@@ -215,6 +215,20 @@ enumeration failing**, not an independent problem to serve better.
 which there are no 14. A change that makes the trap path answer them correctly would raise
 `read_served`, leave `named=0`, and **look like progress while the design still does not work**.
 
+> ### ✔ ANSWERED — 2026-09-15 (w739), on hardware, and it is the fix this section prescribes
+> `[measured w739, vast 51107999, binary and tree both `0fd956c8`, both arms]`
+> **`DEVICE-FB named=32772`** (w736 and w738: `0`), **`BAR1-PASSTHROUGH misses=0`**,
+> **`BAR2-PASSTHROUGH misses=0`** (w738: `14`), **`BAR2 (translated): … 0 REFUSED by name`**
+> (w738: `14`), bar1/bar2 `TRAP_FILLS=0` with `premap_fills=544` / `142` behind them.
+> ⇒ **the guest-side trap census on the `device` arm is EMPTY**, and the causal chain 1→6 above
+> is confirmed in the direction it predicts: fixing step 1 (`decode_subtree_from_entry`'s
+> dropped faults) removed steps 4–6 without anything touching the trap path.
+> ⊘ **The 14 were not served — they stopped happening.** Cut C's whole diff is the entry-rooted
+> decode's `faults` and a repair path at the lock-free fill; neither makes a trapped access
+> answer better, which is checkable from the diff.
+> ⚠ **The boot still fails**, now at `ce_utils.c:349` / `NV_ERR_TIMEOUT` — constraint 9's scrub,
+> not this. Full grading in the w739 block below.
+
 ### ★★★★★ CUT C IS THE WRITE HALF — AND `host_write_refused=0` NEVER MEANT WHAT WE READ IT TO MEAN
 
 `[measured w738, the cut-B boot]`
@@ -387,7 +401,46 @@ on it**: `FB-IO walk-bar[r=21 frames=2] walk-guest-pt[r=0]` measures that `Plane
 the framebuffer **zero times**, so item 2 — the one the plan called *"costs no transient at
 all"* — never ran. What served was item 4's premap retry.
 
-### ★★★★★ 2026-09-15 (w739) — **THE CUT-C BOOT RAN. `kbusVerifyBar2` IS GONE, 32 772 PAGES OF REAL VIDEO MEMORY ARE UNDER GUEST MEMSLOTS, AND THE WALL IS NOW THE CeUtils SCRUB.**
+### ★★★★★ 2026-09-15 (w739) — **`named` 0 → 32 772, AND THE GUEST-SIDE BAR1/BAR2 TRAP CENSUS IS EMPTY. The cut-C boot, RE-GRADED under the owner's criterion above.**
+
+> #### ★★★★★ RE-GRADED against **`### ★★★★★ OWNER, 2026-09-15 — YOU CANNOT OBSERVE A PASSTHROUGH ACCESS`**, which landed after this boot ran and before it was written up.
+>
+> The owner's criterion: **`named` is the grade**; the BAR1/BAR2 trap census must be **empty,
+> not small**; and *"do NOT fix this by serving those 14 accesses — make premap install the
+> memslots, after which there are no 14."*
+>
+> | the owner's number | w736 | w738 | **w739** |
+> |---|---|---|---|
+> | ★★★ **`DEVICE-FB named=`** — THE GRADE | `0` | `0` | **`32772`** |
+> | `BAR2-PASSTHROUGH arm=on misses=` — guest-side traps, **zero is the target** | — | **`14`** | **`0`** |
+> | `BAR1-PASSTHROUGH arm=on misses=` | — | — | **`0`** |
+> | `BAR2 (translated): … REFUSED by name` | — | **`14`** | **`0`** |
+> | bar1/bar2 `TRAP_FILLS=` | `0` | `0` | **`0`**, now with `premap_fills=544` / `142` behind it |
+>
+> ★★★ **The guest-side census on the `device` arm is EMPTY, by construction rather than by
+> luck**, and it got there the way the owner prescribed: the 14 are gone because premap
+> installs memslots, **not** because the trap path learned to answer them. Every one of cut C's
+> two fixes is on the enumeration/recovery path; **nothing in this change makes a trapped
+> access serve better**, which is checkable from the diff — `decode_subtree_from_entry` and
+> `fill_after_refusal` are the whole of it.
+>
+> ⊘ **AND THE HEADLINE IN THIS BLOCK'S ORIGINAL TITLE WAS THE WRONG NUMBER TOO.** It led with
+> *"`kbusVerifyBar2` is gone"* — true, and a **consequence**. The grade is `named`. ⚠ Same
+> correction the owner's section applies to w738's `read_served=3`: this file has now picked the
+> wrong headline number twice in two days, in the same direction — **a number that moved, in
+> place of the number that decides.**
+>
+> ★ **The host-side numbers keep their meaning and are NOT the grade**: `read_served=204683`,
+> `host_read_refused=15`, `wanted_by_read=15`. The walker, PRAMIN and the CPU CE executor read
+> the store through a CPU view **by design, forever**; a memslot never removes that. They are
+> progress on the host side only, and w739's two-hundred-thousand served reads say nothing
+> about whether a guest access was ever passthrough. `named=32772` is what says that.
+>
+> ⊘ **What a `named>0` does NOT buy, stated so nobody reads it as the design working:** the
+> boot still fails, at `ce_utils.c:349`, and `RmInitAdapter` still does not complete. `named` is
+> the grade for *this increment*, not for the branch.
+
+### ★★★★★ 2026-09-15 (w739) — **THE CUT-C BOOT, IN FULL. `kbusVerifyBar2` IS GONE AND THE WALL IS NOW THE CeUtils SCRUB.**
 
 ⚠ **Read this before the pre-registration below; it is the measurement of it.**
 `[measured w739, 2026-09-15]` fresh GA106 bench (vast **51107999**, machine 33261, host driver
@@ -409,10 +462,10 @@ there either.
 |---|---|---|---|
 | 1 | `arm[retries=] ≥ 2` (w738: `1`) | **`arm[retries=5 retried_ok=0 gave_up=0]`** | ✔ **HELD** |
 | 2 | `premap[bar2_visited=] ≥ 1` (w738: `0`) | **`bar2_visited=19`**, `premap[runs=244 filled=686 skipped=30632 refused=0 biggest_leaf=65536 pt_faults=0]` | ✔ **HELD** |
-| 3 | `DEVICE-FB named= > 0` ★ **THE MEMSLOT GATE** (w736 and w738: `0`) | **`named=32772`**, `bar1 premap_fills=544 distinct_pages=272`, `bar2 premap_fills=142 distinct_pages=71`, `slots live=256 peak=343` | ✔ **HELD** — `install_device_page` ran for the first time in this campaign |
+| 3 | `DEVICE-FB named= > 0` ★★★ **THE GRADE** under the owner's criterion (w736 and w738: `0`) | **`named=32772`**, `bar1 premap_fills=544 distinct_pages=272`, `bar2 premap_fills=142 distinct_pages=71`, `slots live=256 peak=343` | ✔ **HELD** — `install_device_page` ran for the first time in this campaign |
 | 4 | `from_refusal ≥ 1` device, `= 0` arena | **`0` on BOTH** | ◐ **control half HELD, device half REFUTED — and see below: the refutation is the fix working** |
 | 5 | `refusal_declined = 0` both | `0` on both | ✔ **HELD** |
-| 6 | **NOT** `kbusVerifyBar2_GM107 … garbage 0x0` ★★★ **THE GRADE** | the string `kbusVerifyBar2` and the string `garbage` appear **ZERO times** in the device arm's guest dmesg. It now dies at `memmgrMemSet … NV_ERR_TIMEOUT (0x65)` → `pCeUtils->lastCompletedPayload == lastSubmittedPayload @ ce_utils.c:349` → `memmgrInitCeUtils @ mem_mgr.c:526` → `RmInitNvDevice: *** Cannot load state into the device` → **`RmInitAdapter failed! (0x25:0x65:1249)`** | ✔ **HELD** |
+| 6 | **NOT** `kbusVerifyBar2_GM107 … garbage 0x0` ★ (pre-registered as *the* grade; ⊘ **superseded by the owner's criterion** — a consequence of row 3, not the grade) | the string `kbusVerifyBar2` and the string `garbage` appear **ZERO times** in the device arm's guest dmesg. It now dies at `memmgrMemSet … NV_ERR_TIMEOUT (0x65)` → `pCeUtils->lastCompletedPayload == lastSubmittedPayload @ ce_utils.c:349` → `memmgrInitCeUtils @ mem_mgr.c:526` → `RmInitNvDevice: *** Cannot load state into the device` → **`RmInitAdapter failed! (0x25:0x65:1249)`** | ✔ **HELD** |
 | 7 | control `(P)` etc. | `(P)`, `8 of 8`, `MEAN_FALSIFIER=PASS`, `TRAP_FILLS=0`, `from_refusal=0` | ✔ **HELD** |
 | 8 | `HOST_DMESG_XID=0` device | **`0`** (the arena control's is `1`, the known per-client CE0 fault) | ✔ **HELD** |
 | 9 | `FB-IO walk-guest-pt[r=]` arena — ⊘ not graded, the item-2 number | **`walk-guest-pt[r=53966/141.4MiB frames=70]`** | ★★★ see below |
@@ -431,6 +484,10 @@ DEVICE-VIEW-PORT armed=714 released=26 outstanding=688 refused=0 double_released
 premap[runs=244 filled=686 skipped=30632 refused=0 biggest_leaf=65536 bar2_visited=19
           pt_faults=0] arm[retries=5 retried_ok=0 gave_up=0]
 BAR1/BAR2 (translated): 0 reads / 0 writes resolved through the GMMU, 0 REFUSED by name
+BAR1-PASSTHROUGH arm=on misses=0        (w738 device arm: BAR2 misses=14)
+BAR2-PASSTHROUGH arm=on misses=0
+BAR-MIRROR bar1 … TRAP_FILLS=0 premap_fills=544 distinct_pages=272 distinct_frames=272
+BAR-MIRROR bar2 … TRAP_FILLS=0 premap_fills=142 distinct_pages=71  distinct_frames=71
 FB-IO trap[r=0 w=0] walk-bar[r=203837/12.7MiB] walk-guest-pt[r=840/3.0MiB]
 HOST_DMESG_XID=0   SMI_RC=124
 ```
