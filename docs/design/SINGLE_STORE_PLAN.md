@@ -167,6 +167,55 @@ sentence that follows is attributable, and by the `DEVICE-FB` counters that join
 ⊘ Carrying `why` through `FbRead` is **cut B's call**: every consumer of that trait would have
 to grow a reason it currently discards, and cut B is the increment that gives them one.
 
+### ⊘⊘⊘ THE RAW CLIENT'S BLOCKER IS **DOORBELL BIRTH**, NOT `CpuCeFb` — I MIS-RANKED IT
+
+`[measured w742 device arm, run_w742dev_qemu.log]`
+
+    FwdFault::PassthroughDoorbellBirth = 19      ← the dominant one
+    FwdFault::CpuCeFb                  =  4
+    FwdFault::RingBroughtNoEntry       =  3
+    doorbells: 124 arrived, 97 served            ⇒ 27 refused
+
+⊘ **I ranked `CpuCeFb` as the blocker because it FELL 63 → 4 between boots.** A delta is not a
+rank. It is the **smallest** of the three, and w740's own report already said its first refusal
+was `PassthroughDoorbellBirth` — read past, twice.
+
+★ The device states the consequence itself: *"every refused doorbell is a submission that never
+reached the GPU."*
+
+## ⇒ THE REFUSAL CARRIES ITS FULL IDENTITY
+
+    PassthroughDoorbellBirth { proc: ProcId(2), chan: ChanId(0), vchid: VChid(3) }
+    c=0xc1d00013 vas=0xcafe0004 dec=NONE
+    userd=h0xcafe0006/off0x3000/phys=fb:0x13000/0x200  fbuserd@0x13088
+    GET=0 PUT=1
+
+**`GET=0 PUT=1`** — the guest put **one** entry in the ring and rang; `GET` never advanced, so
+nothing fetched it. **`dec=NONE`** — the channel was never decoded. ⇒ this is a **BIRTH-ORDERING**
+refusal: the doorbell arrives for a channel that is not yet decodable and the submission is
+**dropped, not forwarded**.
+
+⚠ And note the USERD: **`phys=fb:0x13000` — framebuffer-resident**, the same family as w740's
+producer-cursor wall, one level up on **user** channels rather than the CeUtils control channel.
+
+## ⇒ CHAIN TO THE CLIENT'S FAILURE
+
+channel born with FB-resident USERD → doorbell at birth, `dec=NONE` → **refused** → that
+submission never reaches the GPU → the CE copy the client waits on is one of them → its
+completion semaphore is never written →
+
+    the copy from 0x0000008080000000 NEVER RETIRED — the completion semaphore never reached
+    0x6d000001 in 3s (it holds Ok(0)). This is an UNMEASURED read, not a wrong value.
+
+→ `W392D_GUEST_OUTCOME=(R)`, `THREADS 0 of 8`.
+
+★ **Keep that last sentence.** *Never written* is a different fact from *written wrong*, and the
+instrument refuses to collapse them.
+
+⇒ **"Arm before the session" addresses `CpuCeFb` (4). It does NOT obviously address a doorbell
+arriving before channel birth completes (19)** — that is bring-up ordering, not arming. ⊘ Rank
+by **the fault the client's own copy hits**, never by totals and never by what moved most.
+
 ### ★★★★★ THE 44 BAR1 TRAPS ARE A **JOIN** REFUSAL ON THE PUBLISH ROUTE — the sync point is fine
 
 > ### ⊘⊘⊘ CORRECTED 2026-09-15 (w742) — **TWO THINGS BELOW ARE WRONG, AND THE SECOND IS THE
