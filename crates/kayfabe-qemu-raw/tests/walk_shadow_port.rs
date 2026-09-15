@@ -68,7 +68,11 @@ fn a_sweep_result(pdb: u64) -> PtDecodeResult {
 fn a_port() -> WalkShadowPort {
     let (factory, _rec) = kayfabe_mocks::MockIsolateFactory::new();
     let iso = IsolateBox::new(factory.spawn(IsolateId::new(u32::MAX, GpuId::ZERO)));
-    WalkShadowPort::new(iso)
+    // ⊘ The box now lives behind `SharedIsolate` so §3's device-view port can hold the SAME
+    // one — see that type. The port takes a handle, not the box.
+    WalkShadowPort::new(std::sync::Arc::new(
+        kayfabe_qemu_raw::scratchpad::SharedIsolate::new(iso),
+    ))
 }
 
 /// ⊘ **The disarmed decider moves nothing.** The unobserved sweep is the observed sweep with

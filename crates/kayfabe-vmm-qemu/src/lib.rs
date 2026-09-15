@@ -810,7 +810,11 @@ struct Installer {
     next_slot_id: u64,
     alloc: SlotAllocator,
     /// Removed reservations whose mapping has not been released yet — #57's mechanism.
-    retired: Vec<Arc<GuestWindow>>,
+    ///
+    /// ★★★★★ **§3 — EACH ONE CARRIES THE REGION IT WAS**, so a caller holding a resource whose
+    /// lifetime is tied to the *mapping* (not to the memslot) can learn when it is finally
+    /// safe to give that resource back. See [`QemuMachine::reclaim_released_windows`].
+    retired: Vec<(RamRegionId, Arc<GuestWindow>)>,
 }
 
 #[derive(Debug)]
@@ -866,7 +870,7 @@ impl Plane {
         // Every door that reaches this line has just been proved lock-free on both halves,
         // which makes it the legal place to release a reservation an accessor was still
         // reading when it was removed.
-        self.collect_retired();
+        let _ = self.collect_retired();
     }
 
     /// The lifecycle gate.
@@ -947,26 +951,29 @@ impl Plane {
     }
 
     /// Park a removed reservation's mapping where no accessor's clone can be the last one.
-    fn retire(&self, window: Arc<GuestWindow>) {
+    fn retire(&self, region: RamRegionId, window: Arc<GuestWindow>) {
         if Arc::strong_count(&window) > 1 {
             self.audit
                 .window_releases_deferred
                 .fetch_add(1, Ordering::SeqCst);
         }
         let (mut ins, _h) = self.installer();
-        ins.retired.push(window);
+        ins.retired.push((region, window));
     }
 
     /// Release every retired mapping no accessor still holds, with every lock dropped.
-    fn collect_retired(&self) {
-        let dead: Vec<Arc<GuestWindow>> = {
+    ///
+    /// Returns the regions whose mappings were released **by this call** — see
+    /// [`QemuMachine::reclaim_released_windows`] for why anybody needs to know.
+    fn collect_retired(&self) -> Vec<RamRegionId> {
+        let dead: Vec<(RamRegionId, Arc<GuestWindow>)> = {
             let (mut ins, _h) = self.installer();
             if ins.retired.is_empty() {
-                return;
+                return Vec::new();
             }
             let (dead, keep): (Vec<_>, Vec<_>) = core::mem::take(&mut ins.retired)
                 .into_iter()
-                .partition(|w| Arc::strong_count(w) == 1);
+                .partition(|(_, w)| Arc::strong_count(w) == 1);
             ins.retired = keep;
             dead
         };
@@ -974,7 +981,9 @@ impl Plane {
         self.audit
             .window_mappings_released
             .fetch_add(dead.len() as u64, Ordering::SeqCst);
+        let regions = dead.iter().map(|(r, _)| *r).collect();
         drop(dead);
+        regions
     }
 
     fn bump_topology(&self, v: &mut View) {
@@ -1452,6 +1461,91 @@ impl QemuMachine {
             if readonly { Some(&whole) } else { None },
             WindowBacking::SharedFile { fd, offset },
             "installing a shared-file window (BAR mirror)",
+        )
+        .map(|(r, _)| r)
+    }
+
+    /// ★★★★★ **§3 — WHICH REMOVED WINDOWS' MAPPINGS ARE NOW ACTUALLY GONE.**
+    ///
+    /// Runs the retirement collector and returns the regions whose host mapping was released
+    /// **by this call**. Safe to call from any lock-free, leaf-free point; returns an empty
+    /// vector when there is nothing to collect.
+    ///
+    /// # ⊘⊘⊘ WHY THIS HAD TO EXIST — the defect it closes is SILENT AND CROSS-TENANT
+    ///
+    /// [`QemuMachine::remove_window`] does **not** unmap. It clears the memslots and then
+    /// *parks* the mapping (`Plane::retire`), because an accessor on another thread may still
+    /// hold a clone of the `Arc` and be reading through it — `window_releases_deferred` counts
+    /// exactly that. The `munmap` happens later, in [`Plane::collect_retired`].
+    ///
+    /// For a window over a **shared file** that deferral is invisible: the pages stay valid.
+    /// For a window over an **armed device node** it is not, and the reason is in the driver:
+    /// RM's `osUnmapPciMemoryUser` is an **empty function** (`ogkm os.c:1275-1282`; the
+    /// comment at `:714-722` says RM neither creates nor destroys user mappings). ⇒
+    /// `NV_ESC_RM_UNMAP_MEMORY` returns the host BAR1 aperture to the pool **without touching
+    /// the VMA**.
+    ///
+    /// ⇒ *"remove the slot, then release the view"* can leave a **live user mapping whose PTEs
+    /// point at BAR1 space RM has already handed to the next mapping** — ours, the host's own
+    /// CUDA context, or another VM's. Nothing reports it and nothing faults.
+    ///
+    /// ⇒ **A device view may be released only after the region it backed appears in this
+    /// call's result.** Removing the window is not enough, and `Ok(())` from
+    /// [`QemuMachine::remove_window`] is not the signal.
+    #[must_use]
+    pub fn reclaim_released_windows(&self) -> Vec<RamRegionId> {
+        self.plane.collect_retired()
+    }
+
+    /// ★★★★★ **§3 — ONE FRAMEBUFFER PAGE OF THE RESERVED OBJECT, AS A GUEST MEMSLOT.**
+    ///
+    /// `install_file_window`'s shape, with an armed device node in place of the shared file:
+    /// the guest's memslot resolves to **real video memory**, so a guest access through it
+    /// takes no VM exit and lands in the one memory the engines already read.
+    ///
+    /// # ⊘⊘⊘ WHY THIS IS NOT [`QemuMachine::install_device_window`] WITH A FULL `native`
+    ///
+    /// That verb's `native` argument is `install_window_inner`'s **`read_native`** — *"the
+    /// write-trap sub-range that needs a **read-only** slot of its own"*. It has exactly one
+    /// consumer, the BAR0 counter page, where a read-only slot is the whole point: the
+    /// doorbell at `+0x90` must keep exiting so the token can be translated.
+    ///
+    /// ⇒ **`install_device_window` cannot install a WRITABLE guest slot at all**, and a
+    /// framebuffer page needs one — a writable slot is the entire content of *"no more
+    /// bar1/bar2 traps"*. Passing `native = Some(whole)` there would install a read-only slot
+    /// over guest video memory and every guest store would trap, which reads as *"the switch
+    /// landed and performance collapsed"* rather than as the wrong verb.
+    ///
+    /// ⚠ `readonly` here means **the guest's containment**, exactly as in
+    /// `install_file_window`: it is the guest PTE's writability, not ours. The VMA is mapped
+    /// writable either way, because the store serves host-side reads and writes for the same
+    /// frame through the same object and `NV_ESC_RM_MAP_MEMORY` armed the node read-write.
+    ///
+    /// # ⚠ The caller MUST close `fd` — and it does not do it here
+    ///
+    /// The descriptor is borrowed and `mmap` is the only thing done with it. Closing is the
+    /// arming side's job (`DeviceViewPort::with_node` closes on the line after this returns),
+    /// which is condition 2 of the owner's decision-(b) ruling. ⊘ And `munmap` on
+    /// [`QemuMachine::remove_window`] is **not** a release: `[measured w722]` only
+    /// `NV_ESC_RM_UNMAP_MEMORY` returns host BAR1 aperture, so removing the window and
+    /// releasing the view are two separate obligations and the caller owes both.
+    ///
+    /// # Errors
+    /// As [`QemuMachine::install_file_window`].
+    pub fn install_device_page(
+        &self,
+        gpa: u64,
+        len: u64,
+        fd: std::os::fd::BorrowedFd<'_>,
+        readonly: bool,
+    ) -> Result<RamRegionId, VmmError> {
+        let spec = WindowSpec::passthrough(gpa, len);
+        let whole = gpa..gpa + len;
+        self.install_window_inner(
+            &spec,
+            if readonly { Some(&whole) } else { None },
+            WindowBacking::DeviceView { fd, writable: true },
+            "installing a device-view framebuffer page (BAR mirror, single store)",
         )
         .map(|(r, _)| r)
     }
@@ -2252,7 +2346,7 @@ impl QemuMachine {
             p.host.migrate_del_blocker(b);
         }
         let _ = p.host.ram_block_discard_disable(false);
-        p.collect_retired();
+        let _ = p.collect_retired();
     }
 
     /// Remove one reservation: the guest-physical range stops resolving **first**, then the
@@ -2326,7 +2420,7 @@ impl QemuMachine {
                 ins.alloc.release(n);
             }
         }
-        p.retire(taken.window);
+        p.retire(region, taken.window);
         Ok(())
     }
 }

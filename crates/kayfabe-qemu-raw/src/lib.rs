@@ -88,6 +88,8 @@
 pub mod bar1budget;
 #[cfg(feature = "host-isolates")]
 pub mod barmirror;
+/// ★★★★★ §3's device-view port — the reserved object, reachable after bring-up.
+pub mod deviceview;
 pub mod kftime;
 pub mod reclaimtick;
 /// ★★★★★ `SINGLE_STORE_PLAN.md` increment 1 — the VM-lifetime scratchpad isolate and the

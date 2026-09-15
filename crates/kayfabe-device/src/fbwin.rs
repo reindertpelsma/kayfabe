@@ -697,6 +697,35 @@ pub enum FbPageBacking {
     Joined(FbPageExport),
     /// The page is one of the store's own, held in the page arena.
     Arena(FbPageExport),
+    /// ★★★★★ **§3 — THE PAGE *IS* DEVICE MEMORY**, `at` bytes into the one reserved
+    /// video-memory object. `SINGLE_STORE_PLAN.md`'s single store: *"BAR1, BAR2, PRAMIN,
+    /// channels and engines are all views of **it**."*
+    ///
+    /// # ⊘⊘⊘ WHY THIS CARRIES AN ADDRESS AND NOT AN [`FbPageExport`]
+    ///
+    /// [`FbPageBacking::Joined`] and [`FbPageBacking::Arena`] both name a **file this
+    /// process already holds**, so a token is enough and the shell can `dup` it under any
+    /// lock it likes. A page of the reserved object is not like that: naming it to a
+    /// hypervisor means **arming a CPU view**, which is an IPC round trip to the isolate
+    /// that owns the object and asserts lock-free on arrival.
+    ///
+    /// `SINGLE_STORE_PLAN.md` §3, structural fact 2: *"`page_backing` / `read` / `write`
+    /// **CANNOT ARM** … all three of those run under the plane lock, and two of them on a
+    /// vCPU inside an MMIO exit. ⇒ the store can only report **where** a page lives; a
+    /// lock-free caller must do the arming."*
+    ///
+    /// ⇒ This arm is the store saying *"that page is at this offset in the object"* and
+    /// nothing more. The arming, the mapping and — critically — the **release** all belong
+    /// to the lock-free caller, which is `BarMirror::fill_now`'s step 2.
+    ///
+    /// ⚠ **`at` is a byte offset into the reserved object, which under the arena's own
+    /// *"framebuffer address = file offset"* contract is the framebuffer address itself.**
+    /// The two coincide deliberately and the invariant is stated in both directions, because
+    /// a store that ever breaks it would hand the mirror an offset that looks valid.
+    Device {
+        /// Byte offset of this page within the one reserved object — host-page aligned.
+        at: u64,
+    },
     /// The page is one of the store's own, on the heap — created before an arena was
     /// installed, or while the arena was exhausted. Not memslottable; served by the trap.
     Heap,
@@ -1886,3 +1915,255 @@ impl FbStore for SparseFb {
 }
 
 kayfabe_util::assert_send_sync!(Bar0Window, FbRefused, RefusingFb);
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ★★★★★ §3 — THE SINGLE STORE. `SINGLE_STORE_PLAN.md`'s switch, cut A.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+/// Why a host-side read of the single store is refused, in cut A.
+pub const DEVICE_HOST_READ_UNBUILT: &str =
+    "this framebuffer page IS device-local video memory and the host has no CPU view of it. \
+     Serving it from anywhere else would be the two-memories defect the reserved object \
+     exists to delete — a value that reads back correctly and is in the wrong memory — so it \
+     is refused by name instead. Arming a view here is impossible by construction: \
+     `FbStore::read` runs under the plane lock and on a vCPU inside an MMIO exit, and \
+     `Worker::export_device_view` is an IPC round trip that asserts lock-free. The lock-free \
+     caller must arm (`SINGLE_STORE_PLAN.md` §3, structural fact 2); cut B is what teaches \
+     the walkers and the CPU CE executor to do it.";
+
+/// Why a host-side write of the single store is refused, in cut A.
+pub const DEVICE_HOST_WRITE_UNBUILT: &str =
+    "this framebuffer page IS device-local video memory and the host has no CPU view of it to \
+     write through. ⊘ There is deliberately no success-shaped answer: a write that landed \
+     somewhere else would be a byte the engines never see, which is the exact failure a \
+     single store exists to make impossible. See `DEVICE_HOST_READ_UNBUILT`.";
+
+/// Why [`FbStore::device_reset`] cannot be honoured by the single store.
+pub const DEVICE_RESET_UNBUILT: &str =
+    "a device reset must leave the guest's video memory reading as unallocated. Under the \
+     arena that was dropping host pages; under ONE RESERVED OBJECT it is ZEROING GIBIBYTES OF \
+     REAL VIDEO MEMORY, and until something does that, the previous driver life's page tables \
+     stay readable through PRAMIN across an unload/reload. ⇒ said by name rather than \
+     silently doing nothing.";
+
+/// ★★★★★ **§3's SINGLE STORE — every framebuffer page IS the one reserved device-local
+/// object, and nothing here holds a byte of host memory.**
+///
+/// > **Owner, 2026-09-14:** *"One GPGA store, one RM object, no more fake fb, no more
+/// > bar1/bar2 traps, no more populate on fault."* — and `THE_CONSTRAINTS.md` §22: *"if the
+/// > guest says this is now in vidmem, its in vidmem."*
+///
+/// # ⊘⊘⊘ WHAT THIS STORE CAN AND CANNOT DO, AND WHY THE SECOND HALF IS NOT A STUB
+///
+/// [`FbStore::page_backing`] answers [`FbPageBacking::Device`] — an **address** in the
+/// reserved object — for every page of the advertised framebuffer, with no materialisation
+/// and no bookkeeping. That is the whole of the memslot path: `BarMirror::fill_now` is
+/// lock-free at its install step, arms a view of that address, and installs a guest memslot
+/// over real video memory.
+///
+/// [`FbStore::read`] and [`FbStore::write`] **refuse by name**, and that is a property of the
+/// mechanism rather than of this increment's ambition:
+///
+/// > `SINGLE_STORE_PLAN.md` §3: *"★★★ **`page_backing` / `read` / `write` CANNOT ARM.** …
+/// > all three of those run **under the plane lock**, and two of them on a vCPU inside an
+/// > MMIO exit."*
+///
+/// ⇒ a host-side read of a device page needs a CPU view, arming one is an IPC round trip that
+/// asserts lock-free, and no amount of care inside this type can make that legal. The callers
+/// that need bytes — the BAR and guest page-table walkers, the CPU copy-engine executor,
+/// PRAMIN — have to arm **before** they take the lock. Teaching them that is cut B.
+///
+/// # ⚠ SO A BOOT ON THIS STORE DOES NOT GET FAR, AND IT SAYS SO
+///
+/// The first BAR1 or BAR2 translation reads a page-table page out of the store and is refused,
+/// loudly and by name. ⊘ That is the **designed** end of cut A: the alternative — falling back
+/// to a host-memory store for host reads — is two memories for one address, which is the
+/// defect §18 and §22 exist to delete and which
+/// `a_framebuffer_page_written_through_bar1_is_the_page_bar2_reads` is the falsifier for.
+///
+/// ⇒ **This type is not usable as a general framebuffer store yet, and nothing should be
+/// graded on a boot that installs it until cut B lands.** Its value is that the memslot half
+/// can be exercised and measured — how many views a real boot arms, what they cost, whether
+/// the aperture holds — without the fallback that would make the measurement meaningless.
+#[derive(Debug)]
+pub struct DeviceFb {
+    /// The advertised framebuffer length. ⊘ The **only** thing this store knows: there is no
+    /// page map, because there are no pages of ours.
+    fb_len: u64,
+}
+
+/// ★★★ **How often the single store refused a host-side access, by reason.**
+///
+/// ⊘ A process-global census rather than fields on the type, for the reason
+/// [`crate::plane::FB_TRAP_REFUSED`] already is one: the store lives behind
+/// `Box<dyn FbStore>` inside the plane's mutex, and a counter nobody downstream can **ask
+/// for** is the w584 defect — incremented correctly for fifteen commits, on a concrete type
+/// nothing could reach.
+pub static DEVICE_FB_READ_REFUSED: core::sync::atomic::AtomicU64 =
+    core::sync::atomic::AtomicU64::new(0);
+/// As [`DEVICE_FB_READ_REFUSED`], for writes.
+pub static DEVICE_FB_WRITE_REFUSED: core::sync::atomic::AtomicU64 =
+    core::sync::atomic::AtomicU64::new(0);
+/// How many pages were named to the memslot path — the half of this store that works.
+pub static DEVICE_FB_NAMED: core::sync::atomic::AtomicU64 =
+    core::sync::atomic::AtomicU64::new(0);
+/// Accesses refused because they were outside the advertised framebuffer entirely.
+pub static DEVICE_FB_OUT_OF_RANGE: core::sync::atomic::AtomicU64 =
+    core::sync::atomic::AtomicU64::new(0);
+
+/// ★★★ The single store's census line. Printed unconditionally at teardown, on both arms.
+///
+/// ⊘ It states its own verdict rather than four numbers, because the interesting reading is
+/// a **ratio of two paths** — pages named to the memslot path against host accesses refused —
+/// and a reader who sees only the first would read cut A as working.
+#[must_use]
+pub fn device_fb_report() -> String {
+    use core::sync::atomic::Ordering::Relaxed;
+    let named = DEVICE_FB_NAMED.load(Relaxed);
+    let rd = DEVICE_FB_READ_REFUSED.load(Relaxed);
+    let wr = DEVICE_FB_WRITE_REFUSED.load(Relaxed);
+    let oob = DEVICE_FB_OUT_OF_RANGE.load(Relaxed);
+    let verdict = if named == 0 && rd == 0 && wr == 0 {
+        "⊘⊘ VACUOUS — the single store was installed and NOTHING asked it anything. That is \
+         not `no accesses were needed`; it is an unmeasured store."
+    } else if rd + wr == 0 {
+        "★★★ NO HOST-SIDE ACCESS WAS EVER NEEDED — every framebuffer touch on this boot went \
+         through a guest memslot. ⚠ Read this against the workload: it is the property cut B \
+         exists to make unnecessary, and one boot reaching it is not the guest suite."
+    } else {
+        "⊘ HOST-SIDE ACCESSES WERE REFUSED — expected in cut A and fatal to the boot. Each \
+         one is a walker, the CPU copy-engine executor or PRAMIN needing bytes it cannot \
+         reach under the plane lock; cut B is what teaches them to arm first."
+    };
+    format!(
+        "DEVICE-FB named={named} host_read_refused={rd} host_write_refused={wr} \
+         out_of_range={oob} ⇒ {verdict}"
+    )
+}
+
+impl DeviceFb {
+    /// A store over a framebuffer of `fb_len` bytes.
+    #[must_use]
+    pub fn new(fb_len: u64) -> DeviceFb {
+        DeviceFb { fb_len }
+    }
+
+    fn inside(&self, phys: u64, len: usize) -> bool {
+        phys.checked_add(len as u64).is_some_and(|e| e <= self.fb_len)
+    }
+}
+
+impl FbStore for DeviceFb {
+    fn read(&mut self, phys: u64, buf: &mut [u8]) -> Result<(), FbRefused> {
+        use core::sync::atomic::Ordering::Relaxed;
+        if !self.inside(phys, buf.len()) {
+            DEVICE_FB_OUT_OF_RANGE.fetch_add(1, Relaxed);
+            return Err(FbRefused {
+                phys,
+                len: buf.len(),
+                why: OUTSIDE_FRAMEBUFFER,
+            });
+        }
+        let n = DEVICE_FB_READ_REFUSED.fetch_add(1, Relaxed);
+        // ★★★★★ **SAID ONCE, BECAUSE THE CALLER THROWS THIS SENTENCE AWAY.**
+        //
+        // ⊘⊘ `[measured w735, offline]` a BAR1 translate through this store is refused — and
+        // the refusal that reaches the log reads *"the page-table decoder refused a level of
+        // this walk"*. `FbRead::read_in` returns a **`bool`**, so `why` dies at
+        // `m.fb.read(phys, buf).is_ok()` and the walker turns it into `WalkFault::Unbacked`,
+        // which the plane renders as its own `&'static str`.
+        //
+        // ⇒ a boot's only visible diagnosis would name the **decoder**, which is working
+        // perfectly, instead of the store — this tree's most expensive recurring shape, a
+        // symptom naming the wrong subsystem. One line, once, beside the counter, closes it
+        // without a second source of truth and without changing `FbRead`'s signature.
+        if n == 0 {
+            eprintln!(
+                "kayfabe: DEVICE-FB ⊘⊘⊘ FIRST HOST-SIDE READ REFUSED at fb 0x{phys:x} —                  {DEVICE_HOST_READ_UNBUILT} ⚠ Any 'page-table decoder refused a level of this                  walk' that follows is THIS, flattened: `FbRead::read_in` answers a bool and                  the sentence cannot travel. Printed once; the total is `DEVICE-FB                  host_read_refused=`."
+            );
+        }
+        Err(FbRefused {
+            phys,
+            len: buf.len(),
+            why: DEVICE_HOST_READ_UNBUILT,
+        })
+    }
+
+    fn write(&mut self, phys: u64, bytes: &[u8]) -> Result<(), FbRefused> {
+        use core::sync::atomic::Ordering::Relaxed;
+        if !self.inside(phys, bytes.len()) {
+            DEVICE_FB_OUT_OF_RANGE.fetch_add(1, Relaxed);
+            return Err(FbRefused {
+                phys,
+                len: bytes.len(),
+                why: OUTSIDE_FRAMEBUFFER,
+            });
+        }
+        let n = DEVICE_FB_WRITE_REFUSED.fetch_add(1, Relaxed);
+        if n == 0 {
+            eprintln!(
+                "kayfabe: DEVICE-FB ⊘⊘⊘ FIRST HOST-SIDE WRITE REFUSED at fb 0x{phys:x} —                  {DEVICE_HOST_WRITE_UNBUILT} Printed once; the total is `DEVICE-FB                  host_write_refused=`."
+            );
+        }
+        Err(FbRefused {
+            phys,
+            len: bytes.len(),
+            why: DEVICE_HOST_WRITE_UNBUILT,
+        })
+    }
+
+    /// ★★★★★ **THE HALF THAT WORKS.** Every page of the advertised framebuffer IS at its own
+    /// address in the reserved object — the arena's *"framebuffer address = file offset"*
+    /// contract, now true of real video memory rather than of a memfd.
+    ///
+    /// ⊘ `materialise` is ignored **deliberately and is not a bug**: there is nothing to
+    /// materialise. The object was reserved whole, at realize, before the guest's first
+    /// instruction — which is the entire argument for reserving up front
+    /// (`gpga_is_one_reserved_object.md`: an allocation that can fail later, on a refresh path
+    /// where nothing can recover, is what this makes impossible).
+    fn page_backing(&mut self, phys: u64, materialise: bool) -> FbPageBacking {
+        use core::sync::atomic::Ordering::Relaxed;
+        let _ = materialise;
+        let at = phys & !(FB_PAGE - 1);
+        if !self.inside(at, FB_PAGE as usize) {
+            DEVICE_FB_OUT_OF_RANGE.fetch_add(1, Relaxed);
+            return FbPageBacking::Refused(OUTSIDE_FRAMEBUFFER);
+        }
+        DEVICE_FB_NAMED.fetch_add(1, Relaxed);
+        FbPageBacking::Device { at }
+    }
+
+    /// **Zero**, and it is the truth rather than a stub: this store holds no host memory on
+    /// the guest's behalf at all. That is the whole point of it.
+    fn resident_bytes(&self) -> u64 {
+        0
+    }
+
+    /// [`None`] — *"cannot say"*, never *"nothing is resident"*.
+    ///
+    /// ⊘⊘ The distinction is load-bearing here in a way it is not for [`RefusingFb`]. Under
+    /// one object **every** page of the framebuffer exists, always, because the object was
+    /// reserved whole; there is no such thing as a frame that *"was never written"*. A `0`
+    /// or a `false` would be a positive claim that the guest's video memory is absent, which
+    /// is the opposite of true. See [`FbStore::residency`].
+    fn residency(&self) -> Option<FbResidency> {
+        None
+    }
+
+    /// [`None`], for [`DeviceFb::residency`]'s reason: residency is not a question this
+    /// store can answer, and `Some(false)` would be a claim that a page the object certainly
+    /// contains is missing.
+    fn is_resident(&self, phys: u64) -> Option<bool> {
+        let _ = phys;
+        None
+    }
+
+    /// ⊘⊘⊘ **REFUSED BY NAME, LOUDLY, AND IT IS NOT DONE.**
+    ///
+    /// See [`DEVICE_RESET_UNBUILT`]. The trait's signature has no `Result`, so the refusal
+    /// can only be said — and saying it is strictly better than the silent no-op a reader
+    /// would otherwise take for a completed reset.
+    fn device_reset(&mut self) {
+        eprintln!("kayfabe: DEVICE-FB ⊘⊘⊘ device_reset NOT PERFORMED — {DEVICE_RESET_UNBUILT}");
+    }
+}

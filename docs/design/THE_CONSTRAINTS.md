@@ -1259,3 +1259,64 @@ only the session.
 a comparison against an unmeasured alternative is not a comparison. ⚠ This tree already records the
 shape — *"the CPU path costs ~3 min"* was only meaningful once someone measured the GPU path at
 462 ms and then again at 205 µs.
+
+## ★★★★★ w735 — THE SINGLE STORE'S WALL IS A LOCK RANK, NOT A BANDWIDTH
+
+`[established from the source, 2026-09-15, building §3]` No constraint was relaxed to reach
+this; it is what building the switch found.
+
+§w724c said the intermediate *"does not boot"* and costed it in `bytes ÷ 48 MiB/s`. w734i
+measured both terms and refuted the arithmetic — 275.5 MiB of walk traffic, 5–10 s, 0.5 MiB of
+a 256 MiB aperture. **Both of those readings are about throughput, and the wall is not
+throughput.**
+
+**Arming a CPU view of the reserved object is an IPC round trip that asserts lock-free
+(`kayfabe-isolate/src/lib.rs:3477`); every host-side reader of the framebuffer store holds
+`LockRank::PlaneMem` when it reads (`plane.rs:2992`, `:5632`, `:5734`), and two of them run on
+a vCPU inside an MMIO exit.** ⇒ **the store cannot arm**, so every host-side consumer of
+framebuffer bytes must arm *before* it takes the lock. Full table, and which of the four can:
+`SINGLE_STORE_PLAN.md`'s w735 block.
+
+⇒ **§6 step 3 and constraint 9 are prerequisites of a clean §3** — they are what delete three
+of those four consumers. This does not overturn §22, §18 or *"no populate on fault"*; it says
+where the work is.
+
+### ⚠ THREE THINGS THIS CHANGES ABOUT HOW THE REST OF §3 IS COSTED
+
+1. ⊘ **A pre-registered threshold is only as good as its AXIS.** w734's Q4 was written down in
+   advance, honestly, and in **seconds** — and the wall is a lock rank, which no number of
+   seconds could have reached. Choosing the axis is the part nobody reviews.
+2. ⊘⊘ **`FbTrapPolicy::Serve` becomes IMPOSSIBLE on the device arm, and that is a scoping, not
+   a relaxation.** Under the arena an unslotted guest access was *served* by the trap. Under
+   one object there is nothing to serve it from, so **publication completeness stops being a
+   performance property and becomes a correctness one**. `TRAP_FILLS=0` is one workload
+   (§w727's own rule), and the 30-arm suite is wedged on a pre-existing `--concurrency` bug.
+3. ⊘ **§18 is NOT satisfied by §3 finishing.** `KAYFABE_FB_JOIN` defaults to `off` and `Off`
+   materialises nothing, so the guest's **engines** see no guest vidmem today; after §3 the
+   guest's **CPU** sees the object and the engines still do not. Engine-side slices need a
+   cross-isolate handle, which the foreign-handle gate (`isolate/lib.rs:3477`) currently
+   refuses and for which `DUP_OBJECT` exists only as a doc mention. ⇒ *"satisfied by
+   construction"* is a claim about the end of a longer road than §3.
+
+### ⊘⊘⊘ AND ONE DEFECT THAT WOULD HAVE SHIPPED — release ordering, silent and cross-tenant
+
+*"Evict the slot, then release the view"* is wrong. `QemuMachine::remove_window` **parks** the
+mapping rather than unmapping it (an accessor may still hold the `Arc`), and RM's
+`osUnmapPciMemoryUser` is an **empty function** (`ogkm os.c:1275-1282`) — so
+`NV_ESC_RM_UNMAP_MEMORY` returns the aperture **without touching the VMA**. Releasing early
+leaves live PTEs pointing at BAR1 space RM has re-handed to the next mapping: ours, the host's
+CUDA context, or another VM's. No fault, no counter.
+
+✔ Closed in w735: `reclaim_released_windows` names the regions whose mapping actually went, and
+a view is released only then. ⚠ Leaking is the safe direction — it refuses later arms loudly —
+and `parked=` in the census makes it visible.
+
+### ⊘ AND AN INSTRUMENT GAP, since the commit gate is what would have caught the above
+
+`cargo check --workspace --all-targets` **does not compile `barmirror.rs`**: it is behind
+`kayfabe-qemu-raw/host-isolates`. ⇒ w734a's *"the next `FbPageBacking` arm is now a compile
+error in **both** matches"* is true only with that feature on, and the default gate proves
+nothing about it. `[measured w735]` adding the arm produced **zero** errors under the default
+gate and **exactly the two** expected errors with `--features kayfabe-qemu-raw/host-isolates`.
+⇒ **the commit gate must carry the feature**, or the tree's most load-bearing match arms are
+unchecked.

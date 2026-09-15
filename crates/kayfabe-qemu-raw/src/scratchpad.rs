@@ -541,29 +541,135 @@ pub fn identity_window_reached(span_bytes: u64, reserved_bytes: u64) -> String {
     }
 }
 
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ★★★★★ THE ONE ISOLATE, SHARED — `SINGLE_STORE_PLAN.md` §3's item 1.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+/// ★★★★★ **THE VM-LIFETIME ISOLATE, BEHIND ONE OWNER TWO PORTS CAN BOTH HOLD.**
+///
+/// # ⊘⊘ Why this type exists at all — the plan named the problem before the code hit it
+///
+/// `SINGLE_STORE_PLAN.md` §3, item 1: *"A **device-view port** reachable after bring-up (the
+/// `WalkShadowPort` shape; ⚠ it and the walk shadow both want the one `IsolateBox`, so they
+/// must **share** it, not take it)."*
+///
+/// Before this, [`Scratchpad::share_for_walk_shadow`] **moved** the box into
+/// [`crate::walkshadow::WalkShadowPort`]. That was right while there was one consumer and it
+/// is wrong the moment there are two: a second `take()` of the same `Option` answers `None`,
+/// and `None` from a port whose gate is **on** reads in a boot log exactly like a gate that
+/// was **off**. ⇒ one owner, `Arc`-cloned to each port, and the `Option` on
+/// [`Scratchpad::iso`] goes back to meaning only *"retired"*.
+///
+/// # ⚠ The mutex is UNRANKED, deliberately, and what that costs
+///
+/// It is a bare [`std::sync::Mutex`] and not a [`kayfabe_util::lock::LockRank`] lock, for the
+/// same reason [`crate::walkshadow::WalkShadowPort`]'s already was: a worker round trip runs
+/// beneath it, and the ranked-lock witness would — correctly — refuse that. ⇒ **every caller
+/// must be lock-free and off-trap when it arrives**, and both ports assert exactly that
+/// through the verbs below rather than hoping.
+///
+/// ⊘ It also means the two ports **serialise against each other**, which is not a cost being
+/// hidden: there is one isolate, its worker pool is the thing being shared, and a walk-shadow
+/// refresh and a device-view arm genuinely cannot both hold the same worker.
+#[derive(Debug)]
+pub struct SharedIsolate {
+    iso: std::sync::Mutex<IsolateBox>,
+}
+
+impl SharedIsolate {
+    /// Take the bring-up's box. ⊘ The only constructor: an isolate that did not come from
+    /// [`Scratchpad::bring_up`] is not the VM's one isolate.
+    #[must_use]
+    pub fn new(iso: IsolateBox) -> SharedIsolate {
+        SharedIsolate {
+            iso: std::sync::Mutex::new(iso),
+        }
+    }
+
+    /// Check a worker out, run `f`, and check it back in **whatever happened**.
+    ///
+    /// `None` when the isolate offered no worker — which is a refusal with a cause of its
+    /// own (the pool is quiesced, or the spawn never produced one) and is deliberately NOT
+    /// folded into whatever `f` would have returned.
+    ///
+    /// # ⊘ The check-in is unconditional, and that is the whole reason this is a method
+    ///
+    /// `[the shape recorded at`WalkShadowPort::refresh`]` *"a slot left checked out is a pool
+    /// that never quiesces, which turns one refused refresh into a hang at teardown — a
+    /// second, unrelated failure attributed to the first."* Two call sites each remembering
+    /// to check in is one call site away from that hang; one method cannot forget.
+    ///
+    /// # Panics
+    /// Through the witnesses `f` itself uses. This function takes an unranked mutex and does
+    /// not block on the isolate, so it adds no assertion of its own.
+    pub fn with_worker<R>(&self, f: impl FnOnce(&mut kayfabe_isolate::Worker) -> R) -> Option<R> {
+        let mut g = self
+            .iso
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut worker = g.checkout()?;
+        let out = f(&mut worker);
+        g.checkin(worker);
+        Some(out)
+    }
+
+    /// How many worker slots the isolate offered at birth.
+    #[must_use]
+    pub fn pool_size(&self) -> usize {
+        self.iso
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .pool_size()
+    }
+
+    /// Retire the isolate deliberately. Safe to call twice.
+    ///
+    /// # Panics
+    /// Through `IsolateBox`, if called under a ranked lock.
+    pub fn retire(&self) {
+        self.iso
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .retire();
+    }
+}
+
 #[derive(Debug)]
 pub struct Scratchpad {
     /// Which arm of [`SCRATCHPAD_ENV`] this one was brought up under. ⊘ Carried on the
     /// struct rather than re-read, so the census cannot name an arm the bring-up did not run.
     arm: ScratchpadArm,
     id: IsolateId,
+    /// ★★★ **THE ONE ISOLATE**, behind the handle both ports clone.
+    ///
     /// ⊘ `Option` only so [`Scratchpad::retire`] can take it and drop it deliberately at a
-    /// point of our choosing. It is `Some` for the whole ordinary life of the struct —
-    /// **unless** [`Scratchpad::share_for_walk_shadow`] has moved it into
-    /// [`Self::walk_shadow`], which is the live shadow's arm.
-    iso: Option<IsolateBox>,
+    /// point of our choosing. It is `Some` for the whole ordinary life of the struct.
+    ///
+    /// ⊘⊘ **It used to be MOVED OUT by [`Scratchpad::share_for_walk_shadow`]**, which was
+    /// right with one consumer and became wrong with two: §3's device-view port wants the
+    /// same box, a second `take()` answers `None`, and `None` from an ARMED port reads in a
+    /// boot log exactly like a gate that was off. See [`SharedIsolate`].
+    iso: Option<std::sync::Arc<SharedIsolate>>,
     /// ★★★ **The live walk shadow's port**, holding this isolate, when
     /// `KAYFABE_WALK_SHADOW` is on (`SINGLE_STORE_PLAN.md` §6 step 1).
     ///
-    /// ⊘ The isolate MOVES here rather than being borrowed. `IsolateBox::checkout` needs
-    /// `&mut`, and the sweep reaches the port through a cloned `SharedDoorbell` that cannot
-    /// hold a mutable borrow of this struct. One owner behind an `Arc<Mutex<..>>` is the
-    /// honest shape; two borrows of one box is not a shape at all.
+    /// ⊘ The port holds a **clone of [`Self::iso`]'s handle**, not the box. `IsolateBox::
+    /// checkout` needs `&mut`, and the sweep reaches the port through a cloned
+    /// `SharedDoorbell` that cannot hold a mutable borrow of this struct — so the box lives
+    /// behind [`SharedIsolate`]'s mutex and every holder gets an `Arc`.
     ///
     /// ⚠ The reservation hangs off this isolate's RM client either way, so its lifetime is
     /// still exactly this struct's — the `Arc` is cloned only into the doorbell port, which
     /// the device owns.
     walk_shadow: Option<std::sync::Arc<crate::walkshadow::WalkShadowPort>>,
+    /// ★★★★★ **§3's DEVICE-VIEW PORT**, holding a clone of [`Self::iso`]'s handle plus the
+    /// reserved object, when [`DEVICE_VIEW_ENV`] armed it and the reservation is held.
+    ///
+    /// ⊘ `None` has three causes and the port's own census line names which: the gate is
+    /// off, the reservation was refused, or this process has no route from an isolate-minted
+    /// token to a descriptor (no export directory).
+    device_port: Option<std::sync::Arc<crate::deviceview::DeviceViewPort>>,
     outcome: Reservation,
     /// Wall time inside `IsolateFactory::spawn`, in microseconds — the quantity w470
     /// measured on the vCPU, measured here where the guest does not pay it.
@@ -690,8 +796,9 @@ impl Scratchpad {
             device_view: device_view_report,
             cuda: cuda_report,
             id,
-            iso: Some(iso),
+            iso: Some(std::sync::Arc::new(SharedIsolate::new(iso))),
             walk_shadow: None,
+            device_port: None,
             outcome,
             spawn_us,
             probe_us,
@@ -767,7 +874,7 @@ impl Scratchpad {
              reservation={token} RESERVED_MB={mb} spawn_ms={spawn:.3} probe_ms={probe:.3} \
              reserve_ms={reserve:.3}{why} ⇒ {verdict}",
             arm = self.arm.as_str(),
-            up = self.iso.is_some() || self.walk_shadow.is_some(),
+            up = self.iso.is_some(),
             proc = self.id.proc(),
             gpu = self.id.gpu().0,
             pool = self.pool,
@@ -820,15 +927,17 @@ impl Scratchpad {
     /// ⚠ Must be called with **no ranked lock held** — `IsolateBox::drop` asserts it. Safe
     /// to call twice; the second call does nothing.
     pub fn retire(&mut self) {
-        if let Some(mut iso) = self.iso.take() {
-            iso.retire();
-        }
-        // ⊘ Reached through the `Arc` when the live shadow took the box. Retiring is a
-        // statement to the isolate, not a drop, so doing it here is correct even though the
-        // doorbell port still holds a handle — and the port's own `Arc` going away later is
+        // ⊘ ONE retirement, because there is one box. Retiring is a statement to the
+        // isolate, not a drop, so doing it here is correct even though the doorbell port and
+        // the device-view port may still hold handles — their `Arc`s going away later is
         // what actually reaps the child.
-        if let Some(p) = self.walk_shadow.take() {
-            p.retire();
+        //
+        // ⚠ The ports are dropped FIRST and the handle LAST, so nothing can check a worker
+        // out of a box that has just been told to retire.
+        self.walk_shadow = None;
+        self.device_port = None;
+        if let Some(iso) = self.iso.take() {
+            iso.retire();
         }
     }
 
@@ -841,16 +950,79 @@ impl Scratchpad {
     /// CUDA (~135 MB of mappings and hundreds of ms of context creation). One walk isolate
     /// per VM."* Spawning a second one for the shadow would be a second CUDA context and a
     /// second reservation-holding client.
+    ///
+    /// ⊘⊘ **It CLONES the handle; it no longer MOVES the box.** §3's device-view port wants
+    /// the same isolate, and a second consumer of a `take()`-based share gets `None` — which
+    /// is indistinguishable, in the only place anyone reads it, from its gate being off.
     pub fn share_for_walk_shadow(
         &mut self,
     ) -> Option<std::sync::Arc<crate::walkshadow::WalkShadowPort>> {
         if self.walk_shadow.is_none() {
-            let iso = self.iso.take()?;
+            let iso = std::sync::Arc::clone(self.iso.as_ref()?);
             self.walk_shadow = Some(std::sync::Arc::new(
                 crate::walkshadow::WalkShadowPort::new(iso),
             ));
         }
         self.walk_shadow.clone()
+    }
+
+    /// ★★★★★ **HAND THE ISOLATE AND THE RESERVED OBJECT TO §3's DEVICE-VIEW PORT.**
+    ///
+    /// Returns the port to clone into whatever drives the data plane, or `None` — with the
+    /// reason **said**, not silently — when there is nothing to hand over.
+    ///
+    /// # ⊘ The three `None`s, and why each is printed rather than returned
+    ///
+    /// 1. **No isolate.** The bring-up got no worker at all; the `SCRATCHPAD` census line
+    ///    already carries which step refused.
+    /// 2. **No reserved object.** Arming a view over something other than the one object the
+    ///    guest's video memory *is* would prove a different thing, exactly as
+    ///    [`probe_device_view`]'s placement argues.
+    /// 3. **No `dup`.** This process has no route from an isolate-minted token to a
+    ///    descriptor, so a view could be armed and never seen.
+    ///
+    /// ⚠ A caller that reads `None` as *"the gate is off"* is reading one of four states as
+    /// one, which is this tree's most-repeated instrument failure. The port's census line and
+    /// the `eprintln!`s here are what keep the four apart in a boot log.
+    pub fn share_for_device_views(
+        &mut self,
+        dup: std::sync::Arc<crate::deviceview::DupArc>,
+    ) -> Option<std::sync::Arc<crate::deviceview::DeviceViewPort>> {
+        if self.device_port.is_none() {
+            let Some(iso) = self.iso.as_ref().map(std::sync::Arc::clone) else {
+                eprintln!(
+                    "kayfabe: DEVICE-VIEW-PORT ⊘ NOT ARMED — the scratchpad isolate is not \
+                     held, so there is no worker to arm a view through. The SCRATCHPAD census \
+                     line above names which step refused."
+                );
+                return None;
+            };
+            let Reservation::Held { obj, .. } = self.outcome else {
+                eprintln!(
+                    "kayfabe: DEVICE-VIEW-PORT ⊘ NOT ARMED — nothing is reserved, so there is \
+                     no object to view. A port over some other allocation would not be the \
+                     memory the guest's framebuffer IS."
+                );
+                return None;
+            };
+            self.device_port = Some(std::sync::Arc::new(
+                crate::deviceview::DeviceViewPort::new(iso, self.id, obj, dup),
+            ));
+        }
+        self.device_port.clone()
+    }
+
+    /// ★★★ **§3's device-view port**, or `None` when none was built. The route the data
+    /// plane reaches it by, after realize.
+    #[must_use]
+    pub fn device_port(&self) -> Option<std::sync::Arc<crate::deviceview::DeviceViewPort>> {
+        self.device_port.clone()
+    }
+
+    /// The device-view port's census line, or `None` when no port was ever built.
+    #[must_use]
+    pub fn device_port_census(&self) -> Option<String> {
+        self.device_port.as_ref().map(|p| p.census_line())
     }
 
     /// The shadow's census line, or `None` when the shadow was never armed.

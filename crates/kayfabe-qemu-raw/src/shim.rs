@@ -14910,6 +14910,55 @@ impl Regs {
             None
         };
 
+        // ★★★★★ **§3's DEVICE-VIEW PORT, WIRED HERE — `SINGLE_STORE_PLAN.md` §3 item 1.**
+        //
+        // ⊘ Placed immediately after the walk shadow because both hold the SAME isolate and
+        // the ordering makes that visible: the shadow clones the handle, this clones it
+        // again, and neither takes it. Before this increment `share_for_walk_shadow` MOVED
+        // the box, so a second consumer could only have got `None` — which reads, in the only
+        // place anyone looks, exactly like a gate that was off.
+        //
+        // ⚠ The port is built whenever the crossing's gate is armed AND a reservation is
+        // held. It arms nothing by itself: it is the lock-free door the data plane needs, and
+        // an unused port says so by name in its own census (`⊘⊘ VACUOUS`) rather than
+        // printing a zero that could mean either thing.
+        let device_port: Option<std::sync::Arc<crate::deviceview::DeviceViewPort>> =
+            if device_view_dup.is_some() {
+            #[cfg(feature = "host-isolates")]
+            {
+                let dup: Option<std::sync::Arc<crate::deviceview::DupArc>> =
+                    exports.clone().map(|e| {
+                        std::sync::Arc::new(move |iso, token| e.dup(iso, token))
+                            as std::sync::Arc<crate::deviceview::DupArc>
+                    });
+                match (scratchpad.as_mut(), dup) {
+                    (Some(sp), Some(dup)) => {
+                        let port = sp.share_for_device_views(dup);
+                        if port.is_some() {
+                            eprintln!(
+                                "kayfabe: DEVICE-VIEW-PORT AT REALIZE: ★★★ ARMED over the \
+                                 reserved object. Views can now be armed and released AFTER \
+                                 bring-up, from any lock-free caller. ⊘ Nothing arms one yet \
+                                 — the store still serves the arena."
+                            );
+                        }
+                        port
+                    }
+                    _ => None,
+                }
+            }
+            #[cfg(not(feature = "host-isolates"))]
+            {
+                None
+            }
+        } else {
+            None
+        };
+        // ⊘ The port itself lives on the `Scratchpad`; this binding exists only so the
+        // REALIZE line above is written once. The data plane reaches it through
+        // `Scratchpad::device_port` at `attach_ram`, which is where the BAR mirror is built.
+        drop(device_port);
+
         // ★★★ **ADVERTISE WHAT WAS RESERVED, NEVER ASSERT AHEAD OF IT**
         // (`gpga_is_one_reserved_object.md`: *"the guest's advertised framebuffer size is
         // derived from the reservation that succeeded"*).
@@ -15053,7 +15102,44 @@ impl Regs {
         // answers `NV2080_CTRL_CMD_FB_GET_INFO` and `GA106_FB_REGIONS` with. A store
         // smaller than what the device advertises would refuse an address the guest was
         // promised, which is a refusal we would have manufactured ourselves.
-        plane.set_fb(Box::new(kayfabe_device::SparseFb::new(chip.fb_length)));
+        //
+        // ★★★★★ **§3's SWITCH, DECIDED HERE — `KAYFABE_FB_STORE`.** The one line in the tree
+        // that says what guest video memory *is*. ⊘ Both arms print, because a configuration
+        // that only announces itself when enabled makes the control arm's log
+        // indistinguishable from an older binary's.
+        let fb_store_arm = crate::deviceview::selected_fb_store()
+            .map_err(|why| (Status::Unsupported, why))?;
+        let have_port = scratchpad
+            .as_ref()
+            .and_then(crate::scratchpad::Scratchpad::device_port)
+            .is_some();
+        // ⚠ `defer_reval` is not knowable here — the BAR mirror is built at `attach_ram` —
+        // so the vCPU-fill precondition is checked THERE, with the same function, and the
+        // port precondition is checked here where the scratchpad is in scope. Two moments,
+        // one rule, stated once.
+        crate::deviceview::enforce_device_store(fb_store_arm, have_port, true)
+            .map_err(|why| (Status::Unsupported, why))?;
+        if fb_store_arm.is_device() {
+            eprintln!(
+                "kayfabe: FB-STORE AT REALIZE: ★★★ DEVICE — the guest's framebuffer is the \
+                 one reserved device-local RM object. Every page names an address in it and \
+                 the BAR mirror arms a CPU view per guest memslot. ⊘⊘ CUT A: the store's own \
+                 host-side `read`/`write` REFUSE BY NAME, so the first page-table read out of \
+                 the framebuffer ends this boot — deliberately. Falling back to host memory \
+                 for host reads would be two memories for one address, which is the defect \
+                 the reserved object exists to delete. Expiry: {}",
+                "the GUEST SUITE (30 arms) green on this arm — not one workload"
+            );
+            plane.set_fb(Box::new(kayfabe_device::DeviceFb::new(chip.fb_length)));
+        } else {
+            eprintln!(
+                "kayfabe: FB-STORE AT REALIZE: arena (the control, and the default) — the \
+                 guest's framebuffer is a sparse host memfd, byte for byte as it shipped. \
+                 Set {}=device to arm §3's single store.",
+                crate::deviceview::FB_STORE_ENV
+            );
+            plane.set_fb(Box::new(kayfabe_device::SparseFb::new(chip.fb_length)));
+        }
         // ★★★ **THE COMPOSITION ROOT'S PAGE-TABLE-FORMAT DECISION** (`#149`), made here
         // and nowhere else, for exactly the reasons the framebuffer decision above is.
         //
@@ -15646,6 +15732,13 @@ impl Regs {
                 Arc::clone(&self.plane),
                 shim.machine().vmm().machine(),
                 self.doorbell_async.defers(),
+                // ★★★★★ **§3's device-view port**, reached through the scratchpad because
+                // that is what owns the isolate the views are armed in. `None` on every arm
+                // but the single store's, and the mirror refuses `NO-DEVICE-PORT` by name if
+                // the store ever names a device page without one.
+                self.scratchpad
+                    .as_ref()
+                    .and_then(crate::scratchpad::Scratchpad::device_port),
             )
         {
             self.plane.set_fb_mirror(Arc::clone(&m) as Arc<dyn kayfabe_device::FbMirrorPort>);
@@ -17811,6 +17904,29 @@ impl Regs {
                 crate::walkshadow::WALK_SHADOW_ENV
             ),
         }
+        // ★★★★★ **§3's DEVICE-VIEW PORT CENSUS.** Printed unconditionally, disarmed line and
+        // all, for the walk shadow's reason directly above: a boot that printed nothing when
+        // the port was never built is indistinguishable from one whose port was built and
+        // never asked for a view — and only the second is a measurement.
+        match self.scratchpad.as_ref().and_then(
+            crate::scratchpad::Scratchpad::device_port_census,
+        ) {
+            Some(line) => eprintln!("kayfabe: {line}"),
+            None => eprintln!(
+                "kayfabe: DEVICE-VIEW-PORT ⊘ NOT BUILT — no port existed on this boot. Three \
+                 causes and this line does not distinguish them: {}=off (the default), no \
+                 reservation held, or no export directory in this build. The SCRATCHPAD and \
+                 DEVICE-VIEW-PORT AT REALIZE lines above say which.",
+                crate::scratchpad::DEVICE_VIEW_ENV
+            ),
+        }
+        // ★★★★★ **§3's SINGLE STORE — what it was asked and what it refused.**
+        //
+        // ⊘ Printed unconditionally, both arms, and it states its own verdict: the two halves
+        // of this store point in opposite directions and a reader who saw only `named=` would
+        // read cut A as working. `⊘⊘ VACUOUS` is what tells an unmeasured store apart from one
+        // nothing needed.
+        eprintln!("kayfabe: {}", kayfabe_device::device_fb_report());
         // ★★★★★ **w719 — DID THE TWO WORLDS EVER NAME THE SAME PAGE?** The whole of
         // constraint 15's aperture split rests on the answer, `THE_CONSTRAINTS.md` §15 and
         // `gpga_is_one_reserved_object.md` disagree about it, and neither carries a
