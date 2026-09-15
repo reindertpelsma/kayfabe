@@ -34,7 +34,15 @@ echo "TREE_REV=$(git rev-parse HEAD)"
 # ── 1. the build, WITH the feature ──────────────────────────────────────────────────────
 export KAYFABE_SHIM_FEATURES="host-isolates cuda-scratchpad"
 echo "== KAYFABE_SHIM_FEATURES=$KAYFABE_SHIM_FEATURES"
-bash scripts/build_qom_shim.sh > "$BENCH/w731_build.log" 2>&1
+# ⚠ `build_qom_shim.sh` takes the hypervisor SOURCE TREE and the build dir as arguments, and
+# refuses without them — which surfaces as a usage line, an `rc=3`, and a boot on the previous
+# binary if the caller does not read the status. The same two paths every other bench script
+# passes (`w268_run.sh`, `w277_run.sh`, `w291_r33.sh`).
+QEMU_SRC=${KAYFABE_QEMU_SRC:-$BENCH/qemu-10.2.4}
+QEMU_BUILD=${KAYFABE_QEMU_BUILD:-$BENCH/qemu-build}
+[ -f "$QEMU_SRC/VERSION" ] || { echo "⊘ no hypervisor source tree at $QEMU_SRC"; exit 2; }
+echo "== qemu src=$QEMU_SRC build=$QEMU_BUILD"
+bash scripts/build_qom_shim.sh "$QEMU_SRC" "$QEMU_BUILD" > "$BENCH/w731_build.log" 2>&1
 rc=$?
 echo "SHIM_RC=$rc"
 if [ "$rc" -ne 0 ]; then
