@@ -65,6 +65,71 @@ before it takes the lock**, and there are four of them in three different shapes
 | **B** | host reads through armed views: `PlanePtBytes` arm-then-retry, a demand set for `FbStoreReader`'s callers, the premap retry loop, the vCPU decline-by-name | ○ not started |
 | **C** | two-phase CPU CE (dry-run partition → arm → execute), **or** constraint 9 and never build it; plus `device_reset`, which under one object is *zeroing gibibytes of real video memory* | ○ not started — and C is the one to delete rather than build |
 
+### ★★★★★ 2026-09-15 (w736) — **THE BOOT WAS RUN. TWO ROWS HELD, ONE IS REFUTED, AND THE REFUTED ONE IS CONTRADICTED BY A TABLE THREE PARAGRAPHS ABOVE IT IN THIS FILE.**
+
+⚠ **Read this before the prediction table below; it is the measurement of that table.**
+`[measured w736, 2026-09-15]` a fresh GA106 bench (vast 51091607, host driver **580.159.04**),
+binary and tree both at **`ca073573`**, two boots at the **same binary**: `KAYFABE_FB_STORE=device`
+and its `arena` control, `KAYFABE_DEVICE_VIEW=probe` and `SHADOW=on` on both, so the two differ in
+**exactly one variable**. Harness: `scripts/bench/w736_fbstore_run.sh`; evidence in
+`traces/w736_fbstore/`. ⊘ No constraint was relaxed and no source changed.
+
+**THE CONTROL FIRST**, because without it a failure says nothing about which change caused it:
+`W392D_GUEST_OUTCOME=(P)`, `THREADS 8 of 8 verified ✔`, `MEAN_FALSIFIER=PASS`, bar1/bar2
+`TRAP_FILLS=0`. ⇒ the binary is sound and the device arm's death is the store.
+
+| row | predicted | measured | verdict |
+|---|---|---|---|
+| `DEVICE-FB` | `named=0`, a refusal ≥ 1, `⊘ HOST-SIDE ACCESSES WERE REFUSED` | `named=0 host_read_refused=20 host_write_refused=0 out_of_range=0 ⇒ ⊘ HOST-SIDE ACCESSES WERE REFUSED` | ✔ **HELD**, verbatim |
+| `DEVICE-VIEW-PORT` | `armed=0 refused=0` ⇒ `⊘⊘ VACUOUS` | `armed=9 released=8 outstanding=1 refused=0 double_released=0 bytes_armed=9.0MiB arm_us_total=3436 rel_us_total=5042 first_refusal=[none] ⇒ ★ every arm and every release succeeded` | ⊘⊘⊘ **REFUTED** |
+| where it dies | `kbusVerifyBar2` inside `RmInitAdapter`, not a BAR1 translate | `NVRM: kbusVerifyBar2_GM107: MMUTest BAR0 window offset 0x70e000 returned garbage 0x0` → `NV_ERR_MEMORY_ERROR (0x72)` → `RmInitAdapter failed! (0x24:0x72:1220)`, and bar1/bar2 `premap_fills=0 distinct_pages=0`, `doorbells: 0 arrived` | ✔ **HELD**, to the function name |
+
+### ⊘⊘⊘ HOW ROW 2 IS WRONG, AND IT IS THE FILE ARGUING WITH ITSELF
+
+The prediction reasoned over the **four host-side consumers of the framebuffer STORE** — and the
+port is not armed only by them. **PRAMIN arms it**, which the consumer table *in this same w735
+block* already records as **`★ BUILT (w735) — release-and-re-arm, §3 item 4's sanctioned expensive
+trap`**. ⇒ a table and a prediction **three paragraphs apart in one document** say opposite things,
+and only the boot noticed.
+
+★ The attribution is arithmetic and is stated as such: `PRAMIN-SLOT … moves=9` and
+`DEVICE-VIEW-PORT armed=9` on the same boot, with `named=0` and both BAR mirrors at
+`premap_fills=0`. `[inferred from the equality of two counters, not from an instrumented link]`
+
+⇒ **WHAT THIS BUYS, and it is more than the prediction allowed for:** cut A's port half is
+**exercised and green on real video memory** — 9 CPU views armed over the reserved object, 9.0 MiB,
+**zero refusals, zero double-releases**, mean arm **382 µs**, mean release **630 µs**. That is not
+the memslot half (`named=0` — no `FbPageBacking::Device` was ever handed out, because the boot dies
+before a BAR1/BAR2 memslot is wanted), but it is no longer *"unmeasured"* either, and it is the
+first time anything in this campaign has armed a host CPU view of guest video memory in a live boot.
+
+⚠ **AND A COST NUMBER CUT B SHOULD BE PRICED WITH, measured here for the first time.** The PRAMIN
+re-point is a **blocking door on the vCPU** (goal 3), and on the `device` arm it costs
+`move_ns[worst=42588937 mean=6895011]` — **42.6 ms worst, 6.9 ms mean** — against the control's
+`move_ns[worst=13224251 mean=652998]` (13.2 ms / 0.65 ms). **~10x on the mean.**
+⊘ One boot each, n=9 against n=22, and the device arm dies at 21.9 s so the two are not the same
+population. It is a signal that arming-per-access is expensive on the vCPU, not a measured ratio.
+
+### ⊘ THE SUB-DETAIL IN ROW 3 THAT DID NOT HOLD — the wall is a READ, not the predicted WRITE
+
+The prediction named *"`kbusVerifyBar2`'s **write**"*. Measured: **`host_write_refused=0`** and
+`host_read_refused=20`, and the driver's own complaint is *"MMUTest BAR0 window offset 0x70e000
+returned **garbage 0x0**"* — a **read-back that came back zero**, not a write that was refused.
+⇒ The store's write path was **never reached**; the first host-side access of the boot was a read
+(`DEVICE-FB ⊘⊘⊘ FIRST HOST-SIDE READ REFUSED at fb 0xf1cac000`, log line 76 of 231).
+⚠ This matters to cut B's ordering: **`FbStore::read` is the one that has to arm first**, and the
+write side has no measured demand yet on this path at all.
+
+★ **AND THE w735 DIAGNOSIS-NAMING FIX WORKED.** The store said its own name, once, on its own line,
+and the `DEVICE-FB host_read_refused=` total joined it to the 20 — so the *"the page-table decoder
+refused a level of this walk"* flattening never misdirected a reader. The offline half predicted
+that defect and the online half confirms the mitigation.
+
+⇒ **CUT B IS NOT BUILT ON SAND, AND ITS SCOPE IS NARROWER THAN FEARED.** The store's refusal, the
+death point and the diagnosis all behave as designed; what was wrong was a claim that the **port**
+would go unexercised. Nothing in cut B's six-item list changes. ⊘ What does change: item 1's byte
+port is being added to a mechanism **already proven live**, not to one that has never run.
+
 ### ⊘ THE PRE-REGISTERED PREDICTION FOR A CUT-A BOOT — written before any boot, so it can be wrong
 
 No box was rented for cut A, **and the reason is a prediction rather than a budget**: if it is
@@ -73,12 +138,16 @@ Stated here so a later boot is a test rather than a confirmation.
 
 | line | predicted | what a different value would mean |
 |---|---|---|
-| `DEVICE-FB` | `named=0 host_read_refused≥1` **or** `host_write_refused≥1`, and the verdict `⊘ HOST-SIDE ACCESSES WERE REFUSED` | ★ `named>0` would mean a guest memslot over real video memory was installed **before** anything needed host-side bytes — the memslot half is exercisable without cut B, and a boot IS worth renting for |
-| `DEVICE-VIEW-PORT` | `armed=0 refused=0` ⇒ `⊘⊘ VACUOUS` | any `refused>0` before a single arm would be a plumbing fault, not the designed wall |
-| where it dies | the **first framebuffer access at all**, expected to be `kbusVerifyBar2`'s write inside `RmInitAdapter` — i.e. before the guest's first instruction, not at a BAR1 translate | ⊘ if it dies later, the store is reached later than this model says and cut B's four consumers are not the whole list |
+| `DEVICE-FB` | ✔ **HELD w736** (`named=0 host_read_refused=20`). `named=0 host_read_refused≥1` **or** `host_write_refused≥1`, and the verdict `⊘ HOST-SIDE ACCESSES WERE REFUSED` | ★ `named>0` would mean a guest memslot over real video memory was installed **before** anything needed host-side bytes — the memslot half is exercisable without cut B, and a boot IS worth renting for |
+| `DEVICE-VIEW-PORT` | ⊘⊘⊘ **REFUTED w736 — measured `armed=9 refused=0`, ★ not vacuous; see the w736 block above.** Predicted: `armed=0 refused=0` ⇒ `⊘⊘ VACUOUS` | any `refused>0` before a single arm would be a plumbing fault, not the designed wall |
+| where it dies | ✔ **HELD w736** to the function name — ⊘ but it is a **READ**, not the write named here (`host_write_refused=0`). The **first framebuffer access at all**, expected to be `kbusVerifyBar2`'s write inside `RmInitAdapter` — i.e. before the guest's first instruction, not at a BAR1 translate | ⊘ if it dies later, the store is reached later than this model says and cut B's four consumers are not the whole list |
 
 ⚠ **The third row is the one most likely to be wrong**, and it is the one that decides whether
 cut A alone is measurable. It is a reading of the call graph, not a measurement.
+⊘⊘ **AND THAT GUESS WAS WRONG TOO — w736.** The third row **held to the function name**; the row
+that broke was the **second**, which nobody flagged as risky because it was read off the store's
+consumer list and the port has a consumer that is not on it. ⚠ *Which row you expect to fail is
+itself a prediction, and it was the one this block got wrong.*
 
 ### ⊘⊘⊘ AND THE HALF THAT COULD BE CHECKED OFFLINE WAS, AND IT FOUND A DEFECT IN THE DIAGNOSIS
 
