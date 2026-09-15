@@ -176,10 +176,10 @@ every call site. Proposed instead, and the split is then legible from the name a
 | constraint | state | evidence |
 |---|---|---|
 | 1 — no BAR1/BAR2/PRAMIN traps | **HOLDS**, both workloads | `TRAP_FILLS=0`; every fill was a premap install (w696: `1728+211 == premap 1939`; `5841+294 == premap 6135`) |
-| 2 — BAR0 write-only | HOLDS except the counter page | ~132 reads at `+0xbb0000`; the device-view wire verb is unbuilt |
+| 2 — BAR0 write-only | HOLDS except the counter page | ~132 reads at `+0xbb0000`. ⊘ *"the device-view wire verb is unbuilt"* — **STALE, corrected 2026-09-15**: it is live on request tags **30/31**, reply **15**, and was exercised end to end in a boot (`DEVICE_VIEW=OK … released=true`) |
 | 5 — DoorbellTable | wired | goal 4, w656–w660 |
-| 15 — disjoint worlds | **NOT HONOURED** | one `BarMirror` + one store serves BAR1 **and** BAR2; the real-object join is per-LEAF, not per-BAR (`barmirror.rs:19-21`) |
-| 15 — one reserved object | **designed, not wired** | `gpga_is_one_reserved_object.md` is STATUS: LIVE and says the per-leaf join *"is scheduled for deletion by it"*; `reserve_gpga` has no caller outside its own crate; no GPGA line in any boot |
+| 15 — disjoint worlds | ⊘ **SUPERSEDED, not violated** | there is **one world**, not two (§15's supersession block). The row described the old design's failure to meet a constraint that no longer exists |
+| 15 — one reserved object | ◐ **RESERVED AND ADVERTISED; the BACKING has not moved** *(2026-09-15)* | ⊘ *"`reserve_gpga` has no caller … no GPGA line in any boot"* is **STALE**: it has callers (`rm.rs:4595`, `:4651`) and three committed boots carry `reservation=HELD` / `RESERVED_MB`. ⚠ **But `page_backing` still returns memfd leaves**, so guest vidmem remains host RAM over PCIe and parity is unchanged at 0.20x. The object is **held and unused** until §3 |
 | 4, 8 — sub-ms / off-vCPU | **HOLDS**, with the sanctioned PRAMIN exception | `VCPU-BLOCKING total=22 doors=3` and `PRAMIN-SLOT moves=22` — **the 22 doors ARE the 22 PRAMIN re-points**. `moves=22` is IDENTICAL under the raw client and CUDA (only `skipped` moves: 18439 vs 5448), so it is a BOOT-TIME set and the owner's ruling (*"297us for a thing that only happens at boot… thats fine for that mmap"*, `move_ns[worst=296558 mean=74698]`) is not expired |
 | 7, 14 — epoll / threaded isolates | not built | |
 | 12 — any die | not done | ~20 GA106 `ChipProfile` fields are per-die measurements |
