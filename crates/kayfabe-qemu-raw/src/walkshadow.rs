@@ -78,20 +78,48 @@ pub const WALK_SHADOW_EXPIRY: &str =
 /// header's exact size — a number that would otherwise have to track the protocol.
 const CHUNK: usize = 256 << 10;
 
-/// ★★★★★ **HOW MANY REFRESHES THE SHADOW MAY RUN IN ONE BOOT**, and this is a safety valve
-/// rather than a tuning knob.
+/// ★★★★★ **HOW MANY REFRESHES THE SHADOW MAY RUN IN ONE BOOT.**
 ///
-/// ⊘ The off-vCPU sweep the shadow hangs off is **not off the guest's critical path**: one of
-/// its two callers is the TLB-invalidate handler, and the guest's invalidate completion waits
-/// on it. A refresh costs a staged image (`[w724c]` ~7.3 MiB of resident tables), an H2D copy,
-/// three kernel launches and a read-back — tens of milliseconds. Paying that on **every**
-/// invalidate for a whole boot risks tripping the guest driver's own timeouts, and a boot that
-/// times out measures nothing at all.
+/// # ⊘⊘ THIS IS PRUDENCE, NOT A FIX FOR A CONSTRAINT BEING BROKEN — read this first
 ///
-/// ★ 64 comparisons is far more than the census needs: a disagreement that exists in the
-/// guest's tables shows up in the first few, and `[w725]`'s real capture is five address
-/// spaces. ⚠ Spending the budget is **counted by name** (`skipped[budget_spent=N]`), so a
-/// census read after the cap says so rather than looking like agreement that kept holding.
+/// One of the two off-vCPU callers of `refresh_page_tables` is the **TLB-invalidate
+/// handler**, and the guest's invalidate completion waits on it. ⚠ A later reader finding a
+/// cap beside this crate's blocking-invariants references could reasonably conclude an
+/// invariant was bent here and try to "restore" it. **It was not.**
+///
+/// `[owner ruling, 2026-09-09]` there are **three synchronization points** — *TLB invalidate,
+/// RPC map calls, UVM setup* — and **all three are blockable**. The invariants forbid blocking
+/// **on the vCPU thread** and **under a lock on any thread**; they do not forbid blocking at
+/// those three points, which exist precisely because a real GPU also makes the guest wait
+/// there. ⇒ the TLB-invalidate handler is *the* sanctioned place to do expensive work, and
+/// this cap is about the **guest driver's own timeout**, nothing else.
+///
+/// # What it is bounding
+///
+/// A refresh costs a staged image (`[w724c]` ~7.3 MiB of resident tables), the relocation
+/// pass over it, an H2D copy, three kernel launches and a read-back — tens of milliseconds.
+/// Paying that on **every** invalidate for a whole boot risks tripping the driver's timeouts,
+/// and a boot that times out measures nothing at all.
+///
+/// ★ 64 comparisons is far more than the census needs: `[w725]`'s real capture is five
+/// address spaces, and a disagreement that exists in the guest's tables appears in the first
+/// few. ⊘ It is checked **before the image is built**, because the staging is the expensive
+/// half and a cap checked after it would cost nearly as much as no cap. ⊘ And spending it is
+/// **counted by name** (`skipped[budget_spent=N]`), which is the difference between a bound
+/// and a silent lie: a census read after the cap says the shadow STOPPED rather than looking
+/// like agreement that kept holding.
+///
+/// # ★★★ EXPIRY (§w724g) — the cap is scaffolding for the same reason relocation is
+///
+/// Every term in the cost above belongs to the **shadow's transitional shape**, not to the
+/// design: §3 makes GPGA one reserved object mapped whole at a fixed base, so the relocation
+/// goes, and the staged image and its H2D copy go with it — the kernel reads GPGA **in
+/// place**. What remains is the launch and the read-back, and `[w726]` measured the walk
+/// itself at **205.7 µs** for the working set (**0.24 s across 1178 refreshes**).
+///
+/// ⇒ **Retire this cap when the kernel reads GPGA in place**; in production there is likely
+/// nothing left to bound, and a 64-refresh limit that outlived its reason would quietly cap a
+/// path that no longer needs capping.
 const MAX_REFRESHES: u64 = 64;
 
 /// Read the gate. `Ok(false)` when unset or `off`; a refusal names the value, because a
@@ -395,6 +423,35 @@ impl kayfabe_rt::device::PtSweepObserver for WalkShadowObserver<'_> {
             port.note_skipped("report_runs_undecodable");
             return;
         };
+        // ⊘⊘ **`present_runs` SKIPS `UNMAP`, so it is NOT index-aligned with `report.runs`.**
+        // The per-address-space split below needs each decoded run's `pdb_index`, which only
+        // the raw row carries — and zipping the two directly would misalign the moment a
+        // single `UNMAP` appeared. ⇒ the raw rows are filtered by the SAME rule
+        // `present_runs` applies, and the two lengths are then checked rather than assumed.
+        //
+        // ⚠ In practice every report is a full resync (the driver never acks, so
+        // `acked != generation` always) and carries no `UNMAP` at all — which is exactly why
+        // an unchecked zip would have worked on every boot until it did not.
+        let kept: Vec<&kayfabe_mmu::walkreport::MapRun> = report
+            .runs
+            .iter()
+            .enumerate()
+            .filter(|(i, r)| {
+                r.op_decoded(*i)
+                    .is_ok_and(|o| o != kayfabe_mmu::walkreport::RunOp::Unmap)
+            })
+            .map(|(_, r)| r)
+            .collect();
+        if kept.len() != runs.len() {
+            eprintln!(
+                "kayfabe: WALK-SHADOW report rows and decoded runs disagree in count \
+                 ({} vs {}) — refusing rather than pairing them by position",
+                kept.len(),
+                runs.len()
+            );
+            port.note_skipped("report_rows_misaligned");
+            return;
+        }
 
         // The report is keyed by the RELOCATED root; the comparison is per real address
         // space. ⊘ Built from the image's own `roots`, which is the only place the two
@@ -415,7 +472,7 @@ impl kayfabe_rt::device::PtSweepObserver for WalkShadowObserver<'_> {
             // host's are — the comparison is between two descriptions, not two cuttings.
             let mine: Vec<_> = runs
                 .iter()
-                .zip(report.runs.iter())
+                .zip(kept.iter())
                 .filter(|(_, raw)| usize::from(raw.pdb_index) == i)
                 .map(|(r, _)| *r)
                 .collect();
