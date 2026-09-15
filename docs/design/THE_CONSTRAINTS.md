@@ -146,6 +146,35 @@ and the per-client host MMU fault above.
     a collision waiting for a second device, and under constraint 23 that collision is
     **silent**.
 
+25. **★★★ THE vCPU MMIO HANDLER HOLDS NO CAPABILITY THAT CAN BLOCK — blocking is UNSPELLABLE,
+    not disallowed** (owner, 2026-09-15). *"Code in such a way you can't make the 44 ms worst
+    trap ever again. If the vCPU MMIO handler is just one write on BAR0 without being able to
+    add another functionality, on top of a simple queue, then getting it beyond that is just
+    impossible."*
+    ⇒ The handler receives **a queue handle and nothing else**: no `/dev/nvidia` fd, no isolate
+    socket, no VM fd, no `ViewSpace`, no allocator. Then `mmap` is not *forbidden* — it is
+    **uncallable**, because one cannot `mmap` without an fd; IPC is uncallable without the
+    socket; `KVM_SET_USER_MEMORY_REGION` is uncallable without the VM fd. Every door in the
+    w742 census becomes a **queued job by construction**.
+    ⊘ **Reads:** a read must return a value, so it cannot merely queue — but under **23** BAR1/
+    BAR2 reads are premapped and never trap, so a trapping read *is already* the error. The
+    handler answers reads from the shadow page and holds nothing further.
+    ★ **GATE, and it must GATE rather than report:** the vCPU allowlist goes to **EMPTY**, and a
+    **non-empty allowlist is a BUILD FAILURE**. ⊘⊘⊘ **This is the correction of a measured
+    failure, not a new idea.** `kayfabe-util/src/lock.rs`'s `the_vcpu_allowlist` already exists
+    and its own test is named `blocking_inside_a_trap_is_recorded_and_says_whether_it_was_
+    allowlisted` — **recorded**, with a list you may append to. `deviceview.rs:1197` says it
+    outright: *"blocked inside an MMIO exit, which `assert_not_on_vcpu` **only REPORTS**."*
+    The allowlist grew **3 doors → 9** and **22 crossings → 197** and nothing failed. ★ This
+    campaign's most-repeated lesson, applied to itself: **a check that reports is not a check
+    that gates.**
+    ⚠ And note WHY the lock discipline did not catch it: every increment satisfied the **lock
+    rank** — `want` under the plane lock, `drain` only at **lock-free** entry points — and
+    **LOCK-FREE IS NOT OFF-vCPU.** The lock-free points chosen are still on the vCPU thread, so
+    constraint 9's discipline held perfectly while 4, 6 and 8 broke behind it.
+    ⇒ **The remedy reuses built machinery:** the `want`/`drain` split already exists and is
+    tested. Constraint 6 is exactly *"move `drain` to a worker"* — the split was the hard part.
+
 ★ **THE PREFERRED MECHANISM for 23, and why (owner, 2026-09-15).** Rather than an anonymous
 sparse `mmap`, allocate a **GPU-native sparse range** (`NVOS32_ALLOC_FLAGS_SPARSE = 0x04000000`,
 confirmed present in RM's SDK) in the scratchpad and MMIO-map **that** for BAR1/BAR2. Three
