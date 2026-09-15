@@ -175,7 +175,19 @@ and the per-client host MMU fault above.
     ⇒ **The remedy reuses built machinery:** the `want`/`drain` split already exists and is
     tested. Constraint 6 is exactly *"move `drain` to a worker"* — the split was the hard part.
 
-> ### ◐ **BUILT, NOT BOOTED — 2026-09-15 (w745), branch `w745-ownership-split`.** Bare per-proc
+> ### ◐ **BUILT AND BOOTED — 2026-09-15 (w745). IT ARMS AND REFUSES AT THE HAND-OVER.**
+> `[vast 51149807, GA106, 580.159.04 OPEN, three arms, one binary]` The control holds at
+> **`(P)` 8 of 8**; the split arm is **`(R)` 0/8** with `handovers=0 handover_refused=4619`,
+> every one `NoVas(ChanId(0))` under a placeholder **`pdb=Pdb(0)`**. ⇒ the hand-over
+> **re-derives a routing key its caller already holds**, and the publish route's pdb is `None`
+> until a `SetPageDir` arrives. ⊘ `adopts=0` — the dup was never issued, so `adopt_vaspace`,
+> `map_store_slice`, the slice binding, the ring oracle and **constraint 28 on hardware** are
+> all unmeasured. `RING-NOT-A-SLICE=0` is VACUOUS, not a pass.
+> ★ What did hold on every arm: `TRAP_FILLS=0`, `misses=0`, `RmInitAdapter failed!=0`,
+> `SMI_RC=0`, `HOST_DMESG_XID=0`, and the vCPU guard declined by name **14 times without
+> panicking**. ⊘ **Constraint 25 gained nothing**: `VCPU-BLOCKING total=197 doors=9` on both
+> the `isolate` and `scratchpad` arms, identical to w742.
+> ⊘ Previously: **BUILT, NOT BOOTED — 2026-09-15 (w745), branch `w745-ownership-split`.** Bare per-proc
 > `FERMI_VASPACE_A`s (`--bare-vaspaces`), the hand-over (`vaspace_handover`, tag 38), the dup
 > (`adopt_vaspace`, tag 35), `map_store_slice` (tag 36) over `NVOS46::offset`,
 > `FbLeafBacking::StoreSlice` binding a `HostBacking::slice`, and `StoreMapPort` as the VMM's
@@ -225,6 +237,11 @@ and the per-client host MMU fault above.
     Enforce as a **newtype**, the way `OwnClient` already does, so the approved set grows by a
     TYPE and not by a string on an allowlist.
 
+> ### ✔ **BUILT AND BOOTED 2026-09-15 (w745)** — live on all three arms, and it never had to
+> fire: `withheld_unmaps=0 worst_unmaps_outstanding=0 pending=false`, with every
+> `MMUINVAL-REFRESH` carrying `unmaps_outstanding=0 drain_trips=0`. ⊘ `pending=false` at
+> teardown is the half that matters: the barrier caused **no hang**. ⚠ A never-fired barrier is
+> not a tested one — the test that fires it is offline, and it is the known-positive below.
 > ### ✔ **BUILT 2026-09-15 (w745)**, with the known-positive this constraint demands by name.
 > `MmuInvalidateLog::complete_through_unmaps` returns a **three-armed** `CompletionVerdict` —
 > not a `bool`, because *"a newer trigger completes this"* and *"nobody will, come back"* are
@@ -254,6 +271,10 @@ and the per-client host MMU fault above.
     ⚠ **Needs a known-positive**: stall an unmap and assert the invalidate does **not** complete.
     A test that only checks unmaps happen cannot tell "before" from "eventually".
 
+> ### ⚠ **BUILT 2026-09-15 (w745) AND NOT EXERCISED ON HARDWARE.** The w745 boot never issued
+> a store map (`maps=0`), so the placement assertion and the page-size selection were reached
+> only by the offline tests. The w744 trace remains the only hardware evidence for the RULE;
+> there is none yet for this implementation of it.
 > ### ✔ **BUILT 2026-09-15 (w745).** `RmConnection::raw_map_dma_flags` now refuses
 > `RmError::PlacementRefused` when `dmaOffset != at`, **after tearing the mis-placed mapping
 > down**, and selects the page-size flag from `kayfabe_abi::bringup::nvos46_page_size_flag`.

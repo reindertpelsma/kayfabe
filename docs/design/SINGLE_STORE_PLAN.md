@@ -2278,6 +2278,83 @@ here rather than discovered by a latency campaign later (w586's class, by w554's
    release-and-re-arm, **~0.7 ms measured**, on the vCPU, which is the one sanctioned expensive
    trap (constraint 4) and is inside its budget.
 
+### ✔✔✔ MEASURED 2026-09-15 (w745) — **THE SPLIT ARMS, THE PUBLISH ROUTE REACHES IT, AND IT REFUSES AT ONE PLACE 4 619 TIMES. THE CAUSE IS A ROUTING KEY RE-DERIVED FROM A PLACEHOLDER.**
+
+⚠ **Read this before the "BUILT" block below; it is that block's measurement.**
+
+`[vast **51149807**, RTX 3060 **GA106**, host driver **580.159.04 OPEN**, `TREE_REV = 1edb741a`
+on all three arms, control first; evidence `traces/w745_split/`]`
+⊘ No constraint was relaxed. No completion was forged.
+
+#### ⇒ THE CLIENT, FIRST
+
+| arm | store / VAS owner | client |
+|---|---|---|
+| 1 | `arena` / `isolate` | **`(P)` — `THREADS 8 of 8 ✔`, `MEAN_FALSIFIER=PASS`** |
+| 2 | `device` / `isolate` | `(R)` — 0/8, and **w743's four frozen numbers reproduced byte-identically** |
+| 3 | `device` / **`scratchpad`** | ⊘ **`(R)` — 0/8** |
+
+★ **Arm 2 is what makes this run mean anything.** `(6)=17`, `BIRTH REFUSED=11`,
+`DoorbellBirth=19`, `ADOPTING=0` — the same four numbers as w740, w742 and w743, on **this**
+binary. ⇒ the rebuild changes nothing, so arm 3 is attributable to the split.
+
+#### ⇒ ★★★★★ THE CAUSE, AND IT IS NOT THE ONE THAT WAS PREDICTED
+
+    VAS-PUBLISH(proc=2 pdb=0x0) leaf va=0x8000000000 pdb=Pdb(0)
+      → ⊘⊘ CONSTRAINT 26: the per-proc isolate would not hand its address space over:
+        NoVas(ChanId(0))
+
+`handovers=0 handover_refused=4619`, **every** refusal that one, **every** leaf under
+`pdb=Pdb(0)`. `SharedDevice::vaspace_handover` routes with `route_pdb(spine, gpu, pdb)`; the
+publish route offers framebuffer leaves under a **placeholder** pdb — `Vas::pdb` is
+`Option<Pdb>` and is `None` until a `SetPageDir` declaration arrives.
+
+⇒ **The hand-over RE-DERIVED a routing key its caller already held.** `join_one_fb_leaf` is
+handed the `IsolateId` and the pdb by a caller that has already routed to the right proc;
+keying the hand-over on `(gpu, pdb)` made it a *second statement of one routing decision*, and
+the caller's key can be a value the second statement cannot resolve. That is
+`a_second_source_of_truth_beside_a_complete_value` in a new place.
+
+★ **The fix is subtraction, not addition:** take the route the caller already has (the
+`IsolateId`, or the `Vas` the publish context resolved) instead of re-deriving one. ⊘ Not done
+here — it is a design change to a seam that has now been measured once, and guessing at it is
+what this file's own rules refuse.
+
+#### ⇒ ⊘ WHAT THE BOOT DID NOT REACH, so nobody reads the zeros as answers
+
+`adopts=0` ⇒ **`NV_ESC_RM_DUP_OBJECT` was never issued.** `maps=0`, `asserted=0`,
+`first_refusal=[none]` ⇒ `adopt_vaspace`, `map_store_slice`, the slice binding, the ring oracle
+and constraint 28's placement assertion were **all downstream of the refusal and none ran on
+hardware**. `RING-NOT-A-SLICE=0` and `FOREIGN-HANDLE=0` are **vacuous**, not passes. w744's RM
+answers were neither confirmed nor challenged.
+
+⚠ And **leg B / the USERD ruling is untested**: the boot never birthed a channel over a store
+slice, so the predicted *reason* for `(R)` is not the reason it was `(R)`.
+
+#### ⇒ ✔ WHAT DID HOLD, ON EVERY ARM
+
+`TRAP_FILLS=0` and `misses=0` on bar1 and bar2, `RmInitAdapter failed! = 0`, `SMI_RC=0`,
+`HOST_DMESG_XID=0` on the split arm, `quiesce[calls=0 removed=0]`.
+★ **Constraint 27 is live and honest**: `withheld_unmaps=0 worst_unmaps_outstanding=0
+pending=false`, and every `MMUINVAL-REFRESH` carries `unmaps_outstanding=0 drain_trips=0`. It
+never had to fire, and `pending=false` at teardown says it caused no hang.
+★ The vCPU guard **declined by name 14 times and did not panic** — the second defect found in
+review, proving itself on hardware.
+
+#### ⇒ ⊘ CONSTRAINT 25: THERE IS NO SECOND WIN
+
+`VCPU-BLOCKING total=197 doors=9` on **both** arm 2 and arm 3 — identical to w742's open
+violation. Moving mapping into the scratchpad neither reduced nor multiplied the doors.
+⊘ `worst_trap` was `63351us` (arm 2) and `79686us` (arm 3), one boot each; both are the
+PRAMIN-family door and the pair is not a measured ratio.
+
+#### ⇒ ⊘⊘ AND MY OWN PRE-BOOT AMENDMENT IS REFUTED
+
+It predicted the system proc's `Emulated` channels would hit `MAP_THROUGH_A_BARE_SPACE`.
+Measured: that refusal fired **zero** times and `RmInitAdapter failed!` is `0`. ⇒ the third row
+of the amendment's own table. ⚠ A measured zero on one boot, not a proof the path is
+unreachable.
+
 ### ★★★★★ 2026-09-15 (w745) — **THE OWNERSHIP SPLIT IS BUILT, AND THE `ForeignHandle` RULING IS OPTION (ii). ⊘ A SECOND RULING — THE USERD — IS OPEN AND I DID NOT MAKE IT.**
 
 ⚠ **Read this before the w744 correction below**; it is what that correction's *"(d) needs one
@@ -2387,7 +2464,7 @@ is stale.
 | **6** | **walker → publish path** | ✔ **STEP 1 + STEP 2 DONE & MEASURED** — `[w732, vast 51076219]` `swap` arm: `compared=65 disagreements=0 decided=65 fell_back[none]`, raw client **(P)** on both arms, `traces/walk_swap_live/`. ⊘ See the correction under §6: it does **NOT** retire the host walk |
 | **3** | BAR1/BAR2 as device views, the switch | ◐ **CUTS A–D BUILT; w740 BOOTS PAST `RmInitAdapter` ON THE `device` ARM** (`SMI_RC=0`, `nvidia_uvm` loaded, raw client reaches `(R)` not a hang). Next wall = `FwdFault::CpuCeFb` on USER channels. ⊘ Previously: **CUTS A (w735) AND B (w737) BUILT, behind `KAYFABE_FB_STORE=device`; default `arena` is byte-identical. **Cut C not started; cut B has NOT BOOTED.** ★ the w735 block at the head of this section says why the ORDERING rule was right for a reason nobody had written down — read it before costing B.** ⊘ Previously: **NOT STARTED. ★ w734 MEASURED BOTH TERMS OF THE COST AND THEY DO NOT BLOCK IT** — 275.5 MiB of walk traffic ⇒ 5–10 s (not ~3 min), and 128 distinct frames ⇒ 0.5 MiB of a 256 MiB aperture. The plumbing on its critical path is fixed (w734f). Read the w734 block above the status board before costing it.** SURVEYED w732.** §6 is done, so nothing is in front of it. ⊘ Four of §3's own claims are refuted below — read the w732 correction before costing it |
 | 7 | the deletions | ⊘ **NOT LICENSED — measured w735, 28 PASS / 2 TIMEOUT / 0 FAIL.** The suite now reports all 30 verdicts, but two are REAL defects (`--gpga-reserve-probe`, `--ce-client-guest-ram`) and the device survives only 5 `RmInitAdapter` cycles per QEMU lifetime. A contained cascade is not a green suite |
-| **26** | **the ownership split (`KAYFABE_VAS_OWNER`)** | ◐ **BUILT w745, NOT BOOTED.** Bare per-proc VA spaces, the hand-over, the dup, `StoreMapPort`, slice bindings, `RingProvenance`, the fail-closed ring oracle. ⊘ **Leg B (the USERD) is an OPEN RULING** and is why the client is predicted not to pass — read the w745 block at the head of this section |
+| **26** | **the ownership split (`KAYFABE_VAS_OWNER`)** | ◐ **BUILT AND BOOTED w745 — ARMS, AND REFUSES AT THE HAND-OVER.** `handovers=0 handover_refused=4619`, all `NoVas` under a placeholder `pdb=Pdb(0)`: the hand-over re-derives a routing key its caller already holds. ⊘ Nothing downstream ran, so the dup/map/bind/oracle are all **unmeasured on hardware**. Read the w745 MEASURED block at the head of this section. ⊘ Previously: **BUILT w745, NOT BOOTED.** Bare per-proc VA spaces, the hand-over, the dup, `StoreMapPort`, slice bindings, `RingProvenance`, the fail-closed ring oracle. ⊘ **Leg B (the USERD) is an OPEN RULING** and is why the client is predicted not to pass — read the w745 block at the head of this section |
 | 8 | the raw client's full suite, in the guest | ○ not started |
 
 ### ★★★ THE ORDER IS 1,2,4,5 → **6** → **3** → 7 → 8 — and 6-before-3 is FORCED
