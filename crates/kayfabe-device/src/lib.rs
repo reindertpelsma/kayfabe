@@ -118,12 +118,14 @@ pub use kayfabe_trace::{FaultTag, Faulted};
 pub use fbwin::{
     ALREADY_JOINED, Bar0Window, CARRY_BACK_NO_JOIN, CARRY_BACK_READ_FAILED, ESTABLISH_FAILED,
     DEVICE_HOST_READ_NOT_ARMED, DEVICE_HOST_READ_UNBUILT, DEVICE_HOST_WRITE_NOT_ARMED,
-    DEVICE_HOST_WRITE_UNBUILT, DEVICE_RESET_UNBUILT, DeviceFb, DeviceFbDrained, DeviceFbPort,
+    DEVICE_HOST_WRITE_UNBUILT, DEVICE_JOIN_IS_A_SECOND_MEMORY, DEVICE_RESET_UNBUILT, DeviceFb,
+    DeviceFbDrained, DeviceFbPort,
     DeviceFbWant,
-    FB_WRITER_KINDS, FbArenaPage, FbJoinCarried, FbJoinInstalled, FbJoined, FbPageArena,
-    FbPageBacking, FbPageExport, FbPageOrigin, FbPageStanding, FbRefused, FbStore, FbWriter,
-    JOIN_NOT_EXPORTABLE, NO_JOIN_SUPPORT, NO_PAGE_ARENA, NO_PAGE_EXPORT, PAGE_NOT_RESIDENT,
-    RefusingFb, SparseFb, device_fb_report,
+    FB_WRITER_KINDS, FbArenaPage, FbJoinCarried, FbJoinInstalled, FbJoinPlan, FbJoined,
+    FbPageArena, FbPageBacking, FbPageExport, FbPageOrigin, FbPageStanding, FbRefused, FbStore,
+    FbWriter,
+    JOIN_NOT_EXPORTABLE, NO_JOIN_SUPPORT, NO_PAGE_ARENA, NO_PAGE_EXPORT, OUTSIDE_FRAMEBUFFER,
+    PAGE_NOT_RESIDENT, RefusingFb, SparseFb, device_fb_report,
 };
 
 /// ★★★ **E2** — the usermode doorbell port, re-exported: [`RegPlane::set_doorbell`]'s

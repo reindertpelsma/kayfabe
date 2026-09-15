@@ -13806,6 +13806,53 @@ const RING_PAGE_DUMPS: usize = 4;
 /// range, which is printed beside it.
 const RING_SCAN_REPORT: usize = 4;
 
+/// ★★★★★ **w742 — leaves the store answered [`kayfabe_device::FbJoinPlan::DeviceBacked`] for**:
+/// a `RegPlane::join_fb` that did not happen, and therefore a mirror quiesce and a slot removal
+/// that did not happen either. `[measured w740]` there were 4431 of these, all refused.
+static DEVICE_LEAF_DEVICE_BACKED: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+/// As [`DEVICE_LEAF_DEVICE_BACKED`], for a range the store refused by name before anything was
+/// minted, mapped or quiesced.
+static DEVICE_LEAF_PLAN_REFUSED: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+/// ★★★ Runs of the reserved object this arm's own drains armed — the *install* half. ⊘ Counted
+/// here and not read from `FB-DEMAND`, which sums every caller's drains: a number that cannot
+/// separate this arm's arms from the byte port's demand cannot say whether the arm did anything.
+static DEVICE_LEAF_SLICE_ARMED: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+/// How many of each of the two lines above are printed. ⊘ Capped and LOUD about the cap: the
+/// device arm fires thousands of times a boot and an uncapped line would be the log.
+const DEVICE_LEAF_LINES_MAX: u64 = 6;
+
+/// ★★★ The w742 publish-route census, printed at teardown on both arms.
+///
+/// ⊘ Printed unconditionally and stating its own verdict, for `device_fb_report`'s reason: on
+/// the arena arm every number here is zero **because the arm never ran**, and a line that
+/// simply vanished would make that indistinguishable from an arm that ran and did nothing.
+fn device_leaf_report() -> String {
+    use std::sync::atomic::Ordering::Relaxed;
+    let dev = DEVICE_LEAF_DEVICE_BACKED.load(Relaxed);
+    let refused = DEVICE_LEAF_PLAN_REFUSED.load(Relaxed);
+    let armed = DEVICE_LEAF_SLICE_ARMED.load(Relaxed);
+    let verdict = if dev == 0 && refused == 0 {
+        "⊘ THE DEVICE ARM NEVER RAN — every leaf this boot offered was answered `NeedsRegion`. \
+         That is the ARENA arm's correct answer and the control's; on a `device` boot it means \
+         the store was not the single store and nothing below is about it."
+    } else if armed == 0 {
+        "◐ THE JOINS WERE SKIPPED AND NO SLICE WAS ARMED — the quiesce storm is gone (read \
+         `quiesce[calls=` beside this) and the CPU-view install did nothing. ⊘ Read \
+         `FB-DEMAND`/`DEVICE-FB-PORT`: a drain DECLINED on a vCPU is a different finding from \
+         a drain that found the runs already armed."
+    } else {
+        "★★★ THE DEVICE ARM RAN AND INSTALLED — joins skipped (so no mirror quiesce for any of \
+         them) and slices of the reserved object armed. ⚠ `armed` is runs, not leaves: a \
+         re-offered leaf whose run is already armed costs nothing and is counted in neither."
+    };
+    format!(
+        "DEVICE-LEAF no_join_needed={dev} plan_refused={refused} slices_armed={armed} ⇒ {verdict}"
+    )
+}
+
 /// What joining ONE framebuffer leaf produced, as the two call sites need it.
 ///
 /// ⊘ `installed` is `Some(len)` **only** when step 3 returned `Ok` — i.e. when the guest's
@@ -13849,6 +13896,100 @@ fn join_one_fb_leaf(
     leaf: kayfabe_rt::completion_watch::FbLeaf,
 ) -> Option<JoinedLeaf> {
     let release = selected_join_release();
+    // ---- -1. ★★★★★ **w742 — THE DEVICE STORE'S OWN ARM, AND IT IS ASKED FIRST FOR A REASON.**
+    //
+    // `SINGLE_STORE_PLAN.md`: *"the device store needs its own install path on the publish
+    // route — install a slice of the one reserved object at the aperture offset — instead of
+    // being asked for a join it cannot perform."*
+    //
+    // ⊘⊘⊘ **ASKED BEFORE STEP 0, BEFORE `back_fb_leaf`, AND ABOVE ALL BEFORE `join_fb`.** Every
+    // one of those has a side effect that a later refusal does not undo:
+    //
+    //   `back_fb_leaf`  — an IPC round trip that MINTS a host object and maps it at the guest's
+    //                     VA. `[measured w740]` `VERBCOST [JoinFbLeaf n=2149 mean=1.07ms 57.8%]`
+    //                     + `[Release n=2150 mean=0.74ms 40.0%]` = **97.8 % of the boot's whole
+    //                     verb budget**, spent minting objects that were then released unused.
+    //   `join_fb`       — QUIESCES the BAR mirror over the leaf before asking the store, and a
+    //                     refused install puts NOTHING back. This is the one that cost traps.
+    //
+    // ★★★★★ **THE IDENTITY, from the w740 device-arm log, and it is exact:**
+    //
+    //     THE INSTALL REFUSED …  4431        (37 distinct frames, re-offered)
+    //     quiesce[calls=4431 removed=58175]  ⇐ the SAME 4431, one per refused install
+    //     BAR1-PASSTHROUGH arm=on misses=2183
+    //     BAR-MIRROR bar1 TRAP_FILLS=44 … refused=[ALREADY-COVERED-EARLY=2139]   (44+2139=2183)
+    //
+    // ⇒ every BAR1 exit on that boot was a guest access landing in a window a **refused** join
+    // had opened by removing the slot, and 2139 of them found the slot back again by the time
+    // the fill ran — which is what `ALREADY-COVERED-EARLY` beside a trap **means**. The store's
+    // refusal was correct; paying for it in guest VM exits was not.
+    //
+    // ★ And the arm is not merely *"do less"*. A leaf the store answers `DeviceBacked` for is
+    // already the reserved object at that offset for every GUEST access (the mirror's memslots
+    // name it, `FbPageBacking::Device`), and the one thing that is **not** yet true of it is a
+    // **CPU view** — which is exactly what `FwdFault::CpuCeFb` refuses for on this arm. So the
+    // arm installs that slice: `want` here, `drain` below, and the drain is the only IPC.
+    //
+    // ⚠ `want` + `drain` is the §3 shape and nothing else is permitted here: the want is a
+    // `BTreeSet` insert bounded by `WANT_SET_CAP`, the drain arms at most `DRAIN_ARMS_MAX`
+    // runs per call (a **fixed trip count**, never a loop that ends when the guest's tables say
+    // so) and **declines by name** when this thread is a vCPU or inside a trap. There is no
+    // retry loop here at all — a leaf the drain could not reach this time is re-offered by the
+    // next publish, which is the route's own iteration and not ours.
+    match plane.fb_join_plan(leaf.phys, leaf.len) {
+        kayfabe_device::FbJoinPlan::NeedsRegion => {}
+        kayfabe_device::FbJoinPlan::Refused(why) => {
+            let n = DEVICE_LEAF_PLAN_REFUSED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            if n < DEVICE_LEAF_LINES_MAX {
+                eprintln!(
+                    "{head} {what} leaf va=0x{:x} len=0x{:x} fb_phys=0x{:x} → ⊘ THE STORE \
+                     REFUSED THE RANGE BY NAME BEFORE ANYTHING WAS DONE: `{why}`. ⊘ Nothing was \
+                     minted, nothing was mapped, the mirror was NOT quiesced and nothing is \
+                     bound. (printed {} of {DEVICE_LEAF_LINES_MAX}; the total is `DEVICE-FB \
+                     join_plan_refused=`)",
+                    leaf.va,
+                    leaf.len,
+                    leaf.phys,
+                    n + 1,
+                );
+            }
+            return None;
+        }
+        kayfabe_device::FbJoinPlan::DeviceBacked { at } => {
+            let wanted = plane.want_fb_device_slice(at, leaf.len);
+            // ★ THE DRAIN — the IPC round trip, at a lock-free entry point, with a fixed trip
+            // count inside it. ⊘ It declines by name on a vCPU; that is not a failure of this
+            // arm and is counted separately by `FB-DEMAND`.
+            let d = plane.arm_fb_demand();
+            DEVICE_LEAF_SLICE_ARMED
+                .fetch_add(u64::from(d.armed), std::sync::atomic::Ordering::Relaxed);
+            let n = DEVICE_LEAF_DEVICE_BACKED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            if n < DEVICE_LEAF_LINES_MAX {
+                eprintln!(
+                    "{head} {what} leaf va=0x{:x} len=0x{:x} fb_phys=0x{:x} → ★★★★★ NO JOIN IS \
+                     NEEDED: this range IS the one reserved object at +0x{at:x}. ⊘ No host \
+                     object was minted, no establishment copy was performed and — the number \
+                     that matters — THE MIRROR WAS NOT QUIESCED, so every memory slot over this \
+                     leaf stays live. INSTALLED the CPU-view slice: wanted={wanted} \
+                     armed={} refused={} deferred={} declined={} (printed {} of \
+                     {DEVICE_LEAF_LINES_MAX}; totals are `DEVICE-LEAF`)",
+                    leaf.va,
+                    leaf.len,
+                    leaf.phys,
+                    d.armed,
+                    d.refused,
+                    d.deferred,
+                    d.declined,
+                    n + 1,
+                );
+            }
+            // ⊘ `None`, and it is NOT a refusal dressed up: nothing was joined, so nothing may
+            // be reported as joined. The callers all treat `None` as *"this leaf was not
+            // backed"*, which is exactly true — and was equally true of the 4431 refusals this
+            // replaces, at the cost of an IPC round trip and a mirror quiesce each.
+            return None;
+        }
+    }
     // ---- 0. ★★★★★ **w380 — DOES THIS FRAME ALREADY HAVE PAGES, AND WHOSE ARE THEY?**
     //
     // Ordered FIRST, and that ordering is the whole reason it is cheap: deciding at the
@@ -18118,6 +18259,11 @@ impl Regs {
         // read cut A as working. `⊘⊘ VACUOUS` is what tells an unmeasured store apart from one
         // nothing needed.
         eprintln!("kayfabe: {}", kayfabe_device::device_fb_report());
+        // ★★★★★ **w742 — THE PUBLISH ROUTE'S OWN VERDICT.** Read it beside `quiesce[calls=` in
+        // the BAR-mirror census: on the `device` arm `no_join_needed` is the count of mirror
+        // quiesces that did **not** happen, and `[measured w740]` that number was the whole of
+        // the BAR1 trap census.
+        eprintln!("kayfabe: {}", device_leaf_report());
         // ★★★★★ **CUT B — THE ARMING PATH, AND THE BYTE PORT IT ARMS THROUGH.**
         //
         // ⊘ TWO lines and not one, because they answer different questions and either can be

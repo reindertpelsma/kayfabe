@@ -3272,6 +3272,56 @@ impl RegPlane {
         out
     }
 
+    /// ★★★★★ **w742 — ASK THE STORE WHAT THIS RANGE NEEDS, BEFORE ANYTHING IS DESTROYED.**
+    ///
+    /// [`crate::fbwin::FbStore::join_plan`], through one short hold of the memory lock. Nothing
+    /// blocks, nothing is allocated, and — the whole point — **the BAR mirror is not quiesced**.
+    ///
+    /// # ⊘⊘⊘ WHY THIS IS A SEPARATE VERB AND NOT A BRANCH INSIDE [`RegPlane::join_fb`]
+    ///
+    /// `join_fb`'s first act is `m.quiesce(phys, len)` — the mirror's slots over the range come
+    /// off **before** the store is asked, because the establishment copy must not race a guest
+    /// store through a memslot. That ordering is correct and stays. But it means a store that
+    /// refuses the install has already had the guest's memory slots taken away for nothing, and
+    /// `[measured w740]` the bill for that is exact: **4431** `THE INSTALL REFUSED`, **4431**
+    /// `quiesce[calls=`, **58175** slots removed, and **2183** `BAR1-PASSTHROUGH` guest exits
+    /// into the windows those removals opened.
+    ///
+    /// ⇒ The question has to be asked **before** `join_fb` is entered at all, which is what this
+    /// is for. ⊘ It deliberately does not quiesce, does not resume, and cannot fail.
+    #[must_use]
+    pub fn fb_join_plan(&self, phys: u64, len: u64) -> crate::fbwin::FbJoinPlan {
+        let s = self.mem.lock();
+        s.fb.join_plan(phys, len)
+    }
+
+    /// ★★★★★ **w742 — RECORD A WANT for one slice of the reserved object.** The `want` half of
+    /// the arming pair; [`RegPlane::arm_fb_demand`] is the `drain` half and is the only one that
+    /// performs the IPC round trip.
+    ///
+    /// Returns `true` when a byte port took the demand, `false` when this store has none — which
+    /// is every store but the single store, and is the control arm's answer **by construction**.
+    ///
+    /// # ⚠ THE LOCK DISCIPLINE, WHICH IS THE WHOLE OF THE SAFETY ARGUMENT
+    ///
+    /// `SINGLE_STORE_PLAN.md` §3: *"`want` records **under** the plane lock; `drain` is the IPC
+    /// round trip and runs **only** at lock-free entry points."* The `Arc` clone below is the one
+    /// thing that takes the memory lock, and the lock is **released before `want` is called** —
+    /// not because `want` blocks (it takes one `BTreeSet` mutex and inserts), but because a
+    /// caller who reads this must never learn the habit of calling a port under the plane lock.
+    ///
+    /// ⊘ Bounded by the port's own `WANT_SET_CAP`, which drops loudly rather than growing: the
+    /// set is fed by guest-authored addresses and an unbounded one is a guest-driven host
+    /// allocation.
+    pub fn want_fb_device_slice(&self, at: u64, len: u64) -> bool {
+        let Some(port) = self.fb_demand_port() else {
+            return false;
+        };
+        // ⊘ HERE, with the memory lock released — see the doc above.
+        port.want(at, len.max(1), crate::fbwin::DeviceFbWant::Read);
+        true
+    }
+
     /// ★★★★★ **w329 — RELEASE the join installed at `phys`**, [`RegPlane::join_fb`]'s inverse
     /// and the half `w327` measured the absence of as a hard `rc=719`.
     ///
