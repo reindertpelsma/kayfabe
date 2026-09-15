@@ -502,6 +502,68 @@ assumption about what `AdoptedGuestRing::memory` names.
 
 ⊘⊘⊘ **AND TWO STRUCTURAL BLOCKERS. Neither is a one-liner and the first is an OWNER RULING.**
 
+> ### ✔✔✔ PHASE 1 ANSWERED ON HARDWARE, 2026-09-15 (w744) — **(d) IS BUILDABLE AT THE RM LEVEL, VIA ROUTE B**
+>
+> **STATUS: LIVE, 2026-09-15.** `[vast 51135962, RTX 3060 (GA106), driver 580.126.20,
+> `TREE_REV = e0ffe496`; verbatim output `traces/w744_b1d_probe/run3_FINAL_*.log`, earlier runs
+> beside it; rung `kayfabe-rm-ladder --dup-vaspace-probe`]`
+> ⊘ No guest, no KVM, no constraint relaxed. `B1D_PROBE=(P)`.
+>
+> | question | answer | measurement |
+> |---|---|---|
+> | **1.** can a `FERMI_VASPACE_A` be duped into another client? | ★ **YES** | `B1D_Q1A_DUP_VASPACE status=0x0000` |
+> | **1b.** …and the `NV01_MEMORY_VIRTUAL` range? | ⊘ **NO**, and not because of the parent | `0x26 INVALID_DEVICE` (parent = device), `0x36 INVALID_OBJECT_PARENT` (parent = root) — **two different refusals**, so route A is dead for a reason |
+> | **2.** does `MapMemoryDma` take a duped `hDma` with a local `hMemory`? | ⊘ **moot, and better** | route A has no duped `hDma` to offer. **Route B needs none**: the scratchpad builds its OWN range over the duped space (`Q1C3 … status=0x0000`) and maps with it — `Q2B … placed_as_asked=true`. **Nothing foreign is named on the map.** |
+> | **3.** does `DMA_OFFSET_FIXED_TRUE` accept an arbitrary guest-chosen VA? | ★★★ **ONLY WITH `NVOS46_FLAGS_PAGE_SIZE_4KB`** | without it **`0/3`** and *silently relocated*; with it **`3/3`, exact** |
+> | **4.** (not asked, and it decides the design) is it ONE address space or a copy? | ★★★★★ **ONE** | control `status=0x0000` at an unclaimed VA, collision **`0x51`** at one S occupied ⇒ `B1D_SHARING=ONE SPACE` |
+>
+> #### ⇒ ★★★★★ THE SHAPE THAT WORKS, and it is the owner's preferred route B in its cleanest form
+>
+> **The per-proc client creates ONLY a bare `FERMI_VASPACE_A`. The scratchpad dupes that, and
+> builds its own `NV01_MEMORY_VIRTUAL` range inside it.** Both halves measured `NV_OK`, and the
+> map through that range lands exactly where asked.
+> ⊘ **It must be a BARE space.** If the per-proc client has already built a whole-space range —
+> which `alloc_vaspace_raw` does today, minting both and pairing them — the scratchpad's range is
+> refused `0x19 NV_ERR_INSERT_DUPLICATE_NAME`, *"a duplicate entry in the requested btree"*, and
+> so is a **sub**-range (`Q1C2`). ⇒ **one range object per address space**, and `alloc_vaspace_raw`
+> must be split so the range is built by whoever will map, not by whoever creates the space.
+>
+> #### ⇒ ★★★★★ AND A DATA-PLANE FINDING THAT IS NOT A DETAIL: `FIXED` RELOCATES, AND SAYS `NV_OK`
+>
+> ```text
+> B1D_Q3_FIXED    at=0x0000008000001000 status=0x0000 dmaOffset=0x0000008000000000 honoured=false
+> B1D_Q3B_FIXED_4K at=0x0000009000001000 status=0x0000 dmaOffset=0x0000009000001000 honoured=true
+> ```
+>
+> Those are the **raw client's own per-thread ring VAs** (`rmladder --w379`: `BASE 0x80_0000_0000`,
+> stride `0x2_0000_0000`, `+0x1000`). Without `NVOS46_FLAGS_PAGE_SIZE_4KB`, RM answers **`NV_OK`**
+> and places the mapping **4 KiB below** the address asked for: `DMA_OFFSET_FIXED_TRUE` makes
+> `dmaOffset` an `[IN]`, but `_dmaGetPageSize` still picks a **big page**, and a big-page mapping
+> cannot begin on a 4 KiB boundary — so RM **aligns the request down instead of refusing it**.
+> ★ That is exactly the failure `NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE`'s own doc warns about —
+> *"the mapping exists somewhere the guest never names: the submission looks published and faults
+> the instant hardware resolves it (`Xid 31 FAULT_PDE`)"* — **reached through a success.**
+> ⚠ **Every production caller of `raw_map_dma_flags` passes `extra: 0`**, so nothing in the
+> forwarding plane sets this flag today, and `AddressTable::bind` would then refuse the row with
+> `HostVaMismatch` — or, where the VA happens to be big-page aligned, silently pass.
+> ⊘ It was caught **only** because `MapOutcome` carries `dmaOffset` beside the status by design;
+> a `Result<u64, RmError>` returns `Ok` here.
+>
+> #### ⊘ WHAT THIS PROBE DOES **NOT** SAY
+>
+> - One driver (`580.126.20`) on one chip (GA106). The bench runs `580.159.04 OPEN`; run 1 of this
+>   probe reproduced `Q1A = NV_OK` on `580.159.03`, so the hinge holds across two builds, but the
+>   4 KiB finding is measured on one.
+> - Sharing a VA namespace is **not** the same as a channel born by the stub executing against the
+>   scratchpad's mapping. That needs a submission; this rung deliberately builds none.
+> - It says nothing about `ForeignHandle` or `RING_NOT_A_JOINED_WINDOW` — **kayfabe's own gates**,
+>   not RM's. See the correction directly below, which is what still blocks the build.
+> - ⊘ `--w379`'s `VAS_LIMIT = 0x100_0000_0000` is **not** RM's limit on this part: a map at
+>   `0x100_0001_0000` was **accepted** (`honoured=true`). The rung's first known-positive was built
+>   on that number and **did not fire**; it was replaced with re-mapping an address the rung had
+>   already mapped, which must refuse whatever the layout is. It fires.
+
+
 > ### ⊘⊘⊘ CORRECTED 2026-09-15 (w744) — **THE `ForeignHandle` GATE DOES *NOT* DISSOLVE, AND THERE
 > ### IS A SECOND GATE THE RULING DOES NOT NAME.** Read this before building (d).
 >
