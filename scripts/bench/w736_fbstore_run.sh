@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 # ★★★★★ w736 — THE CUT-A BOOT. Tests `SINGLE_STORE_PLAN.md`'s w735 pre-registered prediction.
+# ★★★★★ w738 — REUSED VERBATIM FOR THE CUT-B BOOT. Same two arms, same one variable, same
+#   order (control first). The ONLY change is three extra `grep`s in `report()`, marked
+#   `w738 ADDITION, REPORTING ONLY`: cut B added `FB-DEMAND`, `DEVICE-FB-PORT` and
+#   `premap[pt_faults=] arm[…]`, and a harness that does not cut them out would grade cut B
+#   on cut A's fields. ⊘ No arm, threshold or boot step differs — a second harness for the
+#   same job is what this comment exists to prevent.
 #
 #   usage: bash scripts/bench/w736_fbstore_run.sh [tag]     (run ON the bench box)
 #
@@ -62,9 +68,18 @@ n_ws=$(strings "$Q_BIN" 2>/dev/null | grep -c 'WALK-SHADOW')
 n_img=$(strings "$Q_BIN" 2>/dev/null | grep -c 'kayfabe-isolate-cuda')
 n_fs=$(strings "$Q_BIN" 2>/dev/null | grep -c 'FB-STORE AT REALIZE')
 n_dfb=$(strings "$Q_BIN" 2>/dev/null | grep -c 'DEVICE-FB named=')
+# ★★★ w738 — CHECK THE BINARY FOR **CUT B**, BY CONTENT, AND REFUSE.
+# ⊘ `FB-DEMAND` and `DEVICE-FB-PORT` print UNCONDITIONALLY on both arms, so a boot that does
+# not carry them is an OLDER binary, not a quiet boot — and every row of w738's prediction
+# would then be graded against absence. This is the same gate `E6-CONTENT` already applies to
+# the walk shadow, for the reason that gate exists.
+n_fd=$(strings "$Q_BIN" 2>/dev/null | grep -c 'FB-DEMAND drains=')
+n_fbp=$(strings "$Q_BIN" 2>/dev/null | grep -c 'DEVICE-FB-PORT drains=')
 echo "W736-CONTENT: walk_shadow=$n_ws cuda_image=$n_img fb_store=$n_fs device_fb=$n_dfb"
+echo "W738-CONTENT: fb_demand=$n_fd device_fb_port=$n_fbp (either 0 ⇒ the binary predates CUT B)"
 if [ "$n_img" -eq 0 ]; then echo "⊘ no cuda-scratchpad in the binary — the port cannot arm. STOP."; exit 5; fi
 if [ "$n_fs" -eq 0 ] || [ "$n_dfb" -eq 0 ]; then echo "⊘ the binary predates cut A. STOP."; exit 4; fi
+if [ "$n_fd" -eq 0 ] || [ "$n_fbp" -eq 0 ]; then echo "⊘ the binary predates CUT B — w738's rows cannot be graded. STOP."; exit 6; fi
 
 report() {
   local tag="$1" arm="$2"
@@ -83,6 +98,39 @@ report() {
   echo "W736-RD-REFUSED=$(f 'host_read_refused=[0-9]*')"
   echo "W736-WR-REFUSED=$(f 'host_write_refused=[0-9]*')"
   echo "W736-OOR=$(f 'out_of_range=[0-9]*')"
+  # ★★★ w738 ADDITION, REPORTING ONLY — cut B's own fields, which cut A's store did not have.
+  # ⊘ Nothing here changes an arm, a threshold or a boot step; it cuts three censuses out of
+  # the same logs the w736 run already produced. `read_served` is cut B's GATE (row 2).
+  echo "W738-RD-SERVED=$(f 'read_served=[0-9]*')"
+  echo "W738-WR-SERVED=$(f 'write_served=[0-9]*')"
+  echo "W738-WANTED-RD=$(f 'wanted_by_read=[0-9]*')"
+  echo "W738-WANTED-WR=$(f 'wanted_by_write=[0-9]*')"
+  echo "--- ★★★ w738 ROW 3: the FB-DEMAND census (cut B's callers), VERBATIM ---"
+  n_fd=$(grep -ac 'FB-DEMAND drains=' "$Q" 2>/dev/null)
+  echo "W738-FBDEMAND-LINES=${n_fd:-0}  (0 ⇒ UNMEASURED — the line is printed on BOTH arms, so"
+  echo "                                 a missing one is an older binary, not a quiet boot)"
+  FD=$(grep -ao 'FB-DEMAND drains=.\{0,700\}' "$Q" 2>/dev/null | tail -1)
+  printf '%s\n' "$FD" | fold -w 160
+  g() { printf '%s' "$FD" | grep -ao "$1" | tail -1; }
+  echo "W738-FD-DRAINS=$(g 'drains=[0-9]*')"
+  echo "W738-FD-ARMED=$(g 'armed=[0-9]*')"
+  echo "W738-FD-REFUSED=$(g 'refused=[0-9]*')"
+  echo "W738-FD-DECLINED=$(g 'declined_on_vcpu=[0-9]*')"
+  echo "W738-FD-NOPORT=$(g 'no_port=[0-9]*')"
+  echo "W738-FD-RETRIED-OK=$(g 'read_retried_ok=[0-9]*')"
+  echo "W738-FD-GAVE-UP=$(g 'read_gave_up=[0-9]*')"
+  echo "--- ★★★ w738 ROWS 4/5: the DEVICE-FB-PORT census (cut B's mechanism), VERBATIM ---"
+  n_pp=$(grep -ac 'DEVICE-FB-PORT ' "$Q" 2>/dev/null)
+  echo "W738-DEVFBPORT-LINES=${n_pp:-0}"
+  grep -ao 'DEVICE-FB-PORT .\{0,800\}' "$Q" 2>/dev/null | tail -1 | fold -w 160
+  echo "--- ★★★ w738 ROW 6: premap's fault count and the arm-then-retry trip counts ---"
+  grep -ao 'premap\[[^]]*\] arm\[[^]]*\]' "$Q" 2>/dev/null | tail -1
+  echo "--- w738: the store's first MISSED-AN-ARMED-VIEW line (cut B's transient, not cut A's wall) ---"
+  grep -a 'MISSED AN ARMED VIEW' "$Q" 2>/dev/null | head -2 | cut -c1-300
+  echo "--- w738: PREMAP's SHORT-enumeration line, if item 4's shape fired at all ---"
+  grep -a 'PREMAP ⊘⊘' "$Q" 2>/dev/null | head -2 | cut -c1-300
+  echo "--- w738: the cut-B banner at realize (absent ⇒ no byte port was attached at all) ---"
+  grep -a 'CUT B — a byte port is attached\|CUT A SHAPE — no byte port' "$Q" 2>/dev/null | head -2 | cut -c1-300
   echo "--- the store's FIRST refusal, on its own line (it says its own name once) ---"
   grep -a 'DEVICE-FB ⊘⊘⊘ FIRST HOST-SIDE' "$Q" 2>/dev/null | head -4 | cut -c1-300
   echo "--- ★★★ PREDICTION 1b: the DEVICE-VIEW-PORT census, VERBATIM ---"

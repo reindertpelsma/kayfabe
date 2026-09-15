@@ -62,7 +62,7 @@ before it takes the lock**, and there are four of them in three different shapes
 | cut | content | state |
 |---|---|---|
 | **A** | `FbPageBacking::Device { at }`, the third token space, `fill_now`'s device arm with **release-after-the-mapping-is-gone**, `install_device_page`, `DeviceFb` (host `read`/`write` **refuse by name**), PRAMIN release-and-re-arm, the `KAYFABE_FB_STORE` gate | ✔ **BUILT w735**, gate default `arena` |
-| **B** | host reads through armed views: `PlanePtBytes` arm-then-retry, a demand set for `FbStoreReader`'s callers, the premap retry loop, the vCPU decline-by-name | ✔ **BUILT w737**, offline only — see the w737 block below, including the correction to item 4's mechanism. ⊘ It has not booted, and item 6 was answered rather than built |
+| **B** | host reads through armed views: `PlanePtBytes` arm-then-retry, a demand set for `FbStoreReader`'s callers, the premap retry loop, the vCPU decline-by-name | ✔ **BUILT w737 and BOOTED w738** — `read_served=3` out of the reserved object, the first host-side framebuffer read this campaign has ever served. ⊘ Item 2 (`PlanePtBytes`) measured **INERT** (`walk-guest-pt r=0`), item 4 fired **once**, and two of cut B's censuses report the opposite of what the boot did. Read the w738 block. ~~offline only … ⊘ It has not booted~~ (superseded 2026-09-15) |
 | **C** | two-phase CPU CE (dry-run partition → arm → execute), **or** constraint 9 and never build it; plus `device_reset`, which under one object is *zeroing gibibytes of real video memory* | ○ not started — and C is the one to delete rather than build |
 
 ### ★★★★★ 2026-09-15 (w736) — **THE BOOT WAS RUN. TWO ROWS HELD, ONE IS REFUTED, AND THE REFUTED ONE IS CONTRADICTED BY A TABLE THREE PARAGRAPHS ABOVE IT IN THIS FILE.**
@@ -312,6 +312,13 @@ every caller that re-asks.
 
 ### ⚠ WHAT CUT B IS **NOT**, RESTATED BECAUSE THE TEMPTATION IS AT ITS STRONGEST HERE
 
+> ### ⊘⊘⊘ SUPERSEDED IN PART, 2026-09-15 (w738) — **CUT B HAS NOW BOOTED.** The paragraph
+> below is true of w737 and false from w738 onward. What it says about the boot NOT reaching a
+> guest still holds — it died at `kbusVerifyBar2_GM107`, verbatim as predicted. What is new:
+> `read_served=3`, `DEVICE-VIEW-PORT armed=10`, and the two census defects in the w738 block.
+> ⊘ The *"predicted end is the kernel CeUtils scrubber"* sentence below remains a **refuted**
+> diagnosis — see the corrected block further down — and w738 did not test it either.
+
 ⊘ **Cut B has not booted.** Everything above is offline: 28 tests, 18 of them new
 known-positives. The plan's own ruling stands — *"do not grade anything on a `device` boot
 until cut B lands"*, and cut B's predicted end is the **kernel CeUtils scrubber** (cut C /
@@ -407,6 +414,171 @@ The alternative — a host-memory fallback for host reads — is two memories fo
 which is the defect the reserved object exists to delete and which
 `a_framebuffer_page_written_through_bar1_is_the_page_bar2_reads` is the falsifier for. ⇒ **do
 not grade anything on a `device` boot until cut B lands.**
+
+### ★★★★★ 2026-09-15 (w738) — **THE CUT-B BOOT RAN. THE STORE SERVED HOST READS OUT OF REAL VIDEO MEMORY FOR THE FIRST TIME — AND TWO OF CUT B's OWN CENSUSES LIE ABOUT IT.**
+
+⚠ **Read this before the pre-registration below; it is the measurement of it.**
+`[measured w738, 2026-09-15]` fresh GA106 bench (vast **51103139**, machine 33261, host driver
+**580.159.04 open module**, verified on content). **Binary and tree both `d0b659f8`, stamped on
+both arms** (`BINARY_REV=TREE_REV`). Two boots at the same binary, `KAYFABE_DEVICE_VIEW=probe`
+`SHADOW=on` on both, **control first**: exactly one variable. Harness
+`scripts/bench/w736_fbstore_run.sh` (reused; three `grep`s added, reporting only). Evidence in
+`traces/w738_fbstore_cutb/`. ⊘ **No constraint was relaxed and no source changed** — the diff for
+this boot is this document and that harness, **zero `.rs` files**.
+
+**THE CONTROL FIRST:** `W392D_GUEST_OUTCOME=(P)`, `THREADS 8 of 8 verified ✔`,
+`MEAN_FALSIFIER=PASS`, `SMI_RC=0`, bar1/bar2 `TRAP_FILLS=0`. ⇒ the binary is sound.
+★ And cut B is **provably inert on the control**, live rather than offline:
+`DEVICE-FB … ⊘⊘ VACUOUS`, `FB-DEMAND drains=0 armed=0 … no_port=0`,
+`DEVICE-FB-PORT ⊘ NO BYTE PORT ON THIS BOOT`, `arm[retries=0]`. **`arm_fb_demand` was never
+even called** on the arena arm — w737's offline claim, confirmed by a boot.
+
+#### THE NINE PRE-REGISTERED ROWS, graded verbatim
+
+| # | predicted | measured | verdict |
+|---|---|---|---|
+| 1 | `host_read_refused` ≥ 20, may RISE | **`18`** | ⊘ **REFUTED as stated** — it FELL. ⊘ Not cut-B-refuting: the refuting value was `0` |
+| 2 | `read_served ≥ 1` ★ **THE GATE** | **`read_served=3`** | ✔ **HELD** |
+| 3 | `FB-DEMAND drains≥1 armed≥1`, verdict `WORKING`/`PARTLY` | `drains=1 armed=1 refused=0 declined_on_vcpu=0 no_port=0 read_retried_ok=0 read_gave_up=0` ⇒ `⊘ THE ARMING PATH RAN AND NO READ WAS EVER SERVED BY A RETRY` | ◐ **numbers HELD, VERDICT REFUTED** — and see below: **the verdict is wrong** |
+| 4 | `DEVICE-VIEW-PORT armed > 9` | **`armed=10`** (w736: 9) | ✔ **HELD**, and attributable: `DEVICE-FB-PORT armed=1` + `PRAMIN-SLOT moves=9` |
+| 5 | `refused=0 double_released=0` | `refused=0 double_released=0`, `arm_refused=0`, `first_arm_refusal=[none]`, `budget_refused=0`, `outside_object=0` | ✔ **HELD** |
+| 6 | `premap[pt_faults] ≥ 1` **and** `arm[retries] ≥ 1` | `premap[runs=6 filled=0 skipped=0 refused=0 biggest_leaf=0 bar2_visited=0 pt_faults=0] arm[retries=1 retried_ok=0 gave_up=0]` | ◐ **retries HELD, `pt_faults` REFUTED** — and the refutation is **the census's, not cut B's** |
+| 7 | `named=0` | **`named=0`** | ✔ **HELD** (the surprise did not occur) |
+| 8 | dies at `kbusVerifyBar2_GM107 … garbage 0x0` | `NVRM: kbusVerifyBar2_GM107: MMUTest BAR0 window offset 0x70e000 returned garbage 0x0` → `NV_ERR_MEMORY_ERROR (0x72)` → `RmInitAdapter failed! (0x24:0x72:1220)`, `SMI_RC=6` | ✔ **HELD verbatim** — same function, same offset, same status triple as w736 |
+| 9 | control `(P)` | `(P)`, `8 of 8`, `MEAN_FALSIFIER=PASS`, `TRAP_FILLS=0` | ✔ **HELD** |
+
+Full lines, verbatim:
+```
+DEVICE-FB named=0 host_read_refused=18 host_write_refused=0 read_served=3 write_served=0
+          wanted_by_read=18 wanted_by_write=0 out_of_range=0 ⇒ ◐ CUT B IS PARTLY SERVING
+FB-DEMAND drains=1 armed=1 refused=0 declined_on_vcpu=0 no_port=0 read_retried_ok=0 read_gave_up=0
+DEVICE-FB-PORT drains=1 armed=1 arm_refused=0 declined_on_vcpu=0 evicted=0 outstanding=1
+          served_read=3 served_write=0 wanted_read=18 wanted_write=0 want_dropped=0 still_wanted=1
+          outside_object=0 span_too_wide=0 budget_refused=0 first_arm_refusal=[none]
+DEVICE-VIEW-PORT armed=10 released=8 outstanding=2 refused=0 double_released=0 bytes_armed=9.1MiB
+FB-IO trap[r=0] walk-bar[r=21 frames=2] walk-guest-pt[r=0] out-of-band[r=0] cpu-ce[r=0]
+HOST_DMESG_XID=0   (device arm; the control's is 1)
+```
+
+#### ★★★★★ WHAT IT BOUGHT — **cut B's mechanism works, end to end, on real video memory**
+
+`read_served=3` / `served_read=3` is the **first time in this campaign that a host-side
+framebuffer read has been answered out of the one reserved device-local object.** Cut A could
+only refuse; cut B arms and serves. One 64 KiB run, armed once, served three reads, zero
+refusals from the aperture, zero double-releases, `outside_object=0`.
+⊘ **And its scale is three reads.** This is a mechanism proven live, not a data plane.
+
+#### ⊘⊘⊘ AND THE LOAD-BEARING FINDING — **TWO CENSUSES REPORT THE OPPOSITE OF WHAT THE BOOT DID**
+
+★★★ **`FB-DEMAND`'s verdict is WRONG on this boot, and the words are the strongest in the file:**
+*"THE ARMING PATH RAN AND NO READ WAS EVER SERVED BY A RETRY"* — printed on a boot whose
+**only arm was drained by a retry** and which **served three reads through it**.
+The verdict is computed from `FB_DEMAND_READ_RETRIED_OK`, and that counter is moved **only by
+`PlanePtBytes::read_in`** (`plane.rs`, both arms of the retry loop). ⇒ it is a verdict about
+**one of the two retry sites**, rendered as a verdict about cut B.
+★ **And the boot measures why that site is silent:** `FB-IO walk-bar[r=21 frames=2]
+walk-guest-pt[r=0]` — **all 21 host reads are `FbStoreReader`'s; `PlanePtBytes` read the
+framebuffer ZERO times.** ⇒ **cut B item 2 — the item the plan called *"costs no transient at
+all"* — is INERT on this path**, and the census that speaks for cut B speaks only for it.
+
+★★★ **`premap[pt_faults=]` cannot distinguish *"never faulted"* from *"faulted and was fixed"*.**
+It is `fetch_add`ed from the **FINAL** `enumerated` value, after `arm_then_retry` has already
+returned. The chain is forced by the counters plus `arm_then_retry`'s own source
+(`used > 0` ⇒ the first attempt was **not good** **and** `arm()` returned `true`):
+- `arm[retries=1]` with `retried_ok=0 gave_up=0` ⇒ the retry was **`premap_window`'s**, not
+  `resolve_arming`'s (that path always increments one of the two when `used > 0`).
+- ⇒ the **single** `drains=1 / armed=1` of the whole boot happened **inside** premap's
+  `arm_then_retry`, i.e. **item 4 fired, armed a run, and retried.**
+- The final enumeration came back `Ok` (`premap_refused=0`) with `faults=0` ⇒ **`pt_faults=0`
+  is what a SUCCESSFUL item-4 repair looks like.**
+⇒ **Reading `pt_faults=0` alone says item 4 never fired, on the boot where it fired and worked.**
+⚠ Exactly the class this file already names four times — an empty artefact reading as benign —
+**inside the counter added to close that class.** ⊘ Neither of the two "the retry worked"
+counters (`arm[retried_ok]`, `FB_DEMAND_READ_RETRIED_OK`) covers premap's retry at all.
+
+#### ⊘ SCOPE — and it is not small
+
+- `premap[runs=6]` on the device arm against **`runs=2298 filled=6085 bar2_visited=19`** on the
+  control, because the device arm dies at **32.7 s of guest time**. Row 6 is measured over
+  **six** enumerations at the very start of bring-up. Whether item 4's shape recurs later is
+  **unmeasured, not absent.**
+- The **write half is still entirely unmeasured**: `host_write_refused=0 write_served=0
+  wanted_by_write=0`, exactly as in w736. Row 8's reasoning therefore stands unrefuted and
+  untested: MMUTest writes through BAR2 and reads back through PRAMIN, and cut B built no
+  write-side drain-and-retry.
+- `still_wanted=1 outstanding=1` — one recorded want was never drained before teardown.
+- 18 wants produced **one** drain. The demand is recorded faithfully; the **coupling from
+  demand to arming is the thin part**, and it is thin because the only caller that armed is
+  premap, whose retry ends the moment its own result looks good.
+
+#### ⚠ THE META-CALL — half right, and the half that was right is not the useful half
+
+The pre-registration named **row 3** as *"the row most likely to be wrong"*, and row 3 is
+indeed the row that broke. ⊘ **But the named reason was wrong**: it predicted
+`declined_on_vcpu > 0` (the refusals arriving on a vCPU). Measured **`declined_on_vcpu=0`** on
+both arms — **that fear did not materialise at all.** Row 3 broke because a verdict was scoped
+to one counter's owner, which the pre-registration did not consider.
+⇒ w736 got *which* row wrong; w738 got *which* row right and *why* wrong. **Naming the reason
+is a second prediction, and it is the one that failed.**
+
+### ★★★★★ 2026-09-15 (w738) — **PRE-REGISTERED PREDICTIONS FOR THE CUT-B BOOT. WRITTEN AND COMMITTED BEFORE THE BOX EXISTS.**
+
+⚠ **Nothing below has been measured.** This block is frozen at commit time and graded verbatim
+afterwards; a row that comes back wrong is a **result** (w736's most valuable row was the refuted
+one), and `fix_the_criterion_before_the_boot` is why it is written first. ⊘ No constraint is
+relaxed by this boot and none may be relaxed to make a row pass.
+
+**The arms.** Same binary both arms, `KAYFABE_DEVICE_VIEW=probe SHADOW=on`, **control (`arena`)
+first** so its `(P)` is a fact about a clean box; then `KAYFABE_FB_STORE=device`. One variable.
+Harness: `scripts/bench/w736_fbstore_run.sh`, unchanged except for the three cut-B censuses it
+does not yet cut out (`FB-DEMAND`, `DEVICE-FB-PORT`, `premap[pt_faults=]`/`arm[…]`), which are
+**additive reporting only** — no arm, no threshold and no boot step changes.
+
+#### ⊘ WHAT THIS BOOT CANNOT BE GRADED ON, stated first
+
+- **Not** *"did it reach the kernel CeUtils scrubber"* — `ce_utils.c:304` is a **refuted**
+  diagnosis (the corrected block above). Graded against where it actually stops.
+- **Not** §3's `--gpga-reserve-probe` falsifier. That arm is graded **after** the switch; cut B
+  moves nothing in it and a bespoke re-measurement of the same question is forbidden.
+- **Not** pass/fail of the campaign. Cut B is not expected to reach a guest.
+
+#### THE ROWS, each with a direction, a threshold, and what REFUTES cut B
+
+| # | line | predicted | what would REFUTE cut B |
+|---|---|---|---|
+| 1 | `DEVICE-FB host_read_refused=` | **≥ 20, and it may RISE** (w736: 20) | **`0`** ⇒ the reads that were the whole premise never happened; the boot is not the same boot and rows 2-6 are about nothing |
+| 2 | `DEVICE-FB read_served=` | **≥ 1** — ★ **THIS IS CUT B's GATE** | **`0`** ⇒ cut B is inert: nothing was ever answered out of an armed view, verdict stays `⊘ HOST-SIDE ACCESSES WERE REFUSED` (cut A's, verbatim) |
+| 3 | `FB-DEMAND` | `drains ≥ 1`, `armed ≥ 1`, verdict `★★★★★ CUT B IS WORKING` or `◐ … PARTLY WORKING` | `⊘⊘⊘ EVERY ARMING ATTEMPT WAS DECLINED ON A vCPU` (`armed=0 declined_on_vcpu>0`) ⇒ **the retry is at the wrong caller**; `⊘⊘ VACUOUS` (`drains=0 declined=0 no_port=0`) ⇒ **no lock-free caller ever called `arm_fb_demand`**; `no_port>0` on the DEVICE arm ⇒ **the byte port was not attached** (a plumbing fault, not the wall) |
+| 4 | `DEVICE-VIEW-PORT armed=` | **> 9** (w736: `armed=9`, all PRAMIN) | **exactly `9`** ⇒ every arm on this boot was still PRAMIN's and the byte port armed **nothing** |
+| 5 | `DEVICE-VIEW-PORT refused=` / `double_released=` | **`0` / `0`** (w736: `0` / `0`) | any `refused>0` ⇒ the **host BAR1 aperture**, which arming cannot fix by retrying — read `DEVICE-FB-PORT first_arm_refusal` and `arm_refused`. Any `double_released>0` ⇒ a lifecycle defect in cut A that cut B's traffic volume exposed |
+| 6 | `premap[… pt_faults=]` and `arm[retries= retried_ok= gave_up=]` | `pt_faults ≥ 1` **and** `retries ≥ 1` (w736 had neither counter) | `retries=0` ⇒ item 4's retry never ran; `pt_faults=0` **with** `premap[filled=0]` again ⇒ the empty-enumeration shape item 4 was built for is **not** what w736's `premap[runs=6 filled=0 biggest_leaf=0]` was, and item 4 is aimed at the wrong thing |
+| 7 | `DEVICE-FB named=` | **`0`** (w736: `0`) | ★ **`named>0` is the SURPRISE result**, not a failure: a guest memslot over real video memory. It would mean cut B's arming let `window_leaves` enumerate real leaves and `fill_now` install a slot — measure `premap[filled=]` and the BAR mirror census carefully and say so |
+| 8 | **where it dies** | **`kbusVerifyBar2_GM107: MMUTest BAR0 window offset 0x70e000 returned garbage 0x0` → `RmInitAdapter failed! (0x24:0x72:1220)` — the SAME wall as w736**, before the guest's first instruction | dying **later** (`kbusInitBar2_HAL`, GSP boot, or a guest that boots) ⇒ cut B moved the wall, which the plan did not predict; dying **earlier**, or the control arm not reaching `(P)`, ⇒ the binary, not the store |
+| 9 | control arm | `W392D_GUEST_OUTCOME=(P)`, `THREADS 8 of 8`, `MEAN_FALSIFIER=PASS`, `TRAP_FILLS=0` | anything else ⇒ **STOP**; the device arm's death is then uninterpretable and no row above may be reported |
+
+#### ⚠ WHY ROW 8 IS "THE SAME WALL" AND NOT "PAST IT" — the reasoning, so a wrong call is diagnosable
+
+`kbusVerifyBar2`'s MMUTest **writes** a pattern through BAR2 and **reads it back** through the
+BAR0 PRAMIN window. w736 measured `host_write_refused=0` beside `host_read_refused=20`: the write
+never reached the store at all — there is no BAR2 memslot (`named=0`) and no host-side write
+demand on this path. **Cut B did not build a write-side drain-and-retry** (`fbwin.rs`, by name:
+*"no write-side drain-and-retry loop exists, because there is no measured demand"*). ⇒ even if
+every read arms, the half that has to land the pattern is the half cut B deliberately left alone,
+so PRAMIN should still read back `0x0`.
+⊘ **The way this reasoning is wrong, if it is:** row 7. If arming the page-table pages lets
+`window_leaves` return real leaves, `fill_now` installs a BAR2 memslot, and the guest's write
+lands in the reserved object **without** ever reaching `FbStore::write`. Rows 7 and 8 are
+therefore **coupled**, and `named>0` with the old wall, or `named=0` with a new wall, is the
+combination that says this model is wrong somewhere it does not know about.
+
+#### ⊘ AND THE ROW MOST LIKELY TO BE WRONG — named in advance, because w736 got this meta-call wrong too
+
+**Row 3.** `arm_fb_demand` declines by name on `on_vcpu_thread() || in_trap()`, and it is asserted
+nowhere that w736's 20 refusals arrived off-vCPU. The evidence that they may is indirect:
+`premap[runs=6]` on the device arm, and `premap_bars()` is called from the invalidate publish
+path, which prints `MMUINVAL-PUBLISH (off-vCPU)`. That is **an inference from a log prefix**, not
+a measurement of the thread the refusals were on. ⚠ w736's own block guessed which row was
+riskiest and was wrong; this naming is a prediction like any other.
 
 ### ⊘⊘⊘ AND A SECOND DEFECT, CAUGHT IN REVIEW OF MY OWN DIFF — the two gates read each other
 
