@@ -804,6 +804,40 @@ lifetime) is wrong.
 
 ★ **No lying, either way.** The aperture the guest names is the aperture it gets.
 
+## ⊘⊘⊘ REFUTED w734i — THE SECTION BELOW IS WRONG, AND BOTH TERMS ARE NOW MEASURED
+
+`[measured, vast 51082161, RTX 3060 GA106, 580.159.04, traces/w734_fbio_census/]` — raw client
+`(P)`, 8/8 threads.
+
+| term | what the section below assumed | **measured** |
+|---|---|---|
+| read rate through a device view of the reserved object | 48 MiB/s *(uncited)* | **52.5 MiB/s** — ★ the rate was **right** |
+| **write** rate | assumed the same | **4987.5 MiB/s** — **95× faster**, and nobody had ever measured it |
+| walk traffic per boot | **8.6 GiB** (`7.3 MiB × 1178`, derived) | **275.5 MiB** |
+| ⇒ cost of the "impossible" intermediate | *"~3 min … **it does not boot**"* | **5–10 s** |
+
+⇒ ★★★ **The RATE was right; the VOLUME was wrong by ~30×**, because the derivation assumed the
+whole resident table set is re-read **every** refresh, and it is not. **The intermediate boots.**
+
+⇒ **§w724c's conclusion is withdrawn, and with it the claim that §6 was FORCED to precede §3.**
+⊘ The aperture cost — the one nobody had named, and the only candidate for a second reason — fits
+with **500× margin**.
+
+★ Honest about its own precision: the 5–10 s range is a range because `walk-bar`'s **3 454 311**
+reads average **~41 bytes**. Those are 8-byte point-walk entry reads from
+`bar1_translate`/`bar2_translate` — **latency-bound, not bandwidth-bound** (~1 µs per uncached BAR
+round trip ⇒ ~3.5 s on top of the 2.6 s the bytes alone predict). A pure byte model understates
+them.
+
+### ⚠ What this does NOT overturn
+
+§6 is **done and sound**, and the walker is wanted on its own merits: `[w726]` 205.7 µs against a
+walk the host does far more slowly. ⇒ **The ordering was not wrong, its stated REASON was** — and a
+rule whose recorded reason is false is one nobody can re-derive when it matters. ⊘ That is the
+whole cost of a derivation cited as a measurement, and it was mine.
+
+## ⊘ SUPERSEDED — the original section, kept for the reasoning it got right
+
 ## ⊘⊘⊘ CORRECTED w734 — THE SECTION BELOW CITES A DERIVATION AS A MEASUREMENT
 
 `[surveyed w734]` Both *"§6 must precede §3"* and the section below's *"there is no working
