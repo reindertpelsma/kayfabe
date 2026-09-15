@@ -139,6 +139,16 @@ recover() {
     echo "rmmod rc=$?"
     $SUDO modprobe nvidia_uvm 2>&1
     echo "modprobe rc=$?"
+    # ★★★ AND RE-CREATE THE NODES. `[boot_capture.sh:50]` *"`modprobe` does not run
+    # `RmInitAdapter`"* — it registers the PCI driver, and `/dev/nvidia0` does not exist until
+    # something makes it. Without this the retry's `openat` fails with ENOENT and the log still
+    # says `openat(nvidia<gpu>)`, so a recovery that worked would read as one that did not.
+    # ⊘ `nvidia-modprobe -c 0 -u` and NOT `nvidia-smi`: it mknods and loads, it does not OPEN
+    # the device, so the instrument does not spend the resource (`RmInitAdapter` cycles) whose
+    # exhaustion is the thing being recovered from.
+    $SUDO nvidia-modprobe -c 0 -u 2>&1
+    echo "nvidia-modprobe rc=$?"
+    ls -l /dev/nvidia* 2>&1
     $SUDO lsmod 2>/dev/null | grep -E '^nvidia' 2>&1
   } >>"$OUT/recover.log" 2>&1
   sleep 2
