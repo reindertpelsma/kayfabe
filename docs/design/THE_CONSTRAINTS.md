@@ -752,9 +752,17 @@ memory means what the hardware says it means, where on substituted system memory
       manages the aperture. So views must be torn down and re-established, and `munmap` + `close`
       demonstrably returns **nothing** to the pool (rounds 1–4 got **zero**). Without
       `NV_ESC_RM_UNMAP_MEMORY` we leak until we refuse, **however we size things**.
-   2. **Build the release verb FIRST.** `NV_ESC_RM_UNMAP_MEMORY` has no caller; recycling is
-      unimplementable until it does, and the failure mode without it is a silent leak followed by
-      total refusal.
+   2. ✔ **DONE 2026-09-14/15 — ~~Build the release verb FIRST.~~** ~~`NV_ESC_RM_UNMAP_MEMORY` has
+      no caller~~ — it now has **nine** references across the tree (`release_device_view`,
+      `release_cpu_view`, the wire verb on tag **31**). `Nvos34Parameters` is in `kayfabe-abi`
+      with every byte offset pinned, and the crossing was **exercised end to end in a boot**:
+      `DEVICE_VIEW=OK … released=true`.
+
+      ⚠ **This row said "no caller" for a day after it stopped being true**, and it is the second
+      stale claim found in this file in one session (the other: the index stopped at 17). ⇒ **A
+      "not built yet" row is a claim with an expiry, and nothing expires it automatically.** When
+      the thing gets built, the row that said it was missing is the first place to look — not the
+      last.
    3. **Reserve headroom for ourselves** — our CUDA context and channels come out of the same
       254 MiB. A budget the guest cannot consume, enforced, not hoped for.
 
