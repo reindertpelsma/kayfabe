@@ -318,16 +318,45 @@ impl kayfabe_rt::device::PtSweepObserver for WalkShadowObserver<'_> {
         // ⊘ Only address spaces whose walk SUCCEEDED. A faulted decode has no leaves to
         // compare and no reliable visited set to build an image from, and including it would
         // put the host walk's own failure into the kernel's column.
+        // ⊘⊘⊘ **THE COMPARISON'S UNIT IS THE ROOT PAGE, NOT THE `Vas`** — and getting that
+        // wrong manufactures disagreements out of nothing.
+        //
+        // `[measured w731, first live boot]` `compared=65 disagreements=100
+        // by_kind[extra_in_kernel=35 len_differs=35 missing_in_kernel=30]`, and the leading
+        // pair decoded as ONE 4 GiB mapping the kernel had cut in two:
+        //
+        //   host   va=0x120000000 gpga=0x0        len=0x100000000
+        //   kernel va=0x120000000 gpga=0x0        len=0xefc00000
+        //        + va=0x20fc00000 gpga=0xefc00000 len=0x10400000
+        //
+        // Contiguous in VA, contiguous in GPGA, identical flags — `walkdiff::canonical`
+        // merges exactly that, and does (checked offline against these very numbers). ⇒ the
+        // two halves were not in the same comparison.
+        //
+        // ★ The cause: a proc can hold **several `Vas` entries with the same page-directory
+        // base** — `[w555]` *"11 of 12 VA spaces never declare a root, so they SHARE the key
+        // `Pdb(0)`"*, and this boot swept `pdb=0x0` **901 times**. Each contributes its own
+        // `visited` set, `build_image` holds their UNION, and the kernel walks that union
+        // once. Comparing it against ONE of those `Vas`'s leaves compares a walk of the union
+        // against a walk of a part.
+        //
+        // ⇒ leaves are accumulated **per root page**, which is the unit the kernel's report is
+        // keyed by and therefore the only unit the two sides can be compared in.
         let mut vases: Vec<(u64, &[kayfabe_mmu::walker::PtPage])> = Vec::new();
-        let mut leaves_of: std::collections::BTreeMap<u64, &[kayfabe_mmu::walker::DecodedLeaf]> =
-            std::collections::BTreeMap::new();
+        let mut leaves_of: std::collections::BTreeMap<
+            u64,
+            Vec<kayfabe_mmu::walker::DecodedLeaf>,
+        > = std::collections::BTreeMap::new();
         for r in results {
             let Ok(d) = &r.decode else { continue };
             if d.visited.is_empty() {
                 continue;
             }
             vases.push((r.task.pdb.0, d.visited.as_slice()));
-            leaves_of.insert(r.task.pdb.0, d.leaves.as_slice());
+            leaves_of
+                .entry(r.task.pdb.0 & !0xfff)
+                .or_default()
+                .extend(d.leaves.iter().copied());
         }
         if vases.is_empty() {
             port.note_skipped("no_decoded_vas");
@@ -456,8 +485,11 @@ impl kayfabe_rt::device::PtSweepObserver for WalkShadowObserver<'_> {
         // The report is keyed by the RELOCATED root; the comparison is per real address
         // space. ⊘ Built from the image's own `roots`, which is the only place the two
         // numbers are known to belong together.
-        let real_of: std::collections::BTreeMap<u64, u64> =
-            image.roots.iter().map(|(real, h)| (*h, *real)).collect();
+        let real_of: std::collections::BTreeMap<u64, u64> = image
+            .roots
+            .iter()
+            .map(|(real, h)| (*h, *real & !0xfff))
+            .collect();
 
         let mut compared_any = false;
         for (i, entry) in report.pdbs.iter().enumerate() {

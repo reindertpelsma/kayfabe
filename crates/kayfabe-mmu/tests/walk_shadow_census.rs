@@ -449,3 +449,50 @@ fn the_image_statistics_reach_the_line() {
     assert!(line.contains("absent_edges=6"), "{line}");
     assert!(line.contains("sysmem_edges=2"), "{line}");
 }
+
+/// ★★★★★ **THE w731 LIVE DISAGREEMENT, AS A REGRESSION TEST — over the real numbers.**
+///
+/// `[measured w731, first live boot]` the census came back `compared=65 disagreements=100
+/// by_kind[extra_in_kernel=35 len_differs=35 missing_in_kernel=30]`, and the leading pair
+/// decoded as **one 4 GiB mapping the kernel had cut in two**:
+///
+/// ```text
+/// host   va=0x120000000 gpga=0x0        len=0x100000000
+/// kernel va=0x120000000 gpga=0x0        len=0xefc00000
+///      + va=0x20fc00000 gpga=0xefc00000 len=0x10400000
+/// ```
+///
+/// ⊘ Contiguous in VA, contiguous in GPGA, identical flags. This test pins that
+/// canonicalisation absorbs exactly that — so a future reader can tell *"the walkers
+/// disagree"* apart from *"the comparison put the halves in different sets"*, which is what
+/// had actually happened (a proc holds several `Vas` entries sharing one page-directory base;
+/// the comparison's unit had been the `Vas` and is now the **root page**).
+#[test]
+fn the_w731_split_is_absorbed_when_both_halves_are_in_one_set() {
+    let host = vec![run(0x1_2000_0000, 0x0, 0x1_0000_0000, PageClass::P2M)];
+    let kernel = vec![
+        run(0x1_2000_0000, 0x0, 0xefc0_0000, PageClass::P2M),
+        run(0x2_0fc0_0000, 0xefc0_0000, 0x1040_0000, PageClass::P2M),
+    ];
+    let h = kayfabe_mmu::walkdiff::canonical(&host);
+    let k = kayfabe_mmu::walkdiff::canonical(&kernel);
+    assert_eq!(h, k, "the split and the whole must canonicalise identically");
+    assert!(
+        compare(&h, &k).is_empty(),
+        "★ a run split at a contiguous boundary is NOT a disagreement: {:?}",
+        compare(&h, &k)
+    );
+
+    // ⊘ And the known-positive for the assertion above: a split whose halves are NOT
+    // contiguous in GPGA must still fire, or this test would pass for a comparison that
+    // absorbed everything.
+    let moved = vec![
+        run(0x1_2000_0000, 0x0, 0xefc0_0000, PageClass::P2M),
+        run(0x2_0fc0_0000, 0xefc0_0000 + 0x20_0000, 0x1040_0000, PageClass::P2M),
+    ];
+    let m = kayfabe_mmu::walkdiff::canonical(&moved);
+    assert!(
+        !compare(&h, &m).is_empty(),
+        "a split whose second half points somewhere else MUST disagree"
+    );
+}
