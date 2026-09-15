@@ -167,6 +167,45 @@ pub enum Request {
         /// Where the halving search starts, in MiB.
         start_mb: u64,
     },
+    /// ★★★★★ **STAGE ONE CHUNK OF THE WALK KERNEL'S IMAGE** — `SINGLE_STORE_PLAN.md` §6
+    /// step 1, the live half. Request tag **32**.
+    ///
+    /// The image is the guest's page-table pages **relocated into a compact arena**
+    /// ([`kayfabe_mmu::walkshadow::build_image`]) — it must be, because the guest's RM puts
+    /// its tables ~11.78 GiB up a 12 GiB framebuffer and the kernel addresses tables as
+    /// offsets into one flat window.
+    ///
+    /// ⊘ **Chunked, and that is not an optimisation.** `[measured w724c]` a boot's resident
+    /// tables are ~7.3 MiB and [`FRAME_MAX`] is 1 MiB, so one frame cannot carry an image.
+    /// A staging verb keeps the framing invariant intact rather than raising a limit that
+    /// exists to bound a hostile peer.
+    ///
+    /// ⚠ `off == 0` **allocates**: the child drops whatever it was holding and takes a fresh
+    /// zeroed `span`. Any other offset appends into the image already declared, and a chunk
+    /// that would leave it is refused rather than clamped.
+    WalkShadowStage {
+        /// The whole image's length in bytes. Must be identical on every chunk of one image.
+        span: u64,
+        /// Where this chunk starts.
+        off: u64,
+        /// The chunk.
+        bytes: Vec<u8>,
+    },
+    /// ★★★★★ **RUN THE WALK KERNEL OVER THE STAGED IMAGE.** Request tag **33**.
+    ///
+    /// `pdbs` are the address-space roots **as they were relocated** — offsets into the
+    /// staged image, ascending, because the kernel refuses an unsorted list by name
+    /// (`KFWR_R_PDB_UNSORTED`).
+    ///
+    /// The reply is [`Reply::Payload`] carrying the report packed exactly as
+    /// [`kayfabe_mmu::walkreport::Report::parse`] expects it: header, then `pdb_count`
+    /// `PdbEntry`s, then `run_count` `MapRun`s. ⊘ The child does **not** interpret it; the
+    /// parent validates every report it acts on, and a child-side interpretation would be a
+    /// second decoder nobody diffs.
+    WalkShadowRun {
+        /// The relocated roots, ascending.
+        pdbs: Vec<u64>,
+    },
     /// [`kayfabe_isolate::RmBackend::alloc_channel`].
     AllocChannel {
         /// Host VAS handle, raw.
@@ -925,6 +964,19 @@ impl Envelope {
                 out.push(31);
                 out.extend_from_slice(&token.to_le_bytes());
             }
+            Request::WalkShadowStage { span, off, bytes } => {
+                out.push(32);
+                out.extend_from_slice(&span.to_le_bytes());
+                out.extend_from_slice(&off.to_le_bytes());
+                put_blob(&mut out, bytes);
+            }
+            Request::WalkShadowRun { pdbs } => {
+                out.push(33);
+                out.extend_from_slice(&(u32::try_from(pdbs.len()).unwrap_or(u32::MAX)).to_le_bytes());
+                for p in pdbs {
+                    out.extend_from_slice(&p.to_le_bytes());
+                }
+            }
             Request::AllocChannel {
                 vas,
                 engine,
@@ -1193,6 +1245,19 @@ impl Envelope {
                 start_mb: c.u64("gpga probe start mb")?,
             },
             29 => Request::CudaWalkReport,
+            32 => Request::WalkShadowStage {
+                span: c.u64("walk shadow span")?,
+                off: c.u64("walk shadow off")?,
+                bytes: c.blob("walk shadow chunk")?,
+            },
+            33 => {
+                let n = c.u32("walk shadow pdb count")? as usize;
+                let mut pdbs = Vec::with_capacity(n.min(1024));
+                for _ in 0..n {
+                    pdbs.push(c.u64("walk shadow pdb")?);
+                }
+                Request::WalkShadowRun { pdbs }
+            }
             30 => Request::ExportDeviceView {
                 memory: c.u64("device view memory")?,
                 offset: c.u64("device view offset")?,
@@ -1715,6 +1780,14 @@ mod tests {
             },
             Request::LargestReservableMb { start_mb: 12_288 },
             Request::CudaWalkReport,
+            Request::WalkShadowStage {
+                span: 0x4000,
+                off: 0x1000,
+                bytes: vec![0xab; 64],
+            },
+            Request::WalkShadowRun {
+                pdbs: vec![0x1000, 0x2000, 0x3000],
+            },
             Request::ExportDeviceView {
                 memory: 0xC1D0_0031,
                 offset: 0x20_0000,
@@ -1935,6 +2008,8 @@ mod tests {
             Request::ReserveGpga { .. } => "ReserveGpga",
             Request::LargestReservableMb { .. } => "LargestReservableMb",
             Request::CudaWalkReport => "CudaWalkReport",
+            Request::WalkShadowStage { .. } => "WalkShadowStage",
+            Request::WalkShadowRun { .. } => "WalkShadowRun",
             Request::ExportDeviceView { .. } => "ExportDeviceView",
             Request::ReleaseDeviceView { .. } => "ReleaseDeviceView",
             Request::AllocChannel { .. } => "AllocChannel",
@@ -1975,6 +2050,8 @@ mod tests {
                 "AllocVidmem",
                 "CeCopy",
                 "CudaWalkReport",
+                "WalkShadowStage",
+                "WalkShadowRun",
                 "ExportDeviceView",
                 "ReleaseDeviceView",
                 "Control",

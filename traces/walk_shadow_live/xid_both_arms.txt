@@ -1,0 +1,4 @@
+=== ARMED ARM: host dmesg Xid ===
+[ 5814.092155] NVRM: Xid (PCI:0000:00:08): 31, pid=104932, name=68, channel 0x00000019, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0xa0_00000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+=== CONTROL ARM: host dmesg Xid ===
+[ 2519.896495] NVRM: Xid (PCI:0000:00:08): 31, pid=93351, name=68, channel 0x00000019, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0xa0_00000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ

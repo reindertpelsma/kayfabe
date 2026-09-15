@@ -3570,6 +3570,13 @@ impl kayfabe_rmrpc::ObjectModel for SharedObjectModel {
 #[derive(Clone)]
 struct SharedDoorbell {
     device: Arc<kayfabe_rt::device::SharedDevice>,
+    /// ★★★★★ **THE LIVE WALK SHADOW** (`SINGLE_STORE_PLAN.md` §6 step 1), or `None` when
+    /// `KAYFABE_WALK_SHADOW` is off — which is the default and the shipped behaviour.
+    ///
+    /// ⊘ An `Arc` and not a field, because this port is cloned into the register plane and
+    /// the shadow's census must survive every clone as ONE census. Two censuses summing to
+    /// the same total would still be two vacuity verdicts.
+    walk_shadow: Option<Arc<crate::walkshadow::WalkShadowPort>>,
     /// ★★★ The register plane this port is installed in — **weak**, because the plane owns
     /// this port and a strong handle would be a cycle that never frees.
     ///
@@ -11260,10 +11267,20 @@ impl SharedDoorbell {
             // `/byBAR2`, so the guest's CPU wrote them into the device's own store — a sweep
             // reading the isolate's aperture instead would walk a tree nobody wrote.
             let mut fb = plane.pt_bytes();
-            let Some((plan, out)) =
-                self.device
-                    .sweep_pt_tables_revoking(pid, &fmt, &mut fb, revoke_policy.policy())
-            else {
+            // ★★★★★ **THE SHADOW'S HOOK.** The observer is built fresh per address space and
+            // is the disarmed one unless `KAYFABE_WALK_SHADOW` is on. ⊘ It declines by name
+            // when this thread is a vCPU — see `crate::walkshadow`'s header for why the
+            // "EXECUTE holds no lock" finding does NOT settle that question.
+            let mut shadow = crate::walkshadow::WalkShadowObserver {
+                port: self.walk_shadow.as_deref(),
+            };
+            let Some((plan, out)) = self.device.sweep_pt_tables_observing(
+                pid,
+                &fmt,
+                &mut fb,
+                revoke_policy.policy(),
+                &mut shadow,
+            ) else {
                 continue;
             };
             // ★★★★★ w329 — the sweep proposes unbinds too, and from the SAME settlement
@@ -14766,6 +14783,39 @@ impl Regs {
             }
             None
         };
+        // ★★★★★ **THE LIVE WALK SHADOW'S PORT** (`SINGLE_STORE_PLAN.md` §6 step 1).
+        //
+        // ⊘ Wired HERE, between the scratchpad's bring-up and the doorbell port's
+        // construction, because it takes the scratchpad's isolate and the doorbell port needs
+        // the result. ⚠ `KAYFABE_WALK_SHADOW=on` with the scratchpad gate off gets a SAID
+        // refusal rather than a silent nothing — the same shape `KAYFABE_SCRATCHPAD_CUDA`
+        // already has, and for the same reason: an absent census line reads as "off".
+        let mut scratchpad = scratchpad;
+        let walk_shadow = if crate::walkshadow::selected_walk_shadow()? {
+            match scratchpad.as_mut().and_then(
+                crate::scratchpad::Scratchpad::share_for_walk_shadow,
+            ) {
+                Some(p) => {
+                    eprintln!(
+                        "kayfabe: WALK-SHADOW AT REALIZE: armed. The walk kernel will be run                          ALONGSIDE the host walk at every off-vCPU page-table sweep and the                          two answers compared by kind. ⊘ Nothing is published from it.                          Expiry: {}",
+                        crate::walkshadow::WALK_SHADOW_EXPIRY
+                    );
+                    Some(p)
+                }
+                None => {
+                    eprintln!(
+                        "kayfabe: WALK-SHADOW AT REALIZE: ⊘ {}=on but there is no VM-lifetime                          scratchpad isolate to run the kernel in (set {}=on and {}=on).                          NOTHING was armed.",
+                        crate::walkshadow::WALK_SHADOW_ENV,
+                        crate::scratchpad::SCRATCHPAD_ENV,
+                        crate::scratchpad::SCRATCHPAD_CUDA_ENV,
+                    );
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
         // ★★★ **ADVERTISE WHAT WAS RESERVED, NEVER ASSERT AHEAD OF IT**
         // (`gpga_is_one_reserved_object.md`: *"the guest's advertised framebuffer size is
         // derived from the reservation that succeeded"*).
@@ -15176,6 +15226,7 @@ impl Regs {
         // ports that happen to agree today.
         let doorbell_port = SharedDoorbell {
             device: Arc::clone(&device),
+            walk_shadow: walk_shadow.clone(),
             plane: Arc::downgrade(&plane),
             ce: Arc::clone(&ce),
             // ★★★ §14.24 / ★★★★★ §16.80 — from the composition root's OWN selector
@@ -17519,6 +17570,23 @@ impl Regs {
         match &self.scratchpad {
             Some(sp) => sp.census("END OF RUN"),
             None => crate::scratchpad::Scratchpad::census_disarmed("END OF RUN"),
+        }
+        // ★★★★★ **THE LIVE WALK SHADOW'S CENSUS** (`SINGLE_STORE_PLAN.md` §6 step 1).
+        //
+        // ⊘ Printed **unconditionally**, with a disarmed line when the gate is off. w304's
+        // lesson, one crate over: a boot with the arm off that printed nothing would be
+        // indistinguishable from a boot whose shadow ran and found nothing to say — and the
+        // second is the result, while the first is the absence of one.
+        match self.scratchpad.as_ref().and_then(
+            crate::scratchpad::Scratchpad::walk_shadow_census,
+        ) {
+            Some(line) => eprintln!("kayfabe: {line}"),
+            None => eprintln!(
+                "kayfabe: WALK-SHADOW ⊘ DISARMED — {}=off (the default), so the walk kernel \
+                 was never run beside the host walk on this boot. This is NOT agreement and \
+                 it is NOT a clean census; it is the absence of a measurement.",
+                crate::walkshadow::WALK_SHADOW_ENV
+            ),
         }
         // ★★★★★ **w719 — DID THE TWO WORLDS EVER NAME THE SAME PAGE?** The whole of
         // constraint 15's aperture split rests on the answer, `THE_CONSTRAINTS.md` §15 and

@@ -849,6 +849,24 @@ impl RmBackend for ProxyRmBackend {
         }
     }
 
+    fn walk_shadow_stage(&mut self, span: u64, off: u64, bytes: &[u8]) -> Result<(), RmError> {
+        self.unit(Request::WalkShadowStage {
+            span,
+            off,
+            bytes: bytes.to_vec(),
+        })
+    }
+
+    fn walk_shadow_run(&mut self, pdbs: &[u64]) -> Result<Vec<u8>, RmError> {
+        let reply = self.call(Request::WalkShadowRun {
+            pdbs: pdbs.to_vec(),
+        })?;
+        match self.lift(reply)? {
+            Reply::Payload(p) => Ok(p),
+            _ => Err(RmError::Wedged),
+        }
+    }
+
     fn largest_reservable_mb(&mut self, start_mb: u64) -> Result<u64, RmError> {
         let reply = self.call(Request::LargestReservableMb { start_mb })?;
         match self.lift(reply)? {

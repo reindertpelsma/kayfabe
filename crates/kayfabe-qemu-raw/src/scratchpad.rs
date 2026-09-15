@@ -393,8 +393,22 @@ pub struct Scratchpad {
     arm: ScratchpadArm,
     id: IsolateId,
     /// ⊘ `Option` only so [`Scratchpad::retire`] can take it and drop it deliberately at a
-    /// point of our choosing. It is `Some` for the whole ordinary life of the struct.
+    /// point of our choosing. It is `Some` for the whole ordinary life of the struct —
+    /// **unless** [`Scratchpad::share_for_walk_shadow`] has moved it into
+    /// [`Self::walk_shadow`], which is the live shadow's arm.
     iso: Option<IsolateBox>,
+    /// ★★★ **The live walk shadow's port**, holding this isolate, when
+    /// `KAYFABE_WALK_SHADOW` is on (`SINGLE_STORE_PLAN.md` §6 step 1).
+    ///
+    /// ⊘ The isolate MOVES here rather than being borrowed. `IsolateBox::checkout` needs
+    /// `&mut`, and the sweep reaches the port through a cloned `SharedDoorbell` that cannot
+    /// hold a mutable borrow of this struct. One owner behind an `Arc<Mutex<..>>` is the
+    /// honest shape; two borrows of one box is not a shape at all.
+    ///
+    /// ⚠ The reservation hangs off this isolate's RM client either way, so its lifetime is
+    /// still exactly this struct's — the `Arc` is cloned only into the doorbell port, which
+    /// the device owns.
+    walk_shadow: Option<std::sync::Arc<crate::walkshadow::WalkShadowPort>>,
     outcome: Reservation,
     /// Wall time inside `IsolateFactory::spawn`, in microseconds — the quantity w470
     /// measured on the vCPU, measured here where the guest does not pay it.
@@ -522,6 +536,7 @@ impl Scratchpad {
             cuda: cuda_report,
             id,
             iso: Some(iso),
+            walk_shadow: None,
             outcome,
             spawn_us,
             probe_us,
@@ -597,7 +612,7 @@ impl Scratchpad {
              reservation={token} RESERVED_MB={mb} spawn_ms={spawn:.3} probe_ms={probe:.3} \
              reserve_ms={reserve:.3}{why} ⇒ {verdict}",
             arm = self.arm.as_str(),
-            up = self.iso.is_some(),
+            up = self.iso.is_some() || self.walk_shadow.is_some(),
             proc = self.id.proc(),
             gpu = self.id.gpu().0,
             pool = self.pool,
@@ -653,6 +668,40 @@ impl Scratchpad {
         if let Some(mut iso) = self.iso.take() {
             iso.retire();
         }
+        // ⊘ Reached through the `Arc` when the live shadow took the box. Retiring is a
+        // statement to the isolate, not a drop, so doing it here is correct even though the
+        // doorbell port still holds a handle — and the port's own `Arc` going away later is
+        // what actually reaps the child.
+        if let Some(p) = self.walk_shadow.take() {
+            p.retire();
+        }
+    }
+
+    /// ★★★★★ **HAND THE ISOLATE TO THE LIVE WALK SHADOW** — `SINGLE_STORE_PLAN.md` §6 step 1.
+    ///
+    /// Returns the port to clone into the doorbell, or `None` when there is no isolate to
+    /// give (the bring-up got no worker, or this was already called).
+    ///
+    /// ⊘ **One isolate per VM, and this is it.** §4 is explicit: *"No other isolate loads
+    /// CUDA (~135 MB of mappings and hundreds of ms of context creation). One walk isolate
+    /// per VM."* Spawning a second one for the shadow would be a second CUDA context and a
+    /// second reservation-holding client.
+    pub fn share_for_walk_shadow(
+        &mut self,
+    ) -> Option<std::sync::Arc<crate::walkshadow::WalkShadowPort>> {
+        if self.walk_shadow.is_none() {
+            let iso = self.iso.take()?;
+            self.walk_shadow = Some(std::sync::Arc::new(
+                crate::walkshadow::WalkShadowPort::new(iso),
+            ));
+        }
+        self.walk_shadow.clone()
+    }
+
+    /// The shadow's census line, or `None` when the shadow was never armed.
+    #[must_use]
+    pub fn walk_shadow_census(&self) -> Option<String> {
+        self.walk_shadow.as_ref().map(|p| p.census_line())
     }
 }
 

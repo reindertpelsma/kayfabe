@@ -533,6 +533,73 @@ pub trait GmmuFmt: Send + Sync {
     /// An encoding this regime cannot represent decodes to [`PteDecode::Invalid`];
     /// it must never be *guessed* into a leaf.
     fn decode_entry(&self, level: u8, raw: u128) -> PteDecode;
+
+    /// ★★★★★ **REWRITE ONE ENTRY'S SUB-TABLE POINTERS** so the same tree can be walked out
+    /// of a different, compact image. [`Relocated`] says what happened, by name.
+    ///
+    /// `home` maps a **table page's** current physical address to the address it has in the
+    /// new image, or [`None`] for a page the new image does not contain. It is consulted
+    /// only for pointers this regime would actually dereference; a leaf's target is
+    /// *reported* and never followed, so it is never passed through `home` and never
+    /// rewritten.
+    ///
+    /// # ⊘ Why this is on the FORMAT and not in the walker
+    ///
+    /// Only the format knows which bits of an entry are a sub-table address, how many of
+    /// them there are, what they are shifted by, and that a VER2 `PD0` slot is sixteen bytes
+    /// naming **two** sub-tables with **different** shifts. A relocator written anywhere else
+    /// would be a second, private copy of that knowledge — and `#13`'s dual-PDE drop is the
+    /// standing proof of what a second copy costs.
+    ///
+    /// # ⚠ The default is a REFUSAL, not a no-op
+    ///
+    /// A format with no relocator must not silently hand back the entry unchanged: the
+    /// caller would then build an image whose directory entries still point at the
+    /// *original* addresses, and every dereference would land on whatever happens to sit at
+    /// that offset of the new image. That is a wrong answer with no diagnostic, which is
+    /// precisely the class this tree keeps paying for. ⇒ [`Relocated::Refused`], and the
+    /// caller abandons the relocation.
+    ///
+    /// # ★★★ THIS SEAM IS EXPECTED TO OUTLIVE ITS FIRST CALLER — and its caller is not
+    ///
+    /// `[expiry, §w724g]` The **only** thing that needs relocation today is the live walk
+    /// shadow, and only because it reads the guest's tables out of a **sparse framebuffer
+    /// arena** spread across ~11.8 GiB, which no flat window can span
+    /// (`kayfabe_mmu::walkshadow::build_image`). `SINGLE_STORE_PLAN.md` §3 replaces that store
+    /// with **one reserved device-local object**, and `gpga_is_one_reserved_object.md`
+    /// specifies that the scratchpad maps the whole of it at a fixed base — *"an address is
+    /// `X + gpga_offset`"*. ⇒ the kernel's window becomes that mapping, **identity, with
+    /// nothing rewritten**, and the shadow's relocation is retired.
+    ///
+    /// ⚠ **Expected end state, not a promise.** Nothing has yet built the scratchpad-side
+    /// whole-object mapping; the design doc specifies it. Until something does, this is the
+    /// mechanism the shadow runs on.
+    ///
+    /// ⊘ **The METHOD stays even then.** It belongs on the format because only the format
+    /// knows which bits of an entry are a sub-table address — and a regime that genuinely
+    /// needs a moved tree (a captured corpus, a migration) would otherwise grow a private
+    /// second copy of that knowledge. What expires is the shadow's *use* of it.
+    fn relocate_entry(&self, level: u8, raw: u128, home: &dyn Fn(u64) -> Option<u64>) -> Relocated {
+        let _ = (level, raw, home);
+        Relocated::Refused("this GMMU format has no relocator")
+    }
+}
+
+/// What [`GmmuFmt::relocate_entry`] did to one entry.
+///
+/// ⊘ Three arms and not `Option<u128>`: *"there was nothing to move"*, *"here is the moved
+/// entry"* and *"this format cannot move it"* send a caller to three different places, and
+/// collapsing the first and third is how a relocation silently does nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Relocated {
+    /// The entry names no sub-table this regime would dereference — a leaf, an invalid slot,
+    /// a sparse declaration. Copy it verbatim.
+    Unchanged,
+    /// Every sub-table pointer in the entry now names its address in the new image.
+    Moved(u128),
+    /// Not relocatable, and why. ⚠ The caller must abandon the whole image: one entry left
+    /// pointing at its old address is an arbitrary dereference into the new one.
+    Refused(&'static str),
 }
 
 /// Axis-B seam B5: USERD layout accessors + the #11 liveness rule's geometry.

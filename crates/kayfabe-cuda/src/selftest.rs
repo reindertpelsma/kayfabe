@@ -43,6 +43,18 @@ pub struct SelftestOutcome {
     pub probe_relaunch: String,
     /// ★ Probe (b): a deliberately failed launch AFTER the sandbox. Empty until it runs.
     pub probe_failed_launch: String,
+    /// ★★★★★ **(c) — CAN A DIFFERENT THREAD USE THIS CONTEXT?**
+    ///
+    /// ⊘⊘⊘ Added because its absence cost a boot. `[measured w731]` the live walk shadow's
+    /// every call returned **`CUDA_ERROR_INVALID_CONTEXT` (201)** — 2 115 times — while this
+    /// outcome reported `CUDA_WALK=OK` and probes (a) and (b) both `PASS`. A CUDA context is
+    /// **current per thread**; the bring-up runs on the isolate's startup thread and every
+    /// request is served on a **worker**. Probes (a) and (b) run on the bring-up thread, so
+    /// they could not have seen it.
+    ///
+    /// ⚠ A probe that shares the thing under test is not an observer, and here the shared
+    /// thing was the **thread** — which nobody had thought of as state.
+    pub probe_other_thread: String,
     /// Whether the `abi_version` refusal fired when it was deliberately skewed.
     pub abi_refusal_fired: bool,
     /// The PTX's size, so a boot can tell which artifact it ran.
@@ -193,6 +205,35 @@ pub fn bring_up_and_prove() -> (SelftestOutcome, Option<WalkKernel>) {
 /// ⚠ Call this **after** the sandbox is entered and privilege dropped, on the kernel returned
 /// by [`bring_up_and_prove`]. Running it before proves nothing.
 pub fn probe_after_sandbox(k: &mut WalkKernel, out: &mut SelftestOutcome) {
+    // ★★★★★ **(c) FIRST, because it is the one that has actually failed.**
+    //
+    // A worker thread that has never touched CUDA asks the driver for memory in this
+    // context. Without `cuCtxSetCurrent` that is `CUDA_ERROR_INVALID_CONTEXT` (201) and
+    // nothing else in this file notices, because everything else runs where the context
+    // already is.
+    //
+    // ⊘ It is run BEFORE (a) and (b) so that a failure here cannot be blamed on state they
+    // left behind, and so that the ordering in the census matches the order of discovery.
+    out.probe_other_thread = std::thread::scope(|sc| {
+        sc.spawn(|| match k.make_current() {
+            Err(e) => format!("FAIL cuCtxSetCurrent on a second thread: {e}"),
+            Ok(()) => match k.upload(&[0u8; 4096]) {
+                Err(e) => format!(
+                    "FAIL a second thread cannot allocate in this context even after \
+                     cuCtxSetCurrent: {e}"
+                ),
+                Ok(d) => {
+                    k.release(d);
+                    "PASS a second thread can use this context (cuCtxSetCurrent + cuMemAlloc \
+                     + cuMemFree)"
+                        .to_string()
+                }
+            },
+        })
+        .join()
+        .unwrap_or_else(|_| "FAIL the probe thread panicked".to_string())
+    });
+
     // (a) — a full round trip: allocate, upload, launch three kernels, copy back, validate.
     let (img, root, expect) = synth::contiguous_small_pages(FIXTURE_VA, FIXTURE_PAGES, FIXTURE_GPGA);
     out.probe_relaunch = match k.upload(&img.mem) {

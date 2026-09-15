@@ -902,6 +902,39 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
         Request::ExportDeviceView { .. } => {
             Reply::Failed(WireError::Other(crate::rm::NOT_ON_THIS_RUNG))
         }
+        // ★★★★★ The live shadow's two verbs. Like `CudaWalkReport` they do NOT go through
+        // `rm`: the walk kernel belongs to the PROCESS (it was brought up before the sandbox,
+        // on the startup path) and not to any RM connection. ⊘ Answered by name when the
+        // feature is absent, so "this binary has no kernel" and "the kernel refused" stay
+        // different facts.
+        Request::WalkShadowStage { span, off, bytes } => {
+            #[cfg(feature = "cuda-scratchpad")]
+            {
+                match crate::cudawalk::stage(span, off, &bytes) {
+                    Ok(()) => Reply::Unit,
+                    Err(e) => Reply::Failed(WireError::Other(e)),
+                }
+            }
+            #[cfg(not(feature = "cuda-scratchpad"))]
+            {
+                let _ = (span, off, bytes);
+                Reply::Failed(WireError::Other(kayfabe_isolate::NOT_A_WALK_SHADOW))
+            }
+        }
+        Request::WalkShadowRun { pdbs } => {
+            #[cfg(feature = "cuda-scratchpad")]
+            {
+                match crate::cudawalk::run(&pdbs) {
+                    Ok(bytes) => Reply::Payload(bytes),
+                    Err(e) => Reply::Failed(WireError::Other(e)),
+                }
+            }
+            #[cfg(not(feature = "cuda-scratchpad"))]
+            {
+                let _ = pdbs;
+                Reply::Failed(WireError::Other(kayfabe_isolate::NOT_A_WALK_SHADOW))
+            }
+        }
         Request::CudaWalkReport => {
             #[cfg(feature = "cuda-scratchpad")]
             {
