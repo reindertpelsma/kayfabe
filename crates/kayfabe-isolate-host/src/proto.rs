@@ -570,10 +570,24 @@ pub enum Reply {
     /// ★★★★★ **The geometry of an armed device node** — the answer to
     /// [`Request::ExportDeviceView`], **reply tag 15** (12 is retired, never reused).
     ///
-    /// ⊘ The **token does not cross**: it is the child's index into its own export table. The
-    /// parent mints its own when it adopts the descriptor, exactly as every other
-    /// descriptor-carrying reply does.
+    /// ⊘ The **parent's** token does not cross: it mints its own when it adopts the
+    /// descriptor, exactly as every other descriptor-carrying reply does.
+    ///
+    /// ⊘⊘⊘ **CORRECTED w734 — THE CHILD'S TOKEN NOW DOES CROSS, AND IT HAD TO.** The text
+    /// above used to read *"the token does not cross"* full stop, and it was right about the
+    /// parent's and silent about the child's — while `Request::ReleaseDeviceView` is executed
+    /// **in the child, against the child's table**, and the only token the parent held was its
+    /// own. The two index spaces stay aligned solely because each child mint happens to be
+    /// matched in order by one parent adopt: an invariant nothing stated and nothing checked,
+    /// which a single refused `adopt` shifts by one forever. ⚠ And an unknown token releases
+    /// **nothing** and answers `Ok(())`, while `[measured w722]` that release is the only
+    /// thing that returns BAR1 aperture. ⇒ `release_token` crosses, and the parent hands back
+    /// what the child gave it rather than a number of its own that happens to match.
     DeviceViewNode {
+        /// ★★★★★ **w734 — the CHILD's index into its own export table**, to be handed back
+        /// verbatim in `Request::ReleaseDeviceView`. ⊘ Never used as a parent token: the
+        /// parent's is minted by `adopt` and is what `dup` is keyed by.
+        release_token: u64,
         /// The RM object viewed, raw — echoed so the value is self-describing at an installer
         /// that never saw the request.
         memory: u64,
@@ -1509,11 +1523,13 @@ impl Reply {
                 out.extend_from_slice(&mb.to_le_bytes());
             }
             Reply::DeviceViewNode {
+                release_token,
                 memory,
                 offset,
                 mmap_len,
             } => {
                 out.push(15);
+                out.extend_from_slice(&release_token.to_le_bytes());
                 out.extend_from_slice(&memory.to_le_bytes());
                 out.extend_from_slice(&offset.to_le_bytes());
                 out.extend_from_slice(&mmap_len.to_le_bytes());
@@ -1591,6 +1607,7 @@ impl Reply {
             5 => Reply::Va(c.u64("va")?),
             14 => Reply::Megabytes(c.u64("reservable mb")?),
             15 => Reply::DeviceViewNode {
+                release_token: c.u64("device view release token")?,
                 memory: c.u64("device view memory")?,
                 offset: c.u64("device view offset")?,
                 mmap_len: c.u64("device view mmap len")?,
@@ -2099,6 +2116,9 @@ mod tests {
             Reply::Va(0x7f00_0000),
             Reply::Megabytes(11_808),
             Reply::DeviceViewNode {
+                // ⊘ w734: a value that is NOT any of the other three, so a codec that
+                // transposed two fields fails rather than round-tripping.
+                release_token: 5,
                 memory: 0xC1D0_0031,
                 offset: 0x20_0000,
                 mmap_len: 0x1_0000,

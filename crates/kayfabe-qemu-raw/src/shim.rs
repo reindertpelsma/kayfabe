@@ -2535,10 +2535,79 @@ pub fn classify_chip(e: &ChipError) -> (Status, &'static str) {
 /// # Errors
 /// [`Status::Unsupported`], [`classify_chip`]-ed.
 pub fn chip_for(device_id: u16) -> Result<&'static ChipProfile, (Status, &'static str)> {
-    if device_id == 0 {
-        return Ok(kayfabe_device::default_chip());
+    let base = if device_id == 0 {
+        kayfabe_device::default_chip()
+    } else {
+        kayfabe_device::chip_for_device_id(device_id).map_err(|e| classify_chip(&e))?
+    };
+    apply_guest_bar1_knob(base)
+}
+
+/// ★★★★★ **w734 — §w727's BAR1 KNOB, APPLIED HERE AND NOWHERE ELSE.**
+///
+/// ⊘⊘ **Placed inside [`chip_for`] deliberately, because there are TWO readers of the chip row
+/// and they must not be able to disagree.** [`chip_identity`] answers the hypervisor *before*
+/// realize — it is what QEMU checks its own `bar1-size` property against — and
+/// `Regs::create_probed` builds the plane *at* realize. Two call sites each reading the
+/// environment would be two sources for one fact, and the failure would be a device that
+/// registers one aperture and tells the guest another, which is precisely what
+/// `nvkvm.c:3552-3559` exists to refuse. One function, one read, both callers.
+///
+/// ⚠ **A refusal here refuses the DEVICE**, which is §w727 item 3: *"refuse at startup,
+/// loudly, never silently clamp. A guest booted with a BAR too small for its driver fails
+/// somewhere unrecognisable."* ⊘ And item 3's other half — *"do not gate on it before anything
+/// consumes BAR1 views"* — is honoured by the knob being **unset by default**: a boot that
+/// does not ask for a size is never refused for one.
+fn apply_guest_bar1_knob(
+    base: &'static ChipProfile,
+) -> Result<&'static ChipProfile, (Status, &'static str)> {
+    let choice = match crate::bar1budget::selected_guest_bar1() {
+        Ok(c) => c,
+        Err(why) => {
+            eprintln!("kayfabe: GUEST-BAR1 \u{2298} REFUSED — {why}");
+            return Err((
+                Status::Unsupported,
+                "the requested guest BAR1 aperture was refused by name (see the GUEST-BAR1 \
+                 line): it is not a power of two, is below the functional minimum, or does \
+                 not fit beside our own headroom in this board's aperture. \u{2298} Refused \
+                 rather than clamped \u{2014} a guest whose BAR is too small for its driver \
+                 fails somewhere that looks nothing like this option",
+            ));
+        }
+    };
+    let Some(choice) = choice else {
+        return Ok(base);
+    };
+    let (patched, moved) = kayfabe_device::with_bar_len(
+        base,
+        kayfabe_abi::pcibars::bus_bar::FB,
+        choice.bytes,
+    );
+    eprintln!(
+        "kayfabe: GUEST-BAR1 {}={} MiB row_moved={moved} advertised=0x{:x} \u{21d2} \u{2605} \
+         \u{a7}w727's knob, wired. A {} MiB-BAR1 {} is a REAL hardware configuration \u{2014} a \
+         different truthful board, not a lie (\u{a7}22). \u{26a0} `-device \
+         nvkvm-gpu,bar1-size={}` must match, or realize refuses by name.",
+        crate::bar1budget::GUEST_BAR1_ENV,
+        choice.bytes / (1024 * 1024),
+        patched.pci_bar_len(kayfabe_abi::pcibars::bus_bar::FB),
+        choice.bytes / (1024 * 1024),
+        patched.name,
+        choice.bytes,
+    );
+    if !moved {
+        // \u{2298} w614's class: a patch that matched nothing and reported success. Here the
+        // only benign cause is "the row already says that", which is stated rather than
+        // inferred \u{2014} an operator reading `row_moved=false` beside a size they asked for
+        // must be able to tell "already so" from "silently ignored".
+        eprintln!(
+            "kayfabe: GUEST-BAR1 \u{2298} the BAR table row did NOT move. Either it already \
+             carried this size, or this chip declares no framebuffer window at all (a zero \
+             row), in which case sizing one would INVENT an aperture the board does not \
+             have. Nothing was patched."
+        );
     }
-    kayfabe_device::chip_for_device_id(device_id).map_err(|e| classify_chip(&e))
+    Ok(patched)
 }
 
 /// The identity a chip's device claims, in the wire shape.
@@ -14876,6 +14945,87 @@ impl Regs {
             }
             None => chip,
         };
+        // ★★★★★ **w734 — RE-APPLY THE BAR1 KNOB, AND THEN CHECK THE TWO ROWS AGREE.**
+        //
+        // ⊘⊘⊘ **`[measured w734, boot `w734bar1`]` THE FB-SIZE DERIVATION SILENTLY UNDID THE
+        // BAR1 PATCH, AND A GREEN CLIENT DID NOT CATCH IT.** `ga106_profile` rebuilds from
+        // `let mut p = GA106;` — the **static** row — so it restores
+        // `pci_bars = GA106_PCI_BARS`, whose framebuffer window is the hardcoded 256 MiB.
+        // ⇒ on that boot `chip_identity` (which QEMU checks its own `bar1-size` against, and
+        // which does NOT go through this derivation) answered **128 MiB**, the hypervisor
+        // registered 128 MiB, and the plane — hence the emulated GSP's
+        // `NV2080_CTRL_CMD_BUS_GET_PCI_BAR_INFO` — told the guest **256 MiB**.
+        //
+        // ⚠ That is EXACTLY what `nvkvm.c:3552-3559` exists to refuse — *"the guest maps past
+        // the end of a region the hypervisor decodes and reads whatever is next, with nothing
+        // logged on either side"* — reached through a door that check cannot see, because the
+        // two numbers it compares were both 128. The boot printed `GUEST-BAR1 … row_moved=true`
+        // and `BAR1-BUDGET … advertised_guest_bar1=256 MiB` in the same log, and the raw client
+        // still graded `(P)`.
+        //
+        // ⇒ Re-applied here, **after** every other patch, and then the two rows are compared.
+        // ⊘ The comparison is the part that matters: re-applying fixes today's ordering, and
+        // the gate makes the whole CLASS a named refusal — any future patch that rebuilds the
+        // profile from a static row is caught at realize instead of by a guest reading past
+        // the end of an aperture.
+        let chip = apply_guest_bar1_knob(chip)?;
+        {
+            let ours = chip.pci_bar_len(kayfabe_abi::pcibars::bus_bar::FB);
+            let registered = chip_identity(chip.pci_device_id)?.fb_window_len;
+            eprintln!(
+                "kayfabe: BAR1-AGREE plane=0x{ours:x} identity=0x{registered:x} \u{21d2} {}",
+                if ours == registered {
+                    "\u{2714} the aperture this device REGISTERS and the one its emulated GSP \
+                     TELLS THE GUEST are the same number"
+                } else {
+                    "\u{2298}\u{2298}\u{2298} THEY DISAGREE"
+                }
+            );
+            if ours != registered {
+                return Err((
+                    Status::Unsupported,
+                    "the framebuffer aperture this device registers and the one its emulated \
+                     GSP reports to the guest are DIFFERENT SIZES (see the BAR1-AGREE line). \
+                     The guest's resource manager sizes its own mappings against the reported \
+                     number, so it would map past the end of a region the hypervisor decodes \
+                     and read whatever is next \u{2014} with nothing logged on either side. \
+                     \u{2298} Refused at realize, which is the only moment an operator can act",
+                ));
+            }
+        }
+        // ★★★★★ **w734 — THE IDENTITY-WINDOW INVARIANT, AT THE ONLY MOMENT AN OPERATOR CAN
+        // ACT.** `SINGLE_STORE_PLAN.md` §5's expiry note makes relocation, the staged image
+        // and `MAX_REFRESHES` retirable *because* the window becomes identity — and identity
+        // is destroyed by advertising more framebuffer than was reserved, because the guest's
+        // own RM puts its page tables at the TOP of what it is told it has. ⊘ A comment
+        // cannot catch that; this can.
+        //
+        // ⚠ Printed on EVERY boot including the disarmed one, for the reason every other
+        // census here is: a line that only appears when armed makes the control arm's log
+        // indistinguishable from an older binary's.
+        {
+            let reserved = scratchpad
+                .as_ref()
+                .and_then(crate::scratchpad::Scratchpad::reserved_mb)
+                .map_or(0, |mb| mb << 20);
+            let (possible, line) =
+                crate::scratchpad::identity_window_verdict(chip.fb_length, reserved);
+            eprintln!("kayfabe: {line}");
+            // ⊘ A REFUSAL only under `require`, and that asymmetry is increment 2's own
+            // argument re-used: `on` is how the question gets asked and `require` is how the
+            // answer gets enforced. A device that refuses to realize produces no census and
+            // no guest, which is the wrong trade while the switch is being measured.
+            if !possible && scratchpad_arm == crate::scratchpad::ScratchpadArm::Require {
+                return Err((
+                    Status::Unsupported,
+                    "the advertised framebuffer is larger than the reserved object, so the \
+                     guest will place page tables outside it and no identity window can \
+                     answer for them (see the IDENTITY-WINDOW line). \u{2298} Refused under \
+                     `require` rather than booted into a state whose failures appear as \
+                     refused kernel dereferences much later",
+                ));
+            }
+        }
         let plane = RegPlane::with_objects(
             chip,
             abi,
@@ -17593,6 +17743,53 @@ impl Regs {
                 }
             );
         }
+        // ★★★★★ **w734 — THE STORE'S I/O VOLUME, THE NUMBER §3's ORDERING RESTS ON.**
+        //
+        // ⊘⊘⊘ `SINGLE_STORE_PLAN.md`'s *"§6 MUST PRECEDE §3"* and `THE_CONSTRAINTS.md`
+        // §w724c's *"it does not boot"* both multiply an **unmeasured** byte volume by a
+        // rate measured on a different path. `[surveyed w734]` no byte counter for store I/O
+        // existed anywhere in this tree — only `pages_swept`, a page count at six different
+        // page sizes. ⇒ The volume is measured here, split by the role that decides whether
+        // the switch can afford it, and the projection is labelled as a projection.
+        {
+            // ★★★ Prefer the rate MEASURED on this boot through a device view of the reserved
+            // object (w734's probe) over the 48 MiB/s the plan inherited. ⊘ Zero means the
+            // probe never ran, which is not a slow rate — the line says which one it used.
+            let measured = crate::scratchpad::DEVICE_VIEW_READ_BPS
+                .load(std::sync::atomic::Ordering::Relaxed);
+            let (rate, provenance) = if measured > 0 {
+                (measured, "MEASURED on this boot through a device view of the reserved object")
+            } else {
+                (
+                    FB_IO_ASSUMED_BYTES_PER_SEC,
+                    "ASSUMED — the plan's inherited figure; no device-view rate was measured \
+                     on this boot, which is NOT the same as a slow one",
+                )
+            };
+            eprintln!("{}", kayfabe_device::plane::fb_io_census_line(rate));
+            eprintln!("kayfabe: FB-IO-RATE {} bytes/s \u{21d0} {provenance}", rate);
+        }
+        // ★★★ **w734 — AND DID THE GUEST STAY INSIDE?** The realize-time verdict's
+        // known-positive, taken from the page arena's own high-water — a FORWARD measurement
+        // that consults nothing the verdict computed. ⊘ Zero prints VACUOUS, never a pass.
+        {
+            let reserved = self
+                .scratchpad
+                .as_ref()
+                .and_then(crate::scratchpad::Scratchpad::reserved_mb)
+                .map_or(0, |mb| mb << 20);
+            // ⊘ The arena lives in the BAR mirror, which only exists in a build with the
+            // isolate plane. Without it the span is genuinely unmeasured, and
+            // `identity_window_reached` answers VACUOUS rather than pretending to zero.
+            #[cfg(feature = "host-isolates")]
+            let span = self.bar_mirror.get().map_or(0, |m| m.arena_span_bytes());
+            #[cfg(not(feature = "host-isolates"))]
+            let span = 0u64;
+            eprintln!(
+                "kayfabe: {}",
+                crate::scratchpad::identity_window_reached(span, reserved)
+            );
+        }
         match &self.scratchpad {
             Some(sp) => sp.census("END OF RUN"),
             None => crate::scratchpad::Scratchpad::census_disarmed("END OF RUN"),
@@ -19776,6 +19973,16 @@ pub fn selected_fb_trap() -> Result<kayfabe_device::plane::FbTrapPolicy, (Status
         .map(|v| v.to_str().unwrap_or("\u{fffd}invalid"));
     fb_trap_from(value)
 }
+
+/// ★★ **The rate the FB-IO census projects against, and it is an ASSUMPTION.**
+///
+/// 48 MiB/s is `SINGLE_STORE_PLAN.md`'s own figure for a CPU read of video memory through a
+/// BAR1 aperture. ⊘ It was measured on a **different path** (a CPU view armed for the BAR1
+/// crossing probe), not on this store, and this constant exists so that the projection it
+/// feeds can be read as *"bytes × somebody else's rate"* rather than as a measurement.
+/// ⚠ Replace it with a rate measured through a device view of the **reserved object** the
+/// moment one exists; until then the byte counts beside it are the only measured half.
+pub const FB_IO_ASSUMED_BYTES_PER_SEC: u64 = 48 * 1024 * 1024;
 
 pub const DIRTY_GATE_PUBLISH_ENV: &str = "KAYFABE_DIRTY_GATE_PUBLISH";
 

@@ -1,0 +1,41 @@
+BAR1B_START 2026-09-15T05:21:48+00:00
+SHIM_RC=0
+      |                  ^
+[3/3] Linking target qemu-system-x86_64
+== built: /workspace/bench/qemu-build/qemu-system-x86_64
+PT-SWEEP tasks=0 skipped=0 ran=0 truncated=0 pages=0 reasons={} JOIN-RELEASE revoked=0 released=0 stranded=0 drained=0 joined_ranges=0 remaps_refused=0 remaps_revoked=0 → bound=0 unchanged=0 repointed=0 swept
+HOST_DMESG_XID=1
+--- the guest's OWN first failure (NOT the last line: a re-boot attempt masks it) ---
+[   19.995345] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+[   21.857008] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternal
+[   21.857097] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternal
+[   21.902618] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   21.905238] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   21.905342] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternal
+[   21.905348] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, N
+[   22.348018] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00008; hParent=0x31415903; hObject=0x3141590f; hClass=0x00000070; paramsSize=0x00000018; paramsSta
+=== SINGLE-STORE E6 END 2026-09-15T05:23:27+00:00 tag=w734c ===
+--- THE KNOB AND THE GATE ---
+kayfabe: GUEST-BAR1 KAYFABE_GUEST_BAR1_MB=128 MiB row_moved=true advertised=0x8000000 ⇒ ★ §w727's knob, wired. A 128 MiB-BAR1 GA106 is a REAL hardware configuration — a different truthful board, not a lie (§22). ⚠ `-device nvkvm-gpu,bar1-size=134217728` must match, or realize refuses by name.
+kayfabe: GUEST-BAR1 KAYFABE_GUEST_BAR1_MB=128 MiB row_moved=true advertised=0x8000000 ⇒ ★ §w727's knob, wired. A 128 MiB-BAR1 GA106 is a REAL hardware configuration — a different truthful board, not a lie (§22). ⚠ `-device nvkvm-gpu,bar1-size=134217728` must match, or realize refuses by name.
+kayfabe: BAR1-AGREE plane=0x8000000 identity=0x8000000 ⇒ ✔ the aperture this device REGISTERS and the one its emulated GSP TELLS THE GUEST are the same number
+BAR1-BUDGET host_bar1=256 MiB at 0000:00:07.0 advertised_guest_bar1=128 MiB headroom=16 MiB ⇒ ✔ FITS — 128 MiB advertised + 16 MiB headroom ≤ 256 MiB ho
+--- the client ---
+        THREADS           8 of 8 verified ✔
+    W392D_GUEST_OUTCOME=(P) ★★★★★ THE FALSIFIER SURVIVES — the SAME client that
+--- FB-IO / identity ---
+FB-IO trap[r=0/0.0MiB w=0/0.0MiB frames=0] walk-bar[r=3499752/135.4MiB w=0/0.0MiB frames=58] walk-guest-pt[r=53463/140.3MiB w=0/0.0MiB frames=71] out-of-band[r=542/0.4MiB w=0/0.0MiB frames=60] cpu-ce[r=2/0.0MiB w=352/15.7MiB frames=2049] ★ TOTAL=291.8MiB WALK=275.8MiB WALK_FRAMES=129 ⇒ PROJECTION: at an ASSUMED 57 MiB/s over PCIe the WALK half alone would cost 4.8s of this boot, and the total 5.0s; and serving those frames as device views would need 129 armed nodes = 0.5 MiB of host BAR1 if none of th
+IDENTITY-REACHED ✔ INSIDE — the guest's highest framebuffer address was 3868.7 MiB, 94.5 % of the 4096.0 MiB reserved, leaving 227.3 MiB. ★ This is the known-positive 
+BAR1B_END 2026-09-15T05:23:28+00:00
+kayfabe: GUEST-BAR1 KAYFABE_GUEST_BAR1_MB=128 MiB row_moved=true advertised=0x8000000 ⇒ ★ §w727's knob, wired. A 128 MiB-BAR1 GA106 is a REAL hardware configuration — a different truthful board, not a lie (§22). ⚠ `-device nvkvm-gpu,bar1-size=134217728` must match, or realize refuses by name.
+kayfabe: GUEST-BAR1 KAYFABE_GUEST_BAR1_MB=128 MiB row_moved=true advertised=0x8000000 ⇒ ★ §w727's knob, wired. A 128 MiB-BAR1 GA106 is a REAL hardware configuration — a different truthful board, not a lie (§22). ⚠ `-device nvkvm-gpu,bar1-size=134217728` must match, or realize refuses by name.
+kayfabe: SCRATCHPAD-DEVICE-VIEW AT REALIZE: DEVICE_VIEW=OK rate[rd=57.9MiB/s wr=4902.0MiB/s over=2048KiB arm_us=253 rel_us=316 released=true] mmap_len=0x1000 sentinel_roundtrip=true released=true ⇒ the scratchpad isolate armed a view of the RESERVED OBJECT, the node crossed by SCM_RIGHTS, this process mapped it, CLOSED the descriptor, and the mapping survived — the owner's conditional ruling, exercised end to end
+kayfabe: GUEST-BAR1 KAYFABE_GUEST_BAR1_MB=128 MiB row_moved=true advertised=0x8000000 ⇒ ★ §w727's knob, wired. A 128 MiB-BAR1 GA106 is a REAL hardware configuration — a different truthful board, not a lie (§22). ⚠ `-device nvkvm-gpu,bar1-size=134217728` must match, or realize refuses by name.
+kayfabe: GUEST-BAR1 KAYFABE_GUEST_BAR1_MB=128 MiB row_moved=true advertised=0x8000000 ⇒ ★ §w727's knob, wired. A 128 MiB-BAR1 GA106 is a REAL hardware configuration — a different truthful board, not a lie (§22). ⚠ `-device nvkvm-gpu,bar1-size=134217728` must match, or realize refuses by name.
+kayfabe: BAR1-AGREE plane=0x8000000 identity=0x8000000 ⇒ ✔ the aperture this device REGISTERS and the one its emulated GSP TELLS THE GUEST are the same number
+kayfabe: IDENTITY-WINDOW ✔ POSSIBLE — advertised=4096.0 MiB ≤ reserved=4096.0 MiB, headroom=0.0 MiB. ⇒ every framebuffer address the guest can name is an offset into the reserved object, so the walk kernel's window can be IDENTITY and relocation, the staged image and its H2D copy, and MAX_REFRESHES all become retirable. ⚠ Possible, not achieved: `identity_window_reached` at teardown is what says the guest's own tables landed inside.
+kayfabe: BAR1-BUDGET host_bar1=256 MiB at 0000:00:07.0 advertised_guest_bar1=128 MiB headroom=16 MiB ⇒ ✔ FITS — 128 MiB advertised + 16 MiB headroom ≤ 256 MiB host, so an all-resident BAR1 is a sizing question this board answers yes to
+kayfabe: FB-IO trap[r=0/0.0MiB w=0/0.0MiB frames=0] walk-bar[r=3499752/135.4MiB w=0/0.0MiB frames=58] walk-guest-pt[r=53463/140.3MiB w=0/0.0MiB frames=71] out-of-band[r=542/0.4MiB w=0/0.0MiB frames=60] cpu-ce[r=2/0.0MiB w=352/15.7MiB frames=2049] ★ TOTAL=291.8MiB WALK=275.8MiB WALK_FRAMES=129 ⇒ PROJECTION: at an ASSUMED 57 MiB/s over PCIe the WALK half alone would cost 4.8s of this boot, and the total 5.0s; and serving those frames as device views would need 129 armed nodes = 0.5 MiB of host BAR1 if none of them is contiguous with another. ⚠ The byte and frame counts are MEASURED here; the rate is NOT — it is an input from a different path's measurement, and the product is only as good as it.
+kayfabe: FB-IO-RATE 60681481 bytes/s ⇐ MEASURED on this boot through a device view of the reserved object
+kayfabe: IDENTITY-REACHED ✔ INSIDE — the guest's highest framebuffer address was 3868.7 MiB, 94.5 % of the 4096.0 MiB reserved, leaving 227.3 MiB. ★ This is the known-positive for the identity window: the guest's own tables fit in the object, so an identity window would have answered for all of them.
+kayfabe: SCRATCHPAD-DEVICE-VIEW AT END OF RUN: DEVICE_VIEW=OK rate[rd=57.9MiB/s wr=4902.0MiB/s over=2048KiB arm_us=253 rel_us=316 released=true] mmap_len=0x1000 sentinel_roundtrip=true released=true ⇒ the scratchpad isolate armed a view of the RESERVED OBJECT, the node crossed by SCM_RIGHTS, this process mapped it, CLOSED the descriptor, and the mapping survived — the owner's conditional ruling, exercised end to end

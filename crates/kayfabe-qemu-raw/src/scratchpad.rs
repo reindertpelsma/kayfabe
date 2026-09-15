@@ -88,6 +88,17 @@ use crate::shim::Status;
 /// silent default are bad here and they are bad in opposite ways: defaulting a typo to `off`
 /// makes a boot the operator believes is armed run the control arm, and defaulting it to
 /// `on` reserves the host's entire framebuffer on a boot nobody asked for it on.
+
+/// ★★★★★ **w734 — THE MEASURED READ RATE THROUGH A DEVICE VIEW OF THE RESERVED OBJECT**, in
+/// bytes per second, or **0 for "never measured on this boot"**.
+///
+/// ⊘⊘ Zero is not a slow rate and must never be read as one. It means the probe did not run
+/// (its gate is off) or refused — and the FB-IO census says which of `MEASURED` and `ASSUMED`
+/// it used, rather than silently multiplying by somebody else's number. That distinction is
+/// the entire point of w734: the switch's cost has been quoted for two documents as a
+/// measured fact when only one of its two terms was ever measured.
+pub static DEVICE_VIEW_READ_BPS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 pub const SCRATCHPAD_ENV: &str = "KAYFABE_SCRATCHPAD";
 
 /// Which arm of [`SCRATCHPAD_ENV`] this boot runs.
@@ -386,6 +397,150 @@ impl Reservation {
 /// isolate's client. ⇒ **the reservation's lifetime IS this struct's lifetime**, with no
 /// separate release step to forget. `IsolateBox::drop` asserts lock-free, so this must not
 /// be dropped under a ranked lock.
+
+/// ★★★★★ **w734 — THE IDENTITY-WINDOW INVARIANT, MADE CATCHABLE BY A BOOT.**
+///
+/// > **`SINGLE_STORE_PLAN.md` §5's expiry note:** *"§3 makes GPGA one reserved device-local
+/// > object which `gpga_is_one_reserved_object.md` has the scratchpad map **whole, at a fixed
+/// > base** — an address is `X + gpga_offset`. ⇒ **after §3 the window is identity and
+/// > `build_image` is retired.**"*
+///
+/// An identity window means the walk kernel can dereference a guest page-table address
+/// **directly**, with one bounds check against the window's length, and no relocation, no
+/// staged image, no H2D copy and no `MAX_REFRESHES` ceiling. Everything that retires with §3
+/// retires *because of this one property*.
+///
+/// # ⊘⊘⊘ AND IT IS DESTROYED BY ADVERTISING MORE THAN WAS RESERVED
+///
+/// The kernel addresses table pages as offsets into one flat window
+/// (`KfArgs::win = {base, len}`, every dereference bounds-checked against `win.len`). A window
+/// that answers for the guest's tables **at their own GPGA** must be as long as the highest
+/// table page's address. ⇒ if the guest is told it has `N` bytes of framebuffer and we hold
+/// fewer than `N`, its RM will place tables at addresses **outside the object** — the guest's
+/// own RM puts them at the **top** — and the kernel's bounds check refuses every one of them.
+///
+/// ⚠ **The margin is thin by design and it is measured, not assumed.** `[measured]`
+/// `span_pages → 3868.7 MiB` inside `RESERVED_MB=4096`: **94.5 % of what the guest was told**,
+/// 227.3 MiB of headroom. ⇒ this is not a comfortable inequality with a safety factor; it is
+/// an invariant that holds because `derived_from_reservation` moves the guest's tables **down
+/// with the reservation**, and it fails the moment anything advertises independently of it.
+///
+/// ⊘ w730's *"the tables live ~11.8 GiB up a 12 GiB board, so an identity window is
+/// unaffordable"* is a fact about the **advertised** size, not about the design. Advertise
+/// what was reserved and the same 94.5 % lands inside it.
+///
+/// # ★ Two checks, at two moments, and they answer different questions
+///
+/// | | asks | when |
+/// |---|---|---|
+/// | [`identity_window_verdict`] | *"could the guest even place a table outside the object?"* | **at realize**, before the guest's first instruction — the only moment an operator can act |
+/// | [`identity_window_reached`] | *"did it?"* | at teardown, from the arena's own high-water |
+///
+/// ⊘ The first is the invariant; the second is the **known-positive for the first**. A verdict
+/// that says *"identity is possible"* on every boot and is never confronted with what the
+/// guest actually did is a check that reports rather than one that gates — the failure this
+/// tree names most often. ⚠ And the second alone would be useless: by teardown the boot is
+/// over, and a table outside the window is a kernel that refused every dereference, not a
+/// number somebody reads afterwards.
+///
+/// Returns `(identity_is_possible, the sentence)`.
+#[must_use]
+pub fn identity_window_verdict(advertised_fb_bytes: u64, reserved_bytes: u64) -> (bool, String) {
+    let mib = |b: u64| b as f64 / (1024.0 * 1024.0);
+    if reserved_bytes == 0 {
+        return (
+            false,
+            "IDENTITY-WINDOW ⊘ NO RESERVATION — nothing is held, so there is no object for a \
+             window to be the identity of. ⊘ This is not `identity is impossible`; it is the \
+             question not arising, and the fake framebuffer is still what backs the guest."
+                .to_string(),
+        );
+    }
+    if advertised_fb_bytes <= reserved_bytes {
+        (
+            true,
+            format!(
+                "IDENTITY-WINDOW ✔ POSSIBLE — advertised={:.1} MiB ≤ reserved={:.1} MiB, \
+                 headroom={:.1} MiB. ⇒ every framebuffer address the guest can name is an \
+                 offset into the reserved object, so the walk kernel's window can be IDENTITY \
+                 and relocation, the staged image and its H2D copy, and MAX_REFRESHES all \
+                 become retirable. ⚠ Possible, not achieved: `identity_window_reached` at \
+                 teardown is what says the guest's own tables landed inside.",
+                mib(advertised_fb_bytes),
+                mib(reserved_bytes),
+                mib(reserved_bytes - advertised_fb_bytes),
+            ),
+        )
+    } else {
+        (
+            false,
+            format!(
+                "IDENTITY-WINDOW ⊘⊘⊘ IMPOSSIBLE — advertised={:.1} MiB > reserved={:.1} MiB, \
+                 over by {:.1} MiB. ⚠ The guest's own RM places its page tables at the TOP of \
+                 what it is told it has, so this is not a rounding worry: the tables will land \
+                 OUTSIDE the object and the walk kernel's bounds check will refuse every one \
+                 of them. ⇒ Advertise what was reserved (`derived_from_reservation`), or hold \
+                 more.",
+                mib(advertised_fb_bytes),
+                mib(reserved_bytes),
+                mib(advertised_fb_bytes - reserved_bytes),
+            ),
+        )
+    }
+}
+
+/// ★★★ **DID THE GUEST ACTUALLY STAY INSIDE?** — [`identity_window_verdict`]'s known-positive,
+/// taken from the page arena's own high-water rather than from anything this check controls.
+///
+/// `span_bytes` is the highest framebuffer address the guest caused a page to exist at, which
+/// is the arena's `span_pages × 4 KiB`. ⊘ It is a **forward** measurement: the arena indexes
+/// by framebuffer address (*"framebuffer address = file offset"*), so its high-water is the
+/// guest's own answer to *"how high did you go"* and consults nothing this verdict computed.
+///
+/// ⚠ `span_bytes == 0` is **VACUOUS**, not a pass. It means no page was ever arena-backed on
+/// this boot — the mirror was off, or the arena refused everything — and a run that read it as
+/// *"the guest stayed well inside"* would be reading the absence of a measurement as its
+/// best possible result.
+#[must_use]
+pub fn identity_window_reached(span_bytes: u64, reserved_bytes: u64) -> String {
+    let mib = |b: u64| b as f64 / (1024.0 * 1024.0);
+    if span_bytes == 0 {
+        return "IDENTITY-REACHED ⊘⊘ VACUOUS — the page arena's high-water is zero, so no \
+                framebuffer page was ever arena-backed on this boot. That is the absence of a \
+                measurement, NOT the guest staying inside the reservation."
+            .to_string();
+    }
+    if reserved_bytes == 0 {
+        return format!(
+            "IDENTITY-REACHED ⊘ NO RESERVATION — the guest reached {:.1} MiB of framebuffer \
+             and nothing is held to compare it against.",
+            mib(span_bytes)
+        );
+    }
+    let pct = span_bytes as f64 * 100.0 / reserved_bytes as f64;
+    if span_bytes <= reserved_bytes {
+        format!(
+            "IDENTITY-REACHED ✔ INSIDE — the guest's highest framebuffer address was \
+             {:.1} MiB, {pct:.1} % of the {:.1} MiB reserved, leaving {:.1} MiB. ★ This is \
+             the known-positive for the identity window: the guest's own tables fit in the \
+             object, so an identity window would have answered for all of them.",
+            mib(span_bytes),
+            mib(reserved_bytes),
+            mib(reserved_bytes - span_bytes),
+        )
+    } else {
+        format!(
+            "IDENTITY-REACHED ⊘⊘⊘ OUTSIDE — the guest reached {:.1} MiB, which is \
+             {:.1} MiB ABOVE the {:.1} MiB reserved ({pct:.1} %). ⇒ an identity window CANNOT \
+             answer for this boot's tables, whatever the realize-time verdict said, and \
+             anything that retires on the strength of identity must NOT be retired.",
+            mib(span_bytes),
+            mib(span_bytes - reserved_bytes),
+            mib(reserved_bytes),
+        )
+    }
+}
+
 #[derive(Debug)]
 pub struct Scratchpad {
     /// Which arm of [`SCRATCHPAD_ENV`] this one was brought up under. ⊘ Carried on the
@@ -921,7 +1076,7 @@ fn probe_device_view(
     let Some(fd) = dup(id, view.token) else {
         // ⊘ Release first: the view exists in the isolate whether or not we can see it, and
         // leaking it would consume aperture for the rest of the boot.
-        let _ = worker.release_device_view(view.token);
+        let _ = worker.release_device_view(&view);
         return format!(
             "DEVICE_VIEW=NO_DESCRIPTOR token={} ⇒ the isolate minted a view this process \
              could not dup; the export directory does not know that isolate",
@@ -934,7 +1089,7 @@ fn probe_device_view(
         Ok(w) => w,
         Err(e) => {
             drop(fd);
-            let _ = worker.release_device_view(view.token);
+            let _ = worker.release_device_view(&view);
             return format!("DEVICE_VIEW=NO_WINDOW why={e:?}");
         }
     };
@@ -945,7 +1100,7 @@ fn probe_device_view(
     // mapping exists — not at the end of the scope, not on the error path only.
     drop(fd);
     if let Err(e) = placed {
-        let _ = worker.release_device_view(view.token);
+        let _ = worker.release_device_view(&view);
         return format!("DEVICE_VIEW=MMAP_REFUSED why={e:?}");
     }
 
@@ -955,11 +1110,26 @@ fn probe_device_view(
     let wrote = win.store_u32(HostOffset::ZERO, SENTINEL);
     let mut buf = [0u8; 4];
     let read = win.read_into(HostOffset::ZERO, &mut buf).map(|()| u32::from_le_bytes(buf));
-    let released = worker.release_device_view(view.token);
+    let released = worker.release_device_view(&view);
+
+    // ★★★★★ **w734 — THE RATE, MEASURED ON THE PATH THAT WILL CARRY IT.**
+    //
+    // ⊘⊘⊘ `SINGLE_STORE_PLAN.md` and `THE_CONSTRAINTS.md` §w724c both cost the switch as
+    // `bytes ÷ 48 MiB/s`. `[surveyed w734]` that 48 MiB/s is quoted in both with no citation
+    // to a measurement of THIS path — a CPU `memcpy` out of a device view of the **reserved
+    // object** — and the whole "there is no working intermediate, it does not boot" ruling is
+    // that rate times an unmeasured byte volume. w734b measured the volume. This measures the
+    // rate, on the same boot, through the same verb, over the same object.
+    //
+    // ⚠ It costs BAR1 aperture for its duration and gives it straight back through the
+    // release verb (`[measured w722]` `munmap` + `close` returns **nothing**), and it costs
+    // wall time at realize, where the guest does not exist yet. ⊘ Both are why it is a
+    // bounded probe and not a sweep.
+    let rate = probe_device_view_rate(worker, off, id, obj, dup);
 
     match (wrote, read) {
         (Ok(()), Ok(got)) if got == SENTINEL => format!(
-            "DEVICE_VIEW=OK mmap_len=0x{:x} sentinel_roundtrip=true released={} ⇒ the \
+            "DEVICE_VIEW=OK {rate} mmap_len=0x{:x} sentinel_roundtrip=true released={} ⇒ the \
              scratchpad isolate armed a view of the RESERVED OBJECT, the node crossed by \
              SCM_RIGHTS, this process mapped it, CLOSED the descriptor, and the mapping \
              survived — the owner's conditional ruling, exercised end to end",
@@ -977,6 +1147,152 @@ fn probe_device_view(
             released.is_ok()
         ),
     }
+}
+
+/// ★★★★★ **w734 — HOW FAST IS A CPU `memcpy` THROUGH A DEVICE VIEW OF THE RESERVED OBJECT?**
+///
+/// # ⊘⊘⊘ Why this number, and not the one already written down
+///
+/// `SINGLE_STORE_PLAN.md`'s ordering rule (*"§6 MUST PRECEDE §3"*) and `THE_CONSTRAINTS.md`
+/// §w724c's *"it does not boot"* are the same arithmetic: **store bytes ÷ 48 MiB/s**. w734b
+/// measured the numerator for the first time. ⊘ The denominator is quoted in both documents
+/// with no citation to a measurement of **this** path, and a rate measured on some other
+/// aperture is exactly the input this tree keeps being burned by — *a ruling's date and its
+/// architecture are both part of the citation*.
+///
+/// ⇒ This measures it where it will be paid: [`kayfabe_isolate::Worker::export_device_view`]
+/// over the reserved object → `SCM_RIGHTS` → `place_device_view` → `copy_nonoverlapping`,
+/// which is byte for byte what a `read`/`write` on a device-backed `FbStore` would do.
+///
+/// # ★★★ Four numbers, and the last two are the ones nobody has costed
+///
+/// | | what it decides |
+/// |---|---|
+/// | `rd` MiB/s | the walk's cost after the switch — the plan's whole ordering argument |
+/// | `wr` MiB/s | `kbusVerifyBar2`, the CPU CE executor, every boot-time store write |
+/// | `arm_us` | ⚠ **per view.** A device view is mapped from file offset **0 only**, so a non-contiguous working set needs ONE ARMED NODE PER RUN — this is the per-run tax, and nothing had costed it |
+/// | `rel_us` | the same on the way out; and `[measured w722]` skipping it returns **zero** aperture |
+///
+/// ⊘ `PROBE_BYTES` is deliberately small. §22 item 3 measured host BAR1 at 256 MiB **shared
+/// with the host driver**, so a probe sized to impress would compete with the thing it is
+/// measuring for. 2 MiB is ~0.8 % of the aperture and is released immediately.
+///
+/// ⚠ **EXPIRY (§w724g):** deleted when a device-backed `FbStore` exists and reports its own
+/// throughput from production traffic. At that point this measures a path the device already
+/// measures, and two sources for one fact is the defect this tree names most often.
+#[cfg(feature = "host-isolates")]
+fn probe_device_view_rate(
+    worker: &mut kayfabe_isolate::Worker,
+    off: &OffTrap,
+    id: IsolateId,
+    obj: HostHandle,
+    dup: &DupFn,
+) -> String {
+    use kayfabe_linux_raw::{GuestWindow, HostOffset, HostPageSize};
+    use std::os::fd::AsFd;
+
+    /// 2 MiB — see the doc comment. ⊘ Not a tunable: a knob here would make two boots'
+    /// numbers incomparable without anyone noticing which arm they were read from.
+    const PROBE_BYTES: u64 = 2 * 1024 * 1024;
+    /// ⊘ Three passes, and the **minimum** is reported rather than the mean. A `memcpy` out
+    /// of an uncached device mapping has a floor and a long tail (scheduler, host-driver
+    /// contention); the floor is a property of the bus and the tail a property of the box. A
+    /// mean blends them and moves run to run.
+    const PASSES: u32 = 3;
+
+    let t_arm = std::time::Instant::now();
+    let view = match worker.export_device_view(obj, 0, PROBE_BYTES, true) {
+        Ok(v) => v,
+        Err(e) => return format!("rate=UNMEASURED why=EXPORT_REFUSED:{e:?}"),
+    };
+    let Some(fd) = dup(id, view.token) else {
+        let _ = worker.release_device_view(&view);
+        return "rate=UNMEASURED why=NO_DESCRIPTOR".to_string();
+    };
+    let win = match GuestWindow::create(view.mmap_len, HostPageSize::query()) {
+        Ok(w) => w,
+        Err(e) => {
+            drop(fd);
+            let _ = worker.release_device_view(&view);
+            return format!("rate=UNMEASURED why=NO_WINDOW:{e:?}");
+        }
+    };
+    let placed = win.place_device_view(HostOffset::ZERO, view.mmap_len, fd.as_fd(), true);
+    // ★ Condition 2 of the ruling, here too: the descriptor goes the instant the mapping
+    // exists — not at the end of the scope, not on the error path only.
+    drop(fd);
+    let arm_us = micros(t_arm);
+    if let Err(e) = placed {
+        let _ = worker.release_device_view(&view);
+        return format!("rate=UNMEASURED why=MMAP_REFUSED:{e:?} arm_us={arm_us}");
+    }
+    let _ = off;
+
+    let n = view.mmap_len.min(PROBE_BYTES);
+    let Ok(len) = usize::try_from(n) else {
+        let _ = worker.release_device_view(&view);
+        return "rate=UNMEASURED why=LENGTH_NOT_HOST_SIZED".to_string();
+    };
+    let mut buf = vec![0u8; len];
+    let mut rd_us = u64::MAX;
+    let mut wr_us = u64::MAX;
+    let mut failed: Option<String> = None;
+    for _ in 0..PASSES {
+        let t = std::time::Instant::now();
+        if let Err(e) = win.read_into(HostOffset::ZERO, &mut buf) {
+            failed = Some(format!("READ:{e:?}"));
+            break;
+        }
+        // ⊘ `.max(1)` guards the division below, and it is a FLOOR on the reported time, so
+        // it can only make the rate look SLOWER than it was. A guard that flattered the
+        // number would be the one direction that matters here.
+        rd_us = rd_us.min(micros(t).max(1));
+        let t = std::time::Instant::now();
+        // ★ Writing back exactly what was read leaves the object's bytes unchanged, which
+        // matters: this runs over the reserved object the guest's framebuffer will live in.
+        if let Err(e) = win.write_from(HostOffset::ZERO, &buf) {
+            failed = Some(format!("WRITE:{e:?}"));
+            break;
+        }
+        wr_us = wr_us.min(micros(t).max(1));
+    }
+
+    let t_rel = std::time::Instant::now();
+    let released = worker.release_device_view(&view).is_ok();
+    let rel_us = micros(t_rel);
+    drop(win);
+
+    if let Some(why) = failed {
+        return format!("rate=UNMEASURED why={why} arm_us={arm_us} rel_us={rel_us}");
+    }
+    let mibps = |us: u64| (n as f64) * 1e6 / (us as f64) / (1024.0 * 1024.0);
+    // ★ Published so the FB-IO census can multiply the volume it MEASURED by a rate that was
+    // also measured, on this boot, on this board — instead of by the 48 MiB/s the plan
+    // inherited. ⊘ Reads only; the write rate is reported but not published, because the
+    // census's dominant term is the walk and the walk reads.
+    DEVICE_VIEW_READ_BPS.store(
+        ((n as f64) * 1e6 / (rd_us as f64)) as u64,
+        std::sync::atomic::Ordering::Relaxed,
+    );
+    format!(
+        "rate[rd={rd:.1}MiB/s wr={wr:.1}MiB/s over={kib}KiB arm_us={arm_us} rel_us={rel_us} released={released}]",
+        rd = mibps(rd_us),
+        wr = mibps(wr_us),
+        kib = n / 1024,
+    )
+}
+
+/// ⊘ No isolate plane, no view, no rate — said by name, because *an unmeasured rate* and *a
+/// slow one* are the two facts this probe exists to keep apart.
+#[cfg(not(feature = "host-isolates"))]
+fn probe_device_view_rate(
+    _worker: &mut kayfabe_isolate::Worker,
+    _off: &OffTrap,
+    _id: IsolateId,
+    _obj: HostHandle,
+    _dup: &DupFn,
+) -> String {
+    "rate=UNMEASURED why=NO_ISOLATE_PLANE".to_string()
 }
 
 /// ⊘ Without the isolate plane there is no isolate to arm a view in, and this arm says so by

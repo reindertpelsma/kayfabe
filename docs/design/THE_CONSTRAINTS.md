@@ -107,6 +107,12 @@ and the per-client host MMU fault above.
     is sysmem**. If the guest explicitly asks for DMA-mapped system memory it gets real host
     memory (§22, §w724c).
 
+★ **And one measurement that changed a ruling, 2026-09-15 (w734):** §w724c's *"there is no
+working intermediate — it does not boot"* is **refuted by measurement**; the intermediate costs
+**5–10 s**, not minutes, and its aperture cost is **0.5 MiB of 256**. The correction is folded
+directly above §w724c. ⇒ *a derivation cited as a measurement is the most expensive kind of
+wrong*, and this file carried one for two weeks in the sentence that ordered the whole branch.
+
 ★ **Later additions that are not numbered constraints but bind the same way:**
 **§w724g** gates expire — carry an expiry condition in the gate's own doc comment, and unwire and
 delete in the **same** change · **§w727** BAR1/BAR2 are **sized options** with enforced minimums
@@ -864,6 +870,32 @@ exists to prevent it.
 · `cpu-ce`), at the six entry points that reach `FbStore`. **Do not treat the section below as
 settled until that census lands** — and if the number comes back small, the forced ordering is an
 open question again rather than a rule.
+
+### ★★★ TWO THINGS THE TABLE ABOVE DOES NOT CARRY, AND THE FIRST IS A WHOLE COST NOBODY HAD NAMED
+
+⊘ **The aperture term.** A device view is mapped from **file offset 0 only**
+(`nvidia_mmap_helper` refuses `vm_pgoff != 0`, `window_unsafe.rs:251-253`), so a device-backed
+store needs **one armed node per contiguous run**, and an armed node costs host BAR1 — §22 item
+3's 256 MiB, shared with the host driver. ⇒ **bytes and frames are bounded by completely
+different things**: bytes by the bus (*a slow boot*), frames by the aperture (*does not fit, at
+any speed*), and they can point opposite ways. Measured across four boots:
+
+| | measured |
+|---|---|
+| distinct frames the walk touched, whole boot | **107 – 131** ⇒ **0.4 – 0.5 MiB** of 256 |
+| cost to arm one view / give it back | **`arm_us` 241–273** / **`rel_us` 409–446** ⇒ ~0.7 ms a round |
+
+⇒ the term that could have made this *"does not fit, at any speed"* fits with ~500× margin, and
+the per-view tax — which nothing had costed — is under a millisecond.
+
+⚠ **And two caveats the numbers do not carry themselves.** `[w734]` This is **ONE WORKLOAD**,
+the raw client: a boot that ran the 30-arm guest suite cascade-failed on its **pre-existing**
+`--concurrency`/`--engines` wedge and cascade-skipped 26 arms, so its census is a **narrower**
+workload (146 MiB), never a wider one. ⊘ The same caveat §w727 attaches to `BAR1_MIN` applies
+here with equal force. And `HOST_DMESG_XID=1` on those boots is the pre-existing
+`Xid 31 … ENGINE CE0 … FAULT_PDE @ 0xa0_00000000` (w555/w711) — neither caused nor fixed by any
+of this.
+
 
 ## ★★★★★ w724c — WHY THE SWITCH CANNOT BE INCREMENTAL: THERE IS NO WORKING INTERMEDIATE
 

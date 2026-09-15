@@ -1335,3 +1335,57 @@ fn gpu_name_from_seam(p: staticinfo::StaticInfoPolicy) -> staticinfo::StaticInfo
         }
     }
 }
+
+/// ★★★★★ **w734 — THE SAME CHIP, WITH A DIFFERENT (TRUTHFUL) BAR1 APERTURE** —
+/// `THE_CONSTRAINTS.md` §w727's *"BAR1/BAR2 are sized options, like VRAM"*.
+///
+/// # ⊘ Why this is not a lie, and why that argument is load-bearing
+///
+/// §22 forbids lying about the aperture. This does not lie: *"a 128 MiB-BAR1 GA106 is **a real
+/// hardware configuration**, so advertising one is a different truthful board, not a lie"* —
+/// the same argument that licensed deriving the framebuffer size from the reservation instead
+/// of asserting 12288. Every consumer of the number is told the SAME number: the BAR table
+/// this patches is what [`ChipProfile::pci_bar_len`] answers, what [`identity_for`] hands the
+/// hypervisor to register, and what the emulated GSP replies to
+/// `NV2080_CTRL_CMD_BUS_GET_PCI_BAR_INFO` with.
+///
+/// # ★★★ ONE FACT, ONE ROW — and the hypervisor refuses a disagreement
+///
+/// The QEMU device carries `bar1-size` as its own property and **refuses at realize** if it
+/// differs from this row (`qemu/hw/misc/nvkvm/nvkvm.c:3552-3559`): *"if this device registers
+/// a 128 MiB window and tells the guest 256 MiB, the guest maps past the end of a region the
+/// hypervisor decodes and reads whatever is next — with nothing logged on either side."*
+/// ⇒ The operator must move both, and moving one is a **named refusal at the only moment
+/// anybody can act**, never a silent skew. That is §w727 item 3 exactly: *"refuse at startup,
+/// loudly, never silently clamp."*
+///
+/// ⊘ `bar` is RM's own logical index ([`kayfabe_abi::pcibars::bus_bar`]), so the same function
+/// serves BAR2's knob when §w727's `Bar2Choice` exists. ⚠ A `bar` this chip does not declare
+/// is left alone and reported by the `bool`: patching a row that is not there would invent an
+/// aperture, which is the one direction §22 has no defence against.
+///
+/// Returns the patched profile and whether the row actually moved. ⊘ The `bool` is not
+/// decoration: w614's failure in this tree was a patch that matched nothing and reported
+/// success, and `ga10x::ga106_profile` asserts its own patch count for the same reason.
+#[must_use]
+pub fn with_bar_len(base: &'static ChipProfile, bar: usize, len: u64) -> (&'static ChipProfile, bool) {
+    let mut bars: Vec<PciBarRow> = base.pci_bars.to_vec();
+    let Some(row) = bars.get_mut(bar) else {
+        return (base, false);
+    };
+    if row.size_bytes == len {
+        // ⊘ Identical is not a failure and must not read as one — it is the operator asking
+        // for what the row already says. Reported as "did not move" with the original
+        // profile, so no leak happens for a no-op.
+        return (base, false);
+    }
+    if row.size_bytes == 0 {
+        // ⚠ A BAR the chip does not present. Sizing it would INVENT an aperture, and §22 has
+        // no defence against an aperture that does not exist on the board we claim to be.
+        return (base, false);
+    }
+    row.size_bytes = len;
+    let mut p = *base;
+    p.pci_bars = Box::leak(bars.into_boxed_slice());
+    (Box::leak(Box::new(p)), true)
+}

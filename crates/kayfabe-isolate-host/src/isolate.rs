@@ -632,12 +632,13 @@ impl ProxyRmBackend {
         let Ok(reply) = Reply::decode(&self.buf) else {
             return Err(RmError::Wedged);
         };
-        let (memory, offset, mmap_len) = match self.lift(reply)? {
+        let (release_token, memory, offset, mmap_len) = match self.lift(reply)? {
             Reply::DeviceViewNode {
+                release_token,
                 memory,
                 offset,
                 mmap_len,
-            } => (memory, offset, mmap_len),
+            } => (release_token, memory, offset, mmap_len),
             // ⊘ Any other shape drops `fds`, which closes whatever arrived.
             _ => return Err(RmError::Wedged),
         };
@@ -657,6 +658,12 @@ impl ProxyRmBackend {
         };
         Ok(kayfabe_isolate::DeviceView {
             token,
+            // ★★★★★ **w734 — THE CHILD'S OWN TOKEN, OFF THE WIRE, NOT `token`.** `token` is
+            // the index THIS process's `ExportRegistry` just minted, which is what `dup` is
+            // keyed by; a release runs in the CHILD against the CHILD's table. The two agree
+            // only because each mint is matched in order by one adopt — an invariant nothing
+            // stated, and one a single refused `adopt` shifts by one forever.
+            release_token,
             // ★ Stamped with THIS connection's isolate, never taken from the wire.
             memory: HostHandle::new(self.isolate, memory),
             offset,
@@ -838,7 +845,26 @@ impl RmBackend for ProxyRmBackend {
     }
 
     fn release_device_view(&mut self, token: u64) -> Result<(), RmError> {
-        self.unit(Request::ReleaseDeviceView { token })
+        let out = self.unit(Request::ReleaseDeviceView { token });
+        // ★★★★★ **w734 — AND GIVE BACK OUR OWN DESCRIPTOR TOO.**
+        //
+        // ⊘ `[surveyed w734]` this registry was append-only, so every crossing kept one
+        // adopted `/dev/nvidia<N>` in this process for the isolate's whole life. For an armed
+        // node that is not merely an fd: the armed `mmap` context lives on the `struct file`
+        // and `nv_free_file_private` runs only when the LAST reference goes — so the child
+        // closing its end freed nothing while we held a duplicate.
+        //
+        // ⚠ The BAR1 **aperture** was never the leak (`[measured w722]` it comes back through
+        // the explicit unmap the child just did); the **descriptor count** was, and §3 arms
+        // and releases views in a loop. ⊘ This does not disturb any live mapping: a VMA holds
+        // its own reference, which is the property `install_device_window`'s *"the caller MAY
+        // close it on return — and under decision (b) it SHOULD"* already rests on.
+        //
+        // ⊘ `token` is ours to retire here — this is the parent-side token, which is exactly
+        // the one `release_token` is NOT. The two are different numbers and each is used in
+        // its own space; see `DeviceView::release_token`.
+        let _ = self.exports.retire(token);
+        out
     }
 
     fn cuda_walk_report(&mut self) -> Result<String, RmError> {
@@ -1100,6 +1126,12 @@ impl RmBackend for ProxyRmBackend {
         let (token, mmap_len) = self.call_for_usermode_view(write)?;
         Ok(kayfabe_isolate::DeviceView {
             token,
+            // ⚠ **w734 — NOT KNOWABLE, and said so rather than guessed.** `Reply::UsermodeView`
+            // carries no token: this view is armed once and lives for the boot, and nothing
+            // releases it. ⊘ Putting `token` here would make a later release free whatever the
+            // child's table holds at the PARENT's index — a different view — and report
+            // success. The sentinel makes that a named refusal instead.
+            release_token: kayfabe_isolate::DeviceView::UNRELEASABLE,
             memory: HostHandle::NULL,
             offset: 0,
             mmap_len,

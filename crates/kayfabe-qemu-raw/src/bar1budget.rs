@@ -382,6 +382,84 @@ pub fn largest_power_of_two_that_fits(host: u64) -> u64 {
     0
 }
 
+
+/// ★★★★★ **w734 — THE KNOB §w727 SPECIFIED AND NOBODY WIRED.**
+///
+/// > **Owner, 2026-09-14:** *"just like VRAM size, where you can select how much vram to give
+/// > to the guest, so can you select how much bar1/bar2 to give as option with also minimums
+/// > set to function."*
+///
+/// `[surveyed w732]` [`Bar1Choice::check`] had **no caller anywhere in the tree outside
+/// tests** — §w727's *"refuse, never clamp"* was implemented and **unreachable**, while
+/// GA106's BAR1 stayed the hardcoded `const FB_WINDOW_LEN = 256 << 20`. This is the door.
+///
+/// | value | what happens |
+/// |---|---|
+/// | unset | **the default.** The chip row's own aperture, byte for byte what shipped. |
+/// | `64` / `128` / `256` (MiB) | parsed, checked against **this board's** BAR1, and the chip row is patched — or the device is **refused by name**. |
+///
+/// # ⊘ It refuses in THREE different ways and each names a different fix
+///
+/// Not a power of two (the guest's own PCI enumeration would find it); below
+/// [`BAR1_MIN_BYTES`] (the driver would fail somewhere unrecognisable); or it does not fit
+/// beside our headroom on this board (`asked + headroom > host`, with the largest power of two
+/// that *would* fit named in the message). ⊘ Never clamped: §w727 item 3.
+///
+/// # ⚠ THE OPERATOR MUST MOVE THE QOM PROPERTY TOO, AND THAT IS ENFORCED, NOT ASSUMED
+///
+/// QEMU carries `bar1-size` as its own property and **refuses at realize** when it differs
+/// from the chip row (`nvkvm.c:3552-3559`). ⇒ Setting this knob without
+/// `-device nvkvm-gpu,bar1-size=…` to match is a loud, named refusal at realize, which is the
+/// only moment an operator can act — never a device that registers one size and tells the
+/// guest another.
+pub const GUEST_BAR1_ENV: &str = "KAYFABE_GUEST_BAR1_MB";
+
+/// Parse the knob's value. `None` means **unset** — the chip row's own aperture — and is not
+/// an error.
+///
+/// # Errors
+/// The refusal, whole, for a value that is not a positive integer, or that
+/// [`Bar1Choice::parse`] rejects. ⊘ A value that parses as nothing is refused rather than
+/// treated as unset: *"the operator asked for something"* and *"the operator asked for
+/// nothing"* are different facts, and silently collapsing them runs the control arm on a boot
+/// somebody believes is armed.
+pub fn guest_bar1_from(value: Option<&str>) -> Result<Option<Bar1Choice>, String> {
+    let Some(v) = value else {
+        return Ok(None);
+    };
+    let v = v.trim();
+    if v.is_empty() {
+        return Ok(None);
+    }
+    let mib: u64 = v.parse().map_err(|_| {
+        format!(
+            "{GUEST_BAR1_ENV}=`{v}` is not a whole number of MiB. ⊘ Refused rather than \
+             ignored: a typo that fell back to the default would run the control arm on a \
+             boot the operator believes is armed."
+        )
+    })?;
+    Bar1Choice::parse(mib).map(Some).map_err(|r| r.to_string())
+}
+
+/// ★★★ **Read the knob, check it against this board, and hand back the aperture to
+/// advertise** — or a refusal that is already a sentence.
+///
+/// # Errors
+/// The whole refusal, ready to print. ⊘ Both halves are here so a caller cannot check the
+/// size and forget the board, which is the failure mode §w727's own note warns about
+/// (*"the minimum is a measurement, not a guess"* sits beside *"it must also fit"*).
+pub fn selected_guest_bar1() -> Result<Option<Bar1Choice>, String> {
+    let raw = std::env::var(GUEST_BAR1_ENV).ok();
+    let Some(choice) = guest_bar1_from(raw.as_deref())? else {
+        return Ok(None);
+    };
+    let (host, addr) = query_host_bar1();
+    match choice.check(host) {
+        Ok(()) => Ok(Some(choice)),
+        Err(r) => Err(format!("{GUEST_BAR1_ENV} on the board at {addr}: {r}")),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

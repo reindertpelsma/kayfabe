@@ -199,6 +199,7 @@ impl Faulted for RmError {
             RmError::NotExportableAsMemory { .. } => FaultTag("RmError::NotExportableAsMemory"),
             RmError::GuestRamUnavailable => FaultTag("RmError::GuestRamUnavailable"),
             RmError::Other(_) => FaultTag("RmError::Other"),
+            RmError::ViewNotReleasable => FaultTag("RmError::ViewNotReleasable"),
         }
     }
 }

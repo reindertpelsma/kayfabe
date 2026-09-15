@@ -102,7 +102,17 @@ fn read_plane(
     buf: &mut [u8],
 ) -> Result<(), FwdFault> {
     match plane {
-        CpuPlane::Fb => fb.read(addr.0, buf).map_err(fb_fault),
+        CpuPlane::Fb => {
+            // ★ w734 — the byte census. These copies cross the PCIe bus the moment the
+            // framebuffer store becomes the reserved device-local object, so they belong in
+            // the same ledger as the walk's.
+            kayfabe_device::plane::note_fb_read(
+                kayfabe_device::plane::FbIoRole::CpuCe,
+                addr.0,
+                buf.len(),
+            );
+            fb.read(addr.0, buf).map_err(fb_fault)
+        }
         CpuPlane::GuestRam => vmm.gpa_read(addr.0, buf).map_err(ram_fault),
     }
 }
@@ -121,9 +131,15 @@ fn write_plane(
         // pages were indistinguishable from a window's in the first-writer census, and
         // "which window put the ring's neighbours there" is the whole question the census
         // is for. See `kayfabe_device::FbWriter`.
-        CpuPlane::Fb => fb
-            .write_tagged(addr.0, bytes, FbWriter::Executor)
-            .map_err(fb_fault),
+        CpuPlane::Fb => {
+            kayfabe_device::plane::note_fb_write(
+                kayfabe_device::plane::FbIoRole::CpuCe,
+                addr.0,
+                bytes.len(),
+            );
+            fb.write_tagged(addr.0, bytes, FbWriter::Executor)
+                .map_err(fb_fault)
+        }
         CpuPlane::GuestRam => vmm.gpa_write(addr.0, bytes).map_err(ram_fault),
     }
 }

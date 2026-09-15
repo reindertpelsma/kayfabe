@@ -18,6 +18,135 @@ broken across a long stretch with **no working intermediate and no way to bisect
 the raw client. This tree's whole method is measured increments; a big-bang rewrite abandons it
 exactly where it is most needed.
 
+## ⊘⊘⊘ MEASURED 2026-09-15 (w734) — **BOTH TERMS OF THE ORDERING ARGUMENT ARE NOW MEASURED, AND THE CONCLUSION DOES NOT SURVIVE THEM.**
+
+`[measured, vast 51082161, RTX 3060 GA106, driver 580.159.04, rev 56edd0ed, `traces/w734_fbio_census/`]`
+
+This file's *"§6 MUST PRECEDE §3"* and `THE_CONSTRAINTS.md` §w724c's *"there is no working
+intermediate — **it does not boot**"* are the same sum: **store bytes ÷ 48 MiB/s**, quoted as
+`7.3 MiB × 1178 refreshes ⇒ ~3 min`, and `24 MiB worst case ⇒ ~10 min`.
+
+⊘ **Neither term had ever been measured.** The numerator was `pages_swept` — a PAGE count, at
+six different page sizes of which three are not 4 KiB (`ga10x.rs:842`: PD3 = 32 B,
+PT_BIG = **256 B**) — turned into MiB by assumption; and the tree contained **no byte counter
+for store I/O at all**. The denominator is quoted in both documents with no citation to a
+measurement of a CPU `memcpy` out of a device view of the reserved object.
+
+### ★ The rate — the plan was RIGHT, and it was right about only one direction
+
+    DEVICE_VIEW=OK rate[rd=52.5MiB/s wr=4987.5MiB/s over=2048KiB arm_us=273 rel_us=446]
+
+- **reads 52.5 MiB/s** — the inherited 48 MiB/s is confirmed, on this path, on this board.
+- ★★★ **writes 4987.5 MiB/s — 95× the read rate**, and nobody had this number. Write-combining
+  on the BAR. ⇒ `kbusVerifyBar2`, the CPU CE executor's 15.6 MiB and every boot-time store are
+  very nearly free, and any cost model that used one rate for both was wrong by two orders of
+  magnitude in the write direction.
+- ★★ **`arm_us=273`, `rel_us=446`** — a device view costs **~0.7 ms** to arm and give back.
+  Nothing had costed the per-view tax, and it is the one that bounds a recycling design.
+
+### ⊘⊘⊘ The volume — and it is 30–115× SMALLER than the derivation
+
+    FB-IO trap[r=0/0.0MiB frames=0]
+          walk-bar[r=3454311/135.0MiB frames=58]
+          walk-guest-pt[r=53545/140.5MiB frames=70]
+          out-of-band[r=530/0.3MiB frames=60]
+          cpu-ce[w=351/15.6MiB frames=2049]
+          ★ TOTAL=291.5MiB WALK=275.5MiB WALK_FRAMES=128
+
+⇒ **275.5 MiB of walk traffic for the WHOLE BOOT**, against the derivation's 8.6 GiB
+(`7.3 × 1178`). At the measured read rate that is **5.2 s**, not ~3 minutes. ⚠ The derivation
+assumed the entire resident table set is re-read on every refresh; it is not.
+
+⊘ **And the byte model UNDERSTATES `walk-bar`, which must be said.** 3 454 311 reads for
+135 MiB is ~41 bytes a read — the 8-byte point-walk entry reads of `bar1_translate` /
+`bar2_translate`, which are **latency**-bound, not bandwidth-bound. At ~1 µs per uncached BAR
+round trip that is ~3.5 s *on top*. ⇒ call it **5–10 s of extra boot time**, measured to an
+order of magnitude. Still nowhere near a guest boot timeout, and ⇒ **the intermediate that
+§w724c says "does not boot" — a device-backed store with the host walker still reading the
+tables — costs seconds, not minutes.**
+
+### ★★★★★ AND THE TERM NOBODY HAD NOTICED THE DESIGN PAYS — the aperture — FITS WITH 500× MARGIN
+
+A device view is mapped from file offset **0 only** (`nvidia_mmap_helper` refuses
+`vm_pgoff != 0`, `window_unsafe.rs:251-253`), so a device-backed store needs **one armed node
+per contiguous run**, and an armed node costs host BAR1 — §22 item 3's measured 256 MiB,
+shared with the host driver. That is a cost bounded by something completely different from the
+byte count, and a large value would mean *"does not fit, at any speed"*.
+
+⇒ `WALK_FRAMES=128` ⇒ **128 armed nodes = 0.5 MiB** of a 256 MiB aperture, worst case (nothing
+contiguous). ⚠ Distinct-**ever**, not distinct-concurrently, so this is the pessimistic reading.
+
+### ⇒ WHAT THIS CHANGES, AND WHAT IT DOES NOT
+
+- ★ **§3 is not blocked by the cost §6-before-§3 was protecting it from.** The ordering rule
+  should be re-read as *"§6 first is cheaper and safer"*, not *"§3 alone does not boot"*.
+- ⊘ **It does not make §3 done.** What remains is mechanism, named below, and it is real work.
+- ⊘ **One workload.** This is the raw client (`W392D_GUEST_OUTCOME=(P)`, `THREADS 8 of 8`), not
+  the 30-arm guest suite and not the LLM. §w727's *"the minimum is a measurement, and it is one
+  workload"* applies to this number exactly as it does to `BAR1_MIN`.
+- ⚠ **`HOST_DMESG_XID=1` on this boot** — `Xid 31 … ENGINE CE0 … FAULT_PDE @ 0xa0_00000000`,
+  which is the **pre-existing** fault w555/w711 already record (*"each client costs one host
+  Xid 31 on CE0 that the (P) grade does not catch"*). It is not caused by this work and it is
+  not fixed by it.
+
+### ★★★ THE IDENTITY WINDOW IS MEASURED TOO, AND ITS MARGIN IS ZERO BY CONSTRUCTION
+
+    IDENTITY-WINDOW  ✔ POSSIBLE  advertised=4096.0 MiB ≤ reserved=4096.0 MiB headroom=0.0 MiB
+    IDENTITY-REACHED ✔ INSIDE    highest framebuffer address 3868.7 MiB = 94.5 % of reserved
+
+⇒ `derived_from_reservation` advertises **exactly** what was held, so the realize-time headroom
+is **0.0 MiB** and the whole invariant is *"never advertise past the reservation"*. The guest
+then used **94.5 %** of it. ⊘ This is not a comfortable inequality; it is an invariant with no
+slack, and it is now checked by a boot (`identity_window_verdict` at realize, refusing under
+`require`; `identity_window_reached` at teardown, from the arena's own high-water).
+
+### ⊘ THREE STRUCTURAL FACTS ABOUT `DeviceFb`, ESTABLISHED FROM THE CODE — the shape is forced
+
+1. **One armed node per contiguous run.** See above: `place_device_view` passes file offset 0
+   as a literal, and `GuestWindow::place` refuses `Backing::DeviceFile` by variant. ⇒ per-view
+   offsetting exists **only** as `export_device_view`'s `offset` argument.
+2. ★★★ **`page_backing` / `read` / `write` CANNOT ARM.** `Worker::export_device_view` asserts
+   lock-free (R1) and is an IPC round trip; all three of those run **under the plane lock**,
+   and two of them on a vCPU inside an MMIO exit. ⇒ the store can only report **where** a page
+   lives; a lock-free caller must do the arming. **That is why a third `FbPageBacking` arm
+   carries an ADDRESS and not an `FbPageExport`** — unlike `Joined` and `Arena`, which name
+   files this process already holds. `BarMirror::fill_now`'s step 2 is lock-free and is the
+   place; `BarMirror::fill`'s `defer_reval && on_vcpu_thread()` split already routes off the
+   vCPU.
+3. **Two defects on the release path had to be fixed first** (w734f): `release_device_view` was
+   handed the **parent's** token and executed it in the **child's** index space, and the
+   parent's `ExportRegistry` was **append-only**, so every crossing retained a
+   `/dev/nvidia<N>` for the isolate's life. Both are on §3's critical path — recycling views is
+   the only way a 256 MiB aperture serves a GiB reservation.
+
+### ⚠ WHAT THIS RUN CHANGED ABOUT THE DEVICE, AND WHAT IT DID NOT
+
+⊘ **Nothing on the data plane.** The census is counters; the rate probe is bounded, runs at
+realize and writes back exactly what it read; the identity checks are two `eprintln!`s and one
+comparison. ⇒ **parity is unchanged by construction and was NOT re-measured** — the box was
+destroyed after the last boot, and re-measuring a number nothing on its path moved would have
+been a fact about the box.
+
+⚠ **But the census IS on a hot path and it is not gated.** `walk-bar` takes 3 454 311 reads a
+boot and each now costs three relaxed atomics and a bitmap `fetch_or` — **~70 ms a boot by
+arithmetic, not by measurement**. No control boot was taken without it. The only measured bound
+is that the raw client graded `(P)` with `THREADS 8 of 8` on all four boots carrying it. ⊘ Said
+here rather than discovered by a latency campaign later (w586's class, by w554's author).
+
+### ⇒ WHAT §3 STILL NEEDS, in order
+
+1. A **device-view port** reachable after bring-up (the `WalkShadowPort` shape; ⚠ it and the
+   walk shadow both want the one `IsolateBox`, so they must share it, not take it).
+2. `FbPageBacking::Device { at }` + `key_of` + `fill_now` (**both** matches — the `_ => {}` is
+   already gone, w734a) + the third token space beside `ARENA_TOKEN`/`JoinRegistry`.
+3. `DeviceFb: FbStore` over armed+mapped runs; `read`/`write` served from a mapped run or
+   **refused by name**; `install_join` answered deliberately (under one store there are no two
+   memories, so the join's whole premise changes).
+4. PRAMIN: today one re-pointable slot over the arena's file (`repoint_file_window`). A device
+   view cannot be re-pointed — each arming is its own fd at offset 0 — so PRAMIN becomes
+   release-and-re-arm, **~0.7 ms measured**, on the vCPU, which is the one sanctioned expensive
+   trap (constraint 4) and is inside its budget.
+
 ## ⊘⊘⊘ READ THIS FIRST — the live status board, 2026-09-15
 
 ⚠ **The sections below have accumulated corrections as SIBLINGS rather than folded above what they
@@ -33,7 +162,7 @@ is stale.
 | 5 | the format seam | ✔ **BUILT** — no bit position left in the kernel |
 | — | the **crossing** (§3's prerequisite) | ✔ **BUILT & PROVEN** — `DEVICE_VIEW=OK`, ruling w727b |
 | **6** | **walker → publish path** | ✔ **STEP 1 + STEP 2 DONE & MEASURED** — `[w732, vast 51076219]` `swap` arm: `compared=65 disagreements=0 decided=65 fell_back[none]`, raw client **(P)** on both arms, `traces/walk_swap_live/`. ⊘ See the correction under §6: it does **NOT** retire the host walk |
-| **3** | BAR1/BAR2 as device views, the switch | ○ **UNBLOCKED; SURVEYED w732, NOT STARTED.** §6 is done, so nothing is in front of it. ⊘ Four of §3's own claims are refuted below — read the w732 correction before costing it |
+| **3** | BAR1/BAR2 as device views, the switch | ○ **NOT STARTED. ★ w734 MEASURED BOTH TERMS OF THE COST AND THEY DO NOT BLOCK IT** — 275.5 MiB of walk traffic ⇒ 5–10 s (not ~3 min), and 128 distinct frames ⇒ 0.5 MiB of a 256 MiB aperture. The plumbing on its critical path is fixed (w734f). Read the w734 block above the status board before costing it.** SURVEYED w732.** §6 is done, so nothing is in front of it. ⊘ Four of §3's own claims are refuted below — read the w732 correction before costing it |
 | 7 | the deletions | ○ not started; licence is the **guest suite**, not one workload |
 | 8 | the raw client's full suite, in the guest | ○ not started |
 

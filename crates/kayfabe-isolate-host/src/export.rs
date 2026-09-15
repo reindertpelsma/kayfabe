@@ -276,7 +276,14 @@ impl ChildExports {
 /// the scope is the isolate rather than the worker.
 #[derive(Debug, Default)]
 pub struct ExportRegistry {
-    adopted: Mutex<Vec<CrossedFd>>,
+    /// ★★★★★ **w734 — `Option`, and the `None` is a TOMBSTONE, not an absence.**
+    ///
+    /// The token IS the index, so a retired crossing cannot be removed — `Vec::remove` would
+    /// renumber every later token under live mappings. ⊘ It is replaced in place, which drops
+    /// the [`CrossedFd`] and closes this process's descriptor while leaving every other
+    /// token where it was. Exactly the shape [`ChildExports::take_cpu_view_release`] already
+    /// uses one process over, and for the same reason.
+    adopted: Mutex<Vec<Option<CrossedFd>>>,
 }
 
 impl ExportRegistry {
@@ -320,8 +327,47 @@ impl ExportRegistry {
     ) -> Result<u64, RawError> {
         let crossed = CrossedFd::adopt(fd, FdOrigin::Isolate(from), want)?;
         let mut t = self.adopted.lock().unwrap_or_else(|e| e.into_inner());
-        t.push(crossed);
+        t.push(Some(crossed));
         Ok(t.len() as u64 - 1)
+    }
+
+    /// ★★★★★ **w734 — GIVE THIS PROCESS'S DESCRIPTOR BACK.** Returns whether a live crossing
+    /// was there to retire.
+    ///
+    /// # ⊘⊘⊘ Why this had to exist before §3 could recycle anything
+    ///
+    /// `[surveyed w734]` this registry was **append-only**: `adopt` pushed and nothing ever
+    /// removed. Every crossing therefore retained one adopted descriptor in the VMM **for the
+    /// life of the isolate**, and for an armed `/dev/nvidia<N>` node that is not merely an fd:
+    /// the armed `mmap` context lives on the `struct file` and is freed by
+    /// `nv_free_file_private` only when the **last** reference goes. ⇒ the child's own
+    /// `take_cpu_view_release` closing its end frees nothing while this process still holds a
+    /// duplicate.
+    ///
+    /// ⚠ The BAR1 **aperture** was never the leak — `[measured w722]` that comes back through
+    /// the explicit `NV_ESC_RM_UNMAP_MEMORY`, 224 MiB a round where `munmap` + `close`
+    /// returns zero. What grows without bound is the **descriptor count**, and
+    /// `SINGLE_STORE_PLAN.md` §3 is a design in which the BAR mirror arms and releases views
+    /// in a loop. A default `RLIMIT_NOFILE` of 1024 is reached by a few hundred views.
+    ///
+    /// ★ **Retiring does not invalidate a live mapping.** A VMA holds its own reference to the
+    /// `struct file`, which is the same property `install_device_window`'s *"the caller may
+    /// close it on return — and under decision (b) it SHOULD"* rests on. This closes OUR
+    /// descriptor; it does not unmap anything.
+    ///
+    /// ⊘ A token this registry never minted, or one already retired, is `false` — **not a
+    /// panic and not a silent `true`**. A double retire must be a no-op that says so, for
+    /// `take_cpu_view_release`'s reason: a caller that could not tell *"I closed it"* from
+    /// *"it was already gone"* cannot detect a double release at all.
+    pub fn retire(&self, token: u64) -> bool {
+        let mut t = self.adopted.lock().unwrap_or_else(|e| e.into_inner());
+        let Some(slot) = usize::try_from(token).ok().and_then(|i| t.get_mut(i)) else {
+            return false;
+        };
+        // ⊘ `.take()` drops the `CrossedFd` here, under the lock. That is a `close(2)`, which
+        // is not a blocking call and takes no ranked lock — the `munmap` that WOULD be one is
+        // not ours to do: this registry never mapped anything.
+        slot.take().is_some()
     }
 
     /// A duplicate of `token`'s descriptor, for the VMM's own `mmap` and memslot install.
@@ -337,6 +383,11 @@ impl ExportRegistry {
         let crossed = usize::try_from(token)
             .ok()
             .and_then(|i| t.get(i))
+            .and_then(Option::as_ref)
+            // ⊘ A RETIRED token and one that was never minted are the same refusal here on
+            // purpose: both mean "this registry has no descriptor for you", and a caller that
+            // distinguished them would be reasoning about a slot's history rather than about
+            // what it can map.
             .ok_or(RawError::UnknownExport { token })?;
         crossed
             .as_local_fd()
@@ -358,6 +409,7 @@ impl ExportRegistry {
         usize::try_from(token)
             .ok()
             .and_then(|i| t.get(i))
+            .and_then(Option::as_ref)
             .map(CrossedFd::kind)
     }
 
@@ -368,16 +420,40 @@ impl ExportRegistry {
         usize::try_from(token)
             .ok()
             .and_then(|i| t.get(i))
+            .and_then(Option::as_ref)
             .map(CrossedFd::origin)
     }
 
-    /// How many backings this registry holds.
+    /// How many **live** backings this registry holds — retired slots do not count.
+    ///
+    /// ⊘ w734: this used to be the vector's length, which after [`ExportRegistry::retire`]
+    /// exists would be *"how many tokens were ever minted"*. Both are real numbers and they
+    /// answer different questions; this one is *"what is still held"*, which is what its
+    /// callers (`is_empty`, the teardown assertions) are asking. [`ExportRegistry::minted`]
+    /// is the other.
     #[must_use]
     pub fn len(&self) -> usize {
+        self.adopted
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .iter()
+            .filter(|s| s.is_some())
+            .count()
+    }
+
+    /// How many tokens this registry has ever minted, retired ones included — the token
+    /// space's high-water.
+    ///
+    /// ★ Worth its own number because *"nothing is held"* and *"nothing ever crossed"* are
+    /// different facts, and after `retire` exists [`ExportRegistry::len`] alone cannot tell
+    /// them apart. A teardown census reporting `len=0 minted=0` is a boot where the crossing
+    /// never happened; `len=0 minted=57` is one where it happened 57 times and was cleaned up.
+    #[must_use]
+    pub fn minted(&self) -> usize {
         self.adopted.lock().unwrap_or_else(|e| e.into_inner()).len()
     }
 
-    /// Whether it holds none.
+    /// Whether it holds none **live**.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
