@@ -7788,50 +7788,6 @@ impl HostRmBackend {
             .map_err(|_| RmError::Other(BAD_ENCODE))
     }
 
-    /// ★★ **Dup an object out of another client into this one — A BENCH PROBE.**
-    ///
-    /// ⊘⊘ **This is NOT the production dup and must not become one.** The production path is
-    /// [`HandedVaSpace`], a type a per-proc backend cannot construct, and that is how F11's
-    /// *"we cannot name a client we did not mint"* is scoped by a type rather than by an
-    /// allowlist. This method takes two bare `u32`s because its entire purpose is to ask RM
-    /// whether a class is dupable at all, in a process that owns **both** clients.
-    ///
-    /// ⚠ Constraint 30: a dup that *succeeds* says nothing about what the duped object
-    /// carries. `[w744]` measured exactly that — a successful dup that was still the wrong
-    /// thing. A caller must follow this with a measurement of the property it actually wants.
-    ///
-    /// # Errors
-    /// Whatever RM refused the dup with.
-    pub fn dup_object_for_probe(
-        &mut self,
-        src_client: u32,
-        src_object: u32,
-    ) -> Result<HostHandle, RmError> {
-        let want = self.conn.mint();
-        let mut arg = [0u8; Nvos55Parameters::SIZE];
-        Nvos55Parameters {
-            h_client: self.conn.client.raw(),
-            h_parent: self.conn.device,
-            h_object: want,
-            h_client_src: src_client,
-            h_object_src: src_object,
-            flags: 0,
-            status: 0,
-        }
-        .encode_into(&mut arg)
-        .map_err(|_| RmError::Other(BAD_ENCODE))?;
-        let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_DUP_OBJECT as u8, arg.len())
-            .map_err(|_| RmError::Other(BAD_ENCODE))?;
-        self.conn
-            .ctl
-            .ioctl(req, &mut arg, &mut [])
-            .map_err(|e| ioctl_error(&e))?;
-        let out = Nvos55Parameters::decode(&arg).map_err(|_| RmError::Other(BAD_ENCODE))?;
-        status_check(out.status)?;
-        self.conn.remember(out.h_object, self.conn.device);
-        Ok(self.stamp(out.h_object))
-    }
-
     /// Zero the notifier page before a channel is told about it.
     ///
     /// ⊘ **Not hygiene — it is the control.** Without it, `status == 0xffff` on a freshly

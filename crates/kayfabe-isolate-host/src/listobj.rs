@@ -653,22 +653,35 @@ fn cross_client(rm: &mut HostRmBackend, gpu: u32, parent: HostHandle, slice: Hos
         ),
     }
 
-    // Row 2 — the dup. `memlistCanCopy_IMPL` returns NV_TRUE, so the reading is that this
-    // succeeds. ⚠ Constraint 30: a dup that SUCCEEDS says nothing about what it carries.
-    match rm_b.dup_object_for_probe(client_a, slice.raw() as u32) {
-        Ok(h) => {
-            println!(
-                "★★★   W747 xclient dup    = client B duped A's slice, handle {:#010x}, status \
-                 {:#06x} {} ⚠ constraint 30: a successful dup says NOTHING about what the duped \
-                 object carries",
-                h.raw(),
-                0,
-                status_name(0)
-            );
-            let _ = rm_b.free(h);
-        }
-        Err(e) => println!("⊘     W747 xclient dup    = REFUSED {}", show(&e)),
-    }
+    // Row 2 — the dup. ⊘⊘⊘ **DELIBERATELY NOT MEASURED, and the reason is a constraint.**
+    //
+    // `memlistCanCopy_IMPL` returns `NV_TRUE`, so the reading is that a slice IS dupable.
+    // Measuring it needs a second `NV_ESC_RM_DUP_OBJECT` escape in `rm.rs`, and constraint
+    // 26 scopes F11 — *"we cannot name a client we did not mint"* — by making that escape
+    // **countable**: `own_client_invariant.rs::there_is_exactly_one_dup_object_escape_in_rm_rs`
+    // asserts there is exactly one, behind [`HandedVaSpace`](crate::rm), a type no per-proc
+    // backend can construct.
+    //
+    // ⚠ I wrote that second escape first and the gate caught it. Routing the probe through
+    // `listobj.rs` instead would have passed the gate while doing the same thing one file
+    // over — the letter without the spirit — and buying a measurement by relaxing a
+    // constraint is what §w729 forbids by name.
+    //
+    // ★★★ **And row 1 above is the better question anyway.** The design needs *"can the
+    // isolate name a slice of the scratchpad's store?"*. A dup answers it by hand-over,
+    // which is exactly what constraint 30 says must then be PROVEN not to carry the
+    // scratchpad's privilege. Row 1 answers it by the isolate **minting its own handle**
+    // over the scratchpad's object — no hand-over, so no privilege to carry, and constraint
+    // 30's question does not arise for this artefact at all. If row 1 is accepted, the dup
+    // is not on the critical path; if row 1 is refused, the dup becomes worth its own
+    // reviewed escape.
+    println!(
+        "⊘     W747 xclient dup    = NOT MEASURED BY CHOICE. `memlistCanCopy_IMPL` returns \
+         NV_TRUE (a reading, not a measurement). Measuring it needs a SECOND \
+         NV_ESC_RM_DUP_OBJECT escape in rm.rs, which constraint 26's countability gate \
+         forbids — and row 1 above asks the better question: a slice the isolate MINTS \
+         carries no hand-over for constraint 30 to interrogate"
+    );
 }
 
 /// ⚠ **The owner's question (4).** With a live slice outstanding, free the parent and read
