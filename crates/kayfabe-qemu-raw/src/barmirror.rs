@@ -82,6 +82,29 @@ const PAGE: u64 = 4096;
 /// The export token that names the page arena. Joins are numbered from 1.
 const ARENA_TOKEN: u64 = 0;
 
+/// ★★★★★ **§3's THIRD TOKEN SPACE — the one reserved device-local video-memory object.**
+///
+/// `SINGLE_STORE_PLAN.md` §3: *"the third token space beside `ARENA_TOKEN`/`JoinRegistry`"*.
+///
+/// # ⊘⊘ Why `u64::MAX` and not `1`, and why the choice is load-bearing
+///
+/// [`Key::token`] is a bare `u64` and [`key_of`] deliberately erases which arm of
+/// [`FbPageBacking`] produced it, so the three spaces must be **disjoint by value**:
+///
+/// | space | values | minted by |
+/// |---|---|---|
+/// | the page arena | exactly `ARENA_TOKEN` (`0`) | `ArenaPagePort::export` |
+/// | joins | `1 ..` ascending, forever | `JoinRegistry::register` |
+/// | **the reserved object** | exactly `DEVICE_TOKEN` | [`key_of`], from the address |
+///
+/// ⇒ the join space grows upward from `ARENA_TOKEN + 1` and the device token is the top of
+/// the range, so a collision needs `2^64 - 1` joins in one boot. ⊘ Stated as a table rather
+/// than assumed, because the survey of this file found the `Arena ⇒ ARENA_TOKEN` invariant to
+/// be **cross-crate and untyped**: `kayfabe-device` mints the token and this file decides
+/// what it means, and nothing but these constants keeps them agreeing. A second arena
+/// returning any other value would be looked up in the `JoinRegistry` and refused `JOIN-GONE`.
+const DEVICE_TOKEN: u64 = u64::MAX;
+
 /// How many refused fills are printed live per name (the total is uncapped).
 const REFUSAL_LIVE: u64 = 4;
 
@@ -135,6 +158,13 @@ const R_COVERED: &str = "ALREADY-COVERED";
 /// ★ w611 — the same fact, found BEFORE the plane lock. See the phase-0 check in `fill_now`.
 const R_COVERED_EARLY: &str = "ALREADY-COVERED-EARLY";
 const R_RACED: &str = "RACED-AND-DROPPED";
+/// ★★★ §3 — the store named a page of the reserved object and no device-view port exists.
+const R_NO_DEVICE_PORT: &str = "NO-DEVICE-PORT";
+/// ★★★ §3 — a device view would have been armed from a vCPU. See the guard in `fill_now`.
+const R_ON_VCPU: &str = "DEVICE-VIEW-ON-VCPU";
+/// ★★★ §3 — the port refused to arm a view. The sentence is the port's own four-way name;
+/// `RM_REFUSED` there means the host BAR1 **aperture** is full, not that vidmem ran out.
+const R_VIEW_REFUSED: &str = "DEVICE-VIEW-REFUSED";
 const R_INSTALL: &str = "INSTALL-REFUSED";
 /// ★★★★★ **THE LANDMINE ARM** — a backing [`key_of`] keyed and this match did not.
 ///
@@ -320,6 +350,27 @@ struct Slot {
     window: FbWindow,
     page_off: u64,
     key: Key,
+    /// ★★★★★ **§3 — the armed device view this slot's memory came from**, as
+    /// [`crate::deviceview::ViewId`]'s inner `u64`. `None` for arena and join slots, which
+    /// name a file this process already holds and cost no host BAR1 aperture.
+    ///
+    /// ⊘ A `u64` and not the [`crate::deviceview::ArmedView`] itself, because this struct is
+    /// [`Copy`] and is snapshotted by value under a lock in three places. An armed view is a
+    /// **resource**: two copies of one release is a double-release or a leak depending on
+    /// which runs. The port keeps the resources; this names one.
+    view: Option<u64>,
+}
+
+/// ★★★ **A SLOT ON ITS WAY OUT** — what [`BarMirror::retire`] needs to undo, all of it.
+///
+/// ⊘ It replaced a bare `(gpa, RamRegionId)` tuple. Under §3 a removed slot may owe a second
+/// obligation that the region id cannot carry — see [`Slot::view`] — and a tuple that carried
+/// only the first would have looked complete.
+#[derive(Debug, Clone, Copy)]
+struct Retired {
+    gpa: u64,
+    region: RamRegionId,
+    view: Option<u64>,
 }
 
 #[derive(Debug, Default)]
@@ -376,9 +427,23 @@ pub struct BarMirror {
     arms: [Option<Arm>; 2],
     /// ★★★★★ w578 — the PRAMIN aperture: one installed slot, and the framebuffer address it
     /// currently shows. `None` when the chip declares no window or the install was refused.
-    pramin: Mutex<Option<(kayfabe_vmm::RamRegionId, u64)>>,
+    /// `(region, the framebuffer address it shows, the armed device view behind it)`.
+    ///
+    /// ⊘ The third field is `None` on the arena arm and `Some` on §3's — and it is what makes
+    /// a move release-and-re-arm instead of one `MAP_FIXED`. See [`BarMirror::repoint_pramin`].
+    pramin: Mutex<Option<(kayfabe_vmm::RamRegionId, u64, Option<u64>)>>,
     /// How many times the latch moved and how many redundant writes were skipped. ⚠ Two
     /// numbers: *"never moved"* and *"wrote the same value forty times"* are different facts.
+    /// ★★★★★ **§3's device-view port**, or `None` on every arm but the single store's.
+    ///
+    /// ⊘ Held here rather than reached through the plane: arming is lock-free by
+    /// requirement, and the plane is the thing whose lock the requirement is about.
+    device_port: Option<Arc<crate::deviceview::DeviceViewPort>>,
+    /// ★★★★★ **§3 — views whose slot is gone and whose MAPPING may not be.**
+    ///
+    /// `(region, view id)`. See [`BarMirror::retire`] for why the two events are not the
+    /// same one and why releasing on the first is a silent cross-tenant defect.
+    parked: Mutex<Vec<(RamRegionId, u64)>>,
     pramin_moves: AtomicU64,
     pramin_skipped: AtomicU64,
     /// ★★★★★ **w652 — HOW LONG THE REPOINT ACTUALLY TAKES, on the vCPU that trapped.**
@@ -568,6 +633,16 @@ fn name(w: FbWindow) -> &'static str {
 fn key_of(r: &WindowPageResolution) -> Option<Key> {
     let e = match r.backing {
         FbPageBacking::Joined(e) | FbPageBacking::Arena(e) => e,
+        // ★★★★★ **§3.** The store named an ADDRESS in the reserved object, not a file this
+        // process holds — see [`FbPageBacking::Device`] for why it cannot name a token. The
+        // offset IS the framebuffer address, under the arena's own contract that the two
+        // coincide, and `phys` beside it is the same number: kept as two fields anyway,
+        // because `Key` equality is what revalidation compares and a key that derived one
+        // from the other could not notice the day they stop agreeing.
+        FbPageBacking::Device { at } => FbPageExport {
+            token: DEVICE_TOKEN,
+            offset: at,
+        },
         FbPageBacking::Heap | FbPageBacking::Refused(_) => return None,
     };
     Some(Key {
@@ -601,6 +676,7 @@ impl BarMirror {
         plane: Arc<RegPlane>,
         machine: QemuMachine,
         defer_reval: bool,
+        device_port: Option<Arc<crate::deviceview::DeviceViewPort>>,
     ) -> Option<Arc<BarMirror>> {
         let mut arms = [None, None];
         for (i, bar, w) in [(0usize, BarId::Bar1, "bar1"), (1, BarId::Bar2, "bar2")] {
@@ -635,6 +711,25 @@ impl BarMirror {
         if arms.iter().all(Option::is_none) {
             return None;
         }
+        // ★★★★★ **§3 — THE `device` ARM'S PRECONDITIONS, CHECKED HERE TOO.**
+        //
+        // ⊘ `defer_reval` is only knowable at this point — the mirror is built at
+        // `attach_ram` — so the half of the rule that depends on it is enforced here, with
+        // the SAME function the realize-time half uses. Two moments, one statement of the
+        // rule: a second spelling would be a second chance for the two to disagree.
+        let store_arm = match crate::deviceview::selected_fb_store() {
+            Ok(a) => a,
+            Err(why) => {
+                eprintln!("kayfabe: BAR-MIRROR ⊘⊘⊘ NOT ARMED — {why}");
+                return None;
+            }
+        };
+        if let Err(why) =
+            crate::deviceview::enforce_device_store(store_arm, device_port.is_some(), defer_reval)
+        {
+            eprintln!("kayfabe: BAR-MIRROR ⊘⊘⊘ NOT ARMED — {why}");
+            return None;
+        }
         // ★ w578 — sized to THIS chip's framebuffer, because since w569 a page's file offset
         // is its framebuffer ADDRESS. A sparse memfd makes the extent free; residency is still
         // bounded by the store's own ceiling, which is where that limit belongs.
@@ -651,7 +746,16 @@ impl BarMirror {
                 return None;
             }
         };
-        if plane
+        if store_arm.is_device() {
+            eprintln!(
+                "kayfabe: BAR-MIRROR §3: the page arena is NOT installed — the single store \
+                 holds no pages of ours, so there is nothing to arena. Every framebuffer page \
+                 names an address in the reserved object and this mirror arms a CPU view per \
+                 memslot. ⊘ This function used to read the store's refusal of an arena as \
+                 \"every access traps\" and return None, which would leave the device arm with \
+                 NO MIRROR AT ALL."
+            );
+        } else if plane
             .install_fb_page_arena(Box::new(ArenaPort(arena.clone())))
             .is_err()
         {
@@ -667,6 +771,8 @@ impl BarMirror {
             reval_done: AtomicU64::new(0),
             reval_why: AtomicU64::new(0),
             defer_reval,
+            device_port,
+            parked: Mutex::new(Vec::new()),
             fills: Mutex::new(std::collections::VecDeque::new()),
             fills_queued: AtomicU64::new(0),
             fills_dropped: AtomicU64::new(0),
@@ -904,7 +1010,9 @@ impl BarMirror {
                 // rather than `unreachable!()`: this runs on a guest MMIO exit, and a panic
                 // here is a guest-reachable abort of the VMM for a contradiction that costs
                 // one un-mirrored page.
-                FbPageBacking::Joined(_) | FbPageBacking::Arena(_) => self.refuse(
+                FbPageBacking::Joined(_)
+                | FbPageBacking::Arena(_)
+                | FbPageBacking::Device { .. } => self.refuse(
                     w,
                     off,
                     R_UNKEYED,
@@ -947,36 +1055,115 @@ impl BarMirror {
             t.pending.insert(gpa, (ticket, key.phys));
             (ticket, t.reval_epoch)
         };
-        let join_fd;
-        let fd = if key.token == ARENA_TOKEN {
-            self.arena.as_backing_fd()
-        } else {
-            match JoinRegistry::global().get(key.token) {
-                Some(f) => {
-                    join_fd = f;
-                    join_fd.as_fd()
-                }
-                None => {
+        // ★★★★★ **§3 — THE THIRD BACKING, AND IT IS THE ONLY ONE THAT COSTS HOST BAR1.**
+        //
+        // ⊘ Arena and join slots name a file this process already holds: the `dup` is local,
+        // free, and nothing has to be given back. A device page is different in every one of
+        // those respects — the node is armed by an **IPC round trip** to the isolate that
+        // owns the reserved object, it consumes host BAR1 aperture, and the aperture comes
+        // back only through `NV_ESC_RM_UNMAP_MEMORY`.
+        //
+        // ⚠ **This is the lock-free step, and it has to be.** `Worker::export_device_view`
+        // asserts `assert_lock_free` on arrival; `SINGLE_STORE_PLAN.md` §3's structural fact 2
+        // is that `page_backing`/`read`/`write` cannot arm, which is why the store handed us
+        // an ADDRESS rather than a token. Phase 1's plane lock was taken and released above;
+        // nothing is held here.
+        let (region, view) = if key.token == DEVICE_TOKEN {
+            // ★★★★★ **THE vCPU GUARD, AND IT IS NOT BELT-AND-BRACES.**
+            //
+            // ⊘⊘ `assert_lock_free` inside `Worker::export_device_view` asks *"what does this
+            // thread HOLD"*, not *"where am I"* — and its `assert_not_on_vcpu` half only
+            // **reports** unless `KAYFABE_VCPU_BLOCK_FATAL` is set. ⇒ an IPC round trip
+            // reached from a vCPU here would simply block one inside an MMIO exit, silently,
+            // and be discovered later as latency with nothing pointing at the cause.
+            //
+            // ★ `enforce_device_store` refuses the one configuration that routes here on a
+            // vCPU (`defer_reval` off) at startup, so this arm should be unreachable. It is
+            // spelled out anyway and **refuses by name** rather than asserting: a second route
+            // onto this path is a change somebody will make, and the cost of catching it here
+            // is one un-mirrored page against a blocked vCPU.
+            if kayfabe_util::lockwitness::on_vcpu_thread() {
+                self.cancel(gpa, ticket);
+                self.refuse(
+                    w,
+                    off,
+                    R_ON_VCPU,
+                    "arming a device view is an IPC round trip to the scratchpad isolate and \
+                     this is a vCPU inside an MMIO exit; refused rather than blocking it",
+                );
+                return;
+            }
+            let Some(port) = self.device_port.as_ref() else {
+                self.cancel(gpa, ticket);
+                self.refuse(
+                    w,
+                    off,
+                    R_NO_DEVICE_PORT,
+                    "the store named a page of the reserved object and there is no \
+                     device-view port to arm it through — the two gates disagree",
+                );
+                return;
+            };
+            match port.with_node(key.offset, PAGE, true, |fd, mmap_len| {
+                // ⊘ `install_device_page`, NOT `install_device_window`: that verb's `native`
+                // argument is the READ-ONLY sub-range, and a framebuffer page needs a
+                // WRITABLE slot — a read-only one would trap every guest store, which reads
+                // as "the switch landed and performance collapsed" rather than as the wrong
+                // verb. See its doc.
+                //
+                // ⚠ `mmap_len` is the DRIVER's page-rounded length, which is what the node
+                // will accept; `PAGE` is what we asked for. They agree on a 4 KiB host page
+                // and the driver's number is the one that must be mapped.
+                self.machine
+                    .install_device_page(gpa, mmap_len, fd, key.readonly)
+            }) {
+                Ok(Ok((r, id))) => (r, Some(id.0)),
+                Ok(Err(e)) => {
+                    // ⊘ The view was already released by the port — the caller could not use
+                    // the mapping, so the aperture went straight back.
                     self.cancel(gpa, ticket);
-                    self.refuse(
-                        w,
-                        off,
-                        R_JOIN_GONE,
-                        "the join's descriptor left the registry between resolve and install",
-                    );
+                    self.refuse(w, off, refusal_name(&e), &format!("{e:?}"));
+                    return;
+                }
+                Err(v) => {
+                    self.cancel(gpa, ticket);
+                    self.refuse(w, off, R_VIEW_REFUSED, v.name());
                     return;
                 }
             }
-        };
-        let region = match self
-            .machine
-            .install_file_window(gpa, PAGE, fd, key.offset, key.readonly)
-        {
-            Ok(r) => r,
-            Err(e) => {
-                self.cancel(gpa, ticket);
-                self.refuse(w, off, refusal_name(&e), &format!("{e:?}"));
-                return;
+        } else {
+            let join_fd;
+            let fd = if key.token == ARENA_TOKEN {
+                self.arena.as_backing_fd()
+            } else {
+                match JoinRegistry::global().get(key.token) {
+                    Some(f) => {
+                        join_fd = f;
+                        join_fd.as_fd()
+                    }
+                    None => {
+                        self.cancel(gpa, ticket);
+                        self.refuse(
+                            w,
+                            off,
+                            R_JOIN_GONE,
+                            "the join's descriptor left the registry between resolve and \
+                             install",
+                        );
+                        return;
+                    }
+                }
+            };
+            match self
+                .machine
+                .install_file_window(gpa, PAGE, fd, key.offset, key.readonly)
+            {
+                Ok(r) => (r, None),
+                Err(e) => {
+                    self.cancel(gpa, ticket);
+                    self.refuse(w, off, refusal_name(&e), &format!("{e:?}"));
+                    return;
+                }
             }
         };
 
@@ -998,6 +1185,7 @@ impl BarMirror {
                         window: w,
                         page_off,
                         key,
+                        view,
                     },
                 );
                 t.live += 1;
@@ -1010,7 +1198,14 @@ impl BarMirror {
             }
         };
         if !kept {
-            let _ = self.machine.remove_window(region);
+            // ⊘ Through `retire`, not a bare `remove_window`: a device page's view must be
+            // parked and released only once its mapping is actually gone, and a second
+            // spelling of that sequence is a second chance to get it wrong.
+            let _ = self.retire(vec![Retired {
+                gpa,
+                region,
+                view,
+            }]);
             self.refuse(
                 w,
                 off,
@@ -1050,29 +1245,85 @@ impl BarMirror {
         }
     }
 
-    /// Remove `regions` from the machine, lock-free, and account for them.
-    fn retire(&self, regions: Vec<(u64, RamRegionId)>) -> u64 {
+    /// Remove `gone` from the machine, lock-free, and account for them.
+    ///
+    /// # ★★★★★ §3 — REMOVING THE WINDOW IS NOT RELEASING THE VIEW, AND THE GAP IS DANGEROUS
+    ///
+    /// `QemuMachine::remove_window` clears the memslots and **parks** the mapping: an accessor
+    /// on another thread may still hold a clone of the `Arc` and be reading through it, so the
+    /// `munmap` happens later. For an arena or join slot that deferral is invisible.
+    ///
+    /// For a **device view** it is not. RM's `osUnmapPciMemoryUser` is an empty function
+    /// (`ogkm os.c:1275-1282`), so `NV_ESC_RM_UNMAP_MEMORY` returns the host BAR1 aperture to
+    /// the pool **without touching the VMA**. Releasing while a mapping is still live leaves
+    /// PTEs pointing at BAR1 space RM has already handed to the next mapping — ours, the
+    /// host's own CUDA context, or another VM's. Silent, and cross-tenant.
+    ///
+    /// ⇒ the view is **parked** here and released only once
+    /// `QemuMachine::reclaim_released_windows` names its region. [`Self::drain_view_releases`]
+    /// is what does it, and it is called from lock-free points only.
+    fn retire(&self, gone: Vec<Retired>) -> u64 {
         let mut n = 0;
-        for (_, r) in regions {
-            if self.machine.remove_window(r).is_ok() {
+        for r in gone {
+            if self.machine.remove_window(r.region).is_ok() {
                 n += 1;
             }
+            if let Some(v) = r.view {
+                self.parked
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .push((r.region, v));
+            }
         }
+        self.drain_view_releases();
         n
+    }
+
+    /// ★★★★★ **§3 — GIVE BACK THE APERTURE OF EVERY VIEW WHOSE MAPPING IS NOW GONE.**
+    ///
+    /// ⊘ Must be lock-free and off-trap: releasing is an IPC round trip to the isolate that
+    /// asserts exactly that. Called from [`Self::retire`] and from the reclaim tick.
+    ///
+    /// ⚠ A parked view whose region never gets collected stays parked, and that is the safe
+    /// direction: a leaked aperture refuses later arms loudly, while an early release
+    /// corrupts another tenant's mapping silently. The census prints `parked=` so the leak is
+    /// visible rather than inferred.
+    pub fn drain_view_releases(&self) {
+        let Some(port) = self.device_port.as_ref() else {
+            return;
+        };
+        let freed = self.machine.reclaim_released_windows();
+        if freed.is_empty() {
+            return;
+        }
+        let ready: Vec<u64> = {
+            let mut p = self.parked.lock().unwrap_or_else(|e| e.into_inner());
+            let (ready, keep): (Vec<_>, Vec<_>) =
+                std::mem::take(&mut *p).into_iter().partition(|(r, _)| freed.contains(r));
+            *p = keep;
+            ready.into_iter().map(|(_, v)| v).collect()
+        };
+        for v in ready {
+            port.release(crate::deviceview::ViewId(v));
+        }
     }
 
     /// Take every slot whose frame lies in `[phys, phys+len)` out of the table (the caller
     /// removes them from the machine) and cancel the pendings there.
-    fn take_over_frames(t: &mut Table, phys: u64, len: u64) -> Vec<(u64, RamRegionId)> {
+    fn take_over_frames(t: &mut Table, phys: u64, len: u64) -> Vec<Retired> {
         let end = phys.saturating_add(len);
-        let gone: Vec<(u64, RamRegionId)> = t
+        let gone: Vec<Retired> = t
             .slots
             .iter()
             .filter(|(_, s)| s.key.phys >= phys && s.key.phys < end)
-            .map(|(g, s)| (*g, s.region))
+            .map(|(g, s)| Retired {
+                gpa: *g,
+                region: s.region,
+                view: s.view,
+            })
             .collect();
-        for (g, _) in &gone {
-            t.slots.remove(g);
+        for r in &gone {
+            t.slots.remove(&r.gpa);
         }
         t.live = t.live.saturating_sub(gone.len() as u64);
         gone
@@ -1119,7 +1370,7 @@ impl BarMirror {
             t.slots.iter().map(|(g, s)| (*g, *s)).collect()
         };
         let mut kept = 0u64;
-        let mut gone: Vec<(u64, RamRegionId)> = Vec::new();
+        let mut gone: Vec<Retired> = Vec::new();
         for (gpa, s) in snapshot {
             let same = self
                 .plane
@@ -1135,7 +1386,11 @@ impl BarMirror {
             if t.slots.get(&gpa).is_some_and(|cur| cur.region == s.region) {
                 t.slots.remove(&gpa);
                 t.live = t.live.saturating_sub(1);
-                gone.push((gpa, s.region));
+                gone.push(Retired {
+                    gpa,
+                    region: s.region,
+                    view: s.view,
+                });
             }
         }
         let removed = self.retire(gone);
@@ -1244,18 +1499,9 @@ impl BarMirror {
             else {
                 return;
             };
-            match self.machine.install_file_window(
-                p.base + span_off,
-                span_len,
-                self.arena.as_backing_fd(),
-                base,
-                // ⊘ NOT read-only: PRAMIN is the framebuffer, not a register file. `[measured
-                // w577]` its writes are 631 458 of 635 162 accesses — a read-only slot would
-                // remove the reads and leave the larger half exiting.
-                false,
-            ) {
-                Ok(region) => {
-                    *slot = Some((region, base));
+            match self.install_pramin_window(p.base + span_off, span_len, base) {
+                Ok((region, view)) => {
+                    *slot = Some((region, base, view));
                     self.pramin_moves.fetch_add(1, Ordering::Relaxed);
                     // w593 - the prefix, latched once, before any post-install access.
                     let c = self.plane.counters();
@@ -1278,7 +1524,7 @@ impl BarMirror {
             }
             return;
         }
-        let Some((region, shown)) = *slot else {
+        let Some((region, shown, view)) = *slot else {
             return;
         };
         if shown == base {
@@ -1286,9 +1532,66 @@ impl BarMirror {
             return;
         }
         let t0 = std::time::Instant::now();
-        let outcome = self
-            .machine
-            .repoint_file_window(region, self.arena.as_backing_fd(), base);
+        // ★★★★★ **§3 — A DEVICE VIEW CANNOT BE RE-POINTED, SO THE MOVE IS RELEASE-AND-RE-ARM.**
+        //
+        // `SINGLE_STORE_PLAN.md` §3 item 4: *"today one re-pointable slot over the arena's
+        // file (`repoint_file_window`). A device view cannot be re-pointed — each arming is
+        // its own fd at offset 0 — so PRAMIN becomes release-and-re-arm, **~0.7 ms
+        // measured**, on the vCPU, which is the one sanctioned expensive trap (constraint 4)
+        // and is inside its budget."*
+        //
+        // ⊘ `nvidia_mmap_helper` refuses any `vm_pgoff` but zero, so *what* a node shows was
+        // fixed by the `NV_ESC_RM_MAP_MEMORY` that armed it. There is no offset to move.
+        //
+        // ⚠ **THE GAP IS REAL AND IS NAMED.** `repoint_file_window` is one `MAP_FIXED` that
+        // replaces the backing atomically; this is a window removal followed by an install,
+        // and between them PRAMIN has no slot. A sibling vCPU accessing PRAMIN in that
+        // interval traps — and on this arm the trap path reaches the single store and is
+        // refused by name. ⊘ Said rather than discovered: it is bounded by one install and it
+        // is the price of a backing that cannot be re-pointed.
+        let outcome = if view.is_some() {
+            let Some(p) = self.machine.bar_placement(BarId::Bar0) else {
+                return;
+            };
+            let Some((span_off, span_len)) = self.plane.pramin_span() else {
+                return;
+            };
+            let gpa = p.base + span_off;
+            let _ = self.retire(vec![Retired {
+                gpa,
+                region,
+                view,
+            }]);
+            match self.install_pramin_window(gpa, span_len, base) {
+                Ok((r2, v2)) => {
+                    *slot = Some((r2, base, v2));
+                    self.pramin_moves.fetch_add(1, Ordering::Relaxed);
+                    self.mark_pramin(base);
+                    let ns = u64::try_from(t0.elapsed().as_nanos()).unwrap_or(u64::MAX);
+                    self.pramin_move_ns_total.fetch_add(ns, Ordering::Relaxed);
+                    self.pramin_move_ns_worst.fetch_max(ns, Ordering::Relaxed);
+                    return;
+                }
+                Err(why) => {
+                    // ⊘ The old slot is already gone. PRAMIN traps from here on and the trap
+                    // path refuses by name — which is loud, and is the honest state: there is
+                    // no window, rather than a window showing the wrong framebuffer.
+                    *slot = None;
+                    eprintln!(
+                        "kayfabe: PRAMIN-WINDOW ⊘⊘ RE-ARM REFUSED to fb 0x{base:x} ({why}); \
+                         the old view was released and there is now NO slot. Every PRAMIN \
+                         access traps and the single store refuses it by name."
+                    );
+                    let ns = u64::try_from(t0.elapsed().as_nanos()).unwrap_or(u64::MAX);
+                    self.pramin_move_ns_total.fetch_add(ns, Ordering::Relaxed);
+                    self.pramin_move_ns_worst.fetch_max(ns, Ordering::Relaxed);
+                    return;
+                }
+            }
+        } else {
+            self.machine
+                .repoint_file_window(region, self.arena.as_backing_fd(), base)
+        };
         // ⊘ Timed around the syscall ONLY, and recorded on both outcomes: a refused repoint
         // still spent the time, and excluding it would flatter the worst case.
         let ns = u64::try_from(t0.elapsed().as_nanos()).unwrap_or(u64::MAX);
@@ -1296,7 +1599,7 @@ impl BarMirror {
         self.pramin_move_ns_worst.fetch_max(ns, Ordering::Relaxed);
         match outcome {
             Ok(()) => {
-                *slot = Some((region, base));
+                *slot = Some((region, base, view));
                 self.pramin_moves.fetch_add(1, Ordering::Relaxed);
                 self.mark_pramin(base);
             }
@@ -1307,6 +1610,38 @@ impl BarMirror {
                  aperture still shows 0x{shown:x} and the guest's next access through it is \
                  WRONG. This is the one failure on this path that cannot be contained."
             ),
+        }
+    }
+
+    /// ★★★ **PRAMIN's WINDOW, ON WHICHEVER ARM IS RUNNING** — one place, two backings.
+    ///
+    /// ⊘ NOT read-only on either arm: PRAMIN is the framebuffer, not a register file.
+    /// `[measured w577]` its writes are 631 458 of 635 162 accesses, so a read-only slot
+    /// would remove the reads and leave the larger half exiting.
+    ///
+    /// # Errors
+    /// The refusal's rendering, for the caller to print with its own context.
+    fn install_pramin_window(
+        &self,
+        gpa: u64,
+        span_len: u64,
+        base: u64,
+    ) -> Result<(RamRegionId, Option<u64>), String> {
+        match self.device_port.as_ref() {
+            Some(port) => {
+                match port.with_node(base, span_len, true, |fd, mmap_len| {
+                    self.machine.install_device_page(gpa, mmap_len, fd, false)
+                }) {
+                    Ok(Ok((r, id))) => Ok((r, Some(id.0))),
+                    Ok(Err(e)) => Err(format!("{e:?}")),
+                    Err(v) => Err(format!("{}: {v:?}", v.name())),
+                }
+            }
+            None => self
+                .machine
+                .install_file_window(gpa, span_len, self.arena.as_backing_fd(), base, false)
+                .map(|r| (r, None))
+                .map_err(|e| format!("{e:?}")),
         }
     }
 
@@ -1677,6 +2012,32 @@ impl BarMirror {
     /// The census, one line per armed window plus one for the mechanism.
     pub fn report(&self, at: &str) {
         self.census.census_lines.fetch_add(1, Ordering::Relaxed);
+        // ★★★★★ **§3's OWN LINE, printed on BOTH arms.** ⊘ Separate from the slot census
+        // because *"how many memslots are live"* and *"how much host BAR1 aperture are we
+        // holding"* are bounded by completely different things — §w724c's two terms — and a
+        // reader who saw only the first would not know which one bit.
+        {
+            let parked = self
+                .parked
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .len();
+            match self.device_port.as_ref() {
+                Some(port) => eprintln!(
+                    "kayfabe: FB-STORE-DEVICE AT {at}: {} parked_releases={parked} ⇒ {}",
+                    port.census_line(),
+                    if parked == 0 {
+                        "★ no view is waiting on a mapping that has not been collected"
+                    } else {
+                        "⚠ views whose SLOT is gone and whose MAPPING may not be. They are                          held deliberately: releasing early leaves PTEs pointing at BAR1                          space RM has re-handed out, which is silent and cross-tenant. A                          number that never falls is a leak and refuses later arms loudly."
+                    }
+                ),
+                None => eprintln!(
+                    "kayfabe: FB-STORE-DEVICE AT {at}: ⊘ ARENA ARM — no device-view port, no                      armed views, the framebuffer is a host memfd. This is the control and                      the default ({}=arena).",
+                    crate::deviceview::FB_STORE_ENV
+                ),
+            }
+        }
         // ★★★★★ **w587 — PRAMIN's move counters, printed. They existed since w577 and nothing
         // read them**, which is the w584 failure exactly: a number that was correct the whole
         // time and had no emitter. `[measured w586a]` `moves=42` in `BAR0-READS` says the guest
@@ -1692,7 +2053,7 @@ impl BarMirror {
                 .pramin
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
-                .map_or_else(|| "none".to_string(), |(_, b)| format!("0x{b:x}"));
+                .map_or_else(|| "none".to_string(), |(_, b, _)| format!("0x{b:x}"));
             let c = self.plane.counters();
             let total = c.pramin_reads + c.pramin_writes;
             let pre = self.pramin_at_install.load(Ordering::Relaxed);
@@ -1883,10 +2244,17 @@ impl FbMirrorPort for BarMirror {
     }
 
     fn retire_all(&self, why: &'static str) {
-        let gone: Vec<(u64, RamRegionId)> = {
+        let gone: Vec<Retired> = {
             let mut t = self.table.lock().unwrap_or_else(|e| e.into_inner());
-            let all: Vec<(u64, RamRegionId)> =
-                t.slots.iter().map(|(g, s)| (*g, s.region)).collect();
+            let all: Vec<Retired> = t
+                .slots
+                .iter()
+                .map(|(g, s)| Retired {
+                    gpa: *g,
+                    region: s.region,
+                    view: s.view,
+                })
+                .collect();
             t.slots.clear();
             t.pending.clear();
             t.live = 0;

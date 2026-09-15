@@ -116,10 +116,11 @@ pub use kayfabe_trace::{FaultTag, Faulted};
 /// seam, so a shell plugging into it should not have to name a third crate to do so.
 pub use fbwin::{
     ALREADY_JOINED, Bar0Window, CARRY_BACK_NO_JOIN, CARRY_BACK_READ_FAILED, ESTABLISH_FAILED,
+    DEVICE_HOST_READ_UNBUILT, DEVICE_HOST_WRITE_UNBUILT, DEVICE_RESET_UNBUILT, DeviceFb,
     FB_WRITER_KINDS, FbArenaPage, FbJoinCarried, FbJoinInstalled, FbJoined, FbPageArena,
     FbPageBacking, FbPageExport, FbPageOrigin, FbPageStanding, FbRefused, FbStore, FbWriter,
     JOIN_NOT_EXPORTABLE, NO_JOIN_SUPPORT, NO_PAGE_ARENA, NO_PAGE_EXPORT, PAGE_NOT_RESIDENT,
-    RefusingFb, SparseFb,
+    RefusingFb, SparseFb, device_fb_report,
 };
 
 /// ★★★ **E2** — the usermode doorbell port, re-exported: [`RegPlane::set_doorbell`]'s

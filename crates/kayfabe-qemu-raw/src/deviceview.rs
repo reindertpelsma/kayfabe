@@ -98,6 +98,22 @@ impl ViewRefusal {
     }
 }
 
+/// ★★★★★ **THE NAME OF AN ARMED VIEW**, as the port hands it out.
+///
+/// # ⊘⊘ Why the caller gets a NAME and not the [`ArmedView`] itself
+///
+/// The consumer of an armed view is `BarMirror`'s slot table, whose `Slot` is [`Copy`] and is
+/// snapshotted by value under a lock in three places. An [`ArmedView`] is a **resource** — it
+/// cannot be `Copy` and must not be, because two copies of one release is either a
+/// double-release or a leak depending on which one runs.
+///
+/// ⇒ the port keeps the resources and hands out `u64`s. That also puts the leak accounting in
+/// exactly one place: [`DeviceViewPort::census_line`]'s outstanding count is the port's own
+/// map, not a subtraction of two counters that can each be right while their difference is a
+/// fact about neither.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ViewId(pub u64);
+
 /// ★★★★★ **AN ARMED VIEW OF THE RESERVED OBJECT** — the thing that costs host BAR1.
 ///
 /// # ⊘⊘ It does NOT release itself, and that is deliberate
@@ -161,9 +177,20 @@ pub struct DeviceViewPort {
     /// *"a probe over a different object would prove a different thing"*, and so would an arm.
     obj: HostHandle,
     dup: std::sync::Arc<DupArc>,
+    /// ★★★ **THE ARMED VIEWS THIS PORT IS HOLDING**, by the name it handed out.
+    ///
+    /// ⊘ The map IS the outstanding set: its length is the authoritative *"how much host
+    /// BAR1 are we holding"*, where `armed - released` is an arithmetic that is wrong the
+    /// moment a release is refused.
+    views: std::sync::Mutex<std::collections::BTreeMap<u64, ArmedView>>,
+    next_id: AtomicU64,
     armed: AtomicU64,
     released: AtomicU64,
     refused: AtomicU64,
+    /// Releases naming an id this port does not hold. ⊘ Counted rather than panicked: it is
+    /// a caller's bookkeeping bug, and it is ALSO what a leak looks like from the other side
+    /// — so a non-zero here and a non-zero outstanding are read together.
+    double_released: AtomicU64,
     bytes_armed: AtomicU64,
     arm_us: AtomicU64,
     rel_us: AtomicU64,
@@ -189,9 +216,14 @@ impl DeviceViewPort {
             id,
             obj,
             dup,
+            views: std::sync::Mutex::new(std::collections::BTreeMap::new()),
+            // ⊘ Ids start at 1 so `0` is never a live view — a `Slot`'s `Option<u64>` that
+            // lost its `Some` would otherwise name the first view ever armed.
+            next_id: AtomicU64::new(1),
             armed: AtomicU64::new(0),
             released: AtomicU64::new(0),
             refused: AtomicU64::new(0),
+            double_released: AtomicU64::new(0),
             bytes_armed: AtomicU64::new(0),
             arm_us: AtomicU64::new(0),
             rel_us: AtomicU64::new(0),
@@ -229,11 +261,11 @@ impl DeviceViewPort {
         len: u64,
         write: bool,
         f: impl FnOnce(std::os::fd::BorrowedFd<'_>, u64) -> Result<T, E>,
-    ) -> Result<Result<(T, ArmedView), (E, ())>, ViewRefusal> {
+    ) -> Result<Result<(T, ViewId), E>, ViewRefusal> {
         let t0 = std::time::Instant::now();
-        let armed = self.iso.with_worker(|worker| {
-            worker.export_device_view(self.obj, offset, len, write)
-        });
+        let armed = self
+            .iso
+            .with_worker(|worker| worker.export_device_view(self.obj, offset, len, write));
         let view = match armed {
             None => return Err(self.note_refusal(ViewRefusal::NoWorker)),
             Some(Err(e)) => return Err(self.note_refusal(ViewRefusal::Rm(format!("{e:?}")))),
@@ -241,34 +273,40 @@ impl DeviceViewPort {
         };
         self.arm_us
             .fetch_add(t0.elapsed().as_micros() as u64, Ordering::Relaxed);
-        let Some(fd) = (self.dup)(self.id, view.token) else {
-            let token = view.token;
-            self.release_inner(ArmedView {
-                view,
-                released: false,
-            });
-            return Err(self.note_refusal(ViewRefusal::NoDescriptor { token }));
-        };
-        let mmap_len = view.mmap_len;
-        let out = f(fd.as_fd(), mmap_len);
-        // ★★★ **CONDITION 2, and it is this line.** The descriptor is closed the instant the
-        // mapping exists — not at the end of the scope, not on the success path only.
-        drop(fd);
-        let mut armed = ArmedView {
+        let mut held = ArmedView {
             view,
             released: false,
         };
+        let Some(fd) = (self.dup)(self.id, held.view.token) else {
+            let token = held.view.token;
+            // ⊘ Released BEFORE the refusal is returned: the view exists in the isolate
+            // whether or not this process can see it, and leaking it would consume aperture
+            // for the rest of the boot with nothing able to name or release it.
+            self.release_held(&mut held);
+            return Err(self.note_refusal(ViewRefusal::NoDescriptor { token }));
+        };
+        let mmap_len = held.view.mmap_len;
+        let out = f(fd.as_fd(), mmap_len);
+        // ★★★ **CONDITION 2 OF THE OWNER'S RULING, AND IT IS THIS LINE.** The descriptor is
+        // closed the instant the mapping exists — not at the end of the scope, not on the
+        // success path only.
+        drop(fd);
         match out {
             Ok(t) => {
                 self.armed.fetch_add(1, Ordering::Relaxed);
                 self.bytes_armed.fetch_add(mmap_len, Ordering::Relaxed);
-                Ok(Ok((t, armed)))
+                let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+                self.views
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .insert(id, held);
+                Ok(Ok((t, ViewId(id))))
             }
             Err(e) => {
                 // ⊘ The caller could not use the mapping, so the aperture goes straight back.
                 // Holding it would be a leak with a plausible-looking cause.
-                armed.released = self.release_inner_ref(&mut armed);
-                Ok(Err((e, ())))
+                self.release_held(&mut held);
+                Ok(Err(e))
             }
         }
     }
@@ -276,9 +314,8 @@ impl DeviceViewPort {
     /// ★★★★★ **ARM A VIEW AND MAP IT INTO A HOST WINDOW OF THIS PROCESS.**
     ///
     /// The shape the **store** needs: a CPU mapping of a run of the reserved object that this
-    /// process can `memcpy` through. Returns the window beside the view, and **both** must be
-    /// kept together — dropping the window unmaps, and only [`DeviceViewPort::release`]
-    /// returns the aperture.
+    /// process can `memcpy` through. The window and the [`ViewId`] must be kept together —
+    /// dropping the window unmaps, and only [`DeviceViewPort::release`] returns the aperture.
     ///
     /// ⊘ `writable` is the VMA's protection — what **this process** may do — and is
     /// independent of any guest slot tier.
@@ -298,7 +335,7 @@ impl DeviceViewPort {
         offset: u64,
         len: u64,
         writable: bool,
-    ) -> Result<(kayfabe_linux_raw::GuestWindow, ArmedView), ViewRefusal> {
+    ) -> Result<(kayfabe_linux_raw::GuestWindow, ViewId), ViewRefusal> {
         use kayfabe_linux_raw::{GuestWindow, HostOffset, HostPageSize};
         let out = self.with_node(offset, len, writable, |fd, mmap_len| {
             let win = GuestWindow::create(mmap_len, HostPageSize::query())
@@ -307,27 +344,67 @@ impl DeviceViewPort {
                 .map_err(|e| format!("{e:?}"))?;
             Ok(win)
         })?;
-        match out {
-            Ok((win, view)) => Ok((win, view)),
-            Err((why, ())) => Err(self.note_refusal(ViewRefusal::Mmap(why))),
-        }
+        out.map_err(|why| self.note_refusal(ViewRefusal::Mmap(why)))
     }
 
     /// ★★★★★ **GIVE THE APERTURE BACK.** The only thing that does.
     ///
+    /// An id the port does not hold is a **no-op and is counted**, not a panic: a double
+    /// release is a bookkeeping bug in a caller, and aborting the VMM over it would turn a
+    /// leak-shaped defect into a guest-visible crash.
+    ///
     /// # Panics
     /// Through `Worker::release_device_view`'s `assert_lock_free`.
-    pub fn release(&self, mut view: ArmedView) {
-        view.released = self.release_inner_ref(&mut view);
+    pub fn release(&self, id: ViewId) {
+        let held = self
+            .views
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(&id.0);
+        match held {
+            Some(mut v) => self.release_held(&mut v),
+            None => {
+                self.double_released.fetch_add(1, Ordering::Relaxed);
+            }
+        }
     }
 
-    fn release_inner(&self, mut view: ArmedView) {
-        view.released = self.release_inner_ref(&mut view);
+    /// How many armed views this port is holding right now — the authoritative host-BAR1
+    /// outstanding count.
+    #[must_use]
+    pub fn outstanding(&self) -> usize {
+        self.views
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .len()
     }
 
-    fn release_inner_ref(&self, view: &mut ArmedView) -> bool {
+    /// Release everything this port still holds, and say how many there were.
+    ///
+    /// ⊘ For teardown, and for a store that is being replaced. Not a `Drop`: releasing is an
+    /// IPC round trip that asserts lock-free, and a `Drop` would perform it wherever the
+    /// value happened to go out of scope.
+    ///
+    /// # Panics
+    /// As [`DeviceViewPort::release`].
+    pub fn release_all(&self) -> usize {
+        let all: Vec<ArmedView> = {
+            let mut g = self
+                .views
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            std::mem::take(&mut *g).into_values().collect()
+        };
+        let n = all.len();
+        for mut v in all {
+            self.release_held(&mut v);
+        }
+        n
+    }
+
+    fn release_held(&self, view: &mut ArmedView) {
         if view.released {
-            return true;
+            return;
         }
         let t0 = std::time::Instant::now();
         let out = self
@@ -337,19 +414,18 @@ impl DeviceViewPort {
             .fetch_add(t0.elapsed().as_micros() as u64, Ordering::Relaxed);
         match out {
             Some(Ok(())) => {
+                view.released = true;
                 self.released.fetch_add(1, Ordering::Relaxed);
-                true
             }
-            // ⊘⊘ A refused release is NOT a released view, and saying so is the whole point:
-            // the aperture is gone either way, and a counter that called it released would
-            // make the leak invisible in exactly the census meant to catch it.
+            // ⊘⊘ A refused release is NOT a released view, and the flag stays `false` so the
+            // `Drop` still screams: the aperture is gone either way, and a counter that
+            // called it released would make the leak invisible in exactly the census meant
+            // to catch it.
             Some(Err(e)) => {
                 self.note_refusal(ViewRefusal::Rm(format!("release: {e:?}")));
-                false
             }
             None => {
                 self.note_refusal(ViewRefusal::NoWorker);
-                false
             }
         }
     }
@@ -368,41 +444,38 @@ impl DeviceViewPort {
 
     /// ★★★ **THE CENSUS LINE.** One line, and it carries the per-view tax by name.
     ///
-    /// ⊘ `armed` and `released` are printed separately and never as a difference: *"how many
-    /// are outstanding"* and *"how many were leaked"* are the same arithmetic and different
-    /// facts, and only the caller's own bookkeeping can tell them apart.
+    /// ⊘ `outstanding` is read from the port's own map, **never** as `armed - released`: a
+    /// refused release increments neither, and the difference of two right numbers would be
+    /// a fact about neither.
     #[must_use]
     pub fn census_line(&self) -> String {
         let armed = self.armed.load(Ordering::Relaxed);
         let released = self.released.load(Ordering::Relaxed);
         let refused = self.refused.load(Ordering::Relaxed);
+        let outstanding = self.outstanding();
         let first = self
             .first_refusal
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone();
         format!(
-            "DEVICE-VIEW-PORT armed={armed} released={released} refused={refused} \
-             bytes_armed={:.1}MiB arm_us_total={} rel_us_total={} first_refusal=[{}] \
-             ⇒ {} ({} view{} still hold host BAR1)",
-            self.bytes_armed.load(Ordering::Relaxed) as f64 / (1024.0 * 1024.0),
-            self.arm_us.load(Ordering::Relaxed),
-            self.rel_us.load(Ordering::Relaxed),
-            first.unwrap_or_else(|| "none".to_string()),
-            if armed == 0 && refused == 0 {
+            "DEVICE-VIEW-PORT armed={armed} released={released} outstanding={outstanding} \
+             refused={refused} double_released={dr} bytes_armed={mib:.1}MiB \
+             arm_us_total={au} rel_us_total={ru} first_refusal=[{first}] ⇒ {verdict}",
+            dr = self.double_released.load(Ordering::Relaxed),
+            mib = self.bytes_armed.load(Ordering::Relaxed) as f64 / (1024.0 * 1024.0),
+            au = self.arm_us.load(Ordering::Relaxed),
+            ru = self.rel_us.load(Ordering::Relaxed),
+            first = first.unwrap_or_else(|| "none".to_string()),
+            verdict = if armed == 0 && refused == 0 {
                 "⊘⊘ VACUOUS — the port exists and NOTHING ever asked it for a view. That is \
-                 not 'no views were needed'; it is an unmeasured port."
+                 not `no views were needed`; it is an unmeasured port."
             } else if refused > 0 {
-                "⚠ at least one arm was REFUSED — read first_refusal before reading anything \
-                 else, because NV_ERR_NO_MEMORY here means the host BAR1 aperture is full"
+                "⚠ at least one arm or release was REFUSED — read first_refusal before \
+                 anything else, because NV_ERR_NO_MEMORY here means the host BAR1 APERTURE \
+                 is full, not that video memory ran out"
             } else {
-                "★ every arm succeeded"
-            },
-            armed.saturating_sub(released),
-            if armed.saturating_sub(released) == 1 {
-                ""
-            } else {
-                "s"
+                "★ every arm and every release succeeded"
             },
         )
     }
@@ -419,4 +492,146 @@ impl core::fmt::Debug for DeviceViewPort {
             .field("refused", &self.refused.load(Ordering::Relaxed))
             .finish()
     }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ★★★★★ §3's GATE — which store backs the guest's video memory.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+/// ★★★★★ **THE SWITCH.** `arena` (the default) | `device`.
+///
+/// | value | what backs a guest framebuffer page |
+/// |---|---|
+/// | unset / `arena` | **the default.** A sparse host memfd. Byte for byte what shipped. |
+/// | `device` | the one reserved device-local RM object — `THE_CONSTRAINTS.md` §22's *"if the guest says this is now in vidmem, its in vidmem"*. |
+///
+/// # ⊘ Why a gate at all, when the design's answer is `device`
+///
+/// `SINGLE_STORE_PLAN.md`'s sequencing rule: *"If deletion rides along, the tree is broken
+/// across a long stretch with **no working intermediate and no way to bisect** which half
+/// broke the raw client."* The switch is the same hazard one increment earlier. With the gate
+/// defaulting to `arena`, every commit on the way keeps a working tree and a red bisects to
+/// one cut rather than to "the switch".
+///
+/// ⊘ A value naming neither arm is **refused**, not defaulted — both directions of a silent
+/// default are wrong and they are wrong in opposite ways.
+///
+/// # ★★★ THIS GATE'S EXPIRY CONDITION (§w724g), stated where the rule requires it
+///
+/// > **Deleted when the GUEST SUITE — all 30 arms, not one workload — passes on `device`.**
+/// > At that point `arena` is the dead half and `SparseFb`, the page arena, the join and the
+/// > demand-fill mirror go with it (`SINGLE_STORE_PLAN.md` §7, *"the deletions — only now"*).
+///
+/// ⊘ It is **not** deleted because a boot came back clean, and not because the raw client
+/// grades `(P)`: §w727's *"the minimum is a measurement, and it is one workload"* applies to
+/// this gate exactly as it does to `BAR1_MIN`.
+pub const FB_STORE_ENV: &str = "KAYFABE_FB_STORE";
+
+/// Which store this boot installs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FbStoreArm {
+    /// A sparse host memfd. The shipped behaviour.
+    Arena,
+    /// The one reserved device-local object.
+    Device,
+}
+
+impl FbStoreArm {
+    /// The value as written in the environment.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            FbStoreArm::Arena => "arena",
+            FbStoreArm::Device => "device",
+        }
+    }
+
+    /// Whether this arm serves guest video memory out of the reserved object.
+    #[must_use]
+    pub fn is_device(self) -> bool {
+        matches!(self, FbStoreArm::Device)
+    }
+}
+
+/// Which arm `value` names — the pure half, and the only statement of the default.
+///
+/// # Errors
+/// [`kayfabe_isolate::Status`]-shaped refusal text if `value` names neither arm. **Absent is
+/// not an error**; it is [`FbStoreArm::Arena`].
+pub fn fb_store_from(value: Option<&str>) -> Result<FbStoreArm, &'static str> {
+    match value {
+        None | Some("arena") => Ok(FbStoreArm::Arena),
+        Some("device") => Ok(FbStoreArm::Device),
+        Some(_) => Err(
+            "KAYFABE_FB_STORE does not name a store: the only values are `arena` (the \
+             default, a sparse host memfd) and `device` (the one reserved device-local RM \
+             object). It is not defaulted, because both directions of a typo are wrong in \
+             opposite ways: defaulted to `arena` it runs the control arm on a boot the \
+             operator believes is armed, and defaulted to `device` it puts the guest's whole \
+             framebuffer on a path whose host-side half is not built yet.",
+        ),
+    }
+}
+
+/// Which arm this boot runs.
+///
+/// # Errors
+/// Whatever [`fb_store_from`] refused with.
+pub fn selected_fb_store() -> Result<FbStoreArm, &'static str> {
+    let raw = std::env::var_os(FB_STORE_ENV);
+    let value = raw
+        .as_ref()
+        .map(|v| v.to_str().unwrap_or("\u{fffd}invalid"));
+    fb_store_from(value)
+}
+
+/// ★★★★★ **THE PRECONDITIONS OF THE `device` ARM, CHECKED AT REALIZE AND REFUSED BY NAME.**
+///
+/// `Ok(())` on the `arena` arm whatever the rest of the configuration is.
+///
+/// # ⊘ Why each of these refuses rather than degrades
+///
+/// §w727's third rule: *"**Refuse at startup, loudly, never silently clamp.** A guest booted
+/// with a BAR too small for its driver fails somewhere unrecognisable."* Each precondition
+/// below, unmet, produces a boot that fails later and elsewhere:
+///
+/// 1. **No device-view port.** Every page the store names would be refused `NO-DEVICE-PORT`
+///    by the mirror, one per access, and the boot would look like a translation failure.
+/// 2. **`defer_reval` off.** `BarMirror::fill` runs `fill_now` **synchronously on the vCPU**
+///    on that arm (`!self.defer_reval || !on_vcpu_thread()`), and `fill_now`'s device branch
+///    is an IPC round trip to the isolate. `assert_lock_free` would not catch it —
+///    `assert_not_on_vcpu` only *reports* unless `KAYFABE_VCPU_BLOCK_FATAL` is set — so the
+///    vCPU would simply block, silently, inside an MMIO exit. ⊘ That is constraint 4
+///    violated by construction, and it would be measured as latency rather than named.
+///
+/// # Errors
+/// The refusal text, when `device` is armed and a precondition is not met.
+pub fn enforce_device_store(
+    arm: FbStoreArm,
+    have_port: bool,
+    defer_reval: bool,
+) -> Result<(), &'static str> {
+    if !arm.is_device() {
+        return Ok(());
+    }
+    if !have_port {
+        return Err(
+            "KAYFABE_FB_STORE=device and there is NO DEVICE-VIEW PORT. The single store names \
+             every framebuffer page as an address in the reserved object, and only the port \
+             can arm a CPU view of one — so every guest memslot would be refused \
+             `NO-DEVICE-PORT` and the boot would look like a translation failure. Set \
+             KAYFABE_SCRATCHPAD=on and KAYFABE_DEVICE_VIEW=probe, and check the SCRATCHPAD \
+             census line above for which step refused.",
+        );
+    }
+    if !defer_reval {
+        return Err(
+            "KAYFABE_FB_STORE=device with the deferred revalidation arm OFF. On that arm \
+             `BarMirror::fill` runs `fill_now` synchronously ON THE vCPU, and the single \
+             store's install step is an IPC round trip to the scratchpad isolate — a vCPU \
+             blocked inside an MMIO exit, which `assert_not_on_vcpu` only REPORTS. Refused \
+             here rather than measured as latency later.",
+        );
+    }
+    Ok(())
 }

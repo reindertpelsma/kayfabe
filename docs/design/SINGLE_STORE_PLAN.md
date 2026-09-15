@@ -18,6 +18,83 @@ broken across a long stretch with **no working intermediate and no way to bisect
 the raw client. This tree's whole method is measured increments; a big-bang rewrite abandons it
 exactly where it is most needed.
 
+## ★★★★★ 2026-09-15 (w735) — **§6-BEFORE-§3 IS RIGHT, AND w734 REFUTED THE WRONG REASON FOR IT**
+
+⚠ **Read this before the w734 block below.** w734 is correct in everything it measured and its
+conclusion — *"§3 is not blocked by the cost §6-before-§3 was protecting it from"* — is true of
+the cost. It is not the binding constraint, and the binding one had never been written down.
+
+`[established from the source, w735, building the switch]`
+
+### The mechanism, in one line
+
+**Arming a CPU view of the reserved object is an IPC round trip that asserts lock-free
+(`kayfabe-isolate/src/lib.rs:3477`), and every host-side reader of the framebuffer store holds
+`LockRank::PlaneMem` when it reads.** ⇒ the store cannot arm. §3's structural fact 2 already
+says this, and this file read it as a constraint on the *shape of the `FbPageBacking` arm*. It
+is much more than that: it means **every host-side consumer of framebuffer bytes must arm
+before it takes the lock**, and there are four of them in three different shapes.
+
+| consumer | where | can it arm-then-retry? |
+|---|---|---|
+| `PlanePtBytes::read_in` — the guest page-table walk | `plane.rs:2053` | ★ **YES.** It takes the plane locks *inside*, per read (`pt_bytes`' own *"the lock is taken PER READ"*), so it is lock-free at entry |
+| `FbStoreReader` — `bar1_translate`, `bar2_translate`, `window_leaves` | `plane.rs:2252, 3692, 3944, 5407, 5500` | ⊘ **NO.** It holds `fb.as_mut()` **under** the lock. Needs a demand set in the store and a retry at the lock-free caller (`fill_now`, `premap`) |
+| the **CPU CE executor** | `shim.rs:8876`, inside `ce_session_with_root`, which holds `mem` for the whole closure (`plane.rs:3999`) | ⊘⊘ **NO, and worse.** The frames are not known before the lock is taken, and a store refusal comes back as `refused(..)` — the submission is **dropped, not requeued**. A transient *"not armed yet"* becomes a dropped kernel CeUtils scrub: the wedge class in `the_wedge_is_the_ceutils_scrubber_channel.md` |
+| PRAMIN | `BarMirror::repoint_pramin`, on the vCPU | ★ **BUILT (w735)** — release-and-re-arm, §3 item 4's sanctioned expensive trap |
+
+### ⇒ WHAT THIS CHANGES
+
+- ★★★ **§6 step 3 (the kernel owning reachability) and constraint 9 (the copy engine off the
+  CPU) are PREREQUISITES of a clean §3** — not because of bytes per second, but because they
+  are what **delete the first three rows of that table**. With them, §3 needs no demand-driven
+  arming at all.
+- ⊘ **w734's Q4 could never have detected this.** It pre-registered a threshold in *seconds of
+  walk traffic*; the wall is a lock rank. ⚠ Same class this tree already names: a
+  pre-registered criterion is only as good as the axis it is on, and choosing the axis is the
+  part nobody reviews.
+- ✔ **w734 is not wrong and is not withdrawn.** The bytes and the aperture really do fit — 128
+  frames, 0.5 MiB of 256 — which is what makes the *arm-then-retry* design (cut B below)
+  affordable at all if anyone does build it. The correction is to the **conclusion drawn from
+  the ordering**, not to the numbers.
+
+### ★★★ THE CUTS, and cut A is landed
+
+| cut | content | state |
+|---|---|---|
+| **A** | `FbPageBacking::Device { at }`, the third token space, `fill_now`'s device arm with **release-after-the-mapping-is-gone**, `install_device_page`, `DeviceFb` (host `read`/`write` **refuse by name**), PRAMIN release-and-re-arm, the `KAYFABE_FB_STORE` gate | ✔ **BUILT w735**, gate default `arena` |
+| **B** | host reads through armed views: `PlanePtBytes` arm-then-retry, a demand set for `FbStoreReader`'s callers, the premap retry loop, the vCPU decline-by-name | ○ not started |
+| **C** | two-phase CPU CE (dry-run partition → arm → execute), **or** constraint 9 and never build it; plus `device_reset`, which under one object is *zeroing gibibytes of real video memory* | ○ not started — and C is the one to delete rather than build |
+
+⊘ **A boot on `KAYFABE_FB_STORE=device` does not reach a guest and is not supposed to.** The
+first BAR1/BAR2 translation reads a page-table page out of the store and is refused by name.
+The alternative — a host-memory fallback for host reads — is two memories for one address,
+which is the defect the reserved object exists to delete and which
+`a_framebuffer_page_written_through_bar1_is_the_page_bar2_reads` is the falsifier for. ⇒ **do
+not grade anything on a `device` boot until cut B lands.**
+
+### ⊘⊘⊘ AND A RELEASE-ORDERING DEFECT THAT WOULD HAVE SHIPPED — silent and cross-tenant
+
+*"Slot eviction calls `release_device_view`"* — which this file's §3 item 3 implies and which
+the obvious implementation does — **is wrong**, and nothing would have reported it:
+
+- `QemuMachine::remove_window` does **not** unmap. It clears the memslots and *parks* the
+  mapping (`Plane::retire`), because an accessor on another thread may still hold a clone of
+  the `Arc`; `window_releases_deferred` counts exactly that. The `munmap` happens later, in
+  `collect_retired`.
+- RM's `osUnmapPciMemoryUser` is an **empty function** (`ogkm os.c:1275-1282`; `:714-722`: RM
+  neither creates nor destroys user mappings). ⇒ `NV_ESC_RM_UNMAP_MEMORY` returns the host
+  BAR1 aperture to the pool **without touching the VMA**.
+
+⇒ releasing on slot removal can leave **a live user mapping whose PTEs point at BAR1 space RM
+has already handed to the next mapping** — ours, the host's own CUDA context, or another VM's.
+No fault, no counter, no log line.
+
+✔ **Closed in w735.** `QemuMachine::reclaim_released_windows` returns the regions whose mapping
+was actually released; the mirror **parks** every view and releases only once its region
+appears there. ⚠ The safe direction is deliberate: a parked view that never gets collected is
+a leaked aperture, which refuses later arms **loudly**, and the census prints `parked=` so it
+is visible rather than inferred.
+
 ## ⊘⊘⊘ MEASURED 2026-09-15 (w734) — **BOTH TERMS OF THE ORDERING ARGUMENT ARE NOW MEASURED, AND THE CONCLUSION DOES NOT SURVIVE THEM.**
 
 `[measured, vast 51082161, RTX 3060 GA106, driver 580.159.04, rev 56edd0ed, `traces/w734_fbio_census/`]`
@@ -162,7 +239,7 @@ is stale.
 | 5 | the format seam | ✔ **BUILT** — no bit position left in the kernel |
 | — | the **crossing** (§3's prerequisite) | ✔ **BUILT & PROVEN** — `DEVICE_VIEW=OK`, ruling w727b |
 | **6** | **walker → publish path** | ✔ **STEP 1 + STEP 2 DONE & MEASURED** — `[w732, vast 51076219]` `swap` arm: `compared=65 disagreements=0 decided=65 fell_back[none]`, raw client **(P)** on both arms, `traces/walk_swap_live/`. ⊘ See the correction under §6: it does **NOT** retire the host walk |
-| **3** | BAR1/BAR2 as device views, the switch | ○ **NOT STARTED. ★ w734 MEASURED BOTH TERMS OF THE COST AND THEY DO NOT BLOCK IT** — 275.5 MiB of walk traffic ⇒ 5–10 s (not ~3 min), and 128 distinct frames ⇒ 0.5 MiB of a 256 MiB aperture. The plumbing on its critical path is fixed (w734f). Read the w734 block above the status board before costing it.** SURVEYED w732.** §6 is done, so nothing is in front of it. ⊘ Four of §3's own claims are refuted below — read the w732 correction before costing it |
+| **3** | BAR1/BAR2 as device views, the switch | ◐ **CUT A BUILT (w735), behind `KAYFABE_FB_STORE=device`; default `arena` is byte-identical. Cuts B and C not started, and ★ the w735 block at the head of this section says why the ORDERING rule was right for a reason nobody had written down — read it before costing B.** ⊘ Previously: **NOT STARTED. ★ w734 MEASURED BOTH TERMS OF THE COST AND THEY DO NOT BLOCK IT** — 275.5 MiB of walk traffic ⇒ 5–10 s (not ~3 min), and 128 distinct frames ⇒ 0.5 MiB of a 256 MiB aperture. The plumbing on its critical path is fixed (w734f). Read the w734 block above the status board before costing it.** SURVEYED w732.** §6 is done, so nothing is in front of it. ⊘ Four of §3's own claims are refuted below — read the w732 correction before costing it |
 | 7 | the deletions | ○ not started; licence is the **guest suite**, not one workload |
 | 8 | the raw client's full suite, in the guest | ○ not started |
 

@@ -1012,6 +1012,13 @@ impl Scratchpad {
         self.device_port.clone()
     }
 
+    /// ★★★ **§3's device-view port**, or `None` when none was built. The route the data
+    /// plane reaches it by, after realize.
+    #[must_use]
+    pub fn device_port(&self) -> Option<std::sync::Arc<crate::deviceview::DeviceViewPort>> {
+        self.device_port.clone()
+    }
+
     /// The device-view port's census line, or `None` when no port was ever built.
     #[must_use]
     pub fn device_port_census(&self) -> Option<String> {
