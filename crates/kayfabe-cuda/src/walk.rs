@@ -47,11 +47,26 @@ pub struct WalkCfg {
 
 impl Default for WalkCfg {
     fn default() -> Self {
+        // ★★★ SIZED FOR A REAL GUEST'S TABLES, not for the synthetic fixture.
+        //
+        // ⊘ The previous values (`runs_per_pdb: 256`, `run_capacity: 4096`) were the
+        // selftest's, where one address space maps eight contiguous pages and coalesces to a
+        // single run. `[w725]`'s capture of a REAL driver has **6 254 leaves in one address
+        // space**, and the live shadow (`kayfabe_mmu::walkshadow`) runs against tables like
+        // those. A per-address-space slice of 256 makes `KFWR_R_RUN_CAP` fire and the whole
+        // report **truncate** — which the shadow refuses by name, so the symptom would be a
+        // permanently VACUOUS census with the cause one indirection away.
+        //
+        // ⚠ **`run_capacity` is bounded from ABOVE by the wire, and that bound is real.** The
+        // report crosses as one `Reply::Payload` and the isolate protocol's `FRAME_MAX` is
+        // 1 MiB; a `KfMapRun` is 32 bytes. 16 384 runs is 512 KiB — half the frame, with room
+        // for the header and the `PdbEntry` array. Raising this further requires chunking the
+        // reply, not a bigger number.
         WalkCfg {
-            runs_per_pdb: 256,
-            run_capacity: 4096,
+            runs_per_pdb: 2048,
+            run_capacity: 16384,
             pdb_capacity: 64,
-            entry_budget: 1 << 20,
+            entry_budget: 1 << 22,
             table_version: KF_TBL_VER2,
         }
     }

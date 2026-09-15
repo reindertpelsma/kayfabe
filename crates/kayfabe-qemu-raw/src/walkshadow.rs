@@ -268,6 +268,38 @@ impl kayfabe_rt::device::PtSweepObserver for WalkShadowObserver<'_> {
                 return;
             }
         };
+        // ⊘⊘ **THE HEADER IS READ FIRST, AND TRUNCATION IS ASKED BEFORE PARSING.**
+        //
+        // A truncated report legitimately DECLARES more than it carries (the format's
+        // invariant I3), and `WalkKernel::refresh` clamps its copy-back to the configured
+        // capacity — so a full parse of one fails with `CountExceedsCapacity` or `Short`.
+        // Asking afterwards would file every truncation under `report_unparseable`, which
+        // sends a reader to the wire when the answer is "raise `run_capacity`".
+        let header = match kayfabe_mmu::walkreport::ReportHeader::decode(&bytes) {
+            Ok(h) => h,
+            Err(e) => {
+                eprintln!("kayfabe: WALK-SHADOW report header unreadable: {e:?}");
+                census.note_skipped("report_unparseable");
+                return;
+            }
+        };
+        // ⊘ A truncated report describes less than it found and is not a comparable answer.
+        // Counted by name rather than compared, because comparing it would report
+        // `missing_in_kernel` for every mapping past the cut.
+        if header.is_truncated() || header.pdb_count > header.pdb_capacity {
+            eprintln!(
+                "kayfabe: WALK-SHADOW report TRUNCATED: flags={:#x} refuse_mask={:#x} \
+                 runs={}/{} pdbs={}/{} — raise `WalkCfg`, do not read the census as clean",
+                header.flags,
+                header.refuse_mask,
+                header.run_count,
+                header.run_capacity,
+                header.pdb_count,
+                header.pdb_capacity
+            );
+            census.note_skipped("report_truncated");
+            return;
+        }
         let report = match kayfabe_mmu::walkreport::Report::parse(&bytes) {
             Ok(r) => r,
             Err(e) => {
@@ -276,16 +308,23 @@ impl kayfabe_rt::device::PtSweepObserver for WalkShadowObserver<'_> {
                 return;
             }
         };
+        // ⊘ `parse` already validates; this is the second, explicit statement of the rule so a
+        // future `parse` that stopped validating cannot quietly let an invalid report through.
         if let Err(e) = report.validate() {
             eprintln!("kayfabe: WALK-SHADOW report invalid: {e:?}");
             census.note_skipped("report_invalid");
             return;
         }
-        // ⊘ A truncated report describes less than it found and is not a comparable answer.
-        // Counted by name rather than compared, because comparing it would report
-        // `missing_in_kernel` for every mapping past the cut.
-        if report.header.is_truncated() {
-            census.note_skipped("report_truncated");
+        // ★★ **A REFUSAL THE KERNEL RAISED IS NOT AGREEMENT.** `refuse_mask` names which one
+        // fired (`R_OOB`, `R_FOREIGN_AP`, `R_MISALIGNED_LEAF`, …). A walk that refused a
+        // subtree found fewer mappings for a reason that has nothing to do with decoding, and
+        // comparing it would file that under `missing_in_kernel`.
+        if header.refusals > 0 {
+            eprintln!(
+                "kayfabe: WALK-SHADOW kernel refused during the walk: refusals={} mask={:#x}",
+                header.refusals, header.refuse_mask
+            );
+            census.note_skipped("kernel_refused_a_subtree");
             return;
         }
         let Ok(runs) = report.present_runs() else {
