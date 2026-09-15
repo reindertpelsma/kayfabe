@@ -30,11 +30,23 @@ SRC_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO=${KAYFABE_REPO:-/root/kayfabe}
 BENCH=${BENCH_DIR:-/workspace/bench}
 TAG=${1:-w735b}
-# ⊘ THREE, not four, and the number is MEASURED rather than chosen: `[measured w735, boot
-# w735a]` five `RmInitAdapter` cycles succeed in one QEMU lifetime and the sixth fails, and
-# `boot_capture.sh` spends one of them on its own `nvidia-smi` before the hook runs. Four would
-# sit exactly on the wall with no margin. ⚠ Confirm with `RMLADDER_OPEN_PROBE` on this build
-# before trusting it — the wall is a property of the tree, not a constant.
+# ⊘ THREE, and the number is MEASURED twice rather than chosen.
+#
+# `[measured w735, boot w735probe, RMLADDER_OPEN_PROBE=8]` — the open-ordinal probe w424 asked
+# for, on this build:
+#
+#     OPEN 1..4  rc=0     the device opens
+#     OPEN 5     rc=124   ⇐ THE WALL. It does not refuse; it HANGS (the 30 s timeout fires)
+#     OPEN 6..8  rc=1     unopenable — `openat` now fails fast, WPR2 latched
+#
+# ⊘ **The wall arm TIMES OUT and the ones after it REFUSE.** Two different signatures for one
+# cause, which is why a ledger that collapsed TIMEOUT into FAIL would have hidden the shape.
+# ★ `boot_capture.sh` spends one cycle on its own `nvidia-smi` before the hook runs, so the
+# probe's open #1 is really cycle #2 ⇒ **five cycles per QEMU lifetime, the sixth hangs** —
+# and boot `w735a` agrees independently: nvidia-smi + exactly four passing arms, then the wall.
+# ⇒ four arms per boot sits EXACTLY on it; three leaves a margin of one, and an arm that opens
+# the device twice would eat that margin without saying so.
+# ⚠ Re-measure with `RMLADDER_OPEN_PROBE` on any new build: the wall is a property of the tree.
 PER=${2:-3}
 cd "$REPO" || { echo "⊘ no repo at $REPO"; exit 2; }
 
