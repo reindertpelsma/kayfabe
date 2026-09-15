@@ -1292,6 +1292,20 @@ impl BarMirror {
         let Some(port) = self.device_port.as_ref() else {
             return;
         };
+        // ⊘ **The emptiness check comes FIRST, and that is not a micro-optimisation.** The
+        // device-view port can be armed on the `arena` arm too (`KAYFABE_DEVICE_VIEW=probe`
+        // with the default store), and nothing is ever parked there. Calling
+        // `reclaim_released_windows` regardless would run the retirement collector on a path
+        // that never ran it before — a second variable on a boot that is supposed to differ
+        // from the control in exactly one thing.
+        if self
+            .parked
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .is_empty()
+        {
+            return;
+        }
         let freed = self.machine.reclaim_released_windows();
         if freed.is_empty() {
             return;

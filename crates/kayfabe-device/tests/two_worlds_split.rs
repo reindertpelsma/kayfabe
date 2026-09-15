@@ -696,3 +696,100 @@ fn the_armed_trap_path_refuses_by_name_and_counts_it() {
         "and PRAMIN must not have been counted as a refusal"
     );
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ★★★★★ §3 CUT A — WHERE A `device`-STORE BOOT DIES, PINNED OFFLINE.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+/// ★★★★★ **THE CUT-A WALL, AS A CHECKED PROPERTY RATHER THAN A READING OF THE CALL GRAPH.**
+///
+/// `SINGLE_STORE_PLAN.md`'s w735 block predicts that a boot on `KAYFABE_FB_STORE=device` dies
+/// at the **first framebuffer access of any kind**, because `DeviceFb` refuses every
+/// host-side `read` and `write` by name and the BAR1/BAR2 translate walks the page tables
+/// through exactly those calls.
+///
+/// # ⊘⊘ Why this is worth a test and not a paragraph
+///
+/// That prediction is the reason **no bench box was rented for cut A** — a boot that dies
+/// before installing one memslot measures nothing about the memslot half. A prediction load-
+/// bearing enough to decide a spend should be checkable, and this plane can check the half
+/// that does not need a GPU: *"a translate through this store is refused, and refused **by
+/// the store's own name** rather than by some upstream `NoAddressModel`."*
+///
+/// ⊘ What it still cannot say: **when** in a real boot the first such access happens. That is
+/// the third row of the prediction table and it stays a reading.
+#[test]
+fn a_bar1_translate_through_the_single_store_is_refused_and_the_store_is_what_refused() {
+    use kayfabe_device::fbwin::DEVICE_FB_READ_REFUSED;
+    use kayfabe_device::DeviceFb;
+
+    // ── the control, first: the SAME tree, on the arena store, translates ──
+    let arena = plane();
+    build_bar1_tree(&arena, BAR1_VA, leaf(SHARED_PHYS));
+    let (phys, _) = fb_read(&arena, BAR_FB, BAR1_VA);
+    assert_eq!(
+        phys, SHARED_PHYS,
+        "★ the control must TRANSLATE, or the refusal below would be about a tree that was \
+         never built and this test would pass for the wrong reason"
+    );
+
+    // ── now the same plane with the single store installed ──
+    let p = plane();
+    build_bar1_tree(&p, BAR1_VA, leaf(SHARED_PHYS));
+    // ⊘ Swapped in AFTER the tree is written, because writing it needs a store that accepts
+    // writes. In a real boot the guest writes its tables through a device-view memslot and
+    // nothing host-side ever sees them — which is precisely why cut B exists.
+    p.set_fb(Box::new(DeviceFb::new(GA106.fb_length)));
+
+    // ⊘ `window_page_backing` takes an `FbWindow`, not a BAR number: it is the PREMAP path
+    // (`BarMirror::fill_now`'s phase 1), which is the one that would be asked for a memslot.
+    let before = DEVICE_FB_READ_REFUSED.load(core::sync::atomic::Ordering::Relaxed);
+    let r = p.window_page_backing(kayfabe_device::FbWindow::FbAperture, BAR1_VA, true);
+    match r {
+        Err(kayfabe_device::WindowRefusal::Translated { .. }) => {
+            // ⊘⊘⊘ **AND THE STORE'S SENTENCE IS NOT IN IT — measured, w735.**
+            //
+            // The refusal that arrives reads *"the page-table decoder refused a level of this
+            // walk"*: `FbRead::read_in` answers a **`bool`**, so `FbRefused::why` dies at
+            // `m.fb.read(..).is_ok()` and the walker turns the miss into `WalkFault::Unbacked`.
+            // ⇒ a cut-A boot's visible diagnosis names the **decoder**, which is working, and
+            // not the store. That is a symptom naming the wrong subsystem — this tree's most
+            // expensive recurring shape — so the store says its own name ONCE, on its own line,
+            // and the count below is what joins the two.
+            //
+            // ⚠ Asserted **by the counter**, not by the sentence, precisely because the
+            // sentence cannot travel. Changing `FbRead::read_in` to carry it is cut B's call:
+            // every consumer of that trait would have to grow a reason it currently discards.
+            assert_eq!(
+                DEVICE_FB_READ_REFUSED.load(core::sync::atomic::Ordering::Relaxed),
+                before + 1,
+                "★ the refusal must have come from THE STORE. Without this the assertion \
+                 above passes for any `Translated` refusal at all — including one from a \
+                 tree that was never built, which is exactly the false green the control at \
+                 the top of this test exists to rule out."
+            );
+        }
+        other => panic!(
+            "★★★ THE PREDICTION IS WRONG, AND THAT IS THE FINDING. A BAR1 translate through \
+             the single store was expected to be refused by `DEVICE_HOST_READ_UNBUILT`; it \
+             answered {other:?}. If it SUCCEEDED, the walk is not reading through \
+             `FbStore::read` and cut B's consumer list is incomplete — re-read \
+             `SINGLE_STORE_PLAN.md`'s w735 table before costing anything."
+        ),
+    }
+}
+
+/// ⊘ **And the store still NAMES the page, which is the half that works.** Stated beside the
+/// refusal so nobody reads cut A as *"the device store does nothing"*.
+#[test]
+fn the_single_store_still_names_every_page_for_the_memslot_path() {
+    use kayfabe_device::{DeviceFb, FbPageBacking, FbStore};
+    let mut fb = DeviceFb::new(GA106.fb_length);
+    assert_eq!(
+        fb.page_backing(SHARED_PHYS, true),
+        FbPageBacking::Device { at: SHARED_PHYS },
+        "★ the memslot half needs only an ADDRESS and gets one without reading a byte — which \
+         is why `fill_now` can arm a view and install a guest memslot over real video memory \
+         while every host-side read is still refused"
+    );
+}

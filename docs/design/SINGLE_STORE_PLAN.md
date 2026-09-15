@@ -65,6 +65,21 @@ before it takes the lock**, and there are four of them in three different shapes
 | **B** | host reads through armed views: `PlanePtBytes` arm-then-retry, a demand set for `FbStoreReader`'s callers, the premap retry loop, the vCPU decline-by-name | ○ not started |
 | **C** | two-phase CPU CE (dry-run partition → arm → execute), **or** constraint 9 and never build it; plus `device_reset`, which under one object is *zeroing gibibytes of real video memory* | ○ not started — and C is the one to delete rather than build |
 
+### ⊘ THE PRE-REGISTERED PREDICTION FOR A CUT-A BOOT — written before any boot, so it can be wrong
+
+No box was rented for cut A, **and the reason is a prediction rather than a budget**: if it is
+right, the boot measures nothing worth the money; if it is wrong, that is itself the finding.
+Stated here so a later boot is a test rather than a confirmation.
+
+| line | predicted | what a different value would mean |
+|---|---|---|
+| `DEVICE-FB` | `named=0 host_read_refused≥1` **or** `host_write_refused≥1`, and the verdict `⊘ HOST-SIDE ACCESSES WERE REFUSED` | ★ `named>0` would mean a guest memslot over real video memory was installed **before** anything needed host-side bytes — the memslot half is exercisable without cut B, and a boot IS worth renting for |
+| `DEVICE-VIEW-PORT` | `armed=0 refused=0` ⇒ `⊘⊘ VACUOUS` | any `refused>0` before a single arm would be a plumbing fault, not the designed wall |
+| where it dies | the **first framebuffer access at all**, expected to be `kbusVerifyBar2`'s write inside `RmInitAdapter` — i.e. before the guest's first instruction, not at a BAR1 translate | ⊘ if it dies later, the store is reached later than this model says and cut B's four consumers are not the whole list |
+
+⚠ **The third row is the one most likely to be wrong**, and it is the one that decides whether
+cut A alone is measurable. It is a reading of the call graph, not a measurement.
+
 ⊘ **A boot on `KAYFABE_FB_STORE=device` does not reach a guest and is not supposed to.** The
 first BAR1/BAR2 translation reads a page-table page out of the store and is refused by name.
 The alternative — a host-memory fallback for host reads — is two memories for one address,

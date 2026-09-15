@@ -2064,7 +2064,24 @@ impl FbStore for DeviceFb {
                 why: OUTSIDE_FRAMEBUFFER,
             });
         }
-        DEVICE_FB_READ_REFUSED.fetch_add(1, Relaxed);
+        let n = DEVICE_FB_READ_REFUSED.fetch_add(1, Relaxed);
+        // ★★★★★ **SAID ONCE, BECAUSE THE CALLER THROWS THIS SENTENCE AWAY.**
+        //
+        // ⊘⊘ `[measured w735, offline]` a BAR1 translate through this store is refused — and
+        // the refusal that reaches the log reads *"the page-table decoder refused a level of
+        // this walk"*. `FbRead::read_in` returns a **`bool`**, so `why` dies at
+        // `m.fb.read(phys, buf).is_ok()` and the walker turns it into `WalkFault::Unbacked`,
+        // which the plane renders as its own `&'static str`.
+        //
+        // ⇒ a boot's only visible diagnosis would name the **decoder**, which is working
+        // perfectly, instead of the store — this tree's most expensive recurring shape, a
+        // symptom naming the wrong subsystem. One line, once, beside the counter, closes it
+        // without a second source of truth and without changing `FbRead`'s signature.
+        if n == 0 {
+            eprintln!(
+                "kayfabe: DEVICE-FB ⊘⊘⊘ FIRST HOST-SIDE READ REFUSED at fb 0x{phys:x} —                  {DEVICE_HOST_READ_UNBUILT} ⚠ Any 'page-table decoder refused a level of this                  walk' that follows is THIS, flattened: `FbRead::read_in` answers a bool and                  the sentence cannot travel. Printed once; the total is `DEVICE-FB                  host_read_refused=`."
+            );
+        }
         Err(FbRefused {
             phys,
             len: buf.len(),
@@ -2082,7 +2099,12 @@ impl FbStore for DeviceFb {
                 why: OUTSIDE_FRAMEBUFFER,
             });
         }
-        DEVICE_FB_WRITE_REFUSED.fetch_add(1, Relaxed);
+        let n = DEVICE_FB_WRITE_REFUSED.fetch_add(1, Relaxed);
+        if n == 0 {
+            eprintln!(
+                "kayfabe: DEVICE-FB ⊘⊘⊘ FIRST HOST-SIDE WRITE REFUSED at fb 0x{phys:x} —                  {DEVICE_HOST_WRITE_UNBUILT} Printed once; the total is `DEVICE-FB                  host_write_refused=`."
+            );
+        }
         Err(FbRefused {
             phys,
             len: bytes.len(),
