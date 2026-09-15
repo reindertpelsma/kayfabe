@@ -285,6 +285,44 @@ switch**, against the thresholds pre-registered above, and nothing in cut B move
 ran and did not help) and `DEVICE-FB-PORT arm_refused` (non-zero is the **host BAR1 aperture**,
 which arming cannot fix by trying again).
 
+### ⊘⊘⊘ AND THE WORKSPACE SUITE IS RED AT THE BASELINE — MEASURED, w737, BOTH ARMS
+
+⚠ **`cargo test --workspace` does not pass on `single-store` and has not for a while.**
+`[measured w737, `--no-fail-fast`, both with and without `kayfabe-qemu-raw/host-isolates`]`
+
+| | at `9e444fd4` (the baseline) | with cut B |
+|---|---|---|
+| failing test **targets** | **11** | **11** |
+| failing **tests** | **30** | **30** |
+| the set of failing test NAMES | — | ⊘ **byte-identical** (`comm`, both directions, empty) |
+
+All eleven are in `kayfabe-tests`: `admitted_is_served`, `doorbell_reaches_the_completion_observer`,
+`guest_os_axis_gate`, `host_class_role_wiring`, `l1_mean`, `reachability`,
+`ring_out_of_our_own_framebuffer`, `rmrpc_bridge`, `sticky_answer`, `trace_replay`,
+`unranked_locks`. `kayfabe-device` itself is **green** (50 targets, 0 failures).
+
+★★★ **And the reason this is written down rather than mentioned: a red baseline makes the
+commit gate unable to answer the only question it is for.** *"The suite fails"* and *"my
+change broke something"* arrive as the same red, so the gate silently degrades into a
+tradition. ⇒ the only usable form is a **differential against the baseline commit**, which is
+what the table above is, and it costs a second full run every time.
+
+⊘ Two traps met on the way, both this tree's named classes:
+- **`cargo test | head -N` returns 101 on a green suite.** `head` closes the pipe, cargo takes
+  SIGPIPE. The first gate run reported `TEST_FEAT_RC=101` with **zero** failing tests in its
+  own output — *"a nonzero exit from the thing that started the work tells you nothing"*, one
+  layer in.
+- **`cargo test` is fail-FAST.** Without `--no-fail-fast` the first run reported **one**
+  failing target; there are eleven. A gate that stops at the first red cannot produce a
+  differential at all.
+
+★ **One obligation this did surface and it is discharged:**
+`unranked_locks::every_unranked_lock_a_vcpu_thread_can_hold_is_classified` is one of the
+eleven, with **14** unclassified rows at the baseline — **two of them cut A's own**, from
+w735. Cut B's three are now classified, and the unclassified set is diffed back to
+byte-identical with the baseline's. ⚠ A gate that is already red is exactly where a new row
+hides.
+
 ### ⇒ WHAT CUT B NEEDS, IN ORDER — so the next session does not re-derive it
 
 1. **A byte port for the store.** `DeviceFb` lives in `kayfabe-device`, which holds no
