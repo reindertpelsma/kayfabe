@@ -63,6 +63,7 @@ before it takes the lock**, and there are four of them in three different shapes
 |---|---|---|
 | **A** | `FbPageBacking::Device { at }`, the third token space, `fill_now`'s device arm with **release-after-the-mapping-is-gone**, `install_device_page`, `DeviceFb` (host `read`/`write` **refuse by name**), PRAMIN release-and-re-arm, the `KAYFABE_FB_STORE` gate | ✔ **BUILT w735**, gate default `arena` |
 | **B** | host reads through armed views: `PlanePtBytes` arm-then-retry, a demand set for `FbStoreReader`'s callers, the premap retry loop, the vCPU decline-by-name | ✔ **BUILT w737 and BOOTED w738** — `read_served=3` out of the reserved object, the first host-side framebuffer read this campaign has ever served. ⊘ Item 2 (`PlanePtBytes`) measured **INERT** (`walk-guest-pt r=0`), item 4 fired **once**, and two of cut B's censuses report the opposite of what the boot did. Read the w738 block. ~~offline only … ⊘ It has not booted~~ (superseded 2026-09-15) |
+| **D** | ★ **w740 — the ARMING half of the CeUtils doorbell.** `fb_userd_gp_put_arming` (the producer cursor, which is the only framebuffer read on this channel's control path) and the submission's own bounded re-run after a drain, gated on `CeUtilsRefusal::progress::may_re_run()` | ✔ **BUILT w740**, offline tests green. ⊘ The scrub it unblocks is **8 bytes in 2 submissions** — measured three ways — so `device_reset` is **not** on this path |
 | **C** | ★ **REDEFINED BY MEASUREMENT, w739.** The write half: `decode_subtree_from_entry`'s dropped faults (BAR2's premap could never retry its arming) and the repair path gated on the success it repairs | ✔ **BUILT AND BOOTED w739** — `kbusVerifyBar2` is GONE, `named=32772`, `read_served=204683`, `BAR1/BAR2 (translated) … 0 REFUSED`. Read the w739 block. ⊘ The **CeUtils scrub** (`ce_utils.c:349`, `NV_ERR_TIMEOUT`) is the NEW wall and is constraint 9's, not cut C's; `device_reset` (zeroing gibibytes of real video memory) is still unbuilt and still said by name |
 
 ### ★★★★★ 2026-09-15 (w736) — **THE BOOT WAS RUN. TWO ROWS HELD, ONE IS REFUTED, AND THE REFUTED ONE IS CONTRADICTED BY A TABLE THREE PARAGRAPHS ABOVE IT IN THIS FILE.**
@@ -400,6 +401,155 @@ write half lands.
 on it**: `FB-IO walk-bar[r=21 frames=2] walk-guest-pt[r=0]` measures that `PlanePtBytes` read
 the framebuffer **zero times**, so item 2 — the one the plan called *"costs no transient at
 all"* — never ran. What served was item 4's premap retry.
+
+### ★★★★★ 2026-09-15 (w740) — **THE CeUtils SCRUB IS 4 BYTES, AND THE WALL IS THE PRODUCER CURSOR, NOT THE SCRUB.**
+
+⚠ **Read this before the pre-registration below it; the measurements here are what the
+pre-registration is built on, and every one of them is offline.** ⊘ **No constraint was
+relaxed.** Nothing is forged: the completion is still written only by
+`cpu_ce::write_resolved_completion`, and only after `execute_ours_spans` returned `Ok`.
+
+#### ★★★ 1. THE VOLUME — **8 bytes, 2 GPFIFO submissions.** Three independent sources agree.
+
+The brief asked whether RM's scrub covers a large fraction of the 11 904 MiB reserved object.
+**It does not, and the number was already in the w739 evidence.**
+
+| source | what it says | where |
+|---|---|---|
+| the guest's own `dmesg`, device arm | `memmgrMemSet(pMemoryManager, &vidSurface, 0, **sizeof vidmemData**, TRANSFER_FLAGS_PREFER_CE) @ mem_mgr.c:463` | `traces/w739_fbstore_cutc/w739_evidence.tgz`, `run_w739dev_dmesg.log` |
+| `ogkm-580.159.04`, the driver's own source | `NvU32 vidmemData = 0xAABBCCDD;` (`mem_mgr.c:418`), memdesc created `sizeof vidmemData` (`:441`) ⇒ **4 bytes**; `ceutilsMemset` chunks at `NV_MIN(len, CE_MAX_BYTES_PER_LINE=0xffffffff)` (`ce_utils.c:632`) ⇒ **one** `_ceutilsSubmitPushBuffer` | `research_clones/ogkm-580.159.04` |
+| **the captured pushbuffer**, decoded by our own codec in the w739 log | `[5]sub0/m0x418/Incrementing/n1=[**0x4**]` — `LINE_LENGTH_IN = 4`, with `m0x700=[0x0]` (`SET_REMAP_CONST_A`), `m0x708=[0x4]` (`SET_REMAP_COMPONENTS`) and `LAUNCH_DMA=0x400058e` (`REMAP_ENABLE`, one-word semaphore, no `MULTI_LINE`) | `run_w739dev_qemu.log:645` |
+
+⇒ `memmgrInitCeUtils` issues **one 4-byte CE memset and one 4-byte CE memcopy** — `8 bytes of
+GPU DMA for the whole of RM's bring-up`, as **two** GPFIFO entries. The device's own doorbell
+census agrees from the third side: **`doorbells: 2 arrived`**.
+★ And `scrubberConstruct` — the thing that *could* have been framebuffer-sized — **scrubs
+zero bytes**: it registers the scrubber with PMA for scrub-**on-free** (`mem_scrub.c:183`) and
+never issues one. `memmgrScrubInit_HAL` and `memmgrScrubInternalRegions_HAL` are both **stubs**
+in the open module (`g_mem_mgr_nvoc.h:2494`, `:2504`).
+⇒ ★★★ **`device_reset` (zeroing gibibytes of real video memory) is NOT a prerequisite of this
+increment.** It is still unbuilt and still says so by name; it is simply not on this path.
+
+#### ★ 2. THE RATE — **228 µs per page armed**, measured, `n = 714`
+
+`[measured w739, the device arm]` `DEVICE-VIEW-PORT armed=714 … arm_us_total=163160` ⇒
+**228.5 µs per arm**, and `rel_us_total=14884 / released=26` ⇒ 572 µs per release. That is the
+rate at which a host CPU view of a page of the reserved object can be brought up, and it is
+the only rate on this path: the bytes themselves are a 4-byte store.
+
+#### ⇒ 3. THE PRODUCT, stated only now
+
+The scrub touches **one destination page** and its producer cursor **one USERD page**. ⇒
+**≈ 0.46 ms of arming** against RM's own budget of **4 s** (`GPU_TIMEOUT_DEFAULT` →
+`osGetTimeoutParams`, graphics mode, `os.c:1961`; `channelWaitForFinishPayload` at
+`channel_utils.c:344-362`). **Margin ≈ 8 700×.**
+⊘ Do not read this as a throughput claim. It is the cost of *this* submission, whose volume is
+8 bytes; it says nothing about a workload that scrubs pages in bulk.
+
+#### ★★★★★ 4. THE WALL, ROOT-CAUSED FROM THE COMMITTED TRACE — and it is **not** the scrub
+
+The w739 refusal line carries the whole diagnosis in the store's own words
+(`run_w739dev_qemu.log:645`, elided):
+
+```text
+first doorbell refusal [FwdFault::RingProducerCursorUnknown]
+  RingProducerCursorUnknown { ring_va: GpuVa(9127215104), index: 0, entries: 4096 }
+  userd=h0x9/off0x0/phys=fb:0xec850000/0x200
+  fbuserd@0xec850088=REFUSED(no CPU view of this page of the reserved object is armed yet.
+    The demand has been recorded in the store's want set; a LOCK-FREE caller must call
+    `DeviceFbPort::drain` and retry, because arming is an IPC round trip that asserts
+    lock-free and this read ran under the plane lock.)
+  ring=0x220064000 … fbRING[p0]@va0x220064000=NOT-VIDMEM(S:0x11033f000)  pb=S:0x107962064
+```
+
+⇒ **This channel's ring and pushbuffer are SYSMEM; its USERD is in the FRAMEBUFFER.** The
+producer cursor is therefore the **only** framebuffer read on the submission's control path,
+and it is the one that fails — `gp_put = None` ⇒ `RingProducerCursorUnknown`
+(`ceutils.rs:735`) ⇒ **the submission is never decoded at all**, so the 4-byte scrub never
+runs, so `channelWaitForFinishPayload` times out after 4 s and `ceutilsDestruct` asserts
+`lastCompletedPayload == lastSubmittedPayload` at `ce_utils.c:349`.
+
+★★★ **The `0x65 TIMEOUT` is a consequence, and `RingProducerCursorUnknown` is the cause.**
+⊘ w739 wrote *"whether the two doorbell refusals are the cause or a consequence is
+**unmeasured**"*. They are the **cause**, and the trace it committed says so; nothing new had
+to be run to establish it.
+★ And the store is not broken: on that same boot it served **204 683** host-side reads and
+refused **15**. The USERD page is one of those 15.
+
+#### ⇒ 5. WHAT w740 BUILT — two bounded arm-then-retry loops, and nothing else
+
+1. **`fb_userd_gp_put_arming`** (`shim.rs`) — the producer-cursor read, wrapped in cut B's
+   `arm_then_retry`. Attempt; while the **store refused** and a lock-free
+   `RegPlane::arm_fb_demand()` actually armed something, attempt again, at most
+   `USERD_ARM_RETRIES = 4` times. ⊘ Still no fallback: `None` is still refused by name, and
+   the ring's zero-terminator is still never read instead (`[measured w386]`).
+   ⚠ It is legal only because it runs **before** the vmm mutex and before any plane lock, on
+   the `kayfabe-doorbell-publish` worker (`declare_thread_class(ThreadClass::Worker)`).
+2. **The submission's own retry** (`shim.rs`, `CE_SUBMIT_ARM_RETRIES = 2`) — the whole
+   `run_submission` re-run after a drain, for the framebuffer reads and the **destination
+   write** that only the walk can discover. This is the gap the w735 table named:
+   *"a store refusal comes back as `refused(..)` — the submission is **dropped, not
+   requeued** … the wedge class."*
+3. **`CeUtilsRefusal::progress`** (`kayfabe-rt/src/ceutils.rs`) — the only thing that makes a
+   re-run legal. `may_re_run()` is `bytes == 0 && completions == 0`.
+
+#### ⊘⊘⊘ AND A DEFECT IN MY OWN GATE, CAUGHT BY ITS OWN TEST BEFORE ANY BOOT
+
+My first `may_re_run` was `progress == CeProgress::NONE`, which includes `launches`.
+**`run.launches` is incremented at DECODE, before the operand walk** — so a submission
+refused on its first launch's own destination reports `launches: 1`, and the gate would have
+been **closed on every real case**. Shipped, the boot would have failed **identically**, the
+census would have read `CE-SUBMIT-ARM trips=0`, and the honest report would have been *"the
+retry never fired"* with nothing pointing at why.
+★ `a_refusal_before_any_launch_reports_no_progress_and_is_therefore_re_runnable` failed with
+`CeProgress { launches: 1, bytes: 0, completions: 0 }` on its first run. ⚠ Same class this
+tree names repeatedly: **a counter whose name says "executed" and whose increment site says
+"decoded"**, and no boot could have distinguished the two.
+
+### ★★★★★ 2026-09-15 (w740) — **PRE-REGISTERED PREDICTIONS. WRITTEN AND COMMITTED BEFORE THE BOX EXISTS.**
+
+⚠ **Nothing below has been measured.** Frozen at commit time, graded verbatim afterwards; a
+row that comes back wrong is a **result**. ⊘ No constraint is relaxed by this boot and none
+may be relaxed to make a row pass — in particular, **the completion must not be forged**, and
+a green row 5 bought that way is a failed deliverable, not a passing one.
+
+**The arms.** Same binary both arms, `KAYFABE_DEVICE_VIEW=probe SHADOW=on`, **control
+(`arena`) first**, then `KAYFABE_FB_STORE=device`. One variable. Harness
+`scripts/bench/w736_fbstore_run.sh`, unchanged except for **two reporting-only greps**
+(`W740-USERD-ARM`, `W740-CE-SUBMIT-ARM`) — no arm, threshold or boot step.
+
+#### ⊘ WHAT THIS BOOT CANNOT BE GRADED ON, stated first
+
+- **Not** "the scrub completed". `ce_utils.c:349` disappearing is necessary and not
+  sufficient: it would also disappear if the completion were forged, and forging it is the
+  one thing forbidden. The grade is **`RmInitAdapter` proceeding** *and* `W740-*-ARM
+  recovered ≥ 1` — i.e. the bytes moved through a view a lock-free drain armed.
+- **Not** throughput. 8 bytes.
+- **Not** `CE-SUBMIT-ARM trips`. If C1 alone is enough, this is legitimately `0` — see row 8.
+
+#### THE ROWS
+
+| # | direction + threshold | what REFUTES it |
+|---|---|---|
+| 1 | device: `W740-USERD-ARM trips= ≥ 1` | `trips=0` ⇒ the USERD read was never refused ⇒ §4's root-cause is **wrong**, and the wall is elsewhere |
+| 2 | device: `W740-USERD-ARM recovered= ≥ 1` | `recovered=0` with `trips>0` ⇒ the drain arms pages but not *this* page; read `DEVICE-FB wanted_by_read` beside it |
+| 3 | ★ **control: `W740-USERD-ARM trips=0 recovered=0 gave_up=0` and `W740-CE-SUBMIT-ARM trips=0`** — provably inert | any non-zero ⇒ the change is **not** inert on the control and the one-variable claim fails |
+| 4 | device: the first doorbell refusal is **not** `RingProducerCursorUnknown` (ideally `0 REFUSED by name`) | still `RingProducerCursorUnknown` ⇒ C1 did not work at all |
+| 5 | device: the string `lastCompletedPayload == lastSubmittedPayload` appears **0** times in the guest dmesg | present ⇒ the scrub still never completes; the wall has not moved |
+| 6 | ★★★ **device: `RmInitAdapter failed!` appears 0 times** — THE WIN CONDITION | present ⇒ a wall remains; the deliverable is then **where**, named |
+| 7 | ★★★ **device NO-REGRESSION GATE: `DEVICE-FB named= ≥ 32772`, `BAR1-PASSTHROUGH misses=0`, `BAR2-PASSTHROUGH misses=0`, `BAR1/BAR2 (translated): … 0 REFUSED by name`, bar1/bar2 `TRAP_FILLS=0`** | any non-zero miss/refusal ⇒ **regression**, and the change is rejected *regardless of row 6* |
+| 8 | device: `DEVICE-FB wanted_by_write= ≥ 1` — the first host-side framebuffer WRITE demand this campaign records | `wanted_by_write=0` **and** row 5 held ⇒ the destination page was already armed by a read; a finding, not a failure |
+| 9 | control: `W392D_GUEST_OUTCOME=(P)`, `THREADS 8 of 8`, `MEAN_FALSIFIER=PASS`, `TRAP_FILLS=0` | anything else ⇒ the binary is broken and **nothing on the device arm may be graded** |
+| 10 | both: `W740-CE-SUBMIT-ARM blocked_by_progress=0` | `> 0` ⇒ the safety valve fired — a refusal that had already released a payload reached the gate — and that must be reported as its own finding |
+
+#### ⚠ THE ROW MOST LIKELY TO BE WRONG — named, and named as a bet
+
+**Row 6.** C1 removes the *first* wall; there is no evidence that the destination write, the
+`memmgrMemCopy` that follows the memset, or anything after `memmgrInitCeUtils` will pass. ⊘
+And this campaign has now called the likely-wrong row **wrong three times running** (w736,
+w738, w739), so this is recorded as a bet and **not** presented as insight. `[w739's own
+words: "Naming the likely-wrong row is a prediction this campaign has never got right, and it
+should stop being presented as insight."]`
 
 ### ★★★★★ 2026-09-15 (w739) — **`named` 0 → 32 772, AND THE GUEST-SIDE BAR1/BAR2 TRAP CENSUS IS EMPTY. The cut-C boot, RE-GRADED under the owner's criterion above.**
 

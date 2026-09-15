@@ -8833,6 +8833,9 @@ impl SharedDoorbell {
         }
         let (vaspace, ring_va) = (facts.vaspace?, facts.ring_va?);
         let plane = self.plane.upgrade()?;
+        // ⊘ Computed on its own line, before ANY lock, so the `⚠` in the field below is a
+        // statement a reader can check by looking at the two statements around it.
+        let (userd_gp_put, userd_arm_trips) = fb_userd_gp_put_arming(&plane, facts.userd);
         let chan = kayfabe_rt::ceutils::CeUtilsChannel {
             client: facts.client,
             vaspace,
@@ -8844,7 +8847,19 @@ impl SharedDoorbell {
             // whole closure. ⊘ `None` is REFUSED by `run_submission`, by name — never fallen
             // back onto the ring's zero-terminator, which is only sound for the ring's
             // first lap.
-            gp_put: fb_userd_gp_put(&plane, facts.userd),
+            //
+            // ★★★★★ **w740 — AND IT MAY NOW ARM THE PAGE IT READS FROM.** This channel's
+            // USERD is in the framebuffer, the framebuffer is the reserved device-local
+            // object under `KAYFABE_FB_STORE=device`, and `[measured w739]` the single
+            // attempt this used to be was refused on every doorbell of the boot ⇒
+            // `RingProducerCursorUnknown` ⇒ RM's 4-byte CeUtils scrub never ran ⇒
+            // `NV_ERR_TIMEOUT` at `ce_utils.c:349`. See `fb_userd_gp_put_arming`.
+            //
+            // ⚠ THIS CALL MUST STAY ABOVE `self.ce.vmm.lock()` AND ABOVE ANY PLANE LOCK.
+            // `RegPlane::arm_fb_demand` is an IPC round trip that asserts lock-free, and the
+            // only reason it is legal here is that this statement runs before either is
+            // taken, on the `kayfabe-doorbell-publish` worker.
+            gp_put: userd_gp_put,
         };
         let key = (facts.proc.0, facts.chan.0);
         let cursor = *self
@@ -8863,30 +8878,10 @@ impl SharedDoorbell {
             .get(&key)
             .unwrap_or(&kayfabe_rt::ceutils::MethodState::new());
 
-        let mut held = self.ce.vmm.lock().unwrap_or_else(|e| e.into_inner());
-        let Some(vmm) = held.as_mut() else {
-            return Some(refused(
-                token,
-                kayfabe_device::FaultTag("Shim::NoMemoryPlane"),
-                "the memory plane is not attached, so a copy-engine submission has no guest \
-                 memory to read or write; refused rather than served out of nothing"
-                    .to_string(),
-            ));
-        };
         // ⊘ The walk's authorisation, as a value: the guest rang THIS channel's doorbell,
         // so the addresses of THIS submission are past their publication window
         // (`gmmu_publication_discipline.md` §6.1 / §7 rule 1).
         let demand = kayfabe_device::ceresolve::Demand::from_doorbell();
-        let mut run = |root: &kayfabe_device::ceresolve::VasRoot| {
-            plane.ce_session_with_root(root, demand, |ce| {
-                self.device.with_pushbuffer(|pb| {
-                    // ★★★★★ w406 — releases DEFERRED: written below, AFTER the refresh.
-                    kayfabe_rt::ceutils::run_submission_deferring_releases(
-                        ce, pb, vmm, chan, cursor, state,
-                    )
-                })
-            })
-        };
         // ★★★★ §16.64 — TWO ROOT SOURCES, tried in the order of what each one KNOWS.
         //
         // 1. This device's own publication table, keyed `(hClient, hVASpace)`. It answers
@@ -8925,7 +8920,6 @@ impl SharedDoorbell {
             // not size the format's root level" are different diagnoses and exactly one of
             // them is our defect.
             DoorbellRoot::Underivable(phys, why) => {
-                drop(held);
                 return Some(refused(
                     token,
                     kayfabe_device::FaultTag("CeResolve::DeclaredRootUnusable"),
@@ -8940,8 +8934,93 @@ impl SharedDoorbell {
                 ));
             }
         };
-        let outcome = root.as_ref().map(&mut run);
-        drop(held);
+        // ★★★★★ **w740 — THE SUBMISSION'S OWN BOUNDED ARM-THEN-RETRY.**
+        //
+        // ⊘⊘ `SINGLE_STORE_PLAN.md`'s w735 table names this gap by name and by consequence:
+        // the CPU CE executor *"holds `mem` for the whole closure … the frames are not known
+        // before the lock is taken, and a store refusal comes back as `refused(..)` — the
+        // submission is **dropped, not requeued**. A transient 'not armed yet' becomes a
+        // dropped kernel CeUtils scrub: the wedge class."*
+        //
+        // ⇒ The frames STILL cannot be known before the lock is taken — so this does not try
+        // to know them. It lets the submission run, refuse, and **record its wants in the
+        // store on the way out**, then drains at a lock-free point (the vmm mutex and every
+        // plane lock are released first, by construction: the whole session is inside the
+        // block below and `held` dies at its end) and runs the submission again.
+        //
+        // # ⊘⊘⊘ THE ONE THING THAT MAKES A RE-RUN LEGAL, and it is not a comment
+        //
+        // `CeUtilsRefusal::progress`. A submission that already executed a `LAUNCH_DMA`
+        // **must never be re-run** — it would move the bytes twice and, worse, release the
+        // guest's declared payload twice. `nothing_happened()` is the gate, it is checked
+        // here, and `blocked_by_progress` in the census counts every time it fired. ⚠ A
+        // refusal with progress is returned unchanged, exactly as before w740.
+        //
+        // # The three properties, same as `armretry::arm_then_retry`
+        //
+        // 1. **Fixed trip count** — the guest's own page tables decide what the walk touches,
+        //    so they must not decide how long this thread runs.
+        // 2. **`arm` returning false ENDS IT** — *"the drain declined"* (a vCPU),
+        //    *"the aperture refused"*, *"there is no byte port"* all read as *"retrying helps
+        //    with nothing"*, and on the `arena` control the third is true by construction, so
+        //    the control runs exactly one attempt and is byte-identical to pre-w740.
+        // 3. **The last value comes back either way**, so a give-up still reports what it saw.
+        let mut ce_arm_trips = 0u32;
+        let outcome = loop {
+            let mut held = self.ce.vmm.lock().unwrap_or_else(|e| e.into_inner());
+            let Some(vmm) = held.as_mut() else {
+                return Some(refused(
+                    token,
+                    kayfabe_device::FaultTag("Shim::NoMemoryPlane"),
+                    "the memory plane is not attached, so a copy-engine submission has no \
+                     guest memory to read or write; refused rather than served out of nothing"
+                        .to_string(),
+                ));
+            };
+            let out = root.as_ref().map(|r| {
+                plane.ce_session_with_root(r, demand, |ce| {
+                    self.device.with_pushbuffer(|pb| {
+                        // ★★★★★ w406 — releases DEFERRED: written below, AFTER the refresh.
+                        kayfabe_rt::ceutils::run_submission_deferring_releases(
+                            ce, pb, vmm, chan, cursor, state,
+                        )
+                    })
+                })
+            });
+            // ⚠ BEFORE the drain, never after: `arm_fb_demand` asserts lock-free.
+            drop(held);
+            if ce_arm_trips >= CE_SUBMIT_ARM_RETRIES {
+                if matches!(&out, Some(Err(r)) if r.progress.may_re_run()) {
+                    CE_SUBMIT_ARM_GAVE_UP.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                }
+                break out;
+            }
+            match &out {
+                Some(Err(r)) if r.progress.may_re_run() => {
+                    if !drain_if_lock_free(&plane, "a refused CeUtils submission") {
+                        break out;
+                    }
+                    ce_arm_trips += 1;
+                    CE_SUBMIT_ARM_TRIPS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                }
+                // ⊘ A refusal that DID something is final. Counted, because a silent
+                // non-retry and a retry that was never reached look identical in a log.
+                Some(Err(_)) => {
+                    CE_SUBMIT_ARM_BLOCKED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    break out;
+                }
+                _ => break out,
+            }
+        };
+        if ce_arm_trips > 0 && matches!(&outcome, Some(Ok(_))) {
+            CE_SUBMIT_ARM_RECOVERED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            eprintln!(
+                "kayfabe: CE-SUBMIT-ARMED token={token:#010x} trips={ce_arm_trips} \
+                 userd_trips={userd_arm_trips} ★★★★★ a framebuffer read on this submission \
+                 refused under the plane lock, a LOCK-FREE drain armed the page, and the \
+                 re-run was SERVED. ⊘ The bytes moved; no completion was forged."
+            );
+        }
 
         let Some(outcome) = outcome else {
             // ⊘ NEITHER source had a root. §16.64 narrowed what this sentence may claim:
@@ -18051,6 +18130,12 @@ impl Regs {
         // above: a boot that printed nothing when the port was never built is indistinguishable
         // from one whose port was built and never used.
         eprintln!("kayfabe: {}", kayfabe_device::plane::fb_demand_census());
+        // ★★★★★ **w740 — THE CeUtils DOORBELL'S TWO ARMING LOOPS.** A third question again:
+        // `FB-DEMAND` says whether ANY lock-free caller drained; this says whether the
+        // **CeUtils submission path** did, which is the one `[measured w739]` was the wall
+        // (`RingProducerCursorUnknown` on every doorbell ⇒ a 4-byte scrub that never ran ⇒
+        // `NV_ERR_TIMEOUT` at `ce_utils.c:349`). Printed on BOTH arms, zeros and all.
+        eprintln!("kayfabe: {}", crate::shim::ceutils_arming_census());
         match self.plane.fb_demand_port() {
             Some(p) => eprintln!("kayfabe: {}", p.census_line()),
             None => eprintln!(
@@ -21613,11 +21698,254 @@ fn fb_userd_gp_put(
     }
 }
 
+/// ★★★★★ **w740 — HOW MANY TIMES THE DOORBELL MAY ARM-AND-RETRY THE PRODUCER CURSOR.**
+///
+/// A fixed trip count, `THE_CONSTRAINTS.md` §20 invariant 1, for the same reason
+/// [`crate::armretry::arm_then_retry`]'s callers have one: the input is a guest-authored
+/// USERD address and a loop that ended when the read succeeded would let the guest choose
+/// how long the publication worker runs. ⊘ Four, not one, because `DeviceFbPort::drain` arms
+/// the *recorded* want set and a single page's want is recorded by the very read that failed
+/// — so one trip is the expected cost and the rest are headroom for a batch that spans a
+/// second page.
+const USERD_ARM_RETRIES: u32 = 4;
+
+/// ★★★ **w740 — how many times one doorbell may re-run its whole submission after a drain.**
+///
+/// ⊘ Two, not four. Each trip is a full ring walk plus a full operand walk, and the thing it
+/// is waiting for is a **page**, not a queue: the first refusal records every want the walk
+/// reached, one drain arms them, and a second refusal on the same page means the drain is
+/// arming something other than what the read wants — which more trips cannot fix and the
+/// census must be allowed to say.
+const CE_SUBMIT_ARM_RETRIES: u32 = 2;
+
+/// ★★★★★ **w740 — THE MEASURED WALL OF THE CUT-C BOOT, AND ITS FIX.**
+///
+/// `[measured w739, vast 51107999, the `device` arm]` every doorbell on RM's own kernel
+/// CeUtils channel was refused `FwdFault::RingProducerCursorUnknown`, and the refusal line
+/// says why in the store's own words:
+///
+/// ```text
+/// userd=h0x9/off0x0/phys=fb:0xec850000/0x200
+/// fbuserd@0xec850088=REFUSED(no CPU view of this page of the reserved object is armed yet.
+///   The demand has been recorded in the store's want set; a LOCK-FREE caller must call
+///   `DeviceFbPort::drain` and retry, because arming is an IPC round trip that asserts
+///   lock-free and this read ran under the plane lock.)
+/// ```
+///
+/// ⇒ **This channel's USERD is in the framebuffer**, the framebuffer is now the reserved
+/// device-local object, and [`fb_userd_gp_put`]'s single attempt reads it from under
+/// `RegPlane`'s state mutex — the one place arming is impossible. The ring and the
+/// pushbuffer are both **sysmem** on this channel (`ring=…=NOT-VIDMEM(S:0x11033f000)`,
+/// `pb=S:0x107962064`), so the producer cursor is the *only* framebuffer read in the whole
+/// submission's control path, and it is the one that fails.
+///
+/// This is [`fb_userd_gp_put`] wrapped in the bounded arm-then-retry cut B built: attempt,
+/// and while the store refused **and** a lock-free drain actually armed something, attempt
+/// again. Returns the cursor and the trips spent.
+///
+/// # ⊘ What it is NOT allowed to be, and the boot that says so
+///
+/// A fallback. `None` still means *"no producer cursor"* and `run_submission` still refuses
+/// it by name. Nothing here invents a cursor, and nothing here reads the ring's
+/// zero-terminator instead — `[measured w386]` an 8-entry ring at slot 7 consumed all 8 and
+/// wrote 8 completions when that fallback existed.
+///
+/// # ⚠ On the `arena` control this is exactly [`fb_userd_gp_put`]
+///
+/// `RegPlane::arm_fb_demand` returns `no_port` before taking any lock when the store has no
+/// byte port, so `arm` is `false`, the loop runs its single attempt, and the control arm's
+/// behaviour is byte-identical. That is checked, not asserted: `W740-USERD-ARM` must print
+/// `trips=0 recovered=0` on the control.
+fn fb_userd_gp_put_arming(
+    plane: &kayfabe_device::plane::RegPlane,
+    userd: Option<kayfabe_core::rmgraph::DeclaredUserd>,
+) -> (Option<u32>, u32) {
+    use std::sync::atomic::Ordering::Relaxed;
+    let (out, trips) = crate::armretry::arm_then_retry(
+        USERD_ARM_RETRIES,
+        || userd_attempt(fb_userd_slot(plane, userd).map(|s| s.cursors)),
+        || drain_if_lock_free(plane, "the CeUtils producer cursor"),
+    );
+    if trips > 0 {
+        USERD_ARM_TRIPS.fetch_add(u64::from(trips), Relaxed);
+        if out.is_some() {
+            USERD_ARM_RECOVERED.fetch_add(1, Relaxed);
+        } else {
+            USERD_ARM_GAVE_UP.fetch_add(1, Relaxed);
+        }
+    } else if out.is_none() {
+        // ⊘ Refused with NO trip spent: the drain armed nothing on the very first ask. A
+        // different fact from "we retried and still could not read it", and the two have
+        // different fixes — one is the port, one is the page.
+        USERD_ARM_NO_ARM.fetch_add(1, Relaxed);
+    }
+    (out, trips)
+}
+
+/// ★★★★★ **w740 — DRAIN THE STORE'S WANT SET, BUT ONLY IF THIS THREAD MAY BLOCK.**
+///
+/// `RegPlane::arm_fb_demand` -> `DeviceFbPort::drain` -> `Worker::export_device_view`, which
+/// calls `kayfabe_util::lockwitness::assert_lock_free` and **panics** if this thread holds
+/// any ranked lock (R1, `l1_concurrency.md` §3.3). `arm_fb_demand`'s own guard covers the
+/// vCPU and the trap; it does **not** cover *"a worker that happens to hold a rank"*.
+///
+/// ⊘⊘ **This is not a way around R1 and must never become one.** Both call sites are
+/// reasoned lock-free — the producer-cursor read runs before the vmm mutex and before any
+/// plane lock is taken, and the submission retry runs after `held` is dropped and after
+/// `ce_session_with_root`'s closure has returned. This is the **check on that reasoning**,
+/// and it is loud rather than fatal for one reason: a panic on the publication worker kills
+/// the boot and costs a bench, while a named line costs a `grep` and still cannot be
+/// mistaken for success — the drain does not happen, `arm` is `false`, and the loop stops
+/// exactly as it does when there is no port.
+///
+/// ⚠ If `W740-ARM-NOT-LOCK-FREE` ever prints, the reasoning above is wrong and the fix is to
+/// move the call site, never to widen this.
+fn drain_if_lock_free(plane: &kayfabe_device::plane::RegPlane, what: &str) -> bool {
+    let mask = kayfabe_util::lockwitness::held_mask();
+    if mask != 0 {
+        let n = ARM_NOT_LOCK_FREE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if n == 0 {
+            eprintln!(
+                "kayfabe: W740-ARM-NOT-LOCK-FREE ⊘⊘⊘ refusing to drain the store for {what}: this thread holds rank(s) {:?}, and `export_device_view` asserts lock-free. The arming loop stops here and the submission is refused exactly as it was before w740. ★ This line means THE CALL SITE IS IN THE WRONG PLACE — printed once; the total is `not_lock_free=` in the W740 census.",
+                kayfabe_util::lockwitness::held_ranks(mask)
+            );
+        }
+        return false;
+    }
+    plane.arm_fb_demand().armed > 0
+}
+
+/// `[w740]` Times [`drain_if_lock_free`] refused because a rank was held. ⊘ Zero is the
+/// design working; non-zero is a defect in **where the call sites are**, not in the loop.
+static ARM_NOT_LOCK_FREE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// ★★★★★ **w740 — the ONE decision inside [`fb_userd_gp_put_arming`]'s attempt, as a pure
+/// function, because it is the part that can be wrong on its own.**
+///
+/// `arm_then_retry` needs `(value, is_good)`. Three inputs, and the middle one is the trap:
+///
+/// | slot | meaning | `good`? |
+/// |---|---|---|
+/// | `None` | this channel declares **no framebuffer USERD at all** — undeclared, unreadable, or **sysmem**, whose base is a guest-physical address | ★ **YES.** There is nothing to arm and no drain can conjure one |
+/// | `Some(Ok((_get, put)))` | the cursor was read | yes |
+/// | `Some(Err(_))` | the store refused these bytes — *this* is the w739 wall | **no**, retry after a drain |
+///
+/// ⊘⊘ Calling the first row `good == false` would drain the byte port **once per doorbell on
+/// every sysmem-USERD channel in the machine**, forever, to arm a page that does not exist —
+/// an IPC round trip per doorbell bought with nothing. The two `None`s mean opposite things
+/// and arrive spelled the same way, which is why this is a table and not an `is_some()`.
+fn userd_attempt(slot: Option<Result<(u32, u32), String>>) -> (Option<u32>, bool) {
+    match slot {
+        None => (None, true),
+        Some(Ok((_get, put))) => (Some(put), true),
+        Some(Err(_)) => (None, false),
+    }
+}
+
+/// `[w740]` Trips spent arming the CeUtils producer cursor, submissions that recovered
+/// because of them, submissions that spent the whole budget and still had no cursor, and
+/// reads refused with nothing to arm at all. ⊘ All four print unconditionally on both arms:
+/// a census only present when it is non-zero cannot tell "zero" from "the code never ran".
+static USERD_ARM_TRIPS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static USERD_ARM_RECOVERED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static USERD_ARM_GAVE_UP: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static USERD_ARM_NO_ARM: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// `[w740]` Submissions re-run after a drain armed a page, and how many of those went on to
+/// be served. `blocked_by_progress` is the safety valve firing: a refusal that had ALREADY
+/// executed a launch, which must never be re-run.
+static CE_SUBMIT_ARM_TRIPS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static CE_SUBMIT_ARM_RECOVERED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static CE_SUBMIT_ARM_BLOCKED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static CE_SUBMIT_ARM_GAVE_UP: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// ★★★ `[w740]` The one census line for both arm-then-retry loops the CeUtils doorbell path
+/// now carries. Printed at teardown on **both** arms.
+pub(crate) fn ceutils_arming_census() -> String {
+    use std::sync::atomic::Ordering::Relaxed;
+    let (t, r, g, n) = (
+        USERD_ARM_TRIPS.load(Relaxed),
+        USERD_ARM_RECOVERED.load(Relaxed),
+        USERD_ARM_GAVE_UP.load(Relaxed),
+        USERD_ARM_NO_ARM.load(Relaxed),
+    );
+    let (st, sr, sb, sg) = (
+        CE_SUBMIT_ARM_TRIPS.load(Relaxed),
+        CE_SUBMIT_ARM_RECOVERED.load(Relaxed),
+        CE_SUBMIT_ARM_BLOCKED.load(Relaxed),
+        CE_SUBMIT_ARM_GAVE_UP.load(Relaxed),
+    );
+    let verdict = if t == 0 && st == 0 {
+        "⊘ NEITHER LOOP EVER TRIPPED — on the `arena` control this is correct and expected          (no byte port, `arm` is false by construction); on a `device` arm it means no          framebuffer read on the CeUtils doorbell path was ever refused, which is a          DIFFERENT fact from the fix working"
+    } else if r > 0 || sr > 0 {
+        "★★★★★ THE ARMING LOOP RECOVERED A SUBMISSION — a framebuffer read that refused          under the plane lock was armed by a lock-free drain and served on retry.          Constraint 9: the bytes moved; nothing was forged"
+    } else {
+        "⚠ TRIPPED AND RECOVERED NOTHING — the drain armed pages and the retry still          refused. Read `DEVICE-FB wanted_by_read/wanted_by_write` beside this: the page the          read wants and the page the drain armed may not be the same page"
+    };
+    let nlf = ARM_NOT_LOCK_FREE.load(Relaxed);
+    let verdict = if nlf > 0 {
+        "⊘⊘⊘ NOT LOCK FREE — a call site held a ranked lock and the drain was refused. THE CALL SITE IS WRONG; read the `W740-ARM-NOT-LOCK-FREE` line above. Every other number here is about a loop that was prevented from running"
+    } else {
+        verdict
+    };
+    format!(
+        "W740-USERD-ARM trips={t} recovered={r} gave_up={g} nothing_to_arm={n} not_lock_free={nlf}  W740-CE-SUBMIT-ARM trips={st} recovered={sr} blocked_by_progress={sb} gave_up={sg} ⇒ {verdict}"
+    )
+}
+
 /// ★ **A TRUNCATED SAMPLE MUST NEVER RENDER AS A COMPLETE LIST.**
 ///
 /// ⊘ w304 — leg 4's page-derivation and run-coalescing tests went with leg 4. What is left is
 /// the one property that outlived it, because `pushbuffer_sample` is still what renders every
 /// bounded list the remaining passes print.
+/// ★★★★★ **w740 — THE THREE ROWS OF [`userd_attempt`], EACH FIRED.**
+///
+/// ⊘ These cannot be checked by booting: a boot on the `arena` control never refuses a USERD
+/// read, and a boot on the `device` arm exercises **one** of the three rows. The row that
+/// costs an IPC round trip per doorbell if it is wrong — *"no framebuffer USERD at all"* —
+/// is the one no boot in this campaign has ever reached.
+#[cfg(test)]
+mod userd_attempt_tests {
+    use super::userd_attempt;
+
+    #[test]
+    fn a_channel_with_no_framebuffer_userd_is_good_so_nothing_is_ever_armed_for_it() {
+        let (v, good) = userd_attempt(None);
+        assert_eq!(v, None, "there is no cursor and none is invented");
+        assert!(
+            good,
+            "★★★ `good` — otherwise every sysmem-USERD channel in the machine costs one \
+             `DeviceFbPort::drain` IPC round trip per doorbell, to arm a page that does \
+             not exist"
+        );
+    }
+
+    #[test]
+    fn a_cursor_that_read_is_good_and_is_the_put_half_not_the_get_half() {
+        let (v, good) = userd_attempt(Some(Ok((7, 9))));
+        assert_eq!(
+            v,
+            Some(9),
+            "⊘ GP_PUT is the SECOND of the pair; returning GP_GET would make the ring walk \
+             consume nothing and look like an idle channel"
+        );
+        assert!(good);
+    }
+
+    #[test]
+    fn a_store_refusal_is_not_good_so_the_loop_drains_and_tries_again() {
+        let (v, good) = userd_attempt(Some(Err("no CPU view of this page … is armed yet".into())));
+        assert_eq!(
+            v, None,
+            "⊘ and still no cursor is invented — `run_submission` refuses `None` by name"
+        );
+        assert!(
+            !good,
+            "★★★★★ THE w739 WALL. This row, and only this row, is what the retry exists for"
+        );
+    }
+}
+
 #[cfg(all(test, feature = "host-isolates"))]
 mod pushbuffer_pin_tests {
     use super::pushbuffer_sample;

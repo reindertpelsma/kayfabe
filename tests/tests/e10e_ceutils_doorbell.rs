@@ -1171,3 +1171,140 @@ fn a_producer_cursor_outside_the_ring_is_refused_as_its_own_fact() {
     assert_eq!(cursor.next, 0, "⊘ nothing advanced");
     assert!(vmm.irqs.is_empty());
 }
+
+// =====================================================================================
+// ★★★★★ w740 — `CeUtilsRefusal::progress`: THE ONLY THING THAT MAKES A RE-RUN LEGAL
+// =====================================================================================
+//
+// `SINGLE_STORE_PLAN.md`'s w735 table named the gap and its consequence: the CPU CE executor
+// *"holds `mem` for the whole closure … a store refusal comes back as `refused(..)` — the
+// submission is **dropped, not requeued**. A transient 'not armed yet' becomes a dropped
+// kernel CeUtils scrub."* w740's doorbell path fixes that by **running the submission
+// again** after a lock-free drain has armed the page.
+//
+// ⊘⊘⊘ That is only sound for a refusal that did NOTHING. A submission that already executed
+// a `LAUNCH_DMA` and released its payload would, on a re-run, move the bytes a second time
+// and **release the guest's declared payload a second time** — the stale-release defect
+// `[measured w386]` already cost this campaign an 8-entry ring that consumed all 8 and wrote
+// 8 completions.
+//
+// ⚠ These two tests are the whole safety argument, and neither can be checked by booting:
+// the shim's retry gate is `progress.nothing_happened()`, and a boot where nothing ever
+// refused mid-submission would pass with the gate wired backwards.
+
+/// A method block whose destination is **unmapped** — the second half of the two-entry
+/// fixture below. ⊘ Same `memset_block` the acceptance uses; only the VA differs, so the
+/// refusal under test is the walk's and not a decode artefact.
+const UNMAPPED_DST: u64 = PB_GPU_VA + (512 << 20);
+
+/// Publish doorbell `d`'s ring entry naming a block that fills an **unmapped** destination.
+fn publish_unmapped_doorbell(vmm: &mut MockVmm, d: u32) {
+    let block = memset_block(
+        UNMAPPED_DST,
+        0x40,
+        doorbell_fill(d),
+        PB_GPU_VA + FINISH_PAYLOAD_OFFSET,
+        doorbell_payload(d),
+    );
+    let va = slot_push_va(d);
+    vmm.gpa_write(phys_of(va), &block)
+        .expect("this doorbell's method block");
+    let e = submit::gp_entry(va, block.len() as u64).expect("representable");
+    vmm.gpa_write(
+        phys_of(RING_VA + 8 * u64::from(d % SMALL_RING)),
+        &e.to_le_bytes(),
+    )
+    .expect("this doorbell's ring entry");
+}
+
+/// ★★★ **THE RE-RUNNABLE CASE** — refused before a single launch, so every counter is zero
+/// and the shim's gate opens.
+#[test]
+fn a_refusal_before_any_launch_reports_no_progress_and_is_therefore_re_runnable() {
+    let plane = plane_with_tree();
+    let block = memset_block(
+        UNMAPPED_DST,
+        0x40,
+        0x11,
+        PB_GPU_VA + FINISH_PAYLOAD_OFFSET,
+        1,
+    );
+    let mut vmm = guest_ram(&block);
+    let mut cursor = GpCursor::default();
+
+    let err = ring_once(&plane, &mut vmm, &mut cursor, 1).expect_err("the destination is unmapped");
+    // ★★★★★ **THE DEFECT THIS TEST CAUGHT, kept as the assertion that caught it.**
+    // `launches` is bumped at DECODE, so it is `1` here even though the walk refused before
+    // a byte moved. My first gate was `progress == NONE`, which uses it — and would have
+    // been **closed on every real case**, making the whole w740 retry inert on hardware
+    // while the boot failed identically.
+    assert_eq!(
+        err.progress.launches, 1,
+        "★ one launch DECODED — the counter that must NOT be in the gate: {err:?}"
+    );
+    assert_eq!(err.progress.bytes, 0, "⊘ and not one byte moved: {err:?}");
+    assert_eq!(
+        err.progress.completions, 0,
+        "⊘ and no payload released: {err:?}"
+    );
+    assert!(
+        err.progress.may_re_run(),
+        "★★★ ⇒ the shim's re-run gate is OPEN, which is the whole point of w740"
+    );
+    assert_eq!(
+        vmm.ram_read(phys_of(PB_GPU_VA + FINISH_PAYLOAD_OFFSET), 4),
+        0u32.to_le_bytes(),
+        "⊘ corroborated from the guest's side: no payload was released"
+    );
+}
+
+/// ★★★★★ **THE CASE THAT MUST NEVER BE RE-RUN** — entry `[0]` executed and released its
+/// payload, entry `[1]` then refused. A re-run would fill `[0]`'s destination again and
+/// release payload 1 a second time.
+///
+/// ⊘ The assertion is on `progress`, **not** on the shim: this pins the fact the shim's gate
+/// reads. `[the shim side]` `crate::shim`'s `CE-SUBMIT-ARM … blocked_by_progress=` counts
+/// every time this shape arrives there.
+#[test]
+fn a_refusal_after_a_launch_executed_reports_progress_and_must_never_be_re_run() {
+    let plane = plane_with_tree();
+    let mut vmm = guest_ram_zero_ring();
+    publish_doorbell(&mut vmm, 0); // entry [0]: a real fill, to a mapped destination
+    publish_unmapped_doorbell(&mut vmm, 1); // entry [1]: the walk fails here
+    let mut cursor = GpCursor::default();
+    let mut state = MethodState::new();
+
+    // `GP_PUT = 2` ⇒ the guest published both, so one doorbell must walk both.
+    let err = ring_once_on(&plane, &mut vmm, &mut cursor, &mut state, small_channel(2))
+        .expect_err("the SECOND entry's destination is unmapped");
+
+    assert_eq!(
+        err.progress.launches, 2,
+        "two launches DECODED — entry [0]'s, which ran, and entry [1]'s, which refused on \
+         its walk: {err:?}"
+    );
+    assert_eq!(
+        err.progress.bytes, 0x40,
+        "★ and it moved entry [0]'s 0x40 bytes — the count is the work, not a flag"
+    );
+    assert_eq!(
+        err.progress.completions, 1,
+        "★★★★★ AND IT RELEASED A PAYLOAD. This is the number that forbids a re-run: the \
+         guest has already been told submission 1 finished"
+    );
+    assert!(
+        !err.progress.may_re_run(),
+        "⊘⊘⊘ the shim's re-run gate MUST be closed here"
+    );
+    // ⊘ Corroborated from the guest's own memory rather than from our counters alone.
+    assert_eq!(
+        vmm.ram_read(phys_of(PB_GPU_VA + FINISH_PAYLOAD_OFFSET), 4),
+        doorbell_payload(0).to_le_bytes(),
+        "entry [0]'s payload really is in the guest's finishPayload word"
+    );
+    assert_eq!(
+        cursor.next, 0,
+        "⊘ and the cursor still did not advance — which is exactly why a re-run would \
+         re-execute entry [0]"
+    );
+}

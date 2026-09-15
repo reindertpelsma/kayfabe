@@ -79,6 +79,9 @@
 
 #![doc(test(attr(deny(warnings))))]
 
+/// ★ w740 — the bounded arm-then-retry loop. NOT gated: `barmirror` is, and `shim`'s
+/// CeUtils doorbell path is not, and both need the same loop.
+pub(crate) mod armretry;
 /// ★★★★★ w393 — the demand-driven BAR1/BAR2 mirror (a memslot per touched aperture page).
 /// ★★★★★ `THE_CONSTRAINTS.md` §22 item 3 — the BAR1 sizing relation, queried from the board
 /// rather than compared against a literal, and printed every boot.
@@ -86,6 +89,7 @@
 /// ⊘ NOT behind `host-isolates`: it reads sysfs text and needs no isolate, no device
 /// descriptor and no GPU. A board with no NVIDIA device gets a census line saying so.
 pub mod bar1budget;
+
 #[cfg(feature = "host-isolates")]
 pub mod barmirror;
 /// ★★★★★ §3's device-view port — the reserved object, reachable after bring-up.

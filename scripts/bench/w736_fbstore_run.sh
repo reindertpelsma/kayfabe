@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# ★★★★★ w740 — REUSED VERBATIM AGAIN. Only `report()` greps and the binary content gate
+#   changed (marked `w740 ADDITION, REPORTING ONLY`). No arm, threshold or boot step.
 # ★★★★★ w736 — THE CUT-A BOOT. Tests `SINGLE_STORE_PLAN.md`'s w735 pre-registered prediction.
 # ★★★★★ w738 — REUSED VERBATIM FOR THE CUT-B BOOT. Same two arms, same one variable, same
 #   order (control first). The ONLY change is three extra `grep`s in `report()`, marked
@@ -75,11 +77,17 @@ n_dfb=$(strings "$Q_BIN" 2>/dev/null | grep -c 'DEVICE-FB named=')
 # the walk shadow, for the reason that gate exists.
 n_fd=$(strings "$Q_BIN" 2>/dev/null | grep -c 'FB-DEMAND drains=')
 n_fbp=$(strings "$Q_BIN" 2>/dev/null | grep -c 'DEVICE-FB-PORT drains=')
+# ★★★ w740 — THE SAME GATE, FOR THIS CHANGE. `W740-USERD-ARM` prints UNCONDITIONALLY on both
+# arms, so a boot that does not carry the string is an OLDER BINARY, not a quiet boot, and
+# every w740 row would then be graded against absence. Same reason `E6-CONTENT` exists.
+n_w740=$(strings "$Q_BIN" 2>/dev/null | grep -c 'W740-USERD-ARM trips=')
 echo "W736-CONTENT: walk_shadow=$n_ws cuda_image=$n_img fb_store=$n_fs device_fb=$n_dfb"
 echo "W738-CONTENT: fb_demand=$n_fd device_fb_port=$n_fbp (either 0 ⇒ the binary predates CUT B)"
+echo "W740-CONTENT: userd_arm=$n_w740 (0 ⇒ the binary predates w740 — its rows cannot be graded)"
 if [ "$n_img" -eq 0 ]; then echo "⊘ no cuda-scratchpad in the binary — the port cannot arm. STOP."; exit 5; fi
 if [ "$n_fs" -eq 0 ] || [ "$n_dfb" -eq 0 ]; then echo "⊘ the binary predates cut A. STOP."; exit 4; fi
 if [ "$n_fd" -eq 0 ] || [ "$n_fbp" -eq 0 ]; then echo "⊘ the binary predates CUT B — w738's rows cannot be graded. STOP."; exit 6; fi
+if [ "$n_w740" -eq 0 ]; then echo "⊘ the binary predates w740 — its rows cannot be graded. STOP."; exit 7; fi
 
 report() {
   local tag="$1" arm="$2"
@@ -146,6 +154,28 @@ report() {
   echo "W739-FILLS-QUEUED=$(h 'queued=[0-9]*')"
   echo "W739-FILLS-RUN=$(h 'run=[0-9]*')"
   echo "W739-FILLS-FROM-REFUSAL=$(h 'from_refusal=[0-9]*')   ⊘ arena MUST be 0 (no byte port)"
+  # ★★★ w740 ADDITION, REPORTING ONLY — the two arming loops on the CeUtils doorbell path.
+  # ⊘ Cut from the SAME log, on BOTH arms. The control's zeros are row 3 (provably inert) and
+  #   are as much a result as the device arm's non-zeros; a grep that ran on one arm only is
+  #   how w738's `walk-guest-pt[r=0]` came to mean "inert" when it meant "never reached".
+  echo "--- ★★★ w740 1/3: the CeUtils arming census, VERBATIM, both arms ---"
+  n_arm=$(grep -ac 'W740-USERD-ARM trips=' "$Q" 2>/dev/null)
+  echo "W740-ARM-LINES=${n_arm:-0}  (0 ⇒ UNMEASURED, not 'no arming')"
+  ARM=$(grep -ao 'W740-USERD-ARM .\{0,700\}' "$Q" 2>/dev/null | tail -1)
+  printf '%s\n' "$ARM" | fold -w 160
+  k() { printf '%s' "$ARM" | grep -ao "$1" | tail -1; }
+  echo "W740-USERD-TRIPS=$(k 'W740-USERD-ARM trips=[0-9]*')"
+  echo "W740-USERD-RECOVERED=$(k 'recovered=[0-9]*')"
+  echo "W740-USERD-GAVEUP=$(k 'gave_up=[0-9]*')"
+  echo "W740-USERD-NOTHING-TO-ARM=$(k 'nothing_to_arm=[0-9]*')"
+  echo "W740-CE-SUBMIT=$(printf '%s' "$ARM" | grep -ao 'W740-CE-SUBMIT-ARM .\{0,120\}' | tail -1)"
+  echo "--- ★★★ w740 2/3: did a submission ever recover after a drain? ---"
+  grep -a 'CE-SUBMIT-ARMED token=' "$Q" 2>/dev/null | head -4 | cut -c1-300
+  echo "--- ★★★ w740 3/3: the doorbell census and its FIRST refusal (row 4) ---"
+  grep -a 'doorbells: ' "$Q" 2>/dev/null | tail -1 | cut -c1-200
+  grep -ao 'first doorbell refusal \[[^]]*\]' "$Q" 2>/dev/null | tail -1
+  echo "W740-CEUTILS-ASSERT=$(grep -ac 'lastCompletedPayload == lastSubmittedPayload' "$BENCH/run_${tag}_dmesg.log" 2>/dev/null)  ⊘ row 5: 0 is the prediction"
+  echo "W740-RMINIT-FAILED=$(grep -ac 'RmInitAdapter failed' "$BENCH/run_${tag}_dmesg.log" 2>/dev/null)  ★★★ row 6: 0 is the WIN CONDITION"
   echo "--- ★★★ w739 CUT C 2/3: the BAR1/BAR2 translate tallies (resolved vs REFUSED) ---"
   grep -ao 'BAR2 (translated):.\{0,200\}' "$Q" 2>/dev/null | tail -1
   grep -ao 'BAR1 (translated):.\{0,200\}' "$Q" 2>/dev/null | tail -1
