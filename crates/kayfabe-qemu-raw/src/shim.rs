@@ -21711,12 +21711,30 @@ const USERD_ARM_RETRIES: u32 = 4;
 
 /// ★★★ **w740 — how many times one doorbell may re-run its whole submission after a drain.**
 ///
-/// ⊘ Two, not four. Each trip is a full ring walk plus a full operand walk, and the thing it
-/// is waiting for is a **page**, not a queue: the first refusal records every want the walk
-/// reached, one drain arms them, and a second refusal on the same page means the drain is
-/// arming something other than what the read wants — which more trips cannot fix and the
-/// census must be allowed to say.
-const CE_SUBMIT_ARM_RETRIES: u32 = 2;
+/// ⊘⊘ **Sixteen, and the number is DERIVED rather than picked.** My first draft was `2`, on
+/// the reasoning *"one refusal records the want, one drain arms it, one retry serves"*. That
+/// is true of **one page** and false of this submission, because a page-table walk **refuses
+/// at the FIRST level it cannot read** and records a want for that level only. Each trip
+/// therefore advances the descent by **one level**, and one submission walks three separate
+/// VAs plus a destination:
+///
+/// | what is walked | framebuffer pages it can need | why |
+/// |---|---|---|
+/// | the GPFIFO ring's VA | ≤ 5 | one per page-directory level; the ring itself is **sysmem** on this channel |
+/// | each pushbuffer range's VA | ≤ 5 | likewise; the pushbuffer is sysmem too |
+/// | the destination VA | ≤ 5 | RM's `vidSurface` |
+/// | the destination **page** | 1 | the 4 bytes themselves, and this one is a WRITE |
+///
+/// ⇒ 16 is that sum, not a guess, and nothing here caches a level
+/// (`gmmu_publication_discipline.md` §7 rule 6 — *"never cache the walk"*), so the levels
+/// really are re-descended each trip. ⚠ It is still a **fixed** trip count (§20 invariant 1):
+/// the guest's own tables decide what is walked, never how long this thread runs.
+///
+/// ★ The cost is bounded and measured: `[w739]` **228.5 µs per page armed**
+/// (`arm_us_total=163160 / armed=714`), so a worst-case 16-trip submission costs **≈3.7 ms**
+/// against RM's own **4 s** `channelWaitForFinishPayload` budget — a margin of ~1000×.
+/// ⊘ And `gave_up` in the census is what says the derivation was wrong, if it was.
+const CE_SUBMIT_ARM_RETRIES: u32 = 16;
 
 /// ★★★★★ **w740 — THE MEASURED WALL OF THE CUT-C BOOT, AND ITS FIX.**
 ///
