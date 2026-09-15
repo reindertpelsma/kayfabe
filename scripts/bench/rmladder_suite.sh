@@ -130,8 +130,16 @@ recover() {
     $SUDO sh -c "$RMLADDER_RECOVER_CMD" >>"$OUT/recover.log" 2>&1
     return $?
   fi
-  pkill -f '[k]ayfabe-rm-ladder' >/dev/null 2>&1
-  pkill -f '[k]ayfabe-isolate'   >/dev/null 2>&1
+  # ⊘⊘⊘ **THERE IS NO `pkill` FOR THE LADDER HERE, AND THE REASON IS THE TRAP ITSELF.**
+  # This script's own command line is `bash /tmp/rmladder_suite.sh /tmp/rmladder 0 90` — the
+  # ladder's path is a LATER WORD ON IT. Any `pkill -f` naming the ladder therefore matches
+  # **this shell**, kills it, and everything after the kill silently never runs: exactly the
+  # `nvkvm-pv 2026-08-17` failure, and the bracket trick does NOT help, because the bracket
+  # only hides the *pattern* from itself.
+  # ⊘ It is also unnecessary: every arm runs under `timeout -k 5`, so by the time recovery is
+  # reached the arm process is already gone. Only the isolate CHILD can outlive it, and its
+  # name appears nowhere on this shell's command line.
+  pkill -f '[k]ayfabe-isolate' >/dev/null 2>&1
   sleep 1
   {
     echo "--- recover $(date -u +%FT%TZ) ---"
