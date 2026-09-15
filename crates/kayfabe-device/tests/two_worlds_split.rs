@@ -224,7 +224,14 @@ fn build_bar1_tree(p: &RegPlane, va: u64, leaf_entry: u64) {
 /// into the framebuffer, and the **root entry** travels as a value on `UPDATE_BAR_PDE`.
 fn build_and_publish_bar2_tree(p: &RegPlane, va: u64, leaf_entry: u64) {
     pramin_wr_entry(p, B2_L1 + ((va >> 21) & 511) * 8, leaf_entry);
+    publish_bar2_root(p);
+}
 
+/// Publish BAR2's **root entry**, the way the guest does — as a value on `UPDATE_BAR_PDE`,
+/// never as a page. ⊘ Split out of [`build_and_publish_bar2_tree`] so the single-store tests
+/// can put the directory page into the reserved object by a path the host cannot see and
+/// still publish the root the same way.
+fn publish_bar2_root(p: &RegPlane) {
     let driver = *kayfabe_abi::versions::table_for(BENCH_DRIVER).expect("the bench driver table");
     let mut link = kayfabe_device::bar2::BarPdePolicy::new(driver, p.bar_pde_log());
     let mut body = vec![0u8; kayfabe_device::bar2::UPDATE_BAR_PDE_BODY_SIZE];
@@ -1023,4 +1030,339 @@ fn the_arena_arm_enumerates_with_no_faults_and_has_no_byte_port_at_all() {
          three numbers"
     );
     assert_eq!(after.0, before.0, "and no drain ran");
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ★★★★★ §3 CUT C — THE WRITE HALF. `SINGLE_STORE_PLAN.md`'s cut-C block.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+/// Build BAR2's directory page **inside the reserved object**, and publish its root the way
+/// the guest does.
+///
+/// ⊘ [`build_and_publish_bar2_tree`]'s twin for the single store, for
+/// [`build_bar1_tree_in_the_object`]'s reason exactly: writing the page through PRAMIN would
+/// write it through the store, which is the arena's path and not the one under test.
+fn build_bar2_tree_in_the_object(
+    p: &RegPlane,
+    port: &fakeport::FakePort,
+    va: u64,
+    leaf_entry: u64,
+) {
+    port.poke(B2_L1 + ((va >> 21) & 511) * 8, &leaf_entry.to_le_bytes());
+    publish_bar2_root(p);
+}
+
+/// Run `f` until it says it is good, arming between attempts — the **caller's** half of cut
+/// B, reproduced here so a test drives the same shape production does.
+///
+/// ⚠ **A FIXED TRIP COUNT** (`THE_CONSTRAINTS.md` §20, invariant 1), and it ends the moment a
+/// drain arms nothing: exactly [`BarMirror::arm_then_retry`]'s two rules. ⊘ A test helper that
+/// looped until success would pass on a build where arming does nothing at all, by spinning.
+fn with_arming<T>(p: &RegPlane, mut f: impl FnMut() -> (T, bool)) -> T {
+    const TRIPS: u32 = 8;
+    let (mut value, mut good) = f();
+    for _ in 0..TRIPS {
+        if good || !p.arm_fb_demand().progressed() {
+            break;
+        }
+        let (v, g) = f();
+        value = v;
+        good = g;
+    }
+    value
+}
+
+/// ★★★★★ **CUT C's FIRST DEFECT — `decode_subtree_from_entry` DROPPED ITS FAULTS, AND BAR2
+/// IS THE ONLY WINDOW THAT USES IT.**
+///
+/// # ⊘⊘⊘ What was wrong, and why cut B's own fix could not see it
+///
+/// Cut B item 4 made [`RegPlane::window_leaves`] **return** `faults`, so that an enumeration
+/// whose page-table pages could not be read out of the single store stops reading as *"the
+/// guest has mapped nothing"*. `[established from the source, w739]` for BAR1 that worked —
+/// `decode_subtree` pushes a `WalkFault` per unreadable branch. For **BAR2 it could not**:
+/// BAR2's root is a raw PDE *entry*, so it goes through `decode_subtree_from_entry`, and that
+/// function extended `leaves` and `visited` from each sub-walk and **dropped `sub.faults` on
+/// the floor**. ⇒ `faults` was structurally pinned at `0` on the one window `kbusVerifyBar2`
+/// exercises.
+///
+/// ★★★ **And that is what made cut B inert on BAR2.** `BarMirror::premap_window` treats
+/// `Ok && faults == 0` as *good* and stops; a first attempt that came back `Ok` with an
+/// **EMPTY** leaf list therefore armed nothing and retried nothing.
+/// `[measured w738, the cut-B boot]` `premap[runs=6 filled=0 … bar2_visited=0 pt_faults=0]`
+/// with `named=0` and `BAR2 (translated): … 14 REFUSED by name` — the census cut B added to
+/// close the empty-artefact class, reporting a zero its own plumbing guaranteed.
+///
+/// ⚠ **The known-positive is the fault, not the empty list.** An empty list is what the defect
+/// produced *and* what a genuinely unmapped BAR2 produces; only `faults > 0` separates them,
+/// which is the whole point of the field.
+#[test]
+fn an_unreadable_bar2_directory_page_reports_a_fault_rather_than_an_empty_tree() {
+    let port = std::sync::Arc::new(fakeport::FakePort::new(GA106.fb_length));
+    let p = device_plane_with_port(&port);
+    build_bar2_tree_in_the_object(&p, &port, BAR2_VA, leaf(SHARED_PHYS));
+
+    // ── nothing is armed, so the directory page cannot be read out of the object ──
+    let e = p
+        .window_leaves(FbWindow::InstanceWindow, 4096)
+        .expect("the enumeration is `Ok` — a page it cannot read is per-branch, never terminal");
+    assert!(
+        e.leaves.is_empty(),
+        "setup: with nothing armed the walk reaches no leaf, or the assertion below is not \
+         about an unreadable page"
+    );
+    assert!(
+        e.faults >= 1,
+        "★★★★★ THE DEFECT: an enumeration that could not read BAR2's directory page must say \
+         so. It answered `Ok` with {} leaves and faults={} — an EMPTY LIST THAT READS AS 'the \
+         guest has mapped nothing', published as fact. `premap_window` treats `faults == 0` as \
+         good, so this zero is what stopped cut B from ever arming anything on BAR2 \
+         (w738: `bar2_visited=0 pt_faults=0 named=0` on a boot with fourteen refused BAR2 \
+         accesses).",
+        e.leaves.len(),
+        e.faults
+    );
+
+    // ── and the repair is distinguishable from the defect: arm, and the SAME call succeeds ──
+    let e2 = with_arming(&p, || {
+        let got = p
+            .window_leaves(FbWindow::InstanceWindow, 4096)
+            .expect("still `Ok`");
+        let good = got.faults == 0;
+        (got, good)
+    });
+    assert_eq!(
+        e2.faults, 0,
+        "★ after arming, the same enumeration must come back clean — otherwise `faults > 0` \
+         above would be a permanent state and the retry would be a spin"
+    );
+    assert_eq!(
+        e2.leaves.len(),
+        1,
+        "★★★ and it must now find the leaf the guest really mapped. This is the number \
+         `premap[filled=]` is made of, and it was ZERO on the w738 boot."
+    );
+    assert_eq!(e2.leaves[0].phys, SHARED_PHYS);
+}
+
+/// ⊘ **THE ARENA CONTROL FOR THE FIX ABOVE.** `SparseFb` answers every in-range address, so a
+/// BAR2 enumeration on the default arm must report **no** fault — the propagated vector must
+/// be empty, not merely returned.
+///
+/// ⚠ Without this, *"faults now travel"* could be satisfied by a change that reports a fault
+/// for every branch on every arm, which would make the control print `PREMAP ⊘⊘ came back
+/// SHORT` on a boot where nothing is short.
+#[test]
+fn the_arena_arm_enumerates_bar2_with_no_faults_at_all() {
+    let p = plane();
+    build_and_publish_bar2_tree(&p, BAR2_VA, leaf(SHARED_PHYS));
+    let e = p
+        .window_leaves(FbWindow::InstanceWindow, 4096)
+        .expect("the arena arm enumerates BAR2");
+    assert_eq!(
+        e.faults, 0,
+        "★ the default arm must stay byte-identical: a fault here would be new output on a \
+         boot nothing changed for"
+    );
+    assert_eq!(e.leaves.len(), 1, "and it must still find the leaf");
+    assert_eq!(e.leaves[0].phys, SHARED_PHYS);
+}
+
+/// ★★★★★ **CUT C's SECOND DEFECT, AS A GATE — THE REPAIR PATH IS REACHABLE ONLY ON THE
+/// `device` ARM, AND IT IS REACHABLE.**
+///
+/// `Regs::read` queued a fill only on `ReadOutcome::Fb` and `Regs::write` only on
+/// `fb_landed.is_some()` — *"the access worked"*. Under the single store the **first** access
+/// to any BAR1/BAR2 page is refused, so the one path that could install a memslot was
+/// reachable only from the state in which the page was already fine.
+/// `[measured w738]` `BAR-MIRROR FILLS queued=0 run=0 dropped=0` beside fourteen refused BAR2
+/// accesses and `named=0`.
+///
+/// ⊘ `BarMirror` needs a `QemuMachine` and cannot be built in a `cargo test`, so what is
+/// pinned here is the **gate** the shell asks before it queues: the predicate is `false` on
+/// the arena arm — which is what makes the default arm byte-identical by construction rather
+/// than by inspection — and `true` the moment a byte port is installed.
+#[test]
+fn the_refused_access_repair_gate_is_false_on_the_arena_arm_and_true_on_the_device_arm() {
+    let arena = plane();
+    assert!(
+        !arena.fb_has_demand_port(),
+        "⊘ THE CONTROL: with `KAYFABE_FB_STORE` unset the store hands out no byte port, so \
+         cut C's repair arm is UNREACHABLE and the arena arm's fill traffic is unchanged"
+    );
+
+    let port = std::sync::Arc::new(fakeport::FakePort::new(GA106.fb_length));
+    let dev = device_plane_with_port(&port);
+    assert!(
+        dev.fb_has_demand_port(),
+        "★★★ THE KNOWN-POSITIVE: the gate must actually open on the single store. A predicate \
+         that were always false would make cut C's whole repair path dead code, and the only \
+         symptom would be a boot that still refuses every page — which is what w738 measured \
+         and is indistinguishable from the defect it fixes."
+    );
+    assert!(
+        dev.fb_demand_port().is_some(),
+        "and the cached flag must agree with the store itself; two projections of one fact \
+         that can disagree is this tree's named shape"
+    );
+}
+
+/// ★★★★★ **THE SINGLE STORE'S FALSIFIER, ON THE `device` ARM — and it was VACUOUS there
+/// until now.**
+///
+/// [`a_framebuffer_page_written_through_bar1_is_the_page_bar2_reads`] is named in
+/// `SINGLE_STORE_PLAN.md` as the falsifier the single store must satisfy. ⊘ **It runs on
+/// `SparseFb`** — the *arena* store, the one the single store replaces — so it says nothing
+/// whatever about `DeviceFb`, and a `device` arm that split BAR1 from BAR2 would leave it
+/// green. `[established from the source, w739]` This is that test's device-arm twin, and it
+/// is what makes the name mean something on the arm it is quoted about.
+///
+/// # ⊘ What it pins, and what it still cannot
+///
+/// **Identity**: one framebuffer address, one memory, across all three windows — a write
+/// through BAR1 is what BAR2 and PRAMIN read. ⊘ **Not residence**: [`fakeport::FakePort`]'s
+/// bytes are host memory in this process, and whether the real port's bytes are device-local
+/// is §18's property and not a question `cargo test` can ask. The module docs above say the
+/// same of the arena twin.
+///
+/// ★ It is a **write-half** test by construction: the BAR1 write must reach
+/// `DeviceFb::write` → `DeviceFbPort::write_armed` and land in the object, or the BAR2 read
+/// below answers zero — which is exactly `kbusVerifyBar2_GM107`'s `returned garbage 0x0`,
+/// reproduced offline.
+#[test]
+fn a_framebuffer_page_written_through_bar1_is_the_page_bar2_reads_on_the_device_arm() {
+    let port = std::sync::Arc::new(fakeport::FakePort::new(GA106.fb_length));
+    let p = device_plane_with_port(&port);
+    build_bar1_tree_in_the_object(&port, BAR1_VA, leaf(SHARED_PHYS));
+    build_bar2_tree_in_the_object(&p, &port, BAR2_VA, leaf(SHARED_PHYS));
+
+    // ── setup, asserted first: both apertures really do name ONE framebuffer address ──
+    let b1 = with_arming(&p, || {
+        let r = p.read(BAR_FB, BAR1_VA, 4);
+        let good = matches!(r, ReadOutcome::Fb { .. });
+        (r, good)
+    });
+    let ReadOutcome::Fb { phys: b1_phys, .. } = b1 else {
+        panic!(
+            "BAR1 must translate through the single store after arming; it answered {b1:?}. \
+             That is a SETUP failure — cut B item 3's arm-then-retry, not the write half."
+        )
+    };
+    assert_eq!(b1_phys, SHARED_PHYS);
+    let b2 = with_arming(&p, || {
+        let r = p.read(BAR_INST, BAR2_VA, 4);
+        let good = matches!(r, ReadOutcome::Fb { .. });
+        (r, good)
+    });
+    let ReadOutcome::Fb { phys: b2_phys, .. } = b2 else {
+        panic!("BAR2 must translate to the same address; it answered {b2:?}")
+    };
+    assert_eq!(
+        b2_phys, SHARED_PHYS,
+        "★ the two apertures must resolve to ONE framebuffer address, or the agreement below \
+         is about two unrelated addresses and means nothing"
+    );
+
+    // ── THE WRITE HALF: through BAR1, into the reserved object ──
+    let w = with_arming(&p, || {
+        let o = p.write(BAR_FB, BAR1_VA, 4, u64::from(DEVICE_SENTINEL));
+        let good = o.fb_landed.is_some();
+        (o, good)
+    });
+    assert_eq!(
+        w.fb_landed,
+        Some(SHARED_PHYS),
+        "★★★★★ THE WRITE MUST LAND IN THE OBJECT. A dropped write here is precisely what the \
+         w738 boot measured — `BAR2 (translated): … 14 REFUSED by name`, `the bytes did NOT \
+         land anywhere`, `DEVICE-FB wanted_by_write=0` — and it is what `kbusVerifyBar2` \
+         reports, ninety lines later, as `returned garbage 0x0`."
+    );
+    assert_eq!(
+        port.peek(SHARED_PHYS, 4),
+        DEVICE_SENTINEL.to_le_bytes().to_vec(),
+        "★ and it must be in the OBJECT's own bytes, read past every armed-run check — not \
+         merely reported as landed"
+    );
+
+    // ── THE PROPERTY: BAR2 reads what BAR1 wrote ──
+    let r2 = with_arming(&p, || {
+        let r = p.read(BAR_INST, BAR2_VA, 4);
+        let good = matches!(r, ReadOutcome::Fb { .. });
+        (r, good)
+    });
+    let ReadOutcome::Fb { value, .. } = r2 else {
+        panic!("BAR2 must still translate; it answered {r2:?}")
+    };
+    assert_eq!(
+        value as u32, DEVICE_SENTINEL,
+        "★★★★★ THE SINGLE STORE, ON THE `device` ARM: BAR1 and BAR2 are views of ONE reserved \
+         object, so a write through BAR1 at {SHARED_PHYS:#x} must be visible through BAR2 at \
+         the same address. BAR2 read {value:#x}. A zero here IS `kbusVerifyBar2`'s `garbage \
+         0x0`: two memories for one address, which is the defect the reserved object exists \
+         to delete."
+    );
+
+    // ── and PRAMIN, the third view, sees it too ──
+    let pr = with_arming(&p, || {
+        point_window(&p, SHARED_PHYS);
+        let r = p.read(
+            BAR_REGS,
+            GA106.pramin_window.base + (SHARED_PHYS & 0xFFFF),
+            4,
+        );
+        let good = matches!(r, ReadOutcome::Fb { .. });
+        (r, good)
+    });
+    let ReadOutcome::Fb { value: pv, .. } = pr else {
+        panic!("PRAMIN must read the object; it answered {pr:?}")
+    };
+    assert_eq!(
+        pv as u32, DEVICE_SENTINEL,
+        "★ PRAMIN is the third view of the same object, and it is the one RM reads back \
+         through in `kbusVerifyBar2_GM107`: it writes through BAR2 and reads through the BAR0 \
+         window. A split that left PRAMIN behind is the same defect one aperture over."
+    );
+}
+
+/// ⊘⊘ **THE WRITE HALF REFUSES BY NAME WHEN NOTHING IS ARMED — AND RECORDS THE DEMAND.**
+///
+/// ⚠ `[measured w738]` `DEVICE-FB wanted_by_write=0` was read as *"no host-side write was
+/// ever needed"*. It meant the opposite: `RegPlane::fb_write` refused at **translation**, so
+/// the store was never asked at all. ⇒ this pins the half that IS the store's — that a write
+/// which reaches it with nothing armed lands **nowhere**, says so, and leaves a want behind
+/// for a lock-free caller — so that a future `wanted_by_write=0` is evidence about the
+/// caller and not about this.
+#[test]
+fn an_unarmed_write_lands_nowhere_and_leaves_a_want_behind() {
+    use core::sync::atomic::Ordering::Relaxed;
+    use kayfabe_device::DeviceFbPort;
+    use kayfabe_device::fbwin::DEVICE_FB_WANTED_BY_WRITE;
+
+    let port = std::sync::Arc::new(fakeport::FakePort::new(GA106.fb_length));
+    let mut fb = kayfabe_device::DeviceFb::with_port(
+        GA106.fb_length,
+        port.clone() as std::sync::Arc<dyn kayfabe_device::DeviceFbPort>,
+    );
+    let before = DEVICE_FB_WANTED_BY_WRITE.load(Relaxed);
+    let err = kayfabe_device::FbStore::write(&mut fb, SHARED_PHYS, &[0xEE; 4])
+        .expect_err("nothing is armed, so the write must be refused");
+    assert_eq!(err.phys, SHARED_PHYS);
+    assert_eq!(
+        port.peek(SHARED_PHYS, 4),
+        vec![0u8; 4],
+        "⊘ THE ONE ANSWER THAT MUST NOT EXIST: a refused write that changed bytes anyway. \
+         There is no success-shaped answer and there must be no success-shaped side effect."
+    );
+    assert!(
+        DEVICE_FB_WANTED_BY_WRITE.load(Relaxed) > before,
+        "★ and the demand must be RECORDED, or `wanted_by_write` stays a number that cannot \
+         distinguish `no write was wanted` from `the write never reached the store`"
+    );
+    assert_eq!(port.wanted_now(), 1, "one run is now wanted");
+
+    // ── the known-positive: after a drain the SAME write lands, in the object ──
+    assert!(port.drain().progressed(), "the drain must arm the wanted run");
+    kayfabe_device::FbStore::write(&mut fb, SHARED_PHYS, &[0xEE; 4])
+        .expect("★ armed, the same write must land — otherwise the refusal above is permanent");
+    assert_eq!(port.peek(SHARED_PHYS, 4), vec![0xEE; 4]);
 }

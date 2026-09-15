@@ -2037,9 +2037,20 @@ pub fn fb_io_census_line(bytes_per_sec: u64) -> String {
     if total_bytes == 0 {
         // ⊘⊘⊘ **THE VACUITY ARM.** A census of zero bytes and a census that never ran print
         // the same `0`, and this tree's most expensive recurring instrument failure is
-        // exactly that pair being collapsed. There is no boot in which the store serves
-        // nothing — `kbusVerifyBar2` writes and reads it before the guest's first
-        // instruction — so a zero here is a statement about the INSTRUMENT.
+        // exactly that pair being collapsed.
+        //
+        // ⊘⊘ **CORRECTED w739 — THE JUSTIFICATION THAT USED TO BE HERE IS FALSE ON THE
+        // `device` ARM.** It read *"there is no boot in which the store serves nothing —
+        // `kbusVerifyBar2` writes and reads it before the guest's first instruction"*.
+        // `[measured w738, the cut-B device boot]` `FB-IO trap[r=0/0.0MiB w=0/0.0MiB
+        // frames=0]`: `kbusVerifyBar2`'s four MMUTest dwords were refused at TRANSLATION and
+        // never reached `RegPlane::fb_write` at all, so the trap role really did record
+        // nothing. ⇒ the premise held under the arena store and is **arm-dependent**, which
+        // is exactly the shape a justification written once and never re-read acquires.
+        //
+        // ★ The arm itself is unchanged and still right: a total of zero across **every**
+        // role is a statement about the INSTRUMENT, because the walk roles cannot all be
+        // silent on a boot that reaches `RmInitAdapter` at all.
         out.push_str(
             " \u{2298}\u{2298} VACUOUS \u{2014} not one byte was recorded in any role.              That is not `the store served nothing`: every boot writes it during              `kbusVerifyBar2`. It means these counters were not reached on this binary's              path, and NOTHING below may be read as a measurement.",
         );
@@ -3538,6 +3549,30 @@ impl RegPlane {
     pub fn fb_demand_port(&self) -> Option<std::sync::Arc<dyn crate::fbwin::DeviceFbPort>> {
         let s = self.mem.lock();
         s.fb.demand_port()
+    }
+
+    /// ★★★★★ **CUT C — IS THERE A BYTE PORT?**, answered from the cached flag and **without
+    /// taking the memory lock**.
+    ///
+    /// # ⊘⊘⊘ Why a lock-free predicate and not just `fb_demand_port().is_some()`
+    ///
+    /// The one caller is the shell's MMIO path deciding whether a **refused** BAR1/BAR2
+    /// access is worth queueing a repair for. That decision is made on a **vCPU inside an
+    /// MMIO exit**, on the hottest path in the device, and `fb_demand_port` takes
+    /// `PlaneMem` — the lock the vCPU is already contending for and the one w516/w522 were
+    /// both about. ⇒ asking the store would put a second acquisition of the most expensive
+    /// lock in the device on a path that is already refusing.
+    ///
+    /// ★ Safe for the same reason [`RegPlane::arm_fb_demand`]'s use of it is: `set_fb` is the
+    /// only door that changes the store and the composition root calls it once, at realize.
+    ///
+    /// ⊘ **It is a question about the MECHANISM, never about an address.** `true` means *"the
+    /// single store is installed with a byte port"*; it says nothing about whether any
+    /// particular page can be armed, and a caller that read it as *"this will work"* would be
+    /// making cut A's mistake one level up.
+    #[must_use]
+    pub fn fb_has_demand_port(&self) -> bool {
+        self.fb_has_demand_port.load(Ordering::Relaxed)
     }
 
     /// ★★★★★ **CUT B — ARM WHAT THE STORE COULD NOT SERVE.** Call only from a lock-free,

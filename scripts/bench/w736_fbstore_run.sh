@@ -131,6 +131,28 @@ report() {
   grep -a 'PREMAP ⊘⊘' "$Q" 2>/dev/null | head -2 | cut -c1-300
   echo "--- w738: the cut-B banner at realize (absent ⇒ no byte port was attached at all) ---"
   grep -a 'CUT B — a byte port is attached\|CUT A SHAPE — no byte port' "$Q" 2>/dev/null | head -2 | cut -c1-300
+  # ★★★ w739 ADDITION, REPORTING ONLY — cut C's three numbers, cut from the SAME logs.
+  # ⊘ Nothing here changes an arm, a threshold or a boot step. All three are printed on BOTH
+  #   arms, which is the point: `FB-IO walk-guest-pt` was read as *"cut B item 2 is inert"*
+  #   from the DEVICE arm alone, on a boot that died at 32.7 s with `pre_birth_pages=NO-BIRTH`
+  #   — i.e. before any guest CUDA page table exists to walk. A number that is only ever
+  #   captured on the arm that dies early cannot tell "never needed" from "never reached".
+  echo "--- ★★★ w739 CUT C 1/3: the fill queue, and whether a REFUSED access ever asked ---"
+  n_fq=$(grep -ac 'BAR-MIRROR FILLS' "$Q" 2>/dev/null)
+  echo "W739-FILLS-LINES=${n_fq:-0}  (0 ⇒ UNMEASURED, not 'no fills')"
+  grep -ao 'BAR-MIRROR FILLS .\{0,400\}' "$Q" 2>/dev/null | tail -1 | fold -w 160
+  FQ=$(grep -ao 'BAR-MIRROR FILLS .\{0,200\}' "$Q" 2>/dev/null | tail -1)
+  h() { printf '%s' "$FQ" | grep -ao "$1" | tail -1; }
+  echo "W739-FILLS-QUEUED=$(h 'queued=[0-9]*')"
+  echo "W739-FILLS-RUN=$(h 'run=[0-9]*')"
+  echo "W739-FILLS-FROM-REFUSAL=$(h 'from_refusal=[0-9]*')   ⊘ arena MUST be 0 (no byte port)"
+  echo "--- ★★★ w739 CUT C 2/3: the BAR1/BAR2 translate tallies (resolved vs REFUSED) ---"
+  grep -ao 'BAR2 (translated):.\{0,200\}' "$Q" 2>/dev/null | tail -1
+  grep -ao 'BAR1 (translated):.\{0,200\}' "$Q" 2>/dev/null | tail -1
+  echo "--- ★★★ w739 CUT C 3/3: FB-IO by role, ON BOTH ARMS (the item-2 pricing) ---"
+  n_io=$(grep -ac 'FB-IO trap\[' "$Q" 2>/dev/null)
+  echo "W739-FBIO-LINES=${n_io:-0}"
+  grep -ao 'FB-IO trap\[.\{0,300\}' "$Q" 2>/dev/null | tail -1 | fold -w 160
   echo "--- the store's FIRST refusal, on its own line (it says its own name once) ---"
   grep -a 'DEVICE-FB ⊘⊘⊘ FIRST HOST-SIDE' "$Q" 2>/dev/null | head -4 | cut -c1-300
   echo "--- ★★★ PREDICTION 1b: the DEVICE-VIEW-PORT census, VERBATIM ---"

@@ -595,6 +595,16 @@ pub struct BarMirror {
     arm_retried_ok: AtomicU64,
     /// Resolutions still refused after the last allowed retry.
     arm_gave_up: AtomicU64,
+    /// ★★★★★ **CUT C — fills asked for by an access that was REFUSED**, as opposed to one
+    /// the archive served. ⊘ A number that could not exist before cut C, because a refused
+    /// access asked for nothing at all: see [`BarMirror::fill_after_refusal`].
+    fills_from_refusal: AtomicU64,
+    /// ★★★ Cut C repairs **declined inside an MMIO trap on the non-deferring arm**, where
+    /// [`BarMirror::fill`] would otherwise run `fill_now` — three blocking syscalls — on the
+    /// vCPU. ⊘ Counted apart from `fills_dropped`: *"the queue was full"* and *"this caller
+    /// may not do the work at all"* are different facts with different fixes, and a reader
+    /// who saw one number could not tell which arm was talking.
+    fills_refusal_declined: AtomicU64,
     /// BAR0's placement as last seen, for the transition count above.
     bar0_last: AtomicU64,
     table: Mutex<Table>,
@@ -870,6 +880,8 @@ impl BarMirror {
             arm_retries: AtomicU64::new(0),
             arm_retried_ok: AtomicU64::new(0),
             arm_gave_up: AtomicU64::new(0),
+            fills_from_refusal: AtomicU64::new(0),
+            fills_refusal_declined: AtomicU64::new(0),
             premap_bar2_visited: AtomicU64::new(0),
             bar0_last: AtomicU64::new(u64::MAX),
             pramin_skipped: AtomicU64::new(0),
@@ -981,6 +993,70 @@ impl BarMirror {
         true
     }
 
+    /// ★★★★★ **CUT C — THE REPAIR PATH, ASKED FOR BY THE ACCESS THAT FAILED.**
+    ///
+    /// # ⊘⊘⊘ THE DEFECT THIS EXISTS FOR — the recovery was gated on the success it repairs
+    ///
+    /// `[established from the source and confirmed by the w738 boot, w739]` both shell call
+    /// sites of [`BarMirror::fill`] are gated on the access having **worked**:
+    /// `Regs::read` fills only on `ReadOutcome::Fb` (*the archive served it*) and
+    /// `Regs::write` only on `out.fb_landed.is_some()` (*the store took the bytes*).
+    ///
+    /// ⇒ Under the arena store that is harmless, because a trapped access to a mapped page
+    /// always succeeds and the fill is a pure prefetch. **Under the single store it is a
+    /// deadlock**: the FIRST access to any BAR1/BAR2 page is refused — no memslot covers it
+    /// and no CPU view of its page tables is armed — a refused access queues nothing, so
+    /// `fill_now` never runs, so `resolve_arming` never arms, so the page is never covered,
+    /// so the next access is refused for the same reason. `[measured w738]`
+    /// `BAR-MIRROR FILLS queued=0 run=0 dropped=0` beside `BAR2 (translated): … 14 REFUSED
+    /// by name` and `named=0`: fourteen refusals, not one repair attempted.
+    ///
+    /// ★★★ This is the tree's named class one turn further on — not *"a diagnostic gated on
+    /// the drop it hunts"* but **a repair gated on the failure it repairs**, and the symptom
+    /// is a counter reading `0` for *"nothing needed fixing"* on a boot where everything did.
+    ///
+    /// # ⚠ WHY IT IS GATED ON THE BYTE PORT AND NOT ARMED UNCONDITIONALLY
+    ///
+    /// On the arena arm a refusal means the guest's own tables do not map that offset, and
+    /// re-walking it on a worker would resolve to the same refusal, every time, for as long
+    /// as the guest keeps poking it — real work, queued forever, to discover a fact that has
+    /// not changed. ⊘ So the caller asks [`kayfabe_device::plane::RegPlane::fb_has_demand_port`]
+    /// **first**, which is `false` on the arena arm and makes this unreachable there: the
+    /// default arm is byte-identical by construction rather than by inspection, and
+    /// `two_worlds_split::the_refused_access_repair_gate_is_false_on_the_arena_arm_and_true_on_the_device_arm`
+    /// pins the predicate on both arms.
+    ///
+    /// ⊘ **It does not recover the bytes of the write that was refused.** Those are gone —
+    /// the guest was not told and cannot be. What this buys is that the NEXT access to that
+    /// page can land, which is the difference between a boot that repairs itself and one that
+    /// refuses the same page until it dies.
+    ///
+    /// Returns whether a worker wake is owed, exactly as [`BarMirror::fill`] does.
+    #[must_use = "the caller must wake the worker IF AND ONLY IF this returns true"]
+    pub fn fill_after_refusal(&self, w: FbWindow, off: u64) -> bool {
+        self.fills_from_refusal.fetch_add(1, Ordering::Relaxed);
+        // ⊘⊘⊘ **NEVER INLINE FROM AN MMIO EXIT.** [`BarMirror::fill`] falls through to
+        // `fill_now` **synchronously** when the deferring arm is off — and `fill_now` makes
+        // the three blocking syscalls w471 measured on a vCPU (`mmap`, `mmap MAP_FIXED`,
+        // `KVM_SET_USER_MEMORY_REGION`). This caller is a vCPU inside an MMIO exit **by
+        // construction**: it is the refusal of that very access.
+        //
+        // ⇒ constraint 4 (*"all traps sub-millisecond"*) and constraint 6 (*"every MMIO trap
+        // only posts to a queue"*) both forbid it, and no number of microseconds changes
+        // that. ★ The repair is a **prefetch**: declining costs the next access to this page
+        // and never a wrong value — the same contract the full-queue drop already has.
+        //
+        // ⚠ The deferring arm (the shipped one) does not reach this: `fill` queues there.
+        if kayfabe_util::lockwitness::on_vcpu_thread() || kayfabe_util::trapwitness::in_trap() {
+            if !self.defer_reval {
+                self.fills_refusal_declined.fetch_add(1, Ordering::Relaxed);
+                return false;
+            }
+        }
+        self.fill(w, off)
+    }
+
+
     /// ★★★★★ **w472 — the worker's half.** Runs every queued fill. ⊘ Never call from a vCPU.
     pub fn drain_fills(&self) {
         loop {
@@ -998,12 +1074,25 @@ impl BarMirror {
     /// The census for the fill queue, one line.
     #[must_use]
     pub fn fill_census(&self) -> String {
+        let from_refusal = self.fills_from_refusal.load(Ordering::Relaxed);
+        let refusal_declined = self.fills_refusal_declined.load(Ordering::Relaxed);
         format!(
-            "BAR-MIRROR FILLS queued={} run={} dropped={} (a dropped fill is a page that \
-             keeps trapping, never a wrong value)",
+            "BAR-MIRROR FILLS queued={} run={} dropped={} from_refusal={from_refusal} \
+             refusal_declined={refusal_declined} (a \
+             dropped fill is a page that keeps trapping, never a wrong value){}",
             self.fills_queued.load(Ordering::Relaxed),
             self.fills_run.load(Ordering::Relaxed),
             self.fills_dropped.load(Ordering::Relaxed),
+            if from_refusal == 0 {
+                " ⊘ from_refusal=0 — cut C's repair path was NEVER ASKED. On the arena arm \
+                 that is correct and expected (no byte port, the gate is false by \
+                 construction); on the `device` arm it means a refused BAR1/BAR2 access \
+                 never reached the gate, which is a DIFFERENT defect from one that reached \
+                 it and could not fix the page."
+            } else {
+                " ★ from_refusal>0 — a refused access asked for its own repair, which before \
+                 cut C nothing did."
+            }
         )
     }
 

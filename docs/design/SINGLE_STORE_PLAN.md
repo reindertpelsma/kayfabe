@@ -63,7 +63,7 @@ before it takes the lock**, and there are four of them in three different shapes
 |---|---|---|
 | **A** | `FbPageBacking::Device { at }`, the third token space, `fill_now`'s device arm with **release-after-the-mapping-is-gone**, `install_device_page`, `DeviceFb` (host `read`/`write` **refuse by name**), PRAMIN release-and-re-arm, the `KAYFABE_FB_STORE` gate | ✔ **BUILT w735**, gate default `arena` |
 | **B** | host reads through armed views: `PlanePtBytes` arm-then-retry, a demand set for `FbStoreReader`'s callers, the premap retry loop, the vCPU decline-by-name | ✔ **BUILT w737 and BOOTED w738** — `read_served=3` out of the reserved object, the first host-side framebuffer read this campaign has ever served. ⊘ Item 2 (`PlanePtBytes`) measured **INERT** (`walk-guest-pt r=0`), item 4 fired **once**, and two of cut B's censuses report the opposite of what the boot did. Read the w738 block. ~~offline only … ⊘ It has not booted~~ (superseded 2026-09-15) |
-| **C** | two-phase CPU CE (dry-run partition → arm → execute), **or** constraint 9 and never build it; plus `device_reset`, which under one object is *zeroing gibibytes of real video memory* | ○ not started — and C is the one to delete rather than build |
+| **C** | ★ **REDEFINED BY MEASUREMENT, w739.** The write half: `decode_subtree_from_entry`'s dropped faults (BAR2's premap could never retry its arming) and the repair path gated on the success it repairs | ✔ **BUILT AND BOOTED w739** — `kbusVerifyBar2` is GONE, `named=32772`, `read_served=204683`, `BAR1/BAR2 (translated) … 0 REFUSED`. Read the w739 block. ⊘ The **CeUtils scrub** (`ce_utils.c:349`, `NV_ERR_TIMEOUT`) is the NEW wall and is constraint 9's, not cut C's; `device_reset` (zeroing gibibytes of real video memory) is still unbuilt and still said by name |
 
 ### ★★★★★ 2026-09-15 (w736) — **THE BOOT WAS RUN. TWO ROWS HELD, ONE IS REFUTED, AND THE REFUTED ONE IS CONTRADICTED BY A TABLE THREE PARAGRAPHS ABOVE IT IN THIS FILE.**
 
@@ -215,6 +215,20 @@ enumeration failing**, not an independent problem to serve better.
 which there are no 14. A change that makes the trap path answer them correctly would raise
 `read_served`, leave `named=0`, and **look like progress while the design still does not work**.
 
+> ### ✔ ANSWERED — 2026-09-15 (w739), on hardware, and it is the fix this section prescribes
+> `[measured w739, vast 51107999, binary and tree both `0fd956c8`, both arms]`
+> **`DEVICE-FB named=32772`** (w736 and w738: `0`), **`BAR1-PASSTHROUGH misses=0`**,
+> **`BAR2-PASSTHROUGH misses=0`** (w738: `14`), **`BAR2 (translated): … 0 REFUSED by name`**
+> (w738: `14`), bar1/bar2 `TRAP_FILLS=0` with `premap_fills=544` / `142` behind them.
+> ⇒ **the guest-side trap census on the `device` arm is EMPTY**, and the causal chain 1→6 above
+> is confirmed in the direction it predicts: fixing step 1 (`decode_subtree_from_entry`'s
+> dropped faults) removed steps 4–6 without anything touching the trap path.
+> ⊘ **The 14 were not served — they stopped happening.** Cut C's whole diff is the entry-rooted
+> decode's `faults` and a repair path at the lock-free fill; neither makes a trapped access
+> answer better, which is checkable from the diff.
+> ⚠ **The boot still fails**, now at `ce_utils.c:349` / `NV_ERR_TIMEOUT` — constraint 9's scrub,
+> not this. Full grading in the w739 block below.
+
 ### ★★★★★ CUT C IS THE WRITE HALF — AND `host_write_refused=0` NEVER MEANT WHAT WE READ IT TO MEAN
 
 `[measured w738, the cut-B boot]`
@@ -234,6 +248,120 @@ asked"*, which is the opposite of *"no writes happen"*.
 ★ Exactly this tree's recurring class — [[the_zero_was_never_measured_three_times]], and
 `failed=0 IS NOT "NOTHING REFUSED"`. A refusal counter cannot distinguish **"nothing to
 refuse"** from **"the arm never ran"**, and here it did the second while reading as the first.
+
+> ### ⊘⊘⊘ CORRECTED 2026-09-15 (w739, building cut C) — **THE WRITE DID NOT LAND IN THE OLD
+> ### BACKING. THERE IS NO OLD BACKING. IT LANDED NOWHERE, AND THE REASON IS A READ.**
+>
+> ⚠ **Read this before the block below; it is the measurement of the block below**, taken
+> from the **committed w738 evidence** (`traces/w738_fbstore_cutb/w738_evidence.tgz`,
+> `run_w738dev_qemu.log`) and from the source. No new boot.
+>
+> The block below says the BAR2 write *"landed in the old backing"* and calls that **TWO
+> MEMORIES FOR ONE ADDRESS**. ⊘ **Both halves are wrong**, and the trace says so in its own
+> words:
+>
+> ```
+> BAR2 (translated): 0 reads / 0 writes resolved through the GMMU, 14 REFUSED by name
+> a write through the translated BAR2 window at aperture offset +0x0 DID NOT LAND: the GMMU
+>   would not translate this write through the instance/BAR2 window; the bytes did NOT land
+>   anywhere, and the guest will not be told
+> FB-IO trap[r=0/0.0MiB w=0/0.0MiB frames=0]
+> ```
+>
+> Offsets `+0x0 / +0x4 / +0x8 / +0xc` are **exactly** `kbusVerifyBar2`'s four MMUTest dwords
+> (`FBSIZETESTED = 0x10`, `ogkm-580: kern_bus_gm107.c:4161-4165`). All four were **refused at
+> TRANSLATION** and dropped. `FB-IO trap[w=0]` confirms `RegPlane::fb_write` never reached
+> `note_fb_write`, i.e. never got past `window_phys`.
+>
+> ⇒ **`wanted_by_write=0` does not mean the write went somewhere else. It means the store was
+> never reached, because the BAR2 PAGE-TABLE WALK — a READ — was refused first.** On the
+> `device` arm `DeviceFb` is the only store; there is nothing else for a byte to land in.
+> ★ So *"the write half has no caller"* was right; *"two memories"* was not. Same shape as the
+> error this block corrects, one turn on: **a counter at zero, read as a statement about the
+> thing it names rather than about whether its arm ran.**
+>
+> ### ⇒ AND THE TWO DEFECTS THAT ACTUALLY HOLD THE WRITE OUT — both found offline, both fixed
+>
+> **1. `decode_subtree_from_entry` DROPPED ITS FAULTS, and BAR2 is the only window that uses
+> it.** (`kayfabe-mmu/src/walker.rs`.) Cut B item 4 taught `window_leaves` to **return**
+> `faults`; the entry-rooted decode extended `leaves` and `visited` from each sub-walk and
+> **never extended `faults`**. ⇒ `window_leaves(InstanceWindow).faults` was **structurally
+> pinned at 0**, so `premap_window`'s `arm_then_retry` — whose `good` is `Ok && faults == 0` —
+> called it good on the **first** attempt, armed nothing, and published an **EMPTY** leaf list
+> as *"the guest has mapped nothing"*.
+> ⇒ **That is why `premap[... bar2_visited=0 pt_faults=0]` and `named=0`**: cut B item 4 was
+> **inert on BAR2**, on the one window `kbusVerifyBar2` uses. ⚠ The census added to close the
+> empty-artefact class was reporting a zero its own plumbing guaranteed — the class one layer
+> below where it was looked for.
+> ✔ Fixed; known-positive
+> `two_worlds_split::an_unreadable_bar2_directory_page_reports_a_fault_rather_than_an_empty_tree`
+> **fails on the pre-fix walker** (verified by reverting it) and passes after, with an arena
+> control (`the_arena_arm_enumerates_bar2_with_no_faults_at_all`).
+>
+> **2. ★★★★★ THE REPAIR PATH WAS GATED ON THE SUCCESS IT REPAIRS.** Both shell call sites of
+> `BarMirror::fill` are gated on the access having **worked**: `Regs::read` fills only on
+> `ReadOutcome::Fb` and `Regs::write` only on `out.fb_landed.is_some()`. Under the arena store
+> that is harmless — a fill is a pure prefetch after an access that already succeeded. **Under
+> the single store it is a deadlock**: the FIRST access to any BAR1/BAR2 page is refused, a
+> refused access queues nothing, so `fill_now` never runs, so `resolve_arming` never arms, so
+> no memslot is ever installed, so the next access is refused for the same reason.
+> ⇒ `BAR-MIRROR FILLS queued=0 run=0 dropped=0` beside fourteen refused BAR2 accesses and
+> `named=0`: **not one repair was attempted on the whole boot.**
+> ✔ Fixed by `BarMirror::fill_after_refusal`, called from both shell sites and gated on
+> `RegPlane::fb_has_demand_port()` — `false` on the arena arm, so the control is unchanged
+> **by construction** rather than by inspection
+> (`the_refused_access_repair_gate_is_false_on_the_arena_arm_and_true_on_the_device_arm`).
+> ⊘ It **declines inside an MMIO exit on the non-deferring arm** rather than running
+> `fill_now`'s three blocking syscalls on a vCPU — constraints 4 and 6, counted as
+> `refusal_declined=`.
+>
+> ### ⊘ WHAT CUT C DOES **NOT** BUY, STATED BEFORE ANY BOOT GRADES IT
+>
+> ⚠ **The four dwords `kbusVerifyBar2` already lost are still lost.** A trapped write that
+> cannot translate is on a vCPU inside an MMIO exit; arming is an IPC round trip that asserts
+> lock-free; so the bytes cannot be recovered at the trap, and the guest is not told. The only
+> way `kbusVerifyBar2` passes is for BAR2 to be **premapped before it writes** — which is
+> defect 1 — and cut C's repair path (defect 2) is what stops a page from being permanently
+> unrepairable once something *has* missed it.
+> ⊘ A **deferred-write queue** would preserve those bytes and was deliberately **not built**:
+> applying a guest store after a later read of the same address is a correctness hazard, and
+> PRAMIN read-backs are memslot-served, so there is no ordering point to apply it at. That is
+> a semantic change nobody has sanctioned, not an increment.
+>
+> ### ★ AND THE PRICING THE BRIEF ASKED FOR — item 2 is **NOT** measured inert; DO NOT DELETE IT
+>
+> `FB-IO walk-guest-pt[r=0]` was read as *"cut B item 2 (`PlanePtBytes::read_in`) is inert on
+> this path"*. ⊘ **That reading is unsafe and the evidence says so:**
+> - `FB-IO` was captured on the **device arm only** — it is absent from the committed arena
+>   census (`run_w738arena_qemu_census.txt`), so there is **no control number at all**.
+> - `PlanePtBytes` reads the **guest's CUDA page tables**, and that boot died at **32.7 s**
+>   with `pre_birth_pages=NO-BIRTH` — *no channel was ever born*. There were no guest page
+>   tables in existence to walk.
+> ⇒ `walk-guest-pt[r=0]` is **"never reached"**, not **"never needed"** — the exact class this
+> file names four times. ★ Cut C's write path does not ride on item 2 in any case: it rides on
+> `FbStoreReader` (`walk-bar`, all 21 reads), which is items 3 and 4.
+> ✔ The harness now cuts `FB-IO`, `BAR-MIRROR FILLS` and the `BAR1/BAR2 (translated)` tallies
+> out of **both** arms, reporting only, so the next boot has the control number.
+>
+> ### ⊘ THE FALSIFIER WAS VACUOUS ON THE `device` ARM, AND IT NO LONGER IS
+>
+> `a_framebuffer_page_written_through_bar1_is_the_page_bar2_reads` — named in the block below
+> as the falsifier cut C should make mean something — **runs on `SparseFb`**, the *arena*
+> store. ⇒ it says nothing whatever about `DeviceFb`, and a `device` arm that split BAR1 from
+> BAR2 would have left it green. ✔ Its device-arm twin
+> (`…_on_the_device_arm`) is added: BAR1 write → `DeviceFbPort::write_armed` → the object,
+> read back through **BAR2 and PRAMIN**, with the object peeked past every armed-run check.
+> ⊘ It pins **identity**, never residence — `FakePort`'s bytes are host memory in this
+> process, as the module docs already say of the arena twin.
+>
+> ### ⊘ WHAT IS NOT BYTE-IDENTICAL ON THE ARENA ARM, STATED RATHER THAN CLAIMED AWAY
+>
+> Guest-observable behaviour is unchanged: same leaves, same fills, same memslots, and cut C's
+> repair arm is unreachable. **Two report-only deltas are possible**, both of which BAR1
+> already had and BAR2 now matches: `premap[pt_faults=]` can become non-zero if a BAR2 branch
+> is genuinely undecodable, and each such run costs one extra `arm_fb_demand()` — a cached
+> atomic load and a `no_port` bump, no lock taken. ⚠ Said out loud because *"byte-identical"*
+> claimed and *"byte-identical"* checked are different sentences.
 
 ## ⇒ WHAT THE `garbage 0x0` ACTUALLY IS
 
@@ -272,6 +400,234 @@ write half lands.
 on it**: `FB-IO walk-bar[r=21 frames=2] walk-guest-pt[r=0]` measures that `PlanePtBytes` read
 the framebuffer **zero times**, so item 2 — the one the plan called *"costs no transient at
 all"* — never ran. What served was item 4's premap retry.
+
+### ★★★★★ 2026-09-15 (w739) — **`named` 0 → 32 772, AND THE GUEST-SIDE BAR1/BAR2 TRAP CENSUS IS EMPTY. The cut-C boot, RE-GRADED under the owner's criterion above.**
+
+> #### ★★★★★ RE-GRADED against **`### ★★★★★ OWNER, 2026-09-15 — YOU CANNOT OBSERVE A PASSTHROUGH ACCESS`**, which landed after this boot ran and before it was written up.
+>
+> The owner's criterion: **`named` is the grade**; the BAR1/BAR2 trap census must be **empty,
+> not small**; and *"do NOT fix this by serving those 14 accesses — make premap install the
+> memslots, after which there are no 14."*
+>
+> | the owner's number | w736 | w738 | **w739** |
+> |---|---|---|---|
+> | ★★★ **`DEVICE-FB named=`** — THE GRADE | `0` | `0` | **`32772`** |
+> | `BAR2-PASSTHROUGH arm=on misses=` — guest-side traps, **zero is the target** | — | **`14`** | **`0`** |
+> | `BAR1-PASSTHROUGH arm=on misses=` | — | — | **`0`** |
+> | `BAR2 (translated): … REFUSED by name` | — | **`14`** | **`0`** |
+> | bar1/bar2 `TRAP_FILLS=` | `0` | `0` | **`0`**, now with `premap_fills=544` / `142` behind it |
+>
+> ★★★ **The guest-side census on the `device` arm is EMPTY, by construction rather than by
+> luck**, and it got there the way the owner prescribed: the 14 are gone because premap
+> installs memslots, **not** because the trap path learned to answer them. Every one of cut C's
+> two fixes is on the enumeration/recovery path; **nothing in this change makes a trapped
+> access serve better**, which is checkable from the diff — `decode_subtree_from_entry` and
+> `fill_after_refusal` are the whole of it.
+>
+> ⊘ **AND THE HEADLINE IN THIS BLOCK'S ORIGINAL TITLE WAS THE WRONG NUMBER TOO.** It led with
+> *"`kbusVerifyBar2` is gone"* — true, and a **consequence**. The grade is `named`. ⚠ Same
+> correction the owner's section applies to w738's `read_served=3`: this file has now picked the
+> wrong headline number twice in two days, in the same direction — **a number that moved, in
+> place of the number that decides.**
+>
+> ★ **The host-side numbers keep their meaning and are NOT the grade**: `read_served=204683`,
+> `host_read_refused=15`, `wanted_by_read=15`. The walker, PRAMIN and the CPU CE executor read
+> the store through a CPU view **by design, forever**; a memslot never removes that. They are
+> progress on the host side only, and w739's two-hundred-thousand served reads say nothing
+> about whether a guest access was ever passthrough. `named=32772` is what says that.
+>
+> ⊘ **What a `named>0` does NOT buy, stated so nobody reads it as the design working:** the
+> boot still fails, at `ce_utils.c:349`, and `RmInitAdapter` still does not complete. `named` is
+> the grade for *this increment*, not for the branch.
+
+### ★★★★★ 2026-09-15 (w739) — **THE CUT-C BOOT, IN FULL. `kbusVerifyBar2` IS GONE AND THE WALL IS NOW THE CeUtils SCRUB.**
+
+⚠ **Read this before the pre-registration below; it is the measurement of it.**
+`[measured w739, 2026-09-15]` fresh GA106 bench (vast **51107999**, machine 33261, host driver
+**580.159.04 open module**, verified on content). **Binary and tree both `0fd956c8`, stamped on
+both arms** (`BINARY_REV=TREE_REV`). Two boots at the same binary, `KAYFABE_DEVICE_VIEW=probe`
+`SHADOW=on` on both, **control first**: exactly one variable. Harness
+`scripts/bench/w736_fbstore_run.sh` (reused; three reporting-only `grep` blocks added).
+Evidence in `traces/w739_fbstore_cutc/`. ⊘ **No constraint was relaxed.**
+
+**THE CONTROL FIRST:** `W392D_GUEST_OUTCOME=(P)`, `THREADS 8 of 8 verified ✔`,
+`MEAN_FALSIFIER=PASS`, bar1/bar2 `TRAP_FILLS=0`, and cut C **provably inert on it**:
+`BAR-MIRROR FILLS … from_refusal=0 refusal_declined=0`, `premap[… bar2_visited=19 pt_faults=0]
+arm[retries=0]` — **identical to w738's control**, so the fault propagation added no output
+there either.
+
+#### THE NINE PRE-REGISTERED ROWS, graded verbatim
+
+| # | predicted | measured | verdict |
+|---|---|---|---|
+| 1 | `arm[retries=] ≥ 2` (w738: `1`) | **`arm[retries=5 retried_ok=0 gave_up=0]`** | ✔ **HELD** |
+| 2 | `premap[bar2_visited=] ≥ 1` (w738: `0`) | **`bar2_visited=19`**, `premap[runs=244 filled=686 skipped=30632 refused=0 biggest_leaf=65536 pt_faults=0]` | ✔ **HELD** |
+| 3 | `DEVICE-FB named= > 0` ★★★ **THE GRADE** under the owner's criterion (w736 and w738: `0`) | **`named=32772`**, `bar1 premap_fills=544 distinct_pages=272`, `bar2 premap_fills=142 distinct_pages=71`, `slots live=256 peak=343` | ✔ **HELD** — `install_device_page` ran for the first time in this campaign |
+| 4 | `from_refusal ≥ 1` device, `= 0` arena | **`0` on BOTH** | ◐ **control half HELD, device half REFUTED — and see below: the refutation is the fix working** |
+| 5 | `refusal_declined = 0` both | `0` on both | ✔ **HELD** |
+| 6 | **NOT** `kbusVerifyBar2_GM107 … garbage 0x0` ★ (pre-registered as *the* grade; ⊘ **superseded by the owner's criterion** — a consequence of row 3, not the grade) | the string `kbusVerifyBar2` and the string `garbage` appear **ZERO times** in the device arm's guest dmesg. It now dies at `memmgrMemSet … NV_ERR_TIMEOUT (0x65)` → `pCeUtils->lastCompletedPayload == lastSubmittedPayload @ ce_utils.c:349` → `memmgrInitCeUtils @ mem_mgr.c:526` → `RmInitNvDevice: *** Cannot load state into the device` → **`RmInitAdapter failed! (0x25:0x65:1249)`** | ✔ **HELD** |
+| 7 | control `(P)` etc. | `(P)`, `8 of 8`, `MEAN_FALSIFIER=PASS`, `TRAP_FILLS=0`, `from_refusal=0` | ✔ **HELD** |
+| 8 | `HOST_DMESG_XID=0` device | **`0`** (the arena control's is `1`, the known per-client CE0 fault) | ✔ **HELD** |
+| 9 | `FB-IO walk-guest-pt[r=]` arena — ⊘ not graded, the item-2 number | **`walk-guest-pt[r=53966/141.4MiB frames=70]`** | ★★★ see below |
+
+Full lines, verbatim (device arm):
+```
+DEVICE-FB named=32772 host_read_refused=15 host_write_refused=0 read_served=204683
+          write_served=0 wanted_by_read=15 wanted_by_write=0 out_of_range=0
+FB-DEMAND drains=6 armed=6 refused=0 declined_on_vcpu=0 no_port=0 read_retried_ok=1
+          read_gave_up=0 ⇒ ★★★★★ CUT B IS WORKING
+DEVICE-FB-PORT drains=6 armed=6 arm_refused=0 declined_on_vcpu=0 evicted=0 outstanding=6
+          served_read=204683 served_write=0 wanted_read=15 wanted_write=0 want_dropped=0
+          still_wanted=1 outside_object=0 span_too_wide=0 budget_refused=0
+DEVICE-VIEW-PORT armed=714 released=26 outstanding=688 refused=0 double_released=0
+          bytes_armed=25.1MiB arm_us_total=163160 rel_us_total=14884  parked_releases=425
+premap[runs=244 filled=686 skipped=30632 refused=0 biggest_leaf=65536 bar2_visited=19
+          pt_faults=0] arm[retries=5 retried_ok=0 gave_up=0]
+BAR1/BAR2 (translated): 0 reads / 0 writes resolved through the GMMU, 0 REFUSED by name
+BAR1-PASSTHROUGH arm=on misses=0        (w738 device arm: BAR2 misses=14)
+BAR2-PASSTHROUGH arm=on misses=0
+BAR-MIRROR bar1 … TRAP_FILLS=0 premap_fills=544 distinct_pages=272 distinct_frames=272
+BAR-MIRROR bar2 … TRAP_FILLS=0 premap_fills=142 distinct_pages=71  distinct_frames=71
+FB-IO trap[r=0 w=0] walk-bar[r=203837/12.7MiB] walk-guest-pt[r=840/3.0MiB]
+HOST_DMESG_XID=0   SMI_RC=124
+```
+
+#### ★★★★★ WHAT IT BOUGHT — **the single store is now the guest's video memory, and the driver stopped disagreeing with it**
+
+- **`read_served` went 3 → 204 683** and **`named` went 0 → 32 772**. w738 proved the byte port
+  as a *mechanism* (one run, three reads); this is a **data plane**: 32 772 framebuffer pages
+  named to the memslot path, 686 of them installed as guest memslots over the reserved object,
+  686 more pages the guest touches with **no VM exit** (`TRAP_FILLS=0` on both BARs).
+- **`BAR1/BAR2 (translated): … 0 REFUSED by name`** against w738's **14 refused**. The four
+  MMUTest dwords that "DID NOT LAND" now land — through a memslot, in real video memory — which
+  is why `kbusVerifyBar2` has nothing to complain about and why `wanted_by_write=0` on this boot
+  is **correct** rather than the signal it was in w738. The pre-registration said so before the
+  boot; that is the only reason it can be read that way now.
+- ⇒ **The two defects were the whole of the `garbage 0x0` wall**, and it is a *control-plane*
+  result reached without relaxing anything.
+
+#### ⊘⊘⊘ ROW 4 IS THE INTERESTING ONE, AND ITS REFUTATION IS THE FIX SUCCEEDING
+
+`from_refusal=0` on the device arm was predicted `≥ 1`. ⊘ **Nothing was ever refused at a trap
+to repair**: `BAR1/BAR2 (translated) … 0 REFUSED by name`, `trap[r=0 w=0]`, `TRAP_FILLS=0`.
+The C1 fix made **premap** cover the pages *ahead of every access*, so the deadlock C2 exists to
+break was never entered.
+★ That is exactly what the census was built to say — *"cut C's repair path was NEVER ASKED …
+on the `device` arm it means a refused BAR1/BAR2 access never reached the gate, which is a
+DIFFERENT defect from one that reached it and could not fix the page"* — and it is the
+difference between a zero that is a finding and a zero that is an unmeasured arm.
+⚠ **C2 is therefore UNEXERCISED on hardware, and must not be reported as proven.** Its offline
+gate (`the_refused_access_repair_gate_is_false_on_the_arena_arm_and_true_on_the_device_arm`)
+pins the predicate on both arms and nothing more. It remains the right backstop — a page that
+*does* miss must not be permanently unrepairable — but this boot is not evidence that it works.
+
+#### ★★★ ROW 9 — **"CUT B ITEM 2 IS INERT" IS REFUTED, DECISIVELY, AND ITEM 2 MUST NOT BE DELETED**
+
+`[measured w739, the ARENA arm — the first capture of this line on a boot that reaches a guest]`
+```
+FB-IO trap[r=0] walk-bar[r=3489577/135.3MiB frames=58] walk-guest-pt[r=53966/141.4MiB frames=70]
+      out-of-band[r=551/0.3MiB] cpu-ce[r=2 w=351/15.6MiB] ★ TOTAL=292.7MiB WALK=276.8MiB
+```
+**`PlanePtBytes` read the framebuffer 53 966 times for 141.4 MiB — the LARGEST single consumer
+by bytes on the boot, 48 % of all framebuffer I/O.** w738's `walk-guest-pt[r=0]` was read as
+*"item 2 is inert on this path"*; it was captured on the **device** arm alone, on a boot that
+died at 32.7 s with `pre_birth_pages=NO-BIRTH` — **no channel was ever born, so no guest CUDA
+page table existed to walk.**
+⇒ *"never reached"*, not *"never needed"* — the class this file names four times, and it was
+about to license a deletion. ⊘ The fix was to capture the line on **both** arms, which costs one
+`grep`.
+
+#### ⊘ THE NEW WALL, NAMED — and it is cut C's *other* half, which the cut table already scopes
+
+```
+NVRM: Call timed out [NV_ERR_TIMEOUT] (0x65) returned from memmgrMemSet(pMemoryManager, &vidSurface, …)
+NVRM: Assertion failed: pCeUtils->lastCompletedPayload == lastSubmittedPayload @ ce_utils.c:349
+NVRM: Call timed out (0x65) returned from memmgrInitCeUtils(…) @ mem_mgr.c:526
+NVRM: RmInitNvDevice: *** Cannot load state into the device
+NVRM: RmInitAdapter failed! (0x25:0x65:1249)
+```
+`doorbells: 2 arrived, 0 served, 2 REFUSED by name`,
+`first doorbell refusal [FwdFault::RingProducerCursorUnknown]`, `HOST_DMESG_XID=0`.
+⇒ **RM's kernel CeUtils scrub is submitted and never completes.** The status is
+`0x65 TIMEOUT`, not `0x72 MEMORY_ERROR`: the failure changed *kind*, from *"our memory is
+split"* to *"an emulated channel's work is never done"*.
+★ This is the cut table's **C** row verbatim — *"two-phase CPU CE … **or** constraint 9 and
+never build it"* — and constraint 9 says it by name: *"a scrub must be executed, on scratchpad,
+if its from an emulated channel."*
+⊘ **It is NOT the `ce_utils.c:304` diagnosis this file already marked refuted.** That one was
+offered as the wall for *cut A/B*, where the boot never got near it; this is measured, at
+`:349`, on a boot that reached `memmgrInitCeUtils`. ⚠ Whether the two doorbell refusals are the
+cause or a consequence is **unmeasured** — `RingProducerCursorUnknown` on `vas=0xa` is the next
+thing to read, not a conclusion.
+
+#### ⚠ TWO NUMBERS THIS BOOT ADDS THAT NOBODY PRE-REGISTERED, BOTH WORTH A LOOK
+
+- **`DEVICE-VIEW-PORT armed=714 released=26 outstanding=688 parked_releases=425`,
+  `bytes_armed=25.1MiB`.** 688 host CPU views held at teardown, 425 of them parked because the
+  slot is gone and the mapping may not be. `refused=0 double_released=0`, so nothing is wrong
+  *yet* — but the host BAR1 aperture is 256 MiB and this is 25.1 MiB after 90 seconds of
+  bring-up. ⊘ A number that never falls is a leak; it now has a first reading to ratchet against.
+- **`still_wanted=1 outstanding=6`** on the byte port, exactly as in w738 — one recorded want is
+  still never drained before teardown.
+
+#### ⚠ THE META-CALL — wrong for the third time, and in the most useful direction
+
+The pre-registration named **row 6** (the grade) as most likely to fail, on the argument that
+BAR2 and PRAMIN are two separate `mmap`s of one reserved object and their aliasing is untested.
+**Row 6 held and row 4 broke.** ⇒ the aliasing question was answered in passing — `kbusVerifyBar2`
+writes through BAR2 and reads back through the BAR0 window, and it **passed**, so the two views
+of the one object *do* alias on real hardware. ★ `[w736 got which row wrong; w738 got which row
+right and why wrong; w739 got which row wrong again]` — **three for three. Naming the
+likely-wrong row is a prediction this campaign has never got right, and it should stop being
+presented as insight.**
+
+### ★★★★★ 2026-09-15 (w739) — **PRE-REGISTERED PREDICTIONS FOR THE CUT-C BOOT. WRITTEN AND COMMITTED BEFORE THE BOX EXISTS.**
+
+⚠ **Nothing below has been measured.** Frozen at commit time and graded verbatim afterwards;
+a row that comes back wrong is a **result**, and `fix_the_criterion_before_the_boot` is why it
+is written first. ⊘ No constraint is relaxed by this boot and none may be relaxed to make a
+row pass.
+
+**The arms.** Same binary both arms, `KAYFABE_DEVICE_VIEW=probe SHADOW=on`, **control
+(`arena`) first**, then `KAYFABE_FB_STORE=device`. One variable. Harness
+`scripts/bench/w736_fbstore_run.sh`, unchanged except for the w739 reporting-only greps
+(`BAR-MIRROR FILLS`, `BAR1/BAR2 (translated)`, `FB-IO`) — no arm, threshold or boot step.
+
+#### ⊘ WHAT THIS BOOT CANNOT BE GRADED ON, stated first
+
+- **Not** `write_served > 0`. If the premap half works, BAR2's writes go through a **guest
+  memslot** and never reach `FbStore::write` at all — so `wanted_by_write=0` would then be
+  **correct**, and reading it as a failure would grade the fix as the defect.
+- **Not** §3's `--gpga-reserve-probe` falsifier. That is graded after the switch.
+- **Not** *"did it reach the CeUtils scrubber"* — a refuted diagnosis (the corrected block
+  above). Graded against where it actually stops.
+
+#### THE ROWS
+
+| # | line | predicted | a different value means |
+|---|---|---|---|
+| 1 | `arm[retries=]`, device arm | **≥ 2** (w738: `1`) | `1` ⇒ BAR2's enumeration still came back *good* on its first attempt: the real GA10x tree does not produce the fault the fixture does, and C1 changed nothing in a boot |
+| 2 | `premap[bar2_visited=]` | **≥ 1** (w738: `0`) | `0` ⇒ the BAR2 tree was still never walked; read `premap[refused=]` for whether it was `BAR2_UNROOTED`, an unknown root level, or budget |
+| 3 | `DEVICE-FB named=` ★ **THE MEMSLOT GATE** | **> 0** (w736 and w738: `0`) | `0` ⇒ premap enumerated and still installed nothing, and `install_device_page` — which has **never run** — stays unmeasured |
+| 4 | `BAR-MIRROR FILLS from_refusal=` | **≥ 1** on device, **`0`** on arena | `0` on device ⇒ cut C's repair gate was never *reached* (a different defect from one reached and unhelpful). **`>0` on arena ⇒ the control is NOT byte-identical and `fb_has_demand_port` is wrong** |
+| 5 | `refusal_declined=` | **`0`** on both (the shipped arm defers) | `>0` ⇒ the boot ran the non-deferring arm and cut C correctly declined to `mmap` inside an MMIO exit — information, not a failure |
+| 6 | where it dies ★★★ **THE GRADE** | **NOT** `kbusVerifyBar2_GM107 … returned garbage 0x0` | the same line at the same offset `0x70e000` ⇒ cut C did not move the wall, and the two-defect reading above is incomplete |
+| 7 | control | `(P)`, `THREADS 8 of 8`, `MEAN_FALSIFIER=PASS`, `TRAP_FILLS=0`, `from_refusal=0` | any of these moving ⇒ the change is not inert on the arm it must be inert on, whatever the device arm did |
+| 8 | `HOST_DMESG_XID`, device arm | **`0`** (w738: `0`) | `>0` ⇒ **new**: a memslot over real video memory is the first time the guest can touch device memory directly, and an Xid there is a finding in its own right |
+| 9 | `FB-IO walk-guest-pt[r=]`, **arena** arm | ⊘ **NOT GRADED** — first capture, the number item 2's pricing needs | it exists to retire *"item 2 is inert"*, which was read off the arm that dies before any channel is born |
+
+#### ⚠ THE ROW MOST LIKELY TO BE WRONG, and why — naming the reason is a second prediction
+
+**Row 6**, and the reason is a link no offline test can reach: `kbusVerifyBar2` writes through
+**BAR2** and reads back through **PRAMIN**, which under the single store are **two separate
+`mmap`s of the same reserved object** — the BAR2 leaf's memslot and the PRAMIN slot's
+re-pointed window. That they alias is an assumption about RM's mapping of one object through
+two views, and `a_framebuffer_page_written_through_bar1_is_the_page_bar2_reads_on_the_device_arm`
+**cannot test it**: `FakePort` serves both from one map by construction. ⊘ If row 6 fails with
+rows 1–3 held, that is where to look first, and it is a new finding rather than a cut-C defect.
+
+⚠ `[w736 got *which* row wrong; w738 got which row right and *why* wrong.]` This is the third
+attempt at the meta-call and it is recorded as such.
 
 ### ⚠ `--ce-client-guest-ram`: "THE COMPLETION NEVER ARRIVES" CANNOT BE WHAT HAPPENS
 
