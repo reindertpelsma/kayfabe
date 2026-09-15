@@ -64,9 +64,10 @@ pkill -f '[q]emu-system-x86'
 sleep 3
 
 export POST_CAPTURE_HOOK="$SRC_DIR/rmladder_suite_hook.sh"
-# ⊘ The suite is 30 processes; 90 s each is a 45-minute worst case and the boot's own guest
-# session would not survive it. 60 s is enough for every arm that PASSES on bare metal.
-export RMLADDER_ARM_TIMEOUT=${RMLADDER_ARM_TIMEOUT:-60}
+# ⊘ 90 s is `[measured w734t]`'s value, kept UNCHANGED on purpose. Shortening it would make a
+# legitimately slow arm (`--concurrent-fuzz`, `--map-stress`) time out for a reason that is not
+# the one under test, and a run that changes two things at once cannot attribute either.
+export RMLADDER_ARM_TIMEOUT=${RMLADDER_ARM_TIMEOUT:-90}
 export RMLADDER_RECOVER=${RMLADDER_RECOVER:-modprobe}
 export RMLADDER_SUDO=${RMLADDER_SUDO:-1}
 # ⊘ SHADOW=off: this run is about the guest's RM plane, and the walk shadow needs the CUDA

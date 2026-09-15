@@ -24,7 +24,7 @@ arm=""; for a in "$@"; do case "$a" in --*) arm="$a";; esac; done
 case "$arm" in
   --gpu) ;;
 esac
-arm=$(printf '%s\n' "$@" | grep -E '^--(pass|wedge|hardwedge|hang|fail)$' | head -1)
+arm=$(printf '%s\n' "$@" | grep -E '^--(passnoisy|pass|wedge|hang|fail)$' | head -1)
 # ★ Every arm is a "device open": once the wedge marker exists, NOTHING opens, exactly as the
 # real wall behaves (`[measured w424]` opens #1-#3 pass, #4 fails, and it is permanent).
 if [ -e "$KF_WEDGE" ]; then
@@ -40,6 +40,11 @@ case "$arm" in
   --wedge)     touch "$KF_WEDGE"; echo "done"; exit 0;;
   --hang)      sleep 600;;
   --fail)      echo "FAIL R17 CE COPY = dst did not move"; exit 1;;
+  # ★ An arm that PASSES while printing the rung name. `--cross-client-leak` opens a second
+  # client and a rung that reports an EXPECTED refusal quotes the same string. If the
+  # unopenable predicate drops its exit-code conjunct, this arm is misreported as UNMEASURED —
+  # i.e. the containment would manufacture the very "reported nothing" it exists to remove.
+  --passnoisy) echo "ok    R1 openat(nvidia<gpu>) refused for the second client, as expected"; echo done; exit 0;;
 esac
 echo unreachable; exit 9
 STUB
@@ -92,6 +97,15 @@ printf '%s\n' "$out" | sed 's/^/    /'
 chk "timeout is its own outcome"   "SUITE_PASS=2 SUITE_FAIL=0 SUITE_TIMEOUT=1 SUITE_UNMEASURED=0" \
     "$(printf '%s\n' "$out" | grep -o 'SUITE_PASS=[0-9]* SUITE_FAIL=[0-9]* SUITE_TIMEOUT=[0-9]* SUITE_UNMEASURED=[0-9]*')"
 chk "every arm got a row"          "3" "$(printf '%s\n' "$out" | grep -c '^--')"
+
+echo "=== CASE 5 — an arm that PASSES while printing \`openat(nvidia\` is PASS, not UNMEASURED ==="
+rm -f "$WEDGE"
+out=$(RMLADDER_SUITE_LOGDIR="$T/l5" RMLADDER_ARMS="--pass --passnoisy --pass" RMLADDER_RECOVER_CMD="true" \
+      bash "$SUITE" "$T/stub" 0 5 2>&1)
+printf '%s\n' "$out" | sed 's/^/    /'
+chk "the string alone does not condemn an arm" "SUITE_PASS=3 SUITE_FAIL=0 SUITE_TIMEOUT=0 SUITE_UNMEASURED=0" \
+    "$(printf '%s\n' "$out" | grep -o 'SUITE_PASS=[0-9]* SUITE_FAIL=[0-9]* SUITE_TIMEOUT=[0-9]* SUITE_UNMEASURED=[0-9]*')"
+chk "and the suite reports GREEN when it is" "SUITE_RC=0" "$(printf '%s\n' "$out" | grep -o 'SUITE_RC=[0-9]*')"
 
 echo ""
 if [ $fails -eq 0 ]; then echo "SELFTEST_RC=0 — the containment has a known-positive"; exit 0; fi

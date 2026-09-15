@@ -181,7 +181,12 @@ run_arm() {  # $1 = arm, $2 = log path
   timeout -k 5 "$ARM_TIMEOUT" "$BIN" --gpu "$GPU" "$1" > "$2" 2>&1
 }
 # Did this run even reach its subject? ⊘ `openat(nvidia` is R1 — before the arm's own code.
-unopenable() { [ "$(grep -ac 'openat(nvidia' "$1" 2>/dev/null)" -gt 0 ]; }
+# ⚠ **THE EXIT CODE IS PART OF THE PREDICATE, and dropping it was a real bug in this rewrite's
+# first draft.** An arm may legitimately PRINT that string while passing — `--cross-client-leak`
+# opens a second client, and a rung that reports a *refusal* it expected quotes the same rung
+# name. w717b's original had the `rc != 0` conjunct; it is not decoration.
+# ⇒ `unopenable` means **failed AND never got past R1**, never "the string appears".
+unopenable() { [ "${2:-1}" -ne 0 ] && [ "$(grep -ac 'openat(nvidia' "$1" 2>/dev/null)" -gt 0 ]; }
 
 for arm in $ARMS; do
   name=${arm#--}
@@ -192,16 +197,16 @@ for arm in $ARMS; do
   # ★★★ CONTAINMENT. Two triggers, one action, and the RETRY is what turns a cascade back into
   # a measurement. ⊘ The retry runs at most once per arm: a second would make a flaky arm
   # indistinguishable from a recovered one.
-  if unopenable "$log" || [ $rc -eq 124 ]; then
+  if unopenable "$log" "$rc" || [ $rc -eq 124 ]; then
     grab_dmesg "$name"
     if recover; then
       # ⊘ Counted only when recovery was ATTEMPTED — `RMLADDER_RECOVER=none` returns non-zero
       # without touching anything, and a counter that ticked for it would report a containment
       # that is switched off.
       n_rec=$((n_rec+1))
-      if unopenable "$log"; then
+      if unopenable "$log" "$rc"; then
         run_arm "$arm" "$log.retry"; rc2=$?
-        if unopenable "$log.retry"; then
+        if unopenable "$log.retry" "$rc2"; then
           note=" (recovery did NOT reopen the device)"
         else
           n_recok=$((n_recok+1)); mv -f "$log.retry" "$log"; rc=$rc2; note=" (after recovery)"
@@ -218,7 +223,7 @@ for arm in $ARMS; do
   fi
 
   last=$(grep -vE '^\s*$' "$log" 2>/dev/null | tail -1 | cut -c1-64)
-  if unopenable "$log"; then
+  if unopenable "$log" "$rc"; then
     v=UNMEASURED; n_unmeas=$((n_unmeas+1)); unmeasured="$unmeasured $arm"
   else
   case $rc in
