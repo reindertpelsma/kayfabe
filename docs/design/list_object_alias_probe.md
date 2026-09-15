@@ -55,13 +55,23 @@ isolated. Seeding **S** first and requiring **S** back is what makes the differe
 | P6 | a slice naming a **foreign** client's parent via `hClient`/`hParent` is **accepted** | any non-zero status |
 | P7 | the slice is **dupable** into a second client (`memlistCanCopy_IMPL` returns `NV_TRUE`) | any non-zero status |
 | P8 | ⚠ freeing the **parent** with a live slice outstanding is **accepted**, and the slice then **silently serves stale physical memory** — no refusal, no fault | RM refuses the free, or the read faults/refuses |
-| P9 | as a **non-root** uid the same alloc is refused **`0x1f NV_ERR_INSUFFICIENT_PERMISSIONS`** | any other status, accepted included |
+| P9 | as a **non-root** uid the same alloc is refused **`0x1b NV_ERR_INSUFFICIENT_PERMISSIONS`** | any other status, accepted included |
+
+> ### ⊘⊘ CORRECTED BEFORE THE RUN (same day) — P9's REFUTER WAS THE WRONG NUMBER
+> This row first named **`0x1f`** as `NV_ERR_INSUFFICIENT_PERMISSIONS`. It is **`0x1b`**
+> (`nvstatuscodes.h:56`); `0x1f` is **`NV_ERR_INVALID_ARGUMENT`** (`:60`) — the code a
+> malformed parameter block gets, which is the *most likely* refusal this rung will actually
+> see. ⇒ the original refuter would have read a bug in my encoder as RM enforcing a privilege
+> rule, and the finding would have been a fact about the probe. ⚠ Corrected in the table
+> above and in `listobj.rs`'s decode table, which carried the same wrong row and now asserts
+> both codes in both directions. Same class the repo already names: **a citation that is not
+> read is a guess with a reference attached.**
 
 ### Where P1, P8 and P9 come from — read before the run, not after it
 
 - **P9 / P1.** `resource_list.h:631-640` gives `NV01_MEMORY_LIST_OBJECT` the flag
   **`RS_FLAGS_ALLOC_PRIVILEGED`**, and `alloc_free.c:649-658` refuses
-  `NV_ERR_INSUFFICIENT_PERMISSIONS` when `privLevel < RS_PRIV_LEVEL_USER_ROOT`. ⇒ **the class is
+  `NV_ERR_INSUFFICIENT_PERMISSIONS` (**`0x1b`**) when `privLevel < RS_PRIV_LEVEL_USER_ROOT`. ⇒ **the class is
   root-only.** That is a *design* fact, not a probe detail: it says which of our processes may
   mint a slice at all, and it is the first thing this rung must confirm rather than assume.
 - **P1's other gate.** `memlistConstruct_IMPL:88-101` returns `NV_ERR_NOT_SUPPORTED` outright

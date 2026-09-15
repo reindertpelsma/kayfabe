@@ -242,6 +242,22 @@ enum IndirectTarget<'a> {
 pub struct Indirect<'a> {
     at: usize,
     target: IndirectTarget<'a>,
+    /// ★★★ **Pointer fields INSIDE the pointed-at buffer** — see [`Indirect::nested`].
+    /// Empty for every pre-existing caller, which is why this field is not a constructor
+    /// parameter: a one-level indirect stays one call.
+    inner: Vec<Nested<'a>>,
+}
+
+/// A pointer field at `at` bytes **into an [`Indirect`]'s own buffer**, pointing at `buf`.
+///
+/// ⊘ Not public, and not a second [`Indirect`]: nesting terminates at one level on purpose.
+/// The NVIDIA ABI's two-level payloads (an allocation-parameter struct that itself carries
+/// an array pointer) are the whole population, and a general graph would need a cycle check
+/// to be sound while buying nothing.
+#[derive(Debug)]
+struct Nested<'a> {
+    at: usize,
+    buf: &'a mut [u8],
 }
 
 impl<'a> Indirect<'a> {
@@ -251,7 +267,56 @@ impl<'a> Indirect<'a> {
         Indirect {
             at,
             target: IndirectTarget::Buf(buf),
+            inner: Vec::new(),
         }
+    }
+
+    /// ★★★ **TWO LEVELS: the field at `at` of the argument points at `buf`, and the field
+    /// at `inner_at` of `buf` points at `inner`.**
+    ///
+    /// ## Why this exists
+    ///
+    /// `NV_MEMORY_LIST_ALLOCATION_PARAMS` (`cl84a0.h`) is an allocation-parameter struct
+    /// reached through `NVOS21_PARAMETERS.pAllocParms` — one level — which itself carries
+    /// `NvP64 pageNumberList` at `+128`, a userspace pointer RM `copy_from_user`s the page
+    /// list out of (`mem_list.c`, `rmapiParamsCopyIn(..., bUserModeArgs)`). Both addresses
+    /// have to be live for the same syscall, and neither may be **produced** outside this
+    /// file — §4.2.1's rule does not weaken because a pointer is one level deeper.
+    ///
+    /// ⊘ **The inner address is scrubbed too.** Both the argument's field and `buf`'s field
+    /// are zeroed after the syscall on both arms, so a caller that logs or replays either
+    /// buffer sees no host address. Leaving the inner one live would have put an address
+    /// into exactly the buffer a caller is most likely to keep — the parameter block it
+    /// built and will read the driver's answer back out of.
+    ///
+    /// # Errors
+    /// [`RawError::OutOfRange`] — the inner pointer field does not fit inside `buf`. Refused
+    /// **here**, at construction, so a caller cannot hold an ill-formed nest and discover it
+    /// only when the driver has already followed the pointer.
+    pub fn nested(
+        at: usize,
+        buf: &'a mut [u8],
+        inner_at: usize,
+        inner: &'a mut [u8],
+    ) -> Result<Self, RawError> {
+        let end = inner_at
+            .checked_add(POINTER_FIELD_WIDTH)
+            .ok_or(RawError::LengthOverflow {
+                offset: inner_at as u64,
+                len: POINTER_FIELD_WIDTH as u64,
+            })?;
+        if end > buf.len() {
+            return Err(RawError::OutOfRange {
+                offset: inner_at as u64,
+                len: POINTER_FIELD_WIDTH as u64,
+                object_len: buf.len() as u64,
+            });
+        }
+        Ok(Indirect {
+            at,
+            target: IndirectTarget::Buf(buf),
+            inner: vec![Nested { at: inner_at, buf: inner }],
+        })
     }
 
     /// ★★★ The pointer field at byte offset `at` of the argument **describes**
@@ -288,6 +353,7 @@ impl<'a> Indirect<'a> {
                 offset,
                 len,
             },
+            inner: Vec::new(),
         })
     }
 
@@ -572,9 +638,54 @@ impl CharDevice {
             {
                 region.addr_at(*offset, *len)?;
             }
+            // ★ And the same for a NESTED pointer field ([`Indirect::nested`]): its bound
+            // was established at construction and is re-established **here**, in the pass
+            // that runs before any byte is written, for the reason directly above — a patch
+            // loop that could fail partway would leave a live address in a caller's buffer
+            // with no scrub to follow it.
+            for n in &p.inner {
+                let IndirectTarget::Buf(buf) = &p.target else {
+                    // A described region has no bytes this crate may patch into; nesting is
+                    // only ever constructed over `Buf`, and this arm says so rather than
+                    // assuming it.
+                    return Err(RawError::OutOfRange {
+                        offset: n.at as u64,
+                        len: POINTER_FIELD_WIDTH as u64,
+                        object_len: 0,
+                    });
+                };
+                let end = n.at
+                    .checked_add(POINTER_FIELD_WIDTH)
+                    .ok_or(RawError::LengthOverflow {
+                        offset: n.at as u64,
+                        len: POINTER_FIELD_WIDTH as u64,
+                    })?;
+                if end > buf.len() {
+                    return Err(RawError::OutOfRange {
+                        offset: n.at as u64,
+                        len: POINTER_FIELD_WIDTH as u64,
+                        object_len: buf.len() as u64,
+                    });
+                }
+            }
         }
 
         for p in indirect.iter_mut() {
+            // ★ Inner first: the bytes of `buf` must already carry the nested address by
+            // the time the driver follows `buf`'s own address, and `buf` is borrowed
+            // exclusively for this call so nothing can move underneath either write.
+            //
+            // SAFETY (of the ADDRESS, not of a dereference): identical to the outer case
+            // below — `n.buf` is a live exclusive borrow for the whole of this function, so
+            // the address is valid for its length until this call returns. The scrub below
+            // removes it from `buf` on both arms.
+            let Indirect { target, inner, .. } = p;
+            for n in inner.iter_mut() {
+                let inner_addr = n.buf.as_mut_ptr() as u64;
+                if let IndirectTarget::Buf(buf) = target {
+                    buf[n.at..n.at + POINTER_FIELD_WIDTH].copy_from_slice(&inner_addr.to_le_bytes());
+                }
+            }
             let addr = match &mut p.target {
                 // SAFETY (of the ADDRESS, not of a dereference): the buffer is a live
                 // exclusive borrow for the whole of this function, so the address is valid
@@ -632,8 +743,18 @@ impl CharDevice {
         // ★ The scrub (module docs). Unconditional, and after BOTH arms: a failed ioctl
         // leaves the caller holding the same buffer, and an address that survives an error
         // path is exactly the one nobody looks at.
-        for p in indirect.iter() {
+        for p in indirect.iter_mut() {
             arg[p.at..p.at + POINTER_FIELD_WIDTH].fill(0);
+            // ⊘ The NESTED field is scrubbed in the same breath and with the same
+            // unconditionality. An address that survives into the caller's own parameter
+            // block — the buffer it is most likely to keep, log and read RM's answer out of
+            // — is exactly the one nobody looks at.
+            let Indirect { target, inner, .. } = p;
+            for n in inner.iter() {
+                if let IndirectTarget::Buf(buf) = target {
+                    buf[n.at..n.at + POINTER_FIELD_WIDTH].fill(0);
+                }
+            }
         }
 
         // ⊘⊘ **AFTER THE SCRUB, DELIBERATELY.** The census now retains a prefix of the reply
@@ -771,6 +892,51 @@ mod tests {
         // above pass on a buffer that was never patched at all.
         assert_ne!(expect, 0, "a live buffer never has a null address");
         assert_eq!(&arg[..8], &[0u8; 8], "and it was scrubbed");
+    }
+
+    /// ★★★ **The two-level patch, and its known-positive.** `Indirect::nested` has to write
+    /// an address into the caller's *parameter block* as well as into the argument, and then
+    /// scrub both. A sentinel is seeded into the inner field FIRST, so *"the field is zero
+    /// afterwards"* cannot pass on a nest that was never patched at all — which is exactly
+    /// how a silent no-op would look.
+    #[test]
+    fn a_nested_pointer_is_patched_and_scrubbed_at_both_levels() {
+        let d = dev_null();
+        let mut list = vec![0x11u8; 8];
+        let mut params = vec![0u8; 24];
+        // The sentinel: if nesting is a no-op these bytes survive the call unchanged.
+        params[8..16].copy_from_slice(&0xDEAD_BEEF_CAFE_F00Du64.to_le_bytes());
+        let mut arg = [0u8; 32];
+        let req = ioctl::readwrite(b'F', 0x2A, arg.len()).expect("32 fits");
+        let mut nest = Indirect::nested(16, &mut params, 8, &mut list).expect("8 + 8 <= 24");
+        let r = d.ioctl(req, &mut arg, std::slice::from_mut(&mut nest));
+        assert!(r.is_err(), "/dev/null answers ENOTTY");
+        assert_eq!(&arg[16..24], &[0u8; 8], "the OUTER address survived the call");
+        drop(nest);
+        assert_eq!(
+            &params[8..16],
+            &[0u8; 8],
+            "the INNER field is neither the sentinel (never patched) nor an address (never \
+             scrubbed)"
+        );
+        assert_eq!(&params[..8], &[0u8; 8], "nothing else in the block was disturbed");
+        assert_eq!(&params[16..], &[0u8; 8], "nor after it");
+    }
+
+    /// An inner pointer field that does not fit its own buffer is refused **at
+    /// construction**, before any driver can follow it.
+    #[test]
+    fn a_nested_pointer_field_that_does_not_fit_its_buffer_is_refused() {
+        let mut list = vec![0u8; 8];
+        let mut params = vec![0u8; 12];
+        assert_eq!(
+            Indirect::nested(16, &mut params, 8, &mut list).err(),
+            Some(RawError::OutOfRange {
+                offset: 8,
+                len: 8,
+                object_len: 12,
+            })
+        );
     }
 
     #[test]

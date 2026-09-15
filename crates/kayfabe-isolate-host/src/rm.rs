@@ -126,7 +126,8 @@ use kayfabe_abi::submit::{
     ATTR_CONTIGUOUS_VIDMEM, BIND_PARAMS_SIZE, CeAllocParams, ChannelAllocParams, ENGINE_TYPE_COPY0,
     ENGINE_TYPE_GRAPHICS, GP_ENTRY_SIZE, GpfifoScheduleParams, NV_ESC_RM_MAP_MEMORY,
     NV_ESC_RM_UNMAP_MEMORY, Nvos34Parameters,
-    NV01_MEMORY_LOCAL_USER, NVA06C_CTRL_CMD_BIND, NVA06C_CTRL_CMD_GPFIFO_SCHEDULE,
+    NV01_MEMORY_LIST_OBJECT, NV01_MEMORY_LOCAL_USER, NVA06C_CTRL_CMD_BIND,
+    NVA06C_CTRL_CMD_GPFIFO_SCHEDULE, NvMemoryListAllocationParams,
     NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN, NvMemoryAllocationParams, Nvos33ParametersWithFd,
     PTIMER_PAGE_TIME_0, PTIMER_PAGE_TIME_1, PtimerSampleError, SET_OBJECT, USERD_GP_GET,
     USERD_GP_PUT, USERMODE_NOTIFY_CHANNEL_PENDING, USERMODE_TIME_0, USERMODE_TIME_1,
@@ -2247,6 +2248,55 @@ impl RmConnection {
         Ok(out.h_object_new)
     }
 
+    /// ★★★ [`Self::raw_alloc`] for a class whose parameter block itself carries a
+    /// **userspace pointer** — one more level of indirection and nothing else.
+    ///
+    /// `NV_MEMORY_LIST_ALLOCATION_PARAMS` is the population: it is reached through
+    /// `pAllocParms` and carries `NvP64 pageNumberList`, which RM `copy_from_user`s the page
+    /// array out of. Both addresses must be live for the same syscall and neither may be
+    /// produced outside `kayfabe-linux-raw`, which is exactly what
+    /// [`Indirect::nested`](kayfabe_linux_raw::Indirect::nested) is for.
+    ///
+    /// ⊘ Separate from [`Self::raw_alloc`] rather than a parameter on it: every other
+    /// allocation in this file has a flat parameter block, and giving them all an
+    /// `Option<(usize, &mut [u8])>` would put a nesting decision at thirty call sites that
+    /// have none to make.
+    ///
+    /// # Errors
+    /// Whatever RM refused, or [`RmError::Other`] if the nest does not fit its buffer.
+    fn raw_alloc_nested(
+        &self,
+        parent: u32,
+        want: u32,
+        class: u32,
+        params: &mut [u8],
+        inner_at: usize,
+        inner: &mut [u8],
+    ) -> Result<u32, RmError> {
+        let mut arg = [0u8; Nvos21Parameters::SIZE];
+        Nvos21Parameters {
+            h_root: self.client.raw(),
+            h_object_parent: parent,
+            h_object_new: want,
+            h_class: class,
+            p_alloc_parms: 0,
+            params_size: params.len() as u32,
+            status: 0,
+        }
+        .encode_into(&mut arg)
+        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_ALLOC as u8, arg.len())
+            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let mut patches = [Indirect::nested(16, params, inner_at, inner)
+            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?];
+        self.ctl
+            .ioctl(req, &mut arg, &mut patches)
+            .map_err(|e| ioctl_error(&e))?;
+        let out = Nvos21Parameters::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        status_check(out.status)?;
+        Ok(out.h_object_new)
+    }
+
     /// [`Self::raw_alloc`] for a **GPFIFO channel**, and the only reason it exists is the
     /// type of `class` (`#166`).
     ///
@@ -3745,6 +3795,15 @@ pub enum GuestReach {
 /// rung is asking.
 const NOTIFIER_BYTES: u64 = 0x1000;
 
+/// `RM_PAGE_SIZE` — the granularity `NV01_MEMORY_LIST_OBJECT`'s page numbers count in
+/// (`ogkm-580: mem_list.c`, `pPteArray[i] << RM_PAGE_SHIFT`) and the granularity USERD is
+/// attributed at (`kernel_channel_gm107.c:689`).
+///
+/// ⊘ Deliberately **not** `HostPageSize::query()`: this is RM's constant, fixed at 4 KiB on
+/// every part, and a host with 64 KiB pages would silently change the meaning of a page
+/// *number* if the two were conflated.
+const RM_PAGE_BYTES: u64 = 0x1000;
+
 /// ★★★★★ **What a raw client READS OUT OF ITS OWN ADDRESS SPACE after its channel died.**
 ///
 /// The decoded `NvNotification` at
@@ -4836,6 +4895,18 @@ impl HostRmBackend {
     #[must_use]
     pub fn host_client(&self) -> u32 {
         self.conn.client()
+    }
+
+    /// ★★ **This connection's `NV01_DEVICE_0` handle** — the `hParent` a
+    /// `NV_MEMORY_LIST_ALLOCATION_PARAMS` must carry when `hClient` names a FOREIGN client.
+    ///
+    /// ⊘ Exposed for that one reason. The pair `(hClient, hParent)` is how `mem_list.c`
+    /// resolves *"which GPU is the source object on?"* (`gpuGetByHandle`), and it refuses
+    /// `NV_ERR_INVALID_OBJECT_PARENT` if the two disagree — so a probe that names a foreign
+    /// client needs that client's device handle and cannot derive it.
+    #[must_use]
+    pub fn host_device(&self) -> u32 {
+        self.conn.device
     }
 
     /// ★★★ w392c — the control fd this backend's connection holds, for
@@ -7594,6 +7665,171 @@ impl HostRmBackend {
         payload: &mut [u8],
     ) -> Result<(), RmError> {
         self.conn.raw_control(self.conn.device, cmd, payload)
+    }
+
+    /// ★★★ **Mint an `NV01_MEMORY_LIST_OBJECT` naming ONE 4 KiB page of an existing object
+    /// — the primitive leg B of the USERD design stands or falls on.**
+    ///
+    /// `parent` is the object the page number is relative to; `page` is that index; the
+    /// slice's own length is one `RM_PAGE_SIZE`. `foreign` names a *different* client's
+    /// object instead — `(hClient, hDevice)` — which `NV_MEMORY_LIST_ALLOCATION_PARAMS`
+    /// supports by design (*"client to which object belongs (may differ from client creating
+    /// the mapping)"*) and `mem_list.c` resolves through `serverGetClientUnderLock`.
+    ///
+    /// ⊘⊘ **Whether the slice ALIASES the parent's physical pages or COPIES them is not
+    /// asserted here and must not be assumed by any caller.** The reading of `mem_list.c` is
+    /// that it aliases; the measurement is `rmladder --list-object-alias`
+    /// (`docs/design/list_object_alias_probe.md`). ⚠ If it copies, a guest would ring a USERD
+    /// hardware never reads and **every counter we have would show green** — which is why
+    /// this method's docs carry the warning rather than the rung's.
+    ///
+    /// ⚠ **Root-only** (`RS_FLAGS_ALLOC_PRIVILEGED`) and **GSP-client-only**
+    /// (`memlistConstruct_IMPL`'s first gate) — see [`NV01_MEMORY_LIST_OBJECT`]. Both refuse
+    /// with a status rather than a syscall error, so the caller sees them as
+    /// [`RmError`]s carrying `0x1f` and `0x56`.
+    ///
+    /// # Errors
+    /// Whatever RM refused the allocation with.
+    pub fn alloc_list_object_page(
+        &mut self,
+        parent: HostHandle,
+        page: u64,
+        foreign: Option<(u32, u32)>,
+        attr: u32,
+    ) -> Result<HostHandle, RmError> {
+        let raw_parent = self.narrow(parent)?;
+        self.alloc_list_object_page_raw(raw_parent, page, foreign, attr)
+    }
+
+    /// [`Self::alloc_list_object_page`] over a parent named by its **raw** RM handle.
+    ///
+    /// ⊘⊘ **The cross-client row needs this and nothing else should.** `hObject` is resolved
+    /// against `hClient`, so when the slice names a FOREIGN client's object the parent handle
+    /// is a value in *that* client's namespace — which [`HostHandle`] correctly refuses to
+    /// represent, because it is not this backend's to mint. Passing it as a bare `u32` is the
+    /// honest spelling: the provenance genuinely is not ours, and the type says so by its
+    /// absence rather than by a fabricated stamp.
+    ///
+    /// ⚠ With `foreign = None` this is [`Self::alloc_list_object_page`] with the namespace
+    /// check skipped, which is why the safe wrapper exists and is what every other caller
+    /// uses.
+    ///
+    /// # Errors
+    /// Whatever RM refused the allocation with.
+    pub fn alloc_list_object_page_raw(
+        &mut self,
+        raw_parent: u32,
+        page: u64,
+        foreign: Option<(u32, u32)>,
+        attr: u32,
+    ) -> Result<HostHandle, RmError> {
+        let (h_client, h_parent) = foreign.unwrap_or((0, 0));
+        let mut params = [0u8; NvMemoryListAllocationParams::SIZE];
+        NvMemoryListAllocationParams {
+            h_client,
+            h_parent,
+            h_object: raw_parent,
+            pte_adjust: 0,
+            mem_type: 0,
+            flags: 0,
+            attr,
+            attr2: 0,
+            page_count: 1,
+            // ⚠ `limit`, not `length`: RM computes `memSize = limit + 1`. The same off-by-one
+            // `Nvos02ParametersWithFd::limit` carries, and the same one that silently
+            // over-allocates a page if a caller writes the size here.
+            limit: RM_PAGE_BYTES - 1,
+            flags_os02: kayfabe_abi::submit::OS02_FLAGS_CONTIG_WRITE_COMBINE,
+        }
+        .encode_into(&mut params)
+        .map_err(|_| RmError::Other(BAD_ENCODE))?;
+        let mut page_list = page.to_le_bytes();
+        let want = self.conn.mint();
+        let h = self.conn.raw_alloc_nested(
+            self.conn.device,
+            want,
+            NV01_MEMORY_LIST_OBJECT,
+            &mut params,
+            NvMemoryListAllocationParams::PAGE_NUMBER_LIST_OFFSET,
+            &mut page_list,
+        )?;
+        self.conn.remember(h, self.conn.device);
+        Ok(self.stamp(h))
+    }
+
+    /// ★★ **The physical address an object's offset lands on, asked of RM directly** —
+    /// `NV0041_CTRL_CMD_GET_SURFACE_PHYS_ATTR`.
+    ///
+    /// ⊘ A *direct equality*, which is why it exists: every other way of comparing two
+    /// objects' backing goes through a mapping and an engine, and then a disagreement could
+    /// be the mapping's. `memOffset` is in/out — the offset goes in, the address comes back.
+    ///
+    /// ⚠ The returned number is a **device** physical address, not a host one, so §4.2.1 is
+    /// not in play: nothing in this process can dereference it.
+    ///
+    /// # Errors
+    /// Whatever RM refused the control with — the header claims the call is MODS-only, and
+    /// a refusal here is a measurement of that claim rather than a failure of the caller.
+    pub fn surface_phys_attr(
+        &mut self,
+        mem: HostHandle,
+        offset: u64,
+    ) -> Result<kayfabe_abi::submit::Nv0041SurfacePhysAttr, RmError> {
+        let raw = self.narrow(mem)?;
+        let mut buf = [0u8; kayfabe_abi::submit::Nv0041SurfacePhysAttr::SIZE];
+        kayfabe_abi::submit::Nv0041SurfacePhysAttr::encode_query(offset, &mut buf)
+            .map_err(|_| RmError::Other(BAD_ENCODE))?;
+        self.conn.raw_control(
+            raw,
+            kayfabe_abi::submit::NV0041_CTRL_CMD_GET_SURFACE_PHYS_ATTR,
+            &mut buf,
+        )?;
+        kayfabe_abi::submit::Nv0041SurfacePhysAttr::decode(&buf)
+            .map_err(|_| RmError::Other(BAD_ENCODE))
+    }
+
+    /// ★★ **Dup an object out of another client into this one — A BENCH PROBE.**
+    ///
+    /// ⊘⊘ **This is NOT the production dup and must not become one.** The production path is
+    /// [`HandedVaSpace`], a type a per-proc backend cannot construct, and that is how F11's
+    /// *"we cannot name a client we did not mint"* is scoped by a type rather than by an
+    /// allowlist. This method takes two bare `u32`s because its entire purpose is to ask RM
+    /// whether a class is dupable at all, in a process that owns **both** clients.
+    ///
+    /// ⚠ Constraint 30: a dup that *succeeds* says nothing about what the duped object
+    /// carries. `[w744]` measured exactly that — a successful dup that was still the wrong
+    /// thing. A caller must follow this with a measurement of the property it actually wants.
+    ///
+    /// # Errors
+    /// Whatever RM refused the dup with.
+    pub fn dup_object_for_probe(
+        &mut self,
+        src_client: u32,
+        src_object: u32,
+    ) -> Result<HostHandle, RmError> {
+        let want = self.conn.mint();
+        let mut arg = [0u8; Nvos55Parameters::SIZE];
+        Nvos55Parameters {
+            h_client: self.conn.client.raw(),
+            h_parent: self.conn.device,
+            h_object: want,
+            h_client_src: src_client,
+            h_object_src: src_object,
+            flags: 0,
+            status: 0,
+        }
+        .encode_into(&mut arg)
+        .map_err(|_| RmError::Other(BAD_ENCODE))?;
+        let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_DUP_OBJECT as u8, arg.len())
+            .map_err(|_| RmError::Other(BAD_ENCODE))?;
+        self.conn
+            .ctl
+            .ioctl(req, &mut arg, &mut [])
+            .map_err(|e| ioctl_error(&e))?;
+        let out = Nvos55Parameters::decode(&arg).map_err(|_| RmError::Other(BAD_ENCODE))?;
+        status_check(out.status)?;
+        self.conn.remember(out.h_object, self.conn.device);
+        Ok(self.stamp(out.h_object))
     }
 
     /// Zero the notifier page before a channel is told about it.

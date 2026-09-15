@@ -1497,6 +1497,217 @@ pub const ATTR_CONTIGUOUS_VIDMEM: u32 = 2 << 27;
 pub const ATTR_NONCONTIGUOUS_VIDMEM: u32 = 1 << 27;
 
 // =====================================================================================
+// `NV01_MEMORY_LIST_OBJECT` — a SLICE of an object someone else allocated
+// =====================================================================================
+
+/// `NV01_MEMORY_LIST_OBJECT` — `ogkm-580: src/common/sdk/nvidia/inc/class/cl84a0.h:49`,
+/// class `0x83`: *"List of page numbers relative to the start of the specified object"*.
+///
+/// ★★★ **No memory is allocated.** The class comment says so in as many words — *"only a
+/// memory descriptor and memory object are created"* — and `mem_list.c`'s FBMEM arm is a
+/// page-number list added to the parent's own base physical address
+/// (`baseOffset = memdescGetPhysAddr(src_pMemDesc, AT_GPU, 0)`, then
+/// `memdescSetPte(pMemDesc, AT_GPU, i, newBase + baseOffset)`). ⊘ That is a **reading**;
+/// `docs/design/list_object_alias_probe.md` is where it becomes a measurement.
+///
+/// ⚠ **Root-only.** `resource_list.h` gives the class `RS_FLAGS_ALLOC_PRIVILEGED`, which
+/// `alloc_free.c` refuses below `RS_PRIV_LEVEL_USER_ROOT` with
+/// `0x1f NV_ERR_INSUFFICIENT_PERMISSIONS` — a fact about *which of our processes may mint a
+/// slice*, not a probe detail.
+/// ⚠ And `memlistConstruct_IMPL` refuses `NV_ERR_NOT_SUPPORTED` outright unless the GPU is a
+/// **GSP client** (or the caller is a vGPU hypervisor / kernel in a guest), so a box with GSP
+/// disabled refuses it for an environmental reason and not an ABI one.
+pub const NV01_MEMORY_LIST_OBJECT: u32 = 0x0083;
+
+/// `NV_MEMORY_LIST_ALLOCATION_PARAMS` — `ogkm-580: cl84a0.h:66-109`. 152 bytes.
+///
+/// Only the fields a `NV01_MEMORY_LIST_OBJECT` over device-local memory needs are named.
+/// The `hHwRes*` trio is the Windows-VM backdoor-surface path and stays zero; the geometry
+/// fields (`height`/`width`/`pitch`/`comprcovg`) are meaningful only with `NVOS32_ATTR_COMPR`
+/// or `_ZCULL` set, which this never does.
+///
+/// ⊘ **`page_number_list` is NOT a field here.** It is a userspace address at `+128`, and
+/// §4.2.1 forbids this crate from producing or holding one; the caller passes the page array
+/// as a buffer through [`kayfabe_linux_raw::Indirect::nested`] naming
+/// [`Self::PAGE_NUMBER_LIST_OFFSET`], exactly as `pAllocParms` itself is passed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct NvMemoryListAllocationParams {
+    /// `NvHandle hClient` @ +0 — *"client to which object belongs (may differ from client
+    /// creating the mapping)"*. `0` means *this* client, and then `h_parent` **must** also be
+    /// `0` (`mem_list.c` returns `NV_ERR_INVALID_OBJECT_PARENT` otherwise).
+    pub h_client: u32,
+    /// `NvHandle hParent` @ +4 — the **device** `h_client`'s object hangs under. Must be `0`
+    /// exactly when `h_client` is.
+    pub h_parent: u32,
+    /// `NvHandle hObject` @ +8 — the object the page numbers are relative to. Must be
+    /// non-zero for this class; `NV_ERR_INVALID_ARGUMENT` otherwise.
+    pub h_object: u32,
+    /// `NvU32 pteAdjust` @ +24 — offset of the data in the first page. Must be
+    /// `< RM_PAGE_SIZE` (4096) or the alloc is refused `NV_ERR_INVALID_ARGUMENT`.
+    pub pte_adjust: u32,
+    /// `NvU32 type` @ +32 — `NVOS32_TYPE_*`; `NVOS32_TYPE_IMAGE` = 0.
+    pub mem_type: u32,
+    /// `NvU32 flags` @ +36 — `NVOS32_ALLOC_FLAGS_*`. ⊘ `_VIRTUAL` is asserted against;
+    /// `_TURBO_CIPHER_ENCRYPTED`, `_ALIGNMENT_HINT`, `_ALIGNMENT_FORCE` and `_BANK_FORCE` are
+    /// each refused `NV_ERR_INVALID_ARGUMENT` on this path.
+    pub flags: u32,
+    /// `NvU32 attr` @ +40 — `NVOS32_ATTR_*`. The FBMEM arm **requires**
+    /// `_LOCATION _VIDMEM` (value 0), and `dmaNvos32ToPageSizeAttr` reads `_PAGE_SIZE` out of
+    /// it to size the descriptor.
+    pub attr: u32,
+    /// `NvU32 attr2` @ +44 — `NVOS32_ATTR2_*`; the other half of the page-size attribute.
+    pub attr2: u32,
+    /// `NvU32 pageCount` @ +68 — elements in the page-number array. ⚠ With
+    /// `NVOS02_FLAGS_PHYSICALITY_CONTIGUOUS` in [`Self::flags_os02`] this must be **1**.
+    pub page_count: u32,
+    /// `NvU64 limit` @ +136 — the highest valid offset. ⚠ `memSize = limit + 1`: off by one
+    /// **by ABI**, the same trap `Nvos02ParametersWithFd::limit` carries.
+    pub limit: u64,
+    /// `NvU32 flagsOs02` @ +144 — `NVOS02_FLAGS_*`. `_PHYSICALITY` (field `7:4`) is what
+    /// makes the descriptor contiguous, and `_COHERENCY` (field `15:12`) is the only source
+    /// of the descriptor's cache attribute on this path.
+    pub flags_os02: u32,
+}
+
+impl NvMemoryListAllocationParams {
+    /// The C typedef name.
+    pub const C_NAME: &'static str = "NV_MEMORY_LIST_ALLOCATION_PARAMS";
+    /// `sizeof`. ⚠ RM compares this against `NVOS21_PARAMETERS.paramsSize` and refuses a
+    /// mismatch, so it is load-bearing rather than descriptive.
+    pub const SIZE: usize = 152;
+    /// `alignof`.
+    pub const ALIGN: usize = 8;
+    /// Byte offset of `NvP64 pageNumberList`. See the struct docs for why it is an offset
+    /// and not a field.
+    pub const PAGE_NUMBER_LIST_OFFSET: usize = 128;
+
+    /// Encode into a **zeroed** little-endian image of at least [`Self::SIZE`] bytes.
+    ///
+    /// # Errors
+    /// [`AbiError::Truncated`].
+    pub fn encode_into(&self, bytes: &mut [u8]) -> Result<(), AbiError> {
+        let n = Self::C_NAME;
+        let s = Self::SIZE;
+        if bytes.len() < s {
+            return Err(AbiError::Truncated {
+                c_name: n,
+                need: s,
+                got: bytes.len(),
+            });
+        }
+        put(bytes, n, s, 0, &self.h_client.to_le_bytes())?;
+        put(bytes, n, s, 4, &self.h_parent.to_le_bytes())?;
+        put(bytes, n, s, 8, &self.h_object.to_le_bytes())?;
+        put(bytes, n, s, 24, &self.pte_adjust.to_le_bytes())?;
+        put(bytes, n, s, 32, &self.mem_type.to_le_bytes())?;
+        put(bytes, n, s, 36, &self.flags.to_le_bytes())?;
+        put(bytes, n, s, 40, &self.attr.to_le_bytes())?;
+        put(bytes, n, s, 44, &self.attr2.to_le_bytes())?;
+        put(bytes, n, s, 68, &self.page_count.to_le_bytes())?;
+        put(bytes, n, s, 136, &self.limit.to_le_bytes())?;
+        put(bytes, n, s, 144, &self.flags_os02.to_le_bytes())
+    }
+}
+
+/// `NVOS32_ATTR_LOCATION_VIDMEM` (0) in field `26:25` with `NVOS32_ATTR_PAGE_SIZE_4KB` (1)
+/// in field `24:23` — `ogkm-580: nvos.h:1061-1068`.
+///
+/// ★ 4 KiB is not a default here, it is the USERD attribution: ogkm programs the instance
+/// block from a **4 KiB-attributed** physical address (`kernel_channel_gm107.c:689`), so a
+/// slice minted for that role is asked for at the granularity hardware will read it at.
+pub const ATTR_VIDMEM_PAGE_4KB: u32 = 1 << 23;
+
+/// `NVOS02_FLAGS_PHYSICALITY_CONTIGUOUS` (0) in field `7:4` with
+/// `NVOS02_FLAGS_COHERENCY_WRITE_COMBINE` (2) in field `15:12` — `ogkm-580: nvos.h:190-202`.
+///
+/// ⚠ `_CONTIGUOUS` encodes as **zero**, so this constant's only set bits are the coherency
+/// field. That is the `NVOS*` trap [`ATTR_CONTIGUOUS_VIDMEM`] already records: these are
+/// field ranges with values in them, and a value of zero is still a choice being made.
+pub const OS02_FLAGS_CONTIG_WRITE_COMBINE: u32 = 2 << 12;
+
+/// `NV0041_CTRL_CMD_GET_SURFACE_PHYS_ATTR` — `ogkm-580: ctrl0041.h:113`.
+///
+/// ★ The one control that answers *"what PHYSICAL address does this object's offset land
+/// on?"* without an engine, a mapping or an inference: `memOffset` is **in/out** — an offset
+/// going in, the physical address coming back
+/// (`mem_ctrl.c: memCtrlCmdGetSurfacePhysAttrLvm_IMPL` → `memdescFillMemdescForPhysAttr`).
+/// ⊘ The header says *"only currently supported in the MODS environment"*; the open driver's
+/// implementation carries no such gate, which is a difference worth measuring rather than
+/// trusting either way.
+pub const NV0041_CTRL_CMD_GET_SURFACE_PHYS_ATTR: u32 = 0x0041_0103;
+
+/// `NV0041_CTRL_GET_SURFACE_PHYS_ATTR_PARAMS` — `ogkm-580: ctrl0041.h:117-126`. 48 bytes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Nv0041SurfacePhysAttr {
+    /// `NvU64 memOffset` @ +0 — **in/out**: the offset asked about, then the physical
+    /// address it lands on.
+    pub mem_offset: u64,
+    /// `NvU32 memFormat` @ +8 — the surface's memory kind.
+    pub mem_format: u32,
+    /// `NvU32 memAperture` @ +20 — `0` VIDMEM, `1` SYSMEM (`ctrl0041.h:130-131`).
+    pub mem_aperture: u32,
+    /// `NvU64 contigSegmentSize` @ +40 — bytes from `memOffset` to the end of the
+    /// physically contiguous run, or 0 if the surface is not contiguous there.
+    pub contig_segment_size: u64,
+}
+
+impl Nv0041SurfacePhysAttr {
+    /// The C typedef name.
+    pub const C_NAME: &'static str = "NV0041_CTRL_GET_SURFACE_PHYS_ATTR_PARAMS";
+    /// `sizeof`.
+    pub const SIZE: usize = 48;
+    /// `alignof`.
+    pub const ALIGN: usize = 8;
+
+    /// Encode the **input** half into a zeroed image: the offset being asked about.
+    ///
+    /// # Errors
+    /// [`AbiError::Truncated`].
+    pub fn encode_query(offset: u64, bytes: &mut [u8]) -> Result<(), AbiError> {
+        let n = Self::C_NAME;
+        let s = Self::SIZE;
+        if bytes.len() < s {
+            return Err(AbiError::Truncated {
+                c_name: n,
+                need: s,
+                got: bytes.len(),
+            });
+        }
+        put(bytes, n, s, 0, &offset.to_le_bytes())
+    }
+
+    /// Decode RM's answer.
+    ///
+    /// # Errors
+    /// [`AbiError::Truncated`].
+    pub fn decode(bytes: &[u8]) -> Result<Self, AbiError> {
+        if bytes.len() < Self::SIZE {
+            return Err(AbiError::Truncated {
+                c_name: Self::C_NAME,
+                need: Self::SIZE,
+                got: bytes.len(),
+            });
+        }
+        let u32_at = |o: usize| {
+            let mut b = [0u8; 4];
+            b.copy_from_slice(&bytes[o..o + 4]);
+            u32::from_le_bytes(b)
+        };
+        let u64_at = |o: usize| {
+            let mut b = [0u8; 8];
+            b.copy_from_slice(&bytes[o..o + 8]);
+            u64::from_le_bytes(b)
+        };
+        Ok(Nv0041SurfacePhysAttr {
+            mem_offset: u64_at(0),
+            mem_format: u32_at(8),
+            mem_aperture: u32_at(20),
+            contig_segment_size: u64_at(40),
+        })
+    }
+}
+
+// =====================================================================================
 // USERD, the GPFIFO ring, and the doorbell
 // =====================================================================================
 
@@ -3714,6 +3925,81 @@ mod tests {
             let expected: Vec<usize> = (offset..offset + want.len()).collect();
             assert_eq!(nonzero, expected, "field at +{offset} spilled");
         }
+    }
+
+    /// `NV_MEMORY_LIST_ALLOCATION_PARAMS`' offsets, field by field, with the same
+    /// nothing-else-moved check. ⚠ The offsets were re-derived by compiling the ogkm
+    /// typedef and taking `offsetof` on x86-64, because `NV_DECLARE_ALIGNED` inserts a
+    /// 4-byte pad after `heapOwner` that nothing in the header's own text mentions.
+    #[test]
+    fn memory_list_allocation_params_land_at_the_580_offsets() {
+        let cases: [(NvMemoryListAllocationParams, usize, &[u8]); 11] = [
+            (NvMemoryListAllocationParams { h_client: 0x1111_1111, ..Default::default() },
+             0, &0x1111_1111u32.to_le_bytes()),
+            (NvMemoryListAllocationParams { h_parent: 0x2222_2222, ..Default::default() },
+             4, &0x2222_2222u32.to_le_bytes()),
+            (NvMemoryListAllocationParams { h_object: 0x3333_3333, ..Default::default() },
+             8, &0x3333_3333u32.to_le_bytes()),
+            (NvMemoryListAllocationParams { pte_adjust: 0x4444_4444, ..Default::default() },
+             24, &0x4444_4444u32.to_le_bytes()),
+            (NvMemoryListAllocationParams { mem_type: 0x5555_5555, ..Default::default() },
+             32, &0x5555_5555u32.to_le_bytes()),
+            (NvMemoryListAllocationParams { flags: 0x6666_6666, ..Default::default() },
+             36, &0x6666_6666u32.to_le_bytes()),
+            (NvMemoryListAllocationParams { attr: 0x7777_7777, ..Default::default() },
+             40, &0x7777_7777u32.to_le_bytes()),
+            (NvMemoryListAllocationParams { attr2: 0x0888_8888, ..Default::default() },
+             44, &0x0888_8888u32.to_le_bytes()),
+            (NvMemoryListAllocationParams { page_count: 0x0999_9999, ..Default::default() },
+             68, &0x0999_9999u32.to_le_bytes()),
+            (NvMemoryListAllocationParams { limit: 0x0AAA_AAAA_AAAA_AAAA, ..Default::default() },
+             136, &0x0AAA_AAAA_AAAA_AAAAu64.to_le_bytes()),
+            (NvMemoryListAllocationParams { flags_os02: 0x0BBB_BBBB, ..Default::default() },
+             144, &0x0BBB_BBBBu32.to_le_bytes()),
+        ];
+        for (params, offset, want) in cases {
+            let mut buf = [0u8; NvMemoryListAllocationParams::SIZE];
+            params.encode_into(&mut buf).expect("encode");
+            assert_eq!(&buf[offset..offset + want.len()], want, "at +{offset}");
+            let nonzero: Vec<usize> = (0..NvMemoryListAllocationParams::SIZE)
+                .filter(|&i| buf[i] != 0)
+                .collect();
+            let expected: Vec<usize> = (offset..offset + want.len()).collect();
+            assert_eq!(nonzero, expected, "field at +{offset} spilled");
+        }
+        // ★ The one field this struct does NOT encode, asserted as an offset: it is a
+        // userspace address and belongs to `Indirect::nested`, never to this crate.
+        assert_eq!(NvMemoryListAllocationParams::PAGE_NUMBER_LIST_OFFSET, 128);
+        const {
+            assert!(
+                NvMemoryListAllocationParams::PAGE_NUMBER_LIST_OFFSET + 8
+                    <= NvMemoryListAllocationParams::SIZE
+            );
+        };
+    }
+
+    /// The physical-attribute reply's offsets, and the in/out field that makes the control
+    /// usable at all: `memOffset` goes in as an offset and comes back as an address, so the
+    /// query encoder and the reply decoder must name the SAME eight bytes.
+    #[test]
+    fn the_surface_phys_attr_reply_decodes_at_the_580_offsets() {
+        let mut buf = [0u8; Nv0041SurfacePhysAttr::SIZE];
+        Nv0041SurfacePhysAttr::encode_query(0x2000, &mut buf).expect("encode");
+        assert_eq!(&buf[0..8], &0x2000u64.to_le_bytes());
+        assert!(buf[8..].iter().all(|b| *b == 0), "the query spilled");
+        buf[0..8].copy_from_slice(&0x1_4000_0000u64.to_le_bytes());
+        buf[8..12].copy_from_slice(&0xABu32.to_le_bytes());
+        buf[20..24].copy_from_slice(&1u32.to_le_bytes());
+        buf[40..48].copy_from_slice(&0x3000u64.to_le_bytes());
+        assert_eq!(
+            Nv0041SurfacePhysAttr::decode(&buf).expect("decode"),
+            Nv0041SurfacePhysAttr {
+                mem_offset: 0x1_4000_0000,
+                mem_format: 0xAB,
+                mem_aperture: 1,
+                contig_segment_size: 0x3000,
+            }
+        );
     }
 
     /// ★ `ATTR_CONTIGUOUS_VIDMEM` is a FIELD VALUE, not a bit mask — the mistake the
