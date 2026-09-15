@@ -111,12 +111,20 @@ echo "--- ★★★★★ Q2/Q3/Q4/Q5 THE SHADOW CENSUS (a missing line is UNMEA
 n_wc=$(grep -ac 'WALK-SHADOW' "$Q" 2>/dev/null)
 echo "E6-SHADOW-LINES=${n_wc:-0}  (0 ⇒ UNMEASURED)"
 grep -ao 'WALK-SHADOW[^|]\{0,1400\}' "$Q" 2>/dev/null | tail -2
-echo "E6-COMPARED=$(grep -ao 'WALK-SHADOW compared=[0-9]*' "$Q" 2>/dev/null | tail -1 | cut -d= -f2)"
-echo "E6-DISAGREEMENTS=$(grep -ao 'disagreements=[0-9]*' "$Q" 2>/dev/null | tail -1 | cut -d= -f2)"
-echo "E6-BY-KIND=$(grep -ao 'by_kind\[[^]]*\]' "$Q" 2>/dev/null | tail -1)"
-echo "E6-SKIPPED=$(grep -ao 'skipped\[[^]]*\]' "$Q" 2>/dev/null | tail -1)"
-echo "E6-IMAGE-STATS=$(grep -ao 'image\[[^]]*\]' "$Q" 2>/dev/null | tail -1)"
-echo "E6-VACUOUS=$(grep -aoc 'VACUOUS' "$Q" 2>/dev/null)"
+# ⊘⊘ **EVERY FIELD IS CUT OUT OF THE `WALK-SHADOW` LINE ITSELF, NOT GREPPED FROM THE LOG.**
+# `[measured w731]` a bare `grep 'by_kind\[...\]'` matched a DIFFERENT subsystem's census
+# (`by_kind[doorbell=242 mirror_fill=41 invalidate=1132 …]`) and a bare `grep -c VACUOUS`
+# counted 306 unrelated lines — so the control arm's summary printed numbers that had nothing
+# to do with the shadow and looked like data. A field lifted from the wrong line is worse than
+# a missing one.
+WS=$(grep -ao 'WALK-SHADOW compared=[^|]\{0,1400\}' "$Q" 2>/dev/null | tail -1)
+field() { printf '%s' "$WS" | grep -ao "$1" | tail -1; }
+echo "E6-COMPARED=$(printf '%s' "$WS" | grep -ao 'compared=[0-9]*' | head -1 | cut -d= -f2)"
+echo "E6-DISAGREEMENTS=$(field 'disagreements=[0-9]*' | cut -d= -f2)"
+echo "E6-BY-KIND=$(field 'by_kind\[[^]]*\]')"
+echo "E6-SKIPPED=$(field 'skipped\[[^]]*\]')"
+echo "E6-IMAGE-STATS=$(field 'image\[[^]]*\]')"
+echo "E6-VERDICT=$(printf '%s' "$WS" | grep -aoc 'VACUOUS')  (1 ⇒ the census is VACUOUS; 0 ⇒ it is not)"
 echo "--- ★ the per-refresh refusals, verbatim, if any fired ---"
 grep -a 'WALK-SHADOW image refused\|WALK-SHADOW refresh refused\|WALK-SHADOW report' "$Q" 2>/dev/null | head -6 | cut -c1-300
 echo "--- ★ the isolate's OWN stderr for the shadow verbs ---"

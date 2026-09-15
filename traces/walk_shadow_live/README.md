@@ -20,9 +20,12 @@ WALK-SHADOW compared=65 kernel_unavailable=2072 skipped[budget_spent=2072]
 
 - **Not vacuous**: 65 comparisons, 171 runs on each side.
 - **Clean**: zero disagreements, of any kind.
-- **The raw client still passes**, and it also passed on the **control arm**
-  (`KAYFABE_WALK_SHADOW=off`, same binary, same box) — so the (P) is not a fact about a
-  lucky boot.
+- **The raw client still passes**, and it also passed on the **control arm** at the SAME
+  binary (`tag=w731ctl`, `KAYFABE_WALK_SHADOW=off`, `TREE_REV=87441e73`) — so the (P) is not
+  a fact about a lucky boot, and the shadow is the only difference between the two.
+  The control's own census line is the disarmed one, verbatim:
+  `WALK-SHADOW ⊘ DISARMED — KAYFABE_WALK_SHADOW=off … This is NOT agreement and it is NOT a
+  clean census; it is the absence of a measurement.`
 - **`absent_edges=0`**: the kernel was given the complete tree, not a clipped one.
 
 ⊘ **What the zero does NOT say**, stated in the line itself: `compared_flags=0xf` is aperture
@@ -49,7 +52,8 @@ The shadow's first findings were about the shadow — which is the instrument wo
 
 ## Files
 
-- `boot_w731on.log` — the graded run, verbatim.
+- `boot_w731on.log` — the graded armed run, verbatim.
+- `boot_w731ctl_control.log` — the control arm at the same binary.
 - `census_lines.txt` — the census, the arena line and the CUDA census, verbatim.
 - `first_disagreement_dumps.txt` — the v4 and v5 dumps that localised defects 2 and 3.
 - `xid_both_arms.txt` — the standing `Xid 31`, on both arms.
