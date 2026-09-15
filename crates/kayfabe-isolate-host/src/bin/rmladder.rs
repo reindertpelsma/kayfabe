@@ -7169,6 +7169,710 @@ fn rpc_mixed_allocs(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> bool 
     clean
 }
 
+/// ★★★★★ **B1(d) — THE HINGE PROBE. Can the scratchpad NAME another client's address
+/// space?** (`docs/design/SINGLE_STORE_PLAN.md`, *"(d) NOBODY BUT THE SCRATCHPAD EVER
+/// NAMES THE OBJECT"*.)
+///
+/// The ruling puts the reserved framebuffer object, the guest GPA memfd and the guest's
+/// **duped-in** VA spaces in the scratchpad isolate, and gives the per-proc stub neither
+/// the framebuffer, nor guest RAM, nor the vidmem object. The stub then executes against
+/// an address space that is **already mapped**, and `Worker::execute`'s `ForeignHandle`
+/// gate stops being an obstacle because no foreign handle is ever named.
+///
+/// **Every word of that depends on one unmeasured link**, and `NV_ESC_RM_DUP_OBJECT`
+/// supports many classes but not all. This rung asks hardware, with no guest and no KVM.
+///
+/// # The roles, and why they are this way round
+///
+/// - **S** — the *scratchpad*. The rung's primary [`HostRmBackend`]. It holds the vidmem
+///   reservation and does all the mapping.
+/// - **P** — the *per-proc stub*. A second, independently opened [`RmConnection`], which
+///   is what [`cross_client_leak`] establishes is genuinely a second client rather than a
+///   second handle onto the first. **P creates the address space**, because in production
+///   the guest's `Vas` is born on the proc that owns it; S dupes it *in*.
+///
+/// # ⊘ THE HINGE IS NOT ONE QUESTION, AND THE BRIEF'S WORDING HIDES THE SECOND HALF
+///
+/// *"Can a `FERMI_VASPACE_A` handle be duplicated"* presumes that handle is the one the
+/// design needs. It is not, or not only: `NVOS46_PARAMETERS::hDma` **does not take a
+/// `FERMI_VASPACE_A`** — it takes an `NV01_MEMORY_VIRTUAL` *range within* one, and being
+/// handed the space is refused `NV_ERR_INVALID_OBJECT_HANDLE` (0x33), measured on
+/// hardware and recorded at [`kayfabe_abi::bringup::NV01_MEMORY_VIRTUAL`] and at R7b in
+/// `alloc_vaspace_raw`. One address space is **two** RM objects, so there are **two**
+/// dup candidates and **two** ways (d) could be built:
+///
+/// | route | dup | `hDma` comes from |
+/// |---|---|---|
+/// | **A** | the `NV01_MEMORY_VIRTUAL` range | the duped range itself |
+/// | **B** | the `FERMI_VASPACE_A` space | a range S allocates **locally** over the duped space |
+///
+/// Route B is the better one if it works — S's `hDma` is then S's own object, so the map
+/// names nothing foreign at all — and it is invisible if one only asks the brief's
+/// question. Both are measured.
+///
+/// # ★★★ AND A FOURTH QUESTION THE BRIEF DOES NOT ASK, WHICH DECIDES THE DESIGN
+///
+/// A dup that *succeeds* and yields an **independent copy** of the address space is worse
+/// than a refusal: every row above would be green and (d) would still be void, because the
+/// stub's channels would walk a different set of page tables than the ones S mapped into.
+/// So the rung ends with a **sharing falsifier**: S maps its object at `VA_SHARED`, then
+/// **P** tries to map **its own** object at the same `VA_SHARED` through its own range
+/// handle.
+///
+/// - **refused** (`0x51 NV_ERR_NO_MEMORY` / `0x1A`) ⇒ the VA is occupied ⇒ **one** address
+///   space, seen from two clients. This is the result (d) needs.
+/// - **`NV_OK`** ⇒ two clients placed two different objects at one VA ⇒ they are **not**
+///   the same space, and (d) is dead however green the dup was.
+///
+/// ⚠ **With its control, because a refusal with no control is not a measurement.** P also
+/// maps at `VA_UNTOUCHED`, which nothing has claimed. If *that* is refused too, P simply
+/// cannot map and the `VA_SHARED` refusal says nothing about sharing.
+fn dup_vaspace_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
+    /// Inside P's and S's default `FERMI_VASPACE_A` range, and clear of every other arm's
+    /// address map (`--w379` `BASE` is `0x80_0000_0000`, `--concurrent-fuzz` is `0x20 +`).
+    const VA_SHARED: u64 = 0x0000_0044_0000_0000;
+    /// Route B's map, deliberately a DIFFERENT VA from route A's: mapping both routes at
+    /// one address would make the second a `0x51` *because of the first*, and that reads as
+    /// a route-B refusal when it is route A's success.
+    const VA_ROUTE_B: u64 = VA_SHARED + 0x2_0000_0000;
+    /// Never mapped by S — the sharing falsifier's control.
+    ///
+    /// ⊘⊘ **CAUGHT BY WRITING THE CONST DOWN, BEFORE THE FIRST RUN.** The first draft made
+    /// this `VA_SHARED + 0x2_0000_0000`, which is *exactly* [`VA_ROUTE_B`] — so S would have
+    /// mapped the control's "untouched" address itself, the control would have been refused,
+    /// and `B1D_SHARING` would have read `INDETERMINATE` with the falsifier void. Identical
+    /// in shape to w743's fixture, which put its vidmem region at an address that was already
+    /// `UNMAPPED_DST` and was caught only by its own control.
+    /// ⇒ The [`ADDRESSES_ARE_DISJOINT`] assertion below makes the recurrence a BUILD failure.
+    const VA_UNTOUCHED: u64 = 0x0000_004A_0000_0000;
+    /// ★ Every VA this rung names is ≥ 1 GiB from every other, so no mapping can be covered
+    /// by a large PTE a neighbour installed and no "untouched" address can quietly be one S
+    /// already claimed. ⊘ A `const` block, so a future edit that re-introduces the overlap
+    /// **does not compile** rather than producing an `INDETERMINATE` nobody reads.
+    const ADDRESSES_ARE_DISJOINT: () = {
+        assert!(VA_ROUTE_B > VA_SHARED && VA_ROUTE_B - VA_SHARED >= (1 << 30));
+        assert!(VA_UNTOUCHED > VA_ROUTE_B && VA_UNTOUCHED - VA_ROUTE_B >= (1 << 30));
+    };
+    let () = ADDRESSES_ARE_DISJOINT;
+    /// RM's default `FERMI_VASPACE_A` limit on this part, as `--w379` names it. A VA at or
+    /// past it must be REFUSED, and that is this rung's known-positive for the FIXED sweep:
+    /// if every address "succeeds", the instrument is not measuring placement at all.
+    const VAS_LIMIT: u64 = 0x0000_0100_0000_0000;
+    /// One object, mapped repeatedly. Two pages, so a 4 KiB and a 64 KiB PTE are both
+    /// expressible and a `0x51` cannot be "the object was too small".
+    const OBJ_LEN: u64 = 128 << 10;
+
+    println!(
+        "info  B1d roles           = GPU {gpu}, euid {} — S (scratchpad) dupes P's (per-proc) \
+         address space IN; S holds the vidmem, P holds neither",
+        kayfabe_linux_raw::geteuid()
+    );
+
+    // ── P — a second client, opened from scratch, exactly as R5b does. ──────────────────
+    let dev = match DevDir::open(c"/dev") {
+        Ok(d) => d,
+        Err(e) => {
+            println!("??    B1d client P        = open(/dev) refused: {e} — NOT a result");
+            println!("B1D_PROBE=NOTRUN");
+            return false;
+        }
+    };
+    let conn_p = match RmConnection::open(&dev, GpuId(gpu), kayfabe_chips::pinned_host_classes()) {
+        Ok(c) => c,
+        Err(e) => {
+            println!(
+                "??    B1d client P        = a SECOND RM client could not be opened: {e}. ⊘ \
+                 NOT a dup result — the experiment never ran"
+            );
+            println!("B1D_PROBE=NOTRUN");
+            return false;
+        }
+    };
+    let client_s = rm.host_client();
+    let client_p = conn_p.client();
+    println!("B1D_CLIENT_S={client_s:#010x}");
+    println!("B1D_CLIENT_P={client_p:#010x}");
+    if client_s == client_p {
+        println!(
+            "??    B1d SAME ROOT       = both connections returned the SAME hClient, so nothing \
+             below would be a CROSS-client statement"
+        );
+        println!("B1D_PROBE=NOTRUN");
+        return false;
+    }
+    let mut rm_p = HostRmBackend::new(
+        IsolateId::new(1, GpuId(gpu)),
+        Arc::new(conn_p),
+        Arc::new(kayfabe_isolate_host::ChildExports::new()),
+    );
+
+    // ── P builds the address space it owns: the range AND the space it lives in. ────────
+    let (range_p, space_p) = match rm_p.host_alloc_vaspace_pair() {
+        Ok(pair) => pair,
+        Err(e) => {
+            println!("??    B1d P vaspace       = refused: {e:?} — NOT a dup result");
+            println!("B1D_PROBE=NOTRUN");
+            return false;
+        }
+    };
+    println!("B1D_P_RANGE={range_p:#010x}  (NV01_MEMORY_VIRTUAL, the hDma class)");
+    println!("B1D_P_SPACE={space_p:#010x}  (FERMI_VASPACE_A, the class the brief names)");
+
+    // ════════════════════════════════════════════════════════════════════════════════════
+    // Q1 — THE HINGE, both halves.
+    // ════════════════════════════════════════════════════════════════════════════════════
+    let dup_space = rm.host_dup_object(client_p, space_p, 0);
+    match &dup_space {
+        Ok(o) => println!(
+            "B1D_Q1A_DUP_VASPACE status={:#06x} h={:#010x}   ({})",
+            o.status,
+            o.h_object,
+            if o.status == 0 { "NV_OK" } else { "REFUSED" }
+        ),
+        Err(e) => println!("B1D_Q1A_DUP_VASPACE ioctl-level failure: {e:?}"),
+    }
+    let dup_range = rm.host_dup_object(client_p, range_p, 0);
+    match &dup_range {
+        Ok(o) => println!(
+            "B1D_Q1B_DUP_VIRTUAL status={:#06x} h={:#010x}   ({})",
+            o.status,
+            o.h_object,
+            if o.status == 0 { "NV_OK" } else { "REFUSED" }
+        ),
+        Err(e) => println!("B1D_Q1B_DUP_VIRTUAL ioctl-level failure: {e:?}"),
+    }
+    let h_dup_space = dup_space.ok().filter(|o| o.status == 0).map(|o| o.h_object);
+    let h_dup_range = dup_range.ok().filter(|o| o.status == 0).map(|o| o.h_object);
+
+    // ── Q1b2 — the SAME dup, parented at the CLIENT ROOT instead of the device. ─────────
+    //
+    // ⊘⊘ **NOT a retry-until-green.** Q1b answered `0x26 NV_ERR_INVALID_DEVICE` — *"current
+    // device is not valid"* — and that number cannot distinguish *"this class may not cross
+    // a client"* from *"the destination parent I chose is the wrong one"*. Two different
+    // findings behind one status, and only one of them refutes route A. Making the parent a
+    // parameter is what turns the refusal into a measurement; if BOTH parents are refused,
+    // route A is dead and now says so for a reason.
+    let dup_range_at_root = rm.host_dup_object_at(rm.host_root(), client_p, range_p, 0);
+    match &dup_range_at_root {
+        Ok(o) => println!(
+            "B1D_Q1B2_DUP_VIRTUAL_AT_ROOT status={:#06x} h={:#010x}   ({})",
+            o.status,
+            o.h_object,
+            if o.status == 0 { "NV_OK" } else { "REFUSED" }
+        ),
+        Err(e) => println!("B1D_Q1B2_DUP_VIRTUAL_AT_ROOT ioctl-level failure: {e:?}"),
+    }
+    let h_dup_range = h_dup_range.or_else(|| {
+        dup_range_at_root
+            .ok()
+            .filter(|o| o.status == 0)
+            .map(|o| o.h_object)
+    });
+
+    // ── Q1c — route B's second half, in THREE arms, because the first one measured the
+    //    probe's own setup rather than the design. ────────────────────────────────────────
+    //
+    // ⊘⊘⊘ **c1 ANSWERED `0x19 NV_ERR_INSERT_DUPLICATE_NAME`** — *"found a duplicate entry in
+    // the requested btree"*. RM keeps ONE btree of VA ranges per address space, and P's
+    // `host_alloc_vaspace_pair` had ALREADY put a whole-space range in it. So the refusal is
+    // about **the duplicate**, and reading it as *"a duped space cannot carry a range"* would
+    // have been a finding manufactured by the probe's own setup — the exact shape R7b in
+    // `alloc_vaspace_raw` records paying for once already ("a defect in THE CLIENT, not in
+    // anything under test").
+    //
+    // c2 asks for a **sub-range** instead, and c3 is what (d) would actually do: the per-proc
+    // client creates ONLY the address space and the scratchpad creates the range.
+    let mut h_local_range_over_duped: Option<u32> = None;
+    if let Some(space) = h_dup_space {
+        match rm.host_alloc_virtual_range_over(space) {
+            Ok(o) => {
+                println!(
+                    "B1D_Q1C1_WHOLE_RANGE_OVER_DUPED status={:#06x} h={:#010x}   ({})  \
+                     — ⊘ P already holds a whole-space range here; 0x19 = the DUPLICATE, not the dup",
+                    o.status,
+                    o.h_object,
+                    if o.status == 0 { "NV_OK" } else { "REFUSED" }
+                );
+                if o.status == 0 {
+                    h_local_range_over_duped = Some(o.h_object);
+                }
+            }
+            Err(e) => println!("B1D_Q1C1_WHOLE_RANGE_OVER_DUPED ioctl-level failure: {e:?}"),
+        }
+        if h_local_range_over_duped.is_none() {
+            // c2 — a bounded sub-range covering only the VAs this rung maps.
+            let lo = VA_SHARED;
+            let hi = VA_UNTOUCHED + 0x4000_0000;
+            match rm.host_alloc_virtual_subrange_over(space, lo, hi) {
+                Ok(o) => {
+                    println!(
+                        "B1D_Q1C2_SUBRANGE_OVER_DUPED status={:#06x} h={:#010x} range=[{lo:#018x},{hi:#018x}]   ({})",
+                        o.status,
+                        o.h_object,
+                        if o.status == 0 { "NV_OK" } else { "REFUSED" }
+                    );
+                    if o.status == 0 {
+                        h_local_range_over_duped = Some(o.h_object);
+                    }
+                }
+                Err(e) => println!("B1D_Q1C2_SUBRANGE_OVER_DUPED ioctl-level failure: {e:?}"),
+            }
+        }
+    } else {
+        println!("B1D_Q1C1_WHOLE_RANGE_OVER_DUPED=SKIPPED  (Q1a refused — no space to build over)");
+        println!("B1D_Q1C2_SUBRANGE_OVER_DUPED=SKIPPED");
+    }
+
+    // ── Q1c3 — ★★★★★ THE SHAPE (d) WOULD ACTUALLY USE. A SECOND, CLEAN address space:
+    //    P creates ONLY the `FERMI_VASPACE_A`, S dupes it, S creates the range. No range
+    //    exists in that space before S's, so `0x19` is structurally unavailable. ────────────
+    let clean = (|| -> Option<(u32, u32)> {
+        let bare = match rm_p.host_alloc_vaspace_space_bare() {
+            Ok(h) => h,
+            Err(e) => {
+                println!("B1D_Q1C3=NOTRUN  (P could not allocate a bare FERMI_VASPACE_A: {e:?})");
+                return None;
+            }
+        };
+        println!("B1D_Q1C3_P_BARE_SPACE={bare:#010x}  (FERMI_VASPACE_A alone — NO range in it)");
+        let dup = match rm.host_dup_object(client_p, bare, 0) {
+            Ok(o) => {
+                println!(
+                    "B1D_Q1C3_DUP_BARE_SPACE status={:#06x} h={:#010x}   ({})",
+                    o.status,
+                    o.h_object,
+                    if o.status == 0 { "NV_OK" } else { "REFUSED" }
+                );
+                if o.status != 0 {
+                    return None;
+                }
+                o.h_object
+            }
+            Err(e) => {
+                println!("B1D_Q1C3_DUP_BARE_SPACE ioctl-level failure: {e:?}");
+                return None;
+            }
+        };
+        match rm.host_alloc_virtual_range_over(dup) {
+            Ok(o) => {
+                println!(
+                    "B1D_Q1C3_RANGE_IN_CLEAN_DUPED_SPACE status={:#06x} h={:#010x}   ({})  \
+                     — ★ the scratchpad builds the range in a space the stub only CREATED",
+                    o.status,
+                    o.h_object,
+                    if o.status == 0 { "NV_OK" } else { "REFUSED" }
+                );
+                if o.status == 0 { Some((o.h_object, bare)) } else { None }
+            }
+            Err(e) => {
+                println!("B1D_Q1C3_RANGE_IN_CLEAN_DUPED_SPACE ioctl-level failure: {e:?}");
+                None
+            }
+        }
+    })();
+    let clean_range = clean.map(|(r, _)| r);
+    let clean_bare_space = clean.map(|(_, b)| b);
+    if h_local_range_over_duped.is_none() {
+        h_local_range_over_duped = clean_range;
+    }
+
+    if h_dup_range.is_none() && h_local_range_over_duped.is_none() {
+        println!(
+            "⊘⊘⊘  B1d THE HINGE FAILS  = neither route produced an hDma S may name. Route A \
+             (dup the NV01_MEMORY_VIRTUAL) and route B (dup the FERMI_VASPACE_A, build a local \
+             range over it) are both refused. (d) as written cannot be built."
+        );
+        println!("B1D_HINGE=FAIL");
+        println!("B1D_PROBE=(F)");
+        return false;
+    }
+    println!("B1D_HINGE=PASS");
+
+    // ── S's own vidmem — the "reserved object" in miniature. ────────────────────────────
+    let mem_s = match rm.host_reserve_vidmem(OBJ_LEN) {
+        Ok(h) => h,
+        Err(e) => {
+            println!("??    B1d S vidmem        = refused: {e:?} — NOT a mapping result");
+            println!("B1D_PROBE=NOTRUN");
+            return false;
+        }
+    };
+    println!("B1D_S_MEMORY={mem_s:#010x}  ({OBJ_LEN} B, NV01_MEMORY_LOCAL_USER, S-local)");
+
+    // ════════════════════════════════════════════════════════════════════════════════════
+    // Q2 — does MapMemoryDma accept a DUPED hDma with a LOCAL hMemory?
+    // ════════════════════════════════════════════════════════════════════════════════════
+    let mut route_a_va: Option<u64> = None;
+    let mut route_b_va: Option<u64> = None;
+
+    if let Some(h_dma) = h_dup_range {
+        match rm.host_map_dma_fixed(h_dma, mem_s, OBJ_LEN, VA_SHARED) {
+            Ok(o) => {
+                println!(
+                    "B1D_Q2A_MAP_DUPED_HDMA status={:#06x} dmaOffset={:#018x} asked={VA_SHARED:#018x} \
+                     placed_as_asked={}",
+                    o.status,
+                    o.dma_offset,
+                    o.status == 0 && o.dma_offset == VA_SHARED
+                );
+                if o.status == 0 && o.dma_offset == VA_SHARED {
+                    route_a_va = Some(VA_SHARED);
+                }
+            }
+            Err(e) => println!("B1D_Q2A_MAP_DUPED_HDMA ioctl-level failure: {e:?}"),
+        }
+    } else {
+        println!("B1D_Q2A_MAP_DUPED_HDMA=SKIPPED  (route A's dup was refused)");
+    }
+
+    if let Some(h_dma) = h_local_range_over_duped {
+        let at = VA_ROUTE_B;
+        match rm.host_map_dma_fixed(h_dma, mem_s, OBJ_LEN, at) {
+            Ok(o) => {
+                println!(
+                    "B1D_Q2B_MAP_LOCAL_RANGE_OVER_DUPED_SPACE status={:#06x} dmaOffset={:#018x} \
+                     asked={at:#018x} placed_as_asked={}",
+                    o.status,
+                    o.dma_offset,
+                    o.status == 0 && o.dma_offset == at
+                );
+                if o.status == 0 && o.dma_offset == at {
+                    route_b_va = Some(at);
+                }
+            }
+            Err(e) => println!("B1D_Q2B_MAP_LOCAL_RANGE_OVER_DUPED_SPACE ioctl-level failure: {e:?}"),
+        }
+    } else {
+        println!("B1D_Q2B_MAP_LOCAL_RANGE_OVER_DUPED_SPACE=SKIPPED  (route B's dup was refused)");
+    }
+
+    // The hDma the rest of the rung uses: route B if it works (S names nothing foreign),
+    // else route A.
+    // ⊘⊘⊘ **WHICH ADDRESS SPACE THE WORKING hDma LIVES IN IS PART OF THE ANSWER**, because
+    // the sharing falsifier below is only a falsifier if P maps into the SAME space. Route
+    // B via Q1c3 runs in a **clean** space P created but has no range in — and a collision
+    // test run there through `range_p` (which lives in `space_p`) would be two maps in two
+    // different spaces, which of course both succeed. That would print
+    // `⊘ TWO SPACES — (d) is void` on a test that never tested anything.
+    // ⇒ The space is carried with the handle, and P's side is chosen from it.
+    let (working_hdma, working_label, working_space) =
+        match (h_local_range_over_duped, route_b_va, h_dup_range, route_a_va) {
+            // Prefer a route in `space_p`: P already holds `range_p` there, so the falsifier
+            // needs nothing built.
+            (Some(h), Some(_), _, _) if Some(h) != clean_range => {
+                (Some(h), "B (local range over duped space_p)", Some(space_p))
+            }
+            (_, _, Some(h), Some(_)) => (Some(h), "A (duped range)", Some(space_p)),
+            (Some(h), Some(_), _, _) => (
+                Some(h),
+                "B (range built by S in a CLEAN space P only created)",
+                clean_bare_space,
+            ),
+            _ => (None, "none", None),
+        };
+    println!("B1D_WORKING_ROUTE={working_label}");
+    println!(
+        "B1D_WORKING_SPACE={}",
+        working_space.map_or_else(|| "none".to_string(), |v| format!("{v:#010x}"))
+    );
+    let Some(h_dma) = working_hdma else {
+        println!(
+            "⊘⊘   B1d MAP FAILS        = a dup succeeded but no FIXED map through it did. \
+             (d) needs the map, not the handle."
+        );
+        println!("B1D_PROBE=(F)");
+        return false;
+    };
+
+    // ════════════════════════════════════════════════════════════════════════════════════
+    // Q3 — does DMA_OFFSET_FIXED_TRUE accept an ARBITRARY guest-chosen VA?
+    //
+    // ★ The first four are the raw client's OWN per-thread ring windows (`--w379`:
+    //   BASE 0x80_0000_0000, THREAD_BASE = BASE + 0x2_0000_0000, stride 0x2_0000_0000),
+    //   i.e. the exact numbers production must place, not decorative ones.
+    // ★ The last is PAST RM's default VAS limit and is the KNOWN-POSITIVE: it must be
+    //   REFUSED. A sweep in which everything succeeds is not measuring placement.
+    // ════════════════════════════════════════════════════════════════════════════════════
+    /// What a row's outcome is allowed to mean.
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum Row {
+        /// ★ A VA **production must place**, so a refusal here refutes (d)'s data plane.
+        Required,
+        /// Informational: it answers *"is FIXED constrained to a reserved range?"* and a
+        /// refusal is a FINDING about RM's VA layout, not about (d). ⊘ It is deliberately
+        /// NOT in the verdict — an unrelated address-range fact must not decide the design
+        /// question, in either direction.
+        Informational,
+        /// ★ The KNOWN-POSITIVE: it MUST be refused.
+        MustRefuse,
+    }
+    let sweep: [(u64, &str, Row); 6] = [
+        (0x0000_0080_0000_1000, "raw client ring, thread 0", Row::Required),
+        (0x0000_0082_0000_1000, "raw client ring, thread 1", Row::Required),
+        (0x0000_0086_0000_1000, "raw client ring, thread 3", Row::Required),
+        (0x0000_0000_0001_0000, "a LOW VA, near RM's own reservations", Row::Informational),
+        (0x0000_00F0_0000_0000, "high, still under the VAS limit", Row::Informational),
+        (VAS_LIMIT + 0x1_0000, "★ PAST the VAS limit — MUST be refused", Row::MustRefuse),
+    ];
+    let mut req_honoured = 0usize;
+    let mut req_total = 0usize;
+    let mut info_honoured = 0usize;
+    let mut info_total = 0usize;
+    let mut placed: Vec<u64> = Vec::new();
+    for (at, what, row) in sweep {
+        let r = rm.host_map_dma_fixed(h_dma, mem_s, OBJ_LEN, at);
+        match r {
+            Ok(o) => {
+                let honoured = o.status == 0 && o.dma_offset == at;
+                println!(
+                    "B1D_Q3_FIXED at={at:#018x} status={:#06x} dmaOffset={:#018x} honoured={honoured}  \
+                     — {what}",
+                    o.status, o.dma_offset
+                );
+                match row {
+                    Row::Required => {
+                        req_total += 1;
+                        if honoured {
+                            req_honoured += 1;
+                            placed.push(at);
+                        }
+                    }
+                    Row::Informational => {
+                        info_total += 1;
+                        if honoured {
+                            info_honoured += 1;
+                            placed.push(at);
+                        }
+                    }
+                    Row::MustRefuse => {
+                        if o.status != 0 {
+                            // ⊘ Recorded but NO LONGER the known-positive — see Q3's block.
+                        } else {
+                            // It "succeeded" past the limit — then either the limit is not
+                            // what `--w379` says, or this code is not reading the status.
+                            // Either way the sweep above cannot be cited.
+                            placed.push(at);
+                        }
+                    }
+                }
+            }
+            Err(e) => println!("B1D_Q3_FIXED at={at:#018x} ioctl-level failure: {e:?} — {what}"),
+        }
+    }
+    println!("B1D_Q3_REQUIRED_HONOURED={req_honoured}/{req_total}   (raw-client ring VAs, NO page-size flag)");
+    println!("B1D_Q3_INFORMATIONAL_HONOURED={info_honoured}/{info_total}   (⊘ a finding about RM's VA layout, NOT in the verdict)");
+
+    // ════════════════════════════════════════════════════════════════════════════════════
+    // Q3b — ★★★★★ THE SAME THREE VAs WITH `NVOS46_FLAGS_PAGE_SIZE_4KB`.
+    //
+    // ⊘⊘⊘ Q3 above measured `status=0x0000` with `dmaOffset` **4 KiB BELOW what was asked**
+    // — `…_1000` came back `…_0000`. RM did not refuse; it RELOCATED, because
+    // `DMA_OFFSET_FIXED_TRUE` makes the offset an [IN] and `_dmaGetPageSize` is still free
+    // to pick a BIG page, and a big-page mapping cannot begin at a 4 KiB boundary.
+    // ★ That is the `Xid 31 FAULT_PDE` failure `NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE`'s own
+    // doc describes, reached through a SUCCESS instead of through a missing flag — and it
+    // is invisible to any caller that reads only `status`.
+    // ⇒ This arm is the falsifiable half: if pinning the small-page table honours exactly
+    // the addresses the plain arm relocated, the cause is named and the production fix is
+    // one flag. If it does not, the cause is something else and the flag is not it.
+    // ════════════════════════════════════════════════════════════════════════════════════
+    // ⊘⊘⊘ **ITS OWN VA WINDOW, and the first cut did not have one.** Re-using the plain
+    // sweep's addresses measured `0x51 NV_ERR_NO_MEMORY` on all three — because the PLAIN
+    // arm had just mapped a BIG page at `0x80_0000_0000`, which COVERS `0x80_0000_1000`.
+    // The 4 KiB arm was colliding with the relocation it exists to diagnose, and the
+    // refusal read as "the flag does not help" when nothing had been tested. Same class as
+    // run 1's `0x19`: the probe measuring its own setup.
+    // ⇒ `Q3B_BASE` is 16 GiB clear of the plain sweep and of every other VA this rung names.
+    const Q3B_BASE: u64 = 0x0000_0090_0000_0000;
+    let mut req4k_honoured = 0usize;
+    let mut req4k_total = 0usize;
+    for (i, (_plain, what, row)) in sweep.into_iter().enumerate() {
+        if row != Row::Required {
+            continue;
+        }
+        // Same SHAPE as the plain arm's addresses — a `…_1000` tail, 8 GiB apart — at
+        // addresses nothing has touched.
+        let at = Q3B_BASE + (i as u64) * 0x2_0000_0000 + 0x1000;
+        req4k_total += 1;
+        match rm.host_map_dma_fixed_4k(h_dma, mem_s, OBJ_LEN, at) {
+            Ok(o) => {
+                let honoured = o.status == 0 && o.dma_offset == at;
+                println!(
+                    "B1D_Q3B_FIXED_4K at={at:#018x} status={:#06x} dmaOffset={:#018x} honoured={honoured}  \
+                     — {what}",
+                    o.status, o.dma_offset
+                );
+                if honoured {
+                    req4k_honoured += 1;
+                    placed.push(at);
+                }
+            }
+            Err(e) => println!("B1D_Q3B_FIXED_4K at={at:#018x} ioctl-level failure: {e:?} — {what}"),
+        }
+    }
+    println!("B1D_Q3B_REQUIRED_HONOURED_4K={req4k_honoured}/{req4k_total}   (★ IN the verdict)");
+
+    // ════════════════════════════════════════════════════════════════════════════════════
+    // ★★ THE KNOWN-POSITIVE, redesigned. The first version asked for a VA past what
+    // `--w379` calls RM's default VAS limit and expected a refusal; RM **accepted** it
+    // (`0x100_0001_0000`, `honoured=true`), so that row proved nothing and the gate read
+    // `DID NOT FIRE`. ⊘ A known-positive that depends on the driver's VA layout is not a
+    // known-positive — it is a second hypothesis.
+    // ⇒ Re-map an address THIS RUNG HAS ALREADY MAPPED. That must be refused whatever the
+    // layout is, because the VA is occupied by our own mapping, and it is the same `0x51`
+    // the sharing falsifier below reads as its positive.
+    // ════════════════════════════════════════════════════════════════════════════════════
+    let known_positive_fired = match placed.first() {
+        None => {
+            println!("B1D_Q3_KNOWN_POSITIVE=⊘ NOTRUN — nothing was placed, so nothing can be re-placed");
+            false
+        }
+        Some(&again) => match rm.host_map_dma_fixed(h_dma, mem_s, OBJ_LEN, again) {
+            Ok(o) => {
+                println!(
+                    "B1D_Q3_KNOWN_POSITIVE_REMAP at={again:#018x} status={:#06x}  \
+                     — the SAME VA this rung already mapped; a refusal is REQUIRED",
+                    o.status
+                );
+                o.status != 0
+            }
+            Err(e) => {
+                println!("B1D_Q3_KNOWN_POSITIVE_REMAP ioctl-level failure: {e:?}");
+                false
+            }
+        },
+    };
+    println!(
+        "B1D_Q3_KNOWN_POSITIVE={}",
+        if known_positive_fired {
+            "FIRED — the sweep can distinguish a refusal from a placement"
+        } else {
+            "⊘ DID NOT FIRE — every row above is unmeasured"
+        }
+    );
+
+
+    // ════════════════════════════════════════════════════════════════════════════════════
+    // Q4 — THE SHARING FALSIFIER, with its control.
+    //
+    // S has just mapped `mem_s` at every VA in `placed`. P now tries to map ITS OWN object
+    // at one of them, through P's OWN range handle. If the dup shares the space, the VA is
+    // taken and RM must refuse.
+    // ════════════════════════════════════════════════════════════════════════════════════
+    let mem_p = match rm_p.host_reserve_vidmem(OBJ_LEN) {
+        Ok(h) => h,
+        Err(e) => {
+            println!("??    B1d P vidmem        = refused: {e:?} — the falsifier cannot run");
+            println!("B1D_SHARING=NOTRUN");
+            println!("B1D_PROBE=(F)");
+            return false;
+        }
+    };
+    // ★★★ P's OWN hDma **IN THE SPACE S MAPPED INTO**. See `working_space`.
+    let p_hdma = match working_space {
+        Some(sp) if sp == space_p => Some(range_p),
+        Some(sp) => {
+            // The clean space: P created it but has no range in it, and S's range is
+            // whole-space, so P needs a bounded one.
+            match rm_p.host_alloc_virtual_subrange_over(sp, VA_SHARED, VA_UNTOUCHED + 0x4000_0000)
+            {
+                Ok(o) if o.status == 0 => {
+                    println!("B1D_Q4_P_SUBRANGE={:#010x}  (P's own range in the clean space)", o.h_object);
+                    Some(o.h_object)
+                }
+                Ok(o) => {
+                    println!(
+                        "B1D_Q4_P_SUBRANGE status={:#06x} REFUSED — P holds no range in the space \
+                         S mapped into",
+                        o.status
+                    );
+                    None
+                }
+                Err(e) => {
+                    println!("B1D_Q4_P_SUBRANGE ioctl-level failure: {e:?}");
+                    None
+                }
+            }
+        }
+        None => None,
+    };
+    let Some(p_hdma) = p_hdma else {
+        // ⊘ NOT `TWO SPACES`. Mapping through a range in a DIFFERENT space would succeed for
+        // a reason that has nothing to do with sharing, and printing the void verdict here
+        // would be this campaign's "a green number is not a proof about a race", inverted.
+        println!(
+            "B1D_SHARING=NOTRUN  (P holds no hDma in the space S mapped into, so a collision \
+             there would compare two different address spaces)"
+        );
+        println!("B1D_PROBE=(F)");
+        return false;
+    };
+
+    // The control FIRST: if P cannot map at all, a refusal below proves nothing.
+    let control = rm_p.host_map_dma_fixed(p_hdma, mem_p, OBJ_LEN, VA_UNTOUCHED);
+    let control_ok = match &control {
+        Ok(o) => {
+            println!(
+                "B1D_Q4_CONTROL at={VA_UNTOUCHED:#018x} status={:#06x} dmaOffset={:#018x}  \
+                 — P maps its OWN object at a VA NOBODY has claimed",
+                o.status, o.dma_offset
+            );
+            o.status == 0 && o.dma_offset == VA_UNTOUCHED
+        }
+        Err(e) => {
+            println!("B1D_Q4_CONTROL ioctl-level failure: {e:?}");
+            false
+        }
+    };
+    println!("B1D_Q4_CONTROL_OK={control_ok}");
+
+    let Some(&collide_at) = placed.first() else {
+        println!("B1D_SHARING=NOTRUN  (S placed nothing, so there is no occupied VA to collide with)");
+        println!("B1D_PROBE=(F)");
+        return false;
+    };
+    let collide = rm_p.host_map_dma_fixed(p_hdma, mem_p, OBJ_LEN, collide_at);
+    let shared = match &collide {
+        Ok(o) => {
+            println!(
+                "B1D_Q4_COLLIDE at={collide_at:#018x} status={:#06x} dmaOffset={:#018x}  \
+                 — P maps its OWN object at a VA **S already occupied in the duped space**",
+                o.status, o.dma_offset
+            );
+            o.status != 0
+        }
+        Err(e) => {
+            println!("B1D_Q4_COLLIDE ioctl-level failure: {e:?}");
+            false
+        }
+    };
+    println!(
+        "B1D_SHARING={}",
+        if !control_ok {
+            "INDETERMINATE — the control did not pass, so the collision says nothing"
+        } else if shared {
+            "ONE SPACE — the collision was REFUSED, so S and P see the same address space"
+        } else {
+            "⊘ TWO SPACES — the collision SUCCEEDED, so the dup made an independent copy and (d) is void"
+        }
+    );
+
+    // ⊘ The verdict names exactly the five things (d) needs, and nothing else. In
+    // particular the two INFORMATIONAL sweep rows are excluded on purpose: whether RM
+    // hands out a VA near its own reservations is a fact about RM's address layout, and
+    // letting it swing this line would let an unrelated fact decide the design question.
+    // ⊘ The verdict names the five things (d) needs. `req_honoured` (no page-size flag) is
+    // DELIBERATELY NOT one of them: it measured a RELOCATION, which is the finding, and
+    // `req4k_honoured` is the clause that says the data plane can place what it must.
+    let verdict = req4k_total > 0
+        && req4k_honoured == req4k_total
+        && known_positive_fired
+        && control_ok
+        && shared;
+    println!("B1D_PROBE={}", if verdict { "(P)" } else { "(F)" });
+    verdict
+}
+
 /// ★★★★★ **w381 R5b — CROSS-CLIENT LEAKAGE. Two RM clients must not see each other's
 /// memory.**
 ///
@@ -11706,6 +12410,7 @@ fn main() -> std::process::ExitCode {
     // ★★★★★ w381 — R4 and the cross-client rung, and THE PROBE SELECTOR.
     let mut want_rpc_mixed = false;
     let mut want_cross_client = false;
+    let mut want_dup_vaspace = false;
     // ★★★★★ w289 — `--defer-liveness`. Its OWN flag and deliberately NOT part of
     // `--w379`/`--w381`: it provokes three Xids of its own, it is the only rung in this
     // file whose result depends on what is CACHED in an MMU, and folding it into a
@@ -11921,6 +12626,7 @@ fn main() -> std::process::ExitCode {
             "--rpc-mixed-allocs" => want_rpc_mixed = true,
             // ★★★★★ w381 R5b — a SECOND RM client, and the standing requirement that two
             // guest processes must not see each other's memory.
+            "--dup-vaspace-probe" => want_dup_vaspace = true,
             "--cross-client-leak" => want_cross_client = true,
             // ★★★★★ THE GUEST-SERVABLE BATTERY. Everything `--w379` selects, plus R4 and the
             // cross-client rung, on the `LAUNCH_DMA` primitive — i.e. the exact invocation
@@ -12470,6 +13176,24 @@ fn main() -> std::process::ExitCode {
     // placement** and cannot be R13's RM-placed channel from earlier in the ladder. Two
     // channel allocations in one process, one placed and one not, would make "which one
     // refused?" a question — and the answer to that question IS the rung.
+    // ★★★★★ B1(d) — the hinge probe RUNS AND RETURNS, for R25's reason and one more: it
+    // opens a SECOND RM client and dupes objects between the two, and any object an earlier
+    // rung left live in either client is a second explanation for a `0x51`. A probe whose
+    // refusal has two candidate causes is not a probe.
+    if want_dup_vaspace {
+        println!(
+            "REV_UNDER_TEST={}",
+            option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
+        );
+        let ok = dup_vaspace_probe(&mut rm, gpu);
+        println!("done — B1(d) dup-vaspace hinge probe only");
+        return if ok {
+            std::process::ExitCode::SUCCESS
+        } else {
+            std::process::ExitCode::from(1)
+        };
+    }
+
     if want_dictated_neg {
         println!(
             "REV_UNDER_TEST={}",

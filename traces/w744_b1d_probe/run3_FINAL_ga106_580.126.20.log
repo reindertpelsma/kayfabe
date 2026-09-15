@@ -1,0 +1,56 @@
+PROBE_START 2026-09-15T16:34:18Z
+TREE_REV=e0ffe496
+warning: `kayfabe-isolate-host` (bin "kayfabe-rm-ladder") generated 3 warnings (run `cargo fix --bin "kayfabe-rm-ladder" -p kayfabe-isolate-host` to apply 1 suggestion)
+    Finished `release` profile [optimized] target(s) in 14.29s
+CARGO_RC=0
+NVIDIA GeForce RTX 3060, 580.126.20
+GPU_NODE_THAT_OPENS=1
+===== B1D PROBE BEGIN =====
+info  RMLADDER ARGV     = [--gpu 1 --dup-vaspace-probe]
+ok    R2 version         = "580.126.20"
+ok    R4 hClient         = 0xc1dd3c6f
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=unknown
+info  B1d roles           = GPU 1, euid 0 — S (scratchpad) dupes P's (per-proc) address space IN; S holds the vidmem, P holds neither
+B1D_CLIENT_S=0xc1dd3c6f
+B1D_CLIENT_P=0xc1dd3c70
+B1D_P_RANGE=0xcafe0005  (NV01_MEMORY_VIRTUAL, the hDma class)
+B1D_P_SPACE=0xcafe0004  (FERMI_VASPACE_A, the class the brief names)
+B1D_Q1A_DUP_VASPACE status=0x0000 h=0xcafe0004   (NV_OK)
+B1D_Q1B_DUP_VIRTUAL status=0x0026 h=0xcafe0005   (REFUSED)
+B1D_Q1B2_DUP_VIRTUAL_AT_ROOT status=0x0036 h=0xcafe0006   (REFUSED)
+B1D_Q1C1_WHOLE_RANGE_OVER_DUPED status=0x0019 h=0xcafe0007   (REFUSED)  — ⊘ P already holds a whole-space range here; 0x19 = the DUPLICATE, not the dup
+B1D_Q1C2_SUBRANGE_OVER_DUPED status=0x0019 h=0xcafe0008 range=[0x0000004400000000,0x0000004a40000000]   (REFUSED)
+B1D_Q1C3_P_BARE_SPACE=0xcafe0006  (FERMI_VASPACE_A alone — NO range in it)
+B1D_Q1C3_DUP_BARE_SPACE status=0x0000 h=0xcafe0009   (NV_OK)
+B1D_Q1C3_RANGE_IN_CLEAN_DUPED_SPACE status=0x0000 h=0xcafe000a   (NV_OK)  — ★ the scratchpad builds the range in a space the stub only CREATED
+B1D_HINGE=PASS
+B1D_S_MEMORY=0xcafe000b  (131072 B, NV01_MEMORY_LOCAL_USER, S-local)
+B1D_Q2A_MAP_DUPED_HDMA=SKIPPED  (route A's dup was refused)
+B1D_Q2B_MAP_LOCAL_RANGE_OVER_DUPED_SPACE status=0x0000 dmaOffset=0x0000004600000000 asked=0x0000004600000000 placed_as_asked=true
+B1D_WORKING_ROUTE=B (range built by S in a CLEAN space P only created)
+B1D_WORKING_SPACE=0xcafe0006
+B1D_Q3_FIXED at=0x0000008000001000 status=0x0000 dmaOffset=0x0000008000000000 honoured=false  — raw client ring, thread 0
+B1D_Q3_FIXED at=0x0000008200001000 status=0x0000 dmaOffset=0x0000008200000000 honoured=false  — raw client ring, thread 1
+B1D_Q3_FIXED at=0x0000008600001000 status=0x0000 dmaOffset=0x0000008600000000 honoured=false  — raw client ring, thread 3
+B1D_Q3_FIXED at=0x0000000000010000 status=0x001f dmaOffset=0x0000000000010000 honoured=false  — a LOW VA, near RM's own reservations
+B1D_Q3_FIXED at=0x000000f000000000 status=0x0000 dmaOffset=0x000000f000000000 honoured=true  — high, still under the VAS limit
+B1D_Q3_FIXED at=0x0000010000010000 status=0x0000 dmaOffset=0x0000010000010000 honoured=true  — ★ PAST the VAS limit — MUST be refused
+B1D_Q3_REQUIRED_HONOURED=0/3   (raw-client ring VAs, NO page-size flag)
+B1D_Q3_INFORMATIONAL_HONOURED=1/2   (⊘ a finding about RM's VA layout, NOT in the verdict)
+B1D_Q3B_FIXED_4K at=0x0000009000001000 status=0x0000 dmaOffset=0x0000009000001000 honoured=true  — raw client ring, thread 0
+B1D_Q3B_FIXED_4K at=0x0000009200001000 status=0x0000 dmaOffset=0x0000009200001000 honoured=true  — raw client ring, thread 1
+B1D_Q3B_FIXED_4K at=0x0000009400001000 status=0x0000 dmaOffset=0x0000009400001000 honoured=true  — raw client ring, thread 3
+B1D_Q3B_REQUIRED_HONOURED_4K=3/3   (★ IN the verdict)
+B1D_Q3_KNOWN_POSITIVE_REMAP at=0x000000f000000000 status=0x0051  — the SAME VA this rung already mapped; a refusal is REQUIRED
+B1D_Q3_KNOWN_POSITIVE=FIRED — the sweep can distinguish a refusal from a placement
+B1D_Q4_P_SUBRANGE=0xcafe0008  (P's own range in the clean space)
+B1D_Q4_CONTROL at=0x0000004a00000000 status=0x0000 dmaOffset=0x0000004a00000000  — P maps its OWN object at a VA NOBODY has claimed
+B1D_Q4_CONTROL_OK=true
+B1D_Q4_COLLIDE at=0x000000f000000000 status=0x0051 dmaOffset=0x000000f000000000  — P maps its OWN object at a VA **S already occupied in the duped space**
+B1D_SHARING=ONE SPACE — the collision was REFUSED, so S and P see the same address space
+B1D_PROBE=(P)
+done — B1(d) dup-vaspace hinge probe only
+PROBE_RC=0
+===== B1D PROBE END =====
+PROBE_EXIT_STATUS=0
