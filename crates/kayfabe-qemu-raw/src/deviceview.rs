@@ -632,6 +632,14 @@ mod byteport {
         /// apart from an RM refusal: one is OUR bound and the other is the host's aperture,
         /// and reading them as one would send somebody to measure the wrong pool.
         budget_refused: AtomicU64,
+        /// ★ w743 — the pre-flight's own counters, kept APART from `wanted_read`/`served_read`.
+        /// ⊘ A probe that misses also calls `want`, so it bumps `wanted_*` too; without these
+        /// three there would be no way to tell a demand raised by an *attempted access* from one
+        /// raised by a *question*, and the whole of w743's claim is about which came first.
+        probes: AtomicU64,
+        probe_ready: AtomicU64,
+        probe_missed: AtomicU64,
+        probe_unservable: AtomicU64,
         first_arm_refusal: std::sync::Mutex<Option<String>>,
     }
 
@@ -670,6 +678,10 @@ mod byteport {
                 outside_object: AtomicU64::new(0),
                 span_too_wide: AtomicU64::new(0),
                 budget_refused: AtomicU64::new(0),
+                probes: AtomicU64::new(0),
+                probe_ready: AtomicU64::new(0),
+                probe_missed: AtomicU64::new(0),
+                probe_unservable: AtomicU64::new(0),
                 first_arm_refusal: std::sync::Mutex::new(None),
             }
         }
@@ -818,6 +830,57 @@ mod byteport {
                 self.served_write.fetch_add(1, Ordering::Relaxed);
             }
             ok
+        }
+
+        fn probe_or_want(&self, at: u64, len: u64, by: kayfabe_device::DeviceFbWant) -> bool {
+            self.probes.fetch_add(1, Ordering::Relaxed);
+            // ⊘ An access this port can NEVER serve — outside the reserved object, or wider
+            // than `MAX_SPAN_RUNS` — is not a want, for `want`'s own reason: putting it in
+            // the set would make every later drain spend an IPC round trip rediscovering it.
+            // It is still `false`, because it is still not servable, and `span`'s own
+            // `outside_object` / `span_too_wide` counters are what name which.
+            let Some((first, last)) = self.span(at, len.max(1)) else {
+                self.probe_unservable.fetch_add(1, Ordering::Relaxed);
+                return false;
+            };
+            {
+                let runs = self
+                    .runs
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let mut base = first;
+                let mut all = true;
+                // ★ A fixed trip count: `span` refused anything wider than `MAX_SPAN_RUNS`.
+                while base <= last {
+                    match runs.get(&base) {
+                        // ⊘ The run's length is the DRIVER's, page-rounded, and may be
+                        // SHORT of the grain. Checked with exactly `read_armed`'s test, so
+                        // a `true` here and a served access cannot disagree.
+                        Some(run) => {
+                            let want_end = (at + len.max(1)).min(base + ARM_GRAIN);
+                            if want_end > base + run.len {
+                                all = false;
+                                break;
+                            }
+                        }
+                        None => {
+                            all = false;
+                            break;
+                        }
+                    }
+                    base += ARM_GRAIN;
+                }
+                if all {
+                    self.probe_ready.fetch_add(1, Ordering::Relaxed);
+                    return true;
+                }
+            }
+            // ⚠ The `runs` lock is DROPPED above before this: `want` takes the `want` mutex,
+            // and holding two of this type's mutexes at once is the one ordering fact the
+            // type's own table forbids.
+            self.probe_missed.fetch_add(1, Ordering::Relaxed);
+            kayfabe_device::DeviceFbPort::want(self, at, len, by);
+            false
         }
 
         fn want(&self, at: u64, len: u64, by: kayfabe_device::DeviceFbWant) {
@@ -1019,8 +1082,13 @@ mod byteport {
                  declined_on_vcpu={declined} evicted={ev} outstanding={out} served_read={sr} \
                  served_write={sw} wanted_read={wr} wanted_write={ww} want_dropped={wd} \
                  still_wanted={sw2} outside_object={oo} span_too_wide={stw} \
-                 budget_refused={br} first_arm_refusal=[{first}] ⇒ {verdict}",
+                 budget_refused={br} probes={pr} probe_ready={prr} probe_missed={prm} \
+                 probe_unservable={pru} first_arm_refusal=[{first}] ⇒ {verdict}",
                 br = self.budget_refused.load(Ordering::Relaxed),
+                pr = self.probes.load(Ordering::Relaxed),
+                prr = self.probe_ready.load(Ordering::Relaxed),
+                prm = self.probe_missed.load(Ordering::Relaxed),
+                pru = self.probe_unservable.load(Ordering::Relaxed),
                 ev = self.evicted.load(Ordering::Relaxed),
                 out = self
                     .runs

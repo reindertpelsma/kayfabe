@@ -351,6 +351,131 @@ to grow a reason it currently discards, and cut B is the increment that gives th
 > first eight prints showed, never a census.
 
 
+### ★★★★★ 2026-09-15 (w743) — **THE PRE-FLIGHT: NOTHING MOVES UNTIL EVERY VIEW IS ARMED**
+
+**STATUS: LIVE.** ⊘ **No constraint was relaxed. No completion was forged.** The completion is
+still written only by `cpu_ce::write_resolved_completion`, and only after `execute_ours_spans`
+returned `Ok`.
+
+#### ⇒ 1. THE SHAPE CHOSEN, AND THE EVIDENCE THAT FORCED IT
+
+The brief named two candidate shapes. **Shape 2 — hand the copy to the scratchpad's engine
+(`CeExecutor::HostCe`) — was rejected on measurement, not on cost:**
+
+- `kayfabe_isolate_host::rm::ce_copy` refuses a `CeSource::Constant` by name today
+  (`NOT_ON_THIS_RUNG`, `rm.rs:8472`), and RM's CeUtils scrub **is** a constant fill.
+- The isolate *"deliberately holds neither the emulated framebuffer nor guest RAM"*
+  (`cpu_ce.rs` module docs) — that is the security posture, not a gap. Every span whose other
+  end is guest RAM is structurally unavailable to it, and the CeUtils ring, method block and
+  finishPayload semaphore of the walling channel are **in guest RAM**
+  (`[measured 2026-08-08]`, `0x2f2c_b004`).
+- It is a new host channel + host VAS + submission path, i.e. a rung, against a gate that is
+  the raw client passing.
+
+**Shape 1 — arm before the session — is right in its INTENT and wrong in its stated LOCATION,
+and that is a measurement:**
+
+> ⊘⊘⊘ **THE OPERANDS ARE NOT KNOWABLE BEFORE THE LOCK.** The brief says *"the session is built
+> from a plan"*. It is not. Every address the session touches comes out of a **walk of the
+> guest's own page tables**, which live in the framebuffer and are read through `CePlane` —
+> i.e. under the same rank-0 `RegPlane` mutex `ce_session_with_root` holds for its whole
+> closure (`plane.rs:4340`). A pre-session arm would have to walk first, and **walking is the
+> thing that needs the lock.** The chain is: `run_submission_body` reads the GPFIFO ring by VA
+> (`read_va` → walk → `fb.read`), reads the method block by VA, decodes, and only then can
+> `partition_ce` say where the operands are. There is no earlier point at which the operand
+> set exists.
+>
+> ★ **But the property that actually matters is a property of the ORDER, not of the lock:**
+> *no byte moves until every view the submission needs is armed.* That is achievable at the
+> earliest point the operand set exists, which is **inside** the session, and it satisfies the
+> arming shape unchanged: `want` records under the plane lock, `drain` is the IPC round trip at
+> the lock-free entry point the shim already has, fixed trip counts. No number of seconds
+> reaches a lock rank and none is asked for.
+
+#### ⇒ 2. WHAT WAS BUILT
+
+A **pre-flight phase** in `run_submission_body`, between decode (step 3) and the execute loop
+(step 4). It re-resolves the same operands the loop will, asks the store's byte port whether
+each range is servable **without touching one**, and records the demand for every range that is
+not. If anything was missing the whole submission is refused with `progress = NONE`.
+
+Three pieces:
+
+1. `DeviceFbPort::probe_or_want(at, len, by) -> bool` — a **required** trait method (no
+   default: `[w742]` a trait default that refuses ships its own justification, and here a
+   default would be a ruling in either direction). `DeviceFbBytePort`'s impl uses
+   **byte-for-byte `read_armed`'s own coverage test**, so a `true` and a served access cannot
+   disagree; a `false` records the want and returns, with the `runs` mutex dropped first.
+2. `cpu_ce::want_ours_spans` / `want_releases` — probe every `Ours` span's `Fb`-plane source
+   and destination, and **every word of every release**, in exactly `execute_ours`' own
+   `CHUNK` (64 KiB) steps. ⊘ **It does not stop at the first miss.** Stopping would hand the
+   drain one run per trip, which is what `[measured w742]` `trips=37 … gave_up=1` is.
+3. The refusal, carrying the first missing plane address and `cpu_ce::PREFLIGHT_NOT_ARMED`.
+
+**⊘ Inert on the `arena` control by construction**: `FbStore::demand_port()` is `None` there,
+so the block costs one `Option` test and resolves nothing.
+**⊘ A WALK refusal is deliberately not the pre-flight's business** — it is skipped, so the
+remaining launches still get their demand recorded, and the execute loop names it as before.
+
+#### ⇒ 3. THE KNOWN-POSITIVE, AND IT REPRODUCES THE BOOT NUMBER OFFLINE
+
+`tests/tests/e10e_ceutils_doorbell.rs`, five new arms over a `DeviceFb` + byte-port fixture
+(`device_plane_with_tree`), with a second 512 MiB region mapped to **video** memory so the CE
+destination is where the raw client's actually is (`NV01_MEMORY_LOCAL_USER` +
+`ATTR_CONTIGUOUS_VIDMEM`).
+
+★ **Disable the `3b` block (`if false && …`) and three arms go red with the exact shape this
+increment is about:**
+
+| arm | with the pre-flight | with it disabled |
+|---|---|---|
+| `a_later_entrys_unarmed_destination_no_longer_costs_the_earlier_entrys_payload` | green | **`progress: { launches: 2, bytes: 64, completions: 1 }`** — ★ the `blocked_by_progress` shape, reproduced offline for the first time |
+| `the_preflight_asks_about_the_completion_word_and_not_only_the_copy` | green | `{ launches: 1, bytes: 64, completions: 0 }` — the copy ran, the **release** then refused |
+| `a_preflight_refusal_moves_nothing_and_is_therefore_re_runnable` | green | `launches: 1` — the loop was entered |
+| `the_preflight_is_inert_without_a_byte_port` | green | **green** ⊘ the control, correctly not measuring the pre-flight's presence |
+| `the_preflight_leaves_a_walk_refusal_to_the_loop_that_names_it` | green | **green** ⊘ same |
+
+⚠ **And the fixture was caught by its own control:** the first draft put the vidmem region at
+`PB_GPU_VA + 512 MiB`, which is `UNMAPPED_DST` — turning a deliberately unmapped address into a
+perfectly good framebuffer one. `the_preflight_leaves_a_walk_refusal…` failed and named it.
+
+**Suite gate:** `cargo test --workspace --no-fail-fast` ⇒ **11 failing targets / 30 failing
+tests**, name set byte-identical to the baseline in this file.
+
+#### ⇒ 4. ★★★★★ THE PRE-REGISTERED PREDICTION, COMMITTED BEFORE THE BOX EXISTS
+
+⊘ Written and committed **in this same commit as the code**, before any instance was rented.
+Each row carries the value that **refutes** it. Both arms, same binary, **control (`arena`)
+first**.
+
+| # | line, on the `device` arm | predicted | ⊘ REFUTED BY |
+|---|---|---|---|
+| 1 | `W743-PREFLIGHT passes=` | **≥ 50** (w742: 124 doorbells arrived, 97 served) | **`0`** ⇒ the arm never executed and **no other row below is interpretable**. Read this one first |
+| 2 | `W743-PREFLIGHT unarmed=` | **≥ 1** | `0` **beside `blocked≥1`** is the two halves disagreeing. `0` with `blocked=0` would mean every view was already armed at ask time — possible, and then rows 3/4 must still hold |
+| 3 | ★★★ `W740-CE-SUBMIT-ARM blocked_by_progress=` | **0** (w742: **3**) | ≥1 ⇒ a refusal still reached the gate having moved bytes. **THE MECHANISM ROW** — it is the number the whole increment is aimed at |
+| 4 | ★★★ `W740-CE-SUBMIT-ARM gave_up=` | **0** (w742: **1**) | ≥1 ⇒ a submission still needed >16 arming rounds ⇒ *"one drain arms the whole submission"* is false |
+| 5 | `W743-PREFLIGHT truncated=` | **0** | ≥1 ⇒ an operand exceeded `PREFLIGHT_CHUNKS_MAX` (256 chunks ≈ 16 MiB) and that submission's atomicity is **not proved** |
+| 6 | `DOORBELL-REFUSALS FwdFault::CpuCeFb=` | ⊘ **NOT PREDICTED, AND NOT A GRADE.** The pre-flight refuses under the *same name*, so this can **rise** while the client improves | — ⚠ w742's lesson, restated: *do not read a refusal count as progress on the client* |
+| 7 | ★★★★★ `W392D_GUEST_OUTCOME=` | **`(P)`, `THREADS 8 of 8`** — **THE GATE. Nothing else counts** | anything else |
+| 8 | `BAR-MIRROR bar1 … TRAP_FILLS=` / `BAR1-PASSTHROUGH … misses=` | **0 / 0** (w742: 0 / 0) | ≥1 either ⇒ regression |
+| 9 | `BAR-MIRROR bar2 … TRAP_FILLS=` / `BAR2-PASSTHROUGH … misses=` | **0 / 0** (w742: 0 / 0) | ≥1 either ⇒ regression |
+| 10 | `quiesce[calls=` | **0** (w742: 0) | ≥1000 ⇒ regression |
+| 11 | `RmInitAdapter failed!` / `SMI_RC=` | **0 occurrences / `0`** | ≥1 / non-zero ⇒ regression |
+| 12 | control arm `W392D_GUEST_OUTCOME=` | **`(P)`, `THREADS 8 of 8`, `MEAN_FALSIFIER=PASS`** | anything else ⇒ the boot is uninterpretable |
+| 13 | ★★ control arm `W743-PREFLIGHT passes=` | **0** — provably inert | ≥1 ⇒ the pre-flight ran where there is no byte port, and **the control is not a control** |
+
+> ### ⚠ ROW 7 IS THE GATE AND IT IS **NOT** PREDICTED WITH CONFIDENCE — stated before the run
+> `[measured w742]` the device arm's four `CpuCeFb` doorbell refusals are exactly accounted for
+> by `blocked_by_progress=3` + `gave_up=1`, so rows 3 and 4 going to `0` removes **all four**.
+> ⊘ **But the client failed `THREADS 0 of 8` — eight threads, four refusals.** Those numbers do
+> not match, so either one refusal wedges more than one thread (plausible: the lanes share a
+> device) or **there is a second cause the census does not name.** If rows 3 and 4 hold and row
+> 7 still reads `(R)`, that is the finding: the wall is not, or not only, the arming order, and
+> the next instrument is the client's own per-lane output rather than another arming increment.
+> ⚠ The client also has a measured **1-in-5 false-negative rate on a single boot**
+> (`RESUME_HERE_w414.md:104`) — `n=1` is not a grade for a *failure*, though a `(P)` is
+> self-evidencing.
+
 ⊘ **Owner's question: "does the driver use the refresh (three entrypoints) before using a BAR
 address? can you confirm?" — CONFIRMED, from the w740 device-arm log.** The line immediately
 before the first miss is the refresh itself:

@@ -269,6 +269,184 @@ pub fn execute_ours_spans(
 }
 
 // =====================================================================================
+// ★★★★★ w743 — THE PRE-FLIGHT. **Nothing moves until every view the submission needs is
+// armed**, because a refusal that has already moved bytes can never be retried.
+// =====================================================================================
+
+/// How many [`CHUNK`]-sized probes one operand may cost. ⊘ A **fixed trip count**, and the
+/// number is not arbitrary: the byte port holds at most
+/// `kayfabe_qemu_raw::deviceview::ARMED_RUNS_CAP` (256) armed runs of `ARM_GRAIN` (64 KiB)
+/// = 16 MiB, so probing past 256 chunks asks for views the port could not hold at once
+/// anyway. ⚠ Reaching it is **counted, not silent** ([`CePreflight::truncated`]): a
+/// truncated pre-flight has not proved the submission atomic, and a reader must be able to
+/// tell that from a clean one.
+///
+/// ⊘ Not derived from the port's constants by an import: `kayfabe-rt` must not depend on
+/// the QEMU adapter. The two numbers agreeing is a fact stated here and asserted in
+/// `crates/kayfabe-qemu-raw/tests/` rather than a coupling.
+pub const PREFLIGHT_CHUNKS_MAX: usize = 256;
+
+/// ★★★ What one pre-flight pass found. ⊘ Every field is a count and none is an
+/// `Option<bool>`: *"nothing was missing"* and *"nothing was looked at"* are told apart by
+/// [`CePreflight::probed`], which this tree has paid for four times over.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct CePreflight {
+    /// Ranges asked about. `0` with a non-empty span list means the store has **no demand
+    /// port** — the `arena` control arm, where the pre-flight is inert by construction.
+    pub probed: usize,
+    /// Ranges that were **not** servable. Each one recorded its demand on the way out.
+    pub unarmed: usize,
+    /// The first plane address that was not servable, for the refusal's own `phys`.
+    pub first_missing: Option<u64>,
+    /// Operands whose probe hit [`PREFLIGHT_CHUNKS_MAX`] before reaching the end of the
+    /// range. ⊘ **A truncated pass makes no atomicity claim.**
+    pub truncated: usize,
+}
+
+impl CePreflight {
+    /// Fold another pass's findings in, keeping the FIRST missing address.
+    pub fn merge(&mut self, other: CePreflight) {
+        self.probed += other.probed;
+        self.unarmed += other.unarmed;
+        self.truncated += other.truncated;
+        if self.first_missing.is_none() {
+            self.first_missing = other.first_missing;
+        }
+    }
+}
+
+/// Why a submission was refused before it moved anything.
+pub const PREFLIGHT_NOT_ARMED: &str =
+    "w743 PRE-FLIGHT: this submission needs a CPU view of a page of the reserved object that \
+     is not armed yet, and the demand for EVERY page it needs has now been recorded in the \
+     store's want set. ⊘ Refused BEFORE the first byte moved and before any payload was \
+     released, so `CeProgress::may_re_run` is open and the lock-free caller's drain-and-retry \
+     can fix it. ⚠ That ordering is the whole point: `[measured w740]` `blocked_by_progress=68` \
+     against `trips=10` — refusals that had already moved bytes, which no number of retries \
+     can repair.";
+
+/// Probe `[base, base+len)` in the framebuffer plane with exactly the chunking
+/// [`execute_ours`] will use, recording the demand for every chunk that is not servable.
+///
+/// ⊘ **It does not stop at the first miss.** Stopping would hand the drain one run per trip,
+/// which is what `[measured w742]` `trips=37 … gave_up=1` is: a submission needing more
+/// distinct runs than `CE_SUBMIT_ARM_RETRIES` never converges. Asking about all of them puts
+/// every run in one want set, so **one** drain arms the submission.
+fn probe_fb_range(
+    port: &dyn kayfabe_device::DeviceFbPort,
+    base: u64,
+    len: u64,
+    by: kayfabe_device::DeviceFbWant,
+    out: &mut CePreflight,
+) {
+    // ⊘ The SAME step `execute_ours` takes, so a chunk this proves servable is a chunk that
+    // one call will serve — a coarser probe could pass a range the executor then cuts into
+    // pieces that straddle a run boundary the probe never looked at.
+    let step = CHUNK.min(usize::try_from(len).unwrap_or(CHUNK)) as u64;
+    if step == 0 {
+        return;
+    }
+    let mut off: u64 = 0;
+    let mut chunks = 0usize;
+    while off < len {
+        if chunks >= PREFLIGHT_CHUNKS_MAX {
+            out.truncated += 1;
+            return;
+        }
+        let take = (len - off).min(step);
+        let at = base.wrapping_add(off);
+        out.probed += 1;
+        if !port.probe_or_want(at, take, by) {
+            out.unarmed += 1;
+            if out.first_missing.is_none() {
+                out.first_missing = Some(at);
+            }
+        }
+        chunks += 1;
+        off += take;
+    }
+}
+
+/// ★★★ Ask, for every `Ours` span, whether the framebuffer views it will touch are armed —
+/// **without touching one**.
+///
+/// Returns a census; `unarmed > 0` means the caller must refuse with
+/// [`kayfabe_arch::CeSemStructure`]-free, byte-free, release-free progress and let a
+/// lock-free drain arm what was just wanted.
+///
+/// ⊘ **Inert without a demand port**, which is the `arena` control arm and every offline
+/// fixture that does not install one: [`FbStore::demand_port`] answers `None`, this returns
+/// [`CePreflight::default`] with `probed == 0`, and the caller's behaviour is byte-identical
+/// to pre-w743. That is not an optimisation — it is what makes the control arm a control.
+#[must_use]
+pub fn want_ours_spans(fb: &mut dyn FbStore, spans: &[CeSpan]) -> CePreflight {
+    let mut out = CePreflight::default();
+    let Some(port) = fb.demand_port() else {
+        return out;
+    };
+    for span in spans {
+        if span.sub.by != CeExecutor::Ours || span.sub.len == 0 {
+            continue;
+        }
+        // The DESTINATION, always: a fill and a copy both write it.
+        if let Some(op) = span.dst_place {
+            if op.residency.backing == Backing::Stable && op.residency.plane == CpuPlane::Fb {
+                probe_fb_range(
+                    port.as_ref(),
+                    op.addr.0,
+                    span.sub.len,
+                    kayfabe_device::DeviceFbWant::Write,
+                    &mut out,
+                );
+            }
+        }
+        // The SOURCE, only for a real copy — a `Constant` fill has no source operand, which
+        // is `partition_ce`'s own rule and not a shortcut taken here.
+        if matches!(span.sub.src, CeSource::Address(_)) {
+            if let Some(op) = span.src_place {
+                if op.residency.backing == Backing::Stable && op.residency.plane == CpuPlane::Fb {
+                    probe_fb_range(
+                        port.as_ref(),
+                        op.addr.0,
+                        span.sub.len,
+                        kayfabe_device::DeviceFbWant::Read,
+                        &mut out,
+                    );
+                }
+            }
+        }
+    }
+    out
+}
+
+/// The same question for the completion payloads a submission will release.
+///
+/// ⊘ A release is the **one** write whose refusal mid-record is unrecoverable: half a
+/// sixteen-byte record in the guest's semaphore page is a payload the guest may already have
+/// read. ⇒ its words are probed with the copies, not after them.
+#[must_use]
+pub fn want_releases(fb: &mut dyn FbStore, releases: &[ResolvedRelease]) -> CePreflight {
+    let mut out = CePreflight::default();
+    let Some(port) = fb.demand_port() else {
+        return out;
+    };
+    for r in releases {
+        for w in r.words.iter().flatten() {
+            if w.residency.backing == Backing::Stable && w.residency.plane == CpuPlane::Fb {
+                probe_fb_range(
+                    port.as_ref(),
+                    w.addr.0,
+                    4,
+                    kayfabe_device::DeviceFbWant::Write,
+                    &mut out,
+                );
+            }
+        }
+    }
+    out
+}
+
+// =====================================================================================
 // ★★★ E10d — THE COMPLETION WRITE-BACK TAIL. There is NONE today: the finishPayload
 // semaphore the guest polls is written nowhere (`execution_plane_increments.md` §14.4(3),
 // §14.5 E10d). This is the `sem_releases` consumer.

@@ -91,15 +91,23 @@ n_w740=$(strings "$Q_BIN" 2>/dev/null | grep -c 'W740-USERD-ARM trips=')
 # UNCONDITIONALLY on BOTH arms at teardown, so a boot without the string is an OLDER BINARY
 # and every w742 row would be graded against absence.
 n_w742=$(strings "$Q_BIN" 2>/dev/null | grep -c 'DEVICE-LEAF no_join_needed=')
+# ★★★ w743 — THE SAME GATE, FOR THIS CHANGE. `W743-PREFLIGHT passes=` is appended to the
+# w740 arming census, which prints UNCONDITIONALLY on BOTH arms at teardown. A boot without
+# the string is an OLDER BINARY and every w743 row would be graded against absence — and the
+# most dangerous of those rows is `passes=0`, which on a stale binary is indistinguishable
+# from "the pre-flight ran and never had to refuse".
+n_w743=$(strings "$Q_BIN" 2>/dev/null | grep -c 'W743-PREFLIGHT passes=')
 echo "W736-CONTENT: walk_shadow=$n_ws cuda_image=$n_img fb_store=$n_fs device_fb=$n_dfb"
 echo "W738-CONTENT: fb_demand=$n_fd device_fb_port=$n_fbp (either 0 ⇒ the binary predates CUT B)"
 echo "W740-CONTENT: userd_arm=$n_w740 (0 ⇒ the binary predates w740 — its rows cannot be graded)"
 echo "W742-CONTENT: device_leaf=$n_w742 (0 ⇒ the binary predates w742 — its rows cannot be graded)"
+echo "W743-CONTENT: preflight=$n_w743 (0 ⇒ the binary predates w743 — its rows cannot be graded)"
 if [ "$n_img" -eq 0 ]; then echo "⊘ no cuda-scratchpad in the binary — the port cannot arm. STOP."; exit 5; fi
 if [ "$n_fs" -eq 0 ] || [ "$n_dfb" -eq 0 ]; then echo "⊘ the binary predates cut A. STOP."; exit 4; fi
 if [ "$n_fd" -eq 0 ] || [ "$n_fbp" -eq 0 ]; then echo "⊘ the binary predates CUT B — w738's rows cannot be graded. STOP."; exit 6; fi
 if [ "$n_w740" -eq 0 ]; then echo "⊘ the binary predates w740 — its rows cannot be graded. STOP."; exit 7; fi
 if [ "$n_w742" -eq 0 ]; then echo "⊘ the binary predates w742 — its rows cannot be graded. STOP."; exit 8; fi
+if [ "$n_w743" -eq 0 ]; then echo "⊘ the binary predates w743 — its rows cannot be graded. STOP."; exit 9; fi
 
 report() {
   local tag="$1" arm="$2"
@@ -181,6 +189,19 @@ report() {
   echo "W740-USERD-GAVEUP=$(k 'gave_up=[0-9]*')"
   echo "W740-USERD-REFUSED-NO-ARM=$(k 'refused_no_arm=[0-9]*')"
   echo "W740-CE-SUBMIT=$(printf '%s' "$ARM" | grep -ao 'W740-CE-SUBMIT-ARM .\{0,120\}' | tail -1)"
+  # ★★★★★ w743 — THE PRE-FLIGHT, CUT OUT OF ITS OWN LINE. ⊘ Read `passes=` FIRST: `0` on the
+  # device arm means the arm never executed and NO other field here is interpretable.
+  # `blocked=` and w740's `blocked_by_progress=` are the two halves of one question — a
+  # refusal the pre-flight caught moved nothing and lands in `trips=`; one it missed lands in
+  # `blocked_by_progress=`.
+  PF=$(printf '%s' "$ARM" | grep -ao 'W743-PREFLIGHT .\{0,200\}' | tail -1)
+  echo "W743-PREFLIGHT=$PF"
+  pff() { printf '%s' "$PF" | grep -ao "$1" | tail -1; }
+  echo "W743-PASSES=$(pff 'passes=[0-9]*')      ★ 0 on arena is CORRECT; 0 on device is the finding"
+  echo "W743-PROBED=$(pff 'probed=[0-9]*')"
+  echo "W743-UNARMED=$(pff 'unarmed=[0-9]*')"
+  echo "W743-BLOCKED=$(pff 'blocked=[0-9]*')    ★ each is a refusal that moved NOTHING"
+  echo "W743-TRUNCATED=$(pff 'truncated=[0-9]*')  ⊘ non-zero ⇒ atomicity NOT proved for that submission"
   echo "--- ★★★ w740 2/3: did a submission ever recover after a drain? ---"
   grep -a 'CE-SUBMIT-ARMED token=' "$Q" 2>/dev/null | head -4 | cut -c1-300
   echo "--- ★★★ w740 3/3: the doorbell census and its FIRST refusal (row 4) ---"

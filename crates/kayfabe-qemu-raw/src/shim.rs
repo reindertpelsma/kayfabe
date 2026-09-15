@@ -22086,8 +22086,24 @@ pub(crate) fn ceutils_arming_census() -> String {
     } else {
         verdict
     };
+    // ★★★★★ **w743 — THE PRE-FLIGHT'S OWN LINE, on the SAME census so the two are read
+    // together.** `blocked=` here and `blocked_by_progress=` above are the two halves of one
+    // question: a refusal the pre-flight caught moved nothing and lands in `trips`, and a
+    // refusal it missed lands in `blocked_by_progress`. ⊘ `passes=0` on a `device` arm means
+    // the pre-flight never executed and **no other number on this line is interpretable** —
+    // it is not `nothing was missing`.
+    let (pp, ppr, ppu, ppb, ppt) = kayfabe_rt::ceutils::preflight_census();
+    let pre_verdict = if pp == 0 {
+        "⊘ THE PRE-FLIGHT NEVER RAN. On the `arena` control that is correct by construction           (`FbStore::demand_port` is `None`); on a `device` arm it is the finding, not a zero"
+    } else if ppb == 0 {
+        "★ it ran and never had to refuse — every view a submission needed was already armed           when it was asked for"
+    } else if ppt > 0 {
+        "⚠ IT REFUSED **AND** TRUNCATED — at least one operand was longer than           `PREFLIGHT_CHUNKS_MAX` chunks, so for that submission `nothing moved until           everything was armed` is NOT proved. Read `truncated` before reading `blocked`"
+    } else {
+        "★★★★★ IT REFUSED BEFORE ANYTHING MOVED — each `blocked` is a submission that kept           `progress = NONE` and is therefore re-runnable. ⇒ it should appear in           `W740-CE-SUBMIT-ARM trips=` and NOT in `blocked_by_progress=`"
+    };
     format!(
-        "W740-USERD-ARM trips={t} recovered={r} gave_up={g} refused_no_arm={n} not_lock_free={nlf}  W740-CE-SUBMIT-ARM trips={st} recovered={sr} blocked_by_progress={sb} gave_up={sg} ⇒ {verdict}"
+        "W740-USERD-ARM trips={t} recovered={r} gave_up={g} refused_no_arm={n} not_lock_free={nlf}  W740-CE-SUBMIT-ARM trips={st} recovered={sr} blocked_by_progress={sb} gave_up={sg} ⇒ {verdict}  W743-PREFLIGHT passes={pp} probed={ppr} unarmed={ppu} blocked={ppb} truncated={ppt} ⇒ {pre_verdict}"
     )
 }
 
