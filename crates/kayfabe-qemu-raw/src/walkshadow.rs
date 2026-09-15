@@ -78,6 +78,22 @@ pub const WALK_SHADOW_EXPIRY: &str =
 /// header's exact size — a number that would otherwise have to track the protocol.
 const CHUNK: usize = 256 << 10;
 
+/// ★★★★★ **HOW MANY REFRESHES THE SHADOW MAY RUN IN ONE BOOT**, and this is a safety valve
+/// rather than a tuning knob.
+///
+/// ⊘ The off-vCPU sweep the shadow hangs off is **not off the guest's critical path**: one of
+/// its two callers is the TLB-invalidate handler, and the guest's invalidate completion waits
+/// on it. A refresh costs a staged image (`[w724c]` ~7.3 MiB of resident tables), an H2D copy,
+/// three kernel launches and a read-back — tens of milliseconds. Paying that on **every**
+/// invalidate for a whole boot risks tripping the guest driver's own timeouts, and a boot that
+/// times out measures nothing at all.
+///
+/// ★ 64 comparisons is far more than the census needs: a disagreement that exists in the
+/// guest's tables shows up in the first few, and `[w725]`'s real capture is five address
+/// spaces. ⚠ Spending the budget is **counted by name** (`skipped[budget_spent=N]`), so a
+/// census read after the cap says so rather than looking like agreement that kept holding.
+const MAX_REFRESHES: u64 = 64;
+
 /// Read the gate. `Ok(false)` when unset or `off`; a refusal names the value, because a
 /// mistyped arm that silently means "off" is a boot that measured nothing and said nothing.
 ///
@@ -151,6 +167,15 @@ impl WalkShadowPort {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         g.retire();
+    }
+
+    /// Whether [`MAX_REFRESHES`] comparisons have already been made.
+    fn budget_spent(&self) -> bool {
+        self.census
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .compared
+            >= MAX_REFRESHES
     }
 
     /// ⊘ **Every census write is a short, self-contained acquisition.** The census mutex is
@@ -254,6 +279,11 @@ impl kayfabe_rt::device::PtSweepObserver for WalkShadowObserver<'_> {
         }
         if results.is_empty() {
             port.note_skipped("no_tasks");
+            return;
+        }
+        // ⊘ Checked BEFORE the image is built, because building one is the expensive half.
+        if port.budget_spent() {
+            port.note_skipped("budget_spent");
             return;
         }
 
