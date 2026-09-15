@@ -50,7 +50,15 @@ exec "$Q" \
    # than a positional arg because the device line is one argument and cannot be extended
    # from "$@"; the device's own end-of-run census reports the probe set it actually ran
    # with, so a boot cannot silently diverge from what this variable claims.` \
-  -device nvkvm-gpu,bar1-size=268435456,bar2-size=33554432,id=kf0${NVKVM_DEV_EXTRA:+,$NVKVM_DEV_EXTRA} \
+  `# ★★★★★ w734 — §w727's BAR1 KNOB HAS TWO HALVES AND BOTH MUST MOVE.
+   # The chip row is patched by KAYFABE_GUEST_BAR1_MB (read in the archive's `chip_for`), and
+   # THIS property is what the hypervisor registers. `nvkvm_apply_identity` REFUSES at realize
+   # if they differ (`nvkvm.c:3552-3559`) — deliberately: a device that registers 128 MiB and
+   # tells the guest 256 lets the guest map past the end of a region the hypervisor decodes,
+   # with nothing logged on either side.
+   # ⊘ So this derives from the SAME variable rather than being a second literal an operator
+   # has to remember. Unset ⇒ 256 MiB, byte for byte what shipped.` \
+  -device nvkvm-gpu,bar1-size=$(( ${KAYFABE_GUEST_BAR1_MB:-256} * 1024 * 1024 )),bar2-size=33554432,id=kf0${NVKVM_DEV_EXTRA:+,$NVKVM_DEV_EXTRA} \
   -display none \
   `# ★★★ E2 — TIMESTAMP every error_report/info_report the device writes.
    # The device's per-doorbell line is the ATTRIBUTION instrument: a ring is only
