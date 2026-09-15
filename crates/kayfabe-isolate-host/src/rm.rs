@@ -4988,6 +4988,8 @@ impl RmBackend for HostRmBackend {
         // deletion in one diff is two reviews pretending to be one.
         Ok(kayfabe_isolate::DeviceView {
             token: v.token,
+            // ★ In-process, as above: one table, so the two tokens are the same number.
+            release_token: v.token,
             memory: v.memory,
             offset: v.offset,
             mmap_len: v.mmap_len,
@@ -5139,6 +5141,12 @@ impl RmBackend for HostRmBackend {
         // either keeps this change to the verb surface.
         Ok(kayfabe_isolate::DeviceView {
             token: v.token,
+            // ★ In-process: THIS backend owns the export table, so the token it minted is
+            // both the one a `dup` is keyed by and the one a release takes. ⊘ Written as two
+            // fields carrying one value rather than one field meaning two things — the
+            // equality is a property of this configuration, and w734's defect was reading it
+            // as a property of the type.
+            release_token: v.token,
             memory: v.memory,
             offset: v.offset,
             mmap_len: v.mmap_len,

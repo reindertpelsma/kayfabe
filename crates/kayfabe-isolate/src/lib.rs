@@ -383,6 +383,15 @@ pub enum RmError {
     GuestRamUnavailable,
     /// Any other backend-reported failure (opaque status for diagnostics).
     Other(u32),
+    /// ★★★★★ **w734 — this device view carries no token the owning process could release
+    /// by**, so nothing was released and nothing was pretended.
+    ///
+    /// The usermode/counter-page crossing's reply carries no token at all, by design: that
+    /// view is armed once and lives for the boot. ⊘ Its [`DeviceView::release_token`] is
+    /// therefore [`DeviceView::UNRELEASABLE`], and asking to release it is refused HERE
+    /// rather than falling back to [`DeviceView::token`] — which is the parent's index into
+    /// a different table, and would free a **different** view while answering `Ok(())`.
+    ViewNotReleasable,
 }
 
 /// ★★★★★ **An instruction to map a slice of GUEST RAM into an isolate** — and the whole
@@ -677,7 +686,43 @@ pub struct DeviceView {
     /// Adapter-scoped opaque index naming the **armed node** the adapter adopted (as a
     /// `CharDevice`, established from the kernel — never claimed by the peer). Minted by the
     /// parent, never carried on the wire, exactly as [`ExportedBacking::token`].
+    ///
+    /// ⊘⊘⊘ **THIS IS THE PARENT'S TOKEN AND IT IS NOT THE ONE A RELEASE TAKES.** See
+    /// [`DeviceView::release_token`]; w734 found the two being used interchangeably.
     pub token: u64,
+    /// ★★★★★ **w734 — THE TOKEN THE OWNING PROCESS RELEASES BY**, which is a different number
+    /// from [`DeviceView::token`] in the only configuration that matters.
+    ///
+    /// # ⊘⊘⊘ The defect this field exists to make impossible
+    ///
+    /// `Reply::DeviceViewNode`'s own doc states the invariant: *"the token does not cross: it
+    /// is the **child's** index into its own export table. The parent mints its own when it
+    /// adopts the descriptor."* ⇒ under the proxy backend, [`DeviceView::token`] is a
+    /// **parent** index — which is right, because the parent's export directory is what
+    /// `dup` is keyed by — while `Request::ReleaseDeviceView` is executed **in the child**,
+    /// against the **child's** table.
+    ///
+    /// `[found w734]` `release_device_view` was being handed [`DeviceView::token`]. One field
+    /// meant the child's index under the in-process backend and the parent's under the proxy,
+    /// and the release crossed the second into the first. The two index spaces stay aligned
+    /// only because every child mint happens to be matched, in order, by exactly one parent
+    /// adopt — **an invariant nothing states and nothing checks**, and one that a single
+    /// refused `adopt` (a kind refusal, which is a threat-model path) shifts by one
+    /// **forever**.
+    ///
+    /// ⚠ And the breakage is silent in the worst direction: an unknown token is `Ok(())`
+    /// (deliberately, so a double release is a no-op), so every later release would reclaim
+    /// **nothing** and say it succeeded — while `[measured w722]` that release is the only
+    /// thing that returns BAR1 aperture at all, 224 MiB a round where `munmap` + `close`
+    /// returns zero. `SINGLE_STORE_PLAN.md` §3 recycles views in a loop.
+    ///
+    /// ⊘ Under an in-process backend the two are equal, and that is a fact about that
+    /// configuration rather than a reason to have one field.
+    ///
+    /// ⚠ [`DeviceView::UNRELEASABLE`] when the owning process's token is **not knowable** —
+    /// see that constant. Releasing it is refused by name rather than releasing something
+    /// else.
+    pub release_token: u64,
     /// The RM object the view is over — the same handle the caller named. Echoed so the
     /// value is self-describing when it reaches an installer that never saw the request.
     pub memory: HostHandle,
@@ -688,6 +733,24 @@ pub struct DeviceView {
     /// rounded size). A VMM that `mmap`s the unrounded length is refused with `ENXIO`.
     pub mmap_len: u64,
 }
+
+impl DeviceView {
+    /// ★★★★★ **w734 — "the owning process's token for this view is NOT KNOWABLE HERE."**
+    ///
+    /// The usermode-view crossing (`Reply::UsermodeView`) carries **no token at all** — by
+    /// design, because nothing releases the counter page: it is armed once and lives for the
+    /// boot. ⊘ Its [`DeviceView`] therefore cannot carry a real
+    /// [`DeviceView::release_token`], and the two honest options are this sentinel or a lie.
+    ///
+    /// ⚠ **A lie here is specifically the defect w734 removed**, one field over: setting it to
+    /// [`DeviceView::token`] would release *whatever the child's table holds at the parent's
+    /// index*, and answer `Ok(())` when that is nothing. ⇒ the sentinel, and
+    /// [`Worker::release_device_view`] refuses it by name.
+    ///
+    /// ⊘ `u64::MAX` and not `0`: zero is a **valid** first index in both tables.
+    pub const UNRELEASABLE: u64 = u64::MAX;
+}
+
 
 /// ★★★★★ **§16.106 — the engine object a channel is being materialized to HOST.**
 ///
@@ -3432,11 +3495,26 @@ impl Worker {
     /// different table's row and is answered `Ok` (the idempotent arm), never another
     /// isolate's view.
     ///
+    /// ★★★★★ **w734 — IT TAKES THE VIEW, NOT A NUMBER, AND THAT IS THE FIX.**
+    ///
+    /// It used to take a `u64`, and every caller passed [`DeviceView::token`] — the **parent's**
+    /// index — which the child then looked up in **its own** table. See
+    /// [`DeviceView::release_token`] for the whole defect. ⇒ taking the view makes the right
+    /// token the only one in scope: there is no longer a wrong `u64` a caller could reach for.
+    ///
     /// # Errors
-    /// [`RmError`], from the backend.
-    pub fn release_device_view(&mut self, token: u64) -> Result<(), RmError> {
+    /// [`RmError::ViewNotReleasable`] for a view whose owning-process token is not knowable
+    /// ([`DeviceView::UNRELEASABLE`]); otherwise [`RmError`] from the backend.
+    pub fn release_device_view(&mut self, view: &DeviceView) -> Result<(), RmError> {
         kayfabe_util::lockwitness::assert_lock_free("releasing a host device view");
-        self.backend.release_device_view(token)
+        if view.release_token == DeviceView::UNRELEASABLE {
+            // ⊘ Refused BY NAME rather than falling back to `view.token`. That fallback is
+            // exactly the bug this signature removes: it would release whatever the child's
+            // table holds at the PARENT's index, and answer `Ok(())` when that is nothing —
+            // leaking the BAR1 aperture the release exists to reclaim, silently.
+            return Err(RmError::ViewNotReleasable);
+        }
+        self.backend.release_device_view(view.release_token)
     }
 
     /// ★★★★★ **w635 — the door for the counter page's view.**

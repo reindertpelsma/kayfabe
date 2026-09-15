@@ -668,11 +668,17 @@ fn export_device_view(
         Ok(v) => v,
         Err(e) => return (failed(e), None),
     };
-    // ⊘ `view.token` is the CHILD's index into its own table and does not go on the wire; the
-    // parent mints its own when it adopts the descriptor.
+    // ⊘ `view.token` is the CHILD's index into its own table. The PARENT's token does not
+    // come from here — it mints its own when it adopts the descriptor.
+    //
+    // ⊘⊘⊘ **w734 — but the child's DOES cross now, as `release_token`.** A release is executed
+    // here, against this table, and before w734 the parent handed back a token of its own
+    // minting. They coincide only because each mint is matched in order by one adopt, which
+    // nothing stated and nothing checked.
     match exports.lend(view.token) {
         Ok(fd) => (
             Reply::DeviceViewNode {
+                release_token: view.token,
                 memory: view.memory.raw(),
                 offset: view.offset,
                 mmap_len: view.mmap_len,
@@ -1247,9 +1253,14 @@ fn failed(e: RmError) -> Reply {
         // #102: a child backend cannot produce `PlacementRefused` — the check that mints
         // it lives in the PARENT's `Worker::execute`, above the wire. Listed explicitly
         // rather than caught by a wildcard, so adding a variant stays a compile error.
-        RmError::Wedged | RmError::ForeignHandle { .. } | RmError::PlacementRefused { .. } => {
-            WireError::Other(crate::rm::NOT_ON_THIS_RUNG)
-        }
+        // ★ w734: `ViewNotReleasable` joins them for the same reason. It is minted in the
+        // PARENT's `Worker::release_device_view`, above the wire — a child never sees a
+        // `DeviceView` and so can never produce it. Listed rather than wildcarded, so the
+        // next variant is a compile error here too.
+        RmError::Wedged
+        | RmError::ForeignHandle { .. }
+        | RmError::PlacementRefused { .. }
+        | RmError::ViewNotReleasable => WireError::Other(crate::rm::NOT_ON_THIS_RUNG),
     })
 }
 

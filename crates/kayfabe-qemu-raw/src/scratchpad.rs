@@ -1076,7 +1076,7 @@ fn probe_device_view(
     let Some(fd) = dup(id, view.token) else {
         // ⊘ Release first: the view exists in the isolate whether or not we can see it, and
         // leaking it would consume aperture for the rest of the boot.
-        let _ = worker.release_device_view(view.token);
+        let _ = worker.release_device_view(&view);
         return format!(
             "DEVICE_VIEW=NO_DESCRIPTOR token={} ⇒ the isolate minted a view this process \
              could not dup; the export directory does not know that isolate",
@@ -1089,7 +1089,7 @@ fn probe_device_view(
         Ok(w) => w,
         Err(e) => {
             drop(fd);
-            let _ = worker.release_device_view(view.token);
+            let _ = worker.release_device_view(&view);
             return format!("DEVICE_VIEW=NO_WINDOW why={e:?}");
         }
     };
@@ -1100,7 +1100,7 @@ fn probe_device_view(
     // mapping exists — not at the end of the scope, not on the error path only.
     drop(fd);
     if let Err(e) = placed {
-        let _ = worker.release_device_view(view.token);
+        let _ = worker.release_device_view(&view);
         return format!("DEVICE_VIEW=MMAP_REFUSED why={e:?}");
     }
 
@@ -1110,7 +1110,7 @@ fn probe_device_view(
     let wrote = win.store_u32(HostOffset::ZERO, SENTINEL);
     let mut buf = [0u8; 4];
     let read = win.read_into(HostOffset::ZERO, &mut buf).map(|()| u32::from_le_bytes(buf));
-    let released = worker.release_device_view(view.token);
+    let released = worker.release_device_view(&view);
 
     // ★★★★★ **w734 — THE RATE, MEASURED ON THE PATH THAT WILL CARRY IT.**
     //
@@ -1206,14 +1206,14 @@ fn probe_device_view_rate(
         Err(e) => return format!("rate=UNMEASURED why=EXPORT_REFUSED:{e:?}"),
     };
     let Some(fd) = dup(id, view.token) else {
-        let _ = worker.release_device_view(view.token);
+        let _ = worker.release_device_view(&view);
         return "rate=UNMEASURED why=NO_DESCRIPTOR".to_string();
     };
     let win = match GuestWindow::create(view.mmap_len, HostPageSize::query()) {
         Ok(w) => w,
         Err(e) => {
             drop(fd);
-            let _ = worker.release_device_view(view.token);
+            let _ = worker.release_device_view(&view);
             return format!("rate=UNMEASURED why=NO_WINDOW:{e:?}");
         }
     };
@@ -1223,14 +1223,14 @@ fn probe_device_view_rate(
     drop(fd);
     let arm_us = micros(t_arm);
     if let Err(e) = placed {
-        let _ = worker.release_device_view(view.token);
+        let _ = worker.release_device_view(&view);
         return format!("rate=UNMEASURED why=MMAP_REFUSED:{e:?} arm_us={arm_us}");
     }
     let _ = off;
 
     let n = view.mmap_len.min(PROBE_BYTES);
     let Ok(len) = usize::try_from(n) else {
-        let _ = worker.release_device_view(view.token);
+        let _ = worker.release_device_view(&view);
         return "rate=UNMEASURED why=LENGTH_NOT_HOST_SIZED".to_string();
     };
     let mut buf = vec![0u8; len];
@@ -1258,7 +1258,7 @@ fn probe_device_view_rate(
     }
 
     let t_rel = std::time::Instant::now();
-    let released = worker.release_device_view(view.token).is_ok();
+    let released = worker.release_device_view(&view).is_ok();
     let rel_us = micros(t_rel);
     drop(win);
 

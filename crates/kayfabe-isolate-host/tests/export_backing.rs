@@ -634,3 +634,180 @@ fn a_regular_file_is_refused_when_the_caller_asked_for_a_character_device() {
         "a refused descriptor must not land in the registry"
     );
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ★★★★★ w734 — THE PARENT'S REGISTRY CAN GIVE A DESCRIPTOR BACK, AND THE TWO TOKEN SPACES
+//               ARE NOT THE SAME SPACE.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+/// ★★★★★ **RETIRE CLOSES OUR DESCRIPTOR AND LEAVES EVERY OTHER TOKEN WHERE IT WAS.**
+///
+/// ⊘ `[surveyed w734]` `ExportRegistry` was **append-only** — `adopt` pushed and nothing ever
+/// removed — so every crossing kept one adopted descriptor in the VMM for the isolate's whole
+/// life. For an armed `/dev/nvidia<N>` node that is not merely an fd: the armed `mmap` context
+/// lives on the `struct file` and `nv_free_file_private` runs only when the LAST reference
+/// goes, so the child closing its end freed nothing while this process held a duplicate.
+///
+/// ★ The token IS the index, so a retire must **tombstone in place**. Removing would renumber
+/// every later token under live mappings — which is why nobody did it, and why this test
+/// checks the neighbour rather than only the retired slot.
+#[test]
+fn retiring_a_token_closes_it_and_renumbers_nothing() {
+    let _fd_table = serialized();
+    let registry = ExportRegistry::new();
+    let id = IsolateId::new(49, GpuId(0));
+    let mint = || {
+        let ram = kayfabe_linux_raw::SharedRam::create(4096).expect("memfd must mint");
+        registry
+            .adopt(
+                ram.dup_for_export().expect("dup"),
+                id,
+                DescriptorKind::RegularFile,
+            )
+            .expect("adopt")
+    };
+    let a = mint();
+    let b = mint();
+    let c = mint();
+    assert_eq!((a, b, c), (0, 1, 2));
+    assert_eq!(registry.len(), 3);
+    assert_eq!(registry.minted(), 3);
+
+    assert!(registry.retire(b), "a live crossing retires");
+    assert!(
+        !registry.retire(b),
+        "★ a DOUBLE retire must be a no-op that SAYS so — a caller that could not tell \
+         `I closed it` from `it was already gone` cannot detect a double release at all"
+    );
+
+    assert!(registry.dup(b).is_err(), "the retired token has no descriptor");
+    assert!(
+        registry.dup(a).is_ok() && registry.dup(c).is_ok(),
+        "★★★ and the NEIGHBOURS keep their tokens. `Vec::remove` would have renumbered `c` to \
+         `b` under whatever mapping already named it — which is why this is a tombstone"
+    );
+    assert_eq!(registry.kind(b), None, "a retired slot answers no kind");
+    assert_eq!(
+        registry.kind(c),
+        Some(DescriptorKind::RegularFile),
+        "and `c` still answers its own"
+    );
+
+    // ⊘ `len` is LIVE and `minted` is the high-water; `len=0 minted=0` (never crossed) and
+    // `len=0 minted=3` (crossed and cleaned up) are different facts.
+    assert_eq!((registry.len(), registry.minted()), (2, 3));
+    assert!(registry.retire(a) && registry.retire(c));
+    assert!(registry.is_empty());
+    assert_eq!(registry.minted(), 3);
+}
+
+/// ⊘ A token this registry never minted is `false`, not a panic — the same answer a retired
+/// one gives, because both mean *"there is no descriptor here"*.
+#[test]
+fn retiring_a_token_that_was_never_minted_is_false() {
+    let _fd_table = serialized();
+    let registry = ExportRegistry::new();
+    assert!(!registry.retire(0));
+    assert!(!registry.retire(u64::MAX));
+    assert!(registry.is_empty());
+    assert_eq!(registry.minted(), 0);
+}
+
+/// ★★★★★ **THE TWO TOKEN SPACES ARE DIFFERENT SPACES, AND THIS IS THE ARM THAT PROVES IT.**
+///
+/// `Reply::DeviceViewNode`'s own doc states the invariant the defect broke: *"the token does
+/// not cross: it is the **child's** index into its own export table. The parent mints its own
+/// when it adopts the descriptor."* ⇒ `DeviceView::token` is a PARENT index — right, because
+/// the parent's export directory is what `dup` is keyed by — while
+/// `Request::ReleaseDeviceView` executes **in the child**, against the **child's** table.
+///
+/// `[found w734]` the release was handed `DeviceView::token`. The two spaces agree only
+/// because each child mint happens to be matched, in order, by exactly one parent adopt —
+/// **an invariant nothing stated and nothing checked**, which one refused `adopt` (a kind
+/// refusal, which is a threat-model path) shifts by one **forever**. ⚠ And an unknown token
+/// releases nothing and answers `Ok(())`, while `[measured w722]` that release is the only
+/// thing that returns BAR1 aperture.
+///
+/// ⇒ This drives the spaces apart **the way the threat model does** — one refused adopt — and
+/// shows the parent's next token naming a different row than the child's.
+#[test]
+fn one_refused_adopt_shifts_the_parent_token_space_off_the_childs() {
+    let _fd_table = serialized();
+    let parent = ExportRegistry::new();
+    let id = IsolateId::new(50, GpuId(0));
+
+    // The child's table is modelled by a counter: every mint pushes, in order.
+    let mut child_next = 0u64;
+    let mut child_mint = || {
+        let t = child_next;
+        child_next += 1;
+        t
+    };
+
+    // Crossing 1: a fabricated backing. Child mints 0; parent adopts 0. Aligned.
+    let ram = kayfabe_linux_raw::SharedRam::create(4096).expect("memfd");
+    let c0 = child_mint();
+    let p0 = parent
+        .adopt(
+            ram.dup_for_export().expect("dup"),
+            id,
+            DescriptorKind::RegularFile,
+        )
+        .expect("adopt");
+    assert_eq!((c0, p0), (0, 0), "aligned while nothing has been refused");
+
+    // Crossing 2: the child mints, and the PARENT REFUSES the adopt — a kind refusal, which
+    // `adopt`'s own docs call the enforcement point against a compromised isolate. The child's
+    // table grew; the parent's did not.
+    let c1 = child_mint();
+    let ram2 = kayfabe_linux_raw::SharedRam::create(4096).expect("memfd");
+    assert!(
+        parent
+            .adopt(
+                ram2.dup_for_export().expect("dup"),
+                id,
+                DescriptorKind::CharDevice,
+            )
+            .is_err(),
+        "a regular file answering a device-node crossing is refused — this is the path"
+    );
+    assert_eq!(c1, 1);
+
+    // Crossing 3: both succeed. The child is now at 2; the parent mints 1.
+    let ram3 = kayfabe_linux_raw::SharedRam::create(4096).expect("memfd");
+    let c2 = child_mint();
+    let p1 = parent
+        .adopt(
+            ram3.dup_for_export().expect("dup"),
+            id,
+            DescriptorKind::RegularFile,
+        )
+        .expect("adopt");
+
+    assert_ne!(
+        c2, p1,
+        "★★★★★ THE SPACES HAVE DIVERGED. The child calls this crossing 2 and the parent \
+         calls it 1. A release that sent the PARENT's token would retire the child's row 1 \
+         — a DIFFERENT view — and, if that row were already a tombstone, would answer \
+         `Ok(())` having freed nothing. ⇒ the child's token must cross, which is what \
+         `DeviceView::release_token` is."
+    );
+    assert_eq!((c2, p1), (2, 1));
+}
+
+/// ⊘ And the sentinel that keeps the unreleasable case honest: it is not a valid index in
+/// either space, so it cannot be mistaken for one.
+#[test]
+fn the_unreleasable_sentinel_is_not_a_valid_index() {
+    assert_eq!(
+        kayfabe_isolate::DeviceView::UNRELEASABLE,
+        u64::MAX,
+        "⊘ not 0 — zero is a VALID first index in both tables"
+    );
+    let _fd_table = serialized();
+    let registry = ExportRegistry::new();
+    assert!(
+        !registry.retire(kayfabe_isolate::DeviceView::UNRELEASABLE),
+        "the sentinel must never name a live row"
+    );
+}
