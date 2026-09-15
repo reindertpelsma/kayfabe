@@ -376,6 +376,45 @@ and the per-client host MMU fault above.
     measured answer and its own fail-closed assert**, and until it has one the sharing is
     refused, not assumed.
 
+31. **★★★★★ USERD PINNING IS A SECURITY ASSUMPTION ABOUT AN *HONEST* GUEST — and the window
+    opens at TEARDOWN** (owner, 2026-09-15).
+
+    ## The assumption, recorded because it is load-bearing and invisible
+
+    ogkm programs the instance block from `memdescGetPhysAddr(pUserdSubDeviceMemDesc, AT_GPU, 0)`
+    (`kernel_channel_gm107.c:328`) — a **physical** address, 4 KiB-attributed (`:689`), which
+    **never touches PT\*/PD\***. ⇒ hardware holds a raw physical address for the channel's
+    lifetime, so the page **cannot** be moved or freed while the channel lives **without
+    hardware reading the wrong memory, silently**.
+    ★ **We therefore depend on it being pinned — and that is an assumption about an HONEST
+    guest.** A hostile guest that frees or re-points its own USERD hurts only itself *provided
+    we hold nothing over that page*; the moment we do, its lifetime becomes our problem.
+
+    ## ⚠ THE WINDOW IS AT TEARDOWN, AND IT IS A GUEST-INTERNAL CROSS-PROCESS READ
+
+    When the channel dies or the VA space goes, the guest unpins the page and **its allocator may
+    hand that 4 KiB to another guest process**. If any artefact of ours outlives that moment —
+    a `LIST_OBJECT` slice handle over the page, a mapping, an armed CPU view — then a page now
+    owned by **guest process B** is still reachable through machinery minted for **guest process
+    A**. ⇒ **an unprivileged guest userspace process reading 4 KiB assigned to another process,
+    caused by us, and invisible to the guest.**
+
+    ⇒ **Constraint 27 extends from MAPPINGS to HANDLES.** A slice handle is not a mapping: it is
+    an RM object with its own lifetime, and destroying a mapping does not destroy it.
+    **Every artefact we mint over a guest page must be destroyed before the guest may reuse that
+    page**, and the barrier must cover **channel teardown and VA-space destruction**, not only the
+    TLB-invalidate refresh — those are different events and only one of them is currently a
+    barrier.
+    ⚠ **Known-positive required**, and it must be the racing one: tear a channel down with a live
+    slice handle outstanding and assert the teardown **does not complete** until the handle is
+    gone. A test that merely checks the handle is eventually destroyed cannot tell *"before the
+    guest could reuse it"* from *"eventually"* — the same distinction 27 already turns on.
+
+    ⊘ **And a `LIST_OBJECT` is a SNAPSHOT**: its page-number list is taken at creation and
+    subscribes to nothing. If the guest moves the page, the handle silently names the old one.
+    That is the same failure by a different route, and it is why the teardown barrier cannot be
+    replaced by revalidation.
+
 ★ **THE PREFERRED MECHANISM for 23, and why (owner, 2026-09-15).** Rather than an anonymous
 sparse `mmap`, allocate a **GPU-native sparse range** (`NVOS32_ALLOC_FLAGS_SPARSE = 0x04000000`,
 confirmed present in RM's SDK) in the scratchpad and MMIO-map **that** for BAR1/BAR2. Three

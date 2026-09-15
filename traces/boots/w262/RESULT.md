@@ -1,5 +1,30 @@
 # w262 — LEG A2 FIRED, WITNESSED BY NAME; and the leg-B ordering question is NOT the one that can be asked
 
+> ## ⊘⊘⊘ REFUTED 2026-09-15 — **THE USERD ADDRESS WAS NEVER UNOBTAINABLE, AND THERE WAS NO VA
+> ## TO FIND.** Read this before the text below; the conclusion it reaches is wrong.
+>
+> This document (with `traces/boots/w262/RESULT.md` §5 and
+> `nvidia-gpu-passthrough/docs/design/userd_is_not_the_ring.md` §3) concluded the guest's USERD
+> address is **unobtainable**, from one shared premise: *"USERD is named by handle+offset, never
+> by a VA, so the page-table walk that gave the ring its join source cannot be pointed at USERD."*
+> **Three lanes then went looking for a VA.**
+>
+> ★★★ **The premise is true and the conclusion does not follow.** The guest's CPU-RM resolves the
+> handle **itself, locally, before the RPC** — GSP has no client-handle namespace to look one up
+> in — and ships the **physical address in the same buffer the handle comes out of**.
+> ⇒ `NV_CHANNEL_ALLOC_PARAMS` carries **`userdMem`** beside `hUserdMemory[0]`, and this port
+> already parses it: `kayfabe_core::rmgraph::DeclaredUserd` (`rmgraph.rs:529`), offset folded in.
+> **We have known where the guest's USERD physically is, all along.**
+>
+> ⚠ The shape of the error is worth more than the fact: **a correct observation about the
+> INTERFACE ("named by handle, not VA") was carried into a conclusion about the INFORMATION
+> ("therefore the address is unobtainable").** The address was in the same struct.
+>
+> ★ And from ogkm: USERD never goes through PT*/PD* at all — `kernel_channel_gm107.c:328` programs
+> the instance block from `memdescGetPhysAddr(pUserdSubDeviceMemDesc, AT_GPU, 0)`, a **physical**
+> address, 4 KiB-attributed (`:689`). So there was never a page-table path to point at.
+
+
 > ### STATUS — 2026-08-12 / **LIVE — MEASURED.** Two arms (`off`, `ring`) from **one** binary,
 > plus a third boot (`w262b_ring`) from a **second** binary carrying a corrected instrument.
 > Bench `vh`, `NVIDIA GeForce RTX 3060` (GA106), host driver **580.159.04**.
