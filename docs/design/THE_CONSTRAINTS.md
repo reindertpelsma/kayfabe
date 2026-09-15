@@ -245,8 +245,53 @@ every call site. Proposed instead, and the split is then legible from the name a
 | 5 — DoorbellTable | wired | goal 4, w656–w660 |
 | 15 — disjoint worlds | ⊘ **SUPERSEDED, not violated** | there is **one world**, not two (§15's supersession block). The row described the old design's failure to meet a constraint that no longer exists |
 | 15 — one reserved object | ◐ **RESERVED AND ADVERTISED; the BACKING has not moved** *(2026-09-15)* | ⊘ *"`reserve_gpga` has no caller … no GPGA line in any boot"* is **STALE**: it has callers (`rm.rs:4595`, `:4651`) and three committed boots carry `reservation=HELD` / `RESERVED_MB`. ⚠ **But `page_backing` still returns memfd leaves**, so guest vidmem remains host RAM over PCIe and parity is unchanged at 0.20x. The object is **held and unused** until §3 |
-| 4, 8 — sub-ms / off-vCPU | **HOLDS**, with the sanctioned PRAMIN exception | `VCPU-BLOCKING total=22 doors=3` and `PRAMIN-SLOT moves=22` — **the 22 doors ARE the 22 PRAMIN re-points**. `moves=22` is IDENTICAL under the raw client and CUDA (only `skipped` moves: 18439 vs 5448), so it is a BOOT-TIME set and the owner's ruling (*"297us for a thing that only happens at boot… thats fine for that mmap"*, `move_ns[worst=296558 mean=74698]`) is not expired |
+| 4, 6, 7, 8 — sub-ms / off-vCPU | ⊘⊘⊘ **VIOLATED ON THE `device` ARM (w742, 2026-09-15)** — `VCPU-BLOCKING total=197 doors=9 worst_trap=44440us` (control: `total=22 doors=3 worst_trap=22311us`). ★ The old ruling covered **3 doors that WERE the 22 PRAMIN re-points**; the new doors are the single store's own machinery — `exporting a host device view`, `receiving a descriptor across the isolate boundary` (40×), `classifying a received descriptor`, `mmap`, `mmap MAP_FIXED`, `KVM_SET_USER_MEMORY_REGION` (20×) — **none of which is PRAMIN**, so the sanction does not reach them (*a ruling's date AND its architecture are part of the citation*). ⇒ **REMEDY IS CONSTRAINTS 6+7+8 THEMSELVES**: post to a queue, wake a worker, return; workers do the work and write completions asynchronously. Owner's queue/epoll/eventfd design of 2026-09-15 is the plan of record — see the block below. ⊘ Tracked as an OPEN VIOLATION with a named fix, **not** as hardening. |
 | 7, 14 — epoll / threaded isolates | not built | |
+
+### ⊘⊘⊘ OPEN VIOLATION — 4, 6, 7, 8 on the `device` arm, and the remedy is already specified
+
+`[measured w742, both arms, one binary]`
+
+    device arm:   VCPU-BLOCKING total=197 doors=9   worst_trap=44440us
+    control arm:  VCPU-BLOCKING total=22  doors=3   worst_trap=22311us
+
+⚠ **Constraint 4 says ALL traps sub-millisecond, with PRAMIN the ONE sanctioned exception.**
+44 ms is three orders out, and the control's 22 ms means this did not start with the single
+store — but the single store **multiplied the doors from 3 to 9 and the crossings from 22 to
+197**, and its new doors are not PRAMIN.
+
+★★★ **THE REMEDY IS NOT NEW WORK — IT IS CONSTRAINTS 6, 7 AND 8, WHICH ARE UNBUILT:**
+6 (*every MMIO trap only posts the write to a queue, wakes a worker, and returns*),
+7 (*epoll in workers*), 8 (*workers do all the work; completions land asynchronously*).
+⊘ `completion_wait_architecture.md` (2026-08-09) measured the shape: *"There is no
+completion-wait architecture. There is one synchronous inline executor on the vCPU thread…
+The op finishes before the MMIO write returns."* ★ And the escalation seam is **already
+written and named** — `Registrar::arm_counter` (`sources.rs:398`) → the child's relay thread
+`signal()`s the `Notifier` → the parent `Reactor` blocks in `Poller::wait` (`reactor.rs:307`).
+**Every piece exists; none is connected.**
+
+★ **Owner's design, 2026-09-15 — plan of record for constraint 10**, better specified than what
+was in the docs: translate in the scratchpad → **batch** the channel's CE/scrub work → start →
+wait on the semaphore, escalating to eventfd only when slow → load new work meanwhile → each
+completion is a semaphore write **then**, only if armed, an interrupt (armed *after* the
+semaphore ⇒ send immediately, closing the race) → idle last. Blocking rule: while any semaphore
+still spins the loop may not block (`epoll` timeout 0); block only once **every** outstanding
+semaphore has a registered eventfd; the epoll set always contains the global new-work eventfd.
+Refresh: exactly one at a time, **queued, never lock-contended**, one completion marker per each
+of the three entrypoints.
+⊘ **Two amendments, argued from measurement:**
+1. ⚠ **Keep the semaphore as source of truth, as a CONSTRAINT not a note.** `await_semaphore`'s
+   own comment is the argument: *"a poll cannot mistake 'we were never woken' for 'it never
+   landed'."* An eventfd can, and absence-read-as-health is this campaign's dominant failure
+   class.
+2. ⊘ **Drop the work hand-off on refresh entry.** `[w675]` RM's **device-global client lock
+   serialises one isolate** — four sockets allow four in flight, RM does not. Hand-off is
+   machinery buying concurrency RM will not honour; the simple rule (a worker entering refresh
+   holds no other work) is enough.
+
+⊘ **Sequencing:** behind the raw client. A doorbell refused at channel birth
+(`PassthroughDoorbellBirth=19`, `dec=NONE`, `GET=0 PUT=1`) is not fixed by better waiting — the
+semaphore holds `Ok(0)`, **never written**, not written late.
 | 12 — any die | not done | ~20 GA106 `ChipProfile` fields are per-die measurements |
 
 ## ★ Constraints 12 and 15 share ONE prerequisite (found 2026-09-13, w696d)
