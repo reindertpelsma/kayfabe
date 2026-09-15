@@ -166,6 +166,48 @@ sentence that follows is attributable, and by the `DEVICE-FB` counters that join
 ⊘ Carrying `why` through `FbRead` is **cut B's call**: every consumer of that trait would have
 to grow a reason it currently discards, and cut B is the increment that gives them one.
 
+### ⚠ `--ce-client-guest-ram`: "THE COMPLETION NEVER ARRIVES" CANNOT BE WHAT HAPPENS
+
+⊘⊘ **HYPOTHESIS FROM READING THE SOURCE, NOT A MEASUREMENT.** Recorded so the next
+investigator does not start where the description points, because the description is
+arithmetically impossible.
+
+`[w735o]` the arm was reported as *"rings its doorbell and the completion never arrives, for
+600 s"*, its last line being `DOORBELL-STORE #1 … ★★★ WROTE`. But the completion wait **cannot
+take 600 s**:
+
+- `RmBackend::await_semaphore` (`rm.rs:8431`) is **bounded**: `let deadline = Instant::now() +
+  timeout`, and it returns a `SubmitOutcome` carrying whatever the semaphore holds **plus
+  `gp_get`/`gp_put`** — it does not fail, it reports.
+- Its timeout on every CE path is `CE_COPY_TIMEOUT` = **2 seconds** (`rm.rs:1154`).
+- Its poll, `ring_load_u32` (`rm.rs:7707`), reads a **locally mapped** ring through
+  `conn.with_rings(…)` — no IPC round trip, so no blocking peer on that path.
+
+⇒ **A missing completion costs 2 s and RETURNS, with the diagnostic pair that distinguishes
+"fetched but the methods did nothing" (`gp_get == gp_put`, no semaphore) from "never fetched at
+all" (`gp_get == 0, gp_put == 1`).** 600 s is not that. Something else holds the arm.
+
+★ **The hypothesis worth testing first:** the arm is not *waiting* for anything — its **vCPU is
+stuck inside the doorbell MMIO exit**, so control never returns to the guest and the 2 s
+deadline is never reached. That fits every measured fact: the doorbell line is printed by the
+**isolate** (`rm.rs:1817`), i.e. the store executed; nothing guest-side prints afterwards
+because the guest thread is still in the exit; and `HOST_DMESG_XID=0`, because no engine
+faulted — nothing was ever asked of one.
+⚠ It also composes with the §3 lock-rank finding: **a vCPU in an MMIO exit holds
+`LockRank::PlaneMem`, two of them**, and anything on that path needing an IPC round trip
+(which asserts lock-free) cannot complete. The vidmem-source sibling `--ce-client` passing is
+consistent — a different source path need not take the same door.
+
+⊘ **What would REFUTE it:** a `gp_get`/`gp_put` pair printed by the arm at all (⇒ it did reach
+`await_semaphore`, so the vCPU returned), or the guest making forward progress on another
+thread during the 600 s (⇒ the vCPU is not wedged).
+★ **The cheap instrument is not another boot:** `eu-stack` at 10 Hz on the QEMU vCPU thread
+during the hang says which of the two it is in one sample — and this campaign already knows
+that `gdb` sampling MANUFACTURES slow traps, so use `eu-stack` and detect a RUN.
+
+⊘ Not scheduled here: this is a real defect but it is **not** a §3 gate, and §3's own falsifier
+is the arm below. Kept adjacent so the two are not confused.
+
 ### ★★★★★ §3 NOW HAS A ONE-BOOT FALSIFIER, AND THE GUEST SUITE HANDED IT TO US
 
 `[measured w735o, 2026-09-15, one arm per fresh QEMU at 600 s]` The guest arm
