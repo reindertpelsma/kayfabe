@@ -2856,6 +2856,28 @@ impl RmConnection {
         self.raw_alloc_status(self.device, want, NV01_MEMORY_VIRTUAL, &mut range)
     }
 
+    /// [`RmConnection::raw_alloc_virtual_range`] bounded to `[offset, limit]`.
+    ///
+    /// # Errors
+    /// Ioctl-level only.
+    fn raw_alloc_virtual_subrange(
+        &self,
+        h_va_space: u32,
+        offset: u64,
+        limit: u64,
+    ) -> Result<AllocOutcome, RmError> {
+        let mut range = [0u8; NvMemoryVirtualAllocationParams::SIZE];
+        NvMemoryVirtualAllocationParams {
+            offset,
+            limit,
+            h_va_space,
+        }
+        .encode_into(&mut range)
+        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let want = self.mint();
+        self.raw_alloc_status(self.device, want, NV01_MEMORY_VIRTUAL, &mut range)
+    }
+
     /// [`RmConnection::raw_alloc`] that reports RM's status instead of classifying it —
     /// the allocation half of the probe pair. See [`RmConnection::raw_dup_object`] for why
     /// a probe must not go through [`status_check`].
@@ -4759,6 +4781,89 @@ impl HostRmBackend {
             .space_of(range)
             .ok_or(RmError::Other(NOT_ON_THIS_RUNG))?;
         Ok((range, space))
+    }
+
+    /// ★★★ **B1(d) PROBE — a `FERMI_VASPACE_A` ALONE, with no companion
+    /// `NV01_MEMORY_VIRTUAL` range.**
+    ///
+    /// [`HostRmBackend::host_alloc_vaspace_pair`] mints both, which is what production needs
+    /// and what makes route B **unmeasurable**: RM keeps one btree of VA ranges per address
+    /// space, and a second whole-space `NV01_MEMORY_VIRTUAL` over a space that already has
+    /// one is refused `0x19 NV_ERR_INSERT_DUPLICATE_NAME` — *"found a duplicate entry in the
+    /// requested btree"*. That refusal is about **the duplicate**, not about the dup, and
+    /// reading it as *"a duped space cannot carry a range"* would have been a finding
+    /// manufactured by the probe's own setup.
+    ///
+    /// ⇒ This verb is what (d) would actually do: the per-proc client creates **only the
+    /// address space**, and the scratchpad — which does all the mapping — creates the range.
+    ///
+    /// # Errors
+    /// Propagates RM's refusal.
+    pub fn host_alloc_vaspace_space_bare(&self) -> Result<u32, RmError> {
+        let mut params = [0u8; NvVaspaceAllocationParameters::SIZE];
+        NvVaspaceAllocationParameters::default()
+            .encode_into(&mut params)
+            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let want = self.conn.mint();
+        let space = self
+            .conn
+            .raw_alloc(self.conn.device, want, VA_SPACE, &mut params)?;
+        self.conn.remember(space, self.conn.device);
+        Ok(space)
+    }
+
+    /// ★★★ **B1(d) PROBE — dup with a CALLER-CHOSEN destination parent.**
+    ///
+    /// [`HostRmBackend::host_dup_object`] parents at this connection's device. RM answered
+    /// `0x26 NV_ERR_INVALID_DEVICE` — *"current device is not valid"* — for an
+    /// `NV01_MEMORY_VIRTUAL`, and *"the parent I chose is wrong"* and *"this class cannot
+    /// cross a client"* are two different findings behind that one number. The parent has to
+    /// become a parameter before either can be claimed.
+    ///
+    /// # Errors
+    /// Ioctl-level only — RM's refusal is [`DupOutcome::status`].
+    pub fn host_dup_object_at(
+        &self,
+        parent: u32,
+        src_client: u32,
+        src_object: u32,
+        flags: u32,
+    ) -> Result<DupOutcome, RmError> {
+        let want = self.conn.mint();
+        self.conn
+            .raw_dup_object(parent, want, src_client, src_object, flags)
+    }
+
+    /// This connection's `NV01_ROOT_CLIENT` handle — a candidate destination parent for
+    /// [`HostRmBackend::host_dup_object_at`].
+    #[must_use]
+    pub fn host_root(&self) -> u32 {
+        self.conn.client()
+    }
+
+    /// This connection's `NV01_DEVICE_0` handle — the other candidate parent.
+    #[must_use]
+    pub fn host_device(&self) -> u32 {
+        self.conn.device
+    }
+
+    /// ★★★ **B1(d) PROBE — an `NV01_MEMORY_VIRTUAL` over `h_va_space` bounded to
+    /// `[offset, limit]`** rather than the whole space.
+    ///
+    /// The whole-space form collides with an existing range's btree entry (`0x19`); a
+    /// bounded one asks whether a **sub-range** is allowed, which is the question route B
+    /// actually needs answered when the guest's own range already exists.
+    ///
+    /// # Errors
+    /// Ioctl-level only — RM's refusal is [`AllocOutcome::status`].
+    pub fn host_alloc_virtual_subrange_over(
+        &self,
+        h_va_space: u32,
+        offset: u64,
+        limit: u64,
+    ) -> Result<AllocOutcome, RmError> {
+        self.conn
+            .raw_alloc_virtual_subrange(h_va_space, offset, limit)
     }
 
     /// ★★★★★ **B1(d) PROBE — dup `src_object` out of client `src_client` into THIS

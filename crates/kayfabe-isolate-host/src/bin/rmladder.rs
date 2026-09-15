@@ -7344,28 +7344,137 @@ fn dup_vaspace_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
     let h_dup_space = dup_space.ok().filter(|o| o.status == 0).map(|o| o.h_object);
     let h_dup_range = dup_range.ok().filter(|o| o.status == 0).map(|o| o.h_object);
 
-    // Q1c — route B's second half: a range S owns, over a space S duped in.
-    let h_local_range_over_duped = match h_dup_space {
-        None => {
-            println!("B1D_Q1C_RANGE_OVER_DUPED=SKIPPED  (Q1a refused, so there is no space to build over)");
-            None
-        }
-        Some(space) => match rm.host_alloc_virtual_range_over(space) {
+    // ── Q1b2 — the SAME dup, parented at the CLIENT ROOT instead of the device. ─────────
+    //
+    // ⊘⊘ **NOT a retry-until-green.** Q1b answered `0x26 NV_ERR_INVALID_DEVICE` — *"current
+    // device is not valid"* — and that number cannot distinguish *"this class may not cross
+    // a client"* from *"the destination parent I chose is the wrong one"*. Two different
+    // findings behind one status, and only one of them refutes route A. Making the parent a
+    // parameter is what turns the refusal into a measurement; if BOTH parents are refused,
+    // route A is dead and now says so for a reason.
+    let dup_range_at_root = rm.host_dup_object_at(rm.host_root(), client_p, range_p, 0);
+    match &dup_range_at_root {
+        Ok(o) => println!(
+            "B1D_Q1B2_DUP_VIRTUAL_AT_ROOT status={:#06x} h={:#010x}   ({})",
+            o.status,
+            o.h_object,
+            if o.status == 0 { "NV_OK" } else { "REFUSED" }
+        ),
+        Err(e) => println!("B1D_Q1B2_DUP_VIRTUAL_AT_ROOT ioctl-level failure: {e:?}"),
+    }
+    let h_dup_range = h_dup_range.or_else(|| {
+        dup_range_at_root
+            .ok()
+            .filter(|o| o.status == 0)
+            .map(|o| o.h_object)
+    });
+
+    // ── Q1c — route B's second half, in THREE arms, because the first one measured the
+    //    probe's own setup rather than the design. ────────────────────────────────────────
+    //
+    // ⊘⊘⊘ **c1 ANSWERED `0x19 NV_ERR_INSERT_DUPLICATE_NAME`** — *"found a duplicate entry in
+    // the requested btree"*. RM keeps ONE btree of VA ranges per address space, and P's
+    // `host_alloc_vaspace_pair` had ALREADY put a whole-space range in it. So the refusal is
+    // about **the duplicate**, and reading it as *"a duped space cannot carry a range"* would
+    // have been a finding manufactured by the probe's own setup — the exact shape R7b in
+    // `alloc_vaspace_raw` records paying for once already ("a defect in THE CLIENT, not in
+    // anything under test").
+    //
+    // c2 asks for a **sub-range** instead, and c3 is what (d) would actually do: the per-proc
+    // client creates ONLY the address space and the scratchpad creates the range.
+    let mut h_local_range_over_duped: Option<u32> = None;
+    if let Some(space) = h_dup_space {
+        match rm.host_alloc_virtual_range_over(space) {
             Ok(o) => {
                 println!(
-                    "B1D_Q1C_RANGE_OVER_DUPED status={:#06x} h={:#010x}   ({})",
+                    "B1D_Q1C1_WHOLE_RANGE_OVER_DUPED status={:#06x} h={:#010x}   ({})  \
+                     — ⊘ P already holds a whole-space range here; 0x19 = the DUPLICATE, not the dup",
                     o.status,
                     o.h_object,
                     if o.status == 0 { "NV_OK" } else { "REFUSED" }
                 );
-                if o.status == 0 { Some(o.h_object) } else { None }
+                if o.status == 0 {
+                    h_local_range_over_duped = Some(o.h_object);
+                }
+            }
+            Err(e) => println!("B1D_Q1C1_WHOLE_RANGE_OVER_DUPED ioctl-level failure: {e:?}"),
+        }
+        if h_local_range_over_duped.is_none() {
+            // c2 — a bounded sub-range covering only the VAs this rung maps.
+            let lo = VA_SHARED;
+            let hi = VA_UNTOUCHED + 0x4000_0000;
+            match rm.host_alloc_virtual_subrange_over(space, lo, hi) {
+                Ok(o) => {
+                    println!(
+                        "B1D_Q1C2_SUBRANGE_OVER_DUPED status={:#06x} h={:#010x} range=[{lo:#018x},{hi:#018x}]   ({})",
+                        o.status,
+                        o.h_object,
+                        if o.status == 0 { "NV_OK" } else { "REFUSED" }
+                    );
+                    if o.status == 0 {
+                        h_local_range_over_duped = Some(o.h_object);
+                    }
+                }
+                Err(e) => println!("B1D_Q1C2_SUBRANGE_OVER_DUPED ioctl-level failure: {e:?}"),
+            }
+        }
+    } else {
+        println!("B1D_Q1C1_WHOLE_RANGE_OVER_DUPED=SKIPPED  (Q1a refused — no space to build over)");
+        println!("B1D_Q1C2_SUBRANGE_OVER_DUPED=SKIPPED");
+    }
+
+    // ── Q1c3 — ★★★★★ THE SHAPE (d) WOULD ACTUALLY USE. A SECOND, CLEAN address space:
+    //    P creates ONLY the `FERMI_VASPACE_A`, S dupes it, S creates the range. No range
+    //    exists in that space before S's, so `0x19` is structurally unavailable. ────────────
+    let clean = (|| -> Option<(u32, u32)> {
+        let bare = match rm_p.host_alloc_vaspace_space_bare() {
+            Ok(h) => h,
+            Err(e) => {
+                println!("B1D_Q1C3=NOTRUN  (P could not allocate a bare FERMI_VASPACE_A: {e:?})");
+                return None;
+            }
+        };
+        println!("B1D_Q1C3_P_BARE_SPACE={bare:#010x}  (FERMI_VASPACE_A alone — NO range in it)");
+        let dup = match rm.host_dup_object(client_p, bare, 0) {
+            Ok(o) => {
+                println!(
+                    "B1D_Q1C3_DUP_BARE_SPACE status={:#06x} h={:#010x}   ({})",
+                    o.status,
+                    o.h_object,
+                    if o.status == 0 { "NV_OK" } else { "REFUSED" }
+                );
+                if o.status != 0 {
+                    return None;
+                }
+                o.h_object
             }
             Err(e) => {
-                println!("B1D_Q1C_RANGE_OVER_DUPED ioctl-level failure: {e:?}");
+                println!("B1D_Q1C3_DUP_BARE_SPACE ioctl-level failure: {e:?}");
+                return None;
+            }
+        };
+        match rm.host_alloc_virtual_range_over(dup) {
+            Ok(o) => {
+                println!(
+                    "B1D_Q1C3_RANGE_IN_CLEAN_DUPED_SPACE status={:#06x} h={:#010x}   ({})  \
+                     — ★ the scratchpad builds the range in a space the stub only CREATED",
+                    o.status,
+                    o.h_object,
+                    if o.status == 0 { "NV_OK" } else { "REFUSED" }
+                );
+                if o.status == 0 { Some((o.h_object, bare)) } else { None }
+            }
+            Err(e) => {
+                println!("B1D_Q1C3_RANGE_IN_CLEAN_DUPED_SPACE ioctl-level failure: {e:?}");
                 None
             }
-        },
-    };
+        }
+    })();
+    let clean_range = clean.map(|(r, _)| r);
+    let clean_bare_space = clean.map(|(_, b)| b);
+    if h_local_range_over_duped.is_none() {
+        h_local_range_over_duped = clean_range;
+    }
 
     if h_dup_range.is_none() && h_local_range_over_duped.is_none() {
         println!(
@@ -7439,12 +7548,33 @@ fn dup_vaspace_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
 
     // The hDma the rest of the rung uses: route B if it works (S names nothing foreign),
     // else route A.
-    let (working_hdma, working_label) = match (h_local_range_over_duped, route_b_va, h_dup_range, route_a_va) {
-        (Some(h), Some(_), _, _) => (Some(h), "B (local range over duped space)"),
-        (_, _, Some(h), Some(_)) => (Some(h), "A (duped range)"),
-        _ => (None, "none"),
-    };
+    // ⊘⊘⊘ **WHICH ADDRESS SPACE THE WORKING hDma LIVES IN IS PART OF THE ANSWER**, because
+    // the sharing falsifier below is only a falsifier if P maps into the SAME space. Route
+    // B via Q1c3 runs in a **clean** space P created but has no range in — and a collision
+    // test run there through `range_p` (which lives in `space_p`) would be two maps in two
+    // different spaces, which of course both succeed. That would print
+    // `⊘ TWO SPACES — (d) is void` on a test that never tested anything.
+    // ⇒ The space is carried with the handle, and P's side is chosen from it.
+    let (working_hdma, working_label, working_space) =
+        match (h_local_range_over_duped, route_b_va, h_dup_range, route_a_va) {
+            // Prefer a route in `space_p`: P already holds `range_p` there, so the falsifier
+            // needs nothing built.
+            (Some(h), Some(_), _, _) if Some(h) != clean_range => {
+                (Some(h), "B (local range over duped space_p)", Some(space_p))
+            }
+            (_, _, Some(h), Some(_)) => (Some(h), "A (duped range)", Some(space_p)),
+            (Some(h), Some(_), _, _) => (
+                Some(h),
+                "B (range built by S in a CLEAN space P only created)",
+                clean_bare_space,
+            ),
+            _ => (None, "none", None),
+        };
     println!("B1D_WORKING_ROUTE={working_label}");
+    println!(
+        "B1D_WORKING_SPACE={}",
+        working_space.map_or_else(|| "none".to_string(), |v| format!("{v:#010x}"))
+    );
     let Some(h_dma) = working_hdma else {
         println!(
             "⊘⊘   B1d MAP FAILS        = a dup succeeded but no FIXED map through it did. \
@@ -7553,8 +7683,48 @@ fn dup_vaspace_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
             return false;
         }
     };
+    // ★★★ P's OWN hDma **IN THE SPACE S MAPPED INTO**. See `working_space`.
+    let p_hdma = match working_space {
+        Some(sp) if sp == space_p => Some(range_p),
+        Some(sp) => {
+            // The clean space: P created it but has no range in it, and S's range is
+            // whole-space, so P needs a bounded one.
+            match rm_p.host_alloc_virtual_subrange_over(sp, VA_SHARED, VA_UNTOUCHED + 0x4000_0000)
+            {
+                Ok(o) if o.status == 0 => {
+                    println!("B1D_Q4_P_SUBRANGE={:#010x}  (P's own range in the clean space)", o.h_object);
+                    Some(o.h_object)
+                }
+                Ok(o) => {
+                    println!(
+                        "B1D_Q4_P_SUBRANGE status={:#06x} REFUSED — P holds no range in the space \
+                         S mapped into",
+                        o.status
+                    );
+                    None
+                }
+                Err(e) => {
+                    println!("B1D_Q4_P_SUBRANGE ioctl-level failure: {e:?}");
+                    None
+                }
+            }
+        }
+        None => None,
+    };
+    let Some(p_hdma) = p_hdma else {
+        // ⊘ NOT `TWO SPACES`. Mapping through a range in a DIFFERENT space would succeed for
+        // a reason that has nothing to do with sharing, and printing the void verdict here
+        // would be this campaign's "a green number is not a proof about a race", inverted.
+        println!(
+            "B1D_SHARING=NOTRUN  (P holds no hDma in the space S mapped into, so a collision \
+             there would compare two different address spaces)"
+        );
+        println!("B1D_PROBE=(F)");
+        return false;
+    };
+
     // The control FIRST: if P cannot map at all, a refusal below proves nothing.
-    let control = rm_p.host_map_dma_fixed(range_p, mem_p, OBJ_LEN, VA_UNTOUCHED);
+    let control = rm_p.host_map_dma_fixed(p_hdma, mem_p, OBJ_LEN, VA_UNTOUCHED);
     let control_ok = match &control {
         Ok(o) => {
             println!(
@@ -7576,7 +7746,7 @@ fn dup_vaspace_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
         println!("B1D_PROBE=(F)");
         return false;
     };
-    let collide = rm_p.host_map_dma_fixed(range_p, mem_p, OBJ_LEN, collide_at);
+    let collide = rm_p.host_map_dma_fixed(p_hdma, mem_p, OBJ_LEN, collide_at);
     let shared = match &collide {
         Ok(o) => {
             println!(
