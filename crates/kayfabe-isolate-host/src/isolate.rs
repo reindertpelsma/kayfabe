@@ -157,6 +157,24 @@ fn embedded_image() -> Result<&'static Arc<ProgramImage>, String> {
 /// name it. The two are pinned equal by `the_scratchpad_proc_id_agrees_across_the_seam`.
 pub const SCRATCHPAD_ISOLATE_PROC: u32 = u32::MAX;
 
+/// ★★★★★ **CONSTRAINT 26 — a [`kayfabe_isolate::RingProvenance`] as its three wire fields.**
+///
+/// `(tag, a, b)`: for `OwnObject` that is `(0, handle, 0)`, for `StoreSlice` `(1, offset,
+/// len)`. ⊘ One function, so the encoder and `crate::child::ring_provenance` cannot come to
+/// disagree about which number is which — the failure `AdoptedRingWire`'s own docs describe
+/// ("four consecutive integers with no names is exactly where an encoder and a decoder swap
+/// two of them and every in-process test still passes").
+fn ring_wire(p: kayfabe_isolate::RingProvenance) -> (u8, u64, u64) {
+    match p {
+        kayfabe_isolate::RingProvenance::OwnObject(h) => {
+            (crate::proto::RING_PROVENANCE_OWN_OBJECT, h.raw(), 0)
+        }
+        kayfabe_isolate::RingProvenance::StoreSlice { offset, len } => {
+            (crate::proto::RING_PROVENANCE_STORE_SLICE, offset, len)
+        }
+    }
+}
+
 /// fd number of the control datagram socket in the child.
 pub const CONTROL_FD: i32 = 3;
 /// ★ The number the C parks `NVKVM_DEV_DIRFD` on, **reserved and never granted** here. See
@@ -989,8 +1007,11 @@ impl RmBackend for ProxyRmBackend {
             hosting: hosting.map(|h| (h.class.0, h.params.to_vec())),
             // ★★★★★ LEG A2 — same crossing, same reason. See `Request::AllocChannel::adopt`.
             adopt: adopt.map(|a| {
+                let (kind, x, y) = ring_wire(a.ring);
                 (
-                    a.memory.raw(),
+                    kind,
+                    x,
+                    y,
                     a.ring_va,
                     a.gp_fifo_va,
                     a.gp_fifo_entries,
@@ -1025,13 +1046,18 @@ impl RmBackend for ProxyRmBackend {
             vas: vas.raw(),
             engine: engine_code(engine),
             declared_engine_type,
-            adopt: (
-                adopt.memory.raw(),
-                adopt.ring_va,
-                adopt.gp_fifo_va,
-                adopt.gp_fifo_entries,
-                adopt.userd.map(|u| (u.memory.raw(), u.offset)),
-            ),
+            adopt: {
+                let (kind, x, y) = ring_wire(adopt.ring);
+                (
+                    kind,
+                    x,
+                    y,
+                    adopt.ring_va,
+                    adopt.gp_fifo_va,
+                    adopt.gp_fifo_entries,
+                    adopt.userd.map(|u| (u.memory.raw(), u.offset)),
+                )
+            },
             err_notifier: err_notifier.map(|h| h.raw()),
         })?;
         match self.lift(reply)? {

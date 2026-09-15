@@ -772,6 +772,79 @@ pub struct HostedObject<'a> {
     pub params: &'a [u8],
 }
 
+/// ★★★★★ **CONSTRAINT 26 — WHOSE MEMORY THE GUEST'S RING IS, AS A TYPE.**
+///
+/// > `THE_CONSTRAINTS.md` §26: *"A per-proc isolate never holds an `hMemory` for vidmem."*
+///
+/// # ⊘ Why this replaces a bare `HostHandle`, and what it does NOT give up
+///
+/// Before §26 the ring was always an object the **birth isolate itself** minted by joining a
+/// framebuffer leaf, so a handle was the whole answer and `alloc_channel_declared` re-checked
+/// it against that isolate's own joined-object set (`RING_NOT_A_JOINED_WINDOW`). Under the
+/// ownership split the bytes are a **slice of the one reserved object**, which the per-proc
+/// isolate may not name — so a handle here is a `ForeignHandle` refusal before RM is reached,
+/// and the far-side re-check has nothing to check against.
+///
+/// ★★★ **The measurement that makes this safe to do:** the ring handle **never reaches RM**.
+/// `alloc_channel_in`'s `RingSource::Guest` arm maps nothing, and what RM is told is
+/// `gp_fifo_offset: layout.gp_fifo_va` — an absolute VA. The handle was an **authorization
+/// token**, not an operand. ⇒ dropping it costs no capability; it only moves the question of
+/// *who authorizes the birth*.
+///
+/// # ★★★ AND THE QUESTION IS KEPT — `RING_NOT_A_JOINED_WINDOW`'s, restated
+///
+/// The failure that check prevents is exact and **silent**: a channel over a blank twin
+/// fetches zeros, never advances `GP_GET`, and reports no error at all. Under §26 it is asked
+/// as *"is this ring a slice of the one object, placed by the party that holds it?"* — of
+/// `kayfabe_qemu_raw::storemap::StoreMapPort`, the mapper's own ledger, which is the only
+/// party that can answer. ⊘ The mechanism is deleted. The question is not.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RingProvenance {
+    /// **The birth isolate's own object** — an `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` it minted
+    /// by joining a framebuffer leaf, or the guest's own RAM it pinned. The far side
+    /// re-checks membership in its joined-object set and refuses by name otherwise.
+    ///
+    /// ⊘ This is the pre-§26 shape, unchanged, and it is what the `isolate` arm still uses.
+    OwnObject(HostHandle),
+    /// ★★★★★ **A SLICE OF THE ONE RESERVED OBJECT**, already mapped at the guest's own VA by
+    /// the scratchpad. **No handle**, because the birth isolate holds none and must not.
+    ///
+    /// ⚠ **What the far side can and cannot check, stated rather than implied.** It can check
+    /// that the ring is declared as a store slice at all — i.e. that nothing is being handed
+    /// a foreign handle — and it does. It **cannot** check that the slice exists, because it
+    /// holds neither the object nor the mapping. That check is made VMM-side, before the plan
+    /// is built, by the party that placed it. ⊘ This is a real move of the checker and it is
+    /// not a strengthening; it is the only place the knowledge lives once the object stops
+    /// crossing.
+    StoreSlice {
+        /// Byte offset of these bytes inside the one reserved object.
+        offset: u64,
+        /// How many bytes the scratchpad placed at [`AdoptedGuestRing::ring_va`].
+        len: u64,
+    },
+}
+
+impl RingProvenance {
+    /// The handle, when there is one. `None` for a store slice — which is what keeps
+    /// `VerbPlan::handles()` from offering the foreign-handle gate something it must refuse.
+    #[must_use]
+    pub const fn handle(self) -> Option<HostHandle> {
+        match self {
+            RingProvenance::OwnObject(h) => Some(h),
+            RingProvenance::StoreSlice { .. } => None,
+        }
+    }
+
+    /// The name a census prints. ⊘ Two words, never a `bool`.
+    #[must_use]
+    pub const fn kind(self) -> &'static str {
+        match self {
+            RingProvenance::OwnObject(_) => "OwnObject",
+            RingProvenance::StoreSlice { .. } => "StoreSlice",
+        }
+    }
+}
+
 /// ★★★★★ **LEG A2 — THE GUEST'S OWN RING, as the birth path names it.**
 ///
 /// Handed to [`RmBackend::alloc_channel`] so a host channel can be born over the GPFIFO the
@@ -808,9 +881,9 @@ pub struct HostedObject<'a> {
 /// adopting the cursor are two legs, and this is the first.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AdoptedGuestRing {
-    /// The joined host object carrying the guest's GPFIFO. Neither allocated nor freed by
-    /// the channel.
-    pub memory: HostHandle,
+    /// ★★★★★ **WHERE THE GUEST'S GPFIFO BYTES LIVE — and, under constraint 26, WHOSE they
+    /// are.** See [`RingProvenance`].
+    pub ring: RingProvenance,
     /// Where that object is placed in the channel's address space.
     pub ring_va: u64,
     /// The guest's `gpFifoOffset` — an **absolute VA**, not an offset into anything.
@@ -3015,12 +3088,16 @@ impl VerbPlan {
             // `alloc_channel_declared` would be a channel born over ANOTHER isolate's
             // joined leaf — the far side re-checks `fb_joins` membership too, and both is
             // correct: this is the central gate, that is the direct-call entrance.
+            // ★★★★★ **CONSTRAINT 26 — the ring contributes a handle ONLY when it is this
+            // isolate's own.** A `RingProvenance::StoreSlice` names nothing, which is the
+            // whole point: the foreign-handle gate below cannot refuse what is not offered,
+            // and nothing was smuggled past it — there is no handle to smuggle.
             VerbPlan::ChannelBirth {
                 host_vas, adopt, ..
             } => host_vas
                 .iter()
                 .copied()
-                .chain(core::iter::once(adopt.memory))
+                .chain(adopt.ring.handle())
                 .chain(adopt.userd.map(|u| u.memory))
                 .collect(),
             VerbPlan::Doorbell {

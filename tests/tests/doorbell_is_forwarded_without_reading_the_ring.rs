@@ -443,7 +443,7 @@ fn an_unadoptable_ring_is_refused_by_name_and_never_served_over_ours() {
 
     // (1) The birth, attempted where production attempts it: refused by name, with the
     // ring VA the guest declared.
-    let birth = kayfabe_fwd::birth_channel(&mut gpu, CLIENT, HObject(0xC1D_0019), None);
+    let birth = kayfabe_fwd::birth_channel(&mut gpu, CLIENT, HObject(0xC1D_0019), None, None);
     assert_eq!(
         birth.map(|o| format!("{o:?}")),
         Err(kayfabe_fwd::FwdFault::PassthroughRingNotAdoptable {

@@ -975,6 +975,12 @@ pub struct SharedDevice {
     /// than silently forwarding unbacked work — an absent seam is a different fact from a
     /// refresh that found nothing.
     invalidate_refresh: std::sync::OnceLock<Arc<dyn kayfabe_fwd::InvalidateRefresh>>,
+    /// ★★★★★ **CONSTRAINT 26 — the party that can answer *"is this ring a slice of the one
+    /// object?"***, installed by the composition root exactly as `invalidate_refresh` is.
+    ///
+    /// ⊘ `None` is **fail-closed**, not permissive: `adopted_guest_ring` refuses a
+    /// store-slice ring when nobody can vouch for it. See [`kayfabe_fwd::RingSliceOracle`].
+    ring_slice: std::sync::OnceLock<Arc<dyn kayfabe_fwd::RingSliceOracle>>,
     /// `[w281]` The PUSHBUFFER's vidmem route — [`SharedDevice::set_pushbuffer_vidmem`].
     /// ⊘ Separate from `fb` on purpose: supply and route are different questions.
     pb_vidmem: std::sync::atomic::AtomicBool,
@@ -1331,6 +1337,7 @@ impl SharedDevice {
             vas_refresh_q: std::sync::Mutex::new(Vec::new()),
             fb: std::sync::OnceLock::new(),
             invalidate_refresh: std::sync::OnceLock::new(),
+            ring_slice: std::sync::OnceLock::new(),
             pb_vidmem: std::sync::atomic::AtomicBool::new(false),
             mode,
             pool: PoolGate::default(),
@@ -1939,6 +1946,11 @@ impl SharedDevice {
                             proc,
                             &route,
                             err_notifier_grant,
+                            // ★★★★★ **CONSTRAINT 26.** `None` when nothing installed one,
+                            // and `adopted_guest_ring` treats that as FAIL-CLOSED: a
+                            // store-slice ring nobody can vouch for is refused, never
+                            // adopted. See `kayfabe_fwd::RingSliceOracle`.
+                            self.ring_slice.get().map(std::sync::Arc::as_ref),
                         )?;
                         Staged::check_out(proc, planned.plan.cgpu, planned)
                     },
@@ -3635,6 +3647,19 @@ impl SharedDevice {
         src: Arc<dyn kayfabe_fwd::InvalidateRefresh>,
     ) -> Result<(), Arc<dyn kayfabe_fwd::InvalidateRefresh>> {
         self.invalidate_refresh.set(src)
+    }
+
+    /// ★★★★★ **CONSTRAINT 26 — install the ring-slice oracle.** Once, at realize, and only
+    /// on the arm where a store slice can occur at all.
+    ///
+    /// # Errors
+    /// The oracle back, if one was already installed — a second would be a second answer to
+    /// a question whose whole value is that one party owns it.
+    pub fn set_ring_slice_oracle(
+        &self,
+        src: Arc<dyn kayfabe_fwd::RingSliceOracle>,
+    ) -> Result<(), Arc<dyn kayfabe_fwd::RingSliceOracle>> {
+        self.ring_slice.set(src)
     }
 
     /// ★★★★★ `[w281]` **Arm the PUSHBUFFER's vidmem route — its OWN flag, never route B's.**

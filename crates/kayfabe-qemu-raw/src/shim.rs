@@ -15535,6 +15535,23 @@ impl Regs {
                     match sp.share_for_store_maps() {
                         Some(port) => {
                             crate::storemap::register_store_map_port(DOORBELL_TARGET_GPU, &port);
+                            // ★★★★★ **CONSTRAINT 26 — AND THE RESTATED RING QUESTION GETS ITS
+                            // ANSWERER.** ⊘ Installed only on this arm: with no oracle
+                            // `adopted_guest_ring` refuses a store-slice ring by name, which
+                            // is the fail-closed direction and is exactly right on the
+                            // `isolate` arm where a store slice cannot occur at all.
+                            if device
+                                .set_ring_slice_oracle(std::sync::Arc::clone(&port)
+                                    as std::sync::Arc<dyn kayfabe_fwd::RingSliceOracle>)
+                                .is_err()
+                            {
+                                eprintln!(
+                                    "kayfabe: STORE-MAP AT REALIZE: ⚠ a ring-slice oracle was \
+                                     ALREADY installed — two answerers for one question. The \
+                                     first one stands; this port's ledger is NOT what births \
+                                     will be checked against."
+                                );
+                            }
                             eprintln!(
                                 "kayfabe: STORE-MAP AT REALIZE: ★★★★★ ARMED — {}=scratchpad. \
                                  Per-proc isolates get BARE address spaces and map nothing; \

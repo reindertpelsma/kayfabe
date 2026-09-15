@@ -386,6 +386,17 @@ impl StoreMapPort {
     }
 }
 
+/// ★★★★★ **CONSTRAINT 26 — THE PORT *IS* THE ORACLE.**
+///
+/// ⊘ The seam and the ledger are the same object deliberately: an oracle that read a copy of
+/// the mapper's state would be a second source of truth for *"what is mapped"*, and the one
+/// question it exists to answer is exactly that. See [`kayfabe_fwd::RingSliceOracle`].
+impl kayfabe_fwd::RingSliceOracle for StoreMapPort {
+    fn is_slice_of_the_store(&self, vas: HostHandle, at: GpuVa, len: u64) -> bool {
+        StoreMapPort::is_slice_of_the_store(self, vas, at, len)
+    }
+}
+
 kayfabe_util::assert_send_sync!(StoreMapPort);
 
 /// ★★★ **THE PER-GPU REGISTRY — how the publish path reaches this device's port.**

@@ -95,6 +95,15 @@ const JOINED_HOST_VA: u64 = RING_VA.0;
 /// The joined host object. ★ In leg A2 this is the number that must reach
 /// `GuestRing::memory`.
 const JOINED_MEMORY: u64 = 0x0BAD_C0DE;
+/// ★★★★★ **CONSTRAINT 26** — the ONE reserved object, in the SCRATCHPAD's namespace. A
+/// per-proc worker cannot name it, which is the whole reason `RingProvenance` exists.
+const STORE_OBJECT: u64 = 0x0057_0BE0;
+/// Where in that object this leaf lives.
+const STORE_OFFSET: u64 = 0x0400_0000;
+/// The scratchpad isolate's proc id — `u32::MAX`, which can never alias a live `ProcId`.
+const SCRATCHPAD_PROC: u32 = u32::MAX;
+/// The scratchpad's own `NV01_MEMORY_VIRTUAL` over this `Vas`'s duped space.
+const STORE_VAS: u64 = 0x00CA_FE0A;
 
 /// What the address table says lives at the ring's VA.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -106,6 +115,10 @@ enum RingBacking {
     HostButSoleBacking,
     /// ★★★★★ The join: one memory.
     Joined,
+    /// ★★★★★ **CONSTRAINT 26 — the ring is a SLICE of the one reserved object**, placed at
+    /// the guest's own VA by the scratchpad. The binding names an arena this isolate does
+    /// **not** own, so `frees_object()` is false and the handle must never reach a birth.
+    StoreSlice,
 }
 
 /// ★★★★★ **LEG B — what the guest's own kernel said about this channel's USERD.**
@@ -288,6 +301,25 @@ fn guest_with_a_gr_channel_and_userd(
             ),
         )
         .expect("a joined window over vidmem is exactly ruling 4's carve-out"),
+        // ★★★★★ **CONSTRAINT 26.** `HostBacking::slice` over an arena whose `IsolateId` is the
+        // SCRATCHPAD's — a handle this proc's worker could never name. ⊘ The length must be
+        // the leaf's, or `AddressTable::bind` refuses `SliceLenMismatch`, which is the check
+        // that keeps a slice's extent and its row's extent one fact.
+        RingBacking::StoreSlice => Binding::real_gpu_memory(
+            LEAF_FB_PHYS,
+            Aperture::Vidmem,
+            HostBacking::slice(
+                HostHandle::new(
+                    kayfabe_isolate::IsolateId::new(SCRATCHPAD_PROC, GPU),
+                    STORE_OBJECT,
+                ),
+                JOINED_HOST_VA,
+                kayfabe_mmu::HostSlice::new(STORE_OFFSET, LEAF_LEN)
+                    .expect("the fixture's slice is non-empty and does not wrap"),
+                BackingBytes::JoinsGuestWindow,
+            ),
+        )
+        .expect("a store slice at a guest VA is one memory, which is ruling 4's carve-out"),
     };
     {
         let proc = gpu.procs.get_mut(&pid).expect("live");
@@ -352,8 +384,19 @@ fn the_joined_ring_is_adopted_with_the_guests_own_numbers() {
          path. Without this the host GR channel is born over a ring of ours that stays empty \
          forever, which is `gr_doorbell_passthrough.md` §0.3's first reason",
     );
+    // ★★★★★ **CONSTRAINT 26** — the adoption now carries a `RingProvenance`, and a JOINED
+    // window is `OwnObject`: the isolate minted it, so the far side can and does re-check it.
+    // ⊘ Asserted as the ARM as well as the handle: a `StoreSlice` here would mean the ring
+    // was read as a slice of the reserved object, which is a different chain entirely.
     assert_eq!(
-        a.memory.raw(),
+        a.ring
+            .handle()
+            .expect(
+                "★★★ a JOINED window must be `RingProvenance::OwnObject` — it is this \
+                 isolate's own `OS_DESCRIPTOR`, and the far-side `RING_NOT_A_JOINED_WINDOW` \
+                 check is only reachable for that arm"
+            )
+            .raw(),
         JOINED_MEMORY,
         "★ the adoption must name the JOINED object — the one `join_fb_leaf` minted — and \
          nothing else"
@@ -553,5 +596,219 @@ fn leg_b_is_unreachable_when_leg_a2_refused() {
         "★★★★★ the ring's adoption was refused (an arena page, not the guest's bytes) and \
          leg B must be refused with it. A USERD adopted here would advance a cursor into a \
          GPFIFO the guest never writes"
+    );
+}
+
+// =====================================================================================
+// ★★★★★ CONSTRAINT 26 — "IS THIS RING A SLICE OF THE ONE OBJECT?", the restated question
+// =====================================================================================
+
+/// A [`kayfabe_fwd::RingSliceOracle`] that answers what it was built to answer, and records
+/// what it was asked.
+///
+/// ⊘ It records the ARGUMENTS as well as the count: an oracle that answered `true` for a
+/// different VA than the one under test would make every assertion below pass for the wrong
+/// reason, and `a_probe_that_shares_the_allocator_is_not_an_observer` is this tree's name for
+/// that class.
+struct FixedOracle {
+    answer: bool,
+    asked: std::sync::Mutex<Vec<(u64, u64, u64)>>,
+}
+
+impl FixedOracle {
+    fn new(answer: bool) -> FixedOracle {
+        FixedOracle {
+            answer,
+            asked: std::sync::Mutex::new(Vec::new()),
+        }
+    }
+}
+
+impl kayfabe_fwd::RingSliceOracle for FixedOracle {
+    fn is_slice_of_the_store(&self, vas: HostHandle, at: GpuVa, len: u64) -> bool {
+        self.asked
+            .lock()
+            .expect("oracle")
+            .push((vas.raw(), at.0, len));
+        self.answer
+    }
+}
+
+/// Record the scratchpad's range on the `Vas`, as the hand-over would.
+fn hand_the_vas_over(gpu: &mut Gpu, pid: ProcId) {
+    let proc = gpu.procs.get_mut(&pid).expect("live");
+    let v = proc.vas_by_pdb_mut(GPU, PDB0).expect("the VAS exists");
+    v.store_vas = Some(HostHandle::new(
+        kayfabe_isolate::IsolateId::new(SCRATCHPAD_PROC, GPU),
+        STORE_VAS,
+    ));
+}
+
+/// The `adopt` the **birth** path would carry — the path that HAS the oracle, unlike
+/// [`planned_adoption`]'s latch.
+fn planned_birth(
+    gpu: &Gpu,
+    oracle: Option<&dyn kayfabe_fwd::RingSliceOracle>,
+) -> Result<Option<kayfabe_isolate::VerbPlan>, kayfabe_fwd::FwdFault> {
+    let route = kayfabe_fwd::route_channel_birth(&gpu.spine, CLIENT, HObject(0x5C00_0019))?;
+    let planned = kayfabe_fwd::plan_channel_birth(
+        &gpu.spine,
+        &gpu.procs[&route.proc],
+        &route,
+        None,
+        oracle,
+    )?;
+    Ok(planned.verbs)
+}
+
+#[test]
+fn a_store_slice_ring_is_adopted_only_when_the_mapper_says_it_placed_one() {
+    let (mut gpu, pid, _cid) = guest_with_a_gr_channel(RingBacking::StoreSlice);
+    hand_the_vas_over(&mut gpu, pid);
+
+    // ---- ★★★ THE POSITIVE. The party that owns the object says it placed the slice.
+    let yes = FixedOracle::new(true);
+    let verbs = planned_birth(&gpu, Some(&yes))
+        .expect("the birth plans")
+        .expect("a first birth emits verbs");
+    let kayfabe_isolate::VerbPlan::ChannelBirth { adopt, .. } = &verbs else {
+        panic!("the birth emitted {verbs:?}");
+    };
+    assert_eq!(
+        adopt.ring,
+        kayfabe_isolate::RingProvenance::StoreSlice {
+            offset: STORE_OFFSET,
+            len: LEAF_LEN,
+        },
+        "★★★★★ CONSTRAINT 26 — a ring bound as a slice of the one object must be adopted AS \
+         one, carrying the slice's own offset and length off the binding rather than a \
+         handle. Anything else means the birth is about to name an object this isolate does \
+         not hold."
+    );
+    assert_eq!(
+        adopt.ring.handle(),
+        None,
+        "★★★★★ …and it must name NO HANDLE. The handle is what `Worker::execute`'s \
+         foreign-handle gate refuses, and `[established from alloc_channel_in]` it never \
+         reaches RM on this arm anyway — it was an authorization token, not an operand."
+    );
+
+    // ⊘ The oracle was asked about THE RING'S OWN VA, in THE SCRATCHPAD'S range. An oracle
+    // asked about something else would make the `true` above meaningless.
+    assert_eq!(
+        yes.asked.lock().expect("oracle").as_slice(),
+        &[(STORE_VAS, JOINED_HOST_VA, LEAF_LEN)],
+        "★ NON-VACUITY: the oracle must be asked exactly once, about the scratchpad's range, \
+         at the binding's own start, for the binding's own length"
+    );
+
+    // ---- ★★★★★ THE GATE: the foreign-handle gate has nothing to refuse.
+    let foreign: Vec<_> = verbs
+        .handles()
+        .into_iter()
+        .filter(|h| !h.belongs_to(kayfabe_isolate::IsolateId::new(pid.0, GPU)))
+        .collect();
+    assert!(
+        foreign.is_empty(),
+        "★★★★★ CONSTRAINT 26 — the birth plan still offers the per-proc worker a handle it \
+         does not own: {foreign:?}. `Worker::execute` refuses the whole plan \
+         `ForeignHandle` before RM is reached, which is the refusal that made the ownership \
+         split unbuildable in the first place."
+    );
+}
+
+#[test]
+fn a_store_slice_ring_is_refused_when_no_one_can_vouch_for_it() {
+    // ⊘⊘ **FAIL CLOSED, and this is the arm that says so.** A missing checker must never
+    // read as a passed check — the worst direction of `a check that reports is not a check
+    // that gates`, applied to the one question that separates a real ring from a blank twin.
+    let (mut gpu, pid, _cid) = guest_with_a_gr_channel(RingBacking::StoreSlice);
+    hand_the_vas_over(&mut gpu, pid);
+    let err = planned_birth(&gpu, None).expect_err(
+        "★★★★★ CONSTRAINT 26 — with NO ring-slice oracle installed, nobody holds the one \
+         reserved object and nobody can say this range was ever mapped. Adopting it would \
+         birth a channel over a blank twin: it fetches zeros, never advances GP_GET, and \
+         reports NO ERROR AT ALL.",
+    );
+    assert!(
+        matches!(err, kayfabe_fwd::FwdFault::PassthroughRingNotAdoptable { .. }),
+        "the refusal must be the ring's own, by name: got {err:?}"
+    );
+}
+
+#[test]
+fn a_store_slice_ring_is_refused_when_the_mapper_says_it_placed_nothing() {
+    let (mut gpu, pid, _cid) = guest_with_a_gr_channel(RingBacking::StoreSlice);
+    hand_the_vas_over(&mut gpu, pid);
+    let no = FixedOracle::new(false);
+    let err = planned_birth(&gpu, Some(&no)).expect_err(
+        "★★★★★ CONSTRAINT 26 — the mapper says it placed NO slice here and the ring was \
+         adopted anyway. This is `RING_NOT_A_JOINED_WINDOW` restated, and it is the same \
+         silent failure: zeros fetched forever with no error anywhere.",
+    );
+    assert!(matches!(
+        err,
+        kayfabe_fwd::FwdFault::PassthroughRingNotAdoptable { .. }
+    ));
+    assert_eq!(
+        no.asked.lock().expect("oracle").len(),
+        1,
+        "★ NON-VACUITY: the refusal must come from the oracle having been ASKED, not from \
+         the plan failing earlier for an unrelated reason"
+    );
+}
+
+#[test]
+fn a_store_slice_ring_is_refused_when_the_vas_was_never_handed_over() {
+    // ⊘ The `Vas` carries no scratchpad range, so there is nothing to ask the oracle ABOUT.
+    // ⚠ This is a different failure from the two above and must not collapse into them: it
+    // means the hand-over never happened, i.e. the scratchpad was never given this address
+    // space — so every slice in it is one nobody placed.
+    let (gpu, _pid, _cid) = guest_with_a_gr_channel(RingBacking::StoreSlice);
+    let yes = FixedOracle::new(true);
+    let err = planned_birth(&gpu, Some(&yes)).expect_err(
+        "★★★★★ CONSTRAINT 26 — a store slice in a VA space the scratchpad never adopted was \
+         adopted anyway",
+    );
+    assert!(matches!(
+        err,
+        kayfabe_fwd::FwdFault::PassthroughRingNotAdoptable { .. }
+    ));
+    assert!(
+        yes.asked.lock().expect("oracle").is_empty(),
+        "★ …and the oracle must not even be asked: with no `store_vas` there is no range to \
+         name, and asking about a handle we do not have would be asking a question whose \
+         `true` would mean nothing"
+    );
+}
+
+#[test]
+fn a_joined_window_is_still_an_own_object_and_still_names_its_handle() {
+    // ⊘ THE CONTROL for all four arms above, and it is the `KAYFABE_VAS_OWNER=isolate` arm:
+    // nothing about the pre-constraint-26 chain may have moved. An oracle is installed and
+    // must NOT be consulted — a join is this isolate's own object and the far-side
+    // `RING_NOT_A_JOINED_WINDOW` check is the one that governs it.
+    let (gpu, pid, _cid) = guest_with_a_gr_channel(RingBacking::Joined);
+    let yes = FixedOracle::new(true);
+    let verbs = planned_birth(&gpu, Some(&yes))
+        .expect("the birth plans")
+        .expect("a first birth emits verbs");
+    let kayfabe_isolate::VerbPlan::ChannelBirth { adopt, .. } = &verbs else {
+        panic!("the birth emitted {verbs:?}");
+    };
+    assert_eq!(
+        adopt.ring,
+        kayfabe_isolate::RingProvenance::OwnObject(HostHandle::new(
+            kayfabe_isolate::IsolateId::new(pid.0, GPU),
+            JOINED_MEMORY
+        )),
+        "★ a joined window is the isolate's OWN object and must still be named as one"
+    );
+    assert!(
+        yes.asked.lock().expect("oracle").is_empty(),
+        "★★★ NON-VACUITY OF THE SPLIT: the oracle must NOT be consulted for a join. If it \
+         is, then the two chains have been collapsed into one and the far-side \
+         `RING_NOT_A_JOINED_WINDOW` check — which still governs this arm — is being asked a \
+         question it is not the answer to."
     );
 }

@@ -1046,9 +1046,9 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
                 // ★★★★★ LEG A2 — rebuilt on THIS side of the wire, where the adapter that
                 // lowers it runs. ⊘ The handle is re-validated by the adapter as one
                 // `join_fb_leaf` minted; nothing here trusts the four integers.
-                adopt.map(|(memory, ring_va, gp_fifo_va, gp_fifo_entries, userd)| {
+                adopt.map(|(kind, a, b, ring_va, gp_fifo_va, gp_fifo_entries, userd)| {
                     kayfabe_isolate::AdoptedGuestRing {
-                        memory: raw(memory),
+                        ring: ring_provenance(kind, a, b),
                         ring_va,
                         gp_fifo_va,
                         gp_fifo_entries,
@@ -1081,7 +1081,7 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
             vas,
             engine,
             declared_engine_type,
-            adopt: (memory, ring_va, gp_fifo_va, gp_fifo_entries, userd),
+            adopt: (kind, a, b, ring_va, gp_fifo_va, gp_fifo_entries, userd),
             err_notifier,
         } => match engine_from_code(engine) {
             None => Reply::Failed(WireError::Other(crate::rm::NOT_ON_THIS_RUNG)),
@@ -1090,7 +1090,7 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
                 engine,
                 declared_engine_type,
                 kayfabe_isolate::AdoptedGuestRing {
-                    memory: raw(memory),
+                    ring: ring_provenance(kind, a, b),
                     ring_va,
                     gp_fifo_va,
                     gp_fifo_entries,
@@ -1281,6 +1281,21 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
 /// has no business asserting a namespace**: the parent stamps every handle it receives with
 /// the connection it asked on, so a provenance claim from this side would be a claim the
 /// parent overrides anyway — and one that a compromised child could make.
+/// ★★★★★ **CONSTRAINT 26 — rebuild the ring's provenance from its wire tag.**
+///
+/// ⊘ The tag was already validated by `Request::decode` (`ring_provenance_tag` refuses an
+/// unknown one), so this match is total by construction and the `_` arm cannot be reached by
+/// a frame. It answers `StoreSlice` there rather than `OwnObject` because the two arms are
+/// asymmetric: `StoreSlice` names no handle and the adapter refuses it unless it was expected,
+/// while `OwnObject` would fabricate a `HostHandle` out of whatever `a` happened to be.
+fn ring_provenance(kind: u8, a: u64, b: u64) -> kayfabe_isolate::RingProvenance {
+    if kind == crate::proto::RING_PROVENANCE_OWN_OBJECT {
+        kayfabe_isolate::RingProvenance::OwnObject(raw(a))
+    } else {
+        kayfabe_isolate::RingProvenance::StoreSlice { offset: a, len: b }
+    }
+}
+
 fn raw(value: u64) -> HostHandle {
     if value == 0 {
         HostHandle::NULL

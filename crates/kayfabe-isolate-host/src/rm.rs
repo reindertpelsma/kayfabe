@@ -1121,8 +1121,10 @@ const W381_COPY_SRC_OFFSET: u64 = 0x4000;
 /// advancing the cursor are two rungs, and this is the first.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GuestRing {
-    /// The memory object carrying the guest's GPFIFO. Neither allocated nor freed here.
-    pub memory: HostHandle,
+    /// ★★★★★ **CONSTRAINT 26 — WHOSE memory carries the guest's GPFIFO.** Neither allocated
+    /// nor freed here either way. See [`kayfabe_isolate::RingProvenance`]: a
+    /// `StoreSlice` names **no handle**, because this isolate holds none.
+    pub ring: kayfabe_isolate::RingProvenance,
     /// Where the object is placed in the channel's address space — the base the caller
     /// asked for and RM honoured, kept so a diagnostic can say which mapping the
     /// `gpFifoOffset` below lives inside.
@@ -5548,7 +5550,13 @@ impl RmBackend for HostRmBackend {
         self.conn.remember_bare_space(space);
         Ok(kayfabe_isolate::BareVaSpace {
             space: self.stamp(space),
-            client: self.conn.client(),
+            // ⊘ `self.conn.client.raw()`, not `self.conn.client()`. The two return the same
+            // number and only one of them is a form F11's gate approves — deliberately, and
+            // the gate is right to be that literal: it over-approximates its universe (any
+            // ABI field named `client`/`root`/`owner`) so that it fails CLOSED, and a second
+            // spelling of "our own client" is a second thing a reader has to verify. See
+            // `mod own_client`.
+            client: self.conn.client.raw(),
         })
     }
 
@@ -5566,7 +5574,13 @@ impl RmBackend for HostRmBackend {
         }
         Ok(kayfabe_isolate::BareVaSpace {
             space,
-            client: self.conn.client(),
+            // ⊘ `self.conn.client.raw()`, not `self.conn.client()`. The two return the same
+            // number and only one of them is a form F11's gate approves — deliberately, and
+            // the gate is right to be that literal: it over-approximates its universe (any
+            // ABI field named `client`/`root`/`owner`) so that it fails CLOSED, and a second
+            // spelling of "our own client" is a second thing a reader has to verify. See
+            // `mod own_client`.
+            client: self.conn.client.raw(),
         })
     }
 
@@ -6807,18 +6821,43 @@ impl HostRmBackend {
         };
         // ⊘ THE OWNER INVARIANT, on the far side of the wire. See `RING_NOT_A_JOINED_WINDOW`
         // for why the core's own type-level check cannot reach here.
-        let raw_memory = self.narrow(ring.memory)?;
-        let joined = self
-            .fb_joins
-            .as_ref()
-            .is_some_and(|t| t.is_joined_object(raw_memory));
+        //
+        // ★★★★★ **CONSTRAINT 26 — AND THERE ARE NOW TWO SHAPES, WITH DIFFERENT CHECKERS.**
+        //
+        // `OwnObject` is the pre-§26 shape and its check is unchanged: this isolate must have
+        // minted the handle by joining a framebuffer leaf.
+        //
+        // `StoreSlice` names **no handle**, because the birth isolate holds none — that is
+        // the ownership split. What this side can still check is that it was not handed one
+        // in disguise, and it does: there is nothing to narrow and nothing to look up. The
+        // *"is this ring one memory the guest reaches?"* question is answered VMM-side by
+        // `kayfabe_fwd::RingSliceOracle`, of the party that placed the slice, **before** this
+        // plan was built. ⚠ That is a real move of the checker, not a second one: this side
+        // cannot answer it and a check it cannot make must not be spelled as if it could.
+        let (raw_memory, joined) = match ring.ring {
+            kayfabe_isolate::RingProvenance::OwnObject(h) => {
+                let raw = self.narrow(h)?;
+                let j = self
+                    .fb_joins
+                    .as_ref()
+                    .is_some_and(|t| t.is_joined_object(raw));
+                (raw, j)
+            }
+            kayfabe_isolate::RingProvenance::StoreSlice { .. } => (0, true),
+        };
+        let _ = raw_memory;
         // ⊘ The guest's four numbers are printed on the refusal side too — `ce_copy`'s stated
         // reason, one plane over: a witness that only speaks when the thing succeeded is silent
         // on exactly the outcome it is run to see.
         let named = format!(
-            "memory={:#x} ring_va={:#x} gp_fifo_va={:#x} entries={} userd_memory={} \
+            "memory={} ring_va={:#x} gp_fifo_va={:#x} entries={} userd_memory={} \
              userd_offset={}",
-            ring.memory.raw(),
+            match ring.ring {
+                kayfabe_isolate::RingProvenance::OwnObject(h) => format!("{:#x}", h.raw()),
+                kayfabe_isolate::RingProvenance::StoreSlice { offset, len } => {
+                    format!("STORE-SLICE(+{offset:#x}, len={len:#x})")
+                }
+            },
             ring.ring_va,
             ring.gp_fifo_va,
             ring.gp_fifo_entries,
@@ -6886,7 +6925,7 @@ impl HostRmBackend {
             offer.because(BirthLimb::Ring),
         );
         let guest_ring = GuestRing {
-            memory: ring.memory,
+            ring: ring.ring,
             ring_va: ring.ring_va,
             gp_fifo_va: ring.gp_fifo_va,
             gp_fifo_entries: ring.gp_fifo_entries,
@@ -7654,7 +7693,25 @@ impl HostRmBackend {
                 if g.gp_fifo_entries == 0 {
                     return Err(RmError::Other(RING_ENTRIES_REFUSED));
                 }
-                (self.narrow(g.memory)?, RingOwner::HandedIn)
+                // ★★★★★ **CONSTRAINT 26 — AND THE MEASUREMENT THAT MAKES `0` SAFE HERE.**
+                //
+                // `[established from this function's own body]` the ring's handle **never
+                // reaches RM** on this arm: the mapping decision below maps nothing, and what
+                // `ChannelAllocParams` is told is `gp_fifo_offset: layout.gp_fifo_va`, an
+                // absolute VA. The handle's only uses are (a) the unwind list, which excludes
+                // it for `HandedIn` two lines down, and (b) the CPU-mapping branch, which
+                // refuses `RING_NOT_OURS` for `HandedIn`. ⇒ a `StoreSlice` contributes `0`
+                // and nothing reads it.
+                //
+                // ⊘ Zero is written deliberately rather than by an `unwrap_or`: this is the
+                // one place the absence is turned into a number, and it is annotated so a
+                // reader does not have to prove the two uses above for themselves.
+                match g.ring {
+                    kayfabe_isolate::RingProvenance::OwnObject(h) => {
+                        (self.narrow(h)?, RingOwner::HandedIn)
+                    }
+                    kayfabe_isolate::RingProvenance::StoreSlice { .. } => (0, RingOwner::HandedIn),
+                }
             }
         };
         // What a later failure must give back. ⊘ The guest's ring is not in it on any arm,
@@ -10375,7 +10432,7 @@ impl HostRmBackend {
             vas,
             ENGINE_TYPE_COPY0,
             GuestRing {
-                memory: self.stamp(desc),
+                ring: kayfabe_isolate::RingProvenance::OwnObject(self.stamp(desc)),
                 ring_va: ring_got_va,
                 gp_fifo_va,
                 gp_fifo_entries: GUEST_ENTRIES,
@@ -10423,7 +10480,7 @@ impl HostRmBackend {
                 vas,
                 ENGINE_TYPE_COPY0,
                 GuestRing {
-                    memory: self.stamp(desc),
+                    ring: kayfabe_isolate::RingProvenance::OwnObject(self.stamp(desc)),
                     ring_va: UNBOUND_AT,
                     gp_fifo_va: UNBOUND_AT,
                     gp_fifo_entries: GUEST_ENTRIES,

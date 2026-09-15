@@ -50,7 +50,24 @@ use std::io::{self, Read, Write};
 /// disagrees with the hand-written codec. ⊘ And not left as a bare five-tuple either — four
 /// consecutive integers with no names is exactly where an encoder and a decoder swap two of
 /// them and every in-process test still passes.
-pub type AdoptedRingWire = (u64, u64, u64, u32, Option<(u64, u64)>);
+pub type AdoptedRingWire = (u8, u64, u64, u64, u64, u32, Option<(u64, u64)>);
+
+/// ★★★★★ **CONSTRAINT 26 — the ring's PROVENANCE byte, the first field of
+/// [`AdoptedRingWire`].**
+///
+/// | value | meaning | the two numbers after it |
+/// |---|---|---|
+/// | `0` | `RingProvenance::OwnObject` | `(handle, 0)` |
+/// | `1` | `RingProvenance::StoreSlice` | `(offset, len)` — **no handle** |
+///
+/// ⊘ **An explicit byte, never an in-band sentinel.** `handle == 0` would be the obvious
+/// encoding of *"no handle"* and it is wrong for the reason this file already gives about
+/// `offset = 0`: the decoder must not have to decide what a legal value means. A tag that
+/// names neither arm is a refusal, so a peer that speaks a different vocabulary fails at the
+/// frame rather than three fields later.
+pub const RING_PROVENANCE_OWN_OBJECT: u8 = 0;
+/// See [`RING_PROVENANCE_OWN_OBJECT`].
+pub const RING_PROVENANCE_STORE_SLICE: u8 = 1;
 
 /// The largest frame either side will send or accept.
 ///
@@ -977,6 +994,22 @@ impl<'a> Cursor<'a> {
     }
 }
 
+/// ★★★ **CONSTRAINT 26** — validate the ring's provenance byte, refusing by name.
+///
+/// ⊘ Refused rather than defaulted to `OwnObject`: a byte we do not understand means the two
+/// sides disagree about the frame, and *"it is the isolate's own object"* is the arm that
+/// makes the far side name a handle — so guessing it would turn a vocabulary mismatch into a
+/// `BadHandle` three fields later.
+fn ring_provenance_tag(tag: u8) -> Result<u8, ProtoError> {
+    match tag {
+        RING_PROVENANCE_OWN_OBJECT | RING_PROVENANCE_STORE_SLICE => Ok(tag),
+        tag => Err(ProtoError::UnknownTag {
+            what: "ring provenance",
+            tag,
+        }),
+    }
+}
+
 fn put_blob(out: &mut Vec<u8>, blob: &[u8]) {
     out.extend_from_slice(&(blob.len() as u32).to_le_bytes());
     out.extend_from_slice(blob);
@@ -1100,9 +1133,11 @@ impl Envelope {
                 }
                 match adopt {
                     None => out.push(0),
-                    Some((memory, ring_va, gp_fifo_va, entries, userd)) => {
+                    Some((kind, a, b, ring_va, gp_fifo_va, entries, userd)) => {
                         out.push(1);
-                        out.extend_from_slice(&memory.to_le_bytes());
+                        out.push(*kind);
+                        out.extend_from_slice(&a.to_le_bytes());
+                        out.extend_from_slice(&b.to_le_bytes());
                         out.extend_from_slice(&ring_va.to_le_bytes());
                         out.extend_from_slice(&gp_fifo_va.to_le_bytes());
                         out.extend_from_slice(&entries.to_le_bytes());
@@ -1136,7 +1171,7 @@ impl Envelope {
                 vas,
                 engine,
                 declared_engine_type,
-                adopt: (memory, ring_va, gp_fifo_va, entries, userd),
+                adopt: (kind, a, b, ring_va, gp_fifo_va, entries, userd),
                 err_notifier,
             } => {
                 out.push(24);
@@ -1149,7 +1184,9 @@ impl Envelope {
                         out.extend_from_slice(&t.to_le_bytes());
                     }
                 }
-                out.extend_from_slice(&memory.to_le_bytes());
+                out.push(*kind);
+                out.extend_from_slice(&a.to_le_bytes());
+                out.extend_from_slice(&b.to_le_bytes());
                 out.extend_from_slice(&ring_va.to_le_bytes());
                 out.extend_from_slice(&gp_fifo_va.to_le_bytes());
                 out.extend_from_slice(&entries.to_le_bytes());
@@ -1411,7 +1448,9 @@ impl Envelope {
                 adopt: match c.u8("channel adopt presence")? {
                     0 => None,
                     1 => Some((
-                        c.u64("adopt memory")?,
+                        ring_provenance_tag(c.u8("adopt provenance")?)?,
+                        c.u64("adopt ring a")?,
+                        c.u64("adopt ring b")?,
                         c.u64("adopt ring_va")?,
                         c.u64("adopt gp_fifo_va")?,
                         c.u32("adopt gp_fifo_entries")?,
@@ -1466,7 +1505,9 @@ impl Envelope {
                     }
                 },
                 adopt: (
-                    c.u64("declared adopt memory")?,
+                    ring_provenance_tag(c.u8("declared adopt provenance")?)?,
+                    c.u64("declared adopt ring a")?,
+                    c.u64("declared adopt ring b")?,
                     c.u64("declared adopt ring_va")?,
                     c.u64("declared adopt gp_fifo_va")?,
                     c.u32("declared adopt gp_fifo_entries")?,
@@ -1979,7 +2020,9 @@ mod tests {
                 engine: engine_code(EngineKind::Ce),
                 hosting: Some((0xc7b5, vec![1, 0, 0, 0, 11, 0, 0, 0])),
                 adopt: Some((
+                    RING_PROVENANCE_OWN_OBJECT,
                     0x5c00_0019,
+                    0,
                     0x2_0020_0000,
                     0,
                     1024,
@@ -1995,7 +2038,35 @@ mod tests {
                 vas: 7,
                 engine: engine_code(EngineKind::Ce),
                 declared_engine_type: Some(0),
-                adopt: (0x5c00_0019, 0x2_0020_0000, 0, 1024, None),
+                adopt: (
+                    RING_PROVENANCE_OWN_OBJECT,
+                    0x5c00_0019,
+                    0,
+                    0x2_0020_0000,
+                    0,
+                    1024,
+                    None,
+                ),
+                err_notifier: None,
+            },
+            // ★★★★★ **CONSTRAINT 26 — the STORE-SLICE arm of the provenance byte.** ⊘ Its own
+            // sample, not a variation of the one above: the two arms put DIFFERENT NUMBERS in
+            // the same two fields (`(handle, 0)` vs `(offset, len)`), which is precisely where
+            // an encoder and a decoder swap two integers and every in-process test still
+            // passes. `offset = 0` is deliberate — a slice at the object's own base is legal.
+            Request::AllocChannelDeclared {
+                vas: 9,
+                engine: engine_code(EngineKind::GrCompute),
+                declared_engine_type: Some(1),
+                adopt: (
+                    RING_PROVENANCE_STORE_SLICE,
+                    0,
+                    0x1_0000,
+                    0x2_0020_0000,
+                    0x2_0020_1000,
+                    1024,
+                    None,
+                ),
                 err_notifier: None,
             },
             Request::AllocChannelDeclared {
@@ -2003,7 +2074,9 @@ mod tests {
                 engine: engine_code(EngineKind::Ce),
                 declared_engine_type: None,
                 adopt: (
+                    RING_PROVENANCE_OWN_OBJECT,
                     0x5c00_0019,
+                    0,
                     0x2_0020_0000,
                     0x2_0020_0000,
                     4096,
