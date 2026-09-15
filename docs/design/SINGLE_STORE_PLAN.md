@@ -223,6 +223,61 @@ The host walker is format-polymorphic (`fmt: &dyn GmmuFmt`); `cuda/walk` hardcod
 the host parsing before the kernel has the seam **silently caps the product at Ada**, and Blackwell
 is goals 1 and 10.
 
+> ## ⊘⊘⊘ CORRECTED 2026-09-15 (w731, building the live half) — **THE NUMBER BELOW IS NOT
+> ## THE ONE IT TURNS ON, AND THE MEMFD ROUTE IS NOT THE ROUTE.**
+>
+> The block below says the live half *"turns on one number"* — `store_refused`, whose zero
+> would make it safe to hand the isolate the arena's memfd. `[measured w730]` it is zero, and
+> that is a true measurement of a real hazard. ⊘ **But it was never the binding one.**
+>
+> **The kernel addresses page-table pages as offsets into ONE FLAT WINDOW** — `KfArgs::win =
+> {base, len}`, and every dereference is bounds-checked against `win.len`
+> (`cuda/walk/kf_walk.cu:346,357`). So a window that answers for the guest's tables **at their
+> own GPGA must be as long as the highest table page's address**.
+>
+> - `[measured w730]` the page arena's high-water on a full raw-client boot is
+>   `span_pages=3087533` — **~11.78 GiB up a 12 GiB framebuffer**. The guest's own RM puts its
+>   tables at the **top**.
+> - `[corroborated]` `cuda/walk/corpus/real_leaves.txt`, w725's capture of a **real** driver's
+>   tables, has its five address-space roots at `0x2efa4c000 .. 0x2f1cac000` — the same place.
+>
+> ⇒ An identity window is an **11.8 GiB device allocation on a 12 GiB board**, competing with
+> the guest's own forwarded video memory. ⚠ It is not affordable, and **no assertion about
+> `store_refused` changes that** — the blocker is the WINDOW, not the arena.
+>
+> ★ **w725 hit the same wall from the other side and had already answered it**
+> (`cuda/walk/kf_real_tables.py`): *"the tables live across ~12 GiB of framebuffer, which no
+> test buffer can hold … table **pages** are relocated into a compact arena and the **address
+> field of directory entries** is rewritten to point at the new home."* w731 lands that live —
+> `GmmuFmt::relocate_entry` + `kayfabe_mmu::walkshadow::build_image`.
+>
+> ### ⇒ AND THE HAZARD THIS BLOCK EXISTS FOR IS DISSOLVED, NOT ASSERTED AWAY
+>
+> Because the image is **built by the parent**, its bytes are read through `FbRead` — the same
+> authoritative byte source the host walk itself reads, which answers correctly whether a page
+> is in the arena or on the heap. ⇒ **there is no second image that could be partial, and no
+> counter to assert at every use.** The memfd grant is not built; it would have saved wire
+> bytes and nothing else. The arena line is still printed beside the census for continuity.
+>
+> ### ⚠ AND THE CONSTRAINT THE PLAN CHECKED IS NOT THE ONE THAT BINDS EITHER
+>
+> The ✔ below records a feared blocker checked and false: the sweep's EXECUTE phase holds no
+> lock, so a synchronous isolate round trip there is not an R1 violation. **True, and it is a
+> different question from which THREAD it runs on.** `sweep_cpu_pt_tables` is called from
+> `ring_inline`'s settlement and from the register-write settle-before-birth path, and
+> `[goal 4, w656-w660]` a doorbell can be rung **by one dword store on the vCPU** — where a
+> round trip blocks a vCPU. ⇒ w731's observer **declines by name** on a vCPU thread and the
+> census counts it (`skipped[on_vcpu=N]`); the off-vCPU `refresh_page_tables` path is where the
+> shadow actually lives.
+>
+> ### ★ EXPIRY — relocation is TRANSITIONAL (§w724g)
+>
+> The sparsity is a property of **today's `SparseFb`**. §3 makes GPGA one reserved
+> device-local object which `gpga_is_one_reserved_object.md` has the scratchpad map **whole, at
+> a fixed base** — *"an address is `X + gpga_offset`"*. ⇒ **after §3 the window is identity and
+> `build_image` is retired.** ⚠ Expected end state, not a promise: nothing has built that
+> mapping yet.
+>
 > ## ⊘⊘ §6 STEP 1 — the COMPARISON is built; the LIVE half turns on one measurement
 >
 > `[2026-09-15]` `kayfabe_mmu::walkshadow` lands the half that makes the swap safe: the host
