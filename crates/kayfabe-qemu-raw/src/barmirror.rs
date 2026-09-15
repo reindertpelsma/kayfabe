@@ -2466,10 +2466,13 @@ impl BarMirror {
         // ★ Found by the w742 audit of every `FbStore` method `DeviceFb` inherits a default
         // for, which is the same audit that found `install_join`. ⇒ SAID, not printed as a
         // number.
-        let arena_line = if self.device_store {
-            " arena[⊘ NO ARENA — the single store holds no pages of ours, so every arena \
-             number here is UNMEASURED and NOT zero; `DeviceFb` inherits \
-             `arena_census_all`'s (0,0,0,0) default]"
+        //
+        // ⊘ ONLY the four STORE numbers are replaced. `live`/`peak`/`allocations`/`span_pages`
+        // come from the shell's own allocator, which exists on both arms, and blanking them
+        // would take a real number away to fix a false one.
+        let store_nums = if self.device_store {
+            "⊘ the four store numbers are UNMEASURED, NOT zero — `DeviceFb` has no arena and \
+             inherits `arena_census_all`'s (0,0,0,0) default"
                 .to_string()
         } else {
             let (s_ref, s_mig, s_rref, s_rst) = if at.contains("END") {
@@ -2478,11 +2481,14 @@ impl BarMirror {
                 (0, 0, 0, 0)
             };
             format!(
-                " arena[pages live={a_live} peak={a_peak} allocations={a_recycled} \
-                 span_pages={a_issued} store_refused={s_ref} store_migrated={s_mig} \
-                 store_read_refused={s_rref} store_resets={s_rst} (store numbers at END only)]"
+                "store_refused={s_ref} store_migrated={s_mig} store_read_refused={s_rref} \
+                 store_resets={s_rst} (store numbers at END only)"
             )
         };
+        let arena_line = format!(
+            " arena[pages live={a_live} peak={a_peak} allocations={a_recycled} \
+             span_pages={a_issued} {store_nums}]"
+        );
         let refused_s: Vec<String> = refused.iter().map(|(k, v)| format!("{k}={v}")).collect();
         eprintln!(
             "kayfabe: BAR-MIRROR MECHANISM AT {at}: slots live={live} peak={peak} \
