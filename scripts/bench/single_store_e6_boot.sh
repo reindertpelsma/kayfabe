@@ -179,6 +179,38 @@ grep -a 'WALK-SHADOW AT REALIZE' "$Q" 2>/dev/null | head -2 | cut -c1-300
 echo "--- the arena counter the previous session's plan turned on (reported, not depended on) ---"
 grep -ao 'arena\[[^]]*\]' "$Q" 2>/dev/null | tail -1
 
+# ★★★★★ **§3's FIRST PRECONDITION, MEASURED RATHER THAN ASSUMED** — does the reserved object
+# contain every framebuffer address the guest ever names?
+#
+# The post-§3 window is specified as identity (`gpga_is_one_reserved_object.md`: *"an address
+# is `X + gpga_offset`"*), which is only sound if `span_pages * 4096 <= RESERVED_MB << 20`.
+# ⊘ `[w730]` `span_pages=3087533` = **12062 MiB** was read as *"the guest's RM puts its tables
+# ~11.78 GiB up a 12 GiB board"* — true, and it is a number about the **ADVERTISED** size, not
+# about the reservation. The advertised size is rebound to the reservation whenever one is held
+# (`SCRATCHPAD FB-SIZE derived_from_reservation=`), so the tables move DOWN with it.
+# ⇒ The invariant §3 must never break: **advertise more than was reserved and the identity
+# window is impossible**, and relocation cannot be retired. This line is what would catch it.
+SPAN=$(grep -ao 'span_pages=[0-9]*' "$Q" 2>/dev/null | tail -1 | cut -d= -f2)
+RMB=$(grep -ao 'RESERVED_MB=[0-9]*' "$Q" 2>/dev/null | tail -1 | cut -d= -f2)
+DERIVED=$(grep -ao 'derived_from_reservation=[0-9]*' "$Q" 2>/dev/null | tail -1 | cut -d= -f2)
+echo "E3-SPAN-PAGES=${SPAN:-UNSET} E3-RESERVED_MB=${RMB:-UNSET} E3-ADVERTISED_MB=${DERIVED:-UNSET}"
+if [ -n "${SPAN:-}" ] && [ -n "${RMB:-}" ]; then
+  python3 - "$SPAN" "$RMB" <<'PYEOF'
+import sys
+span, rmb = int(sys.argv[1]), int(sys.argv[2])
+top, cap = span * 4096, rmb << 20
+print(f"E3-IDENTITY-WINDOW={'FITS' if top <= cap else 'DOES_NOT_FIT'} "
+      f"top={top} ({top/2**20:.1f} MiB) reserved={cap} ({rmb} MiB) "
+      f"headroom={(cap-top)/2**20:.1f} MiB")
+print("  ⊘ FITS = every framebuffer page the guest named this boot is inside the reserved "
+      "object ⇒ §3's identity window is arithmetically possible for THIS workload. It is "
+      "NOT a proof for every workload, and it says nothing about the promote/demote FAKE "
+      "RANGE, which is specified and built by nobody.")
+PYEOF
+else
+  echo "E3-IDENTITY-WINDOW=UNMEASURED ⊘ one of the two numbers is missing — this is not a pass"
+fi
+
 echo "--- Q5 WHAT THE GUEST PAID ---"
 grep -ao 'TRAPWITNESS[^|]*' "$Q" 2>/dev/null | tail -1
 grep -ao 'SLOW-SITES[^⊘]*' "$Q" 2>/dev/null | tail -1
