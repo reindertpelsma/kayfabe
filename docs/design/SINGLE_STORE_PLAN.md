@@ -166,6 +166,44 @@ sentence that follows is attributable, and by the `DEVICE-FB` counters that join
 ⊘ Carrying `why` through `FbRead` is **cut B's call**: every consumer of that trait would have
 to grow a reason it currently discards, and cut B is the increment that gives them one.
 
+### ★★★★★ §3 NOW HAS A ONE-BOOT FALSIFIER, AND THE GUEST SUITE HANDED IT TO US
+
+`[measured w735o, 2026-09-15, one arm per fresh QEMU at 600 s]` The guest arm
+`--gpga-reserve-probe` memcpy-sweeps a reserved object through a CPU view
+(`sweep_vidmem_reads` → `map_cpu(raw, len, WriteCombining)`, `rm.rs:4642`) and **had not
+finished 64 MiB after 600 seconds ⇒ < 0.43 MiB/s.**
+
+★ **Read what that view IS before reading the number.** In the guest, `map_cpu` of vidmem
+lands in **guest BAR1**, and w736 measured `named=0` on the `device` arm — **no memslot is
+installed**. So `< 0.43 MiB/s` is **the trapped-MMIO cost of the very path §3 replaces**, not
+a prediction about §3. The probe's own source says so: *"a CPU view of vidmem goes through
+BAR1, which is 256 MiB TOTAL on this card and already partly held."*
+
+⇒ **THIS IS THE CHEAPEST FALSIFIER THE SINGLE STORE HAS EVER HAD.** §3's whole claim is that
+BAR1/BAR2 stop being emulated windows and become **device views** — a memslot over the
+reserved object. If that claim is true, this arm's number must move by orders of magnitude,
+because the guest's loads stop exiting. **One arm, one boot, no LLM, no parity harness.**
+
+⚠ **PRE-REGISTERED, so the next session cannot grade it after the fact:**
+
+| | before §3 (measured) | after §3 | reading |
+|---|---|---|---|
+| `--gpga-reserve-probe` | **< 0.43 MiB/s** (600 s, unfinished) | **≥ 50 MiB/s**, and the arm COMPLETES | ★ the switch did what it exists to do |
+| | | 0.43 – 50 MiB/s | ⊘ the memslot is installed but something still exits — read `named` and the trap census, do NOT call it a pass |
+| | | still < 0.43 MiB/s / still TIMEOUT | ⊘⊘⊘ **§3's premise is refuted on its own terms** — a negative result and a full deliverable (w729b) |
+
+⊘ **The 52.5 MiB/s host figure (w734) is NOT the target and must not be quoted as a ratio
+against this.** It was measured on the HOST through a device view of the reserved object — a
+different mechanism on a different side of the guest boundary. It is a *floor worth clearing*,
+not an apples-to-apples comparison, and the ">120x gap" phrasing in w735o's commit body should
+be read with that caveat attached. ★ Same discipline as w736's PRAMIN cost number: **a signal,
+not a ratio.**
+
+⊘ And the second real timeout is NOT this: `--ce-client-guest-ram` rings its doorbell and the
+completion never arrives in 600 s, while its sibling `--ce-client` — same round trip, **vidmem
+source** — passes with `HOST_DMESG_XID=0`. That is specific to the **guest-RAM source path**
+with no host fault to explain it, and it is a defect in its own right, not a §3 gate.
+
 ### ⇒ WHAT CUT B NEEDS, IN ORDER — so the next session does not re-derive it
 
 1. **A byte port for the store.** `DeviceFb` lives in `kayfabe-device`, which holds no

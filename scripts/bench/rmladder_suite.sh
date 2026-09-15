@@ -216,6 +216,31 @@ run_arm() {  # $1 = arm, $2 = log path
 # ⇒ `unopenable` means **failed AND never got past R1**, never "the string appears".
 unopenable() { [ "${2:-1}" -ne 0 ] && [ "$(grep -ac 'openat(nvidia' "$1" 2>/dev/null)" -gt 0 ]; }
 
+# ★★★★★ **THE WALL HAS TWO SIGNATURES AND THE PREDICATE ABOVE ONLY CATCHES ONE.**
+#
+# `[measured w735, RMLADDER_OPEN_PROBE=8]` the device-open wall presents as **`rc=124` — a HANG
+# inside the open** on the cycle that breaks, and as **`rc=1` with `openat(nvidia`** on every
+# cycle after it. `unopenable` sees the second and is blind to the first.
+#
+# ⊘ `[measured w735, batched run]` that blindness had teeth: `--atomics-probe` and
+# `--pce-mask-probe` followed a killed `--gpga-reserve-probe`, hung in the open, printed nothing
+# but their own `RMLADDER ARGV` line, and were reported as **FAIL** — a verdict about arms that
+# never reached their subject, which is precisely the defect-manufacturing w717b removed from
+# the other signature.
+#
+# ★ The marker is the ladder's own bring-up: **`R2 version` is printed by every arm** (it is in
+# `bring_up`, before any arm dispatch). No `R2 version` ⇒ bring-up did not complete ⇒ the arm
+# has no verdict, whatever its exit code. ⊘ This is evidence from the arm's own output, not a
+# guess from a number.
+reached_subject() { [ "$(grep -ac 'R2 version' "$1" 2>/dev/null)" -gt 0 ]; }
+
+# ⊘⊘ **124 AND 137 ARE BOTH TIMEOUTS, AND CONFLATING 137 WITH FAIL WAS A REAL BUG HERE.**
+# `timeout -k 5 N` exits **124** when `SIGTERM` was enough and **137** when it had to escalate to
+# `SIGKILL`. Both mean *the arm exceeded its budget*; only the second means it also ignored
+# `TERM`. Reporting 137 as `FAIL(137)` collapses the hang-versus-refusal distinction this file's
+# own outcome list says it exists to keep — and it did, for four arms, in the first batched run.
+timed_out() { [ "$1" -eq 124 ] || [ "$1" -eq 137 ]; }
+
 for arm in $ARMS; do
   name=${arm#--}
   log="$OUT/$name.out"
@@ -225,7 +250,7 @@ for arm in $ARMS; do
   # ★★★ CONTAINMENT. Two triggers, one action, and the RETRY is what turns a cascade back into
   # a measurement. ⊘ The retry runs at most once per arm: a second would make a flaky arm
   # indistinguishable from a recovered one.
-  if unopenable "$log" "$rc" || [ $rc -eq 124 ]; then
+  if unopenable "$log" "$rc" || timed_out $rc || { [ $rc -ne 0 ] && ! reached_subject "$log"; }; then
     grab_dmesg "$name"
     if recover; then
       # ⊘ Counted only when recovery was ATTEMPTED — `RMLADDER_RECOVER=none` returns non-zero
@@ -251,12 +276,17 @@ for arm in $ARMS; do
   fi
 
   last=$(grep -vE '^\s*$' "$log" 2>/dev/null | tail -1 | cut -c1-64)
-  if unopenable "$log" "$rc"; then
+  # ⊘ ORDER MATTERS. "Never reached its subject" outranks every other reading, because an arm
+  # that did not finish bring-up has no verdict to report — whether it refused fast or hung.
+  if [ $rc -ne 0 ] && { unopenable "$log" "$rc" || ! reached_subject "$log"; }; then
     v=UNMEASURED; n_unmeas=$((n_unmeas+1)); unmeasured="$unmeasured $arm"
+  elif timed_out $rc; then
+    # ★ 124 vs 137 is kept IN THE ROW — it says whether the arm honoured SIGTERM — while both
+    # count as TIMEOUT. A number that is thrown away cannot be asked about later.
+    v="TIMEOUT($rc)"; n_to=$((n_to+1)); failed="$failed $arm(timeout,$rc)"
   else
   case $rc in
     0)   v=PASS;    n_pass=$((n_pass+1));;
-    124) v=TIMEOUT; n_to=$((n_to+1));   failed="$failed $arm(timeout)";;
     *)   v="FAIL($rc)"; n_fail=$((n_fail+1)); failed="$failed $arm";;
   esac
   fi
