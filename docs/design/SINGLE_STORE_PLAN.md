@@ -80,6 +80,23 @@ Stated here so a later boot is a test rather than a confirmation.
 ⚠ **The third row is the one most likely to be wrong**, and it is the one that decides whether
 cut A alone is measurable. It is a reading of the call graph, not a measurement.
 
+### ⊘⊘⊘ AND THE HALF THAT COULD BE CHECKED OFFLINE WAS, AND IT FOUND A DEFECT IN THE DIAGNOSIS
+
+`[measured w735, `two_worlds_split::a_bar1_translate_through_the_single_store_is_refused_and_the_store_is_what_refused`]`
+a BAR1 translate through `DeviceFb` **is** refused, with the arena arm as its control. But the
+refusal that arrives reads **"the page-table decoder refused a level of this walk"**.
+
+`FbRead::read_in` returns a **`bool`**, so `FbRefused::why` dies at `m.fb.read(..).is_ok()` and
+the walker turns the miss into `WalkFault::Unbacked`, which the plane renders as its own
+string. ⇒ **a cut-A boot's only visible diagnosis names the page-table decoder — which is
+working perfectly — and not the store.** That is a symptom naming the wrong subsystem, the
+shape that has cost this campaign six hypotheses in one night before.
+
+✔ Closed for now by the store saying its own name **once** on its own line, so the generic
+sentence that follows is attributable, and by the `DEVICE-FB` counters that join the two.
+⊘ Carrying `why` through `FbRead` is **cut B's call**: every consumer of that trait would have
+to grow a reason it currently discards, and cut B is the increment that gives them one.
+
 ⊘ **A boot on `KAYFABE_FB_STORE=device` does not reach a guest and is not supposed to.** The
 first BAR1/BAR2 translation reads a page-table page out of the store and is refused by name.
 The alternative — a host-memory fallback for host reads — is two memories for one address,
