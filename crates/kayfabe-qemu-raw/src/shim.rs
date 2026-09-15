@@ -14910,6 +14910,55 @@ impl Regs {
             None
         };
 
+        // ★★★★★ **§3's DEVICE-VIEW PORT, WIRED HERE — `SINGLE_STORE_PLAN.md` §3 item 1.**
+        //
+        // ⊘ Placed immediately after the walk shadow because both hold the SAME isolate and
+        // the ordering makes that visible: the shadow clones the handle, this clones it
+        // again, and neither takes it. Before this increment `share_for_walk_shadow` MOVED
+        // the box, so a second consumer could only have got `None` — which reads, in the only
+        // place anyone looks, exactly like a gate that was off.
+        //
+        // ⚠ The port is built whenever the crossing's gate is armed AND a reservation is
+        // held. It arms nothing by itself: it is the lock-free door the data plane needs, and
+        // an unused port says so by name in its own census (`⊘⊘ VACUOUS`) rather than
+        // printing a zero that could mean either thing.
+        let device_port: Option<std::sync::Arc<crate::deviceview::DeviceViewPort>> =
+            if device_view_dup.is_some() {
+            #[cfg(feature = "host-isolates")]
+            {
+                let dup: Option<std::sync::Arc<crate::deviceview::DupArc>> =
+                    exports.clone().map(|e| {
+                        std::sync::Arc::new(move |iso, token| e.dup(iso, token))
+                            as std::sync::Arc<crate::deviceview::DupArc>
+                    });
+                match (scratchpad.as_mut(), dup) {
+                    (Some(sp), Some(dup)) => {
+                        let port = sp.share_for_device_views(dup);
+                        if port.is_some() {
+                            eprintln!(
+                                "kayfabe: DEVICE-VIEW-PORT AT REALIZE: ★★★ ARMED over the \
+                                 reserved object. Views can now be armed and released AFTER \
+                                 bring-up, from any lock-free caller. ⊘ Nothing arms one yet \
+                                 — the store still serves the arena."
+                            );
+                        }
+                        port
+                    }
+                    _ => None,
+                }
+            }
+            #[cfg(not(feature = "host-isolates"))]
+            {
+                None
+            }
+        } else {
+            None
+        };
+        // ⊘ Consumed below by the data plane when its own gate arms it; bound here so the
+        // wiring is one decision in one place. `let _` rather than a field, until §3's store
+        // exists to take it.
+        let _ = &device_port;
+
         // ★★★ **ADVERTISE WHAT WAS RESERVED, NEVER ASSERT AHEAD OF IT**
         // (`gpga_is_one_reserved_object.md`: *"the guest's advertised framebuffer size is
         // derived from the reservation that succeeded"*).
@@ -17809,6 +17858,22 @@ impl Regs {
                  was never run beside the host walk on this boot. This is NOT agreement and \
                  it is NOT a clean census; it is the absence of a measurement.",
                 crate::walkshadow::WALK_SHADOW_ENV
+            ),
+        }
+        // ★★★★★ **§3's DEVICE-VIEW PORT CENSUS.** Printed unconditionally, disarmed line and
+        // all, for the walk shadow's reason directly above: a boot that printed nothing when
+        // the port was never built is indistinguishable from one whose port was built and
+        // never asked for a view — and only the second is a measurement.
+        match self.scratchpad.as_ref().and_then(
+            crate::scratchpad::Scratchpad::device_port_census,
+        ) {
+            Some(line) => eprintln!("kayfabe: {line}"),
+            None => eprintln!(
+                "kayfabe: DEVICE-VIEW-PORT ⊘ NOT BUILT — no port existed on this boot. Three \
+                 causes and this line does not distinguish them: {}=off (the default), no \
+                 reservation held, or no export directory in this build. The SCRATCHPAD and \
+                 DEVICE-VIEW-PORT AT REALIZE lines above say which.",
+                crate::scratchpad::DEVICE_VIEW_ENV
             ),
         }
         // ★★★★★ **w719 — DID THE TWO WORLDS EVER NAME THE SAME PAGE?** The whole of

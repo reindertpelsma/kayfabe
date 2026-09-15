@@ -53,7 +53,6 @@
 
 use std::sync::Mutex;
 
-use kayfabe_isolate::IsolateBox;
 
 use crate::shim::Status;
 use kayfabe_mmu::walkshadow::{self, ShadowCensus};
@@ -216,16 +215,20 @@ pub fn selected_walk_shadow() -> Result<Arm, (Status, &'static str)> {
 /// isolate.
 #[derive(Debug)]
 pub struct WalkShadowPort {
-    iso: Mutex<IsolateBox>,
+    iso: std::sync::Arc<crate::scratchpad::SharedIsolate>,
     census: Mutex<ShadowCensus>,
 }
 
 impl WalkShadowPort {
-    /// Take the scratchpad's isolate.
+    /// Take a handle on the scratchpad's isolate.
+    ///
+    /// ⊘⊘ It used to take the `IsolateBox` itself. §3's device-view port wants the same one
+    /// box, so the box moved behind [`crate::scratchpad::SharedIsolate`] and both ports hold
+    /// an `Arc` — see that type for why two `take()`-based shares cannot coexist.
     #[must_use]
-    pub fn new(iso: IsolateBox) -> WalkShadowPort {
+    pub fn new(iso: std::sync::Arc<crate::scratchpad::SharedIsolate>) -> WalkShadowPort {
         WalkShadowPort {
-            iso: Mutex::new(iso),
+            iso,
             census: Mutex::new(ShadowCensus::default()),
         }
     }
@@ -244,11 +247,7 @@ impl WalkShadowPort {
     /// # Panics
     /// Through `IsolateBox`, if called under a ranked lock.
     pub fn retire(&self) {
-        let mut g = self
-            .iso
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        g.retire();
+        self.iso.retire();
     }
 
     /// Whether [`MAX_REFRESHES`] comparisons have already been made.
@@ -316,36 +315,31 @@ impl WalkShadowPort {
     /// Stage an image and run the kernel over it, returning the report bytes.
     fn refresh(&self, image: &walkshadow::ShadowImage) -> Result<Vec<u8>, String> {
         let off_trap = kayfabe_util::trapwitness::OffTrap::claim("running the walk shadow");
-        let mut g = self
-            .iso
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let Some(mut worker) = g.checkout() else {
-            return Err("the scratchpad isolate offered no worker".to_string());
-        };
         let span = image.bytes.len() as u64;
-        let mut staged = Ok(());
-        for (i, chunk) in image.bytes.chunks(CHUNK).enumerate() {
-            let off = (i * CHUNK) as u64;
-            staged = worker
-                .with_rm(&off_trap, |rm| rm.walk_shadow_stage(span, off, chunk))
-                .map_err(|e| format!("stage at {off:#x} refused: {e:?}"));
-            if staged.is_err() {
-                break;
+        // ⊘ `with_worker` checks the slot back in whatever happened — *"a slot left checked
+        // out is a pool that never quiesces, which turns one refused refresh into a hang at
+        // teardown"*. `None` is the isolate offering no worker, which is a different refusal
+        // from anything the closure can produce and is kept as one.
+        let ran = self.iso.with_worker(|worker| {
+            let mut staged = Ok(());
+            for (i, chunk) in image.bytes.chunks(CHUNK).enumerate() {
+                let off = (i * CHUNK) as u64;
+                staged = worker
+                    .with_rm(&off_trap, |rm| rm.walk_shadow_stage(span, off, chunk))
+                    .map_err(|e| format!("stage at {off:#x} refused: {e:?}"));
+                if staged.is_err() {
+                    break;
+                }
             }
-        }
-        let pdbs: Vec<u64> = image.roots.iter().map(|(_, h)| *h).collect();
-        let out = match staged {
-            Err(e) => Err(e),
-            Ok(()) => worker
-                .with_rm(&off_trap, |rm| rm.walk_shadow_run(&pdbs))
-                .map_err(|e| format!("run refused: {e:?}")),
-        };
-        // ⊘ The worker goes back whatever happened. A slot left checked out is a pool that
-        // never quiesces, which turns one refused refresh into a hang at teardown — a second,
-        // unrelated failure attributed to the first.
-        g.checkin(worker);
-        out
+            let pdbs: Vec<u64> = image.roots.iter().map(|(_, h)| *h).collect();
+            match staged {
+                Err(e) => Err(e),
+                Ok(()) => worker
+                    .with_rm(&off_trap, |rm| rm.walk_shadow_run(&pdbs))
+                    .map_err(|e| format!("run refused: {e:?}")),
+            }
+        });
+        ran.unwrap_or_else(|| Err("the scratchpad isolate offered no worker".to_string()))
     }
 }
 
