@@ -61,6 +61,18 @@ $G "${SUDO}dmesg | grep -a NVRM | tail -40" > "$BENCH/run_${TAG}_suite_dmesg_bef
 # (`provision_bench_tree.sh:36`), which ships `kernel.apparmor_restrict_unprivileged_userns=1`
 # and denies `CLONE_NEWUSER` to an unprivileged process.
 # ⇒ Two arms, one cause, and it is testable in one line without the ladder in the path.
+#
+# ★★★★★ **AND IT IS MEASURED, 2026-09-15, in this bench's own guest image**
+# (Ubuntu 24.04.5, the provisioning guest, before any Mode-2 boot):
+#
+#     kernel.apparmor_restrict_unprivileged_userns = 1
+#     as ubuntu:  unshare -Ur  ⇒ DENIED  "write failed /proc/self/uid_map: Operation not permitted"
+#     as root:    unshare -Ur  ⇒ ok
+#
+# ⇒ `clone(CLONE_NEWUSER)` **cannot succeed** for the uid this hook used to run the ladder as.
+# ⊘ This does not weaken R16: the isolate CHILD still drops every capability inside the
+# namespace it is born in, which is the property R16 tests. The parent needing privilege to
+# CREATE a user namespace on Noble is a property of the guest kernel, not of the sandbox.
 # ⊘ `a_false_negative_from_a_missing_debug_print`: ask the kernel directly rather than infer
 # the answer from a red arm three layers up.
 echo "=== ★ CAN THE GUEST MAKE A USER NAMESPACE AT ALL? (R10's precondition, asked directly) ==="
