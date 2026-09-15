@@ -831,8 +831,17 @@ impl RmBackend for ProxyRmBackend {
 
     /// ★★★★★ **CONSTRAINT 26 — the bare space.** See the trait method: the handle that
     /// comes back is the `FERMI_VASPACE_A`, not a range.
-    fn alloc_vaspace_bare(&mut self) -> Result<HostHandle, RmError> {
-        self.handle(Request::AllocVaSpaceBare)
+    fn alloc_vaspace_bare(&mut self) -> Result<kayfabe_isolate::BareVaSpace, RmError> {
+        let reply = self.call(Request::AllocVaSpaceBare)?;
+        match self.lift(reply)? {
+            Reply::BareVaSpace { space, client } => Ok(kayfabe_isolate::BareVaSpace {
+                space: HostHandle::new(self.isolate, space),
+                client,
+            }),
+            // ⊘ `Wedged`, never a fabricated handle: a reply shape we cannot read means the
+            // two sides disagree about the frame.
+            _ => Err(RmError::Wedged),
+        }
     }
 
     /// ★★★★★ **CONSTRAINT 26 — the hand-over.** ⚠ This is the one request in the protocol
@@ -872,6 +881,21 @@ impl RmBackend for ProxyRmBackend {
             vas: vas.raw(),
             at: at.0,
         })
+    }
+
+    /// ★★★★★ **CONSTRAINT 26 — ask a per-proc isolate what it would hand over.**
+    fn vaspace_handover(
+        &mut self,
+        space: HostHandle,
+    ) -> Result<kayfabe_isolate::BareVaSpace, RmError> {
+        let reply = self.call(Request::VaSpaceHandover { space: space.raw() })?;
+        match self.lift(reply)? {
+            Reply::BareVaSpace { space, client } => Ok(kayfabe_isolate::BareVaSpace {
+                space: HostHandle::new(self.isolate, space),
+                client,
+            }),
+            _ => Err(RmError::Wedged),
+        }
     }
 
     fn export_device_view(
@@ -1671,6 +1695,13 @@ pub struct HostIsolateFactory {
     /// isolate"* is a configuration decision, and a per-spawn flag would make it one that
     /// could differ between two isolates of one VM.
     cuda_walk: bool,
+    /// ★★★★★ **CONSTRAINT 26 — do PER-PROC isolates spawned by this factory allocate BARE
+    /// address spaces?**
+    ///
+    /// ⊘ **Per-proc only.** The scratchpad owns the ranges everything maps through, so it
+    /// keeps allocating space+range pairs; `build_isolate` applies that exemption once and
+    /// the child is told the ANSWER, not the rule.
+    bare_vaspaces: bool,
     /// ★★★★★ Every isolate's [`ExportRegistry`], by id — the VMM's route to a descriptor an
     /// isolate handed up (`fb_cpu_view.md` §4).
     ///
@@ -1758,6 +1789,9 @@ impl HostIsolateFactory {
             guest_ram: None,
             // ⊘ OFF unless the composition root arms it. See `HostIsolateFactory::cuda_walk`.
             cuda_walk: false,
+            // ⊘ OFF unless the composition root arms it — the pre-§26 ownership, byte for
+            // byte, which is what the `arena` control arm and every existing test expect.
+            bare_vaspaces: false,
             exports: ExportDirectory::new(),
         }
     }
@@ -1777,6 +1811,26 @@ impl HostIsolateFactory {
     #[must_use]
     pub fn with_cuda_walk(mut self) -> Self {
         self.cuda_walk = true;
+        self
+    }
+
+    /// ★★★★★ **CONSTRAINT 26 — per-proc isolates allocate BARE address spaces.**
+    ///
+    /// > Owner, 2026-09-15: *"All memory is held by the scratchpad, the userspace isolates
+    /// > only borrow from it."*
+    ///
+    /// With this armed, every isolate this factory spawns **except the scratchpad** gets
+    /// `--bare-vaspaces on`: its `alloc_vaspace` mints a `FERMI_VASPACE_A` and no
+    /// `NV01_MEMORY_VIRTUAL` range, so it can bind channels to the space and map nothing
+    /// into it. ⊘ The exemption is applied HERE, in `build_isolate`, so the child is told
+    /// the answer rather than the rule.
+    ///
+    /// ⚠ `[measured w744]` the space **must** be bare for the design to work at all: a
+    /// pre-built whole-space range makes the scratchpad's own range refuse `0x19
+    /// INSERT_DUPLICATE_NAME`. This is not a preference.
+    #[must_use]
+    pub fn with_bare_vaspaces(mut self, bare: bool) -> Self {
+        self.bare_vaspaces = bare;
         self
     }
 
@@ -1866,6 +1920,14 @@ impl HostIsolateFactory {
         // not gets the ordinary image for this id too, so the arm is a configuration of the
         // composition root and not a per-spawn decision.
         let want_cuda = self.cuda_walk && id.proc() == SCRATCHPAD_ISOLATE_PROC;
+        // ★★★★★ **CONSTRAINT 26 — AND ITS EXEMPTION, APPLIED ONCE, HERE.**
+        //
+        // *"All memory is held by the scratchpad, the userspace isolates only borrow from
+        // it."* The scratchpad is the party that OWNS the ranges everything maps through,
+        // so it keeps allocating space+range pairs; every per-proc isolate gets a bare
+        // space and can map nothing. ⊘ The same id-space discriminator as the CUDA arm,
+        // read once, so the child is told the answer rather than the rule.
+        let want_bare = self.bare_vaspaces && id.proc() != SCRATCHPAD_ISOLATE_PROC;
         let image = if want_cuda {
             embedded_cuda_image().map_err(|e| format!("CUDA scratchpad image: {e}"))
         } else {
@@ -1880,6 +1942,7 @@ impl HostIsolateFactory {
                 self.pool,
                 self.guest_ram.as_ref(),
                 want_cuda,
+                want_bare,
             )
         });
         let isolate = built.unwrap_or_else(|why| HostIsolate::stillborn(id, self.pool, why));
@@ -1908,6 +1971,7 @@ fn build_isolate(
     pool: usize,
     guest_ram: Option<&(std::sync::Arc<OwnedFd>, u64)>,
     cuda_walk: bool,
+    bare_vaspaces: bool,
 ) -> Result<HostIsolate, String> {
     let (control_ours, control_theirs) =
         UnixDatagram::pair().map_err(|e| format!("control socketpair: {e}"))?;
@@ -1930,6 +1994,11 @@ fn build_isolate(
         // an isolate that has to guess what it is cannot say so in a census.
         .arg("--cuda-walk")
         .arg(if cuda_walk { "on" } else { "off" })
+        // ★★★★★ **CONSTRAINT 26**, and passed on BOTH arms for `--cuda-walk`'s reason: an
+        // isolate that has to guess what it is cannot say so in a census. The scratchpad's
+        // exemption is already applied by the caller, so this argument is the ANSWER.
+        .arg("--bare-vaspaces")
+        .arg(if bare_vaspaces { "on" } else { "off" })
         // ★★★ Born namespaced. The user, pid, network, IPC, UTS and mount namespaces are
         // taken by the `clone` that CREATES this process, not by anything it does afterwards
         // — which is the only way `CLONE_NEWPID` can be had at all, and which means the
@@ -2125,6 +2194,7 @@ mod tests {
     #[test]
     fn an_unusable_image_yields_a_retired_isolate_that_names_why() {
         let f = HostIsolateFactory {
+            bare_vaspaces: false,
             image: Err("no image in this build".to_owned()),
             pool: 4,
             rm: RmMode::Loopback,

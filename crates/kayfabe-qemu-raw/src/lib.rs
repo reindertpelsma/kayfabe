@@ -94,6 +94,9 @@ pub mod bar1budget;
 pub mod barmirror;
 /// ★★★★★ §3's device-view port — the reserved object, reachable after bring-up.
 pub mod deviceview;
+/// ★★★★★ **CONSTRAINT 26** — the port through which the scratchpad does all GPU-side
+/// mapping, and the home of the restated `RING_NOT_A_JOINED_WINDOW` question.
+pub mod storemap;
 pub mod kftime;
 pub mod reclaimtick;
 /// ★★★★★ `SINGLE_STORE_PLAN.md` increment 1 — the VM-lifetime scratchpad isolate and the

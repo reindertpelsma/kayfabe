@@ -63,14 +63,20 @@ fn there_is_exactly_one_nvos46_encode_site_in_the_crate() {
 #[test]
 fn the_one_fixed_map_refuses_a_placement_rm_moved() {
     let code = rm_rs_code_only();
-    let at = code
-        .find("fn raw_map_dma_flags(")
-        .expect("★ NON-VACUITY: `raw_map_dma_flags` is gone — this gate gates nothing");
-    // The function body ends at the next `\n    }` at its own indentation.
+    // ★ The function is found by the thing it CONTAINS, not by its name. A rename must not
+    // silently un-gate the only place an `NVOS46` is built — this gate has already survived
+    // one (`raw_map_dma_flags` -> `raw_map_dma_slice`, when the object-offset parameter
+    // arrived) and it survived it by looking for the struct literal instead.
+    let lit = code
+        .find("Nvos46Parameters {")
+        .expect("★ NON-VACUITY: nothing in rm.rs builds an NVOS46 — this gate gates nothing");
+    let at = code[..lit]
+        .rfind("    fn ")
+        .expect("the encode site is inside a function");
     let end = code[at..]
         .find("\n    }\n")
         .map(|o| at + o)
-        .expect("a closing brace for raw_map_dma_flags");
+        .expect("a closing brace for the fixed-map function");
     let body = &code[at..end];
 
     assert!(

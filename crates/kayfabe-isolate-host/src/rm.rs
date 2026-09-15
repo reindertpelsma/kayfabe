@@ -1268,6 +1268,14 @@ pub const ADOPT_NOT_THE_SCRATCHPAD: u32 = 0x4B41;
 /// not a range"* and not *"you are the wrong party to be mapping"*.
 pub const MAP_THROUGH_A_BARE_SPACE: u32 = 0x4B42;
 
+/// ★★★★★ **CONSTRAINT 26** — a hand-over was asked for a space that is **not** bare.
+///
+/// `[measured w744]` the scratchpad's `NV01_MEMORY_VIRTUAL` over such a space is refused
+/// `0x19 INSERT_DUPLICATE_NAME`. ⊘ Refused here rather than there, because at the far end
+/// `0x19` reads as *"the dup is broken"* and the actual fault is *"this space was never the
+/// scratchpad's to map into"*.
+pub const HANDOVER_OF_A_NON_BARE_SPACE: u32 = 0x4B43;
+
 /// The opaque status a **bounds** refusal made by this crate reports.
 ///
 /// ★ Distinct from [`NOT_ON_THIS_RUNG`], and the distinction is not cosmetic. An access
@@ -3529,6 +3537,18 @@ pub struct HostRmBackend {
     /// `Default` that fabricates one — `None` refuses by name ([`FB_JOIN_NO_TABLE`]), because
     /// a per-worker table is a bug no single-worker test can observe.
     fb_joins: Option<Arc<crate::fbjoin::FbJoinTable>>,
+    /// ★★★★★ **CONSTRAINT 26 — does this isolate allocate BARE address spaces?**
+    ///
+    /// `true` means [`RmBackend::alloc_vaspace`] mints a `FERMI_VASPACE_A` and **no**
+    /// `NV01_MEMORY_VIRTUAL` range over it, so this isolate can bind channels to the space
+    /// and can map nothing into it — the ownership split, as a missing object rather than
+    /// as a rule.
+    ///
+    /// ⊘ **Carried rather than derived from the isolate id**, even though the scratchpad is
+    /// exempt: the exemption is the *composition root's* decision, made once in
+    /// `build_isolate`, and an isolate that has to infer what it is cannot say so in a
+    /// census. Same argument the `--cuda-walk` argument already makes.
+    bare_vaspaces: bool,
 }
 
 /// ★★★ **E6 — what the LAST [`RmBackend::ce_copy`] this backend performed actually
@@ -4734,6 +4754,7 @@ impl HostRmBackend {
             guest_ram: None,
             ce_witness: None,
             fb_joins: None,
+            bare_vaspaces: false,
         }
     }
 
@@ -4744,6 +4765,18 @@ impl HostRmBackend {
     #[must_use]
     pub fn with_fb_joins(mut self, joins: Arc<crate::fbjoin::FbJoinTable>) -> Self {
         self.fb_joins = Some(joins);
+        self
+    }
+
+    /// ★★★★★ **CONSTRAINT 26 — declare that this isolate allocates BARE address spaces.**
+    ///
+    /// See [`HostRmBackend::bare_vaspaces`]. ⊘ The default is `false`, which is the
+    /// pre-§26 behaviour byte for byte: a backend nobody told is a backend that owns its
+    /// own ranges, which is what every existing test and the whole `arena` control arm
+    /// expect.
+    #[must_use]
+    pub fn with_bare_vaspaces(mut self, bare: bool) -> Self {
+        self.bare_vaspaces = bare;
         self
     }
 
@@ -5342,6 +5375,21 @@ impl RmBackend for HostRmBackend {
     }
 
     fn alloc_vaspace(&mut self) -> Result<HostHandle, RmError> {
+        // ★★★★★ **CONSTRAINT 26 — THE FORK, AND IT IS HERE SO THAT NO CALL SITE MOVES.**
+        //
+        // Seven `VerbPlan` arms mint a host VAS lazily (`match *host_vas { None => rm
+        // .alloc_vaspace()? }`). Putting the arm in any of them would be seven places the
+        // ownership split lives; putting it in the backend makes it one, and makes it a
+        // property of **who this isolate is** rather than of what it was asked to do.
+        //
+        // ⊘ The handle's CLASS changes with the arm — a range there, a space here — and
+        // that is deliberate rather than hidden: `space_of` answers for both (a bare space
+        // is its own space) so everything asking *"which address space?"* is unchanged,
+        // while `map_gpu_va` refuses `MAP_THROUGH_A_BARE_SPACE` by name, which is the only
+        // thing that must change behaviour.
+        if self.bare_vaspaces {
+            return self.alloc_vaspace_bare().map(|b| b.space);
+        }
         self.alloc_vaspace_raw().map(|r| self.stamp(r))
     }
 
@@ -5484,7 +5532,7 @@ impl RmBackend for HostRmBackend {
 
     /// ★★★★★ **CONSTRAINT 26 — the bare space.** See the trait method for why the range is
     /// absent rather than optional.
-    fn alloc_vaspace_bare(&mut self) -> Result<HostHandle, RmError> {
+    fn alloc_vaspace_bare(&mut self) -> Result<kayfabe_isolate::BareVaSpace, RmError> {
         let mut params = [0u8; NvVaspaceAllocationParameters::SIZE];
         NvVaspaceAllocationParameters::default()
             .encode_into(&mut params)
@@ -5498,7 +5546,28 @@ impl RmBackend for HostRmBackend {
         // fallback, and `map_gpu_va` reads it as its refusal — so the two views of
         // "this handle is a space, not a range" cannot come apart.
         self.conn.remember_bare_space(space);
-        Ok(self.stamp(space))
+        Ok(kayfabe_isolate::BareVaSpace {
+            space: self.stamp(space),
+            client: self.conn.client(),
+        })
+    }
+
+    /// ★★★★★ **CONSTRAINT 26 — what this isolate would hand over for `space`.**
+    fn vaspace_handover(
+        &mut self,
+        space: HostHandle,
+    ) -> Result<kayfabe_isolate::BareVaSpace, RmError> {
+        let raw = self.narrow(space)?;
+        if !self.conn.is_bare_space(raw) {
+            // ⊘ The refusal that matters: a space carrying its own range is one this
+            // isolate maps through, and handing it over produces `0x19` at the far end,
+            // where it reads as a dup problem rather than as the ownership error it is.
+            return Err(RmError::Other(HANDOVER_OF_A_NON_BARE_SPACE));
+        }
+        Ok(kayfabe_isolate::BareVaSpace {
+            space,
+            client: self.conn.client(),
+        })
     }
 
     /// ★★★★★ **CONSTRAINT 26 — the scratchpad takes the hand-over.**

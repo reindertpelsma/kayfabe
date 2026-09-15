@@ -194,7 +194,25 @@ pub struct Vas {
     /// The forward-populated VA→backing table (MISS=FAULT).
     pub table: AddressTable,
     /// This Vas's own host VAS object, once materialized by the fwd plane.
+    ///
+    /// ⚠ **Its CLASS depends on constraint 26's arm** and the two are not interchangeable.
+    /// Under `KAYFABE_VAS_OWNER=isolate` it is the `NV01_MEMORY_VIRTUAL` **range** the
+    /// isolate maps through; under `scratchpad` it is a **bare `FERMI_VASPACE_A`** the
+    /// isolate can bind channels to and map nothing into. Everything that asks *"which
+    /// address space?"* is unaffected (`space_of` answers for both); the one thing that
+    /// changes is that mapping through it is refused by name.
     pub host_vas: Option<HostHandle>,
+    /// ★★★★★ **CONSTRAINT 26 — the SCRATCHPAD's range over this same address space**, once
+    /// the VMM has handed [`Vas::host_vas`] over and the scratchpad has duped it.
+    ///
+    /// `[measured w744]` the dup shares **one** space rather than copying it — a map by the
+    /// per-proc client at a VA the scratchpad already took is refused `0x51` — so this
+    /// handle and `host_vas` name the same page tables from two clients.
+    ///
+    /// ⊘ `None` under the `isolate` arm, always, and `None` under the `scratchpad` arm
+    /// until the hand-over has happened. The two are distinguishable because the arm is
+    /// printed by the boot census; a reader must not infer the arm from this field.
+    pub store_vas: Option<HostHandle>,
     /// Captured page-table pages of this VAS (#13's per-PDB `m2_cpt` equivalent;
     /// populated by the CE-PT-write capture feed once the mmu port lands).
     pub pt_pages: BTreeSet<u64>,
@@ -564,6 +582,7 @@ impl Vas {
                 None => AddressTable::new(),
             },
             host_vas: None,
+            store_vas: None,
             pt_pages: BTreeSet::new(),
             pt_meta: BTreeMap::new(),
             // Level 0 is a DECLARED fact: a PDB *is* its own root page. The shadow is

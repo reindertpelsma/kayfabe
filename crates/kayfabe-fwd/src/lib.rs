@@ -2643,6 +2643,23 @@ pub enum FbLeafBacking {
     /// is deliberate: the mistake that cannot be seen is made unrepresentable, and the
     /// mistake that is loud is left loud.
     Aliased,
+    /// ★★★★★ **CONSTRAINT 26 — THE LEAF *IS* THE ONE RESERVED OBJECT, AT THIS OFFSET, AND
+    /// THE SCRATCHPAD HAS ALREADY MAPPED IT AT THE GUEST'S VA.**
+    ///
+    /// > Owner, 2026-09-15: *"All memory is held by the scratchpad, the userspace isolates
+    /// > only borrow from it."*
+    ///
+    /// ⊘ **Nothing is minted on this arm and nothing is copied.** The other three chains end
+    /// in a host object this isolate allocated; this one ends in a *slice* of an object
+    /// nobody but the scratchpad names, already placed. So the binding it produces is a
+    /// [`kayfabe_mmu::HostBacking::slice`] whose `frees_object()` is **false** — releasing
+    /// one leaf must not free eleven gibibytes out from under every sibling.
+    ///
+    /// ⚠ The offset is the store's, not the guest's: `FbJoinPlan::DeviceBacked { at }`.
+    StoreSlice {
+        /// Where in the one reserved object this leaf lives.
+        offset: u64,
+    },
 }
 
 /// ★★★★★ **WHAT THE GUEST DECLARED FOR A LEAF**, as the backing decision needs it.
@@ -2846,7 +2863,14 @@ impl FbLeafBacking {
     pub const fn granule(self) -> u64 {
         match self {
             Self::Vidmem => FB_LEAF_GRANULE,
-            Self::Joined | Self::Aliased => FB_LEAF_PAGE,
+            // ★★★★★ **CONSTRAINT 26.** A store slice is placed by
+            // `RmConnection::raw_map_dma_slice`, which pins the small-page table whenever
+            // the VA or the length is not big-page aligned — so it reserves exactly `len` at
+            // exactly `va`, which is the `FB_LEAF_PAGE` granule's own statement.
+            // ⊘ Not `FB_LEAF_GRANULE`: this object is device-local, but the MAPPING's
+            // granularity is decided by the page-size flag constraint 28 selects, not by
+            // where the bytes live.
+            Self::Joined | Self::Aliased | Self::StoreSlice { .. } => FB_LEAF_PAGE,
         }
     }
 
@@ -3005,6 +3029,28 @@ pub fn plan_back_fb_leaf(
             // vidmem publish, because a leaf that could not be joined is a leaf whose two
             // memories would then be re-created deliberately.
             Some(match how {
+                // ★★★★★ **CONSTRAINT 26 — THERE IS NO VERB.** A store slice is placed by the
+                // SCRATCHPAD, before this plan is built, and the plan exists only to carry
+                // the binding into core state. ⊘ `None` here is not "nothing to do": it is
+                // *"the host work already happened, and it was not this isolate's"* — which
+                // is the whole of the ownership split at the one line where the old design
+                // would have issued an IPC.
+                FbLeafBacking::StoreSlice { .. } => {
+                    return Ok(Planned {
+                        plan: BackFbLeafPlan {
+                            proc: pid,
+                            gpu,
+                            pdb,
+                            va,
+                            len,
+                            phys,
+                            host_vas,
+                            existing,
+                            how,
+                        },
+                        verbs: None,
+                    });
+                }
                 FbLeafBacking::Vidmem => VerbPlan::PublishVidmem {
                     host_vas,
                     len,
@@ -3478,12 +3524,41 @@ fn bind_backed_fb_leaf(
         FbLeafBacking::Joined | FbLeafBacking::Aliased => {
             kayfabe_mmu::BackingBytes::JoinsGuestWindow
         }
+        // ★★★★★ **CONSTRAINT 26.** `JoinsGuestWindow` is TRUE of a store slice in the
+        // strongest sense the word has: the guest's framebuffer window over this range IS
+        // this object at this offset — not a copy of it, not a re-pointing of it. There is
+        // one memory and the guest reaches it independently, which is exactly the predicate
+        // `adopted_guest_ring`'s conjunct (7) tests for.
+        FbLeafBacking::StoreSlice { .. } => kayfabe_mmu::BackingBytes::JoinsGuestWindow,
     };
-    let binding = match kayfabe_mmu::Binding::real_gpu_memory(
-        plan.phys,
-        Aperture::Vidmem,
-        kayfabe_mmu::HostBacking::whole(memory, host_va, bytes),
-    ) {
+    // ★★★★★ **CONSTRAINT 26 — `slice`, NOT `whole`, AND THE DIFFERENCE IS A USE-AFTER-FREE.**
+    //
+    // `HostBacking::frees_object()` is `true` only for `Whole`, and every reclaim site asks
+    // it before freeing. A store slice bound as `whole` would make the FIRST leaf's release
+    // free the entire reservation out from under every sibling slice and every channel —
+    // silently, because RM frees the object happily and says nothing about who was reading
+    // through it.
+    let host = match plan.how {
+        FbLeafBacking::StoreSlice { offset } => {
+            // ⊘ A zero-length or wrapping slice is refused HERE rather than bound: the
+            // walker's `len` is guest-derived, and `AddressTable::bind` would compare it
+            // against a slice that does not exist.
+            let Ok(slice) = kayfabe_mmu::HostSlice::new(offset, plan.len) else {
+                return Err(Refusal {
+                    fault: FwdFault::FbLeafGranularity {
+                        va: plan.va,
+                        len: plan.len,
+                        granule: FB_LEAF_PAGE,
+                    },
+                    orphans: orphans(),
+                    retry: false,
+                });
+            };
+            kayfabe_mmu::HostBacking::slice(memory, host_va, slice, bytes)
+        }
+        _ => kayfabe_mmu::HostBacking::whole(memory, host_va, bytes),
+    };
+    let binding = match kayfabe_mmu::Binding::real_gpu_memory(plan.phys, Aperture::Vidmem, host) {
         Ok(b) => b,
         Err(fault) => {
             return Err(Refusal {

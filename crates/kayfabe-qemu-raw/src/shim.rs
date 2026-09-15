@@ -13935,6 +13935,205 @@ static DEVICE_LEAF_SLICE_ARMED: std::sync::atomic::AtomicU64 =
 /// device arm fires thousands of times a boot and an uncapped line would be the log.
 const DEVICE_LEAF_LINES_MAX: u64 = 6;
 
+/// ★★★ **CONSTRAINT 26 — store-slice mappings the scratchpad placed for a leaf.**
+#[cfg(feature = "host-isolates")]
+static STORE_SLICE_MAPPED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+/// ★★★ Leaves the split could not place. ⊘ Counted separately from `DEVICE_LEAF_PLAN_REFUSED`
+/// because they are opposite findings: that one is the store saying *"not my range"*, this one
+/// is the store saying *"my range and I could not map it"*.
+#[cfg(feature = "host-isolates")]
+static STORE_SLICE_REFUSED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+/// ★★★ Hand-overs performed — one per `Vas` that ever needed a store mapping.
+#[cfg(feature = "host-isolates")]
+static STORE_HANDOVERS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+/// ★★★ Hand-overs refused. ⊘ A non-zero here with `STORE_SLICE_MAPPED=0` says the split never
+/// got off the ground; a zero with both others zero says nothing ever asked.
+#[cfg(feature = "host-isolates")]
+static STORE_HANDOVER_REFUSED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// ★★★★★ **CONSTRAINT 26 — is the scratchpad the party that maps into guest VA spaces?**
+///
+/// ⊘ Read per call rather than latched, and it is cheap (`getenv` + a match). Latching it in
+/// a `static` would be a second statement of a default whose only statement is
+/// `scratchpad::vas_owner_from`, which is this tree's most expensive recurring class.
+/// ⊘ `unwrap_or` the SAFE arm: the realize-time gate has already reported a malformed value,
+/// and defaulting one to `scratchpad` here would arm the split on a boot nobody asked it on.
+#[cfg(feature = "host-isolates")]
+fn store_owns_vas() -> bool {
+    crate::scratchpad::selected_vas_owner()
+        .map(crate::scratchpad::VasOwner::bare_vaspaces)
+        .unwrap_or(false)
+}
+
+/// ★★★★★ **CONSTRAINT 26 — HAND THE `Vas` OVER IF NEEDED, MAP THE SLICE, BIND IT.**
+///
+/// Returns the [`JoinedLeaf`] the caller reports, or `None` with a named line in the log.
+///
+/// ## The three steps, and why they are in this order
+///
+/// 1. **Hand-over** (once per `Vas`). The per-proc isolate is asked what it would hand over
+///    for its own `host_vas`; it refuses a space that is not bare, which is the ownership
+///    check. The scratchpad then dups it and builds its own range.
+/// 2. **Map.** `[at, at+len)` of the one reserved object at the guest's own VA. Constraint 28
+///    asserts the placement inside the isolate, so a relocated mapping arrives here as a
+///    refusal rather than as an `Ok` naming the wrong address.
+/// 3. **Bind** — and only now. ⊘ Binding before the map would declare a row over a mapping
+///    that does not exist, which is the `w260` ordering rule this file already follows for
+///    the join chain: *nothing is bound until the host work returns `Ok`*.
+///
+/// ⚠ **Nothing is unwound on a bind failure**, and that is deliberate rather than an
+/// omission: the mapping belongs to the scratchpad and is keyed by `(vas, va)` in its own
+/// ledger, so the next publish re-offers the same leaf and `map` answers `0x51` for the VA it
+/// already holds — the idempotent replay, not a leak. ⊘ The alternative, unmapping here,
+/// would take a live mapping away from a channel that may already be born over it.
+#[cfg(feature = "host-isolates")]
+fn map_store_slice_for_leaf(
+    head: &str,
+    what: &str,
+    device: &kayfabe_rt::device::SharedDevice,
+    pdb: kayfabe_rt::Pdb,
+    leaf: kayfabe_rt::completion_watch::FbLeaf,
+    at: u64,
+) -> Option<JoinedLeaf> {
+    use std::sync::atomic::Ordering;
+    let Some(sp) = crate::storemap::store_map_port(DOORBELL_TARGET_GPU) else {
+        let n = STORE_SLICE_REFUSED.fetch_add(1, Ordering::Relaxed);
+        if n < DEVICE_LEAF_LINES_MAX {
+            eprintln!(
+                "{head} {what} leaf va=0x{:x} → ⊘⊘ CONSTRAINT 26: {}=scratchpad is armed and \
+                 there is NO STORE-MAP PORT. The scratchpad isolate is not held or nothing is \
+                 reserved; the SCRATCHPAD and STORE-MAP lines say which. Nothing was mapped \
+                 and nothing is bound.",
+                leaf.va,
+                crate::scratchpad::VAS_OWNER_ENV,
+            );
+        }
+        return None;
+    };
+    // ---- 1. THE HAND-OVER, once per `Vas`.
+    let store_vas = match device.store_vas(DOORBELL_TARGET_GPU, pdb) {
+        Some(h) => h,
+        None => {
+            let bare = match device.vaspace_handover(DOORBELL_TARGET_GPU, pdb) {
+                Ok(b) => b,
+                Err(e) => {
+                    STORE_HANDOVER_REFUSED.fetch_add(1, Ordering::Relaxed);
+                    let n = STORE_SLICE_REFUSED.fetch_add(1, Ordering::Relaxed);
+                    if n < DEVICE_LEAF_LINES_MAX {
+                        eprintln!(
+                            "{head} {what} leaf va=0x{:x} pdb={pdb:?} → ⊘⊘ CONSTRAINT 26: the \
+                             per-proc isolate would not hand its address space over: {e:?}. \
+                             ⚠ `HANDOVER_OF_A_NON_BARE_SPACE` here means this isolate was \
+                             spawned WITHOUT `--bare-vaspaces on`, i.e. the arm reached the \
+                             VMM and not the factory.",
+                            leaf.va
+                        );
+                    }
+                    return None;
+                }
+            };
+            match sp.adopt(bare) {
+                Ok(range) => {
+                    STORE_HANDOVERS.fetch_add(1, Ordering::Relaxed);
+                    eprintln!(
+                        "{head} CONSTRAINT-26 HAND-OVER pdb={pdb:?} space={:?} client={:#010x} \
+                         → the scratchpad duped it and built its own range {:?}. ★ One space, \
+                         two clients: `[measured w744]` a map by the per-proc client at a VA \
+                         this range already holds is refused 0x51.",
+                        bare.space, bare.client, range
+                    );
+                    if !device.set_store_vas(DOORBELL_TARGET_GPU, pdb, range) {
+                        eprintln!(
+                            "{head} CONSTRAINT-26 ⚠ the hand-over succeeded and the `Vas` \
+                             could not be routed to record it — the range is live and this \
+                             boot will re-dup on the next leaf, which RM answers from its own \
+                             table rather than by minting a second space."
+                        );
+                    }
+                    range
+                }
+                Err(e) => {
+                    STORE_HANDOVER_REFUSED.fetch_add(1, Ordering::Relaxed);
+                    let n = STORE_SLICE_REFUSED.fetch_add(1, Ordering::Relaxed);
+                    if n < DEVICE_LEAF_LINES_MAX {
+                        eprintln!(
+                            "{head} {what} leaf va=0x{:x} pdb={pdb:?} → ⊘⊘ CONSTRAINT 26: the \
+                             scratchpad REFUSED the hand-over: {e:?}",
+                            leaf.va
+                        );
+                    }
+                    return None;
+                }
+            }
+        }
+    };
+    // ---- 2. THE MAP.
+    let host_va = match sp.map(store_vas, at, leaf.len, kayfabe_rt::GpuVa(leaf.va)) {
+        Ok(va) => va,
+        Err(e) => {
+            let n = STORE_SLICE_REFUSED.fetch_add(1, Ordering::Relaxed);
+            if n < DEVICE_LEAF_LINES_MAX {
+                eprintln!(
+                    "{head} {what} leaf va=0x{:x} len=0x{:x} store_off=0x{at:x} → ⊘⊘ \
+                     CONSTRAINT 26: the scratchpad could not map this slice: {e:?}. ⊘ Nothing \
+                     is bound, so `ADOPT-WHY (6)` will refuse a channel born over it — which \
+                     is correct and is not a second bug.",
+                    leaf.va, leaf.len
+                );
+            }
+            return None;
+        }
+    };
+    // ---- 3. THE BIND, and only now.
+    if let Err(e) = device.adopt_store_slice_fb_leaf(
+        DOORBELL_TARGET_GPU,
+        pdb,
+        kayfabe_fwd::FbLeafRange {
+            va: kayfabe_rt::GpuVa(leaf.va),
+            len: leaf.len,
+            phys: leaf.phys,
+        },
+        host_va,
+        sp.object(),
+        at,
+    ) {
+        let n = STORE_SLICE_REFUSED.fetch_add(1, Ordering::Relaxed);
+        if n < DEVICE_LEAF_LINES_MAX {
+            eprintln!(
+                "{head} {what} leaf va=0x{:x} host_va=0x{host_va:x} → ⊘⊘ CONSTRAINT 26: the \
+                 slice IS mapped and the BINDING was refused: {e:?}. ⚠ The mapping is kept — \
+                 it is the scratchpad's, keyed by (vas, va), and taking it down here would \
+                 pull it from under a channel that may already be born over it.",
+                leaf.va
+            );
+        }
+        return None;
+    }
+    let n = STORE_SLICE_MAPPED.fetch_add(1, Ordering::Relaxed);
+    if n < DEVICE_LEAF_LINES_MAX {
+        eprintln!(
+            "{head} {what} leaf va=0x{:x} len=0x{:x} store_off=0x{at:x} host_va=0x{host_va:x} \
+             placed_as_asked={} → ★★★★★ CONSTRAINT 26: the SCRATCHPAD mapped a slice of the \
+             ONE reserved object at the guest's own VA and this row is BOUND to it. ⊘ No \
+             object was minted, nothing was copied, and the per-proc isolate names neither \
+             the object nor the mapping. (printed {} of {DEVICE_LEAF_LINES_MAX}; totals are \
+             `STORE-MAP`)",
+            leaf.va,
+            leaf.len,
+            host_va == leaf.va,
+            n + 1,
+        );
+    }
+    Some(JoinedLeaf {
+        host_va,
+        memory: sp.object().raw(),
+        // ★ `Some(len)`: the guest's framebuffer window for this range IS this object at this
+        // offset. ⊘ `None` would say the view is not live, which would make a reader conclude
+        // the leaf is two memories — and under the single store there is no second one.
+        installed: Some(leaf.len),
+    })
+}
+
 /// ★★★ The w742 publish-route census, printed at teardown on both arms.
 ///
 /// ⊘ Printed unconditionally and stating its own verdict, for `device_fb_report`'s reason: on
@@ -14093,6 +14292,34 @@ fn join_one_fb_leaf(
                     d.declined,
                     n + 1,
                 );
+            }
+            // ★★★★★★ **CONSTRAINT 26 — AND THIS IS WHERE THE OWNERSHIP SPLIT ACTUALLY RUNS.**
+            //
+            // > Owner, 2026-09-15: *"All memory is held by the scratchpad, the userspace
+            // > isolates only borrow from it."*
+            //
+            // ⊘⊘⊘ **THE DEFECT THIS CLOSES, MEASURED THREE TIMES.** `[w740, w742, w743]` the
+            // raw client's every channel was refused `BIRTH-AT-ALLOC REFUSED=11`, naming
+            // `ADOPT-WHY ⊘ (6) the binding EXISTS but carries NO HOST OBJECT`, **17 times, on
+            // all three boots, byte-identical**. Conjunct (6) is `binding.host() == None`, and
+            // it was `None` for every vidmem range because this arm returned before anything
+            // was bound: the range is the reserved object, the per-proc isolate may not name
+            // that object, and so nobody mapped it and nobody bound it.
+            //
+            // Under §26 the party that CAN do both does: the scratchpad dups this `Vas`'s
+            // bare address space, maps `[at, at+len)` of the one object at the guest's own
+            // VA, and the binding that results is a **slice** — `frees_object() == false`, so
+            // one leaf's release cannot free eleven gibibytes.
+            //
+            // ⚠ **Gated, and the gate's off position is byte-identical to w743.** On
+            // `KAYFABE_VAS_OWNER=isolate` (the default, and the `arena` control arm) this
+            // whole block is skipped and the arm returns `None` exactly as before — which is
+            // what keeps the control a control.
+            if store_owns_vas() {
+                if let Some(joined) = map_store_slice_for_leaf(head, what, device, pdb, leaf, at)
+                {
+                    return Some(joined);
+                }
             }
             // ⊘ `None`, and it is NOT a refusal dressed up: nothing was joined, so nothing may
             // be reported as joined. The callers all treat `None` as *"this leaf was not
@@ -15289,6 +15516,60 @@ impl Regs {
         // REALIZE line above is written once. The data plane reaches it through
         // `Scratchpad::device_port` at `attach_ram`, which is where the BAR mirror is built.
         drop(device_port);
+
+        // ★★★★★ **CONSTRAINT 26's STORE-MAP PORT, WIRED HERE AND ONLY WHEN THE ARM ASKS.**
+        //
+        // ⊘ **Built on the `scratchpad` arm only.** On the default `isolate` arm nothing is
+        // built and the publish path's `store_owns_vas()` is false, so the whole chain is
+        // absent rather than present-and-unused — which is what keeps the control arm a
+        // control and what `§w724g` means by not carrying the system you pivoted from.
+        //
+        // ⚠ Registered by `GpuId`, not in a bare `static`: `join_one_fb_leaf` is reached from
+        // three different types and one process hosts two emulated GPUs. See
+        // `storemap::register_store_map_port`.
+        #[cfg(feature = "host-isolates")]
+        {
+            let owner = crate::scratchpad::selected_vas_owner();
+            match (owner, scratchpad.as_mut()) {
+                (Ok(crate::scratchpad::VasOwner::Scratchpad), Some(sp)) => {
+                    match sp.share_for_store_maps() {
+                        Some(port) => {
+                            crate::storemap::register_store_map_port(DOORBELL_TARGET_GPU, &port);
+                            eprintln!(
+                                "kayfabe: STORE-MAP AT REALIZE: ★★★★★ ARMED — {}=scratchpad. \
+                                 Per-proc isolates get BARE address spaces and map nothing; \
+                                 this port dups each one and places slices of the ONE reserved \
+                                 object at the guest's own VAs. ⊘ Nothing is mapped yet — the \
+                                 publish path is what asks.",
+                                crate::scratchpad::VAS_OWNER_ENV
+                            );
+                        }
+                        None => eprintln!(
+                            "kayfabe: STORE-MAP AT REALIZE: ⊘⊘ {}=scratchpad AND NO PORT COULD \
+                             BE BUILT. The STORE-MAP lines above name which of the two causes \
+                             fired. ⚠ Every per-proc isolate was still spawned with BARE \
+                             address spaces, so this boot will refuse every vidmem mapping by \
+                             name — it is NOT the control arm.",
+                            crate::scratchpad::VAS_OWNER_ENV
+                        ),
+                    }
+                }
+                (Ok(crate::scratchpad::VasOwner::Scratchpad), None) => eprintln!(
+                    "kayfabe: STORE-MAP AT REALIZE: ⊘⊘ {}=scratchpad AND THERE IS NO \
+                     SCRATCHPAD. Set {} as well, or the split has nobody to hand the address \
+                     spaces to.",
+                    crate::scratchpad::VAS_OWNER_ENV,
+                    crate::scratchpad::SCRATCHPAD_ENV
+                ),
+                (Ok(crate::scratchpad::VasOwner::Isolate), _) => eprintln!(
+                    "kayfabe: STORE-MAP AT REALIZE: ⊘ {}=isolate (the default) — the \
+                     pre-constraint-26 ownership. Per-proc isolates own their own ranges and \
+                     map into them; no port is built and none is wanted.",
+                    crate::scratchpad::VAS_OWNER_ENV
+                ),
+                (Err((_, why)), _) => eprintln!("kayfabe: STORE-MAP AT REALIZE: ⊘⊘ {why}"),
+            }
+        }
 
         // ★★★ **ADVERTISE WHAT WAS RESERVED, NEVER ASSERT AHEAD OF IT**
         // (`gpga_is_one_reserved_object.md`: *"the guest's advertised framebuffer size is
@@ -18361,6 +18642,25 @@ impl Regs {
                  reservation held, or no export directory in this build. The SCRATCHPAD and \
                  DEVICE-VIEW-PORT AT REALIZE lines above say which.",
                 crate::scratchpad::DEVICE_VIEW_ENV
+            ),
+        }
+        // ★★★★★ **CONSTRAINT 26's STORE-MAP CENSUS.** Printed unconditionally on BOTH arms,
+        // for the two reasons directly above and one of its own: `adopts=0 maps=0` is the
+        // verdict `⊘⊘ VACUOUS`, which is the difference between *"the scratchpad mapped
+        // nothing because nothing asked"* and *"the ownership split is not wired"* — and on
+        // the `isolate` arm the FIRST is correct and expected.
+        match self
+            .scratchpad
+            .as_ref()
+            .and_then(crate::scratchpad::Scratchpad::store_port_census)
+        {
+            Some(line) => eprintln!("kayfabe: {line}"),
+            None => eprintln!(
+                "kayfabe: STORE-MAP ⊘ NOT BUILT — no port existed on this boot. On \
+                 {}=isolate (the default) that is CORRECT and is what the control arm must \
+                 print; on `scratchpad` it means the split could not arm, and the SCRATCHPAD \
+                 census line above says which step refused.",
+                crate::scratchpad::VAS_OWNER_ENV
             ),
         }
         // ★★★★★ **§3's SINGLE STORE — what it was asked and what it refused.**
@@ -21651,11 +21951,28 @@ pub fn isolate_factory(
                 // which can never alias a live `ProcId` — spawn from the glibc-linked image
                 // and be sandboxed LATE. Every other isolate this factory spawns is
                 // untouched: same static image, same sandbox-first ordering.
-                if crate::scratchpad::selected_scratchpad_cuda().unwrap_or(false) {
-                    kayfabe_isolate_host::HostIsolateFactory::new(kayfabe_isolate_host::RmMode::Real)
+                {
+                    // ★★★★★ **CONSTRAINT 26** — the ownership split is a property of the
+                    // FACTORY too, decided here beside the CUDA arm and for the same reason:
+                    // it is a configuration of the composition root, not a per-spawn choice.
+                    // ⊘ `unwrap_or` the SAFE arm: a refusal here is already reported by the
+                    // realize-time gate, and defaulting a malformed value to `scratchpad`
+                    // would arm the split on a boot nobody asked it on.
+                    let bare = crate::scratchpad::selected_vas_owner()
+                        .map(crate::scratchpad::VasOwner::bare_vaspaces)
+                        .unwrap_or(false);
+                    if crate::scratchpad::selected_scratchpad_cuda().unwrap_or(false) {
+                        kayfabe_isolate_host::HostIsolateFactory::new(
+                            kayfabe_isolate_host::RmMode::Real,
+                        )
                         .with_cuda_walk()
-                } else {
-                    kayfabe_isolate_host::HostIsolateFactory::new(kayfabe_isolate_host::RmMode::Real)
+                        .with_bare_vaspaces(bare)
+                    } else {
+                        kayfabe_isolate_host::HostIsolateFactory::new(
+                            kayfabe_isolate_host::RmMode::Real,
+                        )
+                        .with_bare_vaspaces(bare)
+                    }
                 },
                 guest_ram,
             )?;

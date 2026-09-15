@@ -572,6 +572,14 @@ pub enum Request {
         /// The guest's own VA. Binding, not a hint.
         at: u64,
     },
+    /// ★★★★★ **CONSTRAINT 26, tag 38** — [`kayfabe_isolate::RmBackend::vaspace_handover`].
+    ///
+    /// ⊘ Asked **for a space**, not for "this isolate's client": the far side refuses a
+    /// space that is not bare, which is the ownership check and not a lookup.
+    VaSpaceHandover {
+        /// The bare `FERMI_VASPACE_A` this isolate handed out, raw.
+        space: u64,
+    },
     /// ★★★★★ **CONSTRAINT 26/27, tag 37** — [`kayfabe_isolate::RmBackend::unmap_store_slice`].
     UnmapStoreSlice {
         /// The adopted VA space's range handle, raw.
@@ -643,6 +651,20 @@ pub enum Reply {
     /// real answer — *"nothing down to the probe's floor could be reserved"* — and is not
     /// an error.
     Megabytes(u64),
+    /// ★★★★★ **CONSTRAINT 26, reply tag 16** — [`Request::AllocVaSpaceBare`]'s answer: the
+    /// bare `FERMI_VASPACE_A` **and the client it lives in**.
+    ///
+    /// ⊘ A shape of its own rather than [`Reply::Handle`] plus a second round trip, and
+    /// rather than [`Reply::HandleAndToken`] with the client smuggled through the token
+    /// field. A handle without its namespace is not an answer, and re-using a shape whose
+    /// second field means *"work-submit token"* everywhere else is how a reader — and a
+    /// grader — comes to believe a boot did something it did not.
+    BareVaSpace {
+        /// The space handle, raw.
+        space: u64,
+        /// The RM client it lives in.
+        client: u32,
+    },
     /// ★★★ #102 stage C3 — the answer to a [`Request::FbRead`].
     ///
     /// Two fields, not one, and the second is not a length: `covered == false` means the
@@ -1036,6 +1058,10 @@ impl Envelope {
                 out.extend_from_slice(&len.to_le_bytes());
                 out.extend_from_slice(&at.to_le_bytes());
             }
+            Request::VaSpaceHandover { space } => {
+                out.push(38);
+                out.extend_from_slice(&space.to_le_bytes());
+            }
             Request::UnmapStoreSlice { vas, at } => {
                 out.push(37);
                 out.extend_from_slice(&vas.to_le_bytes());
@@ -1356,6 +1382,9 @@ impl Envelope {
                 len: c.u64("store slice len")?,
                 at: c.u64("store slice at")?,
             },
+            38 => Request::VaSpaceHandover {
+                space: c.u64("vaspace handover space")?,
+            },
             37 => Request::UnmapStoreSlice {
                 vas: c.u64("store unmap vas")?,
                 at: c.u64("store unmap at")?,
@@ -1601,6 +1630,11 @@ impl Reply {
                 out.push(14);
                 out.extend_from_slice(&mb.to_le_bytes());
             }
+            Reply::BareVaSpace { space, client } => {
+                out.push(16);
+                out.extend_from_slice(&space.to_le_bytes());
+                out.extend_from_slice(&client.to_le_bytes());
+            }
             Reply::DeviceViewNode {
                 release_token,
                 memory,
@@ -1685,6 +1719,10 @@ impl Reply {
             4 => Reply::Payload(c.blob("payload")?),
             5 => Reply::Va(c.u64("va")?),
             14 => Reply::Megabytes(c.u64("reservable mb")?),
+            16 => Reply::BareVaSpace {
+                space: c.u64("bare vaspace space")?,
+                client: c.u32("bare vaspace client")?,
+            },
             15 => Reply::DeviceViewNode {
                 release_token: c.u64("device view release token")?,
                 memory: c.u64("device view memory")?,
@@ -1907,6 +1945,7 @@ mod tests {
                 vas: 0xCAFE_000A,
                 at: 0x0000_0090_0000_1000,
             },
+            Request::VaSpaceHandover { space: 0xCAFE_0006 },
             Request::AllocChannel {
                 vas: 7,
                 engine: engine_code(EngineKind::Ce),
@@ -2128,6 +2167,7 @@ mod tests {
             Request::AdoptVaSpace { .. } => "AdoptVaSpace",
             Request::MapStoreSlice { .. } => "MapStoreSlice",
             Request::UnmapStoreSlice { .. } => "UnmapStoreSlice",
+            Request::VaSpaceHandover { .. } => "VaSpaceHandover",
             Request::AllocChannel { .. } => "AllocChannel",
             Request::AllocChannelDeclared { .. } => "AllocChannelDeclared",
             Request::AllocEngineObject { .. } => "AllocEngineObject",
@@ -2167,6 +2207,7 @@ mod tests {
                 "AdoptVaSpace",
                 "MapStoreSlice",
                 "UnmapStoreSlice",
+                "VaSpaceHandover",
                 "AllocVidmem",
                 "CeCopy",
                 "CudaWalkReport",
@@ -2218,6 +2259,10 @@ mod tests {
             Reply::Payload(vec![7; 100]),
             Reply::Va(0x7f00_0000),
             Reply::Megabytes(11_808),
+            Reply::BareVaSpace {
+                space: 0xCAFE_0006,
+                client: 0xC1DD_3C70,
+            },
             Reply::DeviceViewNode {
                 // ⊘ w734: a value that is NOT any of the other three, so a codec that
                 // transposed two fields fails rather than round-tripping.

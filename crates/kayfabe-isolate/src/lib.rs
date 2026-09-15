@@ -914,6 +914,26 @@ pub struct AdoptedGuestUserd {
 /// `Send + Sync` — see the crate docs: only ever reached via `&mut`, so shared
 /// cross-thread references are unrepresentable, but the pool *stores* boxed
 /// backends inside a `Sync` `Proc`, which makes the bound structural.
+/// ★★★★★ **CONSTRAINT 26 — A BARE ADDRESS SPACE AND THE CLIENT IT LIVES IN, AS ONE VALUE.**
+///
+/// [`RmBackend::alloc_vaspace_bare`]'s answer. ⊘ **Not two returns and not a bare
+/// `HostHandle`**: an RM handle is meaningless without the client whose namespace it is in,
+/// and the whole of [`RmBackend::adopt_vaspace`] is *"name a handle in somebody else's
+/// namespace"*. Carrying them apart would let a caller pair a space with the wrong client —
+/// which RM would answer for with `0x33 INVALID_OBJECT_HANDLE` if we were lucky, and with a
+/// **different live object** if we were not.
+///
+/// ⚠ `client` is the per-proc isolate's own RM client. It leaves that isolate deliberately,
+/// and it is the only handle in the system that does. See `kayfabe_isolate_host::rm`'s
+/// `handed_vaspace` module for what receives it and what that does and does not prove.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BareVaSpace {
+    /// The `FERMI_VASPACE_A`, with **no** `NV01_MEMORY_VIRTUAL` range over it.
+    pub space: HostHandle,
+    /// The RM client that space lives in — `NVOS55_PARAMETERS::hClientSrc`, eventually.
+    pub client: u32,
+}
+
 pub trait RmBackend: Send + Sync {
     /// Allocate an RM object of `class` under `parent`. `params` is an opaque,
     /// already-encoded parameter blob (encoding is the ABI adapter's job).
@@ -1018,7 +1038,7 @@ pub trait RmBackend: Send + Sync {
     /// # Errors
     /// Whatever RM refused the space with. The default is a named refusal: a backend with no
     /// RM connection must say so rather than hand back a handle it did not mint.
-    fn alloc_vaspace_bare(&mut self) -> Result<HostHandle, RmError> {
+    fn alloc_vaspace_bare(&mut self) -> Result<BareVaSpace, RmError> {
         Err(RmError::Other(0x56))
     }
 
@@ -1046,6 +1066,27 @@ pub trait RmBackend: Send + Sync {
     /// not the scratchpad.
     fn adopt_vaspace(&mut self, client: u32, space: u32) -> Result<HostHandle, RmError> {
         let _ = (client, space);
+        Err(RmError::Other(0x56))
+    }
+
+    /// ★★★★★ **CONSTRAINT 26 — WHAT THIS ISOLATE WOULD HAND OVER FOR `space`.**
+    ///
+    /// A [`RmBackend::alloc_vaspace_bare`] result carries the client beside the handle, and
+    /// the seven `VerbPlan` arms that mint a host VAS lazily keep only the handle — so the
+    /// VMM, which is the party that performs the hand-over, has a space and no namespace to
+    /// name it in. This verb is how it asks.
+    ///
+    /// ⊘ **It is not an accessor for "this isolate's client".** It answers *for a space*,
+    /// and it **refuses a space that is not bare**: a space with its own
+    /// `NV01_MEMORY_VIRTUAL` range is one this isolate maps through itself, and handing it
+    /// to the scratchpad would produce the `0x19 INSERT_DUPLICATE_NAME` w744 measured — at
+    /// the far end, as an unexplained refusal, rather than here as the ownership error it
+    /// is.
+    ///
+    /// # Errors
+    /// A named refusal if `space` is not a bare address space this isolate allocated.
+    fn vaspace_handover(&mut self, space: HostHandle) -> Result<BareVaSpace, RmError> {
+        let _ = space;
         Err(RmError::Other(0x56))
     }
 

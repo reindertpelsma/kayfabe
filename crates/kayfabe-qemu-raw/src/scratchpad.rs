@@ -233,6 +233,91 @@ pub fn selected_device_view() -> Result<bool, (Status, &'static str)> {
     device_view_from(value)
 }
 
+/// ★★★★★ **CONSTRAINT 26's GATE — WHO OWNS THE MAPPING INTO A GUEST VA SPACE.**
+///
+/// > Owner, 2026-09-15: *"All memory is held by the scratchpad, the userspace isolates only
+/// > borrow from it."*
+///
+/// | value | per-proc isolates | the scratchpad |
+/// |---|---|---|
+/// | `isolate` (default) | space **+** `NV01_MEMORY_VIRTUAL` range; they map their own | holds the reserved object and nothing else maps through it |
+/// | `scratchpad` | a **bare** `FERMI_VASPACE_A`; `map_gpu_va` refuses by name | dups each space, builds its own range, and does all GPU-side mapping |
+///
+/// ⊘ **`isolate` is byte-identical to the pre-§26 tree**, which is what keeps the `arena`
+/// control arm a control: nothing in this gate's off position is new code on the path.
+///
+/// ## ⚠ THE EXPIRY CONDITION, because §w724g says a gate carries one
+///
+/// This gate exists so the ownership split can be measured against its own control on one
+/// binary. It is **retired — unwired and deleted in the same change** — once the raw client
+/// grades `(P)` with `THREADS 8 of 8` on the `scratchpad` arm and the `isolate` arm has no
+/// remaining production caller. Until then a boot that does not say which arm it ran is
+/// uninterpretable, so the census prints it on both.
+pub const VAS_OWNER_ENV: &str = "KAYFABE_VAS_OWNER";
+
+/// Which party owns the mapping into a guest VA space. See [`VAS_OWNER_ENV`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VasOwner {
+    /// The per-proc isolate owns its own `NV01_MEMORY_VIRTUAL` range and maps into it.
+    /// The pre-constraint-26 tree.
+    Isolate,
+    /// The scratchpad dups each per-proc address space and does **all** GPU-side mapping;
+    /// per-proc isolates get a bare space and map nothing.
+    Scratchpad,
+}
+
+impl VasOwner {
+    /// The name a census prints. ⊘ Two distinct words, never a `bool`: a boot log that says
+    /// `true` has not said what is true.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            VasOwner::Isolate => "isolate",
+            VasOwner::Scratchpad => "scratchpad",
+        }
+    }
+
+    /// Does this arm hand per-proc isolates a bare address space?
+    #[must_use]
+    pub fn bare_vaspaces(self) -> bool {
+        matches!(self, VasOwner::Scratchpad)
+    }
+}
+
+/// The pure half of [`selected_vas_owner`], and the **only** statement of the default.
+///
+/// # Errors
+/// [`Status::Unsupported`] if `value` names neither arm. **Absent is not an error**; it is
+/// [`VasOwner::Isolate`].
+pub fn vas_owner_from(value: Option<&str>) -> Result<VasOwner, (Status, &'static str)> {
+    match value {
+        None | Some("isolate") => Ok(VasOwner::Isolate),
+        Some("scratchpad") => Ok(VasOwner::Scratchpad),
+        Some(_) => Err((
+            Status::Unsupported,
+            "KAYFABE_VAS_OWNER does not name an arm: the only values are `isolate` (the \
+             default, the pre-constraint-26 ownership) and `scratchpad`. It is not \
+             defaulted, because both directions are wrong in opposite ways — a typo \
+             defaulted to `isolate` runs the control arm on a boot the operator believes is \
+             armed, and one defaulted to `scratchpad` gives every per-proc isolate an \
+             address space it cannot map into, which surfaces as a refusal storm twenty \
+             seconds into a boot rather than as a configuration error.",
+        )),
+    }
+}
+
+/// Which party this process says owns guest VA-space mappings.
+///
+/// # Errors
+/// Whatever [`vas_owner_from`] refused with.
+pub fn selected_vas_owner() -> Result<VasOwner, (Status, &'static str)> {
+    let raw = std::env::var_os(VAS_OWNER_ENV);
+    let value = raw
+        .as_ref()
+        .map(|v| v.to_str().unwrap_or("\u{fffd}invalid"));
+    vas_owner_from(value)
+}
+
 /// ★★ **Where the reservation probe starts halving from, in MiB.** Only read when
 /// [`SCRATCHPAD_ENV`] is armed.
 ///
@@ -670,6 +755,12 @@ pub struct Scratchpad {
     /// off, the reservation was refused, or this process has no route from an isolate-minted
     /// token to a descriptor (no export directory).
     device_port: Option<std::sync::Arc<crate::deviceview::DeviceViewPort>>,
+    /// ★★★★★ **CONSTRAINT 26's MAPPING PORT**, holding a clone of [`Self::iso`]'s handle
+    /// plus the reserved object, once [`Scratchpad::share_for_store_maps`] has built it.
+    ///
+    /// ⊘ `None` has the same three causes as [`Self::device_port`] and the port's own census
+    /// line names which — reading it as *"the gate is off"* is reading three states as one.
+    store_port: Option<std::sync::Arc<crate::storemap::StoreMapPort>>,
     outcome: Reservation,
     /// Wall time inside `IsolateFactory::spawn`, in microseconds — the quantity w470
     /// measured on the vCPU, measured here where the guest does not pay it.
@@ -799,6 +890,7 @@ impl Scratchpad {
             iso: Some(std::sync::Arc::new(SharedIsolate::new(iso))),
             walk_shadow: None,
             device_port: None,
+            store_port: None,
             outcome,
             spawn_us,
             probe_us,
@@ -936,6 +1028,7 @@ impl Scratchpad {
         // out of a box that has just been told to retire.
         self.walk_shadow = None;
         self.device_port = None;
+        self.store_port = None;
         if let Some(iso) = self.iso.take() {
             iso.retire();
         }
@@ -1010,6 +1103,57 @@ impl Scratchpad {
             ));
         }
         self.device_port.clone()
+    }
+
+    /// ★★★★★ **CONSTRAINT 26 — build the port through which the scratchpad does all
+    /// GPU-side mapping**, or say by name why it cannot be built.
+    ///
+    /// ⊘ Two causes, and the port's census line plus these `eprintln!`s are what keep them
+    /// apart in a boot log: no isolate at all, or nothing reserved. A port over some other
+    /// allocation would map memory that is not what the guest's framebuffer IS — the
+    /// "two memories at one address" state the single store exists to abolish.
+    ///
+    /// ⚠ **Idempotent, and it must be**: the publish path asks for this on every leaf, and
+    /// a second port would keep a second ledger — so the restated ring assertion would
+    /// answer `false` for a slice the other port had placed.
+    pub fn share_for_store_maps(&mut self) -> Option<std::sync::Arc<crate::storemap::StoreMapPort>> {
+        if self.store_port.is_none() {
+            let Some(iso) = self.iso.as_ref().map(std::sync::Arc::clone) else {
+                eprintln!(
+                    "kayfabe: STORE-MAP ⊘ NOT ARMED — the scratchpad isolate is not held, so \
+                     there is no worker to map through. The SCRATCHPAD census line above \
+                     names which step refused."
+                );
+                return None;
+            };
+            let Reservation::Held { obj, mb } = self.outcome else {
+                eprintln!(
+                    "kayfabe: STORE-MAP ⊘ NOT ARMED — nothing is reserved, so there is no \
+                     object to map slices of. Mapping some other allocation at a guest VA \
+                     would be two memories at one address."
+                );
+                return None;
+            };
+            self.store_port = Some(std::sync::Arc::new(crate::storemap::StoreMapPort::new(
+                iso,
+                self.id,
+                obj,
+                mb << 20,
+            )));
+        }
+        self.store_port.clone()
+    }
+
+    /// ★★★★★ **CONSTRAINT 26's mapping port**, or `None` when none was built.
+    #[must_use]
+    pub fn store_port(&self) -> Option<std::sync::Arc<crate::storemap::StoreMapPort>> {
+        self.store_port.clone()
+    }
+
+    /// The store-map port's census line, or `None` when no port was ever built.
+    #[must_use]
+    pub fn store_port_census(&self) -> Option<String> {
+        self.store_port.as_ref().map(|p| p.census_line())
     }
 
     /// ★★★ **§3's device-view port**, or `None` when none was built. The route the data
