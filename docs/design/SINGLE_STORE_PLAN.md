@@ -166,6 +166,64 @@ sentence that follows is attributable, and by the `DEVICE-FB` counters that join
 ⊘ Carrying `why` through `FbRead` is **cut B's call**: every consumer of that trait would have
 to grow a reason it currently discards, and cut B is the increment that gives them one.
 
+### ★★★★★ CUT C IS THE WRITE HALF — AND `host_write_refused=0` NEVER MEANT WHAT WE READ IT TO MEAN
+
+`[measured w738, the cut-B boot]`
+
+    DEVICE-FB named=0 host_read_refused=18 host_write_refused=0 read_served=3
+               wanted_by_read=18  wanted_by_write=0  out_of_range=0
+
+★★★ **`wanted_by_write=0`. The store was never asked for a single write.** Not refused —
+**never asked.**
+
+⊘⊘⊘ **AND THAT RETIRES THE REASONING THAT SCOPED CUT B.** w736 measured `host_write_refused=0`
+and both the plan and the cut-B brief concluded *"the write side has no measured demand on this
+path at all"*, so no write-side arming was built. The conclusion does not follow from the
+premise: **a write that never asks the store is not refused — it is silently served by the
+other memory.** `host_write_refused=0` and `wanted_by_write=0` together say *"no write ever
+asked"*, which is the opposite of *"no writes happen"*.
+★ Exactly this tree's recurring class — [[the_zero_was_never_measured_three_times]], and
+`failed=0 IS NOT "NOTHING REFUSED"`. A refusal counter cannot distinguish **"nothing to
+refuse"** from **"the arm never ran"**, and here it did the second while reading as the first.
+
+## ⇒ WHAT THE `garbage 0x0` ACTUALLY IS
+
+`kbusVerifyBar2` writes a pattern and reads it back through the BAR0 window. Under
+`KAYFABE_FB_STORE=device`:
+- the **read** goes to the reserved object (`read_served=3`, `wanted_by_read=18`), which is
+  zeroed,
+- the **write** never reached the reserved object at all (`wanted_by_write=0`) and landed in
+  the old backing.
+
+⇒ **TWO MEMORIES FOR ONE ADDRESS — the precise defect the single store exists to delete**
+(constraints 18 and 22), and `garbage 0x0` is its signature. The driver is not reporting a
+broken MMU; it is reporting that *we* answered its read-back out of a different memory than
+the one it wrote.
+⊘ This is also why the boot dying at `kbusVerifyBar2` is **not** the wall it looked like: it
+is not a BAR2 translate failing, it is our own split memory, and it will move only when the
+write half lands.
+
+## ⇒ CUT C, SCOPED BY THAT
+
+1. **Framebuffer WRITES route to the store**, so the reserved object is the single memory for
+   any address it covers. The existing `write_armed` on `DeviceFbPort` is the seam; nothing new
+   is needed in the port.
+2. ⚠ **The arming shape does not change**: `want` records under the plane lock, `drain` is the
+   IPC round trip and runs only at lock-free entry points, fixed trip counts. The lock rank is
+   not negotiable and no seconds figure reaches it.
+3. ★ **The falsifier already exists and is named**:
+   `a_framebuffer_page_written_through_bar1_is_the_page_bar2_reads`. Cut C is the increment
+   that can finally make it mean something on the `device` arm.
+4. ⊘ **Do not read `write_served > 0` as success.** The grade is the driver's own check:
+   `kbusVerifyBar2` must stop reporting `garbage`. This campaign has measured that
+   **zero traps proves interception, not agreement** — three defects once lived in the gap
+   between *"the slot intercepts"* and *"the slot shows the same bytes"*.
+
+★ And one cut-B item is **inert on this path and should be priced as such before more is built
+on it**: `FB-IO walk-bar[r=21 frames=2] walk-guest-pt[r=0]` measures that `PlanePtBytes` read
+the framebuffer **zero times**, so item 2 — the one the plan called *"costs no transient at
+all"* — never ran. What served was item 4's premap retry.
+
 ### ⚠ `--ce-client-guest-ram`: "THE COMPLETION NEVER ARRIVES" CANNOT BE WHAT HAPPENS
 
 ⊘⊘ **HYPOTHESIS FROM READING THE SOURCE, NOT A MEASUREMENT.** Recorded so the next
