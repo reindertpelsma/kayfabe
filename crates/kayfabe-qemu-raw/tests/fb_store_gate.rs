@@ -88,3 +88,33 @@ fn the_device_arm_with_inline_revalidation_is_refused_because_it_would_block_a_v
 fn the_device_arm_with_both_preconditions_met_is_allowed() {
     assert!(enforce_device_store(FbStoreArm::Device, true, true).is_ok());
 }
+
+/// ★★★★★ **THE TWO GATES DO NOT READ EACH OTHER** — and this one is a defect caught in review.
+///
+/// `KAYFABE_DEVICE_VIEW` arms the **port**; `KAYFABE_FB_STORE` chooses the **store**. w734's
+/// census boot ran the first with the second at its default, and that is a legitimate
+/// configuration.
+///
+/// ⇒ a site that picks a backing by asking *"is there a port?"* puts **that one aperture** on
+/// the reserved object while every other framebuffer path serves the arena memfd — **two
+/// memories for one address, on the control arm**, which is the exact defect
+/// `two_worlds_split::a_framebuffer_page_written_through_bar1_is_the_page_bar2_reads` exists
+/// to catch and which no unit test of the arena arm would ever see. `install_pramin_window`
+/// was written that way.
+#[test]
+fn a_port_without_the_device_store_never_chooses_a_device_backing() {
+    use kayfabe_qemu_raw::deviceview::backing_is_device;
+    assert!(
+        !backing_is_device(FbStoreArm::Arena, true),
+        "★★★ THE PORT ALONE MUST NOT DECIDE. This is w734's own census configuration — the \
+         crossing probe armed, the default store — and answering `true` here puts one \
+         aperture on real video memory while the rest of the framebuffer is a host memfd."
+    );
+    assert!(!backing_is_device(FbStoreArm::Arena, false));
+    assert!(
+        !backing_is_device(FbStoreArm::Device, false),
+        "and the store alone cannot act: without a port there is nothing to arm a view with, \
+         which `enforce_device_store` refuses at startup rather than discovering here"
+    );
+    assert!(backing_is_device(FbStoreArm::Device, true));
+}
