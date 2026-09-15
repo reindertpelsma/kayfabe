@@ -1,0 +1,60 @@
+[  314.999060] NVRM: _kgspBootGspRm: unexpected WPR2 already up, cannot proceed with booting GSP
+[  314.999076] NVRM: _kgspBootGspRm: (the GPU is likely in a bad state and may need to be reset)
+[  314.999152] NVRM: RmInitAdapter: Cannot initialize GSP firmware RM
+[  315.001983] NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x62:0x40:2028)
+[  315.008414] NVRM: GPU 0000:00:03.0: rm_init_adapter failed, device minor number 0
+[  315.544210] NVRM: _kgspBootGspRm: unexpected WPR2 already up, cannot proceed with booting GSP
+[  315.544224] NVRM: _kgspBootGspRm: (the GPU is likely in a bad state and may need to be reset)
+[  315.544271] NVRM: RmInitAdapter: Cannot initialize GSP firmware RM
+[  315.545827] NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x62:0x40:2028)
+[  315.550408] NVRM: GPU 0000:00:03.0: rm_init_adapter failed, device minor number 0
+[  316.930145] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+[  319.658588] NVRM: _kgspBootGspRm: unexpected WPR2 already up, cannot proceed with booting GSP
+[  319.658600] NVRM: _kgspBootGspRm: (the GPU is likely in a bad state and may need to be reset)
+[  319.658645] NVRM: RmInitAdapter: Cannot initialize GSP firmware RM
+[  319.660132] NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x62:0x40:2028)
+[  319.662906] NVRM: GPU 0000:00:03.0: rm_init_adapter failed, device minor number 0
+[  320.209023] NVRM: _kgspBootGspRm: unexpected WPR2 already up, cannot proceed with booting GSP
+[  320.209039] NVRM: _kgspBootGspRm: (the GPU is likely in a bad state and may need to be reset)
+[  320.209117] NVRM: RmInitAdapter: Cannot initialize GSP firmware RM
+[  320.211872] NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x62:0x40:2028)
+[  320.217505] NVRM: GPU 0000:00:03.0: rm_init_adapter failed, device minor number 0
+[  321.613648] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+[  324.351803] NVRM: _kgspBootGspRm: unexpected WPR2 already up, cannot proceed with booting GSP
+[  324.351816] NVRM: _kgspBootGspRm: (the GPU is likely in a bad state and may need to be reset)
+[  324.351871] NVRM: RmInitAdapter: Cannot initialize GSP firmware RM
+[  324.353677] NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x62:0x40:2028)
+[  324.357996] NVRM: GPU 0000:00:03.0: rm_init_adapter failed, device minor number 0
+[  325.066537] NVRM: _kgspBootGspRm: unexpected WPR2 already up, cannot proceed with booting GSP
+[  325.066548] NVRM: _kgspBootGspRm: (the GPU is likely in a bad state and may need to be reset)
+[  325.066591] NVRM: RmInitAdapter: Cannot initialize GSP firmware RM
+[  325.068161] NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x62:0x40:2028)
+[  325.070145] NVRM: GPU 0000:00:03.0: rm_init_adapter failed, device minor number 0
+[  326.488733] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+[  329.143395] NVRM: _kgspBootGspRm: unexpected WPR2 already up, cannot proceed with booting GSP
+[  329.143406] NVRM: _kgspBootGspRm: (the GPU is likely in a bad state and may need to be reset)
+[  329.143462] NVRM: RmInitAdapter: Cannot initialize GSP firmware RM
+[  329.145068] NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x62:0x40:2028)
+[  329.147921] NVRM: GPU 0000:00:03.0: rm_init_adapter failed, device minor number 0
+[  329.677998] NVRM: _kgspBootGspRm: unexpected WPR2 already up, cannot proceed with booting GSP
+[  329.678009] NVRM: _kgspBootGspRm: (the GPU is likely in a bad state and may need to be reset)
+[  329.678066] NVRM: RmInitAdapter: Cannot initialize GSP firmware RM
+[  329.679534] NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x62:0x40:2028)
+[  329.683067] NVRM: GPU 0000:00:03.0: rm_init_adapter failed, device minor number 0
+[  331.036398] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+[  333.717687] NVRM: _kgspBootGspRm: unexpected WPR2 already up, cannot proceed with booting GSP
+[  333.717699] NVRM: _kgspBootGspRm: (the GPU is likely in a bad state and may need to be reset)
+[  333.717743] NVRM: RmInitAdapter: Cannot initialize GSP firmware RM
+[  333.719610] NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x62:0x40:2028)
+[  333.722890] NVRM: GPU 0000:00:03.0: rm_init_adapter failed, device minor number 0
+[  334.198999] NVRM: _kgspBootGspRm: unexpected WPR2 already up, cannot proceed with booting GSP
+[  334.199011] NVRM: _kgspBootGspRm: (the GPU is likely in a bad state and may need to be reset)
+[  334.199053] NVRM: RmInitAdapter: Cannot initialize GSP firmware RM
+[  334.200573] NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x62:0x40:2028)
+[  334.203081] NVRM: GPU 0000:00:03.0: rm_init_adapter failed, device minor number 0
+[  335.590488] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+[  338.292752] NVRM: _kgspBootGspRm: unexpected WPR2 already up, cannot proceed with booting GSP
+[  338.292762] NVRM: _kgspBootGspRm: (the GPU is likely in a bad state and may need to be reset)
+[  338.292805] NVRM: RmInitAdapter: Cannot initialize GSP firmware RM
+[  338.295095] NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x62:0x40:2028)
+[  338.302144] NVRM: GPU 0000:00:03.0: rm_init_adapter failed, device minor number 0

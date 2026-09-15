@@ -1,0 +1,39 @@
+    SUITE_STARTED=2026-09-15T06:39:21Z bin=/tmp/rmladder gpu=0 arm_timeout=90 uid=0
+    === RMLADDER SUITE — 30 arms, gpu 0, 90s each, recover=modprobe ===
+    ARM                          VERDICT      last line
+    --concurrency                PASS         done
+    --timer                      PASS         done — timer probe only
+    --engines                    PASS         done
+    --doorbell-census            PASS         done — doorbell census only
+    --gpu-info-sweep             UNMEASURED   FAIL  RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { ca (recovery did NOT reopen the device)
+    --bus-info-sweep             UNMEASURED   FAIL  RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { ca (recovery did NOT reopen the device)
+    --gpga-reserve-probe         UNMEASURED   FAIL  RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { ca (recovery did NOT reopen the device)
+    --atomics-probe              UNMEASURED   FAIL  RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { ca (recovery did NOT reopen the device)
+    --pce-mask-probe             UNMEASURED   FAIL  RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { ca (recovery did NOT reopen the device)
+    --dictated-ring              UNMEASURED   FAIL  RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { ca (recovery did NOT reopen the device)
+    --dictated-ring-negative     UNMEASURED   FAIL  RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { ca (recovery did NOT reopen the device)
+    --late-map-race              UNMEASURED   FAIL  RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { ca (recovery did NOT reopen the device)
+    --blockage-coverage          UNMEASURED   FAIL  RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { ca (recovery did NOT reopen the device)
+    --uvm-invalidate             UNMEASURED   FAIL  RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { ca (recovery did NOT reopen the device)
+    --uvm-mean                   UNMEASURED   FAIL  RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { ca (recovery did NOT reopen the device)
+    --alias-two-vas              UNMEASURED   FAIL  RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { ca (recovery did NOT reopen the device)
+    --alias-unmap-observe        UNMEASURED   FAIL  RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { ca (recovery did NOT reopen the device)
+    --map-propagation            UNMEASURED   FAIL  RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { ca (recovery did NOT reopen the device)
+    --missing-page-fault         UNMEASURED   FAIL  RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { ca (recovery did NOT reopen the device)
+    --map-stress                 UNMEASURED   FAIL  RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { ca (recovery did NOT reopen the device)
+    --rpc-mixed-allocs           UNMEASURED   FAIL  RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { ca (recovery did NOT reopen the device)
+    --cross-client-leak          UNMEASURED   FAIL  RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { ca (recovery did NOT reopen the device)
+    --concurrent-fuzz            UNMEASURED   FAIL  RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { ca (recovery did NOT reopen the device)
+    --defer-liveness             UNMEASURED   FAIL  RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { ca (recovery did NOT reopen the device)
+    --guest-ram-pin              UNMEASURED   FAIL  RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { ca (recovery did NOT reopen the device)
+    --guest-ring-channel         UNMEASURED   FAIL  RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { ca (recovery did NOT reopen the device)
+    --executor-vas               UNMEASURED   FAIL  RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { ca (recovery did NOT reopen the device)
+    --ce-client                  UNMEASURED   FAIL  RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { ca (recovery did NOT reopen the device)
+    --ce-client-guest-ram        UNMEASURED   FAIL  RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { ca (recovery did NOT reopen the device)
+    --bar1-crossing              UNMEASURED   FAIL  RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { ca (recovery did NOT reopen the device)
+    
+    SUITE_ARMS=30 SUITE_PASS=4 SUITE_FAIL=0 SUITE_TIMEOUT=0 SUITE_UNMEASURED=26
+    SUITE_RECOVERIES=26 SUITE_RECOVERED=0  (attempts > recovered ⇒ the wedge SURVIVES a guest driver reload ⇒ the leaked state is ours, not the guest RM's)
+    SUITE_UNMEASURED_ARMS (never reached their subject — the absence of a verdict, not a verdict): --gpu-info-sweep --bus-info-sweep --gpga-reserve-probe --atomics-probe --pce-mask-probe --dictated-ring --dictated-ring-negative --late-map-race --blockage-coverage --uvm-invalidate --uvm-mean --alias-two-vas --alias-unmap-observe --map-propagation --missing-page-fault --map-stress --rpc-mixed-allocs --cross-client-leak --concurrent-fuzz --defer-liveness --guest-ram-pin --guest-ring-channel --executor-vas --ce-client --ce-client-guest-ram --bar1-crossing
+    SUITE_LOGDIR=/tmp/suitelogs
+    SUITE_RC=1
