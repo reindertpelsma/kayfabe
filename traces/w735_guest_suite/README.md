@@ -80,7 +80,19 @@ not stressing the device — it is the **first workload that counted**.
 ⚠ And it is invisible to every grade this campaign has recorded, because each of them opens the
 device once or twice. `W392D_GUEST_OUTCOME=(P)` is one client on one boot.
 
-## 5. What the containment does, and what it does not
+## 5. ⊘⊘⊘ The previous ledger would have called this boot GREEN
+
+The old `rmladder_suite.sh` gated its exit on `if [ $n_fail -gt 0 ] || [ $n_to -gt 0 ]`, and a
+cascaded arm incremented `n_skip` — which is in neither term. ⇒ `PASS=4 FAIL=0 TIMEOUT=0
+SKIP_CASCADE=26` printed **`SUITE_RC=0`**, and that is **exactly the shape this boot produced**.
+A caller checking the exit code would have recorded a green 30-arm guest suite in which 26 arms
+never reached their subject — under a comment reading *"a caller cannot record a green by
+ignoring the body."*
+
+⚠ Nobody bought that pass; the arithmetic did. `SUITE_UNMEASURED` is now in the gate, which is
+why renaming `SKIP/cascade` was not cosmetic.
+
+## 6. What the containment does, and what it does not
 
 `rmladder_suite.sh` now recovers-and-retries and reports **30 rows either way**, with
 `UNMEASURED` (never reached its subject) kept distinct from `FAIL` (ran and judged itself

@@ -45,6 +45,16 @@
 # left it. Recovering after a TIMEOUT does not change that arm's verdict — it is still TIMEOUT —
 # it protects the arms after it.
 #
+# ⊘⊘⊘ **AND THE OLD LEDGER'S EXIT CODE FORGAVE A FULL CASCADE — verified against the file.**
+# Its gate was `if [ $n_fail -gt 0 ] || [ $n_to -gt 0 ]`, and a cascaded arm incremented
+# `n_skip`, which appeared in neither term. ⇒ a run with `PASS=4 FAIL=0 TIMEOUT=0
+# SKIP_CASCADE=26` printed **`SUITE_RC=0`**. `[measured w735, boot w735a]` **that is exactly the
+# shape this bench produces today**, so the previous script would have handed back a GREEN suite
+# in which 26 of 30 arms measured nothing — under a comment reading *"a caller cannot record a
+# green by ignoring the body."* ⚠ §w729's *"never buy a pass"* with nobody buying it: the
+# forgiveness was in the arithmetic, not in anyone's intent.
+# ⇒ `SUITE_UNMEASURED` is in the gate below, and it is why the rename was not cosmetic.
+#
 # ⊘⊘ **RECOVERY IS INSTRUMENTED, NOT ASSUMED.** `SUITE_RECOVERIES=` counts attempts and
 # `SUITE_RECOVERED=` counts the ones after which the device opened. If those two differ, the
 # wedge survives a driver reload — which is a **finding about where the leaked state lives**
