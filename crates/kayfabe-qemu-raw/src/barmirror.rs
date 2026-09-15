@@ -136,6 +136,18 @@ const R_COVERED: &str = "ALREADY-COVERED";
 const R_COVERED_EARLY: &str = "ALREADY-COVERED-EARLY";
 const R_RACED: &str = "RACED-AND-DROPPED";
 const R_INSTALL: &str = "INSTALL-REFUSED";
+/// ★★★★★ **THE LANDMINE ARM** — a backing [`key_of`] keyed and this match did not.
+///
+/// ⊘⊘⊘ This match used to end in `_ => {}`, and `key_of`'s does not: `key_of` is exhaustive,
+/// so a new [`FbPageBacking`] arm is a **compile error** there and was a **silent no-op**
+/// here. ⇒ a new arm that compiled would have become an unnamed refusal — the mirror would
+/// install no slot, count nothing, and say nothing, which reads in a boot log exactly like a
+/// window nobody touched. `SINGLE_STORE_PLAN.md` §3 names it as the trap this increment must
+/// disarm before adding its own arm.
+///
+/// ⇒ The `_` is gone. Every arm is spelled, this one is the "keyed but unkeyed" contradiction,
+/// and the next arm anyone adds is a compile error in **both** matches.
+const R_UNKEYED: &str = "KEYED-BUT-UNKEYED";
 
 // ---- the join export registry ------------------------------------------------------------
 
@@ -886,7 +898,18 @@ impl BarMirror {
                     "the store holds this frame on the heap and could not move it to the arena",
                 ),
                 FbPageBacking::Refused(why) => self.refuse(w, off, R_STORE, why),
-                _ => {}
+                // ⊘ Unreachable by `key_of`'s own shape — it answers `Some` for exactly these
+                // two — and spelled out anyway, because the `_` that used to stand here is the
+                // reason a new arm could be added and wired nowhere. Refused **by name**
+                // rather than `unreachable!()`: this runs on a guest MMIO exit, and a panic
+                // here is a guest-reachable abort of the VMM for a contradiction that costs
+                // one un-mirrored page.
+                FbPageBacking::Joined(_) | FbPageBacking::Arena(_) => self.refuse(
+                    w,
+                    off,
+                    R_UNKEYED,
+                    "the store named a memslottable backing and `key_of` refused to key it \u{2014}                      the two matches on `FbPageBacking` disagree, which is a defect in this                      file and not in the store",
+                ),
             }
             return;
         };
