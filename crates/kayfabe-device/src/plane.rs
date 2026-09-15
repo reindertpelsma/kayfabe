@@ -2037,9 +2037,20 @@ pub fn fb_io_census_line(bytes_per_sec: u64) -> String {
     if total_bytes == 0 {
         // ⊘⊘⊘ **THE VACUITY ARM.** A census of zero bytes and a census that never ran print
         // the same `0`, and this tree's most expensive recurring instrument failure is
-        // exactly that pair being collapsed. There is no boot in which the store serves
-        // nothing — `kbusVerifyBar2` writes and reads it before the guest's first
-        // instruction — so a zero here is a statement about the INSTRUMENT.
+        // exactly that pair being collapsed.
+        //
+        // ⊘⊘ **CORRECTED w739 — THE JUSTIFICATION THAT USED TO BE HERE IS FALSE ON THE
+        // `device` ARM.** It read *"there is no boot in which the store serves nothing —
+        // `kbusVerifyBar2` writes and reads it before the guest's first instruction"*.
+        // `[measured w738, the cut-B device boot]` `FB-IO trap[r=0/0.0MiB w=0/0.0MiB
+        // frames=0]`: `kbusVerifyBar2`'s four MMUTest dwords were refused at TRANSLATION and
+        // never reached `RegPlane::fb_write` at all, so the trap role really did record
+        // nothing. ⇒ the premise held under the arena store and is **arm-dependent**, which
+        // is exactly the shape a justification written once and never re-read acquires.
+        //
+        // ★ The arm itself is unchanged and still right: a total of zero across **every**
+        // role is a statement about the INSTRUMENT, because the walk roles cannot all be
+        // silent on a boot that reaches `RmInitAdapter` at all.
         out.push_str(
             " \u{2298}\u{2298} VACUOUS \u{2014} not one byte was recorded in any role.              That is not `the store served nothing`: every boot writes it during              `kbusVerifyBar2`. It means these counters were not reached on this binary's              path, and NOTHING below may be read as a measurement.",
         );
