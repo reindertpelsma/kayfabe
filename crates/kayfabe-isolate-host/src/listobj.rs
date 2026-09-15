@@ -385,10 +385,14 @@ pub fn run(rm: &mut HostRmBackend, gpu: u32) -> bool {
     // ── 3. The slice, and the control slice.
     let Some(slice) = mint_slice(rm, "L_N", parent, N, None) else {
         println!(
-            "FAIL  W747 slice          = ⊘ BOTH attribute arms refused. Decode the status above: \
-             0x1f is the class's RS_FLAGS_ALLOC_PRIVILEGED (root-only) and 0x56 is \
-             memlistConstruct's GSP-client gate — an ENVIRONMENT result, not RM's ruling on \
-             aliasing"
+            "FAIL  W747 slice          = ⊘ BOTH attribute arms refused. Decode the status above \
+             before reading it as a ruling on aliasing: \
+             0x1b INSUFFICIENT_PERMISSIONS is the class's RS_FLAGS_ALLOC_PRIVILEGED, and \
+             ⚠ THAT GATE IS CAP_SYS_ADMIN, NOT uid 0 — RM's privLevel comes from \
+             os_is_administrator() = capable(CAP_SYS_ADMIN) (ogkm-580: nv-linux.h:537), so \
+             root inside an unprivileged container is refused exactly like a normal user; \
+             0x56 NOT_SUPPORTED is memlistConstruct's GSP-client gate (check nvidia-smi -q \
+             for a GSP Firmware Version). Both are ENVIRONMENT results"
         );
         println!("W747_VERDICT=NOTRUN");
         return false;

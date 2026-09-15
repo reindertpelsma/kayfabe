@@ -95,6 +95,37 @@ and the run does **not stop at the first refusal** — w744 lost a lane to two r
 (`0x19 INSERT_DUPLICATE_NAME`, `0x26 INVALID_DEVICE`) that were its own setup rather than RM's
 ruling.
 
+## ★★★★★ MEASURED 2026-09-15 (run 1, GA106 / 580.173.02, CUDA container) — P1 REFUSED, AND THE REASON IS A DESIGN FACT
+
+    ⊘  W747 slice L_N = page 2 attr PAGE_SIZE_4KB      REFUSED status 0x001b NV_ERR_INSUFFICIENT_PERMISSIONS
+    ⊘  W747 slice L_N = page 2 attr PAGE_SIZE_DEFAULT  REFUSED status 0x001b NV_ERR_INSUFFICIENT_PERMISSIONS
+    ==  W747 list-object-alias = gpu 0, euid 0, …
+
+**`euid 0` and the class still refused.** The gate is `RS_FLAGS_ALLOC_PRIVILEGED` →
+`privLevel < RS_PRIV_LEVEL_USER_ROOT`, and RM's `privLevel` comes from
+`os_is_administrator()`, which on Linux is **`capable(CAP_SYS_ADMIN)`**
+(`ogkm-580: kernel-open/common/inc/nv-linux.h:537`, `NV_IS_SUSER`). The box's container had
+
+    CapEff: 00000000a80405fb   (cap_sys_admin absent; cap_chown … cap_setfcap present)
+
+⇒ ★★★ **"root" is not RM-admin. The discriminator is CAP_SYS_ADMIN, not uid 0.** A VMM
+running as uid 0 inside any container, namespace or service manager that drops
+`CAP_SYS_ADMIN` **cannot mint a `LIST_OBJECT` at all**, and the refusal arrives as a
+permissions status with nothing in it naming a capability. ⚠ This is a *deployment*
+constraint on leg B, not a probe detail, and it was measured rather than predicted — the
+pre-registration said "root-only" and root was not enough.
+
+⊘ It also **scopes P9's known-positive**: the non-root arm no longer needs a second uid to
+be interesting, because this run *is* the negative arm. The positive arm needs a box where
+the process holds `CAP_SYS_ADMIN`.
+
+★ Two rows that DID hold, and they matter because the environment is otherwise the blocker:
+`nvidia-smi -q` reported **`GSP Firmware Version: 580.173.02`**, so `memlistConstruct`'s
+`IS_GSP_CLIENT` gate is satisfied on this class of box — the refusal is the privilege gate
+and **only** the privilege gate. And the seed/readback control passed
+(`page 2 = 0x747a0001, page 0 = 0x74750004, both read back through the parent`), so the
+parent, its CPU view and the pattern plumbing are all live.
+
 ## Known-positives — what makes a green result mean anything
 
 1. **The control arm (P4).** A `LIST_OBJECT` over a *different* page must **not** see the
