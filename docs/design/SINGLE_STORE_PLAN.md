@@ -166,6 +166,55 @@ sentence that follows is attributable, and by the `DEVICE-FB` counters that join
 ⊘ Carrying `why` through `FbRead` is **cut B's call**: every consumer of that trait would have
 to grow a reason it currently discards, and cut B is the increment that gives them one.
 
+### ★★★★★ OWNER, 2026-09-15 — **YOU CANNOT OBSERVE A PASSTHROUGH ACCESS, SO EVERY TRAP IS ALREADY THE ERROR**
+
+> *"how can you observe a read or a write anyways if its passthrough mapped. If you receive a
+> trap means it errored."*
+
+★★★ **This changes the grading criterion, and it retires a way of reading the census that has
+already misled this file twice.** A memslot exists precisely so the guest's loads and stores
+go straight to memory **with no VM exit**. ⇒ in the intended steady state the BAR1/BAR2 trap
+census is **EMPTY, BY CONSTRUCTION** — not small, empty.
+
+⇒ **Every guest-side line in the w738 BAR2 census exists only because no memslot was ever
+installed.** `named=0` says exactly that. So those 14 `REFUSED by name` entries are **not
+evidence about the steady state**; they are a census of the fallback path, and *the fallback
+path running at all is the failure*.
+
+## ⇒ THE HEADLINE NUMBER IS `named`, AND NOTHING ELSE
+
+⊘ **`read_served=3` was reported as the w738 headline. That was wrong** — see the host/guest
+split below. The honest scoreboard for a `device` boot is:
+
+| number | meaning |
+|---|---|
+| **`named`** | ★★★ **THE grade.** Guest memslots installed over the reserved object. `named=0` ⇒ nothing was ever passthrough and every other guest-side number is a fallback artefact |
+| BAR1/BAR2 trap counts | ⊘ **lower is not better — ZERO is the target**, and a non-zero count means premap did not cover that page |
+| `host_read_refused` / `read_served` | ★ a **different category** — see below |
+
+## ⊘ THE ONE DISTINCTION THAT CUTS THE OTHER WAY
+
+**Host-side store access is not a guest trap and a memslot never removes it.** The walker,
+PRAMIN and the CPU CE executor read the store through a **CPU view**, by design, forever. So
+`host_read_refused=18 / read_served=3` remain real and legitimately observable — cut B's three
+served reads stand. They are progress **on the host side only**, and say nothing about whether
+a guest access was ever served.
+
+## ⇒ AND IT FIXES THE CAUSAL ORDER
+
+1. `decode_subtree_from_entry` drops its faults ⇒ `faults` structurally pinned at **0** on BAR2
+2. ⇒ `arm_then_retry`'s `good = Ok && faults == 0` calls the **first** attempt good
+3. ⇒ an **empty leaf list** is published as *"the guest has mapped nothing"*
+4. ⇒ premap installs **no memslots** ⇒ `named=0`
+5. ⇒ every guest BAR2 access now **traps**, because nothing is mapped to absorb it
+6. ⇒ each trap is refused, and a refused access queues no fill, so nothing ever arms
+
+★ **Defect 1 is the ROOT; defect 2 is why it cannot recover.** The traps are a **symptom of the
+enumeration failing**, not an independent problem to serve better.
+⊘⊘ **So do NOT fix this by serving those 14 accesses.** Make premap install the memslots, after
+which there are no 14. A change that makes the trap path answer them correctly would raise
+`read_served`, leave `named=0`, and **look like progress while the design still does not work**.
+
 ### ★★★★★ CUT C IS THE WRITE HALF — AND `host_write_refused=0` NEVER MEANT WHAT WE READ IT TO MEAN
 
 `[measured w738, the cut-B boot]`
