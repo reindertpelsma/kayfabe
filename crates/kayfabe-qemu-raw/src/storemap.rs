@@ -61,6 +61,20 @@ pub enum StoreMapRefusal {
     /// ioctl: RM would map whatever offset it was given, and a run past the object's end is
     /// a guest range pointed at memory the reservation does not cover.
     OutOfRange { offset: u64, len: u64, obj_len: u64 },
+    /// ★★★★★ **THE CALLER IS ON A vCPU OR INSIDE A GUEST TRAP.**
+    ///
+    /// Every verb here is an IPC round trip to another process. `OffTrap::claim` **panics**
+    /// on a trap thread, and a panic in the VMM is a guest-visible crash produced by a rule
+    /// that exists to prevent a stall. ⇒ declined **by name**, counted, and the leaf is
+    /// re-offered by the next publish — which is the route's own iteration and not ours.
+    ///
+    /// ⊘ Distinct from every other arm: nothing was asked and nothing refused. A boot that
+    /// reads this as an RM refusal is reading *"we did not ask"* as *"the driver said no"*.
+    OnVcpu,
+    /// ⚠ A handle that does not fit RM's 32 bits. ⊘ Refused rather than truncated:
+    /// `u32::try_from(..).unwrap_or(0)` would dup **object 0**, which is a legal-looking
+    /// handle in somebody else's namespace.
+    BadHandle { raw: u64 },
 }
 
 impl StoreMapRefusal {
@@ -72,6 +86,8 @@ impl StoreMapRefusal {
             StoreMapRefusal::Rm(_) => "Rm",
             StoreMapRefusal::NotAdopted { .. } => "NotAdopted",
             StoreMapRefusal::OutOfRange { .. } => "OutOfRange",
+            StoreMapRefusal::OnVcpu => "OnVcpu",
+            StoreMapRefusal::BadHandle { .. } => "BadHandle",
         }
     }
 }
@@ -114,6 +130,11 @@ pub struct StoreMapPort {
     /// first means the gate is not wired.
     asserted: AtomicU64,
     assert_refused: AtomicU64,
+    /// ★★★ Calls declined because the caller was on a vCPU or inside a guest trap. ⊘ Its own
+    /// counter: *"we did not ask"* and *"RM said no"* are different facts with different
+    /// fixes, and a census that adds them cannot tell a stalled publish route from a broken
+    /// driver.
+    declined_on_vcpu: AtomicU64,
     /// The first refusal's name, so a census can say WHICH of four fired. `None` means none.
     first_refusal: std::sync::Mutex<Option<String>>,
 }
@@ -156,6 +177,7 @@ impl StoreMapPort {
             bytes_mapped: AtomicU64::new(0),
             asserted: AtomicU64::new(0),
             assert_refused: AtomicU64::new(0),
+            declined_on_vcpu: AtomicU64::new(0),
             first_refusal: std::sync::Mutex::new(None),
         }
     }
@@ -180,12 +202,15 @@ impl StoreMapPort {
         {
             return Ok(*h);
         }
-        let off = kayfabe_util::trapwitness::OffTrap::claim("adopting a guest VA space");
-        let out = self.iso.with_worker(|worker| {
-            worker.with_rm(&off, |rm| {
-                rm.adopt_vaspace(bare.client, u32::try_from(bare.space.raw()).unwrap_or(0))
-            })
-        });
+        let Ok(space) = u32::try_from(bare.space.raw()) else {
+            return Err(self.note(StoreMapRefusal::BadHandle {
+                raw: bare.space.raw(),
+            }));
+        };
+        let off = self.off_vcpu()?;
+        let out = self
+            .iso
+            .with_worker(|worker| worker.with_rm(&off, |rm| rm.adopt_vaspace(bare.client, space)));
         match out {
             None => Err(self.note(StoreMapRefusal::NoWorker)),
             Some(Err(e)) => {
@@ -227,7 +252,7 @@ impl StoreMapPort {
                 obj_len: self.obj_len,
             }));
         }
-        let off = kayfabe_util::trapwitness::OffTrap::claim("mapping a slice of the store");
+        let off = self.off_vcpu()?;
         let obj = self.obj;
         let out = self.iso.with_worker(|worker| {
             worker.with_rm(&off, |rm| rm.map_store_slice(vas, obj, offset, len, at))
@@ -260,7 +285,7 @@ impl StoreMapPort {
     /// # Errors
     /// [`StoreMapRefusal`], by name.
     pub fn unmap(&self, vas: HostHandle, at: GpuVa) -> Result<(), StoreMapRefusal> {
-        let off = kayfabe_util::trapwitness::OffTrap::claim("unmapping a slice of the store");
+        let off = self.off_vcpu()?;
         let out = self
             .iso
             .with_worker(|worker| worker.with_rm(&off, |rm| rm.unmap_store_slice(vas, at)));
@@ -332,6 +357,21 @@ impl StoreMapPort {
             .len()
     }
 
+    /// ★★★★★ **DECLINE BY NAME RATHER THAN PANIC.** See [`StoreMapRefusal::OnVcpu`].
+    ///
+    /// ⊘ Checked **before** `OffTrap::claim`, never after: `claim` asserts, and an assert is
+    /// not a refusal — it is a VMM abort, which is a guest-visible crash caused by the rule
+    /// that exists to stop a guest-visible stall.
+    fn off_vcpu(&self) -> Result<kayfabe_util::trapwitness::OffTrap, StoreMapRefusal> {
+        if kayfabe_util::lockwitness::on_vcpu_thread() || kayfabe_util::trapwitness::in_trap() {
+            self.declined_on_vcpu.fetch_add(1, Ordering::Relaxed);
+            return Err(self.note(StoreMapRefusal::OnVcpu));
+        }
+        Ok(kayfabe_util::trapwitness::OffTrap::claim(
+            "a scratchpad store mapping",
+        ))
+    }
+
     fn note(&self, why: StoreMapRefusal) -> StoreMapRefusal {
         let mut first = self
             .first_refusal
@@ -367,7 +407,7 @@ impl StoreMapPort {
             "STORE-MAP iso={:?} obj={:?} obj_len={} adopts={adopts} adopt_refused={} \
              maps={maps} map_refused={} unmaps={} unmap_refused={} bytes_mapped={} \
              outstanding={} asserted={asserted} assert_refused={assert_refused} \
-             first_refusal=[{}] ⇒ {verdict}",
+             declined_on_vcpu={} first_refusal=[{}] ⇒ {verdict}",
             self.id,
             self.obj,
             self.obj_len,
@@ -377,6 +417,7 @@ impl StoreMapPort {
             self.unmap_refused.load(Ordering::Relaxed),
             self.bytes_mapped.load(Ordering::Relaxed),
             self.outstanding(),
+            self.declined_on_vcpu.load(Ordering::Relaxed),
             self.first_refusal
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)

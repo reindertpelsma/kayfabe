@@ -3035,20 +3035,21 @@ pub fn plan_back_fb_leaf(
                 // *"the host work already happened, and it was not this isolate's"* — which
                 // is the whole of the ownership split at the one line where the old design
                 // would have issued an IPC.
+                // ★★★★★ **CONSTRAINT 26 — REFUSED HERE BY NAME, AND THAT IS NOT A GAP.**
+                //
+                // A store slice is placed by the SCRATCHPAD before any plan exists, and it is
+                // bound by `SharedDevice::adopt_store_slice_fb_leaf`, which builds its plan
+                // directly. Nothing reaches this function with `how == StoreSlice`.
+                //
+                // ⊘ **A `verbs: None` arm here would compile, read as working, and never
+                // run** — the *unwired but still compiling* shape `§w724g` names as the cruft
+                // trap. A refusal cannot be mistaken for a mechanism: if this fires, somebody
+                // has routed a store slice through the chain that mints objects, and the boot
+                // says so instead of silently planning nothing.
                 FbLeafBacking::StoreSlice { .. } => {
-                    return Ok(Planned {
-                        plan: BackFbLeafPlan {
-                            proc: pid,
-                            gpu,
-                            pdb,
-                            va,
-                            len,
-                            phys,
-                            host_vas,
-                            existing,
-                            how,
-                        },
-                        verbs: None,
+                    return Err(FwdFault::Rm {
+                        err: kayfabe_isolate::RmError::Other(STORE_SLICE_IS_NOT_PLANNED_HERE),
+                        on: None,
                     });
                 }
                 FbLeafBacking::Vidmem => VerbPlan::PublishVidmem {
@@ -6830,6 +6831,12 @@ pub trait FbBytes {
     /// `false` that reads as a positive claim about the guest.
     fn page_written(&self, phys: u64) -> Option<bool>;
 }
+
+/// ★★★★★ **CONSTRAINT 26** — a store slice was routed through `plan_back_fb_leaf`, which
+/// mints host objects. It is bound by `SharedDevice::adopt_store_slice_fb_leaf` instead,
+/// because the scratchpad already placed it and there is nothing to mint. `0x4B44` (`"KD"`),
+/// in the same private range as the isolate's own refusals.
+pub const STORE_SLICE_IS_NOT_PLANNED_HERE: u32 = 0x4B44;
 
 /// ★★★★★ **CONSTRAINT 26 — THE RESTATED `RING_NOT_A_JOINED_WINDOW` QUESTION, AS A SEAM.**
 ///
