@@ -106,7 +106,11 @@ fn read_plane(
             // ★ w734 — the byte census. These copies cross the PCIe bus the moment the
             // framebuffer store becomes the reserved device-local object, so they belong in
             // the same ledger as the walk's.
-            kayfabe_device::plane::note_fb_read(kayfabe_device::plane::FbIoRole::CpuCe, buf.len());
+            kayfabe_device::plane::note_fb_read(
+                kayfabe_device::plane::FbIoRole::CpuCe,
+                addr.0,
+                buf.len(),
+            );
             fb.read(addr.0, buf).map_err(fb_fault)
         }
         CpuPlane::GuestRam => vmm.gpa_read(addr.0, buf).map_err(ram_fault),
@@ -130,6 +134,7 @@ fn write_plane(
         CpuPlane::Fb => {
             kayfabe_device::plane::note_fb_write(
                 kayfabe_device::plane::FbIoRole::CpuCe,
+                addr.0,
                 bytes.len(),
             );
             fb.write_tagged(addr.0, bytes, FbWriter::Executor)

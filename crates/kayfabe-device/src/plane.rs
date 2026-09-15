@@ -1755,22 +1755,113 @@ static FB_IO: [[AtomicU64; 4]; FbIoRole::N] = [
     ],
 ];
 
-/// Note one read of `len` bytes in `role`. ⊘ Counted whether or not the store served it: the
-/// question this instrument answers is *"how many bytes would have to cross the bus"*, and a
-/// refused read is one the switched store would still have had to attempt.
+/// ★★★★★ **THE SECOND TERM, AND IT IS THE ONE THAT DECIDES THE APERTURE** — how many
+/// **DISTINCT 4 KiB frames** each role has ever touched.
+///
+/// # ⊘⊘⊘ Why bytes alone cannot answer the question the switch asks
+///
+/// A device view is mapped from **file offset 0 only** (`nvidia_mmap_helper` refuses
+/// `vm_pgoff != 0`), so a device-backed store needs **one armed node per contiguous run it
+/// serves** — and an armed node costs host BAR1 aperture, which §22 item 3 measured at
+/// **256 MiB total, shared with the host driver**. ⇒ the switch has TWO costs and they are
+/// bounded by different things:
+///
+/// | term | bounded by | what a large value means |
+/// |---|---|---|
+/// | **bytes** | the PCIe bus's rate | the boot gets slower |
+/// | **distinct frames** | the host's BAR1 aperture | the design **does not fit**, at any speed |
+///
+/// ⊘ A boot that re-reads 25 pages 1181 times is 118 MiB of traffic and **100 KiB of
+/// aperture** — affordable. A boot that touches 1 870 distinct pages once each is 7.3 MiB of
+/// traffic and **1 870 armed nodes**, each an isolate round trip and a permanently-retained
+/// `/dev/nvidia<N>` descriptor in the VMM. **The second is the harder problem and the byte
+/// count cannot see it.** Nothing in this tree had measured either.
+///
+/// ★ A bitmap over frame numbers, not a set: it is lock-free, bounded by the framebuffer's own
+/// size (12 GiB ⇒ 3 M frames ⇒ 384 KiB per role), and it must not be a `Mutex` because two of
+/// the five roles are reached from a vCPU inside an MMIO exit.
+///
+/// ⚠ **Distinct-EVER, not distinct-concurrently.** A working set that churns reports its
+/// union, which is the pessimistic direction — it can say *"this does not fit"* about a design
+/// that recycles. Stated because the optimistic reading is the dangerous one.
+struct FrameSet {
+    words: Vec<AtomicU64>,
+    distinct: AtomicU64,
+}
+
+impl FrameSet {
+    fn new() -> FrameSet {
+        // 12 GiB of 4 KiB frames, the largest framebuffer any row in this tree advertises.
+        // ⊘ A frame past the end is counted in the total and NOT in the bitmap, and
+        // `truncated` says so — silently dropping it would under-report the aperture term,
+        // which is the flattering direction.
+        const FRAMES: usize = (12 << 30) / (crate::fbwin::FB_PAGE as usize);
+        FrameSet {
+            words: (0..FRAMES / 64).map(|_| AtomicU64::new(0)).collect(),
+            distinct: AtomicU64::new(0),
+        }
+    }
+
+    /// Mark the frames covering `[phys, phys+len)`. Returns nothing; the count is internal.
+    fn mark(&self, phys: u64, len: u64) {
+        let first = phys / crate::fbwin::FB_PAGE;
+        let last = phys.saturating_add(len.saturating_sub(1)) / crate::fbwin::FB_PAGE;
+        for f in first..=last {
+            let (w, b) = ((f / 64) as usize, f % 64);
+            let Some(word) = self.words.get(w) else {
+                continue;
+            };
+            let bit = 1u64 << b;
+            if word.fetch_or(bit, Ordering::Relaxed) & bit == 0 {
+                self.distinct.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+    }
+}
+
+/// Lazily built — five 384 KiB bitmaps allocated on a boot that never reaches this code
+/// would be 1.9 MiB of nothing.
+static FB_FRAMES: [std::sync::OnceLock<FrameSet>; FbIoRole::N] = [
+    std::sync::OnceLock::new(),
+    std::sync::OnceLock::new(),
+    std::sync::OnceLock::new(),
+    std::sync::OnceLock::new(),
+    std::sync::OnceLock::new(),
+];
+
+fn frames(role: FbIoRole) -> &'static FrameSet {
+    FB_FRAMES[role.idx()].get_or_init(FrameSet::new)
+}
+
+/// How many **distinct 4 KiB frames** `role` has touched. See [`FrameSet`].
+#[must_use]
+pub fn fb_frames_for(role: FbIoRole) -> u64 {
+    FB_FRAMES[role.idx()]
+        .get()
+        .map_or(0, |f| f.distinct.load(Ordering::Relaxed))
+}
+
+/// Note one read of `len` bytes at framebuffer address `phys` in `role`. ⊘ Counted whether or
+/// not the store served it: the question this instrument answers is *"how many bytes would
+/// have to cross the bus, and how many frames would have to be mapped"*, and a refused read is
+/// one the switched store would still have had to attempt.
 #[inline]
-pub fn note_fb_read(role: FbIoRole, len: usize) {
+pub fn note_fb_read(role: FbIoRole, phys: u64, len: usize) {
     let r = &FB_IO[role.idx()];
     r[0].fetch_add(1, Ordering::Relaxed);
     r[1].fetch_add(len as u64, Ordering::Relaxed);
+    frames(role).mark(phys, len as u64);
 }
 
-/// Note one write of `len` bytes in `role`. See [`note_fb_read`].
+/// Note one write of `len` bytes at framebuffer address `phys` in `role`. See
+/// [`note_fb_read`]. ★ Writes mark the **same** frame set as reads: a frame is mapped or it
+/// is not, and the aperture does not care which direction touched it.
 #[inline]
-pub fn note_fb_write(role: FbIoRole, len: usize) {
+pub fn note_fb_write(role: FbIoRole, phys: u64, len: usize) {
     let r = &FB_IO[role.idx()];
     r[2].fetch_add(1, Ordering::Relaxed);
     r[3].fetch_add(len as u64, Ordering::Relaxed);
+    frames(role).mark(phys, len as u64);
 }
 
 /// `(read calls, read bytes, write calls, write bytes)` for one role.
@@ -1796,14 +1887,21 @@ pub fn fb_io_census_line(bytes_per_sec: u64) -> String {
     let mut out = String::from("kayfabe: FB-IO");
     let mut walk_bytes = 0u64;
     let mut total_bytes = 0u64;
+    let mut walk_frames = 0u64;
     for role in FbIoRole::all() {
         let (rc, rb, wc, wb) = fb_io_for(role);
         total_bytes += rb + wb;
         if matches!(role, FbIoRole::WalkInPlane | FbIoRole::WalkGuestPt) {
             walk_bytes += rb + wb;
         }
+        let fr = fb_frames_for(role);
+        walk_frames += if matches!(role, FbIoRole::WalkInPlane | FbIoRole::WalkGuestPt) {
+            fr
+        } else {
+            0
+        };
         out.push_str(&format!(
-            " {}[r={rc}/{:.1}MiB w={wc}/{:.1}MiB]",
+            " {}[r={rc}/{:.1}MiB w={wc}/{:.1}MiB frames={fr}]",
             role.as_str(),
             rb as f64 / (1024.0 * 1024.0),
             wb as f64 / (1024.0 * 1024.0),
@@ -1821,15 +1919,19 @@ pub fn fb_io_census_line(bytes_per_sec: u64) -> String {
         return out;
     }
     out.push_str(&format!(
-        " \u{2605} TOTAL={:.1}MiB WALK={:.1}MiB \u{21d2} PROJECTION: at an ASSUMED {} MiB/s \
-         over PCIe the WALK half alone would cost {:.1}s of this boot, and the total \
-         {:.1}s. \u{26a0} The byte counts are MEASURED here; the rate is NOT \u{2014} it is an \
-         input from a different path's measurement, and the product is only as good as it.",
+        " \u{2605} TOTAL={:.1}MiB WALK={:.1}MiB WALK_FRAMES={walk_frames} \u{21d2} PROJECTION: at \
+         an ASSUMED {} MiB/s over PCIe the WALK half alone would cost {:.1}s of this boot, and \
+         the total {:.1}s; and serving those frames as device views would need \
+         {walk_frames} armed nodes = {:.1} MiB of host BAR1 if none of them is contiguous \
+         with another. \u{26a0} The byte and frame counts are MEASURED here; the rate is NOT \
+         \u{2014} it is an input from a different path's measurement, and the product is only as \
+         good as it.",
         total_bytes as f64 / (1024.0 * 1024.0),
         walk_bytes as f64 / (1024.0 * 1024.0),
         bytes_per_sec / (1024 * 1024),
         walk_bytes as f64 / bytes_per_sec as f64,
         total_bytes as f64 / bytes_per_sec as f64,
+        walk_frames as f64 * 4096.0 / (1024.0 * 1024.0),
     ));
     out
 }
@@ -1943,7 +2045,7 @@ impl FbRead for PlanePtBytes<'_> {
         match aperture {
             // Device-local: the (fake) framebuffer.
             Aperture::Vidmem => {
-                note_fb_read(FbIoRole::WalkGuestPt, buf.len());
+                note_fb_read(FbIoRole::WalkGuestPt, phys, buf.len());
                 m.fb.read(phys, buf).is_ok()
             }
             // ★ System memory. A GMMU PDE may point at a next-level table in sysmem, and the
@@ -1962,7 +2064,7 @@ impl FbRead for PlanePtBytes<'_> {
 
     fn read(&mut self, phys: u64, buf: &mut [u8]) -> bool {
         self.breathe();
-        note_fb_read(FbIoRole::WalkGuestPt, buf.len());
+        note_fb_read(FbIoRole::WalkGuestPt, phys, buf.len());
         let mut m = self.plane.mem.lock();
         m.fb.read(phys, buf).is_ok()
     }
@@ -1983,7 +2085,7 @@ impl FbRead for FbStoreReader<'_> {
     fn read_in(&mut self, phys: u64, aperture: kayfabe_arch::Aperture, buf: &mut [u8]) -> bool {
         match aperture {
             kayfabe_arch::Aperture::Vidmem => {
-                note_fb_read(FbIoRole::WalkInPlane, buf.len());
+                note_fb_read(FbIoRole::WalkInPlane, phys, buf.len());
                 self.fb.read(phys, buf).is_ok()
             }
             _ => false,
@@ -1991,7 +2093,7 @@ impl FbRead for FbStoreReader<'_> {
     }
 
     fn read(&mut self, phys: u64, buf: &mut [u8]) -> bool {
-        note_fb_read(FbIoRole::WalkInPlane, buf.len());
+        note_fb_read(FbIoRole::WalkInPlane, phys, buf.len());
         self.fb.read(phys, buf).is_ok()
     }
 
@@ -3685,7 +3787,7 @@ impl RegPlane {
     /// # Errors
     /// The store's own sentence when it does not back the range at all.
     pub fn fb_peek(&self, phys: u64, buf: &mut [u8]) -> Result<(), &'static str> {
-        note_fb_read(FbIoRole::OutOfBand, buf.len());
+        note_fb_read(FbIoRole::OutOfBand, phys, buf.len());
         let mut s = self.mem.lock();
         s.fb.read(phys, buf).map_err(|e| e.why)
     }
@@ -3707,7 +3809,7 @@ impl RegPlane {
     /// # Errors
     /// The store's own sentence when it does not back the range at all.
     pub fn fb_poke(&self, phys: u64, bytes: &[u8]) -> Result<(), &'static str> {
-        note_fb_write(FbIoRole::OutOfBand, bytes.len());
+        note_fb_write(FbIoRole::OutOfBand, phys, bytes.len());
         let mut s = self.mem.lock();
         s.fb.write(phys, bytes).map_err(|e| e.why)
     }
@@ -5511,7 +5613,7 @@ impl RegPlane {
         };
         let n = usize::from(size.clamp(1, 8));
         let mut buf = [0u8; 8];
-        note_fb_read(FbIoRole::Trap, n);
+        note_fb_read(FbIoRole::Trap, phys, n);
         match s.fb.read(phys, &mut buf[..n]) {
             Ok(()) => ReadOutcome::Fb {
                 window: w,
@@ -5613,7 +5715,7 @@ impl RegPlane {
         // ★ `w` is the window the ADDRESS MODEL already resolved for this very access —
         // taken from the same `match` that produced `phys`, never recomputed. A second
         // derivation of the window would be a second projection auditing the first.
-        note_fb_write(FbIoRole::Trap, n);
+        note_fb_write(FbIoRole::Trap, phys, n);
         let outcome = match s.fb.write_tagged(phys, &bytes[..n], FbWriter::Window(w)) {
             Ok(()) => {
                 if !kayfabe_util::trapwitness::in_trap() {

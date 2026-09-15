@@ -21,7 +21,22 @@
 //! ⚠ The counters are process-global statics, so this test asserts on **deltas**, never on
 //! absolute values: another test in the same binary bumping them must not make this one fail.
 
-use kayfabe_device::plane::{FbIoRole, fb_io_census_line, fb_io_for, note_fb_read, note_fb_write};
+use kayfabe_device::plane::{
+    FbIoRole, fb_frames_for, fb_io_census_line, fb_io_for, note_fb_read, note_fb_write,
+};
+
+/// ⚠ **THE COUNTERS ARE PROCESS-GLOBAL AND `cargo test` RUNS THESE IN PARALLEL THREADS.**
+///
+/// ⊘ Not a nuisance to work around — it is the same fact the instrument itself has to live
+/// with, stated once. Every test here takes this lock, so each one's deltas are taken against
+/// a quiet process. `[found building this]` without it, the disjointness arm failed against a
+/// neighbour's writes and looked like the buckets bleeding into each other — a green-or-red
+/// test measuring the harness rather than the subject.
+static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn serial() -> std::sync::MutexGuard<'static, ()> {
+    SERIAL.lock().unwrap_or_else(|e| e.into_inner())
+}
 
 /// Every role's four counters, as a tuple, for differencing.
 fn snap(role: FbIoRole) -> (u64, u64, u64, u64) {
@@ -39,11 +54,12 @@ fn delta(a: (u64, u64, u64, u64), b: (u64, u64, u64, u64)) -> (u64, u64, u64, u6
 /// plan's own ordering argument depends on being false.
 #[test]
 fn the_census_counts_bytes_and_not_calls() {
+    let _g = serial();
     let t0 = snap(FbIoRole::Trap);
     let w0 = snap(FbIoRole::WalkGuestPt);
 
-    note_fb_read(FbIoRole::Trap, 8);
-    note_fb_read(FbIoRole::WalkGuestPt, 4096);
+    note_fb_read(FbIoRole::Trap, 0x1000, 8);
+    note_fb_read(FbIoRole::WalkGuestPt, 0x2000, 4096);
 
     let (trc, trb, _, _) = delta(t0, snap(FbIoRole::Trap));
     let (wrc, wrb, _, _) = delta(w0, snap(FbIoRole::WalkGuestPt));
@@ -62,9 +78,10 @@ fn the_census_counts_bytes_and_not_calls() {
 /// has no answer.
 #[test]
 fn a_read_in_one_role_moves_no_other_role() {
+    let _g = serial();
     let before: Vec<_> = FbIoRole::all().iter().map(|r| snap(*r)).collect();
-    note_fb_read(FbIoRole::WalkInPlane, 32);
-    note_fb_write(FbIoRole::CpuCe, 64);
+    note_fb_read(FbIoRole::WalkInPlane, 0x3000, 32);
+    note_fb_write(FbIoRole::CpuCe, 0x4000, 64);
     for (i, role) in FbIoRole::all().iter().enumerate() {
         let d = delta(before[i], snap(*role));
         let expect = match role {
@@ -86,8 +103,9 @@ fn a_read_in_one_role_moves_no_other_role() {
 /// flatters the switch.
 #[test]
 fn writes_do_not_land_in_the_read_column() {
+    let _g = serial();
     let b = snap(FbIoRole::OutOfBand);
-    note_fb_write(FbIoRole::OutOfBand, 100);
+    note_fb_write(FbIoRole::OutOfBand, 0x5000, 100);
     let d = delta(b, snap(FbIoRole::OutOfBand));
     assert_eq!(d, (0, 0, 1, 100));
 }
@@ -98,6 +116,7 @@ fn writes_do_not_land_in_the_read_column() {
 /// one step earlier.
 #[test]
 fn every_role_prints_under_its_own_name() {
+    let _g = serial();
     let mut seen = std::collections::BTreeSet::new();
     for r in FbIoRole::all() {
         assert!(
@@ -121,6 +140,7 @@ fn every_role_prints_under_its_own_name() {
 /// globals, because another test in this binary will have moved those.
 #[test]
 fn a_zero_census_says_vacuous_and_not_zero() {
+    let _g = serial();
     // The globals are shared, so pose the question the only way it can be posed
     // deterministically: the formatter's own contract, on the state it is given.
     let line = fb_io_census_line(48 * 1024 * 1024);
@@ -147,4 +167,64 @@ fn a_zero_census_says_vacuous_and_not_zero() {
             r.as_str()
         );
     }
+}
+
+
+/// ★★★★★ **THE APERTURE TERM — DISTINCT FRAMES, NOT BYTES.**
+///
+/// ⊘ A device view is mapped from file offset **0 only**, so a device-backed store needs one
+/// armed node per contiguous run it serves, and an armed node costs host BAR1 — §22 item 3's
+/// 256 MiB, shared with the host driver. ⇒ *"how many bytes"* and *"how many frames"* are
+/// bounded by **different things**, and a boot that re-reads 25 pages a thousand times is a
+/// completely different design problem from one that touches 1 870 pages once.
+///
+/// Three properties, and the second is the one a `HashSet` would have got right by accident
+/// and a counter would have got wrong: re-touching a frame does **not** increment; a read that
+/// spans a page boundary marks **both** frames; and a write marks the same set as a read,
+/// because the aperture does not care which direction touched it.
+#[test]
+fn distinct_frames_count_frames_and_not_touches() {
+    let _g = serial();
+    let role = FbIoRole::OutOfBand;
+    let before = fb_frames_for(role);
+
+    // One frame, touched three times and in both directions.
+    note_fb_read(role, 0x40_0000, 8);
+    note_fb_read(role, 0x40_0ff8, 8);
+    note_fb_write(role, 0x40_0100, 4);
+    assert_eq!(
+        fb_frames_for(role) - before,
+        1,
+        "three touches of one frame are ONE frame of aperture"
+    );
+
+    // A read straddling a page boundary is two frames, and the second is new.
+    note_fb_read(role, 0x40_0ffc, 8);
+    assert_eq!(
+        fb_frames_for(role) - before,
+        2,
+        "a straddling read must mark BOTH frames; under-counting here is the flattering \
+         direction and would say a design fits when it does not"
+    );
+}
+
+/// ⚠ A frame past the largest framebuffer any row advertises is counted in the BYTES and not
+/// in the frame bitmap. ⊘ Checked so the limitation is a known one rather than a surprise: the
+/// alternative (growing the bitmap) would make an instrument allocate on a guest-driven
+/// address, which is worse than a stated bound.
+#[test]
+fn a_frame_past_the_largest_framebuffer_is_bounded_not_unbounded() {
+    let _g = serial();
+    let role = FbIoRole::OutOfBand;
+    let f0 = fb_frames_for(role);
+    let (_, b0, _, _) = fb_io_for(role);
+    note_fb_read(role, 64u64 << 30, 8);
+    let (_, b1, _, _) = fb_io_for(role);
+    assert_eq!(b1 - b0, 8, "the bytes are always counted");
+    assert_eq!(
+        fb_frames_for(role),
+        f0,
+        "a frame outside the bitmap's range is not counted as aperture, and the bitmap does \
+         not grow on a guest-supplied address"
+    );
 }
