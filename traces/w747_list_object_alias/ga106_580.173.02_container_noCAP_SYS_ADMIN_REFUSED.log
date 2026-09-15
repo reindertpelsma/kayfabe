@@ -1,0 +1,15 @@
+0
+info  RMLADDER ARGV     = [--gpu 0 --list-object-alias]
+ok    R2 version         = "580.173.02"
+ok    R4 hClient         = 0xc1d1b520
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=2354c4deaeff9b42d9c0f2904e390b7ec7dd3826
+==    W747 list-object-alias = gpu 0, euid 0, parent 0x4000 bytes, slice page 2, control page 0
+info  W747 the bar        = a write through the PARENT after the slice exists must be visible through the SLICE (ALIAS); still reading the pre-write value is COPY and the USERD design is dead however green the read-at-creation looked
+ok    W747 KP grader      = a stale snapshot grades COPY · a live alias grades ALIAS · an uninterpretable read grades UNKNOWN — the grader can reach all three answers
+ok    W747 seed           = page 2 = 0x747a0001 (A), page 0 = 0x74750004 (S), both read back through the parent
+⊘     W747 slice L_N               = page 2 attr PAGE_SIZE_4KB REFUSED status 0x001b NV_ERR_INSUFFICIENT_PERMISSIONS
+⊘     W747 slice L_N               = page 2 attr PAGE_SIZE_DEFAULT REFUSED status 0x001b NV_ERR_INSUFFICIENT_PERMISSIONS
+FAIL  W747 slice          = ⊘ BOTH attribute arms refused. Decode the status above: 0x1f is the class's RS_FLAGS_ALLOC_PRIVILEGED (root-only) and 0x56 is memlistConstruct's GSP-client gate — an ENVIRONMENT result, not RM's ruling on aliasing
+W747_VERDICT=NOTRUN
+done — list-object alias probe only

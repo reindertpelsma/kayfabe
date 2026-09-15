@@ -1,9 +1,23 @@
 # `NV01_MEMORY_LIST_OBJECT` — does a slice ALIAS its parent's pages, or COPY them?
 
-**STATUS: PRE-REGISTERED (w747, 2026-09-15).** Predictions below are committed **before** a GPU
-box exists. The measurement is `rmladder --list-object-alias` on **bare metal** (real GPU, no
-KVM, no guest). This block is updated in place with the measured result; the predictions are
-never edited, only marked HELD / REFUTED.
+**STATUS: ANSWERED — ★★★ ALIAS (w747, 2026-09-15).** Measured on a real **GA106 / RTX 3060**,
+**NVIDIA UNIX Open Kernel Module 580.159.04**, bare metal (no KVM, no guest), `REV_UNDER_TEST =
+d0347a5869744de86a87f9348bc94f45ef2d5e47`. Three consecutive runs, identical.
+`traces/w747_list_object_alias/`.
+
+    ★★★★★ W747 STEP 5 VERDICT = ALIAS — wrote B 0x747b0002 through the PARENT's page 2;
+                                 the SLICE now reads 0x747b0002 (it read 0x747a0001 before)
+    ★★★★★ W747 step 8 phys    = parent page 2 at 0x0000000003112000,
+                                 slice at 0x0000000003112000 — THE SAME PHYSICAL ADDRESS
+    W747_VERDICT=ALIAS  W747_REVERSE=ALIAS  W747_CONTROL=HELD  W747_KNOWN_POSITIVES=HELD
+
+⇒ **A `LIST_OBJECT` slice is the parent's pages, not a copy of them.** Leg B's premise holds.
+
+⚠ **Two results that bound it, and both change what leg B has to do — read them before
+building on the verdict.** They are §§ *"The gate is CAP_SYS_ADMIN"* and *"The lifetime window
+is real and silent"* below.
+
+The predictions are not edited, only marked HELD / REFUTED.
 
 ## Why this is the gate
 
@@ -45,17 +59,17 @@ isolated. Seeding **S** first and requiring **S** back is what makes the differe
 
 ## Pre-registered predictions — each with the value that refutes it
 
-| # | prediction | refuted by |
-|---|---|---|
-| P1 | the `0x83` alloc is **accepted** (`status=0x0000`) as **root** on a GSP-client GA10x | any non-zero status |
-| P2 | ★★★ **ALIAS** — step 5 reads **B** through `L_N` | step 5 reads **A** (or anything else) |
-| P3 | the reverse direction also aliases — step 6 reads **C** through the parent | the parent still reads **B** |
-| P4 | the control `L_M` reads **S** at step 4 **and** at step 7 | reads **B**, or reads `0`, at either point |
-| P5 | `phys(L_N@0) == phys(parent@N*4096)`, aperture `VIDMEM` both | any inequality, or a refusal |
-| P6 | a slice naming a **foreign** client's parent via `hClient`/`hParent` is **accepted** | any non-zero status |
-| P7 | the slice is **dupable** into a second client (`memlistCanCopy_IMPL` returns `NV_TRUE`) | any non-zero status |
-| P8 | ⚠ freeing the **parent** with a live slice outstanding is **accepted**, and the slice then **silently serves stale physical memory** — no refusal, no fault | RM refuses the free, or the read faults/refuses |
-| P9 | as a **non-root** uid the same alloc is refused **`0x1b NV_ERR_INSUFFICIENT_PERMISSIONS`** | any other status, accepted included |
+| # | prediction | refuted by | result |
+|---|---|---|---|
+| P1 | the `0x83` alloc is **accepted** (`status=0x0000`) as **root** on a GSP-client GA10x | any non-zero status | ⊘ **REFUTED AS WRITTEN, HELD AS CORRECTED.** Root is not enough — see *"the gate is CAP_SYS_ADMIN"*. With the capability: accepted, `handle 0xcafe0005` |
+| P2 | ★★★ **ALIAS** — step 5 reads **B** through `L_N` | step 5 reads **A** (or anything else) | ★★★ **HELD.** `0x747b0002` |
+| P3 | the reverse direction also aliases — step 6 reads **C** through the parent | the parent still reads **B** | **HELD.** `0x747c0003` |
+| P4 | the control `L_M` reads **S** at step 4 **and** at step 7 | reads **B**, or reads `0`, at either point | **HELD.** `0x74750004` both times; and the control's own page, written `0x747d0005` through the parent, reached it ⇒ it is a live view, not an inert one |
+| P5 | `phys(L_N@0) == phys(parent@N*4096)`, aperture `VIDMEM` both | any inequality, or a refusal | ★★★ **HELD.** Both `0x0000000003112000`, aperture 0 VIDMEM. ⊘ `memFormat` differs (parent `0x6`, slice `0x0`) and `contigSegmentSize` differs (`0xe000` vs `0x1000`) — the slice is one page of a longer contiguous run and carries the `format` we passed, which is `0` |
+| P6 | a slice naming a **foreign** client's parent via `hClient`/`hParent` is **accepted** | any non-zero status | **HELD.** `status 0x0000 NV_OK` — ⚠ but the *minting* client also held `CAP_SYS_ADMIN`; see the scoping below |
+| P7 | the slice is **dupable** into a second client (`memlistCanCopy_IMPL` returns `NV_TRUE`) | any non-zero status | ⊘ **NOT MEASURED BY CHOICE** — it needs a second `NV_ESC_RM_DUP_OBJECT` escape, which constraint 26's countability gate forbids. Still a reading, not a measurement |
+| P8 | ⚠ freeing the **parent** with a live slice outstanding is **accepted**, and the slice then **silently serves stale physical memory** — no refusal, no fault | RM refuses the free, or the read faults/refuses | ⊘⊘⊘ **HELD, AND WORSE THAN PREDICTED** — see below |
+| P9 | as a **non-root** uid the same alloc is refused **`0x1b NV_ERR_INSUFFICIENT_PERMISSIONS`** | any other status, accepted included | **HELD**, on the same box, same driver, same binary, `uid 65534` |
 
 > ### ⊘⊘ CORRECTED BEFORE THE RUN (same day) — P9's REFUTER WAS THE WRONG NUMBER
 > This row first named **`0x1f`** as `NV_ERR_INSUFFICIENT_PERMISSIONS`. It is **`0x1b`**
@@ -95,7 +109,7 @@ and the run does **not stop at the first refusal** — w744 lost a lane to two r
 (`0x19 INSERT_DUPLICATE_NAME`, `0x26 INVALID_DEVICE`) that were its own setup rather than RM's
 ruling.
 
-## ★★★★★ MEASURED 2026-09-15 (run 1, GA106 / 580.173.02, CUDA container) — P1 REFUSED, AND THE REASON IS A DESIGN FACT
+## ★★★★★ THE GATE IS CAP_SYS_ADMIN, NOT uid 0 — measured twice, two ways of losing it
 
     ⊘  W747 slice L_N = page 2 attr PAGE_SIZE_4KB      REFUSED status 0x001b NV_ERR_INSUFFICIENT_PERMISSIONS
     ⊘  W747 slice L_N = page 2 attr PAGE_SIZE_DEFAULT  REFUSED status 0x001b NV_ERR_INSUFFICIENT_PERMISSIONS
@@ -115,16 +129,62 @@ permissions status with nothing in it naming a capability. ⚠ This is a *deploy
 constraint on leg B, not a probe detail, and it was measured rather than predicted — the
 pre-registration said "root-only" and root was not enough.
 
-⊘ It also **scopes P9's known-positive**: the non-root arm no longer needs a second uid to
-be interesting, because this run *is* the negative arm. The positive arm needs a box where
-the process holds `CAP_SYS_ADMIN`.
+(Run 1, a CUDA container on a GA106 at driver **580.173.02** —
+`traces/w747_list_object_alias/ga106_580.173.02_container_noCAP_SYS_ADMIN_REFUSED.log`.)
 
-★ Two rows that DID hold, and they matter because the environment is otherwise the blocker:
+★ Two rows that DID hold in that run, and they matter because they attribute the refusal:
 `nvidia-smi -q` reported **`GSP Firmware Version: 580.173.02`**, so `memlistConstruct`'s
 `IS_GSP_CLIENT` gate is satisfied on this class of box — the refusal is the privilege gate
 and **only** the privilege gate. And the seed/readback control passed
 (`page 2 = 0x747a0001, page 0 = 0x74750004, both read back through the parent`), so the
 parent, its CPU view and the pattern plumbing are all live.
+
+### ★ And the matched positive/negative pair, on ONE box
+
+`uid 0` with `CapEff: 000001ffffffffff` ⇒ **accepted**. The same binary on the same box under
+`setpriv --reuid=65534` ⇒ **`0x001b NV_ERR_INSUFFICIENT_PERMISSIONS`**, while `alloc_vidmem`,
+its CPU view and the seed/readback in that same unprivileged run all **succeeded** — so the
+refusal is scoped to class `0x83` and to the *allocating* client's privilege, not to the GPU,
+the node permissions (`crw-rw-rw-`) or the memory plane.
+
+⇒ ★★★★★ **THE CONSEQUENCE FOR LEG B, and it is the opposite of what the cross-client row
+first suggests.** The P6 row shows a *second client* can mint a slice over the *first
+client's* object — which reads like *"the isolate can mint its own USERD handle, no hand-over
+needed, constraint 30 never arises"*. ⊘ **It does not follow.** In that row client B lived in
+the same process and therefore held the same `CAP_SYS_ADMIN`. A real per-proc isolate is
+unprivileged **by design**, and the gate is on the allocating client, so it would be refused
+`0x1b` exactly like the `uid 65534` arm. ⇒ **the scratchpad must mint the slice and hand it
+over**, which puts constraint 30's question — *does the shared artefact carry the creator's
+privilege or process identity?* — squarely back on the critical path, and makes P7's dup the
+next thing that has to be measured under its own reviewed escape.
+⚠ Stated as a **derivation from two measurements of the same gate**, not as a third
+measurement: nothing here ran a client whose process lacked the capability while naming a
+foreign parent.
+
+## ⊘⊘⊘ THE LIFETIME WINDOW IS REAL, AND IT IS SILENT — constraint 31, measured
+
+    ★★★ W747 lifetime free  = the PARENT was freed with a live slice outstanding — RM did NOT refuse
+    info  W747 lifetime read  = through the slice: 0x747b0002 before the free, 0x00000000 after
+    ⊘⊘⊘ W747 lifetime stale = THE SLICE SERVES THE NEW OWNER'S BYTES. A fresh allocation wrote
+        0x747d0005 at page 2 and the slice — minted over a parent that no longer exists — reads
+        0x747d0005.
+
+Three facts in three lines, and the third is the one constraint 31 exists for:
+
+1. **RM does not refuse the free.** The slice holds no reference on its parent — which is what
+   `memlistConstruct_IMPL` reading `memdescGetPhysAddr` and never taking a ref predicted.
+2. **The page was scrubbed**, not left stale: the slice read `0x00000000` immediately after the
+   free. ⊘ ⚠ **Do not read that as containment.** It is RM's vidmem scrubber running on free,
+   and it says nothing about who owns the page next.
+3. ★★★ **A fresh allocation landed on the same physical page and the orphaned slice served its
+   bytes.** No refusal, no fault, no counter anywhere. That is constraint 31's sentence —
+   *"a page now owned by guest process B is still reachable through machinery minted for guest
+   process A"* — reproduced end to end in three lines of output, on hardware, and the only
+   reason it reads as benign is that nothing in the system is in a position to complain.
+
+⇒ **Constraint 27's barrier must extend from mappings to HANDLES, exactly as constraint 31
+says.** ⊘ And revalidation cannot substitute: the slice's page list is taken at creation and
+subscribes to nothing, so there is no moment at which a checker could notice.
 
 ## Known-positives — what makes a green result mean anything
 
