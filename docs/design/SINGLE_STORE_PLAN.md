@@ -343,6 +343,18 @@ hides.
 6. ⚠ **Consider carrying `why` through `FbRead::read_in`** (it returns a `bool` today). Cut B
    is the increment that gives every consumer a reason to want one — see the flattening above.
 
+> ### ⊘⊘⊘ CORRECTED w735 — **THE NAMED PREDICTED END IS A REFUTED DIAGNOSIS.**
+> "The kernel CeUtils scrubber" below cites `ce_utils.c:304`, and **that is not the wall.**
+> Measured in-guest, the driver names its own:
+> `kbusInitBar2_HAL … NV_ERR_INVALID_STATE (_memdescSetSubAllocatorFlag @ mem_desc.c:404)` →
+> `RmInitAdapter failed! (0x24:0x40:1220)`, after which **every** later open dies on
+> `_kgspBootGspRm: unexpected WPR2 already up`. The ordinal is **5, not 4**, and the fifth
+> **HANGS** rather than refusing. ★★ **26 `modprobe -r nvidia` cycles reopened it ZERO
+> times ⇒ the leaked state is OURS, not the guest RM's.**
+> ⇒ **Do not grade cut B's boot against "did it reach the CeUtils scrubber".** Grade it
+> against where it actually stops, and expect `kbusVerifyBar2`/`kbusInitBar2`, not a scrub.
+> A prediction inherited from a refuted cause grades the right boot by the wrong rule.
+
 ⊘ **Cut B still does not reach a guest.** Its predicted end is the kernel CeUtils scrubber
 (cut C / constraint 9), which is a **prediction and not a measurement** — the boot that tests
 it is the one worth renting a box for.
