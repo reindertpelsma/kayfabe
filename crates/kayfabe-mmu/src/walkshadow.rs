@@ -585,11 +585,20 @@ pub fn build_image(
     vases: &[(u64, &[crate::walker::PtPage])],
     page_cap: usize,
 ) -> Result<ShadowImage, ShadowRefusal> {
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, BTreeSet};
 
-    // ⊘ Keyed by address, because one page may be reached from two address spaces and must
-    // get ONE home — two copies would let the kernel and the host disagree about a page that
-    // is the same page.
+    // ★★★★★ **A TABLE IS NOT A PAGE, AND CONFLATING THEM LOSES WHOLE SUBTREES.**
+    //
+    // `[measured w731, live boot]` a VER2 **big-page table is 32 entries — 256 BYTES** — and
+    // the dual PDE's big half names it with `_ADDRESS_SHIFT = 8`, i.e. **256-byte
+    // granularity**. `PD3` is smaller still: four entries, 32 bytes. So a table legitimately
+    // sits at a **non-page-aligned** address, and keying the image by `phys & !0xfff` throws
+    // that offset away: the edge that named it was then sent to the absent slot, the kernel
+    // found nothing under that root, and the census reported `missing_in_kernel` for a
+    // mapping the host had decoded perfectly (`absent_edges=53`, `missing_in_kernel=30`).
+    //
+    // ⇒ **tables** are keyed by their own address; **pages** are what the image holds; and
+    // `home` preserves the offset within the page.
     let mut level_of: BTreeMap<u64, u8> = BTreeMap::new();
     for (_, visited) in vases {
         for p in *visited {
@@ -599,13 +608,12 @@ pub fn build_image(
                 // directory entry naming it keeps its own encoding so that refusal fires.
                 continue;
             }
-            let base = p.phys & !0xfff;
-            match level_of.get(&base) {
+            match level_of.get(&p.phys) {
                 Some(l) if *l != p.level => {
-                    return Err(ShadowRefusal::AmbiguousLevel { phys: base })
+                    return Err(ShadowRefusal::AmbiguousLevel { phys: p.phys })
                 }
                 _ => {
-                    level_of.insert(base, p.level);
+                    level_of.insert(p.phys, p.level);
                 }
             }
         }
@@ -613,33 +621,28 @@ pub fn build_image(
     if level_of.is_empty() {
         return Err(ShadowRefusal::NoPages);
     }
-    if level_of.len() > page_cap {
+    let pages: BTreeSet<u64> = level_of.keys().map(|a| a & !0xfff).collect();
+    if pages.len() > page_cap {
         return Err(ShadowRefusal::TooManyPages {
-            pages: level_of.len(),
+            pages: pages.len(),
             cap: page_cap,
         });
     }
 
-    // Slot 1 upwards; slot 0 stays zero and is where every unvisited edge is sent.
-    let home_of: BTreeMap<u64, u64> = level_of
-        .keys()
+    // Slot 1 upwards; slot 0 stays zero and is where every unfollowable edge is sent.
+    let home_of: BTreeMap<u64, u64> = pages
+        .iter()
         .enumerate()
-        .map(|(i, &phys)| (phys, ((i + 1) * IMAGE_PAGE) as u64))
+        .map(|(i, &base)| (base, ((i + 1) * IMAGE_PAGE) as u64))
         .collect();
 
-    let mut bytes = vec![0u8; (level_of.len() + 1) * IMAGE_PAGE];
+    let mut bytes = vec![0u8; (pages.len() + 1) * IMAGE_PAGE];
     let absent = std::cell::Cell::new(0u64);
+    // ⊘ **The offset within the page is preserved**, because a sub-page table's address is
+    // not its page's address. See the block above for the boot this cost.
     let home = |old: u64| -> Option<u64> {
-        if old & 0xfff != 0 {
-            // An unaligned sub-table pointer is not a page we could have visited. It goes to
-            // the absent slot like any other edge we cannot follow — and the kernel's own
-            // `KFWR_R_UNALIGNED` is not the right instrument here, because it would fire on
-            // OUR rewrite rather than on the guest's encoding.
-            absent.set(absent.get() + 1);
-            return Some(ABSENT_SLOT);
-        }
-        match home_of.get(&old) {
-            Some(&h) => Some(h),
+        match home_of.get(&(old & !0xfff)) {
+            Some(&h) => Some(h + (old & 0xfff)),
             None => {
                 absent.set(absent.get() + 1);
                 Some(ABSENT_SLOT)
@@ -647,9 +650,17 @@ pub fn build_image(
         }
     };
 
+    // ⊘ Whole pages, not "as many bytes as the table at the base needs": one page can hold
+    // sixteen big-page tables, and each of them is named independently.
+    for (&base, &slot) in &home_of {
+        let dst = slot as usize;
+        if !fb.read_in(base, Aperture::Vidmem, &mut bytes[dst..dst + IMAGE_PAGE]) {
+            return Err(ShadowRefusal::Unreadable { phys: base });
+        }
+    }
+
     let mut sysmem_edges = 0u64;
-    for (&phys, &level) in &level_of {
-        let slot = home_of[&phys] as usize;
+    for (&addr, &level) in &level_of {
         let es = usize::from(fmt.entry_size(level));
         let Some(geom) = fmt.level_shift(level) else {
             return Err(ShadowRefusal::BadGeometry { level });
@@ -657,23 +668,15 @@ pub fn build_image(
         if es == 0 || es > 16 {
             return Err(ShadowRefusal::BadGeometry { level });
         }
-        // ★★ **Exactly the bytes the table HAS**, not a whole page. `LevelShift::entries` is a
-        // count read off the level's own virtual-address bits — VER2's big-page table holds
-        // **32** entries in a page that could hold 512 — and a 4 KiB read of it would demand
-        // 3 840 bytes nobody has to be able to serve. ⊘ The walk kernel sizes its loads the
-        // same way, so the image holds neither more nor less than either walker reads.
-        let need = (geom.entries as usize).saturating_mul(es).min(IMAGE_PAGE);
-        let page = &mut bytes[slot..slot + IMAGE_PAGE];
-        if need == 0 || !fb.read_in(phys, Aperture::Vidmem, &mut page[..need]) {
-            return Err(ShadowRefusal::Unreadable { phys });
-        }
+        let at = (home_of[&(addr & !0xfff)] + (addr & 0xfff)) as usize;
+        let need = (geom.entries as usize).saturating_mul(es);
         for i in 0..geom.entries as usize {
-            let off = i * es;
-            if off + es > need {
+            let off = at + i * es;
+            if off + es > at + need || off + es > bytes.len() {
                 break;
             }
             let mut w = [0u8; 16];
-            w[..es].copy_from_slice(&page[off..off + es]);
+            w[..es].copy_from_slice(&bytes[off..off + es]);
             let raw = u128::from_le_bytes(w);
             // ⊘ The sysmem census is taken from the DECODE, not from the relocator, because
             // the relocator's answer for a sysmem edge is `Unchanged` — the same answer it
@@ -688,7 +691,7 @@ pub fn build_image(
             match fmt.relocate_entry(level, raw, &home) {
                 kayfabe_arch::Relocated::Unchanged => {}
                 kayfabe_arch::Relocated::Moved(v) => {
-                    page[off..off + es].copy_from_slice(&v.to_le_bytes()[..es]);
+                    bytes[off..off + es].copy_from_slice(&v.to_le_bytes()[..es]);
                 }
                 kayfabe_arch::Relocated::Refused(why) => {
                     return Err(ShadowRefusal::Relocate(why))
@@ -699,21 +702,20 @@ pub fn build_image(
 
     let mut roots = Vec::with_capacity(vases.len());
     for (pdb, _) in vases {
-        let base = pdb & !0xfff;
-        let Some(&h) = home_of.get(&base) else {
+        let Some(&h) = home_of.get(&(pdb & !0xfff)) else {
             return Err(ShadowRefusal::RootMissing { pdb: *pdb });
         };
-        roots.push((*pdb, h));
+        roots.push((*pdb, h + (pdb & 0xfff)));
     }
     // ★ The kernel refuses an unsorted pdb list by name (`KFWR_R_PDB_UNSORTED`), and two
-    // address spaces may legitimately share a root page.
+    // address spaces may legitimately share a root.
     roots.sort_by_key(|(_, h)| *h);
     roots.dedup_by_key(|(_, h)| *h);
 
     Ok(ShadowImage {
         bytes,
         roots,
-        pages: level_of.len(),
+        pages: pages.len(),
         absent_edges: absent.get(),
         sysmem_edges,
     })

@@ -42,14 +42,18 @@ impl FbRead for ImgFb<'_> {
         if aperture != Aperture::Vidmem {
             return false;
         }
-        let Some(end) = phys.checked_add(buf.len() as u64) else {
-            return false;
-        };
-        if end > self.img.len() as u64 {
+        if phys >= self.img.len() as u64 {
             return false;
         }
+        // ⊘ **Zero-fill past the end rather than refuse**, which is what the production
+        // `SparseFb` does: an address inside the framebuffer that was never written reads as
+        // zeros. The corpus's arena is sized to the tables it holds, so a whole-page read of
+        // the LAST table legitimately runs past it — and refusing there would model a
+        // framebuffer that has holes, which is not the one this runs against.
         let lo = phys as usize;
-        buf.copy_from_slice(&self.img[lo..lo + buf.len()]);
+        let n = (self.img.len() - lo).min(buf.len());
+        buf[..n].copy_from_slice(&self.img[lo..lo + n]);
+        buf[n..].fill(0);
         true
     }
 }
@@ -195,10 +199,12 @@ impl FbRead for SparseImg {
         let Some(p) = self.pages.get(&base) else {
             return false;
         };
-        if off + buf.len() > p.len() {
-            return false;
-        }
-        buf.copy_from_slice(&p[off..off + buf.len()]);
+        // ⊘ Zero-fill past the stored table, for the same reason `ImgFb` does: this fixture
+        // stores each table at exactly its own length, and the production framebuffer serves
+        // a whole page of which the unwritten tail reads as zeros.
+        let n = p.len().saturating_sub(off).min(buf.len());
+        buf[..n].copy_from_slice(&p[off..off + n]);
+        buf[n..].fill(0);
         true
     }
 }
@@ -522,4 +528,52 @@ fn sysmem_sub_tables_are_counted_rather_than_rewritten() {
         let _ = image.sysmem_edges;
     }
     assert!(seen_any, "no image produced leaves");
+}
+
+/// ★★★★★ **A SUB-PAGE TABLE KEEPS ITS OFFSET — the w731 `missing_in_kernel=30`.**
+///
+/// A VER2 big-page table is **32 entries, 256 bytes**, and the dual PDE's big half names it
+/// with `_ADDRESS_SHIFT = 8` — **256-byte granularity**. `PD3` is four entries, 32 bytes. So a
+/// table legitimately sits at a non-page-aligned address.
+///
+/// ⊘ `[measured w731, live boot]` keying the image by `phys & !0xfff` threw that offset away:
+/// the edge naming such a table was sent to the absent slot, the kernel found **nothing**
+/// under that root (`PDB[0] run_count=0`) while the host had decoded a leaf there, and the
+/// census reported `missing_in_kernel` — **for a mapping neither walker had got wrong**.
+#[test]
+fn a_table_at_a_sub_page_offset_survives_the_image() {
+    let fmt = Ga10xGmmu::new();
+
+    // Two tables inside ONE page, at different offsets. Only their addresses matter here:
+    // the assertion is that both keep their offsets and that `home` never sends either to
+    // the absent slot.
+    let page = 0x2_efa4_0000u64;
+    let visited = [
+        PtPage { phys: page, aperture: Aperture::Vidmem, level: 0, vabase: 0 },
+        PtPage { phys: page + 0x800, aperture: Aperture::Vidmem, level: 4, vabase: 0 },
+    ];
+    let mut fb = SparseImg {
+        pages: std::collections::BTreeMap::from([(page, vec![0u8; 4096])]),
+    };
+    let image = build_image(&fmt, &mut fb, &[(page, &visited)], PAGE_CAP).expect("built");
+
+    assert_eq!(
+        image.pages, 1,
+        "two tables in one page are ONE page in the image, not two"
+    );
+    assert_eq!(
+        image.absent_edges, 0,
+        "a zeroed page names no edges at all, so nothing may be counted absent"
+    );
+    // ★ The root keeps its own offset — here zero, but the arithmetic is the one that matters.
+    assert_eq!(image.roots[0].1 % 4096, page % 4096);
+
+    // And a root that is itself at a sub-page offset lands at that offset in its slot.
+    let off_root = page + 0x800;
+    let image2 = build_image(&fmt, &mut fb, &[(off_root, &visited)], PAGE_CAP).expect("built");
+    assert_eq!(
+        image2.roots[0].1 % 4096,
+        0x800,
+        "a root at +0x800 must be addressed at +0x800 in its slot, not at the page base"
+    );
 }
