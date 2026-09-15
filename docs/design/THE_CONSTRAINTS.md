@@ -107,6 +107,52 @@ and the per-client host MMU fault above.
     is sysmem**. If the guest explicitly asks for DMA-mapped system memory it gets real host
     memory (§22, §w724c).
 
+23. **★★★ THE MEMSLOTS FOR BAR0/BAR1/BAR2 ARE INSTALLED BEFORE THE GUEST DRIVER TOUCHES THE
+    DEVICE — there is NO demand-fill path for BAR1/BAR2** (owner, 2026-09-15). A memslot exists
+    so the guest's loads and stores go straight to memory **with no VM exit**; ⇒ in the intended
+    steady state the BAR1/BAR2 **trap census is EMPTY BY CONSTRUCTION, not small**, and a trap
+    on those windows **is itself the error**. Shape: BAR0 is 2–3 adjacent memslots (several
+    **read-only with writes trapped**, plus one r/w for PRAMIN); BAR1 is one memslot whole;
+    BAR2 is one memslot whole. ⇒ **In production only BAR0 write traps remain; the rest is
+    discarded forever, with no fallback.**
+    ⊘ **REFINEMENT, and it is load-bearing: the hook is the BAR *map* callback, not VM start.**
+    BAR GPAs are not known before PCI enumeration — QEMU's PCI layer assigns them and the guest
+    may **reassign** them (Linux does). So: installed in `pci_update_mappings`, before the guest
+    driver touches the device, **and re-installed when a BAR moves**. With no trap, a guest that
+    moves its BAR onto a stale memslot fails **invisibly**.
+    ⊘ **And a read-only memslot converts "read trap" into "the shadow page must be correct at
+    ALL times."** Registers with read side effects — clear-on-read, FIFOs, the free-running
+    counter — cannot live in one; they would serve stale values with no way to notice. `[w590–
+    w609]` took BAR0's read surface from 184 585 reads to **134**, *"one page from zero"*, with
+    only the free-running counter left ⇒ the shape above is reachable, possibly with that one
+    page still trapped.
+
+24. **★★★ THE GPA RANGES FOR BAR0/1/2 ARE UNIQUELY RESERVED FOR OUR DEVICE, AND ARE NEVER
+    HARDCODED** (owner, 2026-09-15). No other QEMU device may claim them. We **read back where
+    the BARs landed** rather than assuming, and re-read when they move. ⇒ A hardcoded range is
+    a collision waiting for a second device, and under constraint 23 that collision is
+    **silent**.
+
+★ **THE PREFERRED MECHANISM for 23, and why (owner, 2026-09-15).** Rather than an anonymous
+sparse `mmap`, allocate a **GPU-native sparse range** (`NVOS32_ALLOC_FLAGS_SPARSE = 0x04000000`,
+confirmed present in RM's SDK) in the scratchpad and MMIO-map **that** for BAR1/BAR2. Three
+reasons, the first being the owner's biggest: it **reserves the aperture on the host** up front,
+like VRAM, so there are no mid-boot out-of-memory surprises; it makes a BAR1/BAR2 trap
+**unimplementable by construction**; and it removes `munmap` from the BAR1/BAR2 path entirely —
+pages are replaced **in the GMMU underneath a fixed host mapping**, so the memslot never moves
+and KVM is untouched after boot.
+⚠ **THE ONE OBJECTION, and it must be answered before this ships: SPARSE IS SILENT.**
+*"writes ignored, reads 0"* makes *"nothing is mapped here"* indistinguishable from *"zero is
+the value"*, forever, with no counter. Every expensive defect of 2026-09-15 was of exactly that
+shape — `garbage 0x0`, `SUITE_RC=0` over 26 unmeasured arms, an empty leaf list published as
+*"the guest has mapped nothing"*, `faults` pinned at 0 by its own plumbing. Concretely,
+`kbusVerifyBar2` writes a pattern and reads it back: **on a sparse page that reproduces
+`garbage 0x0` exactly, with no refusal to name.**
+⇒ **Two PTE states behind the same memslot:** production **sparse** (reads 0, writes dropped, no
+trap possible); bring-up leaves the PTE **INVALID** so the access faults into the GPU fault
+buffer where it can be seen. Same memslot, same no-trap-in-prod guarantee, and the bring-up arm
+stays **loud**. ★ The debug arm is the default until the raw client passes.
+
 ★ **And one measurement that changed a ruling, 2026-09-15 (w734):** §w724c's *"there is no
 working intermediate — it does not boot"* is **refuted by measurement**; the intermediate costs
 **5–10 s**, not minutes, and its aperture cost is **0.5 MiB of 256**. The correction is folded
