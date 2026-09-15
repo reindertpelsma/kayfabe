@@ -26,6 +26,23 @@ try:
     tok = AutoTokenizer.from_pretrained(MODEL)
     model = AutoModelForCausalLM.from_pretrained(MODEL, torch_dtype=torch.float16)
     model = model.to(dev).eval()
+    # ⊘⊘⊘ **`LLM_OK=1` MUST NOT MEAN "it ran". IT MUST MEAN "it ran WHERE WE ASKED".**
+    #
+    # ⚠ `.to('cuda')` raises when CUDA is absent, so *that* case already fails loudly. The hole is
+    # the other one: `LLM_DEVICE=cpu` runs perfectly, reports `LLM_OK=1`, and produces a plausible
+    # `LLM_MS` — and a debugging session that set it once and forgot would put a CPU number into a
+    # GPU/GPU ratio. ⇒ The parameters are asked WHERE THEY ACTUALLY ARE, not where we requested.
+    #
+    # ★ This is the `correct_by_accident_under_a_temporary_condition` class: today nobody sets
+    # `LLM_DEVICE`, so the default holds and the gap is invisible. The default is incidental.
+    param_dev = next(model.parameters()).device.type
+    print('LLM_PARAM_DEVICE=' + param_dev, flush=True)
+    if param_dev != dev.split(':')[0]:
+        raise RuntimeError('asked for %s, weights landed on %s' % (dev, param_dev))
+    # ⊘ A ratio's two halves must be the same measurement. A non-CUDA run is a legitimate thing to
+    # do deliberately, and an illegitimate thing to compare — so it is RUN and LOUDLY marked, never
+    # refused outright.
+    print('LLM_RATIO_ELIGIBLE=%d' % (1 if param_dev == 'cuda' else 0), flush=True)
     ids = tok('The capital of France is', return_tensors='pt').to(dev)
     t0 = time.time()
     with torch.no_grad():
