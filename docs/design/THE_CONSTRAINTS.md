@@ -175,6 +175,76 @@ and the per-client host MMU fault above.
     ⇒ **The remedy reuses built machinery:** the `want`/`drain` split already exists and is
     tested. Constraint 6 is exactly *"move `drain` to a worker"* — the split was the hard part.
 
+26. **★★★ THE OWNERSHIP SPLIT — the isolate borrows, the scratchpad holds** (owner,
+    2026-09-15). *"All memory is held by the scratchpad, the userspace isolates only borrow
+    from it."*
+
+    | | **owns** | **sees** |
+    |---|---|---|
+    | per-proc **isolate** | channel, VA space, compute, control | **only its own VA space** |
+    | **scratchpad** | the vidmem GPGA object, the tables, bounded kernel channels | all vidmem, all VA spaces |
+
+    ⇒ **A per-proc isolate never holds an `hMemory` for vidmem and never receives the guest-RAM
+    memfd.** Isolates remain keyed on VA spaces.
+    ★ **Flow:** the isolate allocates a **bare** `FERMI_VASPACE_A` and does not touch it; it is
+    handed through the VMM to the scratchpad, which dups it and builds **its own**
+    `NV01_MEMORY_VIRTUAL` range inside, then maps slices of the one object into it.
+    ⊘ **No dummy channel is needed** — `[w744]` route B mapped with the duped space plus the
+    scratchpad's own range, `placed_as_asked=true`; `MapMemoryDma` takes an `hDma`, not a
+    channel. ⚠ The space **must be bare**: a pre-built whole-space range makes the scratchpad's
+    `0x19 INSERT_DUPLICATE_NAME` ⇒ **one range object per space**, so `alloc_vaspace_raw` splits.
+    ★ **Hardware already enforces the half that matters:** `[w744]` a VA collision is refused
+    **`0x51`** with the control passing at an unclaimed VA ⇒ **an isolate cannot map over a
+    slice the scratchpad placed.**
+    ★★ **AND IT DELETES PLANNED WORK, NOT JUST CODE:** `guestram.rs`'s deferred enforcement —
+    fd pinning, the seccomp filter, **`SECCOMP_RET_USER_NOTIF` on `mmap`**, munmap confirmation
+    — exists to make *"the isolate never `mmap`s guest RAM on its own"* checkable. Under 26 the
+    per-proc isolate **has no guest-RAM descriptor at all**, so the property holds by absence
+    and the notify machinery is never built. ⊘ Stated explicitly: the scratchpad **does** hold
+    guest RAM, and is trusted to because **it executes no guest-derived work** — that is a trust
+    statement, not an omission.
+    ⊘ **F11 is SCOPED, not eliminated.** Someone still names a client they did not mint — the
+    **scratchpad**, dup'ing the isolate's VA space. The rule is: *a per-proc isolate may never
+    name a foreign client; the scratchpad may, and only for a VA space the VMM handed it.*
+    Enforce as a **newtype**, the way `OwnClient` already does, so the approved set grows by a
+    TYPE and not by a string on an allowlist.
+
+27. **★★★★★ A REFRESH MAY NOT COMPLETE UNTIL ITS UNMAPS HAVE LANDED** (owner, 2026-09-15).
+    *"Before a refresh finishes, this kernel channel has unmapped slices the guest userspace no
+    longer has access to. So the guest kernel knows: okay, invalidate done, I can reuse this
+    phys for another userspace process safely after a scrub."*
+    ⇒ **This is a GUEST-INTERNAL isolation invariant and we are the only thing that can break
+    it.** If the refresh reports the TLB invalidate complete before the unmaps land, the guest
+    kernel reuses a physical page that a guest **userspace** process can still reach through a
+    stale slice — a cross-process leak **inside the guest**, caused by us, and **invisible to
+    the guest**.
+    ★ The hook is already right: the refresh is driven by the TLB invalidate, one of the three
+    sanctioned sync points, so the barrier is where it belongs. What must be true:
+    **unmaps applied AND acknowledged before the invalidate completes**, and **unmaps ordered
+    before maps** within one refresh. `walkdiff` already emits `Unmap`; completion must wait.
+    ⚠ **Needs a known-positive**: stall an unmap and assert the invalidate does **not** complete.
+    A test that only checks unmaps happen cannot tell "before" from "eventually".
+
+28. **★★★ EVERY FIXED MAP ASSERTS ITS OWN PLACEMENT, AND THE PAGE-SIZE FLAG MATCHES THE RUN'S
+    CLASS** (2026-09-15, from `[w744]`). `NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE` honours an
+    arbitrary VA **only** with `NVOS46_FLAGS_PAGE_SIZE_4KB` — **0/3 without, 3/3 with** — and
+    without it RM **relocates and returns `NV_OK`**:
+
+        at=0x8000001000 status=0x0 dmaOffset=0x8000000000 honoured=false
+        at=0x9000001000 status=0x0 dmaOffset=0x9000001000 honoured=true   (4K flag)
+
+    ⇒ `_dmaGetPageSize` picks a big page, which cannot start on a 4 KiB boundary, so RM
+    **aligns down instead of refusing** — the `Xid 31 FAULT_PDE` the flag's own doc describes,
+    **reached through a success**. ⚠ Every production caller of `raw_map_dma_flags` passes
+    `extra: 0`.
+    ★ **The rule:** a large leaf is necessarily at a large-aligned VA, so map it with the
+    matching big-page flag at its own address; only 4 KiB-class runs need `PAGE_SIZE_4KB`. The
+    coalescer already carries `Run::class` and never coalesces across page sizes, so the class
+    is in hand at the map site.
+    ★★ **The enforcement:** every FIXED map **asserts `dmaOffset == requested` and refuses
+    otherwise.** ⊘ A `Result<u64, RmError>` returns `Ok` here and tells you nothing — this was
+    caught only because `MapOutcome` carries `dmaOffset` **beside** the status.
+
 ★ **THE PREFERRED MECHANISM for 23, and why (owner, 2026-09-15).** Rather than an anonymous
 sparse `mmap`, allocate a **GPU-native sparse range** (`NVOS32_ALLOC_FLAGS_SPARSE = 0x04000000`,
 confirmed present in RM's SDK) in the scratchpad and MMIO-map **that** for BAR1/BAR2. Three
