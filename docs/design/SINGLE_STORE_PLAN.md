@@ -18,6 +18,45 @@ broken across a long stretch with **no working intermediate and no way to bisect
 the raw client. This tree's whole method is measured increments; a big-bang rewrite abandons it
 exactly where it is most needed.
 
+## ⊘⊘⊘ READ THIS FIRST — the live status board, 2026-09-15
+
+⚠ **The sections below have accumulated corrections as SIBLINGS rather than folded above what they
+correct**: there are **three** `### 3.` sections and **two** `### 6.` sections, and file order no
+longer matches execution order. This block is authoritative; a section below that disagrees with it
+is stale.
+
+| # | increment | status |
+|---|---|---|
+| 1 | VM-lifetime scratchpad isolate | ✔ **BUILT** — `KAYFABE_SCRATCHPAD`, booted, 11904 MiB reserved |
+| 2 | the reserved object | ✔ **BUILT** (came with 1) |
+| 4 | CUDA in the scratchpad isolate | ✔ **BUILT** — `KAYFABE_SCRATCHPAD_CUDA`, `CUDA_WALK=OK` |
+| 5 | the format seam | ✔ **BUILT** — no bit position left in the kernel |
+| — | the **crossing** (§3's prerequisite) | ✔ **BUILT & PROVEN** — `DEVICE_VIEW=OK`, ruling w727b |
+| **6** | **walker → publish path** | ◐ **IN PROGRESS** — comparison merged (`walkshadow`), live half in flight |
+| **3** | BAR1/BAR2 as device views, the switch | ○ **UNBLOCKED, NOT STARTED — and it comes AFTER 6** |
+| 7 | the deletions | ○ not started; licence is the **guest suite**, not one workload |
+| 8 | the raw client's full suite, in the guest | ○ not started |
+
+### ★★★ THE ORDER IS 1,2,4,5 → **6** → **3** → 7 → 8 — and 6-before-3 is FORCED
+
+⊘ `RegPlane::window_leaves` builds its reader over `PlaneMem::fb` — **the BAR1/BAR2 walk reads page
+tables out of the very `FbStore` the switch replaces.** Move the store first and every page-table
+read becomes a **48 MiB/s CPU read through a scarce aperture**, which is the ~10-minutes-a-boot cost
+that was the whole reason the two-world split existed. ⇒ **The switch would re-create the problem it
+exists to remove.**
+
+⊘ And the intuitive reason for the coupling is **wrong**, which is why it was got backwards: *"the
+kernel needs the tables in GPU memory"* — they are in a host memfd today, reading at ~3.7 GB/s.
+**Residence is not the constraint; the READER is.**
+
+### ⊘ The falsifier list below is STALE in one entry
+
+`two_worlds_split::a_framebuffer_page_written_through_bar1_is_not_the_page_bar2_reads` is
+**unbuildable**, not pending: it asserts BAR1 and BAR2 are *two memories*, and §15 is superseded —
+there is **one world**. ⇒ The gate is its **inverse**, `..._is_the_page_bar2_reads`, which passes
+today and **fails the moment anyone gives BAR1 its own store** — exactly the accident a one-path
+`page_backing` switch produces.
+
 ## The increments, in order
 
 ### 1. A VM-LIFETIME SCRATCHPAD ISOLATE  ⟵ **BUILT 2026-09-14, behind `KAYFABE_SCRATCHPAD`**
