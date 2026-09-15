@@ -101,12 +101,14 @@ pub fn probe_after_sandbox() {
         outcome.probe_relaunch =
             "SKIPPED — CUDA never came up, so there is no context to probe".to_string();
         outcome.probe_failed_launch.clone_from(&outcome.probe_relaunch);
+        outcome.probe_other_thread.clone_from(&outcome.probe_relaunch);
         return;
     };
     kayfabe_cuda::selftest::probe_after_sandbox(k, outcome);
     eprintln!(
-        "kayfabe-isolate: CUDA-WALK POST-SANDBOX relaunch={:?} failed_launch={:?}",
-        outcome.probe_relaunch, outcome.probe_failed_launch
+        "kayfabe-isolate: CUDA-WALK POST-SANDBOX relaunch={:?} failed_launch={:?} \
+         other_thread={:?}",
+        outcome.probe_relaunch, outcome.probe_failed_launch, outcome.probe_other_thread
     );
 }
 
@@ -122,7 +124,7 @@ pub fn report_line() -> String {
     format!(
         "CUDA_WALK={} cuda_up={} device={:?} ptx_bytes={} bring_up_ms={:.3} jit_ms={:.3} \
          report_valid={} mapping_matched={} abi_refusal_fired={} report={:?} \
-         probe_relaunch={:?} probe_failed_launch={:?} why={:?}",
+         probe_relaunch={:?} probe_failed_launch={:?} probe_other_thread={:?} why={:?}",
         o.token(),
         o.cuda_up,
         o.device_name,
@@ -135,6 +137,7 @@ pub fn report_line() -> String {
         o.report,
         o.probe_relaunch,
         o.probe_failed_launch,
+        o.probe_other_thread,
         o.why,
     )
 }

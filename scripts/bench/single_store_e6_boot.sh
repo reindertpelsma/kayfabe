@@ -122,6 +122,12 @@ grep -a 'WALK-SHADOW image refused\|WALK-SHADOW refresh refused\|WALK-SHADOW rep
 echo "--- ★ the isolate's OWN stderr for the shadow verbs ---"
 grep -a 'kayfabe-isolate: ⊘ WALK-SHADOW' "$Q" 2>/dev/null | head -6 | cut -c1-300
 
+echo "--- ★★★★★ Q2c THE CROSS-THREAD PROBE — the one whose absence cost w731's first boot ---"
+echo "⊘ A CUDA context is CURRENT PER THREAD. The bring-up runs on the isolate's startup"
+echo "  thread and every request is served on a WORKER. Probes (a) and (b) run where the"
+echo "  context already is, so they cannot see this; it must begin PASS."
+grep -ao 'probe_other_thread=\"[^\"]*\"' "$Q" 2>/dev/null | tail -1
+
 echo "--- Q2b THE CUDA CENSUS: the shadow cannot run without it ---"
 echo "E4-CUDA_WALK=$(grep -ao 'CUDA_WALK=[A-Z_]*' "$Q" 2>/dev/null | tail -1 | cut -d= -f2)"
 echo "E1-RESERVATION=$(grep -ao 'reservation=[A-Z_]*' "$Q" 2>/dev/null | tail -1 | cut -d= -f2)"
