@@ -518,6 +518,14 @@ would have printed a large number about a mechanism that was never asked to do a
 it is not a refusal. ⚠ `[this file's own name for the shape: "an absence wearing a number's
 clothes"]` — twice in one change, once in a gate and once in a counter.
 
+#### ✔ THE WORKSPACE SUITE, AT THE REVISION THE BENCH WILL BUILD
+
+`[measured, rev `3af8a406`, `cargo test --workspace --no-fail-fast`]` **11 failing targets / 30
+failing tests**, and the failing **name set is byte-identical** to w739's
+(`diff` of the two sorted lists is empty). ⊘ The gate is the name SET, never the count: a
+change that fixed one pre-existing failure and broke a different one would leave both numbers
+unchanged.
+
 ### ★★★★★ 2026-09-15 (w740) — **PRE-REGISTERED PREDICTIONS. WRITTEN AND COMMITTED BEFORE THE BOX EXISTS.**
 
 ⚠ **Nothing below has been measured.** Frozen at commit time, graded verbatim afterwards; a
