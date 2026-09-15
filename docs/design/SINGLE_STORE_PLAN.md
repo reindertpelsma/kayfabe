@@ -502,6 +502,83 @@ assumption about what `AdoptedGuestRing::memory` names.
 
 ⊘⊘⊘ **AND TWO STRUCTURAL BLOCKERS. Neither is a one-liner and the first is an OWNER RULING.**
 
+> ### ⊘⊘⊘ CORRECTED 2026-09-15 (w744) — **THE `ForeignHandle` GATE DOES *NOT* DISSOLVE, AND THERE
+> ### IS A SECOND GATE THE RULING DOES NOT NAME.** Read this before building (d).
+>
+> **STATUS: LIVE, 2026-09-15.** ⊘ Read from this tree's own source, offline, no boot. It corrects
+> two sentences of the ruling below and adds a blocker that is **not** in its B3 list.
+>
+> #### ⇒ 1. ★★★ "NO FOREIGN HANDLE IS EVER NAMED" IS FALSE AS WRITTEN — the ring names one
+>
+> The ruling says *"`Worker::execute`'s `ForeignHandle` gate stops being an obstacle because **no
+> foreign handle is ever named**."* The handle is named, by `AdoptedGuestRing::memory`:
+>
+> - `crates/kayfabe-fwd/src/lib.rs:4911-4924` builds the ring as `memory: host.memory()`.
+> - Under `HostBacking::slice(arena, …)`, `memory()` **is the arena** — i.e. *the reserved
+>   object*, whose `HostHandle` carries `IsolateId { proc: SCRATCHPAD_PROC, … }`
+>   (`kayfabe-mmu/src/lib.rs:388`; `HostHandle` carries an `IsolateId`,
+>   `kayfabe-isolate/src/lib.rs:140-145`).
+> - `VerbPlan::ChannelBirth`'s `handles()` **chains it in**
+>   (`kayfabe-isolate/src/lib.rs:2884-2887`): `.chain(core::iter::once(adopt.memory))`.
+> - `Worker::execute` refuses any handle not belonging to the running isolate
+>   (`:3651-3656`, `RmError::ForeignHandle`).
+>
+> ⇒ A per-proc worker running `ChannelBirth` over a slice of the scratchpad's reservation is
+> refused `ForeignHandle`. The gate is **exactly as much an obstacle as before**; what (d)
+> changes is *where the mapping happens*, not *whose handle the birth names*.
+>
+> #### ⇒ 2. ⊘ AND A SECOND GATE, NOT IN THE B3 LIST: `RING_NOT_A_JOINED_WINDOW`
+>
+> `alloc_channel_declared` re-checks on the far side of the wire
+> (`crates/kayfabe-isolate-host/src/rm.rs:6629-6662` — ⊘ **not** `:6330-6334`, which is
+> `map_guest_ram`):
+>
+> ```rust
+> let raw_memory = self.narrow(ring.memory)?;
+> let joined = self.fb_joins.as_ref().is_some_and(|t| t.is_joined_object(raw_memory));
+> if !joined { … return Err(RmError::Other(RING_NOT_A_JOINED_WINDOW)); }
+> ```
+>
+> That set is `FbJoinTable::joined_objects` (`fbjoin.rs:90`) and it is minted in **exactly two
+> places**, both `remember_object` on the **per-proc** isolate: the join path (`rm.rs:6207`) and
+> the alias path (`rm.rs:6304`). ★ Under (d) **nothing joins** — that is the point — so the set
+> stays empty and the birth refuses here *even if conjunct (6) were satisfied*.
+> ⊘ B3 calls this *"trivial: register the reservation in the birth isolate's joined-object
+> table"*. It is not trivial in the way that sentence implies: the reservation lives in the
+> **scratchpad's** namespace, so registering it in the **per-proc** isolate's table is telling
+> that isolate *"you may birth a channel over an object you do not own"* — which is the same
+> reach §9.3 already calls *"a slice handed across an isolate boundary is a reach over that
+> isolate's whole reservation"*, and it is precisely what (d) exists to abolish.
+>
+> #### ⇒ 3. ★★★★★ SO (d) NEEDS ONE MORE RULING, AND IT MUST NOT BE PICKED BY CONVENIENCE
+>
+> Two ways out, and they are mutually exclusive:
+>
+> | | what moves | cost |
+> |---|---|---|
+> | **(i)** channel birth runs on the **scratchpad** worker | the birth verb, not the object | this is the old option **(c)**, re-entering through (d)'s back door — and it puts guest-derived work (a pushbuffer's own ring VA) on the isolate that holds everything |
+> | **(ii)** `AdoptedGuestRing` stops carrying a `HostHandle` at all | the *type*, and both gates with it | ★ supported by §3a's own finding that **the ring handle never reaches RM**: `alloc_channel_in`'s `RingSource::Guest` arm maps nothing (`rm.rs:7326-7334`) and what RM receives is `gp_fifo_offset: layout.gp_fifo_va`, an absolute VA. The handle is an **authorization token**, not an operand — so the question is what authorizes the birth once the object is nobody's to name |
+>
+> ⇒ (ii) looks right *because of a measurement already in this file*, but it rewrites what
+> authorizes a channel birth, which is a security-posture decision. **It is B1-shaped and it is
+> the owner's.** ⊘ Not picked here — `mode2_forwarding_model.md`'s rule and B1's own
+> *"do not pick one by implementation convenience"* both apply.
+>
+> #### ⇒ 4. ⊘ WHAT IS *NOT* WRONG WITH (d)
+>
+> Everything about the **mapping** half stands: `HostExtent::Slice` exists with `frees_object()`
+> already `false` (`kayfabe-mmu/src/lib.rs:419-422`), `HostBacking::slice` has **zero production
+> callers** so nothing regresses by minting the first one, and the place it must be minted is
+> identified: the `FbJoinPlan::DeviceBacked { at }` arm at
+> `crates/kayfabe-qemu-raw/src/shim.rs:13958-13990`, which today `return None`s **before**
+> `adopt_joined_fb_leaf` — the only route to a `HostBacking` for a vidmem leaf — which is why
+> conjunct (6) is `None` for **every** vidmem range and `BIRTH-AT-ALLOC REFUSED=11`.
+> ⚠ And `AddressTable::bind` will hold it to both `host_va == va` (`mmu:1160-1167`) and
+> `slice.len() == len` (`mmu:1171-1179`), so the reserved object must be mapped **in the guest's
+> own VA space at the guest's own VA** — which is what makes the duped-in VA space load-bearing
+> rather than a convenience.
+
+
 ### ★★★★★ B1 RULED, 2026-09-15 — **(d) NOBODY BUT THE SCRATCHPAD EVER NAMES THE OBJECT**
 
 ⊘ **The owner rejected all three of (a)/(b)/(c) by reframing the question.** B1 asked *"who gets
