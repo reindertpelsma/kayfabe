@@ -1,5 +1,12 @@
 # w735 — the 30-arm raw-client suite IN THE GUEST: what it reports, and the wall it hits
 
+## ⇒ THE HEADLINE, in one line
+
+**The guest suite reports 30 verdicts for the first time: 28 PASS, 2 TIMEOUT, 0 FAIL, 0
+UNMEASURED** — and it needs **10 boots** to do it, because the emulated device survives only
+**five `RmInitAdapter` cycles per QEMU lifetime**. ⊘ That wall is the product defect; the
+batching is containment, and §7's deletions stay unlicensed.
+
 **Measured 2026-09-15**, vast instance `51090077` (RTX 3060 / **GA106**, NVIDIA **open**
 `580.159.04`), guest Ubuntu 24.04.5, tree revision **`d6201633`** (boot `w735a`) and
 **`bfa143fe`** (boot `w735probe`).
@@ -143,7 +150,17 @@ submission happened and nothing came back, for **600 s**. ⊘ Its sibling `--ce-
 round trip with a **vidmem** source — **PASSES** (*"ALL ARMS MET"*), so this is specific to the
 guest-RAM source path, and `HOST_DMESG_XID=0` on that boot: **no host fault explains it.**
 
-## 8. What the containment does, and what it does not
+## 8. The commit gate, on this tree
+
+`cargo test --workspace` on the bench at rev `4ecf2164`: **one failure, and it is exactly the
+documented known one** — `admitted_is_served::every_unserviced_id_a_boot_recorded_is_classified`
+(w730's provenance gap, awaiting an owner decision). Everything else green.
+⊘ `cargo fmt --check` (148 files) and `cargo clippy --workspace --all-targets` (3
+`undocumented_unsafe_blocks` in `kayfabe-linux-raw`) fail **identically on the base commit
+`59efee10`** — checked by running both on each. `rmladder.rs` has the **same 8 fmt hunks** on
+both, so nothing here added one.
+
+## 9. What the containment does, and what it does not
 
 `rmladder_suite.sh` now recovers-and-retries and reports **30 rows either way**, with
 `UNMEASURED` (never reached its subject) kept distinct from `FAIL` (ran and judged itself
