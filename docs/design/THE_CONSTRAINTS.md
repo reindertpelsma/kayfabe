@@ -107,6 +107,12 @@ and the per-client host MMU fault above.
     is sysmem**. If the guest explicitly asks for DMA-mapped system memory it gets real host
     memory (§22, §w724c).
 
+★ **And one measurement that changed a ruling, 2026-09-15 (w734):** §w724c's *"there is no
+working intermediate — it does not boot"* is **refuted by measurement**; the intermediate costs
+**5–10 s**, not minutes, and its aperture cost is **0.5 MiB of 256**. The correction is folded
+directly above §w724c. ⇒ *a derivation cited as a measurement is the most expensive kind of
+wrong*, and this file carried one for two weeks in the sentence that ordered the whole branch.
+
 ★ **Later additions that are not numbered constraints but bind the same way:**
 **§w724g** gates expire — carry an expiry condition in the gate's own doc comment, and unwire and
 delete in the **same** change · **§w727** BAR1/BAR2 are **sized options** with enforced minimums
@@ -803,6 +809,47 @@ class: every property it derives from the aperture (coherence, host visibility, 
 lifetime) is wrong.
 
 ★ **No lying, either way.** The aperture the guest names is the aperture it gets.
+
+## ⊘⊘⊘ MEASURED 2026-09-15 (w734) — **§w724c's "IT DOES NOT BOOT" IS REFUTED BY ITS OWN ARITHMETIC, MEASURED.** Read this before the block below.
+
+`[measured, vast 51082161, RTX 3060 GA106, driver 580.159.04, rev 56edd0ed,
+`traces/w734_fbio_census/`]` — and the full working is in `SINGLE_STORE_PLAN.md`, folded above
+its status board.
+
+§w724c below costs the intermediate — *backing on real video memory, host walker still reading
+the tables* — as **7.3 MiB × 1178 refreshes ÷ 48 MiB/s ⇒ ~3 min**, worst case ~10 min, and
+concludes *"it does not merely cost machinery we would delete. **It does not boot.**"*
+
+⊘ **Neither term of that sum had ever been measured.** The tree contained **no byte counter for
+framebuffer-store I/O at all**; the numerator was `pages_swept`, a PAGE count at six different
+page sizes of which three are not 4 KiB, turned into MiB by assumption. Both are measured now:
+
+| term | §w724c | measured |
+|---|---|---|
+| store read rate through a device view of the reserved object | 48 MiB/s (uncited) | **52.5 MiB/s** — ★ right |
+| store **write** rate | assumed the same | **4987.5 MiB/s** — ★★★ 95× faster, nobody had this |
+| walk traffic per boot | 8.6 GiB (derived) | **275.5 MiB** (measured) |
+| ⇒ cost | *"~3 min … it does not boot"* | **5–10 s** |
+
+★ The rate was right; the **volume** was wrong by ~30×, because the derivation assumed the whole
+resident table set is re-read on every refresh and it is not. ⊘ The 5–10 s range is honest: the
+byte model understates `walk-bar`, whose 3 454 311 reads average ~41 bytes and are
+**latency**-bound rather than bandwidth-bound.
+
+★★★★★ **And the cost §w724c never named — the APERTURE — fits with 500× margin.** A device view
+maps from file offset 0 only, so a device-backed store needs one armed node per contiguous run,
+each costing host BAR1 (§22 item 3's 256 MiB, shared). Measured: **128 distinct frames ⇒ 0.5
+MiB**, and **~0.7 ms to arm and release one** (`arm_us=273 rel_us=446`).
+
+⇒ **The conclusion below does not follow from the numbers.** What survives is the weaker and
+still-useful claim: *§6 first is cheaper and safer.* ⊘ What does **not** survive is *"every other
+ordering produces a tree that does not boot"* — that sentence is load-bearing for the branch's
+whole sequencing and it is not true at the measured scale.
+
+⚠ **One workload.** This is the raw client (`(P)`, `THREADS 8 of 8`), not the 30-arm guest suite
+and not the LLM — the same caveat §w727 attaches to `BAR1_MIN`, and it applies here with equal
+force. ⚠ And `HOST_DMESG_XID=1` on that boot is the **pre-existing** `Xid 31 … CE0 … FAULT_PDE @
+0xa0_00000000` (w555/w711), neither caused nor fixed by this.
 
 ## ★★★★★ w724c — WHY THE SWITCH CANNOT BE INCREMENTAL: THERE IS NO WORKING INTERMEDIATE
 
