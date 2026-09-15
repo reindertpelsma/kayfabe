@@ -175,6 +175,55 @@ and the per-client host MMU fault above.
     ⇒ **The remedy reuses built machinery:** the `want`/`drain` split already exists and is
     tested. Constraint 6 is exactly *"move `drain` to a worker"* — the split was the hard part.
 
+> ### ✔✔✔ **MEASURED 2026-09-15 (w746) — THE HAND-OVER WORKS; RM REFUSES THE DUP `NV_ERR_INSUFFICIENT_PERMISSIONS`, AND THAT IS CONSTRAINT 30 ANSWERING FROM HARDWARE.**
+> `[vast 51155860, GA106, 580.159.04 OPEN, TREE_REV 0c0dd2ce, three arms, one binary;
+> `traces/w746_handover/`]` Control **`(P)` 8/8**; arm 2 reproduces 17/11/19/0; arm 3 **`(R)` 0/8**.
+> ★★★ `HANDOVER-ASSERTS asked=4637 leaf_untabled=0 space_not_held=0 ⇒ ASKED AND PASSED`. The
+> hand-over **ran 4637 times**, minting and committing a bare space each time, and every
+> constraint-29/30 assert was exercised without firing (`ROUTE-DISAGREES=0`, `C30-REFUSED=0`,
+> `C30-BIRTH-REFUSED=0`, `RING-HANDLE-REACHED-RM=0`). ⊘ These are *asserted-and-passed*; the
+> `asked=` term is printed beside them precisely so they cannot be read as w745's vacuous zeros.
+> ⇒ **THE NEW WALL IS `adopt_vaspace`**: `adopts=0 adopt_refused=4637
+> first_refusal=[Rm("InsufficientPermissions")]` — `NV_ESC_RM_DUP_OBJECT` issued for the first
+> time in this campaign and refused by RM.
+> ★★★★★ **ogkm names the gate** `[ogkm-580.159.04 rs_client.c:537-551, clientCopyResource_IMPL]`:
+> a **cross-client** dup by a client below `RS_PRIV_LEVEL_KERNEL` needs `RS_ACCESS_DUP_OBJECT`
+> **granted on the source object**; `rsAccessCheckRights` ends `NV_ERR_INSUFFICIENT_PERMISSIONS`
+> (`rs_access_map.c:540`). We grant nothing. ⇒ the missing piece is an **explicit share** by the
+> per-proc isolate on its own VA space — `NV0000_CTRL_CMD_CLIENT_SHARE_OBJECT` (`0xd06`).
+> ⊘⊘ **AND THIS ANSWERS CONSTRAINT 30 FOR THIS RESOURCE, FAVOURABLY.** 30 worried that euid 0
+> makes `rmclientIsAdmin` hold for the scratchpad ⇒ effectively privileged. **Measured false**:
+> `rmclientIsAdmin` yields `RS_PRIV_LEVEL_ADMIN`, the gate demands `>= RS_PRIV_LEVEL_KERNEL`,
+> and **ADMIN < KERNEL** — RM treated our scratchpad as an ordinary user client. ⚠ It also
+> SCOPES `[w744]`'s `NV_OK` on the same dup: that probe ran both clients in ONE process; this
+> crosses two isolate processes. **A dup that succeeded once says nothing about a dup between
+> different parties.**
+> ⊘ Still unmeasured after two boots: `map_store_slice`, constraint 28 on hardware, leg B, and
+> constraint 30 part 2's mapping question. `maps=0` for a second boot, now for a new reason.
+>
+> ### ⊘⊘⊘ **CORRECTED 2026-09-15 (w746) — THE CAUSE NAMED BELOW IS WRONG.** Read this first.
+> The block below says the 4619 refusals were *"a routing key re-derived from a placeholder"*.
+> **They were not, and `Pdb(0)` is not a placeholder.** `project.rs`'s `pdb_claims` makes two
+> live VASpaces sharing a base a hard `ProjectionError::PdbCollision`, so `route_pdb` resolved
+> it to proc 2 correctly — the same proc whose census produced the leaf three lines earlier in
+> the same function. The failing conjunct is the next one, `Vas::host_vas == None`, and it was
+> `None` because of a closed loop: `host_vas` is minted only by a commit that SUCCEEDED, the
+> only verb that runs on the device arm is `EngineObject` (`VERBCOST … [EngineObject n=8 …
+> 100.0%]`), it births a channel whose ring is `RingSource::Ours` and therefore **maps its own
+> ring through the space**, and on the scratchpad arm that space is bare. Every engine object
+> was refused (`forwarded=0 refused=10`, against `forwarded=8` on arm 2, same binary) and its
+> fresh space unwound. ⇒ **a repair gated on the success it repairs.**
+> ⊘⊘ **And `W745-BARE-SPACE-REFUSED=0`, the row w745 used to retire this very diagnosis, was
+> VACUOUS**: `alloc_channel_in` reaches RM through `raw_map_dma`, which carried no bare-space
+> refusal, so the counter could not increment whatever happened. RM answered `0x51`, which is
+> indistinguishable from exhaustion. Fixed at w746 — the refusal now sits in
+> `raw_map_dma_slice`, the one site that builds `NVOS46_PARAMETERS`.
+> ⇒ w746 makes the hand-over **ensure** the space (`alloc_vaspace_bare` when `host_vas` is
+> `None`, with a real commit phase), takes the caller's `ProcId` instead of re-deriving it, and
+> attaches the three replacement asserts constraint 29 obliges plus constraint 30's.
+> ⚠ **Still true below, and unchanged by this correction:** everything after *"What did hold on
+> every arm"*, and the whole USERD paragraph — leg B is untouched and remains the owner's.
+>
 > ### ◐ **BUILT AND BOOTED — 2026-09-15 (w745). IT ARMS AND REFUSES AT THE HAND-OVER.**
 > `[vast 51149807, GA106, 580.159.04 OPEN, three arms, one binary]` The control holds at
 > **`(P)` 8 of 8**; the split arm is **`(R)` 0/8** with `handovers=0 handover_refused=4619`,

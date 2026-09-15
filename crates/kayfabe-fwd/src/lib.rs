@@ -449,6 +449,28 @@ pub enum FwdFault {
         /// The PDB of the declared-but-unpublished `Vas`.
         pdb: Pdb,
     },
+    /// ★★★★★ **w746, CONSTRAINT 29 — the caller's route and the spine's DISAGREE.**
+    ///
+    /// `SharedDevice::vaspace_handover` used to re-derive its routing key with
+    /// [`route_pdb`] even though every call site already held the `ProcId` it passes to
+    /// `IsolateId::new`. That second statement of one decision was removed (w746); this is
+    /// the assert that took its place, and it is constraint 29 part 2 literally — the
+    /// argument that retired the derivation is *"the caller's route is the one that owns
+    /// this space"*, so the replacement **goes red exactly when it is not**.
+    ///
+    /// ⊘ Distinct from [`FwdFault::UnknownPdb`]: that one is *"the spine does not know this
+    /// PDB"*; this one is *"it knows, and it names a different proc"* — which is a
+    /// cross-address-space hand-over and the worst thing this seam could do silently.
+    HandoverRouteDisagrees {
+        /// The GPU the hand-over was asked on.
+        gpu: GpuId,
+        /// The page-directory base the caller named.
+        pdb: Pdb,
+        /// The proc the caller says owns it.
+        caller: ProcId,
+        /// The proc the spine says owns it.
+        spine: ProcId,
+    },
     /// ★★★ **A guest-RAM pin was asked for at a VA whose backing is not guest RAM.**
     ///
     /// The VA resolves — this is not a miss — and its binding's aperture is something

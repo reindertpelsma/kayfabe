@@ -664,6 +664,18 @@ fn latch_channel_birth_after_apply(st: &mut DeviceState, ev: RmEvent) {
 /// Bumped by every push onto either pending latch, anywhere.
 static PENDING_LATCH_EPOCH: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
+// =====================================================================================
+// ★★★★★ w746 — CONSTRAINT 29's REPLACEMENT COUNTERS FOR `SharedDevice::vaspace_handover`.
+// =====================================================================================
+/// Leaves offered to the hand-over whose VA the routed `Vas` has **no row for**. See
+/// [`SharedDevice::handover_leaf_untabled`].
+static HANDOVER_LEAF_UNTABLED: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+/// Hand-overs whose returned space is not the one the `Vas` holds. See
+/// [`SharedDevice::handover_space_not_held`]. ⊘ Any non-zero is a defect.
+static HANDOVER_SPACE_NOT_HELD: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+
 /// Record that something was latched. Called beside every push.
 fn note_pending_latch() {
     PENDING_LATCH_EPOCH.fetch_add(1, std::sync::atomic::Ordering::Release);
@@ -6354,57 +6366,304 @@ impl SharedDevice {
     /// VMM recovers the namespace it belongs to.
     ///
     /// ⊘ **Not a `VerbPlan`**, and that is deliberate: a plan exists to be *gated* on the
-    /// handles it names and to be *committed* into core state. This names no handle it did
-    /// not already hold and changes nothing — it is a read, and dressing a read as a plan
-    /// would put it through a commit phase with nothing to commit.
+    /// handles it names and to be *committed* into core state. A `VerbPlan` would put this
+    /// through the whole gate machinery for one handle it is handed back; what it does need
+    /// — and now has — is a **commit phase**, because on the ensure path it writes
+    /// [`kayfabe_core::gpu::Vas::host_vas`].
     ///
     /// ⚠ **Blocking, and never on a vCPU**: it is an IPC round trip to a per-proc isolate.
     /// `Worker::with_rm` asserts lock-free, so a caller holding a ranked lock panics rather
     /// than deadlocking behind whatever that isolate is doing.
     ///
+    /// # ★★★★★ w746 — IT **ENSURES** THE SPACE, AND HERE IS THE MEASUREMENT THAT FORCED IT
+    ///
+    /// Until w746 this read `Vas::host_vas` and refused `NoVas(ChanId(0))` when it was
+    /// `None`. `[measured from w745's own committed evidence]` that refusal fired **4619
+    /// times on the split arm and every single one was that conjunct** — and the reason it
+    /// was `None` is a closed loop:
+    ///
+    /// ```text
+    ///   host_vas is minted ONLY by a commit that SUCCEEDED (engine object, channel birth,
+    ///     publish, pin, back_fb_leaf)
+    ///        ⇒ on the device arm the only verb that runs is EngineObject
+    ///        ⇒ EngineObject births a channel whose ring is RingSource::Ours, which MAPS
+    ///           its own 64 KiB ring through the space
+    ///        ⇒ on the scratchpad arm the space is BARE and cannot be mapped through
+    ///        ⇒ every EngineObject is refused (`forwarded=0 refused=10`, arm 3) and its
+    ///           freshly-minted space is UNWOUND
+    ///        ⇒ host_vas stays None forever
+    ///        ⇒ the hand-over refuses
+    ///        ⇒ no slice is placed, no leaf is bound
+    ///        ⇒ `adopted_guest_ring` conjunct (6) refuses, the ring is never adopted
+    ///        ⇒ the birth is RingSource::Ours … and the loop closes.
+    /// ```
+    ///
+    /// ★★★ **The repair was gated on the success it repairs.** The cut is here, because a
+    /// bare address space is the one link in that chain that needs nothing from the rest of
+    /// it: [`kayfabe_isolate::RmBackend::alloc_vaspace_bare`] is one `NV01_VASPACE` alloc.
+    ///
+    /// ⊘ **This is NOT a relaxation of [`kayfabe_fwd::FwdFault::NoHostVas`]'s ruling**, and
+    /// the difference is the whole of why it is sound. That refusal's stated reason is
+    /// *"allocating an empty host VAS here would let the chain proceed and point a real
+    /// copy engine at addresses that resolve to nothing in it"* — it is about **execution
+    /// over an unpopulated space**, and it still governs `plan_ce`, which is where it lives.
+    /// Nothing executes over the space this function mints: it is handed to the scratchpad
+    /// precisely so the scratchpad can **populate** it, and the first thing that could run
+    /// over it is a channel born after slices exist. ⇒ the ruling's *why* does not reach
+    /// here. (`a_rulings_date_is_part_of_the_citation`.)
+    ///
+    /// # ★★★ w746 — AND IT TAKES THE ROUTE ITS CALLER ALREADY HOLDS
+    ///
+    /// `pid` is a parameter because every call site already built
+    /// `IsolateId::new(pid.0, gpu)` from it before calling. Re-deriving it with `route_pdb`
+    /// was a **second statement of a routing decision the caller had already made**
+    /// (`a_second_source_of_truth_beside_a_complete_value`).
+    ///
+    /// ⚠⚠ **AND THE SUBTRACTION REMOVES A CHECK, SO THE CHECK IS RESTATED** (constraint 29
+    /// part 1). Two asserts, both fail-closed, both at the point of use:
+    ///
+    /// 1. [`kayfabe_fwd::FwdFault::HandoverRouteDisagrees`] — the spine must agree that
+    ///    `pdb` on `gpu` belongs to `pid`. ★★★ This is constraint 29 part 2 exactly: the
+    ///    argument that retired the derivation is *"the caller's route is the one that owns
+    ///    this space"*, so the replacement **goes red if it is not**. It is total — it can
+    ///    only fire when the caller and the authority genuinely disagree.
+    /// 2. `FbLeafExtent` / `FbLeafDisagrees` on `leaf` — if the `Vas` this route reached
+    ///    **describes** the leaf's VA at all, it must describe it as THIS leaf: same extent,
+    ///    `Vidmem`, same `phys`. ⊘ Deliberately reusing the two refusals
+    ///    `bind_backed_fb_leaf` already spells rather than inventing a third name for one
+    ///    fact. ⚠ An **absent** row is permitted and **counted**, not silently passed: the
+    ///    ring source presents leaves off a page-table walk that the address table may not
+    ///    have a row for yet, and `not found is not not-written`. The count is
+    ///    `handover_leaf_untabled` in the census line.
+    ///
     /// # Errors
-    /// [`FwdFault`] when the `Vas` cannot be routed, has no host VAS yet, or offers no
-    /// worker; the isolate's own refusal (`HANDOVER_OF_A_NON_BARE_SPACE`) when the space is
-    /// not bare — i.e. when this was called on the `isolate` arm, which is a configuration
-    /// error and not a transient.
+    /// [`FwdFault`] when the proc is gone, the `Vas` cannot be found, the route disagrees,
+    /// the leaf disagrees, or no worker is free; the isolate's own refusal
+    /// (`HANDOVER_OF_A_NON_BARE_SPACE`) when the space is not bare — i.e. when this was
+    /// called on the `isolate` arm, which is a configuration error and not a transient.
     pub fn vaspace_handover(
         &self,
+        pid: ProcId,
         gpu: GpuId,
         pdb: Pdb,
+        leaf: crate::completion_watch::FbLeaf,
     ) -> Result<kayfabe_isolate::BareVaSpace, FwdFault> {
-        // ---- PLAN: route, read `host_vas`, and take a worker — all inside one locked phase.
-        let mut taken: Option<(ProcId, kayfabe_isolate::HostHandle, Worker)> = None;
+        // ---- PLAN: check the caller's route, check the leaf, read `host_vas`, take a
+        // worker — all inside one locked phase, so nothing below can be true of a different
+        // `Vas` than the one that was checked.
+        let mut taken: Option<(Option<kayfabe_isolate::HostHandle>, Worker)> = None;
+        let mut refusal: Option<FwdFault> = None;
         self.route_act(
-            |spine| Ok((kayfabe_fwd::route_pdb(spine, gpu, pdb)?, ())),
+            |spine| {
+                // ★★★ REPLACEMENT ASSERT 1 — the caller's route, checked against the
+                // authority instead of replacing it. ⊘ `route_pdb`'s own misses
+                // (`UnknownPdb`, `Condemned`) are still surfaced, because "the spine does
+                // not know this pdb" is not the same finding as "it knows and says someone
+                // else".
+                let owner = kayfabe_fwd::route_pdb(spine, gpu, pdb)?;
+                if owner != pid {
+                    return Err(FwdFault::HandoverRouteDisagrees {
+                        gpu,
+                        pdb,
+                        caller: pid,
+                        spine: owner,
+                    });
+                }
+                Ok((pid, ()))
+            },
             |_spine, proc, ()| {
                 let Some(vas) = proc.vas_by_pdb(gpu, pdb) else {
+                    refusal = Some(FwdFault::UnknownPdb { gpu, pdb });
                     return;
                 };
-                let Some(host_vas) = vas.host_vas else {
-                    return;
-                };
+                // ★★★ REPLACEMENT ASSERT 2 — does THIS `Vas` describe the leaf the caller
+                // is about to have a slice placed for? ⊘ Absence is permitted and counted
+                // (see the type doc); DISAGREEMENT is refused.
+                match vas.table.binding_at(kayfabe_arch::ids::GpuVa(leaf.va)) {
+                    None => {
+                        HANDOVER_LEAF_UNTABLED
+                            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    }
+                    Some((start, tlen, b)) => {
+                        if start != leaf.va || tlen != leaf.len {
+                            refusal = Some(FwdFault::FbLeafExtent {
+                                va: kayfabe_arch::ids::GpuVa(leaf.va),
+                                len: leaf.len,
+                                tabled: (start, tlen),
+                            });
+                            return;
+                        }
+                        if b.aperture() != kayfabe_arch::Aperture::Vidmem || b.phys() != leaf.phys
+                        {
+                            refusal = Some(FwdFault::FbLeafDisagrees {
+                                va: kayfabe_arch::ids::GpuVa(leaf.va),
+                                walked: (leaf.phys, kayfabe_arch::Aperture::Vidmem),
+                                tabled: (b.phys(), b.aperture()),
+                            });
+                            return;
+                        }
+                    }
+                }
+                let host_vas = vas.host_vas;
                 // ⊘ `checkout_with_pending_release` and not a bare checkout: it is the only
                 // door, and its `Orphans` obligation travels with the worker. We owe the
                 // disposal exactly as every other op does.
                 let (worker, orphans) = proc.checkout_with_pending_release(gpu);
                 if let Some(w) = worker {
-                    taken = Some((proc.id, host_vas, w));
+                    taken = Some((host_vas, w));
                     // The queue rides out with this checkout, as it does for every op.
                     proc.stage_release(gpu, orphans);
                 } else {
                     // ⊘ Put it straight back: taking a queue we cannot issue would strand it.
                     proc.stage_release(gpu, orphans);
+                    refusal = Some(FwdFault::PoolSaturated { proc: pid, gpu });
                 }
             },
         )?;
-        let Some((pid, host_vas, mut worker)) = taken else {
-            return Err(FwdFault::NoVas(kayfabe_core::ChanId(0)));
+        if let Some(f) = refusal {
+            return Err(f);
+        }
+        let Some((host_vas, mut worker)) = taken else {
+            // ⊘ Unreachable in practice — every early return above names itself — and it is
+            // still spelled rather than `expect`ed, because a refusal that cannot say which
+            // conjunct fired is the defect this whole function is a correction of.
+            return Err(FwdFault::PoolSaturated { proc: pid, gpu });
         };
-        // ---- EXECUTE: zero locks held.
+        // ---- EXECUTE: zero locks held. Either ask about the space this `Vas` already
+        // holds, or MINT a bare one for it.
         let off = kayfabe_util::trapwitness::OffTrap::claim("asking for a VA-space hand-over");
-        let out = worker.with_rm(&off, |rm| rm.vaspace_handover(host_vas));
+        let minted = host_vas.is_none();
+        let out = worker.with_rm(&off, |rm| match host_vas {
+            Some(h) => rm.vaspace_handover(h),
+            None => rm.alloc_vaspace_bare(),
+        });
         self.return_worker(pid, gpu, worker);
-        out.map_err(|err| FwdFault::Rm { err, on: None })
+        let bare = out.map_err(|err| FwdFault::Rm { err, on: None })?;
+        // ★★★★★ **CONSTRAINT 30's ASSERT ON THIS SHARING PATH, AND IT ARRIVES WITH IT.**
+        //
+        // > Owner, 2026-09-15: *"the reason we also do isolates is to ensure the channel is
+        // > created in an unprivileged process. If ogkm links the process that created the
+        // > channel to the privileges of it… the cross guest process isolation is broken."*
+        //
+        // `[ogkm-580.159.04, kernel_channel.c:277-295]` privilege and process identity are
+        // stamped **at creation** and survive a `DupObject`. ⇒ the direction of this
+        // hand-over is load-bearing: the space must be **created by the per-proc isolate**
+        // and lent UP to the scratchpad, never created by the scratchpad and lent DOWN.
+        // Constraint 30's withdrawn option (d) is the second direction.
+        //
+        // ⊘ **Asserted, not assumed, and that is the whole of constraint 30 part 3.** The
+        // mint above runs through `proc.checkout_with_pending_release(gpu)` — the per-proc
+        // pool — so it is the right party *by construction* today; this is the check that
+        // notices when a future edit takes the worker from somewhere else. ⚠ It is a
+        // property of the HANDLE, which carries its minting isolate, so it cannot be
+        // satisfied by a comment.
+        if !bare
+            .space
+            .belongs_to(kayfabe_isolate::IsolateId::new(pid.0, gpu))
+        {
+            HANDOVER_SPACE_NOT_HELD.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            kayfabe_util::lock_safe_eprintln!(
+                "kayfabe: HAND-OVER ⊘⊘⊘ REFUSED CONSTRAINT 30 — the space offered for \
+                 proc={} pdb={pdb:?} is {:?}, which is NOT this proc's own isolate's. A space \
+                 the scratchpad created and lent DOWN carries the scratchpad's privilege and \
+                 process identity at every channel born in it (ogkm-580 \
+                 kernel_channel.c:277-295), which is the cross-guest isolation the per-proc \
+                 isolates exist to provide.",
+                pid.0,
+                bare.space,
+            );
+            return Err(FwdFault::HandoverRouteDisagrees {
+                gpu,
+                pdb,
+                caller: pid,
+                spine: pid,
+            });
+        }
+        if !minted {
+            return Ok(bare);
+        }
+        // ---- COMMIT: adopt the freshly-minted space into the `Vas`, under the lock again.
+        //
+        // ⚠ **R5, and it is a real race.** Two publish threads can reach the mint at once;
+        // exactly one may win, or the loser's space is an orphan RM holds and nothing names.
+        // ⊘ The loser does NOT return its own handle: it returns the winner's, so every
+        // caller of this function is talking about the same address space.
+        let mut orphan: Option<kayfabe_isolate::HostHandle> = None;
+        let mut winner = bare;
+        let committed = self.route_act(
+            |_| Ok((pid, ())),
+            |_spine, proc, ()| {
+                let Some(vas) = proc.vas_by_pdb_mut(gpu, pdb) else {
+                    orphan = Some(bare.space);
+                    return false;
+                };
+                match vas.host_vas {
+                    None => {
+                        vas.host_vas = Some(bare.space);
+                        true
+                    }
+                    Some(theirs) => {
+                        // A sibling won. Ours is an orphan; theirs is the answer.
+                        orphan = Some(bare.space);
+                        winner = kayfabe_isolate::BareVaSpace {
+                            space: theirs,
+                            client: bare.client,
+                        };
+                        true
+                    }
+                }
+            },
+        )?;
+        if let Some(h) = orphan {
+            self.stage_orphans(
+                pid,
+                gpu,
+                kayfabe_isolate::Orphans {
+                    unmap: Vec::new(),
+                    free: vec![h],
+                    guest_ram: Vec::new(),
+                },
+            );
+        }
+        if !committed {
+            return Err(FwdFault::UnknownPdb { gpu, pdb });
+        }
+        // ★★★ REPLACEMENT ASSERT 3 — what leaves this function is what the `Vas` HOLDS.
+        // ⊘ Fail-closed and total: it re-reads core state rather than trusting the branch
+        // above, so a hand-over can never hand out a space some other `Vas` owns.
+        let held = self
+            .route_act(
+                |_| Ok((pid, ())),
+                |_spine, proc, ()| proc.vas_by_pdb(gpu, pdb).and_then(|v| v.host_vas),
+            )
+            .ok()
+            .flatten();
+        if held != Some(winner.space) {
+            HANDOVER_SPACE_NOT_HELD.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            return Err(FwdFault::HandoverRouteDisagrees {
+                gpu,
+                pdb,
+                caller: pid,
+                spine: pid,
+            });
+        }
+        Ok(winner)
+    }
+
+    /// ★★★ **w746 — leaves the hand-over was asked about whose VA this `Vas` has NO row
+    /// for.** ⊘ Permitted (a page-table walk can present a leaf the address table has not
+    /// learned yet) and **counted**, because *"not found is not not-written"* and a silent
+    /// pass here would be the hole replacement assert 2 exists to close.
+    #[must_use]
+    pub fn handover_leaf_untabled() -> u64 {
+        HANDOVER_LEAF_UNTABLED.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// ★★★ **w746 — hand-overs whose returned space is NOT the one the `Vas` holds.**
+    /// Replacement assert 3's counter. ⊘ Any non-zero here is a defect, never a transient.
+    #[must_use]
+    pub fn handover_space_not_held() -> u64 {
+        HANDOVER_SPACE_NOT_HELD.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     /// ★★★★★ **CONSTRAINT 26 — record the scratchpad's range over this `Vas`'s space.**

@@ -131,6 +131,14 @@ if [ "$n_w742" -eq 0 ]; then echo "⊘ the binary predates w742 — its rows can
 if [ "$n_w743" -eq 0 ]; then echo "⊘ the binary predates w743 — its rows cannot be graded. STOP."; exit 9; fi
 echo "W745-CONTENT: store_map=$n_w745 ring_not_a_slice=$n_w745b split_census=$n_w745c (any 0 ⇒ the binary predates w745)"
 if [ "$n_w745" -eq 0 ] || [ "$n_w745b" -eq 0 ] || [ "$n_w745c" -eq 0 ]; then echo "⊘ the binary predates w745 — its rows cannot be graded. STOP."; exit 10; fi
+# ★★★★★ w746 ADDITION — CONTENT GATE. Every w746 row below is about a string this revision
+# introduced; a binary that predates it prints zeros that read exactly like measured zeros.
+# ⊘ The bench served a binary built from `862c7c2` for weeks; this is the check that makes
+# that impossible for THIS increment's rows rather than a thing to remember.
+n_w746=$(strings "$Q_BIN" 2>/dev/null | grep -c 'HANDOVER-ASSERTS')
+n_w746b=$(strings "$Q_BIN" 2>/dev/null | grep -c 'THE HAND-OVER WAS REFUSED')
+echo "W746-CONTENT: handover_asserts=$n_w746 refusal_line=$n_w746b (any 0 ⇒ the binary predates w746)"
+if [ "$n_w746" -eq 0 ] || [ "$n_w746b" -eq 0 ]; then echo "⊘ the binary predates w746 — its rows cannot be graded. STOP."; exit 11; fi
 
 report() {
   local tag="$1" arm="$2"
@@ -329,7 +337,29 @@ report() {
   echo "W745-BIRTH-ADOPTING=$(grep -ac 'BIRTH-AT-ALLOC.*ADOPTING at creation' "$Q" 2>/dev/null)   ★★★ 0 on all three prior boots"
   echo "W745-DOORBELL-BIRTH=$(grep -ao 'FwdFault::PassthroughDoorbellBirth=[0-9]*' "$Q" 2>/dev/null | tail -1)   ⊘ w740/w742/w743: 19, 19, 19"
   echo "W745-FOREIGN-HANDLE=$(grep -ac 'ForeignHandle' "$Q" 2>/dev/null)"
-  echo "W745-BARE-SPACE-REFUSED=$(grep -ac '0x4b42\|MAP_THROUGH_A_BARE_SPACE' "$Q" 2>/dev/null)"
+  # ⊘⊘⊘ **w746 — THIS GREP WAS BLIND TO ITS OWN REFUSAL, AND THE BOOT PROVED IT.**
+  # `[measured w746, split arm]` the refusal fired **10 times** and this row reported **0**,
+  # because `RmError::Other` is printed through `Debug` in DECIMAL — `Other(19266)` — and the
+  # pattern asked for `0x4b42` and the constant's NAME, neither of which ever appears in the
+  # log. ⇒ a counter that cannot see the thing it counts, inside the increment whose subject
+  # is exactly that. The decimal spelling is now first.
+  echo "W745-BARE-SPACE-REFUSED=$(grep -ac 'Other(19266)\|0x4b42\|MAP_THROUGH_A_BARE_SPACE' "$Q" 2>/dev/null)   ⊘ 19266 = 0x4B42; the Debug print is DECIMAL"
+  echo "W746-SCRATCHPAD-BIRTH-REFUSED=$(grep -ac 'Other(19270)\|SCRATCHPAD_BIRTH_IN_A_HANDED_SPACE' "$Q" 2>/dev/null)   ⊘ 19270 = 0x4B46 (constraint 30)"
+  echo "W746-RING-HANDLE-RM-DEC=$(grep -ac 'Other(19269)\|RING_HANDLE_REACHED_RM' "$Q" 2>/dev/null)   ⊘ 19269 = 0x4B45 (constraint 29)"
+  echo "W746-HANDOVER-NON-BARE=$(grep -ac 'Other(19267)\|HANDOVER_OF_A_NON_BARE_SPACE' "$Q" 2>/dev/null)   ⊘ 19267 = 0x4B43"
+  echo "W746-ADOPT-NOT-SCRATCHPAD=$(grep -ac 'Other(19265)\|ADOPT_NOT_THE_SCRATCHPAD' "$Q" 2>/dev/null)   ⊘ 19265 = 0x4B41"
+  echo "--- ★★★★★ w746 ROWS: THE HAND-OVER'S ENSURE PATH AND ITS THREE ASSERTS ---"
+  # ⊘ `asked` beside every fire. w745 read `RING-NOT-A-SLICE=0` and `FOREIGN-HANDLE=0` as
+  # passes on a boot where `asserted=0`; a gate's zero is a pass only if the gate RAN.
+  echo "W746-ASSERTS-LINE=$(grep -ac 'HANDOVER-ASSERTS' "$Q" 2>/dev/null)  (0 ⇒ UNMEASURED)"
+  grep -ao 'HANDOVER-ASSERTS .\{0,400\}' "$Q" 2>/dev/null | tail -1 | fold -w 160
+  echo "W746-HANDOVER-MINTED=$(grep -ac 'CONSTRAINT-26 HAND-OVER' "$Q" 2>/dev/null)   ★★★ row A: ≥1. w745: 0, and the cause was that host_vas was never minted"
+  echo "W746-HANDOVER-REFUSED-LINES=$(grep -ac 'THE HAND-OVER WAS REFUSED' "$Q" 2>/dev/null)"
+  grep -a 'THE HAND-OVER WAS REFUSED' "$Q" 2>/dev/null | head -3 | cut -c1-320
+  echo "W746-ROUTE-DISAGREES=$(grep -ac 'HandoverRouteDisagrees' "$Q" 2>/dev/null)   ⊘ ANY non-zero is a DEFECT, never a transient"
+  echo "W746-C30-REFUSED=$(grep -ac 'REFUSED CONSTRAINT 30' "$Q" 2>/dev/null)   ⊘ constraint 30: a space that is not this proc's own isolate's"
+  echo "W746-C30-BIRTH-REFUSED=$(grep -ac 'SCRATCHPAD_BIRTH_IN_A_HANDED_SPACE' "$Q" 2>/dev/null)   ⊘ constraint 30: the scratchpad birthing in an adopted space"
+  echo "W746-RING-HANDLE-REACHED-RM=$(grep -ac 'RING_HANDLE_REACHED_RM' "$Q" 2>/dev/null)   ⊘ constraint 29: the deleted \`AdoptedGuestRing::memory\`'s premise breaking"
   echo "--- ★★★★★ w745 ROW 6: CONSTRAINT 27's barrier, on every arm ---"
   echo "W745-WITHHELD-UNMAPS=$(grep -ac 'WITHHELD-UNMAPS' "$Q" 2>/dev/null)"
   echo "W745-MMUINVAL=$(grep -ao 'MMUINVAL armed=.\{0,400\}' "$Q" 2>/dev/null | tail -1)"

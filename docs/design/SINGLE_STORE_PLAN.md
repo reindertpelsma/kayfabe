@@ -2278,6 +2278,72 @@ here rather than discovered by a latency campaign later (w586's class, by w554's
    release-and-re-arm, **~0.7 ms measured**, on the vCPU, which is the one sanctioned expensive
    trap (constraint 4) and is inside its budget.
 
+### ⊘⊘⊘ CORRECTED 2026-09-15 (w746) — **THE CAUSE NAMED BELOW IS WRONG, AND IT IS WRONG IN THE HEADLINE.** Read this first.
+
+**STATUS: LIVE, 2026-09-15.** ⚠ The block below says the 4619 refusals were *"a routing key
+re-derived from a placeholder"*. **They were not.** Re-derived from w745's own committed
+evidence (`traces/w745_split/w745_evidence.tgz`, no new boot):
+
+- `Pdb(0)` is a **real, uniquely-claimed base**. `project.rs`'s `pdb_claims` makes two live
+  VASpaces on one GPU sharing a base a hard `ProjectionError::PdbCollision`, so
+  `route_pdb(gpu, Pdb(0))` resolves to **proc 2** — the same proc `vas_keys` enumerated it
+  under, and the same proc whose census produced the leaf **three lines earlier in the same
+  function**. ⇒ the route was never wrong.
+- The failing conjunct is the **next** one: `let Some(host_vas) = vas.host_vas else { return }`.
+
+★★★★★ **AND THE REASON `host_vas` WAS `None` IS A CLOSED LOOP — "a repair gated on the
+success it repairs", in its purest form.** The evidence is one line of the split arm's own
+log:
+
+    VERBCOST total=39504us over 8 plan(s) [EngineObject n=8 … 100.0%]
+
+⊘ **`EngineObject` is the ONLY verb that ran.** No `JoinFbLeaf`, no `ChannelBirth`, no
+`PinGuestRam` — and those are the verbs whose commits mint `Vas::host_vas`. And every engine
+object was **refused**: `[seen=10 forwarded=0 refused=10]` on arm 3 against
+`[seen=10 forwarded=8 refused=2]` on arm 2, same binary, one variable. The loop:
+
+```text
+  host_vas is minted ONLY by a commit that SUCCEEDED
+   ⇒ on the device arm the only verb that runs is EngineObject
+   ⇒ it births a channel whose ring is RingSource::Ours, which MAPS its own 64 KiB ring
+   ⇒ on the scratchpad arm the space is BARE and cannot be mapped through
+   ⇒ the birth is refused and its freshly-minted space is UNWOUND
+   ⇒ host_vas stays None forever
+   ⇒ the hand-over refuses ⇒ no slice ⇒ no binding ⇒ conjunct (6) ⇒ the client is (R).
+```
+
+⊘⊘⊘ **AND HERE IS WHY w745 COULD NOT SEE IT, WHICH IS THE TRANSFERABLE HALF.** w745's own
+pre-boot amendment predicted this mechanism *in words* and gave it a falsifier:
+*"`RmInitAdapter failed!` ≥ 1 **and** `W745-BARE-SPACE-REFUSED` ≥ 1 ⇒ this amendment,
+confirmed"*. It measured `BARE-SPACE-REFUSED = 0` and took the third row — *"better than
+predicted, the emulated path did not need a map on this boot"* — which **retired the correct
+diagnosis**.
+
+★★★ **That row could not have fired whatever happened.** `MAP_THROUGH_A_BARE_SPACE` lived in
+four `RmBackend` verbs; `alloc_channel_in` calls **none** of them — it reaches RM through
+`RmConnection::raw_map_dma` directly. The map happened, RM answered it `0x51`
+(`NV_ERR_NO_MEMORY`, indistinguishable from exhaustion), and the counter stayed at zero
+**because of its own plumbing**. ⇒ *a census reporting a zero its own plumbing guarantees*,
+on the one row that decided the reading. Fixed at w746: the refusal now sits in
+`raw_map_dma_slice`, the single site where `NVOS46_PARAMETERS` is built, and
+`ownership_split_gates.rs` is the test that goes red if it leaves.
+
+#### ⇒ WHAT w746 CHANGED, and the assert each change owes (constraint 29)
+
+| change | the failure it addresses | the assert that now watches it |
+|---|---|---|
+| the hand-over **ensures** the space (`alloc_vaspace_bare` when `host_vas` is `None`) | the closed loop above | `vaspace_handover_asserts.rs` — the mint is committed, and a second ask reaches the SAME space |
+| `route_pdb` inside the hand-over **removed**; the caller's `ProcId` is used | a second statement of one routing decision | `FwdFault::HandoverRouteDisagrees` — red exactly when caller and spine disagree |
+| the leaf is checked against the routed `Vas` | *"which `Vas` owns this leaf?"* had no answer at the point of use | `FbLeafExtent` / `FbLeafDisagrees`, fail-closed; an **absent** row is admitted and **counted** (`leaf_untabled`) |
+| `MAP_THROUGH_A_BARE_SPACE` restated in `raw_map_dma_slice` | a counter zero by construction | `ownership_split_gates::every_map_in_this_crate_can_refuse_a_bare_space` |
+| constraint 30: the scratchpad may not birth in an adopted space; the handed space must be the asking proc's own | `[ogkm-580.159.04 kernel_channel.c:277-295]` privilege is stamped at creation and survives a dup | `SCRATCHPAD_BIRTH_IN_A_HANDED_SPACE` + `the_space_handed_over_is_the_asking_procs_own_isolates` |
+| `RING_HANDLE_REACHED_RM` | `AdoptedGuestRing::memory` was deleted on *"the handle never reaches RM"* and nothing watched that | `guest_ring_census::a_store_slice_birth_refuses_before_rm_if_it_holds_a_ring_handle` |
+
+⚠ **None of this is a hardware measurement yet.** What is measured is the CAUSE (from w745's
+artifacts) and the port-level FIX (offline, `cargo test`). The boot is `traces/w746_handover/`.
+
+---
+
 ### ✔✔✔ MEASURED 2026-09-15 (w745) — **THE SPLIT ARMS, THE PUBLISH ROUTE REACHES IT, AND IT REFUSES AT ONE PLACE 4 619 TIMES. THE CAUSE IS A ROUTING KEY RE-DERIVED FROM A PLACEHOLDER.**
 
 ⚠ **Read this before the "BUILT" block below; it is that block's measurement.**

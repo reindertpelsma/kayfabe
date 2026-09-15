@@ -651,6 +651,24 @@ struct Objects {
     /// that `alloc_channel_in`, which asks *"what space is this range in?"*, keeps working
     /// unchanged when the handle it is given IS the space.
     bare_spaces: std::collections::BTreeSet<u32>,
+    /// ★★★★★ **CONSTRAINT 30 — the `FERMI_VASPACE_A` handles this connection ADOPTED from
+    /// somebody else** (`NV_ESC_RM_DUP_OBJECT`, [`RmBackend::adopt_vaspace`]), as opposed to
+    /// the ones it created.
+    ///
+    /// > Owner, 2026-09-15: *"the reason we also do isolates is to ensure the channel is
+    /// > created in an unprivileged process. If ogkm links the process that created the
+    /// > channel to the privileges of it, the cross guest process isolation is broken."*
+    ///
+    /// `[ogkm-580.159.04, kernel_channel.c:277-295]` privilege is stamped **at creation**
+    /// from the creating call context and the channel records the creating process; a
+    /// `DupObject` does not re-run that code. ⇒ a channel the **scratchpad** births is
+    /// stamped with the scratchpad's privilege for the whole of its life, and our isolates'
+    /// kernel-visible euid is `0` on a root VMM.
+    ///
+    /// ⊘ This set is what makes *"the scratchpad births the channel and dups it to the
+    /// isolate"* — constraint 30's withdrawn option (d) — **refusable rather than merely
+    /// unwritten**. See [`SCRATCHPAD_BIRTH_IN_A_HANDED_SPACE`].
+    adopted_spaces: std::collections::BTreeSet<u32>,
     /// ★ `channel handle -> the four objects and one address that make it work`.
     ///
     /// Same shape of problem as [`Objects::companions`] and a different answer, because a
@@ -1278,6 +1296,57 @@ pub const MAP_THROUGH_A_BARE_SPACE: u32 = 0x4B42;
 /// scratchpad's to map into"*.
 pub const HANDOVER_OF_A_NON_BARE_SPACE: u32 = 0x4B43;
 
+/// ★★★★★ **w746, CONSTRAINT 29 — THE REPLACEMENT FOR `AdoptedGuestRing::memory`.**
+///
+/// That field was deleted at constraint 26c on the argument *"the ring handle never reaches
+/// RM — it was an authorization token, not an operand"*. ⊘ **That argument is exactly the
+/// thing most likely to be wrong, and nothing was watching it**: the claim was established
+/// by reading [`HostRmBackend::alloc_channel_in`]'s body once, and any later edit that fed
+/// `ring_obj` into `ChannelAllocParams` would have restored the violation silently.
+///
+/// ⇒ This is the gate that goes red if it ever does. On the `StoreSlice` arm the birth
+/// isolate holds **no** handle for the ring, so three things must all be true at the moment
+/// RM is addressed: `ring_obj` is `0`, the USERD is not the in-ring one (which would BE
+/// `ring_obj`), and the USERD handle RM is told about is not itself `0`.
+///
+/// ⚠ Fail-closed, and refused **before** `NV_ESC_RM_ALLOC` is built rather than after: a
+/// channel born naming handle `0` is a channel RM resolves to nothing, which is the silent
+/// `GP_PUT == GP_GET` this whole leg exists to avoid.
+pub const RING_HANDLE_REACHED_RM: u32 = 0x4B45;
+
+/// ★★★★★ **w746, CONSTRAINT 30 — THE SCRATCHPAD MAY NOT BIRTH A CHANNEL IN A SPACE IT
+/// ADOPTED.**
+///
+/// > Owner, 2026-09-15: *"the reason we also do isolates is to ensure the channel is created
+/// > in an unprivileged process. If ogkm links the process that created the channel to the
+/// > privileges of it… the cross guest process isolation is broken. So this has to be
+/// > asserted."*
+///
+/// `[ogkm-580.159.04, src/kernel/gpu/fifo/kernel_channel.c:277-295]` — `privLevel` comes
+/// from `pCallContext->secInfo.privLevel` at **creation**, `rmclientIsAdmin(...)` alone is
+/// enough for `_PRIVILEGED_CHANNEL_TRUE`, and `ProcessID`/`SubProcessID` are copied from the
+/// creating client. `NV_ESC_RM_DUP_OBJECT` does not re-run any of it.
+///
+/// ⇒ A channel born by the scratchpad and handed to a guest proc would carry the
+/// **scratchpad's** privilege and process identity for its whole life, which is the cross-
+/// guest isolation the per-proc isolates exist to provide. Constraint 30 withdrew that
+/// design; this is the gate that makes it **refusable rather than merely unwritten**.
+///
+/// ⊘ **Scoped to ADOPTED spaces on purpose, and the scoping is the correctness argument.**
+/// The scratchpad legitimately births channels of its own — the `ce_copy` copy engine, the
+/// CUDA walk kernel — in spaces it created, and those are never shared with a guest proc. A
+/// blanket *"the scratchpad births nothing"* would refuse those and would be a different,
+/// wrong rule. What constraint 30 forbids is the scratchpad birthing **into a space that
+/// came from somewhere else**, which is exactly [`Objects::adopted_spaces`].
+///
+/// ⚠ **This is a structural refusal, not the measurement.** Whether a *mapping* the
+/// scratchpad places in a handed-over space conveys anything of the scratchpad's is
+/// `[UNMEASURED]` — see `docs/design/ownership_gpga_leases_and_the_two_channel_kinds.md`.
+/// Constraint 30 part 3 says an unmeasured sharing is refused, not assumed; this gate
+/// refuses the one shape ogkm has already answered, and the doc names the falsifier for the
+/// one it has not.
+pub const SCRATCHPAD_BIRTH_IN_A_HANDED_SPACE: u32 = 0x4B46;
+
 /// The opaque status a **bounds** refusal made by this crate reports.
 ///
 /// ★ Distinct from [`NOT_ON_THIS_RUNG`], and the distinction is not cosmetic. An access
@@ -1830,6 +1899,7 @@ impl RmConnection {
                 parents: BTreeMap::new(),
                 companions: BTreeMap::new(),
                 bare_spaces: std::collections::BTreeSet::new(),
+                adopted_spaces: std::collections::BTreeSet::new(),
                 channels: BTreeMap::new(),
                 exec_vases: BTreeMap::new(),
             }),
@@ -2385,6 +2455,27 @@ impl RmConnection {
             .insert(space);
     }
 
+    /// ★★★★★ **CONSTRAINT 30** — is `h` an address space this connection ADOPTED rather
+    /// than created? See [`Objects::adopted_spaces`].
+    fn is_adopted_space(&self, h: u32) -> bool {
+        let _leaf = leafwitness::Held::enter();
+        self.objects
+            .lock()
+            .expect("objects")
+            .adopted_spaces
+            .contains(&h)
+    }
+
+    /// Record `space` as adopted. Called only by the scratchpad's `adopt_vaspace`.
+    fn remember_adopted_space(&self, space: u32) {
+        let _leaf = leafwitness::Held::enter();
+        self.objects
+            .lock()
+            .expect("objects")
+            .adopted_spaces
+            .insert(space);
+    }
+
     /// The isolate's own address space over `guest_range`, if one has been built.
     fn exec_vas_of(&self, guest_range: u32) -> Option<u32> {
         let _leaf = leafwitness::Held::enter();
@@ -2619,6 +2710,31 @@ impl RmConnection {
         at: Option<u64>,
         extra: u32,
     ) -> Result<u64, RmError> {
+        // ★★★★★ **CONSTRAINT 26/29 — THE BARE-SPACE REFUSAL, AT THE ONE PLACE EVERY MAP
+        // GOES THROUGH.** `[measured from w745's own committed evidence, w746]`
+        //
+        // The same refusal has lived in the four `RmBackend` verbs (`map_gpu_va`,
+        // `unmap_gpu_va`, `map_local_at`, `unmap_local`) since constraint 26b — and
+        // `alloc_channel_in` does not call any of them. It reaches RM through
+        // [`RmConnection::raw_map_dma`] **directly**, so a channel birth mapping its own
+        // 64 KiB ring into a bare space could never increment that counter.
+        //
+        // ⊘⊘⊘ w745 pre-registered *"`RmInitAdapter failed!` ≥ 1 **and**
+        // `W745-BARE-SPACE-REFUSED` ≥ 1"* as the row that would confirm exactly this
+        // mechanism, measured `BARE-SPACE-REFUSED=0`, and read the third row — *"better
+        // than predicted: the emulated path did not need a map on this boot"*. **The zero
+        // was guaranteed by this function's own plumbing.** The map DID happen; RM answered
+        // it `0x51` and the isolate reported that instead, ten times
+        // (`traces/w745_split/…/run_w745split_qemu.log`, every `ENGINE-OBJECT … REFUSED`).
+        //
+        // ⇒ Restated HERE, where `Nvos46Parameters` is built and therefore where every map
+        // in the crate is expressible, so the counter cannot be zero by construction again.
+        // ⚠ It is a **widening of the same refusal, not a new policy**: the four verbs keep
+        // theirs (they refuse before building anything and say which verb asked), and this
+        // one is the backstop that makes their question total.
+        if self.is_bare_space(h_dma) {
+            return Err(RmError::Other(MAP_THROUGH_A_BARE_SPACE));
+        }
         let mut arg = [0u8; Nvos46Parameters::SIZE];
         // ★★★★★ **CONSTRAINT 28, HALF ONE — THE PAGE-SIZE FLAG MATCHES THE REQUEST.**
         // `[measured w744]` `DMA_OFFSET_FIXED_TRUE` alone is **not** address identity: RM
@@ -5599,6 +5715,11 @@ impl RmBackend for HostRmBackend {
         // Parented at the DEVICE: `[measured w744]` a dup parented at the client root is
         // refused `0x36`, and the device is the legal parent for this class.
         let duped = self.conn.raw_dup_object(self.conn.device, want, handed)?;
+        // ★★★★★ **CONSTRAINT 30 — REMEMBERED AS ADOPTED BEFORE ANYTHING CAN USE IT.**
+        // Recorded here and not at the range, for `remember_bare_space`'s reason exactly:
+        // the two views of *"whose space is this?"* must not be able to come apart, and the
+        // only instant at which the answer is unambiguous is the one the dup returns.
+        self.conn.remember_adopted_space(duped);
         match self.conn.raw_alloc_range_over(duped) {
             Ok(range) => Ok(self.stamp(range)),
             Err(e) => {
@@ -7667,6 +7788,23 @@ impl HostRmBackend {
                 .ok_or_else(|| RmError::BadHandle(self.stamp(range)))?,
         };
 
+        // ★★★★★ **CONSTRAINT 30 — REFUSED BEFORE ANY OBJECT EXISTS.** See
+        // [`SCRATCHPAD_BIRTH_IN_A_HANDED_SPACE`]. ⊘ Placed above the first allocation so
+        // that the refusal has nothing to unwind: a gate that has to clean up is a gate that
+        // can leak on the path it exists to take.
+        if ScratchpadRole::of(self.id).is_some() && self.conn.is_adopted_space(space) {
+            eprintln!(
+                "kayfabe-isolate: CHANNEL-BIRTH ⊘⊘⊘ REFUSED SCRATCHPAD_BIRTH_IN_A_HANDED_SPACE \
+                 space={space:#x} engine_type={engine_type:#x} — this is the VM-lifetime \
+                 scratchpad, and this address space was ADOPTED from a per-proc isolate. \
+                 ogkm-580 stamps a channel's privilege and process identity AT CREATION \
+                 (kernel_channel.c:277-295) and a DupObject does not re-run it, so a channel \
+                 born here would carry the scratchpad's privilege into a guest proc's space \
+                 for its whole life. Constraint 30."
+            );
+            return Err(RmError::Other(SCRATCHPAD_BIRTH_IN_A_HANDED_SPACE));
+        }
+
         let unwind = |me: &mut Self, objs: &[u32]| {
             for h in objs.iter().rev() {
                 let _ = me.free(me.stamp(*h));
@@ -7942,6 +8080,29 @@ impl HostRmBackend {
             return Err(RmError::Other(TSG_NOT_SINGLETON));
         }
 
+        // ★★★★★ **w746, CONSTRAINT 29 — THE RESTATED `AdoptedGuestRing::memory` CHECK, AT
+        // THE ONE INSTANT IT IS ABOUT.** See [`RING_HANDLE_REACHED_RM`].
+        //
+        // ⊘ Placed HERE — after every handle this function will name has been decided and
+        // before the struct RM reads is built — because the claim being defended is about
+        // what crosses to RM, not about what a plan carried. A check at the plan would be a
+        // check of a different fact wearing the same name.
+        let store_slice_ring = matches!(
+            ring,
+            RingSource::Guest(GuestRing {
+                ring: kayfabe_isolate::RingProvenance::StoreSlice { .. },
+                ..
+            })
+        );
+        if store_slice_ring
+            && (ring_obj != 0 || matches!(userd_owner, UserdOwner::InRing) || userd == 0)
+        {
+            eprintln!(
+                "kayfabe-isolate: CHANNEL-BIRTH ⊘⊘ REFUSED RING_HANDLE_REACHED_RM                  ring_obj={ring_obj:#x} userd={userd:#x} userd_owner={userd_owner:?} — the                  ring is a STORE SLICE, so this isolate holds no handle for it and RM must                  be told none. One of the three conjuncts is false, which means the                  `AdoptedGuestRing::memory` deletion's premise (\"the handle never reaches                  RM\") has stopped holding."
+            );
+            unwind(self, &[ours, owned_userd, &[tsg]].concat());
+            return Err(RmError::Other(RING_HANDLE_REACHED_RM));
+        }
         let mut chan_params = [0u8; ChannelAllocParams::SIZE];
         let encoded = ChannelAllocParams {
             // ★★★★★ **w287 — THE GUEST-OBSERVABLE ERROR PATH, and it is one field.**
