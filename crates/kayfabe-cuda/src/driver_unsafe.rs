@@ -106,6 +106,7 @@ pub struct Cuda {
     pub(crate) cuCtxCreate: unsafe extern "C" fn(*mut *mut c_void, c_uint, c_int) -> CUresult,
     pub(crate) cuCtxDestroy: unsafe extern "C" fn(*mut c_void) -> CUresult,
     pub(crate) cuCtxSynchronize: unsafe extern "C" fn() -> CUresult,
+    pub(crate) cuCtxSetCurrent: unsafe extern "C" fn(*mut c_void) -> CUresult,
     pub(crate) cuModuleLoadData: unsafe extern "C" fn(*mut *mut c_void, *const c_void) -> CUresult,
     pub(crate) cuModuleGetFunction:
         unsafe extern "C" fn(*mut *mut c_void, *mut c_void, *const c_char) -> CUresult,
@@ -219,6 +220,7 @@ impl Cuda {
             cuCtxCreate: sym!("cuCtxCreate_v2"),
             cuCtxDestroy: sym!("cuCtxDestroy_v2"),
             cuCtxSynchronize: sym!("cuCtxSynchronize"),
+            cuCtxSetCurrent: sym!("cuCtxSetCurrent"),
             cuModuleLoadData: sym!("cuModuleLoadData"),
             cuModuleGetFunction: sym!("cuModuleGetFunction"),
             cuMemAlloc: sym!("cuMemAlloc_v2"),
@@ -346,6 +348,30 @@ impl Cuda {
         // SAFETY: `ctx` is a handle this binding produced and is destroyed exactly once —
         // `WalkKernel::drop` nulls its copy before returning.
         unsafe { (self.cuCtxDestroy)(ctx.0 as *mut c_void) };
+    }
+
+    /// ★★★★★ `cuCtxSetCurrent` — **BIND THIS CONTEXT TO THE CALLING THREAD.**
+    ///
+    /// ⊘⊘⊘ **A CUDA context is CURRENT PER THREAD, and this cost a boot.**
+    /// `[measured 2026-09-15, w731, RTX 3060, 580.159.04]` the scratchpad isolate brings CUDA
+    /// up on its **startup** thread (before the sandbox, as §w724d requires), and
+    /// `cuCtxCreate` makes the context current **only there**. A later request is served on a
+    /// **worker** thread, which has no current context — so the first `cuMemAlloc` of the live
+    /// walk shadow returned **`CUDA_ERROR_INVALID_CONTEXT` (201)**, 2 115 times, and the
+    /// census came back `compared=0 skipped[isolate_refused=2115]`.
+    ///
+    /// ⚠ The selftest could not have caught it: `bring_up_and_prove` runs on the **same**
+    /// thread as the bring-up, so `CUDA_WALK=OK` and both post-sandbox probes passed on the
+    /// very boot where every cross-thread call refused.
+    ///
+    /// # Errors
+    /// [`CudaError`].
+    pub fn ctx_set_current(&self, ctx: CtxHandle) -> Result<(), CudaError> {
+        // SAFETY: `ctx` came from this library's own `cuCtxCreate_v2` and is only ever handed
+        // back to it. `cuCtxSetCurrent` takes the handle and affects the calling thread only.
+        self.check("cuCtxSetCurrent", unsafe {
+            (self.cuCtxSetCurrent)(ctx.0 as *mut c_void)
+        })
     }
 
     /// `cuCtxSynchronize`.

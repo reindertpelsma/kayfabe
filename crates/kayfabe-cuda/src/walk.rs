@@ -510,6 +510,19 @@ impl WalkKernel {
         })
     }
 
+    /// ★★★★★ **MAKE THIS KERNEL'S CONTEXT CURRENT ON THE CALLING THREAD.**
+    ///
+    /// ⊘ **Required before any call from a thread that did not bring CUDA up.** The context is
+    /// per-thread current; see [`crate::driver_unsafe::Cuda::ctx_set_current`] for the boot
+    /// this cost. Idempotent and cheap — call it at the top of every entry point that can be
+    /// reached from a worker.
+    ///
+    /// # Errors
+    /// [`CudaError`].
+    pub fn make_current(&self) -> Result<(), CudaError> {
+        self.cu.ctx_set_current(self.ctx)
+    }
+
     /// Copy a host image into fresh device memory.
     ///
     /// # Errors

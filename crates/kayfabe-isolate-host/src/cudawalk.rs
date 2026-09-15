@@ -254,6 +254,14 @@ pub fn run(pdbs: &[u64]) -> Result<Vec<u8>, u32> {
         );
         return Err(WS_NO_KERNEL);
     };
+    // ★★★★★ **THE CONTEXT IS PER-THREAD CURRENT, AND THIS IS NOT THE BRING-UP THREAD.**
+    // `[measured w731]` without this every `cuMemAlloc` here returns
+    // `CUDA_ERROR_INVALID_CONTEXT` (201) — 2 115 times in one boot — while the selftest, which
+    // runs on the bring-up thread, reports `CUDA_WALK=OK`.
+    if let Err(e) = k.make_current() {
+        eprintln!("kayfabe-isolate: ⊘ WALK-SHADOW could not make the CUDA context current: {e}");
+        return Err(WS_LAUNCH_FAILED);
+    }
     let img = match k.upload(&image) {
         Ok(i) => i,
         Err(e) => {
