@@ -17593,6 +17593,18 @@ impl Regs {
                 }
             );
         }
+        // ★★★★★ **w734 — THE STORE'S I/O VOLUME, THE NUMBER §3's ORDERING RESTS ON.**
+        //
+        // ⊘⊘⊘ `SINGLE_STORE_PLAN.md`'s *"§6 MUST PRECEDE §3"* and `THE_CONSTRAINTS.md`
+        // §w724c's *"it does not boot"* both multiply an **unmeasured** byte volume by a
+        // rate measured on a different path. `[surveyed w734]` no byte counter for store I/O
+        // existed anywhere in this tree — only `pages_swept`, a page count at six different
+        // page sizes. ⇒ The volume is measured here, split by the role that decides whether
+        // the switch can afford it, and the projection is labelled as a projection.
+        eprintln!(
+            "{}",
+            kayfabe_device::plane::fb_io_census_line(FB_IO_ASSUMED_BYTES_PER_SEC)
+        );
         match &self.scratchpad {
             Some(sp) => sp.census("END OF RUN"),
             None => crate::scratchpad::Scratchpad::census_disarmed("END OF RUN"),
@@ -19776,6 +19788,16 @@ pub fn selected_fb_trap() -> Result<kayfabe_device::plane::FbTrapPolicy, (Status
         .map(|v| v.to_str().unwrap_or("\u{fffd}invalid"));
     fb_trap_from(value)
 }
+
+/// ★★ **The rate the FB-IO census projects against, and it is an ASSUMPTION.**
+///
+/// 48 MiB/s is `SINGLE_STORE_PLAN.md`'s own figure for a CPU read of video memory through a
+/// BAR1 aperture. ⊘ It was measured on a **different path** (a CPU view armed for the BAR1
+/// crossing probe), not on this store, and this constant exists so that the projection it
+/// feeds can be read as *"bytes × somebody else's rate"* rather than as a measurement.
+/// ⚠ Replace it with a rate measured through a device view of the **reserved object** the
+/// moment one exists; until then the byte counts beside it are the only measured half.
+pub const FB_IO_ASSUMED_BYTES_PER_SEC: u64 = 48 * 1024 * 1024;
 
 pub const DIRTY_GATE_PUBLISH_ENV: &str = "KAYFABE_DIRTY_GATE_PUBLISH";
 

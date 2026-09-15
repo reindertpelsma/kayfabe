@@ -1631,6 +1631,210 @@ struct MmioInFlight<'a>(&'a AtomicU32);
 /// starvation and wants a different fix.
 static SWEEP_DEFER_GIVEUPS: AtomicU64 = AtomicU64::new(0);
 
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ★★★★★ **w734 — THE STORE'S I/O VOLUME, IN BYTES, BY ROLE.**
+//
+// # ⊘⊘⊘ Why this did not exist, and why its absence was expensive
+//
+// `SINGLE_STORE_PLAN.md`'s ordering rule — *"§6 MUST PRECEDE §3"* — and
+// `THE_CONSTRAINTS.md` §w724c's *"there is no working intermediate … it does not boot"* both
+// rest on ONE quantity: **how many bytes the host reads out of the framebuffer store per
+// boot.** Both documents state it as `7.3 MiB × 1178 refreshes @ 48 MiB/s ⇒ ~3 minutes`, and
+// the 24 MiB variant as ~10 minutes.
+//
+// ⊘ `[surveyed w734]` **no byte counter for store I/O exists anywhere in this tree.** The
+// numbers above are a DERIVATION — `pages_swept` (a page count, at six different page sizes,
+// three of which are not 4 KiB) multiplied by an assumed width. This tree's own rule is that
+// *a derivation cited as a measurement is the most expensive kind of wrong*, and the
+// derivation in question is the one that decides the order of the whole branch.
+//
+// ⇒ This counts the bytes. Not pages, not calls alone — **bytes**, at the five entry points
+// that reach [`FbStore`], split by the role that will or will not survive the switch:
+//
+// | role | what it is | after the switch |
+// |---|---|---|
+// | [`FbIoRole::Trap`] | a guest BAR1/BAR2/PRAMIN access that took a VM exit (≤8 B each) | served by a memslot; ~zero by constraint 1 |
+// | [`FbIoRole::WalkInPlane`] | `window_leaves`, `bar1_translate`, `bar2_translate`, `ceresolve` — the BAR apertures' OWN page tables | **stays**, and moves onto the PCIe bus |
+// | [`FbIoRole::WalkGuestPt`] | `PlanePtBytes` — the guest's CUDA page tables, the sweep and the decode | **stays** until the kernel owns reachability (§6 step 3) |
+// | [`FbIoRole::OutOfBand`] | `fb_peek`/`fb_poke`/`fb_ring_sweep`/dumps — instruments, not the device | mostly diagnostics; separable |
+//
+// ★ The split is the whole value. A total says *"the switch costs N seconds"*; the split says
+// **which of the four has to be fixed first**, which is exactly the question §6-before-§3 was
+// answering without the number.
+//
+// ⊘ **Statics, and deliberately so.** `Counters` lives behind the FSM lock and this must be
+// incremented on the walk paths, which hold `mem` and sometimes `state`; taking a third lock
+// under those is the R1 hazard this file is written against. Relaxed atomics on a
+// process-global, exactly as [`SWEEP_DEFER_GIVEUPS`] and [`MIRROR_DRAINS`] already are.
+// ⚠ Process-global therefore means **per process, not per device**. One QEMU serves one
+// device today; a second would sum into these. Said here rather than discovered later.
+/// One role a framebuffer-store access can arrive in. See the module-level table above.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FbIoRole {
+    /// A guest MMIO access that took a VM exit — `fb_read`/`fb_write`, ≤8 bytes each.
+    Trap,
+    /// A page-table read of one of the BAR apertures' own tables, inside the plane lock.
+    WalkInPlane,
+    /// A page-table read of the GUEST's tables, through `PlanePtBytes`.
+    WalkGuestPt,
+    /// `fb_peek`/`fb_poke` and the instruments built on them.
+    OutOfBand,
+    /// ★ The CPU copy-engine executor (`kayfabe_rt::cpu_ce`) — a scrub or a copy this
+    /// device performed with the host CPU because no real engine ran it. ⊘ Its own role
+    /// because it is the one bucket whose right answer after the switch is *"stop doing
+    /// this on the CPU"* rather than *"make the bytes cheaper"*.
+    CpuCe,
+}
+
+impl FbIoRole {
+    const N: usize = 5;
+    const fn idx(self) -> usize {
+        match self {
+            FbIoRole::Trap => 0,
+            FbIoRole::WalkInPlane => 1,
+            FbIoRole::WalkGuestPt => 2,
+            FbIoRole::OutOfBand => 3,
+            FbIoRole::CpuCe => 4,
+        }
+    }
+    /// The token this role prints under.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            FbIoRole::Trap => "trap",
+            FbIoRole::WalkInPlane => "walk-bar",
+            FbIoRole::WalkGuestPt => "walk-guest-pt",
+            FbIoRole::OutOfBand => "out-of-band",
+            FbIoRole::CpuCe => "cpu-ce",
+        }
+    }
+    /// Every role, in printing order.
+    #[must_use]
+    pub const fn all() -> [FbIoRole; FbIoRole::N] {
+        [
+            FbIoRole::Trap,
+            FbIoRole::WalkInPlane,
+            FbIoRole::WalkGuestPt,
+            FbIoRole::OutOfBand,
+            FbIoRole::CpuCe,
+        ]
+    }
+}
+
+/// `[role]` read calls, read bytes, write calls, write bytes.
+static FB_IO: [[AtomicU64; 4]; FbIoRole::N] = [
+    [
+        AtomicU64::new(0),
+        AtomicU64::new(0),
+        AtomicU64::new(0),
+        AtomicU64::new(0),
+    ],
+    [
+        AtomicU64::new(0),
+        AtomicU64::new(0),
+        AtomicU64::new(0),
+        AtomicU64::new(0),
+    ],
+    [
+        AtomicU64::new(0),
+        AtomicU64::new(0),
+        AtomicU64::new(0),
+        AtomicU64::new(0),
+    ],
+    [
+        AtomicU64::new(0),
+        AtomicU64::new(0),
+        AtomicU64::new(0),
+        AtomicU64::new(0),
+    ],
+    [
+        AtomicU64::new(0),
+        AtomicU64::new(0),
+        AtomicU64::new(0),
+        AtomicU64::new(0),
+    ],
+];
+
+/// Note one read of `len` bytes in `role`. ⊘ Counted whether or not the store served it: the
+/// question this instrument answers is *"how many bytes would have to cross the bus"*, and a
+/// refused read is one the switched store would still have had to attempt.
+#[inline]
+pub fn note_fb_read(role: FbIoRole, len: usize) {
+    let r = &FB_IO[role.idx()];
+    r[0].fetch_add(1, Ordering::Relaxed);
+    r[1].fetch_add(len as u64, Ordering::Relaxed);
+}
+
+/// Note one write of `len` bytes in `role`. See [`note_fb_read`].
+#[inline]
+pub fn note_fb_write(role: FbIoRole, len: usize) {
+    let r = &FB_IO[role.idx()];
+    r[2].fetch_add(1, Ordering::Relaxed);
+    r[3].fetch_add(len as u64, Ordering::Relaxed);
+}
+
+/// `(read calls, read bytes, write calls, write bytes)` for one role.
+#[must_use]
+pub fn fb_io_for(role: FbIoRole) -> (u64, u64, u64, u64) {
+    let r = &FB_IO[role.idx()];
+    (
+        r[0].load(Ordering::Relaxed),
+        r[1].load(Ordering::Relaxed),
+        r[2].load(Ordering::Relaxed),
+        r[3].load(Ordering::Relaxed),
+    )
+}
+
+/// ★★★ The census line — every role, plus the one derived number the plan turns on.
+///
+/// ⊘ The projection at the end is explicitly labelled a **projection**, with its rate named
+/// as an input, because that is the half this tree keeps losing: the measured term is the
+/// byte count, the 48 MiB/s is somebody else's measurement of a different path, and a line
+/// that printed only their product would be a derivation wearing a measurement's clothes.
+#[must_use]
+pub fn fb_io_census_line(bytes_per_sec: u64) -> String {
+    let mut out = String::from("kayfabe: FB-IO");
+    let mut walk_bytes = 0u64;
+    let mut total_bytes = 0u64;
+    for role in FbIoRole::all() {
+        let (rc, rb, wc, wb) = fb_io_for(role);
+        total_bytes += rb + wb;
+        if matches!(role, FbIoRole::WalkInPlane | FbIoRole::WalkGuestPt) {
+            walk_bytes += rb + wb;
+        }
+        out.push_str(&format!(
+            " {}[r={rc}/{:.1}MiB w={wc}/{:.1}MiB]",
+            role.as_str(),
+            rb as f64 / (1024.0 * 1024.0),
+            wb as f64 / (1024.0 * 1024.0),
+        ));
+    }
+    if total_bytes == 0 {
+        // ⊘⊘⊘ **THE VACUITY ARM.** A census of zero bytes and a census that never ran print
+        // the same `0`, and this tree's most expensive recurring instrument failure is
+        // exactly that pair being collapsed. There is no boot in which the store serves
+        // nothing — `kbusVerifyBar2` writes and reads it before the guest's first
+        // instruction — so a zero here is a statement about the INSTRUMENT.
+        out.push_str(
+            " \u{2298}\u{2298} VACUOUS \u{2014} not one byte was recorded in any role.              That is not `the store served nothing`: every boot writes it during              `kbusVerifyBar2`. It means these counters were not reached on this binary's              path, and NOTHING below may be read as a measurement.",
+        );
+        return out;
+    }
+    out.push_str(&format!(
+        " \u{2605} TOTAL={:.1}MiB WALK={:.1}MiB \u{21d2} PROJECTION: at an ASSUMED {} MiB/s \
+         over PCIe the WALK half alone would cost {:.1}s of this boot, and the total \
+         {:.1}s. \u{26a0} The byte counts are MEASURED here; the rate is NOT \u{2014} it is an \
+         input from a different path's measurement, and the product is only as good as it.",
+        total_bytes as f64 / (1024.0 * 1024.0),
+        walk_bytes as f64 / (1024.0 * 1024.0),
+        bytes_per_sec / (1024 * 1024),
+        walk_bytes as f64 / bytes_per_sec as f64,
+        total_bytes as f64 / bytes_per_sec as f64,
+    ));
+    out
+}
+
+
 /// How many times [`RegPlane::drain_mirror_revalidation`] has been called, by anyone.
 ///
 /// ⊘ Exists because the drain's CALLER is the thing that regressed, not its body: it had one
@@ -1738,7 +1942,10 @@ impl FbRead for PlanePtBytes<'_> {
         let mut m = self.plane.mem.lock();
         match aperture {
             // Device-local: the (fake) framebuffer.
-            Aperture::Vidmem => m.fb.read(phys, buf).is_ok(),
+            Aperture::Vidmem => {
+                note_fb_read(FbIoRole::WalkGuestPt, buf.len());
+                m.fb.read(phys, buf).is_ok()
+            }
             // ★ System memory. A GMMU PDE may point at a next-level table in sysmem, and the
             // guest's own address for it is a GPA — so this is a guest-RAM read, not an FB one.
             // Reading it out of the framebuffer is what produced a page of "invalid" entries.
@@ -1755,6 +1962,7 @@ impl FbRead for PlanePtBytes<'_> {
 
     fn read(&mut self, phys: u64, buf: &mut [u8]) -> bool {
         self.breathe();
+        note_fb_read(FbIoRole::WalkGuestPt, buf.len());
         let mut m = self.plane.mem.lock();
         m.fb.read(phys, buf).is_ok()
     }
@@ -1774,12 +1982,16 @@ impl FbRead for FbStoreReader<'_> {
     /// signature exists to prevent, and a reader with one source must say so rather than guess.
     fn read_in(&mut self, phys: u64, aperture: kayfabe_arch::Aperture, buf: &mut [u8]) -> bool {
         match aperture {
-            kayfabe_arch::Aperture::Vidmem => self.fb.read(phys, buf).is_ok(),
+            kayfabe_arch::Aperture::Vidmem => {
+                note_fb_read(FbIoRole::WalkInPlane, buf.len());
+                self.fb.read(phys, buf).is_ok()
+            }
             _ => false,
         }
     }
 
     fn read(&mut self, phys: u64, buf: &mut [u8]) -> bool {
+        note_fb_read(FbIoRole::WalkInPlane, buf.len());
         self.fb.read(phys, buf).is_ok()
     }
 
@@ -3473,6 +3685,7 @@ impl RegPlane {
     /// # Errors
     /// The store's own sentence when it does not back the range at all.
     pub fn fb_peek(&self, phys: u64, buf: &mut [u8]) -> Result<(), &'static str> {
+        note_fb_read(FbIoRole::OutOfBand, buf.len());
         let mut s = self.mem.lock();
         s.fb.read(phys, buf).map_err(|e| e.why)
     }
@@ -3494,6 +3707,7 @@ impl RegPlane {
     /// # Errors
     /// The store's own sentence when it does not back the range at all.
     pub fn fb_poke(&self, phys: u64, bytes: &[u8]) -> Result<(), &'static str> {
+        note_fb_write(FbIoRole::OutOfBand, bytes.len());
         let mut s = self.mem.lock();
         s.fb.write(phys, bytes).map_err(|e| e.why)
     }
@@ -5297,6 +5511,7 @@ impl RegPlane {
         };
         let n = usize::from(size.clamp(1, 8));
         let mut buf = [0u8; 8];
+        note_fb_read(FbIoRole::Trap, n);
         match s.fb.read(phys, &mut buf[..n]) {
             Ok(()) => ReadOutcome::Fb {
                 window: w,
@@ -5398,6 +5613,7 @@ impl RegPlane {
         // ★ `w` is the window the ADDRESS MODEL already resolved for this very access —
         // taken from the same `match` that produced `phys`, never recomputed. A second
         // derivation of the window would be a second projection auditing the first.
+        note_fb_write(FbIoRole::Trap, n);
         let outcome = match s.fb.write_tagged(phys, &bytes[..n], FbWriter::Window(w)) {
             Ok(()) => {
                 if !kayfabe_util::trapwitness::in_trap() {
