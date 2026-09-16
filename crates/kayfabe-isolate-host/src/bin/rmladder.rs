@@ -12173,7 +12173,10 @@ mod route_k {
     /// ★ **This is the whole of route K's identity claim**: the task that runs this line is
     /// the task whose tgid lands in `pClient->ProcID` (`client.c:112`).
     fn allocate_root(ctl: &CharDevice) -> Result<u32, Fail> {
-        let mut e = Esc::new(ctl, 0, 0);
+        // ⊘ The handle is REQUESTED, not chosen: RM writes back the one it assigned and
+        //   that is what we keep. Same value `RmConnection` asks for, so a trace of this
+        //   probe and a trace of the port read alike.
+        let mut e = Esc::new(ctl, 0, 0xCAFE_0000);
         e.alloc(0, NV01_ROOT_CLIENT, &mut [], "NV01_ROOT_CLIENT")
     }
 
@@ -12408,20 +12411,6 @@ mod route_k {
             }
         };
         let classes = kayfabe_chips::pinned_host_classes();
-        let id = IsolateId::new(0, GpuId(gpu));
-        let conn = Arc::new(conn);
-        let mut rm = HostRmBackend::new(
-            id,
-            Arc::clone(&conn),
-            Arc::new(kayfabe_isolate_host::ChildExports::new()),
-        );
-        let space = match rm.host_alloc_vaspace_space() {
-            Ok(s) => s,
-            Err(e) => {
-                println!("K_BIT5_KP=UNMEASURED:vaspace:{e:?}");
-                return 1;
-            }
-        };
         let store = match conn.reserve_gpga(STORE_BYTES) {
             Ok(h) => h,
             Err(e) => {
@@ -12466,7 +12455,7 @@ mod route_k {
                 return 1;
             }
         };
-        let mut esc = Esc::new(&ctl_own, root, 0x4b00_0000);
+        let mut esc = Esc::new(&ctl_own, root, 0xCAFE_2001);
         let mut dev_params = [0u8; Nv0080AllocParameters::SIZE];
         let dev_encode = Nv0080AllocParameters {
             device_id: gpu,
@@ -12507,7 +12496,6 @@ mod route_k {
                 return 1;
             }
         };
-        let _ = space;
         let mut range_params = [0u8; NvMemoryVirtualAllocationParams::SIZE];
         let _ = NvMemoryVirtualAllocationParams {
             offset: 0,
@@ -12967,7 +12955,7 @@ mod route_k {
         let _node2 = CharDevice::adopt(it.next().expect("two descriptors"));
         println!("K_FD_CROSSED=1");
 
-        let mut esc = Esc::new(&ctl2, b_client, 0x5000_0000);
+        let mut esc = Esc::new(&ctl2, b_client, 0xCAFE_1001);
 
         // ---- B's own device tree, built by S on I's descriptor --------------------------
         let mut dev_params = [0u8; Nv0080AllocParameters::SIZE];
