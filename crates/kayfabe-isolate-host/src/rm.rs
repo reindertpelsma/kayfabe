@@ -226,6 +226,8 @@ pub mod local_status {
     /// the compiler — see the module docs for why both gates exist.
     pub const ALL: &[(&str, u32)] = &[
         ("NOT_ON_THIS_RUNG", super::NOT_ON_THIS_RUNG),
+        ("PLACEMENT_WOULD_RELOCATE", super::PLACEMENT_WOULD_RELOCATE),
+        ("STORE_IS_NOT_CONTIGUOUS", super::STORE_IS_NOT_CONTIGUOUS),
         ("ABI_ENCODE_FAILED", super::ABI_ENCODE_FAILED),
         ("IOCTL_NUMBER_UNBUILDABLE", super::IOCTL_NUMBER_UNBUILDABLE),
         ("ABI_DECODE_FAILED", super::ABI_DECODE_FAILED),
@@ -346,11 +348,32 @@ pub mod local_status {
 ///   Nvos46Parameters::decode(..).map_err(|_| Other(NOT_ON_THIS_RUNG))   <- ABI decode
 /// ```
 ///
-/// ⇒ **seven distinct causes, one integer**, on the exact path whose 2 154 refusals this
-/// session set out to read. ⚠ **And I over-claimed on the strength of it**: the w755 commit
-/// titled *"THE WALL IS CONSTRAINT 28"* named ONE of the seven as though the collision fix
-/// had made it the only candidate. It had not. The correct statement was *"constraint 28 is
-/// now READABLE if it is the cause"*.
+/// ⇒ **seven spellings, one integer** — but see the next block, because three of the seven
+/// turn out to be unreachable and the correction I made was itself an over-correction.
+///
+/// > ### ⊘⊘ CORRECTED AGAIN, SAME SESSION — **I CORRECTED A CLAIM THAT WAS RIGHT.**
+/// >
+/// > The commit titled *"THE WALL IS CONSTRAINT 28"* was then walked back as over-claiming,
+/// > on the grounds that six more spellings shared the integer. **Checking reachability
+/// > instead of counting spellings reverses that.** On the map path:
+/// >
+/// > - the buffer is `let mut arg = [0u8; Nvos46Parameters::SIZE];` — a fixed array sized by
+/// >   **the same constant** the field offsets come from. `encode_into`'s only failure is
+/// >   `AbiError::Truncated` (*"the buffer is shorter than the struct"*), so it **cannot
+/// >   fire**. Neither can `decode`, reading the same array.
+/// > - `ioctl::readwrite(MAGIC, cmd, arg.len())` fails only past `_IOC_SIZEMASK` (16 383);
+/// >   `NVOS46_PARAMETERS` is 64 bytes.
+/// > - the child has a real `Request::MapStoreSlice` arm going straight to `failed(e)`
+///   — no fall-through to *"verb not implemented"*.
+/// >
+/// > ⇒ **On the map path, `Other(19270)` could only ever have been the flattened
+/// > `PlacementRefused`.** The original diagnosis stands; the retraction was wrong.
+/// >
+/// > ★ The split into four codes is **still right** — the three failures are different bugs
+/// > in different places and must not share a number — but it was not a correction to the
+/// > diagnosis, and the reachability argument is what distinguishes those two claims.
+/// > ⚠ Two over-corrections in one session, in opposite directions, on the same subject. A
+/// > *count* of spellings is not an *analysis* of which can fire; the second is the work.
 ///
 /// ★ Across `rm.rs` the same three `map_err`s appear **71 times**. Split by what actually
 /// failed, because *"the struct would not encode"*, *"the ioctl number would not build"* and
@@ -370,11 +393,24 @@ pub const IOCTL_NUMBER_UNBUILDABLE: u32 = 0x4B64;
 /// ★★★★★ **RM's REPLY WOULD NOT DECODE — and this is the one of the three that is about the
 /// HOST.**
 ///
-/// ⊘ The ioctl **succeeded**. The driver wrote a reply and this crate's transcription of the
-/// struct could not read it back — a size or layout disagreement with the running driver,
-/// i.e. exactly the `a_capture_derived_table_expires_as_a_vendor_regression` shape. Reporting
-/// it as *"this rung does not implement that"* pointed every reader at our own completeness
-/// when the finding is a **driver-version mismatch**.
+/// ⊘ The ioctl **succeeded** and this crate could not read the reply back.
+///
+/// ⚠⚠ **NOT a driver-version signal, and the first draft of this doc said it was.** Where the
+/// buffer is a fixed `[0u8; T::SIZE]`, `decode` reads the array it was handed and
+/// `AbiError::Truncated` cannot fire; a driver whose struct is a different size is rejected
+/// **by RM itself**, in `escape.c`'s `dataSize != sizeof(*pApi)` check, as
+/// `NV_ERR_INVALID_ARGUMENT` — an RM status, arriving through `status_check`, never through
+/// here.
+///
+/// ★ The real version exposure is named elsewhere and is **not** detected by this code at
+/// all: `kayfabe_abi::host_driver`'s docs record that this crate writes the **64-byte,
+/// post-580.65.06** `NVOS46_PARAMETERS` *unconditionally*, with no `MapDmaWire` selector, so
+/// the encoders are pinned to the interval `[580.65.06, 581)` — a **source reading**, with
+/// no host outside 580.159.04 ever run against it.
+///
+/// ⇒ This status is live only where the buffer length is **not** `T::SIZE` — variable-length
+/// control payloads. That is a narrower claim than the first draft's and it is the one the
+/// code supports.
 pub const ABI_DECODE_FAILED: u32 = 0x4B65;
 
 /// ⊘ A conversion Rust makes us handle that cannot fail in practice — `CString::new` on a
@@ -382,6 +418,31 @@ pub const ABI_DECODE_FAILED: u32 = 0x4B65;
 /// [`ABI_ENCODE_FAILED`] so a boot log never shows an "encode failure" for something that is
 /// not an encode, and so that if one of these EVER fires it is unmistakable.
 pub const IMPOSSIBLE_CONVERSION: u32 = 0x4B66;
+
+/// ★★★★★ **THE PRE-FLIGHT PLACEMENT REFUSAL — we predicted RM would move it, so we did not
+/// ask.** `0x4B67` is `"Kg"`.
+///
+/// ⊘ Distinct from [`RmError::PlacementRefused`], which is the **post-mortem**: that one
+/// means a mapping was really made at the wrong VA and torn back down. This one means **no
+/// ioctl was issued at all**, so there is nothing to leak and nothing to undo. Reading the
+/// second as the first would have a reader hunting a teardown that never happened.
+///
+/// See [`kayfabe_abi::bringup::rm_would_place`] for the model, which is ogkm's own four lines.
+pub const PLACEMENT_WOULD_RELOCATE: u32 = 0x4B67;
+
+/// ★★★★★ **THE STORE IS NOT CONTIGUOUS, AND EVERY SLICE ADDRESS WE COMPUTE ASSUMES IT IS.**
+/// `0x4B68` is `"Kh"`.
+///
+/// ⊘ The predictor needs the slice's **physical** address and derives it as
+/// `reservation_base + offset`. That is only true if the one reserved object is contiguous.
+/// `[campaign record]` `AllocVidmem` is contiguous and length-aligned — but `reserve_gpga` is
+/// a different verb, and *"the sibling verb is contiguous"* is an argument, not a measurement.
+///
+/// ⇒ checked **once**, on the first store slice at a non-zero offset, by asking RM for that
+/// offset's address directly and comparing. ⚠ Fail-closed: if the store is not contiguous,
+/// every predicted address is wrong and silently continuing would make the predictor a
+/// confident source of wrong answers — worse than not having one.
+pub const STORE_IS_NOT_CONTIGUOUS: u32 = 0x4B68;
 
 /// The opaque status a verb this rung does not implement reports.
 ///
@@ -4793,6 +4854,46 @@ fn read_version(ctl: &CharDevice) -> Option<String> {
     Some(String::from_utf8_lossy(&s[..end]).into_owned())
 }
 
+/// ★★★ **w755 — THE PREDICTOR'S OWN SCOREBOARD.** See
+/// [`kayfabe_abi::bringup::rm_would_place`].
+///
+/// ⚠ Three counters and not one, because *"we refused before asking"*, *"we asked and RM
+/// moved it"* and *"we predicted fine and RM moved it anyway"* are three different facts and
+/// only the third is a statement about the MODEL. A single `placement_refused` would hide it.
+pub static PLACEMENT_PREFLIGHT_REFUSED: AtomicUsize = AtomicUsize::new(0);
+/// Post-hoc catches — a mapping really was made at the wrong VA and torn down.
+pub static PLACEMENT_OBSERVED_REFUSED: AtomicUsize = AtomicUsize::new(0);
+/// ★★★★★ **THE ROW THAT GRADES THE PREDICTOR.** The pre-flight said `Honoured` and the
+/// post-hoc assert caught a relocation anyway ⇒ [`kayfabe_abi::bringup::rm_would_place`] is
+/// WRONG about this driver. ⊘ A nonzero here retires the model, not the mapping.
+pub static PLACEMENT_PREDICTION_DISAGREED: AtomicUsize = AtomicUsize::new(0);
+/// ★ How many store slices were mapped with **no** predicted base available, i.e. with the
+/// pre-flight check inert. ⊘ Its own counter because a zero in the three above means nothing
+/// if this one is large — the `a_census_zero_needs_a_known_positive` shape.
+pub static PLACEMENT_UNPREDICTED: AtomicUsize = AtomicUsize::new(0);
+
+/// One line for a boot log. ⊘ Printed even when every number is zero.
+#[must_use]
+pub fn placement_census() -> String {
+    format!(
+        "PLACEMENT preflight_refused={} observed_refused={} prediction_disagreed={} \
+         unpredicted={} ⇒ {}",
+        PLACEMENT_PREFLIGHT_REFUSED.load(Ordering::Relaxed),
+        PLACEMENT_OBSERVED_REFUSED.load(Ordering::Relaxed),
+        PLACEMENT_PREDICTION_DISAGREED.load(Ordering::Relaxed),
+        PLACEMENT_UNPREDICTED.load(Ordering::Relaxed),
+        if PLACEMENT_PREDICTION_DISAGREED.load(Ordering::Relaxed) > 0 {
+            "⊘⊘⊘ THE MODEL OF RM IS WRONG — `rm_would_place` said Honoured and RM relocated"
+        } else if PLACEMENT_UNPREDICTED.load(Ordering::Relaxed) > 0
+            && PLACEMENT_PREFLIGHT_REFUSED.load(Ordering::Relaxed) == 0
+        {
+            "⚠ the pre-flight check was INERT — no reservation base was available"
+        } else {
+            "★ pre-flight and post-hoc agree"
+        }
+    )
+}
+
 /// One pool worker's view of the shared connection.
 ///
 /// `&mut self` on every verb, as the port requires, but the *connection* behind it is
@@ -4820,6 +4921,13 @@ pub struct HostRmBackend {
     /// ★★★ **E6 — the recorder-only CE witness**, `None` unless a diagnostic asked for
     /// one ([`HostRmBackend::with_ce_witness`]). See [`CeWitness`].
     ce_witness: Option<Arc<CeWitness>>,
+    /// ★★★ **w755 — the reservation's physical base, per object, asked ONCE.**
+    /// `Some(None)` means *"this host refused to say"* and is cached exactly so a refusing
+    /// host is asked once rather than once per slice. See [`HostRmBackend::store_slice_phys`].
+    store_phys_base: BTreeMap<u32, Option<u64>>,
+    /// ★★★ Whether the one-shot store-contiguity check has run. ⊘ Per worker: each worker
+    /// computes its own predicted addresses, so each must have satisfied itself once.
+    store_contiguity_checked: bool,
     /// ★★★★★ This isolate's joined framebuffer leaves (`crate::fbjoin`), or `None` when the
     /// composition root built no table.
     ///
@@ -6051,6 +6159,8 @@ impl HostRmBackend {
             conn,
             slots: BTreeMap::new(),
             ce_channels: BTreeMap::new(),
+            store_phys_base: BTreeMap::new(),
+            store_contiguity_checked: false,
             exports,
             guest_ram: None,
             ce_witness: None,
@@ -7127,6 +7237,55 @@ impl RmBackend for HostRmBackend {
     ) -> Result<u64, RmError> {
         let h_dma = self.narrow(vas)?;
         let h_memory = self.narrow(memory)?;
+        // ★★★★★ **w755 — THE PRE-FLIGHT PLACEMENT ASSERT. PREDICT, THEN REFUSE WITHOUT
+        // ASKING.** See [`kayfabe_abi::bringup::rm_would_place`] and
+        // [`PLACEMENT_WOULD_RELOCATE`].
+        //
+        // ⊘ Constraint 28's existing assert is a post-mortem: RM makes a real mapping at the
+        // wrong VA and we tear it down, swallowing the teardown's own error. This runs first
+        // and issues no ioctl at all when the answer is already known.
+        // ⚠ It does NOT replace the post-hoc one (§29). Both run, and a DISAGREEMENT is a
+        // finding about the model rather than about the mapping — `PLACEMENT_PREDICTION_
+        // DISAGREED`.
+        match self.store_slice_phys(memory, offset)? {
+            None => {
+                // ⊘ Counted, not silently skipped: a zero in the refusal counters means
+                // nothing unless this one is also zero.
+                PLACEMENT_UNPREDICTED.fetch_add(1, Ordering::Relaxed);
+            }
+            Some(phys) => {
+                // The page size we are about to ASK for — read from the same function the
+                // ioctl will use, so the prediction cannot be about a different request.
+                let page = kayfabe_abi::bringup::nvos46_store_slice_page_bytes();
+                match kayfabe_abi::bringup::rm_would_place(at.0, phys, page) {
+                    kayfabe_abi::bringup::PlacementPrediction::Honoured => {}
+                    kayfabe_abi::bringup::PlacementPrediction::WouldRelocate { predicted } => {
+                        PLACEMENT_PREFLIGHT_REFUSED.fetch_add(1, Ordering::Relaxed);
+                        eprintln!(
+                            "kayfabe-isolate: PLACEMENT ⊘⊘ REFUSED BEFORE THE IOCTL — at=0x{:x} \
+                             phys=0x{phys:x} page=0x{page:x}: RM would ACCEPT this and answer \
+                             0x{predicted:x} (delta 0x{:x}), because it substitutes the \
+                             PHYSICAL side's page offset for the VA's. Nothing was asked, so \
+                             nothing is mapped and nothing needs tearing down.",
+                            at.0,
+                            predicted.wrapping_sub(at.0),
+                        );
+                        return Err(RmError::Other(PLACEMENT_WOULD_RELOCATE));
+                    }
+                    kayfabe_abi::bringup::PlacementPrediction::WouldRefuse => {
+                        PLACEMENT_PREFLIGHT_REFUSED.fetch_add(1, Ordering::Relaxed);
+                        eprintln!(
+                            "kayfabe-isolate: PLACEMENT ⊘⊘ REFUSED BEFORE THE IOCTL — at=0x{:x} \
+                             phys=0x{phys:x} page=0x{page:x}: RM would answer \
+                             NV_ERR_INVALID_OFFSET; the VA names an intra-page offset that is \
+                             neither zero nor the physical side's.",
+                            at.0
+                        );
+                        return Err(RmError::Other(PLACEMENT_WOULD_RELOCATE));
+                    }
+                }
+            }
+        }
         // ⊘ A bare space is not an `hDma`. Refused by name here rather than by RM's
         // `0x33 INVALID_OBJECT_HANDLE`, because the two mean different things: RM's says
         // "that handle is not a range", ours says "you were handed a space and asked to
@@ -9218,6 +9377,78 @@ impl HostRmBackend {
         )?;
         self.conn.remember(h, self.conn.device);
         Ok(self.stamp(h))
+    }
+
+    /// ★★★★★ **w755 — THE SLICE'S PHYSICAL ADDRESS, OR `None` WHEN THIS HOST WILL NOT SAY.**
+    ///
+    /// The pre-flight placement assert needs `reservation_base + offset`, and
+    /// `RmBackend::reserve_gpga` answers a handle and nothing else. This asks RM directly
+    /// with [`HostRmBackend::surface_phys_attr`], **once per object**, and caches it.
+    ///
+    /// ⚠ **`None` is a real answer, not an error.** `ctrl0041.h` claims the control is
+    /// MODS-only; a refusal here is a measurement of that claim, and the right response is to
+    /// fall back to the post-hoc assert rather than to fail the map. ⊘ Cached as
+    /// `Some(None)` so a refusing host is asked **once**, not once per slice — 2 000+ extra
+    /// ioctls on a path whose whole problem is that it runs thousands of times.
+    ///
+    /// # ★★★ The contiguity check, once
+    ///
+    /// `base + offset` is only the slice's address if the one reserved object is
+    /// **contiguous**. `AllocVidmem` is; `reserve_gpga` is a different verb, and *"the
+    /// sibling verb is contiguous"* is an argument rather than a measurement. So the first
+    /// slice at a non-zero offset is checked against RM's own answer for that offset, and a
+    /// disagreement refuses [`STORE_IS_NOT_CONTIGUOUS`] — **fail-closed**, because every
+    /// predicted address after it would be wrong and a confidently wrong predictor is worse
+    /// than none.
+    ///
+    /// # Errors
+    /// [`STORE_IS_NOT_CONTIGUOUS`] when the store is not what the arithmetic assumes.
+    fn store_slice_phys(
+        &mut self,
+        memory: HostHandle,
+        offset: u64,
+    ) -> Result<Option<u64>, RmError> {
+        let key = self.narrow(memory)?;
+        let base = match self.store_phys_base.get(&key) {
+            Some(cached) => *cached,
+            None => {
+                let b = self.surface_phys_attr(memory, 0).ok().map(|a| a.mem_offset);
+                self.store_phys_base.insert(key, b);
+                if b.is_none() {
+                    eprintln!(
+                        "kayfabe-isolate: PLACEMENT ⚠ this host will not report the \
+                         reservation's physical address (GET_SURFACE_PHYS_ATTR refused; the \
+                         header calls it MODS-only). The PRE-FLIGHT placement assert is \
+                         inert for this object -- constraint 28's post-hoc assert still \
+                         runs. Counted as PLACEMENT unpredicted=."
+                    );
+                }
+                b
+            }
+        };
+        let Some(base) = base else { return Ok(None) };
+        // ★ The contiguity check, once, at the first non-zero offset.
+        if offset != 0 && !self.store_contiguity_checked {
+            self.store_contiguity_checked = true;
+            if let Ok(a) = self.surface_phys_attr(memory, offset) {
+                if a.mem_offset != base + offset {
+                    eprintln!(
+                        "kayfabe-isolate: PLACEMENT ⊘⊘⊘ THE STORE IS NOT CONTIGUOUS — \
+                         base=0x{base:x} offset=0x{offset:x} predicts 0x{:x}, RM says \
+                         0x{:x}. Every address the placement predictor computes is wrong, \
+                         so it is refused rather than trusted.",
+                        base + offset,
+                        a.mem_offset
+                    );
+                    return Err(RmError::Other(STORE_IS_NOT_CONTIGUOUS));
+                }
+                eprintln!(
+                    "kayfabe-isolate: PLACEMENT ★ contiguity CONFIRMED at offset 0x{offset:x} \
+                     (base=0x{base:x}); the predictor's arithmetic holds on this store."
+                );
+            }
+        }
+        Ok(Some(base + offset))
     }
 
     /// ★★ **The physical address an object's offset lands on, asked of RM directly** —
