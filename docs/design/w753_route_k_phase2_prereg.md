@@ -104,6 +104,20 @@ design did not move past it is the deletion constraint 29 exists to refuse.
 not move one thread; the brief names that as a trap already paid for. A pre-registration
 that predicted `(P)` because `(P)` is the goal would be the same shape one rung along.
 
+## 2b. ⊘⊘⊘ WHAT THIS SESSION DID **NOT** BUILD, AND WHY — said before the boot, not after
+
+Three gaps. Each is named with the condition under which it stops being acceptable.
+
+| gap | why it is not on this session's path | when it stops being acceptable |
+|---|---|---|
+| **Increment 6 — birth in B** (`Worker::execute`'s foreign-handle gate, `Staged::check_out`) | Neither is crossed by the mapping plane: `StoreMapPort` reaches RM through `Worker::with_rm`, a **closure**, never a `VerbPlan`. Per constraint 29, an assert that is not crossed is not retired. | the moment conjunct (6) still refuses **after** `maps > 0`. That is the measurement that says the channel must be born in B too. |
+| **Birth-client teardown** — nothing removes a `BirthConn`; two descriptors per guest process stay open and **client B outlives isolate I**, because RM frees a client when its last `struct file` closes and we hold that file | the grading boot is one guest process and a few minutes | the LLM lane, or any run with many short-lived guest processes. Counter: `birth_clients_outstanding`. ⚠ The reap must run **after** every range placed through the connection is gone — the descriptors are what keep those objects reachable for the unmap constraint 27's barrier waits on. |
+| **A known-positive for `ProxyRmBackend::adopt_birth_client`'s scratchpad refusal** | it lives behind a live proxy with no offline harness | never blocked: the **same question** is asked at the receiver, where it *is* testable (`a_per_proc_isolate_refuses_a_birth_client_offered_to_it`), and the two are not redundant — one protects against a VMM bug, the other against the socket. |
+
+⚠ **The second row is the one to watch.** It is the shape this tree calls *"correct by accident
+under a temporary condition"*: it is right for the boot that grades it and wrong for the
+workload that follows.
+
 ## 3. Non-regression, pre-registered as a list rather than as a habit
 
 BAR1/BAR2 `TRAP_FILLS=0` **and** `misses=0` · `named` ≈ 312k · `RmInitAdapter failed!`=0
