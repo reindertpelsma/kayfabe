@@ -13603,6 +13603,27 @@ fn main() -> std::process::ExitCode {
                 u8::try_from(route_k::role_i(role_gpu).clamp(0, 255)).unwrap_or(1),
             );
         }
+        // ★★★★★ w755i — the CUDA-store ownership probe. Needs NO guest, NO QEMU, NO KVM:
+        // a CUDA container answers it. See `kayfabe_isolate_host::cudastore`.
+        #[cfg(feature = "cuda-scratchpad")]
+        if argv.iter().any(|a| a == "--cuda-store-probe") {
+            return std::process::ExitCode::from(
+                u8::try_from(
+                    kayfabe_isolate_host::cudastore::cuda_store_probe(role_gpu).clamp(0, 255),
+                )
+                .unwrap_or(1),
+            );
+        }
+        // ⊘ Without the feature the flag must SAY it is unavailable rather than falling
+        // through into the ladder's parser and running something else entirely.
+        #[cfg(not(feature = "cuda-scratchpad"))]
+        if argv.iter().any(|a| a == "--cuda-store-probe") {
+            println!(
+                "CS_RESULT=UNMEASURED:this binary was built without `--features \
+                 cuda-scratchpad`, so libcuda is not linked and the probe cannot run"
+            );
+            return std::process::ExitCode::from(1);
+        }
         if argv.iter().any(|a| a == "--route-k") {
             let skip = argv.iter().any(|a| a == "--route-k-skip-free");
             return std::process::ExitCode::from(

@@ -129,6 +129,26 @@ pub struct Cuda {
         *mut *mut c_void,
     ) -> CUresult,
     cuGetErrorName: Option<unsafe extern "C" fn(CUresult, *mut *const c_char) -> CUresult>,
+    // ★★★★★ **w755i — THE VMM (virtual-memory-management) ENTRY POINTS, OPTIONAL BY DESIGN.**
+    //
+    // They exist to answer ONE question: can a device allocation CUDA owns be exported to an
+    // fd and IMPORTED INTO OUR RM CLIENT? If yes, the single store can be allocated through
+    // CUDA — making it CUDA-addressable by construction, so the walk kernel reads guest page
+    // tables LIVE at their own GPGA instead of a relocated copy, and `cuMemcpyAsync` can serve
+    // the emulated CE plane — while still yielding the RM handle `map_store_slice` needs to
+    // place slices into GUEST VA spaces.
+    //
+    // ⊘ `Option`, not required, and the distinction is load-bearing: this binding is loaded on
+    // EVERY boot for the walk kernel. A required symbol absent from an older `libcuda` would
+    // take the whole binding down and turn a missing *experiment* into a missing *walker*.
+    // ⚠ `None` is therefore a measurement ("this driver has no VMM API"), never a failure.
+    pub(crate) cuMemGetAllocationGranularity:
+        Option<unsafe extern "C" fn(*mut usize, *const c_void, c_uint) -> CUresult>,
+    pub(crate) cuMemCreate:
+        Option<unsafe extern "C" fn(*mut u64, usize, *const c_void, u64) -> CUresult>,
+    pub(crate) cuMemExportToShareableHandle:
+        Option<unsafe extern "C" fn(*mut c_void, u64, c_uint, u64) -> CUresult>,
+    pub(crate) cuMemRelease: Option<unsafe extern "C" fn(u64) -> CUresult>,
 }
 
 // SAFETY: every field is a code pointer into a library loaded `RTLD_GLOBAL` for the life of
@@ -192,6 +212,21 @@ impl Cuda {
         // `cuMemAlloc` (rather than `cuMemAlloc_v2`) on a 64-bit host silently truncates every
         // device pointer. The same is true of `cuCtxCreate`, `cuMemcpy*` and `cuMemFree`.
         // ⇒ every size-carrying entry point here is asked for by its versioned name.
+        // ★ The NULL-tolerant twin of `sym!`. See the VMM fields: a symbol this driver does
+        // not have must yield `None` rather than refusing the whole binding.
+        macro_rules! opt {
+            ($name:literal) => {{
+                let n = CString::new($name).expect("a literal with no NUL");
+                // SAFETY: `handle` is a live library handle and `n` is NUL-terminated.
+                let p = unsafe { dlsym(handle, n.as_ptr()) };
+                if p.is_null() {
+                    None
+                } else {
+                    // SAFETY: the driver's ABI for this symbol.
+                    Some(unsafe { core::mem::transmute(p) })
+                }
+            }};
+        }
         macro_rules! sym {
             ($name:literal) => {{
                 let n = CString::new($name).expect("a literal with no NUL");
@@ -229,6 +264,12 @@ impl Cuda {
             cuMemcpyHtoD: sym!("cuMemcpyHtoD_v2"),
             cuMemcpyDtoH: sym!("cuMemcpyDtoH_v2"),
             cuLaunchKernel: sym!("cuLaunchKernel"),
+            // ⊘ Resolved with a NULL-tolerant lookup, unlike `sym!`, for the reason the field
+            // docs give: absent is an ANSWER here, not a load failure.
+            cuMemGetAllocationGranularity: opt!("cuMemGetAllocationGranularity"),
+            cuMemCreate: opt!("cuMemCreate"),
+            cuMemExportToShareableHandle: opt!("cuMemExportToShareableHandle"),
+            cuMemRelease: opt!("cuMemRelease"),
             cuGetErrorName: if err_name.is_null() {
                 None
             } else {
@@ -630,4 +671,144 @@ pub fn zeroed<T: Copy>() -> T {
     // arrays (`abi.rs`), for which it is; the types contain no reference, no `NonZero`, no
     // enum with a niche, and no pointer Rust tracks.
     unsafe { core::mem::zeroed() }
+}
+
+/// ★★★★★ **w755i — A DEVICE ALLOCATION CUDA OWNS, EXPORTED TO AN fd.**
+///
+/// This is one half of the question the single store's design now turns on. The other half —
+/// *"will our RM client IMPORT that fd"* — lives in `kayfabe-isolate-host`, because only it
+/// can issue `NV_ESC_RM_IMPORT_OBJECT_FROM_FD`. ⊘ Deliberately split at the crate boundary:
+/// this half must not pretend to know what RM will say.
+///
+/// # Why the answer matters
+///
+/// If CUDA can own the store and RM can name it, then the store is CUDA-addressable **by
+/// construction** — the walk kernel reads the guest's page tables LIVE at their own GPGA
+/// instead of a relocated copy (which today **forecloses** the one disagreement direction the
+/// second walker exists for), and `cuMemcpyAsync`/`cuMemsetAsync` can serve the emulated CE
+/// and scrub planes without the CPU. And `map_store_slice` still has an RM handle for guest
+/// VA spaces, which is the thing everything else rests on.
+///
+/// # Errors
+/// [`CudaError::NoVmmApi`] when this driver has no VMM entry points — a **measurement**, not a
+/// failure — or the driver's own refusal, by name.
+pub struct ExportedAllocation {
+    /// The CUDA handle, kept so the allocation outlives the fd.
+    pub handle: u64,
+    /// The POSIX fd the allocation was exported to.
+    pub fd: i32,
+    /// The granularity CUDA required, rounded up into the request.
+    pub granularity: usize,
+    /// The size actually requested after rounding.
+    pub bytes: usize,
+}
+
+/// `CU_MEM_ALLOCATION_TYPE_PINNED`.
+const CU_MEM_ALLOCATION_TYPE_PINNED: u32 = 0x1;
+/// `CU_MEM_LOCATION_TYPE_DEVICE`.
+const CU_MEM_LOCATION_TYPE_DEVICE: u32 = 0x1;
+/// `CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR`.
+const CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR: u32 = 0x1;
+/// `CU_MEM_ALLOC_GRANULARITY_RECOMMENDED`.
+const CU_MEM_ALLOC_GRANULARITY_RECOMMENDED: u32 = 0x1;
+
+/// `CUmemAllocationProp`, transcribed. ⚠ Layout is the driver's; a field added in a later
+/// CUDA would shift `win_desc` and this must be re-read rather than assumed.
+#[repr(C)]
+#[derive(Default, Clone, Copy)]
+struct CuMemAllocationProp {
+    kind: u32,
+    requested_handle_types: u32,
+    location_type: u32,
+    location_id: i32,
+    win_security_attributes: *const core::ffi::c_void,
+    alloc_flags_compression_type: u8,
+    alloc_flags_gpu_direct_rdma_capable: u8,
+    alloc_flags_usage: u16,
+    alloc_flags_reserved: [u8; 4],
+}
+
+impl Cuda {
+    /// Does this driver expose the VMM API at all? ⊘ A measurement: `false` is an answer.
+    #[must_use]
+    pub fn has_vmm_api(&self) -> bool {
+        self.cuMemCreate.is_some()
+            && self.cuMemExportToShareableHandle.is_some()
+            && self.cuMemGetAllocationGranularity.is_some()
+    }
+
+    /// Allocate `bytes` of device memory through CUDA and export it to a POSIX fd.
+    ///
+    /// # Errors
+    /// The driver's refusal, by name, or a marker that this driver has no VMM API.
+    pub fn export_device_allocation(
+        &self,
+        device: i32,
+        bytes: usize,
+    ) -> Result<ExportedAllocation, String> {
+        let (Some(gran_fn), Some(create), Some(export)) = (
+            self.cuMemGetAllocationGranularity,
+            self.cuMemCreate,
+            self.cuMemExportToShareableHandle,
+        ) else {
+            return Err("NO-VMM-API: this libcuda has no cuMemCreate/Export/Granularity".into());
+        };
+
+        let mut prop = CuMemAllocationProp {
+            kind: CU_MEM_ALLOCATION_TYPE_PINNED,
+            requested_handle_types: CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR,
+            location_type: CU_MEM_LOCATION_TYPE_DEVICE,
+            location_id: device,
+            win_security_attributes: core::ptr::null(),
+            ..Default::default()
+        };
+
+        let mut gran: usize = 0;
+        // SAFETY: `prop` is a live, fully-initialised transcription of `CUmemAllocationProp`.
+        let rc = unsafe {
+            gran_fn(
+                &raw mut gran,
+                (&raw const prop).cast(),
+                CU_MEM_ALLOC_GRANULARITY_RECOMMENDED,
+            )
+        };
+        if rc != 0 || gran == 0 {
+            return Err(format!("cuMemGetAllocationGranularity rc={rc} gran={gran}"));
+        }
+        // ⊘ Round UP. A request below the granularity is refused outright, and a request that
+        // is not a multiple of it is the kind of near-miss that reads as a capability problem.
+        let rounded = bytes.div_ceil(gran) * gran;
+
+        let mut handle: u64 = 0;
+        // SAFETY: as above; `handle` is written only on success.
+        let rc = unsafe { create(&raw mut handle, rounded, (&raw const prop).cast(), 0) };
+        if rc != 0 {
+            return Err(format!("cuMemCreate rc={rc} bytes={rounded} gran={gran}"));
+        }
+
+        let mut fd: i32 = -1;
+        // SAFETY: `handle` is live; the out-param for a POSIX fd is an `int`.
+        let rc = unsafe {
+            export(
+                (&raw mut fd).cast(),
+                handle,
+                CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR,
+                0,
+            )
+        };
+        if rc != 0 || fd < 0 {
+            if let Some(release) = self.cuMemRelease {
+                // SAFETY: `handle` is live and unexported.
+                let _ = unsafe { release(handle) };
+            }
+            return Err(format!("cuMemExportToShareableHandle rc={rc} fd={fd}"));
+        }
+        prop.alloc_flags_reserved = [0; 4];
+        Ok(ExportedAllocation {
+            handle,
+            fd,
+            granularity: gran,
+            bytes: rounded,
+        })
+    }
 }

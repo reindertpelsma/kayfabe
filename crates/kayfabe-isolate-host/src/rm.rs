@@ -4381,6 +4381,41 @@ impl RmConnection {
     /// Whatever RM refused with. ⊘ A refusal here means **the VM does not start** — that is
     /// the design's central promise, and it is what makes an out-of-memory on the refresh
     /// path (where we cannot recover) impossible rather than unlikely.
+    /// ★★★★★ **w755i — IMPORT AN OBJECT FROM AN fd INTO THIS CLIENT.**
+    ///
+    /// `NV0000_CTRL_CMD_OS_UNIX_IMPORT_OBJECT_FROM_FD` (`0x3d06`) on the client itself.
+    ///
+    /// ⊘ **The gate is narrow and worth knowing before reading a refusal**
+    /// (`ogkm-580.159.04`): `cliresCtrlCmdOsUnixImportObjectFromFd_IMPL` (`os.c:2494`) calls
+    /// `nv_get_file_private(fd, NV_TRUE, ..)`, which requires the fd's inode to be
+    /// `MAJOR == NV_MAJOR_DEVICE_NUMBER` **and** the control-device minor
+    /// (`kernel-open/nvidia/nv.c:4096-4106`) — i.e. **`/dev/nvidiactl`** — and then requires
+    /// `nvfp->handles[0] != 0`, which only `NV_ESC_RM_EXPORT_OBJECT_TO_FD` sets.
+    /// ⇒ this is **not** a general dma-buf importer, and a refusal usually means the fd was
+    /// the wrong KIND rather than that the object was unacceptable.
+    ///
+    /// # Errors
+    /// Whatever RM refused with.
+    pub fn import_object_from_fd(&self, fd: i32) -> Result<u32, RmError> {
+        // `NV0000_CTRL_OS_UNIX_IMPORT_OBJECT_FROM_FD_PARAMS { NvS32 fd; NV0000_CTRL_OS_UNIX_EXPORT_OBJECT object; }`
+        // and `NV0000_CTRL_OS_UNIX_EXPORT_OBJECT { NvU32 type; union { struct { NvHandle hParent, hObject; } rmObject; } data; }`.
+        // ⊘ Transcribed here rather than generated: it is one probe's parameter block, and a
+        // generated struct would imply a maintained ABI surface this is not.
+        const IMPORT_PARAMS_SIZE: usize = 16;
+        const EXPORT_OBJECT_TYPE_RM: u32 = 0;
+        let want = self.mint();
+        let mut arg = [0u8; IMPORT_PARAMS_SIZE];
+        arg[0..4].copy_from_slice(&fd.to_le_bytes());
+        arg[4..8].copy_from_slice(&EXPORT_OBJECT_TYPE_RM.to_le_bytes());
+        arg[8..12].copy_from_slice(&self.device.to_le_bytes());
+        arg[12..16].copy_from_slice(&want.to_le_bytes());
+        self.raw_control(self.client.raw(), 0x0000_3d06, &mut arg)?;
+        // ⊘ `hObject` is IN/OUT — read back what RM actually named, never the request.
+        let got = u32::from_le_bytes([arg[12], arg[13], arg[14], arg[15]]);
+        self.remember(got, self.device);
+        Ok(got)
+    }
+
     pub fn reserve_gpga(&self, len: u64) -> Result<u32, RmError> {
         self.reserve_gpga_inner(len, true)
     }
