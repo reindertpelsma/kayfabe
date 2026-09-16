@@ -1352,7 +1352,7 @@ pub fn mute_doorbell_witness() -> usize {
 pub struct RmConnection {
     /// The **control** node. `NV_CTL_DEVICE_ONLY` escapes go here — see
     /// [`RmConnection::open`]'s docs for the routing rule and where it is enforced.
-    ctl: CharDevice,
+    pub(crate) ctl: CharDevice,
     /// The per-GPU node. `NV_ACTUAL_DEVICE_ONLY` escapes go here, and it is held for its
     /// whole life because `REGISTER_FD` binds the *session*.
     gpu: CharDevice,
@@ -1369,7 +1369,7 @@ pub struct RmConnection {
     /// value that can be here is one [`OwnClient::allocate_root`] produced, so every
     /// escape this connection issues names a client this isolate minted.
     client: OwnClient,
-    device: u32,
+    pub(crate) device: u32,
     subdevice: u32,
     /// The **host** driver's version string, as its frontend reported it.
     ///
@@ -2139,7 +2139,7 @@ fn rung<T, E: std::fmt::Debug>(r: &'static str, x: Result<T, E>) -> Result<T, Br
 /// permissions is `0x1B`. Nothing in the suite could have caught it, because a mock never
 /// produces an RM status at all — the only reason it is right now is that hardware returned
 /// a status this function had to name.
-fn status_check(status: u32) -> Result<(), RmError> {
+pub(crate) fn status_check(status: u32) -> Result<(), RmError> {
     match status {
         0 => Ok(()),
         // `NV_ERR_INSUFFICIENT_PERMISSIONS` (`:56`) — lesson L2 says this means "wrong
@@ -2717,7 +2717,7 @@ fn region_error(e: &RawError) -> RmError {
 }
 
 /// Classify an ioctl-level failure. `EINTR` is **the cancellation signal**, not an error.
-fn ioctl_error(e: &RawError) -> RmError {
+pub(crate) fn ioctl_error(e: &RawError) -> RmError {
     match e {
         RawError::Syscall {
             errno: Some(errno), ..
@@ -4092,7 +4092,7 @@ impl RmConnection {
     ///
     /// # Errors
     /// Whatever RM refused the range with.
-    fn raw_alloc_range_over(&self, h_va_space: u32) -> Result<u32, RmError> {
+    pub(crate) fn raw_alloc_range_over(&self, h_va_space: u32) -> Result<u32, RmError> {
         let mut range = [0u8; NvMemoryVirtualAllocationParams::SIZE];
         NvMemoryVirtualAllocationParams {
             offset: 0,
@@ -4112,7 +4112,7 @@ impl RmConnection {
     }
 
     /// One `NV_ESC_RM_UNMAP_MEMORY_DMA`, undoing a [`RmConnection::raw_map_dma`].
-    fn raw_unmap_dma(&self, h_dma: u32, gpu_va: u64) -> Result<(), RmError> {
+    pub(crate) fn raw_unmap_dma(&self, h_dma: u32, gpu_va: u64) -> Result<(), RmError> {
         let mut arg = [0u8; Nvos47Parameters::SIZE];
         Nvos47Parameters {
             h_client: self.client.raw(),
