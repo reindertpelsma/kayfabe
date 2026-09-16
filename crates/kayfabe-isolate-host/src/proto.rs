@@ -868,6 +868,32 @@ pub enum WireError {
     /// would make it indistinguishable from "the host refused" — which is the difference
     /// between *reconfigure the VM* and *file a bug*.
     GuestRamUnavailable,
+    /// ★★★★★ **w755 — [`RmError::PlacementRefused`], CARRYING THE TWO NUMBERS THAT SAY
+    /// WHERE RM ACTUALLY PUT IT.**
+    ///
+    /// ⊘⊘⊘ **This variant is the repair of a wire form that DISCARDED the diagnosis.** Until
+    /// w755 a child's `PlacementRefused` was collapsed into `Other(NOT_ON_THIS_RUNG)` under a
+    /// comment asserting *"a child backend cannot produce `PlacementRefused` — the check that
+    /// mints it lives in the PARENT's `Worker::execute`, above the wire"*. That was true when
+    /// it was written (#102) and **stopped being true** when constraint 28's assertion moved
+    /// into the `NVOS46` sites themselves: `HostRmBackend::raw_map_dma_slice` and B's
+    /// `map_dma_slice` — the two arms of `map_store_slice` — both mint it, and both run in a
+    /// child.
+    ///
+    /// ⇒ `[measured w753]` the split-ownership boot reported
+    /// `map_refused=2154 first_refusal=Rm("Other(19270)")`. The refusal was constraint 28
+    /// firing 2 154 times, and `want`/`got` — the whole content of the diagnosis — never
+    /// crossed the boundary.
+    ///
+    /// ⚠ The lesson is sharper than the bug: the comment did not go stale about a *fact*, it
+    /// went stale about a **reachability claim**, and a reachability claim is exactly what
+    /// nothing re-checks. It is the same shape as `a_rulings_date_is_part_of_the_citation`.
+    PlacementRefused {
+        /// The VA the caller asked for — `at`, binding and not a hint.
+        want: u64,
+        /// The VA RM chose instead.
+        got: u64,
+    },
 }
 
 impl WireError {
@@ -888,6 +914,7 @@ impl WireError {
                 memory: kayfabe_isolate::HostHandle::new(isolate, raw),
             },
             WireError::GuestRamUnavailable => RmError::GuestRamUnavailable,
+            WireError::PlacementRefused { want, got } => RmError::PlacementRefused { want, got },
         }
     }
 }
@@ -1838,6 +1865,11 @@ impl Reply {
                         out.extend_from_slice(&raw.to_le_bytes());
                     }
                     WireError::GuestRamUnavailable => out.push(7),
+                    WireError::PlacementRefused { want, got } => {
+                        out.push(8);
+                        out.extend_from_slice(&want.to_le_bytes());
+                        out.extend_from_slice(&got.to_le_bytes());
+                    }
                 }
             }
         }
@@ -1882,6 +1914,10 @@ impl Reply {
                 5 => WireError::Other(c.u32("status")?),
                 6 => WireError::NotExportableAsMemory(c.u64("unexportable memory")?),
                 7 => WireError::GuestRamUnavailable,
+                8 => WireError::PlacementRefused {
+                    want: c.u64("placement want")?,
+                    got: c.u64("placement got")?,
+                },
                 tag => {
                     return Err(ProtoError::UnknownTag {
                         what: "wire error",
@@ -2510,28 +2546,124 @@ mod tests {
         }
     }
 
-    /// ★★ The two variants the child may not claim (module docs). Asserted by
-    /// **exhaustion**: every `WireError` maps to an `RmError` that is neither, so there is
-    /// no encoding of either — and the `match` below fails to compile if `WireError` grows
-    /// a variant, which is the point.
+    /// ★★★★★ **w755 — THE GATE THAT MAKES THE LIST BELOW EXHAUSTIVE FOR REAL.**
+    ///
+    /// ⊘⊘⊘ The test under this one claimed to assert *"by exhaustion"* and said *"the `match`
+    /// below fails to compile if `WireError` grows a variant, which is the point"*. **It does
+    /// not.** The `match` it referred to is over [`RmError`] and carries a `_ => {}` arm, and
+    /// the `for` list of `WireError`s is hand-maintained — so a new variant joins neither and
+    /// the test stays green having never seen it. `[found w755]` when
+    /// [`WireError::PlacementRefused`] was added, it escaped both.
+    ///
+    /// ★ THIS function is the real gate: a wildcard-free `match` over every variant. Adding
+    /// one is a **compile error here**, and the error lands three lines above the list that
+    /// must also be updated.
+    fn every_wire_error_variant(w: WireError) -> &'static str {
+        match w {
+            WireError::InsufficientPermissions => "InsufficientPermissions",
+            WireError::BadHandle(_) => "BadHandle",
+            WireError::NoMemory => "NoMemory",
+            WireError::Interrupted => "Interrupted",
+            WireError::Other(_) => "Other",
+            WireError::NotExportableAsMemory(_) => "NotExportableAsMemory",
+            WireError::GuestRamUnavailable => "GuestRamUnavailable",
+            WireError::PlacementRefused { .. } => "PlacementRefused",
+        }
+    }
+
+    /// Every variant, once. ⚠ Kept in step with [`every_wire_error_variant`] by the
+    /// `distinct_names` assertion in `wire_errors_that_the_child_may_not_claim`.
+    const ALL_WIRE_ERRORS: &[WireError] = &[
+        WireError::InsufficientPermissions,
+        WireError::BadHandle(1),
+        WireError::NoMemory,
+        WireError::Interrupted,
+        WireError::Other(0),
+        WireError::NotExportableAsMemory(1),
+        WireError::GuestRamUnavailable,
+        WireError::PlacementRefused {
+            want: 0x7f00_0000,
+            got: 0x7f00_1000,
+        },
+    ];
+
+    /// ★★ The two variants the child may not claim (module docs).
+    ///
+    /// ⚠ w755: the *exhaustion* this relies on is supplied by [`every_wire_error_variant`]
+    /// and the `distinct_names` assertion, not by the `match` below — see that function.
     #[test]
     fn wire_errors_that_the_child_may_not_claim() {
+        // ★ The list must cover every variant `every_wire_error_variant` can name. A new
+        // variant added to the enum is a compile error there; a new variant left out of
+        // ALL_WIRE_ERRORS is caught here.
+        let names: std::collections::BTreeSet<&str> = ALL_WIRE_ERRORS
+            .iter()
+            .map(|w| every_wire_error_variant(*w))
+            .collect();
+        assert_eq!(
+            names.len(),
+            ALL_WIRE_ERRORS.len(),
+            "ALL_WIRE_ERRORS repeats a variant, so it is short of at least one other"
+        );
+
         let iso = kayfabe_isolate::IsolateId::new(1, kayfabe_arch::ids::GpuId(0));
-        for w in [
-            WireError::InsufficientPermissions,
-            WireError::BadHandle(1),
-            WireError::NoMemory,
-            WireError::Interrupted,
-            WireError::Other(0),
-            WireError::NotExportableAsMemory(1),
-            WireError::GuestRamUnavailable,
-        ] {
+        for w in ALL_WIRE_ERRORS.iter().copied() {
             match w.into_rm_error(iso) {
                 RmError::Wedged => panic!("a child claimed it never answered"),
                 RmError::ForeignHandle { .. } => panic!("a child claimed OUR gate fired"),
                 _ => {}
             }
         }
+    }
+
+    /// ★★★★★ **w755 — EVERY WIRE ERROR SURVIVES THE WIRE WITH ITS PAYLOAD.**
+    ///
+    /// ⊘⊘⊘ The defect this exists for was not a missing round-trip — it was a variant that
+    /// was **deliberately flattened** into `Other(NOT_ON_THIS_RUNG)` on the argument that a
+    /// child could never mint it. That argument was true at #102 and false at HEAD, and
+    /// nothing re-checked it, so `[measured w753]` `map_refused=2154` reported a placement
+    /// refusal as an opaque integer with `want`/`got` gone.
+    ///
+    /// ⇒ The gate is not *"does it encode"* but *"does what came back EQUAL what went in"*,
+    /// over every variant, driven off [`ALL_WIRE_ERRORS`] which is itself gated above.
+    #[test]
+    fn every_wire_error_round_trips_with_its_payload() {
+        for w in ALL_WIRE_ERRORS.iter().copied() {
+            let back = Reply::decode(&Reply::Failed(w).encode());
+            assert_eq!(
+                back,
+                Ok(Reply::Failed(w)),
+                "{} did not survive the wire",
+                every_wire_error_variant(w)
+            );
+        }
+    }
+
+    /// ★★★★★ **w755 — AND IT MUST SURVIVE THE FULL CHILD→PARENT LIFT, NOT JUST `encode`.**
+    ///
+    /// ⊘ The flattening that cost w753 happened in `crate::child::failed`, one layer ABOVE
+    /// the codec — the codec was always fine. A test that only round-trips `WireError` would
+    /// have stayed green through the entire defect. This one starts from an [`RmError`] a
+    /// child really mints and asserts the parent gets the same error back, `want`/`got`
+    /// included.
+    #[test]
+    fn a_childs_placement_refusal_reaches_the_parent_intact() {
+        let iso = kayfabe_isolate::IsolateId::new(1, kayfabe_arch::ids::GpuId(0));
+        let minted = RmError::PlacementRefused {
+            want: 0x7f00_1234_5000,
+            got: 0x7f00_9876_0000,
+        };
+        let Reply::Failed(w) = crate::child::failed_for_test(minted) else {
+            panic!("a refusal did not shape as Failed");
+        };
+        let Ok(Reply::Failed(decoded)) = Reply::decode(&Reply::Failed(w).encode()) else {
+            panic!("the refusal did not survive the codec");
+        };
+        assert_eq!(
+            decoded.into_rm_error(iso),
+            minted,
+            "constraint 28's diagnosis was altered on the way out of the child"
+        );
     }
 
     /// ★★★ The **named boundary** survives the wire as itself, and is stamped with OUR

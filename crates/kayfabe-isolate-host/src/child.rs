@@ -1561,9 +1561,15 @@ fn raw(value: u64) -> HostHandle {
     }
 }
 
-/// Shape an [`RmError`] for the wire. The two variants with no wire form
-/// ([`RmError::Wedged`], [`RmError::ForeignHandle`]) are unreachable from a backend, and
-/// are mapped to an opaque status rather than silently dropped — see `crate::proto`.
+/// Shape an [`RmError`] for the wire.
+///
+/// ⚠ **w755 — the variants collapsed into an opaque status are the ones with NO PAYLOAD TO
+/// LOSE, not the ones believed unreachable.** The previous wording claimed
+/// [`RmError::Wedged`] and [`RmError::ForeignHandle`] *"are unreachable from a backend"*, and
+/// [`RmError::PlacementRefused`] was collapsed on the same reasoning — which had stopped being
+/// true. A collapse justified by reachability silently becomes a collapse of real information
+/// the moment the reachability changes, and nothing re-checks it. See
+/// [`crate::proto::WireError::PlacementRefused`].
 fn failed(e: RmError) -> Reply {
     Reply::Failed(match e {
         RmError::InsufficientPermissions => WireError::InsufficientPermissions,
@@ -1587,11 +1593,35 @@ fn failed(e: RmError) -> Reply {
         // PARENT's `Worker::release_device_view`, above the wire — a child never sees a
         // `DeviceView` and so can never produce it. Listed rather than wildcarded, so the
         // next variant is a compile error here too.
-        RmError::Wedged
-        | RmError::ForeignHandle { .. }
-        | RmError::PlacementRefused { .. }
-        | RmError::ViewNotReleasable => WireError::Other(crate::rm::NOT_ON_THIS_RUNG),
+        // ★★★★★ **w755 — `PlacementRefused` KEEPS ITS PAYLOAD ACROSS THE WIRE.**
+        //
+        // ⊘⊘⊘ It used to be in the list below, under the comment *"a child backend cannot
+        // produce `PlacementRefused`"*. That reachability claim was true at #102 and FALSE at
+        // HEAD: constraint 28's assertion now lives in the `NVOS46` sites themselves, and
+        // `HostRmBackend::raw_map_dma_slice` (rm.rs) plus B's `map_dma_slice` — the two arms
+        // of `map_store_slice` — both mint it, in a child. `[measured w753]` that flattening
+        // is what made `map_refused=2154 first_refusal=Rm("Other(19270)")` unreadable.
+        RmError::PlacementRefused { want, got } => WireError::PlacementRefused { want, got },
+        // #102: listed explicitly rather than caught by a wildcard, so adding a variant stays
+        // a compile error.
+        // ★ w734: `ViewNotReleasable` is minted in the PARENT's `Worker::release_device_view`,
+        // above the wire — a child never sees a `DeviceView` and so can never produce it.
+        // ⚠ w755: and note what the entry above cost. `ViewNotReleasable` and `Wedged` carry
+        // the SAME KIND of claim — *"unreachable from here"* — and nothing re-checks a
+        // reachability claim when the code that would falsify it moves. They stay here
+        // because they carry no payload to lose, not because the claim was re-verified.
+        RmError::Wedged | RmError::ForeignHandle { .. } | RmError::ViewNotReleasable => {
+            WireError::Other(crate::rm::NOT_ON_THIS_RUNG)
+        }
     })
+}
+
+/// ★ w755 — `failed` is private and the codec's tests live in `crate::proto`. Exposing it
+/// under `cfg(test)` lets the payload-survival gate start from an [`RmError`] a child really
+/// mints, rather than from a `WireError` that was hand-built to match.
+#[cfg(test)]
+pub(crate) fn failed_for_test(e: RmError) -> Reply {
+    failed(e)
 }
 
 #[cfg(test)]

@@ -75,6 +75,29 @@ pub enum StoreMapRefusal {
     /// `u32::try_from(..).unwrap_or(0)` would dup **object 0**, which is a legal-looking
     /// handle in somebody else's namespace.
     BadHandle { raw: u64 },
+    /// ★★★★★ **w755 — CONSTRAINT 28 REFUSED IT: RM PLACED THE SLICE SOMEWHERE ELSE.**
+    ///
+    /// ⊘⊘⊘ **This arm exists because the boot that needed it could not say it.**
+    /// `[measured w753]` the split-ownership boot reported `map_refused=2154` with
+    /// `first_refusal=Rm("Other(19270)")` — an opaque integer that was ALSO another
+    /// constant's, so the one number naming the wall named nothing. The refusal was
+    /// constraint 28 all along, and `want`/`got` had been discarded at the isolate IPC
+    /// boundary (see `kayfabe_isolate_host::proto::WireError::PlacementRefused`).
+    ///
+    /// ⚠ Split out of [`StoreMapRefusal::Rm`] rather than left inside it, and the
+    /// distinction is not cosmetic: `Rm` means *"the driver said no"* and this means
+    /// **"the driver said YES, at the wrong address, and we took it back down"** — a
+    /// mapping that briefly existed, a guest VA that is still unbacked, and an invariant
+    /// of OURS that broke. Reading the second as the first sends the reader to the host.
+    ///
+    /// ★ Rendered in hex by [`StoreMapRefusal::detail`], because these are GPU VAs and a
+    /// 12-digit decimal is not a number anybody compares against a page table by eye.
+    Placement {
+        /// The guest's own VA, binding.
+        want: u64,
+        /// Where RM put it instead.
+        got: u64,
+    },
 }
 
 impl StoreMapRefusal {
@@ -88,6 +111,22 @@ impl StoreMapRefusal {
             StoreMapRefusal::OutOfRange { .. } => "OutOfRange",
             StoreMapRefusal::OnVcpu => "OnVcpu",
             StoreMapRefusal::BadHandle { .. } => "BadHandle",
+            StoreMapRefusal::Placement { .. } => "Placement",
+        }
+    }
+
+    /// ★ The one-line detail a census prints beside the name — hex for anything that is an
+    /// address, because a boot log is read against a page table by eye.
+    #[must_use]
+    pub fn detail(&self) -> String {
+        match self {
+            StoreMapRefusal::Placement { want, got } => {
+                format!(
+                    "CONSTRAINT 28: want={want:#x} got={got:#x} delta={:#x}",
+                    got.wrapping_sub(*want)
+                )
+            }
+            other => format!("{other:?}"),
         }
     }
 }
@@ -146,6 +185,24 @@ pub struct StoreMapPort {
     birth_procs: std::sync::Mutex<std::collections::BTreeSet<u32>>,
     /// The first refusal's name, so a census can say WHICH of four fired. `None` means none.
     first_refusal: std::sync::Mutex<Option<String>>,
+    /// ★★★★★ **w755 — THE DISTINCT REFUSALS, WITH COUNTS. `first_refusal` ALONE IS TOO
+    /// THIN FOR A FOUR-FIGURE NUMBER.**
+    ///
+    /// ⊘ `[measured w753]` `map_refused=2154 first_refusal=[one string]` cannot distinguish
+    /// *"one cause, 2 154 times"* from *"2 154 distinct causes"*, and those have completely
+    /// different fixes. The first is a single wrong invariant; the second is a path that is
+    /// wrong per-page. A census that cannot tell them apart is the
+    /// `falsifier_blocker_vs_only_blocker` shape, at the one place this boot is stuck.
+    ///
+    /// ⚠ **Capped at [`Self::DISTINCT_CAP`] keys**, and the cap is *reported* rather than
+    /// silently applied: an unbounded map keyed on a guest-influenced string is a memory
+    /// grow the guest can drive. Once full, further distinct refusals increment
+    /// [`Self::refusal_kinds_dropped`] — so *"the histogram is complete"* and *"the
+    /// histogram is a sample"* are different, visible states.
+    refusal_kinds: std::sync::Mutex<std::collections::BTreeMap<String, u64>>,
+    /// Distinct refusal strings that did not fit under the cap. ⊘ See [`Self::refusal_kinds`]
+    /// — a truncated histogram that does not say it is truncated is worse than none.
+    refusal_kinds_dropped: AtomicU64,
 }
 
 impl core::fmt::Debug for StoreMapPort {
@@ -191,6 +248,8 @@ impl StoreMapPort {
             birth_refused: AtomicU64::new(0),
             birth_procs: std::sync::Mutex::new(std::collections::BTreeSet::new()),
             first_refusal: std::sync::Mutex::new(None),
+            refusal_kinds: std::sync::Mutex::new(std::collections::BTreeMap::new()),
+            refusal_kinds_dropped: AtomicU64::new(0),
         }
     }
 
@@ -352,7 +411,13 @@ impl StoreMapPort {
             None => Err(self.note(StoreMapRefusal::NoWorker)),
             Some(Err(e)) => {
                 self.map_refused.fetch_add(1, Ordering::Relaxed);
-                Err(self.note(StoreMapRefusal::Rm(format!("{e:?}"))))
+                // ★★★★★ w755 — constraint 28 gets its OWN arm. See `StoreMapRefusal::Placement`.
+                Err(self.note(match e {
+                    kayfabe_isolate::RmError::PlacementRefused { want, got } => {
+                        StoreMapRefusal::Placement { want, got }
+                    }
+                    other => StoreMapRefusal::Rm(format!("{other:?}")),
+                }))
             }
             Some(Ok(va)) => {
                 self.maps.fetch_add(1, Ordering::Relaxed);
@@ -384,7 +449,12 @@ impl StoreMapPort {
             None => Err(self.note(StoreMapRefusal::NoWorker)),
             Some(Err(e)) => {
                 self.unmap_refused.fetch_add(1, Ordering::Relaxed);
-                Err(self.note(StoreMapRefusal::Rm(format!("{e:?}"))))
+                Err(self.note(match e {
+                    kayfabe_isolate::RmError::PlacementRefused { want, got } => {
+                        StoreMapRefusal::Placement { want, got }
+                    }
+                    other => StoreMapRefusal::Rm(format!("{other:?}")),
+                }))
             }
             Some(Ok(())) => {
                 self.unmaps.fetch_add(1, Ordering::Relaxed);
@@ -464,14 +534,62 @@ impl StoreMapPort {
     }
 
     fn note(&self, why: StoreMapRefusal) -> StoreMapRefusal {
-        let mut first = self
-            .first_refusal
+        let detail = why.detail();
+        {
+            let mut first = self
+                .first_refusal
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if first.is_none() {
+                *first = Some(detail.clone());
+            }
+        }
+        // ★★★★★ w755 — and the histogram, because one string cannot characterise 2 154
+        // refusals. See `Self::refusal_kinds`.
+        let mut kinds = self
+            .refusal_kinds
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if first.is_none() {
-            *first = Some(format!("{why:?}"));
+        if let Some(n) = kinds.get_mut(&detail) {
+            *n += 1;
+        } else if kinds.len() < Self::DISTINCT_CAP {
+            kinds.insert(detail, 1);
+        } else {
+            self.refusal_kinds_dropped.fetch_add(1, Ordering::Relaxed);
         }
         why
+    }
+
+    /// How many distinct refusal strings [`Self::refusal_kinds`] will hold before it starts
+    /// counting drops instead. ⊘ Bounded because the key is guest-influenced.
+    pub const DISTINCT_CAP: usize = 24;
+
+    /// ★ The distinct refusals seen, most frequent first, with the drop count appended when
+    /// the histogram is a sample rather than a census.
+    #[must_use]
+    pub fn refusal_histogram(&self) -> String {
+        let kinds = self
+            .refusal_kinds
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if kinds.is_empty() {
+            return "none".to_string();
+        }
+        let mut rows: Vec<(&String, &u64)> = kinds.iter().collect();
+        rows.sort_by(|a, b| b.1.cmp(a.1).then(a.0.cmp(b.0)));
+        let mut out = rows
+            .iter()
+            .map(|(k, n)| format!("{n}x {k}"))
+            .collect::<Vec<_>>()
+            .join(" | ");
+        let dropped = self.refusal_kinds_dropped.load(Ordering::Relaxed);
+        if dropped > 0 {
+            out.push_str(&format!(
+                " | ⚠ SAMPLE not census: {dropped} further distinct refusals exceeded the                  {} key cap",
+                Self::DISTINCT_CAP
+            ));
+        }
+        out
     }
 
     /// One line for a boot log. ⊘ Printed even when every number is zero: *"the port never
@@ -516,7 +634,7 @@ impl StoreMapPort {
              STORE-MAP iso={:?} obj={:?} obj_len={} adopts={adopts} adopt_refused={} \
              maps={maps} map_refused={} unmaps={} unmap_refused={} bytes_mapped={} \
              outstanding={} asserted={asserted} assert_refused={assert_refused} \
-             declined_on_vcpu={} first_refusal=[{}] ⇒ {verdict}",
+             declined_on_vcpu={} first_refusal=[{}] refusals=[{}] ⇒ {verdict}",
             self.id,
             self.obj,
             self.obj_len,
@@ -532,6 +650,7 @@ impl StoreMapPort {
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .as_deref()
                 .unwrap_or("none"),
+            self.refusal_histogram(),
         )
     }
 }
