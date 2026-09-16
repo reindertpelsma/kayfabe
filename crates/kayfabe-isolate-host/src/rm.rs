@@ -226,6 +226,7 @@ pub mod local_status {
     /// the compiler — see the module docs for why both gates exist.
     pub const ALL: &[(&str, u32)] = &[
         ("NOT_ON_THIS_RUNG", super::NOT_ON_THIS_RUNG),
+        ("VA_ALREADY_MAPPED", super::VA_ALREADY_MAPPED),
         ("ABI_ENCODE_FAILED", super::ABI_ENCODE_FAILED),
         ("IOCTL_NUMBER_UNBUILDABLE", super::IOCTL_NUMBER_UNBUILDABLE),
         ("ABI_DECODE_FAILED", super::ABI_DECODE_FAILED),
@@ -394,6 +395,33 @@ pub const IMPOSSIBLE_CONVERSION: u32 = 0x4B66;
 /// true this must become per-object, and `the_store_is_a_singleton` is the gate that says so.
 pub static STORE_IS_CONTIGUOUS_AND_ALIGNED: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
+
+/// ★★★★★ **w755d — `NV_ERR_NO_MEMORY` ON A *FIXED MAP* MEANS "THE VA IS ALREADY MAPPED",
+/// NOT "OUT OF MEMORY".** `0x4B69` is `"Ki"`.
+///
+/// ⊘⊘ [`status_check`] collapses `0x1A NV_ERR_INSUFFICIENT_RESOURCES` and
+/// `0x51 NV_ERR_NO_MEMORY` into one [`RmError::NoMemory`], and that is right for an
+/// **allocation**, where both really do mean *"you cannot have this"*. On a
+/// `DMA_OFFSET_FIXED` map it is wrong, and the difference is the whole diagnosis.
+///
+/// `[C: src/qemu/nvkvm_gpu_emul.c:7935-7937]`, the Mode-2 oracle, verbatim:
+///
+/// ```text
+///   st=0x51 (NV_ERR_NO_MEMORY) on a FIXED map => the VA is ALREADY mapped in the host
+///   VASpace (host RM self-promoted its GR ctx at the same VAs). Desired for ctx buffers —
+///   host already has them; do NOT overlay. Only genuinely-unmapped buffers get placed.
+/// ```
+///
+/// ⇒ `[measured w755k, route-K boot]` the split arm's new wall is
+/// `refusals=[11x Rm("NoMemory")]` against `maps=45` — and 45 + 11 = **56**, exactly the
+/// number of map attempts the same boot counted. Reported as *"out of memory"* on a card with
+/// 12 GiB free, which sends a reader to capacity when the fact is **address occupancy**.
+///
+/// ⚠ **Interpreted at the FIXED-map sites, not in [`status_check`].** The status means
+/// different things per verb, so a global re-mapping would make an allocation's genuine
+/// `NV_ERR_NO_MEMORY` read as *"already mapped"* — the same one-integer-many-meanings defect
+/// this session has now found four times, inverted.
+pub const VA_ALREADY_MAPPED: u32 = 0x4B69;
 
 /// The opaque status a verb this rung does not implement reports.
 ///
@@ -868,7 +896,7 @@ mod birth_conn {
         NV_IOCTL_MAGIC, NV01_MEMORY_VIRTUAL, NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE,
         Nv0080AllocParameters, Nv2080AllocParameters, NvMemoryVirtualAllocationParams,
         Nvos00Parameters, Nvos21Parameters, Nvos46Parameters, Nvos47Parameters, Nvos55Parameters,
-        RmError, ioctl_error, status_check,
+        RmError, VA_ALREADY_MAPPED, ioctl_error, status_check,
     };
 
     use kayfabe_linux_raw::{CharDevice, ioctl};
@@ -1168,6 +1196,11 @@ mod birth_conn {
                 .map_err(|e| ioctl_error(&e))?;
             let out =
                 Nvos46Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
+            // ★★★★★ w755d — see [`VA_ALREADY_MAPPED`]. This site is ALWAYS a FIXED map, so
+            // the condition is unconditional here and guarded by `at.is_some()` in the twin.
+            if out.status == 0x0000_0051 {
+                return Err(RmError::Other(VA_ALREADY_MAPPED));
+            }
             status_check(out.status)?;
             // ★★★★★ **CONSTRAINT 28 HALF TWO — RM's ANSWER IS CHECKED, NOT ASSUMED.** An
             // `Ok` naming the wrong address is the failure mode this exists for: it is
@@ -3960,6 +3993,11 @@ impl RmConnection {
             .ioctl(req, &mut arg, &mut [])
             .map_err(|e| ioctl_error(&e))?;
         let out = Nvos46Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
+        // ★★★★★ w755d — see [`VA_ALREADY_MAPPED`]. `0x51` on a FIXED map is ADDRESS
+        // OCCUPANCY, not capacity, and `status_check` would report it as `NoMemory`.
+        if at.is_some() && out.status == 0x0000_0051 {
+            return Err(RmError::Other(VA_ALREADY_MAPPED));
+        }
         status_check(out.status)?;
         // ★★★★★ **CONSTRAINT 28, HALF TWO — EVERY FIXED MAP ASSERTS ITS OWN PLACEMENT.**
         //
@@ -4344,6 +4382,31 @@ impl RmConnection {
     /// the design's central promise, and it is what makes an out-of-memory on the refresh
     /// path (where we cannot recover) impossible rather than unlikely.
     pub fn reserve_gpga(&self, len: u64) -> Result<u32, RmError> {
+        self.reserve_gpga_inner(len, true)
+    }
+
+    /// ★★★★★ **w755c — THE SIZE PROBE'S RESERVATION, WHICH MUST NOT SPEAK FOR THE REAL ONE.**
+    ///
+    /// ⊘⊘ `HostRmBackend::largest_reservable_mb` bisects by **really allocating and freeing**,
+    /// ~13 times. Routing those through [`RmConnection::reserve_gpga`] would have every probe step
+    /// set [`STORE_IS_CONTIGUOUS_AND_ALIGNED`] and print a headline claiming a reservation —
+    /// so the flag the page-size decision reads would be a fact about a **throwaway probe**,
+    /// and the log would carry a dozen contradictory claims about a store that does not exist
+    /// yet.
+    ///
+    /// ⚠ Caught by asking where `reserve_gpga` is called from, not by a test: the last probe
+    /// step usually IS the real size, so the flag would usually be right — and "usually
+    /// right, by accident of ordering" is the
+    /// `correct_by_accident_under_a_temporary_condition` shape this campaign has recorded
+    /// five times in two days.
+    ///
+    /// # Errors
+    /// Whatever RM refused the allocation with.
+    pub fn reserve_gpga_probe(&self, len: u64) -> Result<u32, RmError> {
+        self.reserve_gpga_inner(len, false)
+    }
+
+    fn reserve_gpga_inner(&self, len: u64, is_the_real_store: bool) -> Result<u32, RmError> {
         // ★★★★★ **w755c — TRY CONTIGUOUS AND 1 GiB-ALIGNED FIRST, FALL BACK, AND SAY WHICH.**
         //
         // > Owner, 2026-09-16: *"ensure the gpga rm object in the scratchpad va is aligned
@@ -4388,11 +4451,15 @@ impl RmConnection {
         .encode_into(&mut params)
         .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         if let Ok(h) = self.raw_alloc(self.device, want, NV01_MEMORY_LOCAL_USER, &mut params) {
-            STORE_IS_CONTIGUOUS_AND_ALIGNED.store(true, Ordering::Relaxed);
-            eprintln!(
-                "kayfabe-isolate: STORE-RESERVE ★ CONTIGUOUS and 1 GiB-ALIGNED, {} MiB —                  every slice's physical address is `base + offset` with `base ≡ 0`, so a                  FIXED map is congruent at EVERY page size and store slices need no                  small-page pin.",
-                len >> 20
-            );
+            if is_the_real_store {
+                STORE_IS_CONTIGUOUS_AND_ALIGNED.store(true, Ordering::Relaxed);
+            }
+            if is_the_real_store {
+                eprintln!(
+                    "kayfabe-isolate: STORE-RESERVE ★ CONTIGUOUS and 1 GiB-ALIGNED, {} MiB —                  every slice's physical address is `base + offset` with `base ≡ 0`, so a                  FIXED map is congruent at EVERY page size and store slices need no                  small-page pin.",
+                    len >> 20
+                );
+            }
             self.remember(h, self.device);
             return Ok(h);
         }
@@ -4410,11 +4477,15 @@ impl RmConnection {
         .encode_into(&mut params)
         .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         let h = self.raw_alloc(self.device, want, NV01_MEMORY_LOCAL_USER, &mut params)?;
-        STORE_IS_CONTIGUOUS_AND_ALIGNED.store(false, Ordering::Relaxed);
-        eprintln!(
-            "kayfabe-isolate: STORE-RESERVE ⊘ NONCONTIGUOUS, {} MiB — the contiguous              1 GiB-aligned form was refused (fragmentation, not capacity). A slice's physical              address is then whatever RM's page list says, so store slices PIN THE 4 KiB PAGE              TABLE, where congruence holds however the pages fell.",
-            len >> 20
-        );
+        if is_the_real_store {
+            STORE_IS_CONTIGUOUS_AND_ALIGNED.store(false, Ordering::Relaxed);
+        }
+        if is_the_real_store {
+            eprintln!(
+                "kayfabe-isolate: STORE-RESERVE ⊘ NONCONTIGUOUS, {} MiB — the contiguous              1 GiB-aligned form was refused (fragmentation, not capacity). A slice's physical              address is then whatever RM's page list says, so store slices PIN THE 4 KiB PAGE              TABLE, where congruence holds however the pages fell.",
+                len >> 20
+            );
+        }
         self.remember(h, self.device);
         Ok(h)
     }
@@ -13033,7 +13104,7 @@ impl HostRmBackend {
         // Phase 1 — find any success, halving. This is the old loop, kept only for the floor.
         let mut probe = start_mb;
         while probe >= 256 {
-            match self.conn.reserve_gpga(probe << 20) {
+            match self.conn.reserve_gpga_probe(probe << 20) {
                 Ok(h) => {
                     let _ = self.free_one(h);
                     lo = probe;
@@ -13053,7 +13124,7 @@ impl HostRmBackend {
         // size this process actually reserved and freed.
         while hi - lo > GRAIN_MB {
             let mid = lo + (hi - lo) / 2;
-            match self.conn.reserve_gpga(mid << 20) {
+            match self.conn.reserve_gpga_probe(mid << 20) {
                 Ok(h) => {
                     let _ = self.free_one(h);
                     lo = mid;

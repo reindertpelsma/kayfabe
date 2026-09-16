@@ -342,7 +342,12 @@ constraint 32 REPLACED. Do not read this arm as a route-K result."
   echo "--- ★★★★★ w742 ROW 12: the raw client's named fault, direction only ---"
   echo "W742-CPUCEFB=$(grep -ao 'FwdFault::CpuCeFb=[0-9]*' "$Q" 2>/dev/null | tail -1)   ⊘ w740: 63 on the device arm; <63 is the DIRECTION, not a pass"
   echo "W742-CPUCEFB-LINES=$(grep -ac 'CpuCeFb {' "$Q" 2>/dev/null)"
-  echo "--- ★★★★★ w742 ROW 7: `named` must not regress ---"
+  # ⊘ w755d: the backticks around `named` here were COMMAND SUBSTITUTION inside a
+  #   double-quoted string — bash ran a command called `named`, printed
+  #   `named: command not found`, and the header lost the word it was naming. Harmless in
+  #   blast radius (the very next line ran) but it fired on EVERY arm of every run, which
+  #   desensitizes the `W755-COMMAND-NOT-FOUND` gate that found it. Single-quoted now.
+  echo '--- ★★★★★ w742 ROW 7: `named` must not regress ---'
   echo "W742-NAMED=$(printf '%s' "$DFB" | grep -ao 'named=[0-9]*' | tail -1)   ★ row 7: ≥300000 (w740: 426221)"
   echo "--- ⊘ w742: the arena census line — on the device arm it must SAY unmeasured, not print four zeros ---"
   grep -ao 'arena\[[^]]*\]' "$Q" 2>/dev/null | tail -1 | cut -c1-320
@@ -358,7 +363,16 @@ constraint 32 REPLACED. Do not read this arm as a route-K result."
   echo "W745-ADOPTS=$(w745f 'adopts=[0-9]*')        ★ row 1: ≥1 on the scratchpad arm"
   echo "W745-ADOPT-REFUSED=$(w745f 'adopt_refused=[0-9]*')"
   echo "W745-MAPS=$(w745f ' maps=[0-9]*')           ★★★ row 2: ≥1 is the whole increment"
-  echo "W745-MAP-REFUSED=$(w745f 'map_refused=[0-9]*')"
+  # ⊘⊘⊘ w755d — THIS ROW REPORTED 0 WHILE THE CENSUS SAID 11.
+  #   `map_refused=[0-9]*` also matches inside `unmap_refused=0`, which appears LATER on the
+  #   same line, and `w745f` takes `tail -1`. So the row that says whether the increment's
+  #   mappings were refused printed the UNMAP count instead — and printed it as a zero on the
+  #   one boot where the answer was 11.
+  #   ⚠ This is the exact failure this harness already warns about for `inplace_refused` vs
+  #   `early_release_refused` two hundred lines below. The warning was written and the same
+  #   defect shipped three rows up from it.
+  #   ⇒ anchored on the leading space, so `unmap_refused=` can never match.
+  echo "W745-MAP-REFUSED=$(w745f ' map_refused=[0-9]*' | tr -d ' ')"
   echo "W745-OUTSTANDING=$(w745f 'outstanding=[0-9]*')"
   echo "W745-ASSERTED=$(w745f 'asserted=[0-9]*')    ⊘ 0 with maps>0 means births never reached the oracle"
   echo "W745-ASSERT-REFUSED=$(w745f 'assert_refused=[0-9]*')"

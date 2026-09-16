@@ -98,6 +98,25 @@ pub enum StoreMapRefusal {
         /// Where RM put it instead.
         got: u64,
     },
+    /// ★★★★★ **w755d — THIS VA ALREADY HOLDS A DIFFERENT SLICE OF THE STORE.**
+    ///
+    /// ⊘ Re-offering the *same* slice is idempotent and answers `Ok` without touching RM —
+    /// see [`StoreMapPort::map`]. This is the other case: the same guest VA named with a
+    /// different `(offset, len)`, which is **two memories at one address**, the state the
+    /// single store exists to abolish. Refused by name rather than re-placed, because
+    /// whichever mapping won would be invisible to whichever caller lost.
+    AlreadyPlacedDifferently {
+        /// The guest VA in question.
+        at: u64,
+        /// The store offset already placed there.
+        had_offset: u64,
+        /// Its length.
+        had_len: u64,
+        /// The store offset now being offered.
+        want_offset: u64,
+        /// Its length.
+        want_len: u64,
+    },
 }
 
 impl StoreMapRefusal {
@@ -112,6 +131,7 @@ impl StoreMapRefusal {
             StoreMapRefusal::OnVcpu => "OnVcpu",
             StoreMapRefusal::BadHandle { .. } => "BadHandle",
             StoreMapRefusal::Placement { .. } => "Placement",
+            StoreMapRefusal::AlreadyPlacedDifferently { .. } => "AlreadyPlacedDifferently",
         }
     }
 
@@ -421,6 +441,48 @@ impl StoreMapPort {
         if len > 0 && len.is_power_of_two() && offset % len != 0 {
             self.offset_less_aligned_than_len
                 .fetch_add(1, Ordering::Relaxed);
+        }
+        // ★★★★★ **w755d — THE LEDGER IS CONSULTED BEFORE THE MAP, NOT ONLY WRITTEN AFTER
+        // IT.**
+        //
+        // ⊘⊘⊘ `[measured w755k, route-K boot]` `maps=45 map_refused=11` with
+        // `refusals=[11x Rm("NoMemory")]`, and **45 + 11 = 56**, the exact number of map
+        // attempts that boot made. `unmaps=0` — nothing is ever taken down — so eleven of
+        // the fifty-six were the route re-publishing a leaf this port had ALREADY placed.
+        // RM then answered `0x51` on a FIXED map, which
+        // `[C: src/qemu/nvkvm_gpu_emul.c:7935]` records as *"the VA is ALREADY mapped in the
+        // host VASpace"* and NOT as capacity.
+        //
+        // ⚠ This ledger existed the whole time and was **write-only**: `placed` was inserted
+        // on success and read by `is_slice_of_the_store`, never by the mapper. A publish
+        // route that legitimately re-offers a leaf (which is its documented behaviour on a
+        // declined vCPU attempt) therefore paid an IPC round trip and an RM refusal per
+        // repeat.
+        //
+        // ★ Re-offering the SAME slice is idempotent and answers the VA already held. A
+        // re-offer naming a DIFFERENT `(offset, len)` at the same VA is NOT idempotent — it
+        // is two memories at one address, the state the single store exists to abolish — so
+        // it is refused by name rather than silently re-placed.
+        {
+            let placed = self
+                .placed
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if let Some(prev) = placed.get(&(vas.raw(), at.0)) {
+                if prev.offset == offset && prev.len == len {
+                    return Ok(at.0);
+                }
+                let prev = *prev;
+                drop(placed);
+                self.map_refused.fetch_add(1, Ordering::Relaxed);
+                return Err(self.note(StoreMapRefusal::AlreadyPlacedDifferently {
+                    at: at.0,
+                    had_offset: prev.offset,
+                    had_len: prev.len,
+                    want_offset: offset,
+                    want_len: len,
+                }));
+            }
         }
         let off = self.off_vcpu()?;
         let obj = self.obj;
