@@ -163,6 +163,35 @@ report() {
   local Q="$BENCH/run_${tag}_qemu.log" D="$BENCH/run_${tag}_probe.log"
   echo
   echo "######## W736 REPORT arm=$arm tag=$tag ########"
+  # ★★★★★ w755 GATE 1 — A SHELL THAT COULD NOT RUN A LINE MUST NOT PRODUCE A QUIET REPORT.
+  #   `[measured w755]` a merge remnant made this script print `else: command not found` on
+  #   EVERY run, for THREE boots, and nobody read it -- the arm header printed, the boot
+  #   happened, the numbers looked ordinary. `bash -n` passed the whole time, because a
+  #   dangling continuation is valid syntax and an invalid program.
+  #   ⊘ Checked on the HARNESS's own stdout as well as the boot logs, because the remnant was
+  #   in the harness, not in the boot.
+  local nf
+  nf=$(grep -ac 'command not found' "$Q" "$D" "${W736_SELF_LOG:-/dev/null}" 2>/dev/null | awk -F: '{s+=$NF} END{print s+0}')
+  echo "W755-COMMAND-NOT-FOUND=$nf"
+  if [ "${nf:-0}" -gt 0 ]; then
+    echo "⊘⊘⊘ W755 GATE: a command in this run DID NOT EXIST ($nf occurrence(s)). Some step \
+did not run and the rest of this report is about a program that is not the one written. \
+FIX THE SCRIPT BEFORE READING ANY NUMBER BELOW."
+  fi
+  # ★★★★★ w755 GATE 2 — WHEN ROUTE K IS SELECTED, IT MUST ACTUALLY HAVE BEEN ASKED.
+  #   `[measured w755]` three boots reported `ARM=split (THE TEST)` while running the DEFAULT
+  #   owner, and `STORE-MAP-K handed=0 refused=0 procs=0 ⇒ NOT ASKED` was the only line that
+  #   said so -- printed, never gated. An arm that RAN and an arm that was TESTED are
+  #   different facts. ⊘ `NOT ASKED` is the census's own words; this gate reads them.
+  if [ "$arm" = "split" ] && [ "${ARM3_VAS_OWNER:-}" = "k" ]; then
+    if grep -aq 'STORE-MAP-K.*NOT ASKED' "$Q" 2>/dev/null; then
+      echo "⊘⊘⊘ W755 GATE: ARM3_VAS_OWNER=k was requested and STORE-MAP-K says NOT ASKED. \
+Route K was NOT on this path, so every number in this arm describes the configuration \
+constraint 32 REPLACED. Do not read this arm as a route-K result."
+    else
+      echo "W755-ROUTE-K-ENGAGED=yes"
+    fi
+  fi
   echo "--- the switch's own line at realize ---"
   grep -a 'FB-STORE AT REALIZE' "$Q" 2>/dev/null | head -2 | cut -c1-400
   echo "--- ★★★ PREDICTION 1a: the DEVICE-FB census, VERBATIM ---"
@@ -529,7 +558,16 @@ report "${TAG}dev" device
 #     Arms 1 and 2 are byte-identical either way, which is the whole point of running them.
 #   ⚠ It is PRINTED, because a boot that does not say which arm it ran is uninterpretable —
 #     and the two arms differ in exactly one decision.
-ARM3_VAS_OWNER="${ARM3_VAS_OWNER:-scratchpad}"
+# ⊘⊘⊘ w755 -- THE DEFAULT IS NOW `k`, AND THE CHANGE IS THE POINT.
+#   It defaulted to `scratchpad`, which is the PRE-route-K configuration: the scratchpad adopts
+#   the guest's VA space under its OWN client, and ogkm refuses the dup
+#   `INSUFFICIENT_PERMISSIONS`. `[measured w755, 3 boots]` adopt_refused=4673/4502/4686, maps=0,
+#   and therefore `map_refused=0` -- a VACUOUS zero that cannot confirm or refute anything about
+#   mapping, because nothing was ever mapped.
+#   ★ Constraint 32 RULED route K, and `[measured w753]` it takes adopt_refused 4718 -> 0 with
+#   the first bytes ever mapped through the split. A harness whose default is the configuration
+#   the design replaced makes "the arm ran" and "the arm was tested" different facts.
+ARM3_VAS_OWNER="${ARM3_VAS_OWNER:-k}"
 case "$ARM3_VAS_OWNER" in
   scratchpad|k) : ;;
   *) echo "ARM3_VAS_OWNER must be 'scratchpad' or 'k', got '$ARM3_VAS_OWNER'"; exit 2 ;;
@@ -555,13 +593,18 @@ env -u KAYFABE_VAS_OWNER KAYFABE_FB_STORE=device KAYFABE_DEVICE_VIEW=probe \
 echo "INLINE_BOOT_RC=$?"
 report "${TAG}inline" inline
 else
-echo "############ ARM=split (THE TEST — constraint 26) ############"
-KAYFABE_VAS_OWNER=scratchpad KAYFABE_FB_STORE=device KAYFABE_DEVICE_VIEW=probe \
-else
 # ⊘⊘ MERGE (w753 x w754): w753 parameterised THIS arm's VAS owner while w754 wrapped it in an
 #    inline known-positive branch. Neither side is optional -- w754's arm is the A/B that makes
 #    `on_vcpu=0` attributable, and w753's variable is what selects route K. Dropping either
 #    would leave a counter nobody has shown can move.
+# ⊘⊘⊘ w755 -- THE MERGE THAT WROTE THIS COMMENT LEFT A DANGLING REMNANT RIGHT HERE, AND IT
+#    COST THREE BOOTS. Two stray lines survived above it: a duplicate `ARM=split` header and
+#    `KAYFABE_VAS_OWNER=scratchpad ... \` whose backslash swallowed the `else`. bash parsed the
+#    assignments as env for a command named `else`, printed `else: command not found`, and ran
+#    on. `bash -n` PASSED. The real arm then ran -- with the DEFAULT owner -- so every log
+#    carried a header naming an arm that had not run, and three boots measured
+#    `ARM3_VAS_OWNER=scratchpad` while their report said `split (THE TEST)`.
+#    ⇒ see the `command not found` gate in report(); a syntax check is not a semantic one.
 echo "############ ARM=split (THE TEST — KAYFABE_VAS_OWNER=$ARM3_VAS_OWNER) ############"
 echo "W753_ARM3_VAS_OWNER=$ARM3_VAS_OWNER"
 KAYFABE_VAS_OWNER="$ARM3_VAS_OWNER" KAYFABE_FB_STORE=device KAYFABE_DEVICE_VIEW=probe \
