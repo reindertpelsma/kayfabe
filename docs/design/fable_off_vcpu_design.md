@@ -315,6 +315,22 @@ INFERRED determinism. Row 2 is the one this document is confident of.
 | **1** census | 102 crossings / 6 doors, doors 4+6 at exactly 1, doors 7/8/9 absent | **`total=102 doors=6`**, `[1 × window mmap] [1 × memslot install]`, 7/8/9 **absent** | **HELD, to the crossing** |
 | **2** cost | mean < 1 ms; worst not predicted sub-ms | `move_ns[worst=1115752 mean=496145]` = **1.12 ms / 0.50 ms** (w742: 44.4 ms / 7.25 ms) | **HELD** |
 | **3** `worst_trap` does NOT go sub-ms | ~22 ms at `NV_PGSP_QUEUE_HEAD` remains | **`worst_trap=24999us at=bar0+0x110c00`**, `cpu_of_that_trap=23979us`; control **25 077 µs at the same address** | **HELD** |
+
+> ### ⊘⊘⊘ **ROW 3's READING IS CORRECTED — 2026-09-16 (w754). The NUMBER held; the SENTENCE
+> ### it was read as did not.** Row 3 predicted *"~22 ms at `NV_PGSP_QUEUE_HEAD` remains"* and
+> the register name was taken as the mechanism. **`NV_PGSP_QUEUE_HEAD` has not serviced the GSP
+> queue inline since w432**, and `defer_commands` has survived a guest reset since w472b. The
+> cost was `adopt_pending_channel_rings`' guest page-table settlement, running on the vCPU from
+> `Regs::write` on **whichever** register write noticed `pending_latch_epoch()` move —
+> `0x110c00` merely wins that race most often during driver init.
+> ⇒ `[measured w754]` settlement on the worker: that site goes **24 999 µs → 1 579 µs**, and
+> `0xb81408/0410/1608/1610` leave `SLOW-SITES` with it. The worst trap was then a THIRD thing
+> (a 4.19 M-iteration `OnceLock` sweep at `0x110118`, 100 % CPU), and after that a **lock wait**
+> at `0xbb0090` (48 % CPU). Full record: `w754_gsp_queue_off_vcpu.md`.
+> ⚠ The lesson for this table's own form: a prediction that names a **register** is confirmed by
+> the register appearing, whatever is actually spending the time there. Predict the MECHANISM,
+> or make the confirming row carry `cpu_of_that_trap` beside the site — which is what separated
+> these three.
 | **4** leak gauge | `early_release_refused=0`, `held` small, `declined_on_vcpu > 0` | `inplace=21 started=21 landed=21 released=21 held=0 early_release_refused=0` — but **`declined_on_vcpu=0`** | **REFUTED on its last clause** |
 | **5** no regression | — | `TRAP_FILLS=0` / `misses=0` both BARs both arms; `named=311180`; `RmInitAdapter failed`=0; `SMI_RC=0`; control `(P)` `THREADS 8 of 8`; Xid=0 on the device arm | **HELD** |
 

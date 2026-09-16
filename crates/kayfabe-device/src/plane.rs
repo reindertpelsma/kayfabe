@@ -1321,6 +1321,32 @@ pub struct RegPlane {
     /// atomic cannot). This is written under the lock the writer already holds, and read with
     /// no lock at all.
     pending_cmd_doorbells: std::sync::atomic::AtomicU32,
+    /// ★★★★★ **w754 — COMMAND DOORBELLS THE TRAP POSTED WITHOUT TAKING THE RANK-0 LOCK.**
+    ///
+    /// Constraint 6: *"every MMIO trap only posts the register write to a queue …, wakes a
+    /// worker, and returns."* w432 stopped the queue-head write from SERVICING the queue;
+    /// it still reached the deferral through [`RegPlane::state`], the lock a worker holds
+    /// across a whole RPC. This is where the write lands instead, and
+    /// [`RegPlane::service_one_deferred_command`] folds it into the FSM under the lock it
+    /// was taking anyway.
+    ///
+    /// ⊘ A SECOND counter beside [`RegPlane::pending_cmd_doorbells`] and not a replacement:
+    /// that one MIRRORS the FSM's authoritative count, this one holds what the FSM has not
+    /// been told yet. [`RegPlane::pending_command_doorbells`] returns the sum, so the shim's
+    /// wake gate sees a posted doorbell immediately.
+    ///
+    /// ⚠ Cleared by [`RegPlane::device_reset`] with the FSM's own count, because a doorbell
+    /// for a queue binding that no longer exists must not be serviced against the next one.
+    posted_cmd_doorbells: std::sync::atomic::AtomicU32,
+    /// ★ Whether command-doorbell deferral is armed, readable with NO lock.
+    ///
+    /// ⊘ The FSM holds the authoritative flag (it derives `Eq`); this mirrors it so the trap
+    /// can decide *"post, or fall through to the inline path"* without the rank-0 lock —
+    /// which is the whole point of the classification above it. ⚠ Written under the lock by
+    /// [`RegPlane::set_defer_commands`], the one place the FSM's copy changes, so the two
+    /// cannot drift: a mirror refreshed in fewer places than its source is precisely w469's
+    /// defect.
+    defer_cmds_armed: std::sync::atomic::AtomicBool,
     /// ★ Step 5a's whole deliverable: where the guest said its replayable fault buffer is
     /// (`crate::faultbuffer`). Recorded, never answered.
     fault_buffer: crate::faultbuffer::FaultBufferLog,
@@ -1659,6 +1685,42 @@ struct MmioInFlight<'a>(&'a AtomicU32);
 /// guest traps faster than the sweep can complete, which is a different problem from
 /// starvation and wants a different fix.
 static SWEEP_DEFER_GIVEUPS: AtomicU64 = AtomicU64::new(0);
+
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ★★★★★ w754 — THE GSP QUEUE-HEAD DOORBELL'S OWN CENSUS. Constraint 6's two halves, and
+// they must be read together: a POST that nothing folds in is a parked guest, and a FOLD
+// with no posts is an arm that never ran.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+/// Queue-head writes that posted and returned **without the rank-0 lock**.
+static GSP_HEAD_POSTED: AtomicU64 = AtomicU64::new(0);
+/// Posted doorbells the worker folded into the FSM under the lock.
+static GSP_POSTED_FOLDED: AtomicU64 = AtomicU64::new(0);
+
+/// ★★★ **One line, and it states its own verdict.** ⊘ The four readings are kept apart
+/// because they have nothing in common:
+/// *posted=0 folded=0* is an UNARMED boot (no worker ⇒ the FSM services inline, as designed);
+/// *posted>0 folded=0* is a **PARKED GUEST** — the trap took work off the inline path and
+/// nothing ever picked it up;
+/// *posted>0 folded>0* with `posted - folded` small is the mechanism working, the remainder
+/// being whatever was in flight at teardown;
+/// *folded>posted* is impossible and says the counters have a second writer.
+#[must_use]
+pub fn gsp_head_census() -> String {
+    let posted = GSP_HEAD_POSTED.load(Ordering::Relaxed);
+    let folded = GSP_POSTED_FOLDED.load(Ordering::Relaxed);
+    let verdict = if posted == 0 && folded == 0 {
+        "⊘ UNARMED — no queue-head write took the lock-free path. On a boot with no doorbell          worker that is CORRECT (the FSM services inline); on one with a worker it means the          early classification never fired and constraint 6 is UNMEASURED here"
+    } else if folded == 0 {
+        "⊘⊘⊘ PARKED — doorbells were posted and NOTHING folded them in. The guest's RPCs are          unanswered and it is polling a reply that will never come. This is a hang, not a          statistic"
+    } else if folded > posted {
+        "⊘⊘ IMPOSSIBLE — more folded than posted ⇒ a second writer of these counters"
+    } else {
+        "★ WORKING — the queue-head write posts with no rank-0 acquisition and the worker          folds it in under the lock it was taking anyway (constraint 6)"
+    };
+    format!("GSP-HEAD posted={posted} folded={folded} in_flight={} ⇒ {verdict}",
+        posted.saturating_sub(folded))
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
 // ★★★★★ CUT B — THE ARM-THEN-RETRY CENSUS. `SINGLE_STORE_PLAN.md` cut B, items 2, 3 and 5.
@@ -2941,6 +3003,8 @@ impl RegPlane {
             census,
             mmu_inval: crate::mmuinval::MmuInvalidateLog::new(),
             pending_cmd_doorbells: std::sync::atomic::AtomicU32::new(0),
+            posted_cmd_doorbells: std::sync::atomic::AtomicU32::new(0),
+            defer_cmds_armed: std::sync::atomic::AtomicBool::new(false),
             fault_buffer,
             bar_pdes,
             fb_mirror: RwLock::new(None),
@@ -2964,6 +3028,25 @@ impl RegPlane {
         // I/O. There was never a reason to defer it, and deferring it put 4.2 million predicate
         // evaluations under a halted guest.
         plane.dead_pages = plane.build_dead_page_bitmap();
+        // ★★★★★ **w754 — AND THE SECOND SWEEP OF THE SAME APERTURE, FOR THE SAME REASON.**
+        //
+        // ⊘⊘⊘ **w573's comment directly above is the whole argument, and a second lazy sweep
+        // was sitting three functions away with nobody having applied it.**
+        // `RegPlane::gsp_register_offsets` is a `OnceLock<Vec<u64>>` built from
+        // `(0..regs_aperture_len).step_by(4).filter(decode_reg)` — **the same 4.19 M
+        // evaluations over the same 16 MiB aperture** — and it initialises inside whichever
+        // guest MMIO store first reaches `publish_gsp_registers`.
+        //
+        // `[measured w754, GA106, stall alarm at `bar0+0x110118`]` that store was the worst
+        // trap in the device on **all three arms** of one boot — 45 580 / 53 345 / 46 136 µs,
+        // 100 % CPU, **zero context switches** — and the backtrace names this `OnceLock`'s
+        // initialiser between `publish_gsp_registers` and `kvm_vcpu_thread_fn`.
+        //
+        // ★ The lesson is not "warm this one too". It is that **a fix applied to an instance
+        // leaves the class**: the two sweeps are the same shape, over the same range, in the
+        // same file, and the first one's comment already says why it is wrong. ⚠ Any future
+        // `OnceLock` whose initialiser is O(aperture) belongs on this line, not on a trap.
+        let _warm = plane.gsp_register_offsets();
         Ok(plane)
     }
 
@@ -3745,6 +3828,39 @@ impl RegPlane {
     /// ⊘ The sweep uses `decode_reg`, which is state-free, so building this list cannot
     /// disturb the FSM it is about to describe. It is a property of the CHIP, not of the boot,
     /// which is why caching it is sound.
+    ///
+    /// # ⊘⊘⊘ w754 — THIS SWEEP IS 4 194 304 `decode_reg` CALLS AND IT USED TO RUN ON A vCPU
+    ///
+    /// `[measured w754, GA106, `KAYFABE_STALL_ALARM_AT=110118`]` the backtrace, verbatim:
+    ///
+    /// ```text
+    /// 2: <Vec<u64> as SpecFromIterNested<u64, Filter<StepBy<Range<u64>>>>>
+    /// 3: <OnceLock<Vec<u64>>>::get_or_init  … RegPlane::gsp_register_offsets
+    /// 6: RegPlane::publish_gsp_registers
+    /// 7: RegPlane::write
+    /// 9: kayfabe_shim_regs_write  …  20: kvm_vcpu_thread_fn
+    /// ```
+    ///
+    /// `regs_aperture_len` is **16 MiB**, so `(0..len).step_by(4)` is 4.19 M iterations, and a
+    /// `OnceLock` initialises **inside whichever guest MMIO store reaches it first**: on three
+    /// arms of one boot that was `bar0+0x110118` at **45 580 / 53 345 / 46 136 µs**, 100 % CPU,
+    /// zero context switches — the worst trap in the device, on all three.
+    ///
+    /// ★★★ **And the comment on [`RegPlane::publish_gsp_registers`] said it was cheap.** It
+    /// says *"cost is bounded by the chip's register map, not by traffic … they span five pages
+    /// of a sixteen-megabyte aperture"* — which is TRUE OF THE LOOP BODY and FALSE OF THE SWEEP
+    /// THAT BUILDS THE LIST IT ITERATES. ⚠ A bound stated about the wrong quantity reads
+    /// exactly like a bound.
+    ///
+    /// ⇒ [`RegPlane::new`] warms it, at realize, off every vCPU. The `OnceLock` stays because
+    /// it is still the right shape — what changes is WHO pays for the one initialisation, and
+    /// `gsp_register_offsets_warm` is how a test can insist it is nobody in a trap.
+    ///
+    /// ⊘ **The better fix is not this one and is named here so it is not forgotten:** ask the
+    /// model to ENUMERATE its registers instead of probing 4 M offsets for them. That is a
+    /// `kayfabe-arch` trait change (`GspModel` exposes `decode_reg`/`addr_of` but no iterator),
+    /// it is derived-per-family rather than swept, and it would make this list's cost a
+    /// property of the register map the way the comment always claimed.
     fn gsp_register_offsets(&self) -> &[u64] {
         const BAR: u8 = kayfabe_abi::pcibars::bus_bar::REGS as u8;
         self.gsp_regs.get_or_init(|| {
@@ -3753,6 +3869,17 @@ impl RegPlane {
                 .filter(|&off| self.model.decode_reg(BAR, off).is_some())
                 .collect()
         })
+    }
+
+    /// ★★★ **Is the GSP offset list already built?** — so a test can insist the 4 M-iteration
+    /// sweep above happened at realize and not inside a guest trap.
+    ///
+    /// ⊘ A property of the PLANE, asked after construction. A test that merely timed a write
+    /// would be measuring the box; this asks the structural question, and it fails closed:
+    /// `false` immediately after [`RegPlane::new`] means some vCPU is going to pay for it.
+    #[must_use]
+    pub fn gsp_register_offsets_warm(&self) -> bool {
+        self.gsp_regs.get().is_some()
     }
 
     /// ★★★★★ **Re-publish every GSP register into the read shadow.**
@@ -4787,6 +4914,8 @@ impl RegPlane {
             mmio_in_flight: _,
             mem: _,
             pending_cmd_doorbells: _,
+            posted_cmd_doorbells: _,
+            defer_cmds_armed: _,
             chip: _,
             model: _,
             rom: _,
@@ -5092,6 +5221,24 @@ impl RegPlane {
         let PlaneState {
             fsm, ram, policy, ..
         } = &mut *s;
+        // ★★★★★ **w754 — FOLD IN WHAT THE TRAP POSTED, under the lock we already hold.**
+        //
+        // The queue-head write is now classified before the rank-0 lock and counted in
+        // `posted_cmd_doorbells`; this is the one place that count becomes the FSM's. ⊘ A
+        // `swap`, not a read-then-clear: a trap posting between the two would otherwise be
+        // erased, and an erased doorbell is a guest submission nothing ever services.
+        //
+        // ⚠ BEFORE the `== 0` early return, or a boot whose every doorbell took the new path
+        // would find the FSM's count zero and return `None` forever — the queue would never
+        // be drained and the guest would park. That ordering is the whole correctness of the
+        // hand-over.
+        let posted = self
+            .posted_cmd_doorbells
+            .swap(0, std::sync::atomic::Ordering::AcqRel);
+        if posted > 0 {
+            fsm.note_command_doorbells(posted);
+            GSP_POSTED_FOLDED.fetch_add(u64::from(posted), Ordering::Relaxed);
+        }
         if fsm.pending_command_doorbells() == 0 {
             return Ok(None);
         }
@@ -5269,8 +5416,17 @@ impl RegPlane {
         // ★ An arm is an experiment and an experiment has an end. The losing side belongs in
         // the commit that records the result; leaving it is how 51 flags accumulate, each one
         // doubling the state space everything else must be correct in.
+        // ★ w754 — THE SUM. `pending_cmd_doorbells` mirrors what the FSM knows;
+        // `posted_cmd_doorbells` is what the trap recorded without taking the rank-0 lock and
+        // the FSM has not been told yet. The shim gates its worker wake on this value, so a
+        // posted doorbell that were invisible here would be a doorbell nothing wakes for —
+        // the `DROPPED.arm_gsp_drain()` fallback exists for a FULL lane, not for a silent one.
         self.pending_cmd_doorbells
             .load(std::sync::atomic::Ordering::Acquire)
+            .saturating_add(
+                self.posted_cmd_doorbells
+                    .load(std::sync::atomic::Ordering::Acquire),
+            )
     }
 
     /// Arm or disarm command-doorbell deferral on the FSM.
@@ -5278,6 +5434,12 @@ impl RegPlane {
     /// ⚠ Arming this without a worker that drains it parks the guest by construction.
     pub fn set_defer_commands(&self, on: bool) {
         self.state.lock().fsm.set_defer_commands(on);
+        // ⊘ Under the same hold as the FSM's own flag, and in the ONE place that flag
+        // changes. A mirror refreshed in fewer places than its source is w469's defect
+        // (`pending_cmd_doorbells` stored on the write path only), and it read as a
+        // measurement for two boots.
+        self.defer_cmds_armed
+            .store(on, std::sync::atomic::Ordering::Release);
     }
 
     pub fn release_held_replies(&self) -> Result<usize, kayfabe_gsp::GspFault> {
@@ -5333,6 +5495,14 @@ impl RegPlane {
         }
         let mut s = self.state.lock();
         s.fsm.device_reset();
+        // ★★★ w754 — AND THE POSTED COUNT DIES WITH THE BINDING. `GspFsm::device_reset`
+        // rebuilds the FSM, so its own pending count goes to zero; a posted doorbell left
+        // here would be folded in afterwards and serviced against the NEXT queue binding.
+        // ⊘ Under the same hold as the FSM's reset, so no trap can post into the gap.
+        self.posted_cmd_doorbells
+            .store(0, std::sync::atomic::Ordering::Release);
+        self.pending_cmd_doorbells
+            .store(0, std::sync::atomic::Ordering::Release);
         s.bar0_window = Bar0Window::new();
         self.mem.lock().fb.device_reset();
         // ★★★ **AND THE INTERRUPT TREE** — `#151`'s state, and §14.18 is what made leaving
@@ -6384,6 +6554,69 @@ impl RegPlane {
             return WriteOutcome {
                 claimed: true,
                 raise_cpu_intr: raise,
+                ..WriteOutcome::nothing()
+            };
+        }
+        // ★★★★★ **w754 — THE GSP COMMAND-QUEUE DOORBELL: POST AND RETURN, NO PLANE LOCK.**
+        //
+        // Constraint 6: *"every MMIO trap only posts the register write to a queue (optionally
+        // clearing another register to close a race), wakes a worker, and returns."*
+        //
+        // ⊘ **This is NOT "move the drain".** w432 already moved the servicing to a worker and
+        // w472b made the arming survive a guest reset, so this write has not drained anything
+        // for a long time. What it still did was reach that deferral through
+        // [`RegPlane::state`] — the rank-0 lock that also covers `ram`, `policy` and the FSM,
+        // and which the worker holds for a whole command. ⇒ the trap recorded a counter
+        // increment at the price of a lock a blocking thread owns, which is the owner's own
+        // formulation of the rule: *"a blocking call in vcpu also counts if the lock it's
+        // waiting on to acquire is held by a thread that has a blocking call."*
+        //
+        // ⊘ Classified HERE — beside the usermode doorbell, the MMU invalidate and the
+        // interrupt tree — for the reason all three of them give in their own comments: every
+        // arm below this point is inside `self.state.lock()`, and the POSITION is a
+        // concurrency requirement rather than a precedence one.
+        //
+        // ⚠ **Asked of the MODEL, never of the offset.** Which register means *"the command
+        // queue moved"* is the chip profile's business (`NV_PGSP_QUEUE_HEAD(i)`, an ARRAY —
+        // `ad10x: 0x110c00 + i*8`), and an offset test here would be a second copy of that
+        // knowledge, free to diverge quietly.
+        //
+        // ⊘ **Nothing is shadowed and that is measured, not assumed:** every chip profile
+        // encodes `GspReg::GspQueueHead(_) => 0` on a read (`ad10x.rs:293`, `gh100.rs:714`,
+        // `gb20x.rs:803`), and the FSM stores no value for it, so the value the guest wrote
+        // was never readable back on ANY path. Adding a shadow here would be a behaviour
+        // change wearing the clothes of a refactor.
+        //
+        // ⚠ **The arming gate is what keeps the no-worker arm correct.** With deferral off
+        // there is no thread to fold the count in, so the write falls through to the FSM and
+        // is serviced inline exactly as before — slower and correct, the same shape
+        // `start_doorbell_publish_worker`'s `Err` arm chose.
+        //
+        // ⊘⊘ **AND THE SKIPPED `publish_gsp_registers()` IS ARGUED, NOT OVERLOOKED.** The
+        // generic GSP arm below republishes the whole register group into the read shadow
+        // after every claimed write. Returning here skips that, and it is sound for this
+        // register and no other: with deferral armed, `GspFsm::apply`'s `CommandDoorbell`
+        // arm returns before touching ANY state, `FalconSecureBooterBoot::on_write` emits
+        // that one step and mutates no `arch_state`, and no chip profile encodes a value for
+        // `GspQueueHead` at all. ⇒ there is nothing whose shadow could have moved.
+        // ⚠ If a future generation makes a queue-head write change observable GSP state, this
+        // arm must publish before it returns — the shadow is the half of the read surface
+        // nobody thinks to update (`the_bar0_read_surface.md` §5).
+        if bar == kayfabe_abi::pcibars::bus_bar::REGS as u8
+            && self
+                .defer_cmds_armed
+                .load(std::sync::atomic::Ordering::Acquire)
+            && matches!(
+                self.model.decode_reg(bar, off),
+                Some(kayfabe_arch::GspReg::GspQueueHead(_))
+            )
+        {
+            self.c.gsp_writes.fetch_add(1, Ordering::Relaxed);
+            self.posted_cmd_doorbells
+                .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+            GSP_HEAD_POSTED.fetch_add(1, Ordering::Relaxed);
+            return WriteOutcome {
+                claimed: true,
                 ..WriteOutcome::nothing()
             };
         }

@@ -198,6 +198,41 @@ and the per-client host MMU fault above.
     `NV_PGSP_QUEUE_HEAD`** is a SECOND constraint-4 violator that passes through **no
     `assert_lock_free` door at all** — the door census cannot see it.
 
+> ### ⊘⊘⊘ **CORRECTED 2026-09-16 (w754) — `NV_PGSP_QUEUE_HEAD` WAS NOT THE VIOLATOR. IT WAS A
+> ### BYSTANDER, AND IT HAD BEEN ONE SINCE w432.** Read this before acting on the line above.
+> The paragraph above, `fable_off_vcpu_design.md` row 3 and `boot.rs:945`'s own comment all
+> read `worst_trap … at=bar0+0x110c00` as *"the queue-head write drains and services the GSP
+> command queue inline"*. **It has not done that since w432**, and `defer_commands` has
+> survived a guest device reset since **w472b** (`boot.rs:828-846`, itself the correction of
+> exactly that failure). Three refutations, all from w752's own logs, none needing a boot:
+> `GSP-ASYNC ARMED` at realize on every arm · `LOCKCOST rank0 worst_wait=8790us
+> worst_hold=748us` (a 25 ms trap cannot be that lock) · `cpu_of_that_trap` is
+> `CLOCK_THREAD_CPUTIME_ID` **on the trapping thread**, so 96 % CPU means the vCPU *ran*.
+> ★★★ **What it actually was:** `Regs::write` still called `adopt_pending_channel_rings()` on
+> the vCPU, gated only on `pending_latch_epoch()` moving — and that function's FIRST act is
+> three guest page-table settlement passes. It ran on **whichever register write noticed the
+> latch**, and `0x110c00` is the register the guest writes most during driver init.
+> ⇒ `[measured w754, GA106, vast 51217315]` with the settlement moved to the doorbell worker:
+> `bar0+0x110c00` **24 999 µs → 1 579 µs**, and four more "slow registers"
+> (`0xb81408/0410/1608/1610`) left `SLOW-SITES` entirely — they were the same code at a
+> different address. Proved by one env var on the same binary (`KAYFABE_MATERIALIZE_INLINE=1`
+> forces it back): 1 trap @1 579 µs vs 3 traps @15 336 µs, `doors 6` vs `doors 9`,
+> `inline_exceptions 0` vs `5`.
+> ★★★★★ **AND THE WORST TRAP WAS A THIRD THING AGAIN**, on all three arms:
+> `bar0+0x110118` at **45–53 ms, 100 % CPU, zero context switches** — a `OnceLock<Vec<u64>>`
+> initialising `(0..regs_aperture_len).step_by(4).filter(decode_reg)`, **4 194 304 evaluations
+> over a 16 MiB aperture**, inside `publish_gsp_registers`, named by one stall-alarm boot.
+> ⊘⊘⊘ **w573 had already fixed the identical sweep three functions away** (`dead_pages`, *"4.2
+> million predicate evaluations under a halted guest"*) — **a fix applied to an instance leaves
+> the class.** Warmed at realize: **control arm 25 077 µs → 920 µs, `slow_traps(>1000us)=0`.**
+> ⊘ **Constraint 4 is STILL VIOLATED on the device arm, and the violator is a DIFFERENT KIND:**
+> `worst_trap=9649us at=bar0+0xbb0090` (the usermode doorbell) with `cpu_of_that_trap=4621us`
+> — **48 % CPU, 52 % WAIT** — `LOCKCOST rank0 worst_wait=9625us
+> worst_wait_blocked_by=plane.rs:3286` (`window_page_backing`, which takes **both** `state` and
+> `mem`). ⇒ **the next cut is LOCK SCOPE, not thread placement.** Moving more work off the vCPU
+> cannot help a trap that is already waiting on a lock a worker holds.
+> Full record: `w754_gsp_queue_off_vcpu.md`, `traces/w754_gsp_queue_off_vcpu/`.
+
 > ### ✔✔✔ **MEASURED 2026-09-15 (w746) — THE HAND-OVER WORKS; RM REFUSES THE DUP `NV_ERR_INSUFFICIENT_PERMISSIONS`, AND THAT IS CONSTRAINT 30 ANSWERING FROM HARDWARE.**
 > `[vast 51155860, GA106, 580.159.04 OPEN, TREE_REV 0c0dd2ce, three arms, one binary;
 > `traces/w746_handover/`]` Control **`(P)` 8/8**; arm 2 reproduces 17/11/19/0; arm 3 **`(R)` 0/8**.
