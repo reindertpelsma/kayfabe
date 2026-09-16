@@ -1007,7 +1007,74 @@ and the `serverutilGetClientHandlesFromPid` / `GET_PIDS` discrimination (`rs_uti
    `domain = GUEST_INSECURE`, `subProcessID = KERNEL_PID`. **An unprivileged client can therefore
    switch its own USERD isolation off.** That is worth knowing regardless of this decision.
 
-### 6.3 ★★ COUNTER-CASE C — `NV01_ROOT_NON_PRIV` makes a CAP_SYS_ADMIN process non-admin to RM
+### 6.3 ⊘⊘⊘ COUNTER-CASE C — **REFUTED, an hour after writing it. The escape layer overwrites
+the class.**
+
+> ⊘⊘⊘ **CORRECTION, folded in above the text it corrects (doc-hygiene rule).** Everything below
+> about `bIsRootNonPriv` is **true of RM's core and UNREACHABLE from Linux userspace.**
+> `src/nvidia/arch/nvalloc/unix/src/escape.c:394-403`, in the `NV_ESC_RM_ALLOC` handler:
+>
+> ```c
+>             switch (pApi->hClass)
+>             {
+>                 case NV01_ROOT:
+>                 case NV01_ROOT_CLIENT:
+>                 case NV01_ROOT_NON_PRIV:
+>                 {
+>                     NV_CTL_DEVICE_ONLY(nv);
+>                     // Force userspace client allocations to be the _CLIENT class.
+>                     pApi->hClass = NV01_ROOT_CLIENT;
+>                     break;
+>                 }
+> ```
+>
+> ⇒ **`NV01_ROOT_NON_PRIV` is rewritten to `NV01_ROOT_CLIENT` before RM ever sees it, so
+> `bIsRootNonPriv` can never be true for a userspace client on Linux** (`client.c:88` compares
+> the already-rewritten class). Counter-case C **does not exist**. ⚠ I found the mechanism, wrote
+> it up, and only then read the escape layer — the failure mode this campaign names as *"a
+> mechanism that is real in the core and unreachable at the boundary."*
+>
+> ### ★★★★★ AND THE REFUTATION SHARPENS THE REAL CONSTRAINT — this is the load-bearing half
+>
+> With `bIsRootNonPriv` permanently false, `rmclientIsAdmin` reduces to
+> **`privLevel >= RS_PRIV_LEVEL_USER_ROOT`** (`client.c:393`), and `privLevel` is computed
+> **per ioctl** from `capable(CAP_SYS_ADMIN)` (`escape.c:304` → `os.c:614-617` →
+> `os-interface.c:377-381` → `nv-linux.h:537`). `kchannelConstruct` reads the **call's**
+> privLevel, not the client's cached one — `kernel_channel.c:277`:
+> `RS_PRIV_LEVEL privLevel = pCallContext->secInfo.privLevel;`
+>
+> ⇒ ★★★★★ **A scratchpad holding `CAP_SYS_ADMIN` at the moment it births a channel produces
+> `_PRIVILEGE_ADMIN`, unavoidably, with no knob to prevent it.** And it must hold `CAP_SYS_ADMIN`
+> to mint `NV01_MEMORY_LIST_OBJECT` (`alloc_free.c:650-660`). The two requirements are the same
+> capability, evaluated at two different ioctls.
+>
+> ⇒ **Constraint 30's demand — *"scratchpad-born channels come out `_PRIVILEGE_USER`"* — is
+> satisfiable only by SEQUENCING:** mint every slice while privileged, drop `CAP_SYS_ADMIN`, then
+> birth. ⊘ **And that collides with the design:** guest channels are born lazily, throughout the
+> VM's life, as guest processes appear (`crates/kayfabe-core/src/gpu.rs:3363-3369`,
+> `:5479`), each wanting a fresh USERD slice. A VM-lifetime scratchpad cannot both mint on demand
+> and be unprivileged at birth **in one process**.
+>
+> ⊘ **And this corrects Constraint 30's own reasoning.** `docs/design/THE_CONSTRAINTS.md:414-415`
+> attributes the risk to euid: *"F11 records that our isolates' kernel-visible euid is **0** on a
+> root VMM, so `rmclientIsAdmin(...)` plausibly holds."* **The euid is the wrong quantity.**
+> `rmclientIsAdmin` keys on `capable(CAP_SYS_ADMIN)`, which `surrender_privilege` *does* drop; the
+> euid governs a **different** check (the UID/security token,
+> `client.c:172-190`, `osValidateClientTokens`), which is what F11 is actually about
+> (`crates/kayfabe-isolate-host/tests/own_client_invariant.rs:1-14`). **The conclusion stands and
+> the mechanism named for it does not** — and the corrected mechanism is *stronger*, because it
+> binds to the very capability the scratchpad exists to hold.
+>
+> ★★★ **Which is the strongest argument in this document for COUNTER-CASE A (§6.1): in A the
+> ISOLATE births, and the isolate is never privileged, so the whole problem is absent by
+> construction rather than managed by sequencing.**
+
+---
+
+*(The refuted analysis is retained below, because the reading of RM's core is correct and the
+reader should be able to check the refutation against it.)*
+
+### 6.3-orig ⊘ REFUTED — `NV01_ROOT_NON_PRIV` in RM's core
 
 This does not let I birth while naming S's memory, but it **repairs the brief's premise** (§4.3) and
 is the cheapest thing on this list.
@@ -1068,3 +1135,185 @@ Recorded so the search's bound is visible. All in `research_clones/ogkm-580.159.
 - `RS_ACCESS_PERFMON` enforcement: **not found** — the right is defined
   (`rs_access.h:62`) but no `rsAccessCheckRights` / `RS_ACCESS_MASK_TEST` site gates on it.
 - A `CanCopy` for `KernelChannel`: **not found** (§2.0).
+
+---
+
+## §7 — What is unmeasurable from source, and the probe for each
+
+★ Per the brief: each item states the probe's **shape**. ⊘ **None of these has been run.** No probe
+code was written for this deliverable.
+
+### 7.1 ★★★★★ The one that costs nothing and Constraint 30 already demands
+
+**Question:** does a scratchpad-born channel come out `_PRIVILEGE_USER` or `_PRIVILEGE_ADMIN`?
+
+**★ It is directly readable from userspace, and we are not reading it.** RM writes its verdict back
+into the caller's own alloc-params buffer — `src/nvidia/src/kernel/gpu/fifo/kernel_channel.c:281-287`:
+
+```c
+            pKernelChannel->privilegeLevel = ..._PRIVILEGE_ADMIN;
+            pChannelGpfifoParams->flags =
+                FLD_SET_DRF(OS04, _FLAGS, _PRIVILEGED_CHANNEL, _TRUE, pChannelGpfifoParams->flags);
+```
+
+and the alloc params are copied out **on success** — `serverAllocApiCopyOut`,
+`src/nvidia/src/kernel/rmapi/alloc_free.c:195-218` (`SKIP_COPYOUT` is set *only* when
+`status != NV_OK`), via `rmapiParamsRelease`'s `portMemExCopyToUser`
+(`src/nvidia/src/kernel/rmapi/param_copy.c:168-179`).
+
+The bit is `NVOS04_FLAGS_PRIVILEGED_CHANNEL` = **`5:5`**, `_TRUE = 1`
+(`src/common/sdk/nvidia/inc/alloc/alloc_channel.h:141-143`).
+
+⇒ **Probe shape: after `alloc_channel_in`'s channel alloc returns `NV_OK`, decode bit 5 of the
+returned `flags` field and refuse if set.** No new ioctl, no hardware, no bench — it is a read of
+a buffer we already own. ★ This is precisely the *"asserted at birth and refusing otherwise"* that
+`docs/design/THE_CONSTRAINTS.md:416-417` demands, and it is available today for the channels we
+already birth. ⊘ Our encoder (`crates/kayfabe-abi/src/submit.rs:345`) writes `flags`; **nothing in
+our tree reads it back** (no reader found).
+
+⚠ **One caveat that must be checked in the same probe:** `kernel_channel.c:217-226` rewrites
+several params fields on entry, and `:2814-2815` re-reads them for the GSP RPC. The copy-out
+happens after all of that, so the flag should be RM's final verdict — **but that is a reading of
+call order, not a measurement.** The probe settles it by construction: run it once as an
+unprivileged process (expect bit 5 clear) and once with `CAP_SYS_ADMIN` (expect bit 5 set). ★ A
+probe with only the first arm cannot distinguish *"we are unprivileged"* from *"the readback does
+not work"* — that is this campaign's `a_census_zero_needs_a_known_positive` class.
+
+### 7.2 Is the USERD ChID isolation actually armed on our host?
+
+§1.2(b) found the mechanism and §1.2's two limits found that it may not be armed:
+`kfifoIsPreAllocatedUserDEnabled()` (`src/nvidia/generated/g_kernel_fifo_nvoc.h:2411`) and the
+`IS_GSP_CLIENT ⇒ subProcessIsolation = 0` path that then calls
+`eheapSetOwnerIsolation(..., NV_FALSE, ...)` (`src/nvidia/src/kernel/gpu/fifo/kernel_fifo.c:355-366`).
+
+**Probe shape, and it needs no new instrument:** the work-submit token we already read back is
+`runlist << 16 | chid` (`crates/kayfabe-chips/src/ga10x.rs:266`,
+`crates/kayfabe-chips/tests/gb20x_doorbell_and_regs.rs:96`). The USERD isolation granularity is
+`RM_PAGE_SIZE / userdBar1Size` channel IDs (`kernel_fifo.c:338-342`). ⇒ **Birth two channels from
+two different RM clients in two different host processes and compare
+`chid / granularity`.** Same group ⇒ isolation is **off**; different groups ⇒ **on**.
+Then repeat with both channels from one client: if they land in the same group under arm 1's
+*different*-group result, the discrimination is confirmed to be the client identity.
+⚠ `userdBar1Size` comes from `kfifoGetUserdSizeAlign_HAL`; **derive it, do not assume 4 KiB / 512 B**.
+
+### 7.3 Does a duped `MemoryList` work as `hUserdMemory[0]`? (counter-case A)
+
+**The decisive experiment for §6.1, and it is a userspace-only, two-process test on one GPU.**
+
+Shape:
+1. Process S, `CAP_SYS_ADMIN`: allocate the store, mint an `NV01_MEMORY_LIST_OBJECT` page-slice.
+2. S: `NV0000_CTRL_CMD_CLIENT_SHARE_OBJECT` (`0xd06`) — try `RS_SHARE_TYPE_CLIENT` **first**
+   (narrower; `src/nvidia/src/kernel/rmapi/client_resource.c:5161-5165`), fall back to the
+   sibling's measured `NV_ESC_RM_SHARE` / `RS_SHARE_TYPE_ALL`
+   (`/workspace/nvkvm-pv/src/qemu/nvkvm_isolate_handlers.c:4150-4219`) only if the narrow one fails.
+3. Process I, **unprivileged**: `NV_ESC_RM_DUP_OBJECT` the slice into its own client.
+4. I: birth an `AMPERE_CHANNEL_GPFIFO_A` naming its own duped handle in `hUserdMemory[0]`.
+5. Assert: alloc returns `NV_OK`, **and** bit 5 of the returned `flags` is **clear** (§7.1).
+
+Three ways it can fail, each informative and each already located in source:
+- the share is refused ⇒ §6.1's gap is real and `TYPE_ALL` is the only route;
+- the dup is refused ⇒ `memlistCanCopy` is true but something else gates it
+  (`clientCopyResource_IMPL`, `src/nvidia/src/libraries/resserv/src/rs_client.c:543-551`);
+- the birth is refused inside `kchannelCreateUserdMemDesc_GV100` ⇒ the VPR flag test
+  (`src/nvidia/src/kernel/gpu/fifo/arch/volta/kernel_channel_gv100.c:199-203`),
+  `kchannelIsUserdAddrSizeValid_HAL` (`:211`), or the page-size override (`:226-229`).
+
+### 7.4 What does GSP do with the `ProcessID` it is handed?
+
+`kernel_channel.c:2814-2815` forwards `pKernelChannel->ProcessID`/`SubProcessID` to GSP verbatim.
+**GSP firmware is a signed blob; this is unmeasurable from any source we have.**
+⊘ Probe shape: none that is sound. The closest is a **differential** — birth two channels
+identically except for the creating client's `SubProcessID` and diff every observable
+(`GET_PIDS`, accounting, FECS event stream, RC text, `nvidia-smi`). ⚠ A null result proves
+nothing; it would only bound what GSP's use of the field is *visible as*.
+
+### 7.5 Is there any check on *who* rings a doorbell?
+
+§3.4 argues there is none because there is no software in the path.
+⊘ **This is INFERRED**, and the grep that would have refuted it came back near-empty:
+`grep -n "NV_VIRTUAL_FUNCTION_DOORBELL\|WORK_SUBMIT\|ringDoorbell"
+src/nvidia/src/kernel/gpu/usermode_api.c` finds only the comment at `:85`. The usermode classes
+are `RS_FLAGS_ALLOC_NON_PRIVILEGED`, parented to `Subdevice`, `RS_ACCESS_NONE`
+(`src/nvidia/src/kernel/rmapi/resource_list.h:853`, `:864`, `:875`, `:886`, `:896`).
+**Probe shape:** process A births a channel and reports its token; process B, which never touched
+that channel, opens its own `AMPERE_USERMODE_A` under its own subdevice and stores A's token.
+Assert A's semaphore releases. ⚠ A **positive** result is a cross-tenant submission primitive and
+should be recorded as a finding in its own right, independent of this decision.
+
+### 7.6 What does a non-privileged root client lose? — **⊘ MOOT.** Refuted by §6.3's correction:
+`NV01_ROOT_NON_PRIV` is unreachable from Linux userspace (`escape.c:394-403`), so there is nothing
+to probe.
+
+---
+
+## Summary — what breaks, what restates, what is untouched
+
+★ Scope: this table is about **S births the guest channel and the per-proc isolate drives it**.
+
+| | item | verdict | evidence |
+|---|---|---|---|
+| **BREAKS** | The isolate can never **name** the channel | dup is refused unconditionally — no rights, no policy, no privilege can fix it | `rs_server.c:1719-1723`; `resCanCopy_IMPL` `rs_resource.c:333-340`; no `kchannelCanCopy` (empty grep) |
+| **BREAKS** | The isolate can never allocate compute/CE objects on it | alloc parent must be in the caller's own map; no cross-client parent exists | `alloc_free.c:739-743`; `rs_client.c:381-392`; `rmapi_specific.c:74` |
+| **BREAKS** | The isolate can never `BIND`, `SCHEDULE` or free it | controls and free dispatch on a ref in the invoking client | `control.c:751-752`; `rs_server.c:1125-1173` |
+| **BREAKS** | ⇒ **S owns the channel for its whole life**; the isolate's role collapses to a doorbell store | structural consequence of the three rows above | — |
+| **BREAKS** | `_PRIVILEGE_USER` is **not** achievable while S holds `CAP_SYS_ADMIN` | `rmclientIsAdmin` reduces to `privLevel >= USER_ROOT`; `bIsRootNonPriv` unreachable; privLevel is per-ioctl | `client.c:393`; `escape.c:394-403`, `:304`; `kernel_channel.c:277` |
+| **BREAKS** | HWPM profiler context permission | `pClient->ProcID == pChannel->ProcessID` now fails for the isolate and passes for S on **every** channel in the VM | `kern_profiler_v2.c:656` |
+| **BREAKS** | Per-guest-process attribution in FECS / video-log / RC breadcrumbs | all report S | `fecs_event_list.c:311-363`; `videoeventlist.c:81`; `kernel_rc.c:341` |
+| **BREAKS (conditionally)** | USERD-page co-tenancy across guest processes | one `FIFO_ISOLATIONID` for the whole VM — **but the protection may never be armed on a GSP host** | `kernel_fifo.c:504-511`, `:729-777`; limits at `:338-342`, `:355-366` |
+| **RESTATES (C29)** | `Worker::execute` / `belongs_to` / `ChannelBirth::handles()` | the failure (raw handles alias across clients) is untouched; the gate must key on the verb's isolate, and must go red if a *driving* verb carries an S handle | `crates/kayfabe-isolate/src/lib.rs:3862-3868`, `:184-193`, `:3095-3103`, `:113-127` |
+| **RESTATES (C29)** | ★ `StoreMapPort::is_slice_of_the_store` | under S-birth the ring **is** S's own slice, so the oracle's question becomes trivially yes and **stops discriminating**. Most likely restate to be missed. | `crates/kayfabe-qemu-raw/src/storemap.rs:309-331`; `crates/kayfabe-fwd/src/lib.rs:6863-6886` |
+| **RESTATES (C29)** | `SCRATCHPAD_BIRTH_IN_A_HANDED_SPACE` | the gate being crossed. Successor must read the privilege stamp back live (§7.1), not argue it. | `crates/kayfabe-isolate-host/src/rm.rs:1345`, `:7794-7806`; `THE_CONSTRAINTS.md:415-417` |
+| **RESTATES** | routing / worker checkout / commit | mechanical: birth routes to S, driving stays per-proc; no failure guarded | `crates/kayfabe-fwd/src/lib.rs:1588-1600`, `:5485-5493`, `:5612-5614` |
+| **RESTATES (C26 change)** | Constraint 26's "an isolate never holds a vidmem `hMemory`" | only under counter-case A; S-birth itself does not touch it | `THE_CONSTRAINTS.md:264` |
+| **UNTOUCHED** | ★★★ **CPU mappings** | the channel object is unmappable for everyone on our shape; the guest-backed birth path maps nothing; the doorbell uses the isolate's own usermode object; and an armed node crosses processes anyway (measured) | `kernel_channel.c:1291`; `crates/kayfabe-isolate-host/src/rm.rs:8212-8253`, `:1992-2001`; `nv-mmap.c:506-531`; `the_counter_page_and_the_device_view.md:68-84` |
+| **UNTOUCHED** | Ringing the doorbell | needs the isolate's own usermode window + a `u32`; no channel handle | `crates/kayfabe-isolate-host/src/rm.rs:1992-2001`, `:2041-2075` |
+| **UNTOUCHED** | `OwnClient` / F11 | the isolate still names only clients it minted — **because it never names the channel at all** | `crates/kayfabe-isolate-host/src/rm.rs:273`, `:292-320` |
+| **UNTOUCHED** | `ScratchpadRole` / `HandedVaSpace` / `ADOPT_NOT_THE_SCRATCHPAD` | unaffected | `crates/kayfabe-isolate-host/src/rm.rs:337-453`, `:1281` |
+| **UNTOUCHED** | `RING_HANDLE_REACHED_RM` | still the right assert, still fail-closed | `crates/kayfabe-isolate-host/src/rm.rs:1315`, `:8094-8105` |
+| **UNTOUCHED** | `unranked_locks` | ⊘ unrelated to ownership; reported empty | `tests/tests/unranked_locks.rs:1-30` |
+| **UNTOUCHED** | Per-guest-process discrimination that keys on the **calling** client | GPU/FB accounting, `GET_PIDS`, `GET_CLIENT_INFO`, NVENC sessions, `RS_SHARE_TYPE_PID` — all read `pClient->ProcID` of the current call, still the isolate | `device.c:431-493`; `video_mem.c:1032-1044`; `gpu_rmapi.c:1006`; `mem_mgr_ctrl.c:557`; `nvencsession.c:147`; `client_resource.c:217-231` |
+
+---
+
+## Open questions for the owner
+
+1. ★★★★★ **§6.1 — counter-case A changes the shape of the decision.** `MemoryList` is dupable
+   (`mem_list.c:787-794`), the copy path does no privilege check, and the channel resolves
+   `hUserdMemory` in the **allocating** client (`kernel_channel_gv100.c:183-190`). ⇒ S can mint and
+   share the slice while **I births the channel**, preserving creator == driver and every gate in
+   §4.1. **Is that in scope, or has it already been ruled out for a reason not recorded in the
+   tree?** The falsifier is §7.3 and it is a userspace-only two-process test.
+2. ★★★★★ **Counter-case A costs a Constraint 26 amendment** — the isolate would hold a vidmem
+   `hMemory` (`THE_CONSTRAINTS.md:264` says it never does), **and** it puts a `LIST_OBJECT` dup
+   inside Constraint 31's teardown barrier (`THE_CONSTRAINTS.md:446-458` — *"Constraint 27 extends
+   from MAPPINGS to HANDLES"*; a dup is a second handle with its own lifetime). Which amendment is
+   preferable: 26, or 30?
+3. ★★★★ **If S births anyway: is "S owns the channel for its whole life" acceptable?** §2 shows
+   this is not a rights problem — the channel is simply not shareable. Every engine-object alloc,
+   `BIND`, `GPFIFO_SCHEDULE` and free moves into S. ⚠ That makes S a **serialization point for
+   every guest process's channel control plane**, which interacts with the three blocking
+   invariants (`memory/the_three_blocking_invariants.md`).
+4. ★★★ **The privilege stamp is a SEQUENCING problem, not a knob** (§6.3 correction). S must hold
+   `CAP_SYS_ADMIN` to mint and must not hold it to birth `_PRIVILEGE_USER`, and both happen
+   throughout the VM's life. Options visible from here: (a) a privileged minter + an unprivileged
+   birther as two processes — which is counter-case A with extra steps; (b) pre-mint a pool of
+   slices, drop, then birth from the pool; (c) accept `_PRIVILEGE_ADMIN` and bound its
+   consequences. ⚠ For (c), the concrete consequence found is
+   `kgrctxGetRegisterAccessMapId_IMPL` (`kernel_graphics_context.c:3285-3299`): an admin channel is
+   given `GR_GLOBALCTX_BUFFER_UNRESTRICTED_PRIV_ACCESS_MAP` instead of the restricted one — **and
+   the pushbuffer on a guest channel is the guest's.** ⊘ Not measured; it is a reading.
+5. ★★★ **Constraint 30's assert is available today and free** (§7.1): bit 5 of the alloc params'
+   `flags`, copied back on every successful channel alloc. **Should it be added to the channels we
+   already birth, regardless of this decision?** It would also be the known-positive the eventual
+   S-birth gate needs.
+6. ★★ **§1's answer may be "this costs almost nothing"** — the `ProcessID` stamp is one enforcement
+   gate (HWPM, which we likely never reach), one isolation key that may not be armed on a GSP host
+   (§7.2), and otherwise telemetry. ⊘ **But "may not be armed" is unmeasured**, and if it *is*
+   armed, S-birth puts every guest process's USERD in one page group. Is §7.2 worth running before
+   the ruling?
+7. ★★ **Is the RC/Xid attribution loss acceptable?** Under S-birth, a host operator cannot tell
+   which guest process faulted from `dmesg` (`kernel_rc.c:341`). ⊘ Recoverable via §6.2's
+   `SubProcessID` trick only if the tooling reads subpid, which is **not established**.
+8. ★ **§7.5 is a finding waiting to happen, independent of this decision.** If any process can ring
+   any channel's doorbell given only a `u32` token, that is a cross-tenant submission primitive on
+   the host and should be known either way.
