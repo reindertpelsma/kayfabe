@@ -117,6 +117,26 @@ pub enum StoreMapRefusal {
         /// Its length.
         want_len: u64,
     },
+    /// ★★★★★ **w755g — A RE-POINT WHOSE UNMAP WAS REFUSED, so the new slice was NOT placed.**
+    ///
+    /// ⊘ Fail-closed by design. The alternative — map the new slice anyway — is two memories
+    /// at one address, with the additional property that nobody knows which one the engine
+    /// will resolve. ⚠ Distinct from [`StoreMapRefusal::Rm`]: the *map* was never attempted,
+    /// and a reader hunting a failed `NVOS46` would find none.
+    ReplaceUnmapRefused {
+        /// The guest VA in question.
+        at: u64,
+        /// The store offset that is still placed there.
+        had_offset: u64,
+        /// Its length.
+        had_len: u64,
+        /// The store offset that could not be placed.
+        want_offset: u64,
+        /// Its length.
+        want_len: u64,
+        /// What the unmap refused with, whole.
+        why: String,
+    },
 }
 
 impl StoreMapRefusal {
@@ -132,6 +152,7 @@ impl StoreMapRefusal {
             StoreMapRefusal::BadHandle { .. } => "BadHandle",
             StoreMapRefusal::Placement { .. } => "Placement",
             StoreMapRefusal::AlreadyPlacedDifferently { .. } => "AlreadyPlacedDifferently",
+            StoreMapRefusal::ReplaceUnmapRefused { .. } => "ReplaceUnmapRefused",
         }
     }
 
@@ -223,6 +244,14 @@ pub struct StoreMapPort {
     /// Distinct refusal strings that did not fit under the cap. ⊘ See [`Self::refusal_kinds`]
     /// — a truncated histogram that does not say it is truncated is worse than none.
     refusal_kinds_dropped: AtomicU64,
+    /// ★★★★★ **w755g — RE-POINTS: a VA that already held a DIFFERENT slice.**
+    ///
+    /// ⊘ Its own counter because `unmaps` alone cannot distinguish *"the guest retired a
+    /// leaf"* from *"a VA was re-pointed at a new slice"*, and only the second is the shape
+    /// the raw client's `P1 round r+1` and `STALE RACE` exercise deliberately. A zero here
+    /// with a passing client means the client never re-pointed; a zero with a FAILING one
+    /// means this path is not the reason.
+    replaced: AtomicU64,
     /// ★★★★★ **w755 — SLICES WHOSE STORE OFFSET IS LESS ALIGNED THAN THEIR LENGTH IMPLIES.**
     ///
     /// ⊘⊘ This counter exists to make an ARGUMENT CHECKABLE. w755 proposed that
@@ -284,6 +313,7 @@ impl StoreMapPort {
             first_refusal: std::sync::Mutex::new(None),
             refusal_kinds: std::sync::Mutex::new(std::collections::BTreeMap::new()),
             refusal_kinds_dropped: AtomicU64::new(0),
+            replaced: AtomicU64::new(0),
             offset_less_aligned_than_len: AtomicU64::new(0),
         }
     }
@@ -474,14 +504,42 @@ impl StoreMapPort {
                 }
                 let prev = *prev;
                 drop(placed);
-                self.map_refused.fetch_add(1, Ordering::Relaxed);
-                return Err(self.note(StoreMapRefusal::AlreadyPlacedDifferently {
-                    at: at.0,
-                    had_offset: prev.offset,
-                    had_len: prev.len,
-                    want_offset: offset,
-                    want_len: len,
-                }));
+                // ★★★★★ **w755g — THE RE-POINT: UNMAP THE OLD SLICE, THEN MAP THE NEW.**
+                //
+                // ⊘⊘⊘ This arm used to refuse `AlreadyPlacedDifferently`. That is right for
+                // *two memories at one address* and **wrong for a legitimate re-point**, and
+                // the two were indistinguishable only because **nothing ever unmapped**:
+                // `StoreMapPort::unmap` was fully implemented and had ZERO production callers
+                // (`[measured w755k]` `maps=45 unmaps=0 outstanding=45`).
+                //
+                // ⚠ **It is also the leak constraint 27 exists to prevent, and this file's own
+                // sibling named it before anyone wrote this code** (`rm.rs:7318`): *"the
+                // refresh reports the guest's TLB invalidate complete, the guest kernel reuses
+                // the physical page for another of its own userspace processes, and the old
+                // process can still reach it through a slice we told the guest was gone — a
+                // cross-process leak INSIDE the guest, caused by us, invisible to the guest."*
+                // We had the never-issued form of exactly that.
+                //
+                // ★ **UNMAP FIRST, and the order is the constraint, not a preference.** §27
+                // requires unmaps ordered before maps within one refresh. Doing it in this one
+                // call makes the window in which both could be live **not exist**, rather than
+                // making it small.
+                //
+                // ⊘ **FAIL-CLOSED.** If the unmap is refused we do NOT map: a second slice
+                // placed over a live one is the two-memories-at-one-address state, and
+                // "the old one is probably gone" is the assumption this whole defect was.
+                self.replaced.fetch_add(1, Ordering::Relaxed);
+                if let Err(e) = self.unmap(vas, at) {
+                    self.map_refused.fetch_add(1, Ordering::Relaxed);
+                    return Err(self.note(StoreMapRefusal::ReplaceUnmapRefused {
+                        at: at.0,
+                        had_offset: prev.offset,
+                        had_len: prev.len,
+                        want_offset: offset,
+                        want_len: len,
+                        why: format!("{e:?}"),
+                    }));
+                }
             }
         }
         let off = self.off_vcpu()?;
@@ -716,7 +774,8 @@ impl StoreMapPort {
              STORE-MAP iso={:?} obj={:?} obj_len={} adopts={adopts} adopt_refused={} \
              maps={maps} map_refused={} unmaps={} unmap_refused={} bytes_mapped={} \
              outstanding={} asserted={asserted} assert_refused={assert_refused} \
-             declined_on_vcpu={} ragged_offset={} first_refusal=[{}] refusals=[{}] ⇒ {verdict}",
+             declined_on_vcpu={} ragged_offset={} replaced={} first_refusal=[{}] refusals=[{}] \
+             ⇒ {verdict}",
             self.id,
             self.obj,
             self.obj_len,
@@ -728,6 +787,7 @@ impl StoreMapPort {
             self.outstanding(),
             self.declined_on_vcpu.load(Ordering::Relaxed),
             self.offset_less_aligned_than_len.load(Ordering::Relaxed),
+            self.replaced.load(Ordering::Relaxed),
             self.first_refusal
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)

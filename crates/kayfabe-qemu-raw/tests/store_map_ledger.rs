@@ -61,32 +61,80 @@ fn the_ledger_is_consulted_before_the_isolate_round_trip() {
     );
 }
 
-/// ★★★ **Idempotent only for the SAME slice — a different one at the same VA is refused.**
+/// ★★★★★ **w755g — A RE-POINT UNMAPS THE OLD SLICE FIRST, AND IT IS CODE THAT SAYS SO, NOT
+/// A COMMENT.**
 ///
-/// ⊘ Re-offering the same `(offset, len)` at the same VA is the publish route repeating
-/// itself and must answer the VA already held. A **different** `(offset, len)` at that VA is
-/// two memories at one address — the state the single store exists to abolish — and silently
-/// re-placing it would make whichever mapping lost invisible to whichever caller lost it.
+/// ⊘⊘⊘ **The first version of this gate passed on PROSE.** It asserted that `map()`'s body
+/// contained `AlreadyPlacedDifferently`; after the behaviour changed, that string survived
+/// only in the sentence *"this arm used to refuse `AlreadyPlacedDifferently`"* — and the gate
+/// went green on an English explanation of the thing it was meant to forbid. ⇒ every match
+/// here is taken against **comment-stripped** source.
+///
+/// # What it asserts, and why each row is a failure somebody met
+///
+/// | property | what its absence looks like |
+/// |---|---|
+/// | `map()` calls `self.unmap` | `StoreMapPort::unmap` had ZERO production callers; `[measured w755k]` `maps=45 unmaps=0` |
+/// | the unmap precedes the round trip | a slice replaced AFTER the new one is placed is two memories at one address |
+/// | a refused unmap refuses the map | "the old one is probably gone" is the assumption this whole defect was |
+///
+/// ⚠ The stake is not only the client. `rm.rs:7318` names it: the refresh reports the guest's
+/// TLB invalidate complete, the guest reuses the page for another of its processes, and the
+/// old process still reaches it — **a cross-process leak inside the guest, caused by us**.
 #[test]
-fn a_different_slice_at_the_same_va_is_refused_by_name() {
+fn a_re_point_unmaps_the_old_slice_before_mapping_the_new() {
     let src = storemap_src();
-    let body = map_body(&src);
+    let body = code_only(&map_body(&src));
+
+    // ★ NON-VACUITY: stripping comments must not have emptied the subject.
+    assert!(
+        body.len() > 400 && body.contains("with_worker"),
+        "comment-stripping left {} bytes of code — the scan is vacuous",
+        body.len()
+    );
+
+    let unmap = body.find("self.unmap(").expect(
+        "★★★★★ `map()` no longer unmaps a VA that already holds a different slice.          `StoreMapPort::unmap` then has NO production caller again, and a re-pointed VA          keeps resolving to its FIRST slice — which is both the client's `STALE RACE`          failure and the guest-internal cross-process leak constraint 27 exists to prevent.",
+    );
+    let ipc = body
+        .find("with_worker")
+        .expect("★ NON-VACUITY: `map` makes no isolate round trip — wrong subject");
+    assert!(
+        unmap < ipc,
+        "★★★ THE UNMAP MUST PRECEDE THE MAP. §27 orders unmaps before maps within one          refresh; doing it in this one call makes the window where both are live NOT EXIST          rather than making it small. (unmap at {unmap}, round trip at {ipc})"
+    );
+
+    // ⊘ FAIL-CLOSED: a refused unmap must refuse the map, not fall through to it.
+    assert!(
+        body.contains("ReplaceUnmapRefused"),
+        "★★★ a re-point whose unmap was REFUSED no longer refuses the map. Placing the new          slice anyway is two memories at one address, with nobody able to say which one the          engine resolves"
+    );
+    let refused = body.find("ReplaceUnmapRefused").expect("checked above");
+    assert!(
+        refused < ipc,
+        "the fail-closed refusal is AFTER the round trip, so the map has already happened"
+    );
+
+    // ★ And the idempotent case must still compare BOTH terms, or a different slice at the
+    //   same VA would be answered `Ok` without any unmap at all.
     assert!(
         body.contains("prev.offset == offset && prev.len == len"),
-        "★★★ the idempotence test no longer compares BOTH terms. Comparing only the VA would \
-         answer `Ok` for a different slice mapped at the same address"
+        "the idempotence test no longer compares both terms"
     );
-    assert!(
-        body.contains("AlreadyPlacedDifferently"),
-        "★★★ a conflicting re-offer is no longer refused by name — it is being treated as \
-         idempotent, which is exactly the two-memories-at-one-address state"
-    );
-    // ⊘ And the refusal must be COUNTED, or a census reads it as "nothing was refused".
-    let at = body
-        .find("AlreadyPlacedDifferently")
-        .expect("checked above");
-    assert!(
-        body[..at].contains("self.map_refused.fetch_add"),
-        "the conflicting re-offer is refused but not counted"
-    );
+}
+
+/// Source with `//` comments removed, so a gate cannot be satisfied by prose.
+///
+/// ⊘ Deliberately crude — it does not understand strings containing `//`. That is acceptable
+/// here and would not be in a parser: the failure mode is a gate that scans LESS than it
+/// should, which makes it refuse, not pass. A stripper that erred the other way would
+/// reintroduce exactly the defect it exists to remove.
+fn code_only(src: &str) -> String {
+    src.lines()
+        .map(|l| match l.find("//") {
+            Some(i) => &l[..i],
+            None => l,
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
