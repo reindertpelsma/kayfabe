@@ -743,3 +743,328 @@ The stub's own mirror mapping exists only for ioctl-time pointer dereference
 (`src/qemu/nvkvm_isolate_handlers.c:4760-4767`), not for submission. ⇒ **corroborates §3.4 from an
 independent codebase: the process that drives a channel is not, in general, the process that must
 hold CPU mappings of it.**
+
+---
+
+## §2 — RM rights and access: if S creates the channel, can I use it at all?
+
+### 2.0 ★★★★★ The headline: **a `KernelChannel` cannot be duped. At all. By anyone.**
+
+This is the single most consequential finding in this document, and it is unconditional — it does
+not depend on privilege, on PID, or on any share policy.
+
+`serverCopyResource` refuses before rights are ever consulted —
+`src/nvidia/src/libraries/resserv/src/rs_server.c:1719-1723`:
+
+```c
+    if (!resCanCopy(pResourceRefSrc->pResource))
+    {
+        status = NV_ERR_INVALID_ARGUMENT;
+        goto done;
+    }
+```
+
+`KernelChannel` has **no `CanCopy` override**. `grep -rn "kchannelCanCopy_IMPL\|kchannelCopyConstruct" src/`
+returns **empty**; the only hits for `kchannelCanCopy` are NVOC glue, and the vtable slot is
+`src/nvidia/generated/g_kernel_channel_nvoc.c:708`:
+
+```c
+    .vtable.__kchannelCanCopy__ = &__nvoc_up_thunk_RsResource_kchannelCanCopy,
+```
+
+which thunks straight to the base (`g_kernel_channel_nvoc.c:862-865`), and the base is
+`src/nvidia/src/libraries/resserv/src/rs_resource.c:333-340`:
+
+```c
+NvBool resCanCopy_IMPL(RsResource *pResource) { return NV_FALSE; }
+```
+
+⊘ Contrast, from the full `grep -rn "CanCopy" src/nvidia/` census: the **TSG**
+(`kchangrpapiCanCopy`, `src/nvidia/src/kernel/gpu/fifo/kernel_channel_group_api.c:798-800`), the
+**context share** (`kctxshareapiCanCopy`, `src/nvidia/src/kernel/gpu/fifo/kernel_ctxshare.c:327-333`),
+the **usermode object** (`usrmodeCanCopy`, `src/nvidia/src/kernel/gpu/usermode_api.c:108-110`), every
+`Memory` subclass, and `VaSpaceApi` all return `NV_TRUE`. **The channel is the exception.**
+
+### 2.1 And I cannot allocate engine objects on S's channel either
+
+The alloc parent handle is looked up **only in the calling client's own handle map** —
+`src/nvidia/src/kernel/rmapi/alloc_free.c:739-743`:
+
+```c
+        status = clientGetResourceRef(pClient, hParent, &pParentRef);
+        if (status != NV_OK) goto done;
+```
+
+and `clientGetResourceRef_IMPL`, `src/nvidia/src/libraries/resserv/src/rs_client.c:381-392`:
+
+```c
+    pResourceRef = mapFind(&pClient->resourceMap, hResource);
+    if (pResourceRef == NULL) return NV_ERR_OBJECT_NOT_FOUND;
+```
+
+(the same lookup again at `rs_client.c:659-661`). `AMPERE_COMPUTE_B` and `AMPERE_DMA_COPY_B`
+require a `KernelChannel` parent (`src/nvidia/src/kernel/rmapi/resource_list.h:1605`, `:2016`).
+
+⊘ **There is no cross-client parent mechanism.** `hParentClient` appears only in GSP RPC
+marshalling (`src/nvidia/inc/kernel/vgpu/rpc.h:349`) and NV0005 event internals
+(`src/nvidia/src/kernel/rmapi/nv_gpu_ops.c:1353`, `:1586`;
+`src/nvidia/arch/nvalloc/unix/src/rmapi_specific.c:74` actually **rejects**
+`hParentClient != hClient`). `hClientSrc`/`hSrcClient` appear only on the dup path. `pRightsRequested`
+(`alloc_free.c:153-180`) lets the allocator request rights on the object it is *creating*; it names
+no second client.
+
+### 2.2 Controls and free are likewise scoped to the handle-holding client
+
+- Controls dispatch on `pRmCtrlParams->pResourceRef`, resolved in the invoking client. No PID check
+  exists inside `kchannelCtrlCmdGpFifoSchedule_IMPL`
+  (`src/nvidia/src/kernel/gpu/fifo/kernel_channel.c:3086`, checks only
+  `kchannelIsSchedulable_HAL` at `:3105`) or `kchannelCtrlCmdBind_IMPL` (`:3172`). Both carry
+  `accessRight = 0x0u` (`src/nvidia/generated/g_kernel_channel_nvoc.c:317-318`, `:332-333`).
+  ⊘ Two channel controls *do* require a right: `RESTART_RUNLIST` (`0xa06f0111`) and
+  `SET_INTERLEAVE_LEVEL` (`0xa06f0109`) carry `accessRight = 0x2u` = `RS_ACCESS_NICE`
+  (`src/nvidia/generated/g_kernel_channel_nvoc.c:377-378`, `:362`;
+  `src/common/sdk/nvidia/inc/rs_access.h:60`), enforced at
+  `src/nvidia/src/kernel/rmapi/control.c:751`.
+- Free is looked up in `pParams->hClient`'s own map —
+  `src/nvidia/src/libraries/resserv/src/rs_server.c:1125-1173`. **A client cannot free another
+  client's channel.**
+
+### 2.3 ⇒ The answer to §2's question
+
+| can I (the isolate)… | answer | evidence |
+|---|---|---|
+| name S's channel at all? | **No.** Dup is refused unconditionally. | `rs_server.c:1719-1723` + `resCanCopy_IMPL` `rs_resource.c:333-340` |
+| allocate a compute/CE object on it? | **No.** Parent must be in my own map. | `alloc_free.c:739-743`, `rs_client.c:381-392` |
+| schedule / bind it? | **No** — the control needs a ref in my client. | `control.c:751-752` |
+| free it? | **No.** | `rs_server.c:1125-1173` |
+| ★ **ring it?** | **YES** — and this is the one that matters. | §3.4: my own usermode window + a `u32` token |
+
+⇒ ★★★★★ **Under scratchpad birth, S does not "birth and hand over". S owns the channel for its
+entire life** — birth, every engine object, `BIND`, `GPFIFO_SCHEDULE`, and free — **and the isolate's
+role collapses to ringing a doorbell with a token.** That is a far larger change than the brief's
+framing ("can I use it at all?") implies, and it is not a rights problem that a grant can fix: the
+channel is simply not a shareable object in this driver.
+
+⊘ **The dup would also fail for a second, independent reason even if `CanCopy` were true**, and it
+is worth recording because it is the reason `nvkvm-pv` hit this: the default inherited share policy
+is `RS_ACCESS_DUP_OBJECT` granted by `RS_SHARE_TYPE_PID`
+(`src/nvidia/src/kernel/rmapi/sharing.c:338-352`), and `RS_SHARE_TYPE_PID` is
+`pSrcClient->ProcID == pDstClient->ProcID` (`src/nvidia/src/kernel/rmapi/client_resource.c:217-231`).
+S and I are different OS processes, so the default grants nothing. The rights check itself is
+`clientCopyResource_IMPL`, `src/nvidia/src/libraries/resserv/src/rs_client.c:543-551`.
+
+⊘ **And there are only FOUR access rights in the whole driver** — `RS_ACCESS_DUP_OBJECT`,
+`RS_ACCESS_NICE`, `RS_ACCESS_DEBUG`, `RS_ACCESS_PERFMON`
+(`src/common/sdk/nvidia/inc/rs_access.h:59-63`). Independently confirmed: **all 197 `RS_ENTRY`
+blocks in `resource_list.h` require `RS_ACCESS_NONE`** —
+`grep "Required Access Rights" src/nvidia/src/kernel/rmapi/resource_list.h | sort | uniq -c` →
+one line, `197 /* Required Access Rights */ RS_ACCESS_NONE`; the `grep -v RS_ACCESS_NONE`
+complement is **EMPTY**. Rights are checked only at dup (`rs_client.c:551`), share/grant
+(`rs_client.c:176`), control dispatch (`control.c:751`), the SM debugger
+(`src/nvidia/src/kernel/gpu/gr/kernel_sm_debugger_session.c:295-301`), the SMC-partition dup
+exception (`src/nvidia/src/kernel/gpu/gpu_resource.c:204`) and UVM's internal dup
+(`src/nvidia/src/kernel/rmapi/nv_gpu_ops.c:735`). ⇒ **"What `RS_ACCESS_*` rights would the isolate
+need?" has no answer, because there is no right that would help.** Access in RM is
+*handle reachability within a client*, and the channel cannot be made reachable.
+
+### 2.4 The share verb, for completeness
+
+`NV0000_CTRL_CMD_CLIENT_SHARE_OBJECT` (`0xd06`) is
+`cliresCtrlCmdClientShareObject_IMPL`, `src/nvidia/src/kernel/rmapi/client_resource.c:5109`. It
+looks the object up **in the caller's own client** (`:5128`), so only an owner may publish policy on
+it, and `clientCanShareResource_IMPL` (`src/nvidia/src/libraries/resserv/src/rs_client.c:157`,
+`:176`) requires the sharer to already hold the rights it grants. `RS_SHARE_TYPE_CLIENT` additionally
+resolves the target and registers a back-ref (`client_resource.c:5161-5165`).
+`GET_ACCESS_RIGHTS` is `:5069`; `SET_INHERITED_SHARE_POLICY` is `:5093` and delegates to
+`ShareObject` at `:5106`.
+⇒ **All of this works, and none of it helps for a channel**, because `CanCopy` is checked *before*
+rights (`rs_server.c:1719` precedes `clientCopyResource` at `:1741`).
+
+---
+
+## §6 — The counter-case: can the ISOLATE birth the channel while naming memory it does not hold?
+
+The brief asks for this and warns *"⊘ `NV_CHANNEL_ALLOC_PARAMS` has **no** client field beside
+`hUserdMemory[]` (checked). Look wider before concluding there is none."*
+
+**Confirmed and widened.** The complete handle inventory of `NV_CHANNEL_ALLOC_PARAMS`
+(`src/common/sdk/nvidia/inc/alloc/alloc_channel.h:298-333`) is: `hObjectError` (`:298`),
+`hObjectBuffer` (`:299`, *"no longer used"*), `hContextShare` (`:306`), `hVASpace` (`:307`),
+`hUserdMemory[NV_MAX_SUBDEVICES]` (`:310`), `hObjectEccError` (`:321`), `hPhysChannelGroup`
+(`:328`, *"reserved"*). **None has a companion client field.** The GPFIFO ring is named by
+`gpFifoOffset` (`:300`) — a **VA in the channel's own VAS, not a handle** — so the ring never needs
+one.
+
+⊘ **And the `ProcessID`/`SubProcessID` fields in the params (`:332-333`, marked "reserved") are a
+dead end for a userspace caller** — CPU-RM zeroes them on entry,
+`src/nvidia/src/kernel/gpu/fifo/kernel_channel.c:217-226`:
+
+```c
+    // Internal fields must be cleared when RMAPI call is from client
+    ...
+    pChannelGpfifoParams->ProcessID = 0;
+    pChannelGpfifoParams->SubProcessID = 0;
+```
+
+and the branch that *honours* them is gated `if (RMCFG_FEATURE_PLATFORM_GSP)` (`:246`) — it runs
+only inside **GSP firmware**, which receives already-stamped values over RPC (`:2814-2815`).
+⇒ **There is no way for a userspace caller to supply a channel's `ProcessID`.**
+
+### 6.1 ★★★★★ COUNTER-CASE A — `MemoryList` **is** dupable, and the channel resolves USERD in the *allocating* client
+
+`memlistCanCopy_IMPL` — `src/nvidia/src/kernel/mem_mgr/mem_list.c:787-794`:
+
+```c
+NvBool memlistCanCopy_IMPL(MemoryList *pMemoryList) { return NV_TRUE; }
+```
+
+⇒ **`NV01_MEMORY_LIST_OBJECT` — the very class whose `RS_FLAGS_ALLOC_PRIVILEGED` started this whole
+question — can be duped into another client.**
+
+And the dup path **never re-checks the allocation privilege**: `RS_FLAGS_ALLOC_PRIVILEGED` is
+consumed only by `_serverAllocValidatePrivilege`
+(`src/nvidia/src/kernel/rmapi/alloc_free.c:611-675`), which is on the **alloc** path.
+`grep -n "PRIVILEGED\|ValidatePrivilege" src/nvidia/src/libraries/resserv/src/rs_server.c` returns
+**one hit, `:1073`**, an unrelated internal `secInfo.privLevel = RS_PRIV_LEVEL_KERNEL`. ⇒ **the copy
+path performs no privilege validation at all.**
+
+And the channel's USERD resolution takes the **allocating** client's handle —
+`kchannelCreateUserdMemDesc_GV100`, `src/nvidia/src/kernel/gpu/fifo/arch/volta/kernel_channel_gv100.c:183-190`:
+
+```c
+    if (serverutilGetResourceRefWithType(hClient, hUserdMemory, classId(Memory),
+                                         &pUserdMemoryRef) != NV_OK)
+        return NV_ERR_OBJECT_NOT_FOUND;
+```
+
+`classId(Memory)` matches derived classes, and `MemoryList` is one
+(`resource_list.h:630-640`, internal class `MemoryList`). Reached from
+`kernel_channel.c:2299-2308` via `kchannelCreateUserdMemDescBc_GV100`
+(`kernel_channel_gv100.c:69-131`).
+
+⇒ ★★★★★ **THE COUNTER-CASE EXISTS, and it inverts the design question:**
+
+> **S (privileged) mints the `NV01_MEMORY_LIST_OBJECT` page-slice of the store → S shares it for
+> `RS_ACCESS_DUP_OBJECT` → I dups it into its own client → I births the channel naming its *own*
+> duped handle.**
+>
+> Creator == driver is **preserved**. The privileged mint stays in S. Nothing carries S's
+> `ProcessID`. Every gate in §4.1 stands unmodified.
+
+**The one gap this has to close** is the share, and there is a **shipped, measured precedent for
+exactly it** in the Mode-1 sibling (§5.4): `NV_ESC_RM_SHARE` (`0xc0184635`) with
+`.accessMask = RS_ACCESS_DUP_OBJECT`, `.type = RS_SHARE_TYPE_ALL`, **issued by the owner on the
+owner's own fd** — `/workspace/nvkvm-pv/src/qemu/nvkvm_isolate_handlers.c:4150-4219`, reasoning at
+`:4089-4108`, rationale for why `TYPE_ALL` is not a cross-tenant hole at `:4177-4200`.
+
+⚠ **What is NOT established, and must be measured before anyone relies on this:**
+1. Whether a duped `MemoryList` satisfies `kchannelCreateUserdMemDesc`'s *later* checks — the VPR
+   flag test (`kernel_channel_gv100.c:199-203`), `kchannelIsUserdAddrSizeValid_HAL` (`:211`), and
+   the page-size override (`:226-229`). **Source says nothing against it; nothing says it works.**
+2. Whether the same trick covers everything a per-proc isolate needs from the store, or only
+   USERD. ⊘ Under Constraint 26 the isolate is *supposed* to hold no vidmem `hMemory`
+   (`docs/design/THE_CONSTRAINTS.md:264`), so **this counter-case is itself a constraint change**
+   — a smaller and differently-shaped one than scratchpad birth, but not free.
+3. Whether `RS_SHARE_TYPE_ALL` is acceptable posture here. It is host-wide, not scoped to I.
+   `RS_SHARE_TYPE_CLIENT` (`client_resource.c:5161-5165`) is the narrower verb and is the obvious
+   thing to try first; **no evidence was found either way about whether it works for this case.**
+
+### 6.2 ★★ COUNTER-CASE B — `SubProcessID` is settable by any unprivileged client
+
+If the owner prefers scratchpad birth anyway, §1's lost discrimination is **partly recoverable
+without extra processes**.
+
+`cliresCtrlCmdSetSubProcessID_IMPL` — `src/nvidia/src/kernel/rmapi/client_resource.c:4754-4770`:
+
+```c
+    pClient->SubProcessID = pParams->subProcessID;
+    portStringCopy(pClient->SubProcessName, ..., pParams->subProcessName, ...);
+    return NV_OK;
+```
+
+**No privilege check, no rights check, no validation of the value.** The export entry
+(`src/nvidia/generated/g_client_resource_nvoc.c:1316-1330`) is `methodId = 0x901`,
+`accessRight = 0x0u`, `flags = 0x10109u` — and `0x10109 & RMCTRL_FLAGS_PRIVILEGED (0x4) == 0` while
+`0x10109 & RMCTRL_FLAGS_NON_PRIVILEGED (0x8) == 0x8`
+(`src/nvidia/inc/kernel/rmapi/control.h:202`, `:208`). The command id is
+`NV0000_CTRL_CMD_SET_SUB_PROCESS_ID = 0x901`
+(`src/common/sdk/nvidia/inc/ctrl/ctrl0000/ctrl0000proc.h:93`).
+
+⇒ **An unprivileged scratchpad holding N root clients — one per guest process, each with a distinct
+`SubProcessID` — would birth channels that carry distinct `SubProcessID`s** (`kernel_channel.c:294`),
+restoring the `FIFO_ISOLATIONID` discrimination of §1.2(b) (`kernel_fifo.c:504-511`, `:732`, `:768`)
+and the `serverutilGetClientHandlesFromPid` / `GET_PIDS` discrimination (`rs_utils.c:310`,
+`gpu_rmapi.c:1006`) — **without N processes and without N privilege grants.**
+
+⚠ ⊘ **Three warnings, all from source:**
+1. It does **not** restore `ProcessID`, so the HWPM profiler gate (`kern_profiler_v2.c:656`) and
+   FECS/video/RC attribution (§1.3 items 2–5) stay collapsed onto S.
+2. Setting a non-zero `SubProcessID` **changes the isolation domain**:
+   `kernel_fifo.c:745-763` takes `if (0x0 != subProcessID)` → `GUEST_KERNEL` or `GUEST_USER` instead
+   of `HOST_USER`. **Unmeasured what else keys on `domain`.**
+3. `cliresCtrlCmdDisableSubProcessUserdIsolation_IMPL` (`client_resource.c:4777-4790`) sets
+   `pClient->bIsSubProcessDisabled`, which `kernel_fifo.c:771-777` turns into
+   `domain = GUEST_INSECURE`, `subProcessID = KERNEL_PID`. **An unprivileged client can therefore
+   switch its own USERD isolation off.** That is worth knowing regardless of this decision.
+
+### 6.3 ★★ COUNTER-CASE C — `NV01_ROOT_NON_PRIV` makes a CAP_SYS_ADMIN process non-admin to RM
+
+This does not let I birth while naming S's memory, but it **repairs the brief's premise** (§4.3) and
+is the cheapest thing on this list.
+
+`rmclientIsAdmin_IMPL` — `src/nvidia/src/kernel/rmapi/client.c:384-394`:
+
+```c
+    return (privLevel >= RS_PRIV_LEVEL_USER_ROOT) && !pClient->bIsRootNonPriv;
+```
+
+and `bIsRootNonPriv` is set purely by the **root class chosen at client allocation** —
+`src/nvidia/src/kernel/rmapi/client.c:88`:
+
+```c
+    pClient->bIsRootNonPriv  = (pParams->externalClassId == NV01_ROOT_NON_PRIV);
+```
+
+`NV01_ROOT_NON_PRIV` is `0x1` (`src/common/sdk/nvidia/inc/class/cl0001.h:31`), a real allocatable
+root class (`src/nvidia/src/kernel/rmapi/resource_list.h:74-83`, same flags as `NV01_ROOT` at
+`:62-71` minus `RS_FLAGS_ALLOC_GSP_PLUGIN_FOR_VGPU_GSP`, `RS_ACCESS_NONE`).
+
+⇒ ★ **`privLevel` (what `_serverAllocValidatePrivilege` checks for `RS_FLAGS_ALLOC_PRIVILEGED`,
+`alloc_free.c:650-660`) and `rmclientIsAdmin` (what `kernel_channel.c:285` checks) are
+independently controllable.** A process with `CAP_SYS_ADMIN` that allocates its root as
+`NV01_ROOT_NON_PRIV`:
+- still has `privLevel == RS_PRIV_LEVEL_USER_ROOT` (`escape.c:304`, per-ioctl from
+  `capable(CAP_SYS_ADMIN)`), so it **can still mint `NV01_MEMORY_LIST_OBJECT`**;
+- but has `rmclientIsAdmin == false`, so channels it births come out **`_PRIVILEGE_USER`**
+  (`kernel_channel.c:288-291`).
+
+⇒ **This is a structural answer to Constraint 30's demand** (*"scratchpad-born channels come out
+`_PRIVILEGE_USER`, asserted at birth"*) and to F11's euid-0-on-a-root-VMM problem
+(`docs/design/THE_CONSTRAINTS.md:414-415`) — it removes the dependency on the VMM not being root.
+
+⊘ **We are not using it.** `OwnClient::allocate_root`
+(`crates/kayfabe-isolate-host/src/rm.rs:297-320`) allocates `NV01_ROOT_CLIENT` (`0x41`), for which
+`bIsRootNonPriv == false`. The constant exists in our ABI only as a capability-table row
+(`crates/kayfabe-abi/src/capability.rs:893-896`) — never allocated.
+
+⚠ **Not free, and unmeasured:** the complete `bIsRootNonPriv` census is four sites —
+`client.c:88`, `:179` (security/UID-token caching is *enabled* for non-priv roots),
+`:393` (`rmclientIsAdmin`), `:477` (a client-handle validation path that **rejects** kernel-privilege
+callers unless the client is non-priv). ⊘ **Nothing was measured about what a non-priv root client
+loses.** Some admin-gated control or alloc we depend on may break. Probe shape in §7.
+
+### 6.4 ⊘ What was looked for and NOT found
+
+Recorded so the search's bound is visible. All in `research_clones/ogkm-580.159.04/`:
+
+- A non-privileged sub-object class of `MemoryList` that slices a parent object: **not found.**
+  `NV01_MEMORY_LIST_SYSTEM`, `_FBMEM` and `_OBJECT` are all `RS_FLAGS_ALLOC_PRIVILEGED`
+  (`resource_list.h:617`, `:627`, `:637`).
+- A companion-client field on any channel-alloc handle: **not found** (§6 opening).
+- A cross-client alloc parent: **not found** (`grep -rn "hParentClient"` → GSP RPC + NV0005 only;
+  `rmapi_specific.c:74` explicitly rejects it).
+- A way for userspace to supply `ProcessID`: **not found**; it is zeroed at
+  `kernel_channel.c:225`.
+- `RS_ACCESS_PERFMON` enforcement: **not found** — the right is defined
+  (`rs_access.h:62`) but no `rsAccessCheckRights` / `RS_ACCESS_MASK_TEST` site gates on it.
+- A `CanCopy` for `KernelChannel`: **not found** (§2.0).
