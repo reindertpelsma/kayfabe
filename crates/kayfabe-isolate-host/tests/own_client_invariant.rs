@@ -316,6 +316,33 @@ fn is_handed_accessor(value: &str, accessors: &BTreeSet<String>) -> bool {
 }
 
 /// The byte span of `mod handed_vaspace { … }` in `rm.rs`, by brace matching.
+/// The byte span of `mod handed_client` inside `rm.rs` — constraint 32's half of the same
+/// scoping. ⊘ A separate span from `handed_vaspace`'s on purpose: the two types widen F11 in
+/// two different fields (`hClientSrc` vs `hRoot`), and a test that scanned one span for both
+/// would pass while the other was deleted.
+fn handed_client_module_span(code: &str) -> (usize, usize) {
+    let start = code.find("mod handed_client {").expect(
+        "★ NON-VACUITY: `mod handed_client` is gone from rm.rs — constraint 32's birth-client \
+         exception has no home, and any escape `hRoot` is therefore ungated",
+    );
+    let open = start + code[start..].find('{').expect("an opening brace");
+    let bytes = code.as_bytes();
+    let mut depth = 0usize;
+    for (i, b) in bytes.iter().enumerate().skip(open) {
+        match b {
+            b'{' => depth += 1,
+            b'}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return (start, i);
+                }
+            }
+            _ => {}
+        }
+    }
+    panic!("unbalanced braces scanning `mod handed_client`");
+}
+
 fn handed_vaspace_module_span(code: &str) -> (usize, usize) {
     let start = code.find("mod handed_vaspace {").expect(
         "★ NON-VACUITY: `mod handed_vaspace` is gone from rm.rs — constraint 26's scoped \
@@ -618,4 +645,92 @@ fn there_is_exactly_one_dup_object_escape_in_rm_rs() {
          second is a second scope for an exception whose whole defence is that it is \
          countable."
     );
+}
+
+/// ★★★★★ **CONSTRAINT 32 — `HandedClient` is as unforgeable as `HandedVaSpace`.**
+///
+/// ⊘ **And the reason it needs its own test rather than a second assertion in
+/// `handed_vaspace_is_unforgeable`:** the two types widen F11 in *different fields*.
+/// `HandedVaSpace` supplies `NVOS55_PARAMETERS::hClientSrc` while the escape is still
+/// issued under **our** client on **our** descriptor. `HandedClient` supplies the `hRoot`
+/// of the escape itself — every object allocated under it lands in the foreign client's
+/// namespace. A `From<u32>` here is not "F11 with a method on it"; it is F11 gone.
+///
+/// ⊘ Mirrors `handed_vaspace_is_unforgeable` deliberately, forbidden-name list included. If
+/// one grows a case the other should too, and the duplication is what makes that visible.
+#[test]
+fn handed_client_is_unforgeable() {
+    let code = rm_rs_code_only();
+    let (start, end) = handed_client_module_span(&code);
+    let module = &code[start..end];
+
+    assert!(
+        module.contains("pub(super) struct HandedClient {")
+            && module.contains("        client: u32,")
+            && module.contains("        minted_by: u32,"),
+        "★★★ CONSTRAINT 32 REGRESSED — `HandedClient`'s handles are no longer private \
+         fields. A public field is a `u32 -> HandedClient` conversion with extra steps, and \
+         the one sanctioned birth client becomes any client at all as an escape's `hRoot`."
+    );
+
+    // Exactly one door into the handed-over value, and it consumes the role.
+    assert_eq!(
+        module.matches("fn handed_over(").count(),
+        1,
+        "★★★ CONSTRAINT 32 REGRESSED — `HandedClient` has more than one constructor. The \
+         invariant is that *having* one and *being the scratchpad, handed these numbers* are \
+         one fact; a second constructor splits them apart."
+    );
+    assert!(
+        module.contains("_role: ScratchpadRole,"),
+        "★★★ CONSTRAINT 32 REGRESSED — `handed_over` no longer takes the `ScratchpadRole` BY \
+         VALUE. Taking it by reference, or not at all, is what lets the role be re-used or \
+         skipped — and a per-proc backend that can build a `HandedClient` can issue escapes \
+         under a client it did not mint."
+    );
+    assert!(
+        module.contains("use super::handed_vaspace::ScratchpadRole;"),
+        "★★★ CONSTRAINT 32 REGRESSED — `mod handed_client` no longer reuses the ONE \
+         `ScratchpadRole`. A second unit type meaning *\"I am the scratchpad\"* is a second \
+         place for that answer to drift, and only one of them would be checked against \
+         `SCRATCHPAD_ISOLATE_PROC`."
+    );
+
+    // ★★★ The minting proc must SURVIVE into the value. Constraint 32's security claim is a
+    // statement about `ProcessID`; a value that cannot say which isolate minted it cannot be
+    // checked against the descriptor that carried it.
+    assert!(
+        module.contains("fn minted_by(self) -> u32 {"),
+        "★★★ CONSTRAINT 32 REGRESSED — `HandedClient` no longer reports the isolate that \
+         minted it. RM stamps `ProcessID` from the CREATING task (client.c:112), so \
+         `minted_by` is the only thing that makes *\"stamps land as I's\"* checkable rather \
+         than argued. Dropping it is the whole ruling becoming a comment."
+    );
+    assert!(
+        module.contains("minted_by=proc {}"),
+        "★★★ CONSTRAINT 32 REGRESSED — `HandedClient`'s `Debug` no longer prints the minting \
+         proc. A census line that names a client without naming whose identity it carries \
+         cannot answer the one question this route exists to answer."
+    );
+    assert!(
+        !module.contains("static ") && !module.contains("thread_local"),
+        "★★★ CONSTRAINT 32 REGRESSED — the birth client is being read off process-global \
+         state. One process hosts TWO emulated GPUs; a `static` binds to whichever realized \
+         first, which is the w637 defect in the one place it would be least visible."
+    );
+
+    for forbidden in [
+        "impl From<u32> for HandedClient",
+        "fn new(",
+        "derive(Default)",
+        "impl Default for HandedClient",
+        "fn from_raw(",
+    ] {
+        assert!(
+            !module.contains(forbidden),
+            "★★★ CONSTRAINT 32 REGRESSED — `mod handed_client` now contains `{forbidden}`, \
+             which manufactures the type from a value nobody was handed. That is precisely \
+             the direction it exists to make impossible."
+        );
+    }
 }

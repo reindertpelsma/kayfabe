@@ -829,3 +829,116 @@ fn does_not_observe_isolate_lifetime() {
          indistinguishable here, and §9 records that as open"
     );
 }
+
+// =====================================================================================
+// ★★★★★ CONSTRAINT 32, ROUTE K — the birth-client descriptor's one-target rule
+// =====================================================================================
+
+/// ★★★★★ **THE KNOWN-POSITIVE THE PHASE-2 PLAN NAMES FIRST** (`w750_route_k_phase2_plan.md`
+/// §1.3: *"an attempt to lend a birth-client fd to a **second per-proc isolate** must stay
+/// red"*).
+///
+/// The descriptor that reaches client **B** is the whole of route K's capability: naming B
+/// without it reaches no RM at all. ⇒ if this descriptor can land in a second guest
+/// process's isolate, that process can allocate objects in — and free objects out of — a
+/// client whose `ProcessID` RM stamped as somebody else's. That is `#14` with an extra
+/// hop, and it is refused by name.
+#[test]
+fn a_birth_client_descriptor_may_not_be_lent_to_a_second_per_proc_isolate() {
+    let _fd_table = serialized();
+    let minter = iso(7, 0);
+    let ctl = CrossedFd::adopt(
+        a_char_device(),
+        FdOrigin::BirthClient { minted_by: minter },
+        DescriptorKind::CharDevice,
+    )
+    .expect("adopted as a birth-client descriptor");
+
+    // The scratchpad — the ONE legitimate target.
+    let scratchpad = IsolateId::new(kayfabe_isolate_host::SCRATCHPAD_ISOLATE_PROC, GpuId(0));
+    ctl.lend_to(scratchpad)
+        .expect("route K hands the birth client to the scratchpad; that is the whole route");
+
+    // Every per-proc isolate, INCLUDING the minter, is refused.
+    for (who, id) in [
+        ("a second guest process's isolate", iso(8, 0)),
+        ("another GPU's isolate for that proc", iso(8, 1)),
+        ("the MINTER's own isolate", minter),
+        ("the minter on another GPU", iso(7, 1)),
+    ] {
+        let err = ctl
+            .lend_to(id)
+            .err()
+            .unwrap_or_else(|| panic!("CONSTRAINT 32 BREACHED — {who} received the birth-client descriptor"));
+        match err {
+            RawError::ForeignDescriptor { origin, target } => {
+                assert_ne!(origin, target, "the refusal must name two different parties");
+            }
+            other => panic!("expected ForeignDescriptor for {who}, got {other:?}"),
+        }
+    }
+}
+
+/// ★★★ **The minter's refusal is not an accident of `origin != target`** — and this is the
+/// test that says so, because the two rules are one line apart and an editor who "fixed"
+/// the birth-client arm to mirror `Isolate`'s would make the minter legal again with a
+/// change that reads like a tidy-up.
+///
+/// Route K's step 2 has I **close its own copy** precisely so that only S holds a
+/// descriptor naming B. Lending it back would undo by transport what that close achieved.
+#[test]
+fn the_birth_clients_own_minter_is_refused_where_an_isolate_descriptors_owner_is_not() {
+    let _fd_table = serialized();
+    let owner = iso(3, 0);
+
+    let ordinary = CrossedFd::adopt(
+        a_char_device(),
+        FdOrigin::Isolate(owner),
+        DescriptorKind::CharDevice,
+    )
+    .unwrap();
+    assert!(
+        ordinary.lend_to(owner).is_ok(),
+        "an ordinary isolate descriptor DOES go back to its owner — the contrast this test is"
+    );
+
+    let birth = CrossedFd::adopt(
+        a_char_device(),
+        FdOrigin::BirthClient { minted_by: owner },
+        DescriptorKind::CharDevice,
+    )
+    .unwrap();
+    assert!(
+        birth.lend_to(owner).is_err(),
+        "★★★ CONSTRAINT 32 REGRESSED — a birth-client descriptor went back to its minter. \
+         The two origins have one-element target sets that share no element; a birth-client \
+         arm written to mirror `Isolate`'s is the safest-looking spelling of the breach."
+    );
+}
+
+/// ⊘ **A birth-client descriptor is NOT a VMM-minted one**, which is the other direction an
+/// editor could collapse it in. `FdOrigin::Vmm` goes anywhere; this must not.
+#[test]
+fn a_birth_client_descriptor_is_not_treated_as_vmm_minted() {
+    let _fd_table = serialized();
+    let birth = CrossedFd::adopt(
+        a_char_device(),
+        FdOrigin::BirthClient {
+            minted_by: iso(1, 0),
+        },
+        DescriptorKind::CharDevice,
+    )
+    .unwrap();
+    let mut refused = 0;
+    for id in [iso(1, 0), iso(2, 0), iso(2, 1), iso(9, 3)] {
+        if birth.lend_to(id).is_err() {
+            refused += 1;
+        }
+    }
+    assert_eq!(
+        refused, 4,
+        "★★★ CONSTRAINT 32 REGRESSED — {} of 4 per-proc isolates were handed a birth-client \
+         descriptor. A `Vmm`-shaped rule here would pass every one of them.",
+        4 - refused
+    );
+}

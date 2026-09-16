@@ -453,6 +453,114 @@ mod handed_vaspace {
 
 use handed_vaspace::{HandedVaSpace, ScratchpadRole};
 
+/// ★★★★★ **CONSTRAINT 32's ROUTE K, AS A TYPE — *"the isolate mints the birth client and
+/// hands the fd over; the scratchpad drives it and may name no other."***
+///
+/// # The question this keeps asking
+///
+/// [`mod@handed_vaspace`] answers *"which foreign **VA space** may the scratchpad name?"*.
+/// Route K asks the same question one object over: under constraint 32 the per-proc isolate
+/// **I** allocates an `NV01_ROOT_CLIENT` **B** on a second `/dev/nvidiactl`, passes the
+/// descriptor to the scratchpad **S** by `SCM_RIGHTS`, and closes its own copy. S then
+/// stamps **B** as `hRoot` on every escape it issues down that descriptor — a client this
+/// process did not mint, exactly the thing [`mod@own_client`] exists to make unspellable.
+///
+/// ⊘ **And it is a DIFFERENT widening from `HandedVaSpace`'s, which is why it is a second
+/// type and not a second accessor.** `HandedVaSpace` names a foreign client in **one field
+/// of one escape** (`NVOS55_PARAMETERS::hClientSrc`) while the escape itself is still issued
+/// under our **own** client and our **own** descriptor. A `HandedClient` is the `hRoot` of
+/// the escape: every object allocated under it lands in **B's** namespace, on **I's**
+/// descriptor. Folding the two into one type would let a `src_client()` accessor be read as
+/// an `hRoot`, and that is the whole hole.
+///
+/// # The construction — deliberately the same shape, so a reader who knows one knows both
+///
+/// * [`ScratchpadRole`] — reused verbatim. It is already *"proof the holder is the
+///   scratchpad"*, and minting a second unit type saying the same thing is a second place
+///   for the answer to drift.
+/// * [`HandedClient`] — constructed **only** from a `ScratchpadRole` plus the client handle
+///   **and the proc that minted it**. The minting proc is carried rather than discarded
+///   because constraint 32's whole security claim is a statement about it: *"`ProcessID`
+///   lands as I's"*. A value that cannot say which I it came from cannot be checked against
+///   the fd that carried it.
+///
+/// # ⚠ WHAT IS STRUCTURAL AND WHAT IS NOT — the same honest half as `handed_vaspace`
+///
+/// **Structural:** a per-proc backend cannot build a `ScratchpadRole`, so it cannot express
+/// a `HandedClient` at all; and there is no `u32 -> HandedClient` direction.
+///
+/// **Not structural:** *"the VMM handed it over"* is carried by the wire. What bounds it is
+/// the socket topology plus [`crate::fdcross::FdOrigin::BirthClient`]'s one-target rule —
+/// the descriptor that makes the client reachable can be lent to the scratchpad and to
+/// nothing else. ⇒ **the fd is the capability and the handle is only a name.** That is the
+/// half `HandedVaSpace` does not have, and it is why route K is safer than it looks: naming
+/// B without B's descriptor reaches no RM at all.
+mod handed_client {
+    use super::handed_vaspace::ScratchpadRole;
+
+    /// **A birth client minted by a per-proc isolate and handed to the scratchpad.**
+    ///
+    /// The only value this crate will accept as the `hRoot` of an escape issued on a
+    /// descriptor we did not open. `Copy`, because it is two 32-bit words; **no** `From`,
+    /// `new`, `Default` or `Deserialize` — each would re-open precisely what this closes.
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    pub(super) struct HandedClient {
+        client: u32,
+        minted_by: u32,
+    }
+
+    impl core::fmt::Debug for HandedClient {
+        /// Named rather than bare hex, and it prints **both** halves: a birth client is only
+        /// interesting relative to the proc whose `ProcessID` RM stamped into it, and a
+        /// `Debug` that hid that would make constraint 32's central claim unprintable.
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            write!(
+                f,
+                "HandedClient(client={:#010x}, minted_by=proc {})",
+                self.client, self.minted_by
+            )
+        }
+    }
+
+    impl HandedClient {
+        /// **Take the hand-over.** Consuming the [`ScratchpadRole`] by value is what makes
+        /// *"I am the scratchpad"* travel into this value instead of being re-checked — or
+        /// forgotten — at the use site.
+        pub(super) fn handed_over(
+            _role: ScratchpadRole,
+            client: u32,
+            minted_by: u32,
+        ) -> HandedClient {
+            HandedClient { client, minted_by }
+        }
+
+        /// The foreign client, for the one field it is for: the `hRoot` of an
+        /// `NVOS*`-carrying escape issued down the descriptor that came with it.
+        ///
+        /// ⚠ An *exit*, not a hole. It hands out a client somebody handed us; it cannot
+        /// manufacture one. The direction that would matter — `u32 -> HandedClient` — does
+        /// not exist.
+        pub(super) fn root(self) -> u32 {
+            self.client
+        }
+
+        /// **Which per-proc isolate minted it** — the proc whose `ProcessID` RM stamped into
+        /// the client at creation (`client.c:112`), and therefore into every channel born
+        /// under it.
+        ///
+        /// ★★★ Read by the fail-closed check that the descriptor which carried this client
+        /// was minted by the **same** proc. Constraint 32's argument is *"stamps land as
+        /// `ProcessID = I`"*; a `HandedClient` from I₁ driven down I₂'s descriptor would
+        /// make that sentence false while every individual ioctl still succeeded.
+        pub(super) fn minted_by(self) -> u32 {
+            self.minted_by
+        }
+    }
+}
+
+use handed_client::HandedClient;
+
+
 
 /// ★ How many [`RmConnection::doorbell`] stores print in full before the witness falls back
 /// to a periodic tally. `cup2` rings a few hundred doorbells in total (448 at `w202`), so at
