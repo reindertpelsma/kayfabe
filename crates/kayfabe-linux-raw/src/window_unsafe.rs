@@ -538,6 +538,23 @@ mod tests {
         HostPageSize::query()
     }
 
+    /// Read the first `n` bytes of a backing WITHOUT going through any window — the only way
+    /// to tell *"the window shows B"* from *"the window shows A and A happens to hold B's
+    /// bytes"*. ⊘ A probe that shared the window would not be an observer.
+    fn read_backing_directly(fd: std::os::fd::BorrowedFd<'_>, p: HostPageSize, n: usize) -> Vec<u8> {
+        let m = crate::MappedRegion::map(
+            Backing::SharedFile { fd, offset: 0 },
+            p.bytes(),
+            HostProt::ReadWrite,
+            crate::CachePolicy::WriteBack,
+            p,
+        )
+        .expect("map the backing directly");
+        let mut out = vec![0u8; n];
+        m.read_into(HostOffset::ZERO, &mut out).expect("read the backing");
+        out
+    }
+
     #[test]
     fn a_window_is_readable_everywhere_before_anything_is_placed_in_it() {
         let p = page();
@@ -606,6 +623,106 @@ mod tests {
             "restore detaches a backing from the window; it must not destroy it, or a \
              re-place would resurrect zeroes instead of the object's contents"
         );
+    }
+
+    /// ★★★★★ **w752 — THE IN-PLACE RE-POINT SENTINEL.** The brief's required known-positive:
+    /// *"write a known value through the window at base A, re-point to base B, prove the window
+    /// shows B's bytes AND that A's are no longer reachable through it."*
+    ///
+    /// This is the property the whole of cut P1 rests on. `barmirror.rs` carried *"a device
+    /// view cannot be re-pointed — each arming is its own fd at offset 0"* as the reason
+    /// PRAMIN's move became release-and-re-arm (20 arms x 7 vCPU doors + 19 retirements x 3 =
+    /// **197 blocking crossings, worst trap 44 ms**, `[measured w742]`). The sentence is true of
+    /// the **node** and false of the **window**, and this test is that distinction as a
+    /// measurement rather than an argument.
+    ///
+    /// ⚠ **Why a memfd stands in for `/dev/nvidia<N>`.** [`GuestWindow::place_device_view`] is
+    /// `fixed_map` with `MAP_SHARED` at file offset 0 — the driver's constraint (it refuses any
+    /// `vm_pgoff` but zero) is on the *node*, not on this call, and the kernel's `MAP_FIXED`
+    /// replacement semantics are what is under test here. ⊘ What a memfd CANNOT stand in for is
+    /// the `VM_IO | VM_PFNMAP` VMA a real node produces; that half is exercised only on the
+    /// bench, and the boot's `PRAMIN-INPLACE` census is where it is read.
+    #[test]
+    fn a_device_view_is_re_pointed_in_place_and_the_old_backing_goes_unreachable() {
+        let p = page();
+        let a = crate::SharedRam::create(p.bytes()).expect("backing A");
+        let b = crate::SharedRam::create(p.bytes()).expect("backing B");
+        let w = GuestWindow::create(p.bytes(), p).expect("a one-page window");
+
+        w.place_device_view(HostOffset::ZERO, p.bytes(), a.as_backing_fd(), true)
+            .expect("place A");
+        w.write_from(HostOffset::ZERO, b"AAAAAAAA").expect("write A");
+
+        // ★ THE RE-POINT. One `MAP_FIXED`, into the window that is already there: no new
+        // window, no memslot, no munmap.
+        w.place_device_view(HostOffset::ZERO, p.bytes(), b.as_backing_fd(), true)
+            .expect("re-point the SAME window at B, in place");
+
+        let mut got = [0u8; 8];
+        w.read_into(HostOffset::ZERO, &mut got).expect("read");
+        assert_eq!(
+            &got, b"\0\0\0\0\0\0\0\0",
+            "the window must show B (untouched, so zeroes) the instant the re-point returns. \
+             Seeing A's bytes here is the failure the trap contract calls the one that cannot \
+             be contained: the guest re-aims the aperture and reads the PREVIOUS framebuffer, \
+             with no trap and no error"
+        );
+
+        // ★★ And the stronger half: A is no longer REACHABLE through the window. A write here
+        // must land in B and must not touch A — otherwise the old node's aperture is still
+        // live behind our PTEs, which is exactly what makes an early release cross-tenant.
+        w.write_from(HostOffset::ZERO, b"BBBBBBBB").expect("write B");
+        let in_a = read_backing_directly(a.as_backing_fd(), p, 8);
+        assert_eq!(
+            &in_a[..], b"AAAAAAAA",
+            "a write through the re-pointed window reached the OLD backing — the window is \
+             still mapping A, so the re-point did not take and the two backings are one memory"
+        );
+        let in_b = read_backing_directly(b.as_backing_fd(), p, 8);
+        assert_eq!(
+            &in_b[..], b"BBBBBBBB",
+            "a write through the re-pointed window must reach B: `MAP_FIXED` replaced the \
+             mapping, it did not shadow it"
+        );
+    }
+
+    /// ★★★★★ **w752 — WHY `repoint_device_window` CHECKS THE LENGTH.** The half-re-pointed
+    /// aperture, produced on purpose.
+    ///
+    /// A placement shorter than the window leaves the tail showing the backing it replaced:
+    /// **two framebuffers behind one guest-physical range, with no trap and no error.** That is
+    /// the `[w582-w586]` class — *zero traps proves the slot INTERCEPTS the access, never that
+    /// it shows the same bytes* — and it is why `QemuMachine::repoint_device_window` refuses a
+    /// length that is not exactly the window's rather than placing what it was given.
+    #[test]
+    fn a_short_re_point_leaves_the_windows_tail_showing_the_backing_it_replaced() {
+        let p = page();
+        let a = crate::SharedRam::create(2 * p.bytes()).expect("backing A");
+        let b = crate::SharedRam::create(2 * p.bytes()).expect("backing B");
+        let w = GuestWindow::create(2 * p.bytes(), p).expect("a two-page window");
+
+        w.place_device_view(HostOffset::ZERO, 2 * p.bytes(), a.as_backing_fd(), true)
+            .expect("place A whole");
+        w.write_from(HostOffset::ZERO, b"A0").expect("page 0");
+        w.write_from(HostOffset::new(p.bytes()), b"A1").expect("page 1");
+
+        // The mistake, made deliberately: replace only the first page.
+        w.place_device_view(HostOffset::ZERO, p.bytes(), b.as_backing_fd(), true)
+            .expect("a SHORT placement is accepted by the window — it is in bounds");
+
+        let mut tail = [0u8; 2];
+        w.read_into(HostOffset::new(p.bytes()), &mut tail).expect("read the tail");
+        assert_eq!(
+            &tail, b"A1",
+            "this assertion is the DEFECT, asserted so it cannot be argued away: the window's \
+             tail still shows the PREVIOUS backing while its head shows the new one. The guest \
+             sees one aperture over two framebuffers, and nothing anywhere reports it. \
+             `REPOINT_LENGTH_IS_NOT_THE_WINDOWS` is the refusal that keeps this unreachable \
+             from the mirror — if that check is ever removed, THIS is what ships"
+        );
+        let mut head = [0u8; 2];
+        w.read_into(HostOffset::ZERO, &mut head).expect("read the head");
+        assert_eq!(&head, b"\0\0", "and the head really did move to B");
     }
 
     #[test]

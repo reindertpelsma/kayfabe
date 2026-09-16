@@ -721,8 +721,45 @@ every call site. Proposed instead, and the split is then legible from the name a
 | 5 — DoorbellTable | wired | goal 4, w656–w660 |
 | 15 — disjoint worlds | ⊘ **SUPERSEDED, not violated** | there is **one world**, not two (§15's supersession block). The row described the old design's failure to meet a constraint that no longer exists |
 | 15 — one reserved object | ◐ **RESERVED AND ADVERTISED; the BACKING has not moved** *(2026-09-15)* | ⊘ *"`reserve_gpga` has no caller … no GPGA line in any boot"* is **STALE**: it has callers (`rm.rs:4595`, `:4651`) and three committed boots carry `reservation=HELD` / `RESERVED_MB`. ⚠ **But `page_backing` still returns memfd leaves**, so guest vidmem remains host RAM over PCIe and parity is unchanged at 0.20x. The object is **held and unused** until §3 |
-| 4, 6, 7, 8 — sub-ms / off-vCPU | ⊘⊘⊘ **VIOLATED ON THE `device` ARM (w742, 2026-09-15)** — `VCPU-BLOCKING total=197 doors=9 worst_trap=44440us` (control: `total=22 doors=3 worst_trap=22311us`). ★ The old ruling covered **3 doors that WERE the 22 PRAMIN re-points**; the new doors are the single store's own machinery — `exporting a host device view`, `receiving a descriptor across the isolate boundary` (40×), `classifying a received descriptor`, `mmap`, `mmap MAP_FIXED`, `KVM_SET_USER_MEMORY_REGION` (20×) — **none of which is PRAMIN**, so the sanction does not reach them (*a ruling's date AND its architecture are part of the citation*). ⇒ **REMEDY IS CONSTRAINTS 6+7+8 THEMSELVES**: post to a queue, wake a worker, return; workers do the work and write completions asynchronously. Owner's queue/epoll/eventfd design of 2026-09-15 is the plan of record — see the block below. ⊘ Tracked as an OPEN VIOLATION with a named fix, **not** as hardening. |
+| 4, 6, 7, 8 — sub-ms / off-vCPU | ◐ **PARTLY DISCHARGED w752, 2026-09-16** — `total=197 doors=9` ⇒ **`total=102 doors=6`**, doors 7/8/9 gone and 4/6 down to one crossing each; PRAMIN's move 44.4 ms ⇒ **1.12 ms** worst. ⚠ **4 IS STILL VIOLATED ON BOTH ARMS**: `worst_trap≈25 ms at bar0+0x110c00` (`NV_PGSP_QUEUE_HEAD`), which crosses **no `assert_lock_free` door** and is invisible to this census. See the w752 block below. ⊘ The w742 state it replaced: ⊘⊘⊘ **VIOLATED ON THE `device` ARM (w742, 2026-09-15)** — `VCPU-BLOCKING total=197 doors=9 worst_trap=44440us` (control: `total=22 doors=3 worst_trap=22311us`). ★ The old ruling covered **3 doors that WERE the 22 PRAMIN re-points**; the new doors are the single store's own machinery — `exporting a host device view`, `receiving a descriptor across the isolate boundary` (40×), `classifying a received descriptor`, `mmap`, `mmap MAP_FIXED`, `KVM_SET_USER_MEMORY_REGION` (20×) — **none of which is PRAMIN**, so the sanction does not reach them (*a ruling's date AND its architecture are part of the citation*). ⇒ **REMEDY IS CONSTRAINTS 6+7+8 THEMSELVES**: post to a queue, wake a worker, return; workers do the work and write completions asynchronously. Owner's queue/epoll/eventfd design of 2026-09-15 is the plan of record — see the block below. ⊘ Tracked as an OPEN VIOLATION with a named fix, **not** as hardening. |
 | 7, 14 — epoll / threaded isolates | not built | |
+
+### ✔✔✔ **PARTLY DISCHARGED 2026-09-16 (w752) — THE NINE DOORS ARE SIX, THE 197 CROSSINGS ARE 102, AND THE 44 ms IS 1.1 ms. Read this before the section below, which describes the state it replaced.**
+
+`[vast 51210329, GA106, 580.159.04 OPEN, TREE_REV fcce2a11, three arms, one binary, control first]`
+
+```
+device arm w742:  VCPU-BLOCKING total=197 doors=9   move_ns[worst=44426000 mean=7248000]
+device arm w752:  VCPU-BLOCKING total=102 doors=6   move_ns[worst=1115752  mean=496145]
+  [40 × receiving a descriptor across the isolate boundary]   door 2 — STAYS (the arm)
+  [20 × classifying a received descriptor]                    door 3 — STAYS (the arm)
+  [20 × exporting a host device view to the VMM]              door 1 — STAYS (the arm)
+  [20 × mmap MAP_FIXED (placing an armed device node)]        door 5 — STAYS, the SANCTIONED one
+  [1  × KVM_SET_USER_MEMORY_REGION (installing a memslot)]    door 6 — the ONE-TIME install
+  [1  × mmap (creating a guest-physical window)]              door 4 — the ONE-TIME install
+```
+⇒ **doors 7 (memslot drop), 8 (`munmap`) and 9 (releasing a view) are ABSENT**, and 4 and 6 are
+down to **one crossing each** — the window + memslot the guest's *first* latch write creates.
+★ **worst move 39.8x better, mean 14.6x better**; the device arm's mean move (0.50 ms) is now at
+the arena control's mean on the same box (0.44 ms) and its **worst is 6.8x better than the
+control's** (1.12 ms vs 7.55 ms).
+
+**What did it:** *"a device view cannot be re-pointed"* is true of the **node** and false of the
+**window**. `QemuMachine::repoint_device_window` places a newly armed node into the window that is
+already there with one `MAP_FIXED` — which is what §6.7 rule 3 and **constraint 16** below already
+required. ⊘ Compliance, not a new design. Door 9 moved to the worker's reclaim tick behind a
+decline-by-name, with the w735 release barrier **restated** (constraint 29) as a happens-before on
+the `MAP_FIXED` sequence: `releasable_through` releases only views whose replacement has landed.
+
+⚠ **CONSTRAINT 4 IS STILL VIOLATED, ON BOTH ARMS, AND THE CENSUS CANNOT SEE WHY.**
+`worst_trap` = **24 999 µs at `bar0+0x110c00`** (device) and **25 077 µs at the same address**
+(control) — `NV_PGSP_QUEUE_HEAD`, 96 % CPU (`cpu_of_that_trap=23979us`). It passes through **no
+`assert_lock_free` door at all**, so the door census is structurally blind to it (§0.3 of
+`fable_off_vcpu_design.md`). ⇒ w752 removed the PRAMIN move as the device arm's worst trap and the
+two arms now agree on what is left; **a reduced door count is not constraint 4 satisfied.**
+
+⊘ **Still open:** P3(a)/(b) (take the arm itself off the vCPU: 102/6 → 20/1) and §2.4(c) (the
+one-time install moves to the BAR-map callback, constraint 23: 102/6 → 100/4).
 
 ### ⊘⊘⊘ OPEN VIOLATION — 4, 6, 7, 8 on the `device` arm, and the remedy is already specified
 
