@@ -34,3 +34,14 @@ only.
 ⊘ NOT MEASURED BY THIS BOOT: the 30-name raw-client failing-test baseline. This boot script
 runs `w392d_mean_hook.sh` (the mean client, THREADS 8 of 8), not `rmladder_suite_hook.sh`
 (the 30-arm suite). Recorded as unmeasured rather than assumed unchanged.
+
+---
+# GATE — the two crates this change touches, run locally with --no-fail-fast
+#   cargo test -p kayfabe-linux-raw -p kayfabe-isolate-host --no-fail-fast
+#   25 test binaries · 369 passed · 0 failed · 0 ignored · rc=0
+# ★ Includes own_client_invariant.rs, ownership_split_gates.rs and guest_ring_census.rs —
+#   the three that assert BY STRING MATCH the ownership properties route K would change.
+#   Phase 1 adds a probe and three probe-scoped accessors and breaks none of them.
+# ⊘ NOT the whole workspace: the coordinator box is at 97% disk and 15 GB RAM, and a local
+#   whole-workspace `cargo test` is the thing `a_local_cargo_OOM_kills_the_COORDINATOR`
+#   names. Recorded as scoped rather than claimed as green.
