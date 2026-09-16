@@ -11688,7 +11688,7 @@ mod route_k {
         Nvos54Parameters, Nvos55Parameters,
     };
     use kayfabe_abi::submit::{
-        ChannelAllocParams, NV_ESC_RM_MAP_MEMORY, NVA06C_CTRL_CMD_BIND,
+        CeAllocParams, ChannelAllocParams, NV_ESC_RM_MAP_MEMORY, NVA06C_CTRL_CMD_BIND,
         NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN, Nvos33ParametersWithFd, USERD_GP_GET,
         USERD_GP_PUT, engine_type_copy, fifo, gp_entry, method_header_inc,
     };
@@ -12280,6 +12280,10 @@ mod route_k {
         tsg: u32,
         /// The channel.
         chan: u32,
+        /// ★★★ The copy-engine object under the channel — **row 2's only visible handle.**
+        /// See [`get_pids`]: `NV2080_CTRL_CMD_GPU_GET_PIDS` cannot see a `KernelChannel` at
+        /// all. `0` if RM refused it.
+        ce_object: u32,
         /// ★★★ `NV_CHANNEL_ALLOC_PARAMS.flags` **as RM copied it back**
         /// (`alloc_free.c:207-211`). Nothing in this tree read this before w750.
         flags_readback: u32,
@@ -12304,6 +12308,7 @@ mod route_k {
         userd_memory: u32,
         userd_offset: u64,
         channel_class: u32,
+        ce_class: u32,
     ) -> Result<Birth, Fail> {
         let mut tsg_params = [0u8; NvChannelGroupAllocationParameters::SIZE];
         NvChannelGroupAllocationParameters {
@@ -12365,9 +12370,36 @@ mod route_k {
         )?;
         let token = u32::from_le_bytes(tok);
 
+        // ★★★ THE ENGINE OBJECT, and it is NOT decoration — it is **row 2's instrument**.
+        //
+        // ⊘ Its absence would have made row 2 report an empty pid list and look like a
+        // refutation. `subdeviceCtrlCmdGpuGetPids_IMPL` maps every class id that is not
+        // `NV20_SUBDEVICE_0`/`MPS_COMPUTE` to `classId(ChannelDescendant)`
+        // (`subdevice_ctrl_gpu_kernel.c:2289-2302`), and the match inside
+        // `gpuGetProcWithObject_IMPL` is `RES_GET_EXT_CLASS_ID(Object) == elementID` on a
+        // **ChannelDescendant** (`gpu_rmapi.c:797-810`). A `KernelChannel` is not one.
+        // ⇒ the only object of this channel the pid query can see is the engine object
+        // hanging under it, so the probe allocates one and asks about *that* class.
+        //
+        // ⚠ And the eight bytes are not optional: a CE object whose
+        // `NVB0B5_ALLOCATION_PARAMETERS` is not forwarded reads as `engineType = 0` and
+        // binds to runlist 0, with the failure surfacing at the SCHEDULE.
+        let mut ce_params = [0u8; CeAllocParams::SIZE];
+        CeAllocParams {
+            version: CeAllocParams::VERSION_1,
+            engine_type,
+        }
+        .encode_into(&mut ce_params)
+        .map_err(|e| Fail::Refused {
+            what: "CE object encode",
+            detail: format!("{e:?}"),
+        })?;
+        let ce_object = esc.alloc(chan, ce_class, &mut ce_params, "CE engine object")?;
+
         Ok(Birth {
             tsg,
             chan,
+            ce_object,
             flags_readback,
             token,
         })
@@ -12543,6 +12575,7 @@ mod route_k {
             store_dup,
             USERD_OFFSET_IN_STORE,
             classes.gpfifo_channel().channel_id().0,
+            classes.ce_object().ce_object_id().0,
         ) {
             Ok(b) => {
                 let bit = u32::from(b.flags_readback & NVOS04_FLAGS_PRIVILEGED_CHANNEL != 0);
@@ -12551,6 +12584,9 @@ mod route_k {
                     "info  route-K KP flags readback = {:#010x}, token {:#010x}",
                     b.flags_readback, b.token
                 );
+                if b.ce_object != 0 {
+                    let _ = esc.free(b.chan, b.ce_object, "free KP CE object");
+                }
                 let _ = esc.free(b.tsg, b.chan, "free KP channel");
                 let _ = esc.free(device, b.tsg, "free KP tsg");
                 i32::from(bit != 1)
@@ -12752,9 +12788,18 @@ mod route_k {
             let neg = s.register_channel(ctl_fd, bogus, chan_uvm, K_CHANRES_NEG_VA, K_CHANRES_LEN);
             println!("K_UVM_REG_CHAN_NEG_RC={:#x}", uvm_code(&neg));
             println!("info  route-K I  UVM_REGISTER_CHANNEL(hClient=bogus) -> {neg:?}");
-        } else if chan_uvm == 0 {
-            println!("K_UVM_REG_CHAN_RC=UNMEASURED:no-uvm-channel");
-            println!("K_UVM_REG_CHAN_NEG_RC=UNMEASURED:no-uvm-channel");
+        } else {
+            // ⊘ Both reasons print, and they are different findings: S never produced a
+            //   channel in the UVM space, or this role never got a UVM session. Either way
+            //   row 4 is UNMEASURED and must say so — an absent row would be read as a
+            //   refusal by anything grepping for a status.
+            let why = if chan_uvm == 0 {
+                "no-uvm-channel"
+            } else {
+                "no-uvm-session"
+            };
+            println!("K_UVM_REG_CHAN_RC=UNMEASURED:{why}");
+            println!("K_UVM_REG_CHAN_NEG_RC=UNMEASURED:{why}");
         }
 
         let done = Msg {
@@ -12903,6 +12948,9 @@ mod route_k {
         };
         let classes = kayfabe_chips::pinned_host_classes();
         let channel_class = classes.gpfifo_channel().channel_id().0;
+        // ★ Row 2 asks about THIS class, not the channel's — see `birth_channel`'s engine
+        //   object for why `GET_PIDS` cannot see a `KernelChannel`.
+        let ce_class = classes.ce_object().ce_object_id().0;
         let id = IsolateId::new(0, GpuId(gpu));
         let conn = Arc::new(conn);
         let mut rm = HostRmBackend::new(
@@ -13111,6 +13159,7 @@ mod route_k {
             store_dup,
             USERD_OFFSET_IN_STORE,
             channel_class,
+            ce_class,
         ) {
             Ok(b) => b,
             Err(e) => {
@@ -13134,6 +13183,7 @@ mod route_k {
             "K_CHAN_FLAGS_READBACK={:#010x}  K_TOKEN={:#010x}",
             birth.flags_readback, birth.token
         );
+        println!("K_CE_OBJECT={:#010x} class {ce_class:#06x}", birth.ce_object);
         if bit5 != 0 {
             rc = 1;
         }
@@ -13175,6 +13225,7 @@ mod route_k {
         // ---- row 4's channel: the SAME shape, in the externally-owned space ------------
         let mut chan_uvm = 0u32;
         let mut uvm_tsg = 0u32;
+        let mut uvm_ce = 0u32;
         if ext_space != 0 {
             match esc.dup(device_b, a_client, ext_space, "dup I's UVM VAS into B") {
                 Ok(ext_dup) => match birth_channel(
@@ -13187,10 +13238,12 @@ mod route_k {
                     store_dup,
                     USERD_OFFSET_IN_STORE + 0x1000,
                     channel_class,
+                    ce_class,
                 ) {
                     Ok(b) => {
                         chan_uvm = b.chan;
                         uvm_tsg = b.tsg;
+                        uvm_ce = b.ce_object;
                         println!("K_UVM_CHAN_BIRTH_RC=0");
                     }
                     Err(e) => println!("K_UVM_CHAN_BIRTH_RC={:#x} ({e})", e.code()),
@@ -13296,7 +13349,7 @@ mod route_k {
         println!("K_GPGET_AFTER_FREE={gp_get_final}");
 
         // ---- row 2: whose pid does the driver say owns the channel? --------------------
-        match get_pids(&conn, channel_class) {
+        match get_pids(&conn, ce_class) {
             Ok(p) => {
                 println!("K_PIDS_CHAN={}", pids_csv(&p));
                 println!("K_PID_I_IN_CHAN={}", u32::from(p.contains(&pid_i)));
@@ -13315,8 +13368,14 @@ mod route_k {
 
         // ---- teardown, then let I go ---------------------------------------------------
         if chan_uvm != 0 {
+            if uvm_ce != 0 {
+                let _ = esc.free(chan_uvm, uvm_ce, "free UVM CE object");
+            }
             let _ = esc.free(uvm_tsg, chan_uvm, "free UVM channel");
             let _ = esc.free(device_b, uvm_tsg, "free UVM tsg");
+        }
+        if birth.ce_object != 0 {
+            let _ = esc.free(birth.chan, birth.ce_object, "free CE object");
         }
         let _ = esc.free(birth.tsg, birth.chan, "free channel");
         let _ = esc.free(device_b, birth.tsg, "free tsg");

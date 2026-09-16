@@ -83,9 +83,29 @@ rewrites `flags` on the USER arm.
 
 ### Row 2 — `ProcessID` lands as **I's**, not S's
 
+> ### ⊘⊘ CORRECTED 2026-09-16, BEFORE THE BOX EXISTED — **THE INSTRUMENT NAMED BELOW CANNOT
+> ### SEE A CHANNEL, AND WOULD HAVE ANSWERED AN EMPTY LIST THAT READ AS A REFUTATION.**
+> The row below says *"`id` = the GPFIFO channel class"*. Read further into the handler and
+> that is wrong: `subdeviceCtrlCmdGpuGetPids_IMPL` maps **every** class id that is not
+> `NV20_SUBDEVICE_0` or `MPS_COMPUTE` to `classId(ChannelDescendant)`
+> (`subdevice_ctrl_gpu_kernel.c:2289-2302`), and the match inside `gpuGetProcWithObject_IMPL`
+> is `RES_GET_EXT_CLASS_ID(Object) == elementID` **on a `ChannelDescendant`**
+> (`gpu_rmapi.c:797-810`). A `KernelChannel` is not a `ChannelDescendant`, so the query
+> would have matched nothing.
+> ⇒ **The probe allocates a copy-engine object under the channel in B and asks about THAT
+> class** (`AMPERE_DMA_COPY_B` on this part, via `HostClasses::ce_object`). The object lives
+> in **B**, so the pid reported is still `B.ProcID`, which is the stamp the row is about;
+> only the handle the query can *see* changed.
+> ⚠ The reading that produced the error was *"GET_PIDS takes a class id, the channel has a
+> class id"* — a name that fits is not a mechanism that matches, and the failure mode would
+> have been the quiet one: **an empty list is what a refutation looks like too.** This is the
+> same class as `a_census_zero_needs_a_known_positive`, and it is why row 2 carries the
+> subdevice query as its control.
+
+
 | | |
 |---|---|
-| observable | `K_PIDS_CHAN` = the `pidTbl` from `NV2080_CTRL_CMD_GPU_GET_PIDS` (`0x2080018d`, `idType = _ID_TYPE_CLASS`, `id` = the GPFIFO channel class), issued from S's own subdevice; plus `K_PID_I`, `K_PID_S` (the two tgids) |
+| observable | `K_PIDS_CHAN` = the `pidTbl` from `NV2080_CTRL_CMD_GPU_GET_PIDS` (`0x2080018d`, `idType = _ID_TYPE_CLASS`, `id` = ⊘ **the CE OBJECT class, see the correction above** ⊘), issued from S's own subdevice; plus `K_PID_I`, `K_PID_S` (the two tgids) |
 | why it reads the stamp | `gpuGetProcWithObject_IMPL` (`gpu_rmapi.c:699-800`) walks every client, matches objects of the class, and reports **`pClient->ProcID`** — the same field `kernel_channel.c:293` copies into the channel. The control is `RMCTRL_FLAGS_NON_PRIVILEGED` (`g_subdevice_nvoc.c:1126-1128`, flags `0x8`). |
 | **prediction** | **`K_PID_I ∈ K_PIDS_CHAN`** and **`K_PID_S ∉ K_PIDS_CHAN`** — confidence ★★★★ **0.85** |
 | **refuting values** | `K_PID_S ∈ K_PIDS_CHAN` ⇒ the stamp follows the **driving** process, and `client.c:112` is not what governs ⇒ K's identity claim is false. `K_PID_I ∉ K_PIDS_CHAN` with the channel alive ⇒ a third answer; record it, **do not explain it away** (§3.1's own instruction). |
