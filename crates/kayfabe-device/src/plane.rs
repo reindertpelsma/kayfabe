@@ -3289,21 +3289,55 @@ impl RegPlane {
         materialise: bool,
     ) -> Result<WindowPageResolution, WindowRefusal> {
         let page_off = off & !(crate::fbwin::FB_PAGE - 1);
-        // ⊘ BOTH, in rank order. The window LATCH is FSM state; the framebuffer it points
-        // into moved to [`PlaneMem`] at w522.
-        let mut st = self.state.lock();
-        let mut s = self.mem.lock();
+        // ★★★★★ **w755 — CONSTRAINT 4: RANK 0 IS TAKEN BY THE ONE ARM THAT READS IT, NOT BY
+        // ALL THREE.**
+        //
+        // ⊘⊘⊘ This function used to open `let mut st = self.state.lock();` unconditionally,
+        // under the comment *"BOTH, in rank order"*. But look at what each arm actually
+        // reads: **only `Pramin` touches `st`** (the BAR0 window latch). `bar1_translate` and
+        // `bar2_translate` take `&mut s` and nothing else. So on the two translated windows —
+        // which are the BAR1/BAR2 paths the device arm runs on — rank 0 was held across a
+        // full guest page-table walk AND the store's `page_backing`, protecting nothing.
+        //
+        // ⇒ `[measured w754]` `LOCKCOST rank0 worst_wait=9625us worst_wait_blocked_by=
+        // plane.rs:3286`, 52% of a 9 649 us trap spent WAITING. w754's own conclusion was
+        // *"the next cut is lock scope, not thread placement — moving more work off the vCPU
+        // cannot help a trap already waiting on a lock a worker holds."* This is that cut.
+        //
+        // ★ It is a pure SCOPE reduction, not a semantic change: removing an acquisition of a
+        // lock whose guard is never read cannot alter what this function computes. The only
+        // thing it can alter is mutual exclusion against other rank-0 holders — and there is
+        // nothing here to exclude them from.
+        //
+        // ⚠ `Pramin` keeps BOTH, in the original order and for the original scope. Its
+        // "translation" IS the latch read, so the atomicity this function's docs require —
+        // translation and backing as one instant's answer — is exactly what holding `st`
+        // across `page_backing` provides. Narrowing that one would be a different change with
+        // a different argument, and it is not the hot path.
+        let mut s;
+        let _st_pramin;
         let (phys, read_only) = match w {
-            FbWindow::Pramin => (
-                st.bar0_window
-                    .fb_addr(page_off.wrapping_sub(self.chip.pramin_window.base)),
-                false,
-            ),
+            FbWindow::Pramin => {
+                let st = self.state.lock();
+                s = self.mem.lock();
+                let phys = st
+                    .bar0_window
+                    .fb_addr(page_off.wrapping_sub(self.chip.pramin_window.base));
+                // Held to the end of the function, as before — see the ⚠ above.
+                _st_pramin = st;
+                (phys, false)
+            }
             FbWindow::FbAperture if self.chip.bar1_pde_base == 0 => {
                 return Err(WindowRefusal::NoAddressModel);
             }
-            FbWindow::FbAperture => self.bar1_translate(page_off, &mut s)?,
-            FbWindow::InstanceWindow => self.bar2_translate(page_off, &mut s)?,
+            FbWindow::FbAperture => {
+                s = self.mem.lock();
+                self.bar1_translate(page_off, &mut s)?
+            }
+            FbWindow::InstanceWindow => {
+                s = self.mem.lock();
+                self.bar2_translate(page_off, &mut s)?
+            }
         };
         let phys = phys & !(crate::fbwin::FB_PAGE - 1);
         // ★★★★★ **w719 — the measurement constraint 15's aperture split rests on.** Records

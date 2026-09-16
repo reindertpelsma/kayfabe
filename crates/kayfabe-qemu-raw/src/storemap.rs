@@ -203,6 +203,20 @@ pub struct StoreMapPort {
     /// Distinct refusal strings that did not fit under the cap. ⊘ See [`Self::refusal_kinds`]
     /// — a truncated histogram that does not say it is truncated is worse than none.
     refusal_kinds_dropped: AtomicU64,
+    /// ★★★★★ **w755 — SLICES WHOSE STORE OFFSET IS LESS ALIGNED THAN THEIR LENGTH IMPLIES.**
+    ///
+    /// ⊘⊘ This counter exists to make an ARGUMENT CHECKABLE. w755 proposed that
+    /// `map_refused` was `nvos46_page_size_flag` ignoring the slice offset; the owner refuted
+    /// it from provenance: these slices come out of a **page-table walk**, `len` is the
+    /// walk's own page size and `offset` is the frame that PTE names, and a PTE's physical
+    /// base is aligned to its own page size **by hardware**. So the case cannot arise.
+    ///
+    /// ⚠ That is a true argument about another crate's walker, held here as a belief. If it
+    /// ever stops being true — a sub-leaf slice, a store offset from a source that is not a
+    /// PTE — the page-size predicate becomes load-bearing again and nothing would say so.
+    /// ⇒ counted, printed, and **not refused**: a nonzero here is a finding about the
+    /// walker, not a reason to drop a mapping the guest needs.
+    offset_less_aligned_than_len: AtomicU64,
 }
 
 impl core::fmt::Debug for StoreMapPort {
@@ -250,6 +264,7 @@ impl StoreMapPort {
             first_refusal: std::sync::Mutex::new(None),
             refusal_kinds: std::sync::Mutex::new(std::collections::BTreeMap::new()),
             refusal_kinds_dropped: AtomicU64::new(0),
+            offset_less_aligned_than_len: AtomicU64::new(0),
         }
     }
 
@@ -401,6 +416,11 @@ impl StoreMapPort {
                 len,
                 obj_len: self.obj_len,
             }));
+        }
+        // ★★★ w755 — see `Self::offset_less_aligned_than_len`. A count, never a refusal.
+        if len > 0 && len.is_power_of_two() && offset % len != 0 {
+            self.offset_less_aligned_than_len
+                .fetch_add(1, Ordering::Relaxed);
         }
         let off = self.off_vcpu()?;
         let obj = self.obj;
@@ -634,7 +654,7 @@ impl StoreMapPort {
              STORE-MAP iso={:?} obj={:?} obj_len={} adopts={adopts} adopt_refused={} \
              maps={maps} map_refused={} unmaps={} unmap_refused={} bytes_mapped={} \
              outstanding={} asserted={asserted} assert_refused={assert_refused} \
-             declined_on_vcpu={} first_refusal=[{}] refusals=[{}] ⇒ {verdict}",
+             declined_on_vcpu={} ragged_offset={} first_refusal=[{}] refusals=[{}] ⇒ {verdict}",
             self.id,
             self.obj,
             self.obj_len,
@@ -645,6 +665,7 @@ impl StoreMapPort {
             self.bytes_mapped.load(Ordering::Relaxed),
             self.outstanding(),
             self.declined_on_vcpu.load(Ordering::Relaxed),
+            self.offset_less_aligned_than_len.load(Ordering::Relaxed),
             self.first_refusal
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)

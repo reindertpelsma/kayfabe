@@ -603,8 +603,44 @@ pub const NVOS46_BIG_PAGE_BYTES: u64 = 64 * 1024;
 /// ★★★★★ **WHICH `NVOS46_FLAGS_PAGE_SIZE` A *FIXED* MAP OF `[offset, offset+len)` AT `at`
 /// MUST CARRY — constraint 28, and it is a measurement, not a preference.**
 ///
-/// > ### ⊘⊘⊘ CORRECTED w755 — **THE PREDICATE QUANTIFIED OVER TWO OF THE THREE QUANTITIES
-/// > ### THAT DETERMINE IT, AND THE THIRD ONE ARRIVED WITH THE SINGLE STORE.**
+/// > ### ⊘⊘⊘⊘ REFUTED AS A DIAGNOSIS, SAME DAY, BY THE OWNER — **THE FIX IS RIGHT AND THE
+/// > ### REASON GIVEN FOR IT WAS WRONG.** Read this before the block below.
+/// >
+/// > Owner, 2026-09-16: *"I don't think RM is going to randomly switch page alignment
+/// > requirements… how was it unaligned? or is this the wrong understanding?"*
+/// >
+/// > **It is the wrong understanding, and the check is one line of provenance.** The slices
+/// > this predicate decides for arrive from `map_store_slice_for_leaf`, which passes
+/// > `leaf.len` and `leaf.phys` straight out of a **page-table walk** — `len` is *"the walk's
+/// > own page size for this entry, never an assumed one"* and `phys` is the frame that entry
+/// > names. **A PTE's physical base is aligned to its own page size by hardware.** So
+/// > `offset` can never be LESS aligned than `len` requires:
+/// >
+/// > | leaf | `len` | `at` | `offset` | old predicate |
+/// > |---|---|---|---|---|
+/// > | 4 KiB | `0x1000` | any | any | already `_4KB` — `len` fails the test |
+/// > | 64 KiB | `0x10000` | 64K-aligned | 64K-aligned | `0`, and correctly so |
+/// > | 2 MiB | `0x200000` | 2M-aligned | 2M-aligned | `0`, and correctly so |
+/// >
+/// > ⇒ **The case the third quantity was added for does not arise on this path**, and this
+/// > is therefore NOT the cause of `map_refused=2154`. The `[measured w744]` rows below are
+/// > real, but they were measured on **ring VAs the isolate itself chose**, not on walked
+/// > guest leaves. Carrying that conclusion to a different provenance without re-checking the
+/// > premise is the same error this file's own corrections keep naming.
+/// >
+/// > ★ **The change is KEPT, on a narrower and honest argument**: the predicate is now total
+/// > over its own inputs instead of resting on an alignment invariant established in another
+/// > crate by a walker it cannot see. A caller that ever maps a sub-leaf slice, or a store
+/// > offset from any source but a PTE, gets the right flag rather than a silent relocation.
+/// > ⊘ It buys correctness under a wider set of callers; it does not explain the boot.
+/// >
+/// > ⚠ **THE WALL IS UNATTRIBUTED AGAIN.** What the w755 `refusals=[…]` histogram
+/// > discriminates, all three now visible because `want`/`got` survive the wire:
+/// > **delta constant and large** ⇒ `dmaOffset` read relative to the `NV01_MEMORY_VIRTUAL`
+/// > range's base while we pass an absolute guest VA; **delta sub-page and varying** ⇒ a
+/// > page-size or kind disagreement after all; **`got == 0`** ⇒ `FIXED` ignored on this path.
+/// >
+/// > ### ⊘⊘⊘ THE SUPERSEDED REASONING, kept because the CHANGE it produced is still in force
 /// >
 /// > This function took `(at, len)`. The argument below — *"a large leaf is necessarily at a
 /// > large-aligned VA, so it can be served by a big page at its own address and needs no
