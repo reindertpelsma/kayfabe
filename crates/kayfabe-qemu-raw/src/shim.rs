@@ -5364,7 +5364,14 @@ fn ring_adopt_census() -> String {
     } else if ran == 0 {
         "⊘ NOTHING TO ADOPT — the latch moved and no Passthrough birth or engine forward was          ever pending. A real measurement, and a boot that births no passthrough channel is          expected to read exactly this"
     } else if on > 0 && off > 0 {
-        "⚠ BOTH THREADS — some passes ran on a vCPU and some on the worker. Legal only if the          arm changed mid-boot; otherwise the vCPU gate is wrong"
+        // ⊘⊘ **CORRECTED AFTER THE BOOT THAT PRODUCED IT (w754).** The first wording called
+        // this *"legal only if the arm changed mid-boot"*, and the known-positive arm printed
+        // `off_vcpu=7 on_vcpu=21` while behaving exactly as designed — so the verdict accused
+        // the mechanism of a defect it did not have. `KAYFABE_MATERIALIZE_INLINE=1` ADDS the
+        // vCPU caller; it does not remove the worker's, which is unconditional. ⚠ A verdict
+        // that is wrong in the alarming direction costs as much as one wrong in the
+        // flattering direction — it sends the next reader to audit a gate that is correct.
+        "⚠ BOTH THREADS — passes ran on a vCPU AND on the worker. EXPECTED under          `KAYFABE_MATERIALIZE_INLINE=1`, which ADDS the vCPU caller without removing the          worker's. Without that arm set, the vCPU gate is wrong"
     } else if on > 0 {
         "⚠ ON THE vCPU — every pass ran inside a guest MMIO trap, settlement included. CORRECT          on the arm with no doorbell worker; a constraint-4 violation on any other"
     } else {
