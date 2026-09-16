@@ -289,19 +289,6 @@ pub fn serve(args: &ChildArgs) -> i32 {
     // loop returned — but never join it unconditionally: §7.5's rule is that we do not
     // block on a thread that may be inside an unbounded wait.
     drop(control_thread);
-    // ★★★★★ **w755 — THE PLACEMENT SCOREBOARD, EMITTED BY THE PROCESS THAT KEEPS IT.**
-    //
-    // ⊘⊘ It was first wired into the VMM's own census block in `kayfabe-qemu-raw`, which
-    // would have printed ZEROS FOREVER: `map_store_slice` runs HERE, in the child, and the
-    // counters are per-process statics. The parent cannot see them and the field would have
-    // read as "nothing was refused" on every boot.
-    // ⚠ Two defects in one, and both are this campaign's recorded classes — a census nobody
-    // emits, and a counter read in a process that cannot increment it. Found by grepping for
-    // the census's own name before renting a box to read it.
-    //
-    // ⊘ At teardown rather than per-map: it is a TOTAL, and printing it per map would bury
-    // the per-refusal lines that say WHICH mapping.
-    eprintln!("kayfabe-isolate: {}", crate::rm::placement_census());
     0
 }
 

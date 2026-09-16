@@ -222,7 +222,7 @@ fn the_store_slice_flag_is_the_only_one_that_survives_an_unknown_reservation_bas
 
     // ★★★ And the flag the store-slice path asks for is the one that holds.
     assert_eq!(
-        kayfabe_abi::bringup::nvos46_page_size_flag_for_store_slice(),
+        kayfabe_abi::bringup::nvos46_page_size_flag_for_store_slice(false),
         NVOS46_FLAGS_PAGE_SIZE_4KB,
         "the store-slice path must pin the small page table; congruence at any larger size \
          needs the reservation's GPGA, which `reserve_gpga` does not report"
@@ -258,129 +258,38 @@ fn a_page_aligned_request_is_accepted_and_silently_relocated() {
     );
 }
 
-/// ★★★ **w755 — THE PREDICTED PAGE SIZE IS THE ONE WE ASK FOR.**
+/// ★★★★★ **w755c — THE PAGE-SIZE PIN FOLLOWS THE RESERVATION, AND BOTH DIRECTIONS MATTER.**
 ///
-/// ⊘⊘ Two constants for one decision is how a predicate and its subject drift apart, which is
-/// this tree's most-repeated defect. The pre-flight assert computes with
-/// `nvos46_store_slice_page_bytes()` and the ioctl carries
-/// `nvos46_page_size_flag_for_store_slice()`; if those ever disagree the prediction is about
-/// a request nobody makes, and it would be CONFIDENTLY WRONG rather than merely absent.
+/// > Owner, 2026-09-16: *"ensure the gpga rm object … is aligned with 1GiB, that basically
+/// > kills all these issues with memory offset harmony."*
+///
+/// It does — **on a contiguous object**. Then `phys = base + offset` with `base ≡ 0`, so
+/// `phys ≡ offset (mod P)` for every page size and the guest's own `at ≡ offset` closes the
+/// congruence. RM may pick any page it likes and still honour the VA.
+///
+/// ⊘ On the NONCONTIGUOUS fallback it does not: `MapMemoryDma` sub-descriptors walk a page
+/// list, so aligning the allocation's base constrains page 0 and nothing else. There the
+/// 4 KiB pin is the only size whose congruence holds however the pages fell.
+///
+/// ⚠ **Both rows, because a one-way test would pass on a function that ignored its argument.**
 #[test]
-fn the_predicted_page_size_is_the_one_we_ask_for() {
-    use kayfabe_abi::bringup::{
-        nvos46_page_size_flag_for_store_slice, nvos46_store_slice_page_bytes,
-    };
+fn the_store_slice_page_pin_follows_the_reservations_actual_shape() {
+    use kayfabe_abi::bringup::nvos46_page_size_flag_for_store_slice;
     assert_eq!(
-        nvos46_page_size_flag_for_store_slice(),
+        nvos46_page_size_flag_for_store_slice(true),
+        0,
+        "a contiguous 1 GiB-aligned store is congruent at EVERY page size, so pinning 4 KiB \
+         would cost the framebuffer its TLB reach for nothing"
+    );
+    assert_eq!(
+        nvos46_page_size_flag_for_store_slice(false),
         NVOS46_FLAGS_PAGE_SIZE_4KB,
-        "the store-slice flag moved"
+        "a noncontiguous store gives no guarantee about a slice's physical page, so the \
+         small page table is the only size whose congruence holds"
     );
-    assert_eq!(
-        nvos46_store_slice_page_bytes(),
-        4096,
-        "the flag says 4 KiB and the byte count must say the same 4 KiB"
+    assert_ne!(
+        nvos46_page_size_flag_for_store_slice(true),
+        nvos46_page_size_flag_for_store_slice(false),
+        "★ NON-VACUITY: the two arms must differ, or the argument is being ignored"
     );
-}
-
-/// ★★★★★ **w755 — THE PREDICTOR AGREES WITH THE MODEL OF ogkm, ON EVERY BRANCH.**
-///
-/// `rm_would_place` is the production predicate; `rm_would_return` above is the independent
-/// transcription of ogkm's four lines written for the earlier test. ⊘ Checking one against
-/// the other is a differential, not a tautology: they were written separately, and the
-/// production one has to answer a three-way enum where the model answers `Option<u64>`.
-#[test]
-fn the_predictor_agrees_with_the_model_on_every_branch() {
-    use kayfabe_abi::bringup::{PlacementPrediction, rm_would_place};
-    let big = NVOS46_BIG_PAGE_BYTES;
-
-    let mut seen_honoured = 0;
-    let mut seen_relocate = 0;
-    let mut seen_refuse = 0;
-
-    for page in [0x1000_u64, big, 0x20_0000] {
-        for at in [
-            0_u64,
-            0x1000,
-            0x2000,
-            big,
-            big + 0x1000,
-            0x20_0000,
-            0x20_1000,
-        ] {
-            for phys in [0_u64, 0x1000, 0x3000, big, big + 0x2000, 0x20_0000 + 0x5000] {
-                let predicted = rm_would_place(at, phys, page);
-                let modelled = rm_would_return(at, phys, 0, page);
-                match (predicted, modelled) {
-                    (PlacementPrediction::Honoured, Some(g)) => {
-                        assert_eq!(g, at, "Honoured must mean the model returns `at`");
-                        seen_honoured += 1;
-                    }
-                    (PlacementPrediction::WouldRelocate { predicted: p }, Some(g)) => {
-                        assert_eq!(p, g, "the predicted VA must be the modelled one");
-                        assert_ne!(g, at, "a relocation that lands on `at` is not one");
-                        seen_relocate += 1;
-                    }
-                    (PlacementPrediction::WouldRefuse, None) => seen_refuse += 1,
-                    (p, m) => panic!(
-                        "predictor and model disagree at at={at:#x} phys={phys:#x} \
-                         page={page:#x}: {p:?} vs {m:?}"
-                    ),
-                }
-            }
-        }
-    }
-
-    // ★ NON-VACUITY, three ways. A predictor that answered one branch for everything would
-    // agree with a model that did the same, and both could be wrong together.
-    assert!(seen_honoured > 0, "no input was predicted Honoured");
-    assert!(seen_relocate > 0, "no input was predicted WouldRelocate");
-    assert!(seen_refuse > 0, "no input was predicted WouldRefuse");
-}
-
-/// ★★★ **The degenerate page size answers `WouldRefuse`, not garbage.**
-///
-/// ⊘ A `page_size` of 0 or a non-power-of-two would make `page_size - 1` a mask that means
-/// nothing, and the prediction would be a confident number computed from nonsense. Refusing
-/// is the only honest answer, and it is asserted rather than assumed.
-#[test]
-fn a_degenerate_page_size_is_refused_rather_than_computed_with() {
-    use kayfabe_abi::bringup::{PlacementPrediction, rm_would_place};
-    for bad in [0_u64, 3, 5, 6, 100, 0x1001] {
-        assert_eq!(
-            rm_would_place(0x1000, 0x1000, bad),
-            PlacementPrediction::WouldRefuse,
-            "page_size {bad:#x} is not a page size and must not be computed with"
-        );
-    }
-    // ... and a good one still answers normally, so the guard is not swallowing everything.
-    assert_eq!(
-        rm_would_place(0x1000, 0x1000, 0x1000),
-        PlacementPrediction::Honoured
-    );
-}
-
-/// ★★★★★ **THE WHOLE POINT, in one row: at 4 KiB the pre-flight assert NEVER fires.**
-///
-/// ⊘ If it could fire at the size the store-slice path actually asks for, the fix would be
-/// refusing real work rather than preventing a relocation. Swept over every (VA, phys) pair
-/// a page-table walk can produce — both 4 KiB-granular, which is all we are entitled to
-/// assume and all that is needed.
-#[test]
-fn at_four_kib_the_preflight_assert_can_never_refuse_a_walked_leaf() {
-    use kayfabe_abi::bringup::{
-        PlacementPrediction, nvos46_store_slice_page_bytes, rm_would_place,
-    };
-    let page = nvos46_store_slice_page_bytes();
-    for at_k in 0..64_u64 {
-        for phys_k in 0..64_u64 {
-            assert_eq!(
-                rm_would_place(at_k * 0x1000, phys_k * 0x1000, page),
-                PlacementPrediction::Honoured,
-                "at={:#x} phys={:#x} must be honoured at 4 KiB — if this ever fails the \
-                 store-slice fix is refusing work instead of preventing a relocation",
-                at_k * 0x1000,
-                phys_k * 0x1000
-            );
-        }
-    }
 }

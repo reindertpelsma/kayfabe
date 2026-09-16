@@ -777,7 +777,12 @@ pub const fn nvos46_page_size_flag(at: u64, offset: u64, len: u64) -> u32 {
 /// histogram showing ONE key. ⊘ Varied deltas would refute this reading, and that is the
 /// point of recording it before the boot.
 ///
-/// # ★ Why this is unconditionally `_4KB`
+/// # ★ Why this is `_4KB` ON THE NONCONTIGUOUS RESERVATION, and 'RM chooses' on the other
+///
+/// ⊘ w755c: this was unconditional. It is now conditioned on the reservation actually coming
+/// back contiguous and 1 GiB-aligned, because that is what makes `phys ≡ offset` true — see
+/// `RmConnection::reserve_gpga`. Pinning 4 KiB on a store where the congruence holds anyway
+/// costs TLB reach for nothing.
 ///
 /// ⊘ The term above vanishes at 4 KiB, and that — not conservatism — is the argument.
 /// `reservation_base` is RM's choice and **we never learn it**: `RmBackend::reserve_gpga`
@@ -799,90 +804,15 @@ pub const fn nvos46_page_size_flag(at: u64, offset: u64, len: u64) -> u32 {
 /// worse failure. [`nvos46_page_size_flag`] keeps serving callers whose object base IS the
 /// mapping base.
 #[must_use]
-pub const fn nvos46_page_size_flag_for_store_slice() -> u32 {
-    NVOS46_FLAGS_PAGE_SIZE_4KB
-}
-
-/// The page size **in bytes** that [`nvos46_page_size_flag_for_store_slice`] asks for.
-///
-/// ⊘⊘ Exists so a caller predicting RM's placement and the caller building the ioctl read
-/// the SAME number. `[campaign record]` a predicate and its subject drifting apart is this
-/// tree's most-repeated defect; two constants for one decision is how that starts. ⚠ Pinned
-/// equal by `the_predicted_page_size_is_the_one_we_ask_for`.
-#[must_use]
-pub const fn nvos46_store_slice_page_bytes() -> u64 {
-    4096
-}
-
-/// ★★★★★ **WHAT RM WILL DO WITH A FIXED PLACEMENT REQUEST — PREDICTED, SO IT CAN BE
-/// REFUSED BEFORE THE IOCTL RATHER THAN UNDONE AFTER IT.**
-///
-/// Constraint 28 today is a **post-mortem**: the map is issued, RM makes a real mapping at
-/// the wrong VA, and the refusal then tears it back down. That works, and it has two costs
-/// this predicate removes.
-///
-/// - **A mapping briefly exists at an address nobody will ever name again.** The teardown's
-///   own failure is swallowed deliberately (a second error there would replace the diagnosis
-///   with the cleanup's), so a failed teardown is a leak inside client B that nothing else
-///   frees.
-/// - **The log says what RM did, not what it was going to do.** A prediction that names
-///   `predicted` *before* the call turns "we asked and it went wrong" into "we knew it would
-///   and did not ask".
-///
-/// ⚠ **It does NOT replace the post-hoc assert.** `THE_CONSTRAINTS.md` §29: *an assert is
-/// retired only by re-asking its question in the new shape*. Both run, and a **disagreement
-/// between them is itself a finding** — it means this model of RM is wrong, which is a fact
-/// about the driver worth far more than the mapping that prompted it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PlacementPrediction {
-    /// RM will return exactly the requested VA.
-    Honoured,
-    /// ⊘ RM will **accept** and return a different VA — the silent relocation. Carries what
-    /// it will return, so a refusal can name it.
-    WouldRelocate {
-        /// The VA RM will answer with.
-        predicted: u64,
-    },
-    /// RM will refuse with `NV_ERR_INVALID_OFFSET`: the request names an intra-page offset
-    /// that is neither zero nor the physical side's.
-    WouldRefuse,
-}
-
-/// Predict [`PlacementPrediction`] for a FIXED map of physical address `phys` at VA `at`
-/// under `page_size`.
-///
-/// Models `[ogkm-580.159.04]` `virt_mem_allocator_gm107.c:726/:922/:1081/:1532` exactly:
-///
-/// ```text
-///   pageOffset = phys & (pageSize - 1)
-///   vaLo       = ALIGN_DOWN(at, pageSize)
-///   refuse iff (at - vaLo) != 0 && (at - vaLo) != pageOffset
-///   got        = vaLo + pageOffset
-/// ```
-///
-/// ⊘ `phys` is `reservation_base + offset` — RM turns the NVOS46 `offset` into a
-/// sub-descriptor (`virtual_mem.c:1323`), so the page offset it compares against is the
-/// **slice's** physical address, not the object's base.
-///
-/// # Panics
-/// Never. A `page_size` that is not a power of two answers [`PlacementPrediction::WouldRefuse`]
-/// rather than computing with a mask that means nothing.
-#[must_use]
-pub const fn rm_would_place(at: u64, phys: u64, page_size: u64) -> PlacementPrediction {
-    if page_size == 0 || !page_size.is_power_of_two() {
-        return PlacementPrediction::WouldRefuse;
-    }
-    let page_offset = phys & (page_size - 1);
-    let va_lo = at & !(page_size - 1);
-    let delta = at - va_lo;
-    if delta != 0 && delta != page_offset {
-        return PlacementPrediction::WouldRefuse;
-    }
-    let got = va_lo + page_offset;
-    if got == at {
-        PlacementPrediction::Honoured
+pub const fn nvos46_page_size_flag_for_store_slice(contiguous_and_aligned: bool) -> u32 {
+    if contiguous_and_aligned {
+        // ★★★ The strong reservation makes `phys = base + offset` with `base ≡ 0 (mod 1 GiB)`,
+        // so `phys ≡ offset (mod P)` for every page size, and the guest's own
+        // `at ≡ offset` closes the congruence. RM may pick any page it likes and still
+        // honour the VA ⇒ no pin, and the framebuffer keeps its TLB reach.
+        0
     } else {
-        PlacementPrediction::WouldRelocate { predicted: got }
+        NVOS46_FLAGS_PAGE_SIZE_4KB
     }
 }
 

@@ -13603,17 +13603,6 @@ fn main() -> std::process::ExitCode {
                 u8::try_from(route_k::role_i(role_gpu).clamp(0, 255)).unwrap_or(1),
             );
         }
-        // ★★★★★ w755 — THE PLACEMENT PROBE, dispatched here for the same reason the route-K
-        // roles are: it opens its own connection and must not fall through into the ladder's
-        // parser. ⊘ Needs NO guest, NO QEMU and NO KVM — a plain CUDA container answers it.
-        if argv.iter().any(|a| a == "--placement-probe") {
-            return std::process::ExitCode::from(
-                u8::try_from(
-                    kayfabe_isolate_host::placement_probe::placement_probe(role_gpu).clamp(0, 255),
-                )
-                .unwrap_or(1),
-            );
-        }
         if argv.iter().any(|a| a == "--route-k") {
             let skip = argv.iter().any(|a| a == "--route-k-skip-free");
             return std::process::ExitCode::from(

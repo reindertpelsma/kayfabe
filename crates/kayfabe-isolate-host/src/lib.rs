@@ -87,9 +87,6 @@ pub mod guestram;
 pub mod isolate;
 pub mod listobj;
 pub mod loopback;
-/// ★★★★★ w755 — the bare-metal placement differential. See the module docs for why it is
-/// not in [`rm`].
-pub mod placement_probe;
 pub mod planreactor;
 pub mod proto;
 pub mod rm;
