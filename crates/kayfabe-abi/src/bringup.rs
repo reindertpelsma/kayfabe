@@ -600,8 +600,34 @@ pub const NVOS46_FLAGS_PAGE_SIZE_4KB: u32 = 1 << 8;
 /// the right one and [`nvos46_page_size_flag`] must take the space's own value instead.
 pub const NVOS46_BIG_PAGE_BYTES: u64 = 64 * 1024;
 
-/// ★★★★★ **WHICH `NVOS46_FLAGS_PAGE_SIZE` A *FIXED* MAP AT `at` FOR `len` BYTES MUST
-/// CARRY — constraint 28, and it is a measurement, not a preference.**
+/// ★★★★★ **WHICH `NVOS46_FLAGS_PAGE_SIZE` A *FIXED* MAP OF `[offset, offset+len)` AT `at`
+/// MUST CARRY — constraint 28, and it is a measurement, not a preference.**
+///
+/// > ### ⊘⊘⊘ CORRECTED w755 — **THE PREDICATE QUANTIFIED OVER TWO OF THE THREE QUANTITIES
+/// > ### THAT DETERMINE IT, AND THE THIRD ONE ARRIVED WITH THE SINGLE STORE.**
+/// >
+/// > This function took `(at, len)`. The argument below — *"a large leaf is necessarily at a
+/// > large-aligned VA, so it can be served by a big page at its own address and needs no
+/// > flag"* — is sound **for a dedicated leaf**, whose physical base is the allocation's own
+/// > base and is therefore aligned by construction. It is **false for a slice**: the single
+/// > store maps `[offset, offset+len)` of ONE 11 904 MiB object, and a 64 KiB PTE needs the
+/// > **physical** side 64 KiB-aligned too.
+/// >
+/// > ⚠ A guest's VA alignment and its frame alignment are **independent**. `at` 64 KiB-aligned
+/// > with `offset` only 4 KiB-aligned is not a corner case — it is the ordinary shape of a
+/// > guest framebuffer run — and in exactly that case the old predicate returned `0`
+/// > (*"RM chooses"*), RM chose a big page, could not honour `dmaOffset`, **aligned it down
+/// > and answered `NV_OK`**, and constraint 28 refused the relocation.
+/// >
+/// > ⇒ `[measured w753, split-ownership boot]` `map_refused=2154`. ⚠ **Attributed by
+/// > mechanism, not yet by a boot**: the identity of the refusal is measured (constraint 28,
+/// > via the w755 wire repair), and this is the mechanism that produces it at this rate. The
+/// > confirming row is the `refusals=[…]` histogram showing `want`/`got` deltas **under
+/// > 64 KiB** with `want` big-aligned. Recorded as the ranked hypothesis until that row.
+/// >
+/// > ★ The class: **a correct rule whose premise changed underneath it.** Nothing was wrong
+/// > when it was written and nothing edited it; the single store made a third quantity
+/// > load-bearing, and a predicate cannot notice that its own subject grew.
 ///
 /// `[measured w744, GA106, driver 580.126.20, `traces/w744_b1d_probe/`]`
 /// `NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE` makes `dmaOffset` an `[IN]` — and RM **still**
@@ -628,14 +654,22 @@ pub const NVOS46_BIG_PAGE_BYTES: u64 = 64 * 1024;
 /// unbuilt) run publisher holds. ⊘ The two agree by construction — the coalescer never
 /// emits a 64 KiB-class run at a VA that is not 64 KiB-aligned — so this is the same rule
 /// read off the numbers that are actually in hand.
+/// ⊘⊘ **w755: `(at, len)` is now `(at, offset, len)` — see the correction at the top. The
+/// sentence above is still the right argument; it was applied to a quantity list that was
+/// complete for a leaf and short by one for a slice.**
 ///
 /// ⊘ `PAGE_SIZE_DEFAULT` is `0`, i.e. *"RM chooses"*, and is returned deliberately rather
 /// than a transcribed `_BIG`: the only member of this field this crate has read the header
 /// for is `_4KB`, and naming a value we have not transcribed would be a guess wearing a
 /// constant's clothes.
 #[must_use]
-pub const fn nvos46_page_size_flag(at: u64, len: u64) -> u32 {
-    if at % NVOS46_BIG_PAGE_BYTES == 0 && len % NVOS46_BIG_PAGE_BYTES == 0 {
+pub const fn nvos46_page_size_flag(at: u64, offset: u64, len: u64) -> u32 {
+    // ⊘ ALL THREE. A big page needs the VA, the LENGTH and the PHYSICAL BASE big-aligned;
+    // the physical base of a slice is the reservation's base (big-aligned) plus `offset`.
+    if at % NVOS46_BIG_PAGE_BYTES == 0
+        && offset % NVOS46_BIG_PAGE_BYTES == 0
+        && len % NVOS46_BIG_PAGE_BYTES == 0
+    {
         0
     } else {
         NVOS46_FLAGS_PAGE_SIZE_4KB

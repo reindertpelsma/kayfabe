@@ -1063,7 +1063,7 @@ mod birth_conn {
             // `DMA_OFFSET_FIXED_TRUE` alone is not address identity: RM still picks a page
             // size, a big page cannot start at a 4 KiB boundary, so RM aligns the request
             // DOWN and answers `NV_OK`.
-            let page_size = kayfabe_abi::bringup::nvos46_page_size_flag(at, len);
+            let page_size = kayfabe_abi::bringup::nvos46_page_size_flag(at, offset, len);
             Nvos46Parameters {
                 h_client: self.handed.root(),
                 h_device: self.device,
@@ -3832,7 +3832,7 @@ impl RmConnection {
         // named the bit itself (`map_local_at_with_flags`) keeps naming it, and the two can
         // only agree.
         let page_size = match at {
-            Some(a) => kayfabe_abi::bringup::nvos46_page_size_flag(a, len),
+            Some(a) => kayfabe_abi::bringup::nvos46_page_size_flag(a, offset, len),
             None => 0,
         };
         Nvos46Parameters {
