@@ -423,6 +423,16 @@ come back set. **INFERRED** only that no later code clears the bit before copy-o
 > `kernel_channel.c:2342-2356` is not wrong — that arm really is gated on `ADDR_SYSMEM` (or
 > `ADDR_FBMEM` under full SR-IOV), and a PF host is neither. So **something else zeroes it**,
 > and this probe does not say what. Recorded as open rather than explained away.
+> ★★ **One thing the same run already narrows, for free:** the scrub is **targeted at the USERD
+> extent, not at the object**. The same store object carries the GPFIFO entry at offset `0` and
+> the pushbuffer at `0x2000`, both written before the birth, and the channel then **fetched that
+> entry and executed that pushbuffer** (`K_CHANNEL_LIVE=1`, the release semaphore landed). Those
+> bytes survived; only the 512 B at `userdOffset` did not — which is exactly
+> `kfifoSetupUserD_HAL`'s shape (`kernel_fifo_gm107.c:797-808`, 512 B).
+> ⇒ the open question is **not** *"what wrote zeros"* but *"which arm reaches
+> `kfifoSetupUserD_HAL` on a PF host with the open module"*, given that this section's guard
+> reads `ADDR_SYSMEM || (ADDR_FBMEM && bFullSriov)` and a PF host is neither.
+>
 > ⊘ Same class this campaign keeps paying for: *a correct reading of one code path is not a
 > statement about the observable end state.*
 

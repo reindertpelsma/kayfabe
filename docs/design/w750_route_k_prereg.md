@@ -302,6 +302,17 @@ re-point **before the first doorbell** or it wipes the guest's cursor mid-flight
 not wrong about the CPU-RM arm, so **something else does the scrub** and this probe does not say
 what. That is the next question, not a settled one.
 
+★★ **And one thing the run already narrows it to, for free.** The scrub is **targeted at the
+USERD extent, not at the object.** The same store carries the GPFIFO entry at offset `0` and the
+pushbuffer at `0x2000`, both written before the birth — and `K_CHANNEL_LIVE=1` with
+`K_SEM=0x57500001` means hardware **fetched that entry and executed that pushbuffer** after the
+birth. ⇒ those bytes survived; only the 512 B at `userdOffset` did not. That is exactly
+`kfifoSetupUserD_HAL`'s shape (`kernel_fifo_gm107.c:797-808`, 512 B).
+⇒ **The open question is narrowed from *"what wrote zeros"* to *"which arm reaches
+`kfifoSetupUserD_HAL` on a PF host with the open module"*, given that
+`kernel_channel.c:2342-2356`'s guard reads `ADDR_SYSMEM || (ADDR_FBMEM && bFullSriov)` and a PF
+host is neither. ⊘ Still not settled — but it is one question now, not two.
+
 ## ⊘ TWO HARNESS DEFECTS THE CONTROLS CAUGHT — both would have produced a false report
 
 1. **Row 2's first instrument could not see a channel at all.** `GET_PIDS` with the GPFIFO class
