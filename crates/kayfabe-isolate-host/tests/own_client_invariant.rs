@@ -261,7 +261,23 @@ fn own_client_module_span(code: &str) -> (usize, usize) {
 /// Both are an [`OwnClient`] unwrapped at the ABI boundary. That the list is short is the
 /// point: any *other* expression is a client this code did not mint, or cannot prove it
 /// minted, and either way it is the thing F11 says must not become possible.
-const APPROVED_RHS: &[&str] = &["self.client.raw()", "self.conn.client.raw()"];
+/// ## ⊘⊘ THIRD FORM ADDED w753 — CONSTRAINT 32, AND IT IS STILL AN `OwnClient`
+///
+/// `birth.raw_for_surrender()` is a client **this task minted** — F11's question, *"did we
+/// mint this?"*, answers **yes** — being handed to another process. It is an exit of exactly
+/// `raw()`'s kind, spelled differently so that the gate, and a reader, can see at the call
+/// site that the handle is leaving. ⚠ Pinned to **one** call site by
+/// `the_surrender_exit_has_exactly_one_call_site`, for the reason the dup gate pins its
+/// second escape: an exception whose whole defence is that it is countable has to stay
+/// countable.
+///
+/// ⊘ It is a **literal spelling** like the other two, not a type test — this list has always
+/// been literal spellings, and that is what makes it fail closed.
+const APPROVED_RHS: &[&str] = &[
+    "self.client.raw()",
+    "self.conn.client.raw()",
+    "birth.raw_for_surrender()",
+];
 
 /// ★★★★★ **CONSTRAINT 26 — THE ONE SCOPED EXCEPTION, AND IT IS A TYPE RATHER THAN A STRING.**
 ///
@@ -792,6 +808,47 @@ fn there_are_exactly_two_dup_object_escapes_and_the_second_is_in_birth_conn() {
          the count at two while losing everything that makes the second one safe: its `hRoot` \
          is no longer required to be a `HandedClient`, and the scoped F11 arm no longer \
          covers it."
+    );
+}
+
+/// ★★★ **CONSTRAINT 32 — THE SURRENDER EXIT IS ONE CALL SITE WIDE.**
+///
+/// [`APPROVED_RHS`] grew a third form, and the whole argument for that being a scoping
+/// rather than a hole is that it names **one** place: the per-proc isolate minting a birth
+/// client it immediately gives away. A second caller would be a second place a client handle
+/// leaves this process, and *"we minted it"* stops being a sufficient answer the moment
+/// there is more than one story about where it went.
+///
+/// ⊘ Non-vacuity is the same assertion: **exactly** one, never *"at most"*. A zero would mean
+/// the mint is gone and the approved form is gating nothing.
+#[test]
+fn the_surrender_exit_has_exactly_one_call_site() {
+    let code = rm_rs_code_only();
+    let calls = code.matches("birth.raw_for_surrender()").count();
+    assert_eq!(
+        calls, 1,
+        "★★★ CONSTRAINT 32 — `raw_for_surrender()` has {calls} call site(s) in rm.rs, \
+         expected exactly 1 (`HostRmBackend::mint_birth_client`). Zero means the mint is gone \
+         and `APPROVED_RHS`'s third form is gating nothing; more than one means a client \
+         handle leaves this process from somewhere nobody argued about."
+    );
+    let defs = code.matches("fn raw_for_surrender(self) -> u32 {").count();
+    assert_eq!(
+        defs, 1,
+        "★★★ CONSTRAINT 32 — `raw_for_surrender` has {defs} definition(s), expected 1. A \
+         second one on another type would make the approved spelling reachable from a value \
+         nobody minted."
+    );
+    let (start, end) = own_client_module_span(&code);
+    let at = code
+        .find("fn raw_for_surrender(self) -> u32 {")
+        .expect("checked above");
+    assert!(
+        at > start && at < end,
+        "★★★ CONSTRAINT 32 — `raw_for_surrender` is no longer inside `mod own_client`. Its \
+         entire safety argument is that it can only be reached from an `OwnClient`, which \
+         `own_client_is_unforgeable` checks separately; outside that module it is a `u32` \
+         accessor on anything."
     );
 }
 

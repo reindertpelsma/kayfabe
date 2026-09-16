@@ -329,6 +329,24 @@ mod own_client {
         pub(super) fn raw(self) -> u32 {
             self.0
         }
+
+        /// ★★★★★ **CONSTRAINT 32 — THE HANDLE LEAVING THIS PROCESS, NAMED AS SUCH.**
+        ///
+        /// Route K has a per-proc isolate mint a client on a **second** `/dev/nvidiactl` and
+        /// hand both the handle and the descriptors to the scratchpad, keeping nothing. The
+        /// value is still one **we** minted — F11's question, *"did we mint this?"*, answers
+        /// **yes** — so this is an exit of exactly [`OwnClient::raw`]'s kind.
+        ///
+        /// ⊘⊘ **So why a second accessor at all?** Because F11's gate is textual and
+        /// deliberately literal, and `raw()` on this path would be indistinguishable from
+        /// `raw()` on the connection's own client — while the two mean opposite things about
+        /// what happens next. A reader (and the gate) can see *"this handle is being
+        /// surrendered"* only if the call site says so. ⚠ The gate pins it to **one** call
+        /// site for the reason the dup gate pins its second escape: an exception whose whole
+        /// defence is that it is countable has to stay countable.
+        pub(super) fn raw_for_surrender(self) -> u32 {
+            self.0
+        }
     }
 }
 
@@ -1903,6 +1921,16 @@ pub const FD_ON_A_BYTES_ONLY_REQUEST: u32 = 0x4B54;
 /// corruption; the VMM mints one per proc by construction, so this is a defect and not a
 /// transient.
 pub const BIRTH_CLIENT_ALREADY_HELD: u32 = 0x4B57;
+
+/// ★★★★★ **CONSTRAINT 32 — the SCRATCHPAD tried to mint a birth client.**
+///
+/// ⊘⊘ The direction is the whole claim. RM stamps `ProcessID` from the **creating** task
+/// (`client.c:112`), so a birth client minted by the scratchpad carries the **scratchpad's**
+/// identity for its whole life — every channel born in it, every `GET_PIDS` that names it —
+/// and every later stamp would be wrong while every ioctl succeeded. It is refused here
+/// rather than trusted to the call graph, because *"which task ran it"* is not something a
+/// handle can be asked afterwards.
+pub const BIRTH_CLIENT_NOT_A_PER_PROC_ISOLATE: u32 = 0x4B58;
 
 /// How long [`RmBackend::ce_copy`] waits for the copy engine's own release semaphore
 /// before calling the copy failed.
@@ -6471,6 +6499,99 @@ impl RmBackend for HostRmBackend {
             // spelling of "our own client" is a second thing a reader has to verify. See
             // `mod own_client`.
             client: self.conn.client.raw(),
+        })
+    }
+
+    /// ★★★★★ **CONSTRAINT 32 STEP 1 — THE PER-PROC ISOLATE MINTS THE BIRTH CLIENT.**
+    ///
+    /// The one verb on the **other** side of route K, and the only one that must run in
+    /// **I**: open a second `/dev/nvidiactl` and its per-GPU node, bind them, and allocate an
+    /// `NV01_ROOT_CLIENT` on them.
+    ///
+    /// ★★★ **THE WHOLE IDENTITY CLAIM IS THE TASK THAT RUNS THIS LINE.** RM stamps
+    /// `pClient->ProcID` from the **creating** task (`client.c:112`), so the client this
+    /// returns carries **this isolate's** process identity for its entire life, whoever
+    /// drives it afterwards. ⇒ it may not be minted by the scratchpad, by the VMM, or on a
+    /// worker borrowed from another proc's pool — and because *"which task ran it"* is not
+    /// something a handle can be asked afterwards, the direction is enforced by this verb
+    /// existing **only here** and by `ScratchpadRole::of` refusing it below.
+    ///
+    /// ⊘ **A SECOND `nvidiactl`, not this connection's own.** A client is bound to the
+    /// `struct file` (`g_system_nvoc.c:104`, STRICT default), and `SCM_RIGHTS` carries a
+    /// `struct file`. Minting B on the connection's existing `ctl` would hand the scratchpad
+    /// a descriptor that also reaches **every object this isolate owns** — the entire
+    /// per-proc namespace, which is the opposite of what route K is for.
+    ///
+    /// ⚠ **The caller must close its copies.** This returns owned descriptors and keeps
+    /// none: the moment they cross, only the scratchpad can reach B, which is what makes
+    /// `FdOrigin::BirthClient`'s refusal of the minter meaningful rather than decorative.
+    ///
+    /// # Errors
+    /// [`BIRTH_CLIENT_NOT_A_PER_PROC_ISOLATE`] if this is the scratchpad; otherwise whatever
+    /// the opens, the bind or the root allocation refused.
+    fn mint_birth_client(&mut self) -> Result<kayfabe_isolate::MintedBirthClient, RmError> {
+        // ★★★ THE DIRECTION, ASSERTED RATHER THAN ASSUMED — and it is constraint 30's
+        // argument applied to the client instead of the VA space. `device.rs`'s hand-over
+        // already says it for the space: *"the space must be created by the per-proc isolate
+        // and lent UP to the scratchpad, never created by the scratchpad and lent DOWN."*
+        // A birth client minted here would carry the SCRATCHPAD's `ProcessID`, which is the
+        // one thing route K exists to prevent, and every later stamp would be wrong while
+        // every ioctl succeeded.
+        if ScratchpadRole::of(self.id).is_some() {
+            return Err(RmError::Other(BIRTH_CLIENT_NOT_A_PER_PROC_ISOLATE));
+        }
+        let ctl = CharDevice::openat(&self.conn.dev, c"nvidiactl")
+            .map_err(|e| ioctl_error(&e))?;
+        let name = CString::new(format!("nvidia{}", self.conn.gpu_index))
+            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let node = CharDevice::openat(&self.conn.dev, &name).map_err(|e| ioctl_error(&e))?;
+        // Bind the device node to the new control session. Without it every later escape on
+        // that session answers `0x23 INVALID_CLIENT` — a refusal that reads like a
+        // permissions problem and is a missing binding.
+        let mut reg = [0u8; 4];
+        RegisterFd {
+            ctl_fd: ctl.fd_number(),
+        }
+        .encode_into(&mut reg)
+        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_REGISTER_FD, reg.len())
+            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        node.ioctl(req, &mut reg, &mut [])
+            .map_err(|e| ioctl_error(&e))?;
+        // ★★★★★ **THE ROOT IS ALLOCATED BY `mod own_client`'s ONE CONSTRUCTOR, NOT BY A
+        // SECOND COPY OF IT HERE.**
+        //
+        // ⊘ A hand-rolled `NV01_ROOT_CLIENT` alloc is what I wrote first, and F11's gate
+        // caught it: `h_root: 0` is legal *inside* `mod own_client` and nowhere else,
+        // deliberately, because *"the one escape with no owning client"* is a claim that
+        // must have exactly one site. Reusing the constructor is not tidiness — it keeps that
+        // claim true, and it means this client is an `OwnClient`: F11's question, *"did we
+        // mint this?"*, answers **yes** for the birth client too.
+        //
+        // ⚠ `allocate_root` takes `&CharDevice` rather than a connection precisely so it can
+        // mint a client for a session no `RmConnection` will ever be built over — which is
+        // this one.
+        let birth = OwnClient::allocate_root(&ctl)?;
+        if birth.raw() == 0 {
+            // ⊘ A zero root is the one value RM interprets rather than refuses, so it is
+            // refused HERE. An `Ok(0)` would cross the socket and land as an `hRoot` of 0 on
+            // every escape the scratchpad afterwards issues.
+            return Err(RmError::Other(BIRTH_CLIENT_NULL_HANDLE));
+        }
+        kayfabe_util::lock_safe_eprintln!(
+            "kayfabe-isolate-host: CONSTRAINT-32 BIRTH-CLIENT MINTED client={:#010x} by {:?} \
+             on a SECOND nvidiactl ⇒ RM stamped ProcessID from THIS task (client.c:112), and \
+             this isolate keeps no copy of the descriptors",
+            birth.raw(),
+            self.id,
+        );
+        Ok(kayfabe_isolate::MintedBirthClient {
+            // ⊘ `raw_for_surrender`, not `raw`: same number, and the call site is where a
+            // reader — and F11's gate — can see that this handle is LEAVING the process.
+            client: birth.raw_for_surrender(),
+            isolate_client: self.conn.client.raw(),
+            ctl: ctl.surrender(),
+            node: node.surrender(),
         })
     }
 

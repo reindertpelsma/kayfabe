@@ -502,6 +502,19 @@ impl CharDevice {
         CharDevice { fd }
     }
 
+    /// ★★★ **Give up the descriptor** — the exact mirror of [`CharDevice::adopt`], for the
+    /// one caller that must hand it onward.
+    ///
+    /// ⊘ Added for constraint 32's route K, where a per-proc isolate opens a control node,
+    /// issues a handful of ioctls on it, and then **surrenders it entirely** so that only
+    /// the scratchpad can reach the client minted on it. ⚠ That last clause is a security
+    /// property, not plumbing: `adopt` + `surrender` is how a descriptor can be *used here*
+    /// and *owned there* without either side holding a second reference.
+    #[must_use]
+    pub fn surrender(self) -> OwnedFd {
+        self.fd
+    }
+
     /// The descriptor **number**, for an ioctl payload that names another descriptor.
     ///
     /// NVIDIA's `NV_ESC_REGISTER_FD` binds a per-GPU node to the control node by passing

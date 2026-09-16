@@ -999,6 +999,38 @@ pub struct AdoptedGuestUserd {
 /// ⚠ `client` is the per-proc isolate's own RM client. It leaves that isolate deliberately,
 /// and it is the only handle in the system that does. See `kayfabe_isolate_host::rm`'s
 /// `handed_vaspace` module for what receives it and what that does and does not prove.
+/// ★★★★★ **CONSTRAINT 32 — A BIRTH CLIENT AND THE DESCRIPTORS THAT REACH IT.**
+///
+/// [`RmBackend::mint_birth_client`]'s answer. ⊘ **Not three returns and not a bare handle**,
+/// for [`BareVaSpace`]'s reason one step further along: a client handle without the
+/// `struct file` its session is bound to reaches **no RM at all** (`g_system_nvoc.c:104`,
+/// STRICT default), so carrying them apart would let a caller hold a name it believes is a
+/// capability.
+///
+/// ⚠ **The descriptors are OWNED and the isolate keeps no copy.** That is the difference
+/// between route K and every rejected alternative: after this value is built, the minting
+/// isolate cannot reach the client it just created. `isolate_client` travels with it because
+/// the far side files the birth client under it — it is the key
+/// [`RmBackend::adopt_vaspace`] will present, and it is known only here and in the VMM.
+#[derive(Debug)]
+pub struct MintedBirthClient {
+    /// The `NV01_ROOT_CLIENT` RM assigned, in **this isolate's** process identity.
+    ///
+    /// ⊘ A `u32`, which is what an RM handle is, and **not** the `u64` the wire carries. The
+    /// widening happens at the encoder, where every other handle's does; carrying it widened
+    /// through this struct would make the one call site that fills it read as an arithmetic
+    /// expression rather than as the single approved spelling F11's gate pins.
+    pub client: u32,
+    /// This isolate's **own** client `A` — the namespace whose VA space the scratchpad will
+    /// dup out of, and the key the birth client is filed under.
+    pub isolate_client: u32,
+    /// The second `/dev/nvidiactl`. Every escape against `client` is issued on this.
+    pub ctl: std::os::fd::OwnedFd,
+    /// The per-GPU node bound to it by `NV_ESC_REGISTER_FD`. ⊘ Carried and never used:
+    /// closing it takes the session's GPU binding with it.
+    pub node: std::os::fd::OwnedFd,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BareVaSpace {
     /// The `FERMI_VASPACE_A`, with **no** `NV01_MEMORY_VIRTUAL` range over it.
@@ -1139,6 +1171,27 @@ pub trait RmBackend: Send + Sync {
     /// not the scratchpad.
     fn adopt_vaspace(&mut self, client: u32, space: u32) -> Result<HostHandle, RmError> {
         let _ = (client, space);
+        Err(RmError::Other(0x56))
+    }
+
+    /// ★★★★★ **CONSTRAINT 32 STEP 1 — MINT A BIRTH CLIENT AND SURRENDER ITS DESCRIPTORS.**
+    ///
+    /// Run **in the per-proc isolate**, because RM stamps `pClient->ProcID` from the
+    /// **creating** task (`client.c:112`) and that stamp is the whole of route K's isolation
+    /// claim. ⇒ this verb may not be served by the scratchpad, and the host implementation
+    /// refuses it there by name rather than trusting the call graph.
+    ///
+    /// ⚠ **The caller must close nothing and forward everything.** The returned descriptors
+    /// are the isolate's only reference to the session that reaches this client, and they
+    /// leave with the value. What makes
+    /// [`kayfabe_isolate_host::fdcross::FdOrigin::BirthClient`]'s refusal of the minter
+    /// meaningful rather than decorative is that after this call the minter genuinely
+    /// cannot get back in.
+    ///
+    /// # Errors
+    /// A named refusal on the scratchpad and on any backend with no RM connection; whatever
+    /// RM refused the opens, the bind or the root allocation with.
+    fn mint_birth_client(&mut self) -> Result<MintedBirthClient, RmError> {
         Err(RmError::Other(0x56))
     }
 

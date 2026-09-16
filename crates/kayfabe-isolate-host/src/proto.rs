@@ -606,6 +606,14 @@ pub enum Request {
         /// The bare `FERMI_VASPACE_A` this isolate handed out, raw.
         space: u64,
     },
+    /// ★★★★★ **CONSTRAINT 32 STEP 1, tag 40** — [`kayfabe_isolate::RmBackend::mint_birth_client`].
+    ///
+    /// ⊘ It names nothing: the isolate mints the client in **its own** process identity and
+    /// there is nothing a caller could steer. ★ Its REPLY carries **two** descriptors up —
+    /// the first reply in this protocol to carry more than one — and that is why
+    /// [`crate::isolate::ProxyRmBackend`] reads it with its own allowance rather than
+    /// reusing the export path's `1`.
+    MintBirthClient,
     /// ★★★★★ **CONSTRAINT 32 — ROUTE K, tag 39. THE ONE REQUEST THAT CARRIES DESCRIPTORS
     /// DOWN**, and the only one there is ever expected to be.
     ///
@@ -811,6 +819,21 @@ pub enum Reply {
         /// Where RM actually placed it. ⊘ Carried rather than assumed equal to the request:
         /// the parent's own placement check is the point.
         host_va: u64,
+    },
+    /// ★★★★★ **CONSTRAINT 32 STEP 1 — the answer to a [`Request::MintBirthClient`].**
+    ///
+    /// ⚠ **The FIRST reply in this protocol that carries TWO descriptors**, and they are not
+    /// interchangeable: the control node is what an escape is issued on, the per-GPU node is
+    /// what keeps the session's GPU binding alive. They ride in that order and the reader's
+    /// allowance is `2` rather than the export path's `1`.
+    ///
+    /// ⊘ The scalars are a NAME and the descriptors are the CAPABILITY — a client handle
+    /// with no `struct file` bound to its session reaches no RM at all.
+    MintedBirthClient {
+        /// The `NV01_ROOT_CLIENT` RM assigned, in the **minting isolate's** identity.
+        client: u64,
+        /// The minting isolate's own client `A` — the key the far side files it under.
+        isolate_client: u32,
     },
     /// The verb failed.
     Failed(WireError),
@@ -1142,6 +1165,7 @@ impl Envelope {
                 out.push(38);
                 out.extend_from_slice(&space.to_le_bytes());
             }
+            Request::MintBirthClient => out.push(40),
             Request::AdoptBirthClient {
                 client,
                 isolate_client,
@@ -1479,6 +1503,7 @@ impl Envelope {
             38 => Request::VaSpaceHandover {
                 space: c.u64("vaspace handover space")?,
             },
+            40 => Request::MintBirthClient,
             39 => Request::AdoptBirthClient {
                 client: c.u64("birth client handle")?,
                 isolate_client: c.u32("birth client isolate client")?,
@@ -1733,6 +1758,14 @@ impl Reply {
                 out.push(14);
                 out.extend_from_slice(&mb.to_le_bytes());
             }
+            Reply::MintedBirthClient {
+                client,
+                isolate_client,
+            } => {
+                out.push(17);
+                out.extend_from_slice(&client.to_le_bytes());
+                out.extend_from_slice(&isolate_client.to_le_bytes());
+            }
             Reply::BareVaSpace { space, client } => {
                 out.push(16);
                 out.extend_from_slice(&space.to_le_bytes());
@@ -1822,6 +1855,10 @@ impl Reply {
             4 => Reply::Payload(c.blob("payload")?),
             5 => Reply::Va(c.u64("va")?),
             14 => Reply::Megabytes(c.u64("reservable mb")?),
+            17 => Reply::MintedBirthClient {
+                client: c.u64("minted birth client")?,
+                isolate_client: c.u32("minted birth isolate client")?,
+            },
             16 => Reply::BareVaSpace {
                 space: c.u64("bare vaspace space")?,
                 client: c.u32("bare vaspace client")?,
@@ -2049,6 +2086,7 @@ mod tests {
                 at: 0x0000_0090_0000_1000,
             },
             Request::VaSpaceHandover { space: 0xCAFE_0006 },
+            Request::MintBirthClient,
             Request::AdoptBirthClient {
                 client: 0xCAFE_0039,
                 isolate_client: 0xC1D0_0002,
@@ -2309,6 +2347,7 @@ mod tests {
             Request::UnmapStoreSlice { .. } => "UnmapStoreSlice",
             Request::VaSpaceHandover { .. } => "VaSpaceHandover",
             Request::AdoptBirthClient { .. } => "AdoptBirthClient",
+            Request::MintBirthClient => "MintBirthClient",
             Request::AllocChannel { .. } => "AllocChannel",
             Request::AllocChannelDeclared { .. } => "AllocChannelDeclared",
             Request::AllocEngineObject { .. } => "AllocEngineObject",
@@ -2350,6 +2389,7 @@ mod tests {
                 "UnmapStoreSlice",
                 "VaSpaceHandover",
                 "AdoptBirthClient",
+                "MintBirthClient",
                 "AllocVidmem",
                 "CeCopy",
                 "CudaWalkReport",
@@ -2404,6 +2444,10 @@ mod tests {
             Reply::BareVaSpace {
                 space: 0xCAFE_0006,
                 client: 0xC1DD_3C70,
+            },
+            Reply::MintedBirthClient {
+                client: 0xCAFE_0040,
+                isolate_client: 0xC1DD_3C71,
             },
             Reply::DeviceViewNode {
                 // ⊘ w734: a value that is NOT any of the other three, so a codec that

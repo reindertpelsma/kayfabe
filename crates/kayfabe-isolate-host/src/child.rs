@@ -632,9 +632,16 @@ fn worker_loop(
         // `sendmsg` the body does. Only an export reply ever carries one; every other reply
         // takes the plain writer, so the fd-carrying path cannot be reached by a verb that
         // was not asked for a backing.
-        let wrote = match &carried {
-            Some(fd) => write_frame_with_fds(sock.as_fd(), &reply.encode(), &[fd.as_fd()]).is_ok(),
-            None => write_frame(&mut sock, &reply.encode()).is_ok(),
+        // ★★ A descriptor rides the frame's FIRST byte, so it goes on the same single
+        // `sendmsg` the body does. ⊘ **A `Vec` since w753, not an `Option`**: constraint
+        // 32's mint answers with TWO descriptors (the control node and the per-GPU node),
+        // and they are not interchangeable — the order here is the order the far side
+        // unpacks them in, which is why they travel as a sequence and not as two fields.
+        let wrote = if carried.is_empty() {
+            write_frame(&mut sock, &reply.encode()).is_ok()
+        } else {
+            let borrows: Vec<_> = carried.iter().map(std::os::fd::AsFd::as_fd).collect();
+            write_frame_with_fds(sock.as_fd(), &reply.encode(), &borrows).is_ok()
         };
         if !wrote {
             return;
@@ -680,6 +687,37 @@ const REQUEST_MAX_FDS: usize = 2;
 /// ever lent onward it meets the one-target rule rather than `FdOrigin::Isolate`'s. It is
 /// recorded here — at adoption — because that is the only moment the information exists: a
 /// later caller has an `OwnedFd` and no way to recover where it came from.
+/// ★★★★★ **CONSTRAINT 32 STEP 1 — MINT A BIRTH CLIENT IN *THIS* ISOLATE AND SEND ITS
+/// DESCRIPTORS UP.**
+///
+/// ⊘ **The direction is the claim, and this is the process that has to run it.** RM stamps
+/// `pClient->ProcID` from the **creating task** (`client.c:112`), so the identity every
+/// object later born in this client carries is *this child's*. The backend refuses the verb
+/// on the scratchpad by name (`BIRTH_CLIENT_NOT_A_PER_PROC_ISOLATE`) rather than trusting
+/// that nobody will ask.
+///
+/// ⚠ **Both descriptors leave and this process keeps neither.** That is what makes route
+/// K's isolation claim true rather than aspirational: after this reply the minting isolate
+/// cannot reach the client it just created, which is exactly what
+/// `FdOrigin::BirthClient`'s refusal of the minter assumes.
+fn mint_birth_client(rm: &mut dyn RmBackend) -> (Reply, Vec<OwnedFd>) {
+    match rm.mint_birth_client() {
+        Ok(m) => (
+            Reply::MintedBirthClient {
+                // ⊘ Widened at the ENCODER, where every other handle's is. The value is a
+                // `u32` everywhere it means anything.
+                client: u64::from(m.client),
+                isolate_client: m.isolate_client,
+            },
+            // ⊘ ORDER IS PROTOCOL: control node first, per-GPU node second. The far side
+            // unpacks positionally, and the two are not interchangeable — one is what an
+            // escape is issued on, the other is what keeps the session's GPU binding alive.
+            vec![m.ctl, m.node],
+        ),
+        Err(e) => (failed(e), Vec::new()),
+    }
+}
+
 fn adopt_birth_client(
     rm: &mut dyn RmBackend,
     client: u64,
@@ -687,7 +725,7 @@ fn adopt_birth_client(
     minted_by_proc: u32,
     fds: Vec<OwnedFd>,
     id: IsolateId,
-) -> (Reply, Option<OwnedFd>) {
+) -> (Reply, Vec<OwnedFd>) {
     let Ok([ctl, node]) = <[OwnedFd; 2]>::try_from(fds) else {
         kayfabe_util::lock_safe_eprintln!(
             "kayfabe-isolate-host: ⊘⊘⊘ CONSTRAINT 32 REFUSED — AdoptBirthClient arrived \
@@ -698,7 +736,7 @@ fn adopt_birth_client(
         );
         return (
             failed(RmError::Other(crate::rm::BIRTH_CLIENT_NO_DESCRIPTORS)),
-            None,
+            Vec::new(),
         );
     };
     if client == 0 || isolate_client == 0 {
@@ -708,7 +746,7 @@ fn adopt_birth_client(
              instead of refusing, and a null `A` would file this birth client under a key no \
              `AdoptVaSpace` can ever present."
         );
-        return (failed(RmError::Other(crate::rm::BIRTH_CLIENT_NULL_HANDLE)), None);
+        return (failed(RmError::Other(crate::rm::BIRTH_CLIENT_NULL_HANDLE)), Vec::new());
     }
     // ★★★★★ **THE RECEIVER'S OWN REFUSAL, AND IT IS NOT THE SENDER'S RESTATED.**
     //
@@ -731,7 +769,7 @@ fn adopt_birth_client(
         );
         return (
             failed(RmError::Other(crate::rm::BIRTH_CLIENT_NOT_THE_SCRATCHPAD)),
-            None,
+            Vec::new(),
         );
     }
     // ⊘ The isolate the descriptors are attributed to. The GPU is THIS backend's own — a
@@ -757,7 +795,7 @@ fn adopt_birth_client(
             );
             return (
                 failed(RmError::Other(crate::rm::BIRTH_CLIENT_NOT_A_CHAR_DEVICE)),
-                None,
+                Vec::new(),
             );
         }
     };
@@ -768,8 +806,8 @@ fn adopt_birth_client(
         ctl.into_owned(),
         node.into_owned(),
     ) {
-        Ok(()) => (Reply::Unit, None),
-        Err(e) => (failed(e), None),
+        Ok(()) => (Reply::Unit, Vec::new()),
+        Err(e) => (failed(e), Vec::new()),
     }
 }
 
@@ -785,7 +823,7 @@ fn serve_one(
     exports: &ChildExports,
     fds: Vec<OwnedFd>,
     id: IsolateId,
-) -> (Reply, Option<OwnedFd>) {
+) -> (Reply, Vec<OwnedFd>) {
     // ★★★★★ **w753 / CONSTRAINT 32 — THE PER-VERB fd RULE, ENFORCED AFTER THE DECODE.**
     //
     // The reader's allowance is a constant because one reader serves every verb. This is
@@ -806,7 +844,7 @@ fn serve_one(
         );
         return (
             failed(RmError::Other(crate::rm::FD_ON_A_BYTES_ONLY_REQUEST)),
-            None,
+            Vec::new(),
         );
     }
     match request {
@@ -816,6 +854,11 @@ fn serve_one(
             isolate_client,
             minted_by_proc,
         } => adopt_birth_client(rm, client, isolate_client, minted_by_proc, fds, id),
+        // ★★★★★ **CONSTRAINT 32 STEP 1 — THE FIFTH DESCRIPTOR-CARRYING REPLY, AND THE FIRST
+        // THAT CARRIES TWO.** Intercepted here for the other four's reason exactly:
+        // `execute` is a pure `Request -> Reply` function and a resource has no place in
+        // twenty of its arms.
+        Request::MintBirthClient => mint_birth_client(rm),
         Request::ExportBacking {
             source,
             memory,
@@ -851,7 +894,7 @@ fn serve_one(
             len,
             write,
         } => export_device_view(rm, memory, offset, len, write != 0, exports),
-        other => (execute(rm, other), None),
+        other => (execute(rm, other), Vec::new()),
     }
 }
 
@@ -883,10 +926,10 @@ fn export_device_view(
     len: u64,
     write: bool,
     exports: &ChildExports,
-) -> (Reply, Option<OwnedFd>) {
+) -> (Reply, Vec<OwnedFd>) {
     let view = match rm.export_device_view(raw(memory), offset, len, write) {
         Ok(v) => v,
-        Err(e) => return (failed(e), None),
+        Err(e) => return (failed(e), Vec::new()),
     };
     // ⊘ `view.token` is the CHILD's index into its own table. The PARENT's token does not
     // come from here — it mints its own when it adopts the descriptor.
@@ -903,14 +946,14 @@ fn export_device_view(
                 offset: view.offset,
                 mmap_len: view.mmap_len,
             },
-            Some(fd),
+            vec![fd],
         ),
         // ⊘ The backend minted a token this table does not know — our bug, not the parent's.
         // Refused rather than answered with a descriptor-less reply, which would have the
         // parent adopt whatever descriptor arrived next.
         Err(_) => (
             Reply::Failed(WireError::Other(crate::rm::NOT_ON_THIS_RUNG)),
-            None,
+            Vec::new(),
         ),
     }
 }
@@ -919,10 +962,10 @@ fn export_usermode_view(
     rm: &mut dyn RmBackend,
     exports: &ChildExports,
     write: bool,
-) -> (Reply, Option<OwnedFd>) {
+) -> (Reply, Vec<OwnedFd>) {
     let view = match rm.export_usermode_view(write) {
         Ok(v) => v,
-        Err(e) => return (failed(e), None),
+        Err(e) => return (failed(e), Vec::new()),
     };
     // ⊘ The token is the CHILD's; the parent mints its own when it adopts the descriptor. It
     // never crosses the wire, exactly as `export_backing`'s does not.
@@ -931,7 +974,7 @@ fn export_usermode_view(
             Reply::UsermodeView {
                 mmap_len: view.mmap_len,
             },
-            Some(fd),
+            vec![fd],
         ),
         // ⊘ Same reasoning as `export_backing`'s twin: the backend minted a token this table
         // does not know, which is our bug and not the parent's. Refused rather than answered
@@ -939,7 +982,7 @@ fn export_usermode_view(
         // descriptor arrived next.
         Err(_) => (
             Reply::Failed(WireError::Other(crate::rm::NOT_ON_THIS_RUNG)),
-            None,
+            Vec::new(),
         ),
     }
 }
@@ -962,11 +1005,11 @@ fn export_backing(
     len: u64,
     prot: u8,
     exports: &ChildExports,
-) -> (Reply, Option<OwnedFd>) {
+) -> (Reply, Vec<OwnedFd>) {
     let Some(prot) = prot_from_code(prot) else {
         return (
             Reply::Failed(WireError::Other(crate::rm::NOT_ON_THIS_RUNG)),
-            None,
+            Vec::new(),
         );
     };
     let source = match source {
@@ -977,14 +1020,14 @@ fn export_backing(
         _ => {
             return (
                 Reply::Failed(WireError::Other(crate::rm::NOT_ON_THIS_RUNG)),
-                None,
+                Vec::new(),
             );
         }
     };
     let want = ExportRequest { source, len, prot };
     let backing = match rm.export_backing(want) {
         Ok(b) => b,
-        Err(e) => return (failed(e), None),
+        Err(e) => return (failed(e), Vec::new()),
     };
     // ★ `backing.token` is the CHILD's index into its own table. It does not go on the
     // wire: the parent mints its own when it adopts the descriptor (`export`'s module
@@ -996,7 +1039,7 @@ fn export_backing(
                 len: backing.len,
                 prot: prot_code(backing.prot),
             },
-            Some(fd),
+            vec![fd],
         ),
         // The backend minted a token this table does not know, which is our own bug and
         // not the parent's. Reported as a failure rather than as a reply with no
@@ -1004,7 +1047,7 @@ fn export_backing(
         // whatever descriptor arrived next.
         Err(_) => (
             Reply::Failed(WireError::Other(crate::rm::NOT_ON_THIS_RUNG)),
-            None,
+            Vec::new(),
         ),
     }
 }
@@ -1027,11 +1070,11 @@ fn join_fb_leaf(
     phys: u64,
     prot: u8,
     exports: &ChildExports,
-) -> (Reply, Option<OwnedFd>) {
+) -> (Reply, Vec<OwnedFd>) {
     let Some(prot) = prot_from_code(prot) else {
         return (
             Reply::Failed(WireError::Other(crate::rm::NOT_ON_THIS_RUNG)),
-            None,
+            Vec::new(),
         );
     };
     // ⊘ Decoded and then IGNORED, on purpose, and it is not dead: the join's backing is
@@ -1041,7 +1084,7 @@ fn join_fb_leaf(
     let _ = prot;
     let joined = match rm.join_fb_leaf(raw(vas), len, GpuVa(at), phys) {
         Ok(j) => j,
-        Err(e) => return (failed(e), None),
+        Err(e) => return (failed(e), Vec::new()),
     };
     // ★ `joined.backing.token` is the CHILD's index into its own table and does not go on the
     // wire; here it is what says which descriptor to attach. See `crate::export`.
@@ -1054,7 +1097,7 @@ fn join_fb_leaf(
                 memory: joined.memory.raw(),
                 host_va: joined.host_va,
             },
-            Some(fd),
+            vec![fd],
         ),
         // The backend minted a token this table does not know — our own bug, not the
         // parent's. Reported as a failure rather than as a reply with no descriptor: a
@@ -1064,7 +1107,7 @@ fn join_fb_leaf(
         // will never receive, so there is nothing left that can free them by name.
         Err(_) => (
             Reply::Failed(WireError::Other(crate::rm::NOT_ON_THIS_RUNG)),
-            None,
+            Vec::new(),
         ),
     }
 }
@@ -1364,7 +1407,7 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
         // the request with a `Unit` while the descriptors it needed were already dropped — a
         // hand-over reported complete with nothing on the far end. ⊘ That is the
         // `a_check_that_reports_is_not_a_check_that_gates` shape; this refuses.
-        Request::AdoptBirthClient { .. } => {
+        Request::AdoptBirthClient { .. } | Request::MintBirthClient => {
             Reply::Failed(WireError::Other(crate::rm::NOT_ON_THIS_RUNG))
         }
         // ★★★★★ **w380 — the alias, and it is NOT in the line above.** Its reply carries no
@@ -1617,7 +1660,7 @@ mod tests {
             "★★★ a birth client with no descriptors must be refused by ITS OWN name — a \
              generic refusal makes a transport bug indistinguishable from RM's answer"
         );
-        assert!(carried.is_none());
+        assert!(carried.is_empty());
     }
 
     /// ⊘ **A null `hRoot` is the one handle RM interprets rather than refuses.** Both
@@ -1686,7 +1729,7 @@ mod tests {
             reply,
             Reply::Failed(WireError::Other(crate::rm::FD_ON_A_BYTES_ONLY_REQUEST)),
         );
-        assert!(carried.is_none());
+        assert!(carried.is_empty());
     }
 
     /// ★★★★★ **CONSTRAINT 32 — A PER-PROC ISOLATE REFUSES A BIRTH CLIENT OFFERED TO IT.**
@@ -1727,7 +1770,7 @@ mod tests {
                  another guest process's RM identity landing in a per-proc isolate, which is \
                  #14 with an extra hop."
             );
-            assert!(carried.is_none());
+            assert!(carried.is_empty());
         }
     }
 

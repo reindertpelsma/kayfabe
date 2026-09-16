@@ -905,6 +905,93 @@ impl RmBackend for ProxyRmBackend {
         self.handle(Request::AdoptVaSpace { client, space })
     }
 
+    /// ★★★★★ **CONSTRAINT 32 STEP 1 — ask a per-proc isolate to mint a birth client.**
+    ///
+    /// ⚠ **The only reply in this protocol read with an allowance of TWO.** Every other
+    /// descriptor-carrying reply takes `1`; this one carries the control node and the
+    /// per-GPU node, which are not interchangeable and travel in that order.
+    ///
+    /// ⊘ **Adopted here as [`crate::fdcross::FdOrigin::BirthClient`], not as
+    /// `FdOrigin::Isolate`**, and the distinction is the whole of the cross-isolate rule:
+    /// an `Isolate` descriptor goes back to the isolate it came from, and a `BirthClient`
+    /// descriptor goes only to the scratchpad — **never** back to its minter, because route
+    /// K's step 2 has the minter close its own copies precisely so that only the scratchpad
+    /// can reach the client.
+    ///
+    /// ⚠ The provenance must be recorded HERE. It is the only moment the information
+    /// exists: past this function the VMM holds two `OwnedFd`s and no way to recover where
+    /// they came from.
+    fn mint_birth_client(&mut self) -> Result<kayfabe_isolate::MintedBirthClient, RmError> {
+        let txn = self.cancel.current_txn().unwrap_or(0);
+        let body = Envelope {
+            txn,
+            request: Request::MintBirthClient,
+        }
+        .encode();
+        let mut sock = &*self.sock;
+        if write_frame(&mut sock, &body).is_err() {
+            return Err(RmError::Wedged);
+        }
+        let mut fds = Vec::new();
+        // ★ A refusal from here leaves `fds` owned, so every path out — the refusals
+        // included — closes whatever arrived, by `Drop`.
+        let Ok(true) = read_frame_with_fds(self.sock.as_fd(), &mut self.buf, &mut fds, 2) else {
+            return Err(RmError::Wedged);
+        };
+        let Ok(reply) = Reply::decode(&self.buf) else {
+            return Err(RmError::Wedged);
+        };
+        let (client, isolate_client) = match self.lift(reply)? {
+            Reply::MintedBirthClient {
+                client,
+                isolate_client,
+                // ⊘ Narrowed HERE, at the decode, and refused rather than truncated: the
+                // wire is `u64` like every other handle field, an RM handle is `u32`, and a
+                // silent `as u32` would turn a framing disagreement into a live handle that
+                // names something else.
+            } => match u32::try_from(client) {
+                Ok(c) => (c, isolate_client),
+                Err(_) => return Err(RmError::Wedged),
+            },
+            // ⊘ `Wedged` and never a zero: a reply shape we cannot read means the two sides
+            // disagree about the frame. `fds` drops here, which closes them.
+            _ => return Err(RmError::Wedged),
+        };
+        let Ok([ctl, node]) = <[_; 2]>::try_from(fds) else {
+            // ⊘⊘ The check that catches a reader with the wrong allowance, or a child that
+            // answered without attaching. A `recvmsg` does not refuse a descriptor it has no
+            // room for — the kernel closes it and delivers the body intact — so an `Ok` with
+            // the wrong count is the only evidence either bug leaves.
+            kayfabe_util::lock_safe_eprintln!(
+                "kayfabe: ⊘⊘⊘ CONSTRAINT 32 — MintBirthClient answered without its TWO \
+                 descriptors. The client handle on its own reaches no RM: a client is bound \
+                 to the `struct file`, and this reply is the only thing that ever carries one."
+            );
+            return Err(RmError::Wedged);
+        };
+        let origin = crate::fdcross::FdOrigin::BirthClient {
+            minted_by: self.isolate,
+        };
+        let kind = kayfabe_linux_raw::DescriptorKind::CharDevice;
+        let (ctl, node) = match (
+            crate::fdcross::CrossedFd::adopt(ctl, origin, kind),
+            crate::fdcross::CrossedFd::adopt(node, origin, kind),
+        ) {
+            (Ok(c), Ok(n)) => (c, n),
+            _ => return Err(RmError::Wedged),
+        };
+        Ok(kayfabe_isolate::MintedBirthClient {
+            client,
+            isolate_client,
+            // ⊘ Unwrapped back to `OwnedFd` for the trait's shape. The provenance check the
+            // wrapper exists for has ALREADY RUN — `CrossedFd::adopt` verified the kind
+            // against the kernel — and the cross-isolate half is restated at the send, where
+            // `ProxyRmBackend::adopt_birth_client` refuses any target but the scratchpad.
+            ctl: ctl.into_owned(),
+            node: node.into_owned(),
+        })
+    }
+
     /// ★★★★★ **CONSTRAINT 32 — ROUTE K: hand the birth client's descriptors DOWN.**
     ///
     /// ⊘⊘ **THE LAST FAIL-CLOSED RESTATEMENT, AND IT NEEDS NO PROVENANCE.**
