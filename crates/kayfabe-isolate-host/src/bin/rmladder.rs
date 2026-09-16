@@ -11728,6 +11728,24 @@ mod route_k {
     /// The payload the one `SEM_EXECUTE` releases.
     const SEM_PAYLOAD: u32 = 0x5750_0001;
 
+    /// ★★★ **The copy engine the two UVM-space channels use, and it is NOT CE0.**
+    ///
+    /// `[measured w750, run 2]` both UVM arms — the B-owned channel AND the known-positive
+    /// role I owns itself — answered `UVM_REGISTER_CHANNEL` with `0x31 NV_ERR_INVALID_OBJECT`
+    /// on **CE0**, while this tree's known-good `--uvm-mean` P2 registers the same shape
+    /// successfully on **COPY(2)**. The reason is already written down one probe over:
+    /// `kchannelGetEngine_GM107` resolves a channel's engine from its **runlist** and picks
+    /// the first engine on it (`kernel_channel_gm107.c:722-727`), and on this part CE0 shares
+    /// runlist 0 with GR — so a CE0 channel is graded by the graphics rule and RM goes
+    /// looking for context buffers it does not have.
+    ///
+    /// ⊘ This is a property of the HARNESS, not of route K: the engine a guest's channel
+    /// lands on is the guest's declaration. Using CE0 here would have reported a refusal that
+    /// is about the runlist and read as one about the foreign client.
+    /// ⚠ The row-1/2/3 channel stays on CE0 deliberately — it is in a **plain** VA space,
+    /// where none of this applies, and it schedules and runs there (`K_CHANNEL_LIVE=1`).
+    const UVM_CE_INDEX: u32 = 2;
+
     /// The GPU VA the UVM session publishes the ring at. Same shape as `--uvm-mean`'s `P2_*`
     /// constants, deliberately far from anything RM places itself.
     const K_RING_VA: u64 = 0x0000_0091_0000_0000;
@@ -12742,6 +12760,10 @@ mod route_k {
             }
         };
 
+        let uvm_engine = engine_type_copy(UVM_CE_INDEX)
+            .unwrap_or(kayfabe_abi::submit::ENGINE_TYPE_COPY0);
+        println!("K_UVM_ENGINE_TYPE={uvm_engine:#x}");
+
         // ★★★★★ ROW 4's KNOWN-POSITIVE, AND WITHOUT IT A REFUSAL BELOW IS UNINTERPRETABLE.
         //
         // ⊘ `falsifier_blocker_vs_only_blocker`: if S's B-owned channel is refused by UVM,
@@ -12763,7 +12785,7 @@ mod route_k {
                     } else {
                         match rm.alloc_channel_in_uvm_space(
                             ext_space,
-                            kayfabe_abi::submit::ENGINE_TYPE_COPY0,
+                            uvm_engine,
                             kp_ring,
                             K_RING_KP_VA,
                         ) {
@@ -12777,6 +12799,7 @@ mod route_k {
                                     K_CHANRES_LEN,
                                 );
                                 println!("K_UVM_REG_CHAN_KP_RC={:#x}", uvm_code(&reg));
+                                println!("K_UVM_KP_TOKEN={_tok:#010x} runlist={}", _tok >> 16);
                                 println!(
                                     "info  route-K I  UVM_REGISTER_CHANNEL(hClient=A, own                                      channel) -> {reg:?}"
                                 );
@@ -12839,7 +12862,7 @@ mod route_k {
                 ring_raw,
                 tgid(),
                 GP_ENTRIES,
-                0,
+                uvm_engine,
             ],
             q: [K_RING_VA, RING_BYTES, 0, 0],
         };
@@ -13082,6 +13105,10 @@ mod route_k {
         let pid_i = m1.w[5];
         let gp_entries = m1.w[6];
         let ring_va = m1.q[0];
+        // ⊘ Carried rather than re-derived: the two UVM arms must be the SAME experiment
+        //   apart from which client owns the channel, and an engine chosen twice is a second
+        //   place for them to diverge.
+        let uvm_engine = m1.w[7];
         let mut it = fds.into_iter();
         let ctl2 = CharDevice::adopt(it.next().expect("two descriptors"));
         let _node2 = CharDevice::adopt(it.next().expect("two descriptors"));
@@ -13340,7 +13367,7 @@ mod route_k {
                     &mut esc,
                     device_b,
                     ext_dup,
-                    engine,
+                    uvm_engine,
                     ring_va,
                     gp_entries,
                     store_dup,
@@ -13353,6 +13380,11 @@ mod route_k {
                         uvm_tsg = b.tsg;
                         uvm_ce = b.ce_object;
                         println!("K_UVM_CHAN_BIRTH_RC=0");
+                        println!(
+                            "K_UVM_CHAN_TOKEN={:#010x} runlist={} engine={uvm_engine:#x}",
+                            b.token,
+                            b.token >> 16
+                        );
                     }
                     Err(e) => println!("K_UVM_CHAN_BIRTH_RC={:#x} ({e})", e.code()),
                 },
