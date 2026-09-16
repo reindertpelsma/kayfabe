@@ -493,6 +493,55 @@ and the per-client host MMU fault above.
     That is the same failure by a different route, and it is why the teardown barrier cannot be
     replaced by revalidation.
 
+32. **★★★★★ LEG B IS RULED — ROUTE K: THE ISOLATE MINTS THE BIRTH CLIENT AND HANDS THE fd OVER**
+    (owner, 2026-09-16: *"K is by far the cleanest, I am for it"*).
+
+    ## The mechanism, and why it costs nothing the alternatives cost
+
+    Two facts make it work, and neither was obvious: **`ProcessID` is stamped at CLIENT creation
+    from the creating task** (`client.c:112`), and **a client is bound to the `struct file`, not
+    to a pid** (STRICT default, `g_system_nvoc.c:104`) — which `SCM_RIGHTS` carries. Privilege
+    comes from the **calling task's capability**, per ioctl (`escape.c:304`).
+    ⇒ **Which task created the client** (identity) and **which process drives it** (the fd) are
+    separable. Every earlier route conflated them.
+
+    **The sequence.** I allocates client **B** on a second fd → passes it to S via `SCM_RIGHTS`
+    and **closes its own copy** → S dups the store into B → S dups **I's VAS** into B **with no
+    grant** (default same-PID `DUP` policy, `sharing.c:341-352`) → S births the channel in B →
+    S **frees the dup** (the sub-memdesc holds its own parent ref, `mem_desc.c:2676`).
+    ⇒ Stamps land as **`ProcessID = I`** and **`_PRIVILEGE_USER`**, and **I never holds a vidmem
+    handle nor the guest-RAM memfd** — constraint 26 intact, and kayfabe's isolates stay
+    unprivileged.
+
+    ## ⊘ The cost, stated rather than discovered later
+
+    The channel handle lives in **B**, reachable only by S, because **a `KernelChannel` cannot be
+    duped by anyone at any privilege** (`resCanCopy_IMPL` → `NV_FALSE`; `serverCopyResource`
+    refuses at `rs_server.c:1719-1723` **before rights are consulted**). ⇒ §26's row *"the
+    isolate owns the channel"* is **amended**: the isolate owns the channel's **identity and
+    address space**; S holds the **handle**. Ownership in the sense that matters — whose
+    `ProcessID`, whose VAS, whose privilege — is the isolate's.
+
+    ## ⚠ What must be MEASURED before it is believed (Fable §9 discriminators)
+
+    1. **bit-5 readback** — `NVOS04_FLAGS_PRIVILEGED_CHANNEL` must come back **clear**. ★ Free,
+       exact, and the only form of constraint 30 that cannot be argued with.
+    2. **`ProcessID` lands as I's** — check the channel's pid-info reports under **I's** pid, not
+       S's.
+    3. **The freed dup is unmappable while `GP_GET` still advances** — proves the parent ref
+       outlives the dup *and* that the channel is live.
+    4. ⚠ **UVM registration of a B-owned channel from I's UVM fd is INFERRED viable**
+       (`uvm_user_channel.c:945-948`, no `rmCtrlFd` validation) — **not measured**. If it fails,
+       K needs an answer for UVM before it can carry CUDA.
+
+    ⊘ **A, B and the sysmem-USERD family are DEAD — do not probe them.** USERD's aperture is a
+    hardcoded `ADDR_FBMEM` (`kernel_fifo_gm107.c:82-87`) and libcuda never asks
+    `GET_USERD_LOCATION` (zero `0x208011xx` controls in 197, real-GA106 trace); the `userdMem`
+    descriptor reader is unreachable off GSP/VF builds.
+    ⊘ And **"there is no SET for USERD" was FALSE** — `NV2080_CTRL_CMD_FIFO_UPDATE_CHANNEL_INFO`
+    (`0x20801116`) re-points a live channel's USERD+GPFIFO. It is privileged, so K is preferred,
+    but the claim was a **name-shaped blind spot** in a grep for `SET_USERD`.
+
 ★ **THE PREFERRED MECHANISM for 23, and why (owner, 2026-09-15).** Rather than an anonymous
 sparse `mmap`, allocate a **GPU-native sparse range** (`NVOS32_ALLOC_FLAGS_SPARSE = 0x04000000`,
 confirmed present in RM's SDK) in the scratchpad and MMIO-map **that** for BAR1/BAR2. Three
