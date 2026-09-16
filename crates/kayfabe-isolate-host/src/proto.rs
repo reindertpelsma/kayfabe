@@ -630,6 +630,16 @@ pub enum Request {
         /// frame. Raw, because it is a **foreign** client and this crate's own client type
         /// is by construction unable to represent one.
         client: u64,
+        /// ★★★ **The per-proc isolate's OWN client `A`** — the client whose VA space the
+        /// scratchpad is about to dup into `client`.
+        ///
+        /// ⊘ It is on the wire rather than derived because **the VMM is the only party that
+        /// has it**: it is [`kayfabe_isolate::BareVaSpace::client`], produced by the
+        /// hand-over, and the scratchpad has never seen it. ⇒ it is also the **key** the far
+        /// side files this birth client under, so that [`Request::AdoptVaSpace`] — which
+        /// already carries `A` and nothing else — can find it without a second routing
+        /// decision.
+        isolate_client: u32,
         /// The [`kayfabe_core::ProcId`] of the isolate that opened the descriptors and
         /// minted the client on them.
         minted_by_proc: u32,
@@ -1134,10 +1144,12 @@ impl Envelope {
             }
             Request::AdoptBirthClient {
                 client,
+                isolate_client,
                 minted_by_proc,
             } => {
                 out.push(39);
                 out.extend_from_slice(&client.to_le_bytes());
+                out.extend_from_slice(&isolate_client.to_le_bytes());
                 out.extend_from_slice(&minted_by_proc.to_le_bytes());
             }
             Request::UnmapStoreSlice { vas, at } => {
@@ -1469,6 +1481,7 @@ impl Envelope {
             },
             39 => Request::AdoptBirthClient {
                 client: c.u64("birth client handle")?,
+                isolate_client: c.u32("birth client isolate client")?,
                 minted_by_proc: c.u32("birth client minting proc")?,
             },
             37 => Request::UnmapStoreSlice {
@@ -2038,6 +2051,7 @@ mod tests {
             Request::VaSpaceHandover { space: 0xCAFE_0006 },
             Request::AdoptBirthClient {
                 client: 0xCAFE_0039,
+                isolate_client: 0xC1D0_0002,
                 minted_by_proc: 7,
             },
             Request::AllocChannel {

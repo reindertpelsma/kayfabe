@@ -920,6 +920,7 @@ impl RmBackend for ProxyRmBackend {
     fn adopt_birth_client(
         &mut self,
         client: u64,
+        isolate_client: u32,
         minted_by_proc: u32,
         ctl: OwnedFd,
         node: OwnedFd,
@@ -940,6 +941,7 @@ impl RmBackend for ProxyRmBackend {
         let reply = self.call_with_fds(
             Request::AdoptBirthClient {
                 client,
+                isolate_client,
                 minted_by_proc,
             },
             &[ctl.as_fd(), node.as_fd()],

@@ -1151,6 +1151,12 @@ pub trait RmBackend: Send + Sync {
     /// that root. From here on the scratchpad is the only party that can reach `client` at
     /// all.
     ///
+    /// `isolate_client` is **I's own client `A`** — the one whose VA space the scratchpad is
+    /// about to dup into `client`, and the key this birth client is filed under. ⊘ It is a
+    /// parameter because the **VMM** is the only party that has it
+    /// ([`BareVaSpace::client`]); deriving it anywhere else would be a second statement of a
+    /// routing decision the caller already made.
+    ///
     /// ⇒ **Every escape the scratchpad afterwards issues for this proc's store mapping runs
     /// with `hRoot = client` on `ctl`**, so RM sees a client whose `ProcessID` is **I's**
     /// (`client.c:112`) — which is what makes the cross-client dup of I's VA space a
@@ -1178,6 +1184,7 @@ pub trait RmBackend: Send + Sync {
     fn adopt_birth_client(
         &mut self,
         client: u64,
+        isolate_client: u32,
         minted_by_proc: u32,
         ctl: std::os::fd::OwnedFd,
         node: std::os::fd::OwnedFd,
@@ -1185,7 +1192,7 @@ pub trait RmBackend: Send + Sync {
         // ⊘ Dropped, and therefore CLOSED, on the refusing default. A default that leaked
         // them would hold a live session for a client nobody can use, for the life of the
         // process.
-        let _ = (client, minted_by_proc, ctl, node);
+        let _ = (client, isolate_client, minted_by_proc, ctl, node);
         Err(RmError::Other(0x56))
     }
 

@@ -932,7 +932,7 @@ fn handed_client_is_unforgeable() {
     // statement about `ProcessID`; a value that cannot say which isolate minted it cannot be
     // checked against the descriptor that carried it.
     assert!(
-        module.contains("pub(super) fn minted_by(self) -> u32 {"),
+        module.contains("fn minted_by(self) -> u32 {"),
         "★★★ CONSTRAINT 32 REGRESSED — `HandedClient` no longer reports the isolate that \
          minted it. RM stamps `ProcessID` from the CREATING task (client.c:112), so \
          `minted_by` is the only thing that makes *\"stamps land as I's\"* checkable rather \

@@ -36,7 +36,7 @@ use crate::isolate::{
 use crate::loopback::{LoopbackRm, LoopbackShared, ParkVerb};
 use crate::proto::{
     EXPORT_SOURCE_FABRICATED, EXPORT_SOURCE_HOST_DEVICE, Envelope, Reply, Request, WireError,
-    engine_from_code, prot_code, prot_from_code, read_frame, write_frame,
+    engine_from_code, prot_code, prot_from_code, write_frame,
 };
 use crate::rm::{HostRmBackend, RmConnection};
 use kayfabe_arch::ids::{ClassId, ControlCmd, GpuId, GpuVa};
@@ -683,6 +683,7 @@ const REQUEST_MAX_FDS: usize = 2;
 fn adopt_birth_client(
     rm: &mut dyn RmBackend,
     client: u64,
+    isolate_client: u32,
     minted_by_proc: u32,
     fds: Vec<OwnedFd>,
     id: IsolateId,
@@ -700,10 +701,12 @@ fn adopt_birth_client(
             None,
         );
     };
-    if client == 0 {
+    if client == 0 || isolate_client == 0 {
         kayfabe_util::lock_safe_eprintln!(
             "kayfabe-isolate-host: ⊘⊘ CONSTRAINT 32 REFUSED — AdoptBirthClient named client \
-             0x0. A null hRoot is the one handle RM interprets instead of refusing."
+             0x0, or an isolate client of 0x0. A null hRoot is the one handle RM interprets \
+             instead of refusing, and a null `A` would file this birth client under a key no \
+             `AdoptVaSpace` can ever present."
         );
         return (failed(RmError::Other(crate::rm::BIRTH_CLIENT_NULL_HANDLE)), None);
     }
@@ -758,7 +761,13 @@ fn adopt_birth_client(
             );
         }
     };
-    match rm.adopt_birth_client(client, minted_by_proc, ctl.into_owned(), node.into_owned()) {
+    match rm.adopt_birth_client(
+        client,
+        isolate_client,
+        minted_by_proc,
+        ctl.into_owned(),
+        node.into_owned(),
+    ) {
         Ok(()) => (Reply::Unit, None),
         Err(e) => (failed(e), None),
     }
@@ -804,8 +813,9 @@ fn serve_one(
         // ★★★★★ **CONSTRAINT 32 — THE ONE REQUEST THAT CARRIES DESCRIPTORS DOWN.**
         Request::AdoptBirthClient {
             client,
+            isolate_client,
             minted_by_proc,
-        } => adopt_birth_client(rm, client, minted_by_proc, fds, id),
+        } => adopt_birth_client(rm, client, isolate_client, minted_by_proc, fds, id),
         Request::ExportBacking {
             source,
             memory,
@@ -1594,6 +1604,7 @@ mod tests {
             &mut rm,
             Request::AdoptBirthClient {
                 client: 0xc1d0_0001,
+                isolate_client: 0xc1d0_0002,
                 minted_by_proc: 2,
             },
             &ChildExports::new(),
@@ -1618,6 +1629,7 @@ mod tests {
             &mut rm,
             Request::AdoptBirthClient {
                 client: 0,
+                isolate_client: 0xc1d0_0002,
                 minted_by_proc: 2,
             },
             &ChildExports::new(),
@@ -1640,6 +1652,7 @@ mod tests {
             &mut rm,
             Request::AdoptBirthClient {
                 client: 0xc1d0_0001,
+                isolate_client: 0xc1d0_0002,
                 minted_by_proc: 2,
             },
             &ChildExports::new(),
@@ -1700,6 +1713,7 @@ mod tests {
                 &mut rm,
                 Request::AdoptBirthClient {
                     client: 0xc1d0_0001,
+                    isolate_client: 0xc1d0_0002,
                     minted_by_proc: 2,
                 },
                 &ChildExports::new(),
@@ -1731,6 +1745,7 @@ mod tests {
             &mut rm,
             Request::AdoptBirthClient {
                 client: 0xc1d0_0001,
+                isolate_client: 0xc1d0_0002,
                 minted_by_proc: 2,
             },
             &ChildExports::new(),
