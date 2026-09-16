@@ -219,6 +219,14 @@ pub const WINDOW_OVER_A_LIVE_RESERVATION: &str = "a reservation over a guest-phy
      covers; the kernel refuses overlapping MEMSLOTS, but an observe-tiered span has no \
      memslot for it to refuse, so nothing outside this check can see the collision";
 
+/// ★★★★★ w752 — [`QemuMachine::repoint_device_window`]'s refusal: an in-place re-point whose
+/// new node is not exactly as long as the window it is being placed into. Refused rather than
+/// truncated, because a short `MAP_FIXED` leaves the window's tail showing the PREVIOUS node —
+/// two framebuffers behind one guest-physical range, with no trap and no error.
+pub const REPOINT_LENGTH_IS_NOT_THE_WINDOWS: &str = "an in-place re-point whose new backing is not exactly the window's length; placing it \
+     would leave the rest of the window showing the backing it replaced, which is a \
+     half-re-pointed aperture and is invisible to the guest";
+
 /// ★★ `set_trap` refusal: a read-write trap over a range a memslot already serves.
 pub const TRAP_OVER_A_LIVE_SLOT: &str = "a read-write trap over a range a live memslot serves; the guest's access resolves from \
      the slot and never leaves the guest, so the registration reads as a trap and is none";
@@ -1366,6 +1374,83 @@ impl QemuMachine {
             .map_err(|e| {
                 p.audit.host_refusals.fetch_add(1, Ordering::SeqCst);
                 host_refused("re-pointing a file window (the moving aperture)", &e)
+            })
+    }
+
+    /// ★★★★★ **w752 — RE-POINT AN INSTALLED WINDOW AT A NEWLY ARMED DEVICE NODE — one
+    /// `MAP_FIXED`, nothing else.** The device analogue of
+    /// [`QemuMachine::repoint_file_window`], and the whole of cut P1
+    /// (`docs/design/fable_off_vcpu_design.md` §2.1).
+    ///
+    /// # ⊘⊘⊘ *"A device view cannot be re-pointed"* is TRUE OF THE NODE AND FALSE OF THE WINDOW
+    ///
+    /// `barmirror.rs` carried that sentence as the reason PRAMIN's move became
+    /// release-and-re-arm — 20 arms x 7 vCPU doors + 19 retirements x 3 = **197 blocking
+    /// crossings on vCPU threads, worst trap 44 ms** `[measured w742]`. The sentence is right
+    /// about the node: `nvidia_mmap_helper` refuses any `vm_pgoff` but zero, so *what* a node
+    /// shows was fixed by the `NV_ESC_RM_MAP_MEMORY` that armed it, and a new base needs a new
+    /// node. It says **nothing** about the window the node is placed INSIDE:
+    /// [`kayfabe_linux_raw::GuestWindow::place_device_view`] is `fixed_map` over a
+    /// `HostOffset` in an existing window, exactly as `place` is for a file.
+    ///
+    /// ⇒ The fresh window, its memslot, the previous memslot's deletion and the previous
+    /// window's `munmap` — doors 4, 6, 7 and 8 of that census — are **not required by
+    /// anything**. `l1_os_shell.md` §6.7 rule 3 forbids them outright (*"No slot
+    /// delete/recreate to change a mapping … Re-`MAP_FIXED` the window's backing instead"*),
+    /// and so does constraint 16. This verb is compliance, not a new design.
+    ///
+    /// # ⊘ Why the hypervisor is not told — the same argument, checked for the device case
+    ///
+    /// [`QemuMachine::repoint_file_window`]'s reasoning is *"the guest-physical range is where
+    /// it was and the host virtual range is where it was; only what lies BEHIND the host range
+    /// moved"*, so there is no slot to update. That holds here unchanged: the memslot names an
+    /// HVA, the HVA is the window's, and the window does not move. ⚠ What is *new* is the kind
+    /// of VMA behind it — `VM_IO | VM_PFNMAP` rather than a file mapping — and KVM already
+    /// resolves this slot over exactly that kind of VMA today, because
+    /// [`QemuMachine::install_device_page`] installed it over one. The MMU notifier retires
+    /// the stale EPT entries on the replacement either way.
+    ///
+    /// ★ **And the atomicity is strictly BETTER than what it replaces.** The release-and-re-arm
+    /// it supersedes left PRAMIN with *no slot at all* between the removal and the install —
+    /// its own comment says a sibling vCPU touching the aperture in that interval traps and is
+    /// refused by name. `MAP_FIXED` has no such interval.
+    ///
+    /// # ⚠ `len` is CHECKED, not trusted — a short re-point is a HALF-RE-POINTED WINDOW
+    ///
+    /// The caller passes the length the driver will accept for the new node (`mmap_len`). If
+    /// that were ever shorter than the window, the tail of the aperture would keep showing the
+    /// **previous** node: two framebuffers behind one guest-physical range, silently, which is
+    /// the `[w582-w586]` failure class (*"zero traps proves the slot INTERCEPTS the access; it
+    /// says nothing about whether the slot shows the same BYTES"*). ⇒ a length that is not
+    /// exactly the window's is **refused**, and nothing is placed.
+    ///
+    /// # Errors
+    /// [`VmmError::Unsupported`] if the region is not an installed window or `len` is not the
+    /// window's length; otherwise whatever the placement refuses with.
+    /// ⚠ A refused re-point leaves the window showing what it showed before — never half.
+    pub fn repoint_device_window(
+        &self,
+        region: RamRegionId,
+        fd: std::os::fd::BorrowedFd<'_>,
+        len: u64,
+        writable: bool,
+    ) -> Result<(), VmmError> {
+        let p = &self.plane;
+        let (ins, _h) = p.installer();
+        let Some(window) = ins.windows.get(&region) else {
+            return Err(VmmError::Unsupported(
+                "that region is not an installed window, so there is nothing to re-point",
+            ));
+        };
+        if window.len != len {
+            return Err(VmmError::Unsupported(REPOINT_LENGTH_IS_NOT_THE_WINDOWS));
+        }
+        window
+            .window
+            .place_device_view(HostOffset::ZERO, len, fd, writable)
+            .map_err(|e| {
+                p.audit.host_refusals.fetch_add(1, Ordering::SeqCst);
+                host_refused("re-pointing a device window (the moving aperture)", &e)
             })
     }
 

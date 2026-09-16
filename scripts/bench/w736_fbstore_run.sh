@@ -139,6 +139,15 @@ n_w746=$(strings "$Q_BIN" 2>/dev/null | grep -c 'HANDOVER-ASSERTS')
 n_w746b=$(strings "$Q_BIN" 2>/dev/null | grep -c 'THE HAND-OVER WAS REFUSED')
 echo "W746-CONTENT: handover_asserts=$n_w746 refusal_line=$n_w746b (any 0 ⇒ the binary predates w746)"
 if [ "$n_w746" -eq 0 ] || [ "$n_w746b" -eq 0 ]; then echo "⊘ the binary predates w746 — its rows cannot be graded. STOP."; exit 11; fi
+# ★★★★★ w752 ADDITION — CONTENT GATE. `PRAMIN-INPLACE` prints UNCONDITIONALLY whenever the
+# device-view port exists, on BOTH device arms, so a boot without the string is an OLDER
+# BINARY and every w752 row would be graded against absence. ⚠ The most dangerous of those
+# rows is `declined_on_vcpu=0`, which on a stale binary is indistinguishable from "cut P2 ran
+# and the decline was never on the path" — the exact `a_refusal_counter_read_as_absent_demand`
+# shape this increment's own census line was written to refuse.
+n_w752=$(strings "$Q_BIN" 2>/dev/null | grep -c 'PRAMIN-INPLACE AT')
+echo "W752-CONTENT: pramin_inplace=$n_w752 (0 ⇒ the binary predates w752 — its rows cannot be graded)"
+if [ "$n_w752" -eq 0 ]; then echo "⊘ the binary predates w752 — its rows cannot be graded. STOP."; exit 12; fi
 
 report() {
   local tag="$1" arm="$2"
@@ -366,6 +375,48 @@ report() {
   echo "W745-REFRESH-LINE=$(grep -ao 'MMUINVAL-REFRESH #[0-9]* seq=[0-9]* armed=[0-9]* refresh_ms=[0-9.]* unmaps_outstanding=[0-9]* drain_trips=[0-9]*' "$Q" 2>/dev/null | tail -1)"
   echo "--- ★★★★★ w745 ROW 7: CONSTRAINT 25's open violation — the number the brief asks for ---"
   echo "W745-VCPU-BLOCKING=$(grep -ao 'VCPU-BLOCKING total=[0-9]* doors=[0-9]* worst_trap=[0-9]*us' "$Q" 2>/dev/null | tail -1)"
+  # ★★★★★ w752 ADDITION, REPORTING ONLY — the door census IN FULL, and PRAMIN's own numbers.
+  # ⊘ The w745 grep above cuts only the HEADER. `total=` and `doors=` cannot say WHICH doors
+  # survived, and w752's whole claim is about four named ones (4, 6, 7, 8) going to zero while
+  # three named ones (1, 2, 3) plus the sanctioned MAP_FIXED (5) stay. A header-only capture
+  # would grade "197 -> 102" as a pass even if the residual were the wrong doors entirely.
+  echo "--- ★★★★★ w752 ROW 1: THE DOOR CENSUS IN FULL (every [n x door] row) ---"
+  echo "W752-VCPU-LINES=$(grep -ac 'VCPU-BLOCKING ' "$Q" 2>/dev/null)  (0 ⇒ UNMEASURED)"
+  VB=$(grep -ao 'VCPU-BLOCKING .\{0,1200\}' "$Q" 2>/dev/null | tail -1)
+  printf '%s\n' "$VB" | fold -w 160
+  d() { printf '%s' "$VB" | grep -ao "$1" | tail -1; }
+  echo "W752-DOOR-WINDOW-MMAP=$(d '\[[0-9]* × mmap (creating a guest-physical window)\]')   ⊘ door 4 — predicted EXACTLY 1 (the one-time install)"
+  echo "W752-DOOR-SLOT-INSTALL=$(d '\[[0-9]* × KVM_SET_USER_MEMORY_REGION (installing a memslot)\]')   ⊘ door 6 — predicted EXACTLY 1"
+  echo "W752-DOOR-SLOT-DROP=$(d '\[[0-9]* × KVM_SET_USER_MEMORY_REGION (dropping a memslot)\]')   ⊘ door 7 — predicted ABSENT"
+  echo "W752-DOOR-MUNMAP=$(d '\[[0-9]* × munmap (dropping a guest-physical window)\]')   ⊘ door 8 — predicted ABSENT"
+  echo "W752-DOOR-RELEASE=$(d '\[[0-9]* × releasing a host device view\]')   ⊘ door 9 — predicted ABSENT (moved to the worker tick)"
+  echo "W752-DOOR-MAPFIXED=$(d '\[[0-9]* × mmap MAP_FIXED (placing an armed device node)\]')   ★ door 5 — STAYS, one per move"
+  echo "W752-DOOR-EXPORT=$(d '\[[0-9]* × exporting a host device view to the VMM\]')   ★ door 1 — STAYS"
+  echo "W752-DOOR-RECV=$(d '\[[0-9]* × receiving a descriptor across the isolate boundary\]')   ★ door 2 — STAYS, TWO per arm"
+  echo "W752-DOOR-CLASSIFY=$(d '\[[0-9]* × classifying a received descriptor\]')   ★ door 3 — STAYS"
+  echo "--- ★★★★★ w752 ROW 2: PRAMIN's OWN census — the move cost and the cut's counters ---"
+  echo "W752-PRAMIN-SLOT=$(grep -ao 'PRAMIN-SLOT AT [A-Z]*: moves=[0-9]* skipped=[0-9]*' "$Q" 2>/dev/null | tail -1)"
+  echo "W752-MOVE-NS=$(grep -ao 'move_ns\[worst=[0-9]* mean=[0-9]*\]' "$Q" 2>/dev/null | tail -1)   ⊘ w742 device arm: worst=44426000 mean=7248000 (ns)"
+  echo "W752-INPLACE-LINES=$(grep -ac 'PRAMIN-INPLACE AT' "$Q" 2>/dev/null)  (0 ⇒ UNMEASURED — printed whenever the port exists, so absence is an old binary)"
+  PI=$(grep -ao 'PRAMIN-INPLACE AT .\{0,600\}' "$Q" 2>/dev/null | tail -1)
+  printf '%s\n' "$PI" | fold -w 160
+  h() { printf '%s' "$PI" | grep -ao "$1" | tail -1; }
+  echo "W752-INPLACE=$(h 'inplace=[0-9]*')   ★ the moves that were ONE MAP_FIXED"
+  echo "W752-INPLACE-REFUSED=$(h 'refused=[0-9]*')   ⊘ any non-zero tore the slot down; PRAMIN then traps"
+  echo "W752-STARTED=$(h 'started=[0-9]*')"
+  echo "W752-LANDED=$(h 'landed=[0-9]*')   ⊘ started != landed ⇒ a re-point did not place"
+  echo "W752-RELEASED=$(h 'released=[0-9]*')   ★ cut P2: released BY THE WORKER, not inside a trap"
+  echo "W752-HELD=$(h 'held=[0-9]*')"
+  echo "W752-DECLINED-ON-VCPU=$(h 'declined_on_vcpu=[0-9]*')   ★★★ cut P2's GATE: 0 with inplace>0 means the decline is NOT on the path"
+  echo "W752-EARLY-REFUSED=$(h 'early_release_refused=[0-9]*')   ⊘⊘ non-zero = the restated w735 barrier FIRED (an aperture leak, the safe direction)"
+  echo "W752-PORT-OUTSTANDING=$(h 'port_outstanding=[0-9]*')"
+  echo "--- ★★★★★ w752 ROW 3: the SECOND constraint-4 violator the door census CANNOT see ---"
+  echo "⊘ Predicted, not hoped: worst_trap does NOT go sub-ms. The control arm's 22 311 us at"
+  echo "  bar0+0x110c00 (NV_PGSP_QUEUE_HEAD) passes through no assert_lock_free door at all."
+  echo "W752-TRAPWITNESS=$(grep -ao 'TRAPWITNESS off_trap_claims=.\{0,220\}' "$Q" 2>/dev/null | tail -1)"
+  echo "W752-TRAP-CPU=$(grep -ao 'TRAP-CPU .\{0,200\}' "$Q" 2>/dev/null | tail -1)"
+  echo "--- ★ w752: any IN-PLACE RE-POINT REFUSED line, verbatim ---"
+  grep -a 'IN-PLACE RE-POINT REFUSED' "$Q" 2>/dev/null | head -3 | cut -c1-320
   echo "--- host Xid ---"
   echo "HOST_DMESG_XID=$(grep -ac 'Xid' "$BENCH/run_${tag}_hostdmesg.log" 2>/dev/null)"
   grep -a 'Xid' "$BENCH/run_${tag}_hostdmesg.log" 2>/dev/null | head -3 | cut -c1-190

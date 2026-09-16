@@ -1,6 +1,6 @@
 # Fable — the off-vCPU design for the w742 violation (constraints 4, 6, 7, 8)
 
-**STATUS: DESIGN-ONLY, 2026-09-16 (w751).** Written from source at `8a842d90` (kf-master tip,
+**STATUS: LIVE — §2.1 (P1) and §2.2 (P2) BUILT 2026-09-16 by w752; §2.4 and §2.5 rows 3-5 remain DESIGN-ONLY. Originally DESIGN-ONLY, 2026-09-16 (w751).** Written from source at `8a842d90` (kf-master tip,
 = `single-store` + the w749 leg-B ruling) and from the committed w742 evidence
 (`traces/w742_publish_install/w742_evidence.tgz`, `kayfabe-rev d0a4b10b`). ⊘ No production code
 was changed, no bench was booted. Every number below is either read out of that trace or is a
@@ -305,6 +305,56 @@ and onto setup, where a memslot ioctl belongs (constraint 16).
 
 ⊘ Row 4 is the only one that reaches *"one door, the sanctioned one"*, and it rests on an
 INFERRED determinism. Row 2 is the one this document is confident of.
+
+### ★★★★★ w752 — CUTS P1 AND P2 ARE BUILT. PRE-REGISTERED PREDICTIONS, 2026-09-16
+
+`[branch `w752-pramin-in-place`, off `e8ce6f4a`. **Committed before any box existed** — nothing
+below was written after seeing a number.]`
+
+Built: `QemuMachine::repoint_device_window` (P1), `BarMirror::repoint_pramin_in_place` (P1),
+the decline-by-name in `BarMirror::drain_view_releases` plus the worker tick in
+`BarMirror::revalidate_pending` (P2). **Not built: P3(a), P3(b), (c).**
+
+**Prediction 1 — the census.** Row 2 above says `100 crossings / 4 doors`. ⚠ That row and §2.4(c)
+disagree by exactly the one-time install, and §2.4(c) is the one that is right: the window and
+its memslot are still created on *"the guest's FIRST latch write"*, which is a vCPU. So the
+number this cut can reach is:
+
+| | crossings | doors | which |
+|---|---|---|---|
+| Fable §2.5 row 2, literal | 100 | 4 | |
+| **w752 pre-registered** | **102** | **6** | 19 moves x 5 + one install x 7; doors 4 and 6 survive with **count 1 each** |
+| after §2.4(c), not built | 100 | 4 | the install moves to the BAR-map callback |
+
+⇒ **Held** = `total` and `doors` fall to within `+2 / +2` of row 2, **with doors 4 and 6 at a
+count of exactly 1** and doors 7, 8 and 9 **absent**. **Refuted** = anything else, including a
+fall to 102 whose residual doors are not the one-time install.
+⊘ The move count is not fixed at 20: `moves` is what the guest does. The identity to check is
+`crossings == 5 * moves + 2` on the device arm, not the literal 102.
+
+**Prediction 2 — the cost.** `PRAMIN-SLOT move_ns` on the device arm falls from
+`mean 7 248 us / worst 44 426 us` to **the order of the arm plus one `MAP_FIXED`**: §2.3's
+component sum is `294 us + 63 us ~= 0.36 ms` mean. Predicted **mean < 1 ms**; worst **not
+predicted sub-ms**, because the arm's tail is RM's device-global client lock and is not ours to
+bound.
+
+**Prediction 3 — what does NOT move, stated so it cannot be claimed later.** `worst_trap` will
+**not** go sub-millisecond. The control arm's `22 311 us at bar0+0x110c00` (`NV_PGSP_QUEUE_HEAD`)
+is a second constraint-4 violator that passes through **no `assert_lock_free` door at all**, so
+the door census cannot see it and this cut cannot touch it (§0.3). If the device arm's
+`worst_trap` lands near the control's ~22 ms, that is this second violator becoming visible once
+the 44 ms PRAMIN move is gone — **not** a failure of the cut, and **not** a success either.
+
+**Prediction 4 — the leak gauge.** `PRAMIN-INPLACE … early_release_refused=0` and `held` small
+(the tick is frequent). A non-zero `early_release_refused` means the restated w735 barrier fired
+and a view is holding 1 MiB of host BAR1 aperture forever — the safe direction, and a bug.
+`declined_on_vcpu` must be **> 0** with `inplace > 0`: a zero there would mean the decline is not
+on the path, i.e. cut P2 is not doing anything.
+
+**Prediction 5 — no regression.** BAR1/BAR2 `TRAP_FILLS=0` and `misses=0`, `named` unchanged,
+`RmInitAdapter failed!`=0, `SMI_RC=0`, control arm `(P)` `THREADS 8 of 8`, the failing-test name
+set identical to the 30-name baseline.
+
 
 ### 2.6 Constraint 25's gate, stated against the code that exists
 

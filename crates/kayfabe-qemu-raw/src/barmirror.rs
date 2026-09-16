@@ -379,6 +379,80 @@ struct Retired {
     view: Option<u64>,
 }
 
+/// ★★★★★ **w752 — WHAT AN IN-PLACE PRAMIN RE-POINT DID, AS A VALUE.**
+///
+/// ⊘ A separate type, and a **pure** classifier below it, for one reason: the refusal arms of
+/// this path cannot be reached in a test — arming a node needs a live isolate, a real
+/// `/dev/nvidia<N>` and a GPU — so the only way to hold *"a refused arm leaves the aperture in a
+/// defined refusing state"* to a gate is to make the decision itself a value a test can produce.
+/// ⚠ `ViewRefusal::NoWorker` **is reachable in production**: `with_node` arms through
+/// `SharedIsolate::with_worker`, which is `g.checkout()?` and answers `None` — it does not wait —
+/// when every worker of the `pool=4` scratchpad is checked out, which a publication burst can do.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum InPlaceVerdict {
+    /// The `MAP_FIXED` landed and `view` is the node now behind the aperture.
+    Shows { view: u64 },
+    /// **Nothing was placed.** The caller tears the slot down; see
+    /// [`BarMirror::refuse_pramin_slot`] for why a stale aperture is not the safe direction.
+    Refuse { why: &'static str },
+}
+
+/// Classify [`crate::deviceview::DeviceViewPort::with_node`]'s three-level result. PURE: no
+/// syscalls, no IPC, no state — so the arms that need a GPU to *reach* can still be *tested*.
+///
+/// ★ Exhaustive by `match`, deliberately: a new refusal variant added to `ViewRefusal` cannot
+/// silently acquire the `Shows` arm, because there is exactly one way to produce `Shows` and it
+/// requires the mapping verb to have returned `Ok`.
+fn in_place_verdict<E>(
+    armed: &Result<Result<((), crate::deviceview::ViewId), E>, crate::deviceview::ViewRefusal>,
+) -> InPlaceVerdict {
+    match armed {
+        Ok(Ok(((), id))) => InPlaceVerdict::Shows { view: id.0 },
+        // ⊘ The node was armed and the `MAP_FIXED` refused it. `with_node` has ALREADY released
+        // that view — *"a caller that could not use the mapping has no reason to hold the
+        // aperture"* — so there is no new view to account for here, only the old one.
+        Ok(Err(_)) => InPlaceVerdict::Refuse {
+            why: "the MAP_FIXED over the live window was refused; nothing was placed",
+        },
+        // ⊘ Nothing was armed, so nothing was unmapped and the window still holds the node it
+        // held. It is torn down anyway: a window showing the framebuffer the guest just
+        // re-aimed AWAY from is wrong with no way for the guest to notice.
+        Err(v) => InPlaceVerdict::Refuse {
+            why: match v {
+                crate::deviceview::ViewRefusal::NoWorker => {
+                    "no scratchpad worker was free to arm a node (the pool refuses rather than \
+                     waits), so nothing was placed"
+                }
+                crate::deviceview::ViewRefusal::NoDescriptor { .. } => {
+                    "the armed node's descriptor did not cross the isolate boundary, so nothing \
+                     was placed"
+                }
+                _ => "the node could not be armed, so nothing was placed",
+            },
+        },
+    }
+}
+
+/// ★★★★★ **w752 — THE RESTATED w735 BARRIER, AS A PURE FUNCTION.**
+///
+/// `parked` is `(view id, the sequence number of the re-point that displaced its mapping)`;
+/// `landed` is the highest sequence whose `MAP_FIXED` **returned `Ok`**. A view may be released
+/// only when the mapping that named its host BAR1 aperture is definitely gone, and the thing
+/// that proves it gone is the placement that overwrote it. ⇒ `seq <= landed` releases,
+/// **everything else is held**.
+///
+/// ⊘ Fail-closed in the direction that leaks. Holding an entry forever costs 1 MiB of a ~254 MiB
+/// host aperture pool and is visible in the census; releasing one early hands RM an aperture our
+/// PTEs still point into — *"ours, the host's own CUDA context, or another VM's. Silent, and
+/// cross-tenant."*
+///
+/// ⚠ **The stamp is taken BEFORE the placement is attempted.** Taken afterwards this function
+/// could never see an entry above `landed` and would be a comment with a signature.
+fn releasable_through(parked: Vec<(u64, u64)>, landed: u64) -> (Vec<u64>, Vec<(u64, u64)>) {
+    let (ready, keep): (Vec<_>, Vec<_>) = parked.into_iter().partition(|(_, seq)| *seq <= landed);
+    (ready.into_iter().map(|(v, _)| v).collect(), keep)
+}
+
 #[derive(Debug, Default)]
 struct Table {
     /// Guest-physical page → the slot over it.
@@ -456,6 +530,42 @@ pub struct BarMirror {
     /// `(region, view id)`. See [`BarMirror::retire`] for why the two events are not the
     /// same one and why releasing on the first is a silent cross-tenant defect.
     parked: Mutex<Vec<(RamRegionId, u64)>>,
+    /// ★★★★★ **w752 — VIEWS WHOSE MAPPING WAS OVERWRITTEN IN PLACE, AND THE RE-POINT THAT
+    /// OVERWROTE IT.** `(view id, the re-point sequence number that displaced it)`.
+    ///
+    /// ⊘⊘ **A SECOND list rather than an extension of [`BarMirror::parked`], and that is
+    /// constraint 29 rather than duplication.** `parked` releases when
+    /// `QemuMachine::reclaim_released_windows` names the region — the w735 barrier — and under
+    /// an in-place re-point **the window is never removed**, so that condition can never become
+    /// true and every entry folded into it would leak forever while reading as *"waiting"*.
+    /// The barrier's QUESTION is untouched: *"is the mapping that named this view's aperture
+    /// definitely gone?"* Its MECHANISM is wrong in the new shape, because the thing that
+    /// proves the mapping gone is no longer the window's collection but the `MAP_FIXED` that
+    /// overwrote it. [`BarMirror::repoint_landed`] is that proof as a number, and
+    /// [`BarMirror::drain_inplace_releases`] is the fail-closed gate on it.
+    parked_inplace: Mutex<Vec<(u64, u64)>>,
+    /// Re-points STARTED, stamped onto the displaced view **before** its replacement is
+    /// placed. ⊘ Before, deliberately: a stamp taken afterwards would make the gate below
+    /// vacuous — it could never name an entry whose replacement had not landed.
+    repoint_started: AtomicU64,
+    /// Re-points whose `MAP_FIXED` **returned `Ok`**. Raised at exactly one place, immediately
+    /// after `QemuMachine::repoint_device_window` succeeds, and never anywhere else.
+    repoint_landed: AtomicU64,
+    /// Release drains DECLINED because the caller was a vCPU thread or inside a trap (cut P2).
+    /// ⚠ Counted, not silent: a worker that never ticks and a mirror with nothing parked read
+    /// identically otherwise — `a_refusal_counter_read_as_absent_demand`.
+    parked_declined: AtomicU64,
+    /// Parked entries a drain REFUSED to release because their replacement had not landed:
+    /// summed over passes, so a permanently-held entry accumulates. Non-zero means the
+    /// never-early-release gate fired, which is a leak and never a corruption.
+    parked_early_refused: AtomicU64,
+    /// In-place re-points that placed a new node over the live window — the whole of cut P1.
+    pramin_inplace: AtomicU64,
+    /// In-place re-points REFUSED. Each one tears the slot down; see
+    /// [`BarMirror::refuse_pramin_slot`] for why a stale aperture is not the safe direction.
+    pramin_inplace_refused: AtomicU64,
+    /// Views released out of [`BarMirror::parked_inplace`] by a worker tick.
+    inplace_released: AtomicU64,
     pramin_moves: AtomicU64,
     pramin_skipped: AtomicU64,
     /// ★★★★★ **w652 — HOW LONG THE REPOINT ACTUALLY TAKES, on the vCPU that trapped.**
@@ -812,6 +922,14 @@ impl BarMirror {
             device_port,
             device_store: store_arm.is_device(),
             parked: Mutex::new(Vec::new()),
+            parked_inplace: Mutex::new(Vec::new()),
+            repoint_started: AtomicU64::new(0),
+            repoint_landed: AtomicU64::new(0),
+            parked_declined: AtomicU64::new(0),
+            parked_early_refused: AtomicU64::new(0),
+            pramin_inplace: AtomicU64::new(0),
+            pramin_inplace_refused: AtomicU64::new(0),
+            inplace_released: AtomicU64::new(0),
             fills: Mutex::new(std::collections::VecDeque::new()),
             fills_queued: AtomicU64::new(0),
             fills_dropped: AtomicU64::new(0),
@@ -1469,6 +1587,22 @@ impl BarMirror {
         let Some(port) = self.device_port.as_ref() else {
             return;
         };
+        // ★★★★★ **w752 CUT P2 — DECLINE BY NAME**, in exactly the shape
+        // `DeviceFbBytePort::drain` already uses. `[measured w742]` this was door 9 of the
+        // nine: `retire` called it INLINE, so 19 of the 197 vCPU-blocking crossings were an
+        // `NV_ESC_RM_UNMAP_MEMORY` round trip inside an MMIO exit. It is deferrable by
+        // construction — the aperture is ours until we give it back — and the worker tick in
+        // [`BarMirror::revalidate_pending`] is what gives it back.
+        //
+        // ⊘ Asked AFTER the port check and not before: on the arena arm there is no port and
+        // nothing is ever parked, so counting a decline there would put a number on a boot
+        // that has nothing to drain. The port check takes no lock, so nothing is held on the
+        // way to finding out.
+        if kayfabe_util::lockwitness::on_vcpu_thread() || kayfabe_util::trapwitness::in_trap() {
+            self.parked_declined.fetch_add(1, Ordering::Relaxed);
+            return;
+        }
+        self.drain_inplace_releases(port);
         // ⊘ **The emptiness check comes FIRST, and that is not a micro-optimisation.** The
         // device-view port can be armed on the `arena` arm too (`KAYFABE_DEVICE_VIEW=probe`
         // with the default store), and nothing is ever parked there. Calling
@@ -1723,62 +1857,31 @@ impl BarMirror {
             return;
         }
         let t0 = std::time::Instant::now();
-        // ★★★★★ **§3 — A DEVICE VIEW CANNOT BE RE-POINTED, SO THE MOVE IS RELEASE-AND-RE-ARM.**
+        // ★★★★★ **w752 CUT P1 — THE MOVE IS ONE `MAP_FIXED`, ON BOTH ARMS.**
         //
-        // `SINGLE_STORE_PLAN.md` §3 item 4: *"today one re-pointable slot over the arena's
-        // file (`repoint_file_window`). A device view cannot be re-pointed — each arming is
-        // its own fd at offset 0 — so PRAMIN becomes release-and-re-arm, **~0.7 ms
-        // measured**, on the vCPU, which is the one sanctioned expensive trap (constraint 4)
-        // and is inside its budget."*
+        // ⊘⊘⊘ **THIS REPLACES A COMMENT THAT WAS TRUE OF THE NODE AND FALSE OF THE WINDOW.**
+        // It read: *"a device view cannot be re-pointed — each arming is its own fd at offset
+        // 0 — so PRAMIN becomes release-and-re-arm, ~0.7 ms measured"* (`SINGLE_STORE_PLAN.md`
+        // §3 item 4). The first half is right: `nvidia_mmap_helper` refuses any `vm_pgoff` but
+        // zero, so *what* a node shows was fixed by the `NV_ESC_RM_MAP_MEMORY` that armed it
+        // and a new base needs a new node. The conclusion does not follow — the node is placed
+        // **inside a window**, and `GuestWindow::place_device_view` re-places it exactly as
+        // `place` re-places a file. See `QemuMachine::repoint_device_window`.
         //
-        // ⊘ `nvidia_mmap_helper` refuses any `vm_pgoff` but zero, so *what* a node shows was
-        // fixed by the `NV_ESC_RM_MAP_MEMORY` that armed it. There is no offset to move.
+        // ⊘ And the `~0.7 ms` was `arm_us + rel_us` of the view alone. `[measured w742]` the
+        // real cost of release-and-re-arm was **7.2 ms mean / 44 ms worst**, 97.6 % of it CPU,
+        // and the census named nine vCPU-blocking doors — `20 x 7 + 19 x 3 = 197` crossings,
+        // every one of them this function. `l1_os_shell.md` §6.7 rule 3 and constraint 16 both
+        // forbade the shape outright: *"No slot delete/recreate to change a mapping … Re-
+        // `MAP_FIXED` the window's backing instead."*
         //
-        // ⚠ **THE GAP IS REAL AND IS NAMED.** `repoint_file_window` is one `MAP_FIXED` that
-        // replaces the backing atomically; this is a window removal followed by an install,
-        // and between them PRAMIN has no slot. A sibling vCPU accessing PRAMIN in that
-        // interval traps — and on this arm the trap path reaches the single store and is
-        // refused by name. ⊘ Said rather than discovered: it is bounded by one install and it
-        // is the price of a backing that cannot be re-pointed.
-        let outcome = if view.is_some() {
-            let Some(p) = self.machine.bar_placement(BarId::Bar0) else {
-                return;
-            };
-            let Some((span_off, span_len)) = self.plane.pramin_span() else {
-                return;
-            };
-            let gpa = p.base + span_off;
-            let _ = self.retire(vec![Retired {
-                gpa,
-                region,
-                view,
-            }]);
-            match self.install_pramin_window(gpa, span_len, base) {
-                Ok((r2, v2)) => {
-                    *slot = Some((r2, base, v2));
-                    self.pramin_moves.fetch_add(1, Ordering::Relaxed);
-                    self.mark_pramin(base);
-                    let ns = u64::try_from(t0.elapsed().as_nanos()).unwrap_or(u64::MAX);
-                    self.pramin_move_ns_total.fetch_add(ns, Ordering::Relaxed);
-                    self.pramin_move_ns_worst.fetch_max(ns, Ordering::Relaxed);
-                    return;
-                }
-                Err(why) => {
-                    // ⊘ The old slot is already gone. PRAMIN traps from here on and the trap
-                    // path refuses by name — which is loud, and is the honest state: there is
-                    // no window, rather than a window showing the wrong framebuffer.
-                    *slot = None;
-                    eprintln!(
-                        "kayfabe: PRAMIN-WINDOW ⊘⊘ RE-ARM REFUSED to fb 0x{base:x} ({why}); \
-                         the old view was released and there is now NO slot. Every PRAMIN \
-                         access traps and the single store refuses it by name."
-                    );
-                    let ns = u64::try_from(t0.elapsed().as_nanos()).unwrap_or(u64::MAX);
-                    self.pramin_move_ns_total.fetch_add(ns, Ordering::Relaxed);
-                    self.pramin_move_ns_worst.fetch_max(ns, Ordering::Relaxed);
-                    return;
-                }
-            }
+        // ★ The re-point is also STRICTLY SAFER than what it replaces: the old code removed the
+        // window and then installed a new one, and between them **PRAMIN had no slot at all**,
+        // so a sibling vCPU touching the aperture in that interval trapped and was refused by
+        // name. `MAP_FIXED` has no such interval.
+        let outcome = if let Some(old_view) = view {
+            self.repoint_pramin_in_place(&mut slot, region, old_view, base, t0);
+            return;
         } else {
             self.machine
                 .repoint_file_window(region, self.arena.as_backing_fd(), base)
@@ -1801,6 +1904,181 @@ impl BarMirror {
                  aperture still shows 0x{shown:x} and the guest's next access through it is \
                  WRONG. This is the one failure on this path that cannot be contained."
             ),
+        }
+    }
+
+    /// ★★★★★ **w752 CUT P1 — RE-POINT THE LIVE PRAMIN WINDOW AT A NEWLY ARMED NODE.**
+    ///
+    /// The whole move, on the single-store arm: arm a node for `base` (doors 1-3, which STAY —
+    /// see the module note and `fable_off_vcpu_design.md` §2.3) and `MAP_FIXED` it over the
+    /// window that is already there (door 5, the one the trap contract sanctions). Nothing
+    /// else. **No fresh window, no memslot install, no memslot delete, no `munmap`** — doors
+    /// 4, 6, 7 and 8 of the w742 census stop existing on this path.
+    ///
+    /// # ★★★★★ THE RELEASE BARRIER, RESTATED (constraint 29)
+    ///
+    /// w735 asked: *"is the mapping that named this view's host BAR1 aperture definitely
+    /// gone?"* — because RM's `osUnmapPciMemoryUser` is empty, so `NV_ESC_RM_UNMAP_MEMORY`
+    /// hands the aperture to the next tenant **without touching our VMA**, and releasing early
+    /// leaves live PTEs pointing into somebody else's BAR1. Silent, and cross-tenant.
+    ///
+    /// Its **mechanism** was *"`reclaim_released_windows` has named the region"*. Under an
+    /// in-place re-point the window is **never removed**, so that mechanism can never answer
+    /// yes and every view would leak while the counter read as *"waiting"*. Its **question is
+    /// untouched**, and the new shape answers it more directly: the old node's PTEs are gone
+    /// the instant the `MAP_FIXED` that overwrote them returned.
+    ///
+    /// ⇒ **Successor assert:** the displaced view is parked stamped with the sequence number of
+    /// the re-point that displaced it, **before** the `MAP_FIXED` is attempted;
+    /// [`BarMirror::repoint_landed`] is raised **after** it returns `Ok`, at exactly one place;
+    /// and [`BarMirror::drain_inplace_releases`] releases only entries whose stamp is `<=`
+    /// landed. Fail-closed in the direction that leaks: a re-point that never landed holds its
+    /// aperture forever and says so in the census, and **cannot** release early. ⊘ Stamping
+    /// before rather than after is what makes the gate non-vacuous — stamped afterwards it
+    /// could never name an entry whose replacement had not landed, and it would be a comment.
+    ///
+    /// # ⚠ A REFUSAL TEARS THE SLOT DOWN — and that is the fail-closed direction
+    ///
+    /// See [`BarMirror::refuse_pramin_slot`]. Leaving the old node mapped would be a window
+    /// showing the **previous** framebuffer with no trap and no error, which is the
+    /// `[w582-w586]` class this file already paid for three times.
+    fn repoint_pramin_in_place(
+        &self,
+        slot: &mut Option<(RamRegionId, u64, Option<u64>)>,
+        region: RamRegionId,
+        old_view: u64,
+        base: u64,
+        t0: std::time::Instant,
+    ) {
+        let Some(port) = self.device_port.as_ref() else {
+            // ⊘ Unreachable by construction — a slot carrying a view id is a slot some port
+            // armed — and said rather than `unwrap`ed, because the honest state if it ever
+            // happened is a refusing aperture, not a panic in an MMIO exit.
+            self.refuse_pramin_slot(slot, region, old_view, base, "the device-view port is gone");
+            return;
+        };
+        let Some((_span_off, span_len)) = self.plane.pramin_span() else {
+            return;
+        };
+
+        // ★ The barrier's OPEN half. Stamped, and the view parked, BEFORE anything is placed.
+        let seq = self.repoint_started.fetch_add(1, Ordering::AcqRel) + 1;
+        self.parked_inplace
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push((old_view, seq));
+
+        let armed = port.with_node(base, span_len, true, |fd, mmap_len| {
+            self.machine
+                .repoint_device_window(region, fd, mmap_len, true)
+        });
+        // ⊘ Timed around the arm AND the placement, on every outcome: a refused move still
+        // spent the time, and excluding it would flatter the worst case.
+        let ns = u64::try_from(t0.elapsed().as_nanos()).unwrap_or(u64::MAX);
+        self.pramin_move_ns_total.fetch_add(ns, Ordering::Relaxed);
+        self.pramin_move_ns_worst.fetch_max(ns, Ordering::Relaxed);
+
+        match in_place_verdict(&armed) {
+            InPlaceVerdict::Shows { view } => {
+                // ★★★ THE ONE PLACE `repoint_landed` IS RAISED. It means exactly *"the
+                // `MAP_FIXED` that replaced the node parked at this sequence has returned"*.
+                self.repoint_landed.fetch_max(seq, Ordering::AcqRel);
+                *slot = Some((region, base, Some(view)));
+                self.pramin_moves.fetch_add(1, Ordering::Relaxed);
+                self.pramin_inplace.fetch_add(1, Ordering::Relaxed);
+                self.mark_pramin(base);
+            }
+            InPlaceVerdict::Refuse { why } => {
+                self.pramin_inplace_refused.fetch_add(1, Ordering::Relaxed);
+                // ⊘ The displaced view's mapping was NOT overwritten — nothing was placed — so
+                // it goes back to the window-collected barrier, which is the correct one for a
+                // window that is about to be removed.
+                self.unpark_in_place(seq);
+                self.refuse_pramin_slot(slot, region, old_view, base, why);
+            }
+        }
+    }
+
+    /// Take a stamped entry back out of the in-place parked list, if it is still there.
+    /// ⊘ Returns nothing: a caller that has already decided to tear the window down owns the
+    /// view either way, and a missing entry can only mean a drain released it, which needs the
+    /// `MAP_FIXED` to have landed — i.e. it cannot happen on the refusal path.
+    fn unpark_in_place(&self, seq: u64) {
+        self.parked_inplace
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .retain(|(_, s)| *s != seq);
+    }
+
+    /// ★★★★★ **w752 — A REFUSED IN-PLACE RE-POINT LEAVES PRAMIN WITH NO SLOT, LOUDLY.**
+    ///
+    /// Three states were available and only one of them is honest:
+    ///
+    /// - **leave the old node mapped** — the guest reads the PREVIOUS framebuffer through an
+    ///   aperture it just re-aimed, with no trap and no error. `[w582-w586]` measured three
+    ///   separate defects living in exactly that gap between *"the slot intercepts"* and
+    ///   *"the slot shows the same bytes"*, and the arena arm's own refusal path names this as
+    ///   *"the one failure on this path that cannot be contained"*.
+    /// - **restore anonymous backing** — the guest reads zeroes, silently. Same class.
+    /// - **remove the window** — every PRAMIN access traps and the single store refuses it by
+    ///   name. Loud, contained, and the state the release-and-re-arm path already ended in.
+    ///
+    /// ⚠ This reintroduces the memslot delete and the `munmap` (doors 7 and 8) — **on the
+    /// refusal path only**, which is never reached in a healthy boot. The census says how
+    /// often, so this is checkable rather than assumed.
+    fn refuse_pramin_slot(
+        &self,
+        slot: &mut Option<(RamRegionId, u64, Option<u64>)>,
+        region: RamRegionId,
+        old_view: u64,
+        base: u64,
+        why: &str,
+    ) {
+        let gpa = self.pramin_gpa.load(Ordering::Relaxed);
+        let _ = self.retire(vec![Retired {
+            gpa,
+            region,
+            view: Some(old_view),
+        }]);
+        *slot = None;
+        eprintln!(
+            "kayfabe: PRAMIN-WINDOW ⊘⊘ IN-PLACE RE-POINT REFUSED to fb 0x{base:x} ({why}); the \
+             window and its memslot were REMOVED, so every PRAMIN access now traps and the \
+             single store refuses it by name. ⊘ A refusal, never a stale aperture: leaving the \
+             node that was there would have shown the guest the PREVIOUS framebuffer with no \
+             trap and no error."
+        );
+    }
+
+    /// ★★★★★ **w752 CUT P2's half — RELEASE THE VIEWS WHOSE MAPPING A `MAP_FIXED` OVERWROTE.**
+    ///
+    /// The fail-closed gate: an entry is released **only** if the re-point that displaced it
+    /// has landed. Everything else is held, and counted.
+    ///
+    /// ⊘ Lock-free and off-trap, like its sibling — releasing is an IPC round trip.
+    /// [`BarMirror::drain_view_releases`] has already declined by name before this runs.
+    fn drain_inplace_releases(&self, port: &crate::deviceview::DeviceViewPort) {
+        let landed = self.repoint_landed.load(Ordering::Acquire);
+        let ready: Vec<u64> = {
+            let mut p = self.parked_inplace.lock().unwrap_or_else(|e| e.into_inner());
+            if p.is_empty() {
+                return;
+            }
+            let (ready, keep) = releasable_through(std::mem::take(&mut *p), landed);
+            if !keep.is_empty() {
+                // ⚠ Summed over passes, so a permanently-held entry accumulates rather than
+                // being counted once and forgotten. Non-zero means the gate FIRED: a view is
+                // holding host BAR1 aperture because its replacement never landed. That is a
+                // leak, which is the safe direction — the other direction is cross-tenant.
+                self.parked_early_refused
+                    .fetch_add(keep.len() as u64, Ordering::Relaxed);
+            }
+            *p = keep;
+            ready
+        };
+        for v in ready {
+            port.release(crate::deviceview::ViewId(v));
+            self.inplace_released.fetch_add(1, Ordering::Relaxed);
         }
     }
 
@@ -2240,6 +2518,21 @@ impl BarMirror {
     /// ★★★★★ **w468 — the worker's half.** Runs the walk `after_write` deferred, if any is
     /// outstanding. ⊘ Never call from a vCPU thread.
     pub fn revalidate_pending(&self) {
+        // ★★★★★ **w752 CUT P2 — THE RECLAIM TICK, and it had no caller before this.**
+        //
+        // ⊘⊘ `drain_view_releases`'s own doc said *"Called from `Self::retire` and from the
+        // reclaim tick"*, and `grep` found exactly one caller: `retire`, on the vCPU. The
+        // second half of that sentence described an intention. ⇒ moving the release off the
+        // trap without wiring a worker that actually drains it would have turned door 9 into a
+        // permanent aperture leak — the `a_check_that_reports_is_not_a_check_that_gates` shape,
+        // one layer down.
+        //
+        // ★ Here, and unconditionally ahead of the early return below: this method is the
+        // worker's half of the mirror (`RegPlane::drain_mirror_revalidation`, 4 691 calls in
+        // the w742 boot, plus `revalidate_mirror_first`), and a tick that only drained when a
+        // revalidation happened to be outstanding would tie the release rate to an unrelated
+        // signal.
+        self.drain_view_releases();
         let req = self.reval_req.load(Ordering::Acquire);
         if req == self.reval_done.load(Ordering::Relaxed) {
             return;
@@ -2369,6 +2662,39 @@ impl BarMirror {
             eprintln!(
                 "kayfabe: PRAMIN-SLOT AT {at}: moves={moves} skipped={} showing={shown} window_accesses={total} {split}{placement} {shape} move_ns[worst={worst} mean={mean}] \u{2605} THE REPOINT IS A BLOCKING DOOR ON THE vCPU (goal 3) AND PART OF A WRITE TRAP (goal 6): `worst` is what both are actually worth, and it was UNMEASURED before w652 - absent from SLOW-SITES only proves it is under 1ms. \u{2298} moves+skipped below the guest's latch-write count means a re-point was REFUSED and the guest read the wrong framebuffer.",
                 self.pramin_skipped.load(Ordering::Relaxed),
+            );
+        }
+        // ★★★★★ **w752 — THE CUT'S OWN CENSUS LINE.** Printed whenever the device-view port
+        // exists, whether or not it was ever used: *"nothing was parked"* and *"the worker
+        // never ticked"* must not read the same, and neither may hide behind an absent line.
+        if let Some(port) = self.device_port.as_ref() {
+            let held = self
+                .parked_inplace
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .len();
+            let started = self.repoint_started.load(Ordering::Relaxed);
+            let landed = self.repoint_landed.load(Ordering::Relaxed);
+            let early = self.parked_early_refused.load(Ordering::Relaxed);
+            eprintln!(
+                "kayfabe: PRAMIN-INPLACE AT {at}: inplace={} refused={} started={started} \
+                 landed={landed} released={} held={held} declined_on_vcpu={} \
+                 early_release_refused={early} port_outstanding={} \u{2605} CUT P1: every move \
+                 after the first install is ONE MAP_FIXED over the live window - no fresh \
+                 window, no memslot install, no memslot drop, no munmap (doors 4/6/7/8 of the \
+                 w742 census). \u{2605} CUT P2: the release runs on the worker's reclaim tick; \
+                 `declined_on_vcpu` is the door-9 crossings that did NOT happen inside an MMIO \
+                 exit, and a ZERO there with `inplace`>0 means the decline is not on the path. \
+                 \u{2298} `early_release_refused`>0 is the restated w735 barrier FIRING: a view \
+                 whose replacing MAP_FIXED never landed is held forever, which is an aperture \
+                 LEAK - the safe direction, the other one is cross-tenant. \u{26a0} \
+                 `held`>0 at teardown with started==landed means the tick is behind, not that \
+                 the gate fired.",
+                self.pramin_inplace.load(Ordering::Relaxed),
+                self.pramin_inplace_refused.load(Ordering::Relaxed),
+                self.inplace_released.load(Ordering::Relaxed),
+                self.parked_declined.load(Ordering::Relaxed),
+                port.outstanding(),
             );
         }
         let (live, peak, pages, frames, refused) = {
@@ -2724,6 +3050,129 @@ mod arena_unit_tests {
             [0u8; 64],
             "the previous device life's framebuffer bytes are still in the file, readable by \
              the next guest through the same memory slot"
+        );
+    }
+}
+
+/// ★★★★★ **w752 — THE TWO GATES CUT P1/P2 ADD, AND THE MUTATIONS THAT MUST BREAK THEM.**
+///
+/// ⊘ Neither of these can be reached through a live `BarMirror` in a test: arming a device view
+/// needs a running scratchpad isolate, a real `/dev/nvidia<N>` and a GPU. That is exactly why
+/// both decisions were extracted as pure functions — a gate whose only proof is a boot on a
+/// rented box is a gate nobody runs.
+#[cfg(test)]
+mod in_place_repoint_gates {
+    use super::*;
+    use crate::deviceview::{ViewId, ViewRefusal};
+
+    /// ★★★★★ **THE `NoWorker` KNOWN-POSITIVE.** The brief's requirement, verbatim: *"force it
+    /// and assert the window is left in a defined, refusing state, never a half-re-pointed
+    /// one."*
+    ///
+    /// `NoWorker` is **reachable** — `DeviceViewPort::with_node` arms through
+    /// `SharedIsolate::with_worker`, which is `g.checkout()?` and answers `None` rather than
+    /// waiting when every worker of the `pool=4` scratchpad is busy. Under the old
+    /// release-and-re-arm path that refusal arrived *after* the old view had already been
+    /// released and the window removed, so PRAMIN was left with no slot **and** the aperture
+    /// given back. Here it arrives before anything is placed, and the verdict must still be
+    /// `Refuse`: the window is torn down deliberately, never left showing the framebuffer the
+    /// guest just aimed away from.
+    #[test]
+    fn every_refusal_leaves_a_defined_refusing_aperture_and_never_a_stale_one() {
+        // The arm that must NOT be `Shows`, and the one this test exists for.
+        let no_worker: Result<Result<((), ViewId), String>, ViewRefusal> =
+            Err(ViewRefusal::NoWorker);
+        match in_place_verdict(&no_worker) {
+            InPlaceVerdict::Refuse { why } => assert!(
+                why.contains("nothing was placed"),
+                "a refusal must say that nothing was placed, because the caller's whole \
+                 decision — tear the slot down rather than leave it stale — turns on it; got \
+                 {why:?}"
+            ),
+            v => panic!(
+                "a `NoWorker` refusal produced {v:?}. `Shows` here would mean the aperture is \
+                 believed re-pointed while NOTHING was armed and NOTHING was placed: the guest \
+                 reads the PREVIOUS framebuffer through a window it just re-aimed, with no trap \
+                 and no error. That is the [w582-w586] class, which this tree has already paid \
+                 for three times."
+            ),
+        }
+
+        // The other two refusals, so the arm above is not the only one anybody checks.
+        for (armed, what) in [
+            (
+                Err(ViewRefusal::NoDescriptor { token: 7 }) as Result<Result<((), ViewId), String>, _>,
+                "a node that did not cross the isolate boundary",
+            ),
+            (
+                Err(ViewRefusal::Rm("whatever RM said".into())),
+                "an RM refusal of the arm itself",
+            ),
+            (
+                Ok(Err("the MAP_FIXED was refused".to_string())),
+                "a refused placement of a node that WAS armed",
+            ),
+        ] {
+            assert!(
+                matches!(in_place_verdict(&armed), InPlaceVerdict::Refuse { .. }),
+                "{what} must leave a defined refusing aperture"
+            );
+        }
+
+        // ⊘ Non-vacuity: the success arm must still be reachable, or the assertions above are
+        // satisfied by a function that refuses everything.
+        assert_eq!(
+            in_place_verdict(&(Ok(Ok(((), ViewId(9)))) as Result<Result<_, String>, ViewRefusal>)),
+            InPlaceVerdict::Shows { view: 9 },
+            "a landed MAP_FIXED must produce the view it landed"
+        );
+    }
+
+    /// ★★★★★ **NEVER-EARLY-RELEASE — the restated w735 barrier, with the failure it guards.**
+    ///
+    /// w735's mechanism was *"`reclaim_released_windows` has named the region"*. The in-place
+    /// re-point never removes the window, so that can never answer yes; the successor is *"the
+    /// `MAP_FIXED` that overwrote this view's mapping has returned"*, carried as a sequence
+    /// number stamped **before** the placement is attempted.
+    ///
+    /// ⚠ The mutation this must catch is the obvious one: stamp the view *after* the placement
+    /// (or raise `repoint_landed` before it). Then every parked entry is `<= landed` by
+    /// construction, the `keep` list is always empty, and the gate is a comment.
+    #[test]
+    fn a_view_whose_replacement_never_landed_is_held_and_never_released() {
+        // Three re-points started; only the first two landed.
+        let parked = vec![(101, 1), (102, 2), (103, 3)];
+        let (ready, keep) = releasable_through(parked, 2);
+        assert_eq!(
+            ready,
+            vec![101, 102],
+            "a view whose replacing MAP_FIXED returned Ok may be released: its PTEs were \
+             overwritten atomically by that very call"
+        );
+        assert_eq!(
+            keep,
+            vec![(103, 3)],
+            "view 103's replacement NEVER LANDED, so the mapping that names its host BAR1 \
+             aperture may still be live. Releasing it hands RM an aperture our own PTEs point \
+             into — RM's `osUnmapPciMemoryUser` is an empty function, so the unmap returns the \
+             range to the pool WITHOUT touching our VMA. Silent, and cross-tenant."
+        );
+
+        // ⊘ The gate must be able to hold EVERYTHING — the state after a first re-point that
+        // was refused, which is precisely when it matters.
+        let (ready, keep) = releasable_through(vec![(7, 1)], 0);
+        assert!(
+            ready.is_empty() && keep == vec![(7, 1)],
+            "nothing has landed, so nothing may be released"
+        );
+
+        // ⊘ Non-vacuity, the other way: a gate that held everything would pass both assertions
+        // above and leak the entire aperture pool.
+        let (ready, keep) = releasable_through(vec![(7, 1), (8, 2)], 9);
+        assert!(
+            ready == vec![7, 8] && keep.is_empty(),
+            "once every replacement has landed the whole list must drain, or cut P2 is a leak \
+             wearing a barrier's name"
         );
     }
 }
