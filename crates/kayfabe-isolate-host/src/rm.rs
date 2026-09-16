@@ -615,9 +615,11 @@ use handed_client::HandedClient;
 mod birth_conn {
     use super::{
         HandedClient, Indirect, NV01_MEMORY_VIRTUAL, NV_ESC_RM_ALLOC, NV_ESC_RM_DUP_OBJECT,
-        NV_ESC_RM_FREE, NV_ESC_RM_MAP_MEMORY_DMA, NV_IOCTL_MAGIC, NOT_ON_THIS_RUNG,
+        NV_ESC_RM_FREE, NV_ESC_RM_MAP_MEMORY_DMA, NV_ESC_RM_UNMAP_MEMORY_DMA, NV_IOCTL_MAGIC,
+        NOT_ON_THIS_RUNG,
         NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE, Nvos00Parameters, Nvos21Parameters,
-        Nvos46Parameters, Nvos55Parameters, NvMemoryVirtualAllocationParams, RmError,
+        Nvos46Parameters, Nvos47Parameters, Nvos55Parameters, NvMemoryVirtualAllocationParams,
+        RmError,
         ioctl_error, status_check,
     };
 
@@ -883,13 +885,58 @@ mod birth_conn {
             // ★★★★★ **CONSTRAINT 28 HALF TWO — RM's ANSWER IS CHECKED, NOT ASSUMED.** An
             // `Ok` naming the wrong address is the failure mode this exists for: it is
             // indistinguishable from success until an engine faults on a VA nothing holds.
-            if out.dma_offset != at {
+            let want = at;
+            if out.dma_offset != want {
+                // ★★★★★ **AND THE REFUSAL TEARS THE MIS-PLACED MAPPING DOWN.**
+                //
+                // ⊘⊘ **This was MISSING in the first version of this function and
+                // `the_one_fixed_map_refuses_a_placement_rm_moved` is what found it.** RM
+                // made a **real** mapping at an address nothing will ever name again;
+                // returning the refusal without unmapping is the relocation's leak with a
+                // refusal printed over it — inside B, where nothing else will ever free it,
+                // because the ledger this connection deliberately does not have is the thing
+                // that would have.
+                //
+                // ⚠ The unmap's own failure is swallowed deliberately: the caller is already
+                // being told the map failed, and a second error here would replace the
+                // diagnosis with the cleanup's.
+                let _ = self.unmap_dma(h_dma, out.dma_offset);
                 return Err(RmError::PlacementRefused {
-                    want: at,
+                    want,
                     got: out.dma_offset,
                 });
             }
             Ok(out.dma_offset)
+        }
+
+        /// One `NV_ESC_RM_UNMAP_MEMORY_DMA` inside B, undoing a
+        /// [`BirthConn::map_dma_slice`].
+        ///
+        /// # Errors
+        /// Whatever RM refused the unmap with.
+        pub(super) fn unmap_dma(&self, h_dma: u32, gpu_va: u64) -> Result<(), RmError> {
+            let mut arg = [0u8; Nvos47Parameters::SIZE];
+            Nvos47Parameters {
+                h_client: self.handed.root(),
+                h_device: self.device,
+                h_dma,
+                h_memory: 0,
+                flags: 0,
+                dma_offset: gpu_va,
+                size: 0,
+                status: 0,
+            }
+            .encode_into(&mut arg)
+            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+            let req =
+                ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_UNMAP_MEMORY_DMA as u8, arg.len())
+                    .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+            self.ctl
+                .ioctl(req, &mut arg, &mut [])
+                .map_err(|e| ioctl_error(&e))?;
+            let out =
+                Nvos47Parameters::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+            status_check(out.status)
         }
 
         /// `NV_ESC_RM_FREE` inside B.
