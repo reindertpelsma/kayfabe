@@ -1981,6 +1981,32 @@ impl GspFsm {
         self.pending_command_doorbells
     }
 
+    /// ★★★★★ **w754 — RECORD DOORBELLS THE SHELL POSTED WITHOUT TAKING THIS LOCK.**
+    ///
+    /// Constraint 6 asks that an MMIO trap *"only posts the register write to a queue …,
+    /// wakes a worker, and returns"*. [`BootStep::CommandDoorbell`]'s deferral already does
+    /// the *"does not service"* half, but reaching it costs the shell the plane's rank-0
+    /// lock — the one a worker holds across a whole RPC. So the shell may now classify the
+    /// queue-head write **before** that lock, count it in an atomic of its own, and hand the
+    /// total here on the worker's next pass, under the lock it was going to take anyway.
+    ///
+    /// ⊘ **A COUNT, not a flag**, for exactly [`Self::pending_command_doorbells`]' reason:
+    /// two writes before the worker wakes are two queue states to drain, and collapsing them
+    /// would strand the guest's second submission behind a wake that never comes again.
+    ///
+    /// ⚠ Saturating. The count is a *"the queue moved"* tally and the drain empties it to
+    /// zero, so the only way to reach `u32::MAX` is a worker that never runs — in which case
+    /// the guest is already parked and losing an increment changes nothing.
+    ///
+    /// ⊘ It does **not** consult [`Self::defer_commands`]. The shell's own arming decides
+    /// whether the early classification happens at all; making this refuse when deferral is
+    /// off would silently DROP a doorbell the shell had already taken off the inline path —
+    /// two arming flags for one decision, which is the second-source-of-truth shape this
+    /// tree keeps paying for.
+    pub const fn note_command_doorbells(&mut self, n: u32) {
+        self.pending_command_doorbells = self.pending_command_doorbells.saturating_add(n);
+    }
+
     /// Turn command-doorbell deferral on or off.
     ///
     /// ⊘ Off by default so every existing test keeps the synchronous behaviour it asserts.

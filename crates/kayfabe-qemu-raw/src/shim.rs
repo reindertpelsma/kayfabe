@@ -3841,6 +3841,12 @@ struct SharedDoorbell {
     /// [`DoorbellInlineArm`]. Present on both arms; the control makes the queue the only path.
     doorbell_inline: DoorbellInlineArm,
     doorbell_async: DoorbellAsyncArm,
+    /// ★ w754 — which guest-ring arm this boot is running, so
+    /// [`SharedDoorbell::adopt_pending_channel_rings`] can ask it from the worker. ⊘ A `Copy`
+    /// enum carried on the port rather than re-read from the environment: `selected_guest_ring`
+    /// parses `KAYFABE_GUEST_RING` and a second parse is a second source of truth, free to
+    /// disagree with the one the boot log printed.
+    guest_ring: GuestRingArm,
 }
 
 /// ★★★★★ **w318 — THE DIRTY GATE: what the last doorbell already did, so this one need not
@@ -5321,6 +5327,55 @@ static GSP_LANE_FULL: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU6
 /// boot where it is ZERO while the guest is making progress means deferral is not armed.
 static GSP_SERVICED_OFF_VCPU: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// ★★★★★ w754 — THE RING-ADOPT CENSUS. Four numbers, because four different things read as
+// "0" and only one of them is health.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+
+/// Passes that found something latched and did the settlement + join.
+static RING_ADOPT_RAN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+/// ★★★ Of those, the ones that ran on the DOORBELL WORKER. This is the number that says the
+/// move took.
+static RING_ADOPT_OFF_VCPU: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+/// ⚠ Of those, the ones that ran INSIDE A GUEST MMIO TRAP. Legitimate on the arm with no
+/// worker; on a deferring arm every one of these is a constraint-4 violation.
+static RING_ADOPT_ON_VCPU: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+/// Passes that found the latch moved but nothing pending — the cheap, common case.
+static RING_ADOPT_NOTHING_PENDING: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+/// Passes that could not derive a plane at all (teardown).
+static RING_ADOPT_NO_PLANE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// ★★★ **One line, with its own verdict.** ⊘ `ran=0` has three different causes and they
+/// need different fixes: no worker ever woke, nothing was ever latched, or the arm is
+/// disarmed. The line says which.
+#[must_use]
+fn ring_adopt_census() -> String {
+    use std::sync::atomic::Ordering::Relaxed;
+    let (ran, off, on, none, noplane) = (
+        RING_ADOPT_RAN.load(Relaxed),
+        RING_ADOPT_OFF_VCPU.load(Relaxed),
+        RING_ADOPT_ON_VCPU.load(Relaxed),
+        RING_ADOPT_NOTHING_PENDING.load(Relaxed),
+        RING_ADOPT_NO_PLANE.load(Relaxed),
+    );
+    let verdict = if ran == 0 && none == 0 {
+        "⊘⊘ UNMEASURED — the arm was never entered at all. Not `nothing was latched`: that          case increments `nothing_pending`. Either the guest-ring arm is off or no register          write ever saw the latch epoch move"
+    } else if ran == 0 {
+        "⊘ NOTHING TO ADOPT — the latch moved and no Passthrough birth or engine forward was          ever pending. A real measurement, and a boot that births no passthrough channel is          expected to read exactly this"
+    } else if on > 0 && off > 0 {
+        "⚠ BOTH THREADS — some passes ran on a vCPU and some on the worker. Legal only if the          arm changed mid-boot; otherwise the vCPU gate is wrong"
+    } else if on > 0 {
+        "⚠ ON THE vCPU — every pass ran inside a guest MMIO trap, settlement included. CORRECT          on the arm with no doorbell worker; a constraint-4 violation on any other"
+    } else {
+        "★ OFF THE vCPU — every pass ran on the doorbell worker, before the birth drain that          consumes it (constraints 4, 6 and 8)"
+    };
+    format!(
+        "RING-ADOPT ran={ran} off_vcpu={off} on_vcpu={on} nothing_pending={none} \
+         no_plane={noplane} ⇒ {verdict}"
+    )
+}
+
 /// ★★★ Set when a publication job could not be queued. The next refresh in the worker treats
 /// **every** page directory and page table as dirty, so a dropped notification costs time and
 /// never coverage. Owner's design, 2026-09-10.
@@ -5516,6 +5571,18 @@ fn doorbell_publish_loop(
                 }
             }
         }
+        // ★★★★★ **w754 — THE RING ADOPT AND ITS SETTLEMENT, HERE, BEFORE THE BIRTH DRAIN.**
+        //
+        // `[measured w752]` this body cost a vCPU **24 999 us at `bar0+0x110c00`**, 96 % of it
+        // CPU, because `Regs::write` ran it inline on whichever register write noticed
+        // `pending_latch_epoch()` move. Its own doc has always required it to run before
+        // `report_channel_birth_drain` — and on this arm that drain is the line below, so
+        // "before" is now a property of one thread rather than a hope about two.
+        //
+        // ⊘ `false` = not on a vCPU, and it is passed rather than derived: an `OffTrap` proves
+        // this thread is not in a trap, but nothing at this line can prove which thread the
+        // NEXT edit will call from. The flag makes the claim explicit and the census checks it.
+        port.adopt_pending_channel_rings(false);
         let birth_grants =
             pending_birth_notifier_grants_of(&port.device, &port.ce, port.guest_ram_backing);
         // ★★★ **w644 — THIS DEVICE'S MIRROR, not a process-global fallback.**
@@ -10973,6 +11040,290 @@ impl SharedDoorbell {
     ///
     /// Returns the line to print. ⊘ It prints on the disarmed arm too, saying so: an
     /// instrument that is silent when off cannot be told from one that is not wired.
+    // ═══════════════════════════════════════════════════════════════════════════════════
+    // ★★★★★ w754 — THE RING ADOPT AND ITS PAGE-TABLE SETTLEMENT, MOVED OFF THE vCPU.
+    //
+    // `[measured w752]` `worst_trap=24999us at=bar0+0x110c00 cpu_of_that_trap=23979us` —
+    // 96 % CPU, on a register whose servicing w432 had already deferred and whose arming
+    // w472b had already made survive a reset. The 25 ms was never the GSP command queue:
+    // it is the three settlement passes below, run inline from `Regs::write` on whichever
+    // guest register write happened to notice `pending_latch_epoch()` move.
+    //
+    // ⊘ `0x110c00` is a BYSTANDER — the register the guest writes most during driver init.
+    // `SLOW-SITES` names six more (`0xbb0090`, `0xb81408/0410/1608/1610`, `0x1700`), and the
+    // four `0xb81…` offsets carry no per-register work of their own that could cost
+    // milliseconds, which is what makes them the same code at a different address.
+    //
+    // ⚠ The move also RESTORES an ordering this function's own doc demands. It says it must
+    // run before `report_channel_birth_drain` and `report_engine_forward_drain`; on the
+    // deferring arm those two already run on the worker while this stayed on the vCPU, so
+    // "before" was not true of any single thread. Here it is, by construction.
+    // ═══════════════════════════════════════════════════════════════════════════════════
+    #[cfg(feature = "host-isolates")]
+    pub(crate) fn adopt_pending_channel_rings(&self, on_vcpu: bool) {
+        if !self.guest_ring.adopts_ring() {
+            // ⊘ Silent, exactly as `back_census_framebuffer_leaves`' disarmed arm is: the
+            // control's log must not contain a line the armed run's does not, or the two stop
+            // being comparable. The arming itself is on disk, printed once at the root.
+            return;
+        }
+        // ★★★★★ **w393 — TWO latches feed this join, and the BIRTH one is the point.** A
+        // channel born at its own alloc adopts its ring AND USERD at creation, and
+        // `adopted_guest_ring` can only say yes over a leaf this pass has already joined. So
+        // every pending birth's ring leaf is walked and joined HERE, before the birth
+        // drains — the exact ordering leg A1 already imposes on the engine-object latch.
+        // ⊘ Births of `Emulated` channels are filtered out silently: not this site's birth,
+        // and `plan_back_fb_leaf` would refuse `SYSTEM_PROC` by name anyway — one line per
+        // kernel channel at boot is a log the control must not gain.
+        let forwards = self.device.peek_pending_engine_forwards();
+        let births = self.device.peek_pending_channel_births();
+        if forwards.is_empty() && births.is_empty() {
+            // The overwhelmingly common case — this runs on every register write.
+            RING_ADOPT_NOTHING_PENDING.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            return;
+        }
+        let mut targets: Vec<(
+            String,
+            Result<kayfabe_rt::device::CeChannelFacts, kayfabe_rt::FwdFault>,
+        )> = Vec::with_capacity(forwards.len() + births.len());
+        for (client, parent, class) in forwards {
+            targets.push((
+                format!(
+                    "client={:#x} parent={:#x} class={:#06x}",
+                    client.0, parent.0, class.0
+                ),
+                self.device
+                    .engine_object_channel_facts(client, parent, class),
+            ));
+        }
+        for (client, channel) in births {
+            let facts = self.device.channel_birth_facts(client, channel);
+            if let Ok(f) = &facts
+                && f.kind != kayfabe_core::channel_kind::GuestChannelKind::Passthrough
+            {
+                continue;
+            }
+            targets.push((
+                format!("BIRTH client={:#x} channel={:#x}", client.0, channel.0),
+                facts,
+            ));
+        }
+        let pending = targets;
+        if pending.is_empty() {
+            return;
+        }
+        // ★★★★★ THE POSITIVE SIGNAL, emitted on EVERY armed pass that has anything to do,
+        // **including the ones that join nothing.** ⚠ Without it *"leg A never executed"* and
+        // *"leg A executed and changed nothing"* are identical on every other observable —
+        // the same class as a `dlen=0` oracle row and a zero-byte bench artefact.
+        // ★★★★★ **w754 — THE COUNTER THAT SEPARATES "NOTHING TO ADOPT" FROM "THE ARM NEVER
+        // RAN".** This body moved threads; the failure mode of such a move is not an error,
+        // it is SILENCE — and `a_census_zero_needs_a_known_positive` is this tree's name for
+        // reading that silence as health. `on_vcpu` is the half that says the move took.
+        RING_ADOPT_RAN.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if on_vcpu {
+            RING_ADOPT_ON_VCPU.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        } else {
+            RING_ADOPT_OFF_VCPU.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+        // ⊘ The plane is held as a `Weak` here (it owns this port), so it is upgraded rather
+        // than borrowed — and a dead plane is SAID rather than skipped: at teardown that is
+        // benign, and at any other time it is a ring the guest declared that nobody joined.
+        let Some(plane) = self.plane.upgrade() else {
+            RING_ADOPT_NO_PLANE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            eprintln!(
+                "kayfabe: GR-RING-JOIN ⊘ NO PLANE — the register plane is gone, so no VA-space
+                 root can be derived and nothing is joined. Benign at teardown ONLY"
+            );
+            return;
+        };
+        let head = "kayfabe: GR-RING-JOIN".to_string();
+        let Some(exports) = self.exports.as_ref() else {
+            eprintln!(
+                "{head} arm={} pending={} → ⊘ NOT ARMABLE: this build has no route from a \
+                 backing token to a descriptor (exports_directory=false), so no leaf can be \
+                 claimed. ⊘ Nothing was asked of the host",
+                self.guest_ring.as_str(),
+                pending.len(),
+            );
+            return;
+        };
+        eprintln!(
+            "{head} arm={} host_isolates=yes exports_directory=true fb_join={} pending={} — \
+             the engine-object latch is about to be drained, and every host channel it births \
+             is born HERE. ⊘ Nothing below reads a ring byte",
+            self.guest_ring.as_str(),
+            self.fb_join.as_str(),
+            pending.len(),
+        );
+        // ★★★★★ **w393 — SETTLE THE PAGE TABLES BEFORE THE BIRTH-TIME JOIN.** A birth
+        // happens on a register write, BETWEEN doorbells, and `join_one_fb_leaf`'s sibling
+        // predicate (`fb_join_va_in_vas`) answers out of OUR address table — which is only
+        // brought level with the guest's page tables by the settlement `ring_inline` runs
+        // (`witness_executor_fb_pages` → `decode_cpu_pt_writes` → `sweep_cpu_pt_tables`).
+        //
+        // `[measured w392s, run_w392s_qemu.log:421,451,455,458,495-505]` the last settlement
+        // before P3's birth was P2's round-3 doorbell (`:421`, `exec_writes=47`), which
+        // precedes that round's `UVM_FREE` + `NV01_FREE` of its 4 KiB object; the guest's
+        // allocator then re-issued the SAME frame `0x140000` to P3's 64 KiB ring. At the
+        // birth (`:451`, `:458`) the row `0x9080000000 → 0x140000` was still
+        // `JoinsGuestWindow` in the table — a frame the guest had already unmapped read as a
+        // LIVE SIBLING, the ring's leaf was refused by name, and the channel was born
+        // `PassthroughRingNotAdoptable` (`:455`). The very next settlement, at P3's OWN first
+        // doorbell (`:496`, `exec_writes=74`, `drained=123`), revoked exactly that row
+        // (`revoked=1 kept_for_move=1`, `KEPT-FOR-MOVE va=0x9080000000` at `:495`) and the
+        // REGROW arm then joined the ring at 64 KiB (`:503-505`, `established=65536 bytes`)
+        // — 45 lines after the birth it was needed for.
+        //
+        // ⇒ Run the SAME three passes here, first. Not a new predicate and not a second
+        // source of truth beside the settlement: the one settlement, one consumer earlier.
+        // ⊘ Scoped by construction to a register write with a Passthrough birth or engine
+        // forward pending (the early returns above), so a plain doorbell — which has already
+        // settled in `ring_inline` — never pays for it twice. ⊘ Emits nothing into the
+        // guest's message queue (the passes print and issue host verbs only), so the
+        // `bPollingForRpcResponse` obligation the call site names is untouched.
+        // ⚠ NOT YET MEASURED against a boot: the chain it relies on is measured only in
+        // pieces (the revoke at `:496`, the REGROW at `:503-505`, adoption at P2's CE births).
+        {
+            let w = self.witness_executor_fb_pages();
+            let d = self.decode_cpu_pt_writes();
+            let s = self.sweep_cpu_pt_tables();
+            eprintln!(
+                "{head} SETTLE-BEFORE-BIRTH pending={} → the doorbell's own page-table \
+                 settlement, run BEFORE the join so a row the guest has already unmapped \
+                 cannot read as a LIVE SIBLING ([measured w392s:421→451→496]){w}{d}{s}",
+                pending.len(),
+            );
+        }
+        for (label, facts) in pending {
+            let facts = match facts {
+                Ok(f) => f,
+                Err(e) => {
+                    eprintln!(
+                        "{head} {label} → ⊘ NOT ROUTED `{e:?}` — this alloc names no channel \
+                         this port can resolve, so there is no ring to adopt. ⊘ Not a miss: \
+                         the drain refuses it too",
+                    );
+                    continue;
+                }
+            };
+            let (Some(ring_va), Some(pdb), Some(vaspace)) =
+                (facts.ring_va, facts.vas_pdb, facts.vaspace)
+            else {
+                eprintln!(
+                    "{head} proc={} chan={} {label} → ⊘ NOTHING TO ADOPT: ring_va={:?} \
+                     vas_pdb={:?} vaspace={:?}. ⚠ `ring_va = Some(0)` would be a VALUE and not \
+                     a blank — the driver declares `gpFifoOffset = 0` for its golden-context \
+                     channel — so a `None` here is the channel declaring no ring at all",
+                    facts.proc.0, facts.chan.0, facts.ring_va, facts.vas_pdb, facts.vaspace,
+                );
+                continue;
+            };
+            let root = match SharedDoorbell::doorbell_root(
+                &plane,
+                facts.client,
+                vaspace,
+                Some(pdb.0),
+            ) {
+                DoorbellRoot::Published(r) | DoorbellRoot::Declared(r) => r,
+                DoorbellRoot::Absent => {
+                    eprintln!(
+                        "{head} proc={} chan={} ring=0x{ring_va:x} → ⊘ NO ROOT: this channel \
+                         has no VA space root at all, so its ring VA cannot be walked",
+                        facts.proc.0, facts.chan.0,
+                    );
+                    continue;
+                }
+                DoorbellRoot::Underivable(p, why) => {
+                    eprintln!(
+                        "{head} proc={} chan={} ring=0x{ring_va:x} → ⊘ ROOT UNDERIVABLE from \
+                         pdb 0x{p:x}: {}",
+                        facts.proc.0,
+                        facts.chan.0,
+                        why.kind(),
+                    );
+                    continue;
+                }
+            };
+            // ★ The walk, and NOTHING is printed inside the guard (R1).
+            let (site, leaf) = plane.ce_session_with_root(
+                &root,
+                kayfabe_device::ceresolve::Demand::from_doorbell(),
+                |ce| kayfabe_rt::ceutils::resolve_leaf_of(ce, ring_va),
+            );
+            let Some(leaf) = leaf else {
+                eprintln!(
+                    "{head} proc={} chan={} ring=0x{ring_va:x} entries={} → ⊘ NOT A \
+                     FRAMEBUFFER LEAF: {site:?}. ⚠ `GuestRam` here is a REAL and SERVED case \
+                     that belongs to the guest-RAM pin, not to this source; `Unresolved` is a \
+                     TIMING fact — the guest had not bound its own ring at the instant its \
+                     engine object was latched — and must NOT be read as `the channel \
+                     declared no ring`",
+                    facts.proc.0, facts.chan.0, facts.ring_entries,
+                );
+                continue;
+            };
+            let isolate = kayfabe_isolate::IsolateId::new(facts.proc.0, DOORBELL_TARGET_GPU);
+            let what = format!(
+                "RING(chan={} entries={} engine={})",
+                facts.chan.0,
+                facts.ring_entries,
+                facts.engine_name(),
+            );
+            match join_one_fb_leaf(
+                &head,
+                &what,
+                &self.device,
+                &plane,
+                exports,
+                self.fb_join,
+                isolate,
+                pdb,
+                leaf,
+            ) {
+                Some(j) => eprintln!(
+                    "{head} proc={} chan={} ring=0x{ring_va:x} entries={} → ★★★★★ THE RING'S \
+                     OWN LEAF IS JOINED: memory={:#x} host_va=0x{:x} fb_phys=0x{:x}. ⊘ This is \
+                     the SUPPLY side only — the host channel about to be born still declares \
+                     OUR ring and OUR USERD, so GP_PUT == GP_GET and the engine fetches \
+                     nothing (gr_doorbell_passthrough.md §0.3). Legs A2 and B are what consume \
+                     this",
+                    facts.proc.0, facts.chan.0, facts.ring_entries, j.memory, j.host_va, leaf.phys,
+                ),
+                None => eprintln!(
+                    "{head} proc={} chan={} ring=0x{ring_va:x} → ⊘ THE RING'S LEAF WAS NOT \
+                     JOINED; the refusal above names why. Nothing is bound and the drain below \
+                     is unaffected",
+                    facts.proc.0, facts.chan.0,
+                ),
+            }
+        }
+    }
+
+    /// ⊘ **THE STUB, AND IT IS DELIBERATELY NOT SILENT.**
+    ///
+    /// `back_census_framebuffer_leaves`' own `#[cfg(not(host-isolates))]` twin has an empty
+    /// body, and that is exactly the shape that makes *"the experiment never ran"* read as
+    /// *"the experiment ran and changed nothing"* — an archive built without the feature
+    /// prints nothing, exits 0, and every other signal says the boot happened. This one says
+    /// so, **once**, the first time it is asked to do something.
+    #[cfg(not(feature = "host-isolates"))]
+    pub(crate) fn adopt_pending_channel_rings(&self, _on_vcpu: bool) {
+        if !self.guest_ring.adopts_ring() {
+            return;
+        }
+        static SAID: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        if !SAID.swap(true, std::sync::atomic::Ordering::Relaxed) {
+            eprintln!(
+                "kayfabe: GR-RING-JOIN arm={} host_isolates=NO ⇒ ⊘ THIS ARCHIVE CANNOT ADOPT A \
+                 RING AT ALL. The arm was requested and this build has no isolate plane, so \
+                 leg A is a no-op — ⚠ do NOT grade a boot from this binary as `armed and \
+                 nothing moved`",
+                self.guest_ring.as_str(),
+            );
+        }
+    }
+
     fn witness_executor_fb_pages(&self) -> String {
         // ⊘ w534 — the disarm is gone: the executor's framebuffer pages are ALWAYS witnessed.
         // `THE_PRODUCTION_CONTRACT.md` §2. Its `off` value was never in a graded boot, and the
@@ -16244,6 +16595,7 @@ impl Regs {
             pubqueue: Arc::clone(&pubqueue),
             doorbell_async,
             doorbell_inline,
+            guest_ring,
             // ⊘ `VCHID_SPACE` entries — the whole 12-bit vector field `decode_work_submit_token`
             // can produce, so a well-formed token is never past the end and the bounds check
             // only ever refuses a MALFORMED one.
@@ -17412,248 +17764,20 @@ impl Regs {
         pending_birth_notifier_grants_of(&self.device, &self.ce, self.guest_ram_backing)
     }
 
-    #[cfg(feature = "host-isolates")]
+    /// ★★★★★ **w754 — THE DELEGATE. The body now lives on [`SharedDoorbell`].**
+    ///
+    /// ⊘ It moved because of WHERE it has to run, not because of what it does. Every line of
+    /// it is unchanged; what changed is that the doorbell worker can now call it, which is
+    /// the only thread on the deferring arm where its two consumers
+    /// (`report_channel_birth_drain`, `report_engine_forward_drain`) already run.
+    ///
+    /// ⚠ This entry point is kept — and kept called from `Regs::write` — for the arm with NO
+    /// worker, exactly as `materialize_pending` and the two drains are. Deleting it would
+    /// make a no-worker boot adopt nothing at all.
     fn adopt_pending_channel_rings(&self) {
-        if !self.guest_ring.adopts_ring() {
-            // ⊘ Silent, exactly as `back_census_framebuffer_leaves`' disarmed arm is: the
-            // control's log must not contain a line the armed run's does not, or the two stop
-            // being comparable. The arming itself is on disk, printed once at the root.
-            return;
-        }
-        // ★★★★★ **w393 — TWO latches feed this join, and the BIRTH one is the point.** A
-        // channel born at its own alloc adopts its ring AND USERD at creation, and
-        // `adopted_guest_ring` can only say yes over a leaf this pass has already joined. So
-        // every pending birth's ring leaf is walked and joined HERE, before the birth
-        // drains — the exact ordering leg A1 already imposes on the engine-object latch.
-        // ⊘ Births of `Emulated` channels are filtered out silently: not this site's birth,
-        // and `plan_back_fb_leaf` would refuse `SYSTEM_PROC` by name anyway — one line per
-        // kernel channel at boot is a log the control must not gain.
-        let forwards = self.device.peek_pending_engine_forwards();
-        let births = self.device.peek_pending_channel_births();
-        if forwards.is_empty() && births.is_empty() {
-            // The overwhelmingly common case — this runs on every register write.
-            return;
-        }
-        let mut targets: Vec<(
-            String,
-            Result<kayfabe_rt::device::CeChannelFacts, kayfabe_rt::FwdFault>,
-        )> = Vec::with_capacity(forwards.len() + births.len());
-        for (client, parent, class) in forwards {
-            targets.push((
-                format!(
-                    "client={:#x} parent={:#x} class={:#06x}",
-                    client.0, parent.0, class.0
-                ),
-                self.device
-                    .engine_object_channel_facts(client, parent, class),
-            ));
-        }
-        for (client, channel) in births {
-            let facts = self.device.channel_birth_facts(client, channel);
-            if let Ok(f) = &facts
-                && f.kind != kayfabe_core::channel_kind::GuestChannelKind::Passthrough
-            {
-                continue;
-            }
-            targets.push((
-                format!("BIRTH client={:#x} channel={:#x}", client.0, channel.0),
-                facts,
-            ));
-        }
-        let pending = targets;
-        if pending.is_empty() {
-            return;
-        }
-        // ★★★★★ THE POSITIVE SIGNAL, emitted on EVERY armed pass that has anything to do,
-        // **including the ones that join nothing.** ⚠ Without it *"leg A never executed"* and
-        // *"leg A executed and changed nothing"* are identical on every other observable —
-        // the same class as a `dlen=0` oracle row and a zero-byte bench artefact.
-        let head = "kayfabe: GR-RING-JOIN".to_string();
-        let Some(exports) = self.exports.as_ref() else {
-            eprintln!(
-                "{head} arm={} pending={} → ⊘ NOT ARMABLE: this build has no route from a \
-                 backing token to a descriptor (exports_directory=false), so no leaf can be \
-                 claimed. ⊘ Nothing was asked of the host",
-                self.guest_ring.as_str(),
-                pending.len(),
-            );
-            return;
-        };
-        eprintln!(
-            "{head} arm={} host_isolates=yes exports_directory=true fb_join={} pending={} — \
-             the engine-object latch is about to be drained, and every host channel it births \
-             is born HERE. ⊘ Nothing below reads a ring byte",
-            self.guest_ring.as_str(),
-            self.fb_join.as_str(),
-            pending.len(),
-        );
-        // ★★★★★ **w393 — SETTLE THE PAGE TABLES BEFORE THE BIRTH-TIME JOIN.** A birth
-        // happens on a register write, BETWEEN doorbells, and `join_one_fb_leaf`'s sibling
-        // predicate (`fb_join_va_in_vas`) answers out of OUR address table — which is only
-        // brought level with the guest's page tables by the settlement `ring_inline` runs
-        // (`witness_executor_fb_pages` → `decode_cpu_pt_writes` → `sweep_cpu_pt_tables`).
-        //
-        // `[measured w392s, run_w392s_qemu.log:421,451,455,458,495-505]` the last settlement
-        // before P3's birth was P2's round-3 doorbell (`:421`, `exec_writes=47`), which
-        // precedes that round's `UVM_FREE` + `NV01_FREE` of its 4 KiB object; the guest's
-        // allocator then re-issued the SAME frame `0x140000` to P3's 64 KiB ring. At the
-        // birth (`:451`, `:458`) the row `0x9080000000 → 0x140000` was still
-        // `JoinsGuestWindow` in the table — a frame the guest had already unmapped read as a
-        // LIVE SIBLING, the ring's leaf was refused by name, and the channel was born
-        // `PassthroughRingNotAdoptable` (`:455`). The very next settlement, at P3's OWN first
-        // doorbell (`:496`, `exec_writes=74`, `drained=123`), revoked exactly that row
-        // (`revoked=1 kept_for_move=1`, `KEPT-FOR-MOVE va=0x9080000000` at `:495`) and the
-        // REGROW arm then joined the ring at 64 KiB (`:503-505`, `established=65536 bytes`)
-        // — 45 lines after the birth it was needed for.
-        //
-        // ⇒ Run the SAME three passes here, first. Not a new predicate and not a second
-        // source of truth beside the settlement: the one settlement, one consumer earlier.
-        // ⊘ Scoped by construction to a register write with a Passthrough birth or engine
-        // forward pending (the early returns above), so a plain doorbell — which has already
-        // settled in `ring_inline` — never pays for it twice. ⊘ Emits nothing into the
-        // guest's message queue (the passes print and issue host verbs only), so the
-        // `bPollingForRpcResponse` obligation the call site names is untouched.
-        // ⚠ NOT YET MEASURED against a boot: the chain it relies on is measured only in
-        // pieces (the revoke at `:496`, the REGROW at `:503-505`, adoption at P2's CE births).
-        {
-            let w = self.doorbell_port.witness_executor_fb_pages();
-            let d = self.doorbell_port.decode_cpu_pt_writes();
-            let s = self.doorbell_port.sweep_cpu_pt_tables();
-            eprintln!(
-                "{head} SETTLE-BEFORE-BIRTH pending={} → the doorbell's own page-table \
-                 settlement, run BEFORE the join so a row the guest has already unmapped \
-                 cannot read as a LIVE SIBLING ([measured w392s:421→451→496]){w}{d}{s}",
-                pending.len(),
-            );
-        }
-        for (label, facts) in pending {
-            let facts = match facts {
-                Ok(f) => f,
-                Err(e) => {
-                    eprintln!(
-                        "{head} {label} → ⊘ NOT ROUTED `{e:?}` — this alloc names no channel \
-                         this port can resolve, so there is no ring to adopt. ⊘ Not a miss: \
-                         the drain refuses it too",
-                    );
-                    continue;
-                }
-            };
-            let (Some(ring_va), Some(pdb), Some(vaspace)) =
-                (facts.ring_va, facts.vas_pdb, facts.vaspace)
-            else {
-                eprintln!(
-                    "{head} proc={} chan={} {label} → ⊘ NOTHING TO ADOPT: ring_va={:?} \
-                     vas_pdb={:?} vaspace={:?}. ⚠ `ring_va = Some(0)` would be a VALUE and not \
-                     a blank — the driver declares `gpFifoOffset = 0` for its golden-context \
-                     channel — so a `None` here is the channel declaring no ring at all",
-                    facts.proc.0, facts.chan.0, facts.ring_va, facts.vas_pdb, facts.vaspace,
-                );
-                continue;
-            };
-            let root = match SharedDoorbell::doorbell_root(
-                &self.plane,
-                facts.client,
-                vaspace,
-                Some(pdb.0),
-            ) {
-                DoorbellRoot::Published(r) | DoorbellRoot::Declared(r) => r,
-                DoorbellRoot::Absent => {
-                    eprintln!(
-                        "{head} proc={} chan={} ring=0x{ring_va:x} → ⊘ NO ROOT: this channel \
-                         has no VA space root at all, so its ring VA cannot be walked",
-                        facts.proc.0, facts.chan.0,
-                    );
-                    continue;
-                }
-                DoorbellRoot::Underivable(p, why) => {
-                    eprintln!(
-                        "{head} proc={} chan={} ring=0x{ring_va:x} → ⊘ ROOT UNDERIVABLE from \
-                         pdb 0x{p:x}: {}",
-                        facts.proc.0,
-                        facts.chan.0,
-                        why.kind(),
-                    );
-                    continue;
-                }
-            };
-            // ★ The walk, and NOTHING is printed inside the guard (R1).
-            let (site, leaf) = self.plane.ce_session_with_root(
-                &root,
-                kayfabe_device::ceresolve::Demand::from_doorbell(),
-                |ce| kayfabe_rt::ceutils::resolve_leaf_of(ce, ring_va),
-            );
-            let Some(leaf) = leaf else {
-                eprintln!(
-                    "{head} proc={} chan={} ring=0x{ring_va:x} entries={} → ⊘ NOT A \
-                     FRAMEBUFFER LEAF: {site:?}. ⚠ `GuestRam` here is a REAL and SERVED case \
-                     that belongs to the guest-RAM pin, not to this source; `Unresolved` is a \
-                     TIMING fact — the guest had not bound its own ring at the instant its \
-                     engine object was latched — and must NOT be read as `the channel \
-                     declared no ring`",
-                    facts.proc.0, facts.chan.0, facts.ring_entries,
-                );
-                continue;
-            };
-            let isolate = kayfabe_isolate::IsolateId::new(facts.proc.0, DOORBELL_TARGET_GPU);
-            let what = format!(
-                "RING(chan={} entries={} engine={})",
-                facts.chan.0,
-                facts.ring_entries,
-                facts.engine_name(),
-            );
-            match join_one_fb_leaf(
-                &head,
-                &what,
-                &self.device,
-                &self.plane,
-                exports,
-                self.fb_join,
-                isolate,
-                pdb,
-                leaf,
-            ) {
-                Some(j) => eprintln!(
-                    "{head} proc={} chan={} ring=0x{ring_va:x} entries={} → ★★★★★ THE RING'S \
-                     OWN LEAF IS JOINED: memory={:#x} host_va=0x{:x} fb_phys=0x{:x}. ⊘ This is \
-                     the SUPPLY side only — the host channel about to be born still declares \
-                     OUR ring and OUR USERD, so GP_PUT == GP_GET and the engine fetches \
-                     nothing (gr_doorbell_passthrough.md §0.3). Legs A2 and B are what consume \
-                     this",
-                    facts.proc.0, facts.chan.0, facts.ring_entries, j.memory, j.host_va, leaf.phys,
-                ),
-                None => eprintln!(
-                    "{head} proc={} chan={} ring=0x{ring_va:x} → ⊘ THE RING'S LEAF WAS NOT \
-                     JOINED; the refusal above names why. Nothing is bound and the drain below \
-                     is unaffected",
-                    facts.proc.0, facts.chan.0,
-                ),
-            }
-        }
+        self.doorbell_port.adopt_pending_channel_rings(true);
     }
 
-    /// ⊘ **THE STUB, AND IT IS DELIBERATELY NOT SILENT.**
-    ///
-    /// `back_census_framebuffer_leaves`' own `#[cfg(not(host-isolates))]` twin has an empty
-    /// body, and that is exactly the shape that makes *"the experiment never ran"* read as
-    /// *"the experiment ran and changed nothing"* — an archive built without the feature
-    /// prints nothing, exits 0, and every other signal says the boot happened. This one says
-    /// so, **once**, the first time it is asked to do something.
-    #[cfg(not(feature = "host-isolates"))]
-    fn adopt_pending_channel_rings(&self) {
-        if !self.guest_ring.adopts_ring() {
-            return;
-        }
-        static SAID: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-        if !SAID.swap(true, std::sync::atomic::Ordering::Relaxed) {
-            eprintln!(
-                "kayfabe: GR-RING-JOIN arm={} host_isolates=NO ⇒ ⊘ THIS ARCHIVE CANNOT ADOPT A \
-                 RING AT ALL. The arm was requested and this build has no isolate plane, so \
-                 leg A is a no-op — ⚠ do NOT grade a boot from this binary as `armed and \
-                 nothing moved`",
-                self.guest_ring.as_str(),
-            );
-        }
-    }
 
     /// Serve one register write.
     ///
@@ -17960,9 +18084,14 @@ impl Regs {
         // a different vCPU site. That is a real risk and it is why this lands behind an arm
         // with a census rather than as a claim: `VCPU-BLOCKING` names the doors, so one boot
         // says whether the spawn moved or merely relocated.
-        if *MATERIALIZE_INLINE.get_or_init(|| std::env::var("KAYFABE_MATERIALIZE_INLINE").is_ok())
-            || !self.doorbell_async.defers()
-        {
+        // ★ w754 — ONE spelling of one decision: *"is there a worker to do this instead?"*.
+        // Three call sites below turn on it (`materialize_pending`, the ring adopt + its error
+        // grants, and the birth/forward drains), and three separate spellings is how an arm
+        // comes to be half-moved.
+        let inline_because_no_worker = *MATERIALIZE_INLINE
+            .get_or_init(|| std::env::var("KAYFABE_MATERIALIZE_INLINE").is_ok())
+            || !self.doorbell_async.defers();
+        if inline_because_no_worker {
             self.device.materialize_pending();
         } else {
             // ⊘ Gated (w677): this fired on EVERY trap and cost the worker a full pass each time.
@@ -18012,7 +18141,23 @@ impl Regs {
             != self
                 .last_latch_epoch
                 .swap(latch_epoch, std::sync::atomic::Ordering::Relaxed);
-        if latch_changed {
+        // ★★★★★ **w754 — ONLY THE ARM WITH NO WORKER DOES THIS HERE.**
+        //
+        // The body runs the guest page-table settlement (`witness_executor_fb_pages` →
+        // `decode_cpu_pt_writes` → `sweep_cpu_pt_tables`) before it joins anything, and
+        // `[measured w752]` that is the whole of the device's remaining constraint-4
+        // violation: `worst_trap=24999us at=bar0+0x110c00`, `cpu_of_that_trap=23979us`. The
+        // register is a bystander — it is simply the one the guest writes most during driver
+        // init, so it is the trap that most often notices the latch.
+        //
+        // ⊘ The gate is the SAME expression `materialize_pending` and the two drains use, and
+        // deliberately so: they are one decision — *"is there a worker to do this instead?"* —
+        // and three spellings of one decision is how an arm comes to be half-moved.
+        //
+        // ⚠ Without a worker this MUST stay here. `start_doorbell_publish_worker` returns
+        // immediately when `!defers()`, so on that arm nothing else would ever adopt a ring
+        // and every passthrough channel would be born without one.
+        if latch_changed && inline_because_no_worker {
             self.adopt_pending_channel_rings();
         }
         kft.mark("ring_adopt");
@@ -18124,7 +18269,15 @@ impl Regs {
         // ⊘ Same gate as `ring_adopt` above, and the SAME `latch_changed` value — recomputing
         // it here would let a push between the two reads give this trap a different answer
         // from the one the adopt just acted on.
-        let err_notifier_grants = if latch_changed {
+        // ⊘ **w754 — AND UNDER THE SAME GATE, because its ONLY consumer is the inline drain.**
+        // `report_engine_forward_drain` is the sole reader of this `Vec`, and on the deferring
+        // arm that call does not happen on this thread at all — the worker computes its own
+        // (`pending_err_notifier_grants_of`, in `doorbell_publish_loop`). So on that arm every
+        // one of these was a device read-lock acquisition and a walk whose result was dropped
+        // on the floor. ⚠ Not a micro-optimisation: `[measured w519]` this line and its
+        // sibling took the Device read lock on EVERY trap, and that rank is held for 5 ms at a
+        // stretch by the page-table sweep's commit.
+        let err_notifier_grants = if latch_changed && inline_because_no_worker {
             self.pending_err_notifier_grants()
         } else {
             Vec::new()
@@ -18159,9 +18312,7 @@ impl Regs {
         //
         // ⚠ The owner's reason for caring, which is the one that counts: a vCPU stall does
         // not merely delay GPU work, it freezes **all** guest CPU work for its duration.
-        if *MATERIALIZE_INLINE.get_or_init(|| std::env::var("KAYFABE_MATERIALIZE_INLINE").is_ok())
-            || !self.doorbell_async.defers()
-        {
+        if inline_because_no_worker {
             let birth_grants = self.pending_birth_notifier_grants();
             // ⊘ The count is DISCARDED here and that is the point: this arm runs on a vCPU
             // inside the guest's MMIO exit, so it may not publish. The worker's copy of this
@@ -18802,6 +18953,15 @@ impl Regs {
         // above: a boot that printed nothing when the port was never built is indistinguishable
         // from one whose port was built and never used.
         eprintln!("kayfabe: {}", kayfabe_device::plane::fb_demand_census());
+        // ★★★★★ **w754 — CONSTRAINT 6's TWO CENSUSES, printed on EVERY arm, zeros and all.**
+        //
+        // ⊘ Unconditional for the same reason every line around it is: a boot that printed
+        // nothing when the mechanism was disarmed is indistinguishable from one where it was
+        // armed and never fired, and the second is the failure this rung must be able to see.
+        // ⚠ `GSP-HEAD posted>0 folded=0` is a HANG, not a statistic; `RING-ADOPT on_vcpu>0` on
+        // a deferring arm is a constraint-4 violation that no `assert_lock_free` door reports.
+        eprintln!("kayfabe: {}", kayfabe_device::plane::gsp_head_census());
+        eprintln!("kayfabe: {}", crate::shim::ring_adopt_census());
         // ★★★★★ **w740 — THE CeUtils DOORBELL'S TWO ARMING LOOPS.** A third question again:
         // `FB-DEMAND` says whether ANY lock-free caller drained; this says whether the
         // **CeUtils submission path** did, which is the one `[measured w739]` was the wall

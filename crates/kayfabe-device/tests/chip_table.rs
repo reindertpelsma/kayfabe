@@ -1482,6 +1482,96 @@ fn an_armed_queue_head_write_records_and_returns() {
     );
 }
 
+/// ★★★★★ **w754 — CONSTRAINT 29's SUCCESSOR TO `an_armed_queue_head_write_records_and_returns`.**
+///
+/// The old gate asked *"does an armed queue-head write RECORD instead of SERVICE?"* and w432's
+/// deferral answered it. w754 moves where the record lives, so the question is re-asked in the
+/// new shape **and one conjunct is added**: the write must reach that record **without taking
+/// the plane's rank-0 lock at all**.
+///
+/// ⚠ The added conjunct is not decoration. `[measured w752]` `LOCKCOST rank0 worst_wait=8790us`
+/// — the lock a worker holds across a whole GSP command — and the owner's rule is that *"a
+/// blocking call in vcpu also counts if the lock it's waiting on to acquire is held by a
+/// thread that has a blocking call"*. A deferral reached THROUGH that lock satisfies the old
+/// gate and violates the constraint.
+///
+/// # ★ THE KNOWN-POSITIVE IS IN THE TEST, and that is the point
+///
+/// `kayfabe_util::lock::acquisitions` is **per-thread and monotonic**, so a zero here could
+/// equally mean *"the counter is broken"*. The unarmed arm is run **on the same thread, in the
+/// same test**, and MUST be non-zero: the instrument is shown to fire before its silence is
+/// read as a result (`a_census_zero_needs_a_known_positive`).
+#[test]
+fn an_armed_queue_head_write_takes_no_rank_zero_acquisition() {
+    use kayfabe_util::lock::{LockRank, acquisitions};
+    let chip = kayfabe_device::default_chip();
+    let plane = RegPlane::new(chip, abi(), test_clock()).expect("servable");
+
+    // ⊘ THE KNOWN-POSITIVE FIRST, while deferral is still off: the same write, on this same
+    // thread, through the FSM — which cannot happen without the rank-0 lock.
+    let before_unarmed = acquisitions(LockRank::Plane);
+    let _ = plane.write(0, 0x0011_0c00, 4, 0);
+    let unarmed_cost = acquisitions(LockRank::Plane) - before_unarmed;
+    assert!(
+        unarmed_cost > 0,
+        "the instrument must be able to fire: an UNARMED queue-head write reaches the FSM \
+         through the rank-0 lock, so a zero here means `acquisitions` is not counting and the \
+         armed measurement below would be meaningless"
+    );
+
+    plane.set_defer_commands(true);
+    let before_armed = acquisitions(LockRank::Plane);
+    let w = plane.write(0, 0x0011_0c00, 4, 0);
+    let armed_cost = acquisitions(LockRank::Plane) - before_armed;
+    assert!(w.claimed, "the write is still ours");
+    assert_eq!(w.fault, None, "posting is not a refusal");
+    assert_eq!(
+        armed_cost, 0,
+        "constraint 6: an armed queue-head write must POST AND RETURN — it may not acquire \
+         the plane's rank-0 lock, which a worker holds across a whole GSP command"
+    );
+    assert_eq!(
+        plane.pending_command_doorbells(),
+        1,
+        "and the post must be VISIBLE without that lock, or nothing wakes the worker"
+    );
+
+    // ⊘ And the worker's fold is what makes the post real work rather than a lost write.
+    let (serviced, _) = plane
+        .service_deferred_commands()
+        .expect("a cold queue services cleanly");
+    assert_eq!(serviced, 1, "the posted doorbell must be folded in and drained");
+    assert_eq!(plane.pending_command_doorbells(), 0);
+}
+
+/// ★★★ **w754 — A DOORBELL POSTED FOR A DEAD QUEUE BINDING MUST NOT SURVIVE THE RESET.**
+///
+/// `GspFsm::device_reset` rebuilds the FSM, so its own pending count goes to zero and the
+/// queue binding dies with it (`enter_halted`: *"the batch died with the binding"*). A count
+/// posted outside the FSM would be folded in afterwards and serviced against the NEXT life's
+/// queue — reading a GPA the previous driver chose.
+///
+/// ⊘ Fail-closed: the assertion is that the count is GONE, not that it is small.
+#[test]
+fn a_device_reset_drops_a_posted_command_doorbell() {
+    let chip = kayfabe_device::default_chip();
+    let plane = RegPlane::new(chip, abi(), test_clock()).expect("servable");
+    plane.set_defer_commands(true);
+    let _ = plane.write(0, 0x0011_0c00, 4, 0);
+    assert_eq!(plane.pending_command_doorbells(), 1, "posted");
+    plane.device_reset();
+    assert_eq!(
+        plane.pending_command_doorbells(),
+        0,
+        "a doorbell posted against a binding this reset destroyed must not be serviced \
+         against the next one"
+    );
+    let (serviced, _) = plane
+        .service_deferred_commands()
+        .expect("nothing to service");
+    assert_eq!(serviced, 0, "and the drain must find nothing banked");
+}
+
 /// ⊘ UNARMED, the write keeps servicing inline — so no existing boot changes meaning until
 /// the device arms deferral alongside a worker that drains it.
 #[test]
