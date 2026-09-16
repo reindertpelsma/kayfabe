@@ -163,7 +163,14 @@ and the per-client host MMU fault above.
     **non-empty allowlist is a BUILD FAILURE**. ⊘⊘⊘ **This is the correction of a measured
     failure, not a new idea.** `kayfabe-util/src/lock.rs`'s `the_vcpu_allowlist` already exists
     and its own test is named `blocking_inside_a_trap_is_recorded_and_says_whether_it_was_
-    allowlisted` — **recorded**, with a list you may append to. `deviceview.rs:1197` says it
+    allowlisted` — **recorded**, with a list you may append to. ⊘ **CORRECTED w751: 25's GATE IS
+    AIMED AT THE WRONG CENSUS.** `lock.rs`'s `BlockingSection` allowlist has **zero production
+    call sites** and saw **none of the 197**; those are `lockwitness` doors, which have **no
+    allowlist at all** (only `KAYFABE_VCPU_BLOCK_FATAL`). ⇒ emptying the allowlist would empty a
+    list that is **already empty**; the gate must be built on `lockwitness`. ⚠ And
+    `kayfabe_shim_regs_read` never calls `mark_vcpu_thread` (only the write path does), so **a
+    door reached from a READ on a thread that has not yet written is INVISIBLE** — fix that
+    first, or the census undercounts by construction. `deviceview.rs:1236`/`:1265` (was `:1197`) says it
     outright: *"blocked inside an MMIO exit, which `assert_not_on_vcpu` **only REPORTS**."*
     The allowlist grew **3 doors → 9** and **22 crossings → 197** and nothing failed. ★ This
     campaign's most-repeated lesson, applied to itself: **a check that reports is not a check
@@ -173,7 +180,23 @@ and the per-client host MMU fault above.
     **LOCK-FREE IS NOT OFF-vCPU.** The lock-free points chosen are still on the vCPU thread, so
     constraint 9's discipline held perfectly while 4, 6 and 8 broke behind it.
     ⇒ **The remedy reuses built machinery:** the `want`/`drain` split already exists and is
-    tested. Constraint 6 is exactly *"move `drain` to a worker"* — the split was the hard part.
+    tested.
+    ⊘⊘⊘ **CORRECTED w751 — "constraint 6 is exactly *move `drain` to a worker*" IS REFUTED, AND
+    IT WAS MINE.** `drain` **already declines by name on a vCPU** (`deviceview.rs:915-922`,
+    `plane.rs:3673-3682`; measured `declined_on_vcpu=14`) and **contributes ZERO of the 197**.
+    The `want`/`drain` split is sound and was never the problem.
+    ★★★ **All nine doors and all 197 crossings are ONE path**: `repoint_pramin`
+    (`barmirror.rs:1630`) doing **release-and-re-arm** — `20 × 7 + 19 × 3 = 197`. And
+    `cpu_of_that_trap=43390us` of 44440 ⇒ **the 44 ms is CPU, not an RM wait.**
+    ⇒ The fix is **deletion, not relocation**: re-point the **existing** window in place with one
+    `MAP_FIXED` (doors 4/6/7/8 vanish), park the release on the worker's reclaim tick (door 9),
+    and doors 1–3 + 5 stay. Predicted **197/9 → 100/4 → 22/1, ~0.36 ms**.
+    ⚠ **`l1_os_shell.md` §6.7 rule 3 and constraint 16 ALREADY FORBADE slot delete/recreate** —
+    we were violating a rule we had written. The conflation that built the churn: *"a device view
+    cannot be re-pointed"* is **true of the NODE, false of the WINDOW**.
+    ⊘ **And this does NOT make `worst_trap` sub-millisecond.** The control arm's **22 ms at
+    `NV_PGSP_QUEUE_HEAD`** is a SECOND constraint-4 violator that passes through **no
+    `assert_lock_free` door at all** — the door census cannot see it.
 
 > ### ✔✔✔ **MEASURED 2026-09-15 (w746) — THE HAND-OVER WORKS; RM REFUSES THE DUP `NV_ERR_INSUFFICIENT_PERMISSIONS`, AND THAT IS CONSTRAINT 30 ANSWERING FROM HARDWARE.**
 > `[vast 51155860, GA106, 580.159.04 OPEN, TREE_REV 0c0dd2ce, three arms, one binary;
