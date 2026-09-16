@@ -1,6 +1,9 @@
 # w754 — the GSP command-queue doorbell, and what is ACTUALLY on the vCPU behind it
 
-**STATUS: LIVE, 2026-09-16.** Pre-registration, written and committed **before the first
+**STATUS: LIVE, 2026-09-16 — MEASURED. See §MEASURED at the end; the pre-registration below
+is kept verbatim and its six predictions are resolved there, two of them REFUTED.**
+
+Pre-registration, written and committed **before the first
 boot of this rung** (the box was rented first because provisioning is the long pole; no
 measurement of this branch existed when this file was written). Successor to
 `fable_off_vcpu_design.md` row 3 and to `THE_CONSTRAINTS.md` §25's closing ⊘.
@@ -138,3 +141,111 @@ Nothing is deleted. Two questions are **restated in the new shape**:
 - **The drain stays bounded.** `service_deferred_commands` already terminates on its own
   counter, never on guest data; cut A's fold-in preserves that (a `u32` posted count,
   saturating, drained to zero) and adds no loop that a guest can lengthen.
+
+
+---
+
+# ★★★★★ MEASURED — 2026-09-16
+
+`[vast 51217315, GA106, 580.159.04 OPEN, three arms, ONE binary per run, control first;
+traces/w754_gsp_queue_off_vcpu/]`
+
+Two runs, because run 1 found a **third** cost the pre-registration did not know about and cut
+C is the answer to it.
+
+| | baseline **w752** (`fcce2a11`) | run 1 **A+B** (`8286ee65`) | run 2 **A+B+C** (`018c41d4`) |
+|---|---|---|---|
+| **control** (`arena`) | `25 077 µs @0x110c00` | `45 580 µs @0x110118` | ★ **`920 µs @0xb81608`**, `slow_traps=0` |
+| **device** (graded) | `24 999 µs @0x110c00`, cpu `23 979` | `53 345 µs @0x110118` | ★ **`9 649 µs @0xbb0090`**, cpu **`4 621`** |
+| third arm | `split` `30 474 µs @0x110c00` | `inline` `46 136 µs @0x110118` | `inline` `17 976 µs @0xb81208`, cpu `711` |
+
+**Device arm: 24 999 µs → 9 649 µs (2.59×), and the 10–100 ms decade is EMPTY
+(`by_decade[1-10ms=5 10-100ms=0]`, was `[5, 1]`).**
+**At the register the brief named: `bar0+0x110c00` 24 999 µs → 1 579 µs, 15.8×.**
+**Control arm: 25 077 µs → 920 µs, 27×, and `slow_traps(>1000us)=0` — not one trap over a
+millisecond in the whole boot.**
+
+## The three cuts, each with its own A/B
+
+### Cut A — the queue-head write takes no rank-0 lock
+
+`GSP-HEAD posted=545 folded=545 in_flight=0` on the device arm (`563/563` on the control), on
+both runs. **Every doorbell the trap posted was folded in; nothing was parked.**
+⊘ **Prediction P5 HELD**: cut A alone moved `worst_trap` by less than 20 % — in fact it moved
+it not at all, because the plane lock was never what the 25 ms was. `LOCKCOST rank0
+worst_wait` fell 8 790 µs → 911 µs anyway, which is cut A being worth something other than the
+headline.
+
+### Cut B — the ring adopt's page-table settlement, off the vCPU
+
+★ **One env var, same binary, same box** (`KAYFABE_MATERIALIZE_INLINE=1` forces the body back
+onto the vCPU). Run 2, arms 2 vs 3:
+
+| | settlement OFF the vCPU | settlement ON the vCPU |
+|---|---|---|
+| `RING-ADOPT` | `ran=21 off_vcpu=21 on_vcpu=0` | `ran=28 off_vcpu=7 on_vcpu=21` |
+| `bar0+0x110c00` | **1 trap, worst 1 579 µs** | **3 traps, worst 15 336 µs** |
+| `slow_traps(>1000us)` | **5** | **10** |
+| `VCPU-BLOCKING` | **`total=102 doors=6`** | `total=111 doors=9` |
+| `inline_exceptions` | **0** | 5 |
+
+⊘ Run 1 showed the same A/B independently: `0x110c00` 1×2 183 µs vs 6×17 616 µs.
+⇒ **P4 HELD** (`ran>0`, `on_vcpu=0`, and the counter is shown to move on the other arm);
+**P3b HELD** — `0xb81408 / 0xb81410 / 0xb81608 / 0xb81610` left `SLOW-SITES` with it. They
+carry no per-register work that could cost milliseconds; they were the same code at a
+different address.
+⊘ **P2 REFUTED as written**: `0x110c00` did not leave `SLOW-SITES` — it is still listed once,
+at 1 579 µs. The 25 ms is gone; the register is not.
+
+### Cut C — the 46 ms the pre-registration did not predict at all
+
+Run 1's worst trap moved to `bar0+0x110118` (`NV_PGSP_FALCON_DMATRFCMD`) at **45–53 ms on all
+three arms**, `cpu_of_that_trap` ≈ wall (**100 % CPU**), **zero context switches**. One boot
+with `KAYFABE_STALL_ALARM_US=15000 KAYFABE_STALL_ALARM_AT=110118` named the frame
+(`w754_stall_backtrace.txt`): a `OnceLock<Vec<u64>>` initialising
+`(0..regs_aperture_len).step_by(4).filter(decode_reg)` — **4 194 304 evaluations over a 16 MiB
+aperture** — inside `publish_gsp_registers`, inside `RegPlane::write`, inside
+`kvm_vcpu_thread_fn`.
+
+⊘⊘⊘ **And the fix was already in the same function, for the twin sweep.** w573 ends
+`with_objects` with `plane.dead_pages = plane.build_dead_page_bitmap();` and the comment
+*"deferring it put 4.2 million predicate evaluations under a halted guest."* Same count, same
+aperture, same file, three functions apart.
+★ `publish_gsp_registers`' own doc bounded the cost — *"by the chip's register map, not by
+traffic"* — which is true of the **loop body** and false of the **sweep that builds the list it
+iterates**. ⚠ A bound stated about the wrong quantity reads exactly like a bound.
+
+⇒ P1 is **moot**: the KFTIME segment census was never run, because the stall alarm answered
+the attribution question outright and the A/B answered the causal one. Recorded as not-done
+rather than quietly dropped.
+
+## ⊘ P3 REFUTED — `worst_trap` is NOT sub-millisecond on the device arm. The new worst, named.
+
+    device: worst_trap=9649us at=bar0+0xbb0090   cpu_of_that_trap=4621us   (48 % CPU)
+            LOCKCOST rank0 worst_wait=9625us worst_hold=701us slow_waits=3
+                     worst_wait_blocked_by=crates/kayfabe-device/src/plane.rs:3286
+            SLOW-SITES bar0+0xbb0090=3(worst 9649us) bar0+0x1700=2(worst 1179us)
+                       bar0+0x110c00=1(worst 1579us)
+
+★★★ **And it is a DIFFERENT KIND of violation, which is exactly what `cpu_of_that_trap` is
+for.** The three this rung fixed were 96–100 % CPU; this one is **48 % CPU / 52 % wait**, and
+rank 0's own census names the blocker: `plane.rs:3286` is `RegPlane::window_page_backing`,
+which takes **both** `state` and `mem` to resolve a framebuffer window page. `bar0+0xbb0090` is
+the **usermode doorbell** — the register a CUDA process rings.
+
+⇒ The next cut is **lock scope, not thread placement**. Moving more work off the vCPU cannot
+help a trap that is already waiting for a lock a worker holds; the settlement's reader
+(`PlanePtBytes::read_in`, `plane.rs:2267`, the worst *holder* at 701 µs) and the window
+resolver need to stop sharing rank 0 with the doorbell's path. ⚠ Do not read this rung's
+success as licence to repeat its method here.
+
+## P6 — no regression, on the graded arm, run 2
+
+`TRAP_FILLS=0` and `misses=0` on **both** BAR1 and BAR2 · `named=312390` (w752: 311 180) ·
+`RmInitAdapter failed!`=0 **asserted against a non-empty dmesg** (5 597 bytes, **33 `NVRM`
+lines**) · `SMI_RC=0` · `MODPROBE_RC=0` · `HOST_DMESG_XID=0` · control `(P)` `THREADS 8 of 8`
+`MEAN_FALSIFIER=PASS` · `VCPU-BLOCKING total=102 doors=6` — **identical to w752, not worsened**.
+
+⊘ **The raw client is `(R)` `THREADS 0 of 8` on the device arm, as it is at HEAD.** Another
+lane owns it. Reported, not graded, and it is `(R)` on the known-positive arm too — so it
+cannot be hiding a difference between them.
