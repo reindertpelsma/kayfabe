@@ -306,6 +306,38 @@ and onto setup, where a memslot ioctl belongs (constraint 16).
 ⊘ Row 4 is the only one that reaches *"one door, the sanctioned one"*, and it rests on an
 INFERRED determinism. Row 2 is the one this document is confident of.
 
+### ✔✔✔ w752 — MEASURED 2026-09-16. FOUR PREDICTIONS HELD, ONE REFUTED, AND THE REFUTED ONE IS THE INSTRUCTIVE ONE
+
+`[vast 51210329, GA106, 580.159.04 OPEN, TREE_REV fcce2a11, three arms, one binary, control first]`
+
+| | predicted | **measured** | |
+|---|---|---|---|
+| **1** census | 102 crossings / 6 doors, doors 4+6 at exactly 1, doors 7/8/9 absent | **`total=102 doors=6`**, `[1 × window mmap] [1 × memslot install]`, 7/8/9 **absent** | **HELD, to the crossing** |
+| **2** cost | mean < 1 ms; worst not predicted sub-ms | `move_ns[worst=1115752 mean=496145]` = **1.12 ms / 0.50 ms** (w742: 44.4 ms / 7.25 ms) | **HELD** |
+| **3** `worst_trap` does NOT go sub-ms | ~22 ms at `NV_PGSP_QUEUE_HEAD` remains | **`worst_trap=24999us at=bar0+0x110c00`**, `cpu_of_that_trap=23979us`; control **25 077 µs at the same address** | **HELD** |
+| **4** leak gauge | `early_release_refused=0`, `held` small, `declined_on_vcpu > 0` | `inplace=21 started=21 landed=21 released=21 held=0 early_release_refused=0` — but **`declined_on_vcpu=0`** | **REFUTED on its last clause** |
+| **5** no regression | — | `TRAP_FILLS=0` / `misses=0` both BARs both arms; `named=311180`; `RmInitAdapter failed`=0; `SMI_RC=0`; control `(P)` `THREADS 8 of 8`; Xid=0 on the device arm | **HELD** |
+
+⊘⊘⊘ **WHY PREDICTION 4's LAST CLAUSE WAS WRONG, AND IT IS THIS TREE'S OWN FAILURE CLASS.** I
+wrote *"`declined_on_vcpu` must be > 0 with `inplace` > 0: a zero there would mean the decline is
+not on the path, i.e. cut P2 is not doing anything."* Measured: **zero, and cut P2 works.** The
+decline never fires because **cut P1 deleted its only vCPU-side caller** — `retire()` is not
+reached at all on a successful re-point, so `drain_view_releases` is never entered from a trap.
+⇒ The evidence that door 9 moved is **not** the decline counter; it is that
+**`releasing a host device view` is ABSENT from the census while `released=21`** — 21 releases
+happened, none of them on a vCPU.
+★ The decline is still load-bearing, on the **refusal** path (`refuse_pramin_slot` → `retire` →
+`drain_view_releases`), which did not fire this boot (`inplace_refused=0`). ⚠ Its census text says
+the wrong thing and has been corrected in the source; **a counter's zero means what its callers
+make it mean, and I predicted from the counter rather than from its call graph.**
+
+⚠ **`port_outstanding=1729`** is the whole port's outstanding set (the BAR mirror's premap views),
+not PRAMIN's; PRAMIN's own number is `held=0`.
+
+⊘ **The arms count 20, not 22, while `moves=22`** — identical in shape to w742 (`20 × 7 + 19 × 3`
+against the same `moves=22`). The census counts crossings **on a vCPU thread**; the exact identity
+this boot is `5 × 19 + 7 = 102`.
+
 ### ★★★★★ w752 — CUTS P1 AND P2 ARE BUILT. PRE-REGISTERED PREDICTIONS, 2026-09-16
 
 `[branch `w752-pramin-in-place`, off `e8ce6f4a`. **Committed before any box existed** — nothing

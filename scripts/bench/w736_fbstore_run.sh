@@ -410,7 +410,7 @@ report() {
   echo "W752-LANDED=$(h 'landed=[0-9]*')   ⊘ started != landed ⇒ a re-point did not place"
   echo "W752-RELEASED=$(h 'released=[0-9]*')   ★ cut P2: released BY THE WORKER, not inside a trap"
   echo "W752-HELD=$(h 'held=[0-9]*')"
-  echo "W752-DECLINED-ON-VCPU=$(h 'declined_on_vcpu=[0-9]*')   ★★★ cut P2's GATE: 0 with inplace>0 means the decline is NOT on the path"
+  echo "W752-DECLINED-ON-VCPU=$(h 'declined_on_vcpu=[0-9]*')   ⊘⊘ MEASURED w752: 0, and cut P2 STILL WORKS — cut P1 deleted the only vCPU-side caller, so read W752-DOOR-RELEASE (must be ABSENT) beside W752-RELEASED (must equal W752-INPLACE) instead"
   echo "W752-EARLY-REFUSED=$(h 'early_release_refused=[0-9]*')   ⊘⊘ non-zero = the restated w735 barrier FIRED (an aperture leak, the safe direction)"
   echo "W752-PORT-OUTSTANDING=$(h 'port_outstanding=[0-9]*')"
   echo "--- ★★★★★ w752 ROW 3: the SECOND constraint-4 violator the door census CANNOT see ---"

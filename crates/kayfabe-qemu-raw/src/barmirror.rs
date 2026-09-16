@@ -2697,9 +2697,12 @@ impl BarMirror {
                  early_release_refused={early} port_outstanding={} \u{2605} CUT P1: every move \
                  after the first install is ONE MAP_FIXED over the live window - no fresh \
                  window, no memslot install, no memslot drop, no munmap (doors 4/6/7/8 of the \
-                 w742 census). \u{2605} CUT P2: the release runs on the worker's reclaim tick; \
-                 `declined_on_vcpu` is the door-9 crossings that did NOT happen inside an MMIO \
-                 exit, and a ZERO there with `inplace`>0 means the decline is not on the path. \
+                 w742 census). \u{2605} CUT P2: the release runs on the worker's reclaim tick. \
+                 \u{2298}\u{2298} READ `released` AND THE DOOR CENSUS, NOT `declined_on_vcpu`: \
+                 measured w752, `declined_on_vcpu=0` while `released=21` and the door \
+                 `releasing a host device view` was ABSENT - because cut P1 deleted the only \
+                 vCPU-side caller (`retire`) rather than because the decline failed. The \
+                 decline is now load-bearing on the REFUSAL path only. \
                  \u{2298} `early_release_refused`>0 is the restated w735 barrier FIRING: a view \
                  whose replacing MAP_FIXED never landed is held forever, which is an aperture \
                  LEAK - the safe direction, the other one is cross-tenant. \u{26a0} \
