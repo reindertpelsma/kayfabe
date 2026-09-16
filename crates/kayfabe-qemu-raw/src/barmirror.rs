@@ -1937,6 +1937,21 @@ impl BarMirror {
     /// before rather than after is what makes the gate non-vacuous — stamped afterwards it
     /// could never name an entry whose replacement had not landed, and it would be a comment.
     ///
+    /// # ⚠ WHAT A SIBLING vCPU SEES DURING THE ARM — a CHANGED exposure, named
+    ///
+    /// Release-and-re-arm removed the window first, so for the length of the arm PRAMIN had
+    /// **no slot** and a sibling vCPU touching it trapped and was refused by name. Here the
+    /// window stays live through the arm, so for those ~294 us a sibling reads the **previous**
+    /// framebuffer instead of trapping.
+    ///
+    /// ⊘ This is the arena arm's behaviour verbatim — `repoint_file_window` is one `mmap` and
+    /// the window shows the old offset until it returns — and it is the weaker exposure of the
+    /// two: the vCPU that wrote the latch is still inside its MMIO exit and cannot read yet, so
+    /// the only reader that can see it is a sibling racing an aperture *another* vCPU is
+    /// re-aiming, which the guest has no defined answer for either way. ⚠ Stated rather than
+    /// discovered, because it is a real difference and the old comment named its own version of
+    /// it.
+    ///
     /// # ⚠ A REFUSAL TEARS THE SLOT DOWN — and that is the fail-closed direction
     ///
     /// See [`BarMirror::refuse_pramin_slot`]. Leaving the old node mapped would be a window
