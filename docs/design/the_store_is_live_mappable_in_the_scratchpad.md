@@ -50,6 +50,24 @@ the store has exactly the same guarantee, with `win.len` = the reservation's len
 bound becomes *the guest's own video memory*, which is the honest statement of the invariant
 rather than a proxy for it.
 
+## ⊘⊘⊘⊘ AND THE COST IS WORSE THAN "AN EXTRA COPY" — THE DIFFERENTIAL IS FORECLOSED
+
+`walkshadow.rs:553-560`, the relocation's **own** doc, states it:
+
+> *"The image holds exactly the pages the **host walk visited**. ⇒ the kernel's reach is
+> clipped to the host's reach, and it cannot find a subtree the host never entered."*
+> `ExtraInKernel` — *"live within the visited pages, **foreclosed beyond them**"*
+
+★★★★★ **The GPU walker exists to catch what the host walker gets WRONG. Relocation forecloses
+exactly the direction in which the host is wrong BY OMISSION** — a mapping the host never
+visited cannot be in the image, so the kernel cannot report it. The second walker is structurally
+prevented from disagreeing in the one way that matters most.
+
+⊘ And `absent_edges=0` — recorded on w731's boot and read as clean — is a statement about
+**scope**, not agreement: it counts edges pointed at the reserved zero slot because the host
+never went there. A live window has no reserved slot and no clipping, so the number stops
+existing rather than reading as good.
+
 ## What the change removes, and what it unlocks
 
 - `GmmuFmt::relocate_entry` and `walkshadow::build_image`'s rewriting go away.
@@ -59,12 +77,30 @@ rather than a proxy for it.
   raised the same day: whether `cuMemcpyAsync`/`cuMemsetAsync` could serve the emulated CE and
   scrub planes. One mapping serves the walk kernel, the emulated CE, and CUDA.
 
-## ⚠ The one open question before building
+## ⚠ THE ONE MEASURABLE OBSTACLE, and the route that probably clears it
 
-Whether the scratchpad's **CUDA context** uses the same VA space as our RM client, or whether the
-store must be mapped into CUDA's context VAS separately. Either is workable — this codebase
-already adopts VA spaces — but it decides whether this is one mapping or two. ⊘ Answerable on a
-CUDA container with no guest.
+The walk kernel dereferences `win.base + gpga` as a raw device pointer. A kernel's load needs no
+CUDA blessing — it needs the **VA to be mapped in the context's address space**. And libcuda
+creates its **own RM client and VA space**; ours cannot `NVOS46` into it without a handle it
+never gives us. That, not the window size, is the real obstacle.
+
+★★★ **The route is to invert the ownership — allocate the store THROUGH CUDA and import it into
+RM**, rather than trying to push an RM object into CUDA:
+
+1. `cuMemCreate` the reservation (real device memory, CUDA-owned, CUDA-addressable by
+   construction — the walk kernel and `cuMemcpyAsync`/`cuMemsetAsync` all just work);
+2. export it to a shareable handle (`CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR`);
+3. **import that fd into our RM client**, so we still get the handle `map_store_slice` needs to
+   place slices into **guest** VA spaces.
+
+⊘ Step 3 is the one that is unproven and it is the whole design: without an RM handle the single
+store cannot be mapped at guest VAs, which is the thing everything else rests on.
+
+⚠ **PROBE IT, DO NOT REASON ABOUT IT.** A CUDA container, no guest, ~30 minutes: `cuMemCreate` →
+export fd → `NV_ESC_RM_IMPORT_OBJECT_FROM_FD` → `NVOS46` a slice of it at a fixed VA. If step 3
+answers, the whole design is a small change and the CUDA CE/scrub proposal lands with it. If it
+refuses, the fallback is a live window over the RM-allocated store for the kernel only, which
+still removes the foreclosure — and the CUDA data-plane idea needs a different bridge.
 
 ## Sequencing
 
