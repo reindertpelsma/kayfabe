@@ -312,6 +312,34 @@ constraint 32 REPLACED. Do not read this arm as a route-K result."
   grep -a 'W392D_GUEST_OUTCOME=' "$D" 2>/dev/null | tail -1 | cut -c1-120
   grep -a 'THREADS ' "$D" 2>/dev/null | tail -1 | cut -c1-90
   grep -a 'MEAN_FALSIFIER' "$D" 2>/dev/null | tail -1 | cut -c1-90
+  # ★★★★★ **w755e — THE FIVE ROWS THAT DECIDE THE GATE, WHICH THIS HARNESS HAS NEVER CUT.**
+  #
+  # ⊘⊘⊘ `W392D_GUEST_OUTCOME=` is the client's VERDICT. Its PASS requires FIVE rows green —
+  #   `P1 rm-invalidate`, `P2 uvm-memop`, `P3 rpc-bind`, `STALE RACE`, and
+  #   `THREADS >= 2` with no faults — and this report cut only the verdict and the THREADS
+  #   count. So every boot of this campaign has reported THAT the client failed and never
+  #   WHICH ROW, and the plumbing censuses (adopt/map/doorbell refusals) have been optimised
+  #   against a gate nobody was reading.
+  #   ⚠ That is `a_falsifier_that_cant_tell_THE_blocker_from_A_blocker`, applied to the
+  #   deliverable itself: counters have gone from thousands to single digits with the gate
+  #   unmoved, and nothing here could say whether they were ever on its path.
+  #   ★ The `thread fault:` lines are cut too — `THREADS 0 of 8 ⊘ A WORKER CAME BACK DIRTY`
+  #   means faults EXIST and names none of them without these.
+  echo "--- ★★★★★ w755e: THE CLIENT'S OWN LEDGER — the five rows the gate is made of ---"
+  n_ledger=$(grep -ac 'w392d LEDGER' "$D" 2>/dev/null)
+  echo "W755-LEDGER-BLOCKS=${n_ledger:-0}  (0 ⇒ UNMEASURED, not 'the client is fine')"
+  grep -aA 12 'w392d LEDGER' "$D" 2>/dev/null | tail -14 | cut -c1-190
+  echo "--- every thread fault, verbatim (THREADS n of m says only THAT they exist) ---"
+  n_faults=$(grep -ac 'thread fault:' "$D" 2>/dev/null)
+  echo "W755-THREAD-FAULTS=${n_faults:-0}"
+  grep -a 'thread fault:' "$D" 2>/dev/null | head -12 | cut -c1-190
+  # ⊘ Each row's own state, greppable, so a runner can diff rows between boots rather than
+  #   eyeball a block. `Unexercised` is NOT a failure — it means an earlier row stopped the
+  #   run before this one could be reached, and reading it as a failure would send a reader
+  #   to the wrong row.
+  for row in 'P1 rm-invalidate' 'P2 uvm-memop' 'P3 rpc-bind' 'STALE RACE'; do
+    echo "W755-ROW[$row]=$(grep -a "$row" "$D" 2>/dev/null | tail -1 | sed 's/^ *//' | cut -c1-150)"
+  done
   echo "--- what the device path was asked for, if anything (trap/fill census) ---"
   grep -ao 'TRAPWITNESS[^|]\{0,300\}' "$Q" 2>/dev/null | tail -1
   grep -ao 'arena\[[^]]*\]' "$Q" 2>/dev/null | tail -1
