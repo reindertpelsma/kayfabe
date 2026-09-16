@@ -261,7 +261,23 @@ fn own_client_module_span(code: &str) -> (usize, usize) {
 /// Both are an [`OwnClient`] unwrapped at the ABI boundary. That the list is short is the
 /// point: any *other* expression is a client this code did not mint, or cannot prove it
 /// minted, and either way it is the thing F11 says must not become possible.
-const APPROVED_RHS: &[&str] = &["self.client.raw()", "self.conn.client.raw()"];
+/// ## ⊘⊘ THIRD FORM ADDED w753 — CONSTRAINT 32, AND IT IS STILL AN `OwnClient`
+///
+/// `birth.raw_for_surrender()` is a client **this task minted** — F11's question, *"did we
+/// mint this?"*, answers **yes** — being handed to another process. It is an exit of exactly
+/// `raw()`'s kind, spelled differently so that the gate, and a reader, can see at the call
+/// site that the handle is leaving. ⚠ Pinned to **one** call site by
+/// `the_surrender_exit_has_exactly_one_call_site`, for the reason the dup gate pins its
+/// second escape: an exception whose whole defence is that it is countable has to stay
+/// countable.
+///
+/// ⊘ It is a **literal spelling** like the other two, not a type test — this list has always
+/// been literal spellings, and that is what makes it fail closed.
+const APPROVED_RHS: &[&str] = &[
+    "self.client.raw()",
+    "self.conn.client.raw()",
+    "birth.raw_for_surrender()",
+];
 
 /// ★★★★★ **CONSTRAINT 26 — THE ONE SCOPED EXCEPTION, AND IT IS A TYPE RATHER THAN A STRING.**
 ///
@@ -308,6 +324,73 @@ fn approved_src_rhs(code: &str) -> BTreeSet<String> {
     out
 }
 
+/// ★★★★★ **CONSTRAINT 32's APPROVED SET, DERIVED FROM `mod handed_client`'s ACCESSORS.**
+///
+/// The exact shape [`approved_src_rhs`] uses, one type over, and for its reason: a gate whose
+/// approved set is written here is `gates_quantified_over_a_list`, and renaming an accessor
+/// would silently un-gate the field.
+fn approved_root_rhs(code: &str) -> BTreeSet<String> {
+    let (start, end) = handed_client_module_span(code);
+    let module = &code[start..end];
+    let mut out = BTreeSet::new();
+    let mut search = 0usize;
+    while let Some(rel) = module[search..].find("pub(super) fn ") {
+        let at = search + rel + "pub(super) fn ".len();
+        search = at;
+        let Some(paren) = module[at..].find('(') else {
+            break;
+        };
+        let name = module[at..at + paren].trim();
+        let sig_end = module[at..].find("->").map(|o| at + o).unwrap_or(at);
+        if !module[at..sig_end].contains("self") {
+            continue;
+        }
+        if !module[sig_end..].starts_with("-> u32") {
+            continue;
+        }
+        out.insert(name.to_string());
+    }
+    out
+}
+
+/// The byte span of `mod birth_conn { … }` — the ONE module in which a [`HandedClient`]
+/// accessor may fill a destination client field.
+///
+/// ⊘⊘ **The scoping is the whole successor.** `HandedClient` being unforgeable says a
+/// foreign `hRoot` cannot be *manufactured*; it does not say where one may be *used*. Without
+/// this span the rule would read *"any escape anywhere may stamp a birth client"*, which is
+/// F11 with one extra call — the exact shape `handed_vaspace_is_unforgeable`'s own docs warn
+/// about ("F11 with a method on it").
+fn birth_conn_module_span(code: &str) -> (usize, usize) {
+    let start = code.find("mod birth_conn {").expect(
+        "★ NON-VACUITY: `mod birth_conn` is gone from rm.rs — constraint 32's second RM \
+         connection has no home, and the scoping below gates an empty region",
+    );
+    let open = start + code[start..].find('{').expect("an opening brace");
+    let bytes = code.as_bytes();
+    let mut depth = 0usize;
+    for (i, b) in bytes.iter().enumerate().skip(open) {
+        match b {
+            b'{' => depth += 1,
+            b'}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return (start, i);
+                }
+            }
+            _ => {}
+        }
+    }
+    panic!("unbalanced braces scanning `mod birth_conn`");
+}
+
+/// Does `value` read a [`HandedClient`] accessor?
+fn is_root_accessor(value: &str, accessors: &BTreeSet<String>) -> bool {
+    accessors
+        .iter()
+        .any(|a| value.ends_with(&format!(".{a}()")) && !value.contains(' '))
+}
+
 /// Does `value` read a [`HandedVaSpace`] accessor — `<something>.<accessor>()`?
 fn is_handed_accessor(value: &str, accessors: &BTreeSet<String>) -> bool {
     accessors
@@ -316,6 +399,33 @@ fn is_handed_accessor(value: &str, accessors: &BTreeSet<String>) -> bool {
 }
 
 /// The byte span of `mod handed_vaspace { … }` in `rm.rs`, by brace matching.
+/// The byte span of `mod handed_client` inside `rm.rs` — constraint 32's half of the same
+/// scoping. ⊘ A separate span from `handed_vaspace`'s on purpose: the two types widen F11 in
+/// two different fields (`hClientSrc` vs `hRoot`), and a test that scanned one span for both
+/// would pass while the other was deleted.
+fn handed_client_module_span(code: &str) -> (usize, usize) {
+    let start = code.find("mod handed_client {").expect(
+        "★ NON-VACUITY: `mod handed_client` is gone from rm.rs — constraint 32's birth-client \
+         exception has no home, and any escape `hRoot` is therefore ungated",
+    );
+    let open = start + code[start..].find('{').expect("an opening brace");
+    let bytes = code.as_bytes();
+    let mut depth = 0usize;
+    for (i, b) in bytes.iter().enumerate().skip(open) {
+        match b {
+            b'{' => depth += 1,
+            b'}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return (start, i);
+                }
+            }
+            _ => {}
+        }
+    }
+    panic!("unbalanced braces scanning `mod handed_client`");
+}
+
 fn handed_vaspace_module_span(code: &str) -> (usize, usize) {
     let start = code.find("mod handed_vaspace {").expect(
         "★ NON-VACUITY: `mod handed_vaspace` is gone from rm.rs — constraint 26's scoped \
@@ -367,6 +477,15 @@ fn every_rm_escape_in_rm_rs_stamps_the_isolates_own_client() {
 
     let params = fn_signature_spans(&code);
     let accessors = approved_src_rhs(&code);
+    // ★★★★★ **CONSTRAINT 32's HALF, and it is a SECOND derived set with a SECOND span.**
+    let root_accessors = approved_root_rhs(&code);
+    let (birth_start, birth_end) = birth_conn_module_span(&code);
+    assert!(
+        !root_accessors.is_empty(),
+        "★ NON-VACUITY: `mod handed_client` exposes no `-> u32` accessor, so constraint 32's \
+         destination rule has an EMPTY approved set and would refuse the very escapes it \
+         sanctions — or be read as having nothing to gate."
+    );
     assert!(
         !accessors.is_empty(),
         "★ NON-VACUITY: `mod handed_vaspace` exposes no `-> u32` accessor, so the scoped \
@@ -376,6 +495,9 @@ fn every_rm_escape_in_rm_rs_stamps_the_isolates_own_client() {
 
     let mut sites = 0usize;
     let mut src_sites = 0usize;
+    // ★ How many sites the NEW arm admitted. A zero means the widening is dead code and the
+    // gate's own report would read "F11 holds" while proving nothing about constraint 32.
+    let mut admitted_by_type = 0usize;
     let mut bad = Vec::new();
     for (idx, line) in code.lines().enumerate() {
         let t = line.trim();
@@ -398,6 +520,8 @@ fn every_rm_escape_in_rm_rs_stamps_the_isolates_own_client() {
             continue;
         }
         let inside_own_client = offset > mod_start && offset < mod_end;
+        // ★★★★★ **CONSTRAINT 32 — the ONE region where a foreign `hRoot` is sanctioned.**
+        let inside_birth_conn = offset > birth_start && offset < birth_end;
 
         // ★★★★★ **CONSTRAINT 26's SCOPED EXCEPTION.** A `*_src` client field names the
         // OTHER client by definition — `NVOS55_PARAMETERS::hClientSrc` is the whole point of
@@ -406,10 +530,23 @@ fn every_rm_escape_in_rm_rs_stamps_the_isolates_own_client() {
         // the approved set is derived from the newtype, so neither half is a list here.
         if name.ends_with("_src") {
             src_sites += 1;
-            if !is_handed_accessor(value, &accessors) {
+            // ★★★★★ **CONSTRAINT 32 — INSIDE `mod birth_conn` THE SAFETY IS THE DESTINATION,
+            // NOT THE SOURCE, and this is the one place that is true.**
+            //
+            // Every escape in that module stamps a `HandedClient` as its `hRoot` — asserted
+            // separately and unconditionally by `every_escape_in_birth_conn_stamps_the_handed
+            // _client`. A dup whose DESTINATION is B is one RM grades under its own sharing
+            // policy: same-`ProcessID` sources pass (`sharing.c:341-352`), every other source
+            // needs a grant we have not issued and RM refuses it
+            // (`ogkm-580 rs_client.c:537-551`). ⇒ naming a source there cannot widen what we
+            // can reach; it can only name something RM will refuse.
+            //
+            // ⊘ Outside that span the old rule is UNCHANGED: a source client must be a
+            // `HandedVaSpace` accessor. The universe grew; the rule did not soften.
+            if !is_handed_accessor(value, &accessors) && !inside_birth_conn {
                 bad.push(format!(
                     "  rm.rs (code line {}): `{name}: {value}` ⇒ a SOURCE client that is not \
-                     a `HandedVaSpace` accessor",
+                     a `HandedVaSpace` accessor, and not inside `mod birth_conn`",
                     idx + 1
                 ));
             }
@@ -420,6 +557,19 @@ fn every_rm_escape_in_rm_rs_stamps_the_isolates_own_client() {
         let ok = if inside_own_client {
             // The root-client allocation: no owning client exists yet, by construction.
             value == "0" || APPROVED_RHS.contains(&value)
+        } else if inside_birth_conn {
+            // ★★★★★ **CONSTRAINT 32 — the approved set grows BY A TYPE, and only here.**
+            // `APPROVED_RHS` is untouched; what this arm adds is a `HandedClient` accessor,
+            // whose unforgeability `handed_client_is_unforgeable` checks separately, inside
+            // the one module whose whole purpose is escapes under a handed-over client.
+            // ⊘ The isolate's own client is STILL approved here: `mod birth_conn` is allowed
+            // to be less exotic than it is, and forbidding it would push a legitimate future
+            // use outside the span, which is `gates_quantified_over_a_list` in reverse.
+            let by_type = is_root_accessor(value, &root_accessors);
+            if by_type {
+                admitted_by_type += 1;
+            }
+            by_type || APPROVED_RHS.contains(&value)
         } else {
             APPROVED_RHS.contains(&value)
         };
@@ -444,6 +594,17 @@ fn every_rm_escape_in_rm_rs_stamps_the_isolates_own_client() {
         "★ NON-VACUITY: found only {sites} RM client-field initialiser(s) in rm.rs, floor is \
          {CLIENT_FIELD_SITES_FLOOR}. This gate has stopped seeing the thing it gates — treat \
          it as RED and fix the scanner, do NOT lower the floor."
+    );
+    // ★★★★★ **NON-VACUITY FOR CONSTRAINT 32's ARM ITSELF.** ⊘ `a_census_zero_needs_a_known_
+    // positive`: if the scoped widening admits nothing, either `mod birth_conn` has stopped
+    // issuing escapes (and the second connection is gone) or the accessor set drifted — and
+    // in both cases this test would print a clean F11 pass having checked nothing about the
+    // exception it exists to scope.
+    assert!(
+        admitted_by_type >= 4,
+        "★ NON-VACUITY: constraint 32's scoped arm admitted {admitted_by_type} site(s), floor \
+         is 4 (alloc, dup, map_dma_slice, free). The widening is gating nothing — treat this \
+         as RED and fix the scanner, do NOT lower the floor."
     );
     assert!(
         bad.is_empty(),
@@ -604,18 +765,261 @@ fn handed_vaspace_is_unforgeable() {
 /// ⊘ **The exception is ONE verb wide.** A second `NV_ESC_RM_DUP_OBJECT` would be a second
 /// place a foreign client is named, and the whole argument for scoping F11 rather than
 /// eliminating it is that the place is countable.
+/// ⊘ **The exception is TWO verbs wide, and each has its own argument.**
+///
+/// ## ⊘⊘⊘ SUPERSEDED IN PLACE — this gate demanded ONE, and constraint 32 made it two
+///
+/// The original text: *"a second is a second scope for an exception whose whole defence is
+/// that it is countable."* That is still the question, and this is still the gate — what
+/// changed is the answer, from `1` to `2`, and the change is **argued** rather than
+/// absorbed:
+///
+/// | # | where | destination client | why it is safe |
+/// |---|---|---|---|
+/// | 1 | `RmConnection::raw_dup_object` | **ours** | source is a `HandedVaSpace`, unforgeable |
+/// | 2 | `BirthConn::dup` | **B**, a `HandedClient` | source is graded by RM's own sharing policy |
+///
+/// ★★★ **The count is still the defence.** A third would be a third scope and this goes red.
+/// ⚠ And the second is pinned to its module: a `NV_ESC_RM_DUP_OBJECT` that drifted out of
+/// `mod birth_conn` would keep the count at two while losing the whole of what makes it safe,
+/// so the span is asserted rather than only the number.
 #[test]
-fn there_is_exactly_one_dup_object_escape_in_rm_rs() {
+fn there_are_exactly_two_dup_object_escapes_and_the_second_is_in_birth_conn() {
     let code = rm_rs_code_only();
     // ⊘ The ESCAPE, not the import: `use` names it once and that is not a call site.
-    let n = code
-        .matches("ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_DUP_OBJECT")
+    let needle = "ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_DUP_OBJECT";
+    let n = code.matches(needle).count();
+    assert_eq!(
+        n, 2,
+        "★★★ CONSTRAINT 26/32 — `rm.rs` now issues {n} `NV_ESC_RM_DUP_OBJECT` escape(s), \
+         expected exactly 2 (`raw_dup_object` and `BirthConn::dup`). Every one of them names \
+         `hClientSrc`; a third is a third scope for an exception whose whole defence is that \
+         it is countable."
+    );
+    let (birth_start, birth_end) = birth_conn_module_span(&code);
+    let inside = code
+        .match_indices(needle)
+        .filter(|(at, _)| *at > birth_start && *at < birth_end)
         .count();
     assert_eq!(
-        n, 1,
-        "★★★ CONSTRAINT 26 — `rm.rs` now issues {n} `NV_ESC_RM_DUP_OBJECT` escape(s), \
-         expected exactly 1 (`raw_dup_object`). Every one of them names `hClientSrc`; a \
-         second is a second scope for an exception whose whole defence is that it is \
-         countable."
+        inside, 1,
+        "★★★ CONSTRAINT 32 — {inside} of the two `NV_ESC_RM_DUP_OBJECT` escapes are inside \
+         `mod birth_conn`, expected exactly 1. A dup that drifted OUT of that module keeps \
+         the count at two while losing everything that makes the second one safe: its `hRoot` \
+         is no longer required to be a `HandedClient`, and the scoped F11 arm no longer \
+         covers it."
     );
+}
+
+/// ★★★ **CONSTRAINT 32 — THE SURRENDER EXIT IS ONE CALL SITE WIDE.**
+///
+/// [`APPROVED_RHS`] grew a third form, and the whole argument for that being a scoping
+/// rather than a hole is that it names **one** place: the per-proc isolate minting a birth
+/// client it immediately gives away. A second caller would be a second place a client handle
+/// leaves this process, and *"we minted it"* stops being a sufficient answer the moment
+/// there is more than one story about where it went.
+///
+/// ⊘ Non-vacuity is the same assertion: **exactly** one, never *"at most"*. A zero would mean
+/// the mint is gone and the approved form is gating nothing.
+#[test]
+fn the_surrender_exit_has_exactly_one_call_site() {
+    let code = rm_rs_code_only();
+    let calls = code.matches("birth.raw_for_surrender()").count();
+    assert_eq!(
+        calls, 1,
+        "★★★ CONSTRAINT 32 — `raw_for_surrender()` has {calls} call site(s) in rm.rs, \
+         expected exactly 1 (`HostRmBackend::mint_birth_client`). Zero means the mint is gone \
+         and `APPROVED_RHS`'s third form is gating nothing; more than one means a client \
+         handle leaves this process from somewhere nobody argued about."
+    );
+    let defs = code.matches("fn raw_for_surrender(self) -> u32 {").count();
+    assert_eq!(
+        defs, 1,
+        "★★★ CONSTRAINT 32 — `raw_for_surrender` has {defs} definition(s), expected 1. A \
+         second one on another type would make the approved spelling reachable from a value \
+         nobody minted."
+    );
+    let (start, end) = own_client_module_span(&code);
+    let at = code
+        .find("fn raw_for_surrender(self) -> u32 {")
+        .expect("checked above");
+    assert!(
+        at > start && at < end,
+        "★★★ CONSTRAINT 32 — `raw_for_surrender` is no longer inside `mod own_client`. Its \
+         entire safety argument is that it can only be reached from an `OwnClient`, which \
+         `own_client_is_unforgeable` checks separately; outside that module it is a `u32` \
+         accessor on anything."
+    );
+}
+
+/// ★★★★★ **CONSTRAINT 32's SUCCESSOR TO F11 — EVERY ESCAPE IN `mod birth_conn` STAMPS THE
+/// HANDED CLIENT, AND NOTHING ELSE.**
+///
+/// ## Why this exists, in constraint 29's words
+///
+/// `every_rm_escape_in_rm_rs_stamps_the_isolates_own_client` was widened to accept a
+/// [`HandedClient`] accessor **inside `mod birth_conn`**. Clause 2: *"the replacement must
+/// test the argument that retired the old one."* The argument is precisely *"inside that
+/// module every escape's destination is a client the scratchpad was handed, so a source
+/// client named there cannot widen what we can reach."*
+///
+/// ⇒ **this goes red if that stops being true**, which is the only way the widening above
+/// becomes a hole. Concretely it refuses:
+///
+/// * an escape in `mod birth_conn` whose destination client is anything but
+///   `self.handed.root()` — a literal, a parameter, a second field;
+/// * `mod birth_conn` growing a `map_memory` escape, which RM refuses by name under route K
+///   (`osapi.c:2378`: `ProcID != osGetCurrentProcess()`) and which therefore must not be
+///   written as though it could work;
+/// * the module losing its destination-client sites altogether (the non-vacuity floor).
+#[test]
+fn every_escape_in_birth_conn_stamps_the_handed_client() {
+    let code = rm_rs_code_only();
+    let (start, end) = birth_conn_module_span(&code);
+    let module = &code[start..end];
+    let fields = client_field_names();
+    let accessors = approved_root_rhs(&code);
+    assert!(!accessors.is_empty(), "★ NON-VACUITY: no `HandedClient` accessors");
+
+    let decls = struct_decl_spans(module);
+    let params = fn_signature_spans(module);
+    let mut sites = 0usize;
+    let mut bad = Vec::new();
+    for (idx, line) in module.lines().enumerate() {
+        let t = line.trim();
+        let Some((name, value)) = t.split_once(':') else {
+            continue;
+        };
+        let name = name.trim();
+        if !fields.contains(name) || name.ends_with("_src") {
+            continue;
+        }
+        let offset = module.lines().take(idx).map(|l| l.len() + 1).sum::<usize>();
+        if decls.iter().any(|(a, b)| offset > *a && offset < *b) {
+            continue;
+        }
+        if params.iter().any(|(a, b)| offset > *a && offset < *b) {
+            continue;
+        }
+        sites += 1;
+        if !is_root_accessor(value.trim().trim_end_matches(',').trim(), &accessors) {
+            bad.push(format!("  `{name}: {}`", value.trim()));
+        }
+    }
+    assert!(
+        sites >= 4,
+        "★ NON-VACUITY: found only {sites} destination-client initialiser(s) in \
+         `mod birth_conn`, floor is 4 (alloc, dup, map_dma_slice, free). This gate has \
+         stopped seeing the thing it gates — treat it as RED and fix the scanner, do NOT \
+         lower the floor."
+    );
+    assert!(
+        bad.is_empty(),
+        "★★★ CONSTRAINT 32 VIOLATED — an escape in `mod birth_conn` names a destination \
+         client that is not the handed one:\n{}\n\nThis is the successor to F11's \
+         destination rule, and it is what makes the scoped widening safe. The whole argument \
+         for letting a foreign client fill an `hRoot` in that module is that EVERY escape \
+         there does so through the unforgeable `HandedClient`. One that does not is an \
+         arbitrary client handle on a descriptor another process opened.",
+        bad.join("\n")
+    );
+
+    // ⊘ RM's own rule, expressed as a forbidden escape rather than as a comment.
+    assert!(
+        !module.contains("NV_ESC_RM_MAP_MEMORY,")
+            && !module.contains("NV_ESC_RM_MAP_MEMORY "),
+        "★★★ CONSTRAINT 32 — `mod birth_conn` now issues `NV_ESC_RM_MAP_MEMORY`. RM refuses \
+         it by name for this client FOREVER (`osapi.c:2378`: `pRmClient->ProcID != \
+         osGetCurrentProcess()` ⇒ `NV_ERR_INVALID_CLIENT`), measured at w750 with its own \
+         known-positive. Code that cannot work must not be written as though it can — it \
+         turns a structural refusal into a runtime mystery."
+    );
+}
+
+/// ★★★★★ **CONSTRAINT 32 — `HandedClient` is as unforgeable as `HandedVaSpace`.**
+///
+/// ⊘ **And the reason it needs its own test rather than a second assertion in
+/// `handed_vaspace_is_unforgeable`:** the two types widen F11 in *different fields*.
+/// `HandedVaSpace` supplies `NVOS55_PARAMETERS::hClientSrc` while the escape is still
+/// issued under **our** client on **our** descriptor. `HandedClient` supplies the `hRoot`
+/// of the escape itself — every object allocated under it lands in the foreign client's
+/// namespace. A `From<u32>` here is not "F11 with a method on it"; it is F11 gone.
+///
+/// ⊘ Mirrors `handed_vaspace_is_unforgeable` deliberately, forbidden-name list included. If
+/// one grows a case the other should too, and the duplication is what makes that visible.
+#[test]
+fn handed_client_is_unforgeable() {
+    let code = rm_rs_code_only();
+    let (start, end) = handed_client_module_span(&code);
+    let module = &code[start..end];
+
+    assert!(
+        module.contains("pub(super) struct HandedClient {")
+            && module.contains("        client: u32,")
+            && module.contains("        minted_by: u32,"),
+        "★★★ CONSTRAINT 32 REGRESSED — `HandedClient`'s handles are no longer private \
+         fields. A public field is a `u32 -> HandedClient` conversion with extra steps, and \
+         the one sanctioned birth client becomes any client at all as an escape's `hRoot`."
+    );
+
+    // Exactly one door into the handed-over value, and it consumes the role.
+    assert_eq!(
+        module.matches("fn handed_over(").count(),
+        1,
+        "★★★ CONSTRAINT 32 REGRESSED — `HandedClient` has more than one constructor. The \
+         invariant is that *having* one and *being the scratchpad, handed these numbers* are \
+         one fact; a second constructor splits them apart."
+    );
+    assert!(
+        module.contains("_role: ScratchpadRole,"),
+        "★★★ CONSTRAINT 32 REGRESSED — `handed_over` no longer takes the `ScratchpadRole` BY \
+         VALUE. Taking it by reference, or not at all, is what lets the role be re-used or \
+         skipped — and a per-proc backend that can build a `HandedClient` can issue escapes \
+         under a client it did not mint."
+    );
+    assert!(
+        module.contains("use super::handed_vaspace::ScratchpadRole;"),
+        "★★★ CONSTRAINT 32 REGRESSED — `mod handed_client` no longer reuses the ONE \
+         `ScratchpadRole`. A second unit type meaning *\"I am the scratchpad\"* is a second \
+         place for that answer to drift, and only one of them would be checked against \
+         `SCRATCHPAD_ISOLATE_PROC`."
+    );
+
+    // ★★★ The minting proc must SURVIVE into the value. Constraint 32's security claim is a
+    // statement about `ProcessID`; a value that cannot say which isolate minted it cannot be
+    // checked against the descriptor that carried it.
+    assert!(
+        module.contains("pub(super) fn minted_by(self) -> u32 {"),
+        "★★★ CONSTRAINT 32 REGRESSED — `HandedClient` no longer reports the isolate that \
+         minted it. RM stamps `ProcessID` from the CREATING task (client.c:112), so \
+         `minted_by` is the only thing that makes *\"stamps land as I's\"* checkable rather \
+         than argued. Dropping it is the whole ruling becoming a comment."
+    );
+    assert!(
+        module.contains("minted_by=proc {}"),
+        "★★★ CONSTRAINT 32 REGRESSED — `HandedClient`'s `Debug` no longer prints the minting \
+         proc. A census line that names a client without naming whose identity it carries \
+         cannot answer the one question this route exists to answer."
+    );
+    assert!(
+        !module.contains("static ") && !module.contains("thread_local"),
+        "★★★ CONSTRAINT 32 REGRESSED — the birth client is being read off process-global \
+         state. One process hosts TWO emulated GPUs; a `static` binds to whichever realized \
+         first, which is the w637 defect in the one place it would be least visible."
+    );
+
+    for forbidden in [
+        "impl From<u32> for HandedClient",
+        "fn new(",
+        "derive(Default)",
+        "impl Default for HandedClient",
+        "fn from_raw(",
+    ] {
+        assert!(
+            !module.contains(forbidden),
+            "★★★ CONSTRAINT 32 REGRESSED — `mod handed_client` now contains `{forbidden}`, \
+             which manufactures the type from a value nobody was handed. That is precisely \
+             the direction it exists to make impossible."
+        );
+    }
 }

@@ -829,3 +829,177 @@ fn does_not_observe_isolate_lifetime() {
          indistinguishable here, and §9 records that as open"
     );
 }
+
+// =====================================================================================
+// ★★★★★ CONSTRAINT 32, ROUTE K — the birth-client descriptor's one-target rule
+// =====================================================================================
+
+/// ★★★★★ **THE KNOWN-POSITIVE THE PHASE-2 PLAN NAMES FIRST** (`w750_route_k_phase2_plan.md`
+/// §1.3: *"an attempt to lend a birth-client fd to a **second per-proc isolate** must stay
+/// red"*).
+///
+/// The descriptor that reaches client **B** is the whole of route K's capability: naming B
+/// without it reaches no RM at all. ⇒ if this descriptor can land in a second guest
+/// process's isolate, that process can allocate objects in — and free objects out of — a
+/// client whose `ProcessID` RM stamped as somebody else's. That is `#14` with an extra
+/// hop, and it is refused by name.
+#[test]
+fn a_birth_client_descriptor_may_not_be_lent_to_a_second_per_proc_isolate() {
+    let _fd_table = serialized();
+    let minter = iso(7, 0);
+    let ctl = CrossedFd::adopt(
+        a_char_device(),
+        FdOrigin::BirthClient { minted_by: minter },
+        DescriptorKind::CharDevice,
+    )
+    .expect("adopted as a birth-client descriptor");
+
+    // The scratchpad — the ONE legitimate target.
+    let scratchpad = IsolateId::new(kayfabe_isolate_host::SCRATCHPAD_ISOLATE_PROC, GpuId(0));
+    ctl.lend_to(scratchpad)
+        .expect("route K hands the birth client to the scratchpad; that is the whole route");
+
+    // Every per-proc isolate, INCLUDING the minter, is refused.
+    for (who, id) in [
+        ("a second guest process's isolate", iso(8, 0)),
+        ("another GPU's isolate for that proc", iso(8, 1)),
+        ("the MINTER's own isolate", minter),
+        ("the minter on another GPU", iso(7, 1)),
+    ] {
+        let err = ctl
+            .lend_to(id)
+            .err()
+            .unwrap_or_else(|| panic!("CONSTRAINT 32 BREACHED — {who} received the birth-client descriptor"));
+        match err {
+            RawError::ForeignDescriptor { origin, target } => {
+                assert_ne!(origin, target, "the refusal must name two different parties");
+            }
+            other => panic!("expected ForeignDescriptor for {who}, got {other:?}"),
+        }
+    }
+}
+
+/// ★★★ **The minter's refusal is not an accident of `origin != target`** — and this is the
+/// test that says so, because the two rules are one line apart and an editor who "fixed"
+/// the birth-client arm to mirror `Isolate`'s would make the minter legal again with a
+/// change that reads like a tidy-up.
+///
+/// Route K's step 2 has I **close its own copy** precisely so that only S holds a
+/// descriptor naming B. Lending it back would undo by transport what that close achieved.
+#[test]
+fn the_birth_clients_own_minter_is_refused_where_an_isolate_descriptors_owner_is_not() {
+    let _fd_table = serialized();
+    let owner = iso(3, 0);
+
+    let ordinary = CrossedFd::adopt(
+        a_char_device(),
+        FdOrigin::Isolate(owner),
+        DescriptorKind::CharDevice,
+    )
+    .unwrap();
+    assert!(
+        ordinary.lend_to(owner).is_ok(),
+        "an ordinary isolate descriptor DOES go back to its owner — the contrast this test is"
+    );
+
+    let birth = CrossedFd::adopt(
+        a_char_device(),
+        FdOrigin::BirthClient { minted_by: owner },
+        DescriptorKind::CharDevice,
+    )
+    .unwrap();
+    assert!(
+        birth.lend_to(owner).is_err(),
+        "★★★ CONSTRAINT 32 REGRESSED — a birth-client descriptor went back to its minter. \
+         The two origins have one-element target sets that share no element; a birth-client \
+         arm written to mirror `Isolate`'s is the safest-looking spelling of the breach."
+    );
+}
+
+/// ⊘ **A birth-client descriptor is NOT a VMM-minted one**, which is the other direction an
+/// editor could collapse it in. `FdOrigin::Vmm` goes anywhere; this must not.
+#[test]
+fn a_birth_client_descriptor_is_not_treated_as_vmm_minted() {
+    let _fd_table = serialized();
+    let birth = CrossedFd::adopt(
+        a_char_device(),
+        FdOrigin::BirthClient {
+            minted_by: iso(1, 0),
+        },
+        DescriptorKind::CharDevice,
+    )
+    .unwrap();
+    let mut refused = 0;
+    for id in [iso(1, 0), iso(2, 0), iso(2, 1), iso(9, 3)] {
+        if birth.lend_to(id).is_err() {
+            refused += 1;
+        }
+    }
+    assert_eq!(
+        refused, 4,
+        "★★★ CONSTRAINT 32 REGRESSED — {} of 4 per-proc isolates were handed a birth-client \
+         descriptor. A `Vmm`-shaped rule here would pass every one of them.",
+        4 - refused
+    );
+}
+
+/// ★★★★★ **THE SILENT DROP, DEMONSTRATED — why the child's reader had to change and why a
+/// `BIRTH_CLIENT_NO_DESCRIPTORS` refusal exists.**
+///
+/// ⊘⊘ **A `recvmsg` with no control buffer does not refuse a descriptor. It CLOSES it and
+/// delivers the body perfectly.** That is the whole hazard of route K's fd-IN path, and it
+/// is invisible at every layer above: the frame decodes, the client handle is the right
+/// number, and the only thing missing is the capability that makes the handle mean
+/// anything.
+///
+/// This test puts both readers on the same wire against the same sender:
+///
+/// | reader | body | descriptors |
+/// |---|---|---|
+/// | `read_frame` (the pre-w753 child) | **perfect** | **silently gone** |
+/// | `read_frame_with_fds` (the w753 child) | perfect | **arrive** |
+///
+/// ⇒ the two differ in exactly one observable, and it is one no error path reports. A
+/// hand-over built on the first reader would have returned `Ok` forever.
+#[test]
+fn a_reader_without_a_control_buffer_loses_the_descriptor_and_reports_nothing() {
+    let _fd_table = serialized();
+    let body = b"an AdoptBirthClient frame's body".to_vec();
+
+    // --- Arm 1: the reader the child had BEFORE w753. The descriptor vanishes.
+    let (tx, rx) = wire();
+    let (file, tag) = a_regular_file("silently-dropped");
+    write_frame_with_fds(tx.as_fd(), &body, &[file.as_fd()]).expect("sent with a descriptor");
+    let mut got = Vec::new();
+    let mut plain = &rx;
+    assert!(
+        kayfabe_isolate_host::proto::read_frame(&mut plain, &mut got).expect("read"),
+        "the plain reader still reads the frame"
+    );
+    assert_eq!(got, body, "★ and it reads it PERFECTLY — that is the hazard");
+    drop((tx, rx, file));
+    assert!(
+        !open_fd_targets().values().any(|t| t.contains(&tag)),
+        "★★★ NON-VACUITY — the descriptor must genuinely be gone from this process. If it \
+         were still open, this test would be demonstrating nothing."
+    );
+
+    // --- Arm 2: the reader the child has NOW. Same sender, same body, descriptor arrives.
+    let (tx, rx) = wire();
+    let (file, _tag) = a_regular_file("delivered");
+    write_frame_with_fds(tx.as_fd(), &body, &[file.as_fd()]).expect("sent with a descriptor");
+    let mut got = Vec::new();
+    let mut fds = Vec::new();
+    assert!(
+        read_frame_with_fds(rx.as_fd(), &mut got, &mut fds, 2).expect("read"),
+        "the fd-carrying reader reads the frame"
+    );
+    assert_eq!(got, body, "…the same body");
+    assert_eq!(
+        fds.len(),
+        1,
+        "★★★ CONSTRAINT 32 — the descriptor must ARRIVE. A zero here with a perfect body is \
+         exactly what a child that forgot its control buffer looks like, and nothing below \
+         this line can tell the difference."
+    );
+}

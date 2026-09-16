@@ -58,6 +58,132 @@ fn rm_body() -> String {
 /// `raw_map_dma_flags` both delegate to it.
 const THE_ONE_MAP_SITE: &str = "fn raw_map_dma_slice(";
 
+/// ★★★★★ **CONSTRAINT 26/32 — THE SECOND MAP SITE IS UNREACHABLE WITH A BARE SPACE, AND
+/// THE ORDER IS WHAT MAKES THAT TRUE.**
+///
+/// ⊘⊘ **`every_map_in_this_crate_can_refuse_a_bare_space` no longer covers every map**, and
+/// saying so is the point. Route K added `BirthConn::map_dma_slice`, a second `NVOS46` site
+/// that **cannot** call `is_bare_space`: the ledger lives on `RmConnection` and `BirthConn`
+/// deliberately has none. The w746 lesson — *"restated HERE, where `Nvos46Parameters` is
+/// built, so the counter cannot be zero by construction again"* — cannot be applied literally.
+///
+/// ★★★ So the property is bought a different way, and it is **stronger** rather than equal:
+/// `BirthConn::map_dma_slice` is reached only through `map_store_slice`, which (a) refuses a
+/// bare space **before** the birth dispatch, and (b) reaches the birth branch only when
+/// `birth_for_range(h_dma)` answers `Some` — which is proof that `h_dma` is a range **this
+/// connection allocated in B**, not merely that it is not bare.
+///
+/// ⇒ this gate checks the ORDER, because the order is the whole argument. A birth dispatch
+/// hoisted above the refusal would let a bare space reach RM through B, where nothing else
+/// is watching.
+/// ★★★★★ **CONSTRAINT 32 — THE TWO HANDLE SPACES CANNOT COLLIDE, AND IT IS ARITHMETIC.**
+///
+/// `RmConnection` mints from `FIRST_HANDLE` **upward**; `BirthConn` mints from
+/// `BIRTH_HANDLE_BASE` upward, in a **different client**. Two ledgers key on the handle
+/// **value** while holding handles from both namespaces — `adopted_spaces` and
+/// `birth_ranges` — so a value that occurs in both is not a wrong handle, it is a **silent
+/// misroute**: one of our ranges mapped into B, under a foreign `hRoot`, on a descriptor we
+/// did not open, and RM answers it because in B's namespace that handle is real.
+///
+/// ⊘⊘ **The first version of `BIRTH_HANDLE_BASE` was `0xCAFE_B000` — 45 055 allocations
+/// above our own base.** That is not a safety margin; it is a collision with a schedule.
+/// The base must be **below** ours, so reaching it requires wrapping `u32`.
+#[test]
+fn the_two_handle_spaces_cannot_collide() {
+    let body = rm_body();
+    let first = read_hex(&body, "const FIRST_HANDLE: u32 = ");
+    let birth = read_hex(&body, "const BIRTH_HANDLE_BASE: u32 = ");
+    assert!(
+        birth < first,
+        "★★★★★ CONSTRAINT 32 — `BIRTH_HANDLE_BASE` ({birth:#010x}) is at or above \
+         `FIRST_HANDLE` ({first:#010x}). Our space INCREMENTS, so it will reach B's in \
+         {} allocations and then every ledger keyed on a handle value is ambiguous.",
+        birth.wrapping_sub(first)
+    );
+    // ⊘ And not merely below: far enough below that wrapping is the only route.
+    let gap = first.wrapping_sub(birth);
+    assert!(
+        gap > 100_000_000,
+        "★★★ CONSTRAINT 32 — the two handle spaces are only {gap} apart. The margin must be \
+         a number nobody reaches, not a number nobody has reached YET."
+    );
+}
+
+/// Read a `u32` hex literal off a `const NAME: u32 = 0x…;` line in the source.
+fn read_hex(body: &str, decl: &str) -> u32 {
+    let at = body
+        .find(decl)
+        .unwrap_or_else(|| panic!("★ NON-VACUITY: `{decl}` is gone from rm.rs"));
+    let rest = &body[at + decl.len()..];
+    let lit: String = rest
+        .chars()
+        .take_while(|c| c.is_ascii_hexdigit() || *c == 'x' || *c == 'X' || *c == '_')
+        .filter(|c| *c != '_')
+        .collect();
+    let hex = lit.trim_start_matches("0x").trim_start_matches("0X");
+    u32::from_str_radix(hex, 16).unwrap_or_else(|e| panic!("parse `{lit}`: {e}"))
+}
+
+/// ★★★★★ **CONSTRAINT 27/32 — THE UNMAP FOLLOWS THE MAP'S NAMESPACE.**
+///
+/// ⊘⊘ **This is constraint 27's failure, not a tidiness one.** If a route-K slice's unmap is
+/// issued under our own client naming a handle that lives in B, it fails — and a silently
+/// failed unmap is exactly what §27 forbids: the refresh reports the guest's TLB invalidate
+/// complete, the guest kernel reuses that physical page for another of its own userspace
+/// processes, and the previous process can still reach it through a slice we told the guest
+/// was gone. A cross-process leak **inside** the guest, caused by us, invisible to the guest.
+///
+/// ⇒ `unmap_store_slice` must consult the same reverse index `map_store_slice` does, so the
+/// two can never disagree about which namespace a handle lives in.
+#[test]
+fn the_store_unmap_routes_through_the_same_index_as_the_map() {
+    let body = rm_body();
+    for f in ["fn map_store_slice(", "fn unmap_store_slice("] {
+        let at = body
+            .find(f)
+            .unwrap_or_else(|| panic!("★ NON-VACUITY: `{f}` is gone from rm.rs"));
+        let end = body[at..].find("\n    fn ").map_or(body.len(), |o| at + o);
+        assert!(
+            body[at..end].contains("birth_for_range(h_dma)"),
+            "★★★★★ CONSTRAINT 27/32 — `{f}` does not consult `birth_for_range`. The map and \
+             the unmap MUST agree about which client a handle lives in; one that routes and \
+             one that does not means every route-K slice is mapped in B and unmapped — or \
+             not — in our own client, and §27's barrier completes on an unmap that never \
+             landed."
+        );
+    }
+}
+
+#[test]
+fn the_birth_dispatch_is_below_the_bare_space_refusal() {
+    let body = rm_body();
+    let at = body
+        .find("fn map_store_slice(")
+        .expect("★ NON-VACUITY: `map_store_slice` is gone — this gate gates nothing");
+    let end = body[at..]
+        .find("\n    fn ")
+        .map_or(body.len(), |o| at + o);
+    let f = &body[at..end];
+    let refusal = f
+        .find("if self.conn.is_bare_space(h_dma)")
+        .expect(
+            "★★★ CONSTRAINT 26 — `map_store_slice` no longer refuses a bare space. It is the \
+             only refusal covering the SECOND NVOS46 site, which cannot make one itself.",
+        );
+    let dispatch = f.find("birth_for_range(h_dma)").expect(
+        "★ NON-VACUITY: `map_store_slice` no longer dispatches to a birth client, so route \
+         K's map is unreachable and this gate is checking an order that does not exist. If \
+         route K was removed, delete this gate in the SAME change.",
+    );
+    assert!(
+        refusal < dispatch,
+        "★★★★★ CONSTRAINT 26/32 — the birth dispatch is ABOVE the bare-space refusal \
+         (refusal@{refusal}, dispatch@{dispatch}). A bare space would reach RM through \
+         client B, where `is_bare_space` cannot be consulted at all because `BirthConn` has \
+         no ledger by design. This ordering is the ONLY thing standing between the two."
+    );
+}
+
 #[test]
 fn every_map_in_this_crate_can_refuse_a_bare_space() {
     let body = rm_body();
@@ -142,19 +268,85 @@ fn the_scratchpad_cannot_birth_a_channel_in_a_space_it_adopted() {
     );
     // ⊘ NON-VACUITY, the other direction: the recording must happen at the DUP, before the
     // range is built, or a failure in between leaves an adopted space nothing knows about.
-    let dup = body
-        .find("let duped = self.conn.raw_dup_object(")
-        .expect("the scratchpad dups the handed-over space");
-    let remember = body
-        .find("self.conn.remember_adopted_space(duped);")
-        .expect("asserted above");
-    let range = body
-        .find("match self.conn.raw_alloc_range_over(duped)")
-        .expect("the range is built over the dup");
+    //
+    // ## ⊘⊘⊘ RESTATED w753 — THE WINDOW IS PER DUP, AND THERE ARE NOW TWO DUPS
+    //
+    // Constraint 32 added a route-K branch to this function: when the proc handed us a birth
+    // client, the dup goes into **B** instead of into our own client. So `adopt_vaspace` now
+    // contains two `dup -> remember -> range` sequences.
+    //
+    // ★★★ **The question is unchanged and is now asked of EVERY sequence.** The previous
+    // form used `find` — the FIRST occurrence of each marker — which is not *"the window
+    // holds"* but *"the window holds for whichever one happens to be first"*. With one
+    // branch those were the same sentence; with two they are not, and the weaker one passes
+    // while a second branch records nothing at all.
+    //
+    // ⇒ every dup is paired with the NEXT remember and the NEXT range after it, and each
+    // triple must be in order. A branch that forgot to record goes red because its dup pairs
+    // with a `remember` that belongs to the branch after it — and the range test then fails.
+    // ⊘ Scoped to `adopt_vaspace`'s OWN body. `rm_body()` is the whole file, and the markers
+    // below also appear in the functions that DEFINE them — a gate that scanned the file
+    // would count four dups and two records and report a leak that is not there.
+    let fn_at = body
+        .find("fn adopt_vaspace(&mut self, client: u32, space: u32)")
+        .expect("★ NON-VACUITY: `adopt_vaspace` is gone — this gate gates nothing");
+    let fn_end = body[fn_at..]
+        .find("\n    fn ")
+        .map_or(body.len(), |o| fn_at + o);
+    let body = &body[fn_at..fn_end];
+    // ⊘ `let duped = ` and not the callee's name: the two branches call DIFFERENT dup verbs
+    // (`raw_dup_object` in our client, `birth.dup` in B), and a gate keyed on either name
+    // would be blind to the other branch — which is exactly the shape that let the first
+    // version of this restatement pass while one branch recorded nothing.
+    let dups: Vec<usize> = body
+        .match_indices("let duped = ")
+        .map(|(at, _)| at)
+        .collect();
     assert!(
-        dup < remember && remember < range,
-        "★★★ the adopted space is recorded outside the window between the dup and the range. \
-         An adopted space that is not yet recorded is one a concurrent birth would be allowed \
-         into."
+        dups.len() >= 2,
+        "★ NON-VACUITY: `adopt_vaspace` contains {} dup(s), expected at least 2 (the \
+         cross-client one and constraint 32's route-K one). If route K's branch is gone, \
+         delete this half of the gate in the SAME change rather than letting it quantify \
+         over one thing and read as if it covered both.",
+        dups.len()
     );
+    let remembers: Vec<usize> = body
+        .match_indices("remember_adopted_space(duped)")
+        .map(|(at, _)| at)
+        .collect();
+    assert_eq!(
+        remembers.len(),
+        dups.len(),
+        "★★★★★ CONSTRAINT 30 — `adopt_vaspace` has {} dup(s) but records {} adopted \
+         space(s). Every dup produces a space the scratchpad now holds; one that is not \
+         recorded is one a concurrent birth WOULD BE ALLOWED INTO, and the gate above \
+         cannot see it because `is_adopted_space` answers `false`.",
+        dups.len(),
+        remembers.len()
+    );
+    let ranges: Vec<usize> = body
+        .match_indices("alloc_range_over(duped)")
+        .map(|(at, _)| at)
+        .collect();
+    assert_eq!(
+        ranges.len(),
+        dups.len(),
+        "★ NON-VACUITY: {} dup(s) but {} range(s). The window this gate checks is \
+         `dup -> remember -> range`; a dup with no range has no window and would pass \
+         vacuously.",
+        dups.len(),
+        ranges.len()
+    );
+    for (i, &dup) in dups.iter().enumerate() {
+        let remember = remembers[i];
+        let range = ranges[i];
+        assert!(
+            dup < remember && remember < range,
+            "★★★ dup #{i} in `adopt_vaspace` records its adopted space OUTSIDE the window \
+             between the dup and the range (dup@{dup}, remember@{remember}, range@{range}). \
+             An adopted space that is not yet recorded is one a concurrent birth would be \
+             allowed into — and with two branches, a gate that only checked the first would \
+             pass while the second recorded nothing."
+        );
+    }
 }

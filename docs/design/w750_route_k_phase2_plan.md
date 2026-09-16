@@ -1,5 +1,38 @@
 # w750 — route K, phase 2: what the integration actually is, and why it is not one sitting
 
+> ### ⊘⊘⊘ CORRECTED 2026-09-16 (w753) — **§1 IS RIGHT THAT ROUTE K CROSSES FOUR INVARIANTS,
+> ### AND WRONG THAT THE MAPPING PLANE CROSSES ALL FOUR.** Read this before §1.
+> Measured by reading the call graph, not the counter: `StoreMapPort` reaches RM through
+> `SharedIsolate::with_worker` → `Worker::with_rm`, which takes a **closure** and never
+> builds a `VerbPlan`. ⇒ **§1.1's foreign-handle gate and §1.2's `Staged::check_out` are NOT
+> on the path to arm 3's measured wall** — they are on the path to *birth in B*, which is a
+> different question. Only §1.3 (`lend_to`) and §1.4 (the request-direction fd) are crossed
+> by the mapping plane.
+> ⇒ **Increments 1–5 + 7 are one session's work, not three**, and per constraint 29 nothing
+> that is not crossed is retired: 1.1 and 1.2 stand un-restated **on purpose**. Retiring an
+> assert *"because the design moved"* when the design did not move past it is the deletion
+> constraint 29 exists to refuse.
+>
+> ### ⊘⊘ AND §0's FRAMING UNDERSELLS WHAT ARM 3 NEEDS FROM K, WHILE §3 STEP 8 OVERSELLS IT
+> §0 says the RM sequence is done and what is missing is the four restatements. True. But
+> the reason arm 3 is **red** is not named anywhere in this file: its measured wall is
+> `STORE-MAP adopts=0 adopt_refused=4718 first_refusal=[Rm("InsufficientPermissions")]`, and
+> route K dissolves it **by construction** (the dup's destination carries I's `ProcessID`, so
+> it is a same-PID dup needing no grant — `sharing.c:341-352`). That consequence is stated
+> once in the tree, at `fable_leg_b_solution_space.md:227`, and nowhere in the plan that
+> costs the work.
+> ⚠ ⊘ **AND FOUR LINKS DOWNSTREAM OF THAT DUP HAVE NEVER RUN ON HARDWARE** at three
+> consecutive boots (`SINGLE_STORE_PLAN.md:2389-2398`): `map_store_slice`, the slice binding,
+> constraint 28's placement assert, and the ring oracle. ⇒ **step 8's gate is not a
+> prediction this plan is entitled to make.** A green dup is not a green client.
+> Pre-registration, with the refuting value for each row: `w753_route_k_phase2_prereg.md`.
+>
+> ### STATUS — 2026-09-16 / **SUPERSEDED IN PART — increments 1-5 and 7 are BUILT (w753).**
+> ⊘ The text below is the plan as written before any code existed. Increments **1, 2, 3, 4, 5
+> and 7 landed** on branch `w753-route-k-phase2`; **6 did not**, for the reason in the
+> correction above. Read §1.1 and §1.2 as *"what birth in B will cost"*, not as *"what this
+> increment owes"*.
+>
 > ### STATUS — 2026-09-16 / **LIVE — PLAN ONLY. NO PRODUCTION CODE WRITTEN.**
 > Phase 1 passed (`w750_route_k_prereg.md` §RESULTS; constraint 32 updated in place), so
 > phase 2 is unblocked **and deliberately not started in the same session.** This file says

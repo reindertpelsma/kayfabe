@@ -35,6 +35,21 @@
 //! *deliberately brokered* dma-buf import for the graphics path, guarded by a comment
 //! rather than a check — see §7 of the design note for why that is a separate, explicitly
 //! argued exception and not a reason to relax the default.
+//!
+//! ## ★★★★★ AND THAT EXCEPTION NOW EXISTS HERE, ARGUED — constraint 32, route K
+//!
+//! The sentence above says a cross-isolate transfer needs *"a separate, explicitly argued
+//! exception"*. [`FdOrigin::BirthClient`] is one, and it is argued in three places that
+//! must agree: `THE_CONSTRAINTS.md` §32 (the ruling and the hardware measurement),
+//! `docs/design/w750_route_k_phase2_plan.md` §1.3 (why this module is one of the four
+//! crossings), and the variant's own doc comment (the rule).
+//!
+//! ⊘ **It does not relax the default and it is not `Isolate` with a bigger target set.**
+//! Its rule is *narrower* in the direction that matters: an `Isolate` descriptor may go to
+//! exactly one isolate — **its own**; a `BirthClient` descriptor may go to exactly one
+//! isolate — **the scratchpad, which is never its own**. Two one-element sets that share
+//! no element. A reader who models this as "a wider `Isolate`" has the security argument
+//! backwards.
 
 use crate::proto::FRAME_MAX;
 use kayfabe_isolate::IsolateId;
@@ -57,6 +72,41 @@ pub enum FdOrigin {
     /// `ISOLATE_RESP_OPEN_DEVICE` direction, and the one this port lacked. It belongs to
     /// **that** isolate and may go back only there.
     Isolate(IsolateId),
+    /// ★★★★★ **CONSTRAINT 32, ROUTE K — the third origin, and the argued exception this
+    /// module's header says a cross-isolate transfer must be.**
+    ///
+    /// A per-proc isolate opened a **second** `/dev/nvidiactl`, allocated an
+    /// `NV01_ROOT_CLIENT` on it, and handed the descriptor over so that the **scratchpad**
+    /// can drive that client. `minted_by` is the isolate that opened it, kept because
+    /// constraint 32's entire security claim is a statement about it: RM stamps
+    /// `ProcessID` from the **creating** task (`client.c:112`), so the descriptor and the
+    /// client it reaches must name the same party or the claim is false while every ioctl
+    /// still succeeds.
+    ///
+    /// ⊘ **Its lending rule is NOT `Isolate`'s and NOT `Vmm`'s**, which is why it is a
+    /// variant and not a flag on either:
+    ///
+    /// | origin | may be lent to |
+    /// |---|---|
+    /// | [`FdOrigin::Vmm`] | any isolate |
+    /// | [`FdOrigin::Isolate`] | the one isolate it came from |
+    /// | `BirthClient` | **the scratchpad, and nothing else** — including not back to
+    /// |   | `minted_by` |
+    ///
+    /// ★ The last cell is the load-bearing one and it is deliberate. Route K's step 2 has
+    /// I **close its own copy** so that only S holds a descriptor naming B; lending it
+    /// back to `minted_by` would undo by transport what that close achieved, and it would
+    /// do so on the one path where the refusal reads as "returning it to its owner", which
+    /// is the safest-looking spelling of the breach.
+    ///
+    /// ⚠ **Expiry condition** (§w724g): this variant is unwired and deleted in the same
+    /// change as `KAYFABE_VAS_OWNER=k`, if route K is ever retired. It has exactly one
+    /// producer and one consumer by construction; a second of either is the signal that
+    /// the "argued exception" has become a general mechanism.
+    BirthClient {
+        /// The per-proc isolate that opened the descriptor and minted the client on it.
+        minted_by: IsolateId,
+    },
 }
 
 impl FdOrigin {
@@ -66,6 +116,18 @@ impl FdOrigin {
         match self {
             FdOrigin::Vmm => u64::MAX,
             FdOrigin::Isolate(id) => (u64::from(id.proc()) << 32) | u64::from(id.gpu().0),
+            // ⊘ **Deliberately NOT the same number as `Isolate(minted_by)`.** A refusal
+            // message that printed a birth-client descriptor as though it were an ordinary
+            // isolate descriptor would name the right proc and the wrong rule, and the two
+            // have opposite answers for `target == minted_by`. The high bit distinguishes
+            // them; `u64::MAX` stays the VMM's and cannot collide because no `IsolateId`
+            // has `gpu().0 == u32::MAX` and `proc() == u32::MAX` at once with the flag
+            // clear.
+            FdOrigin::BirthClient { minted_by } => {
+                0x8000_0000_0000_0000
+                    | ((u64::from(minted_by.proc()) << 32) & 0x7fff_ffff_0000_0000)
+                    | u64::from(minted_by.gpu().0)
+            }
         }
     }
 }
@@ -132,6 +194,10 @@ impl CrossedFd {
     ///   from. Anywhere else is [`RawError::ForeignDescriptor`] — a live handle onto
     ///   isolate A's GPU objects landing in isolate B's table is the `#14` breach, and it
     ///   is refused by name rather than prevented by an assumption about topology.
+    /// - An [`FdOrigin::BirthClient`] descriptor goes **only** to the scratchpad — not to
+    ///   any per-proc isolate, **including the one that minted it**. Constraint 32, and
+    ///   the one case where "give it back to its owner" is the refusal rather than the
+    ///   exemption.
     ///
     /// # Errors
     /// [`RawError::ForeignDescriptor`], naming both isolates.
@@ -140,6 +206,21 @@ impl CrossedFd {
             FdOrigin::Vmm => Ok(self.fd.as_fd()),
             FdOrigin::Isolate(owner) if owner == target => Ok(self.fd.as_fd()),
             FdOrigin::Isolate(_) => Err(RawError::ForeignDescriptor {
+                origin: self.origin.as_u64(),
+                target: FdOrigin::Isolate(target).as_u64(),
+            }),
+            // ★★★★★ **CONSTRAINT 32 — ONE TARGET, AND IT IS NAMED BY WHAT IT IS, NOT BY
+            // WHO SENT IT.** The test is `target.proc() == SCRATCHPAD_ISOLATE_PROC`, so
+            // `minted_by` is **not** consulted here at all: a birth-client descriptor may
+            // go to the scratchpad and to no other isolate, its own minter included. See
+            // the variant's doc for why lending it back is the breach that reads as
+            // innocuous.
+            FdOrigin::BirthClient { .. }
+                if target.proc() == crate::SCRATCHPAD_ISOLATE_PROC =>
+            {
+                Ok(self.fd.as_fd())
+            }
+            FdOrigin::BirthClient { .. } => Err(RawError::ForeignDescriptor {
                 origin: self.origin.as_u64(),
                 target: FdOrigin::Isolate(target).as_u64(),
             }),

@@ -446,6 +446,18 @@ report() {
   echo "--- host Xid ---"
   echo "HOST_DMESG_XID=$(grep -ac 'Xid' "$BENCH/run_${tag}_hostdmesg.log" 2>/dev/null)"
   grep -a 'Xid' "$BENCH/run_${tag}_hostdmesg.log" 2>/dev/null | head -3 | cut -c1-190
+  # ★ w753 ADDITION, REPORTING ONLY — constraint 32's rows. No arm, threshold or boot step.
+  echo "--- w753: route K (constraint 32) ---"
+  grep -a 'ROUTE-K AT REALIZE' "$Q" 2>/dev/null | tail -1 | cut -c1-300
+  grep -a 'STORE-MAP-K ' "$Q" 2>/dev/null | tail -1 | cut -c1-300
+  echo -n "    CONSTRAINT-32 BIRTH-CLIENT MINTED  = "; grep -ac 'BIRTH-CLIENT MINTED' "$Q" 2>/dev/null
+  echo -n "    CONSTRAINT-32 BIRTH-CLIENT ADOPTED = "; grep -ac 'BIRTH-CLIENT ADOPTED' "$Q" 2>/dev/null
+  echo -n "    CONSTRAINT-32 BIRTH-CLIENT HANDED  = "; grep -ac 'BIRTH-CLIENT HANDED' "$Q" 2>/dev/null
+  echo -n "    CONSTRAINT-32 ADOPT-IN-B           = "; grep -ac 'CONSTRAINT-32 ADOPT-IN-B' "$Q" 2>/dev/null
+  echo -n "    CONSTRAINT 32 REFUSED (any)        = "; grep -ac 'CONSTRAINT 32 REFUSED' "$Q" 2>/dev/null
+  echo "    ⊘ MINTED>0 with ADOPTED=0 means the fd crossed and the far side refused — read"
+  echo "      the REFUSED line. MINTED=0 on the k arm means the publish path never reached"
+  echo "      the mint, which is NOT evidence route K failed."
   echo "--- QEMU's own last words (if it refused at realize, the sentence is here) ---"
   grep -aE 'Unsupported|refus|REFUS|⊘' "$Q" 2>/dev/null | tail -12 | cut -c1-260
   # ★★★★★ w754 ADDITION, REPORTING ONLY — constraint 4's actual gate and the two censuses that
@@ -506,7 +518,22 @@ env -u KAYFABE_VAS_OWNER KAYFABE_FB_STORE=device KAYFABE_DEVICE_VIEW=probe \
 echo "DEVICE_BOOT_RC=$?"
 report "${TAG}dev" device
 
-# ===================== ARM 3: w745 — THE OWNERSHIP SPLIT =====================
+# ===================== ARM 3: THE TEST =====================
+# ★★★★★ w753 — ARM 3's VALUE IS NOW A PARAMETER, and the harness is NOT forked.
+#   `ARM3_VAS_OWNER` selects which scratchpad-ownership arm is under test:
+#     scratchpad  (the default) — constraint 26, w745's split. UNCHANGED.
+#     k                          — constraint 32, route K: the split PLUS a per-proc birth
+#                                  client, so the VA-space dup is same-ProcessID.
+#   ⊘ A parameter and not a second script, for the reason three comments at the top of this
+#     file already give: a second harness for the same job is what they exist to prevent.
+#     Arms 1 and 2 are byte-identical either way, which is the whole point of running them.
+#   ⚠ It is PRINTED, because a boot that does not say which arm it ran is uninterpretable —
+#     and the two arms differ in exactly one decision.
+ARM3_VAS_OWNER="${ARM3_VAS_OWNER:-scratchpad}"
+case "$ARM3_VAS_OWNER" in
+  scratchpad|k) : ;;
+  *) echo "ARM3_VAS_OWNER must be 'scratchpad' or 'k', got '$ARM3_VAS_OWNER'"; exit 2 ;;
+esac
 pkill -f '[q]emu-system-x86'
 sleep 3
 echo
@@ -530,6 +557,14 @@ report "${TAG}inline" inline
 else
 echo "############ ARM=split (THE TEST — constraint 26) ############"
 KAYFABE_VAS_OWNER=scratchpad KAYFABE_FB_STORE=device KAYFABE_DEVICE_VIEW=probe \
+else
+# ⊘⊘ MERGE (w753 x w754): w753 parameterised THIS arm's VAS owner while w754 wrapped it in an
+#    inline known-positive branch. Neither side is optional -- w754's arm is the A/B that makes
+#    `on_vcpu=0` attributable, and w753's variable is what selects route K. Dropping either
+#    would leave a counter nobody has shown can move.
+echo "############ ARM=split (THE TEST — KAYFABE_VAS_OWNER=$ARM3_VAS_OWNER) ############"
+echo "W753_ARM3_VAS_OWNER=$ARM3_VAS_OWNER"
+KAYFABE_VAS_OWNER="$ARM3_VAS_OWNER" KAYFABE_FB_STORE=device KAYFABE_DEVICE_VIEW=probe \
     PREFIX="${TAG}split" SHADOW=on \
     bash scripts/bench/single_store_e6_boot.sh 2>&1 | tee "$BENCH/w745_split.log"
 echo "SPLIT_BOOT_RC=$?"

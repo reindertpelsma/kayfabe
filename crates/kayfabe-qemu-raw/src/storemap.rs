@@ -135,6 +135,15 @@ pub struct StoreMapPort {
     /// fixes, and a census that adds them cannot tell a stalled publish route from a broken
     /// driver.
     declined_on_vcpu: AtomicU64,
+    /// ★★★ **CONSTRAINT 32 — birth clients handed to this port, and refusals.** ⊘ Both,
+    /// because `refused=0` alone is the `a_refusal_counter_read_as_absent_demand` shape: it
+    /// reads as *"nothing was refused"* when it may mean *"nothing was asked"*.
+    birth_clients: AtomicU64,
+    /// Birth clients this port refused, or RM did.
+    birth_refused: AtomicU64,
+    /// ★ Per-proc isolates that have a birth client here, so the census can say whether the
+    /// arm reached every proc or only the first.
+    birth_procs: std::sync::Mutex<std::collections::BTreeSet<u32>>,
     /// The first refusal's name, so a census can say WHICH of four fired. `None` means none.
     first_refusal: std::sync::Mutex<Option<String>>,
 }
@@ -178,6 +187,9 @@ impl StoreMapPort {
             asserted: AtomicU64::new(0),
             assert_refused: AtomicU64::new(0),
             declined_on_vcpu: AtomicU64::new(0),
+            birth_clients: AtomicU64::new(0),
+            birth_refused: AtomicU64::new(0),
+            birth_procs: std::sync::Mutex::new(std::collections::BTreeSet::new()),
             first_refusal: std::sync::Mutex::new(None),
         }
     }
@@ -226,6 +238,85 @@ impl StoreMapPort {
                 Ok(range)
             }
         }
+    }
+
+    /// ★★★★★ **CONSTRAINT 32 — HAND A BIRTH CLIENT TO THE SCRATCHPAD.**
+    ///
+    /// The descriptors and the handle came from a per-proc isolate's
+    /// [`kayfabe_isolate::RmBackend::mint_birth_client`]; this puts them where every later
+    /// store-mapping escape for that proc will find them.
+    ///
+    /// ⊘ **Idempotent by REFUSAL, not by replacement.** A second hand-over for one proc is
+    /// refused at the far side (`BIRTH_CLIENT_ALREADY_HELD`) rather than overwriting, because
+    /// replacing drops a live connection — closing I's descriptors and orphaning every range
+    /// already placed through it — while callers holding a range handle from the old one
+    /// carry on naming it. This side therefore asks **once**, and the counter says so.
+    ///
+    /// # Errors
+    /// [`StoreMapRefusal`], by name.
+    ///
+    /// # Panics
+    /// Through `Worker::with_rm`'s `assert_lock_free`, if a caller reaches this holding a
+    /// ranked lock. That is the invariant, not a bug to be caught.
+    pub fn adopt_birth_client(
+        &self,
+        minted: kayfabe_isolate::MintedBirthClient,
+        minted_by_proc: u32,
+    ) -> Result<(), StoreMapRefusal> {
+        let off = self.off_vcpu()?;
+        let isolate_client = minted.isolate_client;
+        let client = u64::from(minted.client);
+        let (ctl, node) = (minted.ctl, minted.node);
+        let out = self.iso.with_worker(move |worker| {
+            worker.with_rm(&off, move |rm| {
+                rm.adopt_birth_client(client, isolate_client, minted_by_proc, ctl, node)
+            })
+        });
+        match out {
+            None => {
+                self.birth_refused.fetch_add(1, Ordering::Relaxed);
+                Err(self.note(StoreMapRefusal::NoWorker))
+            }
+            Some(Err(e)) => {
+                self.birth_refused.fetch_add(1, Ordering::Relaxed);
+                Err(self.note(StoreMapRefusal::Rm(format!("{e:?}"))))
+            }
+            Some(Ok(())) => {
+                self.birth_clients.fetch_add(1, Ordering::Relaxed);
+                self.birth_procs
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .insert(minted_by_proc);
+                Ok(())
+            }
+        }
+    }
+
+    /// ★★★ **CONSTRAINT 32's CENSUS ROW** — handed, refused, and **how many procs**.
+    ///
+    /// ⊘ Three numbers, because two of them answer different questions and the third catches
+    /// the failure that reads as success: one proc's birth client working while the others'
+    /// silently fall back to the cross-client path is a partial arm that looks like a flaky
+    /// GPU.
+    #[must_use]
+    pub fn birth_census(&self) -> (u64, u64, usize) {
+        (
+            self.birth_clients.load(Ordering::Relaxed),
+            self.birth_refused.load(Ordering::Relaxed),
+            self.birth_procs
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .len(),
+        )
+    }
+
+    /// Does this port already hold a birth client for `proc`?
+    #[must_use]
+    pub fn has_birth_client(&self, proc: u32) -> bool {
+        self.birth_procs
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .contains(&proc)
     }
 
     /// ★★★★★ **MAP `[offset, offset+len)` OF THE ONE OBJECT AT THE GUEST'S OWN VA.**
@@ -403,8 +494,26 @@ impl StoreMapPort {
         } else {
             "★ every adopt and every map succeeded"
         };
+        let (bc, br, bp) = self.birth_census();
+        // ★★★★★ **CONSTRAINT 32's ROW, AND IT NAMES ITS OWN VACUITY.** ⊘ `birth_refused=0`
+        // alone is `a_refusal_counter_read_as_absent_demand`: it reads as "nothing was
+        // refused" when it may mean "nothing was asked". So the row carries `handed`,
+        // `refused` AND `procs`, and says in words which of the three states it is in.
+        let birth_verdict = if bc == 0 && br == 0 {
+            "⊘⊘ NOT ASKED — this is the `scratchpad` arm, or the publish path never reached \
+             the mint. It is NOT evidence that route K failed"
+        } else if bc == 0 {
+            "⊘⊘⊘ EVERY BIRTH CLIENT REFUSED — every dup below took the CROSS-CLIENT path and \
+             RM's `InsufficientPermissions` is this line's consequence, not a new finding"
+        } else if br > 0 {
+            "⚠ PARTIAL — some procs have a birth client and some do not. The ones that do not \
+             are silently on the cross-client path; this is NOT a flaky GPU"
+        } else {
+            "★ every birth client was handed over"
+        };
         format!(
-            "STORE-MAP iso={:?} obj={:?} obj_len={} adopts={adopts} adopt_refused={} \
+            "STORE-MAP-K handed={bc} refused={br} procs={bp} ⇒ {birth_verdict}\n\
+             STORE-MAP iso={:?} obj={:?} obj_len={} adopts={adopts} adopt_refused={} \
              maps={maps} map_refused={} unmaps={} unmap_refused={} bytes_mapped={} \
              outstanding={} asserted={asserted} assert_refused={assert_refused} \
              declined_on_vcpu={} first_refusal=[{}] ⇒ {verdict}",

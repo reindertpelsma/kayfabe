@@ -14386,6 +14386,12 @@ fn map_store_slice_for_leaf(
         }
         return None;
     }
+    // ★★★ Which arm this boot is on. ⊘ Read per call rather than latched, for
+    // `store_owns_vas`'s reason exactly: a latched copy is a second statement of a default
+    // whose only statement is `scratchpad::vas_owner_from`.
+    let k_arm = crate::scratchpad::selected_vas_owner()
+        .map(crate::scratchpad::VasOwner::birth_client)
+        .unwrap_or(false);
     let Some(sp) = crate::storemap::store_map_port(DOORBELL_TARGET_GPU) else {
         let n = STORE_SLICE_REFUSED.fetch_add(1, Ordering::Relaxed);
         if n < DEVICE_LEAF_LINES_MAX {
@@ -14432,6 +14438,58 @@ fn map_store_slice_for_leaf(
                     return None;
                 }
             };
+            // ★★★★★ **CONSTRAINT 32, ROUTE K — THE BIRTH CLIENT GOES ACROSS *BEFORE* THE
+            // SPACE IS ADOPTED, AND THE ORDER IS THE WHOLE THING.**
+            //
+            // `sp.adopt(bare)` is what issues the dup. If the birth client is not already in
+            // place when it runs, the dup goes into the scratchpad's own client — which is
+            // the `scratchpad` arm, cross-client, and `[measured w746, w752]` refused
+            // `NV_ERR_INSUFFICIENT_PERMISSIONS` 4 718 times. ⇒ arriving late is not "slower",
+            // it is **running the control arm on a boot the operator armed for K**, and the
+            // only symptom would be the refusal we are trying to dissolve.
+            //
+            // ⊘ And it needs `bare.client` — `A`, the per-proc isolate's own client — which
+            // is why it cannot be hoisted above the hand-over either. It sits in the one
+            // window where both facts exist.
+            if k_arm && !sp.has_birth_client(pid.0) {
+                match device.mint_birth_client(pid, DOORBELL_TARGET_GPU) {
+                    Ok(minted) => {
+                        // ⚠ Asserted, not assumed: the birth client is FILED under
+                        // `isolate_client`, and the store-mapping path looks it up by the
+                        // value the hand-over produced. If the two ever disagreed, every
+                        // later map would silently take the cross-client path.
+                        if minted.isolate_client != bare.client {
+                            STORE_HANDOVER_REFUSED.fetch_add(1, Ordering::Relaxed);
+                            eprintln!(
+                                "{head} ⊘⊘⊘ CONSTRAINT 32 — proc={} minted a birth client                                  keyed {:#010x} while the hand-over produced {:#010x}. These                                  MUST be the same client: one is the key the birth client is                                  filed under, the other is the key every store map presents.                                  Nothing is handed over, and this boot runs the CROSS-CLIENT                                  path — read any later `InsufficientPermissions` as this line                                  and not as RM changing its mind.",
+                                pid.0, minted.isolate_client, bare.client,
+                            );
+                        } else {
+                            let key = minted.isolate_client;
+                            match sp.adopt_birth_client(minted, pid.0) {
+                                Ok(()) => eprintln!(
+                                    "{head} CONSTRAINT-32 BIRTH-CLIENT HANDED proc={}                                      a_client={key:#010x} ⇒ this proc's VA-space dup is now a                                      SAME-ProcessID dup and needs no grant",
+                                    pid.0,
+                                ),
+                                Err(e) => {
+                                    STORE_HANDOVER_REFUSED.fetch_add(1, Ordering::Relaxed);
+                                    eprintln!(
+                                        "{head} ⊘⊘ CONSTRAINT 32: the scratchpad REFUSED the                                          birth client for proc={}: {e:?}. ⚠ The adopt below                                          will now take the CROSS-CLIENT path and RM will                                          refuse it — that refusal is THIS line's consequence.",
+                                        pid.0,
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        STORE_HANDOVER_REFUSED.fetch_add(1, Ordering::Relaxed);
+                        eprintln!(
+                            "{head} ⊘⊘ CONSTRAINT 32: proc={} could not MINT a birth client:                              {e:?}. ⊘ Read the variant: `PoolSaturated` = no worker was free                              and NOTHING was asked, so the next publish re-offers this leaf;                              `Rm(0x4B58)` = the SCRATCHPAD was asked to mint, which is the                              direction constraint 32 forbids and a routing defect here, not                              an RM one.",
+                            pid.0,
+                        );
+                    }
+                }
+            }
             match sp.adopt(bare) {
                 Ok(range) => {
                     STORE_HANDOVERS.fetch_add(1, Ordering::Relaxed);
@@ -15941,7 +15999,19 @@ impl Regs {
         {
             let owner = crate::scratchpad::selected_vas_owner();
             match (owner, scratchpad.as_mut()) {
-                (Ok(crate::scratchpad::VasOwner::Scratchpad), Some(sp)) => {
+                (
+                    Ok(
+                        crate::scratchpad::VasOwner::Scratchpad
+                        // ★★★★★ **CONSTRAINT 32 — ROUTE K TAKES THE SAME REALIZE PATH.**
+                        // ⊘ It is `scratchpad` PLUS a birth client: everything the port
+                        // does is identical, and what differs is which client the escapes
+                        // it issues are rooted in — decided per proc, in `map_store_slice_
+                        // for_leaf`, not here. Arming a separate port would be a second
+                        // answerer for the ring question and a second ledger.
+                        | crate::scratchpad::VasOwner::BirthClient,
+                    ),
+                    Some(sp),
+                ) => {
                     match sp.share_for_store_maps() {
                         Some(port) => {
                             crate::storemap::register_store_map_port(DOORBELL_TARGET_GPU, &port);
@@ -15970,6 +16040,27 @@ impl Regs {
                                  publish path is what asks.",
                                 crate::scratchpad::VAS_OWNER_ENV
                             );
+                            // ★★★ THE ARM IS PRINTED BY NAME ON EVERY BOOT. ⊘ The line above
+                            // says `=scratchpad` for BOTH arms because it is about the port,
+                            // which is identical; this one says which arm actually ran. A
+                            // boot that does not say is uninterpretable, and the two arms
+                            // differ in exactly one decision.
+                            eprintln!(
+                                "kayfabe: ROUTE-K AT REALIZE: {}={} ⇒ store-mapping escapes \
+                                 are rooted in {}.",
+                                crate::scratchpad::VAS_OWNER_ENV,
+                                owner.map(crate::scratchpad::VasOwner::as_str).unwrap_or("?"),
+                                if owner.map(crate::scratchpad::VasOwner::birth_client)
+                                    == Ok(true)
+                                {
+                                    "a PER-PROC BIRTH CLIENT (constraint 32) — the VA-space \
+                                     dup is same-ProcessID and needs no grant"
+                                } else {
+                                    "THE SCRATCHPAD'S OWN CLIENT — the VA-space dup is \
+                                     cross-client and RM refuses it without a grant \
+                                     (measured: adopt_refused=4718 at w752)"
+                                },
+                            );
                         }
                         None => eprintln!(
                             "kayfabe: STORE-MAP AT REALIZE: ⊘⊘ {}=scratchpad AND NO PORT COULD \
@@ -15981,7 +16072,13 @@ impl Regs {
                         ),
                     }
                 }
-                (Ok(crate::scratchpad::VasOwner::Scratchpad), None) => eprintln!(
+                (
+                    Ok(
+                        crate::scratchpad::VasOwner::Scratchpad
+                        | crate::scratchpad::VasOwner::BirthClient,
+                    ),
+                    None,
+                ) => eprintln!(
                     "kayfabe: STORE-MAP AT REALIZE: ⊘⊘ {}=scratchpad AND THERE IS NO \
                      SCRATCHPAD. Set {} as well, or the split has nobody to hand the address \
                      spaces to.",

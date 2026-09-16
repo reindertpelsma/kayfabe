@@ -264,6 +264,21 @@ pub enum VasOwner {
     /// The scratchpad dups each per-proc address space and does **all** GPU-side mapping;
     /// per-proc isolates get a bare space and map nothing.
     Scratchpad,
+    /// ★★★★★ **CONSTRAINT 32 — ROUTE K.** [`VasOwner::Scratchpad`], **plus** a birth client:
+    /// each per-proc isolate mints an `NV01_ROOT_CLIENT` on a second `/dev/nvidiactl` and
+    /// surrenders the descriptors, and the scratchpad issues every store-mapping escape for
+    /// that proc with `hRoot = B` on **I's** descriptor.
+    ///
+    /// ⊘ **It is a THIRD arm and not a flag on `Scratchpad`**, because `Scratchpad` is the
+    /// reproduction control this one's result is attributed against. A boolean would make
+    /// the two share a code path and the control would stop being a control.
+    ///
+    /// ★ What it buys, measured: the VA-space dup that RM refuses cross-client
+    /// (`NV_ERR_INSUFFICIENT_PERMISSIONS`, `adopt_refused=4718` at w752) becomes a
+    /// **same-`ProcessID`** dup needing no grant (`sharing.c:341-352`; `K_VAS_DUP_RC=0` at
+    /// w750). Everything downstream of the dup is unchanged and, as of this writing,
+    /// **unmeasured on hardware**.
+    BirthClient,
 }
 
 impl VasOwner {
@@ -274,13 +289,25 @@ impl VasOwner {
         match self {
             VasOwner::Isolate => "isolate",
             VasOwner::Scratchpad => "scratchpad",
+            VasOwner::BirthClient => "k",
         }
     }
 
     /// Does this arm hand per-proc isolates a bare address space?
     #[must_use]
     pub fn bare_vaspaces(self) -> bool {
-        matches!(self, VasOwner::Scratchpad)
+        matches!(self, VasOwner::Scratchpad | VasOwner::BirthClient)
+    }
+
+    /// ★★★★★ **CONSTRAINT 32 — does this arm route store mappings through a birth client?**
+    ///
+    /// ⊘ Its own predicate and **not** `!matches!(self, Isolate)`: `same_flag_opposite_
+    /// polarity` is a named failure here, and a reader who sees `bare_vaspaces()` and
+    /// assumes it implies this one has the two arms confused in the direction that silently
+    /// runs the control.
+    #[must_use]
+    pub fn birth_client(self) -> bool {
+        matches!(self, VasOwner::BirthClient)
     }
 }
 
@@ -293,15 +320,19 @@ pub fn vas_owner_from(value: Option<&str>) -> Result<VasOwner, (Status, &'static
     match value {
         None | Some("isolate") => Ok(VasOwner::Isolate),
         Some("scratchpad") => Ok(VasOwner::Scratchpad),
+        Some("k") => Ok(VasOwner::BirthClient),
         Some(_) => Err((
             Status::Unsupported,
             "KAYFABE_VAS_OWNER does not name an arm: the only values are `isolate` (the \
-             default, the pre-constraint-26 ownership) and `scratchpad`. It is not \
-             defaulted, because both directions are wrong in opposite ways — a typo \
+             default, the pre-constraint-26 ownership), `scratchpad`, and `k` (constraint \
+             32's route K — `scratchpad` plus a per-proc birth client). It is not \
+             defaulted, because every direction is wrong in a different way — a typo \
              defaulted to `isolate` runs the control arm on a boot the operator believes is \
-             armed, and one defaulted to `scratchpad` gives every per-proc isolate an \
+             armed; one defaulted to `scratchpad` gives every per-proc isolate an \
              address space it cannot map into, which surfaces as a refusal storm twenty \
-             seconds into a boot rather than as a configuration error.",
+             seconds into a boot rather than as a configuration error; and one defaulted to \
+             `k` would grade route K on a boot nobody asked to arm it on, which is how a \
+             result gets attributed to the wrong change.",
         )),
     }
 }
@@ -1228,6 +1259,70 @@ fn why(e: &RmError) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// ★★★★★ **CONSTRAINT 32 — THE THIRD ARM PARSES, AND A TYPO IS STILL REFUSED.**
+    ///
+    /// ⊘ The refusal is the half that matters and it is why `vas_owner_from` returns a
+    /// `Result` at all: a typo defaulted to `k` would grade route K on a boot nobody armed
+    /// it on, which is how a result gets attributed to the wrong change.
+    #[test]
+    fn route_k_is_a_third_arm_and_a_typo_is_still_refused() {
+        assert_eq!(vas_owner_from(Some("k")), Ok(VasOwner::BirthClient));
+        assert_eq!(vas_owner_from(Some("scratchpad")), Ok(VasOwner::Scratchpad));
+        assert_eq!(vas_owner_from(None), Ok(VasOwner::Isolate));
+        for typo in ["K", "route-k", "birthclient", "kk", "", "scratchpad "] {
+            assert!(
+                vas_owner_from(Some(typo)).is_err(),
+                "★★★ `{typo}` must be REFUSED, not defaulted — an arm nobody asked for is \
+                 how a measurement gets attributed to the wrong change"
+            );
+        }
+    }
+
+    /// ★★★★★ **THE TWO PREDICATES ARE NOT THE SAME PREDICATE.**
+    ///
+    /// `bare_vaspaces()` is true for **both** scratchpad arms; `birth_client()` is true for
+    /// exactly one. ⊘ `same_flag_opposite_polarity` is a named failure in this tree, and a
+    /// reader who sees `bare_vaspaces()` and assumes it implies `birth_client()` has the two
+    /// arms confused in the direction that silently runs the control.
+    #[test]
+    fn bare_vaspaces_and_birth_client_are_different_questions() {
+        assert!(!VasOwner::Isolate.bare_vaspaces());
+        assert!(VasOwner::Scratchpad.bare_vaspaces());
+        assert!(VasOwner::BirthClient.bare_vaspaces());
+
+        assert!(!VasOwner::Isolate.birth_client());
+        assert!(
+            !VasOwner::Scratchpad.birth_client(),
+            "★★★ CONSTRAINT 32 — the `scratchpad` arm must NOT route through a birth client. \
+             It is the REPRODUCTION CONTROL that route K's result is attributed against; an \
+             arm that quietly did what the test arm does would destroy the attribution and \
+             the boot would still look green."
+        );
+        assert!(VasOwner::BirthClient.birth_client());
+    }
+
+    /// ⊘ **Every arm prints a DISTINCT word.** A census that cannot say which of three arms
+    /// ran is a census a reader has to guess at, and two arms sharing a name is how the
+    /// guess goes wrong silently.
+    #[test]
+    fn the_three_arms_print_three_distinct_names() {
+        let names = [
+            VasOwner::Isolate.as_str(),
+            VasOwner::Scratchpad.as_str(),
+            VasOwner::BirthClient.as_str(),
+        ];
+        let unique: std::collections::BTreeSet<_> = names.iter().collect();
+        assert_eq!(unique.len(), 3, "arm names collide: {names:?}");
+        for n in names {
+            assert_eq!(
+                vas_owner_from(Some(n)).map(VasOwner::as_str),
+                Ok(n),
+                "★ an arm's printed name must be the value that SELECTS it — otherwise a log \
+                 says one thing and the reproduction command does another"
+            );
+        }
+    }
 
     #[test]
     fn absent_is_off_and_is_not_an_error() {
