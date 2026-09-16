@@ -1,0 +1,74 @@
+--- a/src/nvidia/src/kernel/gpu/mem_mgr/channel_utils.c
++++ b/src/nvidia/src/kernel/gpu/mem_mgr/channel_utils.c
+@@
+     MEM_WR32(&pGpEntry[0], GpEntry0);
+     MEM_WR32(&pGpEntry[1], GpEntry1);
+ 
++    /*
++     * ★★★★★ KAYFABE RINGTRACE — DIAGNOSTIC ONLY, NEVER A SHIPPING CONFIGURATION.
++     *
++     * Owner, 2026-09-17: "a kernel is only ringing a doorbell when advancing, and it does
++     * so probably using mmio bar, so if gp didn't advance, then bar might be stale somehow
++     * or not mapped (maybe it reads silently sparse or write is dropped)."
++     *
++     * The READ-BACK is the whole point and it is taken HERE, before EndTransfer, while the
++     * mapping the write used is still live. It splits the VMM's `RingBroughtNoEntry` into
++     * two facts that look identical from the host:
++     *   rb0 != GpEntry0  ⇒ the GUEST's own write was dropped or went somewhere else. The
++     *                      host never had a chance; the defect is the BAR1 aperture under
++     *                      this memdesc, not our reader.
++     *   rb0 == GpEntry0  ⇒ the guest sees its own entry. If the host then reads zeros, the
++     *                      two views are of DIFFERENT memory and the defect is ours.
++     * ⊘ A read-back through the same mapping cannot detect a write that landed in a stale
++     *   CPU cache line rather than in vidmem — it would read its own cache. That is what
++     *   `osFlushCpuWriteCombineBuffer()` below addresses and why the SECOND read-back after
++     *   it is taken as well.
++     */
++    {
++        NvU32 rb0 = MEM_RD32(&pGpEntry[0]);
++        NvU32 rb1 = MEM_RD32(&pGpEntry[1]);
++        NV_PRINTF(LEVEL_ERROR,
++                  "KAYFABE-RINGTRACE entry bar1=%u pbGpuVA=0x%llx putIndex=%u lastSub=%u "
++                  "pbPut=0x%llx e0=0x%08x e1=0x%08x rb0=0x%08x rb1=0x%08x %s\n",
++                  (NvU32)pChannel->bUseBar1, pChannel->pbGpuVA, putIndex,
++                  pChannel->lastSubmittedEntry, pbPutOffset, GpEntry0, GpEntry1, rb0, rb1,
++                  (rb0 == GpEntry0 && rb1 == GpEntry1) ? "LANDED" : "⊘⊘ DROPPED-OR-ELSEWHERE");
++    }
++
+     if (bReleaseMapping)
+     {
+         memmgrMemDescEndTransfer(pMemoryManager, pChannel->pChannelBufferMemdesc,
+@@
+     MEM_WR32(&pChannel->pControlGPFifo->GPPut, putIndex);
+ 
++    /*
++     * ★ The SAME question for the cursor, and it is a different memory: the ring entry goes
++     * to the channel buffer, GPPut goes to USERD. Either can be dropped without the other,
++     * and the host's symptom is the same sentence.
++     * ⚠ GPGet is read too, NOT to check it, but because "the cursor never advanced" and
++     * "the entry is absent" are different diagnoses that this one line separates.
++     */
++    {
++        NvU32 rbput = MEM_RD32(&pChannel->pControlGPFifo->GPPut);
++        NvU32 rbget = MEM_RD32(&pChannel->pControlGPFifo->GPGet);
++        NV_PRINTF(LEVEL_ERROR,
++                  "KAYFABE-RINGTRACE gpput want=%u rb=%u gpget=%u %s\n",
++                  putIndex, rbput, rbget,
++                  (rbput == putIndex) ? "LANDED" : "⊘⊘ DROPPED-OR-ELSEWHERE");
++    }
++
+     if (bReleaseMapping)
+     {
+         memmgrMemDescEndTransfer(pMemoryManager, pChannel->pUserdMemdesc, transferFlags);
+@@
+         // Use the token from notifier memory for VM migration support.
+         MEM_WR32(pChannel->pDoorbellRegisterOffset,
+                  MEM_RD32(&(pChannel->pTokenFromNotifier->info32)));
+ 
++        NV_PRINTF(LEVEL_ERROR,
++                  "KAYFABE-RINGTRACE doorbell token=0x%08x via=register\n",
++                  MEM_RD32(&(pChannel->pTokenFromNotifier->info32)));
++
+         if (bReleaseMapping)
+         {
+             memmgrMemDescEndTransfer(pMemoryManager, pChannel->pErrNotifierMemdesc, transferFlags);
