@@ -1,0 +1,12619 @@
+//! ★★★ The real thing: an [`RmBackend`] whose implementation is **NVIDIA RM ioctls**.
+//!
+//! This file is what `host_execution_plane.md` §0 says did not exist. Everything above it
+//! — the port, the pool, the plan/execute split, the whole L1 lock discipline — was
+//! designed against a double that returns promptly by construction. Here the verbs land on
+//! a driver that serialises them on a per-client write lock and waits uninterruptibly.
+//!
+//! ## The bring-up ladder (§4's *"the run ladder exists from day one"*)
+//!
+//! Each rung names what is attempted and what "working" looks like, so a failure localises
+//! to a layer instead of arriving as one undifferentiated `cuCtxCreate 999`.
+//!
+//! | rung | attempt | working looks like |
+//! |------|---------|--------------------|
+//! | R0 | `openat` the control node from the granted `/dev` directory | a descriptor |
+//! | R1 | `openat` `nvidia<gpu>` | a descriptor |
+//! | R2 | `NV_ESC_CHECK_VERSION_STR` query | a version string inside the interval these encoders were transcribed for; ★ **a gate since 2026-07-31** |
+//! | R3 | `NV_ESC_REGISTER_FD` binding the GPU node to the control session | rc 0 |
+//! | R4 | `NV01_ROOT_CLIENT` | RM writes back an `hClient` |
+//! | R5 | `NV01_DEVICE_0` with `deviceId = gpu` | status 0 |
+//! | R6 | `NV20_SUBDEVICE_0` | status 0 |
+//! | R7 | `FERMI_VASPACE_A` | a per-`Vas` host address space (#14's fix) |
+//! | R8 | `NV_ESC_RM_ALLOC_MEMORY` sysmem | a memory handle |
+//! | R9 | `NV_ESC_RM_MAP_MEMORY_DMA` | a host GPU VA |
+//! | R13 | a channel group, a ring, USERD, a channel, BIND, SCHEDULE | a **work-submit token** |
+//!
+//! ## ★ What the minimum handshake actually is — measured, not assumed
+//!
+//! **Nothing.** A freshly opened control node accepts `NV_ESC_RM_ALLOC` of a client
+//! immediately: two independent paths in the C artifact do exactly that with no version
+//! check, no `SYS_PARAMS` and no `REGISTER_FD`
+//! (`C: src/qemu/nvkvm_isolate_handlers.c:690-696`, `C: src/qemu/nvkvm_gpu_emul.c:6411`).
+//! R2 is kept because the version string is what selects an ABI profile, and R3 because a
+//! *device node* used without it answers `0x23 INVALID_CLIENT`
+//! (`C: src/qemu/nvkvm_gpu_emul.c:7217-7231`).
+//!
+//! ## ★★★ R2 IS A GATE, and what it is a gate on is THIS FILE
+//!
+//! Every parameter block below is encoded by a **const-size, version-free** encoder —
+//! `…::SIZE` buffers and `encode_into`, used unconditionally — and those encoders were
+//! transcribed from one driver (`kayfabe_abi::submit` §"Provenance": `ogkm-580:
+//! 580.159.04`). So this file is silently pinned to a host driver interval it never
+//! states. Run it against a host outside that interval and nothing errors: the ioctls
+//! succeed and the fields land in the wrong places — at `ogkm-610` `NV_CHANNEL_ALLOC_PARAMS`
+//! gains a field at +32 and `engineType` moves from +128 to +132, which is the C's proven
+//! `engineType = 0` bug class arrived at from a different road.
+//!
+//! ⊘ **The fix is not a host version axis.** There is one host driver available to this
+//! project, so a per-version table set here would be a mechanism with no red available to
+//! it. The fix is to make the pin **say its own name**: [`host_version_gate`] refuses at
+//! R2, quoting the host's version and the layout delta, and
+//! `kayfabe_abi::host_driver` holds the interval because a version fact is data.
+//! `docs/design/host_driver_version_pin.md` is the note; §5 there names the host-side
+//! table as the follow-on that is deliberately not built.
+//!
+//! ## ★★ The verbs that are NOT implemented, and why that is a refusal
+//!
+//! This section used to list five, then three. `alloc_channel`, `alloc_engine_object` and
+//! `schedule` are real (R13); `ring_doorbell` is real (R15) and `ce_copy`'s **`HostCe`
+//! arm** is real (R17), both proven on hardware. What still returns [`RmError::Other`]
+//! carrying [`NOT_ON_THIS_RUNG`], each naming what it lacks at its own definition:
+//!
+//! - **`fb_read`** and **`ce_copy`'s [`CeExecutor::Ours`] arm** — the isolate's own
+//!   mapping of the *fabricated* aperture, whose extent is not written down anywhere in
+//!   this tree.
+//! - **`ce_copy` with a [`CeSource::Constant`]** — a fill needs `REMAP_ENABLE` and the
+//!   `SET_REMAP_*` method block, which the ABI module does not transcribe.
+//!
+//! Returning a plausible success would be the exact failure `mode2_real_forward_not_fake`
+//! forbids: *"prove compute via HW sema/util, never green-guest-log"*. A named refusal
+//! keeps MISS = FAULT true one layer down.
+//!
+//! ## ★★★ What each rung proves, and what it deliberately does not
+//!
+//! - **R13 — a channel exists in hardware.** RM assigns it a chid out of the GPU's channel
+//!   RAM and reports a work-submit token we neither compute nor can predict, and two
+//!   channels get two different ones. It proves nothing about *submission*.
+//! - **R14 — the ring is the GPU's memory.** Written through one mapping, read back
+//!   through a second, independent one. It proves nothing about *execution*.
+//! - **R15 — hardware executed our methods.** The semaphore goes `0 -> payload` **and**
+//!   `GP_GET` advances to meet `GP_PUT`. `GP_GET` is the only word in this crate hardware
+//!   writes and we do not. Measured RTX 3090 / 580.159.04.
+//! - **R16 — the mapping survives the SANDBOX.** The capability-less isolate CPU-maps the
+//!   ring, USERD and the usermode BAR0 window and rings. ⊘ It produces **no submission
+//!   evidence**: the port's verb surface cannot build a pushbuffer through the child, so
+//!   R16 shows the mapping and the store, not that anything ran.
+//! - **R17 — a real copy engine moved device memory.** Destination read before and after,
+//!   the "after" through an independent mapping, plus the engine's own release semaphore.
+
+use crate::export::ChildExports;
+use kayfabe_abi::bringup::{
+    NV_ESC_CHECK_VERSION_STR, NV_ESC_REGISTER_FD, NV_ESC_RM_ALLOC_MEMORY, NV_IOCTL_MAGIC,
+    NV01_MEMORY_SYSTEM, NV01_MEMORY_SYSTEM_OS_DESCRIPTOR, NV01_MEMORY_VIRTUAL, NV20_SUBDEVICE_0,
+    NVOS02_FLAGS_COHERENCY_CACHED, NVOS02_FLAGS_LOCATION_PCI, NVOS02_FLAGS_MAPPING_NO_MAP,
+    NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS, NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE,
+    NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE, Nv2080AllocParameters, NvMemoryVirtualAllocationParams,
+    NvVaspaceAllocationParameters, Nvos02ParametersWithFd, RegisterFd,
+};
+// ★★ #156 — the three ARCH-VARYING class ids that used to be imported here
+// (`AMPERE_CHANNEL_GPFIFO_A`, `AMPERE_USERMODE_A`, `AMPERE_DMA_COPY_B`) are gone. They
+// now arrive through [`RmConnection::classes`], a `kayfabe_arch::HostClasses` profile.
+// The three that remain are NOT arch-varying: `FERMI_VASPACE_A`,
+// `KEPLER_CHANNEL_GROUP_A` and `NV01_*` are NVIDIA's permanent identifiers for classes
+// that are current on every part from Fermi/Kepler to Blackwell — the generation word in
+// the name is not a generation claim. Sourced, not assumed: all three appear verbatim in
+// GA106's, AD106's and GH100's own class lists (`ogkm-580:
+// src/nvidia/generated/g_gpu_class_list.c` — `FERMI_VASPACE_A` at `:1124`/`:1748`/`:2001`,
+// `KEPLER_CHANNEL_GROUP_A` at `:1134`/`:1758`/`:2031`).
+use kayfabe_abi::generated::classes::{
+    NV01_DEVICE_0, NV01_ROOT_CLIENT, Nv0080AllocParameters, NvChannelGroupAllocationParameters,
+};
+// ★★ The two host classes that do NOT vary, by ROLE. `kayfabe_abi::invariant_classes`
+// carries the ids and, more importantly, the per-chip citations that make "does not vary"
+// a checked statement rather than an assumption. Naming them by role is what the
+// Generation-name gate's own failure text prescribes ("a name that says what it MEANS,
+// not which chip has it") and is why this crate can be SCOPED by that gate rather than
+// excused from it — a name scan cannot distinguish `KEPLER_CHANNEL_GROUP_A`, whose
+// generation word is vestigial, from `AMPERE_DMA_COPY_B`, whose is not.
+use kayfabe_abi::generated::nvos::{
+    NV_ESC_RM_ALLOC, NV_ESC_RM_CONTROL, NV_ESC_RM_DUP_OBJECT, NV_ESC_RM_FREE,
+    NV_ESC_RM_MAP_MEMORY_DMA, NV_ESC_RM_UNMAP_MEMORY_DMA, Nvos00Parameters, Nvos21Parameters,
+    Nvos46Parameters, Nvos47Parameters, Nvos54Parameters, Nvos55Parameters,
+};
+use kayfabe_abi::invariant_classes::{CHANNEL_GROUP, VA_SPACE};
+use kayfabe_abi::submit::{
+    ATTR_CONTIGUOUS_VIDMEM, BIND_PARAMS_SIZE, CeAllocParams, ChannelAllocParams, ENGINE_TYPE_COPY0,
+    ENGINE_TYPE_GRAPHICS, GP_ENTRY_SIZE, GpfifoScheduleParams, NV_ESC_RM_MAP_MEMORY,
+    NV_ESC_RM_UNMAP_MEMORY, Nvos34Parameters,
+    NV01_MEMORY_LIST_OBJECT, NV01_MEMORY_LOCAL_USER, NVA06C_CTRL_CMD_BIND,
+    NVA06C_CTRL_CMD_GPFIFO_SCHEDULE, NvMemoryListAllocationParams,
+    NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN, NvMemoryAllocationParams, Nvos33ParametersWithFd,
+    PTIMER_PAGE_TIME_0, PTIMER_PAGE_TIME_1, PtimerSampleError, SET_OBJECT, USERD_GP_GET,
+    USERD_GP_PUT, USERMODE_NOTIFY_CHANNEL_PENDING, USERMODE_TIME_0, USERMODE_TIME_1,
+    USERMODE_WINDOW_SIZE, WORK_SUBMIT_TOKEN_PARAMS_SIZE, ce, engine_type_copy, fifo, gp_entry,
+    method_header_inc, ptimer_sample,
+};
+use kayfabe_arch::ids::{ClassId, ControlCmd, EngineKind, GpuId, GpuVa};
+use kayfabe_arch::{CeObjectClass, ChannelClass, HostClasses, UsermodeClass};
+use kayfabe_isolate::{
+    CeExecutor, CeSource, CeSubCopy, ExportRequest, ExportSource, ExportedBacking, FbLeafAliased,
+    FbLeafJoined, GuestRamGrant, GuestRamMapped, HostHandle, HostedObject, IsolateId, RmBackend,
+    RmError,
+};
+use kayfabe_linux_raw::{
+    Backing, CachePolicy, CharDevice, DevDir, HostOffset, HostPageSize, Indirect, RawError,
+    VolatileRegion, ioctl, release_fence,
+};
+use kayfabe_util::leafwitness;
+use std::collections::BTreeMap;
+use std::ffi::CString;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+
+/// The opaque status a verb this rung does not implement reports.
+///
+/// A distinct, greppable value rather than `0` or an RM status: it must never be mistaken
+/// for something the driver said. `0x4B46` is `"KF"`.
+pub const NOT_ON_THIS_RUNG: u32 = 0x4B46;
+
+/// ★★★ The status a backend with **no shared framebuffer-join table** refuses
+/// [`RmBackend::join_fb_leaf`] with.
+///
+/// ⊘ Distinct from [`NOT_ON_THIS_RUNG`] because it is not a missing rung — the verb is built
+/// and works. It is a **composition** fault: this backend was constructed without
+/// [`crate::fbjoin::FbJoinTable`], and the alternative to refusing is minting a private one,
+/// which would be correct on every one-worker test and wrong at the first boot whose second
+/// request landed on another pool slot. `0x4B4D` is `"KM"`.
+pub const FB_JOIN_NO_TABLE: u32 = 0x4B4D;
+
+/// ★★★★★ **w380 — the status [`RmBackend::alias_fb_leaf`] refuses a frame nobody has joined
+/// with.**
+///
+/// ⊘ Distinct from [`FB_JOIN_NO_TABLE`], which is *"this backend cannot join at all"*. This
+/// one says *"this backend joins, and this frame has no join to alias"* — a caller's ordering
+/// error, and the one refusal that must never be softened into a mint: fabricating pages here
+/// would give the frame a second memory the guest cannot see. `0x4B41` is `"KA"`.
+pub const FB_ALIAS_NO_JOIN: u32 = 0x4B41;
+
+/// The first handle this isolate mints for itself.
+///
+/// ★ **Every isolate starts here**, which is the point. RM mints from one
+/// `RS_CLIENT_HANDLE_BASE` for every client (`ogkm-610:
+/// src/nvidia/generated/g_resserv_nvoc.h:173`, `ogkm-580: :188`), so two isolates' *n*-th
+/// objects genuinely collide in value and are unrelated live objects. The mock had to be
+/// taught to imitate that (`host_execution_plane.md` §2.1); here it is what happens.
+const FIRST_HANDLE: u32 = 0xCAFE_0001;
+
+/// The handle we *ask* RM for when allocating our root client. RM writes back the one it
+/// actually assigned, which is what we keep — asking is not choosing.
+const REQUESTED_CLIENT_HANDLE: u32 = 0xCAFE_0000;
+
+/// ★★★ **`hClient` is never guest-derived — as a TYPE, not as a habit.**
+///
+/// This module exists so that *"the client handle in every RM escape we issue is one this
+/// isolate minted"* is a fact the compiler enforces, rather than a property held by the
+/// eight call sites that happen to write `self.client` today.
+///
+/// ## Why this is worth a module (`guest_blast_radius.md` §4 F11)
+///
+/// [`crate::sandbox`]'s `surrender_privilege` drops **capabilities, not uid**: the user
+/// namespace map is the single line `0 <outer_uid> 1`
+/// (`crates/kayfabe-linux-raw/src/sandbox_unsafe.rs:596-617`), so on a VMM running as root
+/// the isolate's euid **as the host kernel sees it** is 0. RM keys a real check on exactly
+/// that value, and the check is an **OR**:
+///
+/// ```c
+/// if ((pClientTokenUser->euid != pCurrentTokenUser->euid) &&
+///     (pClientTokenUser->pid  != pCurrentTokenUser->pid))
+///     return NV_ERR_INVALID_CLIENT;
+/// ```
+///
+/// (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/os.c:3844-3868`, driven from
+/// `_rmclientUserClientSecurityCheck`, `ogkm-580: src/nvidia/src/kernel/rmapi/client.c:447-512`;
+/// on by default — the property initialises true independent of any registry key,
+/// `ogkm-580: src/nvidia/generated/g_system_nvoc.c:103`). A matching euid **alone** passes.
+///
+/// ⇒ A local unprivileged process (euid 1000) fails that check against a root-owned RM
+/// client. **We pass it.** So RM's cross-user client-handle protection — a real boundary
+/// between an unprivileged process and every root GPU client on the host
+/// (`nvidia-persistenced`, a display server, another root CUDA process) — does not stand
+/// between this isolate and those clients.
+///
+/// The reason that is a *latent* widening and not a live one is the whole of this type:
+/// **there is no way for us to name a client we did not mint.** Before this module that
+/// reason was one line — [`RmConnection::raw_alloc`] took a `root: u32` parameter and every
+/// caller passed `self.client` — and a single future call site passing anything else would
+/// have turned a latent widening into a live one with nothing red anywhere.
+///
+/// ## The construction that makes it structural
+///
+/// [`OwnClient`] wraps a `u32` in a **private field inside a private module**, and the only
+/// constructor is [`OwnClient::allocate_root`], which *performs* the `NV01_ROOT_CLIENT`
+/// allocation and wraps the handle RM wrote back. So the two statements
+///
+/// * *"an `OwnClient` value exists"*, and
+/// * *"this process allocated that client against this control node"*
+///
+/// are **one statement**. There is no `From<u32>`, no `new`, no `Default`, and the field is
+/// unreachable from `rm.rs` itself. A call site cannot name a foreign client because it
+/// cannot *build* the only thing the escape-issuing code will accept.
+///
+/// ⚠ **What this does NOT close, stated plainly.** The ABI parameter blocks
+/// ([`Nvos54Parameters::h_client`] and friends) are `u32`, and typing them is a
+/// `kayfabe-abi`-wide change this module deliberately does not make. So a *new* struct
+/// literal in `rm.rs` could still write `h_client: <some other u32>` and compile. That
+/// residue is covered by a **checked** gate rather than a structural one —
+/// `tests/own_client_invariant.rs::every_rm_escape_in_rm_rs_stamps_the_isolates_own_client`,
+/// which derives its universe by scanning the file rather than from a pinned list. The
+/// honest split is: the *parameter* hole is structural, the *literal* hole is tested.
+///
+/// ⊘ **No run stands behind the security reasoning above.** The euid mechanism is read out
+/// of `ogkm-580` source; whether F11's widening is exploitable at all is `[unknown]` and
+/// needs a root-owned RM client on the box whose handle value we could guess. Nothing here
+/// has been in front of a real driver.
+mod own_client {
+    use super::{
+        CharDevice, Indirect, NOT_ON_THIS_RUNG, NV_ESC_RM_ALLOC, NV_IOCTL_MAGIC, NV01_ROOT_CLIENT,
+        Nvos21Parameters, REQUESTED_CLIENT_HANDLE, RmError, ioctl, ioctl_error, status_check,
+    };
+
+    /// **The client handle this isolate minted for itself, and the only kind of client
+    /// handle any RM escape in this crate will accept.**
+    ///
+    /// Construct it with [`OwnClient::allocate_root`] — which is the `NV01_ROOT_CLIENT`
+    /// allocation, not a wrapper around it. See the module docs for why that identity is
+    /// the point.
+    ///
+    /// `Copy`, because it is a 32-bit handle and passing it around must not be a reason to
+    /// reach for the raw value. **No** `From<u32>`, `new`, `Default`, `FromStr` or
+    /// `Deserialize` — every one of those would re-open exactly what this exists to close,
+    /// so the absence is deliberate and adding one needs the module docs re-read first.
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    pub(super) struct OwnClient(u32);
+
+    impl core::fmt::Debug for OwnClient {
+        /// Named rather than bare-hex: a handle in a log is only ever interesting relative
+        /// to *whose* namespace it came from, and this type's whole content is the answer.
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            write!(f, "OwnClient({:#010x})", self.0)
+        }
+    }
+
+    impl OwnClient {
+        /// **R4 — allocate this isolate's root RM client, and BE the only way to obtain an
+        /// [`OwnClient`].**
+        ///
+        /// `hRoot` is `0` here and nowhere else in the crate: a root-client allocation is
+        /// the one escape with no owning client, which is precisely why it is the one
+        /// constructor. RM writes the handle it actually assigned back into
+        /// `hObjectNew`, and *that* — not [`REQUESTED_CLIENT_HANDLE`] — is what we keep.
+        ///
+        /// ★ Taking `&CharDevice` rather than `&RmConnection` is load-bearing: it lets the
+        /// client be minted **before** the connection struct is built, so there is no
+        /// window in which an [`RmConnection`](super::RmConnection) exists carrying a
+        /// placeholder client. That placeholder (`client: 0`) is what the previous shape
+        /// needed and it was a second way to be wrong.
+        pub(super) fn allocate_root(ctl: &CharDevice) -> Result<Self, RmError> {
+            let mut arg = [0u8; Nvos21Parameters::SIZE];
+            Nvos21Parameters {
+                h_root: 0,
+                h_object_parent: 0,
+                h_object_new: REQUESTED_CLIENT_HANDLE,
+                h_class: NV01_ROOT_CLIENT,
+                p_alloc_parms: 0,
+                params_size: 0,
+                status: 0,
+            }
+            .encode_into(&mut arg)
+            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+            let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_ALLOC as u8, arg.len())
+                .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+            // No `pAllocParms`: `NV01_ROOT_CLIENT` takes none, so the patch list is empty
+            // rather than pointing at a zero-length buffer.
+            let mut patches: Vec<Indirect<'_>> = Vec::new();
+            ctl.ioctl(req, &mut arg, &mut patches)
+                .map_err(|e| ioctl_error(&e))?;
+            let out =
+                Nvos21Parameters::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+            status_check(out.status)?;
+            Ok(Self(out.h_object_new))
+        }
+
+        /// The raw handle, for the one thing it is for: filling an ABI parameter block.
+        ///
+        /// ⚠ This is an *exit*, not a hole. It hands out the client we minted; it cannot
+        /// manufacture one we did not. The direction that would matter — `u32 ->
+        /// OwnClient` — does not exist.
+        pub(super) fn raw(self) -> u32 {
+            self.0
+        }
+    }
+}
+
+use own_client::OwnClient;
+
+/// ★★★★★ **CONSTRAINT 26's F11 SCOPING, AS A TYPE — *"a per-proc isolate may never name a
+/// foreign client; the scratchpad may, and only for a VA space the VMM handed it."***
+///
+/// # Why F11 does not simply dissolve under the ownership split
+///
+/// `THE_CONSTRAINTS.md` §26 moves every GPU-side mapping onto the **scratchpad**, and the
+/// scratchpad reaches a per-proc isolate's address space by **duping it**
+/// (`NV_ESC_RM_DUP_OBJECT`, `[measured w744]` `status=0x0000` on two driver builds). An
+/// `NVOS55` names `hClientSrc` — a client this process did **not** mint — so the one-line
+/// property [`mod@own_client`] exists to make structural is deliberately broken, **once**,
+/// by one verb.
+///
+/// ⊘ **That is a scoping, not an exemption.** The residual widening is exactly F11's:
+/// `surrender_privilege` drops capabilities and not uid, so on a root VMM RM's cross-user
+/// client check passes for us. What keeps it latent is still *"we cannot name a client we
+/// did not mint"* — now with a named, typed exception whose two halves are one statement.
+///
+/// # The construction
+///
+/// Two private types, both with private fields and one constructor each:
+///
+/// * [`ScratchpadRole`] — obtainable **only** by presenting an [`IsolateId`] whose proc is
+///   [`crate::SCRATCHPAD_ISOLATE_PROC`]. A per-proc backend cannot build one, so it cannot
+///   reach the next type at all.
+/// * [`HandedVaSpace`] — constructed **only** from a `ScratchpadRole` plus the two numbers.
+///
+/// ⇒ *"a `HandedVaSpace` value exists"* and *"this is the scratchpad, naming a VA space
+/// somebody handed it"* are one statement, in the same sense
+/// [`OwnClient::allocate_root`] makes one of *"an `OwnClient` exists"* and *"we minted that
+/// client"*.
+///
+/// # ⚠ WHAT IS STRUCTURAL AND WHAT IS NOT — say it rather than let the shape imply it
+///
+/// **Structural:** a per-proc backend cannot express a foreign client. `ScratchpadRole::of`
+/// is the only door and it answers `None` for every proc id but one.
+///
+/// **Not structural, and this is the honest half:** *"the VMM handed it over"* is carried by
+/// the **wire**, not by the type. The numbers reach this crate as
+/// `Request::AdoptVaSpace { client, space }`, and anything that can write that frame can
+/// name any client. What bounds that is the socket's own topology — the scratchpad's socket
+/// has exactly one peer, the VMM — and **not** this module. ⊘ Stated here because a type
+/// that looks like a proof and is one only halfway is worse than a comment.
+///
+/// ⊘ **No run stands behind the security reasoning**, exactly as [`mod@own_client`] records:
+/// whether F11's widening is exploitable at all remains `[unknown]`.
+mod handed_vaspace {
+    use kayfabe_isolate::IsolateId;
+
+    /// **Proof that the backend holding this value is the VM-lifetime scratchpad isolate.**
+    ///
+    /// No `Clone`, no `Copy`, no `Default`, no public field — and deliberately not `Debug`,
+    /// because a value whose entire content is *"I am the scratchpad"* has nothing to print
+    /// that its type does not already say.
+    pub(super) struct ScratchpadRole(());
+
+    impl ScratchpadRole {
+        /// The one door. `None` for every isolate that is not the scratchpad.
+        ///
+        /// ⊘ Takes the [`IsolateId`] rather than reading a global: one process can host two
+        /// emulated GPUs, and a `static` here would bind to whichever realized first — the
+        /// w637 defect, in the one place it would be least visible.
+        pub(super) fn of(id: IsolateId) -> Option<ScratchpadRole> {
+            (id.proc() == crate::SCRATCHPAD_ISOLATE_PROC).then_some(ScratchpadRole(()))
+        }
+    }
+
+    /// **A per-proc isolate's `FERMI_VASPACE_A`, named by the client that owns it.**
+    ///
+    /// The only value any `hClientSrc` in this crate will accept. `Copy`, because it is two
+    /// 32-bit handles; **no** `From`, `new`, `Default` or `Deserialize` — each of those
+    /// would re-open precisely what this closes.
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    pub(super) struct HandedVaSpace {
+        client: u32,
+        space: u32,
+    }
+
+    impl core::fmt::Debug for HandedVaSpace {
+        /// Named rather than bare hex: a handle is only interesting relative to *whose*
+        /// namespace it came from, and this type's whole content is the answer.
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            write!(
+                f,
+                "HandedVaSpace(client={:#010x}, space={:#010x})",
+                self.client, self.space
+            )
+        }
+    }
+
+    impl HandedVaSpace {
+        /// **Take the hand-over.** Consuming the [`ScratchpadRole`] is not a ceremony: it
+        /// is what makes the role's single meaning travel into this value rather than being
+        /// re-checked at the use site.
+        pub(super) fn handed_over(
+            _role: ScratchpadRole,
+            client: u32,
+            space: u32,
+        ) -> HandedVaSpace {
+            HandedVaSpace { client, space }
+        }
+
+        /// The foreign client, for the one field it is for: `NVOS55_PARAMETERS::hClientSrc`.
+        ///
+        /// ⚠ An *exit*, not a hole. It hands out a client somebody handed us; it cannot
+        /// manufacture one. The direction that would matter — `u32 -> HandedVaSpace` — does
+        /// not exist.
+        pub(super) fn src_client(self) -> u32 {
+            self.client
+        }
+
+        /// The address-space handle inside that client. `NVOS55_PARAMETERS::hObjectSrc`.
+        pub(super) fn src_object(self) -> u32 {
+            self.space
+        }
+    }
+}
+
+use handed_vaspace::{HandedVaSpace, ScratchpadRole};
+
+/// ★★★★★ **CONSTRAINT 32's ROUTE K, AS A TYPE — *"the isolate mints the birth client and
+/// hands the fd over; the scratchpad drives it and may name no other."***
+///
+/// # The question this keeps asking
+///
+/// [`mod@handed_vaspace`] answers *"which foreign **VA space** may the scratchpad name?"*.
+/// Route K asks the same question one object over: under constraint 32 the per-proc isolate
+/// **I** allocates an `NV01_ROOT_CLIENT` **B** on a second `/dev/nvidiactl`, passes the
+/// descriptor to the scratchpad **S** by `SCM_RIGHTS`, and closes its own copy. S then
+/// stamps **B** as `hRoot` on every escape it issues down that descriptor — a client this
+/// process did not mint, exactly the thing [`mod@own_client`] exists to make unspellable.
+///
+/// ⊘ **And it is a DIFFERENT widening from `HandedVaSpace`'s, which is why it is a second
+/// type and not a second accessor.** `HandedVaSpace` names a foreign client in **one field
+/// of one escape** (`NVOS55_PARAMETERS::hClientSrc`) while the escape itself is still issued
+/// under our **own** client and our **own** descriptor. A `HandedClient` is the `hRoot` of
+/// the escape: every object allocated under it lands in **B's** namespace, on **I's**
+/// descriptor. Folding the two into one type would let a `src_client()` accessor be read as
+/// an `hRoot`, and that is the whole hole.
+///
+/// # The construction — deliberately the same shape, so a reader who knows one knows both
+///
+/// * [`ScratchpadRole`] — reused verbatim. It is already *"proof the holder is the
+///   scratchpad"*, and minting a second unit type saying the same thing is a second place
+///   for the answer to drift.
+/// * [`HandedClient`] — constructed **only** from a `ScratchpadRole` plus the client handle
+///   **and the proc that minted it**. The minting proc is carried rather than discarded
+///   because constraint 32's whole security claim is a statement about it: *"`ProcessID`
+///   lands as I's"*. A value that cannot say which I it came from cannot be checked against
+///   the fd that carried it.
+///
+/// # ⚠ WHAT IS STRUCTURAL AND WHAT IS NOT — the same honest half as `handed_vaspace`
+///
+/// **Structural:** a per-proc backend cannot build a `ScratchpadRole`, so it cannot express
+/// a `HandedClient` at all; and there is no `u32 -> HandedClient` direction.
+///
+/// **Not structural:** *"the VMM handed it over"* is carried by the wire. What bounds it is
+/// the socket topology plus [`crate::fdcross::FdOrigin::BirthClient`]'s one-target rule —
+/// the descriptor that makes the client reachable can be lent to the scratchpad and to
+/// nothing else. ⇒ **the fd is the capability and the handle is only a name.** That is the
+/// half `HandedVaSpace` does not have, and it is why route K is safer than it looks: naming
+/// B without B's descriptor reaches no RM at all.
+mod handed_client {
+    use super::handed_vaspace::ScratchpadRole;
+
+    /// **A birth client minted by a per-proc isolate and handed to the scratchpad.**
+    ///
+    /// The only value this crate will accept as the `hRoot` of an escape issued on a
+    /// descriptor we did not open. `Copy`, because it is two 32-bit words; **no** `From`,
+    /// `new`, `Default` or `Deserialize` — each would re-open precisely what this closes.
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    pub(super) struct HandedClient {
+        client: u32,
+        minted_by: u32,
+    }
+
+    impl core::fmt::Debug for HandedClient {
+        /// Named rather than bare hex, and it prints **both** halves: a birth client is only
+        /// interesting relative to the proc whose `ProcessID` RM stamped into it, and a
+        /// `Debug` that hid that would make constraint 32's central claim unprintable.
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            write!(
+                f,
+                "HandedClient(client={:#010x}, minted_by=proc {})",
+                self.client, self.minted_by
+            )
+        }
+    }
+
+    impl HandedClient {
+        /// **Take the hand-over.** Consuming the [`ScratchpadRole`] by value is what makes
+        /// *"I am the scratchpad"* travel into this value instead of being re-checked — or
+        /// forgotten — at the use site.
+        pub(super) fn handed_over(
+            _role: ScratchpadRole,
+            client: u32,
+            minted_by: u32,
+        ) -> HandedClient {
+            HandedClient { client, minted_by }
+        }
+
+        /// The foreign client, for the one field it is for: the `hRoot` of an
+        /// `NVOS*`-carrying escape issued down the descriptor that came with it.
+        ///
+        /// ⚠ An *exit*, not a hole. It hands out a client somebody handed us; it cannot
+        /// manufacture one. The direction that would matter — `u32 -> HandedClient` — does
+        /// not exist.
+        pub(super) fn root(self) -> u32 {
+            self.client
+        }
+
+        /// **Which per-proc isolate minted it** — the proc whose `ProcessID` RM stamped into
+        /// the client at creation (`client.c:112`), and therefore into every channel born
+        /// under it.
+        ///
+        /// ★★★ Read by the fail-closed check that the descriptor which carried this client
+        /// was minted by the **same** proc. Constraint 32's argument is *"stamps land as
+        /// `ProcessID = I`"*; a `HandedClient` from I₁ driven down I₂'s descriptor would
+        /// make that sentence false while every individual ioctl still succeeded.
+        pub(super) fn minted_by(self) -> u32 {
+            self.minted_by
+        }
+    }
+}
+
+use handed_client::HandedClient;
+
+
+
+/// ★ How many [`RmConnection::doorbell`] stores print in full before the witness falls back
+/// to a periodic tally. `cup2` rings a few hundred doorbells in total (448 at `w202`), so at
+/// this workload nothing is suppressed — the cap exists so that a *spinning* workload can
+/// never turn this witness into the million-line read trap the owner's brief rules out.
+/// ⊘ Refusals are never counted against it.
+const DOORBELL_WITNESS_MAX: usize = 512;
+
+/// The store counter behind [`DOORBELL_WITNESS_MAX`]. ⊘ Process-wide, not per-connection:
+/// the bound being defended is the LOG's size, which is process-wide too.
+static DOORBELL_WITNESS_N: AtomicUsize = AtomicUsize::new(0);
+
+/// ★★ **Exhaust the per-store doorbell witness for the rest of this process**, and report
+/// how many stores it had already counted.
+///
+/// # ⚠ THIS EXISTS FOR MEASUREMENT, NOT FOR TIDINESS
+///
+/// [`RmConnection::doorbell`] prints **two** `eprintln!` lines for each of the first
+/// [`DOORBELL_WITNESS_MAX`] stores, and those lines are *inside* any region that times a
+/// submission. On bare metal a doorbell is a store measured in **microseconds**, so a
+/// formatted write to stderr is not a rounding error on it — it is a large fraction of the
+/// number, and a rung that left the witness armed would be reporting **the cost of its own
+/// printer** as the native floor of a differential. ⊘ That floor is what every guest-side
+/// gate is a multiple of, so inflating it does not merely add noise: it makes the gate
+/// quietly, uniformly too loose.
+///
+/// # ★ It EXHAUSTS the witness; it does not disable it
+///
+/// The counter is advanced past the cap, so `doorbell`'s existing logic takes over
+/// unchanged: the periodic tally still prints (one line per [`DOORBELL_WITNESS_MAX`]
+/// stores, and it still says how many it suppressed), and **every refusal still prints in
+/// full** — refusals are rare by hypothesis and suppressing the rare event to save room for
+/// the common one inverts the witness's purpose, which is the argument `doorbell` itself
+/// gives.
+///
+/// ⚠ **A caller MUST print that it called this.** A quiet log a reader takes for a complete
+/// one is a failure class this tree has already paid for; the muting is only honest if the
+/// run says it happened.
+pub fn mute_doorbell_witness() -> usize {
+    DOORBELL_WITNESS_N.fetch_max(DOORBELL_WITNESS_MAX, Ordering::Relaxed)
+}
+
+/// The shared RM connection: **one per isolate, shared by its whole worker pool**.
+///
+/// That sharing is the fact `host_execution_plane.md` §0 is about. RM serialises every
+/// ioctl on this client's write lock and waits uninterruptibly, so N pool workers issuing
+/// concurrently do **not** get N verbs on the wire. The pool buys latency isolation, which
+/// is what `DEFAULT_POOL_WORKERS`' own docs already say; wire concurrency comes from having
+/// **more clients**, i.e. more isolates.
+#[derive(Debug)]
+pub struct RmConnection {
+    /// The **control** node. `NV_CTL_DEVICE_ONLY` escapes go here — see
+    /// [`RmConnection::open`]'s docs for the routing rule and where it is enforced.
+    ctl: CharDevice,
+    /// The per-GPU node. `NV_ACTUAL_DEVICE_ONLY` escapes go here, and it is held for its
+    /// whole life because `REGISTER_FD` binds the *session*.
+    gpu: CharDevice,
+    /// ★ The `/dev` grant, **held** rather than borrowed. A CPU mapping needs a
+    /// *freshly opened* per-GPU node for every single mapping (the driver's mmap context
+    /// is one-shot per descriptor — see `kayfabe_abi::submit::NV_ESC_RM_MAP_MEMORY`), and
+    /// after `pivot_root` there is no path to re-derive one from. So the connection keeps
+    /// the capability it was opened with instead of taking a borrow it cannot outlive.
+    dev: DevDir,
+    /// Which GPU node to open for those mappings. Kept as the index rather than as a name
+    /// so the naming rule lives in exactly one place.
+    gpu_index: u32,
+    /// ★★★ **F11's invariant, as a type.** Not a `u32`: see [`mod@own_client`]. The only
+    /// value that can be here is one [`OwnClient::allocate_root`] produced, so every
+    /// escape this connection issues names a client this isolate minted.
+    client: OwnClient,
+    device: u32,
+    subdevice: u32,
+    /// The **host** driver's version string, as its frontend reported it.
+    ///
+    /// ★ It got here by passing [`host_version_gate`], so its presence means the interval
+    /// check succeeded — but nothing downstream reads it to *select* anything, and that is
+    /// the honest state of the host axis rather than an omission. See the module docs.
+    version: String,
+    objects: Mutex<Objects>,
+    /// ★ The CPU mappings, in their **own** mutex rather than inside [`Objects`].
+    ///
+    /// Two reasons, and the second is the real one. (a) [`Objects`] is copied out from
+    /// under its lock by every accessor, and a mapping is not copyable. (b) A ring access
+    /// is a *store into a page hardware reads*; it must not be serialised behind the handle
+    /// table, and the handle table must not be held across it. Two locks, each held for one
+    /// kind of thing, is the R3 lock-rank discipline rather than a convenience.
+    rings: Mutex<BTreeMap<u32, ChannelRings>>,
+    /// ★★★ How many times [`RmConnection::map_cpu_windowed_on`] has been entered — the
+    /// instrument for [`HostRmBackend::cpu_map_calls`].
+    ///
+    /// ⊘ Counted at the **entry** of the one function that issues `NV_ESC_RM_MAP_MEMORY`,
+    /// not at its successful exit, and the difference is the whole point: the claim being
+    /// measured is *"no CPU map was ATTEMPTED"*, and a counter that only recorded successes
+    /// would read zero for a mapping that was tried and refused.
+    ///
+    /// An `AtomicU64` rather than a `Cell` because a connection is shared by every worker
+    /// of the isolate; `Relaxed` because nothing is ordered against it.
+    cpu_maps: std::sync::atomic::AtomicU64,
+    /// ★★★ The **doorbell window** — a [`HostClasses::usermode`] object and its CPU mapping,
+    /// established once at [`RmConnection::open`] and immutable afterwards.
+    ///
+    /// A `Result`, deliberately, and it is the honest shape rather than a convenience:
+    ///
+    /// - It is **not** `Mutex<Option<…>>`. Building it lazily would mean issuing an
+    ///   `NV_ESC_RM_ALLOC`, an `openat`, an `NV_ESC_RM_MAP_MEMORY` and an `mmap` **while
+    ///   holding a ranked lock**, which R1 forbids with no exception (the same rule that
+    ///   makes `forget_rings` drop its mappings outside the lock). Immutable-after-open
+    ///   needs no lock at all.
+    /// - It is **not** a hard failure of `open`. An isolate that never submits work is
+    ///   perfectly usable without a doorbell, and making bring-up depend on a BAR mapping
+    ///   would turn "this GPU refused one mapping" into "this isolate is stillborn", which
+    ///   loses the diagnosis.
+    /// - So the error is **kept** and re-reported by [`RmBackend::ring_doorbell`]. The
+    ///   refusal names what actually happened at open time instead of a generic
+    ///   "unimplemented", which is the difference between *"the sandbox blocked the BAR
+    ///   mapping"* and *"nobody wrote this yet"*.
+    usermode: Result<UsermodeWindow, RmError>,
+    /// ★★★ **The host GPU's class profile** (`#156`) — the three class ids whose correct
+    /// value depends on which generation the *host* board is, supplied once at
+    /// [`RmConnection::open`] and immutable afterwards.
+    ///
+    /// Before this field, three `AMPERE_*` constants were spelled at eighteen sites in
+    /// this file. That was not merely untidy: two of the three have a **different** id on
+    /// a Hopper host and are still *allocatable* there under the Ampere name, so the
+    /// wrong one would have been served rather than refused. See
+    /// [`kayfabe_arch::HostClasses`] for the table and the sourcing.
+    ///
+    /// ⊘ It is a **pin, not a probe.** Nothing here asks the device what it is; the
+    /// caller passes a profile and today every caller passes the same one
+    /// (`kayfabe_chips::pinned_host_classes`, GA10x — the only part any of this has been
+    /// measured on). The seam's value is that the decision is now ONE call site instead
+    /// of eighteen literals, and that a second generation costs an `impl` and no edit
+    /// here. Turning it into a probe is a separate, hardware-requiring increment and is
+    /// named in `kayfabe_chips::host_classes`' module docs.
+    ///
+    /// ★★★ **Which ROLE each site asks this for is now a type, not a convention**
+    /// (`#166`). The three methods return [`ChannelClass`], [`UsermodeClass`] and
+    /// [`CeObjectClass`], and the four consumers in this file —
+    /// [`RmConnection::open_usermode`], [`RmConnection::alloc_gpfifo_channel`],
+    /// [`CePush::class_id`] and [`HostRmBackend::alloc_ce_engine_object`] — each name the
+    /// role in a parameter or field type, so asking for the wrong one does not compile.
+    ///
+    /// That was measured to be worth doing rather than assumed: at `36f746a` the bite
+    /// harness reported `WIRING: 0/3 caught` — every role swap in this file compiled and
+    /// left the whole suite green, and a Hopper host **serves** two of the three wrong
+    /// picks with no error to notice.
+    classes: &'static dyn HostClasses,
+}
+
+/// The [`HostClasses::usermode`] object, the node its mmap context is registered against, and
+/// the mapping itself. All three must live exactly as long as each other.
+#[derive(Debug)]
+struct UsermodeWindow {
+    /// The RM object handle. Held so a teardown could free it; nothing frees it today
+    /// because the connection outlives every channel by construction.
+    object: u32,
+    /// The freshly opened per-GPU node the mmap context is registered against.
+    _node: CharDevice,
+    /// The 64 KiB BAR0 window. [`kayfabe_abi::submit::USERMODE_NOTIFY_CHANNEL_PENDING`]
+    /// is the only offset in it this code ever touches.
+    region: VolatileRegion,
+}
+
+#[derive(Debug, Default)]
+struct Objects {
+    next: u32,
+    /// `child -> parent`, because `NV_ESC_RM_FREE` needs the parent and the port's `free`
+    /// verb does not carry one.
+    ///
+    /// ★ A gap in the port, found by implementing it. `RmBackend::free(obj)` is
+    /// parent-free, which is right for the *core* (a handle names one object) and
+    /// insufficient for RM (`NVOS00_PARAMETERS` has `hObjectParent`). The backend therefore
+    /// has to remember. It is a small table, but it is state a "stateless forwarder" was
+    /// not supposed to need, and it is the reason a handle freed twice is refused here
+    /// rather than by the driver.
+    parents: BTreeMap<u32, u32>,
+    /// ★ `object -> a second object that must die with it`.
+    ///
+    /// Exactly one producer: [`RmBackend::alloc_vaspace`] allocates **two** RM objects — a
+    /// `FERMI_VASPACE_A` and the `NV01_MEMORY_VIRTUAL` range over it that
+    /// `NV_ESC_RM_MAP_MEMORY_DMA` will actually name — and the port has one handle to
+    /// return. Without this table the address space would leak every time a `Vas` was
+    /// freed, and it would leak *silently*, because RM frees the range happily and says
+    /// nothing about the space it referenced.
+    companions: BTreeMap<u32, u32>,
+    /// ★★★★★ **CONSTRAINT 26 — the `FERMI_VASPACE_A` handles this connection allocated
+    /// WITHOUT a companion `NV01_MEMORY_VIRTUAL` range.**
+    ///
+    /// Under the ownership split a per-proc isolate allocates a **bare** address space and
+    /// maps nothing into it; the scratchpad dups it and builds the range. `[measured w744]`
+    /// the space must be bare — a pre-built whole-space range makes the scratchpad's own
+    /// `NV01_MEMORY_VIRTUAL` refuse `0x19 INSERT_DUPLICATE_NAME`.
+    ///
+    /// ⊘ **A set and not `companions[space] = space`.** `companion_of` REMOVES, and a
+    /// self-companion would make `free` name one handle twice — a double free produced by
+    /// a bookkeeping shortcut. [`RmConnection::space_of`] reads this as its fallback so
+    /// that `alloc_channel_in`, which asks *"what space is this range in?"*, keeps working
+    /// unchanged when the handle it is given IS the space.
+    bare_spaces: std::collections::BTreeSet<u32>,
+    /// ★★★★★ **CONSTRAINT 30 — the `FERMI_VASPACE_A` handles this connection ADOPTED from
+    /// somebody else** (`NV_ESC_RM_DUP_OBJECT`, [`RmBackend::adopt_vaspace`]), as opposed to
+    /// the ones it created.
+    ///
+    /// > Owner, 2026-09-15: *"the reason we also do isolates is to ensure the channel is
+    /// > created in an unprivileged process. If ogkm links the process that created the
+    /// > channel to the privileges of it, the cross guest process isolation is broken."*
+    ///
+    /// `[ogkm-580.159.04, kernel_channel.c:277-295]` privilege is stamped **at creation**
+    /// from the creating call context and the channel records the creating process; a
+    /// `DupObject` does not re-run that code. ⇒ a channel the **scratchpad** births is
+    /// stamped with the scratchpad's privilege for the whole of its life, and our isolates'
+    /// kernel-visible euid is `0` on a root VMM.
+    ///
+    /// ⊘ This set is what makes *"the scratchpad births the channel and dups it to the
+    /// isolate"* — constraint 30's withdrawn option (d) — **refusable rather than merely
+    /// unwritten**. See [`SCRATCHPAD_BIRTH_IN_A_HANDED_SPACE`].
+    adopted_spaces: std::collections::BTreeSet<u32>,
+    /// ★ `channel handle -> the four objects and one address that make it work`.
+    ///
+    /// Same shape of problem as [`Objects::companions`] and a different answer, because a
+    /// channel is not *one* extra object: [`RmBackend::alloc_channel`] returns a single
+    /// handle for a group, a channel, two memory objects and a GPU mapping. A second
+    /// `companions` entry cannot express that, and chaining them would make the free
+    /// ORDER implicit — which for a channel is not a detail (the TSG must outlive the
+    /// channel in it).
+    ///
+    /// It is also what the verbs *after* `alloc_channel` read: `schedule` needs the TSG
+    /// (the control is on the group, not the channel), and the ring verbs need the ring's
+    /// GPU VA.
+    channels: BTreeMap<u32, ChannelParts>,
+    /// ★★★★★ **W229** — `guest range -> the isolate's own address space over it`
+    /// ([`ExecutorVas`]).
+    ///
+    /// ⊘⊘ **On the CONNECTION, never on a worker, and that was measured rather than
+    /// designed.** It lived in `HostRmBackend` for one revision and `tests/e6_hw_join.rs`
+    /// caught it on a real GA106: an isolate is a **bounded POOL** of workers, a publish
+    /// and the copy that reads it are two requests that need not land on the same slot, and
+    /// a per-worker table gave the second worker a **fresh, empty** shadow. The operands
+    /// were mapped in worker A's shadow and the engine walked worker B's — arm 1 retired
+    /// and arm 2 reported `NEVER-RETIRED` with `sem = 0`.
+    ///
+    /// ★ The rule it teaches: this table is keyed by an object that belongs to the
+    /// **isolate** (a `Vas`), so it belongs where the isolate's other object state is. A
+    /// pool slot may own a *channel*; it may not own an *address space* that other slots'
+    /// mappings are placed into.
+    exec_vases: BTreeMap<u32, u32>,
+}
+
+/// One channel's **CPU mappings** — the ring and USERD, as this process sees them.
+///
+/// Separate from [`ChannelParts`] and not `Copy`, which is the whole reason: a
+/// [`VolatileRegion`] owns an `mmap` and a [`CharDevice`] owns a descriptor, and both must
+/// be dropped exactly once, in this process, when the channel goes. A handle table can be
+/// copied out from under a lock; a mapping cannot.
+#[derive(Debug)]
+struct ChannelRings {
+    /// The node the ring's mmap context was registered against. Held rather than used:
+    /// Linux keeps the mapping alive without it, but `NV_ESC_RM_UNMAP_MEMORY` names it, and
+    /// a descriptor closed early makes teardown unexpressible.
+    ///
+    /// ★★★ `None` for a channel over a [`GuestRing`], together with
+    /// [`ChannelRings::ring`], and that is the whole of G4: the guest's ring is **never
+    /// CPU-mapped by this process**. See [`RING_NOT_OURS`].
+    _ring_node: Option<CharDevice>,
+    /// The pushbuffer / GPFIFO / semaphore object — `None` when the ring is the guest's.
+    ring: Option<VolatileRegion>,
+    /// The node USERD's mmap context was registered against. `None` on a channel over a
+    /// guest USERD, together with [`ChannelRings::userd`].
+    _userd_node: Option<CharDevice>,
+    /// USERD — where `GP_GET` (hardware writes) and `GP_PUT` (we write) live.
+    ///
+    /// ⊘⊘ **CORRECTION, 2026-08-12 — this used to read *"Always present, on both kinds of
+    /// channel, and the asymmetry with the ring is the design rather than an oversight:
+    /// USERD is **ours** on every channel we allocate"*. That sentence described the state
+    /// of the tree and was written in the grammar of a ruling** — `userd_is_not_the_ring.md`
+    /// §0.3 caught it and asked for the correction to be made here, above the claim, rather
+    /// than in a file of its own. Nothing had ever adjudicated that USERD must be ours; the
+    /// ring rung needed *a* USERD and ours was the only one available.
+    ///
+    /// ★★★★★ **w287 — `Some(offset)` iff USERD lives inside THIS channel's ring object**
+    /// ([`UserdOwner::InRing`]), naming where in [`ChannelRings::ring`] the cursor words are.
+    ///
+    /// ⊘ It exists to keep two different `userd: None` states from colliding. `None` +
+    /// `userd_in_ring: None` = *"the guest's USERD, unmappable, refuse by name"*. `None` +
+    /// `Some(off)` = *"ours, mapped, reachable through the ring at `off`"*. Without the
+    /// second field the accessors would answer [`USERD_NOT_OURS`] for a USERD that is wholly
+    /// ours — a refusal whose **name is false of its cause**, which is the failure class this
+    /// tree has paid for more than any other.
+    userd_in_ring: Option<u64>,
+    /// ★★★ `None` for a channel over a guest USERD, and it is the same shape as
+    /// [`ChannelRings::ring`]'s: not an omission we get away with, a mapping that **cannot
+    /// be made**. `[measured, R31 arm B]` `NV_ESC_RM_MAP_MEMORY` against an
+    /// `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` answers `NV_ERR_NOT_SUPPORTED`, with the driver's
+    /// own `memMap_IMPL: CPU mapping not supported for addressSpace: 0x1`.
+    ///
+    /// ⇒ Both accesses are then refused **by name** ([`USERD_NOT_OURS`]) — the `GP_PUT`
+    /// write because the guest makes it, and the `GP_GET` read because we no longer can.
+    userd: Option<VolatileRegion>,
+}
+
+/// Who allocated the object a channel's GPFIFO lives in, and therefore who must free it.
+///
+/// ★★★ It is recorded per channel rather than inferred, because the two arms differ in
+/// **three** places that are nowhere near each other: the alloc (we allocate, or we do
+/// not), the CPU map (we map, or we must not), and the teardown (we unmap-and-free, or we
+/// must not touch it). A `bool` at any one of those sites would be a fact re-derived at
+/// the other two.
+///
+/// # ⊘⊘ THIS IS NOT THE HOST CHANNEL KIND, and collapsing them would rename a true
+/// statement into a false one
+///
+/// `[decided 2026-08-11, against the owner's two-kind brief]` — the owner's host-facing
+/// split (*"passthrough (unprivileged guest userspace channels, isolated)"* vs
+/// *"managed (usually scratchpad channels)"*) now has a type —
+/// `kayfabe_core::channel_kind::HostChannelKind` — and it lives in the **core**, which was
+/// the brief's ask: *"lift the host-side axis out of `rm.rs` so the core can name it"*.
+/// (⊘ Not linkable from here: this crate does not depend on `kayfabe-core`, and that edge
+/// is exactly what makes the core the right home for a vocabulary the core decides.)
+/// What the brief left open is whether this enum **becomes** that kind. It does not, and
+/// the reason is measured rather than stylistic:
+///
+/// - `RingOwner`'s **write set** is *"did this file allocate the object the GPFIFO lives
+///   in"* — three sites, all inside this file.
+/// - `HostChannelKind`'s write set is *"does this channel carry one guest process's
+///   work"* — decided in the core, one hop from the guest's own `NV01_ROOT` declaration.
+///
+/// ⊘⊘⊘ **CORRECTED 2026-08-13 (w284) — THE PARAGRAPH BELOW IS STALE, AND IT COST A RUNG.**
+/// It was true at `361fca8` and is false at HEAD. `alloc_channel_over_guest_ring` now has
+/// **four** call sites, and one of them is [`HostRmBackend::alloc_channel`] itself
+/// (`:4018`) — i.e. **the core-reachable verb DOES lower to [`RingOwner::HandedIn`]**, for
+/// any engine, whenever the ring's leaf is joined. `[measured, `traces/boots/w283`,
+/// `w263`–`w269`]` **88 `engine=Ce` births** read
+/// `adopt=GUEST-RING → alloc_channel_over_guest_ring` on real GA106, and on the guest
+/// driver's own channels leg B fires with them (`userd=GUEST-USERD`,
+/// `userd_offset=0x1a000`).
+/// ⇒ The `w284` brief reasoned from the sentence below that *"the gap is one core-reachable
+/// verb that lowers to `HandedIn` for CE"*. **There is no such gap.** See
+/// `docs/design/ce_passthrough_is_already_built.md` for what the real blocker is (the raw
+/// CE client's USERD lands one byte past the end of its own ring's leaf).
+/// ⚠ The claim below about *"the two disagree today, on every channel that exists"* is
+/// therefore also false: on an adopted channel `RingOwner::HandedIn` and
+/// `HostChannelKind::Shadow` now agree. The enum still earns its keep for the reason the
+/// last paragraph gives — it answers the free-and-unmap question — but **not** for the
+/// census reason stated here.
+///
+/// `[measured 2026-08-11, `git grep` from every consuming crate]` **the two disagree
+/// today, on every channel that exists.** [`RmBackend::alloc_channel`] — the only channel
+/// verb the core can reach — lowers unconditionally to `RingSource::Ours(None)`, so every
+/// host channel is [`RingOwner::Ours`], *including every one that backs a guest userspace
+/// channel* (`HostChannelKind::Shadow`). The [`RingSource::Guest`] arm has exactly **one**
+/// caller in the workspace and it is `bin/rmladder.rs`'s R31 **diagnostic probe**, never
+/// the core. ⇒ Renaming `Ours` to *"scratchpad"* would be false of the majority of
+/// channels, and it is `same_flag_opposite_polarity` — a predicate is defined by its write
+/// set, not by the two arms happening to line up on the day somebody looks.
+///
+/// ★ Ring provenance is therefore a **detail beneath** the kind, on its way to agreeing
+/// with it: the day a `Shadow` channel adopts the guest's ring, `HandedIn` becomes
+/// *implied by* `Shadow` rather than equal to it, and this enum still answers the
+/// free-and-unmap question that `HostChannelKind` never will.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RingOwner {
+    /// The isolate's own 64 KiB device-local ring object, allocated by
+    /// [`HostRmBackend::alloc_channel_in`] and mapped through [`ChannelParts::range`].
+    Ours,
+    /// A handle **handed in** — on the shadow path, an
+    /// `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` over the guest's own pages, already placed in
+    /// the channel's address space by whoever pinned it.
+    ///
+    /// ⚠ Freeing the channel must not free it and must not unmap it. The pin has its own
+    /// lifetime, held by the party that made the grant, and a channel teardown that
+    /// unmapped the guest's ring would leave a *live* guest channel pointing at nothing.
+    HandedIn,
+    /// ★★★ **w392d — OUR OWN ring object, placed in the address space by somebody who is
+    /// not RM's map verb.**
+    ///
+    /// This is [`RingOwner::Ours`] in every respect that concerns *ownership* — we allocated
+    /// the object, we CPU-map it, we free it, the GPFIFO layout inside it is ours — and
+    /// differs in exactly one: **[`ChannelParts::range`] does not name the mapping**, because
+    /// there is no `NV01_MEMORY_VIRTUAL` range over the address space at all. The mapping was
+    /// made by `nvidia-uvm`, into a `FERMI_VASPACE_A` allocated
+    /// `IS_EXTERNALLY_OWNED`, whose page tables RM does not manage.
+    ///
+    /// ⚠ Teardown therefore frees the object and must **not** call `raw_unmap_dma` — the
+    /// range handle it would pass is not one, and RM would be asked to retire a PTE it never
+    /// wrote. ⊘ It is not `HandedIn` either: `HandedIn` means *"not ours to free and not
+    /// ours to CPU-map"*, and both of those are false here. Collapsing the two would either
+    /// leak a 64 KiB object every channel or refuse every `ring_store_u32` the submitter
+    /// makes.
+    OursUnmapped,
+}
+
+/// The three numbers a channel's GPFIFO is described by, kept **per channel** because on a
+/// shadow channel they are the **guest's** and not this file's constants.
+///
+/// ★★★ `entries` is the load-bearing one. `GP_PUT` is an **index**, so the ring's entry
+/// count is the modulus of the wrap arithmetic in [`HostRmBackend::submit_entry`]; a
+/// channel created with the guest's ring and our [`GPFIFO_ENTRIES`] would have two parties
+/// disagreeing about which entry a number names, and they would wrap in different places.
+/// [measured, `run_w229b_b66bd44_execvas_real_qemu.log`] this guest declares **4096**,
+/// **1024** and **32**-entry rings — never 64, and never the fixture's 512.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct RingLayout {
+    /// `gpFifoOffset` as declared to RM: an **absolute VA** in the channel's address
+    /// space. For an [`RingOwner::Ours`] channel it is `ring_va + GPFIFO_OFFSET`; for a
+    /// [`GuestRing`] it is the guest's own `gpFifoOffset`, passed through untouched.
+    gp_fifo_va: u64,
+    /// `gpFifoEntries` as declared to RM.
+    entries: u32,
+}
+
+/// Everything [`RmBackend::alloc_channel`] built, kept because the port hands back one
+/// handle and the later verbs need the rest.
+#[derive(Debug, Clone, Copy)]
+struct ChannelParts {
+    /// The `KEPLER_CHANNEL_GROUP_A` this channel lives in. ★ The schedule and bind
+    /// controls are issued **here**, not on the channel — see
+    /// `kayfabe_abi::submit::NVA06C_CTRL_CMD_GPFIFO_SCHEDULE`.
+    tsg: u32,
+    /// The object holding the GPFIFO — and, for an [`RingOwner::Ours`] channel, the
+    /// pushbuffer and the semaphore too.
+    ring: u32,
+    /// Whether [`ChannelParts::ring`] is this connection's to unmap and free.
+    owner: RingOwner,
+    /// The object holding USERD — ours, or the joined window the guest writes.
+    userd: u32,
+    /// Whether [`ChannelParts::userd`] is this connection's to free. See [`UserdOwner`].
+    userd_owner: UserdOwner,
+    /// The `NV01_MEMORY_VIRTUAL` range [`ChannelParts::ring`] is mapped through — the
+    /// handle `NV_ESC_RM_UNMAP_MEMORY_DMA` needs, which is NOT the address space.
+    range: u32,
+    /// Where the ring object is in the channel's address space. RM's **[OUT]** `dmaOffset`
+    /// for an [`RingOwner::Ours`] ring; the address the caller states for a handed-in one.
+    ring_va: u64,
+    /// The GPFIFO as **declared to RM**, never re-derived from a constant afterwards.
+    layout: RingLayout,
+}
+
+/// Size of the device-local object holding a channel's pushbuffer, GPFIFO ring and
+/// semaphore. 64 KiB because that is the granularity RM's device-local allocator works
+/// in, and because it is what the C's proven host channel uses
+/// (`C: src/qemu/nvkvm_gpu_emul.c:9491-9495`).
+const RING_OBJECT_BYTES: u64 = 0x1_0000;
+
+/// Offset of the GPFIFO ring within the ring object. A whole page after the pushbuffer:
+/// hardware reads both, and keeping them in different pages means a diagnostic dump of
+/// one cannot be confused for the other.
+const GPFIFO_OFFSET: u64 = 0x1000;
+
+/// GPFIFO entries. A power of two, as RM requires, and small: this ring exists to carry
+/// the isolate's own submissions, not the guest's.
+const GPFIFO_ENTRIES: u32 = 64;
+
+/// The environment variable that overrides [`GPFIFO_ENTRIES`] for a channel this crate
+/// allocates itself. See [`ladder_gpfifo_entries`].
+const LADDER_GPFIFO_ENTRIES_ENV: &str = "KAYFABE_LADDER_GPFIFO_ENTRIES";
+
+/// ★★★★★ **w384 — THE ONE KNOB THAT SEPARATES TWO HYPOTHESES A 64-ENTRY RING CANNOT.**
+///
+/// `[measured 2026-09-06, Mode-2 guest, four (box x device-revision) pairs]` a guest channel
+/// stops retiring at **the submission that writes `GP_PUT = 0`** — the 64th on this ring, and
+/// `entries` is 64. Two readings fit that observation exactly and a single ring size can
+/// never tell them apart:
+///
+/// - *"the value `0` is not consumed"* — a wrap-arithmetic defect, and
+/// - *"the 64th entry is not consumed"* — an off-by-one at the end of the region.
+///
+/// ⇒ **Change the entry count and they predict different answers.** At 32 entries the wrap
+/// moves to the 32nd submission under the first reading and stays at the 64th under the
+/// second. That is the whole reason this exists; it is not a tuning knob.
+///
+/// ⊘ **REFUSED rather than clamped, in both directions that matter.** A value that is not a
+/// power of two is not a legal `gpFifoEntries` and RM would refuse it later, far from here;
+/// a value **larger** than [`GPFIFO_ENTRIES`] would push the GPFIFO region past
+/// [`USERD_OFFSET_IN_RING`] and silently overwrite USERD — which the crate's own unit test
+/// asserts against for the constant and cannot assert against for a runtime value. Either
+/// one falls back to the default **and says so on stderr**: a knob that quietly did nothing
+/// would make an experiment report the control's answer under the arm's name.
+fn ladder_gpfifo_entries() -> u32 {
+    let Some(v) = std::env::var_os(LADDER_GPFIFO_ENTRIES_ENV) else {
+        return GPFIFO_ENTRIES;
+    };
+    let want: Option<u32> = v.to_str().and_then(|t| t.trim().parse().ok());
+    match want {
+        Some(n) if n.is_power_of_two() && (2..=GPFIFO_ENTRIES).contains(&n) => {
+            if n != GPFIFO_ENTRIES {
+                eprintln!(
+                    "kayfabe-isolate: ★ {LADDER_GPFIFO_ENTRIES_ENV}={n} — this channel's \
+                     GPFIFO is {n} entries, NOT the default {GPFIFO_ENTRIES}. Both the \
+                     `gpFifoEntries` declared to RM and the `GP_PUT` modulus follow it."
+                );
+            }
+            n
+        }
+        other => {
+            eprintln!(
+                "kayfabe-isolate: ⊘ {LADDER_GPFIFO_ENTRIES_ENV}={:?} REFUSED (must be a power \
+                 of two in 2..={GPFIFO_ENTRIES}; larger would push the GPFIFO past USERD). \
+                 Falling back to {GPFIFO_ENTRIES} — ⊘ this run is the DEFAULT arm, whatever \
+                 was asked for",
+                other
+            );
+            GPFIFO_ENTRIES
+        }
+    }
+}
+
+/// ★★★★★ **w287 — WHERE USERD LIVES INSIDE OUR OWN RING OBJECT, and it is the whole of the
+/// blocker w284 measured.**
+///
+/// `[measured 2026-08-13, w283/w283c/w283d, three boots, byte-identical]` the raw CE client's
+/// ring landed at fb `0x40000` len `0x10000` and its USERD at fb `0x50000` — **the first byte
+/// past the end of its own ring's joined leaf**. `adopted_guest_userd`'s containment test
+/// (`kayfabe-fwd/src/lib.rs:4021`, `offset + 512 > len`) therefore DECLINED, leg B never fired,
+/// and the host channel carried a USERD of ours that hardware's `GP_GET` could never be read
+/// out of. The test was right; the **layout** was wrong.
+///
+/// ⊘ And the wrong layout was **our instrument's**, not the architecture's: two
+/// `alloc_device_local(RING_OBJECT_BYTES)` calls make two objects and therefore two leaves.
+/// The guest **driver** does the opposite — one object, USERD at `+0x1a000`
+/// (`[measured, w267]`, `userd_memory == ring memory`) — which is exactly why leg B fires on
+/// the driver's channels and declined on ours. ⇒ Putting USERD inside the ring object does not
+/// add a mechanism; it makes this client **representative of the workload it stands in for**.
+///
+/// ★★ **512-ALIGNED, AND WE VALIDATE IT BECAUSE RM DOES NOT.** RM shifts the *resolved
+/// physical* address right by 9 (`kernel_channel_gv100.c:208`) and does **no** alignment check,
+/// so a misaligned `userdOffset` is **silently truncated** to a different address. `0x3000` is
+/// `512 × 24`. See [`USERD_OFFSET_MISALIGNED`] for the refusal that makes a bad value loud.
+const USERD_OFFSET_IN_RING: u64 = 0x3000;
+
+/// The granularity RM's `>> 9` imposes on a USERD offset. See [`USERD_OFFSET_MISALIGNED`].
+const USERD_ALIGNMENT: u64 = 512;
+
+/// Offset of the pushbuffer within the ring object — the methods hardware fetches.
+///
+/// The layout below is the C's proven one, offset for offset
+/// (`C: src/qemu/nvkvm_gpu_emul.c:9460-9463`: pushbuffer at base, GPFIFO at `+0x1000`,
+/// semaphore at `+0x2000`). Keeping the numbers identical is deliberate: when a
+/// submission fails, "is our layout the same as the one that worked?" must not be a
+/// question anyone has to re-answer.
+const PUSHBUFFER_OFFSET: u64 = 0;
+
+/// One pushbuffer slot per GPFIFO entry, so a submission never overwrites methods a
+/// previous one may still be being fetched.
+///
+/// ⊘⊘ **WAS 64, AND 64 IS EXACTLY WHAT OUR OWN PUSH FILLS** — 16 words, to the byte.
+/// `[measured 2026-08-13, boot `w283_client`, real GA106]` adding the guest's own release
+/// (six more words, 88 bytes total) made every forwarded copy refuse
+/// `RmError::Other(BAD_ENCODE)` **before submission**, which regressed `w282b`'s
+/// hardware-retired copy to nothing. ⚠ And note how it presented: the length check answers
+/// with a constant named `BAD_ENCODE`, so a boot log said *"the encoding is wrong"* when the
+/// encoding was right and the **slot** was too small. A refusal whose name is true of a
+/// different cause is the shape this campaign has paid for repeatedly.
+///
+/// ★ 128 bytes leaves room for the copy's own five method runs **and** a guest-declared
+/// release, with 44 bytes spare. [`PUSHBUFFER_SLOTS`] is derived from it rather than
+/// assumed, so the region bound holds whatever this number becomes.
+const PUSHBUFFER_SLOT_BYTES: u64 = 128;
+
+/// ★★★ How many pushbuffer slots actually FIT before [`GPFIFO_OFFSET`] — **derived**, never
+/// a second spelling of a slot count.
+///
+/// ⊘ [`HostRmBackend::next_slot`] used to take the slot index modulo the ring's **entry
+/// count** alone, which is only safe while `entries × PUSHBUFFER_SLOT_BYTES` happens to fit
+/// — true at 64 × 64 and false at 64 × 128. The modulus is now clamped by this, so a slot
+/// can never be written over the GPFIFO that indexes it. ★ That was a latent bug at the old
+/// numbers too: nothing tied [`GPFIFO_ENTRIES`] to the region size, so a larger ring would
+/// have scribbled on its own queue with no check anywhere.
+const PUSHBUFFER_SLOTS: u64 = (GPFIFO_OFFSET - PUSHBUFFER_OFFSET) / PUSHBUFFER_SLOT_BYTES;
+
+/// ★★★★★ **WHERE ONE SUBMISSION'S METHODS GO, AND WHICH GPFIFO ENTRY POINTS AT THEM** — two
+/// indices with **different moduli**, which is the entire reason this type exists.
+///
+/// # ⊘⊘ THE BUG THIS TYPE FIXES, MEASURED 2026-09-06 (w381), AND ITS OWN COMMENT PREDICTED IT
+///
+/// [`HostRmBackend::submit_entry`] used to take **one** index and use it for both: it wrote
+/// the GPFIFO entry at that index *and* set `GP_PUT = (index + 1) % entries`. But the index
+/// came from [`HostRmBackend::next_slot`], which is taken modulo
+/// [`PUSHBUFFER_SLOTS`] (**32**), while `entries` is **64**. ⇒ `GP_PUT` only ever took the
+/// values `1..=32`, and on the **33rd** submission it went **BACKWARDS**, from `32` to `1`.
+///
+/// `[measured, RTX 3060, two independent rungs, one boot each]` inside a Mode-2 guest the
+/// **33rd submission on a channel is the first that does not land, and none after it ever
+/// does**:
+/// - `--map-stress`: `releases 32/186`, first failure at cycle 9 slot 2 — the 33rd release,
+///   with `placements exact 48/48` and `VAs recovered 44/44` beside it, so the mapping plane
+///   was fine and the *submission* was not.
+/// - `--rpc-mixed-allocs`: `identity 12/12` (submissions 1–24) and `ordering 2/6` — the two
+///   read-backs that landed are submissions 31 and 32, and the four that did not are 33–36.
+///
+/// ⊘ **AND THE NATIVE ARM PASSED BOTH, 7/7.** Real hardware walks the GPFIFO from `GP_GET`
+/// to `GP_PUT` and treats the never-written zero entries in between as empty, so the backward
+/// `PUT` costs it a burst of no-ops and nothing else. Our emulated path stops at the first
+/// entry its codec cannot decode and refuses by name (`FwdFault::RingBroughtNoEntry`, which
+/// dominates that boot's refusals). ⇒ **The wall was the PROBE's arithmetic and hardware was
+/// hiding it** — precisely the reason a guest-only red is uninterpretable, arriving as a
+/// worked example rather than as advice.
+///
+/// ⚠ `submit_entry`'s own comment already said it: *"Latent rather than live at this rung —
+/// nothing here submits 64 times — which is exactly the kind of arithmetic that is wrong for
+/// a year and then wrong at scale."* It was right, and the w381 rungs are the first callers
+/// to submit more than 32 times on one channel.
+///
+/// ⊘ **Byte-identical for the first 32 submissions on any channel**: for `seq < 32` both
+/// fields equal `seq` and every previously committed arm is unchanged.
+#[derive(Debug, Clone, Copy)]
+struct RingSlot {
+    /// Index of the 128-byte pushbuffer slot the methods are written into, modulo
+    /// [`PUSHBUFFER_SLOTS`]. ⚠ Reusing one is only safe while no more than that many
+    /// submissions are in flight, which is the assumption this file has always made.
+    pb: u64,
+    /// Index of the GPFIFO entry that points at them, modulo the **ring's own** entry count.
+    /// This is the one `GP_PUT` is derived from, because `GP_PUT` is an index into the
+    /// GPFIFO and into nothing else.
+    gp: u64,
+}
+
+/// Offset of the semaphore word **hardware writes** within the ring object.
+///
+/// ★ A whole page away from both the pushbuffer and the GPFIFO. It has to be somewhere,
+/// and putting it adjacent to either would mean a length mistake in one corrupts the
+/// other — with the failure appearing as "the semaphore never landed", which is also what
+/// a broken doorbell looks like.
+const SEMAPHORE_OFFSET: u64 = 0x2000;
+
+/// Offset of the **CPU-written fence** [`HostRmBackend::submit_fenced_release`] acquires
+/// on, within the ring object.
+///
+/// ★ A whole page past [`SEMAPHORE_OFFSET`], for that constant's own reason: the fence and
+/// the hardware-written semaphore are written by *different parties* — the CPU and the
+/// engine — and a length mistake that let one land in the other's page would read as
+/// "the acquire passed on its own", which is precisely the false pass the late-map race
+/// rung has to be unable to produce.
+///
+/// ⊘ Exported because the rung that opens the race window must store to this offset
+/// itself ([`HostRmBackend::ring_store_u32`]) between the doorbell and the release. A
+/// caller that guessed the number instead would be guessing at a layout this module owns.
+pub const RACE_FENCE_OFFSET: u64 = 0x3000;
+
+/// ★★★★★ **w381** — offset of the four-byte **source word** a `LAUNCH_DMA` liveness probe
+/// copies FROM, within the channel's own ring object.
+///
+/// ★ A whole page past [`RACE_FENCE_OFFSET`], for that constant's own reason: the fence,
+/// the hardware-written semaphore and this source are written by different parties at
+/// different times, and a length mistake that let one land in another's page would read as
+/// *"the copy never happened"* — which is also what a dead destination mapping looks like.
+/// [`HostRmBackend::copy_probe_offsets`] hands it out so no caller has to guess it.
+///
+/// ⊘ Inside [`RING_OBJECT_BYTES`] and checked against it at every use, because a source
+/// past the ring's end names memory the channel does not own and the copy would succeed
+/// while measuring somebody else's bytes.
+const W381_COPY_SRC_OFFSET: u64 = 0x4000;
+
+/// ★★★★★ **The guest's own ring, as the guest declared it** — the argument that turns
+/// [`HostRmBackend::alloc_channel_at`] from *"a channel with a ring of ours"* into *"a
+/// channel over the ring the guest is already pushing into"*.
+///
+/// # The blocker this exists to remove, stated exactly
+///
+/// A host channel allocated the old way has **its own** command queue, which stays empty,
+/// so the engine consumes nothing forever while the guest pushes into a queue our channel
+/// does not read. The owner's ruling is not to copy the methods across: it is to **map the
+/// guest's queue into the GPU's view at identical addresses and let hardware read them
+/// directly**. Under that shape the only verb left is advancing one 32-bit cursor — and
+/// this struct is what makes the channel name the guest's bytes in the first place.
+///
+/// # ⊘ Every field is HANDED IN. Nothing here is derived, and that is the invariant
+///
+/// | field | whose number it is | ⊘ what it must never be |
+/// |---|---|---|
+/// | [`Self::memory`] | the pinning party's — an `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` over the guest's pages | an object this file allocated (`alloc_device_local`), which is the old behaviour |
+/// | [`Self::gp_fifo_va`] | the **guest's** `gpFifoOffset`, as its own channel alloc declared it | `ring_va + `[`GPFIFO_OFFSET`] — our layout, applied to memory that is not laid out that way |
+/// | [`Self::gp_fifo_entries`] | the **guest's** `gpFifoEntries` | [`GPFIFO_ENTRIES`] — see [`RingLayout::entries`] for why a wrong modulus is not cosmetic |
+///
+/// # ⚠ What this type does NOT do
+///
+/// It does not map anything. [`Self::memory`] must **already be placed** at an address
+/// covering `[gp_fifo_va, gp_fifo_va + 8 * gp_fifo_entries)` in the same address space the
+/// channel is created in — on the production path by the guest-RAM pin
+/// (`kayfabe_rt::device::SharedDevice::pin_guest_ram`), which is committed at the doorbell.
+/// That ordering is the whole reason the host channel's birth has to move; see
+/// `docs/design/guest_ring_adoption.md` §3.
+///
+/// ⊘ And it does not make the channel *runnable*. Nothing in this rung writes the guest's
+/// `GP_PUT` into our USERD, so the engine still has nothing to fetch. Adopting the ring and
+/// advancing the cursor are two rungs, and this is the first.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GuestRing {
+    /// ★★★★★ **CONSTRAINT 26 — WHOSE memory carries the guest's GPFIFO.** Neither allocated
+    /// nor freed here either way. See [`kayfabe_isolate::RingProvenance`]: a
+    /// `StoreSlice` names **no handle**, because this isolate holds none.
+    pub ring: kayfabe_isolate::RingProvenance,
+    /// Where the object is placed in the channel's address space — the base the caller
+    /// asked for and RM honoured, kept so a diagnostic can say which mapping the
+    /// `gpFifoOffset` below lives inside.
+    pub ring_va: u64,
+    /// The guest's `gpFifoOffset`: an **absolute VA**, not an offset into anything.
+    ///
+    /// ⚠ `0` is a value and not a blank — the driver deliberately declares
+    /// `gpFifoOffset = 0` for its golden-context channel
+    /// (`kayfabe_core::rmgraph::GpFifoRing`). A caller with no ring to name must not
+    /// synthesise one; it has no [`GuestRing`] to pass.
+    pub gp_fifo_va: u64,
+    /// The guest's `gpFifoEntries`.
+    pub gp_fifo_entries: u32,
+    /// ★★★★★ **LEG B — the guest's own USERD, or `None` for a channel that adopts only the
+    /// ring.** See [`kayfabe_isolate::AdoptedGuestRing::userd`] for why it is nested here
+    /// rather than being a second argument: *"the guest's cursor on a ring of ours"* is a
+    /// state that must not be representable.
+    pub userd: Option<kayfabe_isolate::AdoptedGuestUserd>,
+}
+
+/// Whose object a channel's USERD is, and therefore who must free it and who may read it.
+///
+/// ⊘ Deliberately a twin of [`RingOwner`] rather than a `bool` or a reuse of it, for
+/// [`RingOwner`]'s own stated reason: the two arms differ in **three** places that are
+/// nowhere near each other — the alloc, the CPU map, and the teardown. And they are not the
+/// same predicate: a channel can adopt the guest's ring and keep a USERD of ours (every leg-A
+/// boot before this one did exactly that), so a single flag would be false of the majority of
+/// channels the moment one leg fires without the other.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum UserdOwner {
+    /// The isolate's own device-local object, CPU-mapped, whose `GP_PUT` we advance.
+    Ours,
+    /// A joined framebuffer window handed in — the guest's own USERD bytes. ⚠ Not ours to
+    /// free, not ours to unmap, and **not CPU-mappable at all** (`[measured, R31 arm B]`).
+    HandedIn,
+    /// ★★★★★ **w287 — USERD lives INSIDE this channel's own ring object, at
+    /// [`USERD_OFFSET_IN_RING`].** One object, one leaf, exactly the shape the guest driver
+    /// uses (`userd_memory == ring memory`, `userd_offset=0x1a000`, `[measured, w267]`).
+    ///
+    /// ⊘ **It is a THIRD arm and not a flavour of `Ours` on purpose**, and the reason is a
+    /// double free. `ChannelParts::userd` now *aliases* `ChannelParts::ring`, so a teardown
+    /// that reads this as `Ours` frees one handle twice — and a double free in a teardown path
+    /// surfaces anywhere but at the call. Making the alias its own arm means the compiler
+    /// asks the question at every `match`, which is what actually found the three sites
+    /// below rather than a comment asking the reader to remember.
+    ///
+    /// ⇒ Frees nothing (the ring's owner frees the object), maps nothing (the ring's CPU map
+    /// already covers these bytes), and its accessors reach the words through
+    /// [`ChannelRings::userd_in_ring`].
+    InRing,
+}
+
+/// Where a channel's GPFIFO comes from — the one degree of freedom
+/// [`HostRmBackend::alloc_channel_in`] gained on this rung.
+///
+/// ⊘ Deliberately not `Option<GuestRing>`. The `Ours` arm carries its own parameter
+/// (R26's dictated placement), and collapsing the two into an `Option` would make
+/// *"no guest ring"* and *"no dictated address"* the same word.
+#[derive(Debug, Clone, Copy)]
+enum RingSource {
+    /// Allocate the isolate's own [`RING_OBJECT_BYTES`] device-local ring, optionally at
+    /// an address we dictate (R26).
+    Ours(Option<GpuVa>),
+    /// ★★★ **w392d — allocate the isolate's own ring, but do NOT map it**: it is already
+    /// placed at `ring_va` by `nvidia-uvm`, in a VA space RM does not manage. See
+    /// [`RingOwner::OursUnmapped`] for why this is not [`RingSource::Guest`].
+    OursPlaced {
+        /// The ring object, **already allocated by the caller** — it had to be, because the
+        /// party that places it (nvidia-uvm) needs its RM handle before this call can be
+        /// made. ⚠ Ownership TRANSFERS here: the channel frees it, and an unwind on this
+        /// call frees it too, exactly as on the [`RingSource::Ours`] arm.
+        ring: u32,
+        /// Where `UVM_MAP_EXTERNAL_ALLOCATION` put the ring object. The GPFIFO is at
+        /// `ring_va + GPFIFO_OFFSET` exactly as on the [`RingSource::Ours`] arm, because the
+        /// object's internal layout is ours either way.
+        ring_va: u64,
+    },
+    /// Adopt the guest's, already placed. See [`GuestRing`].
+    Guest(GuestRing),
+}
+
+/// Everything that can go wrong bringing an RM connection up, with the rung it failed on.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BringUpError {
+    /// Which ladder rung (module docs).
+    pub rung: &'static str,
+    /// What happened.
+    pub detail: String,
+}
+
+impl std::fmt::Display for BringUpError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "RM bring-up failed at {}: {}", self.rung, self.detail)
+    }
+}
+
+impl std::error::Error for BringUpError {}
+
+fn rung<T, E: std::fmt::Debug>(r: &'static str, x: Result<T, E>) -> Result<T, BringUpError> {
+    x.map_err(|e| BringUpError {
+        rung: r,
+        // `Debug`, not `Display`: `RmError` deliberately has no `Display` impl (a host
+        // status is not prose), and a bring-up diagnosis wants the exact variant anyway.
+        detail: format!("{e:?}"),
+    })
+}
+
+/// An RM status word that is not zero. Carried through as [`RmError::Other`] so a caller
+/// sees the driver's own number, never a re-classification.
+/// ★ Every number here is read off `ogkm-580:
+/// src/common/sdk/nvidia/inc/nvstatuscodes.h`, line cited per arm. The first draft of this
+/// function had `0x55` as `INSUFFICIENT_PERMISSIONS` from memory; `0x55` is `NOT_READY` and
+/// permissions is `0x1B`. Nothing in the suite could have caught it, because a mock never
+/// produces an RM status at all — the only reason it is right now is that hardware returned
+/// a status this function had to name.
+fn status_check(status: u32) -> Result<(), RmError> {
+    match status {
+        0 => Ok(()),
+        // `NV_ERR_INSUFFICIENT_PERMISSIONS` (`:56`) — lesson L2 says this means "wrong
+        // layer", never "gain privilege": a Case-2 GSP-internal control replayed on the
+        // host gets exactly this, and the caller must treat it as a design error in the
+        // forwarding decision rather than retry.
+        0x0000_001B => Err(RmError::InsufficientPermissions),
+        // `NV_ERR_INSUFFICIENT_RESOURCES` (`:55`) / `NV_ERR_NO_MEMORY` (`:110`).
+        0x0000_001A | 0x0000_0051 => Err(RmError::NoMemory),
+        other => Err(RmError::Other(other)),
+    }
+}
+
+/// ★★★★★ **CONSTRAINT 26** — a backend that is **not** the scratchpad was asked to name a
+/// foreign client. `0x4B41` (`"KA"`), in the same private range as
+/// [`RING_NOT_A_JOINED_WINDOW`].
+///
+/// ⊘ Refused **before** any ioctl is built, so the widening F11 describes is not merely
+/// unused on this path — it is unreachable. See [`mod@handed_vaspace`].
+pub const ADOPT_NOT_THE_SCRATCHPAD: u32 = 0x4B41;
+
+/// ★★★★★ **CONSTRAINT 26** — something tried to map through a **bare** `FERMI_VASPACE_A`.
+///
+/// Under the ownership split a per-proc isolate holds the space and no range, so this is
+/// what *"the isolate borrows, the scratchpad holds"* looks like at the one moment it could
+/// be violated. ⊘ Distinct from RM's own `0x33 INVALID_OBJECT_HANDLE`, which says *"that is
+/// not a range"* and not *"you are the wrong party to be mapping"*.
+pub const MAP_THROUGH_A_BARE_SPACE: u32 = 0x4B42;
+
+/// ★★★★★ **CONSTRAINT 26** — a hand-over was asked for a space that is **not** bare.
+///
+/// `[measured w744]` the scratchpad's `NV01_MEMORY_VIRTUAL` over such a space is refused
+/// `0x19 INSERT_DUPLICATE_NAME`. ⊘ Refused here rather than there, because at the far end
+/// `0x19` reads as *"the dup is broken"* and the actual fault is *"this space was never the
+/// scratchpad's to map into"*.
+pub const HANDOVER_OF_A_NON_BARE_SPACE: u32 = 0x4B43;
+
+/// ★★★★★ **w746, CONSTRAINT 29 — THE REPLACEMENT FOR `AdoptedGuestRing::memory`.**
+///
+/// That field was deleted at constraint 26c on the argument *"the ring handle never reaches
+/// RM — it was an authorization token, not an operand"*. ⊘ **That argument is exactly the
+/// thing most likely to be wrong, and nothing was watching it**: the claim was established
+/// by reading [`HostRmBackend::alloc_channel_in`]'s body once, and any later edit that fed
+/// `ring_obj` into `ChannelAllocParams` would have restored the violation silently.
+///
+/// ⇒ This is the gate that goes red if it ever does. On the `StoreSlice` arm the birth
+/// isolate holds **no** handle for the ring, so three things must all be true at the moment
+/// RM is addressed: `ring_obj` is `0`, the USERD is not the in-ring one (which would BE
+/// `ring_obj`), and the USERD handle RM is told about is not itself `0`.
+///
+/// ⚠ Fail-closed, and refused **before** `NV_ESC_RM_ALLOC` is built rather than after: a
+/// channel born naming handle `0` is a channel RM resolves to nothing, which is the silent
+/// `GP_PUT == GP_GET` this whole leg exists to avoid.
+pub const RING_HANDLE_REACHED_RM: u32 = 0x4B45;
+
+/// ★★★★★ **w746, CONSTRAINT 30 — THE SCRATCHPAD MAY NOT BIRTH A CHANNEL IN A SPACE IT
+/// ADOPTED.**
+///
+/// > Owner, 2026-09-15: *"the reason we also do isolates is to ensure the channel is created
+/// > in an unprivileged process. If ogkm links the process that created the channel to the
+/// > privileges of it… the cross guest process isolation is broken. So this has to be
+/// > asserted."*
+///
+/// `[ogkm-580.159.04, src/kernel/gpu/fifo/kernel_channel.c:277-295]` — `privLevel` comes
+/// from `pCallContext->secInfo.privLevel` at **creation**, `rmclientIsAdmin(...)` alone is
+/// enough for `_PRIVILEGED_CHANNEL_TRUE`, and `ProcessID`/`SubProcessID` are copied from the
+/// creating client. `NV_ESC_RM_DUP_OBJECT` does not re-run any of it.
+///
+/// ⇒ A channel born by the scratchpad and handed to a guest proc would carry the
+/// **scratchpad's** privilege and process identity for its whole life, which is the cross-
+/// guest isolation the per-proc isolates exist to provide. Constraint 30 withdrew that
+/// design; this is the gate that makes it **refusable rather than merely unwritten**.
+///
+/// ⊘ **Scoped to ADOPTED spaces on purpose, and the scoping is the correctness argument.**
+/// The scratchpad legitimately births channels of its own — the `ce_copy` copy engine, the
+/// CUDA walk kernel — in spaces it created, and those are never shared with a guest proc. A
+/// blanket *"the scratchpad births nothing"* would refuse those and would be a different,
+/// wrong rule. What constraint 30 forbids is the scratchpad birthing **into a space that
+/// came from somewhere else**, which is exactly [`Objects::adopted_spaces`].
+///
+/// ⚠ **This is a structural refusal, not the measurement.** Whether a *mapping* the
+/// scratchpad places in a handed-over space conveys anything of the scratchpad's is
+/// `[UNMEASURED]` — see `docs/design/ownership_gpga_leases_and_the_two_channel_kinds.md`.
+/// Constraint 30 part 3 says an unmeasured sharing is refused, not assumed; this gate
+/// refuses the one shape ogkm has already answered, and the doc names the falsifier for the
+/// one it has not.
+pub const SCRATCHPAD_BIRTH_IN_A_HANDED_SPACE: u32 = 0x4B46;
+
+/// The opaque status a **bounds** refusal made by this crate reports.
+///
+/// ★ Distinct from [`NOT_ON_THIS_RUNG`], and the distinction is not cosmetic. An access
+/// that leaves a mapped object is a caller error with an exact answer; *"this rung does not
+/// implement that"* is a statement about the port's completeness. Collapsing them — which
+/// the first draft of this file did, because every non-syscall `RawError` fell into one
+/// catch-all arm — makes a real out-of-range read indistinguishable from an unimplemented
+/// verb in every log and every assertion. `0x4B47` is `"KG"`, one past `"KF"`.
+pub const NOT_IN_THIS_OBJECT: u32 = 0x4B47;
+
+/// The opaque status a **cache-attribute** refusal reports.
+///
+/// ★ A third local status, and it exists because a bite produced the second one for
+/// something that is not a bound. `RawError::CachePolicyUnattainable` means *"the backing
+/// provably cannot have the attribute this call site requires"* — a configuration fault in
+/// the pairing of an RM allocation with its mapping, which is neither an out-of-range
+/// access nor an unimplemented verb. Reporting it as either is the symptom-not-truth
+/// failure §7.3 forbids. `0x4B48` is `"KH"`.
+///
+/// Unreachable in normal operation: every policy this file passes is a constant. That is
+/// the point — if it ever appears, someone changed a mapping's attribute without changing
+/// the allocation's, and the status says so.
+pub const MAPPING_ATTRIBUTE_REFUSED: u32 = 0x4B48;
+
+/// ★★★★★ **CONSTRAINT 32 — `AdoptBirthClient` arrived WITHOUT its two descriptors.**
+///
+/// ⊘⊘ **Its own code, and the reason is the failure it names.** A `recvmsg` with no control
+/// buffer does not refuse a descriptor: the kernel **closes it and delivers the body
+/// perfectly**. So a reader that forgot [`crate::fdcross::read_frame_with_fds`] produces a
+/// frame that decodes, a client handle that looks right, and a hand-over that reports
+/// success onto a session nobody can reach. ⇒ *"the descriptors are missing"* must be
+/// distinguishable from every other refusal, or the one bug it exists to catch reads as a
+/// generic RM `no`.
+pub const BIRTH_CLIENT_NO_DESCRIPTORS: u32 = 0x4B50;
+
+/// ★★★ **CONSTRAINT 32 — a birth-client descriptor is not a character device.**
+///
+/// Checked against the **kernel**, never against the sender's claim: the next thing done
+/// with one is an `ioctl` naming a foreign client.
+pub const BIRTH_CLIENT_NOT_A_CHAR_DEVICE: u32 = 0x4B51;
+
+/// ★★★ **CONSTRAINT 32 — `AdoptBirthClient` named client `0x0`.**
+///
+/// A null `hRoot` is the one handle RM *interprets* rather than refuses, so a zero here
+/// would reach the driver as a meaningful value.
+pub const BIRTH_CLIENT_NULL_HANDLE: u32 = 0x4B52;
+
+/// ★★★★★ **CONSTRAINT 32 — a birth client was offered to a party that is not the
+/// scratchpad.**
+///
+/// The fail-closed restatement that needs no provenance: whatever the descriptor claims
+/// about itself, the **target** must be [`crate::SCRATCHPAD_ISOLATE_PROC`]. A birth client
+/// carries another guest process's RM identity; a per-proc isolate holding one is `#14`.
+pub const BIRTH_CLIENT_NOT_THE_SCRATCHPAD: u32 = 0x4B53;
+
+/// ★★★ **A descriptor arrived on a request that may not carry one.**
+///
+/// Exactly one request may (`AdoptBirthClient`); every other is bytes. The mirror of the
+/// reply direction's rule, and it exists for the same reason: a peer is not obliged to be
+/// well-behaved in either direction.
+pub const FD_ON_A_BYTES_ONLY_REQUEST: u32 = 0x4B54;
+
+/// How long [`RmBackend::ce_copy`] waits for the copy engine's own release semaphore
+/// before calling the copy failed.
+///
+/// ★ Generous on purpose. The failure this bounds is a **wedge**, not a slow copy: a
+/// copy that has genuinely started retires in microseconds, so anything that reaches this
+/// deadline did not start. Two seconds is long enough that a scheduling hiccup or a busy
+/// GPU cannot manufacture a false failure, and short enough that a wedged engine does not
+/// look like a hang. The C polls its equivalent self-test for five (`C:
+/// src/qemu/nvkvm_gpu_emul.c:9622`).
+pub const CE_COPY_TIMEOUT: Duration = Duration::from_secs(2);
+
+/// ★★★★★ **The GPU-VA window `[start, end)` that [`HostRmBackend::probe_guest_reachability`]
+/// DICTATES for its own ring, its control source and its destination.**
+///
+/// ⊘⊘ **It is public because a caller asking that probe about an address inside it is asking
+/// the probe about ITSELF, and the answer looks exactly like a real one.** Measured
+/// 2026-08-12 on `vh`: `--ce-client-fault` asked whether `0x7_0000_0000` was mapped, the
+/// engine retired the read and moved `0x20018000`, and the rung printed `RESOLVED`. Nothing
+/// was mapped there by anyone — except the probe's own channel ring, which the probe places
+/// at exactly that address, by design, for the reason its own doc comment gives.
+///
+/// ⇒ Callers that choose a "surely unmapped" VA must assert it is **outside this window**,
+/// and they can do it at compile time:
+///
+/// ```
+/// use kayfabe_isolate_host::rm::REACH_PROBE_WINDOW;
+/// const UNMAPPED_VA: u64 = 0x9_0000_0000;
+/// const _: () = assert!(
+///     UNMAPPED_VA < REACH_PROBE_WINDOW.0 || UNMAPPED_VA >= REACH_PROBE_WINDOW.1,
+/// );
+/// ```
+///
+/// ★ This is the same class as the 2026-08-10 failure recorded inside the probe — *"a probe
+/// that allocates from the same allocator, in the same space, at the same moment, is not an
+/// independent observer"* — one layer up: there, the probe's own **allocator** produced the
+/// collision; here its own **published constant** did, and the constant was private so no
+/// caller could see it.
+pub const REACH_PROBE_WINDOW: (u64, u64) = (0x0000_0007_0000_0000, 0x0000_0007_0030_0000);
+
+/// The opaque status a copy that **never released its semaphore** reports.
+///
+/// ★★ The single most important refusal in this file. The copy engine writes this word
+/// after the copy retires; if it never appears, the bytes did not move — and the *only*
+/// alternative to reporting that is returning `Ok(())`, which is the forged completion
+/// `mode2_real_forward_not_fake` exists to forbid. It is deliberately **not**
+/// [`RmError::Interrupted`]: nothing cancelled it. `0x4B4B` is `"KK"`.
+pub const CE_NEVER_RETIRED: u32 = 0x4B4B;
+
+/// The opaque status an **unencodable pushbuffer or GPFIFO entry** reports.
+///
+/// ★ Distinct from [`NOT_ON_THIS_RUNG`] because it is the opposite kind of statement: the
+/// verb exists and the *arguments* cannot be expressed on the wire — a semaphore VA above
+/// the GPFIFO's 2^40 ceiling, a method count past the header's 13 bits, a pushbuffer whose
+/// length is not a whole number of dwords. Every one of those is a value
+/// `kayfabe_abi::submit`'s encoders answer `None` for, and every one of them, if forced
+/// through, produces an entry that **runs** — pointing the engine at a truncated address
+/// or a wrong method. `0x4B4A` is `"KJ"`.
+pub const BAD_ENCODE: u32 = 0x4B4A;
+
+/// The opaque status a **work-submit token that does not fit in 32 bits** reports.
+///
+/// ★ The port carries the token as a `u64` because a port must not encode NVIDIA's field
+/// widths, and the doorbell register is 32 bits wide. Truncating instead of refusing would
+/// not error — it would ring **a different channel**, chosen by whichever low bits
+/// survived, and the only symptom would be work executing on hardware nobody asked. That
+/// is the whole reason this is a named status rather than an `as u32`. `0x4B49` is `"KI"`.
+pub const NOT_A_WORK_TOKEN: u32 = 0x4B49;
+
+/// The opaque status **a ring access on a channel whose ring this process does not hold a
+/// CPU mapping of** reports — i.e. every channel built over a [`GuestRing`].
+///
+/// ★★★ It is the *positive* form of "we do not CPU-map the guest's ring". Omitting the
+/// mapping would leave `ring_store_u32` reading a `None` and answering
+/// [`RmError::BadHandle`], which says *"that is not a channel"* about a channel that
+/// certainly exists — the symptom-not-truth failure. This status says the true thing: the
+/// channel is real, the ring is real, and **the bytes are not ours to write from the CPU**.
+///
+/// ⊘ It is also the shape of the next rung's boundary. A guest-backed ring is advanced by
+/// copying the guest's own cursor, not by this process composing methods into it; a caller
+/// that reaches for `ring_store_u32` here is reaching for the wrong verb, and gets told so
+/// by name rather than by a bounds error somewhere inside a mapping that was never opened.
+/// `0x4B4C` is `"KL"`.
+pub const RING_NOT_OURS: u32 = 0x4B4C;
+
+/// The opaque status a **GPFIFO entry count that cannot be an index modulus** reports.
+///
+/// ★★ Only zero is refused here, and the narrowness is the point. RM requires a power of
+/// two and refuses anything else itself — pre-empting it would be this file re-deriving a
+/// rule the driver already enforces, and would turn *"the host refused the guest's ring"*
+/// into *"we refused it first"*, which is a different fact about a boot. Zero is different
+/// in kind: it is the divisor of the wrap arithmetic (`slot % entries`), so it is a
+/// **panic** rather than a refusal, and a guest that declares it is not hypothetical —
+/// `kayfabe_core::rmgraph::GpFifoRing`'s own docs record the driver declaring
+/// `gpFifoOffset = 0` for its golden-context channel. `0x4B4D` is `"KM"`.
+pub const RING_ENTRIES_REFUSED: u32 = 0x4B4D;
+
+/// ★★★★★ **LEG B — the status a USERD access on a channel whose USERD is the GUEST'S
+/// reports.** The twin of [`RING_NOT_OURS`], one object over.
+///
+/// ⊘ It is the *positive* form of *"we do not CPU-map the guest's USERD"*, and it covers
+/// **both** directions, which are not the same fact:
+///
+/// - the `GP_PUT` **write** is *supposed* to be gone — the guest makes it, and that is the
+///   whole of leg B. A silent skip here would be indistinguishable in a log from a write
+///   that landed somewhere wrong.
+/// - the `GP_GET` **read** is a capability we LOSE. `[measured, R31 arm B]` an
+///   `OS_DESCRIPTOR` over another process's pages answers `NV_ERR_NOT_SUPPORTED` to
+///   `NV_ESC_RM_MAP_MEMORY`. ⚠ Returning `0` instead would be a lie shaped exactly like the
+///   truth about a channel that has not run, on the one plane this campaign is trying to
+///   measure. Its replacement is R32's J2 (GPU-write → CPU-read through a described memfd,
+///   `[measured 2026-08-11, f58473f]` HOLDS) and it is **not wired**.
+///
+/// `0x4B55` is `"KU"`.
+pub const USERD_NOT_OURS: u32 = 0x4B55;
+
+/// ★★★ **A `userdOffset` that is not 512-byte aligned — refused BY NAME, because RM will not
+/// refuse it and the corruption is silent.**
+///
+/// `[source: kernel_channel_gv100.c:208]` RM resolves USERD to a physical address and shifts it
+/// **right by 9** to build the runlist entry's pointer. It performs **no alignment validation
+/// whatsoever**. ⇒ A misaligned offset is not rejected — it is **truncated**, and the channel is
+/// then pointed at a *different* 512-byte slot than the one its owner believes it declared.
+/// Hardware then writes `GP_GET` somewhere nobody is reading and the symptom is
+/// *"the cursor never moved"*, i.e. indistinguishable from the wall this rung exists to remove.
+///
+/// ⊘ This is the [`derive-what-you-cannot-query`] shape inverted: the validation RM omits is
+/// the validation we must supply, and the reason to spell it as a named refusal rather than an
+/// `assert!` is that the offset can arrive from the guest.
+///
+/// `0x4B56` is `"KV"`.
+pub const USERD_OFFSET_MISALIGNED: u32 = 0x4B56;
+
+/// ★★★★★ **LEG B — the adopted USERD named an object this isolate did NOT mint by joining a
+/// framebuffer leaf.** The twin of [`RING_NOT_A_JOINED_WINDOW`], and it exists for the
+/// identical reason: the core builds the offer from an address-table binding it can check,
+/// then the offer crosses the isolate IPC boundary as **two integers** and is rebuilt in a
+/// child that cannot see the address table.
+///
+/// ⚠ The state it forbids is worse than the ring's. A USERD handed to RM over an object we
+/// allocated but the guest does not write is a channel that RM **zeroes at creation** and
+/// nobody ever advances: `GP_PUT == GP_GET` forever, scheduled, doorbelled, and reporting no
+/// error at all — the silent stall this whole campaign is trying to leave.
+/// `0x4B56` is `"KV"`.
+pub const USERD_NOT_A_JOINED_WINDOW: u32 = 0x4B56;
+
+/// ★★★★★ **LEG A2 — the adoption named an object this isolate did NOT mint by joining a
+/// framebuffer leaf.**
+///
+/// # ⊘ Why this refusal exists at all, when the core already checked
+///
+/// `kayfabe_isolate::AdoptedGuestRing` is built in the core from an address-table binding
+/// declaring `BackingBytes::JoinsGuestWindow` — *one memory*. But it crosses the isolate IPC
+/// boundary as **four integers** and is rebuilt in the child, which cannot see the address
+/// table. A private constructor in the core is therefore not an enforcement of anything on
+/// the one path a boot exercises.
+///
+/// ⇒ The adapter re-checks membership of `FbJoinTable::joined_objects` and refuses here.
+/// ⊘ **It is a refusal and not a downgrade**: falling back to allocating a ring of our own
+/// would make an armed evidence run and its own control produce the same channel, which is
+/// the failure shape this whole campaign keeps paying for.
+///
+/// ⚠ The state it forbids is the owner's forbidden #2 — a **blank** host vidmem twin
+/// (`FbLeafBacking::Vidmem`, `w228`) named as though it were the guest's ring. A channel born
+/// over that fetches GPFIFO entries out of a page nothing ever wrote, decodes zeros, never
+/// advances `GP_GET`, and **reports no error at all**.
+pub const RING_NOT_A_JOINED_WINDOW: u32 = 0x4B4E;
+
+/// ★★★★★ **w288 — THE CHANNEL GROUP THIS BIRTH IS ABOUT CONTAINS SOMETHING ELSE.**
+///
+/// # ⊘ Why an invariant about OUR OWN allocation has to be asserted rather than commented
+///
+/// The MMU-fault handler does **not** notify the faulting channel. It hardcodes
+/// `RC_NOTIFIER_SCOPE_TSG` (`ogkm-580: kern_gmmu_gv100.c:2124-2131`), and
+/// `krcErrorSetNotifier_IMPL` widens `pChanList` to the **whole group** and loops writing
+/// EACH member's notifier (`ogkm-580: kernel_rc_notification.c:270-289`). So if two host
+/// channels ever shared a `KEPLER_CHANNEL_GROUP_A`, one fault would write BOTH notifiers —
+/// and because each notifier is an `OS_DESCRIPTOR` over a *different guest channel's* pages,
+/// the guest would be told that a channel which never faulted had been RC-killed.
+///
+/// ⚠ That false positive is shaped **exactly like a pass**: a notifier with a non-zero
+/// `status` is the thing this whole rung exists to produce, and nothing downstream can tell
+/// a notification caused by the channel's own fault from one caused by its neighbour's.
+///
+/// ⇒ [`HostRmBackend::alloc_channel_in`] mints a **fresh group per channel**, so the
+/// invariant is a property of code in this file — which is precisely why it is asserted and
+/// not trusted. Grouping channels is what a TSG is *for*; the day someone reuses one, the
+/// only thing standing between that edit and a silently wrong measurement is this refusal.
+/// `0x4B4F` is `"KO"`.
+pub const TSG_NOT_SINGLETON: u32 = 0x4B4F;
+
+/// ★★★★★ **WHAT THIS BIRTH WAS OFFERED — three states, and the third is the one that costs.**
+///
+/// # Why this type exists
+///
+/// `w261` booted leg A on a real GA106 and its own `RESULT.md` leads with the hole: *nothing
+/// prints that a channel was born with `RingSource::Guest`*. Zero [`RING_NOT_A_JOINED_WINDOW`]
+/// refusals is consistent with **both** `adopt: Some` succeeding **and** `adopt: None` never
+/// being asked, and the boot log cannot tell them apart. ⇒ Whether leg A2 fired at all was
+/// unknown at `00c3e28`.
+///
+/// ⊘ **Two states would not have closed it.** *"Asked and declined"* and *"never asked"* both
+/// arrive at `alloc_channel` as `adopt: None`, and they mean opposite things: the first says
+/// the address table held no joined binding at the channel's ring VA, the second says nothing
+/// on this path ever looked. `no_counter_fired_is_not_no_record_exists`.
+///
+/// # ★★★ THE DISCRIMINATOR IS ALREADY ON THE WIRE — no new field, no second source of truth
+///
+/// `hosting` distinguishes them, and has since §16.106. [`crate::proto::Request::AllocChannel`]
+/// says so in as many words: *"`(class, params)` of the engine object this channel is being
+/// materialized to host, or `None` for a **doorbell materialization**"*. The two production
+/// birth sites in `kayfabe_isolate::VerbPlan` are exactly:
+///
+/// - `VerbPlan::EngineObject` — `hosting: Some(..)`, and `adopt` is `kayfabe_fwd`'s
+///   `adopted_guest_ring(..)`, consulted **unconditionally** on the `channel.is_none()` branch.
+///   ⇒ `None` here means *the armed path ran and produced nothing*.
+/// - `VerbPlan::Doorbell` — a literal `alloc_channel(vas, engine, None, None, ..)` for those
+///   two arguments, whose own comment says a ring adopted there would be adopted *without the
+///   leaf having been joined*. ⇒ `None` here means *nothing was ever asked*.
+///   ⊘ **The trailing `..` is w288's error notifier and it is NOT part of the
+///   discriminator.** It is the fifth argument and may be `Some` on either site; this witness
+///   reads arguments three and four and nothing else.
+///
+/// ⚠ **That is a two-crate invariant and a comment cannot hold it.** It is pinned by a source
+/// census — `the_birth_witness_can_tell_declined_from_never_asked` in
+/// `tests/guest_ring_census.rs` — which fails if either site stops matching this table.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BirthOffer {
+    /// The plan produced the guest's own object. **This variant is a leg firing.**
+    Adopted,
+    /// An engine-object birth: the armed path was consulted and produced nothing.
+    Declined,
+    /// A doorbell materialization: by construction it offers nothing at all.
+    NotAsked,
+}
+
+/// ★★★★★ **WHICH LEG a [`BirthOffer`] is about.**
+///
+/// ⊘ A parameter rather than two enums, and that is the load-bearing choice: the *reading* is
+/// one function ([`BirthOffer::read`]) applied twice, so the two limbs can never come to
+/// disagree about what "declined" means. Only the **word on the line** differs, because a
+/// boot log is grepped and two limbs sharing a token is `w261`'s hole restated one leg over.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BirthLimb {
+    /// Leg A2 — the GPFIFO the engine fetches from.
+    Ring,
+    /// Leg B — the 512-byte page the cursor lives in.
+    Userd,
+}
+
+impl BirthOffer {
+    /// Read the three states off the two facts the birth already carries.
+    ///
+    /// ⊘ Deliberately total and deliberately free of `self`: it is the whole reading, it is
+    /// unit-testable without an RM connection, and there is exactly one of it.
+    #[must_use]
+    pub fn read(hosting_present: bool, adopted: bool) -> Self {
+        match (hosting_present, adopted) {
+            // ★ Adoption dominates. An object that was actually adopted is `Adopted`
+            // whatever else is true; `hosting` only ever splits the `None` case.
+            (_, true) => Self::Adopted,
+            (true, false) => Self::Declined,
+            (false, false) => Self::NotAsked,
+        }
+    }
+
+    /// The word that goes on the witness line. ⊘ Three distinct words **per limb**: a boot
+    /// log is grepped for them, and two states sharing a word is `w261`'s hole restated.
+    ///
+    /// ★ `DECLINED`/`NOT-ASKED` are deliberately **shared** between the limbs while the
+    /// adoption word is not. A grep for `adopt=DECLINED` and one for `userd=DECLINED` are
+    /// already disambiguated by the key; a grep for the thing that FIRED must name which leg
+    /// fired, because `guest_ring=16 guest_userd=0` and `guest_ring=16 guest_userd=16` are
+    /// the difference between a ring RM was told about and a channel that can run.
+    #[must_use]
+    pub fn as_str(self, limb: BirthLimb) -> &'static str {
+        match (self, limb) {
+            (Self::Adopted, BirthLimb::Ring) => "GUEST-RING",
+            (Self::Adopted, BirthLimb::Userd) => "GUEST-USERD",
+            (Self::Declined, _) => "DECLINED",
+            (Self::NotAsked, _) => "NOT-ASKED",
+        }
+    }
+
+    /// Why this birth is in this state, in the port's own words — printed beside the word so a
+    /// reader never has to already know the table above.
+    #[must_use]
+    pub fn because(self, limb: BirthLimb) -> &'static str {
+        match (self, limb) {
+            (Self::Adopted, BirthLimb::Ring) => {
+                "the address table held a JoinsGuestWindow binding at this channel's declared \
+                 gpFifoOffset"
+            }
+            (Self::Adopted, BirthLimb::Userd) => {
+                "the guest's OWN KERNEL resolved this channel's USERD to a framebuffer address \
+                 (NV_CHANNEL_ALLOC_PARAMS.userdMem) that falls inside that same joined leaf"
+            }
+            (Self::Declined, BirthLimb::Ring) => {
+                "an engine-object birth, so the armed path WAS consulted — and the address \
+                 table held no joined binding at this channel's ring VA"
+            }
+            (Self::Declined, BirthLimb::Userd) => {
+                "the ring's leaf was consulted — and the guest's resolved USERD was UNREADABLE, \
+                 in guest RAM, undeclared, or outside that leaf"
+            }
+            (Self::NotAsked, BirthLimb::Ring) => {
+                "a doorbell materialization: this birth path offers no ring at all, so nothing \
+                 was consulted"
+            }
+            (Self::NotAsked, BirthLimb::Userd) => {
+                "a doorbell materialization: this birth path offers no USERD at all, so nothing \
+                 was consulted"
+            }
+        }
+    }
+}
+
+/// The per-process birth census.
+///
+/// ⊘ **Process-wide statics rather than [`HostRmBackend`] fields, and that is the correct
+/// granularity rather than a shortcut**: an isolate is a **pool**, one backend per worker, so a
+/// per-backend counter would report a fraction of the isolate's births and a reader would have
+/// to sum lines to get a total. One child process is one isolate; these are that isolate's
+/// numbers.
+mod birth_census {
+    use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
+
+    static SEEN: AtomicU64 = AtomicU64::new(0);
+    static GUEST_RING: AtomicU64 = AtomicU64::new(0);
+    static GUEST_USERD: AtomicU64 = AtomicU64::new(0);
+    static DECLINED: AtomicU64 = AtomicU64::new(0);
+    static NOT_ASKED: AtomicU64 = AtomicU64::new(0);
+    static REFUSED: AtomicU64 = AtomicU64::new(0);
+
+    /// The running totals, taken from the same call that produced `nth`, so a line's index
+    /// and its census can never come from two different instants.
+    ///
+    /// ★★★ `guest_userd` is counted **separately and not as a sub-case of `guest_ring`**,
+    /// even though it can only happen inside one. `guest_ring=16 guest_userd=0` and
+    /// `guest_ring=16 guest_userd=16` are the difference between *"RM was told about a ring"*
+    /// and *"a channel that can actually run"*, and a single number cannot say which.
+    pub(super) fn tally(
+        ring: super::BirthOffer,
+        userd: super::BirthOffer,
+    ) -> (u64, u64, u64, u64, u64, u64) {
+        let nth = SEEN.fetch_add(1, Relaxed) + 1;
+        let counter = match ring {
+            super::BirthOffer::Adopted => &GUEST_RING,
+            super::BirthOffer::Declined => &DECLINED,
+            super::BirthOffer::NotAsked => &NOT_ASKED,
+        };
+        counter.fetch_add(1, Relaxed);
+        if matches!(userd, super::BirthOffer::Adopted) {
+            GUEST_USERD.fetch_add(1, Relaxed);
+        }
+        (
+            nth,
+            GUEST_RING.load(Relaxed),
+            GUEST_USERD.load(Relaxed),
+            DECLINED.load(Relaxed),
+            NOT_ASKED.load(Relaxed),
+            REFUSED.load(Relaxed),
+        )
+    }
+
+    /// Count a birth that named the guest's ring and was **refused** by the adapter's own
+    /// membership check. ⊘ Counted apart from `GUEST_RING`, because *"RM was told"* and *"we
+    /// refused to tell RM"* are the two facts a reader most needs kept separate.
+    pub(super) fn refuse() -> u64 {
+        REFUSED.fetch_add(1, Relaxed) + 1
+    }
+}
+
+/// Classify a failure from a mapped region: a bounds refusal, or a syscall.
+///
+/// Deliberately a different function from [`ioctl_error`]. They share the syscall arm and
+/// nothing else, and the reason they are not one function with a flag is that the *default*
+/// differs: an unrecognised failure from an ioctl is a rung gap, and an unrecognised
+/// failure from a region access is a bound.
+fn region_error(e: &RawError) -> RmError {
+    match e {
+        RawError::Syscall { .. } => ioctl_error(e),
+        RawError::CachePolicyUnattainable { .. } => RmError::Other(MAPPING_ATTRIBUTE_REFUSED),
+        _ => RmError::Other(NOT_IN_THIS_OBJECT),
+    }
+}
+
+/// Classify an ioctl-level failure. `EINTR` is **the cancellation signal**, not an error.
+fn ioctl_error(e: &RawError) -> RmError {
+    match e {
+        RawError::Syscall {
+            errno: Some(errno), ..
+        } if *errno == libc_eintr() => RmError::Interrupted,
+        RawError::Syscall {
+            errno: Some(errno), ..
+        } => RmError::Other(0x8000_0000 | (*errno as u32 & 0xFFFF)),
+        _ => RmError::Other(NOT_ON_THIS_RUNG),
+    }
+}
+
+/// `EINTR`. Named through a function so this file states the constant once — the whole
+/// cancellation design turns on recognising it.
+const fn libc_eintr() -> i32 {
+    4
+}
+
+/// ★★★★★ **How a CPU view is armed — and READ-ONLY is a security primitive here, not a hint.**
+///
+/// `NVOS33_FLAGS_ACCESS` (`ogkm: nvos.h:1724-1727`) lowers through
+/// `mapping_cpu.c:970-982` to `NV_PROTECT_READABLE`, and `nv-mmap.c:155` then refuses a
+/// writable `mmap` of that node with **`-EACCES`**. ⇒ The refusal is the KERNEL DRIVER's, not
+/// ours, which is the only kind that survives a compromised peer.
+///
+/// ⚠ It matters for exactly one page. `0xbb0090` is the PF mirror of the VF doorbell
+/// (`kern_gpu_tu102.c:275-283` — bare metal drives `NV_VIRTUAL_FUNCTION` even on host), and
+/// its token is `runlist << 16 | chid` for **any host channel on the GPU**. A writable mapping
+/// of that page handed to another process is a cross-tenant ring. Read-only makes it
+/// structurally not one, so the VMM cannot become a doorbell it was never given — by
+/// construction rather than by promise. See `the_counter_page_and_the_device_view.md` §3.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ViewAccess {
+    /// `O_RDWR` node, `NVOS33_FLAGS_ACCESS_READ_WRITE` — every pre-existing caller.
+    ReadWrite,
+    /// `O_RDONLY` node. ⊘ The RM flag is set too, and it is NOT what does the work.
+    ReadOnly,
+}
+
+impl ViewAccess {
+    /// How the device NODE is opened — **this is the containment**, per the type docs.
+    #[must_use]
+    pub fn dev_access(self) -> kayfabe_linux_raw::DevAccess {
+        match self {
+            ViewAccess::ReadWrite => kayfabe_linux_raw::DevAccess::ReadWrite,
+            ViewAccess::ReadOnly => kayfabe_linux_raw::DevAccess::ReadOnly,
+        }
+    }
+
+    /// The `NVOS33_PARAMETERS::flags` value. ⊘ `ACCESS` is bits `1:0`; nothing else is set.
+    ///
+    /// ⚠ **Set for honesty, not for protection.** `[measured w596]` it does not make the mmap
+    /// read-only: RM picks protection from a range table that leaves the usermode block
+    /// READ_WRITE by fiat. [`ViewAccess::dev_access`] is the arm that binds.
+    #[must_use]
+    pub fn os33_flags(self) -> u32 {
+        match self {
+            ViewAccess::ReadWrite => 0,
+            ViewAccess::ReadOnly => 1,
+        }
+    }
+}
+
+impl RmConnection {
+    /// Walk the bring-up ladder against the real driver.
+    ///
+    /// # Errors
+    /// [`BringUpError`], naming the rung.
+    ///
+    /// `classes` is the **host** board's class profile (`#156`). It is a parameter rather
+    /// than a constant because the three ids it carries differ on a Hopper host, and a
+    /// caller that has no opinion should pass `kayfabe_chips::pinned_host_classes()`
+    /// rather than have this function invent one.
+    pub fn open(
+        dev: &DevDir,
+        gpu: GpuId,
+        classes: &'static dyn HostClasses,
+    ) -> Result<Self, BringUpError> {
+        // R0/R1 — the two nodes, by name, relative to the granted directory. The naming is
+        // the C's `dev_id_to_path`: the control node is the literal `nvidiactl`, NOT
+        // `nvidia` with an index (`C: src/stub/nvkvm_stub.c:1544-1563`).
+        let ctl = rung(
+            "R0 openat(nvidiactl)",
+            CharDevice::openat(dev, c"nvidiactl"),
+        )?;
+        let name = rung(
+            "R1 device node name",
+            CString::new(format!("nvidia{}", gpu.0)).map_err(|e| e.to_string()),
+        )?;
+        let gpu_node = rung("R1 openat(nvidia<gpu>)", CharDevice::openat(dev, &name))?;
+
+        // ★★★ R2 — the version string, and IT IS NOW A GATE. `cmd = '2'` is the
+        // query-non-strict form; `cmd = 0` is STRICT and deliberately returns EINVAL after
+        // filling the string in, which the open driver enforces
+        // (`C: src/qemu/virtio_nvgpu.c:1157-1170`). See [`host_version_gate`] for why the
+        // rung changed and why the answer is a refusal rather than a table.
+        let version =
+            host_version_gate(read_version(&ctl).as_deref()).map_err(|detail| BringUpError {
+                rung: "R2 host driver version",
+                detail,
+            })?;
+
+        // R3 — bind the device node to the control session. Required, and the failure
+        // without it is `0x23 INVALID_CLIENT` rather than anything that names a binding.
+        let mut reg = [0u8; 4];
+        rung(
+            "R3 REGISTER_FD encode",
+            RegisterFd {
+                ctl_fd: ctl.fd_number(),
+            }
+            .encode_into(&mut reg),
+        )?;
+        let req = rung(
+            "R3 REGISTER_FD request",
+            ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_REGISTER_FD, reg.len()),
+        )?;
+        rung("R3 REGISTER_FD", gpu_node.ioctl(req, &mut reg, &mut []))?;
+
+        let held = rung("R1 hold the /dev grant", dev.try_clone())?;
+
+        // R4 — the root client, minted **before** the connection exists. RM writes back the
+        // handle it assigned. ★ Ordered this way so there is never an `RmConnection`
+        // carrying a placeholder client: `OwnClient` has no zero value and no constructor
+        // but this one, which is the whole of F11's invariant (see `mod own_client`).
+        let client = rung("R4 NV01_ROOT_CLIENT", OwnClient::allocate_root(&ctl))?;
+
+        let conn = RmConnection {
+            ctl,
+            gpu: gpu_node,
+            dev: held,
+            gpu_index: gpu.0,
+            client,
+            device: 0,
+            subdevice: 0,
+            version,
+            classes,
+            objects: Mutex::new(Objects {
+                next: FIRST_HANDLE,
+                parents: BTreeMap::new(),
+                companions: BTreeMap::new(),
+                bare_spaces: std::collections::BTreeSet::new(),
+                adopted_spaces: std::collections::BTreeSet::new(),
+                channels: BTreeMap::new(),
+                exec_vases: BTreeMap::new(),
+            }),
+            rings: Mutex::new(BTreeMap::new()),
+            cpu_maps: std::sync::atomic::AtomicU64::new(0),
+            // Filled in below, once there is a subdevice to parent it to.
+            usermode: Err(RmError::Other(NOT_ON_THIS_RUNG)),
+        };
+
+        // R5 — the device. The parameters are NOT optional: without them RM does not
+        // associate the device with a physical GPU and every later control answers
+        // NOT_SUPPORTED (`C: tests/integration/test_ioctl_fwd.c:657-668`).
+        let mut dev_params = [0u8; Nv0080AllocParameters::SIZE];
+        rung(
+            "R5 NV0080 encode",
+            Nv0080AllocParameters {
+                device_id: gpu.0,
+                ..Default::default()
+            }
+            .encode_into(&mut dev_params),
+        )?;
+        let device = rung(
+            "R5 NV01_DEVICE_0",
+            conn.raw_alloc(client.raw(), FIRST_HANDLE, NV01_DEVICE_0, &mut dev_params),
+        )?;
+
+        // R6 — the subdevice.
+        let mut sub_params = [0u8; Nv2080AllocParameters::SIZE];
+        rung(
+            "R6 NV2080 encode",
+            Nv2080AllocParameters { sub_device_id: 0 }.encode_into(&mut sub_params),
+        )?;
+        let subdevice = rung(
+            "R6 NV20_SUBDEVICE_0",
+            conn.raw_alloc(device, FIRST_HANDLE + 1, NV20_SUBDEVICE_0, &mut sub_params),
+        )?;
+
+        {
+            let mut o = conn.objects.lock().expect("objects");
+            o.next = FIRST_HANDLE + 2;
+            o.parents.insert(device, client.raw());
+            o.parents.insert(subdevice, device);
+        }
+        // ★★ R6b — the doorbell window, attempted here and NOT fatal. See
+        // `RmConnection::usermode` for why it is a stored `Result` rather than a rung.
+        let conn = RmConnection {
+            client,
+            device,
+            subdevice,
+            ..conn
+        };
+        let usermode = conn.open_usermode(conn.classes.usermode());
+        Ok(RmConnection { usermode, ..conn })
+    }
+
+    /// ★★★ Allocate the profile's usermode class under the **subdevice** and CPU-map its
+    /// 64 KiB
+    /// BAR0 window — the mapping whose existence *is* [`RmBackend::ring_doorbell`].
+    ///
+    /// Three things here are not obvious and each was read out of the driver or the C:
+    ///
+    /// 1. **The parent is the subdevice, the mapper is the device.** The object is
+    ///    allocated under `hSubdevice`, but the `NV_ESC_RM_MAP_MEMORY` that maps it names
+    ///    `hDevice` — exactly as the C's proven self-test does
+    ///    (`C: src/qemu/nvkvm_gpu_emul.c:9532-9546`, alloc under `SUB`, `mm.h_device =
+    ///    DEV`). Passing the subdevice as the mapper is the plausible-looking variant.
+    /// 2. **No alloc parameters at all**, not a zeroed struct: `clc561.h` defines the
+    ///    class id and nothing else. ★ Still correct on a Hopper host, where the class
+    ///    DOES accept optional params: omitting them leaves `bBar1Mapping = NV_FALSE`,
+    ///    which selects the same BAR0 register window every earlier usermode class gives
+    ///    unconditionally (`ogkm-580:
+    ///    src/nvidia/src/kernel/gpu/fifo/usermode_api.c:61-98`).
+    /// 3. ★★ **[`CachePolicy::WriteBack`], not write-combining.** This is a BAR0
+    ///    *register* range, so `nvidia_mmap_helper` takes the `IS_REG_OFFSET` branch and
+    ///    calls `nv_encode_caching(…, NV_MEMORY_UNCACHED, NV_MEMORY_TYPE_REGISTERS)`
+    ///    unconditionally (`ogkm-580: kernel-open/nvidia/nv-mmap.c:567-574`); the
+    ///    write-combining branch two lines down is the *framebuffer* one. Nothing in this
+    ///    process can check that claim — `Backing::DeviceFile`'s attainable policy is
+    ///    `None` by design, so `require_attainable` cannot refuse a wrong requirement over
+    ///    a device fd — which is precisely why the policy had to become a parameter of
+    ///    [`RmConnection::map_cpu`] before this call site existed.
+    ///
+    /// ★★★ **`class` is a parameter, and it is a [`UsermodeClass`] rather than a
+    /// `ClassId`** (`#166`). The caller in [`RmConnection::open`] must therefore *name
+    /// the role* it is asking the profile for, and asking for the wrong one —
+    /// `classes.gpfifo_channel()` — is a **type error**, not a silent mis-allocation
+    /// that a Hopper host would have served. Before this signature, that exact swap was
+    /// bitten and **nothing in the workspace went red**.
+    fn open_usermode(&self, class: UsermodeClass) -> Result<UsermodeWindow, RmError> {
+        let want = self.mint();
+        let object = self.raw_alloc(self.subdevice, want, class.usermode_id().0, &mut [])?;
+        self.remember(object, self.subdevice);
+        let (node, region) = self.map_cpu(object, USERMODE_WINDOW_SIZE, CachePolicy::WriteBack)?;
+        Ok(UsermodeWindow {
+            object,
+            _node: node,
+            region,
+        })
+    }
+
+    /// ★★★ **The doorbell store**: tell the GPU's host unit that the channel named by
+    /// `token` has work.
+    ///
+    /// Two acts, in this order and no other:
+    ///
+    /// 1. [`release_fence`] — the ring's stores are into a **write-combining** mapping and
+    ///    are therefore *not* ordered against this one. Without the fence the doorbell can
+    ///    reach the device before the pushbuffer bytes it announces and the engine runs
+    ///    whatever was in the ring before, with no error anywhere.
+    /// 2. A single 32-bit store of the token to
+    ///    [`USERMODE_NOTIFY_CHANNEL_PENDING`] in the uncached window.
+    ///
+    /// There is no completion to check and no status to read: the store either happened or
+    /// the process took a fault. Everything that can be *known* about a submission is
+    /// downstream of it — the semaphore and `GP_GET`.
+    /// ## ★★★★★ THE WITNESS (owner directive, 2026-08-12) — *"do you have proof this piece
+    /// of write instruction is hit for unprivileged guest passthrough channel"*
+    ///
+    /// ⊘ **We did not.** Every *"the doorbell forwarded"* statement in this campaign rested
+    /// on **reading call order in source**, never on an observation, while every doorbell
+    /// line in `w268` reads `DOORBELL-REFUSED` and no positive line exists anywhere in the
+    /// run. `w268` §1.3 then showed that refusal is **post-hoc** — but that too was a code
+    /// reading. This makes the store itself say so.
+    ///
+    /// ⚠ **The `Err` arm is the load-bearing half.** `self.usermode.as_ref()` can return
+    /// early and the store never happens; a silent early return is exactly the shape that
+    /// reads as success. *"We did not reach the store"* is a printed line here, never an
+    /// absence.
+    ///
+    /// ⚠ **Volume, bounded by construction.** `cup2` produces a few hundred doorbells (448 at
+    /// `w202`, 8–16 of them `GrCompute`), so per-doorbell printing is not a spam risk at this
+    /// workload — but this function must never become one if a *spinning* workload reaches
+    /// it. So: the first [`DOORBELL_WITNESS_MAX`] stores print in full; after that only a
+    /// periodic tally prints, and the tally **says how many it suppressed**. ⊘ Refusals are
+    /// **never** suppressed: they are rare by hypothesis, and suppressing the rare event to
+    /// save room for the common one inverts the purpose.
+    fn doorbell(&self, token: u32) -> Result<(), RmError> {
+        let nth = DOORBELL_WITNESS_N.fetch_add(1, Ordering::Relaxed) + 1;
+        let loud = nth <= DOORBELL_WITNESS_MAX;
+        let window = match self.usermode.as_ref() {
+            Ok(w) => w,
+            Err(e) => {
+                // ⊘ ALWAYS printed, whatever the tally: this is the outcome that would
+                // otherwise be indistinguishable from a successful store.
+                eprintln!(
+                    "kayfabe-isolate: DOORBELL-STORE #{nth} host_token={token:#010x} \
+                     runlist={} chid={} ⊘⊘ NOT REACHED — the usermode window is Err({e:?}), \
+                     so NO STORE HAPPENED and nothing was rung",
+                    token >> 16,
+                    token & 0xffff,
+                );
+                return Err(*e);
+            }
+        };
+        release_fence();
+        if loud {
+            eprintln!(
+                "kayfabe-isolate: DOORBELL-STORE #{nth} host_token={token:#010x} runlist={} \
+                 chid={} → storing 32 bits at USERMODE_NOTIFY_CHANNEL_PENDING={:#x} in the \
+                 mapped usermode window",
+                token >> 16,
+                token & 0xffff,
+                USERMODE_NOTIFY_CHANNEL_PENDING,
+            );
+        } else if nth.is_multiple_of(DOORBELL_WITNESS_MAX) {
+            eprintln!(
+                "kayfabe-isolate: DOORBELL-STORE tally: {nth} stores attempted; the last {} \
+                 were NOT printed individually (cap {DOORBELL_WITNESS_MAX}) — ⊘ this is a \
+                 statement about the log, not about the stores",
+                nth - DOORBELL_WITNESS_MAX,
+            );
+        }
+        let out = window
+            .region
+            .store_u32(HostOffset::new(USERMODE_NOTIFY_CHANNEL_PENDING), token)
+            .map_err(|e| region_error(&e));
+        match &out {
+            Ok(()) => {
+                if loud {
+                    eprintln!(
+                        "kayfabe-isolate: DOORBELL-STORE #{nth} host_token={token:#010x} \
+                         ★★★ WROTE — the store instruction executed",
+                    );
+                }
+            }
+            // ⊘ Never suppressed, same argument as the window refusal above.
+            Err(e) => eprintln!(
+                "kayfabe-isolate: DOORBELL-STORE #{nth} host_token={token:#010x} ⊘⊘ THE STORE \
+                 ITSELF WAS REFUSED: {e:?} — the token was never written",
+            ),
+        }
+        out
+    }
+
+    /// ★★★ `#128` T3 — the host GPU's PTIMER, read through the **usermode window this
+    /// connection already holds**.
+    ///
+    /// No new RM object and no new mapping: [`USERMODE_TIME_0`]/[`USERMODE_TIME_1`] are
+    /// sixteen bytes below the doorbell in the same 64 KiB window
+    /// [`Self::open_usermode`] maps at bring-up. That is the point of this accessor — it
+    /// proves a **capability-less** process can read a real host nanosecond counter
+    /// *without acquiring anything it did not already need to submit work*.
+    ///
+    /// ⊘ It is **not** the read-native path and must never be mistaken for it. Every call
+    /// here is a function call inside one process; the guest reaching this would be an
+    /// exit plus an IPC, which is the jitter `#128` exists to remove. This is the
+    /// **oracle** — the value a passthrough mapping must agree with — and the fallback
+    /// for a host that refuses the dedicated page.
+    ///
+    /// # Errors
+    /// The refusal [`Self::open_usermode`] kept, if the window never mapped; or
+    /// [`RmError::Other`] if the counter never settled across
+    /// [`kayfabe_abi::submit::PTIMER_SAMPLE_ROUNDS`] rounds — ⊘ never a zero.
+    pub fn host_ptimer_via_usermode(&self) -> Result<u64, RmError> {
+        let window = self.usermode.as_ref().map_err(|e| *e)?;
+        Self::sample(&window.region, USERMODE_TIME_1, USERMODE_TIME_0)
+    }
+
+    /// [`ptimer_sample`] over a [`VolatileRegion`], mapping both refusals onto [`RmError`].
+    fn sample(region: &VolatileRegion, hi: u64, lo: u64) -> Result<u64, RmError> {
+        ptimer_sample(hi, lo, |off| region.load_u32(HostOffset::new(off))).map_err(|e| match e {
+            PtimerSampleError::Read(r) => region_error(&r),
+            // ⊘ The standing rule, at the one place it could be broken: an incoherent
+            // counter is a REFUSAL. Returning the last pair, or zero, would be plausible.
+            PtimerSampleError::Incoherent => RmError::Other(NOT_ON_THIS_RUNG),
+        })
+    }
+
+    /// ★★★ `#128` T4 — allocate an [`NV01_TIMER`](kayfabe_abi::submit::NV01_TIMER) object,
+    /// the handle behind **a dedicated mapping of BAR0 `0x9000`, the PTIMER page**.
+    ///
+    /// This is the mapping the read-native design first reached for, and it differs from
+    /// [`Self::host_ptimer_via_usermode`] in the one way that looked decisive: the range
+    /// contains **only timer registers**, no doorbell, so the whole page could be exposed
+    /// to a guest without exposing a work-submit path.
+    /// `tmrapiGetRegBaseOffsetAndSize_IMPL` reports `DRF_BASE(NV_PTIMER)` and
+    /// `sizeof(Nv01TimerMap)` for it
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/timer/timer.c:1712-1734`).
+    ///
+    /// ⊘ **It cannot actually back the guest's timer page, and that is not a permission
+    /// problem.** The guest reads its counter at page offset `0x080`; this page carries it
+    /// at `0x400`; a memslot cannot re-base within a page. The route is kept because it is
+    /// the *control* for the usermode mirror — two independent mappings agreeing is what
+    /// licenses treating either as the host's counter — and because it is the only route
+    /// that demonstrates a **doorbell-free** BAR0 range is mappable at all. See
+    /// `docs/design/read_native_timer_measured.md` §2.
+    ///
+    /// ★★★ **The mapping RM grants here is READ-ONLY, and that is hardware policy rather
+    /// than ours.** `subdeviceCtrlCmdValidateMemMapRequest_IMPL` walks BAR0 range by range
+    /// for any caller that is not `osIsAdministrator()`, and the PTIMER row — the *first*
+    /// row it tries — returns `NV_PROTECT_READABLE`
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/subdevice/subdevice_ctrl_gpu_kernel.c:2905-2917`,
+    /// reached from `RmValidateMmapRequest`, `.../unix/src/osapi.c:2023-2054`). So an
+    /// unprivileged holder **cannot** write `NV_PTIMER_TIME_0`, and
+    /// `tmrSetCurrentTime_GV100`'s register is out of reach by construction rather than by
+    /// a check we could forget. ⚠ A *root* caller takes the `osIsAdministrator()` fast path
+    /// and gets `NV_PROTECT_READ_WRITE` instead — which is why the ladder rung that measures
+    /// this means nothing unless it is run as an unprivileged uid.
+    ///
+    /// ⊘ **There is deliberately no `map_ptimer_page` that does the alloc and the map in one
+    /// call.** There was, and it was dead code by the end of the task that added it: the
+    /// rung has to report *which of the two acts* failed, because the first version of this
+    /// rung (2026-08-02, GA106, revision 6213a24) collapsed them and printed our own length
+    /// arithmetic as a driver refusal.
+    /// A convenience that re-collapses them is the one shape this seam must not offer.
+    ///
+    /// # Errors
+    /// Whatever RM refuses the alloc with.
+    pub fn alloc_timer_object(&self) -> Result<u32, RmError> {
+        let want = self.mint();
+        let object = self.raw_alloc(
+            self.subdevice,
+            want,
+            kayfabe_abi::submit::NV01_TIMER,
+            &mut [],
+        )?;
+        self.remember(object, self.subdevice);
+        Ok(object)
+    }
+
+    /// CPU-map an already-allocated object, uncached — the policy every BAR0 register
+    /// range gets (`ogkm-580: kernel-open/nvidia/nv-mmap.c:567-574`). A *cached* mapping of
+    /// a free-running counter would read one value forever, which is this task's failure
+    /// arriving through the cache instead of through a trap.
+    ///
+    /// See [`Self::map_cpu_windowed_on`] for why the two lengths are separate.
+    ///
+    /// ⊘ [`MapNode::Gpu`]: this maps a BAR0 register range, which is by definition inside
+    /// the device's own apertures.
+    ///
+    /// # Errors
+    /// As [`Self::map_cpu_windowed_on`].
+    pub fn map_object_uncached(
+        &self,
+        object: u32,
+        register_len: u64,
+        mmap_len: u64,
+    ) -> Result<(CharDevice, VolatileRegion), RmError> {
+        self.map_cpu_windowed_on(
+            MapNode::Gpu,
+            object,
+            register_len,
+            mmap_len,
+            CachePolicy::WriteBack,
+        )
+    }
+
+    /// ★ **w750 probe support — a WRITE-COMBINING CPU view of one object, by raw handle.**
+    ///
+    /// [`Self::map_object_uncached`] exists already and takes [`CachePolicy::WriteBack`],
+    /// which is the right policy for the sysmem it was written for and the **wrong** one
+    /// for reading a word **hardware** writes: a cached view of a vidmem USERD can answer
+    /// from the CPU's cache and report a `GP_GET` that never moved. Every other vidmem
+    /// mapping in this file already uses [`CachePolicy::WriteCombining`]; this is the same
+    /// mapping, reachable from a probe that holds a raw handle rather than a
+    /// [`HostHandle`].
+    ///
+    /// ⊘ It adds no policy and no state — it is [`Self::map_cpu`] with the cache argument
+    /// fixed, exposed so `--route-k` (`docs/design/w750_route_k_prereg.md`) can read a
+    /// USERD it did not mint through this backend. Nothing on the forwarding path calls it.
+    ///
+    /// # Errors
+    /// Whatever the `NV_ESC_RM_MAP_MEMORY` or the `mmap` refused with.
+    pub fn map_object_write_combining(
+        &self,
+        object: u32,
+        len: u64,
+    ) -> Result<(CharDevice, VolatileRegion), RmError> {
+        self.map_cpu(object, len, CachePolicy::WriteCombining)
+    }
+
+    /// ★ **w750 probe support — one `NV_ESC_RM_CONTROL` on an object this connection names,
+    /// under this connection's own client.**
+    ///
+    /// ⊘ `HostRmBackend::raw_control_for_probe` exists already and hardcodes the **device**
+    /// as the object, which is right for the in-band census it was written for and cannot
+    /// express the two controls `--route-k` needs: `NV0000_CTRL_CMD_CLIENT_SHARE_OBJECT`
+    /// (whose object is the **client**) and `NV2080_CTRL_CMD_GPU_GET_PIDS` (whose object is
+    /// the **subdevice**).
+    ///
+    /// ⚠ Not a general control verb, for the same reason that one is not: every real
+    /// control in this file goes through a typed method that knows its parameter struct.
+    /// This takes bytes because a probe's whole job is to ask questions the port does not.
+    ///
+    /// # Errors
+    /// Whatever RM refused.
+    pub fn control_for_probe(
+        &self,
+        object: u32,
+        cmd: u32,
+        payload: &mut [u8],
+    ) -> Result<(), RmError> {
+        self.raw_control(object, cmd, payload)
+    }
+
+    /// Read the PTIMER pair out of a region produced by [`Self::alloc_timer_object`] +
+    /// [`Self::map_object_uncached`].
+    ///
+    /// # Errors
+    /// As [`Self::host_ptimer_via_usermode`].
+    pub fn ptimer_page_read(region: &VolatileRegion) -> Result<u64, RmError> {
+        Self::sample(region, PTIMER_PAGE_TIME_1, PTIMER_PAGE_TIME_0)
+    }
+
+    /// `NV2080_CTRL_CMD_TIMER_GET_REGISTER_OFFSET` on this connection's subdevice — the
+    /// control that exists expressly *"so that clients may map them directly"*
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080tmr.h:107-110`).
+    ///
+    /// `payload` should be four bytes and is left **as the caller seeded it** if RM answers
+    /// without writing — the `#128` rung seeds `0xCD` for exactly the reason R18 does, so
+    /// *"answered `NV_OK` and wrote nothing"* is distinguishable from *"answered zero"*.
+    ///
+    /// # Errors
+    /// Whatever RM refuses the control with.
+    pub fn timer_register_offset(&self, payload: &mut [u8]) -> Result<(), RmError> {
+        self.raw_control(
+            self.subdevice,
+            kayfabe_abi::submit::NV2080_CTRL_CMD_TIMER_GET_REGISTER_OFFSET,
+            payload,
+        )
+    }
+
+    /// The driver version string the frontend reported, if it answered.
+    #[must_use]
+    pub fn driver_version(&self) -> &str {
+        &self.version
+    }
+
+    /// The client handle RM assigned.
+    #[must_use]
+    pub fn client(&self) -> u32 {
+        self.client.raw()
+    }
+
+    /// ★★★ **The CONTROL node's fd number — what `UVM_REGISTER_GPU.rmCtrlFd` wants.**
+    ///
+    /// nvidia-uvm does not open its own RM connection. `UVM_REGISTER_GPU` /
+    /// `UVM_REGISTER_GPU_VASPACE` take an **already-open RM control fd plus that fd's
+    /// client handle**, and UVM dups the session out of them
+    /// (`ogkm-580: kernel-open/nvidia-uvm/uvm_ioctl.h:536`, `rmCtrlFd` / `hClient`). So the
+    /// only way a raw client can make UVM build its kernel channel manager is to hand over
+    /// the connection it already holds.
+    ///
+    /// ⊘ This is a **borrow, not a transfer**: the fd stays owned by this connection and is
+    /// valid only while it lives. UVM must be unregistered before the connection drops, or
+    /// the kernel holds a reference to a session whose owner is gone.
+    #[must_use]
+    pub fn ctl_fd(&self) -> i32 {
+        self.ctl.fd_number()
+    }
+
+    /// The subdevice handle — the parent of most per-GPU controls.
+    #[must_use]
+    pub fn subdevice(&self) -> u32 {
+        self.subdevice
+    }
+
+    /// One `NV_ESC_RM_ALLOC` under **this isolate's own client**, returning the handle RM
+    /// ended up assigning.
+    ///
+    /// ★★★ **There is deliberately no `root` parameter** (`guest_blast_radius.md` §4 F11).
+    /// This function used to take `root: u32` and every caller passed `self.client`, which
+    /// made *"we never allocate under a client we did not mint"* a property of eight call
+    /// sites rather than of the code. Stamping it here means a caller cannot express the
+    /// wrong thing: the only client this escape can carry is [`OwnClient`], and the only
+    /// way to obtain one is to have allocated it ([`OwnClient::allocate_root`]).
+    ///
+    /// The one allocation with no owning client — `NV01_ROOT_CLIENT` itself, `hRoot = 0` —
+    /// does not come through here at all; it *is* [`OwnClient::allocate_root`].
+    fn raw_alloc(
+        &self,
+        parent: u32,
+        want: u32,
+        class: u32,
+        params: &mut [u8],
+    ) -> Result<u32, RmError> {
+        let mut arg = [0u8; Nvos21Parameters::SIZE];
+        Nvos21Parameters {
+            h_root: self.client.raw(),
+            h_object_parent: parent,
+            h_object_new: want,
+            h_class: class,
+            p_alloc_parms: 0,
+            params_size: params.len() as u32,
+            status: 0,
+        }
+        .encode_into(&mut arg)
+        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_ALLOC as u8, arg.len())
+            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        // `pAllocParms` at +16. An empty params block means a null pointer, which is what
+        // `NV01_ROOT_CLIENT` wants — so the patch list is empty rather than pointing at a
+        // zero-length buffer.
+        let mut patches: Vec<Indirect<'_>> = Vec::new();
+        if !params.is_empty() {
+            patches.push(Indirect::new(16, params));
+        }
+        self.ctl
+            .ioctl(req, &mut arg, &mut patches)
+            .map_err(|e| ioctl_error(&e))?;
+        let out = Nvos21Parameters::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        status_check(out.status)?;
+        Ok(out.h_object_new)
+    }
+
+    /// ★★★ [`Self::raw_alloc`] for a class whose parameter block itself carries a
+    /// **userspace pointer** — one more level of indirection and nothing else.
+    ///
+    /// `NV_MEMORY_LIST_ALLOCATION_PARAMS` is the population: it is reached through
+    /// `pAllocParms` and carries `NvP64 pageNumberList`, which RM `copy_from_user`s the page
+    /// array out of. Both addresses must be live for the same syscall and neither may be
+    /// produced outside `kayfabe-linux-raw`, which is exactly what
+    /// [`Indirect::nested`](kayfabe_linux_raw::Indirect::nested) is for.
+    ///
+    /// ⊘ Separate from [`Self::raw_alloc`] rather than a parameter on it: every other
+    /// allocation in this file has a flat parameter block, and giving them all an
+    /// `Option<(usize, &mut [u8])>` would put a nesting decision at thirty call sites that
+    /// have none to make.
+    ///
+    /// # Errors
+    /// Whatever RM refused, or [`RmError::Other`] if the nest does not fit its buffer.
+    fn raw_alloc_nested(
+        &self,
+        parent: u32,
+        want: u32,
+        class: u32,
+        params: &mut [u8],
+        inner_at: usize,
+        inner: &mut [u8],
+    ) -> Result<u32, RmError> {
+        let mut arg = [0u8; Nvos21Parameters::SIZE];
+        Nvos21Parameters {
+            h_root: self.client.raw(),
+            h_object_parent: parent,
+            h_object_new: want,
+            h_class: class,
+            p_alloc_parms: 0,
+            params_size: params.len() as u32,
+            status: 0,
+        }
+        .encode_into(&mut arg)
+        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_ALLOC as u8, arg.len())
+            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let mut patches = [Indirect::nested(16, params, inner_at, inner)
+            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?];
+        self.ctl
+            .ioctl(req, &mut arg, &mut patches)
+            .map_err(|e| ioctl_error(&e))?;
+        let out = Nvos21Parameters::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        status_check(out.status)?;
+        Ok(out.h_object_new)
+    }
+
+    /// [`Self::raw_alloc`] for a **GPFIFO channel**, and the only reason it exists is the
+    /// type of `class` (`#166`).
+    ///
+    /// The generic [`Self::raw_alloc`] takes a bare `u32` because it allocates everything
+    /// — VA spaces, TSGs, memory, engine objects — so it cannot name a role. That left
+    /// the channel's class id a `u32` at its call site, where swapping
+    /// `classes.gpfifo_channel()` for `classes.ce_object()` compiled and turned nothing
+    /// red (measured: `scripts/bite_host_classes.py`, WIRING 0/3 at `36f746a`). Naming
+    /// the role in the *parameter* makes that swap a type error, and the wrapper is one
+    /// line — the cheapest place to put a compile-time refusal on this path.
+    ///
+    /// ⊘ It is deliberately not "alloc anything, but typed": there is one channel class
+    /// per generation ([`HostClasses::gpfifo_channel`]), and a GR channel and a CE
+    /// channel differ only by `engineType`, so exactly one role can ever reach here.
+    fn alloc_gpfifo_channel(
+        &self,
+        tsg: u32,
+        want: u32,
+        class: ChannelClass,
+        params: &mut [u8],
+    ) -> Result<u32, RmError> {
+        self.raw_alloc(tsg, want, class.channel_id().0, params)
+    }
+
+    /// Mint the next handle value. Taken and released around the ioctl, never held across
+    /// one — the leaf-witness assert inside [`CharDevice::ioctl`] would fire if it were.
+    fn mint(&self) -> u32 {
+        let _leaf = leafwitness::Held::enter();
+        let mut o = self.objects.lock().expect("objects");
+        let h = o.next;
+        o.next = o.next.wrapping_add(1);
+        h
+    }
+
+    fn remember(&self, child: u32, parent: u32) {
+        let _leaf = leafwitness::Held::enter();
+        self.objects
+            .lock()
+            .expect("objects")
+            .parents
+            .insert(child, parent);
+    }
+
+    fn parent_of(&self, child: u32) -> Option<u32> {
+        let _leaf = leafwitness::Held::enter();
+        self.objects
+            .lock()
+            .expect("objects")
+            .parents
+            .get(&child)
+            .copied()
+    }
+
+    /// ★★★★★ **w288 — how many objects this connection has parented to `parent`.**
+    ///
+    /// The one query behind [`TSG_NOT_SINGLETON`]. It reads the table this file already
+    /// keeps for `NV_ESC_RM_FREE`'s `hObjectParent`, so it is a statement about **our own**
+    /// allocations and nothing else — it cannot see objects a different connection made, and
+    /// it does not need to: a `KEPLER_CHANNEL_GROUP_A` this connection just minted is not
+    /// nameable by anyone else.
+    ///
+    /// ⊘ A count and not a `bool`: *"the group has two channels"* and *"the group has
+    /// seventeen"* are the same refusal but not the same log line, and the refusal that
+    /// prints only a name cannot say how far the invariant drifted.
+    fn children_of(&self, parent: u32) -> usize {
+        let _leaf = leafwitness::Held::enter();
+        self.objects
+            .lock()
+            .expect("objects")
+            .parents
+            .values()
+            .filter(|&&p| p == parent)
+            .count()
+    }
+
+    fn pair(&self, object: u32, companion: u32) {
+        let _leaf = leafwitness::Held::enter();
+        self.objects
+            .lock()
+            .expect("objects")
+            .companions
+            .insert(object, companion);
+    }
+
+    fn companion_of(&self, object: u32) -> Option<u32> {
+        let _leaf = leafwitness::Held::enter();
+        self.objects
+            .lock()
+            .expect("objects")
+            .companions
+            .remove(&object)
+    }
+
+    /// ★ **Peek** the companion, leaving it in place — [`RmConnection::companion_of`]
+    /// removes, because its one caller is `free`.
+    ///
+    /// The distinction is load-bearing rather than stylistic. `alloc_vaspace` returns the
+    /// `NV01_MEMORY_VIRTUAL` *range* handle, and a channel group needs the
+    /// `FERMI_VASPACE_A` **space** handle it was built over. Reading it with the removing
+    /// accessor would make allocating a channel silently un-free the address space: the
+    /// range's later `free` would find no companion and leak a live VAS with no handle
+    /// anyone can name.
+    fn space_of(&self, range: u32) -> Option<u32> {
+        let _leaf = leafwitness::Held::enter();
+        let o = self.objects.lock().expect("objects");
+        // ★★★★★ **CONSTRAINT 26 — a BARE space is its own space.** Under the ownership
+        // split the handle a per-proc `Vas` carries IS the `FERMI_VASPACE_A`, because the
+        // isolate builds no range over it. Every caller that asks *"which address space is
+        // this?"* — `alloc_channel_in`'s TSG, `UVM_REGISTER_GPU_VASPACE` — then keeps
+        // working unchanged, and every caller that asks *"which range may I map through?"*
+        // is the one that must now refuse, which it does by name.
+        o.companions
+            .get(&range)
+            .copied()
+            .or_else(|| o.bare_spaces.contains(&range).then_some(range))
+    }
+
+    /// Is `h` a bare `FERMI_VASPACE_A` — one this connection allocated with no companion
+    /// range, i.e. one it may **not** map through?
+    fn is_bare_space(&self, h: u32) -> bool {
+        let _leaf = leafwitness::Held::enter();
+        self.objects
+            .lock()
+            .expect("objects")
+            .bare_spaces
+            .contains(&h)
+    }
+
+    /// Record `space` as bare. Called only by [`HostRmBackend::alloc_vaspace_bare`].
+    fn remember_bare_space(&self, space: u32) {
+        let _leaf = leafwitness::Held::enter();
+        self.objects
+            .lock()
+            .expect("objects")
+            .bare_spaces
+            .insert(space);
+    }
+
+    /// ★★★★★ **CONSTRAINT 30** — is `h` an address space this connection ADOPTED rather
+    /// than created? See [`Objects::adopted_spaces`].
+    fn is_adopted_space(&self, h: u32) -> bool {
+        let _leaf = leafwitness::Held::enter();
+        self.objects
+            .lock()
+            .expect("objects")
+            .adopted_spaces
+            .contains(&h)
+    }
+
+    /// Record `space` as adopted. Called only by the scratchpad's `adopt_vaspace`.
+    fn remember_adopted_space(&self, space: u32) {
+        let _leaf = leafwitness::Held::enter();
+        self.objects
+            .lock()
+            .expect("objects")
+            .adopted_spaces
+            .insert(space);
+    }
+
+    /// The isolate's own address space over `guest_range`, if one has been built.
+    fn exec_vas_of(&self, guest_range: u32) -> Option<u32> {
+        let _leaf = leafwitness::Held::enter();
+        self.objects
+            .lock()
+            .expect("objects")
+            .exec_vases
+            .get(&guest_range)
+            .copied()
+    }
+
+    /// Publish `exec` as the executor space for `guest_range`, and report **the winner**.
+    ///
+    /// ★ It returns whatever is in the table afterwards rather than `()`, because two pool
+    /// workers can mint concurrently: the loser must be told so it can free the space it
+    /// just allocated instead of leaking one that nothing will ever name. The check and the
+    /// insert are one critical section — doing them as two calls is the race with extra
+    /// steps.
+    fn remember_exec_vas(&self, guest_range: u32, exec: u32) -> u32 {
+        let _leaf = leafwitness::Held::enter();
+        *self
+            .objects
+            .lock()
+            .expect("objects")
+            .exec_vases
+            .entry(guest_range)
+            .or_insert(exec)
+    }
+
+    /// Take the executor space out of the table — `free`'s accessor, which is why it
+    /// removes.
+    fn forget_exec_vas(&self, guest_range: u32) -> Option<u32> {
+        let _leaf = leafwitness::Held::enter();
+        self.objects
+            .lock()
+            .expect("objects")
+            .exec_vases
+            .remove(&guest_range)
+    }
+
+    fn remember_channel(&self, chan: u32, parts: ChannelParts) {
+        let _leaf = leafwitness::Held::enter();
+        self.objects
+            .lock()
+            .expect("objects")
+            .channels
+            .insert(chan, parts);
+    }
+
+    fn channel_parts(&self, chan: u32) -> Option<ChannelParts> {
+        let _leaf = leafwitness::Held::enter();
+        self.objects
+            .lock()
+            .expect("objects")
+            .channels
+            .get(&chan)
+            .copied()
+    }
+
+    /// Run `f` against one channel's mappings.
+    ///
+    /// ★ A closure rather than a getter, because a [`VolatileRegion`] cannot leave the
+    /// mutex — and that is the correct shape rather than a limitation: the mapping is
+    /// shared by every worker on this connection, so the only safe borrow is a scoped one.
+    ///
+    /// ★★ R1: `f` must not block. Everything passed to it here is a `Relaxed` atomic load
+    /// or store into a mapped page — nanoseconds, no syscall — and an ioctl under this lock
+    /// would be the violation. The lock is deliberately *not* the handle table's, so a ring
+    /// access and an object operation cannot contend.
+    fn with_rings<T>(&self, chan: u32, f: impl FnOnce(&ChannelRings) -> T) -> Option<T> {
+        let _leaf = leafwitness::Held::enter();
+        let rings = self.rings.lock().expect("rings");
+        rings.get(&chan).map(f)
+    }
+
+    fn remember_rings(&self, chan: u32, rings: ChannelRings) {
+        let _leaf = leafwitness::Held::enter();
+        self.rings.lock().expect("rings").insert(chan, rings);
+    }
+
+    /// Drop one channel's mappings, returning whether there were any. Taken out of the map
+    /// and dropped **outside** the lock: `munmap` and `close` are syscalls, and R1 does not
+    /// have an exception for teardown.
+    fn forget_rings(&self, chan: u32) -> bool {
+        let taken = {
+            let _leaf = leafwitness::Held::enter();
+            self.rings.lock().expect("rings").remove(&chan)
+        };
+        taken.is_some()
+    }
+
+    fn forget_channel(&self, chan: u32) -> Option<ChannelParts> {
+        let _leaf = leafwitness::Held::enter();
+        self.objects.lock().expect("objects").channels.remove(&chan)
+    }
+
+    /// One `NV_ESC_RM_CONTROL` on a raw object handle.
+    ///
+    /// Split out of [`RmBackend::control`] because the channel verbs issue controls on
+    /// objects the *port* never sees — a channel group is an implementation detail of
+    /// `alloc_channel`, and there is no [`HostHandle`] for it to narrow.
+    fn raw_control(&self, object: u32, cmd: u32, payload: &mut [u8]) -> Result<(), RmError> {
+        let mut arg = [0u8; Nvos54Parameters::SIZE];
+        Nvos54Parameters {
+            h_client: self.client.raw(),
+            h_object: object,
+            cmd,
+            flags: 0,
+            params: 0,
+            params_size: payload.len() as u32,
+            status: 0,
+        }
+        .encode_into(&mut arg)
+        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_CONTROL as u8, arg.len())
+            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let mut patches: Vec<Indirect<'_>> = Vec::new();
+        if !payload.is_empty() {
+            patches.push(Indirect::new(16, payload));
+        }
+        self.ctl
+            .ioctl(req, &mut arg, &mut patches)
+            .map_err(|e| ioctl_error(&e))?;
+        let out = Nvos54Parameters::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        status_check(out.status)
+    }
+
+    /// One `NV_ESC_RM_MAP_MEMORY_DMA`. `at = Some(va)` sets
+    /// `NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE` and demands that address; `at = None` lets RM
+    /// choose and reports back where it put the mapping.
+    ///
+    /// ★★ `None` is **not** a weakening of `#102`. Address identity exists so a
+    /// *forwarded* pushbuffer's guest VAs resolve; it says nothing about memory the
+    /// isolate allocated for itself. A channel's own ring is exactly that.
+    ///
+    /// # ⊘⊘⊘ THE SENTENCE THAT USED TO FOLLOW WAS FALSE, AND IT WAS THE INVARIANT
+    ///
+    /// This paragraph read *"…memory the isolate allocated for itself, **which no guest
+    /// ever names**"*, and the owner's invariant — *"VMM state must never be placed where a
+    /// guest VA can name it"* — rested on it and on nothing else. It was **untrue as
+    /// placement** for as long as the copy-engine path existed. `plan_ce` →
+    /// `ce_channel(vas)` → `alloc_channel_on(vas, COPY0)` put the isolate's ring, USERD and
+    /// completion semaphore in **the one address space a guest channel is bound to**, at an
+    /// RM-chosen address — which makes it *unpredictable, not unnameable*, and
+    /// unpredictability is not a boundary
+    /// (`C: docs/design/s1_what_does_it_protect.md` §3).
+    ///
+    /// ⚠ **[measured 2026-08-10, `vh`, at `cc5d55c`]** a copy engine bound to that space
+    /// retired a read of the semaphore's VA and moved `0x00000001` — **the exact payload
+    /// the isolate's own last copy had released**, a number that channel has no other way
+    /// to obtain (`kayfabe-rm-ladder --executor-vas-alias`, arm C).
+    ///
+    /// ⇒ Closed by **separation**, not by a reservation: see [`ExecutorVas`]. ⊘ A reserved
+    /// window inside this space would have stopped RM's *allocator* from colliding with our
+    /// objects and done nothing about a guest **naming** them, because the mapping would
+    /// still be in the page tables the guest's engine walks. The two fixes are easy to
+    /// confuse and only one of them is this one. At `2ce8bd0` the same probe faults:
+    /// `Xid 31 … ENGINE CE0 … FAULT_PDE ACCESS_TYPE_VIRT_READ @ 0x1_20022000`.
+    ///
+    /// ★ The residual, still named and now *only* a collision: RM's own VA allocator and
+    /// our fixed publishes share the guest-facing space, so RM could place something where
+    /// a guest later demands a fixed mapping. That surfaces as a refused fixed map with an
+    /// RM status, which is loud; it is not silent corruption, and it is a different problem
+    /// from the one above.
+    ///
+    /// ⚠ **Amended by R26.** The first paragraph once said *"demanding a fixed address for
+    /// a ring would mean inventing a host-private VA window"*, which no longer describes
+    /// the tree: [`HostRmBackend::alloc_channel_at`] takes `Some` here and a **caller**
+    /// supplies the address, which is what a shadow-forwarded channel needs. What it got
+    /// right is that the *policy* is not this function's — it is still the caller's.
+    fn raw_map_dma(
+        &self,
+        h_dma: u32,
+        h_memory: u32,
+        len: u64,
+        at: Option<u64>,
+    ) -> Result<u64, RmError> {
+        self.raw_map_dma_flags(h_dma, h_memory, len, at, 0)
+    }
+
+    /// ★★★ [`RmConnection::raw_map_dma`] with **extra `NVOS46_PARAMETERS::flags` bits
+    /// OR-ed in** — every caller of the plain verb is byte-identical to what it sent
+    /// before, because `extra == 0` is the only value it passes.
+    ///
+    /// # ⊘ Why the extra bits are a parameter rather than four more `bool`s
+    ///
+    /// The flag word is a bag of unrelated bit-fields (`ogkm-580:
+    /// src/common/sdk/nvidia/inc/nvos.h:2030-2152`) and this crate deliberately understands
+    /// exactly two of them. A `bool` per field would be a claim that the port has an opinion
+    /// on each; a raw word says what is true — the **caller** names bits it has read the
+    /// header for, and everything else stays zero.
+    ///
+    /// ⚠ `DMA_OFFSET_FIXED` is still owned HERE and is not expressible through `extra`: it
+    /// is derived from `at` so that *"which address"* and *"is the address binding"* cannot
+    /// disagree. A caller that OR-ed the bit in by hand with `at = None` would be asking RM
+    /// to place a mapping at offset zero.
+    ///
+    /// # Errors
+    /// As [`RmConnection::raw_map_dma`].
+    fn raw_map_dma_flags(
+        &self,
+        h_dma: u32,
+        h_memory: u32,
+        len: u64,
+        at: Option<u64>,
+        extra: u32,
+    ) -> Result<u64, RmError> {
+        self.raw_map_dma_slice(h_dma, h_memory, 0, len, at, extra)
+    }
+
+    /// ★★★★★ **CONSTRAINT 26 — the same map, over a SLICE of the object.**
+    ///
+    /// `NVOS46_PARAMETERS::offset` is the offset **inside `hMemory`**, and it is the field
+    /// that makes *"one reserved object, many guest ranges"* expressible at all: the
+    /// scratchpad maps `[offset, offset+len)` of the one `NV01_MEMORY_LOCAL_USER` at the
+    /// guest's own VA, and does it once per coalesced run rather than once per object.
+    ///
+    /// ⊘ **This is where the `NVOS46` is built, and it is the ONLY place in the crate.**
+    /// [`RmConnection::raw_map_dma_flags`] delegates here with `offset = 0`, so constraint
+    /// 28's placement assertion below covers every fixed map in the tree — including this
+    /// one — rather than covering whichever sites remembered to compare.
+    ///
+    /// # Errors
+    /// As [`RmConnection::raw_map_dma`], plus [`RmError::PlacementRefused`] when RM placed
+    /// the mapping somewhere other than `at`.
+    fn raw_map_dma_slice(
+        &self,
+        h_dma: u32,
+        h_memory: u32,
+        offset: u64,
+        len: u64,
+        at: Option<u64>,
+        extra: u32,
+    ) -> Result<u64, RmError> {
+        // ★★★★★ **CONSTRAINT 26/29 — THE BARE-SPACE REFUSAL, AT THE ONE PLACE EVERY MAP
+        // GOES THROUGH.** `[measured from w745's own committed evidence, w746]`
+        //
+        // The same refusal has lived in the four `RmBackend` verbs (`map_gpu_va`,
+        // `unmap_gpu_va`, `map_local_at`, `unmap_local`) since constraint 26b — and
+        // `alloc_channel_in` does not call any of them. It reaches RM through
+        // [`RmConnection::raw_map_dma`] **directly**, so a channel birth mapping its own
+        // 64 KiB ring into a bare space could never increment that counter.
+        //
+        // ⊘⊘⊘ w745 pre-registered *"`RmInitAdapter failed!` ≥ 1 **and**
+        // `W745-BARE-SPACE-REFUSED` ≥ 1"* as the row that would confirm exactly this
+        // mechanism, measured `BARE-SPACE-REFUSED=0`, and read the third row — *"better
+        // than predicted: the emulated path did not need a map on this boot"*. **The zero
+        // was guaranteed by this function's own plumbing.** The map DID happen; RM answered
+        // it `0x51` and the isolate reported that instead, ten times
+        // (`traces/w745_split/…/run_w745split_qemu.log`, every `ENGINE-OBJECT … REFUSED`).
+        //
+        // ⇒ Restated HERE, where `Nvos46Parameters` is built and therefore where every map
+        // in the crate is expressible, so the counter cannot be zero by construction again.
+        // ⚠ It is a **widening of the same refusal, not a new policy**: the four verbs keep
+        // theirs (they refuse before building anything and say which verb asked), and this
+        // one is the backstop that makes their question total.
+        if self.is_bare_space(h_dma) {
+            return Err(RmError::Other(MAP_THROUGH_A_BARE_SPACE));
+        }
+        let mut arg = [0u8; Nvos46Parameters::SIZE];
+        // ★★★★★ **CONSTRAINT 28, HALF ONE — THE PAGE-SIZE FLAG MATCHES THE REQUEST.**
+        // `[measured w744]` `DMA_OFFSET_FIXED_TRUE` alone is **not** address identity: RM
+        // still picks a page size, and a big page cannot start at a 4 KiB boundary, so RM
+        // aligns the request DOWN and answers `NV_OK`. See
+        // [`kayfabe_abi::bringup::nvos46_page_size_flag`] for the measurement and for why
+        // the predicate is read off `(at, len)`. ⊘ OR-ed rather than assigned: a caller that
+        // named the bit itself (`map_local_at_with_flags`) keeps naming it, and the two can
+        // only agree.
+        let page_size = match at {
+            Some(a) => kayfabe_abi::bringup::nvos46_page_size_flag(a, len),
+            None => 0,
+        };
+        Nvos46Parameters {
+            h_client: self.client.raw(),
+            h_device: self.device,
+            h_dma,
+            h_memory,
+            offset,
+            length: len,
+            flags: extra
+                | page_size
+                | if at.is_some() {
+                    NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE
+                } else {
+                    0
+                },
+            flags2: 0,
+            kind_override: 0,
+            dma_offset: at.unwrap_or(0),
+            status: 0,
+        }
+        .encode_into(&mut arg)
+        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_MAP_MEMORY_DMA as u8, arg.len())
+            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        self.ctl
+            .ioctl(req, &mut arg, &mut [])
+            .map_err(|e| ioctl_error(&e))?;
+        let out = Nvos46Parameters::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        status_check(out.status)?;
+        // ★★★★★ **CONSTRAINT 28, HALF TWO — EVERY FIXED MAP ASSERTS ITS OWN PLACEMENT.**
+        //
+        // ⊘ *"A `Result<u64, RmError>` returns `Ok` here and tells you nothing"* — the
+        // constraint's own words. It is true of the **caller's** reading, not of this
+        // function, which has `dmaOffset` beside the status and is the one place every
+        // fixed map in the crate passes through. Asserting here makes *"RM relocated it"*
+        // impossible to observe as a success at ANY call site, including ones written
+        // later, rather than at the three that happen to compare today.
+        //
+        // ⚠ The mis-placed mapping is TORN DOWN before the refusal returns. Leaving it
+        // would be a live mapping at a VA nobody will ever name again — the same leak the
+        // relocation itself is, with a refusal on top of it.
+        if let Some(want) = at
+            && out.dma_offset != want
+        {
+            let _ = self.raw_unmap_dma(h_dma, out.dma_offset);
+            return Err(RmError::PlacementRefused {
+                want,
+                got: out.dma_offset,
+            });
+        }
+        Ok(out.dma_offset)
+    }
+
+    /// ★★★★★ **CONSTRAINT 26 — DUP A PER-PROC ISOLATE'S ADDRESS SPACE INTO THIS CLIENT.**
+    ///
+    /// `[measured w744, GA106, on two driver builds]` `NV_ESC_RM_DUP_OBJECT` of a
+    /// `FERMI_VASPACE_A` answers `status=0x0000`, and the two clients then share **one**
+    /// address space rather than getting a copy — proved by the falsifier, not assumed: a
+    /// map by the source client at a VA the destination had already taken was refused
+    /// `0x51`, with the control passing at an unclaimed VA
+    /// (`traces/w744_b1d_probe/run3_FINAL_ga106_580.126.20.log`, `B1D_SHARING=ONE SPACE`).
+    ///
+    /// ⊘ `NV01_MEMORY_VIRTUAL` is **not** dupable — `0x26 NV_ERR_INVALID_DEVICE` at the
+    /// device, `0x36` at the root — which is why the scratchpad builds its **own** range
+    /// inside the duped space (route B) instead of duping the source's.
+    ///
+    /// ## ⚠ THE ONE `hClientSrc` IN THE CRATE
+    ///
+    /// `handed` is a [`HandedVaSpace`], which cannot be built by a per-proc backend. See
+    /// [`mod@handed_vaspace`] for what that does and does not prove; the short form is that
+    /// F11's *"we cannot name a client we did not mint"* is **scoped to this call**, by a
+    /// type, rather than weakened by an allowlist entry.
+    ///
+    /// # Errors
+    /// Whatever RM refused the dup with.
+    fn raw_dup_object(&self, parent: u32, want: u32, handed: HandedVaSpace) -> Result<u32, RmError> {
+        let mut arg = [0u8; Nvos55Parameters::SIZE];
+        Nvos55Parameters {
+            h_client: self.client.raw(),
+            h_parent: parent,
+            h_object: want,
+            h_client_src: handed.src_client(),
+            h_object_src: handed.src_object(),
+            flags: 0,
+            status: 0,
+        }
+        .encode_into(&mut arg)
+        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_DUP_OBJECT as u8, arg.len())
+            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        self.ctl
+            .ioctl(req, &mut arg, &mut [])
+            .map_err(|e| ioctl_error(&e))?;
+        let out = Nvos55Parameters::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        status_check(out.status)?;
+        self.remember(out.h_object, parent);
+        Ok(out.h_object)
+    }
+
+    /// ★★★ **CONSTRAINT 26 — an `NV01_MEMORY_VIRTUAL` range over an address space this
+    /// client did not create.**
+    ///
+    /// [`HostRmBackend::alloc_vaspace_raw`] mints space and range together, which is right
+    /// for a client that owns both and useless here: the scratchpad's range has to be built
+    /// over a **duped-in** handle. `[measured w744]` `B1D_Q1C3_RANGE_IN_CLEAN_DUPED_SPACE
+    /// status=0x0000` — and it works **only** if the space is bare, because a second
+    /// whole-space range collides `0x19 INSERT_DUPLICATE_NAME`.
+    ///
+    /// # Errors
+    /// Whatever RM refused the range with.
+    fn raw_alloc_range_over(&self, h_va_space: u32) -> Result<u32, RmError> {
+        let mut range = [0u8; NvMemoryVirtualAllocationParams::SIZE];
+        NvMemoryVirtualAllocationParams {
+            offset: 0,
+            limit: 0,
+            h_va_space,
+        }
+        .encode_into(&mut range)
+        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let want = self.mint();
+        let h = self.raw_alloc(self.device, want, NV01_MEMORY_VIRTUAL, &mut range)?;
+        self.remember(h, self.device);
+        // ⊘ Paired with the DUPED space, not with the source's: freeing this range must
+        // free the dup (this client's reference), and must NOT reach into the per-proc
+        // client's namespace, which is not ours to free.
+        self.pair(h, h_va_space);
+        Ok(h)
+    }
+
+    /// One `NV_ESC_RM_UNMAP_MEMORY_DMA`, undoing a [`RmConnection::raw_map_dma`].
+    fn raw_unmap_dma(&self, h_dma: u32, gpu_va: u64) -> Result<(), RmError> {
+        let mut arg = [0u8; Nvos47Parameters::SIZE];
+        Nvos47Parameters {
+            h_client: self.client.raw(),
+            h_device: self.device,
+            h_dma,
+            h_memory: 0,
+            flags: 0,
+            dma_offset: gpu_va,
+            size: 0,
+            status: 0,
+        }
+        .encode_into(&mut arg)
+        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_UNMAP_MEMORY_DMA as u8, arg.len())
+            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        self.ctl
+            .ioctl(req, &mut arg, &mut [])
+            .map_err(|e| ioctl_error(&e))?;
+        let out = Nvos47Parameters::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        status_check(out.status)
+    }
+
+    /// ★★★ R14 — **CPU-map an RM memory object.** Two syscalls, in an order neither of
+    /// them documents, plus a descriptor whose *kind* and whose *freshness* both matter.
+    ///
+    /// ```text
+    ///   node = openat(dev, "nvidia<N>")          a FRESH per-GPU node, per mapping
+    ///   NV_ESC_RM_MAP_MEMORY on the CONTROL node, naming node's descriptor NUMBER
+    ///   mmap(node, len, offset = 0)
+    /// ```
+    ///
+    /// Four facts, each of which is a different failure if got wrong:
+    ///
+    /// 1. **The escape goes on the control node** — it is `NV_CTL_DEVICE_ONLY`
+    ///    (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/escape.c:521`) — while the `mmap`
+    ///    goes on the *device* node. The two halves of one mapping use two different files.
+    /// 2. **The descriptor's kind must match what is being mapped.** RM chooses the device
+    ///    node's state for an address inside a BAR and the control node's for system memory
+    ///    (`ogkm-580: .../osapi.c:2270-2279`); `nv_get_file_private` then refuses a
+    ///    descriptor of the other kind (`ogkm-580: kernel-open/nvidia/nv-usermap.c:45-47`).
+    ///    ⊘⊘ **THIS LINE USED TO READ *"everything mapped here is device-local, so it is
+    ///    always the per-GPU node"*, AND THAT SENTENCE WAS THE BUG.** It was true when it
+    ///    was written and stopped being true the moment `alloc_notifier_mem` allocated an
+    ///    `NV01_MEMORY_SYSTEM` object; nothing in the type system noticed, because the node
+    ///    was hardcoded three lines into the body. The kind is a **parameter** now — see
+    ///    [`MapNode`] — precisely so a sysmem caller cannot inherit a device-local
+    ///    assumption by default.
+    /// 3. **A fresh node per mapping.** The context is one-shot: a second registration on a
+    ///    descriptor that already has one is `NV_ERR_STATE_IN_USE`
+    ///    (`ogkm-580: kernel-open/nvidia/nv-usermap.c:53-57`). Reusing `self.gpu` would work
+    ///    exactly once and then start failing on the second channel, which is the kind of
+    ///    bug that looks like a resource leak.
+    /// 4. **The `mmap` offset is zero and the length is exact** — the driver refuses any
+    ///    other offset with `EINVAL` and any other length with `ENXIO`
+    ///    (`ogkm-580: kernel-open/nvidia/nv-mmap.c:533-536`, `:562-565`).
+    ///
+    /// The node is returned alongside the region and must be kept: the mapping outlives the
+    /// descriptor on Linux, but `NV_ESC_RM_UNMAP_MEMORY` needs it, and dropping it early
+    /// makes the teardown unexpressible.
+    fn map_cpu(
+        &self,
+        h_memory: u32,
+        len: u64,
+        cache: CachePolicy,
+    ) -> Result<(CharDevice, VolatileRegion), RmError> {
+        self.map_cpu_windowed_on(MapNode::Gpu, h_memory, len, len, cache)
+    }
+
+    /// [`Self::map_cpu`] for an object whose backing decides the node — see [`MapNode`].
+    ///
+    /// ⊘ A separate entry point rather than a default argument, because the whole defect
+    /// this fixes was a *default* that was correct for every caller that existed and wrong
+    /// for the first one that did not.
+    fn map_cpu_on(
+        &self,
+        node: MapNode,
+        h_memory: u32,
+        len: u64,
+        cache: CachePolicy,
+    ) -> Result<(CharDevice, VolatileRegion), RmError> {
+        self.map_cpu_windowed_on(node, h_memory, len, len, cache)
+    }
+
+    /// [`Self::map_cpu`] with the **ioctl length and the `mmap` length given separately**.
+    ///
+    /// ★★★ **They are not always the same number, and assuming they were cost `#128` a
+    /// wrong finding.** The escape's length is bounded by the RM resource's own size:
+    /// `gpuresMap_IMPL` asks `gpuresGetRegBaseOffsetAndSize` and refuses anything past it
+    /// with `NV_ERR_INVALID_LIMIT` (`ogkm-580: src/nvidia/src/kernel/gpu/gpu_resource.c:126-143`).
+    /// The `mmap` length, by contrast, must be a whole number of host pages — Linux's
+    /// requirement, and independently ours in `Mapping::anywhere`. For an
+    /// [`NV01_TIMER`](kayfabe_abi::submit::NV01_TIMER) those two are `0x414` and `0x1000`,
+    /// so **no single value can satisfy both**: `0x414` never reaches the driver and
+    /// `0x1000` is refused by it.
+    ///
+    /// The two are reconciled inside RM rather than by the caller:
+    /// `nv_align_mmap_offset_length` rounds the range it registers up to a page
+    /// (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/osapi.c:1976-1986`), and
+    /// `nvidia_mmap_helper` then compares the `mmap` length against that **rounded** size
+    /// (`ogkm-580: kernel-open/nvidia/nv-mmap.c:560-565`). So the correct call passes the
+    /// object's true size to the ioctl and the page-rounded size to `mmap`.
+    ///
+    /// ⚠ Every pre-existing caller passes the same value twice and is unchanged by this:
+    /// their objects are already page multiples. This exists for the one object whose size
+    /// is not.
+    fn map_cpu_windowed_on(
+        &self,
+        which: MapNode,
+        h_memory: u32,
+        register_len: u64,
+        mmap_len: u64,
+        cache: CachePolicy,
+    ) -> Result<(CharDevice, VolatileRegion), RmError> {
+        // ★ Before anything can fail. See `RmConnection::cpu_maps`: the measurement is of
+        // attempts, so an early `?` must not be able to hide one.
+        self.cpu_maps
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        // ★ w393 — the registration is its own verb now, because the armed node is a thing
+        // this crate hands to ANOTHER process without ever `mmap`ing it here
+        // (`HostRmBackend::export_device_view`). Everything below this line is the `mmap`.
+        let (node, _cookie) =
+            self.arm_cpu_view(which, h_memory, 0, register_len, ViewAccess::ReadWrite)?;
+
+        // ★ `VolatileRegion`, not `MappedRegion`, and the choice is the type system doing
+        // the work: this is memory **hardware writes**, so every access must be a naturally
+        // aligned atomic of at most eight bytes. A bulk `read_into` of USERD while the GPU
+        // is advancing `GP_GET` is exactly the tearing `VolatileRegion` exists to forbid.
+        //
+        // ★★ The cache policy is a REQUIREMENT that this layer cannot check, and says so:
+        // `Backing::DeviceFile`'s attainable policy is `None` because one NVIDIA descriptor
+        // yields three different attributes depending on the range, so
+        // `require_attainable` CANNOT refuse a wrong requirement over a device fd. That is
+        // exactly why it is a parameter and not a constant here: a hardcoded
+        // write-combining is right for a framebuffer object and **wrong for the doorbell**,
+        // which is a BAR0 register range NVIDIA maps uncached unconditionally
+        // (`ogkm-580: kernel-open/nvidia/nv-mmap.c:567-574` vs `:575-597`), and no test in
+        // this workspace could have failed on the difference. The obligation therefore sits
+        // with each call site, which is the least dishonest place available.
+        let region = VolatileRegion::map(
+            Backing::DeviceFile { fd: node.as_fd() },
+            mmap_len,
+            cache,
+            HostPageSize::query(),
+        )
+        .map_err(|e| region_error(&e))?;
+        Ok((node, region))
+    }
+
+    /// ★★★★★ **w393 — the first half of [`Self::map_cpu_windowed_on`], as a verb: open a
+    /// FRESH node and register an `mmap` context for `[offset, offset+len)` of `h_memory`
+    /// against it, and hand the ARMED NODE back un-`mmap`ed.**
+    ///
+    /// Split out because the node is now something this process may hand to **another**
+    /// process — the VMM — which performs the `mmap` itself and installs a guest memslot
+    /// over it (`kayfabe_isolate::DeviceView`; the host-visible half of
+    /// `DEVICE_LOCAL | HOST_VISIBLE`). Nothing on the driver's framebuffer `mmap` path names
+    /// the calling process (`ogkm-580: kernel-open/nvidia/nv-mmap.c:505-641`, a reading),
+    /// so the node's `struct file` carries the whole context wherever the descriptor goes.
+    ///
+    /// ⊘ A FRESH node either way — see fact 3 on [`Self::map_cpu_windowed_on`]. `self.ctl`
+    /// is the connection's long-lived control descriptor and already carries RM state;
+    /// registering a one-shot mmap context on it would work once and then answer
+    /// `NV_ERR_STATE_IN_USE`, so the `Ctl` arm opens its own `nvidiactl` rather than
+    /// borrowing that one.
+    ///
+    /// `offset` is the offset **within the object** (`NVOS33_PARAMETERS::offset`,
+    /// `kayfabe_abi::submit::Nvos33ParametersWithFd::offset`); every pre-existing caller
+    /// passes `0` through [`Self::map_cpu_windowed_on`] and is unchanged.
+    /// ⊘ **Returns the `pLinearAddress` cookie beside the node, and that is not cosmetic.**
+    /// `NV_ESC_RM_UNMAP_MEMORY` identifies a mapping by that cookie, so a map path that
+    /// status-checks the reply and drops it has made the view **unreleasable** — and
+    /// `[measured w722]` an unreleased view keeps its BAR1 aperture for the life of the process,
+    /// silently.
+    fn arm_cpu_view(
+        &self,
+        which: MapNode,
+        h_memory: u32,
+        offset: u64,
+        len: u64,
+        access: ViewAccess,
+    ) -> Result<(CharDevice, u64), RmError> {
+        let node = match which {
+            MapNode::Gpu => {
+                let name = CString::new(format!("nvidia{}", self.gpu_index))
+                    .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+                CharDevice::openat_mode(&self.dev, &name, access.dev_access())
+                    .map_err(|e| ioctl_error(&e))?
+            }
+            MapNode::Ctl => CharDevice::openat_mode(&self.dev, c"nvidiactl", access.dev_access())
+                .map_err(|e| ioctl_error(&e))?,
+        };
+        let mut arg = [0u8; Nvos33ParametersWithFd::SIZE];
+        Nvos33ParametersWithFd {
+            h_client: self.client.raw(),
+            h_device: self.device,
+            h_memory,
+            offset,
+            length: len,
+            p_linear_address: 0,
+            status: 0,
+            flags: access.os33_flags(),
+            fd: node.fd_number(),
+        }
+        .encode_into(&mut arg)
+        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_MAP_MEMORY, arg.len())
+            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        self.ctl
+            .ioctl(req, &mut arg, &mut [])
+            .map_err(|e| ioctl_error(&e))?;
+        let out =
+            Nvos33ParametersWithFd::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        status_check(out.status)?;
+        Ok((node, out.p_linear_address))
+    }
+
+    /// ★★★★★ **GIVE A CPU VIEW'S BAR1 APERTURE BACK** — `NV_ESC_RM_UNMAP_MEMORY` (`0x4F`).
+    ///
+    /// `[measured w722, GA106]` Over rounds mapping **fresh** offsets each time: with this ioctl,
+    /// 224 MiB every round, 5/5. Without it — `munmap` + `close` alone — round 0 gets 224 MiB and
+    /// rounds 1–4 get **zero**. ⇒ **Closing the node is not a release.**
+    ///
+    /// ⊘ On the **control** device, never a per-GPU node: `NV_CTL_DEVICE_ONLY(nv)`
+    /// (`ogkm-610: escape.c:631`). And the plain SDK struct, **not** an fd wrapper
+    /// (`escape.c:313`) — the map's asymmetry, which would be silent if got wrong.
+    ///
+    /// # Errors
+    /// Whatever RM puts in `status`. ⚠ Which is **the only place a refusal appears**: `ioctl(2)`
+    /// returns 0 and leaves `errno` untouched even when the unmap fails.
+    fn release_cpu_view(&self, r: crate::export::CpuViewRelease) -> Result<(), RmError> {
+        let mut arg = [0u8; Nvos34Parameters::SIZE];
+        Nvos34Parameters {
+            // ⊘ F11: this isolate's OWN client and device, read here — never carried in from the
+            // release key. See `CpuViewRelease`'s comment for the invariant that forbids it.
+            h_client: self.client.raw(),
+            h_device: self.device,
+            h_memory: r.h_memory,
+            p_linear_address: r.p_linear_address,
+            status: 0,
+            flags: 0,
+        }
+        .encode_into(&mut arg)
+        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_UNMAP_MEMORY, arg.len())
+            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        self.ctl
+            .ioctl(req, &mut arg, &mut [])
+            .map_err(|e| ioctl_error(&e))?;
+        let out = Nvos34Parameters::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        status_check(out.status)
+    }
+
+    /// Allocate `len` bytes of **device-local** memory — the only kind a ring, a USERD
+    /// block or a semaphore can be built from.
+    ///
+    /// Not [`RmBackend::alloc_sysmem`]: that verb asks for `MAPPING_NO_MAP`, which makes
+    /// the object deliberately un-CPU-mappable. See
+    /// `kayfabe_abi::submit::NV01_MEMORY_LOCAL_USER`.
+    /// ★★★★★ **RESERVE THE GUEST'S WHOLE VIDEO MEMORY AS ONE OBJECT** —
+    /// `docs/design/gpga_is_one_reserved_object.md`.
+    ///
+    /// Differs from [`Self::alloc_device_local`] in exactly the two ways a multi-gigabyte
+    /// request needs, and both were wrong for it:
+    ///
+    /// 1. **Non-contiguous.** A contiguous multi-gigabyte request is a far stronger demand
+    ///    and fails on merely *fragmented* free memory — refusing the boot for a reason that
+    ///    is not capacity. Contiguity buys nothing: an object is addressed by OFFSET, so
+    ///    slicing GPGA is arithmetic and the physical layout is RM's business.
+    /// 2. **Page-aligned, not `len`-aligned.** `alloc_device_local` passes `alignment: len`,
+    ///    which for an 8 GiB request demands an 8 GiB-aligned base. Nothing needs that.
+    ///
+    /// # Errors
+    /// Whatever RM refused with. ⊘ A refusal here means **the VM does not start** — that is
+    /// the design's central promise, and it is what makes an out-of-memory on the refresh
+    /// path (where we cannot recover) impossible rather than unlikely.
+    pub fn reserve_gpga(&self, len: u64) -> Result<u32, RmError> {
+        let mut params = [0u8; NvMemoryAllocationParams::SIZE];
+        NvMemoryAllocationParams {
+            owner: self.client.raw(),
+            kind: 0,
+            attr: kayfabe_abi::submit::ATTR_NONCONTIGUOUS_VIDMEM,
+            size: len,
+            alignment: 4096,
+        }
+        .encode_into(&mut params)
+        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let want = self.mint();
+        let h = self.raw_alloc(self.device, want, NV01_MEMORY_LOCAL_USER, &mut params)?;
+        self.remember(h, self.device);
+        Ok(h)
+    }
+
+    fn alloc_device_local(&self, len: u64) -> Result<u32, RmError> {
+        let mut params = [0u8; NvMemoryAllocationParams::SIZE];
+        NvMemoryAllocationParams {
+            owner: self.client.raw(),
+            kind: 0,
+            attr: ATTR_CONTIGUOUS_VIDMEM,
+            size: len,
+            alignment: len,
+        }
+        .encode_into(&mut params)
+        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let want = self.mint();
+        let h = self.raw_alloc(self.device, want, NV01_MEMORY_LOCAL_USER, &mut params)?;
+        self.remember(h, self.device);
+        Ok(h)
+    }
+
+    /// ★★★ **R25 — describe memory this process already owns to RM, so the host GPU can
+    /// reach it.** `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` over `[offset, offset+len)` of
+    /// `region`.
+    ///
+    /// This is the one primitive that makes *guest* RAM addressable by the host GPU: the
+    /// VMM maps a slice of the guest's `memfd`, the isolate maps the same pages, and this
+    /// call turns that range into an RM memory object that
+    /// [`RmBackend::map_gpu_va`](kayfabe_isolate::RmBackend::map_gpu_va) can then place in
+    /// a host VAS. Everything after it is machinery that already exists.
+    ///
+    /// ## The four things that are easy to get wrong
+    ///
+    /// **INFERRED** unless a row says otherwise — three are readings of the C artifact and
+    /// of `ogkm`, and the fourth is a property of this crate's own type. What has been
+    /// **MEASURED** is that the assembled call works:
+    /// `traces/real_ga106/rmladder_r25_osdescriptor_real_ga106.txt` (RTX 3060 GA106,
+    /// 580.159.04, `REV_UNDER_TEST=40d44db84`). ⊘ That run does not isolate any individual
+    /// row below — it says the four together are sufficient, never that each is necessary.
+    ///
+    /// 1. **The address never crosses a crate boundary.** `pMemory` is filled in by
+    ///    [`Indirect::describing`] inside `kayfabe-linux-raw` and scrubbed back to zero
+    ///    before this function can observe it — §4.2.1's rule, and the reason
+    ///    [`Nvos02ParametersWithFd::p_memory`]'s own docs forbid this crate from writing it.
+    /// 2. **The node.** `NV_ESC_RM_ALLOC_MEMORY` is `NV_ACTUAL_DEVICE_ONLY`, so it goes on
+    ///    the per-GPU node exactly as [`RmBackend::alloc_sysmem`](kayfabe_isolate::RmBackend::alloc_sysmem)
+    ///    does. The C found the same thing the same way: *"ctl fd -> EINVAL"*
+    ///    (`C: nvkvm_gpu_emul.c:7530-7532`).
+    /// 3. **`REGISTER_FD` is a prerequisite** — without it RM answers `0x23
+    ///    INVALID_CLIENT` (`C: nvkvm_gpu_emul.c:7503-7509`). ⊘ **Already done, and this is
+    ///    not a port of it:** [`RmConnection::open`]'s R3 binds the GPU node to the control
+    ///    session for the connection's whole life, so by the time any caller reaches here
+    ///    the prerequisite is a structural property of the type rather than a step. Porting
+    ///    the C's lazy `m2_gpu_registered` flag would add a second, weaker copy of an
+    ///    invariant we already hold.
+    /// 4. ★ **`MAPPING_NO_MAP` is required, not an optimisation.** Without it the driver
+    ///    tries to build an `mmap` context around a describe-only allocation and returns
+    ///    `EINVAL` (`C: nvkvm_gpu_emul.c:7519-7524`). The flag word is `0x40001010` and is
+    ///    reassembled here from four named constants, pinned by
+    ///    `nvos02_flags_encode_a_value_into_their_field`.
+    ///
+    /// ⚠ **The pages stay pinned until the object is freed.** Dropping `region` unmaps this
+    /// process's view; it does not release RM's reference. Free the returned handle.
+    fn alloc_os_descriptor(
+        &self,
+        region: &kayfabe_linux_raw::MappedRegion,
+        offset: HostOffset,
+        len: u64,
+    ) -> Result<u32, RmError> {
+        if len == 0 {
+            return Err(RmError::NoMemory);
+        }
+        let want = self.mint();
+        let mut arg = [0u8; Nvos02ParametersWithFd::SIZE];
+        Nvos02ParametersWithFd {
+            h_root: self.client.raw(),
+            h_object_parent: self.device,
+            h_object_new: want,
+            h_class: NV01_MEMORY_SYSTEM_OS_DESCRIPTOR,
+            flags: NVOS02_FLAGS_LOCATION_PCI
+                | NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS
+                | NVOS02_FLAGS_COHERENCY_CACHED
+                | NVOS02_FLAGS_MAPPING_NO_MAP,
+            // ★ Left ZERO on purpose. `Indirect` writes the address and scrubs it; a value
+            // here would be overwritten before the syscall and zeroed after it, so the only
+            // effect of setting it would be to make a reader think this crate mints
+            // addresses.
+            p_memory: 0,
+            pad1: 0,
+            // `limit`, not `length` — the ABI's off-by-one, same as `alloc_sysmem`.
+            limit: len - 1,
+            status: 0,
+            fd: -1,
+        }
+        .encode_into(&mut arg)
+        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_ALLOC_MEMORY, arg.len())
+            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let mut describe =
+            [
+                Indirect::describing(Nvos02ParametersWithFd::P_MEMORY_OFFSET, region, offset, len)
+                    .map_err(|e| region_error(&e))?,
+            ];
+        self.gpu
+            .ioctl(req, &mut arg, &mut describe)
+            .map_err(|e| ioctl_error(&e))?;
+        let out =
+            Nvos02ParametersWithFd::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        status_check(out.status)?;
+        self.remember(out.h_object_new, self.device);
+        Ok(out.h_object_new)
+    }
+
+    fn forget(&self, child: u32) {
+        let _leaf = leafwitness::Held::enter();
+        self.objects.lock().expect("objects").parents.remove(&child);
+    }
+}
+
+/// ★★★ The subchannel a copy engine's methods go on — **4, and it is load-bearing**
+/// (`ogkm-580: kernel-open/nvidia-uvm/cla06fsubch.h:30`,
+/// `NVA06F_SUBCHANNEL_COPY_ENGINE`).
+///
+/// It looks arbitrary and is not. UVM's own comment
+/// (`ogkm-580: kernel-open/nvidia-uvm/uvm_maxwell_ce.c:31-36`) says subchannel 4 is
+/// *"required to match CE usage on GRCE"* — and GRCE is exactly what this port gets:
+/// `NV2080_ENGINE_TYPE_COPY0` was measured (rung 1, `--engines`) to land on **runlist 0**,
+/// the graphics runlist, because on this architecture the first two logical copy engines
+/// *are* the graphics copy engines.
+///
+/// ## ★★ MEASURED, RTX 3090 / 580.159.04, 2026-07-30 — and it corrected a wrong diagnosis
+///
+/// Rung 4's first failure was attributed to `SET_OBJECT` carrying an object handle instead
+/// of a class id. That reading was **wrong**, and the bite that was supposed to confirm it
+/// disconfirmed it instead. Isolated, one variable at a time:
+///
+/// | subchannel | `SET_OBJECT` data | result |
+/// |---|---|---|
+/// | 0 | the class id, correct | `GP_GET` advanced to `GP_PUT`, **semaphore never released, destination unchanged** |
+/// | 4 | the class id, correct | 4096 bytes copied, semaphore released |
+/// | 4 | a garbage handle (`0xCAFE_000E`) | **4096 bytes copied anyway** |
+///
+/// So on this part, with the channel group bound to `COPY0`, the *subchannel* routes and
+/// `SET_OBJECT`'s data does not appear to. The failure shape is the dangerous one: the
+/// entry **is fetched** — `GP_GET` moves — and the methods simply evaporate. No fault, no
+/// Xid, no RM status; only the destination not changing says anything happened wrongly.
+const CE_SUBCHANNEL: u32 = 4;
+
+/// One copy engine request, as the arguments [`ce_pushbuffer`] needs.
+///
+/// A struct because six positional arguments of which four are addresses is exactly how
+/// a source and a destination get swapped.
+#[derive(Debug, Clone, Copy)]
+struct CePush {
+    /// The **class id** for `SET_OBJECT` — the host profile's
+    /// [`HostClasses::ce_object`] (`0xc7b5` on the pinned GA10x profile, `0xc8b5` on a
+    /// Hopper host), and **not** the engine object's handle.
+    ///
+    /// `NVC56F_SET_OBJECT_NVCLASS` is bits `15:0` of the data word
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:68-71`), i.e. a *class
+    /// number*, and it is what UVM sends
+    /// (`ogkm-580: kernel-open/nvidia-uvm/uvm_maxwell_ce.c:36`, `rm_info.ceClass`).
+    ///
+    /// ★ **Honest limit: this field was NOT observed to matter.** A deliberately wrong
+    /// value here still produced a correct 4096-byte copy on RTX 3090 / 580.159.04 — see
+    /// [`CE_SUBCHANNEL`] for the table. The class is sent because that is what the
+    /// encoding and the driver's own client say it is, not because a measurement here
+    /// distinguishes it, and claiming otherwise would be attributing a green run to the
+    /// wrong cause.
+    ///
+    /// ★★ **Typed [`CeObjectClass`], not `u32`** (`#166`). This field is the pushbuffer
+    /// half of the role wiring, and the bite that put `classes.gpfifo_channel()` here
+    /// used to compile and stay green. It cannot now: the only value that fits is one a
+    /// [`HostClasses`] handed back **from the `ce_object` role**.
+    class_id: CeObjectClass,
+    /// Source GPU VA.
+    src: u64,
+    /// Destination GPU VA.
+    dst: u64,
+    /// Bytes.
+    len: u32,
+    /// Where the engine releases its completion payload.
+    sem_va: u64,
+    /// The payload it releases.
+    payload: u32,
+    /// ★★★★★ **w283 — the GUEST's own declared release, appended BEHIND ours.**
+    ///
+    /// `Some((va, payload))` ⇒ three extra methods after our own `LAUNCH_DMA`: a second
+    /// `SET_SEMAPHORE_A/B/PAYLOAD` naming the guest's address and the guest's literal, and a
+    /// second `LAUNCH_DMA` with [`ce::LAUNCH_TRANSFER_NONE`] — a **release-only** launch,
+    /// which is the same shape the guest's own driver uses for a bare completion
+    /// (`kayfabe_arch::PushMethod::CeRelease`, UVM's `channel_init` push).
+    ///
+    /// # ★★★ THE ORDER IS THE WHOLE SAFETY ARGUMENT
+    ///
+    /// It goes **after** the copy's own `LAUNCH_DMA` and **before** ours is waited on. A
+    /// copy engine executes a pushbuffer in submission order, so the guest's payload cannot
+    /// land before the guest's bytes have. And because our own release is emitted **last**,
+    /// `await_semaphore` returning means both have retired — so the caller's `RETIRED`
+    /// verdict covers the guest's release too, rather than racing it.
+    ///
+    /// ⊘ **Nothing here is a CPU store.** The payload is the guest's literal, written by the
+    /// engine, at the address the guest named, after the work. `ce_executor_tree.md`'s rule
+    /// 1 forbids *"signalling completion for work that did not happen"*; there is no ordering
+    /// of these methods in which that is expressible.
+    guest_release: Option<(u64, u32)>,
+}
+
+/// ★★ Build the pushbuffer for one copy-engine copy — **pure**, so it is testable with no
+/// GPU and no RM connection, which is the only part of rung 4 that can be.
+///
+/// Five method runs, in submission order:
+///
+/// 1. `SET_OBJECT` — binds the engine object to subchannel 0. Without it the subchannel
+///    holds whatever it last held, and the address methods below go to that class.
+/// 2. `OFFSET_IN_UPPER … OFFSET_OUT_LOWER` — four consecutive dwords, so one header.
+/// 3. `LINE_LENGTH_IN`, `LINE_COUNT` — a pair. With `MULTI_LINE_ENABLE_FALSE`,
+///    `LINE_LENGTH_IN` is a **byte** count and `LINE_COUNT` is 1.
+/// 4. `SET_SEMAPHORE_A/B/PAYLOAD` — a run of three. `_A` is address bits 48:32, `_B` is
+///    31:0 (`ogkm-580: clc7b5.h:47-52`), which is the reverse of the host-FIFO
+///    semaphore's LO/HI order and is a real trap.
+/// 5. `LAUNCH_DMA` — the flags, last, because it is what starts the copy.
+///
+/// ★ The address `_UPPER` fields are **17 bits** (`clc7b5.h:162`), not eight like the
+/// GPFIFO entry's. The check is still here because a truncated destination is a copy into
+/// somebody else's page, and it succeeds.
+fn ce_pushbuffer(p: CePush) -> Result<Vec<u32>, RmError> {
+    let bad = || RmError::Other(BAD_ENCODE);
+    for va in [p.src, p.dst, p.sem_va] {
+        if va >> 49 != 0 {
+            return Err(bad());
+        }
+    }
+    if !p.sem_va.is_multiple_of(4) {
+        return Err(bad());
+    }
+    // ★★★★★ w283 — the guest's release gets the SAME two checks as ours, and they are
+    // applied to the GUEST's number. ⊘ Refused, never clamped and never dropped: a guest
+    // release we silently skipped would leave the guest polling forever with every one of
+    // our own rows green, which is the exact shape of a wall nobody can attribute.
+    if let Some((va, _)) = p.guest_release
+        && (va >> 49 != 0 || !va.is_multiple_of(4))
+    {
+        return Err(bad());
+    }
+    let flags = ce::LAUNCH_TRANSFER_NON_PIPELINED
+        | ce::LAUNCH_FLUSH_ENABLE
+        | ce::LAUNCH_SEMAPHORE_RELEASE_ONE_WORD
+        | ce::LAUNCH_SRC_PITCH
+        | ce::LAUNCH_DST_PITCH
+        | ce::LAUNCH_MULTI_LINE_DISABLE
+        | ce::LAUNCH_SRC_VIRTUAL
+        | ce::LAUNCH_DST_VIRTUAL;
+    // ★ A release-only launch: same semaphore/flush semantics, `TRANSFER_TYPE_NONE`, and
+    // no pitch/line flags because there is no transfer for them to describe.
+    let release_only_flags =
+        ce::LAUNCH_TRANSFER_NONE | ce::LAUNCH_FLUSH_ENABLE | ce::LAUNCH_SEMAPHORE_RELEASE_ONE_WORD;
+    let sub = CE_SUBCHANNEL;
+    let mut out = vec![
+        method_header_inc(sub, SET_OBJECT, 1).ok_or_else(bad)?,
+        p.class_id.ce_object_id().0,
+        method_header_inc(sub, ce::OFFSET_IN_UPPER, 4).ok_or_else(bad)?,
+        (p.src >> 32) as u32,
+        (p.src & 0xFFFF_FFFF) as u32,
+        (p.dst >> 32) as u32,
+        (p.dst & 0xFFFF_FFFF) as u32,
+        method_header_inc(sub, ce::LINE_LENGTH_IN, 2).ok_or_else(bad)?,
+        p.len,
+        1,
+        method_header_inc(sub, ce::SET_SEMAPHORE_A, 3).ok_or_else(bad)?,
+        (p.sem_va >> 32) as u32,
+        (p.sem_va & 0xFFFF_FFFF) as u32,
+        p.payload,
+        method_header_inc(sub, ce::LAUNCH_DMA, 1).ok_or_else(bad)?,
+        flags,
+    ];
+    // ★★★★★ w283 — THE GUEST'S OWN RELEASE, appended behind ours. See `CePush::guest_release`
+    // for why the order is the safety argument and why this is not a CPU store.
+    if let Some((va, payload)) = p.guest_release {
+        out.extend_from_slice(&[
+            method_header_inc(sub, ce::SET_SEMAPHORE_A, 3).ok_or_else(bad)?,
+            (va >> 32) as u32,
+            (va & 0xFFFF_FFFF) as u32,
+            payload,
+            method_header_inc(sub, ce::LAUNCH_DMA, 1).ok_or_else(bad)?,
+            // ⊘ `LAUNCH_TRANSFER_NONE`, so this launch moves NO bytes and only releases.
+            // Re-using the copy's flags would re-run the copy — idempotent here and a
+            // silent doubling of every transfer, which is not a property to rely on.
+            release_only_flags,
+        ]);
+    }
+    Ok(out)
+}
+
+/// The runlist an [`EngineKind`] channel belongs on, as an `NV2080_ENGINE_TYPE_*`.
+///
+/// ★★ **This function is the seam audit's GR-1**, and the reason the port makes `engine`
+/// an argument of `alloc_channel` rather than something the adapter guesses. There is
+/// exactly ONE channel class per architecture — a graphics channel and a copy channel are
+/// both [`HostClasses::gpfifo_channel`] — so this value is the *only* thing that decides which
+/// runlist the channel lands on. The C's proven failure is `engineType = 0`: the channel
+/// binds to runlist 0, the schedule answers `NV_ERR_NOT_READY`, and the visible symptom is
+/// `cuCtxCreate` returning 401 several layers away (`dma_copy_class_alloc_params`).
+///
+/// [`EngineKind::Other`] gets **no answer**, deliberately: an engine the core routes but
+/// does not interpret has no runlist this table can name, and picking one would be picking
+/// wrongly and silently. Its caller refuses.
+///
+/// ## ★★★ MEASURED on RTX 3060 / 580.159.04, because the first run looked like the bug
+///
+/// A CE channel and a GR channel both came back with **runlist 0**, which is precisely
+/// what `engineType = 0` looks like — so the sweep below was run before believing either
+/// reading (`--engines`, `R13b`). The engine type in the alloc params was varied and the
+/// runlist read out of the work-submit token:
+///
+/// | `NV2080_ENGINE_TYPE_COPY(i)` | runlist |
+/// |---|---|
+/// | 0, 1 | **0** — the same runlist as GR |
+/// | 2 | 1 |
+/// | 3 | 2 |
+/// | 4 | 8 |
+/// | 5 and up | refused, RM status `0x57` |
+///
+/// So `engineType` **does** route — five distinct outcomes and a refusal past the end —
+/// and *"CE0 is on runlist 0"* is a fact about this part, not a symptom: on this
+/// architecture the first two logical copy engines are the graphics copy engines and share
+/// the graphics runlist. The C's proven host channel measured the same thing and did not
+/// remark on it (its token was `0xc` = runlist 0, chid 12,
+/// `C: docs/design/mode2_dataplane_architecture.md:148-167`).
+///
+/// ★ The consequence worth stating: an isolate's CE traffic and its GR traffic currently
+/// contend for one runlist. Choosing CE2+ would separate them, and *that* is a scheduling
+/// decision with a cost (those engines are further from the GR context's memory) which
+/// nothing at this rung is in a position to make. Recorded rather than guessed at.
+fn engine_type_for(engine: EngineKind) -> Option<u32> {
+    match engine {
+        // GR runs both compute and graphics contexts; the distinction is the context, not
+        // the runlist, so both map to the same engine type.
+        EngineKind::GrCompute | EngineKind::GrGraphics => Some(ENGINE_TYPE_GRAPHICS),
+        // ★ Index 0, which is what the C's proven host channel uses
+        // (`C: src/qemu/nvkvm_gpu_emul.c:9509`) — see the table above for what that
+        // costs and what it does not.
+        EngineKind::Ce => engine_type_copy(0),
+        // Named rather than folded into `Other`: these are engines with real
+        // `NV2080_ENGINE_TYPE_*` values that this port has never allocated a channel on,
+        // so the honest answer is "not on this rung", not a number read off a header and
+        // never sent.
+        EngineKind::NvEnc | EngineKind::NvDec | EngineKind::Other => None,
+    }
+}
+
+/// ★★★★★ **§16.106 — WHICH copy engine the channel must be built on, taken from the
+/// object the guest is putting on it.**
+///
+/// [`engine_type_for`] answers *which kind of engine*; it cannot answer *which instance*,
+/// because [`EngineKind::Ce`] does not carry one. So it picked index 0, and its own
+/// closing paragraph said choosing CE2+ *"is a scheduling decision with a cost which
+/// nothing at this rung is in a position to make."* ⊘ That is still true — **and we do not
+/// have to make it. The guest already did**, in the eight bytes it hands us.
+///
+/// # ★★★ The 14 refusals this exists to remove, and both ends of the number
+///
+/// `[measured 2026-08-11, boots w250 / w251 / w254, real GA106, host driver open
+/// 580.159.04]` every one of this port's engine-object refusals is this mismatch:
+///
+/// ```text
+/// NVRM: kfifoRunlistSetId_GM107: Channel has already been assigned a runlist
+///       incompatible with this engine (requested: 0x1 current: 0x0).
+/// NVRM: kfifoRunlistSetIdByEngine_GM107: Unable to program runlist for CE2
+/// NVRM: chandesConstruct_IMPL: Invalid object allocation request on channel 0x00000004
+/// ```
+///
+/// - **`current: 0x0`** is OURS: the TSG was allocated with `ENGINE_TYPE_COPY0`, and
+///   `engine_type_for`'s own measured sweep records `COPY(0)`/`COPY(1)` → **runlist 0**.
+/// - **`requested: 0x1` for `CE2` / `0x2` for `CE3`** is the GUEST'S, read out of the
+///   object's `NVB0B5_ALLOCATION_PARAMETERS` by RM's `kceGetEngineDescFromAllocParams`
+///   (`ogkm-580: src/nvidia/src/kernel/gpu/ce/kernel_ce_context.c:60-175`) — and the same
+///   sweep records `COPY(2)` → runlist **1**, `COPY(3)` → runlist **2**. Both ends agree
+///   with the table; nothing here is inferred from the symptom.
+///
+/// The refusal is `kfifoRunlistSetId_GM107`'s first branch (`NV_ERR_INVALID_STATE`, `0x40`),
+/// reached from `chandesConstruct_IMPL` (`ogkm-580: channel_descendant.c:243-250`), whose
+/// status returns out to our `alloc_engine_object`.
+///
+/// # ⊘ Why the CHANNEL moves and not the OBJECT
+///
+/// The other repair — rewrite the guest's `engineType` to `COPY0` — is refused on three
+/// counts. **(1)** The declaration is not ours to edit: the same ordinal goes out again in
+/// the guest's own `NVA06F_CTRL_CMD_BIND` (`engineType = 11` = `COPY2`, measured on real
+/// hardware, `traces/real_ga106/rpc_transcript_real_ga106.txt:63`), so the guest would
+/// believe `COPY2` while the host ran `COPY0` — a disagreement invisible until a copy runs
+/// on an engine nobody asked for. **(2)** It is a *wrong answer* rather than a missing one:
+/// `COPY0`/`COPY1` are the GRCE pair and share the graphics runlist, so forcing them
+/// serialises copies against GR work the guest expects to overlap. **(3)** It re-creates
+/// the C's `dma_copy_class_alloc_params` defect deliberately, having just measured it.
+///
+/// # ⊘ Scope, stated narrowly
+///
+/// - **Only [`EngineKind::Ce`].** A GR channel that later takes a CE object binds it as
+///   GRCE and needs no move — that is the 8 forwards that already succeed, and keying on
+///   the class alone would break them by building a CE channel for a GR context.
+/// - **Only a declaration RM itself would accept.** `None` from
+///   [`CeAllocParams::declared_copy_engine_type`] falls through to `engine_type_for`, so
+///   absent/short/unknown-version params leave behaviour **byte-identical to before**.
+///   ⊘ `None` is never read as "copy engine 0"; the fall-through arrives at `COPY0`
+///   through the unchanged path, which is a different sentence.
+fn declared_channel_engine_type(
+    engine: EngineKind,
+    hosting: Option<HostedObject<'_>>,
+) -> Option<u32> {
+    if engine != EngineKind::Ce {
+        return None;
+    }
+    let hosting = hosting?;
+    CeAllocParams::decode(hosting.params)
+        .ok()?
+        .declared_copy_engine_type()
+}
+
+/// ★★★ R2's **decision**, separated from R2's ioctl so the whole gate is testable.
+///
+/// The argument is `Option<&str>` — *"what the frontend said, if it said anything"* — and
+/// the `None` arm is inside [`kayfabe_abi::host_driver::check`] rather than here, because
+/// this is the one function that could turn a failed query into a default, so it never
+/// gets the chance. `unwrap_or_default()` is exactly what used to be here, and an empty
+/// string is what it produced.
+///
+/// Returns the reported string on success. The **parsed** version is deliberately dropped:
+/// nothing on this side selects on it, and that is the finding
+/// (`host_driver_version_pin.md` §2) rather than an oversight — the value of the check is
+/// that a host outside the pinned interval stops here instead of being encoded for.
+///
+/// # Errors
+/// The refusal's own prose, ready to be the [`BringUpError::detail`] of rung R2.
+fn host_version_gate(reported: Option<&str>) -> Result<String, String> {
+    kayfabe_abi::host_driver::check(reported).map_err(|r| r.to_string())?;
+    Ok(reported.unwrap_or_default().to_string())
+}
+
+/// R2: `NV_ESC_CHECK_VERSION_STR`, query form.
+fn read_version(ctl: &CharDevice) -> Option<String> {
+    // `nv_ioctl_rm_api_version_t { NvU32 cmd; NvU32 reply; char versionString[64]; }`
+    // — `ogkm-580: kernel-open/common/inc/nv-ioctl.h:98-103`.
+    const SIZE: usize = 72;
+    let mut arg = [0u8; SIZE];
+    arg[0] = b'2'; // NV_RM_API_VERSION_CMD_OVERRIDE: query, never the strict form.
+    let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_CHECK_VERSION_STR, SIZE).ok()?;
+    ctl.ioctl(req, &mut arg, &mut []).ok()?;
+    let s = &arg[8..];
+    let end = s.iter().position(|&b| b == 0).unwrap_or(s.len());
+    Some(String::from_utf8_lossy(&s[..end]).into_owned())
+}
+
+/// One pool worker's view of the shared connection.
+///
+/// `&mut self` on every verb, as the port requires, but the *connection* behind it is
+/// shared: that is the whole point (see [`RmConnection`]).
+#[derive(Debug)]
+pub struct HostRmBackend {
+    id: IsolateId,
+    conn: Arc<RmConnection>,
+    /// `channel -> how many entries this worker has published`, so the next submission
+    /// takes the next GPFIFO slot instead of overwriting the live one. Per **worker**
+    /// rather than per connection: see [`HostRmBackend::next_slot`].
+    slots: BTreeMap<u32, u64>,
+    /// `host VAS range -> the copy-engine channel this worker built over it`, for
+    /// [`RmBackend::ce_copy`]. Built on first use and reused, because a channel is six RM
+    /// objects and a copy is one pushbuffer.
+    ce_channels: BTreeMap<u32, CeChannel>,
+    /// ★ The isolate's table of backings minted for the VMM (`crate::export`). Shared with
+    /// every sibling worker: a backing belongs to the isolate, not to the pool slot that
+    /// happened to mint it.
+    exports: Arc<ChildExports>,
+    /// ★★★ This isolate's guest-RAM plane, or `None` when the VM was launched without a
+    /// shared memory backing. Shared with every sibling worker — a guest-RAM mapping
+    /// belongs to the isolate, not to the pool slot that happened to order it.
+    guest_ram: Option<Arc<crate::guestram::GuestRamPlane>>,
+    /// ★★★ **E6 — the recorder-only CE witness**, `None` unless a diagnostic asked for
+    /// one ([`HostRmBackend::with_ce_witness`]). See [`CeWitness`].
+    ce_witness: Option<Arc<CeWitness>>,
+    /// ★★★★★ This isolate's joined framebuffer leaves (`crate::fbjoin`), or `None` when the
+    /// composition root built no table.
+    ///
+    /// ⚠ Shared with every sibling worker, exactly like `exports` and `guest_ram` above, and
+    /// for a reason that has already cost this campaign a rung: **an isolate is a pool**. The
+    /// worker that joins a leaf need not be the worker later asked to read it. ⊘ There is no
+    /// `Default` that fabricates one — `None` refuses by name ([`FB_JOIN_NO_TABLE`]), because
+    /// a per-worker table is a bug no single-worker test can observe.
+    fb_joins: Option<Arc<crate::fbjoin::FbJoinTable>>,
+    /// ★★★★★ **CONSTRAINT 26 — does this isolate allocate BARE address spaces?**
+    ///
+    /// `true` means [`RmBackend::alloc_vaspace`] mints a `FERMI_VASPACE_A` and **no**
+    /// `NV01_MEMORY_VIRTUAL` range over it, so this isolate can bind channels to the space
+    /// and can map nothing into it — the ownership split, as a missing object rather than
+    /// as a rule.
+    ///
+    /// ⊘ **Carried rather than derived from the isolate id**, even though the scratchpad is
+    /// exempt: the exemption is the *composition root's* decision, made once in
+    /// `build_isolate`, and an isolate that has to infer what it is cannot say so in a
+    /// census. Same argument the `--cuda-walk` argument already makes.
+    bare_vaspaces: bool,
+}
+
+/// ★★★ **E6 — what the LAST [`RmBackend::ce_copy`] this backend performed actually
+/// observed**, so a caller that drove the copy *through the core* can build the very
+/// [`CeEvidence`] rung R17 built, instead of a re-derivation of it.
+///
+/// # Why this exists at all, stated so it is not mistaken for a convenience
+///
+/// [`CeEvidence::copied()`] is a **conjunction of four facts**, and the fourth —
+/// *"the engine said it had retired"* — is not observable from the destination's bytes.
+/// The port's verb answers `Ok(())`/`Err(..)`, which is the right shape for a port and
+/// erases the number. So a caller driving the join from `kayfabe_fwd` can see three of the
+/// four and would have to **assume** the fourth, or invent a weaker predicate.
+///
+/// ⊘ Inventing a weaker predicate is exactly what `execution_plane_increments.md` §1
+/// forbids: *"Nothing below invents a new acceptance instrument, and E6's acceptance is
+/// literally R17's, re-driven."* This is what makes that literal.
+///
+/// ⊘ **Recorder-only, and off by default.** [`HostRmBackend::new`] installs none, so the
+/// shipped isolate child records nothing and pays nothing. It is the same posture — and
+/// the same warning — as the C artifact's `m2rec`: an instrument that is on by default
+/// stops being an instrument.
+///
+/// ⚠ **It cannot cross the sandbox.** A real isolate is a separate process, so a witness
+/// held by a parent is not the one the child's backend writes. A diagnostic that needs it
+/// must drive an **in-process** [`HostRmBackend`], exactly as `kayfabe-rm-ladder`'s R14-R17
+/// rungs already do, and say so.
+#[derive(Debug, Default)]
+pub struct CeWitness {
+    last: Mutex<Option<(SubmitOutcome, u32)>>,
+}
+
+impl CeWitness {
+    /// A fresh witness that has observed nothing.
+    #[must_use]
+    pub fn new() -> CeWitness {
+        CeWitness::default()
+    }
+
+    /// The most recent `(outcome, payload)` — `None` if no copy has run on the backend
+    /// this witness is installed in.
+    ///
+    /// ★ `None` is a real answer and must not be read as a zeroed outcome: *an empty
+    /// capture is evidence of nothing*.
+    #[must_use]
+    pub fn latest(&self) -> Option<(SubmitOutcome, u32)> {
+        *self.last.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn record(&self, outcome: SubmitOutcome, payload: u32) {
+        *self.last.lock().unwrap_or_else(|e| e.into_inner()) = Some((outcome, payload));
+    }
+}
+
+/// A copy-engine channel and the engine object bound into its subchannel 0.
+#[derive(Debug, Clone, Copy)]
+struct CeChannel {
+    /// The channel, in this backend's namespace.
+    chan: HostHandle,
+    /// Its work-submit token.
+    token: u64,
+    // ★ There is deliberately NO engine-object handle here. The object must be
+    // ALLOCATED — it is what gives the channel a copy-engine context — but its handle is
+    // never named again: `SET_OBJECT`'s data field is `NVCLASS`, a class number
+    // (`ogkm-580: clc56f.h:68-71`). Keeping the handle would invite exactly the mistake
+    // that was made and measured here on 2026-07-30. It dies with the channel, as a
+    // child of it.
+    /// The payload the next copy will release, so two copies on one channel cannot be
+    /// confused for each other by a stale word.
+    next_payload: u32,
+}
+
+/// ★★★★★ **W229 — a host address space NO GUEST CHANNEL IS EVER BOUND TO.**
+///
+/// This is the type half of the owner's invariant, *"VMM state must never be placed where a
+/// guest VA can name it"*. Before it, that invariant was a sentence in
+/// [`RmConnection::raw_map_dma`]'s doc comment — *"memory the isolate allocated for itself,
+/// which no guest ever names"* — and the isolate's copy-engine ring, USERD and completion
+/// semaphore were mapped into the very space `kayfabe_fwd::plan_doorbell` materializes a
+/// guest's channel in. Measured at `124b69b`: a copy engine bound to that space read the
+/// isolate's semaphore and moved its payload (`R30` arm C).
+///
+/// # ★★ SEPARATION, not a reservation — and the distinction is the whole point
+///
+/// `raw_map_dma`'s own docs propose *"a host-private reservation"*, and a reserved window
+/// inside the shared space is **not this and is not sufficient**. A reservation stops RM's
+/// allocator from *colliding* with our objects; it does nothing about a guest **naming**
+/// the address, because the address is still mapped in the space the guest's engine walks.
+/// ⇒ What this type carries is a **different `FERMI_VASPACE_A`**, so the isolate's control
+/// structures are not in the guest's page tables at all and the address does not resolve
+/// there.
+///
+/// # ⊘ It is NOT a weakening of `#102`, and the guest's addresses do not move
+///
+/// Address identity exists so a *forwarded pushbuffer's* guest VAs resolve. Every isolate
+/// publish — fabricated backings, guest-RAM pins, `w228`'s FB leaves — is still placed
+/// **FIXED at the guest's own VA**, and is now placed at that same VA in **both** spaces
+/// ([`HostRmBackend::map_dma_both`]), because the isolate's own engine has to resolve the
+/// operands it is asked to copy. Nothing the guest names moves. Only our ring does.
+///
+/// # ★ The teeth
+///
+/// The field is **private**, and the only expression that builds one is
+/// [`HostRmBackend::executor_vas`]. There is no `From<HostHandle>`, no public constructor
+/// and no `pub` field, so `ce_channel`'s signature is not a convention a later refactor can
+/// quietly reinterpret: a caller holding a guest `Vas`'s [`HostHandle`] has **no way to
+/// spell** the argument. `tests/ui/name_an_executor_vas.rs` pins it, and
+/// `tests/executor_vas_census.rs` pins the mint site count.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ExecutorVas {
+    /// The `NV01_MEMORY_VIRTUAL` range over the isolate's own `FERMI_VASPACE_A`.
+    ///
+    /// ⊘ Deliberately **not** a [`HostHandle`]: a port handle is a thing the core can be
+    /// handed and can pass back into any verb, and this space must never be reachable that
+    /// way. It is a raw handle behind a private field precisely so it cannot leave.
+    range: u32,
+}
+
+/// ★★★ **W229 — where the isolate's own copy-engine control structures were PLACED**,
+/// reported as raw range handles so the comparison is the caller's.
+///
+/// The two space fields being **equal** is the co-location defect
+/// (`C: docs/design/s1_what_does_it_protect.md` §3): our ring, USERD and completion
+/// semaphore sitting in the one address space a guest channel is bound to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CeControlPlacement {
+    /// The `NV01_MEMORY_VIRTUAL` range a guest channel over this `Vas` is bound to, and
+    /// the one every fixed publish lands in.
+    pub guest_space: u32,
+    /// The range the isolate's own CE ring is mapped through.
+    pub control_space: u32,
+    /// Where the ring object landed.
+    pub ring_va: u64,
+    /// The completion semaphore word hardware writes.
+    pub sem_va: u64,
+    /// The ring object's size. ★★ It is here because it is the **granularity the question
+    /// has to be asked at**: RM maps device-local memory with 64 KiB big pages, so a VA
+    /// 8 KiB above a mapped object still resolves and a 4 KiB probe cannot buy finer
+    /// resolution. [measured 2026-08-10, `vh`] — a 4 KiB fixed ask at `ring_va + 0x2000`
+    /// was placed at `ring_va`. ⇒ *"is our semaphore nameable"* is answered by asking about
+    /// the object that contains it.
+    pub ring_bytes: u64,
+    /// The payload the isolate's last copy over this `Vas` released — the value an engine
+    /// that reads [`CeControlPlacement::sem_va`] would find, and one nothing else has.
+    pub last_payload: u32,
+}
+
+/// What [`HostRmBackend::probe_va`] found at one VA in one address space.
+#[derive(Debug)]
+pub enum VaProbe {
+    /// Nothing was there: a fresh object took the address exactly as asked.
+    Free,
+    /// RM refused the fixed placement — something already occupies it.
+    Occupied(RmError),
+    /// ⊘ RM placed it elsewhere. Occupied, *and* the ask was treated as a hint — a
+    /// distinct finding from a clean refusal and never folded into it.
+    Relocated(u64),
+}
+
+/// What an engine bound to the **guest's** address space did with the isolate's semaphore
+/// VA — [`HostRmBackend::probe_guest_reachability`]'s verdict.
+#[derive(Debug)]
+pub enum GuestReach {
+    /// ⊘ The positive control did not land, so the probe was never issued and this run
+    /// says nothing about reachability.
+    ControlFailed,
+    /// ★★★ **THE DEFECT, MEASURED**: the copy retired and moved a word out of the
+    /// isolate's semaphore address.
+    Read {
+        /// What landed in the destination.
+        word: u32,
+        /// The submission's own cursors and release.
+        outcome: SubmitOutcome,
+    },
+    /// The engine did not retire the copy: the address does not resolve in this space.
+    /// ⚠ Expect a host `Xid 31 FAULT_PDE` for this channel.
+    NotResolved(SubmitOutcome),
+    /// Bytes moved and the engine did not report the release. Neither arm, so neither is
+    /// claimed.
+    Ambiguous {
+        /// What landed in the destination.
+        word: u32,
+        /// The submission's own cursors and release.
+        outcome: SubmitOutcome,
+    },
+}
+
+/// How many bytes of notifier this rung allocates and maps.
+///
+/// One page, for one 16-byte record. ⊘ Not sized to the record: RM's own notifier objects are
+/// page-granular and a sub-page `NV01_MEMORY_SYSTEM` is a different question than the one this
+/// rung is asking.
+const NOTIFIER_BYTES: u64 = 0x1000;
+
+/// `RM_PAGE_SIZE` — the granularity `NV01_MEMORY_LIST_OBJECT`'s page numbers count in
+/// (`ogkm-580: mem_list.c`, `pPteArray[i] << RM_PAGE_SHIFT`) and the granularity USERD is
+/// attributed at (`kernel_channel_gm107.c:689`).
+///
+/// ⊘ Deliberately **not** `HostPageSize::query()`: this is RM's constant, fixed at 4 KiB on
+/// every part, and a host with 64 KiB pages would silently change the meaning of a page
+/// *number* if the two were conflated.
+const RM_PAGE_BYTES: u64 = 0x1000;
+
+/// ★★★★★ **What a raw client READS OUT OF ITS OWN ADDRESS SPACE after its channel died.**
+///
+/// The decoded `NvNotification` at
+/// [`kayfabe_abi::notifier::NOTIFICATION_TYPE_ERROR_INDEX`]. This is the answer to *"how does
+/// the guest learn?"* in field terms, and every field is the driver's, not ours.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ErrorNotifierRead {
+    /// `status` — [`kayfabe_abi::notifier::NOTIFIER_STATUS_RC`] (`0xffff`) once RM has
+    /// written it. ⊘ **Zero is the "nothing happened" value**, and it is also what an
+    /// unwired, unaccepted or never-written notifier reads as. See
+    /// [`HostRmBackend::read_error_notifier`].
+    pub status: u16,
+    /// `info32` — the `ROBUST_CHANNEL_*` exception type. For an MMU fault this is
+    /// [`kayfabe_abi::generated::rpc::ROBUST_CHANNEL_FIFO_ERROR_MMU_ERR_FLT`] (`0x1f`) — the
+    /// same number a host kernel log prints as **`Xid 31`**.
+    pub except_type: u32,
+    /// `info16` — the `nv2080EngineType` the RC event routes on.
+    pub engine_type: u16,
+    /// `timeStamp`, both halves. Nothing grades on it; it is carried so a quiet notifier and
+    /// a stale one stay distinguishable by inspection.
+    pub timestamp: u64,
+}
+
+impl ErrorNotifierRead {
+    /// Did the driver actually write a robust-channel error here?
+    ///
+    /// ★ Keyed on `status`, which is the field RM writes **last**
+    /// (`kernel_rc_notification.c`, and [`kayfabe_abi::notifier::ErrorNotification::PUBLISH_SPLIT`]
+    /// encodes that order): a reader that keyed on `info32` could see a half-published record.
+    #[must_use]
+    pub fn fired(&self) -> bool {
+        self.status != 0
+    }
+}
+
+/// [`HostRmBackend::probe_guest_reachability`]'s full report — the control and the probe,
+/// never the probe alone.
+#[derive(Debug)]
+pub struct GuestReachProbe {
+    /// The positive control's submission.
+    pub control: SubmitOutcome,
+    /// What the control actually moved.
+    pub control_read: u32,
+    /// What the control was supposed to move.
+    pub control_want: u32,
+    /// The probe's verdict.
+    pub reach: GuestReach,
+    /// ★★★★★ **w287 — WHAT THE CLIENT WAS TOLD, IN ITS OWN PROCESS.**
+    ///
+    /// `None` means the notifier could not be built or RM refused the handle — which is a
+    /// *finding*, and deliberately not folded into a quiet `ErrorNotifierRead`, because a
+    /// zeroed record and an absent one are the same bytes and opposite conclusions.
+    pub notifier: Option<ErrorNotifierRead>,
+    /// ★★★★★ **w287 — PLANE C: does the NEXT IOCTL fail?**
+    ///
+    /// One `NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN` issued on the channel **after** the
+    /// fault, on the dead channel, and recorded whatever it answered. `Ok(())` here is the
+    /// finding, not a formality: it says the ioctl plane carries **nothing**, so a client
+    /// that polls only return codes cannot learn it was killed.
+    ///
+    /// ⊘ Deliberately a control that already succeeds on this channel at creation, so a
+    /// failure could only be the RC state and never an unsupported command.
+    pub post_fault_ioctl: Result<(), RmError>,
+    /// ★★★★★ **THE NEGATIVE CONTROL, ON THE SAME SIXTEEN BYTES, IN THE SAME RUN.**
+    ///
+    /// The notifier read **after the positive control retired and before the fault probe was
+    /// issued** — i.e. on a channel that is alive and has just done real work.
+    ///
+    /// ⊘⊘ Without it, `status == 0xffff` after the fault is only *"the word we hoped for was
+    /// there"*. The page is zeroed before the channel is told about it, which excludes a
+    /// dirty allocation — but not a notifier RM wrote at channel *creation*, nor one written
+    /// by the control submission. This field excludes both, and it does so without a second
+    /// run, a second channel or a second revision to compare against.
+    pub notifier_before: Option<ErrorNotifierRead>,
+    /// ★★★★★ **w288 TIER 2 — THE FAULT'S ADDRESS, which the notifier cannot carry.**
+    ///
+    /// `NV906F_CTRL_CMD_GET_MMU_FAULT_INFO`, issued **once**, on this channel, after the
+    /// fault. `None` means the control refused or could not be decoded — a *finding*, and
+    /// deliberately not folded into a zeroed `MmuFaultInfoParams`, because a zeroed record
+    /// decodes to a well-formed *"faulted at address 0"*.
+    ///
+    /// ⊘⊘ **Read exactly once.** The header says the record is cleared by reading it, so a
+    /// second read here would answer all-zero and the run would report a fault at address
+    /// zero with no way to tell that from the truth.
+    pub fault_info: Option<kayfabe_abi::submit::MmuFaultInfoParams>,
+    /// ★★★★★ **w288 TIER 2 — the address this probe DELIBERATELY pointed the engine at**,
+    /// carried so the caller can compare it with [`Self::fault_info`]'s address without
+    /// re-deriving it from anything.
+    ///
+    /// ⊘ It is the probe's own input echoed back, and that is the point: the VA-identity
+    /// oracle is *"the address the fault reports EQUALS the address we asked for"*, and a
+    /// caller that recomputed the expected value from the same variable it printed would be
+    /// checking a number against itself.
+    pub fault_va: u64,
+    /// ★★★★★ **w288 TIER 2 — WHICH APERTURE the notifier was allocated in**, carried rather
+    /// than assumed.
+    ///
+    /// ⊘ It decides how the run must be read: on the **guest** arm a vidmem notifier decodes
+    /// to `kayfabe_arch::fault::ErrorNotifier::Unreachable`, so nothing is attached on the
+    /// host side and the probe measures **nothing** while looking like it ran. Printing the
+    /// aperture is what stops that silence from reading as a result.
+    pub notifier_aperture: NotifierAperture,
+}
+
+impl GuestReachProbe {
+    /// Which of [`Crit1State`]'s exits this probe took.
+    ///
+    /// ⊘ Derived from the probe's own fields, never from a caller's expectation: the whole
+    /// point is that the run reports which experiment it performed.
+    #[must_use]
+    pub fn crit1_state(&self) -> Crit1State {
+        if matches!(self.reach, GuestReach::ControlFailed) {
+            return Crit1State::ControlNeverLanded;
+        }
+        if self.fault_info.is_some() {
+            Crit1State::FaultProvokedAddressRead
+        } else {
+            Crit1State::FaultProvokedAddressSilent
+        }
+    }
+}
+
+/// ★★★★★ **w288 TIER 2 — WHICH STORE THE ERROR NOTIFIER LIVES IN, as a named choice.**
+///
+/// # ⊘⊘ Why this is a parameter and not a constant, and it is measured on BOTH sides
+///
+/// The two arms are not "the same thing, allocated differently" — they are **usable in
+/// different places**, and each is unusable in the other:
+///
+/// - [`Self::Sysmem`] (`NV01_MEMORY_SYSTEM`, [`HostRmBackend::alloc_notifier_mem`]) is the
+///   faithful shape — `[w287 census, 63/63]` every real `errorNotifierMem` a driver declares
+///   carries aperture SYSMEM — and it is the **only** shape this port can serve for a guest:
+///   `kayfabe_arch::fault::ErrorNotifier` has exactly `Sysmem { gpa }` and `Unreachable`, so
+///   a VIDMEM notifier decodes to `Unreachable` and **no host notifier is attached at all**.
+///   A guest-side run on the vidmem arm therefore tests nothing, silently.
+/// - [`Self::Vidmem`] (`NV01_MEMORY_LOCAL_USER`, [`RmConnection::alloc_device_local`]) is the
+///   arm the w287 known-positive was measured on, natively, on a real GA106.
+///   ⊘⊘ **CORRECTED 2026-08-13 (w289) — THE SENTENCE THAT STOOD HERE, *"the sysmem arm may
+///   not survive natively"*, IS WITHDRAWN.** `[measured 2026-08-13, vh2, rev f7a74bc]`
+///   recorded that a `NV01_MEMORY_SYSTEM` notifier was refused **in both flag settings that
+///   were tried** — `NV_ERR_INVALID_ARGUMENT` at the CPU map with
+///   `NVOS02_FLAGS_MAPPING_NO_MAP`, and `EINVAL` at the allocation without it. Both readings
+///   are correct and **both refusals are ours**: the allocation needed `_NO_MAP` (it was
+///   asking RM to build an mmap context around `fd: -1`) and the map needed the **control**
+///   node ([`MapNode`]). Toggling one flag swapped which end refused, so the sweep could
+///   never see the second defect. Full derivation, with the driver's own line numbers, on
+///   [`HostRmBackend::alloc_notifier_mem`].
+///
+/// ⇒ **Two arms, both named, neither a fallback.** There is deliberately no "try sysmem, fall
+/// back to vidmem": a run whose notifier aperture depended on what RM happened to accept
+/// would be a run that cannot say which experiment it performed
+/// (`a_fallback_keyed_on_our_own_ignorance`). The caller states it and the report prints it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NotifierAperture {
+    /// `NV01_MEMORY_SYSTEM` — the faithful shape, and the only one a GUEST-side run can have
+    /// served, because it is the only one this port's `ErrorNotifier` vocabulary can name.
+    Sysmem,
+    /// `NV01_MEMORY_LOCAL_USER` — the arm w287's native known-positive was measured on.
+    Vidmem,
+}
+
+impl NotifierAperture {
+    /// The arm's name, for a report. ⊘ Printed on every run, including the ones that measure
+    /// nothing: the whole hazard is a run that is silent because of this choice.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            NotifierAperture::Sysmem => "SYSMEM (NV01_MEMORY_SYSTEM)",
+            NotifierAperture::Vidmem => "VIDMEM (NV01_MEMORY_LOCAL_USER)",
+        }
+    }
+}
+
+/// ★★★★★ **w309 — THE FOUR CONFOUNDS ON `CONTROL-NEVER-LANDED`, AS AN EXPLICIT ARM.**
+///
+/// `[measured 2026-08-14, w305, vh2]` in ONE process, ONE program, ONE boot, on our emulated
+/// GPU: arm 1 (a `Vas` that had already carried retired work) moved 4096 bytes with the whole
+/// four-fact bar, while arm 4 (a fresh `Vas`) never landed its positive control. Natively
+/// **both** work, so the asymmetry is ours.
+///
+/// ⊘ **That contrast is not an isolation, and w305 said so.** Arm 4 differs from arm 1 in
+/// **four** ways at once, and this type makes three of them settable so a rung can move one
+/// at a time:
+///
+/// | confound | arm 1 | arm 4, default | the field that varies it |
+/// |---|---|---|---|
+/// | address space | `vas`, already worked | a fresh third `Vas` | the `vas` argument (`--…-shared-vas`) |
+/// | ring + operand VAs | RM-chosen | **dictated** in [`REACH_PROBE_WINDOW`] | [`Self::dictate_addresses`] |
+/// | error notifier | none | present | [`Self::error_notifier`] |
+/// | channel ordinal | first | second | ⊘ **NOT settable here** — see below |
+///
+/// ⚠ **The ordinal is deliberately absent**, because it cannot be varied without changing the
+/// rung's own known-positive: arms 2/3/6 read [`CeControlPlacement`], which does not exist
+/// until arm 1 has built a channel. ⇒ It is held CONSTANT at *second* on every arm this type
+/// selects, which is what makes the other three clean. A run in which the probe is the
+/// process's first channel is a different program, not a flag.
+///
+/// ★ Every field's `true` is the **committed default**, so `ReachProbeArms::default()` is
+/// byte-identical to every run before w309.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ReachProbeArms {
+    /// `true` (default) — the ring and both operands are demanded at fixed addresses inside
+    /// [`REACH_PROBE_WINDOW`] and the probe **refuses** with [`RmError::PlacementRefused`] if
+    /// RM places them anywhere else.
+    ///
+    /// `false` — RM chooses all three, exactly as `prove_ce_copy` (arm 1) lets it.
+    ///
+    /// ⊘⊘ **`false` WEAKENS THE INSTRUMENT AND THE WEAKNESS HAS A MEASURED PRECEDENT.**
+    /// `[measured 2026-08-10, vh, and it INVERTED the verdict]` letting RM choose put the
+    /// probe's own ring where `sem_va + 0x2000` landed **inside it**, so the probe read its
+    /// own memory and the rung recorded *"the address still resolves"*. On this arm the probe
+    /// therefore **checks, after RM has answered**, that the fault VA lies outside every
+    /// object RM placed, and refuses with [`PROBE_SELF_ALIASED`] rather than measure itself.
+    pub dictate_addresses: bool,
+    /// `true` (default) — a channel error notifier is allocated, zeroed and attached, and
+    /// planes A and its negative control are measured.
+    ///
+    /// `false` — **no notifier object is allocated at all** and the channel is created by
+    /// [`HostRmBackend::alloc_channel_at`]. ⊘ Plane A is then structurally `None`; this arm
+    /// exists ONLY to ask whether the notifier's presence is what stops the positive control
+    /// from landing, and it can never contribute a criterion-1 measurement.
+    pub error_notifier: bool,
+}
+
+impl Default for ReachProbeArms {
+    fn default() -> Self {
+        Self {
+            dictate_addresses: true,
+            error_notifier: true,
+        }
+    }
+}
+
+impl ReachProbeArms {
+    /// One greppable line naming what was **actually** in force — built from the same values
+    /// the probe used, never from the flags a harness believes it passed. ⚠ *An arm you set
+    /// is not an arm in force.*
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match (self.dictate_addresses, self.error_notifier) {
+            (true, true) => "addr=DICTATED notifier=PRESENT (the committed default)",
+            (false, true) => "addr=RM-PLACED notifier=PRESENT",
+            (true, false) => "addr=DICTATED notifier=ABSENT",
+            (false, false) => "addr=RM-PLACED notifier=ABSENT",
+        }
+    }
+}
+
+/// The fault VA this probe was asked about lies inside an object RM placed for the probe
+/// itself, so a `Read` verdict would be the instrument reading its own memory. Refused rather
+/// than measured. Reachable only on [`ReachProbeArms::dictate_addresses`] `== false`.
+pub const PROBE_SELF_ALIASED: u32 = 0x5A11;
+
+/// ★★★★★ **WHY CRITERION 1 DID OR DID NOT GET MEASURED — as NAMED STATES, never a boolean.**
+///
+/// The bar is *"the guest observes THE SAME FAULT, BY IDENTITY — code, engine, type, access
+/// AND address"*. A run can fail to measure that for **four structurally different reasons**,
+/// and `w289g` proved they are not interchangeable.
+///
+/// # ⊘⊘⊘ THE DEFECT THIS TYPE EXISTS TO KILL
+///
+/// `w289g`'s runner printed a vacuity guard — *"if `PROBE-COULD-NOT-BE-BUILT` is not 0, every
+/// zero below is vacuous"* — and **the guard passed while the zeros were vacuous anyway**,
+/// because the run had taken a *different* route to vacuity (the control never landed, so the
+/// deliberate fault was never issued). ⇒ **A guard covering one route to vacuity reads as
+/// covering all of them.**
+///
+/// ⚠ **That is the same scoping failure, in the same rung, as the two-arm flag sweep** whose
+/// *"the sysmem arm may not survive natively"* verdict this file has already withdrawn: an
+/// instrument that enumerates a subset of the exits can only rename the others, never see
+/// them. One shape, twice. Hence: **enumerate the exits, give each its own name, and print
+/// exactly one of them on every run.**
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Crit1State {
+    /// The deliberate-fault arm was never requested (no `--ce-client-fault`). Nothing about
+    /// criterion 1 was attempted. ⊘ The most benign-looking state and the one a harness is
+    /// likeliest to mistake for a pass, because the run is otherwise green.
+    ArmNotSelected,
+    /// The arm ran and the probe **could not be constructed** — an allocation, mapping,
+    /// channel or schedule refused. ⊘ Nothing was ever submitted, so no fault exists to
+    /// observe. This is `w288nc1`'s state.
+    ProbeNotBuilt,
+    /// The probe was built and its **positive control did not land**, so the deliberate fault
+    /// was deliberately not issued (a fault on a channel never shown to work measures
+    /// nothing). ⊘ A notifier that fires here belongs to the CONTROL's failure, not to the
+    /// deliberate fault. This is `w289g`'s state — and the one the old guard could not see.
+    ControlNeverLanded,
+    /// The deliberate fault WAS provoked, and the **address plane stayed silent**:
+    /// `GET_MMU_FAULT_INFO` refused or did not decode. ⇒ the run carries the fault's **code**
+    /// and not its **address**, so the VA-identity comparison is UNMEASURED.
+    FaultProvokedAddressSilent,
+    /// The deliberate fault was provoked **and** the address plane answered. ★ **Only in this
+    /// state is a `VA-IDENTITY HOLDS` / `BROKEN` count a measurement**; in every other state
+    /// both counts are zero for reasons that have nothing to do with VA identity.
+    FaultProvokedAddressRead,
+}
+
+impl Crit1State {
+    /// The token a harness greps. ⊘ Stable, anchored, one per run.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Crit1State::ArmNotSelected => "ARM-NOT-SELECTED",
+            Crit1State::ProbeNotBuilt => "PROBE-NOT-BUILT",
+            Crit1State::ControlNeverLanded => "CONTROL-NEVER-LANDED",
+            Crit1State::FaultProvokedAddressSilent => "FAULT-PROVOKED-ADDRESS-SILENT",
+            Crit1State::FaultProvokedAddressRead => "FAULT-PROVOKED-ADDRESS-READ",
+        }
+    }
+
+    /// Whether a `VA-IDENTITY` count from this run means anything at all.
+    ///
+    /// ★ **The single predicate the whole type exists for.** `false` ⇒ every VA-identity
+    /// number on the run is vacuous, whichever route produced it.
+    #[must_use]
+    pub const fn va_identity_is_measured(self) -> bool {
+        matches!(self, Crit1State::FaultProvokedAddressRead)
+    }
+
+    /// Why, in one sentence, for the line that prints beside the token.
+    #[must_use]
+    pub const fn why(self) -> &'static str {
+        match self {
+            Crit1State::ArmNotSelected => {
+                "the deliberate-fault arm was not requested, so criterion 1 was never attempted"
+            }
+            Crit1State::ProbeNotBuilt => {
+                "the probe could not be constructed; nothing was submitted, so no fault exists"
+            }
+            Crit1State::ControlNeverLanded => {
+                "the positive control did not land, so the deliberate fault was never issued \
+                 and any notifier that fired belongs to the CONTROL"
+            }
+            Crit1State::FaultProvokedAddressSilent => {
+                "the fault WAS provoked but GET_MMU_FAULT_INFO gave no address, so this run \
+                 carries the fault's CODE and not its ADDRESS"
+            }
+            Crit1State::FaultProvokedAddressRead => {
+                "the fault was provoked AND the address plane answered — the VA-identity \
+                 comparison on this run is a measurement"
+            }
+        }
+    }
+}
+
+/// ★★★★★ **WHICH `/dev/nvidia*` NODE A CPU MAPPING IS REGISTERED AGAINST — and it is the
+/// BACKING that decides, not the caller's taste.**
+///
+/// `NV_ESC_RM_MAP_MEMORY` carries a **descriptor number** as well as parameters, and RM
+/// stores the resulting one-shot mmap context on *that file*. Which file is legal is fixed
+/// by the driver, in two steps:
+///
+/// 1. `RmCreateMmapContextLocked` picks the `nv_state_t` the context belongs to: the
+///    per-GPU state if the address lies inside that GPU's BARs, and otherwise
+///    **`nv_get_ctl_state()`** — *"validate this as a system memory mapping and associate
+///    it with the control device"* (`ogkm-580:
+///    src/nvidia/arch/nvalloc/unix/src/osapi.c:2266-2289`).
+/// 2. `nv_add_mapping_context_to_file` then calls
+///    `nv_get_file_private(fd, NV_IS_CTL_DEVICE(nv), &priv)`
+///    (`ogkm-580: kernel-open/nvidia/nv-usermap.c:45`), and that helper **refuses a
+///    descriptor of the wrong minor**: with `ctl` set it requires
+///    `NV_MINOR_DEVICE_NUMBER_CONTROL_DEVICE` and nothing else
+///    (`ogkm-580: kernel-open/nvidia/nv.c:4102-4106`).
+///
+/// ⇒ A system-memory object mapped through a `/dev/nvidia<N>` descriptor is refused with
+/// `NV_ERR_INVALID_ARGUMENT`, **at the map, after the allocation already succeeded**.
+///
+/// ## ⊘⊘ THIS IS THE SECOND HALF OF THE `w288nc1` FAILURE, AND IT WAS ALREADY WRITTEN DOWN
+///
+/// [`NotifierAperture`]'s own docs recorded `[measured 2026-08-13, vh2, rev f7a74bc]` that a
+/// sysmem notifier was refused *"in both flag settings that were tried —
+/// `NV_ERR_INVALID_ARGUMENT` at the CPU map with `NVOS02_FLAGS_MAPPING_NO_MAP`, and `EINVAL`
+/// at the allocation without it"*, and concluded **"the sysmem arm may not survive
+/// natively"**. Both observations were right and the conclusion was wrong: they are two
+/// different defects of ours, one at each end, and the second is this one. ⚠ A measurement
+/// that tries two settings of the flag a hypothesis names can only ever indict the flag —
+/// it cannot see that the *other* call in the pair is also wrong.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MapNode {
+    /// `/dev/nvidia<N>` — for anything inside the GPU's own BARs: device-local memory,
+    /// register windows, USERD, a framebuffer object.
+    Gpu,
+    /// `/dev/nvidiactl` — for **system memory**, which RM associates with the control
+    /// device regardless of which device allocated it.
+    Ctl,
+}
+
+impl MapNode {
+    /// The node a [`NotifierAperture`]'s backing must be mapped through.
+    ///
+    /// ★ Derived, never chosen: the whole class of bug above is a call site picking a node
+    /// independently of the allocation it is mapping.
+    #[must_use]
+    pub const fn for_notifier(aperture: NotifierAperture) -> Self {
+        match aperture {
+            NotifierAperture::Sysmem => MapNode::Ctl,
+            NotifierAperture::Vidmem => MapNode::Gpu,
+        }
+    }
+}
+
+/// What one submission produced — the whole evidence bar for rung 3, as data.
+///
+/// ★ A struct rather than a `bool` because the *interesting* case is the one where every
+/// field is legal and the submission did nothing: `semaphore = 0`, `gp_get = 0`,
+/// `gp_put = 1` is the `userdOffset` failure, and it reports no error anywhere.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SubmitOutcome {
+    /// The semaphore word after the wait — the payload if the engine released it.
+    pub semaphore: u32,
+    /// USERD `GP_GET`: **hardware's** consume cursor. Advancing to meet `gp_put` is the
+    /// one fact in this struct that no store of ours can produce.
+    pub gp_get: u32,
+    /// USERD `GP_PUT`: our produce cursor, read back so the pair is a comparison and not
+    /// an assumption.
+    pub gp_put: u32,
+}
+
+/// What [`HostRmBackend::prove_ce_copy`] observed in **device memory**, before and after.
+///
+/// ★ The expectations travel with the observations rather than being re-derived by the
+/// caller: a diagnostic that computes its own expected value from the same variable it
+/// printed is how a copy of the wrong length reads as a pass.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CeEvidence {
+    /// The destination's first word **before** the copy — the sentinel, i.e. `!pattern`.
+    pub before: u32,
+    /// The destination's first word after, read through an independent second mapping.
+    pub after: u32,
+    /// The destination's **last** word after. A truncated copy matches `after` and not
+    /// this.
+    pub after_last: u32,
+    /// What `after` must be.
+    pub expect_after: u32,
+    /// What `after_last` must be.
+    pub expect_after_last: u32,
+    /// How many bytes were asked for.
+    pub bytes: u64,
+    /// What the submission itself did — the cursors and the engine's release semaphore.
+    /// Carried so a failed copy can be triaged without a second run: see
+    /// [`HostRmBackend::ce_copy_outcome`].
+    pub submit: SubmitOutcome,
+    /// The payload the engine was told to release.
+    pub payload: u32,
+    /// ★★★★★ **THE SOURCE OPERAND'S GPU VA — the field that makes a host `Xid` JOINABLE.**
+    ///
+    /// ⊘⊘ Added 2026-08-13 (w289) because its absence cost an attribution. `w288nc1`'s guest
+    /// run printed *"the entry WAS fetched and the methods did nothing"* and the host `dmesg`
+    /// for the same boot carried one `Xid 31 … CE0 HUBCLIENT_CE1 faulted @ 0x1_20000000 …
+    /// FAULT_PTE ACCESS_TYPE_VIRT_READ`. Those are the same event — but nothing in the
+    /// client's output named an address, so the `RESULT` could only record the `Xid` as
+    /// unattributable. **A diagnostic that prints every field except the one the other side
+    /// prints cannot be joined to it**, and a join is the whole of criterion 1.
+    pub src_va: u64,
+    /// The destination operand's GPU VA. Same reason as [`Self::src_va`]; printed even when
+    /// the fault is on the source, because *which of the two* is itself the finding.
+    pub dst_va: u64,
+}
+
+/// The first word of a whole-buffer compare that did not match.
+///
+/// ★ An *index*, not a count. "17 words differed" and "the first difference is at word 17"
+/// are different facts, and only the second tells you whether a page boundary, a cache
+/// line or the whole buffer is the story.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WordMismatch {
+    /// Index of the first mismatching 32-bit word.
+    pub word: u64,
+    /// What was read there.
+    pub got: u32,
+    /// What was written there before the descriptor was ever allocated.
+    pub want: u32,
+}
+
+/// ★★★ Which shape the two views of one backing are joined in — [`FbViewJoin::Private`] is
+/// the **negative control**, and it is a control over the property actually under test.
+///
+/// ⊘ Not "a second memfd", which would be a tautology: two different files obviously hold
+/// different bytes, and a differential that fails over them has tested nothing. The one
+/// thing that makes two mappings **one memory** is `MAP_SHARED` over one descriptor
+/// (`kayfabe_linux_raw::Backing::SharedFile`), so the control changes exactly that and
+/// nothing else. ★ The line it is expected to execute is
+/// [`kayfabe_linux_raw::Backing::PrivateAnonymous`]'s arm of `Backing::mmap_args`
+/// (`mapping_unsafe.rs:344-347`), which yields `MAP_PRIVATE | MAP_ANONYMOUS` — different
+/// pages, same code either side of it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FbViewJoin {
+    /// Both views are `MAP_SHARED` mappings of **one** `memfd`: the joined shape.
+    Shared,
+    /// ⊘ The guest-side view is private anonymous memory. Everything else is identical and
+    /// the differential must **FAIL** — in both directions.
+    Private,
+}
+
+/// ★★★ What [`HostRmBackend::export_backing`] did when handed a **host vidmem object**.
+///
+/// ⊘ Three outcomes and not a `bool`, because *"it refused"* and *"it refused by the name
+/// that means the bytes are on the card"* are different facts, and the whole value of
+/// [`kayfabe_isolate::RmError::NotExportableAsMemory`] is lost if a caller cannot tell a
+/// named boundary from an opaque host failure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeviceExportOutcome {
+    /// [`kayfabe_isolate::RmError::NotExportableAsMemory`] — the control fired.
+    RefusedByName,
+    /// It refused, but with something else. The control did **not** fire.
+    RefusedOtherwise,
+    /// ⊘ It **succeeded**. The boundary this project's decision (b) rests on is not there.
+    Succeeded,
+}
+
+/// One direction of the two-view differential: what was written through one mapping and
+/// what came back through the other.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ViewCompare {
+    /// The first word written.
+    pub wrote: u32,
+    /// The first word read back through the **other** mapping.
+    pub read_back: u32,
+    /// ★★ How many words the compare loop actually looked at — [`OsDescEvidence`]'s own
+    /// lesson, carried rather than re-derived: a reported count must come from the thing
+    /// that did the counting, or `None` for `mismatch` means "compared nothing".
+    pub words_compared: u64,
+    /// The first word that disagreed, or [`None`] when every compared word matched.
+    pub mismatch: Option<WordMismatch>,
+}
+
+impl ViewCompare {
+    /// Did every word of a **non-empty** compare agree?
+    ///
+    /// ⊘ The `words_compared > 0` clause is not defensive: a loop that ran zero times
+    /// leaves `mismatch` at [`None`], and without this the vacuous case reads as the pass.
+    #[must_use]
+    pub fn agrees(&self) -> bool {
+        self.words_compared > 0 && self.mismatch.is_none()
+    }
+}
+
+/// ★★★★★ What [`HostRmBackend::prove_fb_view`] observed — the CPU-view question, split
+/// into the four facts that have different causes.
+///
+/// Read `docs/design/fb_cpu_view.md` before interpreting any field.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FbViewEvidence {
+    /// ★ **The premise, measured.** Did `NV_ESC_RM_MAP_MEMORY` succeed on the object
+    /// [`RmBackend::alloc_vidmem`] mints? [`None`] means it refused, carrying the status.
+    pub vidmem_cpu_view: Option<ViewCompare>,
+    /// The status `map_cpu` refused with, when it did.
+    pub vidmem_cpu_refusal: Option<u32>,
+    /// ★★★ **THE NEGATIVE CONTROL.** What happened when that same object was offered to
+    /// [`RmBackend::export_backing`] as [`ExportSource::HostDeviceMemory`].
+    pub device_export: DeviceExportOutcome,
+    /// Which join shape the fabricated backing's two views were built in.
+    pub join: FbViewJoin,
+    /// How many bytes the fabricated backing carries.
+    pub bytes: u64,
+    /// **Direction 1** — written through the *guest-side* mapping, read through the
+    /// *isolate-side* one.
+    pub guest_to_host: ViewCompare,
+    /// **Direction 2** — written through the *isolate-side* mapping, read through the
+    /// *guest-side* one.
+    pub host_to_guest: ViewCompare,
+    /// The GPU VA `DMA_OFFSET_FIXED_TRUE` was asked for.
+    pub asked_va: u64,
+    /// The GPU VA RM reported for the isolate-side mapping's descriptor.
+    pub got_va: u64,
+}
+
+impl FbViewEvidence {
+    /// Was the descriptor placed **exactly** where it was asked for?
+    #[must_use]
+    pub fn placed_as_asked(&self) -> bool {
+        self.got_va == self.asked_va
+    }
+
+    /// ★★★ The rung's verdict for [`FbViewJoin::Shared`]: **both** directions agree, the
+    /// GPU view landed at the guest's number, and the device-memory crossing was refused
+    /// by name.
+    ///
+    /// ⊘ All four, conjoined here rather than left to a caller. Three of them passing is
+    /// not a partial success: a join that carries bytes one way only is a memory the guest
+    /// and the engine disagree about, which is the defect this rung exists to remove.
+    #[must_use]
+    pub fn joined(&self) -> bool {
+        self.guest_to_host.agrees()
+            && self.host_to_guest.agrees()
+            && self.placed_as_asked()
+            && self.device_export == DeviceExportOutcome::RefusedByName
+    }
+}
+
+/// ★★★ What [`HostRmBackend::prove_guest_ram_pin`] observed, as separable facts.
+///
+/// ⊘ Separable on purpose, and it is [`OsDescEvidence`]'s own lesson: `placed_as_asked` and
+/// *"the isolate is looking at the window the grant named"* are different questions, and a
+/// single boolean over both would score a plane that mapped the wrong window as a placement
+/// failure — sending the next reader to re-check `DMA_OFFSET_FIXED`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GuestRamPinEvidence {
+    /// The host GPU VA the caller dictated.
+    pub asked_va: u64,
+    /// The host GPU VA RM wrote back — its **[OUT]** `dmaOffset`, not our argument echoed.
+    pub got_va: u64,
+    /// How many bytes the grant named.
+    pub bytes: u64,
+    /// The grant's offset into the block. Non-zero by construction; see the prover.
+    pub offset: u64,
+    /// The first word the ISOLATE's mapping reads.
+    pub first_word: u32,
+    /// The word the VMM wrote at that offset.
+    pub expected_word: u32,
+}
+
+impl GuestRamPinEvidence {
+    /// The **fixed** map landed where it was asked to.
+    #[must_use]
+    pub fn placed_as_asked(&self) -> bool {
+        self.got_va == self.asked_va
+    }
+
+    /// The isolate is looking at the **window the grant named**, not at the block's start.
+    #[must_use]
+    pub fn window_is_the_granted_one(&self) -> bool {
+        self.first_word == self.expected_word
+    }
+}
+
+/// ★★★ What [`HostRmBackend::prove_os_descriptor`] observed — **shaped so the four
+/// falsifier arms cannot be collapsed into one boolean.**
+///
+/// Each field answers a different question, and the reason they are separate is that a
+/// "did the ioctl succeed?" test scores three of the four failures as a pass:
+///
+/// | field | the question it answers alone |
+/// |---|---|
+/// | (an `Err` from the call) | may a process of this privilege pin its own pages for RM? |
+/// | [`Self::got_va`] vs [`Self::asked_va`] | does address identity extend to described memory? |
+/// | [`Self::submit`] | did the engine actually fetch and retire? |
+/// | [`Self::mismatch`] | are the pages the GPU saw the pages we wrote? |
+#[derive(Debug, Clone, Copy)]
+pub struct OsDescEvidence {
+    /// The GPU VA we asked `DMA_OFFSET_FIXED_TRUE` to place the mapping at.
+    pub asked_va: u64,
+    /// The GPU VA RM reported. Equal to [`Self::asked_va`] or the rung has failed, however
+    /// green everything downstream looks.
+    pub got_va: u64,
+    /// How many bytes were described, mapped and copied.
+    pub bytes: u64,
+    /// The destination's first word **before** the copy — the sentinel. Non-vacuity: it
+    /// says the destination did not already hold the answer.
+    pub before: u32,
+    /// The destination's first word after, through an independent mapping.
+    pub after: u32,
+    /// What `before` was set to.
+    pub sentinel: u32,
+    /// The first word of the destination that is not what we wrote into the memfd, if any.
+    /// `None` means **every** word of [`Self::bytes`] matched.
+    pub mismatch: Option<WordMismatch>,
+    /// ★★ How many bytes were actually **compared**, counted by the comparison loop.
+    ///
+    /// ⊘ Not a copy of [`Self::bytes`], and the distinction is a defect this rung already
+    /// shipped once: the first version printed `"{} of {} bytes match"` from `bytes`
+    /// **twice**, so the reassuring number was a tautology that would have read `65536 of
+    /// 65536` over a loop that compared nothing. A reported count must come from the thing
+    /// that did the counting — `measure_at_the_boundary_not_inside`, in miniature.
+    pub bytes_compared: u64,
+    /// ⊘ **Was the pattern written into the memfd at all?** `false` is the deliberate
+    /// negative control ([`OsDescSeed::Never`]), where a mismatch is the PASS.
+    pub seeded: bool,
+    /// The submission's own cursors and release semaphore.
+    pub submit: SubmitOutcome,
+    /// The payload the engine was told to release.
+    pub payload: u32,
+}
+
+impl OsDescEvidence {
+    /// Was the mapping placed **exactly** where it was asked for?
+    #[must_use]
+    pub fn placed_as_asked(&self) -> bool {
+        self.got_va == self.asked_va
+    }
+
+    /// ★ Did the comparison loop actually look at every byte that was copied?
+    ///
+    /// The guard on [`Self::bytes_compared`]: a loop that compared nothing reports zero
+    /// here and `None` for [`Self::mismatch`], which without this check is
+    /// indistinguishable from a perfect match.
+    #[must_use]
+    pub fn compared_everything(&self) -> bool {
+        self.bytes_compared == self.bytes
+    }
+
+    /// Did the whole chain hold: placed as asked, engine retired, **every** byte compared,
+    /// and every byte the GPU delivered a byte we wrote?
+    ///
+    /// ★ `before != after` is in the conjunction for R17's reason — bytes that match
+    /// without the destination ever changing would mean the sentinel write, not the copy,
+    /// is what we are reading. [`Self::compared_everything`] is in it for the same reason
+    /// one step further out: a `None` mismatch over an empty loop is not agreement.
+    ///
+    /// ⊘ **Meaningless for [`OsDescSeed::Never`]**, where the correct answer is `false` and
+    /// the caller must invert its own verdict rather than ask this.
+    #[must_use]
+    pub fn reached(&self) -> bool {
+        self.placed_as_asked()
+            && self.submit.semaphore == self.payload
+            && self.before == self.sentinel
+            && self.after != self.sentinel
+            && self.compared_everything()
+            && self.mismatch.is_none()
+    }
+}
+
+/// ★★★ What [`HostRmBackend::prove_fb_memfd_join`] measured — **R32**.
+///
+/// ⊘ Every field here is a separate question, and a "did the ioctl succeed?" test scores
+/// **six** of the seven failures as a pass:
+///
+/// | field | the question it answers alone |
+/// |---|---|
+/// | (an `Err` from the call) | may this process describe the *second* mapping's pages? |
+/// | [`Self::join_after`] | are the two mappings one memory **at all**, before RM is involved? |
+/// | [`Self::got_va`] vs [`Self::asked_va`] | did address identity survive? |
+/// | [`Self::fwd_submit`] / [`Self::rev_submit`] | did each engine actually fetch and retire? |
+/// | [`Self::fwd_mismatch`] | **J1** — did the GPU read what the OTHER mapping wrote? |
+/// | [`Self::rev_before`] | non-vacuity: did the memfd hold the OLD pattern first? |
+/// | [`Self::rev_mismatch`] | **J2** — did the OTHER mapping read what the GPU wrote? |
+#[derive(Debug, Clone, Copy)]
+pub struct FbJoinEvidence {
+    /// The GPU VA `DMA_OFFSET_FIXED_TRUE` was asked for.
+    pub asked_va: u64,
+    /// The GPU VA RM reported.
+    pub got_va: u64,
+    /// How many bytes were described, mapped and copied — in each direction.
+    pub bytes: u64,
+    /// The join probe word read through `S` **before** `I` wrote it. Zero on a fresh
+    /// memfd; anything else means the file was not pristine and the join is not a
+    /// measurement.
+    pub join_before: u32,
+    /// The join probe word read through `S` **after** `I` wrote it.
+    pub join_after: u32,
+    /// What `I` wrote there.
+    pub join_want: u32,
+    /// The vidmem destination's word 0 before the forward copy — the sentinel.
+    pub fwd_before: u32,
+    /// Its word 0 after.
+    pub fwd_after: u32,
+    /// What [`Self::fwd_before`] was set to.
+    pub fwd_sentinel: u32,
+    /// **J1**: the first vidmem word that is not what `S` wrote into the memfd. `None`
+    /// means every word matched.
+    pub fwd_mismatch: Option<WordMismatch>,
+    /// Counted by the forward comparison loop, never re-derived from [`Self::bytes`].
+    pub fwd_bytes_compared: u64,
+    /// The forward submission's cursors and release semaphore.
+    pub fwd_submit: SubmitOutcome,
+    /// The payload the forward copy was told to release.
+    pub fwd_payload: u32,
+    /// ★★ The memfd's word 0 **through `S`**, immediately before the reverse copy. In the
+    /// seeded arm this must be [`Self::rev_first`] — never the reverse pattern, and never
+    /// zero. It is what separates *"the engine wrote"* from *"we are reading our own
+    /// earlier write"*.
+    pub rev_before: u32,
+    /// What [`Self::rev_before`] must be in the seeded arm: the forward pattern's first
+    /// word.
+    pub rev_first: u32,
+    /// **J2**: the first memfd word, read **through `S`**, that is not what the engine was
+    /// given. `None` means every word matched.
+    pub rev_mismatch: Option<WordMismatch>,
+    /// Counted by the reverse comparison loop.
+    pub rev_bytes_compared: u64,
+    /// The reverse submission's cursors and release semaphore.
+    pub rev_submit: SubmitOutcome,
+    /// The payload the reverse copy was told to release.
+    pub rev_payload: u32,
+    /// ⊘ Was the forward pattern written through `S` at all? `false` is the negative
+    /// control, where a forward mismatch at word 0 is the PASS.
+    pub seeded: bool,
+}
+
+impl FbJoinEvidence {
+    /// Was the mapping placed exactly where it was asked for?
+    #[must_use]
+    pub fn placed_as_asked(&self) -> bool {
+        self.got_va == self.asked_va
+    }
+
+    /// Are the two mappings one memory, measured with no GPU in the path?
+    ///
+    /// ★ Both halves: the probe word must have been **absent** before and **present**
+    /// after. A store that answered [`Self::join_want`] unconditionally would pass the
+    /// second half alone.
+    #[must_use]
+    pub fn joined(&self) -> bool {
+        self.join_before == 0 && self.join_after == self.join_want
+    }
+
+    /// Did the forward comparison look at every byte that was copied?
+    #[must_use]
+    pub fn fwd_compared_everything(&self) -> bool {
+        self.fwd_bytes_compared == self.bytes
+    }
+
+    /// Did the reverse comparison look at every byte that was copied?
+    #[must_use]
+    pub fn rev_compared_everything(&self) -> bool {
+        self.rev_bytes_compared == self.bytes
+    }
+
+    /// **J1** — the GPU read, through a descriptor over mapping `I`, exactly what mapping
+    /// `S` wrote.
+    ///
+    /// ⊘ Meaningless for [`OsDescSeed::Never`], where the correct answer is `false`.
+    #[must_use]
+    pub fn forward_reached(&self) -> bool {
+        self.joined()
+            && self.placed_as_asked()
+            && self.fwd_submit.semaphore == self.fwd_payload
+            && self.fwd_before == self.fwd_sentinel
+            && self.fwd_after != self.fwd_sentinel
+            && self.fwd_compared_everything()
+            && self.fwd_mismatch.is_none()
+    }
+
+    /// **J2** — mapping `S` read exactly what the GPU wrote through the descriptor over
+    /// mapping `I`.
+    ///
+    /// ★ [`Self::rev_before`] is in the conjunction for the reason the whole rung exists:
+    /// bytes that match without the memfd ever having held something *else* first would
+    /// mean we are reading the seed, not the engine's write. In the unseeded arm the memfd
+    /// starts at zero, so the check is against that instead.
+    #[must_use]
+    pub fn reverse_reached(&self) -> bool {
+        let expected_before = if self.seeded { self.rev_first } else { 0 };
+        self.joined()
+            && self.rev_submit.semaphore == self.rev_payload
+            && self.rev_before == expected_before
+            && self.rev_compared_everything()
+            && self.rev_mismatch.is_none()
+    }
+}
+
+/// ⊘ **Whether [`HostRmBackend::prove_os_descriptor`] writes the pattern at all** — the
+/// negative control, as a parameter rather than a comment.
+///
+/// ★★★ This exists because a rung that has only ever been seen to pass is an instrument
+/// with no demonstrated failure mode. `Never` runs the identical chain over a memfd nobody
+/// wrote, so the copy engine reads the kernel's zero pages: a mismatch at word 0 is the
+/// **expected** result, and a *match* would mean the comparison is not looking at what it
+/// claims to.
+///
+/// **MEASURED** — `traces/real_ga106/rmladder_r25_osdescriptor_real_ga106.txt`, arms A and
+/// C, RTX 3060 GA106 / 580.159.04, binary stamped `REV_UNDER_TEST=40d44db84`: the engine
+/// delivered `0x00000000` at word 0 where the pattern would have been `0x5eed0001`, at both
+/// euid 0 and euid 65534. ⇒ this arm is not hypothetical; the comparison has been watched
+/// to fail on the same hardware that produced the green.
+///
+/// ⚠ It is not a "disable the check" flag. Both arms compare every word; they differ only
+/// in what the correct answer is, and [`HostRmBackend::prove_os_descriptor`]'s caller must
+/// invert its verdict accordingly.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OsDescSeed {
+    /// Write the per-word pattern into the memfd **before** describing it to RM — the arm
+    /// whose agreement is the rung's result.
+    BeforeDescribe,
+    /// Write nothing. The memfd is a fresh `memfd_create` + `ftruncate`, so its pages read
+    /// as zero — and the pattern's first word is deliberately non-zero, so word 0 must
+    /// mismatch.
+    Never,
+}
+
+/// ★★★★★ **R31's evidence** — what happened when a host channel was created over memory
+/// shaped exactly like the guest's ring, with the guest's own numbers.
+///
+/// Five separable facts, and they are separate fields for [`OsDescEvidence`]'s stated
+/// reason: a single verdict over all of them would score *"RM refused the ring"* and
+/// *"RM accepted a ring it should have refused"* as the same colour, and those send the
+/// next reader to opposite places.
+#[derive(Debug)]
+pub struct GuestRingEvidence {
+    /// **Arm A** — the fixed placement of the `OS_DESCRIPTOR` the channel's GPFIFO lives
+    /// in. Asked, and RM's **[OUT]** `dmaOffset`.
+    pub ring_asked_va: u64,
+    /// What RM wrote back.
+    pub ring_got_va: u64,
+    /// The `gpFifoOffset` handed to the channel alloc — an absolute VA inside the mapping
+    /// above, and deliberately **not** `ring_va + `[`GPFIFO_OFFSET`].
+    pub gp_fifo_va: u64,
+    /// The `gpFifoEntries` handed to the channel alloc — the count this bench's guest
+    /// actually declares, and 64× ours.
+    pub gp_fifo_entries: u32,
+    /// What the channel alloc answered: the work-submit token, or RM's refusal.
+    pub channel: Result<u64, RmError>,
+    /// The layout the connection recorded for the channel it built, if it built one.
+    pub declared: Option<(u64, u32)>,
+    /// [`RmConnection::map_cpu_windowed_on`] entries before and after the channel alloc.
+    /// ★ The measurement behind *"no CPU map is attempted on a guest-backed ring"*: the
+    /// difference must be exactly **1** — USERD, which is ours.
+    pub cpu_maps: (u64, u64),
+    /// What [`HostRmBackend::ring_store_u32`] answered on the resulting channel. Must be
+    /// [`RING_NOT_OURS`]; an `Ok` would mean a CPU view of the guest's ring exists.
+    pub ring_store: Result<(), RmError>,
+    /// **Arm B, the negative control on the mapping**: `NV_ESC_RM_MAP_MEMORY` issued
+    /// deliberately against the guest-backed ring object. Expected to be refused; an `Ok`
+    /// is a finding, not a pass, and the mapping is dropped immediately either way.
+    pub cpu_map_of_guest_ring: Result<(), RmError>,
+    /// **Arm C, the negative control on the binding**: the same channel alloc with a
+    /// `gpFifoOffset` at an address **nothing was ever mapped at**. Expected to be refused
+    /// — that refusal is what makes arm A's success a statement about the *binding* rather
+    /// than about the ioctl being well-formed.
+    pub unbound: Result<u64, RmError>,
+    /// The address arm C named.
+    pub unbound_va: u64,
+}
+
+impl GuestRingEvidence {
+    /// The fixed map landed where it was asked to.
+    #[must_use]
+    pub fn placed_as_asked(&self) -> bool {
+        self.ring_got_va == self.ring_asked_va
+    }
+
+    /// RM was told the caller's two numbers, unchanged.
+    #[must_use]
+    pub fn adopted_the_guests_numbers(&self) -> bool {
+        self.declared == Some((self.gp_fifo_va, self.gp_fifo_entries))
+    }
+
+    /// Exactly one CPU mapping was asked for while the channel was built — USERD's.
+    #[must_use]
+    pub fn mapped_only_userd(&self) -> bool {
+        self.cpu_maps.1 == self.cpu_maps.0 + 1
+    }
+}
+
+impl CeEvidence {
+    /// Did the destination change **from the sentinel to the source's bytes**, first word
+    /// and last, *and* did the engine say it had retired?
+    ///
+    /// ★ The semaphore is part of the conjunction rather than a separate check. Bytes that
+    /// match without a release would mean something moved them that we did not ask, and
+    /// that is not a pass — it is a different question.
+    #[must_use]
+    pub fn copied(&self) -> bool {
+        self.before != self.expect_after
+            && self.after == self.expect_after
+            && self.after_last == self.expect_after_last
+            && self.submit.semaphore == self.payload
+    }
+
+    /// ★★★★★ **THE WHOLE BAR THE CLIENT'S OWN BANNER STATES — all FOUR facts, including the
+    /// one [`CeEvidence::copied`] does not check.**
+    ///
+    /// # ⊘⊘ THE DEFECT THIS EXISTS TO FIX, measured on my own instrument
+    ///
+    /// `[measured 2026-08-13, boot `w283c_client`, real GA106]` the client printed its **★
+    /// success** line — *"4096 bytes moved … engine semaphore 0x00000001 (declared
+    /// 0x00000001), **GP_GET 0 caught GP_PUT 1**"* — and returned **`R33_RC=0`**. Read the
+    /// numbers: `0` did not catch `1`. The word *"caught"* is **template text**, printed
+    /// unconditionally, and [`CeEvidence::copied`] — the predicate the ★ arm is gated on —
+    /// checks the bytes and the semaphore and **never compares the cursors**.
+    ///
+    /// ⇒ The client's banner says *"the bar is FOUR facts … **GP_GET reached GP_PUT** …"* and
+    /// its verdict implemented **three**. On the native arm the two cursors agree, so the
+    /// gap is invisible exactly where it does not matter and decisive exactly where it does:
+    /// in the guest, whose channel our forwarding path never runs.
+    ///
+    /// ★ This is `a_falsifier_that_flags_its_own_good_news` in its purest form — a success
+    /// line that CONTAINS the words of the criterion it is not testing. It is the same class
+    /// as `GCC_CUP2_RC=0` matching an unanchored `CUP2_RC` grep, one plane over.
+    ///
+    /// ⊘ [`CeEvidence::copied`] is deliberately left alone: it answers *"did the bytes move
+    /// and did the engine retire"*, which is a real and separately useful question. The
+    /// conjunction belongs at the verdict, not inside a narrower predicate.
+    #[must_use]
+    pub fn met_the_whole_bar(&self) -> bool {
+        self.copied() && self.submit.landed(self.payload)
+    }
+
+    /// Whether the guest's own `GP_GET` reached its own `GP_PUT` — the fourth fact, named
+    /// on its own so a report can say **which** of the four failed.
+    #[must_use]
+    pub fn cursor_caught_up(&self) -> bool {
+        self.submit.gp_get == self.submit.gp_put
+    }
+}
+
+impl SubmitOutcome {
+    /// Did hardware both **consume** the entry and **release** the semaphore?
+    ///
+    /// Both, never either: a `GP_GET` that moved with no semaphore means the methods did
+    /// not execute, and a semaphore without a `GP_GET` means the word was not written by
+    /// the submission this call made.
+    #[must_use]
+    pub fn landed(&self, payload: u32) -> bool {
+        self.semaphore == payload && self.gp_get == self.gp_put
+    }
+}
+
+impl HostRmBackend {
+    /// One worker's backend over `conn`.
+    #[must_use]
+    pub fn new(id: IsolateId, conn: Arc<RmConnection>, exports: Arc<ChildExports>) -> Self {
+        HostRmBackend {
+            id,
+            conn,
+            slots: BTreeMap::new(),
+            ce_channels: BTreeMap::new(),
+            exports,
+            guest_ram: None,
+            ce_witness: None,
+            fb_joins: None,
+            bare_vaspaces: false,
+        }
+    }
+
+    /// ★★★★★ Install this isolate's **shared** framebuffer-join table.
+    ///
+    /// ⊘ Takes the `Arc` rather than building one, and that is the whole point: the caller is
+    /// the party that knows there is exactly one table per isolate. See [`crate::fbjoin`].
+    #[must_use]
+    pub fn with_fb_joins(mut self, joins: Arc<crate::fbjoin::FbJoinTable>) -> Self {
+        self.fb_joins = Some(joins);
+        self
+    }
+
+    /// ★★★★★ **CONSTRAINT 26 — declare that this isolate allocates BARE address spaces.**
+    ///
+    /// See [`HostRmBackend::bare_vaspaces`]. ⊘ The default is `false`, which is the
+    /// pre-§26 behaviour byte for byte: a backend nobody told is a backend that owns its
+    /// own ranges, which is what every existing test and the whole `arena` control arm
+    /// expect.
+    #[must_use]
+    pub fn with_bare_vaspaces(mut self, bare: bool) -> Self {
+        self.bare_vaspaces = bare;
+        self
+    }
+
+    /// Install this isolate's guest-RAM plane (or, with `None`, state that it has none).
+    #[must_use]
+    pub fn with_guest_ram(mut self, plane: Option<Arc<crate::guestram::GuestRamPlane>>) -> Self {
+        self.guest_ram = plane;
+        self
+    }
+
+    /// ★★★ **E6** — install a recorder-only [`CeWitness`]. See that type for why it
+    /// exists, why it is off by default, and why it cannot cross the sandbox.
+    #[must_use]
+    pub fn with_ce_witness(mut self, witness: Arc<CeWitness>) -> Self {
+        self.ce_witness = Some(witness);
+        self
+    }
+
+    /// ★★★ **E6 instrument** — allocate a **CPU-mappable** device-local buffer, the class
+    /// [`HostRmBackend::prove_ce_copy`] already builds its two buffers from.
+    ///
+    /// # ⊘ Why a diagnostic needs its own allocator at all — this is a MEASURED fact
+    ///
+    /// `[measured]` 2026-08-03 on the RTX 3060 bench: [`RmBackend::alloc_sysmem`] — the
+    /// verb every *published guest backing* is minted by — passes
+    /// [`NVOS02_FLAGS_MAPPING_NO_MAP`], and `NV_ESC_RM_MAP_MEMORY` on the result is refused
+    /// `NV_ERR_INVALID_ARGUMENT` (`0x1F`). That flag is **deliberate and documented**:
+    /// *"right for a data buffer the GPU alone touches"*, and it stops the frontend
+    /// building an `mmap` context around the descriptor at all
+    /// (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/escape.c:342-345`).
+    ///
+    /// ⇒ **A published backing is opaque to the CPU in both directions, by design.** So the
+    /// R17 evidence shape — write a sentinel, copy, read back through an independent
+    /// mapping — is *structurally unavailable* on one, and relaxing `NO_MAP` to make a
+    /// diagnostic work would be changing the product to fit its instrument.
+    ///
+    /// ⊘ **This is not a second data path.** Nothing in the forwarding plane calls it; it
+    /// exists so a hardware diagnostic can build an operand it can *see*, exactly as
+    /// `prove_ce_copy` does one method over.
+    ///
+    /// # Errors
+    /// Whatever RM refuses the allocation with.
+    pub fn alloc_probe_local(&mut self, len: u64) -> Result<HostHandle, RmError> {
+        let raw = self.conn.alloc_device_local(len)?;
+        Ok(self.stamp(raw))
+    }
+
+    /// The `hClient` — the `NV01_ROOT` handle — this backend's connection is rooted at.
+    ///
+    /// ⊘ Exists for exactly one caller: a rung that opens a **second** [`RmConnection`] and
+    /// has to establish that the two are genuinely different clients before it says anything
+    /// about isolation between them. Two backends that turned out to share a root would make
+    /// every cross-client statement about them vacuous, and *"they must be different, we
+    /// opened them separately"* is an assumption, not a measurement.
+    #[must_use]
+    pub fn host_client(&self) -> u32 {
+        self.conn.client()
+    }
+
+    /// ★★ **This connection's `NV01_DEVICE_0` handle** — the `hParent` a
+    /// `NV_MEMORY_LIST_ALLOCATION_PARAMS` must carry when `hClient` names a FOREIGN client.
+    ///
+    /// ⊘ Exposed for that one reason. The pair `(hClient, hParent)` is how `mem_list.c`
+    /// resolves *"which GPU is the source object on?"* (`gpuGetByHandle`), and it refuses
+    /// `NV_ERR_INVALID_OBJECT_PARENT` if the two disagree — so a probe that names a foreign
+    /// client needs that client's device handle and cannot derive it.
+    #[must_use]
+    pub fn host_device(&self) -> u32 {
+        self.conn.device
+    }
+
+    /// ★★★ w392c — the control fd this backend's connection holds, for
+    /// `UVM_REGISTER_GPU.rmCtrlFd`. See [`RmConnection::ctl_fd`] for why UVM needs it and
+    /// why it is a borrow.
+    #[must_use]
+    pub fn host_ctl_fd(&self) -> i32 {
+        self.conn.ctl_fd()
+    }
+
+    /// ★★★ w392c — a real `FERMI_VASPACE_A` handle for `UVM_REGISTER_GPU_VASPACE.hVaSpace`.
+    ///
+    /// ⊘⊘ **CAUGHT ON BARE METAL, WHICH IS THE ENTIRE POINT OF RUNNING IT THERE FIRST.**
+    /// The first cut passed `hVaSpace = 0` and UVM answered `0x5d`
+    /// (`NV_ERR_PAGE_TABLE_NOT_AVAIL`, `nvstatuscodes.h:122`) — a defect in *the client*,
+    /// not in anything under test. Inside the guest that same line would have been
+    /// indistinguishable from our emulated device failing to serve a VA-space allocation,
+    /// and it would have been read as a finding.
+    ///
+    /// ⚠ **It must be the SPACE handle, not the RANGE handle.** `alloc_vaspace_raw`
+    /// deliberately returns the `NV01_MEMORY_VIRTUAL` *range* — that is what
+    /// `NV_ESC_RM_MAP_MEMORY_DMA`'s `hDma` names, a distinction this tree already paid for
+    /// once (see R7b in that function). UVM wants the address space itself, so this reaches
+    /// through [`RmConnection::space_of`] for the companion.
+    ///
+    /// # Errors
+    /// Propagates whatever RM said; a caller must not substitute a handle.
+    pub fn host_alloc_vaspace_space(&mut self) -> Result<u32, RmError> {
+        let range = self.alloc_vaspace_raw()?;
+        self.conn
+            .space_of(range)
+            // ⊘ `alloc_vaspace_raw` pairs the two by construction, so a missing companion is
+            //   an invariant break in THIS crate, not an answer from RM. It gets the same
+            //   "not on this rung" code the rest of the file uses for exactly that case.
+            .ok_or(RmError::Other(NOT_ON_THIS_RUNG))
+    }
+
+    /// ★★ **E6 instrument** — fill `memory` with `len` bytes of the ramp
+    /// `first, first+step, first+2*step, …`, one word at a time, through a CPU mapping
+    /// this call opens and drops.
+    ///
+    /// `step == 0` writes a constant, which is how a **sentinel** is written; a non-zero
+    /// step is how a source is filled so that a copy which moved only its first word is
+    /// distinguishable from one that moved all of them.
+    ///
+    /// ★ The mapping is released before returning, and a release fence runs first: the
+    /// stores go into a write-combining mapping and an engine must not be launched while
+    /// they are still in a write-combining buffer. That ordering is not an optimisation —
+    /// getting it wrong makes a *correct* copy read as a failed one.
+    ///
+    /// # Errors
+    /// Whatever the mapping or the stores refuse with; [`RmError::BadHandle`] for a
+    /// `memory` this connection never minted.
+    pub fn fill_words(
+        &self,
+        memory: HostHandle,
+        len: u64,
+        first: u32,
+        step: u32,
+    ) -> Result<(), RmError> {
+        let raw = self.narrow(memory)?;
+        let (node, map) = self.conn.map_cpu(raw, len, CachePolicy::WriteCombining)?;
+        for i in 0..(len / 4) {
+            map.store_u32(
+                HostOffset::new(i * 4),
+                first.wrapping_add(step.wrapping_mul(i as u32)),
+            )
+            .map_err(|e| region_error(&e))?;
+        }
+        release_fence();
+        drop(map);
+        drop(node);
+        Ok(())
+    }
+
+    /// ★★ **E6 instrument** — read the words at `offsets` out of `memory` through a
+    /// **freshly opened, independent** mapping: a different device node, a different mmap
+    /// context, a kernel-chosen address.
+    ///
+    /// ⊘ Independence is the whole content of the call. Reading back through the mapping
+    /// the sentinel was written through proves a page is writable and nothing else, which
+    /// is the failure `prove_ring_is_device_memory`'s docs already name one object over.
+    ///
+    /// # Errors
+    /// Whatever the mapping or the loads refuse with; [`RmError::BadHandle`] for a
+    /// `memory` this connection never minted.
+    /// ★★★★★ **HOW FAST CAN THE CPU READ VIDEO MEMORY?** — the number that decides whether
+    /// page tables can live in the one big reservation, or whether a RAM-side copy is
+    /// load-bearing rather than an optimisation.
+    ///
+    /// Owner, 2026-09-10: *"it might mean that we may need a fake fb directly in the first
+    /// boot, to even boot, if the half a minute is an issue. Which means the fake fb
+    /// optimization is load bearing to implement to get a product, not some small % gain."*
+    ///
+    /// ⊘ Reads `len` bytes sequentially as `u32`s through a fresh mapping and returns the
+    /// elapsed time. The caller divides. It is deliberately a **read** benchmark: writes to
+    /// write-combining memory are buffered and fast, reads are not, and the sweep is a
+    /// reader.
+    ///
+    /// ⚠ Uses the same `WriteCombining` policy every other vidmem mapping here uses, so the
+    /// answer describes the mapping we would actually get rather than a better one.
+    ///
+    /// # Errors
+    /// Whatever the allocation, mapping or a load refuses with.
+    pub fn time_vidmem_read(&self, len: u64) -> Result<(std::time::Duration, u64), RmError> {
+        let raw = self.conn.reserve_gpga(len)?;
+        let (node, map) = self.conn.map_cpu(raw, len, CachePolicy::WriteCombining)?;
+        // ⊘ `load_u64`, the widest single access `VolatileRegion` offers. That type has no
+        // bulk read ON PURPOSE — it is the register-access type, where one call must be one
+        // instruction. So this measures an ACCESS RATE, not a memcpy bandwidth, and the
+        // caller must say so. A true bulk read of video memory needs a non-volatile mapping,
+        // which `map_cpu` does not hand out.
+        let mut acc = 0u64;
+        let start = std::time::Instant::now();
+        let mut off = 0u64;
+        while off + 8 <= len {
+            acc = acc.wrapping_add(
+                map.load_u64(HostOffset::new(off))
+                    .map_err(|e| region_error(&e))?,
+            );
+            off += 8;
+        }
+        let took = start.elapsed();
+        drop(map);
+        drop(node);
+        let _ = raw;
+        Ok((took, acc))
+    }
+
+    /// ★★★★★ **THE READ SWEEP, done properly: ONE object, ONE mapping, copies of varying size.**
+    ///
+    /// Owner, correcting the first attempt twice over: *"you should not measure allocation
+    /// time … You can just do one RM object and then test different sizes of memcpy on it
+    /// using MMIO"*, and *"initialize the whole thing with /dev/urandom for a good test"*.
+    ///
+    /// Both corrections were right and the first sweep was wrong on both counts:
+    ///
+    /// - It allocated and mapped **per row**, so allocation and per-mapping locality were
+    ///   inside every number. Smaller rows looked slower partly for that reason.
+    /// - Every access was an 8-byte load whatever the "chunk size" was, so the row size
+    ///   changed only the LOOP STRUCTURE. It barely measured transfer size at all.
+    ///
+    /// This allocates once, maps once, fills with **random bytes**, and then copies at each
+    /// width. ⊘ Random fill matters: a device that returns zeros for never-written memory, or
+    /// a bus that compresses a repeating pattern, would make a read of an untouched object
+    /// look faster than a read of real page tables. The checksum is returned so the work
+    /// cannot be optimised away.
+    ///
+    /// Returns `(chunk_bytes, elapsed, checksum)` per row.
+    ///
+    /// # Errors
+    /// Whatever the allocation, mapping, fill or a copy refused with.
+    pub fn sweep_vidmem_reads(
+        &self,
+        object_len: u64,
+        chunks: &[u64],
+    ) -> Result<Vec<(u64, std::time::Duration, u64)>, RmError> {
+        // ⊘⊘ `reserve_gpga`, NOT `alloc_device_local`. The latter demands CONTIGUOUS memory
+        // aligned to its own length, so a 256 MiB request needs a 256 MiB-aligned contiguous
+        // run and answers `NoMemory` on a merely fragmented card. `[measured 2026-09-11]` it
+        // did exactly that here, in the same session that added `reserve_gpga` to avoid it.
+        let raw = self.conn.reserve_gpga(object_len)?;
+        let (node, map) = self
+            .conn
+            .map_cpu(raw, object_len, CachePolicy::WriteCombining)?;
+
+        // ⊘ Fill with randomness, in page-sized bursts. Writes to write-combining memory are
+        // buffered and fast; it is the READ side this measures.
+        // ⊘ A `splitmix64` step, not `getrandom`: the property we need is *"not a repeating
+        // pattern a bus or a device could compress or shortcut"*, not cryptographic quality —
+        // and a deterministic seed makes a surprising result reproducible.
+        let mut x: u64 = 0x9E37_79B9_7F4A_7C15;
+        let mut off = 0u64;
+        while off + 8 <= object_len {
+            x = x.wrapping_add(0x9E37_79B9_7F4A_7C15);
+            let mut z = x;
+            z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+            z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+            map.store_u64(HostOffset::new(off), z ^ (z >> 31))
+                .map_err(|e| region_error(&e))?;
+            off += 8;
+        }
+
+        let mut out = Vec::new();
+        for &chunk in chunks {
+            let mut buf = vec![0u8; usize::try_from(chunk).unwrap_or(0)];
+            let mut acc = 0u64;
+            let start = std::time::Instant::now();
+            let mut at = 0u64;
+            while at + chunk <= object_len {
+                map.copy_out(HostOffset::new(at), &mut buf)
+                    .map_err(|e| region_error(&e))?;
+                acc = acc
+                    .wrapping_add(u64::from(buf[0]))
+                    .wrapping_add(u64::from(buf[buf.len() - 1]));
+                at += chunk;
+            }
+            out.push((chunk, start.elapsed(), acc));
+        }
+        drop(map);
+        drop(node);
+        let _ = raw;
+        Ok(out)
+    }
+
+    /// ★★★ **THE NEGATIVE CONTROL for [`Self::time_vidmem_read`]** — the identical loop shape
+    /// over ordinary host memory.
+    ///
+    /// ⊘ Without it, a slow result is unattributable: it could be the PCIe round trip, or it
+    /// could be the per-access wrapper (bounds check, error construction, a non-inlined
+    /// volatile read). Those need opposite fixes, and this tree has a standing habit of
+    /// attributing a cost to the mechanism it was looking at.
+    #[must_use]
+    pub fn time_hostmem_read(len: u64) -> (std::time::Duration, u64) {
+        let buf = vec![0u8; usize::try_from(len).unwrap_or(0)];
+        let mut acc = 0u64;
+        let start = std::time::Instant::now();
+        let mut off = 0usize;
+        while off + 8 <= buf.len() {
+            let mut w = [0u8; 8];
+            w.copy_from_slice(&buf[off..off + 8]);
+            acc = acc.wrapping_add(u64::from_le_bytes(w));
+            off += 8;
+        }
+        (start.elapsed(), acc)
+    }
+
+    pub fn read_words_independently(
+        &self,
+        memory: HostHandle,
+        len: u64,
+        offsets: &[u64],
+    ) -> Result<Vec<u32>, RmError> {
+        let raw = self.narrow(memory)?;
+        let (node, map) = self.conn.map_cpu(raw, len, CachePolicy::WriteCombining)?;
+        let mut out = Vec::with_capacity(offsets.len());
+        for &off in offsets {
+            out.push(
+                map.load_u32(HostOffset::new(off))
+                    .map_err(|e| region_error(&e))?,
+            );
+        }
+        drop(map);
+        drop(node);
+        Ok(out)
+    }
+
+    /// [`RmBackend::alloc_vaspace`]'s body, returning the **raw** `NV01_MEMORY_VIRTUAL`
+    /// range handle instead of a port handle.
+    ///
+    /// ★★ It exists because there are now TWO kinds of address space in this backend and
+    /// only one of them is the port's. [`HostRmBackend::executor_vas`] mints a space that
+    /// is deliberately **not** reachable through a [`HostHandle`] — handing one out is
+    /// exactly how the isolate's own memory ends up somewhere a guest can name — so it
+    /// cannot go through the trait verb, and duplicating R7b's two-object dance is how the
+    /// pairing gets forgotten.
+    /// ★★★ w392c — a `FERMI_VASPACE_A` allocated **externally owned**, which is what
+    /// `UVM_REGISTER_GPU_VASPACE` requires and what the plain one is not.
+    ///
+    /// ⊘⊘ **SECOND DEFECT CAUGHT BY THE BARE-METAL GATE.** With a *real* `hVaSpace` the
+    /// register still answered `0x5d` (`NV_ERR_PAGE_TABLE_NOT_AVAIL`) — so the first
+    /// reading, *"the handle was 0"*, was **only half the cause**. UVM takes ownership of
+    /// the page tables of the VA space it registers, so RM must not have built them:
+    /// `NV_VASPACE_ALLOCATION_FLAGS_IS_EXTERNALLY_OWNED` (`nvos.h:3170`, `BIT(3)`) is the
+    /// declaration that says so. Without it RM has already populated the tables and
+    /// truthfully reports that the page table UVM is asking for is not available.
+    ///
+    /// ⚠ Returns the **space** handle directly — an externally-owned VAS gets no
+    /// `NV01_MEMORY_VIRTUAL` range, because ranges are RM-managed mappings and the whole
+    /// point of this flag is that RM manages nothing here.
+    ///
+    /// # Errors
+    /// Whatever RM said; a caller must not substitute a handle.
+    pub fn host_alloc_vaspace_externally_owned(&mut self) -> Result<u32, RmError> {
+        /// `nvos.h:3170`.
+        const IS_EXTERNALLY_OWNED: u32 = 1 << 3;
+        let mut params = [0u8; NvVaspaceAllocationParameters::SIZE];
+        NvVaspaceAllocationParameters {
+            flags: IS_EXTERNALLY_OWNED,
+            ..NvVaspaceAllocationParameters::default()
+        }
+        .encode_into(&mut params)
+        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let want = self.conn.mint();
+        let space = self
+            .conn
+            .raw_alloc(self.conn.device, want, VA_SPACE, &mut params)?;
+        self.conn.remember(space, self.conn.device);
+        Ok(space)
+    }
+
+    fn alloc_vaspace_raw(&mut self) -> Result<u32, RmError> {
+        // R7. All-zero parameters: index 0, no flags, `vaSize = 0` meaning the default
+        // range. Per-`Vas` separation is the property that matters, not the geometry.
+        let mut params = [0u8; NvVaspaceAllocationParameters::SIZE];
+        NvVaspaceAllocationParameters::default()
+            .encode_into(&mut params)
+            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let want = self.conn.mint();
+        let space = self
+            .conn
+            .raw_alloc(self.conn.device, want, VA_SPACE, &mut params)?;
+        self.conn.remember(space, self.conn.device);
+
+        // ★★ R7b, and it was missing until hardware said so. `NV_ESC_RM_MAP_MEMORY_DMA`'s
+        // `hDma` does NOT name an address space — it names an `NV01_MEMORY_VIRTUAL` RANGE
+        // within one. Handing it the `FERMI_VASPACE_A` handle is refused with
+        // `NV_ERR_INVALID_OBJECT_HANDLE` (0x33), which is what the first end-to-end run of
+        // this ladder returned. The C already knew (`mode2_mapdma_primitive`); the port did
+        // not, and no mock could have said so because a mock's `map_gpu_va` takes whatever
+        // handle it is given.
+        //
+        // So one `Vas` is TWO host objects, and this verb returns the one the map verb
+        // needs. The space rides along as its companion so freeing the range frees both.
+        let mut range = [0u8; NvMemoryVirtualAllocationParams::SIZE];
+        NvMemoryVirtualAllocationParams {
+            offset: 0,
+            limit: 0,
+            h_va_space: space,
+        }
+        .encode_into(&mut range)
+        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let want = self.conn.mint();
+        match self
+            .conn
+            .raw_alloc(self.conn.device, want, NV01_MEMORY_VIRTUAL, &mut range)
+        {
+            Ok(h) => {
+                self.conn.remember(h, self.conn.device);
+                self.conn.pair(h, space);
+                Ok(h)
+            }
+            Err(e) => {
+                // The address space exists and the caller will never learn its handle, so
+                // it is disposed of HERE rather than becoming an orphan nobody can name.
+                let space_handle = self.stamp(space);
+                let _ = self.free(space_handle);
+                Err(e)
+            }
+        }
+    }
+
+    /// ★★★★★ **THE ONE MINT SITE for [`ExecutorVas`]** — the isolate's own address space
+    /// over the guest `Vas` named by the raw range handle `guest_range`, built on first use.
+    ///
+    /// ⊘ **Nothing else in this crate may write `ExecutorVas { … }`.** The type's guarantee
+    /// is *"no guest channel is bound to this space"*, and that is a claim about how the
+    /// handle was **obtained**, which only the constructor can make. A second construction
+    /// site is a second claim, made by whoever wrote it.
+    /// `tests/executor_vas_census.rs` counts them.
+    ///
+    /// ★ Lazy rather than allocated alongside every `Vas`: a `Vas` that never carries an
+    /// isolate copy costs nothing, and the cost of being wrong about that is one extra
+    /// `FERMI_VASPACE_A`, not a wrong address.
+    ///
+    /// # Errors
+    /// Whatever RM refused the address space or its range with.
+    fn executor_vas(&mut self, guest_range: u32) -> Result<ExecutorVas, RmError> {
+        if let Some(range) = self.conn.exec_vas_of(guest_range) {
+            return Ok(ExecutorVas { range });
+        }
+        // ⊘ The mint is OUTSIDE the lock — it is three ioctls — so two pool workers can
+        // reach here for the same `Vas`. `remember_exec_vas` reports the winner and the
+        // loser disposes of what it built: an address space nothing can name is exactly the
+        // orphan `alloc_vaspace`'s error arm exists to avoid.
+        let mine = self.alloc_vaspace_raw()?;
+        let winner = self.conn.remember_exec_vas(guest_range, mine);
+        if winner != mine {
+            let _ = self.free(self.stamp(mine));
+        }
+        Ok(ExecutorVas { range: winner })
+    }
+
+    /// ★★★ **Map `memory` into BOTH the guest-facing space and the isolate's own — at the
+    /// SAME address.**
+    ///
+    /// This is what makes [`ExecutorVas`] affordable. The isolate's copy engine now lives
+    /// in a space no guest channel is bound to, and the operands it is asked to copy are
+    /// **guest VAs**; if those VAs resolved only in the guest's space, every forwarded copy
+    /// would walk the host MMU into nothing (`Xid 31 FAULT_PDE`). So each publish is placed
+    /// twice, at one address.
+    ///
+    /// ⊘ **The guest's address is unchanged and is still chosen first.** `at = Some(va)`
+    /// demands it in the guest's space exactly as before; the shadow is then made to match
+    /// **the address RM reported back**, never the one we asked for. With `at = None` RM
+    /// picks, and the shadow follows. Either way the guest-facing placement is the
+    /// authority and the isolate's copy is derived from it — the reverse would let a
+    /// shadow failure silently relocate a guest VA.
+    ///
+    /// ★ It is all-or-nothing. A shadow that refuses tears the guest-side mapping down and
+    /// returns the refusal, because a range mapped in one space and not the other is
+    /// exactly the state that makes a later copy fault somewhere unrelated.
+    ///
+    /// # Errors
+    /// Whatever either mapping refused, or [`RmError::PlacementRefused`] if the shadow
+    /// could not take the guest-side address.
+    fn map_dma_both(
+        &mut self,
+        guest_range: u32,
+        memory: u32,
+        len: u64,
+        at: Option<u64>,
+    ) -> Result<u64, RmError> {
+        let va = self.conn.raw_map_dma(guest_range, memory, len, at)?;
+        let exec = match self.executor_vas(guest_range) {
+            Ok(e) => e,
+            Err(e) => {
+                let _ = self.conn.raw_unmap_dma(guest_range, va);
+                return Err(e);
+            }
+        };
+        match self.conn.raw_map_dma(exec.range, memory, len, Some(va)) {
+            Ok(got) if got == va => Ok(va),
+            Ok(got) => {
+                let _ = self.conn.raw_unmap_dma(exec.range, got);
+                let _ = self.conn.raw_unmap_dma(guest_range, va);
+                Err(RmError::PlacementRefused { want: va, got })
+            }
+            Err(e) => {
+                let _ = self.conn.raw_unmap_dma(guest_range, va);
+                Err(e)
+            }
+        }
+    }
+
+    /// Undo one [`HostRmBackend::map_dma_both`]. The shadow first, so a failure to unmap it
+    /// cannot leave the guest side free for reuse while the isolate's engine still
+    /// resolves the address.
+    fn unmap_dma_both(&mut self, guest_range: u32, va: u64) -> Result<(), RmError> {
+        if let Some(exec) = self.conn.exec_vas_of(guest_range) {
+            let _ = self.conn.raw_unmap_dma(exec, va);
+        }
+        self.conn.raw_unmap_dma(guest_range, va)
+    }
+
+    fn stamp(&self, raw: u32) -> HostHandle {
+        HostHandle::new(self.id, u64::from(raw))
+    }
+
+    /// Narrow a handle back to RM's 32 bits. A value that does not fit was never minted by
+    /// this connection, so it is a `BadHandle` **here** rather than an ioctl that would name
+    /// a truncated, possibly live, object.
+    fn narrow(&self, h: HostHandle) -> Result<u32, RmError> {
+        u32::try_from(h.raw()).map_err(|_| RmError::BadHandle(h))
+    }
+
+    /// ★ w393 — this backend's export table, for an **in-process** holder that wants to lend
+    /// a token it minted ([`HostRmBackend::export_device_view`]) to a process it spawned itself.
+    /// The child isolate reaches the same table through `crate::child::serve_one`; a probe
+    /// that runs the backend directly has no serve loop and needs the door.
+    #[must_use]
+    pub fn exports(&self) -> &Arc<ChildExports> {
+        &self.exports
+    }
+}
+
+impl RmBackend for HostRmBackend {
+    /// ★★★★★ **w629 — the isolate's OWN usermode page, armed READ-ONLY, for the VMM.**
+    ///
+    /// ⊘ No argument is taken and none could be: the object is `self.conn.usermode`'s, which
+    /// the isolate opened for its own doorbell and PTIMER use at bring-up. See the trait method
+    /// for why a caller-chosen object would be a different and much worse verb.
+    ///
+    /// ⚠ `ViewAccess::ReadOnly` opens the node `O_RDONLY`, and that — not the RM access flag —
+    /// is the containment. `[measured w596]` the RM flag does NOT make the mmap read-only;
+    /// `[measured w600, unprivileged]` the open mode does, with `EACCES` on both a writable
+    /// `mmap` and a later `mprotect`.
+    ///
+    /// ⊘ A missing usermode window is REFUSED rather than substituted: `self.conn.usermode` is
+    /// a `Result` precisely so that "we never got one" cannot be confused with "here is one".
+    fn export_usermode_view(
+        &mut self,
+        write: bool,
+    ) -> Result<kayfabe_isolate::DeviceView, RmError> {
+        let object = self.conn.usermode.as_ref().map_err(|e| *e)?.object;
+        let v = self.export_device_view(
+            HostHandle::new(self.id, u64::from(object)),
+            0,
+            kayfabe_abi::submit::USERMODE_WINDOW_SIZE,
+            if write {
+                // ⊘⊘ **OURS, never the guest's.** This node is opened `O_RDWR`, so whoever
+                // holds it can ring the host doorbell — which is the point: the VMM translates
+                // the guest's token and stores the host one INLINE on the vCPU, as a single
+                // dword, with no IPC and nothing to block on. ⚠ It must never reach a guest
+                // slot; the guest's view is the read-only one, whose whole job is to make its
+                // doorbell store EXIT so the token can be translated at all.
+                ViewAccess::ReadWrite
+            } else {
+                ViewAccess::ReadOnly
+            },
+        )?;
+        // ⊘⊘ **CODE ROT, MARKED (goal 5).** `rm::DeviceView` and `kayfabe_isolate::DeviceView`
+        // are the SAME four fields declared twice in two crates, so a trait that returns one
+        // cannot be implemented by a method that returns the other without this transcription.
+        // ⚠ It is mechanical and it is a liability: four fields copied by hand is four chances
+        // to transpose `offset` and `mmap_len`, and nothing would catch it — both are `u64`.
+        // ⇒ The cleanup is to delete `rm::DeviceView` and use the trait's, which is a rename
+        // and no behaviour; it is not done here because this commit is a new verb and a type
+        // deletion in one diff is two reviews pretending to be one.
+        Ok(kayfabe_isolate::DeviceView {
+            token: v.token,
+            // ★ In-process, as above: one table, so the two tokens are the same number.
+            release_token: v.token,
+            memory: v.memory,
+            offset: v.offset,
+            mmap_len: v.mmap_len,
+        })
+    }
+
+    /// ★★★★★ w345 — the isolate's OWN subdevice, stamped as a [`HostHandle`].
+    ///
+    /// ⊘ **No guest handle is consulted and none could be.** This is the object the isolate
+    /// already opened for its own per-GPU controls (`RmConnection::subdevice`), so a control
+    /// issued against it asks the part about itself — which is exactly what the GSS-legacy
+    /// cudart init-gate family does. Nothing here widens what a guest can reach.
+    fn subdevice_control(&mut self, cmd: ControlCmd, payload: &mut [u8]) -> Result<(), RmError> {
+        let obj = self.conn.subdevice();
+        self.conn.raw_control(obj, cmd.0, payload)
+    }
+
+    fn alloc(
+        &mut self,
+        parent: HostHandle,
+        class: ClassId,
+        params: &[u8],
+    ) -> Result<HostHandle, RmError> {
+        let parent_raw = if parent == HostHandle::NULL {
+            self.conn.client.raw()
+        } else {
+            self.narrow(parent)?
+        };
+        let want = self.conn.mint();
+        let mut params = params.to_vec();
+        let h = self
+            .conn
+            .raw_alloc(parent_raw, want, class.0, &mut params)?;
+        self.conn.remember(h, parent_raw);
+        Ok(self.stamp(h))
+    }
+
+    fn alloc_vaspace(&mut self) -> Result<HostHandle, RmError> {
+        // ★★★★★ **CONSTRAINT 26 — THE FORK, AND IT IS HERE SO THAT NO CALL SITE MOVES.**
+        //
+        // Seven `VerbPlan` arms mint a host VAS lazily (`match *host_vas { None => rm
+        // .alloc_vaspace()? }`). Putting the arm in any of them would be seven places the
+        // ownership split lives; putting it in the backend makes it one, and makes it a
+        // property of **who this isolate is** rather than of what it was asked to do.
+        //
+        // ⊘ The handle's CLASS changes with the arm — a range there, a space here — and
+        // that is deliberate rather than hidden: `space_of` answers for both (a bare space
+        // is its own space) so everything asking *"which address space?"* is unchanged,
+        // while `map_gpu_va` refuses `MAP_THROUGH_A_BARE_SPACE` by name, which is the only
+        // thing that must change behaviour.
+        if self.bare_vaspaces {
+            return self.alloc_vaspace_bare().map(|b| b.space);
+        }
+        self.alloc_vaspace_raw().map(|r| self.stamp(r))
+    }
+
+    fn alloc_sysmem(&mut self, len: u64) -> Result<HostHandle, RmError> {
+        // R8. A different escape and a different struct — see `Nvos02ParametersWithFd`'s
+        // docs for why "allocate memory" cannot ride `NV_ESC_RM_ALLOC`.
+        if len == 0 {
+            return Err(RmError::NoMemory);
+        }
+        let want = self.conn.mint();
+        let mut arg = [0u8; Nvos02ParametersWithFd::SIZE];
+        Nvos02ParametersWithFd {
+            h_root: self.conn.client.raw(),
+            h_object_parent: self.conn.device,
+            h_object_new: want,
+            h_class: NV01_MEMORY_SYSTEM,
+            flags: NVOS02_FLAGS_LOCATION_PCI
+                | NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS
+                | NVOS02_FLAGS_MAPPING_NO_MAP,
+            p_memory: 0,
+            pad1: 0,
+            // ★ `limit`, not `length`. Off by one BY ABI: RM wants the highest valid
+            // offset. Passing `len` here over-allocates by a byte and rounds up a page,
+            // which is invisible until a size assertion somewhere else disagrees.
+            limit: len - 1,
+            status: 0,
+            fd: -1,
+        }
+        .encode_into(&mut arg)
+        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_ALLOC_MEMORY, arg.len())
+            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        // ★★ THE ROUTING RULE, measured against the driver: `NV_ESC_RM_ALLOC_MEMORY` is
+        // `NV_ACTUAL_DEVICE_ONLY` and MUST be issued on the per-GPU node
+        // (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/escape.c:328`, macro at `:66` —
+        // it refuses `NV_FLAG_CONTROL` outright). Every other escape this file issues is
+        // `NV_CTL_DEVICE_ONLY` and must be on the CONTROL node (`:442`, `:634`, `:650`,
+        // `:730`, and the two `RM_ALLOC` arms at `:400`/`:415`). Two disjoint sets, and
+        // getting one wrong costs `EINVAL` from the frontend before RM ever sees it —
+        // which is exactly how this was found, on the first real-hardware run.
+        self.conn
+            .gpu
+            .ioctl(req, &mut arg, &mut [])
+            .map_err(|e| ioctl_error(&e))?;
+        let out =
+            Nvos02ParametersWithFd::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        status_check(out.status)?;
+        self.conn.remember(out.h_object_new, self.conn.device);
+        Ok(self.stamp(out.h_object_new))
+    }
+
+    /// ★★★ **THE SECOND CROSSING'S OBJECT** — a blank host vidmem allocation.
+    ///
+    /// ⊘ **Not a port of a new primitive.** [`RmConnection::alloc_device_local`] has
+    /// existed since the channel work (it is what a ring, a USERD block and a semaphore
+    /// are built from) and issues exactly what the C issues here:
+    /// `NV01_MEMORY_LOCAL_USER` (class `0x0040`) with `CONTIGUOUS | LOCATION_VIDMEM`
+    /// (`C: nvkvm_gpu_emul.c:7286-7294`). This method only gives that allocation an
+    /// **intent name** so the plan layer can ask for it without knowing the class — the
+    /// same anti-bolt-on rule [`kayfabe_isolate::RmBackend::alloc_engine_object`] states.
+    ///
+    /// ⚠ The C aligns to `0x10000` and we align to `len`; `len` is the guest leaf's own
+    /// size, so for every leaf this port will meet it is the stricter of the two. The
+    /// difference is only ever more alignment, never less.
+    ///
+    /// ⊘ **The object is BLANK and this method does not pretend otherwise.** It is the C's
+    /// `nvkvm_m2_host_alloc_vidmem_gpu_only` shape (`C: :7354-7368`): allocate, do not
+    /// build a CPU view. The C chose that arm for a measured reason — the CPU mapping is
+    /// what consumes the host's 256 MiB BAR1, its *"proven D2 wall"* (`C: :7340-7344`) —
+    /// and this port has no CPU view for a different one: the isolate holds the mapping
+    /// and the shell holds the framebuffer, and the descriptor that would join them
+    /// ([`crate::proto::Request::ExportBacking`]) is not wired to this path.
+    fn alloc_vidmem(&mut self, len: u64) -> Result<HostHandle, RmError> {
+        if len == 0 {
+            return Err(RmError::NoMemory);
+        }
+        let h = self.conn.alloc_device_local(len)?;
+        Ok(self.stamp(h))
+    }
+
+    /// ★★★★★ **THE VM'S ONE RESERVED OBJECT** — see
+    /// [`kayfabe_isolate::RmBackend::reserve_gpga`] for why this is not
+    /// [`Self::alloc_vidmem`] at a larger size.
+    ///
+    /// The whole body is [`RmConnection::reserve_gpga`], which has existed since
+    /// `gpga_is_one_reserved_object.md` was written and — until this verb — had exactly one
+    /// caller, the bring-up ladder binary. This is the seam that puts it on the wire.
+    /// ★★★★★ **RE-ISSUED ON THE TRAIT 2026-09-14** — the inherent method has existed since
+    /// the retirement; this is what puts it back on the verb surface, under the ruling in
+    /// `bar1_passthrough_device_local_host_visible.md` §4 item 1.
+    ///
+    /// ⚠ The wire carries a `write` **bool** and the inherent method takes a [`ViewAccess`].
+    /// The mapping is made HERE, once, rather than putting an RM enum on the wire: the wire's
+    /// job is to carry the VMM's intent (*"I will write through this mapping"*), and which RM
+    /// flags and `open` mode that implies is this crate's business.
+    fn export_device_view(
+        &mut self,
+        memory: HostHandle,
+        offset: u64,
+        len: u64,
+        write: bool,
+    ) -> Result<kayfabe_isolate::DeviceView, RmError> {
+        let access = if write {
+            ViewAccess::ReadWrite
+        } else {
+            ViewAccess::ReadOnly
+        };
+        let v = HostRmBackend::export_device_view(self, memory, offset, len, access)?;
+        // ⊘ Two `DeviceView` types exist — this crate's and `kayfabe_isolate`'s — and the
+        // duplication is recorded as code rot (goal 5). Converting here rather than changing
+        // either keeps this change to the verb surface.
+        Ok(kayfabe_isolate::DeviceView {
+            token: v.token,
+            // ★ In-process: THIS backend owns the export table, so the token it minted is
+            // both the one a `dup` is keyed by and the one a release takes. ⊘ Written as two
+            // fields carrying one value rather than one field meaning two things — the
+            // equality is a property of this configuration, and w734's defect was reading it
+            // as a property of the type.
+            release_token: v.token,
+            memory: v.memory,
+            offset: v.offset,
+            mmap_len: v.mmap_len,
+        })
+    }
+
+    fn release_device_view(&mut self, token: u64) -> Result<(), RmError> {
+        HostRmBackend::release_device_view(self, token)
+    }
+
+    fn reserve_gpga(&mut self, len: u64) -> Result<HostHandle, RmError> {
+        if len == 0 {
+            // ⊘ A zero-byte reservation is not "the smallest reservation"; it is a caller
+            // that derived no size. Refused by name rather than handed an object that maps
+            // nothing.
+            return Err(RmError::NoMemory);
+        }
+        let h = self.conn.reserve_gpga(len)?;
+        Ok(self.stamp(h))
+    }
+
+    /// ★★★★★ **CONSTRAINT 26 — the bare space.** See the trait method for why the range is
+    /// absent rather than optional.
+    fn alloc_vaspace_bare(&mut self) -> Result<kayfabe_isolate::BareVaSpace, RmError> {
+        let mut params = [0u8; NvVaspaceAllocationParameters::SIZE];
+        NvVaspaceAllocationParameters::default()
+            .encode_into(&mut params)
+            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let want = self.conn.mint();
+        let space = self
+            .conn
+            .raw_alloc(self.conn.device, want, VA_SPACE, &mut params)?;
+        self.conn.remember(space, self.conn.device);
+        // ⊘ Recorded as BARE before it is handed out. `space_of` reads this set as its
+        // fallback, and `map_gpu_va` reads it as its refusal — so the two views of
+        // "this handle is a space, not a range" cannot come apart.
+        self.conn.remember_bare_space(space);
+        Ok(kayfabe_isolate::BareVaSpace {
+            space: self.stamp(space),
+            // ⊘ `self.conn.client.raw()`, not `self.conn.client()`. The two return the same
+            // number and only one of them is a form F11's gate approves — deliberately, and
+            // the gate is right to be that literal: it over-approximates its universe (any
+            // ABI field named `client`/`root`/`owner`) so that it fails CLOSED, and a second
+            // spelling of "our own client" is a second thing a reader has to verify. See
+            // `mod own_client`.
+            client: self.conn.client.raw(),
+        })
+    }
+
+    /// ★★★★★ **CONSTRAINT 26 — what this isolate would hand over for `space`.**
+    fn vaspace_handover(
+        &mut self,
+        space: HostHandle,
+    ) -> Result<kayfabe_isolate::BareVaSpace, RmError> {
+        let raw = self.narrow(space)?;
+        if !self.conn.is_bare_space(raw) {
+            // ⊘ The refusal that matters: a space carrying its own range is one this
+            // isolate maps through, and handing it over produces `0x19` at the far end,
+            // where it reads as a dup problem rather than as the ownership error it is.
+            return Err(RmError::Other(HANDOVER_OF_A_NON_BARE_SPACE));
+        }
+        Ok(kayfabe_isolate::BareVaSpace {
+            space,
+            // ⊘ `self.conn.client.raw()`, not `self.conn.client()`. The two return the same
+            // number and only one of them is a form F11's gate approves — deliberately, and
+            // the gate is right to be that literal: it over-approximates its universe (any
+            // ABI field named `client`/`root`/`owner`) so that it fails CLOSED, and a second
+            // spelling of "our own client" is a second thing a reader has to verify. See
+            // `mod own_client`.
+            client: self.conn.client.raw(),
+        })
+    }
+
+    /// ★★★★★ **CONSTRAINT 26 — the scratchpad takes the hand-over.**
+    ///
+    /// ⚠ **THE ONE PLACE A FOREIGN CLIENT IS NAMED**, and the gate is a type:
+    /// [`ScratchpadRole::of`] answers `None` for every isolate but the scratchpad, and
+    /// [`HandedVaSpace`] has no other constructor. A per-proc backend reaching this line
+    /// gets [`ADOPT_NOT_THE_SCRATCHPAD`] and issues no ioctl at all.
+    fn adopt_vaspace(&mut self, client: u32, space: u32) -> Result<HostHandle, RmError> {
+        let Some(role) = ScratchpadRole::of(self.id) else {
+            return Err(RmError::Other(ADOPT_NOT_THE_SCRATCHPAD));
+        };
+        let handed = HandedVaSpace::handed_over(role, client, space);
+        let want = self.conn.mint();
+        // Parented at the DEVICE: `[measured w744]` a dup parented at the client root is
+        // refused `0x36`, and the device is the legal parent for this class.
+        let duped = self.conn.raw_dup_object(self.conn.device, want, handed)?;
+        // ★★★★★ **CONSTRAINT 30 — REMEMBERED AS ADOPTED BEFORE ANYTHING CAN USE IT.**
+        // Recorded here and not at the range, for `remember_bare_space`'s reason exactly:
+        // the two views of *"whose space is this?"* must not be able to come apart, and the
+        // only instant at which the answer is unambiguous is the one the dup returns.
+        self.conn.remember_adopted_space(duped);
+        match self.conn.raw_alloc_range_over(duped) {
+            Ok(range) => Ok(self.stamp(range)),
+            Err(e) => {
+                // The dup exists and the caller will never learn its handle, so it is
+                // disposed of HERE rather than becoming an orphan nobody can name — the
+                // same argument `alloc_vaspace_raw`'s error arm makes.
+                let h = self.stamp(duped);
+                let _ = self.free(h);
+                Err(e)
+            }
+        }
+    }
+
+    /// ★★★★★ **CONSTRAINT 26 — one slice of the one object, at the guest's own VA.**
+    fn map_store_slice(
+        &mut self,
+        vas: HostHandle,
+        memory: HostHandle,
+        offset: u64,
+        len: u64,
+        at: GpuVa,
+    ) -> Result<u64, RmError> {
+        let h_dma = self.narrow(vas)?;
+        let h_memory = self.narrow(memory)?;
+        // ⊘ A bare space is not an `hDma`. Refused by name here rather than by RM's
+        // `0x33 INVALID_OBJECT_HANDLE`, because the two mean different things: RM's says
+        // "that handle is not a range", ours says "you were handed a space and asked to
+        // map through it, which is the ownership split being violated".
+        if self.conn.is_bare_space(h_dma) {
+            return Err(RmError::Other(MAP_THROUGH_A_BARE_SPACE));
+        }
+        // ⊘ `raw_map_dma_slice` and NOT `map_dma_both`: the scratchpad builds no executor
+        // shadow, because it executes no guest-derived work that would resolve these VAs.
+        // A shadow here would be a second mapping of guest video memory in a space nothing
+        // reads — the reach `§9.3` names.
+        self.conn
+            .raw_map_dma_slice(h_dma, h_memory, offset, len, Some(at.0), 0)
+    }
+
+    /// ★★★★★ **CONSTRAINT 27's half — take one slice back down, and REPORT it.**
+    fn unmap_store_slice(&mut self, vas: HostHandle, at: GpuVa) -> Result<(), RmError> {
+        let h_dma = self.narrow(vas)?;
+        if self.conn.is_bare_space(h_dma) {
+            return Err(RmError::Other(MAP_THROUGH_A_BARE_SPACE));
+        }
+        self.conn.raw_unmap_dma(h_dma, at.0)
+    }
+
+    /// ★★★ The probe, on the wire. See [`Self::largest_reservable_mb`] — the inherent
+    /// method this forwards to, which is where the bisection and its post-mortem live.
+    ///
+    /// ⊘ It cannot fail today: the inherent method answers `0` for *"nothing down to the
+    /// floor"* rather than erroring, and `0` is a real answer about this host. The
+    /// `Result` is here because the trait's other backends have no RM connection at all and
+    /// must be able to say so.
+    fn largest_reservable_mb(&mut self, start_mb: u64) -> Result<u64, RmError> {
+        Ok(HostRmBackend::largest_reservable_mb(self, start_mb))
+    }
+
+    /// ★★★ R13 — a real host channel. Six RM objects, one GPU mapping and two controls,
+    /// in an order where every step's failure has a different status.
+    ///
+    /// ```text
+    ///   ring   = NV01_MEMORY_LOCAL_USER (64 KiB)   pushbuffer | GPFIFO | semaphore
+    ///   userd  = NV01_MEMORY_LOCAL_USER (64 KiB)   GP_GET / GP_PUT
+    ///   map     ring into the Vas (RM chooses the VA)
+    ///   tsg    = KEPLER_CHANNEL_GROUP_A   parent = device,  hVASpace = the SPACE
+    ///   chan   = <profile>.gpfifo_channel parent = tsg,     hVASpace = 0 (inherits)
+    ///   BIND(engineType)                  on the TSG   -- must precede the token
+    ///   GET_WORK_SUBMIT_TOKEN             on the CHANNEL
+    /// ```
+    ///
+    /// ## What is deliberately absent
+    ///
+    /// **No `FERMI_CONTEXT_SHARE_A`.** A context share is how two channels come to share
+    /// a subcontext, and an isolate's channel shares with none; the C's proven host
+    /// channel leaves `hContextShare` zero too (`C: src/qemu/nvkvm_gpu_emul.c:9517-9522`).
+    /// The module docs listed a context share among the missing machinery, and building
+    /// it would have been an object nothing reads.
+    ///
+    /// **No CPU mapping of the ring or USERD**, so nothing here can submit anything yet.
+    /// That is the next rung, and separating them is what makes the token below mean
+    /// something: it is produced by a channel that exists in hardware, before any of our
+    /// own bytes are involved.
+    ///
+    /// ## The evidence
+    ///
+    /// The returned token is `(runlistId << 16) | chid`, assigned by RM from the GPU's
+    /// channel RAM (`C: docs/design/mode2_doorbell_chid.md:337-345`). We do not compute
+    /// it, cannot predict it, and a channel that was never bound to a runlist cannot have
+    /// one — the control answers `NV_ERR_INVALID_STATE` (0x40) instead
+    /// (`C: src/qemu/nvkvm_gpu_emul.c:9568-9572`).
+    ///
+    /// ## Unwind
+    ///
+    /// Every failure after the first allocation frees what it built, newest first. A
+    /// channel that half-exists is worse than one that does not: the objects are live in
+    /// RM, and the caller has no handle for any of them.
+    fn alloc_channel(
+        &mut self,
+        vas: HostHandle,
+        engine: EngineKind,
+        hosting: Option<HostedObject<'_>>,
+        adopt: Option<kayfabe_isolate::AdoptedGuestRing>,
+        err_notifier: Option<HostHandle>,
+    ) -> Result<(HostHandle, u64), RmError> {
+        // ★★★★★ §16.106 — THE GUEST'S OWN DECLARATION FIRST. See `declared_channel_engine_type`.
+        // ★ Refused HERE rather than sent as a zero. See `engine_type_for`: a channel with
+        // no engine type is not a channel with a default one, it is a channel on runlist 0.
+        let engine_type = declared_channel_engine_type(engine, hosting)
+            .or_else(|| engine_type_for(engine))
+            .ok_or(RmError::Other(NOT_ON_THIS_RUNG))?;
+        // ★ w393 — the witness, the adoption arm and the two named refusals live in ONE
+        // lowering shared with `alloc_channel_declared`, so the two verbs cannot come to
+        // read `DECLINED` differently. `asked = hosting.is_some()` is exactly the
+        // discriminator `BirthOffer::read` has always taken from this call.
+        self.alloc_channel_lowered(
+            vas,
+            engine,
+            engine_type,
+            hosting.is_some(),
+            adopt,
+            err_notifier,
+        )
+    }
+
+    /// ★★★★★ **w393 — the birth-at-alloc verb.** The guest's own `engineType` first, then
+    /// the SAME lowering as [`RmBackend::alloc_channel`] — same witness line, same
+    /// `RING_NOT_A_JOINED_WINDOW` / `USERD_NOT_A_JOINED_WINDOW` refusals — with the adoption
+    /// mandatory by type.
+    ///
+    /// ⊘ `asked = true`: a caller of this verb has by construction consulted the supply side
+    /// (it holds an `AdoptedGuestRing`), so the witness can never read `NOT-ASKED` here, and
+    /// the `DECLINED` word is unreachable on this verb because `adopt` is not an `Option`.
+    fn alloc_channel_declared(
+        &mut self,
+        vas: HostHandle,
+        engine: EngineKind,
+        declared_engine_type: Option<u32>,
+        adopt: kayfabe_isolate::AdoptedGuestRing,
+        err_notifier: Option<HostHandle>,
+    ) -> Result<(HostHandle, u64), RmError> {
+        // ★ THE GUEST'S NUMBER, VERBATIM. `None` = this port could not read the field and
+        // the answer is `engine_type_for`'s — the same fall-through a `hosting: None` birth
+        // takes, so an unreadable declaration costs nothing that worked before. ⊘ Never read
+        // as "copy engine 0"; the fall-through ARRIVES at COPY0 through the unchanged path.
+        let engine_type = declared_engine_type
+            .or_else(|| engine_type_for(engine))
+            .ok_or(RmError::Other(NOT_ON_THIS_RUNG))?;
+        eprintln!(
+            "kayfabe-isolate: CHANNEL-BIRTH-ENGINE {:?} engine={engine:?} declared={} → \
+             engine_type={engine_type:#x} ⇒ the runlist is the GUEST'S declaration, not an \
+             instance recovered from an object that does not exist yet",
+            self.id,
+            declared_engine_type.map_or_else(|| "UNREAD".to_string(), |t| format!("{t:#x}")),
+        );
+        self.alloc_channel_lowered(vas, engine, engine_type, true, Some(adopt), err_notifier)
+    }
+
+    /// The generic alloc with `parent = chan`, exactly as the port's docs say — the host
+    /// verb surface does not grow to add an engine.
+    ///
+    /// ★ `params` is **not** optional in practice and this rung does not enforce that,
+    /// deliberately: which classes need which blob is Axis-A knowledge and belongs to the
+    /// lowering, not here. The failure it guards against is nonetheless worth naming,
+    /// because it is the C's and it is silent — a copy-engine object whose eight-byte
+    /// `NVB0B5_ALLOCATION_PARAMETERS` is not forwarded reads as `engineType = 0`, binds
+    /// to runlist 0, and the *schedule* then fails with `NV_ERR_NOT_READY`, several steps
+    /// away from the cause (`C: src/abi/nvgpu.h:87-95`, `dma_copy_class_alloc_params`).
+    fn alloc_engine_object(
+        &mut self,
+        chan: HostHandle,
+        class: ClassId,
+        params: &[u8],
+    ) -> Result<HostHandle, RmError> {
+        let parent = self.narrow(chan)?;
+        // Stricter than RM on purpose: a handle this connection never minted as a channel
+        // would still be a legal parent for many classes, and an engine object under a
+        // non-channel is a class of bug that surfaces at submission time.
+        if self.conn.channel_parts(parent).is_none() {
+            return Err(RmError::BadHandle(chan));
+        }
+        let want = self.conn.mint();
+        let mut params = params.to_vec();
+        let h = self.conn.raw_alloc(parent, want, class.0, &mut params)?;
+        self.conn.remember(h, parent);
+        Ok(self.stamp(h))
+    }
+
+    /// `NVA06C_CTRL_CMD_GPFIFO_SCHEDULE` with `bEnable = 1`, **on the channel's group**.
+    ///
+    /// ★ Per-channel, never a one-shot: #12's second context rang off-runlist because
+    /// scheduling was a sticky global in the C. Here the group is looked up from the
+    /// channel every time, so there is no state to be stale.
+    fn schedule(&mut self, chan: HostHandle) -> Result<(), RmError> {
+        let raw = self.narrow(chan)?;
+        let parts = self
+            .conn
+            .channel_parts(raw)
+            .ok_or(RmError::BadHandle(chan))?;
+        let mut params = [0u8; GpfifoScheduleParams::SIZE];
+        GpfifoScheduleParams {
+            b_enable: 1,
+            b_skip_submit: 0,
+            b_skip_enable: 0,
+        }
+        .encode_into(&mut params)
+        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        self.conn
+            .raw_control(parts.tsg, NVA06C_CTRL_CMD_GPFIFO_SCHEDULE, &mut params)
+    }
+
+    fn free(&mut self, obj: HostHandle) -> Result<(), RmError> {
+        let raw = self.narrow(obj)?;
+        // ★★ A `Vas` freed while this worker holds a copy-engine channel over it must take
+        // that channel with it. Otherwise the channel outlives its address space (RM would
+        // refuse the free of the space, or worse, accept it) and — the sharper failure —
+        // the handle value gets recycled, so a later `ce_copy` on a *different* `Vas` with
+        // the same raw handle would submit into the dead one's ring. Recycling is exactly
+        // the #80 regression class, and it is cheap to close here.
+        if let Some(ce) = self.ce_channels.remove(&raw) {
+            let _ = self.free(ce.chan);
+        }
+        // ★★★ W229 — and the isolate's OWN address space over that `Vas` goes with it,
+        // AFTER the channel whose ring is mapped in it. The order is not cosmetic: `free`
+        // of the channel unmaps `ChannelParts::ring_va` through `ChannelParts::range`,
+        // which for an isolate channel IS this space, and unmapping through a freed range
+        // handle names an object RM has destroyed.
+        if let Some(exec) = self.conn.forget_exec_vas(raw) {
+            let _ = self.free_one(exec);
+        }
+        // The slot counter is per-channel state with nothing to free; dropping it keeps a
+        // recycled handle from inheriting a stale cursor.
+        self.slots.remove(&raw);
+        // ★★ A channel is six objects and a mapping (see `ChannelParts`), and the ORDER
+        // is the reason this is not another `companions` chain. The channel goes first
+        // because the group must outlive it; the mapping is torn down before the memory
+        // it names; the two memory objects go last.
+        //
+        // ★ The first error is remembered and the rest of the teardown still runs. A
+        // channel whose group refused to free must not also leak 128 KiB of device-local
+        // memory and a GPU mapping — and the caller must still hear that something did
+        // not free, because the alternative is a silent leak that only shows up as the
+        // *next* allocation failing.
+        if let Some(parts) = self.conn.forget_channel(raw) {
+            // ★ The CPU mappings go FIRST, before any RM object is freed. `munmap` of a
+            // device mapping whose backing object RM has already destroyed is the classic
+            // use-after-free of this layer, and the driver's own revocation path
+            // (`ogkm-580: kernel-open/nvidia/nv-mmap.c:786-800`) exists because it happens.
+            self.conn.forget_rings(raw);
+            let mut first: Result<(), RmError> = Ok(());
+            let mut keep = |r: Result<(), RmError>| {
+                if first.is_ok() {
+                    first = r;
+                }
+            };
+            keep(self.free_one(raw));
+            // ★★★★★ **W230 — a channel over a [`GuestRing`] takes NOTHING of the ring with
+            // it.** The mapping was made by the guest-RAM pin, at the guest's own VA, and
+            // the `OS_DESCRIPTOR` is the pin's object; both outlive this channel by
+            // construction, because the guest is still pushing into those pages. Unmapping
+            // here would leave a live guest channel whose ring resolves to nothing, and
+            // freeing here would un-pin pages RM is still DMAing into — with the second
+            // symptom appearing anywhere but at this call.
+            //
+            // ⊘ It is also not a leak: `ChannelParts::owner` says whose it is, and the
+            // owner frees it. What would be a leak is the opposite default.
+            match parts.owner {
+                RingOwner::Ours => {
+                    keep(self.conn.raw_unmap_dma(parts.range, parts.ring_va));
+                    keep(self.free_one(parts.tsg));
+                    keep(self.free_one(parts.ring));
+                }
+                RingOwner::HandedIn => {
+                    keep(self.free_one(parts.tsg));
+                }
+                // ★★★ w392d — ours to free, NOT ours to unmap. `parts.range` is not an
+                // `NV01_MEMORY_VIRTUAL` range on this arm; the placement is nvidia-uvm's and
+                // is retired by `UVM_FREE`, or by the UVM session going away.
+                RingOwner::OursUnmapped => {
+                    keep(self.free_one(parts.tsg));
+                    keep(self.free_one(parts.ring));
+                }
+            }
+            // ⊘ Same rule as the ring, one object over: a joined framebuffer window is the
+            // JOIN's object and the guest is still writing its cursor into it. Freeing it
+            // here would un-publish memory a live guest channel is using, and the symptom
+            // would appear anywhere but at this call.
+            match parts.userd_owner {
+                UserdOwner::Ours => keep(self.free_one(parts.userd)),
+                UserdOwner::HandedIn => {}
+                // ★★★★★ **w287 — FREE NOTHING, and this arm is the reason the enum gained a
+                // third variant.** `parts.userd` *is* `parts.ring` here. The `RingOwner` match
+                // immediately above has already freed it (or deliberately not, if the ring is
+                // the guest's); freeing it again here is a double free of a live handle, and
+                // its symptom would appear at whatever unrelated allocation next reuses the
+                // slot rather than at this line.
+                UserdOwner::InRing => {}
+            }
+            return first;
+        }
+        self.free_one(raw)
+    }
+
+    fn control(
+        &mut self,
+        obj: HostHandle,
+        cmd: ControlCmd,
+        payload: &mut [u8],
+    ) -> Result<(), RmError> {
+        let raw = self.narrow(obj)?;
+        self.conn.raw_control(raw, cmd.0, payload)
+    }
+
+    fn map_gpu_va(
+        &mut self,
+        vas: HostHandle,
+        memory: HostHandle,
+        len: u64,
+        at: GpuVa,
+    ) -> Result<u64, RmError> {
+        // R9. `at` is not a hint: `raw_map_dma` with `Some` sets
+        // `DMA_OFFSET_FIXED_TRUE` so `dmaOffset` is an **[IN]** parameter and RM places
+        // the mapping at the address we name instead of choosing one
+        // (`C: nvkvm_gpu_emul.c:7663-7692`, *"the irreducible primitive the whole data
+        // plane rests on"*). A forwarded pushbuffer carries guest VAs, and the host MMU
+        // walks the host VAS for exactly those numbers.
+        //
+        // ★ The 64-byte `NVOS46` is the 580.65.06-and-later shape, which is the bench's
+        // driver. A host older than that speaks the 56-byte one
+        // (`kayfabe_abi::transcribed::Nvos46ParametersPre580`), and selecting between
+        // them from the R2 version string is the follow-up this rung does not do.
+        //
+        // ★★★ **W229 — placed TWICE, at ONE address.** The guest-facing placement below is
+        // unchanged, bit for bit; what is new is that the same object is also mapped at the
+        // same VA in the isolate's own [`ExecutorVas`], because the isolate's copy engine
+        // no longer lives in the guest's space and still has to resolve these operands. See
+        // [`HostRmBackend::map_dma_both`].
+        let h_dma = self.narrow(vas)?;
+        let h_memory = self.narrow(memory)?;
+        // ★★★★★ **CONSTRAINT 26 — THE OWNERSHIP SPLIT, AT THE ONE LINE THAT COULD VIOLATE
+        // IT.** A `Vas` allocated by `alloc_vaspace_bare` carries the SPACE, not a range,
+        // so this isolate has nothing to map through — by construction, not by policy. ⊘
+        // Refused by name so a boot says *which* rule fired; RM's own `0x33` would say
+        // "that handle is not a range", which is true and is not the finding.
+        if self.conn.is_bare_space(h_dma) {
+            return Err(RmError::Other(MAP_THROUGH_A_BARE_SPACE));
+        }
+        self.map_dma_both(h_dma, h_memory, len, Some(at.0))
+    }
+
+    fn unmap_gpu_va(&mut self, vas: HostHandle, gpu_va: u64) -> Result<(), RmError> {
+        let h_dma = self.narrow(vas)?;
+        if self.conn.is_bare_space(h_dma) {
+            // ⊘ Not silently `Ok`. A caller that staged an unmap against a space this
+            // isolate never mapped into is a bookkeeping error, and under constraint 27 an
+            // unmap that quietly succeeds without having unmapped anything is the exact
+            // shape the barrier exists to refuse.
+            return Err(RmError::Other(MAP_THROUGH_A_BARE_SPACE));
+        }
+        self.unmap_dma_both(h_dma, gpu_va)
+    }
+    /// ★★★ **Rung 3.** Not an ioctl at all: a store into the mapped usermode BAR window
+    /// (see `RmConnection::doorbell`).
+    ///
+    /// ★ The token is **32 bits** — `(runlistId << 16) | chid`, as
+    /// `NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN` reports it — while the port carries
+    /// it as a `u64` because a port must not encode a vendor's field widths. A value that
+    /// does not fit was never a token this connection handed out, so it is refused here
+    /// rather than truncated into a store that would ring **some other channel**.
+    fn ring_doorbell(&mut self, host_token: u64) -> Result<(), RmError> {
+        let token = u32::try_from(host_token).map_err(|_| RmError::Other(NOT_A_WORK_TOKEN))?;
+        self.conn.doorbell(token)
+    }
+
+    /// ★★★ **Rung 4 — a real copy engine moves the bytes**, for the
+    /// [`CeExecutor::HostCe`] arm only.
+    ///
+    /// The owner's ruling that frames the split: *only a CE whose operands are genuinely
+    /// GPGA (physical) must be emulated; everything VA-addressed can be forwarded, because
+    /// we control the mapping.* This is the forwarding half, and it is forwarded **as
+    /// virtual addresses** — `LAUNCH_DMA` goes out with `SRC_TYPE_VIRTUAL` and
+    /// `DST_TYPE_VIRTUAL`, so the engine walks the isolate's own host VAS (`#14`'s
+    /// per-`Vas` boundary) and cannot be pointed at physical memory even by a wrong
+    /// address. `kayfabe_abi::submit::ce` deliberately does not define the `_PHYSICAL`
+    /// constants.
+    ///
+    /// ## What it does
+    ///
+    /// A copy-engine channel is built over `vas` on first use and kept
+    /// (`CeChannel`): six RM objects, a [`HostClasses::ce_object`] engine object, and a
+    /// schedule. Each copy is then one pushbuffer — `SET_OBJECT`, the four address
+    /// methods, length and line count, a one-word release semaphore, `LAUNCH_DMA` — one
+    /// GPFIFO entry, one doorbell, and a **wait for the engine's own semaphore**.
+    ///
+    /// ★★ The wait is not optional and is not a convenience. The port's verb is
+    /// synchronous, so returning before the engine retires would mean returning `Ok(())`
+    /// for bytes that have not moved — the forged completion `mode2_real_forward_not_fake`
+    /// forbids, and the guest's next read would be the only thing that ever noticed. A
+    /// copy that does not retire inside [`CE_COPY_TIMEOUT`] is [`RmError::Other`] carrying
+    /// [`CE_NEVER_RETIRED`], never a success.
+    ///
+    /// ## Two named refusals, both deliberate
+    ///
+    /// - [`CeExecutor::Ours`] — needs the isolate's mapping of the *fabricated* aperture,
+    ///   which does not exist (the `FbRead` production implementation,
+    ///   `eight_blockers_resolved.md` §12.3). Unchanged from the previous rung.
+    /// - [`CeSource::Constant`] — a fill is `LAUNCH_DMA` with `REMAP_ENABLE` plus the
+    ///   `SET_REMAP_*` method block, which `kayfabe_abi::submit::ce` does not transcribe.
+    ///   Emitting a copy from address zero instead would be a plausible success that
+    ///   scrubs the destination with whatever is at VA 0.
+    fn ce_copy(&mut self, vas: HostHandle, sub: CeSubCopy) -> Result<(), RmError> {
+        // ★ The verb answers `Ok`/`Err`; the OUTCOME is what a diagnostic needs to tell
+        // "the engine never fetched the entry" from "it fetched it and released nothing",
+        // and those two have completely different causes. So the body is one level down
+        // and this is the port's projection of it.
+        //
+        // ★★★★ **§16.70 — R26's TWO-FACT BAR, one plane over, PRINTED.** R26 settled that a
+        // submission is believed on two facts — the placement RM reports back, and `GP_GET`
+        // moving — and that `Ok(())` from the call under test is not one of them. The same
+        // bar applies here and had no instrument: `[measured 2026-08-10, boot
+        // p2_29e7c25_planereal]` three guest doorbells reported `forwarded (host channel
+        // rung)` and the guest's scrubber died waiting for a completion, with **neither**
+        // `GP_GET` nor the release semaphore read back anywhere a boot log could hold them.
+        // [`SubmitOutcome`] has carried both since it existed; [`HostRmBackend::ce_witness`]
+        // is the in-process recorder for them and has **zero production callers** (only
+        // `tests/tests/e6_hw_join.rs`), so on a boot the two facts were computed and thrown
+        // away.
+        //
+        // ⊘ This process is the isolate child; its stderr is QEMU's stderr, which
+        // `scripts/bench/boot_nvkvm.sh` redirects to `run_<tag>_qemu.log`. So the line lands
+        // in the boot's own on-disk evidence rather than in a session transcript — the trap
+        // `CLAUDE.md` records for the guest's `dmesg`, avoided by construction.
+        //
+        // ★ Printed on the REFUSAL path too, and before the verdict, for
+        // [`HostRmBackend::ce_witness`]'s own stated reason: a diagnostic that only speaks
+        // when the submission got as far as hardware is silent on exactly the outcomes it is
+        // run to see — `CeExecutor::Ours` and `CeSource::Constant` are both refused by
+        // `ce_copy_outcome` *before* any ring store, and a scrubber's fill is a
+        // `CeSource::Constant`.
+        let result = self.ce_copy_outcome(vas, sub);
+        let (outcome, payload) = match result {
+            Ok(pair) => pair,
+            Err(e) => {
+                eprintln!(
+                    "kayfabe-isolate: CE-SUBMIT dst={:#x} len={} by={:?} src={:?} → REFUSED \
+                     BEFORE SUBMISSION {e:?} (no ring store, no doorbell, no semaphore)",
+                    sub.dst, sub.len, sub.by, sub.src,
+                );
+                return Err(e);
+            }
+        };
+        // ★★★ E6 — recorded BEFORE the verdict, and unconditionally: the interesting case
+        // is the one where the copy did **not** retire, and a witness that only recorded
+        // successes would be blind to exactly the outcome a diagnostic is run to see.
+        if let Some(w) = &self.ce_witness {
+            w.record(outcome, payload);
+        }
+        // ⊘ `gp_get` and `gp_put` are printed as the PAIR they are: `gp_get == gp_put` means
+        // the engine fetched everything we published, `gp_get == 0` with `gp_put == 1` means
+        // it fetched nothing at all, and one of those numbers alone cannot say either.
+        eprintln!(
+            "kayfabe-isolate: CE-SUBMIT dst={:#x} len={} by={:?} gp_get={} gp_put={} \
+             sem={:#010x} want={:#010x} → {}{}",
+            sub.dst,
+            sub.len,
+            sub.by,
+            outcome.gp_get,
+            outcome.gp_put,
+            outcome.semaphore,
+            payload,
+            if outcome.semaphore == payload {
+                "RETIRED"
+            } else {
+                "NEVER-RETIRED"
+            },
+            // ★★★★★ w283 — WHETHER THE GUEST'S OWN RELEASE WAS CARRIED, printed BY ADDRESS
+            // on the same line as the verdict it depends on.
+            //
+            // ⊘⊘ It is a statement about what we PUT IN THE PUSHBUFFER, and nothing more.
+            // The engine wrote the guest's semaphore **iff** the address was reachable in
+            // the executor VAS; this line cannot see that, and a reader who takes
+            // `guest_rel=…` for *"the guest's semaphore now holds the payload"* is reading
+            // the intent for the outcome — `forwarded_counts_intent_not_work`, one plane
+            // over. Only the guest's own read says the other thing.
+            match sub.guest_release {
+                Some(r) => format!(
+                    " guest_rel=CARRIED@{:#x} payload={:#010x} (⊘ CARRIED means EMITTED, \
+                     not OBSERVED — hardware wrote it iff that VA resolves in the executor \
+                     VAS; only the guest's own read is the witness)",
+                    r.va, r.payload
+                ),
+                None => " guest_rel=NONE (this launch declared no completion, or its last \
+                         span is not HostCe, or the payload exceeds one word)"
+                    .to_string(),
+            },
+        );
+        if outcome.semaphore == payload {
+            Ok(())
+        } else {
+            Err(RmError::Other(CE_NEVER_RETIRED))
+        }
+    }
+    /// ★★★ NOT ON THIS RUNG — and this refusal is the honest half of `#102` stage C3.
+    ///
+    /// The seam, the decoder and the production `FbRead`
+    /// (`kayfabe_fwd::IsolateFb`) are built and exercised. What is **not** built is this:
+    /// the isolate's own VRAM-backed mapping of the fabricated aperture, which needs an
+    /// RM allocation of host video memory plus a CPU mapping of it, held for the life of
+    /// the isolate. Neither exists on this rung, and neither could be written honestly
+    /// without a GPU to run it against.
+    ///
+    /// ★ **What is owed, precisely.** On a host with a real device: allocate the
+    /// fabricated aperture's backing object, CPU-map it inside the isolate, write a known
+    /// pattern through [`kayfabe_isolate::CeExecutor::Ours`], and read it back here — the
+    /// bytes must be identical, and an address outside the mapped extent must answer
+    /// `Ok(false)` rather than zeros. The extent itself (where the aperture begins, how
+    /// large it is) is **not written down anywhere in this tree**, which is the second
+    /// reason this is a refusal and not a guess.
+    ///
+    /// Serving zeros instead would be worse than refusing by a wide margin: a page of
+    /// zeros decodes as a page-table page that legitimately maps nothing, so a whole
+    /// address space would read as empty and every mapping in it would silently vanish —
+    /// the same class as the forged completion `mode2_real_forward_not_fake` forbids,
+    /// with a longer fuse.
+    fn fb_read(&mut self, _phys: u64, _buf: &mut [u8]) -> Result<bool, RmError> {
+        Err(RmError::Other(NOT_ON_THIS_RUNG))
+    }
+
+    /// ★★★ Decision (b): perform the mapping here, hand back memory —
+    /// **and refuse the device class BY NAME** (`isolate_vmm_fd_crossing.md` §12).
+    ///
+    /// ## The arm that succeeds
+    ///
+    /// [`ExportSource::Fabricated`] mints a sealed `memfd`. That is the whole of *"the
+    /// isolate performs the mapping"* for memory we invented: the pages exist, both
+    /// processes can map them, and the descriptor that crosses has no `ioctl` handler for
+    /// anything. ★ Note it needs **no GPU at all**, which is why this arm is real on this
+    /// rung while [`RmBackend::fb_read`] is not: minting a backing and knowing what the
+    /// emulated device puts in it are different questions, and only the second one is
+    /// blocked.
+    ///
+    /// ### ⊘⊘⊘ CORRECTED 2026-09-06 — **"THREE SHUT DOORS, NONE OF THEM OURS TO OPEN" IS
+    /// ### WRONG ABOUT ONE DOOR, AND THAT DOOR IS OURS.** Read this before the count below.
+    ///
+    /// The three reasons are **not** three of a kind, and this tree already says so in the
+    /// other direction — `kayfabe_fwd`'s `FbLeafBacking` doc states plainly that reason 3
+    /// *"is **our own** refusal, not a hardware fact"* (`kayfabe-fwd/src/lib.rs:2308`).
+    /// ⚠ **Two docs in this tree, opposite answers, on the question that gates the fix.**
+    /// Adjudicated from the source:
+    ///
+    /// - **Reason 2 (dma-buf) STANDS.** `PDB_PROP_GPU_ZERO_FB` is an integrated-part
+    ///   property; on a discrete card the CPU mapping is refused by NVIDIA's own code. This
+    ///   one is genuinely not ours. ⊘ It is also **moot**, because it rules out a crossing
+    ///   we do not use.
+    /// - **Reason 3 IS OURS.** `Backing::DeviceFile { .. } => return
+    ///   Err(RawError::DeviceBackingNotPlaceable)` is one match arm in **our own crate**, at
+    ///   `kayfabe-linux-raw/src/window_unsafe.rs:213`. Calling it a shut door alongside two
+    ///   NVIDIA refusals reads as *"the platform forbids this"* when what it says is
+    ///   *"we have not written it."*
+    /// - **Reason 1 is a POLICY argument that [`ChildExports::mint_armed_node`] was built to
+    ///   answer**, and it postdates this comment (`export.rs:146`, added 2026-08-27). The
+    ///   hazard named here is that `secInfo.privLevel` is recomputed **per escape** from the
+    ///   caller (`escape.c:304`) — so it bites only a process that **issues escapes**. In the
+    ///   armed-node shape the isolate opens the node and performs the `0x4E` registration
+    ///   itself; the VMM receives the fd and **only ever `mmap`s it**, issuing no `ioctl` at
+    ///   all. ⇒ The privilege recomputation never happens in the VMM's favour because the VMM
+    ///   never reaches the escape path. ★ This is not speculative: it is the shape
+    ///   `nvkvm-pv` ships in production.
+    ///
+    /// ⇒ **The refusal below is still LIVE as code and this comment does not relax it.** What
+    /// changes is its standing: it is **one real door, one of our own making, and one that
+    /// guards a route we do not take** — not three independent walls. Lifting it is a
+    /// **policy decision for the owner** (decision (b)'s scope), not a hardware fact to
+    /// discover. ⚠ Do not cite this comment as evidence that the crossing is impossible.
+    ///
+    /// ⊘ Unchanged and still correct: do **not** "fix" this by copying device pages into a
+    /// `memfd`. A copy is not a mapping.
+    ///
+    /// ## ⊘ The arm that refuses, and why it is a RESULT rather than a gap
+    ///
+    /// [`ExportSource::HostDeviceMemory`] is always
+    /// [`RmError::NotExportableAsMemory`]. A host GPU page is reachable through exactly
+    /// two kinds of object and **neither** can be handed to the VMM as memory:
+    ///
+    /// 1. `/dev/nvidia<N>` with a registered mapping context — what
+    ///    [`RmConnection::map_cpu`] uses, and a **character device**. Crossing it would put
+    ///    an RM escape surface in the VMM, where `secInfo.privLevel` is recomputed from the
+    ///    **caller** on every escape
+    ///    (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/escape.c:304`), i.e. exactly what
+    ///    decision (b) exists to stop.
+    /// 2. An NVIDIA **dma-buf**, which is *not* an RM surface and would therefore have been
+    ///    the escape hatch — except that its CPU mapping is gated on
+    ///    `*pbCanMmap = pGpu->getProperty(pGpu, PDB_PROP_GPU_ZERO_FB)`
+    ///    (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/osapi.c:5609`), and
+    ///    `nv_dma_buf_mmap` refuses outright when that is false
+    ///    (`ogkm-580: kernel-open/nvidia/nv-dmabuf.c:1246-1250`). `PDB_PROP_GPU_ZERO_FB` is
+    ///    an **integrated**-part property; on every discrete card this project targets a
+    ///    dma-buf of device memory cannot be `mmap`ped by the CPU at all.
+    ///
+    /// ★ And the memory plane refuses the result independently anyway:
+    /// `kayfabe_linux_raw::GuestWindow::place` rejects `Backing::DeviceFile` with
+    /// `RawError::DeviceBackingNotPlaceable`. ⊘ **Three shut doors — but see the CORRECTION
+    /// at the top of this comment: door 3 is OURS, and door 1 is answered by `mint_armed_node`.**
+    ///
+    /// ⊘ Do not "fix" this by copying the device pages into a `memfd`. A copy is not a
+    /// mapping: the guest would read a snapshot of a live aperture, which is the forged-
+    /// completion class with a longer fuse.
+    fn export_backing(&mut self, want: ExportRequest) -> Result<ExportedBacking, RmError> {
+        let ExportSource::Fabricated = want.source else {
+            let ExportSource::HostDeviceMemory { memory } = want.source else {
+                unreachable!("ExportSource has exactly two variants")
+            };
+            return Err(RmError::NotExportableAsMemory { memory });
+        };
+        mint_fabricated(&self.exports, want)
+    }
+
+    /// ★★★★★ **ONE MEMORY for a framebuffer leaf** — `fb_cpu_view.md` §4's chain, and it is
+    /// `PinGuestRam`'s chain with the `memfd`'s **owner inverted**.
+    ///
+    /// `mint → mmap here → OS_DESCRIPTOR → map_gpu_va(FIXED)`, then the descriptor rides the
+    /// reply back to the VMM, which maps the same pages as the guest's view of
+    /// `[phys, phys+len)`. Guest RAM crosses VMM→isolate at spawn on a fixed fd number; this
+    /// crosses isolate→VMM on the reply. **No device fd anywhere** — decision (b) is honoured
+    /// rather than circumvented.
+    ///
+    /// ★★ **Sysmem, not vidmem, and it is a NAMED divergence** from the C artifact
+    /// (`C: nvkvm_gpu_emul.c:8454-8459` double-maps a *vidmem* object) and from
+    /// [`kayfabe_isolate::VerbPlan::PublishVidmem`]. The C can do that because it is
+    /// monolithic: QEMU holds `/dev/nvidia` itself, so the CPU half of the double mapping
+    /// never has to cross a process boundary. Here it would have to, and
+    /// [`ExportSource::HostDeviceMemory`]'s three cited refusals are exactly why it cannot.
+    /// The engine reaches this leaf over PCIe instead of out of local framebuffer. ⊘ That is
+    /// a **performance** divergence and it is not optional.
+    ///
+    /// ## ⚠ The unwind, and the one asymmetry in it
+    ///
+    /// Every step undoes the ones before it. ⊘ The `memfd` is **not** unwound: it is owned by
+    /// [`ChildExports`], which is the isolate's table and not this call's, and a mint that is
+    /// never described costs one file this isolate holds until it dies. Reclaiming exports is
+    /// a table-lifetime question and is not this verb's to answer — the same asymmetry
+    /// `describe_guest_ram` records for the guest-RAM mapping it does not free.
+    ///
+    /// # Errors
+    /// [`RmError::Other`] carrying [`FB_JOIN_NO_TABLE`] when this backend was built without a
+    /// shared join table — ⊘ **never a private one**, see [`crate::fbjoin`];
+    /// [`RmError::NoMemory`] if the backing will not mint or the mapping will not take;
+    /// [`RmError::PlacementRefused`] when RM did not place it at `at`; otherwise RM's own
+    /// refusal.
+    fn join_fb_leaf(
+        &mut self,
+        vas: HostHandle,
+        len: u64,
+        at: GpuVa,
+        phys: u64,
+    ) -> Result<FbLeafJoined, RmError> {
+        // ★★★ The pool gate, first and by name. A backend with no shared table cannot serve
+        // this verb, and the alternative — minting one here — is the defect this whole module
+        // is written against: it would work on every single-worker test and fail at the first
+        // boot whose second doorbell landed on a different pool slot.
+        let table = Arc::clone(
+            self.fb_joins
+                .as_ref()
+                .ok_or(RmError::Other(FB_JOIN_NO_TABLE))?,
+        );
+        let range = self.narrow(vas)?;
+        let backing = mint_fabricated(
+            &self.exports,
+            ExportRequest {
+                source: ExportSource::Fabricated,
+                len,
+                prot: kayfabe_vmm::Prot::ReadWrite,
+            },
+        )?;
+        // ⊘ Borrowed only for the `mmap`. `Backing::SharedFile`'s own docs record that the
+        // mapping outlives the descriptor, and `ChildExports` holds the authoritative end —
+        // a second owned copy here would be a second lifetime for one file.
+        let fd = self
+            .exports
+            .lend(backing.token)
+            .map_err(|e| region_error(&e))?;
+        let region = kayfabe_linux_raw::MappedRegion::map(
+            Backing::SharedFile {
+                fd: std::os::fd::AsFd::as_fd(&fd),
+                offset: 0,
+            },
+            len,
+            kayfabe_linux_raw::HostProt::ReadWrite,
+            // ★ `WriteBack`, which is what `Backing::attainable_cache_policy` answers for a
+            // shared file — the one class whose effective CPU memory type is knowable.
+            CachePolicy::WriteBack,
+            HostPageSize::query(),
+        )
+        .map_err(|e| region_error(&e))?;
+        drop(fd);
+        // ★★★★★ **w331 — ASK FOR 2 MiB BACKING BEFORE RM IS TOLD WHAT THIS OBJECT IS, AND
+        // REPORT WHAT THE KERNEL ACTUALLY GAVE.**
+        //
+        // `alloc_os_descriptor` is where RM reads our page geometry and decides what GPU PTEs
+        // to install; after that call the placement is fixed. `[measured w322]` this leaf chain
+        // hands RM **4 KiB-granular, `PHYSICALITY_NONCONTIGUOUS`** sysmem and the guest's
+        // operands run at **2.51 GB/s** against a link-saturating **12.33** on the same GPU and
+        // kernel — a 4.9× gap whose named mechanism is small GPU PTEs over our small pages.
+        //
+        // ⊘⊘ **THE REQUEST AND THE RESULT ARE DIFFERENT FACTS, AND THIS PRINTS THE SECOND.**
+        // `[measured 2026-08-19, bench 48097794]` `madvise(MADV_HUGEPAGE)` on a `memfd` mapping
+        // returns **0 while delivering nothing** — a `memfd` is shmem, and shmem THP is its own
+        // knob (`shmem_enabled`) that ships `[never]`. So `pmd_backed=0` here is a real and
+        // expected state on an unconfigured host, it is NOT an error, and it must be visible:
+        // reading `pmd_backed` is the only way to tell "the host gave huge pages" from "the
+        // call succeeded".
+        //
+        // ⚠ Deliberately UNCONDITIONAL. The isolate is spawned with a CLEARED environment
+        // (`envp = {NULL}`, `spawn_unsafe.rs`) — that is a security property, not an oversight —
+        // so an env-var arm here would mean opening a config channel into the isolate. The arm
+        // selector for the measurement is the HOST KNOB plus a build without this call.
+        match region.request_huge_pages() {
+            Ok(r) => {
+                let backed = match r.pmd_backed {
+                    Some(b) => format!("{b}"),
+                    // ⊘ NOT `0`. See `pmd_mapped_bytes` — the isolate is pivot_rooted with no
+                    // `/proc`, and the first boot of this line reported `0` on 107 of 107
+                    // leaves while a plain process on the same host measured 100 %.
+                    None => "UNMEASURABLE(no /proc/self/smaps in this sandbox)".to_owned(),
+                };
+                let eligible = if r.len >= 2 * 1024 * 1024 {
+                    "yes"
+                } else {
+                    "no(<2MiB)"
+                };
+                println!(
+                    "kayfabe-isolate: LEAF-HUGE len={len} pmd_backed={backed} \
+                     base_2m_aligned={} eligible={eligible}",
+                    r.base_2m_aligned
+                );
+            }
+            Err(e) => println!(
+                "kayfabe-isolate: LEAF-HUGE len={len} \u{2298} madvise REFUSED ({e:?}) — the leaf \
+                 stays 4 KiB-granular and is mapped anyway"
+            ),
+        }
+        let desc = self
+            .conn
+            .alloc_os_descriptor(&region, HostOffset::ZERO, len)?;
+        // ★★★★★ **`map_dma_both`, NOT `raw_map_dma` — w282, and this line is the whole of
+        // it.** `[measured 2026-08-13, boot `w282_client`, real GA106]` leg 7 joined both CE
+        // operand leaves, `placed_as_asked=true`, `host_va == leaf.va`, the establishment
+        // copy brought 4092 and 3072 non-zero bytes across, `#255` went QUIET and the address
+        // table read `HostBacked` at the guest's own VAs — **and the host copy engine still
+        // took `Xid 31 CE0 HUBCLIENT_CE1 FAULT_PTE ACCESS_TYPE_VIRT @ 0x1_20010000`, the
+        // same VA, unmoved.**
+        //
+        // ⊘⊘ Because this line placed the object in **one** address space and the engine
+        // runs in **another**. `ce_copy_outcome`'s own comment states it exactly (`:5333`):
+        //
+        // > *"W229 — the CE channel is built in the isolate's OWN address space, never in
+        // > `vas`. `vas` still names the space the OPERANDS live in, and **`map_dma_both`
+        // > has placed them at the same addresses in both**, which is why `src`/`dst` below
+        // > need no translation."*
+        //
+        // That premise was **true of every other publisher and false of this one.**
+        // `publish_backing` and the guest-RAM pin both go through [`Self::map_dma_both`];
+        // the join went through `raw_map_dma` and mapped the guest-facing range only. The
+        // ring's leaf never exposed it — *we* decode the ring in the VMM and hand `ce_copy`
+        // explicit `src`/`dst`, so nothing the engine dereferences came out of it. An
+        // **operand** is the first joined object a real engine walks for itself.
+        //
+        // ⇒ It is `w229`'s finding one plane over, and the fix is `w229`'s fix: place it
+        // twice, at one address, all-or-nothing. ⚠ `map_dma_both` unwinds the guest-side
+        // mapping itself if the shadow refuses, so the arm below no longer has to.
+        let host_va = match self.map_dma_both(range, desc, len, Some(at.0)) {
+            Ok(va) => va,
+            Err(e) => {
+                let _ = self.free(self.stamp(desc));
+                return Err(e);
+            }
+        };
+        // ★★★ `placed_as_asked`, checked HERE as well as by `Worker::execute`. Not
+        // redundant: this is the only side that can still unwind the descriptor cheaply, and
+        // a mapping adopted at the wrong VA is a host engine pointed at whatever else lives
+        // there — `PinGuestRam`'s own argument, one plane over.
+        //
+        // ⊘ Kept even though `map_dma_both` already refuses a shadow that landed elsewhere:
+        // that check compares the two spaces to EACH OTHER, and this one compares the pair to
+        // **what the caller asked for**. Two different questions, and `w270` measured the cost
+        // of answering the second with the first.
+        if host_va != at.0 {
+            let _ = self.conn.raw_unmap_dma(range, host_va);
+            let _ = self.free(self.stamp(desc));
+            return Err(RmError::PlacementRefused {
+                want: at.0,
+                got: host_va,
+            });
+        }
+        // ⊘ Installed LAST, after the chain has succeeded: a table entry for a leaf whose
+        // fixed map refused would answer the instrument about memory no engine can reach.
+        table.install(phys, len, at.0, backing.token, region);
+        // ★★★★★ LEG A2 — and on the SAME success path as the install, never earlier: this
+        // set is what a channel birth checks before it may name the object.
+        table.remember_object(desc);
+        Ok(FbLeafJoined {
+            backing,
+            memory: self.stamp(desc),
+            host_va,
+        })
+    }
+
+    /// ★★★★★ **w380 — MAP AN ALREADY-JOINED FRAME AT A SECOND GPU VA.** The chain, and
+    /// every step of it is [`Self::join_fb_leaf`]'s with the minting removed.
+    ///
+    /// `token_for` (refuse if absent) → `lend` the **same** `memfd` → a fresh `mmap` of it →
+    /// `alloc_os_descriptor` → `map_dma_both` **at `at`** → placement check → remember.
+    ///
+    /// # ★★★ WHY A FRESH `mmap` OF THE SAME FILE, AND NOT THE JOIN'S OWN MAPPING
+    ///
+    /// Reusing the join's [`kayfabe_linux_raw::MappedRegion`] would mean two live
+    /// `OS_DESCRIPTOR`s pinning the identical user address range. RM would very likely accept
+    /// it — nothing in `os_lock_user_pages` forbids a second pin — but *"very likely"* is not
+    /// a property, and the failure mode if it is wrong is an allocation refusal at the exact
+    /// moment the guest needs its second alias. A second mapping of the same `memfd` is the
+    /// same **pages** by construction (that is what a shared file mapping *is*), costs one
+    /// `mmap`, and needs no assumption about RM's pinning at all.
+    ///
+    /// ⇒ **The bytes are the frame's own.** The guest writes through the emulated
+    /// framebuffer, the VMM's `mmap` and both aliases' mappings all land on the same page
+    /// cache pages of the one `memfd` the join minted.
+    ///
+    /// # ⊘ THE REFUSAL IS THE POINT
+    ///
+    /// A frame with no join has no pages to alias. Minting some would give the frame **two
+    /// memories** — the fabricated `SparseFb` pages the guest is still served out of, and a
+    /// blank host object the engine would read — which is precisely `w228`'s defect and is
+    /// self-concealing. So [`FB_ALIAS_NO_JOIN`] is returned and nothing is allocated.
+    ///
+    /// # Errors
+    /// [`RmError::Other`] with [`FB_JOIN_NO_TABLE`] or [`FB_ALIAS_NO_JOIN`];
+    /// [`RmError::NoMemory`] if the mapping will not take; [`RmError::PlacementRefused`] when
+    /// RM did not place it at `at`; otherwise RM's own refusal.
+    fn alias_fb_leaf(
+        &mut self,
+        vas: HostHandle,
+        len: u64,
+        at: GpuVa,
+        phys: u64,
+    ) -> Result<FbLeafAliased, RmError> {
+        let table = Arc::clone(
+            self.fb_joins
+                .as_ref()
+                .ok_or(RmError::Other(FB_JOIN_NO_TABLE))?,
+        );
+        // ★ Asked FIRST, before a range is narrowed or a descriptor is lent: the whole verb
+        // is *"the frame already has pages"*, and a chain that allocated anything before
+        // checking that would have something to unwind on the one path that matters.
+        let token = table
+            .token_for(phys, len)
+            .ok_or(RmError::Other(FB_ALIAS_NO_JOIN))?;
+        let range = self.narrow(vas)?;
+        let fd = self.exports.lend(token).map_err(|e| region_error(&e))?;
+        let region = kayfabe_linux_raw::MappedRegion::map(
+            Backing::SharedFile {
+                fd: std::os::fd::AsFd::as_fd(&fd),
+                offset: 0,
+            },
+            len,
+            kayfabe_linux_raw::HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            HostPageSize::query(),
+        )
+        .map_err(|e| region_error(&e))?;
+        drop(fd);
+        let desc = self
+            .conn
+            .alloc_os_descriptor(&region, HostOffset::ZERO, len)?;
+        // ⊘ `map_dma_both`, for `join_fb_leaf`'s reason verbatim: the engine runs in the
+        // isolate's own address space and the operands live in `vas`, and both must name this
+        // alias at the same address or the engine dereferences whatever else is there.
+        let host_va = match self.map_dma_both(range, desc, len, Some(at.0)) {
+            Ok(va) => va,
+            Err(e) => {
+                let _ = self.free(self.stamp(desc));
+                return Err(e);
+            }
+        };
+        if host_va != at.0 {
+            let _ = self.conn.raw_unmap_dma(range, host_va);
+            let _ = self.free(self.stamp(desc));
+            return Err(RmError::PlacementRefused {
+                want: at.0,
+                got: host_va,
+            });
+        }
+        table.install_alias(phys, len, at.0, token, region);
+        // ★★★★★ LEG A2 — an alias is a joined window at another address, so a channel may be
+        // born over it on exactly the same terms. Omitting this would make the SECOND VA of a
+        // frame refuse a ring birth the FIRST one allows, which is an ordering-dependent
+        // refusal with no principle behind it.
+        table.remember_object(desc);
+        Ok(FbLeafAliased {
+            memory: self.stamp(desc),
+            host_va,
+        })
+    }
+
+    /// ★★★ The instrument over [`crate::fbjoin::FbJoinTable::peek`]. Every decision — the
+    /// ordering, the per-word pattern, the `Ok(false)` miss — is that method's; this is the
+    /// port's projection of it.
+    fn fb_join_peek(
+        &mut self,
+        phys: u64,
+        buf: &mut [u8],
+        poke: Option<u32>,
+    ) -> Result<bool, RmError> {
+        let table = self
+            .fb_joins
+            .as_ref()
+            .ok_or(RmError::Other(FB_JOIN_NO_TABLE))?;
+        table.peek(phys, buf, poke).map_err(|e| region_error(&e))
+    }
+
+    /// ★★★★★ The real backend's guest-RAM door. It **decides nothing**: the grant's numbers
+    /// are the VMM's, and everything this body adds is the refusal for an isolate that was
+    /// never given a descriptor.
+    fn map_guest_ram(&mut self, grant: GuestRamGrant) -> Result<GuestRamMapped, RmError> {
+        let plane = self
+            .guest_ram
+            .as_ref()
+            .ok_or(RmError::GuestRamUnavailable)?;
+        let raw = plane.honour(grant)?;
+        Ok(GuestRamMapped {
+            // ★ Stamped through `HostHandle::new` directly rather than through `stamp`,
+            // which narrows to RM's 32 bits: a guest-RAM name is deliberately WIDER than an
+            // RM handle (`guestram::GUEST_RAM_NAME_TAG`) so that presenting one where an RM
+            // object is expected is refused by `narrow` — a gate that already exists.
+            region: HostHandle::new(self.id, raw),
+            len: grant.len(),
+        })
+    }
+
+    fn unmap_guest_ram(&mut self, mapped: GuestRamMapped) -> Result<(), RmError> {
+        let plane = self
+            .guest_ram
+            .as_ref()
+            .ok_or(RmError::GuestRamUnavailable)?;
+        plane.release(mapped.region.raw())
+    }
+
+    /// ★★★★★ **`OS_DESCRIPTOR` OVER GUEST RAM** — the one call that makes the host GPU
+    /// able to reach the guest's own pages, and it is `alloc_os_descriptor` applied to a
+    /// mapping this isolate did not choose.
+    ///
+    /// ⊘ **`HostOffset::ZERO` and `mapped.len`, and neither is a decision.**
+    /// [`crate::guestram::GuestRamPlane::honour`] mapped exactly the grant's slice, so
+    /// offset zero of that mapping *is* the grant's first byte. Passing anything else here
+    /// would be this process re-deriving a range the VMM already stated — the circularity
+    /// `mode2_isolate_memory_boundary.md` §3 forbids, arriving through a parameter instead
+    /// of through a request.
+    ///
+    /// ⚠ **The pages are now pinned by RM and stay pinned until the returned handle is
+    /// freed.** Releasing the guest-RAM mapping does *not* release them; that asymmetry is
+    /// `alloc_os_descriptor`'s own warning and is why the port carries the two names
+    /// separately in [`kayfabe_isolate::VerbReply::GuestRamPinned`].
+    fn describe_guest_ram(&mut self, mapped: GuestRamMapped) -> Result<HostHandle, RmError> {
+        let plane = self
+            .guest_ram
+            .as_ref()
+            .ok_or(RmError::GuestRamUnavailable)?;
+        // ★ The closure keeps the `MappedRegion` inside the plane — `with_region`'s whole
+        // shape — so the address never becomes a value this file can hold. `Indirect`
+        // writes it into the ioctl argument and scrubs it back out, one crate down.
+        let raw = plane.with_region(mapped.region.raw(), |region| {
+            self.conn
+                .alloc_os_descriptor(region, HostOffset::ZERO, mapped.len)
+        })??;
+        Ok(self.stamp(raw))
+    }
+}
+
+/// ★ The fabricated arm, shared by the real backend and the loopback fixture.
+///
+/// One implementation rather than two, because the arm has **nothing to do with RM**: it
+/// is `memfd_create` plus a table insert, and a second copy in the fixture would be a
+/// second place for the seal set or the length handling to drift. `host_execution_plane.md`
+/// §5's warning is about a fixture that *models* the driver; this is the fixture and the
+/// real backend agreeing on a fact neither of them models.
+pub(crate) fn mint_fabricated(
+    exports: &ChildExports,
+    want: ExportRequest,
+) -> Result<ExportedBacking, RmError> {
+    let token = exports.mint(want.len).map_err(|_| RmError::NoMemory)?;
+    Ok(ExportedBacking {
+        token,
+        offset: 0,
+        len: want.len,
+        // ★ Echoed rather than narrowed, and that is a *statement*: this backing carries
+        // no seal that would make it read-only, so claiming read-only would be a claim the
+        // descriptor does not support. When a read-only export is built it will be
+        // `F_SEAL_WRITE` on the memfd and this line is where it becomes visible.
+        prot: want.prot,
+    })
+}
+
+/// ★★★ **The geometry of an armed device node** — [`HostRmBackend::export_device_view`]'s
+/// answer, and the CPU-visible half of `DEVICE_LOCAL | HOST_VISIBLE`.
+///
+/// ⊘⊘ **Moved here from `kayfabe_isolate` on 2026-09-12** (`ORPHANS_wire_or_discard.md`).
+/// It used to be a type on the isolate's verb surface that crossed the wire; the verb, the
+/// wire message and the `Worker` wrapper are deleted for having no sender. It stays because
+/// `rmladder --bar1-crossing` — an in-process bare-metal probe — still arms nodes and needs
+/// to be told how long the `mmap` may be.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DeviceView {
+    /// This backend's own index into [`HostRmBackend::exports`] naming the **armed node**.
+    pub token: u64,
+    /// The RM object the view is over — the same handle the caller named.
+    pub memory: HostHandle,
+    /// Byte offset **within the object** the view starts at, as registered.
+    pub offset: u64,
+    /// ★ The `mmap` length the driver will accept — the registered length rounded up to a
+    /// host page (`osapi.c:1976-1986` rounds; `nv-mmap.c:560-565` compares against the
+    /// rounded size). A caller that `mmap`s the unrounded length is refused with `ENXIO`.
+    pub mmap_len: u64,
+}
+
+impl HostRmBackend {
+    /// ★★★ **A BENCH PROBE, NOT A VERB** — arm a CPU view of `[offset, offset+len)` of one
+    /// of this connection's vidmem objects and hand back the **armed node**.
+    ///
+    /// ⊘⊘ **It was an `RmBackend` verb and a wire message, and both are gone**
+    /// (`ORPHANS_wire_or_discard.md`, 2026-09-12): `Request::ExportDeviceView` had **zero
+    /// senders of any kind, tests included**, and the `Worker` wrapper had no caller either.
+    /// What is left is this inherent method, because one caller is real —
+    /// `rmladder --bar1-crossing`, the bare-metal probe `kayfabe_isolate::DeviceView`'s own
+    /// docs named as the thing that would turn two source *readings* into measurements.
+    /// ⚠ It therefore crosses **no process boundary any more**: the isolate cannot be asked
+    /// for a device view, and re-opening that door means re-adding the wire message under a
+    /// **fresh** tag (25 and reply 12 are retired, never reused).
+    ///
+    /// The node carries a one-shot `NV_ESC_RM_MAP_MEMORY` (`0x4E`) context for exactly the
+    /// requested range of `memory` — the thing [`ChildExports::mint_armed_node`] was built
+    /// to lend. It is never `mmap`ed here; the caller `mmap`s it once at file offset zero.
+    /// The RM object stays owned by this connection and is freed through
+    /// [`RmBackend::free`] like any other.
+    ///
+    /// # Errors
+    /// [`RmError::BadHandle`] for an object this connection did not mint; otherwise whatever
+    /// `NV_ESC_RM_MAP_MEMORY` refuses with — including a host BAR1 with no room for the view.
+    pub fn export_device_view(
+        &mut self,
+        memory: HostHandle,
+        offset: u64,
+        len: u64,
+        access: ViewAccess,
+    ) -> Result<DeviceView, RmError> {
+        if len == 0 {
+            return Err(RmError::NoMemory);
+        }
+        let raw = self.narrow(memory)?;
+        // ⊘ The cookie is captured here, not discarded: it is the ONLY thing that can release
+        // this view's BAR1 aperture later (`RmConnection::release_cpu_view`).
+        let (node, p_linear_address) = self
+            .conn
+            .arm_cpu_view(MapNode::Gpu, raw, offset, len, access)?;
+        // ★ The driver rounds the registered range up to a host page and compares the
+        // `mmap` length against the ROUNDED size (`osapi.c:1976-1986`, `nv-mmap.c:560-565`),
+        // so the length that crosses is the one the VMM's `mmap` must use.
+        let page = HostPageSize::query().bytes();
+        let mmap_len = len
+            .checked_add(page - 1)
+            .map(|n| n & !(page - 1))
+            .ok_or(RmError::NoMemory)?;
+        let token = self.exports.mint_armed_node(
+            node,
+            crate::export::CpuViewRelease {
+                h_memory: raw,
+                p_linear_address,
+            },
+        );
+        Ok(DeviceView {
+            token,
+            memory,
+            offset,
+            mmap_len,
+        })
+    }
+
+    /// ★★★★★ **RELEASE A DEVICE VIEW, AND WITH IT ITS BAR1 APERTURE.**
+    ///
+    /// Retires `token`'s armed node and issues `NV_ESC_RM_UNMAP_MEMORY` with the cookie captured
+    /// when the view was armed.
+    ///
+    /// # ⊘⊘⊘ WHY THIS EXISTS — dropping the view is not enough, and the difference is total
+    ///
+    /// `[measured w722, GA106]` A CPU view of video memory holds **BAR1**, one global pool shared
+    /// with the host driver. Over rounds that map **fresh** offsets each time:
+    ///
+    /// | release path | round 0 | rounds 1–4 |
+    /// |---|---|---|
+    /// | this verb | 224 MiB | **224 MiB each** |
+    /// | `munmap` + `close` alone | 224 MiB | ⊘ **zero** |
+    ///
+    /// ⇒ Before this existed, every armed view leaked its aperture for the life of the process,
+    /// and the eventual refusal arrived as `status = 0x51 NV_ERR_NO_MEMORY` **inside the parameter
+    /// struct** with `ioctl(2)` returning 0 — invisible to any check on the syscall.
+    ///
+    /// ⚠ The guest **re-points** its BAR1 page tables as its own RM manages the aperture, so views
+    /// are torn down and re-established continuously. What accumulates without this is **every
+    /// distinct (view, offset) pair over the boot**, not the working set — which is why a 3.6 MiB
+    /// steady state can still exhaust 254 MiB.
+    ///
+    /// ⊘ An unknown or already-released token is **`Ok(())`**, not an error: a double release must
+    /// be a no-op rather than a second ioctl against a stale cookie.
+    ///
+    /// # Errors
+    /// Whatever RM reports in `status`.
+    pub fn release_device_view(&mut self, token: u64) -> Result<(), RmError> {
+        match self.exports.take_cpu_view_release(token) {
+            Some(r) => self.conn.release_cpu_view(r),
+            None => Ok(()),
+        }
+    }
+
+    /// [`RmBackend::alloc_engine_object`] for the **copy engine**, and — like
+    /// [`RmConnection::alloc_gpfifo_channel`] — it exists for the type of `class`
+    /// (`#166`).
+    ///
+    /// The trait verb takes a bare [`ClassId`] and must: it is the generic
+    /// engine-object forward, and the guest's own compute/graphics/NVENC classes come
+    /// through it from [`crate::child`] as numbers off the wire. That genericity is
+    /// correct there and wrong *here*, where the class is not the guest's at all but the
+    /// host profile's `ce_object` role. This wrapper is the one call site in the tree
+    /// that allocates an engine object from a [`HostClasses`] rather than from guest
+    /// intent, so it is the one that can afford to name the role.
+    fn alloc_ce_engine_object(
+        &mut self,
+        chan: HostHandle,
+        class: CeObjectClass,
+        params: &[u8],
+    ) -> Result<HostHandle, RmError> {
+        self.alloc_engine_object(chan, class.ce_object_id(), params)
+    }
+
+    /// ★★★★★ **w393 — THE ONE LOWERING behind [`RmBackend::alloc_channel`] and
+    /// [`RmBackend::alloc_channel_declared`].** The birth witness, the leg-A2 adoption arm
+    /// and its two named refusals, unchanged from where they were — moved rather than
+    /// copied, so a channel born at the guest's alloc and one born at the engine-object
+    /// latch are witnessed by the same code and cannot come to mean different things.
+    ///
+    /// `asked` is what `BirthOffer::read` has always taken from `hosting.is_some()`: *"was
+    /// the supply side consulted at all"*. `engine_type` is already lowered by the caller —
+    /// the two verbs differ in exactly where that number comes from, and nowhere else.
+    fn alloc_channel_lowered(
+        &mut self,
+        vas: HostHandle,
+        engine: EngineKind,
+        engine_type: u32,
+        asked: bool,
+        adopt: Option<kayfabe_isolate::AdoptedGuestRing>,
+        err_notifier: Option<HostHandle>,
+    ) -> Result<(HostHandle, u64), RmError> {
+        // ★★★★★ §16.106 — THE GUEST'S OWN DECLARATION FIRST. See `declared_channel_engine_type`.
+        // ★ Refused HERE rather than sent as a zero. See `engine_type_for`: a channel with
+        // no engine type is not a channel with a default one, it is a channel on runlist 0.
+        // ★★★★★ **THE BIRTH WITNESS — read BEFORE `hosting` is consumed.** See [`BirthOffer`]
+        // for why two states would not have closed `w261`'s hole, and why the discriminator is
+        // `hosting` rather than a new field.
+        let offer = BirthOffer::read(asked, adopt.is_some());
+        // ★★★★★ **LEG B's WITNESS — the SAME reading, applied to the other limb.** ⊘ Not a
+        // second predicate: `BirthOffer::read` is one function and this is its second call,
+        // so "declined" cannot come to mean different things on the two legs.
+        let userd_offer = BirthOffer::read(asked, adopt.is_some_and(|a| a.userd.is_some()));
+        // ⊘ Captured, not re-read at each print: an isolate is a POOL and the census below is
+        // PER PROCESS, so two children interleave their own `#1, #2, …` into one log.
+        // `[measured 2026-08-12, w262_ring]` the log carries `#1..#8` and `#1..#16` from two
+        // children and NOTHING on the line said which was which.
+        let iso = self.id;
+        // ⊘ This process is the isolate child; its stderr is QEMU's stderr, which
+        // `scripts/bench/boot_capture.sh` redirects to `run_<tag>_qemu.log`. Same reasoning as
+        // `ce_copy`'s `CE-SUBMIT` line: the evidence is a file the boot itself wrote, not a
+        // session transcript nobody can re-read.
+        //
+        // ⊘⊘ **IT PRINTS AND IT DECIDES NOTHING.** No branch below reads `offer`, no refusal is
+        // gated on it, no ring byte is read and no method is decoded. Deleting every line of
+        // this witness would leave the channel RM is asked for byte-identical.
+        let (nth, guest_ring, guest_userd, declined, not_asked, refused) =
+            birth_census::tally(offer, userd_offer);
+        let census = format!(
+            "[births={nth} guest_ring={guest_ring} guest_userd={guest_userd} \
+             declined={declined} not_asked={not_asked} refused={refused}]"
+        );
+        // ⊘ Printed on EVERY arm below, including the refusals — a witness that only speaks
+        // when the thing succeeded is silent on exactly the outcome it is run to see.
+        let userd_says = format!(
+            "userd={} ⊘ {}",
+            userd_offer.as_str(BirthLimb::Userd),
+            userd_offer.because(BirthLimb::Userd),
+        );
+        // ★★★★★ **LEG A2 — THE PRODUCTION LOWERING, and it is the whole rung.** Until
+        // `361fca8` `alloc_channel_over_guest_ring` had exactly ONE caller in the workspace and
+        // it was the R31 diagnostic probe; every host channel a guest ever caused was
+        // `RingSource::Ours(None)`.
+        let Some(ring) = adopt else {
+            eprintln!(
+                "kayfabe-isolate: GR-BIRTH {:?} #{nth} engine={engine:?} vas={:#x} adopt={} ⊘ {} \
+                 {userd_says} → RingSource::Ours(None) {census}",
+                iso,
+                vas.raw(),
+                offer.as_str(BirthLimb::Ring),
+                offer.because(BirthLimb::Ring),
+            );
+            // ★★★★★ **w288 — TWO ARMS, NOT AN `unwrap_or(0)`.** `None` reaches
+            // `alloc_channel_at(.., None)` and is every pre-w288 boot byte for byte; `Some`
+            // goes through the verb that NAMES the notifier, so a reader of this file can
+            // see which of the two a channel was born on without decoding a handle value.
+            // ⊘ Zero is a legal-looking handle and must never be the carrier of "absent".
+            return match err_notifier {
+                None => self.alloc_channel_on(vas, engine_type),
+                Some(n) => self.alloc_channel_at_with_error_notifier(vas, engine_type, None, n),
+            };
+        };
+        // ⊘ THE OWNER INVARIANT, on the far side of the wire. See `RING_NOT_A_JOINED_WINDOW`
+        // for why the core's own type-level check cannot reach here.
+        //
+        // ★★★★★ **CONSTRAINT 26 — AND THERE ARE NOW TWO SHAPES, WITH DIFFERENT CHECKERS.**
+        //
+        // `OwnObject` is the pre-§26 shape and its check is unchanged: this isolate must have
+        // minted the handle by joining a framebuffer leaf.
+        //
+        // `StoreSlice` names **no handle**, because the birth isolate holds none — that is
+        // the ownership split. What this side can still check is that it was not handed one
+        // in disguise, and it does: there is nothing to narrow and nothing to look up. The
+        // *"is this ring one memory the guest reaches?"* question is answered VMM-side by
+        // `kayfabe_fwd::RingSliceOracle`, of the party that placed the slice, **before** this
+        // plan was built. ⚠ That is a real move of the checker, not a second one: this side
+        // cannot answer it and a check it cannot make must not be spelled as if it could.
+        let (raw_memory, joined) = match ring.ring {
+            kayfabe_isolate::RingProvenance::OwnObject(h) => {
+                let raw = self.narrow(h)?;
+                let j = self
+                    .fb_joins
+                    .as_ref()
+                    .is_some_and(|t| t.is_joined_object(raw));
+                (raw, j)
+            }
+            kayfabe_isolate::RingProvenance::StoreSlice { .. } => (0, true),
+        };
+        let _ = raw_memory;
+        // ⊘ The guest's four numbers are printed on the refusal side too — `ce_copy`'s stated
+        // reason, one plane over: a witness that only speaks when the thing succeeded is silent
+        // on exactly the outcome it is run to see.
+        let named = format!(
+            "memory={} ring_va={:#x} gp_fifo_va={:#x} entries={} userd_memory={} \
+             userd_offset={}",
+            match ring.ring {
+                kayfabe_isolate::RingProvenance::OwnObject(h) => format!("{:#x}", h.raw()),
+                kayfabe_isolate::RingProvenance::StoreSlice { offset, len } => {
+                    format!("STORE-SLICE(+{offset:#x}, len={len:#x})")
+                }
+            },
+            ring.ring_va,
+            ring.gp_fifo_va,
+            ring.gp_fifo_entries,
+            // ⊘ The guest's TWO leg-B numbers printed on both the success and the refusal
+            // side, and printed as `NONE` rather than as `0x0` when absent: offset zero is a
+            // legal USERD placement (the slot at the joined leaf's own base).
+            ring.userd
+                .map_or_else(|| "NONE".to_string(), |u| format!("{:#x}", u.memory.raw())),
+            ring.userd
+                .map_or_else(|| "NONE".to_string(), |u| format!("{:#x}", u.offset)),
+        );
+        if !joined {
+            let n = birth_census::refuse();
+            eprintln!(
+                "kayfabe-isolate: GR-BIRTH {:?} #{nth} engine={engine:?} vas={:#x} adopt={} {named} \
+                 {userd_says} joined=NO → REFUSED RING_NOT_A_JOINED_WINDOW (this isolate did not \
+                 mint that object by joining a framebuffer leaf; refused={n}) {census}",
+                iso,
+                vas.raw(),
+                offer.as_str(BirthLimb::Ring),
+            );
+            return Err(RmError::Other(RING_NOT_A_JOINED_WINDOW));
+        }
+        // ★★★★★ **LEG B's far-side check, and it is NOT implied by the ring's.** The two
+        // handles arrive as separate integers over the wire and a child cannot see the
+        // address table that related them. ⊘ Refusal, never a downgrade to a USERD of ours:
+        // a channel silently given our USERD after being told it would carry the guest's is
+        // the exact `GP_PUT == GP_GET` silence this leg exists to end, and it would make an
+        // armed run and its control produce the same channel.
+        let adopted_userd = match ring.userd {
+            None => None,
+            Some(u) => {
+                let raw_userd = self.narrow(u.memory)?;
+                if !self
+                    .fb_joins
+                    .as_ref()
+                    .is_some_and(|t| t.is_joined_object(raw_userd))
+                {
+                    let n = birth_census::refuse();
+                    eprintln!(
+                        "kayfabe-isolate: GR-BIRTH {:?} #{nth} engine={engine:?} vas={:#x} \
+                         adopt={} {named} {userd_says} → REFUSED USERD_NOT_A_JOINED_WINDOW \
+                         (this isolate did not mint that object by joining a framebuffer leaf; \
+                         refused={n}) {census}",
+                        iso,
+                        vas.raw(),
+                        offer.as_str(BirthLimb::Ring),
+                    );
+                    return Err(RmError::Other(USERD_NOT_A_JOINED_WINDOW));
+                }
+                Some(u)
+            }
+        };
+        // ★★★★★ **THE LINE THAT PROVES LEG A2 FIRED.** Absent on a disarmed run by
+        // construction — `adopted_guest_ring` is `None` when nothing joined the leaf — and
+        // present exactly when a host channel is about to be born over memory this port did not
+        // allocate. ⇒ The `off`/`ring` differential IS this line, against the `DECLINED` line
+        // it replaces.
+        eprintln!(
+            "kayfabe-isolate: GR-BIRTH {:?} #{nth} engine={engine:?} vas={:#x} adopt={} {named} \
+             {userd_says} joined=YES ⇒ {} → alloc_channel_over_guest_ring {census}",
+            iso,
+            vas.raw(),
+            offer.as_str(BirthLimb::Ring),
+            offer.because(BirthLimb::Ring),
+        );
+        let guest_ring = GuestRing {
+            ring: ring.ring,
+            ring_va: ring.ring_va,
+            gp_fifo_va: ring.gp_fifo_va,
+            gp_fifo_entries: ring.gp_fifo_entries,
+            userd: adopted_userd,
+        };
+        // ★★★★★ **w288 — the `Ours` arm's two arms, on the guest-ring limb.** Same reason:
+        // the verb that carries a notifier is a different name from the one that does not,
+        // so which was used is readable here rather than inferable from a handle value.
+        match err_notifier {
+            None => self.alloc_channel_over_guest_ring(vas, engine_type, guest_ring),
+            Some(n) => self.alloc_channel_over_guest_ring_with_error_notifier(
+                vas,
+                engine_type,
+                guest_ring,
+                n,
+            ),
+        }
+    }
+
+    /// ★★ [`RmBackend::alloc_channel`]'s body, taking the **raw** `NV2080_ENGINE_TYPE_*`
+    /// instead of an [`EngineKind`].
+    ///
+    /// The port's verb takes an abstract engine and that is right: the core must not name
+    /// NVIDIA engine numbers. But `engine_type_for`'s table is a claim about hardware, and
+    /// the only way to *check* a claim about which runlist an engine type lands on is to
+    /// vary the engine type — which the abstract verb cannot express, because two of its
+    /// variants map to one number and one maps to none.
+    ///
+    /// So this is the adapter's own lower entry point, used by the `kayfabe-rm-ladder`
+    /// diagnostic's `--engines` sweep. It is `pub` for that reason and no other; nothing
+    /// in the core can reach it, because nothing in the core has an engine number to pass.
+    ///
+    /// # Errors
+    /// Whatever RM refuses with, after unwinding whatever it had already built.
+    pub fn alloc_channel_on(
+        &mut self,
+        vas: HostHandle,
+        engine_type: u32,
+    ) -> Result<(HostHandle, u64), RmError> {
+        self.alloc_channel_at(vas, engine_type, None)
+    }
+
+    /// ★★★ **R26 — a host channel whose ring lives at an address WE dictate.**
+    ///
+    /// [`Self::alloc_channel_on`]'s body, with one degree of freedom added: `ring_at`.
+    /// `None` reproduces the previous behaviour exactly — RM chooses where the ring goes.
+    /// `Some(va)` demands that address via `DMA_OFFSET_FIXED_TRUE` and **refuses** with
+    /// [`RmError::PlacementRefused`] if RM reports a different one.
+    ///
+    /// # ★★ `ring_at` names the RING OBJECT'S BASE, not `gpFifoOffset`
+    ///
+    /// The two differ by [`GPFIFO_OFFSET`], and picking the wrong one of them is a silent
+    /// off-by-a-page: the channel would be told its GPFIFO is where the **pushbuffer**
+    /// lives, hardware would fetch 64 bytes of methods as GPFIFO entries, and the failure
+    /// would surface as a wild `gpEntry` — nowhere near this call. So the parameter names
+    /// the object, and `gpFifoOffset` is derived from it here, exactly as it was before.
+    ///
+    /// ⊘ **This is deliberately not the guest's `gpFifoOffset` yet.** A shadow-forwarded
+    /// channel's ring is the *guest's* memory, and its whole 64 KiB layout —
+    /// pushbuffer, GPFIFO, semaphore — is the guest's rather than
+    /// [`PUSHBUFFER_OFFSET`]/[`GPFIFO_OFFSET`]/[`SEMAPHORE_OFFSET`]. What this verb
+    /// establishes is the *one fact* that stood between here and there: that host RM will
+    /// let a channel name a ring at an address its caller chose. Deriving `gpFifoOffset`
+    /// from a guest-declared layout is the next increment and belongs with the memory that
+    /// carries it.
+    ///
+    /// # ⊘ Why this is not (yet) a port verb
+    ///
+    /// [`RmBackend`] deliberately does not grow a method here. Nothing in the core has a
+    /// dictated ring VA to pass — the shadow-forward that will is unbuilt — and a trait
+    /// verb with no caller is the bolt-on `alloc_engine_object`'s docs already warn about
+    /// one method up. It is `pub` for the same single reason [`Self::alloc_channel_on`]
+    /// is: the `kayfabe-rm-ladder` diagnostic, which is the only thing that can ask
+    /// hardware this question.
+    ///
+    /// # ★ The residual `raw_map_dma` named, now reachable
+    ///
+    /// `raw_map_dma`'s docs record that RM's own VA allocator and our fixed publishes
+    /// share one address space, so RM *could* place something where a later fixed map is
+    /// demanded. With `Some` that collision is now reachable **from this call** — and it
+    /// surfaces as `PlacementRefused` or an RM status, both loud. It is still not silent
+    /// corruption, and a host-private reservation is still the real fix.
+    ///
+    /// # Errors
+    /// Whatever RM refuses with, or [`RmError::PlacementRefused`] if `ring_at` was named
+    /// and not honoured — after unwinding everything already built, in both cases.
+    pub fn alloc_channel_at(
+        &mut self,
+        vas: HostHandle,
+        engine_type: u32,
+        ring_at: Option<GpuVa>,
+    ) -> Result<(HostHandle, u64), RmError> {
+        let range = self.narrow(vas)?;
+        self.alloc_channel_in(range, engine_type, RingSource::Ours(ring_at), None)
+    }
+
+    /// ★★★★★ **W230 — a host channel over the GUEST'S ring**: the same body, with the
+    /// object hardware fetches from handed in instead of allocated.
+    ///
+    /// This is the verb the blocker asks for. See [`GuestRing`] for what each number is and
+    /// whose it is; everything this method adds on top of that type is the refusal for a
+    /// count that cannot be an index modulus, and the promise that **no CPU mapping of the
+    /// guest's ring is attempted** ([`RING_NOT_OURS`], [`HostRmBackend::cpu_map_calls`]).
+    ///
+    /// # ⊘ What comes back is a channel that is NOT runnable, and saying so is the point
+    ///
+    /// RM will have accepted it, [`RmBackend::schedule`] will make it eligible, and it will
+    /// still execute **nothing**, because the engine reads `GP_PUT` out of the USERD *we*
+    /// gave it and nothing on this rung writes the guest's cursor into that word. A green
+    /// return here is *"the host driver accepted the guest's ring"* and is not
+    /// *"the guest's work runs"*.
+    ///
+    /// # Errors
+    /// [`RmError::Other`] carrying [`RING_ENTRIES_REFUSED`] for a zero entry count,
+    /// [`RmError::BadHandle`] for a `vas` or a ring handle this connection did not mint,
+    /// and otherwise whatever RM refused — after unwinding everything already built, and
+    /// **without** touching the handed-in ring.
+    pub fn alloc_channel_over_guest_ring(
+        &mut self,
+        vas: HostHandle,
+        engine_type: u32,
+        ring: GuestRing,
+    ) -> Result<(HostHandle, u64), RmError> {
+        let range = self.narrow(vas)?;
+        self.alloc_channel_in(range, engine_type, RingSource::Guest(ring), None)
+    }
+
+    /// ★★★★★ **w392d — A COPY-ENGINE CHANNEL INSIDE AN ADDRESS SPACE `nvidia-uvm` OWNS.**
+    ///
+    /// `space` is the raw `FERMI_VASPACE_A` handle from
+    /// [`Self::host_alloc_vaspace_externally_owned`], **after** `UVM_REGISTER_GPU_VASPACE`
+    /// has taken it over — at which point its page directory is UVM's page tree
+    /// (`nvGpuOpsSetPageDirectory` → `NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY`), so every VA
+    /// this channel touches is translated through **UVM's** tables and not RM's.
+    ///
+    /// `ring` is an object from [`Self::alloc_ring_object`] and `ring_va` is where the
+    /// caller already had UVM place it with `UVM_MAP_EXTERNAL_ALLOCATION`. ⚠ **Ownership of
+    /// `ring` transfers on success**: freeing the channel frees it, and so does an unwind
+    /// inside this call. It has to be the caller's to begin with because the party that
+    /// places it needs its RM handle, which does not exist until it is allocated.
+    ///
+    /// # ⊘ Why this is not [`Self::alloc_channel_over_guest_ring`]
+    ///
+    /// That verb's ring is **not ours**: it is not CPU-mapped, `ring_store_u32` refuses on it
+    /// by name (`RING_NOT_OURS`) and `submit_entry` refuses too. A probe that has to compose
+    /// a pushbuffer into the ring cannot use it. This one's ring is ours in every way except
+    /// who placed it.
+    ///
+    /// # Errors
+    /// Whatever RM refused the channel, its group, or its USERD with.
+    pub fn alloc_channel_in_uvm_space(
+        &mut self,
+        space: u32,
+        engine_type: u32,
+        ring: HostHandle,
+        ring_va: u64,
+    ) -> Result<(HostHandle, u64), RmError> {
+        let ring_raw = self.narrow(ring)?;
+        self.alloc_channel_in(
+            space,
+            engine_type,
+            RingSource::OursPlaced {
+                ring: ring_raw,
+                ring_va,
+            },
+            None,
+        )
+    }
+
+    /// ★★★ **w392d — a bare [`RING_OBJECT_BYTES`] device-local object, for a caller that
+    /// must place it itself.**
+    ///
+    /// ⊘ It exists because [`Self::alloc_channel_in_uvm_space`] needs its ring **already
+    /// mapped** at the VA it is told, and the only party that can map into a UVM-owned
+    /// address space is nvidia-uvm — which needs the RM handle first. So the object's
+    /// allocation and the channel's creation cannot be one call, and the size is this
+    /// module's rather than the caller's.
+    ///
+    /// # Errors
+    /// Whatever RM refused the allocation with.
+    pub fn alloc_ring_object(&mut self) -> Result<HostHandle, RmError> {
+        let raw = self.conn.alloc_device_local(RING_OBJECT_BYTES)?;
+        Ok(self.stamp(raw))
+    }
+
+    /// The size of the object [`Self::alloc_ring_object`] returns, so a caller mapping it
+    /// asks for exactly the length RM was told.
+    #[must_use]
+    pub const fn ring_object_bytes() -> u64 {
+        RING_OBJECT_BYTES
+    }
+
+    /// ★★★ **W229 — the isolate's OWN channel, in the isolate's OWN address space.**
+    ///
+    /// [`Self::alloc_channel_at`]'s body over an [`ExecutorVas`] instead of a guest `Vas`.
+    /// The two verbs differ in exactly one thing and it is the one that matters: which
+    /// address space the channel's ring, USERD and completion semaphore land in.
+    ///
+    /// ⊘ There is no `HostHandle` overload of this. A caller who has a guest `Vas` has no
+    /// way to spell an [`ExecutorVas`], which is the whole mechanism — see that type.
+    ///
+    /// # Errors
+    /// As [`Self::alloc_channel_at`].
+    fn alloc_channel_for_isolate(
+        &mut self,
+        vas: ExecutorVas,
+        engine_type: u32,
+    ) -> Result<(HostHandle, u64), RmError> {
+        self.alloc_channel_in(vas.range, engine_type, RingSource::Ours(None), None)
+    }
+
+    /// ★★★★★ **w287 — [`Self::alloc_channel_at`] with an ERROR NOTIFIER on the channel.**
+    ///
+    /// The one verb in this file that lets a client be **told** its channel died, instead of
+    /// inferring it from a semaphore that never moved.
+    ///
+    /// `notifier` names a memory object — [`RmBackend::alloc_sysmem`] is what this rung uses —
+    /// which RM writes one 16-byte `NvNotification` into when the channel is robust-channel
+    /// killed. Read it back with [`Self::read_error_notifier`].
+    ///
+    /// # Errors
+    /// As [`Self::alloc_channel_at`], plus [`RmError::BadHandle`] if `notifier` was not minted
+    /// by this connection.
+    pub fn alloc_channel_at_with_error_notifier(
+        &mut self,
+        vas: HostHandle,
+        engine_type: u32,
+        ring_at: Option<GpuVa>,
+        notifier: HostHandle,
+    ) -> Result<(HostHandle, u64), RmError> {
+        let range = self.narrow(vas)?;
+        let notifier = self.narrow(notifier)?;
+        self.alloc_channel_in(
+            range,
+            engine_type,
+            RingSource::Ours(ring_at),
+            Some(notifier),
+        )
+    }
+
+    /// ★★★★★ **w288 — [`Self::alloc_channel_over_guest_ring`] with an ERROR NOTIFIER**, and
+    /// this is the combination a guest submission actually reaches.
+    ///
+    /// The two refinements are orthogonal and both are the guest's: the ring is the guest's
+    /// memory, and `notifier` is expected to be an `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` over
+    /// the guest's own notifier pages ([`RmBackend::describe_guest_ram`]). What that buys is
+    /// the thing no other verb in this file can give: when the host RC path kills this
+    /// channel, RM/GSP writes `NvNotification` into the very bytes the guest's driver polls
+    /// (`ogkm-580: kernel_channel.c:549-568` sends `errorNotifierMem.base =
+    /// memdescGetPhysAddr(…)` to the GSP, and for this descriptor that base IS the guest's
+    /// page).
+    ///
+    /// ⊘ **Do not attempt to read it back from this side.** `[measured, R31 arm B]` a
+    /// guest-backed `OS_DESCRIPTOR` cannot be CPU-mapped at all, so
+    /// [`Self::read_error_notifier`] is not merely unnecessary here — it is a call that
+    /// fails, and a caller that swallows the failure measures nothing while appearing to
+    /// verify. The reader of these bytes is the guest.
+    ///
+    /// # Errors
+    /// As [`Self::alloc_channel_over_guest_ring`], plus [`RmError::BadHandle`] if `notifier`
+    /// was not minted by this connection.
+    pub fn alloc_channel_over_guest_ring_with_error_notifier(
+        &mut self,
+        vas: HostHandle,
+        engine_type: u32,
+        ring: GuestRing,
+        notifier: HostHandle,
+    ) -> Result<(HostHandle, u64), RmError> {
+        let range = self.narrow(vas)?;
+        let notifier = self.narrow(notifier)?;
+        self.alloc_channel_in(range, engine_type, RingSource::Guest(ring), Some(notifier))
+    }
+
+    /// ★★★★★ **Read the channel's error notifier — the guest-observable error path, as data.**
+    ///
+    /// The record is `NvNotification`: `timeStamp` (8), `info32` (4), `info16` (2),
+    /// `status` (2), and the index this rung reads is
+    /// [`kayfabe_abi::notifier::NOTIFICATION_TYPE_ERROR_INDEX`].
+    ///
+    /// ## ⊘ `status == 0` IS THE "NOTHING HAPPENED" VALUE, and that is a trap with a name
+    ///
+    /// A zeroed page decodes as a well-formed *"no error"*. So a caller that never wired
+    /// `hObjectError`, a caller whose notifier RM never accepted, and a caller whose channel
+    /// simply did not fault **all read identically**. ⇒ This rung's arm 5 runs its
+    /// [`GuestReach::NotResolved`] positive control *first* and reports the notifier
+    /// **against** it, so *"the notifier stayed quiet"* can be graded as a finding rather
+    /// than read as a pass. Same class as the `dlen=0` oracle rows: an empty artefact reads
+    /// as benign.
+    ///
+    /// # Errors
+    /// [`RmError::BadHandle`] for a handle this connection did not mint, or whatever the CPU
+    /// mapping refused.
+    pub fn read_error_notifier(
+        &mut self,
+        notifier: HostHandle,
+        aperture: NotifierAperture,
+    ) -> Result<ErrorNotifierRead, RmError> {
+        use kayfabe_abi::notifier::{
+            NOTIFICATION_SIZE, NOTIFICATION_STATUS_OFF, NOTIFICATION_TYPE_ERROR_INDEX,
+        };
+        let raw = self.narrow(notifier)?;
+        let base = NOTIFICATION_TYPE_ERROR_INDEX * NOTIFICATION_SIZE as u64;
+        // ⊘ `UnCached`, not write-combining. The writer is RM (or, on a GSP part, the GSP)
+        // and the reader is this CPU: a WC mapping is for stores we then fence, and reading
+        // a producer's bytes through one is how a stale line reads as "quiet".
+        let (node, view) = self.conn.map_cpu_on(
+            MapNode::for_notifier(aperture),
+            raw,
+            NOTIFIER_BYTES,
+            CachePolicy::WriteBack,
+        )?;
+        let lo = view
+            .load_u32(HostOffset::new(base))
+            .map_err(|e| region_error(&e))?;
+        let hi = view
+            .load_u32(HostOffset::new(base + 4))
+            .map_err(|e| region_error(&e))?;
+        let except_type = view
+            .load_u32(HostOffset::new(base + 8))
+            .map_err(|e| region_error(&e))?;
+        // `info16` and `status` are two half-words in one dword; split here rather than
+        // asking the region for a `u16` it does not offer.
+        let tail = view
+            .load_u32(HostOffset::new(base + NOTIFICATION_STATUS_OFF as u64 - 2))
+            .map_err(|e| region_error(&e))?;
+        drop(view);
+        drop(node);
+        Ok(ErrorNotifierRead {
+            timestamp: u64::from(lo) | (u64::from(hi) << 32),
+            except_type,
+            engine_type: (tail & 0xFFFF) as u16,
+            status: (tail >> 16) as u16,
+        })
+    }
+
+    /// ⊘⊘ **CORRECTED 2026-08-13 (w288 TIER 2) — THIS IS NOW LIVE, and it is the DEFAULT.**
+    /// The header below used to read *"NOT USED — kept as the record of two measurements
+    /// that cost a run each"*. It is now [`NotifierAperture::Sysmem`], which is the arm a
+    /// GUEST-side run must take: `kayfabe_arch::fault::ErrorNotifier` has only
+    /// `Sysmem { gpa }` and `Unreachable`, so a VIDMEM notifier decodes to `Unreachable`,
+    /// **no host notifier is attached**, and the probe measures nothing while looking like it
+    /// ran. ⚠ The two measurements below are still true of the **host** and are the reason
+    /// the aperture is a named parameter rather than a constant — read them before running
+    /// this natively.
+    ///
+    /// The notifier this rung used to use unconditionally is
+    /// [`RmConnection::alloc_device_local`] (`NV01_MEMORY_LOCAL_USER`), which `kchannelGetNotifierInfo` accepts as
+    /// `ERROR_NOTIFIER_TYPE_MEMORY` exactly as it accepts `NV01_MEMORY_SYSTEM`
+    /// (`ogkm-580: kernel_channel.c:2016`, `:2080` — the handle is resolved by
+    /// `memGetByHandle`, which is class-agnostic), and which this tree already CPU-maps
+    /// every run. ⚠ It is a **deviation from the shape a real driver uses**: the
+    /// `[w287 census, 63/63]` aperture of every real `errorNotifierMem` is SYSMEM. Recorded
+    /// here rather than left for a reader to notice.
+    ///
+    /// # ★★★★★ CORRECTED 2026-08-13 (w289) — **BOTH REFUSALS BELOW WERE OURS, AND NEITHER
+    /// # INDICTS THE SYSMEM ARM.** Read this before the two bullets it qualifies.
+    ///
+    /// The text that stood here concluded *"the two flag settings measured are **both**
+    /// unusable"*, and [`NotifierAperture`] carried that forward as *"the sysmem arm may not
+    /// survive natively"*. **Both observations were right; the conclusion was wrong.** They
+    /// are two independent defects of ours, one at each end of the same object, and toggling
+    /// the one flag merely swapped which end refused:
+    ///
+    /// - **Without `_NO_MAP`** — the ALLOCATION is refused, `errno 22`. Real, and the cause is
+    ///   not the aperture: for `NV01_MEMORY_SYSTEM` with `_ALLOC != _NONE` and
+    ///   `_MAPPING != _NO_MAP`, `RmIoctl` builds an mmap context there and then, around
+    ///   **`pApi->fd`** (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/escape.c:341-359`) — and
+    ///   we pass `fd: -1`. ⇒ the request asked RM to map onto a descriptor we never gave it.
+    /// - **With `_NO_MAP`** — the allocation succeeds and the CPU MAP is refused,
+    ///   `NV_ERR_INVALID_ARGUMENT`. Also real, also not the aperture: a system-memory mapping
+    ///   is associated with the **control device** (`ogkm-580: .../osapi.c:2266-2289`), so
+    ///   `nv_get_file_private(fd, ctl = NV_TRUE)` requires a `/dev/nvidiactl` descriptor
+    ///   (`ogkm-580: kernel-open/nvidia/nv.c:4102-4106`) and [`RmConnection::map_cpu`] was
+    ///   handing it `/dev/nvidia<N>`. ⇒ see [`MapNode`].
+    ///
+    /// ★★★ **THE INSTRUMENT LESSON, and it is the expensive half.** The experiment varied
+    /// **the flag the hypothesis named**, and nothing else. Two settings, two refusals, and a
+    /// verdict about the *aperture* — which was never the variable. A sweep over one suspect
+    /// can only indict that suspect or exonerate it; it cannot see that the **other** call in
+    /// the pair is independently wrong, so it reports *"neither setting works"* where the true
+    /// state was *"I have not found the variable yet"*.
+    ///
+    /// ⊘ Kept because the pair is instructive: the `_NO_MAP` refusal arrived with the ioctl
+    /// census reading **`failed=0`** (RM reports status *inside* the parameter struct while
+    /// `ioctl(2)` returns 0) and the no-flag refusal arrived as **`failed=1`**. One defect
+    /// class, once invisible to the census and once visible, purely by which layer refused.
+    ///
+    /// ⊘ And the claim that `_NO_MAP` is *"unusable for a notifier, whose entire purpose is
+    /// to be read by this CPU"* is **false**: the flag suppresses only the *implicit,
+    /// allocation-time* mapping context. An explicit `NV_ESC_RM_MAP_MEMORY` afterwards builds
+    /// its own (`ogkm-580: .../escape.c:527-534`), which is exactly what
+    /// [`Self::zero_notifier`] and [`Self::read_error_notifier`] issue.
+    ///
+    /// ★★★★★ **The error-notifier page: `NV01_MEMORY_SYSTEM`, `_NO_MAP`, and CPU-mapped
+    /// through the CONTROL node.**
+    ///
+    /// ★ `COHERENCY_CACHED` because the producer is the GPU/GSP over snooped PCIe and the
+    /// consumer is this core; and `NV01_MEMORY_SYSTEM` because the `[w287 census, 63/63]`
+    /// aperture of every real `errorNotifierMem` is **SYSMEM** — against `userdMem`, FBMEM
+    /// `68/68` on the same census. NVIDIA's own raw pusher does exactly this
+    /// (`ogkm-580: src/common/unix/nvidia-push/src/nvidia-push-init.c:1116-1160`).
+    ///
+    /// # Errors
+    /// Whatever RM refused.
+    fn alloc_notifier_mem(&mut self, len: u64) -> Result<HostHandle, RmError> {
+        if len == 0 {
+            return Err(RmError::NoMemory);
+        }
+        let want = self.conn.mint();
+        let mut arg = [0u8; Nvos02ParametersWithFd::SIZE];
+        Nvos02ParametersWithFd {
+            h_root: self.conn.client.raw(),
+            h_object_parent: self.conn.device,
+            h_object_new: want,
+            h_class: NV01_MEMORY_SYSTEM,
+            // ★★★★★ **`_MAPPING_NO_MAP`, AND ITS ABSENCE IS EXACTLY WHAT `w288nc1`
+            // MEASURED.** The comment that stood here said the `_MAPPING` field was *"left
+            // at its zero value on purpose — `_DEFAULT`, not an omission"*. It WAS an
+            // omission, and it is the whole of `Other(0x8000_0016)`:
+            //
+            //   `RmIoctl`'s `NV_ESC_RM_ALLOC_MEMORY` arm, for `hClass == NV01_MEMORY_SYSTEM`
+            //   with `_ALLOC != _NONE` **and `_MAPPING != _NO_MAP`**, immediately calls
+            //   `rm_create_mmap_context(..., pApi->fd)`
+            //   (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/escape.c:341-359`)
+            //     -> `nv_add_mapping_context_to_file(..., fd)`
+            //     -> `nv_get_file_private(fd, ...)` returns NULL for our `fd: -1` below
+            //        (`ogkm-580: kernel-open/nvidia/nv-usermap.c:44-46`)
+            //     -> `NV_ERR_INVALID_ARGUMENT` -> the frontend's `-EINVAL` -> errno 22
+            //     -> `ioctl_error` tags it `Other(0x8000_0000 | 22)` = `2147483670`.
+            //
+            // ⇒ The request asked RM to build a CPU mapping context **on a descriptor we
+            // never supplied**. `_NO_MAP` says the caller will map it later, by name, which
+            // is exactly what `zero_notifier` / `read_error_notifier` do — and it is what
+            // the sibling `alloc_sysmem` has always asked for (see its `flags`).
+            //
+            // ⚠ `fd: -1` below is consistent now rather than merely unread: with `_NO_MAP`
+            // set, nothing in the driver looks at it.
+            flags: NVOS02_FLAGS_LOCATION_PCI
+                | NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS
+                | NVOS02_FLAGS_COHERENCY_CACHED
+                | NVOS02_FLAGS_MAPPING_NO_MAP,
+            p_memory: 0,
+            pad1: 0,
+            limit: len - 1,
+            status: 0,
+            fd: -1,
+        }
+        .encode_into(&mut arg)
+        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_ALLOC_MEMORY, arg.len())
+            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        // `NV_ACTUAL_DEVICE_ONLY`, as `alloc_sysmem` records at length.
+        self.conn
+            .gpu
+            .ioctl(req, &mut arg, &mut [])
+            .map_err(|e| ioctl_error(&e))?;
+        let out =
+            Nvos02ParametersWithFd::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        status_check(out.status)?;
+        self.conn.remember(out.h_object_new, self.conn.device);
+        Ok(self.stamp(out.h_object_new))
+    }
+
+    /// ★★★★★ **w288 TIER 2 — ASK THIS CHANNEL WHERE IT FAULTED.**
+    ///
+    /// `NV906F_CTRL_CMD_GET_MMU_FAULT_INFO` (`0x906f0106`), issued on the **channel object**.
+    /// It is the only control that carries a fault's **address**, **type** and the driver's
+    /// own **fault string**; the error notifier has `status`/`info32`/`info16` and no address
+    /// at all.
+    ///
+    /// # ⊘⊘ THE READ IS DESTRUCTIVE — call this AT MOST ONCE per fault
+    ///
+    /// *"The MMU fault information will be cleared once this command is executed"*
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl906f.h`). A second call answers
+    /// all-zero, which decodes to a well-formed *"faulted at address 0"* — so a retry loop
+    /// here would not merely waste a call, it would **manufacture a wrong answer** and there
+    /// would be nothing in the reply to say so.
+    ///
+    /// ⊘ On a GSP client this is `ROUTE_TO_PHYSICAL` and therefore RPC'd to the GSP. In the
+    /// guest that GSP is **us**, and the arm that answers it is `kayfabe_rmrpc`'s
+    /// `respond_get_mmu_fault_info`, which relays it to the corresponding HOST channel.
+    ///
+    /// # Errors
+    /// [`RmError::BadHandle`] for a handle this connection did not mint, whatever RM refused,
+    /// or [`RmError::Other`] carrying [`BAD_ENCODE`] if the reply did not decode.
+    pub fn get_mmu_fault_info(
+        &mut self,
+        chan: HostHandle,
+    ) -> Result<kayfabe_abi::submit::MmuFaultInfoParams, RmError> {
+        use kayfabe_abi::submit::{MmuFaultInfoParams, NV906F_CTRL_CMD_GET_MMU_FAULT_INFO};
+        let raw = self.narrow(chan)?;
+        // ⊘ Sent zeroed and read back in place: every field is `[OUT]`, so seeding anything
+        // would be this side proposing a value RM is then free to leave alone — the shape
+        // that lets our own number read as the driver's answer.
+        let mut params = [0u8; MmuFaultInfoParams::SIZE];
+        self.conn
+            .raw_control(raw, NV906F_CTRL_CMD_GET_MMU_FAULT_INFO, &mut params)?;
+        MmuFaultInfoParams::decode(&params).map_err(|_| RmError::Other(BAD_ENCODE))
+    }
+
+    /// ★★★★★ **ASK RM WHETHER `va` IS MAPPED IN `vas` — the pointwise, join-keyed oracle.**
+    ///
+    /// `NV0080_CTRL_CMD_DMA_GET_PTE_INFO` on the **device**, naming the VA space explicitly.
+    /// See [`kayfabe_abi::submit::DmaGetPteInfoParams`] for why this id is safe to call
+    /// (direct `_IMPL`, no HAL variance, no privilege check, RM control plane only) and for
+    /// **the blind spot that makes it useful**: it reports what RM believes it mapped, i.e.
+    /// **populate source (1) alone**.
+    ///
+    /// # ⊘⊘ THREE ANSWERS, AND THEY ARE NOT TWO
+    ///
+    /// | return | means |
+    /// |---|---|
+    /// | `Ok(Some(block))` | RM holds a **valid** PTE at this VA, at `block.page_size` |
+    /// | `Ok(None)` | RM holds **no valid PTE** — which is what `FAULT_PTE` says hardware found |
+    /// | `Err(..)` | **the question was not asked**: RM refused the control, or the reply did not decode |
+    ///
+    /// ⚠ **`Ok(None)` and `Err` must never be collapsed into "absent".** *"RM says nothing is
+    /// there"* and *"we could not ask"* are the difference between a finding and a broken
+    /// instrument, and an instrument that reports absence for everything reads as a discovery.
+    /// That is why this returns a nested `Result<Option<_>>` rather than a `bool`.
+    ///
+    /// # Errors
+    /// [`RmError::BadHandle`] for a handle this connection did not mint, whatever RM refused,
+    /// or [`RmError::Other`] carrying [`BAD_ENCODE`] if the reply did not decode.
+    pub fn pte_info(
+        &mut self,
+        vas: HostHandle,
+        va: u64,
+    ) -> Result<Option<kayfabe_abi::submit::DmaPteInfoBlock>, RmError> {
+        use kayfabe_abi::submit::{DmaGetPteInfoParams, NV0080_CTRL_CMD_DMA_GET_PTE_INFO};
+        let range = self.narrow(vas)?;
+        let mut buf = [0u8; DmaGetPteInfoParams::SIZE];
+        DmaGetPteInfoParams {
+            gpu_addr: va,
+            sub_device_id: 0,
+            // ⊘ Never skipped — see the field's docs: an answer that depends on whether
+            // something else touched the space first is not an oracle.
+            skip_vaspace_init: 0,
+            pte_blocks: [kayfabe_abi::submit::DmaPteInfoBlock::default();
+                DmaGetPteInfoParams::PTE_BLOCKS],
+            // ★★ The join key. NOT zero: zero means "the device's implicit VA space", which
+            // is a DIFFERENT space from the one the caller is asking about, and the reply
+            // would be a well-formed answer to a question nobody asked.
+            h_vaspace: range,
+        }
+        .encode_into(&mut buf)
+        .map_err(|_| RmError::Other(BAD_ENCODE))?;
+        // ⊘ On the DEVICE, not the subdevice and not the VA space object: the control is
+        // exported by `Device` (`ogkm-580: g_device_nvoc.c:733-745`), and the VA space is
+        // named by the parameter rather than by the receiver.
+        self.conn
+            .raw_control(self.conn.device, NV0080_CTRL_CMD_DMA_GET_PTE_INFO, &mut buf)?;
+        let out = DmaGetPteInfoParams::decode(&buf).map_err(|_| RmError::Other(BAD_ENCODE))?;
+        Ok(out.mapped())
+    }
+
+    /// ★★ **The PDE-level sibling of [`Self::pte_info`] — and the only one a PRODUCTION driver
+    /// will answer.**
+    ///
+    /// `NV0080_CTRL_CMD_DMA_GET_PDE_INFO`. See
+    /// [`kayfabe_abi::submit::NV0080_CTRL_CMD_DMA_GET_PDE_INFO`] for the measurement that
+    /// forced this to exist (`GET_PTE_INFO` answers `NV_ERR_TEST_ONLY_CODE_NOT_ENABLED` on a
+    /// release driver) and for **the weaker question it answers**: whether a page TABLE covers
+    /// the VA, never whether the leaf PTE is valid.
+    ///
+    /// ⚠ `Ok(None)` here is structurally a `FAULT_PDE`; our fault is `FAULT_PTE`, so a
+    /// `Some(..)` is **consistent with the fault** and localises the miss to the leaf.
+    ///
+    /// # Errors
+    /// As [`Self::pte_info`].
+    pub fn pde_info(
+        &mut self,
+        vas: HostHandle,
+        va: u64,
+    ) -> Result<(Option<kayfabe_abi::submit::DmaPdeInfoBlock>, u64), RmError> {
+        use kayfabe_abi::submit::{DmaGetPdeInfoParams, NV0080_CTRL_CMD_DMA_GET_PDE_INFO};
+        // ⊘⊘⊘ **THE `hVASpace` IS THE COMPANION, NOT THE RANGE — AND THE MIRROR OF THIS
+        // MISTAKE IS ALREADY DOCUMENTED IN THIS FILE.**
+        //
+        // `[measured 2026-08-13, vh]` passing `narrow(vas)` here returned
+        // `Other(51)` = `NV_ERR_INVALID_OBJECT_HANDLE` (`0x33`) for EVERY address — the same
+        // status, from the opposite confusion, as `alloc_vaspace_raw`'s R7b comment records:
+        // *"`NV_ESC_RM_MAP_MEMORY_DMA`'s `hDma` does NOT name an address space — it names an
+        // `NV01_MEMORY_VIRTUAL` RANGE within one. Handing it the `FERMI_VASPACE_A` handle is
+        // refused with `NV_ERR_INVALID_OBJECT_HANDLE` (0x33)"*.
+        //
+        // ⇒ **One `Vas` is TWO host objects.** `alloc_vaspace` returns the RANGE (what the map
+        // verb needs) and keeps the `FERMI_VASPACE_A` as its companion. This control wants the
+        // **space**, so the range is exactly as wrong here as the space was there.
+        // ⚠ A `None` companion is refused by name rather than falling back to the
+        // range: a fallback would ask a well-formed question about the wrong object and get a
+        // well-formed answer.
+        //
+        // ⊘⊘⊘ **CORRECTED 2026-08-14 (w309) — THIS READ WAS DESTRUCTIVE, AND IT COST TWO
+        // RUNGS.** It called [`RmConnection::companion_of`], which **REMOVES** the entry —
+        // the accessor whose one legitimate caller is `free`. [`RmConnection::space_of`] is
+        // the peeking twin, and its own doc-comment already names this exact hazard:
+        // *"Reading it with the removing accessor would make allocating a channel silently
+        // un-free the address space."* That is precisely what happened, and it was visible
+        // in every committed R33 log as two symptoms nobody joined:
+        //
+        //   1. **arm 6's calibration always failed.** The FIRST `pde_info` on a `Vas`
+        //      answered (`CAL+ ring … PDE PRESENT`); every later one on the same `Vas`
+        //      returned `Other(19270)` = `NOT_ON_THIS_RUNG` (`0x4B46`) and printed
+        //      *"⊘ NOT ASKED — the control refused or the reply did not decode"*. The
+        //      control never refused: **this function had eaten its own handle.**
+        //   2. **w305's `--ce-client-fault-shared-vas` could not be BUILT.** Arm 4 in arm 1's
+        //      `Vas` died at `alloc_channel_in`'s `space_of(range) → None` with
+        //      `BadHandle(0xcafe0005)`, because arm 6 ran first and consumed the pairing.
+        //      ⊘ w305 read that as *"arm 1's `vas` handle is the SPACE, pass the RANGE"* and
+        //      called the fix one line. **It is not**: `alloc_vaspace` returns the range
+        //      (`:4082`), `guest_space = narrow(vas)` prints that same range, and the
+        //      `0xcafe0009` w305 named as *"its paired range"* is the **executor VAS**
+        //      `map_dma_both` lazily minted (`:4149`). Same handle either way; the pairing
+        //      was simply gone.
+        //
+        // ⇒ **A destructive read inside a DIAGNOSTIC**, in the same class as
+        // `get_mmu_fault_info` — except that one is destructive in RM and says so, while this
+        // one was destructive in **our own bookkeeping** and reported the damage as the
+        // hardware refusing.
+        let range = self.narrow(vas)?;
+        let space = self
+            .conn
+            .space_of(range)
+            .ok_or(RmError::Other(NOT_ON_THIS_RUNG))?;
+        let mut buf = [0u8; DmaGetPdeInfoParams::SIZE];
+        DmaGetPdeInfoParams {
+            gpu_addr: va,
+            pde_virt_addr: 0,
+            pde_entry_size: 0,
+            pde_addr_space: 0,
+            pde_size: 0,
+            sub_device_id: 0,
+            pte_blocks: [kayfabe_abi::submit::DmaPdeInfoBlock::default();
+                DmaGetPdeInfoParams::PTE_BLOCKS],
+            pdb_addr: 0,
+            h_vaspace: space,
+        }
+        .encode_into(&mut buf)
+        .map_err(|_| RmError::Other(BAD_ENCODE))?;
+        self.conn
+            .raw_control(self.conn.device, NV0080_CTRL_CMD_DMA_GET_PDE_INFO, &mut buf)?;
+        let out = DmaGetPdeInfoParams::decode(&buf).map_err(|_| RmError::Other(BAD_ENCODE))?;
+        // ★ `pdbAddr` returned alongside: it names WHICH tree answered, so the caller can
+        // check the reply against the VAS it believes it asked about rather than trust it.
+        Ok((out.page_table(), out.pdb_addr))
+    }
+
+    /// ★★ **Issue one raw `NV_ESC_RM_CONTROL` on the DEVICE — for the in-band census's
+    /// known-positive, and for nothing else.**
+    ///
+    /// ⊘ Exposed deliberately narrowly: it exists so a caller can provoke a refusal that RM
+    /// reports **inside the parameter struct** while `ioctl(2)` returns `0`, which is the one
+    /// shape `Census::failed` cannot see. See `rmladder`'s `in_band_known_positive`.
+    ///
+    /// ⚠ Not a general control verb. Every real control in this file goes through a typed
+    /// method that knows its parameter struct; this one takes bytes because its whole purpose
+    /// is to send something RM will refuse.
+    ///
+    /// # Errors
+    /// Whatever RM refused — which for the calibration is the point.
+    pub fn raw_control_for_probe(
+        &mut self,
+        _on: HostHandle,
+        cmd: u32,
+        payload: &mut [u8],
+    ) -> Result<(), RmError> {
+        self.conn.raw_control(self.conn.device, cmd, payload)
+    }
+
+    /// ★★★ **Mint an `NV01_MEMORY_LIST_OBJECT` naming ONE 4 KiB page of an existing object
+    /// — the primitive leg B of the USERD design stands or falls on.**
+    ///
+    /// `parent` is the object the page number is relative to; `page` is that index; the
+    /// slice's own length is one `RM_PAGE_SIZE`. `foreign` names a *different* client's
+    /// object instead — `(hClient, hDevice)` — which `NV_MEMORY_LIST_ALLOCATION_PARAMS`
+    /// supports by design (*"client to which object belongs (may differ from client creating
+    /// the mapping)"*) and `mem_list.c` resolves through `serverGetClientUnderLock`.
+    ///
+    /// ⊘⊘ **Whether the slice ALIASES the parent's physical pages or COPIES them is not
+    /// asserted here and must not be assumed by any caller.** The reading of `mem_list.c` is
+    /// that it aliases; the measurement is `rmladder --list-object-alias`
+    /// (`docs/design/list_object_alias_probe.md`). ⚠ If it copies, a guest would ring a USERD
+    /// hardware never reads and **every counter we have would show green** — which is why
+    /// this method's docs carry the warning rather than the rung's.
+    ///
+    /// ⚠ **Root-only** (`RS_FLAGS_ALLOC_PRIVILEGED`) and **GSP-client-only**
+    /// (`memlistConstruct_IMPL`'s first gate) — see [`NV01_MEMORY_LIST_OBJECT`]. Both refuse
+    /// with a status rather than a syscall error, so the caller sees them as
+    /// [`RmError`]s carrying `0x1f` and `0x56`.
+    ///
+    /// # Errors
+    /// Whatever RM refused the allocation with.
+    pub fn alloc_list_object_page(
+        &mut self,
+        parent: HostHandle,
+        page: u64,
+        foreign: Option<(u32, u32)>,
+        attr: u32,
+    ) -> Result<HostHandle, RmError> {
+        let raw_parent = self.narrow(parent)?;
+        self.alloc_list_object_page_raw(raw_parent, page, foreign, attr)
+    }
+
+    /// [`Self::alloc_list_object_page`] over a parent named by its **raw** RM handle.
+    ///
+    /// ⊘⊘ **The cross-client row needs this and nothing else should.** `hObject` is resolved
+    /// against `hClient`, so when the slice names a FOREIGN client's object the parent handle
+    /// is a value in *that* client's namespace — which [`HostHandle`] correctly refuses to
+    /// represent, because it is not this backend's to mint. Passing it as a bare `u32` is the
+    /// honest spelling: the provenance genuinely is not ours, and the type says so by its
+    /// absence rather than by a fabricated stamp.
+    ///
+    /// ⚠ With `foreign = None` this is [`Self::alloc_list_object_page`] with the namespace
+    /// check skipped, which is why the safe wrapper exists and is what every other caller
+    /// uses.
+    ///
+    /// # Errors
+    /// Whatever RM refused the allocation with.
+    pub fn alloc_list_object_page_raw(
+        &mut self,
+        raw_parent: u32,
+        page: u64,
+        foreign: Option<(u32, u32)>,
+        attr: u32,
+    ) -> Result<HostHandle, RmError> {
+        let (h_client, h_parent) = foreign.unwrap_or((0, 0));
+        let mut params = [0u8; NvMemoryListAllocationParams::SIZE];
+        NvMemoryListAllocationParams {
+            h_client,
+            h_parent,
+            h_object: raw_parent,
+            pte_adjust: 0,
+            mem_type: 0,
+            flags: 0,
+            attr,
+            attr2: 0,
+            page_count: 1,
+            // ⚠ `limit`, not `length`: RM computes `memSize = limit + 1`. The same off-by-one
+            // `Nvos02ParametersWithFd::limit` carries, and the same one that silently
+            // over-allocates a page if a caller writes the size here.
+            limit: RM_PAGE_BYTES - 1,
+            flags_os02: kayfabe_abi::submit::OS02_FLAGS_CONTIG_WRITE_COMBINE,
+        }
+        .encode_into(&mut params)
+        .map_err(|_| RmError::Other(BAD_ENCODE))?;
+        let mut page_list = page.to_le_bytes();
+        let want = self.conn.mint();
+        let h = self.conn.raw_alloc_nested(
+            self.conn.device,
+            want,
+            NV01_MEMORY_LIST_OBJECT,
+            &mut params,
+            NvMemoryListAllocationParams::PAGE_NUMBER_LIST_OFFSET,
+            &mut page_list,
+        )?;
+        self.conn.remember(h, self.conn.device);
+        Ok(self.stamp(h))
+    }
+
+    /// ★★ **The physical address an object's offset lands on, asked of RM directly** —
+    /// `NV0041_CTRL_CMD_GET_SURFACE_PHYS_ATTR`.
+    ///
+    /// ⊘ A *direct equality*, which is why it exists: every other way of comparing two
+    /// objects' backing goes through a mapping and an engine, and then a disagreement could
+    /// be the mapping's. `memOffset` is in/out — the offset goes in, the address comes back.
+    ///
+    /// ⚠ The returned number is a **device** physical address, not a host one, so §4.2.1 is
+    /// not in play: nothing in this process can dereference it.
+    ///
+    /// # Errors
+    /// Whatever RM refused the control with — the header claims the call is MODS-only, and
+    /// a refusal here is a measurement of that claim rather than a failure of the caller.
+    pub fn surface_phys_attr(
+        &mut self,
+        mem: HostHandle,
+        offset: u64,
+    ) -> Result<kayfabe_abi::submit::Nv0041SurfacePhysAttr, RmError> {
+        let raw = self.narrow(mem)?;
+        let mut buf = [0u8; kayfabe_abi::submit::Nv0041SurfacePhysAttr::SIZE];
+        kayfabe_abi::submit::Nv0041SurfacePhysAttr::encode_query(offset, &mut buf)
+            .map_err(|_| RmError::Other(BAD_ENCODE))?;
+        self.conn.raw_control(
+            raw,
+            kayfabe_abi::submit::NV0041_CTRL_CMD_GET_SURFACE_PHYS_ATTR,
+            &mut buf,
+        )?;
+        kayfabe_abi::submit::Nv0041SurfacePhysAttr::decode(&buf)
+            .map_err(|_| RmError::Other(BAD_ENCODE))
+    }
+
+    /// Zero the notifier page before a channel is told about it.
+    ///
+    /// ⊘ **Not hygiene — it is the control.** Without it, `status == 0xffff` on a freshly
+    /// allocated page is indistinguishable from RM having written it, and this rung's entire
+    /// claim is that a *driver* wrote that word.
+    ///
+    /// # Errors
+    /// [`RmError::BadHandle`], or whatever the CPU mapping refused.
+    fn zero_notifier(
+        &mut self,
+        notifier: HostHandle,
+        aperture: NotifierAperture,
+    ) -> Result<(), RmError> {
+        let raw = self.narrow(notifier)?;
+        let (node, view) = self.conn.map_cpu_on(
+            MapNode::for_notifier(aperture),
+            raw,
+            NOTIFIER_BYTES,
+            CachePolicy::WriteBack,
+        )?;
+        for off in (0..NOTIFIER_BYTES).step_by(4) {
+            view.store_u32(HostOffset::new(off), 0)
+                .map_err(|e| region_error(&e))?;
+        }
+        drop(view);
+        drop(node);
+        release_fence();
+        Ok(())
+    }
+
+    /// The body all of the above share, over a raw `NV01_MEMORY_VIRTUAL` range.
+    ///
+    /// ## ★★★ `err_notifier` — the channel's ERROR NOTIFIER, and why it is a parameter
+    ///
+    /// `None` reproduces every caller's behaviour before w287 exactly: `hObjectError = 0`
+    /// on both the group and the channel. `Some(h)` names a memory object RM writes one
+    /// `NvNotification` into when this channel is robust-channel killed.
+    ///
+    /// ⊘⊘ **Without it a client learns a fault only by ABSENCE.** `[measured 2026-08-13, vh,
+    /// real GA106 / 580.159.04, rev 996ad42]` `--ce-client-fault` provoked a real
+    /// `Xid 31 … CE0 HUBCLIENT_CE1 faulted @ 0x9_00000000 FAULT_PDE` in the **host** ring
+    /// buffer while the client's own census read **85 ioctls, 0 failed**: every call returned
+    /// `NV_OK`, and the only in-process signal was a semaphore that stayed `0`. *"The engine
+    /// faulted"* and *"we encoded the methods wrongly"* are the same observation to a client
+    /// with no notifier, and they call for opposite next moves.
+    fn alloc_channel_in(
+        &mut self,
+        range: u32,
+        engine_type: u32,
+        ring: RingSource,
+        err_notifier: Option<u32>,
+    ) -> Result<(HostHandle, u64), RmError> {
+        // ★ The channel group names the ADDRESS SPACE, and `alloc_vaspace` returned the
+        // mappable RANGE over it. A handle we never paired is not a `Vas` at all.
+        //
+        // ⊘⊘ **w392d — AND ON ONE ARM THERE IS NO RANGE AT ALL.** A `FERMI_VASPACE_A`
+        // allocated `IS_EXTERNALLY_OWNED` gets no `NV01_MEMORY_VIRTUAL` companion, because
+        // ranges are RM-managed mappings and the whole point of that flag is that RM manages
+        // nothing there (`host_alloc_vaspace_externally_owned`'s own docs). On that arm the
+        // caller passes the SPACE handle itself and `RingSource::OursPlaced` guarantees this
+        // function never asks RM to map through it. ⚠ The two are kept apart by the ring
+        // source and not by a flag, so a caller cannot name a space and then ask for a
+        // mapping in it.
+        let space = match ring {
+            RingSource::OursPlaced { .. } => range,
+            RingSource::Ours(_) | RingSource::Guest(_) => self
+                .conn
+                .space_of(range)
+                .ok_or_else(|| RmError::BadHandle(self.stamp(range)))?,
+        };
+
+        // ★★★★★ **CONSTRAINT 30 — REFUSED BEFORE ANY OBJECT EXISTS.** See
+        // [`SCRATCHPAD_BIRTH_IN_A_HANDED_SPACE`]. ⊘ Placed above the first allocation so
+        // that the refusal has nothing to unwind: a gate that has to clean up is a gate that
+        // can leak on the path it exists to take.
+        if ScratchpadRole::of(self.id).is_some() && self.conn.is_adopted_space(space) {
+            eprintln!(
+                "kayfabe-isolate: CHANNEL-BIRTH ⊘⊘⊘ REFUSED SCRATCHPAD_BIRTH_IN_A_HANDED_SPACE \
+                 space={space:#x} engine_type={engine_type:#x} — this is the VM-lifetime \
+                 scratchpad, and this address space was ADOPTED from a per-proc isolate. \
+                 ogkm-580 stamps a channel's privilege and process identity AT CREATION \
+                 (kernel_channel.c:277-295) and a DupObject does not re-run it, so a channel \
+                 born here would carry the scratchpad's privilege into a guest proc's space \
+                 for its whole life. Constraint 30."
+            );
+            return Err(RmError::Other(SCRATCHPAD_BIRTH_IN_A_HANDED_SPACE));
+        }
+
+        let unwind = |me: &mut Self, objs: &[u32]| {
+            for h in objs.iter().rev() {
+                let _ = me.free(me.stamp(*h));
+            }
+        };
+
+        // ★★★★★ **G1 — WHERE THE RING COMES FROM, and it is now a question rather than a
+        // line.** `Ours` allocates 64 KiB of device-local memory exactly as before.
+        // `Guest` allocates **nothing**: the object is a handle handed in, over the guest's
+        // own pages, and this connection neither made it nor may unmake it.
+        let (ring_obj, owner) = match ring {
+            RingSource::Ours(_) => (
+                self.conn.alloc_device_local(RING_OBJECT_BYTES)?,
+                RingOwner::Ours,
+            ),
+            // ⊘ Allocates NOTHING: the object exists already, because UVM had to be given
+            //   its handle to place it. Ownership transfers — see the variant's docs.
+            RingSource::OursPlaced { ring, .. } => (ring, RingOwner::OursUnmapped),
+            RingSource::Guest(g) => {
+                // ⊘ Refused HERE, before any host object exists, because it is the ONE
+                // number in the guest's declaration this file cannot pass through: it is
+                // the modulus of `submit_entry`'s wrap. See `RING_ENTRIES_REFUSED` for why
+                // nothing else in the declaration is second-guessed.
+                if g.gp_fifo_entries == 0 {
+                    return Err(RmError::Other(RING_ENTRIES_REFUSED));
+                }
+                // ★★★★★ **CONSTRAINT 26 — AND THE MEASUREMENT THAT MAKES `0` SAFE HERE.**
+                //
+                // `[established from this function's own body]` the ring's handle **never
+                // reaches RM** on this arm: the mapping decision below maps nothing, and what
+                // `ChannelAllocParams` is told is `gp_fifo_offset: layout.gp_fifo_va`, an
+                // absolute VA. The handle's only uses are (a) the unwind list, which excludes
+                // it for `HandedIn` two lines down, and (b) the CPU-mapping branch, which
+                // refuses `RING_NOT_OURS` for `HandedIn`. ⇒ a `StoreSlice` contributes `0`
+                // and nothing reads it.
+                //
+                // ⊘ Zero is written deliberately rather than by an `unwrap_or`: this is the
+                // one place the absence is turned into a number, and it is annotated so a
+                // reader does not have to prove the two uses above for themselves.
+                match g.ring {
+                    kayfabe_isolate::RingProvenance::OwnObject(h) => {
+                        (self.narrow(h)?, RingOwner::HandedIn)
+                    }
+                    kayfabe_isolate::RingProvenance::StoreSlice { .. } => (0, RingOwner::HandedIn),
+                }
+            }
+        };
+        // What a later failure must give back. ⊘ The guest's ring is not in it on any arm,
+        // and that is the invariant, not an optimisation: unwinding a channel must never
+        // free memory the guest is still pushing into.
+        let owned_ring = [ring_obj];
+        let ours: &[u32] = match owner {
+            RingOwner::Ours | RingOwner::OursUnmapped => &owned_ring,
+            RingOwner::HandedIn => &[],
+        };
+
+        // ★★★★★ **LEG B — WHERE USERD COMES FROM, and it is now a question rather than a
+        // line.** `Ours` allocates as before. `Guest` allocates **nothing**: the object is
+        // the joined framebuffer window the guest is already advancing its own cursor in,
+        // and this connection neither made it nor may unmake it.
+        //
+        // ⚠ The `userd_offset` on the guest arm is the thing this file has spent a boot
+        // refusing to allow (`userd_offset_0`'s comment below). It is correct *here* and
+        // only here, because on this arm the party that writes the cursor is the same party
+        // the offset came from.
+        let (userd, userd_owner, userd_offset) = match ring {
+            // ★★★★★ **w287 — OUR OWN RING CARRIES ITS OWN USERD.** No second
+            // `alloc_device_local`, therefore no second framebuffer leaf, therefore
+            // `adopted_guest_userd`'s containment test can succeed when this channel is the
+            // one a guest declares to us. See [`USERD_OFFSET_IN_RING`] for the three boots
+            // that measured the old layout failing that test by one byte of extent.
+            RingSource::Ours(_) | RingSource::OursPlaced { .. } => {
+                (ring_obj, UserdOwner::InRing, USERD_OFFSET_IN_RING)
+            }
+            // ⊘ **NOT folded into the arm above, and the distinction is load-bearing.** Here
+            // `ring_obj` is the GUEST's object, handed in over the guest's own pages. Placing
+            // our USERD at an offset inside it would put our cursor in memory the guest owns
+            // and did not offer for that purpose — `ShadowsGuestMemory` wearing a
+            // convenience's clothes. This arm keeps a USERD of ours, and the `GP_GET` it
+            // cannot see is the honest cost of leg A firing without leg B.
+            RingSource::Guest(GuestRing { userd: None, .. }) => {
+                match self.conn.alloc_device_local(RING_OBJECT_BYTES) {
+                    Ok(h) => (h, UserdOwner::Ours, 0),
+                    Err(e) => {
+                        unwind(self, ours);
+                        return Err(e);
+                    }
+                }
+            }
+            RingSource::Guest(GuestRing { userd: Some(u), .. }) => match self.narrow(u.memory) {
+                Ok(h) => (h, UserdOwner::HandedIn, u.offset),
+                Err(e) => {
+                    unwind(self, ours);
+                    return Err(e);
+                }
+            },
+        };
+
+        // ★★★★★ **THE ALIGNMENT RM DOES NOT CHECK — checked here, on EVERY arm.**
+        //
+        // `[source: kernel_channel_gv100.c:208]` RM shifts the *resolved physical* USERD
+        // address `>> 9` into the runlist entry and validates nothing. A misaligned offset is
+        // therefore **silently truncated** to a different 512-byte slot: hardware writes
+        // `GP_GET` to an address nobody reads, and the symptom — *"the cursor never moved"* —
+        // is character-for-character the wall this rung exists to remove. ⇒ A wrong value here
+        // would be diagnosed as the bug we are hunting, which is why it is refused by a name
+        // that is TRUE of it rather than folded into a generic encode error.
+        //
+        // ⚠ Deliberately **after** the match and over all three arms, not inside the `Ours`
+        // arm where the constant is: on the `HandedIn` arm the offset is the **guest's**, and
+        // guest-supplied is exactly the input that must not be trusted to be aligned.
+        // ⊘ **And the unwind list is computed from the OWNER, not from `userd`.** On the
+        // `InRing` arm `userd` IS `ring_obj`; `&[ours, &[userd]].concat()` would hand the same
+        // handle to `free_one` twice on the way out of this very check — the double free this
+        // rung split `UserdOwner` to make unrepresentable, reintroduced by the error path that
+        // nobody runs. It is spelled once, here, and reused below.
+        let owned_userd: &[u32] = match userd_owner {
+            UserdOwner::Ours => &[userd],
+            UserdOwner::HandedIn | UserdOwner::InRing => &[],
+        };
+        if !userd_offset.is_multiple_of(USERD_ALIGNMENT) {
+            unwind(self, &[ours, owned_userd].concat());
+            return Err(RmError::Other(USERD_OFFSET_MISALIGNED));
+        }
+
+        // The ring must be resolvable by hardware before a channel may name it.
+        //
+        // - `Ours` maps it here. With `None` RM picks the address — see `raw_map_dma` for
+        //   why that does not weaken `#102`. With `Some`, `DMA_OFFSET_FIXED_TRUE` makes
+        //   `dmaOffset` an [IN] parameter and the address is ours.
+        // - ★★★ `Guest` maps **nothing**, and that is not a shortcut: the binding is the
+        //   guest-RAM pin's, made at the guest's own VA and committed on the doorbell path,
+        //   and re-mapping an already-placed object here would either fail or double-bind
+        //   the guest's pages. ⇒ The channel alloc below is therefore the FIRST thing to
+        //   test whether that binding exists, which is exactly why the host channel's birth
+        //   has to move to the doorbell (`docs/design/guest_ring_adoption.md` §3).
+        let (ring_va, layout) = match ring {
+            RingSource::Ours(ring_at) => {
+                let va = match self.conn.raw_map_dma(
+                    range,
+                    ring_obj,
+                    RING_OBJECT_BYTES,
+                    ring_at.map(|a| a.0),
+                ) {
+                    Ok(va) => va,
+                    Err(e) => {
+                        unwind(self, &[ours, owned_userd].concat());
+                        return Err(e);
+                    }
+                };
+                // ★★★ The placement check, and it reads RM's **[OUT]** `dmaOffset` rather
+                // than the value we asked for. `raw_map_dma` returns what RM wrote back, so
+                // this is a comparison between two different parties' numbers and not our
+                // argument echoed.
+                //
+                // ⊘ A downgraded placement must never be adopted. A channel whose ring RM
+                // quietly relocated is created, schedulable, and rings a doorbell — and the
+                // *guest's* pushbuffer, which names the address we asked for, then walks
+                // the host MMU into nothing. `RmError::PlacementRefused`'s own docs name
+                // that end state: `Xid 31 FAULT_PDE`, a host-side fault with no
+                // guest-visible cause.
+                if let Some(want) = ring_at
+                    && va != want.0
+                {
+                    let _ = self.conn.raw_unmap_dma(range, va);
+                    unwind(self, &[ours, owned_userd].concat());
+                    return Err(RmError::PlacementRefused {
+                        want: want.0,
+                        got: va,
+                    });
+                }
+                (
+                    va,
+                    RingLayout {
+                        gp_fifo_va: va + GPFIFO_OFFSET,
+                        // ⊘ Not the constant directly — see `ladder_gpfifo_entries`. It IS
+                        // the constant unless an experiment overrode it, and it says so on
+                        // stderr when it is not.
+                        entries: ladder_gpfifo_entries(),
+                    },
+                )
+            }
+            // ★★★ w392d — the OBJECT is ours, so its internal layout is ours; only the
+            // BASE is somebody else's. ⊘ Deliberately not folded into the `Guest` arm below,
+            // whose whole content is that *none* of the three numbers is this file's.
+            RingSource::OursPlaced { ring_va, .. } => (
+                ring_va,
+                RingLayout {
+                    gp_fifo_va: ring_va + GPFIFO_OFFSET,
+                    entries: ladder_gpfifo_entries(),
+                },
+            ),
+            // ★★ G2 + G3: the two numbers RM is about to be told are the GUEST'S, passed
+            // through untouched. Neither is derived from `ring_va`, and neither is one of
+            // this file's constants.
+            RingSource::Guest(g) => (
+                g.ring_va,
+                RingLayout {
+                    gp_fifo_va: g.gp_fifo_va,
+                    entries: g.gp_fifo_entries,
+                },
+            ),
+        };
+
+        let mut tsg_params = [0u8; NvChannelGroupAllocationParameters::SIZE];
+        let encoded = NvChannelGroupAllocationParameters {
+            // ⊘⊘ **ZERO ON PURPOSE EVEN WHEN `err_notifier` IS `Some`, and the asymmetry is
+            // the measurement.** A channel's `hObjectError == 0` does NOT mean *"no
+            // notifier"*: it **inherits the group's**
+            // (`ogkm-580: kernel_channel.c:509-518`). So naming the notifier on BOTH would
+            // make *"the channel's field is the one RM honoured"* unfalsifiable — the run
+            // would be green whichever field did the work. Naming it on the CHANNEL ONLY
+            // means a notifier that fires proves the channel's own field was read.
+            h_object_error: 0,
+            h_object_ecc_error: 0,
+            // ★★ Explicit, never zero, and it is the **VASpace object** — measured. A
+            // group that leaves this zero asks for the device's default address space,
+            // which a forwarding host device does not have; the C measured
+            // `NV_ERR_INVALID_OBJECT_HANDLE` (0x33) for exactly that
+            // (`C: src/qemu/nvkvm_gpu_emul.c:6828-6836`), and substituting the
+            // `NV01_MEMORY_VIRTUAL` range handle here was bitten on this hardware and
+            // produced the same 0x33. It is also #14's fix: per-`Vas` separation is a
+            // property of this field.
+            h_va_space: space,
+            // ★★★ **THIS is the field that routes**, measured rather than assumed. Zeroing
+            // it makes every allocation fail `NV_ERR_INVALID_ARGUMENT` (0x1F); zeroing the
+            // *channel's* `engineType` changes nothing at all, because a channel in a
+            // group inherits the group's engine exactly as it inherits its address space.
+            // See `kayfabe_abi::submit::ChannelAllocParams::engine_type`.
+            engine_type,
+            b_is_calling_context_vgpu_plugin: 0,
+        }
+        .encode_into(&mut tsg_params);
+        if encoded.is_err() {
+            unwind(self, &[ours, owned_userd].concat());
+            return Err(RmError::Other(NOT_ON_THIS_RUNG));
+        }
+        let want = self.conn.mint();
+        let tsg = match self
+            .conn
+            .raw_alloc(self.conn.device, want, CHANNEL_GROUP, &mut tsg_params)
+        {
+            Ok(h) => {
+                self.conn.remember(h, self.conn.device);
+                h
+            }
+            Err(e) => {
+                unwind(self, &[ours, owned_userd].concat());
+                return Err(e);
+            }
+        };
+        // ★★★★★ **w288 — THE SINGLETON-TSG INVARIANT, HALF ONE: the group is FRESH.**
+        //
+        // See [`TSG_NOT_SINGLETON`] for what a shared group costs — one MMU fault writing
+        // every member's notifier, i.e. a guest told that a channel which never faulted was
+        // RC-killed, in exactly the shape a pass has.
+        //
+        // ⊘ This is a check on OUR OWN allocation and it is meant to be: the handle came out
+        // of `mint` one line up, so anything already parented to it means the handle space
+        // wrapped or a caller re-used a group — both of which make every later notifier
+        // reading unfalsifiable. ⚠ Refused BY NAME rather than asserted with a `debug_assert`,
+        // because a release build must not be the build in which the invariant stops holding.
+        let already = self.conn.children_of(tsg);
+        if already != 0 {
+            eprintln!(
+                "kayfabe-isolate: CHANNEL-BIRTH ⊘⊘ REFUSED TSG_NOT_SINGLETON tsg={tsg:#x} \
+                 children={already} (a freshly minted channel group already has \
+                 members; RC notification is TSG-SCOPED, so this group's fault would write \
+                 every member's error notifier — ogkm-580 kern_gmmu_gv100.c:2124-2131 over \
+                 kernel_rc_notification.c:270-289)"
+            );
+            unwind(self, &[ours, owned_userd, &[tsg]].concat());
+            return Err(RmError::Other(TSG_NOT_SINGLETON));
+        }
+
+        // ★★★★★ **w746, CONSTRAINT 29 — THE RESTATED `AdoptedGuestRing::memory` CHECK, AT
+        // THE ONE INSTANT IT IS ABOUT.** See [`RING_HANDLE_REACHED_RM`].
+        //
+        // ⊘ Placed HERE — after every handle this function will name has been decided and
+        // before the struct RM reads is built — because the claim being defended is about
+        // what crosses to RM, not about what a plan carried. A check at the plan would be a
+        // check of a different fact wearing the same name.
+        let store_slice_ring = matches!(
+            ring,
+            RingSource::Guest(GuestRing {
+                ring: kayfabe_isolate::RingProvenance::StoreSlice { .. },
+                ..
+            })
+        );
+        if store_slice_ring
+            && (ring_obj != 0 || matches!(userd_owner, UserdOwner::InRing) || userd == 0)
+        {
+            eprintln!(
+                "kayfabe-isolate: CHANNEL-BIRTH ⊘⊘ REFUSED RING_HANDLE_REACHED_RM                  ring_obj={ring_obj:#x} userd={userd:#x} userd_owner={userd_owner:?} — the                  ring is a STORE SLICE, so this isolate holds no handle for it and RM must                  be told none. One of the three conjuncts is false, which means the                  `AdoptedGuestRing::memory` deletion's premise (\"the handle never reaches                  RM\") has stopped holding."
+            );
+            unwind(self, &[ours, owned_userd, &[tsg]].concat());
+            return Err(RmError::Other(RING_HANDLE_REACHED_RM));
+        }
+        let mut chan_params = [0u8; ChannelAllocParams::SIZE];
+        let encoded = ChannelAllocParams {
+            // ★★★★★ **w287 — THE GUEST-OBSERVABLE ERROR PATH, and it is one field.**
+            // `0` is every pre-w287 caller, unchanged. `Some(h)` hands RM a memory object to
+            // write one `NvNotification` into when this channel is RC-killed, which is what
+            // turns *"the semaphore never moved"* into *"the driver told me: status
+            // `0xffff`, `info32 = ROBUST_CHANNEL_FIFO_ERROR_MMU_ERR_FLT`"*.
+            h_object_error: err_notifier.unwrap_or(0),
+            // ★★★ **G2 + G3 — the two numbers that used to be constants.** For an
+            // `Ours` ring `layout` still computes exactly `ring_va + GPFIFO_OFFSET` and
+            // `GPFIFO_ENTRIES`, bit for bit; for a `Guest` ring they are the guest's own
+            // declaration. ⊘ Neither is spelled here any more, because a constant at this
+            // site is invisible to the one caller that must not use it.
+            gp_fifo_offset: layout.gp_fifo_va,
+            gp_fifo_entries: layout.entries,
+            flags: 0,
+            // Both zero: a channel in a group inherits the group's subcontext and address
+            // space, and naming either again is refused. See `ChannelAllocParams`.
+            h_context_share: 0,
+            h_va_space: 0,
+            h_userd_memory_0: userd,
+            // ★★★ ZERO ON THE `Ours` ARM, and it is a MEASURED requirement rather than a
+            // plausible default. Hardware reads USERD at `hUserdMemory[0] + userdOffset[0]`, so a
+            // non-zero offset makes it look for `GP_PUT` somewhere our store never lands:
+            // it sees `GP_PUT == GP_GET` forever, fetches nothing, and **reports no error
+            // at all** — the C's M5.47 root cause
+            // (`C: src/qemu/nvkvm_gpu_emul.c:9291-9299`). Bitten on RTX 3090 / 580.159.04
+            // on 2026-07-30 by setting it to `0x2000`: every ioctl still returned 0, the
+            // channel scheduled, the doorbell rang, and R15 reported `sem 0x00000000
+            // GP_GET 0 GP_PUT 1` with R17's destination byte-for-byte unchanged.
+            //
+            // ⊘⊘ **AND NON-ZERO IS CORRECT ON THE `Guest` ARM — read what the bite above
+            // actually measured.** The 2026-07-30 boot moved `userdOffset[0]` to `0x2000`
+            // while `submit_entry`'s store stayed at `+0`, so RM read a slot **nobody
+            // wrote**. That is a consistency failure between two of OUR sites, not evidence
+            // that RM mishandles the field — and RM honours it explicitly
+            // (`ogkm-580: kernel_channel_gv100.c:204-206, :234-237`:
+            // `memdescGetPhysAddr(..., userdOffset)` and a sub-memdesc at that offset).
+            // Here the reader and the writer move together: the writer is the **guest**,
+            // through its own BAR1 mapping of the very bytes this offset names.
+            //
+            // ⚠ It remains the single most likely place for this rung to produce a silent
+            // `GP_PUT == GP_GET`, because that is what the failure looks like either way.
+            userd_offset_0: userd_offset,
+            engine_type,
+        }
+        .encode_into(&mut chan_params);
+        if encoded.is_err() {
+            unwind(self, &[ours, owned_userd, &[tsg]].concat());
+            return Err(RmError::Other(NOT_ON_THIS_RUNG));
+        }
+        let want = self.conn.mint();
+        let chan = match self.conn.alloc_gpfifo_channel(
+            tsg,
+            want,
+            self.conn.classes.gpfifo_channel(),
+            &mut chan_params,
+        ) {
+            Ok(h) => {
+                self.conn.remember(h, tsg);
+                h
+            }
+            Err(e) => {
+                unwind(self, &[ours, owned_userd, &[tsg]].concat());
+                return Err(e);
+            }
+        };
+        // ★★★★★ **THE SINGLETON-TSG INVARIANT, HALF TWO: EXACTLY ONE, and it is this one.**
+        //
+        // Half one said the group was empty when we minted it; this says this function put
+        // exactly one channel in it. ⊘ The two are not the same statement and neither implies
+        // the other — a group that was fresh could still be joined below, and a group that
+        // holds one channel could hold somebody else's. Together they are the whole of
+        // [`TSG_NOT_SINGLETON`]'s premise, which is why both are here rather than one being
+        // trusted to cover the other.
+        let members = self.conn.children_of(tsg);
+        if members != 1 {
+            eprintln!(
+                "kayfabe-isolate: CHANNEL-BIRTH ⊘⊘ REFUSED TSG_NOT_SINGLETON tsg={tsg:#x} \
+                 chan={chan:#x} members={members} (expected exactly 1; see \
+                 TSG_NOT_SINGLETON — a fault on ANY member writes EVERY member's error \
+                 notifier, and each notifier here names a DIFFERENT guest channel's pages)"
+            );
+            unwind(self, &[ours, owned_userd, &[tsg, chan]].concat());
+            return Err(RmError::Other(TSG_NOT_SINGLETON));
+        }
+
+        // ★★ BIND, on the GROUP, and it must come before the token control.
+        let mut bind = [0u8; BIND_PARAMS_SIZE];
+        bind.copy_from_slice(&engine_type.to_le_bytes());
+        if let Err(e) = self.conn.raw_control(tsg, NVA06C_CTRL_CMD_BIND, &mut bind) {
+            unwind(self, &[ours, owned_userd, &[tsg, chan]].concat());
+            return Err(e);
+        }
+
+        let mut token = [0u8; WORK_SUBMIT_TOKEN_PARAMS_SIZE];
+        if let Err(e) = self.conn.raw_control(
+            chan,
+            NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN,
+            &mut token,
+        ) {
+            unwind(self, &[ours, owned_userd, &[tsg, chan]].concat());
+            return Err(e);
+        }
+        let token = u32::from_le_bytes(token);
+
+        // ★★★ R14 — the CPU mappings. Deliberately AFTER the token: everything above is a
+        // fact about hardware that no byte of ours has touched, and everything below is
+        // this process getting its hands on the channel. Keeping the order means a failure
+        // here cannot be confused for a channel that never existed.
+        // ★★★★★ **G4 — THE CPU MAP OF THE RING IS CONDITIONAL, AND THE CONDITION IS
+        // PROVENANCE.**
+        //
+        // ⊘ On a guest-backed ring this is not an omission we can get away with; it is a
+        // call that **cannot succeed**. `map_cpu` issues `NV_ESC_RM_MAP_MEMORY` against the
+        // memory object, and the object here is an `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` over
+        // pages RM pinned out of another process's address space. R31 arm B attempts it
+        // deliberately and prints what the driver answered, so the claim in this comment is
+        // a measurement rather than a plausible sentence.
+        //
+        // ★ And we do not need it. The isolate already holds those pages mapped — the same
+        // `GuestRamPlane` grant that the `OS_DESCRIPTOR` was built from — so a second view
+        // through RM would be a second name for memory this process can already read.
+        // Every access this file would have made through the ring view is refused by name
+        // instead (`RING_NOT_OURS`).
+        let ring_view = match owner {
+            // ★ Write-combining, and that is a claim about what this OBJECT is, not about
+            // what it is used for: it is an `NV01_MEMORY_LOCAL_USER` allocation in the
+            // framebuffer, so RM's mmap handler takes the write-combining branch
+            // (`ogkm-580: nv-mmap.c:575-597`). The *uncached* sub-case two lines below it
+            // is RM's own USERD window for a channel whose USERD the driver allocated —
+            // not this one, which is our own vidmem object handed to the channel via
+            // `hUserdMemory[0]`. Claiming uncached here because the word "USERD" appears
+            // would be a comfortable guess, and the fence discipline is what makes
+            // write-combining survivable.
+            RingOwner::Ours | RingOwner::OursUnmapped => Some(self.conn.map_cpu(
+                ring_obj,
+                RING_OBJECT_BYTES,
+                CachePolicy::WriteCombining,
+            )),
+            RingOwner::HandedIn => None,
+        };
+        // ★★★★★ **LEG B's G4 — THE CPU MAP OF USERD IS CONDITIONAL, ON THE SAME
+        // PROVENANCE.** `[measured, R31 arm B]` an `OS_DESCRIPTOR` over another process's
+        // pages cannot be CPU-mapped at all, so on the `HandedIn` arm this is a call that
+        // *would fail*, not one we are choosing to skip. Every access it would have served
+        // is refused by name instead (`USERD_NOT_OURS`).
+        let userd_view = match userd_owner {
+            UserdOwner::Ours => Some(self.conn.map_cpu(
+                userd,
+                RING_OBJECT_BYTES,
+                CachePolicy::WriteCombining,
+            )),
+            UserdOwner::HandedIn => None,
+            // ★★★★★ **w287 — MAP NOTHING, because the ring's map already covers these bytes.**
+            // ⊘ `None` here does NOT mean "refused" the way the `HandedIn` arm's does. The two
+            // are distinguished by [`ChannelRings::userd_in_ring`], which is `Some(offset)`
+            // only on this arm — without it the accessors would answer `USERD_NOT_OURS` for a
+            // USERD that is entirely ours and entirely readable, which is a refusal whose name
+            // is false of its cause (the shape `PUSHBUFFER_SLOT_BYTES` was just paid for).
+            //
+            // ⚠ Mapping the same object a second time would also have worked and is NOT what
+            // this does: one mapping means one set of bytes, so a reader of the ring and a
+            // reader of the cursor cannot disagree about what is in the object.
+            UserdOwner::InRing => None,
+        };
+        // Derived from the OWNER, so the two `userd: None` states stay distinguishable. See
+        // [`ChannelRings::userd_in_ring`].
+        let userd_in_ring = match userd_owner {
+            UserdOwner::InRing => Some(userd_offset),
+            UserdOwner::Ours | UserdOwner::HandedIn => None,
+        };
+        let rings = match (ring_view, userd_view) {
+            (Some(Ok((ring_node, ring_map))), Some(Ok((userd_node, userd_map)))) => ChannelRings {
+                _ring_node: Some(ring_node),
+                ring: Some(ring_map),
+                _userd_node: Some(userd_node),
+                userd: Some(userd_map),
+                userd_in_ring,
+            },
+            (None, Some(Ok((userd_node, userd_map)))) => ChannelRings {
+                _ring_node: None,
+                ring: None,
+                _userd_node: Some(userd_node),
+                userd: Some(userd_map),
+                userd_in_ring,
+            },
+            (Some(Ok((ring_node, ring_map))), None) => ChannelRings {
+                _ring_node: Some(ring_node),
+                ring: Some(ring_map),
+                _userd_node: None,
+                userd: None,
+                userd_in_ring,
+            },
+            (None, None) => ChannelRings {
+                _ring_node: None,
+                ring: None,
+                _userd_node: None,
+                userd: None,
+                userd_in_ring,
+            },
+            (a, b) => {
+                let a = a.and_then(Result::err);
+                let b = b.and_then(Result::err);
+                // Either half failing means the channel cannot be submitted to, so it is
+                // torn down here rather than handed back as a channel that silently is not
+                // one. The first error is the one reported.
+                let e = a.or(b).unwrap_or(RmError::Other(NOT_ON_THIS_RUNG));
+                unwind(self, &[ours, owned_userd, &[tsg, chan]].concat());
+                return Err(e);
+            }
+        };
+        self.conn.remember_rings(chan, rings);
+
+        self.conn.remember_channel(
+            chan,
+            ChannelParts {
+                tsg,
+                ring: ring_obj,
+                owner,
+                userd,
+                userd_owner,
+                range,
+                ring_va,
+                layout,
+            },
+        );
+        Ok((self.stamp(chan), u64::from(token)))
+    }
+
+    /// Read USERD's two ring cursors: `(GP_GET, GP_PUT)`.
+    ///
+    /// ★★ **`GP_GET` is the only word in this whole crate that hardware writes and we do
+    /// not.** It is the GPU host unit's consume cursor. Every claim this port can make
+    /// about submission bottoms out in watching it move, so it is surfaced as its own
+    /// accessor rather than as an offset a caller has to know.
+    ///
+    /// # Errors
+    /// [`RmError::BadHandle`] if `chan` is not a channel of this connection, and whatever
+    /// the bounds check refuses with if USERD is somehow shorter than its own cursors.
+    pub fn userd_cursors(&self, chan: HostHandle) -> Result<(u32, u32), RmError> {
+        let raw = self.narrow(chan)?;
+        self.conn
+            .with_rings(raw, |r| {
+                // ★★★★★ **LEG B's COST, and it is stated rather than absorbed.** On a
+                // channel over the guest's USERD there is no CPU view of these words, so
+                // this cannot answer. ⊘ It refuses by NAME rather than returning `(0, 0)`,
+                // which is what a channel that has never run also looks like — the exact
+                // ambiguity `USERD_NOT_OURS` exists to remove.
+                // ★★★★★ **w287 — the cursor may live inside the ring's own map.** Resolve to
+                // `(region, base)` FIRST, then read both words at `base + offset`, so the two
+                // layouts differ in one place instead of in every accessor.
+                let (userd, base) = match r.userd_in_ring {
+                    Some(off) => (r.ring.as_ref().ok_or(RmError::Other(USERD_NOT_OURS))?, off),
+                    None => (r.userd.as_ref().ok_or(RmError::Other(USERD_NOT_OURS))?, 0),
+                };
+                let get = userd
+                    .load_u32(HostOffset::new(base + USERD_GP_GET))
+                    .map_err(|e| region_error(&e))?;
+                let put = userd
+                    .load_u32(HostOffset::new(base + USERD_GP_PUT))
+                    .map_err(|e| region_error(&e))?;
+                Ok((get, put))
+            })
+            .unwrap_or(Err(RmError::BadHandle(chan)))
+    }
+
+    /// Store one 32-bit word into the channel's ring object at `offset`.
+    ///
+    /// The ring object holds this channel's pushbuffer, its GPFIFO and its semaphore, all
+    /// of which are built a dword at a time. It is `pub` because the ladder builds them and
+    /// the next rung's `ring_doorbell` will; nothing in the core can reach it, and nothing
+    /// should — the ring is the adapter's own object, not an address the guest names.
+    ///
+    /// ★★★ **W230** — and on a channel over a [`GuestRing`] it is
+    /// [`RmError::Other`]`(`[`RING_NOT_OURS`]`)`, always. That refusal *is* G4's assertion:
+    /// the absence of the mapping is expressed as a named answer to the call that would
+    /// have used it, not as a comment saying we did not make one.
+    ///
+    /// # Errors
+    /// [`RmError::BadHandle`], [`RING_NOT_OURS`] if the ring is the guest's, or the bounds
+    /// refusal if `offset` leaves the object.
+    pub fn ring_store_u32(&self, chan: HostHandle, offset: u64, value: u32) -> Result<(), RmError> {
+        let raw = self.narrow(chan)?;
+        self.conn
+            .with_rings(raw, |r| {
+                r.ring
+                    .as_ref()
+                    .ok_or(RmError::Other(RING_NOT_OURS))?
+                    .store_u32(HostOffset::new(offset), value)
+                    .map_err(|e| region_error(&e))
+            })
+            .unwrap_or(Err(RmError::BadHandle(chan)))
+    }
+
+    /// Load one 32-bit word from the channel's ring object at `offset`.
+    ///
+    /// # Errors
+    /// As [`HostRmBackend::ring_store_u32`].
+    pub fn ring_load_u32(&self, chan: HostHandle, offset: u64) -> Result<u32, RmError> {
+        let raw = self.narrow(chan)?;
+        self.conn
+            .with_rings(raw, |r| {
+                r.ring
+                    .as_ref()
+                    .ok_or(RmError::Other(RING_NOT_OURS))?
+                    .load_u32(HostOffset::new(offset))
+                    .map_err(|e| region_error(&e))
+            })
+            .unwrap_or(Err(RmError::BadHandle(chan)))
+    }
+
+    /// ★★★ **How many CPU mappings this connection has asked RM for, since it opened.**
+    ///
+    /// ⊘ It exists for one reason and it is not curiosity: *"we do not CPU-map the guest's
+    /// ring"* is a claim about a call that **did not happen**, and the only way to measure
+    /// an absence is to count the occurrences. A diagnostic that merely observed
+    /// `ring_load_u32` refusing would be reading this file's own bookkeeping; this counts
+    /// at the door every `NV_ESC_RM_MAP_MEMORY` in this process goes through.
+    ///
+    /// ★ [`HostRmBackend::alloc_channel_over_guest_ring`] must move it by exactly **one**
+    /// — USERD, which is ours on every channel — where [`Self::alloc_channel_at`] moves it
+    /// by two.
+    #[must_use]
+    pub fn cpu_map_calls(&self) -> u64 {
+        self.conn
+            .cpu_maps
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// The GPFIFO layout `chan` was **created with**: `(gp_fifo_va, entries)`.
+    ///
+    /// ⊘ Read from [`ChannelParts`], which was written from the values handed to the
+    /// channel alloc — so a caller comparing this against what it asked for is checking
+    /// that the numbers reached RM, and **not** that RM agreed with them. Nothing but a
+    /// submission hardware fetches says that.
+    #[must_use]
+    pub fn channel_ring_layout(&self, chan: HostHandle) -> Option<(u64, u32)> {
+        let raw = self.narrow(chan).ok()?;
+        self.conn
+            .channel_parts(raw)
+            .map(|p| (p.layout.gp_fifo_va, p.layout.entries))
+    }
+
+    /// ★★★ R15 — **submit one host-FIFO semaphore release and watch hardware answer.**
+    ///
+    /// The smallest thing a GPU can be asked to do that leaves evidence *we cannot
+    /// forge*: five consecutive `NVC56F_SEM_*` methods executed by the channel's own front
+    /// end. No engine object, no golden context, no compute — so a failure localises to
+    /// the submission machinery and to nothing else. It is the C's own host-channel
+    /// self-test, method for method (`C: src/qemu/nvkvm_gpu_emul.c:9597-9640`).
+    ///
+    /// ## ★★ The evidence bar, and why it is two facts and not one
+    ///
+    /// Returns [`SubmitOutcome`], and a pass requires **both**:
+    ///
+    /// - `semaphore == payload` — a word in device memory changed to a value only the
+    ///   engine could have written there;
+    /// - `gp_get` advanced to meet `gp_put` — the GPU's host unit *consumed* the ring
+    ///   entry. `GP_GET` is the one word in this crate hardware writes and we do not.
+    ///
+    /// Either alone is weaker than it looks. A semaphore could in principle be stale from
+    /// an earlier submission (hence the sentinel below); `GP_GET` advancing without the
+    /// semaphore landing would mean the entry was fetched and the methods did nothing.
+    ///
+    /// ★ `payload` is chosen by the caller and must be **neither zero** (the sentinel this
+    /// writes first) **nor the token** (which we store into the doorbell window and could
+    /// alias). A false pass should be unavailable, not merely unlikely.
+    ///
+    /// ## ★★★ What this is the FIRST live consumer of
+    ///
+    /// `userdOffset[0]`. Rungs 1 and 2 allocated USERD and mapped it; nothing *read* it.
+    /// Here hardware does, at `hUserdMemory[0] + userdOffset[0]`, and a wrong offset makes
+    /// the GPU look for `GP_PUT` somewhere our store never lands: it sees
+    /// `GP_PUT == GP_GET` forever, fetches nothing, and **reports no error at all**
+    /// (the C's M5.47 root cause, `C: src/qemu/nvkvm_gpu_emul.c:9291-9299`). Zero
+    /// utilisation and no Xid is the worst failure shape available, which is why this
+    /// function returns the cursors rather than a `bool`.
+    ///
+    /// # Errors
+    /// [`RmError::BadHandle`] if `chan` is not this connection's channel, whatever the
+    /// doorbell refuses with (including the stored open-time failure of the usermode
+    /// mapping), or a bounds refusal if the ring object cannot hold the layout.
+    pub fn submit_semaphore_probe(
+        &mut self,
+        chan: HostHandle,
+        token: u64,
+        payload: u32,
+        timeout: Duration,
+    ) -> Result<SubmitOutcome, RmError> {
+        let raw = self.narrow(chan)?;
+        let parts = self
+            .conn
+            .channel_parts(raw)
+            .ok_or(RmError::BadHandle(chan))?;
+        let slot = self.next_slot(raw)?;
+        let sem_va = parts.ring_va + SEMAPHORE_OFFSET;
+        let pb_off = PUSHBUFFER_OFFSET + slot.pb * PUSHBUFFER_SLOT_BYTES;
+        let pb_va = parts.ring_va + pb_off;
+
+        // The sentinel FIRST, so "the payload is there" cannot be satisfied by whatever
+        // the previous submission left behind.
+        self.ring_store_u32(chan, SEMAPHORE_OFFSET, 0)?;
+
+        // One incrementing run, SEM_ADDR_LO..SEM_EXECUTE. `SEM_ADDR_HI` is eight bits of
+        // address: the 2^40 ceiling `gp_entry` enforces applies here too, and a VA above
+        // it would be silently truncated into someone else's page.
+        let header =
+            method_header_inc(0, fifo::SEM_ADDR_LO, 5).ok_or(RmError::Other(BAD_ENCODE))?;
+        if sem_va >= 1 << 40 || !sem_va.is_multiple_of(4) {
+            return Err(RmError::Other(BAD_ENCODE));
+        }
+        let words = [
+            header,
+            (sem_va & 0xFFFF_FFFC) as u32,
+            ((sem_va >> 32) & 0xFF) as u32,
+            payload,
+            0,
+            fifo::SEM_EXECUTE_RELEASE_32BIT,
+        ];
+        for (i, w) in words.iter().enumerate() {
+            self.ring_store_u32(chan, pb_off + 4 * i as u64, *w)?;
+        }
+
+        self.submit_entry(chan, pb_va, 4 * words.len() as u64, slot, token)?;
+        self.await_semaphore(chan, SEMAPHORE_OFFSET, payload, timeout)
+    }
+
+    /// ★★★★★ **w379 — one `SEM_RELEASE` to a CALLER-CHOSEN GPU VA, with no acquire in
+    /// front of it.**
+    ///
+    /// [`Self::submit_semaphore_probe`] releases to the channel's **own ring** semaphore,
+    /// which is mapped by construction and therefore cannot ask a question about a mapping.
+    /// [`Self::submit_fenced_release`] does take a caller VA, but it emits a `SEM_ACQUIRE`
+    /// first — and an acquire is a second thing that can fail, in a way that looks exactly
+    /// like the first.
+    ///
+    /// This verb is the minimal probe for *"does this VA resolve for a real engine?"*: two
+    /// address words, a payload and one `SEM_EXECUTE`. If the payload appears at `target_va`
+    /// the address resolved; if it does not, either it did not resolve or the engine never
+    /// ran, and the caller's own controls are what separate those.
+    ///
+    /// ⊘ **It does not wait**, because the memory it writes is the caller's and this
+    /// backend has no mapping of it. [`Self::read_words_independently`] on the object the
+    /// caller mapped is the read side, and it is deliberately a *different* object handle
+    /// from anything this call touches.
+    ///
+    /// ⚠ **Measured limit, w379, and it decides where this verb can be used.** On the
+    /// Mode-2 emulated device the CPU copy-engine emulator **decodes** `PushMethod::
+    /// SemRelease` and deliberately does not act on it — *"a `SemRelease` is deliberately
+    /// NOT acted on here: it is the host semaphore … and advancing it would satisfy our own
+    /// counters while the guest spins on the word above it"*
+    /// (`kayfabe-rt/src/ceutils.rs:677-679`). ⇒ A probe built on this verb measures **real
+    /// hardware** and is structurally unservable inside a Mode-2 guest, on every
+    /// configuration. That is a statement about the emulator's deliberate scope, not a
+    /// defect, and a rung using it must say so rather than report the guest arm as a red.
+    ///
+    /// # Errors
+    /// [`RmError::BadHandle`] for a channel this connection never minted; [`BAD_ENCODE`] if
+    /// `target_va` is at or above the 2^40 ceiling `SEM_ADDR_HI`'s eight bits enforce, or is
+    /// not dword-aligned; whatever the ring stores and the submission refuse with.
+    pub fn submit_release_at(
+        &mut self,
+        chan: HostHandle,
+        token: u64,
+        target_va: u64,
+        payload: u32,
+    ) -> Result<(), RmError> {
+        let raw = self.narrow(chan)?;
+        let parts = self
+            .conn
+            .channel_parts(raw)
+            .ok_or(RmError::BadHandle(chan))?;
+        let slot = self.next_slot(raw)?;
+        let pb_off = PUSHBUFFER_OFFSET + slot.pb * PUSHBUFFER_SLOT_BYTES;
+        let pb_va = parts.ring_va + pb_off;
+
+        // The same five-method incrementing run `submit_semaphore_probe` uses, with the
+        // address the caller named instead of our own ring's.
+        let header =
+            method_header_inc(0, fifo::SEM_ADDR_LO, 5).ok_or(RmError::Other(BAD_ENCODE))?;
+        if target_va >= 1 << 40 || !target_va.is_multiple_of(4) {
+            return Err(RmError::Other(BAD_ENCODE));
+        }
+        let words = [
+            header,
+            (target_va & 0xFFFF_FFFC) as u32,
+            ((target_va >> 32) & 0xFF) as u32,
+            payload,
+            0,
+            fifo::SEM_EXECUTE_RELEASE_32BIT,
+        ];
+        for (i, w) in words.iter().enumerate() {
+            self.ring_store_u32(chan, pb_off + 4 * i as u64, *w)?;
+        }
+        self.submit_entry(chan, pb_va, 4 * words.len() as u64, slot, token)
+    }
+
+    /// ★★★★★ **w381 — THE GUEST-SERVABLE LIVENESS PRIMITIVE.** One `LAUNCH_DMA` that copies
+    /// `len` bytes from an offset inside the channel's **own ring object** to an arbitrary
+    /// GPU VA, and **does not wait**.
+    ///
+    /// # ⊘ Why this exists beside [`HostRmBackend::submit_release_at`], which already works
+    ///
+    /// `submit_release_at` emits the **host-FIFO** semaphore run (`SEM_ADDR_LO/HI/PAYLOAD/
+    /// EXECUTE`), which the chip codec decodes as `kayfabe_arch::PushMethod::SemRelease`.
+    /// The Mode-2 CPU copy-engine emulator decodes that variant and **deliberately does not
+    /// act on it** (`kayfabe-rt/src/ceutils.rs`, the `else` arm of the `CeLaunchDma` let:
+    /// *"a `SemRelease` is deliberately NOT acted on here"*, restated in
+    /// `release_targets_of`). ⇒ **every rung built on `submit_release_at` is unservable
+    /// inside a Mode-2 guest by design**, and its guest arm can never reach its own positive
+    /// control. That is a scope fact about the emulator, not a defect in the guest.
+    ///
+    /// `LAUNCH_DMA` is the one verb that path serves end to end: `run_submission` partitions
+    /// the operands, `cpu_ce::execute_ours_spans` **moves the bytes**, and only then
+    /// `write_resolved_completion` writes the launch's own `SET_SEMAPHORE_A/B/PAYLOAD`
+    /// release. So a copy INTO the address under test has the same falsifiability as a
+    /// release AT it — the bytes are either there or they are not — and it is servable on
+    /// both sides of the differential.
+    ///
+    /// # ★★★ THE SOURCE IS THE CHANNEL'S OWN RING, AND THAT IS THE POINT
+    ///
+    /// `src_ring_off` is an offset **inside the ring object**, exactly as
+    /// [`RACE_FENCE_OFFSET`] is: the ring is mapped in this channel's VA space **before the
+    /// doorbell, by construction**, so a copy that does not land cannot be blamed on the
+    /// source. The only address under test is `dst_va`. ⊘ A source the caller had to map
+    /// itself would put two mappings on the critical path and make a red unattributable —
+    /// which is the failure mode the whole w379 battery is built to avoid.
+    ///
+    /// # ⚠ IT DOES NOT WAIT, AND THE OBSERVABLES ARE ORDERED
+    ///
+    /// Unlike [`HostRmBackend::probe_guest_reachability`]'s internal copy, this returns as
+    /// soon as the doorbell is rung. The caller polls the **destination** — the primary
+    /// observable, *did the payload land* — and may read this channel's own semaphore at
+    /// [`SEMAPHORE_OFFSET`] through [`HostRmBackend::ring_load_u32`] afterwards as a
+    /// **qualifier only**. ⊘ Grading on the cursor instead is how `GP_GET` produced a
+    /// confident, plausible, always-wrong `NeverFetched` on an emulated device that has no
+    /// PBDMA to advance it.
+    ///
+    /// The semaphore word is zeroed before the methods are written, so `sem_payload` being
+    /// present afterwards means **this** submission retired and not a previous one.
+    ///
+    /// # Errors
+    /// [`RmError::BadHandle`] for a channel this connection never minted; `BAD_ENCODE` if
+    /// the encoded push does not fit one [`PUSHBUFFER_SLOT_BYTES`] slot or an address is
+    /// past the 2^49 ceiling the CE operand fields enforce; whatever the ring stores and the
+    /// submission refuse with.
+    pub fn submit_copy_at(
+        &mut self,
+        chan: HostHandle,
+        token: u64,
+        src_ring_off: u64,
+        dst_va: u64,
+        len: u32,
+        sem_payload: u32,
+    ) -> Result<(), RmError> {
+        let raw = self.narrow(chan)?;
+        let parts = self
+            .conn
+            .channel_parts(raw)
+            .ok_or(RmError::BadHandle(chan))?;
+        // ⊘ The source must be inside the ring object, checked rather than trusted: an
+        // offset past its end names memory this channel does not own, and the copy would
+        // succeed while measuring somebody else's bytes.
+        if src_ring_off
+            .checked_add(u64::from(len))
+            .is_none_or(|end| end > RING_OBJECT_BYTES)
+        {
+            return Err(RmError::Other(BAD_ENCODE));
+        }
+        self.submit_copy_va(
+            chan,
+            token,
+            parts.ring_va + src_ring_off,
+            dst_va,
+            len,
+            sem_payload,
+        )
+    }
+
+    /// ★★★★★ **w381 — the same probe with an ARBITRARY source GPU VA**, so a destination in
+    /// any aperture can be read back the way it was written: by the engine.
+    ///
+    /// # ⊘ Why this is not a convenience wrapper — it is what makes the rung aperture-blind
+    ///
+    /// [`HostRmBackend::read_words_independently`] can only see memory the **CPU** can map,
+    /// and `[measured 2026-08-03, this bench]` a `RmBackend::alloc_sysmem` object carries
+    /// `NVOS02_FLAGS_MAPPING_NO_MAP`, so `NV_ESC_RM_MAP_MEMORY` on it is refused
+    /// `NV_ERR_INVALID_ARGUMENT` — *"a published backing is opaque to the CPU in both
+    /// directions, by design"*, as [`HostRmBackend::alloc_probe_local`]'s own docs record.
+    /// ⇒ a rung that mixes vidmem and sysmem **cannot** grade both families through a CPU
+    /// mapping, and one that quietly graded only the half it could read would be *"every row
+    /// verified"* over half the rows.
+    ///
+    /// Copying `src_va -> scratch_va` and reading the **scratch** closes that: the readback
+    /// is the engine's, so it works in every aperture, and it is *stronger* evidence than a
+    /// CPU load — it proves the engine can **read** the address under test as well as write
+    /// it, which a write-only probe cannot say.
+    ///
+    /// ⚠ The caller must poison the scratch first. A copy that never ran leaves whatever was
+    /// there, and *"the scratch still holds the value we want"* would be indistinguishable
+    /// from a landed copy without a sentinel underneath it.
+    ///
+    /// # Errors
+    /// As [`HostRmBackend::submit_copy_at`].
+    pub fn submit_copy_va(
+        &mut self,
+        chan: HostHandle,
+        token: u64,
+        src_va: u64,
+        dst_va: u64,
+        len: u32,
+        sem_payload: u32,
+    ) -> Result<(), RmError> {
+        let raw = self.narrow(chan)?;
+        let parts = self
+            .conn
+            .channel_parts(raw)
+            .ok_or(RmError::BadHandle(chan))?;
+        let slot = self.next_slot(raw)?;
+        let pb_off = PUSHBUFFER_OFFSET + slot.pb * PUSHBUFFER_SLOT_BYTES;
+        let pb_va = parts.ring_va + pb_off;
+        let sem_va = parts.ring_va + SEMAPHORE_OFFSET;
+        let words = ce_pushbuffer(CePush {
+            class_id: self.conn.classes.ce_object(),
+            src: src_va,
+            dst: dst_va,
+            len,
+            sem_va,
+            payload: sem_payload,
+            // ⊘ `None` — this probe carries no guest-declared release. The only completion
+            // in it is the launch's own, which is what makes the retirement qualifier
+            // attributable to THIS submission.
+            guest_release: None,
+        })?;
+        // ⚠ A LENGTH refusal wearing an ENCODING name — the same trap `probe_copy` records.
+        // The numbers are printed so the next reader does not have to re-derive which of
+        // the two it was.
+        if 4 * words.len() as u64 > PUSHBUFFER_SLOT_BYTES {
+            eprintln!(
+                "kayfabe-isolate: w381 COPY-PROBE ⊘ REFUSED — the push is {} bytes and the \
+                 slot is {PUSHBUFFER_SLOT_BYTES}. ⊘ This is a LENGTH refusal, not an \
+                 encoding one; `BAD_ENCODE` is the only status this call has for it",
+                4 * words.len()
+            );
+            return Err(RmError::Other(BAD_ENCODE));
+        }
+        self.ring_store_u32(chan, SEMAPHORE_OFFSET, 0)?;
+        for (i, w) in words.iter().enumerate() {
+            self.ring_store_u32(chan, pb_off + 4 * i as u64, *w)?;
+        }
+        self.submit_entry(chan, pb_va, 4 * words.len() as u64, slot, token)
+    }
+
+    /// The offset inside a channel's ring object this crate reserves for a w381 copy
+    /// probe's **source word**, and the semaphore offset its retirement lands on.
+    ///
+    /// ⊘ Exported as a pair because a caller that knew one and guessed the other would be
+    /// guessing at a layout this module owns — [`RACE_FENCE_OFFSET`]'s reason exactly. The
+    /// source sits a whole page past the fence at `0x3000`, so a length mistake in either
+    /// cannot land in the other.
+    #[must_use]
+    pub const fn copy_probe_offsets() -> (u64, u64) {
+        (W381_COPY_SRC_OFFSET, SEMAPHORE_OFFSET)
+    }
+
+    /// ★★★ **w384 — ring a channel's doorbell with NO NEW WORK behind it**: the smallest
+    /// act this crate can perform against the device, and nothing else.
+    ///
+    /// # Why a verb for something that submits nothing
+    ///
+    /// [`HostRmBackend::submit_copy_at`] composes twelve-odd stores into the ring, two
+    /// GPFIFO words and a `GP_PUT` update *before* it rings. That is the smallest **real**
+    /// submission, and it is the right thing to time when the question is *"what does one
+    /// submission cost"*. It is the wrong thing to time when the question is *"what does the
+    /// **ring itself** cost"*, because on a Mode-2 guest the ring stores and the doorbell go
+    /// to different places — the ring is memory, the doorbell is a trapped MMIO store — and
+    /// a single number over both cannot say which one is expensive.
+    ///
+    /// This is that second measurement: one `release_fence` and one 32-bit store into the
+    /// mapped usermode window, via the same [`RmBackend::ring_doorbell`] every real
+    /// submission ends in. No ring store, no `GP_PUT` advance, no new GPFIFO entry.
+    ///
+    /// # ⊘ WHAT A RESULT FROM THIS MAY AND MAY NOT BE USED FOR
+    ///
+    /// ⊘ **It must not be graded on.** A device is entitled to notice that `GP_PUT` has not
+    /// moved and do nothing at all, and *"a no-op is fast"* is not a finding about the
+    /// doorbell path — it is a finding about the no-op. Grading on it would be the `GP_GET`
+    /// mistake in a new place: a plausible number that is a property of the instrument.
+    /// ★ What it IS good for is **attribution of a red already measured elsewhere**: if a
+    /// real submission is expensive and this is cheap, the cost is in the ring stores or the
+    /// planning; if this is expensive too, the cost is in the trap.
+    ///
+    /// # Errors
+    /// As [`RmBackend::ring_doorbell`]: [`RmError::Other`] carrying `NOT_A_WORK_TOKEN` for a
+    /// value too wide to be a token this connection handed out, or whatever the usermode
+    /// window refused with — including the case where the window was never mapped, which
+    /// `doorbell` prints in full and never suppresses.
+    pub fn ring_doorbell_only(&mut self, token: u64) -> Result<(), RmError> {
+        <Self as RmBackend>::ring_doorbell(self, token)
+    }
+
+    /// ★★★★★ **The late-map race primitive** — submit `[SEM_ACQUIRE(fence)]
+    /// [SEM_RELEASE(target)]` and **return the instant the doorbell is rung**, with the
+    /// channel stalled inside the acquire.
+    ///
+    /// The two methods separate the two events the doorbell normally fuses:
+    ///
+    /// - the **submission** (doorbell rung, entry fetched, engine running), and
+    /// - the **first touch of `target_va`** (gated on a semaphore only the CPU can satisfy).
+    ///
+    /// Between them the caller may do anything — map memory, allocate, publish — and then
+    /// release the fence with a plain store. That window is the experiment: work already
+    /// admitted to a running channel reaches an address that was **not mapped when the
+    /// doorbell was rung**, and no further doorbell is ever sent.
+    ///
+    /// ⚠ **This call deliberately does not wait, and that makes it the only verb here that
+    /// can leave hardware wedged.** An acquire whose fence is never written stalls the
+    /// channel indefinitely; RM's robust-channel timeout is what eventually reclaims it.
+    /// Every caller must either write the fence or free the channel, on **all** paths
+    /// including the error ones.
+    ///
+    /// `fence_off` is an offset **inside the channel's own ring object** — so the fence is
+    /// reachable by both the CPU ([`Self::ring_store_u32`]) and the engine, and is mapped
+    /// before the doorbell by construction. `target_va` is a raw GPU VA and is expressly
+    /// *not* required to be mapped at call time.
+    ///
+    /// # Errors
+    /// [`RmError::BadHandle`] for a channel this connection never minted; [`BAD_ENCODE`]
+    /// if either address is at or above the 2^40 ceiling `SEM_ADDR_HI`'s eight bits
+    /// enforce, or is not dword-aligned; whatever the ring stores and the submission
+    /// refuse with.
+    pub fn submit_fenced_release(
+        &mut self,
+        chan: HostHandle,
+        token: u64,
+        fence_off: u64,
+        fence_val: u32,
+        target_va: u64,
+        payload: u32,
+    ) -> Result<(), RmError> {
+        let raw = self.narrow(chan)?;
+        let parts = self
+            .conn
+            .channel_parts(raw)
+            .ok_or(RmError::BadHandle(chan))?;
+        let slot = self.next_slot(raw)?;
+        let fence_va = parts.ring_va + fence_off;
+        let pb_off = PUSHBUFFER_OFFSET + slot.pb * PUSHBUFFER_SLOT_BYTES;
+        let pb_va = parts.ring_va + pb_off;
+
+        // ★ BOTH addresses, not just the fence. `SEM_ADDR_HI` is eight bits, so a VA above
+        // 2^40 is silently truncated into someone else's page — and for `target_va`, which
+        // this rung deliberately leaves unmapped, a truncated address would fault at a
+        // location that has nothing to do with the experiment.
+        for va in [fence_va, target_va] {
+            if va >= 1 << 40 || !va.is_multiple_of(4) {
+                return Err(RmError::Other(BAD_ENCODE));
+            }
+        }
+
+        let header =
+            method_header_inc(0, fifo::SEM_ADDR_LO, 5).ok_or(RmError::Other(BAD_ENCODE))?;
+        let words = [
+            // 1 — ACQUIRE. The channel stalls here until the fence word equals `fence_val`.
+            header,
+            (fence_va & 0xFFFF_FFFC) as u32,
+            ((fence_va >> 32) & 0xFF) as u32,
+            fence_val,
+            0,
+            fifo::SEM_EXECUTE_ACQUIRE_32BIT,
+            // 2 — RELEASE into `target_va`, which may not be mapped yet. If it still is not
+            // when the acquire passes, THIS is the method that faults, and it faults as a
+            // VIRT_WRITE — the same shape the LLM wall reports.
+            header,
+            (target_va & 0xFFFF_FFFC) as u32,
+            ((target_va >> 32) & 0xFF) as u32,
+            payload,
+            0,
+            fifo::SEM_EXECUTE_RELEASE_32BIT,
+        ];
+        // ⊘ Two methods must still fit one slot; `PUSHBUFFER_SLOT_BYTES` is the region a
+        // slot owns and overrunning it writes into the next slot's methods.
+        if 4 * words.len() as u64 > PUSHBUFFER_SLOT_BYTES {
+            return Err(RmError::Other(BAD_ENCODE));
+        }
+        for (i, w) in words.iter().enumerate() {
+            self.ring_store_u32(chan, pb_off + 4 * i as u64, *w)?;
+        }
+
+        // ⊘ No `await_semaphore`. The caller owns the window that opens here.
+        self.submit_entry(chan, pb_va, 4 * words.len() as u64, slot, token)
+    }
+
+    /// Map memory this isolate owns into one of its own VA spaces, optionally **at** a
+    /// dictated address.
+    ///
+    /// `at = Some(va)` sets `NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE`; `at = None` lets RM
+    /// choose. Either way the **returned VA is the one RM wrote back**, never the one that
+    /// was asked for — a caller that dictates an address must compare, because a silently
+    /// relocated mapping is what [`RmError::PlacementRefused`] exists to catch and this
+    /// thin verb deliberately does not judge for you.
+    ///
+    /// ⊘ [`RmConnection::raw_map_dma`] and **not** `map_dma_both`: this publishes into one
+    /// space only. Callers standing a buffer in for guest memory want exactly that; a
+    /// caller that also wants the isolate-facing view wants the other verb.
+    ///
+    /// # Errors
+    /// [`RmError::BadHandle`] for a handle this connection never minted; whatever
+    /// `NV_ESC_RM_MAP_MEMORY_DMA` refuses with.
+    pub fn map_local_at(
+        &self,
+        vas: HostHandle,
+        memory: HostHandle,
+        len: u64,
+        at: Option<u64>,
+    ) -> Result<u64, RmError> {
+        let range = self.narrow(vas)?;
+        let obj = self.narrow(memory)?;
+        self.conn.raw_map_dma(range, obj, len, at)
+    }
+
+    /// Undo one [`Self::map_local_at`]. The VA must be the one RM **returned**, not the one
+    /// that was requested.
+    ///
+    /// # Errors
+    /// [`RmError::BadHandle`] for a `vas` this connection never minted; whatever
+    /// `NV_ESC_RM_UNMAP_MEMORY_DMA` refuses with.
+    pub fn unmap_local(&self, vas: HostHandle, gpu_va: u64) -> Result<(), RmError> {
+        let range = self.narrow(vas)?;
+        self.conn.raw_unmap_dma(range, gpu_va)
+    }
+
+    /// ★★★★★ **w289 — [`Self::map_local_at`] WITH THE DEFERRED-INVALIDATE FLAG**, and the
+    /// only caller is the `--defer-liveness` rung.
+    ///
+    /// `defer == true` OR-s [`NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE`] into the map
+    /// request, so RM writes the leaf PTE and **does not** invalidate
+    /// (`ogkm-580: virt_mem_allocator_gm107.c:417` selects `DMA_DEFER_TLB_INVALIDATE`; the
+    /// `done:` gate at `:2610-2615` is then not taken). `page_size_4kb == true` OR-s
+    /// [`NVOS46_FLAGS_PAGE_SIZE_4KB`], pinning the mapping — and the VA reservation the map
+    /// path performs on the way — to the **small-page table**.
+    ///
+    /// # ⊘ WHY THIS IS NOT A PORT VERB AND MUST NOT BECOME ONE
+    ///
+    /// Deferring the invalidate is a promise the *client* makes to keep the TLB consistent
+    /// itself, and this port makes no such promise: nothing in the forwarding plane knows
+    /// when the guest's next access happens, so a deferred map here would be a mapping whose
+    /// liveness is nobody's. It is `pub` for [`Self::map_local_at`]'s single reason — the
+    /// `kayfabe-rm-ladder` diagnostic is the only thing that can ask hardware whether the
+    /// deferral is even observable — and for nothing else.
+    ///
+    /// ⚠ Returns the address RM **reported**, exactly as `map_local_at` does. A caller that
+    /// asked for `at` and got something else has had its placement declined, and reading the
+    /// returned value as the requested one is how a deferred-map experiment ends up testing
+    /// an address nothing was ever mapped at.
+    ///
+    /// # Errors
+    /// [`RmError::BadHandle`] for a `vas` or `memory` this connection did not mint;
+    /// otherwise whatever `NV_ESC_RM_MAP_MEMORY_DMA` refused with, carrying RM's own status.
+    pub fn map_local_at_with_flags(
+        &self,
+        vas: HostHandle,
+        memory: HostHandle,
+        len: u64,
+        at: Option<u64>,
+        defer: bool,
+        page_size_4kb: bool,
+    ) -> Result<u64, RmError> {
+        let range = self.narrow(vas)?;
+        let obj = self.narrow(memory)?;
+        let mut extra = 0u32;
+        if defer {
+            extra |= NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE;
+        }
+        if page_size_4kb {
+            extra |= kayfabe_abi::bringup::NVOS46_FLAGS_PAGE_SIZE_4KB;
+        }
+        self.conn.raw_map_dma_flags(range, obj, len, at, extra)
+    }
+
+    /// ★★★★★ **w289 — `NV2080_CTRL_CMD_DMA_INVALIDATE_TLB` (`0x20802502`) on the SUBDEVICE**,
+    /// naming `vas`'s address space explicitly.
+    ///
+    /// The transport the deferred map is deferring *to*. RM's own header says so: *"This
+    /// command invalidates the GPU TLB. This is intended to be used by RM clients that manage
+    /// their own TLB consistency when updating page tables on their own, **or with
+    /// DEFER_TLB_INVALIDATION options to other RM APIs**"*
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080dma.h:38-56`).
+    ///
+    /// # ★ Why it is callable at all, from source rather than by trying it
+    ///
+    /// `subdeviceCtrlCmdDmaInvalidateTLB`'s nvoc flags are **`0x10008`**
+    /// (`ogkm-580: src/nvidia/generated/g_subdevice_nvoc.c:7466-7477`) — the same word
+    /// `GET_PDE_INFO` carries, i.e. `NON_PRIVILEGED` **without** the `0x00100000`
+    /// test-only bit that makes [`Self::pte_info`] refuse on a release driver. So this is
+    /// not the sibling-refusal trap in a new place.
+    ///
+    /// # ⊘⊘ `hVASpace` IS THE SPACE, NOT THE RANGE — the same two-objects hazard
+    ///
+    /// The handler resolves the field through `vaspaceGetByHandleOrDeviceDefault`
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/mem_mgr/dma.c:875-877`), exactly as
+    /// `GET_PDE_INFO` does, so it wants the `FERMI_VASPACE_A` companion and **not** the
+    /// `NV01_MEMORY_VIRTUAL` range. See [`Self::pde_info`] for what handing it the wrong one
+    /// of the two costs. ⊘ [`RmConnection::space_of`] is the **peeking** accessor; the
+    /// removing twin would un-pair the address space as a side effect of invalidating it.
+    /// ⊘ A missing companion is refused by name rather than falling back to the range: a
+    /// fallback would invalidate a well-formed wrong object and report `NV_OK`.
+    ///
+    /// ★ **Zero is not a legal shorthand here either.** `hVASpace == 0` resolves to the
+    /// *device's default* address space — a real space, a real invalidate, and an answer to
+    /// a question nobody asked. The other three fields are marked `Deprecated` in the header
+    /// and are sent zeroed.
+    ///
+    /// ⚠ What RM does with it is `vaspaceInvalidateTlb(pVAS, pGpu, PTE_DOWNGRADE)`
+    /// (`dma.c:897`) — the **strong** form, chosen by RM and not by us, because its own
+    /// comment says it cannot tell what the caller changed. So a rung that uses this as its
+    /// known-positive is testing the strongest invalidate available, which is the right way
+    /// round: if this does not make a mapping live, nothing weaker would have.
+    ///
+    /// # Errors
+    /// [`RmError::BadHandle`] for a `vas` this connection did not mint; [`RmError::Other`]
+    /// carrying [`NOT_ON_THIS_RUNG`] if the range has no paired address space; otherwise
+    /// whatever RM refused, carrying its own status out of the parameter struct.
+    pub fn invalidate_tlb(&mut self, vas: HostHandle) -> Result<(), RmError> {
+        /// `NV2080_CTRL_CMD_DMA_INVALIDATE_TLB` —
+        /// `ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080dma.h:58`.
+        const NV2080_CTRL_CMD_DMA_INVALIDATE_TLB: u32 = 0x2080_2502;
+        // `NV2080_CTRL_DMA_INVALIDATE_TLB_PARAMS` (`ctrl2080dma.h:62-67`): four `NvU32`s —
+        // `hClient`, `hDevice`, `engine`, `hVASpace`. The first three are marked
+        // `Deprecated` in the header and are sent as zeros; the fourth is the join key.
+        // ⊘ Encoded here rather than as a `kayfabe-abi` struct because it has exactly one
+        // caller and no version axis: a transcription in the ABI crate would be a fifth
+        // place to keep a four-field layout in sync for a diagnostic-only control.
+        const H_VASPACE_OFF: usize = 12;
+        let range = self.narrow(vas)?;
+        let space = self
+            .conn
+            .space_of(range)
+            .ok_or(RmError::Other(NOT_ON_THIS_RUNG))?;
+        let mut buf = [0u8; 16];
+        buf[H_VASPACE_OFF..H_VASPACE_OFF + 4].copy_from_slice(&space.to_le_bytes());
+        // ⊘ On the SUBDEVICE. `deviceCtrlCmdDmaInvalidateTLB` exists too
+        // (`ogkm-580: dma.c:963`) under a DIFFERENT id in the `NV0080` family, and sending
+        // this id to the device object would be refused rather than silently mis-routed —
+        // but only because the ids differ, which is luck and not a design, so the receiver
+        // is stated.
+        self.conn.raw_control(
+            self.conn.subdevice,
+            NV2080_CTRL_CMD_DMA_INVALIDATE_TLB,
+            &mut buf,
+        )
+    }
+
+    /// Publish one GPFIFO entry and ring for it: entry → fence → `GP_PUT` → fence →
+    /// doorbell.
+    ///
+    /// ★★ **The two fences are the whole point of the ordering.** The ring is a
+    /// write-combining mapping, so its stores are not ordered against each other or
+    /// against the doorbell store; without the first fence the GPU can see a `GP_PUT` that
+    /// announces methods that have not landed, and without the second it can see a
+    /// doorbell for a `GP_PUT` that has not landed. Neither produces an error — the engine
+    /// simply executes whatever bytes were there.
+    fn submit_entry(
+        &mut self,
+        chan: HostHandle,
+        pb_va: u64,
+        pb_len: u64,
+        slot: RingSlot,
+        token: u64,
+    ) -> Result<(), RmError> {
+        let raw = self.narrow(chan)?;
+        let parts = self
+            .conn
+            .channel_parts(raw)
+            .ok_or(RmError::BadHandle(chan))?;
+        // ★★★ Refused HERE, at the top, on a channel whose ring is the guest's — not three
+        // stores later. `ring_store_u32` would refuse anyway (`RING_NOT_OURS`), but the
+        // failure would then be *"a store was refused"* on a function whose subject is a
+        // SUBMISSION, and the offsets below are ours: `GPFIFO_OFFSET` is where OUR GPFIFO
+        // sits inside OUR ring object, and the guest's ring has its own layout. ⇒ Composing
+        // methods into a ring we do not own is the wrong verb, and it says so by name.
+        if parts.owner == RingOwner::HandedIn {
+            return Err(RmError::Other(RING_NOT_OURS));
+        }
+        let layout = parts.layout;
+        let entry = gp_entry(pb_va, pb_len).ok_or(RmError::Other(BAD_ENCODE))?;
+        let at = GPFIFO_OFFSET + slot.gp * GP_ENTRY_SIZE;
+        self.ring_store_u32(chan, at, entry as u32)?;
+        self.ring_store_u32(chan, at + 4, (entry >> 32) as u32)?;
+
+        release_fence();
+        // ★ `GP_PUT` is an INDEX INTO THE RING, so it wraps with the ring: after the last
+        // entry it is 0, not the entry count. Writing 64 into a 64-entry ring names an
+        // entry that does not exist. Latent rather than live at this rung — nothing here
+        // submits 64 times — which is exactly the kind of arithmetic that is wrong for a
+        // year and then wrong at scale.
+        //
+        // ★★★ **W230 — the modulus is the CHANNEL'S**, for [`Self::next_slot`]'s reason:
+        // the two are the same number for every ring this file allocates and differ by 64×
+        // the moment the ring is the guest's.
+        if layout.entries == 0 {
+            return Err(RmError::Other(RING_ENTRIES_REFUSED));
+        }
+        // ⊘⊘ `slot.gp`, NOT `slot.pb`. `GP_PUT` is an index into the GPFIFO and into
+        // nothing else, and taking it from the pushbuffer index is the w381 defect
+        // [`RingSlot`] records: the two have different moduli, so `PUT` ran backwards on the
+        // 33rd submission and every submission after it was lost.
+        let put = u32::try_from((slot.gp + 1) % u64::from(layout.entries))
+            .map_err(|_| RmError::Other(BAD_ENCODE))?;
+        self.userd_store_u32(chan, USERD_GP_PUT, put)?;
+        release_fence();
+        self.ring_doorbell(token)
+    }
+
+    /// Poll a semaphore word in the channel's ring object until it holds `payload` or
+    /// `timeout` expires, then report it together with both USERD cursors.
+    ///
+    /// ★ Polling, not waiting on an interrupt: this rung deliberately has no event
+    /// delivery, and a poll cannot mistake "we were never woken" for "it never landed".
+    /// The cursors are read **after** the loop ends either way, so a timeout returns the
+    /// same three facts a success does — which is what makes the `userdOffset` failure
+    /// (`sem = 0`, `gp_get = 0`, `gp_put = 1`, no error) legible instead of invisible.
+    fn await_semaphore(
+        &mut self,
+        chan: HostHandle,
+        sem_offset: u64,
+        payload: u32,
+        timeout: Duration,
+    ) -> Result<SubmitOutcome, RmError> {
+        let deadline = Instant::now() + timeout;
+        let mut semaphore = self.ring_load_u32(chan, sem_offset)?;
+        while semaphore != payload && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(1));
+            semaphore = self.ring_load_u32(chan, sem_offset)?;
+        }
+        let (gp_get, gp_put) = self.userd_cursors(chan)?;
+        Ok(SubmitOutcome {
+            semaphore,
+            gp_get,
+            gp_put,
+        })
+    }
+
+    /// [`RmBackend::ce_copy`]'s body, returning **what hardware did** rather than a
+    /// verdict: the [`SubmitOutcome`] and the payload that was asked for.
+    ///
+    /// ★ The distinction it preserves is the one that costs a day to re-derive by hand.
+    /// `gp_get == gp_put` with no semaphore means the entry was *fetched* and the methods
+    /// did nothing — a wrong class in `SET_OBJECT`, a wrong subchannel, a bad operand.
+    /// `gp_get == 0` with `gp_put == 1` means it was never fetched at all — USERD, the
+    /// token, or the schedule. One error status cannot carry that, and a verb whose only
+    /// answer is `Err(CE_NEVER_RETIRED)` cannot be debugged.
+    ///
+    /// # Errors
+    /// As [`RmBackend::ce_copy`], minus the never-retired verdict which is the caller's.
+    pub fn ce_copy_outcome(
+        &mut self,
+        vas: HostHandle,
+        sub: CeSubCopy,
+    ) -> Result<(SubmitOutcome, u32), RmError> {
+        if sub.by != CeExecutor::HostCe {
+            return Err(RmError::Other(NOT_ON_THIS_RUNG));
+        }
+        let CeSource::Address(src) = sub.src else {
+            return Err(RmError::Other(NOT_ON_THIS_RUNG));
+        };
+        // A zero-length sub-copy is a partition bug upstream, and `LINE_LENGTH_IN = 0` is
+        // not a no-op on every part — so it is refused rather than issued.
+        let len = u32::try_from(sub.len).map_err(|_| RmError::Other(BAD_ENCODE))?;
+        if len == 0 {
+            return Err(RmError::Other(BAD_ENCODE));
+        }
+
+        // ★★★ W229 — the CE channel is built in the isolate's OWN address space, never in
+        // `vas`. `vas` still names the space the OPERANDS live in, and `map_dma_both` has
+        // placed them at the same addresses in both, which is why `src`/`dst` below need no
+        // translation.
+        let key = self.narrow(vas)?;
+        let exec = self.executor_vas(key)?;
+        let ce_chan = self.ce_channel(key, exec)?;
+        let payload = ce_chan.next_payload;
+        let chan = ce_chan.chan;
+        let raw = self.narrow(chan)?;
+        let parts = self
+            .conn
+            .channel_parts(raw)
+            .ok_or(RmError::BadHandle(chan))?;
+        let sem_va = parts.ring_va + SEMAPHORE_OFFSET;
+        let slot = self.next_slot(raw)?;
+        let pb_off = PUSHBUFFER_OFFSET + slot.pb * PUSHBUFFER_SLOT_BYTES;
+        let pb_va = parts.ring_va + pb_off;
+
+        let words = ce_pushbuffer(CePush {
+            class_id: self.conn.classes.ce_object(),
+            src,
+            dst: sub.dst,
+            len,
+            sem_va,
+            payload,
+            // ★★★★★ w283 — THE GUEST'S OWN RELEASE, carried into the SAME pushbuffer,
+            // behind our own LAUNCH_DMA. ⊘ Ours stays last, so `await_semaphore` below
+            // returning means the guest's release has retired too rather than racing it.
+            guest_release: sub.guest_release.map(|r| (r.va, r.payload)),
+        })?;
+        // ⚠ A LENGTH refusal wearing an ENCODING name. `[measured, w283_client]` this fired
+        // on a correctly-encoded push that was six words longer than the slot, and the boot
+        // log could only say `BAD_ENCODE`. The numbers are printed so the next reader does
+        // not have to re-derive which of the two it was.
+        if 4 * words.len() as u64 > PUSHBUFFER_SLOT_BYTES {
+            eprintln!(
+                "kayfabe-isolate: CE-SUBMIT ⊘ REFUSED — the push is {} bytes and the slot is \
+                 {PUSHBUFFER_SLOT_BYTES}. ⊘ This is a LENGTH refusal, not an encoding one; \
+                 `BAD_ENCODE` is the only status this call has for it",
+                4 * words.len()
+            );
+            return Err(RmError::Other(BAD_ENCODE));
+        }
+        self.ring_store_u32(chan, SEMAPHORE_OFFSET, 0)?;
+        for (i, w) in words.iter().enumerate() {
+            self.ring_store_u32(chan, pb_off + 4 * i as u64, *w)?;
+        }
+        self.submit_entry(chan, pb_va, 4 * words.len() as u64, slot, ce_chan.token)?;
+
+        let outcome = self.await_semaphore(chan, SEMAPHORE_OFFSET, payload, CE_COPY_TIMEOUT)?;
+        let key = self.narrow(vas)?;
+        if let Some(c) = self.ce_channels.get_mut(&key) {
+            c.next_payload = c.next_payload.wrapping_add(1);
+        }
+        Ok((outcome, payload))
+    }
+
+    /// The copy-engine channel over `vas`, built on first use.
+    ///
+    /// ★★ Three RM acts in a fixed order, and the order is the C's proven one: the
+    /// channel (which carries `engineType = COPY0` into the group, GR-1), then the
+    /// [`HostClasses::ce_object`] object **under the channel**, then the schedule. Allocating the
+    /// engine object after scheduling is the variant that looks equivalent and is not.
+    ///
+    /// ★ The engine object's eight alloc bytes are [`CeAllocParams`] with the **same**
+    /// ordinal the channel used. Omitting them is the C's `engineType = 0` bug, whose
+    /// symptom is `NV_ERR_NOT_READY` from the schedule — two steps from the cause.
+    ///
+    /// ★★ **Honest limit, measured on RTX 3090 / 580.159.04:** skipping the engine-object
+    /// allocation entirely **still produced a correct 4096-byte copy**. With the group
+    /// bound to `COPY0`, subchannel 4's methods reach the copy engine without it. It is
+    /// allocated anyway — the C allocates it, UVM allocates it, and a channel with no
+    /// engine context is not a thing this port wants to depend on being fine — but the
+    /// dependency is *asserted from those sources*, not from a bite that fired here. A
+    /// step kept for a reason that has not been demonstrated must say so.
+    fn ce_channel(&mut self, key: u32, vas: ExecutorVas) -> Result<CeChannel, RmError> {
+        if let Some(c) = self.ce_channels.get(&key) {
+            return Ok(*c);
+        }
+        let (chan, token) = self.alloc_channel_for_isolate(vas, ENGINE_TYPE_COPY0)?;
+        let mut params = [0u8; CeAllocParams::SIZE];
+        CeAllocParams {
+            version: CeAllocParams::VERSION_1,
+            engine_type: ENGINE_TYPE_COPY0,
+        }
+        .encode_into(&mut params)
+        .map_err(|_| RmError::Other(BAD_ENCODE))?;
+        if let Err(e) = self.alloc_ce_engine_object(chan, self.conn.classes.ce_object(), &params) {
+            let _ = self.free(chan);
+            return Err(e);
+        }
+        if let Err(e) = self.schedule(chan) {
+            let _ = self.free(chan);
+            return Err(e);
+        }
+        let c = CeChannel {
+            chan,
+            token,
+            // ★ Starts at 1, never 0: zero is the sentinel written before every
+            // submission, so a payload of zero would be satisfied by the sentinel itself.
+            next_payload: 1,
+        };
+        self.ce_channels.insert(key, c);
+        Ok(c)
+    }
+
+    /// The next GPFIFO slot for `chan`, wrapping at **that channel's own entry count**.
+    ///
+    /// ★ Kept per **backend**, not per connection: `submit_entry` is the only writer and
+    /// it runs under `&mut self`, so the counter needs no lock. A second worker submitting
+    /// to the same channel would need one — and would need much more than a counter, which
+    /// is why nothing here pretends to support it.
+    ///
+    /// ★★★ **W230 — the modulus is READ FROM THE CHANNEL, not from [`GPFIFO_ENTRIES`].**
+    /// For every channel this file allocates its own ring for the two are the same number,
+    /// so nothing about the isolate's submissions changes. They stop being the same the
+    /// moment a channel is created over a [`GuestRing`], and the failure a constant would
+    /// produce there is silent: a slot index taken modulo 64 in a 4096-entry ring is a
+    /// legal entry, just not the one either party meant.
+    ///
+    /// # Errors
+    /// [`RmError::BadHandle`] if `chan` is not a channel of this connection —
+    /// deliberately, rather than falling back to the constant, because the fallback would
+    /// be a guess about a ring whose geometry we did not find.
+    fn next_slot(&mut self, chan: u32) -> Result<RingSlot, RmError> {
+        let entries = self
+            .conn
+            .channel_parts(chan)
+            .ok_or_else(|| RmError::BadHandle(self.stamp(chan)))?
+            .layout
+            .entries;
+        if entries == 0 {
+            return Err(RmError::Other(RING_ENTRIES_REFUSED));
+        }
+        let n = self.slots.entry(chan).or_insert(0);
+        let seq = *n;
+        *n += 1;
+        // ★★★ TWO MODULI, and they are different numbers on every ring this file allocates.
+        // See [`RingSlot`] for the measurement that separated them and for why using one
+        // index for both made `GP_PUT` run BACKWARDS on the 33rd submission.
+        //
+        // ⊘ `clamp(1, …)` and not `.min(…).max(1)`: identical here because
+        // `PUSHBUFFER_SLOTS` is a non-zero const, and `clamp` would PANIC if that ever
+        // stopped being true — which is the right failure for a divisor.
+        Ok(RingSlot {
+            // CLAMPED BY THE REGION, not by the entry count alone — a pushbuffer slot that
+            // fits the ring's queue but not the ring's pushbuffer area writes methods over
+            // the GPFIFO that points at them, and the symptom is a submission that fetches
+            // garbage rather than an error anyone can attribute.
+            pb: seq % u64::from(entries).clamp(1, PUSHBUFFER_SLOTS),
+            // NOT clamped: this one indexes the GPFIFO, whose region runs from
+            // `GPFIFO_OFFSET` to `SEMAPHORE_OFFSET` and holds far more than `entries`.
+            gp: seq % u64::from(entries),
+        })
+    }
+
+    /// Store one 32-bit word into the channel's USERD.
+    ///
+    /// ★★★★★ **LEG B — on a channel over the guest's USERD this is
+    /// [`RmError::Other`]`(`[`USERD_NOT_OURS`]`)`, always, and that refusal IS the leg.**
+    /// The cursor those bytes hold is the guest's, advanced by the guest's own store through
+    /// its own BAR1 mapping; a second writer would be two parties disagreeing about one
+    /// index, and the loser is whichever wrote first.
+    fn userd_store_u32(&self, chan: HostHandle, offset: u64, value: u32) -> Result<(), RmError> {
+        let raw = self.narrow(chan)?;
+        self.conn
+            .with_rings(raw, |r| {
+                // ★★★★★ **w287 — same resolution as [`Self::userd_cursors`].** ⊘ The
+                // [`UserdOwner::HandedIn`] refusal above is UNCHANGED and is still the whole of
+                // leg B: when the USERD is the guest's, this call must fail by name, because
+                // the party that advances that cursor is the guest and a second writer is two
+                // parties disagreeing about one index.
+                let (userd, base) = match r.userd_in_ring {
+                    Some(off) => (r.ring.as_ref().ok_or(RmError::Other(USERD_NOT_OURS))?, off),
+                    None => (r.userd.as_ref().ok_or(RmError::Other(USERD_NOT_OURS))?, 0),
+                };
+                userd
+                    .store_u32(HostOffset::new(base + offset), value)
+                    .map_err(|e| region_error(&e))
+            })
+            .unwrap_or(Err(RmError::BadHandle(chan)))
+    }
+
+    /// ★★ Where this connection's records say `chan`'s ring object was placed, or `None`
+    /// if `chan` is not a channel of ours.
+    ///
+    /// ★ It exists so a caller can check a placement **without asking the call that made
+    /// it**. `alloc_channel_at` returning `Ok` is the thing under test; verifying it by
+    /// reading its own return value is the R25 tautology one plane over. This reads
+    /// `ChannelParts::ring_va`, which was written from RM's `[OUT]` `dmaOffset` — so a
+    /// diagnostic comparing it against the address it asked for is comparing two parties.
+    ///
+    /// ⊘ It is still not hardware's word. Nothing but a submission that the engine
+    /// **fetches** says the GPU agrees the ring is there; `SubmitOutcome::gp_get` is that
+    /// word, and R26 requires both.
+    #[must_use]
+    pub fn channel_ring_va(&self, chan: HostHandle) -> Option<u64> {
+        let raw = self.narrow(chan).ok()?;
+        self.conn.channel_parts(raw).map(|p| p.ring_va)
+    }
+
+    /// ★★★ **W229 — which address space the isolate's OWN copy-engine control structures
+    /// are in, reported next to the one a GUEST channel over the same `Vas` is bound to.**
+    ///
+    /// The owner's invariant is *"VMM state must never be placed where a guest VA can name
+    /// it"*, and until this existed the only thing upholding it was a doc comment
+    /// ([`RmConnection::raw_map_dma`]: *"memory the isolate allocated for itself, which no
+    /// guest ever names"*). A sentence is not a measurement. This returns the **two range
+    /// handles as separate fields precisely so a caller can compare them** — equality is
+    /// the defect, and it is the whole reason the accessor reports both rather than
+    /// answering a `bool` we computed ourselves.
+    ///
+    /// ⊘ Two equal handles are not *proof* of reachability and two different ones are not
+    /// proof of unreachability; they are handles. What settles it is
+    /// [`HostRmBackend::probe_va`] (is anything mapped at that VA in that space?) and
+    /// [`HostRmBackend::probe_guest_reachability`] (does an engine bound to the guest's
+    /// space read our word?). This accessor exists to tell those two probes *where to
+    /// look*.
+    ///
+    /// `None` if `vas` is not a handle of this backend's, or if no copy-engine channel has
+    /// been built over it yet — the placement does not exist before the channel does.
+    #[must_use]
+    pub fn ce_control_placement(&self, vas: HostHandle) -> Option<CeControlPlacement> {
+        let guest_space = self.narrow(vas).ok()?;
+        let ce = *self.ce_channels.get(&guest_space)?;
+        let chan_raw = self.narrow(ce.chan).ok()?;
+        let parts = self.conn.channel_parts(chan_raw)?;
+        Some(CeControlPlacement {
+            guest_space,
+            control_space: parts.range,
+            ring_va: parts.ring_va,
+            sem_va: parts.ring_va + SEMAPHORE_OFFSET,
+            ring_bytes: RING_OBJECT_BYTES,
+            last_payload: ce.next_payload.wrapping_sub(1),
+        })
+    }
+
+    /// ★★★ **Is anything mapped at `va` in the address space named by the raw range handle
+    /// `space`?** — asked the only way this layer can ask it: by trying to put something
+    /// there.
+    ///
+    /// A fresh device-local object is allocated and fixed-mapped at `va`. RM's **[OUT]**
+    /// `dmaOffset` decides the answer, so this is two parties and not our own argument
+    /// echoed — the shape `dictated_ring_negative` established on this hardware, reused
+    /// because it is already calibrated.
+    ///
+    /// ⊘ **The limit, stated because the pass arm is the weak one.** [`VaProbe::Free`] says
+    /// the VA was **unclaimed at this instant**, which is what *"a guest VA cannot name our
+    /// semaphore"* reduces to in a GPU address space — an unmapped VA resolves to nothing
+    /// and faults. It does **not** say a later mapping could not put something there, and
+    /// it is not a statement about any other address. That is why the rung that uses it
+    /// runs the **same call** against the space our ring *is* in, where the answer must be
+    /// [`VaProbe::Occupied`]: a probe whose refusing arm is unreachable proves nothing.
+    ///
+    /// Everything allocated is freed before returning, on every arm.
+    ///
+    /// # Errors
+    /// Only if the *allocation* failed — a refused placement is [`VaProbe::Occupied`],
+    /// which is an answer rather than an error.
+    pub fn probe_va(&mut self, space: u32, va: u64, len: u64) -> Result<VaProbe, RmError> {
+        // ★★ THE LENGTH IS THE INSTRUMENT, and it is the caller's because only the caller
+        // knows what it is asking about. `alloc_device_local` passes `alignment = len`, and
+        // RM maps device-local memory with 64 KiB big pages regardless, so:
+        //
+        //   [measured 2026-08-10, `vh`] a 64 KiB probe object at `ring_va + 0x2000` was
+        //   placed at `ring_va`  — the probe's own alignment, read as `Relocated`;
+        //   [measured 2026-08-10, `vh`] a 4 KiB probe object at the same address was ALSO
+        //   placed at `ring_va`  — so a smaller probe buys no resolution at all.
+        //
+        // ⊘ An instrument whose own geometry produces the answer it is looking for is not
+        // an instrument, and a finer one that cannot be finer is worse: it looks like it
+        // resolved something. ⇒ Ask about the OBJECT, at its own base and its own size.
+        let obj = self.conn.alloc_device_local(len)?;
+        let out = match self.conn.raw_map_dma(space, obj, len, Some(va)) {
+            Ok(got) if got == va => {
+                let _ = self.conn.raw_unmap_dma(space, got);
+                VaProbe::Free
+            }
+            Ok(got) => {
+                let _ = self.conn.raw_unmap_dma(space, got);
+                VaProbe::Relocated(got)
+            }
+            Err(e) => VaProbe::Occupied(e),
+        };
+        let _ = self.free(self.stamp(obj));
+        Ok(out)
+    }
+
+    /// ★★★★★ **W229's real falsifier — point a copy engine BOUND TO THE GUEST'S ADDRESS
+    /// SPACE at the isolate's own semaphore and see whether it reads it.**
+    ///
+    /// [`HostRmBackend::probe_va`] asks RM's allocator a question about a VA.
+    /// This asks **hardware** the question the invariant is actually about: a channel is
+    /// created over `vas` — the same address space `kayfabe_fwd::plan_doorbell`
+    /// materializes a *guest's* channel in — and made to `LAUNCH_DMA` four bytes out of
+    /// `sem_va` into a scratch buffer we then read.
+    ///
+    /// ## The two submissions, and why the order is not negotiable
+    ///
+    /// 1. **The positive control runs FIRST**: the same probe channel copies from a scratch
+    ///    source holding a known word. Without it, *"the probe copy never retired"* is
+    ///    indistinguishable from *"this channel never worked"* — and the second is what a
+    ///    typo produces. ⊘ A run whose control did not land reports nothing about the
+    ///    probe.
+    /// 2. **The probe** then copies from `sem_va`. If the isolate's ring is in this space,
+    ///    the engine resolves the address and the word lands: [`GuestReach::Read`] carrying
+    ///    a value the caller can compare against the payload **our** last copy released —
+    ///    a number the guest-bound channel has no other way to obtain.
+    ///
+    /// ⚠ **A `NotResolved` verdict means the engine faulted**, which is the correct end
+    /// state and is *not* free: the host `dmesg` will carry an `Xid 31 FAULT_PDE` for this
+    /// channel, and the channel is dead afterwards. That is why this is a stand-alone
+    /// diagnostic that tears its own channel down, and why the control precedes it.
+    ///
+    /// # Errors
+    /// Whatever the allocations, mappings, channel or schedule refused — each before any
+    /// submission, so an error here is never a fault.
+    ///
+    /// ## ★★★★★ w288 TIER 2 — `notifier_aperture`, and it decides whether this run measures
+    ///
+    /// See [`NotifierAperture`]. On a GUEST-side run the vidmem arm attaches **no** host
+    /// notifier at all (the aperture decodes to `ErrorNotifier::Unreachable`), so the probe
+    /// runs, faults, and reports a quiet notifier that means nothing. ⊘ Stated by the caller
+    /// and echoed in [`GuestReachProbe::notifier_aperture`]; never guessed here.
+    ///
+    /// ## ★★★★★ w309 — `arms`, and why it is a parameter rather than four call sites
+    ///
+    /// See [`ReachProbeArms`]. [`ReachProbeArms::default()`] is byte-identical to every run
+    /// committed before w309; the other settings exist so the four confounds on
+    /// `CONTROL-NEVER-LANDED` can be moved **one at a time**.
+    pub fn probe_guest_reachability(
+        &mut self,
+        vas: HostHandle,
+        sem_va: u64,
+        notifier_aperture: NotifierAperture,
+        arms: ReachProbeArms,
+    ) -> Result<GuestReachProbe, RmError> {
+        const BYTES: u64 = 0x1_0000;
+        /// Neither zero nor a plausible semaphore payload: the control's word must not be
+        /// confusable with what the probe is looking for.
+        const CONTROL_WORD: u32 = 0x5EA1_C071;
+        /// What the destination holds before either copy. A word that survives is a copy
+        /// that did not happen.
+        const SENTINEL: u32 = 0xDEAD_0000;
+        /// ★★★★★ **EVERY address this probe owns is DICTATED, and far away.**
+        ///
+        /// [measured 2026-08-10, `vh`, and it inverted the verdict] letting RM choose put
+        /// the probe's OWN channel ring at `0x1_2002_0000` — the address the isolate's ring
+        /// had just been freed from — so `sem_va = ring_va + 0x2000` landed **inside the
+        /// probe's own ring**. The copy retired, moved `0x00000000`, and the rung read it as
+        /// *"the address still resolves in the guest's space"*. It did: in the instrument's
+        /// memory, not the isolate's.
+        ///
+        /// ⊘ A probe that allocates from the same allocator, in the same space, at the same
+        /// moment, is not an independent observer. R26 established that a channel ring can
+        /// be placed where its caller says, so there is no reason to let RM choose here.
+        /// 64 KiB-aligned and three objects apart, well clear of RM's own base.
+        ///
+        /// ⊘⊘ **CORRECTION 2026-08-12, and it is why [`REACH_PROBE_WINDOW`] now exists.**
+        /// These three addresses were private to this function, so a *caller* asking this
+        /// probe *"is `0x7_0000_0000` mapped?"* was asking about the probe's **own ring**.
+        /// It measured exactly that: the engine retired the read, moved `0x20018000`, and
+        /// the verdict came back `Read` — the instrument reading its own memory, one layer
+        /// up from the 2026-08-10 failure the paragraph above records. The window is public
+        /// now and callers assert against it **at compile time**.
+        const PROBE_RING_AT: u64 = REACH_PROBE_WINDOW.0;
+        const CTRL_SRC_AT: GpuVa = GpuVa(REACH_PROBE_WINDOW.0 + 0x10_0000);
+        const DST_AT: GpuVa = GpuVa(REACH_PROBE_WINDOW.0 + 0x20_0000);
+        const _: () = assert!(
+            DST_AT.0 + BYTES <= REACH_PROBE_WINDOW.1,
+            "every address this probe dictates must lie inside the window it publishes"
+        );
+
+        let range = self.narrow(vas)?;
+        let ctrl_src = self.conn.alloc_device_local(BYTES)?;
+        let dst = match self.conn.alloc_device_local(BYTES) {
+            Ok(h) => h,
+            Err(e) => {
+                let _ = self.free(self.stamp(ctrl_src));
+                return Err(e);
+            }
+        };
+        // ★★★★★ **w287 — THE ERROR NOTIFIER, in SYSMEM and CPU-readable.**
+        //
+        // ⊘ **SYSMEM, not device-local, and it is measured rather than chosen.** `[w287
+        // census, 63/63 channels]` every `errorNotifierMem` a real driver declares carries
+        // aperture **SYSMEM** — against `userdMem`, which is FBMEM `68/68` on the same
+        // census. A notifier in vidmem is not the shape RM's writer expects.
+        //
+        // ★ Zeroed before the channel exists, so `status != 0` after the fault cannot be
+        // whatever the allocator handed us. `NV01_MEMORY_SYSTEM` is not documented to arrive
+        // zeroed, and *"it was already `0xffff`"* is exactly the false positive that would
+        // make this whole client report success without a driver ever writing anything.
+        // ⊘⊘ **THE APERTURE IS THE CALLER'S, AND IT IS NOT A FALLBACK.** Neither arm retries
+        // as the other: a run whose notifier store depended on what RM happened to accept
+        // could not say which experiment it performed. See [`NotifierAperture`] for the two
+        // measurements — the census that makes SYSMEM faithful, and the pair of native
+        // refusals that makes VIDMEM the arm w287's known-positive was taken on.
+        //
+        // ⊘⊘ **w309 — on [`ReachProbeArms::error_notifier`] `== false` NO NOTIFIER OBJECT IS
+        // ALLOCATED AT ALL.** Not allocated-and-unattached: the arm's question is whether the
+        // notifier's *presence* is what stops the positive control from landing, and an
+        // object that exists but is not named to RM would answer a third question neither arm
+        // asked. `None` propagates all the way to `alloc_channel_at`, and plane A is then
+        // structurally unmeasured rather than quiet.
+        let notifier_h: Option<HostHandle> = if arms.error_notifier {
+            let notifier_alloc = match notifier_aperture {
+                NotifierAperture::Sysmem => self.alloc_notifier_mem(NOTIFIER_BYTES),
+                NotifierAperture::Vidmem => self
+                    .conn
+                    .alloc_device_local(NOTIFIER_BYTES)
+                    .map(|h| self.stamp(h)),
+            };
+            let h = match notifier_alloc {
+                Ok(h) => h,
+                Err(e) => {
+                    let _ = self.free(self.stamp(dst));
+                    let _ = self.free(self.stamp(ctrl_src));
+                    return Err(e);
+                }
+            };
+            if let Err(e) = self.zero_notifier(h, notifier_aperture) {
+                let _ = self.free(h);
+                let _ = self.free(self.stamp(dst));
+                let _ = self.free(self.stamp(ctrl_src));
+                return Err(e);
+            }
+            Some(h)
+        } else {
+            None
+        };
+
+        let mut mapped: Vec<u64> = Vec::new();
+        let mut chan: Option<HostHandle> = None;
+        let mut go = || -> Result<GuestReachProbe, RmError> {
+            // ⊘ `raw_map_dma`, NOT `map_dma_both`, and deliberately: these buffers stand
+            // in for the GUEST's memory, and the channel below is bound to the guest's
+            // space. Publishing them into the isolate's space too would be the rung
+            // arranging for its own operands to resolve where the thing under test lives.
+            //
+            // ★ FIXED, and refused rather than adopted if RM disagrees — see
+            // `PROBE_RING_AT`. An operand RM placed next to `sem_va` is an operand the
+            // probe would then read instead of the thing it is asking about.
+            //
+            // ★ w309 — `arms.dictate_addresses == false` hands RM the placement instead, so
+            // *"the probe dictates its addresses"* can be varied on its own. `None` and the
+            // absent equality check move together on purpose: a fixed ask RM silently
+            // relocated is the failure `PlacementRefused` exists for, and an arm that asks
+            // for nothing has nothing to compare.
+            let want_ctrl_src = arms.dictate_addresses.then_some(CTRL_SRC_AT.0);
+            let ctrl_src_va = self
+                .conn
+                .raw_map_dma(range, ctrl_src, BYTES, want_ctrl_src)?;
+            mapped.push(ctrl_src_va);
+            if let Some(want) = want_ctrl_src {
+                if ctrl_src_va != want {
+                    return Err(RmError::PlacementRefused {
+                        want,
+                        got: ctrl_src_va,
+                    });
+                }
+            }
+            let want_dst = arms.dictate_addresses.then_some(DST_AT.0);
+            let dst_va = self.conn.raw_map_dma(range, dst, BYTES, want_dst)?;
+            mapped.push(dst_va);
+            if let Some(want) = want_dst {
+                if dst_va != want {
+                    return Err(RmError::PlacementRefused { want, got: dst_va });
+                }
+            }
+
+            // Seed both buffers through CPU mappings that are dropped before any engine
+            // runs — the read-back below opens its own.
+            {
+                let (n, m) = self
+                    .conn
+                    .map_cpu(ctrl_src, BYTES, CachePolicy::WriteCombining)?;
+                m.store_u32(HostOffset::new(0), CONTROL_WORD)
+                    .map_err(|e| region_error(&e))?;
+                drop(m);
+                drop(n);
+                let (n, m) = self.conn.map_cpu(dst, BYTES, CachePolicy::WriteCombining)?;
+                m.store_u32(HostOffset::new(0), SENTINEL)
+                    .map_err(|e| region_error(&e))?;
+                m.store_u32(HostOffset::new(4), SENTINEL)
+                    .map_err(|e| region_error(&e))?;
+                drop(m);
+                drop(n);
+                release_fence();
+            }
+
+            // ★ THE STAND-IN FOR A GUEST CHANNEL. `alloc_channel_on` over the `Vas`'s own
+            // range is exactly what `plan_doorbell` reaches for a guest submission, engine
+            // and all — the point of the rung is that this channel is ORDINARY.
+            //
+            // ★★★★★ **w287 — WITH AN ERROR NOTIFIER, which is the whole of the second
+            // client.** The channel is otherwise the same one w278..w283 measured; the only
+            // new thing RM is told is where to write when it kills this channel.
+            let ring_at = arms.dictate_addresses.then_some(GpuVa(PROBE_RING_AT));
+            let (c, token) = match notifier_h {
+                Some(n) => {
+                    self.alloc_channel_at_with_error_notifier(vas, ENGINE_TYPE_COPY0, ring_at, n)?
+                }
+                // ⊘ w309 — the SAME channel with `hObjectError` unset, which is exactly what
+                // every caller before w287 built. Plane A is unmeasured on this arm by
+                // construction, and [`GuestReachProbe::notifier`] reports `None`.
+                None => self.alloc_channel_at(vas, ENGINE_TYPE_COPY0, ring_at)?,
+            };
+            chan = Some(c);
+            // ★★★★★ **w309 — THE SELF-ALIAS REFUSAL, checked AFTER RM has answered.**
+            //
+            // Reachable only on the RM-placed arm, and it is the 2026-08-10 inversion this
+            // function's own `PROBE_RING_AT` comment records: when RM chose, the probe's ring
+            // landed where the address under test resolved, the copy retired, and the rung
+            // read *"the guest VA still resolves"* — the instrument reading its own memory.
+            // Dictated addresses make that impossible at compile time; RM-placed ones make it
+            // possible again, so it is refused HERE, by name, before anything is submitted.
+            if !arms.dictate_addresses {
+                let ring_va = self
+                    .conn
+                    .channel_parts(self.narrow(c)?)
+                    .map(|p| p.ring_va)
+                    .ok_or(RmError::Other(NOT_ON_THIS_RUNG))?;
+                let aliases = |base: u64, len: u64| sem_va >= base && sem_va < base + len;
+                if aliases(ring_va, RING_OBJECT_BYTES)
+                    || aliases(ctrl_src_va, BYTES)
+                    || aliases(dst_va, BYTES)
+                {
+                    return Err(RmError::Other(PROBE_SELF_ALIASED));
+                }
+            }
+            let mut params = [0u8; CeAllocParams::SIZE];
+            CeAllocParams {
+                version: CeAllocParams::VERSION_1,
+                engine_type: ENGINE_TYPE_COPY0,
+            }
+            .encode_into(&mut params)
+            .map_err(|_| RmError::Other(BAD_ENCODE))?;
+            self.alloc_ce_engine_object(c, self.conn.classes.ce_object(), &params)?;
+            self.schedule(c)?;
+
+            let control = self.probe_copy(c, token, ctrl_src_va, dst_va, 1)?;
+            let (node, view) = self.conn.map_cpu(dst, BYTES, CachePolicy::WriteCombining)?;
+            let control_read = view
+                .load_u32(HostOffset::new(0))
+                .map_err(|e| region_error(&e))?;
+            drop(view);
+            drop(node);
+
+            // ⊘ The probe is not issued at all if the control did not land: a fault
+            // provoked on a channel that was never shown to work is a measurement of
+            // nothing, and it costs a real `Xid`.
+            if !(control.landed(1) && control_read == CONTROL_WORD) {
+                return Ok(GuestReachProbe {
+                    control,
+                    control_read,
+                    control_want: CONTROL_WORD,
+                    reach: GuestReach::ControlFailed,
+                    // ⊘ Read even here. A notifier that fired while the CONTROL was still
+                    // failing means the channel died before the probe was ever issued, and
+                    // that is a different story than the one this rung set out to tell.
+                    notifier: notifier_h
+                        .and_then(|n| self.read_error_notifier(n, notifier_aperture).ok()),
+                    // ⊘ NOT MEASURED on this path — no fault was provoked, so there is no
+                    // "after" for an ioctl to be after. `NOT_ON_THIS_RUNG`, by name.
+                    post_fault_ioctl: Err(RmError::Other(NOT_ON_THIS_RUNG)),
+                    // ⊘ The control did not land, so there is no "alive and working" instant
+                    // for a negative control to be taken at.
+                    notifier_before: None,
+                    // ⊘⊘ **NOT READ on this path, and that is the destructive-read rule
+                    // holding.** No fault was provoked, so there is no record — and asking
+                    // anyway would consume whatever a PREVIOUS fault left, then report it as
+                    // this run's. `None` is *"unmeasured"*, which is what it is.
+                    fault_info: None,
+                    fault_va: sem_va,
+                    notifier_aperture,
+                });
+            }
+
+            // ★★★ THE NEGATIVE CONTROL — read here, between a submission that WORKED and one
+            // that will fault. Nothing between this read and the next one but the fault.
+            let notifier_before =
+                notifier_h.and_then(|n| self.read_error_notifier(n, notifier_aperture).ok());
+
+            let probe = self.probe_copy(c, token, sem_va, dst_va + 4, 2)?;
+            let (node, view) = self.conn.map_cpu(dst, BYTES, CachePolicy::WriteCombining)?;
+            let probe_read = view
+                .load_u32(HostOffset::new(4))
+                .map_err(|e| region_error(&e))?;
+            drop(view);
+            drop(node);
+
+            let reach = if probe.landed(2) {
+                GuestReach::Read {
+                    word: probe_read,
+                    outcome: probe,
+                }
+            } else if probe_read != SENTINEL {
+                // ⊘ Neither arm: bytes moved and the engine did not say so. Reported
+                // rather than folded into one of the two, because a partial answer that
+                // looks like a clean one is how a green gets believed.
+                GuestReach::Ambiguous {
+                    word: probe_read,
+                    outcome: probe,
+                }
+            } else {
+                GuestReach::NotResolved(probe)
+            };
+            // ★★★ READ AFTER the probe's wait has already expired, so RM has had the same
+            // window to react that the semaphore poll gave the engine. ⊘ A notifier read
+            // before the wait would measure our own impatience.
+            let notifier =
+                notifier_h.and_then(|n| self.read_error_notifier(n, notifier_aperture).ok());
+            // ★★★★★ **w288 TIER 2 — PLANE D: WHERE.** The notifier says *this channel died,
+            // Xid 31, GRAPHICS*; it has no address field. This is the only control that
+            // carries one, and it is asked here — **once**, after the wait has expired, on
+            // this channel, and never again in this run. See
+            // [`Self::get_mmu_fault_info`] for why a second ask would manufacture a wrong
+            // answer rather than repeat a right one.
+            //
+            // ⊘ `.ok()`: a refusal is `None`, which is *unmeasured*, and is deliberately NOT
+            // folded into a zeroed record — a zeroed record decodes to a well-formed
+            // *"faulted at address 0"* and would read as a measurement.
+            let fault_info = self.get_mmu_fault_info(c).ok();
+            // Plane C, asked explicitly rather than inferred from the teardown's incidentals.
+            let mut tok = [0u8; WORK_SUBMIT_TOKEN_PARAMS_SIZE];
+            let post_fault_ioctl = self.conn.raw_control(
+                self.narrow(c)?,
+                NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN,
+                &mut tok,
+            );
+            Ok(GuestReachProbe {
+                control,
+                control_read,
+                control_want: CONTROL_WORD,
+                reach,
+                notifier,
+                post_fault_ioctl,
+                notifier_before,
+                fault_info,
+                // ⊘ The probe's own input, echoed. See [`GuestReachProbe::fault_va`]: the
+                // VA-identity oracle compares the REPORTED address against the address we
+                // asked for, and a caller that recomputed the expectation from the same
+                // variable it printed would be checking a number against itself.
+                fault_va: sem_va,
+                notifier_aperture,
+            })
+        };
+        let out = go();
+        if let Some(c) = chan {
+            let _ = self.free(c);
+        }
+        for va in mapped.into_iter().rev() {
+            let _ = self.conn.raw_unmap_dma(range, va);
+        }
+        let _ = self.free(self.stamp(dst));
+        let _ = self.free(self.stamp(ctrl_src));
+        // ⊘ Freed AFTER `out` has already been built — the record was decoded above, so a
+        // caller reads bytes this function owned, never a mapping it has to keep alive.
+        if let Some(n) = notifier_h {
+            let _ = self.free(n);
+        }
+        out
+    }
+
+    /// One four-byte `LAUNCH_DMA` on `chan`, releasing `payload`. The submission half of
+    /// [`HostRmBackend::probe_guest_reachability`], factored out only because that rung
+    /// issues it twice and the two must be identical in everything but their operands.
+    fn probe_copy(
+        &mut self,
+        chan: HostHandle,
+        token: u64,
+        src: u64,
+        dst: u64,
+        payload: u32,
+    ) -> Result<SubmitOutcome, RmError> {
+        let raw = self.narrow(chan)?;
+        let parts = self
+            .conn
+            .channel_parts(raw)
+            .ok_or(RmError::BadHandle(chan))?;
+        let sem_va = parts.ring_va + SEMAPHORE_OFFSET;
+        let slot = self.next_slot(raw)?;
+        let pb_off = PUSHBUFFER_OFFSET + slot.pb * PUSHBUFFER_SLOT_BYTES;
+        let pb_va = parts.ring_va + pb_off;
+        let words = ce_pushbuffer(CePush {
+            class_id: self.conn.classes.ce_object(),
+            src,
+            dst,
+            len: 4,
+            sem_va,
+            payload,
+            // ⊘ `None` — this is the self-contained hardware probe, which has no guest and
+            // therefore no guest-declared release to carry.
+            guest_release: None,
+        })?;
+        // ⚠ A LENGTH refusal wearing an ENCODING name. `[measured, w283_client]` this fired
+        // on a correctly-encoded push that was six words longer than the slot, and the boot
+        // log could only say `BAD_ENCODE`. The numbers are printed so the next reader does
+        // not have to re-derive which of the two it was.
+        if 4 * words.len() as u64 > PUSHBUFFER_SLOT_BYTES {
+            eprintln!(
+                "kayfabe-isolate: CE-SUBMIT ⊘ REFUSED — the push is {} bytes and the slot is \
+                 {PUSHBUFFER_SLOT_BYTES}. ⊘ This is a LENGTH refusal, not an encoding one; \
+                 `BAD_ENCODE` is the only status this call has for it",
+                4 * words.len()
+            );
+            return Err(RmError::Other(BAD_ENCODE));
+        }
+        self.ring_store_u32(chan, SEMAPHORE_OFFSET, 0)?;
+        for (i, w) in words.iter().enumerate() {
+            self.ring_store_u32(chan, pb_off + 4 * i as u64, *w)?;
+        }
+        self.submit_entry(chan, pb_va, 4 * words.len() as u64, slot, token)?;
+        self.await_semaphore(chan, SEMAPHORE_OFFSET, payload, CE_COPY_TIMEOUT)
+    }
+
+    /// ★★★ R14b — **prove the mapped bytes are in the GPU's memory and not in ours.**
+    ///
+    /// A mapping that succeeds proves nothing. `mmap` of an anonymous page succeeds too,
+    /// and a store into it reads back exactly as well — so "I wrote `0xDEADBEEF` and read
+    /// `0xDEADBEEF`" is a statement about our own process, which is precisely the class of
+    /// evidence `mode2_real_forward_not_fake` rejects.
+    ///
+    /// What this does instead: write a pattern through the channel's live mapping, then
+    /// build a **completely independent second mapping** of the same RM object — a fresh
+    /// device node, a fresh mmap context, a kernel-chosen address that has nothing to do
+    /// with the first — and read the pattern back through *that*. Two mappings of one
+    /// anonymous allocation cannot exist; two mappings of one device object can, and they
+    /// alias because the bytes are in the object.
+    ///
+    /// A control word is read at a second offset in the same pass, so a mapping that
+    /// returned a constant would fail even though it "matched".
+    ///
+    /// Returns `(observed_at_offset, observed_at_control_offset)` read through the second
+    /// mapping. The second mapping is dropped before returning: it exists only to be a
+    /// different mapping.
+    ///
+    /// # Errors
+    /// [`RmError::BadHandle`], or whatever the driver refuses the second mapping with.
+    pub fn prove_ring_is_device_memory(
+        &mut self,
+        chan: HostHandle,
+        offset: u64,
+        pattern: u32,
+    ) -> Result<(u32, u32), RmError> {
+        const CONTROL_OFFSET: u64 = 0x40;
+        let raw = self.narrow(chan)?;
+        let parts = self
+            .conn
+            .channel_parts(raw)
+            .ok_or(RmError::BadHandle(chan))?;
+
+        self.ring_store_u32(chan, offset, pattern)?;
+        // A second, deliberately different value, so "the mapping returns a constant" and
+        // "the mapping aliases the object" are distinguishable outcomes.
+        self.ring_store_u32(chan, CONTROL_OFFSET, !pattern)?;
+
+        // The independent mapping. `map_cpu` opens its own node, so this shares nothing
+        // with the first — not the descriptor, not the mmap context, not the address.
+        let (node, second) =
+            self.conn
+                .map_cpu(parts.ring, RING_OBJECT_BYTES, CachePolicy::WriteCombining)?;
+        let a = second
+            .load_u32(HostOffset::new(offset))
+            .map_err(|e| region_error(&e))?;
+        let b = second
+            .load_u32(HostOffset::new(CONTROL_OFFSET))
+            .map_err(|e| region_error(&e))?;
+        drop(second);
+        drop(node);
+        Ok((a, b))
+    }
+
+    /// ★★★ R17 — **prove a copy engine moved bytes of device memory**, by reading the
+    /// destination before and after through mappings that are not the ones written.
+    ///
+    /// Two device-local buffers are allocated, GPU-mapped into `vas` and CPU-mapped. The
+    /// source is filled with a per-word pattern; the destination is filled with a
+    /// **different** sentinel so that "the copy happened" and "the destination already
+    /// looked like that" are distinguishable outcomes. Then one [`RmBackend::ce_copy`]
+    /// runs, and the destination is read back through a **freshly opened, independent**
+    /// mapping — a different device node, a different mmap context, a kernel-chosen
+    /// address — so the answer cannot come from our own page cache.
+    ///
+    /// ★ The last word is returned as well as the first. A copy engine that wrote only a
+    /// header, or a length that got truncated to one dword, would match on word 0 alone.
+    ///
+    /// Everything it allocates is freed before it returns, including on the error paths
+    /// that matter (the copy itself failing still tears down).
+    ///
+    /// # Errors
+    /// Whatever the allocation, the mapping or the copy refuses with.
+    pub fn prove_ce_copy(&mut self, vas: HostHandle, pattern: u32) -> Result<CeEvidence, RmError> {
+        const BYTES: u64 = 4096;
+        const WORDS: u64 = BYTES / 4;
+        let range = self.narrow(vas)?;
+        let sentinel = !pattern;
+
+        let src = self.conn.alloc_device_local(BYTES)?;
+        let dst = match self.conn.alloc_device_local(BYTES) {
+            Ok(h) => h,
+            Err(e) => {
+                let _ = self.free(self.stamp(src));
+                return Err(e);
+            }
+        };
+        let mut cleanup: Vec<(u32, Option<u64>)> = vec![(src, None), (dst, None)];
+        let mut go = || -> Result<CeEvidence, RmError> {
+            // ★ W229 — through `map_dma_both`, exactly as a production publish is: the
+            // isolate's copy engine is in its own space now, and an operand mapped only in
+            // the guest's would fault. RM still chooses the address, in the guest's space,
+            // and the shadow follows it.
+            let src_va = self.map_dma_both(range, src, BYTES, None)?;
+            cleanup[0].1 = Some(src_va);
+            let dst_va = self.map_dma_both(range, dst, BYTES, None)?;
+            cleanup[1].1 = Some(dst_va);
+
+            let (src_node, src_map) = self.conn.map_cpu(src, BYTES, CachePolicy::WriteCombining)?;
+            let (dst_node, dst_map) = self.conn.map_cpu(dst, BYTES, CachePolicy::WriteCombining)?;
+            for i in 0..WORDS {
+                src_map
+                    .store_u32(HostOffset::new(i * 4), pattern.wrapping_add(i as u32))
+                    .map_err(|e| region_error(&e))?;
+                dst_map
+                    .store_u32(HostOffset::new(i * 4), sentinel)
+                    .map_err(|e| region_error(&e))?;
+            }
+            let before = dst_map
+                .load_u32(HostOffset::new(0))
+                .map_err(|e| region_error(&e))?;
+            // The stores above are into a write-combining mapping; the engine must not be
+            // launched while they are still in a write-combining buffer.
+            release_fence();
+            drop(dst_map);
+            drop(dst_node);
+            drop(src_map);
+            drop(src_node);
+
+            let (submit, payload) = self.ce_copy_outcome(
+                vas,
+                CeSubCopy {
+                    dst: dst_va,
+                    src: CeSource::Address(src_va),
+                    len: BYTES,
+                    by: CeExecutor::HostCe,
+                    // ⊘ `None` — a self-contained probe declares no guest completion.
+                    guest_release: None,
+                },
+            )?;
+
+            // ★ The read-back mapping is opened AFTER the copy and is not the one the
+            // sentinel was written through.
+            let (node, second) = self.conn.map_cpu(dst, BYTES, CachePolicy::WriteCombining)?;
+            let after = second
+                .load_u32(HostOffset::new(0))
+                .map_err(|e| region_error(&e))?;
+            let after_last = second
+                .load_u32(HostOffset::new((WORDS - 1) * 4))
+                .map_err(|e| region_error(&e))?;
+            drop(second);
+            drop(node);
+            Ok(CeEvidence {
+                before,
+                after,
+                after_last,
+                expect_after: pattern,
+                expect_after_last: pattern.wrapping_add(WORDS as u32 - 1),
+                bytes: BYTES,
+                submit,
+                payload,
+                src_va,
+                dst_va,
+            })
+        };
+        let out = go();
+        for (h, va) in cleanup.into_iter().rev() {
+            if let Some(va) = va {
+                let _ = self.unmap_dma_both(range, va);
+            }
+            let _ = self.free(self.stamp(h));
+        }
+        out
+    }
+
+    /// ★★★★★ **R34 — A CE COPY WHOSE SOURCE IS GUEST RAM, BEHIND `decoys` OTHER GUEST-RAM ROWS.**
+    ///
+    /// ⊘⊘ **This is the shape [`Self::prove_ce_copy`] CANNOT express, and that gap is why a
+    /// green raw client coexisted with a dead LLM for a whole campaign.** `prove_ce_copy`
+    /// allocates both operands with `alloc_device_local` — **vidmem** — so no engine in that
+    /// rung ever reads a guest-RAM row. `[measured w415llm]` the raw client declares **110**
+    /// guest-RAM rows against the LLM's **13 313**, and the defect that killed the LLM
+    /// (`measure_guest_ram_pin_rate` never running, so `pins=0`) was invisible to every client
+    /// rung for exactly that reason: nothing the client asked an engine to read lived there.
+    ///
+    /// This rung closes it. The source operand is `alloc_sysmem` — **guest RAM when this runs
+    /// inside the guest** — and before the copy it declares `decoys` further guest-RAM rows in
+    /// the same VAS, so the operand the engine reads sits *behind* a queue of rows that any
+    /// rate-limited backing pass must work through first.
+    ///
+    /// ## What a PASS establishes
+    ///
+    /// The bytes moved, and they moved out of a **guest-RAM** source at a VA the engine had to
+    /// resolve through the host's own page tables. ⊘ It does not establish an ordering: a pass
+    /// at `decoys = 0` and a pass at `decoys = 13000` are different claims, and only the second
+    /// speaks to scale. Run both — the pair is the measurement, either alone is not.
+    ///
+    /// ## ⚠ What a FAILURE means, and why it is worth more than the pass
+    ///
+    /// `FAULT_PDE ACCESS_TYPE_VIRT_READ` here reproduces the LLM's wall in a program with no
+    /// CUDA runtime in it, which is the whole reason to have a raw client.
+    ///
+    /// # Errors
+    /// Whatever the allocation, the mapping, or the copy refused — by its own name.
+    pub fn prove_ce_copy_from_guest_ram(
+        &mut self,
+        vas: HostHandle,
+        pattern: u32,
+        // ★★★★★ **w419 — THE ADDRESS, which is now the ONLY difference left.**
+        //
+        // `[measured w419]` R34 PASSES in the guest at depth 0 and depth 2000, byte-correct.
+        // So *"a guest-RAM CE operand does not work"* is refuted, and so is the scale story
+        // that motivated the decoys. What still differs from the LLM is the **VA**: R34's
+        // operands land at `0x1_2000_0000` (our operand space, RM-placed), and the LLM faults
+        // at `0x7cac_3360_0000` — a process-VA-shaped address ~137 TB up, which is what
+        // CUDA's unified addressing hands out.
+        //
+        // `Some(va)` dictates the placement so the two can be compared with one variable
+        // changed. ⊘ `None` keeps the byte-identical committed behaviour.
+        at: Option<u64>,
+        // ★★★★★ **w420 — THE DESTINATION'S APERTURE, and this is the LLM's actual shape.**
+        //
+        // The LLM's fault is `CE2 HUBCLIENT_CE0 … ACCESS_TYPE_VIRT_**WRITE**` — a copy engine
+        // writing its DESTINATION. That copy is `.to('cuda')`: an H2D upload, so its source is
+        // host/guest RAM and its destination is **device memory**. R34 as first written put
+        // BOTH operands in `NV01_MEMORY_SYSTEM`, so its engine never wrote to vidmem at all —
+        // the same blind spot R33 had in mirror image, and the reason R34 can be green while
+        // the LLM dies.
+        //
+        // `true` makes the destination `alloc_device_local`, which is the real H2D shape.
+        // ⊘ `false` is the byte-identical committed behaviour.
+        dst_vidmem: bool,
+        decoys: usize,
+        // ⊘⊘ `[measured w417, in the live guest]` this returned a bare `RmError` and the rung
+        // printed `refused by name: Other(31)` — `NV_ERR_INVALID_ARGUMENT` from ONE of six RM
+        // calls, with nothing saying which. A refusal that cannot be attributed to a call is
+        // not a measurement, and *"refuse by name"* means the NAME IS TRUE: `Other(31)` names
+        // the status, never the step. The step is now part of the error.
+    ) -> Result<(CeEvidence, usize), (&'static str, RmError)> {
+        const BYTES: u64 = 4096;
+        const WORDS: u64 = BYTES / 4;
+        let range = self.narrow(vas).map_err(|e| ("narrow(vas)", e))?;
+        let sentinel = !pattern;
+
+        // ★ The decoys come FIRST, so the operands below are the freshest rows in the table —
+        // the ones a bounded sample reaches last. Allocating them after would put the operand
+        // at the front of the queue and quietly make the rung easy.
+        let mut decoy_rows: Vec<(u32, u64)> = Vec::new();
+        for _ in 0..decoys {
+            let Ok(hh) = self.alloc_sysmem(BYTES) else {
+                // ⊘ Not a failure of the rung: the box ran out. Report how far we got and let
+                // the caller decide — a partial decoy queue still tests SOME depth, and
+                // pretending otherwise would discard a real measurement.
+                break;
+            };
+            #[allow(clippy::cast_possible_truncation)]
+            let h = hh.raw() as u32;
+            match self.map_dma_both(range, h, BYTES, None) {
+                Ok(va) => decoy_rows.push((h, va)),
+                Err(_) => {
+                    let _ = self.free(self.stamp(h));
+                    break;
+                }
+            }
+        }
+        let declared = decoy_rows.len();
+
+        #[allow(clippy::cast_possible_truncation)]
+        let src = self
+            .alloc_notifier_mem(BYTES)
+            .map_err(|e| ("alloc_sysmem(src) — NV01_MEMORY_SYSTEM", e))?
+            .raw() as u32;
+        #[allow(clippy::cast_possible_truncation)]
+        let dst = match if dst_vidmem {
+            // ⊘ Returns a raw `u32` already, unlike `alloc_sysmem`'s `HostHandle`.
+            self.conn.alloc_device_local(BYTES).map(|h| self.stamp(h))
+        } else {
+            self.alloc_sysmem(BYTES)
+        } {
+            Ok(h) => h.raw() as u32,
+            Err(e) => {
+                let _ = self.free(self.stamp(src));
+                for (h, va) in decoy_rows.into_iter().rev() {
+                    let _ = self.unmap_dma_both(range, va);
+                    let _ = self.free(self.stamp(h));
+                }
+                return Err((
+                    if dst_vidmem {
+                        "alloc_device_local(dst)"
+                    } else {
+                        "alloc_sysmem(dst)"
+                    },
+                    e,
+                ));
+            }
+        };
+        let mut cleanup: Vec<(u32, Option<u64>)> = vec![(src, None), (dst, None)];
+        let mut go = || -> Result<CeEvidence, (&'static str, RmError)> {
+            let src_va = self
+                .map_dma_both(range, src, BYTES, at)
+                .map_err(|e| ("map_dma_both(src) — the GUEST-RAM operand's GPU VA", e))?;
+            cleanup[0].1 = Some(src_va);
+            // ⊘⊘ **THE OFFSET FOLLOWS THE DESTINATION'S PAGE SIZE, and getting it wrong
+            // reads as a VA-RANGE LIMIT.** `[measured w420, BARE METAL]` this offset was a
+            // flat `+BYTES` (4 KiB) and the vidmem arm failed
+            // `refused at map_dma_both(dst) by name: NoMemory` at `0x7cac33600000` and
+            // `0x768327600000`, while the SYSMEM destination passed at the same addresses.
+            // The tempting reading — *"device memory cannot be mapped high"* — is not what
+            // was measured: device-local memory on this part is **64 KiB big-page**
+            // granular, which is why RM's own placement put the vidmem destination at
+            // `0x120010000` (+64 KiB) and the sysmem one at `0x120001000` (+4 KiB). A
+            // 4 KiB-aligned VA cannot host a 64 KiB-page mapping.
+            //
+            // ⚠ The rung was asking an impossible question and reporting the answer as a
+            // property of the address. Same class as R34's first two defects: the refusal was
+            // real, correct, and about the probe.
+            let dst_step = if dst_vidmem { 0x1_0000 } else { BYTES };
+            let dst_va = self
+                .map_dma_both(range, dst, BYTES, at.map(|a| a + dst_step))
+                .map_err(|e| ("map_dma_both(dst)", e))?;
+            cleanup[1].1 = Some(dst_va);
+
+            // ⊘⊘ `map_cpu_on(MapNode::Ctl, …)`, NOT `map_cpu`. `[measured w417]` a plain
+            // `map_cpu` on these handles answers `Other(31)`
+            // (`NV_ERR_INVALID_ARGUMENT`): it maps through the **gpu** node, and an
+            // `NV01_MEMORY_SYSTEM` object is mapped through the **ctl** node. That is what
+            // `MapNode::for_notifier(NotifierAperture::Sysmem)` already resolves to, and
+            // what `zero_notifier` / `read_error_notifier` have always used.
+            let (src_node, src_map) = self
+                .conn
+                .map_cpu_on(MapNode::Ctl, src, BYTES, CachePolicy::WriteBack)
+                .map_err(|e| ("map_cpu_on(Ctl, src)", e))?;
+            // ⊘ The NODE follows the APERTURE, not the variable name: sysmem maps through
+            // `Ctl`, device-local through `Gpu`. Getting this wrong is `Other(31)`, which is
+            // exactly how R34's first version failed.
+            let dst_node_kind = if dst_vidmem {
+                MapNode::Gpu
+            } else {
+                MapNode::Ctl
+            };
+            let dst_cache = if dst_vidmem {
+                CachePolicy::WriteCombining
+            } else {
+                CachePolicy::WriteBack
+            };
+            let (dst_node, dst_map) = self
+                .conn
+                .map_cpu_on(dst_node_kind, dst, BYTES, dst_cache)
+                .map_err(|e| ("map_cpu_on(dst)", e))?;
+            for i in 0..WORDS {
+                src_map
+                    .store_u32(HostOffset::new(i * 4), pattern.wrapping_add(i as u32))
+                    .map_err(|e| ("cpu store/load", region_error(&e)))?;
+                dst_map
+                    .store_u32(HostOffset::new(i * 4), sentinel)
+                    .map_err(|e| ("cpu store/load", region_error(&e)))?;
+            }
+            let before = dst_map
+                .load_u32(HostOffset::new(0))
+                .map_err(|e| ("cpu store/load", region_error(&e)))?;
+            release_fence();
+            drop(dst_map);
+            drop(dst_node);
+            drop(src_map);
+            drop(src_node);
+
+            let (submit, payload) = self
+                .ce_copy_outcome(
+                    vas,
+                    CeSubCopy {
+                        dst: dst_va,
+                        src: CeSource::Address(src_va),
+                        len: BYTES,
+                        by: CeExecutor::HostCe,
+                        guest_release: None,
+                    },
+                )
+                .map_err(|e| ("ce_copy_outcome — the CE submit itself", e))?;
+
+            let (node, second) = self
+                .conn
+                .map_cpu_on(dst_node_kind, dst, BYTES, dst_cache)
+                .map_err(|e| ("map_cpu_on(dst) readback", e))?;
+            let after = second
+                .load_u32(HostOffset::new(0))
+                .map_err(|e| ("cpu store/load", region_error(&e)))?;
+            let after_last = second
+                .load_u32(HostOffset::new((WORDS - 1) * 4))
+                .map_err(|e| ("cpu store/load", region_error(&e)))?;
+            drop(second);
+            drop(node);
+            Ok(CeEvidence {
+                before,
+                after,
+                after_last,
+                expect_after: pattern,
+                expect_after_last: pattern.wrapping_add(WORDS as u32 - 1),
+                bytes: BYTES,
+                submit,
+                payload,
+                src_va,
+                dst_va,
+            })
+        };
+        let out = go();
+        for (h, va) in cleanup.into_iter().rev() {
+            if let Some(va) = va {
+                let _ = self.unmap_dma_both(range, va);
+            }
+            let _ = self.free(self.stamp(h));
+        }
+        for (h, va) in decoy_rows.into_iter().rev() {
+            let _ = self.unmap_dma_both(range, va);
+            let _ = self.free(self.stamp(h));
+        }
+        out.map(|e| (e, declared))
+    }
+
+    /// ★★★★★ **R29 — the SAME proof as [`Self::prove_os_descriptor`], but through the
+    /// PRODUCTION verbs**: the guest-RAM plane, the port's `describe_guest_ram`, and a
+    /// fixed `map_dma` at an address the caller dictates.
+    ///
+    /// # ⊘ Why R25 does not already answer this, stated because it nearly does
+    ///
+    /// R25 settled the *ioctl*: a sealed `memfd`, described to RM, placed as asked, read by
+    /// a real engine, byte-identical —
+    /// `traces/real_ga106/rmladder_r25_osdescriptor_real_ga106.txt`. ★ That is a real result
+    /// and this rung does not re-open it. What R25 exercises is a **parallel
+    /// implementation**: it maps the block itself, into its own `Reservation`, and hands the
+    /// region straight to `alloc_os_descriptor`. Not one line of the code the VMM path runs
+    /// is on that route.
+    ///
+    /// ⇒ This rung runs the route that ships: [`crate::guestram::GuestRamPlane::honour`]
+    /// mints the mapping from a **grant**, [`kayfabe_isolate::RmBackend::describe_guest_ram`]
+    /// borrows it through `with_region` and describes it, and
+    /// [`kayfabe_isolate::RmBackend::map_gpu_va`] places it and refuses a placement it did
+    /// not get. A defect in any of the three would leave R25 green.
+    ///
+    /// ## ★★ The grant's offset is NON-ZERO, deliberately
+    ///
+    /// `offset` selects a window *inside* the block. At zero, a plane that ignored the
+    /// grant's offset entirely would map the same pages and every assertion would still
+    /// hold. Here the window is the **second** half and the first half carries a decoy word,
+    /// so a plane that mapped from zero shows up as a value mismatch rather than as nothing.
+    ///
+    /// ## ⊘ What a pass does NOT establish
+    ///
+    /// - **Not that any guest byte was pinned.** The block is a `memfd` this process made;
+    ///   it is *shaped* like guest RAM and it is not the guest's.
+    /// - **Not the cap-dropped case**, for R25's reason exactly — `euid` is printed.
+    /// - **Nothing about a guest VA.** The address is one we chose.
+    ///
+    /// # Errors
+    /// Whatever the plane, the descriptor or the placement refused — each by its own name,
+    /// so a failure attributes to one of the three.
+    pub fn prove_guest_ram_pin(
+        &mut self,
+        vas: HostHandle,
+        at: GpuVa,
+        pattern: u32,
+    ) -> Result<GuestRamPinEvidence, RmError> {
+        use kayfabe_isolate::{GuestRamGrant, RmBackend};
+        const HALF: u64 = 0x1_0000;
+        const BYTES: u64 = 2 * HALF;
+        let page = HostPageSize::query();
+
+        // 1 — the block, and the plane over it. ★ The SAME types the isolate is spawned
+        // with: `SharedRam` is what a VMM's shareable backing is, and `GuestRamPlane` is the
+        // one door guest memory comes through in the child.
+        let ram = kayfabe_linux_raw::SharedRam::create(BYTES).map_err(|e| region_error(&e))?;
+        // The VMM's own view, for writing the pattern. Two mappings of one block is exactly
+        // the shape the crossing is: the VMM writes, the isolate reads the same pages.
+        let ours = kayfabe_linux_raw::MappedRegion::map(
+            Backing::SharedFile {
+                fd: ram.as_backing_fd(),
+                offset: 0,
+            },
+            BYTES,
+            kayfabe_linux_raw::HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            page,
+        )
+        .map_err(|e| region_error(&e))?;
+        let mut image = vec![0u8; BYTES as usize];
+        for i in 0..(BYTES as usize) / 4 {
+            // ⊘ The two halves carry DIFFERENT words. A plane that ignored the grant's
+            // offset would describe the first half, and the read below would find the decoy
+            // rather than find nothing.
+            let w = if (i as u64) * 4 < HALF {
+                !pattern
+            } else {
+                pattern.wrapping_add(i as u32)
+            };
+            image[4 * i..4 * i + 4].copy_from_slice(&w.to_le_bytes());
+        }
+        ours.write_from(HostOffset::new(0), &image)
+            .map_err(|e| region_error(&e))?;
+
+        let fd = ram.dup_for_export().map_err(|e| region_error(&e))?;
+        let plane = Arc::new(crate::guestram::GuestRamPlane::new(fd, BYTES, page));
+        let restore = self.guest_ram.replace(Arc::clone(&plane));
+
+        // 2 — the PRODUCTION chain, verb for verb, in the order `VerbPlan::PinGuestRam`
+        // runs it.
+        let mut go = || -> Result<GuestRamPinEvidence, RmError> {
+            let mapped = self.map_guest_ram(GuestRamGrant::originated_by_the_vmm(
+                HALF,
+                HALF,
+                kayfabe_vmm::Prot::ReadWrite,
+            ))?;
+            let memory = match self.describe_guest_ram(mapped) {
+                Ok(m) => m,
+                Err(e) => {
+                    let _ = self.unmap_guest_ram(mapped);
+                    return Err(e);
+                }
+            };
+            let got_va = match self.map_gpu_va(vas, memory, HALF, at) {
+                Ok(v) => v,
+                Err(e) => {
+                    let _ = self.free(memory);
+                    let _ = self.unmap_guest_ram(mapped);
+                    return Err(e);
+                }
+            };
+            // 3 — ★ read the described pages back through the ISOLATE's own mapping, which
+            // is the only thing that can say the plane mapped the window the grant named.
+            // ⊘ Not the GPU's view, and it does not claim to be: R25 already proved a real
+            // engine reads these pages, and a second CE round trip here would give a rung
+            // whose subject is the ROUTE a second subject.
+            let first = plane.with_region(mapped.region.raw(), |r| {
+                let mut buf = [0u8; 4];
+                r.read_into(HostOffset::new(0), &mut buf).map(|()| buf)
+            })?;
+            let first = first.map_err(|e| region_error(&e))?;
+            let evidence = GuestRamPinEvidence {
+                asked_va: at.0,
+                got_va,
+                bytes: HALF,
+                offset: HALF,
+                first_word: u32::from_le_bytes(first),
+                expected_word: pattern.wrapping_add((HALF as u32) / 4),
+            };
+            // Undo everything. A ladder rung that leaked would poison the next one.
+            let _ = self.unmap_gpu_va(vas, got_va);
+            let _ = self.free(memory);
+            let _ = self.unmap_guest_ram(mapped);
+            Ok(evidence)
+        };
+        let out = go();
+        self.guest_ram = restore;
+        out
+    }
+
+    /// ★★★ **R25 — does memory shaped like guest RAM reach the host GPU's MMU?**
+    ///
+    /// The whole chain, once, on real hardware, with every step's failure distinguishable
+    /// from every other step's:
+    ///
+    /// ```text
+    ///   SharedRam::create            a sealed memfd — what a VMM backs guest RAM with
+    ///   Reservation + map_fixed_in   MAP_SHARED into a range we own (the GuestWindow shape)
+    ///   write a per-word pattern     ordinary CPU stores, write-back
+    ///   alloc_os_descriptor          RM pins those pages                        <- arm B
+    ///   raw_map_dma(FIXED, at)       into a host VAS at an address WE choose     <- arm C
+    ///   ce_copy(src = that VA)       a real engine reads it, real semaphore      <- arm ⊘
+    ///   read the destination back    through a mapping opened after the copy
+    /// ```
+    ///
+    /// ## ★★ Why the destination is device-local and not a second descriptor
+    ///
+    /// If both ends were the same kind of memory, a copy that moved nothing but happened to
+    /// find matching bytes would be indistinguishable from one that worked. The destination
+    /// is vidmem, pre-filled with a **sentinel** through its own mapping and read back
+    /// through a second, independent one — R17's discipline, reused because it is the part
+    /// that makes the answer non-vacuous. The bytes arriving in the destination therefore
+    /// travelled: `our CPU store -> memfd page -> RM's pin -> host GPU VAS -> engine ->
+    /// vidmem`, and only the first and last are ours.
+    ///
+    /// ## ⊘ What this CANNOT see, stated here rather than discovered later
+    ///
+    /// The VA is one **we** choose, so nothing here says whether a host GPU walking a host
+    /// VAS built from *guest* VAs would miss — and with fault delivery unbuilt, such a miss
+    /// is a hang inside UVM's replayable-fault loop rather than an error. That is a limit of
+    /// this rung, not a gap in it.
+    ///
+    /// ★★★★★ **R31 — will host RM build a channel whose command queue is memory we did
+    /// not allocate, at the guest's own numbers?**
+    ///
+    /// The blocker this rung exists for, asked of hardware with no guest in the picture: we
+    /// allocate a host channel with **its own** queue, which stays empty, while the guest
+    /// pushes into **its** queue, which our channel does not read. The fix is not a copier —
+    /// it is to name the guest's queue in the channel alloc and let the engine fetch from
+    /// it. Everything before that is unmeasurable without this answer.
+    ///
+    /// ## The three arms, and the second and third are the ones that make the first mean
+    /// something
+    ///
+    /// - **A** — a sealed `memfd` (what a VMM backs guest RAM with) → `OS_DESCRIPTOR` →
+    ///   **fixed** map at an address we dictate → a channel whose `gpFifoOffset` is an
+    ///   absolute VA *inside that mapping* and whose `gpFifoEntries` is **4096**, the count
+    ///   this bench's guest actually declares (`run_w229b_…_qemu.log`), not our 64 and not
+    ///   the fixture's 512. The channel is never scheduled and never rung.
+    /// - **B, the mapping control** — `NV_ESC_RM_MAP_MEMORY` issued *deliberately* against
+    ///   that same descriptor. G4 claims a CPU view of a guest-backed ring cannot be had;
+    ///   this is the line that tests it instead of asserting it. ⊘ It is expected to be
+    ///   **refused**, and an `Ok` is reported as a finding rather than quietly dropped.
+    /// - **C, the binding control** — the same channel alloc with `gpFifoOffset` at
+    ///   [`Self::prove_guest_ring_channel`]'s `UNBOUND_AT`, an address **nothing has ever
+    ///   been mapped at** in this freshly allocated address space. If RM refuses it, arm A's
+    ///   acceptance is a statement about the *binding*; if RM accepts it, arm A proved only
+    ///   that the ioctl was well-formed — and this rung says so out loud.
+    ///
+    /// ## ★★ Every address this prover owns is DICTATED, and it does not share an allocator
+    /// with what it observes
+    ///
+    /// W229's probe was handed the address its own ring had just been freed from and scored
+    /// a correct boundary as a violation. So: the descriptor's VA, the `gpFifoOffset` inside
+    /// it and arm C's unbound VA are three constants, 4 GiB apart, in an address space this
+    /// call allocates and frees itself; and the `gpFifoOffset` is deliberately **not**
+    /// `ring_va + `[`GPFIFO_OFFSET`], so a regression that fell back to our constant would
+    /// change the number RM was told rather than reproduce it.
+    ///
+    /// ## ⊘ What a green arm A does NOT establish
+    ///
+    /// Not that the guest's work runs — nothing writes `GP_PUT`, so the engine has nothing
+    /// to fetch, and this rung does not schedule or ring the channel at all. Not that the
+    /// pages are coherent (that is R25). Not that a *guest*-declared VA resolves in a host
+    /// VAS built from guest page tables. It establishes exactly one thing: **host RM will
+    /// build a channel over a queue it did not allocate, at an address and an entry count
+    /// its caller states.**
+    ///
+    /// # Errors
+    /// Only the setup can fail this way — the memfd, the reservation, the descriptor and
+    /// its fixed map. Every arm's own outcome is carried inside [`GuestRingEvidence`],
+    /// because a refusal from RM is this rung's *result* and not its failure.
+    pub fn prove_guest_ring_channel(
+        &mut self,
+        vas: HostHandle,
+    ) -> Result<GuestRingEvidence, RmError> {
+        /// 64 KiB, the R25 shape: large enough to hold a 4096-entry GPFIFO (32 KiB) at a
+        /// non-zero offset inside it.
+        const BYTES: u64 = 0x1_0000;
+        /// Where the descriptor is fixed-mapped. ⊘ Used by no other rung: R25 uses
+        /// `0x3_0040_0000`, `probe_guest_reachability` uses `0x7_…`, R30 its own.
+        const RING_AT: GpuVa = GpuVa(0x0000_0009_0000_0000);
+        /// The guest's `gpFifoOffset` **inside** that mapping. ★ `0x3000`, deliberately not
+        /// [`GPFIFO_OFFSET`]: the whole claim is that the layout is the caller's.
+        const GP_FIFO_IN_RING: u64 = 0x3000;
+        /// [measured 2026-08-10, `run_w229b_b66bd44_execvas_real_qemu.log`] the entry counts
+        /// this guest declares are **32**, **1024** and **4096** — the ring that carries the
+        /// doorbells we forward is the 4096 one. Never 64 (ours) and never 512 (the ABI
+        /// fixture's).
+        const GUEST_ENTRIES: u32 = 4096;
+        /// Arm C's `gpFifoOffset`: 4 GiB above the descriptor's mapping, in an address space
+        /// this call allocated, and never mapped by anything.
+        const UNBOUND_AT: u64 = 0x0000_000B_0000_0000;
+
+        let range = self.narrow(vas)?;
+        let page = HostPageSize::query();
+
+        // 1 — the backing a VMM gives guest RAM, exactly as R25 builds it.
+        let ram = kayfabe_linux_raw::SharedRam::create(BYTES).map_err(|e| region_error(&e))?;
+        let mut reservation =
+            kayfabe_linux_raw::Reservation::new(BYTES, page).map_err(|e| region_error(&e))?;
+        let placed = reservation
+            .map_fixed_in(
+                HostOffset::new(0),
+                BYTES,
+                Backing::SharedFile {
+                    fd: ram.as_backing_fd(),
+                    offset: 0,
+                },
+                kayfabe_linux_raw::HostProt::ReadWrite,
+                CachePolicy::WriteBack,
+            )
+            .map_err(|e| region_error(&e))?;
+        let region = reservation
+            .placement(placed)
+            .map_err(|e| region_error(&e))?;
+
+        // 2 — RM's own object over those pages. This is the handle the channel will be
+        // handed; nothing below allocates a ring.
+        let desc = self
+            .conn
+            .alloc_os_descriptor(region, HostOffset::new(0), BYTES)?;
+
+        // 3 — the binding. ⊘ `raw_map_dma`, not `map_dma_both`: this rung's channel lives in
+        // the guest-facing space only and submits nothing, so publishing a shadow copy would
+        // add a second mapping the measurement would then have to account for.
+        let ring_got_va = match self.conn.raw_map_dma(range, desc, BYTES, Some(RING_AT.0)) {
+            Ok(va) => va,
+            Err(e) => {
+                let _ = self.free(self.stamp(desc));
+                return Err(e);
+            }
+        };
+        let gp_fifo_va = ring_got_va + GP_FIFO_IN_RING;
+
+        // 4 — arm A. The counter is read on both sides of the ALLOC and of nothing else.
+        let cpu_before = self.cpu_map_calls();
+        let built = self.alloc_channel_over_guest_ring(
+            vas,
+            ENGINE_TYPE_COPY0,
+            GuestRing {
+                ring: kayfabe_isolate::RingProvenance::OwnObject(self.stamp(desc)),
+                ring_va: ring_got_va,
+                gp_fifo_va,
+                gp_fifo_entries: GUEST_ENTRIES,
+                // ⊘ R31 measures the RING crossing and says nothing about leg B; a probe
+                // that quietly also exercised the USERD arm would report one rung's result
+                // under another's name.
+                userd: None,
+            },
+        );
+        let cpu_after = self.cpu_map_calls();
+
+        let (channel, declared, ring_store) = match built {
+            Ok((chan, token)) => {
+                let declared = self.channel_ring_layout(chan);
+                // ⊘ A store of a value that could not be mistaken for a GPFIFO entry, at
+                // offset 0, and it must be REFUSED. This is G4 asserted rather than omitted.
+                let store = self.ring_store_u32(chan, 0, 0xBAD0_BAD0);
+                let _ = self.free(chan);
+                (Ok(token), declared, store)
+            }
+            Err(e) => (Err(e), None, Err(RmError::Other(NOT_ON_THIS_RUNG))),
+        };
+
+        // 5 — arm B, the mapping control. ★ Which line this is expected to execute:
+        // `RmConnection::map_cpu_windowed_on`'s `status_check(out.status)` — i.e. the driver
+        // answering the escape, not a bounds check of ours. An `Ok` here is dropped
+        // immediately and reported as a finding.
+        let cpu_map_of_guest_ring =
+            match self.conn.map_cpu(desc, BYTES, CachePolicy::WriteCombining) {
+                Ok((node, map)) => {
+                    drop(map);
+                    drop(node);
+                    Ok(())
+                }
+                Err(e) => Err(e),
+            };
+
+        // 6 — arm C, the binding control. Same call, same descriptor, same entry count; the
+        // ONLY thing that changes is that `gpFifoOffset` names an address nothing was mapped
+        // at. ★ Which line this is expected to execute: `RmConnection::alloc_gpfifo_channel`
+        // returning a non-zero RM status, i.e. the `Err(e)` arm of the channel alloc inside
+        // `alloc_channel_in` — after the group was built and before any CPU mapping.
+        let unbound = self
+            .alloc_channel_over_guest_ring(
+                vas,
+                ENGINE_TYPE_COPY0,
+                GuestRing {
+                    ring: kayfabe_isolate::RingProvenance::OwnObject(self.stamp(desc)),
+                    ring_va: UNBOUND_AT,
+                    gp_fifo_va: UNBOUND_AT,
+                    gp_fifo_entries: GUEST_ENTRIES,
+                    userd: None,
+                },
+            )
+            .map(|(chan, token)| {
+                let _ = self.free(chan);
+                token
+            });
+
+        let _ = self.conn.raw_unmap_dma(range, ring_got_va);
+        let _ = self.free(self.stamp(desc));
+        drop(reservation);
+        drop(ram);
+
+        Ok(GuestRingEvidence {
+            ring_asked_va: RING_AT.0,
+            ring_got_va,
+            gp_fifo_va,
+            gp_fifo_entries: GUEST_ENTRIES,
+            channel,
+            declared,
+            cpu_maps: (cpu_before, cpu_after),
+            ring_store,
+            cpu_map_of_guest_ring,
+            unbound,
+            unbound_va: UNBOUND_AT,
+        })
+    }
+
+    /// # Errors
+    /// Whatever the memfd, the mapping, the descriptor alloc, the DMA map or the copy
+    /// refuses with. An `Err` from the descriptor alloc is the falsifier's **arm B** and is
+    /// the one a caller must report by its RM status rather than as "R25 failed".
+    pub fn prove_os_descriptor(
+        &mut self,
+        vas: HostHandle,
+        at: GpuVa,
+        pattern: u32,
+        seed: OsDescSeed,
+    ) -> Result<OsDescEvidence, RmError> {
+        const BYTES: u64 = 0x1_0000;
+        const WORDS: u64 = BYTES / 4;
+        let range = self.narrow(vas)?;
+        let page = HostPageSize::query();
+        let sentinel = !pattern;
+
+        // 1 — the backing a VMM gives guest RAM: a sealed, shareable memfd.
+        let ram = kayfabe_linux_raw::SharedRam::create(BYTES).map_err(|e| region_error(&e))?;
+        // 2 — placed inside a reservation, which is the `GuestWindow` shape rather than a
+        // bare `mmap`: the address space is acquired at a kernel-chosen address first and
+        // the backing is `MAP_FIXED` into a hole we demonstrably own.
+        let mut reservation =
+            kayfabe_linux_raw::Reservation::new(BYTES, page).map_err(|e| region_error(&e))?;
+        let placed = reservation
+            .map_fixed_in(
+                HostOffset::new(0),
+                BYTES,
+                Backing::SharedFile {
+                    fd: ram.as_backing_fd(),
+                    offset: 0,
+                },
+                kayfabe_linux_raw::HostProt::ReadWrite,
+                CachePolicy::WriteBack,
+            )
+            .map_err(|e| region_error(&e))?;
+        let region = reservation
+            .placement(placed)
+            .map_err(|e| region_error(&e))?;
+
+        // 3 — the pattern, by ordinary CPU stores through a write-back mapping. Per-word so
+        // a copy that moved only a header, or a length truncated to one dword, is visible.
+        //
+        // ⊘ `OsDescSeed::Never` skips exactly this and nothing else: the memfd's pages stay
+        // as `ftruncate` left them, which is zero. Everything downstream — the descriptor,
+        // the mapping, the engine, the whole-buffer compare — runs identically, so a run
+        // that still reports a match is reporting on something other than these bytes.
+        let seeded = seed == OsDescSeed::BeforeDescribe;
+        if seeded {
+            let mut image = vec![0u8; BYTES as usize];
+            for i in 0..WORDS as usize {
+                image[4 * i..4 * i + 4]
+                    .copy_from_slice(&pattern.wrapping_add(i as u32).to_le_bytes());
+            }
+            region
+                .write_from(HostOffset::new(0), &image)
+                .map_err(|e| region_error(&e))?;
+        }
+
+        // 4 — arm B. Reported by its own `Err` so a refusal here is never read as a copy
+        // that did not land.
+        let desc = self
+            .conn
+            .alloc_os_descriptor(region, HostOffset::new(0), BYTES)?;
+
+        let dst = match self.conn.alloc_device_local(BYTES) {
+            Ok(h) => h,
+            Err(e) => {
+                let _ = self.free(self.stamp(desc));
+                return Err(e);
+            }
+        };
+        let mut cleanup: Vec<(u32, Option<u64>)> = vec![(desc, None), (dst, None)];
+        let mut go = || -> Result<OsDescEvidence, RmError> {
+            // 5 — arm C. `Some(at)` sets `DMA_OFFSET_FIXED_TRUE`; the returned VA is
+            // compared against `at` by the caller, because `Ok` is not placement.
+            // ★ W229 — `map_dma_both`, because the copy below runs on the isolate's own
+            // channel in its own address space. The FIXED ask is unchanged and is still
+            // made against the guest-facing space; the shadow follows the address RM
+            // reported, so a relocation is still this rung's finding and not hidden by it.
+            let got_va = self.map_dma_both(range, desc, BYTES, Some(at.0))?;
+            cleanup[0].1 = Some(got_va);
+            let dst_va = self.map_dma_both(range, dst, BYTES, None)?;
+            cleanup[1].1 = Some(dst_va);
+
+            let (dst_node, dst_map) = self.conn.map_cpu(dst, BYTES, CachePolicy::WriteCombining)?;
+            for i in 0..WORDS {
+                dst_map
+                    .store_u32(HostOffset::new(i * 4), sentinel)
+                    .map_err(|e| region_error(&e))?;
+            }
+            let before = dst_map
+                .load_u32(HostOffset::new(0))
+                .map_err(|e| region_error(&e))?;
+            release_fence();
+            drop(dst_map);
+            drop(dst_node);
+
+            // 6 — a real engine, waiting on its own release semaphore. No forged completion.
+            let (submit, payload) = self.ce_copy_outcome(
+                vas,
+                CeSubCopy {
+                    dst: dst_va,
+                    src: CeSource::Address(got_va),
+                    len: BYTES,
+                    by: CeExecutor::HostCe,
+                    // ⊘ `None` — a self-contained probe declares no guest completion.
+                    guest_release: None,
+                },
+            )?;
+
+            // 7 — read back through a mapping opened AFTER the copy, and compare EVERY
+            // word. ★ The whole-buffer compare is the point of arm ⊘: a coherency or
+            // cache-policy failure is not "the copy did not happen", it is *some* of the
+            // bytes being the ones we wrote. A first-and-last check would score a partial
+            // page as a pass.
+            let (node, second) = self.conn.map_cpu(dst, BYTES, CachePolicy::WriteCombining)?;
+            let mut mismatch = None;
+            // ★ Counted by the loop that does the comparing, never re-derived from `BYTES`.
+            // The first version of this rung printed `BYTES` twice and called it a result.
+            let mut bytes_compared = 0u64;
+            for i in 0..WORDS {
+                let got = second
+                    .load_u32(HostOffset::new(i * 4))
+                    .map_err(|e| region_error(&e))?;
+                let want = pattern.wrapping_add(i as u32);
+                bytes_compared += 4;
+                if got != want {
+                    mismatch = Some(WordMismatch { word: i, got, want });
+                    break;
+                }
+            }
+            let after = second
+                .load_u32(HostOffset::new(0))
+                .map_err(|e| region_error(&e))?;
+            drop(second);
+            drop(node);
+            Ok(OsDescEvidence {
+                asked_va: at.0,
+                got_va,
+                bytes: BYTES,
+                before,
+                after,
+                sentinel,
+                mismatch,
+                bytes_compared,
+                seeded,
+                submit,
+                payload,
+            })
+        };
+        let out = go();
+        for (h, va) in cleanup.into_iter().rev() {
+            if let Some(va) = va {
+                let _ = self.unmap_dma_both(range, va);
+            }
+            // ⚠ Freeing the descriptor object is what un-pins the guest-RAM pages. Dropping
+            // `reservation` below only unmaps our own view of them.
+            let _ = self.free(self.stamp(h));
+        }
+        drop(reservation);
+        drop(ram);
+        out
+    }
+
+    /// ★★★ **R32 — the framebuffer memfd JOIN: is ONE memfd, mapped TWICE, ONE memory
+    /// on BOTH sides of the GPU?**
+    ///
+    /// R25 ([`Self::prove_os_descriptor`]) measured a sealed memfd described to RM, placed
+    /// at a dictated VA and read correctly by a real copy engine. ⊘ It measured that
+    /// through **one** mapping and in **one** direction, and the framebuffer-memfd design
+    /// rests on neither of those being the limit:
+    ///
+    /// | | property | R25 | why the FB port needs it |
+    /// |---|---|---|---|
+    /// | **J1** | write through mapping **S**, describe mapping **I**, the GPU reads **S**'s bytes | ⊘ **no** — R25 writes and describes through the same [`kayfabe_linux_raw::MappedRegion`] | the shell holds the BAR view and the isolate holds the described view. They are different mappings; a design proved only through the described one has not been proved |
+    /// | **J2** | the GPU **writes** and a CPU mapping **reads** it back | ⊘ **no** — R25 is CPU-write → GPU-read only | ★ this is the direction `cuCtxCreate` is stuck on. The guest's completion semaphore is a word the **engine writes** and the **guest reads**; every byte of OS_DESCRIPTOR evidence this tree owns runs the other way |
+    ///
+    /// # The chain
+    ///
+    /// ```text
+    ///   memfd  = SharedRam::create(BYTES)              ONE sealed memfd
+    ///   S      = Reservation A + map_fixed_in(memfd)   "the shell's BAR view"
+    ///   I      = Reservation B + map_fixed_in(memfd)   "the isolate's describe view"
+    ///
+    ///   0. CPU join   : write a probe word through S, read it through I
+    ///   1. seed       : write P1 through S             (skipped by `OsDescSeed::Never`)
+    ///   2. describe I : alloc_os_descriptor(I, 0, BYTES)
+    ///   3. map        : FIXED at `at`
+    ///   4. FORWARD    : CE copies memfd -> vidmem; compare vidmem against P1   ⇒ J1
+    ///   5. reload     : write P2 into vidmem through its own CPU map
+    ///   6. REVERSE    : CE copies vidmem -> memfd; compare **through S** against P2 ⇒ J2
+    /// ```
+    ///
+    /// ★ **Step 6 reads through `S`, never through `I`.** Reading back through the mapping
+    /// that was described would leave *"did the other mapping see it"* unasked, which is
+    /// the whole of J1 and J2.
+    ///
+    /// ★ **Three patterns, all distinguishable.** Zero, `P1` and `P2` are different, so the
+    /// reverse arm's three failure modes print apart: `0` = the copy never landed; `P1` =
+    /// we are reading step 1's own write and the engine did nothing; `P2` = the engine
+    /// wrote and `S` saw it. A control that only asked *"is it P2?"* would collapse the
+    /// middle case into the first and lose the one reading that names it.
+    ///
+    /// ⊘ **The CPU join probe sits at the LAST word**, not the first, so that
+    /// [`OsDescSeed::Never`]'s forward compare still meets a pristine zero at word 0 and
+    /// breaks there. Placing it at word 0 would have made the negative control read its
+    /// own probe.
+    ///
+    /// ⊘ **Two mappings, one process.** The cross-process case adds `SCM_RIGHTS` and
+    /// nothing else about the memory; that step is *reasoned*, not measured here, and is
+    /// labelled as such wherever it is used.
+    ///
+    /// # Errors
+    /// Whatever the memfd, either mapping, the descriptor alloc, either DMA map or either
+    /// copy refuses with. An `Err` from the descriptor alloc is R25's **arm B** and must be
+    /// reported by its RM status rather than as "R32 failed".
+    pub fn prove_fb_memfd_join(
+        &mut self,
+        vas: HostHandle,
+        at: GpuVa,
+        seed: OsDescSeed,
+    ) -> Result<FbJoinEvidence, RmError> {
+        const BYTES: u64 = 0x1_0000;
+        const WORDS: u64 = BYTES / 4;
+        /// The forward pattern — what mapping `S` writes and the GPU must read.
+        const P1: u32 = 0x5EED_0001;
+        /// The reverse pattern — what the GPU writes and mapping `S` must read.
+        /// ⊘ Deliberately unrelated to [`P1`] and to zero.
+        const P2: u32 = 0xB0B0_0001;
+        /// The CPU-level join probe, at the last word so the negative control's forward
+        /// compare still meets zero at word 0.
+        const JOIN: u32 = 0x1010_FACE;
+        let range = self.narrow(vas)?;
+        let page = HostPageSize::query();
+        let sentinel = !P1;
+        let join_off = HostOffset::new(BYTES - 4);
+
+        // 1 — ONE memfd. Everything below is two views of these pages.
+        let ram = kayfabe_linux_raw::SharedRam::create(BYTES).map_err(|e| region_error(&e))?;
+
+        // 2 — TWO independent reservations, each `MAP_FIXED` over the same descriptor. Two
+        // `mmap` calls at two kernel-chosen addresses: distinct mappings by construction.
+        // ⊘ Their addresses are NOT reported, and cannot be: `MappedRegion::addr_at` is
+        // `pub(crate)` by a deliberate refusal — no representation of a host address
+        // crosses that crate boundary. Distinctness is therefore structural, and *sharing*
+        // is what this rung measures (step 3).
+        let mut res_s =
+            kayfabe_linux_raw::Reservation::new(BYTES, page).map_err(|e| region_error(&e))?;
+        let placed_s = res_s
+            .map_fixed_in(
+                HostOffset::new(0),
+                BYTES,
+                Backing::SharedFile {
+                    fd: ram.as_backing_fd(),
+                    offset: 0,
+                },
+                kayfabe_linux_raw::HostProt::ReadWrite,
+                CachePolicy::WriteBack,
+            )
+            .map_err(|e| region_error(&e))?;
+        let shell = res_s.placement(placed_s).map_err(|e| region_error(&e))?;
+
+        let mut res_i =
+            kayfabe_linux_raw::Reservation::new(BYTES, page).map_err(|e| region_error(&e))?;
+        let placed_i = res_i
+            .map_fixed_in(
+                HostOffset::new(0),
+                BYTES,
+                Backing::SharedFile {
+                    fd: ram.as_backing_fd(),
+                    offset: 0,
+                },
+                kayfabe_linux_raw::HostProt::ReadWrite,
+                CachePolicy::WriteBack,
+            )
+            .map_err(|e| region_error(&e))?;
+        let described = res_i.placement(placed_i).map_err(|e| region_error(&e))?;
+
+        // 3 — the CPU join, before RM exists in this story at all. If these two mappings
+        // were not one memory, nothing downstream could be.
+        let mut w = [0u8; 4];
+        shell
+            .read_into(join_off, &mut w)
+            .map_err(|e| region_error(&e))?;
+        let join_before = u32::from_le_bytes(w);
+        described
+            .write_from(join_off, &JOIN.to_le_bytes())
+            .map_err(|e| region_error(&e))?;
+        shell
+            .read_into(join_off, &mut w)
+            .map_err(|e| region_error(&e))?;
+        let join_after = u32::from_le_bytes(w);
+
+        // 4 — the forward seed, through **S**, per word.
+        //
+        // ⊘ `OsDescSeed::Never` skips exactly this and nothing else. Everything downstream
+        // runs identically, so a run that still reports a forward match is reporting on
+        // something other than these bytes.
+        let seeded = seed == OsDescSeed::BeforeDescribe;
+        if seeded {
+            let mut image = vec![0u8; BYTES as usize];
+            for i in 0..WORDS as usize {
+                image[4 * i..4 * i + 4].copy_from_slice(&P1.wrapping_add(i as u32).to_le_bytes());
+            }
+            shell
+                .write_from(HostOffset::new(0), &image)
+                .map_err(|e| region_error(&e))?;
+        }
+
+        // 5 — describe the OTHER mapping. This is the line the whole rung is about: RM
+        // pins `I`'s pages, and every byte compared afterwards was written or read through
+        // `S`.
+        let desc = self
+            .conn
+            .alloc_os_descriptor(described, HostOffset::new(0), BYTES)?;
+        let dst = match self.conn.alloc_device_local(BYTES) {
+            Ok(h) => h,
+            Err(e) => {
+                let _ = self.free(self.stamp(desc));
+                return Err(e);
+            }
+        };
+        let mut cleanup: Vec<(u32, Option<u64>)> = vec![(desc, None), (dst, None)];
+        let mut go = || -> Result<FbJoinEvidence, RmError> {
+            let got_va = self.map_dma_both(range, desc, BYTES, Some(at.0))?;
+            cleanup[0].1 = Some(got_va);
+            let dst_va = self.map_dma_both(range, dst, BYTES, None)?;
+            cleanup[1].1 = Some(dst_va);
+
+            // 6 — sentinel the vidmem destination, so a forward match cannot be the
+            // destination having already held the answer.
+            let (node, map) = self.conn.map_cpu(dst, BYTES, CachePolicy::WriteCombining)?;
+            for i in 0..WORDS {
+                map.store_u32(HostOffset::new(i * 4), sentinel)
+                    .map_err(|e| region_error(&e))?;
+            }
+            let fwd_before = map
+                .load_u32(HostOffset::new(0))
+                .map_err(|e| region_error(&e))?;
+            release_fence();
+            drop(map);
+            drop(node);
+
+            // 7 — FORWARD. A real engine, waiting on its own release semaphore.
+            let (fwd_submit, fwd_payload) = self.ce_copy_outcome(
+                vas,
+                CeSubCopy {
+                    dst: dst_va,
+                    src: CeSource::Address(got_va),
+                    len: BYTES,
+                    by: CeExecutor::HostCe,
+                    // ⊘ `None` — a self-contained probe declares no guest completion.
+                    guest_release: None,
+                },
+            )?;
+
+            // 8 — compare the vidmem against what **S** wrote, through a mapping opened
+            // after the copy; then reload it with P2 for the reverse arm. One mapping does
+            // both because `NV_ESC_RM_MAP_MEMORY` is one-shot per descriptor and a third
+            // node is a third failure mode for no gain.
+            let (node, map) = self.conn.map_cpu(dst, BYTES, CachePolicy::WriteCombining)?;
+            let mut fwd_mismatch = None;
+            let mut fwd_compared = 0u64;
+            for i in 0..WORDS {
+                let got = map
+                    .load_u32(HostOffset::new(i * 4))
+                    .map_err(|e| region_error(&e))?;
+                let want = P1.wrapping_add(i as u32);
+                fwd_compared += 4;
+                if got != want {
+                    fwd_mismatch = Some(WordMismatch { word: i, got, want });
+                    break;
+                }
+            }
+            let fwd_after = map
+                .load_u32(HostOffset::new(0))
+                .map_err(|e| region_error(&e))?;
+            for i in 0..WORDS {
+                map.store_u32(HostOffset::new(i * 4), P2.wrapping_add(i as u32))
+                    .map_err(|e| region_error(&e))?;
+            }
+            release_fence();
+            drop(map);
+            drop(node);
+
+            // 9 — the memfd's word 0 through **S**, immediately before the reverse copy.
+            // ★ Non-vacuity for J2, and it is the reading that separates the three failure
+            // modes: it must be P1 in the seeded arm (step 4's own write), never P2.
+            let mut w0 = [0u8; 4];
+            shell
+                .read_into(HostOffset::new(0), &mut w0)
+                .map_err(|e| region_error(&e))?;
+            let rev_before = u32::from_le_bytes(w0);
+
+            // 10 — REVERSE. The engine writes into the described memfd.
+            let (rev_submit, rev_payload) = self.ce_copy_outcome(
+                vas,
+                CeSubCopy {
+                    dst: got_va,
+                    src: CeSource::Address(dst_va),
+                    len: BYTES,
+                    by: CeExecutor::HostCe,
+                    // ⊘ `None` — a self-contained probe declares no guest completion.
+                    guest_release: None,
+                },
+            )?;
+
+            // 11 — ★★★ J2. Read every word back **through S** — the mapping RM was never
+            // told about — and compare against what the engine was given.
+            let mut image = vec![0u8; BYTES as usize];
+            shell
+                .read_into(HostOffset::new(0), &mut image)
+                .map_err(|e| region_error(&e))?;
+            let mut rev_mismatch = None;
+            let mut rev_compared = 0u64;
+            for i in 0..WORDS as usize {
+                let got = u32::from_le_bytes(
+                    image[4 * i..4 * i + 4]
+                        .try_into()
+                        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?,
+                );
+                let want = P2.wrapping_add(i as u32);
+                rev_compared += 4;
+                if got != want {
+                    rev_mismatch = Some(WordMismatch {
+                        word: i as u64,
+                        got,
+                        want,
+                    });
+                    break;
+                }
+            }
+            Ok(FbJoinEvidence {
+                asked_va: at.0,
+                got_va,
+                bytes: BYTES,
+                join_before,
+                join_after,
+                join_want: JOIN,
+                fwd_before,
+                fwd_after,
+                fwd_sentinel: sentinel,
+                fwd_mismatch,
+                fwd_bytes_compared: fwd_compared,
+                fwd_submit,
+                fwd_payload,
+                rev_before,
+                rev_first: P1,
+                rev_mismatch,
+                rev_bytes_compared: rev_compared,
+                rev_submit,
+                rev_payload,
+                seeded,
+            })
+        };
+        let out = go();
+        for (h, va) in cleanup.into_iter().rev() {
+            if let Some(va) = va {
+                let _ = self.unmap_dma_both(range, va);
+            }
+            // ⚠ Freeing the descriptor object is what un-pins the pages. Dropping the
+            // reservations below only unmaps this process's two views of them.
+            let _ = self.free(self.stamp(h));
+        }
+        drop(res_i);
+        drop(res_s);
+        drop(ram);
+        out
+    }
+
+    /// ★★★★★ **R30 — THE CPU VIEW, and which object can actually have one.**
+    ///
+    /// `docs/design/fb_cpu_view.md`. `w228` (`fb_leaf_crossing.md` §3) left the framebuffer
+    /// leaves it backed with **no CPU view, so two memories**: the host GPU reads the real
+    /// object and the guest reads the shell's `kayfabe_device::SparseFb`. This probe
+    /// measures, on real hardware, the four facts the successor rung needs and that no
+    /// amount of source-reading settles.
+    ///
+    /// ## What it establishes, in order
+    ///
+    /// 1. **The premise.** `NV_ESC_RM_MAP_MEMORY` on the object
+    ///    [`RmBackend::alloc_vidmem`] mints — the same `alloc_device_local` body, no
+    ///    `MAPPING_NO_MAP` — either succeeds or does not. ★ It is *not* enough that the
+    ///    flag is absent: absence of a refusal in the flags is not the presence of a
+    ///    mapping, and only the host can say.
+    /// 2. ★★★ **The negative control**, and it is a control over the proposition this rung
+    ///    turns on rather than over one its target cannot evaluate — `w228`'s own §0.1
+    ///    lesson. That same object is offered to [`RmBackend::export_backing`] as
+    ///    [`ExportSource::HostDeviceMemory`], which **must** answer
+    ///    [`RmError::NotExportableAsMemory`]. ⊘ **The line this is expected to execute is
+    ///    named**: the `let ... else` arm of [`RmBackend::export_backing`] in this file,
+    ///    which destructures the source and returns that error before any host call. If it
+    ///    ever returns `Ok`, decision (b)'s boundary is not where three cited driver facts
+    ///    say it is, and *that* is the finding.
+    /// 3. **The corrected join**, both directions. A [`ExportSource::Fabricated`] backing —
+    ///    the arm that is *designed* to succeed — mapped **twice**: once standing for the
+    ///    isolate's view and once for the shell's. A per-word pattern is written through
+    ///    one and read through the other, then the reverse, and the second direction runs
+    ///    **after** the descriptor exists so the answer is about pinned pages.
+    /// 4. **The GPU view**, `DMA_OFFSET_FIXED_TRUE` at `at`, compared against `at` by the
+    ///    caller because `Ok` is not placement.
+    ///
+    /// ⊘ **What it does NOT establish.** Nothing here executes on an engine, so the
+    /// guest-side mapping stands for the shell's install and is not the shell's install;
+    /// and step 1's round trip is through the *same* mapping, so it says the mapping takes
+    /// stores and loads, **not** that the card holds them. Both are named in the doc.
+    ///
+    /// # Errors
+    /// Whatever the allocation, the memfd, either mapping, the descriptor or the DMA map
+    /// refused with. ⊘ A refusal at step 1 is **not** an error — it is the measurement, and
+    /// it is reported in [`FbViewEvidence::vidmem_cpu_refusal`].
+    pub fn prove_fb_view(
+        &mut self,
+        vas: HostHandle,
+        at: GpuVa,
+        pattern: u32,
+        join: FbViewJoin,
+    ) -> Result<FbViewEvidence, RmError> {
+        const BYTES: u64 = 0x1_0000;
+        const WORDS: usize = (BYTES / 4) as usize;
+        let range = self.narrow(vas)?;
+        let page = HostPageSize::query();
+
+        // A per-word image, so a read that returned a zero fill, a truncated length or a
+        // different buffer's bytes cannot match. ⊘ Never a constant repeated: a whole-buffer
+        // compare against one repeated word passes on any single correct word.
+        let image = |base: u32| -> Vec<u8> {
+            let mut v = vec![0u8; BYTES as usize];
+            for i in 0..WORDS {
+                v[4 * i..4 * i + 4].copy_from_slice(&base.wrapping_add(i as u32).to_le_bytes());
+            }
+            v
+        };
+        let compare = |want: &[u8], got: &[u8]| -> ViewCompare {
+            let mut mismatch = None;
+            let mut words_compared = 0u64;
+            for i in 0..WORDS {
+                let w = u32::from_le_bytes(want[4 * i..4 * i + 4].try_into().unwrap_or_default());
+                let g = u32::from_le_bytes(got[4 * i..4 * i + 4].try_into().unwrap_or_default());
+                words_compared += 1;
+                if w != g && mismatch.is_none() {
+                    mismatch = Some(WordMismatch {
+                        word: i as u64,
+                        got: g,
+                        want: w,
+                    });
+                }
+            }
+            ViewCompare {
+                wrote: u32::from_le_bytes(want[0..4].try_into().unwrap_or_default()),
+                read_back: u32::from_le_bytes(got[0..4].try_into().unwrap_or_default()),
+                words_compared,
+                mismatch,
+            }
+        };
+
+        // ---- 1. THE PREMISE: is the vidmem object CPU-mappable as `alloc_vidmem` makes it?
+        let vid = self.conn.alloc_device_local(BYTES)?;
+        let mut vidmem_cpu_view = None;
+        let mut vidmem_cpu_refusal = None;
+        // ★ `WriteCombining` because this is a framebuffer object, which is the policy
+        // `map_cpu`'s own docs say the call site owes — the parameter exists precisely
+        // because one NVIDIA descriptor yields three different attributes by range.
+        match self.conn.map_cpu(vid, BYTES, CachePolicy::WriteCombining) {
+            Ok((node, region)) => {
+                let want = image(pattern);
+                for i in 0..WORDS {
+                    region
+                        .store_u32(
+                            HostOffset::new((i * 4) as u64),
+                            pattern.wrapping_add(i as u32),
+                        )
+                        .map_err(|e| region_error(&e))?;
+                }
+                let mut got = vec![0u8; BYTES as usize];
+                for i in 0..WORDS {
+                    let v = region
+                        .load_u32(HostOffset::new((i * 4) as u64))
+                        .map_err(|e| region_error(&e))?;
+                    got[4 * i..4 * i + 4].copy_from_slice(&v.to_le_bytes());
+                }
+                vidmem_cpu_view = Some(compare(&want, &got));
+                drop(region);
+                drop(node);
+            }
+            Err(e) => {
+                // ⊘ Recorded, not propagated. A refusal here is the measurement the brief
+                // asked for and the rung's most interesting outcome; turning it into an
+                // `Err` would make it indistinguishable from a broken probe.
+                vidmem_cpu_refusal = Some(match e {
+                    RmError::Other(s) => s,
+                    _ => u32::MAX,
+                });
+            }
+        }
+
+        // ---- 2. THE NEGATIVE CONTROL, on that same live object.
+        let device_export = match RmBackend::export_backing(
+            self,
+            ExportRequest {
+                source: ExportSource::HostDeviceMemory {
+                    memory: self.stamp(vid),
+                },
+                len: BYTES,
+                prot: kayfabe_vmm::Prot::ReadWrite,
+            },
+        ) {
+            Ok(_) => DeviceExportOutcome::Succeeded,
+            Err(RmError::NotExportableAsMemory { .. }) => DeviceExportOutcome::RefusedByName,
+            Err(_) => DeviceExportOutcome::RefusedOtherwise,
+        };
+        let _ = self.free(self.stamp(vid));
+
+        // ---- 3. THE CORRECTED JOIN: one fabricated backing, two mappings.
+        let backing = mint_fabricated(
+            &self.exports,
+            ExportRequest {
+                source: ExportSource::Fabricated,
+                len: BYTES,
+                prot: kayfabe_vmm::Prot::ReadWrite,
+            },
+        )?;
+        let fd = self
+            .exports
+            .lend(backing.token)
+            .map_err(|e| region_error(&e))?;
+        // The isolate's own view — the one `alloc_os_descriptor` will describe to RM.
+        let iso = kayfabe_linux_raw::MappedRegion::map(
+            Backing::SharedFile {
+                fd: std::os::fd::AsFd::as_fd(&fd),
+                offset: 0,
+            },
+            BYTES,
+            kayfabe_linux_raw::HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            page,
+        )
+        .map_err(|e| region_error(&e))?;
+        // The view standing for the shell's install of the same descriptor — or, in the
+        // control arm, private pages that are deliberately NOT the same memory.
+        let guest = kayfabe_linux_raw::MappedRegion::map(
+            match join {
+                FbViewJoin::Shared => Backing::SharedFile {
+                    fd: std::os::fd::AsFd::as_fd(&fd),
+                    offset: 0,
+                },
+                FbViewJoin::Private => Backing::PrivateAnonymous,
+            },
+            BYTES,
+            kayfabe_linux_raw::HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            page,
+        )
+        .map_err(|e| region_error(&e))?;
+
+        // Direction 1 — the ESTABLISHMENT direction: bytes the guest already wrote must be
+        // visible to what RM is about to describe. Run BEFORE the descriptor exists,
+        // because that is when the real establishment copy runs.
+        let want_g2h = image(pattern ^ 0x5a5a_5a5a);
+        guest
+            .write_from(HostOffset::new(0), &want_g2h)
+            .map_err(|e| region_error(&e))?;
+        let mut got_g2h = vec![0u8; BYTES as usize];
+        iso.read_into(HostOffset::new(0), &mut got_g2h)
+            .map_err(|e| region_error(&e))?;
+        let guest_to_host = compare(&want_g2h, &got_g2h);
+
+        // ---- 4. THE GPU VIEW.
+        let desc = self
+            .conn
+            .alloc_os_descriptor(&iso, HostOffset::new(0), BYTES)?;
+        let mut got_va = 0u64;
+        let mut mapped = false;
+        let out = (|| -> Result<(), RmError> {
+            got_va = self.conn.raw_map_dma(range, desc, BYTES, Some(at.0))?;
+            mapped = true;
+            Ok(())
+        })();
+
+        // Direction 2 — the ENGINE direction, run AFTER the pages are pinned and mapped
+        // into the GPU VAS, so the answer is about the memory RM is now holding.
+        let want_h2g = image(!pattern);
+        let host_to_guest = match iso.write_from(HostOffset::new(0), &want_h2g) {
+            Ok(()) => {
+                let mut got = vec![0u8; BYTES as usize];
+                match guest.read_into(HostOffset::new(0), &mut got) {
+                    Ok(()) => compare(&want_h2g, &got),
+                    Err(e) => return Err(region_error(&e)),
+                }
+            }
+            Err(e) => return Err(region_error(&e)),
+        };
+
+        if mapped {
+            let _ = self.conn.raw_unmap_dma(range, got_va);
+        }
+        let _ = self.free(self.stamp(desc));
+        drop(guest);
+        drop(iso);
+        drop(fd);
+        out?;
+
+        Ok(FbViewEvidence {
+            vidmem_cpu_view,
+            vidmem_cpu_refusal,
+            device_export,
+            join,
+            bytes: BYTES,
+            guest_to_host,
+            host_to_guest,
+            asked_va: at.0,
+            got_va,
+        })
+    }
+
+    /// Free exactly one RM object — the body [`RmBackend::free`] had before a channel
+    /// became six of them.
+    /// ★★★ **The largest reservation that actually succeeds**, in MiB, by halving down from
+    /// `start_mb`. This is how the guest's advertised framebuffer size should be DERIVED —
+    /// `docs/design/gpga_is_one_reserved_object.md`: *"the advertised size is derived from the
+    /// reservation that succeeded, never asserted ahead of it."*
+    ///
+    /// ⚠ The constant today is 12288 MiB, the whole card, while a real RTX 3060 reports
+    /// **11910 MiB free**. So the advertised number has never been reservable, and asserting
+    /// it would refuse every boot under this design — a fact only a probe like this one
+    /// surfaces before it costs a five-minute boot to discover.
+    ///
+    /// ⊘ Frees each successful attempt: this measures capacity, it does not take it.
+    pub fn largest_reservable_mb(&mut self, start_mb: u64) -> u64 {
+        // ⊘⊘⊘ **THIS HALVED ON FAILURE AND REPORTED THE FIRST SUCCESS AS "THE LARGEST".**
+        //
+        // `[measured w426]` it printed `GPGA_LARGEST_RESERVABLE_MB=6144 (advertised today:
+        // 12288)` on an idle 12 GiB board, and that number went into a design note saying the
+        // GPGA reservation would **halve the VRAM the guest sees**. It is not a measurement of
+        // the card. `12288` failed, `6144` succeeded, and nothing between them was ever tried
+        // — the old loop's only step was `mb /= 2`.
+        //
+        // ⚠ The round number was the tell and I wrote it down instead of chasing it. Exactly
+        // one half is what a halving search returns when the first step down succeeds; it is
+        // an artefact of the step, not a property of the board. Same class as the ledger's
+        // *"a probe's private constant is the caller's trap"*.
+        //
+        // Now: halve only to find a FLOOR, then bisect the bracket to `GRAIN`, and report the
+        // largest size actually observed to succeed.
+        const GRAIN_MB: u64 = 64;
+        let mut hi = start_mb; // known-or-assumed FAIL
+        let mut lo = 0; // known PASS (0 always "passes")
+        // Phase 1 — find any success, halving. This is the old loop, kept only for the floor.
+        let mut probe = start_mb;
+        while probe >= 256 {
+            match self.conn.reserve_gpga(probe << 20) {
+                Ok(h) => {
+                    let _ = self.free_one(h);
+                    lo = probe;
+                    break;
+                }
+                Err(_) => {
+                    hi = probe;
+                    probe /= 2;
+                }
+            }
+        }
+        if lo == 0 {
+            return 0;
+        }
+        // Phase 2 — bisect (lo, hi) to GRAIN_MB. ⊘ `hi` is a size that FAILED, `lo` one that
+        // SUCCEEDED, and the invariant holds at every step, so the returned value is always a
+        // size this process actually reserved and freed.
+        while hi - lo > GRAIN_MB {
+            let mid = lo + (hi - lo) / 2;
+            match self.conn.reserve_gpga(mid << 20) {
+                Ok(h) => {
+                    let _ = self.free_one(h);
+                    lo = mid;
+                }
+                Err(_) => hi = mid,
+            }
+        }
+        lo
+    }
+
+    fn free_one(&mut self, raw: u32) -> Result<(), RmError> {
+        // ★ The port's `free` carries no parent and RM needs one — see `Objects::parents`.
+        // A handle we never minted is refused HERE, which is stricter than the host: RM
+        // would have destroyed whatever that value names in this client.
+        let parent = self
+            .conn
+            .parent_of(raw)
+            .ok_or_else(|| RmError::BadHandle(self.stamp(raw)))?;
+        let mut arg = [0u8; Nvos00Parameters::SIZE];
+        Nvos00Parameters {
+            h_root: self.conn.client.raw(),
+            h_object_parent: parent,
+            h_object_old: raw,
+            status: 0,
+        }
+        .encode_into(&mut arg)
+        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_FREE as u8, arg.len())
+            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        self.conn
+            .ctl
+            .ioctl(req, &mut arg, &mut [])
+            .map_err(|e| ioctl_error(&e))?;
+        let out = Nvos00Parameters::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        status_check(out.status)?;
+        self.conn.forget(raw);
+        // ★ The companion (see `Objects::companions`): freeing a `Vas`'s mappable range
+        // must also free the address space it referenced. Its own failure does not mask
+        // this free's success — the object the caller named IS gone — but it is not
+        // swallowed either: it comes back as the result of the second free.
+        if let Some(companion) = self.conn.companion_of(raw) {
+            return self.free(self.stamp(companion));
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// ★★★★★ **w283 — THE PUSH MUST FIT THE SLOT, AND THIS IS THE TEST THAT WOULD HAVE
+    /// CAUGHT THE REGRESSION BEFORE A BOOT DID.**
+    ///
+    /// `[measured 2026-08-13, boot `w283_client`]` adding the guest's own release took the
+    /// push from 16 words (64 bytes — **exactly** the old slot) to 22, and every forwarded
+    /// copy refused `BAD_ENCODE` **before submission**, regressing `w282b`'s
+    /// hardware-retired copy to nothing. The length check is a runtime `if` in
+    /// `ce_copy_outcome`; nothing quantified over the encoder's own output.
+    ///
+    /// ⊘ It asserts the relation, not the number: a future method added to either arm fails
+    /// here rather than on a bench, and raising [`PUSHBUFFER_SLOT_BYTES`] is a fix this test
+    /// accepts while a hard-coded `22` would not be.
+    #[test]
+    fn every_push_this_encoder_can_emit_fits_one_pushbuffer_slot() {
+        let base = CePush {
+            class_id: probe_ce_class(),
+            src: 0x1_2000_0000,
+            dst: 0x1_2001_0000,
+            len: 4096,
+            sem_va: 0x2000,
+            payload: 1,
+            guest_release: None,
+        };
+        for (what, p) in [
+            ("no guest release", base),
+            (
+                "WITH the guest's own release",
+                CePush {
+                    guest_release: Some((0x1_2002_2000, 1)),
+                    ..base
+                },
+            ),
+        ] {
+            let words = ce_pushbuffer(p).expect("encodes");
+            let bytes = 4 * words.len() as u64;
+            assert!(
+                bytes <= PUSHBUFFER_SLOT_BYTES,
+                "{what}: the push is {bytes} bytes and a slot is {PUSHBUFFER_SLOT_BYTES}.                  ⊘ This is the w283 regression: `ce_copy_outcome` answers BAD_ENCODE — a                  name that is true of a DIFFERENT cause — and every forwarded copy is                  refused before submission"
+            );
+        }
+    }
+
+    /// ★★★ **The guest's release is the GUEST's numbers, and it RELEASES rather than
+    /// COPIES** — graded on identity, never on length.
+    ///
+    /// ⊘ A test that only counted words would pass on a second `LAUNCH_DMA` that re-ran the
+    /// copy, which is a silent doubling of every transfer, and on one naming *our* semaphore
+    /// twice, which would leave the guest polling forever with every row green.
+    #[test]
+    fn the_guest_release_names_the_guests_address_and_moves_no_bytes() {
+        let ours = 0x2000u64;
+        let theirs = 0x1_2002_2000u64;
+        let p = CePush {
+            class_id: probe_ce_class(),
+            src: 0x1_2000_0000,
+            dst: 0x1_2001_0000,
+            len: 4096,
+            sem_va: ours,
+            payload: 7,
+            guest_release: Some((theirs, 1)),
+        };
+        let w = ce_pushbuffer(p).expect("encodes");
+        let without = ce_pushbuffer(CePush {
+            guest_release: None,
+            ..p
+        })
+        .expect("encodes");
+        // ★ APPENDED, never interleaved: everything the copy needed is byte-identical, so
+        // the release cannot have changed how the bytes move.
+        assert_eq!(
+            w[..without.len()],
+            without[..],
+            "the copy must be untouched"
+        );
+        let tail = &w[without.len()..];
+        // The guest's address, split exactly as `SET_SEMAPHORE_A/B` splits it.
+        assert_eq!(tail[1], (theirs >> 32) as u32, "A = bits 48:32");
+        assert_eq!(tail[2], (theirs & 0xFFFF_FFFF) as u32, "B = bits 31:0");
+        assert_eq!(tail[3], 1, "the GUEST's literal payload, not ours");
+        // ⊘ And the launch that carries it moves NO bytes.
+        let flags = *tail.last().expect("a launch");
+        assert_eq!(
+            flags & kayfabe_abi::submit::ce::LAUNCH_TRANSFER_MASK,
+            kayfabe_abi::submit::ce::LAUNCH_TRANSFER_NONE,
+            "a release-only launch must be TRANSFER_NONE — anything else re-runs the copy"
+        );
+        assert_ne!(
+            flags & kayfabe_abi::submit::ce::LAUNCH_SEMAPHORE_RELEASE_ONE_WORD,
+            0,
+            "it must actually release"
+        );
+        // ⊘ Ours is still there and is still LAST-but-one, so `await_semaphore` covers both.
+        assert!(
+            without.contains(&((ours & 0xFFFF_FFFF) as u32)),
+            "our own semaphore must survive"
+        );
+    }
+
+    /// ★★★★★ **THE WITNESS'S WHOLE READING, as a table.**
+    ///
+    /// ⊘ Four rows for three states, and the fourth is the one that matters: `(false, true)`
+    /// — *"no hosting, but a ring was adopted"* — is a shape no production caller produces,
+    /// and it must read as `GuestRing` rather than as anything cleverer. **A ring that was
+    /// actually adopted is `GuestRing` whatever else is true**; the `hosting` discriminator
+    /// only ever splits the `None` case. Getting that backwards would report a real adoption
+    /// as *"never asked"*, which is precisely the mislabelling this rung exists to remove.
+    #[test]
+    fn the_birth_offer_reads_three_states_and_adoption_dominates() {
+        assert_eq!(BirthOffer::read(true, true), BirthOffer::Adopted);
+        assert_eq!(BirthOffer::read(false, true), BirthOffer::Adopted);
+        assert_eq!(BirthOffer::read(true, false), BirthOffer::Declined);
+        assert_eq!(BirthOffer::read(false, false), BirthOffer::NotAsked);
+        // ⊘ The words are distinct and non-empty WITHIN a limb: a boot log is grepped for
+        // them, and two states sharing a word is `w261`'s hole restated.
+        for limb in [BirthLimb::Ring, BirthLimb::Userd] {
+            let words = [
+                BirthOffer::Adopted.as_str(limb),
+                BirthOffer::Declined.as_str(limb),
+                BirthOffer::NotAsked.as_str(limb),
+            ];
+            for (i, a) in words.iter().enumerate() {
+                for b in &words[i + 1..] {
+                    assert_ne!(a, b, "two birth states print the same word");
+                }
+                assert!(!a.is_empty(), "a birth state prints nothing at all");
+            }
+        }
+        // ★★★★★ **AND THE TWO LIMBS' ADOPTION WORDS MUST DIFFER.** `guest_ring=16
+        // guest_userd=0` and `guest_ring=16 guest_userd=16` are the difference between a ring
+        // RM was told about and a channel that can run; a grep that cannot separate them
+        // reports the first as the second. ⊘ `DECLINED`/`NOT-ASKED` are deliberately SHARED —
+        // the `adopt=`/`userd=` key already disambiguates them, and duplicating the words
+        // would be two spellings of one reading.
+        assert_ne!(
+            BirthOffer::Adopted.as_str(BirthLimb::Ring),
+            BirthOffer::Adopted.as_str(BirthLimb::Userd),
+            "the two legs' firing words must be greppable apart"
+        );
+        // ★ And each carries its own reason, so a reader never has to already know the table.
+        for limb in [BirthLimb::Ring, BirthLimb::Userd] {
+            assert!(
+                BirthOffer::Declined.because(limb).contains("consulted")
+                    || BirthOffer::Declined
+                        .because(limb)
+                        .contains("was UNREADABLE"),
+                "`DECLINED` must state that the armed path RAN — that is the entire difference \
+                 between it and `NOT-ASKED`, and it is the sentence a boot is graded on"
+            );
+            assert!(
+                BirthOffer::NotAsked
+                    .because(limb)
+                    .contains("nothing was consulted"),
+                "`NOT-ASKED` must state that nothing was consulted"
+            );
+        }
+        // ★★★★★ **LEG B CANNOT FIRE WITHOUT LEG A2**, and it is the TYPE that says so, not a
+        // comment: `AdoptedGuestUserd` is reachable only through `AdoptedGuestRing::userd`,
+        // so `userd_offer` is read off `adopt.is_some_and(|a| a.userd.is_some())` and
+        // `(ring = Declined, userd = Adopted)` is unconstructible. A channel with the guest's
+        // cursor over a ring of ours would fetch from an empty queue forever.
+        assert_eq!(
+            BirthOffer::read(true, false),
+            BirthOffer::Declined,
+            "no adoption at all reads DECLINED on BOTH limbs"
+        );
+    }
+
+    /// ★★★ R2's gate, over the arm that used to be silent.
+    ///
+    /// The path this replaces was `read_version(&ctl).unwrap_or_default()` — a frontend
+    /// that did not answer produced `""` and bring-up walked on to encode 580-era offsets
+    /// against an unknown driver. The two things this asserts are that the bench's own
+    /// driver still gets through, and that **neither** silence nor a nonsense reply is a
+    /// way through. The strings are literals rather than anything derived from
+    /// `kayfabe_abi::host_driver`'s constants.
+    #[test]
+    fn r2_admits_the_benchs_host_driver_and_refuses_silence() {
+        assert_eq!(
+            host_version_gate(Some("580.159.04")).as_deref(),
+            Ok("580.159.04"),
+            "the driver this crate's encoders were transcribed from must pass R2"
+        );
+        for absent in [None, Some(""), Some("580")] {
+            let refusal = host_version_gate(absent).expect_err("R2 must refuse");
+            assert!(
+                refusal.contains("refusing rather than assuming 580"),
+                "{absent:?} must refuse rather than default: {refusal}"
+            );
+        }
+    }
+
+    /// ★★ The refusal that reaches a human is the one R2 builds, so assert **that** value
+    /// — a `BringUpError` naming the rung, carrying the prose whole.
+    ///
+    /// ⚠ `rung()` cannot be used for it: it formats with `Debug`, which would deliver the
+    /// message quoted and backslash-escaped. This asserts the shape a log actually shows.
+    #[test]
+    fn a_refused_host_driver_arrives_as_a_named_r2_failure() {
+        let detail = host_version_gate(Some("610.43.02")).expect_err("610 must refuse");
+        let e = BringUpError {
+            rung: "R2 host driver version",
+            detail,
+        };
+        let shown = e.to_string();
+        assert!(
+            shown.starts_with("RM bring-up failed at R2 host driver version: "),
+            "names the rung: {shown}"
+        );
+        assert!(shown.contains("host driver is 610.43.02"), "{shown}");
+        assert!(shown.contains("NV_CHANNEL_ALLOC_PARAMS"), "{shown}");
+        assert!(!shown.contains('\\'), "not Debug-escaped: {shown}");
+    }
+
+    /// The status map, asserted by variant — never `is_err()`.
+    #[test]
+    fn rm_statuses_map_to_the_named_variants_and_zero_is_success() {
+        assert_eq!(status_check(0), Ok(()));
+        assert_eq!(status_check(0x1B), Err(RmError::InsufficientPermissions));
+        assert_eq!(status_check(0x1A), Err(RmError::NoMemory));
+        assert_eq!(status_check(0x51), Err(RmError::NoMemory));
+        // ★ The three that must NOT be re-classified, each measured on hardware or read
+        // off the header: NOT_READY, INVALID_FLAGS (what a bad NVOS02 flag word returns),
+        // INVALID_CLIENT (what an unregistered device node returns).
+        assert_eq!(status_check(0x55), Err(RmError::Other(0x55)));
+        assert_eq!(status_check(0x29), Err(RmError::Other(0x29)));
+        assert_eq!(status_check(0x23), Err(RmError::Other(0x23)));
+    }
+
+    /// ★★ `EINTR` is the cancellation signal, and it must not be classified as a host
+    /// failure. If this ever returns `Other`, cancellation reports "the host refused" and
+    /// §7.3's *"a fault must name the truth, not the symptom"* is broken.
+    #[test]
+    fn eintr_is_interrupted_and_every_other_errno_is_not() {
+        assert_eq!(
+            ioctl_error(&RawError::Syscall {
+                call: "ioctl",
+                errno: Some(4),
+            }),
+            RmError::Interrupted
+        );
+        for errno in [1, 5, 12, 22, 25] {
+            assert_ne!(
+                ioctl_error(&RawError::Syscall {
+                    call: "ioctl",
+                    errno: Some(errno),
+                }),
+                RmError::Interrupted,
+                "errno {errno} must not read as a cancellation"
+            );
+        }
+    }
+
+    /// A distinct errno produces a distinct opaque status, so a diagnostic can tell
+    /// `ENOTTY` from `EINVAL` without this file having to enumerate them.
+    #[test]
+    fn distinct_errnos_produce_distinct_statuses() {
+        let a = ioctl_error(&RawError::Syscall {
+            call: "ioctl",
+            errno: Some(25),
+        });
+        let b = ioctl_error(&RawError::Syscall {
+            call: "ioctl",
+            errno: Some(22),
+        });
+        assert_ne!(a, b);
+        assert_eq!(a, RmError::Other(0x8000_0000 | 25));
+    }
+
+    /// The not-implemented status is never zero and never collides with the errno lane —
+    /// otherwise "this rung does not do that" would be indistinguishable from a driver
+    /// answer.
+    #[test]
+    fn the_not_on_this_rung_status_cannot_be_mistaken_for_a_driver_answer() {
+        assert_ne!(NOT_ON_THIS_RUNG, 0);
+        assert_eq!(NOT_ON_THIS_RUNG & 0x8000_0000, 0);
+        assert_eq!(
+            status_check(NOT_ON_THIS_RUNG),
+            Err(RmError::Other(NOT_ON_THIS_RUNG))
+        );
+    }
+
+    /// ★★ The engine table, by value and by variant. Getting a row wrong here is the C's
+    /// wrong-runlist bug and it does NOT fail at the alloc — it fails at the schedule, or
+    /// later, or not at all.
+    #[test]
+    fn the_engine_table_maps_exactly_the_engines_this_rung_can_place() {
+        assert_eq!(engine_type_for(EngineKind::GrCompute), Some(1));
+        assert_eq!(engine_type_for(EngineKind::GrGraphics), Some(1));
+        assert_eq!(engine_type_for(EngineKind::Ce), Some(9));
+        // ★ `None`, not a number. An engine this rung cannot place on a runlist must be a
+        // refusal: `Some(0)` would be `engineType = 0`, which is the exact bug.
+        assert_eq!(engine_type_for(EngineKind::NvEnc), None);
+        assert_eq!(engine_type_for(EngineKind::NvDec), None);
+        assert_eq!(engine_type_for(EngineKind::Other), None);
+    }
+
+    /// ★ A copy channel and a graphics channel must not ask for the same **engine type**,
+    /// even though — measured on this part — they land on the same runlist. The two facts
+    /// are independent, and conflating them is how "they end up on runlist 0 anyway"
+    /// becomes a licence to send one number for both.
+    #[test]
+    fn copy_and_graphics_request_different_engine_types() {
+        assert_ne!(
+            engine_type_for(EngineKind::Ce),
+            engine_type_for(EngineKind::GrCompute)
+        );
+        assert_ne!(engine_type_for(EngineKind::Ce), Some(ENGINE_TYPE_GRAPHICS));
+    }
+
+    /// The ring geometry: the GPFIFO must fit between its own offset and the semaphore,
+    /// and every piece must be inside the object. An arithmetic slip here puts the
+    /// semaphore inside the ring, which corrupts entries with payloads.
+    #[test]
+    fn the_ring_geometry_does_not_overlap_itself_or_leave_the_object() {
+        let fifo_bytes = u64::from(GPFIFO_ENTRIES) * 8;
+        assert!(GPFIFO_OFFSET + fifo_bytes <= RING_OBJECT_BYTES);
+        assert!(
+            GPFIFO_ENTRIES.is_power_of_two(),
+            "RM requires a power of two"
+        );
+    }
+
+    /// ★★★★★ **w287 — USERD now shares the ring object, so the geometry has a fourth
+    /// tenant.** Every one of these was true by inspection when it was written; the test
+    /// exists because *"0x3000 is obviously free"* is exactly the sentence that stops being
+    /// true when someone grows the pushbuffer area.
+    #[test]
+    fn userd_fits_inside_the_ring_object_without_touching_the_other_three_regions() {
+        // The 512-byte slot RM's `>> 9` addresses, and the alignment RM does NOT validate.
+        // ★★ `const { assert!(…) }`, not `assert!(…)`. Every operand here is a `const`,
+        // so clippy's `assertions_on_constants` is right that a runtime assert is the wrong
+        // instrument — and the fix STRENGTHENS the gate rather than silencing it: a layout
+        // that overlaps now fails to COMPILE, in every build, instead of failing in a test
+        // somebody has to remember to run. ⊘ The messages are kept; a const assert prints
+        // them at the compile error.
+        const {
+            assert!(
+                USERD_OFFSET_IN_RING.is_multiple_of(USERD_ALIGNMENT),
+                "RM truncates a misaligned userdOffset silently (kernel_channel_gv100.c:208)"
+            );
+            assert!(USERD_OFFSET_IN_RING + USERD_ALIGNMENT <= RING_OBJECT_BYTES);
+            // ⊘ Above the semaphore, not merely different from it.
+            assert!(
+                USERD_OFFSET_IN_RING >= SEMAPHORE_OFFSET + 8,
+                "USERD must not overlap the semaphore the copy releases into"
+            );
+            // And clear of the pushbuffer slots and the GPFIFO that indexes them.
+            assert!(PUSHBUFFER_OFFSET + PUSHBUFFER_SLOTS * PUSHBUFFER_SLOT_BYTES <= GPFIFO_OFFSET);
+            assert!(
+                GPFIFO_OFFSET + GPFIFO_ENTRIES as u64 * 8 <= USERD_OFFSET_IN_RING,
+                "the GPFIFO must end before USERD begins"
+            );
+        }
+        // ★ The containment test on the consuming side — `kayfabe-fwd`'s
+        // `adopted_guest_userd`, `offset + 512 > len` — must ACCEPT this layout. This is the
+        // whole point of the rung, asserted as arithmetic rather than hoped for in a boot.
+        const {
+            assert!(
+                USERD_OFFSET_IN_RING + 512 <= RING_OBJECT_BYTES,
+                "a USERD our own client declares must pass adopted_guest_userd's containment test"
+            );
+        }
+    }
+
+    /// ★★★ A class id that is **deliberately not a real one** (`#156`).
+    ///
+    /// [`ce_pushbuffer`]'s contract is that `SET_OBJECT` carries *whatever class the host
+    /// profile named*. Feeding it the profile's own answer cannot tell "carried it" from
+    /// "hardcoded it" — the encoder would be acting as its own observer, and a mutation
+    /// that replaced the parameter with a constant would survive. A value no NVIDIA part
+    /// defines can only appear in `w[1]` by having been passed in.
+    const NOT_A_REAL_CLASS: u32 = 0x0000_C0DE;
+
+    /// The same value, wearing the **role** [`CePush::class_id`] now demands (`#166`).
+    ///
+    /// ★ Note what has to be written to get here: `CeObjectClass::new`. There is no way
+    /// to hand [`ce_pushbuffer`] a channel or usermode class any more — the field's type
+    /// refuses it — so the test can go on checking the *value* is carried while rustc
+    /// checks the *role* is right at every production call site.
+    fn probe_ce_class() -> CeObjectClass {
+        CeObjectClass::new(ClassId(NOT_A_REAL_CLASS))
+    }
+
+    /// ★★ The copy-engine pushbuffer, word for word. This is the only part of rung 4 that
+    /// can be checked without a GPU, and the two things it pins are the two that failed
+    /// silently on hardware: **which subchannel** every header names, and that the source
+    /// and destination do not swap.
+    #[test]
+    fn the_ce_pushbuffer_addresses_the_copy_engine_subchannel_and_does_not_swap_operands() {
+        let w = ce_pushbuffer(CePush {
+            class_id: probe_ce_class(),
+            src: 0x1234_5678_9ABC,
+            dst: 0x0000_DEAD_0000,
+            len: 4096,
+            sem_va: 0x7_0000_2000,
+            payload: 7,
+            guest_release: None,
+        })
+        .expect("encodable");
+
+        // Every header names subchannel 4 — bits 15:13. A header on subchannel 0 is the
+        // measured silent failure (the entry is fetched and nothing happens).
+        for (i, word) in w.iter().enumerate() {
+            if *word >> 29 == 1 {
+                assert_eq!(
+                    (word >> 13) & 0x7,
+                    CE_SUBCHANNEL,
+                    "header at {i} is on the wrong subchannel"
+                );
+            }
+        }
+        // SET_OBJECT carries the CLASS, and the addresses go out in-then-out, hi-then-lo.
+        assert_eq!(
+            w[1], NOT_A_REAL_CLASS,
+            "SET_OBJECT must carry the class the PROFILE named, not one this encoder knows"
+        );
+        assert_eq!(w[3], 0x1234);
+        assert_eq!(w[4], 0x5678_9ABC, "source low");
+        assert_eq!(w[5], 0x0000);
+        assert_eq!(w[6], 0xDEAD_0000, "destination low");
+        assert_eq!(w[8], 4096, "LINE_LENGTH_IN is a BYTE count");
+        assert_eq!(w[9], 1, "LINE_COUNT");
+        // ★ The CE semaphore is A = HIGH, B = LOW — the REVERSE of the host-FIFO
+        // semaphore's LO/HI order, and swapping them writes the payload into a page 4 GiB
+        // away that we happen to own.
+        assert_eq!(w[11], 0x7, "SET_SEMAPHORE_A is the HIGH bits");
+        assert_eq!(w[12], 0x0000_2000, "SET_SEMAPHORE_B is the LOW bits");
+        assert_eq!(w[13], 7);
+        // The launch flags: virtual on both sides, and a one-word release.
+        let flags = w[15];
+        assert_eq!(flags & 0b11, ce::LAUNCH_TRANSFER_NON_PIPELINED);
+        assert_ne!(flags & ce::LAUNCH_SEMAPHORE_RELEASE_ONE_WORD, 0);
+        assert_eq!(flags & (1 << 12), 0, "SRC_TYPE must stay VIRTUAL");
+        assert_eq!(flags & (1 << 13), 0, "DST_TYPE must stay VIRTUAL");
+        assert_eq!(flags & (1 << 9), 0, "MULTI_LINE must stay disabled");
+    }
+
+    /// An address the methods cannot express is refused, never truncated. A truncated
+    /// destination is a copy into somebody else's page and it succeeds.
+    #[test]
+    fn an_inexpressible_copy_operand_is_refused() {
+        let base = CePush {
+            class_id: probe_ce_class(),
+            src: 0,
+            dst: 0,
+            len: 4,
+            sem_va: 0,
+            payload: 1,
+            guest_release: None,
+        };
+        for bad in [
+            CePush {
+                dst: 1 << 49,
+                ..base
+            },
+            CePush {
+                src: 1 << 49,
+                ..base
+            },
+            CePush {
+                sem_va: 1 << 49,
+                ..base
+            },
+            // A semaphore address that is not dword-aligned: the low bits are not part of
+            // the field, so the release would land somewhere else entirely.
+            CePush {
+                sem_va: 0x1002,
+                ..base
+            },
+        ] {
+            assert_eq!(
+                ce_pushbuffer(bad).err(),
+                Some(RmError::Other(BAD_ENCODE)),
+                "{bad:?} must be refused"
+            );
+        }
+        // …and the whole pushbuffer fits in one slot, which the submit path asserts too.
+        let w = ce_pushbuffer(base).expect("encodable");
+        assert!(4 * w.len() as u64 <= PUSHBUFFER_SLOT_BYTES);
+    }
+
+    /// ★★★ The evidence bar, as a predicate. `landed` must require BOTH facts: a
+    /// semaphore alone could be stale and a `GP_GET` alone means the methods did nothing.
+    #[test]
+    fn a_submission_has_landed_only_when_both_facts_hold() {
+        let ok = SubmitOutcome {
+            semaphore: 0xBEEF,
+            gp_get: 1,
+            gp_put: 1,
+        };
+        assert!(ok.landed(0xBEEF));
+        assert!(
+            !ok.landed(0xBEE0),
+            "a different payload is not this submission"
+        );
+        // The `userdOffset` failure shape, measured on hardware: everything legal, nothing
+        // happened, no error anywhere.
+        let userd_bug = SubmitOutcome {
+            semaphore: 0,
+            gp_get: 0,
+            gp_put: 1,
+        };
+        assert!(!userd_bug.landed(0xBEEF));
+        // Fetched, but the methods evaporated — the wrong-subchannel shape.
+        let fetched_only = SubmitOutcome {
+            semaphore: 0,
+            gp_get: 1,
+            gp_put: 1,
+        };
+        assert!(!fetched_only.landed(0xBEEF));
+    }
+
+    /// ★★ A copy is only proven when the destination CHANGED — the `before` reading is
+    /// what makes it non-vacuous, and a destination that already held the answer must not
+    /// pass.
+    #[test]
+    fn a_copy_into_a_destination_that_already_matched_is_not_evidence() {
+        let landed = SubmitOutcome {
+            semaphore: 3,
+            gp_get: 1,
+            gp_put: 1,
+        };
+        let good = CeEvidence {
+            before: 0xFFFF_FFFF,
+            after: 0xC0FF_EE00,
+            after_last: 0xC0FF_F1FF,
+            expect_after: 0xC0FF_EE00,
+            expect_after_last: 0xC0FF_F1FF,
+            bytes: 4096,
+            submit: landed,
+            payload: 3,
+            src_va: 0x1_2000_0000,
+            dst_va: 0x1_2001_0000,
+        };
+        assert!(good.copied());
+        assert!(
+            !CeEvidence {
+                before: 0xC0FF_EE00,
+                ..good
+            }
+            .copied(),
+            "the destination already held the answer"
+        );
+        assert!(
+            !CeEvidence {
+                after_last: 0,
+                ..good
+            }
+            .copied(),
+            "a copy that moved only the first word is not a copy"
+        );
+        assert!(
+            !CeEvidence {
+                submit: SubmitOutcome {
+                    semaphore: 0,
+                    ..landed
+                },
+                ..good
+            }
+            .copied(),
+            "bytes without a release is a different question, not a pass"
+        );
+    }
+
+    /// ★★ The two local refusal statuses must be distinguishable from each other AND
+    /// from anything the driver can say. A bounds error reported as `NOT_ON_THIS_RUNG`
+    /// reads as "unimplemented", which is how a real out-of-range access gets triaged as
+    /// a missing feature.
+    #[test]
+    fn a_bounds_refusal_is_not_the_unimplemented_status() {
+        assert_ne!(NOT_IN_THIS_OBJECT, NOT_ON_THIS_RUNG);
+        assert_ne!(NOT_IN_THIS_OBJECT, 0);
+        assert_eq!(NOT_IN_THIS_OBJECT & 0x8000_0000, 0);
+        assert_eq!(
+            region_error(&RawError::OutOfRange {
+                offset: 0x1_0000,
+                len: 4,
+                object_len: 0x1_0000,
+            }),
+            RmError::Other(NOT_IN_THIS_OBJECT)
+        );
+        // …and a syscall failure through the SAME function still classifies as one, so the
+        // split did not swallow the errno lane.
+        assert_eq!(
+            region_error(&RawError::Syscall {
+                call: "mmap",
+                errno: Some(4),
+            }),
+            RmError::Interrupted
+        );
+        // ★ …and the THIRD one, which a bite produced: an attribute the backing cannot
+        // have is not a bound. All three local statuses are pairwise distinct and none
+        // collides with the errno lane, so a triage can tell them apart without reading
+        // this file.
+        assert_eq!(
+            region_error(&RawError::CachePolicyUnattainable {
+                requested: kayfabe_linux_raw::CachePolicy::WriteCombining,
+                attainable: kayfabe_linux_raw::CachePolicy::WriteBack,
+                backing: "a device file",
+            }),
+            RmError::Other(MAPPING_ATTRIBUTE_REFUSED)
+        );
+        // ★ Quantified over the LIST, and the list is every local status this file
+        // defines: shortening it would weaken the gate with no red test. Adding a status
+        // without adding it here is the mistake, and it is a mistake in one place.
+        let all = [
+            NOT_ON_THIS_RUNG,
+            NOT_IN_THIS_OBJECT,
+            MAPPING_ATTRIBUTE_REFUSED,
+            BAD_ENCODE,
+            NOT_A_WORK_TOKEN,
+            CE_NEVER_RETIRED,
+        ];
+        for (i, a) in all.iter().enumerate() {
+            assert_ne!(*a, 0, "no local status may be success");
+            assert_eq!(
+                a & 0x8000_0000,
+                0,
+                "no local status may enter the errno lane"
+            );
+            for b in all.iter().skip(i + 1) {
+                assert_ne!(a, b, "two local statuses collide");
+            }
+        }
+    }
+
+    /// Every isolate mints from the same base — the property that makes two isolates'
+    /// handles genuinely collide, which the mock had to be taught to imitate.
+    #[test]
+    fn the_first_handle_is_the_same_for_every_isolate() {
+        assert_eq!(FIRST_HANDLE, 0xCAFE_0001);
+        assert_ne!(FIRST_HANDLE, REQUESTED_CLIENT_HANDLE);
+    }
+
+    /// The eight bytes a CE object declares, as the guest sends them.
+    fn ce_params(version: u32, engine_type: u32) -> Vec<u8> {
+        let mut b = vec![0u8; CeAllocParams::SIZE];
+        CeAllocParams {
+            version,
+            engine_type,
+        }
+        .encode_into(&mut b)
+        .expect("encode");
+        b
+    }
+
+    /// ★★★★★ **§16.106 — the channel follows the OBJECT'S declared copy engine.**
+    ///
+    /// The 14 refusals of `w250`/`w251`/`w254` are `COPY0` (ours, runlist 0) against
+    /// `COPY2`/`COPY3` (the guest's, runlists 1 and 2). This is the decision that removes
+    /// them, tested where it is made.
+    #[test]
+    fn a_ce_channel_takes_the_engine_the_guest_declared() {
+        let copy2 = engine_type_copy(2).expect("COPY2");
+        let copy3 = engine_type_copy(3).expect("COPY3");
+        for (declared, want) in [(copy2, copy2), (copy3, copy3)] {
+            let params = ce_params(CeAllocParams::VERSION_1, declared);
+            let hosting = HostedObject {
+                class: ClassId(0xc7b5),
+                params: &params,
+            };
+            assert_eq!(
+                declared_channel_engine_type(EngineKind::Ce, Some(hosting)),
+                Some(want),
+                "the declared ordinal reaches the channel unchanged"
+            );
+            // ⊘ …and the number it replaces is the one the host driver called `current`.
+            assert_eq!(engine_type_for(EngineKind::Ce), Some(ENGINE_TYPE_COPY0));
+            assert_ne!(want, ENGINE_TYPE_COPY0);
+        }
+    }
+
+    /// ★★ VERSION_0 numbers the same field as a bare **instance index**, so the two
+    /// versions must not be read through one lens
+    /// (`ogkm-580: kernel_ce_context.c:115-125`).
+    #[test]
+    fn version_zero_is_an_index_and_version_one_is_an_ordinal() {
+        let by_index = ce_params(CeAllocParams::VERSION_0, 2);
+        let by_ordinal = ce_params(
+            CeAllocParams::VERSION_1,
+            engine_type_copy(2).expect("COPY2"),
+        );
+        let of = |p: &[u8]| {
+            declared_channel_engine_type(
+                EngineKind::Ce,
+                Some(HostedObject {
+                    class: ClassId(0xc7b5),
+                    params: p,
+                }),
+            )
+        };
+        assert_eq!(of(&by_index), of(&by_ordinal), "both name COPY2");
+        // ⊘ And the same bytes under the other version name a DIFFERENT engine — which is
+        // why the version is decoded rather than assumed.
+        assert_eq!(of(&ce_params(CeAllocParams::VERSION_1, 2)), None);
+    }
+
+    /// ★★★ **The fall-through is byte-identical to the old behaviour**, and it must be:
+    /// every arm that cannot name an engine from the guest's own declaration returns
+    /// `None` so `alloc_channel` reaches `engine_type_for` exactly as before.
+    ///
+    /// ⊘ `None` here is *"nothing was declared"*, never *"copy engine 0"* — the two
+    /// arrive at the same ordinal by different routes and only one of them is a claim.
+    #[test]
+    fn nothing_declarable_falls_through_untouched() {
+        let good = ce_params(
+            CeAllocParams::VERSION_1,
+            engine_type_copy(2).expect("COPY2"),
+        );
+        let host = |engine, params: &[u8]| {
+            declared_channel_engine_type(
+                engine,
+                Some(HostedObject {
+                    class: ClassId(0xc7b5),
+                    params,
+                }),
+            )
+        };
+        // A GR channel that later takes a CE object binds it as GRCE and must NOT move —
+        // these are the 8 forwards that already succeed.
+        assert_eq!(host(EngineKind::GrCompute, &good), None);
+        assert_eq!(host(EngineKind::GrGraphics, &good), None);
+        // No object at all (the doorbell materialization).
+        assert_eq!(declared_channel_engine_type(EngineKind::Ce, None), None);
+        // Short, absent, unknown-version, and not-a-copy-ordinal params.
+        assert_eq!(host(EngineKind::Ce, &[]), None);
+        assert_eq!(host(EngineKind::Ce, &[1, 0, 0]), None);
+        assert_eq!(host(EngineKind::Ce, &ce_params(7, 11)), None);
+        assert_eq!(
+            host(EngineKind::Ce, &ce_params(CeAllocParams::VERSION_1, 1)),
+            None,
+            "ENGINE_TYPE_GRAPHICS is not a copy engine and is never read as one"
+        );
+    }
+}

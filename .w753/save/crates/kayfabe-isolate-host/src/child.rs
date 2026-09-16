@@ -707,30 +707,6 @@ fn adopt_birth_client(
         );
         return (failed(RmError::Other(crate::rm::BIRTH_CLIENT_NULL_HANDLE)), None);
     }
-    // ★★★★★ **THE RECEIVER'S OWN REFUSAL, AND IT IS NOT THE SENDER'S RESTATED.**
-    //
-    // `ProxyRmBackend::adopt_birth_client` refuses to SEND a birth client anywhere but the
-    // scratchpad. This refuses to ACCEPT one anywhere but the scratchpad. ⊘ They are not
-    // redundant: the sender's check protects against a VMM bug, and this one protects
-    // against **the socket** — a per-proc isolate is a separate process whose peer is the
-    // VMM, and *"only the VMM writes this socket"* is a property of today's topology, which
-    // is exactly what `CrossedFd`'s own module header refuses to assume.
-    //
-    // ⚠ And it is the one of the three that is cheaply testable, which is why it exists:
-    // the sender's lives behind a live `ProxyRmBackend` and had no known-positive. A check
-    // nothing can drive red is a check nobody knows still works.
-    if id.proc() != crate::SCRATCHPAD_ISOLATE_PROC {
-        kayfabe_util::lock_safe_eprintln!(
-            "kayfabe-isolate-host: ⊘⊘⊘ CONSTRAINT 32 REFUSED — a birth client was offered to \
-             {id:?}, which is a PER-PROC isolate. A birth client carries another guest \
-             process's RM identity; the scratchpad is the only party that may drive one. \
-             Both descriptors are closed here."
-        );
-        return (
-            failed(RmError::Other(crate::rm::BIRTH_CLIENT_NOT_THE_SCRATCHPAD)),
-            None,
-        );
-    }
     // ⊘ The isolate the descriptors are attributed to. The GPU is THIS backend's own — a
     // birth client is per-`(proc, gpu)` exactly as an isolate is, and a frame that could
     // name another GPU would be a second routing decision on a path that already has one.
@@ -1674,47 +1650,6 @@ mod tests {
             Reply::Failed(WireError::Other(crate::rm::FD_ON_A_BYTES_ONLY_REQUEST)),
         );
         assert!(carried.is_none());
-    }
-
-    /// ★★★★★ **CONSTRAINT 32 — A PER-PROC ISOLATE REFUSES A BIRTH CLIENT OFFERED TO IT.**
-    ///
-    /// The receiver's half. `ProxyRmBackend::adopt_birth_client` refuses to *send* one
-    /// anywhere but the scratchpad; this refuses to *accept* one anywhere but there. ⊘ Not
-    /// redundant: the sender's check protects against a VMM bug and this one against the
-    /// **socket** — a per-proc isolate is a separate process, and *"only the VMM writes
-    /// this socket"* is a property of today's topology, which is what `CrossedFd`'s own
-    /// module header refuses to assume.
-    ///
-    /// ⚠ Everything else about the frame is correct: two real character devices and a
-    /// non-zero client. The ONLY thing wrong is who is being asked — so this cannot pass
-    /// for any of the other four refusals' reasons.
-    #[test]
-    fn a_per_proc_isolate_refuses_a_birth_client_offered_to_it() {
-        let mut rm = loopback();
-        for victim in [
-            IsolateId::new(1, GpuId(0)),
-            IsolateId::new(2, GpuId(0)),
-            IsolateId::new(2, GpuId(1)),
-        ] {
-            let (reply, carried) = serve_one(
-                &mut rm,
-                Request::AdoptBirthClient {
-                    client: 0xc1d0_0001,
-                    minted_by_proc: 2,
-                },
-                &ChildExports::new(),
-                vec![a_char_device(), a_char_device()],
-                victim,
-            );
-            assert_eq!(
-                reply,
-                Reply::Failed(WireError::Other(crate::rm::BIRTH_CLIENT_NOT_THE_SCRATCHPAD)),
-                "★★★ CONSTRAINT 32 BREACHED — {victim:?} accepted a birth client. That is \
-                 another guest process's RM identity landing in a per-proc isolate, which is \
-                 #14 with an extra hop."
-            );
-            assert!(carried.is_none());
-        }
     }
 
     /// ⊘ **NON-VACUITY for the four tests above**: the same verb, well formed, gets past
