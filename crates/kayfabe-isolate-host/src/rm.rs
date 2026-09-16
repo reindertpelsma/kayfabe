@@ -226,6 +226,10 @@ pub mod local_status {
     /// the compiler — see the module docs for why both gates exist.
     pub const ALL: &[(&str, u32)] = &[
         ("NOT_ON_THIS_RUNG", super::NOT_ON_THIS_RUNG),
+        ("ABI_ENCODE_FAILED", super::ABI_ENCODE_FAILED),
+        ("IOCTL_NUMBER_UNBUILDABLE", super::IOCTL_NUMBER_UNBUILDABLE),
+        ("ABI_DECODE_FAILED", super::ABI_DECODE_FAILED),
+        ("IMPOSSIBLE_CONVERSION", super::IMPOSSIBLE_CONVERSION),
         ("FB_JOIN_NO_TABLE", super::FB_JOIN_NO_TABLE),
         ("FB_ALIAS_NO_JOIN", super::FB_ALIAS_NO_JOIN),
         ("ADOPT_NOT_THE_SCRATCHPAD", super::ADOPT_NOT_THE_SCRATCHPAD),
@@ -326,6 +330,58 @@ pub mod local_status {
         ALL.iter().find(|(_, v)| *v == value).map(|(n, _)| *n)
     }
 }
+
+/// ★★★★★ **w755 — `Other(19270)` ON THE MAP PATH WAS AMBIGUOUS SEVEN WAYS, NOT TWO.**
+///
+/// ⊘⊘⊘ **This is the THIRD time in one day that one integer carried many meanings, and the
+/// first two fixes did not reach it.** Fix one: `0x4B46` was two CONSTANTS (four such
+/// collisions). Fix two: `child::failed` FLATTENED `RmError::PlacementRefused` into
+/// `NOT_ON_THIS_RUNG`. Both landed — and `Other(19270)` was *still* not diagnostic, because
+/// `HostRmBackend::raw_map_dma_slice` and B's `map_dma_slice` **each** report
+/// [`NOT_ON_THIS_RUNG`] from three more places of their own:
+///
+/// ```text
+///   .encode_into(&mut arg)      .map_err(|_| Other(NOT_ON_THIS_RUNG))   <- ABI encode
+///   ioctl::readwrite(..)        .map_err(|_| Other(NOT_ON_THIS_RUNG))   <- ioctl number
+///   Nvos46Parameters::decode(..).map_err(|_| Other(NOT_ON_THIS_RUNG))   <- ABI decode
+/// ```
+///
+/// ⇒ **seven distinct causes, one integer**, on the exact path whose 2 154 refusals this
+/// session set out to read. ⚠ **And I over-claimed on the strength of it**: the w755 commit
+/// titled *"THE WALL IS CONSTRAINT 28"* named ONE of the seven as though the collision fix
+/// had made it the only candidate. It had not. The correct statement was *"constraint 28 is
+/// now READABLE if it is the cause"*.
+///
+/// ★ Across `rm.rs` the same three `map_err`s appear **71 times**. Split by what actually
+/// failed, because *"the struct would not encode"*, *"the ioctl number would not build"* and
+/// *"RM's reply would not decode"* are three different bugs in three different places, and
+/// the third one means **the driver answered and we could not read it** — the only one of the
+/// three that is about the host at all.
+///
+/// `0x4B63`–`0x4B66` are `"Kc"`–`"Kf"`.
+pub const ABI_ENCODE_FAILED: u32 = 0x4B63;
+
+/// ★★★ The ioctl **number** could not be built for this verb — a length that does not fit
+/// `_IOC_SIZE`. ⊘ Distinct from [`ABI_ENCODE_FAILED`]: the buffer was fine and the *request*
+/// is malformed, which is a constant in this crate being wrong rather than a struct being
+/// mis-shaped. See [`ABI_ENCODE_FAILED`] for why all three were one number until w755.
+pub const IOCTL_NUMBER_UNBUILDABLE: u32 = 0x4B64;
+
+/// ★★★★★ **RM's REPLY WOULD NOT DECODE — and this is the one of the three that is about the
+/// HOST.**
+///
+/// ⊘ The ioctl **succeeded**. The driver wrote a reply and this crate's transcription of the
+/// struct could not read it back — a size or layout disagreement with the running driver,
+/// i.e. exactly the `a_capture_derived_table_expires_as_a_vendor_regression` shape. Reporting
+/// it as *"this rung does not implement that"* pointed every reader at our own completeness
+/// when the finding is a **driver-version mismatch**.
+pub const ABI_DECODE_FAILED: u32 = 0x4B65;
+
+/// ⊘ A conversion Rust makes us handle that cannot fail in practice — `CString::new` on a
+/// device-node name, `try_into` on a fixed 4-byte slice. Named rather than folded into
+/// [`ABI_ENCODE_FAILED`] so a boot log never shows an "encode failure" for something that is
+/// not an encode, and so that if one of these EVER fires it is unmistakable.
+pub const IMPOSSIBLE_CONVERSION: u32 = 0x4B66;
 
 /// The opaque status a verb this rung does not implement reports.
 ///
@@ -437,8 +493,10 @@ const REQUESTED_CLIENT_HANDLE: u32 = 0xCAFE_0000;
 /// has been in front of a real driver.
 mod own_client {
     use super::{
-        CharDevice, Indirect, NOT_ON_THIS_RUNG, NV_ESC_RM_ALLOC, NV_IOCTL_MAGIC, NV01_ROOT_CLIENT,
-        Nvos21Parameters, REQUESTED_CLIENT_HANDLE, RmError, ioctl, ioctl_error, status_check,
+        ABI_DECODE_FAILED, ABI_ENCODE_FAILED, CharDevice, IMPOSSIBLE_CONVERSION,
+        IOCTL_NUMBER_UNBUILDABLE, Indirect, NOT_ON_THIS_RUNG, NV_ESC_RM_ALLOC, NV_IOCTL_MAGIC,
+        NV01_ROOT_CLIENT, Nvos21Parameters, REQUESTED_CLIENT_HANDLE, RmError, ioctl, ioctl_error,
+        status_check,
     };
 
     /// **The client handle this isolate minted for itself, and the only kind of client
@@ -489,16 +547,16 @@ mod own_client {
                 status: 0,
             }
             .encode_into(&mut arg)
-            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+            .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
             let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_ALLOC as u8, arg.len())
-                .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+                .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
             // No `pAllocParms`: `NV01_ROOT_CLIENT` takes none, so the patch list is empty
             // rather than pointing at a zero-length buffer.
             let mut patches: Vec<Indirect<'_>> = Vec::new();
             ctl.ioctl(req, &mut arg, &mut patches)
                 .map_err(|e| ioctl_error(&e))?;
             let out =
-                Nvos21Parameters::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+                Nvos21Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
             status_check(out.status)?;
             Ok(Self(out.h_object_new))
         }
@@ -792,11 +850,13 @@ use handed_client::HandedClient;
 ///   permissions problem.
 mod birth_conn {
     use super::{
-        HandedClient, Indirect, NOT_ON_THIS_RUNG, NV_ESC_RM_ALLOC, NV_ESC_RM_DUP_OBJECT,
-        NV_ESC_RM_FREE, NV_ESC_RM_MAP_MEMORY_DMA, NV_ESC_RM_UNMAP_MEMORY_DMA, NV_IOCTL_MAGIC,
-        NV01_MEMORY_VIRTUAL, NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE, Nv0080AllocParameters,
-        Nv2080AllocParameters, NvMemoryVirtualAllocationParams, Nvos00Parameters, Nvos21Parameters,
-        Nvos46Parameters, Nvos47Parameters, Nvos55Parameters, RmError, ioctl_error, status_check,
+        ABI_DECODE_FAILED, ABI_ENCODE_FAILED, HandedClient, IMPOSSIBLE_CONVERSION,
+        IOCTL_NUMBER_UNBUILDABLE, Indirect, NOT_ON_THIS_RUNG, NV_ESC_RM_ALLOC,
+        NV_ESC_RM_DUP_OBJECT, NV_ESC_RM_FREE, NV_ESC_RM_MAP_MEMORY_DMA, NV_ESC_RM_UNMAP_MEMORY_DMA,
+        NV_IOCTL_MAGIC, NV01_MEMORY_VIRTUAL, NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE,
+        Nv0080AllocParameters, Nv2080AllocParameters, NvMemoryVirtualAllocationParams,
+        Nvos00Parameters, Nvos21Parameters, Nvos46Parameters, Nvos47Parameters, Nvos55Parameters,
+        RmError, ioctl_error, status_check,
     };
 
     use kayfabe_linux_raw::{CharDevice, ioctl};
@@ -898,12 +958,12 @@ mod birth_conn {
                 ..Default::default()
             }
             .encode_into(&mut dev_params)
-            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+            .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
             let device = conn.alloc(handed.root(), NV01_DEVICE_0, &mut dev_params)?;
             let mut sub_params = [0u8; Nv2080AllocParameters::SIZE];
             Nv2080AllocParameters { sub_device_id: 0 }
                 .encode_into(&mut sub_params)
-                .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+                .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
             let subdevice = conn.alloc(device, NV20_SUBDEVICE_0, &mut sub_params)?;
             Ok(BirthConn {
                 device,
@@ -950,9 +1010,9 @@ mod birth_conn {
                 status: 0,
             }
             .encode_into(&mut arg)
-            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+            .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
             let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_ALLOC as u8, arg.len())
-                .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+                .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
             let mut patches: Vec<Indirect<'_>> = Vec::new();
             if !params.is_empty() {
                 patches.push(Indirect::new(16, params));
@@ -961,7 +1021,7 @@ mod birth_conn {
                 .ioctl(req, &mut arg, &mut patches)
                 .map_err(|e| ioctl_error(&e))?;
             let out =
-                Nvos21Parameters::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+                Nvos21Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
             status_check(out.status)?;
             Ok(out.h_object_new)
         }
@@ -999,14 +1059,14 @@ mod birth_conn {
                 status: 0,
             }
             .encode_into(&mut arg)
-            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+            .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
             let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_DUP_OBJECT as u8, arg.len())
-                .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+                .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
             self.ctl
                 .ioctl(req, &mut arg, &mut [])
                 .map_err(|e| ioctl_error(&e))?;
             let out =
-                Nvos55Parameters::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+                Nvos55Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
             status_check(out.status)?;
             Ok(out.h_object)
         }
@@ -1027,7 +1087,7 @@ mod birth_conn {
                 h_va_space,
             }
             .encode_into(&mut range)
-            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+            .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
             self.alloc(self.device, NV01_MEMORY_VIRTUAL, &mut range)
         }
 
@@ -1086,14 +1146,14 @@ mod birth_conn {
                 status: 0,
             }
             .encode_into(&mut arg)
-            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+            .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
             let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_MAP_MEMORY_DMA as u8, arg.len())
-                .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+                .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
             self.ctl
                 .ioctl(req, &mut arg, &mut [])
                 .map_err(|e| ioctl_error(&e))?;
             let out =
-                Nvos46Parameters::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+                Nvos46Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
             status_check(out.status)?;
             // ★★★★★ **CONSTRAINT 28 HALF TWO — RM's ANSWER IS CHECKED, NOT ASSUMED.** An
             // `Ok` naming the wrong address is the failure mode this exists for: it is
@@ -1140,14 +1200,14 @@ mod birth_conn {
                 status: 0,
             }
             .encode_into(&mut arg)
-            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+            .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
             let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_UNMAP_MEMORY_DMA as u8, arg.len())
-                .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+                .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
             self.ctl
                 .ioctl(req, &mut arg, &mut [])
                 .map_err(|e| ioctl_error(&e))?;
             let out =
-                Nvos47Parameters::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+                Nvos47Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
             status_check(out.status)
         }
 
@@ -1164,14 +1224,14 @@ mod birth_conn {
                 status: 0,
             }
             .encode_into(&mut arg)
-            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+            .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
             let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_FREE as u8, arg.len())
-                .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+                .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
             self.ctl
                 .ioctl(req, &mut arg, &mut [])
                 .map_err(|e| ioctl_error(&e))?;
             let out =
-                Nvos00Parameters::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+                Nvos00Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
             status_check(out.status)
         }
     }
@@ -3188,9 +3248,9 @@ impl RmConnection {
             status: 0,
         }
         .encode_into(&mut arg)
-        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_ALLOC as u8, arg.len())
-            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+            .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
         // `pAllocParms` at +16. An empty params block means a null pointer, which is what
         // `NV01_ROOT_CLIENT` wants — so the patch list is empty rather than pointing at a
         // zero-length buffer.
@@ -3201,7 +3261,7 @@ impl RmConnection {
         self.ctl
             .ioctl(req, &mut arg, &mut patches)
             .map_err(|e| ioctl_error(&e))?;
-        let out = Nvos21Parameters::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let out = Nvos21Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
         status_check(out.status)?;
         Ok(out.h_object_new)
     }
@@ -3242,15 +3302,15 @@ impl RmConnection {
             status: 0,
         }
         .encode_into(&mut arg)
-        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_ALLOC as u8, arg.len())
-            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+            .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
         let mut patches = [Indirect::nested(16, params, inner_at, inner)
-            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?];
+            .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?];
         self.ctl
             .ioctl(req, &mut arg, &mut patches)
             .map_err(|e| ioctl_error(&e))?;
-        let out = Nvos21Parameters::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let out = Nvos21Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
         status_check(out.status)?;
         Ok(out.h_object_new)
     }
@@ -3684,9 +3744,9 @@ impl RmConnection {
             status: 0,
         }
         .encode_into(&mut arg)
-        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_CONTROL as u8, arg.len())
-            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+            .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
         let mut patches: Vec<Indirect<'_>> = Vec::new();
         if !payload.is_empty() {
             patches.push(Indirect::new(16, payload));
@@ -3694,7 +3754,7 @@ impl RmConnection {
         self.ctl
             .ioctl(req, &mut arg, &mut patches)
             .map_err(|e| ioctl_error(&e))?;
-        let out = Nvos54Parameters::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let out = Nvos54Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
         status_check(out.status)
     }
 
@@ -3877,13 +3937,13 @@ impl RmConnection {
             status: 0,
         }
         .encode_into(&mut arg)
-        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_MAP_MEMORY_DMA as u8, arg.len())
-            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+            .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
         self.ctl
             .ioctl(req, &mut arg, &mut [])
             .map_err(|e| ioctl_error(&e))?;
-        let out = Nvos46Parameters::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let out = Nvos46Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
         status_check(out.status)?;
         // ★★★★★ **CONSTRAINT 28, HALF TWO — EVERY FIXED MAP ASSERTS ITS OWN PLACEMENT.**
         //
@@ -3948,13 +4008,13 @@ impl RmConnection {
             status: 0,
         }
         .encode_into(&mut arg)
-        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_DUP_OBJECT as u8, arg.len())
-            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+            .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
         self.ctl
             .ioctl(req, &mut arg, &mut [])
             .map_err(|e| ioctl_error(&e))?;
-        let out = Nvos55Parameters::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let out = Nvos55Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
         status_check(out.status)?;
         self.remember(out.h_object, parent);
         Ok(out.h_object)
@@ -3979,7 +4039,7 @@ impl RmConnection {
             h_va_space,
         }
         .encode_into(&mut range)
-        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         let want = self.mint();
         let h = self.raw_alloc(self.device, want, NV01_MEMORY_VIRTUAL, &mut range)?;
         self.remember(h, self.device);
@@ -4004,13 +4064,13 @@ impl RmConnection {
             status: 0,
         }
         .encode_into(&mut arg)
-        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_UNMAP_MEMORY_DMA as u8, arg.len())
-            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+            .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
         self.ctl
             .ioctl(req, &mut arg, &mut [])
             .map_err(|e| ioctl_error(&e))?;
-        let out = Nvos47Parameters::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let out = Nvos47Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
         status_check(out.status)
     }
 
@@ -4176,7 +4236,7 @@ impl RmConnection {
         let node = match which {
             MapNode::Gpu => {
                 let name = CString::new(format!("nvidia{}", self.gpu_index))
-                    .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+                    .map_err(|_| RmError::Other(IMPOSSIBLE_CONVERSION))?;
                 CharDevice::openat_mode(&self.dev, &name, access.dev_access())
                     .map_err(|e| ioctl_error(&e))?
             }
@@ -4196,14 +4256,14 @@ impl RmConnection {
             fd: node.fd_number(),
         }
         .encode_into(&mut arg)
-        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_MAP_MEMORY, arg.len())
-            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+            .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
         self.ctl
             .ioctl(req, &mut arg, &mut [])
             .map_err(|e| ioctl_error(&e))?;
         let out =
-            Nvos33ParametersWithFd::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+            Nvos33ParametersWithFd::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
         status_check(out.status)?;
         Ok((node, out.p_linear_address))
     }
@@ -4234,13 +4294,13 @@ impl RmConnection {
             flags: 0,
         }
         .encode_into(&mut arg)
-        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_UNMAP_MEMORY, arg.len())
-            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+            .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
         self.ctl
             .ioctl(req, &mut arg, &mut [])
             .map_err(|e| ioctl_error(&e))?;
-        let out = Nvos34Parameters::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let out = Nvos34Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
         status_check(out.status)
     }
 
@@ -4277,7 +4337,7 @@ impl RmConnection {
             alignment: 4096,
         }
         .encode_into(&mut params)
-        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         let want = self.mint();
         let h = self.raw_alloc(self.device, want, NV01_MEMORY_LOCAL_USER, &mut params)?;
         self.remember(h, self.device);
@@ -4294,7 +4354,7 @@ impl RmConnection {
             alignment: len,
         }
         .encode_into(&mut params)
-        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         let want = self.mint();
         let h = self.raw_alloc(self.device, want, NV01_MEMORY_LOCAL_USER, &mut params)?;
         self.remember(h, self.device);
@@ -4375,9 +4435,9 @@ impl RmConnection {
             fd: -1,
         }
         .encode_into(&mut arg)
-        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_ALLOC_MEMORY, arg.len())
-            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+            .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
         let mut describe =
             [
                 Indirect::describing(Nvos02ParametersWithFd::P_MEMORY_OFFSET, region, offset, len)
@@ -4387,7 +4447,7 @@ impl RmConnection {
             .ioctl(req, &mut arg, &mut describe)
             .map_err(|e| ioctl_error(&e))?;
         let out =
-            Nvos02ParametersWithFd::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+            Nvos02ParametersWithFd::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
         status_check(out.status)?;
         self.remember(out.h_object_new, self.device);
         Ok(out.h_object_new)
@@ -6369,7 +6429,7 @@ impl HostRmBackend {
             ..NvVaspaceAllocationParameters::default()
         }
         .encode_into(&mut params)
-        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         let want = self.conn.mint();
         let space = self
             .conn
@@ -6384,7 +6444,7 @@ impl HostRmBackend {
         let mut params = [0u8; NvVaspaceAllocationParameters::SIZE];
         NvVaspaceAllocationParameters::default()
             .encode_into(&mut params)
-            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+            .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         let want = self.conn.mint();
         let space = self
             .conn
@@ -6408,7 +6468,7 @@ impl HostRmBackend {
             h_va_space: space,
         }
         .encode_into(&mut range)
-        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         let want = self.conn.mint();
         match self
             .conn
@@ -6672,9 +6732,9 @@ impl RmBackend for HostRmBackend {
             fd: -1,
         }
         .encode_into(&mut arg)
-        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_ALLOC_MEMORY, arg.len())
-            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+            .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
         // ★★ THE ROUTING RULE, measured against the driver: `NV_ESC_RM_ALLOC_MEMORY` is
         // `NV_ACTUAL_DEVICE_ONLY` and MUST be issued on the per-GPU node
         // (`ogkm-580: src/nvidia/arch/nvalloc/unix/src/escape.c:328`, macro at `:66` —
@@ -6688,7 +6748,7 @@ impl RmBackend for HostRmBackend {
             .ioctl(req, &mut arg, &mut [])
             .map_err(|e| ioctl_error(&e))?;
         let out =
-            Nvos02ParametersWithFd::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+            Nvos02ParametersWithFd::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
         status_check(out.status)?;
         self.conn.remember(out.h_object_new, self.conn.device);
         Ok(self.stamp(out.h_object_new))
@@ -6789,7 +6849,7 @@ impl RmBackend for HostRmBackend {
         let mut params = [0u8; NvVaspaceAllocationParameters::SIZE];
         NvVaspaceAllocationParameters::default()
             .encode_into(&mut params)
-            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+            .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         let want = self.conn.mint();
         let space = self
             .conn
@@ -6875,7 +6935,7 @@ impl RmBackend for HostRmBackend {
         }
         let ctl = CharDevice::openat(&self.conn.dev, c"nvidiactl").map_err(|e| ioctl_error(&e))?;
         let name = CString::new(format!("nvidia{}", self.conn.gpu_index))
-            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+            .map_err(|_| RmError::Other(IMPOSSIBLE_CONVERSION))?;
         let node = CharDevice::openat(&self.conn.dev, &name).map_err(|e| ioctl_error(&e))?;
         // Bind the device node to the new control session. Without it every later escape on
         // that session answers `0x23 INVALID_CLIENT` — a refusal that reads like a
@@ -6885,9 +6945,9 @@ impl RmBackend for HostRmBackend {
             ctl_fd: ctl.fd_number(),
         }
         .encode_into(&mut reg)
-        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_REGISTER_FD, reg.len())
-            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+            .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
         node.ioctl(req, &mut reg, &mut [])
             .map_err(|e| ioctl_error(&e))?;
         // ★★★★★ **THE ROOT IS ALLOCATED BY `mod own_client`'s ONE CONSTRUCTOR, NOT BY A
@@ -7280,7 +7340,7 @@ impl RmBackend for HostRmBackend {
             b_skip_enable: 0,
         }
         .encode_into(&mut params)
-        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         self.conn
             .raw_control(parts.tsg, NVA06C_CTRL_CMD_GPFIFO_SCHEDULE, &mut params)
     }
@@ -8848,16 +8908,16 @@ impl HostRmBackend {
             fd: -1,
         }
         .encode_into(&mut arg)
-        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_ALLOC_MEMORY, arg.len())
-            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+            .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
         // `NV_ACTUAL_DEVICE_ONLY`, as `alloc_sysmem` records at length.
         self.conn
             .gpu
             .ioctl(req, &mut arg, &mut [])
             .map_err(|e| ioctl_error(&e))?;
         let out =
-            Nvos02ParametersWithFd::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+            Nvos02ParametersWithFd::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
         status_check(out.status)?;
         self.conn.remember(out.h_object_new, self.conn.device);
         Ok(self.stamp(out.h_object_new))
@@ -12567,7 +12627,7 @@ impl HostRmBackend {
                 let got = u32::from_le_bytes(
                     image[4 * i..4 * i + 4]
                         .try_into()
-                        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?,
+                        .map_err(|_| RmError::Other(IMPOSSIBLE_CONVERSION))?,
                 );
                 let want = P2.wrapping_add(i as u32);
                 rev_compared += 4;
@@ -12945,14 +13005,14 @@ impl HostRmBackend {
             status: 0,
         }
         .encode_into(&mut arg)
-        .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_FREE as u8, arg.len())
-            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+            .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
         self.conn
             .ctl
             .ioctl(req, &mut arg, &mut [])
             .map_err(|e| ioctl_error(&e))?;
-        let out = Nvos00Parameters::decode(&arg).map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+        let out = Nvos00Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
         status_check(out.status)?;
         self.conn.forget(raw);
         // ★ The companion (see `Objects::companions`): freeing a `Vas`'s mappable range
