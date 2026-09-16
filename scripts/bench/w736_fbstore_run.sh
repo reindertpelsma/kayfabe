@@ -365,7 +365,17 @@ report() {
   echo "W745-MMUINVAL=$(grep -ao 'MMUINVAL armed=.\{0,400\}' "$Q" 2>/dev/null | tail -1)"
   echo "W745-REFRESH-LINE=$(grep -ao 'MMUINVAL-REFRESH #[0-9]* seq=[0-9]* armed=[0-9]* refresh_ms=[0-9.]* unmaps_outstanding=[0-9]* drain_trips=[0-9]*' "$Q" 2>/dev/null | tail -1)"
   echo "--- ★★★★★ w745 ROW 7: CONSTRAINT 25's open violation — the number the brief asks for ---"
-  echo "W745-VCPU-BLOCKING=$(grep -ao 'VCPU-BLOCKING total=[0-9]* doors=[0-9]* worst_trap=[0-9]*us' "$Q" 2>/dev/null | tail -1)"
+  # ⊘⊘ w750 FIX, REPORTING ONLY — THIS ROW PRINTED EMPTY ON EVERY ARM, AND AN EMPTY ROW
+  #    READS AS A ZERO. The pattern demanded a `worst_trap=<n>us` field the line does not
+  #    carry: the census emits `VCPU-BLOCKING total=197 doors=9 [40 × receiving a
+  #    descriptor across the isolate boundary, …]`. `[measured w750, 2026-09-16, all three
+  #    arms]` the number was in `$Q` the whole time and this row said nothing about it —
+  #    the exact shape of `a_check_that_reports_is_not_a_check_that_gates`, on the one row
+  #    whose comment above says it is *"the number the brief asks for"*.
+  #    ⇒ the tail is taken verbatim instead of being matched, so a future field change
+  #      cannot silence it again.
+  echo "W745-VCPU-BLOCKING=$(grep -ao 'VCPU-BLOCKING total=[0-9]* doors=[0-9]*' "$Q" 2>/dev/null | tail -1)"
+  echo "W745-VCPU-BLOCKING-DOORS=$(grep -aohE 'VCPU-BLOCKING \(door #[0-9]+\)' "$Q" 2>/dev/null | sort -u | wc -l)"
   echo "--- host Xid ---"
   echo "HOST_DMESG_XID=$(grep -ac 'Xid' "$BENCH/run_${tag}_hostdmesg.log" 2>/dev/null)"
   grep -a 'Xid' "$BENCH/run_${tag}_hostdmesg.log" 2>/dev/null | head -3 | cut -c1-190

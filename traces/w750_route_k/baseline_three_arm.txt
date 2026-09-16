@@ -1,0 +1,36 @@
+# w750 BASELINE — three arms, one binary, on the freshly rebuilt bench box (vast 51207931)
+# GA106 / host open kernel module 580.159.04 / source rev fac800eb (= 8a842d90 plus w750's
+# additive probe + three probe-scoped accessors; the boot path is untouched by them).
+# Driver: scripts/bench/w736_fbstore_run.sh w750base   (arms 1-2-3 in order, control first)
+
+ARM 1  arena + isolate    (CONTROL)
+  W392D_GUEST_OUTCOME=(P)   THREADS 8 of 8 verified          ✔ the control holds
+  SMI_RC=0   RmInitAdapter failed = 0
+  BAR1 TRAP_FILLS=0 misses=0 | BAR2 TRAP_FILLS=0 misses=0
+  VCPU-BLOCKING total=22 doors=3
+
+ARM 2  device + isolate   (w743 REPRODUCTION — and the brief's phase-2 GATE)
+  W392D_GUEST_OUTCOME=(R)   THREADS 0 of 8 verified          ⊘ A WORKER CAME BACK DIRTY
+  SMI_RC=0   RmInitAdapter failed = 0
+  BAR1 TRAP_FILLS=0 misses=0 | BAR2 TRAP_FILLS=0 misses=0
+  VCPU-BLOCKING total=197 doors=9
+
+ARM 3  device + scratchpad (constraint 26's split)
+  W392D_GUEST_OUTCOME=(R)   THREADS 0 of 8 verified          ⊘ A WORKER CAME BACK DIRTY
+  SMI_RC=0   RmInitAdapter failed = 0
+  BAR1 TRAP_FILLS=0 misses=0 | BAR2 TRAP_FILLS=0 misses=0
+  VCPU-BLOCKING total=197 doors=9
+
+★★★ THE HEADLINE FOR PHASE 2: the brief's gate is "(P), THREADS 8 of 8 on the `device` arm",
+and the `device` arm is RED at HEAD on a freshly rebuilt bench. Route K's arm would therefore
+have been compared against a red reproduction arm, which is the comparison
+`a_rulings_date_is_part_of_the_citation` exists to refuse.
+
+⚠ CONSTRAINT 25 IS NOT WORSENED: `total=197 doors=9` on the device arm is exactly the number
+the brief cites. ⊘ But the harness's own row for it printed EMPTY on all three arms — its grep
+demanded a `worst_trap=<n>us` field the line does not carry. Fixed in this change, reporting
+only.
+
+⊘ NOT MEASURED BY THIS BOOT: the 30-name raw-client failing-test baseline. This boot script
+runs `w392d_mean_hook.sh` (the mean client, THREADS 8 of 8), not `rmladder_suite_hook.sh`
+(the 30-arm suite). Recorded as unmeasured rather than assumed unchanged.
