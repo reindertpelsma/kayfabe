@@ -275,21 +275,20 @@ fn a_page_aligned_request_is_accepted_and_silently_relocated() {
 #[test]
 fn the_store_slice_page_pin_follows_the_reservations_actual_shape() {
     use kayfabe_abi::bringup::nvos46_page_size_flag_for_store_slice;
-    assert_eq!(
-        nvos46_page_size_flag_for_store_slice(true),
-        0,
-        "a contiguous 1 GiB-aligned store is congruent at EVERY page size, so pinning 4 KiB \
-         would cost the framebuffer its TLB reach for nothing"
-    );
-    assert_eq!(
-        nvos46_page_size_flag_for_store_slice(false),
-        NVOS46_FLAGS_PAGE_SIZE_4KB,
-        "a noncontiguous store gives no guarantee about a slice's physical page, so the \
-         small page table is the only size whose congruence holds"
-    );
-    assert_ne!(
-        nvos46_page_size_flag_for_store_slice(true),
-        nvos46_page_size_flag_for_store_slice(false),
-        "★ NON-VACUITY: the two arms must differ, or the argument is being ignored"
-    );
+    // ⊘⊘⊘ **THIS TEST ASSERTED THE OPPOSITE UNTIL w755e MEASURED IT.** It required the two
+    // arms to DIFFER — "★ NON-VACUITY: the two arms must differ, or the argument is being
+    // ignored" — which pinned in place a behaviour that produced **4 633 relocations in one
+    // boot**. A non-vacuity assert is only as good as the property it is protecting, and this
+    // one was protecting a wrong one.
+    for contiguous in [true, false] {
+        assert_eq!(
+            nvos46_page_size_flag_for_store_slice(contiguous),
+            NVOS46_FLAGS_PAGE_SIZE_4KB,
+            "a store slice must pin the small page table REGARDLESS of the reservation's \
+             shape. `[measured w755e]` letting RM choose produced 4 633 CONSTRAINT 28 \
+             refusals with `got = want + k*0x10000`, `k` marching across unrelated bases — \
+             one allocator counter, i.e. FIXED ignored outright, not a congruence failure. \
+             `[measured w744]` FIXED alone honoured 0 of 3 ring VAs and 3 of 3 with this flag."
+        );
+    }
 }

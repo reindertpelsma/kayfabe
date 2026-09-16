@@ -805,15 +805,27 @@ pub const fn nvos46_page_size_flag(at: u64, offset: u64, len: u64) -> u32 {
 /// mapping base.
 #[must_use]
 pub const fn nvos46_page_size_flag_for_store_slice(contiguous_and_aligned: bool) -> u32 {
-    if contiguous_and_aligned {
-        // ★★★ The strong reservation makes `phys = base + offset` with `base ≡ 0 (mod 1 GiB)`,
-        // so `phys ≡ offset (mod P)` for every page size, and the guest's own
-        // `at ≡ offset` closes the congruence. RM may pick any page it likes and still
-        // honour the VA ⇒ no pin, and the framebuffer keeps its TLB reach.
-        0
-    } else {
-        NVOS46_FLAGS_PAGE_SIZE_4KB
-    }
+    // ⊘⊘⊘⊘ **MEASURED WRONG AND REVERTED — w755e, 4 633 relocations in one boot.**
+    //
+    // This took the argument and answered `0` ("RM chooses") when the reservation came back
+    // contiguous and 1 GiB-aligned, on the argument that congruence then holds at every page
+    // size so the pin costs TLB reach for nothing. **The congruence reasoning is right and the
+    // conclusion is false**, because honouring `DMA_OFFSET_FIXED` was never only about
+    // congruence:
+    //
+    // `[measured w755e, route-K arm]` with the pin removed,
+    //   `maps=1 map_refused=4633`, every one CONSTRAINT 28, every `got = want + k*0x10000`
+    //   with `k` marching 1,4,5,6,7,8,9,a,b,c… — **one allocator counter handing out the next
+    //   free 64 KiB slot across unrelated bases.** That is not a congruence failure, which
+    //   would be a FIXED per-base offset; it is `FIXED` being ignored outright.
+    // `[measured w744]` said the same thing first: `DMA_OFFSET_FIXED_TRUE` alone honoured
+    //   **0 of 3** ring VAs, and **3 of 3** with the small-page flag.
+    //
+    // ⇒ the flag is not a congruence remedy, it is what makes RM honour the address at all.
+    // The argument is kept in the parameter rather than deleted, so the next person who
+    // reasons their way to the same conclusion meets the measurement instead of repeating it.
+    let _ = contiguous_and_aligned;
+    NVOS46_FLAGS_PAGE_SIZE_4KB
 }
 
 /// Bounds-checked field write, shared by every `encode_into` above.
