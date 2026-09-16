@@ -396,8 +396,53 @@ and the per-client host MMU fault above.
 28. **★★★ EVERY FIXED MAP ASSERTS ITS OWN PLACEMENT, AND THE PAGE-SIZE FLAG MATCHES THE RUN'S
     CLASS** (2026-09-15, from `[w744]`).
 
-    > ### ⊘⊘⊘ REFINED 2026-09-16 (w755) — **THE RULE BELOW IS "ALIGNMENT". RM'S RULE IS
-    > ### "CONGRUENCE", AND THE DIFFERENCE IS A TERM *WE* INSERT.** Read this first.
+    > ### ⊘⊘⊘⊘ CORRECTED HOURS LATER, 2026-09-16 (w755c) — **THE CONGRUENCE RULE BELOW IS
+    > ### TRUE AND CANNOT FIRE ON THIS PATH. I BUILT A PREDICTOR ON IT ANYWAY.** Read this
+    > ### before the block under it.
+    >
+    > Owner, refuting it with arithmetic that was available the whole time: *"since the
+    > addresses are guest chosen, don't all alignments and congruence already line up?"*
+    >
+    >     guest gives:   at ≡ gpga                    (mod guest page size)  ← a PTE MEANS this
+    >     we map:        at ↦ reservation_base + gpga
+    >     RM needs:      at ≡ reservation_base + gpga (mod P)
+    >     subtract:      ⇒  reservation_base ≡ 0      (mod P)
+    >
+    > **The only term that can break harmony is `reservation_base mod P`**, and RM aligns
+    > vidmem allocations. At 4 KiB it is always zero. ⇒ §28 essentially cannot fire on the
+    > store-slice path, the congruence never explained `map_refused=2154`, and a predictor,
+    > a calibration path, a probe and two rented boxes were built on a premise one page of
+    > arithmetic refutes.
+    >
+    > ★★★★★ **AND THE DEEPER RULE, which is the part to keep: DO NOT MODEL RM'S INTERNALS.**
+    > `rm_would_place` modelled `_dmaGetPageSize` so a placement could be refused *before*
+    > asking. That is exactly the coupling `mode2_forwarding_model.md` forbids — *correctness
+    > = observable end-states only*. The post-hoc assert (★★ below) is the right shape
+    > **because it is purely observational**: ask for `at`, read what came back, refuse a
+    > mismatch. It cannot go stale when the driver changes. A predictor can, silently.
+    > ⇒ reverted. The wire form that carries `want`/`got` out of the child is kept, because
+    > it is a fact about *our own* plumbing and depends on no model.
+    >
+    > ★★★ **WHERE THE ALIGNMENT DOES BELONG — in the RESERVATION, not in a predicate.**
+    > Owner: *"ensure the gpga rm object is aligned with 1 GiB, that basically kills all these
+    > issues with memory offset harmony."* Right, **on a contiguous object**: then
+    > `phys = base + offset` with `base ≡ 0`, so `phys ≡ offset (mod P)` for every page size
+    > and the guest's own congruence closes it. ⊘ On `ATTR_NONCONTIGUOUS_VIDMEM` it does not —
+    > sub-descriptors walk a page list, so aligning the base constrains page 0 and nothing
+    > else. ⚠ And contiguity is what that attribute's own docs refuse, because a multi-gigabyte
+    > contiguous request *"can fail on a card whose free memory is merely fragmented — which
+    > would refuse the boot for a reason that has nothing to do with capacity."*
+    > ⇒ **BOTH, IN ORDER**: `reserve_gpga` tries contiguous + 1 GiB-aligned first and falls
+    > back; which one happened is **recorded, never re-derived**, and the store-slice page-size
+    > pin follows it (no pin when contiguous ⇒ the framebuffer keeps its TLB reach; 4 KiB when
+    > not ⇒ the only size whose congruence holds however the pages fell).
+    >
+    > ⚠ **The harmony problem has never been OBSERVED.** This is hardening, not a fix, and
+    > `map_refused=2154` is still unexplained.
+    >
+    > ### ⊘⊘⊘ THE SUPERSEDED REASONING — the RULE is right, its APPLICATION here was not
+    > ### REFINED 2026-09-16 (w755) — **THE RULE BELOW IS "ALIGNMENT". RM'S RULE IS
+    > ### "CONGRUENCE", AND THE DIFFERENCE IS A TERM *WE* INSERT.**
     >
     > Derived from `[ogkm-580.159.04]` source, not measured: `virtual_mem.c:1323` turns the
     > NVOS46 `offset` into a **sub-descriptor**; then `gm107.c:726/:922/:1081/:1532`
@@ -736,6 +781,39 @@ delete in the **same** change · **§w727** BAR1/BAR2 are **sized options** with
 (powers of two; refuse, never clamp) · **§w729** when stuck **ask Fable and give it this file**,
 and **never buy a pass by relaxing a constraint** · **§w729b** a measured dead end **is a
 deliverable**.
+
+33. **★★★★★ THE RESERVATION'S SHAPE IS MEASURED AND RECORDED, NEVER ASSUMED — AND THE
+    PAGE-SIZE DECISION FOLLOWS IT** (owner, 2026-09-16, w755c).
+    *"Ensure the gpga rm object is aligned with 1 GiB, that basically kills all these issues
+    with memory offset harmony."* — right, **on a contiguous object**, where
+    `phys = base + offset` and `base ≡ 0 (mod 1 GiB)` make a FIXED map congruent at every
+    page size. ⊘ On `ATTR_NONCONTIGUOUS_VIDMEM` it does not: `MapMemoryDma` sub-descriptors
+    walk a page list, so aligning the base constrains page 0 and nothing else.
+    ⚠ And contiguity is what that attribute's own docs refuse — a multi-gigabyte contiguous
+    request *"can fail on a card whose free memory is merely fragmented, which would refuse
+    the boot for a reason that has nothing to do with capacity."* **Both arguments are right.**
+    ⇒ `reserve_gpga` tries **contiguous + 1 GiB-aligned first** and falls back to the
+    documented noncontiguous form. One refused allocation is the entire cost, and the choice
+    is made **by measurement rather than by anyone's prediction**.
+    ★★ **Which one happened is RECORDED, never re-derived.** The store-slice page-size pin
+    reads it: no pin when contiguous (the framebuffer keeps its TLB reach), `PAGE_SIZE_4KB`
+    when not (the only size whose congruence holds however the pages fell). A map site that
+    inferred the reservation's shape would be a second statement of one decision — the
+    failure this file names at §28 and `a_second_source_of_truth_beside_a_complete_value`.
+    ⊘ **Not a fix for anything observed.** See §28's w755c correction: harmony cannot fail at
+    4 KiB, has never been measured failing, and `map_refused=2154` is still unexplained. This
+    is hardening that also **buys back** page-size freedom the earlier unconditional pin took.
+
+34. **★★★★★ DO NOT MODEL RM'S INTERNALS TO PRE-EMPT IT — ASSERT ON WHAT CAME BACK**
+    (2026-09-16, w755c, from the owner's *"we shouldn't … infer rm placement logic"*).
+    A predictor that reproduces `_dmaGetPageSize` so a call can be refused *before* it is
+    made is the coupling `mode2_forwarding_model.md` forbids: **correctness = observable
+    end-states only**. It buys a teardown we do not need, and it can go silently wrong on the
+    next driver while reporting confidence. ⇒ the observational assert is the shape: ask,
+    read what came back, refuse a mismatch **by name**, and carry the two numbers out
+    (`WireError::PlacementRefused { want, got }`) so the refusal is readable.
+    ⚠ This is not an argument against reading the driver's source — that is how `want`/`got`
+    were understood at all. It is an argument against **depending** on the reading at runtime.
 
 ⚠ **This list stopped at 17 while §§18–22 were added as sections below it** — a reader hitting the
 list would have concluded seventeen was all of them. ⇒ **Anything added below gets a row here in
