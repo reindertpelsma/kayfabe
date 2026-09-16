@@ -126,3 +126,93 @@ its merits** (not by the scan's universe shrinking) · failing-test name set == 
 `VCPU-BLOCKING doors=6 total=102` not worsened.
 
 ⊘ **A reduced refusal count is not a pass**, and §2 row 6 is deliberately not the gate.
+
+---
+
+# RESULTS — measured 2026-09-16, vast **51221284**, GA106, host **open 580.159.04**
+
+`[TREE_REV = BINARY_REV = 63b0b588 on all three arms; three arms, one binary, control first;
+trace: traces/w753_route_k/w753_run.log.gz]`
+
+## ★★★ THE GATE — the raw client, first
+
+| arm | `KAYFABE_FB_STORE` / `KAYFABE_VAS_OWNER` | verdict | threads |
+|---|---|---|---|
+| 1 control | `arena` / `isolate` | **`(P)`** | **8 of 8** |
+| 2 reproduction | `device` / `isolate` | `(R)` | 0 of 8 |
+| 3 **the test** | `device` / **`k`** | **`(R)`** | **0 of 8** |
+
+⊘ **THE GATE IS NOT MET.** The brief's bar is `(P)` `THREADS 8 of 8` on the device arm, and
+arm 3 is `(R)` `0 of 8`. Stated first and without qualification.
+
+★ The control passed and the reproduction reproduced, so the result **is attributable**.
+
+## The predictions, graded
+
+| # | prediction | outcome |
+|---|---|---|
+| 1-4 | offline: types unforgeable, one-target rule, fd-IN carries, 30-name baseline | **HELD** (all four settled before the box) |
+| 5 | `k` refused rather than defaulted on a typo | **HELD** |
+| 6 | ★★★ `adopt_refused` **0** and `adopts > 0` — the dup RM refused 4 718 times succeeds with no grant | **HELD.** `adopts=3 adopt_refused=0`, `STORE-MAP-K handed=1 refused=0 procs=1`, `ADOPT-IN-B=3`, `CONSTRAINT 32 REFUSED=0` |
+| 7 | `maps > 0` and `slices_bound > 0` — the first time in four boots | **HALF-HELD.** `maps=30`, `bytes_mapped=122880` — the first bytes this campaign has ever mapped through the split. But `map_refused=2154` |
+| 8 | constraint 28's placement assert **is asked** on hardware: `asserted > 0` | **REFUTED — `asserted=0`.** The refuting value I named: *"`asserted=0` with `maps>0` ⇒ the gate is not wired to the path it guards"* |
+| 9 | ⚠ not predicted green; `ADOPT-WHY (6)` **falls below 17** | **REFUTED.** `BIRTH-ADOPTING=0`, `PassthroughDoorbellBirth=19` — the frozen counters did not move at all |
+
+## ★★★★★ WHAT THIS ESTABLISHES, AND IT IS NOT NOTHING
+
+**Route K works at the level it was built for.** The `NV_ERR_INSUFFICIENT_PERMISSIONS` that
+refused the scratchpad's VA-space dup **4 718 times** at w746 and w752 is **gone**: the dup
+into a birth client carrying I's `ProcessID` is a same-`ProcessID` dup, it needs no grant,
+and RM answered `NV_OK` three times out of three. `adopt_refused` went **4718 → 0**.
+
+⊘⊘ **AND A REDUCED REFUSAL COUNT IS NOT A PASS** — the brief says so and this is the
+instance. The wall moved one link along, from the **dup** to the **map**.
+
+## ⊘⊘⊘ THE NEW WALL, AND IT IS OURS RATHER THAN RM's
+
+```
+STORE-MAP … adopts=3 adopt_refused=0 maps=30 map_refused=2154
+             bytes_mapped=122880 asserted=0 first_refusal=[Rm("Other(19270)")]
+```
+
+**19270 = `0x4B46`** — and that value is defined **twice** in `rm.rs`:
+
+```
+rm.rs:159   pub const NOT_ON_THIS_RUNG: u32                    = 0x4B46;
+rm.rs:1926  pub const SCRATCHPAD_BIRTH_IN_A_HANDED_SPACE: u32  = 0x4B46;
+```
+
+⇒ **the first refusal of the new wall cannot be read**, because two different refusals share
+its number. ⚠ This is the collision I found while choosing codes for this session's own
+refusals, reported in the w753 increment-2 commit, and **deliberately did not fix** — on the
+grounds that changing a live refusal value changes what a boot log means and would have
+needed its own reading. That judgement was **wrong in the direction that cost the most**: the
+very next boot produced that exact value as the thing to diagnose.
+
+★ Reading it from the call graph rather than the number: `map_store_slice`'s birth branch
+reaches `BirthConn::map_dma_slice`, whose only `NOT_ON_THIS_RUNG` returns are encode /
+ioctl-build / decode failures — none of which are RM refusing. `SCRATCHPAD_BIRTH_IN_A_HANDED_
+SPACE` is not on this path at all. ⇒ the probable reading is **our own encode path**, and
+`asserted=0` beside `maps=30` says the placement assert never ran — consistent with the
+refusal happening **before** RM was reached.
+⊘ Stated as the probable reading and **not as the finding**, because the instrument that
+would settle it is the one this boot proved ambiguous.
+
+## What the next session does first, in order
+
+1. **Split `0x4B46`.** One value, one meaning. Until then no refusal on this path is
+   diagnosable, and that is now measured rather than argued.
+2. Re-run arm 3 and read the real first refusal.
+3. Only then ask whether birth-in-B (increment 6) is needed — `BIRTH-ADOPTING=0` says the
+   channel still never adopts, but with `map_refused=2154` upstream that number is **not yet
+   evidence about birth**.
+
+## Non-regression — all held
+
+`TRAP_FILLS=0` and `misses=0` on BAR1 and BAR2, all three arms · `named=311172` (w752:
+311180/312304) · `RmInitAdapter failed`=0 · `SMI_RC=0` · `HOST_DMESG_XID=0` on the device
+and split arms · control `(P)` 8/8 `MEAN_FALSIFIER=PASS` · failing-test name set
+**byte-identical to the 30-name baseline** · **`VCPU-BLOCKING total=102 doors=6`** on arm 3
+— w752's floor, **not worsened**, and the control's `22/3` unchanged.
+
+**Constraints relaxed: NONE.**
