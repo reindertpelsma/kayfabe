@@ -616,7 +616,7 @@ mod birth_conn {
     use super::{
         HandedClient, Indirect, NV01_MEMORY_VIRTUAL, NV_ESC_RM_ALLOC, NV_ESC_RM_DUP_OBJECT,
         NV_ESC_RM_FREE, NV_ESC_RM_MAP_MEMORY_DMA, NV_ESC_RM_UNMAP_MEMORY_DMA, NV_IOCTL_MAGIC,
-        NOT_ON_THIS_RUNG,
+        NOT_ON_THIS_RUNG, Nv0080AllocParameters, Nv2080AllocParameters,
         NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE, Nvos00Parameters, Nvos21Parameters,
         Nvos46Parameters, Nvos47Parameters, Nvos55Parameters, NvMemoryVirtualAllocationParams,
         RmError,
@@ -697,6 +697,7 @@ mod birth_conn {
         /// Whatever RM refused the device or subdevice with.
         pub(super) fn open(
             handed: HandedClient,
+            gpu_index: u32,
             ctl: CharDevice,
             node: CharDevice,
         ) -> Result<BirthConn, RmError> {
@@ -708,11 +709,25 @@ mod birth_conn {
                 _subdevice: 0,
                 next: Mutex::new(BIRTH_HANDLE_BASE),
             };
-            let mut dev_params = [0u8; 40];
-            // `NV0080_ALLOC_PARAMETERS::deviceId` at offset 0; everything else zero, which
-            // is what `RmConnection::open`'s R5 sends.
+            // ⊘⊘ **THE TYPED STRUCTS AND THE REAL `deviceId`, not a zeroed byte array.**
+            // My first version sent `[0u8; 40]` — a GUESSED size with `deviceId = 0` — which
+            // is correct by accident on a single-GPU box and names the WRONG GPU on any
+            // other. `Nv0080AllocParameters::SIZE` is the ABI's own answer to the size, and
+            // `gpu_index` is the connection's own answer to which device. Both are read
+            // rather than assumed, for constraint 12's reason: a per-die fact must be
+            // derived, never hardcoded.
+            let mut dev_params = [0u8; Nv0080AllocParameters::SIZE];
+            Nv0080AllocParameters {
+                device_id: gpu_index,
+                ..Default::default()
+            }
+            .encode_into(&mut dev_params)
+            .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
             let device = conn.alloc(handed.root(), NV01_DEVICE_0, &mut dev_params)?;
-            let mut sub_params = [0u8; 4];
+            let mut sub_params = [0u8; Nv2080AllocParameters::SIZE];
+            Nv2080AllocParameters { sub_device_id: 0 }
+                .encode_into(&mut sub_params)
+                .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
             let subdevice = conn.alloc(device, NV20_SUBDEVICE_0, &mut sub_params)?;
             Ok(BirthConn {
                 device,
@@ -3216,7 +3231,7 @@ impl RmConnection {
         }
         // ⊘ The device tree is built with **no lock held**: it is four ioctls, and R1 has no
         // exception for "only four".
-        let conn = BirthConn::open(handed, ctl, node)?;
+        let conn = BirthConn::open(handed, self.gpu_index, ctl, node)?;
         let mut held = self
             .birth
             .lock()
