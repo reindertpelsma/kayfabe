@@ -325,6 +325,37 @@ constraint 32 REPLACED. Do not read this arm as a route-K result."
   #   unmoved, and nothing here could say whether they were ever on its path.
   #   ★ The `thread fault:` lines are cut too — `THREADS 0 of 8 ⊘ A WORKER CAME BACK DIRTY`
   #   means faults EXIST and names none of them without these.
+  # ★★★★★ **w755e — THE CHANNEL-KIND VERDICT, WHICH NO BOOT HAS EVER REPORTED.**
+  #
+  # > Owner, 2026-09-17: *"I hope you aren't reading guest rings on passthrough."*
+  #
+  # ⊘ The answer is structural — a `Passthrough` host channel is born over the GUEST's own
+  #   ring and USERD, so the hardware fetches it and we ring the real doorbell; the only
+  #   `RingBroughtNoEntry` raise sites are the CeUtils (system-proc, Emulated) path, which is
+  #   OUR ring.
+  #
+  # ⊘⊘ **AND THIS CENSUS IS NOT THE EVIDENCE FOR THAT — it is a downstream restatement.**
+  #   Owner, 2026-09-17: *"it also should be impossible under the new doorbell table anyways."*
+  #   Correct, and the enforcement is UPSTREAM, at the graph: `SYSTEM_ANCHOR` is
+  #   `RESERVED_CLIENT`, `RmGraph::apply` REFUSES it as guest input, so no user component can
+  #   anchor there — and `Boundary::channel_kind()` is then a total function of that one field
+  #   (`anchor == SYSTEM_ANCHOR ? Emulated : Passthrough`). A user-proc channel CANNOT be
+  #   `Emulated`. The first draft of this comment called the census "the MEASUREMENT", which
+  #   is the same error this session made three times: treating a restatement of an invariant
+  #   as an independent check of it.
+  # ★ What it CAN still catch, and why it is cut anyway: `kind` is CARRIED from the channel
+  #   (`VasCensusRow`: *"[`Channel::kind`], carried, not re-derived from [`Self::proc`]"*) while
+  #   `proc` is which table the channel was FOUND in. So `Disagrees` fires on a MIS-FILED
+  #   channel, not on a broken kind rule. That is worth one grep and is not worth reading as
+  #   proof of the passthrough invariant.
+  # ⚠ And it has never been shown able to fire — `a_census_zero_needs_a_known_positive`.
+  #   Treat `AGREES` as "nothing is mis-filed", never as "we do not read guest rings".
+  # ⊘ `Vacuous` is its own verdict and is NOT a pass: it means one of the two populations was
+  #   empty, so the comparison had nothing to compare.
+  echo "--- w755e: CHANNEL-KIND — a mis-filing check, NOT proof of the passthrough invariant ---"
+  n_ck=$(grep -ac 'CHANNEL-KIND' "$Q" 2>/dev/null)
+  echo "W755-CHANNEL-KIND-LINES=${n_ck:-0}  (0 ⇒ UNMEASURED, not 'the invariant holds')"
+  grep -ao 'CHANNEL-KIND[^|]\{0,300\}' "$Q" 2>/dev/null | tail -2
   echo "--- ★★★★★ w755e: THE CLIENT'S OWN LEDGER — the five rows the gate is made of ---"
   n_ledger=$(grep -ac 'w392d LEDGER' "$D" 2>/dev/null)
   echo "W755-LEDGER-BLOCKS=${n_ledger:-0}  (0 ⇒ UNMEASURED, not 'the client is fine')"
