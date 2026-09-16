@@ -402,7 +402,10 @@ report() {
   printf '%s\n' "$PI" | fold -w 160
   h() { printf '%s' "$PI" | grep -ao "$1" | tail -1; }
   echo "W752-INPLACE=$(h 'inplace=[0-9]*')   ★ the moves that were ONE MAP_FIXED"
-  echo "W752-INPLACE-REFUSED=$(h 'refused=[0-9]*')   ⊘ any non-zero tore the slot down; PRAMIN then traps"
+  echo "W752-INPLACE-REFUSED=$(h 'inplace_refused=[0-9]*')   ⊘ any non-zero tore the slot down; PRAMIN then traps"
+  # ⊘ `inplace_refused`, not `refused`: `early_release_refused=` also ends in `refused=` and a
+  # loose grep with `tail -1` would silently report THAT number instead. The two mean opposite
+  # things — a torn-down aperture vs a held one — and one grep cannot serve both.
   echo "W752-STARTED=$(h 'started=[0-9]*')"
   echo "W752-LANDED=$(h 'landed=[0-9]*')   ⊘ started != landed ⇒ a re-point did not place"
   echo "W752-RELEASED=$(h 'released=[0-9]*')   ★ cut P2: released BY THE WORKER, not inside a trap"

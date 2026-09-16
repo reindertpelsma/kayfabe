@@ -2692,7 +2692,7 @@ impl BarMirror {
             let landed = self.repoint_landed.load(Ordering::Relaxed);
             let early = self.parked_early_refused.load(Ordering::Relaxed);
             eprintln!(
-                "kayfabe: PRAMIN-INPLACE AT {at}: inplace={} refused={} started={started} \
+                "kayfabe: PRAMIN-INPLACE AT {at}: inplace={} inplace_refused={} started={started} \
                  landed={landed} released={} held={held} declined_on_vcpu={} \
                  early_release_refused={early} port_outstanding={} \u{2605} CUT P1: every move \
                  after the first install is ONE MAP_FIXED over the live window - no fresh \
