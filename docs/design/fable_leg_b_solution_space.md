@@ -396,6 +396,37 @@ come back set. **INFERRED** only that no later code clears the bit before copy-o
 
 ## 7. The zeroing question is a probe, and it orders every route
 
+> ### ⊘⊘⊘ MEASURED 2026-09-16 (w750) — **THE ANSWER IS "ZEROED", i.e. THE OPPOSITE OF WHAT
+> ### THE SOURCE READING BELOW PREDICTS, AND THE BRANCH IT ORDERS IS THE OTHER ONE.**
+> The text below says the CPU side writes nothing for a **vidmem** slice, and this document's
+> reader (and `w750_route_k_prereg.md` row 5, at ★★★ 0.8) took that to mean the guest's poison
+> survives a birth. **On a PF host, open kernel module 580.159.04, GA106, it does not:**
+>
+> ```
+> K_USERD_BEFORE_BIRTH = a5a50000 a5a50001 a5a50002 a5a50003 a5a50004 a5a50005 a5a50006 a5a50007
+> K_USERD_AFTER_BIRTH  = 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+> K_USERD_POISON_INTACT_WORDS = 0 of 128
+> ```
+> (`traces/w750_route_k/route_k_run3.log`; the probe is `kayfabe-rm-ladder --route-k`.)
+>
+> ★ Both of this section's own falsifiers are closed. The poison was **read back before the
+> birth** — so *"the write-combining store never landed"*, which produces an identical
+> `0 of 128`, is ruled out. And `K_CHANNEL_LIVE=1` with the engine's own release semaphore
+> landing — so *"a wrong `userdOffset` poisoned a different page"* is ruled out: the channel
+> ran, over the page that was poisoned.
+>
+> ⇒ **Take this section's FIRST branch, not its second:** adoption must precede the guest's
+> first `GP_PUT` **for every route**. K does by construction. Any `UPDATE_CHANNEL_INFO`-shaped
+> route must re-point **before the first doorbell** or it wipes the guest's cursor mid-flight.
+>
+> ⚠ **And what is NOT settled: WHICH code performs the scrub.** The reading below of
+> `kernel_channel.c:2342-2356` is not wrong — that arm really is gated on `ADDR_SYSMEM` (or
+> `ADDR_FBMEM` under full SR-IOV), and a PF host is neither. So **something else zeroes it**,
+> and this probe does not say what. Recorded as open rather than explained away.
+> ⊘ Same class this campaign keeps paying for: *a correct reading of one code path is not a
+> statement about the observable end state.*
+
+
 w233 measured: host RM zeroes a **sysmem** client USERD at birth. Source: CPU-RM does so only for
 `ADDR_SYSMEM` (`kernel_channel.c:2342-2356`, `kfifoSetupUserD_GM107` `kernel_fifo_gm107.c:797-808`,
 512 B). For a **vidmem** slice the CPU side writes nothing; the GSP side is closed.
