@@ -390,6 +390,35 @@ and the per-client host MMU fault above.
     mechanism no longer expresses it, and **name the assert that now does**. An assert deleted
     without a successor named is a regression, however green the suite is.
 
+> ### ⊘⊘⊘ CORRECTED w748 — **30's PREMISE NAMES THE WRONG QUANTITY, AND ITS DEMANDED ASSERT
+> ### ALREADY EXISTS IN DATA WE RECEIVE.** Read this before the text below.
+>
+> **(a) It blames the euid. The euid is not the quantity.** 30 reasons from *"our isolates'
+> kernel-visible euid is 0 on a root VMM"*. `NV01_ROOT_NON_PRIV` is real in RM's core, but
+> `escape.c:394-403` **rewrites it to `NV01_ROOT_CLIENT` before RM ever sees it**, so
+> `bIsRootNonPriv` is permanently false and `rmclientIsAdmin` reduces to
+> **`capable(CAP_SYS_ADMIN)`, evaluated PER IOCTL** — not to a uid, and not to a property of the
+> process fixed at spawn. ⇒ a component that holds the capability it needs for one call makes
+> `_PRIVILEGE_ADMIN` channels on *every* call, **with no knob**. That turns 30 into a
+> **sequencing** problem (drop the capability between the mint and the birth) which collides
+> with lazy channel birth.
+>
+> **(b) A `KernelChannel` CANNOT BE DUPED — by anyone, at any privilege.** `resCanCopy_IMPL` →
+> `NV_FALSE` and `serverCopyResource` refuses at `rs_server.c:1719-1723` **before rights are
+> consulted**. So 30's worry about *"a scratchpad-born channel handed to an isolate"* describes
+> a transfer **that cannot happen**. Scratchpad birth means the scratchpad owns the channel for
+> its whole life and the isolate becomes a doorbell store.
+>
+> **(c) ★ The assert 30 demands is already in the reply buffer, and nothing reads it.** RM
+> writes its verdict into the caller's own params (`kernel_channel.c:281-287`), copied back on
+> success (`alloc_free.c:195-218`): **`NVOS04_FLAGS_PRIVILEGED_CHANNEL`, bit 5**. ⇒ we can
+> **assert the channel's actual privilege** after every birth instead of reasoning about it.
+> **Do that.** It is free, it is exact, and it is the only form of 30 that cannot be argued with.
+>
+> ⊘ What survives unchanged: the *rule* — a shared resource needs its own measured answer and a
+> fail-closed assert, and `DupObject` succeeding says nothing about what the duped object
+> carries. Only the euid premise and the channel-transfer example are wrong.
+
 30. **★★★★★ ANY RESOURCE THE SCRATCHPAD CREATES AND SHARES MUST BE PROVEN NOT TO CARRY THE
     SCRATCHPAD'S PRIVILEGE** (owner, 2026-09-15). *"The reason we also do isolates is to ensure
     the channel is created in an unprivileged process. If ogkm links the process that created
