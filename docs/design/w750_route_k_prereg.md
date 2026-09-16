@@ -195,3 +195,129 @@ is taken; it gates nothing.
 Phase 1 **passes** iff rows 1, 2, 3 and 4 are all **HELD** by the definition in §2. Any REFUTED
 row, and any UNMEASURED row, stops phase 2 and is reported as such — `w729b`: **a negative result
 with its measurement is a full deliverable**, and it is not to be rescued by relaxing anything.
+
+---
+
+# ★★★★★ RESULTS — measured 2026-09-16, GA106, open kernel module 580.159.04
+
+> ### STATUS — 2026-09-16 / **ANSWERED. PHASE 1 PASSES. All four rows HELD.**
+> Box: vast `51207931`, RTX 3060 **GA106** (`10de:2503`), host driver swapped to the
+> **open** module **580.159.04** — the exact version every `ogkm` citation in this file is
+> read from. Binary `kayfabe-rm-ladder --route-k`, rev stamped in each log.
+> Evidence committed: `traces/w750_route_k/` (`route_k_phase1.log` = run 1,
+> `route_k_run2.log` = run 2, `route_k_run3.log` = **the graded run**,
+> `box_provenance.txt`).
+> ⊘ **No constraint was relaxed, and none is proposed relaxed.**
+
+## The four rows, verbatim from run 3
+
+| row | predicted | measured | verdict |
+|---|---|---|---|
+| **1** bit 5 clear | `K_BIT5=0` | **`K_BIT5=0`**, `K_CHAN_FLAGS_READBACK=0x00000000` | **HELD** |
+| **1** known-positive | `K_BIT5_KP=1` | **`K_BIT5_KP=1`**, readback `0x00000020` | **FIRED** |
+| **2** `ProcessID` is I's | I ∈ chan, S ∉ chan | **`K_PIDS_CHAN=76347`** = `K_PID_I`; `K_PID_S_IN_CHAN=0` | **HELD** |
+| **2** negative control | both in the device query | **`K_PIDS_DEV=76342,76347`** — S **and** I | **FIRED** |
+| **3** dup gone | `K_DUP_MAP_POST_RC != 0` | **`0x57 NV_ERR_OBJECT_NOT_FOUND`**; skip-free arm `0x23` | **HELD** — see the ⊘ below |
+| **3** channel live | `GP_GET` advances | **`K_GPGET_AFTER=1`**, `K_SEM=0x57500001` (the engine's own release), `K_CHAN_ALIVE_AFTER_FREE=1` | **HELD** |
+| **4** UVM takes a B-owned channel | `0x0` | **`K_UVM_REG_CHAN_RC=0x0`**, and `K_UVM_SCHED_RC=0` after it | **HELD** |
+| **4** known-positive | `K_UVM_REG_CHAN_KP_RC=0x0` | **`0x0`** | **FIRED** |
+| **4** negative control | non-zero | **`0x33 NV_ERR_INVALID_OBJECT_HANDLE`** | **FIRED** |
+| **5** (recorded, not a gate) | poison survives | **`K_USERD_POISON_SURVIVED=0` — the page is ZEROED** | ⊘ **PREDICTION WRONG** |
+
+★ Row 4 is stronger than the row asked for. `K_UVM_SCHED_RC=0` means the B-owned channel in
+the externally-owned space **scheduled**, and `kchannelIsSchedulable_IMPL` refuses an
+externally-owned channel whose allocations are unbound — the only userspace writer of
+`bIsContextBound` is UVM's register (`uvm_user_channel.c:686`). ⇒ the registration did its
+work; it did not merely return `NV_OK`.
+
+## ⊘ ROW 3 — THE PREDICTED VALUE IS STRUCTURALLY UNOBTAINABLE, AND WHY THAT IS A FINDING
+
+The prereg predicted `K_DUP_MAP_PRE_RC=0` and called it row 3's known-positive. **It measured
+`0x23 NV_ERR_INVALID_CLIENT`, and the instrument is not at fault:**
+
+```c
+/* ogkm-580: src/nvidia/arch/nvalloc/unix/src/osapi.c:2378, rm_create_mmap_context */
+if (pRmClient->ProcID != osGetCurrentProcess())
+    rmStatus = NV_ERR_INVALID_CLIENT;
+```
+
+★★★ **`NV_ESC_RM_MAP_MEMORY` refuses whenever the client's `ProcID` is not the CALLING task's.**
+Under route K that is **S calling into a client stamped I**, so **S can never CPU-map any object
+in B** — by construction, for every object, forever.
+
+The instrument's own known-positive fires: `K_MAP_INSTRUMENT_KP=0` runs the identical
+`map_memory` code path against a client whose `ProcID` **is** the calling task's. So `0` is
+reachable and `0x23` is RM's answer.
+
+⇒ Row 3 holds on evidence that replaces the unobtainable control with three others, two of
+them pre-registered:
+1. **The skip-free arm** (pre-registered as `K_DUP_OUTSTANDING`'s known-positive): with the dup
+   **present** the same call answers `0x23`; with it **freed**, `0x57 OBJECT_NOT_FOUND`. *"We
+   could never map it"* would give `0x23` in both. It does not.
+2. **The dup was demonstrably usable while it existed** — the birth named it as
+   `hUserdMemory[0]`, the `MAP_MEMORY_DMA` through it produced `K_STORE_VA`, and the channel
+   ran over that VA.
+3. `K_CHAN_ALIVE_AFTER_FREE=1` — a `GET_WORK_SUBMIT_TOKEN` control **on the channel** still
+   resolves after the free, which `K_GPGET_AFTER_FREE` alone could not have shown (S reads that
+   page through its **own** handle).
+
+## ★★★ WHAT THIS GATE COSTS ROUTE K — stated, because it is a new constraint on the design
+
+**Nothing, and here is the argument with its measurement.** The only pages S must touch are
+USERD (`GP_GET`/`GP_PUT`) and its own doorbell window. Both are reachable through **S's own**
+handles: the USERD is a slice of **the store**, which S owns, and the run reads and writes it
+that way — `K_STORE_WRITE_OK=1`, `K_GPGET_BEFORE=0 → K_GPGET_AFTER=1` on the very page the
+channel's USERD is in. S never needs a CPU view of an object in B.
+
+★★ And it cuts in kayfabe's favour twice: it is an **independent, RM-side enforcement of
+constraint 26** that nobody put there, and it means a compromised S cannot turn a birth client
+into a CPU window onto the isolate's memory.
+
+⚠ **It is also an expiry condition.** The gate is `ProcID`-based, so anything route K later
+wants S to CPU-map *inside B* is refused with a status that names the client, not the mapping.
+Design accordingly rather than discover it.
+
+## ★★★★★ ROW 5 — THE PREDICTION WAS WRONG, AND THE CORRECTION ORDERS EVERY ROUTE
+
+§7 reads `kernel_channel.c:2342-2356` as scrubbing a client USERD **only** for `ADDR_SYSMEM`
+(or `ADDR_FBMEM` under full SR-IOV), and this file predicted at ★★★ 0.8 that a **vidmem**
+USERD's poison would survive. Measured, on a PF host, open 580.159.04:
+
+```
+K_USERD_BEFORE_BIRTH=a5a50000 a5a50001 a5a50002 a5a50003 a5a50004 a5a50005 a5a50006 a5a50007
+K_USERD_AFTER_BIRTH =00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+K_USERD_POISON_INTACT_WORDS=0 of 128
+```
+
+⇒ **A vidmem client USERD IS zeroed at birth.** The read-back **before** the birth is what makes
+this a measurement rather than a guess — it rules out *"the write-combining store never landed"*,
+which produces an identical `0 of 128`. And it is paired with `K_CHANNEL_LIVE=1`, which rules out
+*"a wrong `userdOffset` left the poison somewhere else"*: the channel ran, so the page the birth
+programmed is the page that was poisoned.
+
+⇒ **Adoption must precede the guest's first `GP_PUT`, for every route.** Route K does by
+construction (it births at the guest's alloc RPC). Any `UPDATE_CHANNEL_INFO`-shaped route must
+re-point **before the first doorbell** or it wipes the guest's cursor mid-flight.
+⚠ §7 of `fable_leg_b_solution_space.md` must carry this correction; the source reading there is
+not wrong about the CPU-RM arm, so **something else does the scrub** and this probe does not say
+what. That is the next question, not a settled one.
+
+## ⊘ TWO HARNESS DEFECTS THE CONTROLS CAUGHT — both would have produced a false report
+
+1. **Row 2's first instrument could not see a channel at all.** `GET_PIDS` with the GPFIFO class
+   matches `classId(ChannelDescendant)`, which a `KernelChannel` is not. Caught **by reading**
+   before the box existed; the probe allocates a CE object and asks about that class. An empty
+   pid list is exactly what a refutation of row 2 looks like.
+2. ★★★★★ **Row 4 read as REFUTED for two whole runs, and the known-positive is what saved it.**
+   Runs 1 and 2 measured `K_UVM_REG_CHAN_RC=0x31 NV_ERR_INVALID_OBJECT`. Run 2 added the control
+   — a channel role I owns **itself**, same session, same space — and it answered **`0x31` too**.
+   ⇒ not about the foreign client; about the harness. The cause is in this tree already:
+   `kchannelGetEngine_GM107` resolves a channel's engine from its **runlist** and takes the first
+   engine on it (`kernel_channel_gm107.c:722-727`), and on GA106 **CE0 shares runlist 0 with
+   GR** — so a CE0 channel is graded by the graphics rule and RM looks for context buffers it
+   does not have. `--uvm-mean` P2's known-good channel is **COPY(2)**, runlist 1. Both UVM arms
+   moved to COPY(2) (`K_UVM_ENGINE_TYPE=0xb`, `K_UVM_KP_TOKEN=0x00010008 runlist=1`) and both
+   went green.
+   ⚠ **Without that control this lane would have told the owner that route K cannot carry CUDA.**
+   That is the whole value of the rule, and it is the second time in this file that *a name that
+   fits is not a mechanism that matches*.
