@@ -1063,7 +1063,15 @@ mod birth_conn {
             // `DMA_OFFSET_FIXED_TRUE` alone is not address identity: RM still picks a page
             // size, a big page cannot start at a 4 KiB boundary, so RM aligns the request
             // DOWN and answers `NV_OK`.
-            let page_size = kayfabe_abi::bringup::nvos46_page_size_flag(at, offset, len);
+            // ★★★★★ **w755 — CONGRUENCE, NOT ALIGNMENT. See
+            // [`kayfabe_abi::bringup::nvos46_page_size_flag_for_store_slice`] for the ogkm
+            // derivation: RM returns `ALIGN_DOWN(at, pageSize) + pageOffset`, where
+            // `pageOffset` is the PHYSICAL side's offset in its page, so a big-page-aligned
+            // `at` still relocates unless `at ≡ reservation_base + offset`. We never learn
+            // `reservation_base`, so 4 KiB — where the congruence is free — is the only size
+            // this can prove.
+            let _ = (offset, len);
+            let page_size = kayfabe_abi::bringup::nvos46_page_size_flag_for_store_slice();
             Nvos46Parameters {
                 h_client: self.handed.root(),
                 h_device: self.device,
@@ -3770,7 +3778,7 @@ impl RmConnection {
         at: Option<u64>,
         extra: u32,
     ) -> Result<u64, RmError> {
-        self.raw_map_dma_slice(h_dma, h_memory, 0, len, at, extra)
+        self.raw_map_dma_slice(h_dma, h_memory, 0, len, at, extra, false)
     }
 
     /// ★★★★★ **CONSTRAINT 26 — the same map, over a SLICE of the object.**
@@ -3796,6 +3804,14 @@ impl RmConnection {
         len: u64,
         at: Option<u64>,
         extra: u32,
+        // ★★★★★ **w755 — IS THIS A SLICE OF AN OBJECT WHOSE BASE WE DO NOT KNOW?**
+        //
+        // ⊘ An explicit parameter and NOT `offset != 0`: the first page of the store is a
+        // store slice at offset 0, and inferring the caller's situation from an operand is
+        // exactly the "second source of truth" shape this crate keeps paying for. The two
+        // callers are `raw_map_dma` (a whole dedicated object — its base IS the mapping base,
+        // and RM aligned it) and `map_store_slice` (a slice of the one reservation).
+        is_store_slice: bool,
     ) -> Result<u64, RmError> {
         // ★★★★★ **CONSTRAINT 26/29 — THE BARE-SPACE REFUSAL, AT THE ONE PLACE EVERY MAP
         // GOES THROUGH.** `[measured from w745's own committed evidence, w746]`
@@ -3832,6 +3848,12 @@ impl RmConnection {
         // named the bit itself (`map_local_at_with_flags`) keeps naming it, and the two can
         // only agree.
         let page_size = match at {
+            // ★★★★★ w755 — a store slice is a slice of an object whose base we do not know,
+            // so its page size is settled by congruence, not by alignment. See
+            // [`kayfabe_abi::bringup::nvos46_page_size_flag_for_store_slice`].
+            Some(_) if is_store_slice => {
+                kayfabe_abi::bringup::nvos46_page_size_flag_for_store_slice()
+            }
             Some(a) => kayfabe_abi::bringup::nvos46_page_size_flag(a, offset, len),
             None => 0,
         };
@@ -7070,7 +7092,7 @@ impl RmBackend for HostRmBackend {
         // A shadow here would be a second mapping of guest video memory in a space nothing
         // reads — the reach `§9.3` names.
         self.conn
-            .raw_map_dma_slice(h_dma, h_memory, offset, len, Some(at.0), 0)
+            .raw_map_dma_slice(h_dma, h_memory, offset, len, Some(at.0), 0, true)
     }
 
     /// ★★★★★ **CONSTRAINT 27's half — take one slice back down, and REPORT it.**

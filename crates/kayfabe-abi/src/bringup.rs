@@ -712,6 +712,97 @@ pub const fn nvos46_page_size_flag(at: u64, offset: u64, len: u64) -> u32 {
     }
 }
 
+/// ★★★★★ **THE PAGE-SIZE FLAG A *STORE SLICE* MUST CARRY, AND IT IS UNCONDITIONAL.
+/// DERIVED FROM ogkm's SOURCE, NOT MEASURED AND NOT GUESSED.**
+///
+/// # The rule RM actually applies — congruence, not alignment
+///
+/// `[ogkm-580.159.04, virt_mem_allocator_gm107.c:726, :1081, :1532]`, with
+/// `virtual_mem.c:1323` supplying the descriptor:
+///
+/// ```text
+///   virtual_mem.c:1323   memdescCreateSubMem(&pDmaMappingInfo->pMemDesc, pSrcMemDesc,
+///                                            pGpu, offset, length);
+///   gm107.c:726          pageOffset = memdescGetPhysAddr(pTempMemDesc, at, 0)
+///                                       & (pageSize - 1);
+///   gm107.c:922          vaLo       = RM_ALIGN_DOWN(*pVaddr, pageSize);
+///   gm107.c:1081         if ((*pVaddr - vaLo) != 0 && (*pVaddr - vaLo) != pageOffset)
+///                            -> NV_ERR_INVALID_OFFSET
+///   gm107.c:1532         *pVaddr = vaLo + pageOffset;
+/// ```
+///
+/// ⇒ the NVOS46 `offset` becomes a **sub-descriptor**, so `pageOffset` is
+/// `(reservation_base + offset) & (pageSize - 1)`, and RM returns
+///
+/// ```text
+///   got = ALIGN_DOWN(at, pageSize) + pageOffset
+///   got == at   ⟺   at ≡ (reservation_base + offset)   (mod pageSize)
+/// ```
+///
+/// ⊘⊘⊘ **So RM does not require the request to be ALIGNED. It requires the VA and the
+/// PHYSICAL address to be CONGRUENT modulo the page size it picks.** A perfectly
+/// big-page-aligned `at` whose physical side has a non-zero `pageOffset` **passes the
+/// consistency check** — it takes the `(*pVaddr - vaLo) == 0` branch — and comes back
+/// **relocated by exactly `pageOffset`, reporting `NV_OK`**. That is the silent relocation
+/// constraint 28 exists to catch, and neither [`nvos46_page_size_flag`]'s original
+/// `(at, len)` form nor its w755 `(at, offset, len)` form expresses it.
+///
+/// # ★★★★★ WHERE THE MISALIGNMENT COMES FROM — **WE INSERTED IT**
+///
+/// > Owner, 2026-09-16: *"I suspect the guest already enforces this, so why did this
+/// > misalignment fire. The guest driver is not going to violate its own hardware."*
+///
+/// **It does enforce it, and that is exactly why the fault is ours.** A guest PTE means
+/// `at ≡ guest_gpga (mod guest_page_size)` by construction — the guest's relation is intact
+/// and was never in question. But the single store's identity is *framebuffer address = file
+/// offset*, so what reaches RM is
+///
+/// ```text
+///   physical = reservation_base + guest_gpga
+///   RM asks:   at ≡ (reservation_base + guest_gpga)   (mod pageSize)
+///   guest gives: at ≡                  guest_gpga     (mod guest_page_size)
+///   the difference:  reservation_base mod pageSize
+/// ```
+///
+/// ⇒ `reservation_base` is **our** host allocation's base, a number the guest has never seen
+/// and cannot account for. **We added a term to a congruence the guest had already
+/// satisfied.** Nothing on the guest side is wrong; its physical side was shifted by an
+/// opaque constant underneath it.
+///
+/// ★★★ **And this predicts the shape of the failure, not just its existence**: every slice is
+/// displaced by the *same* `reservation_base mod pageSize`, so the refusals should be **one
+/// bucket with a constant delta**, and the count should be *every attempt* rather than some
+/// of them. `[measured w753]` `map_refused=2154` with a single `first_refusal` is consistent
+/// with that and does not yet confirm it — the confirming row is the w755 `refusals=[…]`
+/// histogram showing ONE key. ⊘ Varied deltas would refute this reading, and that is the
+/// point of recording it before the boot.
+///
+/// # ★ Why this is unconditionally `_4KB`
+///
+/// ⊘ The term above vanishes at 4 KiB, and that — not conservatism — is the argument.
+/// `reservation_base` is RM's choice and **we never learn it**: `RmBackend::reserve_gpga`
+/// answers a `HostHandle` and nothing else. So congruence at any size above 4 KiB is
+/// **unprovable from here**. At 4 KiB it is free: `at` comes from a guest PTE and
+/// `reservation_base + offset` is at worst 4 KiB-granular, so `pageOffset == 0`,
+/// `vaLo == at`, and `got == at` **exactly**, for every slice, wherever RM put the
+/// reservation.
+///
+/// ⚠ **This costs TLB reach and the cost is real**: the whole guest framebuffer is mapped
+/// with 4 KiB PTEs. It is taken deliberately — a relocated mapping is an `Xid 31 FAULT_PDE`
+/// and a wrong answer, a small page is a slow correct one. ⊘ The optimisation is named
+/// rather than hand-waved: **learn the reservation's GPGA, then pick the largest page size
+/// satisfying the congruence above**, and measure the TLB difference rather than assuming
+/// it. Until `reserve_gpga` reports that address, there is nothing to compute with.
+///
+/// ⊘ **Scoped to store slices on purpose.** Compressed kinds require big pages, and a
+/// blanket `_4KB` across every map site could be refused outright by RM — a different and
+/// worse failure. [`nvos46_page_size_flag`] keeps serving callers whose object base IS the
+/// mapping base.
+#[must_use]
+pub const fn nvos46_page_size_flag_for_store_slice() -> u32 {
+    NVOS46_FLAGS_PAGE_SIZE_4KB
+}
+
 /// Bounds-checked field write, shared by every `encode_into` above.
 fn put(
     bytes: &mut [u8],

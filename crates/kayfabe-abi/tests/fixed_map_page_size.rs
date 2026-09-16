@@ -149,3 +149,111 @@ fn a_slice_at_a_small_aligned_offset_must_take_the_small_page_flag() {
         );
     }
 }
+
+/// ★★★★★ **w755 — ogkm's ACTUAL RULE, MODELLED, AND THE STORE-SLICE FLAG CHECKED AGAINST
+/// IT.**
+///
+/// `[ogkm-580.159.04, virt_mem_allocator_gm107.c:726/:922/:1081/:1532 + virtual_mem.c:1323]`
+/// RM does not require alignment — it requires **congruence**, and where the request is
+/// page-aligned it *silently supplies* the physical side's page offset:
+///
+/// ```text
+///   pageOffset = (reservation_base + offset) & (pageSize - 1)
+///   vaLo       = ALIGN_DOWN(at, pageSize)
+///   reject iff (at - vaLo) != 0 && (at - vaLo) != pageOffset
+///   got        = vaLo + pageOffset
+/// ```
+///
+/// ⊘ Modelled here rather than asserted as prose, so the claim the store-slice flag rests on
+/// is executable. ⚠ The model is a MODEL: it reproduces the four lines above and nothing
+/// else about RM. Its job is to show that `_4KB` makes `got == at` for every input, and that
+/// a big page does not.
+fn rm_would_return(at: u64, base: u64, offset: u64, page_size: u64) -> Option<u64> {
+    let page_offset = (base.wrapping_add(offset)) & (page_size - 1);
+    let va_lo = at & !(page_size - 1);
+    let delta = at - va_lo;
+    if delta != 0 && delta != page_offset {
+        return None; // NV_ERR_INVALID_OFFSET
+    }
+    Some(va_lo + page_offset)
+}
+
+#[test]
+fn the_store_slice_flag_is_the_only_one_that_survives_an_unknown_reservation_base() {
+    let big = NVOS46_BIG_PAGE_BYTES;
+    // A guest VA out of a page table, and a store offset out of the same walk — both are at
+    // worst 4 KiB-granular, which is ALL we are entitled to assume.
+    let at = 0x0000_00f0_0004_0000_u64;
+
+    // ⊘ The reservation base is RM's choice and `reserve_gpga` never reports it, so the flag
+    // must hold for EVERY base the driver could have picked. Sweep a representative set,
+    // including bases that are big-aligned and bases that are only 4 KiB-aligned.
+    let mut big_page_moved_it = 0;
+    for base_k in [0_u64, 1, 3, 7, 15, 16, 17, 31, 64, 65] {
+        let base = base_k * 0x1000;
+        for off_k in [0_u64, 1, 2, 5, 15, 16, 48] {
+            let offset = off_k * 0x1000;
+
+            // ★ THE PROPERTY: at 4 KiB, the answer is the address we asked for. Always.
+            assert_eq!(
+                rm_would_return(at, base, offset, 0x1000),
+                Some(at),
+                "a 4 KiB page must honour the request exactly — base={base:#x} \
+                 offset={offset:#x}. If this ever fails, the store-slice flag's whole \
+                 argument is gone"
+            );
+
+            // ... and a big page does NOT, for most of them. Counted rather than asserted
+            // per-case, because some (base, offset) pairs ARE congruent by luck and a
+            // per-case assertion would be asserting the luck.
+            if rm_would_return(at, base, offset, big) != Some(at) {
+                big_page_moved_it += 1;
+            }
+        }
+    }
+
+    // ★ NON-VACUITY: the model must actually be able to produce the relocation this whole
+    // finding is about. A model that never moves anything would satisfy the 4 KiB rows above
+    // while demonstrating nothing.
+    assert!(
+        big_page_moved_it > 0,
+        "the model never relocated anything at {big:#x}, so the 4 KiB rows prove nothing"
+    );
+
+    // ★★★ And the flag the store-slice path asks for is the one that holds.
+    assert_eq!(
+        kayfabe_abi::bringup::nvos46_page_size_flag_for_store_slice(),
+        NVOS46_FLAGS_PAGE_SIZE_4KB,
+        "the store-slice path must pin the small page table; congruence at any larger size \
+         needs the reservation's GPGA, which `reserve_gpga` does not report"
+    );
+}
+
+/// ★★★ **The row that names the SURPRISE**: a perfectly page-aligned request is *accepted*
+/// and *moved*, rather than refused. That asymmetry is why constraint 28 has to compare
+/// `dmaOffset` on the way out instead of trusting a status.
+#[test]
+fn a_page_aligned_request_is_accepted_and_silently_relocated() {
+    let big = NVOS46_BIG_PAGE_BYTES;
+    let at = 0x0000_00f0_0000_0000_u64; // big-aligned: intra-page offset 0
+    let base = 0x1000; // reservation 4 KiB-granular, NOT big-aligned
+    let got = rm_would_return(at, base, 0, big).expect("RM ACCEPTS this — that is the point");
+    assert_ne!(
+        got, at,
+        "the request was page-aligned, accepted, and must come back MOVED — if it came back \
+         equal there would be nothing for constraint 28 to catch"
+    );
+    assert_eq!(
+        got - at,
+        base,
+        "moved by exactly the physical side's page offset"
+    );
+
+    // The third case: a request that names neither 0 nor the page offset is REFUSED outright.
+    assert_eq!(
+        rm_would_return(at + 0x2000, base, 0, big),
+        None,
+        "a VA whose intra-page offset is neither 0 nor the physical one must be refused, not \
+         adjusted"
+    );
+}
