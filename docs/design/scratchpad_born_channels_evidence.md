@@ -242,3 +242,209 @@ or deny access to memory, to a VAS, or to submission.
 ⊘ Greps that came back **empty**, recorded so the bound is visible:
 `grep -rn "ProcessID" src/nvidia/src/kernel/gpu/mmu/ src/nvidia/src/kernel/mem_mgr/ --include=*.c`
 finds only `video_mem.c`; the string does not appear anywhere under `kernel-open/nvidia-uvm/`.
+
+---
+
+## §3 — ★★★ CPU mappings: is this a blocker?
+
+**Short answer from evidence: no, and for two independent reasons — one in RM, one already
+measured in our own tree. But the cited line is not what it looks like, so start there.**
+
+### 3.1 ⊘ The cited refusal is in the UNMAP path, and on Linux it does not refuse
+
+`src/nvidia/src/kernel/rmapi/mapping_cpu.c:1058` sits inside **`serverUnmap_Prologue`**, not a map
+path. `grep -n "processId\|ProcessId\|osGetCurrentProcess" src/nvidia/src/kernel/rmapi/mapping_cpu.c`
+returns hits only at `:991`, `:1058`, `:1060` and the API-entry plumbing `:1331`, `:1363`, `:1396`,
+`:1427`, `:1437` — ⇒ **the MAP path in `mapping_cpu.c` contains no PID check at all.**
+
+And the line itself is not a refusal:
+
+```c
+    if (!bKernel && (ProcessId != osGetCurrentProcess()))
+    {
+        rmStatus = osAttachToProcess(&pProcessHandle, ProcessId);
+```
+
+`osAttachToProcess` on Linux is a **stub that always succeeds** —
+`src/nvidia/arch/nvalloc/unix/src/os.c:677-692`:
+
+```c
+NV_STATUS osAttachToProcess(void** ppProcessInfo, NvU32 ProcessId)
+{
+    // ... On Linux/UNIX platforms, we can't "attach" to a random process, but
+    // since we don't create/destroy user mappings in the RM, we don't need to, either.
+    *ppProcessInfo = NULL;
+    return NV_OK;
+}
+```
+
+★ The real PID gate is downstream, and it is a **lookup filter, not a permission check**:
+`mapping_cpu.c:1080-1082` selects `serverutilMappingFilterCurrentUserProc`, which is
+`src/nvidia/src/kernel/rmapi/rs_utils.c:325-332`:
+
+```c
+    return (!pMapping->pPrivate->bKernel &&
+            (pMapping->processId == osGetCurrentProcess()));
+```
+
+The same predicate appears in `src/nvidia/src/kernel/rmapi/mapping_list.c:84`
+(`CliFindMappingInClient`, `:44`), used by `src/nvidia/src/kernel/mem_mgr/gpu_vaspace.c:4277` and
+`src/nvidia/src/kernel/gpu/mem_mgr/mem_mgr_ctrl.c:323`.
+
+⇒ **The consequence of a cross-process mapping is not "refused" — it is "not found".** A process
+that did not create a mapping cannot *unmap it by CPU address* or look it up by CPU address.
+`processId` is stamped at map time by each resource's own map handler, always as
+`osGetCurrentProcess()`: `src/nvidia/src/kernel/gpu/gpu_resource.c:144`,
+`src/nvidia/src/kernel/gpu/fifo/kernel_channel.c:4471`,
+`src/nvidia/src/kernel/gpu/subdevice/generic_engine.c:157`,
+`src/nvidia/src/kernel/gpu/mmu/mmu_fault_buffer.c:116`,
+`src/nvidia/src/kernel/gpu/uvm/access_cntr_buffer.c:119`,
+`src/nvidia/src/kernel/gpu/ccu/kernel_ccu_api.c:136`, `src/nvidia/src/kernel/gpu/dbgbuffer.c:94`.
+Struct field: `src/nvidia/inc/libraries/resserv/rs_resource.h:470`.
+
+### 3.2 ★★★ The channel object cannot be CPU-mapped at all on our shape
+
+`kchannelMap_IMPL`, `src/nvidia/src/kernel/gpu/fifo/kernel_channel.c:1277-1291`, opens with:
+
+```c
+    NV_ASSERT_OR_RETURN(!pKernelChannel->bClientAllocatedUserD, NV_ERR_INVALID_REQUEST);
+```
+
+⇒ **when the client supplies its own USERD — which is exactly what we do, via
+`hUserdMemory[0]`/`userdOffset[0]` (`crates/kayfabe-abi/src/submit.rs:418`, `:430`; encode site
+`crates/kayfabe-isolate-host/src/rm.rs:8106-8152`) — `NV_ESC_RM_MAP_MEMORY` on the *channel*
+object is refused outright, for everyone, creator included.** What a driving process maps is the
+**USERD memory object**, never the channel. The channel is otherwise a legal map target
+(`src/nvidia/arch/nvalloc/unix/src/osapi.c:1006-1008` lists `classId(KernelChannel)` alongside
+`Memory` and `KernelCcuApi`), but that door is shut on the client-allocated-USERD path.
+
+⇒ **The `ProcessId != osGetCurrentProcess()` question never arises for the channel object.** It
+arises, if at all, for the memory objects.
+
+### 3.3 Which resources the *driving* process actually needs mapped — from our own code
+
+`HostRmBackend::alloc_channel_in` (`crates/kayfabe-isolate-host/src/rm.rs:7765`) makes its CPU
+mappings at `:8212-8290`, and **both are conditional on provenance**:
+
+```rust
+        let ring_view = match owner {
+            RingOwner::Ours | RingOwner::OursUnmapped => Some(self.conn.map_cpu(
+                ring_obj, RING_OBJECT_BYTES, CachePolicy::WriteCombining)),
+            RingOwner::HandedIn => None,
+        };
+        let userd_view = match userd_owner {
+            UserdOwner::Ours     => Some(self.conn.map_cpu(userd, RING_OBJECT_BYTES, ...)),
+            UserdOwner::HandedIn => None,
+            UserdOwner::InRing   => None,
+        };
+```
+
+with the reason stated in the comment at `crates/kayfabe-isolate-host/src/rm.rs:8216-8231`:
+
+> ★★★★★ **G4 — THE CPU MAP OF THE RING IS CONDITIONAL, AND THE CONDITION IS PROVENANCE.**
+> ⊘ On a guest-backed ring this is not an omission we can get away with; it is a call that
+> **cannot succeed**. `map_cpu` issues `NV_ESC_RM_MAP_MEMORY` against the memory object, and the
+> object here is an `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` over pages RM pinned out of another
+> process's address space. **R31 arm B attempts it deliberately and prints what the driver
+> answered**, so the claim in this comment is a measurement rather than a plausible sentence.
+
+and the USERD twin at `:8248-8253`:
+
+> ★★★★★ **LEG B's G4 … `[measured, R31 arm B]` an `OS_DESCRIPTOR` over another process's pages
+> cannot be CPU-mapped at all**, so on the `HandedIn` arm this is a call that *would fail*, not
+> one we are choosing to skip. Every access it would have served is refused by name instead
+> (`USERD_NOT_OURS`).
+
+⇒ ★★★★★ **For the guest passthrough channel — the only shape this design question is about — the
+birthing process makes NO CPU mapping of the ring and NO CPU mapping of USERD.** There is nothing
+for a scratchpad-created mapping to be unusable *as*, because no mapping is created. The
+`ProcessId` filter of §3.1 has no object to filter.
+
+⊘ The `Ours` arms still map, and those are **our own** channels (the CE-copy channel and the CUDA
+walk kernel's channel, `crates/kayfabe-isolate-host/src/rm.rs:1337-1341`,
+`crates/kayfabe-isolate-host/src/cudawalk.rs`). Those already live in the scratchpad under
+Constraint 26 (`docs/design/THE_CONSTRAINTS.md:255-264`), so creator and driver are the same
+process there by construction, today and under the proposal.
+
+### 3.4 The doorbell needs no channel handle and no channel mapping
+
+The ring is a store into a **per-subdevice `*_USERMODE_*` window**, not into anything owned by the
+channel — `HostRmBackend::open_usermode`, `crates/kayfabe-isolate-host/src/rm.rs:1992-2001`:
+
+```rust
+    fn open_usermode(&self, class: UsermodeClass) -> Result<UsermodeWindow, RmError> {
+        let want = self.mint();
+        let object = self.raw_alloc(self.subdevice, want, class.usermode_id().0, &mut [])?;
+        self.remember(object, self.subdevice);
+        let (node, region) = self.map_cpu(object, USERMODE_WINDOW_SIZE, CachePolicy::WriteBack)?;
+```
+
+and the store itself, `crates/kayfabe-isolate-host/src/rm.rs:2041-2075`: `release_fence()` then one
+32-bit store of the token at `USERMODE_NOTIFY_CHANNEL_PENDING` inside that window.
+
+⇒ ★★ **Ringing a channel requires (a) the driving process's own usermode window — allocated under
+its own subdevice, in its own client — and (b) the 32-bit work-submit token, which is a *value*,
+not a handle.** The token is obtained once at birth by the birthing client
+(`NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN`, `crates/kayfabe-isolate-host/src/rm.rs:8203-8210`)
+and returned as the second half of `ChannelHandles` (`crates/kayfabe-isolate/src/lib.rs:2356`).
+**Under scratchpad birth, S obtains it and hands over a `u32`. The isolate never needs to name the
+channel to ring it.**
+⊘ Not established from source: whether RM or hardware validates *who* stores to the usermode
+window. The window is a per-client object and the store is a raw MMIO write with no RM
+involvement; **INFERRED** that there is no such check, because there is no software in the path.
+Confirming it is the probe in §7.
+
+### 3.5 ★★★★★ And the crossing itself is already MEASURED in this tree, unprivileged
+
+Even where a CPU view *is* wanted on both sides, an armed RM device node crosses a process
+boundary as an fd. The RM/kernel reason: `nvidia_mmap_helper`,
+`kernel-open/nvidia/nv-mmap.c:506-531`, validates **only that this file descriptor carries a valid
+mmap context** —
+
+```c
+    /*
+     * If mmap context is not valid on this file descriptor, this mapping wasn't
+     * previously validated with the RM so it must be rejected.
+     */
+    if (!smp_load_acquire(&mmap_context->valid))
+    { nv_printf(NV_DBG_ERRORS, "NVRM: VM: invalid mmap\n"); return -EINVAL; }
+```
+
+— and the context is armed **per-fd** by `NV_ESC_RM_MAP_MEMORY`
+(`kernel-open/nvidia/nv-usermap.c`, `nvamc->valid`). **There is no caller identity anywhere in the
+path.**
+
+Our own measurement of exactly that, recorded at
+`docs/design/the_counter_page_and_the_device_view.md:68-84`, `rmladder --bar1-crossing` on GA106
+**at euid 1002, non-root**:
+
+    W393 LEG A = ONE MEMORY: all 64 words the child stored through node A read back through
+                 node B in THIS process.  => an armed device node CROSSES a process boundary.
+    W393 device slot = KVM_SET_USER_MEMORY_REGION accepted a VM_PFNMAP device view as memslot
+    W393 guest exit  = the ONLY exit is the signal store; the data store and the data load
+                       took NO exit
+    W393 LEG B = a guest CPU store took no VM exit and landed in card memory another CPU
+                 view reads.
+
+Probe source: `crates/kayfabe-isolate-host/src/bin/rmladder.rs:1376-1700` — note `:1655-1660`,
+*"Our copy of A goes NOW. From here the child's descriptor is the only one, so a mapping the child
+makes is a mapping this process could not have made for it."*
+
+⊘ **One limit, measured and recorded in the same doc** (`:88-98`, w596): `NVOS33_FLAGS_ACCESS_READ_ONLY`
+does **not** make the resulting `mmap` read-only — `PROT_WRITE` was accepted on a node armed
+read-only. So fd-passing hands over a **read-write** capability, and the read-only primitive that
+§3 of that doc assumed is absent. That bounds what fd-passing can be used to *contain*; it does not
+affect whether the crossing works.
+
+### 3.6 §3 verdict
+
+| question | answer | evidence |
+|---|---|---|
+| Does RM refuse a cross-process CPU mapping? | **No.** It *fails to find* it on unmap/lookup. `osAttachToProcess` is a Linux no-op. | `os.c:677-692`; `rs_utils.c:325-332`; `mapping_list.c:84` |
+| Could the isolate use a mapping S created via RM? | **Not by RM address lookup** — the filter would miss it. **Yes by fd**, which is a different mechanism and is measured. | `rs_utils.c:330-331`; `nv-mmap.c:506-531`; `the_counter_page_and_the_device_view.md:68-84` |
+| Does the driving process need a CPU map of the channel? | **Impossible on our shape, for anyone.** | `kernel_channel.c:1291` |
+| …of the ring or USERD? | **Not for a guest passthrough channel** — the birth path maps neither, and the calls would fail. | `rm.rs:8212-8253` |
+| …of the doorbell page? | **Yes — but it is the isolate's OWN per-subdevice usermode object**, unrelated to who birthed the channel. | `rm.rs:1992-2001`, `:2041-2075` |
+
+★ **§3 is not a blocker.** It was the most plausible blocker on paper, and the evidence in both
+trees removes it.
