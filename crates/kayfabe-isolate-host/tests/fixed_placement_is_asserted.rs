@@ -150,19 +150,41 @@ fn every_nvos46_site_asserts_its_own_placement() {
         // (`raw_map_dma_flags` -> `raw_map_dma_slice`).
         let at = code[..lit]
             .rfind("fn ")
+            .map(|o| code[..o].rfind('\n').map_or(0, |nl| nl + 1))
             .expect("the encode site is inside a function");
         // ⊘ The body ends at the first closing brace at the function's own indentation.
         // Both sites are indented (one in an `impl`, one in an `impl` inside a module), so
         // the terminator is derived from the `fn`'s own column rather than hardcoded — a
         // fixed `"\n    }\n"` would have run past the nested site's end into the next
         // function and gated the wrong text.
-        let col = code[..at].rfind('\n').map_or(at, |nl| at - nl - 1);
+        // ⊘ The LINE's indentation, not the offset of `fn` within it. `pub(super) fn ` puts
+        // `fn` at column 19 on a line indented 8 — and the closing brace is at 8. Getting
+        // this wrong is what produced the missing terminator above.
+        let line_start = code[..at].rfind('\n').map_or(0, |nl| nl + 1);
+        let col = code[line_start..]
+            .chars()
+            .take_while(|c| *c == ' ')
+            .count();
         let terminator = format!("\n{}}}\n", " ".repeat(col));
-        let end = code[at..]
-            .find(&terminator)
-            .map_or(code.len(), |o| at + o);
+        // ⊘⊘⊘ **A MISSING TERMINATOR IS A FAILURE, NOT A FALLBACK.** The first version of
+        // this gate said `.map_or(code.len(), ..)`, so a terminator it could not find made
+        // the body *the rest of the file* — and the gate then found the OTHER site's
+        // assertions and passed. `KP15` (deleting the B site's teardown) was watched and
+        // came back GREEN because of exactly this. ⇒ a scanner that cannot delimit what it
+        // is scanning must say so, never widen.
+        let end = at + code[at..].find(&terminator).unwrap_or_else(|| {
+            panic!(
+                "★ NON-VACUITY: could not find the end of the function at byte {at} \
+                 (column {col}). A gate that cannot delimit its subject must REFUSE, not \
+                 fall back to the rest of the file — that fallback made this test green \
+                 through a deleted assertion."
+            )
+        });
         let body = &code[at..end];
-        let name: String = body.chars().skip(3).take_while(|c| *c != '(').collect();
+        let name: String = body[body.find("fn ").map_or(0, |o| o + 3)..]
+            .chars()
+            .take_while(|c| *c != '(')
+            .collect();
 
         for (needle, why) in [
             (
