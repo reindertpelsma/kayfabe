@@ -448,3 +448,298 @@ affect whether the crossing works.
 
 ★ **§3 is not a blocker.** It was the most plausible blocker on paper, and the evidence in both
 trees removes it.
+
+---
+
+## §4 — What our own tree assumes
+
+⊘ **Start here: the question is already asked and answered in this tree, and the answer is a live
+refusal.** `docs/design/THE_CONSTRAINTS.md:415-417`:
+
+> ⇒ **"The scratchpad births the channel and dups it to the isolate" is WITHDRAWN as a default.**
+> It is admissible only if measured: **scratchpad-born channels come out `_PRIVILEGE_USER`**,
+> asserted at birth and refusing otherwise.
+
+enforced by `SCRATCHPAD_BIRTH_IN_A_HANDED_SPACE` (constant `crates/kayfabe-isolate-host/src/rm.rs:1345`,
+fired `:7794-7806`, placed *above the first allocation* so the refusal has nothing to unwind).
+⇒ **This research question is a request to cross a named, deliberate gate.** §4 enumerates what
+else is standing behind it.
+
+### 4.1 The load-bearing mechanisms, each independently cited
+
+| # | mechanism | `file:line` | what it encodes |
+|---|---|---|---|
+| 1 | `Worker::execute` foreign-handle gate | `crates/kayfabe-isolate/src/lib.rs:3862-3868` | every handle in a plan must belong to the executing worker's `(ProcId, GpuId)` |
+| 2 | `HostHandle::belongs_to` | `crates/kayfabe-isolate/src/lib.rs:184-193` | compares **both** halves of `IsolateId` |
+| 3 | `VerbPlan::handles()`, `ChannelBirth` arm | `crates/kayfabe-isolate/src/lib.rs:3095-3103` | ring + USERD + host-VAS handles are checked by #1 |
+| 4 | `RING_NOT_A_JOINED_WINDOW` | `crates/kayfabe-isolate-host/src/rm.rs:1520-1539`, fired `:6997-7003` | *"this isolate did not mint that object by joining a framebuffer leaf"* |
+| 5 | `USERD_NOT_A_JOINED_WINDOW` | `crates/kayfabe-isolate-host/src/rm.rs:1517` | same, for USERD |
+| 6 | `RING_HANDLE_REACHED_RM` | `crates/kayfabe-isolate-host/src/rm.rs:1315`, fired `:8094-8105` | the w745 successor assert: a store-slice birth must name handle 0 |
+| 7 | `OwnClient` / **F11** | `crates/kayfabe-isolate-host/src/rm.rs:273`, `:292-320`; doc `:231-240` | *"an `OwnClient` value exists"* and *"this process allocated that client"* are **one statement** |
+| 8 | `ScratchpadRole` + `HandedVaSpace` | `crates/kayfabe-isolate-host/src/rm.rs:337-453` | the **one** typed exception to #7, and only for a VA space handed UP |
+| 9 | `ADOPT_NOT_THE_SCRATCHPAD` | `crates/kayfabe-isolate-host/src/rm.rs:1281`, fired `:5709-5732` | a per-proc isolate may not adopt |
+| 10 | `SCRATCHPAD_BIRTH_IN_A_HANDED_SPACE` | `crates/kayfabe-isolate-host/src/rm.rs:1345`, fired `:7794-7806` | **the exact refusal this question proposes to cross** |
+| 11 | per-`(proc,gpu)` worker checkout | `crates/kayfabe-fwd/src/lib.rs:1588-1600`, `:1650` | the driving verbs run on the proc's own isolate by construction |
+| 12 | birth requires the *routed proc's* isolate | `crates/kayfabe-fwd/src/lib.rs:5485-5493` | `IsolatePending` / `NoTarget` otherwise |
+| 13 | commit writes the proc's own channel | `crates/kayfabe-fwd/src/lib.rs:5612-5614` | host channel + token stored per-proc |
+
+Isolate identity is **`(ProcId, GpuId)`** (`crates/kayfabe-isolate/src/lib.rs:1963-1970`), and
+`ProcId` is *not* a PID, CR3 or token — it is a derived label for one dup-connected component of
+declared user clients (`crates/kayfabe-core/src/lib.rs:205-212`,
+`crates/kayfabe-core/src/project.rs:188-205`). ⊘ That matters for §1: **our notion of "guest
+process" has no relationship to RM's `ProcessID` today**, so nothing in our tree currently *reads*
+the RM stamp. What RM's stamp buys us is whatever RM itself does with it — §1's census.
+
+### 4.2 The ownership split, as the constraints state it
+
+`docs/design/THE_CONSTRAINTS.md:255-264` (Constraint 26):
+
+| | **owns** | **sees** |
+|---|---|---|
+| per-proc **isolate** | channel, VA space, compute, control | **only its own VA space** |
+| **scratchpad** | the vidmem GPGA object, the tables, bounded kernel channels | all vidmem, all VA spaces |
+
+> ⇒ **A per-proc isolate never holds an `hMemory` for vidmem and never receives the guest-RAM
+> memfd.** Isolates remain keyed on VA spaces.
+
+★ Note the **direction** the current design is careful about — `tests/tests/vaspace_handover_asserts.rs:138-158`:
+
+> ★★★★★ **CONSTRAINT 30.** … the direction of this hand-over is the whole of its safety: the
+> space is created by the per-proc isolate and lent **UP** to the scratchpad. A space the
+> scratchpad created and lent **DOWN** would stamp every channel born in it with the scratchpad's
+> privilege.
+
+⇒ Scratchpad birth is the *inverse* of the direction the current design chose, and the gate at
+`rm.rs:7794-7806` is precisely the "no lending down" enforcement.
+
+### 4.3 ⊘⊘⊘ THE PREMISE IN THE BRIEF IS NOT ESTABLISHED — and this tree already says so
+
+The brief states: *"★ An **unprivileged** scratchpad yields `rmclientIsAdmin == false` ⇒
+`_PRIVILEGE_USER`, so the *privilege* stamp is not a cost."*
+
+`docs/design/THE_CONSTRAINTS.md:414-415` contradicts the antecedent:
+
+> ⚠ And F11 records that our isolates' kernel-visible euid is **0** on a root VMM, so
+> `rmclientIsAdmin(...)` plausibly holds for the scratchpad — which would make every channel it
+> births `_PRIVILEGED_CHANNEL_TRUE`.
+
+The reason, from `crates/kayfabe-isolate-host/tests/own_client_invariant.rs:1-14`:
+`surrender_privilege` drops **capabilities, not uid**, so on a root VMM the isolate's euid as the
+host kernel sees it is 0.
+
+And the driver-side predicate, `src/nvidia/src/kernel/rmapi/client.c:384-394`:
+
+```c
+    return (privLevel >= RS_PRIV_LEVEL_USER_ROOT) && !pClient->bIsRootNonPriv;
+```
+
+with `privLevel` set in `src/nvidia/arch/nvalloc/unix/src/escape.c:304`:
+
+```c
+    secInfo.privLevel = osIsAdministrator() ? RS_PRIV_LEVEL_USER_ROOT : RS_PRIV_LEVEL_USER;
+```
+
+resolving through `src/nvidia/arch/nvalloc/unix/src/os.c:614-617` →
+`kernel-open/nvidia/os-interface.c:377-381` → `kernel-open/common/inc/nv-linux.h:537`:
+`#define NV_IS_SUSER() capable(CAP_SYS_ADMIN)`.
+
+⇒ ★ **`privLevel` is a property of the CALLING TASK'S CAPABILITY AT EACH IOCTL, not of the
+client** (though `client.c:95` also caches it as `cachedPrivilege`). A scratchpad that must be
+privileged to mint `NV01_MEMORY_LIST_OBJECT` is, by that same fact, `rmclientIsAdmin == true` —
+**unless** `bIsRootNonPriv` is set. See §6.1: there is a mechanism for exactly that, and we are
+not using it.
+
+⊘ The other disjunct at `kernel_channel.c:285`, `hypervisorCheckForObjectAccess(hClient)`, is
+**dead in the open driver**: `src/nvidia/src/kernel/virtualization/hypervisor/hypervisor_access.c:32-40`
+returns `NV_FALSE` unconditionally. **Unmeasurable from source whether the closed driver differs.**
+
+### 4.4 ★ Constraint 29 — what "restating" costs here
+
+`docs/design/THE_CONSTRAINTS.md:358-391` obliges: *"**Restate, do not remove**… **THE REPLACEMENT
+MUST TEST THE ARGUMENT THAT RETIRED THE OLD ONE**… ⊘ Never go green by shrinking the universe the
+gate quantifies over… ⚠ A retired assert is a commit-message obligation."*
+
+So, for each mechanism in §4.1, the classification:
+
+| # | mechanism | verdict | why |
+|---|---|---|---|
+| 1, 2 | `Worker::execute` / `belongs_to` | **RESTATE** | the failure (a raw handle value is live-and-different in every other client, `lib.rs:113-127`) is untouched. The gate must become "the handle belongs to the isolate this *verb* is for", with birth verbs routed to S. ⚠ That is a widening, and the successor must go red if a *driving* verb ever carries an S-minted handle. |
+| 3 | `ChannelBirth::handles()` | **RESTATE** | the arm must classify S's handles as S's; Constraint 26's existing `StoreSlice` case already shows the shape (`lib.rs:3087-3094`) |
+| 4, 5 | `RING_/USERD_NOT_A_JOINED_WINDOW` | **UNTOUCHED** by S-birth *per se* — already superseded by Constraint 26's `StoreMapPort::is_slice_of_the_store` (`crates/kayfabe-qemu-raw/src/storemap.rs:309-331`, oracle `crates/kayfabe-fwd/src/lib.rs:6863-6886`). ⚠ But under S-birth the ring/USERD would be **S's own** store slices, so the oracle's question ("did *this* port place this slice?") becomes trivially yes and stops discriminating. **That is a restate obligation, and it is the one most likely to be missed.** |
+| 6 | `RING_HANDLE_REACHED_RM` | **UNTOUCHED** — still the right assert, still fail-closed |
+| 7 | `OwnClient` / F11 | **BREAKS, then RESTATES** — the isolate would have to name a channel it did not mint. Today that is structurally unspellable. The existing precedent for widening it *by a type* is `HandedVaSpace` (§4.1 #8), and Constraint 29 clause 3 names that as the approved shape. ⚠ ⊘ **But see §2/§6: it may not need widening at all** — if the isolate never names the channel, F11 stands unmodified. |
+| 8, 9 | `ScratchpadRole` / `HandedVaSpace` / `ADOPT_NOT_THE_SCRATCHPAD` | **UNTOUCHED** |
+| 10 | `SCRATCHPAD_BIRTH_IN_A_HANDED_SPACE` | **THE GATE ITSELF.** Constraint 29 clause 2 applies in its strongest form: it was installed because *"a channel born here would carry the scratchpad's privilege into a guest proc's space for its whole life."* Retiring it requires the successor to go **red if a scratchpad-born channel ever comes out `_PRIVILEGED_CHANNEL_TRUE`** — i.e. a live read-back of the stamp, not an argument. ⊘ **See §7: that read-back may not be available from userspace.** |
+| 11, 12, 13 | routing / checkout / commit | **RESTATE** — mechanical; birth routes to S, driving stays per-proc. No failure is guarded here, only plumbing. |
+
+### 4.5 The tests that would go red
+
+`tests/tests/cross_proc_lifetime.rs:35-37` states the invariant verbatim:
+
+> **No host object is ever released, unmapped, or operated on through an isolate other than the
+> one that minted it — on any teardown ordering, however adversarial.**
+
+Exact-variant assertions on `RmError::ForeignHandle` at `:357-400`, `:389`, `:451`, `:492`, `:522`,
+`:556`, `:616`, `:641`, `:744`, `:821`, `:1081`, `:1130`.
+Further: `tests/tests/concurrency_stress.rs:204-270` (`assert_verb_in_namespace`, `AllocChannel`
+arm destructured with **no `..`**, `:239-253`);
+`tests/tests/vaspace_handover_asserts.rs:138-158`;
+`crates/kayfabe-isolate-host/tests/ownership_split_gates.rs:109-159`
+(`the_scratchpad_cannot_birth_a_channel_in_a_space_it_adopted` — asserts the gate's *exact
+predicate*, that `adopted_spaces` is written, and the ordering dup < remember < range);
+`tests/tests/the_birth_names_the_guests_ring.rs:775-786` (asserts the birth plan offers the
+per-proc worker **zero** foreign handles);
+`crates/kayfabe-isolate-host/tests/export_backing.rs:417-440`;
+`crates/kayfabe-isolate-host/tests/guest_ring_census.rs:221-240`, `:408`, `:530`, `:605`, `:629`;
+`crates/kayfabe-isolate-host/tests/own_client_invariant.rs` (F11, `:451`, `:485-520`, `:522`,
+`:548-563`, `:581-593`);
+`crates/kayfabe-isolate-host/tests/real_isolate.rs:295`.
+
+⊘ **Reported empty:** `unranked_locks` (`tests/tests/unranked_locks.rs`) has **no relation** to
+process/resource ownership — it is `l1_concurrency.md` §3.3.1's INLINE-SAFE clause (c) for
+unranked locks (`:1-30`). It appears in this search space only as a cautionary instrument. It is
+**untouched** by this question.
+
+---
+
+## §5 — `nvkvm-pv`, the shipped Mode-1 sibling
+
+Repo `/workspace/nvkvm-pv`, HEAD `368d2db`.
+
+### 5.1 Who creates channels, and where
+
+**The isolate stub — one freestanding, unprivileged host process per *guest process*.** Not QEMU,
+not a daemon.
+
+- Cardinality stated three times: `src/common/nvkvm_proto.h:24-30`
+  (*"Each guest userspace process (identified by `mm_struct`) has exactly one 'isolate' host
+  process"*), `docs/internal/isolate-model.md:3-5`, `ARCHITECTURE.md:819-823`.
+- The `ioctl(2)` that creates a channel executes at exactly one line:
+  `src/stub/nvkvm_stub.c:1824` (`stub_ioctl(fd, job.cmd, job.param_buf)`), wrapper at `:437-440`.
+- `ARCHITECTURE.md:160-162`: *"**Step 12 runs in a process, not in QEMU.** The isolate has the
+  guest process's address-space layout mirrored and its own RM client."*
+
+### 5.2 ★ Why it must be the stub — and it is **not** a security reason
+
+`docs/internal/isolate-model.md:8-21` and `ARCHITECTURE.md:824-831`:
+
+- `rmclientValidate` compares the RM client's `pOSInfo` against the calling task's `nvfp`;
+- UVM binds its file's `nvfp` to the calling task's `mm` during `UVM_INITIALIZE`;
+- `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` pins the **calling task's** pages.
+
+> *"The isolation property is a consequence of satisfying the driver, not the other way round."*
+> — `docs/internal/isolate-model.md:20-21`
+
+★★★ **This is the single most transferable finding for the decision.** The Mode-1 sibling did not
+choose per-process host processes for isolation; it chose them because **RM refuses to work
+otherwise**, and isolation fell out. ⇒ The question *"may S birth the channel?"* is, on that
+precedent, a question about **which RM state is task-bound**, not about which is
+privilege-bound. ⊘ Note our shape differs: we pass guest pages as `OS_DESCRIPTOR`s built from a
+memfd, and our per-proc isolate is already the one that pins them.
+
+### 5.3 ★ There IS a precedent for one host process serving many guest processes — twice
+
+Neither is for channels, and both are annotated as deliberate exceptions.
+
+**(a) QEMU's own "admin" RM client, one per VM.** `src/qemu/nvkvm_isolate_handlers.c:1664-1671`,
+implementation `nvkvm_admin_ensure()` `:1696-1728` (allocates `NV01_ROOT` `hClient 0xad000001`,
+`NV01_DEVICE_0`, `NV20_SUBDEVICE_0` via `admin_rm_alloc()` `:1678-1692`, then
+`NV_ESC_RM_CONTROL` at `:1788`). It exists because the stub lives inside `CLONE_NEWPID`/`NEWUSER`
+where `GET_PID_INFO` attributes 0 bytes. **Query-only; allocates no channel; never accepts a
+guest-named pid** (`:1734-1737`).
+
+**(b) All UVM ioctls execute in QEMU's process, for every guest process.**
+`src/qemu/nvkvm_isolate_handlers.c:1229-1231` (*"UVM ioctls execute in QEMU's (privileged)
+process"*), call at `:3050`, `UVM_REGISTER_CHANNEL` (27) among them at `:1269-1271`.
+★ **And how guest processes are kept apart inside that one process is directly on point** —
+`src/qemu/nvkvm_isolate_handlers.c:1279-1284`:
+
+> *"Per-HANDLE, deliberately: each guest UVM fd gets its own QEMU-side `/dev/nvidia-uvm` fd and
+> therefore its own `uvm_va_space`, and two guest processes legitimately pick the SAME base
+> (measured: isolates 8 and 10 both create `0x200000000`). A per-VM or process-wide VA
+> reservation would break that; range ownership is only meaningful inside one `va_space`."*
+
+⇒ **One host process, many guest processes, separated by holding a separate device *fd* per guest
+process plus a handle-keyed ownership table — not by PID.** That is the closest existing precedent
+for what scratchpad birth would require.
+
+### 5.4 ★★★ The `RS_SHARE_TYPE_PID` precedent — a shipped workaround for exactly this problem
+
+`ARCHITECTURE.md:848-854`:
+
+> *"The kernel's default share policy is `RS_SHARE_TYPE_PID`, granting `DUP_OBJECT` only when the
+> caller's PID matches the resource owner's. In a split-process model those PIDs differ, so UVM's
+> kernel-internal client cannot dup `libcuda`'s VA space and `cuCtxCreate` fails with
+> `NV_ERR_INSUFFICIENT_PERMISSIONS`."*
+
+The shipped fix — `src/qemu/nvkvm_isolate_handlers.c:4089-4108` (reasoning), `:4150-4219`
+(implementation): after every successful alloc, issue `NV_ESC_RM_SHARE` (`0xc0184635`) with
+`.accessMask = 0x1 /* RS_ACCESS_DUP_OBJECT */` and `.type = 1 /* RS_SHARE_TYPE_ALL */`, **executed
+on the stub fd** (`:4210`) because *"the share runs on the stub fd so the owner check inside
+`_serverShareResource` matches (caller process == resource owner)"* (`:4103-4105`).
+
+⇒ ★★★★★ **`NV_ESC_RM_SHARE` with `RS_SHARE_TYPE_ALL` is a measured, shipping escape from the
+PID-matched dup policy, and it must be issued BY THE OWNER.** Under scratchpad birth, S is the
+owner, so S can issue it. That is the concrete answer to "how would the isolate get dup rights"
+— see §2.
+
+⊘ Two caveats, both recorded by the sibling itself:
+- ⚠ **A live comment/code contradiction**: the block comment at
+  `src/qemu/nvkvm_isolate_handlers.c:4099-4102` says the share is scoped `RS_SHARE_TYPE_PID`; the
+  initializer 100 lines below at `:4204` is `RS_SHARE_TYPE_ALL`, and `ARCHITECTURE.md:856` agrees.
+  **The comment is stale; the shipped type is host-wide.** Do not cite the comment.
+- The argument that `TYPE_ALL` is not a cross-tenant hole (reach-gating happens at
+  `clientGetResourceRef`, not at the share policy) is at `:4177-4200`, demonstrated by
+  `tests/security/poc_cross_proc_dup.c`. ⊘ That argument is the sibling's; it is **not
+  independently verified here**.
+
+### 5.5 Recorded reasoning about PID-keyed isolation
+
+★ The principal-selection note, `src/guest/nvkvm_session.c:36-46`:
+
+> *"The security PRINCIPAL is the address space (`mm`), not the `tgid`. This is deliberate and
+> matches the only sane boundary: nvidia keys access on the tgid (`RS_SHARE_TYPE_PID =
+> current->tgid`) and a thread group always has exactly one mm… (mm is also the robust key: tgids
+> get recycled — audit H2.)"*
+
+Host-side keys are `session_id` (guest `mm_struct`) / `isolate_id` / `handle_id`
+(`src/common/nvkvm_proto.h:31-37`, `:326`, `:333`) — **never a host PID**.
+⚠ And the `hClient` allowlist is **per-VM, not per-process**
+(`src/qemu/nvkvm_isolate_handlers.c:1600-1603`), with the gap stated outright in
+`SECURITY.md:41-51`: *"**This boundary is not currently closed.**… Closing it properly needs a
+caller session id in the protocol, not a patch."*
+
+⊘ **Reported empty — and this is a real bound on §5's usefulness.** The following return **zero
+hits repo-wide** in `/workspace/nvkvm-pv` (`.git/` excluded): `ProcessID`, `SubProcessID`,
+`osGetCurrentProcess`, `RmClient`, `hUserdMemory`, `userdMemory`, `NvRmMapMemory`, `usermodeArea`,
+`nv_mmap`, `client-per-guest`. ⇒ **There is no recorded consideration of RM's `ProcessID` /
+`SubProcessID` fields anywhere in the sibling.** If the owner wants to know whether a
+shared-client-with-`SubProcessID` design was evaluated and rejected, the answer from that repo is:
+**it was never written down.**
+
+### 5.6 Privilege posture
+
+- **The stub never runs privileged**, deliberately, with a five-rung degradation ladder and
+  measured probes: `docs/internal/isolate-model.md:176-296`; drop/harden at
+  `src/qemu/nvkvm_isolate.c:1713-1720`; 20-syscall seccomp allowlist at
+  `src/stub/nvkvm_stub.c:3360-3410`.
+- **QEMU is the privileged party and is declared trusted**: `SECURITY.md:64-66` (*"The VMM and the
+  host are trusted; the guest and the isolates are not"*); the one guest-named ioctl it executes is
+  UVM (`ARCHITECTURE.md:843-846`), guarded by a 31-row default-deny schema allowlist.
+- ⊘ **That posture differs from kayfabe's Constraint 17** (*"Host userspace stays UNPRIVILEGED.
+  Standing, absolute"* — `docs/design/THE_CONSTRAINTS.md:105`). The sibling's split is
+  privileged-VMM + unprivileged-stub; ours is meant to be unprivileged throughout. **The sibling is
+  therefore a precedent for the mechanism and NOT for the posture.**
+
+### 5.7 And the submission plane needs no host process at all
+
+`ARCHITECTURE.md:1024-1041`:
+
+> *"Once a CUDA channel exists, launching work is a **store to a mapped page**… It touches the
+> guest kernel module: no. The virtqueue: no. QEMU: no. The stub: no. There is no VM exit… **There
+> is no doorbell interception anywhere in the tree. That absence is the design.**"*
+
+The stub's own mirror mapping exists only for ioctl-time pointer dereference
+(`src/qemu/nvkvm_isolate_handlers.c:4760-4767`), not for submission. ⇒ **corroborates §3.4 from an
+independent codebase: the process that drives a channel is not, in general, the process that must
+hold CPU mappings of it.**
