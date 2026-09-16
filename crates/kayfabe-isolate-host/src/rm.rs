@@ -633,11 +633,23 @@ mod birth_conn {
 
     /// The handle space `BirthConn` mints from inside **B**.
     ///
-    /// ⊘ Deliberately disjoint from [`RmConnection`]'s, even though the two namespaces are
-    /// different clients and could not collide in RM. The reason is a **log**: a boot trace
-    /// carries both, and two handles that look alike in two namespaces is how a reader
-    /// attributes an object to the wrong client for an hour.
-    const BIRTH_HANDLE_BASE: u32 = 0xCAFE_B000;
+    /// ⊘⊘ **DISJOINT FROM [`RmConnection`]'s BY ARITHMETIC, NOT BY HOPE — and the first
+    /// version of this constant was `0xCAFE_B000`, which is neither.** Our own space starts
+    /// at `FIRST_HANDLE = 0xCAFE_0001` and **increments**, so `0xCAFE_B000` was only 45 055
+    /// allocations away. Two live boots' worth of objects is not a safety margin; it is a
+    /// collision with a schedule.
+    ///
+    /// ★★★ **And a collision here is not a wrong handle — it is a SILENT MISROUTE.** The
+    /// reverse index [`RmConnection::birth_for_range`] and the adopted-space ledger are both
+    /// keyed on the handle **value**, and both hold handles from two namespaces. A range of
+    /// ours that collided with one of B's would be mapped into B, under a foreign `hRoot`,
+    /// on a descriptor we did not open — and RM would answer it, because in **B's**
+    /// namespace that handle is real.
+    ///
+    /// ⇒ `0xB147_0000` ("B14 7H" — birth) is **below** our base, so our incrementing space
+    /// can only reach it by wrapping `u32`: ~884 million allocations, not 45 thousand. Pinned
+    /// by `the_two_handle_spaces_cannot_collide`.
+    const BIRTH_HANDLE_BASE: u32 = 0xB147_0000;
 
     /// ★★★★★ **CONSTRAINT 32 — ONE GUEST PROCESS'S BIRTH CLIENT, AND THE SESSION THAT
     /// REACHES IT.**
@@ -6815,6 +6827,23 @@ impl RmBackend for HostRmBackend {
         let h_dma = self.narrow(vas)?;
         if self.conn.is_bare_space(h_dma) {
             return Err(RmError::Other(MAP_THROUGH_A_BARE_SPACE));
+        }
+        // ★★★★★ **CONSTRAINT 32 — THE UNMAP FOLLOWS THE MAP'S NAMESPACE, AND CONSTRAINT 27
+        // IS WHY THIS IS NOT A DETAIL.**
+        //
+        // ⊘⊘ Found by audit, not by a test: without this the unmap for a route-K slice would
+        // be issued **under our own client** naming a handle that lives in **B**. RM would
+        // answer `0x33 INVALID_OBJECT_HANDLE` — or worse, succeed against a different object
+        // if the two handle spaces ever met — and the slice would stay mapped.
+        //
+        // ★★★ And a *silently failed* unmap here is the one failure constraint 27 exists to
+        // prevent: the refresh reports the guest's TLB invalidate complete, the guest kernel
+        // reuses the physical page for another of its own userspace processes, and the old
+        // process can still reach it through a slice we told the guest was gone. **A
+        // cross-process leak INSIDE the guest, caused by us, invisible to the guest.**
+        // ⇒ it must be routed, and it must return its `Result`, which it does.
+        if let Some((birth, _)) = self.conn.birth_for_range(h_dma) {
+            return birth.unmap_dma(h_dma, at.0);
         }
         self.conn.raw_unmap_dma(h_dma, at.0)
     }

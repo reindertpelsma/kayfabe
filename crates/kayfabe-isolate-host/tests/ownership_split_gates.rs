@@ -76,6 +76,84 @@ const THE_ONE_MAP_SITE: &str = "fn raw_map_dma_slice(";
 /// ⇒ this gate checks the ORDER, because the order is the whole argument. A birth dispatch
 /// hoisted above the refusal would let a bare space reach RM through B, where nothing else
 /// is watching.
+/// ★★★★★ **CONSTRAINT 32 — THE TWO HANDLE SPACES CANNOT COLLIDE, AND IT IS ARITHMETIC.**
+///
+/// `RmConnection` mints from `FIRST_HANDLE` **upward**; `BirthConn` mints from
+/// `BIRTH_HANDLE_BASE` upward, in a **different client**. Two ledgers key on the handle
+/// **value** while holding handles from both namespaces — `adopted_spaces` and
+/// `birth_ranges` — so a value that occurs in both is not a wrong handle, it is a **silent
+/// misroute**: one of our ranges mapped into B, under a foreign `hRoot`, on a descriptor we
+/// did not open, and RM answers it because in B's namespace that handle is real.
+///
+/// ⊘⊘ **The first version of `BIRTH_HANDLE_BASE` was `0xCAFE_B000` — 45 055 allocations
+/// above our own base.** That is not a safety margin; it is a collision with a schedule.
+/// The base must be **below** ours, so reaching it requires wrapping `u32`.
+#[test]
+fn the_two_handle_spaces_cannot_collide() {
+    let body = rm_body();
+    let first = read_hex(&body, "const FIRST_HANDLE: u32 = ");
+    let birth = read_hex(&body, "const BIRTH_HANDLE_BASE: u32 = ");
+    assert!(
+        birth < first,
+        "★★★★★ CONSTRAINT 32 — `BIRTH_HANDLE_BASE` ({birth:#010x}) is at or above \
+         `FIRST_HANDLE` ({first:#010x}). Our space INCREMENTS, so it will reach B's in \
+         {} allocations and then every ledger keyed on a handle value is ambiguous.",
+        birth.wrapping_sub(first)
+    );
+    // ⊘ And not merely below: far enough below that wrapping is the only route.
+    let gap = first.wrapping_sub(birth);
+    assert!(
+        gap > 100_000_000,
+        "★★★ CONSTRAINT 32 — the two handle spaces are only {gap} apart. The margin must be \
+         a number nobody reaches, not a number nobody has reached YET."
+    );
+}
+
+/// Read a `u32` hex literal off a `const NAME: u32 = 0x…;` line in the source.
+fn read_hex(body: &str, decl: &str) -> u32 {
+    let at = body
+        .find(decl)
+        .unwrap_or_else(|| panic!("★ NON-VACUITY: `{decl}` is gone from rm.rs"));
+    let rest = &body[at + decl.len()..];
+    let lit: String = rest
+        .chars()
+        .take_while(|c| c.is_ascii_hexdigit() || *c == 'x' || *c == 'X' || *c == '_')
+        .filter(|c| *c != '_')
+        .collect();
+    let hex = lit.trim_start_matches("0x").trim_start_matches("0X");
+    u32::from_str_radix(hex, 16).unwrap_or_else(|e| panic!("parse `{lit}`: {e}"))
+}
+
+/// ★★★★★ **CONSTRAINT 27/32 — THE UNMAP FOLLOWS THE MAP'S NAMESPACE.**
+///
+/// ⊘⊘ **This is constraint 27's failure, not a tidiness one.** If a route-K slice's unmap is
+/// issued under our own client naming a handle that lives in B, it fails — and a silently
+/// failed unmap is exactly what §27 forbids: the refresh reports the guest's TLB invalidate
+/// complete, the guest kernel reuses that physical page for another of its own userspace
+/// processes, and the previous process can still reach it through a slice we told the guest
+/// was gone. A cross-process leak **inside** the guest, caused by us, invisible to the guest.
+///
+/// ⇒ `unmap_store_slice` must consult the same reverse index `map_store_slice` does, so the
+/// two can never disagree about which namespace a handle lives in.
+#[test]
+fn the_store_unmap_routes_through_the_same_index_as_the_map() {
+    let body = rm_body();
+    for f in ["fn map_store_slice(", "fn unmap_store_slice("] {
+        let at = body
+            .find(f)
+            .unwrap_or_else(|| panic!("★ NON-VACUITY: `{f}` is gone from rm.rs"));
+        let end = body[at..].find("\n    fn ").map_or(body.len(), |o| at + o);
+        assert!(
+            body[at..end].contains("birth_for_range(h_dma)"),
+            "★★★★★ CONSTRAINT 27/32 — `{f}` does not consult `birth_for_range`. The map and \
+             the unmap MUST agree about which client a handle lives in; one that routes and \
+             one that does not means every route-K slice is mapped in B and unmapped — or \
+             not — in our own client, and §27's barrier completes on an unmap that never \
+             landed."
+        );
+    }
+}
+
 #[test]
 fn the_birth_dispatch_is_below_the_bare_space_refusal() {
     let body = rm_body();
