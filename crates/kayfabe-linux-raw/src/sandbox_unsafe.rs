@@ -528,6 +528,23 @@ pub fn privileges() -> Result<Privileges, RawError> {
 ///   `CAP_SETPCAP` and the ceiling is still there, which means the drop did not do what it
 ///   reported. A process that started unprivileged cannot empty the bounding set and is not
 ///   held to it, because `no_new_privs` already makes it unusable.
+/// ★ **w750 probe support — surrender privilege WITHOUT entering the filesystem sandbox.**
+///
+/// [`enter`] is the isolate's door and it does three things at once: a mount namespace, a
+/// scratch `/dev`, and the capability drop. A probe that must measure *"what does RM stamp
+/// when the CALLING TASK has no `CAP_SYS_ADMIN`"* needs only the third — and taking the
+/// other two would make a failure to acquire a user namespace look like a failure of the
+/// measurement. `docs/design/w750_route_k_prereg.md` rows 1 and 2.
+///
+/// ⊘ It is [`surrender_privilege`] verbatim: the same sequence, the same read-back, the
+/// same three refusals. Nothing is relaxed and no new behaviour exists — this is a name.
+///
+/// # Errors
+/// As [`surrender_privilege`]: [`RawError::Syscall`] naming what survived the drop.
+pub fn surrender() -> Result<(), RawError> {
+    surrender_privilege()
+}
+
 fn surrender_privilege() -> Result<(), RawError> {
     let before = privileges()?;
 

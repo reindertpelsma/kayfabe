@@ -2208,6 +2208,54 @@ impl RmConnection {
         )
     }
 
+    /// ★ **w750 probe support — a WRITE-COMBINING CPU view of one object, by raw handle.**
+    ///
+    /// [`Self::map_object_uncached`] exists already and takes [`CachePolicy::WriteBack`],
+    /// which is the right policy for the sysmem it was written for and the **wrong** one
+    /// for reading a word **hardware** writes: a cached view of a vidmem USERD can answer
+    /// from the CPU's cache and report a `GP_GET` that never moved. Every other vidmem
+    /// mapping in this file already uses [`CachePolicy::WriteCombining`]; this is the same
+    /// mapping, reachable from a probe that holds a raw handle rather than a
+    /// [`HostHandle`].
+    ///
+    /// ⊘ It adds no policy and no state — it is [`Self::map_cpu`] with the cache argument
+    /// fixed, exposed so `--route-k` (`docs/design/w750_route_k_prereg.md`) can read a
+    /// USERD it did not mint through this backend. Nothing on the forwarding path calls it.
+    ///
+    /// # Errors
+    /// Whatever the `NV_ESC_RM_MAP_MEMORY` or the `mmap` refused with.
+    pub fn map_object_write_combining(
+        &self,
+        object: u32,
+        len: u64,
+    ) -> Result<(CharDevice, VolatileRegion), RmError> {
+        self.map_cpu(object, len, CachePolicy::WriteCombining)
+    }
+
+    /// ★ **w750 probe support — one `NV_ESC_RM_CONTROL` on an object this connection names,
+    /// under this connection's own client.**
+    ///
+    /// ⊘ `HostRmBackend::raw_control_for_probe` exists already and hardcodes the **device**
+    /// as the object, which is right for the in-band census it was written for and cannot
+    /// express the two controls `--route-k` needs: `NV0000_CTRL_CMD_CLIENT_SHARE_OBJECT`
+    /// (whose object is the **client**) and `NV2080_CTRL_CMD_GPU_GET_PIDS` (whose object is
+    /// the **subdevice**).
+    ///
+    /// ⚠ Not a general control verb, for the same reason that one is not: every real
+    /// control in this file goes through a typed method that knows its parameter struct.
+    /// This takes bytes because a probe's whole job is to ask questions the port does not.
+    ///
+    /// # Errors
+    /// Whatever RM refused.
+    pub fn control_for_probe(
+        &self,
+        object: u32,
+        cmd: u32,
+        payload: &mut [u8],
+    ) -> Result<(), RmError> {
+        self.raw_control(object, cmd, payload)
+    }
+
     /// Read the PTIMER pair out of a region produced by [`Self::alloc_timer_object`] +
     /// [`Self::map_object_uncached`].
     ///

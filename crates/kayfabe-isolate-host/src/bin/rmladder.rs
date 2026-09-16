@@ -11646,6 +11646,1709 @@ fn defer_liveness(rm: &mut HostRmBackend, gpu: u32) -> bool {
     decided
 }
 
+// =========================================================================================
+// ★★★★★ w750 — ROUTE K, PHASE 1: THE BIRTH-CLIENT PROBE
+// =========================================================================================
+
+/// ★★★★★ **The userspace-only probe for `THE_CONSTRAINTS.md` constraint 32 (route K).**
+///
+/// Pre-registered in `docs/design/w750_route_k_prereg.md` **before** this code existed and
+/// before any GPU box was rented. Four rows, each with the value that would refute it
+/// written down first. ⊘ No guest, no KVM, no device model: two processes, raw RM ioctls,
+/// one channel.
+///
+/// The sequence under test, from constraint 32:
+///
+/// > I allocates client **B** on a second `/dev/nvidiactl` → passes that descriptor to S
+/// > over `SCM_RIGHTS` and closes its own copy → S dups the store into B → S dups **I's
+/// > VAS** into B with no grant → S births the channel **in B** → S frees the dup.
+///
+/// The measured question is whether *which task created the client* and *which process
+/// drives it* are separable. `client.c:112` stamps `ProcID` from the creating task;
+/// `escape.c:304` takes privilege from the calling task's `CAP_SYS_ADMIN` at each ioctl;
+/// `g_system_nvoc.c:104` binds a client to the `struct file`, which `SCM_RIGHTS` carries.
+///
+/// ⚠ **Every role drops `CAP_SYS_ADMIN` before it touches RM.** `NV_IS_SUSER()` is
+/// `capable(CAP_SYS_ADMIN)` (`nv-linux.h:537`), **not** uid 0, so on a root bench box a
+/// probe that forgot this would measure its own known-positive and call it the test.
+mod route_k {
+    use kayfabe_abi::bringup::{
+        NV_ESC_REGISTER_FD, NV_IOCTL_MAGIC, NV01_MEMORY_VIRTUAL, NV20_SUBDEVICE_0,
+        Nv2080AllocParameters, NvMemoryVirtualAllocationParams, RegisterFd,
+    };
+    use kayfabe_abi::generated::classes::{
+        FERMI_VASPACE_A, KEPLER_CHANNEL_GROUP_A, NV01_DEVICE_0, NV01_ROOT_CLIENT,
+    };
+    use kayfabe_abi::generated::classes::{
+        Nv0080AllocParameters, NvChannelGroupAllocationParameters,
+    };
+    use kayfabe_abi::generated::nvos::{
+        NV_ESC_RM_ALLOC, NV_ESC_RM_CONTROL, NV_ESC_RM_DUP_OBJECT, NV_ESC_RM_FREE,
+        NV_ESC_RM_MAP_MEMORY_DMA, Nvos00Parameters, Nvos21Parameters, Nvos46Parameters,
+        Nvos54Parameters, Nvos55Parameters,
+    };
+    use kayfabe_abi::submit::{
+        ChannelAllocParams, NV_ESC_RM_MAP_MEMORY, NVA06C_CTRL_CMD_BIND,
+        NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN, Nvos33ParametersWithFd, USERD_GP_GET,
+        USERD_GP_PUT, engine_type_copy, fifo, gp_entry, method_header_inc,
+    };
+    use kayfabe_arch::ids::GpuId;
+    use kayfabe_isolate::{HostHandle, IsolateId};
+    use kayfabe_isolate_host::rm::{HostRmBackend, RmConnection};
+    use kayfabe_linux_raw::{
+        CharDevice, DevDir, HostOffset, Indirect, ioctl, recv_with_fds, send_with_fds,
+    };
+    use std::ffi::CString;
+    use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
+    use std::sync::Arc;
+    use std::time::{Duration, Instant};
+
+    /// `CAP_SYS_ADMIN` — the only capability this probe reasons about.
+    const CAP_SYS_ADMIN: u32 = 21;
+
+    /// The store's size. Large enough to be a store rather than a page, small enough that a
+    /// refusal is never "the box had no memory".
+    const STORE_BYTES: u64 = 0x0010_0000;
+    /// Where USERD sits **inside the store**. 4 KiB-aligned, which is what
+    /// `kfifoGetUserdSizeAlign` requires, and deliberately **non-zero** so a birth that
+    /// ignored `userdOffset[0]` would poison the wrong page and show up in row 5.
+    const USERD_OFFSET_IN_STORE: u64 = 0x3000;
+    /// `NV_CHANNEL_ALLOC_PARAMS.flags` bit `5:5`, `NVOS04_FLAGS_PRIVILEGED_CHANNEL`
+    /// (`alloc_channel.h:141`). **Row 1 is this one bit.**
+    const NVOS04_FLAGS_PRIVILEGED_CHANNEL: u32 = 1 << 5;
+
+    /// The ring object I mints and UVM publishes, and the three things inside it.
+    const RING_BYTES: u64 = 0x0001_0000;
+    /// GPFIFO entries live at the base of the ring; 512 entries of 8 bytes.
+    const GP_ENTRIES: u32 = 512;
+    /// The release semaphore, past the entry area.
+    const SEM_OFFSET: u64 = 0x1000;
+    /// The pushbuffer, past the semaphore.
+    const PB_OFFSET: u64 = 0x2000;
+    /// The payload the one `SEM_EXECUTE` releases.
+    const SEM_PAYLOAD: u32 = 0x5750_0001;
+
+    /// The GPU VA the UVM session publishes the ring at. Same shape as `--uvm-mean`'s `P2_*`
+    /// constants, deliberately far from anything RM places itself.
+    const K_RING_VA: u64 = 0x0000_0091_0000_0000;
+    /// The channel-resource range `UVM_REGISTER_CHANNEL` is given. ⊘ Unused for a CE channel
+    /// (`nv_gpu_ops.c:10855`), passed so the call is correct if that stops being true.
+    const K_CHANRES_VA: u64 = 0x0000_0091_4000_0000;
+    /// A **second** channel-resource range, for the negative control, so a refusal there can
+    /// never be "that range is already registered".
+    const K_CHANRES_NEG_VA: u64 = 0x0000_0091_8000_0000;
+    /// The length of both.
+    const K_CHANRES_LEN: u64 = 0x0010_0000;
+
+    /// `NV0000_CTRL_CMD_CLIENT_SHARE_OBJECT` (`ctrl0000client.h:155`).
+    const NV0000_CTRL_CMD_CLIENT_SHARE_OBJECT: u32 = 0x0000_0d06;
+    /// `RS_SHARE_TYPE_CLIENT` (`rs_access.h:245`).
+    const RS_SHARE_TYPE_CLIENT: u16 = 3;
+    /// `RS_SHARE_ACTION_FLAG_COMPOSE` (`rs_access.h:262`) — **add** to the policy list
+    /// rather than replace it.
+    const RS_SHARE_ACTION_FLAG_COMPOSE: u8 = 4;
+    /// `RS_ACCESS_DUP_OBJECT` is right **0** (`rs_access.h:59`), so the mask limb is bit 0.
+    const RS_ACCESS_MASK_DUP_OBJECT: u32 = 1;
+
+    /// `NV2080_CTRL_CMD_GPU_GET_PIDS` (`ctrl2080gpu.h:3521`), `RMCTRL_FLAGS_NON_PRIVILEGED`
+    /// (`g_subdevice_nvoc.c:1126-1128`, flags `0x8`).
+    const NV2080_CTRL_CMD_GPU_GET_PIDS: u32 = 0x2080_018d;
+    /// `NV2080_CTRL_GPU_GET_PIDS_MAX_COUNT` (`ctrl2080gpu.h:3524`).
+    const GET_PIDS_MAX_COUNT: usize = 950;
+    /// `sizeof(NV2080_CTRL_GPU_GET_PIDS_PARAMS)`.
+    const GET_PIDS_PARAMS_SIZE: usize = 12 + 4 * GET_PIDS_MAX_COUNT;
+    /// `NV2080_CTRL_GPU_GET_PIDS_ID_TYPE_CLASS` (`ctrl2080gpu.h:3540`).
+    const GET_PIDS_ID_TYPE_CLASS: u32 = 0;
+
+    /// The fd number the spawned role-I child finds its socket on.
+    const ROLE_SOCK_FD: i32 = 3;
+
+    /// Every message on the role socket is this long, so a short read is a protocol fault
+    /// rather than a partial parse.
+    const MSG_BYTES: usize = 72;
+
+    /// What one RM escape answered. ⊘ **An ioctl the kernel refused outright and one that
+    /// ran and answered a status are different findings**, and every row in the report has
+    /// to be able to say which.
+    #[derive(Debug, Clone)]
+    enum Fail {
+        /// The `ioctl(2)` itself failed — RM never ran.
+        Refused {
+            /// Which escape.
+            what: &'static str,
+            /// The kernel's complaint.
+            detail: String,
+        },
+        /// RM ran and wrote a non-`NV_OK` status into the parameter struct. ★ This is the
+        /// shape `failed_zero_is_not_nothing_refused` names: `ioctl(2)` returns 0 and the
+        /// refusal is **inside** the struct.
+        Status {
+            /// Which escape.
+            what: &'static str,
+            /// `NV_STATUS`.
+            status: u32,
+        },
+    }
+
+    impl Fail {
+        /// The status if RM answered one, `0xFFFF_FFFF` if the ioctl never reached it.
+        fn code(&self) -> u32 {
+            match self {
+                Fail::Refused { .. } => 0xFFFF_FFFF,
+                Fail::Status { status, .. } => *status,
+            }
+        }
+    }
+
+    impl std::fmt::Display for Fail {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            match self {
+                Fail::Refused { what, detail } => write!(f, "{what}: ioctl refused: {detail}"),
+                Fail::Status { what, status } => write!(f, "{what}: NV_STATUS {status:#x}"),
+            }
+        }
+    }
+
+    /// One escape on one descriptor, against one `hRoot`.
+    ///
+    /// ⊘ **`root` is a parameter here and that is the whole point of the module.** Every
+    /// other RM path in this tree stamps the connection's own client
+    /// (`RmConnection::raw_alloc`'s "there is deliberately no `root` parameter"), which is
+    /// the F11 invariant and is exactly what route K asks about: the client is **I's**, the
+    /// descriptor is **I's**, and the caller is **S**.
+    struct Esc<'a> {
+        /// The control descriptor the client was minted on — `SCM_RIGHTS` carried it here.
+        ctl: &'a CharDevice,
+        /// `hRoot` for every escape below.
+        root: u32,
+        /// The next handle to mint under `root`.
+        next: u32,
+    }
+
+    impl<'a> Esc<'a> {
+        /// A fresh escape over `ctl`, allocating handles from `first`.
+        fn new(ctl: &'a CharDevice, root: u32, first: u32) -> Self {
+            Esc {
+                ctl,
+                root,
+                next: first,
+            }
+        }
+
+        /// Mint the next handle value under `root`.
+        fn mint(&mut self) -> u32 {
+            let h = self.next;
+            self.next = self.next.wrapping_add(1);
+            h
+        }
+
+        /// `NV_ESC_RM_ALLOC`. ★ `params` is **left as RM returned it**: `alloc_free.c:207-211`
+        /// copies the parameter block back on success, and row 1 is read straight out of it.
+        fn alloc(
+            &mut self,
+            parent: u32,
+            class: u32,
+            params: &mut [u8],
+            what: &'static str,
+        ) -> Result<u32, Fail> {
+            let want = self.mint();
+            let mut arg = [0u8; Nvos21Parameters::SIZE];
+            Nvos21Parameters {
+                h_root: self.root,
+                h_object_parent: parent,
+                h_object_new: want,
+                h_class: class,
+                p_alloc_parms: 0,
+                params_size: params.len() as u32,
+                status: 0,
+            }
+            .encode_into(&mut arg)
+            .map_err(|e| Fail::Refused {
+                what,
+                detail: format!("encode: {e:?}"),
+            })?;
+            let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_ALLOC as u8, arg.len()).map_err(
+                |e| Fail::Refused {
+                    what,
+                    detail: format!("request: {e:?}"),
+                },
+            )?;
+            let mut patches: Vec<Indirect<'_>> = Vec::new();
+            if !params.is_empty() {
+                patches.push(Indirect::new(16, params));
+            }
+            self.ctl
+                .ioctl(req, &mut arg, &mut patches)
+                .map_err(|e| Fail::Refused {
+                    what,
+                    detail: format!("{e:?}"),
+                })?;
+            let out = Nvos21Parameters::decode(&arg).map_err(|e| Fail::Refused {
+                what,
+                detail: format!("decode: {e:?}"),
+            })?;
+            if out.status != 0 {
+                return Err(Fail::Status {
+                    what,
+                    status: out.status,
+                });
+            }
+            Ok(out.h_object_new)
+        }
+
+        /// `NV_ESC_RM_CONTROL`.
+        fn control(
+            &self,
+            object: u32,
+            cmd: u32,
+            payload: &mut [u8],
+            what: &'static str,
+        ) -> Result<(), Fail> {
+            let mut arg = [0u8; Nvos54Parameters::SIZE];
+            Nvos54Parameters {
+                h_client: self.root,
+                h_object: object,
+                cmd,
+                flags: 0,
+                params: 0,
+                params_size: payload.len() as u32,
+                status: 0,
+            }
+            .encode_into(&mut arg)
+            .map_err(|e| Fail::Refused {
+                what,
+                detail: format!("encode: {e:?}"),
+            })?;
+            let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_CONTROL as u8, arg.len())
+                .map_err(|e| Fail::Refused {
+                    what,
+                    detail: format!("request: {e:?}"),
+                })?;
+            let mut patches = [Indirect::new(16, payload)];
+            self.ctl
+                .ioctl(req, &mut arg, &mut patches)
+                .map_err(|e| Fail::Refused {
+                    what,
+                    detail: format!("{e:?}"),
+                })?;
+            let out = Nvos54Parameters::decode(&arg).map_err(|e| Fail::Refused {
+                what,
+                detail: format!("decode: {e:?}"),
+            })?;
+            if out.status != 0 {
+                return Err(Fail::Status {
+                    what,
+                    status: out.status,
+                });
+            }
+            Ok(())
+        }
+
+        /// `NV_ESC_RM_DUP_OBJECT` — `hClientSrc` is a **foreign** client, and
+        /// `rs_server.c:1694` validates only the destination against this descriptor.
+        fn dup(
+            &mut self,
+            parent: u32,
+            src_client: u32,
+            src_object: u32,
+            what: &'static str,
+        ) -> Result<u32, Fail> {
+            let want = self.mint();
+            let mut arg = [0u8; Nvos55Parameters::SIZE];
+            Nvos55Parameters {
+                h_client: self.root,
+                h_parent: parent,
+                h_object: want,
+                h_client_src: src_client,
+                h_object_src: src_object,
+                flags: 0,
+                status: 0,
+            }
+            .encode_into(&mut arg)
+            .map_err(|e| Fail::Refused {
+                what,
+                detail: format!("encode: {e:?}"),
+            })?;
+            let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_DUP_OBJECT as u8, arg.len())
+                .map_err(|e| Fail::Refused {
+                    what,
+                    detail: format!("request: {e:?}"),
+                })?;
+            self.ctl
+                .ioctl(req, &mut arg, &mut [])
+                .map_err(|e| Fail::Refused {
+                    what,
+                    detail: format!("{e:?}"),
+                })?;
+            let out = Nvos55Parameters::decode(&arg).map_err(|e| Fail::Refused {
+                what,
+                detail: format!("decode: {e:?}"),
+            })?;
+            if out.status != 0 {
+                return Err(Fail::Status {
+                    what,
+                    status: out.status,
+                });
+            }
+            Ok(out.h_object)
+        }
+
+        /// `NV_ESC_RM_FREE`.
+        fn free(&self, parent: u32, object: u32, what: &'static str) -> Result<(), Fail> {
+            let mut arg = [0u8; Nvos00Parameters::SIZE];
+            Nvos00Parameters {
+                h_root: self.root,
+                h_object_parent: parent,
+                h_object_old: object,
+                status: 0,
+            }
+            .encode_into(&mut arg)
+            .map_err(|e| Fail::Refused {
+                what,
+                detail: format!("encode: {e:?}"),
+            })?;
+            let req =
+                ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_FREE as u8, arg.len()).map_err(|e| {
+                    Fail::Refused {
+                        what,
+                        detail: format!("request: {e:?}"),
+                    }
+                })?;
+            self.ctl
+                .ioctl(req, &mut arg, &mut [])
+                .map_err(|e| Fail::Refused {
+                    what,
+                    detail: format!("{e:?}"),
+                })?;
+            let out = Nvos00Parameters::decode(&arg).map_err(|e| Fail::Refused {
+                what,
+                detail: format!("decode: {e:?}"),
+            })?;
+            if out.status != 0 {
+                return Err(Fail::Status {
+                    what,
+                    status: out.status,
+                });
+            }
+            Ok(())
+        }
+
+        /// `NV_ESC_RM_MAP_MEMORY` — **row 3's instrument**, and it is deliberately the
+        /// CPU-map escape rather than anything cheaper: the question is whether the handle
+        /// still names an object, and a map is the call that has to resolve it.
+        ///
+        /// The descriptor it is handed is a freshly opened device node, as RM requires; it
+        /// is dropped with the result, so nothing is mapped on success beyond the call.
+        fn map_memory(
+            &self,
+            dev: &DevDir,
+            gpu: u32,
+            device: u32,
+            memory: u32,
+            len: u64,
+            what: &'static str,
+        ) -> Result<(), Fail> {
+            let name = CString::new(format!("nvidia{gpu}")).map_err(|e| Fail::Refused {
+                what,
+                detail: format!("node name: {e:?}"),
+            })?;
+            let node = CharDevice::openat(dev, &name).map_err(|e| Fail::Refused {
+                what,
+                detail: format!("openat: {e:?}"),
+            })?;
+            let mut arg = [0u8; Nvos33ParametersWithFd::SIZE];
+            Nvos33ParametersWithFd {
+                h_client: self.root,
+                h_device: device,
+                h_memory: memory,
+                offset: 0,
+                length: len,
+                p_linear_address: 0,
+                status: 0,
+                flags: 0,
+                fd: node.fd_number(),
+            }
+            .encode_into(&mut arg)
+            .map_err(|e| Fail::Refused {
+                what,
+                detail: format!("encode: {e:?}"),
+            })?;
+            let req =
+                ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_MAP_MEMORY, arg.len()).map_err(|e| {
+                    Fail::Refused {
+                        what,
+                        detail: format!("request: {e:?}"),
+                    }
+                })?;
+            self.ctl
+                .ioctl(req, &mut arg, &mut [])
+                .map_err(|e| Fail::Refused {
+                    what,
+                    detail: format!("{e:?}"),
+                })?;
+            let out = Nvos33ParametersWithFd::decode(&arg).map_err(|e| Fail::Refused {
+                what,
+                detail: format!("decode: {e:?}"),
+            })?;
+            if out.status != 0 {
+                return Err(Fail::Status {
+                    what,
+                    status: out.status,
+                });
+            }
+            Ok(())
+        }
+
+        /// `NV_ESC_RM_MAP_MEMORY_DMA` — place `memory` in the VA space behind `h_dma`.
+        fn map_dma(
+            &self,
+            device: u32,
+            h_dma: u32,
+            memory: u32,
+            len: u64,
+            what: &'static str,
+        ) -> Result<u64, Fail> {
+            let mut arg = [0u8; Nvos46Parameters::SIZE];
+            Nvos46Parameters {
+                h_client: self.root,
+                h_device: device,
+                h_dma,
+                h_memory: memory,
+                offset: 0,
+                length: len,
+                flags: 0,
+                flags2: 0,
+                kind_override: 0,
+                dma_offset: 0,
+                status: 0,
+            }
+            .encode_into(&mut arg)
+            .map_err(|e| Fail::Refused {
+                what,
+                detail: format!("encode: {e:?}"),
+            })?;
+            let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_MAP_MEMORY_DMA as u8, arg.len())
+                .map_err(|e| Fail::Refused {
+                what,
+                detail: format!("request: {e:?}"),
+            })?;
+            self.ctl
+                .ioctl(req, &mut arg, &mut [])
+                .map_err(|e| Fail::Refused {
+                    what,
+                    detail: format!("{e:?}"),
+                })?;
+            let out = Nvos46Parameters::decode(&arg).map_err(|e| Fail::Refused {
+                what,
+                detail: format!("decode: {e:?}"),
+            })?;
+            if out.status != 0 {
+                return Err(Fail::Status {
+                    what,
+                    status: out.status,
+                });
+            }
+            Ok(out.dma_offset)
+        }
+    }
+
+    /// Bind a freshly opened per-GPU node to a control session — `NV_ESC_REGISTER_FD`,
+    /// R3 in `RmConnection::open`'s ladder, without which every later escape on that
+    /// session answers `0x23 NV_ERR_INVALID_CLIENT`.
+    fn register_fd(node: &CharDevice, ctl: &CharDevice) -> Result<(), String> {
+        let mut reg = [0u8; 4];
+        RegisterFd {
+            ctl_fd: ctl.fd_number(),
+        }
+        .encode_into(&mut reg)
+        .map_err(|e| format!("REGISTER_FD encode: {e:?}"))?;
+        let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_REGISTER_FD, reg.len())
+            .map_err(|e| format!("REGISTER_FD request: {e:?}"))?;
+        node.ioctl(req, &mut reg, &mut [])
+            .map(|_| ())
+            .map_err(|e| format!("REGISTER_FD: {e:?}"))
+    }
+
+    /// Mint an `NV01_ROOT_CLIENT` on `ctl` — the one allocation with no owning client.
+    /// ★ **This is the whole of route K's identity claim**: the task that runs this line is
+    /// the task whose tgid lands in `pClient->ProcID` (`client.c:112`).
+    fn allocate_root(ctl: &CharDevice) -> Result<u32, Fail> {
+        let mut e = Esc::new(ctl, 0, 0);
+        e.alloc(0, NV01_ROOT_CLIENT, &mut [], "NV01_ROOT_CLIENT")
+    }
+
+    /// This process's own `CAP_SYS_ADMIN` bit, as the kernel reports it.
+    fn has_sys_admin() -> bool {
+        kayfabe_linux_raw::sandbox::privileges()
+            .map(|p| (p.effective >> CAP_SYS_ADMIN) & 1 == 1)
+            .unwrap_or(false)
+    }
+
+    /// Surrender every capability and **say what happened**, because a drop that silently
+    /// did nothing is exactly the instrument failure rows 1 and 2 turn on.
+    fn drop_privilege(role: &str) {
+        let before = has_sys_admin();
+        let outcome = kayfabe_linux_raw::sandbox::surrender();
+        let after = has_sys_admin();
+        println!("K_{role}_CAPS_SYSADMIN={}", u32::from(after));
+        println!(
+            "info  route-K {role} privilege: CAP_SYS_ADMIN {} -> {} ({})",
+            u32::from(before),
+            u32::from(after),
+            match outcome {
+                Ok(()) => "surrendered".to_owned(),
+                Err(e) => format!("surrender refused: {e:?}"),
+            }
+        );
+    }
+
+    /// This process's thread-group id — the number `osGetCurrentProcess()` reads.
+    fn tgid() -> u32 {
+        std::process::id()
+    }
+
+    /// A fixed-size message on the role socket.
+    #[derive(Debug, Default, Clone, Copy)]
+    struct Msg {
+        /// Which step of the protocol this is.
+        tag: u32,
+        /// Six general-purpose words; each step's meaning is documented at its send site.
+        w: [u32; 8],
+        /// Two general-purpose 64-bit words.
+        q: [u64; 4],
+    }
+
+    impl Msg {
+        /// Little-endian image, exactly [`MSG_BYTES`] long.
+        fn encode(&self) -> [u8; MSG_BYTES] {
+            let mut b = [0u8; MSG_BYTES];
+            b[0..4].copy_from_slice(&self.tag.to_le_bytes());
+            for (i, v) in self.w.iter().enumerate() {
+                b[4 + 4 * i..8 + 4 * i].copy_from_slice(&v.to_le_bytes());
+            }
+            for (i, v) in self.q.iter().enumerate() {
+                b[40 + 8 * i..48 + 8 * i].copy_from_slice(&v.to_le_bytes());
+            }
+            b
+        }
+
+        /// The inverse. `None` for a short or malformed frame — a protocol fault, never a
+        /// partial parse.
+        fn decode(b: &[u8]) -> Option<Self> {
+            if b.len() < MSG_BYTES {
+                return None;
+            }
+            let mut m = Msg {
+                tag: u32::from_le_bytes(b[0..4].try_into().ok()?),
+                ..Msg::default()
+            };
+            for i in 0..8 {
+                m.w[i] = u32::from_le_bytes(b[4 + 4 * i..8 + 4 * i].try_into().ok()?);
+            }
+            for i in 0..4 {
+                m.q[i] = u64::from_le_bytes(b[40 + 8 * i..48 + 8 * i].try_into().ok()?);
+            }
+            Some(m)
+        }
+    }
+
+    /// Send one message, optionally carrying descriptors on its first byte.
+    fn send(sock: BorrowedFd<'_>, m: &Msg, fds: &[BorrowedFd<'_>]) -> Result<(), String> {
+        send_with_fds(sock, &m.encode(), fds).map_err(|e| format!("send: {e:?}"))
+    }
+
+    /// Receive one message and whatever descriptors rode with it.
+    fn recv(sock: BorrowedFd<'_>, max_fds: usize) -> Result<(Msg, Vec<OwnedFd>), String> {
+        let mut buf = [0u8; MSG_BYTES];
+        let mut fds = Vec::new();
+        let n =
+            recv_with_fds(sock, &mut buf, &mut fds, max_fds).map_err(|e| format!("recv: {e:?}"))?;
+        if n < MSG_BYTES {
+            return Err(format!("short frame: {n} of {MSG_BYTES} bytes"));
+        }
+        Msg::decode(&buf)
+            .map(|m| (m, fds))
+            .ok_or_else(|| "undecodable frame".to_owned())
+    }
+
+    /// What one channel birth produced, and the one bit row 1 is about.
+    struct Birth {
+        /// The `KEPLER_CHANNEL_GROUP_A` the channel lives in.
+        tsg: u32,
+        /// The channel.
+        chan: u32,
+        /// ★★★ `NV_CHANNEL_ALLOC_PARAMS.flags` **as RM copied it back**
+        /// (`alloc_free.c:207-211`). Nothing in this tree read this before w750.
+        flags_readback: u32,
+        /// `NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN` — what the doorbell carries.
+        token: u32,
+    }
+
+    /// Birth one GPFIFO channel under `esc.root`, submitting `flags` with bit 5 **clear**
+    /// and reading RM's verdict back out of the same buffer.
+    ///
+    /// ⊘ Parameterised rather than duplicated because **row 1's known-positive has to be the
+    /// same code path**: a privileged arm that went through a different function could
+    /// differ for a reason that is not privilege, and then a `0` here would prove nothing.
+    #[allow(clippy::too_many_arguments)]
+    fn birth_channel(
+        esc: &mut Esc<'_>,
+        device: u32,
+        space: u32,
+        engine_type: u32,
+        gp_fifo_va: u64,
+        gp_entries: u32,
+        userd_memory: u32,
+        userd_offset: u64,
+        channel_class: u32,
+    ) -> Result<Birth, Fail> {
+        let mut tsg_params = [0u8; NvChannelGroupAllocationParameters::SIZE];
+        NvChannelGroupAllocationParameters {
+            h_object_error: 0,
+            h_object_ecc_error: 0,
+            h_va_space: space,
+            engine_type,
+            b_is_calling_context_vgpu_plugin: 0,
+        }
+        .encode_into(&mut tsg_params)
+        .map_err(|e| Fail::Refused {
+            what: "TSG encode",
+            detail: format!("{e:?}"),
+        })?;
+        let tsg = esc.alloc(
+            device,
+            KEPLER_CHANNEL_GROUP_A,
+            &mut tsg_params,
+            "KEPLER_CHANNEL_GROUP_A",
+        )?;
+
+        let mut chan_params = [0u8; ChannelAllocParams::SIZE];
+        ChannelAllocParams {
+            h_object_error: 0,
+            gp_fifo_offset: gp_fifo_va,
+            gp_fifo_entries: gp_entries,
+            // ★★★ ROW 1's REQUEST: bit 5 CLEAR. If it comes back set, RM set it.
+            flags: 0,
+            h_context_share: 0,
+            // Zero: the TSG declares the address space and its channels inherit it.
+            h_va_space: 0,
+            h_userd_memory_0: userd_memory,
+            userd_offset_0: userd_offset,
+            engine_type,
+        }
+        .encode_into(&mut chan_params)
+        .map_err(|e| Fail::Refused {
+            what: "channel encode",
+            detail: format!("{e:?}"),
+        })?;
+        let chan = esc.alloc(tsg, channel_class, &mut chan_params, "GPFIFO channel")?;
+        // ★ The readback, out of the SAME buffer RM copied into. Free, and exact.
+        let flags_readback =
+            u32::from_le_bytes(chan_params[20..24].try_into().map_err(|_| Fail::Refused {
+                what: "flags readback",
+                detail: "params buffer shorter than +24".to_owned(),
+            })?);
+
+        let mut bind = [0u8; 4];
+        bind[0..4].copy_from_slice(&engine_type.to_le_bytes());
+        esc.control(tsg, NVA06C_CTRL_CMD_BIND, &mut bind, "NVA06C_CTRL_CMD_BIND")?;
+
+        let mut tok = [0u8; 4];
+        esc.control(
+            chan,
+            NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN,
+            &mut tok,
+            "GET_WORK_SUBMIT_TOKEN",
+        )?;
+        let token = u32::from_le_bytes(tok);
+
+        Ok(Birth {
+            tsg,
+            chan,
+            flags_readback,
+            token,
+        })
+    }
+
+    /// `NVA06C_CTRL_CMD_GPFIFO_SCHEDULE` with `bEnable = 1`.
+    fn schedule(esc: &Esc<'_>, tsg: u32) -> Result<(), Fail> {
+        // `NVA06F_CTRL_GPFIFO_SCHEDULE_PARAMS` is three bytes: bEnable, bSkipSubmit, bSkipEnable.
+        let mut p = [0u8; 3];
+        p[0] = 1;
+        esc.control(
+            tsg,
+            kayfabe_abi::submit::NVA06C_CTRL_CMD_GPFIFO_SCHEDULE,
+            &mut p,
+            "NVA06C_CTRL_CMD_GPFIFO_SCHEDULE",
+        )
+    }
+
+    // =====================================================================================
+    // ROLE KP — the known-positive for row 1
+    // =====================================================================================
+
+    /// ★★★ **Row 1's known-positive, and without it a `K_BIT5=0` is UNMEASURED.**
+    ///
+    /// The same [`birth_channel`] call, from a task that **keeps** `CAP_SYS_ADMIN`, in its
+    /// own client, over its own ring. `rmclientIsAdmin(pRmClient, USER_ROOT)` is then true
+    /// and `kernel_channel.c:286` sets the bit. If this prints `0`, the readback is reading
+    /// nothing and row 1 has no instrument.
+    pub fn role_kp(gpu: u32) -> i32 {
+        println!("K_KP_CAPS_SYSADMIN={}", u32::from(has_sys_admin()));
+        let Ok(dev) = DevDir::open(c"/dev") else {
+            println!("K_BIT5_KP=UNMEASURED:no-devdir");
+            return 1;
+        };
+        let conn = match RmConnection::open(&dev, GpuId(gpu), kayfabe_chips::pinned_host_classes())
+        {
+            Ok(c) => c,
+            Err(e) => {
+                println!("K_BIT5_KP=UNMEASURED:open:{e}");
+                return 1;
+            }
+        };
+        let classes = kayfabe_chips::pinned_host_classes();
+        let id = IsolateId::new(0, GpuId(gpu));
+        let conn = Arc::new(conn);
+        let mut rm = HostRmBackend::new(
+            id,
+            Arc::clone(&conn),
+            Arc::new(kayfabe_isolate_host::ChildExports::new()),
+        );
+        let space = match rm.host_alloc_vaspace_space() {
+            Ok(s) => s,
+            Err(e) => {
+                println!("K_BIT5_KP=UNMEASURED:vaspace:{e:?}");
+                return 1;
+            }
+        };
+        let store = match conn.reserve_gpga(STORE_BYTES) {
+            Ok(h) => h,
+            Err(e) => {
+                println!("K_BIT5_KP=UNMEASURED:store:{e:?}");
+                return 1;
+            }
+        };
+        // The device node for the CPU-map escape is opened inside `Esc::map_memory`; here
+        // only the DMA map is needed, and it needs a range over the space.
+        let ctl_own = match CharDevice::openat(&dev, c"nvidiactl") {
+            Ok(c) => c,
+            Err(e) => {
+                println!("K_BIT5_KP=UNMEASURED:ctl:{e:?}");
+                return 1;
+            }
+        };
+        // ⊘ A SECOND control session in the same process: this arm needs an `Esc` it can
+        //   point at its own client, and the client minted on THIS descriptor is the one it
+        //   can name. It is privileged exactly like the rest of this role.
+        let node_name = match CString::new(format!("nvidia{gpu}")) {
+            Ok(n) => n,
+            Err(e) => {
+                println!("K_BIT5_KP=UNMEASURED:node-name:{e:?}");
+                return 1;
+            }
+        };
+        let node_own = match CharDevice::openat(&dev, &node_name) {
+            Ok(c) => c,
+            Err(e) => {
+                println!("K_BIT5_KP=UNMEASURED:node:{e:?}");
+                return 1;
+            }
+        };
+        if let Err(e) = register_fd(&node_own, &ctl_own) {
+            println!("K_BIT5_KP=UNMEASURED:register-fd:{e}");
+            return 1;
+        }
+        let root = match allocate_root(&ctl_own) {
+            Ok(r) => r,
+            Err(e) => {
+                println!("K_BIT5_KP=UNMEASURED:root:{e}");
+                return 1;
+            }
+        };
+        let mut esc = Esc::new(&ctl_own, root, 0x4b00_0000);
+        let mut dev_params = [0u8; Nv0080AllocParameters::SIZE];
+        let dev_encode = Nv0080AllocParameters {
+            device_id: gpu,
+            ..Default::default()
+        }
+        .encode_into(&mut dev_params);
+        if dev_encode.is_err() {
+            println!("K_BIT5_KP=UNMEASURED:device-encode");
+            return 1;
+        }
+        let device = match esc.alloc(root, NV01_DEVICE_0, &mut dev_params, "NV01_DEVICE_0") {
+            Ok(d) => d,
+            Err(e) => {
+                println!("K_BIT5_KP=UNMEASURED:device:{e}");
+                return 1;
+            }
+        };
+        let mut sub_params = [0u8; Nv2080AllocParameters::SIZE];
+        let _ = Nv2080AllocParameters { sub_device_id: 0 }.encode_into(&mut sub_params);
+        if let Err(e) = esc.alloc(
+            device,
+            NV20_SUBDEVICE_0,
+            &mut sub_params,
+            "NV20_SUBDEVICE_0",
+        ) {
+            println!("K_BIT5_KP=UNMEASURED:subdevice:{e}");
+            return 1;
+        }
+        // Its own VA space and ring: this arm shares nothing with the K arm on purpose.
+        let mut vas_params = [0u8; kayfabe_abi::bringup::NvVaspaceAllocationParameters::SIZE];
+        let _ = kayfabe_abi::bringup::NvVaspaceAllocationParameters::default()
+            .encode_into(&mut vas_params);
+        let kp_space = match esc.alloc(device, FERMI_VASPACE_A, &mut vas_params, "FERMI_VASPACE_A")
+        {
+            Ok(s) => s,
+            Err(e) => {
+                println!("K_BIT5_KP=UNMEASURED:kp-vaspace:{e}");
+                return 1;
+            }
+        };
+        let _ = space;
+        let mut range_params = [0u8; NvMemoryVirtualAllocationParams::SIZE];
+        let _ = NvMemoryVirtualAllocationParams {
+            offset: 0,
+            limit: 0,
+            h_va_space: kp_space,
+        }
+        .encode_into(&mut range_params);
+        let range = match esc.alloc(
+            device,
+            NV01_MEMORY_VIRTUAL,
+            &mut range_params,
+            "NV01_MEMORY_VIRTUAL",
+        ) {
+            Ok(r) => r,
+            Err(e) => {
+                println!("K_BIT5_KP=UNMEASURED:range:{e}");
+                return 1;
+            }
+        };
+        // The store belongs to the OTHER client in this process, so dup it across — the
+        // same `hClientSrc` mechanic the K arm uses, here between two clients of one task.
+        let src_client = conn.client();
+        let store_dup = match esc.dup(device, src_client, store, "dup store (KP)") {
+            Ok(h) => h,
+            Err(e) => {
+                println!("K_BIT5_KP=UNMEASURED:dup:{e}");
+                return 1;
+            }
+        };
+        let store_va = match esc.map_dma(device, range, store_dup, STORE_BYTES, "map_dma (KP)") {
+            Ok(va) => va,
+            Err(e) => {
+                println!("K_BIT5_KP=UNMEASURED:map-dma:{e}");
+                return 1;
+            }
+        };
+        let engine = engine_type_copy(0).unwrap_or(kayfabe_abi::submit::ENGINE_TYPE_COPY0);
+        match birth_channel(
+            &mut esc,
+            device,
+            kp_space,
+            engine,
+            store_va,
+            GP_ENTRIES,
+            store_dup,
+            USERD_OFFSET_IN_STORE,
+            classes.gpfifo_channel().channel_id().0,
+        ) {
+            Ok(b) => {
+                let bit = u32::from(b.flags_readback & NVOS04_FLAGS_PRIVILEGED_CHANNEL != 0);
+                println!("K_BIT5_KP={bit}");
+                println!(
+                    "info  route-K KP flags readback = {:#010x}, token {:#010x}",
+                    b.flags_readback, b.token
+                );
+                let _ = esc.free(b.tsg, b.chan, "free KP channel");
+                let _ = esc.free(device, b.tsg, "free KP tsg");
+                i32::from(bit != 1)
+            }
+            Err(e) => {
+                println!("K_BIT5_KP=UNMEASURED:birth:{e}");
+                1
+            }
+        }
+    }
+
+    /// Turn a `uvm_raw` outcome into a number the report can carry, **without losing the
+    /// distinction between the two failures**: `0` is `NV_OK`, a parsed `rmStatus` is that
+    /// status, and `0xFFFF_FFFF` is *"the ioctl never reached UVM"*.
+    fn uvm_code(outcome: &Result<(), String>) -> u32 {
+        match outcome {
+            Ok(()) => 0,
+            Err(s) => s
+                .split("rmStatus 0x")
+                .nth(1)
+                .and_then(|t| {
+                    let hex: String = t.chars().take_while(char::is_ascii_hexdigit).collect();
+                    u32::from_str_radix(&hex, 16).ok()
+                })
+                .unwrap_or(0xFFFF_FFFF),
+        }
+    }
+
+    // =====================================================================================
+    // ROLE I — the per-guest-process isolate: mints the birth client and surrenders the fd
+    // =====================================================================================
+
+    /// ★★★ **Role I.** It mints client **B** on a second `/dev/nvidiactl`, hands that
+    /// descriptor to S and **closes its own copy**, and it never sees the store.
+    ///
+    /// It also owns both address spaces and the UVM session, because in route K the address
+    /// space is the isolate's — that is precisely the half of §26 constraint 32 keeps.
+    pub fn role_i(gpu: u32) -> i32 {
+        drop_privilege("I");
+        println!("K_PID_I={}", tgid());
+        let sock = match kayfabe_linux_raw::adopt_inherited_fd(ROLE_SOCK_FD) {
+            Ok(fd) => fd,
+            Err(e) => {
+                println!("K_ROLE_I=UNMEASURED:no-socket:{e:?}");
+                return 1;
+            }
+        };
+        let Ok(dev) = DevDir::open(c"/dev") else {
+            println!("K_ROLE_I=UNMEASURED:no-devdir");
+            return 1;
+        };
+        let conn = match RmConnection::open(&dev, GpuId(gpu), kayfabe_chips::pinned_host_classes())
+        {
+            Ok(c) => c,
+            Err(e) => {
+                println!("K_ROLE_I=UNMEASURED:open:{e}");
+                return 1;
+            }
+        };
+        let id = IsolateId::new(0, GpuId(gpu));
+        let conn = Arc::new(conn);
+        let mut rm = HostRmBackend::new(
+            id,
+            Arc::clone(&conn),
+            Arc::new(kayfabe_isolate_host::ChildExports::new()),
+        );
+        let a_client = conn.client();
+        let ctl_fd = conn.ctl_fd();
+
+        // A PLAIN space — rows 1/2/3/5's channel lives here, and it needs no UVM at all.
+        // ⊘ Deliberately separate from the externally-owned one below: if row 4 refutes,
+        //   rows 1-3 must still have been measured. Coupling them would make one refusal
+        //   look like four.
+        let plain_space = match rm.host_alloc_vaspace_space() {
+            Ok(s) => s,
+            Err(e) => {
+                println!("K_ROLE_I=UNMEASURED:plain-vaspace:{e:?}");
+                return 1;
+            }
+        };
+        // The externally-owned space, for row 4 only.
+        let ext_space = match rm.host_alloc_vaspace_externally_owned() {
+            Ok(s) => s,
+            Err(e) => {
+                println!("K_UVM_REG_CHAN_RC=UNMEASURED:ext-vaspace:{e:?}");
+                0
+            }
+        };
+        let ring = match rm.alloc_ring_object() {
+            Ok(h) => h,
+            Err(e) => {
+                println!("K_UVM_REG_CHAN_RC=UNMEASURED:ring:{e:?}");
+                HostHandle::NULL
+            }
+        };
+        let ring_raw = u32::try_from(ring.raw()).unwrap_or(0);
+
+        let uvm = if ext_space == 0 || ring_raw == 0 {
+            None
+        } else {
+            match super::uvm_raw::Session::open(gpu, ctl_fd, a_client) {
+                Ok(s) => {
+                    let reg = s.register_vaspace(ctl_fd, a_client, ext_space);
+                    println!("K_UVM_REG_VAS_RC={:#x}", uvm_code(&reg));
+                    if reg.is_err() {
+                        println!("info  route-K I  UVM_REGISTER_GPU_VASPACE: {reg:?}");
+                    }
+                    let r1 = s.create_external_range(K_RING_VA, RING_BYTES);
+                    let r2 = s.map_external(K_RING_VA, RING_BYTES, ctl_fd, a_client, ring_raw);
+                    println!("K_UVM_MAP_RING_RC={:#x}", uvm_code(&r2));
+                    if r1.is_err() || r2.is_err() {
+                        println!("info  route-K I  UVM ring publish: {r1:?} / {r2:?}");
+                    }
+                    Some(s)
+                }
+                Err(e) => {
+                    println!("K_UVM_REG_CHAN_RC=UNMEASURED:session:{e}");
+                    None
+                }
+            }
+        };
+
+        // ★★★★★ CONSTRAINT 32, STEP 1 — the birth client, on a SECOND control descriptor.
+        let ctl2 = match CharDevice::openat(&dev, c"nvidiactl") {
+            Ok(c) => c,
+            Err(e) => {
+                println!("K_ROLE_I=UNMEASURED:ctl2:{e:?}");
+                return 1;
+            }
+        };
+        let node_name = match CString::new(format!("nvidia{gpu}")) {
+            Ok(n) => n,
+            Err(e) => {
+                println!("K_ROLE_I=UNMEASURED:node-name:{e:?}");
+                return 1;
+            }
+        };
+        let node2 = match CharDevice::openat(&dev, &node_name) {
+            Ok(c) => c,
+            Err(e) => {
+                println!("K_ROLE_I=UNMEASURED:node2:{e:?}");
+                return 1;
+            }
+        };
+        if let Err(e) = register_fd(&node2, &ctl2) {
+            println!("K_ROLE_I=UNMEASURED:register-fd2:{e}");
+            return 1;
+        }
+        let b_client = match allocate_root(&ctl2) {
+            Ok(r) => r,
+            Err(e) => {
+                println!("K_ROLE_I=UNMEASURED:client-b:{e}");
+                return 1;
+            }
+        };
+        println!("K_B_CLIENT={b_client:#010x}");
+
+        // ★★★★★ STEP 2 — hand the descriptors over, then CLOSE OUR OWN COPIES.
+        let msg = Msg {
+            tag: 1,
+            w: [
+                b_client,
+                a_client,
+                plain_space,
+                ext_space,
+                ring_raw,
+                tgid(),
+                GP_ENTRIES,
+                0,
+            ],
+            q: [K_RING_VA, RING_BYTES, 0, 0],
+        };
+        if let Err(e) = send(sock.as_fd(), &msg, &[ctl2.as_fd(), node2.as_fd()]) {
+            println!("K_SCM_RC=UNMEASURED:{e}");
+            return 1;
+        }
+        println!("K_SCM_RC=0");
+        drop(ctl2);
+        drop(node2);
+        println!("info  route-K I  closed its own copies of fd2 — only S holds client B now");
+
+        // Wait for S to birth the UVM-space channel, then answer row 4.
+        let (m2, _) = match recv(sock.as_fd(), 0) {
+            Ok(v) => v,
+            Err(e) => {
+                println!("K_UVM_REG_CHAN_RC=UNMEASURED:msg2:{e}");
+                return 1;
+            }
+        };
+        let chan_uvm = m2.w[0];
+        if let (Some(s), true) = (uvm.as_ref(), chan_uvm != 0) {
+            // ★★★★★ ROW 4 — a channel in client B, registered from I's UVM descriptor.
+            let reg = s.register_channel(ctl_fd, b_client, chan_uvm, K_CHANRES_VA, K_CHANRES_LEN);
+            println!("K_UVM_REG_CHAN_RC={:#x}", uvm_code(&reg));
+            println!("info  route-K I  UVM_REGISTER_CHANNEL(hClient=B) -> {reg:?}");
+            // ⊘ THE NEGATIVE CONTROL. Without it a green above cannot be told from "UVM
+            //   validates nothing", and the row would be vacuous rather than held.
+            let bogus = b_client ^ 0x00ff_0000;
+            let neg = s.register_channel(ctl_fd, bogus, chan_uvm, K_CHANRES_NEG_VA, K_CHANRES_LEN);
+            println!("K_UVM_REG_CHAN_NEG_RC={:#x}", uvm_code(&neg));
+            println!("info  route-K I  UVM_REGISTER_CHANNEL(hClient=bogus) -> {neg:?}");
+        } else if chan_uvm == 0 {
+            println!("K_UVM_REG_CHAN_RC=UNMEASURED:no-uvm-channel");
+            println!("K_UVM_REG_CHAN_NEG_RC=UNMEASURED:no-uvm-channel");
+        }
+
+        let done = Msg {
+            tag: 3,
+            ..Msg::default()
+        };
+        if let Err(e) = send(sock.as_fd(), &done, &[]) {
+            println!("info  route-K I  msg3: {e}");
+            return 1;
+        }
+        // Stay alive until S has finished with the spaces and the UVM session.
+        match recv(sock.as_fd(), 0) {
+            Ok(_) => 0,
+            Err(e) => {
+                println!("info  route-K I  msg4: {e}");
+                1
+            }
+        }
+    }
+
+    // =====================================================================================
+    // ROLE S — the scratchpad: holds the store, drives I's client through the passed fd
+    // =====================================================================================
+
+    /// Spawn one role of this same binary, inheriting stdout, optionally granting a socket
+    /// on [`ROLE_SOCK_FD`].
+    fn spawn_role(role: &str, gpu: u32, grant: Option<OwnedFd>) -> Result<SpawnedRole, String> {
+        let exe = std::env::current_exe().map_err(|e| format!("current_exe: {e}"))?;
+        let mut spec = kayfabe_linux_raw::ChildSpec::new(exe)
+            .arg(role)
+            .arg("--gpu")
+            .arg(gpu.to_string());
+        if let Some(fd) = grant {
+            spec = spec.grant(kayfabe_linux_raw::FdGrant::new(fd, ROLE_SOCK_FD));
+        }
+        kayfabe_linux_raw::SandboxChild::spawn(spec)
+            .map(SpawnedRole)
+            .map_err(|e| format!("spawn {role}: {e:?}"))
+    }
+
+    /// A spawned role, so the reap cannot be forgotten by a `?`.
+    struct SpawnedRole(kayfabe_linux_raw::SandboxChild);
+
+    impl SpawnedRole {
+        /// Wait for it and return its exit status.
+        fn reap(mut self) -> i32 {
+            self.0.reap().unwrap_or(-1)
+        }
+    }
+
+    /// `NV2080_CTRL_CMD_GPU_GET_PIDS` for one class id — **row 2's reader**, and its own
+    /// negative control one call later.
+    ///
+    /// Returns the pid table RM filled in. ⊘ An empty table and a refused call are different
+    /// answers and the caller must be able to tell them apart, so a refusal is an `Err`.
+    fn get_pids(conn: &RmConnection, class_id: u32) -> Result<Vec<u32>, String> {
+        let mut p = vec![0u8; GET_PIDS_PARAMS_SIZE];
+        p[0..4].copy_from_slice(&GET_PIDS_ID_TYPE_CLASS.to_le_bytes());
+        p[4..8].copy_from_slice(&class_id.to_le_bytes());
+        conn.control_for_probe(conn.subdevice(), NV2080_CTRL_CMD_GPU_GET_PIDS, &mut p)
+            .map_err(|e| format!("{e:?}"))?;
+        let n = u32::from_le_bytes(p[8..12].try_into().map_err(|_| "short reply")?) as usize;
+        let n = n.min(GET_PIDS_MAX_COUNT);
+        Ok((0..n)
+            .filter_map(|i| {
+                p[12 + 4 * i..16 + 4 * i]
+                    .try_into()
+                    .ok()
+                    .map(u32::from_le_bytes)
+            })
+            .collect())
+    }
+
+    /// Render a pid list for the report, in one field, so a grep can read it.
+    fn pids_csv(pids: &[u32]) -> String {
+        if pids.is_empty() {
+            return "none".to_owned();
+        }
+        pids.iter()
+            .map(u32::to_string)
+            .collect::<Vec<_>>()
+            .join(",")
+    }
+
+    /// ★★★★★ **The probe.** Role S, and the orchestrator for the other two.
+    ///
+    /// `skip_free` is the known-positive for `K_DUP_OUTSTANDING`: with it, step 6 of
+    /// constraint 32 is deliberately **not** performed and the census must say so. A zero
+    /// that cannot be made non-zero is not a measurement.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one probe is one obligation: the four pre-registered rows are read from \
+                  one channel's life, and splitting the birth from the readbacks would put \
+                  a row's evidence in a different function from the state that produced it"
+    )]
+    pub fn route_k(gpu: u32, skip_free: bool) -> i32 {
+        println!(
+            "K_START={}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_secs())
+        );
+        println!(
+            "K_REV={}",
+            option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
+        );
+        println!("K_SKIP_FREE={}", u32::from(skip_free));
+
+        // ---- row 1's known-positive, FIRST, while this process still has the capability --
+        match spawn_role("--route-k-role-kp", gpu, None) {
+            Ok(c) => println!("K_KP_EXIT={}", c.reap()),
+            Err(e) => println!("K_BIT5_KP=UNMEASURED:spawn:{e}"),
+        }
+
+        // ---- from here on nothing this process does holds CAP_SYS_ADMIN ------------------
+        drop_privilege("S");
+        println!("K_PID_S={}", tgid());
+
+        let (parent_sock, child_sock) = match std::os::unix::net::UnixStream::pair() {
+            Ok(p) => p,
+            Err(e) => {
+                println!("K_EXIT=1 (socketpair: {e})");
+                return 1;
+            }
+        };
+        let child = match spawn_role("--route-k-role-i", gpu, Some(OwnedFd::from(child_sock))) {
+            Ok(c) => c,
+            Err(e) => {
+                println!("K_EXIT=1 (spawn I: {e})");
+                return 1;
+            }
+        };
+
+        let mut rc = 0;
+        let Ok(dev) = DevDir::open(c"/dev") else {
+            println!("K_EXIT=1 (no /dev)");
+            return 1;
+        };
+        let conn = match RmConnection::open(&dev, GpuId(gpu), kayfabe_chips::pinned_host_classes())
+        {
+            Ok(c) => c,
+            Err(e) => {
+                println!("K_EXIT=1 (S open: {e})");
+                return 1;
+            }
+        };
+        let classes = kayfabe_chips::pinned_host_classes();
+        let channel_class = classes.gpfifo_channel().channel_id().0;
+        let id = IsolateId::new(0, GpuId(gpu));
+        let conn = Arc::new(conn);
+        let mut rm = HostRmBackend::new(
+            id,
+            Arc::clone(&conn),
+            Arc::new(kayfabe_isolate_host::ChildExports::new()),
+        );
+
+        // ★★★ THE STORE — S's, and I never sees it.
+        let store = match conn.reserve_gpga(STORE_BYTES) {
+            Ok(h) => h,
+            Err(e) => {
+                println!("K_EXIT=1 (store: {e:?})");
+                return 1;
+            }
+        };
+        let (_store_node, store_view) = match conn.map_object_write_combining(store, STORE_BYTES) {
+            Ok(v) => v,
+            Err(e) => {
+                println!("K_EXIT=1 (store view: {e:?})");
+                return 1;
+            }
+        };
+
+        // ---- the descriptors I surrendered ----------------------------------------------
+        let (m1, fds) = match recv(parent_sock.as_fd(), 2) {
+            Ok(v) => v,
+            Err(e) => {
+                println!("K_EXIT=1 (msg1: {e})");
+                return 1;
+            }
+        };
+        if m1.tag != 1 || fds.len() != 2 {
+            println!(
+                "K_EXIT=1 (msg1 malformed: tag {} fds {})",
+                m1.tag,
+                fds.len()
+            );
+            return 1;
+        }
+        let b_client = m1.w[0];
+        let a_client = m1.w[1];
+        let plain_space = m1.w[2];
+        let ext_space = m1.w[3];
+        let pid_i = m1.w[5];
+        let gp_entries = m1.w[6];
+        let ring_va = m1.q[0];
+        let mut it = fds.into_iter();
+        let ctl2 = CharDevice::adopt(it.next().expect("two descriptors"));
+        let _node2 = CharDevice::adopt(it.next().expect("two descriptors"));
+        println!("K_FD_CROSSED=1");
+
+        let mut esc = Esc::new(&ctl2, b_client, 0x5000_0000);
+
+        // ---- B's own device tree, built by S on I's descriptor --------------------------
+        let mut dev_params = [0u8; Nv0080AllocParameters::SIZE];
+        let _ = Nv0080AllocParameters {
+            device_id: gpu,
+            ..Default::default()
+        }
+        .encode_into(&mut dev_params);
+        let device_b = match esc.alloc(b_client, NV01_DEVICE_0, &mut dev_params, "NV01_DEVICE_0(B)")
+        {
+            Ok(d) => d,
+            Err(e) => {
+                println!("K_EXIT=1 (device in B: {e})");
+                return 1;
+            }
+        };
+        let mut sub_params = [0u8; Nv2080AllocParameters::SIZE];
+        let _ = Nv2080AllocParameters { sub_device_id: 0 }.encode_into(&mut sub_params);
+        if let Err(e) = esc.alloc(
+            device_b,
+            NV20_SUBDEVICE_0,
+            &mut sub_params,
+            "NV20_SUBDEVICE_0(B)",
+        ) {
+            println!("K_EXIT=1 (subdevice in B: {e})");
+            return 1;
+        }
+
+        // ---- share the store to B, then dup it (constraint 32 step 3) -------------------
+        let mut share = [0u8; 16];
+        share[0..4].copy_from_slice(&store.to_le_bytes());
+        share[4..8].copy_from_slice(&b_client.to_le_bytes());
+        share[8..12].copy_from_slice(&RS_ACCESS_MASK_DUP_OBJECT.to_le_bytes());
+        share[12..14].copy_from_slice(&RS_SHARE_TYPE_CLIENT.to_le_bytes());
+        share[14] = RS_SHARE_ACTION_FLAG_COMPOSE;
+        let share_rc = conn.control_for_probe(
+            conn.client(),
+            NV0000_CTRL_CMD_CLIENT_SHARE_OBJECT,
+            &mut share,
+        );
+        println!(
+            "K_SHARE_RC={}",
+            match &share_rc {
+                Ok(()) => "0".to_owned(),
+                Err(e) => format!("{e:?}"),
+            }
+        );
+        let store_dup = match esc.dup(device_b, conn.client(), store, "dup store into B") {
+            Ok(h) => {
+                println!("K_STORE_DUP_RC=0");
+                h
+            }
+            Err(e) => {
+                println!("K_STORE_DUP_RC={:#x}", e.code());
+                println!("K_EXIT=1 ({e})");
+                return 1;
+            }
+        };
+
+        // ---- dup I's PLAIN VA space into B — no grant, same ProcID (step 4) -------------
+        let plain_dup = match esc.dup(device_b, a_client, plain_space, "dup I's VAS into B") {
+            Ok(h) => {
+                println!("K_VAS_DUP_RC=0");
+                h
+            }
+            Err(e) => {
+                println!("K_VAS_DUP_RC={:#x}", e.code());
+                println!("K_EXIT=1 ({e})");
+                return 1;
+            }
+        };
+        let mut range_params = [0u8; NvMemoryVirtualAllocationParams::SIZE];
+        let _ = NvMemoryVirtualAllocationParams {
+            offset: 0,
+            limit: 0,
+            h_va_space: plain_dup,
+        }
+        .encode_into(&mut range_params);
+        let range = match esc.alloc(
+            device_b,
+            NV01_MEMORY_VIRTUAL,
+            &mut range_params,
+            "NV01_MEMORY_VIRTUAL(B)",
+        ) {
+            Ok(r) => r,
+            Err(e) => {
+                println!("K_EXIT=1 (range in B: {e})");
+                return 1;
+            }
+        };
+        let store_va = match esc.map_dma(device_b, range, store_dup, STORE_BYTES, "map_dma(B)") {
+            Ok(va) => va,
+            Err(e) => {
+                println!("K_EXIT=1 (map_dma in B: {e})");
+                return 1;
+            }
+        };
+        println!("K_STORE_VA={store_va:#018x}");
+
+        // ---- the ring, the pushbuffer and the sentinel, all inside the store ------------
+        let sem_va = store_va + SEM_OFFSET;
+        let pb_va = store_va + PB_OFFSET;
+        let Some(header) = method_header_inc(0, fifo::SEM_ADDR_LO, 5) else {
+            println!("K_EXIT=1 (method header)");
+            return 1;
+        };
+        let words = [
+            header,
+            (sem_va & 0xFFFF_FFFC) as u32,
+            ((sem_va >> 32) & 0xFF) as u32,
+            SEM_PAYLOAD,
+            0,
+            fifo::SEM_EXECUTE_RELEASE_32BIT,
+        ];
+        let Some(entry) = gp_entry(pb_va, 4 * words.len() as u64) else {
+            println!("K_EXIT=1 (gp entry)");
+            return 1;
+        };
+        let mut wrote = true;
+        wrote &= store_view.store_u32(HostOffset::new(SEM_OFFSET), 0).is_ok();
+        for (i, w) in words.iter().enumerate() {
+            wrote &= store_view
+                .store_u32(HostOffset::new(PB_OFFSET + 4 * i as u64), *w)
+                .is_ok();
+        }
+        wrote &= store_view
+            .store_u32(HostOffset::new(0), (entry & 0xFFFF_FFFF) as u32)
+            .is_ok();
+        wrote &= store_view
+            .store_u32(HostOffset::new(4), (entry >> 32) as u32)
+            .is_ok();
+        // ---- row 5's poison, over the USERD the birth is about to be told about ---------
+        for i in 0..128u64 {
+            wrote &= store_view
+                .store_u32(
+                    HostOffset::new(USERD_OFFSET_IN_STORE + 4 * i),
+                    0xA5A5_0000 ^ (i as u32),
+                )
+                .is_ok();
+        }
+        kayfabe_linux_raw::release_fence();
+        println!("K_STORE_WRITE_OK={}", u32::from(wrote));
+
+        // ---- ★★★★★ THE BIRTH. Client B, descriptor I's, caller S, bit 5 clear. ----------
+        let engine = engine_type_copy(0).unwrap_or(kayfabe_abi::submit::ENGINE_TYPE_COPY0);
+        let birth = match birth_channel(
+            &mut esc,
+            device_b,
+            plain_dup,
+            engine,
+            store_va,
+            gp_entries,
+            store_dup,
+            USERD_OFFSET_IN_STORE,
+            channel_class,
+        ) {
+            Ok(b) => b,
+            Err(e) => {
+                println!("K_BIT5=UNMEASURED:birth:{e}");
+                println!("K_EXIT=1");
+                let _ = send(
+                    parent_sock.as_fd(),
+                    &Msg {
+                        tag: 2,
+                        ..Msg::default()
+                    },
+                    &[],
+                );
+                let _ = child.reap();
+                return 1;
+            }
+        };
+        let bit5 = u32::from(birth.flags_readback & NVOS04_FLAGS_PRIVILEGED_CHANNEL != 0);
+        println!("K_BIT5={bit5}");
+        println!(
+            "K_CHAN_FLAGS_READBACK={:#010x}  K_TOKEN={:#010x}",
+            birth.flags_readback, birth.token
+        );
+        if bit5 != 0 {
+            rc = 1;
+        }
+
+        // ---- row 5, read back before anything else touches that page -------------------
+        let mut poison_intact = 0u32;
+        for i in 0..128u64 {
+            if store_view
+                .load_u32(HostOffset::new(USERD_OFFSET_IN_STORE + 4 * i))
+                .ok()
+                == Some(0xA5A5_0000 ^ (i as u32))
+            {
+                poison_intact += 1;
+            }
+        }
+        println!("K_USERD_POISON_INTACT_WORDS={poison_intact} of 128");
+        println!(
+            "K_USERD_POISON_SURVIVED={}",
+            u32::from(poison_intact >= 120)
+        );
+
+        // ---- row 3's known-positive: the dup is mappable WHILE it exists ---------------
+        let pre = esc.map_memory(
+            &dev,
+            gpu,
+            device_b,
+            store_dup,
+            STORE_BYTES,
+            "MAP_MEMORY(dup, before free)",
+        );
+        println!(
+            "K_DUP_MAP_PRE_RC={}",
+            match &pre {
+                Ok(()) => 0,
+                Err(e) => e.code(),
+            }
+        );
+
+        // ---- row 4's channel: the SAME shape, in the externally-owned space ------------
+        let mut chan_uvm = 0u32;
+        let mut uvm_tsg = 0u32;
+        if ext_space != 0 {
+            match esc.dup(device_b, a_client, ext_space, "dup I's UVM VAS into B") {
+                Ok(ext_dup) => match birth_channel(
+                    &mut esc,
+                    device_b,
+                    ext_dup,
+                    engine,
+                    ring_va,
+                    gp_entries,
+                    store_dup,
+                    USERD_OFFSET_IN_STORE + 0x1000,
+                    channel_class,
+                ) {
+                    Ok(b) => {
+                        chan_uvm = b.chan;
+                        uvm_tsg = b.tsg;
+                        println!("K_UVM_CHAN_BIRTH_RC=0");
+                    }
+                    Err(e) => println!("K_UVM_CHAN_BIRTH_RC={:#x} ({e})", e.code()),
+                },
+                Err(e) => println!("K_UVM_VAS_DUP_RC={:#x} ({e})", e.code()),
+            }
+        }
+        let m2 = Msg {
+            tag: 2,
+            w: [chan_uvm, 0, 0, 0, 0, 0, 0, 0],
+            q: [0; 4],
+        };
+        if let Err(e) = send(parent_sock.as_fd(), &m2, &[]) {
+            println!("info  route-K S  msg2: {e}");
+        }
+        match recv(parent_sock.as_fd(), 0) {
+            Ok((m, _)) if m.tag == 3 => {}
+            Ok((m, _)) => println!("info  route-K S  unexpected tag {}", m.tag),
+            Err(e) => println!("info  route-K S  msg3: {e}"),
+        }
+        if chan_uvm != 0 {
+            let sched = schedule(&esc, uvm_tsg);
+            println!(
+                "K_UVM_SCHED_RC={}",
+                match &sched {
+                    Ok(()) => 0,
+                    Err(e) => e.code(),
+                }
+            );
+        }
+
+        // ---- row 3's second half: the channel is LIVE ----------------------------------
+        let sched = schedule(&esc, birth.tsg);
+        println!(
+            "K_SCHED_RC={}",
+            match &sched {
+                Ok(()) => 0,
+                Err(e) => e.code(),
+            }
+        );
+        let gp_get_before = store_view
+            .load_u32(HostOffset::new(USERD_OFFSET_IN_STORE + USERD_GP_GET))
+            .unwrap_or(0xFFFF_FFFF);
+        println!("K_GPGET_BEFORE={gp_get_before}");
+        let _ = store_view.store_u32(HostOffset::new(USERD_OFFSET_IN_STORE + USERD_GP_PUT), 1);
+        kayfabe_linux_raw::release_fence();
+        println!("K_GPPUT=1");
+        match rm.ring_doorbell_only(u64::from(birth.token)) {
+            Ok(()) => println!("K_DOORBELL_RC=0"),
+            Err(e) => println!("K_DOORBELL_RC={e:?}"),
+        }
+        let deadline = Instant::now() + Duration::from_secs(3);
+        let mut gp_get_after = gp_get_before;
+        let mut sem = 0u32;
+        while Instant::now() < deadline {
+            gp_get_after = store_view
+                .load_u32(HostOffset::new(USERD_OFFSET_IN_STORE + USERD_GP_GET))
+                .unwrap_or(0xFFFF_FFFF);
+            sem = store_view
+                .load_u32(HostOffset::new(SEM_OFFSET))
+                .unwrap_or(0);
+            if gp_get_after == 1 && sem == SEM_PAYLOAD {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        println!("K_GPGET_AFTER={gp_get_after}");
+        println!("K_SEM={sem:#010x} (want {SEM_PAYLOAD:#010x})");
+        let live = gp_get_after == 1;
+        println!("K_CHANNEL_LIVE={}", u32::from(live));
+
+        // ---- constraint 32 step 6: free the dup, and prove it is gone -------------------
+        if skip_free {
+            println!("K_DUP_FREE_RC=SKIPPED");
+            println!("K_DUP_OUTSTANDING=1");
+        } else {
+            let freed = esc.free(device_b, store_dup, "free the store dup in B");
+            println!(
+                "K_DUP_FREE_RC={}",
+                match &freed {
+                    Ok(()) => 0,
+                    Err(e) => e.code(),
+                }
+            );
+            println!("K_DUP_OUTSTANDING={}", u32::from(freed.is_err()));
+        }
+        let post = esc.map_memory(
+            &dev,
+            gpu,
+            device_b,
+            store_dup,
+            STORE_BYTES,
+            "MAP_MEMORY(dup, after free)",
+        );
+        let post_code = match &post {
+            Ok(()) => 0,
+            Err(e) => e.code(),
+        };
+        println!("K_DUP_MAP_POST_RC={post_code:#x}");
+        let gp_get_final = store_view
+            .load_u32(HostOffset::new(USERD_OFFSET_IN_STORE + USERD_GP_GET))
+            .unwrap_or(0xFFFF_FFFF);
+        println!("K_GPGET_AFTER_FREE={gp_get_final}");
+
+        // ---- row 2: whose pid does the driver say owns the channel? --------------------
+        match get_pids(&conn, channel_class) {
+            Ok(p) => {
+                println!("K_PIDS_CHAN={}", pids_csv(&p));
+                println!("K_PID_I_IN_CHAN={}", u32::from(p.contains(&pid_i)));
+                println!("K_PID_S_IN_CHAN={}", u32::from(p.contains(&tgid())));
+            }
+            Err(e) => println!("K_PIDS_CHAN=UNMEASURED:{e}"),
+        }
+        match get_pids(&conn, NV20_SUBDEVICE_0) {
+            Ok(p) => {
+                println!("K_PIDS_DEV={}", pids_csv(&p));
+                println!("K_PID_I_IN_DEV={}", u32::from(p.contains(&pid_i)));
+                println!("K_PID_S_IN_DEV={}", u32::from(p.contains(&tgid())));
+            }
+            Err(e) => println!("K_PIDS_DEV=UNMEASURED:{e}"),
+        }
+
+        // ---- teardown, then let I go ---------------------------------------------------
+        if chan_uvm != 0 {
+            let _ = esc.free(uvm_tsg, chan_uvm, "free UVM channel");
+            let _ = esc.free(device_b, uvm_tsg, "free UVM tsg");
+        }
+        let _ = esc.free(birth.tsg, birth.chan, "free channel");
+        let _ = esc.free(device_b, birth.tsg, "free tsg");
+        let _ = send(
+            parent_sock.as_fd(),
+            &Msg {
+                tag: 4,
+                ..Msg::default()
+            },
+            &[],
+        );
+        println!("K_I_EXIT={}", child.reap());
+        if !live {
+            rc = 1;
+        }
+        println!("K_EXIT={rc}");
+        rc
+    }
+}
+
 fn main() -> std::process::ExitCode {
     // ★★★ **w309 — ECHO ARGV, FIRST LINE, ALWAYS.**
     //
@@ -11671,6 +13374,40 @@ fn main() -> std::process::ExitCode {
     // ⊘ w735: this was declared TWICE in a row; the first was dead and warned. One only.
     let mut want_gpga_probe = false;
     let mut want_atomics = false;
+    // ★★★★★ w750 — ROUTE K, PHASE 1. Parsed and dispatched HERE, before every other flag,
+    // because two of the three arms are **this same binary re-executed** by
+    // `route_k::spawn_role` and must not fall through into the ladder's own parser. The
+    // roles carry only `--gpu`, so the scan is deliberately the whole of it.
+    //
+    // ⊘ `--route-k-skip-free` is not a convenience: it is `K_DUP_OUTSTANDING`'s
+    // known-positive (constraint 32 step 6 deliberately omitted), and a census whose zero
+    // cannot be made non-zero is not a measurement.
+    {
+        let argv: Vec<String> = std::env::args().skip(1).collect();
+        let role_gpu = argv
+            .iter()
+            .position(|a| a == "--gpu")
+            .and_then(|i| argv.get(i + 1))
+            .and_then(|g| g.parse::<u32>().ok())
+            .unwrap_or(0);
+        if argv.iter().any(|a| a == "--route-k-role-kp") {
+            return std::process::ExitCode::from(
+                u8::try_from(route_k::role_kp(role_gpu).clamp(0, 255)).unwrap_or(1),
+            );
+        }
+        if argv.iter().any(|a| a == "--route-k-role-i") {
+            return std::process::ExitCode::from(
+                u8::try_from(route_k::role_i(role_gpu).clamp(0, 255)).unwrap_or(1),
+            );
+        }
+        if argv.iter().any(|a| a == "--route-k") {
+            let skip = argv.iter().any(|a| a == "--route-k-skip-free");
+            return std::process::ExitCode::from(
+                u8::try_from(route_k::route_k(role_gpu, skip).clamp(0, 255)).unwrap_or(1),
+            );
+        }
+    }
+
     let mut want_pce_mask = false;
     let mut want_osdesc: Option<OsDescSeed> = None;
     let mut want_fb_join: Option<OsDescSeed> = None;

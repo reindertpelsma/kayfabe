@@ -305,7 +305,7 @@ mod window_unsafe;
 pub mod sandbox {
     pub use crate::sandbox_unsafe::{
         Privileges, SandboxPolicy, enter, namespaces_available, privileges, remount_proc, report,
-        report_gate, user_namespaces_available,
+        report_gate, surrender, user_namespaces_available,
     };
 }
 
