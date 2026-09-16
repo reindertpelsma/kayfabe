@@ -21,6 +21,25 @@ paths below are relative to that root unless prefixed. Our tree: `/workspace/kf-
 
 ---
 
+## Reading order
+
+⚠ **The sections are numbered as the brief asked them, but they appear in the order the evidence
+arrived** (each was committed and pushed as it was finished, so nothing would be lost to a
+terminated session). Numeric order is §1 → §7; document order is below.
+
+| in the file | section | the one-line answer |
+|---|---|---|
+| 1st | **§1** — what consumes `ProcessID` | one enforcement gate (HWPM), one isolation key that may not be armed, otherwise telemetry |
+| 2nd | **§3** — CPU mappings | **not a blocker**, for two independent reasons; the cited line is in the UNMAP path |
+| 3rd | **§4** — our own tree | the question is already a **live refusal** here; 13 mechanisms classified against Constraint 29 |
+| 4th | **§5** — `nvkvm-pv` | per-guest-process stubs, chosen **to satisfy the driver, not for isolation**; two precedents for one process serving many |
+| 5th | **§2** — RM rights | ★★★★★ **a channel cannot be duped at all**, so S would own it for life |
+| 6th | **§6** — the counter-case | ★★★★★ **`MemoryList` CAN be duped** ⇒ S mints, I births. One counter-case refuted in place. |
+| 7th | **§7** — probes | incl. one that is free and that Constraint 30 already demands |
+| 8th | summary table · open questions · provenance | |
+
+---
+
 ## The premise, restated from the brief (given, not re-derived)
 
 - `NV01_MEMORY_LIST_OBJECT` carries `RS_FLAGS_ALLOC_PRIVILEGED` —
@@ -1240,8 +1259,9 @@ that channel, opens its own `AMPERE_USERMODE_A` under its own subdevice and stor
 Assert A's semaphore releases. ⚠ A **positive** result is a cross-tenant submission primitive and
 should be recorded as a finding in its own right, independent of this decision.
 
-### 7.6 What does a non-privileged root client lose? — **⊘ MOOT.** Refuted by §6.3's correction:
-`NV01_ROOT_NON_PRIV` is unreachable from Linux userspace (`escape.c:394-403`), so there is nothing
+### 7.6 ⊘ MOOT — what does a non-privileged root client lose?
+
+Refuted by §6.3's correction: `NV01_ROOT_NON_PRIV` is unreachable from Linux userspace (`escape.c:394-403`), so there is nothing
 to probe.
 
 ---
@@ -1317,3 +1337,30 @@ to probe.
 8. ★ **§7.5 is a finding waiting to happen, independent of this decision.** If any process can ring
    any channel's doorbell given only a `u32` token, that is a cross-tenant submission primitive on
    the host and should be known either way.
+
+---
+
+## Provenance — how this was produced, and what that bounds
+
+- Driver source: `research_clones/ogkm-580.159.04/` (open NVIDIA kernel modules 580.159.04) as
+  checked out in `/workspace/nvidia-gpu-passthrough`. ⊘ **Both the closed and the open driver must
+  work** (`CLAUDE.md`), and every RM claim here is from the **open** one. Where the closed driver
+  could differ, it is named: `hypervisorCheckForObjectAccess` (§4.3) and everything behind GSP
+  firmware (§7.4).
+- Our tree: `/workspace/kf-master` `single-store` @ `a4d4ebcd`, read through the worktree this
+  branch was cut from. ⚠ Per `CLAUDE.md`: **a claim carries the revision it was measured at**; this
+  document measures **nothing** — it reads source and cites two pre-existing measurements
+  (`W393 LEG A/B` at `docs/design/the_counter_page_and_the_device_view.md:68-84`; `R31 arm B`,
+  quoted as a measurement by `crates/kayfabe-isolate-host/src/rm.rs:8226-8231`).
+- **No probe was written or run.** §7 gives shapes only.
+- **No production code was modified.** `git diff a4d4ebcd --stat` on this branch touches this file
+  only.
+- Second-hand citations from fan-out were re-verified by hand before publication:
+  `rs_client.c:381-392`, `:543-551`; `alloc_free.c:735-745`; `control.c:745-755`;
+  `resource_list.h:1601-1611` (`AMPERE_DMA_COPY_B`), `:2016-2020` (`AMPERE_COMPUTE_B`),
+  `:874-884` (`AMPERE_USERMODE_A`); `rs_server.c:1714-1726`; `rs_resource.c:333-340`;
+  `mem_list.c:787-794`; `g_kernel_channel_nvoc.c:708`, `:862-865`.
+- ⊘ **Two claims in this document were found wrong by its own later sections and corrected in
+  place**, per the fold-in-above rule: the brief's `alloc_free.c:599-606` pointer (premise section)
+  and counter-case C (§6.3). Both corrections are marked ⊘⊘⊘ and both left the original reading
+  visible so the correction can be checked against it.
