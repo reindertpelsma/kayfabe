@@ -1,0 +1,36 @@
+# host: NVIDIA GeForce RTX 3060 driver 580.159.04
+NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+# euid=0 CapEff=000001ffffffffff
+info  RMLADDER ARGV     = [--gpu 0 --list-object-alias]
+ok    R2 version         = "580.159.04"
+ok    R4 hClient         = 0xc1d00073
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=d0347a5869744de86a87f9348bc94f45ef2d5e47
+==    W747 list-object-alias = gpu 0, euid 0, parent 0x4000 bytes, slice page 2, control page 0
+info  W747 the bar        = a write through the PARENT after the slice exists must be visible through the SLICE (ALIAS); still reading the pre-write value is COPY and the USERD design is dead however green the read-at-creation looked
+ok    W747 KP grader      = a stale snapshot grades COPY · a live alias grades ALIAS · an uninterpretable read grades UNKNOWN — the grader can reach all three answers
+ok    W747 seed           = page 2 = 0x747a0001 (A), page 0 = 0x74750004 (S), both read back through the parent
+ok    W747 slice L_N               = page 2 attr PAGE_SIZE_4KB accepted, handle 0xcafe0005
+ok    W747 slice L_M (control)     = page 0 attr PAGE_SIZE_4KB accepted, handle 0xcafe0006
+ok    W747 step 4         = slice reads 0x747a0001, expected A 0x747a0001 — ⊘ necessary, NOT sufficient: a copy-at-creation gives exactly this
+ok    W747 control id     = control slice reads 0x74750004, expected S 0x74750004 — the control is POSITIVELY IDENTIFIED as page 0, not merely 'not B'
+★★★★★ W747 STEP 5 VERDICT = ALIAS — wrote B 0x747b0002 through the PARENT's page 2; the SLICE now reads 0x747b0002 (it read 0x747a0001 before)
+ok    W747 step 6 reverse = wrote C 0x747c0003 through the SLICE; the PARENT's page 2 reads 0x747c0003 ⇒ ALIAS
+ok    W747 step 7 control = the control slice over page 0 reads 0x74750004; it must still be S 0x74750004 — not B, and NOT ZERO (a dead view reads zero and would look isolated)
+ok    W747 control alias  = page 0 written 0x747d0005 through the parent; the control slice reads 0x747d0005 ⇒ ALIAS — the control is a LIVE view of its own page, not an inert one that agrees by being broken
+info  W747 phys parent@N           = 0x0000000003112000 aperture 0 (VIDMEM) kind 0x6 contig 0xe000
+info  W747 phys slice@0            = 0x0000000003112000 aperture 0 (VIDMEM) kind 0x0 contig 0x1000
+★★★★★  W747 step 8 phys    = parent page 2 at 0x0000000003112000, slice at 0x0000000003112000 — THE SAME PHYSICAL ADDRESS
+ok    W747 KP independent = an unrelated vidmem object seeded with A grades COPY after the same parent-side write — the grader is not answering ALIAS for everything
+info  W747 hClient A/B    = 0xc1d00073 / 0xc1d00074
+★★★   W747 xclient mint   = client B minted a slice over client A's object (hClient=0xc1d00073 hParent=0xcafe0001) — handle 0xcafe0004, status 0x0000 NV_OK
+⊘     W747 xclient dup    = NOT MEASURED BY CHOICE. `memlistCanCopy_IMPL` returns NV_TRUE (a reading, not a measurement). Measuring it needs a SECOND NV_ESC_RM_DUP_OBJECT escape in rm.rs, which constraint 26's countability gate forbids — and row 1 above asks the better question: a slice the isolate MINTS carries no hand-over for constraint 30 to interrogate
+★★★   W747 lifetime free  = the PARENT was freed with a live slice outstanding — RM did NOT refuse
+info  W747 lifetime read  = through the slice: 0x747b0002 before the free, 0x00000000 after
+⊘⊘⊘   W747 lifetime stale = THE SLICE SERVES THE NEW OWNER'S BYTES. A fresh allocation wrote 0x747d0005 at page 2 and the slice — minted over a parent that no longer exists — reads 0x747d0005. ⇒ constraint 31's window is REAL and silent: no refusal, no fault, no counter
+W747_VERDICT=ALIAS
+W747_REVERSE=ALIAS
+W747_CONTROL=HELD
+W747_KNOWN_POSITIVES=HELD
+W747_RESULT=PASS
+done — list-object alias probe only

@@ -11748,6 +11748,12 @@ fn main() -> std::process::ExitCode {
     let mut want_executor_alias = false;
     let mut want_fb_view: Option<FbViewJoin> = None;
     let mut want_bar1_crossing = false;
+    // ★★★★★ w747 — `--list-object-alias`. Its OWN flag and its own early return, for
+    // `--bar1-crossing`'s reason: it frees its own parent object out from under a live
+    // slice on purpose, so nothing else may be holding memory in this process's client
+    // when it runs. The rung itself lives in `kayfabe_isolate_host::listobj` rather than
+    // in this file — see `docs/design/list_object_alias_probe.md`.
+    let mut want_list_object = false;
     let mut want_ce_client = false;
     // ★ R34 — see `--ce-client-guest-ram`. Default decoy depth is the LLM's own order of
     // magnitude (`[measured w415llm]` 13 313 guest-RAM rows), not a round number chosen for
@@ -12126,6 +12132,9 @@ fn main() -> std::process::ExitCode {
             }
             // ★★★★★ w393 — the BAR1 crossing on bare metal; see `bar1_crossing_probe`.
             "--bar1-crossing" => want_bar1_crossing = true,
+            // ★★★★★ w747 — does `NV01_MEMORY_LIST_OBJECT` ALIAS its parent's pages or COPY
+            // them? The single question gating leg B of the USERD design.
+            "--list-object-alias" => want_list_object = true,
             "--bar1-crossing-child" => return bar1_crossing_child(),
             "--fb-view-probe" => want_fb_view = Some(FbViewJoin::Shared),
             // ⊘ The negative control. Same chain, private guest-side pages, inverted verdict.
@@ -12836,6 +12845,23 @@ fn main() -> std::process::ExitCode {
         );
         let ok = guest_ring_channel_probe(&mut rm, gpu);
         println!("done — guest-ring channel probe only");
+        return if ok {
+            std::process::ExitCode::SUCCESS
+        } else {
+            std::process::ExitCode::from(1)
+        };
+    }
+
+    // ★★★★★ w747 — the LIST_OBJECT alias probe runs here and RETURNS. ⚠ It frees its own
+    // parent while a slice over it is still live (constraint 31's window, measured), so it
+    // must not share a process with any other rung's outstanding objects.
+    if want_list_object {
+        println!(
+            "REV_UNDER_TEST={}",
+            option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
+        );
+        let ok = kayfabe_isolate_host::listobj::run(&mut rm, gpu);
+        println!("done \u{2014} list-object alias probe only");
         return if ok {
             std::process::ExitCode::SUCCESS
         } else {

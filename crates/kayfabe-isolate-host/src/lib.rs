@@ -85,6 +85,7 @@ pub mod fbjoin;
 pub mod fdcross;
 pub mod guestram;
 pub mod isolate;
+pub mod listobj;
 pub mod loopback;
 pub mod planreactor;
 pub mod proto;
