@@ -148,7 +148,9 @@ fn scripted_pushbuffer_captures_pt_writes_and_observes_completion() {
         "the other two are VA-operand work: forwarded, not intercepted"
     );
     assert!(
-        gpu.procs[&pid].vas_by_pdb(GpuId::ZERO, A_PDB).expect("the VAS exists")
+        gpu.procs[&pid]
+            .vas_by_pdb(GpuId::ZERO, A_PDB)
+            .expect("the VAS exists")
             .pt_pages
             .contains(&pt_page),
         "latched into the OWNING Vas.pt_pages"
@@ -485,8 +487,14 @@ fn t14_per_vas_publication_gates_the_ring() {
         "address identity: both procs are host-mapped AT the guest VA they named"
     );
     assert_ne!(
-        gpu.procs[&pid_a].vas_by_pdb(GpuId::ZERO, A_PDB).expect("the VAS exists").host_vas,
-        gpu.procs[&pid_b].vas_by_pdb(GpuId::ZERO, B_PDB).expect("the VAS exists").host_vas,
+        gpu.procs[&pid_a]
+            .vas_by_pdb(GpuId::ZERO, A_PDB)
+            .expect("the VAS exists")
+            .host_vas,
+        gpu.procs[&pid_b]
+            .vas_by_pdb(GpuId::ZERO, B_PDB)
+            .expect("the VAS exists")
+            .host_vas,
         "…in DIFFERENT host VASes — the separation #14 actually rests on"
     );
 
@@ -827,7 +835,9 @@ fn soak_submit_complete_loop_loses_no_completion() {
     // for the guest's `MAP_MEMORY_DMA`, re-bound identically all 64 iterations — so this
     // is `1` and not `0`, and a 65th entry would mean the parse itself bound something.
     assert_eq!(
-        gpu.procs[&pid].vas_by_pdb(GpuId::ZERO, A_PDB).expect("the VAS exists")
+        gpu.procs[&pid]
+            .vas_by_pdb(GpuId::ZERO, A_PDB)
+            .expect("the VAS exists")
             .table
             .iter()
             .map(|(va, _, _)| va)
@@ -1197,13 +1207,17 @@ fn a_pt_write_is_attributed_to_the_vas_that_owns_the_page_not_to_the_writer() {
         "★ attributed to A, whose page table it is — NOT to B, who wrote it"
     );
     assert!(
-        gpu.procs[&pid_a].vas_by_pdb(GpuId::ZERO, A_PDB).expect("the VAS exists")
+        gpu.procs[&pid_a]
+            .vas_by_pdb(GpuId::ZERO, A_PDB)
+            .expect("the VAS exists")
             .pt_pages
             .contains(&a_root),
         "latched into A's Vas"
     );
     assert!(
-        gpu.procs[&pid_b].vas_by_pdb(GpuId::ZERO, B_PDB).expect("the VAS exists")
+        gpu.procs[&pid_b]
+            .vas_by_pdb(GpuId::ZERO, B_PDB)
+            .expect("the VAS exists")
             .pt_pages
             .is_empty(),
         "…and NOT into the writer's — an alias in B's VAS confers no ownership"

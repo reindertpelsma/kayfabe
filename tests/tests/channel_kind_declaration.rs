@@ -91,7 +91,6 @@ fn kernel_channel(s: &mut Scenario) {
         // a sysmem-rooted PDB read as vidmem walks the wrong memory and
         // reports success, because a wrong-aperture read returns zeros.
         pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
     });
     s.push(RmEvent::Alloc {
         client: K_CLIENT,
@@ -111,8 +110,12 @@ fn kernel_channel(s: &mut Scenario) {
 fn world() -> Gpu {
     let (factory, _rec) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
-    let mut g =
-        Gpu::new(std::sync::Arc::new(WireClassArch::new()), Box::new(factory), gpa).expect("device realizes");
+    let mut g = Gpu::new(
+        std::sync::Arc::new(WireClassArch::new()),
+        Box::new(factory),
+        gpa,
+    )
+    .expect("device realizes");
     let mut s = Scenario::new();
     s.compute_process(A_CLIENT, A_PDB, identical_handles(0x10, 0x11));
     s.compute_process(B_CLIENT, B_PDB, identical_handles(0x20, 0x21));

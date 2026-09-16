@@ -646,7 +646,10 @@ fn a_join_released_carrying_bytes_re_establishes_them_in_a_longer_join() {
     let est = fb
         .install_join(AT, Box::new(Elsewhere::new(SHORT)))
         .expect("the short join installs");
-    assert_eq!(est.copied, SHORT, "one resident page established the short join");
+    assert_eq!(
+        est.copied, SHORT,
+        "one resident page established the short join"
+    );
     // … and bytes written THROUGH it, which live only in the join.
     let through = image(0x7a7a_0000, 0x800);
     fb.write(AT + 0x800, &through)
@@ -666,7 +669,10 @@ fn a_join_released_carrying_bytes_re_establishes_them_in_a_longer_join() {
     assert_eq!(carried.carried, SHORT, "the whole page came back");
     assert!(carried.nonzero > 0, "and the carry-back was not vacuous");
     assert_eq!(carried.pages, 1, "one page was materialised for it");
-    assert!(fb.joined_ranges().is_empty(), "the store no longer claims the range");
+    assert!(
+        fb.joined_ranges().is_empty(),
+        "the store no longer claims the range"
+    );
     assert_eq!(
         fb.is_resident(AT),
         Some(true),
@@ -674,25 +680,48 @@ fn a_join_released_carrying_bytes_re_establishes_them_in_a_longer_join() {
     );
     let mut got = vec![0u8; 0x1000];
     fb.read(AT, &mut got).expect("inside the framebuffer");
-    assert_eq!(&got[..0x800], &before[..], "the pre-join bytes survived the release");
-    assert_eq!(&got[0x800..], &through[..], "and so did the bytes written through the join");
+    assert_eq!(
+        &got[..0x800],
+        &before[..],
+        "the pre-join bytes survived the release"
+    );
+    assert_eq!(
+        &got[0x800..],
+        &through[..],
+        "and so did the bytes written through the join"
+    );
 
     // ★ THE RE-JOIN AT THE NEW EXTENT establishes from the carried page — this is the line
     // that read `established=0 bytes` in w392j and would have again here.
     let est = fb
         .install_join(AT, Box::new(Elsewhere::new(LEN)))
         .expect("the longer join installs over the released base");
-    assert_eq!(est.pages, 1, "exactly the carried page was resident to establish from");
+    assert_eq!(
+        est.pages, 1,
+        "exactly the carried page was resident to establish from"
+    );
     assert_eq!(est.copied, SHORT);
     assert!(est.nonzero > 0, "the establishment copy was NOT vacuous");
-    assert_eq!(fb.joined_ranges(), vec![(AT, LEN)], "one join, at the NEW length");
+    assert_eq!(
+        fb.joined_ranges(),
+        vec![(AT, LEN)],
+        "one join, at the NEW length"
+    );
     let mut got = vec![0u8; 0x1000];
     fb.read(AT, &mut got).expect("served through the new join");
-    assert_eq!(&got[..0x800], &before[..], "visible through the 64 KiB join");
+    assert_eq!(
+        &got[..0x800],
+        &before[..],
+        "visible through the 64 KiB join"
+    );
     assert_eq!(&got[0x800..], &through[..]);
     let mut tail = [0xffu8; 8];
-    fb.read(AT + LEN - 8, &mut tail).expect("the far end of the new join");
-    assert_eq!(tail, [0u8; 8], "the never-written tail of the longer join reads zero");
+    fb.read(AT + LEN - 8, &mut tail)
+        .expect("the far end of the new join");
+    assert_eq!(
+        tail, [0u8; 8],
+        "the never-written tail of the longer join reads zero"
+    );
 }
 
 /// ⊘ **A carrying release of an all-zero join materialises NOTHING.** An unwritten page and a

@@ -157,7 +157,8 @@ const SYSTEM_ISOLATE: IsolateId = IsolateId::new(0, GPU);
 fn two_proc_gpu() -> (Guarded<Gpu>, ProcId, ProcId, SharedRecorder) {
     let (factory, recorder) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x10_0000_0000..0x1000_0000_0000, 0x10_0000_0000);
-    let mut gpu = Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa).expect("realizes");
+    let mut gpu =
+        Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa).expect("realizes");
 
     let mut s = Scenario::new();
     s.compute_process_on_gpu(
@@ -433,7 +434,9 @@ fn a_foreign_unmap_is_refused_as_loudly_as_a_foreign_free() {
         0x1000,
     )
     .expect("the owner publishes");
-    let host_vas = gpu.procs[&owner].vas_by_pdb(GPU, OWNER_PDB).expect("the VAS exists")
+    let host_vas = gpu.procs[&owner]
+        .vas_by_pdb(GPU, OWNER_PDB)
+        .expect("the VAS exists")
         .host_vas
         .expect("the owner's Vas materialized its host VAS");
 
@@ -484,7 +487,9 @@ fn every_plan_shape_that_names_a_foreign_handle_is_refused() {
         0x1000,
     )
     .expect("the owner publishes");
-    let host_vas = gpu.procs[&owner].vas_by_pdb(GPU, OWNER_PDB).expect("the VAS exists")
+    let host_vas = gpu.procs[&owner]
+        .vas_by_pdb(GPU, OWNER_PDB)
+        .expect("the VAS exists")
         .host_vas
         .expect("host VAS");
     let owned = backing_of(&gpu, owner, OWNER_PDB, VA);
@@ -1194,7 +1199,8 @@ fn uvm_referenced_gpu() -> (Guarded<Gpu>, ProcId, SharedRecorder) {
     // `memory-backend-memfd,share=on` boot has. Without the door the pin refuses by name.
     let factory = factory.with_guest_ram(kayfabe_tests::GUEST_RAM_BYTES);
     let gpa = GpaSpace::new(0x10_0000_0000..0x1000_0000_0000, 0x10_0000_0000);
-    let mut gpu = Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa).expect("realizes");
+    let mut gpu =
+        Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa).expect("realizes");
 
     let mut s = Scenario::new();
     let owner_vas = s.compute_process_on_gpu(
@@ -1353,7 +1359,9 @@ fn a_kernel_reference_keeps_its_owners_object_alive_and_usable_after_the_owner_i
     .expect("the owner forwards a compute object");
 
     let backing = backing_of(&gpu, owner, OWNER_PDB, VA);
-    let host_vas = gpu.procs[&owner].vas_by_pdb(GPU, OWNER_PDB).expect("the VAS exists")
+    let host_vas = gpu.procs[&owner]
+        .vas_by_pdb(GPU, OWNER_PDB)
+        .expect("the VAS exists")
         .host_vas
         .expect("the owner's Vas materialized its host VAS");
     let arena = gpu.procs[&owner].arenas[&GPU].range.clone();
@@ -1587,12 +1595,16 @@ fn the_last_reference_dropping_retires_the_owner_and_frees_its_objects_per_objec
     kayfabe_fwd::handle_doorbell(&mut gpu, GPU, MockArch::token_for(OWNER_GR), &[VA])
         .expect("the owner rings");
     let backing = backing_of(&gpu, owner, OWNER_PDB, VA);
-    let host_vas = gpu.procs[&owner].vas_by_pdb(GPU, OWNER_PDB).expect("the VAS exists")
+    let host_vas = gpu.procs[&owner]
+        .vas_by_pdb(GPU, OWNER_PDB)
+        .expect("the VAS exists")
         .host_vas
         .expect("host VAS");
     // ★ w393 — the two ring-page pins the births at alloc made live in this VAS too, and
     // go with it, per object, at refcount 0 — `Vas::take_guest_ram_pins` (w310).
-    let ring_pins: Vec<HostHandle> = gpu.procs[&owner].vas_by_pdb(GPU, OWNER_PDB).expect("the VAS exists")
+    let ring_pins: Vec<HostHandle> = gpu.procs[&owner]
+        .vas_by_pdb(GPU, OWNER_PDB)
+        .expect("the VAS exists")
         .guest_ram_pins
         .values()
         .map(|p| p.memory)
@@ -1779,7 +1791,9 @@ fn a_condemned_owner_is_not_kept_usable_by_its_kernel_reference() {
     )
     .expect("the owner publishes");
     let backing = backing_of(&gpu, owner, OWNER_PDB, VA);
-    let host_vas = gpu.procs[&owner].vas_by_pdb(GPU, OWNER_PDB).expect("the VAS exists")
+    let host_vas = gpu.procs[&owner]
+        .vas_by_pdb(GPU, OWNER_PDB)
+        .expect("the VAS exists")
         .host_vas
         .expect("host VAS");
 
@@ -2118,7 +2132,8 @@ const OWNER_MIDDLE: HObject = HObject(0x5c00_00f0);
 fn uvm_referenced_via_parked_chain_gpu() -> (Guarded<Gpu>, ProcId, SharedRecorder) {
     let (factory, recorder) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x10_0000_0000..0x1000_0000_0000, 0x10_0000_0000);
-    let mut gpu = Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa).expect("realizes");
+    let mut gpu =
+        Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa).expect("realizes");
 
     let mut s = Scenario::new();
     let owner_vas = s.compute_process_on_gpu(
@@ -2239,7 +2254,9 @@ fn a_dup_of_a_dup_reference_stops_the_reaper_from_freeing_its_owners_host_memory
     )
     .expect("the owner publishes");
     let backing = backing_of(&gpu, owner, OWNER_PDB, VA);
-    let host_vas = gpu.procs[&owner].vas_by_pdb(GPU, OWNER_PDB).expect("the VAS exists")
+    let host_vas = gpu.procs[&owner]
+        .vas_by_pdb(GPU, OWNER_PDB)
+        .expect("the VAS exists")
         .host_vas
         .expect("the owner's Vas materialized its host VAS");
 

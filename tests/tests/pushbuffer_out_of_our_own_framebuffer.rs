@@ -113,8 +113,8 @@ impl FbBytes for FakeFb {
 fn guest_with_a_vidmem_pushbuffer() -> (Gpu, MockVmm, ProcId, ChanId) {
     let (factory, _rec) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
-    let mut gpu =
-        Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa).expect("the device realizes");
+    let mut gpu = Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa)
+        .expect("the device realizes");
 
     let root = HObject(0xC0B_0000);
     let dev = HObject(0xC0B_0001);
@@ -155,7 +155,6 @@ fn guest_with_a_vidmem_pushbuffer() -> (Gpu, MockVmm, ProcId, ChanId) {
         // a sysmem-rooted PDB read as vidmem walks the wrong memory and
         // reports success, because a wrong-aperture read returns zeros.
         pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
     });
     s.push(RmEvent::Alloc {
         client: CLIENT,

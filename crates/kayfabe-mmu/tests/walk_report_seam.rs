@@ -39,7 +39,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use kayfabe_mmu::walkdiff::{PageClass, apply, diff};
-use kayfabe_mmu::walkreport::{self as wr, MapRun, PdbEntry, Report, ReportHeader, RunAperture, RunOp};
+use kayfabe_mmu::walkreport::{
+    self as wr, MapRun, PdbEntry, Report, ReportHeader, RunAperture, RunOp,
+};
 
 /// Where `cuda/walk` lives, relative to this crate.
 fn walk_dir() -> PathBuf {
@@ -53,7 +55,11 @@ fn cc() -> String {
         return v.to_string_lossy().into_owned();
     }
     for c in ["cc", "gcc", "clang"] {
-        if Command::new(c).arg("--version").output().is_ok_and(|o| o.status.success()) {
+        if Command::new(c)
+            .arg("--version")
+            .output()
+            .is_ok_and(|o| o.status.success())
+        {
             return c.to_string();
         }
     }
@@ -93,7 +99,10 @@ fn parse_manifest(text: &str) -> Manifest {
         let w: Vec<&str> = line.split_whitespace().collect();
         match w.as_slice() {
             ["struct", name, sz, al] => {
-                m.structs.insert((*name).to_string(), (sz.parse().unwrap(), al.parse().unwrap()));
+                m.structs.insert(
+                    (*name).to_string(),
+                    (sz.parse().unwrap(), al.parse().unwrap()),
+                );
             }
             ["field", st, fld, off, sz] => {
                 m.fields.insert(
@@ -105,10 +114,17 @@ fn parse_manifest(text: &str) -> Manifest {
                 m.consts.insert((*name).to_string(), v.parse().unwrap());
             }
             ["hdr", fld, rest @ ..] => {
-                m.hdr.insert((*fld).to_string(), rest.iter().map(|s| s.parse().unwrap()).collect());
+                m.hdr.insert(
+                    (*fld).to_string(),
+                    rest.iter().map(|s| s.parse().unwrap()).collect(),
+                );
             }
-            ["pdb", rest @ ..] => m.pdbs.push(rest.iter().map(|s| s.parse().unwrap()).collect()),
-            ["run", rest @ ..] => m.runs.push(rest.iter().map(|s| s.parse().unwrap()).collect()),
+            ["pdb", rest @ ..] => m
+                .pdbs
+                .push(rest.iter().map(|s| s.parse().unwrap()).collect()),
+            ["run", rest @ ..] => m
+                .runs
+                .push(rest.iter().map(|s| s.parse().unwrap()).collect()),
             ["EMIT_OK"] => m.ok = true,
             _ => {}
         }
@@ -134,7 +150,11 @@ fn build_and_run(defines: &[&str], tag: &str) -> (Manifest, Vec<u8>) {
     assert!(src.exists(), "{} is missing", src.display());
 
     let mut c = Command::new(cc());
-    c.arg("-O1").arg("-std=c11").arg("-Wall").arg("-Wextra").arg("-Werror");
+    c.arg("-O1")
+        .arg("-std=c11")
+        .arg("-Wall")
+        .arg("-Wextra")
+        .arg("-Werror");
     for d in defines {
         c.arg(d);
     }
@@ -146,7 +166,10 @@ fn build_and_run(defines: &[&str], tag: &str) -> (Manifest, Vec<u8>) {
         String::from_utf8_lossy(&out.stderr)
     );
 
-    let out = Command::new(&exe).arg(&bin).output().expect("run the emitter");
+    let out = Command::new(&exe)
+        .arg(&bin)
+        .output()
+        .expect("run the emitter");
     assert!(
         out.status.success(),
         "kf_report_emit [{tag}] exited {:?}:\n{}",
@@ -155,9 +178,15 @@ fn build_and_run(defines: &[&str], tag: &str) -> (Manifest, Vec<u8>) {
     );
     let text = String::from_utf8_lossy(&out.stdout).into_owned();
     let m = parse_manifest(&text);
-    assert!(m.ok, "kf_report_emit [{tag}] produced no EMIT_OK terminator -- it did not finish");
+    assert!(
+        m.ok,
+        "kf_report_emit [{tag}] produced no EMIT_OK terminator -- it did not finish"
+    );
     let bytes = std::fs::read(&bin).expect("the emitted report");
-    assert!(!bytes.is_empty(), "the emitted report is ZERO BYTES -- that is a state, not 'not yet'");
+    assert!(
+        !bytes.is_empty(),
+        "the emitted report is ZERO BYTES -- that is a state, not 'not yet'"
+    );
     (m, bytes)
 }
 
@@ -165,16 +194,16 @@ fn build_and_run(defines: &[&str], tag: &str) -> (Manifest, Vec<u8>) {
 /// disagreements rather than asserting, so the known-positive can require it to be non-empty.
 fn layout_disagreements(m: &Manifest) -> Vec<String> {
     let mut bad = Vec::new();
-    let mut want_struct = |name: &str, size: usize| {
-        match m.structs.get(name) {
-            None => bad.push(format!("the emitter printed no layout for {name}")),
-            Some(&(sz, al)) => {
-                if sz != size {
-                    bad.push(format!("sizeof({name}) = {sz} in C, {size} pinned in Rust"));
-                }
-                if al != 8 {
-                    bad.push(format!("_Alignof({name}) = {al}, want 8 -- a padding change"));
-                }
+    let mut want_struct = |name: &str, size: usize| match m.structs.get(name) {
+        None => bad.push(format!("the emitter printed no layout for {name}")),
+        Some(&(sz, al)) => {
+            if sz != size {
+                bad.push(format!("sizeof({name}) = {sz} in C, {size} pinned in Rust"));
+            }
+            if al != 8 {
+                bad.push(format!(
+                    "_Alignof({name}) = {al}, want 8 -- a padding change"
+                ));
             }
         }
     };
@@ -222,7 +251,9 @@ fn layout_disagreements(m: &Manifest) -> Vec<String> {
                     ));
                 }
                 if c_sz != sz {
-                    bad.push(format!("{st}::{fld} is {c_sz} bytes in C, {sz} pinned in Rust"));
+                    bad.push(format!(
+                        "{st}::{fld} is {c_sz} bytes in C, {sz} pinned in Rust"
+                    ));
                 }
             }
         }
@@ -234,14 +265,26 @@ fn layout_disagreements(m: &Manifest) -> Vec<String> {
 fn the_c_struct_layout_is_the_layout_rust_pins() {
     let (m, _) = build_and_run(&[], "layout");
     let bad = layout_disagreements(&m);
-    assert!(bad.is_empty(), "the C compiler and the Rust parser disagree:\n  {}", bad.join("\n  "));
+    assert!(
+        bad.is_empty(),
+        "the C compiler and the Rust parser disagree:\n  {}",
+        bad.join("\n  ")
+    );
 
     // Sizes sum to the whole struct with nothing left over — i.e. there is no padding anywhere,
     // which is the property that makes the pins a complete description rather than a sample.
     let sum = |st: &str| -> usize {
-        m.fields.iter().filter(|((s, _), _)| s == st).map(|(_, &(_, sz))| sz).sum()
+        m.fields
+            .iter()
+            .filter(|((s, _), _)| s == st)
+            .map(|(_, &(_, sz))| sz)
+            .sum()
     };
-    assert_eq!(sum("KfReportHeader"), 64, "KfReportHeader has hidden padding");
+    assert_eq!(
+        sum("KfReportHeader"),
+        64,
+        "KfReportHeader has hidden padding"
+    );
     assert_eq!(sum("KfPdbEntry"), 32, "KfPdbEntry has hidden padding");
     assert_eq!(sum("KfMapRun"), 32, "KfMapRun has hidden padding");
 }
@@ -287,18 +330,31 @@ fn every_kfwr_constant_matches_the_header() {
         ("RF_PS_MASK", u64::from(wr::RF_PS_MASK)),
     ];
     for &(name, v) in want {
-        let c = *m.consts.get(name).unwrap_or_else(|| panic!("{name} absent from the manifest"));
+        let c = *m
+            .consts
+            .get(name)
+            .unwrap_or_else(|| panic!("{name} absent from the manifest"));
         assert_eq!(c, v, "KFWR_{name}: {c} in C, {v} in Rust");
     }
     // The four aperture codes and four page-size codes are positional, so they are checked as
     // an ordered set rather than one at a time.
     assert_eq!(
-        [m.consts["AP_VIDMEM"], m.consts["AP_PEER"], m.consts["AP_SYSCOH"], m.consts["AP_SYSNONCOH"]],
+        [
+            m.consts["AP_VIDMEM"],
+            m.consts["AP_PEER"],
+            m.consts["AP_SYSCOH"],
+            m.consts["AP_SYSNONCOH"]
+        ],
         [0, 1, 2, 3],
         "the aperture codes"
     );
     assert_eq!(
-        [m.consts["PS_4K"], m.consts["PS_64K"], m.consts["PS_2M"], m.consts["PS_512M"]],
+        [
+            m.consts["PS_4K"],
+            m.consts["PS_64K"],
+            m.consts["PS_2M"],
+            m.consts["PS_512M"]
+        ],
         [0, 1, 2, 3],
         "the page-size codes"
     );
@@ -349,9 +405,16 @@ fn the_rust_parser_reads_back_exactly_what_the_c_side_wrote() {
         assert_eq!(u64::from(p.vas_flags), c[4], "pdbs[{i}].vas_flags");
         assert_eq!(u64::from(p.reserved), c[5], "pdbs[{i}].reserved");
         assert_eq!(p.reserved2, c[6], "pdbs[{i}].reserved2");
-        assert_eq!((p.reserved, p.reserved2), (0, 0), "★ the reserved words must stay zero");
+        assert_eq!(
+            (p.reserved, p.reserved2),
+            (0, 0),
+            "★ the reserved words must stay zero"
+        );
     }
-    assert!(rep.pdbs[2].is_gone() && rep.pdbs[2].run_count == 0, "⊘ GONE carries no runs");
+    assert!(
+        rep.pdbs[2].is_gone() && rep.pdbs[2].run_count == 0,
+        "⊘ GONE carries no runs"
+    );
 
     // ── the MapRun array ─────────────────────────────────────────────────────────────────
     assert_eq!(rep.runs.len(), m.runs.len(), "MapRun count");
@@ -362,7 +425,11 @@ fn the_rust_parser_reads_back_exactly_what_the_c_side_wrote() {
         assert_eq!(r.gpga, c[2], "runs[{i}].gpga");
         assert_eq!(r.len, c[3], "runs[{i}].len");
         assert_eq!(u64::from(r.flags), c[4], "runs[{i}].flags");
-        assert_eq!(u64::from(r.op), c[5], "★ runs[{i}].op -- a u16, not the low half of flags");
+        assert_eq!(
+            u64::from(r.op),
+            c[5],
+            "★ runs[{i}].op -- a u16, not the low half of flags"
+        );
         assert_eq!(u64::from(r.pdb_index), c[6], "★ runs[{i}].pdb_index");
     }
 
@@ -386,7 +453,10 @@ fn the_rust_parser_reads_back_exactly_what_the_c_side_wrote() {
 
     // ★★★ The 512 MiB run whose target is only 4 KiB-aligned parses. VER2 can spell it, so a
     // host that refused it would be asserting an alignment the encoding cannot carry.
-    assert_eq!(rep.runs[3].gpga, 0x3000, "a 4 KiB-aligned 512 MiB target must survive the parse");
+    assert_eq!(
+        rep.runs[3].gpga, 0x3000,
+        "a 4 KiB-aligned 512 MiB target must survive the parse"
+    );
 
     // ── and the same bytes read as three separate arrays, which is what kf_refresh gives ──
     let pdb_at = Report::pdb_array_offset();
@@ -405,14 +475,20 @@ fn the_parsed_runs_reach_walkdiff_and_the_diff_closes() {
     // 9 runs, one of which is an UNMAP and therefore not a present mapping.
     assert_eq!(cur.len(), 8, "MAP and REMAP are present; UNMAP is not");
     let classes: Vec<PageClass> = cur.iter().map(|r| r.class).collect();
-    assert!(classes.contains(&PageClass::P4K), "the corpus must exercise 4 KiB");
+    assert!(
+        classes.contains(&PageClass::P4K),
+        "the corpus must exercise 4 KiB"
+    );
     assert!(classes.contains(&PageClass::P64K), "…64 KiB");
     assert!(classes.contains(&PageClass::P2M), "…2 MiB");
     assert!(classes.contains(&PageClass::P512M), "…and 512 MiB");
 
     // apply(∅, diff(∅, cur)) == cur — the closure property, over runs that came out of C.
     let ops = diff(&[], &cur);
-    assert!(!ops.is_empty(), "⚠ an empty diff would make this assertion vacuous");
+    assert!(
+        !ops.is_empty(),
+        "⚠ an empty diff would make this assertion vacuous"
+    );
     let mut got = apply(&[], &ops);
     let mut want = cur.clone();
     got.sort_by_key(|r| (r.class, r.va));
@@ -424,7 +500,10 @@ fn the_parsed_runs_reach_walkdiff_and_the_diff_closes() {
     rev.reverse();
     let mut back = apply(&[], &rev);
     back.sort_by_key(|r| (r.class, r.va));
-    assert_eq!(back, want, "applying the ops backwards gives a different mapping set");
+    assert_eq!(
+        back, want,
+        "applying the ops backwards gives a different mapping set"
+    );
 
     // A second, different mapping set, so the diff is exercised on all three ops rather than
     // only on MAP. Drop one run, move another, and change a third's flags.
@@ -434,7 +513,10 @@ fn the_parsed_runs_reach_walkdiff_and_the_diff_closes() {
     next[1].flags ^= wr::RF_READ_ONLY;
     let ops2 = diff(&cur, &next);
     let kinds = ops2.iter().map(std::mem::discriminant).collect::<Vec<_>>();
-    assert!(kinds.len() >= 3, "expected at least an unmap, a remap and a flag change");
+    assert!(
+        kinds.len() >= 3,
+        "expected at least an unmap, a remap and a flag change"
+    );
     let mut got2 = apply(&cur, &ops2);
     let mut want2 = next;
     got2.sort_by_key(|r| (r.class, r.va));
@@ -460,7 +542,10 @@ fn a_shifted_field_is_caught_by_the_offset_comparison() {
     );
 
     let (broken, broken_bytes) = build_and_run(&["-DKF_SEAM_BREAK_LAYOUT"], "kp_broken");
-    assert!(!broken_bytes.is_empty(), "the broken emitter still has to produce a report");
+    assert!(
+        !broken_bytes.is_empty(),
+        "the broken emitter still has to produce a report"
+    );
 
     let bad = layout_disagreements(&broken);
     assert!(
@@ -468,7 +553,9 @@ fn a_shifted_field_is_caught_by_the_offset_comparison() {
         "⊘⊘⊘ A FIELD MOVED FOUR BYTES AND THE COMPARISON DID NOT NOTICE. Every offset \
          assertion in this file is vacuous."
     );
-    let names_the_field = bad.iter().any(|s| s.contains("KfMapRun::flags") && s.contains("+28"));
+    let names_the_field = bad
+        .iter()
+        .any(|s| s.contains("KfMapRun::flags") && s.contains("+28"));
     assert!(
         names_the_field,
         "the break was caught, but NOT by the offset check on the field that moved -- wrong \
@@ -477,8 +564,7 @@ fn a_shifted_field_is_caught_by_the_offset_comparison() {
     );
     // And the struct grew, which is the second, independent signal.
     assert_eq!(
-        broken.structs["KfMapRun"].0,
-        40,
+        broken.structs["KfMapRun"].0, 40,
         "the broken struct should be 8 bytes longer (4 of hole + 4 of tail padding)"
     );
 }
@@ -498,7 +584,10 @@ fn the_header_this_test_pins_is_the_one_in_the_tree() {
         "uint32_t sparse_slots;",
         "uint8_t  ps_log2[4];",
     ] {
-        assert!(text.contains(field), "kf_walk.h no longer declares `{field}`");
+        assert!(
+            text.contains(field),
+            "kf_walk.h no longer declares `{field}`"
+        );
     }
     assert!(
         Path::new(&walk_dir().join("kf_report_emit.c")).exists(),

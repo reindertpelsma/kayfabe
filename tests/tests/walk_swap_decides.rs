@@ -128,8 +128,12 @@ fn owner(d: &SharedDevice) -> kayfabe_core::ProcId {
 /// What the address table says [`RING_VA`] maps to, or `None` if it is a miss.
 fn bound_phys(d: &SharedDevice, pid: kayfabe_core::ProcId) -> Option<u64> {
     d.with_proc(pid, |p| {
-        p.vas_by_pdb(GPU, PDB)
-            .and_then(|v| v.table.resolve(PDB, GpuVa(RING_VA)).ok().map(|(b, _off)| b.phys()))
+        p.vas_by_pdb(GPU, PDB).and_then(|v| {
+            v.table
+                .resolve(PDB, GpuVa(RING_VA))
+                .ok()
+                .map(|(b, _off)| b.phys())
+        })
     })
     .flatten()
 }
@@ -214,7 +218,10 @@ fn a_well_shaped_replacement_changes_what_is_published() {
     let pid = owner(d);
     let f = kayfabe_chips::Ga10xGmmu::new();
     let mut fb = p.pt_bytes();
-    let mut dec = RepointEverything { rewrote: 0, truncate: false };
+    let mut dec = RepointEverything {
+        rewrote: 0,
+        truncate: false,
+    };
     let (_plan, out) = d
         .sweep_pt_tables_deciding(
             pid,
@@ -224,7 +231,10 @@ fn a_well_shaped_replacement_changes_what_is_published() {
             &mut dec,
         )
         .expect("the proc is live");
-    assert!(dec.rewrote >= 1, "the decider must have had a leaf to rewrite");
+    assert!(
+        dec.rewrote >= 1,
+        "the decider must have had a leaf to rewrite"
+    );
     assert!(out.bound >= 1, "something was bound: {out:?}");
     assert_eq!(
         bound_phys(d, pid),
@@ -245,7 +255,10 @@ fn a_replacement_that_names_different_tasks_is_refused_and_the_host_walk_commits
     let pid = owner(d);
     let f = kayfabe_chips::Ga10xGmmu::new();
     let mut fb = p.pt_bytes();
-    let mut dec = RepointEverything { rewrote: 0, truncate: true };
+    let mut dec = RepointEverything {
+        rewrote: 0,
+        truncate: true,
+    };
     let (plan, out) = d
         .sweep_pt_tables_deciding(
             pid,
@@ -256,7 +269,10 @@ fn a_replacement_that_names_different_tasks_is_refused_and_the_host_walk_commits
         )
         .expect("the proc is live");
     assert!(!plan.tasks.is_empty(), "the sweep had work to do");
-    assert!(out.bound >= 1, "the host walk's binding still committed: {out:?}");
+    assert!(
+        out.bound >= 1,
+        "the host walk's binding still committed: {out:?}"
+    );
     assert_eq!(
         bound_phys(d, pid),
         Some(RING_PHYS),

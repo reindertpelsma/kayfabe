@@ -169,7 +169,6 @@ fn a_zero_census_says_vacuous_and_not_zero() {
     }
 }
 
-
 /// ★★★★★ **THE APERTURE TERM — DISTINCT FRAMES, NOT BYTES.**
 ///
 /// ⊘ A device view is mapped from file offset **0 only**, so a device-backed store needs one

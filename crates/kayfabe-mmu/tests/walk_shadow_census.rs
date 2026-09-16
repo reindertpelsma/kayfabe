@@ -46,10 +46,15 @@ fn run(va: u64, gpga: u64, len: u64, class: PageClass) -> Run {
 /// every assertion below is about a comparison that always fires.
 #[test]
 fn identical_walks_disagree_about_nothing() {
-    let leaves: Vec<_> = (0..8).map(|i| leaf(0x1_0000_0000 + i * 4096, 0x20_0000 + i * 4096, 4096)).collect();
+    let leaves: Vec<_> = (0..8)
+        .map(|i| leaf(0x1_0000_0000 + i * 4096, 0x20_0000 + i * 4096, 4096))
+        .collect();
     let (host, dropped) = leaves_as_runs(&leaves);
     assert_eq!(dropped, 0);
-    assert!(!host.is_empty(), "the fixture must produce runs, or this proves nothing");
+    assert!(
+        !host.is_empty(),
+        "the fixture must produce runs, or this proves nothing"
+    );
     let d = compare(&host, &host);
     assert!(d.is_empty(), "identical inputs disagreed: {d:?}");
 }
@@ -59,7 +64,9 @@ fn identical_walks_disagree_about_nothing() {
 /// thousands of false differences and the census would be useless.
 #[test]
 fn a_coalesced_description_equals_a_split_one() {
-    let leaves: Vec<_> = (0..8).map(|i| leaf(0x1_0000_0000 + i * 4096, 0x20_0000 + i * 4096, 4096)).collect();
+    let leaves: Vec<_> = (0..8)
+        .map(|i| leaf(0x1_0000_0000 + i * 4096, 0x20_0000 + i * 4096, 4096))
+        .collect();
     let (host, _) = leaves_as_runs(&leaves);
     // What a coalescing kernel would emit for the same mappings: one run of eight pages.
     let kernel = vec![run(0x1_0000_0000, 0x20_0000, 8 * 4096, PageClass::P4K)];
@@ -75,14 +82,17 @@ fn a_coalesced_description_equals_a_split_one() {
 /// count that lands in the wrong column sends a reader to the wrong place.
 #[test]
 fn every_disagreement_kind_fires_and_is_named() {
-    let base: Vec<_> = (0..4).map(|i| leaf(0x1_0000_0000 + i * 4096, 0x20_0000 + i * 4096, 4096)).collect();
+    let base: Vec<_> = (0..4)
+        .map(|i| leaf(0x1_0000_0000 + i * 4096, 0x20_0000 + i * 4096, 4096))
+        .collect();
     let (host, _) = leaves_as_runs(&base);
 
     // ── MissingInKernel: the kernel reports nothing at all ──
     let d = compare(&host, &[]);
     assert!(!d.is_empty());
     assert!(
-        d.iter().all(|x| x.kind == DisagreementKind::MissingInKernel),
+        d.iter()
+            .all(|x| x.kind == DisagreementKind::MissingInKernel),
         "a silent kernel must be MISSING, not something else: {d:?}"
     );
 
@@ -105,7 +115,10 @@ fn every_disagreement_kind_fires_and_is_named() {
     let mut k = host.clone();
     k[0].len = 8192;
     let d = compare(&host, &k);
-    assert!(d.iter().any(|x| x.kind == DisagreementKind::LenDiffers), "{d:?}");
+    assert!(
+        d.iter().any(|x| x.kind == DisagreementKind::LenDiffers),
+        "{d:?}"
+    );
 
     // ── FlagsDiffer: read-only flipped ──
     let mut k = host.clone();
@@ -121,7 +134,9 @@ fn every_disagreement_kind_fires_and_is_named() {
 /// would drown in false positives.
 #[test]
 fn a_flag_only_the_kernel_decodes_is_not_a_disagreement() {
-    let base: Vec<_> = (0..2).map(|i| leaf(0x1_0000_0000 + i * 4096, 0x20_0000 + i * 4096, 4096)).collect();
+    let base: Vec<_> = (0..2)
+        .map(|i| leaf(0x1_0000_0000 + i * 4096, 0x20_0000 + i * 4096, 4096))
+        .collect();
     let (host, _) = leaves_as_runs(&base);
     let mut k = host.clone();
     // Bits outside the compared mask: volatile (5), privilege (6), and the KIND field.
@@ -138,7 +153,9 @@ fn a_flag_only_the_kernel_decodes_is_not_a_disagreement() {
 /// silently would be a census nobody can act on.
 #[test]
 fn the_census_counts_by_kind_and_keeps_the_first_few() {
-    let base: Vec<_> = (0..4).map(|i| leaf(0x1_0000_0000 + i * 4096, 0x20_0000 + i * 4096, 4096)).collect();
+    let base: Vec<_> = (0..4)
+        .map(|i| leaf(0x1_0000_0000 + i * 4096, 0x20_0000 + i * 4096, 4096))
+        .collect();
     let (host, dropped) = leaves_as_runs(&base);
     let mut k = host.clone();
     k[0].gpga ^= 0x1000;
@@ -150,7 +167,10 @@ fn the_census_counts_by_kind_and_keeps_the_first_few() {
     let line = c.render();
     assert!(line.contains("disagreements=1"), "{line}");
     assert!(line.contains("gpga_differs=1"), "{line}");
-    assert!(line.contains("DISAGREEMENTS"), "the verdict must be loud: {line}");
+    assert!(
+        line.contains("DISAGREEMENTS"),
+        "the verdict must be loud: {line}"
+    );
     assert!(
         line.contains(&format!("compared_flags={COMPARED_FLAGS:#x}")),
         "★ the line must state WHICH fields it compared, or a zero reads as more than it is: \
@@ -164,13 +184,18 @@ fn the_census_counts_by_kind_and_keeps_the_first_few() {
 /// about everything" — which is false and is the reading that would license the swap wrongly.
 #[test]
 fn a_clean_census_still_names_what_it_did_not_compare() {
-    let base: Vec<_> = (0..4).map(|i| leaf(0x1_0000_0000 + i * 4096, 0x20_0000 + i * 4096, 4096)).collect();
+    let base: Vec<_> = (0..4)
+        .map(|i| leaf(0x1_0000_0000 + i * 4096, 0x20_0000 + i * 4096, 4096))
+        .collect();
     let (host, dropped) = leaves_as_runs(&base);
     let mut c = ShadowCensus::default();
     c.note(&host, &host, dropped, &[]);
     let line = c.render();
     assert!(line.contains("AGREEMENT"), "{line}");
-    assert!(line.contains("KIND"), "the clean verdict must name KIND: {line}");
+    assert!(
+        line.contains("KIND"),
+        "the clean verdict must name KIND: {line}"
+    );
     assert!(
         line.contains("Necessary and not sufficient"),
         "the clean verdict must say so in as many words: {line}"
@@ -192,7 +217,10 @@ fn a_shadow_that_never_ran_is_vacuous_and_says_so() {
     let mut c2 = ShadowCensus::default();
     c2.note(&[], &[], 0, &[]);
     let line2 = c2.render();
-    assert!(line2.contains("VACUOUS"), "two empty sets are vacuous, not agreeing: {line2}");
+    assert!(
+        line2.contains("VACUOUS"),
+        "two empty sets are vacuous, not agreeing: {line2}"
+    );
 }
 
 /// ⊘ A refresh on which the kernel could not run is counted **separately**. Folding it into
@@ -211,7 +239,10 @@ fn a_refresh_the_kernel_could_not_run_is_not_an_agreeing_one() {
 /// 4 KiB — which would turn a real disagreement into an equal comparison.
 #[test]
 fn an_unclassed_leaf_is_dropped_and_counted_rather_than_defaulted() {
-    let leaves = vec![leaf(0x1_0000_0000, 0x20_0000, 4096), leaf(0x2_0000_0000, 0x40_0000, 1234)];
+    let leaves = vec![
+        leaf(0x1_0000_0000, 0x20_0000, 4096),
+        leaf(0x2_0000_0000, 0x40_0000, 1234),
+    ];
     let (runs, dropped) = leaves_as_runs(&leaves);
     assert_eq!(dropped, 1, "the odd size must be dropped");
     assert_eq!(runs.len(), 1);
@@ -334,7 +365,10 @@ fn the_canonical_form_is_stable_on_real_ga106_tables() {
 
         // 1. idempotence
         let again = kayfabe_mmu::walkdiff::canonical(&runs);
-        assert_eq!(again, runs, "image {name}: canonical form is not idempotent");
+        assert_eq!(
+            again, runs,
+            "image {name}: canonical form is not idempotent"
+        );
 
         // 2. self-agreement
         assert!(
@@ -373,10 +407,17 @@ fn the_canonical_form_is_stable_on_the_hostile_corpus_too() {
             continue;
         }
         nonempty += 1;
-        assert_eq!(kayfabe_mmu::walkdiff::canonical(&runs), runs, "image {name}");
+        assert_eq!(
+            kayfabe_mmu::walkdiff::canonical(&runs),
+            runs,
+            "image {name}"
+        );
         assert!(compare(&runs, &runs).is_empty(), "image {name}");
     }
-    assert!(nonempty >= 5, "only {nonempty} hostile images produced runs");
+    assert!(
+        nonempty >= 5,
+        "only {nonempty} hostile images produced runs"
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
@@ -445,7 +486,10 @@ fn the_image_statistics_reach_the_line() {
     c.note_image(30, 4096 * 31, 1, 0);
     let line = c.render();
     assert!(line.contains("pages_max=30"), "{line}");
-    assert!(line.contains(&format!("staged_bytes={}", 4096 * 13 + 4096 * 31)), "{line}");
+    assert!(
+        line.contains(&format!("staged_bytes={}", 4096 * 13 + 4096 * 31)),
+        "{line}"
+    );
     assert!(line.contains("absent_edges=6"), "{line}");
     assert!(line.contains("sysmem_edges=2"), "{line}");
 }
@@ -476,7 +520,10 @@ fn the_w731_split_is_absorbed_when_both_halves_are_in_one_set() {
     ];
     let h = kayfabe_mmu::walkdiff::canonical(&host);
     let k = kayfabe_mmu::walkdiff::canonical(&kernel);
-    assert_eq!(h, k, "the split and the whole must canonicalise identically");
+    assert_eq!(
+        h, k,
+        "the split and the whole must canonicalise identically"
+    );
     assert!(
         compare(&h, &k).is_empty(),
         "★ a run split at a contiguous boundary is NOT a disagreement: {:?}",
@@ -488,7 +535,12 @@ fn the_w731_split_is_absorbed_when_both_halves_are_in_one_set() {
     // absorbed everything.
     let moved = vec![
         run(0x1_2000_0000, 0x0, 0xefc0_0000, PageClass::P2M),
-        run(0x2_0fc0_0000, 0xefc0_0000 + 0x20_0000, 0x1040_0000, PageClass::P2M),
+        run(
+            0x2_0fc0_0000,
+            0xefc0_0000 + 0x20_0000,
+            0x1040_0000,
+            PageClass::P2M,
+        ),
     ];
     let m = kayfabe_mmu::walkdiff::canonical(&moved);
     assert!(
@@ -507,8 +559,20 @@ fn flags_outside_the_compared_mask_must_not_split_a_run() {
     let host = vec![run(0x1_2000_0000, 0x0, 0x1_0000_0000, PageClass::P2M)];
     // The kernel's own numbers, verbatim from the boot log.
     let raw = vec![
-        Run { va: 0x1_2000_0000, gpga: 0x0, len: 0xefc0_0000, flags: 0x9_0200, class: PageClass::P2M },
-        Run { va: 0x2_0fc0_0000, gpga: 0xefc0_0000, len: 0x1040_0000, flags: 0x6_0200, class: PageClass::P2M },
+        Run {
+            va: 0x1_2000_0000,
+            gpga: 0x0,
+            len: 0xefc0_0000,
+            flags: 0x9_0200,
+            class: PageClass::P2M,
+        },
+        Run {
+            va: 0x2_0fc0_0000,
+            gpga: 0xefc0_0000,
+            len: 0x1040_0000,
+            flags: 0x6_0200,
+            class: PageClass::P2M,
+        },
     ];
     assert_eq!(
         raw[0].flags & COMPARED_FLAGS,
@@ -518,7 +582,11 @@ fn flags_outside_the_compared_mask_must_not_split_a_run() {
 
     // ⊘ The control: canonicalising the raw runs does NOT merge them — which is the defect.
     let raw_canon = kayfabe_mmu::walkdiff::canonical(&raw);
-    assert_eq!(raw_canon.len(), 2, "the boundary survives an unmasked canonicalisation");
+    assert_eq!(
+        raw_canon.len(),
+        2,
+        "the boundary survives an unmasked canonicalisation"
+    );
 
     // ★ And masking first does.
     let masked = kayfabe_mmu::walkshadow::kernel_runs_as_compared(&raw);
@@ -534,10 +602,26 @@ fn flags_outside_the_compared_mask_must_not_split_a_run() {
 
     // ⊘ The known-positive: a difference INSIDE the mask must still split and still fire.
     let real = vec![
-        Run { va: 0x1_2000_0000, gpga: 0x0, len: 0xefc0_0000, flags: 0x9_0200, class: PageClass::P2M },
-        Run { va: 0x2_0fc0_0000, gpga: 0xefc0_0000, len: 0x1040_0000, flags: 0x6_0208, class: PageClass::P2M },
+        Run {
+            va: 0x1_2000_0000,
+            gpga: 0x0,
+            len: 0xefc0_0000,
+            flags: 0x9_0200,
+            class: PageClass::P2M,
+        },
+        Run {
+            va: 0x2_0fc0_0000,
+            gpga: 0xefc0_0000,
+            len: 0x1040_0000,
+            flags: 0x6_0208,
+            class: PageClass::P2M,
+        },
     ];
     let m = kayfabe_mmu::walkshadow::kernel_runs_as_compared(&real);
-    assert_eq!(m.len(), 2, "a READ-ONLY difference is inside the mask and MUST split");
+    assert_eq!(
+        m.len(),
+        2,
+        "a READ-ONLY difference is inside the mask and MUST split"
+    );
     assert!(!compare(&host_canon, &m).is_empty(), "and must be reported");
 }

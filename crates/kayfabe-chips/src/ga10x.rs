@@ -934,12 +934,7 @@ impl GmmuFmt for Ga10xGmmu {
     /// ⚠ A leaf's target is deliberately never passed to `home`. It is reported, not
     /// followed, so relocating it would change what the walk **answers** rather than where it
     /// reads — which would make the compact image describe a different guest.
-    fn relocate_entry(
-        &self,
-        level: u8,
-        raw: u128,
-        home: &dyn Fn(u64) -> Option<u64>,
-    ) -> Relocated {
+    fn relocate_entry(&self, level: u8, raw: u128, home: &dyn Fn(u64) -> Option<u64>) -> Relocated {
         let lo = raw as u64;
         let single = |raw: u64| -> Relocated {
             match ver2_move_half(raw, 8, VER2_ADDR_VID_BITS, VER2_ADDR_SHIFT, home) {

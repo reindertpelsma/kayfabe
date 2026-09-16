@@ -44,13 +44,13 @@
 pub mod blockage;
 pub mod gpga;
 pub mod reach;
+pub mod refresh;
+pub mod walkdiff;
+pub mod walker;
+pub mod walkreport;
 /// ★★★★★ `SINGLE_STORE_PLAN.md` §6 step 1 — shadow mode: run both walkers, compare, count
 /// the disagreements by kind. Nothing here changes what is published.
 pub mod walkshadow;
-pub mod walkdiff;
-pub mod walkreport;
-pub mod refresh;
-pub mod walker;
 
 use blockage::{BlockageCensus, BlockageCounts, Publication};
 use kayfabe_arch::Aperture;
@@ -1226,7 +1226,7 @@ impl AddressTable {
         // doorbell while reporting itself as working (w318 outcome (B)).
         if out.is_some() {
             self.generation = self.generation.saturating_add(1);
-        note_any_table_change();
+            note_any_table_change();
         }
         out
     }
@@ -2042,7 +2042,11 @@ mod the_epoch_a_vcpu_may_read {
         let b = Binding::declared_by_guest(0x8000_0000, Aperture::SysmemCoherent)
             .expect("sysmem is kind 4");
         t.bind(PDB, GpuVa(0x2_0020_0000), 0x10000, b).unwrap();
-        assert_eq!(t.generation(), 1, "the fixture must change the table's content");
+        assert_eq!(
+            t.generation(),
+            1,
+            "the fixture must change the table's content"
+        );
         assert!(
             any_table_change_epoch() > before,
             "a content change must move the GLOBAL epoch too — if it does not, a vCPU that \

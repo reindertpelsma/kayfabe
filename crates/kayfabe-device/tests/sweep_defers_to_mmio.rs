@@ -53,7 +53,12 @@ fn every_trap_path_returns_the_in_flight_count_to_zero() {
 
     // The BAR0 window latch, PRAMIN, a plainly unclaimed register, and a BAR1 offset: four
     // different arms of the classifier, chosen because they return from different places.
-    for (bar, off) in [(0u8, 0x1700u64), (0, 0x0070_0000), (0, 0x0000_9400), (1, 0x1000)] {
+    for (bar, off) in [
+        (0u8, 0x1700u64),
+        (0, 0x0070_0000),
+        (0, 0x0000_9400),
+        (1, 0x1000),
+    ] {
         p.write(bar, off, 4, 0xABCD_ABCD);
         assert_eq!(
             p.mmio_in_flight(),
@@ -84,7 +89,11 @@ fn a_permanently_trapping_guest_does_not_livelock_the_sweep() {
     let before = kayfabe_device::plane::sweep_defer_census();
 
     let held = p.hold_mmio_in_flight_for_test();
-    assert_eq!(p.mmio_in_flight(), 1, "the test hold is the mechanism's input");
+    assert_eq!(
+        p.mmio_in_flight(),
+        1,
+        "the test hold is the mechanism's input"
+    );
 
     // One page read, with the flag held for its whole duration. It must return — bounded —
     // rather than spin until the test times out.

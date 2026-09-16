@@ -22,9 +22,9 @@ mod common;
 use common::{MOCK_CEILING, config, machine, page, window_gpa, window_len};
 
 use kayfabe_vmm::VmmError;
+use kayfabe_vmm_qemu::host::BarPlacement;
 use kayfabe_vmm_qemu::mock_host::{MockPolicy, MockSlotPlane};
 use kayfabe_vmm_qemu::slots::{CEILING_TOO_SMALL, OUR_SLOT_BUDGET, SLOT_BUDGET_EXHAUSTED};
-use kayfabe_vmm_qemu::host::BarPlacement;
 use kayfabe_vmm_qemu::{MachineConfig, QemuMachine, WindowSpec};
 use std::sync::Arc;
 

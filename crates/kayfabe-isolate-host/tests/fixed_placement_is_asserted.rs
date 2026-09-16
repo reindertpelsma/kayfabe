@@ -49,9 +49,9 @@ fn rm_rs_code_only() -> String {
 /// The byte span of `mod birth_conn { … }` in `rm.rs` — constraint 32's second RM
 /// connection, and the home of the second `NVOS46` site.
 fn birth_conn_span(code: &str) -> (usize, usize) {
-    let start = code
-        .find("mod birth_conn {")
-        .expect("★ NON-VACUITY: `mod birth_conn` is gone from rm.rs — the scoping below gates nothing");
+    let start = code.find("mod birth_conn {").expect(
+        "★ NON-VACUITY: `mod birth_conn` is gone from rm.rs — the scoping below gates nothing",
+    );
     let open = start + code[start..].find('{').expect("an opening brace");
     let bytes = code.as_bytes();
     let mut depth = 0usize;
@@ -161,10 +161,7 @@ fn every_nvos46_site_asserts_its_own_placement() {
         // `fn` at column 19 on a line indented 8 — and the closing brace is at 8. Getting
         // this wrong is what produced the missing terminator above.
         let line_start = code[..at].rfind('\n').map_or(0, |nl| nl + 1);
-        let col = code[line_start..]
-            .chars()
-            .take_while(|c| *c == ' ')
-            .count();
+        let col = code[line_start..].chars().take_while(|c| *c == ' ').count();
         let terminator = format!("\n{}}}\n", " ".repeat(col));
         // ⊘⊘⊘ **A MISSING TERMINATOR IS A FAILURE, NOT A FALLBACK.** The first version of
         // this gate said `.map_or(code.len(), ..)`, so a terminator it could not find made
@@ -172,14 +169,15 @@ fn every_nvos46_site_asserts_its_own_placement() {
         // assertions and passed. `KP15` (deleting the B site's teardown) was watched and
         // came back GREEN because of exactly this. ⇒ a scanner that cannot delimit what it
         // is scanning must say so, never widen.
-        let end = at + code[at..].find(&terminator).unwrap_or_else(|| {
-            panic!(
-                "★ NON-VACUITY: could not find the end of the function at byte {at} \
+        let end = at
+            + code[at..].find(&terminator).unwrap_or_else(|| {
+                panic!(
+                    "★ NON-VACUITY: could not find the end of the function at byte {at} \
                  (column {col}). A gate that cannot delimit its subject must REFUSE, not \
                  fall back to the rest of the file — that fallback made this test green \
                  through a deleted assertion."
-            )
-        });
+                )
+            });
         let body = &code[at..end];
         let name: String = body[body.find("fn ").map_or(0, |o| o + 3)..]
             .chars()

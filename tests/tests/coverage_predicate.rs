@@ -41,8 +41,12 @@ fn world_inner(guest_ram: Option<u64>) -> Guarded<Gpu> {
         None => factory,
     };
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
-    let mut gpu =
-        Gpu::new(std::sync::Arc::new(WireClassArch::new()), Box::new(factory), gpa).expect("device realizes");
+    let mut gpu = Gpu::new(
+        std::sync::Arc::new(WireClassArch::new()),
+        Box::new(factory),
+        gpa,
+    )
+    .expect("device realizes");
     let mut s = Scenario::new();
     s.compute_process(A_CLIENT, A_PDB, identical_handles(0x10, 0x11));
     for ev in s.events {

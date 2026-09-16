@@ -44,9 +44,9 @@
 //! that hazard for every joined leaf, and the mirror does not add a new kind of it.
 
 use crate::bounds::HostOffset;
+use crate::cache::CachePolicy;
 use crate::error::RawError;
 use crate::host_fd_unsafe::SharedRam;
-use crate::cache::CachePolicy;
 use crate::mapping_unsafe::{Backing, HostProt, MappedRegion};
 use crate::page_size::HostPageSize;
 use kayfabe_util::lockwitness;
@@ -258,10 +258,9 @@ impl SharedPageArena {
     /// into a neighbour, exactly as [`ArenaPage::read_into`] refuses it.
     pub fn read_at(&self, addr: u64, off: u64, dst: &mut [u8]) -> Result<(), RawError> {
         let len = dst.len() as u64;
-        let end = off.checked_add(len).ok_or(RawError::LengthOverflow {
-            offset: off,
-            len,
-        })?;
+        let end = off
+            .checked_add(len)
+            .ok_or(RawError::LengthOverflow { offset: off, len })?;
         let index = addr / ARENA_PAGE;
         if end > ARENA_PAGE || !addr.is_multiple_of(ARENA_PAGE) || index >= self.inner.pages {
             return Err(RawError::OutOfRange {
@@ -550,13 +549,24 @@ mod tests {
         // would have two homes, and nothing would keep them equal.
         drop(a);
         let again = arena.alloc_at(0).expect("again");
-        assert_eq!(again.file_offset(), 0, "the same address is the same offset");
+        assert_eq!(
+            again.file_offset(),
+            0,
+            "the same address is the same offset"
+        );
         // ⊘ And the bytes survived, because it is the same page of the same file.
         let mut buf = [0u8; 4];
         again.read_into(0, &mut buf).unwrap();
-        assert_eq!(buf, [1, 2, 3, 4], "re-asking returned the SAME page, not a fresh one");
+        assert_eq!(
+            buf,
+            [1, 2, 3, 4],
+            "re-asking returned the SAME page, not a fresh one"
+        );
         // ⊘ Refusals are about an ADDRESS now, not about a supply.
-        assert!(arena.alloc_at(1).is_err(), "a misaligned address is refused, never rounded");
+        assert!(
+            arena.alloc_at(1).is_err(),
+            "a misaligned address is refused, never rounded"
+        );
         assert!(
             arena.alloc_at(SharedPageArena::LEN).is_err(),
             "an address past the arena's extent is refused"
@@ -619,17 +629,24 @@ mod tests {
         p.write_from(0, &[0x5A; 64]).unwrap();
         drop(p);
         // Names bytes 8..64 of page 0 — no WHOLE page, so nothing may be punched.
-        arena.punch_range(8, 56).expect("a sub-page punch is a no-op, not an error");
+        arena
+            .punch_range(8, 56)
+            .expect("a sub-page punch is a no-op, not an error");
         let mut buf = [0u8; 4];
         arena.alloc_at(0).unwrap().read_into(0, &mut buf).unwrap();
-        assert_eq!(buf, [0x5A; 4], "a sub-page range must not drop the page it lies in");
+        assert_eq!(
+            buf, [0x5A; 4],
+            "a sub-page range must not drop the page it lies in"
+        );
         // ⊘ Past the end is refused, never clamped.
         assert!(
             arena.punch_range(SharedPageArena::LEN, ARENA_PAGE).is_err(),
             "a range starting past the arena must be refused"
         );
         assert!(
-            arena.punch_range(0, SharedPageArena::LEN + ARENA_PAGE).is_err(),
+            arena
+                .punch_range(0, SharedPageArena::LEN + ARENA_PAGE)
+                .is_err(),
             "a range running past the end must be refused, not truncated"
         );
         assert!(

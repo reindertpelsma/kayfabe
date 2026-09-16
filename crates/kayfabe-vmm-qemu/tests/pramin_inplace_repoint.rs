@@ -39,8 +39,8 @@
 mod common;
 
 use kayfabe_linux_raw::{HostOffset, SharedRam};
-use kayfabe_vmm_qemu::REPOINT_LENGTH_IS_NOT_THE_WINDOWS;
 use kayfabe_vmm::{RamRegionId, VmmError};
+use kayfabe_vmm_qemu::REPOINT_LENGTH_IS_NOT_THE_WINDOWS;
 
 /// Where the aperture lives: inside BAR1, clear of the realize-time reservation.
 fn pramin_gpa() -> u64 {
@@ -64,7 +64,10 @@ fn re_pointing_the_aperture_installs_no_memslot_clears_none_and_replaces_none() 
     // ⊘ The baseline is taken AFTER the install, on purpose: the one-time install is not part
     // of what this test is about, and folding it in would hide a regression of exactly its size.
     let (i0, c0, r0) = (slots.installs(), slots.clears(), slots.replaces());
-    assert!(i0 > 0, "the install must have installed something, or the deltas below are vacuous");
+    assert!(
+        i0 > 0,
+        "the install must have installed something, or the deltas below are vacuous"
+    );
 
     let nodes: Vec<SharedRam> = (0..20)
         .map(|_| SharedRam::create(pramin_len()).expect("a node"))
@@ -75,7 +78,11 @@ fn re_pointing_the_aperture_installs_no_memslot_clears_none_and_replaces_none() 
     }
 
     assert_eq!(
-        (slots.installs() - i0, slots.clears() - c0, slots.replaces() - r0),
+        (
+            slots.installs() - i0,
+            slots.clears() - c0,
+            slots.replaces() - r0
+        ),
         (0, 0, 0),
         "twenty in-place re-points asked the memslot plane for {} install(s), {} clear(s) and \
          {} replace(s). The correct number is ZERO for all three: the guest-physical range is \
@@ -102,13 +109,15 @@ fn the_aperture_shows_the_node_it_was_re_pointed_to_and_not_the_one_before_it() 
         .expect("install over A");
     let w = m.device_window_handle(region).expect("the window's handle");
 
-    w.write_from(HostOffset::ZERO, b"NODE-A!!").expect("write through the aperture");
+    w.write_from(HostOffset::ZERO, b"NODE-A!!")
+        .expect("write through the aperture");
 
     m.repoint_device_window(region, b.as_backing_fd(), pramin_len(), true)
         .expect("re-point to B");
 
     let mut got = [0u8; 8];
-    w.read_into(HostOffset::ZERO, &mut got).expect("read through the aperture");
+    w.read_into(HostOffset::ZERO, &mut got)
+        .expect("read through the aperture");
     assert_eq!(
         &got, b"\0\0\0\0\0\0\0\0",
         "the aperture still shows A after being re-pointed at B. The guest writes the BAR0 \
@@ -120,13 +129,19 @@ fn the_aperture_shows_the_node_it_was_re_pointed_to_and_not_the_one_before_it() 
 
     // ⚠ And the handle a caller took BEFORE the move now sees the NEW backing, which is the
     // correct semantics for a moving aperture and is exactly how the arena arm behaves today.
-    w.write_from(HostOffset::ZERO, b"NODE-B!!").expect("write again");
+    w.write_from(HostOffset::ZERO, b"NODE-B!!")
+        .expect("write again");
     let a_direct = m
         .device_window_handle(region)
         .expect("the handle is still the window's");
     let mut after = [0u8; 8];
-    a_direct.read_into(HostOffset::ZERO, &mut after).expect("read back");
-    assert_eq!(&after, b"NODE-B!!", "the write landed in the node the aperture now shows");
+    a_direct
+        .read_into(HostOffset::ZERO, &mut after)
+        .expect("read back");
+    assert_eq!(
+        &after, b"NODE-B!!",
+        "the write landed in the node the aperture now shows"
+    );
 }
 
 /// ★★★★★ **THE LENGTH GATE — a short re-point is REFUSED, not truncated.**
@@ -149,7 +164,12 @@ fn a_re_point_that_is_not_the_windows_length_is_refused_by_name_and_places_nothi
         .expect("write into the LAST page, which a short re-point would strand");
 
     let (i0, c0) = (slots.installs(), slots.clears());
-    let short = m.repoint_device_window(region, b.as_backing_fd(), pramin_len() - common::page(), true);
+    let short = m.repoint_device_window(
+        region,
+        b.as_backing_fd(),
+        pramin_len() - common::page(),
+        true,
+    );
     assert!(
         matches!(&short, Err(VmmError::Unsupported(why)) if *why == REPOINT_LENGTH_IS_NOT_THE_WINDOWS),
         "a short re-point must be refused BY NAME, got {short:?}"
@@ -172,12 +192,8 @@ fn a_re_point_that_is_not_the_windows_length_is_refused_by_name_and_places_nothi
 
     // ⊘ Non-vacuity: a region that is not an installed window is a DIFFERENT refusal, so the
     // assertion above is about the length and not about everything failing.
-    let nowhere = m.repoint_device_window(
-        RamRegionId(u64::MAX),
-        b.as_backing_fd(),
-        pramin_len(),
-        true,
-    );
+    let nowhere =
+        m.repoint_device_window(RamRegionId(u64::MAX), b.as_backing_fd(), pramin_len(), true);
     assert!(
         matches!(&nowhere, Err(VmmError::Unsupported(why)) if *why != REPOINT_LENGTH_IS_NOT_THE_WINDOWS),
         "an unknown region must refuse for its own reason, got {nowhere:?}"

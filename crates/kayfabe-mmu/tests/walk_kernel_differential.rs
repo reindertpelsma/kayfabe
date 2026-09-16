@@ -103,7 +103,12 @@ fn load_corpus(path: &PathBuf) -> Vec<Img> {
             mem[off..off + 4096].copy_from_slice(&b[at..at + 4096]);
             at += 4096;
         }
-        out.push(Img { name, benign, root, mem });
+        out.push(Img {
+            name,
+            benign,
+            root,
+            mem,
+        });
     }
     out
 }
@@ -143,11 +148,17 @@ fn walk_kernel_differential_real_driver_tables() {
 fn decode_corpus(corpus: &str, leaves: &str, min_images: usize, min_leaves: usize) {
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../cuda/walk/corpus");
     let imgs = load_corpus(&dir.join(corpus));
-    assert!(imgs.len() >= min_images, "{corpus} is suspiciously small: {}", imgs.len());
+    assert!(
+        imgs.len() >= min_images,
+        "{corpus} is suspiciously small: {}",
+        imgs.len()
+    );
 
     let fmt = Ga10xGmmu::new();
     let mut text = String::new();
-    text.push_str(&format!("# kayfabe-mmu::walker decode of cuda/walk/corpus/{corpus}\n"));
+    text.push_str(&format!(
+        "# kayfabe-mmu::walker decode of cuda/walk/corpus/{corpus}\n"
+    ));
     text.push_str("# image <name> <benign 0|1> <leaf count>\n");
     text.push_str("# leaf <va-hex> <phys-hex> <size-hex> <aperture 0..3> <read_only 0|1>\n");
 
@@ -167,19 +178,36 @@ fn decode_corpus(corpus: &str, leaves: &str, min_images: usize, min_leaves: usiz
             .iter()
             .map(|l| {
                 let GpuVa(va) = l.va;
-                (va, l.phys, l.size.0, ap_code(l.aperture), u8::from(l.read_only))
+                (
+                    va,
+                    l.phys,
+                    l.size.0,
+                    ap_code(l.aperture),
+                    u8::from(l.read_only),
+                )
             })
             .collect();
         rows.sort_unstable();
         total += rows.len();
-        text.push_str(&format!("image {} {} {}\n", im.name, u8::from(im.benign), rows.len()));
+        text.push_str(&format!(
+            "image {} {} {}\n",
+            im.name,
+            u8::from(im.benign),
+            rows.len()
+        ));
         for r in &rows {
-            text.push_str(&format!("leaf {:x} {:x} {:x} {} {}\n", r.0, r.1, r.2, r.3, r.4));
+            text.push_str(&format!(
+                "leaf {:x} {:x} {:x} {} {}\n",
+                r.0, r.1, r.2, r.3, r.4
+            ));
         }
     }
     // ⚠ A differential that decoded nothing on both sides agrees perfectly and
     // proves nothing.
-    assert!(total > min_leaves, "{corpus} decoded to only {total} leaves");
+    assert!(
+        total > min_leaves,
+        "{corpus} decoded to only {total} leaves"
+    );
 
     let expected = dir.join(leaves);
     if std::env::var_os("KF_WRITE_EXPECTED").is_some() {
@@ -187,8 +215,12 @@ fn decode_corpus(corpus: &str, leaves: &str, min_images: usize, min_leaves: usiz
         eprintln!("wrote {} ({total} leaves)", expected.display());
         return;
     }
-    let have = std::fs::read_to_string(&expected)
-        .unwrap_or_else(|e| panic!("{}: {e} -- run with KF_WRITE_EXPECTED=1", expected.display()));
+    let have = std::fs::read_to_string(&expected).unwrap_or_else(|e| {
+        panic!(
+            "{}: {e} -- run with KF_WRITE_EXPECTED=1",
+            expected.display()
+        )
+    });
     if have != text {
         let a: Vec<&str> = have.lines().collect();
         let b: Vec<&str> = text.lines().collect();

@@ -157,8 +157,8 @@ fn guest_with_a_gr_channel_and_userd(
 ) -> (Gpu, ProcId, ChanId) {
     let (factory, _rec) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
-    let mut gpu =
-        Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa).expect("the device realizes");
+    let mut gpu = Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa)
+        .expect("the device realizes");
     let mut s = Scenario::new();
     let dev = HObject(0x5C00_0002);
     let vas = HObject(0x5C00_0007);
@@ -196,7 +196,6 @@ fn guest_with_a_gr_channel_and_userd(
         // a sysmem-rooted PDB read as vidmem walks the wrong memory and
         // reports success, because a wrong-aperture read returns zeros.
         pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
     });
     s.push(RmEvent::Alloc {
         client: CLIENT,
@@ -651,13 +650,8 @@ fn planned_birth(
     oracle: Option<&dyn kayfabe_fwd::RingSliceOracle>,
 ) -> Result<Option<kayfabe_isolate::VerbPlan>, kayfabe_fwd::FwdFault> {
     let route = kayfabe_fwd::route_channel_birth(&gpu.spine, CLIENT, HObject(0x5C00_0019))?;
-    let planned = kayfabe_fwd::plan_channel_birth(
-        &gpu.spine,
-        &gpu.procs[&route.proc],
-        &route,
-        None,
-        oracle,
-    )?;
+    let planned =
+        kayfabe_fwd::plan_channel_birth(&gpu.spine, &gpu.procs[&route.proc], &route, None, oracle)?;
     Ok(planned.verbs)
 }
 
@@ -731,7 +725,10 @@ fn a_store_slice_ring_is_refused_when_no_one_can_vouch_for_it() {
          reports NO ERROR AT ALL.",
     );
     assert!(
-        matches!(err, kayfabe_fwd::FwdFault::PassthroughRingNotAdoptable { .. }),
+        matches!(
+            err,
+            kayfabe_fwd::FwdFault::PassthroughRingNotAdoptable { .. }
+        ),
         "the refusal must be the ring's own, by name: got {err:?}"
     );
 }

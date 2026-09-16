@@ -92,7 +92,10 @@ impl FakePort {
     /// # Panics
     /// If the write leaves the object or crosses a grain, which a fixture caller should not do.
     pub fn poke(&self, at: u64, bytes: &[u8]) {
-        assert!(at + bytes.len() as u64 <= self.len, "poke outside the object");
+        assert!(
+            at + bytes.len() as u64 <= self.len,
+            "poke outside the object"
+        );
         let base = at & !(FAKE_GRAIN - 1);
         assert_eq!(
             base,
@@ -100,7 +103,9 @@ impl FakePort {
             "the fixture pokes one grain at a time"
         );
         let mut g = self.grains.lock().unwrap();
-        let page = g.entry(base).or_insert_with(|| vec![0u8; FAKE_GRAIN as usize]);
+        let page = g
+            .entry(base)
+            .or_insert_with(|| vec![0u8; FAKE_GRAIN as usize]);
         let off = (at - base) as usize;
         page[off..off + bytes.len()].copy_from_slice(bytes);
     }

@@ -24,7 +24,10 @@ const MIB: u64 = 1024 * 1024;
 fn the_measured_boot_is_possible_and_reached() {
     let reserved = 4096 * MIB;
     let (ok, line) = identity_window_verdict(reserved, reserved);
-    assert!(ok, "advertising exactly what was reserved must be possible: {line}");
+    assert!(
+        ok,
+        "advertising exactly what was reserved must be possible: {line}"
+    );
     assert!(line.contains("POSSIBLE"), "{line}");
 
     // 3868.7 MiB, the measured high-water. ⊘ Spelled as MiB arithmetic rather than as a
@@ -64,7 +67,10 @@ fn advertising_more_than_was_reserved_is_impossible_and_says_why() {
 fn the_boundary_is_exact_in_both_directions() {
     let r = 4096 * MIB;
     assert!(identity_window_verdict(r, r).0, "equal fits");
-    assert!(!identity_window_verdict(r + 1, r).0, "one byte over does not");
+    assert!(
+        !identity_window_verdict(r + 1, r).0,
+        "one byte over does not"
+    );
     assert!(identity_window_reached(r, r).contains("INSIDE"));
     assert!(identity_window_reached(r + 1, r).contains("OUTSIDE"));
 }

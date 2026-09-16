@@ -216,7 +216,9 @@ fn release(gpu: &mut Gpu, pid: ProcId, orphans: &kayfabe_fwd::Orphans) {
 fn two_slices_of_one_arena_reclaim_independently_and_free_nothing() {
     let (mut gpu, pid, _rec, _vaspace) = one_process_gpu();
     let arena = two_slices_of_one_arena(&mut gpu, pid);
-    let host_vas = gpu.procs[&pid].vas_by_pdb(GPU, PDB).expect("the VAS exists")
+    let host_vas = gpu.procs[&pid]
+        .vas_by_pdb(GPU, PDB)
+        .expect("the VAS exists")
         .host_vas
         .expect("materialized");
 
@@ -276,7 +278,9 @@ fn a_whole_object_backing_is_still_freed_by_its_own_release() {
     let (mut gpu, pid, _rec, _vaspace) = one_process_gpu();
     let p: Published =
         publish_backing(gpu.procs.get_mut(&pid).unwrap(), GPU, PDB, VA_A, LEN).expect("publishes");
-    let host_vas = gpu.procs[&pid].vas_by_pdb(GPU, PDB).expect("the VAS exists")
+    let host_vas = gpu.procs[&pid]
+        .vas_by_pdb(GPU, PDB)
+        .expect("the VAS exists")
         .host_vas
         .expect("materialized");
 
@@ -412,7 +416,9 @@ fn a_backing_from_another_isolate_is_refused_and_not_freed_by_us() {
     // is the steady-state one (no VAS allocation to confuse the refusal's orphans).
     let _ =
         publish_backing(gpu.procs.get_mut(&pid).unwrap(), GPU, PDB, VA_A, LEN).expect("publishes");
-    let host_vas = gpu.procs[&pid].vas_by_pdb(GPU, PDB).expect("the VAS exists")
+    let host_vas = gpu.procs[&pid]
+        .vas_by_pdb(GPU, PDB)
+        .expect("the VAS exists")
         .host_vas
         .expect("materialized");
 
@@ -522,7 +528,9 @@ fn a_backing_from_another_isolate_is_refused_and_not_freed_by_us() {
 fn dropping_a_vas_full_of_slices_queues_the_arena_zero_times_not_once_per_slice() {
     let (mut gpu, pid, _rec, vaspace) = one_process_gpu();
     let arena = two_slices_of_one_arena(&mut gpu, pid);
-    let host_vas = gpu.procs[&pid].vas_by_pdb(GPU, PDB).expect("the VAS exists")
+    let host_vas = gpu.procs[&pid]
+        .vas_by_pdb(GPU, PDB)
+        .expect("the VAS exists")
         .host_vas
         .expect("materialized");
 

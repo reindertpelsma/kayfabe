@@ -382,7 +382,6 @@ pub fn largest_power_of_two_that_fits(host: u64) -> u64 {
     0
 }
 
-
 /// ★★★★★ **w734 — THE KNOB §w727 SPECIFIED AND NOBODY WIRED.**
 ///
 /// > **Owner, 2026-09-14:** *"just like VRAM size, where you can select how much vram to give
@@ -491,7 +490,11 @@ mod tests {
     #[test]
     fn a_malformed_line_is_an_absence_and_not_a_zero() {
         assert_eq!(bar_len_from_resource("garbage\n", 0), None);
-        assert_eq!(bar_len_from_resource("0x10 0x0 0x0\n", 0), None, "end < start");
+        assert_eq!(
+            bar_len_from_resource("0x10 0x0 0x0\n", 0),
+            None,
+            "end < start"
+        );
         assert_eq!(bar_len_from_resource(REAL, 9), None, "no such BAR");
     }
 
@@ -523,7 +526,10 @@ mod tests {
             );
         }
         for mib in [64, 128, 256] {
-            assert!(Bar1Choice::parse(mib).is_ok(), "{mib} MiB is a legal BAR size");
+            assert!(
+                Bar1Choice::parse(mib).is_ok(),
+                "{mib} MiB is a legal BAR size"
+            );
         }
     }
 
@@ -583,9 +589,15 @@ mod tests {
     #[test]
     fn a_board_with_no_fitting_size_says_zero_rather_than_something_unusable() {
         assert_eq!(largest_power_of_two_that_fits(32 * 1024 * 1024), 0);
-        assert_eq!(largest_power_of_two_that_fits(256 * 1024 * 1024), 128 * 1024 * 1024);
+        assert_eq!(
+            largest_power_of_two_that_fits(256 * 1024 * 1024),
+            128 * 1024 * 1024
+        );
         // ⊘ A 1 GiB aperture fits 512 MiB, not 1 GiB: headroom is not optional.
-        assert_eq!(largest_power_of_two_that_fits(1024 * 1024 * 1024), 512 * 1024 * 1024);
+        assert_eq!(
+            largest_power_of_two_that_fits(1024 * 1024 * 1024),
+            512 * 1024 * 1024
+        );
     }
 
     /// ⊘ "We could not tell" is not "it does not fit".    /// ⊘ "We could not tell" is not "it does not fit". Collapsing them would license the

@@ -83,12 +83,8 @@ fn device() -> (
     let (factory, recorder) = MockIsolateFactory::with_pool_size(2);
     let factory = factory.with_guest_ram(GUEST_RAM_BYTES);
     let gpa = GpaSpace::new(0x10_0000_0000..0x1000_0000_0000, 0x10_0000_0000);
-    let mut gpu = Gpu::new(
-        std::sync::Arc::new(MockArch::new()),
-        Box::new(factory),
-        gpa,
-    )
-    .expect("realizes");
+    let mut gpu =
+        Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa).expect("realizes");
     let mut s = Scenario::new();
     s.compute_process_on_gpu(CLIENT, PDB, identical_handles(GR.0, CE.0), None);
     s.memory(CLIENT, HObject(0x5c00_0001), MEM, 0x9_0000_0000);
@@ -337,14 +333,12 @@ fn the_invalidate_arm_orders_unmaps_before_maps() {
         .expect("★ NON-VACUITY: the invalidate arm is gone — this gate gates nothing");
     let body = &code[arm..];
 
-    let unmap_first = body
-        .find("plane.revalidate_mirror_first();")
-        .expect(
-            "★★★★★ CONSTRAINT 27 REGRESSED — the invalidate arm no longer retires stale \
+    let unmap_first = body.find("plane.revalidate_mirror_first();").expect(
+        "★★★★★ CONSTRAINT 27 REGRESSED — the invalidate arm no longer retires stale \
              mirror slots before it publishes. `drain_mirror_revalidation` cannot serve this: \
              it runs `drain_fills()` FIRST, so using it here installs new memslots before the \
              stale ones are gone — maps before unmaps.",
-        );
+    );
     let publish = body
         .find("let published = ctx.publish_vas_rows(token, None, off_vcpu);")
         .expect("★ NON-VACUITY: the publication call moved; this gate is comparing nothing");
@@ -364,13 +358,11 @@ fn the_invalidate_arm_orders_unmaps_before_maps() {
          unmap-first pass."
     );
 
-    let complete = body
-        .find("complete_through_unmaps(")
-        .expect(
-            "★★★★★ CONSTRAINT 27 REGRESSED — the arm completes through the UNGATED \
+    let complete = body.find("complete_through_unmaps(").expect(
+        "★★★★★ CONSTRAINT 27 REGRESSED — the arm completes through the UNGATED \
              `complete_through`. That function cannot see the staged unmaps and will release \
              the guest over a live mapping.",
-        );
+    );
     assert!(
         premap < complete && publish < complete,
         "★ every publication step must precede the completion — the pre-existing ordering \

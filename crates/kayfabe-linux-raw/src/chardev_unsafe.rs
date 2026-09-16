@@ -315,7 +315,10 @@ impl<'a> Indirect<'a> {
         Ok(Indirect {
             at,
             target: IndirectTarget::Buf(buf),
-            inner: vec![Nested { at: inner_at, buf: inner }],
+            inner: vec![Nested {
+                at: inner_at,
+                buf: inner,
+            }],
         })
     }
 
@@ -667,12 +670,12 @@ impl CharDevice {
                         object_len: 0,
                     });
                 };
-                let end = n.at
-                    .checked_add(POINTER_FIELD_WIDTH)
-                    .ok_or(RawError::LengthOverflow {
-                        offset: n.at as u64,
-                        len: POINTER_FIELD_WIDTH as u64,
-                    })?;
+                let end =
+                    n.at.checked_add(POINTER_FIELD_WIDTH)
+                        .ok_or(RawError::LengthOverflow {
+                            offset: n.at as u64,
+                            len: POINTER_FIELD_WIDTH as u64,
+                        })?;
                 if end > buf.len() {
                     return Err(RawError::OutOfRange {
                         offset: n.at as u64,
@@ -696,7 +699,8 @@ impl CharDevice {
             for n in inner.iter_mut() {
                 let inner_addr = n.buf.as_mut_ptr() as u64;
                 if let IndirectTarget::Buf(buf) = target {
-                    buf[n.at..n.at + POINTER_FIELD_WIDTH].copy_from_slice(&inner_addr.to_le_bytes());
+                    buf[n.at..n.at + POINTER_FIELD_WIDTH]
+                        .copy_from_slice(&inner_addr.to_le_bytes());
                 }
             }
             let addr = match &mut p.target {
@@ -924,7 +928,11 @@ mod tests {
         let mut nest = Indirect::nested(16, &mut params, 8, &mut list).expect("8 + 8 <= 24");
         let r = d.ioctl(req, &mut arg, std::slice::from_mut(&mut nest));
         assert!(r.is_err(), "/dev/null answers ENOTTY");
-        assert_eq!(&arg[16..24], &[0u8; 8], "the OUTER address survived the call");
+        assert_eq!(
+            &arg[16..24],
+            &[0u8; 8],
+            "the OUTER address survived the call"
+        );
         drop(nest);
         assert_eq!(
             &params[8..16],
@@ -932,7 +940,11 @@ mod tests {
             "the INNER field is neither the sentinel (never patched) nor an address (never \
              scrubbed)"
         );
-        assert_eq!(&params[..8], &[0u8; 8], "nothing else in the block was disturbed");
+        assert_eq!(
+            &params[..8],
+            &[0u8; 8],
+            "nothing else in the block was disturbed"
+        );
         assert_eq!(&params[16..], &[0u8; 8], "nor after it");
     }
 

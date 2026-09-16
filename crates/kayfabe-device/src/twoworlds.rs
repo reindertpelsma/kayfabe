@@ -58,8 +58,8 @@
 //! test can prove this instrument CAN report a collision. A census that has never been shown to
 //! fire is not evidence of absence — this tree has paid for that lesson roughly twenty times.
 
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
 /// Which of the two worlds an access arrived through.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

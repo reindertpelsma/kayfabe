@@ -309,7 +309,6 @@ fn a_guest_kernel_channels_miss_is_escalated_and_builds_no_event() {
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         },
         RmEvent::Alloc {
             client: KC,

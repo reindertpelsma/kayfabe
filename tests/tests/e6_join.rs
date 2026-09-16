@@ -83,8 +83,8 @@ const NEVER_PUBLISHED: GpuVa = GpuVa(0x7_0000_0000);
 fn device() -> (Guarded<Gpu>, MockVmm, SharedRecorder, ProcId, ChanId) {
     let (factory, rec) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
-    let mut gpu =
-        Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa).expect("the device realizes");
+    let mut gpu = Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa)
+        .expect("the device realizes");
     let mut s = Scenario::new();
     s.compute_process(CLIENT, PDB0, identical_handles(0x20, 0x21));
     for ev in s.events {
@@ -248,7 +248,9 @@ fn a_guests_ce_copy_reaches_the_backend_with_the_guests_own_operands() {
     assert_eq!(seen[0].by, CeExecutor::HostCe, "★ on a REAL engine");
 
     // ---- and in the ringing channel's own host VAS, which is #14's boundary
-    let host_vas = gpu.procs[&pid].vas_by_pdb(GPU, PDB0).expect("the VAS exists")
+    let host_vas = gpu.procs[&pid]
+        .vas_by_pdb(GPU, PDB0)
+        .expect("the VAS exists")
         .host_vas
         .expect("publishing materialized it");
     assert_eq!(

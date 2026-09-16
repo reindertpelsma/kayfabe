@@ -306,7 +306,12 @@ impl ReportHeader {
             refusals: u32_at(b, 48)?,
             refuse_mask: u32_at(b, 52)?,
             sparse_slots: u32_at(b, 56)?,
-            ps_log2: [byte_at(b, 60)?, byte_at(b, 61)?, byte_at(b, 62)?, byte_at(b, 63)?],
+            ps_log2: [
+                byte_at(b, 60)?,
+                byte_at(b, 61)?,
+                byte_at(b, 62)?,
+                byte_at(b, 63)?,
+            ],
         };
         if h.magic != MAGIC {
             return Err(ParseError::BadMagic(h.magic));
@@ -504,11 +509,19 @@ impl MapRun {
         let log2 = usize::try_from(code)
             .ok()
             .and_then(|c| h.ps_log2.get(c).copied())
-            .ok_or(ParseError::BadPageSize { index, code, log2: None })?;
+            .ok_or(ParseError::BadPageSize {
+                index,
+                code,
+                log2: None,
+            })?;
         // 12 is 4 KiB, the smallest GPU page; 40 is 1 TiB, far past any real large page. A shift
         // outside that is a corrupt or uninitialised table, not a page size.
         if !(12..=40).contains(&log2) {
-            return Err(ParseError::BadPageSize { index, code, log2: Some(log2) });
+            return Err(ParseError::BadPageSize {
+                index,
+                code,
+                log2: Some(log2),
+            });
         }
         Ok(1u64 << log2)
     }
@@ -662,10 +675,18 @@ impl Report {
             }
             let ps = r.page_size(&self.header, i)?;
             if r.len == 0 || r.len % ps != 0 {
-                return Err(ParseError::BadRunLength { index: i, len: r.len, page_size: ps });
+                return Err(ParseError::BadRunLength {
+                    index: i,
+                    len: r.len,
+                    page_size: ps,
+                });
             }
             if r.va % ps != 0 {
-                return Err(ParseError::UnalignedRunVa { index: i, va: r.va, page_size: ps });
+                return Err(ParseError::UnalignedRunVa {
+                    index: i,
+                    va: r.va,
+                    page_size: ps,
+                });
             }
             // ⊘ NOTHING is asserted about `gpga` alignment, and that is deliberate — see
             // `the_walk_kernel_report_format.md` §3: VER2 carries a 4 KiB-granular address field
@@ -706,7 +727,13 @@ impl Report {
                     });
                 }
             };
-            out.push(Run { va: r.va, gpga: r.gpga, len: r.len, flags: r.flags, class });
+            out.push(Run {
+                va: r.va,
+                gpga: r.gpga,
+                len: r.len,
+                flags: r.flags,
+                class,
+            });
         }
         Ok(out)
     }
@@ -734,7 +761,11 @@ fn need(have_len: usize, offset: usize, want: usize) -> Result<(), ParseError> {
 }
 
 fn byte_at(b: &[u8], at: usize) -> Result<u8, ParseError> {
-    b.get(at).copied().ok_or(ParseError::Short { offset: at, want: 1, have: 0 })
+    b.get(at).copied().ok_or(ParseError::Short {
+        offset: at,
+        want: 1,
+        have: 0,
+    })
 }
 
 fn u16_at(b: &[u8], at: usize) -> Result<u16, ParseError> {
@@ -788,35 +819,62 @@ mod tests {
         assert_eq!(&b[0..4], &MAGIC.to_le_bytes(), "magic @ +0");
         assert_eq!(&b[4..6], &0x1111u16.to_le_bytes(), "version @ +4");
         assert_eq!(&b[6..8], &0x2222u16.to_le_bytes(), "flags @ +6");
-        assert_eq!(&b[8..16], &0x3333_3333_4444_4444u64.to_le_bytes(), "generation @ +8");
+        assert_eq!(
+            &b[8..16],
+            &0x3333_3333_4444_4444u64.to_le_bytes(),
+            "generation @ +8"
+        );
         assert_eq!(
             &b[16..24],
             &0x5555_5555_6666_6666u64.to_le_bytes(),
             "acked_generation @ +16"
         );
         assert_eq!(&b[24..28], &0x7777_7777u32.to_le_bytes(), "pdb_count @ +24");
-        assert_eq!(&b[28..32], &0x0888_8888u32.to_le_bytes(), "pdb_capacity @ +28");
+        assert_eq!(
+            &b[28..32],
+            &0x0888_8888u32.to_le_bytes(),
+            "pdb_capacity @ +28"
+        );
         assert_eq!(&b[32..36], &0x0999_9999u32.to_le_bytes(), "run_count @ +32");
-        assert_eq!(&b[36..40], &0x0AAA_AAAAu32.to_le_bytes(), "run_capacity @ +36");
+        assert_eq!(
+            &b[36..40],
+            &0x0AAA_AAAAu32.to_le_bytes(),
+            "run_capacity @ +36"
+        );
         assert_eq!(
             &b[40..48],
             &0x0BBB_BBBB_CCCC_CCCCu64.to_le_bytes(),
             "entries_visited @ +40"
         );
         assert_eq!(&b[48..52], &0x0DDD_DDDDu32.to_le_bytes(), "refusals @ +48");
-        assert_eq!(&b[52..56], &0x0EEE_EEEEu32.to_le_bytes(), "refuse_mask @ +52");
-        assert_eq!(&b[56..60], &0x0FFF_FFFFu32.to_le_bytes(), "sparse_slots @ +56");
+        assert_eq!(
+            &b[52..56],
+            &0x0EEE_EEEEu32.to_le_bytes(),
+            "refuse_mask @ +52"
+        );
+        assert_eq!(
+            &b[56..60],
+            &0x0FFF_FFFFu32.to_le_bytes(),
+            "sparse_slots @ +56"
+        );
         // ★★★ `ps_log2` is the field that makes the host's parser format-agnostic. It is a
         // BYTE array at +60 — not a u32 — so a host that read it as one would silently invert
         // the page-size table's order on a big-endian build and, worse, decode the four codes
         // as one number here.
-        assert_eq!(&b[60..64], &[12u8, 16, 21, 29], "ps_log2[4] @ +60, one BYTE per code");
+        assert_eq!(
+            &b[60..64],
+            &[12u8, 16, 21, 29],
+            "ps_log2[4] @ +60, one BYTE per code"
+        );
         assert_eq!(ReportHeader::SIZE, 64, "the doc and the header both say 64");
 
         // ⊘ The pins above use a DISTINCTIVE `version` so a mis-sized read of the field is
         // visible; `decode` refuses an unknown version, by design. So the round trip is taken
         // over the same header with the real version — the only field changed.
-        let h = ReportHeader { version: VERSION, ..h };
+        let h = ReportHeader {
+            version: VERSION,
+            ..h
+        };
         let mut b = [0u8; ReportHeader::SIZE];
         h.encode_into(&mut b).expect("encode");
         assert_eq!(&b[4..6], &VERSION.to_le_bytes(), "version @ +4");
@@ -839,7 +897,11 @@ mod tests {
         let mut b = [0u8; PdbEntry::SIZE];
         p.encode_at(&mut b, 0).expect("encode");
 
-        assert_eq!(&b[0..8], &0x1111_1111_2222_2222u64.to_le_bytes(), "pdb @ +0");
+        assert_eq!(
+            &b[0..8],
+            &0x1111_1111_2222_2222u64.to_le_bytes(),
+            "pdb @ +0"
+        );
         assert_eq!(&b[8..12], &0x3333_3333u32.to_le_bytes(), "first_run @ +8");
         assert_eq!(&b[12..16], &0x4444_4444u32.to_le_bytes(), "run_count @ +12");
         assert_eq!(&b[16..20], &0x5555_5555u32.to_le_bytes(), "vas_flags @ +16");
@@ -866,10 +928,22 @@ mod tests {
         r.encode_at(&mut b, 0).expect("encode");
 
         assert_eq!(&b[0..8], &0x1111_1111_2222_2222u64.to_le_bytes(), "va @ +0");
-        assert_eq!(&b[8..16], &0x3333_3333_4444_4444u64.to_le_bytes(), "gpga @ +8");
-        assert_eq!(&b[16..24], &0x5555_5555_6666_6666u64.to_le_bytes(), "len @ +16");
+        assert_eq!(
+            &b[8..16],
+            &0x3333_3333_4444_4444u64.to_le_bytes(),
+            "gpga @ +8"
+        );
+        assert_eq!(
+            &b[16..24],
+            &0x5555_5555_6666_6666u64.to_le_bytes(),
+            "len @ +16"
+        );
         assert_eq!(&b[24..28], &0x7777_7777u32.to_le_bytes(), "flags @ +24");
-        assert_eq!(&b[28..30], &0x00AAu16.to_le_bytes(), "★ op @ +28, a u16 not a u32");
+        assert_eq!(
+            &b[28..30],
+            &0x00AAu16.to_le_bytes(),
+            "★ op @ +28, a u16 not a u32"
+        );
         assert_eq!(&b[30..32], &0x00BBu16.to_le_bytes(), "★ pdb_index @ +30");
         assert_eq!(MapRun::SIZE, 32);
 
@@ -883,11 +957,30 @@ mod tests {
         assert_eq!(RunOp::Unmap.code(), 2);
         assert_eq!(RunOp::Remap.code(), 3);
         for (code, want) in [(1u16, RunOp::Map), (2, RunOp::Unmap), (3, RunOp::Remap)] {
-            let r = MapRun { op: code, ..MapRun::default() };
+            let r = MapRun {
+                op: code,
+                ..MapRun::default()
+            };
             assert_eq!(r.op_decoded(0).expect("decode"), want);
         }
-        assert!(MapRun { op: 0, ..MapRun::default() }.op_decoded(0).is_err(), "0 is not an op");
-        assert!(MapRun { op: 4, ..MapRun::default() }.op_decoded(0).is_err(), "4 is not an op");
+        assert!(
+            MapRun {
+                op: 0,
+                ..MapRun::default()
+            }
+            .op_decoded(0)
+            .is_err(),
+            "0 is not an op"
+        );
+        assert!(
+            MapRun {
+                op: 4,
+                ..MapRun::default()
+            }
+            .op_decoded(0)
+            .is_err(),
+            "4 is not an op"
+        );
     }
 
     /// The bit positions of every flag, against `kf_walk.h`. ⊘ These are the values a hostile
@@ -901,7 +994,10 @@ mod tests {
         );
         assert_eq!((HF_PDB_TRUNCATED, HF_SCOPE_DEGRADED), (32, 64));
         assert_eq!((R_OOB, R_UNALIGNED, R_FOREIGN_AP, R_TOO_DEEP), (1, 2, 4, 8));
-        assert_eq!((R_RUN_CAP, R_BUDGET, R_PDB_CAP, R_BAD_SCOPE), (16, 32, 64, 128));
+        assert_eq!(
+            (R_RUN_CAP, R_BUDGET, R_PDB_CAP, R_BAD_SCOPE),
+            (16, 32, 64, 128)
+        );
         assert_eq!((R_PDB_UNSORTED, R_DELTA_CAP), (256, 512));
         assert_eq!((R_MISALIGNED_LEAF, R_BAD_FORMAT), (1024, 2048));
         assert_eq!((V_NEW, V_GONE, V_RESYNC), (1, 2, 4));
@@ -909,8 +1005,15 @@ mod tests {
             (RF_READ_ONLY, RF_ATOMIC_DISABLE, RF_VOLATILE, RF_PRIVILEGE),
             (8, 16, 32, 64)
         );
-        assert_eq!((RF_AP_SHIFT, RF_AP_MASK, RF_PS_SHIFT, RF_PS_MASK), (0, 7, 8, 15));
-        assert_eq!(MAGIC.to_le_bytes(), *b"KFWR", "the magic spells KFWR in memory order");
+        assert_eq!(
+            (RF_AP_SHIFT, RF_AP_MASK, RF_PS_SHIFT, RF_PS_MASK),
+            (0, 7, 8, 15)
+        );
+        assert_eq!(
+            MAGIC.to_le_bytes(),
+            *b"KFWR",
+            "the magic spells KFWR in memory order"
+        );
     }
 
     /// Build a minimal well-formed report image, for the refusal tests below.
@@ -918,11 +1021,15 @@ mod tests {
         let mut b = vec![0u8; Report::packed_len(h.pdb_count, h.run_count)];
         h.encode_into(&mut b).expect("header");
         for (i, p) in pdbs.iter().enumerate() {
-            p.encode_at(&mut b, Report::pdb_array_offset() + i * PdbEntry::SIZE).expect("pdb");
+            p.encode_at(&mut b, Report::pdb_array_offset() + i * PdbEntry::SIZE)
+                .expect("pdb");
         }
         for (i, r) in runs.iter().enumerate() {
-            r.encode_at(&mut b, Report::run_array_offset(h.pdb_count) + i * MapRun::SIZE)
-                .expect("run");
+            r.encode_at(
+                &mut b,
+                Report::run_array_offset(h.pdb_count) + i * MapRun::SIZE,
+            )
+            .expect("run");
         }
         b
     }
@@ -954,11 +1061,20 @@ mod tests {
     #[test]
     fn a_well_formed_report_parses_and_its_runs_reach_the_diff() {
         let h = a_header(1, 3);
-        let pdbs = [PdbEntry { pdb: 0xa000_0000, first_run: 0, run_count: 3, ..PdbEntry::default() }];
+        let pdbs = [PdbEntry {
+            pdb: 0xa000_0000,
+            first_run: 0,
+            run_count: 3,
+            ..PdbEntry::default()
+        }];
         let runs = [
             a_run(0x1_0000_0000, 0x30000, 4096 * 4, 0),
             a_run(0x1_0010_0000, 0x40000, 65_536 * 2, 1),
-            { let mut r = a_run(0x1_0040_0000, 0x50000, 0x20_0000, 2); r.op = RunOp::Remap.code(); r },
+            {
+                let mut r = a_run(0x1_0040_0000, 0x50000, 0x20_0000, 2);
+                r.op = RunOp::Remap.code();
+                r
+            },
         ];
         let b = image(&h, &pdbs, &runs);
         let rep = Report::parse(&b).expect("parse");
@@ -966,7 +1082,10 @@ mod tests {
         assert_eq!(rep.runs_of(0).len(), 3, "the PdbEntry's slice resolves");
         assert_eq!(rep.runs[0].page_size(&rep.header, 0).expect("ps"), 4096);
         assert_eq!(rep.runs[1].page_size(&rep.header, 1).expect("ps"), 65_536);
-        assert_eq!(rep.runs[2].page_size(&rep.header, 2).expect("ps"), 0x20_0000);
+        assert_eq!(
+            rep.runs[2].page_size(&rep.header, 2).expect("ps"),
+            0x20_0000
+        );
 
         // ★ The whole path: parsed bytes → walkdiff's own type → a diff that closes.
         let cur = rep.present_runs().expect("present");
@@ -988,7 +1107,11 @@ mod tests {
     #[test]
     fn an_unmap_run_is_not_a_present_mapping() {
         let h = a_header(1, 2);
-        let pdbs = [PdbEntry { first_run: 0, run_count: 2, ..PdbEntry::default() }];
+        let pdbs = [PdbEntry {
+            first_run: 0,
+            run_count: 2,
+            ..PdbEntry::default()
+        }];
         let mut u = a_run(0x1_0000_0000, 0xdead_0000, 4096, 0);
         u.op = RunOp::Unmap.code();
         let runs = [u, a_run(0x2_0000_0000, 0x30000, 4096, 0)];
@@ -1003,7 +1126,10 @@ mod tests {
         let mut h = a_header(0, 0);
         h.magic = 0xdead_beef;
         let b = image(&h, &[], &[]);
-        assert!(matches!(Report::parse(&b), Err(ParseError::BadMagic(0xdead_beef))));
+        assert!(matches!(
+            Report::parse(&b),
+            Err(ParseError::BadMagic(0xdead_beef))
+        ));
 
         let mut h = a_header(0, 0);
         h.version = 99;
@@ -1016,11 +1142,24 @@ mod tests {
     #[test]
     fn a_header_claiming_more_than_the_buffer_holds_is_refused() {
         let h = a_header(1, 4);
-        let pdbs = [PdbEntry { first_run: 0, run_count: 4, ..PdbEntry::default() }];
-        let runs: Vec<MapRun> =
-            (0..4).map(|i| a_run(0x1_0000_0000 + i * 4096, 0x30000 + i * 4096, 4096, 0)).collect();
+        let pdbs = [PdbEntry {
+            first_run: 0,
+            run_count: 4,
+            ..PdbEntry::default()
+        }];
+        let runs: Vec<MapRun> = (0..4)
+            .map(|i| a_run(0x1_0000_0000 + i * 4096, 0x30000 + i * 4096, 4096, 0))
+            .collect();
         let full = image(&h, &pdbs, &runs);
-        for cut in [0usize, 1, 32, 63, ReportHeader::SIZE, ReportHeader::SIZE + 1, full.len() - 1] {
+        for cut in [
+            0usize,
+            1,
+            32,
+            63,
+            ReportHeader::SIZE,
+            ReportHeader::SIZE + 1,
+            full.len() - 1,
+        ] {
             let short = &full[..cut.min(full.len())];
             match Report::parse(short) {
                 Ok(_) if cut == full.len() => {}
@@ -1036,7 +1175,11 @@ mod tests {
         lying.encode_into(&mut b).expect("header");
         assert!(matches!(
             Report::parse(&b),
-            Err(ParseError::CountExceedsCapacity { which: "run", count: 9, capacity: 8 })
+            Err(ParseError::CountExceedsCapacity {
+                which: "run",
+                count: 9,
+                capacity: 8
+            })
         ));
     }
 
@@ -1044,23 +1187,40 @@ mod tests {
     #[test]
     fn a_pdb_slice_past_the_run_array_is_refused() {
         let h = a_header(1, 2);
-        let pdbs = [PdbEntry { first_run: 1, run_count: 5, ..PdbEntry::default() }];
+        let pdbs = [PdbEntry {
+            first_run: 1,
+            run_count: 5,
+            ..PdbEntry::default()
+        }];
         let runs = [a_run(0, 0x30000, 4096, 0), a_run(4096, 0x31000, 4096, 0)];
         assert!(matches!(
             Report::parse(&image(&h, &pdbs, &runs)),
-            Err(ParseError::PdbSliceOutOfRange { index: 0, first_run: 1, run_count: 5, total: 2 })
+            Err(ParseError::PdbSliceOutOfRange {
+                index: 0,
+                first_run: 1,
+                run_count: 5,
+                total: 2
+            })
         ));
     }
 
     #[test]
     fn a_run_naming_no_pdb_is_refused() {
         let h = a_header(1, 1);
-        let pdbs = [PdbEntry { first_run: 0, run_count: 1, ..PdbEntry::default() }];
+        let pdbs = [PdbEntry {
+            first_run: 0,
+            run_count: 1,
+            ..PdbEntry::default()
+        }];
         let mut r = a_run(0, 0x30000, 4096, 0);
         r.pdb_index = 7;
         assert!(matches!(
             Report::parse(&image(&h, &pdbs, &[r])),
-            Err(ParseError::BadPdbIndex { index: 0, pdb_index: 7, pdb_count: 1 })
+            Err(ParseError::BadPdbIndex {
+                index: 0,
+                pdb_index: 7,
+                pdb_count: 1
+            })
         ));
     }
 
@@ -1069,7 +1229,11 @@ mod tests {
     #[test]
     fn a_partial_or_misaligned_run_is_refused_but_a_misaligned_gpga_is_not() {
         let h = a_header(1, 1);
-        let pdbs = [PdbEntry { first_run: 0, run_count: 1, ..PdbEntry::default() }];
+        let pdbs = [PdbEntry {
+            first_run: 0,
+            run_count: 1,
+            ..PdbEntry::default()
+        }];
 
         let zero = a_run(0, 0x30000, 0, 0);
         assert!(matches!(
@@ -1091,7 +1255,8 @@ mod tests {
         // must PARSE it — the refusal belongs in the kernel, by name, and a parser that
         // rejected this would be asserting an alignment the encoding cannot carry.
         let hostile = a_run(0, 0x3000, 0x2000_0000, 3);
-        let rep = Report::parse(&image(&h, &pdbs, &[hostile])).expect("a 4 KiB-aligned 512 MiB target must parse");
+        let rep = Report::parse(&image(&h, &pdbs, &[hostile]))
+            .expect("a 4 KiB-aligned 512 MiB target must parse");
         assert_eq!(rep.runs[0].gpga, 0x3000);
     }
 
@@ -1101,18 +1266,30 @@ mod tests {
     fn an_absurd_page_size_table_is_refused() {
         let mut h = a_header(1, 1);
         h.ps_log2 = [12, 16, 21, 63];
-        let pdbs = [PdbEntry { first_run: 0, run_count: 1, ..PdbEntry::default() }];
+        let pdbs = [PdbEntry {
+            first_run: 0,
+            run_count: 1,
+            ..PdbEntry::default()
+        }];
         let r = a_run(0, 0x30000, 4096, 3);
         assert!(matches!(
             Report::parse(&image(&h, &pdbs, &[r])),
-            Err(ParseError::BadPageSize { code: 3, log2: Some(63), .. })
+            Err(ParseError::BadPageSize {
+                code: 3,
+                log2: Some(63),
+                ..
+            })
         ));
         // The code itself is 4 bits but the table has only 4 entries.
         let h = a_header(1, 1);
         let r = a_run(0, 0x30000, 4096, 9);
         assert!(matches!(
             Report::parse(&image(&h, &pdbs, &[r])),
-            Err(ParseError::BadPageSize { code: 9, log2: None, .. })
+            Err(ParseError::BadPageSize {
+                code: 9,
+                log2: None,
+                ..
+            })
         ));
     }
 
@@ -1123,10 +1300,20 @@ mod tests {
     fn truncation_is_visible_from_the_header_alone() {
         let mut h = a_header(0, 0);
         h.flags = HF_TRUNCATED;
-        assert!(Report::parse(&image(&h, &[], &[])).expect("parse").header.is_truncated());
+        assert!(
+            Report::parse(&image(&h, &[], &[]))
+                .expect("parse")
+                .header
+                .is_truncated()
+        );
         let mut h = a_header(0, 0);
         h.flags = HF_PDB_TRUNCATED;
-        assert!(Report::parse(&image(&h, &[], &[])).expect("parse").header.is_truncated());
+        assert!(
+            Report::parse(&image(&h, &[], &[]))
+                .expect("parse")
+                .header
+                .is_truncated()
+        );
         let mut h = a_header(0, 0);
         h.flags = HF_RESYNC;
         let rep = Report::parse(&image(&h, &[], &[])).expect("parse");

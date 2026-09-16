@@ -879,7 +879,10 @@ fn every_escape_in_birth_conn_stamps_the_handed_client() {
     let module = &code[start..end];
     let fields = client_field_names();
     let accessors = approved_root_rhs(&code);
-    assert!(!accessors.is_empty(), "★ NON-VACUITY: no `HandedClient` accessors");
+    assert!(
+        !accessors.is_empty(),
+        "★ NON-VACUITY: no `HandedClient` accessors"
+    );
 
     let decls = struct_decl_spans(module);
     let params = fn_signature_spans(module);
@@ -926,8 +929,7 @@ fn every_escape_in_birth_conn_stamps_the_handed_client() {
 
     // ⊘ RM's own rule, expressed as a forbidden escape rather than as a comment.
     assert!(
-        !module.contains("NV_ESC_RM_MAP_MEMORY,")
-            && !module.contains("NV_ESC_RM_MAP_MEMORY "),
+        !module.contains("NV_ESC_RM_MAP_MEMORY,") && !module.contains("NV_ESC_RM_MAP_MEMORY "),
         "★★★ CONSTRAINT 32 — `mod birth_conn` now issues `NV_ESC_RM_MAP_MEMORY`. RM refuses \
          it by name for this client FOREVER (`osapi.c:2378`: `pRmClient->ProcID != \
          osGetCurrentProcess()` ⇒ `NV_ERR_INVALID_CLIENT`), measured at w750 with its own \

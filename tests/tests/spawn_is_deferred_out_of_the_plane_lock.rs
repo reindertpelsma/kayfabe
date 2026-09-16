@@ -29,8 +29,8 @@ const PDB0: Pdb = Pdb(0x4002_0000);
 fn device_and_events() -> (SharedDevice, Vec<RmEvent>) {
     let (factory, _rec) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
-    let gpu =
-        Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa).expect("the device realizes");
+    let gpu = Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa)
+        .expect("the device realizes");
 
     let root = HObject(0xC0B_0000);
     let dev = HObject(0xC0B_0001);
@@ -68,7 +68,6 @@ fn device_and_events() -> (SharedDevice, Vec<RmEvent>) {
         // a sysmem-rooted PDB read as vidmem walks the wrong memory and
         // reports success, because a wrong-aperture read returns zeros.
         pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
     });
     (SharedDevice::new(gpu, LockMode::Sharded), s.events)
 }

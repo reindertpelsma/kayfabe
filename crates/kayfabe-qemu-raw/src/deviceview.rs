@@ -1125,7 +1125,7 @@ mod byteport {
 }
 
 #[cfg(feature = "host-isolates")]
-pub use byteport::{ARMED_RUNS_CAP, ARM_GRAIN, DRAIN_ARMS_MAX, DeviceFbBytePort, WANT_SET_CAP};
+pub use byteport::{ARM_GRAIN, ARMED_RUNS_CAP, DRAIN_ARMS_MAX, DeviceFbBytePort, WANT_SET_CAP};
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
 // ★★★★★ §3's GATE — which store backs the guest's video memory.

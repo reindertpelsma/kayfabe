@@ -337,8 +337,7 @@ pub struct KayfabeHostOps {
     pub bar_is_unbacked_reservation: Option<unsafe extern "C" fn(*mut c_void, u32) -> i32>,
     /// ★ w579 — the per-RANGE form. `None` on a device whose op table predates it, which then
     /// answers through the per-BAR question above.
-    pub bar_range_is_unbacked:
-        Option<unsafe extern "C" fn(*mut c_void, u32, u64, u64) -> i32>,
+    pub bar_range_is_unbacked: Option<unsafe extern "C" fn(*mut c_void, u32, u64, u64) -> i32>,
     /// Where the register is currently programmed. [`WIRE_OK`] and the base, or
     /// [`WIRE_UNSUPPORTED`] while it is unmapped.
     pub bar_base: Option<unsafe extern "C" fn(*mut c_void, u32, *mut u64) -> i32>,
@@ -1566,7 +1565,11 @@ pub unsafe extern "C" fn kayfabe_shim_bar0_dead_runs(
     let total = runs.len();
     // ⊘ A null `out` with `max == 0` is the COUNT QUERY, not an error: it is how a caller
     // sizes the buffer it is about to pass. `n` is then 0 and the loop writes nothing.
-    let n = if out.is_null() { 0 } else { total.min(max as usize) };
+    let n = if out.is_null() {
+        0
+    } else {
+        total.min(max as usize)
+    };
     for (i, (off, len)) in runs.iter().take(n).enumerate() {
         // SAFETY: the caller declares `out` writable for `max` pairs, and `i < n <= max`.
         unsafe {
@@ -1698,7 +1701,11 @@ pub unsafe extern "C" fn kayfabe_shim_bar0_shadow_attach(
     sink.segments
         .lock()
         .unwrap_or_else(|e| e.into_inner())
-        .push(ShadowSegment { off, len, base: ram });
+        .push(ShadowSegment {
+            off,
+            len,
+            base: ram,
+        });
     regs.plane().set_read_shadow(sink.clone());
     Status::Ok.code()
 }

@@ -1263,7 +1263,6 @@ fn every_rm_event_converts_to_a_trace_verb_carrying_its_identifying_fields() {
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         }
         .as_rm_verb(),
         RmVerb::SetPageDir { pdb: A_PDB }

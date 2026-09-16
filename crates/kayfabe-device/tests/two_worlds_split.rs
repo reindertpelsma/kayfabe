@@ -656,7 +656,11 @@ fn the_armed_trap_path_refuses_by_name_and_counts_it() {
         "unarmed, the trap path must still translate — otherwise the refusal below is not \
          evidence about the ARM"
     );
-    assert_eq!(p.fb_trap_refusals(), 0, "nothing refused on the control arm");
+    assert_eq!(
+        p.fb_trap_refusals(),
+        0,
+        "nothing refused on the control arm"
+    );
 
     // ── arm it ──
     p.set_fb_trap_policy(FbTrapPolicy::RefuseByName);
@@ -685,7 +689,11 @@ fn the_armed_trap_path_refuses_by_name_and_counts_it() {
 
     // ── BAR2 too: both translated windows are armed, and PRAMIN deliberately is not ──
     let _ = p.read(BAR_INST, BAR2_VA, 4);
-    assert_eq!(p.fb_trap_refusals(), 2, "the instance window is armed as well");
+    assert_eq!(
+        p.fb_trap_refusals(),
+        2,
+        "the instance window is armed as well"
+    );
 
     // ⊘ PRAMIN is NOT armed: it is a control aperture the guest reads through immediately
     // after re-pointing it, it is the one sanctioned expensive trap, and it is not what
@@ -727,8 +735,8 @@ fn the_armed_trap_path_refuses_by_name_and_counts_it() {
 /// the third row of the prediction table and it stays a reading.
 #[test]
 fn a_bar1_translate_through_the_single_store_is_refused_and_the_store_is_what_refused() {
-    use kayfabe_device::fbwin::DEVICE_FB_READ_REFUSED;
     use kayfabe_device::DeviceFb;
+    use kayfabe_device::fbwin::DEVICE_FB_READ_REFUSED;
 
     // ── the control, first: the SAME tree, on the arena store, translates ──
     let arena = plane();
@@ -860,7 +868,10 @@ fn a_page_table_read_arms_its_own_page_and_retries_without_deferring_anything() 
         "★ THE KNOWN-POSITIVE: `read_retried_ok` must move. Without it this test passes for \
          any read that happens to succeed, including one from a store that never refused."
     );
-    assert!(after.1 > before.1, "and a page must actually have been armed");
+    assert!(
+        after.1 > before.1,
+        "and a page must actually have been armed"
+    );
 }
 
 /// ⊘⊘⊘ **CUT B ITEM 5 — A DECLINED DRAIN ENDS THE RETRY, IT DOES NOT SPIN IT.**
@@ -986,7 +997,9 @@ fn an_unarmed_enumeration_comes_back_short_and_says_so_instead_of_reading_as_emp
         if !p.arm_fb_demand().progressed() {
             break;
         }
-        got = p.window_leaves(FbWindow::FbAperture, 4096).expect("still Ok");
+        got = p
+            .window_leaves(FbWindow::FbAperture, 4096)
+            .expect("still Ok");
     }
     assert_eq!(got.faults, 0, "every branch must be readable once armed");
     assert_eq!(
@@ -1361,7 +1374,10 @@ fn an_unarmed_write_lands_nowhere_and_leaves_a_want_behind() {
     assert_eq!(port.wanted_now(), 1, "one run is now wanted");
 
     // ── the known-positive: after a drain the SAME write lands, in the object ──
-    assert!(port.drain().progressed(), "the drain must arm the wanted run");
+    assert!(
+        port.drain().progressed(),
+        "the drain must arm the wanted run"
+    );
     kayfabe_device::FbStore::write(&mut fb, SHARED_PHYS, &[0xEE; 4])
         .expect("★ armed, the same write must land — otherwise the refusal above is permanent");
     assert_eq!(port.peek(SHARED_PHYS, 4), vec![0xEE; 4]);

@@ -94,17 +94,17 @@ pub mod bar1budget;
 pub mod barmirror;
 /// ★★★★★ §3's device-view port — the reserved object, reachable after bring-up.
 pub mod deviceview;
-/// ★★★★★ **CONSTRAINT 26** — the port through which the scratchpad does all GPU-side
-/// mapping, and the home of the restated `RING_NOT_A_JOINED_WINDOW` question.
-pub mod storemap;
 pub mod kftime;
 pub mod reclaimtick;
 /// ★★★★★ `SINGLE_STORE_PLAN.md` increment 1 — the VM-lifetime scratchpad isolate and the
 /// one reserved video-memory object it owns. Gated by `KAYFABE_SCRATCHPAD`, off by default.
 pub mod scratchpad;
-pub mod walkshadow;
 pub mod shim;
 pub mod shim_unsafe;
+/// ★★★★★ **CONSTRAINT 26** — the port through which the scratchpad does all GPU-side
+/// mapping, and the home of the restated `RING_NOT_A_JOINED_WINDOW` question.
+pub mod storemap;
+pub mod walkshadow;
 
 /// ★★★ **The revision this archive was built from** — 40 lowercase hex, or `"unknown"`,
 /// with `-dirty` appended when the worktree had uncommitted tracked changes.

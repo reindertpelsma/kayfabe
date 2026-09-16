@@ -18,8 +18,8 @@
 //! implementation that could trip it. This test quantifies over the SEQUENCES instead, so a
 //! fourth generation is covered the day it is written rather than the day it boots.
 
-use kayfabe_arch::gsp::{ArchBootState, BootContext, BootSequence, GspObservation};
 use kayfabe_arch::GspModel;
+use kayfabe_arch::gsp::{ArchBootState, BootContext, BootSequence, GspObservation};
 
 /// Every `BootSequence` this workspace ships, with a name for the failure message.
 fn sequences() -> Vec<(&'static str, &'static dyn GspModel)> {

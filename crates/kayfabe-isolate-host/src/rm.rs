@@ -125,12 +125,11 @@ use kayfabe_abi::invariant_classes::{CHANNEL_GROUP, VA_SPACE};
 use kayfabe_abi::submit::{
     ATTR_CONTIGUOUS_VIDMEM, BIND_PARAMS_SIZE, CeAllocParams, ChannelAllocParams, ENGINE_TYPE_COPY0,
     ENGINE_TYPE_GRAPHICS, GP_ENTRY_SIZE, GpfifoScheduleParams, NV_ESC_RM_MAP_MEMORY,
-    NV_ESC_RM_UNMAP_MEMORY, Nvos34Parameters,
-    NV01_MEMORY_LIST_OBJECT, NV01_MEMORY_LOCAL_USER, NVA06C_CTRL_CMD_BIND,
-    NVA06C_CTRL_CMD_GPFIFO_SCHEDULE, NvMemoryListAllocationParams,
-    NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN, NvMemoryAllocationParams, Nvos33ParametersWithFd,
-    PTIMER_PAGE_TIME_0, PTIMER_PAGE_TIME_1, PtimerSampleError, SET_OBJECT, USERD_GP_GET,
-    USERD_GP_PUT, USERMODE_NOTIFY_CHANNEL_PENDING, USERMODE_TIME_0, USERMODE_TIME_1,
+    NV_ESC_RM_UNMAP_MEMORY, NV01_MEMORY_LIST_OBJECT, NV01_MEMORY_LOCAL_USER, NVA06C_CTRL_CMD_BIND,
+    NVA06C_CTRL_CMD_GPFIFO_SCHEDULE, NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN,
+    NvMemoryAllocationParams, NvMemoryListAllocationParams, Nvos33ParametersWithFd,
+    Nvos34Parameters, PTIMER_PAGE_TIME_0, PTIMER_PAGE_TIME_1, PtimerSampleError, SET_OBJECT,
+    USERD_GP_GET, USERD_GP_PUT, USERMODE_NOTIFY_CHANNEL_PENDING, USERMODE_TIME_0, USERMODE_TIME_1,
     USERMODE_WINDOW_SIZE, WORK_SUBMIT_TOKEN_PARAMS_SIZE, ce, engine_type_copy, fifo, gp_entry,
     method_header_inc, ptimer_sample,
 };
@@ -152,6 +151,182 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+/// ★★★★★ **w755 — THE CENSUS OF THIS CRATE'S OWN REFUSAL STATUSES, AND THE GATE THAT MAKES A
+/// COLLISION A BUILD FAILURE.**
+///
+/// # Why this module exists
+///
+/// A refusal leaves this crate as a bare integer. It reaches a boot log as
+/// `Rm(Other(19270))` — **no name, no crate, no line**. So a value carried by two constants is
+/// not a cosmetic duplication: it is a log line that **cannot be read**, and the reader cannot
+/// tell that it cannot be read, because one plausible name always resolves.
+///
+/// `[measured w753]` the split-ownership boot's new wall reported
+/// `map_refused=2154 first_refusal=Rm("Other(19270)")`, and `19270 = 0x4B46` was carried by
+/// **both** [`NOT_ON_THIS_RUNG`] and `SCRATCHPAD_BIRTH_IN_A_HANDED_SPACE`. Those two say
+/// opposite things about where to look — *"this rung never implemented the verb"* versus
+/// *"constraint 30 refused a scratchpad birth"* — so the one number that was supposed to name
+/// the wall named nothing.
+///
+/// ⊘ **The collision was found BEFORE that boot and left in place**, on the reasoning that
+/// changing a live refusal value changes what an existing boot log means. That reasoning is
+/// sound and it was applied to the wrong side of the trade: the log it protected was
+/// hypothetical, the log it cost was the next one.
+///
+/// # ⚠ And it was FOUR collisions, not one
+///
+/// The instance that was reported was one of a class. Renumbered here, newer name moves,
+/// older name keeps the value:
+///
+/// | value | kept (introduced) | moved to |
+/// |---|---|---|
+/// | `0x4B46` | [`NOT_ON_THIS_RUNG`] (2026-07-29) | `SCRATCHPAD_BIRTH_IN_A_HANDED_SPACE` → `0x4B5A` |
+/// | `0x4B41` | [`FB_ALIAS_NO_JOIN`] (2026-09-06) | [`ADOPT_NOT_THE_SCRATCHPAD`] → `0x4B59` |
+/// | `0x4B4D` | [`RING_ENTRIES_REFUSED`] (2026-08-11 00:57) | [`FB_JOIN_NO_TABLE`] → `0x4B61` |
+/// | `0x4B56` | [`USERD_NOT_A_JOINED_WINDOW`] (2026-08-12) | [`USERD_OFFSET_MISALIGNED`] → `0x4B62` |
+///
+/// ⊘ **Age is not line order.** Two of the four moved the constant that sits EARLIER in the
+/// file, because it was introduced later. Blaming the line is also not enough — a reformat
+/// re-blames a line — so each date above is `git log -S "pub const <NAME>"`, the introduction.
+///
+/// ★ [`NOT_ON_THIS_RUNG`] keeps `0x4B46` on a stronger ground than age: `Other(19270)` appears
+/// in **committed traces** (`traces/w313_restore/run_w313*_probe.log`), attributed there to
+/// that name. Moving it would retroactively falsify a stored measurement. No other colliding
+/// value appears in any committed trace, so for the other three pairs age is the only
+/// tiebreaker and nothing stored changes meaning.
+///
+/// # The three gates, and why one is not enough
+///
+/// 1. [`FIRST_DUPLICATE`] — a `const` evaluation over [`ALL`]. A duplicate is a **compile
+///    error**, not a test failure, so it cannot be merged past a red suite.
+/// 2. `census_is_complete` (test) — re-derives the constant list from **this file's own
+///    source** via `include_str!` and asserts every `pub const …: u32 = 0x4B…` appears in
+///    [`ALL`]. ⚠ Without this, gate 1 is a guard that a new constant simply never joins:
+///    declaring one and forgetting the census entry restores the exact defect with the gate
+///    still green. That is the shape this campaign has recorded as *"a guard that can never
+///    match what it protects."*
+/// 3. `no_collision_across_the_workspace` (test) — the same scan over **every crate**, because
+///    the integer in the log has no crate attribution either. `kayfabe-fwd` and
+///    `kayfabe-mocks` both declare statuses in this range and neither depends on this crate,
+///    so no type-level census can span them.
+///
+/// ★ Gate 1 is proven able to fire by `the_gate_can_fire`, which runs [`first_duplicate`] over
+/// a hand-built list that *does* collide. A uniqueness check whose only evidence is that it is
+/// green proves nothing about a codebase that is already unique.
+///
+/// # ⊘ The uppercase range is FULL
+///
+/// `0x4B41`–`0x4B5A` is `"KA"`–`"KZ"` and every value is now taken. The continuation is
+/// lowercase — `0x4B61` = `"Ka"` onward — which keeps the property the range was chosen for:
+/// the value is greppable as ASCII and can never be mistaken for a status the driver returned.
+pub mod local_status {
+    /// Every refusal status **this crate** defines, as `(name, value)`.
+    ///
+    /// ⚠ Adding a constant without adding it here is caught by `census_is_complete`, not by
+    /// the compiler — see the module docs for why both gates exist.
+    pub const ALL: &[(&str, u32)] = &[
+        ("NOT_ON_THIS_RUNG", super::NOT_ON_THIS_RUNG),
+        ("FB_JOIN_NO_TABLE", super::FB_JOIN_NO_TABLE),
+        ("FB_ALIAS_NO_JOIN", super::FB_ALIAS_NO_JOIN),
+        ("ADOPT_NOT_THE_SCRATCHPAD", super::ADOPT_NOT_THE_SCRATCHPAD),
+        ("MAP_THROUGH_A_BARE_SPACE", super::MAP_THROUGH_A_BARE_SPACE),
+        (
+            "HANDOVER_OF_A_NON_BARE_SPACE",
+            super::HANDOVER_OF_A_NON_BARE_SPACE,
+        ),
+        ("RING_HANDLE_REACHED_RM", super::RING_HANDLE_REACHED_RM),
+        (
+            "SCRATCHPAD_BIRTH_IN_A_HANDED_SPACE",
+            super::SCRATCHPAD_BIRTH_IN_A_HANDED_SPACE,
+        ),
+        ("NOT_IN_THIS_OBJECT", super::NOT_IN_THIS_OBJECT),
+        (
+            "MAPPING_ATTRIBUTE_REFUSED",
+            super::MAPPING_ATTRIBUTE_REFUSED,
+        ),
+        (
+            "BIRTH_CLIENT_NO_DESCRIPTORS",
+            super::BIRTH_CLIENT_NO_DESCRIPTORS,
+        ),
+        (
+            "BIRTH_CLIENT_NOT_A_CHAR_DEVICE",
+            super::BIRTH_CLIENT_NOT_A_CHAR_DEVICE,
+        ),
+        ("BIRTH_CLIENT_NULL_HANDLE", super::BIRTH_CLIENT_NULL_HANDLE),
+        (
+            "BIRTH_CLIENT_NOT_THE_SCRATCHPAD",
+            super::BIRTH_CLIENT_NOT_THE_SCRATCHPAD,
+        ),
+        (
+            "FD_ON_A_BYTES_ONLY_REQUEST",
+            super::FD_ON_A_BYTES_ONLY_REQUEST,
+        ),
+        (
+            "BIRTH_CLIENT_ALREADY_HELD",
+            super::BIRTH_CLIENT_ALREADY_HELD,
+        ),
+        (
+            "BIRTH_CLIENT_NOT_A_PER_PROC_ISOLATE",
+            super::BIRTH_CLIENT_NOT_A_PER_PROC_ISOLATE,
+        ),
+        ("CE_NEVER_RETIRED", super::CE_NEVER_RETIRED),
+        ("BAD_ENCODE", super::BAD_ENCODE),
+        ("NOT_A_WORK_TOKEN", super::NOT_A_WORK_TOKEN),
+        ("RING_NOT_OURS", super::RING_NOT_OURS),
+        ("RING_ENTRIES_REFUSED", super::RING_ENTRIES_REFUSED),
+        ("USERD_NOT_OURS", super::USERD_NOT_OURS),
+        ("USERD_OFFSET_MISALIGNED", super::USERD_OFFSET_MISALIGNED),
+        (
+            "USERD_NOT_A_JOINED_WINDOW",
+            super::USERD_NOT_A_JOINED_WINDOW,
+        ),
+        ("RING_NOT_A_JOINED_WINDOW", super::RING_NOT_A_JOINED_WINDOW),
+        ("TSG_NOT_SINGLETON", super::TSG_NOT_SINGLETON),
+    ];
+
+    /// The first pair of [`ALL`] entries sharing a value, as indices, or `None`.
+    ///
+    /// `const fn` on purpose: [`FIRST_DUPLICATE`] evaluates it at compile time.
+    pub const fn first_duplicate(xs: &[(&str, u32)]) -> Option<(usize, usize)> {
+        let mut i = 0;
+        while i < xs.len() {
+            let mut j = i + 1;
+            while j < xs.len() {
+                if xs[i].1 == xs[j].1 {
+                    return Some((i, j));
+                }
+                j += 1;
+            }
+            i += 1;
+        }
+        None
+    }
+
+    /// ★ **The build failure.** `None` is the only value that compiles past the `unwrap`-free
+    /// match below; a duplicate makes this a `panic!` in a `const` context, which is an error
+    /// at compile time rather than a message at run time.
+    ///
+    /// ⊘ The panic message cannot name the two constants — `const` panics take a literal — so
+    /// the *names* come from `census_has_no_duplicates`, which fails with both spelled out.
+    /// The build failure is the gate; the test is the diagnostic.
+    pub const FIRST_DUPLICATE: Option<(usize, usize)> = first_duplicate(ALL);
+
+    const _: () = {
+        if FIRST_DUPLICATE.is_some() {
+            panic!(
+                "two kayfabe refusal statuses share one value — a boot log's integer would be \
+                 unreadable. Run `cargo test -p kayfabe-isolate-host census_has_no_duplicates` \
+                 to see which two."
+            );
+        }
+    };
+
+    /// Look a refusal integer up by value — what a human does by hand at a boot log today.
+    pub fn name_of(value: u32) -> Option<&'static str> {
+        ALL.iter().find(|(_, v)| *v == value).map(|(n, _)| *n)
+    }
+}
+
 /// The opaque status a verb this rung does not implement reports.
 ///
 /// A distinct, greppable value rather than `0` or an RM status: it must never be mistaken
@@ -165,8 +340,15 @@ pub const NOT_ON_THIS_RUNG: u32 = 0x4B46;
 /// and works. It is a **composition** fault: this backend was constructed without
 /// [`crate::fbjoin::FbJoinTable`], and the alternative to refusing is minting a private one,
 /// which would be correct on every one-worker test and wrong at the first boot whose second
-/// request landed on another pool slot. `0x4B4D` is `"KM"`.
-pub const FB_JOIN_NO_TABLE: u32 = 0x4B4D;
+/// request landed on another pool slot. `0x4B61` is `"Ka"`.
+///
+/// ⊛ **RENUMBERED w755 — the value this constant was declared with was ALREADY another
+/// constant's.** A refusal reaches a boot log as a bare integer, so two names on one value
+/// is a log line that cannot be read; it cost w753 its first refusal. See
+/// [`local_status`] for the gate that now makes a collision a build failure.
+/// ⊘ It collided with [`RING_ENTRIES_REFUSED`], introduced 16 hours earlier the same day.
+/// The uppercase range `"KA"`–`"KZ"` is now FULL; the continuation is lowercase, `"Ka"` on.
+pub const FB_JOIN_NO_TABLE: u32 = 0x4B61;
 
 /// ★★★★★ **w380 — the status [`RmBackend::alias_fb_leaf`] refuses a frame nobody has joined
 /// with.**
@@ -445,11 +627,7 @@ mod handed_vaspace {
         /// **Take the hand-over.** Consuming the [`ScratchpadRole`] is not a ceremony: it
         /// is what makes the role's single meaning travel into this value rather than being
         /// re-checked at the use site.
-        pub(super) fn handed_over(
-            _role: ScratchpadRole,
-            client: u32,
-            space: u32,
-        ) -> HandedVaSpace {
+        pub(super) fn handed_over(_role: ScratchpadRole, client: u32, space: u32) -> HandedVaSpace {
             HandedVaSpace { client, space }
         }
 
@@ -614,13 +792,11 @@ use handed_client::HandedClient;
 ///   permissions problem.
 mod birth_conn {
     use super::{
-        HandedClient, Indirect, NV01_MEMORY_VIRTUAL, NV_ESC_RM_ALLOC, NV_ESC_RM_DUP_OBJECT,
+        HandedClient, Indirect, NOT_ON_THIS_RUNG, NV_ESC_RM_ALLOC, NV_ESC_RM_DUP_OBJECT,
         NV_ESC_RM_FREE, NV_ESC_RM_MAP_MEMORY_DMA, NV_ESC_RM_UNMAP_MEMORY_DMA, NV_IOCTL_MAGIC,
-        NOT_ON_THIS_RUNG, Nv0080AllocParameters, Nv2080AllocParameters,
-        NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE, Nvos00Parameters, Nvos21Parameters,
-        Nvos46Parameters, Nvos47Parameters, Nvos55Parameters, NvMemoryVirtualAllocationParams,
-        RmError,
-        ioctl_error, status_check,
+        NV01_MEMORY_VIRTUAL, NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE, Nv0080AllocParameters,
+        Nv2080AllocParameters, NvMemoryVirtualAllocationParams, Nvos00Parameters, Nvos21Parameters,
+        Nvos46Parameters, Nvos47Parameters, Nvos55Parameters, RmError, ioctl_error, status_check,
     };
 
     use kayfabe_linux_raw::{CharDevice, ioctl};
@@ -748,7 +924,10 @@ mod birth_conn {
         }
 
         fn mint(&self) -> u32 {
-            let mut n = self.next.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut n = self
+                .next
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             let h = *n;
             *n = n.wrapping_add(1);
             h
@@ -900,9 +1079,8 @@ mod birth_conn {
             }
             .encode_into(&mut arg)
             .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
-            let req =
-                ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_MAP_MEMORY_DMA as u8, arg.len())
-                    .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+            let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_MAP_MEMORY_DMA as u8, arg.len())
+                .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
             self.ctl
                 .ioctl(req, &mut arg, &mut [])
                 .map_err(|e| ioctl_error(&e))?;
@@ -955,9 +1133,8 @@ mod birth_conn {
             }
             .encode_into(&mut arg)
             .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
-            let req =
-                ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_UNMAP_MEMORY_DMA as u8, arg.len())
-                    .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
+            let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_UNMAP_MEMORY_DMA as u8, arg.len())
+                .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
             self.ctl
                 .ioctl(req, &mut arg, &mut [])
                 .map_err(|e| ioctl_error(&e))?;
@@ -993,9 +1170,6 @@ mod birth_conn {
 }
 
 use birth_conn::BirthConn;
-
-
-
 
 /// ★ How many [`RmConnection::doorbell`] stores print in full before the witness falls back
 /// to a periodic tally. `cup2` rings a few hundred doorbells in total (448 at `w202`), so at
@@ -1851,12 +2025,19 @@ fn status_check(status: u32) -> Result<(), RmError> {
 }
 
 /// ★★★★★ **CONSTRAINT 26** — a backend that is **not** the scratchpad was asked to name a
-/// foreign client. `0x4B41` (`"KA"`), in the same private range as
-/// [`RING_NOT_A_JOINED_WINDOW`].
+/// foreign client. `0x4B59` (`"KY"`).
+///
+/// ⊛ **RENUMBERED w755 — the value this constant was declared with was ALREADY another
+/// constant's.** A refusal reaches a boot log as a bare integer, so two names on one value
+/// is a log line that cannot be read; it cost w753 its first refusal. See
+/// [`local_status`] for the gate that now makes a collision a build failure.
+/// ⚠ The superseded doc also cited [`RING_NOT_A_JOINED_WINDOW`] (`0x4B4E`) as the neighbour
+/// sharing its range — which was never this value either. The collision was with
+/// [`FB_ALIAS_NO_JOIN`].
 ///
 /// ⊘ Refused **before** any ioctl is built, so the widening F11 describes is not merely
 /// unused on this path — it is unreachable. See [`mod@handed_vaspace`].
-pub const ADOPT_NOT_THE_SCRATCHPAD: u32 = 0x4B41;
+pub const ADOPT_NOT_THE_SCRATCHPAD: u32 = 0x4B59;
 
 /// ★★★★★ **CONSTRAINT 26** — something tried to map through a **bare** `FERMI_VASPACE_A`.
 ///
@@ -1923,7 +2104,14 @@ pub const RING_HANDLE_REACHED_RM: u32 = 0x4B45;
 /// Constraint 30 part 3 says an unmeasured sharing is refused, not assumed; this gate
 /// refuses the one shape ogkm has already answered, and the doc names the falsifier for the
 /// one it has not.
-pub const SCRATCHPAD_BIRTH_IN_A_HANDED_SPACE: u32 = 0x4B46;
+/// ⊛ **RENUMBERED w755 — the value this constant was declared with was ALREADY another
+/// constant's.** A refusal reaches a boot log as a bare integer, so two names on one value
+/// is a log line that cannot be read; it cost w753 its first refusal. See
+/// [`local_status`] for the gate that now makes a collision a build failure.
+/// ⊘ It collided with [`NOT_ON_THIS_RUNG`], the OLDEST status in this file and one that
+/// appears in committed traces (`traces/w313_restore/*`, `Other(19270)`), so the older name
+/// keeps the value and this one moves. `0x4B5A` is `"KZ"`.
+pub const SCRATCHPAD_BIRTH_IN_A_HANDED_SPACE: u32 = 0x4B5A;
 
 /// The opaque status a **bounds** refusal made by this crate reports.
 ///
@@ -2135,8 +2323,15 @@ pub const USERD_NOT_OURS: u32 = 0x4B55;
 /// the validation we must supply, and the reason to spell it as a named refusal rather than an
 /// `assert!` is that the offset can arrive from the guest.
 ///
-/// `0x4B56` is `"KV"`.
-pub const USERD_OFFSET_MISALIGNED: u32 = 0x4B56;
+/// `0x4B62` is `"Kb"`.
+///
+/// ⊛ **RENUMBERED w755 — the value this constant was declared with was ALREADY another
+/// constant's.** A refusal reaches a boot log as a bare integer, so two names on one value
+/// is a log line that cannot be read; it cost w753 its first refusal. See
+/// [`local_status`] for the gate that now makes a collision a build failure.
+/// ⊘ It collided with [`USERD_NOT_A_JOINED_WINDOW`], which fires on the SAME leg B USERD
+/// path — so the collision was worst exactly where it was most likely to be read.
+pub const USERD_OFFSET_MISALIGNED: u32 = 0x4B62;
 
 /// ★★★★★ **LEG B — the adopted USERD named an object this isolate did NOT mint by joining a
 /// framebuffer leaf.** The twin of [`RING_NOT_A_JOINED_WINDOW`], and it exists for the
@@ -3714,7 +3909,12 @@ impl RmConnection {
     ///
     /// # Errors
     /// Whatever RM refused the dup with.
-    fn raw_dup_object(&self, parent: u32, want: u32, handed: HandedVaSpace) -> Result<u32, RmError> {
+    fn raw_dup_object(
+        &self,
+        parent: u32,
+        want: u32,
+        handed: HandedVaSpace,
+    ) -> Result<u32, RmError> {
         let mut arg = [0u8; Nvos55Parameters::SIZE];
         Nvos55Parameters {
             h_client: self.client.raw(),
@@ -6651,8 +6851,7 @@ impl RmBackend for HostRmBackend {
         if ScratchpadRole::of(self.id).is_some() {
             return Err(RmError::Other(BIRTH_CLIENT_NOT_A_PER_PROC_ISOLATE));
         }
-        let ctl = CharDevice::openat(&self.conn.dev, c"nvidiactl")
-            .map_err(|e| ioctl_error(&e))?;
+        let ctl = CharDevice::openat(&self.conn.dev, c"nvidiactl").map_err(|e| ioctl_error(&e))?;
         let name = CString::new(format!("nvidia{}", self.conn.gpu_index))
             .map_err(|_| RmError::Other(NOT_ON_THIS_RUNG))?;
         let node = CharDevice::openat(&self.conn.dev, &name).map_err(|e| ioctl_error(&e))?;
@@ -7912,9 +8111,9 @@ impl HostRmBackend {
         let raw = self.narrow(memory)?;
         // ⊘ The cookie is captured here, not discarded: it is the ONLY thing that can release
         // this view's BAR1 aperture later (`RmConnection::release_cpu_view`).
-        let (node, p_linear_address) = self
-            .conn
-            .arm_cpu_view(MapNode::Gpu, raw, offset, len, access)?;
+        let (node, p_linear_address) =
+            self.conn
+                .arm_cpu_view(MapNode::Gpu, raw, offset, len, access)?;
         // ★ The driver rounds the registered range up to a host page and compares the
         // `mmap` length against the ROUNDED size (`osapi.c:1976-1986`, `nv-mmap.c:560-565`),
         // so the length that crosses is the one the VMM's `mmap` must use.
@@ -12748,6 +12947,214 @@ impl HostRmBackend {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// ★★★ **w755 — the census names both offenders; the compiler only says "there is one".**
+    ///
+    /// The `const` gate in [`local_status`] already fails the BUILD on a duplicate, so this
+    /// test can never be the thing that catches it in CI. It exists to be the thing a human
+    /// runs when the build fails, because a `const` panic takes a literal message and cannot
+    /// spell the two names.
+    #[test]
+    fn census_has_no_duplicates() {
+        if let Some((i, j)) = local_status::FIRST_DUPLICATE {
+            let (a, av) = local_status::ALL[i];
+            let (b, _) = local_status::ALL[j];
+            panic!("`{a}` and `{b}` both carry {av:#06X} ({av}) — a boot log cannot name which");
+        }
+    }
+
+    /// ★★★★★ **w755 — THE GATE THAT KEEPS THE CENSUS FROM BEING A LIST A NEW CONSTANT SIMPLY
+    /// NEVER JOINS.**
+    ///
+    /// ⊘ Without this, [`local_status::ALL`] is exactly the failure class this campaign has
+    /// paid for twice: a guard whose subject is hand-maintained, so the way to defeat it is to
+    /// do nothing. Declaring `pub const SOMETHING_NEW: u32 = 0x4B46;` and not editing the
+    /// census restores the unreadable-log defect with every gate still green.
+    ///
+    /// The subject is re-derived from **this file's own source text**, not from a list, and
+    /// `include_str!` resolves relative to the file — so it is independent of the working
+    /// directory the tests run from.
+    #[test]
+    fn census_is_complete() {
+        const SRC: &str = include_str!("rm.rs");
+        let declared: Vec<&str> = SRC
+            .lines()
+            .filter_map(|l| l.strip_prefix("pub const "))
+            .filter(|r| r.contains(": u32 = 0x4B"))
+            .filter_map(|r| r.split(':').next())
+            .collect();
+
+        // ⚠ A scan that finds nothing must FAIL, not pass. If the declaration spelling ever
+        // changes (`pub(crate)`, a different range, rustfmt breaking the line), this test would
+        // otherwise go green by looking at nothing at all.
+        assert!(
+            declared.len() >= 20,
+            "the scan found only {} status declarations in rm.rs — the spelling this test \
+             matches has changed and the gate is now vacuous",
+            declared.len()
+        );
+
+        let census: Vec<&str> = local_status::ALL.iter().map(|(n, _)| *n).collect();
+        let missing: Vec<&&str> = declared.iter().filter(|d| !census.contains(d)).collect();
+        assert!(
+            missing.is_empty(),
+            "declared in rm.rs but absent from `local_status::ALL`, so the uniqueness gate \
+             does not cover them: {missing:?}"
+        );
+
+        let stale: Vec<&&str> = census.iter().filter(|c| !declared.contains(c)).collect();
+        assert!(
+            stale.is_empty(),
+            "in the census but no longer declared: {stale:?}"
+        );
+    }
+
+    /// ★★★★★ **w755 — the workspace-wide scan, because the integer in the log carries no
+    /// crate.**
+    ///
+    /// ⊘ `kayfabe-fwd` and `kayfabe-mocks` both declare statuses in the `0x4B..` range and
+    /// neither depends on this crate, so no type-level census can span them. A reader looking
+    /// at `Other(19268)` has no way to know which crate refused.
+    ///
+    /// ★ `kayfabe-mocks` is allowed to MIRROR a value on purpose — a mock that reproduces a
+    /// refusal must report the same integer — so a mock name is exempt only when it mirrors a
+    /// real one, which is checked by name rather than waved through wholesale.
+    #[test]
+    fn no_collision_across_the_workspace() {
+        use std::collections::BTreeMap;
+
+        let crates = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("crates/ is this crate's parent")
+            .to_path_buf();
+        assert!(
+            crates.join("kayfabe-fwd").is_dir(),
+            "cannot see sibling crates at {crates:?} — this gate would otherwise pass by \
+             scanning nothing"
+        );
+
+        let mut files = Vec::new();
+        let mut stack = vec![crates];
+        while let Some(d) = stack.pop() {
+            for e in std::fs::read_dir(&d).expect("readable crate dir").flatten() {
+                let p = e.path();
+                if p.is_dir() {
+                    if p.file_name().is_some_and(|n| n == "target") {
+                        continue;
+                    }
+                    stack.push(p);
+                } else if p.extension().is_some_and(|x| x == "rs") {
+                    files.push(p);
+                }
+            }
+        }
+        assert!(
+            files.len() > 50,
+            "only {} .rs files found; scan is vacuous",
+            files.len()
+        );
+
+        let mut seen: BTreeMap<u32, Vec<String>> = BTreeMap::new();
+        for f in &files {
+            let text = std::fs::read_to_string(f).unwrap_or_default();
+            for line in text.lines() {
+                let Some(rest) = line.trim_start().strip_prefix("pub const ") else {
+                    continue;
+                };
+                let Some((name, tail)) = rest.split_once(':') else {
+                    continue;
+                };
+                // ⊘ `trim()` here — not `trim_start()` — is what made the FIRST draft of this
+                // gate vacuous: it ate the leading space the pattern then demanded, so the scan
+                // matched nothing and the test passed on an empty set. Caught by KP3 below.
+                let Some(v) = tail.trim_start().strip_prefix("u32 = 0x4B") else {
+                    continue;
+                };
+                let Some(hex) = v.split(';').next() else {
+                    continue;
+                };
+                let Ok(value) = u32::from_str_radix(hex.trim(), 16) else {
+                    continue;
+                };
+                seen.entry(0x4B00 | value).or_default().push(format!(
+                    "{}::{name}",
+                    f.file_stem().unwrap_or_default().to_string_lossy()
+                ));
+            }
+        }
+
+        // ★ The non-vacuity assert that the first draft was missing. `files.len() > 50` proved
+        // the DIRECTORY walk worked and said nothing about the PARSE — and the parse was the
+        // half that was broken.
+        assert!(
+            seen.len() >= 20,
+            "parsed only {} status declarations across the workspace; the scan is vacuous",
+            seen.len()
+        );
+
+        let collisions: Vec<_> = seen
+            .iter()
+            .filter(|(_, names)| {
+                // A mock mirroring the real constant is the one legitimate duplicate: same
+                // integer, deliberately, so the mock's refusal reads identically.
+                let real: Vec<_> = names.iter().filter(|n| !n.contains("MOCK_")).collect();
+                real.len() > 1
+            })
+            .collect();
+        assert!(
+            collisions.is_empty(),
+            "one refusal integer, two names, across crates — unreadable in a boot log: \
+             {collisions:?}"
+        );
+    }
+
+    /// ★★★★★ **w755 — THE KNOWN-POSITIVE. A uniqueness check that is green on a codebase
+    /// which is already unique has proven nothing about itself.**
+    ///
+    /// ⊘ This campaign's recorded failure is precisely a census that could not fire
+    /// (`a_census_zero_needs_a_known_positive`). So the checker is run here over a list that
+    /// **does** collide, and must find the pair.
+    #[test]
+    fn the_gate_can_fire() {
+        let colliding: &[(&str, u32)] =
+            &[("A", 0x4B41), ("B", 0x4B42), ("C", 0x4B41), ("D", 0x4B43)];
+        assert_eq!(
+            local_status::first_duplicate(colliding),
+            Some((0, 2)),
+            "the duplicate finder did not find a planted duplicate"
+        );
+        assert_eq!(local_status::first_duplicate(&[("A", 1), ("B", 2)]), None);
+        assert_eq!(local_status::first_duplicate(&[]), None);
+    }
+
+    /// ★ The four renumbered values are the ones a reader will meet first in a w755+ boot log.
+    /// Pinning them makes an accidental re-collision a named failure rather than a silent one.
+    #[test]
+    fn the_four_renumbered_statuses_hold_their_new_values() {
+        assert_eq!(ADOPT_NOT_THE_SCRATCHPAD, 0x4B59);
+        assert_eq!(SCRATCHPAD_BIRTH_IN_A_HANDED_SPACE, 0x4B5A);
+        assert_eq!(FB_JOIN_NO_TABLE, 0x4B61);
+        assert_eq!(USERD_OFFSET_MISALIGNED, 0x4B62);
+        // ⊘ And the values they vacated stay with their original owners: `Other(19270)` in a
+        // committed trace must keep meaning what that trace says it means.
+        assert_eq!(NOT_ON_THIS_RUNG, 0x4B46);
+        assert_eq!(NOT_ON_THIS_RUNG, 19270);
+        assert_eq!(FB_ALIAS_NO_JOIN, 0x4B41);
+        assert_eq!(RING_ENTRIES_REFUSED, 0x4B4D);
+        assert_eq!(USERD_NOT_A_JOINED_WINDOW, 0x4B56);
+    }
+
+    /// ★ `name_of` is the lookup a human does by hand at a boot log. It must be a function of
+    /// the census, so it can never disagree with it.
+    #[test]
+    fn name_of_resolves_and_is_unambiguous() {
+        assert_eq!(local_status::name_of(19270), Some("NOT_ON_THIS_RUNG"));
+        assert_eq!(
+            local_status::name_of(0x4B5A),
+            Some("SCRATCHPAD_BIRTH_IN_A_HANDED_SPACE")
+        );
+        assert_eq!(local_status::name_of(0x0000_001B), None);
+    }
 
     /// ★★★★★ **w283 — THE PUSH MUST FIT THE SLOT, AND THIS IS THE TEST THAT WOULD HAVE
     /// CAUGHT THE REGRESSION BEFORE A BOOT DID.**

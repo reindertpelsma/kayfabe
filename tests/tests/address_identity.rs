@@ -123,7 +123,9 @@ fn a_published_range_is_mapped_at_the_guest_va_and_the_host_verb_says_so() {
     );
 
     // And the law holds over a walk of the whole table, not just the ranges above.
-    gpu.procs[&pid].vas_by_pdb(GPU, A_PDB).expect("the VAS exists")
+    gpu.procs[&pid]
+        .vas_by_pdb(GPU, A_PDB)
+        .expect("the VAS exists")
         .table
         .audit_identity(A_PDB)
         .expect("clean");
@@ -169,8 +171,14 @@ fn identical_guest_vas_share_a_host_va_and_share_nothing_else() {
         "…minted by different isolates (boundary 2)"
     );
     assert_ne!(
-        gpu.procs[&pid_a].vas_by_pdb(GPU, A_PDB).expect("the VAS exists").host_vas,
-        gpu.procs[&pid_b].vas_by_pdb(GPU, B_PDB).expect("the VAS exists").host_vas,
+        gpu.procs[&pid_a]
+            .vas_by_pdb(GPU, A_PDB)
+            .expect("the VAS exists")
+            .host_vas,
+        gpu.procs[&pid_b]
+            .vas_by_pdb(GPU, B_PDB)
+            .expect("the VAS exists")
+            .host_vas,
         "…and mapped into different host VASes — THE #14 separation"
     );
 }
@@ -468,7 +476,10 @@ fn a_table_built_through_the_publish_path_audits_clean() {
         )
         .expect("publishes");
     }
-    let table = &gpu.procs[&pid].vas_by_pdb(GPU, A_PDB).expect("the VAS exists").table;
+    let table = &gpu.procs[&pid]
+        .vas_by_pdb(GPU, A_PDB)
+        .expect("the VAS exists")
+        .table;
     assert_eq!(
         table.iter().count(),
         8,

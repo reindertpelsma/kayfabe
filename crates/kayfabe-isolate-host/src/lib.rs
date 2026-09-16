@@ -75,11 +75,11 @@
 //!   [`fdcross`]**, and the answer to that module's standing bound *"no verb uses the
 //!   crossing yet"*.
 
+pub mod child;
 /// ★★★★★ The scratchpad isolate's CUDA half — `THE_CONSTRAINTS.md` §w724d. Present only in
 /// the glibc-linked second image; see the `cuda-scratchpad` feature.
 #[cfg(feature = "cuda-scratchpad")]
 pub mod cudawalk;
-pub mod child;
 pub mod export;
 pub mod fbjoin;
 pub mod fdcross;

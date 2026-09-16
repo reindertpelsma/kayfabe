@@ -866,13 +866,15 @@ fn a_birth_client_descriptor_may_not_be_lent_to_a_second_per_proc_isolate() {
         ("the MINTER's own isolate", minter),
         ("the minter on another GPU", iso(7, 1)),
     ] {
-        let err = ctl
-            .lend_to(id)
-            .err()
-            .unwrap_or_else(|| panic!("CONSTRAINT 32 BREACHED — {who} received the birth-client descriptor"));
+        let err = ctl.lend_to(id).err().unwrap_or_else(|| {
+            panic!("CONSTRAINT 32 BREACHED — {who} received the birth-client descriptor")
+        });
         match err {
             RawError::ForeignDescriptor { origin, target } => {
-                assert_ne!(origin, target, "the refusal must name two different parties");
+                assert_ne!(
+                    origin, target,
+                    "the refusal must name two different parties"
+                );
             }
             other => panic!("expected ForeignDescriptor for {who}, got {other:?}"),
         }
@@ -936,7 +938,8 @@ fn a_birth_client_descriptor_is_not_treated_as_vmm_minted() {
         }
     }
     assert_eq!(
-        refused, 4,
+        refused,
+        4,
         "★★★ CONSTRAINT 32 REGRESSED — {} of 4 per-proc isolates were handed a birth-client \
          descriptor. A `Vmm`-shaped rule here would pass every one of them.",
         4 - refused
@@ -976,7 +979,10 @@ fn a_reader_without_a_control_buffer_loses_the_descriptor_and_reports_nothing() 
         kayfabe_isolate_host::proto::read_frame(&mut plain, &mut got).expect("read"),
         "the plain reader still reads the frame"
     );
-    assert_eq!(got, body, "★ and it reads it PERFECTLY — that is the hazard");
+    assert_eq!(
+        got, body,
+        "★ and it reads it PERFECTLY — that is the hazard"
+    );
     drop((tx, rx, file));
     assert!(
         !open_fd_targets().values().any(|t| t.contains(&tag)),

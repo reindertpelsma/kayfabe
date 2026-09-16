@@ -497,7 +497,10 @@ mod release_tests {
         assert!(t.take_cpu_view_release(0).is_none(), "empty table");
         let token = t.mint(4096).expect("mint");
         assert!(t.take_cpu_view_release(token + 1).is_none(), "past the end");
-        assert!(t.take_cpu_view_release(u64::MAX).is_none(), "wildly past the end");
+        assert!(
+            t.take_cpu_view_release(u64::MAX).is_none(),
+            "wildly past the end"
+        );
     }
 
     /// ★ **The token is the INDEX**, which is why a release tombstones rather than removes.

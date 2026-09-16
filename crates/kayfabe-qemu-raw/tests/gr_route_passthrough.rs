@@ -160,7 +160,6 @@ fn ring_a_gr_doorbell() -> String {
             pdb: PDB,
             // ⊘ The TEST default; the PRODUCTION path must never assume it.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         },
         RmEvent::Alloc {
             client: CLIENT,

@@ -24,8 +24,8 @@
 //! `SCRATCHPAD` lines in the boot's own log rather than interleaved into QEMU's stderr at
 //! whatever moment the child happened to reach it.
 
-use kayfabe_cuda::selftest::SelftestOutcome;
 use kayfabe_cuda::WalkKernel;
+use kayfabe_cuda::selftest::SelftestOutcome;
 use std::sync::Mutex;
 
 /// The live context and what it has told us so far.
@@ -37,7 +37,9 @@ static STATE: Mutex<Option<(SelftestOutcome, Option<WalkKernel>)>> = Mutex::new(
 /// it twice is a no-op with a complaint: the second call cannot mean anything the first did
 /// not, and silently rebuilding a context would leave the first one's allocations orphaned.
 pub fn bring_up_before_sandbox() {
-    let mut g = STATE.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut g = STATE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     if g.is_some() {
         eprintln!("kayfabe-isolate: ⊘ CUDA bring-up asked for twice; the first one stands");
         return;
@@ -89,7 +91,9 @@ pub fn bring_up_before_sandbox() {
 /// ⊘ If the bring-up never happened this records nothing and says so — an absent probe result
 /// must not read as a passing one.
 pub fn probe_after_sandbox() {
-    let mut g = STATE.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut g = STATE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let Some((outcome, kernel)) = g.as_mut() else {
         eprintln!(
             "kayfabe-isolate: ⊘ the post-sandbox probes were asked for with no CUDA bring-up \
@@ -100,8 +104,12 @@ pub fn probe_after_sandbox() {
     let Some(k) = kernel.as_mut() else {
         outcome.probe_relaunch =
             "SKIPPED — CUDA never came up, so there is no context to probe".to_string();
-        outcome.probe_failed_launch.clone_from(&outcome.probe_relaunch);
-        outcome.probe_other_thread.clone_from(&outcome.probe_relaunch);
+        outcome
+            .probe_failed_launch
+            .clone_from(&outcome.probe_relaunch);
+        outcome
+            .probe_other_thread
+            .clone_from(&outcome.probe_relaunch);
         return;
     };
     kayfabe_cuda::selftest::probe_after_sandbox(k, outcome);
@@ -117,7 +125,9 @@ pub fn probe_after_sandbox() {
 /// code branches on, and a new field must not be a wire-format change.
 #[must_use]
 pub fn report_line() -> String {
-    let g = STATE.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let g = STATE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let Some((o, _)) = g.as_ref() else {
         return "CUDA_WALK=ABSENT reason=\"this isolate never ran a CUDA bring-up\"".to_string();
     };
@@ -190,7 +200,9 @@ pub fn stage(span: u64, off: u64, bytes: &[u8]) -> Result<(), u32> {
         eprintln!("kayfabe-isolate: ⊘ WALK-SHADOW stage refused: span={span} (max {IMAGE_MAX})");
         return Err(WS_IMAGE_TOO_LARGE);
     }
-    let mut g = IMAGE.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut g = IMAGE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     if off == 0 {
         // ⊘ `resize` then `fill`, not `clear` + `resize`: an image re-declared at the same
         // span must not inherit the previous refresh's bytes in the region this refresh does
@@ -243,18 +255,20 @@ pub fn run(pdbs: &[u64]) -> Result<Vec<u8>, u32> {
         return Err(WS_TOO_MANY_PDBS);
     }
     let image = {
-        let g = IMAGE.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let g = IMAGE
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if g.is_empty() {
             eprintln!("kayfabe-isolate: ⊘ WALK-SHADOW run refused: no image was staged");
             return Err(WS_NO_IMAGE);
         }
         g.clone()
     };
-    let mut st = STATE.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut st = STATE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let Some((_, Some(k))) = st.as_mut() else {
-        eprintln!(
-            "kayfabe-isolate: ⊘ WALK-SHADOW run refused: CUDA never came up in this isolate"
-        );
+        eprintln!("kayfabe-isolate: ⊘ WALK-SHADOW run refused: CUDA never came up in this isolate");
         return Err(WS_NO_KERNEL);
     };
     // ★★★★★ **THE CONTEXT IS PER-THREAD CURRENT, AND THIS IS NOT THE BRING-UP THREAD.**

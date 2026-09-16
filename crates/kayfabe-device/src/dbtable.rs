@@ -152,8 +152,14 @@ impl DoorbellTable {
 /// struct that no CPU can load atomically — at which point the missing lock becomes a race
 /// instead of a simplification.
 const _: () = {
-    assert!(core::mem::size_of::<AtomicU64>() == 8, "an entry must fit ONE atomic access");
-    assert!(core::mem::align_of::<AtomicU64>() == 8, "and be naturally aligned, or it is torn");
+    assert!(
+        core::mem::size_of::<AtomicU64>() == 8,
+        "an entry must fit ONE atomic access"
+    );
+    assert!(
+        core::mem::align_of::<AtomicU64>() == 8,
+        "and be naturally aligned, or it is torn"
+    );
 };
 
 #[cfg(test)]
@@ -196,7 +202,12 @@ mod tests {
         assert!(t.install(0, Route::Emulated { chan: MAX_TARGET }));
         assert_eq!(t.route(0), Route::Emulated { chan: MAX_TARGET });
         assert!(
-            !t.install(0, Route::Passthrough { host_token: MAX_TARGET + 1 }),
+            !t.install(
+                0,
+                Route::Passthrough {
+                    host_token: MAX_TARGET + 1
+                }
+            ),
             "63 bits does not fit a 62-bit field"
         );
         assert_eq!(
@@ -252,8 +263,16 @@ mod tests {
         // which a `u64` load/store IS one instruction. ⚠ On a target without 64-bit atomics
         // this design is void and the honest answer is a 4-byte entry, not a silent mutex
         // under the covers; `target_pointer_width` is the guard that would catch it.
-        assert_eq!(core::mem::size_of::<AtomicU64>(), 8, "an entry must be 8 bytes");
-        assert_eq!(core::mem::align_of::<AtomicU64>(), 8, "and naturally aligned, or it tears");
+        assert_eq!(
+            core::mem::size_of::<AtomicU64>(),
+            8,
+            "an entry must be 8 bytes"
+        );
+        assert_eq!(
+            core::mem::align_of::<AtomicU64>(),
+            8,
+            "and naturally aligned, or it tears"
+        );
         assert_eq!(
             usize::BITS,
             64,

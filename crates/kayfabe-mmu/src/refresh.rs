@@ -246,9 +246,10 @@ impl Refresh {
                 // written. ⊘ A binding we have never seen has no path, so it must always be
                 // considered — otherwise a first mapping is never picked up.
                 self.pending.contains(va)
-                    || self.live.get(va).is_none_or(|b| {
-                        b.path.iter().any(|p| dirty.contains(p))
-                    })
+                    || self
+                        .live
+                        .get(va)
+                        .is_none_or(|b| b.path.iter().any(|p| dirty.contains(p)))
             })
             .collect();
 
@@ -269,11 +270,7 @@ impl Refresh {
                 }
                 WalkOutcome::Mapped { phys, .. } => {
                     self.pending.remove(&va);
-                    let b = Binding {
-                        va,
-                        phys,
-                        path,
-                    };
+                    let b = Binding { va, phys, path };
                     if self.live.insert(va, b).is_none() {
                         self.mapped += 1;
                     }
@@ -324,7 +321,14 @@ mod the_refresh_must_unmap {
     fn mapped_world() -> PtWorld {
         let mut w = PtWorld::new();
         w.write(ROOT, 0, Pte::Table(L1));
-        w.write(L1, 7, Pte::Leaf { phys: 0xdead_0000, aperture: Aperture::Vidmem });
+        w.write(
+            L1,
+            7,
+            Pte::Leaf {
+                phys: 0xdead_0000,
+                aperture: Aperture::Vidmem,
+            },
+        );
         w
     }
 
@@ -336,7 +340,11 @@ mod the_refresh_must_unmap {
         r.refresh(&w, &d, &interest_one());
         let b = r.live().get(&VA).expect("must be live");
         assert_eq!(b.phys, 0xdead_0000);
-        assert_eq!(b.path, vec![ROOT, L1], "provenance must be the FULL path, not the leaf");
+        assert_eq!(
+            b.path,
+            vec![ROOT, L1],
+            "provenance must be the FULL path, not the leaf"
+        );
     }
 
     #[test]
@@ -366,7 +374,14 @@ mod the_refresh_must_unmap {
 
         // Only the ROOT page is written. The leaf entry still says `Leaf{phys}`.
         w.write(ROOT, 0, Pte::Invalid);
-        assert_eq!(w.get(L1, 7), Pte::Leaf { phys: 0xdead_0000, aperture: Aperture::Vidmem }, "leaf deliberately untouched");
+        assert_eq!(
+            w.get(L1, 7),
+            Pte::Leaf {
+                phys: 0xdead_0000,
+                aperture: Aperture::Vidmem
+            },
+            "leaf deliberately untouched"
+        );
         let d = w.take_dirty();
         r.refresh(&w, &d, &interest_one());
         assert!(
@@ -382,12 +397,22 @@ mod the_refresh_must_unmap {
     fn an_invalid_parent_leaves_it_pending_and_a_later_validation_is_picked_up() {
         let mut w = PtWorld::new();
         w.write(ROOT, 0, Pte::Invalid);
-        w.write(L1, 7, Pte::Leaf { phys: 0xbeef_0000, aperture: Aperture::Vidmem });
+        w.write(
+            L1,
+            7,
+            Pte::Leaf {
+                phys: 0xbeef_0000,
+                aperture: Aperture::Vidmem,
+            },
+        );
         let mut r = Refresh::new();
         let d = w.take_dirty();
         r.refresh(&w, &d, &interest_one());
         assert!(!r.live().contains_key(&VA));
-        assert!(r.pending().contains(&VA), "an unscannable subtree must stay PENDING");
+        assert!(
+            r.pending().contains(&VA),
+            "an unscannable subtree must stay PENDING"
+        );
 
         // The parent becomes valid. ⊘ Note the leaf page is NOT written again — bottom-up
         // construction means the leaf was already there, and only the parent's write makes it
@@ -417,7 +442,10 @@ mod the_refresh_must_unmap {
             "any write to a page on the provenance path must recheck the mapping, because a \
              torn edit can change its target or length halfway"
         );
-        assert!(r.live().contains_key(&VA), "and it is still correctly mapped");
+        assert!(
+            r.live().contains_key(&VA),
+            "and it is still correctly mapped"
+        );
     }
 
     /// ⊘ FUZZ with hostile/garbage tables: entries pointing at pages that do not exist, cycles,
@@ -442,7 +470,14 @@ mod the_refresh_must_unmap {
                 // a plausible map
                 0 => {
                     w.write(ROOT, 0, Pte::Table(L1));
-                    w.write(L1, 7, Pte::Leaf { phys: rng() & !0xfff, aperture: Aperture::Vidmem });
+                    w.write(
+                        L1,
+                        7,
+                        Pte::Leaf {
+                            phys: rng() & !0xfff,
+                            aperture: Aperture::Vidmem,
+                        },
+                    );
                 }
                 // clear the leaf
                 1 => w.write(L1, 7, Pte::Invalid),
@@ -453,7 +488,14 @@ mod the_refresh_must_unmap {
                 // ★ a CYCLE: the table points at itself
                 4 => w.write(ROOT, 0, Pte::Table(ROOT)),
                 // ★ a leaf where a table belongs (a large page, or garbage)
-                _ => w.write(ROOT, 0, Pte::Leaf { phys: rng() & !0xfff, aperture: Aperture::Vidmem }),
+                _ => w.write(
+                    ROOT,
+                    0,
+                    Pte::Leaf {
+                        phys: rng() & !0xfff,
+                        aperture: Aperture::Vidmem,
+                    },
+                ),
             }
 
             let d = w.take_dirty();
@@ -470,7 +512,10 @@ mod the_refresh_must_unmap {
                 "round {round}: refresh disagrees with the tables — held={held:?} truth={truth:?}"
             );
         }
-        assert!(r.unmapped > 0 && r.mapped > 0, "the fuzz must exercise BOTH directions");
+        assert!(
+            r.unmapped > 0 && r.mapped > 0,
+            "the fuzz must exercise BOTH directions"
+        );
     }
 }
 
@@ -501,7 +546,14 @@ mod the_aperture_is_part_of_the_entry {
     fn world_with(aperture: Aperture) -> PtWorld {
         let mut w = PtWorld::new();
         w.write(ROOT, 0, Pte::Table(L1));
-        w.write(L1, 7, Pte::Leaf { phys: 0x4000, aperture });
+        w.write(
+            L1,
+            7,
+            Pte::Leaf {
+                phys: 0x4000,
+                aperture,
+            },
+        );
         w
     }
 
@@ -541,7 +593,10 @@ mod the_aperture_is_part_of_the_entry {
         let d = w.take_dirty();
         r.refresh(&w, &d, &interest());
 
-        assert!(!r.live().contains_key(&VA), "we cannot back peer memory, so nothing is live");
+        assert!(
+            !r.live().contains_key(&VA),
+            "we cannot back peer memory, so nothing is live"
+        );
         assert_eq!(r.unsupported, 1, "…but it must be counted as UNSUPPORTED");
         assert_eq!(
             r.unmapped, 0,

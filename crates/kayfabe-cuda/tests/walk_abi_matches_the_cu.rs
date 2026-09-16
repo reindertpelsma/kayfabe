@@ -51,11 +51,13 @@ fn extract_struct(src: &str, name: &str) -> String {
     // first draft did exactly that and the probe would not compile; keeping the `typedef`
     // keyword is what makes the extracted text mean what it means in its own file.
     let needle = format!("struct {name} {{");
-    let start = src
-        .find(&needle)
-        .unwrap_or_else(|| panic!("cuda/walk/kf_walk.cu has no `struct {name} {{` — it was \
+    let start = src.find(&needle).unwrap_or_else(|| {
+        panic!(
+            "cuda/walk/kf_walk.cu has no `struct {name} {{` — it was \
                                    renamed or moved, and this differential would otherwise \
-                                   have gone on passing over a struct that no longer exists"));
+                                   have gone on passing over a struct that no longer exists"
+        )
+    });
     let mut depth = 0usize;
     for (i, c) in src[start..].char_indices() {
         match c {
@@ -109,7 +111,9 @@ fn the_rust_mirror_matches_the_cu_byte_for_byte() {
 
     let mut prog = String::new();
     prog.push_str("#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n");
-    prog.push_str(&format!("#define KF_DIRS {kf_dirs}\n#define KF_MAX_PDB {kf_max_pdb}\n"));
+    prog.push_str(&format!(
+        "#define KF_DIRS {kf_dirs}\n#define KF_MAX_PDB {kf_max_pdb}\n"
+    ));
     // The report ABI lives in the header; the launch ABI lives in the .cu.
     for name in ["KfReportHeader", "KfPdbEntry", "KfMapRun", "KfScope"] {
         prog.push_str(&extract_struct(&h, name));
@@ -276,7 +280,11 @@ fn the_rust_mirror_matches_the_cu_byte_for_byte() {
         entries_visited,
         "off KfReportHeader.entries_visited"
     );
-    off!(KfReportHeader, refuse_mask, "off KfReportHeader.refuse_mask");
+    off!(
+        KfReportHeader,
+        refuse_mask,
+        "off KfReportHeader.refuse_mask"
+    );
     off!(
         KfReportHeader,
         sparse_slots,
@@ -301,9 +309,11 @@ fn the_rust_mirror_matches_the_cu_byte_for_byte() {
 /// Pull a whole function definition out of a C++ source, keyed on its signature line.
 fn extract_fn(src: &str, sig: &str) -> String {
     let start = src.find(sig).unwrap_or_else(|| {
-        panic!("cuda/walk/kf_walk.cu has no `{sig}` — it was renamed, and the descriptor \
+        panic!(
+            "cuda/walk/kf_walk.cu has no `{sig}` — it was renamed, and the descriptor \
                 differential would otherwise have gone on passing over a function that no \
-                longer exists")
+                longer exists"
+        )
     });
     let open = start + src[start..].find('{').expect("a function body");
     let mut depth = 0usize;
@@ -346,7 +356,9 @@ fn the_rust_ver2_descriptor_matches_the_cu_byte_for_byte() {
     let kf_dirs = extract_define(&cu, "KF_DIRS");
 
     let mut prog = String::new();
-    prog.push_str("#include <stdint.h>\n#include <stddef.h>\n#include <string.h>\n#include <stdio.h>\n");
+    prog.push_str(
+        "#include <stdint.h>\n#include <stddef.h>\n#include <string.h>\n#include <stdio.h>\n",
+    );
     prog.push_str(&format!("#define KF_DIRS {kf_dirs}\n"));
     for d in [
         "KF_PS_NONE",
@@ -379,9 +391,15 @@ fn the_rust_ver2_descriptor_matches_the_cu_byte_for_byte() {
     // them here would be a fourth transcription of the same arithmetic — `entries` is
     // `1 << (va_hi - va_lo + 1)`, and getting THAT wrong is exactly the class this test is
     // for.
-    prog.push_str(&extract_fn(&cu, "static KfField kf_f(uint8_t lo, uint8_t bits, uint8_t shift)"));
+    prog.push_str(&extract_fn(
+        &cu,
+        "static KfField kf_f(uint8_t lo, uint8_t bits, uint8_t shift)",
+    ));
     prog.push('\n');
-    prog.push_str(&extract_fn(&cu, "static void kf_set_dir(KfDir *d, int active, uint8_t va_lo, uint8_t va_hi,"));
+    prog.push_str(&extract_fn(
+        &cu,
+        "static void kf_set_dir(KfDir *d, int active, uint8_t va_lo, uint8_t va_hi,",
+    ));
     prog.push('\n');
     prog.push_str(&extract_fn(&cu, "static KfFormat kf_format_ver2(void)"));
     prog.push_str(
@@ -547,10 +565,7 @@ fn the_report_constants_match_the_header() {
         parse("KF_TBL_VER3"),
         u64::from(kayfabe_cuda::abi::KF_TBL_VER3)
     );
-    assert_eq!(
-        parse("KF_MAX_PDB"),
-        kayfabe_cuda::abi::KF_MAX_PDB as u64
-    );
+    assert_eq!(parse("KF_MAX_PDB"), kayfabe_cuda::abi::KF_MAX_PDB as u64);
     assert_eq!(
         parse("KF_MAX_SCOPE"),
         kayfabe_cuda::abi::KF_MAX_SCOPE as u64

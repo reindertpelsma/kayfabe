@@ -23,9 +23,7 @@ use kayfabe_arch::ids::{GpuId, GpuVa, HClient, Pdb};
 use kayfabe_core::gpa::GpaSpace;
 use kayfabe_core::gpu::Gpu;
 use kayfabe_core::{ChanId, ProcId};
-use kayfabe_mocks::{
-    MockArch, MockIsolateFactory, MockPushbuffer, MockVmm, mock_classes as mc,
-};
+use kayfabe_mocks::{MockArch, MockIsolateFactory, MockPushbuffer, MockVmm, mock_classes as mc};
 use kayfabe_tests::{Scenario, bind_ring, identical_handles, script_ring_via};
 
 const GPU: GpuId = GpuId::ZERO;
@@ -58,14 +56,16 @@ static CENSUS_DELTA: Mutex<()> = Mutex::new(());
 /// Take the delta lock, ignoring poisoning: a panicking sibling must not turn one failure
 /// into three misleading ones.
 fn delta_window() -> MutexGuard<'static, ()> {
-    CENSUS_DELTA.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    CENSUS_DELTA
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 fn device() -> (Gpu, MockVmm, ProcId, ChanId) {
     let (factory, _rec) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
-    let mut gpu =
-        Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa).expect("the device realizes");
+    let mut gpu = Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa)
+        .expect("the device realizes");
     let mut s = Scenario::new();
     s.compute_process(CLIENT, PDB0, identical_handles(0x20, 0x21));
     for ev in s.events {
@@ -116,7 +116,10 @@ fn a_guest_invalidate_reaches_the_census_and_names_its_own_pdb() {
         "★ the PDB is READ OUT OF THE GUEST'S METHOD WORDS, not echoed from the channel \
          (PDB0 = {PDB0:?}) — the whole point of the census is to name a VAS we were not told about"
     );
-    assert!(membar, "the fixture asked for a membar and it survived the decode");
+    assert!(
+        membar,
+        "the fixture asked for a membar and it survived the decode"
+    );
 
     let after = kayfabe_fwd::memop_census::seen();
     assert!(

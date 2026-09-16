@@ -33,4 +33,4 @@ pub mod synth;
 pub mod walk;
 
 pub use driver_unsafe::{Cuda, CudaError};
-pub use walk::{Report, ReportError, WalkCfg, WalkKernel, WALK_PTX};
+pub use walk::{Report, ReportError, WALK_PTX, WalkCfg, WalkKernel};

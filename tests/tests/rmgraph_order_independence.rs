@@ -140,7 +140,6 @@ fn uvm_session(s: &mut Scenario) {
         // a sysmem-rooted PDB read as vidmem walks the wrong memory and
         // reports success, because a wrong-aperture read returns zeros.
         pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
     });
 }
 
@@ -497,8 +496,8 @@ fn gpu_of(events: &[RmEvent]) -> Guarded<Gpu> {
     // `memory-backend-memfd,share=on` boot has. Without the door the pin refuses by name.
     let factory = factory.with_guest_ram(kayfabe_tests::GUEST_RAM_BYTES);
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
-    let mut gpu =
-        Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa).expect("device realizes");
+    let mut gpu = Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa)
+        .expect("device realizes");
     for &ev in events {
         gpu.apply(ev).expect("the scenario applies");
     }
@@ -569,10 +568,14 @@ fn two_processes_sharing_one_kernel_client_stay_fully_isolated() {
 
     // No shared host handles: every host handle names the isolate that minted it
     // (§12.26), and the two procs' host VASes name different isolates.
-    let hv_a = gpu.procs[&pid_a].vas_by_pdb(GpuId::ZERO, A_PDB).expect("the VAS exists")
+    let hv_a = gpu.procs[&pid_a]
+        .vas_by_pdb(GpuId::ZERO, A_PDB)
+        .expect("the VAS exists")
         .host_vas
         .expect("A's host VAS");
-    let hv_b = gpu.procs[&pid_b].vas_by_pdb(GpuId::ZERO, B_PDB).expect("the VAS exists")
+    let hv_b = gpu.procs[&pid_b]
+        .vas_by_pdb(GpuId::ZERO, B_PDB)
+        .expect("the VAS exists")
         .host_vas
         .expect("B's host VAS");
     assert_ne!(hv_a, hv_b);
@@ -1412,7 +1415,6 @@ fn a_recycled_object_handle_projects_identically_in_every_order() {
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         },
     ];
 
@@ -1753,7 +1755,6 @@ fn a_ghost_channels_declared_hvaspace_never_binds_the_next_tenant_of_its_namespa
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         },
     ] {
         g.apply(&arch, ev).expect("every event is legal RM traffic");
@@ -1998,7 +1999,6 @@ fn a_ghost_engine_object_never_retypes_the_next_tenants_channel() {
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         },
         RmEvent::Alloc {
             client: REFINE_NS,

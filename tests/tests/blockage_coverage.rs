@@ -104,7 +104,6 @@ fn kernel_channel(s: &mut Scenario) {
         // a sysmem-rooted PDB read as vidmem walks the wrong memory and
         // reports success, because a wrong-aperture read returns zeros.
         pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
     });
     s.push(RmEvent::Alloc {
         client: K_CLIENT,
@@ -146,7 +145,12 @@ fn world_user_only() -> Gpu {
 fn bare() -> Gpu {
     let (factory, _rec) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
-    Gpu::new(std::sync::Arc::new(WireClassArch::new()), Box::new(factory), gpa).expect("device realizes")
+    Gpu::new(
+        std::sync::Arc::new(WireClassArch::new()),
+        Box::new(factory),
+        gpa,
+    )
+    .expect("device realizes")
 }
 
 fn promotion() -> CtxPromotion {
@@ -175,7 +179,9 @@ fn pid_of(g: &Gpu, pdb: Pdb) -> kayfabe_core::ProcId {
 
 /// This address space's census, computed the way the boot line computes it.
 fn counts(g: &Gpu, pdb: Pdb, cap: usize) -> kayfabe_mmu::blockage::BlockageCounts {
-    g.procs[&pid_of(g, pdb)].vas_by_pdb(GpuId::ZERO, pdb).expect("the VAS exists")
+    g.procs[&pid_of(g, pdb)]
+        .vas_by_pdb(GpuId::ZERO, pdb)
+        .expect("the VAS exists")
         .table
         .blockage_counts(cap)
 }
@@ -212,7 +218,9 @@ fn a_promotion_served_under_the_rpc_halt_is_attributed_to_it() {
     // makes. ⊘ Not `binding_at`: that is a diagnostic and is deliberately not a use.
     let pid = pid_of(&g, A_PDB);
     assert!(
-        g.procs[&pid].vas_by_pdb(GpuId::ZERO, A_PDB).expect("the VAS exists")
+        g.procs[&pid]
+            .vas_by_pdb(GpuId::ZERO, A_PDB)
+            .expect("the VAS exists")
             .table
             .resolve(A_PDB, GR_VA)
             .is_ok(),
@@ -222,7 +230,9 @@ fn a_promotion_served_under_the_rpc_halt_is_attributed_to_it() {
     // ★ The row's OWN stamp, not only the aggregate. A census that summed correctly over
     // rows stamped wrongly would satisfy every count below and be false of every row.
     assert_eq!(
-        g.procs[&pid].vas_by_pdb(GpuId::ZERO, A_PDB).expect("the VAS exists")
+        g.procs[&pid]
+            .vas_by_pdb(GpuId::ZERO, A_PDB)
+            .expect("the VAS exists")
             .table
             .publication_at(GR_VA)
             .expect("the row exists")
@@ -271,13 +281,17 @@ fn the_same_promotion_with_no_halt_declared_is_uncovered_and_names_its_va() {
     assert_eq!(join.bound, 1);
 
     let pid = pid_of(&g, A_PDB);
-    g.procs[&pid].vas_by_pdb(GpuId::ZERO, A_PDB).expect("the VAS exists")
+    g.procs[&pid]
+        .vas_by_pdb(GpuId::ZERO, A_PDB)
+        .expect("the VAS exists")
         .table
         .resolve(A_PDB, GR_VA)
         .expect("bound");
 
     assert_eq!(
-        g.procs[&pid].vas_by_pdb(GpuId::ZERO, A_PDB).expect("the VAS exists")
+        g.procs[&pid]
+            .vas_by_pdb(GpuId::ZERO, A_PDB)
+            .expect("the VAS exists")
             .table
             .publication_at(GR_VA)
             .expect("the row exists")

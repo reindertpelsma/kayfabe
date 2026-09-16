@@ -82,8 +82,8 @@
 
 use std::cell::Cell;
 use std::marker::PhantomData;
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
 thread_local! {
     /// Nesting depth of guest-trap dispatches on THIS thread. A depth rather than a
@@ -110,8 +110,7 @@ static WORST_TRAP_US: AtomicU64 = AtomicU64::new(0);
 /// boot this bench runs, so in practice nothing wraps.
 const PHASE_BUCKETS: usize = 1024;
 /// The worst trap seen in each one-second bucket since the first trap.
-static PHASE_WORST_US: [AtomicU64; PHASE_BUCKETS] =
-    [const { AtomicU64::new(0) }; PHASE_BUCKETS];
+static PHASE_WORST_US: [AtomicU64; PHASE_BUCKETS] = [const { AtomicU64::new(0) }; PHASE_BUCKETS];
 /// How many traps exceeded [`SLOW_TRAP_US`] in each bucket.
 static PHASE_SLOW: [AtomicU64; PHASE_BUCKETS] = [const { AtomicU64::new(0) }; PHASE_BUCKETS];
 /// The highest bucket index reached, so the census knows where the profile ends.
@@ -779,11 +778,7 @@ mod watchdog {
                                 if site == u64::MAX {
                                     "UNATTRIBUTED".to_string()
                                 } else {
-                                    format!(
-                                        "bar{}+{:#x}",
-                                        site >> 56,
-                                        site & 0x00ff_ffff_ffff_ffff
-                                    )
+                                    format!("bar{}+{:#x}", site >> 56, site & 0x00ff_ffff_ffff_ffff)
                                 },
                             );
                             // ⊘ Flush before aborting: a message lost to buffering would make
@@ -938,7 +933,9 @@ impl InFlight {
             {
                 watchdog::SITE[i].store(site, Ordering::Relaxed);
                 watchdog::TID[i].store(
-                    crate::trapwitness::CURRENT_TID.get().map_or(0, |f| f() as u64),
+                    crate::trapwitness::CURRENT_TID
+                        .get()
+                        .map_or(0, |f| f() as u64),
                     Ordering::Relaxed,
                 );
                 return Some(i);
@@ -1033,10 +1030,10 @@ impl Drop for TrapGuard {
                 // that are all seconds long**. Those demand opposite fixes, and the ledger has
                 // already recorded that *a count and a total cannot recover a distribution*.
                 let b = match us {
-                    ..=9_999 => 0,          // 1-10 ms
-                    ..=99_999 => 1,         // 10-100 ms
-                    ..=999_999 => 2,        // 100 ms - 1 s
-                    _ => 3,                 // over a second
+                    ..=9_999 => 0,   // 1-10 ms
+                    ..=99_999 => 1,  // 10-100 ms
+                    ..=999_999 => 2, // 100 ms - 1 s
+                    _ => 3,          // over a second
                 };
                 SLOW_TRAP_BUCKETS[b].fetch_add(1, Ordering::Relaxed);
                 // ⊘ And the worst-per-site, so "which register" survives a later, larger trap
@@ -1380,8 +1377,8 @@ mod inline_attribution {
         // a partial attribution presented as a whole one is worse than the scalar it
         // replaced, because it looks finished.
         const FILL: [&str; INLINE_REASON_SLOTS] = [
-            "f00", "f01", "f02", "f03", "f04", "f05", "f06", "f07", "f08", "f09", "f10",
-            "f11", "f12", "f13", "f14", "f15",
+            "f00", "f01", "f02", "f03", "f04", "f05", "f06", "f07", "f08", "f09", "f10", "f11",
+            "f12", "f13", "f14", "f15",
         ];
         for w in FILL {
             note_inline_reason(w);
@@ -1448,7 +1445,11 @@ mod the_mmio_rule_is_measured_not_asserted {
         assert_eq!(site_line, "entered");
         // The census may name an earlier attributed site from another test in this binary;
         // what must never happen is `u64::MAX` decoding to a real-looking register.
-        let decoded = format!("at=bar{}+{:#x}", u64::MAX >> 56, u64::MAX & 0x00ff_ffff_ffff_ffff);
+        let decoded = format!(
+            "at=bar{}+{:#x}",
+            u64::MAX >> 56,
+            u64::MAX & 0x00ff_ffff_ffff_ffff
+        );
         assert!(
             !census().contains(&decoded),
             "the sentinel must not decode as a register: {}",

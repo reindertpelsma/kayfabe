@@ -363,9 +363,9 @@ const DOORBELL_RUNLIST_DOORBELL_ENABLE: u32 = 1 << 30;
 
 /// Every bit `kfifoGenerateWorkSubmitTokenHal_GB202` can write: the three fields above and
 /// nothing else, because it starts from `val = 0`.
-const DOORBELL_WRITABLE: u32 =
-    DOORBELL_VECTOR_MASK | (DOORBELL_RUNLIST_MASK << DOORBELL_RUNLIST_SHIFT)
-        | DOORBELL_RUNLIST_DOORBELL_ENABLE;
+const DOORBELL_WRITABLE: u32 = DOORBELL_VECTOR_MASK
+    | (DOORBELL_RUNLIST_MASK << DOORBELL_RUNLIST_SHIFT)
+    | DOORBELL_RUNLIST_DOORBELL_ENABLE;
 
 /// ★★★ **The GB202 work-submit token, decoded — and it is NOT [`crate::ga10x`]'s.**
 ///

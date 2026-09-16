@@ -1569,7 +1569,10 @@ fn an_armed_queue_head_write_takes_no_rank_zero_acquisition() {
     let (serviced, _) = plane
         .service_deferred_commands()
         .expect("a cold queue services cleanly");
-    assert_eq!(serviced, 1, "the posted doorbell must be folded in and drained");
+    assert_eq!(
+        serviced, 1,
+        "the posted doorbell must be folded in and drained"
+    );
     assert_eq!(plane.pending_command_doorbells(), 0);
 }
 
@@ -1614,5 +1617,8 @@ fn an_unarmed_queue_head_write_still_services_inline() {
         0,
         "without deferral armed nothing may be banked: the work was done inline"
     );
-    assert_eq!(w.transitions, 1, "the inline path still reports its transition");
+    assert_eq!(
+        w.transitions, 1,
+        "the inline path still reports its transition"
+    );
 }

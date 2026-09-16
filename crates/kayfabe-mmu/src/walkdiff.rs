@@ -227,14 +227,28 @@ fn diff_one_class(prev: &[Run], cur: &[Run], out: &mut Vec<MapOp>) {
         match (p, c) {
             (None, None) => {}
             (Some(pr), None) => {
-                out.push(MapOp::Unmap(seg(lo, hi, gpga_at(pr, lo), pr.flags, prev, lo)));
+                out.push(MapOp::Unmap(seg(
+                    lo,
+                    hi,
+                    gpga_at(pr, lo),
+                    pr.flags,
+                    prev,
+                    lo,
+                )));
             }
             (None, Some(r)) => out.push(MapOp::Map(seg(lo, hi, gpga_at(r, lo), r.flags, cur, lo))),
             (Some(pr), Some(cr)) => {
                 // ⊘ Compare the DERIVED target at this segment's start, not the runs' own `gpga`:
                 // two runs starting at different VAs can agree perfectly over their overlap.
                 if gpga_at(pr, lo) != gpga_at(cr, lo) || pr.flags != cr.flags {
-                    out.push(MapOp::Remap(seg(lo, hi, gpga_at(cr, lo), cr.flags, cur, lo)));
+                    out.push(MapOp::Remap(seg(
+                        lo,
+                        hi,
+                        gpga_at(cr, lo),
+                        cr.flags,
+                        cur,
+                        lo,
+                    )));
                 }
             }
         }
@@ -332,7 +346,13 @@ mod tests {
     use super::*;
 
     fn r(va: u64, gpga: u64, len: u64, flags: u32, class: PageClass) -> Run {
-        Run { va, gpga, len, flags, class }
+        Run {
+            va,
+            gpga,
+            len,
+            flags,
+            class,
+        }
     }
     const K4: PageClass = PageClass::P4K;
     const K64: PageClass = PageClass::P64K;
@@ -409,7 +429,10 @@ mod tests {
         let longer = vec![r(0x1000, 0xA000, 0x4000, 0, K4)];
         let ops = diff(&base, &longer);
         assert_eq!(ops.len(), 1, "extending should be one op: {ops:#x?}");
-        assert!(matches!(ops[0], MapOp::Map(_)), "extending should MAP the tail");
+        assert!(
+            matches!(ops[0], MapOp::Map(_)),
+            "extending should MAP the tail"
+        );
         assert_eq!(ops[0].run().va, 0x3000, "and only the new pages");
         assert_closes(&base, &longer, "extend");
         assert_closes(&longer, &base, "shrink");
@@ -455,8 +478,14 @@ mod tests {
             }
             assert_closes(&prev, &cur, &format!("step {step}"));
         }
-        assert!(changed > 200, "vacuous: only {changed} steps changed the set");
-        assert!(nonempty > 200, "vacuous: only {nonempty} steps produced ops");
+        assert!(
+            changed > 200,
+            "vacuous: only {changed} steps changed the set"
+        );
+        assert!(
+            nonempty > 200,
+            "vacuous: only {nonempty} steps produced ops"
+        );
     }
 
     // ══ COALESCING — THE OWNER'S CRITERION ═══════════════════════════════════════════════════
@@ -502,11 +531,27 @@ mod tests {
             let (class, va) = k;
             let len = class.bytes();
             let op = match (p.get(&k), c.get(&k)) {
-                (Some(&(gpga, flags)), None) => Some(MapOp::Unmap(Run { va, gpga, len, flags, class })),
-                (None, Some(&(gpga, flags))) => Some(MapOp::Map(Run { va, gpga, len, flags, class })),
-                (Some(a), Some(b)) if a != b => {
-                    Some(MapOp::Remap(Run { va, gpga: b.0, len, flags: b.1, class }))
-                }
+                (Some(&(gpga, flags)), None) => Some(MapOp::Unmap(Run {
+                    va,
+                    gpga,
+                    len,
+                    flags,
+                    class,
+                })),
+                (None, Some(&(gpga, flags))) => Some(MapOp::Map(Run {
+                    va,
+                    gpga,
+                    len,
+                    flags,
+                    class,
+                })),
+                (Some(a), Some(b)) if a != b => Some(MapOp::Remap(Run {
+                    va,
+                    gpga: b.0,
+                    len,
+                    flags: b.1,
+                    class,
+                })),
                 _ => None,
             };
             if let Some(o) = op {
@@ -542,7 +587,11 @@ mod tests {
         ];
         let cur = vec![r(0x1000, 0x50000, 0x2000, 0, K4)];
         let ops = assert_good(&prev, &cur, "one run replacing two");
-        assert_eq!(ops.len(), 1, "one contiguous re-point is ONE mmap: {ops:#x?}");
+        assert_eq!(
+            ops.len(),
+            1,
+            "one contiguous re-point is ONE mmap: {ops:#x?}"
+        );
         assert!(matches!(ops[0], MapOp::Remap(_)));
         assert_eq!(ops[0].run().len, 0x2000);
     }
@@ -619,7 +668,11 @@ mod tests {
         ];
         let cur = vec![r(0x1000, 0xA000, 0x3000, 0, K4)];
         let ops = assert_good(&prev, &cur, "drop a whole run");
-        assert_eq!(ops.len(), 1, "one unmap; the survivor is not re-pointed: {ops:#x?}");
+        assert_eq!(
+            ops.len(),
+            1,
+            "one unmap; the survivor is not re-pointed: {ops:#x?}"
+        );
         assert!(matches!(ops[0], MapOp::Unmap(_)));
         assert_eq!((ops[0].run().va, ops[0].run().len), (0x10_000, 0x3000));
     }
@@ -655,8 +708,15 @@ mod tests {
         assert_eq!((ops[0].run().va, ops[0].run().len), (0x3000, 0x1000));
         // ⊘ And the STATE the host now holds is ONE run, not three that add up.
         let after = canonical(&apply(&prev, &ops));
-        assert_eq!(after.len(), 1, "filling the hole must leave one mapping: {after:#x?}");
-        assert_eq!((after[0].va, after[0].len, after[0].gpga), (0x1000, 0x5000, 0xA000));
+        assert_eq!(
+            after.len(),
+            1,
+            "filling the hole must leave one mapping: {after:#x?}"
+        );
+        assert_eq!(
+            (after[0].va, after[0].len, after[0].gpga),
+            (0x1000, 0x5000, 0xA000)
+        );
     }
 
     #[test]
@@ -670,7 +730,11 @@ mod tests {
         assert_eq!(ops.len(), 1, "one unmap of the hole: {ops:#x?}");
         assert!(matches!(ops[0], MapOp::Unmap(_)));
         assert_eq!((ops[0].run().va, ops[0].run().len), (0x3000, 0x1000));
-        assert_eq!(canonical(&apply(&prev, &ops)).len(), 2, "the run must now be two");
+        assert_eq!(
+            canonical(&apply(&prev, &ops)).len(),
+            2,
+            "the run must now be two"
+        );
     }
 
     // ══ THE COMBINATORIAL STRESS ═════════════════════════════════════════════════════════════
@@ -686,7 +750,9 @@ mod tests {
 
     impl St {
         fn new() -> St {
-            St { pg: vec![vec![None; SN]; SCLASS.len()] }
+            St {
+                pg: vec![vec![None; SN]; SCLASS.len()],
+            }
         }
         fn runs(&self) -> Vec<Run> {
             let mut out: Vec<Run> = Vec::new();
@@ -714,7 +780,13 @@ mod tests {
                                     if let Some(rr) = open.take() {
                                         out.push(rr);
                                     }
-                                    open = Some(Run { va, gpga, len: ps, flags, class });
+                                    open = Some(Run {
+                                        va,
+                                        gpga,
+                                        len: ps,
+                                        flags,
+                                        class,
+                                    });
                                 }
                             }
                         }
@@ -731,7 +803,9 @@ mod tests {
             let ps = SCLASS[ci].bytes();
             let mut out: Vec<(usize, usize)> = Vec::new();
             for i in 0..SN {
-                let Some((g, f)) = self.pg[ci][i] else { continue };
+                let Some((g, f)) = self.pg[ci][i] else {
+                    continue;
+                };
                 let cont = i > 0
                     && out.last().is_some_and(|&(_, hi)| hi == i)
                     && self.pg[ci][i - 1].is_some_and(|(pg, pf)| pg + ps == g && pf == f);
@@ -759,8 +833,16 @@ mod tests {
     }
 
     const MUT: [&str; 10] = [
-        "add", "drop", "repoint", "reflag", "grow_end", "grow_start", "shrink_end",
-        "shrink_start", "split", "merge",
+        "add",
+        "drop",
+        "repoint",
+        "reflag",
+        "grow_end",
+        "grow_start",
+        "shrink_end",
+        "shrink_start",
+        "split",
+        "merge",
     ];
 
     /// Apply one mutation; `false` when the state offered no instance of it, which the vacuity
@@ -770,7 +852,11 @@ mod tests {
         let ps = SCLASS[ci].bytes();
         let ex = s.extents(ci);
         let pick = |r: &mut Rng| -> Option<(usize, usize)> {
-            if ex.is_empty() { None } else { Some(ex[r.below(ex.len())]) }
+            if ex.is_empty() {
+                None
+            } else {
+                Some(ex[r.below(ex.len())])
+            }
         };
         match kind {
             0 => {
@@ -784,14 +870,18 @@ mod tests {
                 true
             }
             1 => {
-                let Some((lo, hi)) = pick(r) else { return false };
+                let Some((lo, hi)) = pick(r) else {
+                    return false;
+                };
                 for i in lo..hi {
                     s.pg[ci][i] = None;
                 }
                 true
             }
             2 => {
-                let Some((lo, hi)) = pick(r) else { return false };
+                let Some((lo, hi)) = pick(r) else {
+                    return false;
+                };
                 let off = r.below(hi - lo);
                 let n = 1 + r.below(hi - lo - off);
                 let d = (1 + r.below(32) as u64) * ps;
@@ -801,7 +891,9 @@ mod tests {
                 true
             }
             3 => {
-                let Some((lo, hi)) = pick(r) else { return false };
+                let Some((lo, hi)) = pick(r) else {
+                    return false;
+                };
                 let off = r.below(hi - lo);
                 let n = 1 + r.below(hi - lo - off);
                 let flip = 1u32 + r.below(3) as u32; // never a no-op
@@ -811,7 +903,11 @@ mod tests {
                 true
             }
             4 | 5 => {
-                let start = if ex.is_empty() { return false } else { r.below(ex.len()) };
+                let start = if ex.is_empty() {
+                    return false;
+                } else {
+                    r.below(ex.len())
+                };
                 for d in 0..ex.len() {
                     let (lo, hi) = ex[(start + d) % ex.len()];
                     let n = 1 + r.below(3);
@@ -840,7 +936,11 @@ mod tests {
                 false
             }
             6 | 7 => {
-                let start = if ex.is_empty() { return false } else { r.below(ex.len()) };
+                let start = if ex.is_empty() {
+                    return false;
+                } else {
+                    r.below(ex.len())
+                };
                 for d in 0..ex.len() {
                     let (lo, hi) = ex[(start + d) % ex.len()];
                     if hi - lo < 2 {
@@ -856,7 +956,11 @@ mod tests {
                 false
             }
             8 => {
-                let start = if ex.is_empty() { return false } else { r.below(ex.len()) };
+                let start = if ex.is_empty() {
+                    return false;
+                } else {
+                    r.below(ex.len())
+                };
                 for d in 0..ex.len() {
                     let (lo, hi) = ex[(start + d) % ex.len()];
                     if hi - lo < 3 {
@@ -948,16 +1052,29 @@ mod tests {
             // ★ The state the host now holds must itself be minimal: a minimal delta applied to a
             // fragmented model still leaves a fragmented model.
             let held = apply(&prev, &ops);
-            assert_eq!(held, canonical(&cur), "{what}: the held state is not the canonical one");
+            assert_eq!(
+                held,
+                canonical(&cur),
+                "{what}: the held state is not the canonical one"
+            );
         }
 
         // ⊘ THE VACUITY GUARDS. A stress that never generated a merge proves nothing about
         // merging and would look exactly as green as one that did.
         for (k, name) in MUT.iter().enumerate() {
-            assert!(fired[k] > 0, "mutation '{name}' NEVER fired: the stress does not cover it");
+            assert!(
+                fired[k] > 0,
+                "mutation '{name}' NEVER fired: the stress does not cover it"
+            );
         }
-        assert!(nonempty > 250, "vacuous: only {nonempty} steps produced any op");
-        assert!(maps > 0 && unmaps > 0 && remaps > 0, "vacuous: {maps}/{unmaps}/{remaps}");
+        assert!(
+            nonempty > 250,
+            "vacuous: only {nonempty} steps produced any op"
+        );
+        assert!(
+            maps > 0 && unmaps > 0 && remaps > 0,
+            "vacuous: {maps}/{unmaps}/{remaps}"
+        );
         assert!(merges > 0, "vacuous: no step ever made two runs become one");
         assert!(splits > 0, "vacuous: no step ever split a run");
     }

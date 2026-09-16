@@ -72,7 +72,7 @@
 
 use kayfabe_abi::generated::classes as nv;
 use kayfabe_arch::ids::ClassId;
-use kayfabe_arch::{ComputeObjectClass, CeObjectClass, ChannelClass, HostClasses, UsermodeClass};
+use kayfabe_arch::{CeObjectClass, ChannelClass, ComputeObjectClass, HostClasses, UsermodeClass};
 
 /// The GA10x host-class profile — the **bench** part, and the only one any of this has
 /// been measured on.
@@ -389,12 +389,16 @@ mod compute_object_tests {
         // pins that every generation answers a class equal to its own generated constant —
         // which a fabricated value could not satisfy.
         assert_eq!(
-            Ad10xHostClasses.compute_object().map(|c| c.compute_object_id().0),
+            Ad10xHostClasses
+                .compute_object()
+                .map(|c| c.compute_object_id().0),
             Some(nv::ADA_COMPUTE_A),
             "Ada must answer its own generated constant"
         );
         assert_eq!(
-            Gh100HostClasses.compute_object().map(|c| c.compute_object_id().0),
+            Gh100HostClasses
+                .compute_object()
+                .map(|c| c.compute_object_id().0),
             Some(nv::HOPPER_COMPUTE_A),
             "Hopper must answer its own generated constant"
         );
@@ -411,15 +415,26 @@ mod compute_object_tests {
         // class is the failure a per-generation table exists to prevent, and it would pass
         // every assertion above if they were all wired to the same constant.
         let all = [
-            Ga10xHostClasses.compute_object().map(|c| c.compute_object_id().0),
-            Ad10xHostClasses.compute_object().map(|c| c.compute_object_id().0),
-            Gh100HostClasses.compute_object().map(|c| c.compute_object_id().0),
-            Gb20xHostClasses.compute_object().map(|c| c.compute_object_id().0),
+            Ga10xHostClasses
+                .compute_object()
+                .map(|c| c.compute_object_id().0),
+            Ad10xHostClasses
+                .compute_object()
+                .map(|c| c.compute_object_id().0),
+            Gh100HostClasses
+                .compute_object()
+                .map(|c| c.compute_object_id().0),
+            Gb20xHostClasses
+                .compute_object()
+                .map(|c| c.compute_object_id().0),
         ];
         let mut seen = std::collections::BTreeSet::new();
         for c in all {
             let c = c.expect("every generation now declares a compute object");
-            assert!(seen.insert(c), "two generations answer the same compute class {c:#x}");
+            assert!(
+                seen.insert(c),
+                "two generations answer the same compute class {c:#x}"
+            );
         }
     }
 
@@ -428,7 +443,9 @@ mod compute_object_tests {
     fn the_compute_object_is_not_the_copy_object() {
         let hc = pinned_host_classes();
         assert_ne!(
-            hc.compute_object().expect("pinned generation declares one").compute_object_id(),
+            hc.compute_object()
+                .expect("pinned generation declares one")
+                .compute_object_id(),
             hc.ce_object().ce_object_id(),
             "a compute object and a copy object are different engines; equal ids would mean \
              one of the two tables is wrong"

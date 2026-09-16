@@ -636,8 +636,12 @@ const GR_LEN: u64 = 0xea000;
 fn world() -> Guarded<Gpu> {
     let (factory, rec) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
-    let mut gpu =
-        Gpu::new(std::sync::Arc::new(WireClassArch::new()), Box::new(factory), gpa).expect("device realizes");
+    let mut gpu = Gpu::new(
+        std::sync::Arc::new(WireClassArch::new()),
+        Box::new(factory),
+        gpa,
+    )
+    .expect("device realizes");
     let mut s = Scenario::new();
     s.compute_process(A_CLIENT, A_PDB, identical_handles(0x10, 0x11));
     s.compute_process(B_CLIENT, B_PDB, identical_handles(0x20, 0x21));
@@ -683,7 +687,9 @@ fn pid_of(gpu: &Gpu, pdb: Pdb) -> kayfabe_core::ProcId {
 
 fn resolve_in(gpu: &Gpu, pdb: Pdb, va: GpuVa) -> Result<u64, AddressFault> {
     let pid = pid_of(gpu, pdb);
-    gpu.procs[&pid].vas_by_pdb(GpuId::ZERO, pdb).expect("the VAS exists")
+    gpu.procs[&pid]
+        .vas_by_pdb(GpuId::ZERO, pdb)
+        .expect("the VAS exists")
         .table
         .resolve(pdb, va)
         .map(|(b, off)| b.phys() + off)
@@ -722,14 +728,18 @@ fn a_promotion_binds_into_the_address_space_its_object_names() {
     );
     // The binding is declared-only: nothing host-side exists and nothing needs reclaiming.
     let pid = pid_of(&gpu, A_PDB);
-    let (b, _) = gpu.procs[&pid].vas_by_pdb(GpuId::ZERO, A_PDB).expect("the VAS exists")
+    let (b, _) = gpu.procs[&pid]
+        .vas_by_pdb(GpuId::ZERO, A_PDB)
+        .expect("the VAS exists")
         .table
         .resolve(A_PDB, GR_VA)
         .expect("bound");
     assert_eq!(b.host(), None);
     assert_eq!(b.aperture(), Aperture::Vidmem);
     // …and it is in the PROMOTE idempotence set, not the RPC one.
-    let vas = &gpu.procs[&pid].vas_by_pdb(GpuId::ZERO, A_PDB).expect("the VAS exists");
+    let vas = &gpu.procs[&pid]
+        .vas_by_pdb(GpuId::ZERO, A_PDB)
+        .expect("the VAS exists");
     assert!(vas.promote_bound.contains(&GR_VA.0));
     assert!(!vas.rpc_bound.contains(&GR_VA.0));
 }
@@ -899,8 +909,12 @@ fn a_kernel_client_may_promote_into_a_user_procs_vas_and_a_foreign_user_client_m
     let mut gpu = {
         let (factory, rec) = MockIsolateFactory::new();
         let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
-        let mut g = Gpu::new(std::sync::Arc::new(WireClassArch::new()), Box::new(factory), gpa)
-            .expect("device realizes");
+        let mut g = Gpu::new(
+            std::sync::Arc::new(WireClassArch::new()),
+            Box::new(factory),
+            gpa,
+        )
+        .expect("device realizes");
         let mut s = Scenario::new();
         s.compute_process(A_CLIENT, A_PDB, identical_handles(0x10, 0x11));
         s.compute_process(B_CLIENT, B_PDB, identical_handles(0x20, 0x21));
@@ -2485,8 +2499,14 @@ fn a_range_the_guests_own_tables_already_describe_is_already_not_a_collision() {
             vec![gr_range(GR_VA, phys)],
         ))
         .expect("★ the promote is CORROBORATED by the guest's tables, not refused");
-    assert_eq!(join.already, 1, "counted as already there, from the other transport");
-    assert_eq!(join.bound, 0, "and nothing was rebound over the sweep's leaves");
+    assert_eq!(
+        join.already, 1,
+        "counted as already there, from the other transport"
+    );
+    assert_eq!(
+        join.bound, 0,
+        "and nothing was rebound over the sweep's leaves"
+    );
     assert_eq!(
         resolve_in(&gpu, A_PDB, GpuVa(GR_VA.0 + 0x1000)),
         Ok(phys + 0x1000),

@@ -160,16 +160,12 @@ fn the_birth_dispatch_is_below_the_bare_space_refusal() {
     let at = body
         .find("fn map_store_slice(")
         .expect("★ NON-VACUITY: `map_store_slice` is gone — this gate gates nothing");
-    let end = body[at..]
-        .find("\n    fn ")
-        .map_or(body.len(), |o| at + o);
+    let end = body[at..].find("\n    fn ").map_or(body.len(), |o| at + o);
     let f = &body[at..end];
-    let refusal = f
-        .find("if self.conn.is_bare_space(h_dma)")
-        .expect(
-            "★★★ CONSTRAINT 26 — `map_store_slice` no longer refuses a bare space. It is the \
+    let refusal = f.find("if self.conn.is_bare_space(h_dma)").expect(
+        "★★★ CONSTRAINT 26 — `map_store_slice` no longer refuses a bare space. It is the \
              only refusal covering the SECOND NVOS46 site, which cannot make one itself.",
-        );
+    );
     let dispatch = f.find("birth_for_range(h_dma)").expect(
         "★ NON-VACUITY: `map_store_slice` no longer dispatches to a birth client, so route \
          K's map is unreachable and this gate is checking an order that does not exist. If \
@@ -223,7 +219,8 @@ fn every_map_in_this_crate_can_refuse_a_bare_space() {
     // asked, and each refuses before allocating anything. This one is the backstop that
     // makes their question total.
     assert_eq!(
-        body.matches("RmError::Other(MAP_THROUGH_A_BARE_SPACE)").count(),
+        body.matches("RmError::Other(MAP_THROUGH_A_BARE_SPACE)")
+            .count(),
         5,
         "★★ the bare-space refusals moved. FIVE is the ruling: `map_gpu_va`, `unmap_gpu_va`, \
          `map_store_slice`, `unmap_store_slice` — each naming its own verb — plus the \

@@ -215,9 +215,7 @@ impl CrossedFd {
             // go to the scratchpad and to no other isolate, its own minter included. See
             // the variant's doc for why lending it back is the breach that reads as
             // innocuous.
-            FdOrigin::BirthClient { .. }
-                if target.proc() == crate::SCRATCHPAD_ISOLATE_PROC =>
-            {
+            FdOrigin::BirthClient { .. } if target.proc() == crate::SCRATCHPAD_ISOLATE_PROC => {
                 Ok(self.fd.as_fd())
             }
             FdOrigin::BirthClient { .. } => Err(RawError::ForeignDescriptor {

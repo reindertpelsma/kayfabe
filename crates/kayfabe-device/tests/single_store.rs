@@ -25,9 +25,7 @@ fn every_framebuffer_page_names_its_own_address_in_the_reserved_object() {
     for phys in [0u64, 0x1000, 0x1234, 0x20_0000, FB - 0x1000] {
         assert_eq!(
             fb.page_backing(phys, true),
-            FbPageBacking::Device {
-                at: phys & !0xfff
-            },
+            FbPageBacking::Device { at: phys & !0xfff },
             "the store must answer the PAGE-ALIGNED address of {phys:#x} in the reserved \
              object. An unaligned `at` would be armed as an unaligned view and the driver \
              would refuse the mmap, which reads as `the crossing is broken`."
@@ -60,7 +58,10 @@ fn a_host_read_is_refused_by_name_and_never_falls_back_to_host_memory() {
     let e = fb
         .read(0x4000, &mut buf)
         .expect_err("a host read of device memory must not succeed: there is no CPU view");
-    assert_eq!(e.why, DEVICE_HOST_READ_UNBUILT, "refused, but not by this name");
+    assert_eq!(
+        e.why, DEVICE_HOST_READ_UNBUILT,
+        "refused, but not by this name"
+    );
     assert_eq!(
         buf, [0xAAu8; 8],
         "⊘ and the buffer must be UNTOUCHED. A refusal that had zero-filled it would be \
@@ -215,8 +216,14 @@ fn a_drain_arms_what_was_wanted_and_the_second_attempt_succeeds() {
     let d = kayfabe_device::FbStore::demand_port(&fb)
         .expect("the store must hand its port out, or no lock-free caller can drain it")
         .drain();
-    assert_eq!(d.armed, 1, "the drain must arm exactly the run that was wanted");
-    assert!(d.progressed(), "and say so, because that is what a retry branches on");
+    assert_eq!(
+        d.armed, 1,
+        "the drain must arm exactly the run that was wanted"
+    );
+    assert!(
+        d.progressed(),
+        "and say so, because that is what a retry branches on"
+    );
     assert!(!d.declined);
 
     fb.read(0x9000, &mut buf)
@@ -249,7 +256,13 @@ fn a_declined_drain_is_distinguishable_from_one_that_had_nothing_to_do() {
 
     // ── and the empty drain, for contrast: it ran, and there was nothing to do ──
     port.set_declining(false);
-    assert_eq!(kayfabe_device::FbStore::demand_port(&fb).unwrap().drain().armed, 1);
+    assert_eq!(
+        kayfabe_device::FbStore::demand_port(&fb)
+            .unwrap()
+            .drain()
+            .armed,
+        1
+    );
     let empty = kayfabe_device::FbStore::demand_port(&fb).unwrap().drain();
     assert!(!empty.declined, "★ THE CONTRAST: this one RAN");
     assert_eq!(empty.armed, 0);
@@ -348,7 +361,10 @@ fn a_read_spanning_two_runs_needs_both_and_fills_neither_until_it_has_them() {
          drain already skips for free."
     );
     assert_eq!(
-        kayfabe_device::FbStore::demand_port(&fb).unwrap().drain().armed,
+        kayfabe_device::FbStore::demand_port(&fb)
+            .unwrap()
+            .drain()
+            .armed,
         1,
         "★ THE KNOWN-POSITIVE FOR THAT BEING FREE: the drain arms exactly the ONE run that \
          was missing. A drain that re-armed the other would leak an aperture per miss."

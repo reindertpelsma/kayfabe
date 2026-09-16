@@ -810,7 +810,6 @@ fn t0_churn(device: &SharedDevice, i: usize, round: u32) {
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         })
         .expect("T0: and binds a page directory to it");
     device
@@ -3199,7 +3198,9 @@ fn a_fresh_client_recovers_from_its_condemned_predecessor() {
         (pid.0 + 1, GPU1.0),
         "★ the recovered component rang a host token minted in its OWN isolate lane"
     );
-    let published = gpu.procs[&pid].vas_by_pdb(GPU1, R_PDB).expect("the VAS exists")
+    let published = gpu.procs[&pid]
+        .vas_by_pdb(GPU1, R_PDB)
+        .expect("the VAS exists")
         .table
         .resolve(R_PDB, GpuVa(VA_CTL))
         .expect("the recovered publication resolves")
@@ -4707,7 +4708,6 @@ fn a_recycled_namespace_cannot_inherit_the_previous_tenants_address_plane() {
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         },
         // The alias that will keep the VASpace alive past its namespace's death.
         RmEvent::Dup {
@@ -5107,7 +5107,6 @@ fn a_recycled_object_handle_never_steals_the_ghosts_address_plane() {
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         },
     ] {
         gpu.apply(ev).expect(
@@ -5159,8 +5158,12 @@ fn a_recycled_object_handle_never_steals_the_ghosts_address_plane() {
     // The two `Vas`es are DIFFERENT resources, not one resource reported twice — the
     // whole point of the identity. Their origin HANDLE is deliberately identical.
     let (g1, g2) = (
-        vas_by_pdb_in(&vases, GPU0, RECYC_OBJ_PDB1).expect("the VAS exists").origin,
-        vas_by_pdb_in(&vases, GPU0, RECYC_OBJ_PDB2).expect("the VAS exists").origin,
+        vas_by_pdb_in(&vases, GPU0, RECYC_OBJ_PDB1)
+            .expect("the VAS exists")
+            .origin,
+        vas_by_pdb_in(&vases, GPU0, RECYC_OBJ_PDB2)
+            .expect("the VAS exists")
+            .origin,
     );
     assert_eq!(
         g1.origin, g2.origin,
@@ -6736,7 +6739,6 @@ fn gpa_workload(
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         })
         .expect("…and binds a page directory to it");
 
@@ -10077,7 +10079,6 @@ fn n3_push_second_device(
         // a sysmem-rooted PDB read as vidmem walks the wrong memory and
         // reports success, because a wrong-aperture read returns zeros.
         pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
     });
     s.push(RmEvent::Alloc {
         client,

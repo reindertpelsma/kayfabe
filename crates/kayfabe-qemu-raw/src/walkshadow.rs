@@ -53,7 +53,6 @@
 
 use std::sync::Mutex;
 
-
 use crate::shim::Status;
 use kayfabe_mmu::walkshadow::{self, ShadowCensus};
 
@@ -86,8 +85,7 @@ pub const WALK_SHADOW_ENV: &str = "KAYFABE_WALK_SHADOW";
 ///
 /// ⇒ The real expiry condition is **§3**: an identity window needs no page list, and only
 /// then can a boot exist in which the host walk did not run.
-pub const WALK_SHADOW_EXPIRY: &str =
-    "deleted when the walk kernel can run WITHOUT the host walk — i.e. when §3's identity \
+pub const WALK_SHADOW_EXPIRY: &str = "deleted when the walk kernel can run WITHOUT the host walk — i.e. when §3's identity \
      window retires the relocated image that is built from the host walk's `visited` set \
      (SINGLE_STORE_PLAN.md §3); NOT merely when the swap arm is clean";
 
@@ -417,10 +415,8 @@ impl kayfabe_rt::device::PtSweepDecider for WalkShadowDecider<'_> {
         // ⇒ leaves are accumulated **per root page**, which is the unit the kernel's report is
         // keyed by and therefore the only unit the two sides can be compared in.
         let mut vases: Vec<(u64, &[kayfabe_mmu::walker::PtPage])> = Vec::new();
-        let mut leaves_of: std::collections::BTreeMap<
-            u64,
-            Vec<kayfabe_mmu::walker::DecodedLeaf>,
-        > = std::collections::BTreeMap::new();
+        let mut leaves_of: std::collections::BTreeMap<u64, Vec<kayfabe_mmu::walker::DecodedLeaf>> =
+            std::collections::BTreeMap::new();
         // ★★★ **HOW MANY TASKS CONTRIBUTED TO EACH ROOT PAGE** — the swap's first guard.
         //
         // ⊘ The comparison can accumulate a union and still be sound; the SUBSTITUTION
@@ -581,7 +577,11 @@ impl kayfabe_rt::device::PtSweepDecider for WalkShadowDecider<'_> {
         // a second source of truth beside a complete value, and the two could drift.
         let mut kernel_of: std::collections::BTreeMap<
             u64,
-            (Vec<kayfabe_mmu::walkdiff::Run>, Vec<kayfabe_mmu::walkdiff::Run>, usize),
+            (
+                Vec<kayfabe_mmu::walkdiff::Run>,
+                Vec<kayfabe_mmu::walkdiff::Run>,
+                usize,
+            ),
         > = std::collections::BTreeMap::new();
         for (i, entry) in report.pdbs.iter().enumerate() {
             let Some(&real) = real_of.get(&entry.pdb) else {
@@ -749,8 +749,14 @@ mod tests {
         assert_eq!(selected(Some("on")).ok(), Some(Arm::Shadow));
         assert_eq!(selected(Some("swap")).ok(), Some(Arm::Swap));
         assert!(selected(Some("yes")).is_err());
-        assert!(selected(Some("ON")).is_err(), "case matters, and is refused by name");
-        assert!(selected(Some("SWAP")).is_err(), "case matters, and is refused by name");
+        assert!(
+            selected(Some("ON")).is_err(),
+            "case matters, and is refused by name"
+        );
+        assert!(
+            selected(Some("SWAP")).is_err(),
+            "case matters, and is refused by name"
+        );
         assert!(selected(Some("1")).is_err());
     }
 
@@ -782,7 +788,11 @@ mod tests {
             ShadowRefusal::RootMissing { pdb: 0 }.as_str(),
         ];
         let uniq: std::collections::BTreeSet<_> = names.iter().collect();
-        assert_eq!(uniq.len(), names.len(), "two refusals share a name: {names:?}");
+        assert_eq!(
+            uniq.len(),
+            names.len(),
+            "two refusals share a name: {names:?}"
+        );
     }
 
     /// ★★ **The gate's expiry condition exists**, which is §w724g's whole mechanism.

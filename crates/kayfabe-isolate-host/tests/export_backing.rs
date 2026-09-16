@@ -680,7 +680,10 @@ fn retiring_a_token_closes_it_and_renumbers_nothing() {
          `I closed it` from `it was already gone` cannot detect a double release at all"
     );
 
-    assert!(registry.dup(b).is_err(), "the retired token has no descriptor");
+    assert!(
+        registry.dup(b).is_err(),
+        "the retired token has no descriptor"
+    );
     assert!(
         registry.dup(a).is_ok() && registry.dup(c).is_ok(),
         "★★★ and the NEIGHBOURS keep their tokens. `Vec::remove` would have renumbered `c` to \

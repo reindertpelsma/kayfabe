@@ -28,7 +28,9 @@
 //! §7.2 forbids, reached from the other end.
 
 use crate::export::ChildExports;
-use crate::fdcross::{CrossedFd, FdFrameError, FdOrigin, read_frame_with_fds, write_frame_with_fds};
+use crate::fdcross::{
+    CrossedFd, FdFrameError, FdOrigin, read_frame_with_fds, write_frame_with_fds,
+};
 use crate::guestram::GuestRamPlane;
 use crate::isolate::{
     CONTROL_FD, GUEST_RAM_FD, PARK_WITNESS_FD, RmMode, WORKER_FD_BASE, decode_control,
@@ -746,7 +748,10 @@ fn adopt_birth_client(
              instead of refusing, and a null `A` would file this birth client under a key no \
              `AdoptVaSpace` can ever present."
         );
-        return (failed(RmError::Other(crate::rm::BIRTH_CLIENT_NULL_HANDLE)), Vec::new());
+        return (
+            failed(RmError::Other(crate::rm::BIRTH_CLIENT_NULL_HANDLE)),
+            Vec::new(),
+        );
     }
     // ★★★★★ **THE RECEIVER'S OWN REFUSAL, AND IT IS NOT THE SENDER'S RESTATED.**
     //
@@ -1284,21 +1289,25 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
                 // ★★★★★ LEG A2 — rebuilt on THIS side of the wire, where the adapter that
                 // lowers it runs. ⊘ The handle is re-validated by the adapter as one
                 // `join_fb_leaf` minted; nothing here trusts the four integers.
-                adopt.map(|(kind, a, b, ring_va, gp_fifo_va, gp_fifo_entries, userd)| {
-                    kayfabe_isolate::AdoptedGuestRing {
-                        ring: ring_provenance(kind, a, b),
-                        ring_va,
-                        gp_fifo_va,
-                        gp_fifo_entries,
-                        // ★★★★★ LEG B — rebuilt here for leg A2's reason, and re-validated
-                        // by the adapter as an object `join_fb_leaf` minted. ⊘ Nothing on
-                        // this side trusts the two integers either.
-                        userd: userd.map(|(memory, offset)| kayfabe_isolate::AdoptedGuestUserd {
-                            memory: raw(memory),
-                            offset,
-                        }),
-                    }
-                }),
+                adopt.map(
+                    |(kind, a, b, ring_va, gp_fifo_va, gp_fifo_entries, userd)| {
+                        kayfabe_isolate::AdoptedGuestRing {
+                            ring: ring_provenance(kind, a, b),
+                            ring_va,
+                            gp_fifo_va,
+                            gp_fifo_entries,
+                            // ★★★★★ LEG B — rebuilt here for leg A2's reason, and re-validated
+                            // by the adapter as an object `join_fb_leaf` minted. ⊘ Nothing on
+                            // this side trusts the two integers either.
+                            userd: userd.map(|(memory, offset)| {
+                                kayfabe_isolate::AdoptedGuestUserd {
+                                    memory: raw(memory),
+                                    offset,
+                                }
+                            }),
+                        }
+                    },
+                ),
                 // ★★★★★ w288 — rebuilt on THIS side of the wire, where the adapter that puts
                 // it in `hObjectError` runs. ⊘ `map`, never `unwrap_or(0)`: the presence byte
                 // already carried the distinction across, and collapsing it here would throw
@@ -1804,7 +1813,10 @@ mod tests {
                 "BIRTH_CLIENT_NOT_A_CHAR_DEVICE",
                 crate::rm::BIRTH_CLIENT_NOT_A_CHAR_DEVICE,
             ),
-            ("BIRTH_CLIENT_NULL_HANDLE", crate::rm::BIRTH_CLIENT_NULL_HANDLE),
+            (
+                "BIRTH_CLIENT_NULL_HANDLE",
+                crate::rm::BIRTH_CLIENT_NULL_HANDLE,
+            ),
             (
                 "FD_ON_A_BYTES_ONLY_REQUEST",
                 crate::rm::FD_ON_A_BYTES_ONLY_REQUEST,

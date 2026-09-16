@@ -64,7 +64,8 @@ fn plane_with_a_sysmem_leaf() -> RegPlane {
     // That asymmetry is the whole point — it is what makes this path need both locks.
     let mut fb = SparseFb::new(12288 << 20);
     let mut put = |at: u64, e: u128| {
-        fb.write(at, &e.to_le_bytes()[..8]).expect("sparse fb takes");
+        fb.write(at, &e.to_le_bytes()[..8])
+            .expect("sparse fb takes");
     };
     put(ROOT + 8, entry(L1, false));
     put(L1 + 16, entry(LEAF_GPA, true));
@@ -128,7 +129,8 @@ fn reading_a_vidmem_leaf_needs_only_the_memory_lock() {
     .expect("GA106 is servable");
     let mut fb = SparseFb::new(12288 << 20);
     let mut put = |at: u64, e: u128| {
-        fb.write(at, &e.to_le_bytes()[..8]).expect("sparse fb takes");
+        fb.write(at, &e.to_le_bytes()[..8])
+            .expect("sparse fb takes");
     };
     put(ROOT + 8, entry(L1, false));
     put(L1 + 16, entry(LEAF_GPA, false));

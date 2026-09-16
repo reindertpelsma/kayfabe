@@ -632,13 +632,17 @@ pub struct ChannelBirthRun {
 ///
 /// ⊘ This is a `push` under a rank-0 lock. It must stay O(1) and allocation-light; the refresh
 /// itself happens on the worker.
-fn vas_refresh_key(ev: RmEvent) -> Option<(kayfabe_arch::ids::HClient, kayfabe_arch::ids::HObject)> {
+fn vas_refresh_key(
+    ev: RmEvent,
+) -> Option<(kayfabe_arch::ids::HClient, kayfabe_arch::ids::HObject)> {
     match ev {
         // A page-directory swap re-roots the address space. `[ogkm-580: gpu_vaspace.c:3221]`
         // the guest's invalidate fires BEFORE the migrate and never after, and the
         // hardware-commit callback is a no-op on a GSP client (`gmmu_walk.c:665-669`) — so
         // nothing at all reaches us afterwards.
-        RmEvent::SetPageDir { client, vaspace, .. } => Some((client, vaspace)),
+        RmEvent::SetPageDir {
+            client, vaspace, ..
+        } => Some((client, vaspace)),
         _ => None,
     }
 }
@@ -669,12 +673,10 @@ static PENDING_LATCH_EPOCH: std::sync::atomic::AtomicU64 = std::sync::atomic::At
 // =====================================================================================
 /// Leaves offered to the hand-over whose VA the routed `Vas` has **no row for**. See
 /// [`SharedDevice::handover_leaf_untabled`].
-static HANDOVER_LEAF_UNTABLED: std::sync::atomic::AtomicU64 =
-    std::sync::atomic::AtomicU64::new(0);
+static HANDOVER_LEAF_UNTABLED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 /// Hand-overs whose returned space is not the one the `Vas` holds. See
 /// [`SharedDevice::handover_space_not_held`]. ⊘ Any non-zero is a defect.
-static HANDOVER_SPACE_NOT_HELD: std::sync::atomic::AtomicU64 =
-    std::sync::atomic::AtomicU64::new(0);
+static HANDOVER_SPACE_NOT_HELD: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 /// Record that something was latched. Called beside every push.
 fn note_pending_latch() {
@@ -1116,7 +1118,8 @@ impl PoolGate {
     /// `gpu`. **Panics (R1) unless the caller holds zero ranked locks** — the whole point
     /// of the exercise.
     fn wait_for_return(&self, gpu: GpuId, seen: u64) {
-        let mut section = BlockingSection::enter("kayfabe_rt::SharedDevice — the pool-full condvar wait");
+        let mut section =
+            BlockingSection::enter("kayfabe_rt::SharedDevice — the pool-full condvar wait");
         section.run(|| {
             let mut g = self.state.lock().expect("pool gate");
             // The saturation event is recorded whether or not this thread ends up
@@ -1359,7 +1362,7 @@ impl SharedDevice {
                 kayfabe_device::pubmark::PublicationWatermark::new(),
             ),
             spawner,
-                    state: RankedRwLock::new(
+            state: RankedRwLock::new(
                 LockRank::Device,
                 DeviceState {
                     spine,
@@ -4505,10 +4508,10 @@ impl SharedDevice {
     /// \u{2605}\u{2605}\u{2605}\u{2605}\u{2605} **w329 - [`SharedDevice::sweep_pt_tables_from`] with the
     /// host-published unbind policy as a parameter.** Same obligation on the caller as
     /// [`SharedDevice::decode_pt_writes_revoking`].
-/// How many address spaces one COMMIT acquisition settles. ⊘ `1` is the finest natural grain:
-/// the sweep's results are keyed by `(gpu, pdb)` and a single address space is the smallest
-/// unit `commit_pt_sweep_revoking` can be handed without splitting one VAS's settlement in
-/// half — which the ruling does **not** permit.
+    /// How many address spaces one COMMIT acquisition settles. ⊘ `1` is the finest natural grain:
+    /// the sweep's results are keyed by `(gpu, pdb)` and a single address space is the smallest
+    /// unit `commit_pt_sweep_revoking` can be handed without splitting one VAS's settlement in
+    /// half — which the ruling does **not** permit.
     const PT_COMMIT_CHUNK_VASES: usize = 1;
 
     pub fn sweep_pt_tables_revoking(
@@ -4871,7 +4874,10 @@ impl SharedDevice {
                     let mut covered = 0usize;
                     let mut only = Vec::<u64>::new();
                     for va in &vas.promote_bound {
-                        if runs.iter().any(|(start, len)| *va >= *start && *va < start + len) {
+                        if runs
+                            .iter()
+                            .any(|(start, len)| *va >= *start && *va < start + len)
+                        {
                             covered += 1;
                         } else {
                             only.push(*va);
@@ -5584,9 +5590,7 @@ impl SharedDevice {
         self.with_proc_mut(pid, |p| {
             let vas = p.vas_by_pdb_mut(gpu, pdb)?;
             vas.table.iter().find_map(|(va, _len, b)| {
-                (va != except
-                    && b.aperture() == kayfabe_arch::Aperture::Vidmem
-                    && b.phys() == phys)
+                (va != except && b.aperture() == kayfabe_arch::Aperture::Vidmem && b.phys() == phys)
                     .then_some(va)
             })
         })
@@ -5978,7 +5982,7 @@ impl SharedDevice {
         let Some(rows) = self.with_proc_mut(pid, |p| {
             let mut rows: Vec<String> = Vec::new();
             for (&(gpu, _origin), vas) in &p.vases {
-            let pdb = vas.pdb.unwrap_or(Pdb(0));
+                let pdb = vas.pdb.unwrap_or(Pdb(0));
                 let hit = vas.reach.leaf_covering(va);
                 rows.push(format!(
                     "gpu={} pdb=0x{:x} sweeps={} trunc={} dirty={} pages={} swept_only={} → {}",
@@ -6481,8 +6485,7 @@ impl SharedDevice {
                 // (see the type doc); DISAGREEMENT is refused.
                 match vas.table.binding_at(kayfabe_arch::ids::GpuVa(leaf.va)) {
                     None => {
-                        HANDOVER_LEAF_UNTABLED
-                            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        HANDOVER_LEAF_UNTABLED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     }
                     Some((start, tlen, b)) => {
                         if start != leaf.va || tlen != leaf.len {
@@ -6493,8 +6496,7 @@ impl SharedDevice {
                             });
                             return;
                         }
-                        if b.aperture() != kayfabe_arch::Aperture::Vidmem || b.phys() != leaf.phys
-                        {
+                        if b.aperture() != kayfabe_arch::Aperture::Vidmem || b.phys() != leaf.phys {
                             refusal = Some(FwdFault::FbLeafDisagrees {
                                 va: kayfabe_arch::ids::GpuVa(leaf.va),
                                 walked: (leaf.phys, kayfabe_arch::Aperture::Vidmem),
@@ -7294,9 +7296,8 @@ impl SharedDevice {
                         if gpu != route.gpu {
                             continue;
                         }
-                        rebound += kayfabe_core::promote::complete_parked_from_globals(
-                            vas, pdb, &fresh,
-                        );
+                        rebound +=
+                            kayfabe_core::promote::complete_parked_from_globals(vas, pdb, &fresh);
                     }
                 };
                 redrive(st.system.get_mut());
@@ -8451,7 +8452,6 @@ impl CeChannelFacts {
         self.engine.name()
     }
 }
-
 
 /// ★★★★★ **THE DECIDER FOR THE WHOLE-VAS SWEEP'S EXECUTE PHASE** —
 /// `SINGLE_STORE_PLAN.md` §6, both steps.

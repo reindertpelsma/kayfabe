@@ -103,7 +103,8 @@ fn device() -> (
     let (factory, recorder) = MockIsolateFactory::with_pool_size(2);
     let factory = factory.with_guest_ram(GUEST_RAM_BYTES);
     let gpa = GpaSpace::new(0x10_0000_0000..0x1000_0000_0000, 0x10_0000_0000);
-    let mut gpu = Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa).expect("realizes");
+    let mut gpu =
+        Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa).expect("realizes");
     let mut s = Scenario::new();
     s.compute_process_on_gpu(CLIENT, PDB, identical_handles(GR.0, CE.0), None);
     s.memory(CLIENT, HObject(0x5c00_0001), MEM, 0x9_0000_0000);
@@ -222,7 +223,11 @@ fn a_dead_procs_guest_ram_pins_are_released_from_the_production_path() {
     let descriptor = pinned.memory;
     assert_eq!(
         device
-            .with_proc_mut(pid, |p| p.vas_by_pdb(GPU, PDB).expect("the VAS exists").guest_ram_pins.len())
+            .with_proc_mut(pid, |p| p
+                .vas_by_pdb(GPU, PDB)
+                .expect("the VAS exists")
+                .guest_ram_pins
+                .len())
             .expect("the proc is live"),
         1,
         "★ NON-VACUITY: the pin must actually be recorded, or every count below is a \

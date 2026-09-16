@@ -588,9 +588,7 @@ impl Vas {
             // Level 0 is a DECLARED fact: a PDB *is* its own root page. The shadow is
             // rooted here and nowhere else, which is what `ReachShadow::audit_root`
             // checks at every commit.
-            reach: kayfabe_mmu::reach::ReachShadow::new(
-                pdb.map_or(0, |p| p.0 & !0xfff),
-            ),
+            reach: kayfabe_mmu::reach::ReachShadow::new(pdb.map_or(0, |p| p.0 & !0xfff)),
             blocks: BTreeMap::new(),
             guest_ram_pins: BTreeMap::new(),
             rpc_bound: BTreeSet::new(),
@@ -2218,7 +2216,9 @@ pub fn vas_by_pdb_in(
     gpu: GpuId,
     pdb: Pdb,
 ) -> Option<&Vas> {
-    let mut it = vases.values().filter(|v| v.gpu == gpu && v.pdb == Some(pdb));
+    let mut it = vases
+        .values()
+        .filter(|v| v.gpu == gpu && v.pdb == Some(pdb));
     let first = it.next()?;
     if it.next().is_some() {
         return None;
@@ -4600,7 +4600,7 @@ impl Spine {
             // use-after-retire.
             self.sources.deregister_proc(id).latched();
             self.retired.push(p);
-        note_retired();
+            note_retired();
         }
 
         // 3b. ★ MG-5: install each live proc's per-(Proc, GpuId) isolate + arena for
@@ -5944,7 +5944,6 @@ pub fn format_vas_census(rows: &[VasCensusRow], mark: Option<ChanId>) -> String 
     }
     out
 }
-
 
 // =====================================================================================
 // ★★★★★ w520 — THE ONE QUESTION A vCPU MAY ASK ABOUT RETIRED PROCS.

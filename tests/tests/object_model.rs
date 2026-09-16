@@ -137,7 +137,6 @@ fn map_at_offset_forward_populates_base_plus_offset() {
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         },
     )
     .unwrap();
@@ -350,7 +349,6 @@ fn parked_map_unmap_drops_only_the_named_map() {
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         },
     )
     .unwrap();
@@ -982,7 +980,6 @@ fn a_dup_that_mints_the_middle_handle_drains_every_parked_table() {
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         },
         // (c) a map whose BOTH endpoints are handles a `Dup` will mint.
         RmEvent::MapMemoryDma {
@@ -1339,7 +1336,6 @@ fn free_subtree_keeps_mappings_of_a_dup_kept_alive_vaspace() {
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         },
     )
     .unwrap();
@@ -1526,7 +1522,6 @@ fn free_subtree_prunes_a_parked_map_when_its_memory_is_freed() {
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         },
     )
     .unwrap();
@@ -1616,7 +1611,6 @@ fn conflicting_map_at_same_va_is_loud_identical_is_idempotent() {
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         },
     )
     .unwrap();
@@ -1845,7 +1839,6 @@ fn map_before_backing_and_pdb_resolves() {
         // a sysmem-rooted PDB read as vidmem walks the wrong memory and
         // reports success, because a wrong-aperture read returns zeros.
         pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
     })
     .expect("setpagedir applies");
 
@@ -1914,7 +1907,6 @@ mod fuzz {
                     // a sysmem-rooted PDB read as vidmem walks the wrong memory and
                     // reports success, because a wrong-aperture read returns zeros.
                     pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
                 }
             }),
             (any_client(), any_handle(), any_handle(), any_va()).prop_map(
@@ -2060,7 +2052,6 @@ fn two_live_vaspaces_at_one_recycled_handle_still_collide_on_a_shared_pdb() {
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         },
     ] {
         g.apply(&arch, ev).expect("★ the recycle itself is legal");

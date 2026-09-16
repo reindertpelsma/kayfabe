@@ -69,7 +69,11 @@ fn with_the_gate_unset_the_advertised_framebuffer_is_the_compiled_one() {
 /// explicitly off, and a value naming neither — is the whole of the gate's contract.
 #[test]
 fn the_gates_three_way_contract() {
-    assert_eq!(scratchpad_from(None), Ok(ScratchpadArm::Off), "absent is off");
+    assert_eq!(
+        scratchpad_from(None),
+        Ok(ScratchpadArm::Off),
+        "absent is off"
+    );
     assert_eq!(scratchpad_from(Some("off")), Ok(ScratchpadArm::Off));
     assert_eq!(scratchpad_from(Some("on")), Ok(ScratchpadArm::Measure));
     // ★ `require` is the design's own rule — "if that fails, the VM does not start" — and it

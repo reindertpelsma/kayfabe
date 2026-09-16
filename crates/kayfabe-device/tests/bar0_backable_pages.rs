@@ -118,7 +118,6 @@ fn report_how_much_of_bar0_is_backable_by_a_zero_page() {
     );
 }
 
-
 /// ★★★★★ **The production run-list must agree with the exhaustive sweep, and cost nothing.**
 ///
 /// `RegPlane::bar0_backable_runs` is what a memslot placement will trust. This checks it
@@ -164,8 +163,7 @@ fn the_production_run_list_matches_the_sweep_and_does_not_disturb_the_census() {
             shadow.fill(0xAA);
             let filled = p.bar0_shadow_fill(page, &mut shadow);
             assert_eq!(
-                filled,
-                PAGE as usize,
+                filled, PAGE as usize,
                 "page {page:#x} is inside a backable run and the shadow could fill only \
                  {filled} of {PAGE} bytes — publishing it would hand the guest 0xAA, or a \
                  stale value, for the rest"
@@ -173,12 +171,8 @@ fn the_production_run_list_matches_the_sweep_and_does_not_disturb_the_census() {
             for off in (page..page + PAGE).step_by(4) {
                 let served = p.read(0, off, 4).value();
                 let i = (off - page) as usize;
-                let shadowed = u32::from_le_bytes([
-                    shadow[i],
-                    shadow[i + 1],
-                    shadow[i + 2],
-                    shadow[i + 3],
-                ]);
+                let shadowed =
+                    u32::from_le_bytes([shadow[i], shadow[i + 1], shadow[i + 2], shadow[i + 3]]);
                 assert_eq!(
                     u64::from(shadowed),
                     served,
@@ -220,7 +214,10 @@ fn the_production_run_list_matches_the_sweep_and_does_not_disturb_the_census() {
 fn the_run_list_is_a_fact_about_the_map_and_not_about_the_traffic() {
     let p = plane();
     let before = p.bar0_backable_runs();
-    assert!(!before.is_empty(), "non-vacuity: the chip must have dead runs");
+    assert!(
+        !before.is_empty(),
+        "non-vacuity: the chip must have dead runs"
+    );
 
     // Drive the plane the way a boot does: every arm, over the whole aperture.
     let mut served = 0u64;
@@ -229,11 +226,15 @@ fn the_run_list_is_a_fact_about_the_map_and_not_about_the_traffic() {
             served += 1;
         }
     }
-    assert!(served > 0, "non-vacuity: the sweep must have reached live arms");
+    assert!(
+        served > 0,
+        "non-vacuity: the sweep must have reached live arms"
+    );
 
     let after = p.bar0_backable_runs();
     assert_eq!(
-        before, after,
+        before,
+        after,
         "the dead-run list moved after the plane was read: it is describing traffic, not the \
          register map. {} runs became {}.",
         before.len(),
@@ -265,7 +266,10 @@ fn the_state_free_classifier_agrees_with_the_read_path() {
             live += 1;
         }
     }
-    assert!(dead > 0 && live > 0, "non-vacuity both ways: dead={dead} live={live}");
+    assert!(
+        dead > 0 && live > 0,
+        "non-vacuity both ways: dead={dead} live={live}"
+    );
 }
 
 /// ★★★★★ **WHICH pages are live, and WHAT makes each one live (w561).**
@@ -319,7 +323,9 @@ fn report_which_pages_are_live_and_why() {
 #[test]
 fn report_the_doorbell_page() {
     let p = plane();
-    let db = p.doorbell_reg().expect("GA106 declares a usermode doorbell");
+    let db = p
+        .doorbell_reg()
+        .expect("GA106 declares a usermode doorbell");
     println!(
         "BAR0-DOORBELL reg={db:#010x} page={:#010x} claimed_by={}",
         db & !(PAGE - 1),
@@ -473,7 +479,10 @@ fn both_edges_of_the_invalidate_trigger_reach_the_read_shadow() {
     // ★ And the latches, which a backed page serves with no exit — a stale zero here is a
     // wrong read-back the guest can never fault on.
     assert_eq!(
-        seen.iter().rev().find(|(o, _)| *o == regs.pdb).map(|(_, v)| *v),
+        seen.iter()
+            .rev()
+            .find(|(o, _)| *o == regs.pdb)
+            .map(|(_, v)| *v),
         Some(0xdead_beef),
         "the PDB latch never reached the shadow: {seen:?}"
     );
@@ -526,7 +535,10 @@ fn the_counter_pages_span_is_derived_and_is_the_page_that_traps() {
         "the derived usermode base is not the page the read census names as the last trap \
          source; mapping this would remove nothing"
     );
-    assert_eq!(len, 4096, "ONE page — the other fifteen measured zero reads");
+    assert_eq!(
+        len, 4096,
+        "ONE page — the other fifteen measured zero reads"
+    );
 
     // ⊘ And it must be a page the cut deliberately leaves LIVE. A counter inside a backed page
     // would be answered from stale memory with no exit, which is worse than trapping.
@@ -569,7 +581,10 @@ fn a_write_to_a_backed_page_still_reaches_the_plane() {
         .flat_map(|(b, l)| (b..b + l).step_by(4096))
         .take(64)
         .collect();
-    assert!(!backed.is_empty(), "no backed pages: the cut is not doing anything");
+    assert!(
+        !backed.is_empty(),
+        "no backed pages: the cut is not doing anything"
+    );
 
     let before = p.counters().writes;
     for off in &backed {

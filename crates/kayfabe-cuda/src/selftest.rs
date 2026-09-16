@@ -6,7 +6,7 @@
 //! A `#[test]` cannot be there. The result crosses the wire as a record the parent prints in
 //! its census, so the boot's own log carries it.
 
-use crate::abi::{kf_format_ver2, KF_ABI_VERSION};
+use crate::abi::{KF_ABI_VERSION, kf_format_ver2};
 use crate::driver_unsafe::CudaError;
 use crate::synth;
 use crate::walk::{Report, WalkCfg, WalkKernel};
@@ -141,7 +141,8 @@ pub fn bring_up_and_prove() -> (SelftestOutcome, Option<WalkKernel>) {
     out.bring_up_us = k.bring_up_us;
     out.jit_us = k.jit_us;
 
-    let (img, root, expect) = synth::contiguous_small_pages(FIXTURE_VA, FIXTURE_PAGES, FIXTURE_GPGA);
+    let (img, root, expect) =
+        synth::contiguous_small_pages(FIXTURE_VA, FIXTURE_PAGES, FIXTURE_GPGA);
     let dev_img = match k.upload(&img.mem) {
         Ok(d) => d,
         Err(e) => {
@@ -169,8 +170,8 @@ pub fn bring_up_and_prove() -> (SelftestOutcome, Option<WalkKernel>) {
                     // the GPGA offset we built, of the length we built. A report that
                     // validated and said nothing would otherwise read as a pass.
                     let found = r.runs.iter().find(|m| m.va == expect.va);
-                    out.mapping_matched = found
-                        .is_some_and(|m| m.gpga == expect.gpga && m.len == expect.len);
+                    out.mapping_matched =
+                        found.is_some_and(|m| m.gpga == expect.gpga && m.len == expect.len);
                     if !out.mapping_matched {
                         out.why = format!(
                             "expected va={:#x} gpga={:#x} len={:#x}; runs = {:?}",
@@ -235,7 +236,8 @@ pub fn probe_after_sandbox(k: &mut WalkKernel, out: &mut SelftestOutcome) {
     });
 
     // (a) — a full round trip: allocate, upload, launch three kernels, copy back, validate.
-    let (img, root, expect) = synth::contiguous_small_pages(FIXTURE_VA, FIXTURE_PAGES, FIXTURE_GPGA);
+    let (img, root, expect) =
+        synth::contiguous_small_pages(FIXTURE_VA, FIXTURE_PAGES, FIXTURE_GPGA);
     out.probe_relaunch = match k.upload(&img.mem) {
         Err(e) => format!("FAIL upload: {e}"),
         Ok(d) => match k.refresh(d.ptr(), d.len(), &[root]) {
@@ -251,13 +253,19 @@ pub fn probe_after_sandbox(k: &mut WalkKernel, out: &mut SelftestOutcome) {
                     // the correct answer when nothing changed — and "empty" must not read as
                     // "the launch did nothing". Both readings are reported.
                     if ok {
-                        format!("PASS runs={} (the mapping was re-reported)", r.header.run_count)
+                        format!(
+                            "PASS runs={} (the mapping was re-reported)",
+                            r.header.run_count
+                        )
                     } else if r.header.run_count == 0 {
                         "PASS runs=0 (a delta over unchanged tables — the launch ran and \
                          correctly found no change)"
                             .to_string()
                     } else {
-                        format!("FAIL wrong answer: {} runs, none matching", r.header.run_count)
+                        format!(
+                            "FAIL wrong answer: {} runs, none matching",
+                            r.header.run_count
+                        )
                     }
                 }
             },
@@ -274,15 +282,18 @@ pub fn probe_after_sandbox(k: &mut WalkKernel, out: &mut SelftestOutcome) {
             // driver that had to reopen something by path would fail HERE, not above.
             let (img2, root2, _) =
                 synth::contiguous_small_pages(FIXTURE_VA, FIXTURE_PAGES, FIXTURE_GPGA);
-            match k.upload(&img2.mem).and_then(|d| k.refresh(d.ptr(), d.len(), &[root2])) {
+            match k
+                .upload(&img2.mem)
+                .and_then(|d| k.refresh(d.ptr(), d.len(), &[root2]))
+            {
                 Ok(r) => format!(
                     "PASS refused as expected ({why}); and the context SURVIVED it — a \
                      following refresh returned runs={} refusals={}",
                     r.header.run_count, r.header.refusals
                 ),
-                Err(e) => format!(
-                    "FAIL refused as expected ({why}) but the context did NOT survive: {e}"
-                ),
+                Err(e) => {
+                    format!("FAIL refused as expected ({why}) but the context did NOT survive: {e}")
+                }
             }
         }
     };

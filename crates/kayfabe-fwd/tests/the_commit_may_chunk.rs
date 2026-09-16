@@ -18,8 +18,8 @@ use kayfabe_fwd::PtDecodeOutcome;
 
 /// Every field set to something distinguishable from `Default`.
 fn populated(seed: usize) -> PtDecodeOutcome {
-    use kayfabe_arch::ids::{GpuId, Pdb};
     use kayfabe_arch::ids::GpuVa;
+    use kayfabe_arch::ids::{GpuId, Pdb};
     let mut o = PtDecodeOutcome::default();
     o.revoked_still_desired = seed;
     o.remaps_refused = seed + 1;
@@ -43,7 +43,8 @@ fn populated(seed: usize) -> PtDecodeOutcome {
     o.duplicate_leaves = seed + 19;
     o.learned_pages
         .push((GpuId(0), Pdb(0x4E60_0000), seed as u64));
-    o.protection_changes.push(GpuVa(0x2_0020_0000 + seed as u64));
+    o.protection_changes
+        .push(GpuVa(0x2_0020_0000 + seed as u64));
     o.retired.push(seed as u64);
     o
 }

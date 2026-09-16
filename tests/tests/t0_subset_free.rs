@@ -164,7 +164,6 @@ fn declare_vaspace(device: &SharedDevice, handle: HObject, pdb: Pdb) {
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         })
         .expect("and binds a page directory to it");
 }
@@ -292,7 +291,11 @@ fn freeing_a_vaspace_queues_its_host_state_and_the_next_op_releases_it() {
         // from the log, so the assertion below names the right objects and would catch
         // the two being swapped (which is the shape of an unmap against the wrong VAS).
         let host_vas = device
-            .with_proc(pid, |p| p.vas_by_pdb(GPU, SCRATCH_PDB).expect("the scratch VAS").host_vas)
+            .with_proc(pid, |p| {
+                p.vas_by_pdb(GPU, SCRATCH_PDB)
+                    .expect("the scratch VAS")
+                    .host_vas
+            })
             .expect("the proc is live")
             .expect("the publication materialized a host VAS");
         let (binding, _) = device

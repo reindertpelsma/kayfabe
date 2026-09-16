@@ -141,7 +141,6 @@ fn declare_one_proc(
             pdb: PDB,
             // ⊘ The TEST default; the PRODUCTION path must never assume it.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         },
         RmEvent::Alloc {
             client: CLIENT,
@@ -357,7 +356,6 @@ fn process_churn_does_not_accumulate_toward_the_retired_cap() {
          writes, not by how many processes the guest has ever run"
     );
 }
-
 
 // =====================================================================================
 // THE OTHER HALF — what the SHIPPING arm does

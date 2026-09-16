@@ -155,7 +155,6 @@ fn expected_set_page_dir(client: u32, vaspace: u32, pdb: u64) -> RmEvent {
         // a sysmem-rooted PDB read as vidmem walks the wrong memory and
         // reports success, because a wrong-aperture read returns zeros.
         pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
     }
 }
 
@@ -197,7 +196,12 @@ fn fresh_gpu() -> kayfabe_tests::Guarded<Gpu> {
     let gpa = GpaSpace::new(0x1_0000_0000..0x1000_0000_0000, 0x1_0000_0000);
     kayfabe_tests::Guarded::new(
         "rmrpc_bridge::fresh_gpu",
-        Gpu::new(std::sync::Arc::new(WireClassArch::new()), Box::new(factory), gpa).expect("device realizes"),
+        Gpu::new(
+            std::sync::Arc::new(WireClassArch::new()),
+            Box::new(factory),
+            gpa,
+        )
+        .expect("device realizes"),
         rec,
     )
 }
@@ -3007,7 +3011,6 @@ fn set_page_dir() -> RmEvent {
         // a sysmem-rooted PDB read as vidmem walks the wrong memory and
         // reports success, because a wrong-aperture read returns zeros.
         pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
     }
 }
 
@@ -6170,7 +6173,6 @@ fn push_process_events(s: &mut Scenario, client: u32, pid: u32, dev: u32, vas: u
         // a sysmem-rooted PDB read as vidmem walks the wrong memory and
         // reports success, because a wrong-aperture read returns zeros.
         pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
     });
 }
 

@@ -541,7 +541,11 @@ mod tests {
     /// Read the first `n` bytes of a backing WITHOUT going through any window — the only way
     /// to tell *"the window shows B"* from *"the window shows A and A happens to hold B's
     /// bytes"*. ⊘ A probe that shared the window would not be an observer.
-    fn read_backing_directly(fd: std::os::fd::BorrowedFd<'_>, p: HostPageSize, n: usize) -> Vec<u8> {
+    fn read_backing_directly(
+        fd: std::os::fd::BorrowedFd<'_>,
+        p: HostPageSize,
+        n: usize,
+    ) -> Vec<u8> {
         let m = crate::MappedRegion::map(
             Backing::SharedFile { fd, offset: 0 },
             p.bytes(),
@@ -551,7 +555,8 @@ mod tests {
         )
         .expect("map the backing directly");
         let mut out = vec![0u8; n];
-        m.read_into(HostOffset::ZERO, &mut out).expect("read the backing");
+        m.read_into(HostOffset::ZERO, &mut out)
+            .expect("read the backing");
         out
     }
 
@@ -651,7 +656,8 @@ mod tests {
 
         w.place_device_view(HostOffset::ZERO, p.bytes(), a.as_backing_fd(), true)
             .expect("place A");
-        w.write_from(HostOffset::ZERO, b"AAAAAAAA").expect("write A");
+        w.write_from(HostOffset::ZERO, b"AAAAAAAA")
+            .expect("write A");
 
         // ★ THE RE-POINT. One `MAP_FIXED`, into the window that is already there: no new
         // window, no memslot, no munmap.
@@ -671,16 +677,19 @@ mod tests {
         // ★★ And the stronger half: A is no longer REACHABLE through the window. A write here
         // must land in B and must not touch A — otherwise the old node's aperture is still
         // live behind our PTEs, which is exactly what makes an early release cross-tenant.
-        w.write_from(HostOffset::ZERO, b"BBBBBBBB").expect("write B");
+        w.write_from(HostOffset::ZERO, b"BBBBBBBB")
+            .expect("write B");
         let in_a = read_backing_directly(a.as_backing_fd(), p, 8);
         assert_eq!(
-            &in_a[..], b"AAAAAAAA",
+            &in_a[..],
+            b"AAAAAAAA",
             "a write through the re-pointed window reached the OLD backing — the window is \
              still mapping A, so the re-point did not take and the two backings are one memory"
         );
         let in_b = read_backing_directly(b.as_backing_fd(), p, 8);
         assert_eq!(
-            &in_b[..], b"BBBBBBBB",
+            &in_b[..],
+            b"BBBBBBBB",
             "a write through the re-pointed window must reach B: `MAP_FIXED` replaced the \
              mapping, it did not shadow it"
         );
@@ -704,14 +713,16 @@ mod tests {
         w.place_device_view(HostOffset::ZERO, 2 * p.bytes(), a.as_backing_fd(), true)
             .expect("place A whole");
         w.write_from(HostOffset::ZERO, b"A0").expect("page 0");
-        w.write_from(HostOffset::new(p.bytes()), b"A1").expect("page 1");
+        w.write_from(HostOffset::new(p.bytes()), b"A1")
+            .expect("page 1");
 
         // The mistake, made deliberately: replace only the first page.
         w.place_device_view(HostOffset::ZERO, p.bytes(), b.as_backing_fd(), true)
             .expect("a SHORT placement is accepted by the window — it is in bounds");
 
         let mut tail = [0u8; 2];
-        w.read_into(HostOffset::new(p.bytes()), &mut tail).expect("read the tail");
+        w.read_into(HostOffset::new(p.bytes()), &mut tail)
+            .expect("read the tail");
         assert_eq!(
             &tail, b"A1",
             "this assertion is the DEFECT, asserted so it cannot be argued away: the window's \
@@ -721,7 +732,8 @@ mod tests {
              from the mirror — if that check is ever removed, THIS is what ships"
         );
         let mut head = [0u8; 2];
-        w.read_into(HostOffset::ZERO, &mut head).expect("read the head");
+        w.read_into(HostOffset::ZERO, &mut head)
+            .expect("read the head");
         assert_eq!(&head, b"\0\0", "and the head really did move to B");
     }
 
@@ -882,7 +894,8 @@ mod tests {
             .expect("an aligned store inside the window");
 
         let mut got = [0u8; 16];
-        w.read_into(HostOffset::new(0x88), &mut got).expect("read back");
+        w.read_into(HostOffset::new(0x88), &mut got)
+            .expect("read back");
         // ⊘ The neighbours matter as much as the target: a store that also disturbed the bytes
         // around it would ring correctly and corrupt the counter 16 bytes away — which is the
         // page's actual layout (`TIME_0` at +0x80, `DOORBELL` at +0x90).
@@ -891,7 +904,11 @@ mod tests {
             u32::from_ne_bytes(got[8..12].try_into().unwrap()),
             0xDEAD_BEEF
         );
-        assert_eq!(&got[12..], &[0u8; 4], "the 4 bytes ABOVE the register moved");
+        assert_eq!(
+            &got[12..],
+            &[0u8; 4],
+            "the 4 bytes ABOVE the register moved"
+        );
     }
 
     /// ⚠ **Refused, never rounded.** An unaligned register store is a different access than the
@@ -910,7 +927,8 @@ mod tests {
         }
         // ⊘ And the refusal must not have written anything on its way out.
         let mut got = [0xFFu8; 8];
-        w.read_into(HostOffset::new(0x90), &mut got).expect("read back");
+        w.read_into(HostOffset::new(0x90), &mut got)
+            .expect("read back");
         assert_eq!(got, [0u8; 8], "a refused store still touched the window");
     }
 
@@ -932,5 +950,4 @@ mod tests {
             "an offset that overflows when 4 is added was accepted"
         );
     }
-
 }

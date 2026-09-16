@@ -136,7 +136,11 @@ fn sorted(mut l: Vec<DecodedLeaf>) -> Vec<DecodedLeaf> {
 fn a_relocated_image_answers_exactly_what_the_original_answered() {
     let fmt = Ga10xGmmu::new();
     let imgs = load("real_ga106.bin");
-    assert_eq!(imgs.len(), 5, "the real-GA106 corpus is five address spaces");
+    assert_eq!(
+        imgs.len(),
+        5,
+        "the real-GA106 corpus is five address spaces"
+    );
     let mut total = 0usize;
     for img in &imgs {
         let (leaves, visited) = walk(&img.mem, img.root);
@@ -221,12 +225,7 @@ const SCATTER_STRIDE: u64 = 0x10000;
 /// `rewrite` is the switch this file's known-positive turns: with it off the pages move and
 /// their directory entries do **not**, which is precisely the image a relocator that answered
 /// `Unchanged` for everything would build.
-fn scatter(
-    img: &[u8],
-    root: u64,
-    visited: &[PtPage],
-    rewrite: bool,
-) -> (SparseImg, u64) {
+fn scatter(img: &[u8], root: u64, visited: &[PtPage], rewrite: bool) -> (SparseImg, u64) {
     let fmt = Ga10xGmmu::new();
     let mut order: Vec<(u64, u8)> = visited
         .iter()
@@ -240,7 +239,8 @@ fn scatter(
         .enumerate()
         .map(|(i, (p, _))| (*p, SCATTER_BASE + (i as u64) * SCATTER_STRIDE))
         .collect();
-    let home = |old: u64| -> Option<u64> { Some(home_of.get(&(old & !0xfff)).copied().unwrap_or(0)) };
+    let home =
+        |old: u64| -> Option<u64> { Some(home_of.get(&(old & !0xfff)).copied().unwrap_or(0)) };
 
     let mut pages = std::collections::BTreeMap::new();
     for (phys, level) in &order {
@@ -305,7 +305,12 @@ fn relocation_is_not_a_no_op() {
         let d = decode_subtree(
             &fmt,
             &mut moved,
-            PtPage { phys: new_root, aperture: Aperture::Vidmem, level: 0, vabase: 0 },
+            PtPage {
+                phys: new_root,
+                aperture: Aperture::Vidmem,
+                level: 0,
+                vabase: 0,
+            },
             BUDGET,
         )
         .expect("the scattered root decodes");
@@ -321,7 +326,12 @@ fn relocation_is_not_a_no_op() {
         let n = decode_subtree(
             &fmt,
             &mut naive,
-            PtPage { phys: naive_root, aperture: Aperture::Vidmem, level: 0, vabase: 0 },
+            PtPage {
+                phys: naive_root,
+                aperture: Aperture::Vidmem,
+                level: 0,
+                vabase: 0,
+            },
             BUDGET,
         )
         .map(|d| d.leaves)
@@ -335,7 +345,10 @@ fn relocation_is_not_a_no_op() {
         );
         proved += 1;
     }
-    assert!(proved >= 3, "only {proved} images exercised the known-positive");
+    assert!(
+        proved >= 3,
+        "only {proved} images exercised the known-positive"
+    );
 }
 
 /// ★★ **And the packed image built from tables that really are high up.** The round-trip test
@@ -356,7 +369,12 @@ fn the_packed_image_answers_the_same_over_tables_that_are_high_up() {
         let d = decode_subtree(
             &fmt,
             &mut moved,
-            PtPage { phys: new_root, aperture: Aperture::Vidmem, level: 0, vabase: 0 },
+            PtPage {
+                phys: new_root,
+                aperture: Aperture::Vidmem,
+                level: 0,
+                vabase: 0,
+            },
             BUDGET,
         )
         .expect("decodes");
@@ -549,8 +567,18 @@ fn a_table_at_a_sub_page_offset_survives_the_image() {
     // the absent slot.
     let page = 0x2_efa4_0000u64;
     let visited = [
-        PtPage { phys: page, aperture: Aperture::Vidmem, level: 0, vabase: 0 },
-        PtPage { phys: page + 0x800, aperture: Aperture::Vidmem, level: 4, vabase: 0 },
+        PtPage {
+            phys: page,
+            aperture: Aperture::Vidmem,
+            level: 0,
+            vabase: 0,
+        },
+        PtPage {
+            phys: page + 0x800,
+            aperture: Aperture::Vidmem,
+            level: 4,
+            vabase: 0,
+        },
     ];
     let mut fb = SparseImg {
         pages: std::collections::BTreeMap::from([(page, vec![0u8; 4096])]),

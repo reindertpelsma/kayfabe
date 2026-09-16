@@ -2314,4 +2314,3 @@ mod holding_a_reply_until_the_refresh_lands {
         assert!(!chain.holds_for_refresh(&cmd()));
     }
 }
-

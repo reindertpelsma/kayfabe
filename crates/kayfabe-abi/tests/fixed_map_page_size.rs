@@ -37,7 +37,8 @@ fn every_ring_va_w744_measured_unhonoured_now_asks_for_the_small_page_table() {
         // 4 KiB long, as a ring's own leaf is.
         let flag = nvos46_page_size_flag(va, 0x1000);
         assert_eq!(
-            flag, NVOS46_FLAGS_PAGE_SIZE_4KB,
+            flag,
+            NVOS46_FLAGS_PAGE_SIZE_4KB,
             "★★★ CONSTRAINT 28 — a FIXED map at {va:#018x} must pin the small-page table. \
              `[measured w744]` without it RM answered NV_OK and placed the mapping at \
              {:#018x} instead, which is the `Xid 31 FAULT_PDE` reached through a success.",
@@ -75,7 +76,10 @@ fn a_big_aligned_base_with_a_ragged_length_still_pins_the_small_page_table() {
 fn the_predicate_is_exactly_big_page_alignment_of_both_terms() {
     // ★ NON-VACUITY: the boundary is where it is claimed to be, on both axes, and the
     // function is not simply "always 4KB" (which would pass the first three tests).
-    assert_eq!(nvos46_page_size_flag(NVOS46_BIG_PAGE_BYTES, NVOS46_BIG_PAGE_BYTES), 0);
+    assert_eq!(
+        nvos46_page_size_flag(NVOS46_BIG_PAGE_BYTES, NVOS46_BIG_PAGE_BYTES),
+        0
+    );
     assert_eq!(
         nvos46_page_size_flag(NVOS46_BIG_PAGE_BYTES - 0x1000, NVOS46_BIG_PAGE_BYTES),
         NVOS46_FLAGS_PAGE_SIZE_4KB

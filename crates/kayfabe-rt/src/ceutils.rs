@@ -93,8 +93,7 @@ static PREFLIGHT_PASSES: core::sync::atomic::AtomicU64 = core::sync::atomic::Ato
 static PREFLIGHT_PROBED: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
 static PREFLIGHT_UNARMED: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
 static PREFLIGHT_BLOCKED: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
-static PREFLIGHT_TRUNCATED: core::sync::atomic::AtomicU64 =
-    core::sync::atomic::AtomicU64::new(0);
+static PREFLIGHT_TRUNCATED: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
 
 /// `(passes, probed, unarmed, blocked, truncated)` — the pre-flight's lifetime census.
 ///
@@ -1184,8 +1183,7 @@ fn run_submission_body(
         PREFLIGHT_PASSES.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
         PREFLIGHT_PROBED.fetch_add(pre.probed as u64, core::sync::atomic::Ordering::Relaxed);
         PREFLIGHT_UNARMED.fetch_add(pre.unarmed as u64, core::sync::atomic::Ordering::Relaxed);
-        PREFLIGHT_TRUNCATED
-            .fetch_add(pre.truncated as u64, core::sync::atomic::Ordering::Relaxed);
+        PREFLIGHT_TRUNCATED.fetch_add(pre.truncated as u64, core::sync::atomic::Ordering::Relaxed);
         if let Some(at) = pre.first_missing {
             PREFLIGHT_BLOCKED.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
             // ⊘ `progress` is left at `NONE` by `run_submission_timed`'s own accumulator
@@ -2537,6 +2535,10 @@ mod owner_ce_rule_witness {
             releases: 1,
             ..CeUtilsRun::default()
         };
-        assert!(!run.describe().contains("UNACCOUNTED"), "{}", run.describe());
+        assert!(
+            !run.describe().contains("UNACCOUNTED"),
+            "{}",
+            run.describe()
+        );
     }
 }

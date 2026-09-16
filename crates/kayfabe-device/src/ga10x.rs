@@ -2040,7 +2040,10 @@ mod fb_size_is_a_parameter_tests {
             "must stay below the firmware range"
         );
         assert!(base < fb, "must stay inside the framebuffer at all");
-        assert!(base.is_multiple_of(4096), "a page directory root is page-granular");
+        assert!(
+            base.is_multiple_of(4096),
+            "a page directory root is page-granular"
+        );
     }
 
     /// ★★★★★ **THE TWO REGISTERS THAT WOULD HAVE KEPT THE OLD SIZE — w696h.**
@@ -2091,7 +2094,9 @@ mod fb_size_is_a_parameter_tests {
             gsp_fw_wpr_end_for(MEASURED_RESERVABLE_MB) < fb_length_for(MEASURED_RESERVABLE_MB),
             "the WPR2 top must stay inside the framebuffer it is derived from"
         );
-        assert!(frts_offset_for(MEASURED_RESERVABLE_MB) < gsp_fw_wpr_end_for(MEASURED_RESERVABLE_MB));
+        assert!(
+            frts_offset_for(MEASURED_RESERVABLE_MB) < gsp_fw_wpr_end_for(MEASURED_RESERVABLE_MB)
+        );
     }
 
     /// ★★★★★ **The operator-chosen profile — the whole knob, end to end in Rust.**
@@ -2118,13 +2123,24 @@ mod fb_size_is_a_parameter_tests {
             .find(|r| r.off == USABLE_FB_SIZE_IN_MB_ADDR)
             .expect("NV_USABLE_FB_SIZE_IN_MB must be present")
             .value;
-        assert_eq!(u64::from(advertised), N, "the register must advertise N MiB");
+        assert_eq!(
+            u64::from(advertised),
+            N,
+            "the register must advertise N MiB"
+        );
 
         assert_eq!(p.fb_regions.len(), 2);
         let carve = fb_length_for(N) - FW_CARVE_OUT_BYTES;
         assert_eq!(p.fb_regions[0].base, 0);
-        assert_eq!(p.fb_regions[0].limit, carve - 1, "usable ends at the carve-out");
-        assert_eq!(p.fb_regions[1].base, carve, "reserved starts there — no gap, no overlap");
+        assert_eq!(
+            p.fb_regions[0].limit,
+            carve - 1,
+            "usable ends at the carve-out"
+        );
+        assert_eq!(
+            p.fb_regions[1].base, carve,
+            "reserved starts there — no gap, no overlap"
+        );
         assert_eq!(
             p.fb_regions[1].limit,
             fb_length_for(N) - 1,
@@ -2134,7 +2150,10 @@ mod fb_size_is_a_parameter_tests {
         // ⊘ And the firmware layout must still land inside the region declared reserved, which
         // is the invariant the shipped size gets from `const` assertions and this size cannot.
         assert!(gsp_fw_wpr_end_for(N) <= fb_length_for(N));
-        assert!(gsp_fw_wpr_end_for(N) > carve, "WPR2 must sit in the RESERVED region");
+        assert!(
+            gsp_fw_wpr_end_for(N) > carve,
+            "WPR2 must sit in the RESERVED region"
+        );
         assert!(bar1_pde_base_for(N) >= carve);
         assert!(bar1_pde_base_for(N) < frts_offset_for(N));
     }

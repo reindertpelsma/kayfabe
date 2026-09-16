@@ -428,7 +428,6 @@ fn the_doorbell_reaches_the_same_object_model_the_bridge_declares_into() {
             pdb: PDB,
             // ⊘ The TEST default; the PRODUCTION path must never assume it.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         },
         RmEvent::Alloc {
             client: CLIENT,
@@ -713,7 +712,6 @@ fn a_gr_channel_is_refused_by_route_and_the_engine_object_is_what_moves_it() {
                     pdb: PDB,
                     // ⊘ The TEST default; the PRODUCTION path must never assume it.
                     pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
                 },
                 RmEvent::Alloc {
                     client: CLIENT,
@@ -891,14 +889,16 @@ fn the_publication_worker_uses_an_arm_that_also_pins_guest_ram() {
         .collect::<Vec<_>>()
         .join("\n");
     assert_eq!(
-        code.matches("ctx.vas_publish = VasPublishArm::Publish;").count(),
+        code.matches("ctx.vas_publish = VasPublishArm::Publish;")
+            .count(),
         0,
         "the worker must NOT force `Publish`: it publishes framebuffer leaves and nothing else, \
          and its measures_pin_rate() is false, so it silently disables the only pass that pins \
          guest-RAM operand rows"
     );
     assert_eq!(
-        code.matches("ctx.vas_publish = VasPublishArm::Drain;").count(),
+        code.matches("ctx.vas_publish = VasPublishArm::Drain;")
+            .count(),
         4,
         "all FOUR worker lanes must use an arm that publishes AND pins: rpc-bind, \
          invalidate, CHANNEL BIRTH (w559), and — since w656 — THE UVM EMULATED CHANNEL, the \
@@ -1023,8 +1023,7 @@ fn all_three_synchronization_points_consume_their_barrier() {
     // satisfy the assertion above and change nothing at runtime, which is this session's
     // single most-repeated failure.
     assert!(
-        shim.contains("fn promote_ctx(")
-            && shim.contains("self.0.promote_ctx(p)"),
+        shim.contains("fn promote_ctx(") && shim.contains("self.0.promote_ctx(p)"),
         "the production `SharedObjectModel` must delegate promote_ctx to the `SharedDevice` \
          whose handler does the backing; without that delegation the refresh above is dead code"
     );
@@ -1041,7 +1040,6 @@ fn all_three_synchronization_points_consume_their_barrier() {
         "one uninstalled seam disables ALL THREE entry points together"
     );
 }
-
 
 // =====================================================================================
 // THE OTHER HALF — what the SHIPPING arm does

@@ -770,7 +770,10 @@ fn a_decode_over_published_and_unpublished_space_declares_preserves_and_refuses_
     // A decode restates what the guest's page table says; the fixture has to say the same
     // thing for "unchanged" to be the case under test rather than an accident.
     let (kept_decl, moved_backing) = with_gpu(&mut gpu, |g| {
-        let t = &only_proc(g).vas_by_pdb(GPU, A_PDB).expect("the VAS exists").table;
+        let t = &only_proc(g)
+            .vas_by_pdb(GPU, A_PDB)
+            .expect("the VAS exists")
+            .table;
         let k = t.binding_at(kept).expect("published").2;
         (
             (k.phys(), k.aperture()),
@@ -819,7 +822,10 @@ fn a_decode_over_published_and_unpublished_space_declares_preserves_and_refuses_
     );
 
     with_gpu(&mut gpu, |g| {
-        let t = &only_proc(g).vas_by_pdb(GPU, A_PDB).expect("the VAS exists").table;
+        let t = &only_proc(g)
+            .vas_by_pdb(GPU, A_PDB)
+            .expect("the VAS exists")
+            .table;
         assert!(
             t.binding_at(kept).expect("still there").2.host().is_some(),
             "an unchanged declaration must not strip the publication"
@@ -1266,7 +1272,6 @@ fn pass_fixture_two_vases() -> (Guarded<Gpu>, MockIsolateFactory, SharedRecorder
         // a sysmem-rooted PDB read as vidmem walks the wrong memory and
         // reports success, because a wrong-aperture read returns zeros.
         pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
     });
     for ev in s.events {
         gpu.apply(ev).expect("applies");
@@ -1381,7 +1386,10 @@ fn the_pass_defers_an_unlinked_page_and_binds_it_once_the_link_is_witnessed() {
     );
 
     with_gpu(&mut gpu, |g| {
-        let t = &only_proc(g).vas_by_pdb(GPU, A_PDB).expect("the VAS exists").table;
+        let t = &only_proc(g)
+            .vas_by_pdb(GPU, A_PDB)
+            .expect("the VAS exists")
+            .table;
         assert_eq!(
             t.binding_at(GpuVa(9 << small.shift))
                 .map(|(_, _, b)| b.phys()),
@@ -1685,7 +1693,8 @@ fn the_pass_runs_through_the_shell_in_both_lock_modes_with_the_blocking_phase_un
 
         device.with_proc(pid, |p| {
             assert_eq!(
-                p.vas_by_pdb(GPU, A_PDB).expect("the VAS exists")
+                p.vas_by_pdb(GPU, A_PDB)
+                    .expect("the VAS exists")
                     .table
                     .binding_at(GpuVa(2 << small.shift))
                     .map(|(_, _, b)| (b.phys(), b.host().is_some())),

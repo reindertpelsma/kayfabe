@@ -848,7 +848,8 @@ pub const JOIN_NOT_EXPORTABLE: &str = "the page lies in a joined range whose bac
      memslot cannot be placed over it";
 
 /// [`FbStore::page_backing`] was asked to look only, and the page is not resident.
-pub const PAGE_NOT_RESIDENT: &str = "no page is resident at that frame and the caller asked not to materialise one";
+pub const PAGE_NOT_RESIDENT: &str =
+    "no page is resident at that frame and the caller asked not to materialise one";
 
 /// ★★★★★ **w393 — one exclusively-owned page of a [`FbPageArena`]**, as this pure crate sees
 /// it: two verbs over 4 KiB and a name a memslot can use.
@@ -2167,8 +2168,7 @@ pub trait DeviceFbPort: Send + Sync + core::fmt::Debug {
 }
 
 /// Why a host-side read of the single store is refused, in cut A.
-pub const DEVICE_HOST_READ_UNBUILT: &str =
-    "this framebuffer page IS device-local video memory and the host has no CPU view of it. \
+pub const DEVICE_HOST_READ_UNBUILT: &str = "this framebuffer page IS device-local video memory and the host has no CPU view of it. \
      Serving it from anywhere else would be the two-memories defect the reserved object \
      exists to delete — a value that reads back correctly and is in the wrong memory — so it \
      is refused by name instead. Arming a view here is impossible by construction: \
@@ -2178,8 +2178,7 @@ pub const DEVICE_HOST_READ_UNBUILT: &str =
      the walkers and the CPU CE executor to do it.";
 
 /// Why a host-side write of the single store is refused, in cut A.
-pub const DEVICE_HOST_WRITE_UNBUILT: &str =
-    "this framebuffer page IS device-local video memory and the host has no CPU view of it to \
+pub const DEVICE_HOST_WRITE_UNBUILT: &str = "this framebuffer page IS device-local video memory and the host has no CPU view of it to \
      write through. ⊘ There is deliberately no success-shaped answer: a write that landed \
      somewhere else would be a byte the engines never see, which is the exact failure a \
      single store exists to make impossible. See `DEVICE_HOST_READ_UNBUILT`.";
@@ -2190,8 +2189,7 @@ pub const DEVICE_HOST_WRITE_UNBUILT: &str =
 /// the demand is recorded, and a lock-free caller must drain and retry"*. They have opposite
 /// fixes, and a boot that could not tell them apart would read cut B's transient as cut A's
 /// wall.
-pub const DEVICE_HOST_READ_NOT_ARMED: &str =
-    "no CPU view of this page of the reserved object is armed yet. The demand has been \
+pub const DEVICE_HOST_READ_NOT_ARMED: &str = "no CPU view of this page of the reserved object is armed yet. The demand has been \
      recorded in the store's want set; a LOCK-FREE caller must call `DeviceFbPort::drain` \
      and retry, because arming is an IPC round trip that asserts lock-free and this read ran \
      under the plane lock. No fallback: a value that read back correctly out of host memory \
@@ -2203,15 +2201,13 @@ pub const DEVICE_HOST_READ_NOT_ARMED: &str =
 /// (`host_write_refused=0` against `host_read_refused=20`), so nothing retries a write today.
 /// The demand is still recorded, which is what turns *"writes were never wanted"* from an
 /// assumption into a number (`wanted_by_write=` in the census).
-pub const DEVICE_HOST_WRITE_NOT_ARMED: &str =
-    "no CPU view of this page of the reserved object is armed yet, so this write has NOT \
+pub const DEVICE_HOST_WRITE_NOT_ARMED: &str = "no CPU view of this page of the reserved object is armed yet, so this write has NOT \
      landed anywhere. The demand is recorded; a lock-free caller must drain and retry. There \
      is deliberately no success-shaped answer: a write that landed in host memory would be a \
      byte the engines never see.";
 
 /// Why [`FbStore::device_reset`] cannot be honoured by the single store.
-pub const DEVICE_RESET_UNBUILT: &str =
-    "a device reset must leave the guest's video memory reading as unallocated. Under the \
+pub const DEVICE_RESET_UNBUILT: &str = "a device reset must leave the guest's video memory reading as unallocated. Under the \
      arena that was dropping host pages; under ONE RESERVED OBJECT it is ZEROING GIBIBYTES OF \
      REAL VIDEO MEMORY, and until something does that, the previous driver life's page tables \
      stay readable through PRAMIN across an unload/reload. ⇒ said by name rather than \
@@ -2283,8 +2279,7 @@ pub static DEVICE_FB_READ_REFUSED: core::sync::atomic::AtomicU64 =
 pub static DEVICE_FB_WRITE_REFUSED: core::sync::atomic::AtomicU64 =
     core::sync::atomic::AtomicU64::new(0);
 /// How many pages were named to the memslot path — the half of this store that works.
-pub static DEVICE_FB_NAMED: core::sync::atomic::AtomicU64 =
-    core::sync::atomic::AtomicU64::new(0);
+pub static DEVICE_FB_NAMED: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
 /// Accesses refused because they were outside the advertised framebuffer entirely.
 pub static DEVICE_FB_OUT_OF_RANGE: core::sync::atomic::AtomicU64 =
     core::sync::atomic::AtomicU64::new(0);
@@ -2372,10 +2367,7 @@ impl DeviceFb {
     /// every page is named to the memslot path and every host-side access is refused by name.
     #[must_use]
     pub fn new(fb_len: u64) -> DeviceFb {
-        DeviceFb {
-            fb_len,
-            port: None,
-        }
+        DeviceFb { fb_len, port: None }
     }
 
     /// ★★★★★ **CUT B — the same store with a byte port**: a host-side access of a page whose

@@ -25,7 +25,9 @@ fn device() -> std::sync::Arc<kayfabe_rt::device::SharedDevice> {
     unsafe {
         std::env::set_var(DOORBELL_ASYNC_ENV, "off");
     }
-    Regs::create(0).expect("the shipped chip row realizes").object_model()
+    Regs::create(0)
+        .expect("the shipped chip row realizes")
+        .object_model()
 }
 
 /// ★★★ **A latch must always move the epoch.** This is the direction that cannot be wrong:

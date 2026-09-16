@@ -438,10 +438,30 @@ pub fn kf_format_ver2() -> KfFormat {
     f.pte_ap_map = [AP_VID, AP_PEER, AP_SYS, AP_SYS_NC];
     f.pde_ap_map = [AP_INVALID, AP_VID, AP_SYS, AP_SYS_NC];
     f.addr_sel = [0, 0, 1, 1];
-    f.addr_local = KfField { lo: 8, bits: 25, shift: 12, pad: 0 };
-    f.addr_sys = KfField { lo: 8, bits: 46, shift: 12, pad: 0 };
-    f.big_addr_local = KfField { lo: 4, bits: 29, shift: 8, pad: 0 };
-    f.big_addr_sys = KfField { lo: 4, bits: 50, shift: 8, pad: 0 };
+    f.addr_local = KfField {
+        lo: 8,
+        bits: 25,
+        shift: 12,
+        pad: 0,
+    };
+    f.addr_sys = KfField {
+        lo: 8,
+        bits: 46,
+        shift: 12,
+        pad: 0,
+    };
+    f.big_addr_local = KfField {
+        lo: 4,
+        bits: 29,
+        shift: 8,
+        pad: 0,
+    };
+    f.big_addr_sys = KfField {
+        lo: 4,
+        bits: 50,
+        shift: 8,
+        pad: 0,
+    };
     f.bit_volatile = 3;
     f.bit_privilege = 5;
     f.bit_read_only = 6;
@@ -451,7 +471,12 @@ pub fn kf_format_ver2() -> KfFormat {
     f.pad1 = [0; 3];
     // ★ VER2's KIND is 63:56, shift 0 — read from the `.cu`'s own `kf_format_ver2`, and
     // pinned byte-for-byte by the descriptor differential.
-    f.kind = KfField { lo: 56, bits: 8, shift: 0, pad: 0 };
+    f.kind = KfField {
+        lo: 56,
+        bits: 8,
+        shift: 0,
+        pad: 0,
+    };
     f.ps_log2 = [12, 16, 21, 29];
     // ⊘ PD4 is inactive on VER2 — the slot exists only so VER3 needs no new nesting.
     // ⚠ `entries: 2`, not 1, and it is not a typo: the `.cu` fills every slot through
@@ -459,18 +484,53 @@ pub fn kf_format_ver2() -> KfFormat {
     // and the inactive slot is declared `(0, 0)` ⇒ **2**. It is dead — `active == 0` makes
     // the level a pass-through — but the descriptor is compared BYTE FOR BYTE against the
     // `.cu`'s, so a "tidier" 1 here is a failing differential.
-    f.dir[0] = KfDir { active: 0, va_lo: 0, entry_bytes: 8, leaf_ps: KF_PS_NONE, entries: 2, pad: 0 };
-    f.dir[1] = KfDir { active: 1, va_lo: 47, entry_bytes: 8, leaf_ps: KF_PS_NONE, entries: 4, pad: 0 };
-    f.dir[2] = KfDir { active: 1, va_lo: 38, entry_bytes: 8, leaf_ps: KF_PS_NONE, entries: 512, pad: 0 };
+    f.dir[0] = KfDir {
+        active: 0,
+        va_lo: 0,
+        entry_bytes: 8,
+        leaf_ps: KF_PS_NONE,
+        entries: 2,
+        pad: 0,
+    };
+    f.dir[1] = KfDir {
+        active: 1,
+        va_lo: 47,
+        entry_bytes: 8,
+        leaf_ps: KF_PS_NONE,
+        entries: 4,
+        pad: 0,
+    };
+    f.dir[2] = KfDir {
+        active: 1,
+        va_lo: 38,
+        entry_bytes: 8,
+        leaf_ps: KF_PS_NONE,
+        entries: 512,
+        pad: 0,
+    };
     // ★ PD1 is a leaf level too: a valid entry here is a **512 MiB** page. ⚠ Also transcribed
     // as `KF_PS_NONE` first — the second of two levels whose dual role is easy to miss, and
     // the reason the descriptor is compared byte for byte rather than spot-checked.
-    f.dir[3] = KfDir { active: 1, va_lo: 29, entry_bytes: 8, leaf_ps: PS_512M, entries: 512, pad: 0 };
+    f.dir[3] = KfDir {
+        active: 1,
+        va_lo: 29,
+        entry_bytes: 8,
+        leaf_ps: PS_512M,
+        entries: 512,
+        pad: 0,
+    };
     // ★★ The DUAL level, and the one directory slot whose `leaf_ps` is NOT `KF_PS_NONE`: a
     // valid *non-dual* entry at PD0 on VER2 IS a 2 MiB page, so the level is both a directory
     // and a leaf. ⚠ Transcribed as `KF_PS_NONE` first, which would have made the kernel and
     // this descriptor disagree about whether 2 MiB pages exist at all.
-    f.dir[4] = KfDir { active: 1, va_lo: 21, entry_bytes: 16, leaf_ps: PS_2M, entries: 256, pad: 0 };
+    f.dir[4] = KfDir {
+        active: 1,
+        va_lo: 21,
+        entry_bytes: 16,
+        leaf_ps: PS_2M,
+        entries: 256,
+        pad: 0,
+    };
     f
 }
 

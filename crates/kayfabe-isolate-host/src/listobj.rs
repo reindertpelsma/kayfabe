@@ -328,10 +328,7 @@ pub fn run(rm: &mut HostRmBackend, gpu: u32) -> bool {
     println!(
         "{}  W747 KP grader      = a stale snapshot grades {} · a live alias grades {} · an \
          uninterpretable read grades {} — the grader can reach all three answers",
-        if kp_stale == Verdict::Copy
-            && kp_alias == Verdict::Alias
-            && kp_junk == Verdict::Unknown
-        {
+        if kp_stale == Verdict::Copy && kp_alias == Verdict::Alias && kp_junk == Verdict::Unknown {
             "ok  "
         } else {
             "FAIL"
@@ -347,7 +344,10 @@ pub fn run(rm: &mut HostRmBackend, gpu: u32) -> bool {
     let parent = match rm.alloc_vidmem(PARENT_BYTES) {
         Ok(h) => h,
         Err(e) => {
-            println!("FAIL  W747 parent         = {} ⊘ the premise never existed", show(&e));
+            println!(
+                "FAIL  W747 parent         = {} ⊘ the premise never existed",
+                show(&e)
+            );
             println!("W747_VERDICT=NOTRUN");
             return false;
         }
@@ -416,7 +416,11 @@ pub fn run(rm: &mut HostRmBackend, gpu: u32) -> bool {
     println!(
         "{}  W747 step 4         = slice reads {slice_before:#010x}, expected A {PAT_A:#010x} \
          — ⊘ necessary, NOT sufficient: a copy-at-creation gives exactly this",
-        if slice_before == PAT_A { "ok  " } else { "??  " }
+        if slice_before == PAT_A {
+            "ok  "
+        } else {
+            "??  "
+        }
     );
     let cv = control.and_then(|c| match View::open(rm, c, PAGE) {
         Ok(v) => Some((c, v)),
@@ -587,8 +591,18 @@ pub fn run(rm: &mut HostRmBackend, gpu: u32) -> bool {
         && slice_before == PAT_A;
     println!("W747_VERDICT={}", verdict.as_str());
     println!("W747_REVERSE={}", rev.as_str());
-    println!("W747_CONTROL={}", if control_ok { "HELD" } else { "BROKEN" });
-    println!("W747_KNOWN_POSITIVES={}", if grader_ok && indep_ok { "HELD" } else { "BROKEN" });
+    println!(
+        "W747_CONTROL={}",
+        if control_ok { "HELD" } else { "BROKEN" }
+    );
+    println!(
+        "W747_KNOWN_POSITIVES={}",
+        if grader_ok && indep_ok {
+            "HELD"
+        } else {
+            "BROKEN"
+        }
+    );
     println!("W747_RESULT={}", if pass { "PASS" } else { "FAIL" });
     pass
 }
@@ -694,13 +708,7 @@ fn cross_client(rm: &mut HostRmBackend, gpu: u32, parent: HostHandle, slice: Hos
 /// Three outcomes and the third is the dangerous one: RM refuses the free · the read faults
 /// or is refused · **the slice silently serves stale physical memory**. ★ The third is why
 /// constraint 31 exists, and nothing in our code would notice it.
-fn lifetime(
-    rm: &mut HostRmBackend,
-    parent: HostHandle,
-    pv: View,
-    slice: HostHandle,
-    sv: &View,
-) {
+fn lifetime(rm: &mut HostRmBackend, parent: HostHandle, pv: View, slice: HostHandle, sv: &View) {
     // The parent's CPU view goes first: a free refused because a mapping is outstanding
     // would be a fact about the mapping, not about the slice's claim on the pages.
     let _ = rm.release_device_view(pv.token);
@@ -760,7 +768,10 @@ fn lifetime(
             }
             let _ = rm.free(fresh);
         }
-        Err(e) => println!("⊘     W747 lifetime stale = fresh alloc refused: {}", show(&e)),
+        Err(e) => println!(
+            "⊘     W747 lifetime stale = fresh alloc refused: {}",
+            show(&e)
+        ),
     }
     let _ = rm.free(slice);
 }
@@ -787,7 +798,10 @@ mod tests {
         let all = [PAT_A, PAT_B, PAT_C, PAT_S, PAT_D, 0u32];
         for (i, a) in all.iter().enumerate() {
             for b in &all[i + 1..] {
-                assert_ne!(a, b, "two patterns collide; the discriminator is degenerate");
+                assert_ne!(
+                    a, b,
+                    "two patterns collide; the discriminator is degenerate"
+                );
             }
         }
         assert_ne!(N, M, "the control must name a different page");

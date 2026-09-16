@@ -316,8 +316,7 @@ impl CePreflight {
 }
 
 /// Why a submission was refused before it moved anything.
-pub const PREFLIGHT_NOT_ARMED: &str =
-    "w743 PRE-FLIGHT: this submission needs a CPU view of a page of the reserved object that \
+pub const PREFLIGHT_NOT_ARMED: &str = "w743 PRE-FLIGHT: this submission needs a CPU view of a page of the reserved object that \
      is not armed yet, and the demand for EVERY page it needs has now been recorded in the \
      store's want set. ⊘ Refused BEFORE the first byte moved and before any payload was \
      released, so `CeProgress::may_re_run` is open and the lock-free caller's drain-and-retry \

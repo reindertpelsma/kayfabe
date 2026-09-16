@@ -263,7 +263,6 @@ fn any_a_event() -> impl Strategy<Value = RmEvent> {
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         }),
         (a_client(), a_handle()).prop_map(|(client, handle)| RmEvent::Free { client, handle }),
     ]
@@ -424,7 +423,6 @@ fn b1_projection_collision_is_contained_not_a_device_wedge() {
         // a sysmem-rooted PDB read as vidmem walks the wrong memory and
         // reports success, because a wrong-aperture read returns zeros.
         pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
     })
     .unwrap();
 
@@ -437,7 +435,6 @@ fn b1_projection_collision_is_contained_not_a_device_wedge() {
         // a sysmem-rooted PDB read as vidmem walks the wrong memory and
         // reports success, because a wrong-aperture read returns zeros.
         pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
     });
     assert!(
         matches!(collide, Err(GpuError::Projection(_))),
@@ -505,7 +502,6 @@ fn b1_vchid_collision_is_a_loud_contained_projection_fault() {
         // a sysmem-rooted PDB read as vidmem walks the wrong memory and
         // reports success, because a wrong-aperture read returns zeros.
         pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
     })
     .unwrap();
     gpu.apply(RmEvent::Alloc {
@@ -614,7 +610,6 @@ fn b1_hw_identity_squat_is_contained_and_third_party_safe() {
         // a sysmem-rooted PDB read as vidmem walks the wrong memory and
         // reports success, because a wrong-aperture read returns zeros.
         pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
     });
 
     // The squat is refused (B declared B_PDB first) — loud + contained.
@@ -868,7 +863,6 @@ fn b2_pending_pdb_flood_is_capped_loud() {
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         };
         if let Err(RmGraphError::CapacityExceeded(Capacity::PendingPdbs)) = g.apply(&arch, ev) {
             faulted_at = Some(i);
@@ -933,7 +927,6 @@ fn b2_a_parked_page_directory_rebind_is_accepted_at_the_cap() {
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         },
     )
     .expect("the first parked declaration lands");
@@ -949,7 +942,6 @@ fn b2_a_parked_page_directory_rebind_is_accepted_at_the_cap() {
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         };
         if let Err(RmGraphError::CapacityExceeded(Capacity::PendingPdbs)) = g.apply(&arch, ev) {
             faulted_at = Some(i);
@@ -975,7 +967,6 @@ fn b2_a_parked_page_directory_rebind_is_accepted_at_the_cap() {
                 // a sysmem-rooted PDB read as vidmem walks the wrong memory and
                 // reports success, because a wrong-aperture read returns zeros.
                 pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
             },
         ),
         Ok(()),
@@ -1057,7 +1048,6 @@ fn b2_mapping_flood_is_capped_loud() {
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         },
     )
     .unwrap();
@@ -1292,7 +1282,6 @@ fn b5_channel_naming_non_vaspace_handle_does_not_bind() {
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         },
     )
     .unwrap();
@@ -1558,7 +1547,6 @@ fn b6_gpa_window_exhaustion_is_graceful() {
                 // a sysmem-rooted PDB read as vidmem walks the wrong memory and
                 // reports success, because a wrong-aperture read returns zeros.
                 pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
             },
         ];
         for ev in steps {
@@ -1731,8 +1719,8 @@ fn handles_at(client: HClient, base: u32, gr: u16, ce: u16) -> kayfabe_tests::Pr
 fn a_refused_merge_leaves_the_victim_it_reached_first_bit_identical() {
     let (factory, _rec) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x1000_0000_0000, 0x1_0000_0000);
-    let mut gpu =
-        Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa).expect("device realizes");
+    let mut gpu = Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa)
+        .expect("device realizes");
 
     const C1: HClient = HClient(0x10);
     const C2: HClient = HClient(0x20);
@@ -2006,7 +1994,9 @@ fn a_refused_map_sync_restores_the_binding_it_had_already_installed() {
     let pb = gpu.spine.by_pdb[&(GPU0, PDBB)];
 
     let snap = |gpu: &Gpu, pid, pdb| -> Vec<(u64, u64, kayfabe_mmu::Binding)> {
-        gpu.procs[&pid].vas_by_pdb(GPU0, pdb).expect("the VAS exists")
+        gpu.procs[&pid]
+            .vas_by_pdb(GPU0, pdb)
+            .expect("the VAS exists")
             .table
             .iter()
             .map(|(va, len, b)| (va, len, *b))
@@ -2225,7 +2215,6 @@ fn g9_an_undeclared_device_instance_is_unroutable_not_gpu_zero() {
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         },
     ] {
         gpu.apply(ev)

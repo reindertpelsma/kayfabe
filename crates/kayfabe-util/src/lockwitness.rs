@@ -237,7 +237,9 @@ mod vcpu {
     }
 }
 
-pub use vcpu::{census as vcpu_blocking_census, is_vcpu as on_vcpu_thread, mark as mark_vcpu_thread};
+pub use vcpu::{
+    census as vcpu_blocking_census, is_vcpu as on_vcpu_thread, mark as mark_vcpu_thread,
+};
 
 /// ★ **The R1 assert.** Panics — naming R1 — unless this thread holds zero **ranked**
 /// locks.

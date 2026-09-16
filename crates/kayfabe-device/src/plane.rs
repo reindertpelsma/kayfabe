@@ -146,7 +146,9 @@ use kayfabe_util::lock::{LockRank, RankedMutex};
 use crate::bar2::{BarPdeLog, BarPdes};
 use crate::cpuintr::CpuIntrTree;
 use crate::doorbell::{DoorbellPort, DoorbellRefused, DoorbellReport, RefusingDoorbell};
-use crate::fbwin::{Bar0Window, FbPageArena, FbPageBacking, FbRefused, FbStore, FbWriter, RefusingFb};
+use crate::fbwin::{
+    Bar0Window, FbPageArena, FbPageBacking, FbRefused, FbStore, FbWriter, RefusingFb,
+};
 use crate::gvaspub::{GvasPubLog, GvasPubSnapshot};
 use crate::{ChipError, ChipProfile, FbWindow};
 
@@ -1068,8 +1070,7 @@ pub const NO_MMU_PORT: &str = "the register plane has no page-table format insta
 /// w473 — the subtree decode refused: a malformed table, a guest-built cycle, or a budget
 /// that ran out. ⊘ All three are the same answer to the caller — **the list is not
 /// complete** — and a partial list must never be returned as if it were.
-pub const WINDOW_ENUMERATION_REFUSED: &str =
-    "the BAR page-table enumeration did not complete (unbacked page, malformed entry, or \
+pub const WINDOW_ENUMERATION_REFUSED: &str = "the BAR page-table enumeration did not complete (unbacked page, malformed entry, or \
      exhausted budget); a PARTIAL list is refused because it reads as a shorter mapping";
 
 pub const BAR2_UNROOTED: &str = "the guest has not published a root page-directory entry for this aperture \
@@ -1622,8 +1623,7 @@ pub enum FbTrapPolicy {
 /// The sentence a refused trap carries. ⊘ One `&'static str`, so the census can count
 /// occurrences of exactly this refusal and not of translation faults that happen to share a
 /// variant.
-pub const FB_TRAP_REFUSED: &str =
-    "the BAR1/BAR2 trap path is ARMED TO REFUSE (KAYFABE_FB_TRAP=refuse): this access was not      covered by publication, and serving it here is the backstop that makes premap-completeness      a soft property. If you are reading this in a boot log, publication is INCOMPLETE and the      demand-fill mirror may not be deleted.";
+pub const FB_TRAP_REFUSED: &str = "the BAR1/BAR2 trap path is ARMED TO REFUSE (KAYFABE_FB_TRAP=refuse): this access was not      covered by publication, and serving it here is the backstop that makes premap-completeness      a soft property. If you are reading this in a boot log, publication is INCOMPLETE and the      demand-fill mirror may not be deleted.";
 
 /// particular address (counted as a translation fault, with the address).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1718,8 +1718,10 @@ pub fn gsp_head_census() -> String {
     } else {
         "★ WORKING — the queue-head write posts with no rank-0 acquisition and the worker          folds it in under the lock it was taking anyway (constraint 6)"
     };
-    format!("GSP-HEAD posted={posted} folded={folded} in_flight={} ⇒ {verdict}",
-        posted.saturating_sub(folded))
+    format!(
+        "GSP-HEAD posted={posted} folded={folded} in_flight={} ⇒ {verdict}",
+        posted.saturating_sub(folded)
+    )
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════════════
@@ -2136,7 +2138,6 @@ pub fn fb_io_census_line(bytes_per_sec: u64) -> String {
     out
 }
 
-
 /// How many times [`RegPlane::drain_mirror_revalidation`] has been called, by anyone.
 ///
 /// ⊘ Exists because the drain's CALLER is the thing that regressed, not its body: it had one
@@ -2530,7 +2531,9 @@ impl RegPlane {
     #[must_use]
     pub fn model_would_serve_for_test(&self, bar: u8, off: u64) -> bool {
         let s = self.state.lock();
-        s.fsm.mmio_read_with(self.model.as_ref(), bar, off).is_some()
+        s.fsm
+            .mmio_read_with(self.model.as_ref(), bar, off)
+            .is_some()
     }
 
     /// The register aperture's length, from the chip row. ⊘ Exposed so a caller placing a
@@ -3181,7 +3184,11 @@ impl RegPlane {
     /// What a trapped BAR1/BAR2 access will do.
     #[must_use]
     pub fn fb_trap_policy(&self) -> FbTrapPolicy {
-        if self.fb_trap_policy.load(std::sync::atomic::Ordering::Relaxed) == 0 {
+        if self
+            .fb_trap_policy
+            .load(std::sync::atomic::Ordering::Relaxed)
+            == 0
+        {
             FbTrapPolicy::Serve
         } else {
             FbTrapPolicy::RefuseByName
@@ -3193,7 +3200,8 @@ impl RegPlane {
     /// **not** licensed.
     #[must_use]
     pub fn fb_trap_refusals(&self) -> u64 {
-        self.fb_trap_refused.load(std::sync::atomic::Ordering::Relaxed)
+        self.fb_trap_refused
+            .load(std::sync::atomic::Ordering::Relaxed)
     }
 
     pub fn set_fb_mirror(&self, port: std::sync::Arc<dyn FbMirrorPort>) {
@@ -3490,8 +3498,7 @@ impl RegPlane {
     #[must_use]
     pub fn fb_join_extent_at(&self, phys: u64) -> Option<u64> {
         let s = self.mem.lock();
-        s.fb
-            .joined_ranges()
+        s.fb.joined_ranges()
             .iter()
             .find(|(b, _)| *b == phys)
             .map(|(_, l)| *l)
@@ -3542,8 +3549,7 @@ impl RegPlane {
         let m = self.fb_mirror()?;
         let len = {
             let s = self.mem.lock();
-            s.fb
-                .joined_ranges()
+            s.fb.joined_ranges()
                 .iter()
                 .find(|(b, _)| *b == phys)
                 .map(|(_, l)| *l)
@@ -3898,7 +3904,12 @@ impl RegPlane {
     /// aperture.
     pub fn publish_gsp_registers(&self) {
         const BAR: u8 = kayfabe_abi::pcibars::bus_bar::REGS as u8;
-        if self.read_shadow.read().unwrap_or_else(|e| e.into_inner()).is_none() {
+        if self
+            .read_shadow
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .is_none()
+        {
             return;
         }
         for &off in self.gsp_register_offsets() {
@@ -3930,7 +3941,12 @@ impl RegPlane {
     /// ★ Takes the guard, so it CANNOT re-lock and cannot be called from outside a hold. That
     /// is the property that makes "call it at every mutation" checkable rather than remembered.
     fn publish_cpu_intr(&self, tree: &crate::cpuintr::CpuIntrTree) {
-        if self.read_shadow.read().unwrap_or_else(|e| e.into_inner()).is_none() {
+        if self
+            .read_shadow
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .is_none()
+        {
             return;
         }
         for (off, reg) in crate::cpuintr::shadowable_regs() {
@@ -5634,7 +5650,8 @@ impl RegPlane {
                 // two counters are the only thing that can say whether that is the cut
                 // failing or the traffic simply not living where the dead pages are.
                 if bar == kayfabe_abi::pcibars::bus_bar::REGS as u8 && self.dead_page(off) {
-                    self.c.unclaimed_reads_in_dead_pages
+                    self.c
+                        .unclaimed_reads_in_dead_pages
                         .fetch_add(1, Ordering::Relaxed);
                 }
                 self.c.unclaimed_reads.fetch_add(1, Ordering::Relaxed)

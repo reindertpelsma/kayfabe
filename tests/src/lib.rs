@@ -1045,7 +1045,9 @@ pub fn bind_ring_in(vas: &mut kayfabe_core::gpu::Vas, va: GpuVa, gpa: u64, len: 
     // ⊘ w555 — a fixture binds into a space it has just declared, so the base is present.
     // `expect` rather than a default: a rootless space here would mean the fixture never
     // declared one, and binding under `Pdb(0)` would silently reintroduce the merge.
-    let pdb = vas.pdb.expect("the fixture's VAS declares a page-directory base");
+    let pdb = vas
+        .pdb
+        .expect("the fixture's VAS declares a page-directory base");
     if let Some((start, l, b)) = vas.table.binding_at(va)
         && start == va.0
         && l == len
@@ -1319,7 +1321,9 @@ fn ring_binding_in(
     // ⊘ w555 — a fixture binds into a space it has just declared, so the base is present.
     // `expect` rather than a default: a rootless space here would mean the fixture never
     // declared one, and binding under `Pdb(0)` would silently reintroduce the merge.
-    let pdb = vas.pdb.expect("the fixture's VAS declares a page-directory base");
+    let pdb = vas
+        .pdb
+        .expect("the fixture's VAS declares a page-directory base");
     vas.table
         .bind(
             pdb,

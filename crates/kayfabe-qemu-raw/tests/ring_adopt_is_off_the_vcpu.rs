@@ -52,7 +52,9 @@ fn the_worker_adopts_rings_before_it_drains_births() {
     // ⊘ Bounded to the worker function by the NEXT top-level `fn` after it, so a matching
     // string somewhere else in a 20 000-line file cannot satisfy this test.
     let rest = &SHIM[loop_start + 1..];
-    let loop_end = rest.find("\nfn ").map_or(rest.len(), |i| loop_start + 1 + i);
+    let loop_end = rest
+        .find("\nfn ")
+        .map_or(rest.len(), |i| loop_start + 1 + i);
     let body = &SHIM[loop_start..loop_end];
 
     let adopt = body

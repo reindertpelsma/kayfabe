@@ -1391,7 +1391,6 @@ pub fn project(
         }
     }
 
-
     // ★ One summary line per projection when any channel was dropped. ⊘ Printed even though the
     // per-drop lines are capped at 8: the CAP must never hide the TOTAL, which is the mistake
     // `503 REFUSED by name; (16 logged)` made for a whole session.

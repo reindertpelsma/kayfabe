@@ -420,7 +420,9 @@ fn a_guests_ring_moves_bytes_on_the_host_gpu_and_the_guest_reads_them_back() {
     // ARM 2 — the same join, over operands a CPU can see
     // =================================================================================
     let host_vas = dev
-        .with_proc(pid, |p| p.vas_by_pdb(GPU, PDB).expect("the VAS exists").host_vas)
+        .with_proc(pid, |p| {
+            p.vas_by_pdb(GPU, PDB).expect("the VAS exists").host_vas
+        })
         .expect("live")
         .expect("arm 1's publish materialized the channel's host VAS");
     let p_src = probe

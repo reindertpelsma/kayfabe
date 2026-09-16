@@ -1059,7 +1059,6 @@ fn an_emulated_channels_first_doorbell_still_births_it_over_our_ring() {
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         },
         RmEvent::Alloc {
             client: K_CLIENT,

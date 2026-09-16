@@ -541,7 +541,10 @@ pub mod stall_alarm {
                 return None;
             }
             let spec = libc::itimerspec {
-                it_interval: libc::timespec { tv_sec: 0, tv_nsec: 0 },
+                it_interval: libc::timespec {
+                    tv_sec: 0,
+                    tv_nsec: 0,
+                },
                 it_value: libc::timespec {
                     tv_sec: us / 1_000_000,
                     tv_nsec: (us % 1_000_000) * 1_000,
@@ -645,7 +648,10 @@ pub mod stall_alarm {
     /// # Errors
     /// If `clock_gettime` refuses.
     pub fn thread_cpu_nanos() -> Result<u64, RawError> {
-        let mut ts = libc::timespec { tv_sec: 0, tv_nsec: 0 };
+        let mut ts = libc::timespec {
+            tv_sec: 0,
+            tv_nsec: 0,
+        };
         // SAFETY: `ts` is a writable out-parameter of the right type, living on this stack.
         let rc = unsafe { libc::clock_gettime(libc::CLOCK_THREAD_CPUTIME_ID, &raw mut ts) };
         if rc != 0 {

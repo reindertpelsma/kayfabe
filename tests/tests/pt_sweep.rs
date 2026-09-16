@@ -609,10 +609,7 @@ fn the_guest_leaf_census_answers_present_and_absent_from_the_same_swept_tree() {
     let small = fmt.level_shift(small_leaf_level()).expect("small");
     let mapped = GpuVa(9 * (1u64 << small.shift));
     let (hit, miss, runs) = with_gpu(&mut gpu, |g| {
-        let r = &only_proc(g)
-            .vas_by_pdb(GPU, A_PDB)
-            .expect("the vas")
-            .reach;
+        let r = &only_proc(g).vas_by_pdb(GPU, A_PDB).expect("the vas").reach;
         (
             r.leaf_covering(mapped),
             r.leaf_covering(GpuVa(0xDEAD_0000_0000)),

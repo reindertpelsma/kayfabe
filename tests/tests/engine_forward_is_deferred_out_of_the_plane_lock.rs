@@ -65,8 +65,8 @@ const PARAMS: &[u8] = &[0xDE, 0xAD, 0xBE, 0xEF, 0x01, 0x02, 0x03, 0x04];
 fn armed_device() -> (SharedDevice, SharedRecorder) {
     let (factory, recorder) = MockIsolateFactory::new();
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
-    let gpu =
-        Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa).expect("the device realizes");
+    let gpu = Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa)
+        .expect("the device realizes");
     let mut s = Scenario::new();
     s.compute_process(CLIENT, PDB, identical_handles(GR_VCHID.0, CE_VCHID.0));
 

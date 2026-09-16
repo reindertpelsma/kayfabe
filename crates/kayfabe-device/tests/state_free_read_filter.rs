@@ -19,8 +19,8 @@
 //! because a hand-picked list tests the offsets I already thought of — and the registers this
 //! would break are by definition the ones nobody listed.
 
-use kayfabe_device::{NanoClock, SteppingClock, abi};
 use kayfabe_device::plane::RegPlane;
+use kayfabe_device::{NanoClock, SteppingClock, abi};
 
 fn plane() -> RegPlane {
     RegPlane::new(

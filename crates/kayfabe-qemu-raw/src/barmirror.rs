@@ -881,10 +881,8 @@ impl BarMirror {
         // ★ w578 — sized to THIS chip's framebuffer, because since w569 a page's file offset
         // is its framebuffer ADDRESS. A sparse memfd makes the extent free; residency is still
         // bounded by the store's own ceiling, which is where that limit belongs.
-        let arena = match SharedPageArena::create_for(
-            plane.chip().fb_length,
-            HostPageSize::query(),
-        ) {
+        let arena = match SharedPageArena::create_for(plane.chip().fb_length, HostPageSize::query())
+        {
             Ok(a) => a,
             Err(e) => {
                 eprintln!(
@@ -1134,7 +1132,6 @@ impl BarMirror {
         self.fill(w, off)
     }
 
-
     /// ★★★★★ **w472 — the worker's half.** Runs every queued fill. ⊘ Never call from a vCPU.
     pub fn drain_fills(&self) {
         loop {
@@ -1214,7 +1211,8 @@ impl BarMirror {
             // isolate, and it declines by name if this thread is a vCPU.
             || self.plane.arm_fb_demand().progressed(),
         );
-        self.arm_retries.fetch_add(u64::from(used), Ordering::Relaxed);
+        self.arm_retries
+            .fetch_add(u64::from(used), Ordering::Relaxed);
         if used > 0 {
             if out.is_ok() {
                 self.arm_retried_ok.fetch_add(1, Ordering::Relaxed);
@@ -1234,7 +1232,12 @@ impl BarMirror {
         };
         let page_off = off & !(PAGE - 1);
         if page_off >= arm.len {
-            self.refuse(w, off, R_OUT_OF_BAR, "the offset is past the BAR's own length");
+            self.refuse(
+                w,
+                off,
+                R_OUT_OF_BAR,
+                "the offset is past the BAR's own length",
+            );
             return;
         }
         let gpa = arm.base + page_off;
@@ -1282,7 +1285,12 @@ impl BarMirror {
         let res = match self.resolve_arming(w, page_off) {
             Ok(r) => r,
             Err(kayfabe_device::WindowRefusal::NoAddressModel) => {
-                self.refuse(w, off, R_NO_ADDRESS_MODEL, "the window has no address model");
+                self.refuse(
+                    w,
+                    off,
+                    R_NO_ADDRESS_MODEL,
+                    "the window has no address model",
+                );
                 return;
             }
             Err(kayfabe_device::WindowRefusal::Translated { why, .. }) => {
@@ -1496,11 +1504,7 @@ impl BarMirror {
             // ⊘ Through `retire`, not a bare `remove_window`: a device page's view must be
             // parked and released only once its mapping is actually gone, and a second
             // spelling of that sequence is a second chance to get it wrong.
-            let _ = self.retire(vec![Retired {
-                gpa,
-                region,
-                view,
-            }]);
+            let _ = self.retire(vec![Retired { gpa, region, view }]);
             self.refuse(
                 w,
                 off,
@@ -1524,9 +1528,7 @@ impl BarMirror {
         // Premap installs are counted by `premap_pages`, which already exists and is honest.
         let n = match origin {
             FillOrigin::Trap => self.census.fills[wi].fetch_add(1, Ordering::Relaxed) + 1,
-            FillOrigin::Premap => {
-                self.census.premap_fills[wi].fetch_add(1, Ordering::Relaxed) + 1
-            }
+            FillOrigin::Premap => self.census.premap_fills[wi].fetch_add(1, Ordering::Relaxed) + 1,
         };
         if n % CENSUS_EVERY_FILLS == 0 {
             self.report("RUNNING");
@@ -1623,8 +1625,9 @@ impl BarMirror {
         }
         let ready: Vec<u64> = {
             let mut p = self.parked.lock().unwrap_or_else(|e| e.into_inner());
-            let (ready, keep): (Vec<_>, Vec<_>) =
-                std::mem::take(&mut *p).into_iter().partition(|(r, _)| freed.contains(r));
+            let (ready, keep): (Vec<_>, Vec<_>) = std::mem::take(&mut *p)
+                .into_iter()
+                .partition(|(r, _)| freed.contains(r));
             *p = keep;
             ready.into_iter().map(|(_, v)| v).collect()
         };
@@ -1724,8 +1727,7 @@ impl BarMirror {
         self.census
             .reval_removed
             .fetch_add(removed, Ordering::Relaxed);
-        if removed > 0 && self.census.reval_printed.fetch_add(1, Ordering::Relaxed) < REVAL_LIVE
-        {
+        if removed > 0 && self.census.reval_printed.fetch_add(1, Ordering::Relaxed) < REVAL_LIVE {
             eprintln!(
                 "kayfabe: BAR-MIRROR REVALIDATE #{runs} [{why}]: kept={kept} removed={removed} \
                  — the guest declared its BAR page tables live and {removed} slot(s) named a \
@@ -1819,9 +1821,10 @@ impl BarMirror {
                 );
                 return;
             }
-            let (Some((span_off, span_len)), Some(p)) =
-                (self.plane.pramin_span(), self.machine.bar_placement(BarId::Bar0))
-            else {
+            let (Some((span_off, span_len)), Some(p)) = (
+                self.plane.pramin_span(),
+                self.machine.bar_placement(BarId::Bar0),
+            ) else {
                 return;
             };
             match self.install_pramin_window(p.base + span_off, span_len, base) {
@@ -2075,7 +2078,10 @@ impl BarMirror {
     fn drain_inplace_releases(&self, port: &crate::deviceview::DeviceViewPort) {
         let landed = self.repoint_landed.load(Ordering::Acquire);
         let ready: Vec<u64> = {
-            let mut p = self.parked_inplace.lock().unwrap_or_else(|e| e.into_inner());
+            let mut p = self
+                .parked_inplace
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
             if p.is_empty() {
                 return;
             }
@@ -2163,7 +2169,10 @@ impl BarMirror {
         if m.is_empty() {
             return "shape=none (never placed)".to_string();
         }
-        let mut d: Vec<u64> = m.windows(2).map(|w| w[1].0.saturating_sub(w[0].0)).collect();
+        let mut d: Vec<u64> = m
+            .windows(2)
+            .map(|w| w[1].0.saturating_sub(w[0].0))
+            .collect();
         d.push(total.saturating_sub(m.last().map_or(0, |x| x.0)));
         let zero = d.iter().filter(|n| **n == 0).count();
         let max = d.iter().copied().max().unwrap_or(0);
@@ -2304,7 +2313,8 @@ impl BarMirror {
             },
             || self.plane.arm_fb_demand().progressed(),
         );
-        self.arm_retries.fetch_add(u64::from(attempt), Ordering::Relaxed);
+        self.arm_retries
+            .fetch_add(u64::from(attempt), Ordering::Relaxed);
         if enumerated.as_ref().is_ok_and(|e| e.faults > 0) {
             self.premap_pt_faults.fetch_add(1, Ordering::Relaxed);
         }
@@ -2333,7 +2343,11 @@ impl BarMirror {
                     eprintln!(
                         "kayfabe: PREMAP ⊘ {} enumeration REFUSED [{why}] — that aperture stays \
                          on demand-fill. First occurrence only; the total is `premap[refused=]`.",
-                        if win == FbWindow::InstanceWindow { "bar2" } else { "bar1" }
+                        if win == FbWindow::InstanceWindow {
+                            "bar2"
+                        } else {
+                            "bar1"
+                        }
                     );
                 }
                 return;
@@ -2408,11 +2422,16 @@ impl BarMirror {
                      demand-fill. ⊘ This is not `the guest mapped nothing`. First occurrence \
                      only; the total is `premap[pt_faults=]`, and `FB-DEMAND` says whether \
                      arming was declined, refused or never drained.",
-                    if win == FbWindow::InstanceWindow { "bar2" } else { "bar1" }
+                    if win == FbWindow::InstanceWindow {
+                        "bar2"
+                    } else {
+                        "bar1"
+                    }
                 );
             }
         }
-        self.premap_biggest_leaf.fetch_max(biggest, Ordering::Relaxed);
+        self.premap_biggest_leaf
+            .fetch_max(biggest, Ordering::Relaxed);
         self.premap_pages.fetch_add(asked, Ordering::Relaxed);
         self.premap_skipped.fetch_add(skipped, Ordering::Relaxed);
         self.premap_runs.fetch_add(1, Ordering::Relaxed);
@@ -2523,7 +2542,11 @@ impl BarMirror {
         // worker exists to drain the queue, and deferring there would leave every stale slot
         // live forever. A configuration is not an experiment.
         if !self.defer_reval {
-            self.revalidate(if why == 1 { "mmu-invalidate" } else { "bar-pde-update" });
+            self.revalidate(if why == 1 {
+                "mmu-invalidate"
+            } else {
+                "bar-pde-update"
+            });
             return;
         }
         self.reval_why.fetch_or(why, Ordering::Relaxed);
@@ -2588,11 +2611,7 @@ impl BarMirror {
         // holding"* are bounded by completely different things — §w724c's two terms — and a
         // reader who saw only the first would not know which one bit.
         {
-            let parked = self
-                .parked
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .len();
+            let parked = self.parked.lock().unwrap_or_else(|e| e.into_inner()).len();
             match self.device_port.as_ref() {
                 Some(port) => eprintln!(
                     "kayfabe: FB-STORE-DEVICE AT {at}: {} parked_releases={parked} ⇒ {}",
@@ -2653,7 +2672,8 @@ impl BarMirror {
             };
             let shape = self.pramin_shape(total);
             let split = if pre == u64::MAX {
-                "\u{2298} the slot was never installed, so ALL of it is pre-install by definition".to_string()
+                "\u{2298} the slot was never installed, so ALL of it is pre-install by definition"
+                    .to_string()
             } else {
                 format!(
                     "before_slot={pre} after_slot={} => {}",
@@ -2672,7 +2692,10 @@ impl BarMirror {
             let mean = if moves == 0 {
                 "n/a (no move)".to_string()
             } else {
-                format!("{}", self.pramin_move_ns_total.load(Ordering::Relaxed) / moves)
+                format!(
+                    "{}",
+                    self.pramin_move_ns_total.load(Ordering::Relaxed) / moves
+                )
             };
             eprintln!(
                 "kayfabe: PRAMIN-SLOT AT {at}: moves={moves} skipped={} showing={shown} window_accesses={total} {split}{placement} {shape} move_ns[worst={worst} mean={mean}] \u{2605} THE REPOINT IS A BLOCKING DOOR ON THE vCPU (goal 3) AND PART OF A WRITE TRAP (goal 6): `worst` is what both are actually worth, and it was UNMEASURED before w652 - absent from SLOW-SITES only proves it is under 1ms. \u{2298} moves+skipped below the guest's latch-write count means a re-point was REFUSED and the guest read the wrong framebuffer.",
@@ -2864,7 +2887,6 @@ impl FbMirrorPort for BarMirror {
         BarMirror::drain_fills(self);
     }
 
-
     fn quiesce(&self, phys: u64, len: u64) {
         let gone = {
             let mut t = self.table.lock().unwrap_or_else(|e| e.into_inner());
@@ -2904,7 +2926,9 @@ impl FbMirrorPort for BarMirror {
         let count = gone.len();
         let n = self.retire(gone);
         self.census.retire_all_calls.fetch_add(1, Ordering::Relaxed);
-        self.census.retire_all_removed.fetch_add(n, Ordering::Relaxed);
+        self.census
+            .retire_all_removed
+            .fetch_add(n, Ordering::Relaxed);
         eprintln!(
             "kayfabe: BAR-MIRROR RETIRE-ALL [{why}]: {n} of {count} slot(s) removed — every \
              BAR page traps again until its next touch"
@@ -2986,15 +3010,16 @@ mod arena_unit_tests {
 
         // The untrapped write: straight into the file at the framebuffer address.
         const ADDR: u64 = 777 * FB_PAGE;
-        let mut page = arena.alloc_at(ADDR).expect("the arena places it by address");
+        let mut page = arena
+            .alloc_at(ADDR)
+            .expect("the arena places it by address");
         page.write_from(0x40, &[0xC5; 16]).expect("file write");
         drop(page);
 
         let mut buf = [0u8; 16];
         fb.read(ADDR + 0x40, &mut buf);
         assert_eq!(
-            buf,
-            [0xC5; 16],
+            buf, [0xC5; 16],
             "the store answered a frame it has no page for from the wrong memory. With an arena \
              installed every frame inside the framebuffer is implicitly resident IN THE FILE — \
              a memory slot lets the guest write it untrapped, so zeros here are an invention."
@@ -3028,12 +3053,12 @@ mod arena_unit_tests {
         let mut far = [0u8; 32];
         fb.read(ADDR + 0x800, &mut far).expect("read the far half");
         assert_eq!(
-            far,
-            [0x77; 32],
+            far, [0x77; 32],
             "the trapped write erased 4 KiB of guest memory it was not addressed to"
         );
         let mut near = [0u8; 4];
-        fb.read(ADDR + 0x10, &mut near).expect("read the written half");
+        fb.read(ADDR + 0x10, &mut near)
+            .expect("read the written half");
         assert_eq!(near, [0x11; 4], "the trapped write itself did not land");
     }
 
@@ -3064,8 +3089,7 @@ mod arena_unit_tests {
         let mut leaked = [0u8; 64];
         page.read_into(0, &mut leaked).expect("file read");
         assert_eq!(
-            leaked,
-            [0u8; 64],
+            leaked, [0u8; 64],
             "the previous device life's framebuffer bytes are still in the file, readable by \
              the next guest through the same memory slot"
         );
@@ -3119,7 +3143,8 @@ mod in_place_repoint_gates {
         // The other two refusals, so the arm above is not the only one anybody checks.
         for (armed, what) in [
             (
-                Err(ViewRefusal::NoDescriptor { token: 7 }) as Result<Result<((), ViewId), String>, _>,
+                Err(ViewRefusal::NoDescriptor { token: 7 })
+                    as Result<Result<((), ViewId), String>, _>,
                 "a node that did not cross the isolate boundary",
             ),
             (

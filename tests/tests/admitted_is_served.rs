@@ -1005,8 +1005,21 @@ fn every_committed_boot_tag_has_its_qemu_log() {
     // ⚠ **Adding a tag here is not how you satisfy this gate.** A boot you ran is a boot whose
     // QEMU log you can still commit; this list is for boots whose evidence is physically gone.
     const NO_LOG_EXISTS_ANY_MORE: &[&str] = &[
-        "w297cup3", "w375a", "w375b", "w375c", "w375cup3", "w376llm", "w376llmb", "w376llmc",
-        "w376llmd", "w377race", "w386a_guest", "w386llm", "w386llm2", "w386llm7", "w386llm8",
+        "w297cup3",
+        "w375a",
+        "w375b",
+        "w375c",
+        "w375cup3",
+        "w376llm",
+        "w376llmb",
+        "w376llmc",
+        "w376llmd",
+        "w377race",
+        "w386a_guest",
+        "w386llm",
+        "w386llm2",
+        "w386llm7",
+        "w386llm8",
         "w387prof",
     ];
     let blind: Vec<String> = tags

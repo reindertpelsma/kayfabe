@@ -500,7 +500,9 @@ fn one_isolate_accepts_two_verbs_and_rm_s_client_lock_serialises_them() {
     .expect("notify descriptor");
 
     let w0 = a.checkout().expect("slot 0");
-    let w1 = a.checkout().expect("slot 1 — a second worker on the SAME isolate");
+    let w1 = a
+        .checkout()
+        .expect("slot 1 — a second worker on the SAME isolate");
     assert_ne!(
         w0.id(),
         w1.id(),
@@ -517,12 +519,14 @@ fn one_isolate_accepts_two_verbs_and_rm_s_client_lock_serialises_them() {
 
     let mid = r.stats();
     assert_eq!(
-        mid.lanes_spawned, 2,
+        mid.lanes_spawned,
+        2,
         "PerWorker must give one lane per pool slot, not one per isolate — {}",
         r.census()
     );
     assert_eq!(
-        mid.in_flight, 2,
+        mid.in_flight,
+        2,
         "both verbs are open on ONE isolate: one parked in the host call, one inside the child          waiting on RM's client lock. The submitting thread is blocked in neither — with          `Worker::execute` it could not have submitted the second at all — {}",
         r.census()
     );

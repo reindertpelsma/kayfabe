@@ -194,8 +194,8 @@ fn guest_with_gpfifo_binding(bind_gpfifo: bool) -> (Gpu, MockVmm, SharedRecorder
     // `memory-backend-memfd,share=on` boot has. Without the door the pin refuses by name.
     let factory = factory.with_guest_ram(kayfabe_tests::GUEST_RAM_BYTES);
     let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
-    let mut gpu =
-        Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa).expect("the device realizes");
+    let mut gpu = Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa)
+        .expect("the device realizes");
 
     let root = HObject(0xC0B_0000);
     let dev = HObject(0xC0B_0001);
@@ -240,7 +240,6 @@ fn guest_with_gpfifo_binding(bind_gpfifo: bool) -> (Gpu, MockVmm, SharedRecorder
         // a sysmem-rooted PDB read as vidmem walks the wrong memory and
         // reports success, because a wrong-aperture read returns zeros.
         pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
     });
     s.push(RmEvent::Alloc {
         client: CLIENT,

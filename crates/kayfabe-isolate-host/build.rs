@@ -200,7 +200,13 @@ fn main() {
     if std::env::var_os(CUDA_FEATURE).is_some() {
         let cuda_triple = format!("{arch}-unknown-linux-gnu");
         let cuda_stage = out_dir.join("isolate-cuda-stage");
-        let bytes = build_isolate_for(&root, &cargo, &cuda_triple, &cuda_stage, &["cuda-scratchpad"]);
+        let bytes = build_isolate_for(
+            &root,
+            &cargo,
+            &cuda_triple,
+            &cuda_stage,
+            &["cuda-scratchpad"],
+        );
         // ⊘⊘ **THE MIRROR ASSERTION.** `the_embedded_image_is_a_static_elf` asserts the
         // ordinary image has NO `PT_INTERP`. This one must HAVE one, and the check is here
         // rather than only in a test because a statically-linked second image would `dlopen`
@@ -301,8 +307,9 @@ fn build_isolate_for(
              rustup target add {triple}"
     );
     let built = stage.join(triple).join("release").join("kayfabe-isolate");
-    let bytes = std::fs::read(&built)
-        .unwrap_or_else(|e| panic!("the nested build reported success but {built:?} is unreadable: {e}"));
+    let bytes = std::fs::read(&built).unwrap_or_else(|e| {
+        panic!("the nested build reported success but {built:?} is unreadable: {e}")
+    });
     assert!(
         bytes.starts_with(b"\x7fELF"),
         "{built:?} is not an ELF image ({} bytes)",

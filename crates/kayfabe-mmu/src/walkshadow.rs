@@ -319,7 +319,13 @@ pub const KEPT: usize = 8;
 
 impl ShadowCensus {
     /// Fold one refresh's comparison in.
-    pub fn note(&mut self, host: &[Run], kernel: &[Run], host_unclassed: usize, d: &[Disagreement]) {
+    pub fn note(
+        &mut self,
+        host: &[Run],
+        kernel: &[Run],
+        host_unclassed: usize,
+        d: &[Disagreement],
+    ) {
         self.compared += 1;
         self.host_runs += host.len() as u64;
         self.kernel_runs += kernel.len() as u64;
@@ -690,7 +696,7 @@ pub fn build_image(
             }
             match level_of.get(&p.phys) {
                 Some(l) if *l != p.level => {
-                    return Err(ShadowRefusal::AmbiguousLevel { phys: p.phys })
+                    return Err(ShadowRefusal::AmbiguousLevel { phys: p.phys });
                 }
                 _ => {
                     level_of.insert(p.phys, p.level);
@@ -773,9 +779,7 @@ pub fn build_image(
                 kayfabe_arch::Relocated::Moved(v) => {
                     bytes[off..off + es].copy_from_slice(&v.to_le_bytes()[..es]);
                 }
-                kayfabe_arch::Relocated::Refused(why) => {
-                    return Err(ShadowRefusal::Relocate(why))
-                }
+                kayfabe_arch::Relocated::Refused(why) => return Err(ShadowRefusal::Relocate(why)),
             }
         }
     }
@@ -973,7 +977,8 @@ pub fn substitute(
     // ⊘ **TOTALITY, BOTH WAYS.** `placed` is keyed by `(class, va)` so a leaf the host found
     // in two pages — a shape collision — counts its bytes once, which is what the kernel's
     // coalesced runs count.
-    let mut placed: std::collections::BTreeSet<(PageClass, u64)> = std::collections::BTreeSet::new();
+    let mut placed: std::collections::BTreeSet<(PageClass, u64)> =
+        std::collections::BTreeSet::new();
     let rewrite = |l: &DecodedLeaf| -> Result<DecodedLeaf, SwapRefusal> {
         let Some(class) = class_of(l.size.0) else {
             // Unreachable after the `host_unclassed` guard, and refused rather than passed

@@ -1198,7 +1198,10 @@ fn fabricated_vram_in_a_userspace_va_becomes_representable_by_being_backed() {
     }
 
     let before = {
-        let t = &gpu.procs[&pid].vas_by_pdb(GPU, A_PDB).expect("the VAS exists").table;
+        let t = &gpu.procs[&pid]
+            .vas_by_pdb(GPU, A_PDB)
+            .expect("the VAS exists")
+            .table;
         pc(Some(t), va, true, GpuVa(0), true, 0x2000, CeWork::Scrub).expect("partitions")
     };
     assert_eq!(
@@ -1230,7 +1233,10 @@ fn fabricated_vram_in_a_userspace_va_becomes_representable_by_being_backed() {
         .expect("the dummy backing is an ordinary publication");
 
     let after = {
-        let t = &gpu.procs[&pid].vas_by_pdb(GPU, A_PDB).expect("the VAS exists").table;
+        let t = &gpu.procs[&pid]
+            .vas_by_pdb(GPU, A_PDB)
+            .expect("the VAS exists")
+            .table;
         pc(Some(t), va, true, GpuVa(0), true, 0x2000, CeWork::Scrub).expect("partitions")
     };
     assert_eq!(
@@ -1347,13 +1353,17 @@ fn there_is_no_read_at_invalidate_and_the_table_is_unchanged_across_one() {
     ring.extend_from_slice(&(bytes.len() as u64).to_le_bytes());
     kayfabe_tests::bind_ring(&mut gpu, pid, cid, &ring);
 
-    let before: Vec<(u64, u64)> = gpu.procs[&pid].vas_by_pdb(GPU, A_PDB).expect("the VAS exists")
+    let before: Vec<(u64, u64)> = gpu.procs[&pid]
+        .vas_by_pdb(GPU, A_PDB)
+        .expect("the VAS exists")
         .table
         .iter()
         .map(|(va, len, _)| (va, len))
         .collect();
     let out = kayfabe_fwd::parse_pushbuffer(&mut gpu, &mut vmm, pid, cid, &ring).expect("parses");
-    let after: Vec<(u64, u64)> = gpu.procs[&pid].vas_by_pdb(GPU, A_PDB).expect("the VAS exists")
+    let after: Vec<(u64, u64)> = gpu.procs[&pid]
+        .vas_by_pdb(GPU, A_PDB)
+        .expect("the VAS exists")
         .table
         .iter()
         .map(|(va, len, _)| (va, len))

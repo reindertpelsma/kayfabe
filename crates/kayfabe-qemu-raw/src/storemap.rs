@@ -42,8 +42,8 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use kayfabe_rt::GpuVa;
 use kayfabe_isolate::{BareVaSpace, HostHandle, IsolateId};
+use kayfabe_rt::GpuVa;
 
 use crate::scratchpad::SharedIsolate;
 

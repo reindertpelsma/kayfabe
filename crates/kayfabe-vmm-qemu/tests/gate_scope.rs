@@ -474,13 +474,16 @@ fn the_adapter_crate_that_holds_the_logic_is_still_forbidden_the_relaxation() {
 #[test]
 fn both_bars_default_to_passthrough() {
     let src = std::fs::read_to_string(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../qemu/hw/misc/nvkvm/nvkvm.c"),
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../qemu/hw/misc/nvkvm/nvkvm.c"),
     )
     .expect("the QOM shim is readable");
     for bar in ["bar1", "bar2"] {
-        let on = format!("DEFINE_PROP_BOOL(\"{bar}-passthrough\", NvkvmState, {bar}_passthrough, true),");
-        let off = format!("DEFINE_PROP_BOOL(\"{bar}-passthrough\", NvkvmState, {bar}_passthrough, false),");
+        let on = format!(
+            "DEFINE_PROP_BOOL(\"{bar}-passthrough\", NvkvmState, {bar}_passthrough, true),"
+        );
+        let off = format!(
+            "DEFINE_PROP_BOOL(\"{bar}-passthrough\", NvkvmState, {bar}_passthrough, false),"
+        );
         assert_eq!(
             src.matches(&off).count(),
             0,

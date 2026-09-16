@@ -59,10 +59,10 @@
 
 use std::sync::Arc;
 
-use kayfabe_rt::GpuId;
-use kayfabe_isolate::{HostHandle, IsolateBox, IsolateFactory, IsolateId, RmError};
-use kayfabe_util::trapwitness::OffTrap;
 use crate::shim::Status;
+use kayfabe_isolate::{HostHandle, IsolateBox, IsolateFactory, IsolateId, RmError};
+use kayfabe_rt::GpuId;
+use kayfabe_util::trapwitness::OffTrap;
 
 /// ★★★★★ **The gate.** Three arms, and the third is the design's own rule made reachable.
 ///
@@ -97,7 +97,8 @@ use crate::shim::Status;
 /// it used, rather than silently multiplying by somebody else's number. That distinction is
 /// the entire point of w734: the switch's cost has been quoted for two documents as a
 /// measured fact when only one of its two terms was ever measured.
-pub static DEVICE_VIEW_READ_BPS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+pub static DEVICE_VIEW_READ_BPS: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
 
 pub const SCRATCHPAD_ENV: &str = "KAYFABE_SCRATCHPAD";
 
@@ -657,7 +658,6 @@ pub fn identity_window_reached(span_bytes: u64, reserved_bytes: u64) -> String {
     }
 }
 
-
 // ═══════════════════════════════════════════════════════════════════════════════════════
 // ★★★★★ THE ONE ISOLATE, SHARED — `SINGLE_STORE_PLAN.md` §3's item 1.
 // ═══════════════════════════════════════════════════════════════════════════════════════
@@ -1083,9 +1083,9 @@ impl Scratchpad {
     ) -> Option<std::sync::Arc<crate::walkshadow::WalkShadowPort>> {
         if self.walk_shadow.is_none() {
             let iso = std::sync::Arc::clone(self.iso.as_ref()?);
-            self.walk_shadow = Some(std::sync::Arc::new(
-                crate::walkshadow::WalkShadowPort::new(iso),
-            ));
+            self.walk_shadow = Some(std::sync::Arc::new(crate::walkshadow::WalkShadowPort::new(
+                iso,
+            )));
         }
         self.walk_shadow.clone()
     }
@@ -1129,9 +1129,9 @@ impl Scratchpad {
                 );
                 return None;
             };
-            self.device_port = Some(std::sync::Arc::new(
-                crate::deviceview::DeviceViewPort::new(iso, self.id, obj, dup),
-            ));
+            self.device_port = Some(std::sync::Arc::new(crate::deviceview::DeviceViewPort::new(
+                iso, self.id, obj, dup,
+            )));
         }
         self.device_port.clone()
     }
@@ -1147,7 +1147,9 @@ impl Scratchpad {
     /// ⚠ **Idempotent, and it must be**: the publish path asks for this on every leaf, and
     /// a second port would keep a second ledger — so the restated ring assertion would
     /// answer `false` for a slice the other port had placed.
-    pub fn share_for_store_maps(&mut self) -> Option<std::sync::Arc<crate::storemap::StoreMapPort>> {
+    pub fn share_for_store_maps(
+        &mut self,
+    ) -> Option<std::sync::Arc<crate::storemap::StoreMapPort>> {
         if self.store_port.is_none() {
             let Some(iso) = self.iso.as_ref().map(std::sync::Arc::clone) else {
                 eprintln!(
@@ -1520,7 +1522,9 @@ fn probe_device_view(
     const SENTINEL: u32 = 0xD0DE_0001;
     let wrote = win.store_u32(HostOffset::ZERO, SENTINEL);
     let mut buf = [0u8; 4];
-    let read = win.read_into(HostOffset::ZERO, &mut buf).map(|()| u32::from_le_bytes(buf));
+    let read = win
+        .read_into(HostOffset::ZERO, &mut buf)
+        .map(|()| u32::from_le_bytes(buf));
     let released = worker.release_device_view(&view);
 
     // ★★★★★ **w734 — THE RATE, MEASURED ON THE PATH THAT WILL CARRY IT.**

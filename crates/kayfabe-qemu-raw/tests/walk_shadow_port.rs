@@ -20,8 +20,8 @@ use kayfabe_fwd::{PtDecodeResult, PtDecodeTask};
 use kayfabe_isolate::{IsolateBox, IsolateFactory, IsolateId};
 use kayfabe_mmu::walker::{DecodedLeaf, FbRead, PtPage, SubtreeDecode};
 use kayfabe_qemu_raw::walkshadow::{Arm, WalkShadowDecider, WalkShadowPort};
-use kayfabe_rt::device::PtSweepDecider;
 use kayfabe_rt::GpuId;
+use kayfabe_rt::device::PtSweepDecider;
 
 /// A framebuffer that serves one page of zeros at any vidmem address. ⊘ Zeros decode as a
 /// table full of invalid entries, which is all this file needs: the image must BUILD, and
@@ -81,7 +81,10 @@ fn a_port() -> WalkShadowPort {
 fn a_disarmed_decider_leaves_the_census_untouched() {
     let port = a_port();
     let before = port.census_line();
-    let mut obs = WalkShadowDecider { port: None, arm: Arm::Off };
+    let mut obs = WalkShadowDecider {
+        port: None,
+        arm: Arm::Off,
+    };
     let fmt = Ga10xGmmu::new();
     let mut fb = ZeroFb;
     obs.decide(&fmt, &mut fb, &[a_sweep_result(0x20_1000)]);
@@ -97,7 +100,10 @@ fn a_disarmed_decider_leaves_the_census_untouched() {
 #[test]
 fn an_isolate_with_no_kernel_is_refused_by_name_and_not_read_as_agreement() {
     let port = a_port();
-    let mut obs = WalkShadowDecider { port: Some(&port), arm: Arm::Shadow };
+    let mut obs = WalkShadowDecider {
+        port: Some(&port),
+        arm: Arm::Shadow,
+    };
     let fmt = Ga10xGmmu::new();
     let mut fb = ZeroFb;
     obs.decide(&fmt, &mut fb, &[a_sweep_result(0x20_1000)]);
@@ -129,7 +135,10 @@ fn an_isolate_with_no_kernel_is_refused_by_name_and_not_read_as_agreement() {
 #[test]
 fn an_empty_sweep_is_named_rather_than_ignored() {
     let port = a_port();
-    let mut obs = WalkShadowDecider { port: Some(&port), arm: Arm::Shadow };
+    let mut obs = WalkShadowDecider {
+        port: Some(&port),
+        arm: Arm::Shadow,
+    };
     let fmt = Ga10xGmmu::new();
     let mut fb = ZeroFb;
     obs.decide(&fmt, &mut fb, &[]);
@@ -143,7 +152,10 @@ fn an_empty_sweep_is_named_rather_than_ignored() {
 #[test]
 fn a_faulted_walk_is_not_compared() {
     let port = a_port();
-    let mut obs = WalkShadowDecider { port: Some(&port), arm: Arm::Shadow };
+    let mut obs = WalkShadowDecider {
+        port: Some(&port),
+        arm: Arm::Shadow,
+    };
     let fmt = Ga10xGmmu::new();
     let mut fb = ZeroFb;
     let faulted = PtDecodeResult {
@@ -171,7 +183,10 @@ fn the_refresh_budget_is_reported_when_it_runs_out() {
     // ⊘ Reached through the census rather than by 64 round trips: what is under test is that
     // `budget_spent` is consulted and named, and `ShadowCensus` is where the count lives.
     let port = Arc::new(a_port());
-    let mut obs = WalkShadowDecider { port: Some(&port), arm: Arm::Shadow };
+    let mut obs = WalkShadowDecider {
+        port: Some(&port),
+        arm: Arm::Shadow,
+    };
     let fmt = Ga10xGmmu::new();
     let mut fb = ZeroFb;
     // Every one of these refuses at the wire, so `compared` never rises and the budget is
@@ -198,18 +213,27 @@ fn the_refresh_budget_is_reported_when_it_runs_out() {
 #[test]
 fn a_swap_arm_with_no_kernel_answer_decides_nothing_and_says_which_it_was() {
     let port = a_port();
-    let mut dec = WalkShadowDecider { port: Some(&port), arm: Arm::Swap };
+    let mut dec = WalkShadowDecider {
+        port: Some(&port),
+        arm: Arm::Swap,
+    };
     port.arm_swap();
     let fmt = Ga10xGmmu::new();
     let mut fb = ZeroFb;
     let out = dec.decide(&fmt, &mut fb, &[a_sweep_result(0x20_1000)]);
-    assert!(out.is_none(), "nothing was decided, so the sweep's own results must commit");
+    assert!(
+        out.is_none(),
+        "nothing was decided, so the sweep's own results must commit"
+    );
 
     let line = port.census_line();
     assert!(line.contains("swap_armed=true"), "{line}");
     assert!(line.contains("decided=0"), "{line}");
     assert!(line.contains("fell_back[none]"), "{line}");
-    assert!(line.contains("isolate_refused=1"), "the refusal is what carries it: {line}");
+    assert!(
+        line.contains("isolate_refused=1"),
+        "the refusal is what carries it: {line}"
+    );
     assert!(
         line.contains("SWAP VACUOUS"),
         "an armed swap that decided nothing must not read as a clean swap: {line}"
@@ -222,10 +246,16 @@ fn a_swap_arm_with_no_kernel_answer_decides_nothing_and_says_which_it_was() {
 #[test]
 fn the_shadow_arm_never_returns_a_replacement() {
     let port = a_port();
-    let mut dec = WalkShadowDecider { port: Some(&port), arm: Arm::Shadow };
+    let mut dec = WalkShadowDecider {
+        port: Some(&port),
+        arm: Arm::Shadow,
+    };
     let fmt = Ga10xGmmu::new();
     let mut fb = ZeroFb;
-    assert!(dec.decide(&fmt, &mut fb, &[a_sweep_result(0x20_1000)]).is_none());
+    assert!(
+        dec.decide(&fmt, &mut fb, &[a_sweep_result(0x20_1000)])
+            .is_none()
+    );
     let line = port.census_line();
     assert!(line.contains("swap_armed=false"), "{line}");
     assert!(line.contains("SWAP DISARMED"), "{line}");

@@ -60,8 +60,8 @@ pub mod doorbell;
 pub mod dropped;
 pub mod faultbuffer;
 pub mod fbwin;
-pub mod gpgaview;
 pub mod ga10x;
+pub mod gpgaview;
 pub mod guestsysinfo;
 pub mod gvaspub;
 pub mod inert;
@@ -116,16 +116,14 @@ pub use kayfabe_trace::{FaultTag, Faulted};
 /// Same argument as [`GuestRam`]'s re-export one paragraph down: `set_fb` is *this* crate's
 /// seam, so a shell plugging into it should not have to name a third crate to do so.
 pub use fbwin::{
-    ALREADY_JOINED, Bar0Window, CARRY_BACK_NO_JOIN, CARRY_BACK_READ_FAILED, ESTABLISH_FAILED,
+    ALREADY_JOINED, Bar0Window, CARRY_BACK_NO_JOIN, CARRY_BACK_READ_FAILED,
     DEVICE_HOST_READ_NOT_ARMED, DEVICE_HOST_READ_UNBUILT, DEVICE_HOST_WRITE_NOT_ARMED,
     DEVICE_HOST_WRITE_UNBUILT, DEVICE_JOIN_IS_A_SECOND_MEMORY, DEVICE_RESET_UNBUILT, DeviceFb,
-    DeviceFbDrained, DeviceFbPort,
-    DeviceFbWant,
-    FB_WRITER_KINDS, FbArenaPage, FbJoinCarried, FbJoinInstalled, FbJoinPlan, FbJoined,
-    FbPageArena, FbPageBacking, FbPageExport, FbPageOrigin, FbPageStanding, FbRefused, FbStore,
-    FbWriter,
-    JOIN_NOT_EXPORTABLE, NO_JOIN_SUPPORT, NO_PAGE_ARENA, NO_PAGE_EXPORT, OUTSIDE_FRAMEBUFFER,
-    PAGE_NOT_RESIDENT, RefusingFb, SparseFb, device_fb_report,
+    DeviceFbDrained, DeviceFbPort, DeviceFbWant, ESTABLISH_FAILED, FB_WRITER_KINDS, FbArenaPage,
+    FbJoinCarried, FbJoinInstalled, FbJoinPlan, FbJoined, FbPageArena, FbPageBacking, FbPageExport,
+    FbPageOrigin, FbPageStanding, FbRefused, FbStore, FbWriter, JOIN_NOT_EXPORTABLE,
+    NO_JOIN_SUPPORT, NO_PAGE_ARENA, NO_PAGE_EXPORT, OUTSIDE_FRAMEBUFFER, PAGE_NOT_RESIDENT,
+    RefusingFb, SparseFb, device_fb_report,
 };
 
 /// ★★★ **E2** — the usermode doorbell port, re-exported: [`RegPlane::set_doorbell`]'s
@@ -1374,7 +1372,11 @@ fn gpu_name_from_seam(p: staticinfo::StaticInfoPolicy) -> staticinfo::StaticInfo
 /// decoration: w614's failure in this tree was a patch that matched nothing and reported
 /// success, and `ga10x::ga106_profile` asserts its own patch count for the same reason.
 #[must_use]
-pub fn with_bar_len(base: &'static ChipProfile, bar: usize, len: u64) -> (&'static ChipProfile, bool) {
+pub fn with_bar_len(
+    base: &'static ChipProfile,
+    bar: usize,
+    len: u64,
+) -> (&'static ChipProfile, bool) {
     let mut bars: Vec<PciBarRow> = base.pci_bars.to_vec();
     let Some(row) = bars.get_mut(bar) else {
         return (base, false);

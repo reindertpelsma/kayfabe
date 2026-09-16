@@ -300,7 +300,9 @@ impl Cuda {
     pub fn device_get(&self, ord: i32) -> Result<i32, CudaError> {
         let mut d: c_int = 0;
         // SAFETY: as `device_count` — one live out-pointer, no aliasing.
-        self.check("cuDeviceGet", unsafe { (self.cuDeviceGet)(&raw mut d, ord) })?;
+        self.check("cuDeviceGet", unsafe {
+            (self.cuDeviceGet)(&raw mut d, ord)
+        })?;
         Ok(d)
     }
 
@@ -432,7 +434,11 @@ impl Cuda {
     ///
     /// # Errors
     /// [`CudaError::Refused`].
-    pub fn mem_alloc_zeroed(&self, bytes: usize, what: &'static str) -> Result<CUdeviceptr, CudaError> {
+    pub fn mem_alloc_zeroed(
+        &self,
+        bytes: usize,
+        what: &'static str,
+    ) -> Result<CUdeviceptr, CudaError> {
         let mut p: CUdeviceptr = 0;
         // SAFETY: one live out-pointer; `bytes` is a length the driver owns entirely.
         self.check(what, unsafe { (self.cuMemAlloc)(&raw mut p, bytes) })?;
@@ -454,7 +460,12 @@ impl Cuda {
     ///
     /// # Errors
     /// [`CudaError::Refused`].
-    pub fn memcpy_h2d(&self, dst: CUdeviceptr, src: &[u8], what: &'static str) -> Result<(), CudaError> {
+    pub fn memcpy_h2d(
+        &self,
+        dst: CUdeviceptr,
+        src: &[u8],
+        what: &'static str,
+    ) -> Result<(), CudaError> {
         // SAFETY: `src` is a live slice for the call and the byte count passed is its own
         // length, so the driver cannot read past it; `dst` is a live allocation of at least
         // that size, which every caller sizes from the same expression.
@@ -467,7 +478,12 @@ impl Cuda {
     ///
     /// # Errors
     /// [`CudaError::Refused`].
-    pub fn memcpy_d2h(&self, dst: &mut [u8], src: CUdeviceptr, what: &'static str) -> Result<(), CudaError> {
+    pub fn memcpy_d2h(
+        &self,
+        dst: &mut [u8],
+        src: CUdeviceptr,
+        what: &'static str,
+    ) -> Result<(), CudaError> {
         // SAFETY: `dst` is a live, exclusively-borrowed slice and the byte count passed is
         // its own length, so the driver cannot write past it.
         self.check(what, unsafe {

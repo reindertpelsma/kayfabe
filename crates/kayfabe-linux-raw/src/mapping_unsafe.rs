@@ -959,7 +959,8 @@ impl VolatileRegion {
     /// byte moves, so a refused call copies nothing.
     pub fn copy_out(&self, offset: HostOffset, dst: &mut [u8]) -> Result<(), RawError> {
         let n = dst.len() as u64;
-        let (start, _n) = bounds::checked_span(self.map.len_bytes(), offset, n, "bulk read length")?;
+        let (start, _n) =
+            bounds::checked_span(self.map.len_bytes(), offset, n, "bulk read length")?;
         // SAFETY: `checked_span` proved `start .. start + dst.len()` is inside the mapping, the
         // mapping outlives `&self`, and `dst` cannot alias device memory. Byte copies need no
         // alignment. This is a plain read of data, not a register access — see the docs above.

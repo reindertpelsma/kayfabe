@@ -751,7 +751,6 @@ impl DeviceView {
     pub const UNRELEASABLE: u64 = u64::MAX;
 }
 
-
 /// ★★★★★ **§16.106 — the engine object a channel is being materialized to HOST.**
 ///
 /// Handed to [`RmBackend::alloc_channel`] so the adapter can honour a declaration the
@@ -1367,8 +1366,7 @@ pub trait RmBackend: Send + Sync {
     }
 
     fn cuda_walk_report(&mut self) -> Result<String, RmError> {
-        Ok("CUDA_WALK=ABSENT reason=\"this backend is not a CUDA scratchpad isolate\""
-            .to_string())
+        Ok("CUDA_WALK=ABSENT reason=\"this backend is not a CUDA scratchpad isolate\"".to_string())
     }
 
     /// ★★★★★ **STAGE ONE CHUNK OF THE WALK KERNEL'S IMAGE** — `SINGLE_STORE_PLAN.md` §6
@@ -3024,8 +3022,8 @@ impl Drop for VerbCostTimer {
 }
 
 pub mod verbcost {
-    use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
     use std::sync::OnceLock;
+    use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
     const SLOTS: usize = 16;
     static NAME: [OnceLock<&'static str>; SLOTS] = [const { OnceLock::new() }; SLOTS];
@@ -3069,7 +3067,10 @@ pub mod verbcost {
                 continue;
             }
             out.push((
-                NAME[i].get().copied().unwrap_or("⊘ (kind not yet published)"),
+                NAME[i]
+                    .get()
+                    .copied()
+                    .unwrap_or("⊘ (kind not yet published)"),
                 hits,
                 NANOS[i].load(Ordering::Relaxed) / 1_000,
                 WORST_NS[i].load(Ordering::Relaxed) / 1_000,
@@ -3978,7 +3979,10 @@ impl Worker {
         // reach the host.
         let _t0 = std::time::Instant::now();
         let _kind = plan.kind();
-        let _timer = VerbCostTimer { t0: _t0, kind: _kind };
+        let _timer = VerbCostTimer {
+            t0: _t0,
+            kind: _kind,
+        };
         match plan {
             VerbPlan::Publish { host_vas, len, at } => {
                 let (vas, fresh_vas) = match *host_vas {

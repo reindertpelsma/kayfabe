@@ -427,7 +427,8 @@ fn the_cpu_written_tree_binds_the_rings_va_in_the_cores_address_table() {
         let pid = owner(&d);
         let seen = d
             .with_proc(pid, |proc| {
-                proc.vas_by_pdb(GPU, PDB).expect("the VAS exists")
+                proc.vas_by_pdb(GPU, PDB)
+                    .expect("the VAS exists")
                     .table
                     .binding_at(GpuVa(RING_VA))
                     .map(|(start, len, b)| (start, len, b.phys(), b.aperture()))
@@ -511,7 +512,9 @@ fn only_the_root_witnessed_learns_the_whole_tree_and_binds_nothing() {
             "{mode:?}: and it says so BY NAME rather than by an absence: {out:?}"
         );
         assert_eq!(
-            d.with_proc(pid, |proc| proc.vas_by_pdb(GPU, PDB).expect("the VAS exists")
+            d.with_proc(pid, |proc| proc
+                .vas_by_pdb(GPU, PDB)
+                .expect("the VAS exists")
                 .table
                 .binding_at(GpuVa(RING_VA))
                 .is_some()),

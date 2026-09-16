@@ -343,10 +343,7 @@ impl SlotAllocator {
     ///
     /// # Errors
     /// As [`SlotAllocator::new`].
-    pub fn for_machine(
-        space: &Arc<SlotNumberSpace>,
-        ceiling: u32,
-    ) -> Result<Self, &'static str> {
+    pub fn for_machine(space: &Arc<SlotNumberSpace>, ceiling: u32) -> Result<Self, &'static str> {
         let (top, budget) = space.claim(ceiling)?;
         match Self::for_machine_below(ceiling, top) {
             Ok(mut a) => {
@@ -603,7 +600,6 @@ pub fn spans(len: u64, cuts: &[(u64, u64, Tier)]) -> Result<Vec<Span>, &'static 
     }
     Ok(out)
 }
-
 
 /// ★★★★★ **THE KERNEL'S SLOT NUMBERS ARE ONE SPACE, AND EVERY EMULATED GPU DRAWS FROM IT.**
 ///
@@ -1001,8 +997,12 @@ mod two_gpus_draw_from_one_number_space {
         let mut b = SlotAllocator::for_machine_below(CEILING, space.claim(CEILING).unwrap().0)
             .expect("device 1");
 
-        let mine: Vec<u32> = (0..64).map(|_| a.alloc(1).expect("device 0 number")[0]).collect();
-        let theirs: Vec<u32> = (0..64).map(|_| b.alloc(1).expect("device 1 number")[0]).collect();
+        let mine: Vec<u32> = (0..64)
+            .map(|_| a.alloc(1).expect("device 0 number")[0])
+            .collect();
+        let theirs: Vec<u32> = (0..64)
+            .map(|_| b.alloc(1).expect("device 1 number")[0])
+            .collect();
 
         for n in &theirs {
             assert!(!mine.contains(n), "slot {n} handed to BOTH devices");
@@ -1027,7 +1027,10 @@ mod two_gpus_draw_from_one_number_space {
                 }
             }
         }
-        assert!(claims >= 2, "a real ceiling must fit at least two devices, fit {claims}");
+        assert!(
+            claims >= 2,
+            "a real ceiling must fit at least two devices, fit {claims}"
+        );
     }
 
     #[test]

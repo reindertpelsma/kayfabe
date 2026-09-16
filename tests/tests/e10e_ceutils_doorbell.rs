@@ -1628,13 +1628,7 @@ fn publish_fb_doorbell(vmm: &mut MockVmm, d: u32) {
 fn the_preflight_is_inert_without_a_byte_port() {
     const LEN: u32 = 0x400;
     let plane = plane_with_tree();
-    let block = memset_block(
-        DST_VA,
-        LEN,
-        0xAB,
-        PB_GPU_VA + FINISH_PAYLOAD_OFFSET,
-        0x1234,
-    );
+    let block = memset_block(DST_VA, LEN, 0xAB, PB_GPU_VA + FINISH_PAYLOAD_OFFSET, 0x1234);
     let mut vmm = guest_ram(&block);
     let mut cursor = GpCursor::default();
     let run = ring_once(&plane, &mut vmm, &mut cursor, 1).expect("the fill is servable");

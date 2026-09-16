@@ -2578,11 +2578,8 @@ fn apply_guest_bar1_knob(
     let Some(choice) = choice else {
         return Ok(base);
     };
-    let (patched, moved) = kayfabe_device::with_bar_len(
-        base,
-        kayfabe_abi::pcibars::bus_bar::FB,
-        choice.bytes,
-    );
+    let (patched, moved) =
+        kayfabe_device::with_bar_len(base, kayfabe_abi::pcibars::bus_bar::FB, choice.bytes);
     eprintln!(
         "kayfabe: GUEST-BAR1 {}={} MiB row_moved={moved} advertised=0x{:x} \u{21d2} \u{2605} \
          \u{a7}w727's knob, wired. A {} MiB-BAR1 {} is a REAL hardware configuration \u{2014} a \
@@ -3070,45 +3067,43 @@ fn pending_err_notifier_grants_of(
     ce: &CeShellState,
     guest_ram_backing: Option<kayfabe_vmm_qemu::layout::BackingId>,
 ) -> Vec<kayfabe_rt::device::EngineNotifierGrant> {
-        // ⊘ Silent and free when the crossing is not armed, for `err_notifier_grant`'s
-        // reason: a control's log must not contain a line the armed run's does not.
-        if guest_ram_backing.is_none() {
-            return Vec::new();
-        }
-        let pending = device.peek_pending_engine_forwards();
-        if pending.is_empty() {
-            // The overwhelmingly common case — this runs on every register write.
-            return Vec::new();
-        }
-        let mut out = Vec::new();
-        for (client, parent, class) in pending {
-            // ⊘ A latch this port cannot route is NOT a miss and is NOT reported here: the
-            // drain refuses it too, and by its own name. Printing a second refusal for one
-            // cause is how one defect comes to read as two.
-            let Ok(facts) = device
-                .engine_object_channel_facts(client, parent, class)
-            else {
-                continue;
-            };
-            if let Some(grant) = err_notifier_grant(
-                ce,
-                guest_ram_backing,
-                facts.error_notifier,
-                &format!(
-                    "latch client={:#x} parent={:#x} class={:#06x} proc={} chan={}",
-                    client.0, parent.0, class.0, facts.proc.0, facts.chan.0
-                ),
-            ) {
-                out.push(kayfabe_rt::device::EngineNotifierGrant {
-                    client,
-                    parent,
-                    class,
-                    grant,
-                });
-            }
-        }
-        out
+    // ⊘ Silent and free when the crossing is not armed, for `err_notifier_grant`'s
+    // reason: a control's log must not contain a line the armed run's does not.
+    if guest_ram_backing.is_none() {
+        return Vec::new();
     }
+    let pending = device.peek_pending_engine_forwards();
+    if pending.is_empty() {
+        // The overwhelmingly common case — this runs on every register write.
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    for (client, parent, class) in pending {
+        // ⊘ A latch this port cannot route is NOT a miss and is NOT reported here: the
+        // drain refuses it too, and by its own name. Printing a second refusal for one
+        // cause is how one defect comes to read as two.
+        let Ok(facts) = device.engine_object_channel_facts(client, parent, class) else {
+            continue;
+        };
+        if let Some(grant) = err_notifier_grant(
+            ce,
+            guest_ram_backing,
+            facts.error_notifier,
+            &format!(
+                "latch client={:#x} parent={:#x} class={:#06x} proc={} chan={}",
+                client.0, parent.0, class.0, facts.proc.0, facts.chan.0
+            ),
+        ) {
+            out.push(kayfabe_rt::device::EngineNotifierGrant {
+                client,
+                parent,
+                class,
+                grant,
+            });
+        }
+    }
+    out
+}
 /// ★★★★★ **w480 — a FREE function so the vCPU and the worker call the SAME code.**
 /// It reads only the three things the doorbell port already holds, which is what makes
 /// moving the drain off the vCPU a move rather than a duplication.
@@ -3117,40 +3112,40 @@ fn pending_birth_notifier_grants_of(
     ce: &CeShellState,
     guest_ram_backing: Option<kayfabe_vmm_qemu::layout::BackingId>,
 ) -> Vec<kayfabe_rt::ChannelBirthGrant> {
-        if guest_ram_backing.is_none() {
-            return Vec::new();
-        }
-        let pending = device.peek_pending_channel_births();
-        if pending.is_empty() {
-            return Vec::new();
-        }
-        let mut out = Vec::new();
-        for (client, channel) in pending {
-            let Ok(facts) = device.channel_birth_facts(client, channel) else {
-                continue;
-            };
-            // ⊘ Silent for `Emulated`: not this site's birth, and the drain skips it silently.
-            if facts.kind != kayfabe_core::channel_kind::GuestChannelKind::Passthrough {
-                continue;
-            }
-            if let Some(grant) = err_notifier_grant(
-                ce,
-                guest_ram_backing,
-                facts.error_notifier,
-                &format!(
-                    "birth client={:#x} channel={:#x} proc={} chan={}",
-                    client.0, channel.0, facts.proc.0, facts.chan.0
-                ),
-            ) {
-                out.push(kayfabe_rt::ChannelBirthGrant {
-                    client,
-                    channel,
-                    grant,
-                });
-            }
-        }
-        out
+    if guest_ram_backing.is_none() {
+        return Vec::new();
     }
+    let pending = device.peek_pending_channel_births();
+    if pending.is_empty() {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    for (client, channel) in pending {
+        let Ok(facts) = device.channel_birth_facts(client, channel) else {
+            continue;
+        };
+        // ⊘ Silent for `Emulated`: not this site's birth, and the drain skips it silently.
+        if facts.kind != kayfabe_core::channel_kind::GuestChannelKind::Passthrough {
+            continue;
+        }
+        if let Some(grant) = err_notifier_grant(
+            ce,
+            guest_ram_backing,
+            facts.error_notifier,
+            &format!(
+                "birth client={:#x} channel={:#x} proc={} chan={}",
+                client.0, channel.0, facts.proc.0, facts.chan.0
+            ),
+        ) {
+            out.push(kayfabe_rt::ChannelBirthGrant {
+                client,
+                channel,
+                grant,
+            });
+        }
+    }
+    out
+}
 
 fn report_engine_forward_drain(
     device: &kayfabe_rt::device::SharedDevice,
@@ -4058,7 +4053,9 @@ impl kayfabe_device::FbJoined for MappedFb {
     }
 
     fn export(&self) -> Option<kayfabe_device::FbPageExport> {
-        self.export.as_ref().map(crate::barmirror::JoinExport::export)
+        self.export
+            .as_ref()
+            .map(crate::barmirror::JoinExport::export)
     }
 }
 
@@ -5395,10 +5392,12 @@ static LANE_FULL_DOORBELLS: std::sync::atomic::AtomicU64 = std::sync::atomic::At
 static DROPPED: kayfabe_device::dropped::DroppedSignals =
     kayfabe_device::dropped::DroppedSignals::new();
 
-static MMUINVAL_REFRESH_FIRINGS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static MMUINVAL_REFRESH_FIRINGS: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
 /// ★★★★★ **w406 — how many locally-served CE submissions ran the REFRESH before writing the
 /// completion their guest is waiting on.** `CE-LOCAL-REFRESH #n` per firing.
-static CE_LOCAL_REFRESH_FIRINGS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static CE_LOCAL_REFRESH_FIRINGS: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
 
 /// ★★★★★ **CONSTRAINT 27's FIXED TRIP COUNT.** How many extra `drain_pending_releases`
 /// passes one refresh may spend trying to retire its staged disposals.
@@ -5478,13 +5477,10 @@ fn install_counter_page(
         return false;
     };
     let gpa = bar0.base + off;
-    match vmm.machine().install_device_window(
-        gpa,
-        mmap_len,
-        fd.as_fd(),
-        Some(gpa..gpa + len),
-        true,
-    ) {
+    match vmm
+        .machine()
+        .install_device_window(gpa, mmap_len, fd.as_fd(), Some(gpa..gpa + len), true)
+    {
         Ok(region) => {
             // ★★★★★ **KEEP THE RING'S COORDINATES (w649).** The doorbell register sits
             // `USERMODE_DOORBELL_OFF` into the usermode window, and the window we just
@@ -5604,7 +5600,8 @@ fn doorbell_publish_loop(
         #[cfg(not(feature = "host-isolates"))]
         let mirror_for_drain: Option<&()> = None;
         #[cfg(feature = "host-isolates")]
-        let born = report_channel_birth_drain(&port.device, &birth_grants, mirror_for_drain.as_deref());
+        let born =
+            report_channel_birth_drain(&port.device, &birth_grants, mirror_for_drain.as_deref());
         #[cfg(not(feature = "host-isolates"))]
         let born = report_channel_birth_drain(&port.device, &birth_grants, mirror_for_drain);
         // ★★★★★ **w559 — A CHANNEL THAT RETURNS TO THE GUEST IS A CHANNEL THE GUEST MAY RING.**
@@ -5830,8 +5827,7 @@ fn doorbell_publish_loop(
             if let Some(plane) = plane_ref.as_ref() {
                 plane.revalidate_mirror_first();
             }
-            let n = MMUINVAL_REFRESH_FIRINGS.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-                + 1;
+            let n = MMUINVAL_REFRESH_FIRINGS.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
             let mut ctx = port.publish_ctx();
             // ⊘⊘ `Drain`, NOT `Publish` — and the difference is a whole publication PASS.
             //
@@ -6162,7 +6158,8 @@ fn doorbell_publish_loop(
             match port.service_deferred_commands() {
                 Ok((0, _)) => {}
                 Ok((serviced, owed)) => {
-                    GSP_SERVICED_OFF_VCPU.fetch_add(serviced as u64, std::sync::atomic::Ordering::Relaxed);
+                    GSP_SERVICED_OFF_VCPU
+                        .fetch_add(serviced as u64, std::sync::atomic::Ordering::Relaxed);
                     if owed {
                         if let Err(e) =
                             kayfabe_vmm::Vmm::raise_irq(&mut vmm, kayfabe_vmm::IrqSpec::Msix(0))
@@ -6534,7 +6531,6 @@ impl DbtableShadow {
     }
 }
 
-
 impl kayfabe_device::DoorbellPort for SharedDoorbell {
     /// ★★★★★ **w383 — THE FRONT DOOR: validate, enqueue, return.**
     ///
@@ -6807,8 +6803,7 @@ impl SharedDoorbell {
             return None;
         }
         let target = self.device.decode_doorbell_token(token)?;
-        let Route::Passthrough { host_token } = self.dbtable.route(u64::from(target))
-        else {
+        let Route::Passthrough { host_token } = self.dbtable.route(u64::from(target)) else {
             return None;
         };
         let (window, off) = self.ring_target.get()?;
@@ -6848,8 +6843,8 @@ impl SharedDoorbell {
     }
 
     fn shadow_route(&self, token: u64) {
-        use std::sync::atomic::Ordering::Relaxed;
         use kayfabe_device::dbtable::Route;
+        use std::sync::atomic::Ordering::Relaxed;
         // ⊘ Pure arch math — no spine, no lock. A malformed token is a non-event on both
         // paths, so it is counted apart rather than folded into `Unallocated`: they are
         // different diagnoses ("RM could not have written this" vs "nobody owns this").
@@ -6880,8 +6875,8 @@ impl SharedDoorbell {
     /// ⚠ Clears vanished rows. A channel that went away must stop routing, or its vChid keeps
     /// naming a host token that now belongs to somebody else.
     fn rebuild_dbtable(&self, _off_vcpu: &OffVcpu, last: &mut Vec<(u16, Option<u64>, bool)>) {
-        use std::sync::atomic::Ordering::Relaxed;
         use kayfabe_device::dbtable::Route;
+        use std::sync::atomic::Ordering::Relaxed;
         // ⊘ The spine read is UNCONDITIONAL, and that is the completeness argument: the table
         // is whatever the current projection says, never whatever an event hook remembered.
         let rows = self.device.doorbell_routes(DOORBELL_TARGET_GPU);
@@ -6970,11 +6965,7 @@ impl SharedDoorbell {
     /// being served inline on the vCPU (the `KAYFABE_DOORBELL_ASYNC=off` control). The
     /// distinction was previously a comment; it is now a type, and `try_ce_submission` can run
     /// the owner's sync-point-(3) refresh **only** on the arm that may block.
-    fn ring_inline(
-        &self,
-        token: u64,
-        off_vcpu: Option<OffVcpu>,
-    ) -> kayfabe_device::DoorbellReport {
+    fn ring_inline(&self, token: u64, off_vcpu: Option<OffVcpu>) -> kayfabe_device::DoorbellReport {
         // ★★★★ §16.64 — ⊘ **THIS COMMENT ASSERTED THE OPPOSITE OF THE CODE**, and it is the
         // first sentence a reader of the doorbell path meets.
         //
@@ -7335,10 +7326,7 @@ impl SharedDoorbell {
                 // unmeasured off-CPU time and a zero one are different facts.
                 kayfabe_util::trapwitness::trap_cpu_census(),
                 kayfabe_util::lock::lockcost::in_trap_census(),
-                kayfabe_util::lock::lockcost::hammer_census(
-                    kayfabe_util::lock::LockRank::Plane,
-                    4,
-                ),
+                kayfabe_util::lock::lockcost::hammer_census(kayfabe_util::lock::LockRank::Plane, 4,),
                 // w503 — whether the stall alarm is even working. It was SILENT for two
                 // boots and silence read as "no trap was over budget".
                 // ⊘ The crate is optional; the default build has no such module.
@@ -9251,9 +9239,9 @@ impl SharedDoorbell {
                 // the unbounded walk the cap exists to prevent, and would do it while holding the
                 // locks this pass holds.
                 if run.stranded > 0 {
-                    let again = self
-                        .pubqueue
-                        .offer(kayfabe_device::pubqueue::MapPublication::for_doorbell(token));
+                    let again = self.pubqueue.offer(
+                        kayfabe_device::pubqueue::MapPublication::for_doorbell(token),
+                    );
                     eprintln!(
                         "kayfabe: GPFIFO-CONTINUE token={token:#010x} stranded={} \
                          re_offered={again:?} ⊘ the cap stopped this pass with entries still \
@@ -10564,9 +10552,7 @@ impl SharedDoorbell {
         // draft: with `#255` inside the armed path, the control printed zero `#255` lines and
         // the instrument's guaranteed known-positive was unreachable.
         // ⊘ w536 — the `off`/`assert` guard is gone: operands are ALWAYS joined.
-        let head = format!(
-            "OPERAND-JOIN token={token:#010x}"
-        );
+        let head = format!("OPERAND-JOIN token={token:#010x}");
         let Some(f) = facts else {
             return OperandVerdict::say(format!(
                 "{head} → NO CHANNEL (the token routed to no channel, so there is no VA space \
@@ -10724,7 +10710,7 @@ impl SharedDoorbell {
             return OperandVerdict {
                 unresolved,
                 line: Some(format!(
-                "{table}\n    ⊘ NOTHING TO JOIN. ⚠ The four counts above are FOUR DIFFERENT \
+                    "{table}\n    ⊘ NOTHING TO JOIN. ⚠ The four counts above are FOUR DIFFERENT \
                  FACTS: a `MISS` says this VAS does not bind that VA at all (§6 — not found, \
                  never denied); `in guest RAM` says leg 6 owns it; `ALREADY JOINED` says a \
                  previous doorbell did this work; and only a zero in ALL of them would mean \
@@ -10868,11 +10854,11 @@ impl SharedDoorbell {
         OperandVerdict {
             unresolved,
             line: Some(format!(
-            "{table}\n    WALK: {}\n    JOINED {joined} leaf/leaves, {refused} REFUSED, over {} \
+                "{table}\n    WALK: {}\n    JOINED {joined} leaf/leaves, {refused} REFUSED, over {} \
              distinct leaf/leaves\n    {}",
-            walk_lines.join("\n          "),
-            leaves.len(),
-            Self::fake_fb_in_userspace_vas(f, &now_host_backed, &still_fabricated),
+                walk_lines.join("\n          "),
+                leaves.len(),
+                Self::fake_fb_in_userspace_vas(f, &now_host_backed, &still_fabricated),
             )),
         }
     }
@@ -11226,32 +11212,28 @@ impl SharedDoorbell {
                 );
                 continue;
             };
-            let root = match SharedDoorbell::doorbell_root(
-                &plane,
-                facts.client,
-                vaspace,
-                Some(pdb.0),
-            ) {
-                DoorbellRoot::Published(r) | DoorbellRoot::Declared(r) => r,
-                DoorbellRoot::Absent => {
-                    eprintln!(
-                        "{head} proc={} chan={} ring=0x{ring_va:x} → ⊘ NO ROOT: this channel \
+            let root =
+                match SharedDoorbell::doorbell_root(&plane, facts.client, vaspace, Some(pdb.0)) {
+                    DoorbellRoot::Published(r) | DoorbellRoot::Declared(r) => r,
+                    DoorbellRoot::Absent => {
+                        eprintln!(
+                            "{head} proc={} chan={} ring=0x{ring_va:x} → ⊘ NO ROOT: this channel \
                          has no VA space root at all, so its ring VA cannot be walked",
-                        facts.proc.0, facts.chan.0,
-                    );
-                    continue;
-                }
-                DoorbellRoot::Underivable(p, why) => {
-                    eprintln!(
-                        "{head} proc={} chan={} ring=0x{ring_va:x} → ⊘ ROOT UNDERIVABLE from \
+                            facts.proc.0, facts.chan.0,
+                        );
+                        continue;
+                    }
+                    DoorbellRoot::Underivable(p, why) => {
+                        eprintln!(
+                            "{head} proc={} chan={} ring=0x{ring_va:x} → ⊘ ROOT UNDERIVABLE from \
                          pdb 0x{p:x}: {}",
-                        facts.proc.0,
-                        facts.chan.0,
-                        why.kind(),
-                    );
-                    continue;
-                }
-            };
+                            facts.proc.0,
+                            facts.chan.0,
+                            why.kind(),
+                        );
+                        continue;
+                    }
+                };
             // ★ The walk, and NOTHING is printed inside the guard (R1).
             let (site, leaf) = plane.ce_session_with_root(
                 &root,
@@ -11503,8 +11485,7 @@ impl SharedDoorbell {
             // non-zero answer is a genuine surviving alias.
             let (live, retired) = self.device.fb_join_namers(r.phys);
             let described = self.device.fb_frame_namers(r.phys, None);
-            if live == 0 && retired == 0 && described > 0 && !frames_given_back.contains(&r.phys)
-            {
+            if live == 0 && retired == 0 && described > 0 && !frames_given_back.contains(&r.phys) {
                 self.device
                     .revoke_published_fb_leaf(r.gpu, r.pdb, r.host_va, r.memory);
                 kept_for_move += 1;
@@ -11742,14 +11723,13 @@ impl SharedDoorbell {
         // ★★★★★ **w329 — BOTH HALVES OF THE RELEASE, HERE, SYNCHRONOUSLY.** Ordered after
         // every decode of this pass and before the line is printed, so the counts it reports
         // and the state the publication pass will find are the same state.
-        let revoke_clause =
-            self.release_revoked_joins(
-                &plane,
-                &revoked,
-                revoked_still_desired,
-                remaps_refused,
-                remaps_revoked,
-            );
+        let revoke_clause = self.release_revoked_joins(
+            &plane,
+            &revoked,
+            revoked_still_desired,
+            remaps_refused,
+            remaps_revoked,
+        );
         // ⊘ THE LEFTOVERS GO BACK. A page the index cannot name an owner for is not a page
         // that was not written, and the witness is the only record that it was.
         let requeue_refused = plane.requeue_pt_witness(pending.iter().copied());
@@ -11975,14 +11955,13 @@ impl SharedDoorbell {
             duplicates += out.duplicate_leaves;
         }
         // ★★★★★ **w329 — the sweep's half of the release, discharged before the line prints.**
-        let revoke_clause =
-            self.release_revoked_joins(
-                &plane,
-                &revoked,
-                revoked_still_desired,
-                remaps_refused,
-                remaps_revoked,
-            );
+        let revoke_clause = self.release_revoked_joins(
+            &plane,
+            &revoked,
+            revoked_still_desired,
+            remaps_refused,
+            remaps_revoked,
+        );
         format!(
             " | PT-SWEEP tasks={tasks} skipped={skipped} ran={ran} truncated={trunc} \
              pages={pages} reasons={reasons:?} JOIN-RELEASE{revoke_clause} → bound={bound} \
@@ -14287,8 +14266,7 @@ static DEVICE_LEAF_PLAN_REFUSED: std::sync::atomic::AtomicU64 =
 /// ★★★ Runs of the reserved object this arm's own drains armed — the *install* half. ⊘ Counted
 /// here and not read from `FB-DEMAND`, which sums every caller's drains: a number that cannot
 /// separate this arm's arms from the byte port's demand cannot say whether the arm did anything.
-static DEVICE_LEAF_SLICE_ARMED: std::sync::atomic::AtomicU64 =
-    std::sync::atomic::AtomicU64::new(0);
+static DEVICE_LEAF_SLICE_ARMED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 /// How many of each of the two lines above are printed. ⊘ Capped and LOUD about the cap: the
 /// device arm fires thousands of times a boot and an uncapped line would be the log.
 const DEVICE_LEAF_LINES_MAX: u64 = 6;
@@ -15838,7 +15816,8 @@ impl Regs {
                 #[cfg(feature = "host-isolates")]
                 {
                     exports.clone().map(|e| {
-                        Box::new(move |iso, token| e.dup(iso, token)) as Box<crate::scratchpad::DupFn>
+                        Box::new(move |iso, token| e.dup(iso, token))
+                            as Box<crate::scratchpad::DupFn>
                     })
                 }
                 #[cfg(not(feature = "host-isolates"))]
@@ -15893,9 +15872,10 @@ impl Regs {
         let mut scratchpad = scratchpad;
         let walk_shadow_arm = crate::walkshadow::selected_walk_shadow()?;
         let walk_shadow = if walk_shadow_arm.runs_kernel() {
-            match scratchpad.as_mut().and_then(
-                crate::scratchpad::Scratchpad::share_for_walk_shadow,
-            ) {
+            match scratchpad
+                .as_mut()
+                .and_then(crate::scratchpad::Scratchpad::share_for_walk_shadow)
+            {
                 Some(p) => {
                     // ★★★★★ **THE TWO ARMS SAY DIFFERENT SENTENCES AT REALIZE**, because a
                     // boot log that says "nothing is published from it" while the kernel is
@@ -15950,36 +15930,36 @@ impl Regs {
         // printing a zero that could mean either thing.
         let device_port: Option<std::sync::Arc<crate::deviceview::DeviceViewPort>> =
             if device_view_dup.is_some() {
-            #[cfg(feature = "host-isolates")]
-            {
-                let dup: Option<std::sync::Arc<crate::deviceview::DupArc>> =
-                    exports.clone().map(|e| {
-                        std::sync::Arc::new(move |iso, token| e.dup(iso, token))
-                            as std::sync::Arc<crate::deviceview::DupArc>
-                    });
-                match (scratchpad.as_mut(), dup) {
-                    (Some(sp), Some(dup)) => {
-                        let port = sp.share_for_device_views(dup);
-                        if port.is_some() {
-                            eprintln!(
-                                "kayfabe: DEVICE-VIEW-PORT AT REALIZE: ★★★ ARMED over the \
+                #[cfg(feature = "host-isolates")]
+                {
+                    let dup: Option<std::sync::Arc<crate::deviceview::DupArc>> =
+                        exports.clone().map(|e| {
+                            std::sync::Arc::new(move |iso, token| e.dup(iso, token))
+                                as std::sync::Arc<crate::deviceview::DupArc>
+                        });
+                    match (scratchpad.as_mut(), dup) {
+                        (Some(sp), Some(dup)) => {
+                            let port = sp.share_for_device_views(dup);
+                            if port.is_some() {
+                                eprintln!(
+                                    "kayfabe: DEVICE-VIEW-PORT AT REALIZE: ★★★ ARMED over the \
                                  reserved object. Views can now be armed and released AFTER \
                                  bring-up, from any lock-free caller. ⊘ Nothing arms one yet \
                                  — the store still serves the arena."
-                            );
+                                );
+                            }
+                            port
                         }
-                        port
+                        _ => None,
                     }
-                    _ => None,
                 }
-            }
-            #[cfg(not(feature = "host-isolates"))]
-            {
+                #[cfg(not(feature = "host-isolates"))]
+                {
+                    None
+                }
+            } else {
                 None
-            }
-        } else {
-            None
-        };
+            };
         // ⊘ The port itself lives on the `Scratchpad`; this binding exists only so the
         // REALIZE line above is written once. The data plane reaches it through
         // `Scratchpad::device_port` at `attach_ram`, which is where the BAR mirror is built.
@@ -16110,7 +16090,10 @@ impl Regs {
         // advertise one chip's size through another chip's tables. Today `CHIPS` has one
         // entry and the guard cannot fail; the day it has two, this refuses instead of
         // mis-patching.
-        let chip = match scratchpad.as_ref().and_then(crate::scratchpad::Scratchpad::reserved_mb) {
+        let chip = match scratchpad
+            .as_ref()
+            .and_then(crate::scratchpad::Scratchpad::reserved_mb)
+        {
             Some(mb) if chip.pci_device_id == kayfabe_device::ga10x::GA106.pci_device_id => {
                 let derived = kayfabe_device::ga10x::ga106_profile(mb);
                 eprintln!(
@@ -16243,8 +16226,8 @@ impl Regs {
         // that says what guest video memory *is*. ⊘ Both arms print, because a configuration
         // that only announces itself when enabled makes the control arm's log
         // indistinguishable from an older binary's.
-        let fb_store_arm = crate::deviceview::selected_fb_store()
-            .map_err(|why| (Status::Unsupported, why))?;
+        let fb_store_arm =
+            crate::deviceview::selected_fb_store().map_err(|why| (Status::Unsupported, why))?;
         let have_port = scratchpad
             .as_ref()
             .and_then(crate::scratchpad::Scratchpad::device_port)
@@ -16856,21 +16839,14 @@ impl Regs {
         ) {
             Ok(z) => z,
             Err(e) => {
-                eprintln!(
-                    "kayfabe: BAR0-ZERO ⊘ NO MEMFD ({e:?}) — every dead page keeps trapping"
-                );
+                eprintln!("kayfabe: BAR0-ZERO ⊘ NO MEMFD ({e:?}) — every dead page keeps trapping");
                 return;
             }
         };
         let (mut placed, mut refused, mut bytes) = (0usize, 0usize, 0u64);
         for (off, len) in &runs {
-            match machine.install_file_window(
-                p.base + off,
-                *len,
-                zero.as_backing_fd(),
-                *off,
-                true,
-            ) {
+            match machine.install_file_window(p.base + off, *len, zero.as_backing_fd(), *off, true)
+            {
                 Ok(_) => {
                     placed += 1;
                     bytes += *len;
@@ -16919,21 +16895,20 @@ impl Regs {
         if self.bar_mirror.get().is_some() {
             return;
         }
-        if let Some(m) =
-            crate::barmirror::BarMirror::arm(
-                Arc::clone(&self.plane),
-                shim.machine().vmm().machine(),
-                self.doorbell_async.defers(),
-                // ★★★★★ **§3's device-view port**, reached through the scratchpad because
-                // that is what owns the isolate the views are armed in. `None` on every arm
-                // but the single store's, and the mirror refuses `NO-DEVICE-PORT` by name if
-                // the store ever names a device page without one.
-                self.scratchpad
-                    .as_ref()
-                    .and_then(crate::scratchpad::Scratchpad::device_port),
-            )
-        {
-            self.plane.set_fb_mirror(Arc::clone(&m) as Arc<dyn kayfabe_device::FbMirrorPort>);
+        if let Some(m) = crate::barmirror::BarMirror::arm(
+            Arc::clone(&self.plane),
+            shim.machine().vmm().machine(),
+            self.doorbell_async.defers(),
+            // ★★★★★ **§3's device-view port**, reached through the scratchpad because
+            // that is what owns the isolate the views are armed in. `None` on every arm
+            // but the single store's, and the mirror refuses `NO-DEVICE-PORT` by name if
+            // the store ever names a device page without one.
+            self.scratchpad
+                .as_ref()
+                .and_then(crate::scratchpad::Scratchpad::device_port),
+        ) {
+            self.plane
+                .set_fb_mirror(Arc::clone(&m) as Arc<dyn kayfabe_device::FbMirrorPort>);
             // ★★★ w615 — a process-global weak handle, for the ONE caller that legitimately
             // cannot hold a mirror. `[measured w614a]` the birth snapshot reported `NO-BIRTH`
             // while the same log carried `BIRTH-PUBLISH (off-vCPU) born=1`: births arrive
@@ -17652,28 +17627,28 @@ impl Regs {
     /// extra exits on one page, never a wrong value.
 
     /// ★★★★★ **HAS ANYTHING BEEN LATCHED SINCE WE LAST WOKE THE WORKER? (w677)**
-///
-/// # ⊘⊘⊘ IT WORKED, AND IT DID NOT FIX THE 20 SECONDS — w678 refuted the causal claim
-///
-/// `[measured w678a]` the gate does exactly what it was built to do:
-/// ```text
-/// mirror_fill  11430 -> 28     wakes_skipped=11402     28 + 11402 = 11430   EXACT
-/// queued       12277 -> 891
-/// cuDeviceGet   ~20s -> ~20s   UNCHANGED
-/// ```
-/// The arithmetic closes perfectly, so the model of **where** the wakes came from was right.
-/// The model of **what they cost** was wrong: deleting 93 % of the worker's jobs moved the wall
-/// clock not at all.
-///
-/// ⇒ **Keep this gate** — 11 402 needless worker passes is real waste and removing it is correct
-/// on its own terms. ⚠ But do NOT let the commit message that introduced it stand as an
-/// explanation of the 20 s `cuDeviceGet`: it is not one, and treating a true optimisation as a
-/// solved bug is how the next person stops looking.
-///
-/// ⊘ What the same boot rules out, with numbers: `TRAP-CPU n=5715 slow_traps=1 slow_starved=0`
-/// (not inline vCPU work), `VERBCOST total=163058us over 14 plans` (not the isolate), `queued=891`
-/// (not the queue). The guest spins at 100 % CPU throughout — it is polling for a value, on a
-/// page that takes no exit, and something takes 20 s to become true.
+    ///
+    /// # ⊘⊘⊘ IT WORKED, AND IT DID NOT FIX THE 20 SECONDS — w678 refuted the causal claim
+    ///
+    /// `[measured w678a]` the gate does exactly what it was built to do:
+    /// ```text
+    /// mirror_fill  11430 -> 28     wakes_skipped=11402     28 + 11402 = 11430   EXACT
+    /// queued       12277 -> 891
+    /// cuDeviceGet   ~20s -> ~20s   UNCHANGED
+    /// ```
+    /// The arithmetic closes perfectly, so the model of **where** the wakes came from was right.
+    /// The model of **what they cost** was wrong: deleting 93 % of the worker's jobs moved the wall
+    /// clock not at all.
+    ///
+    /// ⇒ **Keep this gate** — 11 402 needless worker passes is real waste and removing it is correct
+    /// on its own terms. ⚠ But do NOT let the commit message that introduced it stand as an
+    /// explanation of the 20 s `cuDeviceGet`: it is not one, and treating a true optimisation as a
+    /// solved bug is how the next person stops looking.
+    ///
+    /// ⊘ What the same boot rules out, with numbers: `TRAP-CPU n=5715 slow_traps=1 slow_starved=0`
+    /// (not inline vCPU work), `VERBCOST total=163058us over 14 plans` (not the isolate), `queued=891`
+    /// (not the queue). The guest spins at 100 % CPU throughout — it is polling for a value, on a
+    /// page that takes no exit, and something takes 20 s to become true.
 
     ///
     /// `[measured w674a/w676a]` the deferral sites queued a `MirrorFill` wake **unconditionally**,
@@ -17706,7 +17681,9 @@ impl Regs {
         let seq = MIRROR_FILL_SEQ.fetch_add(1, Relaxed);
         let _ = self
             .pubqueue
-            .offer(kayfabe_device::pubqueue::MapPublication::for_mirror_fill(seq));
+            .offer(kayfabe_device::pubqueue::MapPublication::for_mirror_fill(
+                seq,
+            ));
     }
 
     /// Without `host-isolates` there is no publication worker to wake, so the deferral sites
@@ -17720,7 +17697,9 @@ impl Regs {
         let seq = MIRROR_FILL_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let _ = self
             .pubqueue
-            .offer(kayfabe_device::pubqueue::MapPublication::for_mirror_fill(seq));
+            .offer(kayfabe_device::pubqueue::MapPublication::for_mirror_fill(
+                seq,
+            ));
     }
 
     pub fn read(&self, bar: u32, off: u64, size: u32) -> u64 {
@@ -17882,7 +17861,6 @@ impl Regs {
         self.doorbell_port.adopt_pending_channel_rings(true);
     }
 
-
     /// Serve one register write.
     ///
     /// ★ Returns the **port's** outcome, not the wire shape. `KayfabeRegWrite` carries a
@@ -17949,7 +17927,9 @@ impl Regs {
             let seq = GSP_SUBMIT_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             if matches!(
                 self.pubqueue
-                    .offer(kayfabe_device::pubqueue::MapPublication::for_gsp_submit(seq)),
+                    .offer(kayfabe_device::pubqueue::MapPublication::for_gsp_submit(
+                        seq
+                    )),
                 kayfabe_device::pubqueue::Offered::Full
             ) {
                 GSP_LANE_FULL.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -18084,8 +18064,11 @@ impl Regs {
             // ⊘ No `PublishGuard` here any more: a `Drop` on this thread would signal
             // completion when the ENQUEUE returned, which is precisely the lie the inline
             // version told — "invalidate done" before anything was published.
-            match self.pubqueue.offer(kayfabe_device::pubqueue::MapPublication::for_invalidate(val))
-            {
+            match self
+                .pubqueue
+                .offer(kayfabe_device::pubqueue::MapPublication::for_invalidate(
+                    val,
+                )) {
                 kayfabe_device::pubqueue::Offered::Full => {
                     // ⊘ Refused, so nothing will publish and nothing will complete. Do it
                     // inline rather than hang the guest — and SAY SO, because this is the one
@@ -18308,7 +18291,12 @@ impl Regs {
         // it. The cost is one spare job that finds nothing; the opposite error would leave a
         // guest mapping unpublished. Never invert that.
         let epoch = kayfabe_mmu::any_table_change_epoch();
-        let changed = usize::from(epoch != self.last_table_epoch.swap(epoch, std::sync::atomic::Ordering::Relaxed));
+        let changed = usize::from(
+            epoch
+                != self
+                    .last_table_epoch
+                    .swap(epoch, std::sync::atomic::Ordering::Relaxed),
+        );
         if changed > 0 {
             // ⊘⊘⊘ **THE INLINE PUBLISH THAT STOOD HERE IS REVERTED — owner, 2026-09-10.**
             //
@@ -18341,11 +18329,11 @@ impl Regs {
             // ★ Releasing early is a correctness RISK; never releasing is a correctness
             // FAILURE. Take the risk, and say so in the log rather than let it be
             // rediscovered as a hang.
-            let offered = self
-                .pubqueue
-                .offer(kayfabe_device::pubqueue::MapPublication::for_rpc_bind(
-                    changed as u64,
-                ));
+            let offered =
+                self.pubqueue
+                    .offer(kayfabe_device::pubqueue::MapPublication::for_rpc_bind(
+                        changed as u64,
+                    ));
             if matches!(offered, kayfabe_device::pubqueue::Offered::Full)
                 && self.plane.held_replies() > 0
             {
@@ -18422,14 +18410,13 @@ impl Regs {
             // inside the guest's MMIO exit, so it may not publish. The worker's copy of this
             // call does (`BIRTH-PUBLISH`). Written as an explicit discard rather than an
             // ignored return so the asymmetry reads as a decision.
-            let _born_but_we_may_not_publish_here =
-                {
-                    #[cfg(feature = "host-isolates")]
-                    let m = self.bar_mirror.get().map(std::sync::Arc::as_ref);
-                    #[cfg(not(feature = "host-isolates"))]
-                    let m: Option<&()> = None;
-                    report_channel_birth_drain(&self.device, &birth_grants, m);
-                };
+            let _born_but_we_may_not_publish_here = {
+                #[cfg(feature = "host-isolates")]
+                let m = self.bar_mirror.get().map(std::sync::Arc::as_ref);
+                #[cfg(not(feature = "host-isolates"))]
+                let m: Option<&()> = None;
+                report_channel_birth_drain(&self.device, &birth_grants, m);
+            };
             kft.mark("birth_drain");
             report_engine_forward_drain(&self.device, &err_notifier_grants);
         } else {
@@ -18870,7 +18857,8 @@ impl Regs {
                 verdict = match (policy, n) {
                     (kayfabe_device::plane::FbTrapPolicy::Serve, _) =>
                         "the CONTROL arm — the trap path served normally and this number is 0 \
-                         by construction, not by measurement".to_string(),
+                         by construction, not by measurement"
+                            .to_string(),
                     (kayfabe_device::plane::FbTrapPolicy::RefuseByName, 0) =>
                         "★★★ THE TRAP PATH WAS NEVER REACHED. Publication covered every \
                          BAR1/BAR2 access this boot made, so `zero in practice` becomes \
@@ -18896,10 +18884,13 @@ impl Regs {
             // ★★★ Prefer the rate MEASURED on this boot through a device view of the reserved
             // object (w734's probe) over the 48 MiB/s the plan inherited. ⊘ Zero means the
             // probe never ran, which is not a slow rate — the line says which one it used.
-            let measured = crate::scratchpad::DEVICE_VIEW_READ_BPS
-                .load(std::sync::atomic::Ordering::Relaxed);
+            let measured =
+                crate::scratchpad::DEVICE_VIEW_READ_BPS.load(std::sync::atomic::Ordering::Relaxed);
             let (rate, provenance) = if measured > 0 {
-                (measured, "MEASURED on this boot through a device view of the reserved object")
+                (
+                    measured,
+                    "MEASURED on this boot through a device view of the reserved object",
+                )
             } else {
                 (
                     FB_IO_ASSUMED_BYTES_PER_SEC,
@@ -18941,9 +18932,11 @@ impl Regs {
         // lesson, one crate over: a boot with the arm off that printed nothing would be
         // indistinguishable from a boot whose shadow ran and found nothing to say — and the
         // second is the result, while the first is the absence of one.
-        match self.scratchpad.as_ref().and_then(
-            crate::scratchpad::Scratchpad::walk_shadow_census,
-        ) {
+        match self
+            .scratchpad
+            .as_ref()
+            .and_then(crate::scratchpad::Scratchpad::walk_shadow_census)
+        {
             Some(line) => eprintln!("kayfabe: {line}"),
             None => eprintln!(
                 "kayfabe: WALK-SHADOW ⊘ DISARMED — {}=off (the default), so the walk kernel \
@@ -18956,9 +18949,11 @@ impl Regs {
         // all, for the walk shadow's reason directly above: a boot that printed nothing when
         // the port was never built is indistinguishable from one whose port was built and
         // never asked for a view — and only the second is a measurement.
-        match self.scratchpad.as_ref().and_then(
-            crate::scratchpad::Scratchpad::device_port_census,
-        ) {
+        match self
+            .scratchpad
+            .as_ref()
+            .and_then(crate::scratchpad::Scratchpad::device_port_census)
+        {
             Some(line) => eprintln!("kayfabe: {line}"),
             None => eprintln!(
                 "kayfabe: DEVICE-VIEW-PORT ⊘ NOT BUILT — no port existed on this boot. Three \
@@ -20929,7 +20924,6 @@ fn selected_doorbell_inline() -> Result<DoorbellInlineArm, (Status, &'static str
     }
 }
 
-
 /// ★★★★★ **w383 — where the doorbell's publication and forward RUN.** See
 /// [`DOORBELL_ASYNC_ENV`].
 ///
@@ -22001,7 +21995,6 @@ fn refusal_kind_va(r: &kayfabe_mmu::walker::PopulateRefusal) -> (&'static str, O
     }
 }
 
-
 /// ★★★★★ **w329 — arm the RELEASE of a joined framebuffer leaf the guest has unmapped.**
 ///
 /// # ⊘ ON by default, and the removed `KAYFABE_PT_SWEEP` defaulted the other way
@@ -22207,8 +22200,8 @@ fn namer_census_cache() -> &'static std::sync::Mutex<std::collections::HashMap<u
 /// ⊘ A ledger, not a second source of truth about what the store holds: `fb_join_installed_at`
 /// is still asked first, and an entry here with no store join is simply ignored. It is keyed by
 /// frame because a frame has at most ONE store join (`install_join` refuses any overlap).
-fn minted_join_ledger(
-) -> &'static std::sync::Mutex<std::collections::HashMap<u64, kayfabe_isolate::IsolateId>> {
+fn minted_join_ledger()
+-> &'static std::sync::Mutex<std::collections::HashMap<u64, kayfabe_isolate::IsolateId>> {
     static L: std::sync::OnceLock<
         std::sync::Mutex<std::collections::HashMap<u64, kayfabe_isolate::IsolateId>>,
     > = std::sync::OnceLock::new();
@@ -22854,7 +22847,8 @@ fn userd_attempt(slot: Option<Result<(u32, u32), String>>) -> (Option<u32>, bool
 static USERD_ARM_TRIPS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 static USERD_ARM_RECOVERED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 static USERD_ARM_GAVE_UP: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-static USERD_ARM_REFUSED_NO_ARM: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static USERD_ARM_REFUSED_NO_ARM: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
 
 /// `[w740]` Submissions re-run after a drain armed a page, and how many of those went on to
 /// be served. `blocked_by_progress` is the safety valve firing: a refusal that had ALREADY

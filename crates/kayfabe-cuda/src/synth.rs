@@ -2,7 +2,7 @@
 //! is pointed at when the isolate proves it can run the kernel at all.
 //!
 //! # ⊘ Why the isolate builds its own image rather than reading the guest's
-//! 
+//!
 //! `SINGLE_STORE_PLAN.md` increment 4 proves the kernel **can run in-process and return a
 //! correct answer**. Pointing it at the guest's real tables is increment 6, and it would make
 //! this increment's result depend on a guest being in a particular state — so a red would not

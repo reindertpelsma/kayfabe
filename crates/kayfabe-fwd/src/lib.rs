@@ -4232,7 +4232,10 @@ pub fn plan_doorbell(
                     "kayfabe: BIRTH-KIND proc={:?} chan={:?} vchid={:?} engine={:?} \
                      kind=Emulated ✔ EMULATED — our own ring is CORRECT here: we drive it and \
                      it runs our function bodies",
-                    pid, cid, route.vchid, chan.engine,
+                    pid,
+                    cid,
+                    route.vchid,
+                    chan.engine,
                 );
             }
             kayfabe_core::channel_kind::GuestChannelKind::Passthrough => {
@@ -4243,7 +4246,10 @@ pub fn plan_doorbell(
                      one was not: look for its BIRTH-AT-ALLOC line and the ADOPT-WHY conjunct \
                      it names. NOTHING was materialized: adopting the USERD now would zero \
                      the cursor that rang (w233), and our ring is illegal for this kind",
-                    pid, cid, route.vchid, chan.engine,
+                    pid,
+                    cid,
+                    route.vchid,
+                    chan.engine,
                 );
                 return Err(FwdFault::PassthroughDoorbellBirth {
                     proc: pid,
@@ -4915,12 +4921,16 @@ fn adopted_guest_ring(
     // day of w392d was spent inferring which one fires; the answer is one `eprintln!` per
     // arm. ⊘ Do not collapse these back into `?` — the `?` is what cost the day.
     let Some(node) = spine.rmgraph.node_of_resource(chan.key) else {
-        kayfabe_util::lock_safe_eprintln!("kayfabe: ADOPT-WHY ⊘ (1) NO RMGRAPH NODE for this channel");
+        kayfabe_util::lock_safe_eprintln!(
+            "kayfabe: ADOPT-WHY ⊘ (1) NO RMGRAPH NODE for this channel"
+        );
         return None;
     };
     let facts = node.facts;
     let Some(ring) = facts.gp_fifo_ring else {
-        kayfabe_util::lock_safe_eprintln!("kayfabe: ADOPT-WHY ⊘ (2) the channel DECLARED NO GPFIFO RING");
+        kayfabe_util::lock_safe_eprintln!(
+            "kayfabe: ADOPT-WHY ⊘ (2) the channel DECLARED NO GPFIFO RING"
+        );
         return None;
     };
     let userd = facts.userd;
@@ -4986,11 +4996,9 @@ fn adopted_guest_ring(
     // *"we invented the bytes"* and *"they are the guest's own pages mapped through"*. That is
     // why `Binding::pinned_guest_ram` demands `GuestPhysDma` **and** `SoleBacking` together
     // (`kayfabe-mmu/src/lib.rs:743-746`), and why this reads both.
-    let guests_own_bytes = matches!(
-        host.bytes(),
-        kayfabe_mmu::BackingBytes::JoinsGuestWindow
-    ) || (matches!(binding.kind(), kayfabe_mmu::RegionKind::GuestPhysDma)
-        && matches!(host.bytes(), kayfabe_mmu::BackingBytes::SoleBacking));
+    let guests_own_bytes = matches!(host.bytes(), kayfabe_mmu::BackingBytes::JoinsGuestWindow)
+        || (matches!(binding.kind(), kayfabe_mmu::RegionKind::GuestPhysDma)
+            && matches!(host.bytes(), kayfabe_mmu::BackingBytes::SoleBacking));
     if !guests_own_bytes {
         kayfabe_util::lock_safe_eprintln!(
             "kayfabe: ADOPT-WHY ring=0x{:x} start={start:?} len=0x{len:x} ⊘ (7) host object \
@@ -5028,16 +5036,9 @@ fn adopted_guest_ring(
             // CLOSED: no oracle means nobody can answer, and a missing checker must never
             // read as a passed check — that is the whole class of defect this tree names
             // `a check that reports is not a check that gates`, in its worst direction.
-            let placed = vas
-                .store_vas
-                .zip(oracle)
-                .is_some_and(|(store_vas, o)| {
-                    o.is_slice_of_the_store(
-                        store_vas,
-                        kayfabe_arch::ids::GpuVa(start),
-                        len,
-                    )
-                });
+            let placed = vas.store_vas.zip(oracle).is_some_and(|(store_vas, o)| {
+                o.is_slice_of_the_store(store_vas, kayfabe_arch::ids::GpuVa(start), len)
+            });
             if !placed {
                 kayfabe_util::lock_safe_eprintln!(
                     "kayfabe: ADOPT-WHY ring=0x{:x} start={start:?} len=0x{len:x} ⊘ (8) \
@@ -5957,8 +5958,7 @@ pub fn commit_subdevice_control(
 fn note_short_writeback(want: usize, got: usize) -> usize {
     if got < want {
         SHORT_WRITEBACKS.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
-        SHORT_WRITEBACK_BYTES
-            .fetch_add((want - got) as u64, core::sync::atomic::Ordering::Relaxed);
+        SHORT_WRITEBACK_BYTES.fetch_add((want - got) as u64, core::sync::atomic::Ordering::Relaxed);
     }
     want.min(got)
 }
@@ -5966,8 +5966,7 @@ fn note_short_writeback(want: usize, got: usize) -> usize {
 /// How many control write-backs were shorter than the guest's declared buffer.
 static SHORT_WRITEBACKS: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
 /// How many bytes of guest request data were therefore left in place, in total.
-static SHORT_WRITEBACK_BYTES: core::sync::atomic::AtomicU64 =
-    core::sync::atomic::AtomicU64::new(0);
+static SHORT_WRITEBACK_BYTES: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
 
 /// One line for the boot log. ⊘ Prints its zero arm explicitly: "no line" and "never
 /// happened" must not read the same.
@@ -5995,7 +5994,11 @@ mod short_writeback_tests {
     #[test]
     fn a_short_host_reply_is_counted_and_named() {
         let before = SHORT_WRITEBACKS.load(Ordering::Relaxed);
-        assert_eq!(note_short_writeback(104, 40), 40, "copies only what arrived");
+        assert_eq!(
+            note_short_writeback(104, 40),
+            40,
+            "copies only what arrived"
+        );
         assert_eq!(
             SHORT_WRITEBACKS.load(Ordering::Relaxed),
             before + 1,
@@ -6013,7 +6016,11 @@ mod short_writeback_tests {
     fn an_exact_or_longer_reply_is_not_counted() {
         let before = SHORT_WRITEBACKS.load(Ordering::Relaxed);
         assert_eq!(note_short_writeback(104, 104), 104, "exact fits exactly");
-        assert_eq!(note_short_writeback(104, 200), 104, "never overruns the guest");
+        assert_eq!(
+            note_short_writeback(104, 200),
+            104,
+            "never overruns the guest"
+        );
         assert_eq!(
             SHORT_WRITEBACKS.load(Ordering::Relaxed),
             before,

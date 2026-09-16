@@ -47,7 +47,9 @@ fn page(phys: u64) -> PtPage {
 /// one child edge, one sparse slot and an invalid count — so the test can assert the page
 /// structure is carried through untouched.
 fn a_decode(va0: u64, phys0: u64, n: u64) -> SubtreeDecode {
-    let leaves: Vec<DecodedLeaf> = (0..n).map(|i| leaf(va0 + i * PAGE, phys0 + i * PAGE)).collect();
+    let leaves: Vec<DecodedLeaf> = (0..n)
+        .map(|i| leaf(va0 + i * PAGE, phys0 + i * PAGE))
+        .collect();
     let d = PageDecode {
         children: vec![page(0x9000)],
         leaves: leaves.clone(),
@@ -67,9 +69,11 @@ fn a_decode(va0: u64, phys0: u64, n: u64) -> SubtreeDecode {
 /// and one COALESCED kernel run covering all of them — which is the real shape, since the
 /// kernel reports runs and the host reports single pages.
 fn sides(va0: u64, phys0: u64, n: u64) -> (Vec<Run>, Vec<Run>, usize) {
-    let (host, unclassed) = walkshadow::leaves_as_runs(&(0..n)
-        .map(|i| leaf(va0 + i * PAGE, phys0 + i * PAGE))
-        .collect::<Vec<_>>());
+    let (host, unclassed) = walkshadow::leaves_as_runs(
+        &(0..n)
+            .map(|i| leaf(va0 + i * PAGE, phys0 + i * PAGE))
+            .collect::<Vec<_>>(),
+    );
     let kernel = walkshadow::kernel_runs_as_compared(&[Run {
         va: va0,
         gpga: phys0,
@@ -98,7 +102,10 @@ fn an_agreeing_substitution_is_total_and_leaves_the_page_structure_alone() {
     assert_eq!(out.visited, d.visited, "`visited` is the HOST walk's");
     assert_eq!(pd.leaves.len(), 4);
     for (a, b) in pd.leaves.iter().zip(d.decodes[0].1.leaves.iter()) {
-        assert_eq!(a, b, "under agreement the substituted leaf IS the host leaf");
+        assert_eq!(
+            a, b,
+            "under agreement the substituted leaf IS the host leaf"
+        );
     }
     // ⊘ The flattened view stays consistent with the per-page one, or two consumers of the
     // same decode would disagree about what was found.
@@ -129,13 +136,35 @@ fn a_disagreement_refuses_and_names_how_many() {
     let (host, _k, unclassed) = sides(0x1_0000_0000, 0x20_0000, 4);
     // The kernel points one page somewhere else ⇒ canonicalisation cannot merge it away.
     let kernel = walkshadow::kernel_runs_as_compared(&[
-        Run { va: 0x1_0000_0000, gpga: 0x20_0000, len: PAGE, flags: 0, class: PageClass::P4K },
-        Run { va: 0x1_0000_1000, gpga: 0x99_0000, len: PAGE, flags: 0, class: PageClass::P4K },
-        Run { va: 0x1_0000_2000, gpga: 0x20_2000, len: 2 * PAGE, flags: 0, class: PageClass::P4K },
+        Run {
+            va: 0x1_0000_0000,
+            gpga: 0x20_0000,
+            len: PAGE,
+            flags: 0,
+            class: PageClass::P4K,
+        },
+        Run {
+            va: 0x1_0000_1000,
+            gpga: 0x99_0000,
+            len: PAGE,
+            flags: 0,
+            class: PageClass::P4K,
+        },
+        Run {
+            va: 0x1_0000_2000,
+            gpga: 0x20_2000,
+            len: 2 * PAGE,
+            flags: 0,
+            class: PageClass::P4K,
+        },
     ]);
     let e = walkshadow::substitute(&d, &host, &kernel, unclassed).expect_err("must refuse");
     assert_eq!(e.as_str(), "disagreed", "{e:?}");
-    assert_eq!(e, SwapRefusal::Disagreed(3), "one len_differs and two extra_in_kernel");
+    assert_eq!(
+        e,
+        SwapRefusal::Disagreed(3),
+        "one len_differs and two extra_in_kernel"
+    );
 }
 
 /// ⊘ **A LEAF THE KERNEL DOES NOT COVER REFUSES BY NAME.** Unreachable after an empty
@@ -162,7 +191,10 @@ fn kernel_bytes_the_decode_never_places_refuse() {
     assert_eq!(e.as_str(), "bytes_unplaced", "{e:?}");
     assert_eq!(
         e,
-        SwapRefusal::BytesUnplaced { kernel: 4 * PAGE, host: 2 * PAGE }
+        SwapRefusal::BytesUnplaced {
+            kernel: 4 * PAGE,
+            host: 2 * PAGE
+        }
     );
 }
 
@@ -208,7 +240,11 @@ fn every_swap_refusal_has_its_own_name() {
         SwapRefusal::TargetChanged { va: 0 }.as_str(),
     ];
     let uniq: std::collections::BTreeSet<_> = names.iter().collect();
-    assert_eq!(uniq.len(), names.len(), "two refusals share a name: {names:?}");
+    assert_eq!(
+        uniq.len(),
+        names.len(),
+        "two refusals share a name: {names:?}"
+    );
 }
 
 /// ★★★ **THE CENSUS TELLS A SWAP BOOT THAT DECIDED NOTHING FROM A SHADOW BOOT.**
@@ -226,7 +262,10 @@ fn an_armed_swap_that_decided_nothing_renders_vacuous_beside_an_agreeing_census(
 
     c.note_swap_armed();
     let armed = c.render();
-    assert!(armed.contains("AGREEMENT"), "the agreement verdict is unchanged: {armed}");
+    assert!(
+        armed.contains("AGREEMENT"),
+        "the agreement verdict is unchanged: {armed}"
+    );
     assert!(
         armed.contains("SWAP VACUOUS"),
         "an armed swap that decided nothing must say so beside it: {armed}"

@@ -751,7 +751,6 @@ mod tests {
     }
 }
 
-
 // =====================================================================================
 // ★★★★★ THREAD CLASS — owner, 2026-09-09: "a VCPU block is worse than a block in a reader
 // thread. Reader threads can sleep to wait for an operation, vcpu threads not."
@@ -805,15 +804,17 @@ pub fn current_class() -> ThreadClass {
     if crate::trapwitness::in_trap() {
         return ThreadClass::Vcpu;
     }
-    DECLARED_CLASS.with(Cell::get).unwrap_or(ThreadClass::Coordinator)
+    DECLARED_CLASS
+        .with(Cell::get)
+        .unwrap_or(ThreadClass::Coordinator)
 }
 
 // =====================================================================================
 // ★★★★★ WHAT BLOCKED ON A vCPU THREAD — the owner's 2026-09-09 allowlist, as a census.
 // =====================================================================================
 
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering as AtomicOrdering};
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering as AtomicOrdering};
 
 const VCPU_BLOCK_SLOTS: usize = 16;
 static VB_CLAIMED: [AtomicUsize; VCPU_BLOCK_SLOTS] =
@@ -969,7 +970,10 @@ pub fn vcpu_blocking_rows() -> Vec<(&'static str, u64, bool)> {
             continue;
         }
         out.push((
-            VB_NAME[i].get().copied().unwrap_or("⊘ (reason not yet published)"),
+            VB_NAME[i]
+                .get()
+                .copied()
+                .unwrap_or("⊘ (reason not yet published)"),
             hits,
             VB_ALLOWED[i].load(AtomicOrdering::Acquire) == 1,
         ));
@@ -1003,7 +1007,10 @@ pub fn vcpu_blocking_census() -> String {
     let coord = if coord_n == 0 {
         // ⊘ Zero is the EXPECTED value and is stated, not omitted: an absent line and a clean
         // line are indistinguishable, which is how five instruments went unread today.
-        format!(" | COORD-SLOW 0 committed-over-{}us (expected)", COORDINATOR_SLOW_US)
+        format!(
+            " | COORD-SLOW 0 committed-over-{}us (expected)",
+            COORDINATOR_SLOW_US
+        )
     } else {
         format!(
             " | COORD-SLOW {coord_n} section(s) over {}us, worst={coord_worst}us {} \
@@ -1025,7 +1032,11 @@ pub fn vcpu_blocking_census() -> String {
         rows.iter()
             .map(|(what, n, allowed)| format!(
                 "[{n} × {what}{}]",
-                if *allowed { " (ALLOWLISTED)" } else { " ⊘ NOT ALLOWLISTED" }
+                if *allowed {
+                    " (ALLOWLISTED)"
+                } else {
+                    " ⊘ NOT ALLOWLISTED"
+                }
             ))
             .collect::<Vec<_>>()
             .join(" "),
@@ -1055,7 +1066,9 @@ mod the_vcpu_allowlist {
         let before = vcpu_blocking_rows().len();
         let _s = BlockingSection::enter("unit-test-off-trap");
         assert!(
-            !vcpu_blocking_rows().iter().any(|r| r.0 == "unit-test-off-trap"),
+            !vcpu_blocking_rows()
+                .iter()
+                .any(|r| r.0 == "unit-test-off-trap"),
             "off-trap blocking is the CORRECT shape and must not be reported as a violation"
         );
         assert_eq!(vcpu_blocking_rows().len(), before);
@@ -1077,7 +1090,10 @@ mod the_vcpu_allowlist {
             .iter()
             .find(|r| r.0 == "unit-test-memslot-install")
             .expect("the allowlisted site must be recorded too");
-        assert!(!bad.2, "an ordinary section on a vCPU thread is NOT allowlisted");
+        assert!(
+            !bad.2,
+            "an ordinary section on a vCPU thread is NOT allowlisted"
+        );
         assert!(ok.2, "the allowlist door must mark its entries");
 
         let line = vcpu_blocking_census();
@@ -1103,7 +1119,6 @@ mod the_vcpu_allowlist {
         );
     }
 }
-
 
 // =====================================================================================
 // ★★★★★ OWNER INVARIANT (2), 2026-09-09 — "no blocking calls in a lock in any thread
@@ -1147,7 +1162,11 @@ pub mod lockcost {
     /// ⊘ The caller's location arrives via `#[track_caller]`, so **no call site changes** and
     /// nothing is passed by hand — a label threaded through hundreds of acquisitions is a
     /// label that goes stale at the first refactor.
-    pub fn note_hold_at(rank: LockRank, site: &'static core::panic::Location<'static>, d: Duration) {
+    pub fn note_hold_at(
+        rank: LockRank,
+        site: &'static core::panic::Location<'static>,
+        d: Duration,
+    ) {
         let us = u64::try_from(d.as_micros()).unwrap_or(u64::MAX);
         let slot = slot(rank);
         // ⊘ Record the site only when this hold is the new worst for its rank, so the pair
@@ -1187,8 +1206,7 @@ pub mod lockcost {
     /// answer.
     const SITE_SLOTS: usize = 1024;
     /// The `&'static Location` pointer identifying a site, or 0 for an unclaimed slot.
-    static ACQ_SITE_KEY: [AtomicUsize; SITE_SLOTS] =
-        [const { AtomicUsize::new(0) }; SITE_SLOTS];
+    static ACQ_SITE_KEY: [AtomicUsize; SITE_SLOTS] = [const { AtomicUsize::new(0) }; SITE_SLOTS];
     /// Acquisitions charged to the slot with the same index, packed as `rank << 56 | count`.
     static ACQ_SITE_COUNT: [AtomicU64; SITE_SLOTS] = [const { AtomicU64::new(0) }; SITE_SLOTS];
     /// Acquisitions that found no free slot. ⊘ Nonzero means the table is TOO SMALL and the
@@ -1260,12 +1278,7 @@ pub mod lockcost {
         let i = claim_site(site);
         if i != usize::MAX {
             IN_TRAP_SITE[i].fetch_add(1, Ordering::Relaxed);
-            let _ = IN_TRAP_FIRST.compare_exchange(
-                0,
-                i + 1,
-                Ordering::AcqRel,
-                Ordering::Relaxed,
-            );
+            let _ = IN_TRAP_FIRST.compare_exchange(0, i + 1, Ordering::AcqRel, Ordering::Relaxed);
         }
     }
 
@@ -1323,7 +1336,8 @@ pub mod lockcost {
     /// The file/line of a slot recorded by [`sample_holder`] or [`note_holder`].
     fn name_of(slot_plus_one: usize) -> Option<(&'static str, u32)> {
         let i = slot_plus_one.checked_sub(1)?;
-        *ACQ_SITE_NAME.get(i)?
+        *ACQ_SITE_NAME
+            .get(i)?
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
@@ -1560,8 +1574,14 @@ mod blocking_severity_is_per_thread_class {
         .join()
         .unwrap();
         let (rows, n, worst) = slow_coordinator_rows();
-        assert!(n >= 1 && worst >= COORDINATOR_SLOW_US, "n={n} worst={worst}");
-        assert!(rows.iter().any(|r| r.0 == "unit-test-coord-long"), "{rows:?}");
+        assert!(
+            n >= 1 && worst >= COORDINATOR_SLOW_US,
+            "n={n} worst={worst}"
+        );
+        assert!(
+            rows.iter().any(|r| r.0 == "unit-test-coord-long"),
+            "{rows:?}"
+        );
         assert!(
             !rows.iter().any(|r| r.0 == "unit-test-coord-short"),
             "a SHORT coordinator section must not be reported — the rule is about duration: \
@@ -1578,8 +1598,10 @@ mod blocking_severity_is_per_thread_class {
         std::thread::spawn(|| {
             declare_thread_class(ThreadClass::Coordinator);
             // The healthy shape: parked far longer than the threshold, but wakeable.
-            let long_poll =
-                BlockingSection::responsive("unit-test-multiplexed", "the submission queue's wakeup");
+            let long_poll = BlockingSection::responsive(
+                "unit-test-multiplexed",
+                "the submission queue's wakeup",
+            );
             std::thread::sleep(std::time::Duration::from_micros(COORDINATOR_SLOW_US * 3));
             drop(long_poll);
             // The harmful shape: shorter, but nothing could have woken it.
@@ -1613,7 +1635,10 @@ mod blocking_severity_is_per_thread_class {
     fn a_responsive_wait_on_a_vcpu_is_still_a_violation() {
         {
             let _t = crate::trapwitness::TrapGuard::enter();
-            drop(BlockingSection::responsive("unit-test-vcpu-responsive", "anything"));
+            drop(BlockingSection::responsive(
+                "unit-test-vcpu-responsive",
+                "anything",
+            ));
         }
         assert!(
             vcpu_blocking_rows()
@@ -1665,8 +1690,12 @@ mod hammer_census_tests {
             *m.lock() += 1;
         }
         let c = hammer_census(LockRank::Leaf, 4);
-        let hot = c.find("=500").expect("the 500-acquisition site must be counted");
-        let cold = c.find("=3").expect("the 3-acquisition site must be counted");
+        let hot = c
+            .find("=500")
+            .expect("the 500-acquisition site must be counted");
+        let cold = c
+            .find("=3")
+            .expect("the 3-acquisition site must be counted");
         assert!(
             hot < cold,
             "the busiest site must be reported FIRST — a census that does not RANK cannot \
@@ -2083,6 +2112,7 @@ mod a_diagnostic_may_not_kill_the_process {
                 "the census must remain readable from any thread"
             );
         });
-        t.join().expect("a thread that only emits diagnostics must exit cleanly");
+        t.join()
+            .expect("a thread that only emits diagnostics must exit cleanly");
     }
 }

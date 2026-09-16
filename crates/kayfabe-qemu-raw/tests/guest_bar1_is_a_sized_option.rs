@@ -195,5 +195,9 @@ fn deriving_the_framebuffer_size_restores_the_static_bar_table() {
     let (both, moved) = kayfabe_device::with_bar_len(derived, bus_bar::FB, 128 * 1024 * 1024);
     assert!(moved);
     assert_eq!(both.pci_bar_len(bus_bar::FB), 128 * 1024 * 1024);
-    assert_eq!(both.fb_length, 4096 << 20, "and the size survives the BAR patch");
+    assert_eq!(
+        both.fb_length,
+        4096 << 20,
+        "and the size survives the BAR patch"
+    );
 }

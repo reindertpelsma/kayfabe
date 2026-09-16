@@ -1441,7 +1441,10 @@ fn bar1_crossing_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
                 use std::os::fd::AsFd;
                 let map = |prot| {
                     kayfabe_linux_raw::MappedRegion::map(
-                        kayfabe_linux_raw::Backing::SharedFile { fd: fd.as_fd(), offset: 0 },
+                        kayfabe_linux_raw::Backing::SharedFile {
+                            fd: fd.as_fd(),
+                            offset: 0,
+                        },
                         v.mmap_len,
                         prot,
                         kayfabe_linux_raw::CachePolicy::WriteBack,
@@ -1493,7 +1496,9 @@ fn bar1_crossing_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
                     }
                 }
             }
-            Err(e) => println!("FAIL  W393 LEG R        = could not lend the read-only node: {e:?}"),
+            Err(e) => {
+                println!("FAIL  W393 LEG R        = could not lend the read-only node: {e:?}")
+            }
         },
         Err(e) => println!("FAIL  W393 LEG R        = arming an O_RDONLY view was refused: {e:?}"),
     }
@@ -1515,21 +1520,13 @@ fn bar1_crossing_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
                     kayfabe_linux_raw::HostPageSize::query(),
                 ) {
                     Ok(win) => {
-                        let ro = win.place_device_view(
-                            HostOffset::ZERO,
-                            v.mmap_len,
-                            fd.as_fd(),
-                            false,
-                        );
+                        let ro =
+                            win.place_device_view(HostOffset::ZERO, v.mmap_len, fd.as_fd(), false);
                         // ⊘ And the negative control in the same breath: the SAME node placed
                         // writable must be refused, or `false` above proves nothing about the
                         // arming and only that we asked for less.
-                        let rw = win.place_device_view(
-                            HostOffset::ZERO,
-                            v.mmap_len,
-                            fd.as_fd(),
-                            true,
-                        );
+                        let rw =
+                            win.place_device_view(HostOffset::ZERO, v.mmap_len, fd.as_fd(), true);
                         match (ro.is_ok(), rw.is_err()) {
                             (true, true) => println!(
                                 "\u{2605}\u{2605}\u{2605}\u{2605}\u{2605} W393 LEG P        = an O_RDONLY view PLACES read-only and \
@@ -12760,8 +12757,8 @@ mod route_k {
             }
         };
 
-        let uvm_engine = engine_type_copy(UVM_CE_INDEX)
-            .unwrap_or(kayfabe_abi::submit::ENGINE_TYPE_COPY0);
+        let uvm_engine =
+            engine_type_copy(UVM_CE_INDEX).unwrap_or(kayfabe_abi::submit::ENGINE_TYPE_COPY0);
         println!("K_UVM_ENGINE_TYPE={uvm_engine:#x}");
 
         // ★★★★★ ROW 4's KNOWN-POSITIVE, AND WITHOUT IT A REFUSAL BELOW IS UNINTERPRETABLE.
@@ -13310,7 +13307,10 @@ mod route_k {
             "K_CHAN_FLAGS_READBACK={:#010x}  K_TOKEN={:#010x}",
             birth.flags_readback, birth.token
         );
-        println!("K_CE_OBJECT={:#010x} class {ce_class:#06x}", birth.ce_object);
+        println!(
+            "K_CE_OBJECT={:#010x} class {ce_class:#06x}",
+            birth.ce_object
+        );
         if bit5 != 0 {
             rc = 1;
         }
@@ -14338,7 +14338,9 @@ fn main() -> std::process::ExitCode {
         let mb = rm.largest_reservable_mb(12288);
         println!("GPGA_LARGEST_RESERVABLE_MB={mb}  (advertised today: 12288)");
         if mb == 0 {
-            println!("GPGA_PROBE=(F) ⊘ nothing down to 256 MiB reserved — the design's premise fails here");
+            println!(
+                "GPGA_PROBE=(F) ⊘ nothing down to 256 MiB reserved — the design's premise fails here"
+            );
         } else {
             // The PCIe read cost, on a slice the size of the page tables a 12 GiB mapping
             // needs (~24 MiB), which is the quantity the refresh would re-read.
@@ -14358,8 +14360,7 @@ fn main() -> std::process::ExitCode {
                     );
                     let (h_took, _) =
                         kayfabe_isolate_host::rm::HostRmBackend::time_hostmem_read(probe_len);
-                    let h_mbps =
-                        (probe_len as f64 / (1 << 20) as f64) / h_took.as_secs_f64();
+                    let h_mbps = (probe_len as f64 / (1 << 20) as f64) / h_took.as_secs_f64();
                     println!(
                         "GPGA_HOSTMEM_READ={h_mbps:.0} MiB/s (the SAME loop over ordinary RAM) \
                          ⇒ ratio {:.0}x — if this is fast, the cost is the BUS, not the wrapper",
@@ -14367,7 +14368,9 @@ fn main() -> std::process::ExitCode {
                     );
                     println!("GPGA_PROBE=(P) ★ reserved {mb} MiB and measured the read cost");
                 }
-                Err(e) => println!("GPGA_PROBE=(E) ⊘ reserved {mb} MiB but the read probe refused: {e:?}"),
+                Err(e) => {
+                    println!("GPGA_PROBE=(E) ⊘ reserved {mb} MiB but the read probe refused: {e:?}")
+                }
             }
         }
         return std::process::ExitCode::SUCCESS;
@@ -17272,8 +17275,7 @@ mod mean {
             // ⊘ `Unexercised`, NOT `Refused`: nothing was asked of RM. A `Refused` here
             // would read as the board turning us down, which is a different fact.
             return PathState::Unexercised(
-                "the pinned host classes declare no compute object for their generation"
-                    .to_owned(),
+                "the pinned host classes declare no compute object for their generation".to_owned(),
             );
         };
         if let Err(e) = rm.alloc(gr_chan, compute.compute_object_id(), &gr_params) {

@@ -350,11 +350,21 @@ mod one_gpga_many_views {
         let mut t = GpgaViews::new();
         let a = t.map(G, 0x1000, ViewSpace::Vmm, 0x7f00_0000).unwrap();
         let b = t.map(G, 0x1000, ViewSpace::Vmm, 0x7f10_0000).unwrap();
-        let c = t.map(G, 0x1000, ViewSpace::isolate(1, G0), 0x40_0000).unwrap();
-        let d = t.map(G, 0x1000, ViewSpace::isolate(1, G0), 0x41_0000).unwrap();
-        let e = t.map(G, 0x1000, ViewSpace::isolate(2, G0), 0x40_0000).unwrap();
-        let f = t.map(G, 0x1000, ViewSpace::Scratchpad(G0), 0x10_0000).unwrap();
-        let h = t.map(G, 0x1000, ViewSpace::GuestMmio(G0), 0xe000_0000).unwrap();
+        let c = t
+            .map(G, 0x1000, ViewSpace::isolate(1, G0), 0x40_0000)
+            .unwrap();
+        let d = t
+            .map(G, 0x1000, ViewSpace::isolate(1, G0), 0x41_0000)
+            .unwrap();
+        let e = t
+            .map(G, 0x1000, ViewSpace::isolate(2, G0), 0x40_0000)
+            .unwrap();
+        let f = t
+            .map(G, 0x1000, ViewSpace::Scratchpad(G0), 0x10_0000)
+            .unwrap();
+        let h = t
+            .map(G, 0x1000, ViewSpace::GuestMmio(G0), 0xe000_0000)
+            .unwrap();
 
         // twice in the VMM, twice in ONE isolate, once in a SECOND isolate, scratchpad, MMIO
         assert_eq!(t.refcount(G), 7);
@@ -419,12 +429,23 @@ mod one_gpga_many_views {
         // because each GPU's framebuffer starts at its own zero. Before the GPU axis existed
         // these two `map` calls were indistinguishable and the table said "one range, aliased".
         let mut t = GpgaViews::new();
-        let a = t.map(G, 0x1000, ViewSpace::Scratchpad(G0), 0x10_0000).unwrap();
-        let b = t.map(G, 0x1000, ViewSpace::Scratchpad(G1), 0x10_0000).unwrap();
-        assert_ne!(a.space(), b.space(), "two GPUs' scratchpads are not one space");
+        let a = t
+            .map(G, 0x1000, ViewSpace::Scratchpad(G0), 0x10_0000)
+            .unwrap();
+        let b = t
+            .map(G, 0x1000, ViewSpace::Scratchpad(G1), 0x10_0000)
+            .unwrap();
+        assert_ne!(
+            a.space(),
+            b.space(),
+            "two GPUs' scratchpads are not one space"
+        );
 
         let spaces: Vec<_> = t.views_of(G).iter().map(|v| v.space).collect();
-        assert_eq!(spaces, vec![ViewSpace::Scratchpad(G0), ViewSpace::Scratchpad(G1)]);
+        assert_eq!(
+            spaces,
+            vec![ViewSpace::Scratchpad(G0), ViewSpace::Scratchpad(G1)]
+        );
     }
 
     #[test]
@@ -449,9 +470,17 @@ mod one_gpga_many_views {
         // process per target GPU — `SandboxPolicy::for_gpu` binds only `nvidia{gpu}`. A view
         // space keyed on the proc alone would merge two different processes.
         let mut t = GpgaViews::new();
-        let _a = t.map(G, 0x1000, ViewSpace::isolate(5, G0), 0x40_0000).unwrap();
-        let _b = t.map(G, 0x1000, ViewSpace::isolate(5, G1), 0x40_0000).unwrap();
-        assert_eq!(t.refcount(G), 2, "same proc, same address, two GPUs ⇒ two views");
+        let _a = t
+            .map(G, 0x1000, ViewSpace::isolate(5, G0), 0x40_0000)
+            .unwrap();
+        let _b = t
+            .map(G, 0x1000, ViewSpace::isolate(5, G1), 0x40_0000)
+            .unwrap();
+        assert_eq!(
+            t.refcount(G),
+            2,
+            "same proc, same address, two GPUs ⇒ two views"
+        );
         assert_eq!(t.aliased(), vec![(G, 2)]);
     }
 
@@ -473,6 +502,10 @@ mod one_gpga_many_views {
         let g = t.map(G, 0x1000, ViewSpace::Vmm, 0x1000).unwrap();
         let mut other = GpgaViews::new();
         other.release(g);
-        assert!(other.census().contains("orphan_releases=1"), "{}", other.census());
+        assert!(
+            other.census().contains("orphan_releases=1"),
+            "{}",
+            other.census()
+        );
     }
 }

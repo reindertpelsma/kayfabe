@@ -46,10 +46,8 @@ const LEAF_PHYS: u64 = 0x15_0000;
 
 /// The `Vas`'s own `host_vas`, read the way the boot census would.
 fn host_vas_of(dev: &SharedDevice, pid: ProcId) -> Option<kayfabe_isolate::HostHandle> {
-    dev.with_proc_mut(pid, |p| {
-        p.vas_by_pdb(GPU, PDB).and_then(|v| v.host_vas)
-    })
-    .flatten()
+    dev.with_proc_mut(pid, |p| p.vas_by_pdb(GPU, PDB).and_then(|v| v.host_vas))
+        .flatten()
 }
 
 fn leaf() -> kayfabe_rt::completion_watch::FbLeaf {
@@ -169,13 +167,11 @@ fn a_route_the_spine_disagrees_with_is_refused_by_name() {
     // disagree. ⊘ It is its own known-positive — the input below is the disagreement.
     let (dev, pid) = one_process_device();
     let impostor = ProcId(pid.0.wrapping_add(7));
-    let err = dev
-        .vaspace_handover(impostor, GPU, PDB, leaf())
-        .expect_err(
-            "★★★★★ CONSTRAINT 29 — a hand-over was performed for a proc the spine does not \
+    let err = dev.vaspace_handover(impostor, GPU, PDB, leaf()).expect_err(
+        "★★★★★ CONSTRAINT 29 — a hand-over was performed for a proc the spine does not \
              say owns this PDB. That is a cross-address-space hand-over: the scratchpad \
              would place another guest process's slices in this one's page tables.",
-        );
+    );
     match err {
         FwdFault::HandoverRouteDisagrees {
             caller,
@@ -208,14 +204,12 @@ fn a_leaf_this_vas_describes_at_another_frame_is_refused() {
     let (dev, pid) = one_process_device();
     // The `Vas` says this VA is a DIFFERENT framebuffer frame.
     bind_row(&dev, pid, LEAF_VA, LEAF_LEN, LEAF_PHYS + 0x1000);
-    let err = dev
-        .vaspace_handover(pid, GPU, PDB, leaf())
-        .expect_err(
-            "★★★★★ CONSTRAINT 29 — the caller's route reached a `Vas` that describes this VA \
+    let err = dev.vaspace_handover(pid, GPU, PDB, leaf()).expect_err(
+        "★★★★★ CONSTRAINT 29 — the caller's route reached a `Vas` that describes this VA \
              as another frame, and the hand-over proceeded anyway. The scratchpad would then \
              place a slice of the one reserved object over a frame the guest is using for \
              something else.",
-        );
+    );
     assert!(
         matches!(err, FwdFault::FbLeafDisagrees { .. }),
         "the refusal must name the disagreement: got {err:?}"

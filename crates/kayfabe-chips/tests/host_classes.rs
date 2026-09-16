@@ -598,7 +598,11 @@ fn the_blackwell_channel_pick_departs_from_the_max_rule_because_a_5090_answered(
 
     // The other two roles DO follow the rule, and that is worth asserting: a profile that
     // departed everywhere would mean the rule had simply been abandoned.
-    assert_eq!(user, newest(GB202.usermode), "usermode follows the max rule");
+    assert_eq!(
+        user,
+        newest(GB202.usermode),
+        "usermode follows the max rule"
+    );
     assert_eq!(ce, newest(GB202.ce), "CE object follows the max rule");
     assert_eq!(
         ce, BLACKWELL_DMA_COPY_B,

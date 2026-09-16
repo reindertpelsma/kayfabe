@@ -373,7 +373,8 @@ fn an_interrupt_write_does_not_wait_on_the_plane_lock() {
 
     // Stand in for the CE submission: hold the plane's own lock for as long as we like.
     let holder = {
-        let (p, holder_in, release) = (Arc::clone(&p), Arc::clone(&holder_in), Arc::clone(&release));
+        let (p, holder_in, release) =
+            (Arc::clone(&p), Arc::clone(&holder_in), Arc::clone(&release));
         std::thread::spawn(move || {
             p.hold_plane_state_for_test(|| {
                 holder_in.store(true, Ordering::Release);

@@ -1189,7 +1189,9 @@ impl Envelope {
             }
             Request::WalkShadowRun { pdbs } => {
                 out.push(33);
-                out.extend_from_slice(&(u32::try_from(pdbs.len()).unwrap_or(u32::MAX)).to_le_bytes());
+                out.extend_from_slice(
+                    &(u32::try_from(pdbs.len()).unwrap_or(u32::MAX)).to_le_bytes(),
+                );
                 for p in pdbs {
                     out.extend_from_slice(&p.to_le_bytes());
                 }

@@ -165,7 +165,11 @@ mod tests {
     fn no_vases_is_not_a_change() {
         let mut w = PublicationWatermark::new();
         w.take_changed(&[(A, 1)]);
-        assert_eq!(w.take_changed(&[]), 0, "everything retired; nothing to publish");
+        assert_eq!(
+            w.take_changed(&[]),
+            0,
+            "everything retired; nothing to publish"
+        );
         assert_eq!(w.tracked(), 0);
     }
 

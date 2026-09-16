@@ -168,7 +168,6 @@ fn every_event_naming_an_undeclared_namespace_is_refused_by_name() {
                 // a sysmem-rooted PDB read as vidmem walks the wrong memory and
                 // reports success, because a wrong-aperture read returns zeros.
                 pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
             },
         ),
         (
@@ -315,7 +314,6 @@ fn an_object_allocated_into_an_undeclared_namespace_mints_no_boundary() {
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         },
     ]
     .into_iter()
@@ -453,7 +451,6 @@ fn defer_a_parked_setpagedir_resolves_when_its_vaspace_arrives() {
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         },
     )
     .expect("★ a PDB declared on an unobserved handle PARKS");
@@ -524,7 +521,6 @@ fn a_free_prunes_its_own_parked_pdb_and_leaves_an_untouched_handles_parked_pdb_a
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         },
     )
     .expect("a PDB declared on an unobserved handle parks");
@@ -550,7 +546,6 @@ fn a_free_prunes_its_own_parked_pdb_and_leaves_an_untouched_handles_parked_pdb_a
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         },
     )
     .expect("and a PDB parks on the same handle value");
@@ -712,7 +707,6 @@ fn a_non_root_free_prunes_exactly_the_parked_facts_rooted_at_it_in_every_table()
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         },
     )
     .expect("a PDB parked on the doomed handle value");
@@ -726,7 +720,6 @@ fn a_non_root_free_prunes_exactly_the_parked_facts_rooted_at_it_in_every_table()
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         },
     )
     .expect("a bystander PDB parked in PEER");
@@ -932,7 +925,6 @@ fn defer_an_unresolved_gpu_target_resolves_when_the_device_arrives() {
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         },
     )
     .expect("with a declared PDB");
@@ -1034,7 +1026,6 @@ fn defer_a_channel_with_an_unresolved_vaspace_faults_at_use_then_resolves() {
         // a sysmem-rooted PDB read as vidmem walks the wrong memory and
         // reports success, because a wrong-aperture read returns zeros.
         pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
     })
     .expect("…and binds its page directory");
     assert_eq!(
@@ -1086,7 +1077,6 @@ fn defer_an_unrouted_channel_keeps_a_stable_chanid_until_its_device_arrives() {
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         },
         RmEvent::Alloc {
             client: C,
@@ -1185,7 +1175,6 @@ fn defer_an_rpc_mapping_with_no_pdb_populates_when_setpagedir_lands() {
         // a sysmem-rooted PDB read as vidmem walks the wrong memory and
         // reports success, because a wrong-aperture read returns zeros.
         pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
     })
     .expect("★ SET_PAGE_DIRECTORY finally arrives");
     let (binding, off) =
@@ -1220,7 +1209,6 @@ fn defer_an_rpc_mapping_with_no_gpu_target_populates_when_the_device_lands() {
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         },
         memory(C, H_DEV, H_MEM, MEM_PHYS),
         RmEvent::MapMemoryDma {
@@ -1276,7 +1264,6 @@ fn fault_a_mapping_whose_memory_declared_no_backing_is_unbacked_by_name() {
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         },
         // A MEMORY object with NO declared `mem_phys`.
         RmEvent::Alloc {
@@ -1509,7 +1496,6 @@ fn a_parked_page_directory_does_not_survive_its_namespaces_root_free() {
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         }],
     );
 
@@ -1619,7 +1605,6 @@ fn a_client_root_free_purges_only_its_own_namespaces_parked_facts() {
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         },
     )
     .expect("the dying namespace parks a PDB");
@@ -1633,7 +1618,6 @@ fn a_client_root_free_purges_only_its_own_namespaces_parked_facts() {
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         },
     )
     .expect("the bystander parks a PDB");
@@ -1854,7 +1838,6 @@ fn each_vas_route_reports_itself_and_the_no_route_case_names_its_absence() {
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         },
         // A TSG that declares the same VA space, and a CtxShare under it that does too.
         RmEvent::Alloc {
@@ -2007,7 +1990,6 @@ fn a_committed_route_that_misses_leaves_the_later_routes_not_attempted() {
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         },
         // The TSG declares a VA space that IS live and IS bound.
         RmEvent::Alloc {
@@ -2135,7 +2117,6 @@ fn the_device_default_vaspace_name_outlives_the_handle_rm_frees() {
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         },
         // (3) …and RM frees the handle again.
         RmEvent::Free {
@@ -2233,7 +2214,6 @@ fn an_own_vaspace_under_the_device_is_not_the_devices_default() {
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         },
         chan_declaring(H_DEV, H_CH_NONE, VChid(0x27), None, None),
     ] {

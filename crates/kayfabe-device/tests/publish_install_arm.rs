@@ -312,7 +312,11 @@ fn on_the_arena_arm_the_plan_says_needs_region_and_the_join_still_installs() {
     plane
         .join_fb(AT, Box::new(Elsewhere(vec![0u8; LEN as usize])))
         .expect("the arena store joins — this is the shipped default and it must not move");
-    assert_eq!(mirror.quiesces(), 1, "and the join's own quiesce is untouched");
+    assert_eq!(
+        mirror.quiesces(),
+        1,
+        "and the join's own quiesce is untouched"
+    );
     assert_eq!(
         plane.joined_fb_ranges(),
         vec![(AT, LEN)],
@@ -351,7 +355,10 @@ fn the_want_half_reaches_the_port_and_the_drain_installs_the_slice() {
         plane.want_fb_device_slice(AT, LEN),
         "the single store HAS a byte port, so the want must be taken"
     );
-    assert!(port.wanted_now() > 0, "⊘ and it must reach the port, not merely be counted");
+    assert!(
+        port.wanted_now() > 0,
+        "⊘ and it must reach the port, not merely be counted"
+    );
 
     let d = plane.arm_fb_demand();
     assert!(d.armed > 0, "the drain is the IPC half and it is what arms");

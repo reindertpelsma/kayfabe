@@ -676,7 +676,8 @@ mod tests {
         assert_eq!(q.offer(MapPublication::for_doorbell(2)), Offered::Full);
         assert_eq!(q.stats().refused, 1);
         assert!(
-            q.census().contains("ran INLINE under the VMM's global lock"),
+            q.census()
+                .contains("ran INLINE under the VMM's global lock"),
             "{}",
             q.census()
         );
@@ -805,8 +806,14 @@ mod the_full_lane_must_be_reachable_and_reported {
     #[test]
     fn the_invalidate_and_rpc_bind_lanes_saturate_too() {
         for (name, mk) in [
-            ("invalidate", MapPublication::for_invalidate as fn(u64) -> MapPublication),
-            ("rpc_bind", MapPublication::for_rpc_bind as fn(u64) -> MapPublication),
+            (
+                "invalidate",
+                MapPublication::for_invalidate as fn(u64) -> MapPublication,
+            ),
+            (
+                "rpc_bind",
+                MapPublication::for_rpc_bind as fn(u64) -> MapPublication,
+            ),
         ] {
             let q = PublicationQueue::uncoalescing();
             let mut queued = 0usize;

@@ -8,8 +8,8 @@
 //! committed PTX, built from that same file.
 
 use crate::abi::{
-    KfArgs, KfDev, KfFormat, KfMapRun, KfPdbEntry, KfReportHeader, KfScope, KFWR_HF_TRUNCATED,
-    KFWR_MAGIC, KF_ABI_VERSION, KF_MAX_PDB, KF_TBL_VER2, KF_TBL_VER3,
+    KF_ABI_VERSION, KF_MAX_PDB, KF_TBL_VER2, KF_TBL_VER3, KFWR_HF_TRUNCATED, KFWR_MAGIC, KfArgs,
+    KfDev, KfFormat, KfMapRun, KfPdbEntry, KfReportHeader, KfScope,
 };
 use crate::driver_unsafe::{CUdeviceptr, CtxHandle, Cuda, CudaError, Func};
 
@@ -133,7 +133,10 @@ impl core::fmt::Display for ReportError {
                 write!(f, "pdb_count {count} > capacity {capacity}")
             }
             ReportError::RunOverflow { count, capacity } => {
-                write!(f, "run_count {count} > capacity {capacity}, and not TRUNCATED")
+                write!(
+                    f,
+                    "run_count {count} > capacity {capacity}, and not TRUNCATED"
+                )
             }
             ReportError::SliceOutOfRange {
                 index,
@@ -141,7 +144,10 @@ impl core::fmt::Display for ReportError {
                 count,
             } => write!(f, "pdb[{index}] slice {first}+{count} runs past the array"),
             ReportError::RunPdbIndex { index, pdb_index } => {
-                write!(f, "run[{index}] names pdb_index {pdb_index}, which does not exist")
+                write!(
+                    f,
+                    "run[{index}] names pdb_index {pdb_index}, which does not exist"
+                )
             }
             ReportError::ZeroLenRun(i) => write!(f, "run[{i}] has len 0"),
         }
@@ -352,8 +358,14 @@ impl WalkKernel {
         };
         let dev = a(core::mem::size_of::<KfDev>(), "cuMemAlloc(KfDev)")?;
         let tbl = [
-            a(tbl_runs * core::mem::size_of::<KfMapRun>(), "cuMemAlloc(tbl0)")?,
-            a(tbl_runs * core::mem::size_of::<KfMapRun>(), "cuMemAlloc(tbl1)")?,
+            a(
+                tbl_runs * core::mem::size_of::<KfMapRun>(),
+                "cuMemAlloc(tbl0)",
+            )?,
+            a(
+                tbl_runs * core::mem::size_of::<KfMapRun>(),
+                "cuMemAlloc(tbl1)",
+            )?,
         ];
         let pdbs = a(KF_MAX_PDB * 8, "cuMemAlloc(pdbs)")?;
         let scopes = a(

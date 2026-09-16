@@ -344,7 +344,6 @@ fn restale_and_win(device: &SharedDevice, round: u32, winner_va: GpuVa) {
             // a sysmem-rooted PDB read as vidmem walks the wrong memory and
             // reports success, because a wrong-aperture read returns zeros.
             pdb_aperture: Some(kayfabe_arch::Aperture::Vidmem),
-
         })
         .expect("re-binding the same page directory");
     device

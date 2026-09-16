@@ -241,8 +241,12 @@ fn a_spine_apply_decides_an_isolate_and_spawns_nothing() {
 #[test]
 fn the_composed_single_threaded_apply_materializes_before_it_returns() {
     let (factory, _rec) = MockIsolateFactory::new();
-    let mut gpu =
-        Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa()).expect("device realizes");
+    let mut gpu = Gpu::new(
+        std::sync::Arc::new(MockArch::new()),
+        Box::new(factory),
+        gpa(),
+    )
+    .expect("device realizes");
 
     let ev = process_events(0).into_iter().next().expect("events");
     gpu.apply(ev).expect("the first event applies");
@@ -260,8 +264,12 @@ fn the_composed_single_threaded_apply_materializes_before_it_returns() {
 #[test]
 fn the_sharded_shell_materializes_after_its_guard_drops() {
     let (factory, _rec) = MockIsolateFactory::new();
-    let gpu =
-        Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa()).expect("device realizes");
+    let gpu = Gpu::new(
+        std::sync::Arc::new(MockArch::new()),
+        Box::new(factory),
+        gpa(),
+    )
+    .expect("device realizes");
     let device = SharedDevice::new(gpu, LockMode::Sharded);
 
     assert_eq!(
@@ -291,8 +299,12 @@ fn the_sharded_shell_materializes_after_its_guard_drops() {
 #[test]
 fn an_isolate_spawned_for_a_proc_that_retired_in_the_gap_is_refused() {
     let (factory, _rec) = MockIsolateFactory::new();
-    let mut gpu =
-        Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa()).expect("device realizes");
+    let mut gpu = Gpu::new(
+        std::sync::Arc::new(MockArch::new()),
+        Box::new(factory),
+        gpa(),
+    )
+    .expect("device realizes");
     for ev in process_events(0) {
         gpu.spine
             .apply(&mut gpu.system, &mut gpu.procs, ev)
@@ -340,8 +352,12 @@ fn an_isolate_spawned_for_a_proc_that_retired_in_the_gap_is_refused() {
 #[test]
 fn only_one_of_two_racing_materializations_installs() {
     let (factory, _rec) = MockIsolateFactory::new();
-    let mut gpu =
-        Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa()).expect("device realizes");
+    let mut gpu = Gpu::new(
+        std::sync::Arc::new(MockArch::new()),
+        Box::new(factory),
+        gpa(),
+    )
+    .expect("device realizes");
     let ev = process_events(0).into_iter().next().expect("events");
     gpu.spine
         .apply(&mut gpu.system, &mut gpu.procs, ev)
@@ -374,8 +390,12 @@ fn only_one_of_two_racing_materializations_installs() {
 #[test]
 fn deciding_twice_for_one_pair_materializes_once() {
     let (factory, _rec) = MockIsolateFactory::new();
-    let mut gpu =
-        Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa()).expect("device realizes");
+    let mut gpu = Gpu::new(
+        std::sync::Arc::new(MockArch::new()),
+        Box::new(factory),
+        gpa(),
+    )
+    .expect("device realizes");
     for ev in process_events(0) {
         gpu.apply(ev).expect("applies");
     }
@@ -402,8 +422,12 @@ fn deciding_twice_for_one_pair_materializes_once() {
 #[test]
 fn a_deferred_isolate_is_isolate_pending_and_an_unasked_for_one_is_no_target() {
     let (factory, _rec) = MockIsolateFactory::new();
-    let mut gpu =
-        Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa()).expect("device realizes");
+    let mut gpu = Gpu::new(
+        std::sync::Arc::new(MockArch::new()),
+        Box::new(factory),
+        gpa(),
+    )
+    .expect("device realizes");
     let ev = process_events(0).into_iter().next().expect("events");
     gpu.spine
         .apply(&mut gpu.system, &mut gpu.procs, ev)
@@ -458,8 +482,12 @@ fn a_verb_that_lands_in_the_gap_materializes_the_isolate_and_succeeds() {
     // which the isolate pins through an `OS_DESCRIPTOR` — the shape a
     // `memory-backend-memfd,share=on` boot has. Without the door the pin refuses by name.
     let factory = factory.with_guest_ram(kayfabe_tests::GUEST_RAM_BYTES);
-    let mut gpu =
-        Gpu::new(std::sync::Arc::new(MockArch::new()), Box::new(factory), gpa()).expect("device realizes");
+    let mut gpu = Gpu::new(
+        std::sync::Arc::new(MockArch::new()),
+        Box::new(factory),
+        gpa(),
+    )
+    .expect("device realizes");
     for ev in process_events(0) {
         gpu.spine
             .apply(&mut gpu.system, &mut gpu.procs, ev)

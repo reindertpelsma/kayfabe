@@ -501,7 +501,6 @@ impl PtDecodeOutcome {
     }
 }
 
-
 impl PtDecodeOutcome {
     /// Did anything go wrong that a caller must look at?
     ///

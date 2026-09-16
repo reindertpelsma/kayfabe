@@ -235,7 +235,9 @@ pub fn shadowable_regs() -> impl Iterator<Item = (u64, CpuIntrReg)> {
             (TOP_EN_CLEAR0 + o, CpuIntrReg::TopEnClear(i)),
         ]
     });
-    leaves.chain(tops).chain([(LEAF_TRIGGER, CpuIntrReg::LeafTrigger)])
+    leaves
+        .chain(tops)
+        .chain([(LEAF_TRIGGER, CpuIntrReg::LeafTrigger)])
 }
 
 pub fn decode(off: u64) -> Option<CpuIntrReg> {

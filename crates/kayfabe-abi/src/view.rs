@@ -494,7 +494,6 @@ impl PdbAperture {
         }
     }
 
-
     /// Decode from the two-bit aperture field.
     #[must_use]
     pub fn from_flags(flags: u32) -> Self {
@@ -1018,7 +1017,10 @@ mod the_pdb_aperture_must_not_fold_into_a_default {
     /// ⊘ And the decode itself, so the two bits are read once and the same way by both callers.
     #[test]
     fn the_wire_bits_decode_through_one_function() {
-        assert_eq!(PdbAperture::from_flags(0).to_domain(), Some(kayfabe_arch::Aperture::Vidmem));
+        assert_eq!(
+            PdbAperture::from_flags(0).to_domain(),
+            Some(kayfabe_arch::Aperture::Vidmem)
+        );
         assert_eq!(
             PdbAperture::from_flags(1).to_domain(),
             Some(kayfabe_arch::Aperture::SysmemCoherent)
@@ -1027,6 +1029,10 @@ mod the_pdb_aperture_must_not_fold_into_a_default {
             PdbAperture::from_flags(2).to_domain(),
             Some(kayfabe_arch::Aperture::SysmemNonCoherent)
         );
-        assert_eq!(PdbAperture::from_flags(3).to_domain(), None, "3 is undefined at 580");
+        assert_eq!(
+            PdbAperture::from_flags(3).to_domain(),
+            None,
+            "3 is undefined at 580"
+        );
     }
 }

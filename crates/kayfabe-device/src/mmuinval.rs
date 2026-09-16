@@ -818,7 +818,10 @@ mod tests {
         // the guest's poll timed out and it triggered again while #1 was in flight
         log.note_trigger(0x8001_0001, 10);
         assert_eq!(log.issued(), 2);
-        assert!(!log.complete_through(seq1, 20), "#1's completion must NOT clear");
+        assert!(
+            !log.complete_through(seq1, 20),
+            "#1's completion must NOT clear"
+        );
         assert_eq!(log.read_trigger(), 1 << 31, "★ the guest keeps spinning");
         assert!(log.complete_through(2, 30), "#2's own job clears it");
         assert_eq!(log.read_trigger(), 0);

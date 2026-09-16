@@ -148,12 +148,48 @@ impl Nvos34Parameters {
     /// # Errors
     /// [`AbiError::Truncated`].
     pub fn encode_into(&self, bytes: &mut [u8]) -> Result<(), AbiError> {
-        put(bytes, Self::C_NAME, Self::SIZE, 0, &self.h_client.to_le_bytes())?;
-        put(bytes, Self::C_NAME, Self::SIZE, 4, &self.h_device.to_le_bytes())?;
-        put(bytes, Self::C_NAME, Self::SIZE, 8, &self.h_memory.to_le_bytes())?;
-        put(bytes, Self::C_NAME, Self::SIZE, 16, &self.p_linear_address.to_le_bytes())?;
-        put(bytes, Self::C_NAME, Self::SIZE, 24, &self.status.to_le_bytes())?;
-        put(bytes, Self::C_NAME, Self::SIZE, 28, &self.flags.to_le_bytes())?;
+        put(
+            bytes,
+            Self::C_NAME,
+            Self::SIZE,
+            0,
+            &self.h_client.to_le_bytes(),
+        )?;
+        put(
+            bytes,
+            Self::C_NAME,
+            Self::SIZE,
+            4,
+            &self.h_device.to_le_bytes(),
+        )?;
+        put(
+            bytes,
+            Self::C_NAME,
+            Self::SIZE,
+            8,
+            &self.h_memory.to_le_bytes(),
+        )?;
+        put(
+            bytes,
+            Self::C_NAME,
+            Self::SIZE,
+            16,
+            &self.p_linear_address.to_le_bytes(),
+        )?;
+        put(
+            bytes,
+            Self::C_NAME,
+            Self::SIZE,
+            24,
+            &self.status.to_le_bytes(),
+        )?;
+        put(
+            bytes,
+            Self::C_NAME,
+            Self::SIZE,
+            28,
+            &self.flags.to_le_bytes(),
+        )?;
         Ok(())
     }
 
@@ -3934,28 +3970,94 @@ mod tests {
     #[test]
     fn memory_list_allocation_params_land_at_the_580_offsets() {
         let cases: [(NvMemoryListAllocationParams, usize, &[u8]); 11] = [
-            (NvMemoryListAllocationParams { h_client: 0x1111_1111, ..Default::default() },
-             0, &0x1111_1111u32.to_le_bytes()),
-            (NvMemoryListAllocationParams { h_parent: 0x2222_2222, ..Default::default() },
-             4, &0x2222_2222u32.to_le_bytes()),
-            (NvMemoryListAllocationParams { h_object: 0x3333_3333, ..Default::default() },
-             8, &0x3333_3333u32.to_le_bytes()),
-            (NvMemoryListAllocationParams { pte_adjust: 0x4444_4444, ..Default::default() },
-             24, &0x4444_4444u32.to_le_bytes()),
-            (NvMemoryListAllocationParams { mem_type: 0x5555_5555, ..Default::default() },
-             32, &0x5555_5555u32.to_le_bytes()),
-            (NvMemoryListAllocationParams { flags: 0x6666_6666, ..Default::default() },
-             36, &0x6666_6666u32.to_le_bytes()),
-            (NvMemoryListAllocationParams { attr: 0x7777_7777, ..Default::default() },
-             40, &0x7777_7777u32.to_le_bytes()),
-            (NvMemoryListAllocationParams { attr2: 0x0888_8888, ..Default::default() },
-             44, &0x0888_8888u32.to_le_bytes()),
-            (NvMemoryListAllocationParams { page_count: 0x0999_9999, ..Default::default() },
-             68, &0x0999_9999u32.to_le_bytes()),
-            (NvMemoryListAllocationParams { limit: 0x0AAA_AAAA_AAAA_AAAA, ..Default::default() },
-             136, &0x0AAA_AAAA_AAAA_AAAAu64.to_le_bytes()),
-            (NvMemoryListAllocationParams { flags_os02: 0x0BBB_BBBB, ..Default::default() },
-             144, &0x0BBB_BBBBu32.to_le_bytes()),
+            (
+                NvMemoryListAllocationParams {
+                    h_client: 0x1111_1111,
+                    ..Default::default()
+                },
+                0,
+                &0x1111_1111u32.to_le_bytes(),
+            ),
+            (
+                NvMemoryListAllocationParams {
+                    h_parent: 0x2222_2222,
+                    ..Default::default()
+                },
+                4,
+                &0x2222_2222u32.to_le_bytes(),
+            ),
+            (
+                NvMemoryListAllocationParams {
+                    h_object: 0x3333_3333,
+                    ..Default::default()
+                },
+                8,
+                &0x3333_3333u32.to_le_bytes(),
+            ),
+            (
+                NvMemoryListAllocationParams {
+                    pte_adjust: 0x4444_4444,
+                    ..Default::default()
+                },
+                24,
+                &0x4444_4444u32.to_le_bytes(),
+            ),
+            (
+                NvMemoryListAllocationParams {
+                    mem_type: 0x5555_5555,
+                    ..Default::default()
+                },
+                32,
+                &0x5555_5555u32.to_le_bytes(),
+            ),
+            (
+                NvMemoryListAllocationParams {
+                    flags: 0x6666_6666,
+                    ..Default::default()
+                },
+                36,
+                &0x6666_6666u32.to_le_bytes(),
+            ),
+            (
+                NvMemoryListAllocationParams {
+                    attr: 0x7777_7777,
+                    ..Default::default()
+                },
+                40,
+                &0x7777_7777u32.to_le_bytes(),
+            ),
+            (
+                NvMemoryListAllocationParams {
+                    attr2: 0x0888_8888,
+                    ..Default::default()
+                },
+                44,
+                &0x0888_8888u32.to_le_bytes(),
+            ),
+            (
+                NvMemoryListAllocationParams {
+                    page_count: 0x0999_9999,
+                    ..Default::default()
+                },
+                68,
+                &0x0999_9999u32.to_le_bytes(),
+            ),
+            (
+                NvMemoryListAllocationParams {
+                    limit: 0x0AAA_AAAA_AAAA_AAAA,
+                    ..Default::default()
+                },
+                136,
+                &0x0AAA_AAAA_AAAA_AAAAu64.to_le_bytes(),
+            ),
+            (
+                NvMemoryListAllocationParams {
+                    flags_os02: 0x0BBB_BBBB,
+                    ..Default::default()
+                },
+                144,
+                &0x0BBB_BBBBu32.to_le_bytes(),
+            ),
         ];
         for (params, offset, want) in cases {
             let mut buf = [0u8; NvMemoryListAllocationParams::SIZE];
@@ -5646,7 +5748,11 @@ mod nvos34_tests {
         assert_eq!(&b[0..4], &0x1111_1111u32.to_le_bytes(), "hClient @ +0");
         assert_eq!(&b[4..8], &0x2222_2222u32.to_le_bytes(), "hDevice @ +4");
         assert_eq!(&b[8..12], &0x3333_3333u32.to_le_bytes(), "hMemory @ +8");
-        assert_eq!(&b[12..16], &[0u8; 4], "★ +12..16 is PADDING and must stay zero");
+        assert_eq!(
+            &b[12..16],
+            &[0u8; 4],
+            "★ +12..16 is PADDING and must stay zero"
+        );
         assert_eq!(
             &b[16..24],
             &0x4444_4444_5555_5555u64.to_le_bytes(),
@@ -5655,7 +5761,11 @@ mod nvos34_tests {
         assert_eq!(&b[24..28], &0x6666_6666u32.to_le_bytes(), "status @ +24");
         assert_eq!(&b[28..32], &0x7777_7777u32.to_le_bytes(), "flags @ +28");
 
-        assert_eq!(Nvos34Parameters::decode(&b).expect("decode"), p, "round trip");
+        assert_eq!(
+            Nvos34Parameters::decode(&b).expect("decode"),
+            p,
+            "round trip"
+        );
     }
 
     /// The driver compares `dataSize != sizeof(*pApi)` and refuses outright
