@@ -3028,6 +3028,25 @@ impl RegPlane {
         // I/O. There was never a reason to defer it, and deferring it put 4.2 million predicate
         // evaluations under a halted guest.
         plane.dead_pages = plane.build_dead_page_bitmap();
+        // ★★★★★ **w754 — AND THE SECOND SWEEP OF THE SAME APERTURE, FOR THE SAME REASON.**
+        //
+        // ⊘⊘⊘ **w573's comment directly above is the whole argument, and a second lazy sweep
+        // was sitting three functions away with nobody having applied it.**
+        // `RegPlane::gsp_register_offsets` is a `OnceLock<Vec<u64>>` built from
+        // `(0..regs_aperture_len).step_by(4).filter(decode_reg)` — **the same 4.19 M
+        // evaluations over the same 16 MiB aperture** — and it initialises inside whichever
+        // guest MMIO store first reaches `publish_gsp_registers`.
+        //
+        // `[measured w754, GA106, stall alarm at `bar0+0x110118`]` that store was the worst
+        // trap in the device on **all three arms** of one boot — 45 580 / 53 345 / 46 136 µs,
+        // 100 % CPU, **zero context switches** — and the backtrace names this `OnceLock`'s
+        // initialiser between `publish_gsp_registers` and `kvm_vcpu_thread_fn`.
+        //
+        // ★ The lesson is not "warm this one too". It is that **a fix applied to an instance
+        // leaves the class**: the two sweeps are the same shape, over the same range, in the
+        // same file, and the first one's comment already says why it is wrong. ⚠ Any future
+        // `OnceLock` whose initialiser is O(aperture) belongs on this line, not on a trap.
+        let _warm = plane.gsp_register_offsets();
         Ok(plane)
     }
 
@@ -3809,6 +3828,39 @@ impl RegPlane {
     /// ⊘ The sweep uses `decode_reg`, which is state-free, so building this list cannot
     /// disturb the FSM it is about to describe. It is a property of the CHIP, not of the boot,
     /// which is why caching it is sound.
+    ///
+    /// # ⊘⊘⊘ w754 — THIS SWEEP IS 4 194 304 `decode_reg` CALLS AND IT USED TO RUN ON A vCPU
+    ///
+    /// `[measured w754, GA106, `KAYFABE_STALL_ALARM_AT=110118`]` the backtrace, verbatim:
+    ///
+    /// ```text
+    /// 2: <Vec<u64> as SpecFromIterNested<u64, Filter<StepBy<Range<u64>>>>>
+    /// 3: <OnceLock<Vec<u64>>>::get_or_init  … RegPlane::gsp_register_offsets
+    /// 6: RegPlane::publish_gsp_registers
+    /// 7: RegPlane::write
+    /// 9: kayfabe_shim_regs_write  …  20: kvm_vcpu_thread_fn
+    /// ```
+    ///
+    /// `regs_aperture_len` is **16 MiB**, so `(0..len).step_by(4)` is 4.19 M iterations, and a
+    /// `OnceLock` initialises **inside whichever guest MMIO store reaches it first**: on three
+    /// arms of one boot that was `bar0+0x110118` at **45 580 / 53 345 / 46 136 µs**, 100 % CPU,
+    /// zero context switches — the worst trap in the device, on all three.
+    ///
+    /// ★★★ **And the comment on [`RegPlane::publish_gsp_registers`] said it was cheap.** It
+    /// says *"cost is bounded by the chip's register map, not by traffic … they span five pages
+    /// of a sixteen-megabyte aperture"* — which is TRUE OF THE LOOP BODY and FALSE OF THE SWEEP
+    /// THAT BUILDS THE LIST IT ITERATES. ⚠ A bound stated about the wrong quantity reads
+    /// exactly like a bound.
+    ///
+    /// ⇒ [`RegPlane::new`] warms it, at realize, off every vCPU. The `OnceLock` stays because
+    /// it is still the right shape — what changes is WHO pays for the one initialisation, and
+    /// `gsp_register_offsets_warm` is how a test can insist it is nobody in a trap.
+    ///
+    /// ⊘ **The better fix is not this one and is named here so it is not forgotten:** ask the
+    /// model to ENUMERATE its registers instead of probing 4 M offsets for them. That is a
+    /// `kayfabe-arch` trait change (`GspModel` exposes `decode_reg`/`addr_of` but no iterator),
+    /// it is derived-per-family rather than swept, and it would make this list's cost a
+    /// property of the register map the way the comment always claimed.
     fn gsp_register_offsets(&self) -> &[u64] {
         const BAR: u8 = kayfabe_abi::pcibars::bus_bar::REGS as u8;
         self.gsp_regs.get_or_init(|| {
@@ -3817,6 +3869,17 @@ impl RegPlane {
                 .filter(|&off| self.model.decode_reg(BAR, off).is_some())
                 .collect()
         })
+    }
+
+    /// ★★★ **Is the GSP offset list already built?** — so a test can insist the 4 M-iteration
+    /// sweep above happened at realize and not inside a guest trap.
+    ///
+    /// ⊘ A property of the PLANE, asked after construction. A test that merely timed a write
+    /// would be measuring the box; this asks the structural question, and it fails closed:
+    /// `false` immediately after [`RegPlane::new`] means some vCPU is going to pay for it.
+    #[must_use]
+    pub fn gsp_register_offsets_warm(&self) -> bool {
+        self.gsp_regs.get().is_some()
     }
 
     /// ★★★★★ **Re-publish every GSP register into the read shadow.**
@@ -6528,6 +6591,17 @@ impl RegPlane {
         // there is no thread to fold the count in, so the write falls through to the FSM and
         // is serviced inline exactly as before — slower and correct, the same shape
         // `start_doorbell_publish_worker`'s `Err` arm chose.
+        //
+        // ⊘⊘ **AND THE SKIPPED `publish_gsp_registers()` IS ARGUED, NOT OVERLOOKED.** The
+        // generic GSP arm below republishes the whole register group into the read shadow
+        // after every claimed write. Returning here skips that, and it is sound for this
+        // register and no other: with deferral armed, `GspFsm::apply`'s `CommandDoorbell`
+        // arm returns before touching ANY state, `FalconSecureBooterBoot::on_write` emits
+        // that one step and mutates no `arch_state`, and no chip profile encodes a value for
+        // `GspQueueHead` at all. ⇒ there is nothing whose shadow could have moved.
+        // ⚠ If a future generation makes a queue-head write change observable GSP state, this
+        // arm must publish before it returns — the shadow is the half of the read surface
+        // nobody thinks to update (`the_bar0_read_surface.md` §5).
         if bar == kayfabe_abi::pcibars::bus_bar::REGS as u8
             && self
                 .defer_cmds_armed

@@ -1482,6 +1482,35 @@ fn an_armed_queue_head_write_records_and_returns() {
     );
 }
 
+/// ★★★★★ **w754 — NO APERTURE-SIZED SWEEP MAY BE LAZY. THE SECOND INSTANCE OF ONE CLASS.**
+///
+/// `[measured w754, GA106, `KAYFABE_STALL_ALARM_AT=110118`]` the worst trap in the device on
+/// **all three arms** of one boot — 45 580 / 53 345 / 46 136 µs, 100 % CPU, **zero context
+/// switches** — was a `OnceLock<Vec<u64>>` initialising inside a guest MMIO store. Its
+/// initialiser is `(0..regs_aperture_len).step_by(4).filter(decode_reg)`: **4 194 304
+/// evaluations over a 16 MiB aperture**, charged to whichever store reached it first.
+///
+/// ⊘⊘⊘ **And `RegPlane::with_objects` already carried the fix — for a different sweep.** w573
+/// moved `build_dead_page_bitmap` out of the read path with the comment *"deferring it put 4.2
+/// million predicate evaluations under a halted guest"*. The same number, the same aperture,
+/// the same file, three functions apart. ⇒ **a fix applied to an instance leaves the class**,
+/// and this gate is aimed at the class.
+///
+/// ★ Fail-closed and structural: it asks whether the list is BUILT after construction, not how
+/// long a write took. A timing assertion here would measure the box.
+#[test]
+fn the_gsp_offset_sweep_is_warm_before_any_guest_can_trap() {
+    let chip = kayfabe_device::default_chip();
+    let plane = RegPlane::new(chip, abi(), test_clock()).expect("servable");
+    assert!(
+        plane.gsp_register_offsets_warm(),
+        "the GSP offset list must be built at realize. It is a pure function of the chip — no \
+         guest state, no lock, no I/O — and leaving it lazy puts {} predicate evaluations \
+         inside whichever guest MMIO store reaches `publish_gsp_registers` first",
+        chip.regs_aperture_len / 4
+    );
+}
+
 /// ★★★★★ **w754 — CONSTRAINT 29's SUCCESSOR TO `an_armed_queue_head_write_records_and_returns`.**
 ///
 /// The old gate asked *"does an armed queue-head write RECORD instead of SERVICE?"* and w432's
