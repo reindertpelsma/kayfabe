@@ -148,6 +148,15 @@ if [ "$n_w746" -eq 0 ] || [ "$n_w746b" -eq 0 ]; then echo "⊘ the binary predat
 n_w752=$(strings "$Q_BIN" 2>/dev/null | grep -c 'PRAMIN-INPLACE AT')
 echo "W752-CONTENT: pramin_inplace=$n_w752 (0 ⇒ the binary predates w752 — its rows cannot be graded)"
 if [ "$n_w752" -eq 0 ]; then echo "⊘ the binary predates w752 — its rows cannot be graded. STOP."; exit 12; fi
+# ★★★★★ w754 ADDITION — CONTENT GATE. `GSP-HEAD` and `RING-ADOPT` print UNCONDITIONALLY at
+# teardown on BOTH arms, so a boot without them is an OLDER BINARY and every w754 row would be
+# graded against absence. ⚠ The most dangerous of those rows is `RING-ADOPT on_vcpu=0`, which
+# on a stale binary is indistinguishable from *"the settlement really did leave the vCPU"* —
+# the whole claim of this rung, read off a string that was never printed.
+n_w754=$(strings "$Q_BIN" 2>/dev/null | grep -c 'RING-ADOPT ran=')
+n_w754b=$(strings "$Q_BIN" 2>/dev/null | grep -c 'GSP-HEAD posted=')
+echo "W754-CONTENT: ring_adopt=$n_w754 gsp_head=$n_w754b (either 0 ⇒ the binary predates w754)"
+if [ "$n_w754" -eq 0 ] || [ "$n_w754b" -eq 0 ]; then echo "⊘ the binary predates w754 — its rows cannot be graded. STOP."; exit 13; fi
 
 report() {
   local tag="$1" arm="$2"
@@ -439,6 +448,36 @@ report() {
   grep -a 'Xid' "$BENCH/run_${tag}_hostdmesg.log" 2>/dev/null | head -3 | cut -c1-190
   echo "--- QEMU's own last words (if it refused at realize, the sentence is here) ---"
   grep -aE 'Unsupported|refus|REFUS|⊘' "$Q" 2>/dev/null | tail -12 | cut -c1-260
+  # ★★★★★ w754 ADDITION, REPORTING ONLY — constraint 4's actual gate and the two censuses that
+  # say whether the mechanism behind it ran. ⊘ Nothing here changes an arm, a threshold or a
+  # boot step; it cuts three lines out of the SAME logs. Every field is taken out of ITS OWN
+  # census line, never grepped loose (w731/w732 both lifted a field off the wrong subsystem).
+  echo "--- ★★★★★ w754 ROW 1: THE GRADE — worst_trap, its SITE, and its CPU half ---"
+  echo "W754-TRAPWITNESS=$(grep -ao 'TRAPWITNESS off_trap_claims=.\{0,220\}' "$Q" 2>/dev/null | tail -1)"
+  echo "W754-TRAPCPU=$(grep -ao 'TRAP-CPU n=.\{0,260\}' "$Q" 2>/dev/null | tail -1)"
+  echo "--- ★★★★★ w754 ROW 2: SLOW-SITES — the DISTRIBUTION, because a maximum is one event ---"
+  echo "W754-SLOWSITES-LINES=$(grep -ac 'SLOW-SITES bar0' "$Q" 2>/dev/null)  (0 ⇒ UNMEASURED, and note the"
+  echo "                        REALIZE prose also contains the string 'SLOW-SITES' — anchored on 'bar0')"
+  grep -ao 'SLOW-SITES bar0.\{0,400\}' "$Q" 2>/dev/null | tail -1 | fold -w 160
+  echo "--- ★★★★★ w754 ROW 3: did the moved body RUN, and on which thread? ---"
+  echo "W754-RINGADOPT-LINES=$(grep -ac 'RING-ADOPT ran=' "$Q" 2>/dev/null)  (0 ⇒ UNMEASURED, not 'it never ran')"
+  RA=$(grep -ao 'RING-ADOPT ran=.\{0,500\}' "$Q" 2>/dev/null | tail -1)
+  printf '%s\n' "$RA" | fold -w 160
+  ra() { printf '%s' "$RA" | grep -ao "$1" | tail -1; }
+  echo "W754-ADOPT-RAN=$(ra 'ran=[0-9]*')"
+  echo "W754-ADOPT-OFF-VCPU=$(ra 'off_vcpu=[0-9]*')   ★★★ the device arm's GATE: must be > 0"
+  echo "W754-ADOPT-ON-VCPU=$(ra 'on_vcpu=[0-9]*')     ⊘⊘ > 0 on a deferring arm = constraint 4 violated"
+  echo "W754-ADOPT-NOTHING=$(ra 'nothing_pending=[0-9]*')"
+  echo "W754-GRJOIN-BLOCKS=$(grep -ac 'GR-RING-JOIN arm=' "$Q" 2>/dev/null)   ⊘ w752 device arm: 61"
+  echo "--- ★★★★★ w754 ROW 4: constraint 6 — the queue-head post and its fold ---"
+  echo "W754-GSPHEAD-LINES=$(grep -ac 'GSP-HEAD posted=' "$Q" 2>/dev/null)  (0 ⇒ UNMEASURED)"
+  GH=$(grep -ao 'GSP-HEAD posted=.\{0,400\}' "$Q" 2>/dev/null | tail -1)
+  printf '%s\n' "$GH" | fold -w 160
+  gh() { printf '%s' "$GH" | grep -ao "$1" | tail -1; }
+  echo "W754-HEAD-POSTED=$(gh 'posted=[0-9]*')"
+  echo "W754-HEAD-FOLDED=$(gh 'folded=[0-9]*')   ⊘⊘⊘ posted>0 with folded=0 is a PARKED GUEST"
+  echo "--- ★ w754: the lock census, which is how the 25 ms was shown NOT to be the plane lock ---"
+  echo "W754-LOCKCOST=$(grep -ao 'LOCKCOST(>1000us) \[rank0[^]]*\]' "$Q" 2>/dev/null | tail -1)"
   echo "######## END arm=$arm ########"
 }
 
@@ -471,11 +510,30 @@ report "${TAG}dev" device
 pkill -f '[q]emu-system-x86'
 sleep 3
 echo
+# ⊘⊘ **w754 — WHICH THIRD ARM, and the default is UNCHANGED.** `ARM3=split` (the default) is
+# w745's constraint-26 arm, byte-identical to every previous run of this harness, so a lane
+# that reuses this file is unaffected. `ARM3=inline` swaps it for w754's KNOWN-POSITIVE: the
+# SAME binary and the SAME device arm with `KAYFABE_MATERIALIZE_INLINE=1`, which forces the
+# ring adopt and its page-table settlement back ONTO the vCPU.
+# ★ That arm is not padding — it is the A/B that makes arm 2's number attributable. One env
+# var, opposite result, same binary: `RING-ADOPT on_vcpu>0` and `worst_trap` back at
+# ~25 ms at `bar0+0x110c00`. Without it, `on_vcpu=0` on arm 2 is a counter nobody has shown
+# can move, which is this campaign's most-repeated failure class.
+if [ "${ARM3:-split}" = "inline" ]; then
+echo "############ ARM=inline (w754 KNOWN-POSITIVE — the settlement forced back on the vCPU) ############"
+env -u KAYFABE_VAS_OWNER KAYFABE_FB_STORE=device KAYFABE_DEVICE_VIEW=probe \
+    KAYFABE_MATERIALIZE_INLINE=1 \
+    PREFIX="${TAG}inline" SHADOW=on \
+    bash scripts/bench/single_store_e6_boot.sh 2>&1 | tee "$BENCH/w754_inline.log"
+echo "INLINE_BOOT_RC=$?"
+report "${TAG}inline" inline
+else
 echo "############ ARM=split (THE TEST — constraint 26) ############"
 KAYFABE_VAS_OWNER=scratchpad KAYFABE_FB_STORE=device KAYFABE_DEVICE_VIEW=probe \
     PREFIX="${TAG}split" SHADOW=on \
     bash scripts/bench/single_store_e6_boot.sh 2>&1 | tee "$BENCH/w745_split.log"
 echo "SPLIT_BOOT_RC=$?"
 report "${TAG}split" split
+fi
 
 echo "=== W736 END $(date -Is) ==="
