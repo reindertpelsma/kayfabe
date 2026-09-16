@@ -11737,6 +11737,11 @@ mod route_k {
     /// A **second** channel-resource range, for the negative control, so a refusal there can
     /// never be "that range is already registered".
     const K_CHANRES_NEG_VA: u64 = 0x0000_0091_8000_0000;
+    /// A **third**, for row 4's known-positive — the channel role I owns itself.
+    const K_CHANRES_KP_VA: u64 = 0x0000_0092_0000_0000;
+    /// And that channel's own ring, at its own VA: it must not share the object S's channel
+    /// is built over, or a failure in one arm would take the other with it.
+    const K_RING_KP_VA: u64 = 0x0000_0092_4000_0000;
     /// The length of both.
     const K_CHANRES_LEN: u64 = 0x0010_0000;
 
@@ -12564,6 +12569,34 @@ mod route_k {
                 return 1;
             }
         };
+        // ★★★ THE MAP INSTRUMENT'S OWN KNOWN-POSITIVE, and it is what makes row 3's
+        //     `K_DUP_MAP_PRE_RC` interpretable at all.
+        //
+        // `[measured w750, run 1]` S's `NV_ESC_RM_MAP_MEMORY` of an object in **B** answered
+        // `0x23 NV_ERR_INVALID_CLIENT`, and the cause is not a defect in this probe:
+        // `rm_create_mmap_context` refuses whenever the client's `ProcID` is not the CALLING
+        // task's — `osapi.c:2378` `if (pRmClient->ProcID != osGetCurrentProcess())`. Under
+        // route K that is **S calling into a client stamped I**, so the refusal is
+        // structural.
+        // ⇒ This arm runs the identical code path against a client whose `ProcID` IS this
+        //   task's. A `0` here says the instrument can return `0`, so a non-zero over there
+        //   is RM's answer rather than this function's bug.
+        let map_kp = esc.map_memory(
+            &dev,
+            gpu,
+            device,
+            store_dup,
+            STORE_BYTES,
+            "MAP_MEMORY(own client, KP)",
+        );
+        println!(
+            "K_MAP_INSTRUMENT_KP={}",
+            match &map_kp {
+                Ok(()) => 0,
+                Err(e) => e.code(),
+            }
+        );
+
         let engine = engine_type_copy(0).unwrap_or(kayfabe_abi::submit::ENGINE_TYPE_COPY0);
         match birth_channel(
             &mut esc,
@@ -12708,6 +12741,57 @@ mod route_k {
                 }
             }
         };
+
+        // ★★★★★ ROW 4's KNOWN-POSITIVE, AND WITHOUT IT A REFUSAL BELOW IS UNINTERPRETABLE.
+        //
+        // ⊘ `falsifier_blocker_vs_only_blocker`: if S's B-owned channel is refused by UVM,
+        // that is a statement about the foreign client **only if a channel this role owns
+        // itself, in the same UVM session, over the same externally-owned space, IS
+        // accepted.** Otherwise the refusal is about this harness and row 4 is UNMEASURED.
+        //
+        // It is the `--uvm-mean` P2 shape exactly: its own ring object, published by UVM at
+        // its own VA, a channel born INSIDE the UVM-owned space, then the register.
+        if let Some(s) = uvm.as_ref() {
+            match rm.alloc_ring_object() {
+                Ok(kp_ring) => {
+                    let kp_ring_raw = u32::try_from(kp_ring.raw()).unwrap_or(0);
+                    let r1 = s.create_external_range(K_RING_KP_VA, RING_BYTES);
+                    let r2 =
+                        s.map_external(K_RING_KP_VA, RING_BYTES, ctl_fd, a_client, kp_ring_raw);
+                    if r1.is_err() || r2.is_err() {
+                        println!("K_UVM_REG_CHAN_KP_RC=UNMEASURED:ring:{r1:?}/{r2:?}");
+                    } else {
+                        match rm.alloc_channel_in_uvm_space(
+                            ext_space,
+                            kayfabe_abi::submit::ENGINE_TYPE_COPY0,
+                            kp_ring,
+                            K_RING_KP_VA,
+                        ) {
+                            Ok((kp_chan, _tok)) => {
+                                let kp_raw = u32::try_from(kp_chan.raw()).unwrap_or(0);
+                                let reg = s.register_channel(
+                                    ctl_fd,
+                                    a_client,
+                                    kp_raw,
+                                    K_CHANRES_KP_VA,
+                                    K_CHANRES_LEN,
+                                );
+                                println!("K_UVM_REG_CHAN_KP_RC={:#x}", uvm_code(&reg));
+                                println!(
+                                    "info  route-K I  UVM_REGISTER_CHANNEL(hClient=A, own                                      channel) -> {reg:?}"
+                                );
+                            }
+                            Err(e) => {
+                                println!("K_UVM_REG_CHAN_KP_RC=UNMEASURED:birth:{e:?}");
+                            }
+                        }
+                    }
+                }
+                Err(e) => println!("K_UVM_REG_CHAN_KP_RC=UNMEASURED:ring-alloc:{e:?}"),
+            }
+        } else {
+            println!("K_UVM_REG_CHAN_KP_RC=UNMEASURED:no-uvm-session");
+        }
 
         // ★★★★★ CONSTRAINT 32, STEP 1 — the birth client, on a SECOND control descriptor.
         let ctl2 = match CharDevice::openat(&dev, c"nvidiactl") {
@@ -13151,6 +13235,17 @@ mod route_k {
         }
         kayfabe_linux_raw::release_fence();
         println!("K_STORE_WRITE_OK={}", u32::from(wrote));
+        // ⊘ Read the poison BACK before the birth. Without this, `0 of 128 intact` after the
+        //   birth cannot be told from "the write never landed" — and a write-combining store
+        //   that went nowhere looks exactly like a page RM scrubbed.
+        let before: Vec<String> = (0..8u64)
+            .map(|i| {
+                store_view
+                    .load_u32(HostOffset::new(USERD_OFFSET_IN_STORE + 4 * i))
+                    .map_or_else(|_| "????????".to_owned(), |v| format!("{v:08x}"))
+            })
+            .collect();
+        println!("K_USERD_BEFORE_BIRTH={}", before.join(" "));
 
         // ---- ★★★★★ THE BIRTH. Client B, descriptor I's, caller S, bit 5 clear. ----------
         let engine = engine_type_copy(0).unwrap_or(kayfabe_abi::submit::ENGINE_TYPE_COPY0);
@@ -13204,6 +13299,14 @@ mod route_k {
                 poison_intact += 1;
             }
         }
+        let after: Vec<String> = (0..8u64)
+            .map(|i| {
+                store_view
+                    .load_u32(HostOffset::new(USERD_OFFSET_IN_STORE + 4 * i))
+                    .map_or_else(|_| "????????".to_owned(), |v| format!("{v:08x}"))
+            })
+            .collect();
+        println!("K_USERD_AFTER_BIRTH={}", after.join(" "));
         println!("K_USERD_POISON_INTACT_WORDS={poison_intact} of 128");
         println!(
             "K_USERD_POISON_SURVIVED={}",

@@ -86,6 +86,8 @@ echo "=== w750 PHASE 1 GRADING (docs/design/w750_route_k_prereg.md §2) ===" | t
   grade K_DUP_OUTSTANDING 0
   grade KP2_K_DUP_OUTSTANDING 1
   grade K_UVM_REG_CHAN_RC 0x0
+  grade K_UVM_REG_CHAN_KP_RC 0x0
+  grade K_MAP_INSTRUMENT_KP 0
   echo "ROW K_DUP_MAP_POST_RC=$(grep -m1 '^K_DUP_MAP_POST_RC=' "$OUT" | cut -d= -f2-) \
 (want ANY NON-ZERO)"
   echo "ROW K_UVM_REG_CHAN_NEG_RC=$(grep -m1 '^K_UVM_REG_CHAN_NEG_RC=' "$OUT" | cut -d= -f2-) \
