@@ -394,7 +394,54 @@ and the per-client host MMU fault above.
 > ★ There is exactly **one** `NVOS46` encode site in the crate and a test pins it at one, so
 > the assertion is unavoidable rather than present at the sites that remembered.
 28. **★★★ EVERY FIXED MAP ASSERTS ITS OWN PLACEMENT, AND THE PAGE-SIZE FLAG MATCHES THE RUN'S
-    CLASS** (2026-09-15, from `[w744]`). `NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE` honours an
+    CLASS** (2026-09-15, from `[w744]`).
+
+    > ### ⊘⊘⊘ REFINED 2026-09-16 (w755) — **THE RULE BELOW IS "ALIGNMENT". RM'S RULE IS
+    > ### "CONGRUENCE", AND THE DIFFERENCE IS A TERM *WE* INSERT.** Read this first.
+    >
+    > Derived from `[ogkm-580.159.04]` source, not measured: `virtual_mem.c:1323` turns the
+    > NVOS46 `offset` into a **sub-descriptor**; then `gm107.c:726/:922/:1081/:1532`
+    >
+    >     pageOffset = (reservation_base + offset) & (pageSize - 1)
+    >     vaLo       = ALIGN_DOWN(at, pageSize)
+    >     reject iff (at - vaLo) != 0 && (at - vaLo) != pageOffset
+    >     got        = vaLo + pageOffset
+    >
+    > ⇒ `got == at` **iff** `at ≡ (reservation_base + offset) (mod pageSize)`.
+    >
+    > | request's intra-page offset | RM |
+    > |---|---|
+    > | `0` — page-aligned | **ACCEPTED and MOVED**, `NV_OK` |
+    > | `== pageOffset` | honoured exactly |
+    > | anything else | `NV_ERR_INVALID_OFFSET` |
+    >
+    > ⚠ **The dangerous row is the first.** A nicely aligned VA reads to RM as *"you did not
+    > account for the page offset; let me."* That is why ★★ below — compare `dmaOffset` on
+    > the way out, never trust the status — is the half that survives unchanged and is the
+    > half that matters.
+    >
+    > ★★★★★ **AND THE MISALIGNING TERM IS OURS.** Owner, 2026-09-16: *"I suspect the guest
+    > already enforces this… the guest driver is not going to violate its own hardware."* It
+    > does, and that is why the fault is ours. A guest PTE gives `at ≡ guest_gpga`. The single
+    > store's identity is *framebuffer address = file offset*, so RM sees
+    > `reservation_base + guest_gpga` — and the two congruences differ by
+    > **`reservation_base mod pageSize`**, a number the guest has never seen. **We added a term
+    > to a congruence the guest had already satisfied.**
+    >
+    > ⇒ **Store slices pin `PAGE_SIZE_4KB` unconditionally**, and not out of conservatism: at
+    > 4 KiB the inserted term vanishes, because any RM vidmem allocation is ≥4 KiB-aligned.
+    > Above 4 KiB the congruence needs `reservation_base`, which `reserve_gpga` does not
+    > report. ⚠ Costs TLB reach; the optimisation is **named** — have `reserve_gpga` report the
+    > GPGA, pick the largest congruent size, and *measure* — not assumed away.
+    > ⊘ Scoped to store slices: compressed kinds require big pages, so a blanket `_4KB`
+    > everywhere could be refused outright.
+    >
+    > ⊘ **What this retires in the text below:** *"a large leaf is necessarily at a
+    > large-aligned VA, so map it with the matching big-page flag at its own address"* is
+    > sound for a **dedicated leaf** (base aligned by construction) and **false for a slice of
+    > an object whose base we do not know**. The `[w744]` rows are real but were measured on
+    > **ring VAs the isolate itself chose** — carrying them to walked guest leaves is a change
+    > of provenance, which is the §29 failure applied to a measurement instead of an assert. `NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE` honours an
     arbitrary VA **only** with `NVOS46_FLAGS_PAGE_SIZE_4KB` — **0/3 without, 3/3 with** — and
     without it RM **relocates and returns `NV_OK`**:
 
