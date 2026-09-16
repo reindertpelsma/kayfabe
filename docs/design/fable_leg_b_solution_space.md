@@ -41,7 +41,7 @@ per-proc isolate, **A** = I's working client, **the store** = the one reserved v
    `rmconfig.h:260`). On a PF host it is never read; the RPC field is filled from the handle-derived
    memdesc (`:2747-2757`). §1.2.
 5. ★★ **A free, fail-closed assert for constraint 30 exists in the driver's own writeback**:
-   `kernel_channel.c:281,287` set `NVOS04_FLAGS_PRIVILEGED_CHANNEL` (bit 5, `alloc_channel.h:141`)
+   `kernel_channel.c:281,286` set `NVOS04_FLAGS_PRIVILEGED_CHANNEL` (bit 5, `alloc_channel.h:141`)
    **in the alloc params**, and RM copies the params back on success (`alloc_free.c:207-211`).
    Pass bit 5 clear; if it comes back set, the channel was stamped KERNEL/ADMIN. §6.
 6. ⊘ **The whole "USERD in sysmem" family** (A, udmabuf, dma-buf import) has a real, unprivileged
@@ -112,7 +112,7 @@ guest RM path (`:2457-2466`, `MEMDESC_FLAGS_GUEST_ALLOCATED`). We are not a VF.
 ### 1.3 Two smaller dead ends, so nobody spends a probe on them
 
 - **A `NV50_MEMORY_VIRTUAL`/`NV01_MEMORY_VIRTUAL` handle as USERD.** `kchannelCreateUserdMemDesc_GV100`
-  takes `memdescGetPhysAddr(…, AT_GPU, userdOffset)` (`kernel_channel_gv100.c:198`) and programs the
+  takes `memdescGetPhysAddr(…, AT_GPU, userdOffset)` (`kernel_channel_gv100.c:204`) and programs the
   instance block with it (`kernel_channel_gm107.c:328`). A VA in the hardware's physical field is
   garbage. Dead by shape.
 - **I allocates its own `NV01_MEMORY_LOCAL_USER` at the store's physical offset**
@@ -128,14 +128,14 @@ guest RM path (`:2457-2466`, `MEMDESC_FLAGS_GUEST_ALLOCATED`). We are not a VF.
 `src/nvidia/src/kernel/gpu/fifo/kernel_fifo_ctrl.c:523-597`, `subdeviceCtrlCmdFifoUpdateChannelInfo_IMPL`:
 
 ```c
-    NvHandle hClient = RES_GET_CLIENT_HANDLE(pSubdevice);        // :531  the CALLER's client
+    NvHandle hClient = RES_GET_CLIENT_HANDLE(pSubdevice);        // :532  the CALLER's client
     serverGetClientUnderLock(&g_resServ, pChannelInfo->hClient, &pChannelClient);   // :543-545
     CliGetKernelChannel(pChannelClient, pChannelInfo->hChannel, &pKernelChannel);    // :548-550
     if (!pChannelInfo->hUserdMemory)          return NV_ERR_INVALID_ARGUMENT;         // :553-556
     if (!pKernelChannel->bClientAllocatedUserD) return NV_ERR_NOT_SUPPORTED;          // :558-561
     if (IS_GSP_CLIENT(pGpu)) {
         pRmApi->Control(… physical …);                                                // :565-572 → GSP
-        kchannelDestroyUserdMemDesc_HAL(pGpu, pKernelChannel);                        // :575
+        kchannelDestroyUserdMemDesc_HAL(pGpu, pKernelChannel);                        // :576
         kchannelCreateUserdMemDesc_HAL(pGpu, pKernelChannel, hClient,                 // :580-582
                                        pChannelInfo->hUserdMemory, pChannelInfo->userdOffset, …);
 ```
@@ -147,7 +147,7 @@ guest RM path (`:2457-2466`, `MEMDESC_FLAGS_GUEST_ALLOCATED`). We are not a VF.
   `:558`), i.e. I births with a 4 KiB object of its own (D-shaped) and S re-points it to the store.
 - Host must be `IS_GSP_CLIENT` (`:563`) — it is. The VF HAL variant is a stub (`g_subdevice_nvoc.c:10582-10585`).
 - The new USERD is a **sub-memdesc of the store's memdesc**, owned by the channel and destroyed with
-  it (`kchannelDestroyUserdMemDesc_GV100`, `kernel_channel_gv100.c:291-300`) — no `LIST_OBJECT`
+  it (`kchannelDestroyUserdMemDesc_GV100`, `kernel_channel_gv100.c:285-300`) — no `LIST_OBJECT`
   snapshot, no second RM object with its own lifetime. Constraint 31's "handles outlive the page"
   hazard does not arise: the store never moves.
 
@@ -189,15 +189,15 @@ silently — record which. Ranked low: two closed-source unknowns and a pushbuff
 **The stamps, from source.**
 - `ProcessID` is stamped from **the client**, at **client creation**, from the **creating task**:
   `client.c:112` `pClient->ProcID = osGetCurrentProcess();` and copied into the channel at
-  `kernel_channel.c:294`. (`SubProcessID` likewise, `:295`.)
+  `kernel_channel.c:293`. (`SubProcessID` likewise, `:294`.)
 - Privilege is stamped from **the call**: `kernel_channel.c:277-292`, `privLevel =
   pCallContext->secInfo.privLevel`, and `rmclientIsAdmin(pRmClient, privLevel)` = `privLevel >=
-  USER_ROOT && !bIsRootNonPriv` (`client.c:384-394`). `hypervisorCheckForObjectAccess` is
+  USER_ROOT && !bIsRootNonPriv` (`client.c:384-393`). `hypervisorCheckForObjectAccess` is
   unconditionally `NV_FALSE` (`hypervisor_access.c:32-40`).
 - A client is bound to a **`struct file`**, not a pid: STRICT validation is the default
   (`g_system_nvoc.c:104` → `PDB_PROP_SYS_VALIDATE_CLIENT_HANDLE_STRICT = 1`) and compares
   `pClient->pOSInfo == pSecInfo->clientOSInfo` (`client.c` `rmclientValidate_IMPL`, the
-  `pOSInfo` set at `:92`). The non-strict fallback compares **euid or pid** tokens
+  `pOSInfo` set at `:91`). The non-strict fallback compares **euid or pid** tokens
   (`os.c:3856-3865`: refused only if *both* differ). ⇒ **an fd passed by `SCM_RIGHTS` carries the
   client with it**, whichever mode.
 - The dup destination is validated against the **caller's** fd: `rs_server.c` `serverCopyResource`
@@ -228,7 +228,7 @@ silently — record which. Ranked low: two closed-source unknowns and a pushbuff
    dup whose destination has I's `ProcID`.)
 5. S allocates the channel **in B** on fd2: `hVASpace = the VAS dup`, `hUserdMemory[0] = the store
    dup`, `userdOffset[0] = the guest's USERD offset` (known from the guest's alloc RPC,
-   `userd_mem_is_on_the_wire.md`). Stamps: `ProcessID = I` (`:294`), `_PRIVILEGE_USER` (`:290`,
+   `userd_mem_is_on_the_wire.md`). Stamps: `ProcessID = I` (`:293`), `_PRIVILEGE_USER` (`:290`,
    S's call is unprivileged — measured w746: `rmclientIsAdmin == false` for S).
 6. S **frees the store dup in B** (`NV_ESC_RM_FREE` on fd2). The channel keeps its sub-memdesc.
 7. S drives the channel through fd2: engine objects, work-submit token
@@ -327,7 +327,7 @@ Recorded so it is not re-derived. Host side: an **unprivileged** client may crea
 `nv-dmabuf.c:1867-1890`), and the result is `ADDR_SYSMEM` (`osmemdesc.c:798-800`). A `udmabuf`
 over a **4 KiB range** of the guest-RAM memfd would be a range-restricted fd S could hand I without
 handing it the memfd, and `kchannelCreateUserdMemDesc_GV100` explicitly expects `OsDescMemory`
-USERDs (`kernel_channel_gv100.c:243-246`, `refAddDependant`). UVM itself uses a sysmem client
+USERDs (`kernel_channel_gv100.c:250-254`, `refAddDependant`). UVM itself uses a sysmem client
 USERD when `uvm_channel_gpput_loc=sys` (`nv_gpu_ops.c:5976-5989`), and w233 measured host RM
 accepting one. ⇒ the primitive is real, unprivileged, and vendor-shaped.
 **Dead because the guest never puts USERD in sysmem** (§1.1), and putting it there for the guest
@@ -365,9 +365,9 @@ precise shape of the "if 17 were ever relaxed" world; it is not a route under th
 | stamp | source | line | fixed by |
 |---|---|---|---|
 | `KernelChannel::privilegeLevel` | `pCallContext->secInfo.privLevel`, `rmclientIsAdmin(client)` | `kernel_channel.c:277-292` | the **calling task's** `capable(CAP_SYS_ADMIN)` at the alloc ioctl (`escape.c:304`, `nv-linux.h:537`), and the client's class (`NON_PRIV`) |
-| `KernelChannel::ProcessID` | `pRmClient->ProcID` | `:294` ← `client.c:112` | the **task that allocated the client** |
-| `KernelChannel::SubProcessID` | `pRmClient->SubProcessID` | `:295` ← `client_resource.c:4766` | whoever holds the client's fd |
-| USERD physical address | `memdescGetPhysAddr(sub-memdesc)` | `kernel_channel_gv100.c:198`, `_gm107.c:328` | the handle resolved **in the allocating client** (`_gv100.c:183-190`) |
+| `KernelChannel::ProcessID` | `pRmClient->ProcID` | `:293` ← `client.c:112` | the **task that allocated the client** |
+| `KernelChannel::SubProcessID` | `pRmClient->SubProcessID` | `:294` ← `client_resource.c:4766` | whoever holds the client's fd |
+| USERD physical address | `memdescGetPhysAddr(sub-memdesc)` | `kernel_channel_gv100.c:204`, `_gm107.c:328` | the handle resolved **in the allocating client** (`_gv100.c:183-190`) |
 | client ↔ caller binding | `pOSInfo == clientOSInfo` (STRICT default) | `client.c` `rmclientValidate_IMPL`, `g_system_nvoc.c:104` | the **`struct file`**, which `SCM_RIGHTS` carries |
 
 Every route in this document is a choice of which task performs which of the three actions
@@ -379,7 +379,7 @@ is `{I, I, I}` and fails on the third.
 
 ## 6. ★ A free, fail-closed assert on the privilege stamp — for every route
 
-`kernel_channel.c:281` and `:287` do `pChannelGpfifoParams->flags = FLD_SET_DRF(OS04, _FLAGS,
+`kernel_channel.c:281` and `:286` do `pChannelGpfifoParams->flags = FLD_SET_DRF(OS04, _FLAGS,
 _PRIVILEGED_CHANNEL, _TRUE, …)` **in the alloc params** when the channel is stamped KERNEL or
 ADMIN; the USER arm (`:290`) leaves them alone. `NVOS04_FLAGS_PRIVILEGED_CHANNEL` is bit `5:5`
 (`alloc_channel.h:141`). RM copies alloc params back to the caller on success
@@ -389,7 +389,7 @@ is privileged; refuse and tear down.** This is §30's *"asserted at birth and re
 sourced from the driver's writeback rather than from our belief about euids. ⚠ It must be paired
 with a known-positive: birth one channel from a `CAP_SYS_ADMIN` task in a test and watch the bit
 come back set. **INFERRED** only that no later code clears the bit before copy-out (the
-`pChannelGpfifoParams` object is the one copied out; nothing between `:292` and return writes
+`pChannelGpfifoParams` object is the one copied out; nothing between `:294` and return writes
 `flags` in the USER arm as read here).
 
 ---
@@ -397,7 +397,7 @@ come back set. **INFERRED** only that no later code clears the bit before copy-o
 ## 7. The zeroing question is a probe, and it orders every route
 
 w233 measured: host RM zeroes a **sysmem** client USERD at birth. Source: CPU-RM does so only for
-`ADDR_SYSMEM` (`kernel_channel.c:2342-2356`, `kfifoSetupUserD_GM107` `kernel_fifo_gm107.c:796-808`,
+`ADDR_SYSMEM` (`kernel_channel.c:2342-2356`, `kfifoSetupUserD_GM107` `kernel_fifo_gm107.c:797-808`,
 512 B). For a **vidmem** slice the CPU side writes nothing; the GSP side is closed.
 **Probe**: pre-poison the store at the USERD offset through S's view, birth a channel over it,
 read back. **Discriminator**: zeroed ⇒ GSP zeroes vidmem client USERDs too, so adoption must
