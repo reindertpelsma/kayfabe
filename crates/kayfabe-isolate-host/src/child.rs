@@ -28,7 +28,7 @@
 //! §7.2 forbids, reached from the other end.
 
 use crate::export::ChildExports;
-use crate::fdcross::write_frame_with_fds;
+use crate::fdcross::{CrossedFd, FdFrameError, FdOrigin, read_frame_with_fds, write_frame_with_fds};
 use crate::guestram::GuestRamPlane;
 use crate::isolate::{
     CONTROL_FD, GUEST_RAM_FD, PARK_WITNESS_FD, RmMode, WORKER_FD_BASE, decode_control,
@@ -276,7 +276,7 @@ pub fn serve(args: &ChildArgs) -> i32 {
         let slots = Arc::clone(&slots);
         let exports = Arc::clone(&exports);
         threads.push(std::thread::spawn(move || {
-            worker_loop(i, sock, backend, &slots, &exports);
+            worker_loop(i, sock, backend, &slots, &exports, id);
         }));
     }
     for t in threads {
@@ -541,6 +541,13 @@ fn worker_loop(
     mut backend: Box<dyn RmBackend>,
     slots: &[Mutex<SlotState>],
     exports: &ChildExports,
+    // ⊘ **This isolate's own identity, threaded rather than derived.** `AdoptBirthClient`
+    // attributes the descriptors it receives to `(minted_by_proc, THIS gpu)`, and the GPU
+    // has to come from somewhere. Taking it from the frame would be a second routing
+    // decision on a path that already has one — the
+    // `a_second_source_of_truth_beside_a_complete_value` defect w746 fixed in
+    // `vaspace_handover` — so it comes from the process's own arguments, the authority.
+    id: IsolateId,
 ) {
     {
         let mut s = slots[index].lock().unwrap_or_else(|e| e.into_inner());
@@ -556,14 +563,40 @@ fn worker_loop(
 
     let mut buf = Vec::new();
     loop {
-        match read_frame(&mut sock, &mut buf) {
+        // ★★★★★ **w753 / CONSTRAINT 32 — THE READER NOW SUPPLIES A CONTROL BUFFER.**
+        //
+        // Until route K this was a plain `read_frame`, and `proto.rs` said so by name:
+        // *"the fd-IN gap on the request path is REAL (the child's reader is `read_frame`,
+        // with no control buffer at all)"*. [`Request::AdoptBirthClient`] closes it.
+        //
+        // ⊘⊘ **AND THE FAILURE MODE OF GETTING THIS WRONG IS SILENCE, WHICH IS WHY IT IS
+        // HERE AND NOT BEHIND A FLAG.** A `recvmsg` with no control buffer does not refuse a
+        // descriptor — the kernel **closes it and delivers the bytes perfectly**. The verb
+        // would have returned `Ok`, the census would have counted a hand-over, and the far
+        // side would hold a client handle naming a session it cannot reach. So
+        // `serve_one` refuses `AdoptBirthClient` with an empty `fds` **by its own name**
+        // rather than trusting this line to be right. See
+        // `a_reader_without_a_control_buffer_loses_the_descriptor_and_reports_nothing`,
+        // which puts both readers on one wire and shows the only observable that differs.
+        //
+        // ⚠ The allowance is a CONSTANT and cannot be per-verb: this is one reader for every
+        // request and it has not decoded the body yet. So the allowance is the maximum any
+        // verb may carry, and the per-verb rule — *"every request but one carries none"* —
+        // is enforced below, after the decode, where it can name the verb it refused.
+        let mut fds: Vec<OwnedFd> = Vec::new();
+        match read_frame_with_fds(sock.as_fd(), &mut buf, &mut fds, REQUEST_MAX_FDS) {
             Ok(true) => {}
             // The parent closed, or abandoned this channel (§7.5). Either way there is
             // nothing left to serve.
             Ok(false) => return,
             // A cancel that arrived while this worker was BETWEEN verbs. There is nothing
             // to interrupt, so it is spent here rather than left to break the next read.
-            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+            // ⊘ Spelled through `RawError::is_interrupted` rather than `io::ErrorKind`
+            // because `read_frame_with_fds` reports at a frame boundary and retries
+            // mid-frame itself — the same rule, restated in the other reader's vocabulary.
+            // A reader that dropped this arm would turn every cancel-between-verbs into a
+            // dead worker.
+            Err(FdFrameError::Os(e)) if e.is_interrupted() => continue,
             Err(_) => return,
         }
         let Ok(envelope) = Envelope::decode(&buf) else {
@@ -589,7 +622,7 @@ fn worker_loop(
         // it, because those are the transport this is meant to be subtracted from.
         let t0 = std::time::Instant::now();
         let bucket = w321_bucket(&envelope.request);
-        let (reply, carried) = serve_one(&mut *backend, envelope.request, exports);
+        let (reply, carried) = serve_one(&mut *backend, envelope.request, exports, fds, id);
         w321_note(index, bucket, t0.elapsed().as_nanos());
         {
             let mut s = slots[index].lock().unwrap_or_else(|e| e.into_inner());
@@ -609,6 +642,104 @@ fn worker_loop(
     }
 }
 
+/// ★★★★★ **CONSTRAINT 32 — HOW MANY DESCRIPTORS A REQUEST MAY CARRY, AT MOST.**
+///
+/// Two, and they are [`Request::AdoptBirthClient`]'s: a second `/dev/nvidiactl` and the
+/// matching per-GPU node, bound to each other by `NV_ESC_REGISTER_FD` before they were sent.
+/// **Both** are needed and neither is padding — the control node is what an escape is issued
+/// on, and the per-GPU node keeps the session's GPU binding alive now that the isolate that
+/// opened them has closed its own copies.
+///
+/// ⊘ **It is a CONSTANT, not a per-verb allowance, and that is a property of the reader
+/// rather than a choice.** One reader serves every request and it has not decoded the body
+/// when it must size the control buffer. ⇒ the constant is the maximum any verb may carry,
+/// and the per-verb rule lives in [`serve_one`], after the decode, where a refusal can name
+/// the verb it refused.
+///
+/// ⚠ **Expiry condition** (§w724g): back to `0` — and the reader back to `read_frame` — in
+/// the same change that retires route K, if it is ever retired.
+const REQUEST_MAX_FDS: usize = 2;
+
+/// ★★★★★ **CONSTRAINT 32 — TAKE THE BIRTH CLIENT'S DESCRIPTORS AND PROVE THEY ARE WHAT THE
+/// PROTOCOL PROMISED.**
+///
+/// Three checks, all fail-closed, before the backend is told anything:
+///
+/// 1. **The descriptors arrived at all.** ⊘ This is the check that catches a reader with no
+///    control buffer — a `recvmsg` without one does not refuse a descriptor, it **closes it
+///    and delivers the bytes perfectly**, so the only evidence of that bug is an empty
+///    `fds` on a verb that cannot work without them. It is refused by a code of its own so
+///    that *"the transport dropped them"* can never read as *"RM said no"*.
+/// 2. **They are character devices**, checked against the kernel by [`CrossedFd::adopt`] and
+///    not against the sender's claim. The next thing anyone does with one is issue an
+///    `ioctl` naming a foreign client; a regular file here is a protocol confusion.
+/// 3. **The client handle is not null.** A zero `hRoot` is the one value RM interprets
+///    rather than refuses.
+///
+/// ⊘ **The provenance recorded is [`FdOrigin::BirthClient`]**, so if either descriptor is
+/// ever lent onward it meets the one-target rule rather than `FdOrigin::Isolate`'s. It is
+/// recorded here — at adoption — because that is the only moment the information exists: a
+/// later caller has an `OwnedFd` and no way to recover where it came from.
+fn adopt_birth_client(
+    rm: &mut dyn RmBackend,
+    client: u64,
+    minted_by_proc: u32,
+    fds: Vec<OwnedFd>,
+    id: IsolateId,
+) -> (Reply, Option<OwnedFd>) {
+    let Ok([ctl, node]) = <[OwnedFd; 2]>::try_from(fds) else {
+        kayfabe_util::lock_safe_eprintln!(
+            "kayfabe-isolate-host: ⊘⊘⊘ CONSTRAINT 32 REFUSED — AdoptBirthClient arrived \
+             without its two descriptors. ⚠ Read this as a TRANSPORT defect, not an RM one: \
+             a recvmsg with no control buffer CLOSES what the sender attached and delivers \
+             the body intact, so an empty `fds` here is what a reader that forgot \
+             `read_frame_with_fds` looks like. The client handle on its own reaches no RM."
+        );
+        return (
+            failed(RmError::Other(crate::rm::BIRTH_CLIENT_NO_DESCRIPTORS)),
+            None,
+        );
+    };
+    if client == 0 {
+        kayfabe_util::lock_safe_eprintln!(
+            "kayfabe-isolate-host: ⊘⊘ CONSTRAINT 32 REFUSED — AdoptBirthClient named client \
+             0x0. A null hRoot is the one handle RM interprets instead of refusing."
+        );
+        return (failed(RmError::Other(crate::rm::BIRTH_CLIENT_NULL_HANDLE)), None);
+    }
+    // ⊘ The isolate the descriptors are attributed to. The GPU is THIS backend's own — a
+    // birth client is per-`(proc, gpu)` exactly as an isolate is, and a frame that could
+    // name another GPU would be a second routing decision on a path that already has one.
+    let minted_by = IsolateId::new(minted_by_proc, id.gpu());
+    let origin = FdOrigin::BirthClient { minted_by };
+    let (ctl, node) = match (
+        CrossedFd::adopt(ctl, origin, kayfabe_linux_raw::DescriptorKind::CharDevice),
+        // ⊘ Adopted in the same expression so a refusal of EITHER closes BOTH: each `adopt`
+        // takes its descriptor by value, and the tuple is dropped whole.
+        CrossedFd::adopt(node, origin, kayfabe_linux_raw::DescriptorKind::CharDevice),
+    ) {
+        (Ok(c), Ok(n)) => (c, n),
+        (c, n) => {
+            kayfabe_util::lock_safe_eprintln!(
+                "kayfabe-isolate-host: ⊘⊘ CONSTRAINT 32 REFUSED — a birth-client descriptor \
+                 is not a character device. ctl={:?} node={:?}. Checked against the KERNEL, \
+                 not against the sender's claim, because the next thing done with one is an \
+                 ioctl naming a foreign client.",
+                c.as_ref().err(),
+                n.as_ref().err(),
+            );
+            return (
+                failed(RmError::Other(crate::rm::BIRTH_CLIENT_NOT_A_CHAR_DEVICE)),
+                None,
+            );
+        }
+    };
+    match rm.adopt_birth_client(client, minted_by_proc, ctl.into_owned(), node.into_owned()) {
+        Ok(()) => (Reply::Unit, None),
+        Err(e) => (failed(e), None),
+    }
+}
+
 /// One request, its reply, and **the descriptor that reply carries, if any**.
 ///
 /// The split exists because exactly one verb's answer is a descriptor and everything else
@@ -619,8 +750,38 @@ fn serve_one(
     rm: &mut dyn RmBackend,
     request: Request,
     exports: &ChildExports,
+    fds: Vec<OwnedFd>,
+    id: IsolateId,
 ) -> (Reply, Option<OwnedFd>) {
+    // ★★★★★ **w753 / CONSTRAINT 32 — THE PER-VERB fd RULE, ENFORCED AFTER THE DECODE.**
+    //
+    // The reader's allowance is a constant because one reader serves every verb. This is
+    // where the actual protocol rule lives: **exactly one request may carry descriptors**.
+    // Refused by name, and `fds` is dropped on the refusal path, so whatever arrived is
+    // CLOSED rather than leaked — the property `CrossedFd::adopt` has by taking its
+    // descriptor by value, restated here for the frames that never reach it.
+    //
+    // ⊘ This mirrors `a_descriptor_on_a_message_that_may_not_carry_one_is_refused` on the
+    // reply direction. Both directions get the rule because a peer is not obliged to be
+    // well-behaved in either of them.
+    if !fds.is_empty() && !matches!(request, Request::AdoptBirthClient { .. }) {
+        kayfabe_util::lock_safe_eprintln!(
+            "kayfabe-isolate-host: ⊘⊘ REFUSED — {} descriptor(s) arrived on a request that \
+             may not carry one. Exactly ONE request may (`AdoptBirthClient`, constraint 32); \
+             every other is bytes. The descriptors are closed here.",
+            fds.len(),
+        );
+        return (
+            failed(RmError::Other(crate::rm::FD_ON_A_BYTES_ONLY_REQUEST)),
+            None,
+        );
+    }
     match request {
+        // ★★★★★ **CONSTRAINT 32 — THE ONE REQUEST THAT CARRIES DESCRIPTORS DOWN.**
+        Request::AdoptBirthClient {
+            client,
+            minted_by_proc,
+        } => adopt_birth_client(rm, client, minted_by_proc, fds, id),
         Request::ExportBacking {
             source,
             memory,
@@ -1162,6 +1323,16 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
         | Request::ExportUsermodeView { .. } => {
             Reply::Failed(WireError::Other(crate::rm::NOT_ON_THIS_RUNG))
         }
+        // ★★★★★ **w753 / CONSTRAINT 32 — THE SAME RULE IN THE OTHER DIRECTION.** The arms
+        // above carry a descriptor UP and cannot be answered here; this one carries two DOWN
+        // and cannot either. Named explicitly for their reason exactly: reaching this arm
+        // means `serve_one`'s intercept was removed or reordered, and a wildcard would answer
+        // the request with a `Unit` while the descriptors it needed were already dropped — a
+        // hand-over reported complete with nothing on the far end. ⊘ That is the
+        // `a_check_that_reports_is_not_a_check_that_gates` shape; this refuses.
+        Request::AdoptBirthClient { .. } => {
+            Reply::Failed(WireError::Other(crate::rm::NOT_ON_THIS_RUNG))
+        }
         // ★★★★★ **w380 — the alias, and it is NOT in the line above.** Its reply carries no
         // descriptor, so it is an ordinary `Request -> Reply` arm and belongs here. ⊘ The
         // distinction is load-bearing rather than tidy: routing it through `serve_one`'s
@@ -1348,6 +1519,183 @@ mod tests {
     /// allocation, and the fact that the peer is our own parent is not a reason to write
     /// code that trusts a length — boundary 2 runs in both directions. The refusal is a
     /// named status, so it reads as a refusal and never as an empty page.
+    /// A `/dev/null` handle — a character device, which is what a birth-client descriptor
+    /// must be. ⊘ Not a `memfd`: the check is against the KERNEL, so the test has to hand it
+    /// something the kernel really classifies that way.
+    fn a_char_device() -> OwnedFd {
+        // ⊘ `File -> OwnedFd` is the SAFE conversion; this crate forbids `unsafe` and a test
+        // is not an exemption from that.
+        OwnedFd::from(std::fs::File::open("/dev/null").expect("/dev/null"))
+    }
+
+    fn a_regular_file() -> OwnedFd {
+        let p = std::env::temp_dir().join(format!("kf-w753-birth-{}", std::process::id()));
+        let f = std::fs::File::create(&p).expect("temp file");
+        let _ = std::fs::remove_file(&p);
+        OwnedFd::from(f)
+    }
+
+    fn loopback() -> LoopbackRm {
+        let shared = LoopbackShared::new(ParkVerb::Nothing, None).expect("pipe");
+        LoopbackRm::new(
+            IsolateId::new(1, GpuId(0)),
+            shared,
+            Arc::new(ChildExports::new()),
+        )
+        .expect("dup")
+    }
+
+    /// The scratchpad's own id — the only isolate a birth client may reach.
+    fn scratchpad() -> IsolateId {
+        IsolateId::new(crate::SCRATCHPAD_ISOLATE_PROC, GpuId(0))
+    }
+
+    /// ★★★★★ **CONSTRAINT 32's KNOWN-POSITIVE FOR THE fd-IN PATH — the one that catches a
+    /// reader with no control buffer.**
+    ///
+    /// ⊘⊘ **Not a redundant argument check.** A `recvmsg` without a control buffer does not
+    /// refuse a descriptor: the kernel **closes it and delivers the body perfectly**. So the
+    /// *only* observable of that bug, anywhere in the system, is an `AdoptBirthClient`
+    /// reaching this function with an empty `fds`. Answered `Ok`, the VMM would record a
+    /// hand-over, the scratchpad would hold a client handle naming a session it cannot
+    /// reach, and the first evidence would be an RM refusal hundreds of ioctls later in a
+    /// different subsystem.
+    ///
+    /// ⇒ refused with a code of **its own**, so *"the transport dropped them"* can never be
+    /// read as *"RM said no"*.
+    #[test]
+    fn a_birth_client_without_its_descriptors_is_refused_by_its_own_name() {
+        let mut rm = loopback();
+        let (reply, carried) = serve_one(
+            &mut rm,
+            Request::AdoptBirthClient {
+                client: 0xc1d0_0001,
+                minted_by_proc: 2,
+            },
+            &ChildExports::new(),
+            Vec::new(),
+            scratchpad(),
+        );
+        assert_eq!(
+            reply,
+            Reply::Failed(WireError::Other(crate::rm::BIRTH_CLIENT_NO_DESCRIPTORS)),
+            "★★★ a birth client with no descriptors must be refused by ITS OWN name — a \
+             generic refusal makes a transport bug indistinguishable from RM's answer"
+        );
+        assert!(carried.is_none());
+    }
+
+    /// ⊘ **A null `hRoot` is the one handle RM interprets rather than refuses.** Both
+    /// descriptors are present so this cannot pass for the previous test's reason.
+    #[test]
+    fn a_birth_client_named_zero_is_refused_even_with_both_descriptors() {
+        let mut rm = loopback();
+        let (reply, _) = serve_one(
+            &mut rm,
+            Request::AdoptBirthClient {
+                client: 0,
+                minted_by_proc: 2,
+            },
+            &ChildExports::new(),
+            vec![a_char_device(), a_char_device()],
+            scratchpad(),
+        );
+        assert_eq!(
+            reply,
+            Reply::Failed(WireError::Other(crate::rm::BIRTH_CLIENT_NULL_HANDLE)),
+        );
+    }
+
+    /// ★★★ **The kind check is against the KERNEL, not the sender's claim** — and the
+    /// SECOND descriptor is checked too. A check that only looks at the first is a check on
+    /// half the message.
+    #[test]
+    fn a_birth_client_descriptor_that_is_not_a_char_device_is_refused() {
+        let mut rm = loopback();
+        let (reply, _) = serve_one(
+            &mut rm,
+            Request::AdoptBirthClient {
+                client: 0xc1d0_0001,
+                minted_by_proc: 2,
+            },
+            &ChildExports::new(),
+            vec![a_char_device(), a_regular_file()],
+            scratchpad(),
+        );
+        assert_eq!(
+            reply,
+            Reply::Failed(WireError::Other(crate::rm::BIRTH_CLIENT_NOT_A_CHAR_DEVICE)),
+        );
+    }
+
+    /// ★★★★★ **EXACTLY ONE REQUEST MAY CARRY DESCRIPTORS**, and every other is refused by
+    /// name with whatever arrived **closed**.
+    ///
+    /// ⊘ The reader's allowance is a constant, because one reader serves every verb and has
+    /// not decoded the body when it sizes the control buffer. ⇒ without this, a peer could
+    /// attach a descriptor to *any* request and the child would take it — the rule would
+    /// exist in a doc comment and nowhere else.
+    #[test]
+    fn a_descriptor_on_a_request_that_may_not_carry_one_is_refused() {
+        let mut rm = loopback();
+        let (reply, carried) = serve_one(
+            &mut rm,
+            Request::AllocVaSpaceBare,
+            &ChildExports::new(),
+            vec![a_char_device()],
+            scratchpad(),
+        );
+        assert_eq!(
+            reply,
+            Reply::Failed(WireError::Other(crate::rm::FD_ON_A_BYTES_ONLY_REQUEST)),
+        );
+        assert!(carried.is_none());
+    }
+
+    /// ⊘ **NON-VACUITY for the four tests above**: the same verb, well formed, gets past
+    /// every gate — so those refusals are about what they say they are about, and not about
+    /// `serve_one` refusing this verb unconditionally.
+    ///
+    /// ⊘ Asserted as *"none of the four"* rather than as one value: pinning the backend's
+    /// own answer here would make this test fail the day the real backend lands, which is
+    /// precisely the day it should still pass.
+    #[test]
+    fn a_well_formed_birth_client_reaches_the_backend() {
+        let mut rm = loopback();
+        let (reply, _) = serve_one(
+            &mut rm,
+            Request::AdoptBirthClient {
+                client: 0xc1d0_0001,
+                minted_by_proc: 2,
+            },
+            &ChildExports::new(),
+            vec![a_char_device(), a_char_device()],
+            scratchpad(),
+        );
+        for (name, code) in [
+            (
+                "BIRTH_CLIENT_NO_DESCRIPTORS",
+                crate::rm::BIRTH_CLIENT_NO_DESCRIPTORS,
+            ),
+            (
+                "BIRTH_CLIENT_NOT_A_CHAR_DEVICE",
+                crate::rm::BIRTH_CLIENT_NOT_A_CHAR_DEVICE,
+            ),
+            ("BIRTH_CLIENT_NULL_HANDLE", crate::rm::BIRTH_CLIENT_NULL_HANDLE),
+            (
+                "FD_ON_A_BYTES_ONLY_REQUEST",
+                crate::rm::FD_ON_A_BYTES_ONLY_REQUEST,
+            ),
+        ] {
+            assert_ne!(
+                reply,
+                Reply::Failed(WireError::Other(code)),
+                "★★★ VACUITY — a well-formed birth client was refused by {name}, so the \
+                 refusal tests above may be passing for a reason unrelated to what they claim"
+            );
+        }
+    }
+
     #[test]
     fn an_oversized_fabricated_aperture_read_is_refused_before_anything_is_allocated() {
         let shared = LoopbackShared::new(ParkVerb::Nothing, None).expect("pipe");

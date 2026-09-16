@@ -1480,6 +1480,44 @@ pub const NOT_IN_THIS_OBJECT: u32 = 0x4B47;
 /// the allocation's, and the status says so.
 pub const MAPPING_ATTRIBUTE_REFUSED: u32 = 0x4B48;
 
+/// ★★★★★ **CONSTRAINT 32 — `AdoptBirthClient` arrived WITHOUT its two descriptors.**
+///
+/// ⊘⊘ **Its own code, and the reason is the failure it names.** A `recvmsg` with no control
+/// buffer does not refuse a descriptor: the kernel **closes it and delivers the body
+/// perfectly**. So a reader that forgot [`crate::fdcross::read_frame_with_fds`] produces a
+/// frame that decodes, a client handle that looks right, and a hand-over that reports
+/// success onto a session nobody can reach. ⇒ *"the descriptors are missing"* must be
+/// distinguishable from every other refusal, or the one bug it exists to catch reads as a
+/// generic RM `no`.
+pub const BIRTH_CLIENT_NO_DESCRIPTORS: u32 = 0x4B50;
+
+/// ★★★ **CONSTRAINT 32 — a birth-client descriptor is not a character device.**
+///
+/// Checked against the **kernel**, never against the sender's claim: the next thing done
+/// with one is an `ioctl` naming a foreign client.
+pub const BIRTH_CLIENT_NOT_A_CHAR_DEVICE: u32 = 0x4B51;
+
+/// ★★★ **CONSTRAINT 32 — `AdoptBirthClient` named client `0x0`.**
+///
+/// A null `hRoot` is the one handle RM *interprets* rather than refuses, so a zero here
+/// would reach the driver as a meaningful value.
+pub const BIRTH_CLIENT_NULL_HANDLE: u32 = 0x4B52;
+
+/// ★★★★★ **CONSTRAINT 32 — a birth client was offered to a party that is not the
+/// scratchpad.**
+///
+/// The fail-closed restatement that needs no provenance: whatever the descriptor claims
+/// about itself, the **target** must be [`crate::SCRATCHPAD_ISOLATE_PROC`]. A birth client
+/// carries another guest process's RM identity; a per-proc isolate holding one is `#14`.
+pub const BIRTH_CLIENT_NOT_THE_SCRATCHPAD: u32 = 0x4B53;
+
+/// ★★★ **A descriptor arrived on a request that may not carry one.**
+///
+/// Exactly one request may (`AdoptBirthClient`); every other is bytes. The mirror of the
+/// reply direction's rule, and it exists for the same reason: a peer is not obliged to be
+/// well-behaved in either direction.
+pub const FD_ON_A_BYTES_ONLY_REQUEST: u32 = 0x4B54;
+
 /// How long [`RmBackend::ce_copy`] waits for the copy engine's own release semaphore
 /// before calling the copy failed.
 ///

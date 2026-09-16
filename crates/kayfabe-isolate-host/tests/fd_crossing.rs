@@ -942,3 +942,64 @@ fn a_birth_client_descriptor_is_not_treated_as_vmm_minted() {
         4 - refused
     );
 }
+
+/// ★★★★★ **THE SILENT DROP, DEMONSTRATED — why the child's reader had to change and why a
+/// `BIRTH_CLIENT_NO_DESCRIPTORS` refusal exists.**
+///
+/// ⊘⊘ **A `recvmsg` with no control buffer does not refuse a descriptor. It CLOSES it and
+/// delivers the body perfectly.** That is the whole hazard of route K's fd-IN path, and it
+/// is invisible at every layer above: the frame decodes, the client handle is the right
+/// number, and the only thing missing is the capability that makes the handle mean
+/// anything.
+///
+/// This test puts both readers on the same wire against the same sender:
+///
+/// | reader | body | descriptors |
+/// |---|---|---|
+/// | `read_frame` (the pre-w753 child) | **perfect** | **silently gone** |
+/// | `read_frame_with_fds` (the w753 child) | perfect | **arrive** |
+///
+/// ⇒ the two differ in exactly one observable, and it is one no error path reports. A
+/// hand-over built on the first reader would have returned `Ok` forever.
+#[test]
+fn a_reader_without_a_control_buffer_loses_the_descriptor_and_reports_nothing() {
+    let _fd_table = serialized();
+    let body = b"an AdoptBirthClient frame's body".to_vec();
+
+    // --- Arm 1: the reader the child had BEFORE w753. The descriptor vanishes.
+    let (tx, rx) = wire();
+    let (file, tag) = a_regular_file("silently-dropped");
+    write_frame_with_fds(tx.as_fd(), &body, &[file.as_fd()]).expect("sent with a descriptor");
+    let mut got = Vec::new();
+    let mut plain = &rx;
+    assert!(
+        kayfabe_isolate_host::proto::read_frame(&mut plain, &mut got).expect("read"),
+        "the plain reader still reads the frame"
+    );
+    assert_eq!(got, body, "★ and it reads it PERFECTLY — that is the hazard");
+    drop((tx, rx, file));
+    assert!(
+        !open_fd_targets().values().any(|t| t.contains(&tag)),
+        "★★★ NON-VACUITY — the descriptor must genuinely be gone from this process. If it \
+         were still open, this test would be demonstrating nothing."
+    );
+
+    // --- Arm 2: the reader the child has NOW. Same sender, same body, descriptor arrives.
+    let (tx, rx) = wire();
+    let (file, _tag) = a_regular_file("delivered");
+    write_frame_with_fds(tx.as_fd(), &body, &[file.as_fd()]).expect("sent with a descriptor");
+    let mut got = Vec::new();
+    let mut fds = Vec::new();
+    assert!(
+        read_frame_with_fds(rx.as_fd(), &mut got, &mut fds, 2).expect("read"),
+        "the fd-carrying reader reads the frame"
+    );
+    assert_eq!(got, body, "…the same body");
+    assert_eq!(
+        fds.len(),
+        1,
+        "★★★ CONSTRAINT 32 — the descriptor must ARRIVE. A zero here with a perfect body is \
+         exactly what a child that forgot its control buffer looks like, and nothing below \
+         this line can tell the difference."
+    );
+}

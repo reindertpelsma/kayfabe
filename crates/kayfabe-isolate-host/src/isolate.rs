@@ -48,7 +48,7 @@
 //!    [`ProxyRmBackend::call`].
 
 use crate::export::ExportRegistry;
-use crate::fdcross::read_frame_with_fds;
+use crate::fdcross::{read_frame_with_fds, write_frame_with_fds};
 use crate::proto::{
     EXPORT_SOURCE_FABRICATED, EXPORT_SOURCE_HOST_DEVICE, Envelope, Reply, Request, WireError,
     engine_code, prot_code, prot_from_code, read_frame, write_frame,
@@ -495,6 +495,42 @@ impl ProxyRmBackend {
         }
     }
 
+    /// ★★★★★ **CONSTRAINT 32 — SEND A REQUEST WITH DESCRIPTORS ATTACHED.**
+    ///
+    /// The mirror of [`ProxyRmBackend::call_for_backing`], and the **only** send path in
+    /// this crate that attaches ancillary data to a *request*. Until route K there was none,
+    /// and `proto.rs` said so by name.
+    ///
+    /// ⊘ **This is the transport and NOT the gate.** The cross-isolate question — *"may this
+    /// descriptor go to this isolate?"* — is [`crate::fdcross::CrossedFd::lend_to`]'s, and it
+    /// is asked by the party that holds the provenance, before it reaches here. What this
+    /// function adds is the **last** fail-closed restatement of the same question in a form
+    /// that needs no provenance at all: the receiving isolate must be the scratchpad. ⇒ two
+    /// checks, and neither is the other's diagnostic.
+    ///
+    /// # Errors
+    /// [`RmError::Wedged`] if the socket refuses or the reply cannot be read.
+    fn call_with_fds(
+        &mut self,
+        request: Request,
+        fds: &[std::os::fd::BorrowedFd<'_>],
+    ) -> Result<Reply, RmError> {
+        let txn = self.cancel.current_txn().unwrap_or(0);
+        let body = Envelope { txn, request }.encode();
+        if write_frame_with_fds(self.sock.as_fd(), &body, fds).is_err() {
+            return Err(RmError::Wedged);
+        }
+        let mut sock = &*self.sock;
+        match read_frame(&mut sock, &mut self.buf) {
+            Ok(true) => match Reply::decode(&self.buf) {
+                Ok(reply) => Ok(reply),
+                Err(_) => Err(RmError::Wedged),
+            },
+            Ok(false) => Err(RmError::Wedged),
+            Err(_) => Err(RmError::Wedged),
+        }
+    }
+
     /// Lift a reply, or the failure it reported.
     fn lift(&self, reply: Reply) -> Result<Reply, RmError> {
         match reply {
@@ -867,6 +903,51 @@ impl RmBackend for ProxyRmBackend {
     /// on the far side unless that process is the scratchpad.
     fn adopt_vaspace(&mut self, client: u32, space: u32) -> Result<HostHandle, RmError> {
         self.handle(Request::AdoptVaSpace { client, space })
+    }
+
+    /// ★★★★★ **CONSTRAINT 32 — ROUTE K: hand the birth client's descriptors DOWN.**
+    ///
+    /// ⊘⊘ **THE LAST FAIL-CLOSED RESTATEMENT, AND IT NEEDS NO PROVENANCE.**
+    /// [`crate::fdcross::CrossedFd::lend_to`] asks *"may this descriptor go to this
+    /// isolate?"* where the provenance lives. This asks the **same question from the other
+    /// end**, off a value nothing on the wire can influence: *is the isolate I am about to
+    /// send to the scratchpad?* A caller that lost, forged or forgot the provenance still
+    /// cannot get a birth client into a per-proc isolate through this method.
+    ///
+    /// ★★★ It is deliberately **not** the `lend_to` check moved here. Both stay: one refuses
+    /// by what the descriptor **is**, the other by who the **target** is, and a single edit
+    /// cannot satisfy both while breaking the rule.
+    fn adopt_birth_client(
+        &mut self,
+        client: u64,
+        minted_by_proc: u32,
+        ctl: OwnedFd,
+        node: OwnedFd,
+    ) -> Result<(), RmError> {
+        if self.isolate.proc() != crate::SCRATCHPAD_ISOLATE_PROC {
+            kayfabe_util::lock_safe_eprintln!(
+                "kayfabe: ⊘⊘⊘ CONSTRAINT 32 REFUSED — a birth client was offered to {:?}, \
+                 which is a PER-PROC isolate. A birth client carries another guest process's \
+                 RM identity; the scratchpad is the only party that may drive one. Nothing \
+                 was sent and both descriptors are closed here.",
+                self.isolate,
+            );
+            // ⊘ Dropped on the refusal path, and therefore CLOSED. A refusal that left them
+            // open would hold I's session alive for a client nobody can now reach.
+            drop((ctl, node));
+            return Err(RmError::Other(crate::rm::BIRTH_CLIENT_NOT_THE_SCRATCHPAD));
+        }
+        let reply = self.call_with_fds(
+            Request::AdoptBirthClient {
+                client,
+                minted_by_proc,
+            },
+            &[ctl.as_fd(), node.as_fd()],
+        )?;
+        match self.lift(reply)? {
+            Reply::Unit => Ok(()),
+            _ => Err(RmError::Wedged),
+        }
     }
 
     /// ★★★★★ **CONSTRAINT 26 — one slice of the one reserved object, at the guest's VA.**

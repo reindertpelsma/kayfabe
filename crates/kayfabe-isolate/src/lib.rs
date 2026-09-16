@@ -1142,6 +1142,53 @@ pub trait RmBackend: Send + Sync {
         Err(RmError::Other(0x56))
     }
 
+    /// ★★★★★ **CONSTRAINT 32 — ROUTE K: TAKE THE BIRTH CLIENT A PER-PROC ISOLATE MINTED AND
+    /// SURRENDERED.**
+    ///
+    /// The per-proc isolate **I** opened a second `/dev/nvidiactl` and the matching per-GPU
+    /// node, bound them with `NV_ESC_REGISTER_FD`, allocated an `NV01_ROOT_CLIENT` on them,
+    /// and **closed its own copies**. `ctl` and `node` are those descriptors; `client` is
+    /// that root. From here on the scratchpad is the only party that can reach `client` at
+    /// all.
+    ///
+    /// ⇒ **Every escape the scratchpad afterwards issues for this proc's store mapping runs
+    /// with `hRoot = client` on `ctl`**, so RM sees a client whose `ProcessID` is **I's**
+    /// (`client.c:112`) — which is what makes the cross-client dup of I's VA space a
+    /// **same-PID** dup (`sharing.c:341-352`) needing no grant, dissolving the
+    /// `NV_ERR_INSUFFICIENT_PERMISSIONS` that `[measured w746, w752]` refused 4 718 times.
+    ///
+    /// ⊘ **`ctl` is the capability and `client` is only a name.** A handle with no
+    /// descriptor bound to its session reaches no RM, which is why
+    /// [`kayfabe_isolate_host::fdcross::FdOrigin::BirthClient`]'s one-target rule is the
+    /// real gate. Stated here because a reader who inverts it will guard the wrong thing.
+    ///
+    /// # ⊘⊘ THE DEFAULT REFUSES, AND HERE IS ITS JUSTIFICATION RATHER THAN ITS CONVENIENCE
+    ///
+    /// A refusing default is how *"a trait default that refuses ships its own
+    /// justification"* is honoured: **no backend but the scratchpad's may accept this, and
+    /// a backend that silently accepted and ignored it would report a hand-over that never
+    /// happened.** Mocks and the per-proc backends want the refusal — it is the correct
+    /// answer for them, not a stub. ⚠ The one backend that must override it is
+    /// `kayfabe_isolate_host::rm::HostRmBackend`, and `ScratchpadRole::of` is what refuses
+    /// there when it is not the scratchpad.
+    ///
+    /// # Errors
+    /// A named refusal on every backend that is not the scratchpad; whatever RM refused the
+    /// birth client's device tree with on the one that is.
+    fn adopt_birth_client(
+        &mut self,
+        client: u64,
+        minted_by_proc: u32,
+        ctl: std::os::fd::OwnedFd,
+        node: std::os::fd::OwnedFd,
+    ) -> Result<(), RmError> {
+        // ⊘ Dropped, and therefore CLOSED, on the refusing default. A default that leaked
+        // them would hold a live session for a client nobody can use, for the life of the
+        // process.
+        let _ = (client, minted_by_proc, ctl, node);
+        Err(RmError::Other(0x56))
+    }
+
     /// ★★★★★ **CONSTRAINT 26 — WHAT THIS ISOLATE WOULD HAND OVER FOR `space`.**
     ///
     /// A [`RmBackend::alloc_vaspace_bare`] result carries the client beside the handle, and

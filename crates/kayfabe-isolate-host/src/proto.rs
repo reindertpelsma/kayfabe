@@ -466,6 +466,15 @@ pub enum Request {
     /// `SECCOMP_RET_USER_NOTIF` match trivial: every argument of the `mmap` the child is
     /// about to issue is already in this frame.
     ///
+    /// ⊘⊘ **CORRECTED w753 — THE SECOND HALF OF THE SENTENCE BELOW IS NOW FALSE, AND IT IS
+    /// THE HALF PEOPLE QUOTE.** The fd-IN gap on the request path **has been built**, for
+    /// constraint 32's route K: the child's reader is
+    /// [`crate::fdcross::read_frame_with_fds`] and [`Request::AdoptBirthClient`] carries two
+    /// descriptors **down**. ⚠ What survives unchanged is the ruling *about this verb*:
+    /// `MapGuestRam` still carries no descriptor and still should not, for exactly the
+    /// reason below. ⇒ read the paragraph below as *"not on this path"*, never as *"no such
+    /// path exists"* — a reader who takes it as the latter will build the mechanism twice.
+    ///
     /// ★ The consequence worth writing down: the fd-IN gap on the request path is REAL
     /// (the child's reader is `read_frame`, with no control buffer at all) and is **not on
     /// this path**. Building it here would have been a whole mechanism serving a verb that
@@ -596,6 +605,34 @@ pub enum Request {
     VaSpaceHandover {
         /// The bare `FERMI_VASPACE_A` this isolate handed out, raw.
         space: u64,
+    },
+    /// ★★★★★ **CONSTRAINT 32 — ROUTE K, tag 39. THE ONE REQUEST THAT CARRIES DESCRIPTORS
+    /// DOWN**, and the only one there is ever expected to be.
+    ///
+    /// The per-proc isolate **I** opened a second `/dev/nvidiactl` plus the matching
+    /// per-GPU node, bound them with `NV_ESC_REGISTER_FD`, allocated an `NV01_ROOT_CLIENT`
+    /// on them, told the VMM the handle, and **closed its own copies**. This frame carries
+    /// those two descriptors to the scratchpad, which is from then on the only party that
+    /// can reach client `client` at all.
+    ///
+    /// ⊘ **The scalars are a NAME; the descriptors are the CAPABILITY.** `client` on its
+    /// own reaches no RM — an escape needs a `struct file` bound to that client's session,
+    /// and this frame is the only thing that ever delivers one. That asymmetry is why
+    /// [`crate::fdcross::FdOrigin::BirthClient`]'s one-target rule is the real gate and the
+    /// handle check is only a cross-check.
+    ///
+    /// ⚠ `minted_by_proc` is **not** decoration: RM stamps `ProcessID` from the **creating**
+    /// task (`client.c:112`), so constraint 32's whole claim — *"stamps land as I's"* — is a
+    /// statement about which proc opened these descriptors. The far side refuses when the
+    /// proc named here is not the proc the descriptors' provenance names.
+    AdoptBirthClient {
+        /// The `NV01_ROOT_CLIENT` handle I allocated on the descriptors that ride this
+        /// frame. Raw, because it is a **foreign** client and this crate's own client type
+        /// is by construction unable to represent one.
+        client: u64,
+        /// The [`kayfabe_core::ProcId`] of the isolate that opened the descriptors and
+        /// minted the client on them.
+        minted_by_proc: u32,
     },
     /// ★★★★★ **CONSTRAINT 26/27, tag 37** — [`kayfabe_isolate::RmBackend::unmap_store_slice`].
     UnmapStoreSlice {
@@ -1095,6 +1132,14 @@ impl Envelope {
                 out.push(38);
                 out.extend_from_slice(&space.to_le_bytes());
             }
+            Request::AdoptBirthClient {
+                client,
+                minted_by_proc,
+            } => {
+                out.push(39);
+                out.extend_from_slice(&client.to_le_bytes());
+                out.extend_from_slice(&minted_by_proc.to_le_bytes());
+            }
             Request::UnmapStoreSlice { vas, at } => {
                 out.push(37);
                 out.extend_from_slice(&vas.to_le_bytes());
@@ -1421,6 +1466,10 @@ impl Envelope {
             },
             38 => Request::VaSpaceHandover {
                 space: c.u64("vaspace handover space")?,
+            },
+            39 => Request::AdoptBirthClient {
+                client: c.u64("birth client handle")?,
+                minted_by_proc: c.u32("birth client minting proc")?,
             },
             37 => Request::UnmapStoreSlice {
                 vas: c.u64("store unmap vas")?,
@@ -1987,6 +2036,10 @@ mod tests {
                 at: 0x0000_0090_0000_1000,
             },
             Request::VaSpaceHandover { space: 0xCAFE_0006 },
+            Request::AdoptBirthClient {
+                client: 0xCAFE_0039,
+                minted_by_proc: 7,
+            },
             Request::AllocChannel {
                 vas: 7,
                 engine: engine_code(EngineKind::Ce),
@@ -2241,6 +2294,7 @@ mod tests {
             Request::MapStoreSlice { .. } => "MapStoreSlice",
             Request::UnmapStoreSlice { .. } => "UnmapStoreSlice",
             Request::VaSpaceHandover { .. } => "VaSpaceHandover",
+            Request::AdoptBirthClient { .. } => "AdoptBirthClient",
             Request::AllocChannel { .. } => "AllocChannel",
             Request::AllocChannelDeclared { .. } => "AllocChannelDeclared",
             Request::AllocEngineObject { .. } => "AllocEngineObject",
@@ -2281,6 +2335,7 @@ mod tests {
                 "MapStoreSlice",
                 "UnmapStoreSlice",
                 "VaSpaceHandover",
+                "AdoptBirthClient",
                 "AllocVidmem",
                 "CeCopy",
                 "CudaWalkReport",
