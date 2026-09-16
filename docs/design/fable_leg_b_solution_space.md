@@ -350,7 +350,7 @@ narrow it. (What *can* narrow it is the object's own flags at alloc — `NVOS32_
 ## 4. The privilege half of C, re-read: `NV01_ROOT_NON_PRIV`
 
 `client.c:88` `bIsRootNonPriv = (externalClassId == NV01_ROOT_NON_PRIV)`; `rmclientIsAdmin` is
-`privLevel >= USER_ROOT && !bIsRootNonPriv` (`:394`). ⇒ a `CAP_SYS_ADMIN` process can hold a client
+`privLevel >= USER_ROOT && !bIsRootNonPriv` (`:393`). ⇒ a `CAP_SYS_ADMIN` process can hold a client
 whose channels are stamped `_PRIVILEGE_USER` — the escape w748 §6.1 names. ⚠ It does **not** help
 the *control* gates: `RMCTRL_FLAGS_PRIVILEGED` (§2) and `RS_FLAGS_ALLOC_PRIVILEGED`
 (`alloc_free.c:599-605`) check the **call's** `privLevel`, which stays `USER_ROOT`. So a privileged
