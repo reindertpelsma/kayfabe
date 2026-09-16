@@ -13122,6 +13122,11 @@ mod route_k {
             println!("K_EXIT=1 (gp entry)");
             return 1;
         };
+        // ⊘ Printed because `SEM_ADDR_HI` is EIGHT BITS: a VA at or above 2^40 is silently
+        //   truncated into somebody else's page, and the only symptom would be a sentinel
+        //   that never appears. `gp_entry` refuses the pushbuffer VA on the same ceiling one
+        //   line up, so this is the number that would explain such a refusal.
+        println!("K_SEM_VA={sem_va:#018x}  K_PB_VA={pb_va:#018x}");
         let mut wrote = true;
         wrote &= store_view.store_u32(HostOffset::new(SEM_OFFSET), 0).is_ok();
         for (i, w) in words.iter().enumerate() {
@@ -13347,6 +13352,22 @@ mod route_k {
             .load_u32(HostOffset::new(USERD_OFFSET_IN_STORE + USERD_GP_GET))
             .unwrap_or(0xFFFF_FFFF);
         println!("K_GPGET_AFTER_FREE={gp_get_final}");
+        // ★★ AND THE CHANNEL ITSELF, after the free — a control that RM has to resolve
+        //    through the channel object. ⊘ `K_GPGET_AFTER_FREE` alone proves only that S can
+        //    still read a page it maps through its OWN handle; it says nothing about whether
+        //    RM kept the channel's USERD sub-memdesc. This does.
+        let mut tok2 = [0u8; 4];
+        let alive = esc.control(
+            birth.chan,
+            NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN,
+            &mut tok2,
+            "GET_WORK_SUBMIT_TOKEN(after free)",
+        );
+        println!(
+            "K_CHAN_ALIVE_AFTER_FREE={} token={:#010x}",
+            u32::from(alive.is_ok()),
+            u32::from_le_bytes(tok2)
+        );
 
         // ---- row 2: whose pid does the driver say owns the channel? --------------------
         match get_pids(&conn, ce_class) {

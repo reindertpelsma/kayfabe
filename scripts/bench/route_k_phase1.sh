@@ -90,6 +90,8 @@ echo "=== w750 PHASE 1 GRADING (docs/design/w750_route_k_prereg.md §2) ===" | t
 (want ANY NON-ZERO)"
   echo "ROW K_UVM_REG_CHAN_NEG_RC=$(grep -m1 '^K_UVM_REG_CHAN_NEG_RC=' "$OUT" | cut -d= -f2-) \
 (want ANY NON-ZERO)"
+  echo "ROW K_CHAN_ALIVE_AFTER_FREE=$(grep -m1 '^K_CHAN_ALIVE_AFTER_FREE=' "$OUT" | cut -d= -f2-) \
+(want 1 -- row 3's parent-ref half)"
   echo "ROW K_USERD_POISON_SURVIVED=$(grep -m1 '^K_USERD_POISON_SURVIVED=' "$OUT" | cut -d= -f2-) \
 (recorded, NOT a gate)"
 } | tee -a "$OUT"
