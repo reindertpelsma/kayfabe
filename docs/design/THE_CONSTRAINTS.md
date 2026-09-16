@@ -522,7 +522,64 @@ and the per-client host MMU fault above.
     address space**; S holds the **handle**. Ownership in the sense that matters — whose
     `ProcessID`, whose VAS, whose privilege — is the isolate's.
 
-    ## ⚠ What must be MEASURED before it is believed (Fable §9 discriminators)
+    ## ✔✔✔ MEASURED 2026-09-16 (w750) — **ALL FOUR DISCRIMINATORS HELD. ROUTE K IS REAL.**
+
+    GA106, host **open** kernel module **580.159.04**, `kayfabe-rm-ladder --route-k`.
+    Evidence: `traces/w750_route_k/route_k_run3.log`; pre-registration, predictions and the
+    full reading: `docs/design/w750_route_k_prereg.md`. ⊘ Read the list below as **answered**,
+    not as open.
+
+    | # | measured | verdict |
+    |---|---|---|
+    | 1 | `K_BIT5=0` (readback `0x00000000`); known-positive `K_BIT5_KP=1` (`0x00000020`) | **HELD** |
+    | 2 | `K_PIDS_CHAN` = **I's pid only**, S's absent; control `K_PIDS_DEV` = **both** | **HELD** |
+    | 3 | dup freed ⇒ `0x57 OBJECT_NOT_FOUND` vs `0x23` while it exists; `K_CHANNEL_LIVE=1`, the engine's own semaphore lands, `K_CHAN_ALIVE_AFTER_FREE=1` | **HELD** |
+    | 4 | `K_UVM_REG_CHAN_RC=0x0` **and `K_UVM_SCHED_RC=0`**; known-positive `0x0`; negative control `0x33` | **HELD** |
+
+    ★ Row 4 is stronger than it asked for: the B-owned channel **scheduled**, and
+    `kchannelIsSchedulable_IMPL` refuses an externally-owned channel with unbound
+    allocations — the only userspace writer of `bIsContextBound` is UVM's register. So the
+    registration did its work rather than merely returning `NV_OK`.
+
+    ### ★★★ A SECOND GATE NOBODY NAMED — and it is a constraint on K, not a bug
+
+    `osapi.c:2378`, in `rm_create_mmap_context`:
+    `if (pRmClient->ProcID != osGetCurrentProcess()) rmStatus = NV_ERR_INVALID_CLIENT;`
+    ⇒ **`NV_ESC_RM_MAP_MEMORY` is refused whenever the client's `ProcID` is not the CALLING
+    task's**, so under K **S can never CPU-map any object in B**, for every object, forever.
+    ⚠ Measured, with the instrument's own known-positive (`K_MAP_INSTRUMENT_KP=0` on the
+    identical code path against a same-`ProcID` client), so `0x23` is RM's answer.
+    ⇒ **It costs K nothing** — every page S must touch is a slice of **the store**, which S
+    owns and reaches through its own handle (measured: S wrote the pushbuffer and read
+    `GP_GET` on the very page the channel's USERD is in). ★★ And it is an **independent,
+    RM-side enforcement of §26** that nobody put there. ⚠ But it is an **expiry condition**:
+    anything K later wants S to CPU-map *inside B* is refused by name.
+
+    ### ★★★★★ AND THE ZEROING QUESTION IS ANSWERED, THE OTHER WAY
+
+    `fable_leg_b_solution_space.md` §7 reads `kernel_channel.c:2342-2356` as scrubbing a
+    client USERD **only** for `ADDR_SYSMEM`, and predicted a **vidmem** USERD's poison would
+    survive. **It does not.** Poison read back *before* the birth (`a5a50000 a5a50001 …`) and
+    **all zeros after**, paired with `K_CHANNEL_LIVE=1` so neither *"the store never landed"*
+    nor *"a wrong `userdOffset`"* explains it.
+    ⇒ **Adoption must precede the guest's first `GP_PUT`, for every route.** K does by
+    construction. ⚠ Something other than the CPU-RM arm §7 cites performs the scrub, and this
+    probe does **not** say what — that is the next question, not a settled one.
+
+    ### ⊘ AND THE CONTROL THAT SAVED THE RULING
+
+    Runs 1 and 2 measured row 4 as **REFUTED** (`0x31 NV_ERR_INVALID_OBJECT`). Run 2's
+    known-positive — a channel the per-proc role owns **itself**, same UVM session, same
+    space — answered `0x31` **too**, so the refusal was about the harness, not the foreign
+    client: on GA106 **CE0 shares runlist 0 with GR**, so a CE0 channel is graded by the
+    graphics rule (`kernel_channel_gm107.c:722-727`). Both arms moved to **COPY(2)** and both
+    went green. ⚠ **Without that control this lane would have told the owner that K cannot
+    carry CUDA.**
+
+    ## ⊘ SUPERSEDED BY THE BLOCK ABOVE — what had to be measured before it was believed (Fable §9)
+
+    ⊘ **All four are now measured and all four HELD (w750, 2026-09-16).** Kept for the
+    reasoning and for the refuting values each one named.
 
     1. **bit-5 readback** — `NVOS04_FLAGS_PRIVILEGED_CHANNEL` must come back **clear**. ★ Free,
        exact, and the only form of constraint 30 that cannot be argued with.
