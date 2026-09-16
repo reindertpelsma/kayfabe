@@ -6687,6 +6687,83 @@ impl SharedDevice {
     /// ★★★★★ **CONSTRAINT 26 — the scratchpad's range over this `Vas`, if the hand-over has
     /// happened.** `None` on the `isolate` arm, always.
     #[must_use]
+    /// ★★★★★ **CONSTRAINT 32 — ASK A PER-PROC ISOLATE TO MINT A BIRTH CLIENT.**
+    ///
+    /// The broker half of route K's step 1, and it is [`SharedDevice::vaspace_handover`]'s
+    /// shape deliberately: *"created by the per-proc isolate and lent UP to the scratchpad,
+    /// never created by the scratchpad and lent DOWN."* Constraint 30's direction argument,
+    /// applied to the **client** instead of to the VA space — and it is the same argument
+    /// because it is the same stamp: `kernel_channel.c:277-295` and `client.c:112` both read
+    /// process identity from the creating task.
+    ///
+    /// ⊘ **The worker comes from `pid`'s own pool**, so the minting task is the right party
+    /// *by construction*. The isolate-side verb **also** refuses the scratchpad by name
+    /// (`BIRTH_CLIENT_NOT_A_PER_PROC_ISOLATE`); that is not redundancy, it is the check that
+    /// notices when a future edit takes the worker from somewhere else — the identical
+    /// reasoning `vaspace_handover`'s constraint-30 assert already carries.
+    ///
+    /// ⚠ **This is an IPC round trip on the caller's thread.** Every caller must already
+    /// have declined on a vCPU; `map_store_slice_for_leaf` does so before anything here can
+    /// be reached, and `OffTrap::claim` below would abort the VMM rather than stall it.
+    ///
+    /// # Errors
+    /// [`FwdFault`] when the proc is gone or no worker is free; the isolate's own refusal
+    /// otherwise.
+    pub fn mint_birth_client(
+        &self,
+        pid: ProcId,
+        gpu: GpuId,
+    ) -> Result<kayfabe_isolate::MintedBirthClient, FwdFault> {
+        let mut taken: Option<Worker> = None;
+        let mut refusal: Option<FwdFault> = None;
+        self.route_act(
+            |_| Ok((pid, ())),
+            |_spine, proc, ()| {
+                // ⊘ `checkout_with_pending_release` and not a bare checkout: it is the only
+                // door, and its `Orphans` obligation travels with the worker.
+                let (worker, orphans) = proc.checkout_with_pending_release(gpu);
+                proc.stage_release(gpu, orphans);
+                match worker {
+                    Some(w) => taken = Some(w),
+                    None => refusal = Some(FwdFault::PoolSaturated { proc: pid, gpu }),
+                }
+            },
+        )?;
+        if let Some(f) = refusal {
+            return Err(f);
+        }
+        let Some(mut worker) = taken else {
+            return Err(FwdFault::PoolSaturated { proc: pid, gpu });
+        };
+        let off = kayfabe_util::trapwitness::OffTrap::claim("minting a route-K birth client");
+        let out = worker.with_rm(&off, |rm| rm.mint_birth_client());
+        self.return_worker(pid, gpu, worker);
+        let minted = out.map_err(|err| FwdFault::Rm { err, on: None })?;
+        // ★★★★★ **THE DIRECTION, CHECKED AT THE POINT OF USE.** The verb ran on `pid`'s own
+        // pool, so this holds by construction today — which is exactly why it is asserted
+        // rather than assumed: it is what notices when a future edit takes the worker from
+        // somewhere else, and `ProcessID` is not something a handle can be asked afterwards.
+        //
+        // ⊘ `isolate_client` is the minting connection's own client, filled in the isolate.
+        // A zero means we are talking to a backend that has no RM connection and answered
+        // anyway — and a zero key would file this birth client where no `AdoptVaSpace` can
+        // ever present it.
+        if minted.isolate_client == 0 {
+            kayfabe_util::lock_safe_eprintln!(
+                "kayfabe: ⊘⊘⊘ CONSTRAINT 32 — proc={} minted a birth client whose \
+                 `isolate_client` is 0x0. That is not a transient: the birth client is FILED \
+                 under that key, and the store-mapping path looks it up by the very same \
+                 value it gets from the hand-over. Nothing is handed over.",
+                pid.0,
+            );
+            return Err(FwdFault::Rm {
+                err: kayfabe_isolate::RmError::Other(0x56),
+                on: None,
+            });
+        }
+        Ok(minted)
+    }
+
     pub fn store_vas(&self, gpu: GpuId, pdb: Pdb) -> Option<kayfabe_isolate::HostHandle> {
         self.route_act(
             |spine| Ok((kayfabe_fwd::route_pdb(spine, gpu, pdb)?, ())),
