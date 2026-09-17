@@ -821,6 +821,28 @@ deliverable**.
     cannot reach me"* is not.
     ★★ **POLLING IS ALWAYS ALLOWED**: `epoll_wait(timeout=0)`, a queue check, a semaphore
     check. None of those is a blocking call and none needs permission.
+    ★★ **AND NEITHER IS A CALL EXPECTED TO RETURN ALMOST INSTANTLY** (owner, 2026-09-17):
+    logging, `mmap`/`munmap`, and their kind are **not** §35 blocking points. The rule is
+    about a worker becoming **deaf**, not about latency in general, and a call that returns
+    promptly leaves nothing unreachable.
+    ⊘⊘ **THIS DOES NOT EXEMPT THEM FROM §25, AND THE TWO RULES HAVE DIFFERENT SUBJECTS.**
+    §35 asks *"can new input still reach this worker?"*; §25 asks *"is a lock held across a
+    call that may sleep?"* ⇒ an `mmap` is fine in a worker loop and is still **forbidden under
+    a ranked lock**: `[measured 2026-08-13, boot w289j]` dropping a refused `FbJoined` inside
+    the plane lock `munmap`ped under rank 0, fired `lockwitness`' R1 assert inside an
+    `extern "C"` QEMU callback, and **aborted the whole VMM** on the guest's own MMIO write
+    path — guest-reachable, because the guest chooses whether a join is refused.
+    ⇒ *"returns almost instantly"* licenses it against §35 and says nothing about §25.
+    ★★★ **AND A THIRD EXEMPTION WHOSE SET IS BELIEVED EMPTY** (owner, 2026-09-17):
+    *"anything there is no alternative for with epoll fds — but I think that set is empty."*
+    ⊘ That is the strong form and it is deliberate: the exemption exists so the rule is not
+    a lie, and it is **presumed to have no members**. ⇒ **an entry is a FINDING, not a
+    configuration.** Adding one requires showing that the call has no fd-backed alternative —
+    not that none was convenient, and not that nobody looked.
+    ⚠ Same shape as §25's own gate (*an empty allowlist is a build failure, not a pass*) and
+    as the relaxation ratchets: a set whose growth is invisible stops being a rule. Whatever
+    enforces §35 must therefore **print the set's size every run**, so an empty one is
+    measured rather than assumed.
     ★★★ **There are exactly TWO blocking points, and both are lock-free waits:**
     (1) waiting on the MMIO notification — **the lock is not held while waiting**; or
     (2) waiting on `epoll` over several fds, always including the coordinator's new-work fd.
