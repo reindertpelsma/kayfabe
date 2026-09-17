@@ -27,6 +27,25 @@ scratchpad does not merely cost a hop; under §35 it has **no legal way to repor
 
 ---
 
+## 0.1 ⊘ THE DELTA IS THE RM CLIENT, NOT THE EXECUTION SITE — the first draft overstated it
+
+It is easy to read this ruling as *"guest-derived execution moves into the VMM"*, and it is worth
+being exact, because that reading would collide with §26's trust statement (*"the scratchpad does
+hold guest RAM, and is trusted to because **it executes no guest-derived work**"*).
+
+★ **The emulated CE already executes in the VMM today.** `route_of_engine` maps
+`EngineKind::Ce → DoorbellRoute::CpuCe`, `shell_disposition` maps that to
+`ShellDisposition::MayServeLocally` — *"the shell's own CPU copy-engine executor … the copy IS
+the workload and its operands are in memory this process holds, so it can run here"* — and
+`cpu_ce::execute_ours` runs in the VMM process.
+
+⇒ §37 does **not** move execution into the VMM. Execution is already there. What the VMM gains is
+an **RM client**, so that the executor already running there can hand a descriptor to real
+hardware instead of moving bytes with the CPU at 48 MiB/s. That is a much narrower change than
+*"the VMM starts running guest work"*, and it is the accurate one.
+
+---
+
 ## 1. What this does NOT reopen — the §20 line, and it is the line to hold
 
 §20 says the page-table walker runs in the **scratchpad isolate, never the VMM**, and its
@@ -67,6 +86,34 @@ This ruling is what lets the single store be paid for. ⊘ The CPU path is **kep
 rung** of the degradation ladder, in the same spirit as §20's *"every layer degrades into the one
 below"* — it is correct, and on a scrub of a few KiB it is also fast enough.
 
+### 2.1 ⊘ AUDITED — the CPU rung does NOT forge completions, so it is a safe bottom rung
+
+The owner flagged this as the thing to check first: *"if it forges completion without actually
+doing stuff then thats first to get working."* The worry is well-founded **about the C**, which
+completes `finishPayload` for the kernel CeUtils channels because *"the scrub is a no-op for our
+backing … complete now if no real work"* (`nvkvm_gpu_emul.c:4228`).
+
+`[audited w755p]` **This tree does not do that.** There are exactly three sites that write a
+completion, and each is downstream of the work:
+
+| site | what precedes it |
+|---|---|
+| `ceutils.rs:1253` | a standalone release method — the launch it reports on retired in an earlier submission |
+| `ceutils.rs:1352` | `execute_ours_spans` at `:1307`, **same loop iteration**, with `?` — a failed copy never reaches the release |
+| `shim.rs:9504` | the **deferred** drain: the copy ran, and the release was withheld until the publication committed |
+
+And the two guards that make it structural rather than incidental:
+- §14.8's guard at `ceutils.rs:1300` refuses the whole submission by name (`CpuCeStraddle`) if
+  **any** span is not `CeExecutor::Ours` — a partial copy cannot release a semaphore.
+- A submission that decoded no launch is **refused, not completed**: *"A submission that decoded
+  no launch moved no byte. It is not served."*
+- ⊘ `PushMethod::SemRelease` is deliberately **not** acted on: it is the host-FIFO semaphore four
+  bytes *below* the `finishPayload` the guest actually spins on, and advancing it *"would satisfy
+  our own counters while the guest spins on the word above it."*
+
+⇒ The C's forgery is the reason the C *"is no oracle at all for engine execution"*. Our CPU rung
+is slow, not dishonest — so §37 may keep it as the degradation floor without keeping a lie.
+
 ---
 
 ## 3. The mechanism — and how much of it already exists
@@ -85,9 +132,25 @@ an isolate and passed out over `SCM_RIGHTS`. The VMM **already receives both fds
 that it **keeps a set** rather than only forwarding them. Nothing about the fd-passing has to be
 invented.
 
-⊘ Client **V** (the VMM's) is minted *by the scratchpad*, which makes it the scratchpad's client —
-the same standing that lets **B** name the store under §30. The `ProcessID` is stamped at client
-creation, so V must be minted on the VMM's own `ctl` fd, by the VMM, exactly as route K mints B.
+⊘⊘⊘ **CORRECTED before building on it — the first draft of this line said V is minted BY THE
+SCRATCHPAD, and that is exactly the mistake route K exists to prevent.** RM stamps `ProcessID`
+from **the calling task** at client creation (`client.c:112`), which is why
+`HostRmBackend::mint_birth_client` **refuses outright when the caller is the scratchpad**
+(`rm.rs:7421`, `BIRTH_CLIENT_NOT_A_PER_PROC_ISOLATE`), with the comment *"every later stamp
+would be wrong while every ioctl succeeded."*
+
+⇒ **V is minted BY THE VMM, in the VMM**: open a second `/dev/nvidiactl`, `NV_ESC_REGISTER_FD`
+the matching `/dev/nvidia<N>` onto it (without which every later escape answers `0x23
+INVALID_CLIENT` — *"a refusal that reads like a permissions problem and is a missing binding"*),
+then `OwnClient::allocate_root`. V is then **ours**, with our `ProcessID`, which is correct:
+emulated channels belong to no guest process.
+
+⚠ **This does extend F11's approved set, and that must be deliberate.** The standing rule is
+*"a per-proc isolate may never name a foreign client; the scratchpad may, and only for a VA space
+the VMM handed it."* Duping the **store** into V is the scratchpad naming a foreign client for a
+**memory object**, which that sentence does not cover. ⇒ It needs a second arm on the same
+newtype, argued and named — **not** a string added to an allowlist, and **not** slipped in under
+the existing VA-space arm.
 
 ### 3.2 The store and the VA space, duped into V
 

@@ -905,6 +905,20 @@ deliverable**.
     day a loop over guest data appears on this path, it has become §20's problem and belongs in
     the scratchpad.
 
+    ⊘ **AND THE DELTA IS THE RM CLIENT, NOT THE EXECUTION SITE.** Read carelessly this says
+    *"guest-derived execution moves into the VMM"*, which would collide with §26's trust
+    statement (*"the scratchpad … is trusted to because it executes no guest-derived work"*).
+    It does not: `route_of_engine` already maps `EngineKind::Ce → DoorbellRoute::CpuCe` →
+    `ShellDisposition::MayServeLocally`, and `cpu_ce::execute_ours` **already runs in the
+    VMM**. What the VMM gains is an **RM client**, so the executor already there can hand a
+    descriptor to hardware instead of moving bytes with the CPU.
+    ⚠ **V is minted BY THE VMM.** RM stamps `ProcessID` from the calling task, which is why
+    `mint_birth_client` refuses when the caller is the scratchpad. A V minted anywhere else
+    carries the wrong stamp **while every ioctl succeeds** — route K's founding failure.
+    ⚠ Duping the store into V extends **F11**'s approved set from *"a VA space the VMM handed
+    the scratchpad"* to a **memory object**. That needs a second arm on the newtype, argued —
+    not a string on an allowlist.
+
     ⊘ **It also retires the CPU-read execution path, which was never viable.** The emulated CE
     currently executes on the **CPU** (`cpu_ce.rs::execute_ours`, reading operands via
     `ce.fb().read()`), and under the single store a CPU read of the store is an **MMIO read at
