@@ -734,12 +734,7 @@ impl StoreMapPort {
         };
         let out = self.iso.with_worker(move |worker| {
             worker.with_rm(&off, move |rm| {
-                rm.birth_guest_channel_in_b(
-                    range,
-                    engine,
-                    ring,
-                    err_notifier,
-                )
+                rm.birth_guest_channel_in_b(range, engine, ring, err_notifier)
             })
         });
         match out {
@@ -981,13 +976,7 @@ impl kayfabe_fwd::StoreChannelBirth for StoreMapPort {
         ring: kayfabe_isolate::AdoptedGuestRing,
         err_notifier: Option<kayfabe_isolate::GuestRamGrant>,
     ) -> Result<(HostHandle, u64), kayfabe_fwd::FwdFault> {
-        StoreMapPort::birth_over_the_store(
-            self,
-            host_vas,
-            engine,
-            ring,
-            err_notifier,
-        )
+        StoreMapPort::birth_over_the_store(self, host_vas, engine, ring, err_notifier)
     }
 }
 
