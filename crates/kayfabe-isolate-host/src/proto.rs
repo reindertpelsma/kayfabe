@@ -50,7 +50,7 @@ use std::io::{self, Read, Write};
 /// disagrees with the hand-written codec. ⊘ And not left as a bare five-tuple either — four
 /// consecutive integers with no names is exactly where an encoder and a decoder swap two of
 /// them and every in-process test still passes.
-pub type AdoptedRingWire = (u8, u64, u64, u64, u64, u32, Option<(u64, u64)>);
+pub type AdoptedRingWire = (u8, u64, u64, u64, u64, u32, Option<(u8, u64, u64)>);
 
 /// ★★★★★ **CONSTRAINT 26 — the ring's PROVENANCE byte, the first field of
 /// [`AdoptedRingWire`].**
@@ -1254,10 +1254,15 @@ impl Envelope {
                         // ★★★★★ LEG B, with its OWN presence byte inside the ring's. ⊘ Not
                         // an in-band sentinel: `offset = 0` is a legal USERD placement (the
                         // slot at the joined leaf's own base) and must not read as absent.
+                        // ★★★ w755l — THREE states, not two: absent, a joined leaf, and THE
+                        // STORE (which names no handle at all, because the per-proc isolate
+                        // may not name it — constraint 26). ⊘ A third TAG and not a sentinel
+                        // handle: `0` is a legal-looking handle, and this byte already exists
+                        // precisely so absence is never in-band.
                         match userd {
                             None => out.push(0),
-                            Some((umem, uoff)) => {
-                                out.push(1);
+                            Some((kind, umem, uoff)) => {
+                                out.push(1 + kind);
                                 out.extend_from_slice(&umem.to_le_bytes());
                                 out.extend_from_slice(&uoff.to_le_bytes());
                             }
@@ -1300,10 +1305,11 @@ impl Envelope {
                 out.extend_from_slice(&ring_va.to_le_bytes());
                 out.extend_from_slice(&gp_fifo_va.to_le_bytes());
                 out.extend_from_slice(&entries.to_le_bytes());
+                // ★★★ w755l — the same three-state tag as the sibling encode above.
                 match userd {
                     None => out.push(0),
-                    Some((umem, uoff)) => {
-                        out.push(1);
+                    Some((kind, umem, uoff)) => {
+                        out.push(1 + kind);
                         out.extend_from_slice(&umem.to_le_bytes());
                         out.extend_from_slice(&uoff.to_le_bytes());
                     }
@@ -1572,7 +1578,20 @@ impl Envelope {
                         c.u32("adopt gp_fifo_entries")?,
                         match c.u8("channel adopt userd presence")? {
                             0 => None,
-                            1 => Some((c.u64("adopt userd memory")?, c.u64("adopt userd offset")?)),
+                            1 => Some((
+                                0,
+                                c.u64("adopt userd memory")?,
+                                c.u64("adopt userd offset")?,
+                            )),
+
+                            // ★ w755l — the store: the handle word is present and MEANINGLESS, read and
+
+                            // discarded so the frame stays fixed-width.
+                            2 => Some((
+                                1,
+                                c.u64("adopt userd store pad")?,
+                                c.u64("adopt userd offset")?,
+                            )),
                             tag => {
                                 return Err(ProtoError::UnknownTag {
                                     what: "channel adopt userd presence",
@@ -1630,7 +1649,15 @@ impl Envelope {
                     match c.u8("declared adopt userd presence")? {
                         0 => None,
                         1 => Some((
+                            0,
                             c.u64("declared adopt userd memory")?,
+                            c.u64("declared adopt userd offset")?,
+                        )),
+                        // ★ w755l — THE STORE. The handle word is present and MEANINGLESS;
+                        // it is read and discarded so the frame stays fixed-width.
+                        2 => Some((
+                            1,
+                            c.u64("declared adopt userd store pad")?,
                             c.u64("declared adopt userd offset")?,
                         )),
                         tag => {
@@ -2169,7 +2196,7 @@ mod tests {
                     0x2_0020_0000,
                     0,
                     1024,
-                    Some((0x5c00_0019, 0x2000)),
+                    Some((0, 0x5c00_0019, 0x2000)),
                 )),
                 err_notifier: Some(0x5c00_0021),
             },
@@ -2223,7 +2250,7 @@ mod tests {
                     0x2_0020_0000,
                     0x2_0020_0000,
                     4096,
-                    Some((0x5c00_0019, 0x2000)),
+                    Some((0, 0x5c00_0019, 0x2000)),
                 ),
                 err_notifier: Some(0x5c00_0021),
             },

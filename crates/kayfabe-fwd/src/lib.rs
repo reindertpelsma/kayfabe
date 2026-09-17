@@ -5090,18 +5090,26 @@ fn adopted_guest_ring(
             kayfabe_isolate::RingProvenance::OwnObject(h) => {
                 adopted_guest_userd(&binding, len, h, userd)
             }
+            // ★★★★★ **w755l — LEG B ADOPTS ON A STORE SLICE TOO, AND THE DECLINE THAT USED
+            // TO LIVE HERE HAD AN EXPIRED PREMISE.**
+            //
+            // ⊘⊘ It said *"whose object the birth isolate may not name"* and returned `None`,
+            // so the channel was born with OUR USERD. `[measured w755h]` hardware then reads
+            // `GP_PUT == GP_GET == 0` forever, fetches nothing and **reports no error at
+            // all** — every lane, `HOST_DMESG_XID=0` as a measured zero.
+            //
+            // ⊘ The sentence was TRUE when written (2026-09-15 21:36) and false 19 hours
+            // later: `birth_store_dup` (2026-09-16 16:13) gives the **birth client B** a
+            // handle for the store. ⇒ [`UserdObject::TheStore`] names the object without
+            // naming a handle, and B resolves it — route K's increment 6. Constraint 26 is
+            // unchanged: the per-proc isolate still may not name it, and still does not.
+            //
+            // ★ The offset is the guest's own USERD framebuffer address, UNSUBTRACTED. Under
+            // the single store *framebuffer address = file offset*, so the store's base IS
+            // framebuffer zero — there is no leaf to subtract, and subtracting one would be
+            // arithmetic between two different origins.
             kayfabe_isolate::RingProvenance::StoreSlice { .. } => {
-                if userd.is_some() {
-                    kayfabe_util::lock_safe_eprintln!(
-                        "kayfabe: ADOPT-WHY ring=0x{:x} ⊘ LEG B DECLINED — the guest declared \
-                         a USERD and this ring is a STORE SLICE, whose object the birth \
-                         isolate may not name. `hUserdMemory` is a real RM operand, so the \
-                         channel is born with OUR USERD and the guest's cursor must be \
-                         carried across by the arming path, not by adoption.",
-                        ring.va
-                    );
-                }
-                None
+                adopted_guest_userd_in_store(userd)
             }
         },
     })
@@ -5178,7 +5186,10 @@ fn adopted_guest_userd(
     if offset.checked_add(USERD_SLOT_BYTES)? > len {
         return None;
     }
-    Some(kayfabe_isolate::AdoptedGuestUserd { memory, offset })
+    Some(kayfabe_isolate::AdoptedGuestUserd {
+        object: kayfabe_isolate::UserdObject::Joined(memory),
+        offset,
+    })
 }
 
 /// COMMIT (R5) for the Case-1 forward: same route/channel re-resolution as the
@@ -9005,5 +9016,34 @@ pub fn fault_facts(
         // snapshot, because a notifier address re-read later could belong to a channel
         // the guest has since freed and re-allocated on the same slot.
         error_notifier: chan.error_notifier,
+    })
+}
+
+/// ★★★★★ **w755l — LEG B ON A STORE SLICE: the guest's USERD as an offset into the ONE
+/// reserved object.** See the call site for why the old decline is gone.
+///
+/// ⊘ The same three refusals as [`adopted_guest_userd`], for the same reasons, as ARMS and
+/// never a wildcard: `Sysmem` is a real and legal USERD location this rung has no crossing
+/// for, `Undeclared` is the guest saying it allocated none, and a missing descriptor is
+/// *"we could not read it"*. Folding them together would make three findings look like one
+/// decode that failed.
+///
+/// ⚠ **No extent check here, and that is deliberate rather than forgotten.** The bound is the
+/// *store's* length, which this crate does not hold; `StoreMapPort::map` bounds every slice
+/// against `obj_len` and `BirthConn::birth_channel` re-checks the 512-byte alignment RM does
+/// not. Inventing a bound from a number that is in hand but is not the right one is how a
+/// check comes to be about the wrong quantity.
+fn adopted_guest_userd_in_store(
+    userd: Option<kayfabe_core::rmgraph::DeclaredUserd>,
+) -> Option<kayfabe_isolate::AdoptedGuestUserd> {
+    let base = match userd?.resolved? {
+        kayfabe_arch::UserdMem::Framebuffer { base, .. } => base,
+        kayfabe_arch::UserdMem::Sysmem { .. } | kayfabe_arch::UserdMem::Undeclared { .. } => {
+            return None;
+        }
+    };
+    Some(kayfabe_isolate::AdoptedGuestUserd {
+        object: kayfabe_isolate::UserdObject::TheStore,
+        offset: base,
     })
 }

@@ -1186,7 +1186,7 @@ impl RmBackend for ProxyRmBackend {
                     a.gp_fifo_va,
                     a.gp_fifo_entries,
                     // ★★★★★ LEG B, carried inside leg A2's own tuple.
-                    a.userd.map(|u| (u.memory.raw(), u.offset)),
+                    a.userd.map(|u| userd_wire(u)),
                 )
             }),
             // ★★★★★ w288 — same crossing, same reason: the adapter that writes the handle
@@ -1225,7 +1225,7 @@ impl RmBackend for ProxyRmBackend {
                     adopt.ring_va,
                     adopt.gp_fifo_va,
                     adopt.gp_fifo_entries,
-                    adopt.userd.map(|u| (u.memory.raw(), u.offset)),
+                    adopt.userd.map(|u| userd_wire(u)),
                 )
             },
             err_notifier: err_notifier.map(|h| h.raw()),
@@ -2594,5 +2594,17 @@ mod tests {
     #[should_panic(expected = "at least one worker")]
     fn a_zero_width_pool_is_refused() {
         let _ = HostIsolateFactory::new(RmMode::Loopback).with_pool_size(0);
+    }
+}
+
+/// ★★★ w755l — one [`kayfabe_isolate::AdoptedGuestUserd`] as its three wire words.
+///
+/// ⊘ `TheStore` sends a **zero** handle word, and the receiver discards it: the frame stays
+/// fixed-width and the KIND byte — never the handle — is what carries the distinction. A
+/// sentinel handle would be an in-band signal in a field whose legal values include zero.
+fn userd_wire(u: kayfabe_isolate::AdoptedGuestUserd) -> (u8, u64, u64) {
+    match u.object {
+        kayfabe_isolate::UserdObject::Joined(h) => (0, h.raw(), u.offset),
+        kayfabe_isolate::UserdObject::TheStore => (1, 0, u.offset),
     }
 }

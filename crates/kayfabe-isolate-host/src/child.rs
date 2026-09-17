@@ -1299,9 +1299,9 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
                             // ★★★★★ LEG B — rebuilt here for leg A2's reason, and re-validated
                             // by the adapter as an object `join_fb_leaf` minted. ⊘ Nothing on
                             // this side trusts the two integers either.
-                            userd: userd.map(|(memory, offset)| {
+                            userd: userd.map(|(kind, memory, offset)| {
                                 kayfabe_isolate::AdoptedGuestUserd {
-                                    memory: raw(memory),
+                                    object: userd_object(kind, raw(memory)),
                                     offset,
                                 }
                             }),
@@ -1341,10 +1341,12 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
                     ring_va,
                     gp_fifo_va,
                     gp_fifo_entries,
-                    userd: userd.map(|(memory, offset)| kayfabe_isolate::AdoptedGuestUserd {
-                        memory: raw(memory),
-                        offset,
-                    }),
+                    userd: userd.map(
+                        |(kind, memory, offset)| kayfabe_isolate::AdoptedGuestUserd {
+                            object: userd_object(kind, raw(memory)),
+                            offset,
+                        },
+                    ),
                 },
                 err_notifier.map(raw),
             ) {
@@ -1619,6 +1621,19 @@ fn failed(e: RmError) -> Reply {
 /// ★ w755 — `failed` is private and the codec's tests live in `crate::proto`. Exposing it
 /// under `cfg(test)` lets the payload-survival gate start from an [`RmError`] a child really
 /// mints, rather than from a `WireError` that was hand-built to match.
+/// ★★★ w755l — rebuild a [`kayfabe_isolate::UserdObject`] from its wire kind.
+///
+/// ⊘ Unknown kinds fall to `Joined`, which is the CONSERVATIVE arm: it names a handle the
+/// adapter then re-validates as one `join_fb_leaf` minted, so a corrupt byte is refused by
+/// that check rather than silently promoted to "the store" — the object the isolate is not
+/// allowed to name.
+fn userd_object(kind: u8, memory: kayfabe_isolate::HostHandle) -> kayfabe_isolate::UserdObject {
+    match kind {
+        1 => kayfabe_isolate::UserdObject::TheStore,
+        _ => kayfabe_isolate::UserdObject::Joined(memory),
+    }
+}
+
 #[cfg(test)]
 pub(crate) fn failed_for_test(e: RmError) -> Reply {
     failed(e)

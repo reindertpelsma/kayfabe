@@ -226,6 +226,10 @@ pub mod local_status {
     /// the compiler — see the module docs for why both gates exist.
     pub const ALL: &[(&str, u32)] = &[
         ("NOT_ON_THIS_RUNG", super::NOT_ON_THIS_RUNG),
+        (
+            "USERD_IN_STORE_NEEDS_BIRTH_IN_B",
+            super::USERD_IN_STORE_NEEDS_BIRTH_IN_B,
+        ),
         ("VA_ALREADY_MAPPED", super::VA_ALREADY_MAPPED),
         ("ABI_ENCODE_FAILED", super::ABI_ENCODE_FAILED),
         ("IOCTL_NUMBER_UNBUILDABLE", super::IOCTL_NUMBER_UNBUILDABLE),
@@ -422,6 +426,23 @@ pub static STORE_IS_CONTIGUOUS_AND_ALIGNED: std::sync::atomic::AtomicBool =
 /// `NV_ERR_NO_MEMORY` read as *"already mapped"* — the same one-integer-many-meanings defect
 /// this session has now found four times, inverted.
 pub const VA_ALREADY_MAPPED: u32 = 0x4B69;
+
+/// ★★★★★ **w755l — A STORE-SLICE USERD REACHED THE PER-PROC ISOLATE'S BIRTH.** `0x4B6A` is
+/// `"Kj"`.
+///
+/// [`kayfabe_isolate::UserdObject::TheStore`] names the one reserved object **without a
+/// handle**, because **constraint 26 forbids this isolate naming it**. Only the birth client
+/// B holds a dup (`birth_store_dup`), so a channel whose USERD is a store slice must be born
+/// **in B** — route K's increment 6.
+///
+/// ⊘ Refused here rather than downgraded to a USERD of ours, and the distinction is the whole
+/// point: `[measured w755h]` a channel silently given our USERD sees `GP_PUT == GP_GET == 0`
+/// forever, fetches nothing and **reports no error at all**. A refusal by name is the one
+/// outcome that is not that silence.
+///
+/// ⚠ Seeing this in a boot log means the birth was NOT routed to B — a routing defect here,
+/// not an RM one.
+pub const USERD_IN_STORE_NEEDS_BIRTH_IN_B: u32 = 0x4B6A;
 
 /// The opaque status a verb this rung does not implement reports.
 ///
@@ -8802,8 +8823,15 @@ impl HostRmBackend {
             // ⊘ The guest's TWO leg-B numbers printed on both the success and the refusal
             // side, and printed as `NONE` rather than as `0x0` when absent: offset zero is a
             // legal USERD placement (the slot at the joined leaf's own base).
-            ring.userd
-                .map_or_else(|| "NONE".to_string(), |u| format!("{:#x}", u.memory.raw())),
+            ring.userd.map_or_else(
+                || "NONE".to_string(),
+                |u| match u.object {
+                    kayfabe_isolate::UserdObject::Joined(h) => format!("{:#x}", h.raw()),
+                    // ⊘ Printed as a NAME, not as `0x0`: the store names no handle, and a
+                    // zero here would read as "the guest declared handle zero".
+                    kayfabe_isolate::UserdObject::TheStore => "THE-STORE".to_string(),
+                },
+            ),
             ring.userd
                 .map_or_else(|| "NONE".to_string(), |u| format!("{:#x}", u.offset)),
         );
@@ -8827,8 +8855,30 @@ impl HostRmBackend {
         // armed run and its control produce the same channel.
         let adopted_userd = match ring.userd {
             None => None,
+            // ★★★★★ w755l — `TheStore` is NOT a joined leaf and the check below does not
+            // apply to it. It is refused here by name because THIS isolate may not name the
+            // store (constraint 26); the birth belongs in B. See
+            // [`USERD_IN_STORE_NEEDS_BIRTH_IN_B`].
+            Some(kayfabe_isolate::AdoptedGuestUserd {
+                object: kayfabe_isolate::UserdObject::TheStore,
+                ..
+            }) => {
+                let n = birth_census::refuse();
+                eprintln!(
+                    "kayfabe-isolate: GR-BIRTH ⊘⊘ REFUSED USERD_IN_STORE_NEEDS_BIRTH_IN_B — \
+                     the guest's USERD is a slice of the ONE reserved store, which this \
+                     per-proc isolate may not name (constraint 26). The birth belongs in the \
+                     birth client B, which holds a dup. ⊘ NOT downgraded to a USERD of ours: \
+                     that is the `GP_PUT == GP_GET` silence measured at w755h. (refused={n})"
+                );
+                return Err(RmError::Other(USERD_IN_STORE_NEEDS_BIRTH_IN_B));
+            }
             Some(u) => {
-                let raw_userd = self.narrow(u.memory)?;
+                let raw_userd = self.narrow(
+                    u.object
+                        .handle()
+                        .ok_or(RmError::Other(USERD_IN_STORE_NEEDS_BIRTH_IN_B))?,
+                )?;
                 if !self
                     .fb_joins
                     .as_ref()
@@ -9832,7 +9882,15 @@ impl HostRmBackend {
                     }
                 }
             }
-            RingSource::Guest(GuestRing { userd: Some(u), .. }) => match self.narrow(u.memory) {
+            // ⊘ w755l — a `TheStore` USERD cannot be narrowed here; it is refused upstream by
+            // `USERD_IN_STORE_NEEDS_BIRTH_IN_B`, and this arm restates that rather than
+            // unwrapping into a zero handle.
+            RingSource::Guest(GuestRing { userd: Some(u), .. }) => match u
+                .object
+                .handle()
+                .ok_or(RmError::Other(USERD_IN_STORE_NEEDS_BIRTH_IN_B))
+                .and_then(|h| self.narrow(h))
+            {
                 Ok(h) => (h, UserdOwner::HandedIn, u.offset),
                 Err(e) => {
                     unwind(self, ours);

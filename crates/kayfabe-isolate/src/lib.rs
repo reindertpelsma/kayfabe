@@ -915,6 +915,44 @@ pub struct AdoptedGuestRing {
     pub userd: Option<AdoptedGuestUserd>,
 }
 
+/// ★★★★★ **w755l — WHICH OBJECT A GUEST USERD LIVES IN, when we may not always name it.**
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UserdObject {
+    /// A joined framebuffer leaf **this isolate minted** and holds a handle for. The
+    /// pre-route-K shape, unchanged.
+    Joined(HostHandle),
+    /// ★★★★★ **w755l — THE ONE RESERVED STORE, named by nobody here on purpose.**
+    ///
+    /// The guest's USERD is a slice of the single store, and **constraint 26 forbids the
+    /// per-proc isolate naming that object** — *"the isolate borrows, the scratchpad holds"*.
+    /// So this variant carries **no handle at all**: it says *which object* without being
+    /// able to name it, and the **birth client B** resolves it through its own
+    /// `birth_store_dup`. That is route K's increment 6, and it is why the birth moves to B.
+    ///
+    /// ⊘ A variant rather than `memory: None`, because the enclosing
+    /// [`AdoptedGuestRing::userd`] is **already** an `Option` meaning *"no USERD was
+    /// adopted"*. Two `None`s with different meanings in one path is how a reader comes to
+    /// believe a store-slice USERD was declined.
+    TheStore,
+}
+
+impl UserdObject {
+    /// The handle this object names, or `None` when it names none.
+    ///
+    /// ⊘ The exact twin of [`RingProvenance::handle`], and it exists for the same gate: F11
+    /// collects every handle a plan names so a foreign one can be refused. `TheStore` names
+    /// nothing — *"the foreign-handle gate cannot refuse what is not offered, and nothing was
+    /// smuggled past it: there is no handle to smuggle"* — and this is what says so in a type
+    /// rather than in a comment.
+    #[must_use]
+    pub fn handle(self) -> Option<HostHandle> {
+        match self {
+            UserdObject::Joined(h) => Some(h),
+            UserdObject::TheStore => None,
+        }
+    }
+}
+
 /// ★★★★★ **LEG B — the guest's own USERD, named as an OFFSET INTO AN OBJECT WE HOLD.**
 ///
 /// # The shape, and why it is not an address
@@ -949,10 +987,11 @@ pub struct AdoptedGuestRing {
 /// place look identical in a log.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AdoptedGuestUserd {
-    /// The joined host object containing the guest's USERD bytes. ⊘ Always the same object
-    /// as [`AdoptedGuestRing::memory`] on the production path — one leaf, one join — and the
-    /// adapter re-checks it was minted by `join_fb_leaf` exactly as it does for the ring.
-    pub memory: HostHandle,
+    /// Which object holds the guest's USERD bytes. ⊘ On the joined path it is always the
+    /// same object as the ring — one leaf, one join — and the adapter re-checks it was minted
+    /// by `join_fb_leaf`. On [`UserdObject::TheStore`] there is no handle to check, and the
+    /// birth client resolves it; see that variant.
+    pub object: UserdObject,
     /// Byte offset of this channel's 512-byte USERD slot **within that object**.
     ///
     /// ⚠ This lands in `hUserdMemory[0]`'s companion `userdOffset[0]`, whose being **zero**
@@ -3206,7 +3245,7 @@ impl VerbPlan {
                 .iter()
                 .copied()
                 .chain(adopt.ring.handle())
-                .chain(adopt.userd.map(|u| u.memory))
+                .chain(adopt.userd.and_then(|u| u.object.handle()))
                 .collect(),
             VerbPlan::Doorbell {
                 host_vas, channel, ..

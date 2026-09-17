@@ -509,10 +509,23 @@ fn the_guests_userd_inside_the_joined_leaf_is_adopted_as_an_offset() {
          the birth path. Without it the host channel's GP_PUT lives in a USERD of ours that \
          only we advance, so GP_PUT == GP_GET forever and the engine fetches nothing",
     );
+    // ⊘ Compared through `handle()` and by RAW value, not as a whole `HostHandle`: the
+    // isolate id is the fixture's business and pinning it here would make this assertion
+    // about which isolate ran rather than about which object leg B named. The first draft of
+    // this w755l edit hardcoded `IsolateId::NONE` and failed against `iso1` — the original
+    // `.raw()` comparison was avoiding exactly that and I had to be told by the test.
     assert_eq!(
-        u.memory.raw(),
-        JOINED_MEMORY,
-        "★ leg B must name the SAME joined object the ring names — one leaf, one join"
+        u.object.handle().map(|h| h.raw()),
+        Some(JOINED_MEMORY),
+        "★ leg B must name the SAME joined object the ring names — one leaf, one join. \
+         ⊘ w755l: `object` is now a VARIANT, because a store-slice USERD names the one \
+         reserved object WITHOUT a handle — see `UserdObject::TheStore`."
+    );
+    assert!(
+        matches!(u.object, kayfabe_isolate::UserdObject::Joined(_)),
+        "★★★ a USERD inside a JOINED leaf must be the `Joined` variant. `TheStore` would \
+         send this birth to the birth client B, which is right for a store slice and wrong \
+         here — and the two are indistinguishable once only the offset is compared."
     );
     assert_eq!(
         u.offset, 0x2000,

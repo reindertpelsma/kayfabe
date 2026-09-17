@@ -815,6 +815,48 @@ deliverable**.
     ⚠ This is not an argument against reading the driver's source — that is how `want`/`got`
     were understood at all. It is an argument against **depending** on the reading at runtime.
 
+35. **★★★★★ NO BLOCKING CALL IN A WORKER THAT BLOCKS NEW INPUT TO IT** (owner, 2026-09-17).
+    A worker may block — it must never block in a way that makes it deaf. ⊘ The distinction is
+    the whole constraint: *"blocking"* is fine, *"blocking somewhere the next piece of work
+    cannot reach me"* is not.
+    ★★ **POLLING IS ALWAYS ALLOWED**: `epoll_wait(timeout=0)`, a queue check, a semaphore
+    check. None of those is a blocking call and none needs permission.
+    ★★★ **There are exactly TWO blocking points, and both are lock-free waits:**
+    (1) waiting on the MMIO notification — **the lock is not held while waiting**; or
+    (2) waiting on `epoll` over several fds, always including the coordinator's new-work fd.
+    ⊘ Choosing (1) is not about holding anything: it means a doorbell reaches this worker
+    **directly** instead of via the coordinator's wake — one hop less.
+    ⚠ **AND A PRECONDITION: a worker with semaphores it is still spin-checking MAY NOT BLOCK
+    AT ALL**, on either point, until every one has been promoted to an epoll fd. It cycles
+    with `timeout=0` and re-checks them instead.
+    ⊘⊘ **The failure this precondition prevents has a name and we have just spent a day on
+    its twin: a LOST WAKEUP.** A worker that blocks holding an un-promoted semaphore sleeps
+    through its own completion — the work finishes, nothing writes to an fd, and the symptom
+    is *"the copy never retired"*, indistinguishable from the wall w755h measured. ⇒ it is a
+    **witness**, not a comment: refuse to enter either blocking point while `pending_spin > 0`,
+    count it, and give the counter a known-positive (§ *a census zero needs a known-positive*).
+    ★ It composes with §§4/6/25 for free: both blocking points being lock-free waits makes
+    *"no blocking under a lock on any thread"* true **by construction** rather than by
+    discipline.
+    ⊘ One tunable, and it is measurable rather than guessed: how long to spin before promoting
+    a semaphore to an fd. Sysmem semaphores are cheap to poll; **vidmem ones are not**, and a
+    tight loop on one re-introduces at the completion end exactly the CPU-read cost the GPU
+    execution removed. Condition the spin on the semaphore's aperture — the same
+    `CpuPlane::{Fb, GuestRam}` split the operand read already makes.
+
+36. **★★★★★ ONE WORKER RUNS MANY TASKS AT ONCE — kernel channels AND isolate work**
+    (owner, 2026-09-17). A worker is not a task; it is a loop over several sources.
+    ⊘ **ONE loop, with the `epoll` inside it** — there is no separate spin loop. Each cycle
+    looks at the mutex, the epoll set and the semaphores, then decides what to do next.
+    ★★★ **THE COORDINATOR IS EMERGENT, NOT APPOINTED.** If every worker is in `epoll` and one
+    needs to block on the mutex for new work, that one **becomes** the coordinator by doing so.
+    ⊘ And a coordinator **can never hold outstanding epoll fds, by construction** — it is
+    blocked on the other point. There is no role to assign, no handoff to get wrong, and no
+    state saying who is coordinating that could disagree with who actually is.
+    ⚠ ⇒ *"which thread is the coordinator"* is not a fact to store. Storing it would be a
+    second source of truth for something the blocking point already decides — the
+    `a_second_source_of_truth_beside_a_complete_value` shape.
+
 ⚠ **This list stopped at 17 while §§18–22 were added as sections below it** — a reader hitting the
 list would have concluded seventeen was all of them. ⇒ **Anything added below gets a row here in
 the same change**, or the index becomes the most confidently wrong thing in the file.
