@@ -4824,20 +4824,37 @@ impl RmConnection {
     /// Whatever RM refused with.
     pub fn import_object_from_fd(&self, fd: i32) -> Result<u32, RmError> {
         // `NV0000_CTRL_OS_UNIX_IMPORT_OBJECT_FROM_FD_PARAMS { NvS32 fd; NV0000_CTRL_OS_UNIX_EXPORT_OBJECT object; }`
-        // and `NV0000_CTRL_OS_UNIX_EXPORT_OBJECT { NvU32 type; union { struct { NvHandle hParent, hObject; } rmObject; } data; }`.
-        // ⊘ Transcribed here rather than generated: it is one probe's parameter block, and a
-        // generated struct would imply a maintained ABI surface this is not.
-        const IMPORT_PARAMS_SIZE: usize = 16;
+        // and, from `ctrl0000unix.h:108-118` **read rather than remembered**:
+        // `NV0000_CTRL_OS_UNIX_EXPORT_OBJECT { TYPE type; union { struct { NvHandle hDevice,
+        //  hParent, hObject; } rmObject; } data; }`.
+        //
+        // ⊘⊘⊘ **w755v — THIS WAS TRANSCRIBED WRONG, AND THE WRONG ANSWER WAS ACTED ON.**
+        // The previous version listed only `hParent, hObject` — **`hDevice` was missing** —
+        // so the block was **16 bytes where RM expects 20**. `[measured w755v, RTX 3090]`
+        // RM answered `0x1F NV_ERR_INVALID_ARGUMENT`, and the probe reported that as
+        // *"the fd is an nvidiactl fd and RM still refused the import"* — i.e. as evidence
+        // that **CUDA's export cannot be named by RM**, which is the fact the whole
+        // store-ownership design turns on.
+        //
+        // ⚠ The comment that got it wrong also argued for hand-transcription: *"a generated
+        // struct would imply a maintained ABI surface this is not."* The argument is fine and
+        // the transcription still has to be checked against the header, because a params
+        // block that is the wrong SIZE fails as `INVALID_ARGUMENT` — a status that reads like
+        // a judgement about the argument's VALUE and is really about its LENGTH.
+        const IMPORT_PARAMS_SIZE: usize = 20;
         const EXPORT_OBJECT_TYPE_RM: u32 = 0;
         let want = self.mint();
         let mut arg = [0u8; IMPORT_PARAMS_SIZE];
         arg[0..4].copy_from_slice(&fd.to_le_bytes());
         arg[4..8].copy_from_slice(&EXPORT_OBJECT_TYPE_RM.to_le_bytes());
+        // ★ `hDevice`, `hParent`, `hObject` — the three the importer names. The parent of an
+        // imported memory object is the device, and `hObject` is the handle we want it at.
         arg[8..12].copy_from_slice(&self.device.to_le_bytes());
-        arg[12..16].copy_from_slice(&want.to_le_bytes());
+        arg[12..16].copy_from_slice(&self.device.to_le_bytes());
+        arg[16..20].copy_from_slice(&want.to_le_bytes());
         self.raw_control(self.client.raw(), 0x0000_3d06, &mut arg)?;
         // ⊘ `hObject` is IN/OUT — read back what RM actually named, never the request.
-        let got = u32::from_le_bytes([arg[12], arg[13], arg[14], arg[15]]);
+        let got = u32::from_le_bytes([arg[16], arg[17], arg[18], arg[19]]);
         self.remember(got, self.device);
         Ok(got)
     }
