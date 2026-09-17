@@ -256,7 +256,7 @@ fn the_probe_does_not_mint_the_rings_geometry_twice() {
     // `alloc_channel_in` is still four; a NINTH would mean a fifth decision.
     assert_eq!(
         body.matches("RingSource::Guest(").count(),
-        8,
+        9,
         "`RingSource::Guest` is constructed or matched somewhere new. **EIGHT is the ruling \
          (three before leg B, five before w288, six before w393), ADMITTED 2026-09-10 \
          (w407)**, and each is a different job: TWO constructions — \
@@ -271,7 +271,17 @@ fn the_probe_does_not_mint_the_rings_geometry_twice() {
          ★ The ring arms are deliberately not one arm each: they straddle a failure that \
          must unwind between them, and the USERD arms are a second axis entirely — a \
          channel can adopt the guest's ring and keep a USERD of ours, which is what every \
-         leg-A boot before this one did. ⚠ An EIGHTH site means one of the two guest arms \
+         leg-A boot before this one did. \
+         ★★ **8 → 9, ADMITTED 2026-09-17 (w755n).** The ninth is a ROUTING decision, a job \
+         none of the eight does: `alloc_channel_in`'s head matches \
+         `Guest {{ ring: StoreSlice, userd: TheStore }}` and sends the birth to the BIRTH \
+         CLIENT B (route K increment 6), because `hUserdMemory` is a real RM operand and \
+         constraint 26 forbids THIS isolate naming the store. ⊘ It reads BOTH halves of the \
+         declaration on purpose — a store-slice ring with a JOINED USERD stays on the \
+         isolate's path, where the joined-object check can see it — and it sits ABOVE EVERY \
+         ALLOCATION, because the two paths allocate in different clients and unwinding \
+         across that boundary is the double free `UserdOwner` exists to prevent. \
+         ⚠ A TENTH site means one of the two guest arms \
          is reachable from a path that did not state it."
     );
 }
@@ -751,4 +761,55 @@ fn the_birth_in_b_names_the_store_for_userd_and_no_ring_object() {
         body.contains("gp_fifo_offset: gp_fifo_va"),
         "★★★ `birth_channel` no longer passes the guest's own ring VA"
     );
+}
+
+/// ★★★★★ **w755n — THE ROUTING: a store-slice USERD goes to B, and the decision is made
+/// BEFORE anything is allocated.**
+///
+/// ⊘ The order is the constraint, not tidiness. The two paths allocate different objects in
+/// **different clients**, and unwinding across that boundary is the double-free this file
+/// split `UserdOwner` to make unrepresentable. A routing decision taken after the first
+/// allocation has already created something the other path does not know how to free.
+#[test]
+fn a_store_slice_userd_is_routed_to_b_before_anything_is_allocated() {
+    let body = enclosing_fn(&body_of("src/rm.rs"), "fn alloc_channel_in(");
+
+    let route = body.find("self.birth_in_b(").expect(
+        "★★★★★ ROUTE K INCREMENT 6 REGRESSED — `alloc_channel_in` no longer sends a \
+         store-slice USERD to the birth client. The isolate then births with a USERD OF \
+         OURS, and `[measured w755h]` hardware sees GP_PUT == GP_GET == 0 forever, fetches \
+         nothing and reports nothing.",
+    );
+    // ★ NON-VACUITY: the function must still allocate, or "before any allocation" is vacuous.
+    let first_alloc = body
+        .find("raw_alloc(")
+        .or_else(|| body.find("alloc_device_local("))
+        .expect("★ NON-VACUITY: `alloc_channel_in` allocates nothing — wrong subject");
+    assert!(
+        route < first_alloc,
+        "★★★ THE ROUTING DECISION MOVED BELOW THE FIRST ALLOCATION (route at {route}, alloc \
+         at {first_alloc}). The two paths allocate in DIFFERENT CLIENTS; unwinding across \
+         that boundary is the double free `UserdOwner` exists to make unrepresentable."
+    );
+}
+
+/// ★★★ **Both halves of the guest's declaration are required, never one.**
+///
+/// ⊘ A store-slice ring whose USERD is a **joined leaf** is a real shape — the guest may put
+/// them in different places — and it belongs on the isolate's own path, where the
+/// joined-object check can see it. Routing on the ring alone would send it to B, which holds
+/// no handle for that leaf.
+#[test]
+fn the_routing_requires_the_ring_and_the_userd_to_agree() {
+    let body = enclosing_fn(&body_of("src/rm.rs"), "fn alloc_channel_in(");
+    let at = body.find("self.birth_in_b(").expect("asserted above");
+    let head = &body[..at];
+    for needle in ["RingProvenance::StoreSlice", "UserdObject::TheStore"] {
+        assert!(
+            head.contains(needle),
+            "★★★ the routing to B no longer tests `{needle}`. Both halves are required: a \
+             store-slice ring with a JOINED USERD belongs on the isolate's path, and B holds \
+             no handle for that leaf."
+        );
+    }
 }

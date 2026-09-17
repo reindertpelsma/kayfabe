@@ -1697,13 +1697,22 @@ pub struct RmConnection {
     /// ⊘ Empty on every arm but `k`, and empty on every per-proc isolate always:
     /// [`ScratchpadRole::of`] gates the only insert.
     birth: Mutex<BTreeMap<u32, Arc<BirthConn>>>,
-    /// `NV01_MEMORY_VIRTUAL` range handle **inside B** → the `A` whose `BirthConn` owns it.
+    /// `NV01_MEMORY_VIRTUAL` range handle **inside B** → `(the A whose BirthConn owns it,
+    /// B's own dup of that A's address space)`.
     ///
     /// ⊘ The reverse index [`RmBackend::map_store_slice`] needs: it is handed a range and
     /// must know **which namespace it lives in**, and a range handle from B used against our
     /// own client would name a different object or nothing at all. ⚠ `Ok(0)` is not a legal
     /// answer anywhere in this path for exactly that reason.
-    birth_ranges: Mutex<BTreeMap<u32, u32>>,
+    ///
+    /// ★★★★★ **w755n — THE SPACE TRAVELS WITH THE RANGE, and the reason is a measured
+    /// refusal.** A channel group's `hVASpace` needs a **`FERMI_VASPACE_A`**, not a range:
+    /// `[C: nvkvm_gpu_emul.c:6828-6836]` measured `NV_ERR_INVALID_OBJECT_HANDLE` (0x33) for a
+    /// group that named neither, and substituting the `NV01_MEMORY_VIRTUAL` range handle was
+    /// bitten on this hardware for the same `0x33`. ⇒ route K's increment 6 (birth in B) needs
+    /// the space, and re-deriving it at the birth site would be re-deriving a routing decision
+    /// this index already made — the shape `the_handover_rederived_a_routing_key` records.
+    birth_ranges: Mutex<BTreeMap<u32, (u32, u32)>>,
     /// `(A, the store object in OUR client)` → the store's dup **inside B**.
     ///
     /// ⊘ Cached because the share-and-dup is idempotent but not free, and because duping
@@ -3851,23 +3860,43 @@ impl RmConnection {
     /// ⊘ **`None` means "our own namespace", not "unknown".** That is safe only because the
     /// two handle spaces are deliberately disjoint (`BIRTH_HANDLE_BASE`), so a range from B
     /// can never be mistaken for one of ours by value.
-    fn birth_for_range(&self, range: u32) -> Option<(Arc<BirthConn>, u32)> {
-        let owner = *self
+    fn birth_for_range(&self, range: u32) -> Option<(Arc<BirthConn>, u32, u32)> {
+        let (owner, space) = *self
             .birth_ranges
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .get(&range)?;
-        // ⊘ The owning client travels back WITH the connection. A caller that had to
-        // re-derive it would be re-deriving a routing decision this index already made.
-        self.birth_for_client(owner).map(|c| (c, owner))
+        // ⊘ The owning client AND ITS SPACE travel back with the connection. A caller that had
+        // to re-derive either would be re-deriving a routing decision this index already made.
+        self.birth_for_client(owner).map(|c| (c, owner, space))
     }
 
-    /// Record that `range` lives inside the birth client held for `isolate_client`.
-    fn remember_birth_range(&self, range: u32, isolate_client: u32) {
+    /// Record that `range` lives inside the birth client held for `isolate_client`, over
+    /// `space` — B's own dup of that isolate's address space.
+    ///
+    /// ⊘ Both, in one insert. Two maps keyed on the same range would be two statements of one
+    /// association that could come apart, and the one that came apart would be discovered at a
+    /// channel birth naming a space that is not the range's.
+    fn remember_birth_range(&self, range: u32, isolate_client: u32, space: u32) {
         self.birth_ranges
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .insert(range, isolate_client);
+            .insert(range, (isolate_client, space));
+    }
+
+    /// ★★★ **w755n — the store's dup inside B for this `A`, if a slice map already made one.**
+    ///
+    /// ⊘ Reads the cache [`RmConnection::birth_store_dup`] fills rather than duping again:
+    /// duping twice would give B two references to one object and leave the second unfreed.
+    /// ⚠ `None` is a real answer and it means something specific — **no slice has been mapped
+    /// for this proc** — which is why the caller refuses rather than duping on demand.
+    fn birth_store_dup_for(&self, a: u32) -> Option<u32> {
+        self.birth_store_dups
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .find(|((owner, _), _)| *owner == a)
+            .map(|(_, dup)| *dup)
     }
 
     /// ★★★★★ **CONSTRAINT 32 STEP 3 — SHARE THE STORE TO B, THEN DUP IT, ONCE.**
@@ -7509,7 +7538,7 @@ impl RmBackend for HostRmBackend {
             // shadow one of ours.
             self.conn.remember_adopted_space(duped);
             let range = birth.alloc_range_over(duped)?;
-            self.conn.remember_birth_range(range, client);
+            self.conn.remember_birth_range(range, client, duped);
             kayfabe_util::lock_safe_eprintln!(
                 "kayfabe-isolate-host: CONSTRAINT-32 ADOPT-IN-B {:?} a_client={client:#010x} \
                  space={space:#010x} → dup={duped:#010x} range={range:#010x} ⇒ the dup RM \
@@ -7566,7 +7595,7 @@ impl RmBackend for HostRmBackend {
         // The reverse index is consulted rather than a flag, so the namespace a handle lives
         // in is read off **where it came from** and never off an arm variable that could
         // disagree with it.
-        if let Some((birth, a)) = self.conn.birth_for_range(h_dma) {
+        if let Some((birth, a, _space)) = self.conn.birth_for_range(h_dma) {
             // The store is OURS; B must be granted a dup of it. We may grant, because we own
             // the source — the asymmetry route K turns on. Done once per `(A, store)`.
             let store_dup = self.conn.birth_store_dup(&birth, a, h_memory)?;
@@ -7600,7 +7629,7 @@ impl RmBackend for HostRmBackend {
         // process can still reach it through a slice we told the guest was gone. **A
         // cross-process leak INSIDE the guest, caused by us, invisible to the guest.**
         // ⇒ it must be routed, and it must return its `Result`, which it does.
-        if let Some((birth, _)) = self.conn.birth_for_range(h_dma) {
+        if let Some((birth, ..)) = self.conn.birth_for_range(h_dma) {
             return birth.unmap_dma(h_dma, at.0);
         }
         self.conn.raw_unmap_dma(h_dma, at.0)
@@ -9750,6 +9779,74 @@ impl HostRmBackend {
     /// `NV_OK`, and the only in-process signal was a semaphore that stayed `0`. *"The engine
     /// faulted"* and *"we encoded the methods wrongly"* are the same observation to a client
     /// with no notifier, and they call for opposite next moves.
+    /// ★★★★★ **w755n — ROUTE K INCREMENT 6. The channel is born in B, over the guest's own
+    /// ring AND the guest's own USERD.** See [`BirthConn::birth_channel`] for why B and not
+    /// this isolate, and what it costs when the birth happens here instead.
+    ///
+    /// # Errors
+    /// [`USERD_IN_STORE_NEEDS_BIRTH_IN_B`] when no birth client holds this range — which is a
+    /// **routing** defect, not an RM one: the guest declared a store-slice USERD and route K
+    /// was not on the path. ⊘ Refused rather than birthed locally with a USERD of ours:
+    /// `[measured w755h]` that is the `GP_PUT == GP_GET == 0` silence.
+    fn birth_in_b(
+        &mut self,
+        range: u32,
+        engine_type: u32,
+        gp_fifo_va: u64,
+        gp_fifo_entries: u32,
+        userd_offset: u64,
+        err_notifier: Option<u32>,
+    ) -> Result<(HostHandle, u64), RmError> {
+        let Some((birth, a, space)) = self.conn.birth_for_range(range) else {
+            eprintln!(
+                "kayfabe-isolate: CHANNEL-BIRTH ⊘⊘ REFUSED USERD_IN_STORE_NEEDS_BIRTH_IN_B \
+                 range={range:#010x} — the guest's USERD is a slice of the ONE reserved store \
+                 and NO BIRTH CLIENT holds this range. Route K was not on the path; this is a \
+                 routing defect here, not an RM one."
+            );
+            return Err(RmError::Other(USERD_IN_STORE_NEEDS_BIRTH_IN_B));
+        };
+        // ★★★ The store's dup **inside B**, cached and idempotent. This is the handle that
+        // makes `hUserdMemory` nameable at all, and the whole reason the birth is here.
+        // ★★★ The store's dup **inside B**, found from the cache the slice maps already
+        // filled. ⊘ NOT a new parameter threaded down from the caller: the store object is
+        // the composition root's, the birth path never had it, and inventing a way to carry
+        // it here would be a second statement of *"which object is the store"* — the value
+        // `birth_store_dup`'s own key already holds.
+        // ⚠ An absent entry means **no slice was ever mapped for this proc**, so the ring is
+        // not mapped either and a channel born over it would fetch from nothing. Refused.
+        let Some(store_dup) = self.conn.birth_store_dup_for(a) else {
+            eprintln!(
+                "kayfabe-isolate: CHANNEL-BIRTH ⊘⊘ REFUSED USERD_IN_STORE_NEEDS_BIRTH_IN_B \
+                 a_client={a:#010x} — B holds no dup of the store for this proc, which means \
+                 no slice was ever mapped for it. The ring is therefore unmapped too, and a \
+                 channel born over it would fetch from nothing."
+            );
+            return Err(RmError::Other(USERD_IN_STORE_NEEDS_BIRTH_IN_B));
+        };
+        let (tsg, chan, token) = birth.birth_channel(
+            engine_type,
+            // ⊘ `channel_id()` is `ChannelClass`'s ONE escape and it names the role, so
+            // using it for anything else is a lie a reader can see (#166).
+            self.conn.classes.gpfifo_channel().channel_id().0,
+            space,
+            store_dup,
+            userd_offset,
+            gp_fifo_va,
+            gp_fifo_entries,
+            err_notifier.unwrap_or(0),
+        )?;
+        eprintln!(
+            "kayfabe-isolate: CHANNEL-BIRTH ★★★★★ BORN IN B {:?} range={range:#010x} \
+             space={space:#010x} tsg={tsg:#010x} chan={chan:#010x} token={token:#010x} \
+             userd=THE-STORE+{userd_offset:#x} gp_fifo_va={gp_fifo_va:#x} \
+             entries={gp_fifo_entries} ⇒ hardware reads the GUEST's cursor; this process \
+             neither writes nor inspects GP_PUT",
+            birth.handed(),
+        );
+        Ok((self.stamp(chan), u64::from(token)))
+    }
+
     fn alloc_channel_in(
         &mut self,
         range: u32,
@@ -9757,6 +9854,38 @@ impl HostRmBackend {
         ring: RingSource,
         err_notifier: Option<u32>,
     ) -> Result<(HostHandle, u64), RmError> {
+        // ★★★★★ **w755n — ROUTE K INCREMENT 6: A STORE-SLICE USERD IS BORN IN B, HERE.**
+        //
+        // ⊘ The routing decision is made **before anything is allocated**, because the two
+        // paths allocate different objects in different clients and unwinding across that
+        // boundary is the double-free this file split `UserdOwner` to make unrepresentable.
+        //
+        // The condition is BOTH halves of the guest's declaration, never one: the ring is a
+        // store slice **and** the USERD is [`UserdObject::TheStore`]. ⚠ A store-slice ring
+        // whose USERD is a joined leaf is a real shape (the guest may put them in different
+        // places) and it belongs on the isolate's own path, where the joined-object check
+        // below can see it.
+        if let RingSource::Guest(GuestRing {
+            ring: kayfabe_isolate::RingProvenance::StoreSlice { .. },
+            userd:
+                Some(kayfabe_isolate::AdoptedGuestUserd {
+                    object: kayfabe_isolate::UserdObject::TheStore,
+                    offset: userd_offset,
+                }),
+            gp_fifo_va,
+            gp_fifo_entries,
+            ..
+        }) = ring
+        {
+            return self.birth_in_b(
+                range,
+                engine_type,
+                gp_fifo_va,
+                gp_fifo_entries,
+                userd_offset,
+                err_notifier,
+            );
+        }
         // ★ The channel group names the ADDRESS SPACE, and `alloc_vaspace` returned the
         // mappable RANGE over it. A handle we never paired is not a `Vas` at all.
         //
