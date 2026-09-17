@@ -1713,6 +1713,16 @@ pub struct RmConnection {
     /// the space, and re-deriving it at the birth site would be re-deriving a routing decision
     /// this index already made — the shape `the_handover_rederived_a_routing_key` records.
     birth_ranges: Mutex<BTreeMap<u32, (u32, u32)>>,
+    /// ★★★★★ **w755o — channel handle → `(the A whose B holds it, its TSG inside B)`.**
+    ///
+    /// ⊘ `GPFIFO_SCHEDULE` is an **RM control on the TSG**, so unlike the doorbell it is
+    /// client-scoped: the doorbell is token-addressed and any process may write it, but a
+    /// control naming B's TSG issued on OUR client names a different object or nothing.
+    /// ⚠ Without this index `schedule` would fail `BadHandle` at `channel_parts` — the
+    /// isolate's map has no entry for a channel it did not build — and a channel that is
+    /// born, never scheduled and then doorbelled is **a channel that exists and never runs**:
+    /// the same silence route K increment 6 exists to remove, from a new cause.
+    birth_channels: Mutex<BTreeMap<u32, (u32, u32)>>,
     /// `(A, the store object in OUR client)` → the store's dup **inside B**.
     ///
     /// ⊘ Cached because the share-and-dup is idempotent but not free, and because duping
@@ -3094,6 +3104,7 @@ impl RmConnection {
             classes,
             birth: Mutex::new(BTreeMap::new()),
             birth_ranges: Mutex::new(BTreeMap::new()),
+            birth_channels: Mutex::new(BTreeMap::new()),
             birth_store_dups: Mutex::new(BTreeMap::new()),
             objects: Mutex::new(Objects {
                 next: FIRST_HANDLE,
@@ -3882,6 +3893,29 @@ impl RmConnection {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .insert(range, (isolate_client, space));
+    }
+
+    /// Record that `chan` was born inside the birth client held for `isolate_client`, under
+    /// `tsg`. See [`RmConnection::birth_channels`].
+    fn remember_birth_channel(&self, chan: u32, isolate_client: u32, tsg: u32) {
+        self.birth_channels
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(chan, (isolate_client, tsg));
+    }
+
+    /// `(the connection that owns `chan`, its TSG)` when it was born in a birth client.
+    ///
+    /// ⊘ `None` means *"this channel is one of ours"*, not *"unknown"* — the same reading
+    /// [`RmConnection::birth_for_range`] documents, and safe for the same reason: the two
+    /// handle spaces are disjoint by construction (`BIRTH_HANDLE_BASE`).
+    fn birth_channel_of(&self, chan: u32) -> Option<(Arc<BirthConn>, u32)> {
+        let (owner, tsg) = *self
+            .birth_channels
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&chan)?;
+        self.birth_for_client(owner).map(|c| (c, tsg))
     }
 
     /// ★★★ **w755n — the store's dup inside B for this `A`, if a slice map already made one.**
@@ -7783,10 +7817,6 @@ impl RmBackend for HostRmBackend {
     /// channel every time, so there is no state to be stale.
     fn schedule(&mut self, chan: HostHandle) -> Result<(), RmError> {
         let raw = self.narrow(chan)?;
-        let parts = self
-            .conn
-            .channel_parts(raw)
-            .ok_or(RmError::BadHandle(chan))?;
         let mut params = [0u8; GpfifoScheduleParams::SIZE];
         GpfifoScheduleParams {
             b_enable: 1,
@@ -7795,6 +7825,24 @@ impl RmBackend for HostRmBackend {
         }
         .encode_into(&mut params)
         .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
+        // ★★★★★ **w755o — A CHANNEL BORN IN B IS SCHEDULED IN B.**
+        //
+        // ⊘⊘ And this is where the doorbell and the schedule part company. The **doorbell**
+        // is token-addressed: any process holding the usermode mapping may ring any channel
+        // by writing the right dword, which is what `GET_WORK_SUBMIT_TOKEN` is for. The
+        // **schedule** is an RM CONTROL on the TSG, so it is client-scoped — issued on our
+        // client while naming B's TSG it would name a different object or nothing.
+        // ⚠ And `channel_parts` has no entry for a channel this isolate did not build, so the
+        // pre-w755o path would have failed `BadHandle` here. A channel born, never scheduled
+        // and then doorbelled is a channel that EXISTS AND NEVER RUNS — the same silence
+        // increment 6 exists to remove, arriving from a new cause.
+        if let Some((birth, tsg)) = self.conn.birth_channel_of(raw) {
+            return birth.control(tsg, NVA06C_CTRL_CMD_GPFIFO_SCHEDULE, &mut params);
+        }
+        let parts = self
+            .conn
+            .channel_parts(raw)
+            .ok_or(RmError::BadHandle(chan))?;
         self.conn
             .raw_control(parts.tsg, NVA06C_CTRL_CMD_GPFIFO_SCHEDULE, &mut params)
     }
@@ -9836,6 +9884,7 @@ impl HostRmBackend {
             gp_fifo_entries,
             err_notifier.unwrap_or(0),
         )?;
+        self.conn.remember_birth_channel(chan, a, tsg);
         eprintln!(
             "kayfabe-isolate: CHANNEL-BIRTH ★★★★★ BORN IN B {:?} range={range:#010x} \
              space={space:#010x} tsg={tsg:#010x} chan={chan:#010x} token={token:#010x} \

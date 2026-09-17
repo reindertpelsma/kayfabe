@@ -413,4 +413,47 @@ fn the_shipping_arm_leaves_the_reap_to_the_worker() {
     unsafe {
         std::env::set_var(kayfabe_qemu_raw::shim::DOORBELL_ASYNC_ENV, "off");
     }
+
+    // ★★★★★ **w755p — AND PUT THE PROCESS-GLOBAL BACK TOO. THIS TEST LEAKED A RETIRE.**
+    //
+    // The restore above exists because this test mutates process-wide state that a later
+    // test in the same binary reads. `kayfabe_core::gpu::RETIRED_PENDING` is **exactly the
+    // same kind of state and was missed**: the assertions above deliberately leave one proc
+    // retired and un-reaped, and that retire is counted in a `static AtomicUsize` shared by
+    // every `Gpu` in the process — so it outlived this test.
+    //
+    // `[measured w755p]` The consequence was a **flaky suite**, and the flake was invisible
+    // locally: the three tests in this file race for `serialized()`, so the leak only bites
+    // when THIS test wins the mutex before `a_guest_register_write_reaps_a_retired_proc`,
+    // whose phase-1 assertion is `retired_pending() == 0`. Three consecutive local runs of
+    // this binary all drew the benign order and passed; the full workspace suite drew the
+    // other one and failed with `left: 1, right: 0`.
+    //
+    // ⊘ **Not fixed by weakening that assertion to a delta.** The counter is exact by
+    // design (see `retired_pending`'s doc: a monotone epoch cannot gate a budgeted drain),
+    // and a delta-based assertion would stop detecting a count that runs high — which is
+    // the whole defect w520 introduced the counter to prevent.
+    //
+    // ⊘ **AND THE CLEANUP IS AN EXPLICIT REAP, NOT ANOTHER REGISTER WRITE.** `[measured
+    // w755p]` restoring the env var and writing a register does **not** drain it: this
+    // `Regs` captured its arm at `Regs::create` — which is why the `set_var` above sits
+    // *before* the constructor, and the comment there says so. A write on a `Regs` built
+    // on the shipping arm stays on the shipping arm forever, so the cleanup write left
+    // `retired_len` at 1 and the fix read as applied while fixing nothing.
+    // ⇒ Reap the device directly. It is also the more honest cleanup: it says *"this test
+    // drains what it staged"* rather than depending on a second mechanism's arm.
+    let _ = dev.reap_retired();
+    assert_eq!(
+        dev.retired_len(),
+        0,
+        "the explicit reap must actually drain what this test staged — otherwise it leaks \
+         into the next test in this binary, which is the bug being fixed"
+    );
+    assert_eq!(
+        kayfabe_core::gpu::retired_pending(),
+        0,
+        "★ and the PROCESS-GLOBAL is what actually leaked: `retired_len` is per-device, \
+         `retired_pending` is shared by every Gpu in the process, and only the latter \
+         crosses into another test"
+    );
 }

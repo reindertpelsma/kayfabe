@@ -813,3 +813,45 @@ fn the_routing_requires_the_ring_and_the_userd_to_agree() {
         );
     }
 }
+
+/// ★★★★★ **w755o — A CHANNEL BORN IN B IS SCHEDULED IN B, and the doorbell is NOT the same
+/// question.**
+///
+/// > Owner, 2026-09-17: *"A doorbell can ring from another process, only the token needs to
+/// > match. So VMM can ring the isolate's doorbell fine by just writing a dword."*
+///
+/// Exactly so, and it is why these two must not be conflated. The **doorbell** is
+/// token-addressed: any process holding the usermode mapping may ring any channel by writing
+/// the right dword — that is what `GET_WORK_SUBMIT_TOKEN` exists for. The **schedule** is an
+/// RM *control on the TSG*, so it is client-scoped, and one issued on our client while naming
+/// B's TSG names a different object or nothing at all.
+///
+/// ⚠ `channel_parts` also has no entry for a channel this isolate did not build, so without
+/// the route `schedule` fails `BadHandle`. A channel born, never scheduled and then
+/// doorbelled is **a channel that exists and never runs** — the same silence increment 6
+/// exists to remove, arriving from a new cause.
+#[test]
+fn a_channel_born_in_b_is_scheduled_in_b() {
+    let body = enclosing_fn(&body_of("src/rm.rs"), "fn schedule(");
+
+    let route = body.find("birth_channel_of(").expect(
+        "★★★★★ `schedule` no longer asks whether this channel was born in a birth client. \
+         `GPFIFO_SCHEDULE` is an RM control on the TSG and is client-scoped — issued on our \
+         client it names B's TSG in the wrong namespace, and `channel_parts` has no entry \
+         for a channel we did not build, so this would fail `BadHandle` instead.",
+    );
+    let fallback = body
+        .find("channel_parts(")
+        .expect("★ NON-VACUITY: `schedule` no longer has its own-channel path — wrong subject");
+    assert!(
+        route < fallback,
+        "★★★ the birth-client route is BELOW the isolate's own `channel_parts` lookup, which \
+         returns `None` for a B-born channel — so the refusal happens before the route is \
+         ever consulted. (route at {route}, lookup at {fallback})"
+    );
+    assert!(
+        body.contains("birth.control(tsg, NVA06C_CTRL_CMD_GPFIFO_SCHEDULE"),
+        "★★★ the B route no longer issues the schedule THROUGH B. Naming B's TSG on our own \
+         client is the wrong-namespace control this route exists to avoid."
+    );
+}

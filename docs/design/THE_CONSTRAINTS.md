@@ -879,6 +879,38 @@ deliverable**.
     second source of truth for something the blocking point already decides — the
     `a_second_source_of_truth_beside_a_complete_value` shape.
 
+37. **★★★★★ EMULATED CHANNELS EXECUTE IN THE VMM WORKER, THROUGH A RAW CLIENT THE VMM OWNS —
+    NOT BY A HOP INTO THE SCRATCHPAD** (owner, 2026-09-17). *"For emulated channels it executes
+    in the worker in VMM, from there it can execute the raw client... This means the va space of
+    scratchpad land in the VMM, which is also needed for the MMIO CPU maps to populate bar1/bar2
+    anyways."*
+    Two reasons, and **the second is the load-bearing one**:
+    (a) it removes a process hop for work the worker already has in hand;
+    (b) ★★★ **a raw client yields an `eventfd`**, so the worker polls its own semaphore inside
+    its own `epoll` set — which is what makes §35 satisfiable *at all* for this work. Executing
+    in the scratchpad gives the worker a reply it must wait for; executing here gives it an fd.
+    ⇒ **The scratchpad's VA space lands in the VMM.** That is not a new cost: §23 already
+    requires CPU maps in the VMM to populate BAR1/BAR2, so the VMM holds those views regardless.
+
+    ⊘ **THIS DOES NOT REOPEN §20, AND THE LINE BETWEEN THEM IS THE LINE TO HOLD.** §20 puts the
+    walker in the scratchpad because the walker **dereferences guest-authored pointers in a
+    loop** — memory safety over hostile data, which must run at the privilege of that data. An
+    emulated-channel submission is a different shape: a **bounded-arity descriptor**
+    (`src, dst, len`) that is **bounds-checked against the store before it is built**, then
+    handed to RM. It follows nothing. ⇒ The test for *"may this run in the VMM?"* is **not**
+    *"is the input guest-authored?"* — nearly everything is — but **"does it chase guest-authored
+    structure?"** Walker: yes, scratchpad. CE/scrub descriptor: no, VMM worker.
+    ⚠ **So the boundary is enforceable and must be enforced by a gate, not by intent**: anything
+    the VMM's raw client submits is built from a fixed number of already-validated fields. The
+    day a loop over guest data appears on this path, it has become §20's problem and belongs in
+    the scratchpad.
+
+    ⊘ **It also retires the CPU-read execution path, which was never viable.** The emulated CE
+    currently executes on the **CPU** (`cpu_ce.rs::execute_ours`, reading operands via
+    `ce.fb().read()`), and under the single store a CPU read of the store is an **MMIO read at
+    ~48 MiB/s**. ⇒ *"execute on the CPU"* and *"the store is the only memory"* were never
+    compatible; this ruling is what makes the second one payable.
+
 ⚠ **This list stopped at 17 while §§18–22 were added as sections below it** — a reader hitting the
 list would have concluded seventeen was all of them. ⇒ **Anything added below gets a row here in
 the same change**, or the index becomes the most confidently wrong thing in the file.
