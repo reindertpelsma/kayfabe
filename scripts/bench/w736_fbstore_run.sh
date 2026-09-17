@@ -570,7 +570,7 @@ constraint 32 REPLACED. Do not read this arm as a route-K result."
   grep -a 'STORE-BIRTH ' "$Q" 2>/dev/null | tail -2 | cut -c1-300
   echo "W755R-STORE-BIRTH-ARMED=$(grep -ac 'STORE-BIRTH AT REALIZE: ★★★★★ ARMED' "$Q" 2>/dev/null)   ⊘⊘ 0 with ARM3_VAS_OWNER=k means NO BIRTH PARTY was installed — the route cannot fire"
   echo "W755R-BORN-IN-B=$(grep -ac 'STORE-BIRTH ✔ BORN IN B' "$Q" 2>/dev/null)   ★★★ the first number that means the GUEST'S cursor is what hardware reads"
-  echo "W755R-BIRTH-IN-B-ENTERED=$(grep -ac 'CHANNEL-BIRTH IN B' "$Q" 2>/dev/null)   ⊘ w755q measured 0 — birth_in_b was NEVER ENTERED"
+  echo "W755R-BIRTH-IN-B-ENTERED=$(grep -ac 'CHANNEL-BIRTH ★★★★★ BORN IN B' "$Q" 2>/dev/null)   ⊘ w755q measured 0 — birth_in_b was NEVER ENTERED"
   echo "W755R-USERD-REFUSED-IN-ISOLATE=$(grep -ac 'USERD_IN_STORE_NEEDS_BIRTH_IN_B' "$Q" 2>/dev/null)   ⊘⊘ w755q measured 11. NON-ZERO here means the interception did NOT happen and the per-proc isolate still saw the shape"
   echo "W755R-NOTIFIER-NOT-IN-B=$(grep -ac 'NOTIFIER_NOT_IN_B' "$Q" 2>/dev/null)   ⚠ a notifier from the wrong client reached B's birth"
   # ⊘ The four store-birth refusals, kept apart on purpose — each sends a reader somewhere
