@@ -208,6 +208,20 @@ pub struct StoreMapPort {
     /// ★★★ How many times the restated assertion was **asked**, and how many times it said
     /// no. ⊘ Both, because `asked=0` and `refused=0` are the same line otherwise, and the
     /// first means the gate is not wired.
+    /// ★★★ w755r — CHANNEL births carried into B: asked, refused, and actually borne.
+    ///
+    /// ⚠ **Named `chan_*` and kept apart from [`Self::birth_clients`]/[`Self::birth_refused`]
+    /// deliberately** — those count birth-CLIENT hand-overs, a different event entirely, and
+    /// one counter covering both would make a census unable to say whether a boot failed to
+    /// hand a client over or failed to birth a channel in one it had. That is this file's own
+    /// `a_refusal_counter_read_as_absent_demand` warning, applied to the counter beside it.
+    ///
+    /// ⊘ Three and not one: *"we did not ask"*, *"we asked and were refused"* and *"it
+    /// worked"* are different facts, and a census that adds them cannot tell a route that
+    /// never fired from one that fired and failed — the confusion w755q spent a boot on.
+    chan_births: AtomicU64,
+    chan_birth_refused: AtomicU64,
+    chan_born: AtomicU64,
     asserted: AtomicU64,
     assert_refused: AtomicU64,
     /// ★★★ Calls declined because the caller was on a vCPU or inside a guest trap. ⊘ Its own
@@ -304,6 +318,9 @@ impl StoreMapPort {
             unmaps: AtomicU64::new(0),
             unmap_refused: AtomicU64::new(0),
             bytes_mapped: AtomicU64::new(0),
+            chan_births: AtomicU64::new(0),
+            chan_birth_refused: AtomicU64::new(0),
+            chan_born: AtomicU64::new(0),
             asserted: AtomicU64::new(0),
             assert_refused: AtomicU64::new(0),
             declined_on_vcpu: AtomicU64::new(0),
@@ -431,6 +448,32 @@ impl StoreMapPort {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .len(),
+        )
+    }
+
+    /// ★★★★★ **w755r — THE CHANNEL-BIRTH CENSUS: asked, refused, borne.**
+    ///
+    /// ⊘⊘⊘ **This row exists because of what w755q could not say.** That boot reported
+    /// `P1 … NEVER RETIRED` and every plumbing counter green, and it took reading three
+    /// different log streams to establish that the route under test had **never executed**.
+    /// A route with no census of its own cannot distinguish *"it ran and failed"* from
+    /// *"it never ran"*, and those have opposite fixes.
+    ///
+    /// ⇒ Read it as a triple, never as one number:
+    /// - `asked = 0` — **the route never fired.** Nothing downstream of it has been tested,
+    ///   whatever else the boot says. Look at the USERD discriminant and at whether a birth
+    ///   party was installed at realize.
+    /// - `asked > 0, borne = 0` — it fired and RM (or this port) refused every time. The
+    ///   refusals name themselves; read those.
+    /// - `borne > 0` — channels are being born in B over the guest's own ring AND USERD.
+    ///   ★ This is the first number in the campaign that means the guest's cursor is the one
+    ///   hardware reads.
+    #[must_use]
+    pub fn chan_birth_census(&self) -> (u64, u64, u64) {
+        (
+            self.chan_births.load(Ordering::Relaxed),
+            self.chan_birth_refused.load(Ordering::Relaxed),
+            self.chan_born.load(Ordering::Relaxed),
         )
     }
 
@@ -632,6 +675,98 @@ impl StoreMapPort {
         ok
     }
 
+    /// ★★★★★ **w755r, ROUTE K INCREMENT 7 — CARRY THE GUEST'S CHANNEL BIRTH INTO B.**
+    ///
+    /// `[measured w755q]` the per-proc isolate refused this shape **11 times**
+    /// (`USERD_IN_STORE_NEEDS_BIRTH_IN_B`) while `birth_in_b` was **never entered**: the two
+    /// halves were in different processes and nothing carried the request across. This is
+    /// the crossing.
+    ///
+    /// ⊘ `host_vas` is the **per-proc isolate's** space handle, and this port's `adopted`
+    /// ledger is the only place the corresponding range **inside B** is written down
+    /// (`adopt_space` → `remember_birth_range`). ⇒ resolved here rather than by the caller,
+    /// for the reason `the_handover_rederived_a_routing_key` names: a hand-over that
+    /// re-derives a key its caller already holds gets one of the two wrong eventually.
+    ///
+    /// # Errors
+    /// [`kayfabe_fwd::FwdFault`], by name — a missing adoption and an RM refusal are
+    /// different facts with different fixes, so they are different variants and not one
+    /// string.
+    ///
+    /// # Panics
+    /// Through `Worker::with_rm`'s `assert_lock_free`, if a caller reaches this holding a
+    /// ranked lock. That is the invariant, not a bug to be caught.
+    pub fn birth_over_the_store(
+        &self,
+        host_vas: HostHandle,
+        engine_type: u32,
+        ring: kayfabe_isolate::AdoptedGuestRing,
+        err_notifier: Option<kayfabe_isolate::GuestRamGrant>,
+    ) -> Result<(HostHandle, u64), kayfabe_fwd::FwdFault> {
+        self.chan_births.fetch_add(1, Ordering::Relaxed);
+        let off = self.off_vcpu().map_err(|r| {
+            self.chan_birth_refused.fetch_add(1, Ordering::Relaxed);
+            kayfabe_fwd::FwdFault::Rm {
+                err: kayfabe_isolate::RmError::Other(kayfabe_isolate::STORE_BIRTH_REFUSED),
+                on: None,
+            }
+        })?;
+        // ★ The range inside B, from the ledger that placed every slice for this proc.
+        let Some(range) = self
+            .adopted
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&host_vas.raw())
+            .copied()
+        else {
+            self.chan_birth_refused.fetch_add(1, Ordering::Relaxed);
+            eprintln!(
+                "kayfabe: STORE-BIRTH ⊘⊘ REFUSED host_vas={:#x} — this port never adopted \
+                 that space, so there is no range inside B to birth in. ⊘ A store-slice USERD \
+                 in a space this port did not adopt means the ring was not placed by us \
+                 either, and a channel born over it would fetch from nothing.",
+                host_vas.raw(),
+            );
+            return Err(kayfabe_fwd::FwdFault::Rm {
+                err: kayfabe_isolate::RmError::Other(kayfabe_isolate::NO_STORE_BIRTH_PARTY),
+                on: None,
+            });
+        };
+        let out = self.iso.with_worker(move |worker| {
+            worker.with_rm(&off, move |rm| {
+                rm.birth_guest_channel_in_b(range, engine_type, ring, err_notifier)
+            })
+        });
+        match out {
+            None => {
+                self.chan_birth_refused.fetch_add(1, Ordering::Relaxed);
+                Err(kayfabe_fwd::FwdFault::Rm {
+                    err: kayfabe_isolate::RmError::Other(kayfabe_isolate::STORE_BIRTH_REFUSED),
+                    on: None,
+                })
+            }
+            Some(Err(e)) => {
+                self.chan_birth_refused.fetch_add(1, Ordering::Relaxed);
+                eprintln!("kayfabe: STORE-BIRTH ⊘⊘ REFUSED by the scratchpad — {e:?}");
+                Err(kayfabe_fwd::FwdFault::Rm { err: e, on: None })
+            }
+            Some(Ok(born)) => {
+                self.chan_born.fetch_add(1, Ordering::Relaxed);
+                eprintln!(
+                    "kayfabe: STORE-BIRTH ✔ BORN IN B host_vas={:#x} range={:#x} \
+                     engine_type={engine_type:#x} → channel={:?} token={:#x} ⇒ the channel \
+                     carries the GUEST'S OWN ring AND USERD, so hardware reads the guest's \
+                     cursor and we are never in the GP_PUT path",
+                    host_vas.raw(),
+                    range.raw(),
+                    born.0,
+                    born.1,
+                );
+                Ok(born)
+            }
+        }
+    }
+
     /// Where in the reserved object the slice at `at` lives, if this port placed one.
     #[must_use]
     pub fn slice_offset(&self, vas: HostHandle, at: GpuVa) -> Option<u64> {
@@ -769,8 +904,25 @@ impl StoreMapPort {
         } else {
             "★ every birth client was handed over"
         };
+        let (cba, cbr, cbb) = self.chan_birth_census();
+        // ★★★★★ **w755r's ROW, AND IT NAMES ITS OWN VACUITY TOO** — for the reason w755q
+        // paid for: a boot reported the gate red while the route under test had never run,
+        // and no single counter could have said so.
+        let chan_birth_verdict = if cba == 0 {
+            "⊘⊘⊘ NEVER FIRED — no guest channel declared a store-slice USERD, or no birth \
+             party was installed. ⚠ Nothing downstream of this route has been tested by this \
+             boot, whatever else it says"
+        } else if cbb == 0 {
+            "⊘⊘ ASKED AND REFUSED EVERY TIME — the route fired; read the named refusals above"
+        } else if cbr > 0 {
+            "⚠ PARTIAL — some guest channels were born in B and some were refused. The \
+             refused ones have a USERD of nobody's and will never advance GP_GET"
+        } else {
+            "★★★ EVERY STORE-USERD CHANNEL WAS BORN IN B — hardware reads the GUEST'S cursor"
+        };
         format!(
-            "STORE-MAP-K handed={bc} refused={br} procs={bp} ⇒ {birth_verdict}\n\
+            "STORE-BIRTH asked={cba} refused={cbr} born={cbb} ⇒ {chan_birth_verdict}\n\
+             STORE-MAP-K handed={bc} refused={br} procs={bp} ⇒ {birth_verdict}\n\
              STORE-MAP iso={:?} obj={:?} obj_len={} adopts={adopts} adopt_refused={} \
              maps={maps} map_refused={} unmaps={} unmap_refused={} bytes_mapped={} \
              outstanding={} asserted={asserted} assert_refused={assert_refused} \
@@ -806,6 +958,24 @@ impl StoreMapPort {
 impl kayfabe_fwd::RingSliceOracle for StoreMapPort {
     fn is_slice_of_the_store(&self, vas: HostHandle, at: GpuVa, len: u64) -> bool {
         StoreMapPort::is_slice_of_the_store(self, vas, at, len)
+    }
+}
+
+/// ★★★★★ **w755r, CONSTRAINT 32 — THE PORT IS ALSO THE BIRTH PARTY, for the oracle's reason.**
+///
+/// The port already owns the per-proc-space → adopted-range ledger — it is the same ledger
+/// that places every store slice — and `birth_in_b` is keyed on exactly that range. A second
+/// object holding a copy would be a second source of truth for *"which range is this proc's
+/// inside B"*, which is the shape `a_second_source_of_truth_beside_a_complete_value` names.
+impl kayfabe_fwd::StoreChannelBirth for StoreMapPort {
+    fn birth_over_the_store(
+        &self,
+        host_vas: HostHandle,
+        engine_type: u32,
+        ring: kayfabe_isolate::AdoptedGuestRing,
+        err_notifier: Option<kayfabe_isolate::GuestRamGrant>,
+    ) -> Result<(HostHandle, u64), kayfabe_fwd::FwdFault> {
+        StoreMapPort::birth_over_the_store(self, host_vas, engine_type, ring, err_notifier)
     }
 }
 

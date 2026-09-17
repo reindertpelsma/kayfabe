@@ -256,7 +256,7 @@ fn the_probe_does_not_mint_the_rings_geometry_twice() {
     // `alloc_channel_in` is still four; a NINTH would mean a fifth decision.
     assert_eq!(
         body.matches("RingSource::Guest(").count(),
-        9,
+        10,
         "`RingSource::Guest` is constructed or matched somewhere new. **EIGHT is the ruling \
          (three before leg B, five before w288, six before w393), ADMITTED 2026-09-10 \
          (w407)**, and each is a different job: TWO constructions — \
@@ -281,7 +281,18 @@ fn the_probe_does_not_mint_the_rings_geometry_twice() {
          isolate's path, where the joined-object check can see it — and it sits ABOVE EVERY \
          ALLOCATION, because the two paths allocate in different clients and unwinding \
          across that boundary is the double free `UserdOwner` exists to prevent. \
-         ⚠ A TENTH site means one of the two guest arms \
+         ★★ **9 → 10, ADMITTED 2026-09-17 (w755r).** The tenth is the DELEGATION's own \
+         construction, in `birth_guest_channel_in_b`, and it is a job none of the nine does: \
+         carrying a birth that arrived from ANOTHER PROCESS into this one. `[measured w755q]` \
+         without it the ninth site — the routing decision — was UNREACHABLE from the guest's \
+         path, because the guest's birth lowers through `alloc_channel_lowered` in the \
+         per-proc isolate while the routing sits in `alloc_channel_in` in the scratchpad. \
+         The ninth decided; nothing ever arrived for it to decide about. \
+         ⊘ A struct literal and not a `From`, for the reason `alloc_channel_lowered`'s own \
+         conversion is one: `GuestRing` is this crate's shape and `AdoptedGuestRing` is the \
+         wire's, and a blanket conversion would let a future field silently default across \
+         the boundary. \
+         ⚠ An ELEVENTH site means one of the two guest arms \
          is reachable from a path that did not state it."
     );
 }
@@ -902,6 +913,20 @@ fn a_channel_born_in_b_is_scheduled_in_b() {
 /// that gets muted, and the gap is a missing feature rather than a regression. What it does is
 /// make the refusal's **site** load-bearing, so that moving or deleting it without building the
 /// delegation is caught here rather than by another boot.
+///
+/// # ⊘⊘ UPDATED w755r — THE DELEGATION LANDED, AND THIS REFUSAL IS NOW A BACKSTOP
+///
+/// The crossing is built (`kayfabe_fwd::StoreChannelBirth`, installed at realize on the
+/// `scratchpad`/`BirthClient` arm), and it intercepts **before** the verb is dispatched to the
+/// proc's worker — so on an armed boot `alloc_channel_lowered` should no longer *see* this
+/// shape at all.
+///
+/// ⇒ The refusal stays, and this gate with it, because *"the interception is armed"* and
+/// *"the interception fired"* are different facts. If the birth party is not installed, or the
+/// discriminant stops matching, the verb lands here again — and landing here must go on
+/// refusing rather than birthing with a USERD of ours. ★ The census row `STORE-BIRTH
+/// asked=0` is what says the interception never fired; this assertion is what says the
+/// fallback is still safe when it does.
 #[test]
 fn the_guest_birth_path_refuses_a_store_userd_by_name() {
     let rm = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/rm.rs"))
@@ -939,5 +964,66 @@ fn the_guest_birth_path_refuses_a_store_userd_by_name() {
          this gate was written to say was MISSING. ⊘ That is good news, not a failure: \
          update this test to assert the delegation's shape, and re-boot, because \
          `docs/design/increment_6_never_fired.md` is now out of date."
+    );
+}
+
+/// ★★★★★ **w755r — THE DELEGATION EXISTS, AND IT CROSSES A PROCESS BOUNDARY.**
+///
+/// `[measured w755q]` route K increment 6 never fired because `birth_in_b` lives in the
+/// **scratchpad's** verb family while the guest's birth runs in the **per-proc isolate** —
+/// two processes, and nothing carried the request across. This pins the carrier.
+///
+/// ⊘ The assertions are about **who can be asked**, not about internal ordering. That
+/// distinction is the whole lesson of w755q: the gate that was green through that entire
+/// boot asserted an ordering *inside* a function nothing called.
+#[test]
+fn the_store_birth_delegation_crosses_to_the_scratchpad() {
+    let rm = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/rm.rs"))
+        .expect("rm.rs is readable");
+
+    // ★ 1. The scratchpad implements the delegation verb, and REFUSES when it is not the
+    //      scratchpad — so a verb dispatched to the wrong process says so by name instead of
+    //      reporting "no birth client holds this range", which sends a reader hunting a
+    //      missing hand-over.
+    let birth = enclosing_fn(&rm, "fn birth_guest_channel_in_b(");
+    assert!(
+        !birth.is_empty(),
+        "★★★★★ `birth_guest_channel_in_b` is gone — that is the ONLY carrier from the VMM \
+         into the birth client B. Without it the guest's birth lands in the per-proc isolate, \
+         which refuses it by name and leaves the channel unborn (measured w755q, 11 times)."
+    );
+    assert!(
+        birth.contains("ScratchpadRole::of"),
+        "★★★ the delegation no longer checks that it IS the scratchpad. A per-proc backend \
+         reaching it has no `birth_ranges` at all, so it would refuse as `no birth client \
+         holds this range` — pointing a reader at a missing hand-over rather than at a verb \
+         dispatched to the wrong process."
+    );
+    // ★★★ 2. The notifier is built IN B, from the grant. A handle would be in the
+    //        scratchpad's namespace and B cannot name it; a region mapped by the per-proc
+    //        isolate names memory this process never mapped.
+    assert!(
+        birth.contains("describe_guest_ram_in_b"),
+        "★★★★★ the delegation no longer describes the error notifier in B. `hObjectError` is \
+         a BIRTH parameter, so it cannot be attached afterwards — and a channel born without \
+         one leaves the guest polling bytes the RC path will never write \
+         (ogkm kernel_channel.c:549-568)."
+    );
+    assert!(
+        birth.contains("map_guest_ram"),
+        "★★★ the delegation no longer maps the grant itself. The descriptor must pin pages of \
+         the SCRATCHPAD's mapping, because that is the process B lives in."
+    );
+
+    // ★★★★★ 3. NON-VACUITY, and it is the assertion that would have caught w755q: the
+    //          namespace guard must exist, because `alloc_channel_in` takes `err_notifier` as
+    //          a bare `u32` and the birth route is taken ABOVE it.
+    let in_b = enclosing_fn(&rm, "fn birth_in_b(");
+    assert!(
+        in_b.contains("NOTIFIER_NOT_IN_B"),
+        "★★★★★ `birth_in_b` no longer refuses a notifier from the wrong client. That handle \
+         travels as a bare `u32` past a route taken above every allocation, and RM answers \
+         about the HANDLE — so a plausible one is accepted, the channel is born, and the \
+         guest polls notifier bytes nobody writes. This is the quietest failure on the path."
     );
 }

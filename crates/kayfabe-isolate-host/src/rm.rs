@@ -230,6 +230,7 @@ pub mod local_status {
             "USERD_IN_STORE_NEEDS_BIRTH_IN_B",
             super::USERD_IN_STORE_NEEDS_BIRTH_IN_B,
         ),
+        ("NOTIFIER_NOT_IN_B", super::NOTIFIER_NOT_IN_B),
         ("VA_ALREADY_MAPPED", super::VA_ALREADY_MAPPED),
         ("ABI_ENCODE_FAILED", super::ABI_ENCODE_FAILED),
         ("IOCTL_NUMBER_UNBUILDABLE", super::IOCTL_NUMBER_UNBUILDABLE),
@@ -443,6 +444,20 @@ pub const VA_ALREADY_MAPPED: u32 = 0x4B69;
 /// ⚠ Seeing this in a boot log means the birth was NOT routed to B — a routing defect here,
 /// not an RM one.
 pub const USERD_IN_STORE_NEEDS_BIRTH_IN_B: u32 = 0x4B6A;
+
+/// ★★★★★ **w755r — AN ERROR NOTIFIER FROM THE WRONG CLIENT REACHED B's BIRTH.** `0x4B6B`.
+///
+/// [`HostRmBackend::alloc_channel_in`] takes `err_notifier` as a bare `u32`, and the
+/// birth-in-B route is taken **above** it — so a handle minted in the scratchpad's own
+/// client would be handed to B, where RM answers about the *handle* and not about the
+/// mistake. `BirthConn::is_ours` makes the two namespaces distinguishable
+/// (`BIRTH_HANDLE_BASE`), and this is what that check refuses with.
+///
+/// ⊘ **Latent when it was written** — no caller passed a notifier with a store-slice ring.
+/// It is named now because the delegation is the first path that can, and because a
+/// misrouted `hObjectError` fails in the worst available way: RM accepts a plausible handle,
+/// the channel is born, and the guest polls notifier bytes nobody writes.
+pub const NOTIFIER_NOT_IN_B: u32 = 0x4B6B;
 
 /// The opaque status a verb this rung does not implement reports.
 ///
@@ -951,10 +966,17 @@ mod birth_conn {
         VA_ALREADY_MAPPED,
         WORK_SUBMIT_TOKEN_PARAMS_SIZE,
         ioctl_error,
+        region_error,
         status_check,
     };
+    // ★ w755r — the error notifier's own imports. See `BirthConn::alloc_os_descriptor`.
+    use super::{
+        NV_ESC_RM_ALLOC_MEMORY, NV01_MEMORY_SYSTEM_OS_DESCRIPTOR, NVOS02_FLAGS_COHERENCY_CACHED,
+        NVOS02_FLAGS_LOCATION_PCI, NVOS02_FLAGS_MAPPING_NO_MAP,
+        NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS, Nvos02ParametersWithFd,
+    };
 
-    use kayfabe_linux_raw::{CharDevice, ioctl};
+    use kayfabe_linux_raw::{CharDevice, HostOffset, ioctl};
     use std::sync::Mutex;
 
     /// `NV01_DEVICE_0`.
@@ -988,10 +1010,15 @@ mod birth_conn {
         /// B's control node — the `/dev/nvidiactl` **I** opened. Every escape below is
         /// issued on this and on nothing else.
         ctl: CharDevice,
-        /// B's per-GPU node. ⊘ Held and never used: `NV_ESC_REGISTER_FD` bound it to `ctl`'s
-        /// session before it crossed, and closing it would take the session's GPU binding
-        /// with it. Named `_node` so that *"nothing calls this"* does not read as dead code.
-        _node: CharDevice,
+        /// B's per-GPU node. `NV_ESC_REGISTER_FD` bound it to `ctl`'s session before it
+        /// crossed, and closing it would take the session's GPU binding with it.
+        ///
+        /// ⊘ **It was `_node` — held and never used — until w755r.** The error notifier is an
+        /// `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR`, and this crate issues
+        /// `NV_ESC_RM_ALLOC_MEMORY` on the **per-GPU node**, never on `ctl` (see
+        /// `RmConnection::alloc_os_descriptor`, which uses `self.gpu`). ⇒ B cannot describe
+        /// the guest's notifier pages without it. See [`BirthConn::alloc_os_descriptor`].
+        node: CharDevice,
         /// I's `NV01_ROOT_CLIENT`, and the proc that minted it. The unforgeable half.
         handed: HandedClient,
         /// `NV01_DEVICE_0` under `handed.root()`.
@@ -1034,7 +1061,7 @@ mod birth_conn {
         ) -> Result<BirthConn, RmError> {
             let conn = BirthConn {
                 ctl,
-                _node: node,
+                node,
                 handed,
                 device: 0,
                 _subdevice: 0,
@@ -1119,6 +1146,98 @@ mod birth_conn {
                 Nvos21Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
             status_check(out.status)?;
             Ok(out.h_object_new)
+        }
+
+        /// ★★★★★ **w755r — THE ERROR NOTIFIER, DESCRIBED IN B.**
+        ///
+        /// `hObjectError` is a **birth parameter** (`w288`), so a channel born in B must be
+        /// given a notifier B can name. An `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` minted in the
+        /// scratchpad's own client is **not** that: RM would refuse the handle, and the
+        /// alternative — birthing with no notifier — is worse than a refusal, because when
+        /// the host RC path kills this channel RM/GSP writes `NvNotification` into whatever
+        /// `errorNotifierMem.base` names, and with no descriptor the guest's driver polls
+        /// bytes nobody ever writes (`ogkm-580 kernel_channel.c:549-568`).
+        ///
+        /// ⊘ **This is sound only because B lives in the SCRATCHPAD'S PROCESS.** The
+        /// descriptor pins pages of *this* process's mapping of guest RAM, and under
+        /// constraint 26 the scratchpad is the party that holds guest RAM — the per-proc
+        /// isolate has no guest-RAM descriptor at all. So the region handed in is one this
+        /// process already has mapped; nothing new is opened and no address is minted here.
+        ///
+        /// ⚠ Issued on [`BirthConn::node`], **not** on `ctl`: `NV_ESC_RM_ALLOC_MEMORY` goes
+        /// to the per-GPU node, exactly as `RmConnection::alloc_os_descriptor` does. Sending
+        /// it to `ctl` is the shape that answers `0x23 INVALID_CLIENT` and reads like a
+        /// permissions problem.
+        ///
+        /// # Errors
+        /// [`RmError::NoMemory`] for a zero length, otherwise whatever RM refused.
+        pub(super) fn alloc_os_descriptor(
+            &self,
+            region: &kayfabe_linux_raw::MappedRegion,
+            offset: HostOffset,
+            len: u64,
+        ) -> Result<u32, RmError> {
+            if len == 0 {
+                return Err(RmError::NoMemory);
+            }
+            let want = self.mint();
+            let mut arg = [0u8; Nvos02ParametersWithFd::SIZE];
+            Nvos02ParametersWithFd {
+                h_root: self.handed.root(),
+                h_object_parent: self.device,
+                h_object_new: want,
+                h_class: NV01_MEMORY_SYSTEM_OS_DESCRIPTOR,
+                flags: NVOS02_FLAGS_LOCATION_PCI
+                    | NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS
+                    | NVOS02_FLAGS_COHERENCY_CACHED
+                    | NVOS02_FLAGS_MAPPING_NO_MAP,
+                // ★ Left ZERO for `RmConnection::alloc_os_descriptor`'s reason exactly:
+                // `Indirect` writes the address and scrubs it back out, so a value here
+                // would only mislead a reader into thinking this crate mints addresses.
+                p_memory: 0,
+                pad1: 0,
+                // `limit`, not `length` — the ABI's off-by-one.
+                limit: len - 1,
+                status: 0,
+                fd: -1,
+            }
+            .encode_into(&mut arg)
+            .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
+            let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_ALLOC_MEMORY, arg.len())
+                .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
+            let mut describe = [Indirect::describing(
+                Nvos02ParametersWithFd::P_MEMORY_OFFSET,
+                region,
+                offset,
+                len,
+            )
+            .map_err(|e| region_error(&e))?];
+            self.node
+                .ioctl(req, &mut arg, &mut describe)
+                .map_err(|e| ioctl_error(&e))?;
+            let out = Nvos02ParametersWithFd::decode(&arg)
+                .map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
+            status_check(out.status)?;
+            Ok(out.h_object_new)
+        }
+
+        /// ★★★ **Is `h` a handle THIS connection minted?** — the namespace discriminator.
+        ///
+        /// B's handles start at [`BIRTH_HANDLE_BASE`] and increment; the isolate's own space
+        /// starts **above** it and can only reach it by wrapping `u32` (~884 million
+        /// allocations), which is what `the_two_handle_spaces_cannot_collide` pins.
+        ///
+        /// ⊘ Exists because `alloc_channel_in` takes `err_notifier` as a bare `u32` and the
+        /// birth route is taken **above** it: without this check a notifier minted in the
+        /// scratchpad's client would be handed to B, where RM answers about the *handle*
+        /// rather than about the mistake. Latent today — no caller does it — and named now
+        /// because the delegation added in w755r is the first path that could.
+        pub(super) fn is_ours(&self, h: u32) -> bool {
+            h >= BIRTH_HANDLE_BASE
+                && h < *self
+                    .next
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
         }
 
         /// ★★★★★ **w755l — ROUTE K INCREMENT 6: THE CHANNEL IS BORN IN B, OVER THE GUEST'S
@@ -7383,6 +7502,83 @@ impl RmBackend for HostRmBackend {
         })
     }
 
+    /// ★★★★★ **w755r — ROUTE K INCREMENT 7: THE SCRATCHPAD BIRTHS THE GUEST'S CHANNEL IN B.**
+    ///
+    /// See [`kayfabe_isolate::RmBackend::birth_guest_channel_in_b`] for why this exists — in
+    /// short, `[measured w755q]` the per-proc isolate refused this shape 11 times and
+    /// `birth_in_b` was never entered, because the two are in **different processes**.
+    ///
+    /// ⊘ **Refused unless this really is the scratchpad**, the same direction check
+    /// `mint_birth_client` makes in the opposite sense. A per-proc backend reaching here
+    /// would have no `birth_ranges` at all, so the refusal below would fire anyway — but it
+    /// would fire as *"no birth client holds this range"*, which sends a reader to look for a
+    /// missing hand-over rather than at a verb dispatched to the wrong process.
+    ///
+    /// # Errors
+    /// As the trait documents.
+    fn birth_guest_channel_in_b(
+        &mut self,
+        range: HostHandle,
+        engine_type: u32,
+        ring: kayfabe_isolate::AdoptedGuestRing,
+        err_notifier: Option<kayfabe_isolate::GuestRamGrant>,
+    ) -> Result<(HostHandle, u64), RmError> {
+        if ScratchpadRole::of(self.id).is_none() {
+            eprintln!(
+                "kayfabe-isolate-host: CHANNEL-BIRTH-IN-B ⊘⊘ REFUSED — this backend is {:?}, \
+                 not the scratchpad, and only the scratchpad holds a birth client. ⊘ The verb \
+                 was dispatched to the wrong process; refusing HERE names that, where \
+                 `no birth client holds this range` would have sent a reader after a missing \
+                 hand-over instead.",
+                self.id,
+            );
+            return Err(RmError::Other(USERD_IN_STORE_NEEDS_BIRTH_IN_B));
+        }
+        let raw_range = self.narrow(range)?;
+        // ★★★ **THE NOTIFIER IS BUILT IN B, BEFORE THE CHANNEL**, for `w288`'s reason:
+        // `hObjectError` is a birth parameter, so it cannot be attached afterwards. ⊘ And it
+        // is built from the GRANT rather than handed in as a handle, because a handle would
+        // be in the scratchpad's namespace by construction and B cannot name it — which is
+        // exactly what `NOTIFIER_NOT_IN_B` refuses.
+        // ⊘ Mapped HERE and not handed in already-mapped: the descriptor pins pages of
+        // **this** process's view of guest RAM, and B lives in this process. A region mapped
+        // by the per-proc isolate names memory the scratchpad never mapped.
+        let notifier = match err_notifier {
+            None => None,
+            Some(grant) => {
+                let mapped = self.map_guest_ram(grant)?;
+                match self.describe_guest_ram_in_b(raw_range, mapped) {
+                    Ok(h) => Some(h),
+                    Err(e) => {
+                        // ⚠ Released in line, before the error leaves, for
+                        // `describe_err_notifier`'s stated reason: `Orphans` frees RM objects
+                        // and unmaps GPU VAs, and a guest-RAM mapping is NEITHER — after this
+                        // frame the name is gone and nobody can.
+                        let _ = self.unmap_guest_ram(mapped);
+                        return Err(e);
+                    }
+                }
+            }
+        };
+        // ⊘ A struct literal and not a `From`, for the reason `alloc_channel_lowered`'s own
+        // conversion is one: [`GuestRing`] is this crate's shape and
+        // [`kayfabe_isolate::AdoptedGuestRing`] is the wire's, and a blanket conversion would
+        // make a future field silently default on one side of the boundary.
+        let guest_ring = GuestRing {
+            ring: ring.ring,
+            ring_va: ring.ring_va,
+            gp_fifo_va: ring.gp_fifo_va,
+            gp_fifo_entries: ring.gp_fifo_entries,
+            userd: ring.userd,
+        };
+        self.alloc_channel_in(
+            raw_range,
+            engine_type,
+            RingSource::Guest(guest_ring),
+            notifier,
+        )
+    }
+
     /// ★★★★★ **CONSTRAINT 32 STEP 1 — THE PER-PROC ISOLATE MINTS THE BIRTH CLIENT.**
     ///
     /// The one verb on the **other** side of route K, and the only one that must run in
@@ -9836,6 +10032,45 @@ impl HostRmBackend {
     /// **routing** defect, not an RM one: the guest declared a store-slice USERD and route K
     /// was not on the path. ⊘ Refused rather than birthed locally with a USERD of ours:
     /// `[measured w755h]` that is the `GP_PUT == GP_GET == 0` silence.
+    /// ★★★★★ **w755r — DESCRIBE THE GUEST'S ERROR NOTIFIER INSIDE B.**
+    ///
+    /// The scratchpad's own [`RmBackend::describe_guest_ram`] mints the descriptor in **our**
+    /// client; B cannot name that. This is the same allocation issued under B's `hRoot`, on
+    /// B's per-GPU node, over **this process's** mapping of guest RAM.
+    ///
+    /// ⊘ Sound only because B lives in the scratchpad's process and, under constraint 26,
+    /// the scratchpad is the party that holds guest RAM — the per-proc isolate has no
+    /// guest-RAM descriptor at all. The region is one this process already mapped; nothing
+    /// new is opened here and no address is minted.
+    ///
+    /// # Errors
+    /// [`USERD_IN_STORE_NEEDS_BIRTH_IN_B`] if no birth client holds `range`,
+    /// [`RmError::GuestRamUnavailable`] with no guest-RAM plane, otherwise RM's refusal.
+    fn describe_guest_ram_in_b(
+        &mut self,
+        range: u32,
+        mapped: kayfabe_isolate::GuestRamMapped,
+    ) -> Result<u32, RmError> {
+        let Some((birth, _a, _space)) = self.conn.birth_for_range(range) else {
+            eprintln!(
+                "kayfabe-isolate-host: CHANNEL-BIRTH-IN-B ⊘⊘ REFUSED \
+                 USERD_IN_STORE_NEEDS_BIRTH_IN_B range={range:#010x} — the notifier cannot be \
+                 described because no birth client holds this range. ⊘ Refused BEFORE the \
+                 channel, so there is nothing to unwind."
+            );
+            return Err(RmError::Other(USERD_IN_STORE_NEEDS_BIRTH_IN_B));
+        };
+        let plane = self
+            .guest_ram
+            .as_ref()
+            .ok_or(RmError::GuestRamUnavailable)?;
+        // ★ The closure keeps the `MappedRegion` inside the plane, exactly as
+        // `describe_guest_ram` does — the address never becomes a value this file holds.
+        plane.with_region(mapped.region.raw(), |region| {
+            birth.alloc_os_descriptor(region, HostOffset::ZERO, mapped.len)
+        })?
+    }
+
     fn birth_in_b(
         &mut self,
         range: u32,
@@ -9872,6 +10107,24 @@ impl HostRmBackend {
             );
             return Err(RmError::Other(USERD_IN_STORE_NEEDS_BIRTH_IN_B));
         };
+        // ★★★★★ **w755r — THE NOTIFIER MUST BE B's, AND THE TWO NAMESPACES ARE TELLABLE.**
+        // ⊘ `err_notifier` arrives as a bare `u32` from `alloc_channel_in`, whose route to
+        // here sits ABOVE every allocation — so nothing between the caller and this line
+        // would notice a handle minted in the scratchpad's own client. RM would not notice
+        // either in the way that helps: it answers about the HANDLE, and a plausible one is
+        // accepted, the channel is born, and the guest polls notifier bytes nobody writes.
+        if let Some(h) = err_notifier {
+            if !birth.is_ours(h) {
+                eprintln!(
+                    "kayfabe-isolate: CHANNEL-BIRTH ⊘⊘ REFUSED NOTIFIER_NOT_IN_B \
+                     err_notifier={h:#010x} — this handle was not minted in B, so B cannot \
+                     name it. ⊘ NOT birthed without a notifier instead: `hObjectError` is a \
+                     birth parameter, and a channel with none leaves the guest polling bytes \
+                     the RC path will never write (ogkm kernel_channel.c:549-568)."
+                );
+                return Err(RmError::Other(NOTIFIER_NOT_IN_B));
+            }
+        }
         let (tsg, chan, token) = birth.birth_channel(
             engine_type,
             // ⊘ `channel_id()` is `ChannelClass`'s ONE escape and it names the role, so

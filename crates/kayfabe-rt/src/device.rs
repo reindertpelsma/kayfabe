@@ -995,6 +995,13 @@ pub struct SharedDevice {
     /// ⊘ `None` is **fail-closed**, not permissive: `adopted_guest_ring` refuses a
     /// store-slice ring when nobody can vouch for it. See [`kayfabe_fwd::RingSliceOracle`].
     ring_slice: std::sync::OnceLock<Arc<dyn kayfabe_fwd::RingSliceOracle>>,
+    /// ★★★★★ **w755r, CONSTRAINT 32 — who births a channel whose USERD is the store.**
+    ///
+    /// `None` when nothing installed one, and the birth then **refuses by name** rather than
+    /// falling back to the per-proc isolate — which `[measured w755q]` refuses it anyway,
+    /// eleven times, with `birth_in_b` never entered. See
+    /// [`kayfabe_fwd::StoreChannelBirth`].
+    store_birth: std::sync::OnceLock<Arc<dyn kayfabe_fwd::StoreChannelBirth>>,
     /// `[w281]` The PUSHBUFFER's vidmem route — [`SharedDevice::set_pushbuffer_vidmem`].
     /// ⊘ Separate from `fb` on purpose: supply and route are different questions.
     pb_vidmem: std::sync::atomic::AtomicBool,
@@ -1353,6 +1360,7 @@ impl SharedDevice {
             fb: std::sync::OnceLock::new(),
             invalidate_refresh: std::sync::OnceLock::new(),
             ring_slice: std::sync::OnceLock::new(),
+            store_birth: std::sync::OnceLock::new(),
             pb_vidmem: std::sync::atomic::AtomicBool::new(false),
             mode,
             pool: PoolGate::default(),
@@ -1948,7 +1956,7 @@ impl SharedDevice {
         channel: HObject,
         err_notifier_grant: Option<kayfabe_isolate::GuestRamGrant>,
     ) -> Result<kayfabe_fwd::ChannelBirthOutcome, FwdFault> {
-        self.verb_op(
+        self.verb_op_ex(
             || {
                 self.route_act(
                     |spine| {
@@ -1972,7 +1980,120 @@ impl SharedDevice {
                 )?
             },
             kayfabe_fwd::commit_channel_birth,
+            // ★★★★★ **w755r — ROUTE K INCREMENT 7: THE BIRTH CROSSES TO THE SCRATCHPAD.**
+            //
+            // ⊘ The discriminant is the guest's own declaration and nothing else: the USERD
+            // is [`kayfabe_isolate::UserdObject::TheStore`]. A store-slice RING whose USERD
+            // is a joined leaf is a real shape — the guest may put them in different places —
+            // and it belongs on the isolate's own path, where the joined-object check can see
+            // it. ⇒ keyed on the USERD, never on the ring.
+            //
+            // ⚠ **FAIL CLOSED with nothing installed.** The fallback is NOT the proc's
+            // worker: `[measured w755q]` that worker refuses this shape eleven times with
+            // `USERD_IN_STORE_NEEDS_BIRTH_IN_B`, so falling through would reproduce the exact
+            // state this route exists to end, while looking like a graceful degradation.
+            |worker, verbs, off| {
+                let store_userd = matches!(
+                    verbs,
+                    kayfabe_isolate::VerbPlan::ChannelBirth {
+                        adopt: kayfabe_isolate::AdoptedGuestRing {
+                            userd: Some(kayfabe_isolate::AdoptedGuestUserd {
+                                object: kayfabe_isolate::UserdObject::TheStore,
+                                ..
+                            }),
+                            ..
+                        },
+                        ..
+                    }
+                );
+                if !store_userd {
+                    return worker.execute(verbs, off);
+                }
+                let kayfabe_isolate::VerbPlan::ChannelBirth {
+                    host_vas,
+                    declared_engine_type,
+                    adopt,
+                    err_notifier,
+                    ..
+                } = verbs
+                else {
+                    // Unreachable: `store_userd` matched this variant one statement ago.
+                    return worker.execute(verbs, off);
+                };
+                self.birth_over_the_store(*host_vas, *declared_engine_type, *adopt, *err_notifier)
+            },
         )
+    }
+
+    /// ★★★★★ **w755r — hand the birth to whoever holds the birth client, or refuse by name.**
+    ///
+    /// Split out of the closure above so the refusal has one site and one message. ⊘ It
+    /// returns a [`kayfabe_isolate::VerbFailure`] rather than a `FwdFault` because that is
+    /// what the execute phase consumes — and crucially it carries **no orphans**: nothing was
+    /// allocated on this side, so there is nothing to unwind, and claiming otherwise would
+    /// hand `dispose_on` a handle that names nothing.
+    fn birth_over_the_store(
+        &self,
+        host_vas: Option<HostHandle>,
+        declared_engine_type: Option<u32>,
+        adopt: kayfabe_isolate::AdoptedGuestRing,
+        err_notifier: Option<kayfabe_isolate::GuestRamGrant>,
+    ) -> Result<VerbReply, kayfabe_isolate::VerbFailure> {
+        let fail = |err: RmError| kayfabe_isolate::VerbFailure {
+            err,
+            orphans: kayfabe_fwd::Orphans::default(),
+            on: None,
+        };
+        // ⊘ A birth over the store needs the guest's OWN address space, which the plan
+        // carries. `None` means the plan wanted a fresh host VAS — a shape that cannot be a
+        // store slice, because nothing has been mapped into a space that does not exist yet.
+        let Some(vas) = host_vas else {
+            eprintln!(
+                "kayfabe: STORE-BIRTH ⊘⊘ REFUSED — the plan carries no host VA space, so \
+                 there is no adopted range to birth inside. ⊘ A store-slice USERD in a \
+                 space nothing has been mapped into is a contradiction, not a fallback."
+            );
+            return Err(fail(RmError::Other(
+                kayfabe_isolate::NO_HOST_VAS_FOR_STORE_BIRTH,
+            )));
+        };
+        let Some(party) = self.store_birth.get() else {
+            eprintln!(
+                "kayfabe: STORE-BIRTH ⊘⊘ REFUSED — the guest's USERD is a slice of the ONE \
+                 reserved store and NO birth party is installed. ⊘ NOT fallen back to this \
+                 proc's own worker: `[measured w755q]` that worker refuses this shape by name \
+                 (USERD_IN_STORE_NEEDS_BIRTH_IN_B), so the fallback would reproduce exactly \
+                 the state this route exists to end while reading as graceful degradation."
+            );
+            return Err(fail(RmError::Other(kayfabe_isolate::NO_STORE_BIRTH_PARTY)));
+        };
+        // ★ The guest's own number first, exactly as `alloc_channel_declared` takes it: a
+        // channel with no engine type is not a channel with a default one, it is a channel
+        // on runlist 0.
+        let Some(engine_type) = declared_engine_type else {
+            eprintln!(
+                "kayfabe: STORE-BIRTH ⊘⊘ REFUSED — the guest declared no engineType. ⊘ NOT \
+                 substituted with a default: that is a channel on runlist 0, which is a \
+                 different channel that succeeds."
+            );
+            return Err(fail(RmError::Other(
+                kayfabe_isolate::NO_ENGINE_TYPE_FOR_STORE_BIRTH,
+            )));
+        };
+        // ⊘ The grant travels, not a mapping: the birth party must pin pages of ITS OWN
+        // mapping of guest RAM, because that is the process the birth client lives in.
+        match party.birth_over_the_store(vas, engine_type, adopt, err_notifier) {
+            Ok((channel, token)) => Ok(VerbReply::ChannelBorn {
+                // ⊘ `None`: the space was the guest's own and already existed, so this birth
+                // minted no VAS and `commit_channel_birth` must not be told to free one.
+                host_vas: None,
+                channel: (channel, token),
+            }),
+            Err(f) => {
+                eprintln!("kayfabe: STORE-BIRTH ⊘⊘ REFUSED by the birth party — {f:?}");
+                Err(fail(RmError::Other(kayfabe_isolate::STORE_BIRTH_REFUSED)))
+            }
+        }
     }
 
     /// ★★★ **The DRAIN half of R1's spawn deferral: spawn lock-free, then re-acquire and
@@ -3113,6 +3234,42 @@ impl SharedDevice {
         stage: impl Fn() -> Result<Staged<P>, FwdFault>,
         commit: impl Fn(&Spine, &mut Proc, &P, Option<VerbReply>) -> Result<T, Refusal>,
     ) -> Result<T, FwdFault> {
+        // ⊘ The default executor: the proc's own worker runs the verb. Nine of the ten
+        // callers want exactly this and say nothing about it.
+        self.verb_op_ex(stage, commit, |worker, verbs, off| {
+            worker.execute(verbs, off)
+        })
+    }
+
+    /// ★★★★★ **w755r — [`SharedDevice::verb_op`] WITH THE EXECUTE STEP NAMED.**
+    ///
+    /// Identical in every other respect, and deliberately **one implementation**: the retry
+    /// ladder, the orphan disposal, the wedge branch and R5's re-validation are subtle enough
+    /// that a second copy for one caller is how two of them come to disagree. This tree has
+    /// paid for that shape before (*"a second harness for the same job"*).
+    ///
+    /// # ⊘ The one caller that needs it, and why
+    ///
+    /// A channel whose USERD is a slice of the one reserved store **cannot be born by the
+    /// proc's own worker** — `[measured w755q]` that worker refuses it, eleven times, with
+    /// `USERD_IN_STORE_NEEDS_BIRTH_IN_B`, because a per-proc isolate may not name the store
+    /// (constraint 26) and holds no birth client to name it through. The party that can is in
+    /// another process, reached through [`kayfabe_fwd::StoreChannelBirth`].
+    ///
+    /// ⚠ **The worker is still checked out**, even though the override does not issue on it.
+    /// That is not waste: the checkout is what drains this proc's staged orphans (§7.6 T0),
+    /// what bounds concurrency per `(proc, gpu)`, and what R5 re-validates against. Skipping
+    /// it would make this one path the only verb in the tree with none of those.
+    fn verb_op_ex<P, T>(
+        &self,
+        stage: impl Fn() -> Result<Staged<P>, FwdFault>,
+        commit: impl Fn(&Spine, &mut Proc, &P, Option<VerbReply>) -> Result<T, Refusal>,
+        execute: impl Fn(
+            &mut kayfabe_isolate::Worker,
+            &kayfabe_isolate::VerbPlan,
+            &kayfabe_util::trapwitness::OffTrap,
+        ) -> Result<VerbReply, kayfabe_isolate::VerbFailure>,
+    ) -> Result<T, FwdFault> {
         let mut retries = 0u32;
         loop {
             // Sampled BEFORE any lock is taken, so a return landing in the gap
@@ -3163,7 +3320,7 @@ impl SharedDevice {
             let off = kayfabe_util::trapwitness::OffTrap::at_a_host_verb(
                 "kayfabe_rt::SharedDevice::verb_op — the execute phase",
             );
-            let executed = worker.execute(&verbs, &off);
+            let executed = execute(&mut worker, &verbs, &off);
             let gpu = staged.gpu;
             let Ok(reply) = executed else {
                 let failure = executed.expect_err("matched Err");
@@ -3675,6 +3832,21 @@ impl SharedDevice {
         src: Arc<dyn kayfabe_fwd::RingSliceOracle>,
     ) -> Result<(), Arc<dyn kayfabe_fwd::RingSliceOracle>> {
         self.ring_slice.set(src)
+    }
+
+    /// ★★★★★ **w755r — INSTALL THE PARTY THAT BIRTHS OVER THE STORE.**
+    ///
+    /// Same shape and same `Err`-on-second-install as
+    /// [`SharedDevice::set_ring_slice_oracle`]: two answerers for one question is worse than
+    /// none, because the loser keeps answering to whoever still holds it.
+    ///
+    /// # Errors
+    /// The `Arc` back, if one was already installed.
+    pub fn set_store_channel_birth(
+        &self,
+        src: Arc<dyn kayfabe_fwd::StoreChannelBirth>,
+    ) -> Result<(), Arc<dyn kayfabe_fwd::StoreChannelBirth>> {
+        self.store_birth.set(src)
     }
 
     /// ★★★★★ `[w281]` **Arm the PUSHBUFFER's vidmem route — its OWN flag, never route B's.**

@@ -16012,6 +16012,38 @@ impl Regs {
                                      will be checked against."
                                 );
                             }
+                            // ★★★★★ **w755r, CONSTRAINT 32 — AND THE PARTY THAT BIRTHS OVER
+                            // THE STORE, installed on the SAME arm and from the SAME port.**
+                            //
+                            // ⊘ Not a separate object: the port already owns the
+                            // per-proc-space → adopted-range ledger that `birth_in_b` is
+                            // keyed on, and a second holder of that mapping would be a second
+                            // source of truth for a routing decision.
+                            //
+                            // ⚠ Installed here rather than lazily, so a boot that reaches
+                            // realize either HAS a birth party or says so — `[measured
+                            // w755q]` the failure this route exists to end looked exactly
+                            // like a route that was armed.
+                            if device
+                                .set_store_channel_birth(std::sync::Arc::clone(&port)
+                                    as std::sync::Arc<dyn kayfabe_fwd::StoreChannelBirth>)
+                                .is_err()
+                            {
+                                eprintln!(
+                                    "kayfabe: STORE-BIRTH AT REALIZE: ⚠ a birth party was \
+                                     ALREADY installed — two answerers for one question. The \
+                                     first one stands; this port's range ledger is NOT what \
+                                     guest channels will be born against."
+                                );
+                            } else {
+                                eprintln!(
+                                    "kayfabe: STORE-BIRTH AT REALIZE: ★★★★★ ARMED — a guest \
+                                     channel whose USERD is a slice of the ONE reserved store \
+                                     is born in the per-proc BIRTH CLIENT B, by the \
+                                     scratchpad. ⊘ Nothing is born yet — the guest's own \
+                                     channel alloc is what asks."
+                                );
+                            }
                             eprintln!(
                                 "kayfabe: STORE-MAP AT REALIZE: ★★★★★ ARMED — {}=scratchpad. \
                                  Per-proc isolates get BARE address spaces and map nothing; \

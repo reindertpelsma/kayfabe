@@ -552,6 +552,32 @@ constraint 32 REPLACED. Do not read this arm as a route-K result."
   echo "--- w753: route K (constraint 32) ---"
   grep -a 'ROUTE-K AT REALIZE' "$Q" 2>/dev/null | tail -1 | cut -c1-300
   grep -a 'STORE-MAP-K ' "$Q" 2>/dev/null | tail -1 | cut -c1-300
+  # ★★★★★ **w755r — THE ROW w755q DID NOT HAVE, AND ITS ABSENCE COST A WHOLE BOOT.**
+  #
+  # ⊘⊘⊘ w755q reported `P1 … NEVER RETIRED` with every plumbing counter green, and it took
+  #   reading three different log streams to establish that the route under test had **never
+  #   executed**. `birth_in_b` was never entered; the gate's red said nothing about it.
+  # ⇒ A route with no census of its own cannot distinguish *"it ran and failed"* from *"it
+  #   never ran"*, and those have opposite fixes. THIS row is that census.
+  #
+  # ⚠ Read it as a TRIPLE, never as one number:
+  #   asked=0            ⇒ the route NEVER FIRED. Nothing downstream is tested by this boot.
+  #   asked>0 born=0     ⇒ it fired and every attempt was refused; the refusals name themselves.
+  #   born>0             ⇒ channels ARE being born in B over the guest's own ring AND USERD.
+  echo "--- ★★★★★ w755r: STORE-BIRTH — did the delegation FIRE, and did anything get born? ---"
+  n_sb=$(grep -ac 'STORE-BIRTH ' "$Q" 2>/dev/null)
+  echo "W755R-STORE-BIRTH-LINES=${n_sb:-0}  (0 ⇒ UNMEASURED, not 'nothing was asked')"
+  grep -a 'STORE-BIRTH ' "$Q" 2>/dev/null | tail -2 | cut -c1-300
+  echo "W755R-STORE-BIRTH-ARMED=$(grep -ac 'STORE-BIRTH AT REALIZE: ★★★★★ ARMED' "$Q" 2>/dev/null)   ⊘⊘ 0 with ARM3_VAS_OWNER=k means NO BIRTH PARTY was installed — the route cannot fire"
+  echo "W755R-BORN-IN-B=$(grep -ac 'STORE-BIRTH ✔ BORN IN B' "$Q" 2>/dev/null)   ★★★ the first number that means the GUEST'S cursor is what hardware reads"
+  echo "W755R-BIRTH-IN-B-ENTERED=$(grep -ac 'CHANNEL-BIRTH IN B' "$Q" 2>/dev/null)   ⊘ w755q measured 0 — birth_in_b was NEVER ENTERED"
+  echo "W755R-USERD-REFUSED-IN-ISOLATE=$(grep -ac 'USERD_IN_STORE_NEEDS_BIRTH_IN_B' "$Q" 2>/dev/null)   ⊘⊘ w755q measured 11. NON-ZERO here means the interception did NOT happen and the per-proc isolate still saw the shape"
+  echo "W755R-NOTIFIER-NOT-IN-B=$(grep -ac 'NOTIFIER_NOT_IN_B' "$Q" 2>/dev/null)   ⚠ a notifier from the wrong client reached B's birth"
+  # ⊘ The four store-birth refusals, kept apart on purpose — each sends a reader somewhere
+  #   different. A single count here would be the one-refusal-for-several-causes trap.
+  for r in 'the plan carries no host VA space' 'NO birth party is installed' 'the guest declared no engineType' 'this port never adopted that space'; do
+    echo "W755R-SB-REFUSAL[$r]=$(grep -ac "$r" "$Q" 2>/dev/null)"
+  done
   echo -n "    CONSTRAINT-32 BIRTH-CLIENT MINTED  = "; grep -ac 'BIRTH-CLIENT MINTED' "$Q" 2>/dev/null
   echo -n "    CONSTRAINT-32 BIRTH-CLIENT ADOPTED = "; grep -ac 'BIRTH-CLIENT ADOPTED' "$Q" 2>/dev/null
   echo -n "    CONSTRAINT-32 BIRTH-CLIENT HANDED  = "; grep -ac 'BIRTH-CLIENT HANDED' "$Q" 2>/dev/null

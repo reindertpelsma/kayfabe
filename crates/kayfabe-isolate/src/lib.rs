@@ -211,6 +211,30 @@ impl core::fmt::Debug for HostHandle {
 /// that followed would be attributed to the two walkers rather than to the missing image.
 pub const NOT_A_WALK_SHADOW: u32 = 0x5748_0001;
 
+/// ★★★★★ **w755r — the four refusals of the store-birth route, kept APART.**
+///
+/// ⊘ One name per cause, never one name for the route. `[this tree, repeatedly]` a single
+/// refusal covering several causes is what makes a boot report *that* something failed and
+/// never *which* — the defect `w755q` spent a whole boot on, one layer up. Each of these
+/// sends a reader somewhere different:
+///
+/// - [`NO_HOST_VAS_FOR_STORE_BIRTH`] — the plan wanted a fresh host VAS, so there is no
+///   adopted range. A store-slice USERD in a space nothing has been mapped into is a
+///   contradiction; look at the planner.
+/// - [`NO_STORE_BIRTH_PARTY`] — nobody installed a [`crate::RmBackend`]-side birth party.
+///   Look at the composition root: this is the `scratchpad`/`BirthClient` arm not arming.
+/// - [`NO_ENGINE_TYPE_FOR_STORE_BIRTH`] — the guest declared no `engineType`. Look at the
+///   graph, not at RM.
+/// - [`STORE_BIRTH_REFUSED`] — the party was asked and said no; **its own** message carries
+///   the reason and this is only the envelope.
+pub const NO_HOST_VAS_FOR_STORE_BIRTH: u32 = 0x5342_0001;
+/// See [`NO_HOST_VAS_FOR_STORE_BIRTH`].
+pub const NO_STORE_BIRTH_PARTY: u32 = 0x5342_0002;
+/// See [`NO_HOST_VAS_FOR_STORE_BIRTH`].
+pub const NO_ENGINE_TYPE_FOR_STORE_BIRTH: u32 = 0x5342_0003;
+/// See [`NO_HOST_VAS_FOR_STORE_BIRTH`].
+pub const STORE_BIRTH_REFUSED: u32 = 0x5342_0004;
+
 /// Errors an RM verb can return, in core terms.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RmError {
@@ -1284,6 +1308,70 @@ pub trait RmBackend: Send + Sync {
         // them would hold a live session for a client nobody can use, for the life of the
         // process.
         let _ = (client, isolate_client, minted_by_proc, ctl, node);
+        Err(RmError::Other(0x56))
+    }
+
+    /// ★★★★★ **w755r — ROUTE K INCREMENT 7: BIRTH A GUEST CHANNEL IN B, ON BEHALF OF A
+    /// PER-PROC ISOLATE THAT STRUCTURALLY CANNOT.**
+    ///
+    /// # ⊘⊘⊘ Why this verb exists, and it is a MEASUREMENT rather than a design preference
+    ///
+    /// `[measured w755q — RTX 3090, host driver 580.159.04]` a guest channel whose USERD is a
+    /// slice of the one reserved store was refused **11 times** by
+    /// `HostRmBackend::alloc_channel_lowered`, in a **per-proc isolate**, with
+    /// `USERD_IN_STORE_NEEDS_BIRTH_IN_B` — while the function that serves that shape,
+    /// `birth_in_b`, was **never entered** (all three of its prints were zero).
+    ///
+    /// The two verb families never meet. `alloc_channel`/`alloc_channel_declared` lower into
+    /// `alloc_channel_lowered` and run in the **per-proc isolate**;
+    /// `alloc_channel_over_guest_ring` reaches `alloc_channel_in` → `birth_in_b` and runs in
+    /// the **scratchpad**. `birth_in_b` resolves B through `RmConnection::birth_for_range`,
+    /// whose index is populated **only** in the scratchpad's `adopt_space`.
+    ///
+    /// ⇒ A per-proc isolate has no B and **cannot** birth in one. Its refusal is correct;
+    /// what was missing is that nobody acted on it. This verb is the party that does — and it
+    /// is a **delegation across a process boundary**, which is why no edit inside `rm.rs`
+    /// alone could make `birth_in_b` reachable from the guest's path.
+    ///
+    /// # The arguments, and why each is the caller's rather than derived here
+    ///
+    /// - `range` — **the scratchpad's `NV01_MEMORY_VIRTUAL` range inside B**, as returned by
+    ///   [`RmBackend::adopt_space`]. The VMM holds the per-proc-space → range mapping already
+    ///   (that ledger is what places every store slice), so re-deriving it here would be a
+    ///   second statement of a routing decision the caller has made.
+    /// - `ring` — the guest's own GPFIFO, as [`AdoptedGuestRing`] describes it. ⚠ Its `userd`
+    ///   is expected to be [`UserdObject::TheStore`]; any other shape belongs on the isolate's
+    ///   own path, where the joined-object check can see it.
+    /// - `err_notifier` — **the VMM's grant**, not a handle and not a mapped region. Two
+    ///   reasons, and the second is the one that makes it mandatory: (a) `hObjectError` is a
+    ///   birth parameter and B can only name objects B minted, so a handle would be in the
+    ///   wrong namespace by construction; and (b) the descriptor must pin pages of **the
+    ///   scratchpad's** mapping, because that is the process B lives in — a region mapped in
+    ///   the per-proc isolate names memory this side never mapped. ⇒ the implementor maps the
+    ///   grant itself. The numbers stay the VMM's, exactly as
+    ///   [`RmBackend::describe_guest_ram`] insists.
+    ///
+    /// # ⊘⊘ THE DEFAULT REFUSES, AND THE REFUSAL IS THE CORRECT ANSWER
+    ///
+    /// Only the scratchpad's backend holds a birth client. A backend that accepted this and
+    /// quietly birthed in its **own** client would produce precisely the channel this whole
+    /// route exists to prevent — one whose USERD is ours, whose `GP_PUT == GP_GET == 0`
+    /// forever, and which reports no error at all (`[measured w755h]`). ⇒ Refusing is not a
+    /// stub for the other backends; it is what they mean.
+    ///
+    /// # Errors
+    /// A named refusal on every backend that is not the scratchpad; on the one that is,
+    /// `USERD_IN_STORE_NEEDS_BIRTH_IN_B` when no birth client holds `range`,
+    /// `NOTIFIER_NOT_IN_B` if the notifier did not come from B, and otherwise whatever RM
+    /// refused the birth with — after unwinding.
+    fn birth_guest_channel_in_b(
+        &mut self,
+        range: HostHandle,
+        engine_type: u32,
+        ring: AdoptedGuestRing,
+        err_notifier: Option<GuestRamGrant>,
+    ) -> Result<(HostHandle, u64), RmError> {
+        let _ = (range, engine_type, ring, err_notifier);
         Err(RmError::Other(0x56))
     }
 

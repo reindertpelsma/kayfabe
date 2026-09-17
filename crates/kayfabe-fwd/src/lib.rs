@@ -6903,6 +6903,53 @@ pub trait RingSliceOracle: Send + Sync {
     fn is_slice_of_the_store(&self, vas: HostHandle, at: GpuVa, len: u64) -> bool;
 }
 
+/// ★★★★★ **w755r, CONSTRAINT 32 — THE PARTY THAT CAN BIRTH A CHANNEL OVER THE STORE.**
+///
+/// The sibling of [`RingSliceOracle`], and for the same structural reason one layer on: the
+/// per-proc isolate that would birth this channel **cannot**, and the party that can is in
+/// another process.
+///
+/// # ⊘⊘⊘ It is a measurement, not a preference
+///
+/// `[measured w755q — RTX 3090, driver 580.159.04]` a guest channel whose USERD is a slice of
+/// the one reserved store was refused **11 times** by the per-proc isolate's
+/// `alloc_channel_lowered` with `USERD_IN_STORE_NEEDS_BIRTH_IN_B`, while `birth_in_b` — the
+/// function that serves exactly that shape — was **never entered**. The route existed; the
+/// two halves were in different processes and nothing carried the request across.
+///
+/// ⇒ `hUserdMemory` is a real RM operand, so the birthing client must hold a handle for the
+/// store. **Constraint 26 forbids the per-proc isolate naming it**, and **constraint 30**
+/// permits B precisely because B is *the isolate's* client. Only the scratchpad drives B.
+///
+/// ⚠ **Fail closed**, exactly as the oracle does: with nothing installed a store-slice USERD
+/// is **refused by name**, never downgraded to a USERD of ours. `[measured w755h]` that
+/// downgrade is the `GP_PUT == GP_GET == 0` silence — hardware reads our cursor, fetches
+/// nothing, and reports no error at all, so an armed run and its control produce the same
+/// dead channel.
+pub trait StoreChannelBirth: Send + Sync {
+    /// Birth the guest's channel in the birth client that holds `host_vas`'s adopted range.
+    ///
+    /// `host_vas` is the **per-proc isolate's** VA space handle — the one the plan carries.
+    /// The implementor owns the per-proc-space → range mapping (it is the same ledger that
+    /// places every store slice), so resolving it here rather than in the caller keeps that
+    /// routing decision in one place.
+    ///
+    /// `err_notifier` is **the VMM's grant**, not a handle and not a mapped region: the
+    /// descriptor has to pin pages of the *birth party's own* mapping of guest RAM, and
+    /// `hObjectError` is a birth parameter that only the birth client can name. Both facts
+    /// point the same way — the implementor maps it.
+    ///
+    /// # Errors
+    /// By name, so a boot can say which half refused.
+    fn birth_over_the_store(
+        &self,
+        host_vas: HostHandle,
+        engine_type: u32,
+        ring: kayfabe_isolate::AdoptedGuestRing,
+        err_notifier: Option<kayfabe_isolate::GuestRamGrant>,
+    ) -> Result<(HostHandle, u64), FwdFault>;
+}
+
 /// ★★★★ **A SHARED, long-lived source of our own framebuffer's bytes** — what a device
 /// holds, as opposed to [`FbBytes`], which is what one read borrows.
 ///
