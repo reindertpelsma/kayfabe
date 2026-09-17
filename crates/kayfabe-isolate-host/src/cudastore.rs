@@ -206,7 +206,11 @@ pub fn cuda_store_probe(gpu: u32) -> i32 {
         Err(e) => {
             println!("CS_IMPORT=REFUSED {e:?}");
             println!(
-                "CS_RESULT=NO:ANSWERED — RM imports only from an fd RM ITSELF exported. \
+                "CS_RESULT=NO: RM refused the import — read the status AND check the \
+                 constants before believing it. `[w755v/w755x]` this verdict was reached \
+                 THREE times from three different transcription bugs of mine, each producing \
+                 a status that a real code path also returns. ⊘ A plausible citation for a \
+                 refusal is not evidence the cited path ran. Old text follows: \
                  `[measured w755v, RTX 3090, 580.159.04]` CUDA exports fine and the fd IS an \
                  /dev/nvidiactl fd with matching major/minor, and RM still refuses with \
                  `0x3B NV_ERR_INVALID_PARAMETER` — `os.c:2377`, `nvfp->handles == NULL`. RM \
