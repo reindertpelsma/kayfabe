@@ -97,6 +97,30 @@ pub fn cuda_store_probe(gpu: u32) -> i32 {
             return 1;
         }
     };
+    // ★★★★★ **w755v — `cuInit` FIRST, AND ITS ABSENCE MADE THIS PROBE ANSWER ITS OWN
+    // QUESTION WRONG.**
+    //
+    // `[measured w755v, RTX 3090]` this function opened `libcuda` and went straight to
+    // `export_device_allocation`. `cuMemGetAllocationGranularity` answered **rc=3**, which is
+    // `CUDA_ERROR_NOT_INITIALIZED` — and the probe printed
+    // `CS_RESULT=NO:cuda would not export a device allocation to an fd`.
+    //
+    // ⊘⊘⊘ **That is a FALSE NEGATIVE stated as a finding**, on the one question the whole
+    // store-ownership design turns on. Nothing about export was tested; the call fell over on
+    // a precondition and the refusal was reported as CUDA's answer.
+    //
+    // ⚠ The shape is this campaign's most expensive one — *a refusal is not a measurement* —
+    // and it is why an `rc` is printed beside every verdict below rather than folded into a
+    // word. An uninitialised driver is now `UNMEASURED`, never `NO`.
+    if let Err(e) = cuda.init() {
+        println!("CS_INIT=REFUSED {e}");
+        println!(
+            "CS_RESULT=UNMEASURED:cuInit refused, so nothing about export was tested — \
+             ⊘ NOT `NO`: this says nothing about whether CUDA can export"
+        );
+        return 1;
+    }
+    println!("CS_INIT=OK");
     // ⊘ A driver without the VMM API is an ANSWER about this host, not a probe failure.
     println!("CS_VMM_API={}", cuda.has_vmm_api());
     if !cuda.has_vmm_api() {
@@ -110,8 +134,14 @@ pub fn cuda_store_probe(gpu: u32) -> i32 {
     let exported = match cuda.export_device_allocation(0, 64 << 20) {
         Ok(e) => e,
         Err(e) => {
+            // ⚠ Distinguish a REFUSAL from an UNMEASURED: a precondition error (the driver
+            // not initialised, no device) is not CUDA declining to export. `[w755v]` the
+            // first version of this probe conflated them and answered `NO` on an rc=3.
             println!("CS_EXPORT=REFUSED {e}");
-            println!("CS_RESULT=NO:cuda would not export a device allocation to an fd");
+            println!(
+                "CS_RESULT=NO:cuda would not export a device allocation to an fd ⊘ read the \
+                 rc above before believing this — a precondition failure is UNMEASURED, not NO"
+            );
             return 0;
         }
     };
