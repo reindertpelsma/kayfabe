@@ -206,9 +206,13 @@ pub fn cuda_store_probe(gpu: u32) -> i32 {
         Err(e) => {
             println!("CS_IMPORT=REFUSED {e:?}");
             println!(
-                "CS_RESULT=NO:the fd is an nvidiactl fd and RM still refused the import — read \
-                 the status; `handles[0] == 0` means CUDA's export did not register an RM \
-                 object on that file."
+                "CS_RESULT=NO:ANSWERED — RM imports only from an fd RM ITSELF exported. \
+                 `[measured w755v, RTX 3090, 580.159.04]` CUDA exports fine and the fd IS an \
+                 /dev/nvidiactl fd with matching major/minor, and RM still refuses with \
+                 `0x3B NV_ERR_INVALID_PARAMETER` — `os.c:2377`, `nvfp->handles == NULL`. RM \
+                 populates `handles[0]` only in its OWN export (`os.c:2291`), so CUDA's \
+                 export registers no RM object on that file. ⇒ **USE THE OTHER DIRECTION**: \
+                 RM allocates and exports, `cuMemImportFromShareableHandle` imports."
             );
         }
     }
