@@ -4844,7 +4844,16 @@ impl RmConnection {
         // `{ NV0000_CTRL_OS_UNIX_EXPORT_OBJECT object; NvS32 fd; NvU32 flags; }` where the
         // object is `{ TYPE type; NvHandle hDevice, hParent, hObject; }`.
         const EXPORT_PARAMS_SIZE: usize = 24;
-        const EXPORT_OBJECT_TYPE_RM: u32 = 0;
+        // ⊘⊘⊘ **w755x — `_TYPE_RM` IS 1. `0` IS `_TYPE_NONE`.**
+        // `[ctrl0000unix.h:103-106]` `{ NONE = 0, RM = 1 }`. This constant was `0` in both
+        // the import and the export, so both sent `type = NONE` and both were refused
+        // `0x3B NV_ERR_INVALID_PARAMETER` at `os.c`'s first check —
+        // `pParams->object.type != ..._TYPE_RM`.
+        // ⚠ **That refusal was read as an ANSWER**: w755v concluded from it that *"RM imports
+        // only from an fd RM itself exported"*, citing the `handles[0] == 0` path. That path
+        // returns the same status, so the citation looked confirmed and the run never reached
+        // it. Third transcription error on one probe, third wrong verdict.
+        const EXPORT_OBJECT_TYPE_RM: u32 = 1;
         // `EMPTY_FD_FALSE` — we hand RM a real control fd rather than asking it to mint one.
         const FLAGS_EMPTY_FD_FALSE: u32 = 0;
         let mut arg = [0u8; EXPORT_PARAMS_SIZE];
@@ -4877,7 +4886,16 @@ impl RmConnection {
         // block that is the wrong SIZE fails as `INVALID_ARGUMENT` — a status that reads like
         // a judgement about the argument's VALUE and is really about its LENGTH.
         const IMPORT_PARAMS_SIZE: usize = 20;
-        const EXPORT_OBJECT_TYPE_RM: u32 = 0;
+        // ⊘⊘⊘ **w755x — `_TYPE_RM` IS 1. `0` IS `_TYPE_NONE`.**
+        // `[ctrl0000unix.h:103-106]` `{ NONE = 0, RM = 1 }`. This constant was `0` in both
+        // the import and the export, so both sent `type = NONE` and both were refused
+        // `0x3B NV_ERR_INVALID_PARAMETER` at `os.c`'s first check —
+        // `pParams->object.type != ..._TYPE_RM`.
+        // ⚠ **That refusal was read as an ANSWER**: w755v concluded from it that *"RM imports
+        // only from an fd RM itself exported"*, citing the `handles[0] == 0` path. That path
+        // returns the same status, so the citation looked confirmed and the run never reached
+        // it. Third transcription error on one probe, third wrong verdict.
+        const EXPORT_OBJECT_TYPE_RM: u32 = 1;
         let want = self.mint();
         let mut arg = [0u8; IMPORT_PARAMS_SIZE];
         arg[0..4].copy_from_slice(&fd.to_le_bytes());
