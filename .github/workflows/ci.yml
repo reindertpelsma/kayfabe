@@ -1634,6 +1634,35 @@ jobs:
           #     the arena's resident size, which is how the census knows what it holds.
           # Each carries its own `// SAFETY:` (the crate's `undocumented_unsafe_blocks = deny`
           # makes that unskippable), and none of the three takes a pointer from outside.
+          # ★★★ `kayfabe-cuda` 36 -> 40, 2026-09-18 (w755y) — THE IMPORT SIDE, and it is the
+          # direction that MEASURED YES.
+          #
+          # ⊘ WHAT THE FOUR ARE: four `unsafe { }` CALL SITES in `import_and_map`, one per FFI
+          #   call — `cuMemImportFromShareableHandle`, `cuMemAddressReserve`, `cuMemMap`,
+          #   `cuMemSetAccess` — each with its own SAFETY comment. ⚠ NOT consolidated, for the
+          #   reason the w755i entry below already gives: one `unsafe` per call is the
+          #   reviewable granularity, and collapsing them to shrink this number buys the
+          #   ratchet at the cost of the review. The six new `Option<unsafe extern "C" fn>`
+          #   FIELD TYPES are declarations and are already counted as such by the gate.
+          #
+          # ★★★ WHY, and this one is settled by measurement rather than argued:
+          # `[measured w755x, RTX 3090, 580.159.04]` `CS_REVERSE=CUDA-IMPORT-OK dptr=0x302000000`
+          # — an RM-owned device allocation IS addressable by CUDA. ⇒ the single store can
+          # carry a device pointer, and the walk kernel (`KfWin { base, len }`, dereferenced at
+          # GPGA offsets) can be pointed at it and walk the guest's page tables IN PLACE.
+          #
+          # ⊘⊘ THAT IS WHAT DELETES CODE RATHER THAN ADDING IT. On the device arm the store's
+          # host-side reads REFUSE BY NAME (CUT A: *"two memories for one address"*), so the
+          # CPU page-table walk is blind — `bound=0 published=0 repointed=0` while
+          # `STALE MAPPING CAUGHT RED-HANDED`. The in-place walk removes the staged image
+          # (`build_image` reads through `FbRead`) **and** the Rust walker it is fed by. Four
+          # `unsafe` FFI calls buy the deletion of the whole CPU walk path.
+          #
+          # ⚠ The w755i entry below asked whether CUDA could own the store and recorded NO.
+          # That NO was WRONG — three transcription bugs of mine, each producing a status a
+          # real code path also returns (w755x). Both directions work. The entry is kept
+          # because its reasoning stands; only its verdict was bad.
+
           # ★★★ `kayfabe-cuda` 30 -> 36, 2026-09-17 (w755i) — FOUR VMM SYMBOLS AND THEIR CALL
           # SITES, and the ratchet is what made the growth visible rather than silent.
           #
@@ -1662,7 +1691,7 @@ jobs:
           # yields `None`, which is a MEASUREMENT about that host, never a load failure. The
           # binding is loaded on every boot for the walk kernel, and a required symbol absent
           # from an older `libcuda` would turn a missing experiment into a missing walker.
-          AUDITED="kayfabe-linux-raw:127 kayfabe-qemu-raw:58 kayfabe-cuda:36"
+          AUDITED="kayfabe-linux-raw:127 kayfabe-qemu-raw:58 kayfabe-cuda:40"
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
           missing=""

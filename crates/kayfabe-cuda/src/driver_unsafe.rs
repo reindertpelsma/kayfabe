@@ -805,7 +805,9 @@ impl Cuda {
             self.cuMemMap,
             self.cuMemSetAccess,
         ) else {
-            return Err("NO-VMM-API: this libcuda has no Import/AddressReserve/Map/SetAccess".into());
+            return Err(
+                "NO-VMM-API: this libcuda has no Import/AddressReserve/Map/SetAccess".into(),
+            );
         };
         let mut handle: u64 = 0;
         // SAFETY: `handle` is a live local; `fd` is cast to the pointer-sized osHandle the

@@ -255,7 +255,10 @@ pub fn cuda_store_probe(gpu: u32) -> i32 {
         );
         return 0;
     }
-    println!("CS_REVERSE=RM-EXPORT-OK object={store:#x} fd={}", ctl.fd_number());
+    println!(
+        "CS_REVERSE=RM-EXPORT-OK object={store:#x} fd={}",
+        ctl.fd_number()
+    );
     match cuda.import_and_map(0, ctl.fd_number(), 64 << 20) {
         Ok(ptr) => {
             println!("CS_REVERSE=CUDA-IMPORT-OK dptr={ptr:#x}");

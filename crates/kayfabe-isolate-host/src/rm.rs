@@ -5478,6 +5478,14 @@ fn read_version(ctl: &CharDevice) -> Option<String> {
 pub struct HostRmBackend {
     id: IsolateId,
     conn: Arc<RmConnection>,
+    /// ★★★ w755y — the single store's CUDA device pointer and length, once armed.
+    ///
+    /// ⊘ `None` is *"not armed"*, which the arena arm is legitimately and the device arm is
+    /// not. It is read by the walk kernel to walk the guest's tables IN PLACE; with `None`
+    /// the kernel has no window and the CPU walk — which CUT A refuses on the device arm —
+    /// is the only source. ⇒ a boot must be able to tell those apart, so the arming prints.
+    #[cfg(feature = "cuda-scratchpad")]
+    store_dptr: Mutex<Option<(u64, u64)>>,
     /// `channel -> how many entries this worker has published`, so the next submission
     /// takes the next GPFIFO slot instead of overwriting the live one. Per **worker**
     /// rather than per connection: see [`HostRmBackend::next_slot`].
@@ -6724,6 +6732,8 @@ impl HostRmBackend {
     #[must_use]
     pub fn new(id: IsolateId, conn: Arc<RmConnection>, exports: Arc<ChildExports>) -> Self {
         HostRmBackend {
+            #[cfg(feature = "cuda-scratchpad")]
+            store_dptr: Mutex::new(None),
             id,
             conn,
             slots: BTreeMap::new(),
@@ -7517,6 +7527,24 @@ impl RmBackend for HostRmBackend {
             return Err(RmError::NoMemory);
         }
         let h = self.conn.reserve_gpga(len)?;
+        // ★★★★★ **w755y — GIVE THE STORE A DEVICE POINTER, HERE, WHERE BOTH HALVES LIVE.**
+        //
+        // `[measured w755x]` an RM-owned allocation **is** addressable by CUDA: RM exports it
+        // to a control fd we open, `cuMemImportFromShareableHandle` + `cuMemMap` yield a real
+        // `dptr`. This is the reservation that becomes the single store, and the scratchpad
+        // child holds **both** the RM connection and the CUDA context — so the arming needs
+        // no IPC, no new protocol request, and no second party to agree with.
+        //
+        // ⊘⊘ **Why it matters:** the walk kernel dereferences `KfWin { base, len }` at
+        // **GPGA offsets**, and under the identity window a guest framebuffer address IS an
+        // offset into this object. So a `dptr` here is exactly what lets the kernel walk the
+        // guest's page tables **in place** — which is what deletes the CPU walk that CUT A
+        // refuses by name, rather than working around it.
+        //
+        // ⚠ **Failure is NOT fatal and NOT silent.** The arena arm does not need this, and a
+        // boot that could not arm it must say so rather than report a store that looks armed.
+        #[cfg(feature = "cuda-scratchpad")]
+        self.arm_store_device_pointer(h, len);
         Ok(self.stamp(h))
     }
 
@@ -10111,6 +10139,58 @@ impl HostRmBackend {
     /// **routing** defect, not an RM one: the guest declared a store-slice USERD and route K
     /// was not on the path. ⊘ Refused rather than birthed locally with a USERD of ours:
     /// `[measured w755h]` that is the `GP_PUT == GP_GET == 0` silence.
+    /// ★★★★★ **w755y — export the store to a ctl fd and hand it to CUDA.**
+    ///
+    /// See [`RmBackend::reserve_gpga`]'s call site for why it happens there. Records the
+    /// `dptr` for the walk kernel and prints either way: `[w755v]` this probe's question was
+    /// answered wrongly three times by treating a refusal as a verdict, so the arming states
+    /// its own outcome rather than leaving a reader to infer it from what did not appear.
+    #[cfg(feature = "cuda-scratchpad")]
+    fn arm_store_device_pointer(&mut self, store: u32, len: u64) {
+        let ctl = match CharDevice::openat(&self.conn.dev, c"nvidiactl") {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!(
+                    "kayfabe-isolate: STORE-DPTR ⊘ UNARMED open-ctl {e:?} — the walk kernel \
+                     will have no in-place window and the CPU walk stays the only source"
+                );
+                return;
+            }
+        };
+        if let Err(e) = self.conn.export_object_to_fd(store, ctl.fd_number()) {
+            eprintln!("kayfabe-isolate: STORE-DPTR ⊘ UNARMED rm-export {e:?}");
+            return;
+        }
+        let cuda = match kayfabe_cuda::driver_unsafe::Cuda::open() {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("kayfabe-isolate: STORE-DPTR ⊘ UNARMED no-libcuda {e}");
+                return;
+            }
+        };
+        if let Err(e) = cuda.init() {
+            eprintln!("kayfabe-isolate: STORE-DPTR ⊘ UNARMED cuInit {e}");
+            return;
+        }
+        match cuda.import_and_map(0, ctl.fd_number(), usize::try_from(len).unwrap_or(0)) {
+            Ok(dptr) => {
+                eprintln!(
+                    "kayfabe-isolate: STORE-DPTR ★★★★★ ARMED store={store:#010x} len={len} \
+                     dptr={dptr:#x} ⇒ the walk kernel can be pointed at the store and walk \
+                     the guest's tables IN PLACE, at their own GPGA offsets"
+                );
+                *self
+                    .store_dptr
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = Some((dptr, len));
+                // ⊘ The fd is kept for the life of the process: closing it would drop the
+                // export RM registered on it, and the mapping with it.
+                core::mem::forget(ctl);
+            }
+            Err(e) => eprintln!("kayfabe-isolate: STORE-DPTR ⊘ UNARMED cuda-import {e}"),
+        }
+    }
+
     /// ★★★★★ **w755r — DESCRIBE THE GUEST'S ERROR NOTIFIER INSIDE B.**
     ///
     /// The scratchpad's own [`RmBackend::describe_guest_ram`] mints the descriptor in **our**
