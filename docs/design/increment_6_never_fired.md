@@ -1,6 +1,10 @@
 # Increment 6 never fired — the birth is in the wrong process, and my gate pinned it there
 
-**STATUS: LIVE — measured 2026-09-17 (w755q), on vast box 51304517, RTX 3090, host driver
+**STATUS: ✔ ANSWERED 2026-09-17 (w755u) — the delegation was built, the doorbell was made to
+follow the channel, and the gate MOVED. See §6 at the end for the result. The diagnosis below
+is kept verbatim because it is what the fix was measured against.**
+
+**Originally: LIVE — measured 2026-09-17 (w755q), on vast box 51304517, RTX 3090, host driver
 580.159.04, tree `eb3fc08f`, three arms, `ARM3_VAS_OWNER=k`.**
 
 ---
@@ -115,3 +119,51 @@ about slices.
 
 ⊘ Nothing here says increment 6 is wrong. It says it is **unmeasured**, and that the harness
 reported a failure of something that never ran.
+
+
+---
+
+## 6. ✔ THE ANSWER — w755u, and the gate moved
+
+`[measured w755u — same box, tree `b4b72f54`]`
+
+    STORE-BIRTH    asked=12 refused=0 born=12
+    STORE-DOORBELL asked=13 refused=0 rung=13
+    W755-ROW[P1 rm-invalidate]  ✔ VERIFIED over 8 round(s)
+    W755-ROW[P2 uvm-memop]      ✔ VERIFIED over 8 round(s)
+    W755-ROW[P3 rpc-bind]       ✔ VERIFIED over 8 round(s)
+    MEAN_FALSIFIER=PASS
+    ForeignHandle 20 → 1
+
+**Every one of those three rows was `⊘ REFUSED … NEVER RETIRED` on every previous boot of this
+campaign.** The guest's own copies now execute on the host engine, out of the guest's own ring,
+against the guest's own USERD, on channels born in the per-proc birth client **B**.
+
+### It took TWO crossings, not one, and the second was this document's own defect repeated
+
+§3 named the missing delegation for the **birth**. Building it (w755r/w755s) gave `born=11` —
+and **every doorbell on those channels was then refused**:
+
+    ForeignHandle { handle: HostHandle(iso4294967295/gpu0:0xb1470006), worker_isolate: iso2 }
+
+⊘ The same shape, one verb later: the channel now belonged to the scratchpad, while the
+doorbell verb still ran on the per-proc worker. ⇒ **A delegation is not done when the thing it
+creates is created; it is done when everything that NAMES that thing follows it.** This
+document diagnosed the birth and did not ask what else held the handle.
+
+⚠ And the order inside the doorbell fix is a ruling: **schedule, then ring**. The host-side
+runlist submit is lazy, and a doorbell rung on a channel that is not on the runlist has its
+submission **dropped silently** — no fault, guest waits forever.
+
+### What remains, and §4 called it
+
+`THREADS 0 of 8 ⊘ A WORKER CAME BACK DIRTY`. The eight worker lanes still report `NEVER
+RETIRED`; `STALE RACE` now reports `★★★ CONTENT MISMATCH`, which is **progress** — the copy ran
+and produced bytes, and a stale mapping was caught red-handed.
+
+★ The cause is **§4 of this document, unchanged**: `RING-NOT-A-SLICE=4`, every one carrying
+`oracle_installed=false`, and `oracle_installed=true` still **0**. The intended hand-off —
+*"decline at the latch, adopt at the birth, which is where the oracle is in hand"* — has still
+never happened, so those rings are refused, those channels are not born in B, and their threads
+never retire. ⇒ **That is the next increment**, and it was named before the first boot of this
+route.
