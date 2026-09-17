@@ -126,10 +126,16 @@ const RING_SURFACE: &[(&str, &str, usize, &str)] = &[
     (
         "src/rm.rs",
         "RING_NOT_OURS",
-        4,
+        6,
         "The named status, the two ring accessors that answer it, and `submit_entry`'s \
          early refusal. ⊘ These are the assertion that no CPU view exists — G4 stated as an \
-         answer rather than as an omission.",
+         answer rather than as an omission. \
+         ★★ **4 → 6, ADMITTED 2026-09-17 (w755k).** The two new ones are ONE line of the \
+         `local_status::ALL` census — `(\"RING_NOT_OURS\", super::RING_NOT_OURS)` — which \
+         NAMES the status so a boot log's bare integer can be resolved to it. ⊘ Naming is not \
+         using: the census is a lookup table with no control flow, and it exists because \
+         `0x4B46` was once carried by two constants and made a wall unreadable. ⚠ A seventh \
+         that is not a census row IS the regression this row is about.",
     ),
 ];
 
@@ -599,7 +605,15 @@ const CHANNEL_ALLOC_SITE: &str = "ChannelAllocParams {";
 
 #[test]
 fn a_store_slice_birth_refuses_before_rm_if_it_holds_a_ring_handle() {
-    let body = body_of("src/rm.rs");
+    // ⊘⊘ **SCOPED TO `alloc_channel_in`, and w755l is why.** This read the WHOLE file and
+    // compared the first `RING_HANDLE_REACHED_RM` against the first `ChannelAllocParams {`.
+    // Route K's increment 6 added a SECOND, legitimate birth site — `BirthConn::birth_channel`
+    // — which sits earlier in the file and builds `ChannelAllocParams` under a DIFFERENT rule:
+    // B may name the store, which is the entire point of birthing there. The whole-file read
+    // then compared two sites that are not about each other and failed.
+    // ★ The gate's ruling is unchanged and is NOT widened: within the isolate's own birth, the
+    // handle-free check must precede the struct RM reads. B's birth has its own gate below.
+    let body = enclosing_fn(&body_of("src/rm.rs"), "fn alloc_channel_in(");
     // ★ THE GATE EXISTS, and it is the runtime one — not a comment asserting the property.
     assert!(
         body.contains("RmError::Other(RING_HANDLE_REACHED_RM)"),
@@ -672,5 +686,69 @@ fn the_channel_alloc_struct_is_fed_by_no_store_slice_handle() {
          pinned at zero by ruling (`h_context_share`, `h_va_space` — a channel inherits its \
          group's); if a new one appeared, it is a new thing crossing to RM and this test is \
          the place that says so."
+    );
+}
+
+/// The body of the function whose signature starts with `sig`, delimited by that `fn`'s own
+/// indentation.
+///
+/// ⊘ **A missing terminator is a FAILURE, never a fallback to the rest of the file.** That
+/// fallback is what let a sibling gate in this tree pass through a deleted assertion.
+fn enclosing_fn(src: &str, sig: &str) -> String {
+    let at = src
+        .find(sig)
+        .unwrap_or_else(|| panic!("★ NON-VACUITY: `{sig}` is gone — this gate gates nothing"));
+    let line_start = src[..at].rfind('\n').map_or(0, |nl| nl + 1);
+    let col = src[line_start..].chars().take_while(|c| *c == ' ').count();
+    let terminator = format!("\n{}}}\n", " ".repeat(col));
+    let end = src[at..].find(&terminator).unwrap_or_else(|| {
+        panic!(
+            "★ NON-VACUITY: could not delimit `{sig}` (column {col}); a scanner that cannot \
+                delimit its subject must refuse, never widen"
+        )
+    });
+    src[at..at + end].to_string()
+}
+
+/// ★★★★★ **w755l — ROUTE K INCREMENT 6: B'S BIRTH NAMES THE STORE AND NOT A RING HANDLE.**
+///
+/// The isolate's birth is gated above by `RING_HANDLE_REACHED_RM`: it must tell RM *no* ring
+/// handle, because it holds none. **B's rule is the mirror image** — it MUST name the store
+/// (that is why the birth moved there), and it must still not name a ring object, because the
+/// ring is a slice addressed by absolute VA exactly as it is in the isolate.
+///
+/// ⊘ Without this, moving the birth to B would have bought the isolate's gate back by leaving
+/// the new site gated by nothing — trading one blind spot for another.
+#[test]
+fn the_birth_in_b_names_the_store_for_userd_and_no_ring_object() {
+    let body = enclosing_fn(&body_of("src/rm.rs"), "fn birth_channel(");
+    for (needle, why) in [
+        (
+            "h_userd_memory_0: store_dup",
+            "no longer names the store for `hUserdMemory`. That IS increment 6: a channel              born with OUR USERD sees `GP_PUT == GP_GET == 0` forever, fetches nothing and              reports nothing — the silence measured on every lane at w755h",
+        ),
+        (
+            "userd_offset_0: userd_offset",
+            "no longer carries the guest's own USERD offset. Under the single store that              offset IS the guest's framebuffer address, and a zero would point hardware at              the store's first slot instead of this channel's",
+        ),
+        (
+            "USERD_ALIGNMENT",
+            "no longer checks the alignment RM does not. `[kernel_channel_gv100.c:208]` RM              shifts the resolved address `>> 9` and validates nothing, so a misaligned              offset is SILENTLY TRUNCATED to a different slot — and the symptom is character              for character the wall this function exists to remove",
+        ),
+    ] {
+        assert!(
+            body.contains(needle),
+            "★★★★★ ROUTE K INCREMENT 6 REGRESSED in `birth_channel` — it {why}."
+        );
+    }
+    // ⊘ And it must NOT name a ring object: the ring is a store slice, addressed by absolute
+    // VA. `gp_fifo_offset` carries the guest's VA; no handle for it may reach RM.
+    assert!(
+        !body.contains("ring_obj"),
+        "★★★ `birth_channel` names a ring object. The ring is a STORE SLICE addressed by          absolute VA, and a handle for it reaching RM is what `RING_HANDLE_REACHED_RM`          refuses on the isolate's side"
+    );
+    assert!(
+        body.contains("gp_fifo_offset: gp_fifo_va"),
+        "★★★ `birth_channel` no longer passes the guest's own ring VA"
     );
 }

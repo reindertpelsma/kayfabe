@@ -890,13 +890,47 @@ use handed_client::HandedClient;
 ///   permissions problem.
 mod birth_conn {
     use super::{
-        ABI_DECODE_FAILED, ABI_ENCODE_FAILED, HandedClient, IMPOSSIBLE_CONVERSION,
-        IOCTL_NUMBER_UNBUILDABLE, Indirect, NOT_ON_THIS_RUNG, NV_ESC_RM_ALLOC,
-        NV_ESC_RM_DUP_OBJECT, NV_ESC_RM_FREE, NV_ESC_RM_MAP_MEMORY_DMA, NV_ESC_RM_UNMAP_MEMORY_DMA,
-        NV_IOCTL_MAGIC, NV01_MEMORY_VIRTUAL, NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE,
-        Nv0080AllocParameters, Nv2080AllocParameters, NvMemoryVirtualAllocationParams,
-        Nvos00Parameters, Nvos21Parameters, Nvos46Parameters, Nvos47Parameters, Nvos55Parameters,
-        RmError, VA_ALREADY_MAPPED, ioctl_error, status_check,
+        ABI_DECODE_FAILED,
+        ABI_ENCODE_FAILED,
+        // ★ w755l — the names route K's increment 6 (birth in B) borrows. ⊘ Listed, never
+        // glob-imported: this list IS the reviewable statement of what B can name, and a `*`
+        // would make the F11 exception unauditable.
+        BIND_PARAMS_SIZE,
+        CHANNEL_GROUP,
+        ChannelAllocParams,
+        HandedClient,
+        IMPOSSIBLE_CONVERSION,
+        IOCTL_NUMBER_UNBUILDABLE,
+        Indirect,
+        NOT_ON_THIS_RUNG,
+        NV_ESC_RM_ALLOC,
+        NV_ESC_RM_CONTROL,
+        NV_ESC_RM_DUP_OBJECT,
+        NV_ESC_RM_FREE,
+        NV_ESC_RM_MAP_MEMORY_DMA,
+        NV_ESC_RM_UNMAP_MEMORY_DMA,
+        NV_IOCTL_MAGIC,
+        NV01_MEMORY_VIRTUAL,
+        NVA06C_CTRL_CMD_BIND,
+        NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN,
+        NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE,
+        Nv0080AllocParameters,
+        Nv2080AllocParameters,
+        NvChannelGroupAllocationParameters,
+        NvMemoryVirtualAllocationParams,
+        Nvos00Parameters,
+        Nvos21Parameters,
+        Nvos46Parameters,
+        Nvos47Parameters,
+        Nvos54Parameters,
+        Nvos55Parameters,
+        RmError,
+        USERD_ALIGNMENT,
+        USERD_OFFSET_MISALIGNED,
+        VA_ALREADY_MAPPED,
+        WORK_SUBMIT_TOKEN_PARAMS_SIZE,
+        ioctl_error,
+        status_check,
     };
 
     use kayfabe_linux_raw::{CharDevice, ioctl};
@@ -1064,6 +1098,195 @@ mod birth_conn {
                 Nvos21Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
             status_check(out.status)?;
             Ok(out.h_object_new)
+        }
+
+        /// ★★★★★ **w755l — ROUTE K INCREMENT 6: THE CHANNEL IS BORN IN B, OVER THE GUEST'S
+        /// OWN RING *AND* THE GUEST'S OWN USERD.**
+        ///
+        /// # Why this function has to exist at all
+        ///
+        /// `[measured w755h]` the raw client's every lane reported *"the copy NEVER RETIRED —
+        /// the completion semaphore never reached … (it holds `Ok(0)`)"* with
+        /// **`HOST_DMESG_XID=0`, a measured zero**. Nothing faulted; nothing ran.
+        ///
+        /// The cause is one declined leg. On a store-slice ring the old path printed
+        /// *"⊘ LEG B DECLINED — … whose object the birth isolate may not name … the channel is
+        /// born with OUR USERD and the guest's cursor must be carried across by the arming
+        /// path"* and birthed with `UserdOwner::Ours`. Hardware then reads **our** USERD, sees
+        /// `GP_PUT == GP_GET == 0` forever, fetches nothing and reports nothing — which is
+        /// exactly the observed silence.
+        ///
+        /// ⊘⊘ **That decline's premise expired 19 hours after it was written.** It is dated
+        /// 2026-09-15 21:36; `birth_store_dup` — which gives B a handle for the store —
+        /// landed 2026-09-16 16:13. B *can* name the object; nothing re-checked the sentence
+        /// that said no one could.
+        ///
+        /// # ★★★ Why B and not the isolate, and why that is the constraints rather than taste
+        ///
+        /// `hUserdMemory` is a **real RM operand**. To name the guest's USERD the birthing
+        /// client must hold a handle for the store — and **constraint 26 forbids the per-proc
+        /// isolate naming it** (*"the isolate borrows, the scratchpad holds"*). So the birth
+        /// moves to the one client that legitimately holds a dup: **B**.
+        ///
+        /// - **Constraint 30** permits it precisely because B is *the isolate's* client, not
+        ///   the scratchpad's; `SCRATCHPAD_BIRTH_IN_A_HANDED_SPACE` refuses the other shape.
+        /// - **Constraint 32** — this is route K's step 6, the one it was designed around.
+        /// - `[ogkm kernel_channel.c:277-295]` `ProcessID`/`SubProcessID` are copied from the
+        ///   **creating client**, and B's was stamped as the isolate's (`client.c:112`). ⇒ the
+        ///   channel carries the guest proc's identity, which is the cross-guest isolation
+        ///   the per-proc isolates exist to provide.
+        ///
+        /// ★ **And we are never in the `GP_PUT` path**, which is the point the owner made and
+        /// the reason the "carry the cursor across" alternative is wrong: the guest's own
+        /// libcuda advances `GP_PUT` in its own framebuffer page, hardware reads that page,
+        /// and this crate neither writes nor inspects it.
+        ///
+        /// # Errors
+        /// Whatever RM refused, by name. ⚠ **Fail-closed and unwound**: a partial channel is
+        /// worse than none, because a TSG with no channel still holds a runlist slot.
+        pub(super) fn birth_channel(
+            &self,
+            engine_type: u32,
+            channel_class: u32,
+            // B's own `FERMI_VASPACE_A` for this guest `Vas` — see `h_va_space` below.
+            vaspace: u32,
+            store_dup: u32,
+            userd_offset: u64,
+            gp_fifo_va: u64,
+            gp_fifo_entries: u32,
+            err_notifier: u32,
+        ) -> Result<(u32, u32, u32), RmError> {
+            // ⊘ The alignment RM does not check, checked here exactly as the isolate's own
+            // birth does. `[source: kernel_channel_gv100.c:208]` RM shifts the resolved USERD
+            // address `>> 9` and validates nothing, so a misaligned offset is silently
+            // TRUNCATED to a different 512-byte slot — and the symptom is character for
+            // character the wall this function exists to remove.
+            if !userd_offset.is_multiple_of(USERD_ALIGNMENT) {
+                return Err(RmError::Other(USERD_OFFSET_MISALIGNED));
+            }
+            let mut tsg_params = [0u8; NvChannelGroupAllocationParameters::SIZE];
+            NvChannelGroupAllocationParameters {
+                h_object_error: 0,
+                h_object_ecc_error: 0,
+                // ★★★ **THE GROUP'S ADDRESS SPACE, and it must be B's dup of the guest's.**
+                // ⊘ Zero asks for the device's DEFAULT space, which a forwarding host device
+                // does not have — `[C: nvkvm_gpu_emul.c:6828-6836]` measured
+                // `NV_ERR_INVALID_OBJECT_HANDLE` (0x33) for exactly that, and substituting the
+                // `NV01_MEMORY_VIRTUAL` range handle was bitten on this hardware for the same
+                // 0x33. It is also #14's fix: per-`Vas` separation is a property of THIS field.
+                h_va_space: vaspace,
+                engine_type,
+                b_is_calling_context_vgpu_plugin: 0,
+            }
+            .encode_into(&mut tsg_params)
+            .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
+            let tsg = self.alloc(self.device, CHANNEL_GROUP, &mut tsg_params)?;
+
+            let mut chan_params = [0u8; ChannelAllocParams::SIZE];
+            let encoded = ChannelAllocParams {
+                h_object_error: err_notifier,
+                gp_fifo_offset: gp_fifo_va,
+                gp_fifo_entries,
+                flags: 0,
+                // Both zero: a channel in a group inherits the group's subcontext and address
+                // space, and naming either again is refused.
+                h_context_share: 0,
+                h_va_space: 0,
+                // ★★★★★ **THE TWO FIELDS THIS WHOLE INCREMENT IS FOR.** `hUserdMemory` is B's
+                // dup of the one reserved store; `userdOffset` is the guest's own USERD
+                // address, which under the single store IS its offset in that object
+                // (framebuffer address = file offset).
+                // ⊘ A non-zero `userdOffset` was a MEASURED refusal on the `Ours` arm and is
+                // correct *here and only here*, because on this arm the party that writes the
+                // cursor is the same party the offset came from: the guest.
+                h_userd_memory_0: store_dup,
+                userd_offset_0: userd_offset,
+                engine_type,
+            }
+            .encode_into(&mut chan_params);
+            if encoded.is_err() {
+                let _ = self.free(self.device, tsg);
+                return Err(RmError::Other(ABI_ENCODE_FAILED));
+            }
+            let chan = match self.alloc(tsg, channel_class, &mut chan_params) {
+                Ok(h) => h,
+                Err(e) => {
+                    let _ = self.free(self.device, tsg);
+                    return Err(e);
+                }
+            };
+
+            // ★★ BIND, on the GROUP, and it must come before the token control.
+            let mut bind = [0u8; BIND_PARAMS_SIZE];
+            bind.copy_from_slice(&engine_type.to_le_bytes());
+            if let Err(e) = self.control(tsg, NVA06C_CTRL_CMD_BIND, &mut bind) {
+                let _ = self.free(tsg, chan);
+                let _ = self.free(self.device, tsg);
+                return Err(e);
+            }
+
+            let mut token = [0u8; WORK_SUBMIT_TOKEN_PARAMS_SIZE];
+            if let Err(e) = self.control(
+                chan,
+                NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN,
+                &mut token,
+            ) {
+                let _ = self.free(tsg, chan);
+                let _ = self.free(self.device, tsg);
+                return Err(e);
+            }
+            Ok((tsg, chan, u32::from_le_bytes(token)))
+        }
+
+        /// ★★★★★ **w755l — ONE `NV_ESC_RM_CONTROL` INSIDE B.** The primitive increment 6
+        /// was missing, and the only one it was missing.
+        ///
+        /// A channel birth is five RM operations: a TSG alloc, a channel alloc, a `BIND` on
+        /// the TSG, a `GET_WORK_SUBMIT_TOKEN` on the channel, and later a `GPFIFO_SCHEDULE`.
+        /// [`BirthConn::alloc`] already covered the first two; the last three are controls,
+        /// and B had no way to issue one.
+        ///
+        /// ⊘ Same `hRoot` exception and the same single expression that licenses it —
+        /// [`HandedClient::root`], whose only constructor is `handed_over(ScratchpadRole, …)`.
+        /// A control in B is not a wider power than an alloc in B; it is the same client
+        /// being asked a question instead of told to build something.
+        ///
+        /// # Errors
+        /// Whatever RM refused the control with.
+        pub(super) fn control(
+            &self,
+            object: u32,
+            cmd: u32,
+            params: &mut [u8],
+        ) -> Result<(), RmError> {
+            let mut arg = [0u8; Nvos54Parameters::SIZE];
+            Nvos54Parameters {
+                h_client: self.handed.root(),
+                h_object: object,
+                cmd,
+                // ⊘ `flags` is zero on every control this crate issues; named rather than
+                // defaulted so a future non-zero is a visible edit.
+                flags: 0,
+                // ★ Left ZERO and patched by `Indirect` at +16, exactly as the isolate's own
+                // `raw_control` does. §4.2.1: this crate never writes an address.
+                params: 0,
+                params_size: u32::try_from(params.len()).unwrap_or(0),
+                status: 0,
+            }
+            .encode_into(&mut arg)
+            .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
+            let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_CONTROL as u8, arg.len())
+                .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
+            let mut patches: Vec<Indirect<'_>> = Vec::new();
+            if !params.is_empty() {
+                patches.push(Indirect::new(16, params));
+            }
+            self.ctl
+                .ioctl(req, &mut arg, &mut patches)
+                .map_err(|e| ioctl_error(&e))?;
+            let out =
+                Nvos54Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
+            status_check(out.status)
         }
 
         /// ★★★★★ **`NV_ESC_RM_DUP_OBJECT` INTO B — the escape route K exists for.**
