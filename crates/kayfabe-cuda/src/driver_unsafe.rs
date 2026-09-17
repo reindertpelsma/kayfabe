@@ -149,6 +149,24 @@ pub struct Cuda {
     pub(crate) cuMemExportToShareableHandle:
         Option<unsafe extern "C" fn(*mut c_void, u64, c_uint, u64) -> CUresult>,
     pub(crate) cuMemRelease: Option<unsafe extern "C" fn(u64) -> CUresult>,
+    // ★★★★★ **w755w — THE IMPORT SIDE, which is the direction that can work.**
+    //
+    // `[measured w755v]` RM refuses to import CUDA's fd (`nvfp->handles == NULL`,
+    // `os.c:2377`) because RM registers `handles[0]` only in its **own** export. So the
+    // store is exported BY RM and imported BY CUDA, and these are the symbols for that half.
+    //
+    // ⊘ `osHandle` is a `void *` that, for `CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR`, is the
+    // **fd itself** cast to a pointer — not a pointer to the fd. Getting that backwards
+    // yields `INVALID_VALUE` and reads like a rejected handle.
+    pub(crate) cuMemImportFromShareableHandle:
+        Option<unsafe extern "C" fn(*mut u64, *mut c_void, c_uint) -> CUresult>,
+    pub(crate) cuMemAddressReserve:
+        Option<unsafe extern "C" fn(*mut u64, usize, usize, u64, u64) -> CUresult>,
+    pub(crate) cuMemMap: Option<unsafe extern "C" fn(u64, usize, usize, u64, u64) -> CUresult>,
+    pub(crate) cuMemSetAccess:
+        Option<unsafe extern "C" fn(u64, usize, *const c_void, usize) -> CUresult>,
+    pub(crate) cuMemUnmap: Option<unsafe extern "C" fn(u64, usize) -> CUresult>,
+    pub(crate) cuMemAddressFree: Option<unsafe extern "C" fn(u64, usize) -> CUresult>,
 }
 
 // SAFETY: every field is a code pointer into a library loaded `RTLD_GLOBAL` for the life of
@@ -284,6 +302,12 @@ impl Cuda {
             cuMemCreate: opt!("cuMemCreate"),
             cuMemExportToShareableHandle: opt!("cuMemExportToShareableHandle"),
             cuMemRelease: opt!("cuMemRelease"),
+            cuMemImportFromShareableHandle: opt!("cuMemImportFromShareableHandle"),
+            cuMemAddressReserve: opt!("cuMemAddressReserve"),
+            cuMemMap: opt!("cuMemMap"),
+            cuMemSetAccess: opt!("cuMemSetAccess"),
+            cuMemUnmap: opt!("cuMemUnmap"),
+            cuMemAddressFree: opt!("cuMemAddressFree"),
             cuGetErrorName: if err_name.is_null() {
                 None
             } else {
@@ -755,6 +779,79 @@ impl Cuda {
     ///
     /// # Errors
     /// The driver's refusal, by name, or a marker that this driver has no VMM API.
+    /// ★★★★★ **w755w — IMPORT AN RM-EXPORTED fd AND MAP IT TO A DEVICE POINTER.**
+    ///
+    /// The direction `[measured w755v]` established: RM allocates and exports; CUDA imports.
+    /// The reverse is refused by RM at `os.c:2377` (`nvfp->handles == NULL`), because RM
+    /// registers `handles[0]` only in its own export path.
+    ///
+    /// ⊘ **This is the question the whole table-refresh design waits on.** The walk kernel
+    /// dereferences `KfWin { base, len }` at **GPGA offsets** — so if the single store can be
+    /// given a device pointer here, the kernel walks the guest's tables **in place** and the
+    /// blind CPU walk (refused by CUT A) is deleted rather than worked around.
+    ///
+    /// ⚠ `osHandle` for `POSIX_FILE_DESCRIPTOR` is the **fd cast to a pointer**, not a
+    /// pointer to the fd. The other reading yields `INVALID_VALUE`, which reads like a
+    /// rejected handle rather than a mis-passed argument — the shape that cost w755v two
+    /// wrong answers.
+    ///
+    /// # Errors
+    /// A string naming the call that refused **and its rc**, so a precondition failure can
+    /// never be read as CUDA's verdict (w755v).
+    pub fn import_and_map(&self, device: i32, fd: i32, bytes: usize) -> Result<u64, String> {
+        let (Some(import), Some(reserve), Some(map), Some(set_access)) = (
+            self.cuMemImportFromShareableHandle,
+            self.cuMemAddressReserve,
+            self.cuMemMap,
+            self.cuMemSetAccess,
+        ) else {
+            return Err("NO-VMM-API: this libcuda has no Import/AddressReserve/Map/SetAccess".into());
+        };
+        let mut handle: u64 = 0;
+        // SAFETY: `handle` is a live local; `fd` is cast to the pointer-sized osHandle the
+        // POSIX_FILE_DESCRIPTOR type specifies.
+        let rc = unsafe {
+            import(
+                &raw mut handle,
+                usize::try_from(fd).unwrap_or(0) as *mut c_void,
+                CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR,
+            )
+        };
+        if rc != 0 {
+            return Err(format!("cuMemImportFromShareableHandle rc={rc} fd={fd}"));
+        }
+        let mut ptr: u64 = 0;
+        // SAFETY: `ptr` is a live local. Alignment 0 lets CUDA choose.
+        let rc = unsafe { reserve(&raw mut ptr, bytes, 0, 0, 0) };
+        if rc != 0 {
+            return Err(format!("cuMemAddressReserve rc={rc} bytes={bytes}"));
+        }
+        // SAFETY: `ptr` is a reservation of `bytes` and `handle` is a live imported handle.
+        let rc = unsafe { map(ptr, bytes, 0, handle, 0) };
+        if rc != 0 {
+            return Err(format!("cuMemMap rc={rc} ptr={ptr:#x} bytes={bytes}"));
+        }
+        // `CUmemAccessDesc { CUmemLocation { type, id }, flags }` — 12 bytes, transcribed and
+        // checked against `cuda.h`'s own layout rather than remembered (w755v).
+        #[repr(C)]
+        struct AccessDesc {
+            location_type: c_uint,
+            location_id: c_int,
+            flags: c_uint,
+        }
+        let desc = AccessDesc {
+            location_type: CU_MEM_LOCATION_TYPE_DEVICE,
+            location_id: device,
+            flags: 3, // CU_MEM_ACCESS_FLAGS_PROT_READWRITE
+        };
+        // SAFETY: one live `AccessDesc` for a mapped range of `bytes`.
+        let rc = unsafe { set_access(ptr, bytes, (&raw const desc).cast::<c_void>(), 1) };
+        if rc != 0 {
+            return Err(format!("cuMemSetAccess rc={rc} ptr={ptr:#x}"));
+        }
+        Ok(ptr)
+    }
+
     pub fn export_device_allocation(
         &self,
         device: i32,

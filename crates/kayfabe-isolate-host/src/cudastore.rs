@@ -212,7 +212,62 @@ pub fn cuda_store_probe(gpu: u32) -> i32 {
                  `0x3B NV_ERR_INVALID_PARAMETER` — `os.c:2377`, `nvfp->handles == NULL`. RM \
                  populates `handles[0]` only in its OWN export (`os.c:2291`), so CUDA's \
                  export registers no RM object on that file. ⇒ **USE THE OTHER DIRECTION**: \
-                 RM allocates and exports, `cuMemImportFromShareableHandle` imports."
+                 RM allocates and exports, `cuMemImportFromShareableHandle` imports — \
+                 measured below as CS_REVERSE."
+            );
+        }
+    }
+
+    // ★★★★★ **w755w — THE REVERSE LEG, WHICH IS THE DIRECTION THAT CAN WORK.**
+    //
+    // RM allocates a small vidmem object, exports it to a control fd **we** open, and CUDA
+    // imports and maps it. If this yields a device pointer, the single store can be given one
+    // — and the walk kernel (`KfWin { base, len }`, dereferenced at **GPGA offsets**) walks
+    // the guest's tables **in place**, which is what deletes the CPU walk that CUT A refuses.
+    //
+    // ⊘ Run unconditionally, whichever way the forward leg went: they are different
+    // questions, and the forward leg's `NO` says nothing about this one.
+    let store = match conn.reserve_gpga_probe(64 << 20) {
+        Ok(h) => h,
+        Err(e) => {
+            println!("CS_REVERSE=UNMEASURED:rm-alloc:{e:?}");
+            return 0;
+        }
+    };
+    let ctl = match kayfabe_linux_raw::CharDevice::openat(&dev, c"nvidiactl") {
+        Ok(c) => c,
+        Err(e) => {
+            println!("CS_REVERSE=UNMEASURED:open-ctl:{e:?}");
+            return 0;
+        }
+    };
+    if let Err(e) = conn.export_object_to_fd(store, ctl.fd_number()) {
+        // ⊘ UNMEASURED, not NO: nothing about CUDA's import was tested. w755v's lesson,
+        // applied to the leg written because of it.
+        println!("CS_REVERSE=RM-EXPORT-REFUSED {e:?}");
+        println!(
+            "CS_REVERSE_RESULT=UNMEASURED:RM would not export to our ctl fd, so CUDA's \
+             import was never reached"
+        );
+        return 0;
+    }
+    println!("CS_REVERSE=RM-EXPORT-OK object={store:#x} fd={}", ctl.fd_number());
+    match cuda.import_and_map(0, ctl.fd_number(), 64 << 20) {
+        Ok(ptr) => {
+            println!("CS_REVERSE=CUDA-IMPORT-OK dptr={ptr:#x}");
+            println!(
+                "CS_REVERSE_RESULT=YES: an RM-owned device allocation IS addressable by CUDA. \
+                 ⇒ the single store can carry a device pointer, the walk kernel can be \
+                 pointed at it at its own GPGA offsets, and the staged image + the CPU walk \
+                 CUT A refuses both go away."
+            );
+        }
+        Err(e) => {
+            println!("CS_REVERSE=CUDA-IMPORT-REFUSED {e}");
+            println!(
+                "CS_REVERSE_RESULT=NO: RM exported and CUDA would not import it — read the rc \
+                 above. ⊘ A precondition rc (NOT_INITIALIZED, INVALID_VALUE on the osHandle \
+                 cast) is UNMEASURED, not NO."
             );
         }
     }

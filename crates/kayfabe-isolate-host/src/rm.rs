@@ -4822,6 +4822,41 @@ impl RmConnection {
     ///
     /// # Errors
     /// Whatever RM refused with.
+    /// ★★★★★ **w755w — EXPORT AN RM OBJECT TO A CONTROL fd, the direction that works.**
+    ///
+    /// `[measured w755v]` RM refuses to import CUDA's fd — `nvfp->handles == NULL`
+    /// (`os.c:2377`) — because it registers `handles[0]` only in **its own** export
+    /// (`os.c:2291`). So the store is exported here and imported by CUDA.
+    ///
+    /// ⚠ **The caller supplies the fd and it must be a CONTROL fd.** `os.c` requires
+    /// `pParams->fd != -1` and resolves it with `nv_get_file_private(fd, NV_TRUE)` — the
+    /// `NV_TRUE` is *"require ctl fd"*. A `/dev/nvidia<N>` fd is refused there, and the
+    /// refusal reads as a bad parameter rather than as the wrong kind of file.
+    ///
+    /// ⊘ **The params block is 24 bytes and `object` comes FIRST** — the opposite order from
+    /// the import, whose `fd` leads. `[ctrl0000unix.h:150-154]`, read rather than remembered:
+    /// w755v's 16-vs-20 transcription error on the sibling struct cost two wrong answers to
+    /// the question this verb exists to settle.
+    ///
+    /// # Errors
+    /// Whatever RM refused with.
+    pub fn export_object_to_fd(&self, object: u32, fd: i32) -> Result<(), RmError> {
+        // `{ NV0000_CTRL_OS_UNIX_EXPORT_OBJECT object; NvS32 fd; NvU32 flags; }` where the
+        // object is `{ TYPE type; NvHandle hDevice, hParent, hObject; }`.
+        const EXPORT_PARAMS_SIZE: usize = 24;
+        const EXPORT_OBJECT_TYPE_RM: u32 = 0;
+        // `EMPTY_FD_FALSE` — we hand RM a real control fd rather than asking it to mint one.
+        const FLAGS_EMPTY_FD_FALSE: u32 = 0;
+        let mut arg = [0u8; EXPORT_PARAMS_SIZE];
+        arg[0..4].copy_from_slice(&EXPORT_OBJECT_TYPE_RM.to_le_bytes());
+        arg[4..8].copy_from_slice(&self.device.to_le_bytes());
+        arg[8..12].copy_from_slice(&self.device.to_le_bytes());
+        arg[12..16].copy_from_slice(&object.to_le_bytes());
+        arg[16..20].copy_from_slice(&fd.to_le_bytes());
+        arg[20..24].copy_from_slice(&FLAGS_EMPTY_FD_FALSE.to_le_bytes());
+        self.raw_control(self.client.raw(), 0x0000_3d05, &mut arg)
+    }
+
     pub fn import_object_from_fd(&self, fd: i32) -> Result<u32, RmError> {
         // `NV0000_CTRL_OS_UNIX_IMPORT_OBJECT_FROM_FD_PARAMS { NvS32 fd; NV0000_CTRL_OS_UNIX_EXPORT_OBJECT object; }`
         // and, from `ctrl0000unix.h:108-118` **read rather than remembered**:
