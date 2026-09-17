@@ -302,6 +302,36 @@ pub enum Request {
         /// As [`Self::AllocChannel::err_notifier`].
         err_notifier: Option<u64>,
     },
+    /// ★★★★★ **w755r — [`kayfabe_isolate::RmBackend::birth_guest_channel_in_b`].**
+    ///
+    /// ⊘⊘ **Its own tag, not `AllocChannelDeclared` with a flag** — the same argument that
+    /// variant makes about `AllocChannel`, one step on. The child dispatches by variant to a
+    /// verb that **refuses unless it is the scratchpad**, and an in-band flag would make a
+    /// framing slip land on the ordinary birth, in the per-proc isolate, where it would be
+    /// refused for a different reason and send a reader somewhere else entirely.
+    ///
+    /// ⚠ `range` is **the scratchpad's `NV01_MEMORY_VIRTUAL` range inside B**, not a per-proc
+    /// VAS. The two are different namespaces (`BIRTH_HANDLE_BASE`), and the field is named
+    /// `range` rather than `vas` so a reader cannot mistake one for the other.
+    ///
+    /// ⚠ `err_notifier` is a **grant** (`offset`/`len`/`prot`), never a handle: the
+    /// descriptor must pin pages of the *scratchpad's* mapping, and `hObjectError` is a birth
+    /// parameter only B can name. `[measured w755r]` the first wiring of this route returned
+    /// `Other(86)` — the refusing trait default — because the verb reached a
+    /// `ProxyRmBackend` and there was no request to carry it. This is that request.
+    BirthGuestChannelInB {
+        /// The scratchpad's range inside B, raw.
+        range: u64,
+        /// The channel's engine, as [`engine_code`].
+        engine: u8,
+        /// The guest's own `NV2080_ENGINE_TYPE_*` code, or `None` when unread. Presence byte
+        /// for [`Self::AllocChannelDeclared`]'s reason: `0` is `NV2080_ENGINE_TYPE_NULL`.
+        declared_engine_type: Option<u32>,
+        /// The adoption — mandatory, same tuple as the sibling births.
+        adopt: AdoptedRingWire,
+        /// The error notifier's grant: `(offset, len, prot)`. `None` for no notifier.
+        err_notifier: Option<(u64, u64, u8)>,
+    },
     /// [`kayfabe_isolate::RmBackend::alloc_engine_object`].
     AllocEngineObject {
         /// Host channel handle, raw.
@@ -1322,6 +1352,58 @@ impl Envelope {
                     }
                 }
             }
+            Request::BirthGuestChannelInB {
+                range,
+                engine,
+                declared_engine_type,
+                adopt: (kind, a, b, ring_va, gp_fifo_va, entries, userd),
+                err_notifier,
+            } => {
+                // ⊘ 41, not 40 — `MintBirthClient` holds 40. My first draft collided with it
+                // and the round trip caught it as `TrailingBytes { len: 86 }`: the decoder
+                // matched the field-less variant, consumed the tag, and left the whole body.
+                // ⚠ The scan that picked 40 grepped one indentation level and missed the
+                // arm at another. Tags are found by enumerating the DECODE arms, not by
+                // pattern-matching the encodes.
+                out.push(41);
+                out.extend_from_slice(&range.to_le_bytes());
+                out.push(*engine);
+                match declared_engine_type {
+                    None => out.push(0),
+                    Some(t) => {
+                        out.push(1);
+                        out.extend_from_slice(&t.to_le_bytes());
+                    }
+                }
+                out.push(*kind);
+                out.extend_from_slice(&a.to_le_bytes());
+                out.extend_from_slice(&b.to_le_bytes());
+                out.extend_from_slice(&ring_va.to_le_bytes());
+                out.extend_from_slice(&gp_fifo_va.to_le_bytes());
+                out.extend_from_slice(&entries.to_le_bytes());
+                // ★★★ w755l's three-state tag — `1 + kind`, NOT `kind`.
+                // ⊘⊘ My first draft of this arm pushed `kind` directly, which sends `Joined`
+                // as the byte that DECODES AS ABSENT and `TheStore` as the byte that decodes
+                // as `Joined`. Both are silent: the frame stays fixed-width and the receiver
+                // builds a well-formed request naming the wrong thing.
+                match userd {
+                    None => out.push(0),
+                    Some((kind, h, off)) => {
+                        out.push(1 + kind);
+                        out.extend_from_slice(&h.to_le_bytes());
+                        out.extend_from_slice(&off.to_le_bytes());
+                    }
+                }
+                match err_notifier {
+                    None => out.push(0),
+                    Some((offset, len, prot)) => {
+                        out.push(1);
+                        out.extend_from_slice(&offset.to_le_bytes());
+                        out.extend_from_slice(&len.to_le_bytes());
+                        out.push(*prot);
+                    }
+                }
+            }
             Request::AllocEngineObject {
                 chan,
                 class,
@@ -1619,6 +1701,62 @@ impl Envelope {
                     tag => {
                         return Err(ProtoError::UnknownTag {
                             what: "channel err_notifier presence",
+                            tag,
+                        });
+                    }
+                },
+            },
+            41 => Request::BirthGuestChannelInB {
+                range: c.u64("birth-in-b range")?,
+                engine: c.u8("birth-in-b engine")?,
+                declared_engine_type: match c.u8("birth-in-b engine type presence")? {
+                    0 => None,
+                    1 => Some(c.u32("birth-in-b engine type")?),
+                    tag => {
+                        return Err(ProtoError::UnknownTag {
+                            what: "birth-in-b engine type presence",
+                            tag,
+                        });
+                    }
+                },
+                adopt: (
+                    ring_provenance_tag(c.u8("birth-in-b adopt provenance")?)?,
+                    c.u64("birth-in-b adopt ring a")?,
+                    c.u64("birth-in-b adopt ring b")?,
+                    c.u64("birth-in-b adopt ring_va")?,
+                    c.u64("birth-in-b adopt gp_fifo_va")?,
+                    c.u32("birth-in-b adopt gp_fifo_entries")?,
+                    match c.u8("birth-in-b adopt userd presence")? {
+                        0 => None,
+                        1 => Some((
+                            0,
+                            c.u64("birth-in-b adopt userd memory")?,
+                            c.u64("birth-in-b adopt userd offset")?,
+                        )),
+                        // ★ w755l — THE STORE. The handle word is present and MEANINGLESS.
+                        2 => Some((
+                            1,
+                            c.u64("birth-in-b adopt userd store pad")?,
+                            c.u64("birth-in-b adopt userd offset")?,
+                        )),
+                        tag => {
+                            return Err(ProtoError::UnknownTag {
+                                what: "birth-in-b adopt userd presence",
+                                tag,
+                            });
+                        }
+                    },
+                ),
+                err_notifier: match c.u8("birth-in-b err_notifier presence")? {
+                    0 => None,
+                    1 => Some((
+                        c.u64("birth-in-b err_notifier offset")?,
+                        c.u64("birth-in-b err_notifier len")?,
+                        c.u8("birth-in-b err_notifier prot")?,
+                    )),
+                    tag => {
+                        return Err(ProtoError::UnknownTag {
+                            what: "birth-in-b err_notifier presence",
                             tag,
                         });
                     }
@@ -2254,6 +2392,44 @@ mod tests {
                 ),
                 err_notifier: Some(0x5c00_0021),
             },
+            // ★★★★★ w755r — the store-birth request, in BOTH userd shapes.
+            // ⊘ Two entries and not one: the encode writes `1 + kind`, and a draft that
+            // wrote `kind` sends `Joined` as the byte that decodes as ABSENT and `TheStore`
+            // as the byte that decodes as `Joined` — silent both ways, because the frame
+            // stays fixed-width and the receiver builds a well-formed request naming the
+            // wrong object. Only a round trip over BOTH kinds catches it.
+            Request::BirthGuestChannelInB {
+                range: 0xB147_0003,
+                engine: engine_code(EngineKind::Ce),
+                declared_engine_type: Some(0x9),
+                adopt: (
+                    RING_PROVENANCE_STORE_SLICE,
+                    0x1_0000,
+                    0x1_0000,
+                    0x2_0020_0000,
+                    0x2_0020_0000,
+                    4096,
+                    // `TheStore` — the handle word is present and meaningless.
+                    Some((1, 0, 0x2000)),
+                ),
+                err_notifier: Some((0x1119e8000, 0x1000, PROT_READ_WRITE)),
+            },
+            Request::BirthGuestChannelInB {
+                range: 0xB147_0004,
+                engine: engine_code(EngineKind::GrCompute),
+                declared_engine_type: None,
+                adopt: (
+                    RING_PROVENANCE_STORE_SLICE,
+                    0x2_0000,
+                    0x1_0000,
+                    0x3_0020_0000,
+                    0x3_0020_0000,
+                    512,
+                    // `Joined` — the kind that a `kind`-not-`1 + kind` encode loses entirely.
+                    Some((0, 0x5c00_0019, 0x1000)),
+                ),
+                err_notifier: None,
+            },
             Request::AllocEngineObject {
                 chan: 9,
                 class: 0xc7c0,
@@ -2415,6 +2591,7 @@ mod tests {
             Request::MintBirthClient => "MintBirthClient",
             Request::AllocChannel { .. } => "AllocChannel",
             Request::AllocChannelDeclared { .. } => "AllocChannelDeclared",
+            Request::BirthGuestChannelInB { .. } => "BirthGuestChannelInB",
             Request::AllocEngineObject { .. } => "AllocEngineObject",
             Request::Schedule { .. } => "Schedule",
             Request::Free { .. } => "Free",
@@ -2455,6 +2632,7 @@ mod tests {
                 "VaSpaceHandover",
                 "AdoptBirthClient",
                 "MintBirthClient",
+                "BirthGuestChannelInB",
                 "AllocVidmem",
                 "CeCopy",
                 "CudaWalkReport",

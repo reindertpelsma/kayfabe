@@ -1236,6 +1236,51 @@ impl RmBackend for ProxyRmBackend {
         }
     }
 
+    /// ★★★★★ **w755r — ROUTE K INCREMENT 7 CROSSES THE SOCKET HERE.**
+    ///
+    /// ⊘⊘⊘ **Its absence is what the first boot of this route measured.** `[measured w755r]`
+    /// the delegation was built end to end and every store-USERD birth came back
+    /// `Other(86)` — the **refusing trait default** — because a worker's backend is a
+    /// `ProxyRmBackend`, not a `HostRmBackend`: the verb has to cross a socket to reach the
+    /// scratchpad's child, and no request carried it. The census said `asked=11 refused=11
+    /// born=0`, which is exactly the state this override ends.
+    ///
+    /// ⚠ The `Prot` is sent as its wire code and **decoded on the far side**, where an
+    /// unrecognised value is refused rather than defaulted.
+    fn birth_guest_channel_in_b(
+        &mut self,
+        range: HostHandle,
+        engine: kayfabe_isolate::ChannelEngine,
+        ring: kayfabe_isolate::AdoptedGuestRing,
+        err_notifier: Option<kayfabe_isolate::GuestRamGrant>,
+    ) -> Result<(HostHandle, u64), RmError> {
+        let (kind, declared_engine_type) = engine.parts();
+        let engine = crate::proto::engine_code(kind);
+        let reply = self.call(Request::BirthGuestChannelInB {
+            range: range.raw(),
+            engine,
+            declared_engine_type,
+            adopt: {
+                let (k, x, y) = ring_wire(ring.ring);
+                (
+                    k,
+                    x,
+                    y,
+                    ring.ring_va,
+                    ring.gp_fifo_va,
+                    ring.gp_fifo_entries,
+                    ring.userd.map(|u| userd_wire(u)),
+                )
+            },
+            err_notifier: err_notifier
+                .map(|g| (g.offset(), g.len(), crate::proto::prot_code(g.prot()))),
+        })?;
+        match self.lift(reply)? {
+            Reply::HandleAndToken(h, t) => Ok((HostHandle::new(self.isolate, h), t)),
+            _ => Err(RmError::Wedged),
+        }
+    }
+
     fn alloc_engine_object(
         &mut self,
         chan: HostHandle,

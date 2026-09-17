@@ -487,6 +487,23 @@ fn w321_bucket(r: &Request) -> usize {
     }
 }
 
+/// ★★★ **w755r — the store-birth notifier's grant, decoded or REFUSED.**
+///
+/// ⊘ Split out so the refusal has one site: an unrecognised protection code is refused by
+/// name, never defaulted, for `MapGuestRam`'s stated reason — defaulting to read-write would
+/// map guest pages writable on an authorization that said read-only.
+fn notifier_grant(wire: Option<(u64, u64, u8)>) -> Result<Option<GuestRamGrant>, RmError> {
+    match wire {
+        None => Ok(None),
+        Some((offset, len, prot)) => match crate::proto::prot_from_code(prot) {
+            Some(prot) => Ok(Some(GuestRamGrant::originated_by_the_vmm(
+                offset, len, prot,
+            ))),
+            None => Err(RmError::Other(crate::rm::NOT_ON_THIS_RUNG)),
+        },
+    }
+}
+
 thread_local! {
     /// `(count, nanos)` per bucket, and the running total request count.
     ///
@@ -1352,6 +1369,51 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
             ) {
                 Ok((h, token)) => Reply::HandleAndToken(h.raw(), token),
                 Err(e) => failed(e),
+            },
+        },
+        // ★★★★★ **w755r — ROUTE K INCREMENT 7 lands here, in the SCRATCHPAD's child.**
+        //
+        // ⊘ `range` is the scratchpad's `NV01_MEMORY_VIRTUAL` range **inside B**, not a
+        // per-proc VAS — different namespaces (`BIRTH_HANDLE_BASE`), and the field is named
+        // so a reader cannot mistake one for the other.
+        // ⊘ The notifier arrives as a GRANT and is mapped and described **by the backend**,
+        // in B: the descriptor must pin pages of the scratchpad's own mapping, and
+        // `hObjectError` is a birth parameter only B can name.
+        Request::BirthGuestChannelInB {
+            range,
+            engine,
+            declared_engine_type,
+            adopt: (kind, a, b, ring_va, gp_fifo_va, gp_fifo_entries, userd),
+            err_notifier,
+        } => match engine_from_code(engine) {
+            None => Reply::Failed(WireError::Other(crate::rm::NOT_ON_THIS_RUNG)),
+            // ⊘ The notifier's protection is decoded BEFORE the birth and an unrecognised
+            // code is REFUSED, never defaulted — `MapGuestRam`'s rule, and for its reason:
+            // defaulting to read-write would map guest pages writable on an authorization
+            // that said read-only, which is a silent escalation. ⚠ Refused here, before
+            // anything is allocated, so there is nothing to unwind.
+            Some(engine) => match notifier_grant(err_notifier) {
+                Err(e) => failed(e),
+                Ok(grant) => match rm.birth_guest_channel_in_b(
+                    raw(range),
+                    kayfabe_isolate::ChannelEngine::of(engine, declared_engine_type),
+                    kayfabe_isolate::AdoptedGuestRing {
+                        ring: ring_provenance(kind, a, b),
+                        ring_va,
+                        gp_fifo_va,
+                        gp_fifo_entries,
+                        userd: userd.map(|(kind, memory, offset)| {
+                            kayfabe_isolate::AdoptedGuestUserd {
+                                object: userd_object(kind, raw(memory)),
+                                offset,
+                            }
+                        }),
+                    },
+                    grant,
+                ) {
+                    Ok((h, token)) => Reply::HandleAndToken(h.raw(), token),
+                    Err(e) => failed(e),
+                },
             },
         },
         Request::AllocEngineObject {
