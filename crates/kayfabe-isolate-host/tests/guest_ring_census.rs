@@ -770,6 +770,27 @@ fn the_birth_in_b_names_the_store_for_userd_and_no_ring_object() {
 /// **different clients**, and unwinding across that boundary is the double-free this file
 /// split `UserdOwner` to make unrepresentable. A routing decision taken after the first
 /// allocation has already created something the other path does not know how to free.
+///
+/// # ⊘⊘⊘ WHAT THIS GATE DOES **NOT** SAY — measured w755q, and it cost a boot
+///
+/// It is a statement about the **internal ordering of `alloc_channel_in`**, and nothing else.
+/// In particular it does **not** say that `alloc_channel_in` is on the path a guest's channel
+/// birth takes — and `[measured w755q, RTX 3090, driver 580.159.04]` **it is not**. The guest's
+/// birth runs `alloc_channel`/`alloc_channel_declared` → **`alloc_channel_lowered`**, in the
+/// **per-proc isolate**, which refused `USERD_IN_STORE_NEEDS_BIRTH_IN_B` **11 times** while
+/// `birth_in_b` was never entered (all three of its prints were zero).
+///
+/// ⇒ This gate was **green for the whole of that boot**. A gate on a function's internal
+/// ordering is blind, by construction, to whether that function runs at all —
+/// `a_green_test_can_hold_a_wall_in_place`, and the author of both the route and this gate
+/// was the same (me).
+///
+/// ⚠ The missing piece is a **delegation across a process boundary**, not a moved line:
+/// `birth_in_b` resolves B through `conn.birth_for_range`, and `birth_ranges` is populated
+/// only in the **scratchpad's** `adopt_space`. A per-proc isolate has no B and structurally
+/// cannot birth in one. See `docs/design/increment_6_never_fired.md`, and
+/// [`the_guest_birth_path_refuses_a_store_userd_by_name`] below, which pins the half that IS
+/// true today so the gap has a named home instead of living in a doc nobody greps.
 #[test]
 fn a_store_slice_userd_is_routed_to_b_before_anything_is_allocated() {
     let body = enclosing_fn(&body_of("src/rm.rs"), "fn alloc_channel_in(");
@@ -853,5 +874,70 @@ fn a_channel_born_in_b_is_scheduled_in_b() {
         body.contains("birth.control(tsg, NVA06C_CTRL_CMD_GPFIFO_SCHEDULE"),
         "★★★ the B route no longer issues the schedule THROUGH B. Naming B's TSG on our own \
          client is the wrong-namespace control this route exists to avoid."
+    );
+}
+
+/// ★★★★★ **w755q — THE PATH THE GUEST'S BIRTH ACTUALLY TAKES, AND WHAT IT DOES THERE.**
+///
+/// `[measured w755q — vast 51304517, RTX 3090, host driver 580.159.04, tree `eb3fc08f`]` a
+/// guest channel whose USERD is a slice of the one reserved store is refused **11 times** by
+/// `alloc_channel_lowered`, in a **per-proc isolate**, with
+/// `USERD_IN_STORE_NEEDS_BIRTH_IN_B` — while `birth_in_b` was **never entered** (its success
+/// print and both of its refusal prints were all zero).
+///
+/// ⊘ **That refusal is CORRECT and this gate exists to keep it.** A per-proc isolate may not
+/// name the store (constraint 26), and it has no birth client B to name it through:
+/// `birth_in_b` resolves B via `conn.birth_for_range`, whose index is populated only in the
+/// **scratchpad's** `adopt_space`. Downgrading to a USERD of ours instead would be the
+/// `GP_PUT == GP_GET == 0` silence measured at w755h — an armed run and its control producing
+/// the same dead channel.
+///
+/// # ⚠ WHAT IS MISSING, NAMED HERE SO IT IS NOT ONLY IN A DOC
+///
+/// Nothing acts on the refusal. The birth must be **delegated to the scratchpad**, which holds
+/// B — a change in *which process runs the verb*, which is why no edit inside `rm.rs` alone can
+/// make `birth_in_b` reachable from the guest's path.
+///
+/// ⊘ This test does **not** fail on that gap, deliberately: a permanently-red test is noise
+/// that gets muted, and the gap is a missing feature rather than a regression. What it does is
+/// make the refusal's **site** load-bearing, so that moving or deleting it without building the
+/// delegation is caught here rather than by another boot.
+#[test]
+fn the_guest_birth_path_refuses_a_store_userd_by_name() {
+    let rm = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/rm.rs"))
+        .expect("rm.rs is readable");
+    let body = enclosing_fn(&rm, "fn alloc_channel_lowered(");
+    assert!(
+        !body.is_empty(),
+        "`alloc_channel_lowered` was not found in rm.rs — it is the guest's birth-at-alloc \
+         lowering, and if it was renamed this whole gate is measuring nothing"
+    );
+
+    // ★ The refusal is IN the lowering the guest's birth reaches, not somewhere a reader
+    //   would have to hope is on the path.
+    assert!(
+        body.contains("USERD_IN_STORE_NEEDS_BIRTH_IN_B"),
+        "★★★★★ `alloc_channel_lowered` no longer refuses a store USERD by name. `[measured \
+         w755q]` this is the site that fired 11 times on real hardware, and it is the ONLY \
+         thing standing between a store-slice USERD and a channel silently born with a USERD \
+         of ours — which is the `GP_PUT == GP_GET == 0` silence."
+    );
+    // ⊘ And it must refuse on the `TheStore` discriminant itself, not on some proxy that a
+    //   later edit could make true for a different reason.
+    assert!(
+        body.contains("UserdObject::TheStore"),
+        "★★★ the refusal no longer keys on `UserdObject::TheStore`. A refusal that fires for \
+         a different reason than the one it is named for is this tree's most-repeated defect."
+    );
+    // ★★★ NON-VACUITY, and it is the half w755q proves matters: `birth_in_b` — the thing that
+    //     WOULD serve this — is NOT reachable from here. If a future edit makes it reachable,
+    //     this assertion fires and whoever made it must come and rewrite this test's story,
+    //     which is exactly when the story should be rewritten.
+    assert!(
+        !body.contains("birth_in_b"),
+        "★★★★★ `alloc_channel_lowered` now reaches `birth_in_b` — which is the DELEGATION \
+         this gate was written to say was MISSING. ⊘ That is good news, not a failure: \
+         update this test to assert the delegation's shape, and re-boot, because \
+         `docs/design/increment_6_never_fired.md` is now out of date."
     );
 }
