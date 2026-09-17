@@ -162,6 +162,16 @@ unsafe impl Sync for Cuda {}
 /// NVIDIA driver can run this.
 pub const LIBCUDA_SONAME: &str = "libcuda.so.1";
 
+/// `dlsym`, returning NULL rather than refusing. ⊘ One place, so the NULL-tolerant and the
+/// required lookups share exactly one `unsafe` between them.
+fn sym_or_null(handle: *mut c_void, name: &str) -> *mut c_void {
+    let Ok(n) = CString::new(name) else {
+        return core::ptr::null_mut();
+    };
+    // SAFETY: `handle` is a live library handle and `n` is NUL-terminated.
+    unsafe { dlsym(handle, n.as_ptr()) }
+}
+
 impl Cuda {
     /// `dlopen` the driver and resolve every symbol.
     ///
@@ -214,16 +224,20 @@ impl Cuda {
         // ⇒ every size-carrying entry point here is asked for by its versioned name.
         // ★ The NULL-tolerant twin of `sym!`. See the VMM fields: a symbol this driver does
         // not have must yield `None` rather than refusing the whole binding.
+        //
+        // ⊘ It resolves through `sym_or_null` rather than repeating `sym!`'s body. The first
+        // draft duplicated the `dlsym` + `transmute` pair, which added TWO more `unsafe`
+        // blocks doing what two existing ones already did — and the crate's relaxation
+        // ratchet is what said so. Duplicated `unsafe` is duplicated review surface.
         macro_rules! opt {
             ($name:literal) => {{
-                let n = CString::new($name).expect("a literal with no NUL");
-                // SAFETY: `handle` is a live library handle and `n` is NUL-terminated.
-                let p = unsafe { dlsym(handle, n.as_ptr()) };
-                if p.is_null() {
+                let raw = sym_or_null(handle, $name);
+                if raw.is_null() {
                     None
                 } else {
-                    // SAFETY: the driver's ABI for this symbol.
-                    Some(unsafe { core::mem::transmute(p) })
+                    // SAFETY: the driver's ABI for this symbol; `raw` is non-NULL and came
+                    // from `dlsym` on a live handle.
+                    Some(unsafe { core::mem::transmute(raw) })
                 }
             }};
         }

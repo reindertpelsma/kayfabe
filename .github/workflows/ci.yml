@@ -1634,7 +1634,35 @@ jobs:
           #     the arena's resident size, which is how the census knows what it holds.
           # Each carries its own `// SAFETY:` (the crate's `undocumented_unsafe_blocks = deny`
           # makes that unskippable), and none of the three takes a pointer from outside.
-          AUDITED="kayfabe-linux-raw:127 kayfabe-qemu-raw:58 kayfabe-cuda:30"
+          # ★★★ `kayfabe-cuda` 30 -> 36, 2026-09-17 (w755i) — FOUR VMM SYMBOLS AND THEIR CALL
+          # SITES, and the ratchet is what made the growth visible rather than silent.
+          #
+          # ⊘ WHAT THE SIX ARE, so this is a review and not a number:
+          #   4 × `unsafe extern "C" fn` FIELD TYPES — `cuMemGetAllocationGranularity`,
+          #       `cuMemCreate`, `cuMemExportToShareableHandle`, `cuMemRelease`. A foreign
+          #       function-pointer type cannot be written without the keyword; these are
+          #       declarations, not new powers.
+          #   3 × `unsafe { }` CALL SITES in `export_device_allocation`, one per FFI call, each
+          #       carrying its own SAFETY comment. ⚠ Deliberately NOT consolidated into one
+          #       block: one `unsafe` per call is the reviewable granularity, and collapsing
+          #       them to shrink this number would buy the ratchet at the cost of the review.
+          #   1 × `sym_or_null`, which REPLACED two. The first draft duplicated `sym!`'s
+          #       `dlsym` + `transmute` pair inside a second macro; this gate is what said so,
+          #       and the duplication is gone. ⇒ net +6, not +8.
+          #
+          # ★ WHY THE SURFACE GROWS AT ALL: the four symbols answer one question —
+          # can a device allocation CUDA owns be IMPORTED INTO OUR RM CLIENT
+          # (`kayfabe_isolate_host::cudastore`). If yes, the single store becomes CUDA-owned
+          # and therefore addressable by the walk kernel LIVE at its own GPGA, by
+          # `cuMemcpyAsync` for the emulated CE plane, and by `map_store_slice` into guest VA
+          # spaces — from one object. The alternative is the relocation this replaces, which
+          # FORECLOSES the differential's most important disagreement direction.
+          #
+          # ⊘ They are `Option` and resolved NULL-tolerantly: a driver without the VMM API
+          # yields `None`, which is a MEASUREMENT about that host, never a load failure. The
+          # binding is loaded on every boot for the walk kernel, and a required symbol absent
+          # from an older `libcuda` would turn a missing experiment into a missing walker.
+          AUDITED="kayfabe-linux-raw:127 kayfabe-qemu-raw:58 kayfabe-cuda:36"
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
           missing=""

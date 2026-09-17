@@ -1,7 +1,17 @@
 # The partial rebuild — what is KEPT, what is REBUILT, and the evidence for the line
 
-**STATUS: PROPOSAL, 2026-09-17 (w755j). Owner: *"rebuild if chosen is partly then."* Not a
-decision; the data behind one.**
+**STATUS: PARKED, 2026-09-17 (w755j). Owner: *"rebuild if chosen is partly then"* … *"but maybe
+fix + delete gets it already done later. if so I am also happy"* … *"for later"*.**
+
+⇒ **The ruling is: FIX + DELETE first, and revisit this only if that stalls.** The partition
+below stays as the data a later decision starts from, so it is not re-derived from feel. ⊘ Do
+not read `PARKED` as `REJECTED`: the deletion list under *"What the rebuild gets to DELETE"* is
+**live work** under §7 of `SINGLE_STORE_PLAN.md`, licensed by a green suite. The only thing
+parked is the *rebuild* of the four rotted crates.
+
+★ And the one item that is live **regardless of which path is taken** is the rule in the defect-
+class section: *every instrument must name which gate row it moves, and a boot report must lead
+with the gate.* It found three defects within an hour of existing and costs nothing.
 
 ## The measurement that sets the line
 
