@@ -219,6 +219,12 @@ pub struct StoreMapPort {
     /// ⊘ Three and not one: *"we did not ask"*, *"we asked and were refused"* and *"it
     /// worked"* are different facts, and a census that adds them cannot tell a route that
     /// never fired from one that fired and failed — the confusion w755q spent a boot on.
+    /// ★★★ w755u — doorbells carried to the channel's own isolate: asked, refused, rung.
+    /// ⊘ Kept apart from the birth counters for their reason: a boot must be able to say
+    /// whether the BIRTH or the RING is what stopped, and one counter cannot.
+    chan_doorbells: AtomicU64,
+    chan_doorbell_refused: AtomicU64,
+    chan_rung: AtomicU64,
     chan_births: AtomicU64,
     chan_birth_refused: AtomicU64,
     chan_born: AtomicU64,
@@ -318,6 +324,9 @@ impl StoreMapPort {
             unmaps: AtomicU64::new(0),
             unmap_refused: AtomicU64::new(0),
             bytes_mapped: AtomicU64::new(0),
+            chan_doorbells: AtomicU64::new(0),
+            chan_doorbell_refused: AtomicU64::new(0),
+            chan_rung: AtomicU64::new(0),
             chan_births: AtomicU64::new(0),
             chan_birth_refused: AtomicU64::new(0),
             chan_born: AtomicU64::new(0),
@@ -768,6 +777,69 @@ impl StoreMapPort {
         }
     }
 
+    /// ★★★★★ **w755u — SCHEDULE AND RING A CHANNEL THIS PORT'S ISOLATE OWNS.**
+    ///
+    /// `[measured w755t]` the birth moved to B and the doorbell did not follow: every one was
+    /// refused `ForeignHandle { handle: 0xb1470006, worker_isolate: iso2 }`. ⊘ The gate was
+    /// right; the verb was in the wrong process — w755q's defect, one verb later.
+    ///
+    /// ⚠ **The order is the ruling, not tidiness.** `GPFIFO_SCHEDULE` first, then the ring:
+    /// the host-side runlist submit is lazy, and a doorbell rung on a channel that is not on
+    /// the runlist has its submission **dropped silently** — nothing faults and the guest
+    /// waits forever. That is `NEVER RETIRED` with `Xid = 0`, character for character.
+    ///
+    /// ⊘ Both verbs are plain [`kayfabe_isolate::RmBackend`] methods that already cross the
+    /// socket, so this needs **no new protocol request**: what was missing was never a
+    /// transport, only a caller on the right side of it.
+    ///
+    /// # Errors
+    /// [`kayfabe_fwd::FwdFault`], by name.
+    ///
+    /// # Panics
+    /// Through `Worker::with_rm`'s `assert_lock_free`, if a caller reaches this holding a
+    /// ranked lock. That is the invariant, not a bug to be caught.
+    pub fn doorbell_over_the_store(
+        &self,
+        chan: HostHandle,
+        token: u64,
+        schedule: bool,
+    ) -> Result<(), kayfabe_fwd::FwdFault> {
+        self.chan_doorbells.fetch_add(1, Ordering::Relaxed);
+        let refused = |e: kayfabe_isolate::RmError| {
+            self.chan_doorbell_refused.fetch_add(1, Ordering::Relaxed);
+            kayfabe_fwd::FwdFault::Rm { err: e, on: None }
+        };
+        let off = self.off_vcpu().map_err(|_| {
+            refused(kayfabe_isolate::RmError::Other(
+                kayfabe_isolate::STORE_BIRTH_REFUSED,
+            ))
+        })?;
+        let out = self.iso.with_worker(move |worker| {
+            worker.with_rm(&off, move |rm| {
+                if schedule {
+                    rm.schedule(chan)?;
+                }
+                rm.ring_doorbell(token)
+            })
+        });
+        match out {
+            None => Err(refused(kayfabe_isolate::RmError::Other(
+                kayfabe_isolate::STORE_BIRTH_REFUSED,
+            ))),
+            Some(Err(e)) => {
+                eprintln!(
+                    "kayfabe: STORE-DOORBELL ⊘⊘ REFUSED by the scratchpad chan={chan:?} \
+                     token={token:#x} schedule={schedule} — {e:?}"
+                );
+                Err(refused(e))
+            }
+            Some(Ok(())) => {
+                self.chan_rung.fetch_add(1, Ordering::Relaxed);
+                Ok(())
+            }
+        }
+    }
+
     /// Where in the reserved object the slice at `at` lives, if this port placed one.
     #[must_use]
     pub fn slice_offset(&self, vas: HostHandle, at: GpuVa) -> Option<u64> {
@@ -921,8 +993,31 @@ impl StoreMapPort {
         } else {
             "★★★ EVERY STORE-USERD CHANNEL WAS BORN IN B — hardware reads the GUEST'S cursor"
         };
+        let (cda, cdr, cdg) = (
+            self.chan_doorbells.load(Ordering::Relaxed),
+            self.chan_doorbell_refused.load(Ordering::Relaxed),
+            self.chan_rung.load(Ordering::Relaxed),
+        );
+        // ★★★★★ **w755u's ROW — and it exists because `born>0` was NOT enough.**
+        // `[measured w755t]` 11 channels were born in B and every doorbell on them was
+        // refused `ForeignHandle`, so the birth census read green while nothing reached the
+        // GPU. ⇒ the BIRTH and the RING need separate verdicts, or a boot cannot say which
+        // half stopped.
+        let chan_ring_verdict = if cda == 0 {
+            "⊘⊘ NEVER ASKED — no doorbell was carried to a channel in another isolate. With \
+             born>0 above, that means the doorbells are still running on the per-proc worker \
+             and being refused ForeignHandle; nothing reached the GPU"
+        } else if cdg == 0 {
+            "⊘⊘ CARRIED AND REFUSED EVERY TIME — read the named refusals above"
+        } else if cdr > 0 {
+            "⚠ PARTIAL — some rang and some did not; the ones that did not were dropped \
+             silently, which is `NEVER RETIRED` with no fault"
+        } else {
+            "★★★ EVERY DOORBELL REACHED THE CHANNEL'S OWN ISOLATE — scheduled, then rung"
+        };
         format!(
-            "STORE-BIRTH asked={cba} refused={cbr} born={cbb} ⇒ {chan_birth_verdict}\n\
+            "STORE-DOORBELL asked={cda} refused={cdr} rung={cdg} ⇒ {chan_ring_verdict}\n\
+             STORE-BIRTH asked={cba} refused={cbr} born={cbb} ⇒ {chan_birth_verdict}\n\
              STORE-MAP-K handed={bc} refused={br} procs={bp} ⇒ {birth_verdict}\n\
              STORE-MAP iso={:?} obj={:?} obj_len={} adopts={adopts} adopt_refused={} \
              maps={maps} map_refused={} unmaps={} unmap_refused={} bytes_mapped={} \
@@ -977,6 +1072,15 @@ impl kayfabe_fwd::StoreChannelBirth for StoreMapPort {
         err_notifier: Option<kayfabe_isolate::GuestRamGrant>,
     ) -> Result<(HostHandle, u64), kayfabe_fwd::FwdFault> {
         StoreMapPort::birth_over_the_store(self, host_vas, engine, ring, err_notifier)
+    }
+
+    fn doorbell_over_the_store(
+        &self,
+        chan: HostHandle,
+        token: u64,
+        schedule: bool,
+    ) -> Result<(), kayfabe_fwd::FwdFault> {
+        StoreMapPort::doorbell_over_the_store(self, chan, token, schedule)
     }
 }
 

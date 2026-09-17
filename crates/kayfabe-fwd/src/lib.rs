@@ -6948,6 +6948,28 @@ pub trait StoreChannelBirth: Send + Sync {
         ring: kayfabe_isolate::AdoptedGuestRing,
         err_notifier: Option<kayfabe_isolate::GuestRamGrant>,
     ) -> Result<(HostHandle, u64), FwdFault>;
+
+    /// ★★★★★ **w755u — schedule and ring a channel this party owns.**
+    ///
+    /// `[measured w755t]` after the birth moved to B, every doorbell on those channels was
+    /// refused `ForeignHandle { handle: 0xb1470006, worker_isolate: iso2 }` — the channel
+    /// belongs to the scratchpad, the doorbell verb ran on the per-proc worker, and
+    /// *"every refused doorbell is a submission that never reached the GPU."*
+    ///
+    /// ⊘ `schedule` travels because the runlist submit is **lazy** — deferred to the first
+    /// doorbell — and `GPFIFO_SCHEDULE` is an RM control on the **TSG**, so it is
+    /// client-scoped and only this party can issue it. ⚠ Ringing a channel that is not on
+    /// the runlist drops the submission **silently**: nothing faults and the guest never
+    /// retires.
+    ///
+    /// # Errors
+    /// By name, so a boot can say which half refused.
+    fn doorbell_over_the_store(
+        &self,
+        chan: HostHandle,
+        token: u64,
+        schedule: bool,
+    ) -> Result<(), FwdFault>;
 }
 
 /// ★★★★ **A SHARED, long-lived source of our own framebuffer's bytes** — what a device

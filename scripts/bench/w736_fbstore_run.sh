@@ -569,6 +569,11 @@ constraint 32 REPLACED. Do not read this arm as a route-K result."
   echo "W755R-STORE-BIRTH-LINES=${n_sb:-0}  (0 ⇒ UNMEASURED, not 'nothing was asked')"
   grep -a 'STORE-BIRTH ' "$Q" 2>/dev/null | tail -2 | cut -c1-300
   echo "W755R-STORE-BIRTH-ARMED=$(grep -ac 'STORE-BIRTH AT REALIZE: ★★★★★ ARMED' "$Q" 2>/dev/null)   ⊘⊘ 0 with ARM3_VAS_OWNER=k means NO BIRTH PARTY was installed — the route cannot fire"
+  # ★★★★★ w755u — the RING half. `born>0` with `rung=0` is what w755t measured.
+  echo "--- ★★★★★ w755u: STORE-DOORBELL — did the ring reach the channel's own isolate? ---"
+  grep -a 'STORE-DOORBELL asked' "$Q" 2>/dev/null | tail -1 | cut -c1-300
+  echo "W755U-FOREIGN-HANDLE=$(grep -ac 'ForeignHandle' "$Q" 2>/dev/null)   ⊘⊘ w755t measured 20 — EVERY refused doorbell is a submission that never reached the GPU"
+  echo "W755U-DOORBELL-VERB=$(grep -ac 'DOORBELL-VERB' "$Q" 2>/dev/null)   ⊘ w755t measured 0 — ring_doorbell was NEVER called"
   echo "W755R-BORN-IN-B=$(grep -ac 'STORE-BIRTH ✔ BORN IN B' "$Q" 2>/dev/null)   ★★★ the first number that means the GUEST'S cursor is what hardware reads"
   echo "W755R-BIRTH-IN-B-ENTERED=$(grep -ac 'CHANNEL-BIRTH ★★★★★ BORN IN B' "$Q" 2>/dev/null)   ⊘ w755q measured 0 — birth_in_b was NEVER ENTERED"
   echo "W755R-USERD-REFUSED-IN-ISOLATE=$(grep -ac 'USERD_IN_STORE_NEEDS_BIRTH_IN_B' "$Q" 2>/dev/null)   ⊘⊘ w755q measured 11. NON-ZERO here means the interception did NOT happen and the per-proc isolate still saw the shape"

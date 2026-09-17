@@ -2031,6 +2031,52 @@ impl SharedDevice {
         )
     }
 
+    /// ★★★★★ **w755u — schedule and ring on the worker that owns the channel.**
+    ///
+    /// Split out of the closure for [`SharedDevice::birth_over_the_store`]'s reason: one site
+    /// and one message for the refusal. ⊘ Carries **no orphans** — nothing was allocated on
+    /// this side, so there is nothing to unwind, and naming any would hand `dispose_on` a
+    /// handle that means nothing to it.
+    fn doorbell_where_the_channel_lives(
+        &self,
+        chan: HostHandle,
+        token: u64,
+        schedule: bool,
+    ) -> Result<VerbReply, kayfabe_isolate::VerbFailure> {
+        let fail = |err: RmError| kayfabe_isolate::VerbFailure {
+            err,
+            orphans: kayfabe_fwd::Orphans::default(),
+            on: None,
+        };
+        let Some(party) = self.store_birth.get() else {
+            eprintln!(
+                "kayfabe: STORE-DOORBELL ⊘⊘ REFUSED chan={chan:?} token={token:#x} — the \
+                 channel belongs to another isolate and NO birth party is installed to reach \
+                 it. ⊘ NOT rung from here anyway: the schedule is an RM control on the TSG \
+                 and is client-scoped, so a channel that is not on the runlist would be rung \
+                 and its submission dropped silently — `NEVER RETIRED` with no fault."
+            );
+            return Err(fail(RmError::Other(kayfabe_isolate::NO_STORE_BIRTH_PARTY)));
+        };
+        match party.doorbell_over_the_store(chan, token, schedule) {
+            Ok(()) => Ok(VerbReply::Doorbell {
+                // ⊘ Nothing fresh: the VAS and the channel both already existed — this verb
+                // scheduled and rang, it did not materialize. `commit_doorbell` must not be
+                // told to adopt or free either.
+                host_vas: None,
+                channel: None,
+                scheduled: schedule,
+            }),
+            Err(f) => {
+                eprintln!(
+                    "kayfabe: STORE-DOORBELL ⊘⊘ REFUSED by the birth party — chan={chan:?} \
+                     token={token:#x} schedule={schedule} {f:?}"
+                );
+                Err(fail(RmError::Other(kayfabe_isolate::STORE_BIRTH_REFUSED)))
+            }
+        }
+    }
+
     /// ★★★★★ **w755r — hand the birth to whoever holds the birth client, or refuse by name.**
     ///
     /// Split out of the closure above so the refusal has one site and one message. ⊘ It
@@ -3886,7 +3932,7 @@ impl SharedDevice {
         working_set: &[GpuVa],
         err_notifier_grant: Option<kayfabe_isolate::GuestRamGrant>,
     ) -> Result<DoorbellOutcome, FwdFault> {
-        let out = self.verb_op(
+        let out = self.verb_op_ex(
             || {
                 self.route_act(
                     |spine| {
@@ -3910,6 +3956,49 @@ impl SharedDevice {
                 )?
             },
             kayfabe_fwd::commit_doorbell,
+            // ★★★★★ **w755u — A DOORBELL ON A CHANNEL BORN IN B RUNS WHERE THE CHANNEL IS.**
+            //
+            // ⊘⊘⊘ **This is w755q's defect, one verb later, and it was measured the same
+            // way.** `[measured w755t]` after the birth was delegated, 11 channels were born
+            // in B — and every doorbell on them was refused:
+            //
+            //     ForeignHandle { handle: HostHandle(iso4294967295/gpu0:0xb1470006),
+            //                     worker_isolate: iso2/gpu0 }
+            //
+            // The channel belongs to the **scratchpad** (it was born there, in B); the
+            // doorbell verb still ran on the **per-proc** worker; `Worker::execute`'s
+            // foreign-handle gate refused it before the arm could ring anything. ⊘ The gate
+            // is RIGHT — a per-proc isolate may not name another isolate's handle — and
+            // "every refused doorbell is a submission that never reached the GPU", which is
+            // exactly `NEVER RETIRED` with **`Xid = 0`**: nothing faulted because nothing ran.
+            //
+            // ⇒ Route the verb to the party that owns the handle. ⊘ Nothing is exempted from
+            // the gate and no sentinel handle is invented: the *worker* changes, so the
+            // handle is no longer foreign to it.
+            //
+            // ⚠ **The doorbell itself needs only the token** — owner, 2026-09-17: *"A
+            // doorbell can ring from another process, only the token needs to match."* What
+            // needs B is the **schedule**, which is an RM control on the TSG and therefore
+            // client-scoped (w755o). Both travel together here because both are in this one
+            // verb.
+            |worker, verbs, off| {
+                let kayfabe_isolate::VerbPlan::Doorbell {
+                    channel: Some((chan, token)),
+                    schedule,
+                    ..
+                } = *verbs
+                else {
+                    return worker.execute(verbs, off);
+                };
+                // ⊘ The discriminant is the HANDLE'S OWN isolate against the worker's — the
+                // same question the foreign-handle gate asks, asked before it refuses rather
+                // than after. A flag saying "this was born in B" would be a second source of
+                // truth for something the handle already carries.
+                if chan.isolate() == worker.isolate() {
+                    return worker.execute(verbs, off);
+                }
+                self.doorbell_where_the_channel_lives(chan, token, schedule)
+            },
         )?;
         // ★★★★★ **THE CONTENT FORWARD IS ASKED FOR BY ENGINE** — see
         // [`ring_content_is_forwardable`], which carries the ruling and its reason.
