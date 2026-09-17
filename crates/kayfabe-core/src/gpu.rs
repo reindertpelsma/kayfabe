@@ -5971,6 +5971,20 @@ pub fn note_retired_reaped(n: usize) {
 ///
 /// A boot retires a handful of procs. The answer is almost always zero.
 ///
+/// ⚠ **IT IS PROCESS-WIDE, WHILE EVERY CALLER REASONS PER-DEVICE.** `[noted w755p]` This is a
+/// `static`, so it sums over **every `Gpu` in the process**, whereas
+/// [`Gpu::retired_len`] — the number its callers actually act on — is per-device. The
+/// direction is safe (it can only run HIGH, costing a Device-lock acquisition that finds
+/// nothing; it can never run low and strand a proc), but on a multi-GPU VM a retire on one
+/// GPU makes the *other* GPUs' workers take their lock too, which is a fraction of the w520
+/// cost coming back scaled by GPU count.
+/// ⊘ Not changed here: making it per-device means threading a handle to the atomic through
+/// the vCPU trap path, which is exactly the coupling this mirror exists to avoid. Recorded
+/// so the next reader does not discover it as a surprise.
+/// ★ It has already cost something once: a test that deliberately left one proc retired
+/// leaked it across tests in the same binary, producing a suite flake invisible to running
+/// that binary alone.
+///
 /// ⚠ **EXACT, not monotone, and the two ends are why.** A monotone epoch cannot work for a
 /// BUDGETED drain: the drain may stop mid-way, the epoch would not move again, and the
 /// remainder would never be drained. So this is incremented on every retire and decremented
