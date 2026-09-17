@@ -2011,16 +2011,22 @@ impl SharedDevice {
                 }
                 let kayfabe_isolate::VerbPlan::ChannelBirth {
                     host_vas,
+                    engine,
                     declared_engine_type,
                     adopt,
                     err_notifier,
-                    ..
                 } = verbs
                 else {
                     // Unreachable: `store_userd` matched this variant one statement ago.
                     return worker.execute(verbs, off);
                 };
-                self.birth_over_the_store(*host_vas, *declared_engine_type, *adopt, *err_notifier)
+                self.birth_over_the_store(
+                    *host_vas,
+                    *engine,
+                    *declared_engine_type,
+                    *adopt,
+                    *err_notifier,
+                )
             },
         )
     }
@@ -2035,6 +2041,7 @@ impl SharedDevice {
     fn birth_over_the_store(
         &self,
         host_vas: Option<HostHandle>,
+        engine: kayfabe_arch::ids::EngineKind,
         declared_engine_type: Option<u32>,
         adopt: kayfabe_isolate::AdoptedGuestRing,
         err_notifier: Option<kayfabe_isolate::GuestRamGrant>,
@@ -2067,22 +2074,18 @@ impl SharedDevice {
             );
             return Err(fail(RmError::Other(kayfabe_isolate::NO_STORE_BIRTH_PARTY)));
         };
-        // ★ The guest's own number first, exactly as `alloc_channel_declared` takes it: a
-        // channel with no engine type is not a channel with a default one, it is a channel
-        // on runlist 0.
-        let Some(engine_type) = declared_engine_type else {
-            eprintln!(
-                "kayfabe: STORE-BIRTH ⊘⊘ REFUSED — the guest declared no engineType. ⊘ NOT \
-                 substituted with a default: that is a channel on runlist 0, which is a \
-                 different channel that succeeds."
-            );
-            return Err(fail(RmError::Other(
-                kayfabe_isolate::NO_ENGINE_TYPE_FOR_STORE_BIRTH,
-            )));
-        };
+        // ⊘⊘ **THE ENGINE TYPE IS NOT RESOLVED HERE, AND MY FIRST DRAFT GOT THIS WRONG.**
+        // It refused outright on a `None` declaration — which is **stricter than the
+        // established path**: `alloc_channel_lowered` falls back to `engine_type_for(engine)`
+        // and refuses only when BOTH are absent. A stricter rule here would refuse births
+        // that succeed today, and only for channels whose USERD is the store — so the
+        // symptom would read as *"the store route is broken"* rather than *"a caller
+        // tightened a rule"*. ⇒ both halves travel and the fallback stays where
+        // `engine_type_for` lives.
         // ⊘ The grant travels, not a mapping: the birth party must pin pages of ITS OWN
         // mapping of guest RAM, because that is the process the birth client lives in.
-        match party.birth_over_the_store(vas, engine_type, adopt, err_notifier) {
+        let engine = kayfabe_isolate::ChannelEngine::of(engine, declared_engine_type);
+        match party.birth_over_the_store(vas, engine, adopt, err_notifier) {
             Ok((channel, token)) => Ok(VerbReply::ChannelBorn {
                 // ⊘ `None`: the space was the guest's own and already existed, so this birth
                 // minted no VAS and `commit_channel_birth` must not be told to free one.

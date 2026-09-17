@@ -6944,7 +6944,7 @@ pub trait StoreChannelBirth: Send + Sync {
     fn birth_over_the_store(
         &self,
         host_vas: HostHandle,
-        engine_type: u32,
+        engine: kayfabe_isolate::ChannelEngine,
         ring: kayfabe_isolate::AdoptedGuestRing,
         err_notifier: Option<kayfabe_isolate::GuestRamGrant>,
     ) -> Result<(HostHandle, u64), FwdFault>;

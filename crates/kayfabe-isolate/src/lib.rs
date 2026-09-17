@@ -211,6 +211,46 @@ impl core::fmt::Debug for HostHandle {
 /// that followed would be attributed to the two walkers rather than to the missing image.
 pub const NOT_A_WALK_SHADOW: u32 = 0x5748_0001;
 
+/// ★★★★★ **w755r — THE CHANNEL'S ENGINE, AS A CONDUIT THE SHIM CANNOT INTERPRET.**
+///
+/// The store-birth delegation passes through `kayfabe-qemu-raw`, whose manifest states the
+/// rule plainly: *"`kayfabe-arch` is not a dependency of this crate and must not become one —
+/// **the shim names no architecture**."* Two fields of type [`EngineKind`] and `Option<u32>`
+/// would break that, and re-exporting `EngineKind` so the shim could spell it would honour
+/// the letter while losing the point.
+///
+/// ⇒ They travel as one opaque value. The shim moves it and **cannot** read it: there are no
+/// public accessors, so *"the shim does not interpret the engine"* is a property of the type
+/// rather than a promise in a comment.
+///
+/// ⊘ **Both halves, never a resolved number.** `alloc_channel_lowered` resolves the engine
+/// type as `declared.or_else(|| engine_type_for(kind))`, and that fallback has to stay where
+/// `engine_type_for` lives — `[my first draft of this route]` refused outright on a `None`
+/// declaration, which is **stricter than the established path** and would have refused
+/// births that succeed today, visible only on store-USERD channels.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ChannelEngine {
+    kind: EngineKind,
+    declared: Option<u32>,
+}
+
+impl ChannelEngine {
+    /// Bundle the guest's declaration with the channel's engine kind.
+    #[must_use]
+    pub fn of(kind: EngineKind, declared: Option<u32>) -> Self {
+        Self { kind, declared }
+    }
+
+    /// The pair, for the one party that resolves it — the backend that owns
+    /// `engine_type_for`. ⊘ Deliberately a single accessor returning both: a getter per field
+    /// would let a caller take the declaration and forget the fallback, which is exactly the
+    /// mistake this type was introduced to stop.
+    #[must_use]
+    pub fn parts(self) -> (EngineKind, Option<u32>) {
+        (self.kind, self.declared)
+    }
+}
+
 /// ★★★★★ **w755r — the four refusals of the store-birth route, kept APART.**
 ///
 /// ⊘ One name per cause, never one name for the route. `[this tree, repeatedly]` a single
@@ -1339,6 +1379,13 @@ pub trait RmBackend: Send + Sync {
     ///   [`RmBackend::adopt_space`]. The VMM holds the per-proc-space → range mapping already
     ///   (that ledger is what places every store slice), so re-deriving it here would be a
     ///   second statement of a routing decision the caller has made.
+    /// - `engine` — a [`ChannelEngine`]: **the guest's declaration and the kind, both**,
+    ///   never a number resolved by the caller. ⊘ The fallback `declared.or_else(||
+    ///   engine_type_for(engine))` is `alloc_channel_lowered`'s, and it has to stay where
+    ///   `engine_type_for` lives: a caller that resolved it would be a second statement of
+    ///   *"which runlist does this engine use"*, and `[the first draft of this verb did
+    ///   exactly that]` refusing outright on a `None` declaration is **stricter than the
+    ///   established path** — it would refuse births that succeed today.
     /// - `ring` — the guest's own GPFIFO, as [`AdoptedGuestRing`] describes it. ⚠ Its `userd`
     ///   is expected to be [`UserdObject::TheStore`]; any other shape belongs on the isolate's
     ///   own path, where the joined-object check can see it.
@@ -1367,11 +1414,11 @@ pub trait RmBackend: Send + Sync {
     fn birth_guest_channel_in_b(
         &mut self,
         range: HostHandle,
-        engine_type: u32,
+        engine: ChannelEngine,
         ring: AdoptedGuestRing,
         err_notifier: Option<GuestRamGrant>,
     ) -> Result<(HostHandle, u64), RmError> {
-        let _ = (range, engine_type, ring, err_notifier);
+        let _ = (range, engine, ring, err_notifier);
         Err(RmError::Other(0x56))
     }
 

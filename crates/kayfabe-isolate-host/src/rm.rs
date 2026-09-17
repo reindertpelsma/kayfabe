@@ -7519,7 +7519,7 @@ impl RmBackend for HostRmBackend {
     fn birth_guest_channel_in_b(
         &mut self,
         range: HostHandle,
-        engine_type: u32,
+        engine: kayfabe_isolate::ChannelEngine,
         ring: kayfabe_isolate::AdoptedGuestRing,
         err_notifier: Option<kayfabe_isolate::GuestRamGrant>,
     ) -> Result<(HostHandle, u64), RmError> {
@@ -7535,6 +7535,15 @@ impl RmBackend for HostRmBackend {
             return Err(RmError::Other(USERD_IN_STORE_NEEDS_BIRTH_IN_B));
         }
         let raw_range = self.narrow(range)?;
+        // ★ THE GUEST'S NUMBER FIRST, then `engine_type_for` — byte for byte what
+        // `alloc_channel_lowered` does, and resolved HERE rather than by the caller so that
+        // *"which runlist does this engine use"* keeps one statement. ⊘ Refused only when
+        // BOTH are absent: a channel with no engine type is not a channel with a default
+        // one, it is a channel on runlist 0.
+        let (engine_kind, declared) = engine.parts();
+        let engine_type = declared
+            .or_else(|| engine_type_for(engine_kind))
+            .ok_or(RmError::Other(NOT_ON_THIS_RUNG))?;
         // ★★★ **THE NOTIFIER IS BUILT IN B, BEFORE THE CHANNEL**, for `w288`'s reason:
         // `hObjectError` is a birth parameter, so it cannot be attached afterwards. ⊘ And it
         // is built from the GRANT rather than handed in as a handle, because a handle would

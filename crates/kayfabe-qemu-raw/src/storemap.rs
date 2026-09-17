@@ -699,7 +699,7 @@ impl StoreMapPort {
     pub fn birth_over_the_store(
         &self,
         host_vas: HostHandle,
-        engine_type: u32,
+        engine: kayfabe_isolate::ChannelEngine,
         ring: kayfabe_isolate::AdoptedGuestRing,
         err_notifier: Option<kayfabe_isolate::GuestRamGrant>,
     ) -> Result<(HostHandle, u64), kayfabe_fwd::FwdFault> {
@@ -734,7 +734,12 @@ impl StoreMapPort {
         };
         let out = self.iso.with_worker(move |worker| {
             worker.with_rm(&off, move |rm| {
-                rm.birth_guest_channel_in_b(range, engine_type, ring, err_notifier)
+                rm.birth_guest_channel_in_b(
+                    range,
+                    engine,
+                    ring,
+                    err_notifier,
+                )
             })
         });
         match out {
@@ -754,7 +759,8 @@ impl StoreMapPort {
                 self.chan_born.fetch_add(1, Ordering::Relaxed);
                 eprintln!(
                     "kayfabe: STORE-BIRTH ✔ BORN IN B host_vas={:#x} range={:#x} \
-                     engine_type={engine_type:#x} → channel={:?} token={:#x} ⇒ the channel \
+                     engine={engine:?} → channel={:?} \
+                     token={:#x} ⇒ the channel \
                      carries the GUEST'S OWN ring AND USERD, so hardware reads the guest's \
                      cursor and we are never in the GP_PUT path",
                     host_vas.raw(),
@@ -971,11 +977,17 @@ impl kayfabe_fwd::StoreChannelBirth for StoreMapPort {
     fn birth_over_the_store(
         &self,
         host_vas: HostHandle,
-        engine_type: u32,
+        engine: kayfabe_isolate::ChannelEngine,
         ring: kayfabe_isolate::AdoptedGuestRing,
         err_notifier: Option<kayfabe_isolate::GuestRamGrant>,
     ) -> Result<(HostHandle, u64), kayfabe_fwd::FwdFault> {
-        StoreMapPort::birth_over_the_store(self, host_vas, engine_type, ring, err_notifier)
+        StoreMapPort::birth_over_the_store(
+            self,
+            host_vas,
+            engine,
+            ring,
+            err_notifier,
+        )
     }
 }
 
