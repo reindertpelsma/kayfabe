@@ -436,13 +436,16 @@ impl WalkKernel {
         )?;
 
         // The device-side configuration, written exactly as the `.cu`'s `kf_create` does.
+        // ⊘ Same padding hazard as `args_for`: `KfDev` carries 4 uninitialised bytes and is
+        // memcpy'd to the device. `..Default::default()` fills FIELDS, never padding.
+        let mut h: KfDev = crate::driver_unsafe::zeroed();
         let h = KfDev {
             runs_per_pdb: cfg.runs_per_pdb,
             entry_budget: cfg.entry_budget,
             run_capacity: cfg.run_capacity,
             pdb_capacity: cfg.pdb_capacity,
             max_pdbs: u32::try_from(KF_MAX_PDB).unwrap_or(64),
-            ..KfDev::default()
+            ..h
         };
         cu.memcpy_h2d(dev.ptr, bytes_of(&h), "cuMemcpyHtoD(KfDev)")?;
 
@@ -468,28 +471,42 @@ impl WalkKernel {
     }
 
     fn args_for(&self, gpga: CUdeviceptr, gpga_len: u64, npdb: u32) -> KfArgs {
-        KfArgs {
-            win: crate::abi::KfWin {
-                base: gpga,
-                len: gpga_len,
+        // ★★★★★ **w761a — ZEROED FIRST, THEN ASSIGNED. The padding is the point.**
+        //
+        // ⊘⊘⊘ `KfArgs` carries **8 uninitialised padding bytes** (`npdb`→`scopes` and
+        // `nscope`→`hdr`; `abi.rs:312` names the hole) and a struct literal never writes them
+        // — Rust only writes fields. This value is then handed to `view_bytes` and on to
+        // `cuLaunchKernel` on **every refresh**, so the launch read uninitialised memory every
+        // time. That is live UB, not a latent one, and it is the same defect w728 already paid
+        // for (`rust_struct_padding_crosses_the_abi_uninitialised`): a fix applied to the
+        // instance left the class.
+        //
+        // ⚠ `zeroed()` exists in this crate for exactly this and had been applied only to
+        // `KfFormat` (`abi.rs:425`). ⊘ Sound HERE because `KfArgs` is a `#[repr(C)]` aggregate
+        // of integers and pointers with no niche — the generic signature's unsoundness is a
+        // separate finding and is not made worse by a correct use.
+        let mut a: KfArgs = crate::driver_unsafe::zeroed();
+        a.win = crate::abi::KfWin {
+            base: gpga,
+            len: gpga_len,
                 // ★ §39(c): in production these ARE the same number, and saying so here is
                 // the point. The single store is the whole of guest vidmem and all of it is
                 // mapped, so the bytes we may READ and the addresses a leaf may POINT AT
                 // coincide. They are separate fields because that coincidence is a property
                 // of THIS deployment, not of the walker -- a corpus image breaks it.
-                span: gpga_len,
-            },
-            fmt: self.fmt,
-            dev: self.dev.ptr,
-            tbl: [self.tbl[0].ptr, self.tbl[1].ptr],
-            pdbs: self.pdbs.ptr,
-            npdb,
-            scopes: self.scopes.ptr,
-            nscope: 0,
-            hdr: self.hdr.ptr,
-            rpdb: self.rpdb.ptr,
-            rrun: self.rrun.ptr,
-        }
+            span: gpga_len,
+        };
+        a.fmt = self.fmt;
+        a.dev = self.dev.ptr;
+        a.tbl = [self.tbl[0].ptr, self.tbl[1].ptr];
+        a.pdbs = self.pdbs.ptr;
+        a.npdb = npdb;
+        a.scopes = self.scopes.ptr;
+        a.nscope = 0;
+        a.hdr = self.hdr.ptr;
+        a.rpdb = self.rpdb.ptr;
+        a.rrun = self.rrun.ptr;
+        a
     }
 
     /// One refresh over `gpga` (a device pointer and a length) for the ascending `pdbs`.
