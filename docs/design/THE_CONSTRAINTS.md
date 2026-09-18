@@ -2299,3 +2299,82 @@ nothing about it. `[measured w735]` adding the arm produced **zero** errors unde
 gate and **exactly the two** expected errors with `--features kayfabe-qemu-raw/host-isolates`.
 ⇒ **the commit gate must carry the feature**, or the tree's most load-bearing match arms are
 unchecked.
+
+---
+
+## §39 — THE MAPPING IS LIVE, SO EVERY READ IS A RACE WITH THE GUEST
+
+**STATUS: LIVE, 2026-09-18 (w760c/w760d). Owner ruling, verbatim:**
+
+> *"the guest changing the value underneath you is a real problem. very simple solution to
+> forbid outright in your cuda code: you may never bound check on the value of a C pointer
+> pointing to live gpga. so always copy, then check, then use"*
+> *"note that if the vendor checks are bypassed, a guest corrupting itself is a non issue for
+> us as it doesn't happen on honest ones. only breakout/escalation has to be prevented"*
+> *"the ptx must keep the live mapping, its just hardening you need to do in ptx, for guest
+> writes underneath"*
+
+§38 put the walker on the **live** RM object — the real GPGA, in place, not a copy. That is
+deliberate and stays. The consequence is that **every load races the guest**, and the guest is
+under no obligation to hold still. §39 is what that costs.
+
+### (a) COPY, THEN CHECK, THEN USE — never check through a live pointer
+
+A bounds test on `*p` where `p` points into GPGA proves nothing: the guest may write between
+the test and the use, and the value the check approved is not the value that gets used. The
+load is `volatile`, so this is not theoretical and the compiler will not save you.
+
+⇒ **One dereference site.** `kf_win_load` bounds the offset, dereferences **once** into a
+caller-owned local, and everything downstream reasons about the copy. `KF_GPGA_DEREF` appears
+exactly twice in `kf_walk.cu` (its definition and that one use) and there is exactly one raw
+`const volatile uint64_t *` cast. Both are gated in `make check-invariants`.
+
+⇒ **And no offset may be fetched twice.** One textual deref site does **not** prevent a double
+fetch: two `kf_load64` calls on the same offset are two real reads of a volatile location, and
+they can differ. Gated by `check_s39.py` (§39(a)), which requires every live-GPGA load site to
+name a distinct offset expression. Watched to fire before being wired in.
+
+### (b) THE THREAT MODEL — self-corruption is not our problem; escalation is
+
+A guest that points a leaf at its own wrong page has corrupted **itself**. We do not defend
+against that: an honest guest never does it, and a malicious one is only hurting its own VM.
+
+What must never happen is the guest obtaining **memory that is not its own**. That is the only
+class worth spending refusals on, and it is what every bound in the walker is for.
+
+⚠ The corollary that matters when reading ogkm: **a malicious guest runs none of the vendor's
+checks.** Every condition RM validates before writing a table is a condition our walker must
+assume is violated, because RM is not in the loop — the guest writes the bytes directly. ⇒
+ogkm's own rejection conditions are a **guaranteed-off-the-happy-path fuzz corpus**, and are
+being mined as one (owner, 2026-09-18).
+
+### (c) A LEAF THAT LEAVES THE STORE IS THE ESCALATION — and it was unbounded
+
+★★★ Found by the gate above, w760c. `KFWR_R_OOB` bounds **a table we would READ**. Nothing
+bounded **a leaf we would EMIT**: both emit chokepoints checked a leaf's *alignment* and then
+reported the guest's PTE payload as a GPGA, and `kf_validate_report` could not catch it either
+— it was never given the window. A table read out of bounds reads memory that is not ours; a
+**leaf** out of bounds becomes a **mapping**, and hands the guest memory that is not its own.
+The host's `map()` bound in Rust was the only thing standing there — a defence-in-depth layer
+serving as a single point of failure.
+
+⇒ `KFWR_R_LEAF_OOB`, refused at both chokepoints, **before the coalesce branch** — a check
+placed after it lets a refused leaf extend a legal run past the end of the store with every
+refusal flag clear, which is a silent escalation rather than a loud refusal. Gated (§39(c)).
+
+### (d) THE WINDOW AND THE SPAN ARE TWO NUMBERS — w760d, and w760c got it wrong
+
+`gpga_len` is **how many bytes of the store are mapped for me to READ**. The containment bound
+is **how large the guest's GPGA space IS**. In production they coincide, because the single
+store is the whole of guest vidmem and all of it is mapped. **Nowhere else do they coincide**:
+a captured corpus image holds the guest's *table pages* and no framebuffer, so its leaves point
+legitimately far outside the bytes it contains.
+
+Collapsing them refused **263 legitimate leaves on real GA106 tables**. They are now
+`KfWin { base, len, span }`, and production passes the store length for both *while saying in
+a comment that the coincidence is a property of this deployment, not of the walker*.
+
+⇒ **The general rule this is an instance of:** when a number is correct for two different
+reasons, give it two names. The one place they diverge is the place that finds the bug — and
+here the divergence was a real hardware capture, which is why the suite caught it and no amount
+of local reasoning would have.
