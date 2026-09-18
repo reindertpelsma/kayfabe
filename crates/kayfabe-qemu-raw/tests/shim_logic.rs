@@ -2615,7 +2615,12 @@ use kayfabe_qemu_raw::shim::{GuestRingArm, guest_ring_from};
 /// millions of times. A default that armed would change the shape of every log ever taken.
 #[test]
 fn the_default_guest_ring_arm_leaves_the_shipped_path_byte_identical() {
-    assert_eq!(guest_ring_from(None), Ok(GuestRingArm::Off));
+    assert_eq!(
+        guest_ring_from(None),
+        Ok(GuestRingArm::Ring),
+        "★ w763g §42(a): absent is the DESIGN. `off` is the control and is reachable by name"
+    );
+    assert_eq!(guest_ring_from(Some("off")), Ok(GuestRingArm::Off));
     assert!(
         !GuestRingArm::Off.adopts_ring(),
         "★ the default arm presented the channel's ring to the join"

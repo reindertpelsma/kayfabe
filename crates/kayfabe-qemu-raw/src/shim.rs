@@ -20853,12 +20853,16 @@ impl GuestRingArm {
 /// [`GuestRingArm::Off`].
 pub fn guest_ring_from(value: Option<&str>) -> Result<GuestRingArm, (Status, &'static str)> {
     match value {
-        None | Some("off") => Ok(GuestRingArm::Off),
-        Some("ring") => Ok(GuestRingArm::Ring),
+        // ★ **w763g — ABSENT IS THE DESIGN (THE_CONSTRAINTS §42(a)).** The typo argument
+        // in the refusal below is untouched and is what it was always about: a MISSPELLING
+        // must never silently select the control. It never argued about what ABSENCE means.
+        // ⌘ The control arm stays reachable BY NAME, which is what a negative control needs.
+        None | Some("ring") => Ok(GuestRingArm::Ring),
+        Some("off") => Ok(GuestRingArm::Off),
         Some(_) => Err((
             Status::Unsupported,
-            "KAYFABE_GUEST_RING does not name an arm: the only values are `off` (the default \
-             and the control — the framebuffer join's only source is the operand census, \
+            "KAYFABE_GUEST_RING does not name an arm: the only values are `off` (the control \
+             — the framebuffer join's only source is the operand census, \
              exactly as at w260) and `ring` (the channel's own declared gpFifoOffset is \
              walked to its framebuffer leaf and that leaf is joined, at the engine-object \
              latch, before the host channel is born). It is not defaulted, because a typo \
@@ -21409,13 +21413,17 @@ impl FbJoinArm {
 /// [`FbJoinArm::Off`].
 pub fn fb_join_from(value: Option<&str>) -> Result<FbJoinArm, (Status, &'static str)> {
     match value {
-        None | Some("off") => Ok(FbJoinArm::Off),
-        Some("shared") => Ok(FbJoinArm::Shared),
+        // ★ **w763g — ABSENT IS THE DESIGN (THE_CONSTRAINTS §42(a)).** The typo argument
+        // in the refusal below is untouched and is what it was always about: a MISSPELLING
+        // must never silently select the control. It never argued about what ABSENCE means.
+        // ⌘ The control arm stays reachable BY NAME, which is what a negative control needs.
+        None | Some("shared") => Ok(FbJoinArm::Shared),
+        Some("off") => Ok(FbJoinArm::Off),
         Some("private") => Ok(FbJoinArm::Private),
         Some(_) => Err((
             Status::Unsupported,
-            "KAYFABE_FB_JOIN does not name an arm: the only values are `off` (the default), \
-             `shared` (the join) and `private` (the negative control). It is not defaulted, \
+            "KAYFABE_FB_JOIN does not name an arm: the only values are `shared` (the default, and the join), \
+             `off` (the control) and `private` (the negative control). It is not defaulted, \
              because a typo that silently disarmed the join would make an evidence run and \
              its own control indistinguishable — and the symptom would appear at the first \
              GR doorbell, not here. ⊘ `on` was KAYFABE_FB_BACKING's spelling and it is gone: \

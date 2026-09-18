@@ -1,8 +1,16 @@
-//! ★★★★★ **THE DISARMED ARM IS WHAT SHIPPED** — `SINGLE_STORE_PLAN.md` increment 1.
+//! ★★★★★ **THE DISARMED ARM IS THE CONTROL** — and it is now selected BY NAME, not by silence.
 //!
-//! The increment's method is *"add behind an env-var gate, boot, measure, then decide"*, and
-//! the half of that method a test can hold is the first clause: **with `KAYFABE_SCRATCHPAD`
-//! unset, nothing about this device is different.**
+//! # ⊘⊘⊘ w763f — this file's TITLE CLAIM was the superseded default
+//!
+//! It used to open *"THE DISARMED ARM IS WHAT SHIPPED … with `KAYFABE_SCRATCHPAD` unset,
+//! nothing about this device is different"*, and every assertion below read `None` as `off`.
+//! `SINGLE_STORE_PLAN.md` increment 1's method was *"add behind an env-var gate, boot,
+//! measure, then decide"* — **the decision was made, and the armed arm won** (THE_CONSTRAINTS
+//! §42). Absence now means the design.
+//!
+//! ⊘ What survives is the more important half and it survives UNCHANGED: **the control arm
+//! must still change nothing**, and it is still reachable — now by `off`, spelled out. A
+//! control you can only get by forgetting to configure anything is not a control.
 //!
 //! # ⊘ Why this is its own test binary
 //!
@@ -33,19 +41,27 @@ use kayfabe_qemu_raw::shim::Regs;
 // test binary, which is the shape that already cost this campaign a flake. The arm is an
 // argument to the composition root; production still calls `Regs::create`.
 
-fn shipped() -> Regs {
-    Regs::create_probed_on(0, "", Some(kayfabe_qemu_raw::deviceview::FbStoreArm::Arena)).expect("the shipped chip row realizes")
+fn disarmed() -> Regs {
+    // ⊘ The gates are read by `Regs::create` from the process environment and there is no
+    // per-call override for them (unlike the framebuffer arm). This binary is the only one
+    // that writes them, the write happens once, and EVERY device in this file is built
+    // through here — so the write is ordered before every read of it.
+    // SAFETY: a single `OnceLock`-guarded write, before any `Regs::create` in this process.
+    static SET: std::sync::OnceLock<()> = std::sync::OnceLock::new();
+    SET.get_or_init(|| unsafe {
+        std::env::set_var("KAYFABE_SCRATCHPAD", "off");
+        std::env::set_var("KAYFABE_SCRATCHPAD_CUDA", "off");
+        std::env::set_var("KAYFABE_DEVICE_VIEW", "off");
+    });
+    Regs::create_probed_on(0, "", Some(kayfabe_qemu_raw::deviceview::FbStoreArm::Arena))
+        .expect("the shipped chip row realizes on the control arm")
 }
 
 /// ⊘ **The absence, asserted.** With the gate unset there is no VM-lifetime isolate — so no
 /// child process is forked at realize, and nothing of the host's video memory is held.
 #[test]
-fn with_the_gate_unset_no_scratchpad_isolate_exists() {
-    assert!(
-        std::env::var_os("KAYFABE_SCRATCHPAD").is_none(),
-        "this test binary must not have the gate set; see the module docs"
-    );
-    let regs = shipped();
+fn with_the_gate_off_no_scratchpad_isolate_exists() {
+    let regs = disarmed();
     assert!(
         regs.scratchpad().is_none(),
         "the gate is off and an isolate was spawned anyway"
@@ -58,8 +74,8 @@ fn with_the_gate_unset_no_scratchpad_isolate_exists() {
 /// rebinding that fired unconditionally would change what every guest is told about its own
 /// video memory, silently and on every boot.
 #[test]
-fn with_the_gate_unset_the_advertised_framebuffer_is_the_compiled_one() {
-    let regs = shipped();
+fn with_the_gate_off_the_advertised_framebuffer_is_the_compiled_one() {
+    let regs = disarmed();
     let chip = regs.plane().chip();
     assert_eq!(
         chip.fb_length,
@@ -82,8 +98,8 @@ fn with_the_gate_unset_the_advertised_framebuffer_is_the_compiled_one() {
 fn the_gates_three_way_contract() {
     assert_eq!(
         scratchpad_from(None),
-        Ok(ScratchpadArm::Off),
-        "absent is off"
+        Ok(ScratchpadArm::Measure),
+        "★ absent is the DESIGN. The control arm is `off`, spelled out, on the next line"
     );
     assert_eq!(scratchpad_from(Some("off")), Ok(ScratchpadArm::Off));
     assert_eq!(scratchpad_from(Some("on")), Ok(ScratchpadArm::Measure));
@@ -108,12 +124,8 @@ fn the_gates_three_way_contract() {
 /// security boundary. `THE_CONSTRAINTS.md` §w724d states the cost plainly, and a boundary that
 /// could move because of a typo would not be one.
 #[test]
-fn the_cuda_gate_is_off_and_refuses_anything_that_is_not_a_state() {
-    assert!(
-        std::env::var_os("KAYFABE_SCRATCHPAD_CUDA").is_none(),
-        "this test binary must not have the CUDA gate set; see the module docs"
-    );
-    assert_eq!(scratchpad_cuda_from(None), Ok(false), "absent is off");
+fn the_cuda_gate_has_a_control_arm_and_refuses_anything_that_is_not_a_state() {
+    assert_eq!(scratchpad_cuda_from(None), Ok(true), "★ absent is the DESIGN");
     assert_eq!(scratchpad_cuda_from(Some("off")), Ok(false));
     assert_eq!(scratchpad_cuda_from(Some("on")), Ok(true));
     for junk in ["1", "0", "true", "ON", "yes", "require", ""] {
@@ -131,9 +143,11 @@ fn the_cuda_gate_is_off_and_refuses_anything_that_is_not_a_state() {
 /// not start dragging a dynamically-linked isolate along with it.
 #[test]
 fn the_two_gates_do_not_read_each_other() {
+    // ⊘ Independence is about the PARSERS not reading each other, so every arm here is
+    // named. Reading the default to prove independence made this test restate the default.
     assert_eq!(scratchpad_from(Some("on")), Ok(ScratchpadArm::Measure));
-    assert_eq!(scratchpad_cuda_from(None), Ok(false));
-    assert_eq!(scratchpad_from(None), Ok(ScratchpadArm::Off));
+    assert_eq!(scratchpad_cuda_from(Some("off")), Ok(false));
+    assert_eq!(scratchpad_from(Some("off")), Ok(ScratchpadArm::Off));
     assert_eq!(scratchpad_cuda_from(Some("on")), Ok(true));
 }
 
@@ -141,8 +155,8 @@ fn the_two_gates_do_not_read_each_other() {
 /// and the accessor must say EMPTY rather than inventing a "not run" string that a grader
 /// could mistake for a measured absence.
 #[test]
-fn with_the_gate_unset_there_is_no_cuda_report_to_read() {
-    let regs = shipped();
+fn with_the_gate_off_there_is_no_cuda_report_to_read() {
+    let regs = disarmed();
     assert!(regs.scratchpad().is_none());
 }
 
@@ -175,13 +189,9 @@ fn the_scratchpad_proc_id_agrees_across_the_seam() {
 /// (`bar1_passthrough_device_local_host_visible.md` §4 item 1). A boundary that could move
 /// because of a typo would not be one, so a value naming neither state is refused.
 #[test]
-fn the_device_view_gate_is_off_and_refuses_anything_that_is_not_a_state() {
+fn the_device_view_gate_has_a_control_arm_and_refuses_anything_that_is_not_a_state() {
     use kayfabe_qemu_raw::scratchpad::device_view_from;
-    assert!(
-        std::env::var_os("KAYFABE_DEVICE_VIEW").is_none(),
-        "this test binary must not have the crossing's gate set"
-    );
-    assert_eq!(device_view_from(None), Ok(false), "absent is off");
+    assert_eq!(device_view_from(None), Ok(true), "★ absent is the DESIGN");
     assert_eq!(device_view_from(Some("off")), Ok(false));
     assert_eq!(device_view_from(Some("probe")), Ok(true));
     for junk in ["on", "1", "true", "PROBE", "yes", "require", ""] {
@@ -200,8 +210,8 @@ fn the_device_view_gate_is_off_and_refuses_anything_that_is_not_a_state() {
 #[test]
 fn the_three_gates_are_independent() {
     use kayfabe_qemu_raw::scratchpad::device_view_from;
-    assert_eq!(scratchpad_from(None), Ok(ScratchpadArm::Off));
-    assert_eq!(device_view_from(None), Ok(false));
+    assert_eq!(scratchpad_from(Some("off")), Ok(ScratchpadArm::Off));
+    assert_eq!(device_view_from(Some("off")), Ok(false));
     assert_eq!(scratchpad_from(Some("on")), Ok(ScratchpadArm::Measure));
     assert_eq!(device_view_from(Some("probe")), Ok(true));
 }
