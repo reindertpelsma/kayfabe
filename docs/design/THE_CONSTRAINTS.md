@@ -925,6 +925,40 @@ deliverable**.
     ~48 MiB/s**. ⇒ *"execute on the CPU"* and *"the store is the only memory"* were never
     compatible; this ruling is what makes the second one payable.
 
+38. **★★★★★ THE CPU NEVER READS GUEST VIDMEM, AND THE PTX WALKS GPGA LIVE** (owner,
+    2026-09-18). Four clauses, and they compose into one rule: *nothing copies the guest's
+    framebuffer, and nothing reads it with the CPU.*
+
+    ⊘ **(a) The CPU touches GPGA only for the VMM's BAR MMIO maps.** *"We ourself dont read
+    from guest vidmem."* ⇒ CUT A — the device store's host-side `read`/`write` refusing by
+    name — is **permanent and correct**, not a phase to be worked around. A CPU read of video
+    memory is ~48 MiB/s *and* would be a second memory for one address; the refusal is the
+    design asserting itself.
+    ★ **The one exception, and it is not one:** the raw scratchpad client writes its **own**
+    ring and USERD for kernel-channel work. Those are ours, resident in the scratchpad's VA,
+    **not on GPGA** — so they are not guest vidmem and the rule is unbroken.
+
+    ⊘ **(b) The PTX's mapping of GPGA is LIVE — the real RM object, natively mapped.** Not a
+    copy, not a snapshot, not a staged image. `[measured w755x]` RM exports the reserved
+    object to a control fd; `cuMemImportFromShareableHandle` + `cuMemMap` place **that object**
+    in the CUDA context's VA. ⇒ the kernel dereferences `KfWin { base, len }` at GPGA offsets
+    and reaches the guest's real tables where they live.
+
+    ⊘ **(c) THERE IS NO IMAGE UPLOAD.** *"That code is not needed."* The staged path built the
+    kernel's window by reading page tables through `FbRead`, which (a) forbids — so on the
+    device arm it was **blind, and silently so**: it reported `bound=0 published=0` , which
+    reads as *"there was nothing to publish"* rather than *"we could not look"*.
+    ⚠ **It is DELETED, not kept as a fallback.** A fallback that answers wrong without saying
+    so is worse than a refusal, and this tree spent a session reading that silence as data.
+
+    ⊘ **(d) The prev/cur snapshot is resident in VIDMEM and is the KERNEL'S OWN** — `KfDev
+    { tbl[2], cur_buf, have_prev, generation, acked }`. Its only job is comparing what is new
+    against what is old. It was never something the host staged, and nothing about it crosses
+    the bus.
+
+    ⇒ **The test for any future code touching the framebuffer is (a):** if it needs the CPU to
+    read guest vidmem, it is wrong — the walk moves GPU-side instead.
+
 ⚠ **This list stopped at 17 while §§18–22 were added as sections below it** — a reader hitting the
 list would have concluded seventeen was all of them. ⇒ **Anything added below gets a row here in
 the same change**, or the index becomes the most confidently wrong thing in the file.

@@ -5478,14 +5478,6 @@ fn read_version(ctl: &CharDevice) -> Option<String> {
 pub struct HostRmBackend {
     id: IsolateId,
     conn: Arc<RmConnection>,
-    /// ★★★ w755y — the single store's CUDA device pointer and length, once armed.
-    ///
-    /// ⊘ `None` is *"not armed"*, which the arena arm is legitimately and the device arm is
-    /// not. It is read by the walk kernel to walk the guest's tables IN PLACE; with `None`
-    /// the kernel has no window and the CPU walk — which CUT A refuses on the device arm —
-    /// is the only source. ⇒ a boot must be able to tell those apart, so the arming prints.
-    #[cfg(feature = "cuda-scratchpad")]
-    store_dptr: Mutex<Option<(u64, u64)>>,
     /// `channel -> how many entries this worker has published`, so the next submission
     /// takes the next GPFIFO slot instead of overwriting the live one. Per **worker**
     /// rather than per connection: see [`HostRmBackend::next_slot`].
@@ -6879,8 +6871,6 @@ impl HostRmBackend {
     #[must_use]
     pub fn new(id: IsolateId, conn: Arc<RmConnection>, exports: Arc<ChildExports>) -> Self {
         HostRmBackend {
-            #[cfg(feature = "cuda-scratchpad")]
-            store_dptr: Mutex::new(None),
             id,
             conn,
             slots: BTreeMap::new(),
@@ -10336,14 +10326,14 @@ impl HostRmBackend {
                 // proving the in-place walk until the wiring lands.
                 eprintln!(
                     "kayfabe-isolate: STORE-DPTR ✔ ARMED store={store:#010x} len={len} \
-                     dptr={dptr:#x} ⊘⊘ NOT YET CONSUMED — `cudawalk` still uploads a staged \
-                     image and points the kernel at that. This pointer proves the store is \
-                     CUDA-addressable; it does NOT mean any walk ran in place."
+                     dptr={dptr:#x} ⇒ CONSUMED by the walk kernel: `cudawalk` points \
+                     `KfWin.base` here and the guest's tables are walked WHERE THEY LIVE. \
+                     ⊘ Look for `WALK-IN-PLACE` to see it actually used on a given refresh."
                 );
-                *self
-                    .store_dptr
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner) = Some((dptr, len));
+                // ★★★ w760 — recorded where the WALK KERNEL can reach it. A backend field
+                // could not be read by `cudawalk::run`, which is a free function with no
+                // backend in hand — and that is precisely why the pointer sat unconsumed.
+                crate::cudawalk::arm_store_window(dptr, len);
                 // ⊘ The fd is kept for the life of the process: closing it would drop the
                 // export RM registered on it, and the mapping with it.
                 core::mem::forget(ctl);

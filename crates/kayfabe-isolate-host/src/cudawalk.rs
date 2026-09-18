@@ -244,6 +244,33 @@ pub fn stage(span: u64, off: u64, bytes: &[u8]) -> Result<(), u32> {
 ///
 /// # Errors
 /// A named status; the reason is printed to this child's stderr.
+/// ★★★★★ **w760 — THE SINGLE STORE'S DEVICE POINTER, for the walk kernel.**
+///
+/// ⊘ A module-level record rather than a field, and it is honest here for a structural reason:
+/// this is the **scratchpad child**, it holds exactly ONE reserved store for the life of the
+/// process, and the walk kernel is a free function with no backend in hand. A field would have
+/// to be threaded through `walk_shadow_run`'s wire verb, which carries no backend either.
+///
+/// ⚠ `None` means *"not armed"*, which the arena arm is legitimately and the device arm is
+/// not. It is never defaulted: with `None` the staged path runs, and on the device arm that
+/// path is blind — so the arming's own log line is what a reader must check.
+static STORE_WINDOW: std::sync::Mutex<Option<(u64, u64)>> = std::sync::Mutex::new(None);
+
+/// Record the store's CUDA device pointer and length. Called once, at reservation.
+pub fn arm_store_window(dptr: u64, len: u64) {
+    *STORE_WINDOW
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some((dptr, len));
+}
+
+/// The store's device window, if armed. See [`STORE_WINDOW`].
+#[must_use]
+pub fn store_window() -> Option<(u64, u64)> {
+    *STORE_WINDOW
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 pub fn run(pdbs: &[u64]) -> Result<Vec<u8>, u32> {
     if pdbs.is_empty() || pdbs.len() > kayfabe_cuda::abi::KF_MAX_PDB {
         eprintln!(
@@ -279,18 +306,69 @@ pub fn run(pdbs: &[u64]) -> Result<Vec<u8>, u32> {
         eprintln!("kayfabe-isolate: ⊘ WALK-SHADOW could not make the CUDA context current: {e}");
         return Err(WS_LAUNCH_FAILED);
     }
-    let img = match k.upload(&image) {
-        Ok(i) => i,
-        Err(e) => {
-            eprintln!("kayfabe-isolate: ⊘ WALK-SHADOW upload refused: {e}");
-            return Err(WS_LAUNCH_FAILED);
-        }
+    // ★★★★★ **w760 — WALK THE STORE IN PLACE. THE STAGED IMAGE IS THE CPU WALK'S LAST LIMB.**
+    //
+    // > Owner, 2026-09-18: *"Wait are we still walking on cpu. I really doubt its worth the
+    // > effort to keep trying that."*
+    //
+    // ⊘⊘⊘ **On the device arm the CPU walk is not slow — it is DEAD, and it fails silently.**
+    // `build_image` reads the guest's page tables through `FbRead`, and CUT A makes the device
+    // store's host-side reads **refuse by name** (*"two memories for one address"*). So the
+    // image is built from nothing, the kernel is pointed at nothing, and the boot reports
+    // `bound=0 published=0 repointed=0` — which reads as *"there was nothing to publish"*
+    // rather than as *"we could not look"*.
+    //
+    // ★★★ The kernel never needed the image. `KfWin { base, len }` is dereferenced at **GPGA
+    // offsets** (`KF_GPGA_DEREF`), and under the identity window a guest framebuffer address
+    // IS an offset into the reserved object. So pointing `base` at the store's device pointer
+    // makes the kernel walk the guest's real tables where they live, at ~360 GB/s, with no CPU
+    // read of video memory anywhere in the path.
+    //
+    // ⚠ **The staged path is kept for the ARENA arm and only for it.** There the store is a
+    // host memfd, `FbRead` works, and the image is the correct source. ⊘ It is not a
+    // *fallback* for the device arm: falling back there would silently re-enter the blind walk
+    // and report its emptiness as an answer, which is the whole defect above.
+    // ★★★★★ **w760 — THE PTX WALKS ALL OF GPGA, IN PLACE. THERE IS NO IMAGE.**
+    //
+    // > Owner, 2026-09-18: *"the ptx should have access to all of gpga, mapped, no image
+    // > upload, that code is not needed. then the snapshot, also resident in vidmem, is only
+    // > for comparing whats new/old."*
+    //
+    // `KfWin { base, len }` is dereferenced at **GPGA offsets** (`KF_GPGA_DEREF`), and under
+    // the identity window a guest framebuffer address IS an offset into the one reserved
+    // object. So the store's device pointer over its whole length gives the kernel every GPGA
+    // the guest can name — it walks the real tables where they live, at ~360 GB/s, with no CPU
+    // read of video memory in the path.
+    //
+    // ⊘ The prev/cur snapshot is the KERNEL'S OWN, in device memory: `KfDev { tbl[2],
+    // cur_buf, have_prev, generation, acked }`. It was never something the host staged.
+    //
+    // ⊘⊘⊘ **THE STAGED-IMAGE PATH IS GONE, NOT KEPT AS A FALLBACK.** It built the kernel's
+    // window by reading the guest's page tables through `FbRead` — which the device store
+    // **refuses by name** (CUT A: *"two memories for one address"*). Falling back to it would
+    // re-enter a walk that cannot see, and report its emptiness as `bound=0 published=0`,
+    // i.e. as *"there was nothing to publish"* rather than *"we could not look"*. A fallback
+    // that silently answers wrong is worse than a refusal.
+    let Some((win_base, win_len)) = store_window() else {
+        eprintln!(
+            "kayfabe-isolate: ⊘⊘ WALK-IN-PLACE REFUSED — the store has no device window, so \
+             the kernel has no GPGA to walk. ⊘ NOT falling back to a staged image: that path \
+             reads video memory with the CPU, which the device store refuses, and its silence \
+             would be reported as an empty guest address space."
+        );
+        return Err(WS_NO_KERNEL);
     };
-    let report = k.refresh(img.ptr(), img.len(), pdbs);
+    eprintln!(
+        "kayfabe-isolate: WALK-IN-PLACE ★★★★★ base={win_base:#x} len={win_len} pdbs={} ⇒ the \
+         kernel walks the guest's tables WHERE THEY LIVE; no image, no CPU read of vidmem",
+        pdbs.len()
+    );
+    let report = k.refresh(win_base, win_len, pdbs);
     // ⊘ Released on BOTH paths and before the `?`: a refused launch that leaked its image
     // would run the device out of memory over a boot's worth of refreshes, and the symptom
     // would arrive as a CUDA failure hundreds of refreshes after the one that caused it.
-    k.release(img);
+    // ⊘ Nothing to release: the store's device pointer is owned by the reservation and
+    // outlives every refresh. The image this used to free no longer exists.
     let report = match report {
         Ok(r) => r,
         Err(e) => {
