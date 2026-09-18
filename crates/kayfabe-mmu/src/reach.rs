@@ -938,10 +938,47 @@ pub fn apply_settlement_as(
                 let is_remap = remapped.contains(&va.0);
                 // ⊘⊘ `!is_remap` was a condition here until 2026-09-09 (w392v). See the doc
                 // block above: it kept a re-pointed row translating to its OLD object.
-                let qualifies = policy == PublishedUnbind::RevokeWholeJoins
+                // ★★★★★ **w769 — UNBINDING THE ROW AND FREEING THE OBJECT ARE TWO ACTIONS,
+                // AND THIS CONFLATED THEM.**
+                //
+                // > Owner, 2026-09-19: *"Fix the guard, deleting a va base is perfectly
+                // > allowed and then the entire va is emptied of allocations (and only freed
+                // > if no channel uses it, prerequiste)."*
+                //
+                // The guest deleting a VA is a legitimate, authoritative act — its kernel
+                // validated it and it can only corrupt itself. ⇒ **The table row always
+                // goes.** What is conditional is whether the HOST OBJECT may be freed with
+                // it, and the only real prerequisite there is *nothing else is using it*.
+                //
+                // ⊘ Before, all four conditions gated the UNBIND, so a partial extent or a
+                // shared object left the row in the table and hardware kept translating the
+                // VA to the old memory. `[measured w766]` 30 rows in that state, one of them
+                // `0x9140000000` — the VA a passthrough channel's host semaphore writes, so
+                // the raw client's poison survived with `faults=0`. ⚠ A guard against OUR
+                // bookkeeping was producing a stale translation for the GUEST.
+                let may_unbind = policy == PublishedUnbind::RevokeWholeJoins;
+                // ★★★ **AN EMPTY VAS IS A LEGAL STATE, NOT AN ANOMALY TO PREVENT.**
+                //
+                // > Owner, 2026-09-19: *"some channel can still reference that va, so then you
+                // > get an empty va with no allocations. which is also what happens on bare
+                // > metal."*
+                //
+                // ⇒ A channel still naming a VA the guest emptied is **not** a reason to keep
+                // the row: bare metal does not keep it either, and whatever that channel then
+                // reads or faults on is the guest's own affair (the standing threat model —
+                // a guest corrupting itself is a non-issue; only breakout is). ⊘ Refusing the
+                // unbind to protect such a channel does not protect it — it hands it the OLD
+                // memory, which is the one outcome bare metal never produces.
+                //
+                // ⊘ The object leaves only when this row is its sole whole-extent owner. A
+                // `Slice` names an arena object serving siblings at other offsets, so freeing
+                // it here is a use-after-free for whoever holds the last one — the one
+                // condition in the old set that was never about bookkeeping.
+                let may_release = may_unbind
                     && whole_row
                     && h.frees_object()
                     && h.bytes() == crate::BackingBytes::JoinsGuestWindow;
+                let qualifies = may_unbind;
                 if is_remap && policy == PublishedUnbind::RevokeWholeJoins {
                     if qualifies {
                         out.remaps_revoked += 1;
@@ -960,12 +997,29 @@ pub fn apply_settlement_as(
                     if redescribed.contains(&b.phys) {
                         out.revoked_still_desired += 1;
                     }
-                    out.revoked.push(RevokedPublication {
-                        va,
-                        len: tlen,
-                        phys: b.phys,
-                        host: h,
-                    });
+                    if may_release {
+                        out.revoked.push(RevokedPublication {
+                            va,
+                            len: tlen,
+                            phys: b.phys,
+                            host: h,
+                        });
+                    } else {
+                        // ★ The row is gone and the object is NOT ours to free — it is still
+                        // in use by a sibling binding or is not a whole-extent join. That is
+                        // not a leak while somebody uses it; it becomes one if nobody ever
+                        // does. ⊘ COUNTED rather than prevented, because preventing it was
+                        // what produced the stale translation above. A non-zero here with no
+                        // matching release is the reclaim path's work list.
+                        out.unbound_without_release += 1;
+                        out.unbind_refusal_why.push((va.0, if !whole_row {
+                            "released-row-kept-object/partial-extent"
+                        } else if !h.frees_object() {
+                            "released-row-kept-object/shared-host-object"
+                        } else {
+                            "released-row-kept-object/not-a-guest-window-join"
+                        }));
+                    }
                     continue;
                 }
                 // ⊘⊘⊘ **w767 — ONE NAME OVER FOUR CAUSES, AND THEY HAVE FOUR DIFFERENT FIXES.**
@@ -1083,6 +1137,10 @@ pub struct ApplyOutcome {
     /// unbind: on a VAS teardown the host VAS goes with it and every mapping in it is gone by
     /// construction, so there is nothing left to leak and nothing left to name.
     pub unbind_refusal_why: Vec<(u64, &'static str)>,
+    /// ★ w769 — rows the guest's unbind removed from the table whose HOST OBJECT we kept,
+    /// because a sibling binding still uses it or it is not a whole-extent join. ⊘ Not a leak
+    /// while somebody uses it; the reclaim path's work list if nobody ever does.
+    pub unbound_without_release: usize,
     /// Leaves bound into a range that was free.
     pub bound: usize,
     /// Leaves that restated a binding already in the table.
