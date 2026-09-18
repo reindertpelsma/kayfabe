@@ -1350,6 +1350,37 @@ impl InitTablePolicy {
         }
     }
 
+    /// ★★★★★ **§40 tier B — release the notify slots a freed handle was holding.**
+    ///
+    /// Returns how many slots were released, so a caller (and a test) can tell "nothing to
+    /// do" from "did nothing".
+    ///
+    /// Two shapes, because RM has two:
+    /// - **the subdevice itself is freed** — `handle` names the armed object;
+    /// - **the whole client is freed** — RM frees every object under it
+    ///   (`NVOS00_PARAMETERS` with `hObjectOld == hRoot`), and this is the shape a closing
+    ///   guest driver actually uses. ⊘ Matching only on `object` would have reclaimed
+    ///   nothing on the path that matters, which is how the leak survived being *named*
+    ///   in this very file.
+    ///
+    /// ⚠ Client-scoped and not global: a free in one client may never disturb another's
+    /// arming, or a second tenant's device close would silently disarm the first's.
+    fn retire_notify(&mut self, client: u32, handle: u32) -> usize {
+        let mut released = 0usize;
+        for slot in &mut self.notify_actions {
+            let hit = matches!(
+                slot,
+                Some(s) if s.client == client && (s.object == handle || handle == client)
+            );
+            if hit {
+                *slot = None;
+                released += 1;
+            }
+        }
+        released
+    }
+
+
     /// The guest driver version this policy has latched off fn 1, if any.
     ///
     /// Exposed so a test can ask what was observed without reaching into the reply plane,
@@ -1410,6 +1441,24 @@ impl CommandPolicy for InitTablePolicy {
                 kayfabe_abi::guestsysinfo::decode_guest_driver_version(&cmd.payload)
                     .ok()
                     .and_then(|text| kayfabe_abi::gspfeatures::FirmwareVersion::parse(text).ok());
+            return None;
+        }
+        // ★★★★★ **w760p — RECLAIM THE NOTIFY SLOTS A FREED CLIENT WAS HOLDING.**
+        //
+        // ⊘ Read without answering, exactly like `SetGuestSystemInfo` above: `None` is a
+        // decline, so whichever link owns `FREE` still answers it and no reply byte moves.
+        // Observed HERE rather than in `osevent` because the state being reclaimed lives
+        // here — a reclaim that has to be told about the table it clears is a reclaim
+        // someone can forget to tell.
+        //
+        // ⚠ Like `osevent`'s retire, this does NOT gate on "was this handle one of ours":
+        // the guest frees far more than subdevices, and clearing no slot is the correct
+        // outcome for a handle that names none. Gating would need a second copy of the
+        // object model in here.
+        if cmd.function == RpcFunction::Free {
+            if let Ok(f) = self.driver.decode_free(&cmd.payload) {
+                self.retire_notify(f.client, f.handle);
+            }
             return None;
         }
         if cmd.function != RpcFunction::RmControl {
