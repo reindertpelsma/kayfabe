@@ -81,9 +81,28 @@ KREL=$(ls "$ROOT/mnt/lib/modules" | head -1)
 echo "== guest kernel: $KREL"
 
 mkdir -p "$ROOT/ird/lib/modules"
-cp "$ROOT/mnt/boot/vmlinuz-$KREL" "$OUT/vmlinuz" 2>/dev/null \
-  || cp "$ROOT/mnt/boot/vmlinuz" "$OUT/vmlinuz" 2>/dev/null \
-  || die "no vmlinuz for $KREL in the image"
+# ⊘⊘⊘ **/boot IS ITS OWN PARTITION, AND THE ROOT ONE IS AN EMPTY DIRECTORY.** Measured on this
+# bench image: `nbd0p1` is the 32.5 GiB root and its `/boot` holds NOTHING; the kernel lives on
+# `nbd0p16` (913 MiB, Ubuntu's separate boot partition). ⚠ The failure that taught this reads
+# as a MISSING KERNEL -- `no vmlinuz for 6.8.0-139-generic in the image` -- while the kernel is
+# right there on a partition nobody mounted. An empty directory where a file is expected is
+# indistinguishable from an image that never had one, so SEARCH every partition rather than
+# concluding absence from the first.
+if ! cp "$ROOT/mnt/boot/vmlinuz-$KREL" "$OUT/vmlinuz" 2>/dev/null; then
+    mkdir -p "$ROOT/boot"
+    got=0
+    for part in /dev/nbd0p16 /dev/nbd0p15 /dev/nbd0p14; do
+        [ -b "$part" ] || continue
+        mount -o ro "$part" "$ROOT/boot" 2>/dev/null || continue
+        if cp "$ROOT/boot/vmlinuz-$KREL" "$OUT/vmlinuz" 2>/dev/null; then
+            echo "== kernel taken from $part"
+            got=1
+        fi
+        umount "$ROOT/boot" 2>/dev/null
+        [ "$got" = 1 ] && break
+    done
+    [ "$got" = 1 ] || die "no vmlinuz-$KREL on the root or on any boot partition of $IMG"
+fi
 
 found=0
 for ko in nvidia nvidia-uvm nvidia-modeset nvidia-drm; do
