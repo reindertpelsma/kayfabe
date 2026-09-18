@@ -2564,13 +2564,13 @@ fn apply_guest_bar1_knob(
     let choice = match crate::bar1budget::selected_guest_bar1() {
         Ok(c) => c,
         Err(why) => {
-            eprintln!("kayfabe: GUEST-BAR1 \u{2298} REFUSED — {why}");
+            eprintln!("kayfabe: GUEST-BAR1 ⊘ REFUSED — {why}");
             return Err((
                 Status::Unsupported,
                 "the requested guest BAR1 aperture was refused by name (see the GUEST-BAR1 \
                  line): it is not a power of two, is below the functional minimum, or does \
-                 not fit beside our own headroom in this board's aperture. \u{2298} Refused \
-                 rather than clamped \u{2014} a guest whose BAR is too small for its driver \
+                 not fit beside our own headroom in this board's aperture. ⊘ Refused \
+                 rather than clamped — a guest whose BAR is too small for its driver \
                  fails somewhere that looks nothing like this option",
             ));
         }
@@ -2581,8 +2581,8 @@ fn apply_guest_bar1_knob(
     let (patched, moved) =
         kayfabe_device::with_bar_len(base, kayfabe_abi::pcibars::bus_bar::FB, choice.bytes);
     eprintln!(
-        "kayfabe: GUEST-BAR1 {}={} MiB row_moved={moved} advertised=0x{:x} \u{21d2} \u{2605} \
-         \u{a7}w727's knob, wired. A {} MiB-BAR1 {} is a REAL hardware configuration \u{2014} a \
+        "kayfabe: GUEST-BAR1 {}={} MiB row_moved={moved} advertised=0x{:x} ⇒ ★ \
+         \u{a7}w727's knob, wired. A {} MiB-BAR1 {} is a REAL hardware configuration — a \
          different truthful board, not a lie (\u{a7}22). \u{26a0} `-device \
          nvkvm-gpu,bar1-size={}` must match, or realize refuses by name.",
         crate::bar1budget::GUEST_BAR1_ENV,
@@ -2593,12 +2593,12 @@ fn apply_guest_bar1_knob(
         choice.bytes,
     );
     if !moved {
-        // \u{2298} w614's class: a patch that matched nothing and reported success. Here the
+        // ⊘ w614's class: a patch that matched nothing and reported success. Here the
         // only benign cause is "the row already says that", which is stated rather than
-        // inferred \u{2014} an operator reading `row_moved=false` beside a size they asked for
+        // inferred — an operator reading `row_moved=false` beside a size they asked for
         // must be able to tell "already so" from "silently ignored".
         eprintln!(
-            "kayfabe: GUEST-BAR1 \u{2298} the BAR table row did NOT move. Either it already \
+            "kayfabe: GUEST-BAR1 ⊘ the BAR table row did NOT move. Either it already \
              carried this size, or this chip declares no framebuffer window at all (a zero \
              row), in which case sizing one would INVENT an aperture the board does not \
              have. Nothing was patched."
@@ -15801,6 +15801,36 @@ impl Regs {
     /// that is not a comma-separated decimal list within
     /// [`kayfabe_abi::eventnotify::PROBE_ARM_MAX`] entries.
     pub fn create_probed(device_id: u16, probe_arm: &str) -> Result<Regs, (Status, &'static str)> {
+        Regs::create_probed_on(device_id, probe_arm, None)
+    }
+
+    /// The composition root with the framebuffer arm **stated by the caller** instead of read
+    /// from the environment.
+    ///
+    /// # ★★★ Why this exists, and why it is not a back door
+    ///
+    /// `[measured w763]` flipping `KAYFABE_FB_STORE`'s default to `device` turned seven tests
+    /// red at once — none of them about the framebuffer. They build a register plane to ask
+    /// about BAR ownership, a counter's rate, a refusal's wording; they were reaching the
+    /// benign arm only because it happened to be the ambient default, and the flip revealed
+    /// an **undeclared dependency on a process global**, not a defect in either arm.
+    ///
+    /// ⊘ The tempting fixes are both worse. Setting the variable inside the tests puts a
+    /// process-global write in a multi-threaded test binary — the exact shape that produced a
+    /// flake this campaign has already paid for once. Making the default depend on `cfg(test)`
+    /// would mean the tested configuration is never the shipped one.
+    ///
+    /// ⇒ So the ambient read moves OUT of the composition root's contract and becomes one
+    /// caller's choice. Production still calls [`Regs::create`], which still reads the
+    /// environment, and there is still exactly one statement of the default.
+    ///
+    /// # Errors
+    /// As [`Regs::create_probed`].
+    pub fn create_probed_on(
+        device_id: u16,
+        probe_arm: &str,
+        fb_store_override: Option<crate::deviceview::FbStoreArm>,
+    ) -> Result<Regs, (Status, &'static str)> {
         let probe_arm =
             kayfabe_abi::eventnotify::ProbeArmSet::parse(probe_arm).map_err(|e| match e {
                 kayfabe_abi::eventnotify::ProbeArmParseError::NotDecimal => (
@@ -15972,8 +16002,18 @@ impl Regs {
             // needs its side effect: the log says "NO JOIN IS NEEDED: this range IS the one
             // reserved object" and then "THE RING'S LEAF WAS NOT JOINED". Route K (`k`) is the
             // owner that closes it.
-            match std::env::var("KAYFABE_VAS_OWNER").as_deref() {
-                Ok("k" | "scratchpad") => {}
+            // ⊘⊘⊘ **w763c — THIS BLOCK READ THE ENVIRONMENT DIRECTLY AND HARDCODED THE OLD
+            // DEFAULTS, so it reported the design as VIOLATED on a boot that was holding it.**
+            // `[measured w763]` the fast guest's first clean boot printed
+            // `CONSTRAINT-VERDICT ⊘ §26/§32 KAYFABE_VAS_OWNER != k` while `vas_owner_from(None)`
+            // had ALREADY returned route K — the variable was simply absent, and absence had
+            // stopped meaning `isolate` one commit earlier.
+            // ⇒ A verdict block whose whole purpose is *"the running configuration is not the
+            // designed one"* restated the defaults it was auditing, in a second place, and so
+            // could not survive them changing. It now asks the SAME parsers the device asks;
+            // there is one statement of each default in the tree and this is not it.
+            match crate::scratchpad::selected_vas_owner() {
+                Ok(crate::scratchpad::VasOwner::BirthClient | crate::scratchpad::VasOwner::Scratchpad) => {}
                 _ => violations.push(
                     "§26/§32 the VAS owner is the pre-constraint-26 isolate: KAYFABE_VAS_OWNER \
                      != k ⇒ a device-backed leaf is never bound to the store, so every ring \
@@ -15981,7 +16021,7 @@ impl Regs {
                      OBJECT' and channels are born on a ring of ours",
                 ),
             }
-            if std::env::var("KAYFABE_FB_STORE").as_deref().unwrap_or("arena") != "device" {
+            if !crate::deviceview::selected_fb_store().is_ok_and(crate::deviceview::FbStoreArm::is_device) {
                 violations.push(
                     "§38 NOT the single store: KAYFABE_FB_STORE != device ⇒ the framebuffer is \
                      the sparse-memfd ARENA and guest vidmem is fabricated per leaf. Every leaf \
@@ -15989,7 +16029,7 @@ impl Regs {
                      the single store replaces",
                 );
             }
-            if std::env::var("KAYFABE_ISOLATES").as_deref() != Ok("real") {
+            if selected_isolate_plane() != Ok(IsolatePlane::Real) {
                 violations.push(
                     "§40 no forwarding plane: KAYFABE_ISOLATES != real ⇒ pool=0, and                      `never_serves` then refuses EVERY verb as IsolateRetired — which reads                      exactly like an archive that legitimately has no plane",
                 );
@@ -16342,12 +16382,12 @@ impl Regs {
             let ours = chip.pci_bar_len(kayfabe_abi::pcibars::bus_bar::FB);
             let registered = chip_identity(chip.pci_device_id)?.fb_window_len;
             eprintln!(
-                "kayfabe: BAR1-AGREE plane=0x{ours:x} identity=0x{registered:x} \u{21d2} {}",
+                "kayfabe: BAR1-AGREE plane=0x{ours:x} identity=0x{registered:x} ⇒ {}",
                 if ours == registered {
                     "\u{2714} the aperture this device REGISTERS and the one its emulated GSP \
                      TELLS THE GUEST are the same number"
                 } else {
-                    "\u{2298}\u{2298}\u{2298} THEY DISAGREE"
+                    "⊘⊘⊘ THEY DISAGREE"
                 }
             );
             if ours != registered {
@@ -16357,8 +16397,8 @@ impl Regs {
                      GSP reports to the guest are DIFFERENT SIZES (see the BAR1-AGREE line). \
                      The guest's resource manager sizes its own mappings against the reported \
                      number, so it would map past the end of a region the hypervisor decodes \
-                     and read whatever is next \u{2014} with nothing logged on either side. \
-                     \u{2298} Refused at realize, which is the only moment an operator can act",
+                     and read whatever is next — with nothing logged on either side. \
+                     ⊘ Refused at realize, which is the only moment an operator can act",
                 ));
             }
         }
@@ -16389,7 +16429,7 @@ impl Regs {
                     Status::Unsupported,
                     "the advertised framebuffer is larger than the reserved object, so the \
                      guest will place page tables outside it and no identity window can \
-                     answer for them (see the IDENTITY-WINDOW line). \u{2298} Refused under \
+                     answer for them (see the IDENTITY-WINDOW line). ⊘ Refused under \
                      `require` rather than booted into a state whose failures appear as \
                      refused kernel dereferences much later",
                 ));
@@ -16427,8 +16467,10 @@ impl Regs {
         // that says what guest video memory *is*. ⊘ Both arms print, because a configuration
         // that only announces itself when enabled makes the control arm's log
         // indistinguishable from an older binary's.
-        let fb_store_arm =
-            crate::deviceview::selected_fb_store().map_err(|why| (Status::Unsupported, why))?;
+        let fb_store_arm = match fb_store_override {
+            Some(arm) => arm,
+            None => crate::deviceview::selected_fb_store().map_err(|why| (Status::Unsupported, why))?,
+        };
         let have_port = scratchpad
             .as_ref()
             .and_then(crate::scratchpad::Scratchpad::device_port)
@@ -20221,11 +20263,28 @@ impl IsolatePlane {
 /// decision can be tested without touching a process-global.
 ///
 /// # Errors
-/// [`Status::Unsupported`] if `value` is not a plane name. **Absent is not an error**; it
-/// is [`IsolatePlane::Stillborn`], which is what master shipped.
+/// [`Status::Unsupported`] if `value` is not a plane name. **Absent is not an error**; it is
+/// [`IsolatePlane::Real`].
+///
+/// # ⊘⊘⊘ w763c — absence used to mean `Stillborn`, and that made the DEFAULT BOOT REFUSE
+///
+/// `FB_STORE=device` is the default, and the single store cannot be reached without a
+/// forwarding plane: no plane ⇒ no worker ⇒ no reservation ⇒ no device-view port ⇒
+/// `enforce_device_store` refuses at realize. `[measured w763]` a fast-guest boot that set
+/// NOTHING died on exactly that chain, and the four census lines reported four separate
+/// symptoms of the one cause.
+///
+/// The old default's stated reason was that *"a typo that silently selected the refusing plane
+/// would make an evidence run and its own negative control indistinguishable"* — and that
+/// reason survives unchanged: a **typo still refuses by name** on the `Some` arm below. It only
+/// ever argued about what a MISSPELLING means, never about what ABSENCE means.
+///
+/// ⚠ `Real` on an archive built without `host-isolates` refuses at realize, by name, saying
+/// so. That is the intended failure: refuse at startup rather than degrade into a plane that
+/// answers every verb `IsolateRetired`, which reads like an archive that legitimately has none.
 pub fn isolate_plane_from(value: Option<&str>) -> Result<IsolatePlane, (Status, &'static str)> {
     match value {
-        None => Ok(IsolatePlane::Stillborn),
+        None => Ok(IsolatePlane::Real),
         Some(v) => IsolatePlane::parse(v).ok_or((
             Status::Unsupported,
             "KAYFABE_ISOLATES does not name an isolate plane: the only values are \
@@ -20236,14 +20295,14 @@ pub fn isolate_plane_from(value: Option<&str>) -> Result<IsolatePlane, (Status, 
     }
 }
 
-/// The plane [`ISOLATE_PLANE_ENV`] names, or [`IsolatePlane::Stillborn`] if it is unset.
+/// The plane [`ISOLATE_PLANE_ENV`] names, or [`IsolatePlane::Real`] if it is unset.
 ///
 /// # Errors
 /// [`Status::Unsupported`] if the variable is set to something that is not a plane name,
 /// **including a non-UTF-8 value** — see [`isolate_plane_from`].
 fn selected_isolate_plane() -> Result<IsolatePlane, (Status, &'static str)> {
     match std::env::var_os(ISOLATE_PLANE_ENV) {
-        None => Ok(IsolatePlane::Stillborn),
+        None => Ok(IsolatePlane::Real),
         // ★ A non-UTF-8 value takes the `Some(non-name)` arm rather than the `None` arm:
         // it was SET, so it must not read as unset.
         Some(v) => isolate_plane_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))),

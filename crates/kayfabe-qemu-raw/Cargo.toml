@@ -104,11 +104,18 @@ kayfabe-shell = { workspace = true, optional = true }
 # 3. It keeps `cargo test --workspace`'s default arm identical to master's, so the suite
 #    stays green for everyone who does not opt in.
 #
-# ⊘ **The feature is not the selector.** Turning it on changes nothing at runtime: the
-# plane still defaults to `stillborn` and is chosen by the `KAYFABE_ISOLATES` environment
-# variable (`shim::ISOLATE_PLANE_ENV`). That split is deliberate — it is what lets ONE
-# binary run both arms of a negative control, so an evidence run and its control cannot
-# differ in anything but the variable.
+# ⊘ **The feature is not the selector.** It decides whether the plane can be NAMED; the
+# `KAYFABE_ISOLATES` environment variable (`shim::ISOLATE_PLANE_ENV`) decides which one runs.
+# That split is deliberate — it is what lets ONE binary run both arms of a negative control,
+# so an evidence run and its control cannot differ in anything but the variable.
+#
+# ⊘⊘⊘ **w763c — the variable`s DEFAULT moved to `real`, and the security property above did
+# not.** Reason 2 is the load-bearing one and it is untouched: a build without this feature
+# cannot name `HostIsolateFactory` at all, so `real` there refuses at realize, by name. The
+# default archive still spawns nothing, by LINKAGE. What changed is only what ABSENCE means in
+# a build that already opted in — and it had to, because `KAYFABE_FB_STORE` defaults to
+# `device`, which cannot be reached without a plane: `[measured w763]` the tree`s default
+# configuration refused its own boot at realize.
 [features]
 host-isolates = ["dep:kayfabe-isolate-host", "dep:kayfabe-linux-raw", "dep:kayfabe-shell"]
 # ★★★★★ SINGLE-STORE INCREMENT 4 — forwards to `kayfabe-isolate-host`'s own feature, which

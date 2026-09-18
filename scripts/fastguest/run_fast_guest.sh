@@ -54,6 +54,17 @@ DEADLINE_MS=$(( (BUDGET - 4) * 1000 ))
 [ "$DEADLINE_MS" -gt 1000 ] || DEADLINE_MS=1000
 
 echo "== arms: $ARMS_TOK   budget: ${BUDGET}s   self-deadline: ${DEADLINE_MS}ms"
+# ⚠ **THE BINARY'S AGE, PRINTED, BECAUSE A STALE QEMU IS INVISIBLE.** The device is a Rust
+# archive LINKED INTO qemu-system-x86_64, so a source change that was never relinked runs the
+# OLD device while the tree says otherwise. `[measured w763]` a default flip read as "the flip
+# did not take" for one whole cycle; the binary predated it by four minutes.
+# ⊘ Printed rather than checked: a check would need a provenance stamp inside the binary, and
+# `strings | grep -q` as a gate is a trap this campaign has already paid for.
+echo "== qemu:  $Q  (built $(date -r "$Q" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || echo unknown))"
+echo "== the archive needs cargo features: cuda-scratchpad (implies host-isolates)."
+echo "   Without them KAYFABE_ISOLATES=real refuses at realize BY NAME -- that is the"
+echo "   intended failure, not a kayfabe defect. Rebuild: KAYFABE_SHIM_FEATURES=cuda-scratchpad"
+echo "   bash scripts/build_qom_shim.sh <qemu-src> <qemu-build>"
 
 # ⊘⊘⊘ **THE DEVICE LINE AND THE RAM BACKING ARE NOT THE FAST LANE’S TO INVENT.** As first
 # written this file said `-device kayfabe-gpu` and `-machine q35,accel=kvm -m 4096`, and BOTH

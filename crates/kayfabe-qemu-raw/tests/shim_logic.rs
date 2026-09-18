@@ -76,6 +76,23 @@ fn realize_with(policy: MockPolicy) -> Result<(Shim, Arc<MockQemuHost>), (Status
 // The floor and the accelerator — two refusals that are NEAR NEIGHBOURS and must not merge
 // =====================================================================================
 
+
+/// ★★★ A register plane on the **arena** arm, stated rather than inherited.
+///
+/// ⊘ These tests ask about BAR ownership, refusal wording and a counter's rate — none of them
+/// is about what guest video memory IS. `[measured w763]` they were passing only because the
+/// arena happened to be the ambient default; when it stopped being, seven of them went red at
+/// once and not one of them had changed. ⇒ The arm each test needs is now part of the test,
+/// which is where a precondition belongs.
+fn arena_regs() -> kayfabe_qemu_raw::shim::Regs {
+    kayfabe_qemu_raw::shim::Regs::create_probed_on(
+        0,
+        "",
+        Some(kayfabe_qemu_raw::deviceview::FbStoreArm::Arena),
+    )
+    .expect("the default chip is servable on the arena arm")
+}
+
 #[test]
 fn a_hypervisor_below_the_floor_is_refused_by_name() {
     let err = realize_with(MockPolicy {
@@ -827,7 +844,7 @@ fn a_device_id_the_chip_table_does_not_carry_is_unsupported_and_says_why() {
 fn the_register_plane_answers_through_the_seam_the_c_shim_calls() {
     use kayfabe_qemu_raw::shim::Regs;
 
-    let regs = Regs::create(0).expect("the default chip is servable");
+    let regs = arena_regs();
     // ★★★ THE ACCEPTANCE REGISTER: `NV_PGSP` + `NV_PFALCON_FALCON_CPUCTL`, which
     // `kflcnWaitForHalt_TU102` polls. `HALTED_TRUE` is bit 4.
     assert_eq!(regs.read(0, 0x0011_0100, 4), 0x10);
@@ -963,7 +980,7 @@ fn the_register_plane_answers_through_the_seam_the_c_shim_calls() {
 
 #[test]
 fn a_base_address_register_the_plane_does_not_own_reads_zero() {
-    let regs = kayfabe_qemu_raw::shim::Regs::create(0).expect("servable");
+    let regs = arena_regs();
     assert_eq!(regs.read(1, 0x0011_0100, 4), 0);
     assert_eq!(regs.read(255, 0x0011_0100, 4), 0);
 }
@@ -984,7 +1001,7 @@ fn the_counter_the_c_shim_serves_runs_at_wall_clock_rate() {
     use kayfabe_qemu_raw::shim::Regs;
     use std::time::{Duration, Instant};
 
-    let regs = Regs::create(0).expect("the default chip is servable");
+    let regs = arena_regs();
     let compose = || {
         let hi = regs.read(0, 0x00BB_0084, 4);
         let lo = regs.read(0, 0x00BB_0080, 4);
@@ -1057,7 +1074,7 @@ fn without_the_port_the_refusal_names_the_missing_wiring_not_the_guests_address(
     // otherwise "the port is missing" and "the guest asked for something that is not there"
     // read alike, which is a whole debugging session. Delete the `attach_ram` call in
     // `nvkvm_shim_realize` and every Q5 test below produces THIS sentence.
-    let regs = kayfabe_qemu_raw::shim::Regs::create(0).expect("servable");
+    let regs = arena_regs();
     let w = drive_the_boot_args_pair(&regs);
 
     assert_eq!(w.fault, Some("GspFault::GuestRam"));
@@ -1073,7 +1090,7 @@ fn with_the_port_an_address_no_region_covers_is_refused_in_the_memory_planes_own
     // refusal must move from "there is no port" to "nothing is there" — a different
     // sentence, because they send a reader to different places.
     let (shim, _host) = realize_with(MockPolicy::default()).expect("realize");
-    let regs = kayfabe_qemu_raw::shim::Regs::create(0).expect("servable");
+    let regs = arena_regs();
     regs.attach_ram(&shim);
 
     let w = drive_the_boot_args_pair(&regs);
@@ -1105,7 +1122,7 @@ fn with_the_port_a_declared_ram_region_is_actually_read_and_the_boot_moves_on() 
     let d = host.mint_foreign(BOOT_ARGS_GPA, LIBOS_ARRAY_LEN, SectionFacts::plain_ram());
     shim.region_add(wire_of(d)).expect("plain memory is taken");
 
-    let regs = kayfabe_qemu_raw::shim::Regs::create(0).expect("servable");
+    let regs = arena_regs();
     regs.attach_ram(&shim);
 
     let w = drive_the_boot_args_pair(&regs);
@@ -1141,7 +1158,7 @@ fn a_region_that_is_a_device_is_refused_apart_from_a_region_that_is_absent() {
     let d = host.mint_foreign(BOOT_ARGS_GPA, LIBOS_ARRAY_LEN, facts);
     shim.region_add(wire_of(d)).expect("declared, unclassified");
 
-    let regs = kayfabe_qemu_raw::shim::Regs::create(0).expect("servable");
+    let regs = arena_regs();
     regs.attach_ram(&shim);
 
     let w = drive_the_boot_args_pair(&regs);
@@ -1162,7 +1179,7 @@ fn detaching_the_port_puts_the_plane_back_to_refusing_by_name() {
     let d = host.mint_foreign(BOOT_ARGS_GPA, LIBOS_ARRAY_LEN, SectionFacts::plain_ram());
     shim.region_add(wire_of(d)).expect("plain memory is taken");
 
-    let regs = kayfabe_qemu_raw::shim::Regs::create(0).expect("servable");
+    let regs = arena_regs();
     regs.attach_ram(&shim);
     assert_eq!(drive_the_boot_args_pair(&regs).ram_refusal, None);
 
@@ -1435,16 +1452,41 @@ use kayfabe_qemu_raw::shim::{
     isolate_factory, isolate_plane_from,
 };
 
-/// The default is the plane master shipped — **absent is not an error**.
+/// The default is the plane the design needs — **absent is not an error**.
+///
+/// # ⊘⊘⊘ w763c — this test used to pin `Stillborn`, and its reason was GOOD
+///
+/// It said: *"a default that spawned anything would put a host process behind every guest in
+/// the tree without a single line of configuration."* That objection is real and is answered
+/// rather than overridden — **the opt-in moved, it was not removed**:
+///
+/// - `IsolatePlane::Real` on an archive built **without** the `host-isolates` feature refuses
+///   at realize, by name. A stock `cargo build -p kayfabe-qemu-raw` still spawns nothing, and
+///   `build_qom_shim.sh` still defaults its feature list to EMPTY for exactly this reason.
+/// - So the single line of configuration is now the **build feature**, which is a decision
+///   somebody makes once and visibly, rather than an environment variable every bench run has
+///   to remember.
+///
+/// What forced it: `KAYFABE_FB_STORE` defaults to `device`, and the single store cannot be
+/// reached without a plane — no plane ⇒ no worker ⇒ no reservation ⇒ no device-view port ⇒
+/// `enforce_device_store` refuses. `[measured w763]` the tree's DEFAULT configuration could not
+/// boot, and the four census lines reported four symptoms of that one cause.
 #[test]
-fn an_unset_selector_is_the_stillborn_plane_master_shipped() {
+fn an_unset_selector_is_the_real_plane_the_single_store_needs() {
     assert_eq!(
         isolate_plane_from(None),
-        Ok(IsolatePlane::Stillborn),
-        "★ the default moved. Every build that does not opt in must get the refusing \
-         plane; a default that spawned anything would put a host process behind every \
-         guest in the tree without a single line of configuration."
+        Ok(IsolatePlane::Real),
+        "★★★★★ the default moved BACK. `FB_STORE=device` is the default and needs a plane; \
+         a boot that names nothing must be the designed configuration, not one that refuses \
+         at realize. The `no host process without an opt-in` rule is kept by the \
+         `host-isolates` BUILD FEATURE, which stays off by default — check that before \
+         changing this line back."
     );
+    // ⊘ A typo is still refused by name, which is what the old default's stated reason was
+    // actually about: an evidence run and its negative control must never be spelled alike.
+    assert!(isolate_plane_from(Some("Real")).is_err());
+    assert!(isolate_plane_from(Some("")).is_err());
+    assert_eq!(isolate_plane_from(Some("stillborn")), Ok(IsolatePlane::Stillborn));
 }
 
 /// Every plane round-trips, quantified over [`IsolatePlane::ALL`] rather than over a list
@@ -1742,13 +1784,14 @@ fn the_audit_reports_the_probe_set_the_device_ran_with() {
     use kayfabe_qemu_raw::shim::Regs;
 
     // The shipping constructor: empty, and REPORTED as empty.
-    let stock = Regs::create(0).expect("servable");
+    let stock = arena_regs();
     assert_eq!(stock.audit().probe_arm_len, 0);
     assert_eq!(stock.audit().probe_arm, [0u32; 8]);
 
     // A probed device: the audit states the set, values and count both — this is the
     // line in the boot's own report that proves what it ran with.
-    let probed = Regs::create_probed(0, "35,37").expect("servable");
+    let probed = Regs::create_probed_on(0, "35,37", Some(kayfabe_qemu_raw::deviceview::FbStoreArm::Arena))
+        .expect("servable");
     let audit = probed.audit();
     assert_eq!(audit.probe_arm_len, 2);
     assert_eq!(audit.probe_arm[0], 35);
