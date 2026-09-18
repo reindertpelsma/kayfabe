@@ -1,6 +1,8 @@
 # ogkm's own refusals as our fuzz corpus
 
-**STATUS: LIVE, 2026-09-18 (w760). Findings recorded, two of them are LIVE BUGS and open.**
+**STATUS: LIVE, 2026-09-18 (w760). ✔ The two LIVE BUGS (#1, #2) are FIXED in w760h and
+regression-tested on hardware (78/78, container 51417213, RTX 3090 / 580.95.05). Cases
+#3-#9 below are OPEN.**
 
 Owner, 2026-09-18:
 
@@ -21,7 +23,12 @@ they look like*.
 
 ---
 
-## ★★★★★ TWO LIVE CORRECTNESS BUGS — reachable by an HONEST guest, not just a hostile one
+## ★★★★★ TWO LIVE CORRECTNESS BUGS — reachable by an HONEST guest  ✔ FIXED w760h
+
+Both are one rule — **the big half can veto the small one** — implemented as
+`kf_big_half_vetoes_small` in the serial and parallel duals, and covered by
+`ogkm/unmapped_big_pte_hides_4k` and `ogkm/sparse_big_half_hides_small`, each with a control
+(`dual_control_runs`) because *"0 runs"* is also what a tree that never got built looks like.
 
 These are the important half of the result, and they are **not** fuzz gaps. Both make us report
 a **wrong mapping** from tables a stock driver writes in the ordinary course of business.
