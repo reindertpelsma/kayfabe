@@ -419,6 +419,12 @@ impl WalkKernel {
             win: crate::abi::KfWin {
                 base: gpga,
                 len: gpga_len,
+                // ★ §39(c): in production these ARE the same number, and saying so here is
+                // the point. The single store is the whole of guest vidmem and all of it is
+                // mapped, so the bytes we may READ and the addresses a leaf may POINT AT
+                // coincide. They are separate fields because that coincidence is a property
+                // of THIS deployment, not of the walker -- a corpus image breaks it.
+                span: gpga_len,
             },
             fmt: self.fmt,
             dev: self.dev.ptr,

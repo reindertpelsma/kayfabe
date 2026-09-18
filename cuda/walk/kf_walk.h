@@ -184,7 +184,7 @@ typedef struct KfScope {
 /* Bumped whenever the format descriptor's layout changes. A host/PTX skew must
  * fail LOUDLY at launch rather than decode garbage field offsets and look like a
  * page-table bug (THE_CONSTRAINTS.md §21). */
-#define KF_ABI_VERSION 1u
+#define KF_ABI_VERSION 2u
 
 #define KF_TBL_VER2 2u   /* Pascal…Ada  — GA10x is the tested one               */
 #define KF_TBL_VER3 3u   /* Hopper/Blackwell — SKETCHED, NEVER RUN, and refused
@@ -206,7 +206,22 @@ typedef struct KfWalkCfg {
      * pdb_capacity so that "the report ran out of PdbEntry slots" is testable
      * without also shrinking the table. <= KF_MAX_PDB; 0 means KF_MAX_PDB. */
     uint32_t max_pdbs;
+    /* ★★★★★ §39(c) THE GPGA SPAN -- how large the guest's GPGA address space is,
+     * which is NOT the same question as `gpga_len` (how many bytes of it are
+     * mapped for the kernel to READ). In production they coincide, because the
+     * single store IS the whole of guest vidmem and all of it is mapped. They
+     * come apart everywhere else: a captured corpus image holds the guest's
+     * TABLE PAGES and not its framebuffer, so its leaves legitimately point far
+     * outside the bytes the image contains.
+     * ⊘ Conflating the two refused 263 legitimate leaves on real GA106 tables.
+     * A leaf is contained against THIS; a table read is bounded by `gpga_len`.
+     * 0 refuses every leaf -- loudly, which is the right failure for a field
+     * someone forgot. Use KF_GPGA_SPAN_UNBOUNDED to opt out on purpose. */
+    uint64_t gpga_span;
 } KfWalkCfg;
+
+/* "This caller has no framebuffer, only tables" -- corpora and differentials. */
+#define KF_GPGA_SPAN_UNBOUNDED (~0ull)
 
 typedef struct KfWalk KfWalk;
 
@@ -227,11 +242,11 @@ void kf_ack(KfWalk *w, uint64_t generation);
 /* Property 3 of the format doc, on the host, over a buffer we already have.
  * Returns 0 if the report is well formed, else a negative code; `why` (may be NULL)
  * receives a static string. */
-/* ⚠ §39(c): `gpga_len` is the GPGA window the report was walked over. Every
- * non-UNMAP run must lie wholly inside it. Pass 0 to SKIP that check -- only a
- * caller that has no window (a synthesised report) may do so. */
+/* ⚠ §39(c): `gpga_span` is how large the guest's GPGA space is -- NOT how many
+ * bytes were mapped to walk it. Every non-UNMAP run must lie wholly inside it.
+ * Pass KF_GPGA_SPAN_UNBOUNDED when the caller has no framebuffer, only tables. */
 int kf_validate_report(const KfReportHeader *h, const KfPdbEntry *p,
-                       const KfMapRun *r, uint64_t gpga_len, const char **why);
+                       const KfMapRun *r, uint64_t gpga_span, const char **why);
 
 #ifdef __cplusplus
 }

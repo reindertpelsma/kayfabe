@@ -142,6 +142,7 @@ static void run_case(const char *name, Gpga &g, const std::vector<uint64_t> &pdb
     c.pdb_capacity = 64;
     c.entry_budget = 64u * 1024u * 1024u;   /* generous: a budget stop would not be a walk */
     c.table_version = KF_TBL_VER2;
+    c.gpga_span = KF_GPGA_SPAN_UNBOUNDED;   /* §39(c): a bench image is tables, not a framebuffer */
     c.max_pdbs = 64;
 
     KfWalk *w = kf_create(&c);
@@ -242,6 +243,7 @@ static void run_case_acked(const char *name, Gpga &g, const std::vector<uint64_t
     c.pdb_capacity = 64;
     c.entry_budget = 64u * 1024u * 1024u;
     c.table_version = KF_TBL_VER2;
+    c.gpga_span = KF_GPGA_SPAN_UNBOUNDED;   /* §39(c): a bench image is tables, not a framebuffer */
     c.max_pdbs = 64;
     KfWalk *w = kf_create(&c);
     if (!w) { fprintf(stderr, "%s: kf_create failed\n", name); printf("EXIT=3\n"); exit(3); }

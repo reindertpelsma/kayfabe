@@ -49,7 +49,7 @@ pub const KF_MAX_SCOPE: usize = 256;
 ///
 /// ⚠ A host/PTX skew must fail **loudly at launch** rather than decode garbage field offsets
 /// and look like a page-table bug (`THE_CONSTRAINTS.md` §21). Mirrors `KF_ABI_VERSION`.
-pub const KF_ABI_VERSION: u32 = 1;
+pub const KF_ABI_VERSION: u32 = 2;
 
 /// Pascal…Ada. GA10x is the tested one.
 pub const KF_TBL_VER2: u32 = 2;
@@ -196,8 +196,14 @@ pub struct KfFormat {
 pub struct KfWin {
     /// Device pointer to the buffer.
     pub base: u64,
-    /// Its length in bytes.
+    /// How many bytes of it are MAPPED, and so how far a table read may reach.
     pub len: u64,
+    /// ★★★★★ §39(c): how large the guest's GPGA space is, and so how far a LEAF
+    /// may point. Distinct from [`Self::len`]: in production the single store is
+    /// the whole of guest vidmem and both are the store length, but a captured
+    /// corpus image holds table pages and no framebuffer, so its leaves point
+    /// legitimately outside the bytes it contains. `0` refuses every leaf.
+    pub span: u64,
 }
 
 /// The kernel's cross-refresh state, in device memory.

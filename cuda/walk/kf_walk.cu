@@ -160,7 +160,8 @@ struct KfFormat {
 };
 
 /* ═══ I2: the ONE expression in this file that dereferences the GPGA buffer ═══ */
-struct KfWin { const uint8_t *base; uint64_t len; };
+/* `len` bounds what we may READ; `span` bounds where a leaf may POINT. §39(c). */
+struct KfWin { const uint8_t *base; uint64_t len; uint64_t span; };
 #define KF_GPGA_DEREF(win, off) (*(const volatile uint64_t *)((win).base + (off)))
 
 /* ── the kernel's cross-refresh state ────────────────────────────────────────── */
@@ -395,7 +396,7 @@ __device__ __forceinline__ void kf_emit(KfCtx &c, uint64_t va, uint64_t gpga, ui
      * format constant -- so the guest cannot change either between this test and
      * the emit below (§39(a)). Overflow-safe, and BEFORE the coalesce branch so
      * an extension inherits a checked base. */
-    if (gpga > c.w.len || len > c.w.len - gpga) { c.refuse |= KFWR_R_LEAF_OOB; c.refusals++; return; }
+    if (gpga > c.w.span || len > c.w.span - gpga) { c.refuse |= KFWR_R_LEAF_OOB; c.refusals++; return; }
 #endif
 #ifndef KF_BREAK_COALESCE
     if (c.have && c.run.flags == flags &&
@@ -1363,7 +1364,7 @@ struct KfPar {
  * is mutating the tables underneath it. */
 struct KfRunAcc {
     const KfFormat *fmt;
-    uint64_t win_len;              /* §39(c): the bound every emitted leaf must lie inside */
+    uint64_t span;                 /* §39(c): the bound every emitted leaf must lie inside */
     KfMapRun *out;
     uint32_t cap, n, have, overflow;
     KfMapRun run, first, last;
@@ -1372,10 +1373,10 @@ struct KfRunAcc {
     uint32_t refuse, refusals;
 };
 
-__device__ __forceinline__ void kf_acc_init(KfRunAcc &c, const KfFormat *f, uint64_t win_len,
+__device__ __forceinline__ void kf_acc_init(KfRunAcc &c, const KfFormat *f, uint64_t span,
                                             KfMapRun *out, uint32_t cap, uint16_t pi)
 {
-    c.fmt = f; c.win_len = win_len; c.out = out; c.cap = cap; c.n = 0u; c.have = 0u; c.overflow = 0u;
+    c.fmt = f; c.span = span; c.out = out; c.cap = cap; c.n = 0u; c.have = 0u; c.overflow = 0u;
     c.got_first = 0u; c.skip = 0u; c.pdb_index = pi; c.refuse = 0u; c.refusals = 0u;
     memset(&c.run, 0, sizeof(c.run));
     memset(&c.first, 0, sizeof(c.first));
@@ -1404,7 +1405,7 @@ __device__ __forceinline__ void kf_acc_emit(KfRunAcc &c, uint64_t va, uint64_t g
     }
 #ifndef KF_BREAK_BOUNDS
     /* §39(c), the parallel half of the same chokepoint. */
-    if (gpga > c.win_len || len > c.win_len - gpga) {
+    if (gpga > c.span || len > c.span - gpga) {
         c.refuse |= KFWR_R_LEAF_OOB; c.refusals++; return;
     }
 #endif
@@ -1776,7 +1777,7 @@ __device__ __forceinline__ void kf_par_leaf_one(const KfArgs &a, const KfEnt *ta
     if (t.kind != KF_ENT_DUAL) {                 /* a leaf found at a directory level */
         if (lane == 0u) {
             KfRunAcc c;
-            kf_acc_init(c, &F, a.win.len, NULL, 0u, t.pdb);
+            kf_acc_init(c, &F, a.win.span, NULL, 0u, t.pdb);
             kf_acc_emit(c, t.va, t.addr, 1ull << t.len_log2, t.flags);
             kf_acc_flush(c);
             if (c.n) {
@@ -1814,7 +1815,7 @@ __device__ __forceinline__ void kf_par_leaf_one(const KfArgs &a, const KfEnt *ta
     const uint32_t b1 = (b0 + cpl < nb) ? (b0 + cpl) : nb;
 
     KfRunAcc c;
-    kf_acc_init(c, &F, a.win.len, NULL, 0u, t.pdb);
+    kf_acc_init(c, &F, a.win.span, NULL, 0u, t.pdb);
     if (b0 < nb) kf_par_chunks(a, t, ssmall, sbig, c, b0, b1, 1u);
 
     /* Does this lane's first run continue the previous lane's last? */
@@ -1843,7 +1844,7 @@ __device__ __forceinline__ void kf_par_leaf_one(const KfArgs &a, const KfEnt *ta
     if (st + total > stagecap) { if (lane == 0u) { kf_par_abort(d, KFWR_R_FRONTIER_CAP); sum[gw] = sm; } return; }
 
     KfRunAcc wacc;
-    kf_acc_init(wacc, &F, a.win.len, runstage + st + excl, contrib, t.pdb);
+    kf_acc_init(wacc, &F, a.win.span, runstage + st + excl, contrib, t.pdb);
     wacc.skip = head ? 0u : 1u;
     if (b0 < nb) kf_par_chunks(a, t, ssmall, sbig, wacc, b0, b1, 0u);
     __syncwarp();
@@ -2196,6 +2197,7 @@ extern "C" int kf_refresh(KfWalk *w,
     KfArgs a;
     a.win.base = (const uint8_t *)gpga_dev;
     a.win.len = gpga_len;
+    a.win.span = w->cfg.gpga_span;
     a.fmt = w->fmt;
     a.dev = w->dev;
     a.tbl[0] = w->tbl[0]; a.tbl[1] = w->tbl[1];
@@ -2226,7 +2228,7 @@ extern "C" int kf_refresh(KfWalk *w,
 /* Property 3 of the format doc: the host validates the report even though we wrote
  * the kernel — because its INPUT is guest-authored. ~10 comparisons. */
 extern "C" int kf_validate_report(const KfReportHeader *h, const KfPdbEntry *p,
-                                  const KfMapRun *r, uint64_t gpga_len, const char **why)
+                                  const KfMapRun *r, uint64_t gpga_span, const char **why)
 {
     const char *msg = NULL;
     int rc = 0;
@@ -2264,8 +2266,8 @@ extern "C" int kf_validate_report(const KfReportHeader *h, const KfPdbEntry *p,
          * outside the store hands the guest memory that is not its own. ⊘ This is
          * a SECOND implementation of the kernel's own emit-time check on purpose:
          * if the two ever disagree, the report is the thing that was wrong. */
-        if (gpga_len && r[i].op != KFWR_OP_UNMAP &&
-            (r[i].gpga > gpga_len || r[i].len > gpga_len - r[i].gpga))
+        if (r[i].op != KFWR_OP_UNMAP &&
+            (r[i].gpga > gpga_span || r[i].len > gpga_span - r[i].gpga))
                                                   { msg = "run leaves the GPGA window"; rc = -16; goto out; }
     }
     if ((h->flags & KFWR_HF_TRUNCATED) && h->run_count > h->run_capacity) { msg = "trunc"; rc = -14; goto out; }
