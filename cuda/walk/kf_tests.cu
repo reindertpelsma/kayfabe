@@ -188,6 +188,98 @@ static const uint64_t VBASE = ((uint64_t)1 << 47) | ((uint64_t)3 << 38) | ((uint
 
 /* ══ CORRECTNESS ═════════════════════════════════════════════════════════════ */
 
+/* =====================================================================================
+ * w768 — AN INVALIDATE MAY ONLY DISTURB THE ADDRESS SPACES IT NAMES
+ * =====================================================================================
+ *
+ * > Owner, 2026-09-19: *"during invalidate you may only create undefined behaviour on the
+ * > vas that change, never on the vas the invalidate didn't touch. Invalidate is not freeze
+ * > the guest, I can now reconstruct VA."*
+ *
+ * ★★★★★ The guest is NOT stopped while we answer an invalidate. Another thread may be
+ * running against another address space the whole time, and that address space has no reason
+ * to notice. ⇒ A refresh driven by a change in VAS A must emit NOTHING for VAS B.
+ *
+ * ⊘ This is not a perf claim dressed as correctness. `[measured w766]` the host's
+ * `refresh_page_tables` does `for pid in pids` — it sweeps EVERY process's tables on an
+ * invalidate that names exactly ONE pdb (`all_pdb=0`, `distinct_pdbs=6`). Doing more than the
+ * invalidate asked is how an untouched VAS acquires an op it never earned.
+ *
+ * ⚠ A test that only asserts "B emitted nothing" passes trivially if the walker emits nothing
+ * for anybody, so the KNOWN-POSITIVE below changes B and requires that it DOES emit. Without
+ * it this is a test of an empty report.
+ */
+static void t_invalidate_only_disturbs_the_vas_it_names(void)
+{
+    Fix f(16u << 20, cfg_default());
+    Tree a(f.g), b(f.g);
+    /* ⊘ The SAME VA in both spaces, at different memory: if the walker ever confused the two
+     * this fixture reports it as a wrong gpga rather than as a silent absence. */
+    a.map4k(VBASE, 0x300000ull);
+    b.map4k(VBASE, 0x500000ull);
+    f.upload();
+    CHECK_EQ(f.refresh({a.root, b.root}), 0);
+    CHECK_EQ(f.hdr.pdb_count, 2);
+    CHECK_EQ(f.hdr.run_count, 2);
+
+    /* ---- the invalidate: A changes, B is not touched at all. */
+    a.map4k(VBASE + 4096ull, 0x301000ull);
+    f.upload();
+    CHECK_EQ(f.refresh({a.root, b.root}), 0);
+
+    int b_runs = -1, a_runs = -1;
+    for (uint32_t i = 0; i < f.hdr.pdb_count; i++) {
+        if (f.pe[i].pdb == b.root) b_runs = (int)f.pe[i].run_count;
+        if (f.pe[i].pdb == a.root) a_runs = (int)f.pe[i].run_count;
+    }
+    CHECK(b_runs >= 0);
+    CHECK(a_runs >= 0);
+    if (b_runs != 0) dump(f);
+    CHECK_EQ(b_runs, 0);   /* ★ the whole point: B changed nothing, so B owes nothing */
+    CHECK(a_runs > 0);     /* ⊘ and A must still report, or the delta is just broken */
+
+    /* ---- THE KNOWN-POSITIVE. Change B and it MUST speak, or the assertion above is
+     * satisfied by a walker that has stopped emitting. */
+    b.map4k(VBASE + 4096ull, 0x501000ull);
+    f.upload();
+    CHECK_EQ(f.refresh({a.root, b.root}), 0);
+    int b_runs2 = -1;
+    for (uint32_t i = 0; i < f.hdr.pdb_count; i++)
+        if (f.pe[i].pdb == b.root) b_runs2 = (int)f.pe[i].run_count;
+    if (b_runs2 <= 0) dump(f);
+    CHECK(b_runs2 > 0);
+}
+
+/* ★★★ The same invariant under an explicit SCOPE, which is where it is easiest to get wrong:
+ * `KfScope`'s own contract is *"a HINT: it can only make a walk faster, never wrong"*, so a
+ * scope naming A must not change what B is owed — neither adding to it nor suppressing it. */
+static void t_a_scope_on_one_vas_does_not_change_what_another_owes(void)
+{
+    Fix f(16u << 20, cfg_default());
+    Tree a(f.g), b(f.g);
+    a.map4k(VBASE, 0x300000ull);
+    b.map4k(VBASE, 0x500000ull);
+    f.upload();
+    CHECK_EQ(f.refresh({a.root, b.root}), 0);
+
+    /* Both spaces change; only A is named by the scope. B is still owed its run, because a
+     * scope is a hint about WHERE TO LOOK, not a statement about what is true. */
+    a.map4k(VBASE + 4096ull, 0x301000ull);
+    b.map4k(VBASE + 4096ull, 0x501000ull);
+    f.upload();
+    std::vector<KfScope> sc;
+    KfScope s;
+    s.pdb = a.root; s.va_base = 0; s.va_len = 0;
+    sc.push_back(s);
+    CHECK_EQ(f.refresh({a.root, b.root}, sc), 0);
+
+    int b_runs = -1;
+    for (uint32_t i = 0; i < f.hdr.pdb_count; i++)
+        if (f.pe[i].pdb == b.root) b_runs = (int)f.pe[i].run_count;
+    if (b_runs <= 0) dump(f);
+    CHECK(b_runs > 0);
+}
+
 static void t_single_4k(void)
 {
     Fix f(8u << 20, cfg_default());
@@ -3150,6 +3242,10 @@ static const Case CASES[] = {
 
     { "correctness/single_4k",                  t_single_4k },
     { "correctness/large_pages_64k_2m_512m",    t_large_pages },
+    /* ★ w768 — the owner's invalidate-isolation invariant, with its known-positive. */
+    { "isolation/invalidate_only_disturbs_named_vas", t_invalidate_only_disturbs_the_vas_it_names },
+    { "isolation/a_scope_does_not_change_what_another_vas_owes",
+      t_a_scope_on_one_vas_does_not_change_what_another_owes },
     { "correctness/coalesce_one_run",           t_coalesce_one_run },
     { "correctness/coalesce_split_gpga",        t_coalesce_split_gpga },
     { "correctness/coalesce_split_flags",       t_coalesce_split_flags },
