@@ -1028,6 +1028,77 @@ static void t_hostile_leaf_oob_does_not_extend_its_neighbour(void)
     if (g_fails_here) dump(f);
 }
 
+/* ── §39: WHAT ogkm ITSELF REFUSES ─────────────────────────────────────────────
+ * ★★★★★ Mined from the vendor's own checks (docs/design/ogkm_checks_as_a_fuzz_corpus.md).
+ * ⊘ Neither of these is hostile input. Both are bit patterns a STOCK driver
+ * writes in the ordinary course of business, and we reported WRONG MAPPINGS for
+ * both -- which is why they sit here with controls rather than in a fuzz list. */
+
+/* How many leaves does this tree report when nothing vetoes it? The control is
+ * the whole point: "0 runs" is also what a tree that never got built looks like. */
+static uint32_t dual_control_runs(uint64_t *pd0_out)
+{
+    Fix f(8u << 20, cfg_default());
+    Tree t(f.g);
+    for (uint32_t i = 0; i < 16u; i++)
+        t.map4k(VBASE + (uint64_t)i * 4096ull, 0x300000ull + (uint64_t)i * 4096ull);
+    if (pd0_out) *pd0_out = t.pd0(VBASE);
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    validate(f);
+    return f.hdr.run_count;
+}
+
+static void t_ogkm_unmapped_big_pte_hides_stale_4k(void)
+{
+    /* uvm_va_block.c:6484-6492 unmaps 64 KiB by writing ONE unmapped big PTE and
+     * DELIBERATELY leaving the 4 KiB PTEs stale: "we only need to invalidate the
+     * 4k PTEs without actually writing them". uvm_mmu.h:203-212 says the MMU then
+     * "should stop its walk and not cache any 4k entries which may be in memory".
+     * ⇒ Before w760h we reported all 16 stale leaves as LIVE MAPPINGS, after an
+     * honest guest had asked for them to be gone. The encoding is VALID=0, VOL=0,
+     * PRIVILEGE=1 -- `0x20` on GA10x (uvm_page_tree_test.c:1774). */
+    CHECK_M(dual_control_runs(NULL) > 0,
+            "the CONTROL reported nothing: this tree never had mappings to hide");
+
+    Fix f(8u << 20, cfg_default());
+    Tree t(f.g);
+    for (uint32_t i = 0; i < 16u; i++)
+        t.map4k(VBASE + (uint64_t)i * 4096ull, 0x300000ull + (uint64_t)i * 4096ull);
+    f.g.u64(t.pd0(VBASE) + (uint64_t)vi0(VBASE) * 16) = 0x20ull;   /* the UNMAPPED big PTE */
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    validate(f);
+    CHECK_M(f.hdr.run_count == 0,
+            "an UNMAPPED big PTE must stop the walk: the 4 KiB PTEs under it are stale by "
+            "construction and the GPU will never read them");
+    if (g_fails_here) dump(f);
+}
+
+static void t_ogkm_sparse_big_half_hides_small_table(void)
+{
+    /* ogkm `_gmmuIsInvalidPdeOk` (gmmu_trace.c:429-466) returns NV_FALSE when
+     * sublevel 0 -- THE BIG HALF -- is sparse, and mmu_trace.c:552-558 turns that
+     * into NV_ERR_INVALID_XLATE and LEAVES the walk rather than continuing. So a
+     * sparse big half aborts the whole 2 MiB WITHOUT EVER READING sublevel 1. */
+    CHECK_M(dual_control_runs(NULL) > 0,
+            "the CONTROL reported nothing: this tree never had mappings to hide");
+
+    Fix f(8u << 20, cfg_default());
+    Tree t(f.g);
+    for (uint32_t i = 0; i < 16u; i++)
+        t.map4k(VBASE + (uint64_t)i * 4096ull, 0x300000ull + (uint64_t)i * 4096ull);
+    f.g.u64(t.pd0(VBASE) + (uint64_t)vi0(VBASE) * 16) = kfb_sparse_pde();
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    validate(f);
+    CHECK_M(f.hdr.run_count == 0,
+            "a SPARSE big half must suppress the small table under it -- ogkm aborts "
+            "translation for the whole 2 MiB without reading sublevel 1");
+    CHECK_M(f.hdr.sparse_slots >= 1u, "the sparse slot must still be COUNTED, not just obeyed");
+    if (g_fails_here) dump(f);
+}
+
 static void t_hostile_unaligned_root(void)
 {
     Fix f(8u << 20, cfg_default());
@@ -3120,6 +3191,8 @@ static const Case CASES[] = {
     { "hostile/leaf_straddles_end",             t_hostile_leaf_straddles_end },
     { "hostile/leaf_at_exact_end",              t_hostile_leaf_at_exact_end },
     { "hostile/leaf_oob_no_neighbour_extend",   t_hostile_leaf_oob_does_not_extend_its_neighbour },
+    { "ogkm/unmapped_big_pte_hides_4k",         t_ogkm_unmapped_big_pte_hides_stale_4k },
+    { "ogkm/sparse_big_half_hides_small",       t_ogkm_sparse_big_half_hides_small_table },
     { "hostile/unaligned_root",                 t_hostile_unaligned_root },
     { "hostile/root_out_of_range",              t_hostile_root_out_of_range },
     { "hostile/all_ones_entries",               t_hostile_all_ones },

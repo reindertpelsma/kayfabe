@@ -296,6 +296,40 @@ __device__ __forceinline__ bool kf_slot_sparse(const KfFormat &F, uint64_t raw)
     }
 }
 
+/* ★★★★★ THE BIG HALF CAN VETO THE SMALL ONE (w760h, from ogkm's own checks).
+ * Two encodings of a dual PDE's LOW word, both meaning "there is nothing below
+ * me -- do not look at the 4 KiB table", and we honoured NEITHER:
+ *
+ *   SPARSE    VALID=0 VOL=1.  ogkm `_gmmuIsInvalidPdeOk` (gmmu_trace.c:429-466)
+ *             returns NV_FALSE for sublevel 0 -- THE BIG HALF -- when sparse, and
+ *             its caller (mmu_trace.c:552-558) turns that into
+ *             NV_ERR_INVALID_XLATE and LEAVES the walk; not `continue`. So a
+ *             sparse big half aborts translation for the whole 2 MiB WITHOUT
+ *             EVER READING sublevel 1.
+ *
+ *   UNMAPPED  VALID=0 VOL=0 PRIVILEGE=1 (`0x20` on GA10x). uvm_mmu.h:203-212:
+ *             "Unmapped big PTEs indicate that there are no 4k PTEs below the
+ *             unmapped big entry, so MMU should stop its walk and not cache any
+ *             4k entries which may be in memory". ⊘⊘⊘ AND THIS ONE IS NOT
+ *             HOSTILE INPUT: uvm_va_block.c:6484-6492 unmaps 64 KiB of VA by
+ *             writing exactly this and DELIBERATELY LEAVING THE 4 KiB PTEs
+ *             STALE -- "we only need to invalidate the 4k PTEs without actually
+ *             writing them". An honest, stock guest produces it on every such
+ *             unmap, and we were reporting the stale 4 KiB leaves as live
+ *             mappings AFTER the guest asked for them to be gone.
+ *
+ * ⚠ VER2 only: VER3 spells both in PCF and its decode is a sketch that has never
+ * run, so claiming to implement this there would be a lie (see the format seam).
+ * ⚠ `lo16` is known VALID-clear here -- a valid low word is a 2 MiB leaf and is
+ * handled before this is reached. */
+__device__ __forceinline__ bool kf_big_half_vetoes_small(const KfFormat &F, uint64_t lo16)
+{
+    if (F.table_version != KF_TBL_VER2) return false;
+    if (kf_valid(F, lo16)) return false;
+    if (kf_slot_sparse(F, lo16)) return true;                    /* VOL set   */
+    return ((lo16 >> F.bit_privilege) & 1ull) != 0ull;           /* UNMAPPED  */
+}
+
 /* ── per-thread walk context ─────────────────────────────────────────────────── */
 struct KfCtx {
     KfWin w;
@@ -574,6 +608,8 @@ __device__ void kf_walk_one(KfCtx &c, uint64_t pdb, const KfScopeSet &sc)
                                 has_b = (ptb != 0ull) && kf_table_ok(c, ptb, bb, bb);
                             }
                         } else if (kf_slot_sparse(F, lo16)) c.sparse++;
+                        /* w760h: the big half says there is nothing below it. */
+                        if (has_s && kf_big_half_vetoes_small(F, lo16)) has_s = false;
 
                         /* Both sub-tables cover the SAME VA range at different page
                          * sizes, so they are interleaved at the BIG page's
@@ -1552,6 +1588,8 @@ __device__ __forceinline__ bool kf_par_decode_slot(const KfArgs &a, uint32_t lev
             }
         }
     } else if (census && kf_slot_sparse(F, lo16)) atomicAdd(&d->sparse_slots, 1u);
+    /* w760h: the big half says there is nothing below it -- drop the small table. */
+    if ((has & 1u) && kf_big_half_vetoes_small(F, lo16)) has &= ~1u;
     if (!has) return false;
     ch.va = e.va | ((uint64_t)i << L.va_lo);
     ch.addr = pts; ch.addr2 = ptb; ch.has = has; ch.kind = KF_ENT_DUAL;
@@ -1780,8 +1818,8 @@ __device__ __forceinline__ void kf_par_leaf_one(const KfArgs &a, const KfEnt *ta
             kf_acc_init(c, &F, a.win.span, NULL, 0u, t.pdb);
             kf_acc_emit(c, t.va, t.addr, 1ull << t.len_log2, t.flags);
             kf_acc_flush(c);
-            /* §39(e): above the stagecap return below, which would otherwise drop
-             * this leaf's refusal on the floor while reporting only FRONTIER_CAP. */
+            /* §39(e): above the stagecap return below. That return would drop this
+             * leaf's refusal on the floor and report only FRONTIER_CAP. */
             if (c.refuse) { atomicOr(&d->refuse_mask, c.refuse); atomicAdd(&d->refusals, c.refusals); }
             if (c.n) {
                 const uint32_t st = atomicAdd(used, c.n);

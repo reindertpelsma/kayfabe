@@ -46,6 +46,9 @@ ssh "$HOST" "cd $REMOTE/cuda/walk && nohup sh -c '
   fi
   nvidia-smi -L >/dev/null 2>&1 && echo SMI=responsive || echo SMI=UNRESPONSIVE
   echo \"INV=\$rc_inv BUILD=\$rc_build PTX=\$rc_ptx NEG=\$rc_neg CNEG=\$rc_cneg COAL=\$rc_coal SNEG=\$rc_sneg VER3=\$rc_v3\"
+  # ⊘ rc_inv was computed and NEVER folded in: check-invariants could FAIL while the
+  # run reported EXIT=0. A check that reports is not a check that gates (w760i).
+  if [ \$rc -eq 0 ] && [ \$rc_inv -ne 0 ]; then rc=8; fi
   if [ \$rc -eq 0 ] && [ \$rc_neg -ne 0 ]; then rc=9; fi
   if [ \$rc -eq 0 ] && [ \$rc_cneg -ne 0 ]; then rc=10; fi
   if [ \$rc -eq 0 ] && [ \$rc_coal -ne 0 ]; then rc=13; fi

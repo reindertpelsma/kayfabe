@@ -25,11 +25,15 @@ check-invariants:
 	@n=`grep -c 'const volatile uint64_t \*' kf_walk.cu || true`; \
 	 if [ "$$n" != "1" ]; then echo "I2 FAIL: $$n raw GPGA pointer casts, want 1"; exit 1; fi; \
 	 echo "I2 ok: exactly one raw pointer cast"
-	@if awk '/^__device__ void kf_walk_one/,/^\}/' kf_walk.cu | grep -q 'while'; then \
+	@if awk '/^__device__ void kf_walk_one/,/^\}/' kf_walk.cu \
+	     | sed -e 's,//.*,,' -e '/^[[:space:]]*[*]/d' -e '/^[[:space:]]*\/[*]/d' \
+	     | grep -q 'while'; then \
 	   echo "I1 FAIL: a while loop on the guest-data path"; exit 1; fi; \
 	 echo "I1 ok: no while loop in kf_walk_one"
 	@for f in kf_par_decode_slot kf_par_expand_one kf_par_chunks kf_par_leaf_one; do \
-	   if awk "/__device__ __forceinline__ (bool|void) $$f/,/^\}/" kf_walk.cu | grep -q 'while'; then \
+	   if awk "/__device__ __forceinline__ (bool|void) $$f/,/^\}/" kf_walk.cu \
+	      | sed -e 's,//.*,,' -e '/^[[:space:]]*[*]/d' -e '/^[[:space:]]*\/[*]/d' \
+	      | grep -q 'while'; then \
 	     echo "I1 FAIL: a while loop on the guest-data path in $$f"; exit 1; fi; \
 	 done; \
 	 echo "I1 ok: no while loop anywhere on the PARALLEL guest-data path"
