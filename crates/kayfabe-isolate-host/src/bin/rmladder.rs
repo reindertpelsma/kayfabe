@@ -13552,6 +13552,114 @@ mod route_k {
     }
 }
 
+/// ★★★★★ **w756b — every bare-metal client check, in one command.**
+///
+/// ⊘ The exit code is the WORST arm's, and each arm prints its own verdict. A suite that
+/// returned the last arm's code would let a failure be hidden by whatever ran after it.
+fn bare_metal_suite(gpu: u32) -> i32 {
+    println!("BM_SUITE=start gpu={gpu}");
+    let mut worst = 0;
+    worst = worst.max(unmap_retires_probe(gpu));
+    worst = worst.max(dma_roundtrip_probe(gpu));
+    if worst == 0 {
+        println!(
+            "BM_SUITE=PASS — every arm passed on bare metal. ⇒ a later GUEST failure of this \
+             same client indicts kayfabe, not the client."
+        );
+    } else {
+        println!(
+            "BM_SUITE=FAIL — read the arm verdicts above. ⊘ Until this is green, a guest \
+             failure cannot be attributed to kayfabe."
+        );
+    }
+    worst
+}
+
+/// ★★★★★ **w756b — is DMA memory visible in both directions?**
+fn dma_roundtrip_probe(gpu: u32) -> i32 {
+    let Ok(dev) = DevDir::open(c"/dev") else {
+        println!("DR_RESULT=UNMEASURED:open-dev");
+        return 1;
+    };
+    let conn = match RmConnection::open(&dev, GpuId(gpu), kayfabe_chips::pinned_host_classes()) {
+        Ok(c) => c,
+        Err(e) => {
+            println!("DR_RESULT=UNMEASURED:rm-open:{e:?}");
+            return 1;
+        }
+    };
+    let id = IsolateId::new(0x44_52, GpuId(gpu));
+    let mut rm = HostRmBackend::new(
+        id,
+        std::sync::Arc::new(conn),
+        std::sync::Arc::new(kayfabe_isolate_host::ChildExports::new()),
+    );
+    let vas = match rm.alloc_vaspace() {
+        Ok(v) => v,
+        Err(e) => {
+            println!("DR_RESULT=UNMEASURED:alloc-vaspace:{e:?}");
+            return 1;
+        }
+    };
+    match rm.probe_dma_roundtrip(vas, 0xC0FF_EE01) {
+        Ok(p) => {
+            println!(
+                "DR_LEG1 cpu_to_gpu={} retired={} via_after={:#010x} (seed {:#010x}, want \
+                 {:#010x})",
+                p.cpu_to_gpu(),
+                p.leg1_retired,
+                p.via_after,
+                p.via_sentinel,
+                p.pattern
+            );
+            println!(
+                "DR_LEG2 gpu_to_cpu={} retired={} dst_after={:#010x} (seed {:#010x}, want \
+                 {:#010x})",
+                p.gpu_to_cpu(),
+                p.leg2_retired,
+                p.dst_after,
+                p.dst_sentinel,
+                p.pattern
+            );
+            if p.passed() {
+                println!(
+                    "DR_RESULT=PASS: a CPU write to DMA memory reached the GPU, and a GPU \
+                     write to DMA memory reached the CPU — proven through a VIDMEM waypoint, \
+                     so neither leg can be satisfied without crossing the bus"
+                );
+                0
+            } else if !p.leg1_retired {
+                println!(
+                    "DR_RESULT=UNMEASURED: leg 1 never retired; nothing about coherence was tested"
+                );
+                1
+            } else if p.via_after == p.via_sentinel {
+                println!(
+                    "DR_RESULT=FAIL(cpu->gpu): leg 1 RETIRED but the waypoint still holds its \
+                     seed ⇒ the copy reported completion and moved nothing. ⚠ This is the \
+                     forge shape: a completion is not a copy."
+                );
+                1
+            } else if !p.cpu_to_gpu() {
+                println!(
+                    "DR_RESULT=FAIL(cpu->gpu): the engine read something, but not what the CPU wrote"
+                );
+                1
+            } else {
+                println!(
+                    "DR_RESULT=FAIL(gpu->cpu): the CPU did not read back what the engine \
+                     wrote into DMA memory"
+                );
+                1
+            }
+        }
+        Err(e) => {
+            println!("DR_RESULT=UNMEASURED:probe:{e:?}");
+            1
+        }
+    }
+}
+
 /// ★★★★★ **w755z — the raw client's unmap known-positive.**
 ///
 /// ⊘ **Prints its own non-vacuity.** Leg 1 must retire, or leg 2's fault means only that the
@@ -13577,27 +13685,57 @@ fn unmap_retires_probe(gpu: u32) -> i32 {
         std::sync::Arc::new(conn),
         std::sync::Arc::new(kayfabe_isolate_host::ChildExports::new()),
     );
-    let vas = match rm.alloc_vaspace() {
-        Ok(v) => v,
-        Err(e) => {
-            println!("UR_RESULT=UNMEASURED:alloc-vaspace:{e:?}");
-            return 1;
-        }
-    };
-    match rm.probe_unmap_retires_the_translation(vas, 0x5EA1_C071) {
+    // ★★★★★ **w756a — BOTH APERTURES IN ONE INVOCATION.** Owner, 2026-09-18: *"add dma as
+    // test to the raw client incl unmap must fault. Same reasoning as ordinary vidmem
+    // allocations right"* — yes: the fault is a property of the TRANSLATION, not the
+    // aperture, so a VA with no PTE faults whichever kind of memory it used to name.
+    //
+    // ⊘ Run as two arms of one rung rather than two rungs, so a boot cannot report one and
+    // silently skip the other. ⚠ Each arm gets its OWN address space: the second copy kills
+    // its channel, and a dead channel from the vidmem arm must not be what the sysmem arm
+    // measures.
+    let mut worst = 0;
+    for aperture in [
+        kayfabe_isolate_host::rm::ProbeAperture::Vidmem,
+        kayfabe_isolate_host::rm::ProbeAperture::Sysmem,
+    ] {
+        let vas = match rm.alloc_vaspace() {
+            Ok(v) => v,
+            Err(e) => {
+                println!(
+                    "UR_RESULT[{}]=UNMEASURED:alloc-vaspace:{e:?}",
+                    aperture.name()
+                );
+                worst = worst.max(1);
+                continue;
+            }
+        };
+        worst = worst.max(unmap_retires_arm(&mut rm, vas, aperture));
+    }
+    worst
+}
+
+/// One aperture's arm of [`unmap_retires_probe`].
+fn unmap_retires_arm(
+    rm: &mut HostRmBackend,
+    vas: kayfabe_isolate::HostHandle,
+    aperture: kayfabe_isolate_host::rm::ProbeAperture,
+) -> i32 {
+    let a = aperture.name();
+    match rm.probe_unmap_retires_the_translation(vas, 0x5EA1_C071, aperture) {
         Ok(p) => {
             println!(
-                "UR_LEG1 mapped_retired={} semaphore={:#010x} payload={:#010x} dst_va={:#x}",
+                "UR_LEG1[{a}] mapped_retired={} semaphore={:#010x} payload={:#010x} dst_va={:#x}",
                 p.mapped_retired, p.mapped_semaphore, p.mapped_payload, p.dst_va
             );
-            println!("UR_UNMAP issued={}", p.unmapped);
+            println!("UR_UNMAP[{a}] issued={}", p.unmapped);
             println!(
-                "UR_LEG2 after_retired={} semaphore={:#010x} payload={:#010x} refused={:?}",
+                "UR_LEG2[{a}] after_retired={} semaphore={:#010x} payload={:#010x} refused={:?}",
                 p.after_retired, p.after_semaphore, p.after_payload, p.after_refused
             );
             if p.passed() {
                 println!(
-                    "UR_RESULT=PASS: the copy retired while mapped and did NOT after the \
+                    "UR_RESULT[{a}]=PASS: the copy retired while mapped and did NOT after the \
                      unmap ⇒ our unmap RETIRES THE TRANSLATION, proven by the engine rather \
                      than by a ledger"
                 );
@@ -13605,13 +13743,13 @@ fn unmap_retires_probe(gpu: u32) -> i32 {
             } else if !p.mapped_retired {
                 // ⊘ NOT a fail of the unmap: the probe never established anything to remove.
                 println!(
-                    "UR_RESULT=VACUOUS: leg 1 did not retire, so leg 2 proves nothing about \
+                    "UR_RESULT[{a}]=VACUOUS: leg 1 did not retire, so leg 2 proves nothing about \
                      the unmap — a fault here could mean the mapping was never established"
                 );
                 1
             } else {
                 println!(
-                    "UR_RESULT=FAIL: the copy STILL RETIRED after the unmap ⇒ the translation \
+                    "UR_RESULT[{a}]=FAIL: the copy STILL RETIRED after the unmap ⇒ the translation \
                      is live and our unmap is a bookkeeping entry. This is the shape that \
                      makes two VAs alias one store offset."
                 );
@@ -13619,7 +13757,7 @@ fn unmap_retires_probe(gpu: u32) -> i32 {
             }
         }
         Err(e) => {
-            println!("UR_RESULT=UNMEASURED:probe:{e:?}");
+            println!("UR_RESULT[{a}]=UNMEASURED:probe:{e:?}");
             1
         }
     }
@@ -13685,6 +13823,23 @@ fn main() -> std::process::ExitCode {
         // ⚠ The second copy kills its own channel, so this runs as its own invocation.
         if argv.iter().any(|a| a == "--unmap-retires") {
             let code = unmap_retires_probe(role_gpu);
+            return std::process::ExitCode::from(u8::try_from(code.clamp(0, 255)).unwrap_or(1));
+        }
+        // ★★★★★ **w756b — THE BARE-METAL CLIENT SUITE.** Owner, 2026-09-18: *"testing client
+        // to ensure it passes on bare metal before guest"*.
+        //
+        // ⊘ Its value is entirely in being run BEFORE the guest: a client that passes here
+        // and fails in the guest indicts **kayfabe**, not the client
+        // (`bare_metal_pass_guest_fail_indicts_kayfabe`). That argument needs a measured
+        // baseline, not an assumed one.
+        //
+        // ⚠ Needs a GPU and **nothing else** — no KVM, no guest, no QEMU — so it runs on a
+        // plain CUDA container in ~2 minutes instead of behind a 30-minute KVM boot.
+        //
+        // ⊘ ONE command runs every arm, so a boot cannot report one and silently skip
+        // another; the exit code is the worst arm's.
+        if argv.iter().any(|a| a == "--bare-metal-suite") {
+            let code = bare_metal_suite(role_gpu);
             return std::process::ExitCode::from(u8::try_from(code.clamp(0, 255)).unwrap_or(1));
         }
         // ★★★★★ w755i — the CUDA-store ownership probe. Needs NO guest, NO QEMU, NO KVM:

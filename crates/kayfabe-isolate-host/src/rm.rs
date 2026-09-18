@@ -6147,12 +6147,103 @@ pub struct SubmitOutcome {
     pub gp_put: u32,
 }
 
+/// ★★★★★ **w756b — what [`HostRmBackend::probe_dma_roundtrip`] observed, per leg.**
+///
+/// ⊘ Legs are separate fields, not a verdict, because *"leg 1 never ran"* and *"leg 2 moved
+/// the wrong bytes"* need different fixes and a bool cannot tell them apart.
+#[derive(Debug, Default, Clone)]
+pub struct DmaRoundTrip {
+    /// The word the CPU wrote into the sysmem source, and the one the destination must hold.
+    pub pattern: u32,
+    /// Leg 1 (sysmem → vidmem) retired.
+    pub leg1_retired: bool,
+    /// The vidmem waypoint's first word after leg 1. ★ **This is what says leg 1 MOVED the
+    /// bytes rather than merely retiring** — a retired copy that moved nothing is exactly the
+    /// forge shape the C is no oracle for.
+    pub via_after: u32,
+    /// Leg 2 (vidmem → sysmem) retired.
+    pub leg2_retired: bool,
+    /// The sysmem destination's first word after leg 2, read through a FRESH mapping.
+    pub dst_after: u32,
+    /// The waypoint's pre-seed, kept so a reader can tell *"unchanged"* from *"wrong value"*.
+    pub via_sentinel: u32,
+    /// The destination's pre-seed. Distinct from [`Self::via_sentinel`] on purpose.
+    pub dst_sentinel: u32,
+}
+
+impl DmaRoundTrip {
+    /// ★ **CPU → GPU**: the engine read bytes only the CPU ever wrote.
+    #[must_use]
+    pub fn cpu_to_gpu(&self) -> bool {
+        self.leg1_retired && self.via_after == self.pattern
+    }
+
+    /// ★ **GPU → CPU**: the CPU read bytes only the engine ever wrote.
+    ///
+    /// ⊘ Requires [`Self::cpu_to_gpu`]: if leg 1 did not deliver the pattern to the waypoint,
+    /// leg 2 carrying it to the destination would mean something else entirely.
+    #[must_use]
+    pub fn gpu_to_cpu(&self) -> bool {
+        self.cpu_to_gpu() && self.leg2_retired && self.dst_after == self.pattern
+    }
+
+    /// Both directions.
+    #[must_use]
+    pub fn passed(&self) -> bool {
+        self.gpu_to_cpu()
+    }
+}
+
+/// ★★★★★ **w756a — WHICH APERTURE the unmap probe's operands live in.**
+///
+/// > Owner, 2026-09-18: *"add dma as test to the raw client incl unmap must fault. Same
+/// > reasoning as ordinary vidmem allocations right"*
+///
+/// ★ **Yes, and the reason it transfers is worth stating**: the fault is a property of the
+/// **translation**, not of the aperture. A copy engine touching a VA with no PTE faults
+/// whether that PTE used to name video memory or system memory, because the GMMU walk fails
+/// before anything about the target is consulted.
+///
+/// ⊘⊘ **But DMA has a SECOND ordering that vidmem does not, and this probe does NOT test
+/// it.** For vidmem there is one act: remove the translation. For sysmem there are two —
+/// remove the translation, and release/unpin the host pages — and **the dangerous order is
+/// the reverse of the dangerous order here**: pages freed while a GPU VA still resolves are
+/// reachable by the engine with **no fault at all**, which is the silent case. This probe
+/// asks *"does unmap retire the translation?"*; the free-while-mapped question needs its own
+/// probe and is named here so its absence is deliberate rather than assumed covered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ProbeAperture {
+    /// `NV01_MEMORY_LOCAL_USER` — device-local video memory.
+    ///
+    /// ⊘ The `Default` only so [`UnmapRetiresProbe`] can derive one; every caller names its
+    /// arm explicitly, because a probe that defaulted its aperture would report a verdict
+    /// about memory the caller did not ask about.
+    #[default]
+    Vidmem,
+    /// `NV01_MEMORY_SYSTEM` — host memory the GPU reaches over the bus, i.e. DMA.
+    Sysmem,
+}
+
+impl ProbeAperture {
+    /// The name a census row prints, so an arm is readable without decoding a bool.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            ProbeAperture::Vidmem => "vidmem",
+            ProbeAperture::Sysmem => "sysmem-dma",
+        }
+    }
+}
+
 /// ★★★★★ **w755z — what [`HostRmBackend::probe_unmap_retires_the_translation`] observed.**
 ///
 /// ⊘ A struct and not a `bool`, so *"the engine faulted"* and *"we never got to ask"* cannot
 /// be read as one another — the distinction w755v spent three wrong verdicts on.
 #[derive(Debug, Default, Clone)]
 pub struct UnmapRetiresProbe {
+    /// Which aperture the operands were allocated in — printed, so an arm's verdict cannot be
+    /// read as the other arm's.
+    pub aperture: ProbeAperture,
     /// The source operand's VA.
     pub src_va: u64,
     /// The destination's VA — the one unmapped between the two legs.
@@ -12598,6 +12689,131 @@ impl HostRmBackend {
     ///
     /// # Errors
     /// Whatever the allocation, the mapping or the copy refuses with.
+    /// ★★★★★ **w756b — IS DMA MEMORY COHERENT IN BOTH DIRECTIONS? A ROUND TRIP THROUGH THE
+    /// DEVICE.**
+    ///
+    /// > Owner, 2026-09-18: *"test if you write to dma its visible in gpu and vice versa in
+    /// > raw client"*, and *"testing client to ensure it passes on bare metal before guest"*.
+    ///
+    /// ⊘ **This is a BARE-METAL baseline, and that is its whole point.** If it passes here
+    /// and the same client fails in the guest, the guest failure indicts **kayfabe**, not the
+    /// client — `bare_metal_pass_guest_fail_indicts_kayfabe`. A baseline nobody measured
+    /// cannot carry that argument.
+    ///
+    /// # ★★★ Why a ROUND TRIP, and why it goes through VIDMEM
+    ///
+    /// One copy cannot separate the directions, and a sysmem→sysmem copy proves neither:
+    /// the engine could be satisfied entirely inside host memory and never cross the bus.
+    /// So the path is **A(sysmem) → V(vidmem) → B(sysmem)**:
+    ///
+    /// - leg 1 proves **CPU → GPU**: the engine read bytes only the CPU ever wrote.
+    /// - leg 2 proves **GPU → CPU**: the CPU read bytes only the engine ever wrote.
+    ///
+    /// ⚠ Every buffer is pre-seeded with a **distinct** sentinel, so *"the copy did not
+    /// happen"* and *"the copy moved the wrong bytes"* are different observations. A single
+    /// shared sentinel would let a skipped leg read as a passed one.
+    ///
+    /// # Errors
+    /// Whatever RM refused. ⊘ A refusal is not a failed coherence check — the caller must be
+    /// able to say *"we never got to ask"*, which is why legs are reported separately.
+    pub fn probe_dma_roundtrip(
+        &mut self,
+        vas: HostHandle,
+        pattern: u32,
+    ) -> Result<DmaRoundTrip, RmError> {
+        const BYTES: u64 = 4096;
+        /// Pre-seed for the vidmem waypoint. Distinct from the destination's, so a leg-1
+        /// failure and a leg-2 failure cannot produce the same readback.
+        const VIA_SENTINEL: u32 = 0x71A0_0000;
+        /// Pre-seed for the destination.
+        const DST_SENTINEL: u32 = 0xDEAD_0B0E;
+        let range = self.narrow(vas)?;
+        let a = self.alloc_sysmem(BYTES).and_then(|h| self.narrow(h))?;
+        let v = match self.conn.alloc_device_local(BYTES) {
+            Ok(h) => h,
+            Err(e) => {
+                let _ = self.free(self.stamp(a));
+                return Err(e);
+            }
+        };
+        let b = match self.alloc_sysmem(BYTES).and_then(|h| self.narrow(h)) {
+            Ok(h) => h,
+            Err(e) => {
+                let _ = self.free(self.stamp(v));
+                let _ = self.free(self.stamp(a));
+                return Err(e);
+            }
+        };
+        let mut out = DmaRoundTrip {
+            pattern,
+            ..DmaRoundTrip::default()
+        };
+        let mut go = || -> Result<(), RmError> {
+            let a_va = self.map_dma_both(range, a, BYTES, None)?;
+            let v_va = self.map_dma_both(range, v, BYTES, None)?;
+            let b_va = self.map_dma_both(range, b, BYTES, None)?;
+
+            // ---- seed, from the CPU only ----
+            let (a_node, a_map) = self.conn.map_cpu(a, BYTES, CachePolicy::WriteCombining)?;
+            a_map
+                .store_u32(HostOffset::ZERO, pattern)
+                .map_err(|e| region_error(&e))?;
+            drop(a_map);
+            drop(a_node);
+            let (v_node, v_map) = self.conn.map_cpu(v, BYTES, CachePolicy::WriteCombining)?;
+            v_map
+                .store_u32(HostOffset::ZERO, VIA_SENTINEL)
+                .map_err(|e| region_error(&e))?;
+            drop(v_map);
+            drop(v_node);
+            let (b_node, b_map) = self.conn.map_cpu(b, BYTES, CachePolicy::WriteCombining)?;
+            b_map
+                .store_u32(HostOffset::ZERO, DST_SENTINEL)
+                .map_err(|e| region_error(&e))?;
+            drop(b_map);
+            drop(b_node);
+
+            let sub = |dst: u64, src: u64| CeSubCopy {
+                dst,
+                src: CeSource::Address(src),
+                len: BYTES,
+                by: CeExecutor::HostCe,
+                guest_release: None,
+            };
+            // ---- leg 1: CPU → GPU. sysmem A into vidmem V. ----
+            let (s1, p1) = self.ce_copy_outcome(vas, sub(v_va, a_va))?;
+            out.leg1_retired = s1.semaphore == p1 && s1.gp_get == s1.gp_put;
+            // ⊘ Read the waypoint from the CPU: it is what says leg 1 moved the bytes rather
+            // than merely retiring. A retired copy that moved nothing is the C's forge shape.
+            let (n1, m1) = self.conn.map_cpu(v, BYTES, CachePolicy::WriteCombining)?;
+            out.via_after = m1
+                .load_u32(HostOffset::ZERO)
+                .map_err(|e| region_error(&e))?;
+            drop(m1);
+            drop(n1);
+
+            // ---- leg 2: GPU → CPU. vidmem V back out into sysmem B. ----
+            let (s2, p2) = self.ce_copy_outcome(vas, sub(b_va, v_va))?;
+            out.leg2_retired = s2.semaphore == p2 && s2.gp_get == s2.gp_put;
+            // ⊘ A FRESH mapping, opened after the copy — not the one the seed was written
+            // through, which could answer out of a stale CPU view rather than out of memory.
+            let (n2, m2) = self.conn.map_cpu(b, BYTES, CachePolicy::WriteCombining)?;
+            out.dst_after = m2
+                .load_u32(HostOffset::ZERO)
+                .map_err(|e| region_error(&e))?;
+            drop(m2);
+            drop(n2);
+            out.via_sentinel = VIA_SENTINEL;
+            out.dst_sentinel = DST_SENTINEL;
+            Ok(())
+        };
+        let r = go();
+        let _ = self.free(self.stamp(b));
+        let _ = self.free(self.stamp(v));
+        let _ = self.free(self.stamp(a));
+        r.map(|()| out)
+    }
+
     /// ★★★★★ **w755z — DOES OUR UNMAP RETIRE THE TRANSLATION? ASK THE COPY ENGINE.**
     ///
     /// > Owner, 2026-09-18: *"Add in raw client a test it munmaps and then ce must fault on
@@ -12630,18 +12846,32 @@ impl HostRmBackend {
         &mut self,
         vas: HostHandle,
         pattern: u32,
+        aperture: ProbeAperture,
     ) -> Result<UnmapRetiresProbe, RmError> {
         const BYTES: u64 = 4096;
         let range = self.narrow(vas)?;
-        let src = self.conn.alloc_device_local(BYTES)?;
-        let dst = match self.conn.alloc_device_local(BYTES) {
+        // ⊘ ONE implementation for both apertures, not two probes. The question — *"does our
+        // unmap retire the translation?"* — is identical, and a second copy of this body is
+        // how the two arms come to disagree about what they proved. Only the allocator
+        // differs, which is exactly the variable under test.
+        let mut alloc = |me: &mut Self| -> Result<u32, RmError> {
+            match aperture {
+                ProbeAperture::Vidmem => me.conn.alloc_device_local(BYTES),
+                ProbeAperture::Sysmem => me.alloc_sysmem(BYTES).and_then(|h| me.narrow(h)),
+            }
+        };
+        let src = alloc(self)?;
+        let dst = match alloc(self) {
             Ok(h) => h,
             Err(e) => {
                 let _ = self.free(self.stamp(src));
                 return Err(e);
             }
         };
-        let mut out = UnmapRetiresProbe::default();
+        let mut out = UnmapRetiresProbe {
+            aperture,
+            ..UnmapRetiresProbe::default()
+        };
         let mut go = || -> Result<(), RmError> {
             let src_va = self.map_dma_both(range, src, BYTES, None)?;
             let dst_va = self.map_dma_both(range, dst, BYTES, None)?;
