@@ -310,6 +310,10 @@ pub struct PtDecodeOutcome {
     /// passthrough channel's host semaphore writes — so hardware kept translating it to the
     /// OLD object while the guest read the new one.
     pub unbind_refusal_why: Vec<(u64, &'static str)>,
+    /// ★ w769 — rows the guest's unbind removed whose HOST OBJECT we kept, because a sibling
+    /// binding still uses it. ⊘ Not a leak while somebody uses it; the reclaim work list if
+    /// nobody ever does.
+    pub unbound_without_release: usize,
     /// ★★★ Branches the decode could not read, carried out of the pass rather than
     /// absorbed — MISS = FAULT. The subtree under each contributed nothing and was **not**
     /// guessed at.
@@ -443,6 +447,7 @@ impl PtDecodeOutcome {
     pub fn merge(&mut self, other: Self) {
         let Self {
             unbind_refusal_why,
+            unbound_without_release,
             revoked,
             revoked_still_desired,
             remaps_refused,
@@ -483,6 +488,7 @@ impl PtDecodeOutcome {
         self.repointed += repointed;
         self.dropped.extend(dropped);
         self.unbind_refusal_why.extend(unbind_refusal_why);
+        self.unbound_without_release += unbound_without_release;
         self.refusals.extend(refusals);
         self.faults.extend(faults);
         self.vas_gone += vas_gone;
@@ -1095,6 +1101,12 @@ fn commit_pt_decode_with(
         out.duplicate_leaves += s.duplicate_leaves;
         out.dropped.extend(po.dropped);
         out.refusals.extend(po.refusals);
+        // ⊘ w769b — THE HOP THAT WAS MISSING, and the census reported a FALSE ZERO because of
+        // it: `unbind_why={}` printed beside `unbound=31 revoked=0 released=0`, which cannot
+        // both be true. ⚠ Caught only because the known-positive (`unbound`) said work had
+        // happened — an empty census with nothing to contradict it reads as "nothing to see".
+        out.unbind_refusal_why.extend(po.unbind_refusal_why.iter().copied());
+        out.unbound_without_release += po.unbound_without_release;
     }
     out
 }
