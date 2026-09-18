@@ -1623,12 +1623,23 @@ pub unsafe extern "C" fn kayfabe_shim_bar0_shadow_fill(
 /// plane sees a `dyn ReadShadowPort` and calls `write`. That is this crate's standing shape for
 /// raw addresses, and it is why `RegPlane` can own a sink it could never fabricate.
 #[derive(Debug)]
-struct ShadowSegment {
+pub(crate) struct ShadowSegment {
     /// Offset of this segment within the register aperture.
     off: u64,
     len: u64,
-    /// The hypervisor's own memory for this piece. ⚠ Owned by the device, which outlives the
-    /// register plane; the plane is torn down at the device's exit notifier.
+    /// The hypervisor's own memory for this piece.
+    ///
+    /// ⊘⊘⊘ **w761b — THIS COMMENT USED TO SAY "owned by the device, which outlives the
+    /// register plane", AND THAT PREMISE WAS THE DEFECT.** True within ONE device lifetime and
+    /// false across a `device_del`/`device_add`, which this tree explicitly supports
+    /// (`tests/device_recycle.rs`). The sink was a process-lifetime `static OnceLock` with a
+    /// **push-only** segment list and no detach in `nvkvm_exit`, so a recycled device pushed
+    /// its segments behind the dead device's, and `.find()` — which returns the FIRST match —
+    /// handed back a freed `memory_region_get_ram_ptr`. A guest MMIO write then wrote through
+    /// it: a guest-reachable use-after-free, reached from SAFE code (`plane.rs`).
+    ///
+    /// ⇒ The sink now hangs off [`crate::shim::Regs`], which `kayfabe_shim_regs_destroy` drops,
+    /// so a segment cannot outlive the device that owns its memory.
     base: *mut u8,
 }
 
@@ -1642,7 +1653,7 @@ unsafe impl Sync for ShadowSegment {}
 
 /// Every backed piece of the aperture, as one sink.
 #[derive(Debug, Default)]
-struct ShadowSink {
+pub(crate) struct ShadowSink {
     segments: std::sync::Mutex<Vec<ShadowSegment>>,
 }
 
@@ -1651,7 +1662,21 @@ impl kayfabe_device::plane::ReadShadowPort for ShadowSink {
         let segs = self.segments.lock().unwrap_or_else(|e| e.into_inner());
         let Some(seg) = segs
             .iter()
-            .find(|s| off >= s.off && off + bytes.len() as u64 <= s.off + s.len)
+            // ⊘ w761b — `checked_add` on BOTH sums, not `+`. `off` comes from the guest's own
+            // MMIO offset and `s.off + s.len` from an attach the device supplied; a wrap on
+            // either side makes the comparison pass for a span that is not inside the segment,
+            // and the write below is then out of bounds. The exemplar is
+            // `kayfabe-linux-raw/src/bounds.rs:78`, which has used `checked_add` since it was
+            // written. ⚠ A `None` here is a DROP, exactly as a non-covering offset is.
+            .find(|s| {
+                let Some(end) = off.checked_add(bytes.len() as u64) else {
+                    return false;
+                };
+                let Some(seg_end) = s.off.checked_add(s.len) else {
+                    return false;
+                };
+                off >= s.off && end <= seg_end
+            })
         else {
             // ⊘ An offset no piece covers is DROPPED, per the trait's contract. A producer has
             // no business knowing which pages were backed, and a dropped byte must never be
@@ -1697,7 +1722,9 @@ pub unsafe extern "C" fn kayfabe_shim_bar0_shadow_attach(
     let Some(regs) = borrow_regs(handle) else {
         return Status::Malformed.code();
     };
-    let sink = SHADOW_SINK.get_or_init(|| std::sync::Arc::new(ShadowSink::default()));
+    // ⊘ PER-DEVICE, not per-process: see `ShadowSegment::base`. `Regs` is dropped by
+    // `kayfabe_shim_regs_destroy`, so this list cannot outlive the memory it points at.
+    let sink = regs.read_shadow_sink();
     sink.segments
         .lock()
         .unwrap_or_else(|e| e.into_inner())
@@ -1710,7 +1737,8 @@ pub unsafe extern "C" fn kayfabe_shim_bar0_shadow_attach(
     Status::Ok.code()
 }
 
-/// The one sink, shared by every piece. ⊘ A `OnceLock` rather than one port per piece: the plane
-/// holds a single port, and a second `set_read_shadow` would silently replace the first — which
-/// is how nine of ten pieces would stop being updated with nothing to say so.
-static SHADOW_SINK: std::sync::OnceLock<std::sync::Arc<ShadowSink>> = std::sync::OnceLock::new();
+// ⊘ The process-wide `static SHADOW_SINK` that used to live here is GONE (w761b). Its
+// `OnceLock` rationale — "the plane holds a single port, and a second `set_read_shadow` would
+// silently replace the first" — is still right and is preserved: `Regs::read_shadow_sink` is
+// one sink shared by every piece OF THAT DEVICE. What changed is the lifetime, which is the
+// half that was wrong.

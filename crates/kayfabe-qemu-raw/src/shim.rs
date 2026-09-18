@@ -15497,6 +15497,19 @@ pub struct Regs {
     /// ⚠ Dropping it kills and reaps a child process, so it must not be dropped under a
     /// ranked lock; `IsolateBox::drop` asserts that.
     scratchpad: Option<crate::scratchpad::Scratchpad>,
+    /// ★★★★★ **w761b — THE READ SHADOW'S SINK, OWNED BY THE DEVICE.**
+    ///
+    /// ⊘ It used to be a process-lifetime `static OnceLock` in `shim_unsafe`. Its segment list
+    /// is push-only and `nvkvm_exit` has no detach, so across a `device_del`/`device_add` a
+    /// recycled device's segments queued up BEHIND the dead device's — and `.find()`, which
+    /// returns the first match, handed back a freed `memory_region_get_ram_ptr`. A guest MMIO
+    /// write then wrote through it. Guest-reachable use-after-free, reached from safe code.
+    ///
+    /// Holding it here makes its lifetime exactly the device's: `kayfabe_shim_regs_destroy`
+    /// drops this `Regs`, and the segments go with it. ⊘ Still ONE sink shared by every piece
+    /// — that part of the old design was right, because the plane holds a single port and a
+    /// second `set_read_shadow` would silently replace the first.
+    read_shadow: std::sync::OnceLock<Arc<crate::shim_unsafe::ShadowSink>>,
     /// The [`kayfabe_mmu::any_table_change_epoch`] value this port last offered a
     /// publication job for. ⊘ An atomic and not a cell: `Regs::write` takes `&self` and runs
     /// on eight vCPU threads. A racing swap costs at most one spare job — see the call site
@@ -15754,6 +15767,15 @@ impl core::fmt::Debug for Regs {
 }
 
 impl Regs {
+    /// ★★★ **w761b — this device's read-shadow sink**, created on first attach.
+    ///
+    /// ⊘ `pub(crate)` and returning the `Arc` rather than the segments: the raw pointers stay
+    /// inside `shim_unsafe`, which is this crate's standing shape for addresses.
+    pub(crate) fn read_shadow_sink(&self) -> &Arc<crate::shim_unsafe::ShadowSink> {
+        self.read_shadow
+            .get_or_init(|| Arc::new(crate::shim_unsafe::ShadowSink::default()))
+    }
+
     /// Build the register plane for a chip. `0` selects the table's default row. The
     /// notifier probe is empty — the shipping configuration, and the reason this is the
     /// constructor every test uses.
@@ -16943,6 +16965,7 @@ impl Regs {
         );
         Ok(Regs {
             scratchpad,
+            read_shadow: std::sync::OnceLock::new(),
             last_table_epoch: std::sync::atomic::AtomicU64::new(0),
             #[cfg(feature = "host-isolates")]
             last_wake_epoch: std::sync::atomic::AtomicU64::new(0),
