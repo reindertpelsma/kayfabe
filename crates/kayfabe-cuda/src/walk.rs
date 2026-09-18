@@ -13,6 +13,11 @@ use crate::abi::{
 };
 use crate::driver_unsafe::{CUdeviceptr, CtxHandle, Cuda, CudaError, Func};
 
+/// Byte offset of `KfDev::acked`. ⊘ Derived with `offset_of!` rather than written as `8`, so a
+/// field inserted before it is a compile-time relocation and not a silent write to the wrong
+/// word — `generation` sits immediately before it and the two are the same type.
+const ACKED_BYTE_OFFSET: u64 = core::mem::offset_of!(KfDev, acked) as u64;
+
 /// ★★★ **The committed PTX.** Built from `cuda/walk/kf_walk.cu` by
 /// `cuda/walk/make_ptx.py` — NVRTC, no GPU and no nvcc, so it is generated where the rest of
 /// this tree is generated rather than on a rented box.
@@ -575,6 +580,45 @@ impl WalkKernel {
             runs: runs_out,
             gpga_span: gpga_len,
         })
+    }
+
+    /// ★★★★★ **ACK A GENERATION — the host half of the snapshot handshake.**
+    ///
+    /// ⊘⊘⊘ **This had NO CALLER.** `KfDev` has carried `generation`/`acked` and the `.cu` has
+    /// carried `kf_ack` since the walker was written, and nothing in the Rust tree ever acked:
+    /// `acked` sat at 0 for the life of every VM. The handshake was built and orphaned.
+    ///
+    /// # The race it closes
+    ///
+    /// Owner, 2026-09-18: *"worker 1 is applying mmio refresh but worker 2 started refresh in
+    /// scratchpad."* Without an ack the kernel has no way to know a report was consumed, so a
+    /// second refresh may install a new snapshot while the first one's delta is still being
+    /// applied. The second delta is then computed against a snapshot that assumes the first
+    /// one's mappings are live when they are not — and the difference between those two
+    /// worlds is silent: both are well-formed reports.
+    ///
+    /// ⚠ **ACK AFTER APPLYING, NEVER ON RECEIPT.** Acking when the bytes arrive leaves exactly
+    /// the window open that this exists to close. The caller's contract is: apply the delta,
+    /// then ack the generation it came from.
+    ///
+    /// ⊘ A **truncated** report is not a delta and must NOT be acked — see
+    /// [`Report::truncated`], whose doc has said so since before anything could ack.
+    ///
+    /// # Why a memcpy and not `kf_ack_kernel`
+    ///
+    /// The `.cu` provides `kf_ack_kernel(KfDev*, u64)`, and it is in the shipped PTX. But it
+    /// takes **two** by-value parameters while [`Cuda::launch_raw`] passes exactly one, so
+    /// using it would mean widening the unsafe launch surface for a single `u64` store. A
+    /// device-to-device write of one field through the existing bounded `memcpy_h2d` adds no
+    /// `unsafe` at all. ⊘ `self.dev.ptr` is a **device** address, not a host-process VA, so it
+    /// is legal to compute on in safe Rust (the constraint is about VMM virtual addresses).
+    ///
+    /// # Errors
+    /// The CUDA error, if the copy fails.
+    pub fn ack(&mut self, generation: u64) -> Result<(), CudaError> {
+        let at = self.dev.ptr + ACKED_BYTE_OFFSET;
+        self.cu
+            .memcpy_h2d(at, &generation.to_le_bytes(), "cuMemcpyHtoD(KfDev::acked)")
     }
 
     /// ★★★★★ **MAKE THIS KERNEL'S CONTEXT CURRENT ON THE CALLING THREAD.**

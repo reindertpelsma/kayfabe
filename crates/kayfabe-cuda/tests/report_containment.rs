@@ -95,3 +95,25 @@ fn an_unmap_is_exempt_because_it_names_no_memory() {
         "an UNMAP carries no gpga; bounding it would refuse every legitimate removal"
     );
 }
+
+/// ★★★★★ **The `acked` offset is DERIVED, and this pins that it is the field we think.**
+///
+/// ⊘ `WalkKernel::ack` writes one `u64` at `dev.ptr + ACKED_BYTE_OFFSET`. `generation` is the
+/// same type and sits immediately before it, so an off-by-one field would overwrite the
+/// generation counter with the generation number — a write that looks plausible in a dump and
+/// makes the handshake silently self-satisfying.
+#[test]
+fn the_acked_offset_names_acked_and_not_its_neighbour() {
+    use kayfabe_cuda::abi::KfDev;
+    assert_eq!(
+        core::mem::offset_of!(KfDev, generation),
+        0,
+        "generation is expected first; if it moved, re-read ack()'s doc before trusting it"
+    );
+    assert_eq!(
+        core::mem::offset_of!(KfDev, acked),
+        8,
+        "★ `acked` must follow `generation`. A change here is not cosmetic: `ack()` writes at \
+         this offset and its neighbour is the counter the kernel compares against."
+    );
+}
