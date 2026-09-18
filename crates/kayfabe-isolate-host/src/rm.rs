@@ -6147,6 +6147,47 @@ pub struct SubmitOutcome {
     pub gp_put: u32,
 }
 
+/// ★★★★★ **w755z — what [`HostRmBackend::probe_unmap_retires_the_translation`] observed.**
+///
+/// ⊘ A struct and not a `bool`, so *"the engine faulted"* and *"we never got to ask"* cannot
+/// be read as one another — the distinction w755v spent three wrong verdicts on.
+#[derive(Debug, Default, Clone)]
+pub struct UnmapRetiresProbe {
+    /// The source operand's VA.
+    pub src_va: u64,
+    /// The destination's VA — the one unmapped between the two legs.
+    pub dst_va: u64,
+    /// Leg 1's semaphore word and the payload it should have reached.
+    pub mapped_semaphore: u32,
+    /// See [`Self::mapped_semaphore`].
+    pub mapped_payload: u32,
+    /// ★ Leg 1 retired. **If this is false the probe proves nothing**: a fault in leg 2 could
+    /// then mean the mapping was never established rather than that the unmap removed it.
+    pub mapped_retired: bool,
+    /// The unmap under test was issued and returned `Ok`.
+    pub unmapped: bool,
+    /// Leg 2's semaphore word and payload.
+    pub after_semaphore: u32,
+    /// See [`Self::after_semaphore`].
+    pub after_payload: u32,
+    /// ⊘⊘ **MUST BE FALSE.** True means the copy still reached the destination after we
+    /// unmapped it — the translation is live and our unmap is a bookkeeping entry.
+    pub after_retired: bool,
+    /// RM's refusal on leg 2, if any — the channel dying IS the fault being looked for.
+    pub after_refused: Option<String>,
+}
+
+impl UnmapRetiresProbe {
+    /// ★★★ **The verdict, with its own non-vacuity built in.**
+    ///
+    /// Passes only when leg 1 retired **and** leg 2 did not. ⊘ Leg 2 failing alone is not a
+    /// pass — that is the shape where a probe that never established anything reports success.
+    #[must_use]
+    pub fn passed(&self) -> bool {
+        self.mapped_retired && self.unmapped && !self.after_retired
+    }
+}
+
 /// What [`HostRmBackend::prove_ce_copy`] observed in **device memory**, before and after.
 ///
 /// ★ The expectations travel with the observations rather than being re-derived by the
@@ -12557,6 +12598,108 @@ impl HostRmBackend {
     ///
     /// # Errors
     /// Whatever the allocation, the mapping or the copy refuses with.
+    /// ★★★★★ **w755z — DOES OUR UNMAP RETIRE THE TRANSLATION? ASK THE COPY ENGINE.**
+    ///
+    /// > Owner, 2026-09-18: *"Add in raw client a test it munmaps and then ce must fault on
+    /// > address, something that must pass as well."*
+    ///
+    /// # ⊘ Why this is a different test from R33 arm 4, and a stronger one
+    ///
+    /// Arm 4 points a copy engine at a VA that was **never mapped** and observes
+    /// `Xid 31 FAULT_PDE`. That proves the engine faults on an absent translation. It says
+    /// **nothing** about whether *our* unmap removes one.
+    ///
+    /// This maps, copies **successfully**, unmaps, and copies again — and the second copy
+    /// must **fault**. The first copy is what makes the second one evidence: without it, a
+    /// fault could mean the mapping was never established.
+    ///
+    /// ⚠ **It is the known-positive the unmap path has never had.** `[measured w755u]`
+    /// `maps=76 unmaps=0 replaced=0` — nothing in production removes a slice, and a bookkeeping
+    /// check cannot tell an unmap that worked from one that returned `Ok` and left the
+    /// translation live. A fault cannot be faked by a ledger.
+    ///
+    /// ⊘ **The second copy KILLS ITS OWN CHANNEL**, exactly as arm 4's does, so this probe
+    /// owns its address space and runs last. A faulted channel must not be able to retract a
+    /// verdict already printed.
+    ///
+    /// # Errors
+    /// Whatever RM refused. ⚠ A refusal is **not** a pass: the caller must distinguish *"the
+    /// engine faulted"* from *"we never got to ask"*, which is why the outcome is a struct and
+    /// not a `bool`.
+    pub fn probe_unmap_retires_the_translation(
+        &mut self,
+        vas: HostHandle,
+        pattern: u32,
+    ) -> Result<UnmapRetiresProbe, RmError> {
+        const BYTES: u64 = 4096;
+        let range = self.narrow(vas)?;
+        let src = self.conn.alloc_device_local(BYTES)?;
+        let dst = match self.conn.alloc_device_local(BYTES) {
+            Ok(h) => h,
+            Err(e) => {
+                let _ = self.free(self.stamp(src));
+                return Err(e);
+            }
+        };
+        let mut out = UnmapRetiresProbe::default();
+        let mut go = || -> Result<(), RmError> {
+            let src_va = self.map_dma_both(range, src, BYTES, None)?;
+            let dst_va = self.map_dma_both(range, dst, BYTES, None)?;
+            out.src_va = src_va;
+            out.dst_va = dst_va;
+            // Seed the source so a copy that runs is visible in the destination.
+            let (src_node, src_map) = self.conn.map_cpu(src, BYTES, CachePolicy::WriteCombining)?;
+            src_map
+                .store_u32(HostOffset::ZERO, pattern)
+                .map_err(|e| region_error(&e))?;
+            drop(src_map);
+            drop(src_node);
+
+            let sub = |dst: u64, src: u64| CeSubCopy {
+                dst,
+                src: CeSource::Address(src),
+                len: BYTES,
+                by: CeExecutor::HostCe,
+                guest_release: None,
+            };
+            // ---- leg 1: MAPPED. This must retire, or the leg below proves nothing. ----
+            let (first, payload) = self.ce_copy_outcome(vas, sub(dst_va, src_va))?;
+            out.mapped_semaphore = first.semaphore;
+            out.mapped_payload = payload;
+            out.mapped_retired = first.semaphore == payload && first.gp_get == first.gp_put;
+
+            // ---- the unmap under test ----
+            self.unmap_gpu_va(vas, dst_va)?;
+            out.unmapped = true;
+
+            // ---- leg 2: UNMAPPED. This must NOT retire. ----
+            // ⊘ A second `map_cpu` is deliberately not taken: the question is what the ENGINE
+            // can reach, and a CPU view of the object would answer a different one.
+            match self.ce_copy_outcome(vas, sub(dst_va, src_va)) {
+                Ok((second, payload2)) => {
+                    out.after_semaphore = second.semaphore;
+                    out.after_payload = payload2;
+                    out.after_retired =
+                        second.semaphore == payload2 && second.gp_get == second.gp_put;
+                }
+                // ★ An RM refusal here is the engine's channel dying, which is the FAULT we
+                // are looking for — recorded by name rather than propagated, because a `?`
+                // would make the probe's success path its failure path.
+                Err(e) => {
+                    out.after_refused = Some(format!("{e:?}"));
+                    out.after_retired = false;
+                }
+            }
+            Ok(())
+        };
+        let r = go();
+        // ⊘ Best-effort teardown: the channel may already be dead, and a cleanup refusal must
+        // not replace the finding.
+        let _ = self.free(self.stamp(dst));
+        let _ = self.free(self.stamp(src));
+        r.map(|()| out)
+    }
+
     pub fn prove_ce_copy(&mut self, vas: HostHandle, pattern: u32) -> Result<CeEvidence, RmError> {
         const BYTES: u64 = 4096;
         const WORDS: u64 = BYTES / 4;

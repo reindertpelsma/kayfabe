@@ -113,8 +113,16 @@ const MINT_SURFACE: &[(&str, &str, usize, &str)] = &[
     (
         "src/rm.rs",
         "self.map_dma_both(",
-        10,
-        "★★★★★ **9 → 10 at w605 (2026-09-13), ADJUDICATED — the tenth is \
+        12,
+        "★★★★★ **10 → 12 at w755z (2026-09-18), ADJUDICATED — the eleventh and twelfth are \
+         `probe_unmap_retires_the_translation`'s two operands.** SAME admitted class as every \
+         probe row below: its copies run on the ISOLATE's own engine, so both operands must \
+         resolve in the executor's space as well as the guest-facing one. ⊘ And here the \
+         reason is sharper than usual, because this probe's WHOLE SUBJECT is whether a \
+         translation is live: an operand that reached only one space would fault on **leg 1**, \
+         the probe would report `VACUOUS`, and the unmap — the thing under test — would never \
+         be reached. ⇒ a mapping bug here disguises itself as the probe declining to answer. \
+         ★★★★★ **9 → 10 at w605 (2026-09-13), ADJUDICATED — the tenth is \
          `prove_ce_copy_from_guest_ram`'s operand.** It is the SAME admitted class as the \
          other probes: its copy runs on the ISOLATE's own engine, so the operand must resolve \
          in the executor's space as well as the guest-facing one, and a mapping that reached \

@@ -13552,6 +13552,79 @@ mod route_k {
     }
 }
 
+/// ★★★★★ **w755z — the raw client's unmap known-positive.**
+///
+/// ⊘ **Prints its own non-vacuity.** Leg 1 must retire, or leg 2's fault means only that the
+/// mapping was never established — which is exactly how a probe comes to pass for the wrong
+/// reason. `[w755v]` this session produced three verdicts from refusals that were never the
+/// refusal claimed, so the legs are reported separately and the verdict names both.
+fn unmap_retires_probe(gpu: u32) -> i32 {
+    println!("UR_PROBE=start gpu={gpu}");
+    let Ok(dev) = DevDir::open(c"/dev") else {
+        println!("UR_RESULT=UNMEASURED:open-dev");
+        return 1;
+    };
+    let conn = match RmConnection::open(&dev, GpuId(gpu), kayfabe_chips::pinned_host_classes()) {
+        Ok(c) => c,
+        Err(e) => {
+            println!("UR_RESULT=UNMEASURED:rm-open:{e:?}");
+            return 1;
+        }
+    };
+    let id = IsolateId::new(0x55_52, GpuId(gpu));
+    let mut rm = HostRmBackend::new(
+        id,
+        std::sync::Arc::new(conn),
+        std::sync::Arc::new(kayfabe_isolate_host::ChildExports::new()),
+    );
+    let vas = match rm.alloc_vaspace() {
+        Ok(v) => v,
+        Err(e) => {
+            println!("UR_RESULT=UNMEASURED:alloc-vaspace:{e:?}");
+            return 1;
+        }
+    };
+    match rm.probe_unmap_retires_the_translation(vas, 0x5EA1_C071) {
+        Ok(p) => {
+            println!(
+                "UR_LEG1 mapped_retired={} semaphore={:#010x} payload={:#010x} dst_va={:#x}",
+                p.mapped_retired, p.mapped_semaphore, p.mapped_payload, p.dst_va
+            );
+            println!("UR_UNMAP issued={}", p.unmapped);
+            println!(
+                "UR_LEG2 after_retired={} semaphore={:#010x} payload={:#010x} refused={:?}",
+                p.after_retired, p.after_semaphore, p.after_payload, p.after_refused
+            );
+            if p.passed() {
+                println!(
+                    "UR_RESULT=PASS: the copy retired while mapped and did NOT after the \
+                     unmap ⇒ our unmap RETIRES THE TRANSLATION, proven by the engine rather \
+                     than by a ledger"
+                );
+                0
+            } else if !p.mapped_retired {
+                // ⊘ NOT a fail of the unmap: the probe never established anything to remove.
+                println!(
+                    "UR_RESULT=VACUOUS: leg 1 did not retire, so leg 2 proves nothing about \
+                     the unmap — a fault here could mean the mapping was never established"
+                );
+                1
+            } else {
+                println!(
+                    "UR_RESULT=FAIL: the copy STILL RETIRED after the unmap ⇒ the translation \
+                     is live and our unmap is a bookkeeping entry. This is the shape that \
+                     makes two VAs alias one store offset."
+                );
+                1
+            }
+        }
+        Err(e) => {
+            println!("UR_RESULT=UNMEASURED:probe:{e:?}");
+            1
+        }
+    }
+}
+
 fn main() -> std::process::ExitCode {
     // ★★★ **w309 — ECHO ARGV, FIRST LINE, ALWAYS.**
     //
@@ -13602,6 +13675,17 @@ fn main() -> std::process::ExitCode {
             return std::process::ExitCode::from(
                 u8::try_from(route_k::role_i(role_gpu).clamp(0, 255)).unwrap_or(1),
             );
+        }
+        // ★★★★★ **w755z — DOES OUR UNMAP RETIRE THE TRANSLATION?** Owner, 2026-09-18:
+        // *"Add in raw client a test it munmaps and then ce must fault on address, something
+        // that must pass as well."*
+        //
+        // ⊘ Needs a GPU and nothing else — no guest, no QEMU, no KVM. It maps, copies
+        // SUCCESSFULLY, unmaps, and copies again: the second must fault.
+        // ⚠ The second copy kills its own channel, so this runs as its own invocation.
+        if argv.iter().any(|a| a == "--unmap-retires") {
+            let code = unmap_retires_probe(role_gpu);
+            return std::process::ExitCode::from(u8::try_from(code.clamp(0, 255)).unwrap_or(1));
         }
         // ★★★★★ w755i — the CUDA-store ownership probe. Needs NO guest, NO QEMU, NO KVM:
         // a CUDA container answers it. See `kayfabe_isolate_host::cudastore`.
