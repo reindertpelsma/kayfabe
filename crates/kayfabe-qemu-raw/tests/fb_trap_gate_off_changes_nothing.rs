@@ -14,6 +14,17 @@ use kayfabe_qemu_raw::shim::{Regs, fb_trap_from};
 
 /// ⊘ **Absent is `Serve`, and `Serve` is what shipped.** The default has to be stated in
 /// exactly one place; this is the test that it is the right one.
+// ⊘⊘⊘ **w763 — THE FRAMEBUFFER ARM IS STATED HERE, NOT INHERITED FROM THE ENVIRONMENT.**
+//
+// `KAYFABE_FB_STORE` now defaults to `device`, whose preconditions (a scratchpad isolate, a
+// device-view port) no test process has. `[measured w763]` the flip reddened whole suites at
+// once — none of them about what guest video memory IS — because every one reached a fixture
+// that read a process global it never named.
+//
+// ⊘ Setting the variable here instead would put a process-global write in a multi-threaded
+// test binary, which is the shape that already cost this campaign a flake. The arm is an
+// argument to the composition root; production still calls `Regs::create`.
+
 #[test]
 fn absent_is_serve_and_is_not_an_error() {
     assert_eq!(fb_trap_from(None), Ok(FbTrapPolicy::Serve));
@@ -43,7 +54,7 @@ fn with_the_gate_unset_the_plane_serves_the_trap_path() {
         std::env::var_os("KAYFABE_FB_TRAP").is_none(),
         "this test binary must not have the gate set; it is testing the default"
     );
-    let regs = Regs::create(0).expect("the shipped chip row realizes");
+    let regs = Regs::create_probed_on(0, "", Some(kayfabe_qemu_raw::deviceview::FbStoreArm::Arena)).expect("the shipped chip row realizes");
     assert_eq!(
         regs.plane().fb_trap_policy(),
         FbTrapPolicy::Serve,
@@ -60,7 +71,7 @@ fn with_the_gate_unset_the_plane_serves_the_trap_path() {
 /// zero from an arm that ran and found nothing.
 #[test]
 fn the_armed_policy_is_what_the_plane_reports() {
-    let regs = Regs::create(0).expect("the shipped chip row realizes");
+    let regs = Regs::create_probed_on(0, "", Some(kayfabe_qemu_raw::deviceview::FbStoreArm::Arena)).expect("the shipped chip row realizes");
     regs.plane().set_fb_trap_policy(FbTrapPolicy::RefuseByName);
     assert_eq!(regs.plane().fb_trap_policy(), FbTrapPolicy::RefuseByName);
     regs.plane().set_fb_trap_policy(FbTrapPolicy::Serve);

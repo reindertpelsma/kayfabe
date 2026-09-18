@@ -25,6 +25,17 @@ const REMOVED: &str = "KAYFABE_PT_SWEEP";
 /// ⊘ Both halves in one test. The refusal half alone would pass for an implementation that
 /// refused unconditionally, and this process shares its environment across tests, so the two
 /// cannot be separated without racing.
+// ⊘⊘⊘ **w763 — THE FRAMEBUFFER ARM IS STATED HERE, NOT INHERITED FROM THE ENVIRONMENT.**
+//
+// `KAYFABE_FB_STORE` now defaults to `device`, whose preconditions (a scratchpad isolate, a
+// device-view port) no test process has. `[measured w763]` the flip reddened whole suites at
+// once — none of them about what guest video memory IS — because every one reached a fixture
+// that read a process global it never named.
+//
+// ⊘ Setting the variable here instead would put a process-global write in a multi-threaded
+// test binary, which is the shape that already cost this campaign a flake. The arm is an
+// argument to the composition root; production still calls `Regs::create`.
+
 #[test]
 fn a_removed_arm_refuses_the_boot_and_its_absence_does_not() {
     // ---- absent: the ordinary path still works.
@@ -33,7 +44,7 @@ fn a_removed_arm_refuses_the_boot_and_its_absence_does_not() {
         std::env::remove_var(REMOVED);
     }
     assert!(
-        Regs::create(0).is_ok(),
+        Regs::create_probed_on(0, "", Some(kayfabe_qemu_raw::deviceview::FbStoreArm::Arena)).is_ok(),
         "with no removed arm set, the shipped chip row must still realize — otherwise this \
          test proves the gate refuses everything, not that it refuses the right thing"
     );
@@ -43,7 +54,7 @@ fn a_removed_arm_refuses_the_boot_and_its_absence_does_not() {
     unsafe {
         std::env::set_var(REMOVED, "on");
     }
-    let refused = Regs::create(0);
+    let refused = Regs::create_probed_on(0, "", Some(kayfabe_qemu_raw::deviceview::FbStoreArm::Arena));
     assert!(
         refused.is_err(),
         "a boot that exports a deleted arm must FAIL. Ignoring it lets the run measure the \
@@ -59,7 +70,7 @@ fn a_removed_arm_refuses_the_boot_and_its_absence_does_not() {
         std::env::set_var(REMOVED, "off");
     }
     assert!(
-        Regs::create(0).is_err(),
+        Regs::create_probed_on(0, "", Some(kayfabe_qemu_raw::deviceview::FbStoreArm::Arena)).is_err(),
         "`off` must refuse too — it is the value a stale script is most likely to carry, and \
          the one where being ignored inverts what the operator thinks ran"
     );

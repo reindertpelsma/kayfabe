@@ -81,6 +81,17 @@ const OUT_ENV: &str = "KAYFABE_TEST_GR_ROUTE_OUT";
 /// What the child writes when `Regs::create` refused to realize at all.
 const REFUSED_TO_REALIZE: &str = "<Regs::create refused>";
 
+// ⊘⊘⊘ **w763 — THE FRAMEBUFFER ARM IS STATED HERE, NOT INHERITED FROM THE ENVIRONMENT.**
+//
+// `KAYFABE_FB_STORE` now defaults to `device`, whose preconditions (a scratchpad isolate, a
+// device-view port) no test process has. `[measured w763]` the flip reddened whole suites at
+// once — none of them about what guest video memory IS — because every one reached a fixture
+// that read a process global it never named.
+//
+// ⊘ Setting the variable here instead would put a process-global write in a multi-threaded
+// test binary, which is the shape that already cost this campaign a flake. The arm is an
+// argument to the composition root; production still calls `Regs::create`.
+
 fn kind_of(r: &kayfabe_device::DoorbellReport) -> String {
     r.refusal()
         .unwrap_or_else(|| panic!("expected a named refusal, got {r:?}"))
@@ -118,7 +129,7 @@ fn ring_a_gr_doorbell() -> String {
     unsafe {
         std::env::set_var(kayfabe_qemu_raw::shim::DOORBELL_ASYNC_ENV, "off");
     }
-    let Ok(r) = Regs::create(0) else {
+    let Ok(r) = Regs::create_probed_on(0, "", Some(kayfabe_qemu_raw::deviceview::FbStoreArm::Arena)) else {
         return REFUSED_TO_REALIZE.to_string();
     };
     let dev = r.object_model();

@@ -53,7 +53,12 @@ case "$ARMS_TOK" in *[[:space:]]*) echo "run_fast_guest: KF_ARMS still holds whi
 DEADLINE_MS=$(( (BUDGET - 4) * 1000 ))
 [ "$DEADLINE_MS" -gt 1000 ] || DEADLINE_MS=1000
 
-echo "== arms: $ARMS_TOK   budget: ${BUDGET}s   self-deadline: ${DEADLINE_MS}ms"
+echo "== arms: $ARMS_TOK   budget: ${BUDGET}s   self-deadline: ${DEADLINE_MS}ms   trace: ${KF_IOCTL_TRACE:-verbose}"
+# > Owner, 2026-09-18: *"Run in verbose mode so it prints the ioctls. At timeout trace dump the
+# > whole thing."* ⇒ `verbose` is the default HERE and nowhere else: this lane exists to
+# > diagnose hangs, and a line per ioctl over the serial console is the only record a guest that
+# > never reaches poweroff leaves behind. `KF_IOCTL_TRACE=ring` when measuring a round trip,
+# > where the per-call print is itself the cost.
 # ⚠ **THE BINARY'S AGE, PRINTED, BECAUSE A STALE QEMU IS INVISIBLE.** The device is a Rust
 # archive LINKED INTO qemu-system-x86_64, so a source change that was never relinked runs the
 # OLD device while the tree says otherwise. `[measured w763]` a default flip read as "the flip
@@ -101,7 +106,7 @@ start=$(date +%s)
 timeout --kill-after=3 "$BUDGET" "$Q" \
     "${RAMARGS[@]}" -cpu host -smp "${KF_SMP:-3}" \
     -kernel "$FG/vmlinuz" -initrd "$FG/initrd.cpio.gz" \
-    -append "console=ttyS0 quiet panic=1 KF_ARMS=$ARMS_TOK KF_IOCTL_TRACE=${KF_IOCTL_TRACE:-ring} KF_SELF_DEADLINE_MS=$DEADLINE_MS" \
+    -append "console=ttyS0 quiet panic=1 KF_ARMS=$ARMS_TOK KF_IOCTL_TRACE=${KF_IOCTL_TRACE:-verbose} KF_SELF_DEADLINE_MS=$DEADLINE_MS" \
     -device "nvkvm-gpu,bar1-size=$BAR1_BYTES,bar2-size=33554432,id=kf0${NVKVM_DEV_EXTRA:+,$NVKVM_DEV_EXTRA}" \
     -msg timestamp=on \
     -serial "file:$SER" -display none \

@@ -212,7 +212,15 @@ struct Device {
 /// installs memslots at one; `attach_ram` is the join, and it is a separate call because
 /// the order is fixed by the hypervisor rather than by us.
 fn load_device(m: &Machine) -> Device {
-    let regs = Regs::create(0).expect("the default chip is servable");
+    // ⊘⊘⊘ **THE ARM IS STATED, NOT INHERITED.** `[measured w763]` this suite is about DEVICE
+    // LIFETIME — unload, reload, what a reset keeps and what it clears — and not one of its
+    // eleven tests is about what guest video memory IS. They all went red at once when
+    // `KAYFABE_FB_STORE`'s default moved to `device`, because every one of them reaches this
+    // single fixture, which was reading a process global it never named.
+    // ⇒ Same finding as the seven in `shim_logic`: a default flip that reddens tests which are
+    // not about that default is telling you the composition root takes a hidden argument.
+    let regs = Regs::create_probed_on(0, "", Some(kayfabe_qemu_raw::deviceview::FbStoreArm::Arena))
+        .expect("the default chip is servable on the arena arm");
     let shim = Shim::realize(&cfg(), m.host.clone(), m.slots.clone())
         .expect("a cooperative accelerated machine realizes");
     regs.attach_ram(&shim);

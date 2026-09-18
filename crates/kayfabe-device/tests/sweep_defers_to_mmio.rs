@@ -29,6 +29,23 @@ use kayfabe_device::plane::RegPlane;
 use kayfabe_device::{NanoClock, SteppingClock, abi};
 use kayfabe_mmu::walker::FbRead;
 
+/// ⊘⊘⊘ **THE CENSUS IS A PROCESS GLOBAL, AND TWO TESTS IN THIS BINARY MOVE IT.**
+///
+/// `[measured w763]` `with_no_trap_in_flight_the_sweep_does_not_defer` failed once in a full
+/// `cargo test --workspace` with `left: (1, 0)` — one deferral it did not cause — and then
+/// passed 5/5 when run alone. It was not flaky under load; it was reading a counter that
+/// `a_permanently_trapping_guest_does_not_livelock_the_sweep` was incrementing **on another
+/// thread of the same binary**, between its own `before` and `after`.
+///
+/// ⚠ The dangerous direction is the one that did NOT fire: a negative control that can be
+/// pushed UP by a sibling can equally be read while a sibling's increment is still pending,
+/// and then it passes while the thing it controls for is broken.
+///
+/// ⇒ Every test that observes the census takes this lock **across its whole before/act/after
+/// window**, so no other census-moving test can interleave. ⊘ The lock is not about the
+/// PLANE — each test builds its own — it is about the one counter they share.
+static CENSUS: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 fn plane() -> RegPlane {
     RegPlane::new(
         &kayfabe_device::ga10x::GA106,
@@ -85,6 +102,8 @@ fn every_trap_path_returns_the_in_flight_count_to_zero() {
 /// identical from outside, so the mechanism has to report that it ran.
 #[test]
 fn a_permanently_trapping_guest_does_not_livelock_the_sweep() {
+    // ⊘ Held for the WHOLE window: see `CENSUS`.
+    let _census = CENSUS.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     let p = plane();
     let before = kayfabe_device::plane::sweep_defer_census();
 
@@ -124,6 +143,8 @@ fn a_permanently_trapping_guest_does_not_livelock_the_sweep() {
 /// bounded-livelock test and still be the no-op periodic yield this design rejected.
 #[test]
 fn with_no_trap_in_flight_the_sweep_does_not_defer() {
+    // ⊘ Held for the WHOLE window: see `CENSUS`.
+    let _census = CENSUS.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     let p = plane();
     let before = kayfabe_device::plane::sweep_defer_census();
     let mut r = p.pt_bytes();

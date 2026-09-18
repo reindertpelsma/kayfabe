@@ -29,12 +29,23 @@ const BAR_REGS: u32 = 0;
 /// drain lives. The value is irrelevant; the path is the subject.
 const NOBODYS_OFFSET: u64 = 0x0000_9400;
 
+// ⊘⊘⊘ **w763 — THE FRAMEBUFFER ARM IS STATED HERE, NOT INHERITED FROM THE ENVIRONMENT.**
+//
+// `KAYFABE_FB_STORE` now defaults to `device`, whose preconditions (a scratchpad isolate, a
+// device-view port) no test process has. `[measured w763]` the flip reddened whole suites at
+// once — none of them about what guest video memory IS — because every one reached a fixture
+// that read a process global it never named.
+//
+// ⊘ Setting the variable here instead would put a process-global write in a multi-threaded
+// test binary, which is the shape that already cost this campaign a flake. The arm is an
+// argument to the composition root; production still calls `Regs::create`.
+
 fn regs_with(arm: &str) -> Regs {
     // SAFETY: single-threaded test setup, before this process builds any `Regs`.
     unsafe {
         std::env::set_var(DOORBELL_ASYNC_ENV, arm);
     }
-    Regs::create(0).expect("the shipped chip row realizes")
+    Regs::create_probed_on(0, "", Some(kayfabe_qemu_raw::deviceview::FbStoreArm::Arena)).expect("the shipped chip row realizes")
 }
 
 /// ★★★ **On the no-worker arm, a trap drains the mirror; on the worker arm it does not.**

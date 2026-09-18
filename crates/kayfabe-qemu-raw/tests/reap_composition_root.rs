@@ -62,6 +62,17 @@ const BAR_REGS: u32 = 0;
 /// side-effect. A write that moves no byte and answers `unclaimed_writes` still reaps.
 const NOBODYS_OFFSET: u64 = 0x0033_4000;
 
+// ⊘⊘⊘ **w763 — THE FRAMEBUFFER ARM IS STATED HERE, NOT INHERITED FROM THE ENVIRONMENT.**
+//
+// `KAYFABE_FB_STORE` now defaults to `device`, whose preconditions (a scratchpad isolate, a
+// device-view port) no test process has. `[measured w763]` the flip reddened whole suites at
+// once — none of them about what guest video memory IS — because every one reached a fixture
+// that read a process global it never named.
+//
+// ⊘ Setting the variable here instead would put a process-global write in a multi-threaded
+// test binary, which is the shape that already cost this campaign a flake. The arm is an
+// argument to the composition root; production still calls `Regs::create`.
+
 fn regs() -> Regs {
     // ★★★★★ **w525 — THIS FILE PINS THE ARM WITH NO WORKER, AND SAYS WHY.**
     //
@@ -86,7 +97,7 @@ fn regs() -> Regs {
     }
     // `0` selects the chip table's default row (GA106). Reads `KAYFABE_ISOLATES`
     // process-globally; its own test binary, and the default is `stillborn`.
-    Regs::create(0).expect("the default chip is servable")
+    Regs::create_probed_on(0, "", Some(kayfabe_qemu_raw::deviceview::FbStoreArm::Arena)).expect("the default chip is servable")
 }
 
 /// Declare one guest process — client root → device → VASpace → TSG → channel — through the
@@ -385,7 +396,7 @@ fn the_shipping_arm_leaves_the_reap_to_the_worker() {
     unsafe {
         std::env::set_var(kayfabe_qemu_raw::shim::DOORBELL_ASYNC_ENV, "on");
     }
-    let r = Regs::create(0).expect("the default chip is servable");
+    let r = Regs::create_probed_on(0, "", Some(kayfabe_qemu_raw::deviceview::FbStoreArm::Arena)).expect("the default chip is servable");
     let dev = r.object_model();
 
     let (client, root) = declare_one_proc(&dev);
