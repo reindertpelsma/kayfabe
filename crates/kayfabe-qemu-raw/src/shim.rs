@@ -15939,6 +15939,26 @@ impl Regs {
             // Owner, 2026-09-18: *"in the single store joining is dead right? that idea of
             // islands of framebuffers in gpga is removed?"* — yes, and running the arena is
             // what kept the dead path alive.
+            // ★★★★★ **w760y — THE VAS OWNER, and its default is named "the pre-constraint-26
+            // tree" in its own source.** `KAYFABE_VAS_OWNER=isolate` (the default) skips the
+            // block in `join_one_fb_leaf`'s DeviceBacked arm that maps `[at, at+len)` of the
+            // one reserved object at the guest's own VA and BINDS it.
+            // ⇒ the leaf then has no host object, and `ADOPT-WHY ⊘ (6) the binding EXISTS but
+            // carries NO HOST OBJECT` refuses every ring adoption — `[measured w740/w742/w743]`
+            // 17 times per boot, byte-identical on three boots, and again at w760.
+            // ⊘ The single store makes the JOIN unnecessary and the code consuming it still
+            // needs its side effect: the log says "NO JOIN IS NEEDED: this range IS the one
+            // reserved object" and then "THE RING'S LEAF WAS NOT JOINED". Route K (`k`) is the
+            // owner that closes it.
+            match std::env::var("KAYFABE_VAS_OWNER").as_deref() {
+                Ok("k" | "scratchpad") => {}
+                _ => violations.push(
+                    "§26/§32 the VAS owner is the pre-constraint-26 isolate: KAYFABE_VAS_OWNER \
+                     != k ⇒ a device-backed leaf is never bound to the store, so every ring \
+                     adoption refuses ADOPT-WHY (6) 'the binding EXISTS but carries NO HOST \
+                     OBJECT' and channels are born on a ring of ours",
+                ),
+            }
             if std::env::var("KAYFABE_FB_STORE").as_deref().unwrap_or("arena") != "device" {
                 violations.push(
                     "§38 NOT the single store: KAYFABE_FB_STORE != device ⇒ the framebuffer is \
