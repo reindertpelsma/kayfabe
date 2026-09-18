@@ -5686,7 +5686,23 @@ fn doorbell_publish_loop(
         // neither measured.
         let seg_dbtable_ms = t_seg.elapsed().as_secs_f64() * 1e3;
         let t_retired = std::time::Instant::now();
-        if kayfabe_core::gpu::retired_pending() > 0 {
+        // ★★★★★ **w763w — THE RETIRED DRAIN RUNS AFTER THE GUEST IS RELEASED, NOT BEFORE.**
+        //
+        // `[measured w763]` it is **10.95 ms of a 24 ms invalidate hold** — the single largest
+        // term, larger than the BAR mmaps (5.91) and the mirror revalidation (7.88), and its
+        // own comment already said why: *"on a vCPU this blocks in `recv()` on the isolate
+        // socket for 16ms"*. w525 moved it off the vCPU, which was right. What w525 did not
+        // ask is whether the GUEST should wait for it, and the guest was still waiting: it
+        // sat in front of `complete_through_unmaps`, so a spin on `MMU_INVALIDATE` — which
+        // has nothing to do with object retirement — paid for our IPC.
+        //
+        // ⊘ Nothing about liveness changes: it still runs on THIS wake, one job later in the
+        // body. The only thing that moves is which side of the guest's completion it is on.
+        // ★ `MirrorFill` keeps it here, because for that kind the drain IS the work and there
+        // is no completion to be in front of.
+        let is_mirror_fill =
+            job.kind() == kayfabe_device::pubqueue::PublicationKind::MirrorFill;
+        if is_mirror_fill && kayfabe_core::gpu::retired_pending() > 0 {
             let drain_t0 = std::time::Instant::now();
             let _ = port.device.drain_retired_budgeted(RETIRED_DRAIN_CHUNK, || {
                 u64::try_from(drain_t0.elapsed().as_micros()).unwrap_or(u64::MAX)
@@ -6232,6 +6248,15 @@ fn doorbell_publish_loop(
                      unanswered. ⚠ This is a hang in the making, not a slow path."
                 ),
             }
+        }
+        // ★ w763w — the retired drain, now BEHIND the guest's completion. Same wake, same
+        // chunk, same budget; the guest simply is not spinning through it any more.
+        if !is_mirror_fill && kayfabe_core::gpu::retired_pending() > 0 {
+            let drain_t0 = std::time::Instant::now();
+            let _ = port.device.drain_retired_budgeted(RETIRED_DRAIN_CHUNK, || {
+                u64::try_from(drain_t0.elapsed().as_micros()).unwrap_or(u64::MAX)
+                    >= RETIRED_DRAIN_BUDGET_US
+            });
         }
         queue.note_completed();
     }
