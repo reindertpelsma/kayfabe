@@ -14503,8 +14503,31 @@ fn map_store_slice_for_leaf(
             }
         }
     };
-    // ---- 2. THE MAP.
-    let host_va = match sp.map(store_vas, at, leaf.len, kayfabe_rt::GpuVa(leaf.va)) {
+    // ---- 2. THE MAP — **as a one-op DIFF LIST**, because that is the only executor now.
+    //
+    // ★★★★★ **w757 — owner, 2026-09-18:** *"ensure the diff list is the only thing executing
+    // it."* `StoreMapPort::map` is private; `apply_ops` is the sole mutator. This site used to
+    // map directly, and that is exactly how the tree arrived at `maps=76 unmaps=0
+    // replaced=0` — a path that only ever adds, with no counterpart that removes.
+    //
+    // ⊘ A one-element list is not ceremony: it puts the bind path and the PTX delta through
+    // the SAME chokepoint, so `what is mapped` has one author. When the delta lands, this call
+    // site does not change — it just stops being the only source of ops.
+    //
+    // ⚠ `Map`, never `Remap`: this path does not know whether something was already mapped
+    // here, and claiming `Remap` would make `apply_ops` unmap a slice on the strength of a
+    // guess. The port's own ledger is what detects a replacement.
+    let op = kayfabe_mmu::walkdiff::MapOp::Map(kayfabe_mmu::walkdiff::Run {
+        va: leaf.va,
+        gpga: at,
+        len: leaf.len,
+        flags: 0,
+        class: kayfabe_mmu::walkdiff::PageClass::P4K,
+    });
+    let host_va = match sp
+        .apply_ops(store_vas, core::slice::from_ref(&op))
+        .map(|_| at)
+    {
         Ok(va) => va,
         Err(e) => {
             let n = STORE_SLICE_REFUSED.fetch_add(1, Ordering::Relaxed);

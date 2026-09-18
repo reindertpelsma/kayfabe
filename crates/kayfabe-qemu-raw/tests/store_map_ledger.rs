@@ -25,8 +25,15 @@ fn storemap_src() -> String {
 
 /// The body of `pub fn map(`, delimited by its own indentation.
 fn map_body(src: &str) -> String {
+    // ⊘⊘ **w757 — `map` IS PRIVATE NOW, and this gate had to be told.** It searched for
+    //    `pub fn map(` and refused when it could not find it — correctly: *"a gate that
+    //    cannot delimit its subject must refuse, never widen."* The subject did not vanish,
+    //    it was **narrowed**: `StoreMapPort::map` is private so that `apply_ops` is the only
+    //    way to change what is mapped (owner, 2026-09-18: *"ensure the diff list is the only
+    //    thing executing it"*). Privacy is STRONGER than what this gate assumed, so the gate
+    //    keeps its subject and gains a sibling — `the_diff_list_is_the_only_executor`.
     let at = src
-        .find("    pub fn map(")
+        .find("    fn map(")
         .expect("★ NON-VACUITY: `StoreMapPort::map` is gone — this gate gates nothing");
     let terminator = "\n    }\n";
     let end = src[at..].find(terminator).expect(

@@ -113,8 +113,16 @@ const MINT_SURFACE: &[(&str, &str, usize, &str)] = &[
     (
         "src/rm.rs",
         "self.map_dma_both(",
-        12,
-        "★★★★★ **10 → 12 at w755z (2026-09-18), ADJUDICATED — the eleventh and twelfth are \
+        15,
+        "★★★★★ **12 → 15 at w756b (2026-09-18), ADJUDICATED — the three are \
+         `probe_dma_roundtrip`'s operands: the sysmem source, the vidmem waypoint and the \
+         sysmem destination.** SAME admitted class as every probe row: its two copies run on \
+         the ISOLATE's own engine, so all three operands must resolve in the executor's space \
+         as well as the guest-facing one. ⊘ The waypoint is the interesting one — it is both a \
+         DESTINATION (leg 1) and a SOURCE (leg 2), which is precisely the row's own warning \
+         that a reverse copy whose destination resolved in only one space *'would fault on the \
+         write rather than the read, which is a different Xid at a different address'*. \
+         ★★★★★ **10 → 12 at w755z (2026-09-18), ADJUDICATED — the eleventh and twelfth are \
          `probe_unmap_retires_the_translation`'s two operands.** SAME admitted class as every \
          probe row below: its copies run on the ISOLATE's own engine, so both operands must \
          resolve in the executor's space as well as the guest-facing one. ⊘ And here the \

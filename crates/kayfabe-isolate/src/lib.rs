@@ -251,6 +251,51 @@ impl ChannelEngine {
     }
 }
 
+/// ★★★★★ **w757 — A VA SPACE MAY BE RELEASED ONLY WHEN NOBODY HOLDS IT.**
+///
+/// > Owner, 2026-09-18: *"Ensure va space is only released if it contains 0 mappings, its
+/// > table is no longer referenced and no channel uses it (vmm coordinated)."*
+///
+/// Three conditions, and they are known by **two different parties**:
+///
+/// | condition | who knows it |
+/// |---|---|
+/// | 0 mappings placed in it | the store-map port — it is the only author of mappings (w757) |
+/// | its table is no longer referenced | the store-map port — its own adopted/range ledger |
+/// | **no channel uses it** | **the VMM** — it owns channel lifecycle and sees `RmEvent::Free` |
+///
+/// ⊘⊘ **The third travels as a TYPE, not a `bool`.** A boolean parameter named
+/// `no_channel_holds_it` is a claim any caller can make, including one that never looked; this
+/// is the same reason `HandedClient` exists rather than a `u32` called `client`. The only
+/// constructor is [`SharedDeviceLike::vas_unreferenced`]-shaped — a party that can enumerate
+/// channels — so *"somebody actually checked"* is a property of the value.
+///
+/// ⚠ **And it is an ASSERTION AT AN INSTANT, which is why the port re-checks its own two
+/// conditions after receiving it.** The VMM's answer can go stale between mint and use; the
+/// port's cannot, because the port is the only thing that changes mappings.
+#[derive(Debug, Clone, Copy)]
+pub struct NoChannelHoldsVas {
+    vas: HostHandle,
+}
+
+impl NoChannelHoldsVas {
+    /// Mint the witness. ⊘ Deliberately takes the enumeration's **result**, so the only way to
+    /// produce one is to have looked: `channels_using` is the count the caller counted.
+    ///
+    /// Returns `None` when a channel still holds it — which is not an error, it is the answer.
+    #[must_use]
+    pub fn checked(vas: HostHandle, channels_using: usize) -> Option<Self> {
+        (channels_using == 0).then_some(Self { vas })
+    }
+
+    /// Which space this witness is about. ⊘ Read by the port so a witness for one space cannot
+    /// release another — the shape that makes a typed proof worth more than a flag.
+    #[must_use]
+    pub fn vas(self) -> HostHandle {
+        self.vas
+    }
+}
+
 /// ★★★★★ **w755r — the four refusals of the store-birth route, kept APART.**
 ///
 /// ⊘ One name per cause, never one name for the route. `[this tree, repeatedly]` a single

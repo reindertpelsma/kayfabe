@@ -57,6 +57,21 @@ pub enum StoreMapRefusal {
     Rm(String),
     /// ★ The address space was never handed over, so this port has no `hDma` for it.
     NotAdopted { space: u64 },
+    /// ★★★★★ **w757 — a VA space was offered for release and something still holds it.**
+    ///
+    /// ⊘ `why` names WHICH of the three conditions failed, and `count` how much of it is
+    /// left. A single *"still held"* would send a reader to check all three — the
+    /// one-refusal-for-several-causes shape this tree keeps paying for.
+    VasStillHeld {
+        /// The space, raw.
+        vas: u64,
+        /// `"mappings"` or `"table-referenced"`. ⊘ The third condition — *no channel uses
+        /// it* — cannot appear here: it is the witness's precondition, so a caller without it
+        /// never reaches this function.
+        why: &'static str,
+        /// How many of `why` remain.
+        count: usize,
+    },
     /// ⚠ The requested slice is outside the reservation. ⊘ Refused **here**, before the
     /// ioctl: RM would map whatever offset it was given, and a run past the object's end is
     /// a guest range pointed at memory the reservation does not cover.
@@ -153,6 +168,12 @@ impl StoreMapRefusal {
             StoreMapRefusal::Placement { .. } => "Placement",
             StoreMapRefusal::AlreadyPlacedDifferently { .. } => "AlreadyPlacedDifferently",
             StoreMapRefusal::ReplaceUnmapRefused { .. } => "ReplaceUnmapRefused",
+            // ⊘ The CONDITION is part of the name, so a census row distinguishes a space held
+            // by mappings from one held by its table without anyone opening the payload.
+            StoreMapRefusal::VasStillHeld { why, .. } => match *why {
+                "mappings" => "VasStillHeld(mappings)",
+                _ => "VasStillHeld(table)",
+            },
         }
     }
 
@@ -222,6 +243,15 @@ pub struct StoreMapPort {
     /// ★★★ w755u — doorbells carried to the channel's own isolate: asked, refused, rung.
     /// ⊘ Kept apart from the birth counters for their reason: a boot must be able to say
     /// whether the BIRTH or the RING is what stopped, and one counter cannot.
+    /// ★★★ w757 — how many diff lists have been applied. ⊘ Its own counter: `maps` counts
+    /// individual slices, and a boot must be able to say whether ONE list moved many slices or
+    /// many lists moved none.
+    /// ★★★ w757 — VA spaces released, and release attempts refused. ⊘ Both, for
+    /// `a_refusal_counter_read_as_absent_demand`'s reason: `refused=0` alone cannot tell
+    /// *"nothing was refused"* from *"nothing was asked"*.
+    released: AtomicU64,
+    release_refused: AtomicU64,
+    applied: AtomicU64,
     chan_doorbells: AtomicU64,
     chan_doorbell_refused: AtomicU64,
     chan_rung: AtomicU64,
@@ -324,6 +354,9 @@ impl StoreMapPort {
             unmaps: AtomicU64::new(0),
             unmap_refused: AtomicU64::new(0),
             bytes_mapped: AtomicU64::new(0),
+            released: AtomicU64::new(0),
+            release_refused: AtomicU64::new(0),
+            applied: AtomicU64::new(0),
             chan_doorbells: AtomicU64::new(0),
             chan_doorbell_refused: AtomicU64::new(0),
             chan_rung: AtomicU64::new(0),
@@ -501,7 +534,7 @@ impl StoreMapPort {
     /// [`StoreMapRefusal`], by name. ⚠ `Rm` here includes `PlacementRefused` — constraint
     /// 28's assertion, made inside the isolate at the one `NVOS46` site — so a mapping RM
     /// relocated arrives as a refusal rather than as an `Ok` naming the wrong address.
-    pub fn map(
+    fn map(
         &self,
         vas: HostHandle,
         offset: u64,
@@ -632,7 +665,7 @@ impl StoreMapPort {
     ///
     /// # Errors
     /// [`StoreMapRefusal`], by name.
-    pub fn unmap(&self, vas: HostHandle, at: GpuVa) -> Result<(), StoreMapRefusal> {
+    fn unmap(&self, vas: HostHandle, at: GpuVa) -> Result<(), StoreMapRefusal> {
         let off = self.off_vcpu()?;
         let out = self
             .iso
@@ -713,7 +746,7 @@ impl StoreMapPort {
         err_notifier: Option<kayfabe_isolate::GuestRamGrant>,
     ) -> Result<(HostHandle, u64), kayfabe_fwd::FwdFault> {
         self.chan_births.fetch_add(1, Ordering::Relaxed);
-        let off = self.off_vcpu().map_err(|r| {
+        let off = self.off_vcpu().map_err(|_r| {
             self.chan_birth_refused.fetch_add(1, Ordering::Relaxed);
             kayfabe_fwd::FwdFault::Rm {
                 err: kayfabe_isolate::RmError::Other(kayfabe_isolate::STORE_BIRTH_REFUSED),
@@ -775,6 +808,135 @@ impl StoreMapPort {
                 Ok(born)
             }
         }
+    }
+
+    /// ★★★★★ **w757 — EXECUTE THE DIFF LIST, AND BE THE ONLY THING THAT EXECUTES IT.**
+    ///
+    /// > Owner, 2026-09-18: *"So ensure its executed, and ensure the diff list is the only
+    /// > thing executing it."*
+    ///
+    /// ⊘⊘⊘ **The second half is the one with teeth, and it is enforced by PRIVACY rather than
+    /// by discipline.** [`StoreMapPort::map`] and [`StoreMapPort::unmap`] are now **private**:
+    /// this is the only way to change what is mapped, so *"the diff list is the only thing
+    /// that executes"* is a property of the module's surface, not a rule a reviewer has to
+    /// remember. A gate pins the caller count as well, because privacy stops at the module
+    /// boundary and this file is large.
+    ///
+    /// # ★★★ Why a chokepoint is worth more than it costs
+    ///
+    /// `[measured w755u]` `maps=76 unmaps=0 replaced=0`: mappings only ever accumulated,
+    /// because the bind path mapped directly and nothing else ever removed anything. With
+    /// every change flowing through one list, *"what is mapped"* has exactly one author — and
+    /// the ordering rule below can be stated once rather than at every call site.
+    ///
+    /// ⚠ **UNMAPS BEFORE MAPS, within one application.** §27's rule, and it is not a
+    /// preference: a `Remap` is an unmap plus a map at the same VA, and running the map first
+    /// leaves two slices live at one address — the two-memories-at-one-address state the
+    /// single store exists to abolish. Ordering here makes the window **not exist** rather
+    /// than making it small.
+    ///
+    /// # Errors
+    /// The first refusal, with the op that caused it. ⊘ Stops on the first failure rather than
+    /// continuing: a half-applied delta is a state nobody can describe, and continuing would
+    /// make the ledger disagree with the guest's tables in a way no later diff could repair.
+    ///
+    /// # Panics
+    /// Through `Worker::with_rm`'s `assert_lock_free`, if a caller reaches this holding a
+    /// ranked lock.
+    pub fn apply_ops(
+        &self,
+        vas: HostHandle,
+        ops: &[kayfabe_mmu::walkdiff::MapOp],
+    ) -> Result<AppliedOps, StoreMapRefusal> {
+        use kayfabe_mmu::walkdiff::MapOp;
+        let mut done = AppliedOps::default();
+        // ⊘ Two passes over one list, not a sort: the list's own order is meaningful within
+        // each kind (the differ emits coalesced runs), and sorting would discard it.
+        for op in ops {
+            if let MapOp::Unmap(r) | MapOp::Remap(r) = op {
+                self.unmap(vas, GpuVa(r.va))?;
+                done.unmapped += 1;
+            }
+        }
+        for op in ops {
+            match op {
+                MapOp::Map(r) | MapOp::Remap(r) => {
+                    // ⊘ The store offset IS the GPGA: under the identity window a guest
+                    // framebuffer address is an offset into the one reserved object. That is
+                    // the whole reason the window must stay identity.
+                    self.map(vas, r.gpga, r.len, GpuVa(r.va))?;
+                    done.mapped += 1;
+                }
+                MapOp::Unmap(_) => {}
+            }
+        }
+        done.ops = ops.len();
+        self.applied.fetch_add(1, Ordering::Relaxed);
+        Ok(done)
+    }
+
+    /// ★★★★★ **w757 — RELEASE A VA SPACE, AND ONLY WHEN ALL THREE CONDITIONS HOLD.**
+    ///
+    /// > Owner, 2026-09-18: *"Ensure va space is only released if it contains 0 mappings, its
+    /// > table is no longer referenced and no channel uses it (vmm coordinated)."*
+    ///
+    /// ⊘ **The port re-checks its own two conditions even though the caller may have looked.**
+    /// The VMM's witness is an assertion at an instant and can go stale between mint and use;
+    /// the port's two cannot, because since w757 the port is the **only author of mappings**.
+    /// ⇒ checking here is not belt-and-braces, it is the only check that is still true when it
+    /// runs.
+    ///
+    /// ⚠ **Refusals are per-condition and NOT folded into one name.** *"Something still holds
+    /// it"* would send a reader to look at all three; this tree has paid for one-refusal-for-
+    /// several-causes repeatedly.
+    ///
+    /// # Errors
+    /// [`StoreMapRefusal::VasStillHeld`] naming which condition failed, with its count.
+    ///
+    /// # Panics
+    /// Through `Worker::with_rm`'s `assert_lock_free`, if a caller reaches this holding a
+    /// ranked lock.
+    pub fn release_vas(
+        &self,
+        witness: kayfabe_isolate::NoChannelHoldsVas,
+    ) -> Result<(), StoreMapRefusal> {
+        let vas = witness.vas();
+        // ⊘ A witness for a DIFFERENT space must not release this one. The witness carries its
+        // subject precisely so this check can exist.
+        let placed = self
+            .placed
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let still_mapped = placed.keys().filter(|(v, _)| *v == vas.raw()).count();
+        drop(placed);
+        if still_mapped != 0 {
+            self.release_refused.fetch_add(1, Ordering::Relaxed);
+            return Err(self.note(StoreMapRefusal::VasStillHeld {
+                vas: vas.raw(),
+                why: "mappings",
+                count: still_mapped,
+            }));
+        }
+        // ★ Condition 2 — the table. An adopted space still in the ledger is one whose range
+        // inside B this port still names; releasing it would strand that range.
+        let adopted = self
+            .adopted
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let referenced = usize::from(adopted.contains_key(&vas.raw()));
+        drop(adopted);
+        if referenced != 0 {
+            self.release_refused.fetch_add(1, Ordering::Relaxed);
+            return Err(self.note(StoreMapRefusal::VasStillHeld {
+                vas: vas.raw(),
+                why: "table-referenced",
+                count: referenced,
+            }));
+        }
+        // Condition 3 is the witness's existence: it cannot be constructed with a channel
+        // still using the space.
+        self.released.fetch_add(1, Ordering::Relaxed);
+        Ok(())
     }
 
     /// ★★★★★ **w755u — SCHEDULE AND RING A CHANNEL THIS PORT'S ISOLATE OWNS.**
@@ -1082,6 +1244,20 @@ impl kayfabe_fwd::StoreChannelBirth for StoreMapPort {
     ) -> Result<(), kayfabe_fwd::FwdFault> {
         StoreMapPort::doorbell_over_the_store(self, chan, token, schedule)
     }
+}
+
+/// ★★★ w757 — what one [`StoreMapPort::apply_ops`] did.
+///
+/// ⊘ Counts, not a bool: `ops=12 mapped=0 unmapped=0` is a list that arrived and changed
+/// nothing, which is a different fact from a list that never arrived.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct AppliedOps {
+    /// How many ops the list carried.
+    pub ops: usize,
+    /// Slices mapped (`Map` + `Remap`).
+    pub mapped: usize,
+    /// Slices unmapped (`Unmap` + `Remap`).
+    pub unmapped: usize,
 }
 
 kayfabe_util::assert_send_sync!(StoreMapPort);
