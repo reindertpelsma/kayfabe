@@ -90,19 +90,42 @@ fn release_checks_mappings_and_table_separately() {
          name. Releasing a space that still has slices placed in it strands them: the port is \
          the only author of mappings, so nothing else will ever remove them."
     );
+    // ★★★★★ **w758 — CONDITION 2 IS AN ACTION, AND THIS ASSERTION USED TO PIN IT BACKWARDS.**
+    //
+    // ⊘⊘⊘ It required a refusal named `table-referenced`. But **being adopted is the normal
+    // state** of every space this port ever mapped through, and nothing removes entries from
+    // that ledger — so that refusal fired for every real space, forever, and `Ok(())` was
+    // reachable only for spaces the port had never adopted. The test pinned the inversion in
+    // place, which is `a_green_test_can_hold_a_wall_in_place` for the third time this week.
+    //
+    // ⇒ *"Its table is no longer referenced"* is what `release_vas` must MAKE TRUE. So the
+    // gate now demands the WORK: free our range inside B, and forget the space only after RM
+    // agreed.
     assert!(
-        body.contains("referenced") && body.contains("\"table-referenced\""),
-        "★★★★★ condition 2 (table no longer referenced) is no longer checked. An adopted space \
-         still in the ledger is one whose range inside B this port still names, and releasing \
-         it strands that range."
+        body.contains("rm.free(range)"),
+        "★★★★★ `release_vas` no longer frees the range it holds inside B. Without it the \
+         space is 'released' while the scratchpad still names a range over it — a per-VM leak \
+         reported as a success."
     );
-    // ⊘ NON-VACUITY: the two conditions must be DISTINCT refusals, or a single check is
-    //   satisfying both assertions above.
-    assert_eq!(
-        body.matches("VasStillHeld").count(),
-        2,
-        "★★★ the two conditions must refuse SEPARATELY. One shared refusal sends a reader to \
-         check both, which is the one-refusal-for-several-causes shape this tree keeps paying \
-         for — and it is worse here, because the two have different fixes."
+    assert!(
+        body.contains(".remove(&vas.raw())"),
+        "★★★★★ `release_vas` no longer forgets the space. A ledger that keeps a released \
+         space refuses every later adopt of the same handle."
+    );
+    // ⊘ ORDER: RM must agree BEFORE the ledger forgets. A ledger that forgets a range RM
+    //   still holds is a leak this port can no longer even name.
+    let freed = body.find("rm.free(range)").expect("pinned above");
+    let forgot = body.find(".remove(&vas.raw())").expect("pinned above");
+    assert!(
+        freed < forgot,
+        "★★★★★ `release_vas` forgets the space before RM frees the range. If the free then \
+         refuses, the range is live and unnameable."
+    );
+    // ⊘ NON-VACUITY: a `NoWorker` must NOT read as a release — *'we could not ask'* is not
+    //   *'it is gone'*, and reporting it as one leaks the range silently.
+    assert!(
+        body.contains("StoreMapRefusal::NoWorker"),
+        "★★★ a worker-less release must refuse, not succeed: 'we could not ask' is not 'it is \
+         released', and the caller may retry only if it is told."
     );
 }

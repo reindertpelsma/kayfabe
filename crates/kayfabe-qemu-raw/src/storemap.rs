@@ -252,6 +252,10 @@ pub struct StoreMapPort {
     released: AtomicU64,
     release_refused: AtomicU64,
     applied: AtomicU64,
+    /// ★★★ w758 — asked-for work DECLINED before it left this process (on a vCPU, inside a
+    /// trap). ⊘ Its own counter: *"we did not ask"* and *"we were refused"* have different
+    /// fixes, and a census that adds them reports a route that fired when none did.
+    chan_declined: AtomicU64,
     chan_doorbells: AtomicU64,
     chan_doorbell_refused: AtomicU64,
     chan_rung: AtomicU64,
@@ -357,6 +361,7 @@ impl StoreMapPort {
             released: AtomicU64::new(0),
             release_refused: AtomicU64::new(0),
             applied: AtomicU64::new(0),
+            chan_declined: AtomicU64::new(0),
             chan_doorbells: AtomicU64::new(0),
             chan_doorbell_refused: AtomicU64::new(0),
             chan_rung: AtomicU64::new(0),
@@ -746,8 +751,12 @@ impl StoreMapPort {
         err_notifier: Option<kayfabe_isolate::GuestRamGrant>,
     ) -> Result<(HostHandle, u64), kayfabe_fwd::FwdFault> {
         self.chan_births.fetch_add(1, Ordering::Relaxed);
+        // ⊘⊘ **w758 — `off_vcpu` FAILING IS *WE DID NOT ASK*, NOT *WE WERE REFUSED*.**
+        // The counter used to bump here, so the census printed *"ASKED AND REFUSED EVERY TIME
+        // — the route fired"* for a route that never left this process. Same conflation the
+        // suite header carried at w756c, one layer down.
         let off = self.off_vcpu().map_err(|_r| {
-            self.chan_birth_refused.fetch_add(1, Ordering::Relaxed);
+            self.chan_declined.fetch_add(1, Ordering::Relaxed);
             kayfabe_fwd::FwdFault::Rm {
                 err: kayfabe_isolate::RmError::Other(kayfabe_isolate::STORE_BIRTH_REFUSED),
                 on: None,
@@ -917,21 +926,53 @@ impl StoreMapPort {
                 count: still_mapped,
             }));
         }
-        // ★ Condition 2 — the table. An adopted space still in the ledger is one whose range
-        // inside B this port still names; releasing it would strand that range.
-        let adopted = self
+        // ★★★★★ **w758 — CONDITION 2 IS AN ACTION, NOT A PRECONDITION. My first version had
+        // it backwards and the result was a function that could never release anything real.**
+        //
+        // ⊘⊘⊘ It refused when the space was still in `adopted` — but **being adopted is the
+        // normal state** of every space this port ever mapped through, and nothing removes
+        // entries from that ledger. So every real space was refused `table-referenced`
+        // forever, and the only spaces that reached `Ok(())` were ones this port had never
+        // adopted — i.e. it succeeded exactly when it had nothing to do.
+        //
+        // ⚠ And the success path did **no work at all**: no worker call, no RM free, no ledger
+        // removal — while bumping a `released` counter. A counter that counts a no-op is worse
+        // than no counter; this is the *"the passthrough verb is BUILT and ORPHANED"* shape,
+        // authored in the same hour it was warned about.
+        //
+        // ⇒ *"Its table is no longer referenced"* is what this function must MAKE TRUE: drop
+        // our own range inside B, then forget the space. Conditions 1 and 3 gate; 2 is the
+        // work.
+        let range = self
             .adopted
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let referenced = usize::from(adopted.contains_key(&vas.raw()));
-        drop(adopted);
-        if referenced != 0 {
-            self.release_refused.fetch_add(1, Ordering::Relaxed);
-            return Err(self.note(StoreMapRefusal::VasStillHeld {
-                vas: vas.raw(),
-                why: "table-referenced",
-                count: referenced,
-            }));
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&vas.raw())
+            .copied();
+        if let Some(range) = range {
+            let off = self.off_vcpu()?;
+            let out = self
+                .iso
+                .with_worker(move |worker| worker.with_rm(&off, move |rm| rm.free(range)));
+            match out {
+                // ⊘ NoWorker is *"we could not ask"* — the space stays adopted and the caller
+                // may retry. Reporting it as a release would leak the range silently.
+                None => {
+                    self.release_refused.fetch_add(1, Ordering::Relaxed);
+                    return Err(self.note(StoreMapRefusal::NoWorker));
+                }
+                Some(Err(e)) => {
+                    self.release_refused.fetch_add(1, Ordering::Relaxed);
+                    return Err(self.note(StoreMapRefusal::Rm(format!("{e:?}"))));
+                }
+                Some(Ok(())) => {}
+            }
+            // ⊘ Removed only AFTER RM agreed: a ledger that forgets a range RM still holds is
+            // a leak this port can no longer even name.
+            self.adopted
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .remove(&vas.raw());
         }
         // Condition 3 is the witness's existence: it cannot be constructed with a channel
         // still using the space.

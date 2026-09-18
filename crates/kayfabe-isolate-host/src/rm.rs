@@ -10321,10 +10321,24 @@ impl HostRmBackend {
         }
         match cuda.import_and_map(0, ctl.fd_number(), usize::try_from(len).unwrap_or(0)) {
             Ok(dptr) => {
+                // ⊘⊘⊘ **w758 — THIS LINE USED TO CLAIM THE WALK WAS IN PLACE. IT IS NOT.**
+                //
+                // The first version read *"⇒ the walk kernel can be pointed at the store and
+                // walk the guest's tables IN PLACE"*. `store_dptr` has **zero readers**:
+                // `cudawalk::run` still calls `k.upload(&image)` and points `KfWin.base` at
+                // the STAGED COPY. So the line asserted a capability that is unreachable by
+                // construction — the tree's own *"BUILT AND ORPHANED"* shape, written in the
+                // same session that names it, and worse than silence because a boot log is
+                // what a later reader treats as evidence.
+                //
+                // ⇒ The arming is real and the pointer is real; what is missing is the
+                // consumer. The line now says exactly that, so a boot cannot be read as
+                // proving the in-place walk until the wiring lands.
                 eprintln!(
-                    "kayfabe-isolate: STORE-DPTR ★★★★★ ARMED store={store:#010x} len={len} \
-                     dptr={dptr:#x} ⇒ the walk kernel can be pointed at the store and walk \
-                     the guest's tables IN PLACE, at their own GPGA offsets"
+                    "kayfabe-isolate: STORE-DPTR ✔ ARMED store={store:#010x} len={len} \
+                     dptr={dptr:#x} ⊘⊘ NOT YET CONSUMED — `cudawalk` still uploads a staged \
+                     image and points the kernel at that. This pointer proves the store is \
+                     CUDA-addressable; it does NOT mean any walk ran in place."
                 );
                 *self
                     .store_dptr
