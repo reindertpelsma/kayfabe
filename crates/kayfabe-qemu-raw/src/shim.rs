@@ -5837,6 +5837,10 @@ fn doorbell_publish_loop(
             // 1 ms ceiling while the only number on the line said 20 microseconds. The guest
             // spins on TRIGGER across ALL of this, not across `refresh` alone.
             // ⇒ Time each phase, on the same line, so the next reader aims instead of guesses.
+            // ⊘ w763t — the segment between the loop head and here, which is where the
+            // remaining ~17.8 ms of a 23.8 ms job lives: `job_ms=23.79 premap_ms=5.96` and
+            // every phase between them measured 0.00.
+            let prelude_ms = t_job.elapsed().as_secs_f64() * 1e3;
             let t_reval = std::time::Instant::now();
             if let Some(plane) = plane_ref.as_ref() {
                 plane.revalidate_mirror_first();
@@ -5926,7 +5930,7 @@ fn doorbell_publish_loop(
             if since_trigger_ms > 1.0 || premap_ms > 1.0 {
                 eprintln!(
                     "kayfabe: MMUINVAL-HOLD seq={seq} queued_ms={queued_ms:.2} \
-                     job_ms={:.2} premap_ms={premap_ms:.2} \
+                     job_ms={:.2} prelude_ms={prelude_ms:.2} premap_ms={premap_ms:.2} \
                      since_trigger_ms={since_trigger_ms:.2} ⇒ queued = the worker was \
                      BEHIND; job-minus-premap = it was BUSY before reaching this phase",
                     t_job.elapsed().as_secs_f64() * 1e3
