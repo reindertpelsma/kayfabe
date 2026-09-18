@@ -12689,6 +12689,61 @@ impl HostRmBackend {
     ///
     /// # Errors
     /// Whatever the allocation, the mapping or the copy refuses with.
+    /// ★★★★★ **w756d — A DMA BUFFER THE CPU CAN ACTUALLY WRITE.**
+    ///
+    /// ⊘⊘⊘ **`alloc_sysmem` is the WRONG allocator for this and the failure is silent-ish.**
+    /// `[measured w756b, RTX 3090]` both DMA arms answered `Other(31)` — `INVALID_ARGUMENT` —
+    /// because `alloc_sysmem` sets **`NVOS02_FLAGS_MAPPING_NO_MAP`**, so the object cannot be
+    /// CPU-mapped at all, and the probe's seed step is a `map_cpu` on it. This tree has the
+    /// lesson already: `the_wrong_allocator_returned_ok`, *"NO_MAP set at alloc"*.
+    ///
+    /// ⇒ Real DMA memory is what a VMM actually gives guest RAM: a **sealed memfd**, placed
+    /// in a reservation we own, described to RM as an `OS_DESCRIPTOR`. The CPU side is then
+    /// **our own mapping** — no `map_cpu`, no RM involvement in the CPU half at all — which
+    /// is both the faithful shape and the one that can be written.
+    ///
+    /// Returns the RM handle plus the pieces that must outlive it: dropping the reservation
+    /// unmaps the pages the descriptor names.
+    ///
+    /// # Errors
+    /// Whatever the memfd, the reservation or RM refused.
+    fn dma_buffer(
+        &mut self,
+        len: u64,
+    ) -> Result<
+        (
+            u32,
+            kayfabe_linux_raw::SharedRam,
+            kayfabe_linux_raw::Reservation,
+            kayfabe_linux_raw::PlacementId,
+        ),
+        RmError,
+    > {
+        let page = HostPageSize::query();
+        let ram = kayfabe_linux_raw::SharedRam::create(len).map_err(|e| region_error(&e))?;
+        let mut reservation =
+            kayfabe_linux_raw::Reservation::new(len, page).map_err(|e| region_error(&e))?;
+        let placed = reservation
+            .map_fixed_in(
+                HostOffset::new(0),
+                len,
+                Backing::SharedFile {
+                    fd: ram.as_backing_fd(),
+                    offset: 0,
+                },
+                kayfabe_linux_raw::HostProt::ReadWrite,
+                CachePolicy::WriteBack,
+            )
+            .map_err(|e| region_error(&e))?;
+        let region = reservation
+            .placement(placed)
+            .map_err(|e| region_error(&e))?;
+        let h = self
+            .conn
+            .alloc_os_descriptor(region, HostOffset::new(0), len)?;
+        Ok((h, ram, reservation, placed))
+    }
+
     /// ★★★★★ **w756b — IS DMA MEMORY COHERENT IN BOTH DIRECTIONS? A ROUND TRIP THROUGH THE
     /// DEVICE.**
     ///
@@ -12728,7 +12783,10 @@ impl HostRmBackend {
         /// Pre-seed for the destination.
         const DST_SENTINEL: u32 = 0xDEAD_0B0E;
         let range = self.narrow(vas)?;
-        let a = self.alloc_sysmem(BYTES).and_then(|h| self.narrow(h))?;
+        // ⊘ `dma_buffer`, not `alloc_sysmem`: the latter sets `NO_MAP` and the CPU half of
+        // this probe is the whole point. The backings are bound below so they outlive the
+        // descriptors that name their pages.
+        let (a, _a_ram, a_res, a_placed) = self.dma_buffer(BYTES)?;
         let v = match self.conn.alloc_device_local(BYTES) {
             Ok(h) => h,
             Err(e) => {
@@ -12736,8 +12794,8 @@ impl HostRmBackend {
                 return Err(e);
             }
         };
-        let b = match self.alloc_sysmem(BYTES).and_then(|h| self.narrow(h)) {
-            Ok(h) => h,
+        let (b, _b_ram, b_res, b_placed) = match self.dma_buffer(BYTES) {
+            Ok(t) => t,
             Err(e) => {
                 let _ = self.free(self.stamp(v));
                 let _ = self.free(self.stamp(a));
@@ -12754,24 +12812,25 @@ impl HostRmBackend {
             let b_va = self.map_dma_both(range, b, BYTES, None)?;
 
             // ---- seed, from the CPU only ----
-            let (a_node, a_map) = self.conn.map_cpu(a, BYTES, CachePolicy::WriteCombining)?;
-            a_map
-                .store_u32(HostOffset::ZERO, pattern)
+            // ⊘ Through the mapping WE own, never `map_cpu`: the source is an OS descriptor
+            // over our memfd, and RM has no CPU view of it to hand out. This is also the
+            // faithful shape — a VMM writes guest RAM through its own mapping.
+            a_res
+                .placement(a_placed)
+                .map_err(|e| region_error(&e))?
+                .write_from(HostOffset::new(0), &pattern.to_le_bytes())
                 .map_err(|e| region_error(&e))?;
-            drop(a_map);
-            drop(a_node);
             let (v_node, v_map) = self.conn.map_cpu(v, BYTES, CachePolicy::WriteCombining)?;
             v_map
                 .store_u32(HostOffset::ZERO, VIA_SENTINEL)
                 .map_err(|e| region_error(&e))?;
             drop(v_map);
             drop(v_node);
-            let (b_node, b_map) = self.conn.map_cpu(b, BYTES, CachePolicy::WriteCombining)?;
-            b_map
-                .store_u32(HostOffset::ZERO, DST_SENTINEL)
+            b_res
+                .placement(b_placed)
+                .map_err(|e| region_error(&e))?
+                .write_from(HostOffset::new(0), &DST_SENTINEL.to_le_bytes())
                 .map_err(|e| region_error(&e))?;
-            drop(b_map);
-            drop(b_node);
 
             let sub = |dst: u64, src: u64| CeSubCopy {
                 dst,
@@ -12854,14 +12913,26 @@ impl HostRmBackend {
         // unmap retire the translation?"* — is identical, and a second copy of this body is
         // how the two arms come to disagree about what they proved. Only the allocator
         // differs, which is exactly the variable under test.
-        let mut alloc = |me: &mut Self| -> Result<u32, RmError> {
-            match aperture {
-                ProbeAperture::Vidmem => me.conn.alloc_device_local(BYTES),
-                ProbeAperture::Sysmem => me.alloc_sysmem(BYTES).and_then(|h| me.narrow(h)),
-            }
-        };
-        let src = alloc(self)?;
-        let dst = match alloc(self) {
+        // ⊘ The backings must OUTLIVE the probe: dropping a reservation unmaps the pages the
+        // descriptor names, and RM would then hold a descriptor over nothing.
+        let mut keep: Vec<(kayfabe_linux_raw::SharedRam, kayfabe_linux_raw::Reservation)> =
+            Vec::new();
+        let mut alloc =
+            |me: &mut Self,
+             keep: &mut Vec<(kayfabe_linux_raw::SharedRam, kayfabe_linux_raw::Reservation)>|
+             -> Result<u32, RmError> {
+                match aperture {
+                    ProbeAperture::Vidmem => me.conn.alloc_device_local(BYTES),
+                    // ⊘ NOT `alloc_sysmem`: it sets `NO_MAP`. See `Self::dma_buffer`.
+                    ProbeAperture::Sysmem => {
+                        let (h, ram, res, _placed) = me.dma_buffer(BYTES)?;
+                        keep.push((ram, res));
+                        Ok(h)
+                    }
+                }
+            };
+        let src = alloc(self, &mut keep)?;
+        let dst = match alloc(self, &mut keep) {
             Ok(h) => h,
             Err(e) => {
                 let _ = self.free(self.stamp(src));
