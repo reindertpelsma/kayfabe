@@ -13558,34 +13558,72 @@ mod route_k {
 /// returned the last arm's code would let a failure be hidden by whatever ran after it.
 fn bare_metal_suite(gpu: u32) -> i32 {
     println!("BM_SUITE=start gpu={gpu}");
-    let mut worst = 0;
-    worst = worst.max(unmap_retires_probe(gpu));
-    worst = worst.max(dma_roundtrip_probe(gpu));
-    if worst == 0 {
+    // ★★★★★ **w756c — `UNMEASURED` IS NOT `FAIL`, AND THE SUITE HEADER SAYS SO.**
+    //
+    // `[measured w756b]` the first run reported **`BM_SUITE=FAIL`** when every arm had
+    // answered `UNMEASURED`: the tree refused to open RM at all against driver 575.51.03.
+    // Nothing was tested, and the header said the client had failed.
+    //
+    // ⊘ That is the conflation this session paid for three times over
+    // (`rm_imports_only_what_rm_exported`) — *"we never got to ask"* read as an answer — and
+    // it is worse in a SUITE HEADER than in a probe, because the header is what gets quoted.
+    //
+    // ⇒ Three states. Both non-PASS ones still exit non-zero: an untested client must not
+    // read as a green one either.
+    let mut ran = 0usize;
+    let mut failed = 0usize;
+    let mut unmeasured = 0usize;
+    for (name, code) in [
+        ("unmap-retires", unmap_retires_probe(gpu)),
+        ("dma-roundtrip", dma_roundtrip_probe(gpu)),
+    ] {
+        ran += 1;
+        match code {
+            0 => {}
+            // ⊘ `2` is the arms' code for *"never got to ask"*; `1` is a real failure.
+            2 => {
+                unmeasured += 1;
+                println!("BM_ARM[{name}]=UNMEASURED");
+            }
+            _ => {
+                failed += 1;
+                println!("BM_ARM[{name}]=FAIL");
+            }
+        }
+    }
+    if failed == 0 && unmeasured == 0 {
         println!(
-            "BM_SUITE=PASS — every arm passed on bare metal. ⇒ a later GUEST failure of this \
-             same client indicts kayfabe, not the client."
+            "BM_SUITE=PASS ({ran}/{ran} arms) — every arm passed on bare metal. ⇒ a later \
+             GUEST failure of this same client indicts kayfabe, not the client."
         );
+        0
+    } else if failed == 0 {
+        println!(
+            "BM_SUITE=UNMEASURED ({unmeasured} of {ran} arms never ran) — ⊘⊘ THIS IS NOT A \
+             FAILING CLIENT. Nothing was tested, so nothing was disproved; read each arm's \
+             reason. ⚠ Still non-zero: an untested client must not read as a green one."
+        );
+        2
     } else {
         println!(
-            "BM_SUITE=FAIL — read the arm verdicts above. ⊘ Until this is green, a guest \
-             failure cannot be attributed to kayfabe."
+            "BM_SUITE=FAIL ({failed} of {ran} arms) — read the arm verdicts above. ⊘ Until \
+             this is green, a guest failure cannot be attributed to kayfabe."
         );
+        1
     }
-    worst
 }
 
 /// ★★★★★ **w756b — is DMA memory visible in both directions?**
 fn dma_roundtrip_probe(gpu: u32) -> i32 {
     let Ok(dev) = DevDir::open(c"/dev") else {
         println!("DR_RESULT=UNMEASURED:open-dev");
-        return 1;
+        return 2;
     };
     let conn = match RmConnection::open(&dev, GpuId(gpu), kayfabe_chips::pinned_host_classes()) {
         Ok(c) => c,
         Err(e) => {
             println!("DR_RESULT=UNMEASURED:rm-open:{e:?}");
-            return 1;
+            return 2;
         }
     };
     let id = IsolateId::new(0x44_52, GpuId(gpu));
@@ -13598,7 +13636,7 @@ fn dma_roundtrip_probe(gpu: u32) -> i32 {
         Ok(v) => v,
         Err(e) => {
             println!("DR_RESULT=UNMEASURED:alloc-vaspace:{e:?}");
-            return 1;
+            return 2;
         }
     };
     match rm.probe_dma_roundtrip(vas, 0xC0FF_EE01) {
@@ -13655,7 +13693,7 @@ fn dma_roundtrip_probe(gpu: u32) -> i32 {
         }
         Err(e) => {
             println!("DR_RESULT=UNMEASURED:probe:{e:?}");
-            1
+            2
         }
     }
 }
@@ -13670,13 +13708,13 @@ fn unmap_retires_probe(gpu: u32) -> i32 {
     println!("UR_PROBE=start gpu={gpu}");
     let Ok(dev) = DevDir::open(c"/dev") else {
         println!("UR_RESULT=UNMEASURED:open-dev");
-        return 1;
+        return 2;
     };
     let conn = match RmConnection::open(&dev, GpuId(gpu), kayfabe_chips::pinned_host_classes()) {
         Ok(c) => c,
         Err(e) => {
             println!("UR_RESULT=UNMEASURED:rm-open:{e:?}");
-            return 1;
+            return 2;
         }
     };
     let id = IsolateId::new(0x55_52, GpuId(gpu));
@@ -13758,7 +13796,7 @@ fn unmap_retires_arm(
         }
         Err(e) => {
             println!("UR_RESULT[{a}]=UNMEASURED:probe:{e:?}");
-            1
+            2
         }
     }
 }
