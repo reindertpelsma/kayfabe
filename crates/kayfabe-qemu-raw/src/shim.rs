@@ -5684,6 +5684,8 @@ fn doorbell_publish_loop(
         // per job rather than a Device-lock acquisition. Same chunk and same budget as the
         // trap used — moving the work and changing how much of it runs per turn would leave
         // neither measured.
+        let seg_dbtable_ms = t_seg.elapsed().as_secs_f64() * 1e3;
+        let t_retired = std::time::Instant::now();
         if kayfabe_core::gpu::retired_pending() > 0 {
             let drain_t0 = std::time::Instant::now();
             let _ = port.device.drain_retired_budgeted(RETIRED_DRAIN_CHUNK, || {
@@ -5846,6 +5848,7 @@ fn doorbell_publish_loop(
             // remaining ~17.8 ms of a 23.8 ms job lives: `job_ms=23.79 premap_ms=5.96` and
             // every phase between them measured 0.00.
             let seg_tail_ms = t_seg.elapsed().as_secs_f64() * 1e3;
+            let seg_retired_ms = t_retired.elapsed().as_secs_f64() * 1e3;
             let prelude_ms = t_job.elapsed().as_secs_f64() * 1e3;
             let t_reval = std::time::Instant::now();
             if let Some(plane) = plane_ref.as_ref() {
@@ -5937,7 +5940,8 @@ fn doorbell_publish_loop(
                 eprintln!(
                     "kayfabe: MMUINVAL-HOLD seq={seq} queued_ms={queued_ms:.2} \
                      job_ms={:.2} prelude_ms={prelude_ms:.2} \
-                     SEG[reval={seg_reval_ms:.2} births={seg_births_ms:.2} tail={seg_tail_ms:.2}] \
+                     SEG[reval={seg_reval_ms:.2} births={seg_births_ms:.2} \
+                     dbtable={seg_dbtable_ms:.2} retired={seg_retired_ms:.2} tail={seg_tail_ms:.2}] \
                      premap_ms={premap_ms:.2} \
                      since_trigger_ms={since_trigger_ms:.2} ⇒ queued = the worker was \
                      BEHIND; job-minus-premap = it was BUSY before reaching this phase",
