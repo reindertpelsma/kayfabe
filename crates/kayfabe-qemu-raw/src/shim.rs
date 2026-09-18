@@ -5824,9 +5824,17 @@ fn doorbell_publish_loop(
             // revocations stage are drained synchronously *inside* `refresh_page_tables`,
             // which is above this line — while the host MAPS happen in `publish_vas_rows`,
             // which is below it. The memslot plane was the one that ran the other way.
+            // ⊘⊘⊘ **w763p — `refresh_ms` IS ONE PHASE OF FIVE, AND IT IS THE FAST ONE.**
+            // `[measured w763]` the census printed `refresh_ms=0.02` beside
+            // `worst_hold_us=135318 over_budget=426` — every one of 426 invalidates blew a
+            // 1 ms ceiling while the only number on the line said 20 microseconds. The guest
+            // spins on TRIGGER across ALL of this, not across `refresh` alone.
+            // ⇒ Time each phase, on the same line, so the next reader aims instead of guesses.
+            let t_reval = std::time::Instant::now();
             if let Some(plane) = plane_ref.as_ref() {
                 plane.revalidate_mirror_first();
             }
+            let reval_ms = t_reval.elapsed().as_secs_f64() * 1e3;
             let n = MMUINVAL_REFRESH_FIRINGS.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
             let mut ctx = port.publish_ctx();
             // ⊘⊘ `Drain`, NOT `Publish` — and the difference is a whole publication PASS.
@@ -5846,12 +5854,15 @@ fn doorbell_publish_loop(
             // That intent is right; the arm chosen was too narrow. `Drain` both publishes AND
             // measures-and-pins, which is what the doorbell path used to reach.
             ctx.vas_publish = VasPublishArm::Drain;
+            let t_pub = std::time::Instant::now();
             let published = ctx.publish_vas_rows(token, None, off_vcpu);
+            let publish_ms = t_pub.elapsed().as_secs_f64() * 1e3;
             // ★ One line per firing, and it carries the COUNT: the refresh's three fragments
             // are the same ones the doorbell's `PT-DECODE token=` line prints, so a reader can
             // compare what the invalidate found against what the next doorbell finds.
             eprintln!(
-                "kayfabe: MMUINVAL-REFRESH #{n} seq={seq} armed={armed} refresh_ms={:.2} \
+                "kayfabe: MMUINVAL-REFRESH #{n} seq={seq} armed={armed} \
+                 PHASES[reval_ms={reval_ms:.2} refresh_ms={:.2} publish_ms={publish_ms:.2}] \
                  unmaps_outstanding={} drain_trips={}{}",
                 refresh.took.as_secs_f64() * 1e3,
                 refresh.unmaps_outstanding,
