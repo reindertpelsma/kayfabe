@@ -80,9 +80,37 @@ for fn in ('kf_emit', 'kf_acc_emit'):
                     f"coalesce branch (line {coal}). A refused leaf then extends a legal run "
                     f"past the end of the store, with no refusal flag set.")
 
+# ── (e) no early return may swallow a refusal ────────────────────────────────
+# A warp that produced no runs still has something to say. The propagation must
+# dominate every `return` in the function, or "everything was refused" arrives
+# looking exactly like "there was nothing here".
+for fn in ('kf_par_leaf_one', 'kf_par_expand_one'):
+    body, on, depth = [], False, 0
+    for ln, line in enumerate(lines, 1):
+        if re.search(rf'\b{fn}\s*\(', line) and ('__device__' in line or '__global__' in line):
+            on = True
+        if on:
+            body.append((ln, line))
+            if line.startswith('}'):
+                break
+    if not body:
+        continue
+    prop = next((ln for ln, l in body if 'atomicOr(&d->refuse_mask' in l), None)
+    if prop is None:
+        continue
+    # A return that precedes the accumulator's birth has no refusal to lose.
+    born = next((ln for ln, l in body if 'kf_acc_init(' in l), 0)
+    late = [ln for ln, l in body if re.search(r'\breturn\s*;', l) and born < ln < prop]
+    if late:
+        fail.append(f"S39(e) FAIL: {fn} returns at line(s) {late} BEFORE it propagates "
+                    f"refusals at line {prop}. A warp that emits no runs then reports no "
+                    f"refusal either, and an address space where EVERY mapping was rejected "
+                    f"is indistinguishable from an empty one.")
+
 for f in fail:
     print(f)
 if fail:
     sys.exit(1)
 print(f"S39(a) ok: {sites} live-GPGA load sites, all distinct offsets -- no double fetch")
 print("S39(c) ok: both emit chokepoints bound the leaf BEFORE they coalesce")
+print("S39(e) ok: refusals are propagated before any early return")

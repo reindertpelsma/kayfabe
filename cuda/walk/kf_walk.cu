@@ -1780,6 +1780,9 @@ __device__ __forceinline__ void kf_par_leaf_one(const KfArgs &a, const KfEnt *ta
             kf_acc_init(c, &F, a.win.span, NULL, 0u, t.pdb);
             kf_acc_emit(c, t.va, t.addr, 1ull << t.len_log2, t.flags);
             kf_acc_flush(c);
+            /* §39(e): above the stagecap return below, which would otherwise drop
+             * this leaf's refusal on the floor while reporting only FRONTIER_CAP. */
+            if (c.refuse) { atomicOr(&d->refuse_mask, c.refuse); atomicAdd(&d->refusals, c.refusals); }
             if (c.n) {
                 const uint32_t st = atomicAdd(used, c.n);
                 if (st + c.n > stagecap) { kf_par_abort(d, KFWR_R_FRONTIER_CAP); sum[gw] = sm; return; }
@@ -1788,7 +1791,6 @@ __device__ __forceinline__ void kf_par_leaf_one(const KfArgs &a, const KfEnt *ta
                 sm.fva = c.last.va; sm.fgpga = c.last.gpga; sm.flen = c.last.len; sm.fflags = c.last.flags;
                 sm.lva = c.last.va; sm.lgpga = c.last.gpga; sm.llen = c.last.len; sm.lflags = c.last.flags;
             }
-            if (c.refuse) { atomicOr(&d->refuse_mask, c.refuse); atomicAdd(&d->refusals, c.refusals); }
             sum[gw] = sm;
         }
         return;
