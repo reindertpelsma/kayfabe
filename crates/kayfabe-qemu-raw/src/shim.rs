@@ -5854,6 +5854,7 @@ fn doorbell_publish_loop(
             // That intent is right; the arm chosen was too narrow. `Drain` both publishes AND
             // measures-and-pins, which is what the doorbell path used to reach.
             ctx.vas_publish = VasPublishArm::Drain;
+            let t_premap = std::time::Instant::now();
             let t_pub = std::time::Instant::now();
             let published = ctx.publish_vas_rows(token, None, off_vcpu);
             let publish_ms = t_pub.elapsed().as_secs_f64() * 1e3;
@@ -5903,6 +5904,24 @@ fn doorbell_publish_loop(
             #[cfg(feature = "host-isolates")]
             if let Some(m) = port.bar_mirror.get().and_then(std::sync::Weak::upgrade) {
                 m.premap_bars();
+            }
+            // ⊘ w763q — the FOURTH phase, and the first three all measured 0.00 ms.
+            let premap_ms = t_premap.elapsed().as_secs_f64() * 1e3;
+            // ★ The hold the guest actually sees, from ITS trigger to this instant — not the
+            // sum of our phases. `[measured w763]` the phases summed to ~0 while the census
+            // reported `worst_hold_us=135318`, so the time is spent SOMEWHERE THIS BLOCK DOES
+            // NOT RUN: queueing behind other jobs, or a trigger whose worker turn came late.
+            // ⇒ Print both, and their difference is the answer.
+            let since_trigger_ms = plane_ref
+                .as_ref()
+                .and_then(|pl| pl.mmu_inval().pending_age_us(pl.clock_now_us()))
+                .map_or(-1.0, |us| us as f64 / 1e3);
+            if since_trigger_ms > 1.0 || premap_ms > 1.0 {
+                eprintln!(
+                    "kayfabe: MMUINVAL-HOLD seq={seq} premap_ms={premap_ms:.2} \
+                     since_trigger_ms={since_trigger_ms:.2} ⇒ the phases are the WORK; the \
+                     difference is the WAIT"
+                );
             }
             // ★★★★★ w564 — PUBLISH THE TRIGGER'S VALUE AFTER THE COMPLETION ATTEMPT, on
             // BOTH outcomes.

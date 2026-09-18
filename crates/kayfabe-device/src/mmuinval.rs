@@ -604,6 +604,24 @@ impl MmuInvalidateLog {
         }
     }
 
+    /// ★★★★★ **How long the guest has been spinning on the CURRENT trigger, right now.**
+    ///
+    /// ⊘ w763q. The four phases of the worker's publication block summed to ~0.00 ms while
+    /// this log reported `worst_hold_us=135318` and `over_budget=426` of 426. Phase timers
+    /// answer *"how long did our work take"*; only this answers *"how long has the guest been
+    /// waiting"*, and their DIFFERENCE is the time spent somewhere no phase timer runs —
+    /// queued behind another job, or descheduled.
+    ///
+    /// `None` when nothing is pending: an age is a fact about a live trigger.
+    #[must_use]
+    pub fn pending_age_us(&self, now_us: u64) -> Option<u64> {
+        if !self.pending.load(Ordering::Acquire) {
+            return None;
+        }
+        let g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        g.pending_since_us.map(|s| now_us.saturating_sub(s))
+    }
+
     /// ★★★ **What the guest reads.** `TRIGGER` set iff a publication is outstanding.
     ///
     /// ⊘ Lock-free by construction — see [`Self::pending`]'s note. The guest polls this in
