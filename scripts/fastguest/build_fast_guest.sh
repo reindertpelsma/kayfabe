@@ -146,6 +146,32 @@ done
 echo "== modules taken (with closure): $found"
 sed 's/^/==   /' "$ROOT/ird/lib/modules/loadorder"
 
+# ⊘⊘⊘ **THE GSP FIRMWARE IS NOT A MODULE AND `modules.dep` DOES NOT MENTION IT.**
+# `[measured w763]` with all six modules loading clean, `RmInitAdapter` still failed:
+#   Direct firmware load for nvidia/580.159.04/gsp_ga10x.bin failed with error -2
+#   NVRM: RmFetchGspRmImages: No firmware image found
+#   NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x61:0x56:1927)
+# and the client saw it only as `openat(nvidia<gpu>) errno 5`. ★ The dependency closure is a
+# statement about SYMBOLS; a blob the driver opens by PATH at runtime is invisible to it.
+# ⇒ Take the whole `nvidia/` firmware tree from the image, by the same rule as the modules:
+# from where the working pairing already is, never rebuilt or guessed here.
+FW="$ROOT/mnt/lib/firmware/nvidia"
+if [ -d "$FW" ]; then
+    mkdir -p "$ROOT/ird/lib/firmware"
+    cp -a "$FW" "$ROOT/ird/lib/firmware/" 2>/dev/null
+    # ⊘ Decompress in place: the kernel's direct-load path opens the bare name, and a
+    # `.bin.zst` next to a missing `.bin` reads to the driver as "no firmware image found".
+    find "$ROOT/ird/lib/firmware/nvidia" -name '*.zst' 2>/dev/null | while read -r z; do
+        zstd -dq -o "${z%.zst}" "$z" && rm -f "$z"
+    done
+    find "$ROOT/ird/lib/firmware/nvidia" -name '*.xz' 2>/dev/null | while read -r x; do
+        xz -dc "$x" > "${x%.xz}" && rm -f "$x"
+    done
+    echo "== firmware taken: $(find "$ROOT/ird/lib/firmware/nvidia" -type f | wc -l) file(s), $(du -sh "$ROOT/ird/lib/firmware/nvidia" | cut -f1)"
+else
+    echo "== firmware: ⊘ NONE at /lib/firmware/nvidia in the image - RmInitAdapter will fail 0x61"
+fi
+
 umount "$ROOT/mnt"; qemu-nbd --disconnect /dev/nbd0 >/dev/null 2>&1
 
 # ── 2. the initrd ─────────────────────────────────────────────────────────────────────────
