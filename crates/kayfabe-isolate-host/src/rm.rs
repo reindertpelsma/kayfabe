@@ -12847,10 +12847,17 @@ impl HostRmBackend {
             // rung read its own memory as the isolate's.
             const A_AT: u64 = 0x3_0040_0000;
             const B_AT: u64 = 0x3_0140_0000;
+            // ★★★ w756h — V's VA is dictated too, and the reason is a MEASUREMENT.
+            // `[measured w756g]` with A and B dictated and V left to RM, leg 1 (A→V) retired
+            // and leg 2 (V→B) was refused `0x56`. In the same run the unmap probe's DMA arm
+            // copied **sysmem→sysmem** and retired — so writing INTO a descriptor is not the
+            // problem, and V is the only operand whose placement was not ours.
+            // ⊘ One variable changed, so the next result attributes cleanly either way.
+            const V_AT: u64 = 0x3_0240_0000;
             DMA_STEP.with(|c| c.set("map_dma_both(A sysmem @A_AT)"));
             let a_va = self.map_dma_both(range, a, BYTES, Some(A_AT))?;
-            DMA_STEP.with(|c| c.set("map_dma_both(V vidmem)"));
-            let v_va = self.map_dma_both(range, v, BYTES, None)?;
+            DMA_STEP.with(|c| c.set("map_dma_both(V vidmem @V_AT)"));
+            let v_va = self.map_dma_both(range, v, BYTES, Some(V_AT))?;
             DMA_STEP.with(|c| c.set("map_dma_both(B sysmem @B_AT)"));
             let b_va = self.map_dma_both(range, b, BYTES, Some(B_AT))?;
             DMA_STEP.with(|c| c.set("seed A"));
