@@ -2378,3 +2378,64 @@ a comment that the coincidence is a property of this deployment, not of the walk
 reasons, give it two names. The one place they diverge is the place that finds the bug — and
 here the divergence was a real hardware capture, which is why the suite caught it and no amount
 of local reasoning would have.
+
+### (e) REFUSAL PROPAGATION MUST DOMINATE EVERY RETURN — w760e
+
+`hostile/leaf_past_end` refused its one leaf correctly and reported `run=0 ref=0 mask=0x0`. The
+refusal happened and vanished: the propagation sat at the **bottom** of the parallel leaf
+function, below two early returns, and a warp that emits no runs has `total == 0` and takes
+`if (!total) { … return; }`. The report then says **this address space is empty** when what
+happened is **every mapping in it was rejected**. Opposite facts, identical bytes.
+
+⚠ Pre-existing and not specific to the new flag — `MISALIGNED_LEAF` was lost the same way, and a
+warp that is entirely misaligned is not exotic. Note which inputs it was invisible to: only a
+walk whose *every* leaf is refused takes the losing path, i.e. exactly the hostile case.
+
+⇒ Gated (`check_s39.py` §39(e)), and the gate immediately found a second site nobody had looked
+at. Returns that precede the accumulator's birth are exempt — a return before there is a refusal
+to lose is not a defect.
+
+### (f) THERE ARE THREE VALIDATORS, AND ONLY ONE IS ON THE PATH — w760l/w760m
+
+A containment check was added to `kayfabe_cuda::walk::Report::validate`, whose own doc comment
+calls it *"what production consults"*. It is not: `walkshadow.rs` parses into
+`kayfabe_mmu::walkreport::Report` and calls **that** type's `validate`. Three implementations
+exist — the `.cu`'s `kf_validate_report` (the CUDA suite's oracle), the `kayfabe-cuda` one
+(`selftest` only), and the `kayfabe-mmu` one (production) — and a doc comment asserting which is
+which was **wrong**.
+
+⇒ The check now lives in **`StoreMapPort::apply_ops`**, the sole mutator, which already holds the
+store's length. Two reasons, and the second is the general one:
+
+1. It bounds the **whole batch before anything moves**. `map()` refused out-of-range slices one
+   at a time, but that failure arrives mid-apply — some unmapped, some mapped, the caller left
+   holding a half-applied diff. A report naming memory outside the store is not one to partially
+   honour.
+2. **A check that must be handed its bound from elsewhere is a check someone can forget to hand.**
+   Put the check where the bound already lives.
+
+⊘ `walkreport::Report::validate_within` + `ParseError::RunOutsideGpga` are kept and are
+**BUILT AND NOT YET WIRED** — named as such here rather than left looking wired, which is this
+tree's own most-repeated failure shape.
+
+### (g) EVERY RPC IS ANSWERED — EVENTUALLY, AND NEVER ON THE vCPU
+
+**Owner, 2026-09-18:** *"how can we leave an RPC unanswered? all RPCs must be answered, even if
+unknown with an error."* … *"I mean eventually answered, not on vcpu thread"*.
+
+★ Already the implemented invariant, and worth recording as one. `boot.rs` — *"THE DEFAULT IS A
+NAMED REFUSAL"* (task #127): a policy with no answer gets one posted for it, carrying a non-zero
+envelope `rpc_result` with a **zeroed body** — never the request reflected, never a fabricated
+`NV_OK`. Unknown functions fall through `other => RpcFunction::Other(other)` to
+`Disposition::Reply` and get that same named refusal.
+
+⊘ **Three measured exceptions, where answering is itself the bug:** `GSP_SET_SYSTEM_INFO` (72),
+`SET_REGISTRY` (73), `ECC_NOTIFIER_WRITE_ACK` (202) are all `_issueRpcAsync` and echoing one
+surfaces in the driver as an unexpected event and **desyncs the seqNum**. That set is *derived
+from `rpc.c`* by `rpc_async_set_oracle.rs`, never hand-listed — a hand-list cannot detect a
+shared misreading, and deriving it is how the third member was found.
+
+★ And the owner's *"eventually"* is a first-class split, not an implementation detail:
+`CommandPolicy::respond` says **what** the answer is; `CommandPolicy::may_deliver_yet` says
+**when** it may be delivered — the latter existing so a reply can be held until the page-table
+refresh reaches the host without blocking a vCPU (§ the three blocking invariants).
