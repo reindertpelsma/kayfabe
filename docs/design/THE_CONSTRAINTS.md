@@ -2494,3 +2494,56 @@ restart — but nothing drives it back.
 also holds nothing, the host GPU driver can unload"* is only true if tier A is released at **VM
 shutdown** — so the rule is: tier B resets on driver unload, tier A releases on VM exit, and
 neither event may trigger the other's teardown.
+
+---
+
+## §41 — WHAT A vCPU MMIO WRITE MAY DO, STATED AS AN ALLOWLIST
+
+**STATUS: LIVE, 2026-09-18 (w760). Owner ruling.**
+
+> *"adopt_pending_channel_rings is not something to run on the vcpu thread either, it directly
+> violates a constraint that keeps vcpu simple: mmio write is only updating queue and wake,
+> nothing else. for doorbell it uses doorbell table, passthrough is one dword write, the other
+> is putting the token in a queue. Same is for remaining registers, a synchronous write to a
+> read register is fine to prevent a race."*
+
+★ This **supersedes nothing and sharpens everything**. `no_blocking_work_in_any_mmio_trap` and
+the three blocking invariants are PROHIBITIONS, and a prohibition needs a judgement call at
+every new site: *"is this blocking?"* is answerable only after you know what the callee does,
+which is exactly how `adopt_pending_channel_rings` — three page-table settlement passes —
+lived on a vCPU for four rungs behind an innocent-looking register write.
+
+### The allowlist. A vCPU MMIO write may do these and nothing else:
+
+1. **Update a queue** — append a token/descriptor to a lock-free or briefly-locked structure.
+2. **Wake** — signal the worker that owns the work.
+3. **Doorbell specifically**: consult the doorbell table; a **passthrough** doorbell is ONE
+   DWORD WRITE to the real register; an **emulated** doorbell puts the token in a queue.
+4. **A synchronous write to a read register** — permitted, and permitted *because* it prevents
+   a race: the value must be visible to the next read of that register.
+
+⊘ **Everything else is a defect, including work that is fast today.** The rule is not "keep it
+under N microseconds": a cheap callee acquires expensive callees over time, and the cost is
+discovered as a latency spike attributed to whichever register happened to notice a latch.
+
+### Why the positive form is enforceable and the negative one is not
+
+`[measured w752→w754]` `worst_trap=24999us at=bar0+0x110c00` named `NV_PGSP_QUEUE_HEAD` for
+four rungs. The register was a **bystander** — simply the one the guest writes most during
+driver init, so it noticed the latch first. Under a prohibition, every brief written from that
+number looked compliant because the *register's own* servicing had been deferred since w432.
+Under this allowlist the question is not *"is this slow?"* but *"is this one of the four?"*,
+and `adopt_pending_channel_rings` fails it on sight, at review time, with no boot.
+
+⇒ **A new call reachable from `Regs::write` must be justified against the four items above by
+name.** `worst_trap` NAMES THE SITE, NEVER THE CAUSE — so a profile that attributes cost to the
+trapping register will reproduce the same four-rung error; attribution must be to the callee.
+
+### Status
+
+✔ `adopt_pending_channel_rings` moved off the vCPU at w754; the doorbell worker calls
+`adopt_pending_channel_rings(false)` and `tests/ring_adopt_is_off_the_vcpu.rs` pins it.
+⚠ The `Regs::write` entry point survives behind `inline_because_no_worker`, for a build with no
+worker at all — that arm still violates §41 and is a degraded configuration, not a shipping
+one. ⊘ `ring_adopt_census()`'s `on=` is the number that says which arm actually ran; it prints
+at teardown, so read it there rather than inferring it from the gate.
