@@ -76,8 +76,15 @@ RAMARGS=(-object "memory-backend-memfd,id=ram0,size=${NVKVM_RAM_MB}M,share=on"
 
 # ⚠ One variable, both halves: the device registers this BAR1 and the chip row tells the guest
 # the same number. `nvkvm_apply_identity` refuses at realize if they differ.
-BAR1_BYTES=$(( ${KAYFABE_GUEST_BAR1_MB:-256} * 1024 * 1024 ))
-export KAYFABE_GUEST_BAR1_MB=${KAYFABE_GUEST_BAR1_MB:-256}
+# ★ **128, not 256** -- and the device told us so itself, in one line, in 4 seconds:
+#   "a guest BAR1 of 256 MiB does not fit: 256 MiB + 16 MiB headroom > 256 MiB host aperture.
+#    The largest that fits here is 128 MiB, and a 128-MiB-BAR1 GA106 is a real hardware
+#    configuration -- a different truthful board, not a lie."
+# ⊘ `boot_nvkvm.sh` defaults to 256 because the fat lane passes this variable explicitly on
+# every invocation; a lane that passes NOTHING must default to something that boots. 128 is also
+# the plan-of-record value for the single store, so the two agree.
+BAR1_BYTES=$(( ${KAYFABE_GUEST_BAR1_MB:-128} * 1024 * 1024 ))
+export KAYFABE_GUEST_BAR1_MB=${KAYFABE_GUEST_BAR1_MB:-128}
 
 start=$(date +%s)
 timeout --kill-after=3 "$BUDGET" "$Q" \
