@@ -7934,8 +7934,11 @@ impl SharedDoorbell {
     fn refresh_page_tables(&self, _off_vcpu: OffVcpu) -> PtRefresh {
         let t0 = Instant::now();
         let w = self.witness_executor_fb_pages();
+        let t_witness = t0.elapsed();
         let d = self.decode_cpu_pt_writes();
+        let t_decode = t0.elapsed() - t_witness;
         let sw = self.sweep_cpu_pt_tables();
+        let t_sweep = t0.elapsed() - t_witness - t_decode;
         // ★★★★★ **CONSTRAINT 27 — GET THE STAGED UNMAPS OUT, WITH A FIXED TRIP COUNT.**
         //
         // The three passes above each end in a synchronous `drain_pending_releases`, which
@@ -7954,8 +7957,17 @@ impl SharedDoorbell {
             drain_trips += 1;
             outstanding = self.device.staged_release_len();
         }
+        // ⊘ w763y — the three passes, split. `refresh_page_tables` is 9.96 ms of a 23 ms
+        // hold and `took` covers all of it; which of the three owns it was never measured.
+        let t_drain = t0.elapsed() - t_witness - t_decode - t_sweep;
         PtRefresh {
-            line: format!("{w}{d}{sw}"),
+            line: format!(
+                "{w}{d}{sw} PASSES[witness={:.2} decode={:.2} sweep={:.2} drain={:.2}]",
+                t_witness.as_secs_f64() * 1e3,
+                t_decode.as_secs_f64() * 1e3,
+                t_sweep.as_secs_f64() * 1e3,
+                t_drain.as_secs_f64() * 1e3
+            ),
             took: t0.elapsed(),
             unmaps_outstanding: outstanding,
             drain_trips,
