@@ -2628,6 +2628,18 @@ the default. ★ The precondition now lives in the test, which is where a precon
     Passthrough { host_token }  one dword store to the host, then return
     Emulated { chan }           ours to run: queue and wake
 
+### ★★★★★ A DOORBELL SAYS "CHECK MY USERD". IT IS CHANNEL-AGNOSTIC BY DEFINITION.
+
+> **Owner, 2026-09-19:** *"Channel type decision is not even part of doorbell at all, doorbell
+> is asking to check userd which is channel agnostic. For emulated its just put the token on
+> queue and resume. For passthrough only dword write. The new doorbell table should be the
+> only way."*
+
+That is the whole semantics. A doorbell is the guest saying *"my `GP_PUT` moved, go look"* —
+the cursors live in USERD and mean the same thing for every engine that exists. ⇒ **There is no
+engine question at a doorbell**, and any code that asks one has imported a model in which WE
+execute the work. Under passthrough we execute nothing.
+
 ⇒ **The table cannot see an engine, and must not learn to.** A passthrough channel's engine is
 not our business — we store a dword. An emulated channel is one **we** created, so we can run
 it *by construction*, not by inspection. Those two facts exhaust the question a doorbell asks.
@@ -2656,3 +2668,16 @@ be byte-identical to every boot before this one … every committed `ctl` boot s
 comparable"*. That is true and is exactly how the wrong default survived: a control arm must be
 selected **by name**, and then committed control boots stay comparable to each other whatever
 absence comes to mean. §42(a) again, from the other direction.
+
+### ⊘ (d) THE OLD ENGINE-TYPE LIST IS SCHEDULED FOR DELETION, NOT JUST FOR BEING OFF
+
+`kayfabe_rt::device::DoorbellRoute` (`CpuCe` / `HostGr` / `Unserved`) and
+`shell_disposition`'s `gr_passthrough` parameter are **superseded**, not configurable: they are
+a type list from a design in which the shell served every channel itself.
+
+⚠ **Not deleted yet, and the reason is the sequencing rule, not doubt about the ruling.**
+§7's *"deletions come last, licensed by the guest suite"* holds: the fast suite is at 12/30
+PASS, so the tree cannot yet tell a deletion that is inert from one that removed a path
+something still needed. ⇒ **Obligation:** when the suite is green, delete the enum, delete the
+`gr_passthrough` parameter, and leave `dbtable::Route` as the only doorbell vocabulary. A
+`KAYFABE_GR_ROUTE` that still parses after that is an arm selecting between a path and nothing.
