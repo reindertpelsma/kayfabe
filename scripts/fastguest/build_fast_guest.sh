@@ -1,0 +1,154 @@
+#!/usr/bin/env bash
+# ★★★★★ THE FAST GUEST — an initrd that boots, insmods ogkm, runs the raw client, and dies.
+#
+# > Owner, 2026-09-18: *"a small os thats just initrd containing the ogkm kernel module insmod
+# > and executes raw client. Whole thing is seconds if kayfabe is mature. Now we wait half an
+# > hour per test and is bash time much higher than claude time."*
+#
+# ## Why this exists — measured, not asserted
+#
+# `[measured w760, 2026-09-18]` one iteration of the full guest costs **~28 s to `guest is up`**
+# plus module load plus an ssh wait, before a single arm runs. A dozen boots were spent that
+# day; several produced NO information at all — two died on `kex_exchange_identification` races
+# while the guest was already up, four measured a plane that was compiled but not armed, one
+# burned an hour to `EXIT=124`. Wall-clock was hours; the information was minutes.
+#
+# ⊘ And the second-order cost is worse than the first: a 30-minute cycle makes an agent GUESS.
+# Five hypotheses were refuted that day, nearly all of the form *"I will reason from these log
+# lines rather than spend another half hour"*.
+#
+# ## The three properties that make it fast, in order of what they buy
+#
+# 1. **No disk and no services.** `-kernel` + `-initrd`, `console=ttyS0`, no systemd, no
+#    cloud-init, no sshd. The kernel reaches `/init` in about a second.
+# 2. **Results over the SERIAL CONSOLE, never ssh.** ⊘ This is not a simplification, it is a
+#    correctness fix: `[measured w760]` two boots were scored as failures because the harness
+#    probed before sshd accepted, while the guest sat at a login prompt. There is no sshd here
+#    to race.
+# 3. **A TIMEOUT IS A CRASH.** The whole run gets one budget. ⊘ That single rule dissolves the
+#    category that cost the most on 2026-09-18: an arm that timed out was SIGKILLed mid-operation
+#    and left the device unusable, so the NEXT arm failed — and hours went into telling "this arm
+#    is broken" apart from "the arm before it poisoned this one". Nothing here runs long enough
+#    to poison anything.
+#
+# ⇒ Perf and correctness stop being separate lanes. `[measured w760]` a 120x-slow sweep was what
+# blacked out 18 correctness verdicts; under a budget that is simply a red test.
+#
+# ## ⚠ What it is NOT
+#
+# ⊘ It does not replace the full guest. Some arms want a real environment (multiple processes,
+# `nvidia_uvm`, a package manager's driver install) and those keep the fat guest as a slower
+# CONFIRMATION lane. The fast guest is the ITERATION lane. A green fast run is not a release
+# claim; a red one is always real.
+#
+# usage: build_fast_guest.sh [guest.qcow2] [outdir]
+set -uo pipefail
+
+IMG=${1:-/workspace/bench/guest.qcow2}
+OUT=${2:-/workspace/bench/fastguest}
+CLIENT=${CLIENT:-/root/kayfabe/target/release/kayfabe-rm-ladder}
+
+die() { echo "build_fast_guest: $*" >&2; exit 1; }
+
+[ -f "$IMG" ]    || die "no guest image at $IMG"
+[ -x "$CLIENT" ] || die "no raw client at $CLIENT (cargo build --release -p kayfabe-isolate-host --bin kayfabe-rm-ladder)"
+command -v busybox >/dev/null || die "busybox is not installed"
+command -v cpio    >/dev/null || die "cpio is not installed"
+
+# ⚠ The image must not be in use. A qcow2 read while QEMU writes it yields a torn read, and the
+# failure lands later as a module that will not load — attributed to the module.
+if pgrep -x qemu-system-x86 >/dev/null 2>&1; then
+    die "a QEMU is running and may be writing $IMG. GPU/bench runs are STRICTLY SERIAL."
+fi
+
+mkdir -p "$OUT" || die "cannot create $OUT"
+ROOT=$(mktemp -d) || die "mktemp"
+trap 'qemu-nbd --disconnect /dev/nbd0 >/dev/null 2>&1; umount "$ROOT/mnt" 2>/dev/null; rm -rf "$ROOT"' EXIT
+
+# ── 1. borrow the kernel and the modules from the fat guest ───────────────────────────────
+# ⊘ Taken FROM THE IMAGE rather than built here: the modules must match the kernel they will be
+# insmod'ed into, and the fat guest is where that pairing is already known-good. Building ogkm
+# against a different kernel is how a vermagic mismatch becomes a mystery at boot.
+modprobe nbd max_part=8 2>/dev/null
+mkdir -p "$ROOT/mnt"
+qemu-nbd --read-only --connect=/dev/nbd0 -f qcow2 "$IMG" || die "qemu-nbd could not attach $IMG"
+sleep 1
+partprobe /dev/nbd0 2>/dev/null
+mount -o ro /dev/nbd0p1 "$ROOT/mnt" 2>/dev/null || mount -o ro /dev/nbd0 "$ROOT/mnt" || die "cannot mount the guest root"
+
+KREL=$(ls "$ROOT/mnt/lib/modules" | head -1)
+[ -n "$KREL" ] || die "no /lib/modules in the guest image"
+echo "== guest kernel: $KREL"
+
+mkdir -p "$ROOT/ird/lib/modules"
+cp "$ROOT/mnt/boot/vmlinuz-$KREL" "$OUT/vmlinuz" 2>/dev/null \
+  || cp "$ROOT/mnt/boot/vmlinuz" "$OUT/vmlinuz" 2>/dev/null \
+  || die "no vmlinuz for $KREL in the image"
+
+found=0
+for ko in nvidia nvidia-uvm nvidia-modeset nvidia-drm; do
+    p=$(find "$ROOT/mnt/lib/modules/$KREL" -name "$ko.ko*" | head -1)
+    [ -n "$p" ] || continue
+    case "$p" in *.zst) zstd -dq -o "$ROOT/ird/lib/modules/$ko.ko" "$p" ;;
+                 *.xz)  xz -dc "$p" > "$ROOT/ird/lib/modules/$ko.ko" ;;
+                 *)     cp "$p" "$ROOT/ird/lib/modules/$ko.ko" ;; esac
+    found=$((found+1))
+done
+[ "$found" -gt 0 ] || die "no nvidia modules found under $KREL — is the driver installed in the image?"
+echo "== modules taken: $found"
+
+umount "$ROOT/mnt"; qemu-nbd --disconnect /dev/nbd0 >/dev/null 2>&1
+
+# ── 2. the initrd ─────────────────────────────────────────────────────────────────────────
+mkdir -p "$ROOT/ird"/{bin,dev,proc,sys,tmp}
+cp "$(command -v busybox)" "$ROOT/ird/bin/busybox"
+cp "$CLIENT" "$ROOT/ird/bin/rmladder"
+chmod +x "$ROOT/ird/bin/rmladder"
+
+# ⊘ The client is dynamically linked against glibc unless built for musl; carry what it needs.
+if ldd "$CLIENT" >/dev/null 2>&1 && ! ldd "$CLIENT" | grep -q 'not a dynamic'; then
+    mkdir -p "$ROOT/ird/lib" "$ROOT/ird/lib64"
+    ldd "$CLIENT" | awk '/=>/ {print $3} /ld-linux/ {print $1}' | grep '^/' | sort -u | while read -r so; do
+        d="$ROOT/ird$(dirname "$so")"; mkdir -p "$d"; cp -L "$so" "$d/" 2>/dev/null
+    done
+fi
+
+cat > "$ROOT/ird/init" <<'INIT'
+#!/bin/busybox sh
+# ★ /init — the whole guest. Mount, load, run, report, die.
+/bin/busybox --install -s /bin
+mount -t proc  none /proc
+mount -t sysfs none /sys
+mount -t devtmpfs none /dev 2>/dev/null
+
+echo "FASTGUEST: up $(cut -d' ' -f1 /proc/uptime)s"
+
+for ko in nvidia nvidia-uvm; do
+    if [ -f "/lib/modules/$ko.ko" ]; then
+        insmod "/lib/modules/$ko.ko" 2>&1 && echo "FASTGUEST: insmod $ko ok" \
+                                          || echo "FASTGUEST: insmod $ko FAILED"
+    fi
+done
+# ⊘ The device nodes are created by the driver's own open path on a real system; without
+# nvidia-modprobe we make them ourselves from /proc/devices.
+maj=$(awk '/nvidia-frontend|nvidiactl|^ *[0-9]+ nvidia/ {print $1; exit}' /proc/devices)
+if [ -n "$maj" ]; then
+    mknod /dev/nvidiactl c "$maj" 255 2>/dev/null
+    mknod /dev/nvidia0   c "$maj" 0   2>/dev/null
+fi
+
+echo "FASTGUEST: ready $(cut -d' ' -f1 /proc/uptime)s"
+ARMS=${KF_ARMS:-"--timer --engines --doorbell-census"}
+/bin/rmladder --gpu 0 $ARMS 2>&1
+echo "FASTGUEST: client rc=$? at $(cut -d' ' -f1 /proc/uptime)s"
+echo "FASTGUEST: DONE"
+poweroff -f
+INIT
+chmod +x "$ROOT/ird/init"
+
+( cd "$ROOT/ird" && find . | cpio -o -H newc --quiet | gzip -9 ) > "$OUT/initrd.cpio.gz" \
+    || die "cpio failed"
+
+echo "== built: $OUT/vmlinuz  $(du -h "$OUT/vmlinuz" | cut -f1)"
+echo "== built: $OUT/initrd.cpio.gz  $(du -h "$OUT/initrd.cpio.gz" | cut -f1)"
+echo "== kernel release: $KREL"
