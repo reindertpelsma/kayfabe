@@ -2570,7 +2570,7 @@ fn every_gr_route_arm_round_trips_through_its_own_spelling() {
 /// ★ The stakes here are higher than for the executor selector, and that is why `on` and
 /// `1` are in the list: the two arms of this experiment differ in **one routing decision**,
 /// so a disarmed evidence run and its control produce identical logs — no new lines, and a
-/// full census of `Route::NotACopyEngineChannel` — which is also exactly what a *correct*
+/// full census of `ShellExecutor::NoneInThisProcessForEngine` — which is also exactly what a *correct*
 /// control produces.
 #[test]
 fn a_value_that_is_not_a_gr_route_arm_refuses_rather_than_defaulting() {

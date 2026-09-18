@@ -9022,7 +9022,18 @@ impl SharedDoorbell {
             self.declare_gr_completion(token, &facts);
             return Some(refused(
                 token,
-                kayfabe_device::FaultTag("Route::NotACopyEngineChannel"),
+                // ⊘⊘⊘ **w765 — THIS TAG NAMED A VARIANT THAT DOES NOT EXIST, IN AN ENUM THAT
+                // CANNOT HOLD IT.** It read `Route::NotACopyEngineChannel`, which impersonates
+                // `kayfabe_device::dbtable::Route` — whose ONLY variants are `Unallocated`,
+                // `Passthrough { host_token }` and `Emulated { chan }`, one atomic `u64` with
+                // two tag bits and a 62-bit target. **That table cannot see an engine at all.**
+                //
+                // ⇒ A true statement about OUR executors ("nothing in this process runs GR
+                // work") was published under a fake variant of the doorbell table, so a reader
+                // sees a routing decision where the fact is an unimplemented path.
+                // `[cost, w765]` I read it exactly that way and flipped a route on it.
+                // ⚠ `refuse_by_name` means THE NAME IS TRUE — of the subject it names.
+                kayfabe_device::FaultTag("ShellExecutor::NoneInThisProcessForEngine"),
                 format!(
                     "this channel's engine is {} (route {route:?}), so its pushbuffer is \
                      not copy-engine work and the shell's CPU copy-engine executor is the \

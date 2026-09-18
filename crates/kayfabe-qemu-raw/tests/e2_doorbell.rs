@@ -473,7 +473,7 @@ fn the_doorbell_reaches_the_same_object_model_the_bridge_declares_into() {
         // (`kayfabe-chips/src/ga10x.rs:161`: *"a CE channel becomes one only when its
         // `AMPERE_DMA_COPY_B` engine object arrives and the core's refinement pass rewrites
         // it"*). `SharedDoorbell::try_ce_submission` now routes on that field, so a
-        // GR-labelled channel is refused `Route::NotACopyEngineChannel` **before** it can
+        // GR-labelled channel is refused `ShellExecutor::NoneInThisProcessForEngine` **before** it can
         // reach the isolate plane — and this test's whole subject is the refusal that is
         // *downstream of routing*.
         //
@@ -781,7 +781,7 @@ fn a_gr_channel_is_refused_by_route_and_the_engine_object_is_what_moves_it() {
 
     assert_eq!(
         ring(false).0,
-        "Route::NotACopyEngineChannel",
+        "ShellExecutor::NoneInThisProcessForEngine",
         "★ a GR-labelled channel's doorbell must be refused by the ROUTING fact — not \
          handed to the copy-engine codec to decline by the shape of bytes it was never \
          meant to read",

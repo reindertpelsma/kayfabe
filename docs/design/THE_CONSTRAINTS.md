@@ -2615,3 +2615,44 @@ in a multi-threaded test binary — the shape that already cost this campaign a 
 `Regs::create_probed_on(id, probe, Some(FbStoreArm::Arena))`. Production still calls
 `Regs::create`, which still reads the environment, and there is still exactly one statement of
 the default. ★ The precondition now lives in the test, which is where a precondition belongs.
+
+## §43 — WE SERVE ONLY THE CHANNELS WE EMULATE, AND A DOORBELL NEVER ASKS ABOUT AN ENGINE
+
+> **Owner, 2026-09-19:** *"You only serve channels for the ones you emulate, thats the
+> constraint that should had held up."*
+
+`kayfabe_device::dbtable::Route` is the whole doorbell vocabulary — one naturally-aligned
+`AtomicU64` per token, two tag bits and a 62-bit target:
+
+    Unallocated                 the guest may ring anything; a non-event, no lock, no log
+    Passthrough { host_token }  one dword store to the host, then return
+    Emulated { chan }           ours to run: queue and wake
+
+⇒ **The table cannot see an engine, and must not learn to.** A passthrough channel's engine is
+not our business — we store a dword. An emulated channel is one **we** created, so we can run
+it *by construction*, not by inspection. Those two facts exhaust the question a doorbell asks.
+
+### ⊘⊘⊘ What this constraint was protecting against, measured
+
+`[measured w765]` `kayfabe_rt::device::DoorbellRoute` asks a **third** question —
+*"what engine is this?"* — and answers `CpuCe` / `HostGr` / `Unserved`. Because that question
+has no good answer at a doorbell, its refusal had no honest name to give, and emitted:
+
+    FaultTag("Route::NotACopyEngineChannel")
+
+★★★ **which names a variant that does not exist, in an enum that cannot hold it.** A true
+statement about our executors (*"nothing in this process runs GR work"*) was published under a
+fake variant of the doorbell table. ⚠ The cost is measured: a reader takes it for a routing
+decision and flips a route, because the tag says `Route::`. That reader was me, for hours.
+
+⇒ **§43(a)** — A refusal names a fact about the SUBJECT it names. `refuse_by_name` is not
+satisfied by a name that is merely descriptive of something true nearby.
+⇒ **§43(b)** — A tag must not borrow another type's namespace. `Route::` belongs to the table.
+
+### ⚠ (c) Comparability with yesterday is not a reason to keep yesterday's default
+
+`gr_route_passthrough.rs` pinned absence to the refusal with the reason *"the DEFAULT arm must
+be byte-identical to every boot before this one … every committed `ctl` boot stops being
+comparable"*. That is true and is exactly how the wrong default survived: a control arm must be
+selected **by name**, and then committed control boots stay comparable to each other whatever
+absence comes to mean. §42(a) again, from the other direction.

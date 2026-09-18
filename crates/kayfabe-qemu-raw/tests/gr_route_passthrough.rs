@@ -36,7 +36,7 @@
 //! `KAYFABE_ISOLATES` is unset, so the isolate plane is `Stillborn` — no host verb can be
 //! issued. That is not a limitation here, it is the **discriminator**: a doorbell that
 //! reaches the core on a stillborn plane comes back refused by a **core** fault
-//! (`FwdFault::IsolateRetired`), with a name that is not `Route::NotACopyEngineChannel`. So
+//! (`FwdFault::IsolateRetired`), with a name that is not `ShellExecutor::NoneInThisProcessForEngine`. So
 //! the two arms are distinguished by *which vocabulary refused them*, which is exactly the
 //! fact under test — **where the doorbell went** — and not by whether a GPU did anything.
 //!
@@ -49,7 +49,7 @@
 //! | break, applied temporarily | control assertion | armed assertion |
 //! |---|---|---|
 //! | **A — the route never opens**: `shell_disposition`'s `DoorbellRoute::HostGr if gr_passthrough` arm deleted, so `HostGr` always falls to `RefuseByRoute` | green | ⊘ **RED** — `THE RUNG: on the armed arm a GrCompute doorbell must be HANDED TO THE CORE` |
-//! | **B — the flag is ignored and the route is always open**: `GrRouteArm::gr_passthrough` returns `true` unconditionally | ⊘ **RED** — `left: "FwdFault::IsolateRetired"`, `right: "Route::NotACopyEngineChannel"` | green |
+//! | **B — the flag is ignored and the route is always open**: `GrRouteArm::gr_passthrough` returns `true` unconditionally | ⊘ **RED** — `left: "FwdFault::IsolateRetired"`, `right: "ShellExecutor::NoneInThisProcessForEngine"` | green |
 //!
 //! ★ The two breaks are caught by different assertions, and neither by both: one says the
 //! route cannot open, the other says it cannot stay shut.
@@ -248,15 +248,35 @@ fn the_gr_route_is_handed_to_the_core_only_on_the_armed_arm() {
         return;
     }
 
-    // ---- THE CONTROL.
-    let control = arm(None);
+    // ---- THE CONTROL, NOW SELECTED BY NAME.
+    //
+    // ⊘⊘⊘ **w765 — THIS ASSERTION PINNED `None` TO THE REFUSAL, AND THAT DEFAULT WAS THE BUG.**
+    // It read *"the DEFAULT arm must be byte-identical to every boot before this one"*, which
+    // was true and is exactly how the wrong default survived: comparability with yesterday is
+    // not a reason to keep yesterday's behaviour. `[measured w765]` with `None` refusing, a
+    // GrCompute channel is born, adopted (`✔ ADOPTABLE — RealGpuMemory`) and scheduled, and
+    // then its doorbell is declined — which the raw client reports as *"the GR channel was
+    // scheduled but NEVER WROTE"*.
+    //
+    // ★ The control is unchanged and still checked; it is now spelled `refuse` instead of
+    // being whatever absence happens to mean. Committed `ctl` boots stay comparable to each
+    // other — they were run with an explicit arm, which is what a control is.
+    //
+    // ⚠ **And the deeper error this test was protecting is NOT fixed by the flip.** Owner,
+    // 2026-09-19: *"You only serve channels for the ones you emulate, thats the constraint
+    // that should had held up."* `shell_disposition` asks *"what ENGINE is this?"* when the
+    // only question at a doorbell is *"did WE emulate this channel?"* — which
+    // `kayfabe_device::dbtable::Route` already answers in two tag bits. A passthrough
+    // channel's engine is not our business; an emulated channel is ours by construction.
+    // ⇒ `CpuCe`/`HostGr`/`Unserved` are three answers to a question that should not be asked
+    // here, which is why the refusal had no honest name to give.
     assert_eq!(
-        control, "Route::NotACopyEngineChannel",
-        "★★★ the DEFAULT arm must be byte-identical to every boot before this one: a \
-         GrCompute doorbell is refused by the ROUTING fact, before the core is reached. \
-         Anything else means the route opened without being asked, and every committed \
-         `ctl` boot in `traces/guest_boots/` stops being comparable to the next one."
+        arm(Some("refuse")),
+        "ShellExecutor::NoneInThisProcessForEngine",
+        "★★★ the CONTROL arm, by name: a GrCompute doorbell is refused before the core is \
+         reached. ⊘ This is what every committed `ctl` boot ran with."
     );
+    let control = arm(Some("refuse"));
 
     // ---- ⊘ A value that names no arm REFUSES TO REALIZE. Not decoration: a typo that
     //      quietly defaulted would make an armed evidence run indistinguishable from the
@@ -272,7 +292,7 @@ fn the_gr_route_is_handed_to_the_core_only_on_the_armed_arm() {
     // ---- ★ THE ARMED ARM.
     let armed = arm(Some("passthrough"));
     assert_ne!(
-        armed, "Route::NotACopyEngineChannel",
+        armed, "ShellExecutor::NoneInThisProcessForEngine",
         "★★★★★ THE RUNG: on the armed arm a GrCompute doorbell must be HANDED TO THE CORE, \
          not refused by route. It was still refused by the shell's routing fact, so \
          `SharedDevice::doorbell` was never reached and `DoorbellRoute::HostGr` still has \

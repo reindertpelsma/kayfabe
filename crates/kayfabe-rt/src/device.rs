@@ -8536,8 +8536,18 @@ pub enum DoorbellRoute {
     /// The shell's own CPU copy-engine executor (`kayfabe_rt::ceutils`). The copy IS the
     /// workload and its operands are in memory this process holds, so it can run here.
     CpuCe,
-    /// ★ A GR context — compute or graphics. **Nothing serves this yet**, and it is a
-    /// distinct variant rather than folded into [`DoorbellRoute::Unserved`] because the two
+    /// ★ A GR context — compute or graphics.
+    ///
+    /// ⊘⊘⊘ **STALE UNTIL w765: "Nothing serves this yet" HAS BEEN FALSE SINCE GR PASSTHROUGH
+    /// LANDED.** `shell_disposition` has answered `HandToCore` for this variant whenever
+    /// `gr_passthrough` is set, and `[measured w765]` that path forwards a real doorbell —
+    /// `DOORBELL-XLATE engine=GrCompute host_token=0x1a` then `DOORBELL-STORE ★★★ WROTE`,
+    /// with hardware advancing the ring to `GET=1 PUT=1`. What is still true is the narrower
+    /// claim: **no executor IN THIS PROCESS** runs GR work, and none is planned — the host
+    /// GPU runs it.
+    ///
+    /// ⚠ This variant is a distinct one rather than folded into
+    /// [`DoorbellRoute::Unserved`] because the two
     /// are different states of knowledge: GR is the *destination the ladder is walking
     /// toward* (`ce_executor_tree.md`; it still needs a host channel that SHADOWS the
     /// guest's and the `OS_DESCRIPTOR` primitive), while `Unserved` is an engine nobody has
