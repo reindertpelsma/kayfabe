@@ -229,6 +229,12 @@ pub struct Invalidate {
     pub pdb_aperture: u32,
 }
 
+/// `inval_scope` when the word's `REPLAY` field makes bits 16:15 a `CANCEL_GPC_ID` instead.
+///
+/// ⊘ A sentinel and not `0`: `0` is `ALL_TLBS`, a real scope, and reporting the widest scope
+/// for a word that never named one would be a lie that reads as conservative.
+pub const INVAL_SCOPE_IS_A_CANCEL_GPC_ID: u32 = u32::MAX;
+
 impl Invalidate {
     /// Decode a word, given the PDB halves latched before it.
     #[must_use]
@@ -244,7 +250,23 @@ impl Invalidate {
             all_va: raw & 0b1 != 0,
             all_pdb: raw & 0b10 != 0,
             hubtlb_only: raw & 0b100 != 0,
-            inval_scope: (raw >> 15) & 0b11,
+            // ⊘⊘⊘ **BITS 16:15 ARE TWO FIELDS, AND WHICH ONE DEPENDS ON `REPLAY`.**
+            // `[ogkm-580.159.04, ampere/ga100/dev_vm.h:87-89]` `CANCEL_GPC_ID` is **19:15**
+            // and `INVAL_SCOPE` is **16:15** — they OVERLAP, and the register defines both.
+            // The discriminator is `REPLAY` (5:3): under `CANCEL_TARGETED`/`CANCEL_GLOBAL`
+            // those bits are a GPC id, and reading them as a scope reports a scope the guest
+            // never asked for. ⚠ Decoding both unconditionally is how one register word comes
+            // to carry two contradictory answers.
+            //
+            // ⊘ `kgmmuInvalidateTlb_GM107` (the ordinary map/unmap path) never writes
+            // `REPLAY`, so this is `Some` on every invalidate we have ever measured; the
+            // `None` arm is reachable only from `kgmmuFaultCancelIssueInvalidate_GP100`.
+            // That path exists, so the field is refused rather than mis-decoded.
+            inval_scope: if (raw >> 3) & 0b111 == 0 {
+                (raw >> 15) & 0b11
+            } else {
+                INVAL_SCOPE_IS_A_CANCEL_GPC_ID
+            },
             replay: (raw >> 3) & 0b111,
             pdb: ((hi20 << 28) | lo28) << PDB_ADDR_ALIGNMENT,
             pdb_aperture: (pdb_lo >> 1) & 0b1,
@@ -940,5 +962,37 @@ mod tests {
             0,
             "⊘ a stale latch is not a target"
         );
+    }
+}
+
+#[cfg(test)]
+mod w764_overlapping_fields {
+    use super::*;
+
+    /// ★★★★★ **ONE REGISTER WORD, TWO FIELDS ON THE SAME BITS.**
+    ///
+    /// `[ogkm-580.159.04, ampere/ga100/dev_vm.h:87-89]` `INVAL_SCOPE` is 16:15 and
+    /// `CANCEL_GPC_ID` is 19:15. `REPLAY` (5:3) says which. ⊘ Decoding the scope
+    /// unconditionally made every fault-cancel word report a scope nobody wrote.
+    #[test]
+    fn a_cancel_word_does_not_report_a_scope_it_never_named() {
+        // REPLAY=0 (NONE): bits 16:15 ARE the scope. 2 = NON_LINK_TLBS, what CPU-RM writes.
+        let ordinary = (1 << 31) | 0b1 | (2 << 15);
+        let inv = Invalidate::decode(ordinary, 0, 0);
+        assert_eq!(inv.replay, 0);
+        assert_eq!(inv.inval_scope, 2, "REPLAY=NONE ⇒ 16:15 is INVAL_SCOPE");
+
+        // REPLAY=CANCEL_TARGETED(4): the same bits are a GPC id. Refused, not mis-read.
+        let cancel = (1 << 31) | 0b1 | (4 << 3) | (2 << 15);
+        let inv = Invalidate::decode(cancel, 0, 0);
+        assert_eq!(inv.replay, 4);
+        assert_eq!(
+            inv.inval_scope, INVAL_SCOPE_IS_A_CANCEL_GPC_ID,
+            "★ under a CANCEL replay those bits are CANCEL_GPC_ID; reporting `2` would be a \
+             scope the guest never asked for"
+        );
+        // ⊘ And the sentinel is not a real scope: 0 is ALL_TLBS, so defaulting to it would
+        // read as `the widest scope`, which is a lie that looks conservative.
+        assert_ne!(INVAL_SCOPE_IS_A_CANCEL_GPC_ID, 0);
     }
 }
