@@ -94,3 +94,45 @@ fn apply_ops_unmaps_before_it_maps() {
          store abolishes. §27 requires unmaps ordered first within one application."
     );
 }
+
+/// ★★★★★ **w759 — `apply_ops` RETURNS RM'S ANSWER, AND THE BIND PATH USES IT.**
+///
+/// ⊘⊘⊘ **This gate exists because its absence cost a live regression.** When
+/// `map_store_slice_for_leaf` was routed through `apply_ops`, the returned VA was replaced
+/// with `at` — the store offset. Both are `u64`, so **nothing failed to compile and no test
+/// failed**; `[measured w758]` the guest went from `P1/P2/P3 ✔ VERIFIED` back to
+/// `NEVER RETIRED` on the next boot, and the only evidence was a boot four minutes long.
+///
+/// ⚠ The distinction is not pedantic: `placed_as_asked` exists because **RM may place a
+/// mapping somewhere other than where it was asked**. A caller handed back its own request can
+/// never detect that — it is guaranteed to agree with itself.
+#[test]
+fn the_bind_path_uses_the_address_rm_chose() {
+    let storemap = code_of("src/storemap.rs");
+    assert!(
+        storemap.contains("pub placed: Vec<u64>"),
+        "★★★★★ `AppliedOps::placed` is gone. Without it a caller cannot learn where RM put a \
+         mapping, and the only address available is the one it asked for — which always \
+         agrees with itself and therefore checks nothing."
+    );
+    assert!(
+        storemap.contains("done.placed.push(self.map("),
+        "★★★ `apply_ops` no longer records the VA `map` returned. A `placed` vector that is \
+         never filled is worse than none: the caller's `.first()` then refuses on every map."
+    );
+
+    let shim = code_of("src/shim.rs");
+    // ★★★ The bind path must consume `placed`, and must NOT re-substitute the request.
+    assert!(
+        shim.contains("done.placed.first()"),
+        "★★★★★ the bind path no longer takes RM's answer out of `AppliedOps`. This is the \
+         exact regression of w758, and it is invisible to the compiler because the request \
+         and the answer are both `u64`."
+    );
+    assert!(
+        !shim.contains(".map(|_| at)"),
+        "★★★★★ the bind path discards `apply_ops`' result and substitutes `at` — the store \
+         OFFSET — as the host VA. `[measured w758]` this took the guest from \
+         `P1/P2/P3 ✔ VERIFIED` to `NEVER RETIRED`, with nothing red in the workspace suite."
+    );
+}

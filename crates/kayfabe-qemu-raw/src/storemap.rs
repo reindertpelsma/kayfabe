@@ -819,6 +819,14 @@ impl StoreMapPort {
         }
     }
 
+    /// ★★★ w759 — a `Map` op that placed nothing. ⊘ Its own refusal rather than a default:
+    /// substituting the requested address is what made w758's regression invisible.
+    pub(crate) fn note_applied_nothing(&self) -> StoreMapRefusal {
+        self.note(StoreMapRefusal::Rm(
+            "apply_ops: a Map op placed no VA — RM answered success with no address".into(),
+        ))
+    }
+
     /// ★★★★★ **w757 — EXECUTE THE DIFF LIST, AND BE THE ONLY THING THAT EXECUTES IT.**
     ///
     /// > Owner, 2026-09-18: *"So ensure its executed, and ensure the diff list is the only
@@ -873,7 +881,8 @@ impl StoreMapPort {
                     // ⊘ The store offset IS the GPGA: under the identity window a guest
                     // framebuffer address is an offset into the one reserved object. That is
                     // the whole reason the window must stay identity.
-                    self.map(vas, r.gpga, r.len, GpuVa(r.va))?;
+                    // ⊘ RM's ANSWER is kept, never the request. See `AppliedOps::placed`.
+                    done.placed.push(self.map(vas, r.gpga, r.len, GpuVa(r.va))?);
                     done.mapped += 1;
                 }
                 MapOp::Unmap(_) => {}
@@ -1291,7 +1300,7 @@ impl kayfabe_fwd::StoreChannelBirth for StoreMapPort {
 ///
 /// ⊘ Counts, not a bool: `ops=12 mapped=0 unmapped=0` is a list that arrived and changed
 /// nothing, which is a different fact from a list that never arrived.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct AppliedOps {
     /// How many ops the list carried.
     pub ops: usize,
@@ -1299,6 +1308,18 @@ pub struct AppliedOps {
     pub mapped: usize,
     /// Slices unmapped (`Unmap` + `Remap`).
     pub unmapped: usize,
+    /// ★★★★★ **w759 — THE VAs RM ACTUALLY PLACED, in map order.**
+    ///
+    /// ⊘⊘⊘ **This field exists because leaving it out caused a live regression.** The bind
+    /// path needs the address RM *chose*, not the one we asked for, and when that path was
+    /// routed through `apply_ops` the returned value was replaced with the store OFFSET. Both
+    /// are `u64`, so nothing failed to compile and nothing failed a test — `[measured w758]`
+    /// the guest went from `P1/P2/P3 ✔ VERIFIED` back to `NEVER RETIRED` on the next boot.
+    ///
+    /// ⚠ **`placed_as_asked` is the whole reason RM's answer is not the request.** A map that
+    /// lands elsewhere is a real outcome this tree checks for; a caller handed back its own
+    /// request can never see it.
+    pub placed: Vec<u64>,
 }
 
 kayfabe_util::assert_send_sync!(StoreMapPort);

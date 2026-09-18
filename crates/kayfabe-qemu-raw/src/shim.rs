@@ -14524,10 +14524,20 @@ fn map_store_slice_for_leaf(
         flags: 0,
         class: kayfabe_mmu::walkdiff::PageClass::P4K,
     });
+    // ⊘⊘⊘ **w759 — RM'S ANSWER, NOT THE REQUEST.** The first routing of this site through
+    // `apply_ops` discarded the returned VA and substituted `at`, the store offset. Both are
+    // `u64`, so it compiled and no test failed — and `[measured w758]` the guest regressed
+    // from `P1/P2/P3 ✔ VERIFIED` to `NEVER RETIRED`. `placed_as_asked` exists precisely
+    // because RM may place elsewhere, and a caller handed back its own request cannot see it.
     let host_va = match sp
         .apply_ops(store_vas, core::slice::from_ref(&op))
-        .map(|_| at)
-    {
+        .and_then(|done| {
+            done.placed.first().copied().ok_or_else(|| {
+                // A `Map` op that mapped nothing is not a success with a missing field; it is
+                // a contradiction, and it refuses by name rather than defaulting to `at`.
+                sp.note_applied_nothing()
+            })
+        }) {
         Ok(va) => va,
         Err(e) => {
             let n = STORE_SLICE_REFUSED.fetch_add(1, Ordering::Relaxed);
