@@ -1837,6 +1837,20 @@ __device__ __forceinline__ void kf_par_leaf_one(const KfArgs &a, const KfEnt *ta
     const uint32_t excl = x - contrib;
     const uint32_t total = __shfl_sync(full, x, KF_WARP - 1u);
 
+    /* ★★★★★ PROPAGATE REFUSALS BEFORE ANY EARLY RETURN. ⊘ This used to sit at the
+     * bottom of the function, below BOTH returns below -- so a warp whose leaves
+     * were ALL refused produced `total == 0`, took the `!total` exit, and reported
+     * nothing at all: no run, no flag, no refusal count. The report then said
+     * "this address space is empty" when what happened was "every mapping in it
+     * was rejected", which are opposite facts. Found by hostile/leaf_past_end,
+     * whose single leaf is refused and which therefore hits exactly that path;
+     * `leaf_oob_no_neighbour_extend` passed throughout because its surviving
+     * legal run kept `total` non-zero. ⚠ Pre-existing and NOT specific to
+     * LEAF_OOB -- MISALIGNED_LEAF was lost the same way, and a warp that is
+     * entirely misaligned is not exotic. Same class as
+     * `a_refusal_counter_read_as_absent_demand`. */
+    if (c.refuse) { atomicOr(&d->refuse_mask, c.refuse); atomicAdd(&d->refusals, c.refusals); }
+
     uint32_t st = 0u;
     if (lane == 0u && total) st = atomicAdd(used, total);
     st = __shfl_sync(full, st, 0);
@@ -1861,7 +1875,6 @@ __device__ __forceinline__ void kf_par_leaf_one(const KfArgs &a, const KfEnt *ta
         sm.lva = l.va; sm.lgpga = l.gpga; sm.llen = l.len; sm.lflags = l.flags;
         sum[gw] = sm;
     }
-    if (c.refuse) { atomicOr(&d->refuse_mask, c.refuse); atomicAdd(&d->refusals, c.refusals); }
 }
 
 __global__ void kf_par_leaf(KfArgs a, const KfEnt *task, const uint32_t *nt,
