@@ -956,8 +956,37 @@ deliverable**.
     against what is old. It was never something the host staged, and nothing about it crosses
     the bus.
 
+    ⊘ **(e) A MALICIOUS GUEST RUNS NO KERNEL CHECKS, SO EVERY BOUND MUST BE OURS — AT EVERY
+    STAGE, NOT ONLY IN THE WALK** (owner, 2026-09-18: *"a malicious guest doesn't follow any
+    kernel check, so thats why we need to prepare it"*).
+    The guest's own driver produces well-formed tables; a hostile one writes arbitrary bytes
+    and we follow them. ⇒ every value derived from guest-authored memory is untrusted at each
+    hop. Measured state of the chain:
+    - **the walk** — `KF_GPGA_DEREF` is the single deref site and is guarded
+      **overflow-safely** (`off > w.len || 8 > w.len - off`, never `off + 8 > w.len`); an
+      out-of-range entry sets `KFWR_R_OOB` and bumps `refusals`, so a hostile attempt is
+      **counted**, not silently skipped. ✔ `[w760]` 72/72 on hardware including hostile and
+      racer streams.
+    - **the map** — `offset.checked_add(len)` against the reserved object's length, with the
+      comment that states the rule: *"RM maps whatever offset it is handed."* ✔
+    - **the report** — truncation is refused before comparison (`walkshadow.rs:490`). ✔
+
+    ⚠⚠⚠ **AND THE GAP THAT IS NOT YET CLOSED, named so it cannot be forgotten: a TRUNCATED
+    report must never reach the differ.** §20's third invariant is *"output capped with loud
+    truncation, forcing a full resync"*, and the cap is what a hostile guest will aim at — a
+    table large enough to truncate the report. **A diff computed against a truncated CURRENT
+    set emits `Unmap` for every mapping that fell off the end**, and those mappings are live.
+    ⇒ the guest would be inducing us to unmap arbitrary ranges *through our own executor*.
+    ⊘ The refusal exists today only on the **shadow-comparison** path. When the report is wired
+    to `StoreMapPort::apply_ops`, it must pass through the same refusal — and the right shape
+    is the one this tree already uses for unforgeable claims: make the ops constructible **only
+    from a report that validated**, so *"nobody checked"* is unrepresentable rather than
+    forbidden.
+
     ⇒ **The test for any future code touching the framebuffer is (a):** if it needs the CPU to
-    read guest vidmem, it is wrong — the walk moves GPU-side instead.
+    read guest vidmem, it is wrong — the walk moves GPU-side instead. **And the test for any
+    code consuming the walk is (e):** if a hostile table can make it do something, the bound
+    is missing.
 
 ⚠ **This list stopped at 17 while §§18–22 were added as sections below it** — a reader hitting the
 list would have concluded seventeen was all of them. ⇒ **Anything added below gets a row here in
