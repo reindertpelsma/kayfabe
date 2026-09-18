@@ -218,11 +218,25 @@ while read -r ko; do
 done < /lib/modules/loadorder
 # ⊘ The device nodes are created by the driver's own open path on a real system; without
 # nvidia-modprobe we make them ourselves from /proc/devices.
-maj=$(awk '/nvidia-frontend|nvidiactl|^ *[0-9]+ nvidia/ {print $1; exit}' /proc/devices)
+maj=$(awk '/nvidia-frontend|nvidiactl|^ *[0-9]+ nvidia$/ {print $1; exit}' /proc/devices)
 if [ -n "$maj" ]; then
     mknod /dev/nvidiactl c "$maj" 255 2>/dev/null
     mknod /dev/nvidia0   c "$maj" 0   2>/dev/null
 fi
+# ⊘⊘⊘ **nvidia-uvm IS ITS OWN MAJOR, AND FORGETTING IT READS AS A KAYFABE DEFECT.**
+# `[measured w763]` `--uvm-invalidate` failed `W392C open = /dev/nvidia-uvm: No such file or
+# directory` -- a MISSING DEVICE NODE in this initrd, reported in the scoreboard as an arm
+# failure. ★ On a real system `nvidia-modprobe` makes these; there is none here, so every
+# node this suite can ask for is made from `/proc/devices` by name.
+uvmmaj=$(awk '/nvidia-uvm$/ {print $1; exit}' /proc/devices)
+if [ -n "$uvmmaj" ]; then
+    mknod /dev/nvidia-uvm       c "$uvmmaj" 0 2>/dev/null
+    mknod /dev/nvidia-uvm-tools c "$uvmmaj" 1 2>/dev/null
+fi
+mkdir -p /dev/nvidia-caps
+capmaj=$(awk '/nvidia-caps/ {print $1; exit}' /proc/devices)
+[ -n "$capmaj" ] && mknod /dev/nvidia-caps/nvidia-cap1 c "$capmaj" 1 2>/dev/null
+echo "FASTGUEST: nodes $(ls /dev/nvidia* /dev/nvidia-caps/* 2>/dev/null | tr '\n' ' ')"
 
 echo "FASTGUEST: ready $(cut -d' ' -f1 /proc/uptime)s"
 # ⊘⊘⊘ **ARMS ARRIVE COMMA-SEPARATED, AND THAT IS NOT A STYLE CHOICE.** The kernel splits
