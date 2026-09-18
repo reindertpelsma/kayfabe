@@ -8641,12 +8641,43 @@ pub enum ShellDisposition {
 /// ⊘ The `match` is exhaustive with no `_` arm, for [`route_of_engine`]'s reason: a new
 /// [`DoorbellRoute`] variant fails this build until somebody says what the shell does with
 /// it.
+///
+/// # ⊘⊘⊘ **w766 — `gr_passthrough` IS GONE, AND THE EVIDENCE ABOVE EXPIRED WITH ROUTE K**
+///
+/// Everything above this block is preserved because it is the reasoning that was true when it
+/// was written. ★ **Its premise is not true any more.** §16.65 closed `HostGr` because *"the
+/// host channel's ring and its `GP_PUT` are both ours"*, so a forwarded doorbell could only
+/// ever be a no-op. Route K changed exactly that fact: `[measured w765]`
+///
+///   `GrCompute … → channel=HostHandle(…) token=0x1a ⇒ the channel carries the GUEST'S OWN
+///    ring AND USERD`, and `BIRTH asked=7 refused=0 born=7 ⇒ EVERY STORE-USERD CHANNEL WAS
+///    BORN IN B — hardware reads the GUEST'S cursor`.
+///
+/// ⇒ The host channel's ring is **the guest's**, so the measurement that justified the refusal
+/// no longer describes this system. ⚠ *A ruling's date is part of its citation* — and this one
+/// kept being cited for a year after the thing it measured was replaced.
+///
+/// # ★★★ And the engine question itself is wrong (§43)
+///
+/// > **Owner, 2026-09-19:** *"Channel type decision is not even part of doorbell at all,
+/// > doorbell is asking to check userd which is channel agnostic. For emulated its just put
+/// > the token on queue and resume. For passthrough only dword write."*
+///
+/// A doorbell says *"my `GP_PUT` moved"*. ⇒ There are two answers, and they are the doorbell
+/// table's own two tags: **ours to run** (we only emulate what we can run, by construction) or
+/// **the core's** (one dword; the engine is not our business). `Unserved` therefore folds into
+/// `HandToCore` rather than into a refusal: an engine we do not interpret is precisely an
+/// engine whose bytes we must not touch.
+///
+/// ⊘ [`ShellDisposition::RefuseByRoute`] survives for one reason only: an EMULATED channel
+/// whose engine the shell has no executor for. §43 says that cannot happen — we serve only
+/// what we emulate — so it is a `debug_assert`-grade impossibility kept nameable, not a route.
 #[must_use]
-pub fn shell_disposition(route: DoorbellRoute, gr_passthrough: bool) -> ShellDisposition {
+pub fn shell_disposition(route: DoorbellRoute) -> ShellDisposition {
     match route {
         DoorbellRoute::CpuCe => ShellDisposition::MayServeLocally,
-        DoorbellRoute::HostGr if gr_passthrough => ShellDisposition::HandToCore,
-        DoorbellRoute::HostGr | DoorbellRoute::Unserved => ShellDisposition::RefuseByRoute,
+        // ★ Not ours ⇒ the core's. No flag, because there is nothing to choose between.
+        DoorbellRoute::HostGr | DoorbellRoute::Unserved => ShellDisposition::HandToCore,
     }
 }
 

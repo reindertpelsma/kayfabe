@@ -8933,7 +8933,7 @@ impl SharedDoorbell {
         // finding is that two resolutions of one fact can disagree, and this one is read on
         // both sides of a `return`.
         let route = facts.route();
-        let disposition = kayfabe_rt::shell_disposition(route, self.gr_route.gr_passthrough());
+        let disposition = kayfabe_rt::shell_disposition(route);
         if disposition == kayfabe_rt::ShellDisposition::HandToCore {
             // ★★★★★ **PASSTHROUGH, and the ORDER of these three statements is the ruling.**
             //
@@ -16940,19 +16940,14 @@ impl Regs {
         // `Route::NotACopyEngineChannel` refusals — unless the arming itself is on disk.
         // `boot_nvkvm.sh` sends this stderr to `run_<tag>_qemu.log`, which `boot_capture.sh`
         // phase 6 carries into the repository.
+        // ⊘⊘⊘ **w766 — THIS PRINTED AN ARM THAT SELECTED NOTHING.** `KAYFABE_GR_ROUTE` is
+        // deleted: §43 says a doorbell asks *"did WE emulate this channel?"*, never *"what
+        // engine is this?"*, so there were never two routes to choose between — only the
+        // doorbell table's two tags. The line now states the invariant instead of a choice.
         eprintln!(
-            "kayfabe: GR-ROUTE arm={} ⇒ a GrCompute doorbell is {}",
-            gr_route.as_str(),
-            match gr_route {
-                GrRouteArm::Refuse =>
-                    "REFUSED by name (Route::NotACopyEngineChannel) — the default and the \
-                     control",
-                GrRouteArm::Passthrough =>
-                    "HANDED TO THE CORE — routed, the host channel materialized/scheduled, \
-                     and its HOST token rung. ⊘ The host engine still fetches NOTHING: the \
-                     channel's ring and its GP_PUT are both ours (gr_doorbell_passthrough.md \
-                     §0.3)",
-            },
+            "kayfabe: GR-ROUTE ⊘ NO ARM — §43: a doorbell is channel-agnostic. A channel we \
+             did not emulate is handed to the core (one dword to its host token); a channel \
+             we DID emulate we can run by construction. There is no engine question here."
         );
         // ★★★★★ LEG A'S ARMING, PRINTED, on every arm including `off`.
         //
