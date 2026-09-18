@@ -13692,7 +13692,10 @@ fn dma_roundtrip_probe(gpu: u32) -> i32 {
             }
         }
         Err(e) => {
-            println!("DR_RESULT=UNMEASURED:probe:{e:?}");
+            println!(
+                "DR_RESULT=UNMEASURED:probe:{e:?} at step [{}]",
+                kayfabe_isolate_host::rm::last_dma_step()
+            );
             2
         }
     }
@@ -13795,7 +13798,10 @@ fn unmap_retires_arm(
             }
         }
         Err(e) => {
-            println!("UR_RESULT[{a}]=UNMEASURED:probe:{e:?}");
+            println!(
+                "UR_RESULT[{a}]=UNMEASURED:probe:{e:?} at step [{}]",
+                kayfabe_isolate_host::rm::last_dma_step()
+            );
             2
         }
     }

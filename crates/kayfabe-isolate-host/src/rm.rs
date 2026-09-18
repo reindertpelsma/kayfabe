@@ -6147,6 +6147,21 @@ pub struct SubmitOutcome {
     pub gp_put: u32,
 }
 
+thread_local! {
+    /// ★★★ w756e — the last DMA step attempted, so an opaque RM status can be attributed to a
+    /// CALL SITE rather than to the probe as a whole.
+    ///
+    /// ⊘ Thread-local and not a field: it is read only on the error path, by the same thread
+    /// that set it, and a field would have to be threaded through every helper that can fail.
+    pub(crate) static DMA_STEP: std::cell::Cell<&'static str> = const { std::cell::Cell::new("(none)") };
+}
+
+/// The last DMA step this thread attempted. See [`DMA_STEP`].
+#[must_use]
+pub fn last_dma_step() -> &'static str {
+    DMA_STEP.with(std::cell::Cell::get)
+}
+
 /// ★★★★★ **w756b — what [`HostRmBackend::probe_dma_roundtrip`] observed, per leg.**
 ///
 /// ⊘ Legs are separate fields, not a verdict, because *"leg 1 never ran"* and *"leg 2 moved
@@ -12719,10 +12734,18 @@ impl HostRmBackend {
         ),
         RmError,
     > {
+        // ★★★★★ **w756e — EVERY STEP NAMES ITSELF.** `[measured w756d]` this helper answered
+        // `Other(86)` and the probe reported it as one opaque number: `INSUFFICIENT_PERMISSIONS`
+        // from *somewhere*. A refusal whose SITE is unknown is barely better than no refusal —
+        // it is the same *"a plausible reading is not evidence"* shape this session has paid
+        // for repeatedly, one layer down.
         let page = HostPageSize::query();
+        DMA_STEP.with(|c| c.set("SharedRam::create"));
         let ram = kayfabe_linux_raw::SharedRam::create(len).map_err(|e| region_error(&e))?;
+        DMA_STEP.with(|c| c.set("Reservation::new"));
         let mut reservation =
             kayfabe_linux_raw::Reservation::new(len, page).map_err(|e| region_error(&e))?;
+        DMA_STEP.with(|c| c.set("map_fixed_in"));
         let placed = reservation
             .map_fixed_in(
                 HostOffset::new(0),
@@ -12735,12 +12758,15 @@ impl HostRmBackend {
                 CachePolicy::WriteBack,
             )
             .map_err(|e| region_error(&e))?;
+        DMA_STEP.with(|c| c.set("placement"));
         let region = reservation
             .placement(placed)
             .map_err(|e| region_error(&e))?;
+        DMA_STEP.with(|c| c.set("alloc_os_descriptor"));
         let h = self
             .conn
             .alloc_os_descriptor(region, HostOffset::new(0), len)?;
+        DMA_STEP.with(|c| c.set("(dma_buffer done)"));
         Ok((h, ram, reservation, placed))
     }
 
@@ -12807,9 +12833,13 @@ impl HostRmBackend {
             ..DmaRoundTrip::default()
         };
         let mut go = || -> Result<(), RmError> {
+            DMA_STEP.with(|c| c.set("map_dma_both(A sysmem)"));
             let a_va = self.map_dma_both(range, a, BYTES, None)?;
+            DMA_STEP.with(|c| c.set("map_dma_both(V vidmem)"));
             let v_va = self.map_dma_both(range, v, BYTES, None)?;
+            DMA_STEP.with(|c| c.set("map_dma_both(B sysmem)"));
             let b_va = self.map_dma_both(range, b, BYTES, None)?;
+            DMA_STEP.with(|c| c.set("seed A"));
 
             // ---- seed, from the CPU only ----
             // ⊘ Through the mapping WE own, never `map_cpu`: the source is an OS descriptor
@@ -12840,6 +12870,7 @@ impl HostRmBackend {
                 guest_release: None,
             };
             // ---- leg 1: CPU → GPU. sysmem A into vidmem V. ----
+            DMA_STEP.with(|c| c.set("ce_copy leg1 A->V"));
             let (s1, p1) = self.ce_copy_outcome(vas, sub(v_va, a_va))?;
             out.leg1_retired = s1.semaphore == p1 && s1.gp_get == s1.gp_put;
             // ⊘ Read the waypoint from the CPU: it is what says leg 1 moved the bytes rather
@@ -12852,6 +12883,7 @@ impl HostRmBackend {
             drop(n1);
 
             // ---- leg 2: GPU → CPU. vidmem V back out into sysmem B. ----
+            DMA_STEP.with(|c| c.set("ce_copy leg2 V->B"));
             let (s2, p2) = self.ce_copy_outcome(vas, sub(b_va, v_va))?;
             out.leg2_retired = s2.semaphore == p2 && s2.gp_get == s2.gp_put;
             // ⊘ A FRESH mapping, opened after the copy — not the one the seed was written
