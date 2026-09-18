@@ -13952,6 +13952,8 @@ fn main() -> std::process::ExitCode {
     //   failure whose pattern cannot be reproduced is an anecdote.
     let mut mean_nonce: Option<u32> = None;
     let mut mean_falsify = false;
+    // ★ Default ON — see the `--no-persistence` arm below.
+    let mut persistence = true;
     // ★★★★★ w379 — the mapping-plane rungs. Each is its own flag AND is included in
     // `--w379`, so a run can name one rung or take the whole battery; ⊘ there is no flag
     // that runs a rung WITHOUT its positive control, because a rung whose control did not
@@ -14133,6 +14135,22 @@ fn main() -> std::process::ExitCode {
             // ★★★★★ THE FALSIFIER. Opt-in because it provokes a real Xid 31 and kills its
             // own channel — see [`mean::falsifier`].
             "--mean-falsify" => mean_falsify = true,
+            // ⊘⊘⊘ **w765 — THE PERSISTENCE HOLD, ON BY DEFAULT.**
+            //
+            // > Owner, 2026-09-19: *"maybe add --no-persistence to raw client so it by
+            // > default holds one dummy client"*
+            //
+            // `[measured w765]` every timing-out arm finishes its ioctls in 8–12 s and then
+            // spends ~20 s in TEARDOWN: our own `RPC-REFUSED UnmappedAllocClass { class: 112 }`
+            // (`NV01_MEMORY_VIRTUAL`) means the guest frees objects we never recorded, RM
+            // asserts four times and burns its 4 s watchdog. Bare metal runs the same arm in
+            // **2.12 s total with persistence DISABLED and nothing holding the device** — so
+            // the adapter there really is torn down, and torn down fast.
+            //
+            // ★ A held dummy client is what `nvidia-persistenced` is, and it is the shape a
+            // production host runs in. Default ON so the measured configuration is the shipped
+            // one (§42); `--no-persistence` is the control, by name.
+            "--no-persistence" => persistence = false,
             "--mean-nonce" => {
                 let Some(v) = args.next() else {
                     eprintln!("--mean-nonce needs a value");

@@ -20916,14 +20916,27 @@ impl GrRouteArm {
 /// [`GrRouteArm::Refuse`].
 pub fn gr_route_from(value: Option<&str>) -> Result<GrRouteArm, (Status, &'static str)> {
     match value {
-        None | Some("refuse") => Ok(GrRouteArm::Refuse),
-        Some("passthrough") => Ok(GrRouteArm::Passthrough),
+        // ★★★★★ **w765 — ABSENT IS PASSTHROUGH (THE_CONSTRAINTS §42(a)).**
+        //
+        // `[measured w765]` with `refuse` as the default, `--uvm-mean`'s P3 row reads *"round
+        // 0 at 0x9140000000: still the poison 0xdeadbeef after 3s — the GR channel was
+        // scheduled but NEVER WROTE"*. It was scheduled. It was adopted (`✔ ADOPTABLE — the
+        // guest's own bytes: kind=RealGpuMemory`). And then its doorbell was **refused by
+        // name**, so hardware was never told to run it. ⇒ There is no missing completion
+        // here; there is no submission to complete.
+        //
+        // ⊘ The typo argument below is untouched and is what it always was: a MISSPELLING
+        // must never silently select the control, because the control's expected result —
+        // *"no GR doorbell was ever forwarded"* — is exactly what a disarmed evidence run
+        // shows. It never argued about what ABSENCE should mean. `refuse` stays reachable by
+        // name as the control.
+        None | Some("passthrough") => Ok(GrRouteArm::Passthrough),
+        Some("refuse") => Ok(GrRouteArm::Refuse),
         Some(_) => Err((
             Status::Unsupported,
             "KAYFABE_GR_ROUTE does not name an arm: the only values are `refuse` (the \
-             default and the control — `Route::NotACopyEngineChannel`, exactly as every \
-             boot before this one) and `passthrough` (the doorbell is handed to the core's \
-             ring path). It is not defaulted, because a typo that silently disarmed the \
+             control — `Route::NotACopyEngineChannel`, exactly as every boot before w765) \
+             and `passthrough` (the default: the doorbell is handed to the core's ring path). It is not defaulted, because a typo that silently disarmed the \
              route would make an evidence run and its own control indistinguishable — and \
              the control's expected result is `no GR doorbell was ever forwarded`, which is \
              precisely what a disarmed evidence run would also show. ⊘ `on`/`1` are not \

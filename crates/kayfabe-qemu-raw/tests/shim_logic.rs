@@ -2451,7 +2451,14 @@ use kayfabe_rt::{DoorbellRoute, ShellDisposition, shell_disposition};
 /// `Refuse`, and `Refuse` disposes a `HostGr` doorbell exactly as the `!=  CpuCe` bool did.
 #[test]
 fn the_default_gr_route_leaves_the_shipped_arm_byte_identical() {
-    assert_eq!(gr_route_from(None), Ok(GrRouteArm::Refuse));
+    assert_eq!(
+        gr_route_from(None),
+        Ok(GrRouteArm::Passthrough),
+        "★★★★★ w765 §42(a): absent is the DESIGN. With `refuse` as the default a GR channel is \
+         born, adopted and scheduled, and then its doorbell is refused by name — which the \
+         client reports as `the GR channel was scheduled but NEVER WROTE`"
+    );
+    assert_eq!(gr_route_from(Some("refuse")), Ok(GrRouteArm::Refuse));
     assert!(
         !GrRouteArm::Refuse.gr_passthrough(),
         "★ the default arm opened the route"
