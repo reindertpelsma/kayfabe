@@ -5793,6 +5793,7 @@ fn doorbell_publish_loop(
             continue;
         }
         if job.kind() == kayfabe_device::pubqueue::PublicationKind::Invalidate {
+            let t_arm = std::time::Instant::now();
             // ★★★★★ **w406 — THE ORDER IS: SNAPSHOT, REFRESH, PUBLISH, COMPLETE.**
             //
             // `seq` is read FIRST. It names the trigger this job answers for; a trigger that
@@ -5835,7 +5836,10 @@ fn doorbell_publish_loop(
                      emulated channel(s) looped. ⚠ Slower, never less complete."
                 );
             }
+            let seg_rescan_ms = t_arm.elapsed().as_secs_f64() * 1e3;
+            let t_refresh = std::time::Instant::now();
             let refresh = port.refresh_page_tables(off_vcpu);
+            let seg_refresh_ms = t_refresh.elapsed().as_secs_f64() * 1e3;
             // ★★★★★ **CONSTRAINT 27 — UNMAPS BEFORE MAPS, WITHIN ONE REFRESH.**
             //
             // > Owner, 2026-09-15: *"Before a refresh finishes, this kernel channel has
@@ -5957,7 +5961,8 @@ fn doorbell_publish_loop(
                     "kayfabe: MMUINVAL-HOLD seq={seq} queued_ms={queued_ms:.2} \
                      job_ms={:.2} prelude_ms={prelude_ms:.2} \
                      SEG[reval={seg_reval_ms:.2} births={seg_births_ms:.2} \
-                     dbtable={seg_dbtable_ms:.2} retired={seg_retired_ms:.2} tail={seg_tail_ms:.2}] \
+                     dbtable={seg_dbtable_ms:.2} span={seg_retired_ms:.2} tail={seg_tail_ms:.2} \
+                     rescan={seg_rescan_ms:.2} refresh={seg_refresh_ms:.2}] \
                      premap_ms={premap_ms:.2} \
                      since_trigger_ms={since_trigger_ms:.2} ⇒ queued = the worker was \
                      BEHIND; job-minus-premap = it was BUSY before reaching this phase",
