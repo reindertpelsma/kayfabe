@@ -142,10 +142,20 @@ mount -t devtmpfs none /dev 2>/dev/null
 
 echo "FASTGUEST: up $(cut -d' ' -f1 /proc/uptime)s"
 
-for ko in nvidia nvidia-uvm; do
-    if [ -f "/lib/modules/$ko.ko" ]; then
-        insmod "/lib/modules/$ko.ko" 2>&1 && echo "FASTGUEST: insmod $ko ok" \
-                                          || echo "FASTGUEST: insmod $ko FAILED"
+# ⊘⊘⊘ **`insmod` NAMES A CLASS; THE KERNEL NAMES THE SYMBOL.** busybox prints the same
+# "unknown symbol in module, or unknown parameter" for a missing dependency, a vermagic
+# mismatch and a bad parameter -- three different fixes behind one string. The kernel logs
+# which symbol, and `quiet` on our own command line is what hid it. ⇒ dump the ring on
+# failure, bounded, so a failed load says WHAT is missing on the first boot rather than the
+# third.
+for ko in nvidia nvidia-modeset nvidia-uvm; do
+    [ -f "/lib/modules/$ko.ko" ] || continue
+    if insmod "/lib/modules/$ko.ko" 2>&1; then
+        echo "FASTGUEST: insmod $ko ok"
+    else
+        echo "FASTGUEST: insmod $ko FAILED"
+        dmesg | grep -i -E "unknown symbol|version magic|disagrees about" | tail -12 \
+            | sed 's/^/FASTGUEST:   /'
     fi
 done
 # ⊘ The device nodes are created by the driver's own open path on a real system; without
