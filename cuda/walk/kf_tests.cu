@@ -129,7 +129,9 @@ static void dump(const Fix &f)
 static void validate(Fix &f)
 {
     const char *why = NULL;
-    int rc = kf_validate_report(&f.hdr, f.pe.data(), f.rn.data(), &why);
+    /* §39(c): the REAL window, so every caller of validate() -- the racers
+     * included -- asserts that no run escapes the store. */
+    int rc = kf_validate_report(&f.hdr, f.pe.data(), f.rn.data(), f.g.size(), &why);
     CHECK_M(rc == 0, why);
     /* ⚠ The REPORT's order is (page-size class ascending, VA ascending within a
      * class) -- NOT the walk's (va asc, size desc). The diff is computed per
@@ -913,6 +915,104 @@ static void t_hostile_table_straddles_end(void)
     if (g_fails_here) dump(f);
 }
 
+/* ── §39(c): A LEAF THAT LEAVES THE WINDOW ──────────────────────────────────────
+ * ★★★★★ These four are a different stake from every bounds case above them.
+ * `KFWR_R_OOB` is about a TABLE WE WOULD READ -- getting it wrong reads memory
+ * that is not ours. These are about a MAPPING WE WOULD MAKE -- getting it wrong
+ * HANDS THE GUEST memory that is not its own, which is the escalation the walker
+ * exists to prevent (§39(b): a guest that corrupts only itself is not our
+ * problem; one that reaches outside its store is).
+ * ⊘ Until w760c the kernel refused neither, and `kf_validate_report` could not
+ * have caught it either -- it was never given the window. The host's `map()`
+ * bound was the ONLY thing standing here, which made a defence-in-depth layer
+ * into a single point of failure.
+ * ⊘ A 64-bit WRAP is not among these because it is INEXPRESSIBLE: the VER2 VID
+ * aperture carries 25 address bits at shift 12, so the largest encodable leaf
+ * address is (2^25-1)<<12 ~ 137 GiB and `gpga + len` cannot overflow. Same shape
+ * as `unaligned_is_inexpressible_below_the_root`: the encoding is the bound. */
+
+static void t_hostile_leaf_past_end(void)
+{
+    Fix f(8u << 20, cfg_default());
+    Tree t(f.g);
+    t.map4k(VBASE, (uint64_t)f.g.size() + (16u << 20));   /* wholly outside the store */
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    hostile_invariants(f);
+    CHECK_M(f.hdr.refuse_mask & KFWR_R_LEAF_OOB,
+            "a leaf pointing past the end of GPGA must refuse as LEAF_OOB");
+    CHECK_EQ(f.hdr.run_count, 0);
+    if (g_fails_here) dump(f);
+}
+
+static void t_hostile_leaf_straddles_end(void)
+{
+    /* Starts inside, ends outside. The `gpga < len` half of the test passes and
+     * only the EXTENT half refuses -- the case a naive `gpga < win.len` misses. */
+    Fix f((8u << 20) + 4096u, cfg_default());
+    Tree t(f.g);
+    t.map2m(VBASE, 8ull << 20);          /* 2 MiB-aligned, inside; ends 2 MiB past */
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    hostile_invariants(f);
+    CHECK_M(f.hdr.refuse_mask & KFWR_R_LEAF_OOB,
+            "a leaf that STARTS inside and ENDS outside must refuse as LEAF_OOB");
+    CHECK_EQ(f.hdr.run_count, 0);
+    if (g_fails_here) dump(f);
+}
+
+static void t_hostile_leaf_at_exact_end(void)
+{
+    /* ★ THE OFF-BY-ONE GUARD, and the reason it is in the hostile block: it is
+     * the case an over-strict containment check breaks. `gpga + len == win.len`
+     * is the last LEGAL page. A walker that refuses it would silently drop the
+     * guest's top page of memory, and no test above would notice. */
+    Fix f(8u << 20, cfg_default());
+    Tree t(f.g);
+    const uint64_t last = (uint64_t)f.g.size() - 4096ull;
+    t.map4k(VBASE, last);
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    hostile_invariants(f);
+    CHECK_EQ(f.hdr.refuse_mask & (uint32_t)KFWR_R_LEAF_OOB, 0);
+    CHECK_EQ(f.hdr.run_count, 1);
+    if (f.hdr.run_count == 1) {
+        CHECK_EQ(f.rn[0].va, VBASE);
+        CHECK_EQ(f.rn[0].gpga, last);
+        CHECK_EQ(f.rn[0].len, 4096ull);
+    }
+    if (g_fails_here) dump(f);
+}
+
+static void t_hostile_leaf_oob_does_not_extend_its_neighbour(void)
+{
+    /* ★★★★★ THE ORDERING TEST, and the only one here that can fail while the
+     * other three pass. The refused leaf is EXACTLY coalesce-adjacent to the
+     * legal one before it (0x7ff000 + 4096 == 0x800000 == win.len), so if the
+     * containment check sat AFTER the coalesce branch instead of before it, the
+     * good run would have absorbed the bad one and grown to 8192 bytes -- a run
+     * that REACHES OUTSIDE THE STORE while every refusal flag stays clear.
+     * ⊘ That is a silent escalation, not a loud refusal, which is why the check
+     * is placed above the coalesce branch in both emit chokepoints. */
+    Fix f(8u << 20, cfg_default());
+    Tree t(f.g);
+    const uint64_t last = (uint64_t)f.g.size() - 4096ull;   /* 0x7ff000 */
+    t.map4k(VBASE,            last);                        /* legal: ends AT the end */
+    t.map4k(VBASE + 4096ull,  (uint64_t)f.g.size());        /* one page too far      */
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    hostile_invariants(f);
+    CHECK_M(f.hdr.refuse_mask & KFWR_R_LEAF_OOB, "the second leaf must refuse as LEAF_OOB");
+    CHECK_EQ(f.hdr.run_count, 1);
+    if (f.hdr.run_count == 1) {
+        CHECK_EQ(f.rn[0].gpga, last);
+        CHECK_M(f.rn[0].len == 4096ull,
+                "the legal run ABSORBED the refused one: the containment check is "
+                "running after the coalesce branch, not before it");
+    }
+    if (g_fails_here) dump(f);
+}
+
 static void t_hostile_unaligned_root(void)
 {
     Fix f(8u << 20, cfg_default());
@@ -1199,7 +1299,7 @@ __global__ void kf_mut_kernel(uint8_t *base, uint64_t lo, uint64_t span, uint64_
 
 static const uint32_t RACE_ALLOWED =
     KFWR_R_OOB | KFWR_R_UNALIGNED | KFWR_R_FOREIGN_AP | KFWR_R_RUN_CAP | KFWR_R_BUDGET |
-    KFWR_R_MISALIGNED_LEAF;
+    KFWR_R_MISALIGNED_LEAF | KFWR_R_LEAF_OOB;
 
 static void race_check(Fix &f, int round)
 {
@@ -1721,7 +1821,7 @@ static void d_run(const char *corpus_path, const char *leaves_path,
         int rc = kf_refresh(w, dev, im.gpga_len, &im.root, 1, NULL, 0, &h, pe.data(), rn.data());
         CHECK_EQ(rc, 0);
         const char *why = NULL;
-        CHECK_M(kf_validate_report(&h, pe.data(), rn.data(), &why) == 0, why);
+        CHECK_M(kf_validate_report(&h, pe.data(), rn.data(), im.gpga_len, &why) == 0, why);
         CHECK_M(!(h.flags & KFWR_HF_TRUNCATED), "the corpus must fit: a truncated walk proves nothing here");
 
         std::vector<DLeaf> mine;
@@ -2144,7 +2244,7 @@ static void rt_stream(bool hostile, uint64_t seed, int steps, RtStats &sx)
         CHECK_EQ(kf_refresh(W, dev, RT_BUF, roots.data(), (uint32_t)roots.size(), NULL, 0,
                             &hw, pw.data(), rw.data()), 0);
         const char *why = NULL;
-        CHECK_M(kf_validate_report(&hw, pw.data(), rw.data(), &why) == 0, why);
+        CHECK_M(kf_validate_report(&hw, pw.data(), rw.data(), RT_BUF, &why) == 0, why);
         if (hw.entries_visited > sx.visited_max) sx.visited_max = hw.entries_visited;
 
         bool applied = false;
@@ -2390,7 +2490,7 @@ static void t_roundtrip_under_racer(void)
     for (int step = 0; step < 150; step++) {
         CHECK_EQ(f.refresh(roots), 0);
         const char *why = NULL;
-        CHECK_M(kf_validate_report(&f.hdr, f.pe.data(), f.rn.data(), &why) == 0, why);
+        CHECK_M(kf_validate_report(&f.hdr, f.pe.data(), f.rn.data(), f.g.size(), &why) == 0, why);
         if (f.hdr.entries_visited > deepest) deepest = f.hdr.entries_visited;
         if (f.hdr.refuse_mask & ~RACE_ALLOWED) {
             char b[96];
@@ -3001,6 +3101,10 @@ static const Case CASES[] = {
     { "hostile/deep_cycle",                     t_hostile_deep_cycle },
     { "hostile/pointer_past_end",               t_hostile_ptr_past_end },
     { "hostile/table_straddles_end",            t_hostile_table_straddles_end },
+    { "hostile/leaf_past_end",                  t_hostile_leaf_past_end },
+    { "hostile/leaf_straddles_end",             t_hostile_leaf_straddles_end },
+    { "hostile/leaf_at_exact_end",              t_hostile_leaf_at_exact_end },
+    { "hostile/leaf_oob_no_neighbour_extend",   t_hostile_leaf_oob_does_not_extend_its_neighbour },
     { "hostile/unaligned_root",                 t_hostile_unaligned_root },
     { "hostile/root_out_of_range",              t_hostile_root_out_of_range },
     { "hostile/all_ones_entries",               t_hostile_all_ones },

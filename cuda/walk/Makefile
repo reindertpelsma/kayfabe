@@ -57,6 +57,7 @@ check-invariants:
 	@n=`grep -c 'KFWR_HF_TRUNCATED' kf_walk.cu || true`; \
 	 if [ "$$n" -lt 3 ]; then echo "I3 FAIL: truncation set from fewer than 3 sites"; exit 1; fi; \
 	 echo "I3 ok: truncation raised from $$n sites"
+	@python3 check_s39.py
 
 # ═══ THE KNOWN-POSITIVE ══════════════════════════════════════════════════════
 # -DKF_BREAK_BOUNDS deletes the two bounds checks and NOTHING else. The bounds
@@ -73,6 +74,10 @@ check-negative: kf_tests_broken kf_tests
 	 if [ $$rc -eq 0 ]; then echo "NEG FAIL: pointer_past_end PASSED with the bounds check removed"; \
 	   cat /tmp/kf_neg2.txt; exit 1; fi; \
 	 echo "neg ok: pointer_past_end fails without the check (rc=$$rc)"
+	@./kf_tests_broken leaf_past_end > /tmp/kf_neg1c.txt 2>&1; rc=$$?; \
+	 if [ $$rc -eq 0 ]; then echo "NEG FAIL: leaf_past_end PASSED with the bounds check removed"; \
+	   cat /tmp/kf_neg1c.txt; exit 1; fi; \
+	 echo "neg ok: leaf_past_end fails without the check (rc=$$rc)"
 	@./kf_tests correctness/single_4k > /dev/null 2>&1; rc=$$?; \
 	 if [ $$rc -ne 0 ]; then echo "NEG FAIL: the CONTROL case does not pass on the unbroken binary"; exit 1; fi; \
 	 echo "neg ok: the control case still passes on the unbroken binary"

@@ -68,6 +68,15 @@ extern "C" {
  * cannot reach it (the 12 GiB worst case needs 6 144 tasks); a cycle that makes
  * many directory entries point at one table can. Loud, and it truncates. */
 #define KFWR_R_FRONTIER_CAP    (1u << 12)
+/* ★★★★★ A LEAF whose [gpga, gpga+len) LEAVES THE GPGA WINDOW (§39). `KFWR_R_OOB`
+ * is about a TABLE we would READ; this is about a MAPPING we would MAKE, and the
+ * two are different stakes. A guest that points a leaf at its own wrong page has
+ * corrupted only itself and we do not care (§39(b)); a guest that points one
+ * PAST THE STORE is asking us to hand it memory that is not its own, which is
+ * the escalation this walker exists to refuse. ⊘ Refused at the two emit
+ * chokepoints, so the run never reaches the report — the host's `map()` bound is
+ * defence in depth BEHIND this, not instead of it. */
+#define KFWR_R_LEAF_OOB        (1u << 13)
 
 /* ── PdbEntry::vas_flags ─────────────────────────────────────────────────────── */
 #define KFWR_V_NEW    (1u << 0)
@@ -218,8 +227,11 @@ void kf_ack(KfWalk *w, uint64_t generation);
 /* Property 3 of the format doc, on the host, over a buffer we already have.
  * Returns 0 if the report is well formed, else a negative code; `why` (may be NULL)
  * receives a static string. */
+/* ⚠ §39(c): `gpga_len` is the GPGA window the report was walked over. Every
+ * non-UNMAP run must lie wholly inside it. Pass 0 to SKIP that check -- only a
+ * caller that has no window (a synthesised report) may do so. */
 int kf_validate_report(const KfReportHeader *h, const KfPdbEntry *p,
-                       const KfMapRun *r, const char **why);
+                       const KfMapRun *r, uint64_t gpga_len, const char **why);
 
 #ifdef __cplusplus
 }
