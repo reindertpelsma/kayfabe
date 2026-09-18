@@ -138,7 +138,14 @@ if [ -n "$maj" ]; then
 fi
 
 echo "FASTGUEST: ready $(cut -d' ' -f1 /proc/uptime)s"
-ARMS=${KF_ARMS:-"--timer --engines --doorbell-census"}
+# ⊘⊘⊘ **ARMS ARRIVE COMMA-SEPARATED, AND THAT IS NOT A STYLE CHOICE.** The kernel splits
+# its command line on WHITESPACE and honours no shell quoting whatsoever, so the obvious
+# `KF_ARMS="--timer --engines"` reaches init as the single env value `"--timer` with a literal
+# quote, and `--engines"` is dropped on the floor as an unrecognised kernel arg. Written that
+# way first; caught by reading the kernel's own parser, not by a run. ⇒ one token, commas.
+ARMS=$(echo "${KF_ARMS:-}" | tr -d '"' | tr ',' ' ')
+[ -n "$ARMS" ] || ARMS="--timer --engines --doorbell-census"
+echo "FASTGUEST: arms $ARMS"
 /bin/rmladder --gpu 0 $ARMS 2>&1
 echo "FASTGUEST: client rc=$? at $(cut -d' ' -f1 /proc/uptime)s"
 echo "FASTGUEST: DONE"

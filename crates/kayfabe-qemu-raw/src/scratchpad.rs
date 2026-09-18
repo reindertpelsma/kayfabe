@@ -158,7 +158,13 @@ pub const SCRATCHPAD_CUDA_ENV: &str = "KAYFABE_SCRATCHPAD_CUDA";
 /// `false`.
 pub fn scratchpad_cuda_from(value: Option<&str>) -> Result<bool, (Status, &'static str)> {
     match value {
-        None | Some("off") => Ok(false),
+        // ★★★★★ **w763 — ON BY DEFAULT**, because OFF is a constraint violation and not a
+        // configuration: with no CUDA scratchpad there is no PTX walker, so the page-table walk
+        // falls back to the host CPU path that §20 and §38 exist to retire. ⊘ Owner, on being
+        // told the raw-client suite did not need it: *"you need to use the ptx to even boot
+        // under the constraints"*.
+        None => Ok(true),
+        Some("off") => Ok(false),
         Some("on") => Ok(true),
         Some(_) => Err((
             Status::Unsupported,
@@ -210,7 +216,11 @@ pub const DEVICE_VIEW_ENV: &str = "KAYFABE_DEVICE_VIEW";
 /// `false`.
 pub fn device_view_from(value: Option<&str>) -> Result<bool, (Status, &'static str)> {
     match value {
-        None | Some("off") => Ok(false),
+        // ★★★★★ **w763 — ON BY DEFAULT.** `enforce_device_store` REFUSES `FB_STORE=device`
+        // without a device-view port, naming it — and `device` is now the default. Leaving this
+        // off would make the default configuration refuse at realize.
+        None => Ok(true),
+        Some("off") => Ok(false),
         Some("probe") => Ok(true),
         Some(_) => Err((
             Status::Unsupported,
@@ -393,7 +403,13 @@ pub const DEFAULT_START_MB: u64 = 12_288;
 /// `false`.
 pub fn scratchpad_from(value: Option<&str>) -> Result<ScratchpadArm, (Status, &'static str)> {
     match value {
-        None | Some("off") => Ok(ScratchpadArm::Off),
+        // ★★★★★ **w763 — ON BY DEFAULT.** Owner: *"make the single store the default or
+        // forced"*, and `KAYFABE_FB_STORE` already defaults to `device` (w760w). ⊘ A store
+        // default that needs a scratchpad, with the scratchpad defaulting off, is a default
+        // that refuses itself: `enforce_device_store` would report NO DEVICE-VIEW PORT on every
+        // boot that named nothing. The two must move together or neither should have moved.
+        None => Ok(ScratchpadArm::Measure),
+        Some("off") => Ok(ScratchpadArm::Off),
         Some("on") => Ok(ScratchpadArm::Measure),
         Some("require") => Ok(ScratchpadArm::Require),
         Some(_) => Err((
@@ -1362,8 +1378,31 @@ mod tests {
     }
 
     #[test]
-    fn absent_is_off_and_is_not_an_error() {
-        assert_eq!(scratchpad_from(None), Ok(ScratchpadArm::Off));
+    fn absent_is_the_intended_design_and_is_not_an_error() {
+        // ⊘⊘⊘ THIS TEST USED TO BE `absent_is_off_and_is_not_an_error` AND IT PINNED THE
+        // SUPERSEDED DEFAULT. It was green the whole time the new design was unreachable
+        // unless three env vars were set by hand — the third instance in one session of a
+        // green test holding a wall in place. What it was checking is still checked: an
+        // ABSENT var is not an ERROR. What it may no longer decide is WHICH arm absence means.
+        assert_eq!(
+            scratchpad_from(None),
+            Ok(ScratchpadArm::Measure),
+            "★★★★★ a boot that names no scratchpad arm must ARM one. `FB_STORE=device` is \
+             the default and `enforce_device_store` refuses at realize without a scratchpad \
+             and a device-view port, so `Off` here is not a conservative default — it is a \
+             REFUSAL TO BOOT wearing the word `off`. Owner: `you need to use the ptx to even \
+             boot under the constraints`"
+        );
+        assert_eq!(
+            scratchpad_cuda_from(None),
+            Ok(true),
+            "★ the scratchpad without CUDA has no walker, and the walker is what publishes"
+        );
+        assert_eq!(
+            device_view_from(None),
+            Ok(true),
+            "★ the device-view port is the other half `enforce_device_store` demands"
+        );
     }
 
     #[test]

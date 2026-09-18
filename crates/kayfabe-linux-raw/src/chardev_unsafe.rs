@@ -757,6 +757,13 @@ impl CharDevice {
             Ok(_) => 0,
         };
 
+        // ★★★★★ **THE IOCTL TRACE** (w762a), beside the census and for the same reason: this
+        // is the one funnel, so a trace taken here cannot be incomplete. ⊘ Recorded BEFORE the
+        // scrub below, so `head_after` shows what the DRIVER wrote rather than what we then
+        // zeroed. ⚠ Costs one relaxed atomic load when `KF_IOCTL_TRACE` is unset, which is the
+        // shipping configuration — see `crate::ioctltrace`.
+        crate::ioctltrace::record(request, arg, i32::try_from(rc).unwrap_or(-1));
+
         // ★ The scrub (module docs). Unconditional, and after BOTH arms: a failed ioctl
         // leaves the caller holding the same buffer, and an address that survives an error
         // path is exactly the one nobody looks at.

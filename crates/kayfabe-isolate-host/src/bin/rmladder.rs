@@ -13808,6 +13808,20 @@ fn unmap_retires_arm(
 }
 
 fn main() -> std::process::ExitCode {
+    // ★★★★★ **w762a — ARM THE SELF-DEADLINE BEFORE ANYTHING ELSE CAN HANG.**
+    //
+    // > Owner, 2026-09-18: *"At timeout trace dump the whole thing."*
+    //
+    // ⊘ FIRST, before argv is even echoed: a deadline armed after the thing that hangs is a
+    // deadline that never fires. `[measured w760]` arms wedged in RM bring-up with exactly ONE
+    // line in their log — the argv echo — so anything armed later than this point would have
+    // been armed too late in every observed hang.
+    //
+    // ⚠ Off unless `KF_SELF_DEADLINE_MS` is set, and it must be set BELOW the harness's own
+    // budget or the harness kills us before we can speak. Pairs with `KF_IOCTL_TRACE=ring`.
+    if kayfabe_linux_raw::ioctltrace::arm_self_deadline() {
+        println!("info  RMLADDER DEADLINE = armed (KF_SELF_DEADLINE_MS)");
+    }
     // ★★★ **w309 — ECHO ARGV, FIRST LINE, ALWAYS.**
     //
     // ⊘ w305's runner tried to recover which arm had been requested by grepping the probe log

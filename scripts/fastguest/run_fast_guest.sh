@@ -38,14 +38,56 @@ rm -f "$SER"
 pkill -9 -x qemu-system-x86 2>/dev/null
 sleep 1
 
+# ⊘⊘⊘ **ONE WHITESPACE-FREE TOKEN, OR THE ARMS SILENTLY DO NOT ARRIVE.** The kernel command
+# line is split on whitespace and no quoting survives it, so a space-separated `KF_ARMS`
+# reaches `/init` truncated at the first space and the guest runs the DEFAULT arms while the
+# log says it was asked for others — a green run that measured the wrong thing. Commas here,
+# `tr ',' ' '` in `/init`.
+ARMS_TOK=$(echo "${KF_ARMS:-}" | tr -s ' ' ',' | sed 's/^,//; s/,$//')
+[ -n "$ARMS_TOK" ] || ARMS_TOK="--timer,--engines,--doorbell-census"
+case "$ARMS_TOK" in *[[:space:]]*) echo "run_fast_guest: KF_ARMS still holds whitespace after folding: [$ARMS_TOK]" >&2; exit 2 ;; esac
+
+# ★ The client's OWN deadline fires INSIDE the guest, below the harness budget, so it can
+# dump the ioctl ring over the serial console before QEMU is killed from outside. A deadline at
+# or above the outer budget is a deadline that never speaks.
+DEADLINE_MS=$(( (BUDGET - 4) * 1000 ))
+[ "$DEADLINE_MS" -gt 1000 ] || DEADLINE_MS=1000
+
+echo "== arms: $ARMS_TOK   budget: ${BUDGET}s   self-deadline: ${DEADLINE_MS}ms"
+
+# ⊘⊘⊘ **THE DEVICE LINE AND THE RAM BACKING ARE NOT THE FAST LANE’S TO INVENT.** As first
+# written this file said `-device kayfabe-gpu` and `-machine q35,accel=kvm -m 4096`, and BOTH
+# were wrong in a way that would have been read as a kayfabe defect:
+#
+#   1. The QOM type is **`nvkvm-gpu`**, not `kayfabe-gpu` — QEMU would have exited before the
+#      kernel ran, and the verdict printed would have been `CRASH`, indistinguishable here from
+#      a guest that hung.
+#   2. `-m` ALONE gives an anonymous `MAP_PRIVATE` block **no other process can see**. The
+#      scratchpad isolate lives in another process and adopts the hypervisor’s
+#      `memory-backend-memfd` to reach guest RAM at all; without `share=on` the guest-RAM
+#      crossing never arms and every store-backed path refuses — a REAL failure caused
+#      entirely by the harness, on the lane built to stop exactly that.
+#
+# ⇒ Both derive from the fat guest’s own boot script (`scripts/bench/boot_nvkvm.sh`) rather
+# than being restated here, so the two lanes cannot silently diverge on the thing under test.
+NVKVM_RAM_MB=${NVKVM_RAM_MB:-2048}
+RAMARGS=(-object "memory-backend-memfd,id=ram0,size=${NVKVM_RAM_MB}M,share=on"
+         -machine "q35,accel=kvm,memory-backend=ram0" -m "$NVKVM_RAM_MB")
+
+# ⚠ One variable, both halves: the device registers this BAR1 and the chip row tells the guest
+# the same number. `nvkvm_apply_identity` refuses at realize if they differ.
+BAR1_BYTES=$(( ${KAYFABE_GUEST_BAR1_MB:-256} * 1024 * 1024 ))
+export KAYFABE_GUEST_BAR1_MB=${KAYFABE_GUEST_BAR1_MB:-256}
+
 start=$(date +%s)
 timeout --kill-after=3 "$BUDGET" "$Q" \
-    -machine q35,accel=kvm -cpu host -m "${KF_MEM:-4096}" -smp "${KF_SMP:-4}" \
+    "${RAMARGS[@]}" -cpu host -smp "${KF_SMP:-3}" \
     -kernel "$FG/vmlinuz" -initrd "$FG/initrd.cpio.gz" \
-    -append "console=ttyS0 quiet panic=1 KF_ARMS=\"${KF_ARMS:-}\"" \
-    -device "${KF_DEVICE:-kayfabe-gpu}" \
-    -nographic -serial "file:$SER" -display none \
-    >/dev/null 2>&1
+    -append "console=ttyS0 quiet panic=1 KF_ARMS=$ARMS_TOK KF_IOCTL_TRACE=${KF_IOCTL_TRACE:-ring} KF_SELF_DEADLINE_MS=$DEADLINE_MS" \
+    -device "nvkvm-gpu,bar1-size=$BAR1_BYTES,bar2-size=33554432,id=kf0${NVKVM_DEV_EXTRA:+,$NVKVM_DEV_EXTRA}" \
+    -msg timestamp=on \
+    -serial "file:$SER" -display none \
+    > "$BENCH/fast_${TAG}_qemu.log" 2>&1
 rc=$?
 elapsed=$(( $(date +%s) - start ))
 

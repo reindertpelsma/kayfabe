@@ -272,6 +272,7 @@ mod affinity_unsafe;
 mod arena_unsafe;
 pub mod bounds;
 pub mod cache;
+pub mod ioctltrace;
 pub mod census;
 mod chardev_unsafe;
 mod epoll_unsafe;
