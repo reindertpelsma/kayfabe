@@ -15930,6 +15930,29 @@ impl Regs {
                     "§40 no forwarding plane: KAYFABE_ISOLATES != real ⇒ pool=0, and                      `never_serves` then refuses EVERY verb as IsolateRetired — which reads                      exactly like an archive that legitimately has no plane",
                 );
             }
+            // ★★★★★ **w760u — THE JOIN ARMS, and they are not optional either.**
+            // `[measured w760]` with `KAYFABE_FB_JOIN` off the guest's ring leaf is never
+            // materialised, so leg A's table holds NO JOINED BINDING at the channel's ring
+            // VA. The birth census then reads `adopt=DECLINED userd=DECLINED` on 20 of 20
+            // births with `not_asked=0` — the ring leg was CONSULTED and found nothing — and
+            // every channel falls back to `RingSource::Ours(None)`.
+            // ⇒ Hardware reads OUR USERD, the guest bumps GP_PUT in ITS page, GP_GET never
+            // moves, and the raw client's R15 reports SEM NEVER LANDED. A whole rung's
+            // failure, from two unset variables.
+            if std::env::var("KAYFABE_FB_JOIN").as_deref().unwrap_or("off") == "off" {
+                violations.push(
+                    "§26 no framebuffer join: KAYFABE_FB_JOIN=off => guest leaves are never \
+                     materialised, so no channel can adopt the guest's ring or USERD and every \
+                     birth falls back to RingSource::Ours - hardware then reads OUR cursor",
+                );
+            }
+            if std::env::var("KAYFABE_GUEST_RING").as_deref().unwrap_or("off") == "off" {
+                violations.push(
+                    "§26 the guest's GPFIFO is not presented to the join: KAYFABE_GUEST_RING=off \
+                     => adopts_ring() is false and adopt_pending_channel_rings returns at its \
+                     first line, so a passthrough channel is born on a ring of ours",
+                );
+            }
             if violations.is_empty() {
                 eprintln!(
                     "kayfabe: CONSTRAINT-VERDICT ★★★ COMPLIANT — single store armed, PTX                      walker in the scratchpad, real isolates. A result from this boot is a                      result about the DELIVERABLE."

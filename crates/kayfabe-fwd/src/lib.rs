@@ -5161,13 +5161,39 @@ fn adopted_guest_userd(
     memory: kayfabe_isolate::HostHandle,
     userd: Option<kayfabe_core::rmgraph::DeclaredUserd>,
 ) -> Option<kayfabe_isolate::AdoptedGuestUserd> {
-    let base = match userd?.resolved? {
+    // ★★★★★ **w760t — WHICH of the four declines fired.** `[measured w760]` the raw client
+    // declines leg B on **18 of 18** births and every one prints the same word, so the log
+    // cannot tell "the guest put its USERD in sysmem" (legal, nothing to fix) from "the
+    // address is outside this leaf" (the case this function's own doc marks `[NOT MEASURED]`
+    // and guesses is rare, on the strength of ONE workload where rings and USERDs shared a
+    // 2 MB leaf). Those four need four different fixes, and R15 SEM NEVER LANDED is blocked
+    // behind knowing which. ⊘ One line per decline, at the decline, naming it.
+    let Some(u) = userd else {
+        eprintln!("kayfabe: USERD-DECLINE ⊘ (1/4) the birth carried NO DeclaredUserd at all");
+        return None;
+    };
+    let Some(resolved) = u.resolved else {
+        eprintln!(
+            "kayfabe: USERD-DECLINE ⊘ (2/4) the params carried no resolved descriptor              (`resolved: None`) — the guest's own kernel did not hand us one"
+        );
+        return None;
+    };
+    let base = match resolved {
         kayfabe_arch::UserdMem::Framebuffer { base, .. } => base,
         // ⊘ Arms, not a wildcard. `Sysmem` is a REAL and legal USERD location this rung has
         // no crossing for, and `Undeclared` is the guest saying it allocated none; folding
         // either into the `None` above would make two different findings look like a decode
         // that failed.
-        kayfabe_arch::UserdMem::Sysmem { .. } | kayfabe_arch::UserdMem::Undeclared { .. } => {
+        kayfabe_arch::UserdMem::Sysmem { .. } => {
+            eprintln!(
+                "kayfabe: USERD-DECLINE ⊘ (3a/4) the guest put its USERD in GUEST RAM — legal,                  served by the guest-RAM pin and by no framebuffer join. Not a defect here."
+            );
+            return None;
+        }
+        kayfabe_arch::UserdMem::Undeclared { .. } => {
+            eprintln!(
+                "kayfabe: USERD-DECLINE ⊘ (3b/4) the descriptor was ZERO — the guest let RM                  allocate its USERD, so there is no guest page to adopt"
+            );
             return None;
         }
     };
@@ -5179,11 +5205,26 @@ fn adopted_guest_userd(
     if binding.aperture() != kayfabe_arch::Aperture::Vidmem {
         return None;
     }
-    let offset = base.checked_sub(binding.phys())?;
+    // ★★★ (4/4) OUTSIDE THE RING'S LEAF — the one the doc above marks `[NOT MEASURED]`.
+    // ⊘ Printed with BOTH addresses, because "below the leaf" and "past its end" are
+    // different placements and the subtraction hides the first as an underflow.
+    let Some(offset) = base.checked_sub(binding.phys()) else {
+        eprintln!(
+            "kayfabe: USERD-DECLINE ⊘ (4/4) the USERD is BELOW the ring's leaf: userd={:#x}              leaf_base={:#x} leaf_len={len:#x} — RM placed the two in different leaves, which              this rung resolves RELATIVE to the ring's",
+            base,
+            binding.phys()
+        );
+        return None;
+    };
     // ★ `checked_add` and `>`, not `>=`: the slot's LAST byte must be inside the leaf. A
     // USERD whose first 8 bytes are in the joined window and whose `GP_GET` is not would be
     // accepted by a start-only check and would fetch forever from a page RM zeroed.
-    if offset.checked_add(USERD_SLOT_BYTES)? > len {
+    if offset.checked_add(USERD_SLOT_BYTES).is_none_or(|end| end > len) {
+        eprintln!(
+            "kayfabe: USERD-DECLINE ⊘ (4/4) the USERD is PAST the ring's leaf: userd={:#x}              leaf_base={:#x} offset={offset:#x} + {USERD_SLOT_BYTES:#x} > leaf_len={len:#x}",
+            base,
+            binding.phys()
+        );
         return None;
     }
     Some(kayfabe_isolate::AdoptedGuestUserd {
