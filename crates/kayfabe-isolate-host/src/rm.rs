@@ -12833,12 +12833,26 @@ impl HostRmBackend {
             ..DmaRoundTrip::default()
         };
         let mut go = || -> Result<(), RmError> {
-            DMA_STEP.with(|c| c.set("map_dma_both(A sysmem)"));
-            let a_va = self.map_dma_both(range, a, BYTES, None)?;
+            // ★★★★★ **w756g — THE DESCRIPTORS' VAs ARE DICTATED, and that is what R32 does.**
+            //
+            // `[measured w756e]` this probe let RM choose all three and leg 2 (the copy INTO
+            // the descriptor) was refused `0x56`. `prove_fb_memfd_join` — R32 — runs the same
+            // two directions between a described memfd and vidmem and **dictates the
+            // descriptor's VA** (`map_dma_both(range, desc, BYTES, Some(at.0))`), letting RM
+            // choose only for the vidmem partner. It is the working reference for exactly
+            // this shape, so this follows it rather than inventing a third arrangement.
+            //
+            // ⊘ Far apart and far from RM's own base, for R25's stated reason: letting RM
+            // choose once put a probe's operand inside the probe's own channel ring, and the
+            // rung read its own memory as the isolate's.
+            const A_AT: u64 = 0x3_0040_0000;
+            const B_AT: u64 = 0x3_0140_0000;
+            DMA_STEP.with(|c| c.set("map_dma_both(A sysmem @A_AT)"));
+            let a_va = self.map_dma_both(range, a, BYTES, Some(A_AT))?;
             DMA_STEP.with(|c| c.set("map_dma_both(V vidmem)"));
             let v_va = self.map_dma_both(range, v, BYTES, None)?;
-            DMA_STEP.with(|c| c.set("map_dma_both(B sysmem)"));
-            let b_va = self.map_dma_both(range, b, BYTES, None)?;
+            DMA_STEP.with(|c| c.set("map_dma_both(B sysmem @B_AT)"));
+            let b_va = self.map_dma_both(range, b, BYTES, Some(B_AT))?;
             DMA_STEP.with(|c| c.set("seed A"));
 
             // ---- seed, from the CPU only ----
@@ -12976,17 +12990,26 @@ impl HostRmBackend {
             ..UnmapRetiresProbe::default()
         };
         let mut go = || -> Result<(), RmError> {
-            let src_va = self.map_dma_both(range, src, BYTES, None)?;
-            let dst_va = self.map_dma_both(range, dst, BYTES, None)?;
+            // ⊘ Dictated for the DMA arm, for `probe_dma_roundtrip`'s reason (R32's shape);
+            // left to RM for vidmem, which is what every working vidmem probe here does.
+            let (src_at, dst_at) = match aperture {
+                ProbeAperture::Vidmem => (None, None),
+                ProbeAperture::Sysmem => (Some(0x3_0240_0000), Some(0x3_0340_0000)),
+            };
+            DMA_STEP.with(|c| c.set("map_dma_both(src)"));
+            let src_va = self.map_dma_both(range, src, BYTES, src_at)?;
+            DMA_STEP.with(|c| c.set("map_dma_both(dst)"));
+            let dst_va = self.map_dma_both(range, dst, BYTES, dst_at)?;
             out.src_va = src_va;
             out.dst_va = dst_va;
-            // Seed the source so a copy that runs is visible in the destination.
-            let (src_node, src_map) = self.conn.map_cpu(src, BYTES, CachePolicy::WriteCombining)?;
-            src_map
-                .store_u32(HostOffset::ZERO, pattern)
-                .map_err(|e| region_error(&e))?;
-            drop(src_map);
-            drop(src_node);
+            DMA_STEP.with(|c| c.set("seed src"));
+            // ⊘⊘ **NO SEED, DELIBERATELY.** This probe's subject is the TRANSLATION, not the
+            // bytes: both legs are judged on whether the copy RETIRED (`semaphore == payload`
+            // with `gp_get == gp_put`), and the content is never read. A seed would be dead
+            // weight — and on the DMA arm it was worse than dead, because `map_cpu` cannot
+            // map an `OS_DESCRIPTOR` at all, so seeding made the arm fail before it could ask
+            // its own question.
+            let _ = pattern;
 
             let sub = |dst: u64, src: u64| CeSubCopy {
                 dst,
