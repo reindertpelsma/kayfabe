@@ -104,17 +104,47 @@ if ! cp "$ROOT/mnt/boot/vmlinuz-$KREL" "$OUT/vmlinuz" 2>/dev/null; then
     [ "$got" = 1 ] || die "no vmlinuz-$KREL on the root or on any boot partition of $IMG"
 fi
 
+# ⊘⊘⊘ **TAKE THE DEPENDENCY CLOSURE, NOT THE FOUR NAMES WE HAPPEN TO KNOW.** `[measured w763]`
+# copying only `nvidia*.ko` produced `insmod: unknown symbol in module` for all of them, and
+# the kernel named why: `nvidia.ko` needs `crypto_ecdh_shared_secret`, `ecc_make_pub_key`,
+# `ecc_get_curve`, `ecc_gen_privkey`, `ecc_is_pubkey_valid_full` -- the kernel's own
+# `crypto/ecc.ko` -- and `nvidia-modeset.ko` additionally needs `acpi/video.ko` and
+# `platform/x86/wmi.ko`. ⚠ None of those is an NVIDIA module and no amount of guessing at
+# NVIDIA's file names finds them.
+#
+# ★ `modules.dep` in the image already states the closure, computed by `depmod` FROM THE
+# SYMBOLS, so it cannot drift from what the modules actually import -- and it is flattened and
+# ordered, deps last, so loading it right-to-left is a valid order.
+DEP="$ROOT/mnt/lib/modules/$KREL/modules.dep"
+[ -f "$DEP" ] || die "no modules.dep under $KREL -- cannot resolve the dependency closure"
+
+# one `modname<TAB>space-separated relative dep paths` line per nvidia module we want
+: > "$ROOT/ird/lib/modules/loadorder"
 found=0
-for ko in nvidia nvidia-uvm nvidia-modeset nvidia-drm; do
-    p=$(find "$ROOT/mnt/lib/modules/$KREL" -name "$ko.ko*" | head -1)
-    [ -n "$p" ] || continue
-    case "$p" in *.zst) zstd -dq -o "$ROOT/ird/lib/modules/$ko.ko" "$p" ;;
-                 *.xz)  xz -dc "$p" > "$ROOT/ird/lib/modules/$ko.ko" ;;
-                 *)     cp "$p" "$ROOT/ird/lib/modules/$ko.ko" ;; esac
-    found=$((found+1))
+for ko in nvidia nvidia-uvm nvidia-modeset; do
+    line=$(grep -E "(^|/)$ko\.ko(\.[a-z]+)?:" "$DEP" | head -1)
+    [ -n "$line" ] || continue
+    self=${line%%:*}
+    deps=${line#*:}
+    # ⊘ deps first (right to left), then the module itself
+    order=""
+    for d in $deps; do order="$d $order"; done
+    for rel in $order "$self"; do
+        src="$ROOT/mnt/lib/modules/$KREL/$rel"
+        [ -f "$src" ] || continue
+        base=$(basename "$rel"); base=${base%.zst}; base=${base%.xz}; base=${base%.ko}.ko
+        dst="$ROOT/ird/lib/modules/$base"
+        [ -f "$dst" ] && continue
+        case "$src" in *.zst) zstd -dq -o "$dst" "$src" ;;
+                       *.xz)  xz -dc "$src" > "$dst" ;;
+                       *)     cp "$src" "$dst" ;; esac
+        echo "$base" >> "$ROOT/ird/lib/modules/loadorder"
+        found=$((found+1))
+    done
 done
 [ "$found" -gt 0 ] || die "no nvidia modules found under $KREL — is the driver installed in the image?"
-echo "== modules taken: $found"
+echo "== modules taken (with closure): $found"
+sed 's/^/==   /' "$ROOT/ird/lib/modules/loadorder"
 
 umount "$ROOT/mnt"; qemu-nbd --disconnect /dev/nbd0 >/dev/null 2>&1
 
@@ -148,16 +178,18 @@ echo "FASTGUEST: up $(cut -d' ' -f1 /proc/uptime)s"
 # which symbol, and `quiet` on our own command line is what hid it. ⇒ dump the ring on
 # failure, bounded, so a failed load says WHAT is missing on the first boot rather than the
 # third.
-for ko in nvidia nvidia-modeset nvidia-uvm; do
-    [ -f "/lib/modules/$ko.ko" ] || continue
-    if insmod "/lib/modules/$ko.ko" 2>&1; then
+# ★ The build wrote `loadorder` in dependency order, deps first. Nothing here knows the
+# names; they came from the image's own `modules.dep`.
+while read -r ko; do
+    [ -f "/lib/modules/$ko" ] || continue
+    if insmod "/lib/modules/$ko" 2>&1; then
         echo "FASTGUEST: insmod $ko ok"
     else
         echo "FASTGUEST: insmod $ko FAILED"
-        dmesg | grep -i -E "unknown symbol|version magic|disagrees about" | tail -12 \
+        dmesg | grep -i -E "unknown symbol|version magic|disagrees about" | tail -8 \
             | sed 's/^/FASTGUEST:   /'
     fi
-done
+done < /lib/modules/loadorder
 # ⊘ The device nodes are created by the driver's own open path on a real system; without
 # nvidia-modprobe we make them ourselves from /proc/devices.
 maj=$(awk '/nvidia-frontend|nvidiactl|^ *[0-9]+ nvidia/ {print $1; exit}' /proc/devices)
