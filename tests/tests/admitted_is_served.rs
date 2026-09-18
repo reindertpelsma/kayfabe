@@ -318,6 +318,38 @@ static GRADUATED: &[u32] = &[
 ];
 
 static LEDGER: &[u32] = &[
+    // ★★★★★ **w763 — `NV2080_CTRL_CMD_BIOS_GET_INFO_V2`, AND THE VENDOR WROTE THE
+    // ANSWER TO "IS A REFUSAL FATAL" INTO THEIR OWN CALLER.**
+    //
+    // Recorded unserviced by six committed boots (`w736arena`, `w736dev`, `w736split`,
+    // `w760batch5`, `w760full`, `w760nosweep`). ☆ The belief this row states, and the
+    // evidence for it, is **one function**: `rm_get_vbios_version`
+    // (`ogkm-580.159.04/src/nvidia/arch/nvalloc/unix/src/osapi.c:2608`).
+    //
+    // It does this, in this order:
+    //
+    // ```c
+    // os_snprintf(vbiosString, vbiosStringLen, "??.??.??.??.??");   /* :2620 — FIRST */
+    // rmStatus = pRmApi->Control(..., NV2080_CTRL_CMD_BIOS_GET_INFO_V2, ...);
+    // if (rmStatus == NV_OK) { /* overwrite with the real revision */ }
+    // ```
+    //
+    // ⇒ **The placeholder is written BEFORE the call and the result is consumed only under
+    // `NV_OK`.** A refusal is not an error path the driver stumbles into — it is the path the
+    // vendor pre-addressed. Nothing branches on the status; no caller of
+    // `rm_get_vbios_version` receives one (it returns `void`).
+    //
+    // ☆ **So the whole observable consequence is a STRING**: `nvidia-smi`'s
+    // `VBIOS Version` column reads `??.??.??.??.??`. ⊘ Same family as
+    // `GPU_GET_NAME_STRING` printing `ERR!` in the Name column — cosmetic, visible, and on
+    // the list for `nvidia_smi_basic_is_a_milestone`, not on any critical path.
+    //
+    // ⚠ **What would change this row.** RM caches this control
+    // (`rmapi_cache.c:732/1385/1464` copy `biosInfoList` in and out), so a guest that reads
+    // the version twice gets one call, not two — the refusal cannot become a hot path. If a
+    // future boot shows anything branching on it, or a `biosInfoListSize` we do not expect,
+    // this stops being cosmetic and the row must be replaced by service.
+    0x2080_0810,
     0x0080_0294,
     0x0080_1814,
     0x2080_012c,
@@ -424,7 +456,24 @@ static LEDGER: &[u32] = &[
     //   (b) **commit the evidence** — full `run_w327*_qemu.log`, if it still exists anywhere.
     // ⊘ Not an option: teaching the gate to accept a citation in place of an artifact. This tree
     // already records that **no provenance looks cleaner than bad provenance**.
-    0x83de_030c,
+    //
+    // ★★★★★ **RESOLVED w763, AND OPTION (b) DIED OF MEASUREMENT.** `[measured 2026-09-18]`
+    // `0x83de030c` was searched for across **all 155** `run_*_qemu.log` files reachable from the
+    // bench — the 129 committed ones plus the 26 uncommitted boots on the box, `w736*` and
+    // `w760*` included — and `grep -la "unserviced fn 76 cmd 0x83de030c"` returns **zero files**.
+    // The full `run_w327*_qemu.log` this row needed does not exist anywhere any more.
+    //
+    // ⇒ (b) is not a choice that was declined; it is a choice that is **gone**. (a) is what is
+    // left, and it is the option the note above already called honest. ☆ It is also
+    // **self-reversing**: `Direction 1` puts the row back, with this analysis in git history,
+    // the moment any boot records the id again — so deleting it forfeits nothing except a claim
+    // nothing backs.
+    //
+    // ⚠ The row was invisible until today for a reason worth keeping: `Direction 1`'s
+    // `assert!` runs BEFORE `Direction 3`'s, so while ANY unclassified id existed this failure
+    // could not be reached. A gate with two assertions reports the first one, forever.
+    //
+    //   0x83de_030c,   ← deleted w763; see above before re-adding it by hand
     0xa06f_0112,
 ];
 
