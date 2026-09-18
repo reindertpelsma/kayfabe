@@ -5552,6 +5552,7 @@ fn doorbell_publish_loop(
         // unconditionally rather than only on that kind is deliberate: a fill queued just
         // before a doorbell would otherwise sit until the token after it, and a page that
         // keeps trapping is exactly how BAR1 went back to tens of thousands of exits.
+        let t_seg = std::time::Instant::now();
         if let Some(plane) = port.plane.upgrade() {
             plane.drain_mirror_revalidation();
         }
@@ -5592,6 +5593,8 @@ fn doorbell_publish_loop(
         // ⊘ `false` = not on a vCPU, and it is passed rather than derived: an `OffTrap` proves
         // this thread is not in a trap, but nothing at this line can prove which thread the
         // NEXT edit will call from. The flag makes the claim explicit and the census checks it.
+        let seg_reval_ms = t_seg.elapsed().as_secs_f64() * 1e3;
+        let t_seg = std::time::Instant::now();
         port.adopt_pending_channel_rings(false);
         let birth_grants =
             pending_birth_notifier_grants_of(&port.device, &port.ce, port.guest_ram_backing);
@@ -5667,6 +5670,8 @@ fn doorbell_publish_loop(
         // nothing about whether it exists.** Both were found by reading the loop. ★ A green
         // number is not a proof about a race — and the second time, the loop I was reading was
         // one I had just edited for exactly this reason.
+        let seg_births_ms = t_seg.elapsed().as_secs_f64() * 1e3;
+        let t_seg = std::time::Instant::now();
         port.rebuild_dbtable(&off_vcpu, &mut last_dbtable_rows);
         let err_grants =
             pending_err_notifier_grants_of(&port.device, &port.ce, port.guest_ram_backing);
@@ -5840,6 +5845,7 @@ fn doorbell_publish_loop(
             // ⊘ w763t — the segment between the loop head and here, which is where the
             // remaining ~17.8 ms of a 23.8 ms job lives: `job_ms=23.79 premap_ms=5.96` and
             // every phase between them measured 0.00.
+            let seg_tail_ms = t_seg.elapsed().as_secs_f64() * 1e3;
             let prelude_ms = t_job.elapsed().as_secs_f64() * 1e3;
             let t_reval = std::time::Instant::now();
             if let Some(plane) = plane_ref.as_ref() {
@@ -5930,7 +5936,9 @@ fn doorbell_publish_loop(
             if since_trigger_ms > 1.0 || premap_ms > 1.0 {
                 eprintln!(
                     "kayfabe: MMUINVAL-HOLD seq={seq} queued_ms={queued_ms:.2} \
-                     job_ms={:.2} prelude_ms={prelude_ms:.2} premap_ms={premap_ms:.2} \
+                     job_ms={:.2} prelude_ms={prelude_ms:.2} \
+                     SEG[reval={seg_reval_ms:.2} births={seg_births_ms:.2} tail={seg_tail_ms:.2}] \
+                     premap_ms={premap_ms:.2} \
                      since_trigger_ms={since_trigger_ms:.2} ⇒ queued = the worker was \
                      BEHIND; job-minus-premap = it was BUSY before reaching this phase",
                     t_job.elapsed().as_secs_f64() * 1e3
