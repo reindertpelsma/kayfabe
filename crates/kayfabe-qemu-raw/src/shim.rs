@@ -15895,6 +15895,55 @@ impl Regs {
             }
             None
         };
+        // ★★★★★ **THE CONSTRAINT-COMPLIANCE VERDICT** (w760s). One line, always printed.
+        //
+        // ⊘⊘⊘ **Why this exists, and it cost a day.** Three arms whose `off` state can NEVER
+        // ship all DEFAULT to off, so the free build is the non-compliant one and the
+        // shippable one takes four coordinated switches plus the right cargo feature. Worse,
+        // a HALF-armed plane is indistinguishable from a working one in every other line of
+        // the census: `host_isolates=true` reads as armed while `pool == 0` refuses every
+        // verb as `FwdFault::IsolateRetired` — a fault whose own documentation calls it *"a
+        // legitimate answer to give a guest rather than a bug to report"*. That is true with
+        // NO plane and a lie with an UNARMED one.
+        //
+        // `[measured w760]` four boots were spent on this, and one of them was read as
+        // sixteen distinct defects and an unkillable guest before the cause turned out to be
+        // a switch. ⇒ **A run must say whether it is measuring the deliverable.**
+        //
+        // ⚠ It REPORTS rather than refuses, deliberately: `SINGLE_STORE_PLAN.md` §7 licenses
+        // removing these fallbacks only once the 30-arm guest suite passes, and a bisection
+        // on the way there may legitimately need a non-compliant arm. The line makes such a
+        // run impossible to MISREAD; it does not make it impossible to run.
+        {
+            let mut violations: Vec<&str> = Vec::new();
+            if !scratchpad_arm.is_armed() {
+                violations.push(
+                    "§38 no single store: KAYFABE_SCRATCHPAD=off ⇒ no VM-lifetime isolate, so                      guest vidmem is not ONE host RM object",
+                );
+            } else if !scratchpad_cuda {
+                violations.push(
+                    "§20/§38 the CPU would walk guest vidmem: KAYFABE_SCRATCHPAD_CUDA=off ⇒ no                      PTX walker in the scratchpad, so the page-table walk falls back to the                      host CPU path those constraints exist to retire",
+                );
+            }
+            if std::env::var("KAYFABE_ISOLATES").as_deref() != Ok("real") {
+                violations.push(
+                    "§40 no forwarding plane: KAYFABE_ISOLATES != real ⇒ pool=0, and                      `never_serves` then refuses EVERY verb as IsolateRetired — which reads                      exactly like an archive that legitimately has no plane",
+                );
+            }
+            if violations.is_empty() {
+                eprintln!(
+                    "kayfabe: CONSTRAINT-VERDICT ★★★ COMPLIANT — single store armed, PTX                      walker in the scratchpad, real isolates. A result from this boot is a                      result about the DELIVERABLE."
+                );
+            } else {
+                eprintln!(
+                    "kayfabe: CONSTRAINT-VERDICT ⊘⊘⊘ NOT COMPLIANT ({} violation(s)) — this                      boot does NOT measure the deliverable and its verdicts must not be read                      as defects in it:",
+                    violations.len()
+                );
+                for v in &violations {
+                    eprintln!("kayfabe:   CONSTRAINT-VERDICT ⊘ {v}");
+                }
+            }
+        }
         // ★★★★★ **THE LIVE WALK SHADOW'S PORT** (`SINGLE_STORE_PLAN.md` §6 step 1).
         //
         // ⊘ Wired HERE, between the scratchpad's bring-up and the doorbell port's
