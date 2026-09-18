@@ -27,20 +27,34 @@ fi
 OUT=$BENCH/${TAG}_suite.out
 { echo "FAST_SUITE_STARTED=$(date -Is) arms=${#ARMS[@]} budget=${BUDGET}s"
   echo "rev=$(git -C "$(dirname "$0")/../.." rev-parse --short HEAD 2>/dev/null || echo ?)"
-  printf '%-28s %-8s %s\n' ARM VERDICT "seconds"
+  printf '%-28s %-9s %-5s %s\n' ARM VERDICT secs why
 } > "$OUT"
 pass=0; fail=0; crash=0
 for arm in "${ARMS[@]}"; do
     name=${arm#--}
     line=$(KF_ARMS="$arm" bash "$(dirname "$0")/run_fast_guest.sh" "${TAG}_${name}" "$BUDGET" 2>&1)
+    # ⊘⊘⊘ **THE REASON, NOT JUST THE WORD.** `[measured w763]` two arms scored `CRASH` at 2s
+    # and 6s of a 30s budget — QEMU exited during boot, which `run_fast_guest.sh` reports as
+    # `CRASH (no DONE marker)` and a budget overrun as `CRASH (budget exceeded)`. Grepping
+    # `[A-Z]*` collapsed the two into one word, so "the arm is too slow" and "the VMM died
+    # before the arm ran" landed in the same column. ⚠ Third conflation in this harness:
+    # `FAIL` also covers a self-deadline abort, and a missing device node looked like an arm
+    # failure. A verdict vocabulary that merges causes makes the scoreboard unreadable
+    # exactly where it matters.
     v=$(echo "$line" | grep -o 'FAST_VERDICT=[A-Z]*' | head -1 | cut -d= -f2)
+    why=$(echo "$line" | grep -o 'FAST_VERDICT=[A-Z]* ([^)]*)' | head -1 | sed 's/.*(//; s/)//')
+    case "$why" in
+        *"budget"*)      v=TIMEOUT ;;
+        *"DONE marker"*) v=VMM_DIED ;;
+    esac
     secs=$(echo "$line" | grep -oE '— [0-9]+s of a' | grep -oE '[0-9]+' | head -1)
     case "$v" in
-        PASS)  pass=$((pass+1)) ;;
-        FAIL)  fail=$((fail+1)) ;;
-        *)     v=${v:-CRASH}; crash=$((crash+1)) ;;
+        PASS)     pass=$((pass+1)) ;;
+        FAIL)     fail=$((fail+1)) ;;
+        VMM_DIED) crash=$((crash+1)) ;;
+        *)        v=${v:-TIMEOUT}; crash=$((crash+1)) ;;
     esac
-    printf '%-28s %-8s %ss\n' "$arm" "$v" "${secs:-?}" >> "$OUT"
+    printf '%-28s %-9s %-5s %s\n' "$arm" "$v" "${secs:-?}s" "$why" >> "$OUT"
 done
 { echo
   echo "FAST_SUITE_PASS=$pass FAST_SUITE_FAIL=$fail FAST_SUITE_CRASH=$crash ARMS=${#ARMS[@]}"
