@@ -7935,9 +7935,47 @@ impl SharedDoorbell {
         let t0 = Instant::now();
         let w = self.witness_executor_fb_pages();
         let t_witness = t0.elapsed();
-        let d = self.decode_cpu_pt_writes();
+        let (d, pt_drained) = self.decode_cpu_pt_writes_counting();
         let t_decode = t0.elapsed() - t_witness;
-        let sw = self.sweep_cpu_pt_tables();
+        // ★★★★★ **w763z — THE SWEEP IS SKIPPED WHEN THE GUEST'S CPU WROTE NO PAGE TABLE.**
+        //
+        // `[measured w763]` `sweep_cpu_pt_tables` is **7.22 ms** of a ~23 ms invalidate hold —
+        // the largest single term after the two mirror walks — and its own census says most of
+        // those milliseconds buy nothing:
+        //
+        //   150x  PT-SWEEP tasks=0 skipped=4 ran=0 pages=0
+        //    79x  PT-SWEEP tasks=0 skipped=3 ran=0 pages=0
+        //    42x  PT-SWEEP tasks=0 skipped=0 ran=0 pages=0
+        //    55x  PT-SWEEP tasks=3 ran=3 pages=59
+        //
+        // ⇒ **271 of 369 sweeps walk every proc's page tables and find nothing.**
+        //
+        // # ⊘ Why `pt_drained == 0` is the right guard, and what it does NOT claim
+        //
+        // The sweep reads **the guest's page tables out of our own store**, and the only way
+        // those bytes change is the guest's CPU writing them — which is exactly what
+        // `RegPlane::pt_witness` records and `decode_cpu_pt_writes` drains. A window in which
+        // the witness drained ZERO is a window in which the tables the sweep would walk are
+        // byte-for-byte what they were at the last sweep. ⚠ It is NOT a claim that nothing
+        // happened: bindings, revocations and births all still happen and are all handled by
+        // their own passes. It is the narrower claim that **re-walking unchanged bytes cannot
+        // produce a different answer**.
+        //
+        // ⊘ Gated and counted rather than assumed: this is the page-table plane, where a wrong
+        // skip is a stale GPU translation, so the arm exists to be turned off and the census
+        // exists to prove the skip only fires when the witness is empty.
+        let skip_sweep = pt_sweep_skip_armed() && pt_drained == 0;
+        let (sw, skipped_sweeps) = if skip_sweep {
+            PT_SWEEPS_SKIPPED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            (
+                " | PT-SWEEP ⊘ SKIPPED (pt_witness drained 0: the guest's CPU wrote no page                  table this window, so the bytes this walk reads are unchanged)"
+                    .to_string(),
+                1u64,
+            )
+        } else {
+            (self.sweep_cpu_pt_tables(), 0)
+        };
+        let _ = skipped_sweeps;
         let t_sweep = t0.elapsed() - t_witness - t_decode;
         // ★★★★★ **CONSTRAINT 27 — GET THE STAGED UNMAPS OUT, WITH A FIXED TRIP COUNT.**
         //
@@ -11721,8 +11759,18 @@ impl SharedDoorbell {
     }
 
     fn decode_cpu_pt_writes(&self) -> String {
+        self.decode_cpu_pt_writes_counting().0
+    }
+
+    /// As [`Self::decode_cpu_pt_writes`], and it also says HOW MANY pages it drained.
+    ///
+    /// ⊘ w763z. The count was already computed and thrown away inside a format string. The
+    /// sweep that follows is 7.22 ms and `[measured w763]` **271 of 369 sweeps find nothing**
+    /// (`PT-SWEEP tasks=0 ran=0 pages=0`) — so the one fact that says whether it can find
+    /// anything had to escape this function before that could be acted on.
+    fn decode_cpu_pt_writes_counting(&self) -> (String, usize) {
         let Some(plane) = self.plane.upgrade() else {
-            return String::new();
+            return (String::new(), 0);
         };
         let mut pending = plane.drain_pt_witness();
         let drained = pending.len();
@@ -11731,8 +11779,11 @@ impl SharedDoorbell {
             // first-writer census reads `BAR2 50 / PRAMIN 21 / EXEC 0`, so a drain of zero
             // on the real arm would say the witness is not on the path the census names —
             // a finding about **this instrument**, and a missing line could not carry it.
-            return " | PT-DECODE drained=0 (the CPU transport wrote nothing this window)"
-                .to_string();
+            return (
+                " | PT-DECODE drained=0 (the CPU transport wrote nothing this window)"
+                    .to_string(),
+                0,
+            );
         }
         // ★ Zero-sized and stateless (`Ga10xGmmu` is a unit struct), so this is the same
         // *value* the composition root installed with `plane.set_mmu` — not a second
@@ -11831,7 +11882,7 @@ impl SharedDoorbell {
         // that was not written, and the witness is the only record that it was.
         let requeue_refused = plane.requeue_pt_witness(pending.iter().copied());
         let st = plane.pt_witness_stats();
-        format!(
+        let line = format!(
             " | PT-DECODE drained={drained} latched={latched} unowned_vas={vas_gone} \
              requeued={} rounds={rounds}{revoke_arm}{revoke_clause} → bound={} unchanged={} \
              repointed={} unbound={} \
@@ -11864,7 +11915,8 @@ impl SharedDoorbell {
             st.refused,
             requeue_refused,
             revoke_arm = format!(" | JOIN-RELEASE arm={}", revoke_policy.as_str()),
-        )
+        );
+        (line, drained)
     }
 
     /// ★★★★★ **THE WHOLE-VAS SWEEP AT THE DOORBELL** — the C's `enum_gr_sysmem`, driven.
@@ -21623,6 +21675,42 @@ pub const DIRTY_GATE_WITNESS_ENV: &str = "KAYFABE_DIRTY_GATE_WITNESS";
 /// # Errors
 /// [`Status::Unsupported`] if `value` names neither state. **Absent is not an error**; it is
 /// `false`.
+/// How many invalidates skipped the page-table sweep because the witness was empty.
+pub static PT_SWEEPS_SKIPPED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// `KAYFABE_PT_SWEEP_SKIP` — skip `sweep_cpu_pt_tables` when the CPU page-table witness
+/// drained nothing.
+///
+/// ★ **Absent is ON**, per THE_CONSTRAINTS §42: the skip is the design, and `off` is the
+/// control arm, reachable by name. ⊘ A typo is refused rather than defaulted, because an
+/// evidence run and its own control must not be spelled alike.
+///
+/// # Errors
+/// [`Status::Unsupported`] for anything that is not `on` or `off`.
+pub fn pt_sweep_skip_from(value: Option<&str>) -> Result<bool, (Status, &'static str)> {
+    match value {
+        None | Some("on") => Ok(true),
+        Some("off") => Ok(false),
+        Some(_) => Err((
+            Status::Unsupported,
+            "KAYFABE_PT_SWEEP_SKIP does not name a state: the only values are `on` (the \
+             default — skip the page-table sweep in a window where the guest's CPU wrote no \
+             page table) and `off` (the control — sweep on every invalidate, as before \
+             w763z). It is not defaulted, because a typo that silently selected the control \
+             would make an evidence run and its own negative control indistinguishable.",
+        )),
+    }
+}
+
+/// The arm [`pt_sweep_skip_from`] names, read once.
+fn pt_sweep_skip_armed() -> bool {
+    static ARM: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ARM.get_or_init(|| {
+        pt_sweep_skip_from(std::env::var("KAYFABE_PT_SWEEP_SKIP").ok().as_deref())
+            .unwrap_or(true)
+    })
+}
+
 pub fn dirty_gate_from(value: Option<&str>) -> Result<bool, (Status, &'static str)> {
     match value {
         // ★★★★★ w330 — DEFAULT MOVED off → ON, on measurement.

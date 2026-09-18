@@ -136,3 +136,34 @@ fn a_port_without_the_device_store_never_chooses_a_device_backing() {
     );
     assert!(backing_is_device(FbStoreArm::Device, true));
 }
+
+// =====================================================================================
+// w763z — the page-table sweep skip
+// =====================================================================================
+
+/// ★★★ **The skip is the default and a typo is still refused** (THE_CONSTRAINTS §42).
+#[test]
+fn the_sweep_skip_is_the_default_and_its_control_is_reachable_by_name() {
+    use kayfabe_qemu_raw::shim::pt_sweep_skip_from;
+    assert_eq!(
+        pt_sweep_skip_from(None),
+        Ok(true),
+        "★ absent is the design: a window where the guest's CPU wrote no page table cannot \
+         produce a different sweep answer, and `[measured w763]` 271 of 369 sweeps found \
+         nothing while costing 7.22 ms of a 23 ms invalidate hold"
+    );
+    assert_eq!(pt_sweep_skip_from(Some("on")), Ok(true));
+    assert_eq!(
+        pt_sweep_skip_from(Some("off")),
+        Ok(false),
+        "⊘ the control arm must stay reachable BY NAME: this is the page-table plane, and a \
+         wrong skip is a stale GPU translation"
+    );
+    for typo in ["ON", "1", "true", "yes", "", "Off", " on"] {
+        assert!(
+            pt_sweep_skip_from(Some(typo)).is_err(),
+            "`{typo}` must be refused, never defaulted — an evidence run and its own control \
+             must not be spelled alike"
+        );
+    }
+}
