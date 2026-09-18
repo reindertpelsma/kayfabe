@@ -51,6 +51,10 @@ pub const KF_MAX_SCOPE: usize = 256;
 /// and look like a page-table bug (`THE_CONSTRAINTS.md` §21). Mirrors `KF_ABI_VERSION`.
 pub const KF_ABI_VERSION: u32 = 2;
 
+/// `KFWR_OP_UNMAP` — the run names a VA being RETIRED, so it carries no `gpga` and is exempt
+/// from the §39(c) containment check. Mirrors `kf_walk.h:88`.
+pub const KFWR_OP_UNMAP: u16 = 2;
+
 /// Pascal…Ada. GA10x is the tested one.
 pub const KF_TBL_VER2: u32 = 2;
 /// Hopper/Blackwell — **sketched, never run**, and refused by this crate as by the `.cu`.

@@ -8,7 +8,7 @@
 //! committed PTX, built from that same file.
 
 use crate::abi::{
-    KF_ABI_VERSION, KF_MAX_PDB, KF_TBL_VER2, KF_TBL_VER3, KFWR_HF_TRUNCATED, KFWR_MAGIC, KfArgs,
+    KF_ABI_VERSION, KF_MAX_PDB, KF_TBL_VER2, KF_TBL_VER3, KFWR_HF_TRUNCATED, KFWR_MAGIC, KFWR_OP_UNMAP, KfArgs,
     KfDev, KfFormat, KfMapRun, KfPdbEntry, KfReportHeader, KfScope,
 };
 use crate::driver_unsafe::{CUdeviceptr, CtxHandle, Cuda, CudaError, Func};
@@ -81,6 +81,12 @@ pub struct Report {
     pub pdbs: Vec<KfPdbEntry>,
     /// The runs, in the order the kernel emitted them.
     pub runs: Vec<KfMapRun>,
+    /// ★★★★★ §39(c): the GPGA span this walk was bounded by, carried so that
+    /// [`Report::validate`] can check CONTAINMENT without the caller having to remember to
+    /// supply it. ⊘ Recorded at construction from the refresh that produced the report — a
+    /// span the caller passes separately is a span the caller can forget, and this is the
+    /// check standing between a malicious guest and a mapping outside its own store.
+    pub gpga_span: u64,
 }
 
 /// Why a report is not well formed. ⊘ Each variant names **which** property failed, because
@@ -123,6 +129,18 @@ pub enum ReportError {
     /// A run has zero length. ⊘ A zero-length mapping contributes nothing and can never appear
     /// in a coverage residual, so it is refused rather than counted.
     ZeroLenRun(usize),
+    /// ★★★★★ §39(c): the run names memory OUTSIDE the guest's own GPGA span. Mapping it
+    /// would hand the guest memory that is not its own — the escalation, not a malformation.
+    RunOutsideGpga {
+        /// Which run.
+        index: usize,
+        /// The GPGA it named.
+        gpga: u64,
+        /// Its length.
+        len: u64,
+        /// The span it had to lie inside.
+        span: u64,
+    },
 }
 
 impl core::fmt::Display for ReportError {
@@ -150,6 +168,18 @@ impl core::fmt::Display for ReportError {
                 )
             }
             ReportError::ZeroLenRun(i) => write!(f, "run[{i}] has len 0"),
+            ReportError::RunOutsideGpga {
+                index,
+                gpga,
+                len,
+                span,
+            } => write!(
+                f,
+                "run[{index}] leaves the guest's GPGA: gpga={gpga:#x} len={len:#x} ends at \
+                 {:#x}, span is {span:#x} — mapping it would hand the guest memory that is \
+                 not its own",
+                gpga.saturating_add(*len)
+            ),
         }
     }
 }
@@ -205,6 +235,24 @@ impl Report {
             }
             if r.len == 0 {
                 return Err(ReportError::ZeroLenRun(i));
+            }
+            // ★★★★★ §39(c) CONTAINMENT — the one property here about ESCALATION rather than
+            // well-formedness. An UNMAP names a VA being retired and carries no gpga, so it is
+            // exempt; every other run becomes a MAPPING, and a mapping outside the guest's own
+            // store hands it memory that is not its own.
+            // ⊘ The kernel refuses these at both emit chokepoints and `storemap::map` bounds
+            // again at map time. This is the MIDDLE layer and it was missing: the validator
+            // documented as "what production consults" checked capacities, slice ranges and
+            // zero-len while saying NOTHING about where a run points.
+            if r.op != KFWR_OP_UNMAP
+                && (r.gpga > self.gpga_span || r.len > self.gpga_span - r.gpga)
+            {
+                return Err(ReportError::RunOutsideGpga {
+                    index: i,
+                    gpga: r.gpga,
+                    len: r.len,
+                    span: self.gpga_span,
+                });
             }
         }
         Ok(())
@@ -525,6 +573,7 @@ impl WalkKernel {
             header,
             pdbs: pdbs_out,
             runs: runs_out,
+            gpga_span: gpga_len,
         })
     }
 
