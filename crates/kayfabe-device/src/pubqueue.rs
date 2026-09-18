@@ -205,9 +205,23 @@ pub enum PublicationKind {
 pub struct MapPublication {
     token: u64,
     kind: PublicationKind,
+    /// ★★★★★ **WHEN THIS JOB WAS OFFERED** — `Instant` at `offer`, read at `take`.
+    ///
+    /// ⊘ w763s. The guest's hold is `trigger → completion`; the worker's phase timers only
+    /// cover `dequeue → completion`. `[measured w763]` the phases summed to ~6 ms against a
+    /// 24.8 ms hold, and NOTHING in the tree could say where the other ~19 ms went. This is
+    /// the missing half: `take` minus `offer` is the QUEUE, and it separates "the worker is
+    /// behind" from "the wake was slow" — two findings with completely different fixes.
+    offered_at: Option<std::time::Instant>,
 }
 
 impl MapPublication {
+    /// How long this job sat in the queue, if it was stamped. See [`Self::offered_at`].
+    #[must_use]
+    pub fn queued_for(&self) -> Option<std::time::Duration> {
+        self.offered_at.map(|t| t.elapsed())
+    }
+
     /// The guest rang `token`; the mappings its submission needs are to be published and
     /// the host channel rung, on a worker.
     #[must_use]
@@ -215,6 +229,7 @@ impl MapPublication {
         Self {
             token,
             kind: PublicationKind::Doorbell,
+            offered_at: None,
         }
     }
 
@@ -222,6 +237,7 @@ impl MapPublication {
     #[must_use]
     pub const fn for_invalidate(val: u64) -> Self {
         Self {
+            offered_at: None,
             token: val,
             kind: PublicationKind::Invalidate,
         }
@@ -231,6 +247,7 @@ impl MapPublication {
     #[must_use]
     pub const fn for_mirror_fill(seq: u64) -> Self {
         Self {
+            offered_at: None,
             token: seq,
             kind: PublicationKind::MirrorFill,
         }
@@ -240,6 +257,7 @@ impl MapPublication {
     #[must_use]
     pub const fn for_gsp_submit(seq: u64) -> Self {
         Self {
+            offered_at: None,
             token: seq,
             kind: PublicationKind::GspSubmit,
         }
@@ -249,6 +267,7 @@ impl MapPublication {
     #[must_use]
     pub const fn for_rpc_bind(seq: u64) -> Self {
         Self {
+            offered_at: None,
             token: seq,
             kind: PublicationKind::RpcBind,
         }
@@ -469,6 +488,10 @@ impl PublicationQueue {
         // ⊘ Indexed BEFORE the push, off the job we still own, so the counter cannot drift from
         // what was actually enqueued.
         let k = job.kind() as usize;
+        // ★ Stamped HERE, not by the caller: every path into the queue goes through this
+        // line, so a new call site cannot forget to be timed.
+        let mut job = job;
+        job.offered_at = Some(std::time::Instant::now());
         g.order.push_back(job);
         g.stats.queued += 1;
         if let Some(c) = g.stats.queued_by_kind.get_mut(k) {

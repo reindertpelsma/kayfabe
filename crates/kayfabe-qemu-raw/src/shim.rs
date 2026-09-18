@@ -5537,6 +5537,13 @@ fn doorbell_publish_loop(
     // convention, by type.
     let off_vcpu = OffVcpu::for_publication_worker();
     while let Some(job) = queue.take_blocking() {
+        // ★★★★★ **w763s — THE QUEUE, SPLIT FROM THE WORK.** `[measured w763]` the guest's
+        // hold averaged 24.83 ms while every phase this worker times summed to ~6 ms. The
+        // missing ~19 ms is either this queue (the worker is BEHIND) or the wake (it was slow
+        // to start) — two findings whose fixes have nothing in common, and no instrument in
+        // the tree could tell them apart.
+        let queued_ms = job.queued_for().map_or(-1.0, |d| d.as_secs_f64() * 1e3);
+        let t_job = std::time::Instant::now();
         let token = job.token();
         // ★★★★★ **w472 — DRAIN THE MIRROR'S FILL QUEUE ON EVERY WAKE, whatever woke us.**
         //
@@ -5918,9 +5925,11 @@ fn doorbell_publish_loop(
                 .map_or(-1.0, |us| us as f64 / 1e3);
             if since_trigger_ms > 1.0 || premap_ms > 1.0 {
                 eprintln!(
-                    "kayfabe: MMUINVAL-HOLD seq={seq} premap_ms={premap_ms:.2} \
-                     since_trigger_ms={since_trigger_ms:.2} ⇒ the phases are the WORK; the \
-                     difference is the WAIT"
+                    "kayfabe: MMUINVAL-HOLD seq={seq} queued_ms={queued_ms:.2} \
+                     job_ms={:.2} premap_ms={premap_ms:.2} \
+                     since_trigger_ms={since_trigger_ms:.2} ⇒ queued = the worker was \
+                     BEHIND; job-minus-premap = it was BUSY before reaching this phase",
+                    t_job.elapsed().as_secs_f64() * 1e3
                 );
             }
             // ★★★★★ w564 — PUBLISH THE TRIGGER'S VALUE AFTER THE COMPLETION ATTEMPT, on
