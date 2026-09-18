@@ -319,9 +319,28 @@ impl VasOwner {
 /// [`VasOwner::Isolate`].
 pub fn vas_owner_from(value: Option<&str>) -> Result<VasOwner, (Status, &'static str)> {
     match value {
-        None | Some("isolate") => Ok(VasOwner::Isolate),
+        // ★★★★★ **w760z — ROUTE K IS THE DEFAULT.** Owner, 2026-09-18: *"make route k the
+        // default or remove env vars"*.
+        //
+        // ⊘⊘⊘ **The paragraph below argued against defaulting, and its premise expired.** It
+        // reasoned that `k` as a default *"would grade route K on a boot nobody asked to arm
+        // it on"* — true while route K was an ARM UNDER EVALUATION against `scratchpad` as
+        // its control. It is now the architecture, so there is nothing left to grade, and the
+        // cost of the old default is measured: `isolate` skips the block that binds a
+        // device-backed leaf to the store, so `ADOPT-WHY ⊘ (6) the binding EXISTS but carries
+        // NO HOST OBJECT` refuses every ring adoption and the raw client's R15 fails
+        // (`[measured w740, w742, w743, w760]` — four campaigns, byte-identical).
+        //
+        // ⚠ Note also that the doc below says *"It is not defaulted"* while the code defaulted
+        // to `isolate`. It was defaulted, to the superseded arm, in a function whose comment
+        // denied defaulting at all.
+        //
+        // ⊘ `isolate` and `scratchpad` remain reachable BY NAME: `isolate` is the arena
+        // control arm and `scratchpad` is route K's own reproduction control. Deleting them
+        // waits on `SINGLE_STORE_PLAN.md` §7 (the 30-arm guest suite), which is not green yet.
+        None | Some("k") => Ok(VasOwner::BirthClient),
+        Some("isolate") => Ok(VasOwner::Isolate),
         Some("scratchpad") => Ok(VasOwner::Scratchpad),
-        Some("k") => Ok(VasOwner::BirthClient),
         Some(_) => Err((
             Status::Unsupported,
             "KAYFABE_VAS_OWNER does not name an arm: the only values are `isolate` (the \
@@ -1262,16 +1281,32 @@ fn why(e: &RmError) -> String {
 mod tests {
     use super::*;
 
-    /// ★★★★★ **CONSTRAINT 32 — THE THIRD ARM PARSES, AND A TYPO IS STILL REFUSED.**
+    /// ★★★★★ **CONSTRAINT 32 — ROUTE K IS THE DEFAULT, AND A TYPO IS STILL REFUSED.**
     ///
-    /// ⊘ The refusal is the half that matters and it is why `vas_owner_from` returns a
-    /// `Result` at all: a typo defaulted to `k` would grade route K on a boot nobody armed
-    /// it on, which is how a result gets attributed to the wrong change.
+    /// ⊘ The refusal is still the half that matters and it is why `vas_owner_from` returns a
+    /// `Result` at all: a typo must never silently select an arm nobody asked for.
+    ///
+    /// ⚠ **w760z — the default moved from `isolate` to `k`, and the old assertion was the
+    /// only thing pinning it.** This test previously required `None == Isolate`, i.e. it
+    /// pinned *"a boot that names nothing runs the pre-constraint-26 tree"* — the arm that
+    /// skips binding a device-backed leaf to the store and so refuses every ring adoption
+    /// with `ADOPT-WHY (6)`. A green test held the superseded architecture in place as the
+    /// default across four campaigns (`[measured w740, w742, w743, w760]`).
     #[test]
-    fn route_k_is_a_third_arm_and_a_typo_is_still_refused() {
+    fn route_k_is_the_default_and_a_typo_is_still_refused() {
         assert_eq!(vas_owner_from(Some("k")), Ok(VasOwner::BirthClient));
         assert_eq!(vas_owner_from(Some("scratchpad")), Ok(VasOwner::Scratchpad));
-        assert_eq!(vas_owner_from(None), Ok(VasOwner::Isolate));
+        assert_eq!(
+            vas_owner_from(None),
+            Ok(VasOwner::BirthClient),
+            "★★★★★ a boot that names no VAS owner must run ROUTE K. Defaulting to `isolate` \
+             leaves a device-backed leaf unbound to the store, and every ring adoption then \
+             refuses `ADOPT-WHY (6) the binding EXISTS but carries NO HOST OBJECT`"
+        );
+        // ⊘ Both controls stay reachable BY NAME — `isolate` is the arena control and
+        // `scratchpad` is route K's own reproduction control. §7 licenses deleting them only
+        // once the 30-arm guest suite passes.
+        assert_eq!(vas_owner_from(Some("isolate")), Ok(VasOwner::Isolate));
         for typo in ["K", "route-k", "birthclient", "kk", "", "scratchpad "] {
             assert!(
                 vas_owner_from(Some(typo)).is_err(),
