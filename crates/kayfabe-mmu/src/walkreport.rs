@@ -223,6 +223,19 @@ pub enum ParseError {
         /// The page size its flags declare.
         page_size: u64,
     },
+    /// ★★★★★ §39(c): a run names memory OUTSIDE the guest's own GPGA span. Not a
+    /// malformation — the report is perfectly well formed — but acting on it would map memory
+    /// that is not the guest's, which is the escalation the walker exists to refuse.
+    RunOutsideGpga {
+        /// Index of the offending run.
+        index: usize,
+        /// The GPGA it named.
+        gpga: u64,
+        /// Its length.
+        len: u64,
+        /// The span it had to lie inside.
+        span: u64,
+    },
     /// A run's `va` is not aligned to its own page size.
     UnalignedRunVa {
         /// Index of the offending run.
@@ -688,11 +701,46 @@ impl Report {
                     page_size: ps,
                 });
             }
-            // ⊘ NOTHING is asserted about `gpga` alignment, and that is deliberate — see
+            // ⊘ NOTHING is asserted about `gpga` ALIGNMENT, and that is deliberate — see
             // `the_walk_kernel_report_format.md` §3: VER2 carries a 4 KiB-granular address field
             // at every leaf level, so a hostile guest can spell a 512 MiB page whose base is
             // 4 KiB-aligned. The kernel refuses such a leaf by name; the host must not
             // *assume* the alignment it cannot enforce.
+        }
+        Ok(())
+    }
+
+    /// ★★★★★ **§39(c) CONTAINMENT — every mapping run must lie inside the guest's own GPGA.**
+    ///
+    /// ⊘ Separate from [`Self::validate`] because it is a different KIND of property. Everything
+    /// `validate` asserts describes a report that is internally inconsistent — a slice that runs
+    /// past its array, a length that is not a multiple of its page size. This asserts that the
+    /// report does not ask us to map memory **that is not the guest's**, which is the escalation
+    /// the walker exists to refuse and cannot be checked without knowing how big the guest is.
+    ///
+    /// An `UNMAP` names a VA being retired and carries a meaningless `gpga`, so it is exempt —
+    /// the same exemption [`Self::present_runs`] relies on.
+    ///
+    /// ⚠ This is the layer on the PRODUCTION path. The CUDA kernel refuses such a leaf at both
+    /// emit chokepoints and `StoreMapPort::map` bounds again at map time; this is the middle
+    /// one, and until w760m it did not exist — so a report that named memory outside the store
+    /// was carried all the way into a built diff before anything objected.
+    ///
+    /// # Errors
+    /// [`ParseError::RunOutsideGpga`] naming the first run that leaves `span`.
+    pub fn validate_within(&self, span: u64) -> Result<(), ParseError> {
+        for (i, r) in self.runs.iter().enumerate() {
+            if r.op == RunOp::Unmap.code() {
+                continue;
+            }
+            if r.gpga > span || r.len > span - r.gpga {
+                return Err(ParseError::RunOutsideGpga {
+                    index: i,
+                    gpga: r.gpga,
+                    len: r.len,
+                    span,
+                });
+            }
         }
         Ok(())
     }

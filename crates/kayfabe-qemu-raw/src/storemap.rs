@@ -335,6 +335,15 @@ impl core::fmt::Debug for StoreMapPort {
 }
 
 impl StoreMapPort {
+    /// ★★★★★ §39(c): how large the guest's GPGA is. The single store IS the whole of guest
+    /// vidmem, so the object's length is exactly the bound a reported leaf must lie inside.
+    /// ⊘ Exposed so the WALK path can refuse an out-of-store run when the report is PARSED,
+    /// rather than discovering it one `map()` at a time after the diff is already built.
+    #[must_use]
+    pub fn gpga_span(&self) -> u64 {
+        self.obj_len
+    }
+
     /// Build the port. ⊘ `crate::scratchpad::Scratchpad::share_for_store_maps` is the only
     /// constructor path, because it is the only place that knows the reservation is held.
     #[must_use]
@@ -869,6 +878,34 @@ impl StoreMapPort {
         let mut done = AppliedOps::default();
         // ⊘ Two passes over one list, not a sort: the list's own order is meaningful within
         // each kind (the differ emits coalesced runs), and sorting would discard it.
+        // ★★★★★ §39(c) CONTAINMENT, CHECKED OVER THE WHOLE BATCH BEFORE ANY MAP HAPPENS.
+        //
+        // `map()` already refuses an out-of-range slice one at a time (`OutOfRange`), but that
+        // is a per-op failure discovered MID-APPLY: by then some of the batch has been unmapped
+        // and some mapped, and the caller is left to reason about a half-applied diff. A report
+        // that names memory outside the store is not a report to partially honour — it is one
+        // we have caught asking for memory that is not the guest's, and the whole thing is
+        // refused before a single mapping moves.
+        //
+        // ⊘ This is the layer the WALK path was missing. The CUDA kernel refuses such a leaf at
+        // both emit chokepoints (KFWR_R_LEAF_OOB) and `map()` bounds again underneath; this is
+        // the one in the middle, and it is here rather than in `walkshadow` because THIS is
+        // where the store's own length lives — a check that has to be handed its bound from
+        // somewhere else is a check someone can forget to hand.
+        for op in ops {
+            let r = match op {
+                MapOp::Map(r) | MapOp::Remap(r) => r,
+                MapOp::Unmap(_) => continue,
+            };
+            if r.gpga > self.obj_len || r.len > self.obj_len - r.gpga {
+                self.map_refused.fetch_add(1, Ordering::Relaxed);
+                return Err(StoreMapRefusal::OutOfRange {
+                    offset: r.gpga,
+                    len: r.len,
+                    obj_len: self.obj_len,
+                });
+            }
+        }
         for op in ops {
             if let MapOp::Unmap(r) | MapOp::Remap(r) = op {
                 self.unmap(vas, GpuVa(r.va))?;

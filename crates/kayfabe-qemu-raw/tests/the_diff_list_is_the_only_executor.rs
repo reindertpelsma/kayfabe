@@ -136,3 +136,38 @@ fn the_bind_path_uses_the_address_rm_chose() {
          `P1/P2/P3 ✔ VERIFIED` to `NEVER RETIRED`, with nothing red in the workspace suite."
     );
 }
+
+/// ★★★★★ **§39(c) — `apply_ops` REFUSES THE WHOLE BATCH BEFORE IT MOVES ANYTHING.**
+///
+/// ⊘ `map()` already refuses an out-of-range slice one at a time, but that failure arrives
+/// MID-APPLY: some of the batch is unmapped, some mapped, and the caller is handed a
+/// half-applied diff to reason about. A report naming memory outside the store is not one to
+/// partially honour — it is one we have caught asking for memory that is not the guest's.
+///
+/// This gate pins the ORDER, which is the whole property: the containment loop must sit above
+/// the first `self.unmap(`, or the refusal happens after mappings have already been retired.
+#[test]
+fn apply_ops_bounds_the_whole_batch_before_it_mutates() {
+    let src = std::fs::read_to_string("src/storemap.rs").expect("storemap.rs is readable");
+    let body = {
+        let at = src
+            .find("pub fn apply_ops(")
+            .expect("`apply_ops` exists — the gates above pin that");
+        &src[at..]
+    };
+    let guard = body
+        .find("self.obj_len")
+        .expect(
+            "★★★★★ `apply_ops` no longer bounds its ops against the store's length. A diff \
+             naming memory outside the guest's own store would then be applied, handing the \
+             guest memory that is not its own — the escalation §39 exists to refuse.",
+        );
+    let first_unmap = body.find("self.unmap(").expect("`apply_ops` no longer unmaps");
+    let first_map = body.find("self.map(").expect("`apply_ops` no longer maps");
+    assert!(
+        guard < first_unmap && guard < first_map,
+        "★★★★★ the containment check runs AFTER `apply_ops` has begun mutating (guard at {guard}, \
+         first unmap at {first_unmap}, first map at {first_map}). A batch carrying one \
+         out-of-store run would then be half-applied before anything objected."
+    );
+}
