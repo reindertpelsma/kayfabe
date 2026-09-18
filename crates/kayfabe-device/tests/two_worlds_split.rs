@@ -100,6 +100,17 @@ use kayfabe_device::{FbWindow, NanoClock, SteppingClock, abi, ga10x::GA106};
 mod tiny;
 use tiny::{E_VALID, TinyFmt};
 
+// ⊘⊘⊘ **PLACED HERE, AFTER THE IMPORTS, AND NOT ABOVE THE FIRST `#[test]`.** `[measured w763]`
+// the first attempt anchored on the first `#[test]` and landed BETWEEN a `#[ignore = "..."]`
+// and the function it decorates — silently detaching it, so a falsifier documented as
+// "expected RED until BAR1 is served from the reserved object" ran and failed, and read as a
+// regression this commit had caused. ⚠ An insertion before an ITEM can separate that item
+// from its attributes; an insertion after the imports cannot.
+/// ⊘ The `twoworlds` census is a PROCESS GLOBAL and four tests in this binary move it. Held
+/// across each one's whole before/act/after window, so no two can interleave. See the note on
+/// `the_plane_attributes_each_window_to_the_world_constraint_15_assigns_it`.
+static CENSUS: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 // ───────────────────────────── the three apertures ─────────────────────────────
 
 /// The register aperture, which carries the untranslated BAR0 moving window (PRAMIN).
@@ -482,12 +493,24 @@ fn pramin_and_bar2_resolve_one_framebuffer_address_to_one_memory() {
 /// ⚠ PRAMIN is the arm most likely to be got wrong, because it is in BAR**0** and every other
 /// classification in this plane keys on the BAR index. §15 puts it with BAR2 regardless.
 ///
-/// ⊘ **Read as deltas, and this must stay the only test in this file that drives
-/// `window_page_backing`.** `twoworlds`' maps are process-wide, so an absolute census here
-/// would be a statement about whatever else in this binary happened to run first. The four
+/// ⊘⊘⊘ **THIS COMMENT USED TO STATE AN INVARIANT THAT NOTHING ENFORCED, AND IT WAS ALREADY
+/// FALSE WHEN IT WAS WRITTEN.** It said *"this must stay the only test in this file that
+/// drives `window_page_backing`"* — while THREE other tests in the same binary already did,
+/// all of them on `FbWindow::FbAperture`, which is the very counter this asserts a delta of 1
+/// on. `[measured w763]` it finally interleaved and reported `left: 2`.
+///
+/// ⇒ **Deltas do not make a process-global census safe; they make it safe against what ran
+/// BEFORE, and say nothing about what runs BESIDE.** Cargo runs a file's tests on several
+/// threads of one process. ⚠ Third instance of this class in one session, with
+/// `sweep_defer_census` and the `KAYFABE_FB_STORE` fixtures — a shared global read as if it
+/// were local.
+///
+/// ★ The rule the comment wanted is now ENFORCED, not asserted: every test that drives
+/// `window_page_backing` takes `CENSUS` across its whole window. The four
 /// framebuffer addresses it touches are its own for the same reason.
 #[test]
 fn the_plane_attributes_each_window_to_the_world_constraint_15_assigns_it() {
+    let _census = CENSUS.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     let p = plane();
     // A BAR1 mapping and a BAR2 mapping onto two DIFFERENT pages — this test is about which
     // world each window is recorded as, so a shared page would report a collision that says
@@ -735,6 +758,7 @@ fn the_armed_trap_path_refuses_by_name_and_counts_it() {
 /// the third row of the prediction table and it stays a reading.
 #[test]
 fn a_bar1_translate_through_the_single_store_is_refused_and_the_store_is_what_refused() {
+    let _census = CENSUS.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     use kayfabe_device::DeviceFb;
     use kayfabe_device::fbwin::DEVICE_FB_READ_REFUSED;
 
@@ -914,6 +938,7 @@ fn a_declined_drain_ends_the_retry_rather_than_spinning_it() {
 /// format's depth and not a number somebody picked.
 #[test]
 fn a_bar1_translate_resolves_after_a_lock_free_caller_arms_the_pages_it_missed() {
+    let _census = CENSUS.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     let port = std::sync::Arc::new(fakeport::FakePort::new(GA106.fb_length));
     let p = device_plane_with_port(&port);
     build_bar1_tree_in_the_object(&port, BAR1_VA, leaf(SHARED_PHYS));
