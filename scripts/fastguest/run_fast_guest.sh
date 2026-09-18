@@ -106,7 +106,7 @@ start=$(date +%s)
 timeout --kill-after=3 "$BUDGET" "$Q" \
     "${RAMARGS[@]}" -cpu host -smp "${KF_SMP:-3}" \
     -kernel "$FG/vmlinuz" -initrd "$FG/initrd.cpio.gz" \
-    -append "console=ttyS0 panic=1 loglevel=6 KF_ARMS=$ARMS_TOK KF_IOCTL_TRACE=${KF_IOCTL_TRACE:-verbose} KF_SELF_DEADLINE_MS=$DEADLINE_MS" \
+    -append "console=ttyS0 panic=1 loglevel=6 KF_ARMS=$ARMS_TOK KF_IOCTL_TRACE=${KF_IOCTL_TRACE:-verbose} KF_BUDGET_S=$BUDGET" \
     -device "nvkvm-gpu,bar1-size=$BAR1_BYTES,bar2-size=33554432,id=kf0${NVKVM_DEV_EXTRA:+,$NVKVM_DEV_EXTRA}" \
     -msg timestamp=on \
     -serial "file:$SER" -display none \

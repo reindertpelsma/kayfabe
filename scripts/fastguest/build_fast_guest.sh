@@ -232,7 +232,19 @@ echo "FASTGUEST: ready $(cut -d' ' -f1 /proc/uptime)s"
 # way first; caught by reading the kernel's own parser, not by a run. ⇒ one token, commas.
 ARMS=$(echo "${KF_ARMS:-}" | tr -d '"' | tr ',' ' ')
 [ -n "$ARMS" ] || ARMS="--timer --engines --doorbell-census"
-echo "FASTGUEST: arms $ARMS"
+# ⊘⊘⊘ **THE DEADLINE IS COMPUTED HERE, BECAUSE ONLY HERE IS THE BOOT ALREADY SPENT.**
+# `[measured w763]` the runner set `KF_SELF_DEADLINE_MS = (budget - 4) * 1000` -- but that is
+# measured from the CLIENT's start, and the boot costs ~9 s of the budget before the client
+# exists. So a 25 s budget armed a 21 s client deadline that would have fired at ~30 s wall,
+# four seconds AFTER the outer `timeout` killed QEMU. ⇒ The dump the whole lane exists to
+# produce could not fire, and the evidence was a serial log truncated mid-word.
+# ★ `/init` knows the uptime. The deadline is what is LEFT, minus a margin to speak in.
+BUDGET_S=${KF_BUDGET_S:-20}
+UP=$(cut -d' ' -f1 /proc/uptime | cut -d. -f1)
+LEFT=$(( BUDGET_S - UP - 3 ))
+[ "$LEFT" -lt 2 ] && LEFT=2
+export KF_SELF_DEADLINE_MS=$(( LEFT * 1000 ))
+echo "FASTGUEST: arms $ARMS  deadline ${LEFT}s (budget ${BUDGET_S}s, ${UP}s already spent booting)"
 /bin/rmladder --gpu 0 $ARMS 2>&1
 echo "FASTGUEST: client rc=$? at $(cut -d' ' -f1 /proc/uptime)s"
 echo "FASTGUEST: DONE"
