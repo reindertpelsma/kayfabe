@@ -2547,3 +2547,71 @@ trapping register will reproduce the same four-rung error; attribution must be t
 worker at all — that arm still violates §41 and is a degraded configuration, not a shipping
 one. ⊘ `ring_adopt_census()`'s `on=` is the number that says which arm actually ran; it prints
 at teardown, so read it there rather than inferring it from the gate.
+
+## §42 — A DEFAULT IS THE DESIGN, AND SO ARE ITS PRECONDITIONS
+
+> **Owner, 2026-09-18:** *"make the single store the default or forced"* · *"make route k the
+> default or remove env vars. remove env options which now crash by construction."*
+
+**`[measured w763]`** `KAYFABE_FB_STORE=device` and `KAYFABE_VAS_OWNER=k` were already the
+defaults. Every knob they **depend on** still defaulted off — `SCRATCHPAD`,
+`SCRATCHPAD_CUDA`, `DEVICE_VIEW`, `ISOLATES` — so a boot that named **nothing** died at
+`enforce_device_store`:
+
+    KAYFABE_FB_STORE=device and there is NO DEVICE-VIEW PORT
+
+⇒ **The shipped default was a configuration that cannot boot.** A top-level flip whose
+preconditions are not flipped with it is decoration.
+
+### (a) Flip the whole dependency chain in one commit, or do not flip
+
+A default names an architecture, and an architecture has parts. If `A`'s default requires
+`B`, `C` and `D`, then `B`, `C` and `D` are not separate decisions — they are the same one,
+spelled four times. ⊘ Leaving them off does not make the configuration conservative; it makes
+it **unreachable**, which is strictly worse than the old arm because it fails at realize
+instead of running something honest.
+
+### (b) One statement of a default. An auditor asks the parser, never the environment
+
+⊘⊘⊘ The `CONSTRAINT-VERDICT` block added at w760 to catch *"this boot is not measuring the
+deliverable"* did its own `std::env::var` reads with the pre-flip defaults written into the
+comparison. One commit after route K became the default it printed
+`⊘ §26/§32 KAYFABE_VAS_OWNER != k` **on a boot that was running route K** — the variable was
+merely absent, and absence had changed meaning.
+
+⇒ A verdict block that restates a default is a **second statement** of it, and it fails in the
+most misleading direction available: it accuses the correct configuration. Every auditor calls
+`selected_vas_owner()`, `selected_fb_store()`, `selected_isolate_plane()` — the same parsers
+the device calls. ⚠ `env::var(X) == "literal"` in an audit is the defect, not the check.
+
+### (c) A census names symptoms; act on the FIRST LINK, not the count
+
+That boot printed four violations — `DEVICE_VIEW=DISARMED`, `CUDA_WALK=DISARMED`,
+`VAS_OWNER != k`, `ISOLATES != real`. They are **one** cause: no plane ⇒ no worker ⇒ no
+reservation ⇒ no port ⇒ refuse. Reading four symptoms as four problems is how this survived.
+
+### (d) An opt-in may MOVE; it may not silently disappear
+
+`isolate_plane_from(None)` was `Stillborn`, and its stated reason was real: *"a default that
+spawned anything would put a host process behind every guest without a single line of
+configuration."* ⊘ That objection is **answered, not overridden**: the `host-isolates` cargo
+feature stays **off by default**, so an archive that did not opt in cannot name
+`HostIsolateFactory` at all and `real` there refuses at realize, by name. The property is held
+**by linkage**, not by an `if`. ⇒ When you move a default, say where the old guarantee now
+lives; if you cannot point at it, you removed it.
+
+### (e) A test that reddens on a default flip is reporting a HIDDEN ARGUMENT
+
+`[measured w763]` the flip reddened two whole suites and six more files — **not one of them
+about what guest video memory is**. They ask about BAR ownership, refusal wording, a counter's
+rate. They reached the benign arm only because it was the ambient default: an **undeclared
+dependency on a process global**, revealed.
+
+⊘ Both reflexes are wrong. Setting the variable inside the tests puts a process-global write
+in a multi-threaded test binary — the shape that already cost this campaign a flake. A
+`cfg(test)` default means the tested configuration is never the shipped one.
+
+⇒ Move the ambient read **out of the composition root's contract**:
+`Regs::create_probed_on(id, probe, Some(FbStoreArm::Arena))`. Production still calls
+`Regs::create`, which still reads the environment, and there is still exactly one statement of
+the default. ★ The precondition now lives in the test, which is where a precondition belongs.
