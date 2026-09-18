@@ -2681,3 +2681,43 @@ PASS, so the tree cannot yet tell a deletion that is inert from one that removed
 something still needed. ⇒ **Obligation:** when the suite is green, delete the enum, delete the
 `gr_passthrough` parameter, and leave `dbtable::Route` as the only doorbell vocabulary. A
 `KAYFABE_GR_ROUTE` that still parses after that is an arm selecting between a path and nothing.
+
+## §44 — DURING THIS PHASE, THE NEW ARCHITECTURE IS THE DEFAULT ON ARRIVAL. §7 IS AMENDED.
+
+> **Owner, 2026-09-19:** *"I see you want to defer deletions, but it has happened to block us
+> for days now that old code is rotting through the better architecture. You should quickly set
+> the defaults to the new arch during this phase of the project, not until you 'proof' its good,
+> until you proof it doesn't work and is broken and the old one is better and correct. If you
+> set it later, then you forget, and you are going to debug against old code, that was often
+> deleted not for perf, but also because it was not being able to fit in the design later on."*
+
+⊘ **This RELAXES §7's *"deletions come last, licensed by the guest suite"*, and the argument is
+a PRODUCT one, not a shortcut to a pass** — which is the only kind of argument that may move a
+constraint here.
+
+### The burden of proof is INVERTED
+
+- **Before:** a new arm is off until the suite proves it good.
+- **Now:** a new arm is **the default on arrival**. The OLD arm returns only on proof that the
+  new one is broken **and** that the old one is better **and** correct.
+
+### ★★★ Why deferring costs more than it saves — measured, not asserted
+
+`[measured w765]` an afternoon was spent reasoning about
+`FaultTag("Route::NotACopyEngineChannel")` — a refusal from a superseded engine-type list,
+named after a variant of a table that cannot hold it. The reasoning was careful and entirely
+wasted: the model it was about had already been replaced by `dbtable::Route`. ⇒ **Old code does
+not sit inertly beside new code; it answers questions, and the answers are believed.**
+
+⚠ And the second half of the owner's argument is the load-bearing one: **old paths are usually
+deleted because they cannot fit the new design, not because they are slow.** A deferred deletion
+is therefore not a deferred cleanup — it is a live contradiction kept in the tree, and
+whichever half a future reader finds first is the one they will debug against.
+
+### What this does NOT license
+
+⊘ It does not license deleting a **control arm**: a negative control reachable **by name** is
+part of the new architecture, not a remnant of the old one (§42(d), §43(c)).
+⊘ It does not license removing a refusal without replacing it with the behaviour it refused —
+*"refuse by name"* still holds; §44 changes which arm is default, never whether an unimplemented
+path is allowed to lie about being a decision.
