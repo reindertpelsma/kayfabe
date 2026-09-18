@@ -15925,6 +15925,28 @@ impl Regs {
                     "§20/§38 the CPU would walk guest vidmem: KAYFABE_SCRATCHPAD_CUDA=off ⇒ no                      PTX walker in the scratchpad, so the page-table walk falls back to the                      host CPU path those constraints exist to retire",
                 );
             }
+            // ★★★★★ **w760v — THE SINGLE STORE ITSELF, and the check that was MISSING.**
+            // ⊘⊘⊘ `KAYFABE_FB_STORE` defaults to `arena`: the sparse-memfd framebuffer, i.e.
+            // the TWO-WORLDS design where guest vidmem is fabricated per leaf. `device` is
+            // the single store — the one reserved RM object §38 is about.
+            // `[measured w760]` every boot of this session ran the ARENA, and w760s's verdict
+            // said COMPLIANT anyway because it checked the scratchpad and never this. That is
+            // the verdict lying in exactly the way it exists to prevent.
+            // ⚠ And it is the root of R15: on the arena a guest leaf must be JOINED to become
+            // host-nameable, so ring/USERD adoption runs the leaf-relative path and declines.
+            // Under the single store there is nothing to join — the framebuffer address IS
+            // the file offset, so `adopted_guest_userd_in_store` needs no binding at all.
+            // Owner, 2026-09-18: *"in the single store joining is dead right? that idea of
+            // islands of framebuffers in gpga is removed?"* — yes, and running the arena is
+            // what kept the dead path alive.
+            if std::env::var("KAYFABE_FB_STORE").as_deref().unwrap_or("arena") != "device" {
+                violations.push(
+                    "§38 NOT the single store: KAYFABE_FB_STORE != device ⇒ the framebuffer is \
+                     the sparse-memfd ARENA and guest vidmem is fabricated per leaf. Every leaf \
+                     must then be JOINED to be host-nameable, which is the two-worlds machinery \
+                     the single store replaces",
+                );
+            }
             if std::env::var("KAYFABE_ISOLATES").as_deref() != Ok("real") {
                 violations.push(
                     "§40 no forwarding plane: KAYFABE_ISOLATES != real ⇒ pool=0, and                      `never_serves` then refuses EVERY verb as IsolateRetired — which reads                      exactly like an archive that legitimately has no plane",
