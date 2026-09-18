@@ -11,10 +11,28 @@
 
 use kayfabe_qemu_raw::deviceview::{FbStoreArm, enforce_device_store, fb_store_from};
 
-/// ⊘ **The default is `arena`, stated once and asserted here.**
+/// ★ **The default is the SINGLE STORE, stated once and asserted here.**
+///
+/// # ⊘⊘⊘ w763d — the FIFTH green test found pinning a superseded default
+///
+/// This file's own header says the gate exists so that *"a boot that fails later and
+/// elsewhere, with a symptom that names the wrong subsystem"* cannot happen — and this
+/// assertion was holding the arm that produces exactly that, by name: on the arena a guest
+/// leaf must be JOINED to be host-nameable, so every ring adoption refuses
+/// `ADOPT-WHY (6) the binding EXISTS but carries NO HOST OBJECT`.
+///
+/// > Owner, 2026-09-18: *"in the single store joining is dead right? that idea of islands of
+/// > framebuffers in gpga is removed?"*
+///
+/// ⊘ `arena` stays reachable BY NAME as the control arm. §42(a): the default names an
+/// ARCHITECTURE, and this is the line that says which one.
 #[test]
-fn absent_is_the_arena_and_is_not_an_error() {
-    assert_eq!(fb_store_from(None).unwrap(), FbStoreArm::Arena);
+fn absent_is_the_single_store_and_is_not_an_error() {
+    assert_eq!(
+        fb_store_from(None).unwrap(),
+        FbStoreArm::Device,
+        "★★★★★ a boot that names no framebuffer store must be the SINGLE STORE.          Defaulting to `arena` means guest vidmem is fabricated per leaf and every leaf needs          a join to become host-nameable — the two-worlds machinery the single store replaces"
+    );
     assert_eq!(fb_store_from(Some("arena")).unwrap(), FbStoreArm::Arena);
     assert_eq!(fb_store_from(Some("device")).unwrap(), FbStoreArm::Device);
 }
