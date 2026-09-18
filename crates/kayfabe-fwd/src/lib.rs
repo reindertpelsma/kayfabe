@@ -9146,9 +9146,37 @@ pub fn fault_facts(
 fn adopted_guest_userd_in_store(
     userd: Option<kayfabe_core::rmgraph::DeclaredUserd>,
 ) -> Option<kayfabe_isolate::AdoptedGuestUserd> {
-    let base = match userd?.resolved? {
+    // ★★★★★ **w760x — NAME THE DECLINE HERE TOO.** w760t instrumented the LEAF path and this
+    // one kept one word for three causes — so on the single store, which is the path that
+    // matters, the log went silent again. ⊘ The same lesson twice in one session: an
+    // instrument added to the arm you were looking at is an instrument absent from the arm
+    // you switch to.
+    let Some(u) = userd else {
+        eprintln!("kayfabe: USERD-STORE-DECLINE ⊘ (1/3) the birth carried NO DeclaredUserd");
+        return None;
+    };
+    let Some(resolved) = u.resolved else {
+        eprintln!(
+            "kayfabe: USERD-STORE-DECLINE ⊘ (2/3) the params carried no RESOLVED descriptor — \
+             the guest's own kernel resolves hUserdMemory/userdOffset before it RPCs us, so \
+             this is a decode or a wire gap, not a placement"
+        );
+        return None;
+    };
+    let base = match resolved {
         kayfabe_arch::UserdMem::Framebuffer { base, .. } => base,
-        kayfabe_arch::UserdMem::Sysmem { .. } | kayfabe_arch::UserdMem::Undeclared { .. } => {
+        kayfabe_arch::UserdMem::Sysmem { .. } => {
+            eprintln!(
+                "kayfabe: USERD-STORE-DECLINE ⊘ (3a/3) USERD is in GUEST RAM — legal, and the \
+                 store has no slice for it. Served by the guest-RAM pin or not at all."
+            );
+            return None;
+        }
+        kayfabe_arch::UserdMem::Undeclared { .. } => {
+            eprintln!(
+                "kayfabe: USERD-STORE-DECLINE ⊘ (3b/3) the descriptor was ZERO — the guest let \
+                 RM allocate its USERD, so there is no guest page to adopt"
+            );
             return None;
         }
     };

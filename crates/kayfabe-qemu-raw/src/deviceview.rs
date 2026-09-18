@@ -1193,8 +1193,22 @@ impl FbStoreArm {
 /// not an error**; it is [`FbStoreArm::Arena`].
 pub fn fb_store_from(value: Option<&str>) -> Result<FbStoreArm, &'static str> {
     match value {
-        None | Some("arena") => Ok(FbStoreArm::Arena),
-        Some("device") => Ok(FbStoreArm::Device),
+        // ★★★★★ **w760w — THE SINGLE STORE IS THE DEFAULT.** Owner, 2026-09-18: *"make the
+        // single store the default or forced"*.
+        //
+        // ⊘⊘⊘ It used to be `None | Some("arena")`, so a boot that named nothing got the
+        // TWO-WORLDS arena: guest vidmem fabricated per leaf, every leaf needing a JOIN to
+        // become host-nameable. `[measured w760]` every boot of that session ran it without
+        // anyone choosing it, and the failure it produced (R15 SEM NEVER LANDED, 20 of 20
+        // births declining ring and USERD adoption) was a failure of the superseded design
+        // reached by default.
+        //
+        // ⚠ Defaulting to `device` is SAFE TO GET WRONG, which is why it can be the default:
+        // `enforce_device_store` refuses loudly when the device-view port is absent or the
+        // deferred-revalidation arm is off, naming both the cause and the fix. The old
+        // default failed SILENTLY into a different architecture.
+        None | Some("device") => Ok(FbStoreArm::Device),
+        Some("arena") => Ok(FbStoreArm::Arena),
         Some(_) => Err(
             "KAYFABE_FB_STORE does not name a store: the only values are `arena` (the \
              default, a sparse host memfd) and `device` (the one reserved device-local RM \
