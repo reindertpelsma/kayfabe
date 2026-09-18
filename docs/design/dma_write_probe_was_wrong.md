@@ -1,6 +1,25 @@
-# The engine can READ our DMA memory and is refused when it WRITES
+# ⊘⊘⊘ TITLE REFUTED — DMA WRITES WORK; THIS PROBE IS WRONG
 
-**STATUS: LIVE — measured 2026-09-18 (w756e), vast 51402274, RTX 3090, host driver
+**STATUS: ⊘ SUPERSEDED BY ITS OWN EVIDENCE, 2026-09-18 (w756f) — within the hour, and by a
+commit already in this tree.**
+
+`2ddce6e2` (w711) is a recorded baseline where the **raw client, two concurrent clients,
+`CUP3_VAL=43` and an LLM producing 16 tokens ALL PASS** while every framebuffer leaf is a memfd
+exported as `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` — guest "video memory" is host RAM over PCIe.
+
+★★★ **An LLM cannot emit tokens without the GPU writing its results.** If the engine could not
+write an `OS_DESCRIPTOR`, that baseline could not exist. ⇒ **GPU→DMA writes work on this
+hardware, in this codebase.** The `0x56` below is a defect in the probe written to measure it —
+the FIFTH such defect in one session, after: no `cuInit`, a 16-byte params block, `_TYPE_RM`
+sent as `0`, and `alloc_sysmem`'s `NO_MAP`.
+
+⚠ **The lesson is the one already written down and I failed to apply it to myself:** when a
+probe answers NO, suspect the probe. I had the disproof in the tree — `the_all_dma_baseline_commit`
+— and wrote a design doc naming an open question against the platform instead of checking it.
+⊘ The measurement below is kept verbatim because the probe's behaviour is still what has to be
+fixed; only its ATTRIBUTION was wrong.
+
+**Originally: LIVE — measured 2026-09-18 (w756e), vast 51402274, RTX 3090, host driver
 580.159.04, `--bare-metal-suite`.**
 
 ---
@@ -59,11 +78,15 @@ week: **the suite was complete over the direction it tested.**
 **into** guest RAM. A CE that cannot write an `OS_DESCRIPTOR` cannot serve an H2D-shaped
 completion into guest memory.
 
-## Open — the next thing to establish
+## What to fix — in the PROBE, not the platform
 
-Whether the refusal is about (a) the descriptor's own permissions as RM sees them, (b) the
-second (executor-space) mapping `map_dma_both` makes, or (c) the CE channel's client not having
-write access to memory another client described. ⊘ Deliberately **not guessed**: this session
-produced three wrong verdicts from reading a refusal as an answer, and `0x56` from an unknown
-site is exactly that shape. The probe now names its step, so the next run can narrow it by
-construction rather than by argument.
+`2ddce6e2`'s working path is the reference: `join_fb_leaf` / `alias_fb_leaf` describe a memfd as
+an `OS_DESCRIPTOR` and the engine writes into it. This probe differs from that path in at least
+one way worth checking first — **it lets RM choose the destination VA** (`map_dma_both(…, None)`),
+where `prove_os_descriptor` dictates one and its own docs say why:
+*"every address this probe owns is DICTATED, and far away … letting RM choose put the probe's
+OWN channel ring at the address the isolate's ring had just been freed from."*
+
+⊘ Named as the first thing to check, **not** as the cause: the probe now prints its step, so the
+next run narrows it by construction. What is already settled is that the platform is not the
+subject.
