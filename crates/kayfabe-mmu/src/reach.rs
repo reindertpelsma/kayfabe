@@ -968,8 +968,41 @@ pub fn apply_settlement_as(
                     });
                     continue;
                 }
+                // ⊘⊘⊘ **w767 — ONE NAME OVER FOUR CAUSES, AND THEY HAVE FOUR DIFFERENT FIXES.**
+                //
+                // `[measured w766]` a boot refused **30 rows** as `UnbindsPublished`, one of
+                // them the VA a passthrough channel's host semaphore writes
+                // (`0x9140000000`) — so hardware kept translating it to the OLD object while
+                // the guest read the new one, and the raw client saw its poison survive. The
+                // census could not say WHICH condition refused it, and the four are not one
+                // problem:
+                //
+                //   `!whole_row`      partial extent   — bookkeeping: we would revoke bytes
+                //                                        nobody proposed
+                //   `!frees_object`   ★ THE REAL ONE   — a host double-free: the object
+                //                                        serves sibling bindings at other
+                //                                        offsets
+                //   `!JoinsGuestWindow` wrong plane    — bookkeeping: published-GPA row
+                //   `policy != Revoke`  no release path — bookkeeping: the caller cannot
+                //                                        dispose of the host half
+                //
+                // ⚠ Owner, 2026-09-19: *"If the guest says unpublish then you unpublish the
+                // mapping in that VA. It can only corrupt the guest itself."* — true of the
+                // three bookkeeping arms; the `frees_object` arm is the one that is NOT about
+                // the guest at all, and naming them alike is what made the whole guard look
+                // like it was defending against the guest.
+                let why = if policy != PublishedUnbind::RevokeWholeJoins {
+                    "no-release-path"
+                } else if !whole_row {
+                    "partial-extent"
+                } else if !h.frees_object() {
+                    "would-double-free-a-shared-host-object"
+                } else {
+                    "not-a-guest-window-join"
+                };
                 out.refusals
                     .push(crate::walker::PopulateRefusal::UnbindsPublished { va });
+                out.unbind_refusal_why.push((va.0, why));
                 // ★ The shadow is NOT told the unbind happened, because it did not. Next pass
                 // proposes it again, which is what a refusal that the forwarding plane can
                 // later clear should do.
@@ -1042,6 +1075,14 @@ pub struct RevokedPublication {
 /// What [`apply_settlement`] did to the table.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ApplyOutcome {
+    /// ★★★★★ **w767 — WHY each `UnbindsPublished` refused, per VA.**
+    ///
+    /// ⊘ Four causes wore one name and only ONE of them is about anything but our own
+    /// bookkeeping (`would-double-free-a-shared-host-object`). ⚠ The guard's stated premise —
+    /// *"still mapped into that address space's host VAS"* — also assumes the VAS OUTLIVES the
+    /// unbind: on a VAS teardown the host VAS goes with it and every mapping in it is gone by
+    /// construction, so there is nothing left to leak and nothing left to name.
+    pub unbind_refusal_why: Vec<(u64, &'static str)>,
     /// Leaves bound into a range that was free.
     pub bound: usize,
     /// Leaves that restated a binding already in the table.

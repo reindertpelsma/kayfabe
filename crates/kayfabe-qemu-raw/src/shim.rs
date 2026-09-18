@@ -12008,6 +12008,11 @@ impl SharedDoorbell {
         let mut reasons: std::collections::BTreeMap<kayfabe_fwd::SweepReason, usize> =
             std::collections::BTreeMap::new();
         let mut first_fault: Option<String> = None;
+        // ⊘ w767 — `UnbindsPublished` wore one name over four causes; this is the tally of
+        // which one actually fired, so a stale translation can be told from a double-free
+        // guard without reading the source.
+        let mut unbind_why: std::collections::BTreeMap<&'static str, usize> =
+            std::collections::BTreeMap::new();
         let mut refusal_kinds: std::collections::BTreeMap<&'static str, usize> =
             std::collections::BTreeMap::new();
         let mut refusal_vas: std::collections::BTreeSet<u64> = std::collections::BTreeSet::new();
@@ -12085,6 +12090,9 @@ impl SharedDoorbell {
             // first one.** A `first=` that names a different address than the fault reads as
             // *"unrelated"* and is the exact shape of `a_count_cannot_see_a_substitution`.
             // ⊘ Deduped and capped, and the cap SAYS SO.
+            for (_va, why) in &out.unbind_refusal_why {
+                *unbind_why.entry(why).or_default() += 1;
+            }
             for r in &out.refusals {
                 let (kind, va) = refusal_kind_va(r);
                 *refusal_kinds.entry(kind).or_default() += 1;
@@ -12129,7 +12137,8 @@ impl SharedDoorbell {
              repointed={repointed} swept_binds={swept_binds} swept_only_pages={swept_only} \
              dropped={dropped} unbound={unbound} unwitnessed={unwitnessed} \
              published={published} faults={faults} reach_faults={reach_faults} \
-             refusals={refusals} by_kind={refusal_kinds:?} refused_vas=[{}]{} \
+             refusals={refusals} by_kind={refusal_kinds:?} unbind_why={unbind_why:?} \
+             refused_vas=[{}]{} \
              PUBCONFLICT_VAS[n={} lowest=[{}] highest=[{}]] first={} \
              |{}|{}",
             refusal_vas

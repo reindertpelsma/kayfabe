@@ -302,6 +302,14 @@ pub struct PtDecodeOutcome {
     pub dropped: Vec<(GpuVa, DropReason)>,
     /// Leaves the table refused. Loud.
     pub refusals: Vec<PopulateRefusal>,
+    /// ★★★★★ **w767 — WHICH of `UnbindsPublished`'s four conditions refused each VA.**
+    ///
+    /// ⊘ One name covered four causes with four different fixes, and only ONE of them
+    /// (`would-double-free-a-shared-host-object`) is about anything other than our own
+    /// bookkeeping. `[measured w766]` 30 rows refused this way, one of them the VA a
+    /// passthrough channel's host semaphore writes — so hardware kept translating it to the
+    /// OLD object while the guest read the new one.
+    pub unbind_refusal_why: Vec<(u64, &'static str)>,
     /// ★★★ Branches the decode could not read, carried out of the pass rather than
     /// absorbed — MISS = FAULT. The subtree under each contributed nothing and was **not**
     /// guessed at.
@@ -434,6 +442,7 @@ impl PtDecodeOutcome {
     /// `the_commit_may_chunk.rs` pins that by round-tripping a fully-populated value.
     pub fn merge(&mut self, other: Self) {
         let Self {
+            unbind_refusal_why,
             revoked,
             revoked_still_desired,
             remaps_refused,
@@ -473,6 +482,7 @@ impl PtDecodeOutcome {
         self.unchanged += unchanged;
         self.repointed += repointed;
         self.dropped.extend(dropped);
+        self.unbind_refusal_why.extend(unbind_refusal_why);
         self.refusals.extend(refusals);
         self.faults.extend(faults);
         self.vas_gone += vas_gone;
