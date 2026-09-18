@@ -2439,3 +2439,58 @@ shared misreading, and deriving it is how the third member was found.
 `CommandPolicy::respond` says **what** the answer is; `CommandPolicy::may_deliver_yet` says
 **when** it may be delivered — the latter existing so a reply can be held until the page-table
 refresh reaches the host without blocking a vCPU (§ the three blocking invariants).
+
+---
+
+## §40 — TWO LIFETIMES: THE RESERVATION IS THE VM'S, THE DEVICE STATE IS THE DRIVER'S
+
+**STATUS: LIVE, 2026-09-18 (w760). Owner ruling.**
+
+> *"we load scratchpad process and the raw client when the driver loads, its also our persistent
+> thing immediately. if it unloads, all GPU processes are killed incl the scratchpad, so we
+> ourself also hold no references. if the host then also holds nothing, the host GPU driver can
+> unload (unless the host holds work). … one thing that I want to avoid is to loose our GPU
+> memory reservation when the guest is running but GPU driver unloaded it temporarily."*
+
+The owner names the tension in the same breath as the design, and it resolves into **two
+lifetimes that must not be collapsed into one**:
+
+### Tier A — the VM's lifetime. **Must survive a guest driver unload.**
+
+The scratchpad isolate and the single store reservation. `[measured w760]` this tier already
+exists and is already VM-scoped (`scratchpad.rs:509`, *"The VM-lifetime scratchpad isolate. One
+per `(vm, gpu)`, spawned at device realize"*).
+
+⊘ **Why it must not be driver-scoped:** a guest that `rmmod`s its driver is still running, and
+its vidmem allocation is still its own. Releasing the reservation there hands the guest's memory
+back to the host allocator, where another tenant — or our own host CUDA context — can take it.
+The guest then reloads and cannot get its own framebuffer back. **A temporarily driverless guest
+is not a departed guest.**
+
+### Tier B — the guest driver's lifetime. **Must reset on unload.**
+
+GSP boot phase (and therefore WPR2), channels, VAS, mappings, BAR views. `[measured w760]` this
+tier **does not exist**: there is no "guest driver unloaded" notion anywhere in the device layer,
+which is precisely why the device-open wall is permanent (see §39 and
+`the_device_open_wall_is_wpr2_not_ceutils`). The FSM *can* cycle — `Cold | Halted` both accept a
+restart — but nothing drives it back.
+
+### ⇒ What follows, in priority order
+
+1. **Fix the root cause.** `kbusInitBar2` fails because `memmgrGetDeviceSuballocator` returns the
+   memory manager's heap and that heap is **NULL** (`mem_desc.c:116-160`: the only
+   `NV_ERR_INVALID_STATE` on that path is `NV_ASSERT_OR_RETURN(pHeap != NULL, …)`). A boot that
+   does not fail needs no recovery, and this is the only item that makes the wall *not happen*.
+2. **Reset tier B on guest driver unload**, clean or unclean. The clean path already exists
+   (Booter Unload → `BootStep::Teardown` → `enter_halted()`); the unclean one — the guest process
+   `kill -9`'d, or an init that failed before `NV_INIT_FLAG_GPU_STATE_LOAD` was set — has no path
+   at all, and that is the one that actually fires.
+3. **Model FLR.** `[measured w760]` kayfabe has no function-reset handling, so the guest's own
+   documented recovery (*"the GPU is likely in a bad state and may need to be reset"*) is
+   unavailable. A real device clears WPR2 on reset; ours must, or a wedged guest can only be
+   fixed by destroying the VM.
+
+⚠ **The ordering of tier-A teardown matters for the owner's last clause.** *"If the host then
+also holds nothing, the host GPU driver can unload"* is only true if tier A is released at **VM
+shutdown** — so the rule is: tier B resets on driver unload, tier A releases on VM exit, and
+neither event may trigger the other's teardown.
