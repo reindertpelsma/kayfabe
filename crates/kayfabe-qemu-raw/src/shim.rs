@@ -8239,19 +8239,22 @@ impl SharedDoorbell {
                         .rsplit_once("->")
                         .and_then(|(_, t)| t.split('/').next())
                         .and_then(|h| u64::from_str_radix(h.trim().trim_start_matches("0x"), 16).ok());
+                    // ⊘⊘⊘ **w772b — THE PEEK CANNOT HAPPEN HERE, AND THE FIRST ATTEMPT PROVED
+                    // IT THE EXPENSIVE WAY.** Reading the store from inside the walk gets
+                    // *"no CPU view of this page is armed yet … arming is an IPC round trip
+                    // that asserts lock-free and this read ran under the plane lock"* — a
+                    // refusal about the PROBE's context, which I briefly read as a finding
+                    // about the system. ⚠ The census says the opposite: `read_served=1308759`
+                    // against `host_read_refused=21`.
+                    //
+                    // ⇒ Record the offset and peek it at TEARDOWN, which is lock-free AND is
+                    // the only point at which hardware has certainly finished — a read at the
+                    // doorbell is before execution and could never have answered the question.
+                    if let Some(off) = leaf {
+                        PROBE_LEAF_OFF.store(off, std::sync::atomic::Ordering::Relaxed);
+                    }
                     let peek = match leaf {
-                        Some(off) => {
-                            let mut b = [0u8; 8];
-                            match plane.fb_peek(off, &mut b) {
-                                Ok(()) => format!(
-                                    " | FB@0x{off:x}=[{:02x} {:02x} {:02x} {:02x} {:02x} {:02x} \
-                                     {:02x} {:02x}] le32=0x{:08x}",
-                                    b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7],
-                                    u32::from_le_bytes([b[0], b[1], b[2], b[3]])
-                                ),
-                                Err(e) => format!(" | FB@0x{off:x} ⊘ UNREADABLE: {e}"),
-                            }
-                        }
+                        Some(off) => format!(" | leaf_off=0x{off:x} (peeked at teardown)"),
                         None => " | ⊘ no leaf offset in the trace to peek at".to_string(),
                     };
                     eprintln!("kayfabe: PROBE-VA token=0x{token:08x} va=0x{va:x}{trace}{peek}");
@@ -19324,6 +19327,35 @@ impl Regs {
         // unreachable and increment 7 may delete the demand-fill mirror; anything else means
         // publication is incomplete and names how often.**
         {
+            // ★★★★★ **w772b — THE PROBE'S READ, AT THE ONLY POINT IT CAN ANSWER.**
+            //
+            // Lock-free (teardown), and after hardware has certainly finished — a read at the
+            // doorbell is before execution and answers nothing. `[measured w770]` the guest's
+            // leaf for the probed VA resolves to a framebuffer offset; this says what is
+            // actually THERE when the run ends.
+            //
+            // ⊘ The payload `--uvm-mean`'s P3 waits for is `0x0da19ea1` and its poison is
+            // `0xdeadbeef`. Seeing the payload here while the client still reads poison would
+            // mean hardware wrote correctly and the CLIENT's view of that page is other
+            // memory; seeing poison here means the write never reached this page at all.
+            {
+                let off = PROBE_LEAF_OFF.load(std::sync::atomic::Ordering::Relaxed);
+                if off != u64::MAX {
+                    let mut b = [0u8; 8];
+                    match self.plane.fb_peek(off, &mut b) {
+                        Ok(()) => eprintln!(
+                            "kayfabe: PROBE-FB AT END OF RUN: off=0x{off:x} le32=0x{:08x} \
+                             bytes=[{:02x} {:02x} {:02x} {:02x}] ⇒ 0x0da19ea1 = the GR \
+                             semaphore landed here; 0xdeadbeef = it never did",
+                            u32::from_le_bytes([b[0], b[1], b[2], b[3]]),
+                            b[0], b[1], b[2], b[3]
+                        ),
+                        Err(e) => eprintln!(
+                            "kayfabe: PROBE-FB AT END OF RUN: off=0x{off:x} ⊘ UNREADABLE: {e}"
+                        ),
+                    }
+                }
+            }
             let policy = self.plane.fb_trap_policy();
             let n = self.plane.fb_trap_refusals();
             eprintln!(
@@ -21773,6 +21805,12 @@ pub const DIRTY_GATE_WITNESS_ENV: &str = "KAYFABE_DIRTY_GATE_WITNESS";
 /// # Errors
 /// [`Status::Unsupported`] if `value` names neither state. **Absent is not an error**; it is
 /// `false`.
+/// ★ w772b — the framebuffer offset the probe's walk resolved, peeked at teardown.
+///
+/// ⊘ `u64::MAX` means "no walk recorded one". A `0` would be a real offset.
+pub static PROBE_LEAF_OFF: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(u64::MAX);
+
 /// How many invalidates skipped the page-table sweep because the witness was empty.
 pub static PT_SWEEPS_SKIPPED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
