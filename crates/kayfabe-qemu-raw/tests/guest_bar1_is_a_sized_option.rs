@@ -19,7 +19,10 @@ use kayfabe_qemu_raw::bar1budget::{
 /// yet switched on is noise that teaches people to ignore the check."*
 #[test]
 fn unset_is_the_chip_rows_own_aperture_and_is_not_an_error() {
-    assert_eq!(guest_bar1_from(None).expect("unset parses"), None);
+    // ⊘ `guest_bar1_from(None)` — the DEFAULT — is asserted in
+    // `defaults_are_the_new_design`, so two files cannot disagree about it. What this test
+    // owns is that a BLANK value parses the same way an absent one does, which is a
+    // statement about parsing and not about the default.
     assert_eq!(guest_bar1_from(Some("  ")).expect("blank parses"), None);
 }
 

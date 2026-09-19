@@ -147,6 +147,48 @@ fn absent_selects_the_new_design_for_every_arm() {
     assert_eq!(guest_ring_from(None), Ok(GuestRingArm::Ring));
     assert_eq!(fb_join_from(None), Ok(FbJoinArm::Shared));
     assert_eq!(doorbell_async_from(None), Ok(DoorbellAsyncArm::On));
+
+    // ── w811d: the rows that used to live in four OTHER test files ───────────────────────
+    //
+    // ⊘ These are MOVED, not invented. Each was asserted somewhere else in this crate, which
+    // is how `pt_sweep_skip_from` came to have two files giving opposite answers. The
+    // reasoning travels with the row; the files they came from keep what is theirs — that
+    // both arms are reachable by name, and that a typo refuses.
+
+    // ⊘ `Arena` is the two-worlds machinery the single store replaces: guest vidmem
+    // fabricated per leaf, every leaf needing a join to become host-nameable.
+    assert_eq!(
+        kayfabe_qemu_raw::deviceview::fb_store_from(None).unwrap(),
+        kayfabe_qemu_raw::deviceview::FbStoreArm::Device,
+        "★★★★★ a boot that names no framebuffer store must be the SINGLE STORE"
+    );
+
+    // ⊘ Not a design arm but a SIZE, and `None` means "the chip row's own aperture" — the
+    // honest default, since a refusal firing every boot for a design not yet switched on is
+    // noise that teaches people to ignore the check.
+    assert_eq!(
+        kayfabe_qemu_raw::bar1budget::guest_bar1_from(None).expect("unset parses"),
+        None
+    );
+
+    assert_eq!(
+        kayfabe_qemu_raw::scratchpad::scratchpad_from(None),
+        Ok(kayfabe_qemu_raw::scratchpad::ScratchpadArm::Measure),
+        "★ the control arm is `off`, and it is spelled out rather than inherited"
+    );
+    assert_eq!(kayfabe_qemu_raw::scratchpad::scratchpad_cuda_from(None), Ok(true));
+    assert_eq!(kayfabe_qemu_raw::scratchpad::device_view_from(None), Ok(true));
+
+    // ⊘ Route K. ⚠ `shim.rs:15217` still carries a comment calling `isolate` "the default";
+    // it is STALE and this row is the parser's answer (§42(b) — ask the parser). I read that
+    // comment as authoritative once this session and was wrong in exactly the direction the
+    // rule warns about.
+    assert_eq!(
+        kayfabe_qemu_raw::scratchpad::vas_owner_from(None),
+        Ok(kayfabe_qemu_raw::scratchpad::VasOwner::BirthClient),
+        "★★★★★ w760: with `isolate`, `store_owns_vas()` is false and `join_one_fb_leaf` \
+         returns `None` for every framebuffer leaf — no operand ever gets a host object"
+    );
 }
 
 /// ⊘ **Every frozen arm is still SPELLABLE** — §42(d): an opt-in may MOVE but may not silently
@@ -175,6 +217,14 @@ fn every_frozen_arm_can_still_be_named() {
     assert_eq!(
         join_release_from(Some("supersede")),
         Ok(JoinReleaseArm::Supersede)
+    );
+    assert_eq!(
+        kayfabe_qemu_raw::deviceview::fb_store_from(Some("arena")).unwrap(),
+        kayfabe_qemu_raw::deviceview::FbStoreArm::Arena
+    );
+    assert_eq!(
+        kayfabe_qemu_raw::scratchpad::vas_owner_from(Some("isolate")),
+        Ok(kayfabe_qemu_raw::scratchpad::VasOwner::Isolate)
     );
 }
 

@@ -27,7 +27,8 @@ use kayfabe_qemu_raw::shim::{Regs, fb_trap_from};
 
 #[test]
 fn absent_is_serve_and_is_not_an_error() {
-    assert_eq!(fb_trap_from(None), Ok(FbTrapPolicy::Serve));
+    // ⊘ w811d: the DEFAULT is asserted once, in `defaults_are_the_new_design`. This test
+    // keeps what is its own: the arms, and the refusal of a typo.
     assert_eq!(fb_trap_from(Some("serve")), Ok(FbTrapPolicy::Serve));
     assert_eq!(fb_trap_from(Some("refuse")), Ok(FbTrapPolicy::RefuseByName));
 }

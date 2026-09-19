@@ -28,11 +28,10 @@ use kayfabe_qemu_raw::deviceview::{FbStoreArm, enforce_device_store, fb_store_fr
 /// ARCHITECTURE, and this is the line that says which one.
 #[test]
 fn absent_is_the_single_store_and_is_not_an_error() {
-    assert_eq!(
-        fb_store_from(None).unwrap(),
-        FbStoreArm::Device,
-        "★★★★★ a boot that names no framebuffer store must be the SINGLE STORE.          Defaulting to `arena` means guest vidmem is fabricated per leaf and every leaf needs          a join to become host-nameable — the two-worlds machinery the single store replaces"
-    );
+    // ⊘ The DEFAULT is asserted once, in `defaults_are_the_new_design`. What this test owns
+    // is the rest of the contract: both arms reachable by name, and a typo refused.
+    // ⚠ Keeping a second `fb_store_from(None)` here is how `pt_sweep_skip_from` ended up
+    // with two files disagreeing about one selector — see the note below in this file.
     assert_eq!(fb_store_from(Some("arena")).unwrap(), FbStoreArm::Arena);
     assert_eq!(fb_store_from(Some("device")).unwrap(), FbStoreArm::Device);
 }
@@ -145,13 +144,14 @@ fn a_port_without_the_device_store_never_chooses_a_device_backing() {
 #[test]
 fn the_sweep_skip_is_the_default_and_its_control_is_reachable_by_name() {
     use kayfabe_qemu_raw::shim::pt_sweep_skip_from;
-    assert_eq!(
-        pt_sweep_skip_from(None),
-        Ok(true),
-        "★ absent is the design: a window where the guest's CPU wrote no page table cannot \
-         produce a different sweep answer, and `[measured w763]` 271 of 369 sweeps found \
-         nothing while costing 7.22 ms of a 23 ms invalidate hold"
-    );
+    // ⊘⊘⊘ **w811d — THE DEFAULT ASSERTION THAT USED TO BE HERE WAS STALE AND WRONG.**
+    // It read `assert_eq!(pt_sweep_skip_from(None), Ok(true))`, quoting w763's measurement,
+    // and stayed after w810 flipped the default to `false` — while
+    // `defaults_are_the_new_design` asserted `Ok(false)` for the same selector the whole
+    // time. Two files, one selector, opposite answers, both committed.
+    // ⇒ The default is asserted THERE and only there; this test keeps the part that is its
+    // own — that both arms are reachable BY NAME, which is what §42(d) requires.
+    // ⚠ w763's 271-of-369 measurement is not refuted and is recorded at the selector.
     assert_eq!(pt_sweep_skip_from(Some("on")), Ok(true));
     assert_eq!(
         pt_sweep_skip_from(Some("off")),

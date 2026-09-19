@@ -6955,10 +6955,12 @@ impl SharedDevice {
                     match kayfabe_core::gpu::vas_undeclared_in(&proc.vases, gpu) {
                         Ok(v) => v,
                         Err(found) => {
+                            let on_gpu =
+                                proc.vases.values().filter(|v| v.gpu == gpu).count();
                             // ⊘ Zero or several — both mean "nothing here can tell which
                             // space the caller means", and the COUNT says which, because the
                             // two have different fixes. See the variant's `found` field.
-                            refusal = Some(FwdFault::UndeclaredPdb { pid, found });
+                            refusal = Some(FwdFault::UndeclaredPdb { pid, found, on_gpu });
                             return;
                         }
                     }

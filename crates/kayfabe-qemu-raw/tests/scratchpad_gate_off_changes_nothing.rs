@@ -97,11 +97,7 @@ fn with_the_gate_off_the_advertised_framebuffer_is_the_compiled_one() {
 /// explicitly off, and a value naming neither — is the whole of the gate's contract.
 #[test]
 fn the_gates_three_way_contract() {
-    assert_eq!(
-        scratchpad_from(None),
-        Ok(ScratchpadArm::Measure),
-        "★ absent is the DESIGN. The control arm is `off`, spelled out, on the next line"
-    );
+    // ⊘ The default lives in `defaults_are_the_new_design`; this test owns the ARMS.
     assert_eq!(scratchpad_from(Some("off")), Ok(ScratchpadArm::Off));
     assert_eq!(scratchpad_from(Some("on")), Ok(ScratchpadArm::Measure));
     // ★ `require` is the design's own rule — "if that fails, the VM does not start" — and it
@@ -126,7 +122,7 @@ fn the_gates_three_way_contract() {
 /// could move because of a typo would not be one.
 #[test]
 fn the_cuda_gate_has_a_control_arm_and_refuses_anything_that_is_not_a_state() {
-    assert_eq!(scratchpad_cuda_from(None), Ok(true), "★ absent is the DESIGN");
+    // ⊘ Default asserted in `defaults_are_the_new_design`; the arms are this test's.
     assert_eq!(scratchpad_cuda_from(Some("off")), Ok(false));
     assert_eq!(scratchpad_cuda_from(Some("on")), Ok(true));
     for junk in ["1", "0", "true", "ON", "yes", "require", ""] {
@@ -192,7 +188,7 @@ fn the_scratchpad_proc_id_agrees_across_the_seam() {
 #[test]
 fn the_device_view_gate_has_a_control_arm_and_refuses_anything_that_is_not_a_state() {
     use kayfabe_qemu_raw::scratchpad::device_view_from;
-    assert_eq!(device_view_from(None), Ok(true), "★ absent is the DESIGN");
+    // ⊘ Default asserted in `defaults_are_the_new_design`; the arms are this test's.
     assert_eq!(device_view_from(Some("off")), Ok(false));
     assert_eq!(device_view_from(Some("probe")), Ok(true));
     for junk in ["on", "1", "true", "PROBE", "yes", "require", ""] {

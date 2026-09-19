@@ -1469,15 +1469,8 @@ use kayfabe_qemu_raw::shim::{
 /// boot, and the four census lines reported four symptoms of that one cause.
 #[test]
 fn an_unset_selector_is_the_real_plane_the_single_store_needs() {
-    assert_eq!(
-        isolate_plane_from(None),
-        Ok(IsolatePlane::Real),
-        "★★★★★ the default moved BACK. `FB_STORE=device` is the default and needs a plane; \
-         a boot that names nothing must be the designed configuration, not one that refuses \
-         at realize. The `no host process without an opt-in` rule is kept by the \
-         `host-isolates` BUILD FEATURE, which stays off by default — check that before \
-         changing this line back."
-    );
+    // ⊘ w811d: the DEFAULT is asserted once, in `defaults_are_the_new_design` (the
+    // reasoning moved there with it). This test keeps what is its own: the arms below.
     // ⊘ A typo is still refused by name, which is what the old default's stated reason was
     // actually about: an evidence run and its negative control must never be spelled alike.
     assert!(isolate_plane_from(Some("Real")).is_err());
@@ -2138,14 +2131,8 @@ fn only_local(plane: IsolatePlane, ce: CeExecutorChoice) -> bool {
 /// unreachable by configuration.
 #[test]
 fn the_default_ce_executor_is_the_forwarding_arm_and_stillborn_keeps_its_own() {
-    assert_eq!(
-        ce_executor_from(None),
-        Ok(CeExecutorChoice::Host),
-        "★★★★★ §46 (owner, 2026-09-19): under the single store, real kernel-channel work is \
-         NEVER executed on the CPU — only a no-op or a stub we are obliged to fake. `Local` \
-         is therefore not a permitted arm for a real copy, and w799's 18-vs-15 suite table \
-         was an inadmissible comparison: §44's escape clause presumes both arms are allowed"
-    );
+    // ⊘ w811d: the DEFAULT is asserted once, in `defaults_are_the_new_design` (the
+    // reasoning moved there with it). This test keeps what is its own: the arms below.
     assert_eq!(
         ce_executor_from(Some("local")),
         Ok(CeExecutorChoice::Local),
@@ -2596,11 +2583,8 @@ use kayfabe_qemu_raw::shim::{GuestRingArm, guest_ring_from};
 /// millions of times. A default that armed would change the shape of every log ever taken.
 #[test]
 fn the_default_guest_ring_arm_leaves_the_shipped_path_byte_identical() {
-    assert_eq!(
-        guest_ring_from(None),
-        Ok(GuestRingArm::Ring),
-        "★ w763g §42(a): absent is the DESIGN. `off` is the control and is reachable by name"
-    );
+    // ⊘ w811d: the DEFAULT is asserted once, in `defaults_are_the_new_design` (the
+    // reasoning moved there with it). This test keeps what is its own: the arms below.
     assert_eq!(guest_ring_from(Some("off")), Ok(GuestRingArm::Off));
     assert!(
         !GuestRingArm::Off.adopts_ring(),
@@ -2704,12 +2688,8 @@ fn the_vas_publish_arm_is_three_valued_and_never_defaulted() {
     // ★ Note what my w811 completeness gate does NOT catch: it proves every selector HAS a row,
     // never that no OTHER test contradicts that row. Coverage and consistency are two
     // properties and only one of them is now gated.
-    assert_eq!(
-        vas_publish_from(None),
-        Ok(VasPublishArm::Drain),
-        "★★★★★ w809/w810: `off` means no framebuffer page gets a host object, so every CE \
-         span is graded `CeExecutor::Ours` and the copy plane never reaches hardware"
-    );
+    // ⊘ w811d: the DEFAULT is asserted once, in `defaults_are_the_new_design`. This test
+    // keeps what is its own: the arms, and the refusal of a typo.
     assert_eq!(vas_publish_from(Some("off")), Ok(VasPublishArm::Off));
     assert_eq!(vas_publish_from(Some("assert")), Ok(VasPublishArm::Assert));
     assert_eq!(
@@ -2812,12 +2792,8 @@ fn the_w318_dirty_gate_is_off_by_default_and_refuses_an_unknown_value() {
     // ⇒ **A default and the test that asserts it are ONE edit.**
     // ★ w811 moves it back to `off`; this edit and the selector's are one commit, which is
     // the rule the paragraph above paid for.
-    assert_eq!(
-        dirty_gate_from(None),
-        Ok(false),
-        "★★★★★ w811: absent is OFF — the gate skips publication exactly when the previous \
-         pass published nothing, which is when it most needs to run"
-    );
+    // ⊘ w811d: the DEFAULT is asserted once, in `defaults_are_the_new_design`. This test
+    // keeps what is its own: the arms, and the refusal of a typo.
     assert_eq!(dirty_gate_from(Some("off")), Ok(false));
     assert_eq!(dirty_gate_from(Some("on")), Ok(true));
     for bad in ["1", "true", "yes", "", "On", "ON", "enabled"] {
@@ -2846,15 +2822,8 @@ fn the_w318_dirty_gate_is_off_by_default_and_refuses_an_unknown_value() {
 #[test]
 fn the_w330_flips_keep_their_defaults_and_their_old_arms_reachable_by_name() {
     use kayfabe_qemu_raw::shim::{JoinReleaseArm, join_release_from};
-    assert_eq!(
-        join_release_from(None),
-        Ok(JoinReleaseArm::Alias),
-        "★★★★★ absent is ALIAS since w380. ⊘⊘ It was `Supersede` from w330, and w377 §9 \
-         measured why that has to move: a supersede TARGET later becomes a SOURCE, \
-         repeatedly — the guest holds EVERY alias live, so the takeover had no stale half to \
-         take. `[w376llmd]` 127 takeovers over 17 frames, then 28 108 `SUPERSEDE CAPPED`, \
-         and the `Xid 31 FAULT_PDE` at a VA we had unpublished ourselves"
-    );
+    // ⊘ w811d: the DEFAULT is asserted once, in `defaults_are_the_new_design`. This test
+    // keeps what is its own: the arms, and the refusal of a typo.
     assert_eq!(
         join_release_from(Some("alias")),
         Ok(JoinReleaseArm::Alias),

@@ -376,6 +376,14 @@ pub enum FwdFault {
         /// proc collapses into ONE `pdb=0x0` row and the multiplicity is invisible in the
         /// only place a reader would look for it.
         found: usize,
+        /// ★ Every `Vas` this proc holds on that GPU, undeclared or not.
+        ///
+        /// ⊘ Without it `found: 0` still covers two situations: *"this proc has spaces, none
+        /// undeclared"* and *"this proc has no spaces at all, so the caller is looking in the
+        /// wrong place"*. `[measured w811d]` the boot reported `found: 0` while the boot's own
+        /// VAS census printed a live `proc=1 pdb=0x0 vas=PRESENT` row — two instruments, one
+        /// question, opposite answers, and neither carried the number that separates them.
+        on_gpu: usize,
     },
     /// ★★★ **#177.** The guest rang a channel it never asked us to schedule.
     ///
