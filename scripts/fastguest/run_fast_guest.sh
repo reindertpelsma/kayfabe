@@ -96,6 +96,32 @@ echo "== arms: $ARMS_TOK   budget: ${BUDGET}s   self-deadline: ${DEADLINE_MS}ms 
 # ⊘ Printed rather than checked: a check would need a provenance stamp inside the binary, and
 # `strings | grep -q` as a gate is a trap this campaign has already paid for.
 echo "== qemu:  $Q  (built $(date -r "$Q" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || echo unknown))"
+# ⊘⊘⊘ **w793 — PRINTING THE AGE WAS NOT ENOUGH, AND IT COST A RUN THE SAME DAY IT WAS WRITTEN.**
+#
+# The line above already said *"a stale QEMU is invisible… a default flip read as `the flip did
+# not take` for one whole cycle; the binary predated it by four minutes"*. It PRINTS and does
+# not GATE — `a_check_that_reports_is_not_a_check_that_gates`, in the file that documents the
+# hazard.
+#
+# `[measured w793]` a relink failed with `error[E0061]` on a call site that only compiles under
+# `--features cuda-scratchpad`; the harness ran anyway, the guest booted the PREVIOUS binary,
+# and its ledger was read as a regression of the change under test. The change was not even in
+# the binary.
+#
+# ⇒ Refuse when the archive's own sources are newer than the linked binary. ⊘ Source mtime, not
+# a git stamp: an uncommitted edit is exactly the case that bites, and a commit-hash stamp
+# would call that tree clean.
+KF_ROOT=${KF_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}
+if [ -d "$KF_ROOT/crates" ]; then
+    newest=$(find "$KF_ROOT/crates" -name '*.rs' -newer "$Q" -print -quit 2>/dev/null)
+    if [ -n "$newest" ]; then
+        echo "run_fast_guest: ⊘⊘ REFUSED — $Q is OLDER than $newest." >&2
+        echo "   The relink did not happen (or failed). Running would measure the previous" >&2
+        echo "   binary and attribute the result to the change under test. Rebuild:" >&2
+        echo "   KAYFABE_SHIM_FEATURES=cuda-scratchpad bash scripts/build_qom_shim.sh <src> <build>" >&2
+        exit 3
+    fi
+fi
 echo "== the archive needs cargo features: cuda-scratchpad (implies host-isolates)."
 echo "   Without them KAYFABE_ISOLATES=real refuses at realize BY NAME -- that is the"
 echo "   intended failure, not a kayfabe defect. Rebuild: KAYFABE_SHIM_FEATURES=cuda-scratchpad"

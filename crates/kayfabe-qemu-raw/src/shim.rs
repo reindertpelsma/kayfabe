@@ -11490,7 +11490,7 @@ impl SharedDoorbell {
         {
             let w = self.witness_executor_fb_pages();
             let d = self.decode_cpu_pt_writes();
-            let s = self.sweep_cpu_pt_tables();
+            let s = self.sweep_cpu_pt_tables(None);
             eprintln!(
                 "{head} SETTLE-BEFORE-BIRTH pending={} → the doorbell's own page-table \
                  settlement, run BEFORE the join so a row the guest has already unmapped \
