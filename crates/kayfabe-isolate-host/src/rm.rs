@@ -1148,6 +1148,37 @@ mod birth_conn {
             Ok(out.h_object_new)
         }
 
+        /// ★★★★★ **w784 — AN ENGINE OBJECT ON A CHANNEL THIS CLIENT BUILT.**
+        ///
+        /// `[measured w783]` after the engine-object verb was routed to the scratchpad, it
+        /// was still refused — `BadHandle(HostHandle(iso4294967295/gpu0:0xb1470008))` — and
+        /// the reason is the one [`RmBackend::schedule`] already carries at its own call
+        /// site: *"`channel_parts` has no entry for a channel this isolate did not build."*
+        /// The channel was built by **B**, so `RmConnection`'s table cannot see it and the
+        /// strict parent check refuses before RM is reached.
+        ///
+        /// ⊘ Not a relaxation of that check. The check is right — an engine object under a
+        /// non-channel is a bug that surfaces at submission time — and the answer is the
+        /// same as the schedule's: ask the client that built the channel. An alloc in B is
+        /// not a wider power than the birth that already happened there; it is the same
+        /// client being told to finish the channel it made.
+        ///
+        /// ⚠ The object is **deliberately not remembered** in `RmConnection`'s table. It
+        /// belongs to B, it is freed with B's channel by RM's own subtree semantics, and a
+        /// second ledger naming it would be a second owner for one object — the shape
+        /// `a_second_source_of_truth_beside_a_complete_value` names.
+        ///
+        /// # Errors
+        /// Whatever RM refused the alloc with.
+        pub(super) fn alloc_engine_object(
+            &self,
+            chan: u32,
+            class: u32,
+            params: &mut [u8],
+        ) -> Result<u32, RmError> {
+            self.alloc(chan, class, params)
+        }
+
         /// ★★★★★ **w755r — THE ERROR NOTIFIER, DESCRIBED IN B.**
         ///
         /// `hObjectError` is a **birth parameter** (`w288`), so a channel born in B must be
@@ -8335,6 +8366,24 @@ impl RmBackend for HostRmBackend {
         params: &[u8],
     ) -> Result<HostHandle, RmError> {
         let parent = self.narrow(chan)?;
+        // ★★★★★ **w784 — AN ENGINE OBJECT ON A CHANNEL BORN IN B IS ALLOCATED IN B**, and
+        // this is `schedule`'s w755o branch on the verb that runs BEFORE it.
+        //
+        // `[measured w783]` routing the verb to the scratchpad turned `ForeignHandle` into
+        // `BadHandle(HostHandle(iso4294967295/gpu0:0xb1470008))` — the same channel the
+        // doorbell rings successfully in the same boot (`STORE-DOORBELL asked=1 refused=0
+        // rung=1`). The strict parent check below is what refused it, for the reason
+        // `schedule` states at its own branch: `channel_parts` has no entry for a channel
+        // this isolate did not build.
+        //
+        // ⊘ The check stays. It is right, and it is not what was wrong — the OWNER was.
+        if let Some((birth, _tsg)) = self.conn.birth_channel_of(parent) {
+            let mut params = params.to_vec();
+            let h = birth.alloc_engine_object(parent, class.0, &mut params)?;
+            // ⊘ NOT `self.conn.remember(h, parent)`: the object is B's and RM frees it with
+            // B's channel. Remembering it here would give one object two owners.
+            return Ok(self.stamp(h));
+        }
         // Stricter than RM on purpose: a handle this connection never minted as a channel
         // would still be a legal parent for many classes, and an engine object under a
         // non-channel is a class of bug that surfaces at submission time.
