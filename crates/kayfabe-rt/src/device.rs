@@ -6951,8 +6951,37 @@ impl SharedDevice {
                 Ok((pid, ()))
             },
             |_spine, proc, ()| {
+                // ★★★★★ **w812b — `Pdb(0)` HAS TWO MEANINGS AND BOTH ARE REAL, SO BOTH ARE
+                // TRIED — IN THE ORDER THAT CANNOT GUESS.**
+                //
+                // ⊘⊘⊘ I first "fixed" this by REFUSING a declared root of zero at the wire.
+                // That was wrong and a test with a stated rationale caught it:
+                // *"a zero PDB is NOT refused — it is a legal declaration this port has no
+                // opinion about, and inventing a rule for it would be exactly the guess §4
+                // forbids."* ★ `Pdb` is a FRAMEBUFFER OFFSET and offset 0 is a legal
+                // location — `[measured w811h]` this guest's other spaces took `0x9000` and
+                // `0x200000`, so 0 is a plausible first allocation, and refusing it would
+                // reject a working configuration. Worse, the `learn_root` normalization I
+                // paired with it would have silently destroyed a real root.
+                //
+                // ⇒ The defect was never the guest's zero. It is that **we** use zero as the
+                // sentinel for *absent* (`vas.pdb.unwrap_or(Pdb(0))`, eight call sites), so
+                // one value carries two facts:
+                //   1. a space DECLARED with root 0  → stored as `pdb: Some(Pdb(0))`
+                //   2. a space with NO declaration   → stored as `pdb: None`
+                //
+                // ★ Case 1 is what this boot actually has, and `vas_by_pdb` already resolves
+                // it — w779's guard simply ran first. So: **ask for the declared zero, and
+                // only if there is no such space fall back to the undeclared one.** Both
+                // lookups are uniqueness-checked, so neither can guess, and the order matters
+                // only when a proc has both — in which case an exact declared match is the
+                // better answer by construction.
                 let vas = if undeclared {
-                    match kayfabe_core::gpu::vas_undeclared_in(&proc.vases, gpu) {
+                    match proc
+                        .vas_by_pdb(gpu, pdb)
+                        .map(Ok)
+                        .unwrap_or_else(|| kayfabe_core::gpu::vas_undeclared_in(&proc.vases, gpu))
+                    {
                         Ok(v) => v,
                         Err(found) => {
                             let on_gpu =
@@ -7130,7 +7159,15 @@ impl SharedDevice {
                 // here would find nothing for an undeclared space and silently orphan the
                 // freshly minted one on every call — a mint-and-drop loop with no error.
                 let vas = if undeclared {
-                    match kayfabe_core::gpu::vas_undeclared_in_mut(&mut proc.vases, gpu) {
+                    // ⊘ SAME order as the plan phase. A commit that resolved by a different
+                    // rule would orphan the space the plan just checked, on every call.
+                    let declared = proc.vas_by_pdb(gpu, pdb).is_some();
+                    let got = if declared {
+                        proc.vas_by_pdb_mut(gpu, pdb).ok_or(0usize)
+                    } else {
+                        kayfabe_core::gpu::vas_undeclared_in_mut(&mut proc.vases, gpu)
+                    };
+                    match got {
                         Ok(v) => v,
                         Err(_) => {
                             orphan = Some(bare.space);
@@ -7183,8 +7220,11 @@ impl SharedDevice {
                 |_| Ok((pid, ())),
                 |_spine, proc, ()| {
                     if undeclared {
-                        kayfabe_core::gpu::vas_undeclared_in(&proc.vases, gpu)
-                            .ok()
+                        // ⊘ Same order again — three sites, one rule.
+                        proc.vas_by_pdb(gpu, pdb)
+                            .or_else(|| {
+                                kayfabe_core::gpu::vas_undeclared_in(&proc.vases, gpu).ok()
+                            })
                             .and_then(|v| v.host_vas)
                     } else {
                         proc.vas_by_pdb(gpu, pdb).and_then(|v| v.host_vas)

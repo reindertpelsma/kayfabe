@@ -403,3 +403,69 @@ fn a_proc_with_no_undeclared_space_still_refuses_pdb_zero() {
         other => panic!("★ `Pdb(0)` names nothing here and must refuse: {other:?}"),
     }
 }
+
+/// ★★★★★ **w812b — A SPACE DECLARED WITH ROOT ZERO IS RESOLVED, NOT MISTAKEN FOR AN ABSENT
+/// DECLARATION.**
+///
+/// # The two meanings of `Pdb(0)`, and why refusing one of them was the wrong fix
+///
+/// `Pdb` is a FRAMEBUFFER OFFSET, and offset 0 is a legal place for a page directory.
+/// `[measured w811h, thin guest on a GA106]` P1's address space really is declared there —
+/// `VASPACE-FACTS client=0xc1d0000b handle=0xcafe0004 gpu=Some(0) pdb=Some(0)` — while the
+/// same proc's other spaces took `0x9000` and `0x200000`.
+///
+/// ⊘⊘⊘ My first fix REFUSED a declared zero at the wire. `rmrpc_bridge`'s
+/// `a_zero_hvaspace_names_the_implicit_vas_and_is_refused` caught it, and its rationale was
+/// right: *"a zero PDB is NOT refused — it is a legal declaration this port has no opinion
+/// about, and inventing a rule for it would be exactly the guess §4 forbids."* ⚠ The
+/// `learn_root` normalization I paired with that refusal would have silently deleted a real
+/// root — a worse outcome than the bug.
+///
+/// ⇒ The defect is OUR sentinel: `vas.pdb.unwrap_or(Pdb(0))` at eight `kayfabe-rt` call sites
+/// makes one value carry two facts. So the hand-over asks BOTH questions, exact match first.
+#[test]
+fn a_space_declared_at_root_zero_is_found_rather_than_read_as_undeclared() {
+    let arch = std::sync::Arc::new(MockArch::new());
+    let (factory, _recorder) = MockIsolateFactory::new();
+    let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
+    let mut gpu = Gpu::new(arch, Box::new(factory), gpa).expect("device realizes");
+
+    // ⊘ The declaration is REAL and carries root 0 — built the way the boot builds it, by
+    // declaring, not by poking a field.
+    let mut s = Scenario::new();
+    s.compute_process(CLIENT, Pdb(0), identical_handles(0x10, 0x11));
+    for ev in s.events {
+        gpu.apply(ev).expect("a root of zero is a legal declaration");
+    }
+    let pid = gpu
+        .procs
+        .keys()
+        .copied()
+        .find(|p| *p != kayfabe_core::gpu::Gpu::SYSTEM_PROC)
+        .expect("the guest proc exists");
+    let dev = SharedDevice::new(gpu, LockMode::Sharded);
+    dev.materialize_pending();
+
+    // ★ NON-VACUITY: the space must actually be stored as DECLARED-at-zero, or this test is
+    // really just re-running the undeclared case under another name.
+    let declared_at_zero = dev
+        .with_proc_mut(pid, |p| p.vas_by_pdb(GPU, Pdb(0)).is_some())
+        .expect("the proc is live");
+    assert!(
+        declared_at_zero,
+        "★ the fixture must produce a space whose `pdb` is `Some(Pdb(0))`, not `None`"
+    );
+
+    let bare = dev.vaspace_handover(pid, GPU, Pdb(0), leaf()).expect(
+        "★★★★★ w812b: a space DECLARED at framebuffer offset 0 must resolve — reading it as \
+         `UndeclaredPdb` is what kept every CE operand unbacked and off the GPU",
+    );
+    let again = dev
+        .vaspace_handover(pid, GPU, Pdb(0), leaf())
+        .expect("a second hand-over answers");
+    assert_eq!(
+        again.space, bare.space,
+        "★ the commit phase must resolve by the SAME rule as the plan, or it orphans the \
+         space the plan just minted, on every call"
+    );
+}
