@@ -9006,7 +9006,11 @@ impl SharedDoorbell {
         // finding is that two resolutions of one fact can disagree, and this one is read on
         // both sides of a `return`.
         let route = facts.route();
-        let disposition = kayfabe_rt::shell_disposition(route);
+        // ⊘ w780 — the channel's KIND, not its engine. `Passthrough` is the guest's own
+        // channel: we forward its doorbell and interpret none of its bytes.
+        let emulated =
+            facts.kind != kayfabe_core::channel_kind::GuestChannelKind::Passthrough;
+        let disposition = kayfabe_rt::shell_disposition(route, emulated);
         if disposition == kayfabe_rt::ShellDisposition::HandToCore {
             // ★★★★★ **PASSTHROUGH, and the ORDER of these three statements is the ruling.**
             //
