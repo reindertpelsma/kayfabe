@@ -1248,6 +1248,40 @@ pub fn project(
                 // base and target.
                 let pdb = g.pdb_of_resource(node.id());
                 let gpu = g.gpu_of_resource(node.id());
+                // ★★★★★ **w811f — THE ATTRIBUTION, PRINTED, BECAUSE A `Vas` THAT NEVER
+                // MATERIALIZES LEAVES NO TRACE ANYWHERE ELSE.**
+                //
+                // `[measured w811d]` a guest VASpace carrying five live CE channels produced
+                // NO `Vas` at all: the hand-over reported `found: 0, on_gpu: 1` while the
+                // channel projection resolved that very space by handle. The filter one layer
+                // up is `Some((f.gpu?, *origin))` — w554's rule, *"a root is what lets us
+                // SWEEP a space, not what lets us NAME one"* — so a `gpu: None` here deletes
+                // the space silently, and every operand in it then resolves to unbacked
+                // emulated framebuffer.
+                //
+                // ⊘ Capped, and it prints the MISSES as well as the hits: a census that only
+                // logged successes would be blind to exactly the case it exists for.
+                {
+                    static SEEN: std::sync::atomic::AtomicU64 =
+                        std::sync::atomic::AtomicU64::new(0);
+                    let n = SEEN.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    if n < 24 {
+                        eprintln!(
+                            "kayfabe: VASPACE-FACTS #{} client={:#x} handle={:#x} gpu={:?} \
+                             pdb={:?}{}",
+                            n + 1,
+                            node.key.client.0,
+                            node.key.handle.0,
+                            gpu.map(|g| g.0),
+                            pdb.map(|p| p.0),
+                            if gpu.is_none() {
+                                "  ⊘⊘⊘ NO GPU — this space materializes NO `Vas`, so every                                  binding in it is dropped and every operand resolves unbacked.                                  The parent chain reached no `Device` with a declared                                  `device_instance`."
+                            } else {
+                                ""
+                            }
+                        );
+                    }
+                }
                 boundary.vases.insert(node.id(), VasFacts { gpu, pdb });
                 if let Some(pdb) = pdb {
                     // The F1 guard, scoped per target: same-scope duplicate = loud
