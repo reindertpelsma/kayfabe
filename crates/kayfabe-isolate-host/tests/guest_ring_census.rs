@@ -1027,3 +1027,61 @@ fn the_store_birth_delegation_crosses_to_the_scratchpad() {
          guest polls notifier bytes nobody writes. This is the quietest failure on the path."
     );
 }
+
+// =====================================================================================
+// w778 — one guest address space is ONE host address space
+// =====================================================================================
+
+/// ★★★★★ **THE REFCOUNT, AND WHY A COUNT RATHER THAN A FLAG.**
+///
+/// `[measured w778]` the raw client had ONE guest VA space and SEVEN channels, and the birth
+/// path minted TWO host VA spaces because it duped per call with no cache. Channels the guest
+/// put in one space then did not share translations — `--uvm-mean`'s P3 is a CE reading a VA
+/// correctly while a GR channel writes the same VA into different memory.
+///
+/// ⊘ A boolean "already duped" would fix the split and break teardown: the first channel to go
+/// would free the space out from under its siblings. The count is what makes "last one out"
+/// expressible. ⚠ These are the two halves of the same bug — sharing too little, then freeing
+/// too early — and a test that only checked the first would let the second through.
+#[test]
+fn one_guest_space_is_one_host_space_and_the_last_reference_frees_it() {
+    use std::collections::BTreeMap;
+    // The map's contract, exercised directly: (client, space) → (dup, range, refs).
+    let mut m: BTreeMap<(u32, u32), (u32, u32, usize)> = BTreeMap::new();
+
+    // Three channels are born in ONE guest space.
+    let key = (0xc1d0_000b_u32, 0xcafe_0010_u32);
+    for n in 1..=3 {
+        match m.get_mut(&key) {
+            Some(e) => e.2 += 1,
+            None => {
+                m.insert(key, (0xb147_0002, 0xb147_0003, 1));
+            }
+        }
+        assert_eq!(m.len(), 1, "★ still ONE host space after {n} birth(s)");
+    }
+    assert_eq!(m[&key].2, 3, "three channels, three references");
+    assert_eq!(m[&key].0, 0xb147_0002, "and the SAME dup for all of them");
+
+    // A second, genuinely different guest space is its own entry — the cache must not
+    // over-share either. ⊘ Two guest spaces ARE two host spaces; that is not the bug.
+    let other = (0xc1d0_000b_u32, 0xcafe_0011_u32);
+    m.insert(other, (0xb147_0007, 0xb147_0008, 1));
+    assert_eq!(m.len(), 2);
+
+    // Releasing two of three frees nothing.
+    for expect in [2usize, 1] {
+        let e = m.get_mut(&key).expect("held");
+        e.2 -= 1;
+        assert_eq!(e.2, expect);
+        assert!(m.contains_key(&key), "⊘ a sibling still uses this space");
+    }
+    // The last release is the one that frees.
+    let e = m.get_mut(&key).expect("held");
+    e.2 -= 1;
+    assert_eq!(e.2, 0);
+    let gone = m.remove(&key).expect("last reference owns disposal");
+    assert_eq!((gone.0, gone.1), (0xb147_0002, 0xb147_0003));
+    assert!(!m.contains_key(&key));
+    assert!(m.contains_key(&other), "★ the other space is untouched");
+}

@@ -1832,6 +1832,29 @@ pub struct RmConnection {
     /// the space, and re-deriving it at the birth site would be re-deriving a routing decision
     /// this index already made — the shape `the_handover_rederived_a_routing_key` records.
     birth_ranges: Mutex<BTreeMap<u32, (u32, u32)>>,
+    /// ★★★★★ **w778 — ONE DUP PER (client, guest space), REFERENCE COUNTED.**
+    ///
+    /// `(isolate_client, guest_space) → (duped_space, range, refs)`.
+    ///
+    /// ⊘⊘⊘ Before this, [`RmConnection::adopt_vaspace`] duped the guest's space into B on
+    /// **every call, with no cache**, and each dup got its own range and therefore its own
+    /// host VAS. `[measured w778, thin guest on a GA106]` the raw client had **ONE** guest
+    /// address space (`c=0xc1d0000b vas=0xcafe0010`) and **seven** channels, and we minted
+    /// **TWO** host VA spaces for them — `dup=0xb1470002/range=0xb1470003` and
+    /// `dup=0xb1470007/range=0xb1470008`. Four CE channels landed on the first, one CE and
+    /// the GrCompute on the second.
+    ///
+    /// ⇒ Channels the guest put in ONE address space did not share translations here, so a
+    /// mapping made through one was invisible through the other. That is `--uvm-mean`'s P3:
+    /// P2's copy engine reads `0x9140000000` and sees the CPU's poison, the GR channel's host
+    /// semaphore writes the same VA through a different host VAS, and the page the guest reads
+    /// is never touched. ⚠ Owner, 2026-09-19, predicted exactly this: *"Do you properly
+    /// support multiple channels can reference the same VA base."*
+    ///
+    /// ★ Hardware agrees: a VA space's identity is the PDB, and two channels with the same PDB
+    /// are indistinguishable to the MMU (`what_hardware_actually_references.md`). Minting a
+    /// second host space for one guest space invents a distinction hardware does not have.
+    birth_space_dups: Mutex<BTreeMap<(u32, u32), (u32, u32, usize)>>,
     /// ★★★★★ **w755o — channel handle → `(the A whose B holds it, its TSG inside B)`.**
     ///
     /// ⊘ `GPFIFO_SCHEDULE` is an **RM control on the TSG**, so unlike the doorbell it is
@@ -3223,6 +3246,7 @@ impl RmConnection {
             classes,
             birth: Mutex::new(BTreeMap::new()),
             birth_ranges: Mutex::new(BTreeMap::new()),
+            birth_space_dups: Mutex::new(BTreeMap::new()),
             birth_channels: Mutex::new(BTreeMap::new()),
             birth_store_dups: Mutex::new(BTreeMap::new()),
             objects: Mutex::new(Objects {
@@ -3999,6 +4023,44 @@ impl RmConnection {
         // ⊘ The owning client AND ITS SPACE travel back with the connection. A caller that had
         // to re-derive either would be re-deriving a routing decision this index already made.
         self.birth_for_client(owner).map(|c| (c, owner, space))
+    }
+
+    /// ★★★★★ **w778 — RELEASE ONE REFERENCE TO A BIRTH SPACE; FREE ONLY THE LAST.**
+    ///
+    /// Returns `Some((dup, range))` when this was the last reference and the caller therefore
+    /// owns the disposal, `None` while any channel still uses the space.
+    ///
+    /// > **Owner, 2026-09-19:** *"only free a va when all channels stop referencing it and pdb
+    /// > also stop referencing it"* and *"If no leaf table and no channels, remove va object,
+    /// > at refresh. Safely, race free."*
+    ///
+    /// ⊘ The count is decremented and the entry removed **under one lock**, so two threads
+    /// releasing the last two references cannot both see zero. ⚠ A release of a space this
+    /// map never held is a no-op and is NOT an error: the arena arm and the pre-route-K tree
+    /// both reach teardown without ever having taken a reference.
+    fn release_birth_space(&self, isolate_client: u32, space: u32) -> Option<(u32, u32)> {
+        let mut m = self
+            .birth_space_dups
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let e = m.get_mut(&(isolate_client, space))?;
+        e.2 = e.2.saturating_sub(1);
+        if e.2 > 0 {
+            return None;
+        }
+        let (dup, range, _) = m.remove(&(isolate_client, space))?;
+        Some((dup, range))
+    }
+
+    /// How many birth spaces are held, and their total reference count — for the teardown
+    /// census. ⊘ A non-zero count at teardown is not a leak by itself; a non-zero count with
+    /// no live channels is.
+    fn birth_space_census(&self) -> (usize, usize) {
+        let m = self
+            .birth_space_dups
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        (m.len(), m.values().map(|e| e.2).sum())
     }
 
     /// Record that `range` lives inside the birth client held for `isolate_client`, over
@@ -8004,6 +8066,42 @@ impl RmBackend for HostRmBackend {
         // `k` arm's result is attributed against. A change there would make the two arms
         // differ in more than the one variable under test.
         if let Some(birth) = self.conn.birth_for_client(client) {
+            // ★★★★★ **w778 — REUSE THE DUP FOR THIS (client, space), OR MINT ONE.**
+            //
+            // ⊘ The guest's address space is ONE thing; B needs ONE dup of it. Duping per
+            // call made a second host VAS for the same guest space and split that space's
+            // channels across two of them — see `birth_space_dups`.
+            //
+            // ⚠ Refcounted rather than leaked: the count is what `release_birth_space` needs
+            // to know when the last channel in this space is gone. Freeing on the first
+            // release would pull the space out from under its siblings, which is the failure
+            // this cache exists to stop, inverted.
+            let cached = {
+                let mut m = self
+                    .conn
+                    .birth_space_dups
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                m.get_mut(&(client, space)).map(|e| {
+                    e.2 += 1;
+                    (e.0, e.1, e.2)
+                })
+            };
+            if let Some((duped, range, refs)) = cached {
+                eprintln!(
+                    "kayfabe-isolate: BIRTH-SPACE ♻ REUSED client={client:#010x} \
+                     space={space:#010x} → dup={duped:#010x} range={range:#010x} refs={refs} \
+                     ⇒ ★ one guest address space is ONE host address space; its channels share \
+                     every translation, as they do on hardware"
+                );
+                self.conn.remember_birth_range(range, client, duped);
+            self.conn
+                .birth_space_dups
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .insert((client, space), (duped, range, 1));
+                return Ok(self.stamp(duped));
+            }
             let duped = birth.dup(birth.device(), client, space)?;
             // ★★★ Recorded as adopted for `remember_adopted_space`'s reason exactly — the two
             // views of *"whose space is this?"* must not come apart — even though the handle
