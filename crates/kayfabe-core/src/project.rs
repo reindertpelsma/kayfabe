@@ -1261,15 +1261,32 @@ pub fn project(
                 //
                 // ⊘ Capped, and it prints the MISSES as well as the hits: a census that only
                 // logged successes would be blind to exactly the case it exists for.
+                //
+                // ⊘⊘⊘ **CORRECTED IMMEDIATELY (w811g): THE FIRST VERSION CAPPED THE EVENT
+                // COUNT AND PRINTED EXACTLY ITS CAP.** 24 lines out of a cap of 24 — which
+                // says nothing whatever about the space I was looking for, because the
+                // projection re-runs per apply and the same handful of spaces consumed every
+                // slot. ⚠ `a census ZERO needs a KNOWN-POSITIVE`, and its twin: **a
+                // TRUNCATED census is evidence of nothing about what is absent.** I nearly
+                // read "every space has a gpu" off a list that could not have shown me
+                // otherwise.
+                //
+                // ⇒ One line per DISTINCT `(client, handle)`, so repeats cost nothing and the
+                // population is the population.
                 {
-                    static SEEN: std::sync::atomic::AtomicU64 =
-                        std::sync::atomic::AtomicU64::new(0);
-                    let n = SEEN.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                    if n < 24 {
+                    static SEEN: std::sync::Mutex<
+                        Option<std::collections::BTreeSet<(u32, u32)>>,
+                    > = std::sync::Mutex::new(None);
+                    let mut g = SEEN.lock().unwrap_or_else(|e| e.into_inner());
+                    let set = g.get_or_insert_with(std::collections::BTreeSet::new);
+                    let fresh = set.len() < 128 && set.insert((node.key.client.0, node.key.handle.0));
+                    let n = set.len() as u64;
+                    drop(g);
+                    if fresh {
                         eprintln!(
                             "kayfabe: VASPACE-FACTS #{} client={:#x} handle={:#x} gpu={:?} \
                              pdb={:?}{}",
-                            n + 1,
+                            n,
                             node.key.client.0,
                             node.key.handle.0,
                             gpu.map(|g| g.0),
