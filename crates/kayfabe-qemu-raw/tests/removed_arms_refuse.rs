@@ -42,7 +42,7 @@ fn a_removed_arm_refuses_the_boot_and_its_absence_does_not() {
     // SAFETY: single-threaded test setup; this is the only test in this binary.
     kayfabe_qemu_raw::testenv_unsafe::remove_var_in_single_threaded_test_setup(REMOVED);
     assert!(
-        Regs::create_probed_on(0, "", Some(kayfabe_qemu_raw::deviceview::FbStoreArm::Arena)).is_ok(),
+        Regs::create_probed_in_a_process_with_no_guest(0, "").is_ok(),
         "with no removed arm set, the shipped chip row must still realize — otherwise this \
          test proves the gate refuses everything, not that it refuses the right thing"
     );
@@ -50,7 +50,7 @@ fn a_removed_arm_refuses_the_boot_and_its_absence_does_not() {
     // ---- present: the boot is refused BY NAME.
     // SAFETY: as above.
     kayfabe_qemu_raw::testenv_unsafe::set_var_in_single_threaded_test_setup(REMOVED, "on");
-    let refused = Regs::create_probed_on(0, "", Some(kayfabe_qemu_raw::deviceview::FbStoreArm::Arena));
+    let refused = Regs::create_probed_in_a_process_with_no_guest(0, "");
     assert!(
         refused.is_err(),
         "a boot that exports a deleted arm must FAIL. Ignoring it lets the run measure the \
@@ -64,7 +64,7 @@ fn a_removed_arm_refuses_the_boot_and_its_absence_does_not() {
     // SAFETY: as above.
     kayfabe_qemu_raw::testenv_unsafe::set_var_in_single_threaded_test_setup(REMOVED, "off");
     assert!(
-        Regs::create_probed_on(0, "", Some(kayfabe_qemu_raw::deviceview::FbStoreArm::Arena)).is_err(),
+        Regs::create_probed_in_a_process_with_no_guest(0, "").is_err(),
         "`off` must refuse too — it is the value a stale script is most likely to carry, and \
          the one where being ignored inverts what the operator thinks ran"
     );

@@ -43,7 +43,7 @@ const NOBODYS_OFFSET: u64 = 0x0000_9400;
 fn regs_with(arm: &str) -> Regs {
     // SAFETY: single-threaded test setup, before this process builds any `Regs`.
     kayfabe_qemu_raw::testenv_unsafe::set_var_in_single_threaded_test_setup(DOORBELL_ASYNC_ENV, arm);
-    Regs::create_probed_on(0, "", Some(kayfabe_qemu_raw::deviceview::FbStoreArm::Arena)).expect("the shipped chip row realizes")
+    Regs::create_probed_in_a_process_with_no_guest(0, "").expect("the shipped chip row realizes")
 }
 
 /// ★★★ **On the no-worker arm, a trap drains the mirror; on the worker arm it does not.**

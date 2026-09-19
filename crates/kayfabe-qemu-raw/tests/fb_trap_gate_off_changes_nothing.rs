@@ -54,7 +54,7 @@ fn with_the_gate_unset_the_plane_serves_the_trap_path() {
         std::env::var_os("KAYFABE_FB_TRAP").is_none(),
         "this test binary must not have the gate set; it is testing the default"
     );
-    let regs = Regs::create_probed_on(0, "", Some(kayfabe_qemu_raw::deviceview::FbStoreArm::Arena)).expect("the shipped chip row realizes");
+    let regs = Regs::create_probed_in_a_process_with_no_guest(0, "").expect("the shipped chip row realizes");
     assert_eq!(
         regs.plane().fb_trap_policy(),
         FbTrapPolicy::Serve,
@@ -71,7 +71,7 @@ fn with_the_gate_unset_the_plane_serves_the_trap_path() {
 /// zero from an arm that ran and found nothing.
 #[test]
 fn the_armed_policy_is_what_the_plane_reports() {
-    let regs = Regs::create_probed_on(0, "", Some(kayfabe_qemu_raw::deviceview::FbStoreArm::Arena)).expect("the shipped chip row realizes");
+    let regs = Regs::create_probed_in_a_process_with_no_guest(0, "").expect("the shipped chip row realizes");
     regs.plane().set_fb_trap_policy(FbTrapPolicy::RefuseByName);
     assert_eq!(regs.plane().fb_trap_policy(), FbTrapPolicy::RefuseByName);
     regs.plane().set_fb_trap_policy(FbTrapPolicy::Serve);

@@ -54,7 +54,7 @@ fn disarmed() -> Regs {
         set("KAYFABE_SCRATCHPAD_CUDA", "off");
         set("KAYFABE_DEVICE_VIEW", "off");
     });
-    Regs::create_probed_on(0, "", Some(kayfabe_qemu_raw::deviceview::FbStoreArm::Arena))
+    Regs::create_probed_in_a_process_with_no_guest(0, "")
         .expect("the shipped chip row realizes on the control arm")
 }
 

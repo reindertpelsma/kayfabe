@@ -95,7 +95,7 @@ fn regs() -> Regs {
     kayfabe_qemu_raw::testenv_unsafe::set_var_in_single_threaded_test_setup(kayfabe_qemu_raw::shim::DOORBELL_ASYNC_ENV, "off");
     // `0` selects the chip table's default row (GA106). Reads `KAYFABE_ISOLATES`
     // process-globally; its own test binary, and the default is `stillborn`.
-    Regs::create_probed_on(0, "", Some(kayfabe_qemu_raw::deviceview::FbStoreArm::Arena)).expect("the default chip is servable")
+    Regs::create_probed_in_a_process_with_no_guest(0, "").expect("the default chip is servable")
 }
 
 /// Declare one guest process — client root → device → VASpace → TSG → channel — through the
@@ -392,7 +392,7 @@ fn the_shipping_arm_leaves_the_reap_to_the_worker() {
 
     // SAFETY: single-threaded, and this test builds its own `Regs` immediately below.
     kayfabe_qemu_raw::testenv_unsafe::set_var_in_single_threaded_test_setup(kayfabe_qemu_raw::shim::DOORBELL_ASYNC_ENV, "on");
-    let r = Regs::create_probed_on(0, "", Some(kayfabe_qemu_raw::deviceview::FbStoreArm::Arena)).expect("the default chip is servable");
+    let r = Regs::create_probed_in_a_process_with_no_guest(0, "").expect("the default chip is servable");
     let dev = r.object_model();
 
     let (client, root) = declare_one_proc(&dev);

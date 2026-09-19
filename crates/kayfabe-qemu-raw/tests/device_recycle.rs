@@ -219,7 +219,7 @@ fn load_device(m: &Machine) -> Device {
     // single fixture, which was reading a process global it never named.
     // ⇒ Same finding as the seven in `shim_logic`: a default flip that reddens tests which are
     // not about that default is telling you the composition root takes a hidden argument.
-    let regs = Regs::create_probed_on(0, "", Some(kayfabe_qemu_raw::deviceview::FbStoreArm::Arena))
+    let regs = Regs::create_probed_in_a_process_with_no_guest(0, "")
         .expect("the default chip is servable on the arena arm");
     let shim = Shim::realize(&cfg(), m.host.clone(), m.slots.clone())
         .expect("a cooperative accelerated machine realizes");

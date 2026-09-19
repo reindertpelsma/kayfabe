@@ -103,7 +103,7 @@ fn regs() -> Regs {
     // Its own test binary, so nothing else in this process can have set it — and if
     // something did, `Regs::create` would refuse to build rather than degrade, which is the
     // selector's whole design.
-    Regs::create_probed_on(0, "", Some(kayfabe_qemu_raw::deviceview::FbStoreArm::Arena)).expect("the shipped chip row realizes")
+    Regs::create_probed_in_a_process_with_no_guest(0, "").expect("the shipped chip row realizes")
 }
 
 fn kind_of(r: &kayfabe_device::DoorbellReport) -> &'static str {
@@ -1072,7 +1072,7 @@ fn the_shipping_arm_enqueues_instead_of_routing_on_the_caller() {
     let _serial = serialized();
     // SAFETY: single-threaded, and this test builds its own `Regs` immediately below.
     kayfabe_qemu_raw::testenv_unsafe::set_var_in_single_threaded_test_setup(kayfabe_qemu_raw::shim::DOORBELL_ASYNC_ENV, "on");
-    let r = Regs::create_probed_on(0, "", Some(kayfabe_qemu_raw::deviceview::FbStoreArm::Arena)).expect("the shipped chip row realizes");
+    let r = Regs::create_probed_in_a_process_with_no_guest(0, "").expect("the shipped chip row realizes");
     let out = r.write(BAR_REGS, DOORBELL, 4, GOOD_TOKEN);
     let report = out
         .doorbell

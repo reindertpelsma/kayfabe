@@ -34,7 +34,7 @@ const CHANNEL: HObject = HObject(0x5c00_0019);
 fn device() -> std::sync::Arc<kayfabe_rt::device::SharedDevice> {
     // SAFETY: single-threaded test setup, before this process builds any `Regs`.
     kayfabe_qemu_raw::testenv_unsafe::set_var_in_single_threaded_test_setup(DOORBELL_ASYNC_ENV, "off");
-    Regs::create_probed_on(0, "", Some(kayfabe_qemu_raw::deviceview::FbStoreArm::Arena))
+    Regs::create_probed_in_a_process_with_no_guest(0, "")
         .expect("the shipped chip row realizes")
         .object_model()
 }

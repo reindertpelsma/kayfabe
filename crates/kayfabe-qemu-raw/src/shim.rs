@@ -16234,7 +16234,7 @@ impl Regs {
     /// that is not a comma-separated decimal list within
     /// [`kayfabe_abi::eventnotify::PROBE_ARM_MAX`] entries.
     pub fn create_probed(device_id: u16, probe_arm: &str) -> Result<Regs, (Status, &'static str)> {
-        Regs::create_probed_on(device_id, probe_arm, None)
+        Regs::create_probed_on(device_id, probe_arm, None, None)
     }
 
     /// The composition root with the framebuffer arm **stated by the caller** instead of read
@@ -16258,11 +16258,47 @@ impl Regs {
     /// environment, and there is still exactly one statement of the default.
     ///
     /// # Errors
+    /// ★★★★★ **THE ARMS A PROCESS WITH NO GUEST CAN ACTUALLY SERVE.**
+    ///
+    /// # Why this is a named constructor and not two extra arguments at fifteen call sites
+    ///
+    /// Every in-tree unit test realizes a device the same way and for the same reason: it is
+    /// testing device lifetime, doorbell routing or the object model, and it is **not** a
+    /// VMM. Two facts follow from that one fact, and neither is a preference:
+    ///
+    /// - there is no framebuffer store, so the arm is [`crate::deviceview::FbStoreArm::Arena`];
+    /// - there is no `memory-backend-memfd` open in the process — no guest was ever launched
+    ///   — so the guest-RAM crossing cannot exist and the arm is [`GuestRamSource::None`].
+    ///
+    /// ⊘⊘⊘ **READ THE SECOND ONE CORRECTLY: it is NOT this tree testing a superseded arm.**
+    /// §44 says the new architecture is what a test must run, and the owner has had to say so
+    /// roughly ten times. The crossing is not being *declined* here — it is **unavailable**,
+    /// the way a disk is unavailable to a process with no disk. Writing
+    /// `Some(GuestRamSource::None)` at fifteen call sites would read as fifteen deliberate
+    /// choices of the old arm; this name says the true thing once, which is why it is a name.
+    ///
+    /// ⚠ A test that IS about the crossing must not call this — it must call
+    /// [`Regs::create_probed_on`] and state its arm, so that the thing under test is an
+    /// argument rather than an ambient default. That is the w763 rule this constructor obeys
+    /// rather than evades.
+    pub fn create_probed_in_a_process_with_no_guest(
+        device_id: u16,
+        probe_arm: &str,
+    ) -> Result<Regs, (Status, &'static str)> {
+        Regs::create_probed_on(
+            device_id,
+            probe_arm,
+            Some(crate::deviceview::FbStoreArm::Arena),
+            Some(GuestRamSource::None),
+        )
+    }
+
     /// As [`Regs::create_probed`].
     pub fn create_probed_on(
         device_id: u16,
         probe_arm: &str,
         fb_store_override: Option<crate::deviceview::FbStoreArm>,
+        guest_ram_override: Option<GuestRamSource>,
     ) -> Result<Regs, (Status, &'static str)> {
         let probe_arm =
             kayfabe_abi::eventnotify::ProbeArmSet::parse(probe_arm).map_err(|e| match e {
@@ -16301,7 +16337,7 @@ impl Regs {
             device,
             guest_ram_backing,
             exports,
-        ) = object_policy(abi.driver, chip.engines)?;
+        ) = object_policy(abi.driver, guest_ram_override, chip.engines)?;
         // ★★★★★ **`SINGLE_STORE_PLAN.md` INCREMENT 1 — THE VM-LIFETIME SCRATCHPAD
         // ISOLATE, SPAWNED HERE AND NOWHERE ELSE.**
         //
@@ -20564,6 +20600,20 @@ pub type IsolatePlaneParts = (
 
 fn object_policy(
     driver: kayfabe_abi::versions::DriverAbiTable,
+    // ★★★★★ **w811 — THE HARNESS'S OWN FACT, PASSED IN RATHER THAN INFERRED.**
+    //
+    // `None` means *"derive the arm from the isolate plane"*, which is what a boot does.
+    // `Some(_)` is how a process that is **not a VMM** states what it can actually serve:
+    // `selected_guest_ram_source` refuses `memfd` when no shared `memory-backend-memfd` is
+    // open in this process, and that refusal is RIGHT for a boot — a guest launched without
+    // `share=on` must not run blind — but a unit-test process never launched a guest at all.
+    //
+    // ⊘ Passed as an argument and not sniffed from the environment or from a census: §42(e)
+    // — when the w811 default flip reddened eleven `device_recycle` tests that are about
+    // DEVICE LIFETIME and nothing else, the red was reporting a hidden argument, and this
+    // parameter is that argument given a name. The file already did exactly this for
+    // `FbStoreArm` at w763, one screen down, for the same reason.
+    guest_ram_override: Option<GuestRamSource>,
     // ★★★ E9/§13.6 option (2) — the SAME `ChipProfile::engines` slice the device-info
     // path serves the guest, so the bind check and the advertisement cannot be two
     // descriptions of one silicon.
@@ -20573,7 +20623,10 @@ fn object_policy(
     // ★★★ §4.4's missing link. Read ONCE, here, beside the plane it is checked against —
     // two readings of one environment variable is two facts that can disagree, which is
     // the shape this file already refuses for the probe set and for the isolate plane.
-    let guest_ram = selected_guest_ram_source(isolate_plane)?;
+    let guest_ram = match guest_ram_override {
+        Some(arm) => arm,
+        None => selected_guest_ram_source(isolate_plane)?,
+    };
     let (isolates, guest_ram_backing, exports) = isolate_factory(isolate_plane, guest_ram)?;
     let gpu = kayfabe_core::gpu::Gpu::new(
         std::sync::Arc::new(kayfabe_chips::Ga10xArch::new()),

@@ -85,11 +85,7 @@ fn realize_with(policy: MockPolicy) -> Result<(Shim, Arc<MockQemuHost>), (Status
 /// once and not one of them had changed. ⇒ The arm each test needs is now part of the test,
 /// which is where a precondition belongs.
 fn arena_regs() -> kayfabe_qemu_raw::shim::Regs {
-    kayfabe_qemu_raw::shim::Regs::create_probed_on(
-        0,
-        "",
-        Some(kayfabe_qemu_raw::deviceview::FbStoreArm::Arena),
-    )
+    kayfabe_qemu_raw::shim::Regs::create_probed_in_a_process_with_no_guest(0, "")
     .expect("the default chip is servable on the arena arm")
 }
 
@@ -1817,7 +1813,7 @@ fn the_audit_reports_the_probe_set_the_device_ran_with() {
 
     // A probed device: the audit states the set, values and count both — this is the
     // line in the boot's own report that proves what it ran with.
-    let probed = Regs::create_probed_on(0, "35,37", Some(kayfabe_qemu_raw::deviceview::FbStoreArm::Arena))
+    let probed = Regs::create_probed_in_a_process_with_no_guest(0, "35,37")
         .expect("servable");
     let audit = probed.audit();
     assert_eq!(audit.probe_arm_len, 2);
@@ -2699,7 +2695,21 @@ fn a_value_that_is_not_a_guest_ring_arm_refuses_rather_than_defaulting() {
 #[test]
 fn the_vas_publish_arm_is_three_valued_and_never_defaulted() {
     use kayfabe_qemu_raw::shim::{VasPublishArm, vas_publish_from};
-    assert_eq!(vas_publish_from(None), Ok(VasPublishArm::Off));
+    // ⊘⊘⊘ **w811 — THIS ASSERTED `Off` FROM w810 UNTIL NOW, AND `defaults_are_the_new_design`
+    // ASSERTED `Drain` FOR THE SAME SELECTOR THE WHOLE TIME.** Two tests in one crate, opposite
+    // answers about one default, both committed, neither noticed — because the local suite has
+    // been dying to an OOM before reaching this binary, so "the tests pass" meant "the tests
+    // that ran passed". ⚠ `a_check_that_reports_is_not_a_check_that_gates`, one level up: a
+    // suite that cannot finish is not a gate.
+    // ★ Note what my w811 completeness gate does NOT catch: it proves every selector HAS a row,
+    // never that no OTHER test contradicts that row. Coverage and consistency are two
+    // properties and only one of them is now gated.
+    assert_eq!(
+        vas_publish_from(None),
+        Ok(VasPublishArm::Drain),
+        "★★★★★ w809/w810: `off` means no framebuffer page gets a host object, so every CE \
+         span is graded `CeExecutor::Ours` and the copy plane never reaches hardware"
+    );
     assert_eq!(vas_publish_from(Some("off")), Ok(VasPublishArm::Off));
     assert_eq!(vas_publish_from(Some("assert")), Ok(VasPublishArm::Assert));
     assert_eq!(
