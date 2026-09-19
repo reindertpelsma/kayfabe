@@ -2093,13 +2093,41 @@ fn only_local(plane: IsolatePlane, ce: CeExecutorChoice) -> bool {
     plane == IsolatePlane::Stillborn || ce == CeExecutorChoice::Local
 }
 
-/// ⊘ **The default must not change the plane's default arm at all.** The shipped
-/// configuration (`KAYFABE_ISOLATES` unset) already had `local_ce_is_the_only_executor ==
-/// true`; adding a second selector must be a no-op there, or every `s`-series and `w`-series
-/// ctl boot in `traces/guest_boots/` stops being comparable to the next one.
+/// ★★★★★ **w797 — ABSENT IS `Host`, AND THE OLD ASSERTION WAS THE HIDDEN ARGUMENT.**
+///
+/// ⊘⊘⊘ This test read `assert_eq!(ce_executor_from(None), Ok(CeExecutorChoice::Local))`, and
+/// its stated reason was *"every `s`-series and `w`-series ctl boot in `traces/guest_boots/`
+/// stops being comparable to the next one"*. ⚠ That is the reason §43(c) names and rejects in
+/// as many words: **"Comparability with yesterday is not a reason to keep yesterday's
+/// default."** §42(e): a test that reddens on a default flip is reporting a hidden argument —
+/// this one was the argument.
+///
+/// `[measured w797, --engines, one variable]` what the old default cost:
+/// `DOORBELL-XLATE 0 → 3`, `STORE-DOORBELL asked=0 rung=0 → asked=3 rung=3`,
+/// `FAST_VERDICT FAIL → PASS`, and R15 `SEM LANDED … GP_GET 1 -> caught GP_PUT 1 — the GPU
+/// consumed our ring`. With `Local` as the default, `local_ce_is_the_only_executor` was
+/// permanently true, so `try_ce_submission` claimed every CE doorbell **by engine, before the
+/// channel's kind mattered**, and no copy-engine submission ever reached the GPU.
+///
+/// ★ What this test still pins is the part that was always real and is unaffected by the flip:
+/// **a `Stillborn` plane keeps its CPU executor on BOTH arms.** That is the w219 failure —
+/// configuring away the only executor and putting nothing in its place — and it must stay
+/// unreachable by configuration.
 #[test]
-fn the_default_ce_executor_leaves_the_shipped_arm_byte_identical() {
-    assert_eq!(ce_executor_from(None), Ok(CeExecutorChoice::Local));
+fn the_default_ce_executor_is_the_forwarding_arm_and_stillborn_keeps_its_own() {
+    assert_eq!(
+        ce_executor_from(None),
+        Ok(CeExecutorChoice::Host),
+        "★★★★★ §44: during this phase the new architecture is the DEFAULT ON ARRIVAL. With \
+         `Local` here, `forwarding_plane_owns_ce` is gated off permanently and every CE \
+         doorbell dies in `try_ce_submission` before the core is ever asked"
+    );
+    assert_eq!(
+        ce_executor_from(Some("local")),
+        Ok(CeExecutorChoice::Local),
+        "⊘ §42(d): an opt-in may MOVE but not disappear — `local` produced every earlier green \
+         run and must stay spellable as the control"
+    );
     assert!(
         only_local(IsolatePlane::Stillborn, CeExecutorChoice::Local),
         "★ the shipped arm lost its CPU copy-engine executor"

@@ -21115,7 +21115,46 @@ impl CeExecutorChoice {
 /// [`CeExecutorChoice::Local`].
 pub fn ce_executor_from(value: Option<&str>) -> Result<CeExecutorChoice, (Status, &'static str)> {
     match value {
-        None => Ok(CeExecutorChoice::Local),
+        // ★★★★★ **w797 — ABSENT IS `Host` (§44, §43, §42(a)).**
+        //
+        // ⊘⊘⊘ **THIS DEFAULT WAS STOPPING EVERY COPY-ENGINE SUBMISSION FROM REACHING THE
+        // GPU.** `local_ce_is_the_only_executor` is `isolate_plane == Stillborn || ce_executor
+        // == Local` (`:17316`), and it gates `forwarding_plane_owns_ce` (`:21060`). With
+        // `Local` as the default that term was ALWAYS true, so `try_ce_submission` claimed
+        // every CE doorbell terminally — **by ENGINE, before the channel's KIND was ever
+        // consulted** — and `SharedDevice::doorbell` was never called for a CE channel at all.
+        //
+        // `[measured w797, --engines, one variable]`:
+        //
+        //   default (`local`)        `host`
+        //   DOORBELL-XLATE      0 →  3
+        //   STORE-DOORBELL asked=0 rung=0 → asked=3 refused=0 rung=3
+        //   FAST_VERDICT     FAIL →  PASS
+        //   R15              FAIL →  `SEM LANDED sem=0xbeef5ea1, GP_GET 1 -> caught GP_PUT 1
+        //                             — the GPU consumed our ring`
+        //
+        // ⇒ It also explains why `exec.scheduled` never filled and the doorbell table never
+        // flipped a channel to `Route::Passthrough`: its ONLY insert site is
+        // `kayfabe_fwd::commit_doorbell`, reachable only through `SharedDevice::doorbell`. The
+        // "slow path exactly once per channel" design (`:7110`) has an unstated precondition —
+        // the worker's `ring_inline` must reach the core — and the CE arm broke it for every
+        // CE channel, permanently.
+        //
+        // ⚠ **And it is why w780 and w792 both failed.** Twice I gated `shell_disposition` on
+        // the channel kind to stop serving passthrough locally; twice `SERVED-LOCALLY` did not
+        // move. `try_ce_submission` claims the doorbell *before* that function is reached, so
+        // the seam was unreachable for exactly the traffic it was aimed at. The rule was right
+        // both times; the place was not.
+        //
+        // ⊘ §43 states the principle this violated: *"A DOORBELL NEVER ASKS ABOUT AN ENGINE"*,
+        // and §43(d) already marks `route_of_engine` for deletion. §44 states why the default
+        // is the fix rather than an opt-in: during this phase the new architecture is the
+        // default on arrival. §42(a): the precondition flipped with it — `Host` needs a live
+        // isolate plane, and `isolate_plane_from(None)` has been `Real` since w763.
+        //
+        // ★ `local` stays reachable BY NAME as the control, for §42(d): the arm that produced
+        // every earlier green run must not become unspellable.
+        None => Ok(CeExecutorChoice::Host),
         Some(v) => CeExecutorChoice::parse(v).ok_or((
             Status::Unsupported,
             "KAYFABE_CE_EXECUTOR does not name an executor: the only values are `local` \
