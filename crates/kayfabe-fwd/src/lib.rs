@@ -8590,12 +8590,65 @@ pub fn commit_ce(
             }
         }
     }
+    // ★★★★★ **w813 — THE ONLY NUMBER THAT ANSWERS "DID THE GPU DO IT".**
+    //
+    // > Owner: *"ensure that eventually it must do a real CE copy AND SCRUB on hardware."*
+    //
+    // ⊘⊘⊘ A GREEN LEDGER DOES NOT ANSWER IT, and `[measured w812]` proves that on this
+    // hardware: with `KAYFABE_CE_EXECUTOR=local` — the CPU as the **only** executor
+    // (`local_ce_is_the_only_executor=true`) — the thin guest still passes **all five rows**.
+    // The reason is structural, not a gap in the client: once `join_one_fb_leaf` makes the
+    // guest's window and the host object ONE memory, a CPU memcpy and a copy-engine copy
+    // write byte-identical results, so **content verification cannot discriminate the
+    // executor** however many rounds it runs.
+    //
+    // ⇒ The discriminator has to be the executor itself, and the per-copy grading already
+    // existed — `VerbReply::CeSplit { host_ce, ours }`, decided in the isolate, where
+    // `CeExecutor::HostCe` means *"real hardware runs it … no byte passes through us"*. It
+    // was consumed here and thrown away. Accumulated, it is a boot-wide fact:
+    // `host_ce > 0` is the evidence, and `ours > 0` on a run that claims hardware is the
+    // falsifier.
+    //
+    // ⚠ This counts copies GRADED for hardware, which is not the same as bytes the engine is
+    // proven to have written — a submission can still be refused downstream. It is a
+    // NECESSARY condition, stated as one: a run with `host_ce = 0` has certainly not done a
+    // copy on hardware, whatever its ledger says. The sufficient test is the engine's own
+    // timestamp, and it is not built yet.
+    CE_HOST_COPIES.fetch_add(host_ce as u64, core::sync::atomic::Ordering::Relaxed);
+    CE_OUR_COPIES.fetch_add(ours as u64, core::sync::atomic::Ordering::Relaxed);
     Ok(CeForwarded {
         proc: plan.proc,
         chan: plan.chan,
         host_ce,
         ours,
     })
+}
+
+/// Copies graded [`kayfabe_isolate::CeExecutor::HostCe`] since boot — see [`commit_ce`].
+pub static CE_HOST_COPIES: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+/// Copies graded [`kayfabe_isolate::CeExecutor::Ours`] — the CPU byte-copy — since boot.
+pub static CE_OUR_COPIES: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+
+/// ★★★ The boot's copy-executor census, rendered. ⊘ A number nobody prints is not an
+/// instrument, and this one exists to be read against the owner's hardware requirement.
+#[must_use]
+pub fn ce_executor_census() -> String {
+    let host = CE_HOST_COPIES.load(core::sync::atomic::Ordering::Relaxed);
+    let ours = CE_OUR_COPIES.load(core::sync::atomic::Ordering::Relaxed);
+    render_ce_census(host, ours)
+}
+
+/// The census's wording, as a pure function of the two counts — so a test can drive every arm
+/// without touching process-global state. ⊘ The globals are read in exactly one place above.
+#[must_use]
+pub fn render_ce_census(host: u64, ours: u64) -> String {
+    let verdict = match (host, ours) {
+        (0, 0) => "⊘ UNMEASURED — no copy was committed at all, so this says nothing about                    either executor",
+        (0, _) => "⊘⊘⊘ NOT ONE COPY REACHED HARDWARE — every byte moved through the CPU. A                    green ledger here is a working EMULATOR, not a forwarded copy",
+        (_, 0) => "★★★★★ EVERY committed copy was graded for the host copy engine",
+        (_, _) => "◐ MIXED — some copies were graded for hardware and some for the CPU; the                    `ours` population is the one to explain",
+    };
+    format!("CE-EXECUTOR-CENSUS host_ce={host} ours={ours} ⇒ {verdict}")
 }
 
 /// The **single-threaded composition** of [`plan_ce`] / `Worker::execute` / [`commit_ce`]
@@ -9315,4 +9368,44 @@ fn adopted_guest_userd_in_store(
         object: kayfabe_isolate::UserdObject::TheStore,
         offset: base,
     })
+}
+
+#[cfg(test)]
+mod ce_executor_census_tests {
+    //! ★★★ The census exists to answer ONE question — *did any byte reach the copy engine* —
+    //! and its value is entirely in whether its four sentences are true. A census that said
+    //! "hardware" for a CPU-only run would be worse than no census at all.
+
+    /// ⊘ `(0, 0)` must be UNMEASURED, never "nothing reached hardware": a boot that committed
+    /// no copy at all has not failed the hardware requirement, it has not tested it.
+    /// `a_census_ZERO_needs_a_KNOWN_POSITIVE`, applied to the census's own wording.
+    #[test]
+    fn a_zero_zero_census_is_unmeasured_and_not_a_failure() {
+        let rendered = super::render_ce_census(0, 0);
+        assert!(rendered.contains("UNMEASURED"), "{rendered}");
+        assert!(
+            !rendered.contains("NOT ONE COPY REACHED HARDWARE"),
+            "★ an absent measurement must not be reported as a negative result: {rendered}"
+        );
+    }
+
+    /// ★★★★★ The falsifier the owner's requirement turns on.
+    #[test]
+    fn copies_that_all_went_through_the_cpu_say_so_in_those_words() {
+        let rendered = super::render_ce_census(0, 12);
+        assert!(rendered.contains("NOT ONE COPY REACHED HARDWARE"), "{rendered}");
+        assert!(rendered.contains("host_ce=0"), "{rendered}");
+    }
+
+    #[test]
+    fn a_fully_forwarded_run_and_a_mixed_one_are_different_sentences() {
+        let all_host = super::render_ce_census(7, 0);
+        let mixed = super::render_ce_census(7, 1);
+        assert!(all_host.contains("EVERY committed copy"), "{all_host}");
+        assert!(mixed.contains("MIXED"), "{mixed}");
+        assert_ne!(
+            all_host, mixed,
+            "★ one `ours` is the difference between 'all hardware' and 'explain this one'"
+        );
+    }
 }

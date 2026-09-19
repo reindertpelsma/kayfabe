@@ -20075,6 +20075,11 @@ impl Regs {
         // against it: `forwarded=0 emulated>0` means the submission never went to hardware;
         // `forwarded>0` means it did and the engine did not do the work.
         eprint!("kayfabe: {}", self.plane.doorbell_ledger().render());
+        // ★★★★★ w813 — the owner's hardware requirement, as a number, on every boot.
+        // ⊘ Printed at teardown beside the other censuses rather than per copy: the question
+        // *"did any byte reach the copy engine this boot"* is a whole-run question, and a
+        // per-copy line would bury it.
+        eprintln!("kayfabe: {}", kayfabe_fwd::ce_executor_census());
         // ★★★★★ **R1's C1 + C3, LAST STATE.** See [`Self::blockage_census`] and the note at
         // its per-doorbell call site: this copy exists so a boot that rang **no doorbell at
         // all** still prints a line, and that line reads `⊘NEVER-ARMED` — an absence stated
