@@ -119,6 +119,56 @@ structure, so it runs in the VMM worker, not the scratchpad.
 As passthrough: registering an interrupt vector arms delivery after completion, or immediate
 delivery if it has already completed — through the eventfd the raw client yields (§37(b)).
 
+## 4b. The GPGA VA space — one space, at ogkm's own constant
+
+> **Owner, 2026-09-19:** *"translated still uses isolates as normal, and va spaces (the
+> physical is one va space with the fb offset, I would use the static fb offset constant in
+> ogkm so that its also compatible if ogkm choses a virtual address)."*
+
+**Isolates are unchanged.** A Translated channel's host channel lives in that guest process's
+own isolate, exactly as a Passthrough one does — which is why `hosted_by()` answers
+[`HostChannelKind::Shadow`] and not `Scratchpad`.
+
+**One VA space, based at ogkm's own number.** `ogkm-580: mem_utils_gm107.c:593-596`:
+
+```c
+NvU64 startFbOffset = GPU_GET_HEAP(pGpu)->base;
+NvU64 vaStartOffset = startFbOffset;                 // identity
+if (gpuIsSplitVasManagementServerClientRmEnabled(pGpu))
+    vaStartOffset += NV_ALIGN_UP64(pGVAS->vaLimitServerRMOwned + 1, RM_PAGE_SIZE_512M);
+pChannel->fbAliasVA = pChannel->vaStartOffset;       // :516
+```
+
+⇒ **The default is identity: `fbAliasVA == GPU_GET_HEAP(pGpu)->base`.** The shift applies only
+when `SPLIT_VAS_MGMT_SERVER_CLIENT_RM` is set, and that is a **registry key**
+(`ogkm-580: gpu_registry.c:174-177`) — off by default, and *not* implied by being a GSP client.
+
+★★★ **Why using ogkm's constant rather than one of our own is the load-bearing choice.** If our
+GPGA VA space is based where ogkm would base `fbAliasVA`, the two paths **converge on one
+number**:
+
+- a guest that emits `_PHYSICAL` (GA10x/AD10x/TU10x) — we rebase into that space ourselves, and
+  because the single store makes **FB address = store offset**, the rebase is the identity;
+- a guest that emits `_VIRTUAL` (self-hosted Hopper, or any future part) — it has **already**
+  rebased into `fbAliasVA`, and the addresses land in our space unchanged. It can simply be
+  [`GuestChannelKind::Passthrough`], with no translation and no per-entry copy.
+
+⊘ Picking our own base would have made the second case need a second rebase — i.e. we would
+have had to *undo* the guest's arithmetic to redo it. Same idea, strictly more work, and a
+constant of our own invention to keep in step with a vendor's.
+
+### Two things this pins, and both are ours to get right
+
+1. **512 MiB alignment, on both.** `ogkm-580: mem_utils_gm107.c:443-447` asserts
+   `NV_IS_ALIGNED64(startFbOffset, RM_PAGE_SIZE_512M)` **and** the same for `vaStartOffset`,
+   and derives the usable page-size mask from `LOWESTBIT` of each. ⚠ We advertise the heap
+   base, so **we must advertise a 512 MiB-aligned one** or the guest's own assert fires. ⊘ Not
+   yet verified against what kayfabe currently advertises — first thing to check.
+2. **Do not ASSUME identity, read it.** If a guest ever sets the split-VAS registry key its
+   `fbAliasVA` shifts above `vaLimitServerRMOwned`, and a `_VIRTUAL`-emitting guest's addresses
+   would then not match a space we based at the heap base. The identity is the common case, not
+   an invariant — `an_advertised_limit_is_a_hypothesis_about_what_binds`.
+
 ## 5. What must be decided before implementing
 
 1. ⚠ **`GP_GET` acquires a stated divergence.** On hardware it advances when the **engine**

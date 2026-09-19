@@ -113,6 +113,48 @@ pub enum GuestChannelKind {
     /// inside **that guest process's own isolate** — per-process separation is `#14`'s
     /// proven fix and it is what makes this arm safe to not inspect.
     Passthrough,
+    /// ★★★★★ **TRANSLATED** — the *guest kernel* drives it, and **every entry is inspected
+    /// and rewritten before hardware sees it**.
+    ///
+    /// > **Owner, 2026-09-19:** *"a virtual channel always has a host channel backing it like
+    /// > a passthrough one; the ring of the host channel does NOT reside on GPGA, it's instead
+    /// > in scratchpad va outside it… each entry is a guest entry, but each entry has the
+    /// > ability to translate before its being forwarded."*
+    ///
+    /// # ⊘ Why two kinds was the wrong number
+    ///
+    /// [`Self::Emulated`] and [`Self::Passthrough`] answer *"may hardware run these bytes
+    /// untouched?"* at **channel** granularity. For a guest-kernel copy-engine channel that is
+    /// the wrong granularity: privilege varies **per entry**. `ogkm-580:
+    /// channel_utils.c:1053-1091` emits `LAUNCH_DMA.SRC_TYPE=_VIRTUAL` when the channel was
+    /// built with `bUseVasForCeCopy` and `_PHYSICAL` otherwise — and a second emitter,
+    /// `ogkm-580: mem_utils_gm107.c:2098-2100`, hard-codes `_PHYSICAL` and never consults the
+    /// flag. **One driver, one part, two answers.**
+    ///
+    /// ⊘ A `_PHYSICAL` operand **bypasses the MMU**, so passing it through unmediated would
+    /// hand the engine a guest-authored number as a **host** physical address. That is the
+    /// escape class, not the guest-internal question §45 defers to ogkm.
+    ///
+    /// # ★★★ What makes it safe, and both are STRUCTURAL
+    ///
+    /// **(a) The VAS is the bound.** Entries are rewritten into a VA space that maps *only*
+    /// the single store, so a translated operand **cannot** name memory outside the guest's
+    /// own. There is no validation to forget.
+    ///
+    /// **(b) The completion stays hardware's.** We translate the *address* of the semaphore
+    /// release and never produce its *value* — the guest spins on a word a real engine wrote.
+    /// That is the line between this and `citing_the_c_where_it_forges`.
+    ///
+    /// ⊘ It is §39(a)-shaped: **copy, then check, then use**. The guest mutating its own
+    /// pushbuffer after the copy changes nothing.
+    ///
+    /// ⚠ **Not a licence to translate everything.** The per-entry copy is real cost (`w315`
+    /// measured 86.7 ms/launch when per-launch work ran inline). This kind is for channels
+    /// whose privilege cannot be decided per channel — the CeUtils scrub and kernel CE. Hot
+    /// userspace channels stay [`Self::Passthrough`].
+    ///
+    /// See `docs/design/the_three_channel_kinds.md`.
+    Translated,
 }
 
 /// ★★★★★ **What a channel we ALLOCATE ON THE HOST through RM ioctls is** — whose work it
@@ -306,8 +348,12 @@ impl std::fmt::Display for TrapContract {
 impl GuestChannelKind {
     /// Every kind, so a gate can quantify over the enum rather than over a hand-written
     /// list that shrinks in one place with nothing going red.
-    pub const ALL: [GuestChannelKind; 2] =
-        [GuestChannelKind::Emulated, GuestChannelKind::Passthrough];
+    pub const ALL: [GuestChannelKind; 3] =
+        [
+            GuestChannelKind::Emulated,
+            GuestChannelKind::Passthrough,
+            GuestChannelKind::Translated,
+        ];
 
     /// ★★★★★ **The owner's 2026-08-11 ruling, as a total function** — what the doorbell
     /// trap is permitted to do for a channel of this kind. See [`TrapContract`] for what it
@@ -317,6 +363,14 @@ impl GuestChannelKind {
         match self {
             GuestChannelKind::Emulated => TrapContract::ScheduleAndReturn,
             GuestChannelKind::Passthrough => TrapContract::RingAndReturn,
+            // ⊘ **`ScheduleAndReturn`, the same contract as `Emulated`, and for the same
+            // reason** — not because the two kinds are alike downstream, but because the
+            // vCPU's obligation is identical: §41 lets an MMIO write update a queue and wake,
+            // and a Translated doorbell must do exactly that. The entry has to be READ,
+            // COPIED and REWRITTEN before hardware sees it, and none of that may happen in the
+            // trap. ★ The vCPU deliberately cannot tell Translated from Emulated, which is the
+            // property `route_of_engine`'s docs call "the vCPU has no business knowing which".
+            GuestChannelKind::Translated => TrapContract::ScheduleAndReturn,
         }
     }
 
@@ -339,6 +393,14 @@ impl GuestChannelKind {
         match self {
             GuestChannelKind::Emulated => HostChannelKind::Scratchpad,
             GuestChannelKind::Passthrough => HostChannelKind::Shadow,
+            // ★★★ **`Shadow`, NOT `Scratchpad`** — a Translated channel **always has a host
+            // channel backing it, like a passthrough one** (owner, 2026-09-19). Its work is
+            // one guest channel's and must be isolated as such; what differs from
+            // `Passthrough` is not WHERE the host channel lives but that **its ring is ours,
+            // in scratchpad VA outside GPGA**, so the guest cannot author what hardware
+            // fetches. ⊘ `Scratchpad` would say the work is the VMM's own, which is exactly
+            // what `Emulated` means and exactly what this kind is not.
+            GuestChannelKind::Translated => HostChannelKind::Shadow,
         }
     }
 
@@ -348,6 +410,7 @@ impl GuestChannelKind {
         match self {
             GuestChannelKind::Emulated => "emulated",
             GuestChannelKind::Passthrough => "passthrough",
+            GuestChannelKind::Translated => "translated",
         }
     }
 }

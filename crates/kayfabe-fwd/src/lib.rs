@@ -4286,6 +4286,41 @@ pub fn plan_doorbell(
                     vchid: route.vchid,
                 });
             }
+            // ★★★★★ **w806 — A TRANSLATED CHANNEL IS BORN LIKE A PASSTHROUGH ONE, AND A
+            // LAZY BIRTH HERE IS THE SAME DEFECT.**
+            //
+            // ⊘ It shares `Passthrough`'s answer and NOT `Emulated`'s, and the reason is the
+            // measured one w233 recorded: RM **zeroes a caller-supplied USERD at alloc**, so
+            // adopting at the first doorbell destroys the cursor that rang. A Translated
+            // channel carries the GUEST'S USERD — that is how we read `GP_PUT` at all — so it
+            // is born at the guest's own channel alloc or not at all.
+            //
+            // ⚠ What differs from `Passthrough` is only the RING: ours, in scratchpad VA
+            // outside GPGA. That is a birth-time parameter, not a reason to birth late.
+            //
+            // ⊘ Refused under `PassthroughDoorbellBirth`'s own name rather than a new variant:
+            // the fault is *"a channel that must be born at alloc reached a doorbell un-born"*,
+            // which is one fact about two kinds. A second name would split a census that has
+            // to be read as one. See `docs/design/the_three_channel_kinds.md`.
+            kayfabe_core::channel_kind::GuestChannelKind::Translated => {
+                kayfabe_util::lock_safe_eprintln!(
+                    "kayfabe: BIRTH-KIND proc={:?} chan={:?} vchid={:?} engine={:?} \
+                     kind=Translated ⊘⊘ REFUSED — a translated channel is born at its own \
+                     channel alloc, like a passthrough one, because it carries the GUEST'S \
+                     USERD and adopting it now would zero the cursor that rang (w233). Its \
+                     ring is ours and outside GPGA, which is a birth PARAMETER, not a licence \
+                     to birth late",
+                    pid,
+                    cid,
+                    route.vchid,
+                    chan.engine,
+                );
+                return Err(FwdFault::PassthroughDoorbellBirth {
+                    proc: pid,
+                    chan: cid,
+                    vchid: route.vchid,
+                });
+            }
         }
     }
     let verbs = VerbPlan::gated_doorbell(

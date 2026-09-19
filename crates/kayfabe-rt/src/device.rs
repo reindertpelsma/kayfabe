@@ -269,6 +269,9 @@ pub struct ChannelKindCensus {
     pub emulated: usize,
     /// Channels declared [`kayfabe_core::channel_kind::GuestChannelKind::Passthrough`].
     pub passthrough: usize,
+    /// ★★★★★ w806 — channels the guest kernel drives whose ENTRIES we translate. See
+    /// [`kayfabe_core::channel_kind::GuestChannelKind::Translated`].
+    pub translated: usize,
     /// Channels routed to the reserved system component — the guest kernel's, UVM's.
     pub system_proc_channels: usize,
     /// Channels routed to a user component — a guest CUDA process's.
@@ -326,10 +329,27 @@ impl ChannelKindCensus {
             match r.kind {
                 GuestChannelKind::Emulated => c.emulated += 1,
                 GuestChannelKind::Passthrough => c.passthrough += 1,
+                GuestChannelKind::Translated => c.translated += 1,
             }
             if r.proc == Gpu::SYSTEM_PROC {
                 c.system_proc_channels += 1;
-                if r.kind != GuestChannelKind::Emulated {
+                // ★★★★★ **w806 — A SYSTEM CHANNEL MAY NOW BE EMULATED *OR* TRANSLATED, AND
+                // WIDENING THIS IS THE POINT OF THE RUNG, NOT A RELAXATION.**
+                //
+                // ⊘ The invariant was `system ⇒ Emulated`, and it was a faithful reading of a
+                // two-kind world. §46 splits that population: a kernel channel whose work is
+                // REAL GPU WORK (the CeUtils scrub, kernel CE) is `Translated`; one that is a
+                // function we implement (the UVM kernel channel, stubs) stays `Emulated`.
+                //
+                // ⚠ It is still a **closed** set of two, not "anything goes": a system channel
+                // reported `Passthrough` remains a defect and is still listed — that would be
+                // guest-kernel bytes reaching hardware uninspected, which is what
+                // `the_three_channel_kinds.md` §3 says may never happen for a `PHYSICAL`
+                // operand.
+                if !matches!(
+                    r.kind,
+                    GuestChannelKind::Emulated | GuestChannelKind::Translated
+                ) {
                     c.system_not_emulated.push((r.proc.0, r.chan.0));
                 }
             } else {
