@@ -7040,6 +7040,54 @@ pub trait StoreChannelBirth: Send + Sync {
         token: u64,
         schedule: bool,
     ) -> Result<(), FwdFault>;
+
+    /// ★★★★★ **w783 — allocate an ENGINE OBJECT on a channel this party owns.**
+    ///
+    /// ⊘⊘⊘ **The same defect a THIRD time.** `w755q` found the birth running on the wrong
+    /// worker, `w755u` found the doorbell doing it one verb later, and
+    /// `[measured w783, thin guest r4]` found the engine-object forward doing it one verb
+    /// earlier than both:
+    ///
+    /// ```text
+    ///   ENGINE-OBJECT class=0xc7c0 client=0xc1d0000b parent=0xcafe001b params=16B
+    ///     -> REFUSED host_chan=NONE
+    ///        ForeignHandle { handle: HostHandle(iso4294967295/gpu0:0xb1470008),
+    ///                        worker_isolate: iso1/gpu0 }
+    ///   [seen=8 forwarded=0 refused=8]
+    /// ```
+    ///
+    /// `0xc7c0` is `AMPERE_COMPUTE_B` and `0xb1470008` is the host GR channel `STORE-BIRTH`
+    /// reports at `token=0x19` — the channel the host then faulted on:
+    /// `Xid 31 … GR0_PBDMA0 … FAULT_PDE ACCESS_TYPE_VIRT_WRITE @ 0x91_40000000`.
+    ///
+    /// ★ **`forwarded=0 refused=8` — not one engine object has EVER reached a host channel
+    /// on this arm**, CE classes included. That single fact carries two failures at once:
+    /// `P3 rpc-bind` fails because a GR channel with no compute object has no graphics
+    /// context and therefore no subcontext page-directory base to walk; and `w780` — which
+    /// stopped serving passthrough CE locally — regressed `P1`, `STALE RACE` and `THREADS`
+    /// to `NEVER RETIRED` because the host CE channels it forwarded to have no CE class
+    /// object either. The local CPU executor had been covering for this the whole time.
+    ///
+    /// ⇒ Route the verb to the party that owns the handle — w755u's ruling, unchanged:
+    /// *"Nothing is exempted from the gate and no sentinel handle is invented: the WORKER
+    /// changes, so the handle is no longer foreign to it."*
+    ///
+    /// ⊘ And it is why no golden-context stub is needed here.
+    /// [`kayfabe_isolate::RmBackend::alloc_engine_object`]'s own doc states what this alloc
+    /// buys: it *"makes the host kernel-RM build and self-promote its OWN context (golden
+    /// ctx included, on real silicon)"*. The guest's `buffer_id` 3..=7 halves never receive
+    /// a physical half from RM by construction (`promote::phys_half_scope`), and they do not
+    /// need one — the HOST's RM allocates the host context. What was missing was never the
+    /// backing; it was this alloc.
+    ///
+    /// # Errors
+    /// By name, so a boot can say which half refused.
+    fn engine_object_over_the_store(
+        &self,
+        chan: HostHandle,
+        class: ClassId,
+        params: &[u8],
+    ) -> Result<HostHandle, FwdFault>;
 }
 
 /// ★★★★ **A SHARED, long-lived source of our own framebuffer's bytes** — what a device

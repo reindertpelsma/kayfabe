@@ -259,6 +259,12 @@ pub struct StoreMapPort {
     chan_doorbells: AtomicU64,
     chan_doorbell_refused: AtomicU64,
     chan_rung: AtomicU64,
+    /// ★ w783 — engine-object allocs routed here because the channel lives here.
+    chan_engine_objects: AtomicU64,
+    /// ★ w783 — of those, how many the scratchpad's RM refused. ⊘ A measured zero beside a
+    /// nonzero `chan_engine_objects` is the reading that says the third ForeignHandle is
+    /// closed; the pair is kept because `forwarded=0 refused=8` is how it was found.
+    chan_engine_object_refused: AtomicU64,
     chan_births: AtomicU64,
     chan_birth_refused: AtomicU64,
     chan_born: AtomicU64,
@@ -374,6 +380,8 @@ impl StoreMapPort {
             chan_doorbells: AtomicU64::new(0),
             chan_doorbell_refused: AtomicU64::new(0),
             chan_rung: AtomicU64::new(0),
+            chan_engine_objects: AtomicU64::new(0),
+            chan_engine_object_refused: AtomicU64::new(0),
             chan_births: AtomicU64::new(0),
             chan_birth_refused: AtomicU64::new(0),
             chan_born: AtomicU64::new(0),
@@ -1089,6 +1097,78 @@ impl StoreMapPort {
         }
     }
 
+    /// ★★★★★ **w783 — ALLOCATE AN ENGINE OBJECT ON A CHANNEL THIS PORT'S ISOLATE OWNS.**
+    ///
+    /// `[measured w783, thin guest r4]` the engine-object forward was still running on the
+    /// per-proc worker after the birth moved to B, so **every** one of them was refused:
+    ///
+    /// ```text
+    ///   ENGINE-OBJECT class=0xc7c0 client=0xc1d0000b parent=0xcafe001b params=16B
+    ///     -> REFUSED ForeignHandle { handle: HostHandle(iso4294967295/gpu0:0xb1470008),
+    ///                                worker_isolate: iso1/gpu0 }  [seen=8 forwarded=0 refused=8]
+    /// ```
+    ///
+    /// ⊘ The gate was right and the verb was in the wrong process — w755q's defect, now a
+    /// third time. See [`kayfabe_fwd::StoreChannelBirth::engine_object_over_the_store`] for
+    /// what `forwarded=0` cost: `P3 rpc-bind`'s `FAULT_PDE`, and w780's regression of three
+    /// green rows to `NEVER RETIRED`.
+    ///
+    /// ⊘ [`kayfabe_isolate::RmBackend::alloc_engine_object`] already crosses the socket, so
+    /// like the doorbell this needs **no new protocol request** — what was missing was a
+    /// caller on the right side of one.
+    ///
+    /// # Errors
+    /// [`kayfabe_fwd::FwdFault`], by name.
+    ///
+    /// # Panics
+    /// Through `Worker::with_rm`'s `assert_lock_free`, if a caller reaches this holding a
+    /// ranked lock. That is the invariant, not a bug to be caught.
+    pub fn engine_object_over_the_store(
+        &self,
+        chan: HostHandle,
+        class: kayfabe_rt::ClassId,
+        params: &[u8],
+    ) -> Result<HostHandle, kayfabe_fwd::FwdFault> {
+        self.chan_engine_objects.fetch_add(1, Ordering::Relaxed);
+        let refused = |e: kayfabe_isolate::RmError| {
+            self.chan_engine_object_refused
+                .fetch_add(1, Ordering::Relaxed);
+            kayfabe_fwd::FwdFault::Rm { err: e, on: None }
+        };
+        let off = self.off_vcpu().map_err(|_| {
+            refused(kayfabe_isolate::RmError::Other(
+                kayfabe_isolate::STORE_BIRTH_REFUSED,
+            ))
+        })?;
+        let blob = params.to_vec();
+        let out = self.iso.with_worker(move |worker| {
+            worker.with_rm(&off, move |rm| rm.alloc_engine_object(chan, class, &blob))
+        });
+        match out {
+            None => Err(refused(kayfabe_isolate::RmError::Other(
+                kayfabe_isolate::STORE_BIRTH_REFUSED,
+            ))),
+            Some(Err(e)) => {
+                eprintln!(
+                    "kayfabe: STORE-ENGINE-OBJECT ⊘⊘ REFUSED by the scratchpad chan={chan:?} \
+                     class={:#x} params={}B — {e:?}",
+                    class.0,
+                    params.len()
+                );
+                Err(refused(e))
+            }
+            Some(Ok(obj)) => {
+                eprintln!(
+                    "kayfabe: STORE-ENGINE-OBJECT ✔ chan={chan:?} class={:#x} → object={obj:?} \
+                     ⇒ the host channel now has its engine context; on real silicon host RM \
+                     builds and self-promotes its OWN golden context at this alloc",
+                    class.0
+                );
+                Ok(obj)
+            }
+        }
+    }
+
     /// Where in the reserved object the slice at `at` lives, if this port placed one.
     #[must_use]
     pub fn slice_offset(&self, vas: HostHandle, at: GpuVa) -> Option<u64> {
@@ -1264,8 +1344,33 @@ impl StoreMapPort {
         } else {
             "★★★ EVERY DOORBELL REACHED THE CHANNEL'S OWN ISOLATE — scheduled, then rung"
         };
+        let (cea, cer) = (
+            self.chan_engine_objects.load(Ordering::Relaxed),
+            self.chan_engine_object_refused.load(Ordering::Relaxed),
+        );
+        // ★★★★★ **w783's ROW — and it exists for w755u's reason, one verb earlier.**
+        // `[measured w783]` the birth census read green and the doorbell census read green
+        // while `ENGINE-OBJECT … forwarded=0 refused=8` sat in the log above them: not one
+        // host channel had ever received its engine class object. A channel that is born and
+        // rung but carries no engine object is a channel hardware faults on
+        // (`FAULT_PDE`), so this needs its own verdict too.
+        let chan_obj_verdict = if cea == 0 {
+            "⊘⊘ NEVER ASKED — no engine object was carried to a channel in another isolate. \
+             With born>0 above, that means the engine-object forward is still running on the \
+             per-proc worker and being refused ForeignHandle, and every host channel is \
+             running with NO engine context"
+        } else if cer == cea {
+            "⊘⊘ CARRIED AND REFUSED EVERY TIME — read the named refusals above"
+        } else if cer > 0 {
+            "⚠ PARTIAL — some channels have their engine context and some do not; the ones \
+             that do not fault FAULT_PDE the first time an engine walks their context"
+        } else {
+            "★★★ EVERY ENGINE OBJECT REACHED THE CHANNEL'S OWN ISOLATE — host RM built the \
+             context (golden ctx included, on real silicon)"
+        };
         format!(
-            "STORE-DOORBELL asked={cda} refused={cdr} rung={cdg} ⇒ {chan_ring_verdict}\n\
+            "STORE-ENGINE-OBJECT asked={cea} refused={cer} ⇒ {chan_obj_verdict}\n\
+             STORE-DOORBELL asked={cda} refused={cdr} rung={cdg} ⇒ {chan_ring_verdict}\n\
              STORE-BIRTH asked={cba} refused={cbr} born={cbb} ⇒ {chan_birth_verdict}\n\
              STORE-MAP-K handed={bc} refused={br} procs={bp} ⇒ {birth_verdict}\n\
              STORE-MAP iso={:?} obj={:?} obj_len={} adopts={adopts} adopt_refused={} \
@@ -1330,6 +1435,15 @@ impl kayfabe_fwd::StoreChannelBirth for StoreMapPort {
         schedule: bool,
     ) -> Result<(), kayfabe_fwd::FwdFault> {
         StoreMapPort::doorbell_over_the_store(self, chan, token, schedule)
+    }
+
+    fn engine_object_over_the_store(
+        &self,
+        chan: HostHandle,
+        class: kayfabe_rt::ClassId,
+        params: &[u8],
+    ) -> Result<HostHandle, kayfabe_fwd::FwdFault> {
+        StoreMapPort::engine_object_over_the_store(self, chan, class, params)
     }
 }
 

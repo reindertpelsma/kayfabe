@@ -3278,6 +3278,68 @@ impl SharedDevice {
     ///   exactly. Bounded by [`MAX_COMMIT_RETRIES`] on the same counter, and the bound is
     ///   provably generous: after one materialization the pair is installed or the proc
     ///   is gone, and both are terminal.
+    /// ★★★★★ **w783 — RUN THE ENGINE-OBJECT ALLOC WHERE THE CHANNEL LIVES.**
+    ///
+    /// The exact shape of [`Self::doorbell_where_the_channel_lives`], one verb earlier, and
+    /// for the same measured reason. `[measured w783, thin guest r4]`:
+    ///
+    /// ```text
+    ///   ENGINE-OBJECT class=0xc7c0 client=0xc1d0000b parent=0xcafe001b params=16B
+    ///     -> REFUSED host_chan=NONE
+    ///        ForeignHandle { handle: HostHandle(iso4294967295/gpu0:0xb1470008),
+    ///                        worker_isolate: iso1/gpu0 }   [seen=8 forwarded=0 refused=8]
+    /// ```
+    ///
+    /// The channel was born in B and belongs to the scratchpad; the engine-object verb still
+    /// ran on the per-proc worker; the foreign-handle gate refused it before RM was reached.
+    /// ⊘ The gate is RIGHT. The worker was wrong.
+    ///
+    /// ⚠ **`forwarded=0 refused=8` is not one row's failure, it is the whole arm's.** No host
+    /// channel on this path has ever had an engine class object, which is why `P3 rpc-bind`
+    /// faults `FAULT_PDE` (a GR channel with no compute object has no graphics context and so
+    /// no subcontext page-directory base) and why w780 regressed `P1`, `STALE RACE` and
+    /// `THREADS` to `NEVER RETIRED` the moment it stopped serving passthrough CE from our own
+    /// executor — the host CE channels it forwarded to had no CE class object either.
+    ///
+    /// ⊘ This arm handles only the `channel: Some(..)` case. A plan with `channel: None` asks
+    /// the verb to MATERIALIZE the channel first, and that birth has its own routing
+    /// (`VerbPlan::ChannelBirth` / w755r); sending it here would be a second opinion about
+    /// where a channel is born.
+    fn engine_object_where_the_channel_lives(
+        &self,
+        chan: HostHandle,
+        class: ClassId,
+        params: &[u8],
+    ) -> Result<VerbReply, kayfabe_isolate::VerbFailure> {
+        let fail = |err: RmError| kayfabe_isolate::VerbFailure {
+            err,
+            orphans: kayfabe_fwd::Orphans::default(),
+            on: None,
+        };
+        let Some(party) = self.store_birth.get() else {
+            eprintln!(
+                "kayfabe: STORE-ENGINE-OBJECT ⊘⊘ REFUSED chan={chan:?} class={:#x} — the \
+                 channel belongs to another isolate and NO birth party is installed to reach \
+                 it. ⊘ The channel will run with no engine context, and the first engine to \
+                 walk it faults FAULT_PDE.",
+                class.0
+            );
+            return Err(fail(RmError::Other(kayfabe_isolate::NO_STORE_BIRTH_PARTY)));
+        };
+        match party.engine_object_over_the_store(chan, class, params) {
+            Ok(object) => Ok(VerbReply::EngineObject {
+                // ⊘ Nothing fresh: the VAS and the channel both already existed — this verb
+                // allocated an object on an existing channel and materialized neither.
+                // `commit_engine_object` must not be told to adopt or free either.
+                host_vas: None,
+                channel: None,
+                object,
+            }),
+            Err(kayfabe_fwd::FwdFault::Rm { err, .. }) => Err(fail(err)),
+            Err(_) => Err(fail(RmError::Other(kayfabe_isolate::STORE_BIRTH_REFUSED))),
+        }
+    }
+
     fn verb_op<P, T>(
         &self,
         stage: impl Fn() -> Result<Staged<P>, FwdFault>,
@@ -7394,7 +7456,7 @@ impl SharedDevice {
         params: &[u8],
         err_notifier_grant: Option<kayfabe_isolate::GuestRamGrant>,
     ) -> Result<EngineObjectForwarded, FwdFault> {
-        self.verb_op(
+        self.verb_op_ex(
             || {
                 self.route_act(
                     |spine| {
@@ -7418,6 +7480,22 @@ impl SharedDevice {
                 )?
             },
             kayfabe_fwd::commit_engine_object,
+            // ★★★★★ w783 — see `engine_object_where_the_channel_lives`.
+            |worker, verbs, off| {
+                let kayfabe_isolate::VerbPlan::EngineObject {
+                    channel: Some(ref handles),
+                    class,
+                    ref params,
+                    ..
+                } = *verbs
+                else {
+                    return worker.execute(verbs, off);
+                };
+                if handles.0.isolate() == worker.isolate() {
+                    return worker.execute(verbs, off);
+                }
+                self.engine_object_where_the_channel_lives(handles.0, class, params)
+            },
         )
     }
 
@@ -7439,7 +7517,7 @@ impl SharedDevice {
         params: &[u8],
         err_notifier_grant: Option<kayfabe_isolate::GuestRamGrant>,
     ) -> Result<EngineObjectForwarded, FwdFault> {
-        self.verb_op(
+        self.verb_op_ex(
             || {
                 self.route_act(
                     |spine| {
@@ -7465,6 +7543,25 @@ impl SharedDevice {
                 )?
             },
             kayfabe_fwd::commit_engine_object,
+            // ★★★★★ w783 — see `engine_object_where_the_channel_lives`. ⊘ This is the entry
+            // point the RPC path actually uses, so it is the one the measured
+            // `forwarded=0 refused=8` came through; the `(GpuId, VChid)` sibling above is
+            // rewired identically so the two cannot drift.
+            |worker, verbs, off| {
+                let kayfabe_isolate::VerbPlan::EngineObject {
+                    channel: Some(ref handles),
+                    class,
+                    ref params,
+                    ..
+                } = *verbs
+                else {
+                    return worker.execute(verbs, off);
+                };
+                if handles.0.isolate() == worker.isolate() {
+                    return worker.execute(verbs, off);
+                }
+                self.engine_object_where_the_channel_lives(handles.0, class, params)
+            },
         )
     }
 
