@@ -2117,16 +2117,18 @@ fn only_local(plane: IsolatePlane, ce: CeExecutorChoice) -> bool {
 fn the_default_ce_executor_is_the_forwarding_arm_and_stillborn_keeps_its_own() {
     assert_eq!(
         ce_executor_from(None),
-        Ok(CeExecutorChoice::Host),
-        "★★★★★ §44: during this phase the new architecture is the DEFAULT ON ARRIVAL. With \
-         `Local` here, `forwarding_plane_owns_ce` is gated off permanently and every CE \
-         doorbell dies in `try_ce_submission` before the core is ever asked"
+        Ok(CeExecutorChoice::Local),
+        "⊘⊘ w799: `host` IS the architecturally right arm and §43 wants it — it took \
+         `--engines` and `--ce-client` green and made R15 read `the GPU consumed our ring`. \
+         It is not the default because a forwarded CE copy NEVER RETIRES: 15 PASS against \
+         `local`'s 18 on the same suite, with the thin-guest ledger red. §44's escape clause \
+         wants proof the new arm is broken AND the old one better; that is the proof"
     );
     assert_eq!(
-        ce_executor_from(Some("local")),
-        Ok(CeExecutorChoice::Local),
-        "⊘ §42(d): an opt-in may MOVE but not disappear — `local` produced every earlier green \
-         run and must stay spellable as the control"
+        ce_executor_from(Some("host")),
+        Ok(CeExecutorChoice::Host),
+        "⊘ §42(d): the forwarding arm must stay spellable — it is the one-boot reproducer for \
+         the defect that is blocking it"
     );
     assert!(
         only_local(IsolatePlane::Stillborn, CeExecutorChoice::Local),

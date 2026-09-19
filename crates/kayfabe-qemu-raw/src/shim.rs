@@ -21179,7 +21179,35 @@ pub fn ce_executor_from(value: Option<&str>) -> Result<CeExecutorChoice, (Status
         //
         // ★ `local` stays reachable BY NAME as the control, for §42(d): the arm that produced
         // every earlier green run must not become unspellable.
-        None => Ok(CeExecutorChoice::Host),
+        // ⊘⊘⊘ **w799 — REVERTED TO `Local`, ON §44's OWN ESCAPE CLAUSE AND WITH ITS PROOF.**
+        //
+        // §44 requires, to put the old arm back: *proof the new one is broken AND the old one
+        // better*. Both, measured on the 30-arm suite, one variable:
+        //
+        //   `host` (w797):  15 PASS / 10 FAIL / 5 CRASH
+        //   `local`(w796):  18 PASS /  7 FAIL / 4 CRASH
+        //
+        // ★ The flip did exactly what it was supposed to: `--engines` and `--ce-client` went
+        // GREEN, `DOORBELL-XLATE 0 → 3`, and R15 read *"the GPU consumed our ring"* for the
+        // first time. It is architecturally right and §43 wants it.
+        //
+        // ⊘⊘ It also took **six** arms the other way — `--uvm-mean`, `--alias-two-vas`,
+        // `--alias-unmap-observe`, `--cross-client-leak`, `--rpc-mixed-allocs`, `--map-stress`
+        // — with the ledger reading `P1 ⊘ the copy from 0x8080000000 NEVER RETIRED`,
+        // `STALE RACE` the same, `THREADS 0 of 4`. **That is the third time, by three
+        // different seams** (w780 via `shell_disposition`, w792 the same, w797 via this
+        // default) that sending a CE doorbell to hardware produces a copy that never retires.
+        //
+        // ⇒ The blocker is NOT the routing. It is that **the host CE channel does not execute
+        // the guest's copy**, and three independent routes into it have now hit the identical
+        // signature. That is the defect to find; until it is found, this default makes the
+        // thin guest — the iteration loop itself — red, which costs more than the two arms it
+        // buys.
+        //
+        // ⚠ Reopening is cheap and named: `KAYFABE_CE_EXECUTOR=host` reproduces all of the
+        // above in one boot. Do not re-flip the default without first making a forwarded CE
+        // copy retire.
+        None => Ok(CeExecutorChoice::Local),
         Some(v) => CeExecutorChoice::parse(v).ok_or((
             Status::Unsupported,
             "KAYFABE_CE_EXECUTOR does not name an executor: the only values are `local` \
