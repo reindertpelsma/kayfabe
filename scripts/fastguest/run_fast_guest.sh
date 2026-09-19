@@ -225,4 +225,44 @@ if [ "${crc:-1}" != 0 ]; then
     echo "FAST_VERDICT=FAIL (raw client rc=${crc:-?})"
     exit 1
 fi
+# ★★★★★ **A GREEN RUN THAT NEVER ASKED THE GPU IS NOT A PASS.**
+#
+# > Owner: *"ensure that eventually it must do a real CE copy AND SCRUB on hardware."*
+#
+# ⊘⊘⊘ `[measured w813]` the ledger CANNOT answer that, and the proof is a control:
+# `KAYFABE_CE_EXECUTOR=local` — the CPU as the only executor — passes **all five rows**. Once
+# `join_one_fb_leaf` makes the guest's window and the host object ONE memory, a CPU memcpy and
+# a copy-engine copy write byte-identical results, so content verification is structurally
+# incapable of telling them apart.
+#
+# ★ The DOORBELL LEDGER can, and says so in its own words: *"`forwarded=0` with `emulated>0`
+# means it never went to hardware; `forwarded>0` means it did"*. Measured on the same binary,
+# same arm, same guest:
+#
+#     ce_executor=host   tok=0x00000003 emulated=1 forwarded=5   ⇒ the GPU ran it
+#     ce_executor=local  tok=0x00000003 emulated=6 forwarded=0   ⇒ the CPU ran it
+#
+# ⇒ So the gate is on `forwarded`, and it turns a silently-local run from PASS into FAIL.
+# ⚠ Scoped to the guest's OWN channels (`tok=0x000000xx`): the kernel/system tokens
+# (`0x0001xxxx`) are `forwarded=0` BY DESIGN today — that is §12.26's system-data-plane rule,
+# and whether §46 supersedes it is an open OWNER ruling, not something this gate may pre-empt.
+# ⊘ Opt out with `KF_REQUIRE_FORWARD=0` for a deliberate CPU-arm control run — which must stay
+# spellable, or the control this gate is built on becomes unrunnable.
+QLOG="$BENCH/fast_${TAG}_qemu.log"
+if [ "${KF_REQUIRE_FORWARD:-1}" = 1 ] && [ -s "$QLOG" ]; then
+    fwd=$(grep -ao 'DOORBELL-LEDGER tok=0x000000[0-9a-f][0-9a-f] .*' "$QLOG" 2>/dev/null \
+        | sort -u \
+        | sed -n 's/.*forwarded=\([0-9]*\).*/\1/p' \
+        | awk '{s+=$1} END {print s+0}')
+    guest_tokens=$(grep -aco 'DOORBELL-LEDGER tok=0x000000' "$QLOG" 2>/dev/null || echo 0)
+    if [ "${guest_tokens:-0}" -gt 0 ] && [ "${fwd:-0}" -eq 0 ]; then
+        echo "FAST_VERDICT=FAIL (every row verified, and NOT ONE doorbell reached hardware)"
+        echo "⊘ The guest's own channels show forwarded=0 across $guest_tokens token(s), so the"
+        echo "   copies were executed on the CPU and the ledger cannot tell. That is a working"
+        echo "   EMULATOR, not a forwarded copy. See DOORBELL-LEDGER in $QLOG."
+        echo "⊘ If this IS the deliberate CPU control arm, re-run with KF_REQUIRE_FORWARD=0."
+        exit 1
+    fi
+    echo "== hardware: $fwd doorbell(s) forwarded across $guest_tokens guest token(s)"
+fi
 echo "FAST_VERDICT=PASS (${elapsed}s)"

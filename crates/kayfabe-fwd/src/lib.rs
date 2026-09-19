@@ -8643,8 +8643,14 @@ pub fn ce_executor_census() -> String {
 #[must_use]
 pub fn render_ce_census(host: u64, ours: u64) -> String {
     let verdict = match (host, ours) {
-        (0, 0) => "⊘ UNMEASURED — no copy was committed at all, so this says nothing about                    either executor",
-        (0, _) => "⊘⊘⊘ NOT ONE COPY REACHED HARDWARE — every byte moved through the CPU. A                    green ledger here is a working EMULATOR, not a forwarded copy",
+        (0, 0) => "⊘ UNMEASURED FOR THIS POPULATION — `commit_ce` never ran, so no copy took \
+the isolate's CE-SPLIT path. ⚠ NOT `nothing reached hardware`: [measured w813] a thin-guest \
+run with every row verified and every guest doorbell FORWARDED reads (0,0) here, because a \
+forwarded doorbell never enters this path. For that population the instrument is the DOORBELL \
+LEDGER's `forwarded=` column",
+        (0, _) => "⊘⊘⊘ NOT ONE OF THESE COPIES REACHED HARDWARE — every byte took the CPU. ⊘ \
+Scoped to copies that entered the CE-SPLIT path; forwarded doorbells are counted by the \
+DOORBELL LEDGER instead",
         (_, 0) => "★★★★★ EVERY committed copy was graded for the host copy engine",
         (_, _) => "◐ MIXED — some copies were graded for hardware and some for the CPU; the                    `ours` population is the one to explain",
     };
@@ -9383,8 +9389,15 @@ mod ce_executor_census_tests {
     fn a_zero_zero_census_is_unmeasured_and_not_a_failure() {
         let rendered = super::render_ce_census(0, 0);
         assert!(rendered.contains("UNMEASURED"), "{rendered}");
+        // ⊘ w813: and it must POINT AT THE RIGHT INSTRUMENT. A `(0,0)` that read as "nothing
+        // reached hardware" would have been flatly wrong about the run that produced it —
+        // every row verified, every guest doorbell forwarded.
         assert!(
-            !rendered.contains("NOT ONE COPY REACHED HARDWARE"),
+            rendered.contains("DOORBELL LEDGER"),
+            "★ a census that cannot answer must name what can: {rendered}"
+        );
+        assert!(
+            !rendered.contains("NOT ONE OF THESE COPIES REACHED HARDWARE"),
             "★ an absent measurement must not be reported as a negative result: {rendered}"
         );
     }
@@ -9393,7 +9406,10 @@ mod ce_executor_census_tests {
     #[test]
     fn copies_that_all_went_through_the_cpu_say_so_in_those_words() {
         let rendered = super::render_ce_census(0, 12);
-        assert!(rendered.contains("NOT ONE COPY REACHED HARDWARE"), "{rendered}");
+        assert!(
+            rendered.contains("NOT ONE OF THESE COPIES REACHED HARDWARE"),
+            "{rendered}"
+        );
         assert!(rendered.contains("host_ce=0"), "{rendered}");
     }
 
