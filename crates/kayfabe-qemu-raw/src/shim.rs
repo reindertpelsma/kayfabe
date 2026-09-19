@@ -5895,10 +5895,32 @@ fn doorbell_publish_loop(
                 );
             }
             let t_refresh = std::time::Instant::now();
-            let refresh = port.refresh_page_tables(
-                off_vcpu,
-                if inval_all { None } else { Some(&dirty_pdbs) },
-            );
+            // ⊘⊘⊘ **w793c — THE SWEEP IS NOT SCOPED. MEASURED, AND IT COST P3.**
+            //
+            // `[measured w793b]` scoping the sweep to the named page directories worked
+            // exactly as designed — `refresh` fell **7.36 ms → 3.19 ms (−57 %)** with
+            // `scoped_out=1` on 329 passes and `=2` on 175 — **and `P3 rpc-bind` went from
+            // VERIFIED to CONTENT MISMATCH in the same boot.**
+            //
+            // ⇒ P3 needs a space swept that the invalidate naming it does not name. Why is
+            // not yet known, and the honest reading is that the invalidate's decoded PDB and
+            // the VAS's declared root are not the same key in every case — `w779` already
+            // found one instance of that class (`Pdb(0)` treated as an identity).
+            //
+            // ⚠ **So the dirty set is carried and used for the EPOCH, and NOT for the sweep.**
+            // Marking the named spaces dirty is strictly more precise and loses no coverage:
+            // the publication gate re-arms for exactly the spaces the guest named. Skipping
+            // the walk of the others is what dropped a mapping, and *"widening beats
+            // dropping"* is this rung's own rule — over-wide is slow, dropped is a stale
+            // GPU translation.
+            //
+            // ⊘ The 7.34 ms stands as a MEASURED, NAMED cost with a reopening condition:
+            // find why P3's space is not named by the invalidate that dirties it. The
+            // plumbing (`drain_dirty_pdbs`, `proc_of_pdb`, `scoped_out`) stays, because the
+            // next attempt needs exactly it and re-deriving it is how this gets retried by
+            // accident.
+            let _ = inval_all;
+            let refresh = port.refresh_page_tables(off_vcpu, None);
             let seg_refresh_ms = t_refresh.elapsed().as_secs_f64() * 1e3;
             // ★★★★★ **CONSTRAINT 27 — UNMAPS BEFORE MAPS, WITHIN ONE REFRESH.**
             //
