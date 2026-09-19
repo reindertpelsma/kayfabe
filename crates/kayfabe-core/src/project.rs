@@ -1275,11 +1275,23 @@ pub fn project(
                 // population is the population.
                 {
                     static SEEN: std::sync::Mutex<
-                        Option<std::collections::BTreeSet<(u32, u32)>>,
+                        Option<std::collections::BTreeSet<(u32, u32, Option<u32>, Option<u64>)>>,
                     > = std::sync::Mutex::new(None);
                     let mut g = SEEN.lock().unwrap_or_else(|e| e.into_inner());
                     let set = g.get_or_insert_with(std::collections::BTreeSet::new);
-                    let fresh = set.len() < 128 && set.insert((node.key.client.0, node.key.handle.0));
+                    // ⊘⊘ **w811h — KEYED ON THE FACTS, NOT ONLY THE IDENTITY.** Printing
+                    // once per `(client, handle)` fixed w811f's truncation and introduced the
+                    // opposite blind spot: it showed each space's FIRST attribution and never
+                    // its current one, so `pdb=None` read as *"this space has no root"* when
+                    // it only meant *"it had none the first time we projected"*. ⇒ Key on
+                    // `(client, handle, gpu, pdb)` so a CHANGE prints and a repeat does not.
+                    let fresh = set.len() < 128
+                        && set.insert((
+                            node.key.client.0,
+                            node.key.handle.0,
+                            gpu.map(|g| g.0),
+                            pdb.map(|p| p.0),
+                        ));
                     let n = set.len() as u64;
                     drop(g);
                     if fresh {

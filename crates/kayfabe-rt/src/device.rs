@@ -6957,6 +6957,46 @@ impl SharedDevice {
                         Err(found) => {
                             let on_gpu =
                                 proc.vases.values().filter(|v| v.gpu == gpu).count();
+                            // ★★★★★ **w811h — WHAT THIS PROC ACTUALLY HOLDS, BY ORIGIN.**
+                            //
+                            // ⊘ `found`/`on_gpu` are counts, and three readings of this
+                            // failure have now died on a count that was true and about the
+                            // wrong population. `[measured w811g]` the projection carries a
+                            // `Vas` for `client=0xc1d0000b handle=0xcafe0004 gpu=Some(0)` —
+                            // P1's own space — while this refusal reports `on_gpu: 1` for the
+                            // proc the channel is attributed to. Both cannot describe one
+                            // population, so the inventory is printed rather than counted.
+                            // ⚠ Capped, and it prints ORIGINS: a count cannot see a
+                            // substitution (`w281b`, three rungs in a row).
+                            {
+                                static N: std::sync::atomic::AtomicU64 =
+                                    std::sync::atomic::AtomicU64::new(0);
+                                let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                if n < 6 {
+                                    let inv: Vec<String> = proc
+                                        .vases
+                                        .iter()
+                                        .map(|((g, origin), v)| {
+                                            format!(
+                                                "gpu={} origin={:?} pdb={:?}",
+                                                g.0,
+                                                origin,
+                                                v.pdb.map(|p| p.0)
+                                            )
+                                        })
+                                        .collect();
+                                    eprintln!(
+                                        "kayfabe: HANDOVER-INVENTORY #{} pid={:?} asked_gpu={} \
+                                         asked_pdb={:#x} holds {} vas(es): [{}]",
+                                        n + 1,
+                                        pid,
+                                        gpu.0,
+                                        pdb.0,
+                                        proc.vases.len(),
+                                        inv.join(" | ")
+                                    );
+                                }
+                            }
                             // ⊘ Zero or several — both mean "nothing here can tell which
                             // space the caller means", and the COUNT says which, because the
                             // two have different fixes. See the variant's `found` field.
