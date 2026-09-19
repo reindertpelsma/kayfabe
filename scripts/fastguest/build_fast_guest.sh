@@ -46,7 +46,12 @@ set -uo pipefail
 
 IMG=${1:-/workspace/bench/guest.qcow2}
 OUT=${2:-/workspace/bench/fastguest}
-CLIENT=${CLIENT:-/root/kayfabe/target/release/kayfabe-rm-ladder}
+# ⊘ Derived from THIS SCRIPT's location, never a hardcoded home. `[measured w777]` it read
+# `/root/kayfabe/...` and a box whose checkout is `/workspace/kayfabe` failed step 4 of a
+# five-step pipeline with "no raw client at ..." — a path assumption, reported as a missing
+# build.
+KF_ROOT=${KF_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}
+CLIENT=${CLIENT:-$KF_ROOT/target/release/kayfabe-rm-ladder}
 
 die() { echo "build_fast_guest: $*" >&2; exit 1; }
 
