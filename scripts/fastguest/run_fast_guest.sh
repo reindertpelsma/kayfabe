@@ -32,6 +32,28 @@ done
 # ⚠ Serial, not ssh. See build_fast_guest.sh for the two boots this cost before it was serial.
 rm -f "$SER"
 
+# ★★★★★ **SERIALIZE, OR TWO RUNS DESTROY EACH OTHER — measured 2026-09-20 (w812).**
+#
+# The `pkill` below is deliberate (a clean slate per boot), and that makes ANY two concurrent
+# invocations mutually destructive: each kills the other's QEMU, and the loser leaves a
+# **zero-byte serial log** behind. ⊘ `[measured w812]` two arms re-run in parallel with a
+# timeout sweep produced exactly that — two 0-byte logs, freshly timestamped, which read as
+# *"the arm produced no output"* rather than *"the arm was shot"*. That is the repo's own
+# `a KILLED background job is indistinguishable from a RUNNING one` trap, arriving through the
+# harness instead of through ssh.
+#
+# ⚠ CLAUDE.md already says GPU tests run **strictly serially**. A rule that lives only in a
+# document is a rule that gets broken by whoever did not read it; this makes it structural.
+# ⊘ Blocking (not `-n`): a second run should WAIT, never silently skip — a skipped arm that
+# reports nothing is the same false-negative the lock exists to prevent.
+exec 9>"${KF_LOCK:-/tmp/kayfabe-fastguest.lock}"
+if command -v flock >/dev/null 2>&1; then
+    echo "== serializing on ${KF_LOCK:-/tmp/kayfabe-fastguest.lock} (GPU runs are strictly serial)"
+    flock 9 || { echo "run_fast_guest: could not take the run lock" >&2; exit 2; }
+else
+    echo "run_fast_guest: ⚠ no flock(1) — CONCURRENT RUNS WILL KILL EACH OTHER; run serially" >&2
+fi
+
 # ⊘ `pkill` on its own line and with the bracket trick: a pattern that appears later on the same
 # command line matches the shell running it, and then everything after silently never runs
 # (`nvkvm-pv`, 2026-08-17).
@@ -181,6 +203,16 @@ if [ "$rc" = 124 ] || [ "$rc" = 137 ]; then
     echo "FAST_VERDICT=CRASH (budget ${BUDGET}s exceeded — a timeout IS a crash)"
     echo "⊘ the serial log's last lines are where it stopped:"
     tail -5 "$SER" 2>/dev/null | tr -d '\r' | sed 's/^/    /'
+    exit 1
+fi
+# ⊘⊘ **A ZERO-BYTE SERIAL LOG IS ITS OWN STATE, NOT A VERDICT.** `[measured w812]` a run shot
+# by a concurrent invocation leaves an empty, freshly-timestamped log, and every signal says
+# the evidence is there. Distinguish it BY NAME from a guest that booted and died.
+if [ ! -s "$SER" ]; then
+    echo "FAST_VERDICT=CRASH (the serial log is EMPTY — QEMU wrote nothing at all)"
+    echo "⊘ This is NOT 'the guest died before reporting': nothing was ever written. The"
+    echo "   usual cause is a CONCURRENT run whose pkill shot this one — the lock above"
+    echo "   prevents that, so if you see this with the lock held, QEMU failed to start."
     exit 1
 fi
 if ! grep -aq 'FASTGUEST: DONE' "$SER" 2>/dev/null; then
