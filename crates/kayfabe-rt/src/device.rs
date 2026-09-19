@@ -5774,6 +5774,16 @@ impl SharedDevice {
         marked
     }
 
+    /// ★ w793 — which proc owns the address space rooted at `pdb`, if any.
+    ///
+    /// ⊘ A forward read of the spine's own `by_pdb` index and nothing else — the same index
+    /// `route_promote_ctx`'s hop 3 uses. `None` is a real answer (the guest named a page
+    /// directory we do not model) and its caller must widen rather than skip.
+    #[must_use]
+    pub fn proc_of_pdb(&self, gpu: GpuId, pdb: Pdb) -> Option<ProcId> {
+        self.with_spine(|spine| spine.by_pdb.get(&(gpu, pdb)).copied())
+    }
+
     pub fn vas_publish_epoch(&self, pid: ProcId, gpu: GpuId, pdb: Pdb) -> Option<(u64, usize)> {
         self.with_proc_mut(pid, |p| {
             p.vas_by_pdb(gpu, pdb)

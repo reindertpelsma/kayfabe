@@ -407,6 +407,13 @@ struct Inner {
     pdb_lo: u32,
     pdb_hi: u32,
     pdbs: BTreeSet<u64>,
+    /// ★ w793 — page directories the guest has declared changed since the last sweep drained
+    /// this. ⊘ Distinct from `pdbs`, which is a boot-long census: this one is CONSUMED, so a
+    /// space swept once is not swept again until the guest names it afresh.
+    dirty_pdbs: BTreeSet<u64>,
+    /// ★ w793 — an `ALL_PDB` invalidate, or an overflow of [`Inner::dirty_pdbs`]. Both mean
+    /// *"sweep everything"*, and both are cleared by the same drain.
+    dirty_all: bool,
     /// When the currently-pending publication armed, as a monotonic microsecond stamp
     /// supplied by the caller (this crate models no clock of its own).
     pending_since_us: Option<u64>,
@@ -498,6 +505,25 @@ impl MmuInvalidateLog {
         self.armed.load(Ordering::Acquire)
     }
 
+    /// ★★★★★ **w793 — TAKE the address spaces the guest has declared changed.**
+    ///
+    /// Returns `(all, pdbs)`. `all` means sweep everything — an `ALL_PDB` invalidate, or more
+    /// dirty spaces than the census can hold. Otherwise `pdbs` is exactly the set named since
+    /// the last drain.
+    ///
+    /// ⊘ **Drained, not read**, for `RegPlane::drain_pt_witness`'s reason: a space named again
+    /// after this call must be swept again, and leaving it set would make the second
+    /// declaration indistinguishable from the first.
+    ///
+    /// ⚠ The caller owes the sweep. A drain whose caller then skips is a stale GPU
+    /// translation with no record that anything was dropped.
+    pub fn drain_dirty_pdbs(&self) -> (bool, Vec<u64>) {
+        let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        let all = std::mem::take(&mut g.dirty_all);
+        let pdbs = std::mem::take(&mut g.dirty_pdbs);
+        (all, pdbs.into_iter().collect())
+    }
+
     /// Latch a write to one of the two PDB registers. Returns `true` if it was one.
     pub fn note_pdb_write(&self, regs: InvalidateRegs, off: u64, val: u32) -> bool {
         let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
@@ -527,6 +553,31 @@ impl MmuInvalidateLog {
             return (inv, TriggerAction::Observed);
         }
         g.snap.triggers += 1;
+        // ★★★★★ **w793 — REMEMBER WHICH ADDRESS SPACE THE GUEST NAMED.**
+        //
+        // `[measured w793, uvm-mean, n=530, one variable]` the page-table sweep costs
+        // `refresh=0.02ms` when skipped and `refresh=7.36ms` when it runs — and w786 made it
+        // run on EVERY invalidate, because the only signal left after the single store killed
+        // the CPU witness was *"an invalidate happened"*, with no idea WHERE.
+        //
+        // ⊘ That was the honest conservative choice at the time (*"losing precision may cost a
+        // pass, never coverage"*), and it is now measured: +7.34 ms per invalidate, ~3.9 s on
+        // `uvm-mean` and ~8.5 s on `concurrent-fuzz` at 1155 invalidates — which is most of a
+        // 60 s budget.
+        //
+        // ★ The precision is right here and was simply not carried: `[measured w784]`
+        // `all_pdb=0` and `all_va=530 of 530`, so **every invalidate names exactly ONE page
+        // directory**. Recording it lets the sweep walk that address space instead of all
+        // four. ⊘ `all_pdb` still means every space, which is what the bit says.
+        if inv.all_pdb {
+            g.dirty_all = true;
+        } else if g.dirty_pdbs.len() < MAX_PDBS {
+            g.dirty_pdbs.insert(inv.pdb);
+        } else {
+            // ⚠ Out of room ⇒ widen to EVERYTHING rather than drop one. A forgotten address
+            // space is a stale GPU translation; an over-wide sweep is only slow.
+            g.dirty_all = true;
+        }
         g.snap.all_pdb += u64::from(inv.all_pdb);
         g.snap.all_va += u64::from(inv.all_va);
         g.snap.hubtlb_only += u64::from(inv.hubtlb_only);

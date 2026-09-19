@@ -5856,14 +5856,49 @@ fn doorbell_publish_loop(
             // for the NEXT pass and skip this one — the off-by-one that reads as "the fix did
             // nothing" for a whole boot.
             GUEST_INVALIDATES_DECLARED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            let marked = port.device.note_guest_invalidate(None, None);
+            // ★★★★★ **w793 — MARK THE SPACES THE GUEST NAMED, NOT EVERY SPACE.**
+            //
+            // `[measured w793, --uvm-mean, n=530, one variable changed]` the sweep this arms
+            // costs `refresh=0.02ms` skipped and `refresh=7.36ms` run, and w786 armed it on
+            // every invalidate because the only thing it knew was *that* one happened.
+            // ⇒ +7.34 ms per invalidate: ~3.9 s on `uvm-mean`, ~8.5 s of a 60 s budget on
+            // `concurrent-fuzz`. That is w786's own stated trade — *"losing precision may cost
+            // a pass, never coverage"* — coming due, now with a number on it.
+            //
+            // ★ The precision was always available and simply not carried: `[measured w784]`
+            // `all_pdb=0` with `all_va=530 of 530`, so every invalidate names ONE page
+            // directory. `drain_dirty_pdbs` returns exactly those.
+            //
+            // ⊘ `all` still marks everything — an `ALL_PDB` invalidate means every space, and
+            // an overflow of the dirty set widens rather than drops. Over-wide is slow;
+            // dropped is a stale translation.
+            let (inval_all, dirty_pdbs) = plane_ref
+                .as_ref()
+                .map_or((true, Vec::new()), |pl| pl.mmu_inval().drain_dirty_pdbs());
+            let marked = if inval_all || dirty_pdbs.is_empty() {
+                // ⚠ An EMPTY drain with no `all` is not "nothing changed" — this worker can be
+                // woken by a job whose trigger another pass already drained. Marking widely is
+                // the safe direction and is what w786 did unconditionally.
+                port.device.note_guest_invalidate(None, None)
+            } else {
+                dirty_pdbs
+                    .iter()
+                    .map(|p| {
+                        port.device
+                            .note_guest_invalidate(None, Some(kayfabe_rt::Pdb(*p)))
+                    })
+                    .sum()
+            };
             if marked == 0 {
                 eprintln!(
                     "kayfabe: MMUINVAL-DIRTY ⊘ the guest invalidated and we model NO address                      space to mark. ⊘ A measured zero, not a no-op: with rows declared                      anywhere, this means the publication gate is about to skip on a stale                      epoch."
                 );
             }
             let t_refresh = std::time::Instant::now();
-            let refresh = port.refresh_page_tables(off_vcpu);
+            let refresh = port.refresh_page_tables(
+                off_vcpu,
+                if inval_all { None } else { Some(&dirty_pdbs) },
+            );
             let seg_refresh_ms = t_refresh.elapsed().as_secs_f64() * 1e3;
             // ★★★★★ **CONSTRAINT 27 — UNMAPS BEFORE MAPS, WITHIN ONE REFRESH.**
             //
@@ -7285,7 +7320,8 @@ impl SharedDoorbell {
         // ★ w313 — the sweep is a SEPARATE clause from the census, and it is silent when
         //   disarmed. The census below is unconditional (w304's fix, kept), so a reader can
         //   tell "the census ran and found nothing" from "the sweep was not armed".
-        let pt_sweep = self.sweep_cpu_pt_tables();
+        // ⊘ w793 — the doorbell settlement is not the invalidate path and has no named set.
+        let pt_sweep = self.sweep_cpu_pt_tables(None);
         kft.mark("pt_sweep");
         // ★★★★★ **w513 — THE CENSUS IS AN INSTRUMENT, AND IT WAS THE STALL.**
         //
@@ -7956,7 +7992,9 @@ impl SharedDoorbell {
     /// ⊘ Worker-thread only. Each pass takes and releases its own locks (the plane's, the
     /// device's) and none of them blocks on the guest; `ring_inline` already runs all three
     /// from this same thread, so no new lock order is introduced here.
-    fn refresh_page_tables(&self, _off_vcpu: OffVcpu) -> PtRefresh {
+    /// `dirty` — w793: the address spaces the guest named, or `None` for *"sweep
+    /// everything"*. See `sweep_cpu_pt_tables` for the measured reason this is scoped.
+    fn refresh_page_tables(&self, _off_vcpu: OffVcpu, dirty: Option<&[u64]>) -> PtRefresh {
         let t0 = Instant::now();
         let w = self.witness_executor_fb_pages();
         let t_witness = t0.elapsed();
@@ -8028,7 +8066,7 @@ impl SharedDoorbell {
             )
         } else {
             LAST_SWEPT_INVALIDATE.store(inval_now, std::sync::atomic::Ordering::Relaxed);
-            (self.sweep_cpu_pt_tables(), 0)
+            (self.sweep_cpu_pt_tables(dirty), 0)
         };
         let _ = skipped_sweeps;
         let t_sweep = t0.elapsed() - t_witness - t_decode;
@@ -9665,7 +9703,9 @@ impl SharedDoorbell {
                     let sync3 = !matches!(std::env::var("KAYFABE_SYNC3").as_deref(), Ok("off"));
                     let (refreshed, published) = match off_vcpu.filter(|_| sync3) {
                         Some(w) => {
-                            let r = self.refresh_page_tables(w);
+                            // ⊘ No dirty set at this seam — it is not the invalidate path,
+                            // so it asks for the full sweep exactly as before w793.
+                            let r = self.refresh_page_tables(w, None);
                             let mut ctx = self.publish_ctx();
                             // ⊘ `Drain`, not `Publish` — the same argument the invalidate arm
                             // makes: `Publish` does framebuffer leaves and nothing else, and
@@ -12102,7 +12142,20 @@ impl SharedDoorbell {
     /// census ran and found nothing" from "the sweep was disarmed".
     ///
     /// ⊘ Silent when disarmed, so the control's log stays byte-comparable.
-    fn sweep_cpu_pt_tables(&self) -> String {
+    /// ★★★★★ **w793 — SWEEP THE SPACES THE GUEST NAMED, NOT EVERY SPACE.**
+    ///
+    /// `dirty` is the page-directory bases the guest declared changed, or `None` for every
+    /// live proc (an `ALL_PDB` invalidate, a non-invalidate caller, or an overflowed set).
+    ///
+    /// `[measured w793, --uvm-mean, n=530, one variable]` this pass costs `refresh=0.02ms`
+    /// when skipped and `refresh=7.36ms` when it runs. w786 made it run on EVERY invalidate
+    /// — correct, and the only thing it could do, because the single store had killed the CPU
+    /// witness and left *"an invalidate happened"* as the sole signal. ⇒ +7.34 ms each, ~8.5 s
+    /// of a 60 s budget on `concurrent-fuzz`.
+    ///
+    /// ⊘ The scoping is not a re-skip. Every named space is still swept, every time it is
+    /// named; what stops is walking the three address spaces the guest did **not** name.
+    fn sweep_cpu_pt_tables(&self, dirty: Option<&[u64]>) -> String {
         // ⊘ w533 — the disarm is gone: the whole-VAS sweep is what kayfabe DOES.
         // `THE_PRODUCTION_CONTRACT.md` §2. Its `off` value was never in a graded boot, and its
         // DEFAULT was `off` while the bench pinned `on` — so neither value was the one anyone
@@ -12151,7 +12204,22 @@ impl SharedDoorbell {
         let mut revoked: Vec<kayfabe_fwd::RevokedLeaf> = Vec::new();
         let (mut revoked_still_desired, mut remaps_refused, mut remaps_revoked) =
             (0usize, 0usize, 0usize);
+        // ★ w793 — the procs the named spaces belong to. `None` ⇒ every live proc.
+        let scoped: Option<std::collections::BTreeSet<kayfabe_core::ProcId>> = dirty.map(|ds| {
+            ds.iter()
+                .filter_map(|p| self.device.proc_of_pdb(kayfabe_rt::GpuId::ZERO, kayfabe_rt::Pdb(*p)))
+                .collect()
+        });
+        let mut scoped_out = 0usize;
         for pid in pids {
+            // ⊘ Skipped, and COUNTED. A scoped-out space that should have been swept is a
+            // stale GPU translation, so the census has to be able to say how many this pass
+            // declined to look at — `pages=0 tasks=0` alone reads identically to "nothing
+            // changed anywhere".
+            if scoped.as_ref().is_some_and(|s| !s.contains(&pid)) {
+                scoped_out += 1;
+                continue;
+            }
             // ★ The SAME byte source the decode pass uses. `[measured 2026-08-10, boot
             // `w208_797a6bc_real`]` all five of the walling ring's page-table pages carry
             // `/byBAR2`, so the guest's CPU wrote them into the device's own store — a sweep
@@ -12255,7 +12323,7 @@ impl SharedDoorbell {
             remaps_revoked,
         );
         format!(
-            " | PT-SWEEP tasks={tasks} skipped={skipped} ran={ran} truncated={trunc} \
+            " | PT-SWEEP scoped_out={scoped_out} tasks={tasks} skipped={skipped} ran={ran} truncated={trunc} \
              pages={pages} reasons={reasons:?} JOIN-RELEASE{revoke_clause} → bound={bound} \
              unchanged={unchanged} \
              repointed={repointed} swept_binds={swept_binds} swept_only_pages={swept_only} \
