@@ -290,7 +290,17 @@ t0=$(cut -d' ' -f1 /proc/uptime)
 if [ -f /.kf_switched ]; then
     echo "FASTGUEST: root is a real mount (switch_root done) — the isolate sandbox can pivot_root"
 elif mkdir -p /newroot && mount -t tmpfs -o size=90% tmpfs /newroot 2>/dev/null; then
-    if (cd / && tar -cf - --exclude=./newroot --exclude=./proc --exclude=./sys --exclude=./dev . 2>/dev/null | (cd /newroot && tar -xf - 2>/dev/null)); then
+    # ⊘ `cp -a` per top-level entry, not `tar --exclude`: busybox's tar does not take the
+    # GNU `--exclude` spelling, and `[measured w795]` the pipe failed silently and the guest
+    # correctly reported `switch_root copy FAILED` — the fail-soft path earning itself.
+    copied=1
+    for e in /*; do
+        case "$e" in
+            /newroot|/proc|/sys|/dev) continue ;;
+        esac
+        cp -a "$e" /newroot/ 2>/dev/null || copied=0
+    done
+    if [ "$copied" = 1 ]; then
         mkdir -p /newroot/proc /newroot/sys /newroot/dev /newroot/oldroot
         : > /newroot/.kf_switched
         t1=$(cut -d' ' -f1 /proc/uptime)
