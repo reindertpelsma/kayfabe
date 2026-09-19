@@ -20035,6 +20035,10 @@ impl Regs {
         // nothing reads until now.
         self.plane.doorbell_cost().calibrate();
         eprint!("kayfabe: {}", self.plane.doorbell_cost().render());
+        // ★★★★★ **w801 — the per-token disposition list.** Match a failing rung's token
+        // against it: `forwarded=0 emulated>0` means the submission never went to hardware;
+        // `forwarded>0` means it did and the engine did not do the work.
+        eprint!("kayfabe: {}", self.plane.doorbell_ledger().render());
         // ★★★★★ **R1's C1 + C3, LAST STATE.** See [`Self::blockage_census`] and the note at
         // its per-doorbell call site: this copy exists so a boot that rang **no doorbell at
         // all** still prints a line, and that line reads `⊘NEVER-ARMED` — an absence stated

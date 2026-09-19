@@ -1307,6 +1307,9 @@ pub struct RegPlane {
     /// ★★★★★ w795 — per-route doorbell cost. See [`crate::dbtable::DoorbellHistogram`] for
     /// why it is unconditional and what its own probe costs.
     dbcost: crate::dbtable::DoorbellHistogram,
+    /// ★★★★★ w801 — which TOKENS took which disposition. See [`crate::dbtable::DoorbellLedger`]
+    /// for why counts alone could not answer the question three rungs argued about.
+    dbledger: crate::dbtable::DoorbellLedger,
     /// ★★★★★ **The FSM's pending-doorbell count, readable WITHOUT the big lock.**
     ///
     /// ⊘⊘ `[measured w462]` w432 put `pending_command_doorbells()` at the tail of **every**
@@ -3009,6 +3012,7 @@ impl RegPlane {
             census,
             mmu_inval: crate::mmuinval::MmuInvalidateLog::new(),
             dbcost: crate::dbtable::DoorbellHistogram::default(),
+            dbledger: crate::dbtable::DoorbellLedger::default(),
             pending_cmd_doorbells: std::sync::atomic::AtomicU32::new(0),
             posted_cmd_doorbells: std::sync::atomic::AtomicU32::new(0),
             defer_cmds_armed: std::sync::atomic::AtomicBool::new(false),
@@ -4953,6 +4957,7 @@ impl RegPlane {
             // field cannot be silently left out of the teardown census, and the doorbell cost
             // histogram is rendered from `doorbell_cost()` by the shim, not from this snapshot.
             dbcost: _,
+            dbledger: _,
             // ⊘ Neither is residue. The POLICY is set once at realize from the environment and
             // survives a device reset by design (a reset does not un-arm an experiment the
             // operator armed); the COUNTER is a census of the whole boot, and zeroing it at a
@@ -6871,6 +6876,12 @@ impl RegPlane {
         &self.dbcost
     }
 
+    /// ★ w801 — the per-token disposition ledger.
+    #[must_use]
+    pub fn doorbell_ledger(&self) -> &crate::dbtable::DoorbellLedger {
+        &self.dbledger
+    }
+
     pub fn account_doorbell_report(&self, token: u64, report: &DoorbellReport) {
         match report {
             // ★ Both servings count as served — `doorbells == served + refused` is the
@@ -6986,13 +6997,20 @@ impl RegPlane {
         let ring_ns = t_ring.elapsed().as_nanos() as u64;
         // ⊘ Classified from the REPORT, not from a second `route()` lookup: the port has just
         // decided, and re-deriving it here would be two projections of one fact.
-        self.dbcost.record(
-            match &report {
-                DoorbellReport::Served { .. } => crate::dbtable::DoorbellClass::Passthrough,
-                DoorbellReport::Scheduled { .. } => crate::dbtable::DoorbellClass::Emulated,
-                _ => crate::dbtable::DoorbellClass::Other,
-            },
-            ring_ns,
+        let class = match &report {
+            DoorbellReport::Served { .. } => crate::dbtable::DoorbellClass::Passthrough,
+            DoorbellReport::Scheduled { .. } => crate::dbtable::DoorbellClass::Emulated,
+            _ => crate::dbtable::DoorbellClass::Other,
+        };
+        self.dbcost.record(class, ring_ns);
+        // ★★★★★ **w801 — AND WHICH TOKEN IT WAS.** `Served` here is the inline passthrough
+        // store, i.e. the dword reached the real register — that is `forwarded`. ⊘ A
+        // `ServedLocally` is our own executor and is explicitly NOT forwarded, which is the
+        // distinction the whole ledger exists to make.
+        self.dbledger.record(
+            token,
+            class,
+            matches!(report, DoorbellReport::Served { .. }),
         );
         self.account_doorbell_report(token, &report);
         // ★★★ **§14.18 — THE COMPLETION IS ANNOUNCED**, and only a completion is.

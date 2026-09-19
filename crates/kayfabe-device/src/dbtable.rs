@@ -579,3 +579,82 @@ impl DoorbellHistogram {
         out
     }
 }
+
+
+/// ★★★★★ **w801 — WHICH TOKENS TOOK WHICH DISPOSITION, NOT JUST HOW MANY.**
+///
+/// # ⊘⊘⊘ Why a per-token ledger and not another counter
+///
+/// `[measured w797]` one boot reported `DOORBELL-XLATE=3` beside `SERVED-LOCALLY=8`, and
+/// three rungs then argued from those two numbers about whether a particular channel's copy
+/// had been forwarded. **They cannot answer it.** The ledger's `P1` and `STALE RACE` rows
+/// fail with `the copy … NEVER RETIRED`, and whether their doorbells were among the 3 or the
+/// 8 implies *opposite* defects:
+///
+/// - among the **8** ⇒ the channel is not being routed to hardware at all: a kind/route
+///   problem upstream of the executor (owner's reading: *"for a passthrough channel it means
+///   doorbell is refused or not forwarded"*).
+/// - among the **3** ⇒ the doorbell is fine and the **engine** cannot do the work — the host
+///   channel's VAS is missing the source mapping.
+///
+/// ⚠ An aggregate cannot distinguish those, and three rungs spent boots inferring what one
+/// list would have stated. `a_census_zero_needs_a_known_positive`, one level up: a census of
+/// *counts* needs a census of *identities* behind it.
+///
+/// ⊘ Bounded by construction: one entry per distinct `(token, disposition)` pair, capped, and
+/// the cap is reported. A hostile guest can ring any token it likes, so the bound is on the
+/// TABLE and not on the guest's behaviour.
+#[derive(Debug, Default)]
+pub struct DoorbellLedger {
+    seen: std::sync::Mutex<std::collections::BTreeMap<u64, [u64; 4]>>,
+    /// Distinct tokens refused entry for want of room. ⊘ A silent truncation would make the
+    /// list a claim about the table's capacity rather than about the boot.
+    dropped: core::sync::atomic::AtomicU64,
+}
+
+impl DoorbellLedger {
+    /// How many distinct tokens the ledger will name before it starts counting drops.
+    pub const MAX_TOKENS: usize = 64;
+
+    /// Record one doorbell's outcome against its token.
+    pub fn record(&self, token: u64, class: DoorbellClass, forwarded: bool) {
+        let mut g = self.seen.lock().unwrap_or_else(|e| e.into_inner());
+        let slot = if forwarded { 3 } else { class as usize };
+        if let Some(e) = g.get_mut(&token) {
+            e[slot] = e[slot].saturating_add(1);
+            return;
+        }
+        if g.len() >= Self::MAX_TOKENS {
+            self.dropped
+                .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+            return;
+        }
+        let mut e = [0u64; 4];
+        e[slot] = 1;
+        g.insert(token, e);
+    }
+
+    /// One line per token: `tok=0x… passthrough=N emulated=N other=N forwarded=N`.
+    #[must_use]
+    pub fn render(&self) -> String {
+        let g = self.seen.lock().unwrap_or_else(|e| e.into_inner());
+        let dropped = self.dropped.load(core::sync::atomic::Ordering::Relaxed);
+        if g.is_empty() {
+            return format!("DOORBELL-LEDGER ⊘ no doorbell rang this boot (dropped={dropped})\n");
+        }
+        let mut out = String::new();
+        for (tok, e) in g.iter() {
+            out.push_str(&format!(
+                "DOORBELL-LEDGER tok={tok:#010x} passthrough={} emulated={} other={} forwarded={}\n",
+                e[0], e[1], e[2], e[3]
+            ));
+        }
+        out.push_str(&format!(
+            "DOORBELL-LEDGER tokens={} dropped={dropped} ⇒ match a failing rung's token against \
+             this list: `forwarded=0` with `emulated>0` means it never went to hardware; \
+             `forwarded>0` means it did and the ENGINE did not do the work\n",
+            g.len()
+        ));
+        out
+    }
+}
