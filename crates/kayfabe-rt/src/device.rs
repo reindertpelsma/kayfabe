@@ -5774,6 +5774,31 @@ impl SharedDevice {
         marked
     }
 
+    /// ★ w795c — every page-directory base we model, for the diagnostic that fires when an
+    /// invalidate names one we do not.
+    ///
+    /// ⊘ The two halves of a mismatch must be printed TOGETHER or the reader has to guess
+    /// which side is wrong: `[measured w795]` `MMUINVAL-DIRTY … we model NO address space to
+    /// mark` fired **146 times in one boot** and named only the count, so "the guest named a
+    /// space we do not model" and "our key is shaped differently from the register's" were
+    /// indistinguishable — and they want opposite fixes.
+    #[must_use]
+    pub fn live_vas_roots(&self) -> Vec<u64> {
+        let mut out = Vec::new();
+        for pid in self.live_pids() {
+            self.with_proc_mut(pid, |p| {
+                for vas in p.vases.values() {
+                    if let Some(pdb) = vas.pdb {
+                        out.push(pdb.0);
+                    }
+                }
+            });
+        }
+        out.sort_unstable();
+        out.dedup();
+        out
+    }
+
     /// ★ w793 — which proc owns the address space rooted at `pdb`, if any.
     ///
     /// ⊘ A forward read of the spine's own `by_pdb` index and nothing else — the same index

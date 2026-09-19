@@ -5891,7 +5891,8 @@ fn doorbell_publish_loop(
             };
             if marked == 0 {
                 eprintln!(
-                    "kayfabe: MMUINVAL-DIRTY ⊘ the guest invalidated and we model NO address                      space to mark. ⊘ A measured zero, not a no-op: with rows declared                      anywhere, this means the publication gate is about to skip on a stale                      epoch."
+                    "kayfabe: MMUINVAL-DIRTY ⊘ named={:x?} all={inval_all} but we model roots={:x?} — NO address space marked. ⊘ A measured zero, not a no-op: the publication gate is about to skip on a stale epoch, and a scoped sweep would walk nothing (w793c).",
+                    dirty_pdbs, port.device.live_vas_roots(),
                 );
             }
             let t_refresh = std::time::Instant::now();
