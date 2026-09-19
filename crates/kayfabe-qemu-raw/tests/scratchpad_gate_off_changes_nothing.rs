@@ -48,10 +48,11 @@ fn disarmed() -> Regs {
     // through here — so the write is ordered before every read of it.
     // SAFETY: a single `OnceLock`-guarded write, before any `Regs::create` in this process.
     static SET: std::sync::OnceLock<()> = std::sync::OnceLock::new();
-    SET.get_or_init(|| unsafe {
-        std::env::set_var("KAYFABE_SCRATCHPAD", "off");
-        std::env::set_var("KAYFABE_SCRATCHPAD_CUDA", "off");
-        std::env::set_var("KAYFABE_DEVICE_VIEW", "off");
+    SET.get_or_init(|| {
+        let set = kayfabe_qemu_raw::testenv_unsafe::set_var_in_single_threaded_test_setup;
+        set("KAYFABE_SCRATCHPAD", "off");
+        set("KAYFABE_SCRATCHPAD_CUDA", "off");
+        set("KAYFABE_DEVICE_VIEW", "off");
     });
     Regs::create_probed_on(0, "", Some(kayfabe_qemu_raw::deviceview::FbStoreArm::Arena))
         .expect("the shipped chip row realizes on the control arm")

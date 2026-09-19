@@ -42,9 +42,7 @@ const NOBODYS_OFFSET: u64 = 0x0000_9400;
 
 fn regs_with(arm: &str) -> Regs {
     // SAFETY: single-threaded test setup, before this process builds any `Regs`.
-    unsafe {
-        std::env::set_var(DOORBELL_ASYNC_ENV, arm);
-    }
+    kayfabe_qemu_raw::testenv_unsafe::set_var_in_single_threaded_test_setup(DOORBELL_ASYNC_ENV, arm);
     Regs::create_probed_on(0, "", Some(kayfabe_qemu_raw::deviceview::FbStoreArm::Arena)).expect("the shipped chip row realizes")
 }
 
@@ -80,7 +78,5 @@ fn the_no_worker_arm_drains_on_the_trap_and_the_worker_arm_does_not() {
 
     // Leave the process on the shipping default for anything that runs after.
     // SAFETY: as above.
-    unsafe {
-        std::env::set_var(DOORBELL_ASYNC_ENV, "on");
-    }
+    kayfabe_qemu_raw::testenv_unsafe::set_var_in_single_threaded_test_setup(DOORBELL_ASYNC_ENV, "on");
 }

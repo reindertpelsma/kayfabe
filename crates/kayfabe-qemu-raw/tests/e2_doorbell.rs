@@ -96,9 +96,7 @@ fn regs() -> Regs {
     // this is its own test binary.
     //
     // SAFETY: single-threaded test setup, before any `Regs::create` in this process.
-    unsafe {
-        std::env::set_var(kayfabe_qemu_raw::shim::DOORBELL_ASYNC_ENV, "off");
-    }
+    kayfabe_qemu_raw::testenv_unsafe::set_var_in_single_threaded_test_setup(kayfabe_qemu_raw::shim::DOORBELL_ASYNC_ENV, "off");
     // `0` selects the chip table's default row (GA106).
     //
     // ⚠ This reads `KAYFABE_ISOLATES`, process-globally, and the default is `stillborn`.
@@ -1073,9 +1071,7 @@ fn all_three_synchronization_points_consume_their_barrier() {
 fn the_shipping_arm_enqueues_instead_of_routing_on_the_caller() {
     let _serial = serialized();
     // SAFETY: single-threaded, and this test builds its own `Regs` immediately below.
-    unsafe {
-        std::env::set_var(kayfabe_qemu_raw::shim::DOORBELL_ASYNC_ENV, "on");
-    }
+    kayfabe_qemu_raw::testenv_unsafe::set_var_in_single_threaded_test_setup(kayfabe_qemu_raw::shim::DOORBELL_ASYNC_ENV, "on");
     let r = Regs::create_probed_on(0, "", Some(kayfabe_qemu_raw::deviceview::FbStoreArm::Arena)).expect("the shipped chip row realizes");
     let out = r.write(BAR_REGS, DOORBELL, 4, GOOD_TOKEN);
     let report = out
@@ -1088,7 +1084,5 @@ fn the_shipping_arm_enqueues_instead_of_routing_on_the_caller() {
     );
     // Put it back, so a later test in this binary is not silently run on the other arm.
     // SAFETY: as above.
-    unsafe {
-        std::env::set_var(kayfabe_qemu_raw::shim::DOORBELL_ASYNC_ENV, "off");
-    }
+    kayfabe_qemu_raw::testenv_unsafe::set_var_in_single_threaded_test_setup(kayfabe_qemu_raw::shim::DOORBELL_ASYNC_ENV, "off");
 }

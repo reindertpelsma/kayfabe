@@ -11673,9 +11673,13 @@ mod route_k {
         NV_ESC_REGISTER_FD, NV_IOCTL_MAGIC, NV01_MEMORY_VIRTUAL, NV20_SUBDEVICE_0,
         Nv2080AllocParameters, NvMemoryVirtualAllocationParams, RegisterFd,
     };
-    use kayfabe_abi::generated::classes::{
-        FERMI_VASPACE_A, KEPLER_CHANNEL_GROUP_A, NV01_DEVICE_0, NV01_ROOT_CLIENT,
-    };
+    // ★ w787 — the TSG class through its ARCH-INVARIANT alias, not its generation name.
+    // `invariant_classes::CHANNEL_GROUP` already existed and is the spelling the
+    // generation-name gate asks for: *"give it a name that says what it MEANS, not which chip
+    // has it."* ⊘ Same constant (`0xa06c`), same id on GA106/AD106/GH100 — this renames the
+    // reference, never the value.
+    use kayfabe_abi::generated::classes::{FERMI_VASPACE_A, NV01_DEVICE_0, NV01_ROOT_CLIENT};
+    use kayfabe_abi::invariant_classes::CHANNEL_GROUP;
     use kayfabe_abi::generated::classes::{
         Nv0080AllocParameters, NvChannelGroupAllocationParameters,
     };
@@ -12343,12 +12347,7 @@ mod route_k {
             what: "TSG encode",
             detail: format!("{e:?}"),
         })?;
-        let tsg = esc.alloc(
-            device,
-            KEPLER_CHANNEL_GROUP_A,
-            &mut tsg_params,
-            "KEPLER_CHANNEL_GROUP_A",
-        )?;
+        let tsg = esc.alloc(device, CHANNEL_GROUP, &mut tsg_params, "CHANNEL_GROUP")?;
 
         let mut chan_params = [0u8; ChannelAllocParams::SIZE];
         ChannelAllocParams {

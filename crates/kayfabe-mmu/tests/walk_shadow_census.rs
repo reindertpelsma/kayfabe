@@ -340,7 +340,7 @@ fn the_canonical_form_is_stable_on_real_ga106_tables() {
     let images = corpus_images("real_leaves.txt");
     assert!(
         images.len() >= 5,
-        "the real-GA106 corpus must have images, or this test is about nothing: {}",
+        "the real-hardware corpus must have images, or this test is about nothing: {}",
         images.len()
     );
     let total: usize = images.iter().map(|(_, l)| l.len()).sum();

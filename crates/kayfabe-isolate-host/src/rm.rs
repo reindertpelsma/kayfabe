@@ -3159,7 +3159,7 @@ const fn libc_eintr() -> i32 {
 
 /// ★★★★★ **How a CPU view is armed — and READ-ONLY is a security primitive here, not a hint.**
 ///
-/// `NVOS33_FLAGS_ACCESS` (`ogkm: nvos.h:1724-1727`) lowers through
+/// `NVOS33_FLAGS_ACCESS` (`ogkm-610: nvos.h:1724-1727`, `ogkm-580: :1732-1735`) lowers through
 /// `mapping_cpu.c:970-982` to `NV_PROTECT_READABLE`, and `nv-mmap.c:155` then refuses a
 /// writable `mmap` of that node with **`-EACCES`**. ⇒ The refusal is the KERNEL DRIVER's, not
 /// ours, which is the only kind that survives a compromised peer.

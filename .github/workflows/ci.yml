@@ -1691,7 +1691,7 @@ jobs:
           # yields `None`, which is a MEASUREMENT about that host, never a load failure. The
           # binding is loaded on every boot for the walk kernel, and a required symbol absent
           # from an older `libcuda` would turn a missing experiment into a missing walker.
-          AUDITED="kayfabe-linux-raw:127 kayfabe-qemu-raw:58 kayfabe-cuda:40"
+          AUDITED="kayfabe-linux-raw:127 kayfabe-qemu-raw:61 kayfabe-cuda:40"
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
           missing=""

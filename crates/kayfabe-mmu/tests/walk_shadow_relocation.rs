@@ -139,7 +139,7 @@ fn a_relocated_image_answers_exactly_what_the_original_answered() {
     assert_eq!(
         imgs.len(),
         5,
-        "the real-GA106 corpus is five address spaces"
+        "the real-hardware corpus is five address spaces"
     );
     let mut total = 0usize;
     for img in &imgs {

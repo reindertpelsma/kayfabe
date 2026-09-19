@@ -92,9 +92,7 @@ fn regs() -> Regs {
     // register write reaps" would be a claim about a configuration nobody runs.
     //
     // SAFETY: single-threaded test setup, before any `Regs::create` in this process.
-    unsafe {
-        std::env::set_var(kayfabe_qemu_raw::shim::DOORBELL_ASYNC_ENV, "off");
-    }
+    kayfabe_qemu_raw::testenv_unsafe::set_var_in_single_threaded_test_setup(kayfabe_qemu_raw::shim::DOORBELL_ASYNC_ENV, "off");
     // `0` selects the chip table's default row (GA106). Reads `KAYFABE_ISOLATES`
     // process-globally; its own test binary, and the default is `stillborn`.
     Regs::create_probed_on(0, "", Some(kayfabe_qemu_raw::deviceview::FbStoreArm::Arena)).expect("the default chip is servable")
@@ -393,9 +391,7 @@ fn the_shipping_arm_leaves_the_reap_to_the_worker() {
     use kayfabe_core::rmgraph::RmEvent;
 
     // SAFETY: single-threaded, and this test builds its own `Regs` immediately below.
-    unsafe {
-        std::env::set_var(kayfabe_qemu_raw::shim::DOORBELL_ASYNC_ENV, "on");
-    }
+    kayfabe_qemu_raw::testenv_unsafe::set_var_in_single_threaded_test_setup(kayfabe_qemu_raw::shim::DOORBELL_ASYNC_ENV, "on");
     let r = Regs::create_probed_on(0, "", Some(kayfabe_qemu_raw::deviceview::FbStoreArm::Arena)).expect("the default chip is servable");
     let dev = r.object_model();
 
@@ -421,9 +417,7 @@ fn the_shipping_arm_leaves_the_reap_to_the_worker() {
 
     // Put it back, so a later test in this binary is not silently run on the other arm.
     // SAFETY: as above.
-    unsafe {
-        std::env::set_var(kayfabe_qemu_raw::shim::DOORBELL_ASYNC_ENV, "off");
-    }
+    kayfabe_qemu_raw::testenv_unsafe::set_var_in_single_threaded_test_setup(kayfabe_qemu_raw::shim::DOORBELL_ASYNC_ENV, "off");
 
     // ★★★★★ **w755p — AND PUT THE PROCESS-GLOBAL BACK TOO. THIS TEST LEAKED A RETIRE.**
     //

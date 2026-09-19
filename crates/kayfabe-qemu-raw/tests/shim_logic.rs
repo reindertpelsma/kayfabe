@@ -2463,11 +2463,22 @@ fn the_default_gr_route_leaves_the_shipped_arm_byte_identical() {
         !GrRouteArm::Refuse.gr_passthrough(),
         "★ the default arm opened the route"
     );
+    // ⊘⊘⊘ **w787 — THIS ASSERTION WAS RESTORED BY w780r AND WAS ALREADY UNTRUE.**
+    //
+    // The revert of w780 put back the pre-w780 test body, which calls `shell_disposition`
+    // with a second argument and expects `RefuseByRoute`. Both halves are stale: w766
+    // DELETED the `gr_passthrough` parameter, and §43 folded `Unserved` into `HandToCore`
+    // because *"an engine we do not interpret is precisely an engine whose bytes we must not
+    // touch."* ⚠ I confirmed w780r on the ledger without building the test targets, which is
+    // how a revert left the workspace not compiling.
+    //
+    // ⇒ Asserted against the CURRENT invariant. `GrRouteArm` itself is now orphaned from this
+    // decision and is §43(d) deletion debt, tracked rather than silently exercised here.
     assert_eq!(
-        shell_disposition(DoorbellRoute::HostGr, GrRouteArm::Refuse.gr_passthrough()),
-        ShellDisposition::RefuseByRoute,
-        "★ on the default arm a GR doorbell must still be refused by name, or every \
-         committed `ctl` boot in `traces/guest_boots/` stops being comparable to the next"
+        shell_disposition(DoorbellRoute::HostGr),
+        ShellDisposition::HandToCore,
+        "★★★★★ §43: a doorbell says only *my GP_PUT moved*. A GR channel is not ours to run, \
+         so it is the core's — one dword, and the engine is not our business"
     );
 }
 
@@ -2478,25 +2489,27 @@ fn the_default_gr_route_leaves_the_shipped_arm_byte_identical() {
 /// `route != CpuCe`, which could not have opened one of the two without opening both.
 #[test]
 fn the_arming_opens_hostgr_and_only_hostgr() {
-    assert!(GrRouteArm::Passthrough.gr_passthrough());
     assert_eq!(
-        shell_disposition(
-            DoorbellRoute::HostGr,
-            GrRouteArm::Passthrough.gr_passthrough()
-        ),
+        shell_disposition(DoorbellRoute::HostGr),
         ShellDisposition::HandToCore,
-        "★★★★★ THE RUNG: armed, a GR doorbell is handed to the core"
+        "★★★★★ THE RUNG: a GR doorbell is handed to the core"
     );
-    for armed in [false, true] {
+    // ⊘ The loop is kept with a single iteration rather than deleted: it is the shape that
+    // says *"this answer does not depend on an arm"*, which is now the whole point — w766
+    // removed the arm and §43 removed the question. A reader diffing against the previous
+    // body sees the arm collapse, not a test quietly dropped.
+    for armed in [false] {
+        let _ = armed;
         assert_eq!(
-            shell_disposition(DoorbellRoute::Unserved, armed),
-            ShellDisposition::RefuseByRoute,
-            "⊘ NVENC/NVDEC must be refused on BOTH arms — the GR arming is not a general \
-             `stop refusing` switch, and folding them into one bucket is exactly the defect \
-             `DoorbellRoute` exists to prevent (armed={armed})"
+            shell_disposition(DoorbellRoute::Unserved),
+            ShellDisposition::HandToCore,
+            "⊘⊘ **CHANGED BY §43, and this is the line that records it.** NVENC/NVDEC used to \
+             be REFUSED here. They are now handed to the core for the same reason a GR \
+             doorbell is: we serve only what we emulate, so an engine we run no executor for \
+             is one whose bytes we must not interpret — not one whose doorbell we drop"
         );
         assert_eq!(
-            shell_disposition(DoorbellRoute::CpuCe, armed),
+            shell_disposition(DoorbellRoute::CpuCe),
             ShellDisposition::MayServeLocally,
             "⊘ the copy-engine route is untouched by this rung on BOTH arms (armed={armed})"
         );

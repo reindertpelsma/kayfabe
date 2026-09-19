@@ -126,9 +126,7 @@ fn ring_a_gr_doorbell() -> String {
     //
     // SAFETY: the child process is single-threaded at this point and this runs before the
     // only `Regs::create` in it.
-    unsafe {
-        std::env::set_var(kayfabe_qemu_raw::shim::DOORBELL_ASYNC_ENV, "off");
-    }
+    kayfabe_qemu_raw::testenv_unsafe::set_var_in_single_threaded_test_setup(kayfabe_qemu_raw::shim::DOORBELL_ASYNC_ENV, "off");
     let Ok(r) = Regs::create_probed_on(0, "", Some(kayfabe_qemu_raw::deviceview::FbStoreArm::Arena)) else {
         return REFUSED_TO_REALIZE.to_string();
     };

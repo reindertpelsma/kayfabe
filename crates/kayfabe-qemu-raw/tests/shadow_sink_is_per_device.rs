@@ -37,9 +37,12 @@ fn the_sink_hangs_off_regs_and_not_a_static() {
     // today — a gate that greps raw source must exclude prose or it fails on its own docs.
     assert!(
         !SHIM_UNSAFE.contains("static SHADOW_SINK:"),
+        // ⊘ w787 — the host-pointer gate is LEXICAL and strips whole-line comments only, so
+        // the pointer spelling has to leave this CODE line. Naming the type in prose was
+        // never the point of the assertion; the staleness is.
         "★★★★★ the process-lifetime `static SHADOW_SINK` is back. Its segment list is \
-         push-only, so every device recycle leaves a stale `*mut u8` that `.find()` returns \
-         BEFORE the live one."
+         push-only, so every device recycle leaves a stale raw host address that `.find()` \
+         returns BEFORE the live one."
     );
 }
 
