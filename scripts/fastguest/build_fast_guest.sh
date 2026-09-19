@@ -69,6 +69,61 @@ trap 'qemu-nbd --disconnect /dev/nbd0 >/dev/null 2>&1; umount "$ROOT/mnt" 2>/dev
 # ⊘ Taken FROM THE IMAGE rather than built here: the modules must match the kernel they will be
 # insmod'ed into, and the fat guest is where that pairing is already known-good. Building ogkm
 # against a different kernel is how a vermagic mismatch becomes a mystery at boot.
+# ★★★★★ **HOST MODE — THE THIN GUEST NEEDS NO FAT GUEST IMAGE.**
+#
+# > Owner, 2026-09-19: *"don't do the fat guest"*
+#
+# The kernel and the `nvidia*.ko` only have to MATCH EACH OTHER. Borrowing them from
+# `guest.qcow2` was one way to guarantee that; running them from the HOST is another, and it
+# is free: the host already runs the driver version this tree pins, so its modules match its
+# own kernel by construction. ⊘ That removes the fat guest from the thin lane's critical
+# path entirely — no qcow2, no `qemu-nbd`, no 6 GiB image to build first.
+#
+# ⚠ The kernel must still be one the guest can boot. A vast container shares the host
+# kernel, so `/boot/vmlinuz-$(uname -r)` is what the host is RUNNING, and the modules under
+# `/lib/modules/$(uname -r)` were built against exactly it.
+if [ "${KF_FROM_HOST:-0}" = "1" ]; then
+    KREL=$(uname -r)
+    echo "== HOST MODE: kernel $KREL, modules from /lib/modules/$KREL"
+    cp "/boot/vmlinuz-$KREL" "$OUT/vmlinuz" 2>/dev/null \
+      || die "no /boot/vmlinuz-$KREL on the host — a container may not ship the kernel image"
+    mkdir -p "$ROOT/ird/lib/modules"
+    MODROOT="/lib/modules/$KREL"
+    DEP="$MODROOT/modules.dep"
+    [ -f "$DEP" ] || die "no $DEP on the host"
+    : > "$ROOT/ird/lib/modules/loadorder"
+    found=0
+    for ko in nvidia nvidia-uvm nvidia-modeset; do
+        line=$(grep -E "(^|/)$ko\.ko(\.[a-z]+)?:" "$DEP" | head -1)
+        [ -n "$line" ] || continue
+        self=${line%%:*}; deps=${line#*:}
+        order=""; for d in $deps; do order="$d $order"; done
+        for rel in $order "$self"; do
+            src="$MODROOT/$rel"; [ -f "$src" ] || continue
+            base=$(basename "$rel"); base=${base%.zst}; base=${base%.xz}; base=${base%.ko}.ko
+            dst="$ROOT/ird/lib/modules/$base"; [ -f "$dst" ] && continue
+            case "$src" in *.zst) zstd -dq -o "$dst" "$src" ;;
+                           *.xz)  xz -dc "$src" > "$dst" ;;
+                           *)     cp "$src" "$dst" ;; esac
+            echo "$base" >> "$ROOT/ird/lib/modules/loadorder"; found=$((found+1))
+        done
+    done
+    [ "$found" -gt 0 ] || die "no nvidia modules under $MODROOT"
+    echo "== modules taken from the host (with closure): $found"
+    sed 's/^/==   /' "$ROOT/ird/lib/modules/loadorder"
+    FW="/lib/firmware/nvidia"
+    if [ -d "$FW" ]; then
+        mkdir -p "$ROOT/ird/lib/firmware"; cp -a "$FW" "$ROOT/ird/lib/firmware/" 2>/dev/null
+        find "$ROOT/ird/lib/firmware/nvidia" -name '*.zst' 2>/dev/null | while read -r z; do
+            zstd -dq -o "${z%.zst}" "$z" && rm -f "$z"; done
+        echo "== firmware taken from the host: $(find "$ROOT/ird/lib/firmware/nvidia" -type f | wc -l) file(s)"
+    else
+        echo "== firmware: ⊘ NONE at $FW - RmInitAdapter will fail 0x61"
+    fi
+    SKIP_NBD=1
+fi
+
+if [ "${SKIP_NBD:-0}" != "1" ]; then
 modprobe nbd max_part=8 2>/dev/null
 mkdir -p "$ROOT/mnt"
 qemu-nbd --read-only --connect=/dev/nbd0 -f qcow2 "$IMG" || die "qemu-nbd could not attach $IMG"
@@ -173,6 +228,7 @@ else
 fi
 
 umount "$ROOT/mnt"; qemu-nbd --disconnect /dev/nbd0 >/dev/null 2>&1
+fi   # ⊘ end of the qcow2 path — skipped entirely under KF_FROM_HOST=1
 
 # ── 2. the initrd ─────────────────────────────────────────────────────────────────────────
 mkdir -p "$ROOT/ird"/{bin,dev,proc,sys,tmp}
