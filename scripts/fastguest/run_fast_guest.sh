@@ -102,6 +102,9 @@ RAMARGS=(-object "memory-backend-memfd,id=ram0,size=${NVKVM_RAM_MB}M,share=on"
 BAR1_BYTES=$(( ${KAYFABE_GUEST_BAR1_MB:-128} * 1024 * 1024 ))
 export KAYFABE_GUEST_BAR1_MB=${KAYFABE_GUEST_BAR1_MB:-128}
 
+# ★ w770 — pass an operator-supplied VA through to the device's walk probe.
+[ -n "${KAYFABE_PROBE_VA:-}" ] && export KAYFABE_PROBE_VA
+
 start=$(date +%s)
 timeout --kill-after=3 "$BUDGET" "$Q" \
     "${RAMARGS[@]}" -cpu host -smp "${KF_SMP:-3}" \

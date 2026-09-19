@@ -8192,6 +8192,43 @@ impl SharedDoorbell {
             Ok(dump) => eprintln!("{head}{dump}"),
             Err(refusal) => eprintln!("{head}⊘ NO DUMP: {}", refusal.describe()),
         }
+        // ★★★★★ **w770 — THE ONE MEASUREMENT THAT ENDS THE P3 QUESTION.**
+        //
+        // `[measured w766–w769]` a passthrough GrCompute channel's whole pushbuffer is one
+        // host-class semaphore release — `SEM_ADDR_LO/HI` = `0x9140000000`, payload
+        // `0x0da19ea1`, `SEM_EXECUTE` — the doorbell forwards, hardware advances the ring to
+        // `GET=1 PUT=1`, `faults=0`, and the guest still reads its poison. Four real bugs were
+        // fixed on the way here and none of them was this; six structural hypotheses died to a
+        // 30-second run each.
+        //
+        // ⇒ Stop guessing and ask the tables: **what does this VA resolve to, in THIS
+        // channel's own root, at the moment the doorbell fires?** Three answers, three
+        // different fixes, and no reasoning can pick between them:
+        //
+        //   nothing         → hardware should have faulted; `faults=0` ⇒ a stale TLB entry
+        //                     survived our invalidate — an ORDERING bug
+        //   a different page → a PUBLICATION/BACKING bug
+        //   the right page  → the write landed and the CLIENT is reading elsewhere
+        //
+        // ⊘ The VA comes from the OPERATOR, never from the ring: parsing a passthrough
+        // channel's pushbuffer to find it is the thing §43 forbids, and this probe must not
+        // become a reason to do it. Print-only, one line, off unless asked.
+        if let Ok(v) = std::env::var("KAYFABE_PROBE_VA") {
+            let va = v
+                .strip_prefix("0x")
+                .and_then(|h| u64::from_str_radix(h, 16).ok())
+                .or_else(|| v.parse::<u64>().ok());
+            match (va, self.plane.upgrade()) {
+                (Some(va), Some(plane)) => eprintln!(
+                    "kayfabe: PROBE-VA token=0x{token:08x} va=0x{va:x}{}",
+                    plane.walk_trace_from_root(&root, va)
+                ),
+                (None, _) => eprintln!(
+                    "kayfabe: PROBE-VA ⊘ KAYFABE_PROBE_VA={v} is not a VA (hex with 0x, or decimal)"
+                ),
+                (_, None) => eprintln!("kayfabe: PROBE-VA ⊘ the register plane is gone"),
+            }
+        }
     }
 
     /// ★★★★★ **DECLARE the completion this route-refused submission asks for.**
