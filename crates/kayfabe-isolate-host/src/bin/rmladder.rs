@@ -17717,6 +17717,80 @@ mod mean {
             );
         }
 
+        // ★★★★★ **ARM D0 — THE ENGINE-WRITE CONTROL, w781.**
+        //
+        // `[measured w781]` P3 failed with the host taking
+        // `Xid 31 … GR0_PBDMA0 HUBCLIENT_ESC faulted @ 0x91_40000000 … FAULT_PDE
+        // ACCESS_TYPE_VIRT_WRITE` while arm E's CE copy **read that very VA and retired**,
+        // returning the poison. So the row as written proves `P3_TARGET` is READABLE by an
+        // engine and proves nothing at all about whether it is WRITABLE by one.
+        //
+        // ⊘ Those are different claims and the failure is a WRITE. Without this control a
+        // reader must choose between two explanations that the existing arms cannot
+        // separate: the mapping is fine and the GR/semaphore path is broken, or the mapping
+        // itself refuses engine writes and any engine would fault. This arm is the same
+        // engine and the same VA as arm E, differing in exactly one variable — direction.
+        //
+        // ★ It runs BEFORE the rounds so a failure here reports as its own step rather than
+        // as `still the poison`, which is the sentence that has been misread for three rungs.
+        const P3_CE_WRITE_PROBE: u32 = 0x5745_5250; // "WRPR"
+        if let Err(e) = rm.fill_words(lane.scratch, LEN, P3_CE_WRITE_PROBE, 0) {
+            return done(
+                rm,
+                PathState::Refused {
+                    step: "arm D0: fill the CE-write source",
+                    status: format!("{e:?}"),
+                },
+            );
+        }
+        if let Err(e) = rm.fill_words(target, LEN, P3_POISON, 0) {
+            return done(
+                rm,
+                PathState::Refused {
+                    step: "arm D0: poison the CE-write destination",
+                    status: format!("{e:?}"),
+                },
+            );
+        }
+        lane.seq = lane.seq.wrapping_add(1);
+        let d0_payload = 0x6D00_0000 | (lane.seq & 0x00FF_FFFF);
+        match rm.submit_copy_va(lane.chan, lane.token, lane.scratch_va, P3_TARGET, 4, d0_payload) {
+            Err(e) => {
+                println!(
+                    "⊘     W392D P3 arm D0   = the CE could not even be asked to WRITE                      {P3_TARGET:#018x}: {e:?}"
+                );
+            }
+            Ok(()) => {
+                let (_s, sem_off) = HostRmBackend::copy_probe_offsets();
+                let deadline = std::time::Instant::now() + RETIRE_TIMEOUT;
+                let mut retired = false;
+                while std::time::Instant::now() < deadline {
+                    if matches!(rm.ring_load_u32(lane.chan, sem_off), Ok(v) if v == d0_payload) {
+                        retired = true;
+                        break;
+                    }
+                    std::thread::sleep(RETIRE_POLL);
+                }
+                if !retired {
+                    println!(
+                        "★★★  W392D P3 arm D0   = A CE WRITE TO {P3_TARGET:#018x} NEVER                          RETIRED. ⇒ the VA is readable by an engine and NOT writable by one                          — the GR/semaphore path is a BYSTANDER and the mapping is the fault"
+                    );
+                } else {
+                    match engine_read_through_va(rm, lane, P3_TARGET) {
+                        Ok(v) if v == P3_CE_WRITE_PROBE => println!(
+                            "ok    W392D P3 arm D0   = a CE WRITE to {P3_TARGET:#018x} landed                              and read back {v:#010x} ⇒ the mapping accepts engine writes, so a                              GR fault at this VA indicts the GR channel's OWN page-directory                              binding (VEID/instance block), not the mapping"
+                        ),
+                        Ok(v) => println!(
+                            "★★★  W392D P3 arm D0   = the CE write RETIRED but the readback                              holds {v:#010x}, not {P3_CE_WRITE_PROBE:#010x} ⇒ the write was                              ACKNOWLEDGED AND DROPPED"
+                        ),
+                        Err(e) => println!(
+                            "⊘     W392D P3 arm D0   = the CE write retired and the readback                              refused: {e}"
+                        ),
+                    }
+                }
+            }
+        }
+
         // 7 ── ARMS D and E, once per round.
         for r in 0..rounds {
             let magic = pattern(nonce, 4, r);
