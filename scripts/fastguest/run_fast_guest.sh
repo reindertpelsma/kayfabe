@@ -250,19 +250,32 @@ fi
 # spellable, or the control this gate is built on becomes unrunnable.
 QLOG="$BENCH/fast_${TAG}_qemu.log"
 if [ "${KF_REQUIRE_FORWARD:-1}" = 1 ] && [ -s "$QLOG" ]; then
-    fwd=$(grep -ao 'DOORBELL-LEDGER tok=0x000000[0-9a-f][0-9a-f] .*' "$QLOG" 2>/dev/null \
-        | sort -u \
-        | sed -n 's/.*forwarded=\([0-9]*\).*/\1/p' \
-        | awk '{s+=$1} END {print s+0}')
-    guest_tokens=$(grep -aco 'DOORBELL-LEDGER tok=0x000000' "$QLOG" 2>/dev/null || echo 0)
-    if [ "${guest_tokens:-0}" -gt 0 ] && [ "${fwd:-0}" -eq 0 ]; then
-        echo "FAST_VERDICT=FAIL (every row verified, and NOT ONE doorbell reached hardware)"
-        echo "⊘ The guest's own channels show forwarded=0 across $guest_tokens token(s), so the"
-        echo "   copies were executed on the CPU and the ledger cannot tell. That is a working"
-        echo "   EMULATOR, not a forwarded copy. See DOORBELL-LEDGER in $QLOG."
+    # ⊘⊘ **PER TOKEN, NOT IN TOTAL — the total is too weak and a control proved it.**
+    # `[measured w813b]` the CPU arm still shows **3** forwarded doorbells in total (one
+    # unrelated token forwards), so a `total == 0` gate passes the very run it exists to
+    # catch. The ledger's rule is stated per token and must be applied per token.
+    rows=$(grep -ao 'DOORBELL-LEDGER tok=0x000000[0-9a-f][0-9a-f] .*' "$QLOG" 2>/dev/null | sort -u)
+    guest_tokens=$(printf '%s\n' "$rows" | grep -c 'tok=' || true)
+    fwd=$(printf '%s\n' "$rows" | sed -n 's/.*forwarded=\([0-9]*\).*/\1/p' | awk '{s+=$1} END {print s+0}')
+    # A token that was RUNG (`emulated>0`) and never FORWARDED did its work off the GPU.
+    stranded=$(printf '%s\n' "$rows" | awk '
+        { e=0; f=0
+          for (i=1;i<=NF;i++) { split($i,a,"=")
+              if (a[1]=="emulated") e=a[2]; if (a[1]=="forwarded") f=a[2] }
+          if (e+0 > 0 && f+0 == 0) print $1 }')
+    if [ "${guest_tokens:-0}" -gt 0 ] && [ -n "$stranded" ]; then
+        echo "FAST_VERDICT=FAIL (rows verified, but these guest channels never reached hardware)"
+        printf '%s\n' "$stranded" | sed 's/^/    ⊘ /'
+        echo "⊘ Each was RUNG (emulated>0) and never FORWARDED, which is the DOORBELL LEDGER's"
+        echo "   own rule for 'it never went to hardware'. The copies ran on the CPU, and the"
+        echo "   content ledger CANNOT tell: once the leaf is joined, the guest's window and"
+        echo "   the host object are ONE memory, so both executors write identical bytes."
         echo "⊘ If this IS the deliberate CPU control arm, re-run with KF_REQUIRE_FORWARD=0."
+        echo "⚠ If a guest channel here is legitimately EMULATED (a function we implement, with"
+        echo "   no GPU counterpart), this gate is telling you to say so explicitly rather than"
+        echo "   letting an emulated copy pass as a forwarded one."
         exit 1
     fi
-    echo "== hardware: $fwd doorbell(s) forwarded across $guest_tokens guest token(s)"
+    echo "== hardware: $fwd doorbell(s) forwarded across $guest_tokens guest token(s), 0 stranded"
 fi
 echo "FAST_VERDICT=PASS (${elapsed}s)"
