@@ -277,3 +277,120 @@ fn the_space_not_held_counter_is_a_defect_counter_and_starts_at_zero() {
          `Vas` holds"
     );
 }
+
+// =========================================================================================
+// ★★★★★ w811 — THE SPACE WHOSE ROOT NEVER ARRIVES, AND IT IS THE COMMON CASE ON A GSP PART
+// =========================================================================================
+//
+// `MAP_MEMORY_DMA` is a HAL stub on GSP-client parts, so a client-allocated VASpace is never
+// declared to us: `[measured w811, thin guest]` the boot carries **zero** `SET_PAGE_DIRECTORY`
+// events and **zero** refusals of one, while five CE channels run in such a space. Every
+// framebuffer-leaf hand-over for them was refused `UndeclaredPdb`, so no operand ever got a
+// host object, every copy was graded `CeExecutor::Ours`, and the guest's CE work never reached
+// the GPU — reported to the client as *"the copy NEVER RETIRED"*.
+//
+// ⊘ These fixtures build that shape the way the boot does — by **omitting** the `SetPageDir`
+// event rather than by poking a field — so a change that starts declaring roots some other way
+// makes them non-vacuous instead of silently still passing.
+
+/// A proc whose VASpace exists and is populated but whose root was never declared.
+/// `extra_undeclared` adds further undeclared spaces, for the ambiguity test.
+fn undeclared_space_device(extra_undeclared: u32) -> (SharedDevice, ProcId) {
+    let arch = std::sync::Arc::new(MockArch::new());
+    let (factory, _recorder) = MockIsolateFactory::new();
+    let gpa = GpaSpace::new(0x1_0000_0000..0x100_0000_0000, 0x1_0000_0000);
+    let mut gpu = Gpu::new(arch, Box::new(factory), gpa).expect("device realizes");
+
+    let mut s = Scenario::new();
+    s.compute_process(CLIENT, PDB, identical_handles(0x10, 0x11));
+    // ⊘ THE WHOLE FIXTURE: drop the declaration, keep everything else byte-identical.
+    let declared: usize = s
+        .events
+        .iter()
+        .filter(|e| matches!(e, kayfabe_core::rmgraph::RmEvent::SetPageDir { .. }))
+        .count();
+    assert_eq!(
+        declared, 1,
+        "★ NON-VACUITY: the scenario must contain exactly one declaration for dropping it to \
+         mean anything. If this is 0 the helper stopped declaring roots and these tests would \
+         pass while testing nothing."
+    );
+    let events: Vec<_> = s
+        .events
+        .into_iter()
+        .filter(|e| !matches!(e, kayfabe_core::rmgraph::RmEvent::SetPageDir { .. }))
+        .collect();
+    for ev in events {
+        gpu.apply(ev).expect("scenario applies cleanly without the declaration");
+    }
+    for i in 0..extra_undeclared {
+        let vas = kayfabe_arch::ids::HObject(0x9000 + i);
+        gpu.apply(kayfabe_core::rmgraph::RmEvent::Alloc {
+            client: CLIENT,
+            parent: identical_handles(0x10, 0x11).device,
+            handle: vas,
+            class: kayfabe_mocks::mock_classes::VASPACE,
+            facts: Default::default(),
+        })
+        .expect("a second undeclared VASpace allocates");
+    }
+
+    let pid = gpu
+        .procs
+        .keys()
+        .copied()
+        .find(|p| *p != kayfabe_core::gpu::Gpu::SYSTEM_PROC)
+        .expect("the guest proc exists even with no root declared");
+    let dev = SharedDevice::new(gpu, LockMode::Sharded);
+    dev.materialize_pending();
+    (dev, pid)
+}
+
+/// ★★★★★ **THE FIX.** One undeclared space ⇒ `Pdb(0)` names it unambiguously, and the
+/// hand-over proceeds. ⊘ This is the row the thin guest needs green.
+#[test]
+fn the_one_undeclared_space_of_a_proc_is_handed_over_rather_than_refused() {
+    let (dev, pid) = undeclared_space_device(0);
+    let bare = dev
+        .vaspace_handover(pid, GPU, Pdb(0), leaf())
+        .expect(
+            "★★★★★ w811: a proc with exactly ONE undeclared space is not ambiguous, and \
+             `Vas::pdb`'s own doc says such a space is `nameable, routable and populatable`",
+        );
+    // ⊘ Same idempotence property the declared path is held to: a second ask must reach the
+    // SAME space, or the scratchpad places slices in one while channels are born in another.
+    let again = dev
+        .vaspace_handover(pid, GPU, Pdb(0), leaf())
+        .expect("a second hand-over answers");
+    assert_eq!(
+        again.space, bare.space,
+        "★★★★★ the undeclared path minted a SECOND address space — the exact `Stale::Rebound` \
+         shape the declared path refuses"
+    );
+}
+
+/// ⊘⊘ **AMBIGUITY IS WHAT IS REFUSED — not the key.** Two undeclared spaces and nothing can
+/// say which `Pdb(0)` means, so it refuses BY NAME rather than taking the first.
+#[test]
+fn two_undeclared_spaces_refuse_by_name_instead_of_picking_one() {
+    let (dev, pid) = undeclared_space_device(1);
+    match dev.vaspace_handover(pid, GPU, Pdb(0), leaf()) {
+        Err(FwdFault::UndeclaredPdb { pid: who }) => assert_eq!(who, pid),
+        other => panic!(
+            "★ two undeclared spaces must refuse, never resolve to the first one found: \
+             {other:?}"
+        ),
+    }
+}
+
+/// ⊘ And the refusal is still reachable when there is NOTHING to name: a proc whose every
+/// space is declared has no undeclared one, so `Pdb(0)` names nothing. ★ The variant now means
+/// *"zero or several"* rather than *"this space has no root"*, and both arms are tested.
+#[test]
+fn a_proc_with_no_undeclared_space_still_refuses_pdb_zero() {
+    let (dev, pid) = one_process_device();
+    match dev.vaspace_handover(pid, GPU, Pdb(0), leaf()) {
+        Err(FwdFault::UndeclaredPdb { pid: who }) => assert_eq!(who, pid),
+        other => panic!("★ `Pdb(0)` names nothing here and must refuse: {other:?}"),
+    }
+}

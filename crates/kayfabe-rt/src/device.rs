@@ -6892,9 +6892,33 @@ impl SharedDevice {
         // ⊘ The materialization path has always had this precondition (*"materialization
         // requires a declared VAS"*). This is the same rule, stated where the other caller
         // could reach past it.
-        if pdb.0 == 0 {
-            return Err(FwdFault::UndeclaredPdb { pid });
-        }
+        // ★★★★★ **w811 — `Pdb(0)` IS NOW ROUTED, NOT REFUSED, AND THE DATA MODEL ALREADY
+        // SAID IT COULD BE.**
+        //
+        // w779's text above is right about the hazard and wrong about the remedy, and
+        // [`Vas::pdb`]'s own doc is where the difference is written down: *"`None` until a
+        // declaration arrives, and a space is **nameable, routable and populatable** before
+        // then … so `None` here is a real limit, just no longer a merge."* The merge w779
+        // measured was fixed by making `pdb` an `Option`; this guard is what was left over,
+        // and it refuses exactly what that sentence permits. ⊘ A hand-over does not SWEEP —
+        // it maps a store slice at a VA the caller already resolved — so the one thing an
+        // undeclared space genuinely cannot do is not being asked of it here.
+        //
+        // ★ And w779's premise does not hold for the workload it now blocks. It cites *"four
+        // CE channels under `Pdb(0)` and the GrCompute under `Pdb(0x201000)`, **in one guest
+        // address space**"*. `[measured w811]` they are TWO address spaces — every `pdb=0x0`
+        // channel names `vas=0xcafe0004` and both `pdb=0x201000` channels name
+        // `vas=0xcafe000d`. Keying them apart is correct; the map is injective.
+        //
+        // ⊘ The hazard is ambiguity, and ambiguity is refused rather than the key: below,
+        // `vas_undeclared_in` yields a space only when this proc has EXACTLY ONE, and the
+        // search is scoped to the `Proc` the caller named — so a second proc's undeclared
+        // space cannot be reached at all. That is stricter than the declared-`Pdb` path,
+        // which resolves through a global key.
+        //
+        // ⚠ `UndeclaredPdb` is KEPT and is now TRUE when it fires: it means *"this proc has
+        // no undeclared space, or has several"*, not *"this space has no root"*.
+        let undeclared = pdb.0 == 0;
         // ---- PLAN: check the caller's route, check the leaf, read `host_vas`, take a
         // worker — all inside one locked phase, so nothing below can be true of a different
         // `Vas` than the one that was checked.
@@ -6907,21 +6931,42 @@ impl SharedDevice {
                 // (`UnknownPdb`, `Condemned`) are still surfaced, because "the spine does
                 // not know this pdb" is not the same finding as "it knows and says someone
                 // else".
-                let owner = kayfabe_fwd::route_pdb(spine, gpu, pdb)?;
-                if owner != pid {
-                    return Err(FwdFault::HandoverRouteDisagrees {
-                        gpu,
-                        pdb,
-                        caller: pid,
-                        spine: owner,
-                    });
+                // ⊘ An undeclared space has no row in `Spine::by_pdb` — that map is keyed
+                // by `Pdb` and these spaces have none — so there is no global authority to
+                // check the caller against, and asking would refuse every one of them by
+                // construction. ★ The assert is not skipped, it MOVES: the space is looked
+                // up inside `proc` below, so "the caller's route owns this space" is true by
+                // construction rather than by comparison. See the guard's note.
+                if !undeclared {
+                    let owner = kayfabe_fwd::route_pdb(spine, gpu, pdb)?;
+                    if owner != pid {
+                        return Err(FwdFault::HandoverRouteDisagrees {
+                            gpu,
+                            pdb,
+                            caller: pid,
+                            spine: owner,
+                        });
+                    }
                 }
                 Ok((pid, ()))
             },
             |_spine, proc, ()| {
-                let Some(vas) = proc.vas_by_pdb(gpu, pdb) else {
-                    refusal = Some(FwdFault::UnknownPdb { gpu, pdb });
-                    return;
+                let vas = if undeclared {
+                    match kayfabe_core::gpu::vas_undeclared_in(&proc.vases, gpu) {
+                        Ok(v) => v,
+                        Err(_n) => {
+                            // ⊘ Zero or several — both mean "nothing here can tell which
+                            // space the caller means", which is what this refusal now says.
+                            refusal = Some(FwdFault::UndeclaredPdb { pid });
+                            return;
+                        }
+                    }
+                } else {
+                    let Some(v) = proc.vas_by_pdb(gpu, pdb) else {
+                        refusal = Some(FwdFault::UnknownPdb { gpu, pdb });
+                        return;
+                    };
+                    v
                 };
                 // ★★★ REPLACEMENT ASSERT 2 — does THIS `Vas` describe the leaf the caller
                 // is about to have a slice placed for? ⊘ Absence is permitted and counted
@@ -7038,9 +7083,23 @@ impl SharedDevice {
         let committed = self.route_act(
             |_| Ok((pid, ())),
             |_spine, proc, ()| {
-                let Some(vas) = proc.vas_by_pdb_mut(gpu, pdb) else {
-                    orphan = Some(bare.space);
-                    return false;
+                // ⊘ Resolved by the SAME rule the plan phase used. Re-resolving by `pdb`
+                // here would find nothing for an undeclared space and silently orphan the
+                // freshly minted one on every call — a mint-and-drop loop with no error.
+                let vas = if undeclared {
+                    match kayfabe_core::gpu::vas_undeclared_in_mut(&mut proc.vases, gpu) {
+                        Ok(v) => v,
+                        Err(_) => {
+                            orphan = Some(bare.space);
+                            return false;
+                        }
+                    }
+                } else {
+                    let Some(v) = proc.vas_by_pdb_mut(gpu, pdb) else {
+                        orphan = Some(bare.space);
+                        return false;
+                    };
+                    v
                 };
                 match vas.host_vas {
                     None => {
@@ -7079,7 +7138,15 @@ impl SharedDevice {
         let held = self
             .route_act(
                 |_| Ok((pid, ())),
-                |_spine, proc, ()| proc.vas_by_pdb(gpu, pdb).and_then(|v| v.host_vas),
+                |_spine, proc, ()| {
+                    if undeclared {
+                        kayfabe_core::gpu::vas_undeclared_in(&proc.vases, gpu)
+                            .ok()
+                            .and_then(|v| v.host_vas)
+                    } else {
+                        proc.vas_by_pdb(gpu, pdb).and_then(|v| v.host_vas)
+                    }
+                },
             )
             .ok()
             .flatten();

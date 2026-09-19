@@ -2257,6 +2257,81 @@ impl Proc {
     }
 }
 
+/// ★★★★★ **THE ADDRESS SPACE THIS PROC HAS NOT DECLARED A ROOT FOR — unique, or nothing.**
+///
+/// # Why an undeclared space needs naming at all, in the data model's own words
+///
+/// [`Vas::pdb`]'s doc states the contract: *"`None` until a declaration arrives, and a space
+/// is **nameable, routable and populatable** before then. ⚠ It still cannot be SWEPT without
+/// one — a sweep starts at the root — so `None` here is a real limit, just no longer a
+/// merge."* Everything that keys off a `Pdb` therefore excludes these spaces **by
+/// construction**, not by decision, and a caller that does not sweep has no way to say which
+/// one it means.
+///
+/// `[measured w811, thin guest]` that gap is load-bearing. `MAP_MEMORY_DMA` is a HAL stub on
+/// GSP-client parts, so a client-allocated VASpace is **never declared to us** — the boot
+/// carries zero `SET_PAGE_DIRECTORY` events and zero refusals of one. Five CE channels ran in
+/// such a space; every framebuffer-leaf hand-over for them was refused
+/// `UndeclaredPdb { pid: ProcId(1) }`, so no operand got a host object, every copy was graded
+/// `CeExecutor::Ours`, and the guest's CE work never reached the GPU at all.
+///
+/// # The safety property, and it is STRICTER than the `Pdb` path's
+///
+/// ⊘ This searches **one proc's** spaces only. The hazard w779 named — two address spaces
+/// answering to one key — cannot be resolved by refusing the key; it is resolved by refusing
+/// **ambiguity**, which is what [`vas_by_pdb_in`] one function down already does for declared
+/// roots. So this returns the space only when the proc has **exactly one** undeclared, and
+/// `Err(n)` with the count otherwise — never a guess, and never a first match.
+///
+/// ⚠ Cross-proc ambiguity is impossible here by construction rather than by check: the caller
+/// supplies the `Proc`, so there is no global key that a second proc could also answer to.
+/// That is why this path does not consult `Spine::by_pdb` and does not need to.
+///
+/// # Errors
+/// `Err(0)` — this proc has no undeclared space on `gpu`; `Err(n >= 2)` — it has several, and
+/// nothing here can tell which the caller means. Both are refusals **by name** at the call
+/// site, which is the whole point of returning the count instead of `None`.
+pub fn vas_undeclared_in(
+    vases: &BTreeMap<(GpuId, ResourceKey), Vas>,
+    gpu: GpuId,
+) -> Result<&Vas, usize> {
+    let mut found: Option<&Vas> = None;
+    let mut n = 0usize;
+    for v in vases.values() {
+        if v.gpu == gpu && v.pdb.is_none() {
+            n += 1;
+            if found.is_none() {
+                found = Some(v);
+            }
+        }
+    }
+    match (n, found) {
+        (1, Some(v)) => Ok(v),
+        _ => Err(n),
+    }
+}
+
+/// ★ [`vas_undeclared_in`], mutably. ⊘ Same uniqueness rule and same `Err(count)`: a second
+/// statement of "which space is meant" is a second thing that can disagree, so the predicate
+/// is written once per borrow flavour and nowhere else.
+///
+/// # Errors
+/// `Err(n)` where `n` is the number of undeclared spaces found — never 1.
+pub fn vas_undeclared_in_mut(
+    vases: &mut BTreeMap<(GpuId, ResourceKey), Vas>,
+    gpu: GpuId,
+) -> Result<&mut Vas, usize> {
+    let keys: Vec<(GpuId, ResourceKey)> = vases
+        .iter()
+        .filter(|(_, v)| v.gpu == gpu && v.pdb.is_none())
+        .map(|(k, _)| *k)
+        .collect();
+    match keys.as_slice() {
+        [k] => vases.get_mut(k).ok_or(0),
+        other => Err(other.len()),
+    }
+}
+
 /// ★★★★★ **[`Proc::vas_by_pdb`] over a map that has already been destructured out of its
 /// `Proc`** — the same two refusals, for the call sites that split `Proc`'s fields to borrow
 /// two of them at once.
