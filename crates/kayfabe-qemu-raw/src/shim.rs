@@ -8025,8 +8025,9 @@ impl SharedDoorbell {
         // strictly more precise, and a boot where one signal is dark must not be a boot where
         // the sweep is blind.
         let inval_now = GUEST_INVALIDATES_DECLARED.load(std::sync::atomic::Ordering::Relaxed);
-        let inval_unseen = inval_now != LAST_SWEPT_INVALIDATE.load(std::sync::atomic::Ordering::Relaxed);
-        let skip_sweep = pt_sweep_skip_armed() && pt_drained == 0 && !inval_unseen;
+        let inval_unseen =
+            inval_now != LAST_SWEPT_INVALIDATE.load(std::sync::atomic::Ordering::Relaxed);
+        let skip_sweep = sweep_should_skip(pt_sweep_skip_armed(), pt_drained, inval_unseen);
         let (sw, skipped_sweeps) = if skip_sweep {
             PT_SWEEPS_SKIPPED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             (
@@ -21914,6 +21915,33 @@ pub static PROBE_LEAF_OFF: std::sync::atomic::AtomicU64 =
     std::sync::atomic::AtomicU64::new(u64::MAX);
 
 /// How many invalidates skipped the page-table sweep because the witness was empty.
+/// ★★★★★ **w788 — SHOULD THIS REFRESH SKIP THE PAGE-TABLE SWEEP?** A pure function, so it
+/// can be tested without a GPU, a guest or a boot.
+///
+/// # ⊘⊘⊘ Why this is a named function and not three `&&`s at the call site
+///
+/// It was three `&&`s at the call site, and it was WRONG for an entire architecture without
+/// anything going red. `[measured w784]` `PT-SWEEP ⊘ SKIPPED` **x815 of 831 windows** — the
+/// sweep that discovers the guest's mappings never ran, so the host VA space held four rows,
+/// so `GR0_PBDMA0` faulted `FAULT_PDE` on the first address hardware was asked to translate.
+/// Finding that cost a rented GPU, a guest boot and most of a day.
+///
+/// ⚠ **Nothing about that bug needed hardware.** It is a three-input boolean, and the input
+/// that broke was *"the witness is permanently zero under the single store"* — a state a
+/// test can simply pass in. The reason no test caught it is that there was no function to
+/// call. ⇒ `tests/sweep_skip.rs` now enumerates all eight input combinations.
+///
+/// # The rule
+///
+/// Skip only when the arm is on AND the CPU transport witnessed nothing AND the guest has
+/// declared no invalidate since the last sweep. ⊘ The two evidence terms are OR-ed into the
+/// reason to run, never AND-ed: they are independent channels, and a boot where one is dark
+/// must not be a boot where the sweep is blind.
+#[must_use]
+pub fn sweep_should_skip(armed: bool, pt_drained: usize, invalidate_unseen: bool) -> bool {
+    armed && pt_drained == 0 && !invalidate_unseen
+}
+
 /// ★★★★★ **w785 — HOW MANY TIMES THE GUEST HAS DECLARED ITS PAGE TABLES CHANGED.**
 ///
 /// Monotonic, bumped by the MMUINVAL worker. Paired with [`LAST_SWEPT_INVALIDATE`] so the

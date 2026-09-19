@@ -43,7 +43,37 @@ sleep 1
 # reaches `/init` truncated at the first space and the guest runs the DEFAULT arms while the
 # log says it was asked for others — a green run that measured the wrong thing. Commas here,
 # `tr ',' ' '` in `/init`.
-ARMS_TOK=$(echo "${KF_ARMS:-}" | tr -s ' ' ',' | sed 's/^,//; s/,$//')
+# ★★★★★ **w788 — THE GUEST GETS THE PRIMITIVE THE EMULATOR ACTUALLY SERVES.**
+#
+# ⊘⊘⊘ `[measured w786]` EIGHT arms of the 30-arm suite reported their POSITIVE CONTROL as
+# failed — `alias-two-vas`, `alias-unmap-observe`, `late-map-race`, `missing-page-fault`,
+# `cross-client-leak`, `rpc-mixed-allocs`, `defer-liveness`, `blockage-coverage` — and every
+# one of them carried this line, printed by the client BEFORE any rung ran:
+#
+#   W381_PROBE=sem-release — the w379 host-FIFO `SEM_RELEASE`. ⊘ The Mode-2 CPU copy-engine
+#   emulator decodes `PushMethod::SemRelease` and DELIBERATELY DOES NOT ACT ON IT, so inside
+#   a guest EVERY rung below is expected to report its CONTROL as FAILED and NOTRUN. That is
+#   the emulator's declared scope, NOT a red.
+#
+# ⇒ **Those arms were UNMEASURED, not failing.** They were run with a primitive the emulator
+# declares out of scope, and they said so, in the log, on every run. The client's default is
+# `sem-release` for a BARE-METAL reason it states plainly — *"so every committed w379 arm
+# stays byte-comparable to its own predecessors"* — and this harness only ever runs in the
+# guest, where that reason does not apply and the opposite one does.
+#
+# ⚠ Read the cost: a suite scoreboard of 14/30 counted eight arms as failures that had never
+# asked their question. `a_census_zero_needs_a_known_positive`, arriving as a whole battery.
+#
+# ⊘ `KF_PROBE=sem-release` still selects the old primitive — the point is that the choice is
+# now MADE and PRINTED by the harness rather than inherited from a bare-metal default.
+KF_PROBE=${KF_PROBE:-launch-dma}
+case "$KF_PROBE" in
+    launch-dma)  PROBE_TOK="--probe-launch-dma" ;;
+    sem-release) PROBE_TOK="" ;;
+    *) echo "run_fast_guest: KF_PROBE must be launch-dma or sem-release, got [$KF_PROBE]" >&2; exit 2 ;;
+esac
+
+ARMS_TOK=$(echo "${KF_ARMS:-} ${PROBE_TOK}" | tr -s ' ' ',' | sed 's/^,//; s/,$//')
 [ -n "$ARMS_TOK" ] || ARMS_TOK="--timer,--engines,--doorbell-census"
 case "$ARMS_TOK" in *[[:space:]]*) echo "run_fast_guest: KF_ARMS still holds whitespace after folding: [$ARMS_TOK]" >&2; exit 2 ;; esac
 
