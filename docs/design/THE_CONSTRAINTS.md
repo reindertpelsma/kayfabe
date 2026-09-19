@@ -2769,3 +2769,56 @@ exactly as any unprivileged process's would be, and object ownership is enforced
 ⚠ What this does NOT license: forwarding a guest-chosen number as an address into an object we
 hold (see (b)'s exception), or letting a guest name a host object it did not cause to exist.
 Those are ours to enforce because host RM has already delegated them to us.
+
+---
+
+## §46 — UNDER THE SINGLE STORE, REAL KERNEL-CHANNEL WORK IS **NEVER** EXECUTED ON THE CPU
+
+**STATUS: LIVE, 2026-09-19 (w800). Owner ruling.**
+
+> *"okay no real work kernel channel except the no-op or the ones that we must stub, so the
+> scrub and CE, is never executed on CPU. Its always executed on GPU under the single store"*
+
+### What this permits on the CPU, and it is a short list
+
+1. **A no-op.** The CeUtils scrub is the canonical case: the guest asks for a scrub of memory
+   whose backing we control, the operation has no observable effect we need hardware for, and
+   completing it is the whole job.
+2. **A stub we are obliged to fake** — a value ogkm expects to read back and that no engine
+   ever produces for us.
+
+⊘ **Everything else goes to the GPU.** A real copy is a real copy: if the guest asked a copy
+engine to move bytes, the copy engine moves them.
+
+### ⊘⊘⊘ Why this is a constraint and not an optimisation
+
+The CPU executor is *faster to make green*. That is precisely the hazard. `[measured w797]`
+turning it off took the 30-arm suite from **18 PASS to 15** — and every one of the six arms
+that "regressed" had been passing **because our CPU was doing the GPU's work**:
+
+| arms | `local` | `host` |
+|---|---|---|
+| `--engines`, `--ce-client` | FAIL | **PASS** — hardware ran it: *"the GPU consumed our ring"* |
+| `--uvm-mean`, `--alias-two-vas`, `--alias-unmap-observe`, `--cross-client-leak`, `--rpc-mixed-allocs`, `--map-stress` | PASS | **FAIL** — `the copy … NEVER RETIRED` |
+
+⇒ Those six are **EXPOSURES, not regressions**. The same shape as
+`four_green_rows_never_asked_the_gpu_to_translate`: a ledger can be green while the GPU has
+never been asked to do anything.
+
+### ⚠ And w799 was decided the wrong way, on this exact point
+
+`w799` reverted the default to `local` citing §44's escape clause — *proof the new arm is
+broken AND the old one better* — with the 18-vs-15 table as the proof. ⊘ **The comparison was
+not admissible.** §44's escape clause presumes both arms are *permitted*; this ruling says the
+`local` arm is not, for real work. A scoreboard won by doing forbidden work is w729's *"a pass
+bought by relaxing a constraint is not a pass"*, and the 18 was exactly that.
+
+⇒ `host` is the default (w800). The six exposed arms are the work, not the argument against it.
+
+### What this does NOT license
+
+⊘ It does not license removing the CPU executor. The no-op and stub cases above are real and
+`ceutils` serves them. What it forbids is that path claiming a **real** copy.
+
+⊘ It does not license a green suite by re-enabling `local`. The number to move is *"a forwarded
+CE copy retires"*, and until it does the honest score is the one the GPU earns.

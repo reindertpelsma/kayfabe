@@ -21179,35 +21179,35 @@ pub fn ce_executor_from(value: Option<&str>) -> Result<CeExecutorChoice, (Status
         //
         // ★ `local` stays reachable BY NAME as the control, for §42(d): the arm that produced
         // every earlier green run must not become unspellable.
-        // ⊘⊘⊘ **w799 — REVERTED TO `Local`, ON §44's OWN ESCAPE CLAUSE AND WITH ITS PROOF.**
+        // ★★★★★ **w800 — ABSENT IS `Host`. §46: REAL WORK IS NEVER EXECUTED ON THE CPU.**
         //
-        // §44 requires, to put the old arm back: *proof the new one is broken AND the old one
-        // better*. Both, measured on the 30-arm suite, one variable:
+        // > **Owner, 2026-09-19:** *"no real work kernel channel except the no-op or the ones
+        // > that we must stub, so the scrub and CE, is never executed on CPU. Its always
+        // > executed on GPU under the single store"*
         //
-        //   `host` (w797):  15 PASS / 10 FAIL / 5 CRASH
-        //   `local`(w796):  18 PASS /  7 FAIL / 4 CRASH
+        // ⊘⊘⊘ **THIS REVERSES w799, AND w799 WAS DECIDED ON AN INADMISSIBLE COMPARISON.**
+        // w799 put `Local` back citing §44's escape clause — *proof the new arm is broken AND
+        // the old one better* — with a measured 18-PASS-vs-15 suite table as the proof. §44's
+        // escape clause presumes **both arms are permitted**. §46 says `Local` is not, for
+        // real work. A scoreboard won by doing forbidden work is w729's *"a pass bought by
+        // relaxing a constraint is not a pass"*, and those three arms were exactly that.
         //
-        // ★ The flip did exactly what it was supposed to: `--engines` and `--ce-client` went
-        // GREEN, `DOORBELL-XLATE 0 → 3`, and R15 read *"the GPU consumed our ring"* for the
-        // first time. It is architecturally right and §43 wants it.
+        // ★ What the flip actually measured, and it reads the other way round now:
         //
-        // ⊘⊘ It also took **six** arms the other way — `--uvm-mean`, `--alias-two-vas`,
-        // `--alias-unmap-observe`, `--cross-client-leak`, `--rpc-mixed-allocs`, `--map-stress`
-        // — with the ledger reading `P1 ⊘ the copy from 0x8080000000 NEVER RETIRED`,
-        // `STALE RACE` the same, `THREADS 0 of 4`. **That is the third time, by three
-        // different seams** (w780 via `shell_disposition`, w792 the same, w797 via this
-        // default) that sending a CE doorbell to hardware produces a copy that never retires.
+        //   `--engines`, `--ce-client`                    FAIL → **PASS**
+        //     hardware ran the work: `STORE-DOORBELL asked=3 refused=0 rung=3`, and R15
+        //     `SEM LANDED … GP_GET 1 -> caught GP_PUT 1 — the GPU consumed our ring`.
+        //   `--uvm-mean`, `--alias-two-vas`, `--alias-unmap-observe`, `--cross-client-leak`,
+        //   `--rpc-mixed-allocs`, `--map-stress`          PASS → **FAIL**
+        //     `the copy … NEVER RETIRED`.
         //
-        // ⇒ The blocker is NOT the routing. It is that **the host CE channel does not execute
-        // the guest's copy**, and three independent routes into it have now hit the identical
-        // signature. That is the defect to find; until it is found, this default makes the
-        // thin guest — the iteration loop itself — red, which costs more than the two arms it
-        // buys.
+        // ⇒ Those six are **EXPOSURES, not regressions**: they were green because our CPU was
+        // doing the GPU's work. Same shape as `four_green_rows_never_asked_the_gpu_to_translate`.
         //
-        // ⚠ Reopening is cheap and named: `KAYFABE_CE_EXECUTOR=host` reproduces all of the
-        // above in one boot. Do not re-flip the default without first making a forwarded CE
-        // copy retire.
-        None => Ok(CeExecutorChoice::Local),
+        // ⊘ `local` stays spellable (§42(d)) for the no-op/stub population §46 permits and as
+        // the one-boot reproducer for the exposed defect. What it may not be again is the
+        // default, and it may never claim a real copy.
+        None => Ok(CeExecutorChoice::Host),
         Some(v) => CeExecutorChoice::parse(v).ok_or((
             Status::Unsupported,
             "KAYFABE_CE_EXECUTOR does not name an executor: the only values are `local` \
