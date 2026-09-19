@@ -5920,8 +5920,32 @@ fn doorbell_publish_loop(
             // plumbing (`drain_dirty_pdbs`, `proc_of_pdb`, `scoped_out`) stays, because the
             // next attempt needs exactly it and re-deriving it is how this gets retried by
             // accident.
-            let _ = inval_all;
-            let refresh = port.refresh_page_tables(off_vcpu, None);
+            // ★★★★★ **w796 — SCOPE ONLY WHEN EVERY NAMED SPACE RESOLVES.**
+            //
+            // `[measured w795c]` the reason w793b's scoping killed P3, now named instead of
+            // guessed: the invalidate decodes **PDB ZERO** on most triggers —
+            //   `MMUINVAL-DIRTY ⊘ named=[0] but we model roots=[2cea7e000, 2cea9c000]`
+            // which is `w779`'s finding a third time: *a `Pdb(0)` is not an address space, it
+            // is "not declared yet"*. `[0]` is NON-EMPTY, so w793b scoped on it, resolved it
+            // to **no procs**, and swept **nothing** — and P3 went red while `refresh` fell
+            // 57 %. The scoping was never the defect; scoping on an UNDECLARED pdb was.
+            //
+            // ⇒ Scope only when the named set is non-empty AND **every** member resolves to a
+            // proc we model. Any miss — a zero, a space that has since been freed
+            // (`named=[2cea7e000] but roots=[2cea9c000]` also measured) — widens to the full
+            // sweep. ⊘ Widening beats dropping: over-wide is 7.34 ms, dropped is a stale GPU
+            // translation and a red P3.
+            let scope: Option<&[u64]> = if inval_all || dirty_pdbs.is_empty() {
+                None
+            } else if dirty_pdbs
+                .iter()
+                .all(|p| port.device.proc_of_pdb(kayfabe_rt::GpuId::ZERO, kayfabe_rt::Pdb(*p)).is_some())
+            {
+                Some(&dirty_pdbs)
+            } else {
+                None
+            };
+            let refresh = port.refresh_page_tables(off_vcpu, scope);
             let seg_refresh_ms = t_refresh.elapsed().as_secs_f64() * 1e3;
             // ★★★★★ **CONSTRAINT 27 — UNMAPS BEFORE MAPS, WITHIN ONE REFRESH.**
             //
