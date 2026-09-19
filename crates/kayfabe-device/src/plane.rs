@@ -1304,6 +1304,9 @@ pub struct RegPlane {
     /// Held here for `unserviced`'s two reasons and one of its own: the guest polls this
     /// register in a tight loop, so answering it must never take the FSM's lock.
     mmu_inval: crate::mmuinval::MmuInvalidateLog,
+    /// ★★★★★ w795 — per-route doorbell cost. See [`crate::dbtable::DoorbellHistogram`] for
+    /// why it is unconditional and what its own probe costs.
+    dbcost: crate::dbtable::DoorbellHistogram,
     /// ★★★★★ **The FSM's pending-doorbell count, readable WITHOUT the big lock.**
     ///
     /// ⊘⊘ `[measured w462]` w432 put `pending_command_doorbells()` at the tail of **every**
@@ -3005,6 +3008,7 @@ impl RegPlane {
             unserviced,
             census,
             mmu_inval: crate::mmuinval::MmuInvalidateLog::new(),
+            dbcost: crate::dbtable::DoorbellHistogram::default(),
             pending_cmd_doorbells: std::sync::atomic::AtomicU32::new(0),
             posted_cmd_doorbells: std::sync::atomic::AtomicU32::new(0),
             defer_cmds_armed: std::sync::atomic::AtomicBool::new(false),
@@ -4945,6 +4949,10 @@ impl RegPlane {
     pub fn residue(&self) -> PlaneResidue {
         // ★★★ EXHAUSTIVE. The missing `..` is load-bearing — see this method's docs.
         let RegPlane {
+            // ⊘ w795 — bound and ignored here on purpose: this destructuring exists so a new
+            // field cannot be silently left out of the teardown census, and the doorbell cost
+            // histogram is rendered from `doorbell_cost()` by the shim, not from this snapshot.
+            dbcost: _,
             // ⊘ Neither is residue. The POLICY is set once at realize from the environment and
             // survives a device reset by design (a reset does not un-arm an experiment the
             // operator armed); the COUNTER is a census of the whole boot, and zeroing it at a
@@ -6857,6 +6865,12 @@ impl RegPlane {
     /// claims nothing about the work, and folding it into `served` would be the exact
     /// "counted as a doorbell, went nowhere, looked fine" this crate's doorbell doctrine
     /// forbids.
+    /// ★ w795 — the per-route doorbell cost census. Rendered at teardown beside the others.
+    #[must_use]
+    pub fn doorbell_cost(&self) -> &crate::dbtable::DoorbellHistogram {
+        &self.dbcost
+    }
+
     pub fn account_doorbell_report(&self, token: u64, report: &DoorbellReport) {
         match report {
             // ★ Both servings count as served — `doorbells == served + refused` is the
@@ -6960,10 +6974,26 @@ impl RegPlane {
         // decision turns on, so BOTH its terms are taken by one observer over one interval.
         // Two logs correlated afterwards is how a ratio comes to describe two boots.
         self.mmu_inval.note_doorbell();
+        // ★★★★★ **w795 — TIME THE DOORBELL, BY ROUTE.** See `DoorbellHistogram` for why this
+        // is here, what it costs, and the §41 argument for paying it. ⊘ The span covers exactly
+        // `port.ring` — the dword write or the queue push — and nothing around it, because the
+        // question the ioeventfd decision turns on is what THAT costs.
+        let t_ring = std::time::Instant::now();
         let report = {
             let port = self.doorbell.read().unwrap_or_else(|e| e.into_inner());
             port.ring(token)
         };
+        let ring_ns = t_ring.elapsed().as_nanos() as u64;
+        // ⊘ Classified from the REPORT, not from a second `route()` lookup: the port has just
+        // decided, and re-deriving it here would be two projections of one fact.
+        self.dbcost.record(
+            match &report {
+                DoorbellReport::Served { .. } => crate::dbtable::DoorbellClass::Passthrough,
+                DoorbellReport::Scheduled { .. } => crate::dbtable::DoorbellClass::Emulated,
+                _ => crate::dbtable::DoorbellClass::Other,
+            },
+            ring_ns,
+        );
         self.account_doorbell_report(token, &report);
         // ★★★ **§14.18 — THE COMPLETION IS ANNOUNCED**, and only a completion is.
         let raise_cpu_intr = match &report {

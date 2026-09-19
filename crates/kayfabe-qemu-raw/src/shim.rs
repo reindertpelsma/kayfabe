@@ -19974,6 +19974,17 @@ impl Regs {
             "kayfabe: {} ⊘ a `publications=0` here is a MEASURED ZERO — the lane is always armed",
             self.plane.mmu_inval().census(),
         );
+        // ★★★★★ **w795 — WHAT ONE DOORBELL COST, BY ROUTE.** The measurement
+        // `docs/design/the_doorbell_ioeventfd_question.md` names as the gate on the ioeventfd
+        // decision, and that `l2_qemu_adapter.md` Q5 deferred that decision behind in the first
+        // place. ⊘ Printed with the instrument's own probe cost attached, so a reader can
+        // subtract it rather than trust it.
+        // ⊘ Calibrated HERE, at teardown, and not at realize: `Instant::now` resolution is a
+        // property of the box, the box is the same one that just ran, and doing it at realize
+        // would put 64 clock reads in front of the guest's first instruction for a number
+        // nothing reads until now.
+        self.plane.doorbell_cost().calibrate();
+        eprint!("kayfabe: {}", self.plane.doorbell_cost().render());
         // ★★★★★ **R1's C1 + C3, LAST STATE.** See [`Self::blockage_census`] and the note at
         // its per-doorbell call site: this copy exists so a boot that rang **no doorbell at
         // all** still prints a line, and that line reads `⊘NEVER-ARMED` — an absence stated

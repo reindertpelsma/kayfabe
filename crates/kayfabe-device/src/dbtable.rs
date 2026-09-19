@@ -417,3 +417,165 @@ mod the_table_must_cover_the_whole_encoding {
         assert_eq!(t.route(2), Route::Emulated { chan: 2 });
     }
 }
+
+/// ★★★★★ **w795 — WHAT ONE DOORBELL COSTS, BY ROUTE.**
+///
+/// # ⊘⊘⊘ Why this exists: the tree says it is missing, in those words
+///
+/// `docs/design/c_vs_rust_per_launch_path.md:261` — *"**No timing instrumentation on our
+/// doorbell path at all.** No histogram, no span, no per-doorbell duration counter — only
+/// counters… **NOT A COST — A CAUSE OF NOT KNOWING.**"*
+///
+/// Every number the tree has is the wrong shape for the question. `worst_trap` is **per boot**
+/// and, by §41's own rule, *"NAMES THE SITE, NEVER THE CAUSE"*. `DBL_RATIO_X` measures a whole
+/// submit round trip (guest p50 ~512–683 us against a ~9 us native floor), not a trap. The only
+/// ioeventfd delta in the tree is from a **synthetic** QEMU spike device, not ours.
+///
+/// ⇒ `docs/design/the_doorbell_ioeventfd_question.md` names this as the measurement that
+/// decides whether moving the doorbell to `KVM_IOEVENTFD` is worth anything. It is also the
+/// measurement `l2_qemu_adapter.md` Q5 deferred that decision behind — and never took.
+///
+/// # ★ Why it belongs on the TABLE and costs no lookup
+///
+/// [`DoorbellTable::route`] already classifies every doorbell into
+/// [`Route::Passthrough`] / [`Route::Emulated`] / [`Route::Unallocated`], lock-free, on the hot
+/// path. The two dispositions have completely different shapes — a passthrough doorbell is ONE
+/// DWORD inline on the vCPU (§41), an emulated one is a queue push — so a single pooled number
+/// would describe neither. Bucketing by the decision the table already made costs nothing extra
+/// and is the only split that means anything.
+///
+/// # ⚠ §41 AND THE OBSERVER PROBLEM, both stated rather than waved through
+///
+/// §41 says a vCPU MMIO write may update a queue, wake, write one dword, or write a read
+/// register — *"Everything else is a defect, including work that is fast today."* Two relaxed
+/// atomic adds and two `Instant::now()` reads are **work in the trap**, and this file is not
+/// going to pretend otherwise.
+///
+/// The argument for it: the alternative is the defect the tree has already named, and it has
+/// blocked a decision twice. The cost is bounded by construction — a fixed array, no
+/// allocation, no lock, no branch on guest data — and **it is measured by its own null arm**
+/// ([`DoorbellHistogram::PROBE_NS`]), so a reader can subtract the instrument instead of
+/// trusting it. ⊘ If the probe ever approaches the passthrough path's own p50, this instrument
+/// is reporting mostly itself (`a_probe_that_shares_the_allocator_is_not_an_observer`) and must
+/// be sampled instead of unconditional. The rendered line says so with the number attached.
+#[derive(Debug, Default)]
+pub struct DoorbellHistogram {
+    /// `[class][bucket]`, bucket `i` = durations in `[2^i, 2^(i+1))` nanoseconds.
+    buckets: [[core::sync::atomic::AtomicU64; Self::BUCKETS]; Self::CLASSES],
+    /// Total nanoseconds per class, so a mean survives bucket coarseness.
+    totals: [core::sync::atomic::AtomicU64; Self::CLASSES],
+    /// The instrument's own cost, sampled once. See [`DoorbellHistogram::PROBE_NS`].
+    probe_ns: core::sync::atomic::AtomicU64,
+}
+
+/// Which shape of doorbell a sample belongs to — the split [`DoorbellTable::route`] already
+/// makes, never re-derived.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DoorbellClass {
+    /// One dword to the real register, inline on the vCPU (§41).
+    Passthrough = 0,
+    /// The token went on a queue for a worker.
+    Emulated = 1,
+    /// Refused, unallocated, or served by our own executor — none of which is a submission.
+    Other = 2,
+}
+
+impl DoorbellHistogram {
+    /// Number of route classes.
+    pub const CLASSES: usize = 3;
+    /// `2^0 ns` … `2^23 ns` (~8.4 ms) and an overflow bucket.
+    pub const BUCKETS: usize = 24;
+
+    /// The key the whole instrument has to be read against: **the cost of measuring**.
+    ///
+    /// ⊘ Not a constant — sampled from the same clock on the same box, because a hard-coded
+    /// figure would be a claim about hardware this never ran on.
+    #[must_use]
+    pub fn probe_ns(&self) -> u64 {
+        self.probe_ns.load(core::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Sample the instrument's own cost. Call once, off the hot path.
+    pub fn calibrate(&self) {
+        let t = std::time::Instant::now();
+        let mut worst = 0u64;
+        for _ in 0..64 {
+            let a = std::time::Instant::now();
+            let b = std::time::Instant::now();
+            worst = worst.max((b - a).as_nanos() as u64);
+        }
+        let _ = t;
+        self.probe_ns
+            .store(worst, core::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// Record one doorbell.
+    ///
+    /// ⊘ Relaxed ordering throughout: this is a census, and a sample landing in a neighbouring
+    /// bucket under concurrency changes no decision. Ordering strong enough to make the
+    /// histogram linearizable would be ordering in the trap, which is the thing being measured.
+    pub fn record(&self, class: DoorbellClass, nanos: u64) {
+        let c = class as usize;
+        let b = (64 - nanos.max(1).leading_zeros() as usize - 1).min(Self::BUCKETS - 1);
+        self.buckets[c][b].fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+        self.totals[c].fetch_add(nanos, core::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// `(count, mean_ns, p50_ns, p90_ns, p99_ns)` for one class. Percentiles are bucket
+    /// **lower bounds** — deliberately, so a reported figure is never larger than a real one.
+    #[must_use]
+    pub fn stats(&self, class: DoorbellClass) -> (u64, u64, u64, u64, u64) {
+        let c = class as usize;
+        let counts: Vec<u64> = (0..Self::BUCKETS)
+            .map(|i| self.buckets[c][i].load(core::sync::atomic::Ordering::Relaxed))
+            .collect();
+        let n: u64 = counts.iter().sum();
+        if n == 0 {
+            return (0, 0, 0, 0, 0);
+        }
+        let total = self.totals[c].load(core::sync::atomic::Ordering::Relaxed);
+        let at = |frac: f64| -> u64 {
+            let want = (n as f64 * frac).ceil() as u64;
+            let mut seen = 0u64;
+            for (i, v) in counts.iter().enumerate() {
+                seen += v;
+                if seen >= want {
+                    return 1u64 << i;
+                }
+            }
+            1u64 << (Self::BUCKETS - 1)
+        };
+        (n, total / n, at(0.50), at(0.90), at(0.99))
+    }
+
+    /// One line per class, with the instrument's own cost attached.
+    #[must_use]
+    pub fn render(&self) -> String {
+        let probe = self.probe_ns();
+        let mut out = String::new();
+        for (name, class) in [
+            ("passthrough", DoorbellClass::Passthrough),
+            ("emulated", DoorbellClass::Emulated),
+            ("other", DoorbellClass::Other),
+        ] {
+            let (n, mean, p50, p90, p99) = self.stats(class);
+            if n == 0 {
+                // ⊘ Printed anyway: a class with no samples is a reading ("nothing took this
+                // route this boot"), and its absence is indistinguishable from a skipped render.
+                out.push_str(&format!("DOORBELL-COST {name}: n=0 ⊘ no sample\n"));
+                continue;
+            }
+            let verdict = if probe > 0 && p50 <= probe.saturating_mul(3) {
+                " ⊘⊘ p50 IS WITHIN 3x THE PROBE — this line is mostly the instrument; sample \
+                 instead of measuring unconditionally"
+            } else {
+                ""
+            };
+            out.push_str(&format!(
+                "DOORBELL-COST {name}: n={n} mean={mean}ns p50={p50}ns p90={p90}ns p99={p99}ns \
+                 (probe={probe}ns){verdict}\n"
+            ));
+        }
+        out
+    }
+}
