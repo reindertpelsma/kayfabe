@@ -20573,7 +20573,7 @@ fn object_policy(
     // ★★★ §4.4's missing link. Read ONCE, here, beside the plane it is checked against —
     // two readings of one environment variable is two facts that can disagree, which is
     // the shape this file already refuses for the probe set and for the isolate plane.
-    let guest_ram = selected_guest_ram_source()?;
+    let guest_ram = selected_guest_ram_source(isolate_plane)?;
     let (isolates, guest_ram_backing, exports) = isolate_factory(isolate_plane, guest_ram)?;
     let gpu = kayfabe_core::gpu::Gpu::new(
         std::sync::Arc::new(kayfabe_chips::Ga10xArch::new()),
@@ -20708,8 +20708,12 @@ const STILLBORN_WHY: &str = "this build has no forwarding plane: the object mode
 /// refusal to realize the device, named.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IsolatePlane {
-    /// Every isolate retired at birth; no child process, no host verb. **The default**, and
-    /// what master shipped unconditionally.
+    /// Every isolate retired at birth; no child process, no host verb.
+    ///
+    /// ⊘ This said *"**The default**, and what master shipped unconditionally"* long after
+    /// w760 made [`IsolatePlane::Real`] the default. A stale default in a doc is the same
+    /// defect class as a stale default in code — it is what a reader checks instead of the
+    /// parser (§42(b)).  `[corrected w811]`
     Stillborn,
     /// A real sandboxed child process per `(Proc, GpuId)` — with a **loopback** `RmBackend`
     /// inside it. Real `clone`, real namespaces, real wire protocol, **no NVIDIA ioctl**.
@@ -20861,8 +20865,28 @@ pub const QEMU_MACHINE_RAM_MEMFD: &str = "memory-backend-memfd";
 /// rather than at startup.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GuestRamSource {
-    /// No isolate sees any guest memory. **The default**, and what every boot before this
-    /// one did. Every `map_guest_ram` is `RmError::GuestRamUnavailable`, by name.
+    /// No isolate sees any guest memory. Every `map_guest_ram` is
+    /// `RmError::GuestRamUnavailable`, by name.
+    ///
+    /// ⊘⊘⊘ **w811 — THIS WAS THE UNCONDITIONAL DEFAULT, AND IT WAS THE OLD ARCHITECTURE'S.**
+    /// The doc here used to read *"**The default**, and what every boot before this one
+    /// did"* — a sentence that is its own indictment under §42(a): *a default is the
+    /// design, and so are its preconditions.* The sibling selector one screen up has
+    /// defaulted to [`IsolatePlane::Real`] since w760, and the fast-guest harness has
+    /// built the crossing's precondition (`memory-backend-memfd,share=on`) and
+    /// **documented why** on every boot. So the shipped pair was *a real isolate plane
+    /// that is blind to guest memory*, and no arm of the product wants that.
+    ///
+    /// `[measured w811]` on the thin guest, **every** `VAS-PUBLISH` of the run carried
+    /// `⊘ NO GUEST-RAM BACKING (no hypervisor layout to resolve a GPA against)` and
+    /// `published=0 refused=9`. With `KAYFABE_GUEST_RAM=memfd` that refusal count goes to
+    /// **0 of 0** and the next gate in the chain becomes visible for the first time. ⇒ The
+    /// default was not a neutral starting point; it was a wall, and it hid the wall behind
+    /// it.
+    ///
+    /// ⚠ Still reachable, and deliberately: `KAYFABE_GUEST_RAM=none` selects it by name
+    /// (§42(d) — an opt-in may MOVE but not disappear), and it remains the DERIVED default
+    /// under [`IsolatePlane::Stillborn`], where there is nobody to hold the grant.
     None,
     /// ★ The hypervisor's own machine-RAM `memfd`, found in **this process** by
     /// [`kayfabe_linux_raw::MemfdCensus`].
@@ -20902,14 +20926,38 @@ impl GuestRamSource {
 
 /// The source named by `value` — the pure half of [`selected_guest_ram_source`].
 ///
+/// # The default is DERIVED from the plane, and that is the whole of w811's fix
+///
+/// ★★★★★ §42(e): *a test that reddens on a default flip reports a hidden argument.* When
+/// this default was flipped the predecessor of this function's own test went red, and the
+/// argument it was hiding is named right here in the signature: **which isolate plane is
+/// being armed.** A guest-RAM crossing needs somebody to hold the grant, so the honest
+/// default is not a constant at all — it is a function of the plane.
+///
+/// - [`IsolatePlane::Stillborn`] ⇒ [`GuestRamSource::None`]. Every isolate is retired at
+///   birth; there is no process to map anything into, and [`isolate_factory`] refuses the
+///   pair by name.
+/// - [`IsolatePlane::Loopback`] / [`IsolatePlane::Real`] ⇒ [`GuestRamSource::HypervisorMemfd`].
+///   A real child process exists, so the crossing is the design (§44: during this phase the
+///   new architecture is the default **on arrival**).
+///
+/// ⊘ Note what this deliberately does NOT weaken: an operator who *writes*
+/// `KAYFABE_GUEST_RAM=memfd` beside `KAYFABE_ISOLATES=none` is still refused at startup by
+/// name. That refusal was always about **an operator who asked for a crossing that cannot
+/// happen**, never about the absence of a request — and only the absent case derives.
+///
 /// # Errors
 /// [`Status::Unsupported`] if `value` names no source. **Absent is not an error**; it is
-/// [`GuestRamSource::None`].
+/// the plane's derived default above.
 pub fn guest_ram_source_from(
+    plane: IsolatePlane,
     value: Option<&str>,
 ) -> Result<GuestRamSource, (Status, &'static str)> {
     match value {
-        None => Ok(GuestRamSource::None),
+        None => Ok(match plane {
+            IsolatePlane::Stillborn => GuestRamSource::None,
+            IsolatePlane::Loopback | IsolatePlane::Real => GuestRamSource::HypervisorMemfd,
+        }),
         Some(v) => GuestRamSource::parse(v).ok_or((
             Status::Unsupported,
             "KAYFABE_GUEST_RAM does not name a guest-RAM source: the only values are \
@@ -20921,16 +20969,22 @@ pub fn guest_ram_source_from(
     }
 }
 
-/// The source [`GUEST_RAM_ENV`] names, or [`GuestRamSource::None`] if it is unset.
+/// The source [`GUEST_RAM_ENV`] names, or `plane`'s derived default if it is unset.
+///
+/// ⊘ `plane` is passed in rather than re-read from the environment: two readings of one
+/// variable are two facts that can disagree, and this one now *decides a default*, so a
+/// disagreement would be silent instead of merely redundant.
 ///
 /// # Errors
 /// [`Status::Unsupported`] for a value that names no source, **including a non-UTF-8 one**
 /// — which takes the `Some` arm, because it was SET.
-fn selected_guest_ram_source() -> Result<GuestRamSource, (Status, &'static str)> {
+fn selected_guest_ram_source(
+    plane: IsolatePlane,
+) -> Result<GuestRamSource, (Status, &'static str)> {
     match std::env::var_os(GUEST_RAM_ENV) {
         // ⊘ ONE default, not two: delegate to `guest_ram_source_from` rather than restate it here.
-        None => guest_ram_source_from(None),
-        Some(v) => guest_ram_source_from(Some(v.to_str().unwrap_or("\u{fffd}invalid"))),
+        None => guest_ram_source_from(plane, None),
+        Some(v) => guest_ram_source_from(plane, Some(v.to_str().unwrap_or("\u{fffd}invalid"))),
     }
 }
 
@@ -22100,15 +22154,52 @@ pub fn dirty_gate_from(value: Option<&str>) -> Result<bool, (Status, &'static st
         // ⊘ The MAX is UNCHANGED (2.75 s → 2.82 s): this gate does not touch the worst
         //   trap. That one is the pin drain and it is `KAYFABE_DRAIN_BATCH`'s. The two act
         //   on DIFFERENT STATISTICS of one distribution and neither is sufficient alone.
-        None | Some("on") => Ok(true),
-        Some("off") => Ok(false),
+        //
+        // ★★★★★ **w811 — DEFAULT MOVED BACK `on` → `off`, ON MEASUREMENT AND ON A RULING,
+        // AND THE PERFORMANCE ARGUMENT ABOVE IS NOT WHAT MOVED IT.**
+        //
+        // > **Owner, 2026-09-19:** *"wait is this about the dirty pages? I thought we
+        // > completely skip it, since the ptx walks everything in microseconds/millisecond
+        // > and then produces a diff."*
+        //
+        // ⊘ w330's numbers are not refuted and are not the issue. This gate exists to avoid
+        // an expensive re-walk; the PTX walk kernel does the WHOLE walk in **205.7 µs**
+        // (`the_walk_kernel_is_462ms_not_67us`, validated 72/72 on hardware) and hands back
+        // a diff. An avoidance gate whose premise is *"the pass is expensive"* is dead the
+        // day the pass costs a fifth of a millisecond — §42(a): a default is the design,
+        // **and so are its preconditions.**
+        //
+        // ★★★★★ **And it is a CORRECTNESS wall, which the perf framing hid.**
+        // `[measured w811, thin guest]` the one VAS holding real demand was skipped on every
+        // doorbell of the run:
+        //
+        //   [proc=0 pdb=0x2cea9c000 ⊘SKIPPED(w318 dirty gate: epoch=(25623775090534, 0)
+        //    joined=0 unchanged since the last COMPLETED pass) REPLAY-OF-LAST-CENSUS
+        //    total=5990 ... candidates=5880 published=0 refused=0]
+        //
+        // ⇒ **`published=0` and `unchanged since the last COMPLETED pass` in one line.** The
+        // gate is keyed on a signal that a pass which PUBLISHED NOTHING leaves untouched, so
+        // the first failure latches: nothing publishes, therefore nothing changes, therefore
+        // the pass is skipped, therefore nothing publishes. 5 880 candidate rows — 11.6 MB of
+        // real demand — were never attempted, and `refused=0` made it read as *"nothing was
+        // asked"* rather than *"nothing was allowed to ask"*.
+        //
+        // ⚠ That is `a_refusal_counter_read_as_absent_demand` and
+        // `the_repair_was_gated_on_the_success_it_repairs`, composed: a skip counter is not a
+        // refusal counter, and a retry gated on the success it exists to produce never fires.
+        //
+        // ⊘ `on` is KEPT as its own word — §42(d), and w330's measurement is still the reason
+        // anyone would reach for it. It is FROZEN: a perf arm, not an architecture, and it
+        // may not be developed against until the latch above is separately fixed.
+        None | Some("off") => Ok(false),
+        Some("on") => Ok(true),
         Some(_) => Err((
             Status::Unsupported,
             "a KAYFABE_DIRTY_GATE_* variable does not name a state: the only values are `off` \
-             (the default) and `on`. It is not defaulted, because the ungated arm IS w318's \
-             negative control AND because the armed arm makes a correctness-relevant pass STOP \
-             RUNNING on a clean doorbell — a typo that silently armed it would skip a \
-             publication nobody decided to skip.",
+             (the default) and `on` (frozen, w330's perf arm). It is not defaulted, because \
+             the armed arm makes a correctness-relevant pass STOP RUNNING on a clean \
+             doorbell — a typo that silently armed it would skip a publication nobody \
+             decided to skip, which is precisely what w811 measured it doing.",
         )),
     }
 }

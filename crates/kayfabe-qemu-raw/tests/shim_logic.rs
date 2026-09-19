@@ -1648,13 +1648,40 @@ fn with_the_feature_both_host_planes_build_a_factory() {
 /// at the first doorbell — twenty seconds later, inside a log full of refusals.
 #[test]
 fn an_unknown_guest_ram_source_is_refused_rather_than_defaulted() {
-    assert_eq!(guest_ram_source_from(None), Ok(GuestRamSource::None));
+    // ★★★★★ w811 — THE DEFAULT IS THE PLANE'S, and the old line here is why that matters.
+    //
+    // This read `assert_eq!(guest_ram_source_from(None), Ok(GuestRamSource::None))` — one
+    // constant, quantifying over nothing. It was green through every boot in which EVERY
+    // `VAS-PUBLISH` refused with `⊘ NO GUEST-RAM BACKING`, because the thing it asserted
+    // was exactly the thing that was wrong. §42(e) names the shape: the flip reddened it,
+    // and the hidden argument it reported is the isolate plane.
     assert_eq!(
-        guest_ram_source_from(Some("memfd")),
-        Ok(GuestRamSource::HypervisorMemfd)
+        guest_ram_source_from(IsolatePlane::Stillborn, None),
+        Ok(GuestRamSource::None),
+        "no isolate can hold the grant, so the derived default must be `none`"
     );
+    for armed in [IsolatePlane::Loopback, IsolatePlane::Real] {
+        assert_eq!(
+            guest_ram_source_from(armed, None),
+            Ok(GuestRamSource::HypervisorMemfd),
+            "★ {armed:?} spawns a real child, so the crossing is the design (§44)"
+        );
+    }
+    // ⊘ And the explicit spellings still win over the derivation, on EVERY plane — an
+    // opt-in that a derived default could override would be an opt-in that disappears.
+    for plane in IsolatePlane::ALL {
+        assert_eq!(
+            guest_ram_source_from(plane, Some("memfd")),
+            Ok(GuestRamSource::HypervisorMemfd)
+        );
+        assert_eq!(
+            guest_ram_source_from(plane, Some("none")),
+            Ok(GuestRamSource::None),
+            "§42(d): the superseded arm may MOVE but never become unspellable"
+        );
+    }
     for bad in ["", "Memfd", "MEMFD", "memfd ", "yes", "1", "true", "shared"] {
-        let (status, why) = guest_ram_source_from(Some(bad))
+        let (status, why) = guest_ram_source_from(IsolatePlane::Real, Some(bad))
             .expect_err("★ an unknown source must refuse the device");
         assert_eq!(status.code(), Status::Unsupported.code());
         assert!(
@@ -2742,8 +2769,30 @@ fn the_vas_publish_arm_is_three_valued_and_never_defaulted() {
 /// ⇒ **Absent is now `on`**; an unknown value is still an ERROR, and the runtime selector
 /// still reads any error as `off` — the safe direction for a flag that REMOVES work remains
 /// to do the work.
+///
+/// ★★★★★ **CORRECTED AGAIN 2026-09-19 (w811) — AND THE FIRST PARAGRAPH OF THIS DOC WAS
+/// RIGHT ALL ALONG.** It says, in w318's own words, that arming this gate *"makes a
+/// **correctness-relevant pass stop running** on a clean doorbell"* and that *"a publication
+/// skipped that the engine then needs is a GPU fault, not a slow path."* w330 then flipped
+/// the default to `on` on a perf measurement and **never answered that paragraph** — it
+/// showed the arm was *faster*, not that the skipped pass was never needed.
+///
+/// `[measured w811, thin guest]` the predicted failure, verbatim from the boot log:
+///
+///   [proc=0 pdb=0x2cea9c000 ⊘SKIPPED(w318 dirty gate: epoch=(25623775090534, 0) joined=0
+///    unchanged since the last COMPLETED pass) REPLAY-OF-LAST-CENSUS total=5990 ...
+///    candidates=5880 published=0 refused=0]
+///
+/// ⇒ `published=0` beside *"unchanged since the last COMPLETED pass"*: the gate's freshness
+/// signal is one a **failed** pass does not move, so the first failure latches and 5 880
+/// candidate rows are never attempted again. And `refused=0` made it read as absent demand.
+///
+/// ⊘ Two independent reasons retire it, so neither has to carry the flip alone: the owner's
+/// ruling that the PTX walker makes the avoided pass cost **205.7 µs** (its premise), and the
+/// latch above (its safety). **Absent is `off` again.** `on` stays spellable and FROZEN —
+/// w330's 8.5× is real and is the reason to reach for it once the latch is fixed separately.
 #[test]
-fn the_w318_dirty_gate_is_on_by_default_and_refuses_an_unknown_value() {
+fn the_w318_dirty_gate_is_off_by_default_and_refuses_an_unknown_value() {
     use kayfabe_qemu_raw::shim::dirty_gate_from;
     // ⊘⊘ **THIS TEST WAS RED FOR A WHOLE DAY AND NOTHING NOTICED.** w330 flipped this
     // default `off` -> `on` on measurement, booted it eight times, and never ran the crate's
@@ -2751,7 +2800,14 @@ fn the_w318_dirty_gate_is_on_by_default_and_refuses_an_unknown_value() {
     // caught the stale expectation was never executed. The flip was right; shipping it
     // without re-running the test that names the default was not.
     // ⇒ **A default and the test that asserts it are ONE edit.**
-    assert_eq!(dirty_gate_from(None), Ok(true), "absent is ON since w330");
+    // ★ w811 moves it back to `off`; this edit and the selector's are one commit, which is
+    // the rule the paragraph above paid for.
+    assert_eq!(
+        dirty_gate_from(None),
+        Ok(false),
+        "★★★★★ w811: absent is OFF — the gate skips publication exactly when the previous \
+         pass published nothing, which is when it most needs to run"
+    );
     assert_eq!(dirty_gate_from(Some("off")), Ok(false));
     assert_eq!(dirty_gate_from(Some("on")), Ok(true));
     for bad in ["1", "true", "yes", "", "On", "ON", "enabled"] {
