@@ -51,6 +51,11 @@ impl Faulted for FwdFault {
             FwdFault::RetiredProc(_) => FaultTag("FwdFault::RetiredProc"),
             FwdFault::Condemned { .. } => FaultTag("FwdFault::Condemned"),
             FwdFault::NoVas(_) => FaultTag("FwdFault::NoVas"),
+            // ⊘ Its OWN tag, not folded into `NoVas`: "this channel names no VA space" and
+            // "its VA space has not declared a page directory YET" are different states of
+            // knowledge with different fixes, and a census that summed them would hide the
+            // second behind the first. See `FwdFault::UndeclaredPdb`.
+            FwdFault::UndeclaredPdb { .. } => FaultTag("FwdFault::UndeclaredPdb"),
             FwdFault::NotScheduled { .. } => FaultTag("FwdFault::NotScheduled"),
             FwdFault::UnknownChannel { .. } => FaultTag("FwdFault::UnknownChannel"),
             FwdFault::IsolateRetired { .. } => FaultTag("FwdFault::IsolateRetired"),

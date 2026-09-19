@@ -337,6 +337,35 @@ pub enum FwdFault {
     /// The channel is not bound to any declared VAS and system routing does not
     /// apply — refusing to guess an address space.
     NoVas(ChanId),
+    /// ★★★★★ **w779 — A `Pdb(0)` IS NOT AN ADDRESS SPACE. IT IS "NOT DECLARED YET".**
+    ///
+    /// `[measured w779, thin guest on a GA106]` the raw client owns ONE guest VA space and
+    /// SEVEN channels, and we bound **two** host VA spaces for them:
+    ///
+    /// ```text
+    ///   pdb=Pdb(0)        space=0xcafe0004   4 × Ce
+    ///   pdb=Pdb(2101248)  space=0xcafe0005   1 × Ce + GrCompute
+    /// ```
+    ///
+    /// Both the handover and the materialization path find the `Vas` **by PDB**
+    /// (`vas_by_pdb_mut`), and the PDB is precisely what changes when `SET_PAGE_DIRECTORY`
+    /// arrives — the boot showed **2 ACCEPTED**. So a channel handed over before the
+    /// declaration bound a host VAS under key `0`, the declaration then resolved to a
+    /// *different* `Vas` whose `host_vas` was `None`, and a second host space was minted.
+    ///
+    /// ⇒ Channels the guest put in ONE space stopped sharing translations. That is
+    /// `--uvm-mean`'s P3: P2's copy engine reads `0x9140000000` and sees the CPU's poison
+    /// while the GR channel's host semaphore writes the same VA into the other space, so the
+    /// page the guest reads is never touched and no fault is raised.
+    ///
+    /// ⊘ Refused rather than bound, because the alternative — migrating `host_vas` when the
+    /// PDB is declared — moves an address space out from under channels already born in it.
+    /// The materialization path has always required a declared VAS
+    /// (*"materialization requires a declared VAS"*); this makes the handover agree.
+    UndeclaredPdb {
+        /// The process whose space was asked for.
+        pid: ProcId,
+    },
     /// ★★★ **#177.** The guest rang a channel it never asked us to schedule.
     ///
     /// `NVA06F_CTRL_CMD_GPFIFO_SCHEDULE` (`0xa06f0103`) with `bEnable = NV_TRUE` is what

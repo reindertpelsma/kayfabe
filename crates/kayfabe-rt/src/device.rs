@@ -6716,6 +6716,21 @@ impl SharedDevice {
         pdb: Pdb,
         leaf: crate::completion_watch::FbLeaf,
     ) -> Result<kayfabe_isolate::BareVaSpace, FwdFault> {
+        // ★★★★★ **w779 — REFUSE AN UNDECLARED PDB BEFORE ANYTHING IS MINTED.**
+        //
+        // `Pdb(0)` is not an address space; it is *"SET_PAGE_DIRECTORY has not arrived"*.
+        // Everything below finds the `Vas` **by PDB**, so binding a host space under key `0`
+        // guarantees the declaration later resolves elsewhere and mints a second one —
+        // `[measured w779]` four CE channels under `Pdb(0)` and the GrCompute under
+        // `Pdb(0x201000)`, in one guest address space, not sharing a translation between
+        // them.
+        //
+        // ⊘ The materialization path has always had this precondition (*"materialization
+        // requires a declared VAS"*). This is the same rule, stated where the other caller
+        // could reach past it.
+        if pdb.0 == 0 {
+            return Err(FwdFault::UndeclaredPdb { pid });
+        }
         // ---- PLAN: check the caller's route, check the leaf, read `host_vas`, take a
         // worker — all inside one locked phase, so nothing below can be true of a different
         // `Vas` than the one that was checked.
