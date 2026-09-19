@@ -5864,6 +5864,7 @@ fn doorbell_publish_loop(
             // below both read the epoch this moves. Marking after them would move the epoch
             // for the NEXT pass and skip this one — the off-by-one that reads as "the fix did
             // nothing" for a whole boot.
+            GUEST_INVALIDATES_DECLARED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             let marked = port.device.note_guest_invalidate(None, None);
             if marked == 0 {
                 eprintln!(
@@ -7997,15 +7998,44 @@ impl SharedDoorbell {
         // ⊘ Gated and counted rather than assumed: this is the page-table plane, where a wrong
         // skip is a stale GPU translation, so the arm exists to be turned off and the census
         // exists to prove the skip only fires when the witness is empty.
-        let skip_sweep = pt_sweep_skip_armed() && pt_drained == 0;
+        // ⊘⊘⊘ **w785 — AND THE PREMISE ABOVE IS NO LONGER TRUE UNDER THE SINGLE STORE.**
+        //
+        // The guard's own reasoning is *"the only way those bytes change is the guest's CPU
+        // writing them — which is exactly what `RegPlane::pt_witness` records."* The first
+        // half is still true. The second half stopped being true when the framebuffer became
+        // one shared store: `pt_witness` is recorded **only** on `RegPlane`'s `FbIoRole::Trap`
+        // arm, and the guest's stores into a shared region do not trap. So the bytes change
+        // and nothing records it.
+        //
+        // `[measured w784, thin guest r6]` `PT-DECODE drained=0` **x831 — every window of the
+        // boot** — and `PT-SWEEP ⊘ SKIPPED` **x815**. The table for the user's address space
+        // then held `total=4` rows (its four promoted context rows) and not one UVM mapping,
+        // and `GR0_PBDMA0` took `FAULT_PDE` on the first VA hardware was asked to translate.
+        //
+        // ⚠ **This was added as a PERFORMANCE guard** (w763z: 7.22 ms of a ~23 ms hold, and
+        // *"271 of 369 sweeps walk every proc's page tables and find nothing"*). That
+        // measurement was honest and is still honest. What changed is the architecture
+        // underneath it — `a_rulings_date_is_part_of_the_citation`, and the third time in this
+        // one chain that a single-store change silently unhooked an instrument built for the
+        // trapped-window era.
+        //
+        // ⇒ A declared invalidate ALSO un-skips the sweep. The guest saying *"my tables
+        // changed"* is a reason to re-read them that does not depend on our having watched it
+        // happen. ⊘ The witness arm is kept, not replaced: when the witness does fire it is
+        // strictly more precise, and a boot where one signal is dark must not be a boot where
+        // the sweep is blind.
+        let inval_now = GUEST_INVALIDATES_DECLARED.load(std::sync::atomic::Ordering::Relaxed);
+        let inval_unseen = inval_now != LAST_SWEPT_INVALIDATE.load(std::sync::atomic::Ordering::Relaxed);
+        let skip_sweep = pt_sweep_skip_armed() && pt_drained == 0 && !inval_unseen;
         let (sw, skipped_sweeps) = if skip_sweep {
             PT_SWEEPS_SKIPPED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             (
-                " | PT-SWEEP ⊘ SKIPPED (pt_witness drained 0: the guest's CPU wrote no page                  table this window, so the bytes this walk reads are unchanged)"
+                " | PT-SWEEP ⊘ SKIPPED (pt_witness drained 0 AND no invalidate declared since                  the last sweep: the bytes this walk reads are unchanged)"
                     .to_string(),
                 1u64,
             )
         } else {
+            LAST_SWEPT_INVALIDATE.store(inval_now, std::sync::atomic::Ordering::Relaxed);
             (self.sweep_cpu_pt_tables(), 0)
         };
         let _ = skipped_sweeps;
@@ -21884,6 +21914,19 @@ pub static PROBE_LEAF_OFF: std::sync::atomic::AtomicU64 =
     std::sync::atomic::AtomicU64::new(u64::MAX);
 
 /// How many invalidates skipped the page-table sweep because the witness was empty.
+/// ★★★★★ **w785 — HOW MANY TIMES THE GUEST HAS DECLARED ITS PAGE TABLES CHANGED.**
+///
+/// Monotonic, bumped by the MMUINVAL worker. Paired with [`LAST_SWEPT_INVALIDATE`] so the
+/// page-table sweep can tell *"an invalidate arrived since I last walked"* from *"I have
+/// already walked for it"*. ⊘ Two counters rather than a flag: a flag cleared by the sweep
+/// races an invalidate arriving mid-walk, and the lost one is a stale GPU translation.
+static GUEST_INVALIDATES_DECLARED: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+
+/// The value of [`GUEST_INVALIDATES_DECLARED`] at the last sweep that actually ran.
+static LAST_SWEPT_INVALIDATE: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+
 pub static PT_SWEEPS_SKIPPED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 /// `KAYFABE_PT_SWEEP_SKIP` — skip `sweep_cpu_pt_tables` when the CPU page-table witness
