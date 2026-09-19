@@ -263,9 +263,31 @@ if [ "${KF_REQUIRE_FORWARD:-1}" = 1 ] && [ -s "$QLOG" ]; then
           for (i=1;i<=NF;i++) { split($i,a,"=")
               if (a[1]=="emulated") e=a[2]; if (a[1]=="forwarded") f=a[2] }
           if (e+0 > 0 && f+0 == 0) print $1 }')
-    if [ "${guest_tokens:-0}" -gt 0 ] && [ -n "$stranded" ]; then
+    # ★★★★★ **A REFUSAL BY NAME IS NOT A SILENT CPU FALLBACK — subtract the declared ones.**
+    #
+    # ⊘ The first version of this gate was STRICT but not TRUE, and the suite said so: it
+    # failed `--missing-page-fault`, an arm whose whole point is a copy naming a page nothing
+    # binds. `OPERAND-GATE refused=N` already counts exactly that — *"doorbells NOT forwarded
+    # because the copy named an operand page this channel's VA space binds nowhere"* — so a
+    # token stranded for THAT reason is a declared outcome, not a copy that quietly ran on the
+    # CPU. `[measured w813c]` the two classes separate cleanly:
+    #
+    #     --missing-page-fault  refused=1  stranded=1   ⇒ fully explained
+    #     --ce-client           refused=0  stranded=1   ⇒ NOT explained — a real finding
+    #
+    # ⚠ Conservative by construction: `refused` counts DOORBELLS and `stranded` counts TOKENS,
+    # and one token can be stranded by several refusals — so `stranded > refused` means at
+    # least one token cannot be accounted for, whichever way the refusals are distributed.
+    # ⊘ `refuse by name means the NAME IS TRUE`: a gate that called a declared refusal a
+    # hardware failure would be making exactly the error it exists to catch.
+    og=$(grep -ao 'OPERAND-GATE refused=[0-9]*' "$QLOG" 2>/dev/null | tail -1 | grep -o '[0-9]*$')
+    og=${og:-0}
+    n_stranded=$(printf '%s\n' "$stranded" | grep -c 'tok=' || true)
+    if [ "${guest_tokens:-0}" -gt 0 ] && [ "${n_stranded:-0}" -gt "$og" ]; then
         echo "FAST_VERDICT=FAIL (rows verified, but these guest channels never reached hardware)"
         printf '%s\n' "$stranded" | sed 's/^/    ⊘ /'
+        echo "⊘ $n_stranded token(s) stranded, and the operand gate declared only $og refusal(s),"
+        echo "   so at least one cannot be accounted for by a refusal this run made BY NAME."
         echo "⊘ Each was RUNG (emulated>0) and never FORWARDED, which is the DOORBELL LEDGER's"
         echo "   own rule for 'it never went to hardware'. The copies ran on the CPU, and the"
         echo "   content ledger CANNOT tell: once the leaf is joined, the guest's window and"
@@ -276,6 +298,7 @@ if [ "${KF_REQUIRE_FORWARD:-1}" = 1 ] && [ -s "$QLOG" ]; then
         echo "   letting an emulated copy pass as a forwarded one."
         exit 1
     fi
-    echo "== hardware: $fwd doorbell(s) forwarded across $guest_tokens guest token(s), 0 stranded"
+    echo "== hardware: $fwd doorbell(s) forwarded across $guest_tokens guest token(s); \
+${n_stranded:-0} stranded, $og declared by the operand gate"
 fi
 echo "FAST_VERDICT=PASS (${elapsed}s)"
