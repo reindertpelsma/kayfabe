@@ -19354,6 +19354,45 @@ impl Regs {
                             "kayfabe: PROBE-FB AT END OF RUN: off=0x{off:x} ⊘ UNREADABLE: {e}"
                         ),
                     }
+                    // ★★★★★ **w773 — WHERE DOES THE CLIENT'S DATA ACTUALLY LIVE?**
+                    //
+                    // `[measured w772b]` the leaf the guest's page table names holds **zeros**
+                    // — not the payload and not the poison. So the GR semaphore never wrote
+                    // it AND the client never wrote it either: that page is not the memory
+                    // this VA is really using, and the question is no longer *"did the write
+                    // land"* but *"is the leaf we decode the page the client uses"*.
+                    //
+                    // ⊘ A bounded scan for the two sentinels answers it directly. The poison
+                    // `0xdeadbeef` is written by the CLIENT through its own mapping, so
+                    // wherever it is IS the client's page — and the distance from the leaf we
+                    // decoded is the bug. ⚠ Bounded and teardown-only: vidmem CPU reads run at
+                    // ~48 MiB/s, so 16 MiB is ~0.3 s and 12 GiB is not an option.
+                    let mut buf = vec![0u8; 64 * 1024];
+                    let (mut found_poison, mut found_payload) = (None, None);
+                    let mut o = 0u64;
+                    while o < (16u64 << 20) && (found_poison.is_none() || found_payload.is_none())
+                    {
+                        if self.plane.fb_peek(o, &mut buf).is_ok() {
+                            for (i, w) in buf.chunks_exact(4).enumerate() {
+                                let v = u32::from_le_bytes([w[0], w[1], w[2], w[3]]);
+                                let at = o + (i as u64) * 4;
+                                if v == 0xdead_beef && found_poison.is_none() {
+                                    found_poison = Some(at);
+                                }
+                                if v == 0x0da1_9ea1 && found_payload.is_none() {
+                                    found_payload = Some(at);
+                                }
+                            }
+                        }
+                        o += 64 * 1024;
+                    }
+                    eprintln!(
+                        "kayfabe: PROBE-SCAN first 16 MiB of the store: poison(0xdeadbeef)={} \
+                         payload(0x0da19ea1)={} ⇒ the poison's offset IS the client's page; \
+                         compare it with the leaf this VA decodes to",
+                        found_poison.map_or("ABSENT".to_string(), |a| format!("0x{a:x}")),
+                        found_payload.map_or("ABSENT".to_string(), |a| format!("0x{a:x}"))
+                    );
                 }
             }
             let policy = self.plane.fb_trap_policy();
