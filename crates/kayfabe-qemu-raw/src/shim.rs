@@ -21533,7 +21533,33 @@ impl VasPublishArm {
 /// [`VasPublishArm::Off`].
 pub fn vas_publish_from(value: Option<&str>) -> Result<VasPublishArm, (Status, &'static str)> {
     match value {
-        None | Some("off") => Ok(VasPublishArm::Off),
+        // ★★★★★ **w810 — ABSENT IS `Drain` (§44). `Off` IS THE PRE-w290 ARM AND IS FROZEN.**
+        //
+        // ⊘⊘⊘ `Off` is documented as *"Silent. Byte-identical to every boot before `w290`"* —
+        // i.e. the arm from before publication existed. `Publish` is the one where *"every
+        // qualifying row goes through `join_one_fb_leaf`"*, and that join is what puts a HOST
+        // OBJECT behind a framebuffer page.
+        //
+        // `[measured w809]` with `Off` as the default the VMM logs, for every CE submission:
+        // *"resolve to EMULATED FRAMEBUFFER with **no host object behind them**, which is the
+        // owner's forbidden state and is what routes this copy to `CeExecutor::Ours`"* —
+        // `CeExecutor::Ours ×10, HostCe ×0` in a whole boot. A copy-engine plane that never
+        // reaches hardware, because the default said do not join.
+        //
+        // ⚠ The MMUINVAL worker already forced `ctx.vas_publish = VasPublishArm::Drain` for
+        // its own pass, with the note that *"`Drain` both publishes AND measures-and-pins,
+        // which is what the doorbell path used to reach"*. ⇒ one path had been repaired
+        // locally while the DEFAULT stayed pre-w290 — exactly the shape §42(b) forbids: one
+        // statement of a default, and an auditor asks the parser.
+        //
+        // ⊘ `off` stays spellable as the control (§42(d)) and is FROZEN: it is the byte-
+        // identical-to-2026-07 arm, kept only to bisect against, never to develop on.
+        None => Ok(VasPublishArm::Drain),
+        // ⊘ §42(d) — the frozen arm keeps its OWN spelling. Folding it into the `None` arm
+        // (as w810's first edit did) makes `off` return `Drain`, i.e. silently unspellable,
+        // which removes the bisect the freeze exists to preserve. Caught by
+        // `defaults_are_the_new_design::every_frozen_arm_can_still_be_named` on its first run.
+        Some("off") => Ok(VasPublishArm::Off),
         Some("assert") => Ok(VasPublishArm::Assert),
         Some("publish") => Ok(VasPublishArm::Publish),
         Some("pinrate") => Ok(VasPublishArm::PinRate),
@@ -22025,7 +22051,24 @@ pub static PT_SWEEPS_SKIPPED: std::sync::atomic::AtomicU64 = std::sync::atomic::
 /// [`Status::Unsupported`] for anything that is not `on` or `off`.
 pub fn pt_sweep_skip_from(value: Option<&str>) -> Result<bool, (Status, &'static str)> {
     match value {
-        None | Some("on") => Ok(true),
+        // ★★★★★ **w810 — ABSENT IS `false` (DO NOT SKIP). THE SKIP IS FROZEN.**
+        //
+        // ⊘ The skip's premise is `w763z`'s: *"the only way those bytes change is the guest's
+        // CPU writing them — which is exactly what `RegPlane::pt_witness` records."* The
+        // single store made the framebuffer a shared region whose stores do not trap, so the
+        // witness cannot fire: `[measured w784]` `PT-DECODE drained=0` **×831, every window of
+        // the boot**, and `PT-SWEEP ⊘ SKIPPED` ×815.
+        //
+        // ⇒ Defaulting the skip ON means defaulting to *never re-reading the guest's page
+        // tables* on the architecture we ship. w786 un-skipped it on a declared invalidate and
+        // that is the behaviour, not an opt-in.
+        //
+        // ⚠ It costs `refresh 0.02ms → 7.36ms` per invalidate (`[measured w793]`). That is a
+        // real bill and it is named in `w793c`'s negative result; it is not paid by skipping.
+        None => Ok(false),
+        // ⊘ §42(d) — `on` is the FROZEN skip and keeps its own spelling, so a bisect can still
+        // reach w763z's behaviour. ⚠ Its meaning is unchanged: `on` arms the skip.
+        Some("on") => Ok(true),
         Some("off") => Ok(false),
         Some(_) => Err((
             Status::Unsupported,
