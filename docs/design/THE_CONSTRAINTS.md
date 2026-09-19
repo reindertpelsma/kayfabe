@@ -2721,3 +2721,51 @@ part of the new architecture, not a remnant of the old one (§42(d), §43(c)).
 ⊘ It does not license removing a refusal without replacing it with the behaviour it refused —
 *"refuse by name"* still holds; §44 changes which arm is default, never whether an unimplemented
 path is allowed to lie about being a decision.
+
+## §45 — WE ARE A COMPLIANT GSP, NOT A REAL ONE. IF ogkm DOES NOT VALIDATE IT, NEITHER DO WE.
+
+> **Owner, 2026-09-19:** *"You dont need to be real gsp, you just need a compliant one ogkm
+> expects. The only constraint, which is founding, is that guest userspace works as is. And for
+> security that opaqueness isn't an issue, nvidia doesn't trust userspace provided values with
+> any admin/kernel privilege. So if ogkm doesn't validate it, neither would we (if we know its
+> about cross process isolation, not for vm security/breakout). And since we are host userspace,
+> we by construction cannot supply privileged values."*
+
+### (a) The compliance target is ogkm's EXPECTATIONS, not NVIDIA's implementation
+
+⇒ Byte-accurate RAMFC, runlist entries and other structures **no kernel driver parses** are not
+obligations. `[measured w775]` the open tree publishes ten `NV_RAMRL_ENTRY_*` symbols, most of
+them *values*; `ENTRY_TYPE`, `CHAN_CHID`, `CHAN_INST_PTR`, `TSG_TSGID` do not exist in it, and
+RAMFC's layout is absent entirely. ogkm never reads them — it hands GSP a
+`{base, size, addressSpace, cacheAttrib}` memdesc and lets firmware do as it likes.
+⇒ We keep the facts in **our own tables** and reproduce no opaque layout.
+⚠ **The exception is anything GUEST-VISIBLE**: faults, error notifiers, ECC notifiers. Those
+are read by ogkm and by userspace, so they are compliance surface and must be right.
+
+### (b) ★★★★★ THE VALIDATION RULE, AND ITS ONE EXCEPTION
+
+**If ogkm does not validate a value, we do not validate it either** — *when what is at stake is
+cross-process isolation INSIDE the guest.* That is the guest kernel's job, it is authoritative
+over its own tenants, and a refusal we invent there is not security: it is a compliance break
+that costs a working path.
+
+⊘⊘⊘ **This is not theory. `[measured w769]` the `UnbindsPublished` guard refused an unbind the
+guest is entitled to make, froze 30 rows, and produced a stale translation — while ogkm
+performs no such check.** Three of its four conditions were our own bookkeeping. See §43's
+sibling finding: a refusal that names our limitation as the guest's error.
+
+★ **The exception, and it is narrow: a length or offset INTO AN OBJECT WE HOLD.** Host RM
+validates what *we* ask of it as userspace, but within an object we own it trusts our offsets.
+⇒ §39's copy-then-check-then-use still binds, unchanged. The rule above is about guest-internal
+policy; §39 is about our own memory safety, and they never overlap.
+
+### (c) Why the privilege ceiling is STRUCTURAL
+
+We run as **host userspace** against `/dev/nvidia*`. Every verb we issue is validated by host RM
+exactly as any unprivileged process's would be, and object ownership is enforced there. ⇒ We
+**cannot** supply a privileged value or name another tenant's object, whatever a guest sends us
+— not because we check, but because the ceiling is above us.
+
+⚠ What this does NOT license: forwarding a guest-chosen number as an address into an object we
+hold (see (b)'s exception), or letting a guest name a host object it did not cause to exist.
+Those are ours to enforce because host RM has already delegated them to us.
