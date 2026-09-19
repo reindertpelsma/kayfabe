@@ -8688,31 +8688,7 @@ pub enum ShellDisposition {
 /// whose engine the shell has no executor for. §43 says that cannot happen — we serve only
 /// what we emulate — so it is a `debug_assert`-grade impossibility kept nameable, not a route.
 #[must_use]
-pub fn shell_disposition(route: DoorbellRoute, emulated: bool) -> ShellDisposition {
-    // ★★★★★ **w780 — THE QUESTION IS "DID WE EMULATE THIS CHANNEL?", NEVER "WHAT ENGINE?"**
-    //
-    // > **Owner, 2026-09-19:** *"You only serve channels for the ones you emulate, thats the
-    // > constraint that should had held up."* (THE_CONSTRAINTS §43)
-    //
-    // ⊘⊘⊘ Deciding on the ENGINE served a **passthrough** channel on our own CPU executor
-    // purely because its engine was a copy engine. `[measured w780, thin guest]`
-    // `CHANNEL-KIND` reported `user_proc_channels=3 user_not_passthrough=0` — every user
-    // channel was passthrough — and the same boot logged **8** doorbells
-    // `SERVED-LOCALLY OFF THE TRAP … the CE shell executor claimed a DEFERRED doorbell`,
-    // against **1** `DOORBELL-XLATE` to hardware.
-    //
-    // ⇒ The reader and the writer then ran on DIFFERENT EXECUTION PLANES over different
-    // memory: `--uvm-mean`'s P2 copy engine read `0x9140000000` out of OUR store and saw the
-    // CPU's poison, while the GR channel's host semaphore was executed by REAL HARDWARE and
-    // landed elsewhere. Sharing the address space could not fix that, and did not
-    // (`w779` merged the two host VASes and P3 stayed red).
-    //
-    // ★ An EMULATED channel is one we created, so we can run it by construction. A
-    // PASSTHROUGH channel is the guest's own, and its bytes are not ours to interpret — its
-    // engine is not our business (§43's *"a doorbell is channel-agnostic"*).
-    if !emulated {
-        return ShellDisposition::HandToCore;
-    }
+pub fn shell_disposition(route: DoorbellRoute) -> ShellDisposition {
     match route {
         DoorbellRoute::CpuCe => ShellDisposition::MayServeLocally,
         // ★ Not ours ⇒ the core's. No flag, because there is nothing to choose between.

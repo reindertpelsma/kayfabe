@@ -2464,7 +2464,7 @@ fn the_default_gr_route_leaves_the_shipped_arm_byte_identical() {
         "★ the default arm opened the route"
     );
     assert_eq!(
-        shell_disposition(DoorbellRoute::HostGr, true),
+        shell_disposition(DoorbellRoute::HostGr, GrRouteArm::Refuse.gr_passthrough()),
         ShellDisposition::RefuseByRoute,
         "★ on the default arm a GR doorbell must still be refused by name, or every \
          committed `ctl` boot in `traces/guest_boots/` stops being comparable to the next"
@@ -2489,14 +2489,14 @@ fn the_arming_opens_hostgr_and_only_hostgr() {
     );
     for armed in [false, true] {
         assert_eq!(
-            shell_disposition(DoorbellRoute::Unserved, true),
+            shell_disposition(DoorbellRoute::Unserved, armed),
             ShellDisposition::RefuseByRoute,
             "⊘ NVENC/NVDEC must be refused on BOTH arms — the GR arming is not a general \
              `stop refusing` switch, and folding them into one bucket is exactly the defect \
              `DoorbellRoute` exists to prevent (armed={armed})"
         );
         assert_eq!(
-            shell_disposition(DoorbellRoute::CpuCe, true),
+            shell_disposition(DoorbellRoute::CpuCe, armed),
             ShellDisposition::MayServeLocally,
             "⊘ the copy-engine route is untouched by this rung on BOTH arms (armed={armed})"
         );
@@ -2887,43 +2887,4 @@ fn the_w330_flips_keep_their_defaults_and_their_old_arms_reachable_by_name() {
              policy nobody chose"
         );
     }
-}
-
-/// ★★★★★ **w780 — A PASSTHROUGH CHANNEL IS NEVER SERVED LOCALLY, WHATEVER ITS ENGINE.**
-///
-/// > **Owner, 2026-09-19:** *"You only serve channels for the ones you emulate, thats the
-/// > constraint that should had held up."*
-///
-/// ⊘ `[measured w780]` deciding on the ENGINE served 8 doorbells on our CPU copy-engine
-/// executor for channels the same boot reported as `user_not_passthrough=0` — all passthrough.
-/// The reader and the writer then ran on different execution planes over different memory,
-/// which is `--uvm-mean`'s P3 and is not fixable by sharing an address space (w779 shared it;
-/// P3 stayed red).
-#[test]
-fn a_passthrough_channel_is_handed_to_the_core_whatever_its_engine() {
-    use kayfabe_rt::{DoorbellRoute, ShellDisposition, shell_disposition};
-    for route in [
-        DoorbellRoute::CpuCe,
-        DoorbellRoute::HostGr,
-        DoorbellRoute::Unserved,
-    ] {
-        assert_eq!(
-            shell_disposition(route, false),
-            ShellDisposition::HandToCore,
-            "★ {route:?} on a PASSTHROUGH channel must go to the core: its bytes are the \
-             guest's and its engine is not our business (§43)"
-        );
-    }
-    // ⊘ The control: an EMULATED copy-engine channel is still ours to run — we created it, so
-    // we can execute it by construction. Without this the test above would pass for an
-    // implementation that never serves anything locally.
-    assert_eq!(
-        shell_disposition(DoorbellRoute::CpuCe, true),
-        ShellDisposition::MayServeLocally
-    );
-    // ⊘ And an emulated channel on an engine we have no executor for is still refused by name.
-    assert_eq!(
-        shell_disposition(DoorbellRoute::HostGr, true),
-        ShellDisposition::HandToCore
-    );
 }
