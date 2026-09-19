@@ -7620,14 +7620,39 @@ impl SharedDevice {
             // refresh would be a multi-second vCPU stall — the trap w432 removed. And safe
             // from the lock side because `drop(st)` above released the proc lock.
             if let Ok(join) = out.as_ref() {
-                if join.bound > 0 {
+                // ★★★★★ w781 — **`bound` IS NOT THE NUMBER OF ROWS THIS PROMOTION BOUND.**
+                //
+                // `[measured w781, thin guest r2]` the user proc's promotion read
+                // `bound=0 joined=4 parked=6` and **this refresh never ran**: one
+                // `PROMOTE-REFRESH` line in the whole boot, and it belonged to proc 0. Four
+                // context rows were forward-populated into the address table by the
+                // two-phase join and NONE of them was backed, while the guest was told the
+                // promote succeeded. The host then took
+                // `Xid 31 … GR0_PBDMA0 … FAULT_PDE ACCESS_TYPE_VIRT_WRITE @ 0x91_40000000`
+                // and `P3 rpc-bind` read `still the poison 0xdeadbeef`.
+                //
+                // ⊘ The gate was not wrong about `bound` — it was wrong about the QUESTION.
+                // `bound` and `joined` are deliberately separate *mechanisms* (a single wire
+                // entry carrying both halves, versus two controls stitched together), and
+                // that separation is what makes the join measurable. But **both
+                // forward-populate rows**, and this seam asks only *"did any row appear that
+                // no engine can reach yet?"* — a question neither mechanism owns alone.
+                // `joined_global` is a subset of `joined` (see `PromoteJoin::joined_global`)
+                // and must not be added again.
+                //
+                // ★ Same class as `the_repair_was_gated_on_the_success_it_repairs`: a repair
+                // conditioned on one of the two ways the thing it repairs can arrive. The
+                // rung that introduced `joined` moved the join off zero and left the backing
+                // seam reading the pre-join counter.
+                let newly_bound = join.bound + join.joined;
+                if newly_bound > 0 {
                     if let Some(refresh) = self.invalidate_refresh.get() {
                         let (backed, refused) = refresh.refresh_pdb(route.proc, route.pdb);
                         eprintln!(
-                            "kayfabe: PROMOTE-REFRESH proc={} pdb={:#x} bound={} \
-                             backed={backed} refused={refused} — synchronization point (2), \
-                             done BEFORE this RPC's reply",
-                            route.proc.0, route.pdb.0, join.bound,
+                            "kayfabe: PROMOTE-REFRESH proc={} pdb={:#x} bound={} joined={} \
+                             newly_bound={newly_bound} backed={backed} refused={refused} — \
+                             synchronization point (2), done BEFORE this RPC's reply",
+                            route.proc.0, route.pdb.0, join.bound, join.joined,
                         );
                         if refused > 0 {
                             eprintln!(
@@ -7638,9 +7663,9 @@ impl SharedDevice {
                         }
                     } else {
                         eprintln!(
-                            "kayfabe: PROMOTE-REFRESH ⊘⊘ NO SEAM INSTALLED — {} row(s) bound \
-                             and NONE backed; the guest will be told this promote succeeded.",
-                            join.bound
+                            "kayfabe: PROMOTE-REFRESH ⊘⊘ NO SEAM INSTALLED — {newly_bound} \
+                             row(s) bound and NONE backed; the guest will be told this \
+                             promote succeeded."
                         );
                     }
                 }
