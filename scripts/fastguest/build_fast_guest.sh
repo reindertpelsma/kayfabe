@@ -259,6 +259,50 @@ mount -t devtmpfs none /dev 2>/dev/null
 
 echo "FASTGUEST: up $(cut -d' ' -f1 /proc/uptime)s"
 
+# ★★★★★ **w794 — LEAVE THE INITRAMFS, OR THE ISOLATE SANDBOX CANNOT BE BUILT.**
+#
+# ⊘⊘⊘ `[measured w788]` `--engines` and `--concurrency` both fail their R10 rung with
+#   `FAIL  R10 isolate = it did not start: kind=spawn-failed -- isolate refused to start:
+#    Other(19270)`
+# which is `pivot_root failed (errno 22)`. `EINVAL` there is not a bug in the sandbox: the
+# kernel REFUSES `pivot_root` out of the initial rootfs, by design, on every kernel. An
+# initramfs-only guest therefore cannot host a sandboxed isolate at all.
+#
+# ⚠ **The fix belongs HERE and not in the sandbox.** Falling back to `chroot` when
+# `pivot_root` is unavailable would silently weaken containment on exactly the path whose
+# containment IS the product (`hostile_guest_isolation_is_the_value_proposition`), and it
+# would do it in the harness that most boots run. A guest image limitation must not become a
+# security relaxation -- `THE_CONSTRAINTS` w729: *a pass bought by relaxing a constraint is
+# not a pass*.
+#
+# ⇒ Move to a real tmpfs root and `switch_root` into it. After this, `/` is an ordinary mount
+# and `pivot_root` is legal. ⊘ The copy is the cost: the image carries modules and GSP
+# firmware, so this is ~150 MB of page-cache-to-tmpfs, measured in the boot line below rather
+# than assumed.
+#
+# ⊘ Fail SOFT. A guest that cannot switch_root should still run every rung that does not need
+# an isolate, and say which state it is in -- an image that silently refused to boot would
+# cost more than the two rungs this unblocks.
+# ⊘ **The re-entry guard.** `switch_root` re-execs THIS script as the new root's `/init`, so
+# without a marker the second pass tries to switch again, forever. The marker is written into
+# the new root before the switch and its presence is what says "already switched".
+t0=$(cut -d' ' -f1 /proc/uptime)
+if [ -f /.kf_switched ]; then
+    echo "FASTGUEST: root is a real mount (switch_root done) — the isolate sandbox can pivot_root"
+elif mkdir -p /newroot && mount -t tmpfs -o size=90% tmpfs /newroot 2>/dev/null; then
+    if (cd / && tar -cf - --exclude=./newroot --exclude=./proc --exclude=./sys --exclude=./dev . 2>/dev/null | (cd /newroot && tar -xf - 2>/dev/null)); then
+        mkdir -p /newroot/proc /newroot/sys /newroot/dev /newroot/oldroot
+        : > /newroot/.kf_switched
+        t1=$(cut -d' ' -f1 /proc/uptime)
+        echo "FASTGUEST: switch_root prepared in $(echo "$t1 $t0" | awk '{printf "%.1f", $1-$2}')s"
+        umount /dev 2>/dev/null; umount /sys 2>/dev/null; umount /proc 2>/dev/null
+        exec /bin/busybox switch_root /newroot /init
+    fi
+    echo "FASTGUEST: ⊘ switch_root copy FAILED — staying on initramfs; R10 (isolate) will refuse"
+else
+    echo "FASTGUEST: ⊘ no tmpfs for switch_root — staying on initramfs; R10 (isolate) will refuse"
+fi
+
 # ⊘⊘⊘ **`insmod` NAMES A CLASS; THE KERNEL NAMES THE SYMBOL.** busybox prints the same
 # "unknown symbol in module, or unknown parameter" for a missing dependency, a vermagic
 # mismatch and a bad parameter -- three different fixes behind one string. The kernel logs
