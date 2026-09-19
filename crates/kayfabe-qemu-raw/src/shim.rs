@@ -8219,10 +8219,43 @@ impl SharedDoorbell {
                 .and_then(|h| u64::from_str_radix(h, 16).ok())
                 .or_else(|| v.parse::<u64>().ok());
             match (va, self.plane.upgrade()) {
-                (Some(va), Some(plane)) => eprintln!(
-                    "kayfabe: PROBE-VA token=0x{token:08x} va=0x{va:x}{}",
-                    plane.walk_trace_from_root(&root, va)
-                ),
+                (Some(va), Some(plane)) => {
+                    let trace = plane.walk_trace_from_root(&root, va);
+                    // ★★★★★ **w772 — AND READ THE LEAF IT JUST RESOLVED.**
+                    //
+                    // `[measured w770]` the walk ends `LEAF@0x9140000000->0x180000/Vidmem`, so
+                    // the translation is FINE — the first two candidate causes (stale TLB, no
+                    // mapping) are dead. What is left is a question about BACKING: hardware
+                    // writes to *its* `0x180000` and the client reads *its* `0x180000`, and
+                    // they disagree.
+                    //
+                    // ⇒ Read the store at the resolved offset. The payload is `0x0da19ea1`:
+                    //   present  → hardware wrote CORRECTLY and the CLIENT's CPU view of that
+                    //              page is the wrong memory (a BAR1/mirror backing bug)
+                    //   absent   → the write went somewhere else, and the leaf's offset is not
+                    //              where hardware actually put it
+                    // ⊘ One read of 8 bytes, print-only, behind the same operator flag.
+                    let leaf = trace
+                        .rsplit_once("->")
+                        .and_then(|(_, t)| t.split('/').next())
+                        .and_then(|h| u64::from_str_radix(h.trim().trim_start_matches("0x"), 16).ok());
+                    let peek = match leaf {
+                        Some(off) => {
+                            let mut b = [0u8; 8];
+                            match plane.fb_peek(off, &mut b) {
+                                Ok(()) => format!(
+                                    " | FB@0x{off:x}=[{:02x} {:02x} {:02x} {:02x} {:02x} {:02x} \
+                                     {:02x} {:02x}] le32=0x{:08x}",
+                                    b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7],
+                                    u32::from_le_bytes([b[0], b[1], b[2], b[3]])
+                                ),
+                                Err(e) => format!(" | FB@0x{off:x} ⊘ UNREADABLE: {e}"),
+                            }
+                        }
+                        None => " | ⊘ no leaf offset in the trace to peek at".to_string(),
+                    };
+                    eprintln!("kayfabe: PROBE-VA token=0x{token:08x} va=0x{va:x}{trace}{peek}");
+                }
                 (None, _) => eprintln!(
                     "kayfabe: PROBE-VA ⊘ KAYFABE_PROBE_VA={v} is not a VA (hex with 0x, or decimal)"
                 ),
