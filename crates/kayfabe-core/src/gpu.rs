@@ -6044,3 +6044,41 @@ pub fn note_retired_reaped(n: usize) {
 pub fn retired_pending() -> usize {
     RETIRED_PENDING.load(std::sync::atomic::Ordering::Acquire)
 }
+
+/// ★★★★★ **w788 — IS THIS VAS UNCHANGED SINCE THE LAST COMPLETED PUBLICATION PASS?**
+///
+/// Both terms must match for the pass to be skipped, and they answer different questions:
+/// `epoch` is **our record of the guest's address space**
+/// ([`kayfabe_core::gpu::Vas::publish_epoch`]), `joined` is **host state** — how many
+/// framebuffer ranges the store had joined, because the refusals this gate skips are
+/// *"already joined"* outcomes that do not depend on our table at all.
+///
+/// # ⊘ Why a named function rather than a `filter` closure
+///
+/// `[measured w784]` every publication pass in an 831-window boot replayed its last census,
+/// because the epoch could not move — and the reason was two layers away, in
+/// `Vas::publish_epoch`'s guest-side term going dark under the single store. The gate itself
+/// was never wrong. ⚠ But a reader chasing `published=0 candidates=0` had nothing to call and
+/// nothing to unit-test, so the only way to learn which half was stuck was a rented GPU.
+///
+/// ⇒ Extracted so the gate's *contract* is falsifiable in isolation, and so the next person
+/// who suspects it can be told "no, the gate is pinned — look at the epoch" in ten
+/// milliseconds instead of a boot.
+///
+/// ⊘⊘ **HOME CHOSEN BY THE RULE, NOT BY WHERE THE CODE WAS.** This first lived in
+/// `kayfabe-qemu-raw` because that is where the call site is.
+/// > **Owner, 2026-09-19:** *"as soon as you add vmm you can as well add the gpu since its
+/// > available on hardware; availability shouldn't be a reason to add non gpu tests."*
+/// ⇒ A pure test only earns its place by being a statement about something **VMM- and
+/// GPU-agnostic**. This predicate is publication POLICY and names no hypervisor, so it
+/// belongs in a logic crate — and leaving it in the adapter would hand the next VMM a second
+/// copy of the policy to drift from.
+#[must_use]
+pub fn publish_gate_is_clean(
+    cached_epoch: (u64, usize),
+    cached_joined: usize,
+    now_epoch: (u64, usize),
+    now_joined: usize,
+) -> bool {
+    cached_epoch == now_epoch && cached_joined == now_joined
+}

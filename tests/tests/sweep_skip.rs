@@ -26,7 +26,7 @@
 //! > **Owner, 2026-09-19:** *"It seems to me a lot of them can be found by adding tests to
 //! > the project that don't need a gpu to run."*
 
-use kayfabe_qemu_raw::shim::sweep_should_skip;
+use kayfabe_mmu::reach::sweep_should_skip;
 
 /// ★★★ **THE REGRESSION, NAMED.** The single store's world: the witness is permanently zero,
 /// and the only signal left is the guest's own declaration.

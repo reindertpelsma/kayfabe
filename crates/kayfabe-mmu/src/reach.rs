@@ -1221,3 +1221,30 @@ mod the_gate_must_key_on_the_guest_not_on_us {
         assert!(r.witness_writes() > before);
     }
 }
+
+/// ★★★★★ **w788 — SHOULD THIS REFRESH SKIP THE PAGE-TABLE SWEEP?** A pure function, so it
+/// can be tested without a GPU, a guest or a boot.
+///
+/// # ⊘⊘⊘ Why this is a named function and not three `&&`s at the call site
+///
+/// It was three `&&`s at the call site, and it was WRONG for an entire architecture without
+/// anything going red. `[measured w784]` `PT-SWEEP ⊘ SKIPPED` **x815 of 831 windows** — the
+/// sweep that discovers the guest's mappings never ran, so the host VA space held four rows,
+/// so `GR0_PBDMA0` faulted `FAULT_PDE` on the first address hardware was asked to translate.
+/// Finding that cost a rented GPU, a guest boot and most of a day.
+///
+/// ⚠ **Nothing about that bug needed hardware.** It is a three-input boolean, and the input
+/// that broke was *"the witness is permanently zero under the single store"* — a state a
+/// test can simply pass in. The reason no test caught it is that there was no function to
+/// call. ⇒ `tests/sweep_skip.rs` now enumerates all eight input combinations.
+///
+/// # The rule
+///
+/// Skip only when the arm is on AND the CPU transport witnessed nothing AND the guest has
+/// declared no invalidate since the last sweep. ⊘ The two evidence terms are OR-ed into the
+/// reason to run, never AND-ed: they are independent channels, and a boot where one is dark
+/// must not be a boot where the sweep is blind.
+#[must_use]
+pub fn sweep_should_skip(armed: bool, pt_drained: usize, invalidate_unseen: bool) -> bool {
+    armed && pt_drained == 0 && !invalidate_unseen
+}

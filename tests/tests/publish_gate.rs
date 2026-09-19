@@ -20,7 +20,7 @@
 //! the caller obtains either value. A test that also built an epoch would be testing
 //! `publish_epoch`, which `kayfabe-tests/tests/publish_epoch_gate.rs` already does.
 
-use kayfabe_qemu_raw::shim::publish_gate_is_clean;
+use kayfabe_core::gpu::publish_gate_is_clean;
 
 const E0: (u64, usize) = (0xabc_def, 3);
 const E1: (u64, usize) = (0xabc_df0, 3);
