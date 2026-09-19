@@ -2435,52 +2435,16 @@ fn the_gate_hands_over_exactly_the_kinds_a_shadow_host_channel_may_back() {
 // ★★★★★ THE GR ROUTE selector — the PURE half, and the DISPOSITION it feeds
 // =====================================================================================
 //
-// ⊘ Same scope caveat as the two selector blocks above: these drive `gr_route_from` and
-// `kayfabe_rt::shell_disposition` and never read the process-global. The plumbing from the
-// variable to the routing decision is pinned end to end, through a real guest MMIO write,
-// by `tests/gr_route_passthrough.rs` — which has to be its own binary to write the global
-// safely, and says so.
+// ⊘⊘ **w791 — THE SELECTOR THIS BLOCK USED TO TEST IS DELETED.** `KAYFABE_GR_ROUTE` had two
+// arms because §16.65 had closed the `HostGr` path on evidence and the armed arm re-opened
+// it. Route K made that evidence stale (w766: the host channel's ring IS the guest's), and
+// §43 made the question itself wrong — a doorbell says only *my `GP_PUT` moved*, so an
+// engine we run no executor for is the core's, not a refusal.
 //
-// Why the selector exists at all: the arm it opens was CLOSED ON EVIDENCE at §16.65, and
-// the evidence still stands — `docs/design/gr_doorbell_passthrough.md` §0.2-§0.3.
+// ⇒ There is nothing left to select; the tests below assert the disposition directly.
 
-use kayfabe_qemu_raw::shim::{GrRouteArm, gr_route_from};
 use kayfabe_rt::{DoorbellRoute, ShellDisposition, shell_disposition};
 
-/// ⊘ **The default must leave every prior boot comparable.** `KAYFABE_GR_ROUTE` unset is
-/// `Refuse`, and `Refuse` disposes a `HostGr` doorbell exactly as the `!=  CpuCe` bool did.
-#[test]
-fn the_default_gr_route_leaves_the_shipped_arm_byte_identical() {
-    assert_eq!(
-        gr_route_from(None),
-        Ok(GrRouteArm::Passthrough),
-        "★★★★★ w765 §42(a): absent is the DESIGN. With `refuse` as the default a GR channel is \
-         born, adopted and scheduled, and then its doorbell is refused by name — which the \
-         client reports as `the GR channel was scheduled but NEVER WROTE`"
-    );
-    assert_eq!(gr_route_from(Some("refuse")), Ok(GrRouteArm::Refuse));
-    assert!(
-        !GrRouteArm::Refuse.gr_passthrough(),
-        "★ the default arm opened the route"
-    );
-    // ⊘⊘⊘ **w787 — THIS ASSERTION WAS RESTORED BY w780r AND WAS ALREADY UNTRUE.**
-    //
-    // The revert of w780 put back the pre-w780 test body, which calls `shell_disposition`
-    // with a second argument and expects `RefuseByRoute`. Both halves are stale: w766
-    // DELETED the `gr_passthrough` parameter, and §43 folded `Unserved` into `HandToCore`
-    // because *"an engine we do not interpret is precisely an engine whose bytes we must not
-    // touch."* ⚠ I confirmed w780r on the ledger without building the test targets, which is
-    // how a revert left the workspace not compiling.
-    //
-    // ⇒ Asserted against the CURRENT invariant. `GrRouteArm` itself is now orphaned from this
-    // decision and is §43(d) deletion debt, tracked rather than silently exercised here.
-    assert_eq!(
-        shell_disposition(DoorbellRoute::HostGr),
-        ShellDisposition::HandToCore,
-        "★★★★★ §43: a doorbell says only *my GP_PUT moved*. A GR channel is not ours to run, \
-         so it is the core's — one dword, and the engine is not our business"
-    );
-}
 
 /// ★★★★★ **The arming is the ONLY thing that opens the route**, and it opens it for
 /// `HostGr` and for nothing else.
@@ -2561,62 +2525,7 @@ fn ring_content_is_forwardable_exactly_where_the_cpu_ce_executor_owns_the_route(
     ));
 }
 
-/// Every arm round-trips through its own spelling, with the same non-vacuity check the
-/// executor block uses.
-#[test]
-fn every_gr_route_arm_round_trips_through_its_own_spelling() {
-    for arm in GrRouteArm::ALL {
-        assert_eq!(
-            gr_route_from(Some(arm.as_str())),
-            Ok(arm),
-            "★ {arm:?} does not parse from the name it prints"
-        );
-    }
-    let mut names: Vec<&str> = GrRouteArm::ALL.iter().map(|a| a.as_str()).collect();
-    names.sort_unstable();
-    names.dedup();
-    assert_eq!(names.len(), GrRouteArm::ALL.len(), "two arms share a name");
-}
 
-/// ⊘ A near-miss REFUSES TO REALIZE rather than defaulting quietly.
-///
-/// ★ The stakes here are higher than for the executor selector, and that is why `on` and
-/// `1` are in the list: the two arms of this experiment differ in **one routing decision**,
-/// so a disarmed evidence run and its control produce identical logs — no new lines, and a
-/// full census of `ShellExecutor::NoneInThisProcessForEngine` — which is also exactly what a *correct*
-/// control produces.
-#[test]
-fn a_value_that_is_not_a_gr_route_arm_refuses_rather_than_defaulting() {
-    for bad in [
-        "",
-        "on",
-        "1",
-        "true",
-        "yes",
-        "Refuse",
-        "REFUSE",
-        "refuse ",
-        " refuse",
-        "pass",
-        "passthru",
-        "hostgr",
-        "\u{fffd}invalid",
-    ] {
-        let (status, why) = gr_route_from(Some(bad))
-            .expect_err(&format!("★ {bad:?} was ACCEPTED as a GR route arm"));
-        assert_eq!(
-            status.code(),
-            kayfabe_qemu_raw::shim::Status::Unsupported.code()
-        );
-        for arm in GrRouteArm::ALL {
-            assert!(
-                why.contains(arm.as_str()),
-                "★ the refusal for {bad:?} does not name `{}`; message was: {why}",
-                arm.as_str()
-            );
-        }
-    }
-}
 
 // ---------------------------------------------------------------------------------------
 // ★★★★★ LEG A — `KAYFABE_GUEST_RING`, the arm that gives the framebuffer join a SECOND
@@ -2723,29 +2632,6 @@ fn a_value_that_is_not_a_guest_ring_arm_refuses_rather_than_defaulting() {
     }
 }
 
-/// ★★★ **THE TWO LEGS ARE INDEPENDENT, and that is asserted rather than assumed.**
-///
-/// ⊘ Nothing in the shim may make one arm imply the other. A boot must be able to run
-/// `KAYFABE_GUEST_RING=ring` with `KAYFABE_GR_ROUTE=refuse` (the supply side alone, which is
-/// exactly the `w260` shape) and `passthrough` with `off` (the transport alone, which is
-/// `b734995`'s shape). All four cells are reachable, and the product below is the statement.
-#[test]
-fn the_ring_arm_and_the_route_arm_are_four_independent_cells() {
-    let mut cells = Vec::new();
-    for ring in GuestRingArm::ALL {
-        for route in GrRouteArm::ALL {
-            cells.push((ring.adopts_ring(), route.gr_passthrough()));
-        }
-    }
-    cells.sort_unstable();
-    cells.dedup();
-    assert_eq!(
-        cells.len(),
-        4,
-        "★ the two selectors do not span four cells — one of them constrains the other, and \
-         the supply side and the transport would stop being separately measurable"
-    );
-}
 
 /// ★★★ **w290's publication arm is three-valued and NEVER defaulted.**
 ///
