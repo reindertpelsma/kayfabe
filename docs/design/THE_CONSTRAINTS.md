@@ -2779,16 +2779,37 @@ Those are ours to enforce because host RM has already delegated them to us.
 > *"okay no real work kernel channel except the no-op or the ones that we must stub, so the
 > scrub and CE, is never executed on CPU. Its always executed on GPU under the single store"*
 
-### What this permits on the CPU, and it is a short list
+### ⊘⊘⊘ CORRECTED SAME DAY — I MIS-PARSED THE RULING AND INVERTED ITS EXAMPLES
 
-1. **A no-op.** The CeUtils scrub is the canonical case: the guest asks for a scrub of memory
-   whose backing we control, the operation has no observable effect we need hardware for, and
-   completing it is the whole job.
-2. **A stub we are obliged to fake** — a value ogkm expects to read back and that no engine
-   ever produces for us.
+> **Owner, 2026-09-19:** *"Ceutils scrub is not a no-op, it genuinely needs to clear memory.
+> Same for kernel ce"*
 
-⊘ **Everything else goes to the GPU.** A real copy is a real copy: if the guest asked a copy
-engine to move bytes, the copy engine moves them.
+The first draft of this section named the CeUtils scrub as **the canonical CPU no-op**. The
+ruling lists *"the scrub and CE"* as examples of **REAL WORK that must go to the GPU** — the
+exact opposite. ⚠ And the inversion was not academic: it made me annotate a measured defect as
+correct behaviour (see below).
+
+### What this permits on the CPU, and it is a genuinely short list
+
+1. **A true no-op** — an operation with no observable effect anyone can read back.
+2. **A stub we are obliged to fake** — a value ogkm expects to read and that no engine ever
+   produces for us.
+
+⊘ **Everything else goes to the GPU, and that explicitly includes KERNEL channels.** The
+CeUtils scrub **genuinely clears memory**; kernel CE **genuinely moves bytes**. A scrub whose
+bytes our CPU wrote is not a scrub that happened on the GPU, and the guest cannot tell the
+difference *until something depends on the GPU having done it*.
+
+### ★★★ AND THIS IS WHAT §37 ALREADY MEANT BY "EMULATED"
+
+§37 says emulated channels *"execute in the VMM worker, through a raw client the VMM owns"*. ⊘
+That means the worker **submits the work to the GPU through its own RM client**. It does NOT
+mean the CPU performs the operation. `kayfabe_rt::ceutils`' `execute_ours_spans` — a CPU
+`memcpy` over resolved spans — violates both §37 and this section, for every channel it
+claims.
+
+⇒ **"Emulated" names WHO DRIVES the channel, never WHO MOVES THE BYTES.** The bytes are always
+moved by the GPU.
 
 ### ⊘⊘⊘ Why this is a constraint and not an optimisation
 
@@ -2800,6 +2821,20 @@ that "regressed" had been passing **because our CPU was doing the GPU's work**:
 |---|---|---|
 | `--engines`, `--ce-client` | FAIL | **PASS** — hardware ran it: *"the GPU consumed our ring"* |
 | `--uvm-mean`, `--alias-two-vas`, `--alias-unmap-observe`, `--cross-client-leak`, `--rpc-mixed-allocs`, `--map-stress` | PASS | **FAIL** — `the copy … NEVER RETIRED` |
+
+⚠ **AND `host` DOES NOT YET SATISFY THIS SECTION EITHER.** `[measured w801, per-token ledger]`
+with `host` as the default, every **user**-proc channel is forwarded and every **system**-proc
+channel still is not:
+
+```
+tok=0x00000009 proc=1 forwarded=2     tok=0x00010001 proc=0 forwarded=0  (59 doorbells)
+tok=0x00010008 proc=1 forwarded=9     tok=0x00010004 proc=0 forwarded=0  (66 doorbells)
+```
+
+⊘ I first annotated those two zeros as *"correct — kernel channel"*. Under this section they
+are **the defect**: 125 kernel scrub/CE doorbells whose bytes our CPU moved. The kind
+classifier (`project.rs:311`, `anchor == SYSTEM_ANCHOR ⇒ Emulated`) is not wrong — §37 is what
+"Emulated" must mean, and `execute_ours_spans` is what has to go.
 
 ⇒ Those six are **EXPOSURES, not regressions**. The same shape as
 `four_green_rows_never_asked_the_gpu_to_translate`: a ledger can be green while the GPU has
