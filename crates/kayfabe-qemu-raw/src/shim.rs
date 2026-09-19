@@ -13262,7 +13262,7 @@ impl PublishContext {
                         .lock()
                         .unwrap_or_else(|e| e.into_inner())
                         .get(&(pid, gpu, pdb))
-                        .filter(|s| s.epoch == epoch_now && s.joined == joined_now)
+                        .filter(|s| publish_gate_is_clean(s.epoch, s.joined, epoch_now, joined_now))
                         .cloned();
                     if let Some(s) = cached {
                         gate_skipped += 1;
@@ -21915,6 +21915,35 @@ pub static PROBE_LEAF_OFF: std::sync::atomic::AtomicU64 =
     std::sync::atomic::AtomicU64::new(u64::MAX);
 
 /// How many invalidates skipped the page-table sweep because the witness was empty.
+/// ★★★★★ **w788 — IS THIS VAS UNCHANGED SINCE THE LAST COMPLETED PUBLICATION PASS?**
+///
+/// Both terms must match for the pass to be skipped, and they answer different questions:
+/// `epoch` is **our record of the guest's address space**
+/// ([`kayfabe_core::gpu::Vas::publish_epoch`]), `joined` is **host state** — how many
+/// framebuffer ranges the store had joined, because the refusals this gate skips are
+/// *"already joined"* outcomes that do not depend on our table at all.
+///
+/// # ⊘ Why a named function rather than a `filter` closure
+///
+/// `[measured w784]` every publication pass in an 831-window boot replayed its last census,
+/// because the epoch could not move — and the reason was two layers away, in
+/// `Vas::publish_epoch`'s guest-side term going dark under the single store. The gate itself
+/// was never wrong. ⚠ But a reader chasing `published=0 candidates=0` had nothing to call and
+/// nothing to unit-test, so the only way to learn which half was stuck was a rented GPU.
+///
+/// ⇒ Extracted so the gate's *contract* is falsifiable in isolation, and so the next person
+/// who suspects it can be told "no, the gate is pinned — look at the epoch" in ten
+/// milliseconds instead of a boot. See `tests/publish_gate.rs`.
+#[must_use]
+pub fn publish_gate_is_clean(
+    cached_epoch: (u64, usize),
+    cached_joined: usize,
+    now_epoch: (u64, usize),
+    now_joined: usize,
+) -> bool {
+    cached_epoch == now_epoch && cached_joined == now_joined
+}
+
 /// ★★★★★ **w788 — SHOULD THIS REFRESH SKIP THE PAGE-TABLE SWEEP?** A pure function, so it
 /// can be tested without a GPU, a guest or a boot.
 ///
