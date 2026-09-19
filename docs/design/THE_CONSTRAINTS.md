@@ -2855,5 +2855,25 @@ bought by relaxing a constraint is not a pass"*, and the 18 was exactly that.
 ⊘ It does not license removing the CPU executor. The no-op and stub cases above are real and
 `ceutils` serves them. What it forbids is that path claiming a **real** copy.
 
+### ⊘⊘⊘ AND THE SCRUB IS NOT IN THAT POPULATION — the old justification has EXPIRED
+
+> **Owner, 2026-09-19:** *"why would the scrub remain fake?"*
+
+It would not, and nothing in this tree makes it fake: `kayfabe-fwd/src/lib.rs:8269` plans
+`CeWork::Scrub => CeSource::Constant(0)`, **a real zero-fill**. The defect is the *place* —
+that fill is executed by `ceutils::execute_ours_spans` on our CPU — not the substance.
+
+★ The "no-op" framing is the **C's**, and it is quoted in this repo's own CLAUDE.md:
+*"the scrub is a **no-op for our backing** … complete now if no real work"*
+(`C: nvkvm_gpu_emul.c:4228`; `kayfabe-mocks` still describes it, of the C, at `:2374`).
+
+⚠ **That justification held only while every guest allocation got freshly-allocated host
+backing. The single store reuses memory within the VM's lifetime.** Guest process A frees,
+RM scrubs before the pages reach process B, and a scrub we complete without clearing means
+**B reads A's bytes**. ⊘ §45 defers guest-internal cross-process isolation to ogkm — but here
+ogkm DID its job and asked for the scrub; skipping it is not deferring to ogkm, it is breaking
+it. `a_rulings_date_is_part_of_the_citation`: the C's reason was true of the C's backing model
+and is false of ours.
+
 ⊘ It does not license a green suite by re-enabling `local`. The number to move is *"a forwarded
 CE copy retires"*, and until it does the honest score is the one the GPU earns.
