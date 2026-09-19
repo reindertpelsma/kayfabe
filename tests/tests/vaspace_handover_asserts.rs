@@ -375,7 +375,13 @@ fn the_one_undeclared_space_of_a_proc_is_handed_over_rather_than_refused() {
 fn two_undeclared_spaces_refuse_by_name_instead_of_picking_one() {
     let (dev, pid) = undeclared_space_device(1);
     match dev.vaspace_handover(pid, GPU, Pdb(0), leaf()) {
-        Err(FwdFault::UndeclaredPdb { pid: who }) => assert_eq!(who, pid),
+        Err(FwdFault::UndeclaredPdb { pid: who, found }) => {
+            assert_eq!(who, pid);
+            // ⊘ The COUNT is asserted, not just the variant: `0` and `>= 2` are opposite
+            // situations with different fixes, and a test that accepted either would pass
+            // while the refusal said the wrong one. See the field's own doc.
+            assert_eq!(found, 2, "★ the refusal must report the ambiguity it actually saw");
+        }
         other => panic!(
             "★ two undeclared spaces must refuse, never resolve to the first one found: \
              {other:?}"
@@ -390,7 +396,10 @@ fn two_undeclared_spaces_refuse_by_name_instead_of_picking_one() {
 fn a_proc_with_no_undeclared_space_still_refuses_pdb_zero() {
     let (dev, pid) = one_process_device();
     match dev.vaspace_handover(pid, GPU, Pdb(0), leaf()) {
-        Err(FwdFault::UndeclaredPdb { pid: who }) => assert_eq!(who, pid),
+        Err(FwdFault::UndeclaredPdb { pid: who, found }) => {
+            assert_eq!(who, pid);
+            assert_eq!(found, 0, "★ nothing to name is `0`, never the ambiguity case");
+        }
         other => panic!("★ `Pdb(0)` names nothing here and must refuse: {other:?}"),
     }
 }

@@ -211,11 +211,31 @@ fn a_misspelled_arm_is_refused_rather_than_defaulted() {
 /// input.
 #[test]
 fn the_gate_itself_quantifies_over_every_selector() {
-    const SHIM: &str = include_str!("../src/shim.rs");
+    // ⊘⊘⊘ **w811c — THIS READ `shim.rs` ALONE AND THAT WAS ITS SECOND BLIND SPOT.** Five
+    // selectors live in `scratchpad.rs` and `deviceview.rs` — `scratchpad_from`,
+    // `scratchpad_cuda_from`, `device_view_from`, `fb_store_from`, `guest_bar1_from` — and a
+    // gate that reads one file cannot see them. ⚠ A gate whose scope is narrower than the
+    // thing it gates is the same defect as the hand-written ledger it replaced, one level up.
     const SELF: &str = include_str!("defaults_are_the_new_design.rs");
+    let src_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut sources = String::new();
+    let mut files = 0usize;
+    for entry in std::fs::read_dir(&src_dir).expect("the crate's own src/ is readable") {
+        let path = entry.expect("a readable entry").path();
+        if path.extension().and_then(|e| e.to_str()) == Some("rs") {
+            sources.push_str(&std::fs::read_to_string(&path).expect("a readable source file"));
+            sources.push('\n');
+            files += 1;
+        }
+    }
+    assert!(
+        files >= 3,
+        "★ the scan read only {files} source files — the crate layout moved and this gate \
+         went vacuous"
+    );
 
-    let mut selectors: Vec<&str> = Vec::new();
-    for line in SHIM.lines() {
+    let mut selectors: Vec<String> = Vec::new();
+    for line in sources.lines() {
         let line = line.trim_start();
         let Some(rest) = line.strip_prefix("pub fn ") else {
             continue;
@@ -226,8 +246,8 @@ fn the_gate_itself_quantifies_over_every_selector() {
         // ⊘ `_from` is the file's own naming convention for "the pure half of a selector",
         // stated in each one's rustdoc. Matching the convention rather than a list is the
         // entire point of this test.
-        if name.ends_with("_from") && !selectors.contains(&name) {
-            selectors.push(name);
+        if name.ends_with("_from") && !selectors.iter().any(|s| s == name) {
+            selectors.push(name.to_string());
         }
     }
     assert!(
@@ -239,7 +259,7 @@ fn the_gate_itself_quantifies_over_every_selector() {
 
     let missing: Vec<&str> = selectors
         .iter()
-        .copied()
+        .map(String::as_str)
         .filter(|name| !SELF.contains(name))
         .collect();
     assert!(
@@ -249,5 +269,76 @@ fn the_gate_itself_quantifies_over_every_selector() {
          each a row in `absent_selects_the_new_design_for_every_arm` naming the new-design \
          arm and what the superseded one costs — do NOT add an exemption list, because a \
          forgotten row is exactly the defect w811 paid for."
+    );
+}
+
+/// ★★★★★ **NO SECOND OPINION ABOUT A DEFAULT — COVERAGE IS NOT CONSISTENCY.**
+///
+/// # ⊘⊘⊘ The defect this exists for was live in this crate for a whole revision
+///
+/// `the_gate_itself_quantifies_over_every_selector` proves every selector HAS a row here. It
+/// cannot prove that no OTHER test contradicts that row — and one did.
+/// `shim_logic::the_vas_publish_arm_is_three_valued_and_never_defaulted` asserted
+/// `vas_publish_from(None) == Off` from w810 while this file asserted `Drain` for the same
+/// selector, both committed, both green in isolation, for the whole time every `VAS-PUBLISH`
+/// of every boot was refusing.
+///
+/// ⚠ **And note how it stayed invisible:** the local suite has been dying to an OOM before
+/// reaching that binary, so *"the tests pass"* meant *"the tests that ran passed"*. A suite
+/// that cannot finish is not a gate — which is `a_check_that_reports_is_not_a_check_that_gates`
+/// one level up, applied to the runner rather than to a check.
+///
+/// ⇒ **A default has exactly one assertion, and it lives here.** Any other test in this crate
+/// that spells `<selector>_from(None)` is a second statement of a default, which is this
+/// tree's most expensive recurring class (§42(b): ask the parser, and let one place say what
+/// the parser answers).
+///
+/// ⊘ Other tests may still exercise a selector all they like — `from(Some("..."))` is
+/// untouched, because naming an arm explicitly is the opposite failure mode from inheriting
+/// one silently.
+#[test]
+fn no_other_test_in_this_crate_states_a_default() {
+    const SELF_NAME: &str = "defaults_are_the_new_design.rs";
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
+    let mut offenders: Vec<String> = Vec::new();
+    let mut scanned = 0usize;
+
+    let entries = std::fs::read_dir(&dir).expect("the crate's own tests/ directory is readable");
+    for entry in entries {
+        let path = entry.expect("a readable directory entry").path();
+        if path.extension().and_then(|e| e.to_str()) != Some("rs") {
+            continue;
+        }
+        if path.file_name().and_then(|f| f.to_str()) == Some(SELF_NAME) {
+            continue;
+        }
+        let text = std::fs::read_to_string(&path).expect("a readable test file");
+        scanned += 1;
+        let name = path
+            .file_name()
+            .and_then(|f| f.to_str())
+            .unwrap_or("?")
+            .to_string();
+        for (i, line) in text.lines().enumerate() {
+            // ⊘ The whole pattern, `_from(None)`, and not merely `(None)`: the latter matches
+            // ordinary `Option` plumbing everywhere and the gate would be unusable noise.
+            if line.contains("_from(None)") && !line.trim_start().starts_with("//") {
+                offenders.push(format!("{name}:{} — {}", i + 1, line.trim()));
+            }
+        }
+    }
+
+    assert!(
+        scanned >= 5,
+        "★ the scan read only {scanned} test files — the directory layout moved and this gate          went vacuous, which is the one way it fails silently"
+    );
+    assert!(
+        offenders.is_empty(),
+        "⊘⊘⊘ these tests state a default that `defaults_are_the_new_design.rs` also states, \
+         so two files can disagree about one selector — which is exactly what happened to \
+         `vas_publish_from` between w810 and w811:\n  {}\n\
+         ⇒ Assert the default HERE and nowhere else. Those tests may still name arms \
+         explicitly with `from(Some(\"...\"))`.",
+        offenders.join("\n  ")
     );
 }

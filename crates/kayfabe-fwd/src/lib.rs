@@ -365,6 +365,17 @@ pub enum FwdFault {
     UndeclaredPdb {
         /// The process whose space was asked for.
         pid: ProcId,
+        /// ★★★★★ **w811c — HOW MANY UNDECLARED SPACES THIS PROC ACTUALLY HAS.**
+        ///
+        /// ⊘ Carried because *"refuse by name"* means **the name is true**, and without this
+        /// number the variant covers two opposite situations with one word: `0` — the proc
+        /// has no undeclared space, so `Pdb(0)` names nothing — and `n >= 2` — it has
+        /// several and nothing can say which is meant. Those have different fixes, and
+        /// `[measured w811c]` reading the first when the truth was the second cost a boot:
+        /// the publication census is keyed by `(proc, pdb)`, so every undeclared space of a
+        /// proc collapses into ONE `pdb=0x0` row and the multiplicity is invisible in the
+        /// only place a reader would look for it.
+        found: usize,
     },
     /// ★★★ **#177.** The guest rang a channel it never asked us to schedule.
     ///

@@ -6954,10 +6954,11 @@ impl SharedDevice {
                 let vas = if undeclared {
                     match kayfabe_core::gpu::vas_undeclared_in(&proc.vases, gpu) {
                         Ok(v) => v,
-                        Err(_n) => {
+                        Err(found) => {
                             // ⊘ Zero or several — both mean "nothing here can tell which
-                            // space the caller means", which is what this refusal now says.
-                            refusal = Some(FwdFault::UndeclaredPdb { pid });
+                            // space the caller means", and the COUNT says which, because the
+                            // two have different fixes. See the variant's `found` field.
+                            refusal = Some(FwdFault::UndeclaredPdb { pid, found });
                             return;
                         }
                     }
