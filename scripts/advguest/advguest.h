@@ -69,7 +69,12 @@
 #define ADV_MMU_INVALIDATE          (ADV_VF_PRIV_BASE + 0x30B0u) /* 0x00B830B0 */
 #define ADV_MMU_INVALIDATE_PDB      (ADV_VF_PRIV_BASE + 0x30A0u) /* 0x00B830A0 */
 #define ADV_MMU_INVALIDATE_UPPER    (ADV_VF_PRIV_BASE + 0x30A4u) /* 0x00B830A4 */
-/* bitfields — ogkm-580: turing/tu102/dev_vm.h:132,135,121,125 */
+/* bitfields — ogkm-580: turing/tu102/dev_vm.h:132,135,121,125.
+ * ⚠ TRIGGER is bit 31: kayfabe's decoder keys the invalidate on it
+ * (`crates/kayfabe-device/src/mmuinval.rs:238-274`, "bit 31 = TRIGGER"), and RM
+ * spin-polls the register until TRIGGER reads false. A trigger write with bit 31
+ * clear is a no-op, so every invalidate case below must set it to be adversarial. */
+#define ADV_INV_TRIGGER      (1u << 31)    /* _MMU_INVALIDATE_TRIGGER        31:31 */
 #define ADV_INV_ALL_VA       (1u << 0)     /* _MMU_INVALIDATE_ALL_VA          0:0 */
 #define ADV_INV_ALL_PDB      (1u << 1)     /* _MMU_INVALIDATE_ALL_PDB         1:1 */
 #define ADV_INV_PDB_APERTURE_SYS  (1u << 1)/* _MMU_INVALIDATE_PDB_APERTURE    1:1 */
@@ -80,7 +85,7 @@
 /* GSP command-queue heads — BAR0 0x110c00, stride 8, count 8.
  * `crates/kayfabe-device/src/ga10x.rs:94-96` QUEUE_HEAD0=0x0011_0c00,
  *   QUEUE_HEAD_COUNT=8; ogkm-580 comment ga10x.rs:62 NV_PGSP_QUEUE_HEAD(i). */
-#define ADV_GSP_QUEUE_HEAD0    0x0011_0C00u
+#define ADV_GSP_QUEUE_HEAD0    0x00110C00u
 #define ADV_GSP_QUEUE_HEAD_CNT 8u
 
 /* ── USERD layout (guest RAM) ──────────────────────────────────────────────────

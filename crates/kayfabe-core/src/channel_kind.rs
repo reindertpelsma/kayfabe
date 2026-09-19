@@ -449,21 +449,64 @@ mod tests {
     /// kind has exactly one permitted host kind, and the two guest kinds do not share
     /// one — an injective total map. If both arms ever answered the same host kind the
     /// distinction would have stopped doing work while every call site still compiled.
+    /// ⊘⊘⊘ **w806 — THIS TEST ASSERTED INJECTIVITY, AND INJECTIVITY WAS A PROXY.**
+    ///
+    /// It read *"no two guest kinds share a host kind"*, justified as: *"the moment two guest
+    /// kinds share a host kind, `forwarding_plane_owns_ce`'s `hosted_by(..) == Shadow` term
+    /// stops separating anything."* That was exactly right while the map was 2 → 2.
+    ///
+    /// ⊘ [`GuestChannelKind::Translated`] makes it 3 → 2, **deliberately**: its host channel
+    /// carries one guest channel's work and lives in that guest process's own isolate, which
+    /// is what [`HostChannelKind::Shadow`] means — *"translated still uses isolates as
+    /// normal"* (owner, 2026-09-19). What differs from `Passthrough` is the RING (ours,
+    /// outside GPGA), and `HostChannelKind` does not classify rings; it classifies **whose
+    /// work it carries and therefore whether it must be isolated per guest process.**
+    ///
+    /// ⚠ And the term the old test was protecting is **not** weakened by the collision — it is
+    /// corrected. `forwarding_plane_owns_ce` asks *"does the forwarding plane own this CE
+    /// work?"*, and for a Translated channel hardware **does** own it; we only rewrite the
+    /// operands first. `Shadow` including Translated is the right answer, not a lost
+    /// distinction.
+    ///
+    /// ⇒ What is asserted instead is the property injectivity was standing in for, and it is
+    /// the safety-relevant one: **every host channel that carries a GUEST channel's work is
+    /// per-process isolated, and only a channel that is the VMM's own may be `Scratchpad`.**
     #[test]
-    fn each_guest_kind_permits_exactly_one_host_kind_and_no_two_share_it() {
-        let mut seen: Vec<HostChannelKind> = Vec::new();
+    fn only_a_vmm_owned_channel_may_escape_per_process_isolation() {
         for k in GuestChannelKind::ALL {
             let h = k.hosted_by();
-            assert!(
-                !seen.contains(&h),
-                "★ {k} and a previous guest kind both map to {h}. The map is meant to be \
-                 INJECTIVE: the moment two guest kinds share a host kind, \
-                 `forwarding_plane_owns_ce`'s `hosted_by(..) == Shadow` term stops \
-                 separating anything and every call site still compiles."
-            );
-            seen.push(h);
+            match k {
+                // ⊘ The VMM's own work: there is no guest channel to isolate from anything.
+                GuestChannelKind::Emulated => assert_eq!(
+                    h,
+                    HostChannelKind::Scratchpad,
+                    "★ an emulated channel runs OUR function bodies; hosting it in a guest \
+                     process's isolate would attribute the VMM's work to that process"
+                ),
+                // ★★★ Both carry ONE GUEST CHANNEL'S work ⇒ both must be isolated per guest
+                // process. `#14`'s proven fix, and the reason a hostile guest process cannot
+                // reach another's channel.
+                GuestChannelKind::Passthrough | GuestChannelKind::Translated => assert_eq!(
+                    h,
+                    HostChannelKind::Shadow,
+                    "★★★★★ {k} carries one guest channel's work and MUST live in that guest \
+                     process's own isolate. A `Scratchpad` here would put one guest process's \
+                     submissions in a channel shared with every other — the exact separation \
+                     `hostile_guest_isolation_is_the_value_proposition` sells"
+                ),
+            }
         }
-        assert_eq!(seen.len(), GuestChannelKind::ALL.len());
+        // ⊘ The map stays TOTAL and its image stays exactly the two host kinds — a third host
+        // kind appearing without a guest kind reaching it would be an unreachable arm.
+        let mut image: Vec<HostChannelKind> =
+            GuestChannelKind::ALL.into_iter().map(|k| k.hosted_by()).collect();
+        image.sort_unstable();
+        image.dedup();
+        assert_eq!(
+            image.len(),
+            HostChannelKind::ALL.len(),
+            "★ every host kind must be reachable from some guest kind: image={image:?}"
+        );
     }
 
     /// ⊘ **The uninhabited cell, named.** A guest-KERNEL channel must never be hosted by
@@ -529,47 +572,77 @@ mod tests {
         );
     }
 
-    /// ⊘ **The two kinds get DIFFERENT contracts** — the non-degeneracy the test above
-    /// cannot state on its own. A `trap_contract` that answered `ScheduleAndReturn` for
-    /// both would make *"exactly one may run inline"* false and would be caught; one that
-    /// answered `RingAndReturn` for both would be caught too; but a future third kind
-    /// could collapse the map without either noticing. This quantifies over the enum.
+    /// ⊘⊘ **w806 — THE "DIFFERENT CONTRACTS" TEST WAS ALSO AN INJECTIVITY PROXY.**
+    ///
+    /// It asserted no two kinds share a `TrapContract`. True while there were two kinds and
+    /// two contracts; **false, and rightly, now that there are three kinds.**
+    /// [`GuestChannelKind::Translated`] shares `ScheduleAndReturn` with
+    /// [`GuestChannelKind::Emulated`] **because the vCPU's obligation is identical** — §41
+    /// lets an MMIO write update a queue and wake, and both kinds need exactly that. The vCPU
+    /// deliberately cannot tell them apart; what differs happens later, on the worker.
+    ///
+    /// ⇒ The non-degeneracy this was really protecting is that the contract **partitions**
+    /// rather than labels: both contracts must be reached, and the inline one must stay a
+    /// singleton. A collapse in either direction still lands here.
     #[test]
-    fn the_trap_contract_separates_the_kinds_rather_than_labelling_them() {
-        let mut seen: Vec<TrapContract> = Vec::new();
-        for k in GuestChannelKind::ALL {
-            let c = k.trap_contract();
-            assert!(
-                !seen.contains(&c),
-                "★ {k} shares the trap contract {c} with another kind — the contract has \
-                 stopped distinguishing the populations it exists to distinguish."
-            );
-            seen.push(c);
-        }
-        assert_eq!(seen.len(), TrapContract::ALL.len());
+    fn the_trap_contract_partitions_the_kinds_and_the_inline_class_is_a_singleton() {
+        let mut image: Vec<TrapContract> =
+            GuestChannelKind::ALL.into_iter().map(|k| k.trap_contract()).collect();
+        image.sort_unstable();
+        image.dedup();
+        assert_eq!(
+            image.len(),
+            TrapContract::ALL.len(),
+            "★ every trap contract must be reached by some kind, or an arm is unreachable \
+             and the enum is claiming a distinction nothing makes: image={image:?}"
+        );
+        let inline: Vec<GuestChannelKind> = GuestChannelKind::ALL
+            .into_iter()
+            .filter(|k| k.trap_contract() == TrapContract::RingAndReturn)
+            .collect();
+        assert_eq!(
+            inline,
+            vec![GuestChannelKind::Passthrough],
+            "★★★★★ exactly ONE kind may be rung inline and it is the passthrough one: \
+             {inline:?}. A Translated or Emulated channel's entry must be read, copied and \
+             rewritten before hardware sees it, and §41 forbids every part of that in the trap"
+        );
     }
 
-    /// ★★ **The two kinds' contracts agree with their host backings**, which is the
-    /// coherence the owner's model implies and nothing else asserts: the kind whose work
-    /// runs on a channel of **ours** (`Scratchpad`) is exactly the kind that must be
-    /// scheduled, because *our* channel is the one we have to drive. The kind hosted by a
-    /// `Shadow` needs only its doorbell rung.
+    /// ★★ **The contracts agree with the host backings** — coherence between two independent
+    /// `match`es, so an edit to either alone lands here.
     ///
-    /// ⊘ It is not a tautology over one enum: `hosted_by` and `trap_contract` are two
-    /// independent `match`es, and a future edit to either alone lands here.
+    /// ⊘⊘ **w806 — THE BICONDITIONAL IS NOW A ONE-WAY IMPLICATION, AND THAT IS THE TRUTH.**
+    /// It read `ScheduleAndReturn ⟺ Scratchpad`. [`GuestChannelKind::Translated`] is
+    /// `ScheduleAndReturn` **and** `Shadow`: we must schedule it because its entries need
+    /// translating, not because we own its backing. ⇒ owning the backing still **implies**
+    /// scheduling, but scheduling no longer implies owning the backing — and the reverse
+    /// direction, *"rung inline ⇒ hosted by a Shadow"*, is the one that carries safety.
     #[test]
     fn scheduling_is_required_exactly_where_the_host_backing_is_our_own_scratchpad() {
         for k in GuestChannelKind::ALL {
-            assert_eq!(
-                k.trap_contract() == TrapContract::ScheduleAndReturn,
-                k.hosted_by() == HostChannelKind::Scratchpad,
-                "★ {k} is hosted by a {} but its trap contract is {}. Work that runs on \
-                 OUR channel is work we must drive, and driving it is what may not happen \
-                 on the vCPU thread; work carried by a guest process's own shadow channel \
-                 needs its doorbell rung and nothing more.",
-                k.hosted_by(),
-                k.trap_contract(),
-            );
+            // ⊘ Owning the backing IMPLIES scheduling: our channel is the one we must drive,
+            // and driving it is what may not happen on the vCPU thread.
+            if k.hosted_by() == HostChannelKind::Scratchpad {
+                assert_eq!(
+                    k.trap_contract(),
+                    TrapContract::ScheduleAndReturn,
+                    "★ {k} runs on a channel of OURS and must be driven off the vCPU thread"
+                );
+            }
+            // ★★★ And the direction that carries safety: a doorbell rung INLINE, with no
+            // worker between the guest's store and hardware, is only ever legal on a channel
+            // that is one guest process's own. Anything else would put un-inspected bytes on
+            // a channel the guest does not exclusively own.
+            if k.trap_contract() == TrapContract::RingAndReturn {
+                assert_eq!(
+                    k.hosted_by(),
+                    HostChannelKind::Shadow,
+                    "★★★★★ {k} may be rung INLINE on the vCPU, so nothing inspects its bytes \
+                     before hardware fetches them. That is only ever safe on a channel that \
+                     is one guest process's own"
+                );
+            }
         }
     }
 
@@ -583,5 +656,54 @@ mod tests {
         assert_ne!(h[0], h[1]);
         let t: Vec<&str> = TrapContract::ALL.iter().map(|k| k.name()).collect();
         assert_ne!(t[0], t[1]);
+    }
+}
+
+#[cfg(test)]
+mod translated_tests {
+    use super::*;
+
+    /// ★★★★★ **w806 — THE KIND THAT CARRIES THE GUEST'S USERD AND OUR RING.**
+    ///
+    /// The three facts that define [`GuestChannelKind::Translated`] and that no other test
+    /// states together. Each is a design commitment from
+    /// `docs/design/the_three_channel_kinds.md`, and each has a different consequence if it
+    /// silently flips.
+    #[test]
+    fn translated_is_isolated_like_passthrough_and_scheduled_like_emulated() {
+        let t = GuestChannelKind::Translated;
+
+        // (1) ISOLATED PER GUEST PROCESS. It carries one guest channel's work.
+        // ⊘ A `Scratchpad` here would put one guest process's submissions on a channel shared
+        // with every other — owner, 2026-09-19: *"translated still uses isolates as normal"*.
+        assert_eq!(t.hosted_by(), HostChannelKind::Shadow);
+        assert_eq!(t.hosted_by(), GuestChannelKind::Passthrough.hosted_by());
+
+        // (2) NEVER RUNG INLINE. Its entries must be read, copied and rewritten first, and
+        // §41 forbids all of that in the trap.
+        assert_eq!(t.trap_contract(), TrapContract::ScheduleAndReturn);
+        assert_eq!(t.trap_contract(), GuestChannelKind::Emulated.trap_contract());
+        assert!(!t.trap_contract().may_run_on_the_vcpu_thread());
+
+        // (3) IT IS ITS OWN KIND. ⊘ The whole rung exists because a channel-level
+        // Emulated/Passthrough answer is the wrong granularity: a guest-kernel CE channel's
+        // privilege varies PER ENTRY (`ogkm-580: channel_utils.c:1053-1091` emits `_VIRTUAL`
+        // or `_PHYSICAL` for the same channel, and `mem_utils_gm107.c:2098` hard-codes
+        // `_PHYSICAL` and never consults the flag).
+        assert_ne!(t, GuestChannelKind::Emulated);
+        assert_ne!(t, GuestChannelKind::Passthrough);
+        assert_eq!(t.name(), "translated");
+    }
+
+    /// ⊘ **The kind is in `ALL`, because every gate in this crate quantifies over it.**
+    ///
+    /// `gates_quantified_over_a_list.md`: a check written against named constants keeps
+    /// passing when a member is added. A `Translated` missing from `ALL` would make every
+    /// such gate silently exclude it — the shape that let five arms default to a superseded
+    /// architecture in w760.
+    #[test]
+    fn translated_is_reachable_from_the_quantified_list() {
+        assert!(GuestChannelKind::ALL.contains(&GuestChannelKind::Translated));
+        assert_eq!(GuestChannelKind::ALL.len(), 3);
     }
 }
