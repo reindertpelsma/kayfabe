@@ -5727,6 +5727,53 @@ impl SharedDevice {
     /// not changed"* and must not be cached as one: a key that appears later has no prior
     /// epoch to compare against, so its first pass runs.
     #[must_use]
+    /// ★★★★★ **w785 — THE GUEST HAS DECLARED ITS PAGE TABLES CHANGED.**
+    ///
+    /// One `MMU_INVALIDATE` trigger, folded into every address space it names. `None` means
+    /// *every* — `pdb: None` is the `ALL_PDB` scope, `gpu: None` is every GPU.
+    ///
+    /// ⚠ **The MMUINVAL worker calls this with both `None`, and that breadth is deliberate.**
+    /// The queued job carries only the trigger's raw value, not the latched PDB, and this is
+    /// the direction the owner already ruled for this lane when a job is dropped: *"a flag
+    /// must be set that the refresh considers the entirety of PTE/PDB dirty (i.e. it rescans
+    /// everything). then its correct, only a bit slower on full queue."* ⇒ losing precision
+    /// here may cost a publication pass, never coverage. `[measured w784]` 530 of 530
+    /// triggers were `all_va` anyway, and w328 measured the whole-VAS sweep at 0.0084 % of
+    /// the worst trap.
+    ///
+    /// ⊘ **This is the term the publication gate cannot get any other way under the single
+    /// store.** [`kayfabe_core::gpu::Vas::publish_epoch`] carries the measurement: both
+    /// observation transports the old guest-side term relied on are gone, so without this the
+    /// gate replays its last census forever and hardware translates nothing. It is not a
+    /// heuristic — an invalidate naming a PDB *is* the guest saying that space changed.
+    ///
+    /// ⚠ Returns how many spaces were marked, so a caller can tell *"the guest invalidated a
+    /// space we do not model"* from *"we marked it"*. A zero is a real reading, not a no-op.
+    pub fn note_guest_invalidate(&self, gpu: Option<GpuId>, pdb: Option<Pdb>) -> usize {
+        let mut marked = 0;
+        for pid in self.live_pids() {
+            self.with_proc_mut(pid, |p| {
+                for vas in p.vases.values_mut() {
+                    if gpu.is_some_and(|g| vas.gpu != g) {
+                        continue;
+                    }
+                    // ⊘ `ALL_PDB` marks every space on this GPU; otherwise only the one
+                    // named. A space whose root is not known yet (`pdb == None`) is marked
+                    // only by the ALL_PDB arm — it cannot be the target of a PDB-scoped
+                    // invalidate, and marking it on a name it does not carry would be a guess.
+                    match (pdb, vas.pdb) {
+                        (None, _) => {}
+                        (Some(want), Some(have)) if want == have => {}
+                        _ => continue,
+                    }
+                    vas.note_guest_invalidate();
+                    marked += 1;
+                }
+            });
+        }
+        marked
+    }
+
     pub fn vas_publish_epoch(&self, pid: ProcId, gpu: GpuId, pdb: Pdb) -> Option<(u64, usize)> {
         self.with_proc_mut(pid, |p| {
             p.vas_by_pdb(gpu, pdb)

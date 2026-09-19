@@ -5837,6 +5837,39 @@ fn doorbell_publish_loop(
                 );
             }
             let seg_rescan_ms = t_arm.elapsed().as_secs_f64() * 1e3;
+            // ★★★★★ **w785 — THE GUEST JUST SAID ITS PAGE TABLES CHANGED. RECORD THAT.**
+            //
+            // ⊘⊘⊘ Without this line the publication gate below is CIRCULAR, and
+            // `[measured w784, thin guest r6]` it was:
+            //
+            //   PT-DECODE drained=0                                         x831
+            //   PT-SWEEP ⊘ SKIPPED (pt_witness drained 0)                   x815
+            //   EXEC-WITNESS ARMED but the store cannot enumerate frames    x831
+            //   [proc=1 pdb=0x201000 ⊘SKIPPED(w318 dirty gate … unchanged)
+            //    total=4 already_host=3 candidates=0 published=0]
+            //
+            // `Vas::publish_epoch`'s guest-side term counts writes WE OBSERVED, and the single
+            // store removed both transports that could observe one — guest framebuffer stores
+            // no longer trap, and the store cannot enumerate frames for the executor witness.
+            // So the epoch never moved, every pass replayed its last census, the user's
+            // address space kept its four promoted context rows and nothing else, and
+            // `GR0_PBDMA0` took `FAULT_PDE` on the first VA hardware was ever asked to
+            // translate. ⇒ w406's self-fulfilling skip, one layer down.
+            //
+            // ★ An invalidate is not an observation — it is the guest DECLARING the change,
+            // and it is the top-ranked trigger in `publish_trigger_preference_ordering`. It
+            // cannot go dark the way a witness can.
+            //
+            // ⊘ Placed BEFORE `refresh_page_tables`, because the refresh and the publication
+            // below both read the epoch this moves. Marking after them would move the epoch
+            // for the NEXT pass and skip this one — the off-by-one that reads as "the fix did
+            // nothing" for a whole boot.
+            let marked = port.device.note_guest_invalidate(None, None);
+            if marked == 0 {
+                eprintln!(
+                    "kayfabe: MMUINVAL-DIRTY ⊘ the guest invalidated and we model NO address                      space to mark. ⊘ A measured zero, not a no-op: with rows declared                      anywhere, this means the publication gate is about to skip on a stale                      epoch."
+                );
+            }
             let t_refresh = std::time::Instant::now();
             let refresh = port.refresh_page_tables(off_vcpu);
             let seg_refresh_ms = t_refresh.elapsed().as_secs_f64() * 1e3;

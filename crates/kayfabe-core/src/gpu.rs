@@ -338,6 +338,12 @@ pub struct Vas {
     /// number that will say whether it happens. ⊘ Widening the key on a guess is exactly
     /// the `measure_before_reasoning_is_the_order` mistake.
     pub promote_halves: BTreeMap<u16, crate::promote::ParkedHalf>,
+    /// ★★★★★ **w785 — HOW MANY TIMES THE GUEST HAS DECLARED THESE TABLES CHANGED.**
+    ///
+    /// A TLB invalidate naming this address space. ⊘ Not a count of writes we saw — a count
+    /// of times the guest **said** it wrote. See [`Vas::publish_epoch`] for why the epoch
+    /// cannot be built out of observations alone under the single store.
+    pub guest_invalidates: u64,
 }
 
 impl Vas {
@@ -380,10 +386,53 @@ impl Vas {
         // in the first-writer census), so a guest that changes its tables moves the epoch even
         // though our table has not caught up yet. That is the whole point: the gate must be
         // keyed on the thing it is trying to notice, not on our record of having noticed it.
+        // ★★★★★ **w785 — AND THE OBSERVED TERM IS NOT OBSERVABLE UNDER THE SINGLE STORE.**
+        //
+        // `witness_writes` counts writes WE SAW into this VAS's page tables, and w406 added it
+        // to break exactly the cycle described above. ⊘ It breaks that cycle only while the
+        // observation transports exist, and the single store removed both of them:
+        //
+        // - the CPU transport was the **MMIO trap** on a framebuffer window
+        //   (`RegPlane`'s `FbIoRole::Trap` arm is the only site that records a witness). The
+        //   guest's framebuffer is now a shared memory region and its stores do not trap at
+        //   all — that is the point of the store, not a regression.
+        // - the executor transport needs to enumerate the store's frames.
+        //   `[measured w784, thin guest r6]` `EXEC-WITNESS ARMED but the store cannot
+        //   enumerate frames`, **831 times — every window of the boot**.
+        //
+        // ⇒ `[measured w784]` `PT-DECODE drained=0` x831 and `PT-SWEEP ⊘ SKIPPED` x815, so the
+        // guest-side term never moved, so every publication pass replayed its last census:
+        // `[proc=1 pdb=0x201000 total=4 already_host=3 candidates=0 published=0]`. The user's
+        // address space held its four promoted context rows and NOTHING ELSE, every UVM
+        // mapping absent, and `GR0_PBDMA0` took `FAULT_PDE` on the first VA hardware was ever
+        // asked to translate. **The same self-fulfilling skip w406 named, one layer down.**
+        //
+        // ★★★ `guest_invalidates` is the term that cannot go dark, because it is not an
+        // observation. A TLB invalidate is the guest DECLARING that these tables changed —
+        // the architecturally guaranteed boundary, and `publish_trigger_preference_ordering`'s
+        // top-ranked trigger. `[measured w784]` it is already arriving: `MMUINVAL armed=true
+        // triggers=530 all_va=530 distinct_pdbs=8`.
+        //
+        // ⊘ It does not REPLACE `witness_writes`. Both are folded, because they answer the
+        // same question through independent channels and a boot where one is dark must not be
+        // a boot where the gate is blind. ⚠ And it is deliberately not a heuristic: an
+        // invalidate that names this PDB means the guest changed this address space, full
+        // stop. Skipping a pass after one would be publishing on our record of the guest's
+        // intentions rather than on the guest's own statement of them.
         (
-            self.table.generation() ^ self.reach.witness_writes().rotate_left(32),
+            self.table.generation()
+                ^ self.reach.witness_writes().rotate_left(32)
+                ^ self.guest_invalidates.rotate_left(16),
             self.guest_ram_pins.len(),
         )
+    }
+
+    /// ★★★★★ **w785 — the guest has declared this address space's tables changed.**
+    ///
+    /// Called once per `MMU_INVALIDATE` trigger naming this PDB (or naming every PDB). See
+    /// [`Vas::publish_epoch`] for why this term exists and what went dark without it.
+    pub fn note_guest_invalidate(&mut self) {
+        self.guest_invalidates = self.guest_invalidates.saturating_add(1);
     }
 
     /// ★★★ **The orphan count** — parked halves that never found their partner, split by
@@ -594,6 +643,7 @@ impl Vas {
             rpc_bound: BTreeSet::new(),
             promote_bound: BTreeSet::new(),
             promote_halves: BTreeMap::new(),
+            guest_invalidates: 0,
             sweep: PtSweepState::default(),
         }
     }
