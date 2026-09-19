@@ -23,7 +23,14 @@ ID="${1:?instance id}"; SECS="${2:?seconds}"; LOG="${3:-/workspace/autodestroy-$
   if ! timeout 120 vastai show instances 2>/dev/null | grep -qE "^\s*[0-9]+\s+$ID\b"; then
     echo "instance $ID is already gone -- nothing to do"; echo "=== DONE (no-op) ==="; exit 0
   fi
-  echo y | timeout 180 vastai destroy instance "$ID" 2>&1
+  # ⊘⊘⊘ **`yes |` AND `-y`, AND NEITHER IS DECORATION.** `[owner, 2026-09-19]` *"vastai destroy
+  # asks about y confirm, read docs how to do auto destroy properly ... its tricky for CLI
+  # command"*. `vastai destroy instance <id>` prompts `[y/N]`; with no tty a bare call can
+  # print `Aborted.` and still exit 0, so the net reports success and the box bills on.
+  # ⚠ This script carried only `echo y |`. `nvkvm-pv/scripts/sweep_autodestroy.sh:105` has had
+  # both for months, and its comment says why: *"With no tty it reads ... success. Hence
+  # `yes |` AND `-y`."* The CLI confirms it: `-y, --yes  Skip confirmation prompt`.
+  yes | timeout 180 vastai destroy instance "$ID" -y 2>&1
   sleep 5
   echo "--- VERIFY (verbatim) ---"
   timeout 120 vastai show instances 2>&1
