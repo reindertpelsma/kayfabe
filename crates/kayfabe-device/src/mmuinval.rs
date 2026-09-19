@@ -414,6 +414,12 @@ struct Inner {
     /// ★ w793 — an `ALL_PDB` invalidate, or an overflow of [`Inner::dirty_pdbs`]. Both mean
     /// *"sweep everything"*, and both are cleared by the same drain.
     dirty_all: bool,
+    /// ★ w798 — of the triggers since the last drain, how many set `HUBTLB_ONLY` (a BAR
+    /// space) and how many named a `SYS_MEM` page directory. Cleared with the dirty set, so
+    /// they describe the same window the miss line is about.
+    dirty_hubtlb_only: u64,
+    /// ★ w798 — see [`Inner::dirty_hubtlb_only`].
+    dirty_sysmem: u64,
     /// When the currently-pending publication armed, as a monotonic microsecond stamp
     /// supplied by the caller (this crate models no clock of its own).
     pending_since_us: Option<u64>,
@@ -524,6 +530,21 @@ impl MmuInvalidateLog {
         (all, pdbs.into_iter().collect())
     }
 
+    /// ★★★★★ **w798 — `(hubtlb_only, sysmem)` over the triggers of the window just drained.**
+    ///
+    /// `[Fable, from ogkm-580: kern_gmmu_gm107.c:117-121]` `HUBTLB_ONLY` is set for **exactly
+    /// and only** `VASPACE_FLAGS_BAR`, so it is a free, producer-exact answer to *"is this a
+    /// BAR space?"* — and therefore to *"does an unmodelled root here matter for host
+    /// forwarding?"*. ⊘ Read AFTER [`Self::drain_dirty_pdbs`]; it describes the same window.
+    #[must_use]
+    pub fn last_miss_shape(&self) -> (u64, u64) {
+        let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        (
+            std::mem::take(&mut g.dirty_hubtlb_only),
+            std::mem::take(&mut g.dirty_sysmem),
+        )
+    }
+
     /// Latch a write to one of the two PDB registers. Returns `true` if it was one.
     pub fn note_pdb_write(&self, regs: InvalidateRegs, off: u64, val: u32) -> bool {
         let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
@@ -569,6 +590,12 @@ impl MmuInvalidateLog {
         // `all_pdb=0` and `all_va=530 of 530`, so **every invalidate names exactly ONE page
         // directory**. Recording it lets the sweep walk that address space instead of all
         // four. ⊘ `all_pdb` still means every space, which is what the bit says.
+        // ★ w798 — the shape travels with the set. A BAR root (`HUBTLB_ONLY`) missing is
+        // irrelevant to host publication; a non-BAR root missing is a publication hole.
+        g.dirty_hubtlb_only += u64::from(inv.hubtlb_only);
+        // ⊘ `pdb_aperture == 1` is SYS_MEM. A BAR root can never be sysmem, so SYS_MEM with
+        // `HUBTLB_ONLY` clear is the silent vidmem->sysmem fallback for a client root.
+        g.dirty_sysmem += u64::from(inv.pdb_aperture == 1);
         if inv.all_pdb {
             g.dirty_all = true;
         } else if g.dirty_pdbs.len() < MAX_PDBS {

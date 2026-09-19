@@ -5875,6 +5875,31 @@ fn doorbell_publish_loop(
             let (inval_all, dirty_pdbs) = plane_ref
                 .as_ref()
                 .map_or((true, Vec::new()), |pl| pl.mmu_inval().drain_dirty_pdbs());
+            // ★★★★★ **w798 — THE FREE DISCRIMINATOR, AND IT PARTITIONS THE MISSES.**
+            //
+            // `[Fable, w798, from ogkm-580]` `kgmmuInvalidateTlb_GM107:117-121` sets
+            // `HUBTLB_ONLY` for **exactly and only** `VASPACE_FLAGS_BAR` — *"For host VAS
+            // (e.g. BAR) we do not have to invalidate GR"* — and there is no other producer.
+            // ⇒ the bit already in the trigger word says which kind of space missed:
+            //
+            //   HUBTLB_ONLY set   ⇒ BAR1/BAR2. No engine translates through it; our BAR
+            //                       mirror walks the guest's own tables. An unmodelled BAR
+            //                       root is IRRELEVANT to host publication.
+            //   HUBTLB_ONLY clear ⇒ a space engines DO translate through. Unmodelled means a
+            //                       publication hole, not noise.
+            //
+            // ⊘ And `pdb_aperture` (`mmuinval.rs:272`) corroborates for free: a BAR root can
+            // never be sysmem (`gmmu_walk.c:262-267`), so `SYS_MEM` with `HUBTLB_ONLY` clear
+            // is the **silent sysmem fallback** (`gmmu_walk.c:181-186`) — a client page
+            // directory living in guest RAM because CPU-RM's vidmem allocation failed, which
+            // §40 already records as broken on this device.
+            //
+            // ⚠ Both were decoded and counted already and simply were not on the miss line.
+            // `[measured w795c]` 192 of 283 misses named a REAL pdb and nothing said which
+            // kind, so "irrelevant" and "a hole" were indistinguishable.
+            let (hub_only, sysmem) = plane_ref
+                .as_ref()
+                .map_or((0u64, 0u64), |pl| pl.mmu_inval().last_miss_shape());
             let marked = if inval_all || dirty_pdbs.is_empty() {
                 // ⚠ An EMPTY drain with no `all` is not "nothing changed" — this worker can be
                 // woken by a job whose trigger another pass already drained. Marking widely is
@@ -5891,7 +5916,7 @@ fn doorbell_publish_loop(
             };
             if marked == 0 {
                 eprintln!(
-                    "kayfabe: MMUINVAL-DIRTY ⊘ named={:x?} all={inval_all} but we model roots={:x?} — NO address space marked. ⊘ A measured zero, not a no-op: the publication gate is about to skip on a stale epoch, and a scoped sweep would walk nothing (w793c).",
+                    "kayfabe: MMUINVAL-DIRTY ⊘ named={:x?} all={inval_all} hubtlb_only={hub_only} sysmem={sysmem} but we model roots={:x?} — NO address space marked. ⊘ hubtlb_only=1 ⇒ a BAR space, irrelevant to host publication; hubtlb_only=0 ⇒ a space engines translate through, and unmodelled means a PUBLICATION HOLE (w798).",
                     dirty_pdbs, port.device.live_vas_roots(),
                 );
             }
