@@ -2454,7 +2454,7 @@ use kayfabe_rt::{DoorbellRoute, ShellDisposition, shell_disposition};
 #[test]
 fn the_arming_opens_hostgr_and_only_hostgr() {
     assert_eq!(
-        shell_disposition(DoorbellRoute::HostGr),
+        shell_disposition(DoorbellRoute::HostGr, true),
         ShellDisposition::HandToCore,
         "★★★★★ THE RUNG: a GR doorbell is handed to the core"
     );
@@ -2465,7 +2465,7 @@ fn the_arming_opens_hostgr_and_only_hostgr() {
     for armed in [false] {
         let _ = armed;
         assert_eq!(
-            shell_disposition(DoorbellRoute::Unserved),
+            shell_disposition(DoorbellRoute::Unserved, true),
             ShellDisposition::HandToCore,
             "⊘⊘ **CHANGED BY §43, and this is the line that records it.** NVENC/NVDEC used to \
              be REFUSED here. They are now handed to the core for the same reason a GR \
@@ -2473,7 +2473,7 @@ fn the_arming_opens_hostgr_and_only_hostgr() {
              is one whose bytes we must not interpret — not one whose doorbell we drop"
         );
         assert_eq!(
-            shell_disposition(DoorbellRoute::CpuCe),
+            shell_disposition(DoorbellRoute::CpuCe, true),
             ShellDisposition::MayServeLocally,
             "⊘ the copy-engine route is untouched by this rung on BOTH arms (armed={armed})"
         );

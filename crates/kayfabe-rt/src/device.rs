@@ -8857,7 +8857,39 @@ pub enum ShellDisposition {
 /// whose engine the shell has no executor for. §43 says that cannot happen — we serve only
 /// what we emulate — so it is a `debug_assert`-grade impossibility kept nameable, not a route.
 #[must_use]
-pub fn shell_disposition(route: DoorbellRoute) -> ShellDisposition {
+pub fn shell_disposition(route: DoorbellRoute, emulated: bool) -> ShellDisposition {
+    // ★★★★★ **w792 — A PASSTHROUGH CHANNEL IS NEVER SERVED LOCALLY, WHATEVER ITS ENGINE.**
+    //
+    // > **Owner:** *"You only serve channels for the ones you emulate, that's the constraint
+    // > that should have held up."*
+    //
+    // ⊘⊘⊘ **THIS IS w780, RE-APPLIED — AND THE FIRST ATTEMPT'S FAILURE WAS A SYMPTOM OF A
+    // DIFFERENT BUG, NOT OF THIS RULE.** `[measured w780]` making this change took `P1`,
+    // `STALE RACE` and `THREADS` from ✔ to *"the copy from 0x8080000000 NEVER RETIRED"*, and
+    // it was reverted the same hour. The reading then was *"forwarding a passthrough CE does
+    // not work"*. That reading was wrong.
+    //
+    // `[measured w783]` the actual cause: **not one engine class object had ever reached a
+    // host channel** — `ENGINE-OBJECT … [seen=8 forwarded=0 refused=8]`, every one refused
+    // `ForeignHandle` because the verb ran on the per-proc worker while the channel lives in
+    // B. So the host CE channels w780 forwarded to had no CE class object, and could not
+    // execute anything. Our local CPU executor had been covering for that the whole time,
+    // which is why the ledger looked green and why removing the cover looked like a
+    // regression in the forwarding path.
+    //
+    // ⇒ w783/w784 routed the verb to the channel's own isolate and `STORE-ENGINE-OBJECT
+    // asked=1 refused=0` — the host channels now carry their engine context. The blocker is
+    // gone, so the rule goes back in.
+    //
+    // ⚠ **And the evidence that it MUST go back in is now positive, not just principled.**
+    // `[measured w788]` `ce-client` reports a copy whose bytes and completion semaphore are
+    // both CORRECT while `GP_GET 0 GP_PUT 1` — hardware never fetched the entry. On a channel
+    // the census calls `passthrough Ce`, that combination can only mean **we executed it
+    // ourselves**. Writing `GP_GET` to paper over that would be forging a hardware side
+    // effect (`citing_the_c_where_it_forges`); handing the doorbell to the core is the fix.
+    if !emulated {
+        return ShellDisposition::HandToCore;
+    }
     match route {
         DoorbellRoute::CpuCe => ShellDisposition::MayServeLocally,
         // ★ Not ours ⇒ the core's. No flag, because there is nothing to choose between.
