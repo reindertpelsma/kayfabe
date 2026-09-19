@@ -127,9 +127,39 @@ delivery if it has already completed — through the eventfd the raw client yiel
 2. ⚠ **A scoping rule, or the launch floor returns.** The per-entry copy is real cost
    (`w315` measured **86.7 ms/launch** when per-launch work ran inline). Translated is for
    channels that need per-entry decisions. Hot userspace channels stay Passthrough.
-3. ⊘ **Untranslatable entries refuse BY NAME** — an operand naming sysmem we have not pinned,
-   an aperture we do not model. Never a silent skip
-   (`refuse_by_name_means_the_name_is_true`).
+3. ⊘ **Untranslatable entries: forward a DELIBERATE FAULT, and refuse by name in our census.**
+
+   > **Owner:** *"we can inject an error, or we can forward a channel to the GPU that
+   > deliberately faults (trick) so we keep that the gp get/put of the host channel stays at
+   > the same position, so the error reporting works just like passthrough without us
+   > touching."*
+
+   ★ **The fault is the better mechanism, and the reason is §45 read the other way.** Injecting
+   an error means emulating RM's whole robust-channel path — error notifier, vector, channel
+   state, teardown order. ogkm already has that path, tested; the faithful thing is to let it
+   run. And the GP_GET argument settles it: on a real MMU fault the PBDMA stops with `GP_GET`
+   **at the faulting entry**, which is exactly what the guest sees natively. We get correct
+   error semantics by not implementing them.
+
+   ⊘ **The mechanism is free, because the bound already is one.** §4(a): the GPGA VA space maps
+   *only* the store, so **any VA outside the mapped range faults by construction**. Nothing new
+   is invented. And a GPU fault is contained — `gpu_fault_is_contained`: a bystander ran
+   **2 675 519** verified iterations through one.
+
+   ⚠ **MANDATORY REFINEMENT: the fault address must be a NAMED SENTINEL.** A deliberate fault
+   is otherwise indistinguishable in host `dmesg` from a real defect — we would be
+   manufacturing the exact `Xid 31 … FAULT_PDE` lines this campaign spends its days reading.
+   That poisons the best signal we have. A recognisable poison VA makes the Xid self-describing:
+   *"faulted @ &lt;sentinel&gt; ⇒ deliberate: an entry kayfabe refused to translate"*.
+
+   ⊘ **BOTH, because they answer to different readers.** The fault is for the GUEST (its RC path
+   runs natively). A refusal **by name in our own census** is for US — without it we never learn
+   *which* operand we could not translate, and *"the channel faulted"* becomes the only record.
+
+   ⚠ **Scope it:** a fault tears the channel down, so it is right for an **unserviceable** entry
+   and wrong for a **not-yet-serviceable** one. A sysmem operand we have merely not pinned is
+   pinned and retried — never faulted. Killing a channel over a condition we could fix is the
+   opposite of the refusal this is for.
 4. **Sysmem operands** (`SET_SRC_PHYS_MODE_TARGET_{COHERENT,NONCOHERENT}_SYSMEM`) are not
    covered by a store-only VAS. Unmeasured: how often CeUtils names them.
 5. **The Hopper+ fast scrubber** (`hTdCopyClass >= HOPPER_DMA_COPY_A && !bUseVasForCeCopy ⇒
