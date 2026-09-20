@@ -317,11 +317,44 @@ right one from host userspace to the correct BAR1 MMIO. For that still KVM memsl
 Would then allow BAR1 trapping, but only on that doorbell page, nothing else. Constraint lightly
 lifted."*
 
-★★★ **And the owner's reading of NVIDIA's motive is the load-bearing simplification.** The BAR1
-form exists so that **each vGPU / MIG partition can own its own doorbell page** — a per-partition
-window is only expressible through a translatable aperture, which BAR0's fixed register block is
-not. ⇒ Because **we do not support nested vGPU**, that generality collapses for us: there is
-**exactly one** doorbell page, and we can place it ourselves.
+⚠⚠⚠ **[CORRECTED w821 — I wrote a HYPOTHESIS as an established motive and then leaned on it.]**
+The owner offered, and explicitly flagged as *"just a hypothesis, not proven"*, that the BAR1 form
+exists so each **vGPU / MIG partition** can own its own doorbell page. I recorded it as
+*"the owner's reading of NVIDIA's motive is the load-bearing simplification"* and derived
+*"there is exactly one doorbell page"* from it. ⊘ **Both moves were wrong**: the motive is
+unproven, and a design decision must not rest on why a vendor did something.
+
+⇒ **The question re-asked without the motive: how many doorbell-bearing apertures can exist?**
+That is answerable directly, and the answer is **not one**.
+
+`kfifoConstructUsermodeMemdescs_GH100` (`kernel_fifo_gh100.c:113-132`) builds **two** memdescs in a
+loop, then calls the Volta constructor which builds a **third**:
+
+| memdesc | aperture | VF-relative range (GH100) | size | privilege to obtain |
+|---|---|---|---|---|
+| `pBar1PrivVF` | BAR1 (`ADDR_SYSMEM`, `MAP_SYSCOH_OVER_BAR1`) | `NV_VIRTUAL_FUNCTION_PRIV` `0x00000`–`0x2FFFF` | 192 KiB | ⊘ **kernel** (`bPriv` requires `RS_PRIV_LEVEL_KERNEL`) |
+| `pBar1VF` | BAR1 (same flags) | `NV_VIRTUAL_FUNCTION` `0x30000`–`0x3FFFF` | 64 KiB | ★ **none** — `bBar1Mapping` is ungated |
+| `pRegVF` | BAR0 (`ADDR_REGMEM`) | the VF register block | 64 KiB | none |
+
+⇒ ★ **Up to three doorbell-bearing apertures per GPU, not one** — and the doorbell lives at `+0x90`
+inside `NV_VIRTUAL_FUNCTION`, i.e. in the **first 4 KiB page** of the 64 KiB unprivileged BAR1
+mapping.
+
+★★★ **What DOES survive, and it is the fact the design actually needs:** each of those is
+**constructed once per GPU, at init** — `pKernelFifo->pBar1VF` is a single memdesc that every
+client which asks for the BAR1 form maps. ⇒ The count of *doorbell objects* is bounded and known
+without appealing to anyone's motive.
+
+⊘ **Still open, and it is the one that decides "one page":** whether multiple clients mapping that
+**same** memdesc land on the **same guest-physical BAR1 page** or get separate BAR1 addresses.
+`memdescAddRef` suggests sharing, but that is inference, not a read of the mapping path. **Not
+checked.** §10.
+
+★★★★★ **And the reason this no longer matters much — the mechanism was never really resting on
+it.** We identify the page **by RM object handle** (below), not by *"there is only one."* ⇒ If it
+turns out there are N, we trap N; the classifier keys on `(bar, off)` from a generated descriptor
+set either way. **The hypothesis was load-bearing only for the rhetoric, not for the design** —
+which is precisely why writing it in as settled fact was worth catching.
 
 **The revised rule, replacing *"BAR1/BAR2 are never trapped"*:**
 
@@ -329,8 +362,16 @@ not. ⇒ Because **we do not support nested vGPU**, that generality collapses fo
 > usermode object at. That page is a read-only KVM memslot over the real host doorbell page —
 > reads pass through to hardware, writes trap into §2.2. Nothing else in BAR1 is trapped, ever.**
 
-⊘ This is a **lightening**, not a widening: the trapped set grows by one page and by nothing else,
-and it stays inside the shape §2.5 already uses for BAR0's doorbell page.
+⊘ This is a **lightening**, not a widening: the trapped set grows by **the pages that carry a
+doorbell and no others** — one on Ampere/Ada, and on Hopper+ the first page of the 64 KiB
+unprivileged BAR1 window (plus the privileged one **only if** we ever serve `bPriv`, which
+requires guest kernel privilege and which we have no reason to grant). It stays inside the shape
+§2.5 already uses for BAR0's doorbell page.
+
+⚠ **The other 60 KiB of that BAR1 window is guest-userspace-mappable and carries no doorbell.**
+⇒ It goes through R2's **middle arm** — trap, return immediately, do nothing — for exactly the
+reason §2.2 gives. ⊘ Passing it through writable would hand unprivileged guest userspace a direct
+write path to real VF registers.
 
 **How we find that page — and there is a better answer than pattern-matching PTEs.**
 `[owner]` observed that the VA manager's PTX-derived diff for BAR1 already carries the mapping, so
@@ -527,44 +568,104 @@ On hardware this cannot happen: vCPU0's trap returns before T1 releases the lock
 posted writes to one function are ordered. This is not exotic — it is **every cross-CPU register
 sequence RM orders with its own lock**.
 
-⇒ **One MPSC register ring per device**, globally ordered by reservation order, drained by **one
-named thread** (§1 — the *register drainer*; ⊘ N workers draining "one ordered ring" is not
-ordered). A drainer reaching a reserved-but-unpublished slot waits for its publisher.
+### ⊘⊘⊘ The mechanism, settled at w821 after an adversarial review
 
-⊘⊘⊘ **[CORRECTED w821 — I had this ring share its atomic with `work_seq`, and that deadlocks.]**
-I wrote *"its slot reserved by the same atomic that bumps `work_seq`… one atomic instead of two."*
-⇒ **Every managed doorbell also bumps `work_seq`** (§2.2). If the slot index is a function of
-`work_seq`, each doorbell **reserves a ring slot nobody ever publishes**, and the drainer waits on
-it **forever**. ⇒ The register ring gets its **own reservation counter**; `work_seq` goes back to
-being purely a **wake sequence**. The vCPU pays two atomics on the privileged path and one on the
-doorbell path. ⚠ And the cross-vCPU happens-before argument must then be made for the *reservation*
-counter, not for `work_seq` — it still holds, for the same reason: the reservation is taken inside
-the trap, before it returns, so it embeds the guest's own lock-ordered sequence.
+`[owner]` proposed *"a queue that has a lock multiple threads may read from"* instead of a
+dedicated drainer, on the grounds that *"an additional context switch is more expensive than one
+small lock for the vCPU"*, and asked for this to be investigated before deciding. It was.
 
-⚠ **"Bounded by one trap, microseconds" was also too strong.** The publisher is a **host userspace
-thread** and may be descheduled between reserving and publishing. The real bound is a host
-scheduler quantum, and everything behind that slot stalls with it.
+★ **What the owner got right, and it is most of it:** the two-lock instinct (a tiny push/pop lock
+kept separate from a drain-ownership lock) is the correct shape *if* you use locks at all, and the
+within-queue ordering argument is sound — one global FIFO whose enqueue point is totally ordered
+preserves the guest's cross-vCPU order, because vCPU0's push completes before its trap returns and
+the guest's own lock release/acquire supplies the happens-before.
 
-★★★ **§41 item 4 is not optional, and deferring everything broke it.** `THE_CONSTRAINTS.md` §41
-permits — and *requires* — **a synchronous write to a read register**, because *"the value must be
-visible to the next read of that register"*, and in v3 reads are served from a **shadow page** the
-guest reads with no exit. ⇒ A deferred write leaves the guest reading **stale** state.
-⊘ The sharp case is interrupt masking: the guest's ISR writes `LEAF_EN_CLEAR`/`_SET` and then reads
-`LEAF`/`TOP`. With the mask deferred we deliver an interrupt **the guest has already masked**.
-⇒ The trap path must do the **shadow write synchronously, before** publishing to the ring
-(see the corrected pseudocode above). That write is a store to a mapped page — it is not blocking
-work and does not violate the trap contract.
+⊘ **What decides it against locks, and it is not a performance argument.**
 
-⊘ **Overflow: the doorbell table is *state*, a register write is a *stream*.** A lost hint is
-recoverable by a scan; a dropped register write is not. But **[CORRECTED]** my conclusion —
-*"must be sized so it cannot fill, and ogkm bounds in-flight entries"* — does not follow, and is
-partly false. GSP RPC kicks **are** bounded (the RPC is synchronous: send then poll). ⊘ **ISR mask
-writes and the init register stream are bounded by nothing in ogkm** — that was a *rate* claim
-dressed as a *count* claim. And a full ring leaves the trap unable to either block or drop.
-⇒ **[PROPOSE]** the privilege line licenses the opposite conclusion from the one I drew: since only
-guest root reaches this ring, and a guest root that floods it harms only itself, the ring should be
-**growable** — reserve address space up front, commit on demand — rather than fixed and provably
-un-fillable. ⚠ **This is a real change of position and the owner should rule on it.**
+**1. The cost comparison weighs the wrong two things.** The wake is paid **in both designs** — the
+vCPU writes the eventfd either way. What the shared-lock design saves is a context switch **on a
+worker core**, never on the vCPU. ⇒ It trades a cost the vCPU never pays against a risk only the
+vCPU bears.
+
+**2. Lock-holder preemption puts a host scheduler slice inside an MMIO trap.** `q.lock` is a
+userspace lock; userspace cannot disable preemption. A worker holding it for ~50 ns can be
+preempted with it held, and a vCPU that then traps waits for that worker to be rescheduled —
+**a full CFS slice, milliseconds, on an oversubscribed box.** At a few thousand pops/second the
+tail fires every few minutes. ⊘ *"Still microseconds"* is the **mean**; constraint 4 is about the
+**tail**, and `worst_trap` is exactly the instrument that has caught this class before.
+
+**3. Under `SCHED_FIFO` vCPUs the tail becomes a deadlock.** A FIFO vCPU spinning on a lock held
+by a preempted `SCHED_OTHER` worker on the same core never yields; the worker cannot run; the
+guest core is frozen until the RT throttle intervenes. ⚠ Latency-tuned KVM hosts do run vCPUs
+`SCHED_FIFO`. A futex instead of a spinlock only converts the deadlock into a polite blocking
+wait — which is still a blocking wait on a vCPU.
+
+**4. "Any worker may drain" also means "possibly no worker will drain."** Workers are the threads
+that make blocking host calls. If all of them are inside one, the queue is not drained until one
+next polls — which makes any *"wait for a slot"* policy **unbounded**.
+
+⇒ **Decision: lock-free on the vCPU, one dedicated drainer.** `[owner]` had already sanctioned the
+fallback — *"holding a register drainer is not that bad; we just need the decision that is
+race-free and correct and secure, perf is a second issue"* — and this is that decision. ★ It also
+takes the vCPU's lock count from **one to zero**, which is strictly better than §41 item 1 requires
+rather than merely compliant with it.
+
+### 2.3.1 The design
+
+1. **One bounded lock-free MPSC ring per device**, fixed capacity, **preallocated and prefaulted**.
+   ⊘ Never growable: growth means calling the allocator on a vCPU, possibly faulting — blocking
+   work, under a lock, on a vCPU, three invariants in one line. The producer's `fetch_add` on the
+   enqueue cursor **is** the global order.
+   ⊘ It has its **own** cursor. `work_seq` is a wake sequence and nothing else (§2.4).
+2. **One dedicated drainer thread**, spin-then-park: spin briefly after the last item, then block
+   on an `EFD_NONBLOCK` eventfd. ⇒ Zero wakes under load, one at idle.
+3. **Peek → apply → commit.** The consumer cursor advances only *after* a successful apply, so a
+   failed apply retries at the head instead of being re-queued at the tail, and `applied_seq`
+   becomes a clean monotonic number other paths can fence against.
+4. **Queue everything; shadow every readable register; ⊘ the drainer NEVER stores to the shadow of
+   a guest-writable register.** Queueing pure-state registers looks wasteful and is what keeps
+   `PDB=X, TRIGGER, PDB=Y, TRIGGER` correct — a drainer that read PDB from the shadow when applying
+   the first trigger would see `Y`.
+   ⚠ And the clobber it prevents: vCPU writes `A` (shadow=`A`, queued), drainer starts applying
+   `A`, vCPU writes `B` (shadow=`B`, queued), drainer finishes and writes back `f(A)` — the guest
+   now reads a value older than one it wrote. ⇒ Worker-owned bits live in registers the guest does
+   not write, or are updated by atomic RMW; a guest write-1-to-clear is `fetch_and`, **never**
+   load-store, or the worker's concurrent set is lost against the ISR's clear.
+5. ⊘ **Full ⇒ poison, never wait.** Enter a sticky error state, drop further writes, surface a
+   guest-visible fault by the normal mechanism — the emulated equivalent of the card falling off
+   the bus — and **do not** write the shadow for a poisoned write. ⊘ Silently dropping a single
+   write is the wrong shape: it leaves device state that a later, differently-privileged guest
+   process inherits. ★ The privilege line is what licenses poisoning rather than blocking: only
+   guest root reaches this queue (§2.2's middle arm), so a flood harms only itself.
+   ⚠ Size from measurement, and treat sustained occupancy above ~25 % as a defect to investigate,
+   not a number to grow.
+
+### 2.3.2 ★★★ The ordering hole across the queue boundary — found at w821, by neither of us
+
+**Order is preserved *within* the queue. Doorbells go around it.** A passthrough doorbell hits
+hardware inline on the vCPU; a managed one sets a table bit a *different* worker consumes. Neither
+is ordered against a queued register write:
+
+```
+1. Guest writes register R that a channel's servicing depends on.   → shadow + queue. Trap returns.
+2. Guest rings the doorbell.                                        → hardware NOW, or a worker NOW.
+3. The drainer applies R, 30 µs later.
+```
+
+On hardware, posted writes to one function are ordered and the device saw R first. Here the
+doorbell is serviced against pre-R state. ⚠ **Whether any current register has that dependency is a
+per-die question that will be answered by a hang, not by review.**
+
+⇒ **[PROPOSE] The fence is nearly free and uses space we already allocate.** §2.2's token table is
+two bits inside a `u64` slot; the doorbell trap also stamps the current `enqueue_pos` into that
+slot, and the doorbell worker services it only once `applied_seq >= stamp`. The vCPU pays one
+extra atomic load. ⊘ The worker waits — **the vCPU never does**, which keeps the owner's doorbell
+invariant intact: *queued now ⇒ eventually scheduled, never blocks.*
+
+⊘ **Passthrough has no worker to wait, so it needs a proof, not a fence.** The obligation is:
+*no queued register write can affect how hardware services a passthrough channel.* Plausible — RM
+waits for its RPC replies before ringing, and USERD is memory — **but it is an obligation, and §10
+carries it as one.**
 
 ### 2.4 The wakeup protocol
 
@@ -963,7 +1064,7 @@ Rebuilt.
 |---|---|---|---|
 | R1 | Does a hostile doorbell give an attacker a control input? | ⊘ **No.** It has no access to USERD, the ring or `GP_PUT`; it costs cycles, as on hardware. The double-take is a **correctness** boundary owed to the victim's own concurrency, not a security one | §2.1 |
 | R2 | Non-doorbell offsets in a guest-userspace-mappable page | ⊘⊘⊘ **Return immediately, do nothing.** Without this, unprivileged userspace floods the privileged plane — a live DoS in the w820 design | §2.2 |
-| R3 | The Hopper+ BAR1 doorbell | ✔ **Trap that one page**, read-only memslot, `doorbell_bar` a generated per-arch field. Nested vGPU is unsupported ⇒ exactly one doorbell page exists ⇒ we place it. **BAR1 constraint lightly lifted, by one page and nothing else** | §2.1 |
+| R3 | The Hopper+ BAR1 doorbell | ✔ **Trap the doorbell-bearing page(s) and nothing else**, read-only memslot, `doorbell_bar`/`doorbell_off` generated per arch. ⚠ **[AMENDED w821]** the ruling was first recorded as *"exactly one doorbell page exists"*, derived from an **unproven hypothesis** about NVIDIA's motive. There are up to **three** doorbell-bearing apertures per GPU; the ruling stands because identification is **by RM handle**, not by count | §2.1 |
 | R4 | GB100's `GSP_DOORBELL` bit 31 | ✔ **Safe by construction** — we implement no behaviour for it, so it degenerates to an unowned token and a no-op. Kernel channels have doorbells too and are treated identically | §2.2 |
 | R5 | Per-arch constant-family renames | ✔ **Code it per giant GPU family** — the rename boundary is the family boundary, so it is a bounded, enumerable set | §0.3, §2.2 |
 | R6 | Fault delivery | ✔ **We do fault DELIVERY; we guarantee no fault RECOVERY.** Recovery is unreachable from guest userspace, so we never need to reverse-engineer it — ogkm's recovery cases are nameable and each gets a named workaround. UVM *managed* memory is later and is **simulatable by forcing DMA memory**, which never changes aperture | §2.1 of Part 2, §10.3 |
@@ -980,12 +1081,14 @@ Rebuilt.
    interrupt"* when registration is **per engine** and carries no channel or semaphore identity —
    and when `NVC36F_NON_STALL_INTERRUPT`, the method that *requests* it, is **not recognised
    anywhere in the tree**.
-2. ⊘ **The privileged queue's mechanism and overflow policy.** `[owner]` prefers **a queue with a
-   lock multiple threads may read from** over a dedicated drainer thread — *"an additional context
-   switch is more expensive than one small lock for the vCPU"* — and asks that this be
-   **investigated further first**. ★ Correctness and security decide it; performance is second.
-   ⚠ Overflow is still unanswered either way: w820's *"ogkm bounds in-flight entries"* was a
-   **rate** claim dressed as a **count** claim.
+2. ✔ **The privileged queue — SETTLED at w821 (§2.3), investigated as the owner asked.**
+   Lock-free bounded MPSC + one dedicated drainer, spin-then-park; overflow **poisons** rather than
+   waits. ⇒ The vCPU's lock count goes from one to **zero**.
+   ★ The deciding argument is not performance: a shared lock puts a **host scheduler slice inside
+   an MMIO trap** via lock-holder preemption (milliseconds in the tail, a deadlock under
+   `SCHED_FIFO` vCPUs), and *"any worker may drain"* also means *"possibly no worker will drain"*,
+   which makes any wait-for-a-slot policy unbounded.
+   ⚠ **Still open under it:** the ring's capacity must come from a **measurement**, not a guess.
 3. ★ **Where the walk's root comes from.** `[owner]` this should be analysable from ogkm — the
    call must be used somewhere, and if it is only UVM-managed memory then it is the wrong thing to
    be looking at. ⇒ **And the owner supplies the design answer that makes it actionable:** the
@@ -1001,5 +1104,22 @@ Rebuilt.
 8. **A vIOMMU in the guest hands us IOVAs, not GPAs.** Unhandled; the real content of axis `K`.
 9. **Windows guest** — `[owner]` read ogkm's Windows-specific code and lawfully published
    material on NVIDIA's Windows behaviour. ⊘ In progress; nothing claimed yet.
+13. ⊘⊘ **[NEW w821] The passthrough-doorbell ordering obligation.** §2.3.2 fences *managed*
+   doorbells against queued register writes with an `applied_seq` stamp. A **passthrough** doorbell
+   has no worker to wait, so it needs a **proof** that no queued register write can affect how
+   hardware services a passthrough channel. Plausible (RM awaits its RPC replies before ringing;
+   USERD is memory) — ⊘ but unproven, and the failure mode is a hang, not a diagnostic.
+14. ★ **[NEW w821] The privileged ring's capacity**, from measured peak occupancy under the
+   constraint suite. Sustained occupancy above ~25 % is a defect to investigate, not a number to
+   raise.
 10. **Hopper+ with the BAR0 form of the usermode object** — still legal there. Whether both forms
    can be live at once in one guest is unchecked (R3).
+11. ⊘ **Do multiple clients mapping the SAME `pBar1VF` memdesc share one guest-physical BAR1
+   page, or get separate BAR1 addresses?** `memdescAddRef` suggests sharing, but that is inference
+   and the mapping path was not read. ★ This is what actually decides whether *"one page"* is true
+   on Hopper+; the handle-based identification in R3 is correct either way, but the **size of the
+   trapped set** depends on it.
+12. ⚠ **A standing hygiene item, from w821:** an owner **hypothesis** was written into this
+   document as an established vendor motive and then used to justify a design simplification.
+   ⇒ **A claim's epistemic status is part of its citation**, exactly as its date is. Hypotheses get
+   marked, and a design decision may not rest on one.
