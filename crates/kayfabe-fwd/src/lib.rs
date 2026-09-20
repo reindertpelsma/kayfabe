@@ -7309,11 +7309,23 @@ impl RingLook {
 /// is why §16.69's boot could not say which of them made `3 forwarded` mean nothing:
 ///
 /// 1. **The channel declares no ring at all** (`AllocFacts::gp_fifo_ring == None`), or
-///    declares `gpFifoOffset = 0` with zero entries — which a real driver does on purpose
-///    for a channel it only uses to build a golden context (`ogkm-580:
-///    kernel_graphics.c:2420-2424`, *"Set the gpFifoOffset to zero intentionally"*, and
+///    declares `gpFifoOffset = 0` — which a real driver does on purpose for a channel it
+///    only uses to build a golden context (`ogkm-580: kernel_graphics.c:2414-2424`,
+///    *"Set the gpFifoOffset to zero intentionally since we only need this channel to be
+///    created, but will not submit any work to it"*, and
 ///    `kayfabe_core::rmgraph::GpFifoRing::va`'s own warning that **0 is a value, not a
 ///    blank**).
+///
+///    ⊘⊘ **CORRECTED w823 — this said *"`gpFifoOffset = 0` with ZERO ENTRIES"*, and the
+///    "zero entries" half was this comment's invention.** ogkm sets
+///    `gpFifoEntries = gpFifoEntries` at `:2418` from `NvU32 gpFifoEntries = 32;`
+///    (`:2152`, *"power-of-2 random choice"*) — verified identical in **580.159.04 and
+///    610.43.02**. ⇒ The golden-context channel is **32 entries at offset 0**, not an empty
+///    ring. ⚠ This is a DETECTION RULE stated in prose, so the error is load-bearing: anyone
+///    implementing *"recognise the golden-ctx channel"* from this paragraph would have keyed
+///    on `entries == 0` and matched nothing. **The discriminator is the OFFSET, never the
+///    count.** (No code keyed on it — grepped at w823 — so this was a latent trap, not a live
+///    bug.)
 /// 2. **The channel has no address space** (`vas_pdb == None`). A GSP-managed channel's
 ///    ring is served by the shell's CPU copy-engine path (`kayfabe_rt::ceutils`), which
 ///    descends the guest's published page tables instead; it is not this table's to read.

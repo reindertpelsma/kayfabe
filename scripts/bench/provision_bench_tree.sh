@@ -76,7 +76,10 @@ track_a() {
   echo "A_RC=$?"
   # ⚠ Verify on CONTENT, not on the binary existing: a QEMU without the plane is the same size
   # and the same mtime as one with it.
-  if strings "$BENCH/qemu-build/qemu-system-x86_64" 2>/dev/null | grep -q 'kayfabe-isolate-host'; then
+  # ⊘ `grep -c`, never `grep -q`: under `pipefail` a `-q` early-exit SIGPIPEs `strings` and the
+  # check reports a false negative. Measured w823, and already on the record from w418.
+  _iso_n=$(strings "$BENCH/qemu-build/qemu-system-x86_64" 2>/dev/null | grep -c 'kayfabe-isolate-host' || true)
+  if [ "${_iso_n:-0}" -gt 0 ]; then
       say "A: host-isolate plane present in the archive ✔"
   else
       say "A: ⊘ the built QEMU has NO host-isolate plane — the fast-guest lane will refuse it"

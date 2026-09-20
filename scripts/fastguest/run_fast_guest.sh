@@ -150,7 +150,15 @@ fi
 # use — and the whole 30-arm suite came back `CRASH 0s` before anyone read QEMU's stderr.
 # ⚠ `A CHECK THAT REPORTS IS NOT A CHECK THAT GATES` — this file was a live instance of the
 # rule it is elsewhere careful about. A precondition is CHECKED, by name, before the first boot.
-if ! strings "$Q" 2>/dev/null | grep -q 'kayfabe-isolate-host'; then
+# ⊘⊘⊘ **`grep -c`, NOT `grep -q` — AND THE FIRST VERSION OF THIS CHECK GOT IT WRONG.**
+# `[measured w823]` written as `strings "$Q" | grep -q ...` under `set -o pipefail`, this
+# refused a binary that DID contain the plane: `grep -q` exits on the first match, `strings`
+# dies of SIGPIPE, and `pipefail` reports the pipeline as failed. All 30 arms refused instantly.
+# ⚠ **This tree already recorded that exact class** (`a_pipe_into_grep_q_manufactures_a_failure`,
+# w418 — the same two commands). ⇒ A lesson in memory does not fire on its own; it fires when
+# something makes you look. `grep -c` consumes all input, so there is no SIGPIPE to lose.
+_iso_n=$(strings "$Q" 2>/dev/null | grep -c 'kayfabe-isolate-host' || true)
+if [ "${_iso_n:-0}" -eq 0 ]; then
     echo "run_fast_guest: ⊘⊘ REFUSED — $Q was built WITHOUT the host-isolate plane." >&2
     echo "   The archive needs cargo feature 'cuda-scratchpad' (which implies 'host-isolates')." >&2
     echo "   Without it KAYFABE_ISOLATES refuses at device realize and every arm scores CRASH" >&2
