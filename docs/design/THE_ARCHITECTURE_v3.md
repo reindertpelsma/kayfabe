@@ -30,7 +30,7 @@ the rest is a retrofit waiting to happen.
 | **A** | **GPU architecture** | ★ Turing and newer | a **format family** descriptor (four families span Turing→Blackwell) |
 | **die** | **GPU die** within an arch | ⊘ any die | derived per die, **maintained per family**; a new die is a descriptor, not a code path |
 | **V** | **VMM** | ◐ **the one axis where a version floor is legitimate** — QEMU, Cloud Hypervisor | the core is VMM-agnostic; the VMM shim is the only place that knows |
-| **OS** | **guest OS** | Linux **and** Windows | ⚠ the axis with the least coverage; everything measured in this campaign used a Linux guest |
+| **OS** | **guest OS** | Linux **and** Windows | ⊘⊘⊘ **[SURVEYED w821 — see Part 3.]** No longer zero-coverage, and the news is bad: **a stock Windows guest does not turn GSP on**, so *"we are the GSP"* has nothing to be; under WDDM the **OS owns the page tables** and the PDE-update path is never RPC'd to us; TDR is a hard **2 s** vs Linux's 4/30 s; and **UVM does not exist**. ★ TCC mode collapses most of it. ★★★ And there is a **one-comparison detector**: `bGspNocatEnabled` |
 
 ⊘ **`Dg` and `Dh` are TWO axes, not one.** The operator chooses the guest driver; we do not.
 A design that assumes they match is a defect. ★ This is the structural reason for

@@ -21,9 +21,10 @@ part() { printf '\n\\newpage\n\n# %s\n\n' "$1"; tail -n +2 "$2"; }
     cat docs/design/THE_ARCH_PDF_FRONT_V3.md
     part 'Part 1 — The v3 architecture (the proposal)'        docs/design/THE_ARCHITECTURE_v3.md
     part 'Part 2 — The surface, at constant level'            docs/design/THE_SURFACE_v3.md
-    part 'Part 3 — The machine, as it is'                     docs/design/THE_MACHINE.md
-    part 'Part 4 — The surface we present (v2 plan-level)'    docs/design/THE_SURFACE_v2.md
-    part 'Part 5 — The scrub question (open owner ruling)'    docs/design/the_scrub_is_the_last_thing_on_the_cpu.md
+    part 'Part 3 — The Windows axis'                          docs/design/THE_WINDOWS_AXIS.md
+    part 'Part 4 — The machine, as it is'                     docs/design/THE_MACHINE.md
+    part 'Part 5 — The surface we present (v2 plan-level)'    docs/design/THE_SURFACE_v2.md
+    part 'Part 6 — The scrub question (open owner ruling)'    docs/design/the_scrub_is_the_last_thing_on_the_cpu.md
 } > "$TMP/bundle.md"
 
 pandoc "$TMP/bundle.md" -o "$OUT" --pdf-engine=xelatex --toc --toc-depth=3 \

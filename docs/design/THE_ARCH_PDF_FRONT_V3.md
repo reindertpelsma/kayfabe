@@ -16,11 +16,14 @@ This bundle is five documents, in the order they should be read:
    class, RM control command, BAR0 register and pushbuffer method we touch, **by its NVIDIA
    constant name and hex value**, each with a plain-language sentence saying what it *is* for a
    reader who does not know NVIDIA's constants, and what we do with it.
-3. **The machine, as it is** — what the code actually does today, from a `file:line` survey.
+3. ★ **The Windows axis** — *new in this edition.* The first survey of the `OS` axis, which
+   carried **zero coverage** until now. ⚠ Read it before costing any Windows work: the headline
+   is a **premise** problem, not a compatibility one.
+4. **The machine, as it is** — what the code actually does today, from a `file:line` survey.
    Every place the code contradicts the proposal is marked.
-4. **The surface we present (v2)** — the earlier plan-level inventory: KEEP / DELETE per item.
+5. **The surface we present (v2)** — the earlier plan-level inventory: KEEP / DELETE per item.
    Kept because the *plans* in it are still the plans; document 2 supersedes its *data*.
-5. **The scrub question** — one open owner ruling, isolated because it is a live security
+6. **The scrub question** — one open owner ruling, isolated because it is a live security
    defect and it is the smallest change on the list.
 
 ## What changed since the v2 bundle (w818)
