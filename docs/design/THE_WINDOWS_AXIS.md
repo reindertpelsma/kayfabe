@@ -624,26 +624,53 @@ ogkm residue survey now running.
 
 ### 10.7 The no-GSP plane's boundaries and sources — owner rulings, w821
 
-#### (a) ⊘ Blackwell is GSP-ONLY. The no-GSP plane does not reach it.
+#### (a) ⊘ The no-GSP plane's ceiling is AMPERE — and it is set by OUR ORACLE, not by NVIDIA
 
-`[owner]` *"and for Blackwell it's a prerequisite."* ⇒ The two planes partition the die space
-rather than overlapping everywhere:
+`[owner]` *"and for Blackwell it's a prerequisite."* ✔ True **on Linux**, and I first recorded the
+partition on that basis. ⊘⊘ **[CORRECTED w821 — right conclusion, wrong reason, and the right
+reason gives a better boundary.]**
 
-| plane | covers |
-|---|---|
-| **GSP** (★ priority) | **Turing → Blackwell.** ⊘ **The only plane for Blackwell** |
-| **no-GSP** | pre-Turing, **and** Turing/Ampere/Ada guests that run GSP-off (e.g. consumer Windows, §1) |
+**Why the original reason does not hold.** *"GSP is required on Blackwell"* follows from a chain
+that is **entirely about Linux packaging**: NVIDIA's proprietary Linux module does not support
+Blackwell → only the open modules do → the open modules are GSP-only. ⊘ None of that is a
+statement about the hardware, or about NVIDIA's **closed Windows driver**, which plausibly retains
+monolithic RM for every chip it supports.
 
-★★★ **And that yields a testable prediction worth recording before anyone measures it.** If GSP
-is a prerequisite on Blackwell, then **Windows must default it ON for Blackwell SKUs** — a driver
-cannot ship a default that cannot work. ⇒ The *"off by default"* result in §1 is
-**Turing/Ampere/Ada-scoped and self-limiting**, exactly as the per-SKU policy struct predicts.
+★★★ **And the real boundary is nouveau's native engine coverage, which is checkable:**
 
-⚠ **There is a tension in the record here and it is not resolved.** A forum report has a user
-*disabling* GSP on an **RTX 5090** with a watchdog error stopping as a result — which, taken at
-face value, means a Blackwell part ran **without** GSP on Windows. Either Windows retains a
-monolithic path for Blackwell that Linux does not, or the report is mistaken. ⊘ **Flagged, not
-resolved.** It is the second Blackwell/Windows measurement to take.
+| die | native `.gr` | native `.ce` | no-GSP plane reachable? |
+|---|---|---|---|
+| pre-Turing → Turing (`TU10x`) | ✔ `tu102_gr_new` | ✔ `tu102_ce_new` | ✔ **yes** |
+| Ampere (`GA10x`) | ✔ `ga102_gr_new` | ✔ `ga102_ce_new` | ✔ **yes** |
+| **Ada (`AD10x`)** | ⊘ **none** | ◐ reuses `ga102_ce_new` | ⊘ **no — no native GR** |
+| **Blackwell (`GB20x`)** | ⊘ **none** | ⊘ not bound in the chipset entry | ⊘ **no** |
+
+⇒ ✔ **The partition stands, at a different line:**
+
+| plane | covers | bounded by |
+|---|---|---|
+| **GSP** (★ priority) | **Turing → Blackwell** | — the only plane above Ampere |
+| **no-GSP** | **pre-Turing → Ampere** | ⊘ **nouveau's native GR/CE**, not NVIDIA |
+
+★★★★★ **And this is the strategically good news, which the packaging argument obscured: the
+no-GSP plane is BOUNDED AND WILL NEVER GROW.** nouveau moved to GSP for new hardware precisely
+because native reverse engineering stopped being tractable — signed firmware, complexity. ⇒ The
+plane covers hardware that **already exists and will not expand upward**. That makes it a
+**finite, closing investment**, categorically different from a plane requiring work every
+generation. ⚠ It also means the ceiling rises only if nouveau gains native Ada/Blackwell GR, which
+should be treated as **not going to happen**.
+
+✔ **And the tension I flagged earlier dissolves.** The RTX 5090 report of *disabling* GSP on
+Windows is perfectly consistent — NVIDIA's closed driver can do that. ⇒ It is simply **a
+configuration we cannot serve**, for want of an oracle, not one that contradicts the record.
+
+⊘ **The prediction I recorded is withdrawn.** I wrote that *"Windows must default GSP ON for
+Blackwell SKUs, since a driver cannot ship a default that cannot work."* ⚠ That inherited the
+Linux-packaging error. `[forum, w821, weak]` two posters on the thread the owner linked assert the
+opposite — *"It's not enabled on anything by default"* and that 50-series owners were reporting
+results only **after** setting the key. ⊘ Still no `nvidia-smi` before-state on Blackwell, so this
+is **weak corroboration, not evidence** — but it points away from my prediction, and the
+prediction had no mechanism behind it.
 
 #### (b) ✔ Replay fidelity is relaxed, because most of the delta is stub-able
 
