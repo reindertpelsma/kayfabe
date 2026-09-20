@@ -51,6 +51,24 @@ instead and argue with that."* Everything after it is the evidence that target r
 | ⊘ | a refusal, a deletion, or a thing that is *not* true |
 | ★ | a load-bearing fact |
 | ⚠ | a trap, or a claim whose evidence is weaker than it looks |
+| ✔ | ★ **resolved** — a question that has been answered or a defect that has been ruled on |
+
+### ⚠ How to read repeated markers — added w821, because they were being misread
+
+`[owner]` *"why is this three times ⊘ — haven't we already solved it?"* ★ **A fair question, and
+the answer was that the marker was stale.** Repetition here means **severity**, and severity alone
+says nothing about **status**. So, from now on:
+
+- ⊘⊘⊘ / ★★★★★ mark **how much a thing matters**, at the moment it was written.
+- ✔ / ⚠ mark **where it stands now**, and a heading **always carries one of them** once its status
+  is known.
+- ⊘ **A finding that has been ruled on keeps the severity it had when found** — that is the record
+  of why it mattered — **but its heading changes to ✔ and names the ruling.** The severity is
+  history; the status is current.
+
+⚠ This is the same failure this project already documents for design docs: *a correct document
+that stopped being true and did not say so*. A stale severity marker is that failure in miniature —
+it reads as an open catastrophe long after the catastrophe was closed.
 
 ⚠ **Nothing in this bundle is filled in from memory of NVIDIA's headers.** Every constant name,
 number and structure layout is cited to a file and line in either this tree or the open kernel

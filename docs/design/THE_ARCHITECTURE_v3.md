@@ -39,7 +39,7 @@ call is not merely risky, it is **an implicit assertion that the two versions ag
 
 ⊘ **Host OS is Linux only** — the one scope relaxation, taken deliberately.
 
-### 0.0.1 ⊘⊘⊘ The Turing floor is an ARCHITECTURAL BOUNDARY, not a scoping decision
+### 0.0.1 ✔ The Turing floor is architectural **for the GSP plane** *(amended the same day — it is per-plane)*
 
 **[w821]** `[owner]` *"pre-Turing it can't be used."* ★ Correct, and it reclassifies the `A`-axis
 floor. `_gpumgrIsRmFirmwareCapableChip` is exactly:
@@ -113,7 +113,7 @@ This is the useful part, and the surveys in Part 2 measured it rather than assum
 | **GSP RPC message framing** | ⊘ **`Dg`, and it BREAKS** | the per-element header is **48 bytes** at 580 (`authTag`/`aad`/`checkSum@32`/`seqNum@36`/`elemCount@40`) and **16 bytes** at 610 (`mctpHeader`/`nvdmHeader`/`checkSum@8`/`seqNum@12`) — `message_queue_priv.h:43-51` vs `:52-67` |
 | **RM control command numbers** | `Dg` (additive), **struct layouts break** | FINN-generated; the *number* is stable, the *parameter struct* is versioned |
 | **BAR0 register offsets** | **A** and **die** | `NV_PGSP_QUEUE_HEAD = 0x110c00` from `ampere/ga102/dev_gsp.h`; the doorbell is `0x30090` on Turing, Ampere **and** Blackwell |
-| ⊘⊘⊘ **Which BAR carries the doorbell** | **A** — *and it changes which trap plane exists* | **[MISSING until w821, and it is the worst kind of omission: an axis that moves the mechanism, not a constant.]** Ampere/Ada: BAR0. Hopper+: unprivileged clients map it over **BAR1** (`bBar1Mapping`, not privilege-gated), which v3 §2 does not trap. See §2.1 |
+| ✔ **Which BAR carries the doorbell** | **A** — *and it changes which trap plane exists* | **[Missing until w821 — the worst kind of omission: an axis that moves the mechanism, not a constant. RULED R3 the same day.]** Ampere/Ada: BAR0. Hopper+: unprivileged clients map it over **BAR1** (`bBar1Mapping`, not privilege-gated). ⇒ `doorbell_bar` is a generated per-arch descriptor field and that one page is trapped. §2.1 |
 | **Doorbell token encoding** | ⊘ **die**, within one arch | `NV_CTRL_VF_DOORBELL` field widths are per-arch swref, and GB202 sets bit 30 where Ampere does not |
 | **Channel / engine class ids** | **A**, ⊘ **and die** | `TURING_CHANNEL_GPFIFO_A 0xC46F` (the floor arch) → `AMPERE_ 0xC56F` → `HOPPER_ 0xC86F` → `BLACKWELL_ 0xC96F`. ⊘ **[CORRECTED w821]** not purely per-arch: `BLACKWELL_CHANNEL_GPFIFO_B 0xCA6F` exists on GB202/203/205/206 while GB100 has only `_A` — **die-level inside one architecture** |
 | **Pushbuffer method encoding** | ★ **remarkably stable** | `NVC56F_DMA_SEC_OP`/`METHOD_ADDRESS`/`_SUBCHANNEL`/`_COUNT` is bit-identical to `NVC36F_*`; the GPFIFO entry differs only in `PRIV` (dropped at C56F) and `INVAL_SCOPE` (added) |
@@ -307,10 +307,12 @@ anything**. Two rules follow, and they are the real content of §47:
   immediately, doing nothing.** See §2.2 — this was a live hole in the w820 design and the owner
   found it.
 
-#### ⊘⊘⊘ THE HOPPER+ BREAK — on Hopper and Blackwell the doorbell is written through **BAR1**
+#### ✔ RULED — the Hopper+ BAR1 doorbell. *(Found as a break at w821; ruled the same day.)*
 
-**[NEW w821, from an adversarial review. This is the most serious defect found in v3, and it is
-an architectural break, not a wording problem.]**
+**[STATUS: RESOLVED. Ruling R3 (§10.1), mechanism in §2.1 below, scope corrected in
+`THE_WINDOWS_AXIS.md` §10.7(a).]** ⚠ `[owner]` *"why is this three times ⊘ — haven't we already
+solved it?"* ★ **We had. The marker was stale, and the finding is recorded below at the severity
+it had when found, not the severity it has now.**
 
 v3 §2 opens *"BAR1/BAR2 are never trapped — ensuring that is a requirement."* ⊘ **On Hopper and
 newer that requirement silently discards work submission.**
@@ -335,8 +337,9 @@ And both of NVIDIA's own consumers do, with `bPriv = NV_FALSE`:
 
 ⇒ Four consequences, and the first is a product failure:
 
-1. ⊘⊘⊘ **Every UVM doorbell — and, on this evidence, every CUDA doorbell — is lost on Hopper+**,
-   silently, because it lands on a BAR1 page we deliberately do not trap.
+1. ⚠ **[the defect, as it stood before R3]** Every UVM doorbell — and, on this evidence, every
+   CUDA doorbell — would be **lost on Hopper+**, silently, landing on a BAR1 page v3 deliberately
+   did not trap. ✔ **Closed by R3:** that one page is now trapped.
 2. ⊘ **§2.1 fact 3 is Ampere/Ada-scoped.** On Hopper+ the guest **kernel** still rings BAR0
    (RM's own CeUtils channel allocates `VOLTA_USERMODE_A` and rings via `GPU_VREG_WR32`) while
    **userspace rings BAR1** — *different pages, different GPAs*.
