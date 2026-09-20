@@ -91,13 +91,56 @@ in NVIDIA's own header describes exactly that mode — *"try to enable GPU firmw
 needed… this can result in a mixed mode configuration (ex: GPU0 has firmware enabled, but GPU1
 does not)."*
 
-### ⚠ The honest residual
+### ⊘⊘⊘ AND THE RETRACTION ABOVE OVER-CORRECTED — the struct IS defined, and it changes the answer
 
-`gpumgrGetRmFirmwarePolicy` and `gpumgrIsDeviceRmFirmwareCapable` both take a
-**`WindowsFirmwarePolicyArg *pWinRmFwPolicyArg`** — threaded through, **never read in the open
-tree**, and the struct is not defined in any published header. ⇒ **There is a Windows-specific
-input to this decision and we cannot see it.** That is the limit of what can be claimed; it is not
-licence to assume the answer either way.
+**[CORRECTED AGAIN, same hour.]** I wrote that `WindowsFirmwarePolicyArg` was *"never read in the
+open tree, and the struct is not defined in any published header."* ⊘ **The struct is defined**,
+in `generated/g_gpu_mgr_nvoc.h:601`:
+
+```c
+typedef struct WindowsFirmwarePolicyArg {
+    NvU32  devId;                            // PCI device id
+    NvU32  ssId;                             // PCI subsystem id
+    NvU32  bEnableGpuFirmwareOnWsServerSkus;
+    NvBool bIsTccOrMcdm;
+} WindowsFirmwarePolicyArg;
+```
+
+★★★ **Those four fields say what the Windows default depends on, and it is not uniform:**
+the **SKU** (`devId` + `ssId`), whether this is a **workstation/server SKU** — matching the policy
+bit `NV_REG_ENABLE_GPU_FIRMWARE_POLICY_DEFAULT_ON_WS_SERVER 0x20` in the registry header — and
+whether the GPU is in **TCC/MCDM** rather than WDDM.
+
+⇒ ★ **A per-SKU default with an explicit workstation/server enable is exactly the shape that
+produces "GSP is on for my Quadro and off for my GeForce."** The community reports become
+**plausible again**, for consumer SKUs specifically.
+
+### ⊘⊘⊘ How I got the retraction wrong — I read a build with the branch compiled out
+
+`gpumgrIsDeviceRmFirmwareCapable`'s body in this tree **never references `pWinRmFwPolicyArg`** —
+it only writes `pbEnabledByDefault`. I read that body, saw no OS conditional, and concluded
+*"there is no OS branch in the decision."*
+
+⊘ **But `rmconfig.h` hard-sets `RMCFG_FEATURE_PLATFORM_WINDOWS 0`, so what I read is the
+Linux-compiled view of a function whose Windows logic is absent from the public drop** — NVIDIA
+kept the signature and the struct and stripped the body that uses them. ⚠ **The absence of a
+Windows branch in a build where Windows is disabled is not evidence that no Windows branch
+exists.** ★ Third instance of this tree's own lesson in one session, in a third disguise:
+*an empty result is evidence of nothing, not evidence of emptiness.*
+
+### ✔ So what IS established, stated at the right strength
+
+| claim | status |
+|---|---|
+| **Windows runs as a GSP client** | ★ **Proven.** `RMCFG_FEATURE_PLATFORM_WINDOWS && IS_GSP_CLIENT(pGpu)` at `gpu_registry.c:224` and `gpu_user_shared_data.c:335`, selecting a constant **named for that configuration**: `NV_REG_STR_RM_RUSD_POLLING_INTERVAL_WINDOWS_GSP 250` (vs `_DEFAULT 500`). Plus `bGspNocatEnabled`, a Windows-only field in the GSP boot RPC itself |
+| **The Windows default is per-SKU and per-mode** | ★ **Proven from the struct's fields** — `devId`, `ssId`, WS/server, TCC/MCDM |
+| **Whether a stock GeForce Windows guest defaults GSP on** | ⊘ **UNRESOLVED.** The deciding logic is stripped from the public drop. Community evidence says off; nothing in the open tree refutes it, and the struct's shape makes it plausible |
+| **GSP is required on Blackwell — on Linux** | ★ **Yes, and the mechanism is in this tree.** `[owner]` *"proprietary Linux doesn't work on Blackwell, so that infers GSP is required anyway."* Confirmed: the open module **refuses a non-firmware-capable GPU by name** — `osapi.c:3721` calls `gpumgrIsDeviceRmFirmwareCapable` and on `NV_FALSE` prints *"installed in this system is not supported by open nvidia.ko"*. ⇒ Blackwell + open-modules-only + openrm-is-GSP-only ⇒ **GSP required** |
+| **…and on Windows** | ⊘ **Does not transfer.** `nvlddmkm.sys` is not the open module, so the Linux chain says nothing about it. ⚠ But `devId`/`ssId` are policy inputs, so a per-SKU Blackwell default is expressible either way |
+
+⇒ ★ **The practical position:** design for GSP being present, **detect and refuse the alternative**
+(§1's fallback detector), and treat *"stock GeForce Windows defaults GSP off"* as an open risk to be
+measured — not as a settled premise in either direction.
 
 ### ★★★ How the survey got it wrong, and it is this tree's own documented failure
 
