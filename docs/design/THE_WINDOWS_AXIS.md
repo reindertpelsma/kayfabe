@@ -12,31 +12,119 @@ deliberately **not** relied on; nothing here depends on it.
 
 ---
 
-## 1. ⚠ The headline is a PREMISE problem, not a compatibility problem
+## 0. ★★★ Why this is answerable at all — and exactly where the oracle stops
 
-> ★★★★★ **GSP is off by default on a stock Windows guest.**
+`[owner, 2026-09-20]` *"NVIDIA open-sourced ogkm under MIT/GPL and still had Windows code in it —
+that's so valuable. They could have stripped it with `#if` blocks and then stripped when
+distributing source for Linux, but they didn't."*
 
-The firmware blobs ship in the DriverStore, `nvidia-smi -q` reports
-`GSP Firmware Version : N/A`, and the feature is turned on by a **guest registry DWORD**:
-`…\Class\{4d36e968-…}\0000\EnableGpuFirmware = 1`. Community-confirmed on 30-, 40- and
-**50-series (Blackwell)** parts, with side effects (HDCP loss, ~300 MB VRAM, DSC/G-SYNC issues).
+★ **Correct, and the reason is structural rather than an oversight.** `src/nvidia/` is **one RM
+codebase compiled for several operating systems**. Stripping per-OS for the public drop would mean
+maintaining a *divergent* public tree — permanently more expensive than shipping the seams. So
+the seams ship: **40** `RMCFG_FEATURE_PLATFORM_WINDOWS` sites in 610, **45** `NVOS_IS_WINDOWS`,
+~86 WDDM/LDDM comments, and Windows-only control commands documented as such in the SDK headers.
 
-★ **That key name is not a coincidence, and ogkm corroborates the path from NVIDIA's own code.**
-The Linux macro is `#define __NV_ENABLE_GPU_FIRMWARE EnableGpuFirmware` (`kernel-open/nvidia/nv-reg.h`)
-— one cross-OS registry abstraction. And the Windows GSP-client path demonstrably exists in the
-shared core: `RMCFG_FEATURE_PLATFORM_WINDOWS && IS_GSP_CLIENT(pGpu)` (`gpu_registry.c:224`,
-`gpu_user_shared_data.c:335`), plus a Windows-only enable *inside* `GSP_SET_SYSTEM_INFO`
-(`kernel_gsp.c:4626`).
+⇒ **ogkm is a genuine partial oracle for Windows behaviour** — the only one that exists, since
+nouveau and envytools document the hardware and the Linux blob and say nothing about `nvlddmkm`.
 
-⇒ ⊘⊘⊘ **Our entire architecture is "we are the GSP." On a stock Windows guest there is no GSP to
-be.** The guest drives the hardware from CPU-RM, underneath the whole WDDM DDI contract — a far
-larger emulation surface than the one v3 describes.
+⊘ **And here is precisely where it stops**, because the distinction decides which claims in this
+document are sound:
 
-⚠ Newest datapoint is **September 2025** (drivers 581.x); **no 2026 datapoint either way.**
-★ The one-line experiment if this is ever pursued: set `EnableGpuFirmware=1` in the guest and look
-for an RPC message queue.
+| we CAN see | we CANNOT see |
+|---|---|
+| ★ **Policy and decisions** in the shared core — which branch is taken on Windows, and why | ⊘ **The Windows OS layer.** `arch/nvalloc/win/` is absent; only `unix` is published |
+| Windows-only **control commands and their semantics** (`UPDATE_PDE_2`, `RESERVE_ENTRIES`) | ⊘ **The Windows `rmconfig` profile** — `rmconfig.h` hard-sets `RMCFG_FEATURE_PLATFORM_WINDOWS 0` and `NVOS_IS_WINDOWS 0` *unconditionally*, so every NVOC table here is the UNIX binding |
+| **Comments** stating Windows behaviour in NVIDIA's own words | ⊘ Every `os*()` value on Windows — `osGetPageSize`, `osQueueDpc`, `osIsRaisedIRQL` |
+
+★★★ **The `WindowsFirmwarePolicyArg` in §1 is the exact shape of that boundary, in one symbol:**
+the **parameter** is public and threaded through the shared policy function, and the **struct it
+points at is not defined anywhere in the published headers.** ⇒ They stripped the OS layer and
+kept the seams *into* it. We can therefore see **that** a Windows-specific input exists and
+**where** it applies — and never **what it contains**.
+
+⚠ The practical rule this imposes on everything below: **a claim sourced from the shared core is
+strong; a claim about what the Windows OS layer supplies is inference and is marked as such.**
 
 ---
+
+## 1. ⊘⊘⊘ THE HEADLINE WAS WRONG — GSP is default-ON for Turing+, on every OS
+
+**[RETRACTED w821, within the hour, by the owner: *"are you sure the stock Windows driver
+doesn't turn GSP on when it's available? On Blackwell it's even required."*]**
+
+The survey reported *"GSP is off by default on a stock Windows guest"* from community evidence.
+⊘ **The shared RM core says otherwise, and it is the authority here** — the policy is computed in
+`src/nvidia/src/kernel/gpu_mgr/`, which is **not** the Unix layer.
+
+`gpumgrIsDeviceRmFirmwareCapable` (`gpu_mgr.c`):
+
+```c
+if (!hypervisorIsVgxHyper() && !_gpumgrIsRmFirmwareCapableChip(pmcBoot42))
+    { bFirmwareCapable = NV_FALSE; goto finish; }     // capable ⇔ arch >= TU100
+...
+if (hypervisorIsVgxHyper()) { ...vGPU-specific chips... }
+else                        { bEnabledByDefault = NV_TRUE; }   // ★ every other case
+```
+
+⇒ **For any Turing-or-newer chip outside a vGPU hypervisor, `bEnabledByDefault` is `NV_TRUE`.**
+★ There is **no OS conditional in this function at all** — the sole platform carve-out is
+PowerPC. And `gpumgrGetRmFirmwarePolicy` then requests firmware unless the registry *explicitly*
+says `DISABLED`:
+
+```c
+*pbRequestFirmware = bFirmwareCapable &&
+      (mode == MODE_ENABLED || (bEnableByDefault && mode != MODE_DISABLED));
+```
+
+### ⊘ And the registry key does not mean what the community advice implies
+
+`nv-firmware-registry.h`: `MODE_DISABLED 0x0`, `MODE_ENABLED 0x1`, `MODE_DEFAULT 0x2`,
+`POLICY_ALLOW_FALLBACK 0x10` — and the **default value is `0x12`**, i.e.
+`MODE_DEFAULT | POLICY_ALLOW_FALLBACK`.
+
+⇒ Setting `EnableGpuFirmware = 1` does **not** flip GSP from off to on. It sets `MODE_ENABLED`
+(*force*) **and drops `ALLOW_FALLBACK`**, because `0x1` does not carry the `0x10` bit.
+
+★★★ **Which supplies a better explanation of the community reports than "off by default":** GSP
+was requested, **fell back to monolithic RM**, and setting `1` removed the fallback. The comment
+in NVIDIA's own header describes exactly that mode — *"try to enable GPU firmware but fall back if
+needed… this can result in a mixed mode configuration (ex: GPU0 has firmware enabled, but GPU1
+does not)."*
+
+### ⚠ The honest residual
+
+`gpumgrGetRmFirmwarePolicy` and `gpumgrIsDeviceRmFirmwareCapable` both take a
+**`WindowsFirmwarePolicyArg *pWinRmFwPolicyArg`** — threaded through, **never read in the open
+tree**, and the struct is not defined in any published header. ⇒ **There is a Windows-specific
+input to this decision and we cannot see it.** That is the limit of what can be claimed; it is not
+licence to assume the answer either way.
+
+### ★★★ How the survey got it wrong, and it is this tree's own documented failure
+
+The community evidence rested partly on `nvidia-smi -q` reporting `GSP Firmware Version : N/A`.
+⊘ **That is not evidence GSP is off. It is evidence the field was not populated.**
+⚠ This repo already carries that lesson, paid for once: *an empty capture is evidence of NOTHING,
+not evidence of emptiness* — the `dlen=0` rows whose every checked instance was **contradicted** by
+real hardware. ⇒ The survey reproduced the exact error the tree documents, from a different
+direction.
+
+### ★★ What replaces it, and it matters on every OS
+
+⊘⊘ **The default policy ALLOWS SILENT FALLBACK TO MONOLITHIC RM.** That is `0x12`'s `0x10` bit,
+and it is the default on Linux too.
+
+⇒ **If a guest's RM falls back, our fake GSP is never used at all** — monolithic RM drives our
+emulated registers directly, and every RPC-based assumption in this document evaporates **with no
+error and no message**. ★ **[PROPOSE]** we must be able to detect that and refuse it by name. The
+detector is cheap: a guest that has fallen back **never publishes a message queue** and never sends
+`SET_GUEST_SYSTEM_INFO`, so *"boot progressed past the point where an RPC was due, and no queue
+exists"* is a nameable, checkable state rather than a hang.
+
+⇒ **Net effect on the Windows question:** §1 no longer argues that the premise fails. It argues
+that GSP is requested on Turing+ regardless of OS, that a **fallback** path exists and is enabled
+by default, and that whether NVIDIA's Windows driver takes it is **[UNVERIFIED]** and gated by a
+struct we cannot see. ⚠ **Sections 2–4 below are unaffected** — they are about WDDM's ownership of
+the page tables, TDR, and the absence of UVM, none of which depends on how GSP is enabled.
 
 ## 2. Under WDDM the OS owns the page tables — and we never see the writes
 
