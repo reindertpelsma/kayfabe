@@ -40,12 +40,40 @@ reader should push, because they are the places I would.
 |---|---|---|
 | **A guest IOMMU** | guests configured with one; eventually Windows DMA protection | every guest address we consume resolves through a guest-physical-keyed layout, so a guest IOMMU is bypassed **by construction**. Supporting it means a translation layer on every consumer **including a GPU kernel that cannot call the VMM**. No CUDA or LLM guest needs one |
 | **Broadcast device groups** | multi-GPU SLI-style configurations | it is the only case that produces *"one VA space, many page-directory bases"*, and CUDA never uses it. Refusing it removes a whole class from the address model |
-| **Fault recovery** (we deliver faults; we never recover) | nothing a guest can reach | the recovery registers are **host-kernel-owned and unimplementable from userspace**. ⇒ The host driver recovers our twin and we tell the guest through the mechanism it already has |
+| **Fault recovery** (we deliver faults; we never recover) | ⊘⊘ **[CORRECTED]** — *not* "nothing a guest can reach". **Unified managed memory is guest-reachable ordinary CUDA**, and it depends on replayable faults we do not provide | the recovery *registers* are host-kernel-owned and unimplementable from userspace, so the refusal stands — but it must be **refused by name at the first managed-memory allocation**, not discovered as a hang in the guest's fault loop. ⚠ That is a **compatibility hole**, stated as one |
 | **Guest-chosen pointers in host calls** | the memory class that carries one | it would hand the host driver an address the guest chose. ★ Our host verbs take no guest flag word either — the same rule, applied to bits instead of pointers |
 | **Emitting the firmware bug-check event** | nothing | it crashes the host OS on Windows. **We are the firmware.** Any path that could induce us to emit it is a guest-crash primitive |
 | **Pre-Turing, on this plane** | older hardware | there is no firmware processor to impersonate below Turing. ⊘ Not a scope choice — the architecture does not exist there. The no-GSP plane is what would reach it |
 
 ---
+
+## 4a. The expected parity number, and what dominates the gap
+
+`[E, from measured components]` — stated so it can be argued with rather than discovered:
+
+| regime | expected | dominated by |
+|---|---|---|
+| decode with captured graphs | **0.97–1.0×** | nothing on the path once loaded |
+| decode, eager, GPU-bound | 0.95–1.0× | launch cost hidden by GPU time |
+| decode, eager, launch-bound (small models) | **0.8–0.9×** with the VMM patch; **≤0.7×** without | the trap exit itself — `[MEASURED]` 50 µs under the global lock versus a ~4 µs native launch |
+| prefill / batch | ~1.0× | GPU-bound |
+| ⊘ **load and allocation phases** | ⊘⊘ **10–1000× slower per operation** until the mapping fixes land | the **host-global driver lock**, taken per mapping |
+
+⇒ ★ **The gap is ordered, and the order matters more than the numbers:** the VMM patch first
+(every measurement before it is lock-shaped), then per-leaf mapping, then the trap exit in eager
+mode — a floor that graph capture hides — then the read-trap set.
+
+## 4b. ⚠ Axis findings that are not yet decided
+
+| axis | finding |
+|---|---|
+| **K** | ⊘ **Confidential guests must be refused at startup.** Every consumer reads guest memory through a shared file mapping; encrypted guest memory makes rings, cursors and page tables garbage, reported as a bad address rather than a refusal |
+| **K** | ⚠ **Interrupt-less boot is silent.** A guest booted without message-signalled interrupts gets a device that never interrupts, with no refusal |
+| **Dg × Dh** | ⊘ Guest and host both reserve the **same** address range for server-side use. Identical today in both driver versions — ⚠ **compare it at twin creation and refuse a mismatch by name**, because if a future guest driver moves it, a guest mapping lands in the host's reserved range and fails late |
+| **A** | ⚠ On Blackwell a mid-level directory **can itself be a leaf** at an enormous page size with **no way to request it explicitly** — only automatic selection reaches it. The walker must treat that level as a possible leaf |
+| **die** | ⊘⊘ **"Any die" cannot be met by generation alone.** The vendor publishes register headers for a *subset* of dies. ⇒ Derive the per-die engine facts **from the host driver's own public queries at startup**, not from headers |
+| **V** | ⊘⊘ **Both supported hypervisors need a patch**, not just one. ⇒ *"a version floor is legitimate here"* understates it: **we ship against forks** until the changes land upstream. And the second hypervisor has **not been read at all** |
+| **OS** | ⊘ The Windows page-table path publishes the same way managed memory does — **through the pushbuffer, not the register** — so the second trigger is required there too. ⚠ And a **host-side** stall (another tenant holding the global lock) can exceed Windows' 2 s reset budget: a host contention problem that surfaces as a guest adapter reset |
 
 ## 5. ⚠ The three things most likely to be underestimated
 

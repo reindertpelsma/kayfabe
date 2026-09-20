@@ -81,8 +81,11 @@ switch behind it is a defect however good its average looks.
 ⚠ **The VMM must be patched for this to be true, and the patch is six lines.** QEMU takes its
 global lock unconditionally on every MMIO dispatch, and the per-region opt-out that used to exist
 was removed upstream. ★ But the KVM exit site itself is **already outside** that lock — it is
-re-taken one level down, in the dispatch helper. ⇒ The fix is to **restore the opt-out as a flag on
-the region's operations**, set only on our trap regions, not to write an exit-site dispatcher.
+re-taken one level down, in the dispatch helper. ⇒ The fix is a **flag on the region's operations**, set
+only on our trap regions, rather than an exit-site dispatcher.
+⚠ **This is new design, not a revert.** The per-region opt-out that once existed was removed
+**as dead code** — nothing upstream used it. ⇒ We are adding a facility, and it must be justified
+upstream on its own merits rather than presented as restoring something.
 
 ⊘⊘⊘ **And the patch must disable one more thing, or it creates the very hole it exists to avoid.**
 The VMM guards every device's I/O dispatch with a **plain, non-atomic boolean** — *"do not allow
@@ -156,6 +159,12 @@ registers thousands of times.
 ⚠ **Not every read, though.** Roughly **524 of 4096** BAR0 pages must still read-trap — the
 framebuffer window resolves through a latch, and the firmware-boot pages are state-machine state.
 **The read-trap set is an allowlist, written down, exactly like the write list.**
+
+⊘⊘⊘ **And it is a parity hazard, not just a correctness one.** `[MEASURED, the C artifact]` **99 %
+of its 1 000–3 000 exits per token were READS of a single firmware debug register** on a page this
+design keeps read-trapped as *"boot state"*. That one page cost a **2.5× loss on LLM decode**. ⇒
+**A page is read-trapped for a phase, not forever.** The runtime-polled words on the firmware pages
+are shadowed in DRAM; the trap applies during boot, and is dropped when boot completes.
 
 ⊘ **The timer page is not one of them.** On Turing and newer the kernel's clock is the pair in the
 *usermode* window — which is already the read-only memslot over live host time — and the legacy
@@ -480,6 +489,12 @@ host twins are unprivileged by construction — the host driver grants that priv
 or administrative clients. ⇒ Forwarding it would fault our own twin. We consume it as a trigger and
 do not submit it.
 
+⚠ **The walker competes with the workload it mirrors.** Different contexts on one GPU time-slice
+at roughly a millisecond, so while a guest kernel is running, a 200 µs walk can wait a full slice
+and costs two context switches. ⇒ Either run the walk on a **copy engine**, which does not preempt
+compute, or accept the floor and state it. ⊘ It must not be discovered as *"invalidates are slow
+under load"*.
+
 ⊘⊘ **The walk must be ordered against the guest's own page-table writes, and one case is not
 naturally ordered.** The guest's memory manager writes video-memory page-table entries **with the
 copy engine, inside a pushbuffer**, and issues its invalidate **in the same pushbuffer on the same
@@ -487,6 +502,34 @@ channel**. ⇒ If we trigger the walk when we *decode* the invalidate method, we
 **before the engine has written them.** The split is: submit the pushbuffer prefix up to the
 invalidate, **wait for its completion on our twin**, walk, then continue. ★ This is an ordering the
 design assumes and must establish.
+
+### 6.1 ⊘⊘⊘ The cost of applying a diff is a HOST-GLOBAL lock, and it decides the allocation path
+
+**Every mapping call takes the host driver's single driver-wide API lock in WRITE mode**, plus a
+per-GPU group lock. ⇒ Every other client on that host — **other VMs, and host CUDA** — serialises
+behind each call we make. The deferred-invalidate flag elides one flush and one whole-space
+invalidate; it does **not** touch the locks, the address-space allocation, or the five kernel
+allocations per mapping.
+
+`[MEASURED]` on the current tree: **13 313 mapping plans for a 1 GB model**, ~132 µs per call. ⇒
+Applied naively, **a model load is tens of seconds of wall clock**, and it is wall clock stolen
+from every other tenant.
+
+⇒ ★★★ **Three changes, and they are the difference between a usable product and a demo:**
+
+1. **Coalesce runs.** Slices of one object are contiguous across leaves; map the run, not the leaf.
+2. **Reserve the address range at allocation**, using the object class that does so, rather than
+   letting every map allocate. ⚠ It also removes a trap: re-mapping an already-mapped address
+   currently returns an out-of-memory status, and reading that as *"already mapped, success"* is a
+   coincidence, not a contract.
+3. ★★★ **Register the guest-RAM memfd ONCE, at startup, and map sub-slices of it.** The per-page
+   pinning cost then happens **one time** instead of per mapping — the same posture device
+   assignment already takes. This is the single largest item on the list.
+
+⚠ **And guest RAM must be backed by huge pages.** The host driver **silently downgrades** a
+large-page mapping whose backing is not physically contiguous, so a guest on ordinary 4 KiB pages
+gets 4 KiB entries on the host GPU — sixteen times the mapping count and sixteen times less
+translation reach. ⇒ A startup requirement, checked, not a recommendation.
 
 ⊘⊘ **And the diff is two-phase, or a partial failure desyncs the mirror permanently.** If the
 walker commits its new state when it walks, and the VA manager then fails part-way through — host
@@ -596,6 +639,12 @@ reply. So:
   0 set from the value the guest hands us.
 - ⊘ **BAR1 has no update message at all** — the guest adopts our root page and writes entries into
   it directly.
+- ⊘⊘⊘ **And the guest writes every user page-table entry through BAR2**, using it as its own
+  window onto instance and table memory. ⇒ *"BAR2 is never trapped"* and *"BAR2 is an aperture we
+  serve"* cannot both be loose statements: **trapping it would put a page-table fill through the
+  privileged ring and overflow it on a single large mapping.** ⇒ **We serve it**, and the window is
+  a **pre-reserved host address range that we re-point in place** — never a slot change, because
+  the guest re-points it constantly and each slot edit is a global operation.
 - ⊘ **Nobody sparsifies BAR1 unless we do.** An unpopulated entry there is sparse, not an error.
 
 ⇒ The framebuffer layout — root pages, the protected firmware region, reserved rows — is **ours to
