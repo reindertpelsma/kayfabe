@@ -67,6 +67,9 @@ mode — a floor that graph capture hides — then the read-trap set.
 
 | axis | finding |
 |---|---|
+| **Dg** | ★ **The opaque legacy queries should be FORWARDED, not captured.** A handful of controls are answered today from measured values per driver version and die — so every new version is a new capture, and a wrong answer does not fail, it is *forgiven*. ⇒ They carry no flag word: **forward them to the host twin by allowlisted id and copy the reply.** That dissolves the die axis for them entirely |
+| **A** | ⊘ **Blackwell's enormous mid-level page size cannot be requested**, only auto-selected. ⇒ A leaf at that level must be **split into requestable sizes or refused by name** — never silently mapped smaller |
+| **OS / A** | ⚠ **Compression is lost by construction.** The store is one uncompressed reservation, so a guest entry carrying a compressible kind cannot be honoured. Rare in CUDA, **routine for Windows render targets** ⇒ a bandwidth degrade on that axis |
 | **K** | ⊘ **Confidential guests must be refused at startup.** Every consumer reads guest memory through a shared file mapping; encrypted guest memory makes rings, cursors and page tables garbage, reported as a bad address rather than a refusal |
 | **K** | ⚠ **Interrupt-less boot is silent.** A guest booted without message-signalled interrupts gets a device that never interrupts, with no refusal |
 | **Dg × Dh** | ⊘ Guest and host both reserve the **same** address range for server-side use. Identical today in both driver versions — ⚠ **compare it at twin creation and refuse a mismatch by name**, because if a future guest driver moves it, a guest mapping lands in the host's reserved range and fails late |

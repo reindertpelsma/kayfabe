@@ -81,11 +81,29 @@ switch behind it is a defect however good its average looks.
 ⚠ **The VMM must be patched for this to be true, and the patch is six lines.** QEMU takes its
 global lock unconditionally on every MMIO dispatch, and the per-region opt-out that used to exist
 was removed upstream. ★ But the KVM exit site itself is **already outside** that lock — it is
-re-taken one level down, in the dispatch helper. ⇒ The fix is a **flag on the region's operations**, set
-only on our trap regions, rather than an exit-site dispatcher.
-⚠ **This is new design, not a revert.** The per-region opt-out that once existed was removed
-**as dead code** — nothing upstream used it. ⇒ We are adding a facility, and it must be justified
-upstream on its own merits rather than presented as restoring something.
+re-taken one level down, in the dispatch helper. ⇒ ★★★ **One hook, at the exit site, before dispatch** — our guest-physical ranges are recognised
+and routed into the trap path directly, and everything else falls through unchanged.
+
+⊘⊘⊘ **[DECIDED w821 — and it reverses my own simplification.]** I briefly proposed the smaller-
+looking alternative: a flag on the memory region's operations, restoring an opt-out upstream once
+had. ⊘ **That is three patches, not one, and two of the three are facilities that do not exist:**
+
+1. the lock opt-out itself — ⚠ and it was removed **as dead code**, so this is new design, not a
+   revert, and must be argued upstream on its own merits;
+2. the **re-entrancy guard** opt-out, without which two vCPUs racing drop a write silently;
+3. ⊘⊘ **a read-only device-memory region whose trapped write reaches our code at all.** There is
+   no such constructor. A read-only device region *does* produce the memslot we want, but its
+   write handler **stores the guest's value straight through to the host pointer** — so the guest's
+   **untranslated** token would reach the real hardware doorbell, ringing the wrong channel or
+   none, and our translation would never happen.
+
+★ **The exit-site hook sidesteps all three**, because the access never enters the dispatch
+machinery: no lock is taken, no guard is consulted, and no region write handler runs. ⇒ **One
+patch, and it is the one that makes §5.7 implementable at all.**
+⚠ **Its price, stated:** it must track our own BAR placement and whether memory decoding is
+enabled, which the dispatch machinery would have given us for free. That is cheap — **we are the
+device model, so we already know both**, and a relocation passes through our own configuration
+write path.
 
 ⊘⊘⊘ **And the patch must disable one more thing, or it creates the very hole it exists to avoid.**
 The VMM guards every device's I/O dispatch with a **plain, non-atomic boolean** — *"do not allow
@@ -390,7 +408,17 @@ host GPU in a loop and making the driver run recovery. ⇒ The guest times out, 
 it to another process — **while the attacker's host mapping still resolves to it.**
 ⇒ ★ **If any unmap in a refresh lands later than the guest's own timeout for that driver version,
 tear down every host channel that could still hold the stale translation before applying anything
-else**, and count it. A non-zero count is red in the suite, not a warning. ⚠ And issue unmaps as
+else**, and count it. A non-zero count is red in the suite, not a warning.
+
+⊘⊘ **And if the HOST's own invalidate times out, we must poison — not clear the guest's trigger.**
+The host driver writes the entries and then reports the timeout; the twin's translations are stale
+and **there is no undo**. ⇒ Clearing the trigger at that point tells the guest a barrier completed
+that did not. **Poison the device instead**: honest, root-visible, and recoverable by reset.
+
+⊘ **A related consequence for the diff: it must be exact, not best-effort.** Mapping over an
+already-mapped range returns an out-of-memory status — and the host driver's second overlap check
+fires **after** it has already written entries. ⇒ Overlaps are **prevented by the diff**, never
+detected by the return code. ⚠ And issue unmaps as
 soon as the walker reports a cleared leaf, rather than only at the invalidate.
 
 ### 5.6 Doorbells versus registers, across the boundary
@@ -514,6 +542,12 @@ allocations per mapping.
 `[MEASURED]` on the current tree: **13 313 mapping plans for a 1 GB model**, ~132 µs per call. ⇒
 Applied naively, **a model load is tens of seconds of wall clock**, and it is wall clock stolen
 from every other tenant.
+
+⊘⊘⊘ **And on Windows this is not a performance question — it is whether the product works.** That
+guest maps system memory in **4 KiB** units and gives the driver a **hard two-second deadline**
+before it resets the adapter. At ~130 µs per mapping call, a one-gigabyte mapping is a quarter of a
+million calls — **tens of seconds**. ⇒ **Without coalescing, a Windows guest cannot work at all**,
+and with it the cost is bounded by the number of *runs* rather than of pages.
 
 ⇒ ★★★ **Three changes, and they are the difference between a usable product and a demo:**
 
@@ -747,9 +781,16 @@ advanced ⇒ broadcast; the waiter re-checks memory."* Forwarding the host's edg
 is redundant re-checking, and is exactly what hardware does across processes. Missing edges are
 impossible while the host driver notifies us at all.
 
-⚠ **One invariant closes the only known hole:** when the guest re-arms the top-level enable, the
-drainer must **re-evaluate pending and re-raise** if an enabled bit is still set. The host's
-non-stall path is strictly one-shot, so nothing else recovers a dropped edge.
+⚠ **Two invariants close the known holes:**
+
+1. When the guest re-arms the top-level enable, **re-evaluate pending and re-raise** if an enabled
+   bit is still set. The host's non-stall path is strictly one-shot, so nothing else recovers a
+   dropped edge.
+2. ⊘⊘ **The same applies to a masked interrupt vector, and this one is routine.** The kernel's
+   direct-injection path delivers **regardless of the guest's mask**, and Linux masks a vector
+   whenever it changes interrupt affinity. ⇒ An edge arriving while masked is **lost**, and §8
+   already says there is no level-triggered fallback to recover it. ⇒ **Unmasking a vector must
+   re-evaluate pending and re-raise**, exactly like the enable does.
 
 ⇒ **This is deferrable past the first compute**, because the things that would need it poll. ⚠ It
 is deferrable **only if the absence is red rather than silent**: the suite gets an arm that uses a
