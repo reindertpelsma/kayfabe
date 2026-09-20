@@ -460,10 +460,46 @@ most of the machinery disappear:**
 That is one sentence, it is checkable in **one place per transport**, and it cannot be forgotten at
 a call site the way a fence check can.
 
-| transport | how the invariant is held | what the guest is doing meanwhile |
-|---|---|---|
-| **register trigger** | ★ **clear the trigger only after the apply lands** (§5.5) | **spinning** on that register — it *cannot* proceed |
-| **pushbuffer invalidate** | ★ **hold the channel's subsequent entries** until the apply lands | not waiting at all — so **the channel** is the thing we hold |
+### ⊘ Which fences are forwardable to the host — the rule, and it decides both transports
+
+`[owner]` *"but are fences then not forwardable to the host?"* ★★★ **The rule is one line:**
+
+> ★ **A fence is forwardable when the thing that must wait is the GPU. It is not forwardable when
+> the thing that must wait is the guest's CPU.**
+
+| transport | who must wait | forwardable? | mechanism |
+|---|---|---|---|
+| **register trigger** | ★ the **guest's CPU**, which is spinning on our shadow | ⊘ **no, and it needs no forwarding** — the guest is *already* stalled. There is no channel to hold and nothing for the host to do | clear the trigger only after the apply lands (§5.5) |
+| **pushbuffer invalidate** | ★ the **GPU**, executing a stream we submit | ✔ **yes — and it is better than holding it ourselves** | a **semaphore acquire** in the translated stream |
+
+### ★★★ Forwarding the pushbuffer fence: the hardware waits, not us
+
+The channel front-end can **stall in hardware until a memory location reaches a value** — the
+same primitive the guest's own driver uses for cross-channel ordering. ⇒ Instead of holding the
+remainder of the stream in software:
+
+1. submit the prefix, up to the invalidate;
+2. submit a **semaphore acquire** on a location we own, for the mirror generation this stream
+   needs;
+3. submit the remainder **immediately**;
+4. when the apply lands, **we write the location** — and the GPU releases itself.
+
+★ **Use the *greater-or-equal* form, not exact match**, so a later apply also satisfies an earlier
+wait and a generation that has already moved past cannot wedge the channel.
+
+⇒ **What this buys over holding it ourselves:** no worker carries state across the wait, no
+re-submission logic exists, and the channel resumes **at hardware speed** the instant we signal
+rather than at the next scheduling opportunity. ⊘ And it deletes the *"hold the channel's
+subsequent entries"* machinery entirely.
+
+★ **There is a pleasing symmetry with completions.** A translated completion is *translated in
+address only — the real engine writes the value*. The fence is its mirror image: **we write a value
+the real engine waits on.** Same plane, same primitive, opposite direction.
+
+⊘⊘ **And the obligation it creates, which must be honoured on every exit path:** a stalled channel
+whose value is never written **hangs** — and on a kernel channel a hang is globally fatal for the
+guest's whole GPU stack. ⇒ **Every path that abandons an apply — including poisoning the device —
+must still write the semaphore.** Poison must release, not merely stop.
 
 ⇒ ★★★ **And this means the register path needs no separate fence at all.** If the guest cannot see
 the trigger clear until we have applied, then any doorbell it rings *afterwards* is already ordered
