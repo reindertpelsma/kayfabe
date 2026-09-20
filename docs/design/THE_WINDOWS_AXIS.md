@@ -180,6 +180,12 @@ every claim in either direction is folklore, mine included.
 [guru3D: How to disable NVIDIA's GSP Firmware on Windows](https://forums.guru3d.com/threads/how-to-disable-nvidias-gsp-firmware-on-windows.455267/) ·
 [Overclock.net: RTX 5090 GSP Firmware](https://www.overclock.net/threads/rtx-5090-what-is-this-gsp-firmware-all-about-should-i-enable-this-hidden-feature.1817406/)
 
+⚠ **And one thing the "Turing+" framing in that search should not be allowed to blur** `[owner:
+"pre-Turing it can't be used"]`: **Turing+ is the HARDWARE capability gate**
+(`_gpumgrIsRmFirmwareCapableChip`, `arch >= TU100`), not a Windows policy statement. Below Turing
+there is no GSP to enable on any OS. ⇒ Everything uncertain in this section sits **inside** the
+capable set, in the *default-on policy* — see `THE_ARCHITECTURE_v3.md` §0.0.1.
+
 ⇒ ★ **The practical position:** design for GSP being present, **detect and refuse the alternative**
 (§1's fallback detector), and treat *"stock GeForce Windows defaults GSP off"* as an open risk to be
 measured — not as a settled premise in either direction.

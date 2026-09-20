@@ -27,7 +27,7 @@ the rest is a retrofit waiting to happen.
 | **K** | **guest kernel** version | ⊘ all major versions | ⊘ **[CORRECTED w821]** *not* via struct layouts — RM and UVM structs are NVIDIA-defined and kernel-independent. What K actually moves that we see is **DMA addressing**: a guest booted with a **vIOMMU** hands us **IOVAs, not GPAs**, in every sysmem address we are given. ⇒ K × V, and unhandled |
 | **Dg** | **guest driver** version | ⊘ all major versions | **generated** from that version's headers; a per-version **profile entry**, never `if version ==` |
 | **Dh** | **host driver** version | ⊘ all major versions, **decoupled from `Dg`** | we **author** every host call; our host-verb signatures do not accept a guest flag word |
-| **A** | **GPU architecture** | ★ Turing and newer | a **format family** descriptor (four families span Turing→Blackwell) |
+| **A** | **GPU architecture** | ★ Turing and newer — ⊘ **FORCED, not chosen** (below) | a **format family** descriptor (four families span Turing→Blackwell) |
 | **die** | **GPU die** within an arch | ⊘ any die | derived per die, **maintained per family**; a new die is a descriptor, not a code path |
 | **V** | **VMM** | ◐ **the one axis where a version floor is legitimate** — QEMU, Cloud Hypervisor | the core is VMM-agnostic; the VMM shim is the only place that knows |
 | **OS** | **guest OS** | Linux **and** Windows | ◐ **[SURVEYED w821 — see Part 3.]** No longer zero-coverage. ⊘ GSP is **default-on for Turing+ on every OS** (the shared core has no OS branch) — an early claim that Windows defaults it off was **retracted**. What does bite: under WDDM the **OS owns the page tables** and the PDE-update path is never RPC'd to us; TDR is a hard **2 s** vs Linux's 4/30 s; **UVM does not exist**. ★ TCC collapses most of it, and `bGspNocatEnabled` is a one-comparison Windows detector |
@@ -38,6 +38,34 @@ A design that assumes they match is a defect. ★ This is the structural reason 
 call is not merely risky, it is **an implicit assertion that the two versions agree**.
 
 ⊘ **Host OS is Linux only** — the one scope relaxation, taken deliberately.
+
+### 0.0.1 ⊘⊘⊘ The Turing floor is an ARCHITECTURAL BOUNDARY, not a scoping decision
+
+**[w821]** `[owner]` *"pre-Turing it can't be used."* ★ Correct, and it reclassifies the `A`-axis
+floor. `_gpumgrIsRmFirmwareCapableChip` is exactly:
+
+```c
+return (decodePmcBoot42Architecture(pmcBoot42) >= NV_PMC_BOOT_42_ARCHITECTURE_TU100);
+```
+
+⇒ **Below Turing there is no GSP at all.** A pre-Turing guest driver does not speak this protocol
+*at any level*: it runs **monolithic RM** and drives the hardware directly, with no command queue,
+no RPC envelope, and no firmware to impersonate. ★★★ So *"we are the GSP"* is not merely harder
+there — **it is meaningless**, and no amount of engineering moves the floor.
+
+⇒ The floor should be read as *"the architecture does not exist below Turing"*, not as
+*"we chose to start at Turing"*. ⚠ Everywhere else in this document a posture is a decision that
+could be revisited under a product argument (`support_matrix_asymmetry`); **this one cannot be.**
+
+★ **And it separates two gates this document had been blurring:**
+
+| gate | what it tests | where |
+|---|---|---|
+| **capability** | ⊘ **hardware** — is there a GSP on this die at all? `arch >= TU100` | `_gpumgrIsRmFirmwareCapableChip` |
+| **default-on policy** | ◐ *within* capable hardware, should firmware be used by default? On Windows this is **per-SKU** (`devId`, `ssId`, WS/server, TCC/MCDM) | `gpumgrIsDeviceRmFirmwareCapable` + `WindowsFirmwarePolicyArg` |
+
+⇒ The Windows uncertainty in Part 3 §1 lives **entirely inside the second gate**. It has no bearing
+on the first, and therefore none on our floor.
 
 ### 0.1 The axis band for (Dg, Dh) is a DIAGONAL, not a product
 
