@@ -24,7 +24,7 @@ the rest is a retrofit waiting to happen.
 
 | tag | axis | posture | how variation is absorbed |
 |---|---|---|---|
-| **K** | **guest kernel** version | ⊘ all major versions | never our concern directly — but it sets what the guest driver is *built against*, so it moves `Dg`'s struct layouts |
+| **K** | **guest kernel** version | ⊘ all major versions | ⊘ **[CORRECTED w821]** *not* via struct layouts — RM and UVM structs are NVIDIA-defined and kernel-independent. What K actually moves that we see is **DMA addressing**: a guest booted with a **vIOMMU** hands us **IOVAs, not GPAs**, in every sysmem address we are given. ⇒ K × V, and unhandled |
 | **Dg** | **guest driver** version | ⊘ all major versions | **generated** from that version's headers; a per-version **profile entry**, never `if version ==` |
 | **Dh** | **host driver** version | ⊘ all major versions, **decoupled from `Dg`** | we **author** every host call; our host-verb signatures do not accept a guest flag word |
 | **A** | **GPU architecture** | ★ Turing and newer | a **format family** descriptor (four families span Turing→Blackwell) |
@@ -50,18 +50,26 @@ major or LTS branch). ⇒ A bounded window, not every pair.
 state an out-of-band pair is not a policy, it is a hope, and it decays into the
 `0x56 is the forgiven status` trap where a wrong configuration simply runs on.
 
+⊘ **[CORRECTED w821] The band is not 2-D.** An n−1 guest driver must also **support the die**, or
+it never binds at all — so the refusal key is **`(Dg, Dh, die)`**, not `(Dg, Dh)`.
+⚠ And a third interaction the section missed: **`Dg × A`** — the guest supplies its *own* firmware
+image and protected-region metadata, whose layout our fake GSP must accept. That is a guest-driver
+artifact whose shape is architecture-dependent, and it reaches us as data we must parse.
+
 ### 0.2 ★★★ The axes are not evenly distributed across the four planes
 
 This is the useful part, and the surveys in Part 2 measured it rather than assuming it:
 
 | plane | dominant axis | evidence |
 |---|---|---|
-| **GSP RPC function numbers** | ★ **stable** across `Dg` in the measured window | the `NV_VGPU_MSG_FUNCTION_*` enum is **byte-identical between 580.159.04 and 610.43.02** for every id we use; 610 only *appends* (`rpc_global_enums.h`) |
+| **GSP RPC function *numbers*** | ★ **stable** across `Dg` in the measured window | the `NV_VGPU_MSG_FUNCTION_*` enum is **byte-identical between 580.159.04 and 610.43.02** for every id we use; 610 only *appends* (`rpc_global_enums.h`) |
+| ⊘ **GSP RPC *payload structs*** | ⊘ **`Dg`, and they break** | **[CORRECTED w821 — the row above was true of the wrong population, which is this document's own named failure mode.]** The *id* is stable; the *body behind it* is not. `rpc_alloc_object_v2B_04 → v2C_01`, `rpc_map_memory_dma_v03_00 → v2C_05`, **1 895 changed lines** in `generated/g_rpc-structures.h`. ⇒ Same posture as RM controls, not a stable plane |
 | **GSP RPC message framing** | ⊘ **`Dg`, and it BREAKS** | the per-element header is **48 bytes** at 580 (`authTag`/`aad`/`checkSum@32`/`seqNum@36`/`elemCount@40`) and **16 bytes** at 610 (`mctpHeader`/`nvdmHeader`/`checkSum@8`/`seqNum@12`) — `message_queue_priv.h:43-51` vs `:52-67` |
 | **RM control command numbers** | `Dg` (additive), **struct layouts break** | FINN-generated; the *number* is stable, the *parameter struct* is versioned |
 | **BAR0 register offsets** | **A** and **die** | `NV_PGSP_QUEUE_HEAD = 0x110c00` from `ampere/ga102/dev_gsp.h`; the doorbell is `0x30090` on Turing, Ampere **and** Blackwell |
+| ⊘⊘⊘ **Which BAR carries the doorbell** | **A** — *and it changes which trap plane exists* | **[MISSING until w821, and it is the worst kind of omission: an axis that moves the mechanism, not a constant.]** Ampere/Ada: BAR0. Hopper+: unprivileged clients map it over **BAR1** (`bBar1Mapping`, not privilege-gated), which v3 §2 does not trap. See §2.1 |
 | **Doorbell token encoding** | ⊘ **die**, within one arch | `NV_CTRL_VF_DOORBELL` field widths are per-arch swref, and GB202 sets bit 30 where Ampere does not |
-| **Channel / engine class ids** | **A** | `VOLTA_CHANNEL_GPFIFO_A 0xC36F` → `AMPERE_ 0xC56F` → `HOPPER_ 0xC86F` → `BLACKWELL_ 0xC96F` |
+| **Channel / engine class ids** | **A**, ⊘ **and die** | `TURING_CHANNEL_GPFIFO_A 0xC46F` (the floor arch) → `AMPERE_ 0xC56F` → `HOPPER_ 0xC86F` → `BLACKWELL_ 0xC96F`. ⊘ **[CORRECTED w821]** not purely per-arch: `BLACKWELL_CHANNEL_GPFIFO_B 0xCA6F` exists on GB202/203/205/206 while GB100 has only `_A` — **die-level inside one architecture** |
 | **Pushbuffer method encoding** | ★ **remarkably stable** | `NVC56F_DMA_SEC_OP`/`METHOD_ADDRESS`/`_SUBCHANNEL`/`_COUNT` is bit-identical to `NVC36F_*`; the GPFIFO entry differs only in `PRIV` (dropped at C56F) and `INVAL_SCOPE` (added) |
 | **Page-table format** | ⊘ **A**, four families | Turing binds `kgmmuFmtInitLevels_GP10X`; our one built format is `_GA10X` |
 
@@ -71,9 +79,23 @@ code paths — `ElementLayout { hdr_size, checksum_off, seqnum_off, elem_count_o
 and `GmmuFmt` — and that is the shape every other axis-carrying fact should take.
 
 ★ **The 580/610 element header is the worked example to argue from.** It is a structure whose
-*size and every field offset* changed between two supported guest driver versions, it was
-absorbed as data rather than as a branch, and it proves the discipline is implementable rather
-than aspirational.
+*size and every field offset* changed between two supported guest driver versions, and absorbing
+it as data rather than as a branch is the right shape.
+
+⊘⊘ **[CORRECTED w821 — but the descriptor as it stands does NOT absorb the pair it cites, so the
+example proves less than I claimed.]** Three things it cannot express:
+`elemCount` **no longer exists** at 610 (the count is derived from `length`), so an
+`elem_count_off: Option<usize>` models its absence but not its *replacement*; `hdr_size` is
+**runtime**-conditional, not per-version — Confidential Compute adds an encryption tag to every
+element header; and 610 **validates** the `mctpHeader` version and `nvdmHeader` vendor on every
+element it receives, which is behaviour, not layout. ⇒ The honest claim is that the descriptor
+absorbs *offsets*, and that a `Dg` break can also move **derivation** and **validation** — which
+a layout descriptor cannot hold at all.
+
+★ **And a `Dg` break that is neither layout nor number:** 610 reads a GSP-RM **heartbeat** from a
+mailbox register when an RPC times out, to classify the failure; 580 has no such path. ⇒ A slow
+worker gets a *different and fatal* diagnosis at 610. **A version axis can add a new way to be
+judged, not just a new way to be parsed.**
 
 ### 0.3 ⊘ What this forbids, concretely
 
@@ -104,7 +126,8 @@ No isolate children, no scratchpad process, no IPC, no sandbox plane of our own.
 
 | thread | count | job |
 |---|---|---|
-| **worker** | **N, capped at 255** | everything a trap deferred: managed doorbells, GSP RPCs, TLB invalidates |
+| **worker** | **N, capped at 255** | the doorbell plane: scan the token table, claim a token, run the managed channel's work |
+| **register drainer** | **1** | ★ **[NEW w821]** drains the privileged MPSC ring **in reservation order** — GSP RPC kicks, interrupt-tree writes, TLB-invalidate triggers. ⊘ It must be *one* thread: "an ordered ring drained by N workers" is not ordered |
 | **VA manager** | 1 | ★ *new.* One synchronous thread doing **all** `mmap`/`munmap` — page-table diffs, BAR windows, channel mappings. It replaces the scratchpad isolate. |
 
 ⚠ **[w820]** The worker cap is **structural, asserted at startup** — not a configuration
@@ -182,9 +205,16 @@ Guest-container-corrupts-guest-root is the value proposition.
    `IS_REG_OFFSET` tests `offset >= nv->regs->cpu_address` and within `nv->regs->size`
    (`kernel-open/common/inc/nv.h:854`), where `nv->regs->cpu_address` is BAR0's physical base,
    which under KVM is a **guest**-physical address. The guest kernel reaches the same registers
-   by `ioremap` of that same base. ⇒ Both mappings land in **one KVM memslot at one GPA**, and
-   memslots are keyed by GPA. The trap **cannot distinguish kernel from userspace**. The ring
-   cannot be authorized at the trap. Not with more checks. Ever.
+   by `ioremap` of that same base. ⇒ Both mappings land in **one KVM memslot at one GPA**.
+   ⊘⊘ **[CORRECTED w821 — my reasoning here was wrong, though the conclusion survives.]** I wrote
+   that the trap *"cannot distinguish kernel from userspace. Not with more checks. Ever."*
+   **False**: an MMIO exit hands us the vCPU, and its **CPL is readable** (`KVM_GET_SREGS`,
+   ~1 µs). Kernel-vs-user **is** distinguishable. ⇒ The load-bearing unavailability is not
+   privilege, it is **process identity**: nothing tells us *which* of the guest's unprivileged
+   processes rang, and that is what an authorization decision would need. The conclusion — the
+   ring cannot be authorized at the trap — holds, for that reason and not for the one I gave.
+   ⚠ And CPL is not free to consult on a hot path; it is an argument about what is *knowable*,
+   not a proposal to read it per doorbell.
 
 #### Why hardware survives this and a naive port does not
 
@@ -205,6 +235,62 @@ processing, and it converts two things that read as engineering into security de
 - ⊘ **A degradation path becomes an amplifier.** Any "queue full ⇒ scan everything" fallback
   lets an unprivileged process force the VMM to walk **everyone's** channels on the attacker's
   schedule.
+
+#### ⊘⊘⊘ THE HOPPER+ BREAK — on Hopper and Blackwell the doorbell is written through **BAR1**
+
+**[NEW w821, from an adversarial review. This is the most serious defect found in v3, and it is
+an architectural break, not a wording problem.]**
+
+v3 §2 opens *"BAR1/BAR2 are never trapped — ensuring that is a requirement."* ⊘ **On Hopper and
+newer that requirement silently discards work submission.**
+
+`[ogkm]` `usermode_api.c:63-98`: for `hClass >= HOPPER_USERMODE_A` the allocation takes
+`bBar1Mapping` from the caller, and when set, `pMemDesc = pKernelFifo->pBar1VF` with
+`memClassId = NV01_MEMORY_SYSTEM` — a **BAR1** window onto the VF register block
+(`kernel_fifo_gh100.c`, `MEMDESC_FLAGS_MAP_SYSCOH_OVER_BAR1`), placed wherever the **guest's** RM
+writes a BAR1 PTE for it.
+
+★★★ **`bBar1Mapping` is NOT privilege-gated.** Only `bPriv` is (`!bPrivMapping ||
+privLevel >= RS_PRIV_LEVEL_KERNEL`). Any unprivileged client may ask for the BAR1 form.
+
+And both of NVIDIA's own consumers do, with `bPriv = NV_FALSE`:
+
+- **UVM** — `nv_gpu_ops.c:5644`: `.bBar1Mapping = NV_TRUE, .bPriv = NV_FALSE` when
+  `isDeviceHopperPlus(device)`.
+- **nvidia-push** — `nvidia-push-init.c:968`, carrying NVIDIA's own explanation:
+  > *"The BAR1 mapping is used for (faster and more efficient) writes to perform work submission,
+  > but can't be used for reads. If we ever want to read from the USERMODE region (e.g., to read
+  > PTIMER) then we need a second mapping."*
+
+⇒ Four consequences, and the first is a product failure:
+
+1. ⊘⊘⊘ **Every UVM doorbell — and, on this evidence, every CUDA doorbell — is lost on Hopper+**,
+   silently, because it lands on a BAR1 page we deliberately do not trap.
+2. ⊘ **§2.1 fact 3 is Ampere/Ada-scoped.** On Hopper+ the guest **kernel** still rings BAR0
+   (RM's own CeUtils channel allocates `VOLTA_USERMODE_A` and rings via `GPU_VREG_WR32`) while
+   **userspace rings BAR1** — *different pages, different GPAs*.
+3. ⊘ **§2.1 fact 1 mis-describes `bPriv`.** It selects the `NV_VIRTUAL_FUNCTION_PRIV` region
+   (`pBar1PrivVF`, its own doorbell at `NV_VIRTUAL_FUNCTION_PRIV_DOORBELL 0x2200`), not
+   "BAR1-vs-BAR0". `bBar1Mapping` does that. ⇒ There are **three** usermode memdescs on Hopper+
+   (`pRegVF`, `pBar1VF`, `pBar1PrivVF`), not one.
+4. ⊘ **§0.2 has no row for *which BAR carries the doorbell*.** It is an **A**-axis variable that
+   changes **which trap plane exists at all** — the most consequential kind of axis variation, and
+   the one §0 was written to catch. It did not.
+
+★★★★★ **And the inversion, which is the genuinely good news and changes what is possible.**
+On Hopper+ the privilege separation the owner asked for **exists in hardware, for free**: the
+unprivileged doorbell is a *distinct page at a distinct GPA* from the kernel's. ⇒ The literal form
+of §47 — *"do not register write traps in the unprivileged page"* — which §2.1 records as
+unreachable on Ampere **becomes reachable on Hopper+**, because there the two planes are already
+separate. ⊘ The architecture should be built so that separation is *exploited where it exists*
+rather than assumed absent everywhere.
+
+⇒ **[PROPOSE], and this needs an owner ruling because it is a scope decision:**
+either **(a)** trap the BAR1 page the guest maps `pBar1VF` at — findable by recognising the
+BAR1 PTE the guest writes for it — and carry `doorbell_bar` as a generated per-arch descriptor
+field; or **(b)** scope v3 §2 explicitly to Ampere/Ada and state Hopper+ as unsupported until (a)
+lands. ⊘ What is **not** acceptable is the current text, which claims to span Turing→Blackwell
+while describing a mechanism that works on two of four architecture families.
 
 #### ⚠ The tension with the owner's literal instruction, stated rather than resolved silently
 
@@ -230,19 +316,32 @@ The table alone carries the plane.
 ```
 nvkvm_trap_bar0_write(off, val):
 
-  if off == DOORBELL (0x00BB0090):            # VF aperture base + NV_VIRTUAL_FUNCTION_DOORBELL 0x30090
-        tok = val & TOKEN_MASK                # mask to the two decoded fields — see below
-        w   = table[tok >> 6]
+  if off == chip.doorbell_off:                 # ⊘ generated per die, never a literal (§0.3 rule 1)
+        tok = val & chip.token_mask            # per-die decoded fields (§2.2)
         if PASSTHROUGH(tok):
               write the host doorbell INLINE. No queue, no wake, no lock. Return.
-        else:                                 # MANAGED (translated or emulated), or UNKNOWN
-              fetch_or(table[tok >> 6], RUNG_BIT(tok))     # AcqRel
-              fetch_or(summary[tok >> 15], 1 << ...)       # Release
-              bump work_seq; maybe write(eventfd)          # §2.4
+        else:                                  # MANAGED (translated or emulated), or UNKNOWN
+              # 2 bits per token ⇒ 32 tokens per u64 word ⇒ index by tok>>5
+              fetch_or(table[tok >> 5], RUNG << (2 * (tok & 31)))        # AcqRel
+              fetch_or(summary[tok >> 11], 1 << ((tok >> 5) & 63))       # Release
+              bump work_seq; maybe write(eventfd)                        # §2.4
               Return.
   else:
-        stamp and publish onto the PRIVILEGED ring (§2.3). Return.
+        # ★ §41 item 4 FIRST, synchronously — see §2.3
+        if is_read_register(off): shadow_write(off, val)
+        reserve a slot on the PRIVILEGED ring and publish (§2.3)
+        bump work_seq; maybe write(eventfd)
+        Return.
 ```
+
+⊘⊘⊘ **[CORRECTED w821, from an adversarial review — three defects, all mine.]**
+**(a)** The earlier pseudocode indexed `table[tok >> 6]` and `summary[tok >> 15]`. Those are
+**1-bit-per-token** shifts, while §2.4 specifies **two** bits per token. The corrected shifts are
+above, and the earlier `w = table[tok >> 6]` was a **dead load** besides.
+**(b)** It wrote the doorbell offset as the literal `0x00BB0090` — violating this document's own
+§0.3 rule 1 in the first place it had the chance to.
+**(c)** It deferred **every** non-doorbell write with no synchronous arm, which breaks
+`THE_CONSTRAINTS.md` §41 item 4. See §2.3.
 
 ⇒ **A vCPU now takes NO lock at all on the doorbell path.** The w819 text said "one lock, the
 queue's"; with the queue gone there is none.
@@ -294,9 +393,16 @@ Ampere's table and 4 KiB for the 21-bit worst case; the loaded case streams `u64
 skips zero words. Sub-microsecond warm, low single-digit µs cold. **That is cheaper than
 maintaining a ring** — which is why the ring is deleted rather than repaired.
 
-⇒ What a hostile guest process can buy is: one `fetch_or` on a bit in a fixed table that was
-going to be scanned anyway, on a **per-token cacheline** so there is not even a contention point.
-**Exactly hardware's cost profile: ring anything, pay a redundant look.**
+⇒ What a hostile guest process can buy is: one `fetch_or` on two bits in a fixed table that was
+going to be scanned anyway. **Exactly hardware's cost profile: ring anything, pay a redundant
+look.**
+
+⊘ **[CORRECTED w821]** I wrote *"on a per-token cacheline so there is not even a contention
+point."* **False on both halves.** At 2 bits per token a cacheline holds **256 tokens**, and one
+summary word covers **2048**; and every doorbell — passthrough excepted — also RMWs the single
+`worker_vcpu_poll` line that §2.4 itself says ping-pongs at ~10⁷/s. ⇒ There **is** a contention
+point, it is `worker_vcpu_poll`, and the honest claim is that contention is bounded by that one
+line rather than growing with the number of channels.
 
 ### 2.3 The privileged plane — one ordered ring, and per-vCPU rings were WRONG
 
@@ -316,20 +422,44 @@ On hardware this cannot happen: vCPU0's trap returns before T1 releases the lock
 posted writes to one function are ordered. This is not exotic — it is **every cross-CPU register
 sequence RM orders with its own lock**.
 
-⇒ **One MPSC register ring per device, its slot reserved by the same atomic that bumps
-`work_seq`** (§2.4). The sequence is taken *inside* the trap, before it returns, so it already
-embeds the guest's cross-vCPU happens-before; the ring is globally ordered by construction and
-no separate stamp is needed. The vCPU pays one atomic instead of two, and the per-vCPU claim bit
-disappears. A drainer that reaches a reserved-but-unpublished slot waits — bounded by one trap,
-microseconds, holding nothing.
+⇒ **One MPSC register ring per device**, globally ordered by reservation order, drained by **one
+named thread** (§1 — the *register drainer*; ⊘ N workers draining "one ordered ring" is not
+ordered). A drainer reaching a reserved-but-unpublished slot waits for its publisher.
 
-⊘ **This ring may not overflow, and that asymmetry is the whole point of §2.1.** The doorbell
-table is *state* and a lost hint is recoverable by a scan; a register write is a *stream* and the
-stream **is** the truth — there is nothing to rescan and a dropped write is unrecoverable. So it
-must be sized so it cannot fill, and the bound comes from ogkm limiting in-flight entries.
-⚠ **That bound is asserted, not yet verified** — it belongs in §10, because if it is wrong the
-failure is a guest that wedges with no diagnostic. Its saving grace is the privilege line: only
-guest root can reach it, and a guest root that overflows it harms only itself.
+⊘⊘⊘ **[CORRECTED w821 — I had this ring share its atomic with `work_seq`, and that deadlocks.]**
+I wrote *"its slot reserved by the same atomic that bumps `work_seq`… one atomic instead of two."*
+⇒ **Every managed doorbell also bumps `work_seq`** (§2.2). If the slot index is a function of
+`work_seq`, each doorbell **reserves a ring slot nobody ever publishes**, and the drainer waits on
+it **forever**. ⇒ The register ring gets its **own reservation counter**; `work_seq` goes back to
+being purely a **wake sequence**. The vCPU pays two atomics on the privileged path and one on the
+doorbell path. ⚠ And the cross-vCPU happens-before argument must then be made for the *reservation*
+counter, not for `work_seq` — it still holds, for the same reason: the reservation is taken inside
+the trap, before it returns, so it embeds the guest's own lock-ordered sequence.
+
+⚠ **"Bounded by one trap, microseconds" was also too strong.** The publisher is a **host userspace
+thread** and may be descheduled between reserving and publishing. The real bound is a host
+scheduler quantum, and everything behind that slot stalls with it.
+
+★★★ **§41 item 4 is not optional, and deferring everything broke it.** `THE_CONSTRAINTS.md` §41
+permits — and *requires* — **a synchronous write to a read register**, because *"the value must be
+visible to the next read of that register"*, and in v3 reads are served from a **shadow page** the
+guest reads with no exit. ⇒ A deferred write leaves the guest reading **stale** state.
+⊘ The sharp case is interrupt masking: the guest's ISR writes `LEAF_EN_CLEAR`/`_SET` and then reads
+`LEAF`/`TOP`. With the mask deferred we deliver an interrupt **the guest has already masked**.
+⇒ The trap path must do the **shadow write synchronously, before** publishing to the ring
+(see the corrected pseudocode above). That write is a store to a mapped page — it is not blocking
+work and does not violate the trap contract.
+
+⊘ **Overflow: the doorbell table is *state*, a register write is a *stream*.** A lost hint is
+recoverable by a scan; a dropped register write is not. But **[CORRECTED]** my conclusion —
+*"must be sized so it cannot fill, and ogkm bounds in-flight entries"* — does not follow, and is
+partly false. GSP RPC kicks **are** bounded (the RPC is synchronous: send then poll). ⊘ **ISR mask
+writes and the init register stream are bounded by nothing in ogkm** — that was a *rate* claim
+dressed as a *count* claim. And a full ring leaves the trap unable to either block or drop.
+⇒ **[PROPOSE]** the privilege line licenses the opposite conclusion from the one I drew: since only
+guest root reaches this ring, and a guest root that floods it harms only itself, the ring should be
+**growable** — reserve address space up front, commit on demand — rather than fixed and provably
+un-fillable. ⚠ **This is a real change of position and the owner should rule on it.**
 
 ### 2.4 The wakeup protocol
 
@@ -396,6 +526,50 @@ that preceded it on the same vCPU (different planes, §2.2 vs §2.3). On hardwar
 persists until the channel is schedulable; ours must too. Clearing it on a refusal is a lost
 doorbell — the same class as this tree's `forwarded=0 refused=8` engine-object rows.
 
+⊘⊘ **[CORRECTED w821 — the four states as written cannot express that.]** `CAS RUNG → BUSY`
+**clears** `RUNG`. A worker that then finds it cannot act has no transition back. ⇒ Add
+**`BUSY → RUNG`** as the *"put it back"* edge, distinct from `BUSY → IDLE`.
+⚠ And that creates a livelock the doc must close: an unactionable token is then **found on every
+scan**, so a worker treating *"found work"* as *"do not sleep"* spins forever — while the thing
+that would make the channel schedulable is a **register write or RPC that also needs a worker**.
+⇒ **"Found but unactionable" must count as "no work" for the purpose of deciding to sleep.** The
+`work_seq` bump from the register drainer is what wakes it again, and that is exactly the wakeup
+the sequence protocol already provides.
+
+⊘⊘⊘ **[NEW w821 — a lost doorbell IS reachable with the summary bitmap, and I never specified its
+clearing discipline.]** The interleaving:
+
+```
+Worker W: seen = work_seq
+W: load table word w  → 0
+   vCPU:  fetch_or(table[w], RUNG)            ← work appears
+   vCPU:  fetch_or(summary, bit w)
+   vCPU:  bump work_seq → S+1
+W: CLEAR summary bit w          (it saw the word as 0)
+W: rescan, trusting the summary → misses the token
+W: CAS register-as-polling with work_seq == S+1 → SUCCEEDS (the bump preceded the rescan)
+W: sleeps.   RUNG set, summary clear, no further bump.   ⊘ LOST until an unrelated ring.
+```
+
+★ The fix is the standard one and must be **in the API shape**, not a comment: **clear the summary
+bit first, then re-read the word** (`Release` on the clear, `Acquire` on the re-read); if the word
+is non-zero, set the bit back. ⊘ A summary that is *never* cleared is not an index, and a scan
+that always walks the full table makes the summary pointless — so "just don't clear it" is not an
+escape.
+
+⚠ **Deregistration is unspecified above and needs to be:** who decrements `workers_polling`, and
+when relative to the `read()`. §2.4's Q3-style safety argument assumes deregister-then-scan; that
+ordering is the contract, not an implementation detail.
+
+⊘ **[CORRECTED w821] The eventfd paragraph contradicts itself.** It mandates
+`EFD_SEMAPHORE | EFD_NONBLOCK` with one shared epoll, and then the instrumentation note describes
+workers *parked in a blocking `read()`*. With `EFD_NONBLOCK` no worker ever parks there. ⇒ Keep
+the non-blocking form; the instrumentation note applies only to the blocking variant and is
+retained as a warning about **which** design it would bite. ⚠ Also: with a **single shared** epoll
+instance `EPOLLEXCLUSIVE` is irrelevant — it arbitrates between epoll *instances*. The wakeup
+collapse it was cited against is a property of the per-worker-epoll configuration we are **not**
+using.
+
 ⊘ **The claim is acquired INSIDE the scan, after `seen`, and released before the scan returns.**
 Caching "this ring was empty" across a `seen` read loses an item **forever**. This must be
 enforced by the API shape, not by a comment, because it is exactly the shape someone optimises.
@@ -409,9 +583,17 @@ only under load — the one condition in which anyone consults them.
 ★★★ The doorbell page is mapped into the guest as a **KVM read-only memslot** over the real
 host doorbell page. Consequences, all of them deletions:
 
-- Every **read** is hardware, with **no exit and no code** — including the microsecond counter.
-  ⊘ **There is no PTIMER implementation in v3.** The register emulation, the refusal of guest
-  writes to it, the counter-page install — all gone.
+- Every **read** is hardware, with **no exit and no code** — including the microsecond counter
+  *on this page*.
+  ⊘⊘ **[CORRECTED w821 — "there is no PTIMER implementation in v3" was overdrawn.]** The
+  read-only memslot removes the **usermode window's** timer (`NVC361_TIME_0/1` at page `+0x080`).
+  It does **not** remove the **kernel's** clock: RM reads `NV_PTIMER_TIME_0/1` at
+  **`0x9400`/`0x9410`** (`kepler/gk104/dev_timer.h:35`) — a *different BAR0 page*, reached with
+  ordinary register reads. ⇒ That page needs its own answer, and each option costs something:
+  read-trap it (contradicts *"only writes trap"*), shadow it (is emulation, which §8 deletes), or
+  memslot it over the host's page (⚠ a page of **side-effect registers**, which the constraints
+  forbid mapping wholesale). `THE_CONSTRAINTS.md` already anticipates this — *"possibly with that
+  one page still trapped."* **Unresolved; §10.**
 - Every **write** traps, and runs §2.2.
 - When *we* need to ring a doorbell (passthrough inline, or translated from a worker) we write
   the host page **directly**, bypassing the read-only mapping.
@@ -614,7 +796,8 @@ The surviving hand-written surface should be a small set of per-architecture-ser
 Isolates and the whole IPC plane · the sandbox plane · `Proc` · the address table · joins
 (all four generations) · VA→phys translation on the submission path · the operand gate ·
 publication epochs, the dirty gate, sweep-skip · the CPU CE executor · the completion watch ·
-PTIMER emulation · the framebuffer probe/rebind · **every on/off flag for things that no
+the *usermode-page* PTIMER emulation (⊘ **not** the kernel `NV_PTIMER` page at `0x9400` — see
+§2.5) · the framebuffer probe/rebind · **every on/off flag for things that no
 longer have two sides** `[owner]`.
 
 ★ **[w820] Three more, and they were in the v3 proposal itself — not in the old tree:**
@@ -666,14 +849,21 @@ deleted.
 
 ## 10. Still open
 
-**[w820] Resolved since w819**, recorded here so the list does not read as unchanged:
-the doorbell/register queue split and its overflow semantics (§2.1–2.3); the worker wakeup
-protocol, its bit widths, its layout and its memory orderings (§2.4); the doorbell double-take,
-now a named security boundary rather than a race (§2.4).
+**Resolved since w819**, recorded so the list does not read as unchanged: the doorbell/register
+**split** (§2.1–2.3); the worker wakeup protocol's bit widths, layout and memory orderings (§2.4);
+the doorbell double-take, now a named security boundary rather than a race (§2.4).
+⊘ **[CORRECTED w821]** the w820 text also claimed *"and its overflow semantics"* as resolved while
+§10.5 listed the overflow bound as open — **the same item on both lists**. Overflow is **open**,
+and §2.3 now proposes the opposite answer (growable, not un-fillable).
 
 Still genuinely open:
 
-1. **The interrupt race** (§5) — per-channel or per-semaphore, and whose burden.
+1. ⊘ **[CORRECTED w821 — this entry was stale.]** §5 already settles *whose burden* (the
+   **waiter's**, three independent ways, `[owner's hypothesis, confirmed]`). What is genuinely
+   open is narrower: **what we must do to honour "once armed, a later release must produce an
+   interrupt"**, given §5's finding that registration is **per engine** and carries no channel or
+   semaphore identity — and given that `NVC36F_NON_STALL_INTERRUPT`, the method by which the guest
+   *requests* it, is **not recognised anywhere in the tree** (`THE_SURFACE_v3.md` §4.5).
 2. ✔ **The synchronous-verb list — ANSWERED at w821**, in `THE_SURFACE_v3.md` §2.4. Derived
    from what the guest driver's own call sites *do with the reply*, not from command names.
    ★ **The strongest result is a negative one:** both page-directory verbs —
@@ -693,10 +883,23 @@ Still genuinely open:
    the fault structures are shared with userspace we can map them through for passthrough; a
    translated fault needs its address translated on the way back.
 4. **The crate model** — to be redrawn against §8.
-5. ★ **[NEW, w820] The privileged ring's non-overflow bound is ASSERTED, not verified.**
-   §2.3 needs it sized so it cannot fill, on the argument that ogkm limits in-flight entries.
-   That bound must be **read out of ogkm and turned into a startup assertion**, because if it
-   is wrong the failure is a guest that wedges with no diagnostic.
+5. ⊘ **[REFRAMED w821] The privileged ring's overflow policy needs an owner ruling.** w820 said
+   *"size it so it cannot fill; ogkm bounds in-flight entries."* ⚠ That was a **rate** claim
+   dressed as a **count** claim: GSP RPC kicks are bounded (the RPC is synchronous), but ISR mask
+   writes and the init register stream are bounded by nothing in ogkm. §2.3 now **proposes the
+   opposite** — a *growable* ring, licensed by the same privilege line that makes this plane
+   guest-root-only. **This is a change of position, not a detail.**
+8. ⊘⊘⊘ **[NEW w821, and it is the largest open item in the document] The Hopper+ doorbell BAR.**
+   On Hopper and newer, unprivileged clients map the doorbell over **BAR1** — which §2 never
+   traps — so UVM and CUDA work submission is **silently lost** there. Either trap that page and
+   carry `doorbell_bar` as a generated per-arch descriptor, or scope §2 to Ampere/Ada by name.
+   ★ The compensation is real: on Hopper+ kernel and userspace doorbells are **already separate
+   pages**, so §47's literal form becomes reachable there. See §2.1.
+9. ★ **[NEW w821] The kernel `NV_PTIMER` page at `0x9400`** — §2.5's read-only-memslot argument
+   covers the usermode window only. This page still needs an answer, and all three options cost
+   something.
+10. ★ **[NEW w821] A vIOMMU in the guest hands us IOVAs, not GPAs**, in every sysmem address.
+   Unhandled, and it is the real content of the `K` axis (§0).
 6. ★ **[NEW, w820] The scan-cost figure in §2.2 is arithmetic, not a measurement.** Sub-µs warm
    is the claim the ring-deletion rests on; it needs a microbenchmark on the bench box before it
    is cited as fact.
