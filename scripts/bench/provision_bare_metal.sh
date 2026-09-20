@@ -33,7 +33,7 @@ $S 'export PATH=$HOME/.cargo/bin:$PATH
     git checkout -q w749-fable-legb && git reset -q --hard origin/w749-fable-legb && git log --oneline -1' || exit 2
 
 echo "== build the raw client (release, as the guest lane runs it)"
-$S 'export PATH=$HOME/.cargo/bin:$PATH; cd /root/kayfabe && cargo build -q --release -p kayfabe-isolate-host --bin kayfabe-rm-ladder 2>&1 | tail -5; ls -la target/release/kayfabe-rm-ladder' || exit 2
+$S 'export PATH=$HOME/.cargo/bin:$PATH; cd /root/kayfabe && cargo build -q --release -p kayfabe-rm-ladder --bin kayfabe-rm-ladder 2>&1 | tail -5; ls -la target/release/kayfabe-rm-ladder' || exit 2
 
 echo "== SANITY: the client must be able to open the driver at all"
 # ⊘ A one-arm smoke BEFORE the sweep. Without it a box with no /dev/nvidiactl produces 30

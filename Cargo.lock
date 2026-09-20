@@ -299,6 +299,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "kayfabe-rm-ladder"
+version = "0.1.0"
+dependencies = [
+ "kayfabe-abi",
+ "kayfabe-arch",
+ "kayfabe-chips",
+ "kayfabe-device",
+ "kayfabe-isolate",
+ "kayfabe-isolate-host",
+ "kayfabe-linux-raw",
+ "kayfabe-mmu",
+ "kayfabe-util",
+]
+
+[[package]]
 name = "kayfabe-rmrpc"
 version = "0.1.0"
 dependencies = [

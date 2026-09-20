@@ -1,0 +1,36 @@
+# ★★★★★ THE GRADING INSTRUMENT, MOVED OUT OF THE THING IT GRADES.
+#
+# `[audit w823]` this binary lived at `kayfabe-isolate-host/src/bin/rmladder.rs` — **inside the
+# crate the v3 rewrite deletes.** It is `kayfabe-rm-ladder`: the program all 30 arms of
+# `scripts/fastguest/bare_metal_suite.sh` invoke, the one that scored **30/30 on bare metal**, and
+# now the per-die axis probe.
+#
+# ⊘⊘⊘ **Deleting the isolate plane with this still inside it would have destroyed the only
+# instrument that can say whether the rewrite worked.** `THE_REWRITE.md` states the constraint in
+# as many words: *"It must move to its own crate before that deletion, or the grading instrument
+# disappears with the thing it grades."* This crate is that move, and it is step 1 of 3 —
+# **nothing may be deleted until 30/30 is re-greened from here.**
+#
+# ⚠ It still depends on `kayfabe-isolate-host` for `rm.rs` (the RM ioctl layer, which is a KEEP).
+# That edge is expected and is retired by step 2, when `rm.rs` is lifted into an in-process host
+# crate. The point of step 1 is only that the BINARY is no longer inside the delete target.
+[package]
+name = "kayfabe-rm-ladder"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[[bin]]
+name = "kayfabe-rm-ladder"
+path = "src/main.rs"
+
+[dependencies]
+kayfabe-util.workspace = true
+kayfabe-arch.workspace = true
+kayfabe-abi.workspace = true
+kayfabe-chips.workspace = true
+kayfabe-mmu.workspace = true
+kayfabe-device.workspace = true
+kayfabe-isolate.workspace = true
+kayfabe-isolate-host.workspace = true
+kayfabe-linux-raw.workspace = true

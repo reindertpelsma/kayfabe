@@ -18,7 +18,7 @@ TAG=${1:-bare}
 BUDGET=${2:-120}
 shift 2 2>/dev/null || true
 BIN=${KF_LADDER:-/root/kayfabe/target/release/kayfabe-rm-ladder}
-[ -x "$BIN" ] || { echo "bare_metal_suite: missing $BIN — cargo build --release -p kayfabe-isolate-host --bin kayfabe-rm-ladder"; exit 2; }
+[ -x "$BIN" ] || { echo "bare_metal_suite: missing $BIN — cargo build --release -p kayfabe-rm-ladder --bin kayfabe-rm-ladder"; exit 2; }
 
 ARMS=("$@")
 if [ "${#ARMS[@]}" -eq 0 ]; then

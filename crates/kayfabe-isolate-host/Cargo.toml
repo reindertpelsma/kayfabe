@@ -35,9 +35,9 @@ path = "src/bin/isolate.rs"
 # ★ The bring-up ladder as a program (host_execution_plane.md §4). A human-facing
 # diagnostic, deliberately NOT part of the isolate: the isolate faces a hostile guest and
 # has no business owning an argument parser or a `println!`.
-[[bin]]
-name = "kayfabe-rm-ladder"
-path = "src/bin/rmladder.rs"
+# ⊘ `kayfabe-rm-ladder` MOVED OUT (w823) to `crates/kayfabe-rm-ladder`. It is the grading
+# instrument for the 30-arm bare-metal suite, and it cannot live inside the crate the v3 rewrite
+# deletes -- that would retire the grader together with the thing it grades.
 
 # ★★ The containment prober. A separate PROCESS is not a stylistic choice here: entering
 # the sandbox rewrites this process's mount namespace and root, so the property can only be

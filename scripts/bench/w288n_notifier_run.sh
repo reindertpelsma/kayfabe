@@ -31,7 +31,7 @@ CLIENT=$CARGO_TARGET_DIR/x86_64-unknown-linux-musl/release/kayfabe-rm-ladder
 rm -f /workspace/bench/qemu-build/qemu-system-x86_64 "$CLIENT"
 
 echo "=== BUILD CLIENT (static musl) $(date -Is) ==="
-cargo build --release --target x86_64-unknown-linux-musl -p kayfabe-isolate-host --bin kayfabe-rm-ladder
+cargo build --release --target x86_64-unknown-linux-musl -p kayfabe-rm-ladder --bin kayfabe-rm-ladder
 CRC=$?
 echo "=== CLIENT BUILD RC=$CRC ==="
 [ -x "$CLIENT" ] || { echo "=== ★★★ NO CLIENT BINARY — a missing binary must be FATAL, not a 127 ==="; finish 95; }

@@ -26,7 +26,7 @@ git fetch -q origin && git reset --hard -q "origin/$BRANCH" || { echo "axis_cell
 echo "axis_cell: rev=$(git rev-parse --short HEAD)"
 
 . "$HOME/.cargo/env" 2>/dev/null || true
-cargo build --release -p kayfabe-isolate-host --bin kayfabe-rm-ladder 2>&1 | tail -2 \
+cargo build --release -p kayfabe-rm-ladder --bin kayfabe-rm-ladder 2>&1 | tail -2 \
   || { echo "axis_cell: ⊘ build failed — a BUILD fault, not a cell result"; exit 2; }
 
 export BENCH_DIR=${BENCH_DIR:-/workspace/bench}

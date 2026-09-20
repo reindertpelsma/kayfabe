@@ -56,7 +56,7 @@ CLIENT=${CLIENT:-$KF_ROOT/target/release/kayfabe-rm-ladder}
 die() { echo "build_fast_guest: $*" >&2; exit 1; }
 
 [ -f "$IMG" ]    || die "no guest image at $IMG"
-[ -x "$CLIENT" ] || die "no raw client at $CLIENT (cargo build --release -p kayfabe-isolate-host --bin kayfabe-rm-ladder)"
+[ -x "$CLIENT" ] || die "no raw client at $CLIENT (cargo build --release -p kayfabe-rm-ladder --bin kayfabe-rm-ladder)"
 command -v busybox >/dev/null || die "busybox is not installed"
 command -v cpio    >/dev/null || die "cpio is not installed"
 
