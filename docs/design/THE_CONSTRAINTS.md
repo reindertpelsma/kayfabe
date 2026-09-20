@@ -2877,3 +2877,70 @@ and is false of ours.
 
 ⊘ It does not license a green suite by re-enabling `local`. The number to move is *"a forwarded
 CE copy retires"*, and until it does the honest score is the one the GPU earns.
+
+---
+
+## §47 — THE DOORBELL IS ADVERSARIAL TO THE GUEST'S OWN ROOT. §41 IS AMENDED.
+
+**STATUS: LIVE, 2026-09-20 (w820). Owner ruling.**
+
+> *"yeah the doorbell is adversarial also to the guest itself, since unprivileged guest
+> userspace writes to it (thats below guest kernel). thats why I would not register write traps
+> in the unprivileged bar0 page we mmap from host userspace, same for any other page if they
+> exist guest userspace can exist without something like FULL_REFRESH. Because this is not about
+> the guest corrupting itself from the kernel/root in the guest, its about a sandboxed/container
+> process in the guest corrupting the root in the guest."*
+
+★★★ There are **two** privilege boundaries, not one. Every constraint written before this treated
+"the guest" as a single adversary sitting outside our trust boundary. That is the outer boundary.
+The **inner** one runs between unprivileged guest userspace and guest root, and the doorbell
+straddles it.
+
+### The classification test, applied to every trapped page
+
+**Can unprivileged guest userspace write it?**
+
+- **Yes** ⇒ whatever sits behind the trap must be **fixed-size, idempotent, non-degradable, and
+  require no identity**. No queue it can fill. No fallback it can force. No structure shared with
+  another guest process.
+- **No** (guest root only) ⇒ an ordered, must-not-overflow ring is permitted, because a guest root
+  that overflows it harms only itself, which is inside the guest's own trust model.
+
+⊘ **This is not satisfiable by adding a check.** Three facts, all from ogkm:
+the doorbell page is **one `ADDR_REGMEM` memdesc per GPU**, DUP'd to every client
+(`usermode_api.c:47`, `kernel_fifo_gv100.c:370`) — with RM waiving its own privilege check on it
+**by name**, `MEMDESC_FLAGS_SKIP_REGMEM_PRIV_CHECK` (`:374`); the token is a bare concatenation of
+`runlistId` and `chId` with no capability in it (`kernel_fifo_ga100.c:224`); and guest RM's own
+`ioremap` of BAR0 and userspace's `mmap` of the usermode window resolve to the **same GPA**, so a
+KVM memslot trap **cannot tell kernel from userspace**. There is no identity to check.
+
+### §41 is amended
+
+§41 item 1 permits *"update a queue"* and item 3 says an emulated doorbell *"puts the token in a
+queue."* ⊘ **For the doorbell that is now wrong.** A doorbell sets a bit in a fixed table
+(`THE_ARCHITECTURE_v3.md` §2.2); it never enqueues and never wakes through a growable structure.
+Items 2 and 4 stand; item 1 stands for **privileged** registers only.
+
+### Why hardware tolerates what we cannot
+
+A ring tells the PBDMA to re-read that channel's **USERD `GP_PUT`** — memory only the owner can
+write. The attacker contributes a **timing hint and zero data**. Our handler, for a translated or
+emulated channel, **parses the victim's pushbuffer**. That turns the hint into a control input,
+and it means: ⊘ **concurrent double-take is not a race, it is a triggerable primitive** — ring
+root's token in a loop and get two workers walking root's GPFIFO against one cursor.
+
+### What this licenses, and what it forbids
+
+✔ It licenses **deleting** the doorbell hint queue and every FULL_REFRESH-shaped fallback, in
+favour of a 64 KiB bit table sized to what `NV_CTRL_VF_DOORBELL` can *express* (2¹⁹ tokens), not
+to what is legal — `a_bound_on_reads_is_not_a_bound_on_emits`.
+
+⊘ It does **not** license the literal form of the ruling today. Not trapping the page at all also
+gives up intercepting **kernel** channel doorbells, and the scrub is one of those (§46) — the live
+cross-client leak. The literal form becomes reachable when every channel rung through that page is
+passthrough; until then the design must earn the property by construction instead.
+
+⊘ It does not license asserting that the usermode window is the *only* unprivileged BAR0 surface.
+That is RM policy in one driver version, not an invariant. `[owner]` *"same for any other page if
+they exist"* ⇒ enumerate the objects that hand `ADDR_REGMEM` to a non-kernel client, generated
+from the headers, and assert over that set.

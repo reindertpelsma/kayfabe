@@ -1,7 +1,13 @@
 # kayfabe v3 — the architecture after the owner's review
 
-**STATUS: LIVE, 2026-09-20 (w819). Supersedes `THE_ARCHITECTURE_v2.md`**, which this document
+**STATUS: LIVE, 2026-09-20 (w820). Supersedes `THE_ARCHITECTURE_v2.md`**, which this document
 keeps only as the record of what was proposed before the review corrected it.
+
+⊘ **w820 rewrote §2 entirely** around a second privilege boundary the owner named: the one
+**inside the guest**, between unprivileged guest userspace and guest root. The doorbell hint
+queue and its "inspect all doorbells" fallback are **deleted**, not fixed; per-vCPU register
+rings are **refuted**; the worker wakeup protocol is specified with its orderings. §§1, 8 and 10
+were updated to match. Everything else is unchanged from w819.
 
 ⊘ Written from the owner's point-by-point review. Where the review corrected me, the
 correction is marked **[CORRECTED]** with what I had wrong — those are the load-bearing edits,
@@ -14,12 +20,16 @@ not footnotes.
 **One process.** The VMM (QEMU, or later any hypervisor) with the kayfabe core linked in.
 No isolate children, no scratchpad process, no IPC, no sandbox plane of our own.
 
-**Two threads besides the vCPUs:**
+**Two kinds of thread besides the vCPUs:**
 
-| thread | job |
-|---|---|
-| **worker** | everything a trap deferred: managed doorbells, GSP RPCs, TLB invalidates |
-| **VA manager** | ★ *new.* One synchronous thread doing **all** `mmap`/`munmap` — page-table diffs, BAR windows, channel mappings. It replaces the scratchpad isolate. |
+| thread | count | job |
+|---|---|---|
+| **worker** | **N, capped at 255** | everything a trap deferred: managed doorbells, GSP RPCs, TLB invalidates |
+| **VA manager** | 1 | ★ *new.* One synchronous thread doing **all** `mmap`/`munmap` — page-table diffs, BAR windows, channel mappings. It replaces the scratchpad isolate. |
+
+⚠ **[w820]** The worker cap is **structural, asserted at startup** — not a configuration
+convention. `workers_polling` is 8 bits of `worker_vcpu_poll` (§2.4) and a wrap would read
+**0 while workers are polling**, which is the lost wakeup the protocol exists to prevent.
 
 ★ The VA manager exists because mapping is the one activity that must be serialized and must
 never happen on a vCPU. Giving it a thread rather than a lock makes "who may map" a structural
@@ -46,31 +56,249 @@ with it.
 Only **BAR0**, only **writes**. BAR1/BAR2 are never trapped — ensuring that is a requirement,
 not an optimisation. The entry point is one function, `nvkvm_trap_bar0_write`.
 
+### 2.1 ★★★★★ The privilege boundary INSIDE the guest is the organising idea
+
+**[NEW, w820]** `[owner, 2026-09-20]` *"the doorbell is adversarial also to the guest itself,
+since unprivileged guest userspace writes to it (that's below guest kernel) … It's not about
+the guest corrupting itself from the kernel/root in the guest, it's about a sandboxed/container
+process in the guest corrupting the root in the guest."*
+
+This is not hardening bolted onto the design. It **splits the trap path in two**, and every
+property each half needs is derived from which side of the line it sits on:
+
+| plane | who can write it | what it may therefore be |
+|---|---|---|
+| **doorbell** (usermode window) | **unprivileged guest userspace** | fixed-size, idempotent, non-degradable, needs no identity ⇒ **a bit table, no queue** |
+| **privileged registers** (everything else in BAR0) | **guest root only** (RM) | an ordered ring that must not overflow — a guest root that overflows it harms only itself |
+
+⇒ The test for any future trapped page is one question: **can unprivileged guest userspace
+write it?** If yes it gets no queue, no degradation mode and no shared structure. If that is
+not achievable for some page, we do not map it.
+
+Guest-root-corrupts-guest-root is inside the guest's own trust model and not ours to defend.
+Guest-container-corrupts-guest-root is the value proposition.
+
+#### Why no check at the trap can fix this — three facts from ogkm
+
+1. **The doorbell page is ONE page per GPU, aliased to every client.** `usrmodeConstruct_IMPL`
+   takes `pMemDesc = pKernelFifo->pRegVF` (`usermode_api.c:47`) — a single per-GPU `ADDR_REGMEM`
+   memdesc (`kernel_fifo_gv100.c:370`), 64 KiB (`NVC361_NV_USERMODE__SIZE`), doorbell at `+0x090`.
+   `usrmodeCanCopy` is `NV_TRUE`, so it is **DUP'd, not copied**. There is **no per-client and no
+   per-channel doorbell page on Ampere.** Hopper adds `bPriv`, gated on `RS_PRIV_LEVEL_KERNEL`,
+   but that selects BAR1-vs-BAR0 *mapping*, not which channels you may ring.
+   ★ RM waives its own privilege check on this window **by name**:
+   `memdescSetFlag(pRegVF, MEMDESC_FLAGS_SKIP_REGMEM_PRIV_CHECK, NV_TRUE)` (`:374`). Handing a
+   BAR0 register window to unprivileged userspace is deliberate, documented NVIDIA behaviour.
+2. **The token carries no capability.** `kfifoGenerateWorkSubmitTokenHal_GA100`
+   (`kernel_fifo_ga100.c:224`) is a plain concatenation of `runlistId` and `chId`. RM's comment
+   *"Caller cannot make assumption about this handle"* is a request, not an enforcement: the
+   space is small enough to enumerate by counting.
+3. **The trap carries no attributable identity.** We get a vCPU, a GPA and 32 bits the attacker
+   chose. Nothing says *who* rang, and the guest kernel's own `ioremap` of BAR0 and userspace's
+   `mmap` of the usermode window resolve to the **same GPA** — KVM memslots are keyed by guest
+   physical address, so the trap **cannot distinguish kernel from userspace**. The ring cannot
+   be authorized at the trap. Not with more checks. Ever.
+
+#### Why hardware survives this and a naive port does not
+
+On hardware a ring means *"channel (runlist, chid) may have work"*, and the PBDMA then reads
+that channel's **USERD `GP_PUT`** — memory only the owner can write. A hostile ring buys a
+redundant fetch of work the victim already published. The attacker contributes **zero data**,
+only a timing hint. NVIDIA evidently accepted that.
+
+Our handler does not re-read a pointer. For a **translated** channel it parses and translates
+the victim's pushbuffer; for an **emulated** channel it executes a function on the victim's
+behalf. That promotes the attacker's timing hint into a control input over victim-state
+processing, and it converts two things that read as engineering into security defects:
+
+- ⊘ **Concurrent double-take becomes a triggerable primitive.** Ring root's token in a tight
+  loop and get two workers walking root's GPFIFO concurrently against one cursor: root's work
+  submitted twice, or its cursor walked backwards into a PBDMA ring-wrap. The four-state token
+  word in §2.4 is therefore **the boundary**, not a latency nicety.
+- ⊘ **A degradation path becomes an amplifier.** Any "queue full ⇒ scan everything" fallback
+  lets an unprivileged process force the VMM to walk **everyone's** channels on the attacker's
+  schedule.
+
+#### ⚠ The tension with the owner's literal instruction, stated rather than resolved silently
+
+`[owner]` *"I would not register write traps in the unprivileged bar0 page."* The strongest form
+of that — **map the page writable straight through to hardware, never trap it** — is not
+reachable today, for the reason in fact 3: guest RM rings the *same physical register* from the
+kernel, so not trapping it also gives up intercepting **kernel** channel doorbells. The scrub is
+one of those (§6), and it is the live cross-client leak. So v3 takes the implementable reading:
+**trap, but let nothing behind the trap be shared, growable or degradable.**
+
+★ The literal form becomes reachable the day **every channel rung through that page is
+passthrough**. That is a real future state, not a fiction, and it is the reason §2.2 is built as
+a table rather than a queue: when that day comes, the doorbell trap is deleted rather than
+rewritten.
+
+### 2.2 The doorbell plane — a bit table, and the hint ring is DELETED
+
+**[CORRECTED, w820]** The w819 text here said *"push the token on the queue, set this channel's
+rung bit; queue full ⇒ set 'inspect all doorbells' flag."* That fallback is exactly the
+amplifier above, and the queue is exactly the exhaustible shared structure. **Both are deleted.**
+The table alone carries the plane.
+
 ```
-if off == DOORBELL (0x00BB0090):
-      bound-check the token against the table size
-      one atomic u64 read of the table word
-      ├─ PASSTHROUGH → write the host doorbell INLINE. No queue, no wake, no lock. Return.
-      ├─ MANAGED     → push the token on the queue, set this channel's rung bit. Return.
-      │                 (queue full ⇒ set "inspect all doorbells" flag, do not enqueue)
-      └─ UNKNOWN     → no-op. Return.
-else:
-      push onto the PRIVILEGED queue (RPC submit, TLB invalidate, …). Return.
+nvkvm_trap_bar0_write(off, val):
+
+  if off == DOORBELL (0x00BB0090):            # VF aperture base + NV_VIRTUAL_FUNCTION_DOORBELL 0x30090
+        tok = val & TOKEN_MASK                # mask to the two decoded fields — see below
+        w   = table[tok >> 6]
+        if PASSTHROUGH(tok):
+              write the host doorbell INLINE. No queue, no wake, no lock. Return.
+        else:                                 # MANAGED (translated or emulated), or UNKNOWN
+              fetch_or(table[tok >> 6], RUNG_BIT(tok))     # AcqRel
+              fetch_or(summary[tok >> 15], 1 << ...)       # Release
+              bump work_seq; maybe write(eventfd)          # §2.4
+              Return.
+  else:
+        stamp and publish onto the PRIVILEGED ring (§2.3). Return.
 ```
 
-★ **[CORRECTED] Passthrough and managed are different costs, and I had them merged.** A
-passthrough doorbell is a table lookup and one dword, synchronously, on the vCPU —
-**microseconds and a return**. Only emulated/translated doorbells queue and wake. Translated
-and emulated behave identically from the vCPU's side; only passthrough is inline.
+⇒ **A vCPU now takes NO lock at all on the doorbell path.** The w819 text said "one lock, the
+queue's"; with the queue gone there is none.
 
-⇒ **This excludes `ioeventfd` for passthrough**, and that settles the question I analysed
-earlier: an ioeventfd would buy a cheap exit and then pay for it with a thread context switch
-to deliver a dword the vCPU could already have written itself.
+**Sizing — the number, from the published register, not from the legal space.**
+`ampere/ga100/dev_ctrl.h:26`:
 
-⊘ The doorbell table is the **new** one: fixed-size, `u64` atomic words, copied — not the old
-structure. A vCPU takes **one** lock in the whole path, the queue's, and holds it for a push.
+```
+NV_CTRL_VF_DOORBELL_VECTOR       11:0   →  12 bits  →  4096 channels
+NV_CTRL_VF_DOORBELL_RUNLIST_ID   22:16  →   7 bits  →   128 runlists
+```
 
-### 2.1 The doorbell page is READ-ONLY, not emulated
+19 decoded bits ⇒ **2¹⁹ = 524 288 tokens ⇒ a 64 KiB bit table**, plus a one-bit-per-`u64`
+summary layer = a **1 KiB hot index** over it. Bits 15:12 and 31:23 are undecoded, so `TOKEN_MASK`
+keeps only the two fields.
+
+★ Masking rather than validating is deliberate twice over: it is what the hardware does with
+undecoded bits, **and** it removes an error path — no refusal, no counter, nothing to misread.
+Sizing to what the register can *express* rather than to what is *legal* is this tree's own
+lesson, `[a_bound_on_reads_is_not_a_bound_on_emits]`: the attacker writes the register, not the
+legal space.
+
+★ Scan cost is **arithmetic, not yet measured**: 1 KiB of summary is ~16 cachelines; the loaded
+case streams 8192 `u64` compares over 64 KiB, skipping zero words. Sub-microsecond warm, low
+single-digit µs cold. **That is cheaper than maintaining a ring** — which is why the ring is
+deleted rather than repaired.
+
+⇒ What a hostile guest process can now buy is: one `fetch_or` on a bit in a fixed table that was
+going to be scanned anyway, on a **per-token cacheline** so there is not even a contention point.
+**Exactly hardware's cost profile: ring anything, pay a redundant look.**
+
+⚠ Per-die derivation, not a copied constant: those widths come from the Ampere-family `ga100`
+swref header. Per §7 they must be **generated from the headers**, and the table sized from the
+generated widths — `tu102` agrees today, `gb202`/`gb100` put the doorbell at the same `0x30090`
+but their field widths must be read, not assumed.
+
+### 2.3 The privileged plane — one ordered ring, and per-vCPU rings were WRONG
+
+**[CORRECTED, w820 — this defect was in my proposal, found by an adversarial review.]** I had
+proposed per-vCPU register rings with a single-bit owner claim. Per-vCPU rings preserve only
+**per-vCPU** order, and the order the device needs is the one the **guest** established, which
+spans vCPUs:
+
+```
+T1 on vCPU0, holding an RM lock:  write PDB_LO, PDB_HI   → ring0
+T1 releases the lock
+T2 on vCPU1, takes the lock:      write TRIGGER          → ring1
+Worker B drains ring1 first  ⇒  TRIGGER fires against the OLD PDB
+```
+
+On hardware this cannot happen: vCPU0's trap returns before T1 releases the lock, and PCIe
+posted writes to one function are ordered. This is not exotic — it is **every cross-CPU register
+sequence RM orders with its own lock**.
+
+⇒ **One MPSC register ring per device, its slot reserved by the same atomic that bumps
+`work_seq`** (§2.4). The sequence is taken *inside* the trap, before it returns, so it already
+embeds the guest's cross-vCPU happens-before; the ring is globally ordered by construction and
+no separate stamp is needed. The vCPU pays one atomic instead of two, and the per-vCPU claim bit
+disappears. A drainer that reaches a reserved-but-unpublished slot waits — bounded by one trap,
+microseconds, holding nothing.
+
+⊘ **This ring may not overflow, and that asymmetry is the whole point of §2.1.** The doorbell
+table is *state* and a lost hint is recoverable by a scan; a register write is a *stream* and the
+stream **is** the truth — there is nothing to rescan and a dropped write is unrecoverable. So it
+must be sized so it cannot fill, and the bound comes from ogkm limiting in-flight entries.
+⚠ **That bound is asserted, not yet verified** — it belongs in §10, because if it is wrong the
+failure is a guest that wedges with no diagnostic. Its saving grace is the privilege line: only
+guest root can reach it, and a guest root that overflows it harms only itself.
+
+### 2.4 The wakeup protocol
+
+One word, `worker_vcpu_poll`, and the futex `prepare_to_wait`-then-`schedule` idiom. `[owner]`
+supplied the field split; an adversarial review supplied the orderings and the layout.
+
+```
+worker_vcpu_poll : u64  =  { work_seq : 56 (HIGH) , workers_polling : 8 (LOW) }
+```
+
+**vCPU** — publish the work, then `fetch_add(1 << 8)` (`AcqRel`); if the pre-value's
+`workers_polling > 0`, `write(eventfd, 1)`.
+**Worker** — `seen = work_seq` (`Acquire`) **before** scanning; scan every source; then CAS to
+register as polling **only if `work_seq == seen`** (`AcqRel`); on failure, rescan.
+
+★ Registering only when the sequence is unchanged is what deletes the "who clears the flag, and
+when" question that the flag-based version could not answer. Any work published after `seen`
+fails the CAS, so a worker cannot sleep on work it did not see.
+
+**Why 56/8 is right, with the number.** ABA needs the counter to wrap *inside one worker's scan*,
+not globally — and every vCPU CASes the **same cacheline**, so aggregate bump rate is capped by
+ping-pong at roughly 10⁷/s regardless of vCPU count. 32 bits wraps in ~430 s (a descheduled
+worker could straddle it); 40 bits in ~30 h; **56 bits in ~228 years.** No spin-loop fallback is
+needed.
+
+⊘ **`work_seq` must be the HIGH half.** With it low, the carry at 2⁵⁶ lands in `workers_polling`
+— a phantom poller, permanent, making every subsequent vCPU trap pay a `write()` syscall,
+silently. High, the carry falls off the top of the `u64`. The benign direction (a worker's
+`fetch_add(1)` carrying *into* `work_seq`) only causes a rescan.
+
+⚠ **Cap the worker count at 255 structurally**, asserted at startup. `workers_polling` wrapping
+would read **0 while workers are polling** — precisely the lost wakeup the protocol exists to
+prevent. Saturating is worse than asserting: it makes the count wrong in a way that still reads
+plausible.
+
+⊘ **Orderings are load-bearing and x86 TSO hides their absence.** With `Relaxed` on the vCPU's
+bump, the ring/table store may become visible *after* it on ARM: the worker scans empty,
+registers, sleeps, and the vCPU already read `workers_polling == 0` so sends no wake. Passes
+every bench in this tree; fails on the first Grace host. Rule: **every write to a work source
+happens-before the sequence bump, and every `seen` load happens-before the scan.**
+
+⊘ **The eventfd is a sum, not a queue of wakeups.** M writes landing before the first `read()`
+collapse to one wakeup under `EPOLLEXCLUSIVE`, leaving N−1 workers asleep with work queued.
+⇒ `EFD_SEMAPHORE | EFD_NONBLOCK`, **one shared epoll instance**, `read()` consumes exactly one.
+⚠ And a hard invariant: **no handler may wait on another queued item.** If one ever does, that
+collapse stops being latency and becomes a permanent hang.
+
+⊘ **A bit that says work exists is not a bit that says you may touch the hardware.** Per token,
+two bits, four states:
+
+```
+vCPU:    fetch_or(RUNG)
+worker:  CAS RUNG → BUSY      (fail ⇒ not ours, move on)
+         act
+         CAS BUSY → IDLE      (fail ⇒ state is BUSY_RUNG ⇒ CAS BUSY_RUNG → BUSY, act again)
+```
+
+Exactly one worker per channel at a time, no re-ring lost, no lock. ★ Per §2.1 this is a
+**security** boundary: without it an unprivileged guest process triggers the concurrent walk of
+root's channel deliberately.
+
+⊘ **Never clear `RUNG` on "cannot act yet."** A doorbell can be acted on before a register write
+that preceded it on the same vCPU (different planes, §2.2 vs §2.3). On hardware the pending bit
+persists until the channel is schedulable; ours must too. Clearing it on a refusal is a lost
+doorbell — the same class as this tree's `forwarded=0 refused=8` engine-object rows.
+
+⊘ **The claim is acquired INSIDE the scan, after `seen`, and released before the scan returns.**
+Caching "this ring was empty" across a `seen` read loses an item **forever**. This must be
+enforced by the API shape, not by a comment, because it is exactly the shape someone optimises.
+
+⚠ **Instrumentation note.** A worker parked in a blocking `read()` counts in `workers_polling`
+but is **not** in `epoll_wait`. A census built on the word and one built on epoll state disagree
+only under load — the one condition in which anyone consults them.
+
+### 2.5 The doorbell page is READ-ONLY, not emulated
 
 ★★★ The doorbell page is mapped into the guest as a **KVM read-only memslot** over the real
 host doorbell page. Consequences, all of them deletions:
@@ -78,11 +306,19 @@ host doorbell page. Consequences, all of them deletions:
 - Every **read** is hardware, with **no exit and no code** — including the microsecond counter.
   ⊘ **There is no PTIMER implementation in v3.** The register emulation, the refusal of guest
   writes to it, the counter-page install — all gone.
-- Every **write** traps, and runs the logic above.
-- When *we* need to ring a doorbell (passthrough inline, or translated from the worker) we
-  write the host page **directly**, bypassing the read-only mapping.
+- Every **write** traps, and runs §2.2.
+- When *we* need to ring a doorbell (passthrough inline, or translated from a worker) we write
+  the host page **directly**, bypassing the read-only mapping.
 
 ⚠ Emulated channels need no doorbell written at all — there is no hardware counterpart.
+
+★ **[CORRECTED at w819] Passthrough and managed are different costs, and I had them merged.** A
+passthrough doorbell is a table lookup and one dword, synchronously, on the vCPU — **microseconds
+and a return**. Only translated/emulated doorbells set a bit and wake. Translated and emulated
+behave identically from the vCPU's side; only passthrough is inline.
+
+⇒ **This excludes `ioeventfd` for passthrough**: an ioeventfd would buy a cheap exit and then pay
+for it with a thread context switch to deliver a dword the vCPU could already have written.
 
 ---
 
@@ -128,23 +364,59 @@ The delta is executed by the VA manager thread as `mmap`/`munmap`.
 defer flag** — which ogkm demonstrably has — on every mapping call but the last. One
 invalidate for the whole batch instead of one per page.
 
-### 4.3 A VA space is `(PDB base, aperture)`
+### 4.3 A VA space is the OBJECT. The PDB is an attribute of it, per GPU.
 
-★★★ **[CORRECTED], and it improves the fix I shipped.** I wrote that a root is needed *only*
-to seed a walk and is never an identity. Wrong: a VA space **is** identified by its
-page-directory base plus the aperture that base lives in (sysmem or vidmem) — that is exactly
-what hardware puts in the instance block.
+⊘⊘⊘ **[CORRECTED TWICE — and ogkm refutes the correction I accepted.]** I first wrote that a
+root is *only* a walk seed and never an identity. The review corrected me to
+`(PDB base, aperture)`, and I agreed. **ogkm says neither of us was right, and the original
+`Option<Pdb>` design was.** Four independent reasons, all cited:
 
-⇒ My `Pdb(0)` bug was **two defects I had conflated**: the key was missing its aperture half,
-and zero collided with a sentinel for *absent*. With `(Pdb, Aperture)` as the key, a space
-declared at framebuffer offset 0 is a perfectly good name, distinct from "not declared yet",
-and `unwrap_or(Pdb(0))` never needs to exist.
+1. **RM's identity is the object plus `vasUniqueId`**, a monotonic atomic assigned at creation
+   (`virt_mem_mgr.c:143`). Every runtime lookup is by client handle, never by PDB.
+2. **One VA space has N PDBs on N GPUs** — the PDB lives in per-GPU state
+   (`gvaspaceGetPageDirBase(pGVAS, pGpu)`, `gpu_vaspace.c:1874`).
+3. **A VA space can CHANGE its PDB, and can have NONE.** `SET_PAGE_DIRECTORY` is explicitly
+   repeatable for resize/migrate (`nvos.h:3084`); `gvaspaceResize` migrates the root
+   (`gpu_vaspace.c:3235`); and the same function reads
+   `if (NULL == gvaspaceGetPageDirBase(...)) goto doneGpu;`. Hardware even encodes the absent
+   case: `NV_RAMIN_SC_PAGE_DIR_BASE_TARGET_INVALID`.
+4. **Nothing stops two VA spaces naming the same PDB** — there is no global PDB→VAS registry;
+   RM's only check is local to the target VAS (`gpu_vaspace.c:2855`).
 
-⊘ **Root discovery is not a problem in v3.** `[owner]` a DMA map is *written into the PD/PT
-tables*, and we get an invalidate on the three entry points; sysmem mappings go through the
-host's own DMA allocation. Nothing has to reach us as an RM call — if it is in the tables we
-analyse at refresh, we have it. And the PDB root is declared in **instance blocks**, which is
-how bare metal itself finds it.
+⇒ **`(PDB, aperture)` is a point-in-time HARDWARE FINGERPRINT, not a durable identity.** Use
+the VA-space object (its resource key) as identity; carry `Option<(Pdb, Aperture)>` as a
+mutable, per-GPU, possibly-absent attribute used to seed a walk and to match hardware state.
+
+★ This retroactively vindicates the existing `Vas::pdb` doc — *"`None` until a declaration
+arrives, and a space is nameable, routable and populatable before then"* — which is exactly
+what ogkm describes. ⚠ And it means my `Pdb(0)` fix treated a symptom: the durable fix is to
+stop using the fingerprint as the key at all.
+
+### 4.4 Where the root actually comes from — it is ours to write
+
+⊘ **Root discovery is not a problem, and the reason is stronger than "we can find it".**
+`_gmmuWalkCBUpdatePdb` is a **no-op inside a guest or CPU RM** on GSP parts
+(`gmmu_walk.c:599`): *channel instance blocks are written by GSP-RM* — **which is us**. The
+guest RPCs the instance block's physical address to GSP (`kernel_channel.c:2626`). We are the
+party that programs `NV_RAMIN_PAGE_DIR_BASE_{TARGET,VOL,LO,HI}`, and `TARGET` is the aperture,
+written as one unit with the address (`kern_gmmu_gp100.c:123`).
+
+★★★ And `COPY_SERVER_RESERVED_PDES` is **the guest handing us real PDE physical addresses.**
+In the GSP split one logical VA space exists as *two* objects: client RM owns all page-table
+memory; **server RM — us — gets an exclusive 512 MiB window** (`0x1_0000_0000`, size
+`0x2000_0000`) plus the physical addresses, apertures and page shifts of the client's PDE
+pages for that window, so the server can map into the same hardware tables without allocating
+any (`ctrl90f1.h:261`, `gpu_vaspace.c:4216`).
+
+⊘ **`DMA_SET_PAGE_DIRECTORY` is UVM's call, not a mapping call.** "DMA" is the *device's
+DMA/VA-management sub-interface* of `NV01_DEVICE_0` — legacy taxonomy, and every sibling
+(`GET_PTE_INFO`, `INVALIDATE_TLB`, `SET_VA_SPACE_SIZE`) is VA-space-wide. What it does is
+relocate a VA space's top-level page directory onto **client-supplied** memory; the caller is
+UVM at GPU-VA-space registration (`nv_gpu_ops.c:8986`). `UNSET` is its exact inverse.
+
+⊘ **`DUP_OBJECT` aliases, it does not copy.** `vaspaceapiCopyConstruct` is literally
+`vaspaceIncRefCnt(pVAS); pVaspaceApi->pVASpace = pVAS;` (`vaspace_api.c:440`). Two handles,
+one object — the normal UVM flow, not an anomaly.
 
 ---
 
@@ -161,23 +433,52 @@ how bare metal itself finds it.
 ⇒ The completion-watch list, the 250 ms observer sweep and the CPU-executor completion writer
 all go.
 
-**What remains is the armed interrupt.** A guest that does not spin arms an event and sleeps.
-For passthrough and translated we register that with the host through userspace calls and fire
-the guest interrupt when it fires.
+**What remains is the armed interrupt — and ogkm settles its shape.**
 
-⚠ **The race, and whose burden it is — under investigation, and the answer changes the design:**
-- If the arm names a **channel** and fires on *new work completing*, the waiter must already
-  re-check for itself, and we only fire on genuine channel advance.
-- If the arm names a **specific semaphore**, the race is ours: we must fire immediately when
-  the thing is already complete.
+★★★ **Registration is PER ENGINE, not per channel and not per semaphore.**
+`NV01_EVENT_NONSTALL_INTR` *requires* its notifier to be a **Subdevice**; the notify index maps
+to an engine (`NV2080_NOTIFIERS_CE0..n`, GR, HOST) and lands in
+`pGpu->engineNonstallIntrEventNotifications[rmEngineId]` (`event_notification.c:688`). The
+channel class `NVA06F` has **no completion event at all** — only error/RC notification. So the
+interrupt is a **broadcast wake to every waiter on that engine**, carrying no channel and no
+semaphore identity.
 
-⊘ This is being read out of ogkm rather than assumed. It is the one open item in this section.
+★★★ **The race is the WAITER'S burden, and it is handled three independent ways.** RM's own
+semaphore-surface registration re-reads the value under a spinlock and returns
+`NV_ERR_ALREADY_SIGNALLED` — with the race written out in a comment (`sem_surf.c:1405`);
+callers loop on it (`nvidia-drm-fence.c:991`); and the OS-event wait path **never trusts the
+event**, looping on the notifier word in memory and using the event only to decide *when to
+re-check* (`nvidia-push.c:751`).
+
+⇒ **`[owner's hypothesis, confirmed]`** we only need to fire on **genuinely new completed
+work** — an advance of the engine. We do **not** have to fire retroactively for work already
+complete, because the guest re-checks after arming. ⚠ But the converse is binding: once armed,
+a later release **must** produce an interrupt. There is no level-triggered delivery to fall
+back on.
+
+⊘ **And the interrupt is requested in the PUSHBUFFER**, not by a control: `NV906F_NON_STALL_
+INTERRUPT` pushed after the release (`nvidia-push.c:967`), or CE `LAUNCH_DMA ..._INTERRUPT_
+TYPE_NON_BLOCKING`, which RM sets **only when a completion callback was requested**
+(`channel_utils.c:657`; default `_NONE`). ⚠ There is **no `AWAKEN_ENABLE` field** in the
+headers shipped here — an earlier note in this tree citing one should be re-read.
+
+★ **The channels we most care about POLL anyway.** UVM never uses interrupts for channel
+completion — it spins (`uvm_channel.c:2158`). The CeUtils scrubber registers a non-stall event
+only for its *asynchronous callback* API; every blocking wait is
+`while (READ_CHANNEL_PAYLOAD_SEMA(..) < target) { ... }` (`channel_utils.c:343`), and when it
+holds the GPU lock it services the ISR **inline** rather than sleeping.
 
 ---
 
 ## 6. The scrub
 
-A **translated** channel. The guest's own RM scrubs before reuse and orders it correctly; our
+★ **There IS a dedicated scrub channel, and a second one beside it.** `OBJMEMSCRUB` owns a
+`CeUtils` channel per heap, kind `CE_SCRUBBER_CHANNEL` or `FAST_SCRUBBER_CHANNEL` (SEC2's
+`SWL_SCRUBBER_CHANNEL` under Confidential Compute) — `mem_scrub.c:171`, `ce_utils.c:246`. A
+**separate** `CeUtils` instance serves MemoryManager's general internal copies
+(`mem_mgr.c:4114`), so scrubbing and other RM-internal CE work do not share a channel.
+
+⇒ That makes the scrub a clean, named, **translated** channel. The guest's own RM scrubs before reuse and orders it correctly; our
 only job is to let the work reach the GPU instead of forging its completion. `[measured w813]`
 today the kernel tokens are `forwarded=0` — 140 doorbells rung, none sent — which is the
 cross-client leak.
@@ -209,6 +510,21 @@ Isolates and the whole IPC plane · the sandbox plane · `Proc` · the address t
 publication epochs, the dirty gate, sweep-skip · the CPU CE executor · the completion watch ·
 PTIMER emulation · the framebuffer probe/rebind · **every on/off flag for things that no
 longer have two sides** `[owner]`.
+
+★ **[w820] Three more, and they were in the v3 proposal itself — not in the old tree:**
+
+- **The doorbell hint queue.** Superseded by the 64 KiB bit table (§2.2). Deleting it deletes
+  ring overflow, the multi-consumer problem for doorbells, and an unprivileged guest process's
+  ability to exhaust anything.
+- **"Inspect all doorbells" / any FULL_REFRESH-shaped fallback.** There is no refresh because
+  there is no queue to fall back *from* — there is only the scan, which is the normal mode.
+  `[owner, 2026-09-20]` *"guest userspace can exist without something like FULL_REFRESH."*
+- **Per-vCPU register rings and their owner-claim bit.** Refuted in §2.3: they preserve
+  per-vCPU order where the device needs the guest's cross-vCPU order.
+
+⊘ Deleting a mechanism that only ever existed in a design document costs nothing and is the
+cheapest deletion available. ★ Both doorbell deletions were **licensed by a threat model**, not
+by a benchmark — which is the only reason they were found before the code existed.
 
 ⊘ **[CORRECTED] What to keep is narrower than I said.** I proposed keeping "the instruments".
 The review is right that some instrument *prose* is actively misleading — three stale "The
@@ -244,10 +560,30 @@ deleted.
 
 ## 10. Still open
 
+**[w820] Resolved since w819**, recorded here so the list does not read as unchanged:
+the doorbell/register queue split and its overflow semantics (§2.1–2.3); the worker wakeup
+protocol, its bit widths, its layout and its memory orderings (§2.4); the doorbell double-take,
+now a named security boundary rather than a race (§2.4).
+
+Still genuinely open:
+
 1. **The interrupt race** (§5) — per-channel or per-semaphore, and whose burden.
 2. **The synchronous-verb list** — which RM controls does the guest read the reply to
    immediately? Until that list exists, "no RM verb on a vCPU" cannot be judged.
+   ⚠ **Owner is waiting on this one**; it blocks judging the trap path end to end.
 3. **Fault delivery** — needed by managed memory *and* by letting the GPU fault. `[owner]` if
    the fault structures are shared with userspace we can map them through for passthrough; a
    translated fault needs its address translated on the way back.
 4. **The crate model** — to be redrawn against §8.
+5. ★ **[NEW, w820] The privileged ring's non-overflow bound is ASSERTED, not verified.**
+   §2.3 needs it sized so it cannot fill, on the argument that ogkm limits in-flight entries.
+   That bound must be **read out of ogkm and turned into a startup assertion**, because if it
+   is wrong the failure is a guest that wedges with no diagnostic.
+6. ★ **[NEW, w820] The scan-cost figure in §2.2 is arithmetic, not a measurement.** Sub-µs warm
+   is the claim the ring-deletion rests on; it needs a microbenchmark on the bench box before it
+   is cited as fact.
+7. ★ **[NEW, w820] Enumerate every BAR0 range RM maps to a NON-kernel client.** §2.1 treats the
+   usermode window as the unprivileged surface, which is true of ogkm today — but that is **RM
+   policy, not an invariant**. The right form is a generated assertion over the objects that
+   hand out `ADDR_REGMEM`, not a claim that there is only one. `[owner]` *"same for any other
+   page if they exist."*
