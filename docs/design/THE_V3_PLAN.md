@@ -46,6 +46,45 @@ sitting, have no dependencies but `kf-chip`, and be the most heavily tested crat
 
 ## 2. The phases
 
+### ⊘⊘⊘ P-1 — THE QEMU BQL BYPASS. Item zero, and without it nothing below is measurable.
+
+**[NEW w821, from an adversarial review, verified against QEMU 9.2.0 in this workspace.]**
+
+`THE_ARCHITECTURE_v3.md` §2 claims the vCPU takes **zero locks**, and `THE_CONSTRAINTS.md` §48
+builds a latency argument on it. ⊘⊘⊘ **Both are unreachable as the design stands, because QEMU
+takes the Big QEMU Lock for us, before a single line of our code runs:**
+
+```c
+bool prepare_mmio_access(MemoryRegion *mr)          // system/physmem.c
+{
+    if (!bql_locked()) { bql_lock(); release_lock = true; }
+```
+
+Unconditional, on **every** MMIO dispatch. And the opt-out is gone: `MemoryRegionOps::global_locking`
+has **zero hits** in `include/exec/memory.h` at 9.2.0 — it was removed upstream.
+
+⇒ ★ **Every trapped BAR0 write runs under the same lock as `memory_region_transaction_commit`**
+(which is what the VA manager's BAR1/BAR2 memslot rebuilds do), the main loop, and every other
+vCPU's exit. §2.3's entire argument against a shared lock — lock-holder preemption, millisecond
+tails, the `SCHED_FIFO` deadlock — **applies verbatim to a bigger lock, held longer.**
+
+⊘ **R7, §41 and §48 are violated by the VMM before kayfabe starts.** `[owner, earlier]` *"vCPU
+threads must arrive without BQL"* was the right requirement; it simply cannot be satisfied by
+configuration.
+
+**Build:** a pre-BQL dispatch for our GPAs at the `KVM_EXIT_MMIO` site (`accel/kvm/kvm-all.c`),
+routing our BAR0/BAR1 doorbell pages straight into `nvkvm_trap_write` without `address_space_rw`.
+**Gate:** a microbenchmark showing a trapped doorbell write with `bql_locked() == false` in the
+handler, and `worst_trap` measured **without** a concurrent `memory_region_transaction_commit`
+inflating it.
+
+⊘ **ioeventfd is not the escape**, and §2.5 excluded it for the wrong reason. The real reason is
+not cost — it is that **ioeventfd discards the data word** (or matches one fixed value). A doorbell
+carries a 32-bit token we must read. ⇒ Unusable, permanently, for this surface.
+
+⚠ **Sequencing consequence:** every latency number taken before this patch lands is BQL-shaped and
+must be retaken. ⇒ **P-1 precedes P0.**
+
 ### P0 — The harness, before any product code
 **Build:** fresh workspace; the 30-arm suite running against it; the bare-metal baseline
 reproduced; the `forwarded=` per-token hardware gate wired; the GPU-free gate self-test.
@@ -58,9 +97,21 @@ what makes a guest failure *indict kayfabe* rather than the client.
 (doorbell / userspace-reachable-not-doorbell / privileged); the per-token 2-bit table + summary;
 `worker_vcpu_poll`; the lock-free MPSC register ring + **one dedicated drainer**; the synchronous
 shadow write for read-registers; the VA-manager thread.
+**Also in P1, because everything downstream needs them:**
+- ★ **irqfd.** Workers cannot raise an interrupt through the QEMU path — it is `BQL_LOCK_GUARD` +
+  `msix_notify`, so they would contend with the VA manager's memslot commits. ⇒ **irqfd, and it
+  gates `RmInitAdapter`.**
+- ★ **The swref descriptor generator**, with the `write_semantics` field (§2.3.1 rule 4).
+  ⊘ **Its input is not parseable as C**: `NV_CTRL_VF_DOORBELL_VECTOR 11:0` and
+  `NV_VIRTUAL_FUNCTION 0x0003FFFF:0x00030000` are not C expressions, so libclang yields nothing.
+  It needs a **token-level `hi:lo` + access-code parser**. That generator does not exist today.
+- ⊘ **The read-trap allowlist.** *"Only writes trap"* is **false for 524 of 4096 BAR0 pages** —
+  PRAMIN, the GSP falcon pages, WPR2, `NV_PTIMER`. v3 has no analogue of §41 for reads. **Write
+  one.**
+
 **Gate:** ★ **GPU-free**. Every interleaving in §2.4 as a test: lost-wakeup, summary-clear race,
-double-take, `BUSY→RUNG`, ring-full poison, cross-vCPU register order. Plus a loom-style or
-exhaustive model check of the wakeup word.
+double-take, `BUSY→RUNG`, ring-full poison, cross-vCPU register order, and the unowned-token
+amplifier. Plus a loom-style or exhaustive model check of the wakeup word.
 ⊘ **No guest needed, and that is the point** — this is the one crate whose correctness cannot be
 established by booting.
 
@@ -83,9 +134,16 @@ Binary, externally meaningful, and it exercises ~40 control commands without nee
 **Build:** the single store (one reserved device-local object, guest FB offset = offset into it);
 the VA manager's mmap/munmap diff, batched with the TLB-defer flag and **one refresh last**; the
 PTX page-table walk; BAR1/BAR2 windows.
-⊘⊘ **With the split from `THE_OGKM_RESIDUE.md` §3**: we own **PD0[0]** of BAR2 and the **BAR1 root
-pin**; the guest owns **PD0[1]** and the sparsification. **Build it split from the start** — a flat
-model is a rewrite, not a patch.
+⊘⊘ **With the split from `THE_OGKM_RESIDUE.md` §3, in the CORRECTED direction**: the guest owns
+**PDE3[0]**, **we own PDE3[1]**, and **our BAR2 table is the one hardware walks**. We allocate both
+root pages in reserved FB and **declare their addresses as `bar1PdeBase` / `bar2PdeBase` in
+`GET_GSP_STATIC_INFO`**; the guest then adopts them and writes PDEs into tables we own.
+⊘ **BAR1 has no RPC** — the guest writes our page directly — and **nobody sparsifies BAR1 unless we
+do**. Build it split from the start; a flat model is a rewrite, not a patch.
+⚠ **Prerequisite inside P4:** the **guest FB layout must be declared before static info can be
+served** — root pages, WPR2/FRTS, reserved rows. Today one of those is a captured byte and
+`bar2PdeBase` is deliberately not written. ⇒ **That declaration is the first task of P4, not a
+detail of it.**
 **Gate:** `--alias-two-vas`, `--alias-unmap-observe`, `--map-propagation`, `--late-map-race`,
 `--missing-page-fault`, `--uvm-invalidate`.
 
@@ -110,6 +168,25 @@ host channel, translate the completion **in address only**. Real CE forwarding. 
 **Build:** GR routing to real hardware; `GPU_PROMOTE_CTX`; the ctx-buffer verbs
 (`GR_GET_CTX_BUFFER_INFO`, `KGR_GET_CTX_BUFFER_PTES` — both **value-used and reaching us**).
 **Gate:** `cuCtxCreate` → 2048² matmul at `bad=0 maxerr=0`, in-guest.
+
+### P4.5 — reset, teardown and re-init. ⊘ Not optional, and it blocks the suite being trusted.
+⊘⊘⊘ **The stock driver refuses to boot when WPR2 is up.** Clean shutdown runs unload; **a guest
+crash, `reboot -f`, kexec and a QEMU `system_reset` do not.** ⇒ Without this phase the second boot
+in a process is a different, worse product than the first.
+**Build:** tear down every host twin (⚠ a still-scheduled host channel whose GPFIFO/USERD live in
+guest RAM the new kernel is about to reuse is **a live DMA engine over reused memory**); unmap
+mirrors; clear the token table; un-poison the register ring; drop the BAR memslots; quiesce
+workers; reset the boot FSM including WPR2.
+**Gate:** ★ **every earlier phase's gate, run TWICE in one process.** `[§6.1]`
+
+### P5.5 — error paths: RC, host failure, and what the guest is told
+**Build:** the twin state machine — host RM will **RC our channel** on a fault whether we want it
+or not, and there is currently no path from *"twin dead"* → `RC_TRIGGERED` (fn `0x1004`) → the
+guest's own recovery (`RESET_CHANNEL`, TSG preempt, re-alloc) → re-adopt. Plus a policy for a host
+error that arrives **after** the asynchronous reply (`NV_ERR_NO_MEMORY`, channel exhaustion on a
+shared host GPU).
+**Gate:** an injected host-side channel fault produces a guest that recovers rather than hangs.
+⊘ **And never emit `TRIGGER_BUGCHECK`** (`THE_OGKM_RESIDUE.md` §5).
 
 ### P8 — deletions
 ⊘ **Only now**, and licensed by the **suite**, not by one workload (§8).
@@ -144,6 +221,31 @@ across `crates/*/src`. The reduction comes from four places, in order of size:
 | `kayfabe-abi` hand-written → generated | **−30 000** |
 | the address table, joins, VA→phys translation, publication epochs, the dirty gate, sweep-skip | **−15 000** |
 | `Proc`, the per-proc container, the CPU CE executor, the completion watch, PTIMER | **−10 000** |
+
+### 4.1 ⊘⊘⊘ An adversarial re-count says 50 k is wrong. I think it is right, and here is the gap.
+
+**[w821]** A careful re-count puts the realistic figure at **70–90 k Rust + ~5 k C**, on the
+grounds that the RM plane alone (`abi` + `device` + `rmrpc` + `gsp` ≈ 46 k today) **grows with
+`Dg` coverage**, that the QEMU boundary (~19 k) is deferred by §10, and that nine things are new
+with no existing code — `Translated`, the drainer/ring, the register generator, reset, RC/fault
+delivery, four GMMU formats, the Hopper BAR1 doorbell, the read plane, irqfd.
+
+★ **I think that count is right about the work and wrong about the measure**, and the difference is
+worth stating because the owner set the 50 k target:
+
+- ✔ **It is right that the RM plane dominates and that nine things are new.** Both go into §4's
+  budget as risk, and P4.5/P5.5 above now exist because of it.
+- ⊘ **It counts the QEMU boundary at today's 19 k.** That number is what it is *because* of the
+  isolate plane, the fd passing and the mirror machinery §8 deletes; `kf-qemu` + `kf-core` are
+  budgeted at 3 k because the shim's job after P-1 is *dispatch*, not state.
+- ⊘ **It treats `Dg` growth as line growth.** That is exactly the thing generation is for: a second
+  driver version should add **descriptor rows**, not code. If it adds code, the descriptor approach
+  has failed and the line count is the least of the problems.
+
+⇒ ★ **The honest form of the target:** ~50 k is achievable **for hand-written code** if — and only
+if — `kf-abi`/`kf-chip` are genuinely generated and `kf-rm`'s served set stays near 60. Counting
+generated output, the shim and tests, **70–90 k is the right expectation.** ⚠ Those are not
+competing numbers; they are different denominators, and the plan should quote **both**.
 
 ⚠ **The number to distrust is `kf-rm` at 9 k.** `THE_SURFACE_v3.md` §2.3 enumerates ~40 served
 controls, ~135 admitted-but-undispatched, and two rule-based admissions. If the served set has to

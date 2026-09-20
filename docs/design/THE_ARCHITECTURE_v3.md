@@ -474,14 +474,18 @@ nvkvm_trap_write(bar, off, val):
 
   if (bar, off) == chip.doorbell:              # ⊘ generated per die/arch, never a literal (§0.3 r1)
         tok = val & chip.token_mask            # per-die decoded fields (§2.2)
-        if PASSTHROUGH(tok):
+        w = &token[tok]                        # ★ ONE u64 PER TOKEN — see §2.2.1
+        r = route_of(w)                        # loaded from that same word
+        if r == PASSTHROUGH:
               write the host doorbell INLINE. No queue, no wake, no lock. Return.
-        else:                                  # MANAGED (translated or emulated), or UNKNOWN
-              # 2 bits per token ⇒ 32 tokens per u64 word ⇒ index by tok>>5
-              fetch_or(table[tok >> 5], RUNG << (2 * (tok & 31)))        # AcqRel
-              fetch_or(summary[tok >> 11], 1 << ((tok >> 5) & 63))       # Release
-              bump work_seq; maybe write(eventfd)                        # §2.4
-              Return.
+        if r == UNKNOWN:
+              Return.                          # ⊘⊘ NO bit, NO bump, NO wake — see below
+        # MANAGED (translated or emulated):
+        prev = fetch_or(w, RUNG)                                        # AcqRel
+        if prev already had RUNG:  Return.     # ⊘ already pending: no bump, no wake
+        fetch_or(summary[tok >> 6], 1 << (tok & 63))                    # Release
+        bump work_seq; maybe write(eventfd)                             # §2.4
+        Return.
 
   elif chip.userspace_mappable(bar, off):      # ★★★ THE GUARD — see below
         Return.                                # do NOTHING. Not a queue push, not a counter.
@@ -492,6 +496,26 @@ nvkvm_trap_write(bar, off, val):
         bump work_seq; maybe write(eventfd)
         Return.
 ```
+
+#### ⊘⊘⊘ TWO MORE DEFECTS IN THAT PSEUDOCODE, BOTH MINE, BOTH FOUND AT w821
+
+**(i) `MANAGED` and `UNKNOWN` shared an arm, and that is a §48.2 violation reachable from
+unprivileged guest userspace.** The earlier text bumped `work_seq` and wrote the eventfd for an
+**unowned** token. ⇒ An unprivileged process ringing a token that names no channel, in a loop,
+bumps the sequence forever; §2.4's worker registers only *"if `work_seq == seen`"* and so **never
+parks** — N workers at 100 % CPU on that process's schedule. ★ **That is precisely the amplifier
+§47 exists to delete, reintroduced two sections later.**
+⇒ **The route check must PRECEDE the bump**, `UNKNOWN` must return doing nothing at all, and the
+bump must happen only on a genuine **IDLE→RUNG transition** — `fetch_or` already returns the prior
+value, so a re-ring of an already-pending token costs one atomic and no wake.
+
+**(ii) The token table had three incompatible layouts across three sections.** §2.2 said 2 bits
+packed 32-per-`u64`; §2.3.2 then said *"stamp `enqueue_pos` into that slot"*, which needs a whole
+word; and the existing tree's route table is one `AtomicU64` per token. ⊘ They cannot all be true,
+and the packed form is **actively broken**: with 32 tokens per word, `CAS RUNG→BUSY` fails whenever
+a **neighbour's** bits change, and *"fail ⇒ not ours, move on"* then **skips a live token**.
+
+★ **Resolution: two structures, each doing one job** (§2.2.1).
 
 ⊘⊘⊘ **THE GUARD IS NEW AT w821, AND WITHOUT IT THE DESIGN HAD A REMOTE DoS.** `[owner]`:
 
@@ -529,6 +553,25 @@ above, and the earlier `w = table[tok >> 6]` was a **dead load** besides.
 
 ⇒ **A vCPU now takes NO lock at all on the doorbell path.** The w819 text said "one lock, the
 queue's"; with the queue gone there is none.
+
+### 2.2.1 The two structures — state per token, scanning per bit
+
+⊘ One structure cannot do both jobs. A CAS needs a word **owned by one token**; a scan needs
+**density**. So:
+
+| structure | shape | job |
+|---|---|---|
+| **token word** | ★ **one `u64` per token**: `route` (2 b) · `state` (2 b: IDLE/RUNG/BUSY/BUSY_RUNG) · `stamp` (§2.3.2) · `host_token` | every CAS. **No neighbour can ever fail it.** |
+| **rung bitmap** | 1 bit per token, + a one-bit-per-`u64` summary | ⊘ **scanning only**, never CAS'd for state |
+
+⇒ Cost: **4 MiB** of token words at 19 bits, **16 MiB** at the 21-bit worst case — plainly
+affordable, and **never scanned**. The thing that *is* scanned is the bitmap: **64 KiB** with a
+**1 KiB** summary, which is where the original sizing argument was right.
+
+⚠ **The bitmap is a hint about the words, and the word is the truth** — the same discipline as
+§2.2's ring deletion. A bit set with an IDLE word is a stale hint costing one look.
+★ And the stamp must be **`fetch_max`, not a store**: two vCPUs ringing one token could otherwise
+leave the *older* `enqueue_pos` and let the worker run ahead of a register write.
 
 #### Sizing — ⊘⊘⊘ and my first answer was an axis error I made myself
 
@@ -679,8 +722,20 @@ rather than merely compliant with it.
 3. **Peek → apply → commit.** The consumer cursor advances only *after* a successful apply, so a
    failed apply retries at the head instead of being re-queued at the tail, and `applied_seq`
    becomes a clean monotonic number other paths can fence against.
-4. **Queue everything; shadow every readable register; ⊘ the drainer NEVER stores to the shadow of
-   a guest-writable register.** Queueing pure-state registers looks wasteful and is what keeps
+4. ⊘⊘ **[CORRECTED w821 — rule 4 as first written contradicts §41 item 4, on this design's own
+   central register.]** I wrote *"the drainer NEVER stores to the shadow of a guest-writable
+   register."* ⊘ **`NV_VIRTUAL_FUNCTION_PRIV_MMU_INVALIDATE` breaks it immediately**: the guest
+   writes `TRIGGER=1` and **spin-reads the same register until it reads 0**. The vCPU's synchronous
+   shadow write stores the 1; **only the drainer, after applying the diff, can clear it.** Same
+   shape for every boot-FSM register the guest polls.
+   ⇒ **The rule is narrower:** the drainer may write the shadow of a register **whose completion it
+   owns**, and must not write one the guest also drives. ⊘ And a plain store is wrong for two more
+   classes — `LEAF_EN_SET`/`_CLEAR` are **write-only ports** whose readable effect is on a
+   *different* register, and `INTR_LEAF` is **write-1-to-clear** and needs `fetch_and`.
+   ⇒ ★ **The register descriptor needs a `write_semantics` field** — `plain` / `w1c` /
+   `write_only_port(target)` / `trigger(cleared_by_drainer)` — generated from the swref access
+   codes (`-W-4R`, `-WEVF`), not hand-classified.
+   **Queue everything; shadow every readable register.** Queueing pure-state registers looks wasteful and is what keeps
    `PDB=X, TRIGGER, PDB=Y, TRIGGER` correct — a drainer that read PDB from the shadow when applying
    the first trigger would see `Y`.
    ⚠ And the clobber it prevents: vCPU writes `A` (shadow=`A`, queued), drainer starts applying

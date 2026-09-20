@@ -126,8 +126,34 @@ expects**, and NVIDIA says so twice:
   **no-ops unless `RMCFG_FEATURE_PLATFORM_GSP`** (`:233-237`) — pinning the BAR1 root page
   directory is **the firmware's job**, i.e. **ours**.
 
-★ This is the clearest statement yet of what *"we are the GSP"* obliges: **we own PD0[0] of BAR2
-and the BAR1 root pin; the guest owns PD0[1] and the sparsification.**
+⊘⊘⊘ **[CORRECTED w821 — I stated the ownership BACKWARDS, and the direction is the whole point.]**
+I wrote *"we own PD0[0] and the BAR1 root pin; the guest owns PD0[1]."* **The reverse is true**, per
+`kbusPatchBar2Pdb_GSPCLIENT` (`gpu/bus/kern_bus.c:816`):
+
+> *"CPU-RM owns the VA range under **PDE3[0]** and GSP-RM owns the VA range under **PDE3[1]** …
+> CPU-RM passes its PDE3[0] value to GSP-RM, then GSP-RM will fill this value to PDE3[0] of
+> GSP-RM's table (**only GSP-RM's BAR2 table will be bound to HW**)."*
+
+★★★ ⇒ **Guest = PDE3[0]. We = PDE3[1]. And OUR table is the one hardware walks.** The function
+literally rewrites the guest's own PDB cache to **our** address: `memdescDescribe(pMemDesc,
+ADDR_FBMEM, pGSCI->bar2PdeBase, …); pKernelBus->virtualBar2[…].pPDB = pMemDesc;`
+
+⇒ **Three concrete obligations v3 does not state:**
+
+1. ★ **We allocate and bind the REAL BAR2 root**, in reserved framebuffer, and report its address
+   as **`bar2PdeBase` in `GET_GSP_STATIC_INFO`**. The guest then swaps its PDB cache to ours — so
+   **its TLB invalidates name OUR PDB**, and our BAR2 walker roots at our page with **entry 0 = the
+   guest's `entryValue`** handed to us by `UPDATE_BAR_PDE` (fn 70).
+   ⚠ `THE_SURFACE_v3.md` §1.3's fn-70 row is imprecise: it carries the **PDE3[0] entry**, not a
+   root address.
+2. ⊘⊘ **BAR1 has NO RPC AT ALL.** `kbusPatchBar1Pdb_GSPCLIENT` (`kern_bus.c:766`) makes the guest
+   **adopt our root page at `bar1PdeBase` and write PDEs into it directly.** ⇒ Anything modelling a
+   BAR1 update *message* is modelling something that does not exist.
+3. ⊘ **Nobody sparsifies BAR1 unless we do.** The CPU side skips it for a GSP client
+   (`gpu_vaspace.c:255`), so an unpopulated BAR1 PDE is **sparse, not an error**.
+
+★ ⇒ The real statement of what *"we are the GSP"* obliges here: **we own the root pages of both
+BARs, we declare their addresses in static info, and the guest writes into tables we allocated.**
 
 ### 3.1 Fault-buffer ownership is the sharpest divergence
 
