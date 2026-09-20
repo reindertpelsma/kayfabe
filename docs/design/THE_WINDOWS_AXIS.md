@@ -134,9 +134,51 @@ exists.** ★ Third instance of this tree's own lesson in one session, in a thir
 |---|---|
 | **Windows runs as a GSP client** | ★ **Proven.** `RMCFG_FEATURE_PLATFORM_WINDOWS && IS_GSP_CLIENT(pGpu)` at `gpu_registry.c:224` and `gpu_user_shared_data.c:335`, selecting a constant **named for that configuration**: `NV_REG_STR_RM_RUSD_POLLING_INTERVAL_WINDOWS_GSP 250` (vs `_DEFAULT 500`). Plus `bGspNocatEnabled`, a Windows-only field in the GSP boot RPC itself |
 | **The Windows default is per-SKU and per-mode** | ★ **Proven from the struct's fields** — `devId`, `ssId`, WS/server, TCC/MCDM |
-| **Whether a stock GeForce Windows guest defaults GSP on** | ⊘ **UNRESOLVED.** The deciding logic is stripped from the public drop. Community evidence says off; nothing in the open tree refutes it, and the struct's shape makes it plausible |
+| **Whether a stock GeForce Windows guest defaults GSP on** | ⊘ **UNRESOLVED — and §1.1 establishes that NOBODY HAS MEASURED IT** |
 | **GSP is required on Blackwell — on Linux** | ★ **Yes, and the mechanism is in this tree.** `[owner]` *"proprietary Linux doesn't work on Blackwell, so that infers GSP is required anyway."* Confirmed: the open module **refuses a non-firmware-capable GPU by name** — `osapi.c:3721` calls `gpumgrIsDeviceRmFirmwareCapable` and on `NV_FALSE` prints *"installed in this system is not supported by open nvidia.ko"*. ⇒ Blackwell + open-modules-only + openrm-is-GSP-only ⇒ **GSP required** |
 | **…and on Windows** | ⊘ **Does not transfer.** `nvlddmkm.sys` is not the open module, so the Linux chain says nothing about it. ⚠ But `devId`/`ssId` are policy inputs, so a per-SKU Blackwell default is expressible either way |
+
+### 1.1 ⊘⊘⊘ What the public record actually contains — searched w821
+
+`[owner]` *"maybe find on the internet. GSP Windows Turing+."* Done. The result is not an answer;
+it is the discovery that **there is no published answer, and the folklore has no measured basis.**
+
+**1. NVIDIA has published nothing about Windows.** The authoritative source is the driver README's
+GSP chapter, and it is **Linux-only**: *"The GSP firmware will be used by default for all Turing
+and later GPUs"* — stated for the Linux driver, configured by the **kernel module parameter**
+`NVreg_EnableGpuFirmware`. ⊘ The document **makes no reference to Windows at all**, and NVIDIA
+documents no Windows registry setting, Control Panel option or app control for it.
+
+**2. ★★★ The community claim has no before-state behind it.** The primary thread — the one every
+later citation traces back to — contains **zero documented observations of the default state**.
+Posters report results *after* setting `EnableGpuFirmware=1`; nobody recorded what `nvidia-smi -q`
+said **before**. ⇒ *"GSP is off by default on Windows"* is an **inference from the existence of a
+registry key that people found worth setting**, not a measurement.
+
+**3. ⚠ And the "N/A means disabled" reading is borrowed from the wrong document.** It comes from
+NVIDIA's **Linux** README (*"a valid version if GSP firmware is enabled, or N/A if disabled"*)
+applied to Windows `nvidia-smi`. ⊘ That is precisely the misapplication this tree already has a
+lesson for: an unpopulated field is not a measured zero.
+
+**4. ◐ One Blackwell datapoint cuts the other way.** A user on an **RTX 5090, driver 581.94**
+reports a watchdog error that *"immediately stopped after disabling GSP"* — which implies GSP was
+**on**, and that it is **disableable** on Blackwell/Windows. ⚠ Forum-grade, single report, and it
+does not distinguish "on by default" from "on because they had enabled it".
+
+⇒ ★★★★★ **The convergence is the useful part.** The open tree says the Windows default is decided
+**per-SKU and per-mode** (`devId`, `ssId`, WS/server, TCC/MCDM). The public record says **nobody
+has measured it**. Those two facts fit together exactly: *a per-SKU default is what produces
+contradictory folklore*, because different people are correctly reporting different cards.
+
+⇒ **[PROPOSE] Stop trying to settle this from sources. It is a one-hour measurement** — a Windows
+box, a GeForce part, `nvidia-smi -q` **before** touching the registry — and until someone runs it,
+every claim in either direction is folklore, mine included.
+
+**Sources:**
+[NVIDIA 580.65.06 GSP chapter](https://download.nvidia.com/XFree86/Linux-x86_64/580.65.06/README/gsp.html) ·
+[guru3D: Enable GSP Firmware on Windows](https://forums.guru3d.com/threads/enable-gsp-firmware-on-windows.455714/) ·
+[guru3D: How to disable NVIDIA's GSP Firmware on Windows](https://forums.guru3d.com/threads/how-to-disable-nvidias-gsp-firmware-on-windows.455267/) ·
+[Overclock.net: RTX 5090 GSP Firmware](https://www.overclock.net/threads/rtx-5090-what-is-this-gsp-firmware-all-about-should-i-enable-this-hidden-feature.1817406/)
 
 ⇒ ★ **The practical position:** design for GSP being present, **detect and refuse the alternative**
 (§1's fallback detector), and treat *"stock GeForce Windows defaults GSP off"* as an open risk to be
