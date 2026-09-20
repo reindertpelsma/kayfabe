@@ -1,5 +1,11 @@
 # THE WRITE-TRAP CONTRACT — what a vCPU may do inside an MMIO exit
 
+**STATUS: LIVE AS A REFERENCE, 2026-09-21 (w822).** Cited by `THE_DESIGN.md`, which is the
+current architecture. ⊘ Where this file's *architecture* disagrees with that one, **that one
+wins** — this predates it. ★ What stands here regardless: its **measurements**, its **ogkm
+findings**, and the **reasoning** behind a constraint.
+
+
 > Status: **LIVE, 2026-09-13.** Owner ruling, recorded verbatim below. Supersedes the reading of
 > `the_three_synchronization_points` (2026-09-09) that treated the TLB invalidate, RPC map calls
 > and UVM setup as *"blockable"* — ★ **a ruling's DATE is part of its citation**, and this one is

@@ -1,5 +1,11 @@
 # The completion-wait architecture — what exists, what serialises, what is unbuilt
 
+**STATUS: LIVE AS A REFERENCE, 2026-09-21 (w822).** Cited by `THE_DESIGN.md`, which is the
+current architecture. ⊘ Where this file's *architecture* disagrees with that one, **that one
+wins** — this predates it. ★ What stands here regardless: its **measurements**, its **ogkm
+findings**, and the **reasoning** behind a constraint.
+
+
 **Status:** read-only audit, 2026-08-09. ⚠ **HEAD moved mid-audit.** The reading began at
 `014ea07`; the bench agent landed `25295aa` (§16.19) and `dbf853a` (§16.20) while it was in
 progress, touching `kayfabe-qemu-raw/src/shim.rs`, `kayfabe-rt/src/ceutils.rs` and

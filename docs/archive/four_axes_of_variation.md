@@ -1,0 +1,299 @@
+> ⊘⊘⊘ **ARCHIVED — THIS DESCRIBES A SUPERSEDED ARCHITECTURE. IT IS REFERENCE, NOT CURRENT.**
+> The live design is `docs/design/THE_DESIGN.md`. This file is kept because its *measurements*,
+> its *ogkm findings* and its *reasoning* remain useful — its **architecture does not**. Do not
+> implement from it, and do not cite it as current. Archived 2026-09-21 (w822).
+
+# The four axes of variation — and why guest/host driver mismatch is a FEATURE
+
+> **Owner directive (2026-07-27):** *"I want guest host driver mismatch [to] be a feature to
+> support, especially for small drifts, we should test it as well… ensure it does not become [a]
+> bolt on. not for all mismatch, like only ogkm-like bootstrap sequences. this is necessary I
+> think to also later support Windows."*
+
+## 0. The claim, in one paragraph
+
+Mode 2 does **not** replay the guest's ioctls on the host. It reconstructs *intent* from the RM
+protocol and re-issues that intent against the host driver. So the guest edge and the host edge
+are **two independent translations with an abstract middle**, and a guest/host driver mismatch is
+a translation problem at two well-defined seams rather than a passthrough problem. That is a
+capability Mode 1 structurally cannot have — it forwards the guest's own ioctls, so guest and host
+ABIs must agree.
+
+⚠ **Read `host_driver_version_pin.md` before quoting that as a shipped capability.** The
+guest half of the disjointness is built; the **host** half is not. The host-side encoders are
+pinned to one driver interval, which until 2026-07-31 nothing said and nothing checked. That
+note states the property, states what is actually true, and records the refusal that now
+makes a mismatched host stop at rung R2 instead of receiving wrong struct offsets.
+
+★ **Six axes now, and two of them are audited elsewhere.** `compatibility_matrix.md`
+(2026-07-31) adds **guest kernel version** and **multi-GPU**, states every cell of the
+six-axis matrix as built / designed-only / unknown / known-broken, and — the part that
+reframes the four below — derives which crates a shipping artifact actually **links**.
+Read it before quoting any status here: three of the four axes' seams live in crates no
+build output links today, and `scripts/compat_matrix.py` regenerates that answer rather
+than restating it.
+
+## 1. The four axes
+
+| axis | varies with | where it lives | status |
+|---|---|---|---|
+| **GPU architecture** | the silicon (GA106, Ada, Hopper…) | `kayfabe-arch`: `Arch`, `GmmuFmt`, `UserdModel`, `GspModel` | seam exists, **one** impl |
+| **Guest driver version** | the driver *in the guest* | `kayfabe-abi::DriverVersion` — a full `(major, minor, patch)` triple with a loud `NoTableForVersion` floor | seam exists, few tables |
+| **Host driver version** | the driver *on the host* | ★ **CORRECTED 2026-07-31** — see `host_driver_version_pin.md`. `VerbPlan` carries named intents, but the thing that lowers them (`kayfabe-isolate-host/src/rm.rs`) uses **const-size, version-free** encoders, so the host edge is concretely **pinned to `[580.65.06, 581.0.00)`** | axis still **unbuilt** — and deliberately so — but the pin is now a **named refusal at rung R2** instead of silently wrong offsets |
+| ★ **Guest OS** | Linux / Windows / … | `kayfabe-abi::GuestOs` (`guest_os.rs`) — a profile **beside** the version table, declared at realize; every OS-conditional rule is data on it, and an OS with no rule is a typed refusal | ★ seam exists (2026-07-29), **one** profile + one named refusal |
+
+★ **The fourth axis is the one to protect now**, because it is the only one with no home. A
+Windows guest runs an entirely different driver, but the **GSP RPC protocol and the RM object
+model are largely OS-independent** — the ioctl/escape layer above them is what differs. So Windows
+should later be *another guest-side implementation behind the same seam*, not a rewrite of the
+boot FSM. That only stays true if nothing bakes in "the guest is Linux".
+
+### 1.1 ★★ Windows **guest** is a target. Windows **host** is explicitly NOT.
+
+> **Owner (2026-07-27):** *"windows as guest is way more important than host (since windows host
+> already has hyper-v pv for gpu and target audience is smaller)."*
+
+The two are not symmetric, and conflating them would cost far more than the guest work itself:
+
+| | what it would take | verdict |
+|---|---|---|
+| **Windows GUEST** | another **guest-side** decode/protocol implementation behind the fourth axis. The GSP protocol and RM object model are shared; the escape/ioctl layer differs. Everything below the seam — core, isolates, host edge — is **unchanged**. | ★ **TARGET.** Keep the seam clean; do not implement yet. |
+| **Windows HOST** | the isolate would have to run on Windows and drive the *Windows* RM: no `/dev/nvidiactl`, a different escape mechanism, a different process/handle model, and the whole unprivileged-isolate design re-founded on Windows primitives. That is a **second host port**, not a seam. | **OUT OF SCOPE**, and stays out. Windows hosts already have Hyper-V GPU-PV, and the audience is smaller. |
+
+**The consequence for design work:** when something must be OS-specific, ask *"guest side or host
+side?"* — guest-side OS-specificity goes **behind the fourth-axis seam**; host-side OS-specificity
+may be written **assuming Linux**, freely and without apology. `kayfabe-linux-raw` is named for
+that reason and needs no abstraction for a hypothetical Windows host.
+
+**Do not collapse guest OS into the version key.** Conflating them is the C's major-only version
+key mistake one level up: a single key that silently spans two independent dimensions, so a
+mismatch on one is mis-served by a table chosen for the other.
+
+## 2. Scope — deliberately bounded
+
+Support drift **only across ogkm-like bootstrap sequences**. Anything requiring a genuinely
+different bootstrap — pre-GSP drivers (roughly ≤ 510–515 on consumer), or a different handshake
+entirely — is **out of scope and must be a LOUD REFUSAL**, never a best-effort attempt. A
+best-effort bring-up against an unsupported bootstrap fails deep inside the guest driver with no
+useful diagnostic; a refusal at realize costs one line of log.
+
+## 3. The asymmetry that sets the range
+
+**Old guest on new host is the safe direction.** RM keeps its userspace ABI backward-compatible,
+so an older guest asks for things a newer host still provides. **New guest on old host is where it
+breaks** — the guest can request classes, controls or capabilities the host does not have, and the
+honest answer is a refusal, not emulation.
+
+★ **Both breaks below are host-edge facts as well as guest-edge ones**, and that was not
+written down until 2026-07-31. `kayfabe-isolate-host` emits the post-580.65.06 `NVOS46` form
+and 580's `NV_CHANNEL_ALLOC_PARAMS` offsets unconditionally, so each break bounds the range
+of **hosts** we may point those encoders at — see `host_driver_version_pin.md` §1.3.
+
+**Known layout breaks** (each costs one table entry, mechanical):
+- `NVOS46` 56 → 64 bytes at **580.65.06** (`docs/reference/nvidia_abi_oracles.md` F1)
+- the GSP queue element 48 → 16 bytes with MCTP/NVDM headers in **(595.84, 610.43.02]**
+  — narrowed 2026-07-28 from the earlier estimate of `(570, 610]`. The 48-byte form with
+  `elemCount@40` is present at 575.64.05, 580.65.06, **580.159.04**, 580.173.02, 590.44.01,
+  590.48.01, 595.44.02 and 595.84; the 16-byte MCTP/NVDM form appears only at **610.43.02**.
+  ⇒ **580, 590 and 595 are all on the 48-byte side**, and the version predicate is
+  `major >= 610`, not `> 570`. Only 580.159.04 and 610.43.02 are vendored here
+  (`research_clones/ogkm-580.159.04/`, `research_clones/ogkm/`) and were read directly; the
+  other seven tags are relayed. See `mode2_gsp_port_plan.md` §4.3 and §14.4.
+
+★ **This break is bigger than a layout entry, which is why it is worth naming here.** It is
+not only field offsets: at 610 the receiver *derives* the element count from `rpc.length`,
+while below 610 it *reads* an `elemCount` field — and that number is what advances the ring.
+So the same "one table entry" carries a **behavioural** difference on both the send and the
+receive side, plus a guest-memory-safety bound (`mode2_gsp_port_plan.md` §4.6). A layout table
+that only carries offsets is not sufficient for this axis.
+
+### 3.1 ★★★ `DriverAbiTable` carries LAYOUT and no BEHAVIOURAL BOUNDS — and that gap is now a support defect
+
+> **Owner ruling, 2026-08-09** (`vmm_integration_and_support_matrix.md` §2): the **VMM** is the
+> one axis where a version floor is a legitimate engineering tool. On the **NVIDIA driver
+> version**, the **kernel version** and the **GPU architecture** we must be *"open to support all
+> major versions"*, and the subset must **at least** contain every version NVIDIA still ships
+> updates for. ⇒ **Narrowing the driver axis to make an implementation easier is a product
+> defect, not a trade-off**, and every site below is now filed as one.
+
+This section closes the prediction three paragraphs above (*"a layout table that only carries
+offsets is not sufficient for this axis"*) with the audit that confirms it, done 2026-08-09 by
+reading each site.
+
+#### The shape, and the ⊘ refutation that makes it worth reading
+
+The audit was commissioned to fix a **test double** that was stricter than a driver we support:
+`tests/src/gspworld.rs`'s mock guest refused `rpc_length < 32`, which is 580's bound, while 610
+admits `rpc.length == 0`.
+
+⊘ **That is already fixed, and it was fixed the right way.** `tests/src/gspworld.rs:262-264`
+reads `if self.version.major >= 610 { 0 } else { 32 }` behind `Profile::min_rpc_length()`,
+consumed at `:1268`; the in-file note dates it *"★ FIXED 2026-08-06"*. The sibling —
+the mock enforcing whole MCTP/NVDM transport words where 610 validates only a version nibble and
+a vendor id — is fixed too, at `tests/src/gspworld.rs:1332-1336`, which masks with
+`t.header_validated_mask`, is recorded as a MATCH row in `mock_fidelity_audit.md:315`, and is
+pinned by `tests/tests/gsp_boot.rs:1449-1467`.
+
+★★★ **The finding is the INVERSE, and it is worse.** The double was made version-aware and **the
+product was not**. The min-`rpc.length` rule now exists in exactly one place in the tree —
+`tests/src/gspworld.rs:263`, as a raw `major >= 610` **in test code** — while the shipped
+decoders keep a version-free 32. So the narrowness did not disappear; it **migrated from the
+double to the product**, which is the one direction no test can catch, because a double that is
+*more* permissive than the product simply gets refused and the refusal reads as correct.
+
+⇒ The generalisable rule: **when a fidelity defect is fixed on the double, ask immediately
+whether the same predicate exists on the product.** A double and a product that disagree about a
+bound are a bug wherever the disagreement lies, and fixing only the double moves the bug to the
+side with no oracle. Cf. [[mock-fidelity-both-directions]].
+
+#### The sites, most load-bearing first
+
+| # | site | what it enforces | version reality | verdict |
+|---|---|---|---|---|
+| **D1** | `crates/kayfabe-device/src/guestsysinfo.rs:94-96` | the guest's declared `(VGX_MAJOR, VGX_MINOR)` must **equal** ours exactly; mismatch → `NV_ERR_NOT_SUPPORTED` at `:117` | **590 / 595 share 580's 48-byte element form** but declare a different VGX pair, so they resolve to the 580 row and are refused **at RPC message one** | ⊘ **product defect** — the widest narrowing in the tree |
+| **D2** | `crates/kayfabe-abi/src/versions.rs:338,367,386,405,424,461` | six of the eight `TABLES` rows carry `vgx: None` → `NoVersionForDriver` → the same refusal | the table advertises 8 supported versions; the handshake supports **2** (`:485`, `:507`) | ⊘ **product defect**, and it makes D1 worse |
+| **D3** | `crates/kayfabe-gsp/src/element.rs:331` | `rpc_length < RpcEnvelope::SIZE` (32) → `MsgLenOutOfRange`, for **every** version | its own rustdoc at `:289-293` says 610 admits `rpc.length == 0` and calls refusing it *"the authorised RPC-element-parsing deviation"* | ◐ **needs a decision** — see below |
+| **D4** | `crates/kayfabe-abi/src/view.rs:584-592` | the same 32-byte floor in `rpc_payload_len` | reached from `DriverAbiTable::decode_rpc_envelope` (`versions.rs:1361`), i.e. **through a table that knows the version and ignores it** | ⊘ defect; cheapest fix of the set (`&self` already in hand) |
+| **D5** | `tests/src/gspworld.rs:892`, `:914` | `msg_size = PAGE`, `staging_bytes = STAGING_BYTES` as literals, consumed by the panic at `:1298-1306` | `DriverAbiTable` already carries both per version (`versions.rs:605`, `:614`), and `Profile::element_size_max()` already routes through it — the constructor bypasses it | ◐ latent; inert today (both versions 4096/65536), same shape as the pre-2026-08-06 defect |
+| **D6** | `tests/src/rpctrace.rs:79` | `ELEM_HDR_SIZE = 48` as a decode offset; a shorter record is silently `continue`d at `:540-541` | 610's header is 16 (`versions.rs:144`) | ◐ correct for today's 580 captures; a 610 capture is **mis-decoded, not refused**, in a module whose stated posture is *"a trace with a hole is refused outright"* (`rpctrace.rs:8-9`) |
+| **D7** | `tests/src/gspworld.rs:1268-1273` | the length check's **position**: hoisted and `return`ed, where both drivers consume the element and bump `rxSeqNum` first | the bound is right; the *effect* is still narrower than either driver | ◐ open; already recorded at `mock_fidelity_audit.md:218-241` |
+
+⊘ **Checked and found NOT narrower**, recorded so this is not re-walked: `gspworld::Guest::rx_link`
+(`:990-1032`, all nine codes, both tags identical); `send_declaring` (`:1106-1157`, deliberately
+*more* permissive); `tests/src/rpcwire.rs` (its one assert is a stride sanity check, `:134`);
+`tests/src/guest.rs` (no driver bound anywhere);
+`crates/kayfabe-vmm-qemu/src/mock_host.rs` (stands in for QEMU, not for a driver — all refusals
+version-free); `crates/kayfabe-mocks/src/lib.rs:1164-1182` (divergences are in the permissive
+direction); `crates/kayfabe-chips/src/ga10x.rs:525-527` (argued unreachable-input at `:519-523`).
+
+#### ★★ The decision Ruling 2 forces: a **behavioural** column on `DriverAbiTable`
+
+The mechanism already exists and is the right one — `DriverAbiTable` (`versions.rs:257`), the
+8-row `TABLES` (`:325`), `table_for`'s newest-≤ selector (`:541`) and the loud
+`AbiError::NoTableForVersion` miss (`wire.rs:64`). What it lacks is a place to put a **rule**
+rather than an **offset**.
+
+> **DECIDED (Ruling 2, 2026-08-09): every version-dependent bound becomes a `DriverAbiTable`
+> entry. ⊘ Never an `if version ==`, and ⊘ never a bare constant in a logic crate.**
+
+That is not a new rule; it is §5 rule 1 of this document (*"No `if guest_version == …` in a logic
+crate"*) applied to bounds instead of to offsets. The concrete shape:
+
+1. **Add `min_rpc_length(&self) -> u32` to `DriverAbiTable`**, beside the existing
+   `gsp_element_size_min` (`versions.rs:605`) and `gsp_element_size_max` (`:614`).
+2. **`element.rs:331` and `view.rs:584` read it.** `view.rs`'s caller already holds a
+   `DriverAbiTable`; `element.rs`'s `MsgLen::new` already takes `layout`, `element_size_min` and
+   `element_size_max`, so it is one more parameter of exactly the kind it already accepts.
+3. **`gspworld.rs:263`'s `major >= 610` is DELETED** and reads the table. The test-side predicate
+   stops being the tree's only statement of the rule, and a wrong table entry becomes a **failing
+   test** rather than a silent agreement between two hand-written copies of the same number.
+4. **D5 and D6 read `gsp_element_size_*` / `gsp_element_wire().hdr_size()`** instead of literals.
+
+⚠ **Step 2 requires a decision this document does NOT make, and it must not be made by an edit.**
+`element.rs:289-302` argues that refusing `rpc.length == 0` at 610 is deliberate hardening — 610's
+own check admits it, after which *"a zero-length message silently consumes an element and then
+produces garbage upstream."* That may well be right: we are the **GSP**, and a zero-length message
+from a real driver would be a driver bug, so refusing it costs a supported driver nothing.
+⇒ ★ **The refactor is unconditionally correct; the 610 VALUE is a separate question.** Move the
+number into the table first, at its current value, so the site is *nameable*; then decide whether
+610's entry is `0` (match the driver) or `32` (a named, argued hardening refusal). Landing both in
+one change would hide a behaviour decision inside a mechanical one — cf.
+[[a-queue-item-is-a-hypothesis]].
+⊘ Note that today the two are already inconsistent: `element.rs:301-302` calls 32 *"a strict
+tightening of 610's"* and `gspworld.rs:1224-1225` calls the same 32 *"stricter than the driver it
+models"* and fixed it. **The same number is documented as a feature in one file and as a defect in
+another, and we wrote both.**
+
+#### D1/D2: the widest one, and the protocol already offers the answer
+
+D1 is not a bound to move into a table — it is a **missing negotiation**. `compatibility_matrix.md:90-92`
+records that the protocol defines down-negotiation (`rpc.c:8765-8801`): a GSP speaking a different
+version replies non-`NV_OK` **with its own pair in the body**, and the guest retries at that pair
+or reports *"host too old"*. `crates/kayfabe-abi/src/guestsysinfo.rs:135-141` names it in the
+`VersionMismatch` variant's own docs and says it is not built.
+
+Under Ruling 2, *"the layout axis and the handshake axis do not agree about which guests are
+supported, and the handshake is the binding one"* (`compatibility_matrix.md:86-88`) describes a
+**defect**, not a scope. The remedy is the two the protocol already provides: fill in the six
+`vgx: None` rows (D2), and implement down-negotiation so a pair we do not carry is answered with
+ours instead of refused (D1).
+
+⊘ **Not fixed here, and not scheduled here.** These are product changes to logic crates with a
+real behavioural decision in each; this section's job is to establish that they are **defects**
+rather than boundaries, which is what the ruling changed.
+
+★ [not compiled] Nothing in §3.1 was implemented or built. Every line number was opened and read
+on 2026-08-09; no `cargo` command was run for this section, and no claim here is a claim about
+compilation.
+
+★ **What is now measurable rather than estimated.** Two of the three items above are read from
+driver source at a named tag, so they are facts about the *guest driver*, not about our stack:
+the `NVOS46` boundary and the GSP element break. **That is all.** They bound where a *layout*
+changes; they say nothing about whether a mismatched pair actually runs, because nothing in
+the Rust stack has touched a GPU. The supported-drift range below therefore stays UNMEASURED —
+knowing where the tables must differ is not the same as knowing that a guest at one version
+boots against a host at another.
+
+**Estimated range, explicitly UNMEASURED:** comfortable within a major (580.x guest / 580.y host),
+plausible one major back (575 guest / 580 host), unlikely forward. Nothing in the Rust stack has
+touched a real GPU, and it is not known whether the C ever ran guest and host *mismatched*.
+
+**The experiment**, once GSP boots: pin the host at 580 and walk the guest driver back through
+575/570 until something refuses — and record **what** refuses. That yields a real supported range
+instead of a guess, and the refusals are the interesting data.
+
+## 4. ★ A property worth stating: we do not depend on the host's libcuda
+
+We forward at the **RM ioctl / GSP** level, below CUDA. The guest brings its own libcuda **inside
+the guest**; the host **never runs libcuda at all** — the isolate issues raw RM ioctls. So the
+host's CUDA userspace version is simply not a variable.
+
+That is a real advantage over API-proxying approaches (which must track CUDA's surface release by
+release), and it is why the axis table above has no CUDA row. It also means a guest can run a
+CUDA version the host has never had installed.
+
+## 4.5 ★★★ What the fourth axis actually cost, measured on 2026-07-29
+
+The seam audit costed this axis at *"~100 lines across 3 files, zero trait changes below the ABI
+seam"*. That was right about the size and **wrong about the blast radius**, in a direction worth
+recording.
+
+**The one violation.** `client_kind_from_process_id` — the wire→`ClientKind` translation, i.e.
+the function that decides which RM clients share a host isolate — applied a rule the guest driver
+gates on `RMCFG_FEATURE_PLATFORM_UNIX` (`ogkm-580: src/nvidia/inc/kernel/vgpu/rpc.h:67-77` /
+`ogkm-610: rpc.h:67-77`, byte-identical) to **every** guest, silently. On a WDDM guest the `else`
+arm runs for kernel-privileged clients too, so they declare a real pid.
+
+**The blast radius is not one process.** `ClientKind::User` is not the isolate key — it is the
+*eligibility predicate* for a `DUP_OBJECT`-driven merge. Every guest CUDA process dups into the
+one kernel/UVM session client (`[measured]`: two concurrent processes, 82 dups each, every one
+into that client). On a UNIX guest that client is `ClientKind::Kernel`, is not merge-eligible, and
+the dups merge nothing — which is exactly what fixes #14. On a WDDM guest it would have been
+merge-eligible, and **every process in the guest plus the guest kernel would have landed in one
+host isolate**: #14 un-fixed, silently, on a guest nobody had booted yet. Pinned by
+`a_kernel_client_that_declares_a_real_pid_collapses_the_whole_guest_and_only_the_profile_stops_it`.
+
+**★ A SECOND gate on the same field, and it is not the OS.** The `RMCFG_FEATURE_PLATFORM_UNIX`
+test sits inside `if (!IsT234DorBetter(pGpu))` (`ogkm-580: rpc.h:57` / `ogkm-610: rpc.h:57`), and
+the params struct is zero-initialised at `rpc.h:53`. So on Orin-class silicon RM never writes
+`processID` at all and **every** client declares `0` — which today's rule reads as
+`User { pid: 0 }` for all of them, collapsing the whole guest by a *chip*-axis condition rather
+than an OS one. Recorded, not fixed: our target is GA106, and inventing a rule for hardware we
+have never observed is the mistake the Windows arm exists to refuse. The characterisation test is
+`a_zero_process_id_is_a_user_client_today_and_that_is_wrong_on_t234d`.
+
+**The lesson for the remaining axes.** One declared wire field was conditioned on two independent
+axes, and the code that read it named neither. The cost of the seam really was ~100 lines; the
+cost of *finding* it was an audit. Rule 3 below is now gated so the next one is a test failure.
+
+## 5. What this forbids
+
+1. No `if guest_version == …` in a logic crate. Transitions fire on **observed protocol facts**
+   (what the guest wrote/posted/declared), never on driver identity — the protocol-not-trace
+   doctrine, applied to bring-up where an identity check is most tempting.
+2. No chip constant in a logic crate — it goes behind `Arch` (`kayfabe-gsp` is a logic crate).
+3. No OS assumption without a comment naming it, so the future Windows seam is a grep away.
+   **Gated since 2026-07-29** by `tests/tests/guest_os_axis_gate.rs` — a Rust test rather than a
+   `ci.yml` step, because it runs its own checker against a synthetic violation per token and so
+   can prove it is able to fail, which a YAML `grep` cannot.
+4. Any bootstrap we do not support is a **refusal at realize**, not a partial attempt.

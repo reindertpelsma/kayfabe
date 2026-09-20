@@ -7,6 +7,12 @@ metadata:
   date: 2026-09-13
 ---
 
+**STATUS: LIVE AS A REFERENCE, 2026-09-21 (w822).** Cited by `THE_DESIGN.md`, which is the
+current architecture. ⊘ Where this file's *architecture* disagrees with that one, **that one
+wins** — this predates it. ★ What stands here regardless: its **measurements**, its **ogkm
+findings**, and the **reasoning** behind a constraint.
+
+
 # ★★★★★ THE OWNER'S OVERNIGHT DIRECTIVE — 2026-09-13
 
 > *"See whats achievable."* Owner went to sleep; this governs autonomous work until done.

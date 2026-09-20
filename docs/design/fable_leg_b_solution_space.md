@@ -1,5 +1,11 @@
 # Leg B — the USERD naming problem: an independent survey of the solution space (w749)
 
+**STATUS: LIVE AS A REFERENCE, 2026-09-21 (w822).** Cited by `THE_DESIGN.md`, which is the
+current architecture. ⊘ Where this file's *architecture* disagrees with that one, **that one
+wins** — this predates it. ★ What stands here regardless: its **measurements**, its **ogkm
+findings**, and the **reasoning** behind a constraint.
+
+
 > ### STATUS — 2026-09-16 / **RESEARCH-ONLY, SOURCE-MEASURED. No production code touched. No posture recommended.**
 > Written against `ogkm-580.159.04` (`/workspace/nvidia-gpu-passthrough/research_clones/ogkm-580.159.04`),
 > the host reference trace `traces/host_reference_ga106/ce_r1.jsonl.zst` (real GA106, libcuda

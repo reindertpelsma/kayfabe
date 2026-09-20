@@ -1,5 +1,11 @@
 # THE INTERRUPT ARMING MODEL — fire what the guest armed, not what the channel is bound to
 
+**STATUS: LIVE AS A REFERENCE, 2026-09-21 (w822).** Cited by `THE_DESIGN.md`, which is the
+current architecture. ⊘ Where this file's *architecture* disagrees with that one, **that one
+wins** — this predates it. ★ What stands here regardless: its **measurements**, its **ogkm
+findings**, and the **reasoning** behind a constraint.
+
+
 > **Read this with:** `the_write_trap_contract.md` (why a vCPU may not block, and the
 > arm-synchronously rule this shares), `completion_observer.md` (what observes a completion at
 > all), `w288n_notifier_over_guest_pages.md` (the notifier's guest-page substrate), and

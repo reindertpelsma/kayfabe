@@ -1,5 +1,11 @@
 # L1-M2 — the OS shell: reactor, raw module, VMM seam, and the reclamation lifecycle (decision #38)
 
+**STATUS: LIVE AS A REFERENCE, 2026-09-21 (w822).** Cited by `THE_DESIGN.md`, which is the
+current architecture. ⊘ Where this file's *architecture* disagrees with that one, **that one
+wins** — this predates it. ★ What stands here regardless: its **measurements**, its **ogkm
+findings**, and the **reasoning** behind a constraint.
+
+
 **Status:** ~~design for review, 2026-07-25 · Written **before any L1-M2 code**~~ **★ the
 header is stale: this document now carries build findings through M2-e (§14.1–§14.10) and
 corrections dated 2026-07-27** · per the

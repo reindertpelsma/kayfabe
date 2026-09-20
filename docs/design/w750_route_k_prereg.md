@@ -1,5 +1,11 @@
 # w750 PRE-REGISTRATION — route K, phase 1: the birth-client probe
 
+**STATUS: LIVE AS A REFERENCE, 2026-09-21 (w822).** Cited by `THE_DESIGN.md`, which is the
+current architecture. ⊘ Where this file's *architecture* disagrees with that one, **that one
+wins** — this predates it. ★ What stands here regardless: its **measurements**, its **ogkm
+findings**, and the **reasoning** behind a constraint.
+
+
 > ### STATUS — 2026-09-16 / **LIVE — PRE-REGISTERED, NOT YET RUN, NO BOX EXISTS YET.**
 > Written and committed **before** the probe is built and before any GPU box is rented, per the
 > brief's *"pre-register predictions and commit them before any box exists"*.

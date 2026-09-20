@@ -4,6 +4,10 @@ subtitle: "Stated as decided, 2026-09-20. Written to be argued with from scratch
 date: "branch w749-fable-legb"
 ---
 
+**STATUS: LIVE, 2026-09-21 (w822).** Front matter for the design bundle PDF; not a design
+document in its own right.
+
+
 \newpage
 
 # How to read this
