@@ -19,7 +19,12 @@ echo "== driver and card (the two facts every result must be read against)"
 $S 'nvidia-smi --query-gpu=driver_version,name --format=csv,noheader; ls /dev/nvidia* 2>/dev/null | tr "\n" " "; echo' || exit 2
 
 echo "== toolchain"
-$S 'command -v cargo >/dev/null 2>&1 || { apt-get update -qq && apt-get install -y -qq curl build-essential pkg-config git >/dev/null 2>&1; curl -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal >/dev/null 2>&1; }; export PATH=$HOME/.cargo/bin:$PATH; cargo --version' || exit 2
+# ⊘ `x86_64-unknown-linux-musl` is NOT optional: `kayfabe-isolate-host`'s build.rs performs a
+# NESTED build of the isolate image for that triple and panics by name without it
+# (`build.rs:303`). `[measured w814d]` a fresh CUDA container has the host triple only, so the
+# first provision failed here — and the error told us exactly what to add, which is the only
+# reason this cost minutes instead of an hour.
+$S 'command -v cargo >/dev/null 2>&1 || { apt-get update -qq && apt-get install -y -qq curl build-essential pkg-config git >/dev/null 2>&1; curl -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal >/dev/null 2>&1; }; export PATH=$HOME/.cargo/bin:$PATH; rustup target add x86_64-unknown-linux-musl >/dev/null 2>&1; cargo --version; rustup target list --installed | tr "\n" " "; echo' || exit 2
 
 echo "== pull the tree (public repo; nothing is pushed to the box)"
 $S 'export PATH=$HOME/.cargo/bin:$PATH
