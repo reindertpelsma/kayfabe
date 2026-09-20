@@ -448,10 +448,31 @@ or channel enable** — that rides the message plane — so a queued register wr
 we service a managed channel. The only register that matters is the **invalidate trigger**, and
 what that trigger *means* is *"the mirror must catch up."*
 
-⇒ ★ **Replace the per-token ring-position stamp with a per-VA-space mirror generation.** A worker
-translates only when the mirror's generation for that space is at least the guest's last published
-invalidate for it. One atomic load, no per-token state, and it fences the thing that is actually
-at risk.
+### ★★★ How it is specified: as an OBSERVABILITY INVARIANT, not as a check
+
+`[owner]` *"oh, the fences are — it must have invalidated by then. Is that what it is? And how is
+it specified then?"* ★ **Exactly that, and stating it as an invariant rather than a check makes
+most of the machinery disappear:**
+
+> ⊘ **The guest must never be able to observe an invalidate as complete before the mirror reflects
+> it.**
+
+That is one sentence, it is checkable in **one place per transport**, and it cannot be forgotten at
+a call site the way a fence check can.
+
+| transport | how the invariant is held | what the guest is doing meanwhile |
+|---|---|---|
+| **register trigger** | ★ **clear the trigger only after the apply lands** (§5.5) | **spinning** on that register — it *cannot* proceed |
+| **pushbuffer invalidate** | ★ **hold the channel's subsequent entries** until the apply lands | not waiting at all — so **the channel** is the thing we hold |
+
+⇒ ★★★ **And this means the register path needs no separate fence at all.** If the guest cannot see
+the trigger clear until we have applied, then any doorbell it rings *afterwards* is already ordered
+behind our apply — by its own spin, not by our bookkeeping. **The per-token ring-position stamp was
+solving a problem the trigger discipline already solves.**
+
+⚠ **The invariant has exactly one failure mode, and it is the security case:** the guest's spin is
+**time-bounded** and it proceeds anyway on timeout. That is the one situation where the invariant
+cannot be held — and the response is the tear-down-and-count rule above, not a weaker fence.
 
 ### ⊘ And the host cannot provide it, because translation happens BEFORE submission
 
@@ -624,33 +645,117 @@ GSP parts — instance blocks are written by the firmware, which is us. Where ea
 | **BAR2** | ⊘ **ours.** We declare the address; the guest sends back its **encoded entry value** for slot 0 | same | CPU, at RAM speed |
 | instance block | ⊘ **not a root.** The guest allocates it and tells us where; **we** write the base and aperture into it | same | never walked |
 
+### 6.1 ★★★ BAR1 and BAR2 are ordinary VA spaces. There are no split apertures.
+
+`[owner, w821]` *"BAR1/BAR2 do not create multiple apertures per vidmem. If the guest says map
+vidmem here, we just follow it — a dumb map — whether it is for rings or for tables. The PTX walker
+walks the BAR page directories and tables too, since it has direct access and native performance.
+It returns the diff, also for the BAR spaces, and we apply them like any other. It just keeps track
+like a normal VA space."*
+
+★★★ **Take this. It is strictly simpler than the alternative and it dissolves a contradiction.**
+
+⊘ **What it replaces.** An earlier draft argued the BAR tables are *metadata nobody but us reads*,
+so they should live in host memory and be walked by the CPU. ⚠ That reasoning was sound about who
+reads them and **wrong about what it costs**: the guest writes those entries *through BAR2*, so
+routing them to host memory means **intercepting BAR2** — which is precisely the interception this
+simplification removes. ⇒ The placement trick bought a CPU walk and paid for it with a served
+aperture. **Bad trade.**
+
+**The model, stated once:**
+
+- ⊘ **No split apertures.** The guest says *"map this here"*; we follow it. A **dumb map**, whether
+  the target is a ring, a page table, or a buffer. Nothing inspects the purpose.
+- ★ **The BAR spaces are VA spaces like any other.** Their roots are ours — we allocate them and
+  declare the addresses, and the guest adopts them — but the tables themselves live in video memory
+  with everything else, and **the walker walks them.** It already has direct access at native
+  speed; a few more tables cost nothing.
+- ★ **One diff, one apply path, one tracking mechanism.** The BAR spaces appear in the same delta
+  as user spaces and are applied as mappings the same way. ⊘ No special case, no second walker, no
+  placement decision.
+- ⇒ ★★★ **And the contradiction is gone.** BAR2 is neither *trapped* nor *served* — it is
+  **mapped**, and we learn what the guest did with it the same way we learn everything else: the
+  walker, driven by the publish trigger.
+
+### 6.2 The one exception, and the lock order it implies
+
+⊘ **The doorbell page is the only thing that becomes a memory slot** — read-only over the real host
+page, so reads are hardware and writes trap (§5.7). Everything else is a mapping.
+
+⚠ **Changing a slot requires the VMM's global lock** — `[VERIFIED]` both the region-commit path and
+the kernel slot-update path assert it. ⇒ Two consequences, and the owner named the first:
+
+1. ★ **It is a slow path, and that is fine** — the slot is installed once, at device setup, or at
+   the first allocation of the usermode object on architectures that map the doorbell over BAR1.
+   ⚠ **Not literally "init only" there**: that allocation happens at *process* start, so the
+   install is at *first* such allocation rather than at VM start. Still slow-path, still under the
+   lock, still not on any hot path.
+2. ⊘ **It fixes a lock order.** The thread that installs a slot takes the global lock, so **nothing
+   that may be held while taking that lock may ever be taken while holding it.** In this design
+   only the VA manager installs slots and the vCPU path takes nothing, so there is no inversion —
+   but the rule is stated because the next person to add a lock will not re-derive it.
+
+### 6.1 ⊘⊘⊘ The cost of applying a diff is a HOST-GLOBAL lock, and it decides the allocation path
+
+**Every mapping call takes the host driver's single driver-wide API lock in WRITE mode**, plus a
+per-GPU group lock. ⇒ Every other client on that host — **other VMs, and host CUDA** — serialises
+behind each call we make. The deferred-invalidate flag elides one flush and one whole-space
+invalidate; it does **not** touch the locks, the address-space allocation, or the five kernel
+allocations per mapping.
+
+`[MEASURED]` on the current tree: **13 313 mapping plans for a 1 GB model**, ~132 µs per call. ⇒
+Applied naively, **a model load is tens of seconds of wall clock**, and it is wall clock stolen
+from every other tenant.
+
+⊘⊘⊘ **And on Windows this is not a performance question — it is whether the product works.** That
+guest maps system memory in **4 KiB** units and gives the driver a **hard two-second deadline**
+before it resets the adapter. At ~130 µs per mapping call, a one-gigabyte mapping is a quarter of a
+million calls — **tens of seconds**. ⇒ **Without coalescing, a Windows guest cannot work at all**,
+and with it the cost is bounded by the number of *runs* rather than of pages.
+
+⇒ ★★★ **Three changes, and they are the difference between a usable product and a demo:**
+
+1. **Coalesce runs.** Slices of one object are contiguous across leaves; map the run, not the leaf.
+2. **Reserve the address range at allocation**, using the object class that does so, rather than
+   letting every map allocate. ⚠ It also removes a trap: re-mapping an already-mapped address
+   currently returns an out-of-memory status, and reading that as *"already mapped, success"* is a
+   coincidence, not a contract.
+3. ★★★ **Register the guest-RAM memfd ONCE, at startup, and map sub-slices of it.** The per-page
+   pinning cost then happens **one time** instead of per mapping — the same posture device
+   assignment already takes. This is the single largest item on the list.
+
+⚠ **And guest RAM must be backed by huge pages.** The host driver **silently downgrades** a
+large-page mapping whose backing is not physically contiguous, so a guest on ordinary 4 KiB pages
+gets 4 KiB entries on the host GPU — sixteen times the mapping count and sixteen times less
+translation reach. ⇒ A startup requirement, checked, not a recommendation.
+
+⊘⊘ **And the diff is two-phase, or a partial failure desyncs the mirror permanently.** If the
+walker commits its new state when it walks, and the VA manager then fails part-way through — host
+address space exhausted, an allocation refused — the unapplied entries are **never retried**, and
+the mirror believes they are done. ⇒ The walker commits **only what the VA manager acknowledges**.
+
+**A VA space is the object; the page-directory base is an attribute of it, per GPU.** RM's identity
+is the object and a monotonic unique id; the base is per-GPU, mutable (relocation is explicitly
+repeatable), can be **absent** — hardware encodes that case — and is not unique. ⇒ Identity is the
+object; carry the base as a mutable, possibly-absent, per-GPU attribute used to seed a walk.
+
+**We write the roots**, because the page-directory update callback is a no-op inside a guest on
+GSP parts — instance blocks are written by the firmware, which is us. Where each root comes from:
+
+| space | root arrives as | aperture | walked by |
+|---|---|---|---|
+| user VA space | a control carrying the **reserved-PDE table**, whose level-0 entry **is** the top-level directory. Sent for every space, because the split-VA-space default is on | declared in the same message | the GPU walker (vidmem) / CPU (sysmem) |
+| UVM's external root | a control carrying `{physical address, entry count, aperture, VA space, channel}`. ⚠ **It arrives as a control, not as the dedicated message** — that message is stubbed out on GSP clients | in the message | same |
+| **BAR1** | ⊘ **ours.** We allocate it and declare the address; the guest adopts it and writes entries directly. **No message exists** | ★ framebuffer *to the guest*; **host RAM underneath** — see below | CPU, at RAM speed |
+| **BAR2** | ⊘ **ours.** We declare the address; the guest sends back its **encoded entry value** for slot 0 | same | CPU, at RAM speed |
+| instance block | ⊘ **not a root.** The guest allocates it and tells us where; **we** write the base and aperture into it | same | never walked |
+
 ### 6.1 ★★★ The guest's BAR tables are metadata. Nothing but us ever reads them.
 
-⚠ A CPU read of **real** video memory runs at roughly **48 MiB/s** — flat, regardless of what you
-do. ⇒ *"We walk the BAR tables with the CPU"* would be a serious mistake **if those tables lived in
-video memory**, and under the single store the guest's framebuffer is one real device-local
-allocation. So the question is which side of that line they fall on.
-
-★★★ **They fall on ours, and the reason is that nobody else reads them:**
-
-- On real hardware the **GPU's own MMU** walks a BAR2 table when the CPU touches BAR2. In this
-  design **there is no such hardware access** — the guest's BAR2 window is an aperture *we serve*,
-  and its BAR1 access is a **KVM memslot we install**. No engine ever fetches these entries.
-- The **host** GPU has its own BAR1 and BAR2, owned by the host driver, with their own tables. The
-  guest's are a different object entirely.
-- ⇒ The guest's BAR page tables exist to tell **us** what the guest wants mapped. They are
-  **metadata, consumed once, by software.**
-
-⇒ **So place them where reading is cheap.** The guest must *believe* they sit at framebuffer
-offsets — we declare those addresses, and it writes through apertures we emulate, so **we choose
-where the bytes actually land**. Back them with **host RAM**. The CPU walk is then a RAM walk, and
-the 48 MiB/s figure never enters the picture.
-
-⚠ **The window itself is a memory slot, and slot churn is the part that bites at scale.** Deleting
-and re-adding a slot per window change is expensive on the host, and it interacts badly with other
-devices that count slots. ⇒ **Reserve a fixed host address range per window and remap into it in
-place — never delete the slot.** The kernel invalidates just the changed range, the slot count is
-constant, and nothing else on the machine has to care how often the guest re-points a window.
+⚠ A CPU read of **real** video memory runs at roughly **48 MiB/s** — flat. ⇒ That is why the
+**walker**, not the CPU, reads page tables: it has direct access at native speed. ★ And it is why
+§6.1 puts the BAR tables through the same walker rather than inventing a placement that would let
+the CPU read them cheaply — the cheap CPU read was never worth the interception it required.
 
 ★ **This is also why the GPU-side walker is not the answer here**, even though it is the right
 answer for user VA spaces. Those tables are **guest-allocated in real video memory** — we do not
@@ -711,12 +816,11 @@ reply. So:
   0 set from the value the guest hands us.
 - ⊘ **BAR1 has no update message at all** — the guest adopts our root page and writes entries into
   it directly.
-- ⊘⊘⊘ **And the guest writes every user page-table entry through BAR2**, using it as its own
-  window onto instance and table memory. ⇒ *"BAR2 is never trapped"* and *"BAR2 is an aperture we
-  serve"* cannot both be loose statements: **trapping it would put a page-table fill through the
-  privileged ring and overflow it on a single large mapping.** ⇒ **We serve it**, and the window is
-  a **pre-reserved host address range that we re-point in place** — never a slot change, because
-  the guest re-points it constantly and each slot edit is a global operation.
+- ★ **The guest writes every user page-table entry through BAR2**, using it as its own window onto
+  instance and table memory. ⇒ It is **mapped, not trapped and not served** (§6.1) — trapping it
+  would put a page-table fill through the privileged ring and overflow it on a single large
+  mapping, and serving it would reintroduce the interception §6.1 removes. **We map it and let the
+  walker observe the result.**
 - ⊘ **Nobody sparsifies BAR1 unless we do.** An unpopulated entry there is sparse, not an error.
 
 ⇒ The framebuffer layout — root pages, the protected firmware region, reserved rows — is **ours to
