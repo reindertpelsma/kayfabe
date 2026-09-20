@@ -26,6 +26,7 @@
 //! orderings are argued from the spec, not measured.
 
 pub mod bitmap;
+pub mod channel;
 pub mod ring;
 pub mod completion;
 pub mod shadow;
@@ -34,6 +35,7 @@ pub mod trap;
 pub mod wake;
 
 pub use bitmap::RungBitmap;
+pub use channel::{size_is_total, Birth, Decoded, Disposition, Owner, Submission};
 pub use ring::{PrivRing, Push, RegWrite};
 pub use completion::{Completion, EngineIrq, Raise};
 pub use shadow::{Cell, ClearOutcome, Trigger, WriteSemantics};

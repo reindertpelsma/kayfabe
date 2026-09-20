@@ -786,3 +786,66 @@ fn a_full_privileged_ring_poisons_rather_than_waiting() {
     }
     assert_eq!(p.write(cls, 0, 0xffff, 0, 4), Action::PoisonDevice);
 }
+
+// ---- §7 channels -----------------------------------------------------------------------------
+
+#[test]
+fn an_untranslatable_operand_on_a_KERNEL_channel_refuses_and_never_faults() {
+    // ⊘⊘⊘ §7's security boundary: "The unified-memory driver treats ANY channel error as GLOBALLY
+    // FATAL — one fault kills CUDA for EVERY PROCESS IN THE GUEST until the driver reloads. A
+    // design that forwards a translation miss as a sentinel fault hands unprivileged guest
+    // userspace a way to kill the whole guest's GPU stack."
+    let s = Submission {
+        owner: Owner::Kernel,
+        route: Route::Translated,
+        all_operands_translatable: false,
+    };
+    assert_eq!(
+        s.decide(),
+        Disposition::RefuseAndPoison,
+        "a kernel channel MUST refuse+poison, never fault — a fault is guest-wide DoS"
+    );
+    assert_ne!(s.decide(), Disposition::FaultChannel);
+}
+
+#[test]
+fn a_user_channel_may_fault_because_the_blast_radius_is_the_asker() {
+    let s = Submission {
+        owner: Owner::User,
+        route: Route::Translated,
+        all_operands_translatable: false,
+    };
+    assert_eq!(s.decide(), Disposition::FaultChannel);
+}
+
+#[test]
+fn translatable_operands_always_submit() {
+    for owner in [Owner::Kernel, Owner::User] {
+        for route in [Route::Passthrough, Route::Translated, Route::Emulated] {
+            let s = Submission { owner, route, all_operands_translatable: true };
+            assert_eq!(s.decide(), Disposition::Submit, "{owner:?}/{route:?}");
+        }
+    }
+}
+
+#[test]
+fn a_kernel_channel_is_never_emulated() {
+    // §7: "Kernel channels are TRANSLATED, not emulated ... running them on our CPU is how a
+    // guest process reads another's freed pages." ⊘ This is the rule w823 measured violated on
+    // the OLD architecture: forwarded=0 emulated>0 on seven arms.
+    assert!(!Submission::kernel_channels_are_never_emulated(Owner::Kernel, Route::Emulated));
+    assert!(Submission::kernel_channels_are_never_emulated(Owner::Kernel, Route::Translated));
+    assert!(Submission::kernel_channels_are_never_emulated(Owner::User, Route::Emulated));
+}
+
+#[test]
+fn an_unmodelled_method_form_is_sized_but_decodes_to_nothing() {
+    // §7: "We SIZE every pushbuffer method form so the stream never desynchronises, and DECODE
+    // only what we model. An undefined form decodes to nothing rather than to a guess."
+    let (sz, d) = size_is_total(false, 5);
+    assert_eq!(sz, 5, "an unmodelled form must STILL be sized, or the stream desynchronises");
+    assert_eq!(d, Decoded::SizedOnly, "and must decode to nothing, never to a guess");
+    let (sz, d) = size_is_total(true, 5);
+    assert_eq!(sz, 5);
+    assert_eq!(d, Decoded::Modelled { operand_words: 5 });
+}
