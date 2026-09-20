@@ -334,3 +334,52 @@ looks equivalent.** That file exists precisely because an inline copy of this ru
 3. The 8 TIMEOUTs are being re-run at 300 s to separate **slow** from **hung** — ⊘ the 45 s gate
    stands and they remain RED; this measures *how* slow, because slow and hung are different
    defects with different fixes.
+
+---
+
+## w823 — ★★★★★ THE 30 ARMS DECOMPOSE INTO FOUR GROUPS, NOT ONE SCORE
+
+Re-running all 8 timeouts at 300 s (`diagnose_timeouts.sh`) resolves every one. The suite's
+`15 PASS / 7 FAIL / 8 CRASH` was three distinct defects and a perf tail wearing one scoreboard:
+
+| group | n | arms | what it is |
+|---|---|---|---|
+| ✔ **correct** | **18** | 15 at 45 s, **+3 that pass at ~50 s** (`defer-liveness` 53 s, `uvm-mean` 50 s, `map-stress` 53 s) | correct; the 45 s budget was the only thing failing them |
+| ⊘ **stranded** | **7** | `blockage-coverage`, `late-map-race`, `executor-vas`, `dictated-ring`, `ce-client`, `cross-client-leak`, **`engines`** | guest token rung, `forwarded=0`, `og=0`, **client `rc=0`** |
+| ⊘ **hung** | **4** | `concurrency`, `ce-client-guest-ram`, `gpga-reserve-probe`, `concurrent-fuzz` | still nothing at **300 s** = 6.7× the budget |
+| ⊘ **client fails** | **1** | `rpc-mixed-allocs` | `rc=1`, `stranded=0` — the forwarding gate never fired |
+
+**18 + 7 + 4 + 1 = 30.** ⇒ **Three independent defects**, and the largest group is *correct but
+slow*.
+
+### ★★★★★ AND THE DECISIVE OBSERVATION: STRANDING IS NOT UNIVERSAL
+
+| arm | guest_tokens | stranded |
+|---|---|---|
+| `uvm-mean` (**passes**) | **6** | **0** |
+| `concurrent-fuzz` (hangs) | **9** | **0** |
+| `engines` (fails) | 2 | **2** |
+| the five FAIL arms | 1 | **1** |
+
+⇒ ★★★ **Forwarding works fine on some arms — six and nine tokens, none stranded.** The defect is
+**conditional, not a blanket "nothing reaches hardware."** That reframes the whole hunt: the
+question is no longer *"why does nothing forward"* but **"what distinguishes the stranding arms
+from `uvm-mean` and `concurrent-fuzz`, which forward everything?"** — a differential with a
+known-positive on both sides, which is the strongest shape a question can have here.
+
+⊘ **And hanging is independent of stranding.** `concurrent-fuzz` hangs with **9 tokens forwarded
+and 0 stranded**; two of the four hangs have **no guest token at all**. ⚠ Do not fold the hang
+group into the forwarding defect — they share a symptom in the 45 s column and nothing else.
+
+### What this changes in the plan
+
+1. ⭐ **The forwarding defect is one fix worth seven arms**, and it now has a *differential*, not
+   just a repro. Start there.
+2. **The four hangs are a separate, and more dangerous, defect.** A hang at 6.7× budget is not a
+   perf problem. Two of them ring no guest token, so the hang is upstream of the doorbell path.
+3. ⚠ **The perf tail is real but is NOT the wall**: three arms are correct at ~50 s where bare
+   metal took 2–14 s. That is a **3.8×–25×** slowdown to be fixed *after* correctness, not
+   confused with it.
+4. ⊘ **Never quote `15/30` again without this decomposition.** The single score merged a
+   correctness bug, a hang, a client failure and a perf tail — and the two most actionable facts
+   (a seventh cluster member, and that stranding is conditional) were **invisible** in it.
