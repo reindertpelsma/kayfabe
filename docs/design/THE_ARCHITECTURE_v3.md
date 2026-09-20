@@ -15,6 +15,86 @@ not footnotes.
 
 ---
 
+## 0. ★★★★★ THE SEVEN AXES — every constant in this design varies along at least one
+
+**[NEW, w821]** `[owner, 2026-09-20]` listed the axes this product must span. They are the
+reason almost nothing in Part 2 may be a literal in our source, and they are **prior to** every
+other section: a design that is correct on one point of this lattice and cannot be extended to
+the rest is a retrofit waiting to happen.
+
+| tag | axis | posture | how variation is absorbed |
+|---|---|---|---|
+| **K** | **guest kernel** version | ⊘ all major versions | never our concern directly — but it sets what the guest driver is *built against*, so it moves `Dg`'s struct layouts |
+| **Dg** | **guest driver** version | ⊘ all major versions | **generated** from that version's headers; a per-version **profile entry**, never `if version ==` |
+| **Dh** | **host driver** version | ⊘ all major versions, **decoupled from `Dg`** | we **author** every host call; our host-verb signatures do not accept a guest flag word |
+| **A** | **GPU architecture** | ★ Turing and newer | a **format family** descriptor (four families span Turing→Blackwell) |
+| **die** | **GPU die** within an arch | ⊘ any die | derived per die, **maintained per family**; a new die is a descriptor, not a code path |
+| **V** | **VMM** | ◐ **the one axis where a version floor is legitimate** — QEMU, Cloud Hypervisor | the core is VMM-agnostic; the VMM shim is the only place that knows |
+| **OS** | **guest OS** | Linux **and** Windows | ⚠ the axis with the least coverage; everything measured in this campaign used a Linux guest |
+
+⊘ **`Dg` and `Dh` are TWO axes, not one.** The operator chooses the guest driver; we do not.
+A design that assumes they match is a defect. ★ This is the structural reason for
+`author_host_flags_never_forward_them`: forwarding a guest-supplied flag word into a host RM
+call is not merely risky, it is **an implicit assertion that the two versions agree**.
+
+⊘ **Host OS is Linux only** — the one scope relaxation, taken deliberately.
+
+### 0.1 The axis band for (Dg, Dh) is a DIAGONAL, not a product
+
+`[owner ruling, 2026-08-09]` We owe NVIDIA vGPU's own interoperability policy and no more:
+exact match; same major branch different minor; and **n−1** (a newer host supports the previous
+major or LTS branch). ⇒ A bounded window, not every pair.
+
+★ What that **obliges us to build**: we must know *both* versions and be able to say
+*"this pair is outside the band"* — **refused by name**. ⊘ A compatibility policy that cannot
+state an out-of-band pair is not a policy, it is a hope, and it decays into the
+`0x56 is the forgiven status` trap where a wrong configuration simply runs on.
+
+### 0.2 ★★★ The axes are not evenly distributed across the four planes
+
+This is the useful part, and the surveys in Part 2 measured it rather than assuming it:
+
+| plane | dominant axis | evidence |
+|---|---|---|
+| **GSP RPC function numbers** | ★ **stable** across `Dg` in the measured window | the `NV_VGPU_MSG_FUNCTION_*` enum is **byte-identical between 580.159.04 and 610.43.02** for every id we use; 610 only *appends* (`rpc_global_enums.h`) |
+| **GSP RPC message framing** | ⊘ **`Dg`, and it BREAKS** | the per-element header is **48 bytes** at 580 (`authTag`/`aad`/`checkSum@32`/`seqNum@36`/`elemCount@40`) and **16 bytes** at 610 (`mctpHeader`/`nvdmHeader`/`checkSum@8`/`seqNum@12`) — `message_queue_priv.h:43-51` vs `:52-67` |
+| **RM control command numbers** | `Dg` (additive), **struct layouts break** | FINN-generated; the *number* is stable, the *parameter struct* is versioned |
+| **BAR0 register offsets** | **A** and **die** | `NV_PGSP_QUEUE_HEAD = 0x110c00` from `ampere/ga102/dev_gsp.h`; the doorbell is `0x30090` on Turing, Ampere **and** Blackwell |
+| **Doorbell token encoding** | ⊘ **die**, within one arch | `NV_CTRL_VF_DOORBELL` field widths are per-arch swref, and GB202 sets bit 30 where Ampere does not |
+| **Channel / engine class ids** | **A** | `VOLTA_CHANNEL_GPFIFO_A 0xC36F` → `AMPERE_ 0xC56F` → `HOPPER_ 0xC86F` → `BLACKWELL_ 0xC96F` |
+| **Pushbuffer method encoding** | ★ **remarkably stable** | `NVC56F_DMA_SEC_OP`/`METHOD_ADDRESS`/`_SUBCHANNEL`/`_COUNT` is bit-identical to `NVC36F_*`; the GPFIFO entry differs only in `PRIV` (dropped at C56F) and `INVAL_SCOPE` (added) |
+| **Page-table format** | ⊘ **A**, four families | Turing binds `kgmmuFmtInitLevels_GP10X`; our one built format is `_GA10X` |
+
+⇒ ★★★ **The two planes that break hardest are the two the guest drives most**: RPC framing
+(`Dg`) and page-table format (`A`). Both are already modelled as **descriptors** rather than
+code paths — `ElementLayout { hdr_size, checksum_off, seqnum_off, elem_count_off, TransportHdr }`
+and `GmmuFmt` — and that is the shape every other axis-carrying fact should take.
+
+★ **The 580/610 element header is the worked example to argue from.** It is a structure whose
+*size and every field offset* changed between two supported guest driver versions, it was
+absorbed as data rather than as a branch, and it proves the discipline is implementable rather
+than aspirational.
+
+### 0.3 ⊘ What this forbids, concretely
+
+1. ⊘ **No literal in a comparison.** `derive_per_die_maintain_per_family`. Nothing may test a
+   raw offset, class id or command number against a hardcoded constant.
+2. ⊘ **No C parsed with regex or sed.** Generate from the headers with a real parser front end;
+   `[owner]` *"That will age better."*
+3. ⊘ **No capture-derived table treated as truth.** A table captured from one driver on one die
+   **expires as a vendor regression** — and this tree measured that 11 of 56 captured rows were
+   empty and *every empty one checked against hardware was contradicted*.
+4. ⊘ **No guest flag word forwarded to a host call.** It is a `Dg`↔`Dh` coupling in disguise.
+5. ⊘ **No "Linux-shaped" assumption left unmarked.** Until a Windows guest runs, every
+   guest-side inference in this document is **`OS`-limited**, and Part 2 marks the ones that are.
+
+⚠ **Where this document is weakest on the axes**, stated plainly so it is not discovered later:
+the constant-level tables in Part 2 were surveyed against **Ampere GA10x with a Linux guest**.
+The axis column in each table says what *should* vary; it does **not** certify that each entry
+has been exercised on a second point of that axis.
+
+---
+
 ## 1. The shape
 
 **One process.** The VMM (QEMU, or later any hypervisor) with the kayfabe core linked in.
@@ -93,11 +173,18 @@ Guest-container-corrupts-guest-root is the value proposition.
    (`kernel_fifo_ga100.c:224`) is a plain concatenation of `runlistId` and `chId`. RM's comment
    *"Caller cannot make assumption about this handle"* is a request, not an enforcement: the
    space is small enough to enumerate by counting.
-3. **The trap carries no attributable identity.** We get a vCPU, a GPA and 32 bits the attacker
-   chose. Nothing says *who* rang, and the guest kernel's own `ioremap` of BAR0 and userspace's
-   `mmap` of the usermode window resolve to the **same GPA** — KVM memslots are keyed by guest
-   physical address, so the trap **cannot distinguish kernel from userspace**. The ring cannot
-   be authorized at the trap. Not with more checks. Ever.
+3. **The trap carries no attributable identity**, and this is the load-bearing claim, so it is
+   cited rather than asserted. We get a vCPU, a GPA and 32 bits the attacker chose — nothing says
+   *who* rang. ★ **The two mappings provably coincide:** the usermode window's address is a
+   **BAR0-relative register offset** (`kfifoGetUsermodeMapInfo_GV100` returns
+   `gpuGetRegBaseOffset_HAL(NV_REG_BASE_USERMODE)`, `kernel_fifo_gv100.c:165`), and the driver's
+   own mmap gate admits it precisely *because* it lies inside the register BAR —
+   `IS_REG_OFFSET` tests `offset >= nv->regs->cpu_address` and within `nv->regs->size`
+   (`kernel-open/common/inc/nv.h:854`), where `nv->regs->cpu_address` is BAR0's physical base,
+   which under KVM is a **guest**-physical address. The guest kernel reaches the same registers
+   by `ioremap` of that same base. ⇒ Both mappings land in **one KVM memslot at one GPA**, and
+   memslots are keyed by GPA. The trap **cannot distinguish kernel from userspace**. The ring
+   cannot be authorized at the trap. Not with more checks. Ever.
 
 #### Why hardware survives this and a naive port does not
 

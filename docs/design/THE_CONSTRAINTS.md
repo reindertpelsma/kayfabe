@@ -2913,6 +2913,12 @@ the doorbell page is **one `ADDR_REGMEM` memdesc per GPU**, DUP'd to every clien
 `runlistId` and `chId` with no capability in it (`kernel_fifo_ga100.c:224`); and guest RM's own
 `ioremap` of BAR0 and userspace's `mmap` of the usermode window resolve to the **same GPA**, so a
 KVM memslot trap **cannot tell kernel from userspace**. There is no identity to check.
+★ **Verified, not assumed** (w821): the usermode window is a BAR0-relative register offset
+(`kfifoGetUsermodeMapInfo_GV100` → `gpuGetRegBaseOffset_HAL(NV_REG_BASE_USERMODE)`,
+`kernel_fifo_gv100.c:165`), and the driver's mmap gate admits it *because* it is inside the
+register BAR — `IS_REG_OFFSET` tests against `nv->regs->cpu_address`, BAR0's physical base
+(`kernel-open/common/inc/nv.h:854`). One BAR, one GPA, one memslot, two guest mappings at
+different privilege.
 
 ### §41 is amended
 
