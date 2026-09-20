@@ -3051,3 +3051,114 @@ licensed in the trap, but not every lock-free enqueue qualifies:
 ⚠ A single `fetch_add` is *wait-free* and a CAS loop is only *lock-free*, so this looks like a
 downgrade. It is not: wait-freedom on the claim is worthless if the claim can then be stuck
 waiting on the consumer. **Conditional-and-lock-free beats unconditional-and-wait-free here.**
+
+---
+
+## §49 — THE CONSTRAINTS THE V3 DESIGN ADDS. Added 2026-09-21 (w823).
+
+`[owner, 2026-09-20]` *"What are the new constraints."*
+
+These are the ones the v3 work **created** — not restatements. Each is stated as a rule that can
+be violated, with the thing it forbids named, because a constraint nobody can fail is decoration.
+
+### §49.1 — ⊘ THE GUEST MAY NEVER OBSERVE AN INVALIDATE AS COMPLETE BEFORE THE MIRROR REFLECTS IT
+
+This is the **observability invariant**, and it **replaces most of the fence machinery** the older
+designs carried. Every fault this campaign chased one at a time — pushbuffer VAs, the semaphore
+page, the CE operand and its extent, the GR write — is *one instance of this single invariant being
+missing*. The C never met any of them because its wholesale page-table mirror made them
+**impossible as a class**.
+
+⇒ **The rule is about OBSERVABILITY, not ordering.** We are free to do the mirror work whenever we
+like, as long as no guest-visible edge (a semaphore release, an interrupt, a register read, an RPC
+completion) can be reached that implies the invalidate finished. ⊘ It is **not** *"apply the
+mirror synchronously"* — that reading would put blocking work behind a trap and violate §48.
+
+⚠ **What it forbids by name:** any path that completes an invalidate-bearing operation to the guest
+while a mirror update for it is still outstanding. A "we'll catch up on the next doorbell" design
+is a violation even if it never misbehaves in testing.
+
+### §49.2 — ★ A FENCE IS FORWARDABLE IFF THE WAITER IS THE GPU
+
+`[owner, w821]` *"but are fences then not forwardable to the host?"* — **Yes, and this is the half
+that makes the latency budget close.**
+
+| the waiter is | what we do |
+|---|---|
+| **the GPU** (semaphore acquire, `ACQ_STRICT_GEQ`) | ★ **FORWARD IT.** The host GPU waits on the host GPU. We are not in the loop at all, and the cost is hardware's |
+| **the guest's CPU** (a poll on a completion word, an ioctl that blocks) | ⊘ **NOT forwardable.** We must make the value appear, which means our machinery is on the critical path |
+
+⇒ **The taxonomy is load-bearing** — collapsing these two produced designs that either forwarded
+nothing (all CPU-latency) or forwarded everything (a CPU waiter that never wakes). ⚠ Classify by
+**who waits**, never by which class the fence object belongs to.
+
+### §49.3 — ⊘ BAR1/BAR2 CREATE NO APERTURES. WE FOLLOW THE GUEST'S MAP.
+
+`[owner, w821]` *"bar1/bar2 do not create multiple apertures per vidmem… if the guest says map
+here vidmem, we just follow this (dumb map)."*
+
+⇒ BAR1 and BAR2 are **ordinary VA spaces**, walked by the same PTX walker with the same page-table
+format as every other VAS, at GPU speed. ⊘ **No split vidmem apertures, no second address model,
+no MMIO-read walk** — `[owner]` *"MMIO reads are slow"*, and a BAR walked over MMIO would be a
+48 MiB/s CPU read through a scarce aperture.
+
+⚠ **What it forbids:** any code path that special-cases a BAR address into a separate translation
+table. The BAR is a VAS; treat it as one.
+
+### §49.4 — ★★★ OUR PDE3[1] IS WHAT HARDWARE WALKS. THE GUEST OWNS PDE3[0].
+
+BAR ownership runs **the opposite way** from the intuitive reading (and from an earlier draft of
+this design, which had it backwards). The guest's table is the **input**; *our* table is what the
+hardware actually walks.
+
+⇒ The guest can write whatever it likes into its own half. It is never what the GPU dereferences.
+⚠ **What it forbids:** publishing a guest-authored table root to hardware, under any circumstance,
+including "just for BAR1 during init".
+
+### §49.5 — ⊘ A DOORBELL PAGE CARRIES NO WRITE TRAP (§47), AND THAT IS A CONSTRAINT ON EVERY PAGE
+
+Stated in §47 for the doorbell; **generalised here.** Any page mappable by **unprivileged guest
+userspace** must be trap-free, because the adversary is not only the outer guest — it is a
+sandboxed process attacking **its own guest's root**. ⇒ A trap on such a page is a
+denial-of-service primitive handed to the least privileged code in the system.
+
+⚠ **What it forbids:** the three-way trap classifier collapsing to two. Every BAR0 page must be
+classified as **doorbell / userspace-mappable-but-not-doorbell (return, doing nothing) /
+privileged**, and the middle case must exist.
+
+### §49.6 — A REMOTE LANE STATES THE REVISION IT MEASURED, AND REFUSES WITHOUT ITS PRECONDITIONS
+
+`[measured w823]` Two cycles were lost to a harness that reported `FAIL=30 client rc=1` when the
+truth was `FAIL=0` — a missing log directory, attributed to the thing under test — and then to a
+runner that did not `git pull`, so the pushed fix was not on the box and the re-run reproduced the
+identical output.
+
+⇒ **Two rules, both mechanical:**
+1. A harness **refuses by name** on a precondition and may **never express its own fault in the
+   vocabulary of results**. ⊘ `cmd > file` returns the *redirect's* status; never let that become
+   the subject's.
+2. A remote runner **fetches first and echoes the revision**, and the result header prints `rev=`.
+
+⚠ **What it forbids:** a scoreboard line that cannot be attributed to a revision and a machine.
+
+### §49.7 — ★ EVERY AXIS-MATRIX ROW CARRIES ITS CELL, OR IT IS REFUSED
+
+`[owner, 2026-09-21]` The bare-metal raw client is the per-cell probe for the axis matrix.
+
+⇒ A result row must carry **`pci_dev` (the die), driver version, module flavour (open vs
+proprietary — these are *different host drivers at the same version string*), and the source
+revision.** A run that cannot identify its GPU **refuses** rather than emitting an unattributed row.
+
+⚠ **What it forbids:** quoting a pass rate without its cell, and mixing counts produced by
+different counting methods (⊘ the w823 comment survey's `895/1340` and the gate's `1011/1521` are
+*different quantities* over the same tree).
+
+### §49.8 — ⊘ A STALE-ARCHITECTURE CITATION MAY NOT GROW
+
+`[measured w823]` **1011 of 1521** `.md` citations in source comments resolve to `docs/archive/` —
+files whose own headers say *superseded*. ★ The w822 archive move did **not create** this; it
+**revealed** it, by making a previously invisible property greppable.
+
+⇒ The gate is a **ratchet, not a zero**: most such citations are legitimate provenance, and
+demanding zero would delete the reasoning this tree runs on. ⚠ **What it forbids:** a *new* comment
+citing an archived doc as though it described current behaviour.

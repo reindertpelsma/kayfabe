@@ -223,3 +223,43 @@ worst thing this doc could contain. ⇒ **Every cell row is pasted from a run, n
 ```
 BARE_CELL pci_dev=0x250410DE gpu="NVIDIA GeForce RTX 3060" drv=580.159.04 kmod=open cc=8.6 rev=3dcfd772 pass=30 fail=0 crash=0 arms=30
 ```
+
+---
+
+## w823 — ⊘ LANE 3 BLOCKED BY THE PROVISIONER, AND THE REFUSAL WORKED
+
+The thin-guest lane scored **30 CRASH / 0 PASS**, every arm at 0 s:
+
+```
+--timer   CRASH  0s   the serial log is EMPTY — QEMU wrote nothing at all
+```
+
+★ **And this time the harness did NOT accuse the client.** It said the serial log was empty and
+named that as its own distinct state. ⇒ The lesson from the bare-metal misattribution was already
+encoded in *this* lane (`[measured w812]`), and it paid: the next question was *"what did QEMU
+say"*, not *"which thirty arms are broken"*. **That is the whole value of refusing by name.**
+
+QEMU's own log gave the answer in one line, also by name:
+
+```
+nvkvm: the register plane refused to build (3): KAYFABE_ISOLATES asked for a host isolate
+plane, and this archive was built without the `host-isolates` feature — it does not link
+`kayfabe-isolate-host` and cannot spawn anything.
+```
+
+### ⊘ The defect is in the RECIPE, not the code
+
+`scripts/bench/provision_bench_tree.sh` builds QEMU with **default features**, and
+`scripts/fastguest/run_fast_guest.sh` requires an archive built with **`cuda-scratchpad`** (which
+implies `host-isolates`) — a requirement it prints as advice at line 148 and **does not check**.
+
+⇒ **A fresh box provisioned by the documented recipe produces a QEMU that lane 3 cannot use**, and
+nothing between the two says so until thirty boots have failed. ⚠ Same class as
+`THE NEW DESIGN WAS UNREACHABLE BY DEFAULT` (w760, five arms defaulting to superseded
+architectures): the pieces are each correct and their **composition** is not.
+
+**Fix (w823):** the provisioner builds with `KAYFABE_SHIM_FEATURES=cuda-scratchpad`, and
+`run_fast_guest.sh` turns its advice into a **precondition** — the archive is checked for the
+feature before a single boot, not described in an echo. ⊘ A printed instruction is not a check;
+this tree has the rule already (`A CHECK THAT REPORTS IS NOT A CHECK THAT GATES`) and line 148 was
+a live instance of it.
