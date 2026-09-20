@@ -1,6 +1,6 @@
 # The Windows axis — what a Windows guest actually changes
 
-**STATUS: LIVE, 2026-09-20 (w821).** First survey of the `OS` axis (§0 of
+**STATUS: LIVE, 2026-09-21 (w823).** ★ §1.1 extended: the no-GSP-on-Windows default is now MEASURED on **two architectures** (Turing + Ada) and on a **current** driver (591.86); Blackwell consumer remains the only unmeasured consumer row. First survey of the `OS` axis (§0 of
 `THE_ARCHITECTURE_v3.md`), which until now carried **zero coverage**. Sources: ogkm 610.43.02
 and 580.159.04 (the shared RM core), plus lawfully published Microsoft/NVIDIA documentation,
 vendor bulletins, open-source projects and conference talks.
@@ -218,10 +218,35 @@ was never the `N/A`; it was the **known-positive**, and the record already conta
 | leg | evidence |
 |---|---|
 | the instrument **does** report a version on Windows | ★ the forum posters who set `EnableGpuFirmware=1` **and then saw a version**. ⇒ Windows `nvidia-smi` populates that field when there is something to report — so an `N/A` is **not** an unpopulated field |
-| unmodified consumer Turing reports **nothing** | **RTX 1660 Ti (TU116)** `[owner, measured]` · **RTX 2080 Ti (TU102)** `[forum, 2023]` — two independent Turing consumer dies |
+| unmodified consumer GeForce reports **nothing** | **RTX 1660 Ti (TU116, Turing)** `[owner, measured]` · **RTX 4070 (AD104, Ada) on game driver 591.86** `[owner, measured 2026-09-21]` · **RTX 2080 Ti (TU102)** `[forum, 2023]` — ★ **three dies across TWO architectures**, one of them on a **current** driver |
 | both are **inside** the capability set | `arch >= TU100` (§0.0.1), and `gsp_tu10x.bin` ships in the DriverStore |
 
-⇒ ✔ **GSP is off by default on consumer Turing under Windows.** `[MEASURED]`
+⇒ ✔ **GSP is off by default on consumer GeForce under Windows, Turing AND Ada.** `[MEASURED]`
+
+### ★★★ EXTENDED 2026-09-21 — the second architecture, and it kills the strongest objection
+
+> `[owner, 2026-09-21]` *"I also confirmed on a normal install GeForce RTX 4070 Windows PC: no GSP
+> firmware version in `nvidia-smi -q`. Standard game drivers, 591.86 driver version."*
+
+★ **Two things change, and the second is the one that matters.**
+
+1. **The architecture axis widens.** TU116 and TU102 are both Turing; a reader could fairly say the
+   measurement described *Turing on Windows*, not *Windows*. **AD104 is Ada** — two architectures,
+   three dies, same answer. The row in the strength table below moves from `[FORUM, weak]` to
+   `[MEASURED]` for Ada.
+2. ★★★ **It retires the staleness objection, which the forum datapoint could not.** The 2080 Ti
+   report is from **2023**; the honest reading of it was always *"that was true of some driver, three
+   years ago"* — and `A CAPTURE-DERIVED TABLE EXPIRES AS A VENDOR REGRESSION` is a failure class
+   this campaign has already paid for. **591.86 is a current game driver.** So the claim is no
+   longer *"NVIDIA shipped this default once"*; it is *"NVIDIA ships this default now."*
+
+⊘ **What still does NOT follow.** Blackwell consumer remains unmeasured, and it is the one that
+matters most for the opposite reason: `[owner]` *"for Blackwell it's a prerequisite."* If GSP is
+architecturally required on Blackwell, then **Windows-Blackwell is the SKU where this default must
+break** — and a rule inferred from Turing+Ada would be wrong exactly there. ⇒ The detect-don't-assume
+rule in §7 is not a hedge we can now drop; the widened measurement is precisely what shows the
+remaining gap is real rather than theoretical. Workstation/server and TCC/MCDM are likewise
+untouched by this datapoint.
 
 ### ⚠ How far that generalises — three different strengths, and they must not be merged
 
@@ -232,13 +257,14 @@ not.** Stated at the strength each part actually has:
 | claim | strength |
 |---|---|
 | **consumer Turing, Windows ⇒ GSP off by default** | ✔ **`[MEASURED]`** — owner's 1660 Ti, plus the 2080 Ti report, with the known-positive established |
-| **not default-on for any consumer SKU on Windows, incl. 50-series** | ◐ **`[FORUM, weak]`** — two posters assert it and 50-series owners report only post-registry results. ⊘ No before-state `nvidia-smi` on Ada or Blackwell |
+| **consumer Ada, Windows ⇒ GSP off by default** | ✔ **`[MEASURED, 2026-09-21]`** — owner's RTX 4070 (AD104) on **current** game driver 591.86, same instrument, same known-positive |
+| **not default-on for any consumer SKU on Windows, incl. 50-series** | ◐ **`[FORUM, weak]`** — ⚠ **now scoped to Blackwell only**, since Turing and Ada are measured. 50-series owners report only post-registry results; ⊘ no before-state `nvidia-smi` on Blackwell, and Blackwell is the SKU most likely to differ |
 | **workstation / server SKUs may differ** | ★ **`[STRUCTURAL]`** — `bEnableGpuFirmwareOnWsServerSkus` is a field in the policy struct, and `POLICY_DEFAULT_ON_WS_SERVER 0x20` is a registry bit. ⊘ **NVIDIA built a switch for this, which is evidence the two classes are not the same** |
 | **TCC / MCDM** | ⊘ **unknown** — `bIsTccOrMcdm` is a policy input, so the mode plainly matters, and nothing measured |
 
 ⇒ ★ **The safe form for design purposes:** *"on Windows, assume GSP is OFF unless we observe
 otherwise, and never assume a single answer across SKUs."* That is stronger than the measurement
-alone (it covers Ada/Blackwell consumer, on the weak evidence) **and** weaker than a blanket claim
+alone (it now covers **Blackwell** consumer on weak evidence; Turing and Ada are measured) **and** weaker than a blanket claim
 (it does not extend to workstation/server or TCC). ⊘ A design that hard-codes *either* a
 Windows-always-GSP or a Windows-never-GSP assumption is wrong — the policy struct says the answer
 is **per-SKU**, and we must **detect**, not assume (§7's `bGspNocatEnabled`, and the fallback

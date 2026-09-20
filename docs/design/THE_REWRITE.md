@@ -98,3 +98,53 @@ work — a CPU-only arm passed all five rows. The discriminator is **`forwarded=
 
 ⚠ **Run every gate twice in one process.** A plane that works on the first init and not the second
 does not work, and the stock driver **refuses to boot while the protected firmware region is up**.
+
+---
+
+## w823 — LANE 2 IS GREEN: the raw client passes bare metal 30/30
+
+**Measured 2026-09-21**, box 51815459 (RTX 3060, driver **580.159.04**, open module), rev
+**`3dcfd772`**, `scripts/fastguest/bare_metal_suite.sh`:
+
+```
+BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30
+```
+
+★ Slowest arms: `--gpga-reserve-probe` 15 s, `--defer-liveness` 14 s, `--ce-client-guest-ram` 10 s;
+**whole suite well inside the 120 s/arm budget.** ⇒ The ~2 min lane-2 figure in §4's ladder is
+confirmed by measurement, not estimated.
+
+⇒ **This is the licence the plan needed.** `BARE-METAL PASS + GUEST FAIL ⇒ KAYFABE BUG` is only
+usable as an indictment if the bare-metal side is actually green; at w814 it was **27/30**, so
+three arms could always be blamed on the client. **It is now 30/30**, and every guest-side failure
+from here indicts the VMM.
+
+### ⊘⊘⊘ AND THE ROAD THERE IS THE LESSON — the same suite reported `FAIL=30` TWICE
+
+Both prior runs tonight printed:
+
+```
+BARE_SUITE_PASS=0 BARE_SUITE_FAIL=30 ... --map-propagation FAIL 0s  client rc=1
+```
+
+**The truth was `FAIL=0`. A total inversion — and the harness NAMED THE DEFENDANT**: `client rc=1`
+is an accusation against `kayfabe-rm-ladder`, which was innocent thirty times over. The actual
+cause was that `/workspace/bench/` does not exist on this box, so `> "$BENCH/bare_$arm.log"`
+failed, the redirect took the shell's exit status, and the suite recorded it as the client's.
+
+★★★ **This is worse than a silent instrument, and the difference is the point.** A harness that
+reports nothing gets investigated. A harness that reports a **confident, specific, well-formatted
+verdict pointing at the thing under test** gets believed — and would have sent the next day into
+debugging thirty passing arms. ⚠ Same class as `A CHECK THAT REPORTS IS NOT A CHECK THAT GATES`
+and `failed=0 IS NOT "NOTHING REFUSED"`, but inverted: here the instrument did not under-report,
+it **manufactured** a failure and attributed it.
+
+⇒ Two fixes, both landed:
+1. `bare_metal_suite.sh` now **probes the log directory for writability and refuses by name**
+   (`HARNESS precondition, not a client result`, `exit 3`) before running a single arm.
+2. ⊘ **The runner must `git pull` on the box.** `bare2.sh` built and ran without fetching, so the
+   pushed fix in (1) **was not on the box** and the re-run reproduced the identical output — which
+   read as *"the fix didn't work"* rather than *"the fix wasn't there."* `bare3.sh` does
+   `git fetch && git reset --hard origin/<branch>` and **echoes the rev**, and the suite header now
+   prints `rev=` too. ⚠ Generalise it: **a remote lane must state the revision it measured**, which
+   is the rule `docs/BENCH_REBUILD_NOTES.md` already paid for once in the C tree.
