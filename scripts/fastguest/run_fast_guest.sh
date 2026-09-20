@@ -258,11 +258,20 @@ if [ "${KF_REQUIRE_FORWARD:-1}" = 1 ] && [ -s "$QLOG" ]; then
     guest_tokens=$(printf '%s\n' "$rows" | grep -c 'tok=' || true)
     fwd=$(printf '%s\n' "$rows" | sed -n 's/.*forwarded=\([0-9]*\).*/\1/p' | awk '{s+=$1} END {print s+0}')
     # A token that was RUNG (`emulated>0`) and never FORWARDED did its work off the GPU.
+    # ⊘⊘⊘ **PRINT THE TOKEN FIELD, NOT `$1` — and this line is why the gate needs its own
+    # known-negative.** `[measured w813d]` `$1` is the literal `DOORBELL-LEDGER` (the rows are
+    # grepped WITH their prefix), so `print $1` emitted that word and the later
+    # `grep -c 'tok='` counted **zero** — the gate silently stopped firing and the suite
+    # "improved" from 16/30 back to 23/30. ⚠ The w813b form survived only by accident: it
+    # tested `[ -n "$stranded" ]`, which is true of the word `DOORBELL-LEDGER` as much as of a
+    # token. ⇒ A gate whose failure mode is *passing everything* must be re-checked against a
+    # run that MUST fail, every time it is edited.
     stranded=$(printf '%s\n' "$rows" | awk '
-        { e=0; f=0
+        { e=0; f=0; tokf=""
           for (i=1;i<=NF;i++) { split($i,a,"=")
+              if (a[1]=="tok") tokf=$i
               if (a[1]=="emulated") e=a[2]; if (a[1]=="forwarded") f=a[2] }
-          if (e+0 > 0 && f+0 == 0) print $1 }')
+          if (tokf != "" && e+0 > 0 && f+0 == 0) print tokf }')
     # ★★★★★ **A REFUSAL BY NAME IS NOT A SILENT CPU FALLBACK — subtract the declared ones.**
     #
     # ⊘ The first version of this gate was STRICT but not TRUE, and the suite said so: it
