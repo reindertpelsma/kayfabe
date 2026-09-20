@@ -263,3 +263,74 @@ architectures): the pieces are each correct and their **composition** is not.
 feature before a single boot, not described in an echo. ⊘ A printed instruction is not a check;
 this tree has the rule already (`A CHECK THAT REPORTS IS NOT A CHECK THAT GATES`) and line 148 was
 a live instance of it.
+
+---
+
+## w823 — ★★★★★ LANE 3'S FIRST FULL MEASUREMENT: 15/30, AND SIX FAILURES ARE ONE DEFECT
+
+**Measured 2026-09-21**, thin guest, rev `59421251`, GA106 / 580.159.04 open, 45 s budget:
+
+```
+FAST_SUITE_PASS=15 FAST_SUITE_FAIL=7 FAST_SUITE_CRASH=8 ARMS=30
+```
+
+★★★ **Read against the same binary scoring `30/30` on bare metal the same night, every one of the
+15 non-passes indicts kayfabe.** That is the whole reason the bare-metal lane had to go green
+first: at w814 it was 27/30, and any of these could have been argued back onto the client.
+
+### ★★★★★ The six-arm cluster is a SINGLE defect, and the ledger names it exactly
+
+`blockage-coverage`, `late-map-race`, `executor-vas`, `dictated-ring`, `ce-client`,
+`cross-client-leak` all FAIL with the identical harness verdict — *"rows verified, but these guest
+channels never reached hardware"* — and, applying the gate's own rule per arm:
+
+| arm | guest_tokens | stranded | operand-gate refused |
+|---|---|---|---|
+| blockage-coverage · late-map-race · executor-vas · dictated-ring · ce-client | **1** | **1** | **0** |
+| cross-client-leak | 2 | **1** | **0** |
+| ⭐ *alias-two-vas* (**PASSES**) | 1 | **0** | 0 |
+| *guest-ring-channel*, *timer* (pass) | 0 | 0 | 0 |
+
+⇒ **Exactly one guest token, rung (`emulated>0`), `forwarded=0`, and ZERO declared refusals.**
+⊘ In all six the **client itself exits `rc=0`** — the rows verify. The work simply ran on the CPU
+and the content ledger cannot tell, *"because once the leaf is joined, the guest's window and the
+host object are ONE memory, so both executors write identical bytes."*
+
+★★★ **And `alias-two-vas` is the known-positive that makes this trustworthy**: it carries a guest
+token, **forwards it**, and passes. The gate is not failing everything with a token — it separates
+forwarded from stranded on real data. Cf. `A CENSUS ZERO NEEDS A KNOWN-POSITIVE`.
+
+⚠ This is the same defect family as `THE LEDGER CANNOT SEE WHICH EXECUTOR RAN` (w813) and
+`FOUR GREEN ROWS NEVER ASKED THE GPU TO TRANSLATE` (w784) — now reproduced on the thin lane with
+**six arms pointing at one token**, which is a far better repro than any of them had.
+
+### ⊘ Two FAILs are NOT that defect — do not merge them
+
+`cross-client-leak` and `rpc-mixed-allocs` report **`raw client rc=1`**: the client genuinely
+failed inside the guest. `rpc-mixed-allocs` has **`stranded=0`**, so the forwarding gate did not
+fire on it at all. ⚠ Merging these into the six would have invented a seven-arm cluster that does
+not exist.
+
+### ⊘ MY OWN MIS-READ, AND IT IS THE NIGHT'S THIRD INSTANCE OF ONE CLASS
+
+I first grepped `DOORBELL-LEDGER tok=` across the whole QEMU log, got `stranded=3` for every arm
+**including a passing one**, and nearly reported *"identical in all seven — one defect"* on that
+basis. The gate is **scoped to guest tokens `tok=0x000000xx`**; system tokens `0x0001xxxx` are
+`forwarded=0` **by design** (§12.26's system-data-plane rule) and excluded. My grep swept both
+together.
+
+⇒ ★★★ **I measured a different quantity than the gate and compared the two.** Exactly what §49.7
+forbids after the `895/1340` vs `1011/1521` citation counts, written hours earlier the same night.
+⚠ **The fix is mechanical, not attentional: apply the gate's own rule** —
+`awk -f scripts/fastguest/stranded_tokens.awk` on the gate's own `rows` — **never a fresh grep that
+looks equivalent.** That file exists precisely because an inline copy of this rule rotted at w813d.
+
+### Next
+
+1. The six-arm cluster: one token, one repro, `KAYFABE_CE_EXECUTOR` / executor selection. **Fix
+   this first** — it is one defect worth six arms.
+2. ⚠ `--doorbell-census` PASSED at **43 s of a 45 s budget**. A pass with 2 s of margin is not a
+   pass with margin; at a 40 s budget it reads as a crash. Record it as an edge, not a green.
+3. The 8 TIMEOUTs are being re-run at 300 s to separate **slow** from **hung** — ⊘ the 45 s gate
+   stands and they remain RED; this measures *how* slow, because slow and hung are different
+   defects with different fixes.
