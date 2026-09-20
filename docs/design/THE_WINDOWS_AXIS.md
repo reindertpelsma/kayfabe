@@ -169,9 +169,17 @@ does not distinguish "on by default" from "on because they had enabled it".
 Developer Forums thread every chain leads back to is *"Enable GSP on Windows 11 on my 2080 Ti?"*,
 **26 November 2023**. The poster observes `GSP Firmware Version : N/A`, finds `gsp_tu10x.bin` in
 the DriverStore, and writes *"so it is disabled by default, but the driver has GSP binary."*
-⊘ **No NVIDIA staff member replied.** One Turing card, no driver version, no before/after, and the
+⊘ **No NVIDIA staff member replied.** One card, no driver version, no before/after, and the
 conclusion rests entirely on the `N/A` reading. ⇒ **That single post is the origin of the whole
 claim.**
+
+★ **But the datapoint is at least ON-POINT, and it is worth saying why.** The RTX 2080 Ti is
+**TU102 — Turing**, so it sits *inside* the capable set (`arch >= TU100`, §0.0.1); pre-Turing
+would be Pascal and earlier. ⇒ The `N/A` is **not** explained away by "this die has no GSP".
+★★★ And the blob the poster found is named **`gsp_tu10x.bin`** — firmware for *that very chip
+family*, shipped in the Windows DriverStore. ⇒ The card was capable **and** its firmware was
+present **and** it still reported nothing. That is the right kind of observation; what it lacks is
+replication and a known-positive, not relevance.
 
 **6. NVIDIA's ONLY published sentence connecting Windows and GSP is scoped to a different
 product.** In the vGPU user guide's *"Disabling GSP Firmware"* task: *"For NVIDIA vGPU deployments
