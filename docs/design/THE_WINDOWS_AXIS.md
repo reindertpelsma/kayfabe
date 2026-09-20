@@ -165,6 +165,35 @@ reports a watchdog error that *"immediately stopped after disabling GSP"* — wh
 **on**, and that it is **disableable** on Blackwell/Windows. ⚠ Forum-grade, single report, and it
 does not distinguish "on by default" from "on because they had enabled it".
 
+**5. ★★★ The claim traced to its root — one user, one card, 2023, no vendor reply.** The NVIDIA
+Developer Forums thread every chain leads back to is *"Enable GSP on Windows 11 on my 2080 Ti?"*,
+**26 November 2023**. The poster observes `GSP Firmware Version : N/A`, finds `gsp_tu10x.bin` in
+the DriverStore, and writes *"so it is disabled by default, but the driver has GSP binary."*
+⊘ **No NVIDIA staff member replied.** One Turing card, no driver version, no before/after, and the
+conclusion rests entirely on the `N/A` reading. ⇒ **That single post is the origin of the whole
+claim.**
+
+**6. NVIDIA's ONLY published sentence connecting Windows and GSP is scoped to a different
+product.** In the vGPU user guide's *"Disabling GSP Firmware"* task: *"For NVIDIA vGPU deployments
+on Linux and all NVIDIA vGPU software deployments on Windows, omit this task."* ⊘ That is about
+**NVIDIA vGPU software deployments** — the licensed vGPU/GRID product — not a stock GeForce
+Windows guest. ⚠ It is suggestive (you would not tell people to skip a disable step for something
+that is on and problematic), but it does not address our configuration and must not be stretched
+to.
+
+### ⊘⊘⊘ And the precise reason the claim is untested: it has no known-positive
+
+The `N/A` inference may well be **right** — `nvidia-smi` is NVIDIA's own tool and largely shared,
+so an empty field plausibly does mean "no GSP version to report". ⊘ **It has simply never been
+checked against a known-positive**: nobody has published a Windows card reporting a GSP version
+**without** the registry key, on any SKU.
+
+★ And this tree already names that requirement: `a_census_zero_needs_a_known_positive`. A zero from
+an instrument nobody has seen produce a non-zero, in that configuration, is not a measurement.
+⚠ The guru3D posters who set the key *and then saw a version* prove the **instrument works on
+Windows** — which is exactly what makes the missing observation cheap to take and inexcusable to
+keep inferring.
+
 ⇒ ★★★★★ **The convergence is the useful part.** The open tree says the Windows default is decided
 **per-SKU and per-mode** (`devId`, `ssId`, WS/server, TCC/MCDM). The public record says **nobody
 has measured it**. Those two facts fit together exactly: *a per-SKU default is what produces
