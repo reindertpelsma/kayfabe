@@ -10,7 +10,7 @@
 # table's column count — do not widen the geometry, because that reflows every other page.
 set -uo pipefail
 cd "$(dirname "$0")/.."
-OUT=docs/pdf/kayfabe_architecture_v3.pdf
+OUT=docs/pdf/kayfabe_design.pdf
 mkdir -p docs/pdf
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
@@ -18,15 +18,13 @@ trap 'rm -rf "$TMP"' EXIT
 part() { printf '\n\\newpage\n\n# %s\n\n' "$1"; tail -n +2 "$2"; }
 
 {
-    cat docs/design/THE_ARCH_PDF_FRONT_V3.md
-    part 'Part 1 — THE PLAN: what gets built, in what order'  docs/design/THE_V3_PLAN.md
-    part 'Part 2 — The v3 architecture (the design it rests on)' docs/design/THE_ARCHITECTURE_v3.md
+    cat docs/design/THE_PDF_FRONT_FINAL.md
+    part 'Part 1 — The design'                                docs/design/THE_DESIGN.md
+    part 'Part 2 — The plan'                                  docs/design/THE_V3_PLAN.md
     part 'Part 3 — The surface, at constant level'            docs/design/THE_SURFACE_v3.md
-    part 'Part 4 — ogkm residue: monolithic, pre-Turing, Windows' docs/design/THE_OGKM_RESIDUE.md
-    part 'Part 5 — The Windows axis'                          docs/design/THE_WINDOWS_AXIS.md
-    part 'Part 6 — The machine, as it is (record, not argument)' docs/design/THE_MACHINE.md
-    part 'Part 7 — The surface we present (v2 plan-level)'    docs/design/THE_SURFACE_v2.md
-    part 'Part 8 — The scrub question (open owner ruling)'    docs/design/the_scrub_is_the_last_thing_on_the_cpu.md
+    part 'Part 4 — What the oracles tell us'                  docs/design/THE_OGKM_RESIDUE.md
+    part 'Part 5 — The guest-OS axis'                         docs/design/THE_WINDOWS_AXIS.md
+    part 'Part 6 — What is still open'                        docs/design/THE_OPEN_QUESTIONS.md
 } > "$TMP/bundle.md"
 
 pandoc "$TMP/bundle.md" -o "$OUT" --pdf-engine=xelatex --toc --toc-depth=3 \
