@@ -53,9 +53,27 @@ return (decodePmcBoot42Architecture(pmcBoot42) >= NV_PMC_BOOT_42_ARCHITECTURE_TU
 no RPC envelope, and no firmware to impersonate. ★★★ So *"we are the GSP"* is not merely harder
 there — **it is meaningless**, and no amount of engineering moves the floor.
 
-⇒ The floor should be read as *"the architecture does not exist below Turing"*, not as
-*"we chose to start at Turing"*. ⚠ Everywhere else in this document a posture is a decision that
-could be revisited under a product argument (`support_matrix_asymmetry`); **this one cannot be.**
+⇒ The floor should be read as *"**this** architecture does not exist below Turing"*, not as
+*"we chose to start at Turing"*.
+
+⊘⊘ **[AMENDED w821, the same day — the floor is per-PLANE, and there is a second plane.]** I wrote
+that this posture *"cannot be revisited under a product argument"*. ★ **It can — by adding a plane
+rather than by moving the floor.** `[owner]` has ruled a **GSP-disabled mode** open
+(`THE_WINDOWS_AXIS.md` §10), driving the hardware through registers as a monolithic driver does.
+That plane has **no GSP floor at all**, because it never impersonates firmware.
+
+| plane | floor | why | oracle |
+|---|---|---|---|
+| **GSP** (★ **priority**) | **Turing+**, architectural | no GSP exists below it | **ogkm — NVIDIA source** |
+| **no-GSP** | ⊘ **none** | drives registers directly | nouveau + `mmiotrace` |
+
+★★★ `[owner]` **GSP remains the priority target** — *"it will be our more stable version as we
+have more source available."* ⇒ The no-GSP plane is **additive reach, never a replacement**, and
+where the two share machinery — the whole of §2 — **the GSP plane sets the shape.**
+
+⚠ So the correction to my correction: *"Turing+ is architectural"* is true **of the GSP plane and
+only of it**. Stating it as a property of the product was the error — the same shape as every
+other *"true of the wrong population"* finding in this document.
 
 ★ **And it separates two gates this document had been blurring:**
 

@@ -207,9 +207,31 @@ keep inferring.
 has measured it**. Those two facts fit together exactly: *a per-SKU default is what produces
 contradictory folklore*, because different people are correctly reporting different cards.
 
-⇒ **[PROPOSE] Stop trying to settle this from sources. It is a one-hour measurement** — a Windows
-box, a GeForce part, `nvidia-smi -q` **before** touching the registry — and until someone runs it,
-every claim in either direction is folklore, mine included.
+### ✔✔✔ SETTLED w821 — the owner measured it, and the known-positive was already on the record
+
+> `[owner, 2026-09-20]` *"Confirmed. On an RTX 1660 Ti Windows PC, GSP firmware is N/A. It's
+> real."*
+
+★★★ **That closes it, and the reason is worth spelling out** — the measurement that was missing
+was never the `N/A`; it was the **known-positive**, and the record already contained one:
+
+| leg | evidence |
+|---|---|
+| the instrument **does** report a version on Windows | ★ the forum posters who set `EnableGpuFirmware=1` **and then saw a version**. ⇒ Windows `nvidia-smi` populates that field when there is something to report — so an `N/A` is **not** an unpopulated field |
+| unmodified consumer Turing reports **nothing** | **RTX 1660 Ti (TU116)** `[owner, measured]` · **RTX 2080 Ti (TU102)** `[forum, 2023]` — two independent Turing consumer dies |
+| both are **inside** the capability set | `arch >= TU100` (§0.0.1), and `gsp_tu10x.bin` ships in the DriverStore |
+
+⇒ ✔ **GSP is off by default on consumer Turing under Windows.** `[MEASURED]`
+
+⚠ **What is still NOT established**, and should not be quietly generalised: workstation/server
+SKUs (`bEnableGpuFirmwareOnWsServerSkus` exists precisely because they may differ), Ada and
+Blackwell consumer parts, and TCC/MCDM mode. ⇒ The struct says the default is **per-SKU**; we have
+now measured **one corner of that space**, not the space.
+
+★ And a note on how this resolved, because the pattern recurs: I spent three exchanges arguing
+about the `N/A` reading when the thing that settled it was **the other leg of the instrument
+check**. The known-positive existed in the same threads I had already read. ⊘ *A census zero needs
+a known-positive* — and I kept re-examining the zero.
 
 **Sources:**
 [NVIDIA 580.65.06 GSP chapter](https://download.nvidia.com/XFree86/Linux-x86_64/580.65.06/README/gsp.html) ·
@@ -515,6 +537,42 @@ does."* It is a dictionary, not a behavioural trace.
   cost real time (WPR2 state not resetting across boots; five `RmInitAdapter` cycles per launch),
   so the deletion is worth something concrete.
 
+### 10.4a ⊘⊘⊘ THE ORACLE OBJECTION IS ANSWERED — mmiotrace, and it is still in mainline
+
+**[w821]** §10.3 argued the real cost of a no-GSP mode is **losing the oracle**, since openrm has
+no native Turing+ path and nouveau is only a register dictionary. `[owner]`:
+
+> *"Nouveau has exact traces of what the proprietary driver does. Plus we can trace: we shadow-
+> overwrite the MMIO map function in Linux so it all lands in a trap window, then we observe every
+> trap and we know what it calls, what we must implement. If it's only init it's trivial."*
+
+★★★ **That is `CONFIG_MMIOTRACE`, it is the technique nouveau was built with, and it is alive in
+mainline today.** Verified against a kernel tree cloned **2026-09-20**: `arch/x86/mm/kmmio.c`,
+`mmio-mod.c`, `testmmiotrace.c`, `Documentation/trace/mmiotrace.rst` — whose own opening reads
+*"built for reverse engineering any memory-mapped IO device **with the Nouveau project as the
+first real user**"*, linking to `nouveau.freedesktop.org/wiki/MmioTrace`.
+
+⇒ ✔ **The objection does not stand.** We are not limited to nouveau's *knowledge* — we can
+**generate the trace ourselves**, from the proprietary driver, on the exact chip we care about.
+★ And the two sources compose into a complete oracle pair that neither is alone:
+
+| source | gives |
+|---|---|
+| **nouveau** | ★ **semantics** — what each register *is*, the field layouts, the meaning |
+| **mmiotrace** | ★ **behaviour** — what NVIDIA's driver actually writes, in what order, on this die |
+
+⇒ **[PROPOSE] Adopt this as the standing method for the non-GSP plane**, exactly as the ogkm
+differential is the standing method for the GSP plane.
+
+⚠ **Its documented limits, so nobody discovers them at 3 a.m.:**
+- **x86/x86_64 only** ✔ (our host is).
+- ⊘ **It takes all but one CPU offline.** SMP tracing is unreliable and *silently* drops events.
+  ⇒ We see a **uniprocessor** init, and concurrency is invisible. ★ Check the lost-event counter
+  **every run** — this tree's own lesson about instruments that fail quietly applies directly.
+- ⊘ It traps **`ioremap`'d kernel MMIO**. Userspace's `mmap` of the doorbell page does **not** go
+  through `ioremap` and will not appear. ★ Irrelevant for init — which is the owner's point
+  (*"if it's only init it's trivial"*) — and a **hard limit** for anything else.
+
 ### 10.5 **[PROPOSE]** A spike, not a commitment — and the decisive hour
 
 ⊘ Do not adopt this from a line count. ★ **Run the smallest decisive experiment first:** diff
@@ -525,6 +583,41 @@ either path does, it is small, and the diff shows the shape of every other subde
 next question is the oracle gap in §10.3. If it reads as *"arbitrary board bring-up"*, it is
 answered, and the answer took an hour.
 
-⚠ **And the prerequisite is still §1's one-hour measurement.** Building a no-GSP mode to serve a
-Windows configuration **nobody has confirmed exists** would be the most expensive way possible to
-resolve a question a single `nvidia-smi -q` settles.
+⊘ **[SUPERSEDED w821]** This section previously ended *"the prerequisite is still §1's one-hour
+measurement; building a no-GSP mode for a configuration nobody has confirmed exists would be the
+most expensive way to answer a question one command settles."* ✔ **The measurement was taken and
+the configuration is real** (§1). The prerequisite is discharged.
+
+### 10.6 ✔ OWNER RULING, w821 — the option stays open, and nouveau is the standing oracle
+
+> *"Pre-Turing is still significant… So we get both guaranteed Windows and pre-Turing. Just ensure
+> this remains open. And keep nouveau now as oracle for everything without GSP."*
+
+| ruling | consequence |
+|---|---|
+| ✔ **The no-GSP mode stays OPEN** | Not a spike to be closed out. It is carried as a live design option, and §§2–9 of this document are its requirements list |
+| ★★★ **Pre-Turing is a GOAL, not scope creep** | ⇒ `THE_ARCHITECTURE_v3.md` §0.0.1 is **amended**: the Turing floor is architectural *for the GSP plane*, and a no-GSP plane is exactly what lifts it. **Two planes, two floors** |
+| ✔ **nouveau is the standing oracle for everything without GSP** | Same status ogkm holds for the GSP plane. `research_clones/nouveau-src` (sparse checkout of `drivers/gpu/drm/nouveau`) |
+| ✔ **Mine ogkm for the leftovers** | Whatever residue it holds on Windows behaviour or non-GSP behaviour gets recorded; **the rest is nouveau** |
+| ★★★★★ **GSP REMAINS THE PRIORITY TARGET** | `[owner]` *"it will be our more stable version as we have more source available."* ⇒ The no-GSP plane is **additive reach, never a replacement** |
+
+★★★ **And that ranking is exactly right, for the reason §10.3 gave — which was wrong as a
+blocker and right as a priority.** The two planes do not have equal evidence:
+
+| plane | oracle | strength |
+|---|---|---|
+| **GSP** | **ogkm — actual NVIDIA source** | ★ tells us what the guest *will* send and what it does with the reply, **before** we build anything |
+| **no-GSP** | nouveau (semantics) + mmiotrace (behaviour) | ◐ tells us what *one driver* did on *one die* in *one uniprocessor boot* |
+
+⇒ ⊘ A trace is a **sample**; source is a **specification**. mmiotrace closes the gap enough to
+make the no-GSP plane *tractable*, and not enough to make it *equally trustworthy*. ★ Stability
+follows evidence, so GSP leads and the no-GSP plane follows it — and where the two planes share
+machinery (the whole of Part 1 §2: doorbells, channels, pushbuffers), **the GSP plane's design is
+the one that sets the shape.**
+
+★ **And one corroboration the owner supplies from the sibling project:** `nvkvm-pv` established
+that for the **userspace ioctl** surface, pre-Turing constants **are published in ogkm**, and it
+got pre-Turing working on a subbranch. ⚠ Scope that precisely: it establishes the **constants**
+exist, on the **Mode-1 ioctl** plane. It does **not** establish that per-chip *register-level HAL
+implementations* for pre-Turing are present — that is a separate question, and it is Task B of the
+ogkm residue survey now running.
