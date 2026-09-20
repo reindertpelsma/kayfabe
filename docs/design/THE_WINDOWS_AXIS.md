@@ -621,3 +621,79 @@ got pre-Turing working on a subbranch. ⚠ Scope that precisely: it establishes 
 exist, on the **Mode-1 ioctl** plane. It does **not** establish that per-chip *register-level HAL
 implementations* for pre-Turing are present — that is a separate question, and it is Task B of the
 ogkm residue survey now running.
+
+### 10.7 The no-GSP plane's boundaries and sources — owner rulings, w821
+
+#### (a) ⊘ Blackwell is GSP-ONLY. The no-GSP plane does not reach it.
+
+`[owner]` *"and for Blackwell it's a prerequisite."* ⇒ The two planes partition the die space
+rather than overlapping everywhere:
+
+| plane | covers |
+|---|---|
+| **GSP** (★ priority) | **Turing → Blackwell.** ⊘ **The only plane for Blackwell** |
+| **no-GSP** | pre-Turing, **and** Turing/Ampere/Ada guests that run GSP-off (e.g. consumer Windows, §1) |
+
+★★★ **And that yields a testable prediction worth recording before anyone measures it.** If GSP
+is a prerequisite on Blackwell, then **Windows must default it ON for Blackwell SKUs** — a driver
+cannot ship a default that cannot work. ⇒ The *"off by default"* result in §1 is
+**Turing/Ampere/Ada-scoped and self-limiting**, exactly as the per-SKU policy struct predicts.
+
+⚠ **There is a tension in the record here and it is not resolved.** A forum report has a user
+*disabling* GSP on an **RTX 5090** with a watchdog error stopping as a result — which, taken at
+face value, means a Blackwell part ran **without** GSP on Windows. Either Windows retains a
+monolithic path for Blackwell that Linux does not, or the report is mistaken. ⊘ **Flagged, not
+resolved.** It is the second Blackwell/Windows measurement to take.
+
+#### (b) ✔ Replay fidelity is relaxed, because most of the delta is stub-able
+
+`[owner]` *"anything the driver does extra and not on GSP is mostly stub, so replay is less of an
+issue."* ★ Corroborated by §10.2's measurement: **~22 400 of the ~67 000 `subdev/` lines are board
+and power management** — `clk`, `bios`, `i2c`, `therm`, `volt`, `gpio`, `mxm`. An **emulated** GPU
+has no clocks to raise, no fans, no thermal sensors and no I²C bus. ⇒ Those answer *plausibly*
+rather than *faithfully*, which is a far weaker obligation than replay.
+
+⚠ **The boundary to hold:** *stub* means **answer without modelling**, not **ignore**. A register
+the driver **polls for a state transition** is not stub-able however cosmetic it looks — this tree
+has already paid for that once with a `TRIGGER` bit that must clear or the guest hangs.
+
+#### (c) ★★★ Deriving from nouveau is LICENSED — but derive from rnndb, not from its C headers
+
+`[owner]` *"we need to avoid that we maintain stuff per die, so in that case derive from nouveau
+headers is allowed. We can use nouveau — it's tested on a wide variety of GPUs."*
+★ The breadth is real: **131 chip entries** in nouveau's device table, spanning nv04 → Blackwell.
+
+⇒ **[PROPOSE] Take the licence, but take it one level better.** The nouveau ecosystem publishes
+**`rnndb`** — *"an rnn database of nvidia MMIO registers, FIFO methods, and memory structures"* in
+the **rules-ng-ng XML** format, with `rnn` providing tools and libraries for it. `demmio`
+*"annotates known registers based on its database of registers"*, so it is demonstrably
+machine-consumable.
+
+★ Why XML beats nouveau's C headers here, and it is this document's own rule: §0.3 rule 2 forbids
+parsing C with regex and requires a real parser. **rnndb is already structured data with a
+schema** — deriving from it satisfies that rule *natively* instead of needing a C front end.
+⚠ **[UNVERIFIED]** rnndb's exact per-chip coverage and whether `rnn` ships a header generator —
+the README states neither. **Check before committing to it.**
+
+⊘ **And a provenance rule that must travel with the licence.** ogkm constants are **vendor
+truth**; rnndb/nouveau constants are **reverse-engineered**, possibly incomplete, and use
+*nouveau's* names rather than NVIDIA's. ⇒ Generated code must **mark which source a constant came
+from**, and where both exist, **ogkm wins**. A generator that silently blends the two produces a
+table nobody can audit — the failure this tree already named for capture-derived tables.
+
+#### (d) ⊘ There is NO published corpus of nouveau MMIO traces
+
+`[owner]` *"if nouveau leaked MMIO traces for many GPUs it's a perfect oracle."* ⊘ **Checked: it
+does not exist publicly.** The nouveau wiki asks contributors to **send** dumps privately —
+*"send them to mmio dot dumps at gmail dot com… the archive file name should contain the PCI id
+and GPU family"* — and no public archive was found. What is public is the **dictionary**
+(`rnndb`) and the **tool** (`demmio`), not the traces.
+
+⇒ ★ **So we generate our own, which is what §10.4a already proposed.** And the need is narrower
+than nouveau's: we do not want traces of 131 chips, we want traces of **the dies we ship**, doing
+**init**, from **NVIDIA's driver**. ⇒ nouveau supplies breadth of *semantics*; our own mmiotrace
+runs supply depth of *behaviour* on the dies that matter.
+
+**Sources:** [envytools](https://github.com/envytools/envytools) ·
+[nouveau MmioTrace wiki](https://nouveau.freedesktop.org/MmioTrace.html) ·
+[kernel mmiotrace docs](https://docs.kernel.org/trace/mmiotrace.html)
