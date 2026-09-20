@@ -215,8 +215,11 @@ our emulation — which is the property that makes the result attributable at al
   **assertions needing a per-family overlay**, not bugs. ⇒ Triage a new cell's reds against that
   table above *before* touching code.
 
-**First cell on the record (w823):**
+**First cell on the record (w823)** — `0x2504` is **GA106**, verified from the running box, not
+inferred. ⚠ I first wrote `0x2522` here from memory of the 3060 family and it was **wrong**; the
+device id is the matrix's primary key, so a plausible-looking guess in that field is the single
+worst thing this doc could contain. ⇒ **Every cell row is pasted from a run, never typed.**
 
 ```
-BARE_CELL pci_dev=0x252210DE gpu="NVIDIA GeForce RTX 3060" drv=580.159.04 kmod=open cc=8.6 pass=30 fail=0 crash=0 arms=30
+BARE_CELL pci_dev=0x250410DE gpu="NVIDIA GeForce RTX 3060" drv=580.159.04 kmod=open cc=8.6 rev=3dcfd772 pass=30 fail=0 crash=0 arms=30
 ```
