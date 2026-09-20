@@ -266,8 +266,16 @@ fn no_ring_is_ever_lost_under_concurrent_vcpus_and_workers() {
                             return;
                         }
                     } else {
-                        let _ = p.wake.try_park(seen);
-                        if p.wake.pollers() > 0 {
+                        // ⊘⊘⊘ **PAIR try_park WITH unpark, AND ONLY WHEN IT SUCCEEDED.**
+                        // `[w823]` this was `let _ = try_park(seen); if pollers() > 0 { unpark() }`
+                        // — which decrements ANOTHER worker's registration whenever our own park
+                        // was refused (the sequence moved) but somebody else happened to be
+                        // parked. That is an unbalanced `unpark`, it corrupts the poller count,
+                        // and it trips `unpark`'s own debug assert. ⚠ It reproduced **once in
+                        // ~75 runs**, which is exactly how a wrong pairing behaves: harmless
+                        // until two threads interleave at the one point where it matters.
+                        // ⇒ Only the thread that registered may deregister.
+                        if p.wake.try_park(seen) {
                             p.wake.unpark();
                         }
                         std::thread::yield_now();
@@ -306,16 +314,32 @@ fn no_ring_is_ever_lost_under_concurrent_vcpus_and_workers() {
     // ⊘⊘ THE ASSERTION THAT MATTERS: after every vCPU has finished and every worker has drained,
     // NO TOKEN MAY BE LEFT RUNG. A token stuck in RUNG with no bit is the permanent loss §5.2
     // describes; a token left BUSY is a leaked claim.
+    // ⊘⊘⊘ **THE DIAGNOSTIC THAT SEPARATES THE TWO CAUSES, AND WITHOUT IT THE FAILURE IS
+    // UNACTIONABLE.** A token left `Rung` means one of two completely different things:
+    //   * **bit STILL SET** ⇒ the token was published correctly and the WORKERS EXITED before
+    //     draining it. A defect in this test's stop protocol; the plane is fine.
+    //   * **bit MISSING**   ⇒ a token is `Rung` with nothing pointing at it. That is the
+    //     PERMANENT LOSS §5.2 describes, and it is a defect in the plane.
+    // `[w823]` the first version printed only `[(288, Rung), (365, Rung)]`, which cannot tell
+    // them apart — and "is it my harness or my design" is the entire question.
     let mut stuck = Vec::new();
     for (i, w) in plane.words.iter().enumerate() {
         let st = w.load().state;
         if st != State::Idle {
-            stuck.push((i, st));
+            stuck.push((i, st, plane.bits.bit(i as u32), plane.bits.summary_bit(i as u32)));
         }
     }
+    let orphaned: Vec<_> = stuck.iter().filter(|(_, _, bit, _)| !*bit).collect();
+    assert!(
+        orphaned.is_empty(),
+        "⊘ PLANE DEFECT: token(s) RUNG with NO bitmap bit — the permanent loss of §5.2. \
+         (token, state, bit, summary) = {orphaned:?}"
+    );
     assert!(
         stuck.is_empty(),
-        "tokens left un-idle after drain — work was LOST or a claim leaked: {stuck:?}"
+        "⊘ HARNESS DEFECT: token(s) still published (bit set) when the workers exited — this \
+         test's stop protocol raced, the plane did not lose anything. \
+         (token, state, bit, summary) = {stuck:?}"
     );
     assert!(plane.served.load(O::Acquire) > 0, "the workers must have served something");
 }
@@ -521,4 +545,68 @@ fn an_overdue_trigger_trips_before_the_guest_gives_up() {
     assert!(t.is_overdue(3_000_000_000, guest_budget), "3s of a 4s budget must trip the tripwire");
     t.complete(1);
     assert!(!t.is_overdue(u64::MAX, guest_budget), "a cleared trigger is never overdue");
+}
+
+// ---- §8 completions and interrupts -----------------------------------------------------------
+
+#[test]
+fn only_emulated_work_that_never_reached_the_gpu_may_be_forged() {
+    // ⊘⊘ §8: "Forge is licensed ONLY where there was no work. A completion written for work that
+    // did not happen is how a scrub becomes a leak." This campaign's most expensive measured
+    // defect; the type must refuse to express it.
+    assert_eq!(Completion::for_route(Route::Emulated, false), Completion::Forge);
+    assert_eq!(
+        Completion::for_route(Route::Emulated, true),
+        Completion::Nothing,
+        "emulated work that DID reach the GPU must not be forged — that is the leak"
+    );
+    // The GPU wrote the forwarded semaphore itself; a second author for one value is a bug.
+    assert_eq!(Completion::for_route(Route::Translated, true), Completion::Nothing);
+    assert_eq!(Completion::for_route(Route::Translated, false), Completion::Nothing);
+    // We never inspected the channel, so its completion is not ours.
+    assert_eq!(Completion::for_route(Route::Passthrough, true), Completion::Nothing);
+    // An unknown route should never have been served, let alone completed.
+    assert_eq!(Completion::for_route(Route::Unknown, false), Completion::Nothing);
+}
+
+#[test]
+fn an_edge_that_arrives_while_masked_is_delivered_on_unmask() {
+    // ⚠ §8's binding converse: "once armed, a later release MUST produce an interrupt. There is
+    // no level-triggered fallback." Dropping the edge hangs a waiter with no recovery.
+    // ⊘ And §5.5's hazard: the ISR writes the mask then reads pending, so the two are one state.
+    let e = EngineIrq::new();
+    e.mask();
+    assert_eq!(e.retire(), Raise::Hold, "masked ⇒ held, not delivered");
+    assert_eq!(e.delivered(), 0);
+    assert_eq!(e.unmask(), Raise::Deliver, "the held edge MUST surface on unmask");
+    assert_eq!(e.delivered(), 1);
+    assert_eq!(e.unmask(), Raise::Hold, "and it must not be delivered twice");
+}
+
+#[test]
+fn an_armed_engine_fires_on_new_work_and_not_retroactively() {
+    // ★ §8: "The waiter owns the race ... so we fire on genuinely new completed work and need not
+    // fire retroactively."
+    let e = EngineIrq::new();
+    e.arm();
+    assert_eq!(e.retire(), Raise::Deliver);
+    assert_eq!(e.retire(), Raise::Deliver);
+    assert_eq!(e.delivered(), 2);
+    assert_eq!(e.retired_count(), 2);
+    // Arming again with nothing new pending must not manufacture an edge.
+    assert_eq!(e.unmask(), Raise::Hold, "re-arming is not a completion");
+}
+
+#[test]
+fn a_polled_engine_can_legitimately_deliver_zero() {
+    // ⚠ §8: "The channels we care about most POLL — UVM spins, and the scrubber's blocking waits
+    // loop on the semaphore word." A zero here is not automatically a defect, which is why the
+    // interrupt plane is not the completion plane. `[w684]` 40 of 44 completions were never
+    // announced, and that was correct.
+    let e = EngineIrq::new(); // never armed: nobody registered for events
+    for _ in 0..40 {
+        assert_eq!(e.retire(), Raise::Hold);
+    }
+    assert_eq!(e.delivered(), 0, "never armed ⇒ nothing delivered");
+    assert_eq!(e.retired_count(), 40, "but the work DID retire — count it separately");
 }

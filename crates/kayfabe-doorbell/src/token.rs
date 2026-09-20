@@ -214,18 +214,39 @@ impl TokenWord {
     }
 
     /// Worker: `CAS RUNG → BUSY`. §5.2.
+    /// ⊘⊘⊘ **THIS MUST RETRY, AND THE FIRST VERSION DID NOT — measured w823.**
+    ///
+    /// Written as a single CAS that returned `NotOurs` on any failure, it **stranded tokens
+    /// permanently**, reproducing at ~1 in 20 full-suite runs:
+    ///
+    /// 1. `T` is `RUNG` with a bitmap bit. A worker's `scan()` **consumes the bit**.
+    /// 2. Before the worker's CAS lands, a vCPU rings `T` again. `T` is already `RUNG`, so
+    ///    [`TokenWord::ring`] changes **only the `applied_seq` stamp** and returns `false` —
+    ///    correctly, because a bit is already outstanding.
+    /// 3. But the *word* changed, so the worker's `compare_exchange` **fails**.
+    /// 4. The single-CAS version returned `NotOurs`; the worker dropped `T`.
+    ///
+    /// ⇒ `T` is left **`RUNG` with no bit and no summary** — the permanent loss §5.2 describes,
+    /// caused by a *legitimate concurrent ring* rather than by any contention for ownership.
+    ///
+    /// ★ The distinction the loop encodes: **a CAS failure is not evidence that someone else owns
+    /// the token.** Only `state != RUNG` is. Re-read and retry; give up solely on the state.
     pub fn claim(&self) -> Claim {
-        let cur = self.0.load(Ordering::Acquire);
-        let t = Token::decode(cur);
-        if t.state != State::Rung {
-            // ⚠ §5.1: *"The bitmap is a hint; the word is the truth. A bit set over an IDLE word
-            // costs one look."* This is that look, and it is the whole cost.
-            return Claim::NotOurs;
-        }
-        let next = Token { state: State::Busy, ..t }.encode();
-        match self.0.compare_exchange(cur, next, Ordering::AcqRel, Ordering::Acquire) {
-            Ok(_) => Claim::Won(t),
-            Err(_) => Claim::NotOurs,
+        let mut cur = self.0.load(Ordering::Acquire);
+        loop {
+            let t = Token::decode(cur);
+            if t.state != State::Rung {
+                // ⚠ §5.1: *"The bitmap is a hint; the word is the truth. A bit set over an IDLE
+                // word costs one look."* This is that look, and it is the whole cost.
+                return Claim::NotOurs;
+            }
+            let next = Token { state: State::Busy, ..t }.encode();
+            match self.0.compare_exchange_weak(cur, next, Ordering::AcqRel, Ordering::Acquire) {
+                // ⊘ `t` is the token AS CLAIMED, carrying the newest stamp we observed — which is
+                // what the worker must act up to.
+                Ok(_) => return Claim::Won(t),
+                Err(seen) => cur = seen,
+            }
         }
     }
 
