@@ -319,3 +319,124 @@ fn no_ring_is_ever_lost_under_concurrent_vcpus_and_workers() {
     );
     assert!(plane.served.load(O::Acquire) > 0, "the workers must have served something");
 }
+
+// ---- §5.4 the privileged ring ----------------------------------------------------------------
+
+#[test]
+fn the_ring_preserves_global_order_across_vcpus() {
+    // ★ §5.4's reason for ONE ring: "a guest thread on one vCPU writes PDB_LO/PDB_HI under an RM
+    // lock and releases it; another thread on another vCPU takes the lock and writes TRIGGER...
+    // Per-vCPU rings preserve only per-vCPU order and fire the trigger against a stale base."
+    let r = PrivRing::new();
+    let pdb_lo = RegWrite { bar: 0, offset: 0x1000, value: 0xdead, width: 4 };
+    let trigger = RegWrite { bar: 0, offset: 0x1008, value: 1, width: 4 };
+    assert!(matches!(r.push(pdb_lo), Push::Queued(0)));
+    assert!(matches!(r.push(trigger), Push::Queued(1)));
+    assert_eq!(r.peek().unwrap().1, pdb_lo, "the base must drain BEFORE the trigger");
+    r.commit();
+    assert_eq!(r.peek().unwrap().1, trigger);
+    r.commit();
+    assert!(r.peek().is_none());
+}
+
+#[test]
+fn peek_then_commit_means_a_failed_apply_retries_at_the_head() {
+    // ⊘ §5.4: "peek → apply → commit, so a failed apply retries at the head". Consuming before
+    // applying drops a write whose apply failed -- the silent-drop bug one layer down.
+    let r = PrivRing::new();
+    let w = RegWrite { bar: 0, offset: 0x40, value: 7, width: 4 };
+    r.push(w);
+    assert_eq!(r.peek().unwrap().1, w);
+    // apply "fails" -- we do NOT commit
+    assert_eq!(r.peek().unwrap().1, w, "the same write must still be at the head");
+    assert_eq!(r.applied_seq(), 0, "applied_seq must not move on a failed apply");
+    r.commit();
+    assert_eq!(r.applied_seq(), 1);
+}
+
+#[test]
+fn full_poisons_and_claims_nothing_and_then_drops_by_name() {
+    // ⊘ §5.4: "Full ⇒ poison the device, never wait". And the claim must reserve NOTHING on the
+    // full path -- "a claim-then-bail strands the consumer at that slot forever."
+    let r = PrivRing::new();
+    for i in 0..ring::CAPACITY {
+        assert!(matches!(r.push(RegWrite { bar: 0, offset: i as u32, value: 0, width: 4 }), Push::Queued(_)));
+    }
+    assert_eq!(r.occupancy(), ring::CAPACITY);
+    assert_eq!(r.push(RegWrite { bar: 0, offset: 0xffff, value: 0, width: 4 }), Push::Poisoned);
+    assert!(r.is_poisoned());
+    assert_eq!(r.occupancy(), ring::CAPACITY, "the failed push must NOT have reserved a slot");
+    // Every slot must still be drainable -- no hole.
+    for i in 0..ring::CAPACITY {
+        assert_eq!(r.peek().unwrap().1.offset, i as u32, "a hole would strand the drainer here");
+        r.commit();
+    }
+    assert!(r.peek().is_none());
+    // ⊘ And once poisoned, further writes are dropped BY NAME, never silently: §5.4's security
+    // half -- "dropping one write silently leaves state a later, differently-privileged guest
+    // process inherits."
+    assert_eq!(r.push(RegWrite { bar: 0, offset: 1, value: 1, width: 4 }), Push::Dropped);
+}
+
+#[test]
+fn concurrent_producers_leave_no_hole_for_the_drainer() {
+    // ⊘ The CAS-on-tested-cursor claim exists so that a producer never reserves a slot it will
+    // not fill. With fetch_add, a racing full-check bails AFTER reserving and the drainer stops
+    // at that index forever. This test would deadlock-by-assert in that design.
+    // ⊘⊘ **THIS TEST WAS A LIE UNTIL w823 AND A KNOWN-POSITIVE CAUGHT IT.** It ran 6x500 = 3000
+    // pushes into a 4096 ring, so the ring NEVER FILLED and the bail path -- the only path that
+    // can strand the drainer -- never executed. With `push` deliberately rewritten to the
+    // fetch_add-claim-then-bail that §5.4 says "strands the consumer at that slot forever", this
+    // test still PASSED. A test named `leave_no_hole` that cannot observe a hole is the
+    // "refuse by name means the NAME IS TRUE" failure, in a test.
+    // ⇒ Oversubscribe deliberately: enough producers to exceed CAPACITY, so the full/bail path
+    // runs CONCURRENTLY with live producers, which is the only way a hole can appear.
+    use std::sync::Arc;
+    let r = Arc::new(PrivRing::new());
+    const PER: u32 = 1500;
+    const N: u32 = 6;
+    let mut hs = Vec::new();
+    for v in 0..N {
+        let r = Arc::clone(&r);
+        hs.push(std::thread::spawn(move || {
+            for i in 0..PER {
+                r.push(RegWrite { bar: 0, offset: v * PER + i, value: v as u64, width: 4 });
+            }
+        }));
+    }
+    for h in hs {
+        h.join().unwrap();
+    }
+    // N*PER = 9000 > CAPACITY, so the ring MUST have filled and poisoned.
+    assert!(r.is_poisoned(), "9000 pushes into a {}-slot ring must poison", ring::CAPACITY);
+    let claimed = r.occupancy();
+    assert!(claimed <= ring::CAPACITY, "occupancy {claimed} exceeded capacity — a lost bail");
+    // ⊘ THE ASSERTION THE KNOWN-POSITIVE DEMANDS: every slot the producers CLAIMED must be
+    // drainable. Under fetch_add-then-bail, a bailing producer leaves slot `tail` never marked
+    // ready, `peek()` returns None at that index, and the drain stops SHORT of `claimed`.
+    let mut drained = 0;
+    while r.peek().is_some() {
+        r.commit();
+        drained += 1;
+    }
+    assert_eq!(
+        drained, claimed,
+        "drained {drained} of {claimed} claimed slots — a producer reserved a slot it never          filled, and the drainer is stranded at that index forever (§5.4)"
+    );
+}
+
+#[test]
+fn the_high_water_mark_is_recorded_for_the_teardown_line() {
+    // §5.4: "sustained occupancy above 25 % is a defect to investigate, and the high-water mark
+    // prints at teardown."
+    let r = PrivRing::new();
+    for i in 0..10 {
+        r.push(RegWrite { bar: 0, offset: i, value: 0, width: 4 });
+    }
+    assert_eq!(r.high_water(), 10);
+    while r.peek().is_some() {
+        r.commit();
+    }
+    assert_eq!(r.high_water(), 10, "the mark is a maximum, not a gauge");
+    assert!((r.high_water() as usize) < ring::OCCUPANCY_ALARM);
+}

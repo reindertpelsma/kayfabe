@@ -26,10 +26,12 @@
 //! orderings are argued from the spec, not measured.
 
 pub mod bitmap;
+pub mod ring;
 pub mod token;
 pub mod wake;
 
 pub use bitmap::RungBitmap;
+pub use ring::{PrivRing, Push, RegWrite};
 pub use token::{Claim, Release, Route, State, Token, TokenWord};
 pub use wake::{Wake, WakeWord};
 
