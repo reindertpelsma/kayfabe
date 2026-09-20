@@ -37,6 +37,18 @@ command -v flock >/dev/null 2>&1 && flock 9
 echo "BARE_SUITE_STARTED=$(date -Is) arms=${#ARMS[@]} budget=${BUDGET}s"
 echo "bin=$BIN  rev=$(cd /root/kayfabe 2>/dev/null && git rev-parse --short HEAD 2>/dev/null || echo '?')"
 echo "gpu=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)"
+# ⊘⊘⊘ THE LOG DIRECTORY IS A PRECONDITION, AND WITHOUT THIS CHECK ITS ABSENCE READS AS
+# "the client failed 30 times". `[measured w822]` on a fresh box $BENCH did not exist, every
+# arm's redirect failed, and the suite printed `client rc=1` for all 30 — attributing a HARNESS
+# fault to the CLIENT. That is the misattribution this tree keeps paying for: an instrument that
+# reports a number instead of refusing. A precondition is checked BEFORE the loop, by name.
+mkdir -p "$BENCH" 2>/dev/null
+if ! : > "$BENCH/.write_probe" 2>/dev/null; then
+    echo "bare_metal_suite: ⊘ REFUSING — cannot write logs to $BENCH."
+    echo "  This is a HARNESS precondition, not a client result. Set BENCH= to a writable dir."
+    exit 3
+fi
+rm -f "$BENCH/.write_probe"
 printf '%-28s %-9s %5s  %s\n' ARM VERDICT secs why
 pass=0; fail=0; crash=0
 for arm in "${ARMS[@]}"; do
