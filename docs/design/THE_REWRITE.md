@@ -148,3 +148,75 @@ it **manufactured** a failure and attributed it.
    `git fetch && git reset --hard origin/<branch>` and **echoes the rev**, and the suite header now
    prints `rev=` too. ⚠ Generalise it: **a remote lane must state the revision it measured**, which
    is the rule `docs/BENCH_REBUILD_NOTES.md` already paid for once in the C tree.
+
+---
+
+## w823 — ★★★ THE RAW CLIENT IS AN AXIS PROBE, NOT ONLY A REGRESSION TEST
+
+> `[owner, 2026-09-21]` *"it's also useful if the raw client 30/30 can be run on other GPUs and
+> drivers later, as it's a test for when iterating kayfabe itself on the axis matrix."*
+
+★★★ **Adopted, and it changes what lane 2 is FOR.** The seven axes (§0 of
+`THE_ARCHITECTURE_v3.md`) have always had the same problem: they are enumerated but **unmeasured**,
+and the only lane that could measure them — the full guest — needs a KVM box per cell. This lane
+does not.
+
+### Why it works, stated precisely
+
+**There is no VMM in it.** The suite runs the same binary the guest runs, against the real driver
+on the real card, with no QEMU and no KVM. ⇒ It isolates the **`(GPU die × host driver)`** cell
+from everything kayfabe does. A red arm here is a fact about the **die or the driver**, never about
+our emulation — which is the property that makes the result attributable at all.
+
+### ★★★ Two consequences, and the second is the one that pays
+
+1. **It needs no KVM box.** `[owner's rule]` *"a kvm box can be used for both kvm gpu, non kvm gpu,
+   cpu. a container only for non kvm gpu and cpu."* Bare-metal raw client is **non-kvm-gpu** ⇒ a
+   plain CUDA container suffices. Containers are cheap and available across far more GPU types than
+   VMS-enabled hosts. ⇒ **Die coverage scales on this lane and cannot scale on the guest lane.**
+2. ★★★ **Several arms are already per-die discriminators**, so on an unseen die the suite is a
+   **difference detector**, not a pass/fail gate:
+
+   | arm | what it discriminates |
+   |---|---|
+   | `--doorbell-census` | ⚠ `blackwell_doorbell_encoding_differs_per_die_group` — **GB202 sets bit 30 where Ampere does not.** This arm would have found that |
+   | `--pce-mask-probe` | copy-engine PCE topology, which is per-die |
+   | `--gpga-reserve-probe` | the reservable GPGA window |
+   | `--atomics-probe` | atomic support on the memory path |
+   | `--bar1-crossing` | BAR1 aperture geometry |
+
+   ⇒ **A red arm on a new die is a FINDING, not a defect** — it is precisely the input
+   `DERIVE PER DIE, MAINTAIN PER FAMILY` needs, delivered before any kayfabe code is written for
+   that die.
+
+### What was built for it (w823)
+
+- `bare_metal_suite.sh` now **identifies the cell and refuses without one**: `gpu`, `driver_version`,
+  **`pci.device_id`** (the die), `compute_cap`, and the **module flavour** (`open` vs `proprietary` —
+  ⊘ these are *different host drivers* at the same version string, so the flavour is part of the
+  cell, not a footnote). It emits `BARE_CELL_ARM …` per arm and one `BARE_CELL …` summary, both
+  machine-readable and both carrying the cell.
+  ⚠ It **refuses** when `nvidia-smi` cannot identify the GPU: a row that cannot say which die it
+  describes **poisons the matrix it lands in**, and is worse than a missing row —
+  `no provenance looks CLEANER than bad provenance`.
+- `scripts/fastguest/axis_cell.sh` — one cell end to end on a fresh container box: pull, build, run,
+  emit. ⊘ It distinguishes a **build** fault from a **cell** result by name, because a failed build
+  reported as a failed cell is the same misattribution that cost tonight two cycles.
+
+### ⊘ The limits, so this is not over-read
+
+- It bounds **one axis pair**. Guest kernel, guest driver, VMM and guest OS are untouched — those
+  still need the guest lane.
+- A green cell says the **client and the driver agree on that die**. It does *not* say kayfabe will
+  work there; it says that when kayfabe fails there, the failure is ours. That is exactly the
+  `BARE-METAL PASS + GUEST FAIL ⇒ KAYFABE BUG` rule, extended from one die to a matrix.
+- ⚠ Arms are **not** equally portable. `--gpu-info-sweep` and `--bus-info-sweep` assert values that
+  may legitimately differ per die; when this first runs on a non-GA10x part, expect reds that are
+  **assertions needing a per-family overlay**, not bugs. ⇒ Triage a new cell's reds against that
+  table above *before* touching code.
+
+**First cell on the record (w823):**
+
+```
+BARE_CELL pci_dev=0x252210DE gpu="NVIDIA GeForce RTX 3060" drv=580.159.04 kmod=open cc=8.6 pass=30 fail=0 crash=0 arms=30
+```
