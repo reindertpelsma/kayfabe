@@ -495,3 +495,44 @@ methods (`:6984`, `:7003`) and one ladder rung (`:13633`).
 ⇒ ★ **Every one of them is a feature v3 deletes** (child exports, CPU views, fb joins, the
 guest-RAM transport). So cutting them is **part of the deletion, not a prerequisite for it** — and
 the verify loop is the 30-arm suite at ~3 minutes, which is cheap enough to do it incrementally.
+
+---
+
+## w823 — ✔ `--concurrency` IS IN-PROCESS, 30/30 HOLDS, AND THE PORT MADE IT FASTER
+
+`rev 0a2d286c`, GA106 / 580.159.04 open: **`BARE_SUITE_PASS=30 FAIL=0 CRASH=0`** with the arm
+rewritten from *1 + N isolate child processes* to *N × `RmConnection::open` in this process*.
+`IsolateFactory` references in the grader: **16 → 4**.
+
+### ★ The finding survives, and sharpens
+
+| leg (800 verbs, `alloc_vaspace` + `free`) | isolates `[R12, earlier]` | in-process `[w823]` |
+|---|---|---|
+| baseline, 1 thread sequential | 1610 ms | **1332 ms** |
+| one RM client × 4 threads | 1602 ms — **1.00×** | 1481 ms — **0.90×**, 484 overlapping pairs |
+| 4 RM clients × 1 thread | 1610 ms — **1.00×** | 1461 ms — **0.91×**, 436 overlapping pairs |
+
+⇒ **The conclusion is unchanged: no configuration buys throughput. RM's device-global lock is the
+bottleneck, and it is a property of the DRIVER, not of the address space** — which is exactly why
+the port was safe.
+
+★★★ **And it is a better measurement than the one it replaces**, in two ways:
+1. **The baseline is ~17 % faster** (1610 → 1332 ms) because the IPC round trip per verb is gone.
+   ⇒ The old numbers carried the isolate transport inside the thing they were measuring.
+2. **It now reports overlap directly** — 484 and 436 *overlapping interval pairs*. ⇒ The statement
+   is no longer *"the ratio is 1.00×"* but **"the verbs genuinely DO overlap on the wire, and
+   overlap buys nothing"**, which is a much stronger claim and one a wall-clock ratio cannot make.
+   ⚠ A ratio of 1.00× is consistent with *"nothing ran in parallel"*; 484 overlapping pairs is not.
+
+⊘ **What changed and must not be quietly forgotten:** the old (b) leg put each RM client in a
+separate address space, so it also answered *"do N processes serialise?"*. In-process it answers
+*"do N clients serialise?"*. The measured answer is the same, and the mechanism (one driver-wide
+lock) predicts it should be — but **if a future result ever differs between the two shapes, that is
+a finding, not a regression of this arm.**
+
+### Remaining isolate references in the grader: 4
+
+| site | what | plan |
+|---|---|---|
+| `main.rs:~15525` | default rungs **R10/R11** (`isolate`, `through-isolate`) | port the same way, or retire — they test the plane itself |
+| `main.rs:1365,1637,1892,1902` | `--bar1-crossing` leg A, `SCM_RIGHTS` to a child | ⊘ **deliberately needs a second process.** Leg B (the KVM memslot §6.2 depends on) survives untouched |
