@@ -157,7 +157,9 @@ fi
 # ⚠ **This tree already recorded that exact class** (`a_pipe_into_grep_q_manufactures_a_failure`,
 # w418 — the same two commands). ⇒ A lesson in memory does not fire on its own; it fires when
 # something makes you look. `grep -c` consumes all input, so there is no SIGPIPE to lose.
-_iso_n=$(strings "$Q" 2>/dev/null | grep -c 'kayfabe-isolate-host' || true)
+# ⇒ And the recorded fix is stronger than "use -c": **do not pipe at all.** `grep -a` reads the
+# binary directly, so there is no producer to signal and no pipeline status to invert.
+_iso_n=$(grep -ac 'kayfabe-isolate-host' "$Q" 2>/dev/null || true)
 if [ "${_iso_n:-0}" -eq 0 ]; then
     echo "run_fast_guest: ⊘⊘ REFUSED — $Q was built WITHOUT the host-isolate plane." >&2
     echo "   The archive needs cargo feature 'cuda-scratchpad' (which implies 'host-isolates')." >&2
