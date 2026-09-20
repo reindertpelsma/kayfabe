@@ -551,3 +551,55 @@ the isolate plane, which v3 deletes` line rather than a silent disappearance.
 ★ This is the general rule for the two remaining cases as well: **coverage of a deleted thing is
 deleted by the same change that deletes it, never earlier and never silently.** A suite that
 shrinks before the code does is a suite that stops noticing.
+
+---
+
+## w823 — v3 BUILD STATUS: `crates/kayfabe-doorbell`, 2 025 lines, 36 tests, 0.02 s, no GPU
+
+The trap path and everything it touches now exist as code. ⊘ **No `unsafe`, no OS call, no
+allocation on the vCPU path** — which is what keeps the whole plane in lane 1.
+
+| § | piece | file |
+|---|---|---|
+| 5 | the three-way trap classifier | `trap.rs` |
+| 5.1 | token word · rung bitmap + summary | `token.rs` · `bitmap.rs` |
+| 5.2 | five states, bounded re-act loop, DEAD | `token.rs` |
+| 5.3 | wake word, 56/8 HIGH sequence, `prepare_to_wait` | `wake.rs` |
+| 5.4 | privileged ring, CAS-claim, poison-never-wait | `ring.rs` |
+| 5.5 | shadow, five write semantics, position-stamped trigger | `shadow.rs` |
+| 8 | completion per route, per-engine interrupt arming | `completion.rs` |
+
+### ★★★ Every load-bearing invariant carries a KNOWN-POSITIVE
+
+⊘ A green suite over new code proves nothing on its own. For each invariant below, the rule was
+**deliberately broken and the suite re-run**, and the named test failed:
+
+| invariant | broken by | caught by |
+|---|---|---|
+| publish is bit-**then**-summary | setting summary only | 4 tests, incl. the concurrent one |
+| the ring claim is CAS-on-tested-cursor | `fetch_add` then bail | `..._leave_no_hole_...` |
+| `UNKNOWN` does nothing at all | bumping the sequence | `an_unprivileged_process_cannot_keep_workers_from_parking` |
+| the classifier is **three**-way | collapsing to two | `the_doorbell_pages_other_offsets_do_nothing_at_all` |
+| forge only where no GPU work ran | forging unconditionally | `only_emulated_work_that_never_reached_the_gpu_may_be_forged` |
+
+### ⊘⊘⊘ And lane 1 earned its keep on the first night: a REAL race in v3 core
+
+`TokenWord::claim()` returned `NotOurs` on **any** CAS failure. A concurrent ring on an
+already-`RUNG` token restamps `applied_seq` **without changing the state**, so a *legitimate* ring
+spuriously failed the claim; the worker dropped the token, and its bit had **already been consumed
+by the scan**. ⇒ Token left `RUNG` with no bit — **the permanent loss of §5.2**. Reproduced 2/40,
+now 0/80.
+
+★ **The rule it taught:** *a CAS failure is not evidence that someone else owns the thing.* Only
+`state != RUNG` is.
+
+⚠ **And the process is the transferable part — my first two diagnoses were both wrong:**
+1. *"flaky test"* — 0/75 alone and under load. Nearly filed as noise.
+2. Found an unbalanced `unpark` **in the test**, fixed it, still 2/40. ⊘ **A bug is not THE bug**,
+   and fixing one is the easiest way to stop looking.
+3. Made the assertion **distinguish the two causes** — bit still set ⇒ the harness exited early;
+   bit missing ⇒ the plane lost it. It printed `PLANE DEFECT` on the next failure.
+
+⇒ **When a test can fail for two reasons that demand opposite responses, the assertion must say
+which.** The first version printed `[(288, Rung), (365, Rung)]`, which cannot tell the harness from
+the design — and that was the entire question.
