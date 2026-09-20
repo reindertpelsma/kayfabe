@@ -101,6 +101,123 @@ use std::path::{Path, PathBuf};
 /// across a policy chain on the MMIO trap. That is a weaker list than it used to be, which is
 /// the point: **the strongest entry left this table by being fixed, not by being reworded.**
 const UNRANKED_VCPU_PATH_LOCKS: &[(&str, &str, &str)] = &[
+
+    // ═══ w816 — TWENTY-ONE MORE, FOUND AFTER THE ALLOWLIST WENT STALE AT w737 ═══
+    //
+    // ⊘ `ShadowSink` arrived at w761b and the set grew without the rulings being written
+    // down — the exact failure this gate exists to prevent, happening to the gate itself.
+    // One of these is MINE (the doorbell ledger, w801).
+    //
+    // ⚠ THREE rulings below record a DEFECT rather than blessing the lock: `pramin`,
+    // `counter_slot` and `premap_why` all have blocking work beneath them TODAY. They are
+    // classified so the gate is green on a TRUE statement, not to excuse them.
+    (
+        "crates/kayfabe-qemu-raw/src/barmirror.rs",
+        "Mutex<Option<(kayfabe_vmm::RamRegionId, u64, Option<u64>)>>",
+        "⊘⊘⊘ **THE WORST ENTRY ON THIS LIST, AND IT IS A LIVE DEFECT.** `BarMirror::pramin` — the PRAMIN aperture slot. Taken on the **vCPU** at `barmirror.rs:1770` (`repoint_pramin`, reached from `after_write` <- `Regs::write`) and held to the end of the function. Beneath it, inside a guest MMIO trap: a **cross-process IPC round trip** at `barmirror.rs:1988` (`port.with_node` -> `SharedIsolate::with_worker` -> `scratchpad.rs:762` `f(&mut worker)` -> socket write + BLOCKING read), two further mutexes (`parked_inplace`, `pramin_marks`), five `eprintln!`, a `std::env::var`, an `mmap MAP_FIXED` and a memslot delete. ⚠ `with_worker`'s own doc states the discipline this breaks: every caller must be lock-free and off-trap when it arrives. `pramin` is UNRANKED, so R1 cannot see it and nothing fires. ★★★ THE FIX IS NOT A RULING — the IPC must move out of the guard. Recorded so the gate is green on a TRUE statement: this lock is known, understood, and WRONG.",
+    ),
+    (
+        "crates/kayfabe-qemu-raw/src/scratchpad.rs",
+        "Mutex<IsolateBox>",
+        "★★★ `SharedIsolate::iso` — the one VM-lifetime isolate's worker pool. **An IPC round trip runs beneath it BY DESIGN** (`scratchpad.rs:762`, `f(&mut worker)`), which is why its own doc requires that every caller be lock-free and off-trap on arrival. ⊘ That contract is currently VIOLATED by `repoint_pramin` (row above), which arrives on a vCPU holding `pramin`. ⚠ The order `pramin -> iso` is real, and is the only path by which a guest MMIO trap blocks on another PROCESS while holding a lock. ★ Under the single-process proposal this lock and the round trip beneath it both disappear; until then the ruling is that NOTHING may arrive here holding anything.",
+    ),
+    (
+        "crates/kayfabe-device/src/plane.rs",
+        "Mutex<std::collections::BTreeMap<String, u64>>",
+        "⊘ NOTHING MAY BLOCK BENEATH IT — nothing here can wait. `RegPlane::doorbell_refusals_by_kind` — refused doorbells counted BY FAULT NAME. Taken on the **vCPU** (`plane.rs:7015` <- `ring_doorbell` <- `RegPlane::write:6525`) AND on the **publication worker** (`shim.rs:6290`), so it is genuinely shared. ⚠ ALLOCATION BENEATH IT, on the vCPU: `plane.rs:6934` `refusal.kind.0.to_string()`, then two allocating `BTreeMap` entry inserts. No print, no second lock, no IPC. ⊘ The census reader (`:5406`) is worse in volume — a `Vec` collect, a SORT and a `format!` map with the guard live — and it runs once per doorbell through `ring_inline`, not only at teardown. ★ THE EDIT THAT WOULD MAKE THIS ROW WRONG: nothing — the fix is to intern the kind (it is a &'static str at source) and remove the allocation entirely.",
+    ),
+    (
+        "crates/kayfabe-device/src/plane.rs",
+        "RwLock<Option<std::sync::Arc<dyn ReadShadowPort>>>",
+        "⊘ NOTHING MAY BLOCK BENEATH IT, but a SECOND LOCK is taken beneath it. \
+         `RegPlane::read_shadow` — where a producer's new register value goes so the guest reads it WITHOUT trapping. Read-guarded on the **vCPU** at `plane.rs:3145` (`shadow_write`, from `RegPlane::write:6498`); write-guarded only at realize. ⚠ A SECOND LOCK RUNS BENEATH IT: `plane.rs:3152` `port.write(...)` calls out to a trait object whose only production impl immediately takes `ShadowSink::segments` (`shim_unsafe.rs:1662`). Order: `read_shadow -> segments`; via `publish_cpu_intr` the full order is ranked `CpuIntrTree` -> `read_shadow` -> `segments`. ⊘ Nothing else beneath it: no allocation, no print, no IPC. The nesting is fixed and one-way. ★ THE EDIT THAT WOULD MAKE THIS ROW WRONG: a second `ReadShadowPort` impl doing anything but a bounded `write_volatile`.",
+    ),
+    (
+        "crates/kayfabe-qemu-raw/src/shim_unsafe.rs",
+        "Mutex<Vec<ShadowSegment>>",
+        "★ `ShadowSink::segments` — every backed piece of the BAR0 aperture, including the raw `*mut u8` of hypervisor memory the guest reads directly. ⊘ It used to be a process-lifetime `static` and was a **guest-reachable use-after-free** across `device_del`/`device_add` (w761b); that is why it is a field now. ⊘ NOTHING MAY BLOCK BENEATH IT AND NOTHING DOES: a linear `find` over a handful of segments with `checked_add` bounds checks, then at most 8 bytes of `write_volatile` — no allocation, no print, no second lock, no syscall. ⚠ It is ALWAYS entered beneath `plane::read_shadow`, and sometimes beneath the ranked `CpuIntrTree`. vCPU + realize; no worker caller found.",
+    ),
+    (
+        "crates/kayfabe-device/src/dbtable.rs",
+        "Mutex<std::collections::BTreeMap<u64, [u64; 4]>>",
+        "⊘ **MINE, w801.** `DoorbellLedger::seen` — per-token [passthrough, emulated, other, forwarded], capped at 64 tokens. Taken on the **vCPU on EVERY doorbell** (`plane.rs:7010` <- `ring_doorbell` <- `RegPlane::write:6525`). ⊘ NOTHING MAY BLOCK BENEATH IT AND NOTHING DOES: one `get_mut` + `saturating_add`, or a cap check and one `insert` of a [u64; 4]. No allocation past the cap, no print, no second lock, no IPC. ⊘ NOT shared with a worker — the worker's path is `account_doorbell_report`, which does not touch the ledger; the only reader is teardown, where the guard IS held across `format!`, acceptable there and nowhere else. ★ THE EDIT THAT WOULD MAKE THIS ROW WRONG: removing the 64-token cap, which is what bounds the allocation.",
+    ),
+    (
+        "crates/kayfabe-qemu-raw/src/barmirror.rs",
+        "Mutex<Option<RamRegionId>>",
+        "`BarMirror::counter_slot` — the counter page's memslot, so the guest reads the GPU's real clock with NO exit. Worker-only (`:2462` <- `shim.rs:5571`, `doorbell_publish_loop`); no vCPU reader exists today. ⚠ BLOCKING WORK DOES RUN BENEATH IT: a KVM memslot install (`:2473`) and TWO `eprintln!` (`:2478`, `:2486`), guard live for the whole function. ⊘ Tolerated ONLY because no vCPU takes this lock. ★ THE EDIT THAT WOULD MAKE THIS ROW WRONG: any vCPU reader — at which point the install and the prints must come out first. This is the `Mutex<Table>` row's warning, already realised.",
+    ),
+    (
+        "crates/kayfabe-qemu-raw/src/barmirror.rs",
+        "Mutex<std::collections::BTreeSet<(bool, &'static str)>>",
+        "⚠ BLOCKING WORK RUNS BENEATH IT TODAY, and that is a DEFECT, not a permission. \
+         `BarMirror::premap_why` — the distinct refusal reasons seen, so 1181 identical lines become one each. Worker-only (`premap_window` <- `premap_bars` <- `shim.rs:6078`). ⚠ `eprintln!` IS INSIDE THE GUARD at `:2343` and `:2418` — the process-wide stderr lock and a `write(2)` beneath this mutex. ⊘ That is precisely the anti-pattern the `Mutex<Table>` row praises `refuse()` for avoiding, already happened here. ⊘ Tolerated ONLY because no vCPU takes it. ★ THE FIX is the same shape as `refuse()`'s: end the guard's scope before the print.",
+    ),
+    (
+        "crates/kayfabe-qemu-raw/src/barmirror.rs",
+        "Mutex<Option<(usize, usize)>>",
+        "⊘ NOTHING MAY BLOCK BENEATH IT — nothing in any critical section can wait. `BarMirror::pages_at_first_birth` — (bar1, bar2) distinct pages at the first channel birth. Taken on BOTH threads: **vCPU** via `shim.rs:19122` (the `inline_because_no_worker` arm of `Regs::write`) and **worker** via `shim.rs:5605`. ⚠ A SECOND LOCK BENEATH IT: `:2504` takes `Mutex<Table>` (already classified), establishing the order `pages_at_first_birth -> table`. Nothing takes them the other way and the gate can see neither. ⊘ Otherwise trivially short; the teardown reader holds it across `to_string`/`format!`.",
+    ),
+    (
+        "crates/kayfabe-qemu-raw/src/barmirror.rs",
+        "Mutex<Vec<(u64, u64)>>",
+        "⚠ TWO FIELDS SHARE THIS TYPE and both are ruled here. (a) `parked_inplace` (`:546`) — views whose mapping was overwritten in place. Taken on the **vCPU beneath `pramin`** (`:1984`, `:2025`) and on the **worker** (`:2081`). Each section is trivially short — one `push`, one `retain`, one `mem::take` + partition — and the release IPC is deliberately OUTSIDE the block. ⊘ But it inherits `pramin`'s hold time on the vCPU, which is the defect recorded in that row. (b) `pramin_marks` (`:639`) — the access count at each PRAMIN re-point, bounded at 64. Written on the vCPU beneath `pramin` (`:2159`), read at teardown. ⊘ NOTHING BLOCKS BENEATH EITHER. `plane.counters()` is called BEFORE the lock at `:2158` — moving it inside would put a counter sweep under a lock a trap holds.",
+    ),
+    (
+        "crates/kayfabe-qemu-raw/src/barmirror.rs",
+        "Mutex<Vec<(RamRegionId, u64)>>",
+        "`BarMirror::parked` — views whose slot is gone and whose MAPPING may not be. ⊘ OFF-vCPU BY NAME: `drain_view_releases` declines at `:1603` on `on_vcpu_thread() || in_trap()`, and that fires even when reached from `refuse_pramin_slot` on the vCPU. ⊘ Nothing blocks beneath it: one `is_empty`; then a scoped `mem::take` + `partition` whose guard DROPS before the IPC release loop at `:1635`. `reclaim_released_windows()` runs BETWEEN the two acquisitions, not inside either.",
+    ),
+    (
+        "crates/kayfabe-qemu-raw/src/deviceview.rs",
+        "Mutex<std::collections::BTreeMap<u64, ArmedView>>",
+        "`DeviceViewPort::views` — the armed views this port holds; the map IS the outstanding set. Taken on the **vCPU** (`:314` insert, via `with_node` <- `barmirror.rs:1988`) and off-vCPU (`:375` remove, `:407` take). ⊘ NOTHING BLOCKS BENEATH IT, and the scoping is deliberate and load-bearing: `release` holds it only for the `remove` and runs `release_held` (the IPC) AFTER the guard drops; `release_all` uses an explicit block; `with_node` does its IPC BEFORE taking the lock. ★★★ THE EDIT THAT WOULD MAKE THIS ROW WRONG: moving `:427` (`iso.with_worker(|w| w.release_device_view(..))`) inside any of those scopes — an IPC round trip under a mutex a vCPU takes.",
+    ),
+    (
+        "crates/kayfabe-qemu-raw/src/deviceview.rs",
+        "Mutex<Option<String>>",
+        "⚠ BLOCKING WORK RUNS BENEATH IT TODAY, and that is a DEFECT, not a permission. ⚠ TWO FIELDS SHARE THIS TYPE. (a) `DeviceViewPort::first_refusal` (`:215`) — WHICH of four causes fired, because a census reporting only a total cannot say. Taken on the **vCPU** (`:450` <- `with_node` <- `barmirror.rs:1988`) and off-vCPU via `release_held`. ⚠ ALLOCATION BENEATH IT: `:455` a `format!` under the guard; no print, no second lock, no IPC. (b) `DeviceFbBytePort::first_arm_refusal` (`:643`) — same shape, off-vCPU only, allocation at `:1035`. ★ THE EDIT THAT WOULD MAKE EITHER WRONG: formatting a larger message, or moving the print next to the store instead of the census.",
+    ),
+    (
+        "crates/kayfabe-qemu-raw/src/storemap.rs",
+        "Mutex<Option<String>>",
+        "⊘ NOTHING MAY BLOCK BENEATH IT — nothing in any critical section can wait. `StoreMapPort::first_refusal` — the first refusal's name, so a census can say WHICH of four fired. ⊘ Taken ON THE vCPU by the DECLINE path itself: `off_vcpu()` (`:1203`) answers a vCPU caller with `Err(self.note(OnVcpu))` at `:1207`, and `note` takes this lock. Reached through `Regs::write` -> `adopt_pending_channel_rings(true)` -> the store-map join path. ⚠ ALLOCATION BENEATH IT: `:1221` a `String` clone. The `format!` that builds it happens BEFORE `note` is entered — keep it that way. ⚠ `census_line` (`:1393`) holds this guard across a call that takes `refusal_kinds`, establishing `first_refusal -> refusal_kinds`; `note` itself scopes them apart.",
+    ),
+    (
+        "crates/kayfabe-qemu-raw/src/storemap.rs",
+        "Mutex<std::collections::BTreeMap<String, u64>>",
+        "⊘ NOTHING MAY BLOCK BENEATH IT — nothing in any critical section can wait. `StoreMapPort::refusal_kinds` — the distinct refusals with counts, capped at `DISTINCT_CAP`. Same vCPU decline path as `first_refusal`; also every success/RM-refusal path on the worker, so genuinely shared. ⚠ ALLOCATION BENEATH IT: `:1232` an allocating `BTreeMap` insert. ⚠ `refusal_histogram` (`:1248`) holds it across a `Vec` collect, a SORT, a `format!`+`join` and a `push_str` — census-only, but the longest hold on this lock, and a vCPU can reach `note` concurrently.",
+    ),
+    (
+        "crates/kayfabe-qemu-raw/src/storemap.rs",
+        "Mutex<std::collections::BTreeMap<(u64, u64), Placed>>",
+        "`StoreMapPort::placed` — (scratchpad range, guest VA) -> what was placed there; the ledger the restated ring assertion reads. Taken on the **vCPU** via `is_slice_of_the_store` (`:731` <- `kayfabe-fwd/src/lib.rs:5123`, which is NOT gated) and on the **worker** via `map`/`unmap`. ⊘ NOTHING BLOCKS BENEATH IT at any of seven sites: each is one `get`/`insert`/`remove`/`len`. The two that could have been long explicitly `drop()` the guard first (`:615`, `:974`), and every `with_worker` IPC is outside. ★ THE EDIT THAT WOULD MAKE THIS ROW WRONG: removing either explicit `drop`.",
+    ),
+    (
+        "crates/kayfabe-qemu-raw/src/storemap.rs",
+        "Mutex<std::collections::BTreeMap<u64, HostHandle>>",
+        "`StoreMapPort::adopted` — per-proc space handle -> the scratchpad's own range over the dup. ⚠ The fast-path `get` at `:414` runs BEFORE the `off_vcpu()` gate at `:427`, so a vCPU does touch this lock on a hit. ⊘ Nothing blocks beneath it: single map `get`/`insert`/`remove` on Copy values, all statement temporaries; the IPC at `:428` and `:1007` is outside them.",
+    ),
+    (
+        "crates/kayfabe-qemu-raw/src/storemap.rs",
+        "Mutex<std::collections::BTreeSet<u32>>",
+        "`StoreMapPort::birth_procs` — which per-proc isolates have a birth client here, so the census can say whether the arm reached every proc or only the first. Taken on the **vCPU** via `has_birth_client` (`:546` <- `shim.rs:14865`) and on the **worker** via the hand-over insert (`:491`). ⊘ Nothing blocks beneath it: one `insert`/`len`/`contains` on a u32 set; the insert may allocate a node, bounded by the number of guest processes.",
+    ),
+    (
+        "crates/kayfabe-qemu-raw/src/storemap.rs",
+        "Mutex< std::collections::BTreeMap<u32, std::sync::Weak<StoreMapPort>>, >",
+        "⚠ A process-GLOBAL static, not a field: `STORE_MAP_PORTS`, the per-GpuId registry. It exists because `join_one_fb_leaf` is reached from three different types and threading a handle through all three would be three places the port's identity lives. Taken on the **vCPU** and the **worker** through `store_map_port` (`:1508` <- `shim.rs:14806`); the insert is realize-only. ⊘ Nothing blocks beneath it: one map lookup plus a `Weak::upgrade` (an atomic refcount bump, no allocation). ⚠ Being a global, its lifetime is the PROCESS — the same shape that made `ShadowSink` a guest-reachable use-after-free before w761b. It holds `Weak`, not `Arc`, which is what keeps that from recurring.",
+    ),
+    (
+        "crates/kayfabe-device/src/twoworlds.rs",
+        "Mutex<Vec<u64>>",
+        "`twoworlds::Maps::examples` — the first few colliding GPGAs, so a report names ADDRESSES rather than a count: a bare number cannot be chased, an address can. Taken on the **vCPU** (`plane.rs:5895`, `window_phys` — the fb read/write trap path) and the **worker** (`plane.rs:3354`). ⊘ NOTHING BLOCKS BENEATH IT: one `push`, capped at 16 by the check on the line above. ⊘ And it is reached at most once per NEWLY colliding page — the `fetch_or` transition at `:128` guards it — not once per access.",
+    ),
+    (
+        "crates/kayfabe-qemu-raw/src/walkshadow.rs",
+        "Mutex<ShadowCensus>",
+        "`WalkShadowPort::census` — skipped/decided/fell-back tallies and the kept disagreement sample. ⊘ Reached on the **vCPU by the DECLINE arm**: `:376` answers a vCPU with `note_skipped(on_vcpu)`, which takes this lock. ⊘ NOTHING MAY BLOCK BENEATH IT, and the field carries the reason in its own prose: every census write is a short, self-contained acquisition, and the mutex is never held across the isolate round trip, because a thread waiting on it would be blocked for the length of a walk — and if that thread is a vCPU, the cost is identical to the IPC we refused to do there. Confirmed: `port.refresh(&image)` runs with NO census guard held. ★ THE EDIT THAT WOULD MAKE THIS ROW WRONG: holding the guard across `refresh`.",
+    ),
     // ═══ w541 — SEVEN LOCKS THIS GATE COULD NOT SEE UNTIL ITS REACH WAS FIXED ═══
     //
     // ⊘ Six of these predate this session and one is mine. None were hidden by a judgement
