@@ -610,3 +610,179 @@ fn a_polled_engine_can_legitimately_deliver_zero() {
     assert_eq!(e.delivered(), 0, "never armed ⇒ nothing delivered");
     assert_eq!(e.retired_count(), 40, "but the work DID retire — count it separately");
 }
+
+// ---- §5 the trap path, and §4's INNER boundary ------------------------------------------------
+
+struct Fixture {
+    tokens: Vec<TokenWord>,
+    bits: RungBitmap,
+    wworker: WakeWord,
+    wdrainer: WakeWord,
+    ring: PrivRing,
+}
+impl Fixture {
+    fn new(n: usize) -> Fixture {
+        Fixture {
+            tokens: (0..n).map(|_| TokenWord::new()).collect(),
+            bits: RungBitmap::new(),
+            wworker: WakeWord::new(),
+            wdrainer: WakeWord::new(),
+            ring: PrivRing::new(),
+        }
+    }
+    fn path(&self) -> TrapPath<'_> {
+        TrapPath {
+            tokens: &self.tokens,
+            bits: &self.bits,
+            worker_wake: &self.wworker,
+            drainer_wake: &self.wdrainer,
+            ring: &self.ring,
+            token_mask: 0x1f,
+        }
+    }
+}
+
+#[test]
+fn an_unprivileged_process_cannot_keep_workers_from_parking() {
+    // ⊘⊘⊘ §5's named attack, written as the adversary: "Bumping the sequence for an unowned token
+    // lets an unprivileged process keep every worker spinning: workers register as polling only
+    // if the sequence is unchanged, so a token nobody owns, rung in a loop, prevents them ever
+    // parking."
+    let f = Fixture::new(32);
+    // Every token is Unknown -- nobody allocated them.
+    let p = f.path();
+    let seen = f.wworker.seen();
+    for i in 0..10_000u64 {
+        assert_eq!(p.write(Class::Doorbell, 0, 0, i & 0x1f, 4), Action::None);
+    }
+    assert_eq!(
+        f.wworker.seen(),
+        seen,
+        "10 000 rings on UNOWNED tokens must not move work_seq — otherwise no worker can ever park"
+    );
+    // ⇒ And the consequence that makes it a DoS if violated: a worker can still park.
+    assert!(f.wworker.try_park(seen), "a worker must still be able to park after the flood");
+}
+
+#[test]
+fn the_doorbell_pages_other_offsets_do_nothing_at_all() {
+    // ★ §5: "The doorbell page is 64 KiB and the doorbell is four bytes of it; every other offset
+    // on it is guest-userspace-writable, and without this arm an unprivileged process pushes
+    // unbounded garbage onto the plane reserved for guest root."
+    let f = Fixture::new(32);
+    f.tokens[3].allocate(Route::Translated, 0x33);
+    let p = f.path();
+    for off in (0..65536).step_by(4) {
+        assert_eq!(
+            p.write(Class::UserspaceMappable, 0, off, 3, 4),
+            Action::None,
+            "offset {off} on the doorbell page must do NOTHING"
+        );
+    }
+    assert_eq!(f.ring.occupancy(), 0, "not one byte may reach the privileged ring");
+    assert!(!f.ring.is_poisoned(), "and it must not be poisonable from userspace either");
+    assert_eq!(f.tokens[3].load().state, State::Idle, "no token may be disturbed");
+}
+
+#[test]
+fn a_passthrough_doorbell_is_inline_with_no_queue_no_wake_no_ring() {
+    // §5: "write the host doorbell INLINE. No queue, no wake, no lock. Return."
+    let f = Fixture::new(32);
+    f.tokens[7].allocate(Route::Passthrough, 0xABC);
+    let p = f.path();
+    let seen = f.wworker.seen();
+    assert_eq!(p.write(Class::Doorbell, 0, 0, 7, 4), Action::RingHostInline { host_token: 0xABC });
+    assert_eq!(f.wworker.seen(), seen, "passthrough must not bump the work sequence");
+    assert_eq!(f.ring.occupancy(), 0, "and must not touch the privileged ring");
+}
+
+#[test]
+fn a_translated_doorbell_publishes_once_however_hard_it_is_rung() {
+    // ★ The cheap path that makes a tight ring loop survivable rather than a denial of service:
+    // a second ring over RUNG costs one CAS and produces no bit and no wake.
+    let f = Fixture::new(32);
+    f.tokens[5].allocate(Route::Translated, 0x55);
+    let p = f.path();
+    let seen = f.wworker.seen();
+    assert_eq!(p.write(Class::Doorbell, 0, 0, 5, 4), Action::None); // published; nobody parked
+    assert_eq!(f.wworker.seen(), seen + 1);
+    for _ in 0..5_000 {
+        assert_eq!(p.write(Class::Doorbell, 0, 0, 5, 4), Action::None);
+    }
+    assert_eq!(
+        f.wworker.seen(),
+        seen + 1,
+        "5 000 further rings over an already-RUNG token must produce exactly ZERO further bumps"
+    );
+    let mut out = Vec::new();
+    assert_eq!(f.bits.scan(&mut out, 64), 1, "and exactly one bit");
+    assert_eq!(out, vec![5]);
+}
+
+#[test]
+fn a_parked_worker_is_woken_by_a_translated_doorbell() {
+    let f = Fixture::new(32);
+    f.tokens[9].allocate(Route::Emulated, 0x99);
+    let p = f.path();
+    let seen = f.wworker.seen();
+    assert!(f.wworker.try_park(seen));
+    assert_eq!(p.write(Class::Doorbell, 0, 0, 9, 4), Action::WakeWorker);
+}
+
+#[test]
+fn a_privileged_write_wakes_the_DRAINER_not_a_worker() {
+    // ⊘ §5.3: "the drainer parks on its own word... Sharing one word with a wake-exactly-one
+    // policy means a privileged register write can wake A WORKER INSTEAD OF THE DRAINER — and the
+    // register write then waits for an unrelated doorbell while the guest spins on a trigger."
+    let f = Fixture::new(32);
+    let p = f.path();
+    let wseen = f.wworker.seen();
+    let dseen = f.wdrainer.seen();
+    assert!(f.wworker.try_park(wseen), "a worker is parked");
+    assert!(f.wdrainer.try_park(dseen), "and so is the drainer");
+    let a = p.write(
+        Class::Privileged { readable: true, semantics: WriteSemantics::Plain },
+        0,
+        0x110c00,
+        1,
+        4,
+    );
+    assert_eq!(a, Action::WakeDrainer, "the DRAINER must be the one woken");
+    assert_eq!(f.wworker.seen(), wseen, "and the worker word must not have moved at all");
+    assert_eq!(f.ring.occupancy(), 1);
+}
+
+#[test]
+fn a_data_port_never_enters_the_privileged_ring() {
+    // ⊘⊘ §5.4: on Turing/GA100 the firmware images load through auto-incrementing falcon data
+    // ports -- "16 000–65 000 back-to-back writes during boot" -- and they "would overflow any
+    // ring that exists". They are a synchronous store into the falcon image shadow.
+    let f = Fixture::new(32);
+    let p = f.path();
+    for i in 0..20_000u64 {
+        assert_eq!(
+            p.write(
+                Class::Privileged { readable: false, semantics: WriteSemantics::DataPort },
+                0,
+                0x110040,
+                i,
+                4
+            ),
+            Action::None
+        );
+    }
+    assert_eq!(f.ring.occupancy(), 0, "20 000 data-port writes must not occupy one ring slot");
+    assert!(!f.ring.is_poisoned(), "and must not poison the device -- boot would never complete");
+}
+
+#[test]
+fn a_full_privileged_ring_poisons_rather_than_waiting() {
+    let f = Fixture::new(32);
+    let p = f.path();
+    let cls = Class::Privileged { readable: true, semantics: WriteSemantics::Plain };
+    for i in 0..ring::CAPACITY {
+        let a = p.write(cls, 0, i as u32, 0, 4);
+        assert!(matches!(a, Action::None | Action::WakeDrainer));
+    }
+    assert_eq!(p.write(cls, 0, 0xffff, 0, 4), Action::PoisonDevice);
+}

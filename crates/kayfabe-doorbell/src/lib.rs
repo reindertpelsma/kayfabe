@@ -30,6 +30,7 @@ pub mod ring;
 pub mod completion;
 pub mod shadow;
 pub mod token;
+pub mod trap;
 pub mod wake;
 
 pub use bitmap::RungBitmap;
@@ -37,6 +38,7 @@ pub use ring::{PrivRing, Push, RegWrite};
 pub use completion::{Completion, EngineIrq, Raise};
 pub use shadow::{Cell, ClearOutcome, Trigger, WriteSemantics};
 pub use token::{Claim, Release, Route, State, Token, TokenWord};
+pub use trap::{Action, Class, TrapPath};
 pub use wake::{Wake, WakeWord};
 
 /// §5.2's bound on the re-act loop. ⊘ Not tuning: it is the inner boundary. A guest process
