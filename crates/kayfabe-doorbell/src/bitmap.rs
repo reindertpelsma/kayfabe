@@ -1,0 +1,103 @@
+//! The rung bitmap — **scanning only, never CAS'd** (§5.1).
+//!
+//! §5.1 sizes it: token words are 4–16 MiB and are *"never scanned"*; the bitmap is **64 KiB**
+//! with a **1 KiB summary** and is *"what a worker walks"*. ⇒ A worker touches 65 KiB to find
+//! work among 2²¹ tokens, instead of 16 MiB.
+//!
+//! ⚠ **The bitmap is a HINT; the word is the TRUTH** (§5.1). A bit set over an IDLE word costs
+//! one look. The bitmap may over-report; it must never under-report.
+
+use core::sync::atomic::{AtomicU64, Ordering};
+
+/// 2²¹ tokens ⇒ 2²¹ bits = 256 KiB of bits... §5.1 quotes 64 KiB for the *expressible* range in
+/// the common (Ampere, 19-bit) case. We size from the constant so the two cannot drift.
+pub const TOKEN_BITS: u32 = crate::token::HOST_TOKEN_BITS;
+pub const N_TOKENS: usize = 1 << TOKEN_BITS;
+pub const N_WORDS: usize = N_TOKENS / 64;
+pub const N_SUMMARY: usize = N_WORDS / 64;
+
+pub struct RungBitmap {
+    words: Box<[AtomicU64]>,
+    summary: Box<[AtomicU64]>,
+}
+
+impl Default for RungBitmap {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RungBitmap {
+    pub fn new() -> RungBitmap {
+        RungBitmap {
+            words: (0..N_WORDS).map(|_| AtomicU64::new(0)).collect::<Vec<_>>().into_boxed_slice(),
+            summary: (0..N_SUMMARY).map(|_| AtomicU64::new(0)).collect::<Vec<_>>().into_boxed_slice(),
+        }
+    }
+
+    /// ★★★ PUBLISH. §5.2, stated as an absolute:
+    ///
+    /// > *"Re-publish means the bitmap bit AND the summary bit, **in that order**. Setting only
+    /// > the summary loses the token PERMANENTLY: the next worker clears the summary, finds the
+    /// > group word zero, and moves on — and a further ring from the guest returns early because
+    /// > RUNG is already set, so it produces no bit and no wake."*
+    ///
+    /// ⇒ **bit, then summary. The trap and the put-back use the same order.** This is the only
+    /// function that sets either, so the order cannot be got wrong at a call site.
+    #[inline]
+    pub fn publish(&self, token: u32) {
+        let t = (token as usize) & (N_TOKENS - 1);
+        let w = t / 64;
+        // Release: everything the vCPU wrote to the work source happens-before this bit is
+        // visible (§5.3's rule).
+        self.words[w].fetch_or(1u64 << (t % 64), Ordering::Release);
+        self.summary[w / 64].fetch_or(1u64 << (w % 64), Ordering::Release);
+    }
+
+    /// Scan for a set bit, clearing as it goes.
+    ///
+    /// ⊘⊘ §5.1: *"**Clear the summary bit first, then re-read the word.** Clearing after a scan
+    /// loses a token that arrived during it."* ⇒ We clear the summary BEFORE reading the group
+    /// word. If a publisher sets a bit between our clear and our read, we still see the bit. If
+    /// it sets the bit after our read, it re-sets the summary and the next scan finds it.
+    /// Clearing after would open a window where the bit is set and no summary points at it.
+    pub fn scan(&self, out: &mut Vec<u32>, limit: usize) -> usize {
+        out.clear();
+        for si in 0..N_SUMMARY {
+            let mut s = self.summary[si].load(Ordering::Acquire);
+            while s != 0 {
+                let b = s.trailing_zeros() as usize;
+                s &= s - 1;
+                let w = si * 64 + b;
+                // ⊘ SUMMARY FIRST. See above — this order is the invariant.
+                self.summary[si].fetch_and(!(1u64 << b), Ordering::AcqRel);
+                let mut word = self.words[w].swap(0, Ordering::AcqRel);
+                while word != 0 {
+                    let t = word.trailing_zeros() as usize;
+                    word &= word - 1;
+                    out.push((w * 64 + t) as u32);
+                    if out.len() >= limit {
+                        // Put back what we did not take, in the same order publish uses.
+                        if word != 0 {
+                            self.words[w].fetch_or(word, Ordering::Release);
+                            self.summary[si].fetch_or(1u64 << b, Ordering::Release);
+                        }
+                        return out.len();
+                    }
+                }
+            }
+        }
+        out.len()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn summary_bit(&self, token: u32) -> bool {
+        let w = (token as usize & (N_TOKENS - 1)) / 64;
+        self.summary[w / 64].load(Ordering::Acquire) & (1u64 << (w % 64)) != 0
+    }
+    #[cfg(test)]
+    pub(crate) fn bit(&self, token: u32) -> bool {
+        let t = token as usize & (N_TOKENS - 1);
+        self.words[t / 64].load(Ordering::Acquire) & (1u64 << (t % 64)) != 0
+    }
+}

@@ -191,6 +191,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "kayfabe-doorbell"
+version = "0.1.0"
+
+[[package]]
 name = "kayfabe-fwd"
 version = "0.1.0"
 dependencies = [

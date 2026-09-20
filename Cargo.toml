@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/kayfabe-doorbell",
     "crates/kayfabe-util",
     "crates/kayfabe-arch",
     "crates/kayfabe-chips",
