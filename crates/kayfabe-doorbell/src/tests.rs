@@ -790,7 +790,7 @@ fn a_full_privileged_ring_poisons_rather_than_waiting() {
 // ---- §7 channels -----------------------------------------------------------------------------
 
 #[test]
-fn an_untranslatable_operand_on_a_KERNEL_channel_refuses_and_never_faults() {
+fn an_untranslatable_operand_on_a_kernel_channel_refuses_and_never_faults() {
     // ⊘⊘⊘ §7's security boundary: "The unified-memory driver treats ANY channel error as GLOBALLY
     // FATAL — one fault kills CUDA for EVERY PROCESS IN THE GUEST until the driver reloads. A
     // design that forwards a translation miss as a sentinel fault hands unprivileged guest
@@ -848,4 +848,57 @@ fn an_unmodelled_method_form_is_sized_but_decodes_to_nothing() {
     let (sz, d) = size_is_total(true, 5);
     assert_eq!(sz, 5);
     assert_eq!(d, Decoded::Modelled { operand_words: 5 });
+}
+
+// ---- §6.4 the system-memory leaf bound --------------------------------------------------------
+
+#[test]
+fn a_leaf_naming_our_own_memslot_is_refused_by_name() {
+    // ⊘⊘⊘ §6.4's attack, in full: "Our own structures — the register read shadow, the doorbell
+    // bitmap, the boot pages — are host memory installed as guest-physical memslots. A guest
+    // page-table entry naming one of THOSE addresses, resolved by a layout that maps
+    // guest-physical to host pointers generically, would PIN OUR OWN STATE AND HAND IT TO THE GPU
+    // AS A DMA TARGET. The guest could then have the engine write the bits the drainer owns."
+    let mut l = GuestRamLayout::new();
+    l.register(GuestRamBlock::register(0, 0x1_0000_0000, 0x4000_0000)); // 1 GiB of real guest RAM
+    // Our doorbell bitmap / read shadow / boot pages live at a guest-physical address the guest
+    // can SEE from its CPU but must never reach as a DMA leaf.
+    const OUR_SHADOW_GPA: u64 = 0xF000_0000;
+    assert_eq!(
+        l.leaf(OUR_SHADOW_GPA, 0x1000),
+        Err(LeafRefusal::NotInAnyRegisteredBlock),
+        "a leaf naming OUR memory must be refused, not resolved"
+    );
+    assert_eq!(l.refused(), 1, "and the refusal must be COUNTED — §6.4: not silent");
+    // Genuine guest RAM still resolves.
+    let s = l.leaf(0x1_0000_2000, 0x1000).expect("real guest RAM must resolve");
+    assert_eq!(s, HostSlice { block: 0, offset: 0x2000, len: 0x1000 });
+}
+
+#[test]
+fn a_leaf_may_select_a_block_but_never_name_a_base() {
+    // ★ The SHAPE, not the check: the only route to a HostSlice is GuestRamBlock::slice, and a
+    // GuestRamBlock is minted at registration. There is deliberately no
+    // `resolve(gpa, len) -> HostPtr` in this module -- that function is the circular one.
+    let b = GuestRamBlock::register(7, 0x2_0000_0000, 0x1000_0000);
+    assert_eq!(b.slice(0x100, 0x200).unwrap(), HostSlice { block: 7, offset: 0x100, len: 0x200 });
+    assert_eq!(b.slice(0x0FFF_FF00, 0x200), Err(LeafRefusal::CrossesBlockEnd));
+}
+
+#[test]
+fn an_overflowing_offset_cannot_wrap_into_a_legal_looking_range() {
+    // ⊘ This is the ONE place a guest value meets a bound, so it is the one place wrapping would
+    // be fatal: offset + len must be checked, not wrapping.
+    let b = GuestRamBlock::register(0, 0, 0x1000);
+    assert_eq!(b.slice(u64::MAX, 2), Err(LeafRefusal::CrossesBlockEnd));
+    assert_eq!(b.slice(0x800, u64::MAX), Err(LeafRefusal::CrossesBlockEnd));
+}
+
+#[test]
+fn a_leaf_that_starts_inside_a_block_but_runs_past_it_is_refused() {
+    let mut l = GuestRamLayout::new();
+    l.register(GuestRamBlock::register(0, 0x1000, 0x1000));
+    assert!(l.leaf(0x1000, 0x1000).is_ok(), "exactly filling the block is legal");
+    assert_eq!(l.leaf(0x1800, 0x1000), Err(LeafRefusal::CrossesBlockEnd));
+    assert_eq!(l.refused(), 1);
 }
