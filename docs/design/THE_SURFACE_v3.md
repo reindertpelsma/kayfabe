@@ -129,7 +129,171 @@ on a host call before constructing its reply. The top-level dispatch does not; t
 handler files were not exhaustively checked. ⇒ This is the same question as the synchronous-verb
 list in §2.4, and it is the one the owner is waiting on.
 
-<!--SECTION2-->
+---
+
+## 2. RM objects and control commands — the plane that rides inside the RPC
+
+### 2.1 What this plane is
+
+Everything the guest driver *does* is expressed as two verbs against an object graph:
+
+- **allocate an object of class C under parent P** (`GSP_RM_ALLOC`, §1 fn 103), and
+- **run control command X against object O** (`GSP_RM_CONTROL`, §1 fn 76).
+
+The object graph is a strict tree rooted at a **client**: client → device → subdevice, and
+alongside it VA spaces, channel groups, channels and engine objects. ⇒ Our job on this plane is
+to **be that graph** — to answer as RM would, from our own model, without a host GPU behind most
+of it.
+
+★ **Default-deny, with a named refusal.** Both verbs refuse anything without an explicit
+decoder: `AllocClassNotPermitted` / `ControlNotPermitted` / `UnknownControl`. ⊘ There is no
+generic-ack fallback. §1.3 explains why that matters — `0x56` is a status the driver *forgives*.
+
+### 2.2 The object classes we model
+
+| class | NVIDIA name | what it is, in plain language | we do |
+|---|---|---|---|
+| `0x0` / `0x41` | `NV01_ROOT` / `NV01_ROOT_CLIENT` | the handle namespace everything else lives under — a session root | **emulate** (graph node) |
+| `0x80` | `NV01_DEVICE_0` | one physical GPU, under a client | **emulate**; `deviceId` decoded for multi-GPU routing |
+| `0x2080` | `NV20_SUBDEVICE_0` | a named sub-unit of a device (1:1 on a single GPU) | **emulate** |
+| `0x2081` | `NV2081_BINAPI` | ⊘ an **opaque** handle whose controls tunnel whole to firmware, uninterpreted by the kernel | allow; ★ load-bearing for `cuInit` |
+| `0x79` | `NV01_EVENT_OS_EVENT` | the event object userspace binds to an eventfd for completion wakeups | **emulate**; matched by a later `POST_EVENT` |
+| `0x7e` | `NV01_EVENT_KERNEL_CALLBACK_EX` | an event the guest's own **kernel** RM allocates at adapter init | **emulate**; ⊘ params (a guest-kernel function pointer) deliberately not decoded |
+| `0x90f1` | `FERMI_VASPACE_A` | a GPU virtual address space — the page-table root a channel binds to | **emulate** *and* allocate for real on the host |
+| `0xa06c` | `KEPLER_CHANNEL_GROUP_A` | a **TSG**: channels scheduled together, sharing one VA space | **emulate**; `hVASpace` decoded |
+| `0x9067` | `FERMI_CONTEXT_SHARE_A` | a **subcontext** — an indirect handle reaching a VA space via its TSG | **emulate**; `hVASpace` decoded |
+| `0xc56f` | `AMPERE_CHANNEL_GPFIFO_A` | the command-ring channel object (§4) | **emulate** *and* allocate on host |
+| `0xc7c0` | `AMPERE_COMPUTE_B` | the compute engine object a CUDA process binds | **emulate** *and* allocate on host |
+| `0xc797` | `AMPERE_B` | the 3D/graphics engine object — sibling of compute on the same GR engine | **emulate** |
+| `0xc7b5` | `AMPERE_DMA_COPY_B` | the copy engine object | **emulate** *and* allocate on host |
+| `0xc561` | `AMPERE_USERMODE_A` | ★ the object whose 64 KiB CPU mapping **is the doorbell page** (Part 1 §2.1) | **allocate on host** |
+| `0xc574` | `UVM_CHANNEL_RETAINER` | a handle UVM takes on a channel it did not create, to keep it alive | **emulate**; ⊘ never forwarded |
+| `0xc076` | `GP100_UVM_SW` | the software placeholder class UVM binds for fault-cancel (§4.2) | ⊘⊘ **REFUSED** — `[MEASURED]` all 4 requests in a boot refused `0x56`. ⚠ It is on the shared allowlist but **not routed through `classify()`** — an admitted-but-unreachable class |
+
+⊘ **DENIED by name, each with a reason** (`capability.rs:1579`):
+
+| class | name | why refused |
+|---|---|---|
+| `0x3f` | `NV01_MEMORY_LOCAL_PRIVILEGED` | privileged video memory |
+| `0x71` | `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` | ★ would hand the host a **guest-chosen pointer** |
+| `0x402c` | `NV40_I2C` | no physical board bus exists. ⊘ RM's own source expects this alloc to fail |
+
+Beyond these, ~89 classes are **allowlisted but opaque** — admitted past default-deny and tracked
+as a graph node with no facts extracted (Turing/Ampere/Ada/Hopper/Blackwell engine and codec
+classes, `NV50_MEMORY_VIRTUAL`, `GT200_DEBUGGER`, fabric classes). ⚠ **[UNVERIFIED]** whether any
+of them ever reaches a real host allocation.
+
+★ **Axis note.** The host-side class profile is per-architecture: `AMPERE_CHANNEL_GPFIFO_A` /
+`AMPERE_USERMODE_A` / `AMPERE_DMA_COPY_B` on GA10x and AD10x, `HOPPER_*` equivalents on GH100.
+⊘ **Only the GA10x profile is validated on real silicon.**
+
+### 2.3 Control commands
+
+**Served locally** — the ones we answer from our own model, no host GPU touched:
+
+| cmd | NVIDIA constant | what it asks |
+|---|---|---|
+| `0x20800a36` | `INTERNAL_GPU_GET_CHIP_INFO` | static chip identity — boot registers, architecture, implementation |
+| `0x20800a40` | `INTERNAL_GET_DEVICE_INFO_TABLE` | the per-engine device/instance table |
+| `0x20800a41` | `GET_USER_REGISTER_ACCESS_MAP` | ★ the bitmap of BAR0 registers **userspace may touch** — directly relevant to Part 1 §2.1 |
+| `0x20800a4c` | `GPU_GET_SMC_MODE` | whether MIG partitioning is on |
+| `0x20800aac` | `BIF_GET_STATIC_INFO` | static PCIe info |
+| `0x20800af3` | `CONF_COMPUTE_GET_STATIC_INFO` | confidential-computing capabilities |
+| `0x20800a59` | `GMMU_GET_STATIC_INFO` | MMU geometry |
+| `0x20800a61` | `FIFO_GET_NUM_CHANNELS` | how many channels this GPU supports |
+| `0x20802a08` | `CE_GET_FAULT_METHOD_BUFFER_SIZE` | ⚠ the size RM will DMA into. An empty capture row decoded this as **0** against a real **20480** — a buffer overrun with a hardware writer |
+| `0x2080012b` | `GPU_PROMOTE_CTX` | the guest publishing `{VA, PA, size, attr}` bindings for channel context buffers |
+| `0x00801813/4` | `DMA_SET/UNSET_PAGE_DIRECTORY` | bind or revoke a VA space's page directory on a GPU |
+| `0x90f10106` | `VASPACE_COPY_SERVER_RESERVED_PDES` | ★ the guest handing **us** real PDE physical addresses for our reserved window |
+| `0x20800a9f` | `GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER` | the same, for a GPU-group-global VA space |
+| `0xa06f0103` / `0xa06c0101` | `GPFIFO_SCHEDULE` (channel / TSG) | start scheduling this channel, or this whole group |
+| `0xa06f0104` | `NVA06F_CTRL_CMD_BIND` | bind a channel to an engine |
+| `0x20801210` | `GR_SET_CTXSW_PREEMPTION_MODE` | set graphics context-switch preemption mode |
+| `0x20801702` | `MC_SERVICE_INTERRUPTS` | the guest's interrupt-poll bottom half. ★ **deliberately refused** (`0x56`) to cancel the polling loop |
+| `0xa06c0105` | `NVA06C_CTRL_CMD_PREEMPT` | preempt a channel group. ★ **decided, not echoed** — `NV_OK` only if no member has a live host twin |
+| `0x20808159`, `0x20808162`, `0x20809001/9/64`, `0x20802209` | *unnamed GSS-legacy* | ⊘ **no open-source symbol exists.** Opaque blobs `cuInit`/cudart demand; answered from **measured** values |
+
+**Forwarded to a real host ioctl** — ⊘ **exactly one confirmed live path**:
+
+| cmd | constant | note |
+|---|---|---|
+| `0x906f0106` | `GET_MMU_FAULT_INFO` | scoped to a channel's host twin, one ioctl per ask |
+| `0x2080a026/84/97` | unresolved `0x2080a0xx` family | path built but **gated off by default** ⇒ behaves as REFUSE today |
+
+⚠ **[UNVERIFIED]** `classify_control`/`forward_control` exist as a general mechanism but have
+**one call site**. Whether a broader forwarding path exists elsewhere was not established.
+
+**Refused by name, with a reason** (`capability.rs:1506`): `GPU_EXEC_REG_OPS` (`0x20800122`) and
+the perf-counter `EXEC_REG_OPS` (`0xb0cc010a`) — arbitrary register peek/poke;
+`ALLOC_PMA_STREAM` (`0xb0cc0105`) — hardware performance counters; the SM-debugger trio
+`DEBUG_SET_MODE_MMU_DEBUG` / `SUSPEND_CONTEXT` / `RESUME_CONTEXT` (`0x83de0307/17/18`);
+`GPU_REPORT_NON_REPLAYABLE_FAULT` (`0x20800177`) — the fault mechanism is not modelled; and the
+fabric/NVLink family (`0x00e00102`, `0x00f10003`, `0x20803083`).
+
+**Admitted but undispatched** — ~135 commands pass the allowlist with no handler and fall to the
+unserviced ledger, returning `NV_ERR_NOT_SUPPORTED`. They cluster in: GPU/system enumeration
+(`GET_ATTACHED_IDS`, `GET_PCI_INFO`, `GET_UUID_FROM_GPU_ID`, P2P caps), capability queries
+(`GR_GET_CAPS`, `FB_GET_CAPS`, `FIFO_GET_CAPS`, `HOST_GET_CAPS`, `DMA_GET_CAPS`), descriptive
+subdevice queries (`GPU_GET_INFO_V2`, `GPU_GET_NAME_STRING`, `GR_GET_INFO`, `BUS_GET_PCI_INFO`,
+`MC_GET_ARCH_INFO`, `TIMER_GET_TIME`), and third-party-P2P / ZBC / debugger families.
+
+⚠⚠ **A contradiction the survey found and could not resolve:** at least **nine decoder modules
+exist with no confirmed dispatch site** — `eventnotify.rs`, `fbinfo.rs`, `pcibars.rs`,
+`businfo.rs`, `gpuatomics.rs`, `c2cinfo.rs`, `cepce.rs`, `cecaps.rs`, `gspfeatures.rs`,
+`grfsinfo.rs`. Either a second dispatch site exists that was not read, or **we built decoders for
+controls we then answer "not supported" to.** ⊘ `EVENT_SET_NOTIFICATION` (`0x20800301`) is the
+sharpest instance: it has a decoder and is not in the dispatch table. **This wants one person and
+one grep**, and §5 lists it.
+
+★ **Two rule-based admissions that are not enumerable as rows**: any control with the
+**GSS-legacy mask** bit 15 set (ported from gVisor's `nvproxy`), and any control on a
+`NV2081_BINAPI` object. ⇒ Both admit *classes of number*, not numbers. ⚠ An allowlist that admits
+by rule cannot be audited by listing it.
+
+### 2.4 ★★★★★ The synchronous verbs — the list the trap path is judged against
+
+**This is the answer to the open question in Part 1 §10.2.** *"No RM verb on a vCPU"* cannot be
+checked until we know which verbs the guest issues and then **immediately consumes a value from**.
+A verb whose caller reads only a status can be deferred; a verb whose caller reads a **value** it
+then uses cannot.
+
+Derived from the guest driver's own call sites in `nv_gpu_ops.c` — i.e. from what the caller
+*does with the reply*, not from the command's name.
+
+| verb | the value the caller consumes | what it does with it | we |
+|---|---|---|---|
+| `FB_GET_INFO_V2` | `heapSize`, `reservedHeapSize`, `heapStart` | stored in `device->fbInfo`; **sizes every later vidmem allocation** | served |
+| `FB_GET_FB_REGION_INFO` | `numFBRegions`, `fbRegion[i].limit` | max'd into `maxAllocatableAddress` | ⚠ unverified |
+| `GPU_GET_MAX_SUPPORTED_PAGE_SIZE` | `maxSupportedPageSize` | page-size selection | ⚠ unverified |
+| `GPU_GET_GID_INFO` | `length`, `data` | copied into the caller's GUID buffer | ⊘ **unserviced** |
+| `GPU_GET_ENGINES` | `engineCount`, `engineList[i]` | a size-then-fill pair; drives every follow-up CE query | ⊘ **unserviced** |
+| `CE_GET_CAPS` | `capsTbl` | decoded by `setCeCaps` immediately | ⚠ id equivalence unresolved |
+| `CE_GET_CE_PCE_MASK` | `pceMask` | stored into `ceCaps->cePceMask` | ✔ served |
+| ★★★ `GPFIFO_GET_WORK_SUBMIT_TOKEN` | `workSubmitToken` | ⊘⊘⊘ **the literal value written to the doorbell on every subsequent submission** | ⊘ **UNSERVICED** |
+| `FIFO_GET_CHANNELLIST` | `pChannelList[i].hwChannelId` | the real hardware channel id | ⊘ **unserviced** |
+| `FERMI_VASPACE_A` **alloc** | `vaBase`, `vaSize` | ★ RM *fills these in* when the caller left them blank | served |
+| `FAULTBUFFER_GET_SIZE` | `faultBufferSize` | sizes an immediately-following CPU mapping | ⚠ likely unreachable — no fault buffer is modelled |
+
+⊘ **And the negative results, which are as useful as the positive ones:**
+
+| verb | verdict | why it matters |
+|---|---|---|
+| `DMA_SET_PAGE_DIRECTORY` | ★ **STATUS-ONLY** | the caller only branches on `status == NV_OK`; the address it returns to *its own* caller comes from a **local** `vaspaceGetPageDirBase`, not from RM's reply. ⇒ **a one-way publish, and therefore deferrable** |
+| `GPU_PROMOTE_CTX` | ★ **STATUS-ONLY** | the fields read after the call are ones the **caller itself set** before it. Published to us, never read back. ⇒ **deferrable** |
+
+⇒ **[PROPOSE]** the trap-path rule that follows: a synchronous verb must be answered from state we
+already hold, and **no synchronous verb may require a host round trip**. The two page-directory
+verbs — the ones most likely to tempt a synchronous host call — are provably status-only, which is
+the strongest single result in this section.
+
+⊘⊘⊘ **`GPFIFO_GET_WORK_SUBMIT_TOKEN` is the load-bearing gap in the whole document.** It is the
+verb by which the guest **obtains the doorbell token itself** — the value Part 1 §2 is entirely
+about — and it is currently **unserviced**. ⚠ Whatever the guest does with a failed token query is
+not characterised here, and it must be before any claim about the doorbell plane is complete.
+
+⚠ **[UNVERIFIED — the largest remaining gap]** the UVM kernel module (`kernel-open/nvidia-uvm/`)
+was **not searched at all**. It is the most likely home of further synchronous verbs, particularly
+around channel and USERD setup and the fault-cancel path.
 ---
 
 ## 3. BAR0 MMIO — reads from DRAM, writes to the vCPU
@@ -450,6 +614,10 @@ reader can argue about it or go and close it.
 | 9 | Is there a top-level RPC function a stock guest sends at init that we fail to classify? | Searched; **none found. Absence not proven** |
 | 10 | Does the doorbell token encoding really differ per Blackwell die group? | Carried in this project's notes; **not confirmed** against `gb20x` code. The doorbell *offset* is identical Volta→Blackwell |
 | 11 | Where does the MSI-X table live, and is it inside BAR0? | ⊘ **No MSI-X code exists in this tree at all** — only a vector count. The table and delivery are QEMU's native model on the C side |
+| 12 | ⊘⊘⊘ **`GPFIFO_GET_WORK_SUBMIT_TOKEN` is value-used and unserviced.** It is how the guest obtains the doorbell token Part 1 §2 is entirely about | ★ **The highest-value single gap in this document.** What the guest does with a failed token query is not characterised |
+| 13 | ⚠ **Nine decoder modules with no confirmed dispatch site** (`eventnotify.rs`, `fbinfo.rs`, `pcibars.rs`, `businfo.rs`, `gpuatomics.rs`, `c2cinfo.rs`, `cepce.rs`, `cecaps.rs`, `gspfeatures.rs`, `grfsinfo.rs`) | Either a second dispatch site exists, or we built decoders for controls we answer *"not supported"* to. ⊘ One person, one grep |
+| 14 | ⚠ **The UVM kernel module was not searched at all** | The likeliest home of further synchronous verbs — channel/USERD setup, the fault-cancel path. ⊘ The single largest survey gap |
+| 15 | ⚠ **`GP100_UVM_SW` is allowlisted but not routed through `classify()`** | An *admitted-but-unreachable* class. `[MEASURED]` all 4 allocs in a boot refused `0x56`. ⇒ The allowlist and the dispatcher disagree, and the allowlist is the one that reads as intent |
 
 ### 5.3 ⊘ Axis coverage — the honest statement
 

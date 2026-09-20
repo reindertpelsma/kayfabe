@@ -247,37 +247,56 @@ nvkvm_trap_bar0_write(off, val):
 ⇒ **A vCPU now takes NO lock at all on the doorbell path.** The w819 text said "one lock, the
 queue's"; with the queue gone there is none.
 
-**Sizing — the number, from the published register, not from the legal space.**
-`ampere/ga100/dev_ctrl.h:26`:
+#### Sizing — ⊘⊘⊘ and my first answer was an axis error I made myself
 
-```
-NV_CTRL_VF_DOORBELL_VECTOR       11:0   →  12 bits  →  4096 channels
-NV_CTRL_VF_DOORBELL_RUNLIST_ID   22:16  →   7 bits  →   128 runlists
-```
+**[CORRECTED w821, before the owner saw it.]** I first wrote *"2¹⁹ tokens ⇒ a 64 KiB table"* from
+`ampere/ga100/dev_ctrl.h:26` and presented it as the design constant. ⊘ **That is true of Ampere
+and false as a general claim** — precisely the mistake §0 exists to prevent. The doorbell token
+layout is **not one encoding**; it is at least three, and they do not even live in the same
+header or constant family:
 
-19 decoded bits ⇒ **2¹⁹ = 524 288 tokens ⇒ a 64 KiB bit table**, plus a one-bit-per-`u64`
-summary layer = a **1 KiB hot index** over it. Bits 15:12 and 31:23 are undecoded, so `TOKEN_MASK`
-keeps only the two fields.
+| chip | `VECTOR` | `RUNLIST_ID` | extra decoded bits | header |
+|---|---|---|---|---|
+| Turing TU102 | `11:0` | `22:16` | — | `turing/tu102/dev_ctrl.h:36` |
+| Ampere GA100 | `11:0` | `22:16` | — | `ampere/ga100/dev_ctrl.h:26` |
+| **Blackwell GB202** | `11:0` | `22:16` | ⊘ **`RUNLIST_DOORBELL` `30:30`**, set to `ENABLE` by the token generator (`kernel_fifo_gb202.c`) | `blackwell/gb202/dev_vm.h:28` |
+| **Blackwell GB100** | `11:0` | `22:16` | ⊘⊘ **`RUNLIST_DOORBELL` `22:22`** — *overlapping the top bit of `RUNLIST_ID`* — plus **`GSP_DOORBELL` `31:31`**, `RSVD 15:12`, `RSVD2 31:23` | `blackwell/gb100/dev_vm.h:622` |
 
-★ Masking rather than validating is deliberate twice over: it is what the hardware does with
-undecoded bits, **and** it removes an error path — no refusal, no counter, nothing to misread.
-Sizing to what the register can *express* rather than to what is *legal* is this tree's own
-lesson, `[a_bound_on_reads_is_not_a_bound_on_emits]`: the attacker writes the register, not the
-legal space.
+Three separate hazards fall out, and only the first is about size:
 
-★ Scan cost is **arithmetic, not yet measured**: 1 KiB of summary is ~16 cachelines; the loaded
-case streams 8192 `u64` compares over 64 KiB, skipping zero words. Sub-microsecond warm, low
-single-digit µs cold. **That is cheaper than maintaining a ring** — which is why the ring is
-deleted rather than repaired.
+1. ⊘ **The token space is not 2¹⁹ everywhere.** Worst case across the table is bits
+   `{11:0, 22:16, 30, 31}` = **21 bits ⇒ 2 Mi tokens ⇒ a 256 KiB table**. ⇒ **[PROPOSE]** allocate
+   from the **generated field widths of the running die**, and let 256 KiB be the *bound* the
+   allocator is checked against — not a constant anywhere in source. A scan of 256 KiB is still
+   ~4096 cachelines behind a 4 KiB summary, which is still cheaper than a ring.
+2. ⊘ **The constant family renames across the arch boundary.** Ampere and Turing call it
+   `NV_CTRL_VF_DOORBELL` in `dev_ctrl.h`; Blackwell calls it `NV_VIRTUAL_FUNCTION_DOORBELL_*` in
+   `dev_vm.h`. ⚠ **A generator keyed on the Ampere name finds nothing on Blackwell and silently
+   produces no fields** — an empty result that reads exactly like "no variation here". This is the
+   `a_capture_derived_table_expires_as_a_vendor_regression` shape, arriving through a *generator*
+   rather than a capture.
+3. ⊘⊘⊘ **GB100 has a `GSP_DOORBELL` bit at 31.** A write to the same register can be addressed to
+   the **GSP** rather than to a runlist. ⚠ **[UNVERIFIED and it is the sharpest open question in
+   this section]** — if unprivileged guest userspace can set bit 31 through the same mapping, then
+   on that die the doorbell page is a guest-userspace-reachable path to the *firmware* doorbell,
+   not merely to another process's channel. §2.1's threat model would then be **understated on
+   Blackwell**. This must be settled before any Blackwell claim is made.
 
-⇒ What a hostile guest process can now buy is: one `fetch_or` on a bit in a fixed table that was
+⇒ `TOKEN_MASK` is therefore **per-die, generated**, and masking remains the right operation
+rather than validating: it is what the hardware does with undecoded bits, **and** it removes an
+error path — no refusal, no counter, nothing to misread. Sizing to what the register can
+*express* rather than to what is *legal* is this tree's own lesson,
+`[a_bound_on_reads_is_not_a_bound_on_emits]`: the attacker writes the register, not the legal
+space.
+
+★ Scan cost is **arithmetic, not yet measured**: a summary of one bit per `u64` is 1 KiB for
+Ampere's table and 4 KiB for the 21-bit worst case; the loaded case streams `u64` compares and
+skips zero words. Sub-microsecond warm, low single-digit µs cold. **That is cheaper than
+maintaining a ring** — which is why the ring is deleted rather than repaired.
+
+⇒ What a hostile guest process can buy is: one `fetch_or` on a bit in a fixed table that was
 going to be scanned anyway, on a **per-token cacheline** so there is not even a contention point.
 **Exactly hardware's cost profile: ring anything, pay a redundant look.**
-
-⚠ Per-die derivation, not a copied constant: those widths come from the Ampere-family `ga100`
-swref header. Per §7 they must be **generated from the headers**, and the table sized from the
-generated widths — `tu102` agrees today, `gb202`/`gb100` put the doorbell at the same `0x30090`
-but their field widths must be read, not assumed.
 
 ### 2.3 The privileged plane — one ordered ring, and per-vCPU rings were WRONG
 
@@ -655,9 +674,21 @@ now a named security boundary rather than a race (§2.4).
 Still genuinely open:
 
 1. **The interrupt race** (§5) — per-channel or per-semaphore, and whose burden.
-2. **The synchronous-verb list** — which RM controls does the guest read the reply to
-   immediately? Until that list exists, "no RM verb on a vCPU" cannot be judged.
-   ⚠ **Owner is waiting on this one**; it blocks judging the trap path end to end.
+2. ✔ **The synchronous-verb list — ANSWERED at w821**, in `THE_SURFACE_v3.md` §2.4. Derived
+   from what the guest driver's own call sites *do with the reply*, not from command names.
+   ★ **The strongest result is a negative one:** both page-directory verbs —
+   `DMA_SET_PAGE_DIRECTORY` and `GPU_PROMOTE_CTX`, the two most likely to tempt a synchronous
+   host call — are **status-only**. Their callers read no RM-computed value (`SET_PAGE_DIRECTORY`
+   gets its address from a *local* `vaspaceGetPageDirBase`; `PROMOTE_CTX` reads back only fields
+   it set itself). ⇒ Both are one-way publishes and **deferrable**.
+   ⇒ **[PROPOSE]** the rule this licenses: *a synchronous verb must be answerable from state we
+   already hold, and no synchronous verb may require a host round trip.*
+   ⊘⊘⊘ **But it surfaced a gap that lands on §2 itself:**
+   `NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN` (`0xc36f0108`) is **value-used** — it is how the
+   guest **obtains the doorbell token** this whole section is about — and it is currently
+   **unserviced**. ⚠ Still open: what the guest does with a failed token query.
+   ⚠ **[UNVERIFIED]** the UVM kernel module was not searched; it is the likeliest home of further
+   synchronous verbs around channel/USERD setup.
 3. **Fault delivery** — needed by managed memory *and* by letting the GPU fault. `[owner]` if
    the fault structures are shared with userspace we can map them through for passthrough; a
    translated fault needs its address translated on the way back.

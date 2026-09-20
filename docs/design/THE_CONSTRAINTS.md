@@ -2938,8 +2938,16 @@ root's token in a loop and get two workers walking root's GPFIFO against one cur
 ### What this licenses, and what it forbids
 
 ✔ It licenses **deleting** the doorbell hint queue and every FULL_REFRESH-shaped fallback, in
-favour of a 64 KiB bit table sized to what `NV_CTRL_VF_DOORBELL` can *express* (2¹⁹ tokens), not
-to what is legal — `a_bound_on_reads_is_not_a_bound_on_emits`.
+favour of a bit table sized to what the doorbell register can *express*, not to what is legal —
+`a_bound_on_reads_is_not_a_bound_on_emits`.
+⊘ **The size is per-die and generated, never a constant.** Ampere/Turing decode 19 bits
+(`NV_CTRL_VF_DOORBELL`, `dev_ctrl.h`) ⇒ 64 KiB; GB202 adds `RUNLIST_DOORBELL` at `30:30` and
+GB100 adds `GSP_DOORBELL` at `31:31` (`NV_VIRTUAL_FUNCTION_DOORBELL_*`, `dev_vm.h`) ⇒ **21 bits,
+256 KiB worst case**. ⚠ The register also **renames across the arch boundary**, so a generator
+keyed on the Ampere name finds nothing on Blackwell and emits an empty field set that reads like
+"no variation". ⊘⊘ And GB100's bit 31 addresses the **GSP** rather than a runlist — if guest
+userspace can set it through the same mapping, this ruling's threat model is *understated* on
+that die. **[UNVERIFIED, and it must be settled before any Blackwell claim.]**
 
 ⊘ It does **not** license the literal form of the ruling today. Not trapping the page at all also
 gives up intercepting **kernel** channel doorbells, and the scrub is one of those (§46) — the live
