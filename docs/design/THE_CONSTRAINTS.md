@@ -2958,3 +2958,51 @@ passthrough; until then the design must earn the property by construction instea
 That is RM policy in one driver version, not an invariant. `[owner]` *"same for any other page if
 they exist"* ⇒ enumerate the objects that hand `ADDR_REGMEM` to a non-kernel client, generated
 from the headers, and assert over that set.
+
+---
+
+## §48 — THE LATENCY BUDGET IS ASYMMETRIC. SPEND IT BEHIND THE TRAP, NEVER IN IT.
+
+**STATUS: LIVE, 2026-09-20 (w821). Owner ruling.**
+
+> *"the MMIO trap must be extremely fast, the rest has much more room in the millisecond."*
+
+★★★ **Every constraint before this one is a PROHIBITION on the vCPU.** §41 is an allowlist,
+`no_blocking_work_in_any_mmio_trap` is a ban, the three blocking invariants are bans. They say
+what may not happen in a trap and are silent on what the rest of the system may spend. ⇒ That
+silence has repeatedly been read as *"be frugal everywhere"*, and it has produced the wrong answer
+twice in one session.
+
+### The rule, in both halves
+
+| | budget | what it licenses |
+|---|---|---|
+| **Inside an MMIO trap** | ★ **microseconds, and the TAIL matters, not the mean** | a masked table index, an atomic RMW, a store to a mapped page, a lock-free enqueue, an eventfd write. Nothing whose worst case depends on another thread being scheduled |
+| **Everywhere behind it** | ◐ **milliseconds** | a dedicated thread, a context switch, a syscall, a copy, a lock, a blocking host call, a spin-then-park |
+
+⇒ **A design that spends a thread to keep the trap lock-free is a GOOD trade, not an extravagance.**
+⊘ And the converse: an optimisation that moves work *into* the trap to save a context switch
+behind it is a **defect**, however good its average looks.
+
+### ⊘ Why the mean is the wrong statistic, measured
+
+The w821 register-queue question turned on exactly this. A shared lock between vCPU and worker
+holds for ~50 ns — *"still microseconds"* on average — but the vCPU's worst case is
+**lock-holder preemption**: a worker preempted with the lock held makes the trapping vCPU wait a
+full host scheduler slice, **milliseconds**, and under `SCHED_FIFO` vCPUs it does not resolve at
+all until the RT throttle fires. ⇒ **The mean was microseconds and the design was still wrong.**
+★ `worst_trap` is the instrument that sees this and an average never will — the same reason
+`the_register_in_the_headline_was_a_bystander` mattered.
+
+### What this decides without further argument
+
+1. ✔ A **dedicated drainer thread** in preference to a lock the vCPU shares with workers.
+2. ✔ **Spin-then-park** over cleverness that avoids a wake: the wake is behind the trap.
+3. ✔ **Preallocated and prefaulted** structures: allocation and page faults are trap-time costs
+   even when they are rare.
+4. ⊘ **Never** a policy where the vCPU waits for a worker — not a lock, not a slot, not a reply.
+   If the only way forward is to wait, the answer is to **refuse or poison**, not to wait.
+5. ⊘ **Never** justify a trap-path cost with an average. State the tail and what bounds it.
+
+⚠ **This does not relax the prohibitions.** It scopes them: the bans apply to the trap, and
+behind the trap the question is ordinary engineering, answered by measurement.

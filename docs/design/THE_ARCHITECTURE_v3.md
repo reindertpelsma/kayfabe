@@ -1073,6 +1073,7 @@ Rebuilt.
 | R9 | Batching the VA diff | ✔ **Confirmed as intended**: set the TLB-defer flag on every mapping call but the last, minimising host-side invalidate barriers within one refresh. ⚠ **A refresh on the host must still happen last** — the defer batches the barrier, it does not remove it | §4.2 |
 | R10 | Turing | ✔ **Must be supported.** It is the declared floor and it is *not* the easy end — it needs the `GP10X` format family, which our one built format (`GA10X`) is a superset of by one match arm ⇒ **additive** | §0 |
 | R11 | Multi-GPU / non-GA10x chip tables | ✔ **Rewrite the chip table to be derivable** rather than special-casing. Judged fixable | §7 |
+| R12 | The register queue, after investigation | ✔ **Keep the dedicated drainer thread.** `[owner]` *"fable argued hard to keep it and the arguments are correct. The MMIO trap must be extremely fast, the rest has much more room in the millisecond."* ⇒ Generalised as **`THE_CONSTRAINTS.md` §48** — the latency budget is asymmetric, and a thread spent to keep the trap lock-free is a good trade, not an extravagance | §2.3, §48 |
 
 ### 10.2 Genuinely open
 
