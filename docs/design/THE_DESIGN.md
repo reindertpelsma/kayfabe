@@ -430,6 +430,44 @@ sets a bit another thread consumes. ⇒ A doorbell can be serviced against pre-w
 worker services it only once the applied position has caught up. The **worker** waits; the vCPU
 never does. ⇒ The doorbell invariant holds: *queued now ⇒ eventually scheduled, never blocks.*
 
+### ⊘⊘⊘ Two different fences, and conflating them made this over-specified
+
+**[CORRECTED w821.]** `[owner]` *"do translated channels also need a fence, and since we just
+translate, can the host provide it after translation?"* ⇒ The question separates two things this
+section had merged.
+
+| fence | protects against | who can provide it |
+|---|---|---|
+| **register-order** — a doorbell serviced before a queued register write lands | a *register* affecting how a channel is serviced | us, with the ring position |
+| ★ **mirror-currency** — a channel translated against stale mappings | our **VA mirror** being behind the guest's last published invalidate | ⊘ **only us, and only before submission** |
+
+★★★ **The second is the one translated channels actually need, and the first is nearly vacuous for
+them.** Translation consults the **mirror**, not the register file. And the enumeration in §5.6
+already establishes that on a firmware-client guest **there is no register path for runlist submit
+or channel enable** — that rides the message plane — so a queued register write cannot change how
+we service a managed channel. The only register that matters is the **invalidate trigger**, and
+what that trigger *means* is *"the mirror must catch up."*
+
+⇒ ★ **Replace the per-token ring-position stamp with a per-VA-space mirror generation.** A worker
+translates only when the mirror's generation for that space is at least the guest's last published
+invalidate for it. One atomic load, no per-token state, and it fences the thing that is actually
+at risk.
+
+### ⊘ And the host cannot provide it, because translation happens BEFORE submission
+
+`[owner]` *"can we just rely on the host userspace for providing that one after translation?"*
+⊘ **No — and the reason is a one-way door.** By the time the host sees our work, the operands are
+**already concrete addresses in our space**. A translation made against a stale mirror does not
+arrive at the host as a question it can answer; it arrives as a wrong address. The host then
+either faults, or — worse — **reads a mapping that still resolves to a page the guest has since
+reused.** That is the cross-process leak, arriving by a different door.
+
+★ **But the instinct is half right, and the half that holds is worth keeping:** the host *does*
+provide the **execution-side** ordering. Once we have translated correctly, work on our channel is
+ordered against the host's own mapping calls by the host driver, and against other work on that
+channel by the hardware. ⇒ **We fence translation; we do not fence execution.** That is why the
+fence is one load rather than a round trip.
+
 Three details are load-bearing:
 
 - ⊘ **Stamp before setting `RUNG`, or fold both into one atomic.** They are two read-modify-writes;
