@@ -681,7 +681,7 @@ GSP parts — instance blocks are written by the firmware, which is us. Where ea
 | **BAR2** | ⊘ **ours.** We declare the address; the guest sends back its **encoded entry value** for slot 0 | same | CPU, at RAM speed |
 | instance block | ⊘ **not a root.** The guest allocates it and tells us where; **we** write the base and aperture into it | same | never walked |
 
-### 6.1 ★★★ BAR1 and BAR2 are ordinary VA spaces. There are no split apertures.
+### 6.2 ★★★ BAR1 and BAR2 are ordinary VA spaces. There are no split apertures.
 
 `[owner, w821]` *"BAR1/BAR2 do not create multiple apertures per vidmem. If the guest says map
 vidmem here, we just follow it — a dumb map — whether it is for rings or for tables. The PTX walker
@@ -713,7 +713,7 @@ aperture. **Bad trade.**
   **mapped**, and we learn what the guest did with it the same way we learn everything else: the
   walker, driven by the publish trigger.
 
-### 6.2 The one exception, and the lock order it implies
+### 6.3 The one exception, and the lock order it implies
 
 ⊘ **The doorbell page is the only thing that becomes a memory slot** — read-only over the real host
 page, so reads are hardware and writes trap (§5.7). Everything else is a mapping.
@@ -731,81 +731,40 @@ the kernel slot-update path assert it. ⇒ Two consequences, and the owner named
    only the VA manager installs slots and the vCPU path takes nothing, so there is no inversion —
    but the rule is stated because the next person to add a lock will not re-derive it.
 
-### 6.1 ⊘⊘⊘ The cost of applying a diff is a HOST-GLOBAL lock, and it decides the allocation path
+### 6.4 The leaf record, the mapping verbs, and the bound the system-memory leaf must carry
 
-**Every mapping call takes the host driver's single driver-wide API lock in WRITE mode**, plus a
-per-GPU group lock. ⇒ Every other client on that host — **other VMs, and host CUDA** — serialises
-behind each call we make. The deferred-invalidate flag elides one flush and one whole-space
-invalidate; it does **not** touch the locks, the address-space allocation, or the five kernel
-allocations per mapping.
-
-`[MEASURED]` on the current tree: **13 313 mapping plans for a 1 GB model**, ~132 µs per call. ⇒
-Applied naively, **a model load is tens of seconds of wall clock**, and it is wall clock stolen
-from every other tenant.
-
-⊘⊘⊘ **And on Windows this is not a performance question — it is whether the product works.** That
-guest maps system memory in **4 KiB** units and gives the driver a **hard two-second deadline**
-before it resets the adapter. At ~130 µs per mapping call, a one-gigabyte mapping is a quarter of a
-million calls — **tens of seconds**. ⇒ **Without coalescing, a Windows guest cannot work at all**,
-and with it the cost is bounded by the number of *runs* rather than of pages.
-
-⇒ ★★★ **Three changes, and they are the difference between a usable product and a demo:**
-
-1. **Coalesce runs.** Slices of one object are contiguous across leaves; map the run, not the leaf.
-2. **Reserve the address range at allocation**, using the object class that does so, rather than
-   letting every map allocate. ⚠ It also removes a trap: re-mapping an already-mapped address
-   currently returns an out-of-memory status, and reading that as *"already mapped, success"* is a
-   coincidence, not a contract.
-3. ★★★ **Register the guest-RAM memfd ONCE, at startup, and map sub-slices of it.** The per-page
-   pinning cost then happens **one time** instead of per mapping — the same posture device
-   assignment already takes. This is the single largest item on the list.
-
-⚠ **And guest RAM must be backed by huge pages.** The host driver **silently downgrades** a
-large-page mapping whose backing is not physically contiguous, so a guest on ordinary 4 KiB pages
-gets 4 KiB entries on the host GPU — sixteen times the mapping count and sixteen times less
-translation reach. ⇒ A startup requirement, checked, not a recommendation.
-
-⊘⊘ **And the diff is two-phase, or a partial failure desyncs the mirror permanently.** If the
-walker commits its new state when it walks, and the VA manager then fails part-way through — host
-address space exhausted, an allocation refused — the unapplied entries are **never retried**, and
-the mirror believes they are done. ⇒ The walker commits **only what the VA manager acknowledges**.
-
-**A VA space is the object; the page-directory base is an attribute of it, per GPU.** RM's identity
-is the object and a monotonic unique id; the base is per-GPU, mutable (relocation is explicitly
-repeatable), can be **absent** — hardware encodes that case — and is not unique. ⇒ Identity is the
-object; carry the base as a mutable, possibly-absent, per-GPU attribute used to seed a walk.
-
-**We write the roots**, because the page-directory update callback is a no-op inside a guest on
-GSP parts — instance blocks are written by the firmware, which is us. Where each root comes from:
-
-| space | root arrives as | aperture | walked by |
-|---|---|---|---|
-| user VA space | a control carrying the **reserved-PDE table**, whose level-0 entry **is** the top-level directory. Sent for every space, because the split-VA-space default is on | declared in the same message | the GPU walker (vidmem) / CPU (sysmem) |
-| UVM's external root | a control carrying `{physical address, entry count, aperture, VA space, channel}`. ⚠ **It arrives as a control, not as the dedicated message** — that message is stubbed out on GSP clients | in the message | same |
-| **BAR1** | ⊘ **ours.** We allocate it and declare the address; the guest adopts it and writes entries directly. **No message exists** | ★ framebuffer *to the guest*; **host RAM underneath** — see below | CPU, at RAM speed |
-| **BAR2** | ⊘ **ours.** We declare the address; the guest sends back its **encoded entry value** for slot 0 | same | CPU, at RAM speed |
-| instance block | ⊘ **not a root.** The guest allocates it and tells us where; **we** write the base and aperture into it | same | never walked |
-
-### 6.1 ★★★ The guest's BAR tables are metadata. Nothing but us ever reads them.
+> ⊘⊘⊘ **CORRECTED w823.** This section was titled *"The guest's BAR tables are metadata. Nothing
+> but us ever reads them"* and carried a table stating that BAR1, BAR2 and instance blocks *"live
+> in host RAM"* and are *"walked by the CPU, at RAM speed"*, plus a paragraph beginning *"This is
+> also why the GPU-side walker is not the answer here."*
+>
+> ★★★ **That is the draft §6.2 explicitly REPLACES**, and §6.2 says so by name: *"An earlier draft
+> argued the BAR tables are metadata nobody but us reads, so they should live in host memory and
+> be walked by the CPU. That reasoning was sound about who reads them and wrong about what it
+> costs."* ⇒ **The walker walks the BAR page directories and tables like any other VA space.**
+>
+> ⚠ **And note HOW it survived, because it is the sharpest instance this tree has produced:** the
+> section's opening prose HAD been updated to agree with §6.2 — only the **table** and one
+> paragraph still stated the superseded design. A reader skimming headings and tables, which is
+> how a table is read, got the opposite answer from the reader of the prose above it. ⊘ **A
+> partial update is more dangerous than no update**, because the edited half is evidence the
+> section was reviewed.
 
 ⚠ A CPU read of **real** video memory runs at roughly **48 MiB/s** — flat. ⇒ That is why the
 **walker**, not the CPU, reads page tables: it has direct access at native speed. ★ And it is why
-§6.1 puts the BAR tables through the same walker rather than inventing a placement that would let
+§6.2 puts the BAR tables through that same walker rather than inventing a placement that would let
 the CPU read them cheaply — the cheap CPU read was never worth the interception it required.
 
-★ **This is also why the GPU-side walker is not the answer here**, even though it is the right
-answer for user VA spaces. Those tables are **guest-allocated in real video memory** — we do not
-choose their placement, and a CPU walk of them is the 48 MiB/s path the walker exists to avoid. ⇒
-**Two page-table populations, two mechanisms, and the discriminator is who chose the placement:**
+★ **One page-table population, one mechanism.** Every table the walker can reach, it walks:
 
 | tables | placed by | live in | walked by |
 |---|---|---|---|
 | user VA spaces, and everything the guest allocates | ⊘ the **guest** | real video memory | ★ the **GPU-side walker** |
-| BAR1, BAR2, instance blocks | ★ **us** | host RAM | the CPU, at RAM speed |
+| BAR1, BAR2 | ★ **us** (roots), guest (entries) | real video memory | ★ the **GPU-side walker** (§6.2) |
 
 ⚠ **The trap this closes:** *"it is at a framebuffer offset"* and *"it is in video memory"* are not
 the same statement in this design. The first is what the guest is told; the second is a placement
-decision we make. Conflating them is what makes a CPU walk look unavoidable when it is not.
+decision we make.
 
 ⚠ **Aperture decides the verb, but it is not the whole leaf.** A page-table entry carries kind,
 read-only, atomic-disable, privilege, volatility and a peer id — and the host mapping must carry
@@ -840,7 +799,11 @@ guest-to-host coupling in the same family as forwarding a flag word. ⇒ We tran
 address, read-only and page size**; every other bit is **refused by name and counted**, and the
 kind is fixed to the store's.
 
-### 6.1 BAR1 and BAR2 are split between us and the guest
+### 6.5 BAR OWNERSHIP: the guest owns PDE3[0], we own PDE3[1], and OUR table is what hardware walks
+
+⊘ **"Split" here means the page DIRECTORY is split by entry, not that the aperture is split.**
+§6.2 removes split *apertures*; this section is about who owns which PDE3 slot. The two are
+compatible and the word collision is why this heading now says `OWNERSHIP`.
 
 ★★★ **The guest owns PDE3[0]; we own PDE3[1]; and our table is the one hardware walks.** The guest
 rewrites its own page-directory cache to **our** address, which it learns from our static-info
@@ -1026,7 +989,7 @@ reports *"unchanged"* and maps **nothing** — a second boot that faults for rea
 not. ⇒ Resetting it is part of the teardown order, and the gate is the design's own rule: **run
 every gate twice in one process.**
 
-### 9.2 ⚠ Per-VM caps, because a shared host GPU is a shared resource
+### 9.1 ⚠ Per-VM caps, because a shared host GPU is a shared resource
 
 The host driver enforces no per-client quota. ⇒ On a host with more than one VM, one guest can
 starve the others by allocating twins — channels, engine objects, address spaces, and one host
@@ -1039,7 +1002,7 @@ through which a CPU sees GPU memory is a fixed size shared by every process on t
 guest's at startup **from what is actually free**, and make an unbackable page a **named refusal**
 rather than a silent hole — the guest reading an unbacked hole is a wrong answer, not an error.
 
-### 9.4 ⚠ Two host-platform prerequisites, stated because they are not ours to fix
+### 9.2 ⚠ Two host-platform prerequisites, stated because they are not ours to fix
 
 - ⊘ **Fine-grained runtime power management must be off for a GPU we drive.** The host driver
   **revokes every user mapping** when it powers the device down. Afterwards our inline doorbell
@@ -1050,7 +1013,7 @@ rather than a silent hole — the guest reading an unbacked hole is a wrong answ
 - ⚠ **Ballooning and memory hot-unplug must be disabled** for the guest, because we pin guest pages
   for the GPU. Discarding a pinned page is silent guest data loss.
 
-### 9.1 Multi-GPU: what is per device and what is per process
+### 9.3 Multi-GPU: what is per device and what is per process
 
 | per GPU | per VMM |
 |---|---|
@@ -1062,7 +1025,7 @@ there, and CUDA never uses it.
 id maps as a peer association between our twins plus a fixed-offset map of the other store's slice.
 The guest's peer-id space is **ours to define**, because we serve the object that creates it.
 
-### 9.2 Platform decisions
+### 9.4 Platform decisions
 
 - ⊘ **A guest IOMMU is detected and refused at device realize.** Every guest-supplied system-memory
   address we consume — message rings, page-table entries, cursors, semaphores, and the walker's own

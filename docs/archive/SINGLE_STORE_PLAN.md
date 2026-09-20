@@ -1,6 +1,21 @@
 # The single-store branch — plan of record
 
-**STATUS: LIVE (2026-09-14, w721).** Branch `single-store`. Owner's goal, verbatim:
+**STATUS: ⊘⊘⊘ SUPERSEDED-BY `THE_DESIGN.md` (w821) — ARCHIVED 2026-09-21 (w823).**
+
+> ⊘ **This describes the architecture v3 DELETES.** Its core mechanisms — the VM-lifetime
+> **scratchpad isolate**, `KAYFABE_SCRATCHPAD`, `KAYFABE_SCRATCHPAD_CUDA`, BAR1/BAR2 as **device
+> views** — are all named in `THE_DESIGN.md` §10 as removed. It stood at `STATUS: LIVE` for a week
+> after its replacement was written, and it is **cited 99 times in source comments**, which is
+> exactly the "old architecture reads as current" failure the archive exists to prevent.
+>
+> ★ **Kept as REFERENCE**, not as a plan: its measurements and its account of what was built and
+> why are still the record of that work. ⊘ Do not take any instruction from it.
+>
+> ⚠ It also carries **§3 three times and §6 twice**, each an appended re-statement with the earlier
+> one left standing and saying the opposite (`UNBLOCKED` beside `BLOCKED ON AN OWNER RULING` beside
+> `blocked on an open measurement`). Read nothing here as current status.
+
+Branch `single-store`. Owner's goal, verbatim:
 
 > *"get in that branch the raw client in its full test suite passing under kayfabe guest, with the
 > PTX parser and scratchpad update. One GPGA store, one RM object, no more fake fb, no more

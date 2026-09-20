@@ -2920,7 +2920,7 @@ register BAR — `IS_REG_OFFSET` tests against `nv->regs->cpu_address`, BAR0's p
 (`kernel-open/common/inc/nv.h:854`). One BAR, one GPA, one memslot, two guest mappings at
 different privilege.
 
-### §41 is amended
+### How this amends §41
 
 §41 item 1 permits *"update a queue"* and item 3 says an emulated doorbell *"puts the token in a
 queue."* ⊘ **For the doorbell that is now wrong.** A doorbell sets a bit in a fixed table
