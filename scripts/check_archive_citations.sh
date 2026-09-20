@@ -26,7 +26,19 @@ cd "$(dirname "$0")/.." || exit 2
 # `.md` strings that are not doc references. ⚠ **They are different quantities and must never be
 # quoted interchangeably.** A gate seeded with a number produced by a different method fires on
 # the METHOD GAP, not on a regression — which is a false alarm that trains people to ignore it.
-BASE=${ARCHIVE_CITE_BASELINE:-1011}
+# ⊘⊘⊘ **ARCHIVING A DOC RAISES THIS COUNT WITHOUT ANY COMMENT CHANGING — measured w823.**
+# Moving `SINGLE_STORE_PLAN.md` to `docs/archive/` took the number from **1011 to 1110**: exactly
+# its **99** citations, none of them edited. ⇒ The gate cannot distinguish *"someone wrote a new
+# citation to a dead doc"* (what it exists to catch) from *"a doc the comments already cited was
+# correctly archived"* (which is the archive working as intended, and is GOOD).
+# ⚠ So a rise is a PROMPT, not a verdict. Before rebasing, answer which of the two happened:
+#     git log --diff-filter=R --name-status -1 -- docs/archive/   # was a doc just moved?
+# If a doc moved, rebase the baseline and say so here. If not, a new comment cited a dead
+# architecture as current — fix the comment instead.
+#
+# w823: 1011 -> 1110 (SINGLE_STORE_PLAN.md archived; it said STATUS: LIVE while describing the
+#       scratchpad-isolate plane §10 deletes).
+BASE=${ARCHIVE_CITE_BASELINE:-1110}
 
 tmp=$(mktemp)
 grep -rhoE '[A-Za-z0-9_./-]+\.md' --include='*.rs' crates/ 2>/dev/null \
