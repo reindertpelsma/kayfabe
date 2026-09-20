@@ -440,3 +440,58 @@ those as *documentation* facts and did not carry them across to *"so what is the
    and a hang is the one failure a budget gate cannot characterise.
 3. ⭐ **Keep the lanes.** They are the only part of tonight that is already v3-valid, and they are
    what will tell us whether the rewrite worked.
+
+---
+
+## w823 — ✔ STEP 1 DONE (30/30 re-greened), AND 28 OF 30 ARMS ARE v3-PORTABLE AS-IS
+
+### Step 1: the grading instrument is out of the delete target, and proved it
+
+`git mv crates/kayfabe-isolate-host/src/bin/rmladder.rs → crates/kayfabe-rm-ladder/src/main.rs`
+(history preserved). The gate:
+
+```
+BARE_CELL pci_dev=0x250410DE gpu="NVIDIA GeForce RTX 3060" drv=580.159.04 kmod=open
+          cc=8.6 rev=f3f833f9 pass=30 fail=0 crash=0 arms=30
+```
+
+⇒ **30/30, built from the new crate.** `THE_REWRITE.md` had carried the requirement —
+*"it must move to its own crate before that deletion, or the grading instrument disappears with
+the thing it grades"* — as prose for weeks. It is now a fact.
+
+### ★★★ How much of the grader actually depends on the plane v3 deletes — MEASURED
+
+This is the number that scopes the whole rewrite, because the 30-arm suite **is** the bar. Grepping
+the ladder for every process-plane symbol (`IsolateFactory`, `IsolateBox`, `HostIsolateFactory`,
+`write_frame_with_fds`, `read_frame_with_fds`, `GuestRamPlane`, `FbJoinTable`, `CpuViewRelease`,
+`export_object_to_fd`, `adopt_birth_client`) gives **16 hits**, of which **4 are doc comments**:
+
+| site | arm | what it needs | under v3 |
+|---|---|---|---|
+| `main.rs:103-135` | **`--concurrency`** | spawns 1 + N isolates to compare *one client, N workers* against *N clients* | ★ **portable**: N × `RmConnection::open` in-process. A rewrite, not a loss |
+| `main.rs:1365,1637,1892,1902` | **`--bar1-crossing`** | `SCM_RIGHTS` fd passing to a child | ◐ **leg A deliberately needs a second process**; ⭐ **leg B is the KVM memslot over `VM_IO\|VM_PFNMAP` that §6.2 actually depends on, and it survives** |
+| `main.rs:15525-15526` | default rungs **R10/R11** | isolate spawn | portable the same way as `--concurrency` |
+
+⇒ ★★★ **28 of 30 arms are v3-portable with no change at all.** Two need rewriting, and one of
+those (`--bar1-crossing`) keeps the leg that matters.
+
+⚠ **But say the uncomfortable half out loud: the grader tests features v3 removes.** *"30/30 under
+v3"* is therefore not the same target as *"30/30 today"* — `--concurrency` leg 2 and
+`--bar1-crossing` leg A are measuring a plane that will not exist. They must be **retired or
+rewritten deliberately, and the retirement recorded**, not quietly dropped when they stop
+compiling. ⊘ A suite that shrinks to fit the implementation is not a grader.
+
+★ Note also which arm this touches: **`--concurrency` is one of the four arms that HANG in the
+guest** (w823, still nothing at 300 s). Its in-process rewrite is therefore not only cleanup — it
+removes the isolate spawn from the arm whose failure is currently uncharacterised.
+
+### Step 2 recon — `rm.rs` needs ~8 cuts, not a move
+
+`rm.rs` (15 684 lines, the KEEP set) references the delete-target modules **17 times, of which 9
+are doc links**. The real code sites are `use crate::export::ChildExports` (`:90`),
+`release_cpu_view` (`:4857`, `:9298`), three struct fields (`:5582`, `:5589`, `:5601`), two builder
+methods (`:6984`, `:7003`) and one ladder rung (`:13633`).
+
+⇒ ★ **Every one of them is a feature v3 deletes** (child exports, CPU views, fb joins, the
+guest-RAM transport). So cutting them is **part of the deletion, not a prerequisite for it** — and
+the verify loop is the 30-arm suite at ~3 minutes, which is cheap enough to do it incrementally.
