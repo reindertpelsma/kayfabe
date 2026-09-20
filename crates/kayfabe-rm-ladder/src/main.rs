@@ -41,15 +41,35 @@ use std::sync::Arc;
 /// wall-clock ratio, and it cannot be explained away by a slow machine.
 ///
 /// Two configurations, same total work:
-///   - **one isolate, N workers** — N threads on ONE RM client;
-///   - **N isolates, one worker each** — N threads on N RM clients.
+///   - **one RM client, N threads**;
+///   - **N RM clients, one thread each**.
+///
+/// ## ⊘⊘ PORTED IN-PROCESS, w823 — and the MEASUREMENT is unchanged
+///
+/// This arm used to spawn 1 + N **isolate child processes** (`HostIsolateFactory` +
+/// `IsolateFactory::spawn`) and check out a `Worker` from each. v3 deletes that plane
+/// (`THE_DESIGN.md:62-63`, §10), so the arm is now N × `RmConnection::open` + `HostRmBackend`
+/// **in this process**.
+///
+/// ★ **What is measured did not change**, and that is the point: the question is *"does N threads
+/// on one RM client overlap, and does N clients change it"*, and an RM client is an open
+/// `/dev/nvidiactl` connection — **a process was never the unit under test**, only the thing that
+/// used to own one. The overlap counter, the interval arithmetic and the three configurations are
+/// byte-identical.
+///
+/// ⚠ **One thing genuinely DOES change and it must be stated, not buried:** the old (b) leg put
+/// each RM client in a separate address space, so it also measured *"do N processes serialise"*.
+/// In-process it measures *"do N clients serialise"*. `[R12, measured]` the answer was
+/// **1.00× across all three legs — RM's device-global lock** — which is a property of the driver
+/// and not of the address space, so the finding survives the port. ⊘ If a future result differs
+/// between the two shapes, THAT is a finding, not a regression of this arm.
 fn concurrency(gpu: u32, threads: usize, verbs: usize) -> bool {
     use std::sync::Mutex;
     use std::time::Instant;
 
-    /// Run `verbs` alloc/free pairs on each of `workers`, in parallel, and report how many
-    /// pairs of intervals from different threads overlapped.
-    fn measure(mut workers: Vec<kayfabe_isolate::Worker>, verbs: usize) -> (usize, u128) {
+    /// Run `verbs` alloc/free pairs on each backend, in parallel, and report how many pairs of
+    /// intervals from different threads overlapped.
+    fn measure(mut workers: Vec<HostRmBackend>, verbs: usize) -> (usize, u128) {
         let origin = Instant::now();
         let spans: Arc<Mutex<Vec<(usize, u128, u128)>>> = Arc::new(Mutex::new(Vec::new()));
         let mut handles = Vec::new();
@@ -58,19 +78,15 @@ fn concurrency(gpu: u32, threads: usize, verbs: usize) -> bool {
             handles.push(std::thread::spawn(move || {
                 for _ in 0..verbs {
                     let start = origin.elapsed().as_nanos();
-                    let h = w.with_rm(
-                        &kayfabe_util::trapwitness::OffTrap::claim("a test / adapter host verb"),
-                        |rm| rm.alloc_vaspace(),
-                    );
+                    // ⊘ The verb is called DIRECTLY now. The old `with_rm` closure existed to
+                    // cross the isolate's IPC boundary; in-process there is no boundary to cross
+                    // and no trap-witness claim to make — this is a diagnostic on its own thread,
+                    // not a vCPU.
+                    let h = w.alloc_vaspace();
                     let end = origin.elapsed().as_nanos();
                     spans.lock().expect("spans").push((t, start, end));
                     if let Ok(h) = h {
-                        let _ = w.with_rm(
-                            &kayfabe_util::trapwitness::OffTrap::claim(
-                                "a test / adapter host verb",
-                            ),
-                            |rm| rm.free(h),
-                        );
+                        let _ = w.free(h);
                     }
                 }
                 w
@@ -94,55 +110,54 @@ fn concurrency(gpu: u32, threads: usize, verbs: usize) -> bool {
         (overlaps, total)
     }
 
-    let id = |p: u32| IsolateId::new(p, GpuId(gpu));
-
-    // ★ (0) THE BASELINE, and without it the other two numbers cannot be read at all: one
-    // worker doing ALL the work, sequentially. If (a) and (b) both match this, then no
-    // amount of parallelism buys throughput and the bottleneck is device-global — which is
-    // a completely different finding from "the pool does not help".
-    let base_f = kayfabe_isolate_host::HostIsolateFactory::new(kayfabe_isolate_host::RmMode::Real)
-        .with_pool_size(1);
-    let mut base = kayfabe_isolate::IsolateFactory::spawn(&base_f, id(899));
-    if base.is_retired() {
-        println!("FAIL  R12 baseline         = it did not start");
-        return false;
-    }
-    let Some(w) = base.checkout() else {
-        println!("FAIL  R12 baseline         = no worker");
-        return false;
+    // ⊘ In-process: a "client" is an open RmConnection, not a child process. One helper mints
+    // one, so the three legs below differ ONLY in how many clients and how many threads.
+    // ⊘ The same idiom the rest of this file uses (`:7274`, `:9149`), not a new one.
+    let open_client = |tag: &str| -> Option<Arc<RmConnection>> {
+        let dev = match DevDir::open(c"/dev") {
+            Ok(d) => d,
+            Err(e) => {
+                println!("FAIL  R12 {tag:<18} = no /dev: {e:?}");
+                return None;
+            }
+        };
+        match RmConnection::open(&dev, GpuId(gpu), kayfabe_chips::pinned_host_classes()) {
+            Ok(c) => Some(Arc::new(c)),
+            Err(e) => {
+                println!("FAIL  R12 {tag:<18} = RmConnection::open: {e:?}");
+                None
+            }
+        }
     };
-    let (_, t_base) = measure(vec![w], threads * verbs);
+    let backend = |conn: &Arc<RmConnection>, p: u32| {
+        HostRmBackend::new(
+            IsolateId::new(p, GpuId(gpu)),
+            Arc::clone(conn),
+            Arc::new(kayfabe_isolate_host::export::ChildExports::new()),
+        )
+    };
 
-    // (a) ONE isolate, `threads` workers — one RM client.
-    let f = kayfabe_isolate_host::HostIsolateFactory::new(kayfabe_isolate_host::RmMode::Real)
-        .with_pool_size(threads);
-    let mut one = kayfabe_isolate::IsolateFactory::spawn(&f, id(900));
-    if one.is_retired() {
-        println!("FAIL  R12 one-isolate      = it did not start");
-        return false;
-    }
-    let ws: Vec<_> = (0..threads).filter_map(|_| one.checkout()).collect();
-    if ws.len() != threads {
-        println!("FAIL  R12 one-isolate      = only {} workers", ws.len());
-        return false;
-    }
+    // ★ (0) THE BASELINE, and without it the other two numbers cannot be read at all: ONE
+    // thread doing ALL the work, sequentially. If (a) and (b) both match this, then no amount
+    // of parallelism buys throughput and the bottleneck is device-global — which is a
+    // completely different finding from "the pool does not help".
+    let Some(c0) = open_client("baseline") else { return false };
+    let (_, t_base) = measure(vec![backend(&c0, 899)], threads * verbs);
+    drop(c0);
+
+    // (a) ONE RM client, `threads` threads.
+    let Some(c1) = open_client("one-client") else { return false };
+    let ws: Vec<_> = (0..threads).map(|i| backend(&c1, 900 + i as u32)).collect();
     let (same_client, t_same) = measure(ws, verbs);
+    drop(c1);
 
-    // (b) `threads` isolates, one worker each — `threads` RM clients.
-    let g = kayfabe_isolate_host::HostIsolateFactory::new(kayfabe_isolate_host::RmMode::Real)
-        .with_pool_size(1);
-    let mut many: Vec<_> = (0..threads)
-        .map(|i| kayfabe_isolate::IsolateFactory::spawn(&g, id(910 + i as u32)))
-        .collect();
-    if many.iter().any(|i| i.is_retired()) {
-        println!("FAIL  R12 many-isolates    = one did not start");
-        return false;
+    // (b) `threads` RM clients, one thread each.
+    let mut conns = Vec::new();
+    for i in 0..threads {
+        let Some(c) = open_client("many-clients") else { return false };
+        conns.push((c, 910 + i as u32));
     }
-    let ws: Vec<_> = many.iter_mut().filter_map(|i| i.checkout()).collect();
-    if ws.len() != threads {
-        println!("FAIL  R12 many-isolates    = only {} workers", ws.len());
-        return false;
-    }
+    let ws: Vec<_> = conns.iter().map(|(c, p)| backend(c, *p)).collect();
     let (many_clients, t_many) = measure(ws, verbs);
 
     let n = threads * verbs;
