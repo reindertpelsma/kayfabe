@@ -83,6 +83,24 @@ global lock unconditionally on every MMIO dispatch, and the per-region opt-out t
 was removed upstream. ★ But the KVM exit site itself is **already outside** that lock — it is
 re-taken one level down, in the dispatch helper. ⇒ The fix is to **restore the opt-out as a flag on
 the region's operations**, set only on our trap regions, not to write an exit-site dispatcher.
+
+⊘⊘⊘ **And the patch must disable one more thing, or it creates the very hole it exists to avoid.**
+The VMM guards every device's I/O dispatch with a **plain, non-atomic boolean** — *"do not allow
+more than one simultaneous access to a device's I/O regions"*. Under the global lock that only
+trips on true re-entrancy. **Without it, two vCPUs writing our device concurrently race on that
+boolean, and the loser's write returns an access error and is never performed** — and the exit path
+**discards the return value**, so the write is dropped **silently**.
+
+★★★ **That is a write-drop primitive unprivileged guest userspace can aim at guest root.** A
+doorbell storm from one vCPU keeps the flag set; guest root's privileged writes on another vCPU
+disappear at random — the invalidate trigger (the guest then proceeds with stale translations), the
+interrupt acknowledgement (a storm, or a permanently masked engine), the message-queue kick (the
+request is never noticed, and enough of those mark the device for reset and **cost the guest its
+GPU until reboot**).
+
+⇒ **The same regions must also set the per-region guard opt-out**, and **a region that runs
+lock-free with the guard still enabled must fail at startup.** ⚠ The two changes are one change;
+shipping the first without the second is worse than shipping neither.
 ⊘ Without it, every trapped write runs under the same lock as memory-region commits and the main
 loop, and the tail argument above is false rather than merely optimistic. ⊘ And the obvious
 alternative does not work: the kernel's doorbell-style fast path **discards the data word**, and a
@@ -198,12 +216,34 @@ that arrived during it.
 ### 5.2 The token's four states
 
 ```
-vCPU:    fetch_or(RUNG)
+vCPU:    stamp the ring position, THEN fetch_or(RUNG)        # order matters — see §5.6
 worker:  CAS RUNG → BUSY        (fail ⇒ not ours)
          act
-         CAS BUSY → IDLE        (fail ⇒ BUSY_RUNG ⇒ CAS BUSY_RUNG → BUSY, act again)
-         cannot act yet ⇒ CAS BUSY → RUNG and re-set the summary bit
+         CAS BUSY → IDLE        (fail ⇒ BUSY_RUNG ⇒ CAS BUSY_RUNG → BUSY, act again,
+                                 bounded: after K rounds, CAS BUSY_RUNG → RUNG,
+                                 re-publish, and move on)
+         cannot act yet ⇒ CAS BUSY → RUNG, then re-publish
 ```
+
+⊘ **"Re-publish" means the bitmap bit AND the summary bit, in that order.** Setting only the
+summary loses the token **permanently**: the next worker clears the summary, finds the group word
+zero, and moves on — and a further ring from the guest returns early because `RUNG` is already set,
+so it produces no bit and no wake. ⇒ **Publication is always bit-then-summary, and the trap and the
+put-back use the same order.**
+
+⊘ **The re-act loop is bounded, because it is otherwise a livelock an unprivileged guest process
+can hold.** A process ringing its own channel in a tight loop keeps a worker in
+*act → CAS fails → act* forever; with enough channels it pins every worker and the guest kernel's
+own scrub and UVM channels starve — the inner boundary §4 exists to defend. ⇒ After K rounds the
+worker republishes and moves on. ★ That is a timeslice, and it is what hardware does for the same
+reason.
+
+⊘ **A token needs a retired state, or channel recycling is a use-after-free.** Without one: the
+guest frees a channel while its token is `BUSY`, the free path drops the twin, the guest's driver
+**recycles the channel id**, and the new channel's first ring lands on a word still carrying the
+old route — while the old worker is still reading what it believes is a pushbuffer. ⇒ Free
+transitions `IDLE|RUNG → DEAD` and **waits out `BUSY`** before dropping the twin; allocation
+transitions `DEAD → IDLE` with the new route.
 
 ★ **A bit that says work exists is not a bit that says you may touch the hardware.** Without
 exclusion, two workers walk one channel against one cursor: `[c0,p1)` executes twice, or the cursor
@@ -233,9 +273,19 @@ Orderings are load-bearing and x86 TSO hides their absence: `AcqRel` on the poll
 `Acquire` on `seen`, `Release`/`Acquire` on indices and claims. The rule: **every write to a work
 source happens-before the bump, and every `seen` load happens-before the scan.**
 
-⚠ The eventfd is a **sum, not a queue of wakeups** — `EFD_SEMAPHORE | EFD_NONBLOCK`, one shared
-epoll, `read()` consumes one. And **no handler may wait on another queued item**, or a collapsed
-wakeup becomes a hang rather than latency.
+⚠ The eventfd is a **sum, not a queue of wakeups** — `EFD_SEMAPHORE | EFD_NONBLOCK`, and a wake
+must reach **one** waiter, not all of them. ⊘ A plain write wakes every non-exclusive waiter, so at
+255 workers a single doorbell wakes 255 threads and 254 of them find nothing.
+
+⊘ **And the drainer parks on its own word, not the workers'.** Sharing one word with a
+wake-exactly-one policy means a privileged register write can wake **a worker instead of the
+drainer** — and the register write then waits for an unrelated doorbell while the guest spins on a
+trigger. ⇒ **Two words, signalled by the two arms of the classifier**, which are disjoint by
+construction. ⚠ This does not reopen the multi-GPU objection in §9.1: that is about workers
+registering on more than one word, and they still register on exactly one.
+
+⚠ **No handler may wait on another queued item**, or a collapsed wakeup becomes a hang rather than
+latency.
 
 ### 5.4 The privileged ring
 
@@ -288,7 +338,7 @@ pending, and a deferred mask delivers an interrupt the guest already masked.
 | `plain` | store |
 | `w1c` | `fetch_and(!bits)` — a load-store loses a worker's concurrent set |
 | `write_only_port` | the readable effect is on a **different** register |
-| `trigger` | the guest writes 1 and **spin-reads until 0** ⇒ ★ the **drainer** clears it, after the work is done |
+| `trigger` | the guest writes 1 and **spin-reads until 0** ⇒ ★ cleared **after the work is done**, by whoever did the work — see below |
 | `data_port` | an auto-incrementing image port ⇒ a synchronous store into a shadow image (§5.4) |
 
 ⊘ **`write_semantics` cannot be generated from the published access codes, and that is measured.**
@@ -302,15 +352,62 @@ the build when a register in the generated set has no entry.
 ★ That last row is why the drainer *does* write some guest-writable shadows: it owns their
 completion. It must not write one the guest also drives.
 
+⊘⊘⊘ **But the drainer must never WAIT for that completion, and a naive reading of the rule makes it
+wait for the slowest thing in the system.** An invalidate trigger completes only when the VA
+manager has applied the diff — which waits on the GPU walker and on host mapping calls taken under
+the host driver's own lock. ⇒ If the drainer blocks there, **everything queued behind it stalls**:
+the message-queue kick, the interrupt re-arm, every later register write. A co-tenant holding the
+host GPU lock for a few seconds then lands squarely in the next hazard.
+
+⇒ **The drainer hands the trigger to the thread that does the work and moves on.** It keeps two
+counters — what it has *issued* and what has *completed* — and the owning thread clears the shadow
+when its work is done. Doorbell workers fence on *completed*, and only for the polled class.
+
+⊘⊘⊘ **And the clear must name what it completes, or a slow invalidate silently corrupts.** The
+guest's invalidate spin has a timeout of a few seconds, after which **the driver proceeds anyway,
+with stale translations and no error** — that is its documented behaviour, not a bug we can fix.
+So: the guest times out on invalidate *A* and continues; it later issues invalidate *B*; our work
+for *A* finishes and clears the trigger; the guest reads zero and concludes *B* is done. **It is
+not.** ⇒ The shadow carries the ring position of the write it belongs to, and the clear is a
+compare-and-set against that position — never a blind store.
+⚠ **And add the tripwire:** a trigger outstanding past a fraction of the guest's own timeout budget
+**faults the device loudly**. Letting the guest soldier on with stale translations is the failure
+mode that produces wrong numbers rather than a crash.
+
+⊘⊘⊘ **A late unmap is a SECURITY event, not a latency problem, and an attacker can cause one.**
+The guest's invalidate wait is bounded; ours is not. Landing an unmap means a host call taken under
+the host driver's own device lock — and **a hostile channel can hold that lock**, by faulting the
+host GPU in a loop and making the driver run recovery. ⇒ The guest times out, scrubs the page, hands
+it to another process — **while the attacker's host mapping still resolves to it.**
+⇒ ★ **If any unmap in a refresh lands later than the guest's own timeout for that driver version,
+tear down every host channel that could still hold the stale translation before applying anything
+else**, and count it. A non-zero count is red in the suite, not a warning. ⚠ And issue unmaps as
+soon as the walker reports a cleared leaf, rather than only at the invalidate.
+
 ### 5.6 Doorbells versus registers, across the boundary
 
 Order holds *within* the ring. Doorbells go around it — passthrough hits hardware inline, managed
 sets a bit another thread consumes. ⇒ A doorbell can be serviced against pre-write device state.
 
-**The fence:** the doorbell trap stamps the current ring position into the token word
-(`fetch_max`, not a store — two vCPUs ringing one token could otherwise leave the older value), and
-the worker services it only once `applied_seq` has caught up. The **worker** waits; the vCPU never
-does. ⇒ The doorbell invariant holds: *queued now ⇒ eventually scheduled, never blocks.*
+**The fence:** the doorbell trap stamps the current ring position into the token word, and the
+worker services it only once the applied position has caught up. The **worker** waits; the vCPU
+never does. ⇒ The doorbell invariant holds: *queued now ⇒ eventually scheduled, never blocks.*
+
+Three details are load-bearing:
+
+- ⊘ **Stamp before setting `RUNG`, or fold both into one atomic.** They are two read-modify-writes;
+  if `RUNG` lands first, a worker can claim the token, read the *old* stamp, believe the fence is
+  satisfied, and act against pre-write device state — the exact thing the fence exists to prevent.
+- ⊘ **Compare in modular order, not with a maximum.** The stamp shares a word with route, state and
+  the host token, so it is narrower than the ring counter. A plain `fetch_max` never wraps back,
+  so after the stamp space rolls over the token becomes **permanently unserviceable** — a hang that
+  appears after weeks of uptime and nothing else explains. ⇒ Compare as a signed difference and
+  store-if-ahead in modular order.
+- ⊘⊘ **The drainer must wake the workers after it commits.** Otherwise: a worker claims a token,
+  finds the fence unsatisfied, puts it back and parks; the drainer applies the write and advances;
+  **nothing rescans**, because parking is only ever ended by a new bump. ⇒ A guest that rings once
+  and waits on a semaphore — any single stream synchronise — hangs. The drainer bumps the sequence
+  and signals after every batch that advances past a stamped position.
 
 ★★★ **Passthrough needs no fence, and the obligation is discharged by enumeration.** Every
 privileged runtime write on a GSP client falls into one of four classes, and none of the first
@@ -363,7 +460,38 @@ needs.
 spaces changed and which entries to apply. Previous state lives in video memory, held by the walker
 itself. The VA manager executes the delta as `mmap`/`munmap`, batched with the TLB-defer flag on
 every call but the last. ⚠ The defer batches the barrier; it does not remove it — a refresh still
-happens last.
+happens last, **and it is issued unconditionally, including on a failed batch.**
+
+⊘⊘⊘ **There is more than one publish trigger, and the one the design named is not the one CUDA
+uses.** The register-based invalidate is how the guest *kernel* publishes. But the unified-memory
+path writes its page tables **with the copy engine** and issues its invalidate **as a pushbuffer
+method** — it never touches that register. ⇒ A design triggered only by the register **never
+mirrors a managed-memory unmap**, and the freed guest page is handed to another process while the
+first process's host mapping still translates to it. **That is the cross-process leak, reached by
+ordinary CUDA, with no race required.**
+
+⇒ ★ **The decoded invalidate method on a translated kernel channel is a first-class publish
+trigger**, carrying the same barrier as the register path: the pushbuffer position is held until
+the unmaps have landed.
+
+⊘⊘ **And the method must be stripped from the forwarded stream, not passed through.** It is a
+**privileged** method: a channel that is not privileged **faults** when it executes one, and our
+host twins are unprivileged by construction — the host driver grants that privilege only to kernel
+or administrative clients. ⇒ Forwarding it would fault our own twin. We consume it as a trigger and
+do not submit it.
+
+⊘⊘ **The walk must be ordered against the guest's own page-table writes, and one case is not
+naturally ordered.** The guest's memory manager writes video-memory page-table entries **with the
+copy engine, inside a pushbuffer**, and issues its invalidate **in the same pushbuffer on the same
+channel**. ⇒ If we trigger the walk when we *decode* the invalidate method, we read the tables
+**before the engine has written them.** The split is: submit the pushbuffer prefix up to the
+invalidate, **wait for its completion on our twin**, walk, then continue. ★ This is an ordering the
+design assumes and must establish.
+
+⊘⊘ **And the diff is two-phase, or a partial failure desyncs the mirror permanently.** If the
+walker commits its new state when it walks, and the VA manager then fails part-way through — host
+address space exhausted, an allocation refused — the unapplied entries are **never retried**, and
+the mirror believes they are done. ⇒ The walker commits **only what the VA manager acknowledges**.
 
 **A VA space is the object; the page-directory base is an attribute of it, per GPU.** RM's identity
 is the object and a monotonic unique id; the base is per-GPU, mutable (relocation is explicitly
@@ -403,6 +531,12 @@ offsets — we declare those addresses, and it writes through apertures we emula
 where the bytes actually land**. Back them with **host RAM**. The CPU walk is then a RAM walk, and
 the 48 MiB/s figure never enters the picture.
 
+⚠ **The window itself is a memory slot, and slot churn is the part that bites at scale.** Deleting
+and re-adding a slot per window change is expensive on the host, and it interacts badly with other
+devices that count slots. ⇒ **Reserve a fixed host address range per window and remap into it in
+place — never delete the slot.** The kernel invalidates just the changed range, the slot count is
+constant, and nothing else on the machine has to care how often the guest re-points a window.
+
 ★ **This is also why the GPU-side walker is not the answer here**, even though it is the right
 answer for user VA spaces. Those tables are **guest-allocated in real video memory** — we do not
 choose their placement, and a CPU walk of them is the 48 MiB/s path the walker exists to avoid. ⇒
@@ -428,6 +562,27 @@ single store — the backing already exists, so nothing is allocated; **sysmem**
 object over *our* host pointer into the guest-RAM memfd, plus the same fixed-offset map. ⊘ The
 guest's own pointer never appears in a host call, which is why the memory class that would carry
 one stays refused by name. **Peer** is a third verb and belongs with multi-GPU.
+
+⊘⊘⊘ **The system-memory resolution must admit ONLY true guest RAM, and this is a security boundary
+rather than a correctness one.** Our own structures — the register read shadow, the doorbell
+bitmap, the boot pages — are host memory installed as guest-physical memslots. ⇒ A guest page-table
+entry naming one of *those* addresses, resolved by a layout that maps guest-physical to host
+pointers generically, would **pin our own state and hand it to the GPU as a DMA target.** The guest
+could then have the engine write the bits the drainer owns.
+⇒ ★ **The layout resolves guest RAM blocks and nothing else. Any other guest-physical address is a
+refused leaf, by name.** ⚠ Same shape as refusing the memory class that carries a caller pointer:
+*the guest may name its own memory, never ours.*
+
+⊘ **And that class refusal is decorative — this is the real guard.** The class never reaches us; it
+is handled inside the guest. ⇒ **The only path by which a guest-chosen address reaches a host call
+is this leaf**, so it is the one that must carry the bound. The design states a bound for
+video-memory leaves; **the system-memory leaf needs the same bound stated, not implied.**
+
+⊘ **The leaf's other bits are an allowlist, not a translation.** Forwarding a guest-chosen page
+**kind** would mint host mappings from a guest value and touch device-global compression state — a
+guest-to-host coupling in the same family as forwarding a flag word. ⇒ We translate **aperture,
+address, read-only and page size**; every other bit is **refused by name and counted**, and the
+kind is fixed to the store's.
 
 ### 6.1 BAR1 and BAR2 are split between us and the guest
 
@@ -467,6 +622,14 @@ adopting at first doorbell wipes the cursor that just rang.
 **Kernel channels are translated, not emulated.** The scrubber and UVM's own channels do real work
 on real memory; running them on our CPU is how a guest process reads another's freed pages.
 
+⊘⊘⊘ **An untranslatable operand must never become a deliberate fault on a kernel channel.** The
+unified-memory driver treats **any** channel error as **globally fatal** — one fault kills CUDA for
+**every process in the guest** until the driver reloads. ⇒ A design that forwards a translation
+miss as a sentinel fault hands unprivileged guest userspace a way to kill the whole guest's GPU
+stack. **On a kernel channel we refuse the submission and poison the device** — root-visible and
+honest — rather than faulting it. ⚠ And any guest memory region we cannot back must be **refused at
+startup**, not discovered as a translation miss at run time.
+
 ⚠ **Sizing and decoding are different jobs.** We *size* every pushbuffer method form so the stream
 never desynchronises, and *decode* only what we model. An undefined form decodes to nothing rather
 than to a guess. And a method is not a unit of meaning — a copy is five method runs and the launch
@@ -484,6 +647,16 @@ carries no operands, so only a stateful walk over a run produces a fact.
 
 ⊘ **"Forge" is licensed only where there was no work.** A completion written for work that did not
 happen is how a scrub becomes a leak.
+
+⊘⊘ **What we may send the guest is an allowlist, enforced at build time.** We know one message
+crashes the host operating system on a Windows guest — but it is not the only one that hurts: at
+least three other outbound messages and paths cause the guest's driver to **mark its device for
+reset**, which costs the guest its GPU until it reloads. One of those paths is simply **letting a
+reply take too long**, repeatedly.
+⇒ ★ **Three messages are permitted — boot-complete, the generic completion carrier, and
+channel-teardown — and the build fails on any other.** ⚠ And every synchronous reply carries an
+internal deadline **well under** the guest's own patience, because the timeout path is reachable by
+anything that starves the thread drawing replies.
 
 **Interrupt registration is per engine**, not per channel and not per semaphore: the event object
 requires a subdevice notifier, the index names an engine, and the channel class has no completion
@@ -552,17 +725,62 @@ understands, then allowed to run its own recovery and re-adopt.
 | **A** | the VM | the single store, the host register mappings, the walker's GPU context |
 | **B** | one guest **driver instance** | every twin — devices, VA spaces, channels, engine objects, events, mappings |
 
-⇒ **Tearing down a guest driver instance is `close(B)`.** The host driver then frees every object
-on that descriptor **in its own dependency order** — channels are preempted and unbound by its free
-path — so when the close returns, **no host engine references guest pages.** That is precisely the
-hazard otherwise: a still-scheduled host channel whose ring lives in guest RAM the guest has since
-reused is a live DMA engine over reused memory.
+⊘⊘⊘ **But `close()` is not a synchronous free, and relying on it leaves exactly the hazard it was
+supposed to close.** Two mechanisms defeat it:
+
+- **`release` runs on the last file reference**, not on `close`. Every in-flight call on that
+  descriptor and every mapping made through it holds one. ⇒ `close` returns while teardown has not
+  started.
+- ⊘ **The driver's close path defers the whole cleanup to a kernel thread** when its interruptible
+  wait fails — which **a pending signal causes**. VMM threads carry signals routinely. ⇒ The
+  deferred path is not an edge case; it is the normal case under load.
+
+⇒ ★ **So we free explicitly and then close.** Unmap every mapping made through the descriptor, join
+every in-flight call, **block signals**, issue the **explicit free of the client tree** — which is
+synchronous and ordered by the host driver's own dependency rules, preempting and unbinding
+channels — and only then close the descriptor.
+
+★ **Why this matters rather than being hygiene:** a still-scheduled host channel whose ring lives in
+guest RAM the guest has since reused is **a live DMA engine writing into another guest's memory**.
+The guarantee has to be *"the engine is stopped before the memory is reused"*, and only the explicit
+free gives that ordering.
 
 **Triggers:** the guest's unload message, a device reset (`system_reset`, function-level reset,
 `reboot -f`), and re-entry of driver init with the protected region still up. Our own order is:
 quiesce workers, reset the ring, drain the VA manager, drop twin references, **then** close.
 ⊘ On VMM exit or crash the kernel closes both descriptors and the host driver frees everything —
-**a leak across runs is not possible without a host driver bug.**
+**a leak across runs is not possible without a host driver bug.** ⚠ That is true of *leaks*; it is
+not a substitute for the ordered teardown above, because a crash gives us no chance to run it.
+
+⊘⊘ **And teardown must reset the walker's own state.** Its previous-state snapshot lives across a
+driver instance; if it survives while every mapping is dropped, the next instance's first diff
+reports *"unchanged"* and maps **nothing** — a second boot that faults for reasons the first did
+not. ⇒ Resetting it is part of the teardown order, and the gate is the design's own rule: **run
+every gate twice in one process.**
+
+### 9.2 ⚠ Per-VM caps, because a shared host GPU is a shared resource
+
+The host driver enforces no per-client quota. ⇒ On a host with more than one VM, one guest can
+starve the others by allocating twins — channels, engine objects, address spaces, and one host
+object per non-coalescable system-memory leaf. ★ **We already told the guest how many channels it
+may have**, so that number is the cap, and the same applies to every other twin class: **refuse
+past it, by name, counted.**
+
+⚠ **And the guest's framebuffer aperture is a device-global resource on the host.** The window
+through which a CPU sees GPU memory is a fixed size shared by every process on that GPU. ⇒ Size the
+guest's at startup **from what is actually free**, and make an unbackable page a **named refusal**
+rather than a silent hole — the guest reading an unbacked hole is a wrong answer, not an error.
+
+### 9.4 ⚠ Two host-platform prerequisites, stated because they are not ours to fix
+
+- ⊘ **Fine-grained runtime power management must be off for a GPU we drive.** The host driver
+  **revokes every user mapping** when it powers the device down. Afterwards our inline doorbell
+  write faults into a handler that stalls until a scheduled wakeup completes — a block **we** impose
+  on a vCPU — and a read-only memslot over the same page makes the guest's exit return an error the
+  VMM treats as fatal. ⇒ A host prerequisite, plus a revocation flag the trap checks before touching
+  any host page.
+- ⚠ **Ballooning and memory hot-unplug must be disabled** for the guest, because we pin guest pages
+  for the GPU. Discarding a pinned page is silent guest data loss.
 
 ### 9.1 Multi-GPU: what is per device and what is per process
 
