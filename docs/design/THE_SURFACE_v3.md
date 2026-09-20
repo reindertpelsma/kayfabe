@@ -97,7 +97,7 @@ is **generated**, not transcribed: `kayfabe-abi/src/generated/rpc.rs`.
 | 21 | `DUP_OBJECT` | alias one client's object into another client's handle namespace. ⊘ It **aliases, refcount++; it does not copy** — this is the normal UVM flow | **SERVE** (a graph edge) | `lib.rs:1097`, `:1918` |
 | 103 | `GSP_RM_ALLOC` | the generic *"create an RM object of this class"* envelope. Nearly every object the guest makes — clients, devices, VA spaces, channels, memory, contexts — rides inside | **MIXED, default REFUSE** | `lib.rs:1229-1276` |
 | 76 | `GSP_RM_CONTROL` | the generic *"run this RM control command"* envelope. Almost every specific query or operation rides inside as a nested `NVxxxx_CTRL_CMD_*` id + params — see §2 | **MIXED, default REFUSE** | `lib.rs:1521-1572` |
-| 71 | `CONTINUATION_RECORD` | ⊘ not a function: an overflow *fragment* of a message too large for one element. Only `GSP_RM_CONTROL` fragments this way | folded into reassembly; standalone is refused | `kayfabe-rmrpc/src/reasm.rs:250` |
+| 71 | `CONTINUATION_RECORD` | ⊘ not a function: an overflow *fragment* of a message too large for one element. ⊘⊘ **[CORRECTED w821]** *"only `GSP_RM_CONTROL` fragments this way"* is **false** — there are **three** producers: `GSP_RM_CONTROL`, `SET_REGISTRY` (via the *async*, no-wait path) and `ALLOC_MEMORY` (page-table descriptor RPC). This tree's own `reasm.rs:12-31` lists all three, while its reassembly (`:341`) handles only the control case. ⊘ `GSP_RM_ALLOC` genuinely does **not** fragment — it returns `NV_ERR_BUFFER_TOO_SMALL` | folded into reassembly; standalone is refused | `kayfabe-rmrpc/src/reasm.rs:250` |
 | 47 | `UNLOADING_GUEST_DRIVER` | the guest is about to `rmmod`. ★ **Synchronous** — the guest blocks until we reply | **SERVE (ack-only)**, reply mandatory | `kayfabe-device/src/inert.rs:119` |
 | 202 | `ECC_NOTIFIER_WRITE_ACK` | the guest's own acknowledgement that it finished writing the ECC notifier buffer | **IGNORE** | `rpc.rs:320` |
 | 228 | `INIT_GSP_TRACE_CRASH_BUFFER` | the guest hands us a `{physical address, size}` for a buffer the firmware is meant to fill with crash-trace records | **SERVE (ack, no-op)** — we write no trace records, so it stays zeroed | `inert.rs:119` |
@@ -176,7 +176,7 @@ generic-ack fallback. §1.3 explains why that matters — `0x56` is a status the
 |---|---|---|
 | `0x3f` | `NV01_MEMORY_LOCAL_PRIVILEGED` | privileged video memory |
 | `0x71` | `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` | ★ would hand the host a **guest-chosen pointer** |
-| `0x402c` | `NV40_I2C` | no physical board bus exists. ⊘ RM's own source expects this alloc to fail |
+| `0x402c` | `NV40_I2C` | no physical board bus exists. ⚠ **[UNVERIFIED w821]** the claim that *"RM's own source expects this alloc to fail"* does not check out — `i2capiConstruct_IMPL` returns `NV_OK` unconditionally. The refusal may still be right; **its stated justification is not** |
 
 Beyond these, ~89 classes are **allowlisted but opaque** — admitted past default-deny and tracked
 as a graph node with no facts extracted (Turing/Ampere/Ada/Hopper/Blackwell engine and codec
@@ -211,7 +211,8 @@ of them ever reaches a real host allocation.
 | `0x20801210` | `GR_SET_CTXSW_PREEMPTION_MODE` | set graphics context-switch preemption mode |
 | `0x20801702` | `MC_SERVICE_INTERRUPTS` | the guest's interrupt-poll bottom half. ★ **deliberately refused** (`0x56`) to cancel the polling loop |
 | `0xa06c0105` | `NVA06C_CTRL_CMD_PREEMPT` | preempt a channel group. ★ **decided, not echoed** — `NV_OK` only if no member has a live host twin |
-| `0x20808159`, `0x20808162`, `0x20809001/9/64`, `0x20802209` | *unnamed GSS-legacy* | ⊘ **no open-source symbol exists.** Opaque blobs `cuInit`/cudart demand; answered from **measured** values |
+| `0x20808159`, `0x20808162`, `0x20809001/9/64` | *unnamed GSS-legacy* | ⊘ **no open-source symbol exists.** Opaque blobs `cuInit`/cudart demand; answered from **measured** values. Their categories are `GPU_/CLK_/PERF_LEGACY_NON_PRIVILEGED` (`ctrl2080base.h`) |
+| `0x20802209` | `NV2080_CTRL_CMD_RC_GET_WATCHDOG_INFO` | the robust-channel recovery watchdog's state. ⊘⊘ **[CORRECTED w821]** this was filed as *"unnamed GSS-legacy, no symbol exists"* — **wrong twice**: it is named in `ctrl2080rc.h:179` *and* in this tree's own allowlist (`capability.rs:811`), and bit 15 of `0x2209` is clear so the GSS-legacy rule would not admit it anyway |
 
 **Forwarded to a real host ioctl** — ⊘ **exactly one confirmed live path**:
 
@@ -237,13 +238,15 @@ unserviced ledger, returning `NV_ERR_NOT_SUPPORTED`. They cluster in: GPU/system
 subdevice queries (`GPU_GET_INFO_V2`, `GPU_GET_NAME_STRING`, `GR_GET_INFO`, `BUS_GET_PCI_INFO`,
 `MC_GET_ARCH_INFO`, `TIMER_GET_TIME`), and third-party-P2P / ZBC / debugger families.
 
-⚠⚠ **A contradiction the survey found and could not resolve:** at least **nine decoder modules
-exist with no confirmed dispatch site** — `eventnotify.rs`, `fbinfo.rs`, `pcibars.rs`,
-`businfo.rs`, `gpuatomics.rs`, `c2cinfo.rs`, `cepce.rs`, `cecaps.rs`, `gspfeatures.rs`,
-`grfsinfo.rs`. Either a second dispatch site exists that was not read, or **we built decoders for
-controls we then answer "not supported" to.** ⊘ `EVENT_SET_NOTIFICATION` (`0x20800301`) is the
-sharpest instance: it has a decoder and is not in the dispatch table. **This wants one person and
-one grep**, and §5 lists it.
+⊘ **[RESOLVED w821 — and the resolution is that there was no contradiction.]** A first pass
+reported *"nine decoder modules with no confirmed dispatch site"* and speculated that either a
+second dispatcher existed or we had built decoders for controls we answer *"not supported"* to.
+★ **The second dispatcher exists**: `kayfabe-device/src/inittables.rs` (`WantedTable`, command map
+at `:1146`), and **all ten** are wired through it — `eventnotify`, `businfo`, `gpuatomics`,
+`fbinfo`, `cecaps`, `cepce`, `grfsinfo`, `gspfeatures`, `c2cinfo`, `pcibars`, including
+`EVENT_SET_NOTIFICATION`, which the first pass called the sharpest instance.
+⚠ **The lesson is about the instrument, not the tree:** *"not in the dispatch table I read"* was
+reported as *"not dispatched"*. A negative from one grep is a statement about the grep.
 
 ★ **Two rule-based admissions that are not enumerable as rows**: any control with the
 **GSS-legacy mask** bit 15 set (ported from gVisor's `nvproxy`), and any control on a
@@ -257,43 +260,90 @@ checked until we know which verbs the guest issues and then **immediately consum
 A verb whose caller reads only a status can be deferred; a verb whose caller reads a **value** it
 then uses cannot.
 
-Derived from the guest driver's own call sites in `nv_gpu_ops.c` — i.e. from what the caller
-*does with the reply*, not from the command's name.
+⊘⊘⊘ **[CORRECTED w821 — the first version of this section asked the wrong question, and the
+answer it gave was therefore true of the wrong population.]** I listed what the guest driver's
+callers consume and then marked each *"served / unserviced"* **by us**. But most of these controls
+**never reach us at all**: a control is handled by the guest's **own CPU-RM** unless it is flagged
+`ROUTE_TO_PHYSICAL` or its handler issues an explicit RPC. ⇒ *"unserviced"* named a gap for verbs
+we are never asked about.
 
-| verb | the value the caller consumes | what it does with it | we |
+The table below therefore carries the question that actually matters first: **does it reach us?**
+
+| verb | reaches us? | value the caller consumes | our obligation |
 |---|---|---|---|
-| `FB_GET_INFO_V2` | `heapSize`, `reservedHeapSize`, `heapStart` | stored in `device->fbInfo`; **sizes every later vidmem allocation** | served |
-| `FB_GET_FB_REGION_INFO` | `numFBRegions`, `fbRegion[i].limit` | max'd into `maxAllocatableAddress` | ⚠ unverified |
-| `GPU_GET_MAX_SUPPORTED_PAGE_SIZE` | `maxSupportedPageSize` | page-size selection | ⚠ unverified |
-| `GPU_GET_GID_INFO` | `length`, `data` | copied into the caller's GUID buffer | ⊘ **unserviced** |
-| `GPU_GET_ENGINES` | `engineCount`, `engineList[i]` | a size-then-fill pair; drives every follow-up CE query | ⊘ **unserviced** |
-| `CE_GET_CAPS` | `capsTbl` | decoded by `setCeCaps` immediately | ⚠ id equivalence unresolved |
-| `CE_GET_CE_PCE_MASK` | `pceMask` | stored into `ceCaps->cePceMask` | ✔ served |
-| ★★★ `GPFIFO_GET_WORK_SUBMIT_TOKEN` | `workSubmitToken` | ⊘⊘⊘ **the literal value written to the doorbell on every subsequent submission** | ⊘ **UNSERVICED** |
-| `FIFO_GET_CHANNELLIST` | `pChannelList[i].hwChannelId` | the real hardware channel id | ⊘ **unserviced** |
-| `FERMI_VASPACE_A` **alloc** | `vaBase`, `vaSize` | ★ RM *fills these in* when the caller left them blank | served |
-| `FAULTBUFFER_GET_SIZE` | `faultBufferSize` | sizes an immediately-following CPU mapping | ⚠ likely unreachable — no fault buffer is modelled |
+| `GPU_PROMOTE_CTX` `0x2080012b` | ✔ `ROUTE_TO_PHYSICAL` | ⊘ none — **status-only** | answer status |
+| `CE_GET_CE_PCE_MASK` `0x20802a02` | ✔ `ROUTE_TO_PHYSICAL` | `pceMask` | ✔ served |
+| `DMA_SET_PAGE_DIRECTORY` `0x00801813` | ✔ explicit RPC | ⊘ none — **status-only** | answer status |
+| ★ `GR_GET_CTX_BUFFER_INFO` `0x20801219` | ✔ explicit RPC | `physAddr`, `size`, `aperture`, `pageSize`, `bIsContigous` | ⊘ **[ADDED w821]** value-used and reaches us |
+| ★ `KGR_GET_CTX_BUFFER_PTES` `0x20800a28` | ✔ explicit RPC | the PTEs themselves | ⊘ **[ADDED w821]** value-used and reaches us |
+| `FB_GET_INFO_V2` `0x20801303` | ◐ **only for indices CPU-RM cannot compute** | `heapSize`, `heapStart`, … | ⚠ the four indices UVM asks have **local** handlers — we answer a *different* caller |
+| `FERMI_VASPACE_A` **alloc** | ✔ alloc RPC | ⊘ status only — ★ `vaBase`/`vaSize` are **overwritten from the local VAS** after the call | answer status |
+| `GPU_GET_ENGINES` | ⊘ **no** — local | `engineCount`, `engineList[]` | ⊘ **not our gap** |
+| `GPU_GET_GID_INFO` | ⊘ **no** — local | GUID bytes | ⊘ **not our gap** |
+| `FIFO_GET_CHANNELLIST` `0x0080170d` | ⊘ **no** — pure local (`chid = pKernelChannel->ChID`) | `hwChannelId` | ⊘ **not our gap** |
+| `CE_GET_CAPS` `0x20802a01` | ⊘ **no** — local `kceGetDeviceCaps` | `capsTbl` | ⊘ **not our gap.** (`_V2` is `0x20802a03`) |
+| `GPU_GET_MAX_SUPPORTED_PAGE_SIZE` | ⊘ **no** — local | page size | ⊘ **not our gap** |
+| `FB_GET_FB_REGION_INFO` | ⊘ **no** — local | region limits | ⊘ **not our gap** |
+| `FAULTBUFFER_GET_SIZE` | ⊘ **no** — local | buffer size | ⊘ **not our gap** |
 
-⊘ **And the negative results, which are as useful as the positive ones:**
+### ★★★ The two status-only verdicts hold — and they are the result worth keeping
 
-| verb | verdict | why it matters |
-|---|---|---|
-| `DMA_SET_PAGE_DIRECTORY` | ★ **STATUS-ONLY** | the caller only branches on `status == NV_OK`; the address it returns to *its own* caller comes from a **local** `vaspaceGetPageDirBase`, not from RM's reply. ⇒ **a one-way publish, and therefore deferrable** |
-| `GPU_PROMOTE_CTX` | ★ **STATUS-ONLY** | the fields read after the call are ones the **caller itself set** before it. Published to us, never read back. ⇒ **deferrable** |
+Re-verified at **every** issuer, not just the one originally cited:
 
-⇒ **[PROPOSE]** the trap-path rule that follows: a synchronous verb must be answered from state we
-already hold, and **no synchronous verb may require a host round trip**. The two page-directory
-verbs — the ones most likely to tempt a synchronous host call — are provably status-only, which is
-the strongest single result in this section.
+- **`DMA_SET_PAGE_DIRECTORY`** — the caller branches on status and returns
+  `memdescGetPhysAddr(vaspaceGetPageDirBase(...))`, computed **locally**. The params struct has no
+  output field at all (`ctrl0080dma.h:802`).
+- **`GPU_PROMOTE_CTX`** — the three CPU-RM-internal issuers the first version did not check
+  (`kernel_graphics_object.c:130`, the path a CUDA process actually takes;
+  `kernel_graphics_context.c:2195`; `kernel_falcon.c:273`) read back only `bInitialize`/`bufferId`,
+  **fields they set themselves**.
 
-⊘⊘⊘ **`GPFIFO_GET_WORK_SUBMIT_TOKEN` is the load-bearing gap in the whole document.** It is the
-verb by which the guest **obtains the doorbell token itself** — the value Part 1 §2 is entirely
-about — and it is currently **unserviced**. ⚠ Whatever the guest does with a failed token query is
-not characterised here, and it must be before any claim about the doorbell plane is complete.
+⇒ **[PROPOSE]** the rule stands: *a synchronous verb must be answerable from state we already
+hold, and no synchronous verb may require a host round trip.*
 
-⚠ **[UNVERIFIED — the largest remaining gap]** the UVM kernel module (`kernel-open/nvidia-uvm/`)
-was **not searched at all**. It is the most likely home of further synchronous verbs, particularly
-around channel and USERD setup and the fault-cancel path.
+⚠ **One caveat the first version missed, and it is not about values.** After
+`SET_PAGE_DIRECTORY` returns, the guest's CPU-RM **commits the root locally and re-enables that VA
+space's channels**. So *deferrable* was argued purely from value-consumption; **ordering against
+the next doorbell is a separate argument**, and this document does not make it. ⊘ That is the
+remaining open half of the question, not the value half.
+
+### ⊘⊘⊘ The "highest-value gap" was not a gap — retracted
+
+**[RETRACTED w821.]** The first version of this section called
+`NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN` (`0xc36f0108`) *"the load-bearing gap in the whole
+document"* because it is value-used and unserviced. ⊘ **On our plane it never arrives.**
+
+`kchannelCtrlCmdGpfifoGetWorkSubmitToken_IMPL` (`kernel_channel.c:3181`) forwards to firmware only
+when `bIsVgpuRpcNeeded`, which requires **`IS_VIRTUAL(pGpu)`** — a **vGPU** guest. We present as a
+**GSP-client** guest, so the guest's own CPU-RM computes the token locally via
+`kfifoGenerateWorkSubmitTokenHal_*` from `{runlistId, chId}` it already holds. The control carries
+no `ROUTE_TO_PHYSICAL` flag, and the local generator returns only `NV_OK` or `NV_ERR_INVALID_STATE`
+— **never `0x56`**.
+
+★ **What the doorbell plane actually depends on** — and this is the better statement of it — is
+that the guest's own `chId` and `runlistId`, **chosen by its CPU-RM and handed to us at channel
+allocation**, are the values it will write to the bell. Our obligation is at *alloc* time, not at
+token-query time.
+
+⚠ **And it leaves a live question in the tree, not in the design:** `kayfabe-device/src/sweep.rs`
+attributes a bench-observed `0x56` to kayfabe refusing this very RPC. If the control cannot arrive,
+that attribution is wrong and the `0x56` came from a neighbouring verb — `GPFIFO_SCHEDULE`
+(`0xa06f0103`) and `NVA06F_CTRL_CMD_BIND` (`0xa06f0104`) **do** RPC. ⇒ One recorder grep for
+`fn 76, cmd 0xc36f0108` settles it. **This is the kind of error this document exists to catch: a
+symptom attributed to the first plausible cause on the same page.**
+
+### ✔ The UVM gap closes — in the negative
+
+**[CLOSED w821.]** The first version flagged *"the UVM kernel module was not searched at all"* as
+the largest survey gap. Searched: `grep CTRL_CMD kernel-open/nvidia-uvm/*.c` returns **zero hits**.
+UVM issues every RM control through `nvUvmInterface*` into `nv_gpu_ops.c`. ⇒ **`nv_gpu_ops.c` *is*
+the complete UVM verb list**, and the table above is not missing a hidden set.
+
+★ What UVM consumes on the doorbell path: the token it writes to the bell (locally generated, per
+the retraction above) and the `dmaAddress` from `SetPageDirectory`, which it uses as the PDB for
+TLB invalidates — and which comes from the CPU-RM's **local** memdesc, consistent with the
+status-only verdict.
+
 ---
 
 ## 3. BAR0 MMIO — reads from DRAM, writes to the vCPU
@@ -356,8 +406,14 @@ includes non-zero boot registers and ROM. The test at
 `crates/kayfabe-device/tests/bar0_backable_pages.rs:143` explicitly records that w563 changed the
 invariant from *"the run answers zero"* to *"the run answers what `bar0_shadow_fill` computes."*
 ⇒ Either the two paths are gated to disjoint builds, or one of them serves zeros where the guest
-expects `NV_PMC_BOOT_0`. **The call ordering crosses the FFI boundary into the C shim, which is
-not in this repository, so it could not be settled from here.**
+expects `NV_PMC_BOOT_0`.
+⊘⊘ **[CORRECTED w821] The premise that this could not be settled was false.** I wrote that the
+call ordering *"crosses the FFI boundary into the C shim, which is not in this repository."* **The
+shim is in this repository** — `qemu/hw/misc/nvkvm/nvkvm.c` — and it calls
+`kayfabe_shim_bar0_shadow_fill` before `kayfabe_shim_bar0_shadow_attach`, in that order. ⇒ The
+question is answerable here; what remains unchecked is whether `back_bar0_dead_runs` is also
+invoked from that file. ★ **An "I could not determine this" that was never attempted is worse than
+an open question — it closes the question while looking rigorous.**
 
 ### 3.3 The trapped-write register table
 
@@ -368,7 +424,7 @@ Offsets are GA10x/GA106. **Axis** column: what moves the offset or the meaning.
 
 | offset | register (ogkm swref) | what it is, in plain language | what we do | axis |
 |---|---|---|---|---|
-| `0x001700` | `NV_PBUS_BAR0_WINDOW` | a relocatable 1 MiB window latch: bits pick *which* megabyte of framebuffer the `PRAMIN` aperture below currently points at | store the raw word verbatim (a read-modify-write must see back exactly what it wrote); write through to shadow | A |
+| `0x001700` | `NV_PBUS_BAR0_WINDOW` | the latch that positions the 1 MiB `PRAMIN` aperture below. ⊘ **[CORRECTED w821]** `_BASE` is `23:0` with a **16-bit shift ⇒ 64 KiB granularity**, not megabyte-aligned; and `_TARGET` (`25:24`) additionally selects the **aperture** — vidmem, coherent or non-coherent sysmem. The window is 1 MiB *wide*; it is not positioned in megabytes | store the raw word verbatim (a read-modify-write must see back exactly what it wrote); write through to shadow | A |
 | `0xBB0090` | `NV_VIRTUAL_FUNCTION_DOORBELL` | ★ **the bell**: a work-submission token saying a command ring has new entries | §2 of Part 1 — the security-critical path. Classified with **no lock held** | ⊘ **die** |
 | `0xB830A0` | `..._PRIV_MMU_INVALIDATE_PDB` | low/aperture half of *which page directory to invalidate* | latch only, not acted on | A |
 | `0xB830A4` | `..._PRIV_MMU_INVALIDATE_UPPER_PDB` | high half of that address | latch only | A |
@@ -420,8 +476,9 @@ this register" belief is exactly the kind of claim that expires.
 |---|---|---|
 | `0x700000`–`0x7FFFFF` | **PRAMIN**, 1 MiB | one **aperture**, classified before the register decode. Every dword resolves through the `0x1700` latch: `fb_addr = (base << 16) + window_off`, then reads/writes the guest framebuffer store, or **refuses by name** if untranslatable. ⚠ A bring-up aperture, not a running path |
 | `0x300000`–`0x3FFFFF` | **PROM/VBIOS**, 1 MiB | one range **on read only**, served from a byte image. ⊘ **No write arm exists at all** — writes fall to the dropped path |
-| `0xB80000`–`0xB8FFFF` | **usermode / VF window**, 64 KiB | ⊘ **not** a pass-through aperture — decoded **register by register** (doorbell, invalidate trio, interrupt tree, PTIMER). Any other offset inside it is dropped |
-| MSI-X table / PBA | — | ⊘ **not in this tree at all.** Only a vector *count* lives here; the table and delivery are QEMU's native model on the C side. **[UNVERIFIED]** whether it sits inside BAR0's range |
+| `0xBB0000`–`0xBBFFFF` | **`NV_VIRTUAL_FUNCTION`** — the usermode window, 64 KiB | ⊘ **not** a pass-through aperture — decoded **register by register**: the doorbell at `0xBB0090`, the PTIMER halves at `0xBB0080/84`. Any other offset inside it is dropped |
+| `0xB80000`–`0xBAFFFF` | **`NV_VIRTUAL_FUNCTION_PRIV`** | likewise register-by-register: the CPU interrupt tree at `0xB81xxx` and the MMU-invalidate trio at `0xB830A0/A4/B0`. ⊘⊘ **[CORRECTED w821]** these two rows were one row reading `0xB80000–0xB8FFFF, usermode/VF window`, which is **the wrong range for both** — and it placed the doorbell and PTIMER inside it, contradicting §3.3 of this same document |
+| MSI-X table / PBA | — | ⊘⊘ **[CORRECTED w821]** a first pass claimed *"no MSI-X code exists in this tree at all."* **False** — `IrqSpec::Msix` (`kayfabe-vmm`), `signal_msix` (`kayfabe-vmm-qemu/src/host.rs:374`), and `msix_init` in the device model at `qemu/hw/misc/nvkvm/nvkvm.c`. ⚠ Whether the table sits inside BAR0's range is still **[UNVERIFIED]** |
 | BAR1 / BAR2 | framebuffer / instance windows | separate PCI BARs, ⊘ **never trapped** — ensuring that is a requirement (Part 1 §2) |
 ---
 
@@ -466,8 +523,11 @@ guest **kernel**'s own client — UVM, the CeUtils scrubber), and **Passthrough*
 for method decode and engine routing.
 
 ⊘ `GuestChannelKind::Translated` is a fully-typed third variant with complete contracts and
-exhaustive-match coverage everywhere — and **zero construction sites outside tests**
-(`channel_kind.rs:355` is a test fixture array). The design doc that introduced it
+exhaustive-match coverage everywhere — and **no production path ever assigns it to a channel**;
+a `Translated` birth is refused outright (`kayfabe-fwd/src/lib.rs:4324`).
+⚠ **[CORRECTED w821]** I called `channel_kind.rs:355` *"a test fixture array"*; it is
+`pub const ALL`, outside `#[cfg(test)]`. The substantive claim is unaffected — but the parenthetical
+was wrong, and it was the kind of detail that makes a reader trust the rest. The design doc that introduced it
 (`the_three_channel_kinds.md`, STATUS: DESIGN, w803) says *"not yet implemented"*, and that is
 still true. ⇒ **Real kernel-CE work the design says should be `Translated` is today classified
 `Emulated`** and driven through the CPU/host-CE forwarding path in §4.5. ⚠ This is the gap behind
@@ -481,7 +541,7 @@ the scrub defect in Part 5.
 | `AMPERE_COMPUTE_B` `0xC7C0` | the **compute** class object — kernel launches | inherits; routed `HostGr`, real hardware runs it, no in-process executor | A |
 | `GP100_UVM_SW` `0xC076` | ⊘ **not a real engine.** A software placeholder so UVM's channel allocation succeeds, and a subchannel to hold fault-cancel methods | rides its (kernel) channel → Emulated | stable |
 | `VOLTA_CHANNEL_GPFIFO_A` `0xC36F`, `TURING_…`, `HOPPER_…` `0xC86F`, `BLACKWELL_…` `0xC96F` | the same channel object, per architecture | kind is per-namespace, not per-class | ⊘ **A** |
-| `AMPERE_USERMODE_A` `0xC361` | ⊘ not a channel — the **BAR window object** that exposes the doorbell register itself (Part 1 §2.1) | n/a | A |
+| `AMPERE_USERMODE_A` `0xC561` | ⊘ not a channel — the **BAR window object** that exposes the doorbell register itself (Part 1 §2.1). ⊘⊘ **[CORRECTED w821]** this row read `0xC361`, which is **`VOLTA_USERMODE_A`** — contradicting §2.2 of this same document | n/a | A |
 
 ### 4.3 The GPFIFO entry — 8 bytes
 
@@ -497,8 +557,13 @@ the scrub defect in Part 5.
 | `GP_ENTRY1_LENGTH` | `30:10` | length **in dwords** |
 | `GP_ENTRY1_SYNC` | `31:31` | `PROCEED`, or `WAIT` — the front-end must drain before fetching |
 
-⚠ `LENGTH == 0` is **not an empty run** — it is a *control* entry whose low byte is an opcode, so
-`GET_HI` must not be read there. We refuse it rather than decode it (`submit.rs:1822`).
+⚠ `LENGTH == 0` is treated as a *control* entry whose low byte is an opcode (`GP_ENTRY1_OPCODE`,
+`7:0`) rather than an empty run, so `GET_HI` is not read there. We refuse it rather than decode it
+(`submit.rs:1822`).
+⚠ **[UNVERIFIED w821]** `clc56f.h` defines `GP_ENTRY1_OPCODE` but **does not state the
+`LENGTH == 0` rule**. An earlier version asserted it as fact with a citation that does not carry
+it. The behaviour is conservative either way — we refuse rather than act — but the *reason* is
+inferred, not sourced.
 
 ★ **Axis note:** `NVC36F` (Volta) and `NVC56F` (Ampere) differ in exactly two bits across the
 whole entry — C56F **dropped** `PRIV` (`8:8`) and **gained** `INVAL_SCOPE` in `MEM_OP_A`. ⇒ This
@@ -575,8 +640,10 @@ completion**. If the engine routes `HostGr`, the doorbell is forwarded but ⊘ *
 parsed** — *"no executor IN THIS PROCESS runs GR work"* (`device.rs:8930`).
 
 ⊘⊘⊘ **The measured defect, in one line:** CPU-executed spans have **zero completion writers** —
-`write_completion` has no call sites (`lib.rs:8862`), so a completion on that arm is **silently
-dropped**. Combined with the scrub being classified `Emulated` rather than `Translated`, this is
+`write_completion` (`kayfabe-rt/src/cpu_ce.rs:736`; ⚠ **[CORRECTED w821]** an earlier pointer said
+`kayfabe-fwd/src/lib.rs:8862`, which is a *comment about* it) has **no callers anywhere in
+`crates/`**, pinned by `tests/tests/single_writer_census.rs:360`. A completion on that arm is
+**silently dropped**. Combined with the scrub being classified `Emulated` rather than `Translated`, this is
 the cross-client leak in Part 5.
 
 **Translated.** ⊘ Design only; no doorbell reaches it. The intended path is in
@@ -614,10 +681,10 @@ reader can argue about it or go and close it.
 | 9 | Is there a top-level RPC function a stock guest sends at init that we fail to classify? | Searched; **none found. Absence not proven** |
 | 10 | Does the doorbell token encoding really differ per Blackwell die group? | Carried in this project's notes; **not confirmed** against `gb20x` code. The doorbell *offset* is identical Volta→Blackwell |
 | 11 | Where does the MSI-X table live, and is it inside BAR0? | ⊘ **No MSI-X code exists in this tree at all** — only a vector count. The table and delivery are QEMU's native model on the C side |
-| 12 | ⊘⊘⊘ **`GPFIFO_GET_WORK_SUBMIT_TOKEN` is value-used and unserviced.** It is how the guest obtains the doorbell token Part 1 §2 is entirely about | ★ **The highest-value single gap in this document.** What the guest does with a failed token query is not characterised |
-| 13 | ⚠ **Nine decoder modules with no confirmed dispatch site** (`eventnotify.rs`, `fbinfo.rs`, `pcibars.rs`, `businfo.rs`, `gpuatomics.rs`, `c2cinfo.rs`, `cepce.rs`, `cecaps.rs`, `gspfeatures.rs`, `grfsinfo.rs`) | Either a second dispatch site exists, or we built decoders for controls we answer *"not supported"* to. ⊘ One person, one grep |
-| 14 | ⚠ **The UVM kernel module was not searched at all** | The likeliest home of further synchronous verbs — channel/USERD setup, the fault-cancel path. ⊘ The single largest survey gap |
-| 15 | ⚠ **`GP100_UVM_SW` is allowlisted but not routed through `classify()`** | An *admitted-but-unreachable* class. `[MEASURED]` all 4 allocs in a boot refused `0x56`. ⇒ The allowlist and the dispatcher disagree, and the allowlist is the one that reads as intent |
+| 12 | ⚠ **`sweep.rs` attributes a bench `0x56` to kayfabe refusing `GPFIFO_GET_WORK_SUBMIT_TOKEN`** — a control that **cannot reach us** on a GSP-client guest (§2.4) | ⇒ The attribution is wrong and the `0x56` came from a neighbouring verb (`GPFIFO_SCHEDULE` / `BIND`, which **do** RPC). ★ One recorder grep for `fn 76, cmd 0xc36f0108` settles it |
+| 13 | ⚠ **A too-large `SET_REGISTRY` would arrive as an ignored fn-73 head plus fn-71 fragments the bridge refuses** — i.e. we would *reply* to a no-wait RPC | ⊘ Our reassembly handles only the `GSP_RM_CONTROL` case though three functions fragment (§1.3). ⚠ Whether a stock guest's registry ever exceeds one element is **unmeasured** |
+| 14 | ⚠ **`GP100_UVM_SW` is allowlisted but not routed through `classify()`** | An *admitted-but-unreachable* class. `[MEASURED]` all 4 allocs in a boot refused `0x56`. ⇒ The allowlist and the dispatcher disagree, and the allowlist is the one that reads as intent |
+| 15 | ⚠ **`back_bar0_dead_runs` vs the C shim's fill-then-attach ordering** (§3.2) | Now answerable *in this tree* — the shim is `qemu/hw/misc/nvkvm/nvkvm.c`. What remains is whether that file also invokes the Rust path |
 
 ### 5.3 ⊘ Axis coverage — the honest statement
 
@@ -643,11 +710,27 @@ entry has been exercised at a second point on that axis. Three specific conseque
 1. **#2 and #1 together** — they are one defect wearing two hats, and they are the live security
    bug. A completion that is dropped and a channel kind that was never built are both *"the scrub
    does not really happen."*
-2. **#7, the synchronous-verb list** — mechanical, and it unblocks judging the whole trap path.
-   Until it exists, *"no RM verb on a vCPU"* cannot be checked, only asserted.
-3. **#6** — needs one person to read across the FFI boundary once. Cheap, and the failure mode is
-   silent.
+2. **#12** — one grep, and it either confirms an instrument or retires a wrong attribution that is
+   currently sitting in the tree as a comment.
+3. **#6 / #15** — the shim is in this repository after all; one read settles whether two shadow
+   installers overlap.
 4. **#3** — cheap to decode, and it converts an assumption about guest behaviour into a fact we
    handle.
 5. The axis gaps in §5.3 — ⚠ these are not a task, they are a **standing property** of the
    product, and they want a second point on the lattice in CI rather than a one-off audit.
+
+### 5.5 ⊘⊘⊘ What the review of THIS document found, kept as the record
+
+Two adversarial passes over this bundle found **more defects in the document than in the design**,
+and the pattern is worth stating because it recurs:
+
+- **Two claims were true of the wrong population** — the *"highest-value gap"* that cannot reach
+  us, and *"nine decoders with no dispatch site"* that are all dispatched. Both were built from a
+  correct observation over an incomplete set.
+- **One *"could not be determined"* was never attempted** — the C shim is in this repository.
+  ★ That is worse than an open question, because it **closes** the question while looking rigorous.
+- **One internal contradiction survived both a table and its own prose** — `0xC361` vs `0xC561` for
+  the same class, in two sections of one file.
+- ⚠ **The two headline results survived intact**: both page-directory verbs really are status-only,
+  and the doorbell really is an unprivileged surface. ⇒ The defects clustered in the *supporting*
+  detail, which is exactly where a reader stops checking.
