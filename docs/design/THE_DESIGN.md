@@ -377,9 +377,45 @@ GSP parts — instance blocks are written by the firmware, which is us. Where ea
 |---|---|---|---|
 | user VA space | a control carrying the **reserved-PDE table**, whose level-0 entry **is** the top-level directory. Sent for every space, because the split-VA-space default is on | declared in the same message | the GPU walker (vidmem) / CPU (sysmem) |
 | UVM's external root | a control carrying `{physical address, entry count, aperture, VA space, channel}`. ⚠ **It arrives as a control, not as the dedicated message** — that message is stubbed out on GSP clients | in the message | same |
-| **BAR1** | ⊘ **ours.** We allocate it and declare the address; the guest adopts it and writes entries directly. **No message exists** | framebuffer | CPU, over the memfd |
-| **BAR2** | ⊘ **ours.** We declare the address; the guest sends back its **encoded entry value** for slot 0 | framebuffer | CPU, over the memfd |
-| instance block | ⊘ **not a root.** The guest allocates it and tells us where; **we** write the base and aperture into it | — | never walked |
+| **BAR1** | ⊘ **ours.** We allocate it and declare the address; the guest adopts it and writes entries directly. **No message exists** | ★ framebuffer *to the guest*; **host RAM underneath** — see below | CPU, at RAM speed |
+| **BAR2** | ⊘ **ours.** We declare the address; the guest sends back its **encoded entry value** for slot 0 | same | CPU, at RAM speed |
+| instance block | ⊘ **not a root.** The guest allocates it and tells us where; **we** write the base and aperture into it | same | never walked |
+
+### 6.1 ★★★ The guest's BAR tables are metadata. Nothing but us ever reads them.
+
+⚠ A CPU read of **real** video memory runs at roughly **48 MiB/s** — flat, regardless of what you
+do. ⇒ *"We walk the BAR tables with the CPU"* would be a serious mistake **if those tables lived in
+video memory**, and under the single store the guest's framebuffer is one real device-local
+allocation. So the question is which side of that line they fall on.
+
+★★★ **They fall on ours, and the reason is that nobody else reads them:**
+
+- On real hardware the **GPU's own MMU** walks a BAR2 table when the CPU touches BAR2. In this
+  design **there is no such hardware access** — the guest's BAR2 window is an aperture *we serve*,
+  and its BAR1 access is a **KVM memslot we install**. No engine ever fetches these entries.
+- The **host** GPU has its own BAR1 and BAR2, owned by the host driver, with their own tables. The
+  guest's are a different object entirely.
+- ⇒ The guest's BAR page tables exist to tell **us** what the guest wants mapped. They are
+  **metadata, consumed once, by software.**
+
+⇒ **So place them where reading is cheap.** The guest must *believe* they sit at framebuffer
+offsets — we declare those addresses, and it writes through apertures we emulate, so **we choose
+where the bytes actually land**. Back them with **host RAM**. The CPU walk is then a RAM walk, and
+the 48 MiB/s figure never enters the picture.
+
+★ **This is also why the GPU-side walker is not the answer here**, even though it is the right
+answer for user VA spaces. Those tables are **guest-allocated in real video memory** — we do not
+choose their placement, and a CPU walk of them is the 48 MiB/s path the walker exists to avoid. ⇒
+**Two page-table populations, two mechanisms, and the discriminator is who chose the placement:**
+
+| tables | placed by | live in | walked by |
+|---|---|---|---|
+| user VA spaces, and everything the guest allocates | ⊘ the **guest** | real video memory | ★ the **GPU-side walker** |
+| BAR1, BAR2, instance blocks | ★ **us** | host RAM | the CPU, at RAM speed |
+
+⚠ **The trap this closes:** *"it is at a framebuffer offset"* and *"it is in video memory"* are not
+the same statement in this design. The first is what the guest is told; the second is a placement
+decision we make. Conflating them is what makes a CPU walk look unavoidable when it is not.
 
 ⚠ **Aperture decides the verb, but it is not the whole leaf.** A page-table entry carries kind,
 read-only, atomic-disable, privilege, volatility and a peer id — and the host mapping must carry
