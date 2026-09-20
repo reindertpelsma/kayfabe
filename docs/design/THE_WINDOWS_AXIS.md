@@ -223,10 +223,26 @@ was never the `N/A`; it was the **known-positive**, and the record already conta
 
 ⇒ ✔ **GSP is off by default on consumer Turing under Windows.** `[MEASURED]`
 
-⚠ **What is still NOT established**, and should not be quietly generalised: workstation/server
-SKUs (`bEnableGpuFirmwareOnWsServerSkus` exists precisely because they may differ), Ada and
-Blackwell consumer parts, and TCC/MCDM mode. ⇒ The struct says the default is **per-SKU**; we have
-now measured **one corner of that space**, not the space.
+### ⚠ How far that generalises — three different strengths, and they must not be merged
+
+`[owner]` *"the Windows PC I tested had GSP off on Turing, so GSP off is default under Windows —
+not entirely true right."* ★ **Correct on both halves: the direction is right, the blanket form is
+not.** Stated at the strength each part actually has:
+
+| claim | strength |
+|---|---|
+| **consumer Turing, Windows ⇒ GSP off by default** | ✔ **`[MEASURED]`** — owner's 1660 Ti, plus the 2080 Ti report, with the known-positive established |
+| **not default-on for any consumer SKU on Windows, incl. 50-series** | ◐ **`[FORUM, weak]`** — two posters assert it and 50-series owners report only post-registry results. ⊘ No before-state `nvidia-smi` on Ada or Blackwell |
+| **workstation / server SKUs may differ** | ★ **`[STRUCTURAL]`** — `bEnableGpuFirmwareOnWsServerSkus` is a field in the policy struct, and `POLICY_DEFAULT_ON_WS_SERVER 0x20` is a registry bit. ⊘ **NVIDIA built a switch for this, which is evidence the two classes are not the same** |
+| **TCC / MCDM** | ⊘ **unknown** — `bIsTccOrMcdm` is a policy input, so the mode plainly matters, and nothing measured |
+
+⇒ ★ **The safe form for design purposes:** *"on Windows, assume GSP is OFF unless we observe
+otherwise, and never assume a single answer across SKUs."* That is stronger than the measurement
+alone (it covers Ada/Blackwell consumer, on the weak evidence) **and** weaker than a blanket claim
+(it does not extend to workstation/server or TCC). ⊘ A design that hard-codes *either* a
+Windows-always-GSP or a Windows-never-GSP assumption is wrong — the policy struct says the answer
+is **per-SKU**, and we must **detect**, not assume (§7's `bGspNocatEnabled`, and the fallback
+detector in §1).
 
 ★ And a note on how this resolved, because the pattern recurs: I spent three exchanges arguing
 about the `N/A` reading when the thing that settled it was **the other leg of the instrument

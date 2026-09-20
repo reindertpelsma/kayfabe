@@ -8,23 +8,23 @@ date: "branch w749-fable-legb"
 
 # Read this first
 
-This bundle is five documents, in the order they should be read:
+★★★ **Part 1 is the thing to argue with.** `[owner]` *"I'll look at your intended target
+instead and argue with that."* Everything after it is the evidence that target rests on.
 
-1. **The v3 architecture** — the design I propose, rewritten after the owner's review and
-   after an adversarial review of the worker protocol. Short, and the part to attack first.
-2. **The surface, at constant level** — ★ *new in this edition.* Every GSP RPC, RM object
-   class, RM control command, BAR0 register and pushbuffer method we touch, **by its NVIDIA
-   constant name and hex value**, each with a plain-language sentence saying what it *is* for a
-   reader who does not know NVIDIA's constants, and what we do with it.
-3. ★ **The Windows axis** — *new in this edition.* The first survey of the `OS` axis, which
-   carried **zero coverage** until now. ⚠ Read it before costing any Windows work: the headline
-   is a **premise** problem, not a compatibility one.
-4. **The machine, as it is** — what the code actually does today, from a `file:line` survey.
-   Every place the code contradicts the proposal is marked.
-5. **The surface we present (v2)** — the earlier plan-level inventory: KEEP / DELETE per item.
-   Kept because the *plans* in it are still the plans; document 2 supersedes its *data*.
-6. **The scrub question** — one open owner ruling, isolated because it is a live security
-   defect and it is the smallest change on the list.
+1. ★★★ **THE PLAN** — what gets built, in what order, what proves each step, the crate model,
+   and an honest read on whether 50 k lines is reachable. **Read this first and attack it.**
+2. **The v3 architecture** — the design the plan rests on, rewritten after the owner's review
+   and two adversarial reviews of the worker protocol.
+3. **The surface, at constant level** — every GSP RPC, RM object class, RM control command,
+   BAR0 register and pushbuffer method we touch, **by its NVIDIA constant name and hex value**,
+   each with a plain-language sentence for a reader who does not know NVIDIA's constants.
+4. **ogkm residue** — what NVIDIA's open drop leaves readable about monolithic RM, pre-Turing
+   and Windows. ★ Includes the BAR1/BAR2 split finding, which changes the memory plane.
+5. **The Windows axis** — the `OS` axis, surveyed. ⊘ Nothing here is in the plan; it is scoping.
+6. ⊘ **The machine, as it is** — the current tree, kept as a **record, not an argument**.
+   `[owner]` *"not the point I'm arguing most with."* Skip unless you want the contrast.
+7. **The surface we present (v2)** — the earlier plan-level inventory, kept for its rulings.
+8. **The scrub question** — one open owner ruling, isolated because it is a live security defect.
 
 ## What changed since the v2 bundle (w818)
 
