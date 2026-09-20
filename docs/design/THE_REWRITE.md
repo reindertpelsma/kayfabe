@@ -383,3 +383,60 @@ group into the forwarding defect — they share a symptom in the 45 s column and
 4. ⊘ **Never quote `15/30` again without this decomposition.** The single score merged a
    correctness bug, a hang, a client failure and a perf tail — and the two most actionable facts
    (a seventh cluster member, and that stranding is conditional) were **invisible** in it.
+
+---
+
+## w823 — ⊘⊘⊘ NONE OF TONIGHT'S GUEST NUMBERS ARE ON v3, AND I RECOMMENDED A FIX TO DELETED CODE
+
+`[owner, 2026-09-21]` *"And this is on the new design v3?"*
+
+**No.** Checked rather than assumed, two ways, and both are unambiguous.
+
+**1. Not one v3 construct exists in the source.** Grepped for the eight core shapes of
+`THE_DESIGN.md` §3/§5 — `rung_bitmap`, `work_seq`, `workers_polling`, `BUSY_RUNG`, `VaManager`,
+`RegisterDrainer`, register drainer, VA manager — **zero files match, for all eight.** And all
+three crates §10 deletes (`kayfabe-isolate`, `kayfabe-isolate-host`, `kayfabe-completion`) are
+still present and still built.
+
+**2. The run's own log names the deleted planes.** From `fast_w823c_ce-client_qemu.log`:
+
+| observed | v3 says |
+|---|---|
+| `kayfabe-isolate-host` (×4 spawns) | ⊘ §10 **deletes the isolate plane** |
+| `KAYFABE_FB_TRAP=serve` | ⊘ §49.3 + owner 2026-09-11: *"no traps in bar1/bar2 at all, ever"* |
+| `KAYFABE_VAS_OWNER=scratchpad` / `=k` | ⊘ the selector is **deleted** |
+| `KAYFABE_FB_JOIN=off` | ⊘ **joins are deleted** |
+| `KAYFABE_GUEST_RING=off` | ⊘ birth at **allocation**, no flag |
+
+⇒ **The thin-guest lane measured the architecture THE_REWRITE plans to delete ~82 500 lines of.**
+
+### ⊘⊘ THE CORRECTION THAT MATTERS — I SAID "FIX THIS FIRST" TWICE, AND IT IS WRONG
+
+I wrote *"the forwarding defect is one fix worth seven arms — start there."* ⊘ **Withdraw that.**
+The stranding signature is `emulated>0, forwarded=0` — *the CPU copy executor ran the work.* That
+executor is **exactly what §10 deletes and §46 forbids** (*"real kernel-channel work is NEVER
+executed on the CPU"*). ⇒ **Fixing it is work on code scheduled for deletion**, and the rewrite
+dissolves the defect as a class rather than as an instance — the same shape as
+`A FIX TO AN INSTANCE LEAVES THE CLASS`, inverted.
+
+⚠ I had the evidence for this **in hand before I made the recommendation**: the comment audit I
+wrote hours earlier measured `kayfabe-isolate` at ~70 % rotten and `isolate-host` at ~55 %. I read
+those as *documentation* facts and did not carry them across to *"so what is the runtime?"*
+
+### ★ What the night's numbers ARE worth — scoped honestly
+
+| result | status under v3 |
+|---|---|
+| ⭐ **Bare metal 30/30** | ✔ **VALID.** No VMM is involved — it measures `(die × host driver)`, which v3 does not change. It is a real v3 baseline and the axis-probe cell |
+| ⭐ **The four lanes + their gates** | ✔ **VALID and is the deliverable.** Refuse-by-name, the `forwarded=` gate, `stranded_tokens.awk`, `diagnose_timeouts.sh`, the cell identity — all architecture-independent, and v3 will be judged with them |
+| **Thin guest 18 correct / 7 stranded / 4 hung / 1 client-fail** | ◐ **A BASELINE TO BEAT, not a defect list to fix.** It says what the old plane does today |
+| ★ **Stranding is CONDITIONAL** (`uvm-mean` forwards 6, `ce-client` strands 1) | ✔ **TRANSFERS.** The differential is about which *guest behaviours* get served locally — v3 must answer the same question, with no CPU executor to fall back to |
+| **The 4 hangs** | ⚠ **UNKNOWN.** Two ring no guest token at all, so they sit upstream of the doorbell path — possibly in code v3 keeps. **Worth locating before the rewrite**, unlike the stranding |
+
+### ⇒ The revised priority
+
+1. ⭐ **Do not fix the stranding cluster.** Record it as the pre-rewrite baseline. v3 deletes its cause.
+2. ★ **Do locate the four hangs**, because a hang upstream of the doorbell may survive the rewrite,
+   and a hang is the one failure a budget gate cannot characterise.
+3. ⭐ **Keep the lanes.** They are the only part of tonight that is already v3-valid, and they are
+   what will tell us whether the rewrite worked.
