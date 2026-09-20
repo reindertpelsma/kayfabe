@@ -105,7 +105,14 @@ pub const SCRATCHPAD_ENV: &str = "KAYFABE_SCRATCHPAD";
 /// Which arm of [`SCRATCHPAD_ENV`] this boot runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScratchpadArm {
-    /// The default. Nothing is spawned and nothing changes.
+    /// ⊘⊘⊘ **NOT THE DEFAULT — and this line said it was until w816.**
+    /// `scratchpad_from(None)` returns [`ScratchpadArm::Measure`]; absent is the DESIGN.
+    /// `[measured w816]` this stale line made a full codebase survey report that the
+    /// scratchpad is off by default — i.e. that the single store, the whole memory model,
+    /// does not run. It is the THIRD stale "The default" of one day, after
+    /// `IsolatePlane::Stillborn` and `KAYFABE_VAS_OWNER=isolate`.
+    /// ⇒ Nothing is spawned and nothing changes on THIS arm, which must be named to be
+    /// selected (§42(d) — a superseded arm stays spellable).
     Off,
     /// Spawn, reserve, report — and start the VM either way.
     Measure,
