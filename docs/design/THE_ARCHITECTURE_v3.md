@@ -216,25 +216,50 @@ Guest-container-corrupts-guest-root is the value proposition.
    ⚠ And CPL is not free to consult on a hot path; it is an argument about what is *knowable*,
    not a proposal to read it per doorbell.
 
-#### Why hardware survives this and a naive port does not
+#### ⊘⊘⊘ What a hostile ring actually buys — and it is LESS than w820 claimed
 
-On hardware a ring means *"channel (runlist, chid) may have work"*, and the PBDMA then reads
-that channel's **USERD `GP_PUT`** — memory only the owner can write. A hostile ring buys a
-redundant fetch of work the victim already published. The attacker contributes **zero data**,
-only a timing hint. NVIDIA evidently accepted that.
+**[CORRECTED w821 by the owner, and the correction matters because it moves the threat model
+off the wrong mechanism onto the right one.]**
 
-Our handler does not re-read a pointer. For a **translated** channel it parses and translates
-the victim's pushbuffer; for an **emulated** channel it executes a function on the victim's
-behalf. That promotes the attacker's timing hint into a control input over victim-state
-processing, and it converts two things that read as engineering into security defects:
+w820 argued that a hostile ring *"promotes the attacker's timing hint into a control input over
+victim-state processing."* ⊘ **That overstates it.** `[owner]`:
 
-- ⊘ **Concurrent double-take becomes a triggerable primitive.** Ring root's token in a tight
-  loop and get two workers walking root's GPFIFO concurrently against one cursor: root's work
-  submitted twice, or its cursor walked backwards into a PBDMA ring-wrap. The four-state token
-  word in §2.4 is therefore **the boundary**, not a latency nicety.
-- ⊘ **A degradation path becomes an amplifier.** Any "queue full ⇒ scan everything" fallback
-  lets an unprivileged process force the VMM to walk **everyone's** channels on the attacker's
-  schedule.
+> *"it doesn't have access to userd or ring or `GP_GET`/`GP_PUT`, so it's a harmless check to see
+> if there is work and then there isn't. That's just cycles, just like the real GPU costs cycles
+> to inspect a doorbell."*
+
+★ **Correct, and the mechanism is worth stating exactly.** A worker that takes a spuriously-rung
+token reads the victim's `GP_PUT` and compares it to our cursor. If the victim has not submitted,
+`GP_PUT == cursor`, **there is no work, and we do nothing**. The attacker supplies a 32-bit token
+and nothing else; every byte we then act on comes from memory only the victim can write. ⇒ Our
+cost profile is hardware's: **ring anything, pay a redundant look.**
+
+⇒ **The double-take is therefore a CORRECTNESS boundary, not a security one**, and w820 was wrong
+to promote it. Two *legitimate* rings from the victim itself race exactly the same way — the
+attacker only makes the window easy to hit. ★ The four-state token word in §2.4 is still
+**mandatory**; what changes is *why*. It is owed to the victim's own concurrency, not to an
+adversary, and a design that justified it by the adversary would have deleted it the moment the
+adversary was ruled out.
+
+⚠ **The one residual, named rather than claimed absent:** the passthrough branch and the managed
+branch differ in cost (an inline MMIO write versus two `fetch_or`s), so ring timing is a weak
+oracle for *"does a channel exist at this token, and is it passthrough."* ⊘ Both branches are
+O(1) with no data-dependent work on victim state, so there is no timing channel into anything the
+victim owns. `[owner]` *"barely any meaningful timing of the MMIO trap can be observed."* Agreed;
+recorded so the claim is bounded rather than absolute.
+
+#### ★★★ So the threat is not what we parse — it is what an unprivileged write can REACH
+
+`[owner, and this is the sharp version of the whole section]`: the hazard is not that an
+unprivileged process makes us look at a victim's channel. It is that an unprivileged write, landing
+on a page guest userspace can map, **must not be able to reach the privileged plane or exhaust
+anything**. Two rules follow, and they are the real content of §47:
+
+- ⊘ **A degradation path is an amplifier.** Any *"queue full ⇒ scan everything"* fallback lets an
+  unprivileged process force work on the attacker's schedule. Deleted (§2.2).
+- ⊘⊘⊘ **Any offset in a guest-userspace-mappable page that is NOT the doorbell must return
+  immediately, doing nothing.** See §2.2 — this was a live hole in the w820 design and the owner
+  found it.
 
 #### ⊘⊘⊘ THE HOPPER+ BREAK — on Hopper and Blackwell the doorbell is written through **BAR1**
 
@@ -285,12 +310,56 @@ unreachable on Ampere **becomes reachable on Hopper+**, because there the two pl
 separate. ⊘ The architecture should be built so that separation is *exploited where it exists*
 rather than assumed absent everywhere.
 
-⇒ **[PROPOSE], and this needs an owner ruling because it is a scope decision:**
-either **(a)** trap the BAR1 page the guest maps `pBar1VF` at — findable by recognising the
-BAR1 PTE the guest writes for it — and carry `doorbell_bar` as a generated per-arch descriptor
-field; or **(b)** scope v3 §2 explicitly to Ampere/Ada and state Hopper+ as unsupported until (a)
-lands. ⊘ What is **not** acceptable is the current text, which claims to span Turing→Blackwell
-while describing a mechanism that works on two of four architecture families.
+#### ✔ RULED, w821 — take (a), and the constraint is lightly lifted
+
+`[owner]` *"nested vGPU is unsupported, so there is only 1 doorbell page possible, and we map the
+right one from host userspace to the correct BAR1 MMIO. For that still KVM memslot read-only.
+Would then allow BAR1 trapping, but only on that doorbell page, nothing else. Constraint lightly
+lifted."*
+
+★★★ **And the owner's reading of NVIDIA's motive is the load-bearing simplification.** The BAR1
+form exists so that **each vGPU / MIG partition can own its own doorbell page** — a per-partition
+window is only expressible through a translatable aperture, which BAR0's fixed register block is
+not. ⇒ Because **we do not support nested vGPU**, that generality collapses for us: there is
+**exactly one** doorbell page, and we can place it ourselves.
+
+**The revised rule, replacing *"BAR1/BAR2 are never trapped"*:**
+
+> **BAR1 is never trapped, with exactly one exception: the single page the guest maps the
+> usermode object at. That page is a read-only KVM memslot over the real host doorbell page —
+> reads pass through to hardware, writes trap into §2.2. Nothing else in BAR1 is trapped, ever.**
+
+⊘ This is a **lightening**, not a widening: the trapped set grows by one page and by nothing else,
+and it stays inside the shape §2.5 already uses for BAR0's doorbell page.
+
+**How we find that page — and there is a better answer than pattern-matching PTEs.**
+`[owner]` observed that the VA manager's PTX-derived diff for BAR1 already carries the mapping, so
+the page *is* visible to us. ★ **[PROPOSE]** but the diff should be the **confirmation**, not the
+identification:
+
+1. ★ **Primary — the RM side, which is unambiguous.** We serve `GSP_RM_ALLOC` for
+   `HOPPER_USERMODE_A` (§2.2 of Part 2), so we already hold the object handle **and** the
+   `bBar1Mapping` flag the guest asked for. When that object is subsequently mapped, we know
+   which mapping it is **by handle**, with no inference.
+2. ◐ **Confirmation — the BAR1 diff.** The PTX walk reports the page; we assert it matches the
+   handle-derived answer. ⊘ A disagreement is a **refusal**, not a tiebreak.
+
+⚠ Why not the diff alone: identifying a page by "it looks like the VF register block" is a
+**pattern match on guest-chosen data**, and a hostile guest chooses that data. The handle is ours.
+
+**What this adds to the descriptor set:** `doorbell_bar` and `doorbell_off` become generated
+per-arch fields, so the trap classifier in §2.2 keys on `(bar, off)` rather than on `off` — which
+is why its pseudocode now takes `bar` as a parameter.
+
+⚠ **Still open (§10):** what happens on Hopper+ when the guest allocates the usermode object
+**without** `bBar1Mapping` (the BAR0 form is still legal there), and whether both forms can be
+live at once in one guest. ⊘ Not yet checked.
+
+★★★ **And the compensation, restated because it changes what is achievable:** on Hopper+ the
+guest kernel rings **BAR0** while userspace rings **BAR1**. The two privilege domains are at
+**different pages, different GPAs** — so §47's literal form, *"do not register write traps in the
+unprivileged page"*, unreachable on Ampere, **is reachable there**. ⇒ The classifier should
+exploit that separation where the hardware provides it rather than assume it absent everywhere.
 
 #### ⚠ The tension with the owner's literal instruction, stated rather than resolved silently
 
@@ -314,9 +383,9 @@ amplifier above, and the queue is exactly the exhaustible shared structure. **Bo
 The table alone carries the plane.
 
 ```
-nvkvm_trap_bar0_write(off, val):
+nvkvm_trap_write(bar, off, val):
 
-  if off == chip.doorbell_off:                 # ⊘ generated per die, never a literal (§0.3 rule 1)
+  if (bar, off) == chip.doorbell:              # ⊘ generated per die/arch, never a literal (§0.3 r1)
         tok = val & chip.token_mask            # per-die decoded fields (§2.2)
         if PASSTHROUGH(tok):
               write the host doorbell INLINE. No queue, no wake, no lock. Return.
@@ -326,13 +395,41 @@ nvkvm_trap_bar0_write(off, val):
               fetch_or(summary[tok >> 11], 1 << ((tok >> 5) & 63))       # Release
               bump work_seq; maybe write(eventfd)                        # §2.4
               Return.
-  else:
-        # ★ §41 item 4 FIRST, synchronously — see §2.3
-        if is_read_register(off): shadow_write(off, val)
-        reserve a slot on the PRIVILEGED ring and publish (§2.3)
+
+  elif chip.userspace_mappable(bar, off):      # ★★★ THE GUARD — see below
+        Return.                                # do NOTHING. Not a queue push, not a counter.
+
+  else:                                        # PRIVILEGED: reachable only by guest root
+        if is_read_register(off): shadow_write(off, val)   # §41 item 4, synchronous
+        append to the privileged queue (§2.3)
         bump work_seq; maybe write(eventfd)
         Return.
 ```
+
+⊘⊘⊘ **THE GUARD IS NEW AT w821, AND WITHOUT IT THE DESIGN HAD A REMOTE DoS.** `[owner]`:
+
+> *"if the write is in the userspace doorbell page … but not at the doorbell offset, return
+> immediately, ignore, do nothing. Otherwise a DoS attack exists by triggering from unprivileged
+> userspace the `else` branch and bumping garbage on the privileged ring to try to fill it and
+> crash the guest."*
+
+★★★ **Exactly right, and it is the defect §2.1 was written to prevent, sitting in §2.1's own
+pseudocode.** The doorbell page is **64 KiB**; the doorbell is **four bytes of it**. Everything
+else on that page is guest-userspace-writable and, under the w820 `if/else`, fell through to the
+privileged branch — so any unprivileged guest process could push unbounded garbage onto the
+plane reserved for guest root and wedge it.
+
+⇒ ★ **The right shape is a three-way classification, not a two-way one**, and the middle arm is
+the one the threat model actually needs: *doorbell* / *guest-userspace-reachable but not the
+doorbell* / *privileged*. ⚠ And the middle arm must be derived from **which pages RM maps to
+non-kernel clients** (§10.7), not from a hand-written offset range — otherwise a future
+userspace-mappable page falls into the privileged arm by default, which is the same bug again.
+
+⊘⊘ **This is also why the earlier framing was harmful and not merely imprecise.** w820 spent its
+threat model on *"the attacker makes us parse a victim's pushbuffer"* — which the owner has now
+shown is a no-op — while the actual reachable attack was one `else` away in the same function.
+★ **A threat model aimed at the wrong mechanism does not merely fail to help; it draws attention
+away from the arm that was exploitable.**
 
 ⊘⊘⊘ **[CORRECTED w821, from an adversarial review — three defects, all mine.]**
 **(a)** The earlier pseudocode indexed `table[tok >> 6]` and `summary[tok >> 15]`. Those are
@@ -374,12 +471,20 @@ Three separate hazards fall out, and only the first is about size:
    produces no fields** — an empty result that reads exactly like "no variation here". This is the
    `a_capture_derived_table_expires_as_a_vendor_regression` shape, arriving through a *generator*
    rather than a capture.
-3. ⊘⊘⊘ **GB100 has a `GSP_DOORBELL` bit at 31.** A write to the same register can be addressed to
-   the **GSP** rather than to a runlist. ⚠ **[UNVERIFIED and it is the sharpest open question in
-   this section]** — if unprivileged guest userspace can set bit 31 through the same mapping, then
-   on that die the doorbell page is a guest-userspace-reachable path to the *firmware* doorbell,
-   not merely to another process's channel. §2.1's threat model would then be **understated on
-   Blackwell**. This must be settled before any Blackwell claim is made.
+3. ✔ **GB100's `GSP_DOORBELL` bit at 31 — RESOLVED w821, and it is safe by construction.**
+   w821 first flagged this as *"the sharpest open question in this section"*, on the theory that
+   an unprivileged write addressing the **firmware** rather than a runlist would understate
+   §2.1's threat model. `[owner]` *"well, kernel channels also have doorbells. Same thing — they
+   do not queue on the privileged queue, treated like a normal doorbell, also with the fill, and
+   reading when there is no work is a no-op."*
+   ★ **Right, and the reason is structural rather than a judgement call: we implement no behaviour
+   for that bit at all.** Because the table is sized to what the register can *express*, a token
+   with bit 31 set indexes a real slot; because no channel is registered there, the worker finds
+   no work and releases. ⇒ It degenerates to the same no-op as any other unowned token.
+   ⊘ It is **not** a path to `NV_PGSP_QUEUE_HEAD` — that is a different register at `0x110c00`, on
+   a page guest userspace cannot map, and it is the *only* thing that kicks the RPC plane.
+   ⇒ **Masking to the full expressible space is what makes this safe**, which is the second time
+   that decision has paid for itself.
 
 ⇒ `TOKEN_MASK` is therefore **per-die, generated**, and masking remains the right operation
 rather than validating: it is what the hardware does with undecoded bits, **and** it removes an
@@ -847,64 +952,54 @@ deleted.
 
 ---
 
-## 10. Still open
+## 10. Still open — and what the owner ruled at w821
 
-**Resolved since w819**, recorded so the list does not read as unchanged: the doorbell/register
-**split** (§2.1–2.3); the worker wakeup protocol's bit widths, layout and memory orderings (§2.4);
-the doorbell double-take, now a named security boundary rather than a race (§2.4).
-⊘ **[CORRECTED w821]** the w820 text also claimed *"and its overflow semantics"* as resolved while
-§10.5 listed the overflow bound as open — **the same item on both lists**. Overflow is **open**,
-and §2.3 now proposes the opposite answer (growable, not un-fillable).
+⊘ **Numbering was out of order and one item appeared on both the resolved and open lists.**
+Rebuilt.
 
-Still genuinely open:
+### 10.1 Ruled at w821 — closed, with where each ruling landed
 
-1. ⊘ **[CORRECTED w821 — this entry was stale.]** §5 already settles *whose burden* (the
-   **waiter's**, three independent ways, `[owner's hypothesis, confirmed]`). What is genuinely
-   open is narrower: **what we must do to honour "once armed, a later release must produce an
-   interrupt"**, given §5's finding that registration is **per engine** and carries no channel or
-   semaphore identity — and given that `NVC36F_NON_STALL_INTERRUPT`, the method by which the guest
-   *requests* it, is **not recognised anywhere in the tree** (`THE_SURFACE_v3.md` §4.5).
-2. ✔ **The synchronous-verb list — ANSWERED at w821**, in `THE_SURFACE_v3.md` §2.4. Derived
-   from what the guest driver's own call sites *do with the reply*, not from command names.
-   ★ **The strongest result is a negative one:** both page-directory verbs —
-   `DMA_SET_PAGE_DIRECTORY` and `GPU_PROMOTE_CTX`, the two most likely to tempt a synchronous
-   host call — are **status-only**. Their callers read no RM-computed value (`SET_PAGE_DIRECTORY`
-   gets its address from a *local* `vaspaceGetPageDirBase`; `PROMOTE_CTX` reads back only fields
-   it set itself). ⇒ Both are one-way publishes and **deferrable**.
-   ⇒ **[PROPOSE]** the rule this licenses: *a synchronous verb must be answerable from state we
-   already hold, and no synchronous verb may require a host round trip.*
-   ⊘⊘⊘ **But it surfaced a gap that lands on §2 itself:**
-   `NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN` (`0xc36f0108`) is **value-used** — it is how the
-   guest **obtains the doorbell token** this whole section is about — and it is currently
-   **unserviced**. ⚠ Still open: what the guest does with a failed token query.
-   ⚠ **[UNVERIFIED]** the UVM kernel module was not searched; it is the likeliest home of further
-   synchronous verbs around channel/USERD setup.
-3. **Fault delivery** — needed by managed memory *and* by letting the GPU fault. `[owner]` if
-   the fault structures are shared with userspace we can map them through for passthrough; a
-   translated fault needs its address translated on the way back.
+| # | question | ruling | lands in |
+|---|---|---|---|
+| R1 | Does a hostile doorbell give an attacker a control input? | ⊘ **No.** It has no access to USERD, the ring or `GP_PUT`; it costs cycles, as on hardware. The double-take is a **correctness** boundary owed to the victim's own concurrency, not a security one | §2.1 |
+| R2 | Non-doorbell offsets in a guest-userspace-mappable page | ⊘⊘⊘ **Return immediately, do nothing.** Without this, unprivileged userspace floods the privileged plane — a live DoS in the w820 design | §2.2 |
+| R3 | The Hopper+ BAR1 doorbell | ✔ **Trap that one page**, read-only memslot, `doorbell_bar` a generated per-arch field. Nested vGPU is unsupported ⇒ exactly one doorbell page exists ⇒ we place it. **BAR1 constraint lightly lifted, by one page and nothing else** | §2.1 |
+| R4 | GB100's `GSP_DOORBELL` bit 31 | ✔ **Safe by construction** — we implement no behaviour for it, so it degenerates to an unowned token and a no-op. Kernel channels have doorbells too and are treated identically | §2.2 |
+| R5 | Per-arch constant-family renames | ✔ **Code it per giant GPU family** — the rename boundary is the family boundary, so it is a bounded, enumerable set | §0.3, §2.2 |
+| R6 | Fault delivery | ✔ **We do fault DELIVERY; we guarantee no fault RECOVERY.** Recovery is unreachable from guest userspace, so we never need to reverse-engineer it — ogkm's recovery cases are nameable and each gets a named workaround. UVM *managed* memory is later and is **simulatable by forcing DMA memory**, which never changes aperture | §2.1 of Part 2, §10.3 |
+| R7 | BQL | ✔ **Never on a vCPU.** Permitted only in slow paths that are not our MMIO traps — memslot moves, installation time | §1 |
+| R8 | Locks on a vCPU | ✔ **At most one, microseconds, for MMIO only.** Slow paths (driver setup) may take more, including BQL | §2.3, §41 |
+| R9 | Batching the VA diff | ✔ **Confirmed as intended**: set the TLB-defer flag on every mapping call but the last, minimising host-side invalidate barriers within one refresh. ⚠ **A refresh on the host must still happen last** — the defer batches the barrier, it does not remove it | §4.2 |
+| R10 | Turing | ✔ **Must be supported.** It is the declared floor and it is *not* the easy end — it needs the `GP10X` format family, which our one built format (`GA10X`) is a superset of by one match arm ⇒ **additive** | §0 |
+| R11 | Multi-GPU / non-GA10x chip tables | ✔ **Rewrite the chip table to be derivable** rather than special-casing. Judged fixable | §7 |
+
+### 10.2 Genuinely open
+
+1. **The interrupt race, narrowed.** §5 settles *whose burden* (the **waiter's**, three
+   independent ways). What is open: how to honour *"once armed, a later release must produce an
+   interrupt"* when registration is **per engine** and carries no channel or semaphore identity —
+   and when `NVC36F_NON_STALL_INTERRUPT`, the method that *requests* it, is **not recognised
+   anywhere in the tree**.
+2. ⊘ **The privileged queue's mechanism and overflow policy.** `[owner]` prefers **a queue with a
+   lock multiple threads may read from** over a dedicated drainer thread — *"an additional context
+   switch is more expensive than one small lock for the vCPU"* — and asks that this be
+   **investigated further first**. ★ Correctness and security decide it; performance is second.
+   ⚠ Overflow is still unanswered either way: w820's *"ogkm bounds in-flight entries"* was a
+   **rate** claim dressed as a **count** claim.
+3. ★ **Where the walk's root comes from.** `[owner]` this should be analysable from ogkm — the
+   call must be used somewhere, and if it is only UVM-managed memory then it is the wrong thing to
+   be looking at. ⇒ **And the owner supplies the design answer that makes it actionable:** the
+   walk already tells us whether a leaf is **sysmem or vidmem physical**, and *that* decides the
+   mechanism — an **RM allocation at a VA** in the VA-manager thread, or a **DMA-map ioctl**.
 4. **The crate model** — to be redrawn against §8.
-5. ⊘ **[REFRAMED w821] The privileged ring's overflow policy needs an owner ruling.** w820 said
-   *"size it so it cannot fill; ogkm bounds in-flight entries."* ⚠ That was a **rate** claim
-   dressed as a **count** claim: GSP RPC kicks are bounded (the RPC is synchronous), but ISR mask
-   writes and the init register stream are bounded by nothing in ogkm. §2.3 now **proposes the
-   opposite** — a *growable* ring, licensed by the same privilege line that makes this plane
-   guest-root-only. **This is a change of position, not a detail.**
-8. ⊘⊘⊘ **[NEW w821, and it is the largest open item in the document] The Hopper+ doorbell BAR.**
-   On Hopper and newer, unprivileged clients map the doorbell over **BAR1** — which §2 never
-   traps — so UVM and CUDA work submission is **silently lost** there. Either trap that page and
-   carry `doorbell_bar` as a generated per-arch descriptor, or scope §2 to Ampere/Ada by name.
-   ★ The compensation is real: on Hopper+ kernel and userspace doorbells are **already separate
-   pages**, so §47's literal form becomes reachable there. See §2.1.
-9. ★ **[NEW w821] The kernel `NV_PTIMER` page at `0x9400`** — §2.5's read-only-memslot argument
-   covers the usermode window only. This page still needs an answer, and all three options cost
-   something.
-10. ★ **[NEW w821] A vIOMMU in the guest hands us IOVAs, not GPAs**, in every sysmem address.
-   Unhandled, and it is the real content of the `K` axis (§0).
-6. ★ **[NEW, w820] The scan-cost figure in §2.2 is arithmetic, not a measurement.** Sub-µs warm
-   is the claim the ring-deletion rests on; it needs a microbenchmark on the bench box before it
-   is cited as fact.
-7. ★ **[NEW, w820] Enumerate every BAR0 range RM maps to a NON-kernel client.** §2.1 treats the
-   usermode window as the unprivileged surface, which is true of ogkm today — but that is **RM
-   policy, not an invariant**. The right form is a generated assertion over the objects that
-   hand out `ADDR_REGMEM`, not a claim that there is only one. `[owner]` *"same for any other
-   page if they exist."*
+5. **The scan-cost figure in §2.2 is arithmetic, not a measurement.**
+6. **Enumerate every BAR0/BAR1 range RM maps to a non-kernel client**, generated rather than
+   asserted. ★ R2 makes this load-bearing: the *middle* arm of the trap classifier is defined by
+   this set, and a page missing from it falls into the **privileged** arm by default — which is
+   R2's bug again, arriving by omission.
+7. **The kernel `NV_PTIMER` page at `0x9400`** — §2.5 covers the usermode window only.
+8. **A vIOMMU in the guest hands us IOVAs, not GPAs.** Unhandled; the real content of axis `K`.
+9. **Windows guest** — `[owner]` read ogkm's Windows-specific code and lawfully published
+   material on NVIDIA's Windows behaviour. ⊘ In progress; nothing claimed yet.
+10. **Hopper+ with the BAR0 form of the usermode object** — still legal there. Whether both forms
+   can be live at once in one guest is unchecked (R3).
