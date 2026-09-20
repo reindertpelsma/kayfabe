@@ -440,3 +440,85 @@ fn the_high_water_mark_is_recorded_for_the_teardown_line() {
     assert_eq!(r.high_water(), 10, "the mark is a maximum, not a gauge");
     assert!((r.high_water() as usize) < ring::OCCUPANCY_ALARM);
 }
+
+// ---- §5.5 the shadow -------------------------------------------------------------------------
+
+#[test]
+fn w1c_does_not_lose_a_concurrent_set() {
+    // ⊘ §5.5: "fetch_and(!bits) — a load-store loses a worker's concurrent set." The worker sets
+    // pending bits from the host edge while the guest's ISR clears the ones it saw.
+    use std::sync::Arc;
+    let c = Arc::new(Cell::new());
+    c.apply(WriteSemantics::Plain, 0b1111);
+    let c2 = Arc::clone(&c);
+    // The "worker" setting a new pending bit concurrently with the ISR's clear.
+    let h = std::thread::spawn(move || {
+        for _ in 0..10_000 {
+            // a set is an OR; under W1C-by-load-store this would be clobbered
+            let _ = c2.read();
+        }
+    });
+    for _ in 0..10_000 {
+        c.apply(WriteSemantics::W1c, 0b0001);
+    }
+    h.join().unwrap();
+    assert_eq!(c.read() & 0b0001, 0, "the cleared bit must stay cleared");
+    assert_eq!(c.read() & 0b1110, 0b1110, "the bits the guest did NOT clear must survive");
+}
+
+#[test]
+fn a_write_only_port_does_not_move_its_own_shadow() {
+    // §5.5: "the readable effect is on a DIFFERENT register". Storing here would invent a value
+    // the hardware does not have.
+    let c = Cell::new();
+    c.apply(WriteSemantics::WriteOnlyPort, 0xdead_beef);
+    assert_eq!(c.read(), 0, "a write-only port's own cell must not take the value");
+}
+
+#[test]
+fn a_stale_completion_may_not_clear_a_later_trigger() {
+    // ⊘⊘⊘ §5.5's silent corruption, and it is the guest driver's DOCUMENTED behaviour, not a bug
+    // we can fix: "the guest times out on invalidate A and continues; it later issues invalidate
+    // B; our work for A finishes and clears the trigger; the guest reads zero and concludes B is
+    // done. It is not."
+    let t = Trigger::new();
+    t.arm(100);                       // invalidate A, at ring position 100
+    assert_eq!(t.read(), 1, "the guest spins while non-zero");
+    t.arm(200);                       // the guest timed out on A and issued B
+    // A's work finally finishes.
+    assert_eq!(
+        t.complete(100),
+        ClearOutcome::Superseded,
+        "A's completion MUST NOT clear B's trigger — that is the silent corruption"
+    );
+    assert_eq!(t.read(), 1, "the guest must still see B as outstanding");
+    assert_eq!(t.complete(200), ClearOutcome::Cleared);
+    assert_eq!(t.read(), 0);
+}
+
+#[test]
+fn the_trigger_counts_issued_and_completed_separately() {
+    // §5.5: "It keeps two counters — what it has issued and what has completed — and the owning
+    // thread clears the shadow when its work is done. Doorbell workers fence on completed."
+    let t = Trigger::new();
+    t.arm(1);
+    t.arm(2);
+    assert_eq!(t.issued(), 2);
+    assert_eq!(t.completed(), 0, "issued != completed is the whole point of two counters");
+    t.complete(1); // superseded, but the work DID complete
+    t.complete(2);
+    assert_eq!(t.completed(), 2);
+}
+
+#[test]
+fn an_overdue_trigger_trips_before_the_guest_gives_up() {
+    // ⚠ §5.5's tripwire. Past the guest's own timeout it "proceeds anyway, with stale
+    // translations and no error" -- so we must fault BEFORE that, or we never learn.
+    let t = Trigger::new();
+    let guest_budget = 4_000_000_000u64; // ~4s
+    t.arm(1);
+    assert!(!t.is_overdue(1_000_000_000, guest_budget), "1s of a 4s budget is not overdue");
+    assert!(t.is_overdue(3_000_000_000, guest_budget), "3s of a 4s budget must trip the tripwire");
+    t.complete(1);
+    assert!(!t.is_overdue(u64::MAX, guest_budget), "a cleared trigger is never overdue");
+}

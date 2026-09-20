@@ -27,11 +27,13 @@
 
 pub mod bitmap;
 pub mod ring;
+pub mod shadow;
 pub mod token;
 pub mod wake;
 
 pub use bitmap::RungBitmap;
 pub use ring::{PrivRing, Push, RegWrite};
+pub use shadow::{Cell, ClearOutcome, Trigger, WriteSemantics};
 pub use token::{Claim, Release, Route, State, Token, TokenWord};
 pub use wake::{Wake, WakeWord};
 
