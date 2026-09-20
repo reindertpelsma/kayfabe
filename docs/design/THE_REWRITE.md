@@ -536,3 +536,18 @@ a finding, not a regression of this arm.**
 |---|---|---|
 | `main.rs:~15525` | default rungs **R10/R11** (`isolate`, `through-isolate`) | port the same way, or retire — they test the plane itself |
 | `main.rs:1365,1637,1892,1902` | `--bar1-crossing` leg A, `SCM_RIGHTS` to a child | ⊘ **deliberately needs a second process.** Leg B (the KVM memslot §6.2 depends on) survives untouched |
+
+### ⊘ R10/R11 retire WITH the plane, not before it — and that ordering is deliberate
+
+Their own comment states their purpose: *"Everything above proved the ioctls; **this proves the
+isolate.**"* ⇒ They are not *users* of the plane, they are its **coverage**.
+
+⚠ **So they must not be ported, and must not be retired yet.** Retiring them tonight would remove
+the only ladder coverage of a plane that is **still live in the shipping architecture** — buying a
+tidier grep at the cost of running blind on code that still executes. ⇒ They retire in **step 3**,
+in the same commit that deletes what they cover, with a printed `RETIRED (w823): this rung proved
+the isolate plane, which v3 deletes` line rather than a silent disappearance.
+
+★ This is the general rule for the two remaining cases as well: **coverage of a deleted thing is
+deleted by the same change that deletes it, never earlier and never silently.** A suite that
+shrinks before the code does is a suite that stops noticing.
