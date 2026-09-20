@@ -436,3 +436,95 @@ unusual — and the reason no prior art exists for emulating an NVIDIA GPU to a 
    4 K vs 64 K segments, GpuMmu vs IoMmu. Cheap, and it decides §2 and the page-size finding.
 2. **Check our emulated `DEV_xxxx` is already in NVIDIA's signed INF.** If it is not, nothing else
    on this axis is reachable with a stock guest.
+
+---
+
+## 10. ★ Could we support a GSP-DISABLED guest? — nouveau measured, w821
+
+`[owner]` *"Maybe we can wire disabled GSP in kayfabe. Nouveau source has the registers that tell
+us what NVIDIA writes outside GSP… worth looking from a nouveau clone how no-GSP would look."*
+
+Cloned (`research_clones/nouveau-src`, sparse, 31 MB) and measured.
+
+### 10.1 ✔ nouveau IS the right oracle, structurally
+
+★★★ **nouveau implements both paths side by side, and they are separable by filename.** For each
+subdevice there is a native per-chip file and a GSP-client file:
+
+```
+nvkm/subdev/devinit/tu102.c     ← native: drive the registers ourselves
+nvkm/subdev/devinit/r535.c      ← GSP: ask the firmware
+nvkm/subdev/gsp/rm/r535/*.c     ← the whole GSP-RM client (rpc.c, fifo.c, gr.c, disp.c)
+```
+
+⇒ A per-subdevice diff of `tu102.c` against `r535.c` shows **exactly what the driver must do
+itself when there is no GSP**. That is a real, cheap, repeatable experiment.
+
+### 10.2 The measurement
+
+| | lines of C |
+|---|---|
+| `nvkm` total (the hardware abstraction) | **130 118** |
+| — `subdev/` (init and management) | 66 964 |
+| — `engine/` (runtime) | 56 863 |
+| the **entire GSP subdev**, including the RPC client | **10 957** |
+| native Turing+ **per-chip deltas** | 7 137 |
+
+⚠ **The 7 137 is misleading and must not be quoted as the cost.** Turing's native support is a
+thin delta on an inheritance chain — `fb/tu102.c` pulls `gf100_fb_dtor`, `gm200_fb_init`,
+`gp100_fb_init_unkn`. ⇒ Emulating a native driver means the **whole accumulated register
+interface**, not the per-chip delta.
+
+★ **But the honest delta is much smaller than "all of it", for two reasons:**
+
+- ⊘ **The runtime plane is GSP-independent and carries over unchanged.** `fifo` (7 906) and `ce`
+  (756) are hardware, not firmware — consistent with ogkm, where `gpu/fifo/` has **no GSP
+  conditional** beyond which side generates the token. ⇒ **Everything in Part 1 §2 — the doorbell
+  plane, the token table, the trap classifier — is reused as-is.** The delta is **init only**.
+- ◐ Roughly **22 400 lines** of `subdev/` is board and power management — `clk` 6 189, `bios`
+  8 033, `i2c` 3 058, `therm` 2 614, `volt` 1 023, `gpio` 855, `mxm` 690. An **emulated** GPU has
+  no board to manage; much of this stubs rather than ports.
+
+⇒ **Order-of-magnitude delta: ~30 k lines of register-level init semantics**, of which we already
+model a slice (`fb`, `instmem`, `bar`, `mmu`, `mc`, `fault`). ⚠ **A line count is a proxy for
+surface, not a port estimate.**
+
+### 10.3 ⊘⊘⊘ The real cost is not lines — it is losing the oracle
+
+★★★★★ **nouveau documents the HARDWARE. It does not document NVIDIA's driver.**
+
+Our entire method is *"be what NVIDIA's driver expects."* On the GSP path we have **ogkm — actual
+NVIDIA source** telling us what the guest will send and what it does with the reply. ⊘ **For the
+native Turing+ path, openrm contains nothing**: it is GSP-only. So a no-GSP mode means emulating
+what NVIDIA's **closed monolithic RM** writes, in what order, with nouveau serving only as a
+*register dictionary*.
+
+⚠ And nouveau's native Turing support is **known-incomplete** — no reclocking, signed-firmware
+limits. ⇒ *"nouveau can init Turing natively"* does **not** imply *"nouveau does what NVIDIA's RM
+does."* It is a dictionary, not a behavioural trace.
+
+### 10.4 What it would buy, stated fairly
+
+- ✔ A Windows guest with GSP off, **if** that configuration is real (§1 — still unmeasured).
+- ★★★ ⚠ **It dissolves the Turing floor.** `THE_ARCHITECTURE_v3.md` §0.0.1 argues Turing+ is an
+  *architectural* boundary because below it there is no GSP to impersonate. A no-GSP mode makes
+  **pre-Turing reachable**. ⇒ That is either a significant widening of the product or scope creep,
+  and it is an **owner decision** — flagged because it was probably not the intent of the question.
+- ★ **It deletes the entire GSP boot fiction** — FWSEC, WPR2, the booter, LibOS args, the msgq,
+  the radix3 ELF, and the 139 821 PROM/VBIOS reads in `cap1_coldboot_hermetic`. ⚠ That fiction has
+  cost real time (WPR2 state not resetting across boots; five `RmInitAdapter` cycles per launch),
+  so the deletion is worth something concrete.
+
+### 10.5 **[PROPOSE]** A spike, not a commitment — and the decisive hour
+
+⊘ Do not adopt this from a line count. ★ **Run the smallest decisive experiment first:** diff
+`nvkm/subdev/devinit/tu102.c` against `nvkm/subdev/devinit/r535.c`. `devinit` is the *first* thing
+either path does, it is small, and the diff shows the shape of every other subdevice's split.
+
+⇒ If that diff reads as *"a bounded register sequence we could answer"*, the idea is live and the
+next question is the oracle gap in §10.3. If it reads as *"arbitrary board bring-up"*, it is
+answered, and the answer took an hour.
+
+⚠ **And the prerequisite is still §1's one-hour measurement.** Building a no-GSP mode to serve a
+Windows configuration **nobody has confirmed exists** would be the most expensive way possible to
+resolve a question a single `nvidia-smi -q` settles.
