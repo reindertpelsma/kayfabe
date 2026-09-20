@@ -3006,3 +3006,48 @@ all until the RT throttle fires. ⇒ **The mean was microseconds and the design 
 
 ⚠ **This does not relax the prohibitions.** It scopes them: the bans apply to the trap, and
 behind the trap the question is ordinary engineering, answered by measurement.
+
+### §48.1 — WHO OWNS A THREAD'S BLOCKING. Added 2026-09-20 (w821), owner ruling.
+
+> *"no thread may spin forever at 100% CPU, so eventually everything needs to block. The thing
+> for vCPU threads is that it is not our job — the only thing that's allowed to block is QEMU
+> itself, and it does when the vCPU halts in the kernel waiting for interrupts (idle work,
+> nothing scheduled). So for vCPU we may never block in an MMIO trap. We only control the
+> blockings on workers."*
+
+★★★ **This is a sharper statement than *"the vCPU must never block"*, and the sharpening matters:
+a vCPU thread DOES block, routinely, and that is correct.** The distinction is **who decided**.
+
+| blocking | who decided | verdict |
+|---|---|---|
+| guest executes `HLT`/`MWAIT`; KVM blocks the vCPU thread in `kvm_vcpu_block` until an interrupt | ★ **the guest**, and KVM owns the mechanism | ✔ **Correct and necessary.** It is the guest's own idle path; its scheduler knows that core is idle |
+| we take a lock, wait on a slot, or make a syscall inside an MMIO trap | ⊘ **us** | ⊘ **A defect.** The guest did not ask, cannot see it, cannot preempt it, and its scheduler believes that core is running |
+
+⇒ **We do not manage vCPU blocking at all — we stay out of it.** The vCPU thread's blocking
+belongs to KVM and is driven by the guest. Our only obligation is to **return from the trap**.
+★ **The blocking we own is the workers', and that is where all of it lives.**
+
+### §48.2 — NO UNBOUNDED SPIN, ANYWHERE
+
+⊘ **A thread that spins forever at 100 % is not a solution to anything**, and §48's *"the tail is
+the statistic"* must not be read as licensing a spin to dodge a block. ⇒ Every wait is either
+**bounded then blocking** (spin-then-park: a short bounded spin, then block on an eventfd) or
+**not a wait at all** (fail and report).
+
+⇒ ★ **And this removes a residual hole in §48's own recommendation.** A "lock-free enqueue" is
+licensed in the trap, but not every lock-free enqueue qualifies:
+
+- ⊘ **`fetch_add` to claim a slot, then wait for the consumer to free it, is FORBIDDEN** — that is
+  the vCPU waiting on a worker, wearing a lock-free costume.
+- ⊘ **Claim-then-bail is also forbidden**: a producer that consumes a sequence number and never
+  publishes leaves the consumer stalled at that slot **forever, with no diagnostic** — a worse
+  failure than the overflow it was trying to report.
+- ✔ **The claim must be CONDITIONAL**: read the cursor, test fullness, and take the slot with a
+  **CAS**. On full: poison and return, **without having claimed anything**. On CAS failure: retry,
+  which loops only against **peer producers that are each completing in one instruction** — a
+  bounded wait on threads that cannot be descheduled mid-claim. That is what lock-free buys, and
+  it is the property we actually need.
+
+⚠ A single `fetch_add` is *wait-free* and a CAS loop is only *lock-free*, so this looks like a
+downgrade. It is not: wait-freedom on the claim is worthless if the claim can then be stuck
+waiting on the consumer. **Conditional-and-lock-free beats unconditional-and-wait-free here.**

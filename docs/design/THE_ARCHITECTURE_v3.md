@@ -614,9 +614,20 @@ rather than merely compliant with it.
 
 1. **One bounded lock-free MPSC ring per device**, fixed capacity, **preallocated and prefaulted**.
    ⊘ Never growable: growth means calling the allocator on a vCPU, possibly faulting — blocking
-   work, under a lock, on a vCPU, three invariants in one line. The producer's `fetch_add` on the
-   enqueue cursor **is** the global order.
+   work, under a lock, on a vCPU, three invariants in one line.
    ⊘ It has its **own** cursor. `work_seq` is a wake sequence and nothing else (§2.4).
+   ⊘⊘ **[CORRECTED w821 — the claim must be CONDITIONAL, and `fetch_add` is not.]** I first wrote
+   *"the producer's `fetch_add` on the enqueue cursor is the global order."* ⚠ In the standard
+   bounded-ring shape the producer then **waits for the slot's sequence stamp** if the consumer has
+   not caught up — *the vCPU waiting on a worker, in lock-free costume* — and a producer that
+   claims and then bails leaves the consumer **stalled at that slot forever with no diagnostic**.
+   ⇒ **Read the cursor, test fullness, take the slot with a CAS.** On full: poison and return,
+   having claimed nothing. On CAS failure: retry, looping only against peer producers that each
+   complete in one instruction. ★ `THE_CONSTRAINTS.md` §48.2.
+   ⚠ This trades wait-freedom for lock-freedom on the claim, and that is the right trade:
+   wait-freedom is worthless if the claim can then be stuck waiting on the consumer.
+   ★ **The total order still holds** — a successful CAS on a single cursor is as totally ordered as
+   a `fetch_add`, which is all §2.3's cross-vCPU argument needs.
 2. **One dedicated drainer thread**, spin-then-park: spin briefly after the last item, then block
    on an `EFD_NONBLOCK` eventfd. ⇒ Zero wakes under load, one at idle.
 3. **Peek → apply → commit.** The consumer cursor advances only *after* a successful apply, so a
