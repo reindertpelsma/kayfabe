@@ -144,10 +144,22 @@ if [ -d "$KF_ROOT/crates" ]; then
         exit 3
     fi
 fi
-echo "== the archive needs cargo features: cuda-scratchpad (implies host-isolates)."
-echo "   Without them KAYFABE_ISOLATES=real refuses at realize BY NAME -- that is the"
-echo "   intended failure, not a kayfabe defect. Rebuild: KAYFABE_SHIM_FEATURES=cuda-scratchpad"
-echo "   bash scripts/build_qom_shim.sh <qemu-src> <qemu-build>"
+# ⊘⊘⊘ **THIS WAS THREE `echo`s UNTIL w823, AND IT COST THIRTY BOOTS.** The text below was
+# correct advice and checked nothing; `provision_bench_tree.sh` builds QEMU with DEFAULT
+# features, so a box provisioned by the documented recipe produced an archive this lane cannot
+# use — and the whole 30-arm suite came back `CRASH 0s` before anyone read QEMU's stderr.
+# ⚠ `A CHECK THAT REPORTS IS NOT A CHECK THAT GATES` — this file was a live instance of the
+# rule it is elsewhere careful about. A precondition is CHECKED, by name, before the first boot.
+if ! strings "$Q" 2>/dev/null | grep -q 'kayfabe-isolate-host'; then
+    echo "run_fast_guest: ⊘⊘ REFUSED — $Q was built WITHOUT the host-isolate plane." >&2
+    echo "   The archive needs cargo feature 'cuda-scratchpad' (which implies 'host-isolates')." >&2
+    echo "   Without it KAYFABE_ISOLATES refuses at device realize and every arm scores CRASH" >&2
+    echo "   with an EMPTY serial log — a HARNESS fault that reads exactly like a dead guest." >&2
+    echo "   Rebuild: KAYFABE_SHIM_FEATURES=cuda-scratchpad \\" >&2
+    echo "            bash scripts/build_qom_shim.sh /workspace/bench/qemu-10.2.4 $BENCH/qemu-build" >&2
+    exit 3
+fi
+echo "== archive feature check: host-isolate plane present ✔"
 
 # ⊘⊘⊘ **THE DEVICE LINE AND THE RAM BACKING ARE NOT THE FAST LANE’S TO INVENT.** As first
 # written this file said `-device kayfabe-gpu` and `-machine q35,accel=kvm -m 4096`, and BOTH

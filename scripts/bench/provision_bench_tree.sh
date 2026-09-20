@@ -63,9 +63,24 @@ track_a() {
   [ -d "$BENCH/qemu-$QEMU_VER" ] || tar -C "$BENCH" -xf "$BENCH/qemu-$QEMU_VER.tar.xz"
   say "A: build_qom_shim (this is the long pole)"
   . "$HOME/.cargo/env" 2>/dev/null
-  CARGO_BUILD_JOBS=16 bash "$REPO/scripts/build_qom_shim.sh" \
+  # ⊘⊘⊘ **THE FEATURE SET IS PART OF THE RECIPE.** `[measured w823]` this built with DEFAULT
+  # features, and the resulting QEMU is one the FAST-GUEST lane refuses at device realize:
+  # `KAYFABE_ISOLATES asked for a host isolate plane, and this archive was built without the
+  # host-isolates feature`. The 30-arm thin-guest suite came back **30 CRASH / 0 PASS with an
+  # empty serial log** — a harness fault that reads exactly like a dead guest.
+  # ⇒ `cuda-scratchpad` implies `host-isolates`. A provisioner that produces an artifact the
+  # lanes cannot use has not provisioned anything.
+  CARGO_BUILD_JOBS=16 KAYFABE_SHIM_FEATURES="${KAYFABE_SHIM_FEATURES:-cuda-scratchpad}" \
+  bash "$REPO/scripts/build_qom_shim.sh" \
       "$BENCH/qemu-$QEMU_VER" "$BENCH/qemu-build" > /tmp/trackA.log 2>&1
   echo "A_RC=$?"
+  # ⚠ Verify on CONTENT, not on the binary existing: a QEMU without the plane is the same size
+  # and the same mtime as one with it.
+  if strings "$BENCH/qemu-build/qemu-system-x86_64" 2>/dev/null | grep -q 'kayfabe-isolate-host'; then
+      say "A: host-isolate plane present in the archive ✔"
+  else
+      say "A: ⊘ the built QEMU has NO host-isolate plane — the fast-guest lane will refuse it"
+  fi
   say "A: binary = $(ls -la $BENCH/qemu-build/qemu-system-x86_64 2>/dev/null | awk '{print $5}' || echo MISSING)"
   tail -5 /tmp/trackA.log
 }
