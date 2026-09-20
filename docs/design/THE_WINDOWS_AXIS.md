@@ -513,6 +513,14 @@ surface, not a port estimate.**
 
 ### 10.3 ⊘⊘⊘ The real cost is not lines — it is losing the oracle
 
+⊘⊘⊘ **[RETRACTED w821 — the ogkm residue survey refutes this. See Part 4.]** The claim below is
+too strong: ogkm turns out to contain the monolithic object model, a machine-readable manifest of
+the CPU/physical control boundary, **376 HAL members whose VF arm IS the monolithic body**, and 42
+orphaned physical implementations — including the complete BAR1/BAR2 instance-block layout.
+⇒ **nouveau is needed for pre-Turing REGISTERS** (ogkm's swref stops at Maxwell and has nothing
+for Fermi/Kepler); **ogkm still carries the SEMANTICS.** The cost of the no-GSP plane is
+materially lower than this section claimed. ⚠ It does **not** change the priority ruling.
+
 ★★★★★ **nouveau documents the HARDWARE. It does not document NVIDIA's driver.**
 
 Our entire method is *"be what NVIDIA's driver expects."* On the GSP path we have **ogkm — actual
