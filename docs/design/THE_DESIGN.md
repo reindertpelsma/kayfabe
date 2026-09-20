@@ -793,6 +793,51 @@ is handled inside the guest. ⇒ **The only path by which a guest-chosen address
 is this leaf**, so it is the one that must carry the bound. The design states a bound for
 video-memory leaves; **the system-memory leaf needs the same bound stated, not implied.**
 
+### ⊘⊘⊘ THE SYSTEM-MEMORY BOUND, STATED. Added w823, because the design said it was owed.
+
+The paragraph above ends *"the system-memory leaf needs the same bound stated, not implied."*
+⇒ **Stating it, because the plane that currently enforces its SHAPE is on the delete list**, and
+`crates/kayfabe-isolate/src/lib.rs:518` is right that *"checks can be added later; shapes cannot."*
+
+★★★ **The rule, and it is a shape before it is a check:**
+
+> **We originate the numbers. We never validate a number the guest proposed against a range we
+> derived from that same proposal.**
+
+⊘ **Why the obvious implementation is circular, which is why this must be a shape.** The tempting
+form is: take the guest's leaf, read its address and length, then ask *"is `[addr, addr+len)`
+inside guest RAM?"* That validates a request **against itself** — an echo is unverifiable by its
+reply. If the layout that answers *"is this guest RAM"* is a generic guest-physical→host-pointer
+map, it will happily resolve **our own** memslots: the register read shadow, the doorbell bitmap,
+the boot pages. ⇒ The guest names one of those, we "validate" it, and we have **pinned our own
+state and handed it to the GPU as a DMA target** — the engine can then write the bits the drainer
+owns, across §4's *outer* boundary.
+
+⇒ **The shape that forbids it**, and it is the same one the isolate crossing used:
+
+| forbidden | required |
+|---|---|
+| `resolve(guest_addr, len) -> Option<HostPtr>` — a lookup the guest's value indexes | `slice_of(block: &GuestRamBlock, offset, len)` — where `block` is a handle **we** hold, minted at guest-RAM registration, and never derived from a guest value |
+
+★ The guest's leaf therefore selects **which registered block**, and an offset **within it**; it
+can never name a base. A leaf whose guest-physical address falls in no registered guest-RAM block
+is a **refused leaf, by name and counted** — never a fall-through to a generic map.
+
+⚠ **Three consequences that must not be traded away later:**
+1. **Registration is ours and happens once** (§6.3's memfd): the set of blocks is closed before the
+   guest runs, so no guest action can add one.
+2. **Our own memslots are never in a block.** The shadow, the bitmap and the boot pages are host
+   memory installed as guest-physical ranges — they are *deliberately* reachable by the guest's
+   CPU and must be *unreachable* as a DMA leaf. ⊘ One map serving both is the bug.
+3. ⊘ **The refusal is counted, not silent.** A leaf we refuse is a guest that asked for something
+   it should not have; a zero counter here is evidence, and a silent drop is the inherited-state
+   failure §5.4 names for the privileged ring.
+
+⊘ **And note what this does NOT rest on.** It does not rest on the memory class that carries a
+caller pointer being refused — §6.4 already calls that refusal *"decorative"*, because the class
+never reaches us. **This leaf is the only path by which a guest-chosen address reaches a host
+call**, so it is the only place the bound can live.
+
 ⊘ **The leaf's other bits are an allowlist, not a translation.** Forwarding a guest-chosen page
 **kind** would mint host mappings from a guest value and touch device-global compression state — a
 guest-to-host coupling in the same family as forwarding a flag word. ⇒ We translate **aperture,
