@@ -324,3 +324,26 @@ fn the_deflate_stream_round_trips_through_a_raw_inflater() {
     assert_eq!(m.raw().len(), MAP_BYTES, "the inflated size is the contract");
     assert!(g.len() < MAP_BYTES / 8, "a near-uniform map must compress hard, not merely store");
 }
+
+
+#[test]
+fn the_run_scanner_is_not_capped_at_the_match_length() {
+    // ⊘ A DEBUGGED BUG, pinned. The first deflate emitted 6 620 bytes for a map that fits in
+    // 3 320 — because the run SCANNER stopped at 258, the maximum *match* length. That re-emitted
+    // a literal every 258 bytes and doubled the output.
+    //
+    // ⚠ The 258 limit belongs on each back-reference, never on the run. ★ This test would not
+    // have caught the boot-fatal container bug, but it catches the *silent* half: a stream that
+    // still inflates correctly and merely stops fitting the reply struct, which is the failure
+    // that would reappear years later as "this die does not boot".
+    use accessmap::AccessMap;
+    let m = AccessMap::deny_all(); // 512 KiB of a single repeated byte — the best case for RLE
+    let g = m.to_gzip_deflate();
+    assert!(
+        g.len() < 4096,
+        "a uniform 512 KiB map compressed to {} bytes; a capped run scanner shows up here first",
+        g.len()
+    );
+    // And the ratio itself, as the canary: >100x on uniform input.
+    assert!(m.raw().len() / g.len() > 100, "ratio {}x", m.raw().len() / g.len());
+}
