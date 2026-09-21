@@ -26,6 +26,11 @@
 //! [`Plane::trap_write`], which is [`crate::trap::TrapPath`] and nothing else.
 
 use crate::bitmap::RungBitmap;
+use crate::caps::{Refusal, Twin, VmCaps};
+use crate::channel::{Disposition, Owner, Submission};
+use crate::completion::Completion;
+use crate::leaf::{GuestRamLayout, HostSlice, LeafRefusal};
+use crate::lifetime::{Step, Teardown, TeardownError, WalkerState};
 use crate::ring::PrivRing;
 use crate::token::{Claim, Release, Route, TokenWord};
 use crate::trap::{Action, Class, TrapPath};
@@ -45,6 +50,28 @@ pub trait HostOps: Send + Sync {
     fn run_emulated(&self, host_token: u32, up_to_seq: u64);
     /// Apply one privileged register write, in ring order.
     fn apply_register(&self, bar: u8, offset: u32, value: u64, width: u8);
+
+    /// ⊘ §7: can every operand of the work now queued on this channel be translated?
+    /// Answered by the host side, because only it knows what is bound.
+    fn operands_translatable(&self, host_token: u32, up_to_seq: u64) -> bool;
+
+    /// §8: write a completion ourselves. ⊘ Called **only** where [`Completion::for_route`] says a
+    /// forge is licensed — i.e. where no GPU work ran.
+    fn forge_completion(&self, host_token: u32);
+
+    /// §7: refuse the submission and poison the device. ⊘ A kernel channel is NEVER faulted.
+    fn refuse_and_poison(&self, host_token: u32);
+
+    /// §7: fault one user channel. Blast radius is the process that asked.
+    fn fault_channel(&self, host_token: u32);
+
+    /// §6.4: map a **bounded** slice of registered guest RAM. ⊘ Note the signature: it takes a
+    /// [`HostSlice`], which can only be produced from a block **we** minted. There is
+    /// deliberately no verb here that accepts a raw guest-physical address.
+    fn map_guest_slice(&self, slice: HostSlice);
+
+    /// §9: the ordered teardown steps, performed by the host side.
+    fn teardown_step(&self, step: Step);
 }
 
 /// ★★★ **PER-VMM state.** §9.3 is explicit that this is not per GPU:
@@ -88,6 +115,12 @@ pub struct Plane<'v> {
     pub drainer_wake: WakeWord,
     pub ring: PrivRing,
     pub token_mask: u32,
+    /// §5's read-trap allowlist, consulted by [`Plane::trap_read`].
+    pub read_traps: crate::readtrap::ReadTrapSet,
+    /// §5: the phase the device is in. Boot-state pages stop trapping when this moves.
+    pub phase: crate::readtrap::Phase,
+    /// Which tokens are guest-KERNEL channels (§7's failure-policy selector).
+    kernel_tokens: Vec<u32>,
 }
 
 impl<'v> Plane<'v> {
@@ -99,6 +132,9 @@ impl<'v> Plane<'v> {
             drainer_wake: WakeWord::new(),
             ring: PrivRing::new(),
             token_mask,
+            read_traps: crate::readtrap::ReadTrapSet::new(),
+            phase: crate::readtrap::Phase::Boot,
+            kernel_tokens: Vec::new(),
         }
     }
 
@@ -109,6 +145,30 @@ impl<'v> Plane<'v> {
         &self.vmm.worker_wake
     }
 
+    /// ⊘ §7 needs to know whether a channel is the guest's KERNEL or a user channel, because that
+    /// selects the failure policy. It is recorded at allocation, never inferred at submit time.
+    fn owner_of(&self, tok: u32) -> Owner {
+        if self.kernel_tokens.iter().any(|t| *t == tok) { Owner::Kernel } else { Owner::User }
+    }
+
+    /// ★ Twin allocation goes through §9.1's caps. ⊘ On a shared host GPU the driver enforces no
+    /// per-client quota, so this is the only thing standing between one guest and its neighbours.
+    pub fn allocate_channel(
+        &mut self,
+        caps: &mut VmCaps,
+        tok: u32,
+        route: Route,
+        host_token: u32,
+        owner: Owner,
+    ) -> Result<(), Refusal> {
+        caps.acquire(Twin::Channel)?;
+        if owner == Owner::Kernel {
+            self.kernel_tokens.push(tok);
+        }
+        self.tokens[tok as usize].allocate(route, host_token);
+        Ok(())
+    }
+
     fn path(&self) -> TrapPath<'_> {
         TrapPath {
             tokens: &self.tokens,
@@ -117,10 +177,65 @@ impl<'v> Plane<'v> {
             drainer_wake: &self.drainer_wake,
             ring: &self.ring,
             token_mask: self.token_mask,
+            read_traps: &self.read_traps,
+            phase: self.phase,
         }
     }
 
-    /// ★ THE ONLY vCPU ENTRY POINT.
+    /// ★★★ §6.4 ON THE LIVE PATH. The guest's page-table leaf names a guest-physical address;
+    /// this is the **only** way that address reaches a host mapping call.
+    ///
+    /// ⊘ It **selects** a registered block and an offset within it — it can never name a base.
+    /// A leaf resolving nowhere is refused by name and counted, because the addresses it would
+    /// otherwise resolve include **our own memslots** (the read shadow, the doorbell bitmap, the
+    /// boot pages), and mapping one hands the drainer's state to the GPU as a DMA target.
+    pub fn resolve_and_map_leaf(
+        &self,
+        host: &dyn HostOps,
+        layout: &GuestRamLayout,
+        gpa: u64,
+        len: u64,
+    ) -> Result<HostSlice, LeafRefusal> {
+        let slice = layout.leaf(gpa, len)?;
+        host.map_guest_slice(slice);
+        Ok(slice)
+    }
+
+    /// ★★★ §9 ON THE LIVE PATH. Runs the teardown in the order §9 requires and **refuses any
+    /// other**, including reaching `close` without the explicit free.
+    ///
+    /// ⊘ The walker reset is not an afterthought inside the sequence: without it the next driver
+    /// instance's first diff reports *"unchanged"* and maps nothing — a second boot that faults
+    /// for reasons the first did not.
+    pub fn teardown(&mut self, host: &dyn HostOps, walker: &mut WalkerState) -> Result<(), TeardownError> {
+        let mut t = Teardown::new();
+        for step in crate::lifetime::ORDER {
+            t.run(step)?;
+            if step == Step::ResetWalkerState {
+                walker.reset();
+            }
+            if step == Step::ResetRing {
+                self.kernel_tokens.clear();
+            }
+            host.teardown_step(step);
+        }
+        debug_assert!(t.complete());
+        Ok(())
+    }
+
+    /// ★ The vCPU READ path — §5's allowlist, live.
+    #[inline]
+    pub fn trap_read(&self, bar0_offset: u32) -> crate::readtrap::ReadPolicy {
+        self.path().read(bar0_offset)
+    }
+
+    /// ⊘ §5: *"A page is read-trapped for a phase, not forever."* Boot completing is what drops
+    /// the boot-state pages out of the set, and it is the 2.5× on LLM decode.
+    pub fn boot_complete(&mut self) {
+        self.phase = crate::readtrap::Phase::Runtime;
+    }
+
+    /// ★ THE ONLY vCPU WRITE ENTRY POINT.
     #[inline]
     pub fn trap_write(&self, class: Class, bar: u8, off: u32, val: u64, width: u8) -> Action {
         self.path().write(class, bar, off, val, width)
@@ -148,14 +263,42 @@ impl<'v> Plane<'v> {
                 // updated it in place, and that is how BUSY_RUNG work is picked up without a
                 // second bit.
                 let seq = w.load().applied_seq;
-                match t.route {
-                    Route::Translated => {
-                        host.run_translated(t.host_token, seq);
+                // ★★★ §7 ON THE LIVE PATH. Not a component consulted somewhere else: the
+                // submission decision happens HERE, before any work is handed to the host.
+                // ⊘ The kernel arm is a security boundary — a translation miss on a kernel
+                // channel must never become a fault, because the unified-memory driver treats any
+                // channel error as globally fatal and one fault kills CUDA for every process in
+                // the guest.
+                let sub = Submission {
+                    owner: self.owner_of(tok),
+                    route: t.route,
+                    all_operands_translatable: host.operands_translatable(t.host_token, seq),
+                };
+                let did_gpu_work = match sub.decide() {
+                    Disposition::Submit => match t.route {
+                        Route::Translated => host.run_translated(t.host_token, seq),
+                        Route::Emulated => {
+                            host.run_emulated(t.host_token, seq);
+                            false
+                        }
+                        // ⊘ A passthrough token is rung INLINE on the vCPU and must never be
+                        // served here; reaching this arm means the classifier disagreed with the
+                        // token word.
+                        Route::Passthrough | Route::Unknown => break,
+                    },
+                    Disposition::RefuseAndPoison => {
+                        host.refuse_and_poison(t.host_token);
+                        false
                     }
-                    Route::Emulated => host.run_emulated(t.host_token, seq),
-                    // ⊘ A passthrough token is rung INLINE on the vCPU and must never be served
-                    // here; reaching this arm means the classifier disagreed with the token word.
-                    Route::Passthrough | Route::Unknown => break,
+                    Disposition::FaultChannel => {
+                        host.fault_channel(t.host_token);
+                        false
+                    }
+                };
+                // ★★★ §8 ON THE LIVE PATH. A forge is licensed only where no GPU work ran, and
+                // this is the only place that decision is taken.
+                if Completion::for_route(t.route, did_gpu_work) == Completion::Forge {
+                    host.forge_completion(t.host_token);
                 }
                 served += 1;
                 match w.release(round, REACT_ROUNDS) {

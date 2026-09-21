@@ -619,6 +619,7 @@ struct Fixture {
     wworker: WakeWord,
     wdrainer: WakeWord,
     ring: PrivRing,
+    read_traps: readtrap::ReadTrapSet,
 }
 impl Fixture {
     fn new(n: usize) -> Fixture {
@@ -628,6 +629,7 @@ impl Fixture {
             wworker: WakeWord::new(),
             wdrainer: WakeWord::new(),
             ring: PrivRing::new(),
+            read_traps: readtrap::ReadTrapSet::new(),
         }
     }
     fn path(&self) -> TrapPath<'_> {
@@ -638,6 +640,8 @@ impl Fixture {
             drainer_wake: &self.wdrainer,
             ring: &self.ring,
             token_mask: 0x1f,
+            read_traps: &self.read_traps,
+            phase: readtrap::Phase::Boot,
         }
     }
 }
@@ -905,12 +909,20 @@ fn a_leaf_that_starts_inside_a_block_but_runs_past_it_is_refused() {
 
 // ---- §3 the shape, end to end -----------------------------------------------------------------
 
+use std::sync::atomic::AtomicBool;
+
 #[derive(Default)]
 struct RecordingHost {
     rung: std::sync::atomic::AtomicU64,
     translated: std::sync::atomic::AtomicU64,
     emulated: std::sync::atomic::AtomicU64,
     registers: std::sync::Mutex<Vec<(u32, u64)>>,
+    untranslatable: AtomicBool,
+    forged: std::sync::atomic::AtomicU64,
+    poisoned: std::sync::atomic::AtomicU64,
+    faulted: std::sync::atomic::AtomicU64,
+    mapped: std::sync::Mutex<Vec<leaf::HostSlice>>,
+    teardown: std::sync::Mutex<Vec<lifetime::Step>>,
 }
 impl plane::HostOps for RecordingHost {
     fn ring_host(&self, _t: u32) {
@@ -925,6 +937,24 @@ impl plane::HostOps for RecordingHost {
     }
     fn apply_register(&self, _b: u8, off: u32, v: u64, _w: u8) {
         self.registers.lock().unwrap().push((off, v));
+    }
+    fn operands_translatable(&self, _t: u32, _s: u64) -> bool {
+        !self.untranslatable.load(std::sync::atomic::Ordering::Acquire)
+    }
+    fn forge_completion(&self, _t: u32) {
+        self.forged.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+    }
+    fn refuse_and_poison(&self, _t: u32) {
+        self.poisoned.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+    }
+    fn fault_channel(&self, _t: u32) {
+        self.faulted.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+    }
+    fn map_guest_slice(&self, s: leaf::HostSlice) {
+        self.mapped.lock().unwrap().push(s);
+    }
+    fn teardown_step(&self, s: lifetime::Step) {
+        self.teardown.lock().unwrap().push(s);
     }
 }
 
@@ -1497,4 +1527,121 @@ fn an_unbackable_aperture_page_is_refused_not_holed() {
     assert_eq!(a.refusals(), 1);
     // Overflow must not wrap into a legal-looking range.
     assert_eq!(a.back(u64::MAX, 4096), Backing::RefusedUnbackable);
+}
+
+// ---- THE WIRING, exercised end to end ---------------------------------------------------------
+
+#[test]
+fn a_kernel_channel_with_an_untranslatable_operand_is_refused_not_faulted_ON_THE_LIVE_PATH() {
+    // ★★★ §7 was a correct, tested COMPONENT calling nobody. This asserts it on the path: the
+    // worker must consult it before handing work to the host.
+    // ⊘ A fault here would be a guest-wide DoS -- UVM treats any channel error as globally fatal.
+    use std::sync::atomic::Ordering as O;
+    let vmm = plane::Vmm::new();
+    let mut p = Plane::new(&vmm, 32, 0x1f);
+    let host = RecordingHost::default();
+    let mut caps = VmCaps::from_declared(8, 8, 8, 8);
+    p.allocate_channel(&mut caps, 3, Route::Translated, 0x33, Owner::Kernel).unwrap();
+    host.untranslatable.store(true, O::Release);
+
+    p.trap_write(Class::Doorbell, 0, 0, 3, 4);
+    let mut scratch = Vec::new();
+    p.worker_pass(&host, &mut scratch, 8);
+
+    assert_eq!(host.poisoned.load(O::Acquire), 1, "the kernel channel must be refused+poisoned");
+    assert_eq!(host.faulted.load(O::Acquire), 0, "⊘ and NEVER faulted");
+    assert_eq!(host.translated.load(O::Acquire), 0, "nothing may have been submitted");
+}
+
+#[test]
+fn a_user_channel_with_the_same_miss_faults_ON_THE_LIVE_PATH() {
+    use std::sync::atomic::Ordering as O;
+    let vmm = plane::Vmm::new();
+    let mut p = Plane::new(&vmm, 32, 0x1f);
+    let host = RecordingHost::default();
+    let mut caps = VmCaps::from_declared(8, 8, 8, 8);
+    p.allocate_channel(&mut caps, 4, Route::Translated, 0x44, Owner::User).unwrap();
+    host.untranslatable.store(true, O::Release);
+    p.trap_write(Class::Doorbell, 0, 0, 4, 4);
+    let mut scratch = Vec::new();
+    p.worker_pass(&host, &mut scratch, 8);
+    assert_eq!(host.faulted.load(O::Acquire), 1, "a USER channel may fault");
+    assert_eq!(host.poisoned.load(O::Acquire), 0);
+}
+
+#[test]
+fn a_forge_happens_only_for_emulated_work_ON_THE_LIVE_PATH() {
+    // §8, wired: an Emulated route did no GPU work, so a completion is owed; a Translated route
+    // had its semaphore forwarded, so forging would be a second author for one value.
+    use std::sync::atomic::Ordering as O;
+    let vmm = plane::Vmm::new();
+    let mut p = Plane::new(&vmm, 32, 0x1f);
+    let host = RecordingHost::default();
+    let mut caps = VmCaps::from_declared(8, 8, 8, 8);
+    p.allocate_channel(&mut caps, 5, Route::Emulated, 0x55, Owner::User).unwrap();
+    p.allocate_channel(&mut caps, 6, Route::Translated, 0x66, Owner::User).unwrap();
+    let mut scratch = Vec::new();
+    p.trap_write(Class::Doorbell, 0, 0, 5, 4);
+    p.worker_pass(&host, &mut scratch, 8);
+    assert_eq!(host.forged.load(O::Acquire), 1, "emulated work owes a forged completion");
+    p.trap_write(Class::Doorbell, 0, 0, 6, 4);
+    p.worker_pass(&host, &mut scratch, 8);
+    assert_eq!(host.forged.load(O::Acquire), 1, "⊘ translated work must NOT be forged — the GPU wrote it");
+}
+
+#[test]
+fn the_cap_refuses_a_channel_ON_THE_LIVE_PATH() {
+    // §9.1 wired into allocation, which is the only place it can stop a guest starving a neighbour.
+    let vmm = plane::Vmm::new();
+    let mut p = Plane::new(&vmm, 32, 0x1f);
+    let mut caps = VmCaps::from_declared(2, 8, 8, 8);
+    assert!(p.allocate_channel(&mut caps, 1, Route::Translated, 1, Owner::User).is_ok());
+    assert!(p.allocate_channel(&mut caps, 2, Route::Translated, 2, Owner::User).is_ok());
+    assert!(
+        p.allocate_channel(&mut caps, 3, Route::Translated, 3, Owner::User).is_err(),
+        "the third channel is past the declared cap and must be refused"
+    );
+    assert_eq!(p.tokens[3].load().route, Route::Unknown, "and the token must be untouched");
+}
+
+#[test]
+fn a_leaf_naming_our_memslot_never_reaches_a_host_map_ON_THE_LIVE_PATH() {
+    // ★★★ §6.4 wired. The signature is the guard: map_guest_slice takes a HostSlice, which can
+    // only come from a block we minted -- so there is no way to reach it with a raw gpa.
+    let vmm = plane::Vmm::new();
+    let p = Plane::new(&vmm, 32, 0x1f);
+    let host = RecordingHost::default();
+    let mut layout = GuestRamLayout::new();
+    layout.register(GuestRamBlock::register(0, 0x1_0000_0000, 0x1000_0000));
+    assert!(p.resolve_and_map_leaf(&host, &layout, 0x1_0000_1000, 0x1000).is_ok());
+    assert_eq!(host.mapped.lock().unwrap().len(), 1);
+    // Our own memslot:
+    assert_eq!(
+        p.resolve_and_map_leaf(&host, &layout, 0xF000_0000, 0x1000),
+        Err(LeafRefusal::NotInAnyRegisteredBlock)
+    );
+    assert_eq!(host.mapped.lock().unwrap().len(), 1, "⊘ and NOTHING reached the host");
+}
+
+#[test]
+fn teardown_runs_the_whole_ordered_sequence_ON_THE_LIVE_PATH() {
+    let vmm = plane::Vmm::new();
+    let mut p = Plane::new(&vmm, 32, 0x1f);
+    let host = RecordingHost::default();
+    let mut w = WalkerState::default();
+    assert_eq!(w.diff(9), lifetime::Diff::Changed(9));
+    p.teardown(&host, &mut w).unwrap();
+    assert_eq!(*host.teardown.lock().unwrap(), lifetime::ORDER.to_vec(), "in §9's order");
+    assert_eq!(w.diff(9), lifetime::Diff::Changed(9), "the second instance must map");
+}
+
+#[test]
+fn boot_completing_drops_the_boot_read_traps_ON_THE_LIVE_PATH() {
+    // §5 wired: the phase is the Plane's, and boot_complete() is what makes the 2.5x real.
+    let vmm = plane::Vmm::new();
+    let mut p = Plane::new(&vmm, 32, 0x1f);
+    p.read_traps.add(0x110, readtrap::ReadReason::BootStateMachine);
+    assert_eq!(p.trap_read(0x110_000), readtrap::ReadPolicy::Trap(readtrap::ReadReason::BootStateMachine));
+    p.boot_complete();
+    assert_eq!(p.trap_read(0x110_000), readtrap::ReadPolicy::FromShadow, "⊘ the 2.5x arm");
 }
