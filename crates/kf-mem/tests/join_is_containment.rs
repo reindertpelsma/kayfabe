@@ -1,4 +1,8 @@
-//! The thin guest's `forwarded=0` defect, pinned.
+//! The join's containment semantics, and the old equality semantics beside it.
+//!
+//! ⊘ These tests demonstrate a DIFFERENCE between two lookups. They do **not** show a cause of the
+//! thin guest's `forwarded=0` — that is `route_of_engine` (`kayfabe-rt/src/device.rs:8978`)
+//! mapping `EngineKind::Ce => DoorbellRoute::CpuCe` unconditionally. See `src/join.rs`.
 
 use kf_mem::*;
 
@@ -11,12 +15,11 @@ fn joined() -> JoinTable {
 
 #[test]
 fn a_range_INSIDE_a_joined_leaf_resolves() {
-    // ⊘⊘⊘ THE DEFECT. `fbjoin.rs:154` looked up by EQUALITY —
+    // ⊘ `fbjoin.rs:154` looked up by EQUALITY —
     //     find(|j| j.phys == phys && j.len == len && !j.alias)
-    // so a query CONTAINED IN a joined leaf matched nothing, returned None, read as unbacked, and
-    // the work fell back to the CPU. That is `forwarded=0`, measured across SEVEN arms at w823.
-    // CLAUDE.md records the same class from the other end: "2 560 bytes our own resolve answers
-    // Miss for inside a page the guest has mapped".
+    // so a query CONTAINED IN a joined leaf matched nothing and returned None. CLAUDE.md records
+    // the same shape from the other end: "2 560 bytes our own resolve answers Miss for inside a
+    // page the guest has mapped". ⊘ Whether that ever cost a gate line is UNMEASURED.
     let mut t = joined();
 
     // The exact range — what the old lookup could do.
@@ -139,7 +142,7 @@ fn known_positive_the_OLD_equality_lookup_fails_every_case_the_new_one_passes() 
             old_token_for(&old, 0x10_0000 + off, len),
             None,
             "if the old lookup ANSWERS {off:#x}+{len:#x}, this test no longer reproduces the defect \
-             and the whole regression is worthless"
+             and this regression demonstrates nothing"
         );
         assert!(
             new.resolve(Fb(0x10_0000 + off), len).is_ok(),

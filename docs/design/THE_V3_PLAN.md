@@ -46,7 +46,35 @@ sitting, have no dependencies but `kf-chip`, and be the most heavily tested crat
 
 ## 2. The phases
 
-### ⊘⊘⊘ P-1 — THE QEMU BQL BYPASS. Item zero, and without it nothing below is measurable.
+### ✔✔✔ P-1 — THE QEMU BQL BYPASS. **DISCHARGED w824. The text below is stale.**
+
+> ## ⊘⊘⊘ SUPERSEDED 2026-09-21 (w824) — **P-1 IS NOT ITEM ZERO. IT IS ALREADY DONE.**
+>
+> `[fable w824, verified]` The analysis below is correct **against QEMU 9.2.0**, which is what was
+> in the workspace when it was written. ⊘ **The bench builds 10.2.4**
+> (`scripts/bench/provision_bench_tree.sh:11`, `QEMU_VER=10.2.4`), and 10.2 added a per-region
+> opt-out:
+>
+> ```c
+> /* qemu-next/system/physmem.c:3192 */
+> if (!bql_locked() && !mr->lockless_io) { bql_lock(); release_lock = true; }
+> ```
+>
+> ★ **And the existing C device already opts in** — `qemu/hw/misc/nvkvm/nvkvm.c:1118-1119`,
+> `memory_region_enable_lockless_io(mr)` under `NVKVM_HAVE_LOCKLESS_IO` (≥10.2), with `:393`
+> recording that *every* region of the device is registered that way.
+>
+> ⇒ **There is no exit-site patch to write.** What remains of P-1 is a **one-line
+> `assert(!bql_locked())`** in the BAR0 write op, so the property is checked at runtime instead of
+> assumed — and so a future QEMU that silently stops honouring the flag fails loudly.
+>
+> ⚠ **The lesson is the tree's own, and this is an expensive instance:** the analysis was sound and
+> its *premise* expired. A ruling's **version** is part of its citation exactly as its date is —
+> and this one blocked the whole plan as "item zero" against a QEMU the bench does not build.
+
+⊘ **The superseded analysis follows.** Read it for the mechanism, not for the blocker.
+
+### ⊘ P-1 (SUPERSEDED) — THE QEMU BQL BYPASS.
 
 **[NEW w821, from an adversarial review, verified against QEMU 9.2.0 in this workspace.]**
 

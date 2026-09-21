@@ -1,40 +1,43 @@
-//! ★★★★★ **THE JOIN — and it is where `forwarded=0` lives.**
+//! The **join**: a guest framebuffer range ⇄ a host object, looked up by containment.
 //!
-//! A guest channel's operand names a framebuffer range. If no **host object** stands behind that
-//! range, the GPU cannot execute against it and the work falls back to the CPU. That fallback is
-//! the thin guest's whole failure signature, measured at w823 across **seven arms**:
+//! ## ⊘⊘⊘ THIS FILE'S OPENING CLAIM WAS WRONG, AND IT IS KEPT AS THE CORRECTION
 //!
-//! ```text
-//! guest_tokens=1   stranded=1   forwarded=0   refused=0   client rc=0
-//! ```
+//! The first version of this docstring was headed *"THE JOIN — and it is where `forwarded=0`
+//! lives"*, and its regression test was named as proving *"THIS WAS THE DEFECT"*. **It was not.**
+//! `[fable w824]`, confirming the owner's doubt:
 //!
-//! ⊘ Note `refused=0`: **nothing was refused by name.** The work silently ran somewhere else and
-//! every arm passed its own rows, because once a leaf is joined the guest's window and the host
-//! object are one memory and both executors write identical bytes.
+//! - the only real caller of the old `token_for` already **refuses by name** (`FB_ALIAS_NO_JOIN`),
+//!   so nothing silently fell back there;
+//! - its strictness has a stated rationale — a partial or shifted alias *"would place a host
+//!   mapping whose bytes are only partly the ones the guest reaches, and would do so
+//!   **successfully**"*;
+//! - and the real cause of `forwarded=0` is **`kayfabe-rt/src/device.rs:8978`**:
+//!   ```ignore
+//!   EngineKind::Ce => DoorbellRoute::CpuCe,   // unconditional
+//!   ```
+//!   CE doorbells are routed to the CPU executor **by design**. The seven failing arms are the old
+//!   architecture working as specified, not a lookup bug.
 //!
-//! ## ⊘⊘⊘ THE DEFECT, IN ONE LINE OF THE OLD CODE
+//! ⇒ **The rule this cost, now standing:** *"THE DEFECT"* is a label only a commit **whose gate
+//! line moved** may use. A reading of old code is a **hypothesis**; it belongs in a commit body
+//! said as one, never in a module's opening line, where it becomes the thing the next reader
+//! believes. ⚠ This is the tree's own lesson — `worst_trap` names the site, not the cause — and I
+//! committed the mistake into the code rather than merely into a message.
 //!
-//! `kayfabe-isolate-host/src/fbjoin.rs:154` — `token_for(phys, len)` looks up by **equality**:
+//! ## What this module is actually for, stated without the story
 //!
-//! ```ignore
-//! t.iter().rev().find(|j| j.phys == phys && j.len == len && !j.alias)
-//! ```
+//! A guest channel operand names a framebuffer range; something must say which host object stands
+//! behind it. [`JoinTable::resolve`] answers **by containment** rather than by equality, so a
+//! range *inside* a joined leaf resolves with an offset instead of reading as absent. The old
+//! `fbjoin.rs:154` matched `phys == phys && len == len`, and the old tree has tests pinning that
+//! (`assert_eq!(t.token_for(0x1_0000, 0x8000), None, "half the frame")`).
 //!
-//! ⇒ A query for a range **contained in** a joined leaf — a different offset inside it, or a
-//! shorter length — matches nothing, returns `None`, and reads as *unbacked*. `CLAUDE.md` already
-//! records this class from the other end: *"2 560 bytes our own `resolve` answers `Miss` for
-//! inside a page the guest has mapped"*, held open by a `CrossesEnd` refusal, against a C that
-//! could not have the hole because it rounded every mapping up to 64 KiB.
+//! ⊘ **Measured improvement, no causal claim:** containment resolves ranges equality refuses; the
+//! regression below demonstrates that difference and nothing more. Whether it moves any gate line
+//! is unknown until one moves.
 //!
-//! ★ **So this table looks up by CONTAINMENT**, and returns the offset within the join. An exact
-//! match is not a special case; it is the degenerate one.
-//!
-//! ## What makes this v3 and not a port
-//!
-//! ⊘ [`JoinTable::resolve`] cannot return a bare `None`. It returns [`JoinRefusal`], which **names
-//! itself**, so `refused=0` means *nothing was refused* rather than *we never counted*. There is
-//! no arm a caller can read as *"fall back to the CPU"* — that is the property the old code
-//! lacked, and the reason six arms passed while doing the wrong thing.
+//! ★ And [`JoinTable::resolve`] cannot return a bare `None`: [`JoinRefusal`] **names itself**, so
+//! `refused=0` means nothing was refused rather than nobody counted.
 
 use crate::addr::{page_cover, Fb, HostToken, StoreOffset, PAGE};
 
