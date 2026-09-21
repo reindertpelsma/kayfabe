@@ -28,6 +28,7 @@
 pub mod bitmap;
 pub mod channel;
 pub mod leaf;
+pub mod model;
 pub mod plane;
 pub mod ring;
 pub mod completion;

@@ -1048,3 +1048,33 @@ fn a_passthrough_token_is_never_served_by_a_worker() {
     assert_eq!(p.worker_pass(&host, &mut scratch, 16), 0);
     assert_eq!(host.translated.load(std::sync::atomic::Ordering::Acquire), 0);
 }
+
+// ---- P1's last gate item: the exhaustive interleaving check -----------------------------------
+
+#[test]
+fn the_model_check_FINDS_the_single_cas_claim_bug() {
+    // ★★★ THE KNOWN-POSITIVE FOR THE CHECKER ITSELF. A model checker that reports "no
+    // counterexample" is worthless unless it can be shown to find a bug that is really there.
+    //
+    // This is the exact defect w823 hit on real hardware-free threads at 2/40 — a concurrent ring
+    // moves the stamp, the single-CAS claim reads that as "someone else owns it", the worker
+    // drops the token, and its bit is already consumed.
+    match model::check(model::ClaimShape::SingleCas) {
+        Err(why) => {
+            assert!(why.contains("LOST"), "{why}");
+            assert!(why.contains("interleaving:"), "it must NAME the interleaving: {why}");
+        }
+        Ok(n) => panic!("the checker explored {n} states and MISSED a known real bug"),
+    }
+}
+
+#[test]
+fn the_model_check_clears_the_retrying_claim() {
+    // ⊘ And the negative: with the shipped shape there is NO interleaving that loses work.
+    // ⚠ Under SEQUENTIAL CONSISTENCY only — this says nothing about whether Release/Acquire are
+    // strong enough on a weakly-ordered target. See the module docs.
+    match model::check(model::ClaimShape::Retrying) {
+        Ok(explored) => assert!(explored > 20, "the checker must actually explore: {explored} states"),
+        Err(why) => panic!("the shipped claim() has a losing interleaving:\n{why}"),
+    }
+}
