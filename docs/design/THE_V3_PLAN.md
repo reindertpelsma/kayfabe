@@ -28,7 +28,15 @@ argue with that."* `THE_MACHINE.md` stays in the bundle as the record; it is not
 | **`kf-trap`** | ★ **the vCPU path.** Shadow, three-way classifier, token table, wakeup word, register ring | hand | **~2 k** |
 | `kf-gsp` | boot FSM, msgq geometry, element layout, RPC framing | hand | ~5 k |
 | `kf-rm` | object graph, alloc/control dispatch, the served tables | hand | ~9 k |
-| `kf-mem` | the single store, VA manager, page-table mirror, BAR windows | hand | ~7 k |
+| `kf-mem` | the single store, VA manager, ~~page-table mirror~~, BAR windows | hand | ~7 k |
+
+⊘⊘⊘ **`[w824]` "page-table mirror" IS RULE 2'S DEAD SHAPE, BY NAME.** `THE_CONSTRAINTS.md` §56:
+*"we don't store va tables"*. ⇒ `kf-mem` keeps **no mirror of the guest's page tables**. What it
+may keep is a ledger of **our own** host map handles `(pdb, va) → (handle, offset, len, page_size)`
+— needed because RM's `UNMAP` requires the handle back — and **that distinction needs an owner
+ruling** (`[fable w824]`): rule 2 plainly forbids mirroring the *guest's* tables; whether it also
+forbids a ledger of *our own* handles is unstated. ⚠ If it forbids both, the alternative is
+unmap-all/map-all per invalidate (**~1800 RM calls**) and must be measured before it is chosen.
 | `kf-chan` | channels, doorbell service, pushbuffer decode, completions | hand | ~6 k |
 | `kf-host` | host RM verbs — ⊘ **authored, never forwarded** (§`author_host_flags`) | hand | ~4 k |
 | `kf-core` | VMM-agnostic device interface | hand | ~1 k |

@@ -3718,9 +3718,20 @@ The thin guest's `forwarded=0` cluster and this §46 violation have **one** caus
 | seven thin-guest arms | `forwarded=0`, CE on CPU | operands name fabricated space |
 | the CeUtils scrub | `execute_ours_spans`, CPU memcpy | target names fabricated space |
 
-⇒ **Join the target — give it a host object — and the already-proven `HostCe` arm can be pointed
-at it.** The scrub stops violating §46 and the seven arms stop falling back, from the *same* work.
-⊘ This is one item on the plan, not two, and it is `kf-mem`'s join plus `kf-host`'s verb layer.
+⇒ **Point the already-proven `HostCe` arm at the target.** The scrub stops violating §46 and the
+seven arms stop falling back, from the *same* work.
+
+> ### ⊘⊘⊘ CORRECTED `[w824]`, HOURS LATER — "JOIN THE TARGET" IS RULE 1'S DEAD SHAPE
+>
+> This paragraph said *"join the target — give it a host object … `kf-mem`'s **join** plus
+> `kf-host`'s verb layer"*, and it was written **before** §56. There is no join: **GPGA is one RM
+> object**, so the target already *has* a host object and the operand is an **offset into it**.
+> ★ And NVIDIA does exactly this rewrite itself — `ogkm-610 channel_utils.c:1055-1056,1086-1087`:
+> `addr + pChannel->fbAliasVA - pChannel->startFbOffset`, then `_SRC_TYPE/_DST_TYPE → _VIRTUAL`.
+> The construction has a vendor name: **`fbAliasVA`**.
+> ⇒ The work is the **identity window**, not a join. ⚠ And it closes *physical*-aperture operands
+> only: `clc7c0.h` (GR) declares **zero** `PHYS` methods against `clc7b5.h`'s (CE) **20**, so
+> compute operands are all VAs and need the mirrored VAS instead — see §56's open question.
 
 ★ **And it retires the CPU executor rather than bounding it.** §46 wanted `execute_ours_spans`
 gone; `channel::may_cpu_move` bounds it to 8 bytes in the meantime (§46's measured hazard: `[w797]`

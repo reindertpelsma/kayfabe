@@ -1,7 +1,70 @@
 # GPGA is ONE reserved object
 
-**STATUS: LIVE (2026-09-10).** Owner's design, settled in conversation this date. Supersedes the
-per-leaf join described in `fbwin.rs`'s module docs, which is scheduled for deletion by it.
+**STATUS: LIVE (2026-09-10; amended in place 2026-09-21, w824).** Owner's design, settled in
+conversation 2026-09-10 and **re-affirmed verbatim by the owner on 2026-09-21** (*"yes GPGA is
+just one rm object"*). Supersedes the per-leaf join described in `fbwin.rs`'s module docs, which
+is scheduled for deletion by it. ⚠ The w824 amendments below were folded in by fable with the
+owner's authorisation (*"its ok to update parts"*); each is marked `[w824]`, each says whether
+it is measured, cited, or inferred, and none deletes the 09-10 reasoning — where a 09-10
+conclusion no longer holds, the supersession is recorded **above** the text it supersedes and
+the text is kept for its rationale.
+
+## `[w824]` What moved between 09-10 and 09-21 — read this first
+
+Four owner rulings on 2026-09-21 (`THE_CONSTRAINTS.md` §56, verbatim: *"joins is dead, we
+don't store va tables, we don't auto-map leaves in MMIO if the guest didn't told to, we don't
+have per GPGA phys backings"*) are **consequences** this document implied and did not state.
+They change the *mechanism* sections below and leave the rule, the reservation, the BAR1
+finding and every measurement untouched:
+
+| § below | 09-10 said | after §56 |
+|---|---|---|
+| The rule | one object, sliced by offset | **unchanged, affirmed** |
+| Backing follows USE | learned *"at the moment a range is mapped into a GPU address space"* | **unchanged**, sharpened: that moment is the **guest's own map call** (rule 3), never our observation of an MMIO write |
+| Page tables: promote/demote | copy tables to host RAM inside the invalidate window, dirty-track, demote on an observable event | ⊘ **SUPERSEDED by rules 2 and 3** — see the `[w824]` block above that section. What survives is the GPU-side walk **in place**; what does not is the copy, the dirty tracking, and the fake range |
+| The scratchpad's address space | GPGA range + a *fake range* of promoted buffers | **GPGA range only** — the identity window. The fake range existed for promoted buffers and goes with them |
+| The DoS this closes | host RAM bounded to *"page tables only, ~7 MiB"* | bounded to **our own per-mapping RM records** — no guest page is ever copied into host RAM by us |
+| Sequencing | 1 reserve · 2 promote/demote · 3 delete the join | 1 reserve · **2 the identity window** · 3 delete the join and the walkers-as-storage |
+
+### `[w824]` The two VA spaces — the owner's construction, stated here because the doc predates it
+
+> **Owner, 2026-09-21:** *"you have 2 vas at startup atleast: the va for libcuda, the va manager
+> thread with the ptx. created by libcuda, not us. the second is a va with only the GPGA mapped,
+> one rm object, at the correct fb offset (so that if virtual phys is used then it works). then
+> Translate does if the aperature is phys it translates to the va space and all GPGA is
+> accessible."*
+
+1. **libcuda's VA** — created by `cuCtxCreate` in the process that runs the manager thread and
+   the PTX walk kernel (`cuda/walk/kf_walk.cu`). GPGA is imported into it so the walker reads the
+   guest's page tables **where they are**, as `win.base + gpga` — the one flat window w731 said
+   the kernel needed and could not have while the store was per-leaf
+   (`the_kernel_cannot_be_pointed_at_the_tables_where_they_are`). ★ The relocation image
+   (`GmmuFmt::relocate_entry`, `walkshadow::build_image`) was transitional and expires here.
+2. **The GPGA-identity VA** — one `FERMI_VASPACE_A` we create, holding **one** FIXED
+   `MapMemoryDma` of the whole reserved object at `GPGA_VA_BASE + fb_phys`. A guest operand
+   in **physical** aperture (`NVC7B5_SET_{SRC,DST}_PHYS_MODE_TARGET_LOCAL_FB` +
+   `LAUNCH_DMA_*_TYPE_PHYSICAL`, `clc7b5.h:66-83,122-126`) is served by flipping the type bit to
+   `VIRTUAL` and adding `GPGA_VA_BASE`. Arithmetic; no lookup.
+   ★ **NVIDIA does exactly this itself.** CeUtils' `bUseVasForCeCopy` rewrites an FB-physical
+   operand to `addr + fbAliasVA - startFbOffset` and flips `_SRC_TYPE`/`_DST_TYPE` to `_VIRTUAL`
+   (`ogkm-610: channel_utils.c:1053-1091`); its own log line reads *"FB (addr, size) identity
+   mapped to VAS"* (`mem_utils_gm107.c:505-516`), with FB base and VA base **512 MiB-aligned**.
+   The identity window is not our invention; it is the driver's own shape for this problem.
+   ⚠ `[inferred, unmeasured]` `GPGA_VA_BASE` should be ≥ 512 MiB-aligned (the CeUtils rule) and
+   above any VA a guest can name in that space; the tree's own reservation already tries
+   1 GiB-aligned contiguous first (`rm.rs:reserve_gpga_inner`, w755c) so that VA ≡ phys at every
+   page size and the map needs no small-page pin.
+
+⚠ **Two things the two-VA construction does NOT decide, both recorded so they are not read as
+settled.** (i) Which VA space a **Translated** host channel is bound to when one pushbuffer mixes
+physical and virtual operands (UVM's kernel channels do: page-table writes are physical
+`uvm_mmu.c:432,462`; the pushbuffer itself is sysmem, `uvm_pushbuffer.c:114-117`). Either the
+identity window is mapped into every mirrored VAS above the guest's range, or such channels
+run in the identity VA and their virtual operands are rewritten — the second is only possible
+for operands that are *methods*, never for pointers inside kernel parameters. (ii) A
+**virtual**-aperture operand needs a VA→GPGA answer and rule 2 says we keep none. §56.2 names
+this as the open question; the answer this document takes is in the `[w824]` block above
+"Page tables" below.
 
 ## The rule
 
@@ -41,7 +104,54 @@ cannot be decided by where something is. It is decided by who reads it:
 We learn which is which at the moment a range is mapped into a GPU address space. That is the
 same event that guarantees existence, so one rule does both jobs.
 
+`[w824]` ★ **And rule 3 fixes WHOSE event that is: the guest's.** *"We don't auto-map leaves in
+MMIO if the guest didn't told to."* The map exists because the guest asked for it — an RM map
+call we serve, a channel or context RPC that carries addresses (`GPU_PROMOTE_CTX`, channel
+alloc), or a synchronisation point the guest issues (`the_three_synchronization_points`:
+TLB invalidate · RPC map calls · UVM set-up). Watching a page-table page get written is not a
+request and does not create a mapping.
+
+## `[w824]` ⊘ SUPERSEDED BY §56 RULES 2 AND 3 — the promote/demote protocol below does not survive; read this before it
+
+**What the section below rests on, and which of it §56 removes:**
+
+| premise of promote/demote (09-10) | status after §56 |
+|---|---|
+| we *refresh* by walking the guest's tables and *keep* what we learned (a mirror the views are re-pointed from) | ⊘ **rule 2** — we store no VA table. The guest's tables are read **in place, in GPGA, by the GPU walker**, at the guest's synchronisation point, and the answer is consumed by that one host map call, not retained |
+| an unpromoted vidmem page is *"permanently dirty"*; promoted pages have dirty tracking, so edits are noticed | ⊘ **rule 3** — noticing an edit is not a mapping trigger. And the premise was **already broken for the tables that matter**: UVM writes its tables with the **copy engine** (`uvm_mmu.c:432,462`, w719b) and a DMA write into a promoted host page sets **no KVM dirty bit**. Under the identity window a CE page-table write lands in GPGA, in vidmem, where the walker reads it — the problem dissolves rather than being solved `[inferred from the mechanism; not yet measured on a live guest]` |
+| promoted buffers live in a *fake range* above GPGA, and every view is re-pointed | ⊘ gone with promotion; the scratchpad VA is the identity window only. This is also what makes `GpgaViews`' *"real work"* (§"What promotion actually costs") unnecessary |
+| demotion on an observable event | ⊘ nothing is promoted, nothing is demoted |
+
+**What survives, and why the measurements below are still the reason for the design:** the
+cost table (48 MiB/s CPU reads, 1872 pages, 1178 refreshes ⇒ ~10 min/boot) is exactly why the
+walk is a **GPU kernel over the identity window** and never a CPU read — `the_walk_kernel`:
+462 ms → **205.7 µs**; PTX validated **72/72** on hardware including hostile and racing tables
+(`the_ptx_walker_is_validated_on_hardware`). The 09-10 text reached the right placement for the
+wrong reason (to make promotion affordable); the placement stands on its own.
+
+★ **What triggers a walk now, stated so it cannot be read as MMIO observation:**
+1. a BAR0 `MMU_INVALIDATE` register write naming a PDB — RM's walker path; ALL_VA is hard-coded
+   there (`rm_cannot_express_a_narrow_invalidate`), so the scope is *that address space, whole*;
+2. a `MEM_OP_D MMU_TLB_INVALIDATE[_TARGETED]` method **in a Translated pushbuffer** — UVM's path
+   (`clc56f.h:132-176`), which carries PDB, aperture, target VA and size, i.e. the guest tells us
+   both the space and the extent. ⚠ It must be honoured at **execution** time, after the CE
+   page-table writes that precede it in the same stream have retired on the host — the C latched
+   at the release semaphore for this reason (`nvkvm_m2_cpt_sync_at_release`,
+   `nvkvm_gpu_emul.c:596-604`). Honouring it at decode time reads tables the engine has not
+   written yet;
+3. an RPC that carries addresses explicitly — `GPU_PROMOTE_CTX` entries, channel alloc
+   (instance block, USERD, GPFIFO), `SetPageDir`/`UPDATE_BAR_PDE` for roots.
+
+⊘ **The one record we cannot avoid keeping, said plainly:** RM's `UNMAP_MEMORY_DMA` needs the
+handle and offset of every mapping we made, so a **ledger of our own host map calls** per guest
+space exists. `[fable's reading, not an owner ruling]` That is a list of RM handles, not a mirror
+of the guest's tables, and rule 2 is read here as forbidding the latter. If the owner reads rule 2
+as forbidding the ledger too, the only alternative is unmap-all/map-all at every invalidate,
+which is `entries≈1800` RM calls per invalidate and must be measured before it is chosen.
+
 ## Page tables: promote in the invalidate window only
+
+`[w824]` ⊘ **SUPERSEDED — kept for its reasoning; see the block directly above.**
 
 ★ The GPU never walks the guest's page tables. It walks the **host** tables that host RM builds
 from our map calls. The guest's tables are interpretation data for us alone. Round-tripping them
@@ -131,7 +241,30 @@ driver already holds. ★ This is also what PRAMIN is *for* — a small window t
 a scarce aperture window **and** a 13 MiB/s bus. Promoting them into host memory removes both,
 for single-digit megabytes.
 
+## `[w824]` The pushbuffer read — not covered on 09-10
+
+A Translated channel's entries must be read before hardware sees them
+(`the_three_channel_kinds.md` §1). Where they are decides how:
+
+| pushbuffer lives in | who puts it there | how we read it |
+|---|---|---|
+| **guest RAM (sysmem)** | UVM by default (`uvm_pushbuffer.c:98-117`, `pushbuffer_loc == SYS` unless the module parameter says `vid`); the native oracle's `cup2` pushbuffer was sysmem too (`native_dataplane_cup2_ga106.md:80,127`) | a CPU read of the guest's memfd at RAM speed. **No vidmem read at all.** This is the common case |
+| **vidmem** (a guest that sets `pushbuffer_loc=vid`, or a kernel ring placed in FB) | the guest | ⊘ never a CPU read — 48 MiB/s. A **CE copy** on our own raw-client channel with `src = GPGA_VA_BASE + fb_phys` (arithmetic, the identity window) into a sysmem staging buffer; or, as the owner allows, `cuMemcpyDtoH` from the libcuda context that already holds GPGA |
+
+⚠ Both vidmem routes run **behind the trap, in the worker** (§48: ms budget there, µs in the
+trap) and both are a submit-and-wait. `[inferred, unmeasured]` a `cuMemcpyDtoH` of a few KiB may
+be serviced by libcuda through a BAR1 CPU read rather than a CE — in which case it is bound by the
+same 48 MiB/s bus figure the CE route exists to avoid. Measure before choosing it; the raw-client
+CE is the route whose mechanism is known.
+
+⊘ **Passthrough channels are never read** (`parsing_not_placement_is_what_is_forbidden`): the
+guest's own CUDA pushbuffers are fetched by the host channel through the mirrored space, and the
+compute class has **no physical-aperture operand to rewrite** (`grep -c PHYS clc7c0.h` → 0).
+
 ## The promote / demote protocol
+
+`[w824]` ⊘ **SUPERSEDED by §56 rules 2/3 — see the block above "Page tables". The first paragraph
+(CE, never the CPU) stands; the protocol steps do not.**
 
 ★★★★★ **The CPU never reads video memory on our path. The copy engine does.** Measured: the
 processor reads video memory at **48 MiB/s**; an engine reads it at **hundreds of GB/s** and
@@ -292,12 +425,20 @@ per entry, unbounded in count, which is the same shape this design removes for b
 
 ## Sequencing — deliberately less than the whole design first
 
+`[w824]` ⊘ Step 1 **is done and measured** (`the_vm_lifetime_scratchpad_isolate_holds_11904_mib`:
+11 904 MiB held as one object at PCI realize, `nvidia-smi` 11 909 MiB used; 6144 MiB is the
+largest *contiguous, len-aligned* form measured, 09-11). Step 2 below is **replaced** by the
+identity window — one FIXED map of the whole object, then `Translated` flips physical operands to
+it; step 3 widens to the walkers-as-storage and the MMIO latches (§56.1). The order is now:
+1 reserve (done) → 2 identity window + phys-operand rewrite → 3 mirrored space fed by the guest's
+own synchronisation points → 4 delete.
+
 1. **Reservation only.** One object, refuse to start on failure, advertised size from the
    reservation. **Keep the existing invented framebuffer as the read path**, untouched. This
    already deletes the join and its copy, ends mid-operation OOM, and gives one object to slice —
    most of the structural win — while the PCIe question stays moot.
 2. **Promotion / demotion**, narrowing the invented framebuffer from *everything* to *page tables
-   only*.
+   only*. `[w824]` ⊘ superseded — see above.
 3. **Delete** the join machinery: 146 references across 10 files, mechanical once nothing calls it.
 
 ## Gates
