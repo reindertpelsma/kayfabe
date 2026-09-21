@@ -603,3 +603,55 @@ now 0/80.
 ⇒ **When a test can fail for two reasons that demand opposite responses, the assertion must say
 which.** The first version printed `[(288, Rung), (365, Rung)]`, which cannot tell the harness from
 the design — and that was the entire question.
+
+---
+
+## w823 — ⊘ STEP 2 IS BLOCKED, AND THE MEASUREMENT SAYS WHY. It is not a file move.
+
+The audit's step 2 was *"lift `rm.rs` into an in-process host crate"*. Measured against the tree,
+that cannot be done as stated. Three facts, each grepped:
+
+**1. `rm.rs`'s real dependencies are exactly 8 lines, to exactly 3 modules.**
+`export` (`:90`, `:4857`, `:9298`), `guestram` (`:5589`, `:7003`, `:13633`), `fbjoin` (`:5601`,
+`:6984`). ⊘ Every other reference to the delete target — `proto`, `fdcross`, `child`, `isolate`,
+`loopback`, `planreactor` — is a **doc link**, not code. ★ That looked like a clean seam.
+
+**2. It is not a clean seam, because those three modules ARE the boundary.**
+
+```
+export   → fdcross, proto
+guestram → export, isolate
+fbjoin   → child, export, rm
+```
+
+⇒ Moving `rm.rs` together with its three dependencies **drags in the entire process plane**. The
+three modules rm.rs touches exist *precisely to cross the process boundary*, so they cannot
+travel with the half that stops crossing it.
+
+**3. Cutting them instead removes verbs the GRADER exercises.** `self.exports` has **8** use
+sites (`mint`, `lend`, `mint_fabricated`, `mint_armed_node`, `take_cpu_view_release`), and
+`ChildExports` appears **11 times in the ladder** because it is a parameter of
+`HostRmBackend::new`. `GuestRamPlane` appears **4** times, in `--guest-ram-pin`.
+
+### ⇒ The blocker, stated plainly
+
+**There is nothing to cut over TO.** Those verbs implement the host side; v3's replacement for
+them — the in-process RM behind `HostOps` (§9) — **is not written**. Cutting now would leave the
+tree with a grader that cannot exercise the features and no implementation that provides them.
+
+⚠ This is the same ordering error as step 1, one layer down: **step 1 was blocked until the
+grader moved out; step 2 is blocked until the REPLACEMENT moves in.** Doing it in the wrong order
+does not fail loudly — it silently removes coverage.
+
+### ⇒ The corrected order
+
+1. ★ **Write v3's host side** — §9's lifetime model and the authored verbs behind `HostOps`. New
+   code, GPU-free where it is a lifetime question, and **on the critical path to the owner's
+   number** in a way the deletion is not.
+2. Point the grader's affected arms at it.
+3. **Then** steps 2 and 3 as a single change — cut and delete together, retiring `--guest-ram-pin`'s
+   transport leg and `--bar1-crossing` leg A **with** the plane they cover, per w823's rule that
+   *coverage of a deleted thing is deleted by the same change that deletes it*.
+
+⊘ **Nothing was cut tonight**, and that is the finding rather than a lack of one: the deletion is
+gated on construction, not on courage.
