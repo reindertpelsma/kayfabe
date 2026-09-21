@@ -50,7 +50,10 @@ fn no_safe_struct_field_is_pointer_shaped() {
                 continue;
             }
             let typed = POINTER_TYPED.iter().any(|p| t.contains(p));
-            let named = ADDRESS_NAMED.iter().any(|p| t.starts_with(p));
+            // ⊘ `[fable]` `starts_with` missed `pub host_va: u64,` — the known-positive only
+            // fired because it was injected WITHOUT `pub`. Strip the visibility first.
+            let bare = t.trim_start_matches("pub(crate) ").trim_start_matches("pub ");
+            let named = ADDRESS_NAMED.iter().any(|p| bare.starts_with(p));
             if !(typed || named) {
                 continue;
             }

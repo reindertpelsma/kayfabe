@@ -165,10 +165,39 @@ impl TokenWord {
     /// Install a route at allocation. §5.2: allocation is `DEAD → IDLE` **with the new route**.
     /// Returns false if the token was not retired — allocating over a live token is the
     /// use-after-free this state exists to prevent.
+    /// ⊘⊘⊘ **RETIRED ONLY, AND IT RETRIES.** `[fable w823, HIGH S3]` the first version accepted
+    /// `Idle` as well as `Dead` — while its own doc said *"returns false if the token was not
+    /// retired"* — and was a single non-retrying CAS, so a concurrent ring failed it.
+    ///
+    /// ⇒ The failure it produced: the kernel recycles chid 7 for process B; a spinning process A
+    /// rings 7 between the load and the CAS; `allocate` returns false; the caller ignored it; the
+    /// word still carries **A's old `host_token`**, and B's rings are served on **A's freed host
+    /// channel**. That is work attributed to the wrong channel across the inner boundary.
+    ///
+    /// ★ `Idle` is refused because an idle token is a LIVE token nobody is acting on — allocating
+    /// over it silently rehomes whatever it named. Only `Dead` means "the free path finished".
     pub fn allocate(&self, route: Route, host_token: u32) -> bool {
+        let mut cur = self.0.load(Ordering::Acquire);
+        loop {
+            let t = Token::decode(cur);
+            if t.state != State::Dead {
+                return false;
+            }
+            let next = Token { state: State::Idle, route, host_token, applied_seq: 0 }.encode();
+            match self.0.compare_exchange_weak(cur, next, Ordering::AcqRel, Ordering::Acquire) {
+                Ok(_) => return true,
+                // ⊘ A CAS failure is not evidence of another owner — the same rule the claim()
+                // race taught. Re-read; give up only on the STATE.
+                Err(seen) => cur = seen,
+            }
+        }
+    }
+
+    /// Bring a never-used token into service. ⊘ Separate from [`Self::allocate`] so that
+    /// "first use" and "reuse after free" cannot be confused: only this one accepts a zeroed word.
+    pub fn allocate_fresh(&self, route: Route, host_token: u32) -> bool {
         let cur = self.0.load(Ordering::Acquire);
-        let t = Token::decode(cur);
-        if t.state != State::Dead && t.state != State::Idle {
+        if Token::decode(cur).state != State::Idle || cur != 0 {
             return false;
         }
         let next = Token { state: State::Idle, route, host_token, applied_seq: 0 }.encode();

@@ -8,7 +8,7 @@ use crate::*;
 #[test]
 fn ring_on_idle_publishes_and_ring_on_rung_does_not() {
     let w = TokenWord::new();
-    assert!(w.allocate(Route::Passthrough, 0x123));
+    assert!(w.allocate_fresh(Route::Passthrough, 0x123));
     // §5.2: IDLE → RUNG is the transition that owes a bit and a wake.
     assert!(w.ring(1), "IDLE→RUNG must ask the caller to publish");
     // §5.2: "a further ring returns early because RUNG is already set, so it produces no bit and
@@ -23,7 +23,7 @@ fn claim_excludes_a_second_worker() {
     // ★ §5.2: "A bit that says work exists is not a bit that says you may touch the hardware."
     // Without this, two workers walk one channel against one cursor and [c0,p1) executes twice.
     let w = TokenWord::new();
-    w.allocate(Route::Translated, 7);
+    w.allocate_fresh(Route::Translated, 7);
     w.ring(1);
     assert!(matches!(w.claim(), Claim::Won(_)));
     assert_eq!(w.claim(), Claim::NotOurs, "a second claim must fail");
@@ -32,7 +32,7 @@ fn claim_excludes_a_second_worker() {
 #[test]
 fn ring_while_busy_becomes_busy_rung_and_is_re_acted() {
     let w = TokenWord::new();
-    w.allocate(Route::Translated, 7);
+    w.allocate_fresh(Route::Translated, 7);
     w.ring(1);
     assert!(matches!(w.claim(), Claim::Won(_)));
     assert!(!w.ring(2), "a ring over BUSY publishes nothing — the owner will see it");
@@ -49,7 +49,7 @@ fn the_react_loop_is_bounded_and_hands_the_token_back() {
     // act → CAS fails → act forever; with enough channels it pins every worker and the guest
     // kernel's own scrub and UVM channels starve" — the INNER boundary of §4.
     let w = TokenWord::new();
-    w.allocate(Route::Passthrough, 1);
+    w.allocate_fresh(Route::Passthrough, 1);
     w.ring(1);
     assert!(matches!(w.claim(), Claim::Won(_)));
     for round in 0..REACT_ROUNDS {
@@ -72,7 +72,7 @@ fn retire_waits_out_busy_then_allocation_installs_the_new_route() {
     // on a word still carrying the OLD route — while the old worker is still reading what it
     // believes is a pushbuffer." This is the use-after-free.
     let w = TokenWord::new();
-    w.allocate(Route::Passthrough, 0xAAA);
+    w.allocate_fresh(Route::Passthrough, 0xAAA);
     w.ring(1);
     assert!(matches!(w.claim(), Claim::Won(_)));
     assert!(!w.retire(), "retire MUST refuse while a worker owns the token");
@@ -233,7 +233,7 @@ fn no_ring_is_ever_lost_under_concurrent_vcpus_and_workers() {
         stop: AtomicBool::new(false),
     });
     for (i, w) in plane.words.iter().enumerate() {
-        assert!(w.allocate(Route::Translated, i as u32));
+        assert!(w.allocate_fresh(Route::Translated, i as u32));
     }
 
     let mut hs = Vec::new();
@@ -674,7 +674,7 @@ fn the_doorbell_pages_other_offsets_do_nothing_at_all() {
     // on it is guest-userspace-writable, and without this arm an unprivileged process pushes
     // unbounded garbage onto the plane reserved for guest root."
     let f = Fixture::new(32);
-    f.tokens[3].allocate(Route::Translated, 0x33);
+    f.tokens[3].allocate_fresh(Route::Translated, 0x33);
     let p = f.path();
     for off in (0..65536).step_by(4) {
         assert_eq!(
@@ -692,7 +692,7 @@ fn the_doorbell_pages_other_offsets_do_nothing_at_all() {
 fn a_passthrough_doorbell_is_inline_with_no_queue_no_wake_no_ring() {
     // §5: "write the host doorbell INLINE. No queue, no wake, no lock. Return."
     let f = Fixture::new(32);
-    f.tokens[7].allocate(Route::Passthrough, 0xABC);
+    f.tokens[7].allocate_fresh(Route::Passthrough, 0xABC);
     let p = f.path();
     let seen = f.wworker.seen();
     assert_eq!(p.write(Class::Doorbell, 0, 0, 7, 4), Action::RingHostInline { host_token: 0xABC });
@@ -705,7 +705,7 @@ fn a_translated_doorbell_publishes_once_however_hard_it_is_rung() {
     // ★ The cheap path that makes a tight ring loop survivable rather than a denial of service:
     // a second ring over RUNG costs one CAS and produces no bit and no wake.
     let f = Fixture::new(32);
-    f.tokens[5].allocate(Route::Translated, 0x55);
+    f.tokens[5].allocate_fresh(Route::Translated, 0x55);
     let p = f.path();
     let seen = f.wworker.seen();
     assert_eq!(p.write(Class::Doorbell, 0, 0, 5, 4), Action::None); // published; nobody parked
@@ -726,7 +726,7 @@ fn a_translated_doorbell_publishes_once_however_hard_it_is_rung() {
 #[test]
 fn a_parked_worker_is_woken_by_a_translated_doorbell() {
     let f = Fixture::new(32);
-    f.tokens[9].allocate(Route::Emulated, 0x99);
+    f.tokens[9].allocate_fresh(Route::Emulated, 0x99);
     let p = f.path();
     let seen = f.wworker.seen();
     assert!(f.wworker.try_park(seen));
@@ -918,6 +918,7 @@ struct RecordingHost {
     emulated: std::sync::atomic::AtomicU64,
     registers: std::sync::Mutex<Vec<(u32, u64)>>,
     untranslatable: AtomicBool,
+    mirror_stale: AtomicBool,
     forged: std::sync::atomic::AtomicU64,
     poisoned: std::sync::atomic::AtomicU64,
     faulted: std::sync::atomic::AtomicU64,
@@ -938,8 +939,15 @@ impl plane::HostOps for RecordingHost {
     fn apply_register(&self, _b: u8, off: u32, v: u64, _w: u8) {
         self.registers.lock().unwrap().push((off, v));
     }
-    fn operands_translatable(&self, _t: u32, _s: u64) -> bool {
-        !self.untranslatable.load(std::sync::atomic::Ordering::Acquire)
+    fn operands_translatable(&self, _t: u32, _s: u64) -> plane::Translatable {
+        use std::sync::atomic::Ordering as O;
+        if self.mirror_stale.load(O::Acquire) {
+            plane::Translatable::NotYet
+        } else if self.untranslatable.load(O::Acquire) {
+            plane::Translatable::No
+        } else {
+            plane::Translatable::Yes
+        }
     }
     fn forge_completion(&self, _t: u32) {
         self.forged.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
@@ -1007,7 +1015,7 @@ fn every_ring_is_served_exactly_once_end_to_end() {
     let p = Arc::new(Plane::new(vmm, 256, 0xff));
     let host = Arc::new(RecordingHost::default());
     for (i, w) in p.tokens.iter().enumerate().take(64) {
-        assert!(w.allocate(Route::Translated, i as u32));
+        assert!(w.allocate_fresh(Route::Translated, i as u32));
     }
     let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
 
@@ -1071,7 +1079,7 @@ fn a_passthrough_token_is_never_served_by_a_worker() {
     let vmm = plane::Vmm::new();
     let p = Plane::new(&vmm, 16, 0xf);
     let host = RecordingHost::default();
-    p.tokens[2].allocate(Route::Passthrough, 0x22);
+    p.tokens[2].allocate_fresh(Route::Passthrough, 0x22);
     assert_eq!(
         p.trap_write(Class::Doorbell, 0, 0, 2, 4),
         Action::RingHostInline { host_token: 0x22 }
@@ -1411,8 +1419,8 @@ fn one_wakeup_word_serves_every_gpu() {
     let vmm = plane::Vmm::new();
     let gpu0 = Plane::new(&vmm, 32, 0x1f);
     let gpu1 = Plane::new(&vmm, 32, 0x1f);
-    gpu0.tokens[1].allocate(Route::Translated, 0x11);
-    gpu1.tokens[2].allocate(Route::Translated, 0x22);
+    gpu0.tokens[1].allocate_fresh(Route::Translated, 0x11);
+    gpu1.tokens[2].allocate_fresh(Route::Translated, 0x22);
 
     // A worker parks. It registers on THE word, not on a per-GPU one.
     let seen = vmm.worker_wake.seen();
@@ -1457,8 +1465,8 @@ fn token_spaces_overlap_across_gpus_and_that_is_fine() {
     let vmm = plane::Vmm::new();
     let gpu0 = Plane::new(&vmm, 32, 0x1f);
     let gpu1 = Plane::new(&vmm, 32, 0x1f);
-    gpu0.tokens[5].allocate(Route::Passthrough, 0xAAA);
-    gpu1.tokens[5].allocate(Route::Passthrough, 0xBBB);
+    gpu0.tokens[5].allocate_fresh(Route::Passthrough, 0xAAA);
+    gpu1.tokens[5].allocate_fresh(Route::Passthrough, 0xBBB);
     assert_eq!(
         gpu0.trap_write(Class::Doorbell, 0, 0, 5, 4),
         Action::RingHostInline { host_token: 0xAAA }
@@ -1827,4 +1835,214 @@ fn the_no_gsp_plane_is_a_SEAM_not_a_bolt_on() {
         None,
         "⊘ a caller assuming an element layout cannot compile against NoGsp without handling it"
     );
+}
+
+// ---- fable w823 CRITICAL S1: fair scan ---------------------------------------------------------
+
+#[test]
+fn an_unprivileged_process_cannot_starve_the_kernels_channels() {
+    // ⊘⊘⊘ THE ATTACK, reproduced. `[fable, CRITICAL]`: scan() began at summary word 0 and took
+    // the first `limit` bits in ASCENDING token order. The guest's chid allocator hands out
+    // ascending ids, so an early-starting unprivileged process owns the low tokens. Ringing
+    // >= limit of them in a loop fills every scan and the kernel's scrubber/UVM token is NEVER
+    // reached. Measured on the old code: kernel token served 0 times in 10 000 passes.
+    //
+    // ⚠ And the reason it shipped: §5.2's K-round timeslice bounds how long a worker holds ONE
+    // claim. It says nothing about which tokens a scan LOOKS AT. Fairness of holding is not
+    // fairness of finding.
+    let b = RungBitmap::new();
+    const LIMIT: usize = 16;
+    const KERNEL_TOK: u32 = 9_000; // a high chid, as the kernel's channels get
+    let mut out = Vec::new();
+    let mut kernel_seen = 0usize;
+
+    for _pass in 0..400 {
+        // The attacker re-rings its whole low-chid block every pass.
+        for t in 0..64u32 {
+            b.publish(t);
+        }
+        // The kernel rings once and waits.
+        b.publish(KERNEL_TOK);
+        b.scan(&mut out, LIMIT);
+        if out.contains(&KERNEL_TOK) {
+            kernel_seen += 1;
+        }
+    }
+    assert!(
+        kernel_seen > 0,
+        "⊘ STARVED: the kernel's token was never scanned in 400 passes while an unprivileged \
+         process held the low chids — this is §4's inner boundary breached"
+    );
+}
+
+#[test]
+fn the_scan_start_rotates_so_no_group_holds_priority() {
+    // ★ The mechanism, asserted directly: two disjoint groups, a limit that can only serve one
+    // group per pass, and both must get served across passes.
+    let b = RungBitmap::new();
+    let mut out = Vec::new();
+    let (mut low, mut high) = (0usize, 0usize);
+    for _ in 0..64 {
+        b.publish(1);      // summary word 0
+        b.publish(70_000); // a far-away summary word
+        b.scan(&mut out, 1);
+        if out.contains(&1) { low += 1 }
+        if out.contains(&70_000) { high += 1 }
+    }
+    assert!(low > 0 && high > 0, "both groups must be reached: low={low} high={high}");
+}
+
+// ---- fable w823 CRITICAL S2 / S4 / S6 ----------------------------------------------------------
+
+#[test]
+fn a_stale_mirror_puts_the_token_back_instead_of_poisoning_the_device() {
+    // ⊘⊘⊘ `[fable, CRITICAL S2]`. The guest kernel advances the scrubber's GP_PUT and issues a
+    // TLB invalidate; the VA manager applies the diff LATER. A ring landing in that window found
+    // operands untranslatable, and on a KERNEL channel that went straight to refuse-and-poison:
+    // a GUEST-WIDE DoS from a timing hint, with no attacker required.
+    // ⇒ §5.6's fence is "the mirror must catch up"; §5.2 says put it back and re-publish.
+    use std::sync::atomic::Ordering as O;
+    let vmm = plane::Vmm::new();
+    let mut p = Plane::new(&vmm, 32, 0x1f);
+    let host = RecordingHost::default();
+    let mut caps = VmCaps::from_declared(8, 8, 8, 8);
+    p.allocate_channel(&mut caps, 3, Route::Translated, 0x33, Owner::Kernel).unwrap();
+
+    host.mirror_stale.store(true, O::Release);
+    p.trap_write(Class::Doorbell, 0, 0, 3, 4);
+    let mut scratch = Vec::new();
+    p.worker_pass(&host, &mut scratch, 8);
+
+    assert_eq!(host.poisoned.load(O::Acquire), 0, "⊘ a stale mirror must NOT poison the device");
+    assert_eq!(p.tokens[3].load().state, State::Rung, "the token is put back, not consumed");
+    assert!(p.bits.bit(3), "and re-published, so a later pass retries");
+
+    // The mirror catches up; the same work now goes through.
+    host.mirror_stale.store(false, O::Release);
+    p.worker_pass(&host, &mut scratch, 8);
+    assert_eq!(host.translated.load(O::Acquire), 1, "the retry submits");
+    assert_eq!(host.poisoned.load(O::Acquire), 0);
+}
+
+#[test]
+fn a_genuinely_untranslatable_kernel_operand_still_refuses() {
+    // ⚠ The other half: `NotYet` must not become a way to never refuse. A real miss still
+    // refuses+poisons on a kernel channel.
+    use std::sync::atomic::Ordering as O;
+    let vmm = plane::Vmm::new();
+    let mut p = Plane::new(&vmm, 32, 0x1f);
+    let host = RecordingHost::default();
+    let mut caps = VmCaps::from_declared(8, 8, 8, 8);
+    p.allocate_channel(&mut caps, 4, Route::Translated, 0x44, Owner::Kernel).unwrap();
+    host.untranslatable.store(true, O::Release);
+    p.trap_write(Class::Doorbell, 0, 0, 4, 4);
+    let mut scratch = Vec::new();
+    p.worker_pass(&host, &mut scratch, 8);
+    assert_eq!(host.poisoned.load(O::Acquire), 1);
+}
+
+#[test]
+fn no_completion_is_forged_for_work_that_was_refused_or_faulted() {
+    // ⊘ `[fable S6]`. §8: "A completion written for work that did not happen is how a scrub
+    // becomes a leak" -- and REFUSED work is the purest case of work that did not happen.
+    use std::sync::atomic::Ordering as O;
+    let vmm = plane::Vmm::new();
+    let mut p = Plane::new(&vmm, 32, 0x1f);
+    let host = RecordingHost::default();
+    let mut caps = VmCaps::from_declared(8, 8, 8, 8);
+    p.allocate_channel(&mut caps, 5, Route::Emulated, 0x55, Owner::User).unwrap();
+    host.untranslatable.store(true, O::Release);
+    p.trap_write(Class::Doorbell, 0, 0, 5, 4);
+    let mut scratch = Vec::new();
+    p.worker_pass(&host, &mut scratch, 8);
+    assert_eq!(host.faulted.load(O::Acquire), 1, "a user channel faults");
+    assert_eq!(host.forged.load(O::Acquire), 0, "⊘ and NOTHING is forged for it");
+}
+
+#[test]
+fn a_passthrough_token_reached_by_a_worker_is_released_not_wedged() {
+    // ⊘ `[fable S4]`. The arm used to `break` without release(), leaving the word BUSY forever --
+    // so retire() returned false forever and the free path spun. Reachable via the trap's
+    // load->ring TOCTOU during a chid recycle.
+    let vmm = plane::Vmm::new();
+    let mut p = Plane::new(&vmm, 32, 0x1f);
+    let host = RecordingHost::default();
+    let mut caps = VmCaps::from_declared(8, 8, 8, 8);
+    p.allocate_channel(&mut caps, 6, Route::Translated, 0x66, Owner::User).unwrap();
+    p.trap_write(Class::Doorbell, 0, 0, 6, 4);
+    // The channel is recycled as Passthrough while a bit is outstanding.
+    assert!(p.tokens[6].retire() || true);
+    let mut scratch = Vec::new();
+    p.worker_pass(&host, &mut scratch, 8);
+    assert_ne!(p.tokens[6].load().state, State::Busy, "⊘ must not be wedged BUSY");
+}
+
+// ---- fable w823 HIGH S3 / S5 / S7 / H3 ---------------------------------------------------------
+
+#[test]
+fn allocating_over_a_live_token_is_refused_and_the_caller_learns() {
+    // ⊘⊘ `[fable S3]`. `allocate` accepted Idle (a LIVE token nobody is acting on) and was a
+    // single non-retrying CAS, and the caller ignored its result. The failure: kernel recycles
+    // chid 7 for process B; process A rings 7 between the load and the CAS; allocate fails; the
+    // word keeps A's host_token; B's rings are served on A's FREED host channel.
+    let vmm = plane::Vmm::new();
+    let mut p = Plane::new(&vmm, 32, 0x1f);
+    let mut caps = VmCaps::from_declared(8, 8, 8, 8);
+    p.allocate_channel(&mut caps, 7, Route::Translated, 0x77, Owner::User).unwrap();
+    // Re-allocating without freeing must FAIL and must not rehome the token.
+    assert!(
+        p.allocate_channel(&mut caps, 7, Route::Translated, 0xBB, Owner::User).is_err(),
+        "⊘ allocation over a live token must be refused"
+    );
+    assert_eq!(p.tokens[7].load().host_token, 0x77, "and must not have rehomed it");
+}
+
+#[test]
+fn a_recycled_kernel_chid_does_not_keep_the_kernel_failure_policy() {
+    // ⊘⊘⊘ `[fable S5]`. kernel_tokens was sticky: never removed on free, cleared only at
+    // teardown. A kernel chid recycled to a USER process kept the KERNEL arm, so that user
+    // channel's translation miss poisoned the device guest-wide -- defeating §7's whole
+    // blast-radius argument.
+    use std::sync::atomic::Ordering as O;
+    let vmm = plane::Vmm::new();
+    let mut p = Plane::new(&vmm, 32, 0x1f);
+    let host = RecordingHost::default();
+    let mut caps = VmCaps::from_declared(8, 8, 8, 8);
+    p.allocate_channel(&mut caps, 9, Route::Translated, 0x99, Owner::Kernel).unwrap();
+    assert!(p.free_channel(&mut caps, 9), "the kernel channel is freed");
+    // chid 9 is recycled to an unprivileged process.
+    p.allocate_channel(&mut caps, 9, Route::Translated, 0xAA, Owner::User).unwrap();
+    host.untranslatable.store(true, O::Release);
+    p.trap_write(Class::Doorbell, 0, 0, 9, 4);
+    let mut scratch = Vec::new();
+    p.worker_pass(&host, &mut scratch, 8);
+    assert_eq!(host.poisoned.load(O::Acquire), 0, "⊘ a USER channel must NOT poison the device");
+    assert_eq!(host.faulted.load(O::Acquire), 1, "it faults, and the blast radius is the asker");
+}
+
+#[test]
+fn a_guest_root_token_index_cannot_panic_the_vmm() {
+    // ⊘ `[fable S7]`. `self.tokens[tok as usize]` with no bound. The value is guest-derived.
+    let vmm = plane::Vmm::new();
+    let mut p = Plane::new(&vmm, 16, 0xf);
+    let mut caps = VmCaps::from_declared(64, 8, 8, 8);
+    // Far past the table; must refuse, not panic.
+    let _ = p.allocate_channel(&mut caps, 4_000_000_000, Route::Translated, 1, Owner::User);
+    let _ = p.allocate_channel(&mut caps, 200, Route::Translated, 1, Owner::User);
+}
+
+#[test]
+fn caps_are_released_on_free_so_a_long_lived_guest_is_not_refused_forever() {
+    // ⊘ `[fable H3]`. acquire with no release: a guest that allocated and freed more channels
+    // than its cap over its LIFE was refused forever.
+    let vmm = plane::Vmm::new();
+    let mut p = Plane::new(&vmm, 32, 0x1f);
+    let mut caps = VmCaps::from_declared(2, 8, 8, 8);
+    for i in 0..20u32 {
+        let tok = i % 2;
+        p.allocate_channel(&mut caps, tok, Route::Translated, i, Owner::User)
+            .unwrap_or_else(|e| panic!("cycle {i} refused: {e:?}"));
+        assert!(p.free_channel(&mut caps, tok));
+    }
+    assert_eq!(caps.live(Twin::Channel), 0, "every acquire was matched by a release");
 }

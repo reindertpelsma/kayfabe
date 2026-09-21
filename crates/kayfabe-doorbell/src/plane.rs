@@ -28,6 +28,19 @@
 use crate::bitmap::RungBitmap;
 use crate::caps::{Refusal, Twin, VmCaps};
 use crate::channel::{Disposition, Owner, Submission};
+
+/// The answer to *"can this submission's operands be translated?"* — ⊘ **three-valued on
+/// purpose**. Collapsing `NotYet` into `No` is fable's CRITICAL S2.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Translatable {
+    /// Every operand resolves.
+    Yes,
+    /// ⊘ **Not yet** — the mirror has not caught up with an invalidate still in flight. This is a
+    /// *timing* state, not a verdict about the guest's work.
+    NotYet,
+    /// The operand names something nothing binds, and no amount of waiting changes it.
+    No,
+}
 use crate::completion::Completion;
 use crate::leaf::{GuestRamLayout, HostSlice, LeafRefusal};
 use crate::lifetime::{Step, Teardown, TeardownError, WalkerState};
@@ -51,9 +64,18 @@ pub trait HostOps: Send + Sync {
     /// Apply one privileged register write, in ring order.
     fn apply_register(&self, bar: u8, offset: u32, value: u64, width: u8);
 
-    /// ⊘ §7: can every operand of the work now queued on this channel be translated?
-    /// Answered by the host side, because only it knows what is bound.
-    fn operands_translatable(&self, host_token: u32, up_to_seq: u64) -> bool;
+    /// ⊘ §7/§5.6: can every operand of the work now queued on this channel be translated?
+    ///
+    /// ★★★ **Three answers, not two.** `[fable w823, CRITICAL S2]` the first version returned
+    /// `bool`, and a `false` was treated as a terminal verdict — so a ring landing in the
+    /// **invalidate window**, when the VA mirror has not yet caught up, went straight to
+    /// refuse-and-poison on a kernel channel. That is a **guest-wide denial of service from a
+    /// timing hint**, reachable by an unprivileged process (§47: no identity at the trap) and
+    /// reachable by the guest kernel's own legitimate ring with no attacker at all.
+    ///
+    /// ⇒ §5.6's fence is *"the mirror must catch up"*, and §5.2 says what to do meanwhile:
+    /// *"cannot act yet ⇒ CAS BUSY → RUNG, then re-publish."*
+    fn operands_translatable(&self, host_token: u32, up_to_seq: u64) -> Translatable;
 
     /// §8: write a completion ourselves. ⊘ Called **only** where [`Completion::for_route`] says a
     /// forge is licensed — i.e. where no GPU work ran.
@@ -161,12 +183,47 @@ impl<'v> Plane<'v> {
         host_token: u32,
         owner: Owner,
     ) -> Result<(), Refusal> {
+        // ⊘ `[fable S7]` a guest-root-derived index must not panic the VMM.
+        let idx = (tok & self.token_mask) as usize;
+        if idx >= self.tokens.len() {
+            return Err(Refusal::OverDeclaredCap { twin: Twin::Channel, cap: self.tokens.len() as u32, asked: tok });
+        }
         caps.acquire(Twin::Channel)?;
+        // ⊘⊘ `[fable S3]` the return value is the point: a failed allocate leaves the OLD route
+        // and host_token in place, and ignoring it serves the new channel's rings on the old
+        // channel's twin.
+        let ok = self.tokens[idx].allocate(route, host_token)
+            || self.tokens[idx].allocate_fresh(route, host_token);
+        if !ok {
+            caps.release(Twin::Channel);
+            return Err(Refusal::OverDeclaredCap { twin: Twin::Channel, cap: 0, asked: tok });
+        }
+        // ⊘⊘⊘ `[fable S5]` kernel_tokens was STICKY: never removed on free, duplicated on reuse,
+        // cleared only at teardown. A kernel chid, once freed and recycled to a user process,
+        // kept the KERNEL failure policy — so a user channel's translation miss poisoned the
+        // device guest-wide, defeating §7's blast-radius argument entirely.
+        // ⇒ Ownership is set per allocation, and cleared for the other case. It is also a set
+        // rather than a growing Vec, so a guest allocating and freeing in a loop cannot grow it.
+        self.kernel_tokens.retain(|t| *t != tok);
         if owner == Owner::Kernel {
             self.kernel_tokens.push(tok);
         }
-        self.tokens[tok as usize].allocate(route, host_token);
         Ok(())
+    }
+
+    /// The free path. ⊘ `[fable H3]` there was no free at all: caps were acquired and never
+    /// released, so a guest that allocated and freed more than its cap over its life was refused
+    /// forever.
+    pub fn free_channel(&mut self, caps: &mut VmCaps, tok: u32) -> bool {
+        let idx = (tok & self.token_mask) as usize;
+        let Some(w) = self.tokens.get(idx) else { return false };
+        // §5.2: free waits out BUSY before the twin may be dropped.
+        if !w.retire() {
+            return false;
+        }
+        self.kernel_tokens.retain(|t| *t != tok);
+        caps.release(Twin::Channel);
+        true
     }
 
     fn path(&self) -> TrapPath<'_> {
@@ -269,13 +326,36 @@ impl<'v> Plane<'v> {
                 // channel must never become a fault, because the unified-memory driver treats any
                 // channel error as globally fatal and one fault kills CUDA for every process in
                 // the guest.
+                // ★★★ §5.6's FENCE, on the live path. A stale mirror is a reason to WAIT, never
+                // a reason to poison: put the token back as RUNG and re-publish so a later pass
+                // retries once the VA manager has applied the diff.
+                // ⊘ Bounded by the same K as the re-act loop — §5.2's livelock argument applies
+                // identically, and an unbounded "try again" is a way for a guest to pin a worker.
+                match host.operands_translatable(t.host_token, seq) {
+                    Translatable::NotYet if round < REACT_ROUNDS => {
+                        // ⚠ §5.2: "found but unactionable counts as NO WORK for the purpose of
+                        // sleeping" — so this is NOT counted in `served`, or a worker spins on a
+                        // token whose enabling register write also needs a worker.
+                        w.put_back();
+                        self.bits.publish(tok);
+                        let _ = self.vmm.worker_wake.bump();
+                        break;
+                    }
+                    _ => {}
+                }
                 let sub = Submission {
                     owner: self.owner_of(tok),
                     route: t.route,
-                    all_operands_translatable: host.operands_translatable(t.host_token, seq),
+                    all_operands_translatable: matches!(
+                        host.operands_translatable(t.host_token, seq),
+                        Translatable::Yes
+                    ),
                 };
+                let mut submitted = false;
                 let did_gpu_work = match sub.decide() {
-                    Disposition::Submit => match t.route {
+                    Disposition::Submit => {
+                        submitted = true;
+                        match t.route {
                         Route::Translated => host.run_translated(t.host_token, seq),
                         Route::Emulated => {
                             host.run_emulated(t.host_token, seq);
@@ -284,8 +364,15 @@ impl<'v> Plane<'v> {
                         // ⊘ A passthrough token is rung INLINE on the vCPU and must never be
                         // served here; reaching this arm means the classifier disagreed with the
                         // token word.
-                        Route::Passthrough | Route::Unknown => break,
-                    },
+                        // ⊘ `[fable S4]` was `break` WITHOUT release(), wedging the token BUSY
+                        // forever so `retire()` never succeeded and the free path spun. Release
+                        // first, then leave.
+                        Route::Passthrough | Route::Unknown => {
+                            let _ = w.release(round, REACT_ROUNDS);
+                            break;
+                        }
+                    }
+                    }
                     Disposition::RefuseAndPoison => {
                         host.refuse_and_poison(t.host_token);
                         false
@@ -295,9 +382,12 @@ impl<'v> Plane<'v> {
                         false
                     }
                 };
-                // ★★★ §8 ON THE LIVE PATH. A forge is licensed only where no GPU work ran, and
-                // this is the only place that decision is taken.
-                if Completion::for_route(t.route, did_gpu_work) == Completion::Forge {
+                // ★★★ §8 ON THE LIVE PATH, and ⊘ **only when the work was actually SUBMITTED.**
+                // `[fable w823, S6]` the first version forged after a refusal or a fault, because
+                // `did_gpu_work == false` looks the same in both cases. §8: *"A completion written
+                // for work that did not happen is how a scrub becomes a leak"* — and work that was
+                // REFUSED is the purest instance of work that did not happen.
+                if submitted && Completion::for_route(t.route, did_gpu_work) == Completion::Forge {
                     host.forge_completion(t.host_token);
                 }
                 served += 1;

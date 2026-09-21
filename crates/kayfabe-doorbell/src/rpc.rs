@@ -68,19 +68,90 @@ pub fn name_of(function: u32) -> Option<&'static str> {
     SURFACE.iter().find(|(f, _, _)| *f == function && *f != u32::MAX).map(|(_, n, _)| *n)
 }
 
-/// The RM control commands §2.3 enumerates, as the nested ids that ride inside `GSP_RM_CONTROL`.
+/// RM control commands, **with their dispositions** — §2.3.
 ///
-/// ⚠ §1.3: `GSP_RM_ALLOC` and `GSP_RM_CONTROL` are **MIXED, default REFUSE** — serving the
-/// envelope does not mean serving everything inside it. This is the inner allowlist.
-pub const CONTROLS: [u32; 33] = [
-    0x00801813, 0x00e00102, 0x00f10003, 0x20800122, 0x2080012b, 0x20800177, 0x20800a36,
-    0x20800a40, 0x20800a41, 0x20800a4c, 0x20800a59, 0x20800a61, 0x20800a9f, 0x20800aac,
-    0x20800af3, 0x20801210, 0x20801702, 0x20802209, 0x20802a08, 0x20803083, 0x20808159,
-    0x20808162, 0x20809001, 0x2080a026, 0x83de0307, 0x906f0106, 0x90f10106, 0xa06c0101,
-    0xa06c0105, 0xa06f0103, 0xa06f0104, 0xb0cc0105, 0xb0cc010a,
+/// ## ⊘⊘⊘ THE DEFECT THIS REPLACES, because it would have shipped a hole
+///
+/// `[fable w823, HIGH H1]` the first version was a flat `CONTROLS: [u32; 33]` built by copying
+/// §2.3's ids **without their dispositions**, and `control_is_served()` returned `true` for all
+/// of them. Nine are **refused by name** in §2.3, including:
+///
+/// | id | name | why §2.3 refuses it |
+/// |---|---|---|
+/// | `0x20800122` | `GPU_EXEC_REG_OPS` | ★ **arbitrary register peek/poke** |
+/// | `0xb0cc010a` | perf-counter `EXEC_REG_OPS` | arbitrary register peek/poke |
+/// | `0xb0cc0105` | `ALLOC_PMA_STREAM` | hardware performance counters |
+/// | `0x83de0307` | `DEBUG_SET_MODE_MMU_DEBUG` | SM-debugger |
+/// | `0x20800177` | `GPU_REPORT_NON_REPLAYABLE_FAULT` | the fault mechanism is not modelled |
+/// | `0x00e00102`, `0x00f10003`, `0x20803083` | fabric / NVLink | |
+/// | `0x20801702` | `MC_SERVICE_INTERRUPTS` | ★ **deliberately** refused, to cancel the guest's polling loop |
+///
+/// ⇒ The first handler written against that "inner allowlist" would have admitted **register
+/// peek/poke from the guest**. ⚠ And the coverage test *asserted* it was served — a test that
+/// encoded the bug.
+///
+/// ★ The lesson is narrow and repeatable: **an id list is not an allowlist.** Copying the
+/// identifiers out of a table and leaving the verdicts behind inverts the table's meaning while
+/// looking like faithful transcription.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ControlDisposition {
+    /// Answered from our own model, no host GPU touched.
+    ServedLocally,
+    /// ⊘ Refused by name, with a reason.
+    RefusedByName(&'static str),
+    /// Passes the allowlist, no handler ⇒ falls to the unserviced ledger as `NV_ERR_NOT_SUPPORTED`.
+    /// ⚠ §2.3: ~135 commands are in this state. Admitted is **not** served.
+    AdmittedUndispatched,
+}
+
+pub const CONTROLS: [(u32, ControlDisposition); 33] = [
+    (0x00801813, ControlDisposition::ServedLocally),
+    (0x2080012b, ControlDisposition::ServedLocally),
+    (0x20800a36, ControlDisposition::ServedLocally),
+    (0x20800a40, ControlDisposition::ServedLocally),
+    (0x20800a41, ControlDisposition::ServedLocally),
+    (0x20800a4c, ControlDisposition::ServedLocally),
+    (0x20800a59, ControlDisposition::ServedLocally),
+    (0x20800a61, ControlDisposition::ServedLocally),
+    (0x20800a9f, ControlDisposition::ServedLocally),
+    (0x20800aac, ControlDisposition::ServedLocally),
+    (0x20800af3, ControlDisposition::ServedLocally),
+    (0x20801210, ControlDisposition::ServedLocally),
+    (0x20802209, ControlDisposition::ServedLocally),
+    (0x20802a08, ControlDisposition::ServedLocally),
+    (0x20808159, ControlDisposition::ServedLocally),
+    (0x20808162, ControlDisposition::ServedLocally),
+    (0x20809001, ControlDisposition::ServedLocally),
+    (0x90f10106, ControlDisposition::ServedLocally),
+    (0xa06c0101, ControlDisposition::ServedLocally),
+    (0xa06c0105, ControlDisposition::ServedLocally),
+    (0xa06f0103, ControlDisposition::ServedLocally),
+    (0xa06f0104, ControlDisposition::ServedLocally),
+    (0x906f0106, ControlDisposition::ServedLocally),
+    (0x2080a026, ControlDisposition::AdmittedUndispatched),
+    // ⊘ The nine §2.3 refuses BY NAME.
+    (0x20800122, ControlDisposition::RefusedByName("GPU_EXEC_REG_OPS: arbitrary register peek/poke")),
+    (0xb0cc010a, ControlDisposition::RefusedByName("perf EXEC_REG_OPS: arbitrary register peek/poke")),
+    (0xb0cc0105, ControlDisposition::RefusedByName("ALLOC_PMA_STREAM: hardware performance counters")),
+    (0x83de0307, ControlDisposition::RefusedByName("DEBUG_SET_MODE_MMU_DEBUG: SM debugger")),
+    (0x20800177, ControlDisposition::RefusedByName("GPU_REPORT_NON_REPLAYABLE_FAULT: fault mechanism not modelled")),
+    (0x00e00102, ControlDisposition::RefusedByName("fabric/NVLink")),
+    (0x00f10003, ControlDisposition::RefusedByName("fabric/NVLink")),
+    (0x20803083, ControlDisposition::RefusedByName("fabric/NVLink")),
+    (0x20801702, ControlDisposition::RefusedByName("MC_SERVICE_INTERRUPTS: deliberately refused to cancel the guest's polling loop")),
 ];
 
-/// ⊘ Default REFUSE, by name. The envelope is served; its contents are an allowlist.
+pub fn control_disposition(cmd: u32) -> ControlDisposition {
+    CONTROLS
+        .iter()
+        .find(|(c, _)| *c == cmd)
+        .map(|(_, d)| *d)
+        // ⊘ Default deny, by name.
+        .unwrap_or(ControlDisposition::RefusedByName("not on the allowlist — default deny"))
+}
+
+/// ⊘ *Served* means answered. Admitted-undispatched and refused are both **not served**, and
+/// collapsing them is how "the allowlist admits it" became "we handle it".
 pub fn control_is_served(cmd: u32) -> bool {
-    CONTROLS.contains(&cmd)
+    matches!(control_disposition(cmd), ControlDisposition::ServedLocally)
 }

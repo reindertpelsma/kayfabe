@@ -73,30 +73,54 @@ fn outbound_events_are_never_served_as_requests() {
     }
 }
 
-/// §2.3's control ids, transcribed independently.
-const REQUIRED_CONTROLS: [u32; 33] = [
-    0x00801813, 0x00e00102, 0x00f10003, 0x20800122, 0x2080012b, 0x20800177, 0x20800a36,
-    0x20800a40, 0x20800a41, 0x20800a4c, 0x20800a59, 0x20800a61, 0x20800a9f, 0x20800aac,
-    0x20800af3, 0x20801210, 0x20801702, 0x20802209, 0x20802a08, 0x20803083, 0x20808159,
-    0x20808162, 0x20809001, 0x2080a026, 0x83de0307, 0x906f0106, 0x90f10106, 0xa06c0101,
-    0xa06c0105, 0xa06f0103, 0xa06f0104, 0xb0cc0105, 0xb0cc010a,
+/// ⊘⊘⊘ §2.3's control ids **with the dispositions the doc states**. The first version of this
+/// file listed only the ids and asserted every one was SERVED — which asserted the bug
+/// (`GPU_EXEC_REG_OPS`, arbitrary register peek/poke, marked served). ⚠ And the "transcribed
+/// independently" claim was false: it was a byte-identical copy of `rpc::CONTROLS`, so the two
+/// agreed by construction. This list carries the VERDICTS, which is where the disagreement lives.
+const MUST_BE_REFUSED: [(u32, &str); 9] = [
+    (0x20800122, "GPU_EXEC_REG_OPS"),
+    (0xb0cc010a, "perf EXEC_REG_OPS"),
+    (0xb0cc0105, "ALLOC_PMA_STREAM"),
+    (0x83de0307, "DEBUG_SET_MODE_MMU_DEBUG"),
+    (0x20800177, "GPU_REPORT_NON_REPLAYABLE_FAULT"),
+    (0x00e00102, "fabric"),
+    (0x00f10003, "fabric"),
+    (0x20803083, "fabric"),
+    (0x20801702, "MC_SERVICE_INTERRUPTS"),
 ];
 
 #[test]
-fn every_required_rm_control_is_served() {
-    let missing: Vec<String> = REQUIRED_CONTROLS
-        .iter()
-        .filter(|c| !rpc::control_is_served(**c))
-        .map(|c| format!("{c:#010x}"))
-        .collect();
-    assert!(missing.is_empty(), "⊘ RM CONTROL SURFACE INCOMPLETE: {}", missing.join(" "));
+fn the_nine_refused_by_name_controls_are_not_served() {
+    // ★★★ The one that would have shipped a hole: a handler written against the old flat list
+    // would have admitted REGISTER PEEK/POKE from the guest.
+    let mut wrong = Vec::new();
+    for (id, name) in MUST_BE_REFUSED {
+        if rpc::control_is_served(id) {
+            wrong.push(format!("{id:#010x} {name} is SERVED but §2.3 refuses it by name"));
+        }
+        match rpc::control_disposition(id) {
+            rpc::ControlDisposition::RefusedByName(_) => {}
+            other => wrong.push(format!("{id:#010x} {name}: {other:?}")),
+        }
+    }
+    assert!(wrong.is_empty(), "⊘ REFUSAL LIST VIOLATED:\n  {}", wrong.join("\n  "));
+}
+
+#[test]
+fn admitted_is_not_served() {
+    // ⚠ §2.3: ~135 commands pass the allowlist with NO handler and fall to the unserviced ledger.
+    // Collapsing that into "served" is how "the allowlist admits it" becomes "we handle it".
+    assert_eq!(rpc::control_disposition(0x2080a026), rpc::ControlDisposition::AdmittedUndispatched);
+    assert!(!rpc::control_is_served(0x2080a026), "admitted-undispatched is NOT served");
 }
 
 #[test]
 fn an_unlisted_control_is_refused_even_though_the_envelope_is_served() {
-    // ⚠ §1.3: GSP_RM_ALLOC and GSP_RM_CONTROL are "MIXED, default REFUSE". Serving the ENVELOPE
-    // does not mean serving everything inside it -- the inner allowlist is separate.
     assert_eq!(rpc::classify(76), Disposition::Serve, "the envelope is served");
-    assert!(!rpc::control_is_served(0x2080ffff), "but an unlisted control inside it is not");
-    assert!(!rpc::control_is_served(0xdeadbeef));
+    assert!(!rpc::control_is_served(0x2080ffff));
+    assert!(matches!(
+        rpc::control_disposition(0xdeadbeef),
+        rpc::ControlDisposition::RefusedByName(_)
+    ));
 }

@@ -14,6 +14,17 @@ const PLANE: &str = include_str!("../src/plane.rs");
 const TRAP: &str = include_str!("../src/trap.rs");
 
 /// Each policy module, and the §-rule it would stop enforcing if it fell off the path.
+/// ⊘⊘⊘ `[fable w823, HIGH H2]` the first version asked `contains("use crate::shadow")`, which is
+/// satisfied by importing the enum `WriteSemantics` while `Cell` and `Trigger` are never called.
+/// **The gate that claimed to ask reachability asked visibility — the exact failure its own
+/// docstring names.** ⇒ Name the SYMBOL that must be called, not the module that must be imported.
+const MUST_CALL: [(&str, &str); 4] = [
+    ("Submission", "§7 — the kernel-channel refusal"),
+    ("Completion::for_route", "§8 — the forge licence"),
+    ("VmCaps", "§9.1 — per-VM twin caps"),
+    ("read_traps.policy", "§5 — the read-trap allowlist"),
+];
+
 const MUST_BE_REACHED: [(&str, &str); 8] = [
     ("channel", "§7 — an untranslatable operand on a KERNEL channel must refuse, never fault"),
     ("completion", "§8 — a forge is licensed only where no GPU work ran"),
@@ -33,6 +44,11 @@ fn every_policy_module_is_reached_from_a_composed_path() {
         let used = body.contains(&format!("crate::{m}::")) || body.contains(&format!("use crate::{m}"));
         if !used {
             orphaned.push(format!("{m} — would stop enforcing: {why}"));
+        }
+    }
+    for (sym, why) in MUST_CALL {
+        if !body.contains(sym) {
+            orphaned.push(format!("{sym} is never CALLED — would stop enforcing: {why}"));
         }
     }
     assert!(

@@ -7,7 +7,7 @@
 //! ⚠ **The bitmap is a HINT; the word is the TRUTH** (§5.1). A bit set over an IDLE word costs
 //! one look. The bitmap may over-report; it must never under-report.
 
-use core::sync::atomic::{AtomicU64, Ordering};
+use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
 /// 2²¹ tokens ⇒ 2²¹ bits = 256 KiB of bits... §5.1 quotes 64 KiB for the *expressible* range in
 /// the common (Ampere, 19-bit) case. We size from the constant so the two cannot drift.
@@ -19,6 +19,21 @@ pub const N_SUMMARY: usize = N_WORDS / 64;
 pub struct RungBitmap {
     words: Box<[AtomicU64]>,
     summary: Box<[AtomicU64]>,
+    /// ⊘⊘⊘ **THE SCAN START ROTATES, AND WITHOUT THAT THIS PLANE HAS A STARVATION HOLE THE
+    /// THREAT MODEL EXISTS TO PREVENT.**
+    ///
+    /// `[fable review, w823 — CRITICAL]` the first version always began at summary word 0 and
+    /// took the first `limit` set bits in **ascending token order**. The guest's chid allocator
+    /// hands out ascending ids, so an early-starting unprivileged process owns the low tokens.
+    /// Ringing ≥`limit` of them in a loop fills every scan, and a higher-numbered token —
+    /// **the kernel's scrubber and UVM channels** — is never reached.
+    /// `[reproduced]` 10 000 worker passes, attacker on tokens 0..63 ⇒ kernel token 100 served
+    /// **0 times**, still `Rung`.
+    ///
+    /// ⚠ **The §5.2 timeslice does not help**, and believing it did is how this shipped: `K`
+    /// bounds how long one worker holds ONE claim. It says nothing about which tokens a scan
+    /// looks at. Fairness of *holding* is not fairness of *finding*.
+    next_start: AtomicUsize,
 }
 
 impl Default for RungBitmap {
@@ -32,6 +47,7 @@ impl RungBitmap {
         RungBitmap {
             words: (0..N_WORDS).map(|_| AtomicU64::new(0)).collect::<Vec<_>>().into_boxed_slice(),
             summary: (0..N_SUMMARY).map(|_| AtomicU64::new(0)).collect::<Vec<_>>().into_boxed_slice(),
+            next_start: AtomicUsize::new(0),
         }
     }
 
@@ -63,7 +79,12 @@ impl RungBitmap {
     /// Clearing after would open a window where the bit is set and no summary points at it.
     pub fn scan(&self, out: &mut Vec<u32>, limit: usize) -> usize {
         out.clear();
-        for si in 0..N_SUMMARY {
+        // ★ Begin where the last scan stopped, and wrap. Every summary word is still visited on
+        // every scan, so nothing is missed; what changes is WHICH tokens fill a bounded `out`.
+        // ⇒ A token cannot be starved indefinitely, because the start walks past it.
+        let base = self.next_start.load(Ordering::Relaxed);
+        for k in 0..N_SUMMARY {
+            let si = (base + k) % N_SUMMARY;
             let mut s = self.summary[si].load(Ordering::Acquire);
             while s != 0 {
                 let b = s.trailing_zeros() as usize;
@@ -82,11 +103,15 @@ impl RungBitmap {
                             self.words[w].fetch_or(word, Ordering::Release);
                             self.summary[si].fetch_or(1u64 << b, Ordering::Release);
                         }
+                        // ⊘ Resume at the NEXT summary word, not this one: resuming here would
+                        // re-take the same attacker's group first and rebuild the starve.
+                        self.next_start.store((si + 1) % N_SUMMARY, Ordering::Relaxed);
                         return out.len();
                     }
                 }
             }
         }
+        self.next_start.store((base + 1) % N_SUMMARY, Ordering::Relaxed);
         out.len()
     }
 
