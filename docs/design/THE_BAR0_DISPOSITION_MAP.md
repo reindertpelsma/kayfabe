@@ -39,6 +39,23 @@ point at.
 ★★★ **GSP Turing / Ampere / Ada: ZERO disposition-D pages.** That is the current product target and
 the bench, and it derives from source what `THE_CONSTRAINTS.md:28` measured at w708–w710.
 
+### §1.1 — ⊘ TWO ROWS RESOLVED BY `[fable w824]`. The hole list shrinks to three.
+
+**PMU `0x10a1c4` → disposition B. No hole.** The burst read lives **only** in `gt215_pmu_recv`,
+which runs from the PMU-interrupt work item — **an interrupt WE raise.** `gt215_pmu_init` itself
+only writes the port and polls `0x10a4d0/dc`, `0x10a10c`, `0x10a04c`, all values we author; the
+other reader (`memx.c:184-186`) is reclock-only and never runs at boot; and `devinit/gm200.c:69-70`
+is a *single* read after a cursor write ⇒ computed shadow. ⇒ **Never raise the PMU message
+interrupt and the port is never read.** ⚠ Latent, not boot-blocking: `gt215_pmu_send` does an
+uninterruptible `wait_event`, so if a user ever reclocks, a missing reply hangs *that task*.
+
+**Pascal/Volta SEC2 `0x087000` — still UNVERIFIED.** nouveau passes `addr=0` at `sec2/gp102.c:317`
+and the base resolution was not traced. Volta's *existence* is confirmed (`gp108_sec2_new`,
+`device/base.c:2303-2336`); only the address is open.
+
+⇒ **The D list is: `0x8F2000` (FSP), `0x840000` (SEC2), `0x087000` (SEC2, base unverified).**
+★ And for the current product target — **GSP Turing/Ampere/Ada — it remains EMPTY.**
+
 ## §2 — Disposition C: the only live-host-page read
 
 | page | registers | families |
@@ -130,7 +147,7 @@ asserting monotonicity of observed guest time; until that runs this is reasoning
 **B + E** there, and none of this applies. **Pre-Turing proprietary is UNKNOWN** — ogkm has no
 pre-Turing timer HAL, so there is no source to read.
 
-## §4A — ★ THE THREE EMEM PORTS ARE NOT THE SAME THING. Two are optional; one is the boot itself.
+## §5 — ★ THE THREE EMEM PORTS ARE NOT THE SAME THING. Two are optional; one is the boot itself.
 
 `[owner w824]` *"oh but if its only crash dump, which I don't care about as with kayfabe the guest
 must not see the real GSP (and remain unprivileged), can we keep it read only (no read trap) and
@@ -143,7 +160,7 @@ the gate.**
 | **`NV_PFSP_EMEMD`** `0x8F2ac4` | **the GSP boot handshake** (Hopper, discrete Blackwell) | **YES** | **D** |
 | **`NV_PSEC_EMEMD`** `0x840ac4` | **the GSP boot handshake** (integrated Blackwell) | **YES** | **D** |
 
-### §4A.1 — GSP EMEM: serve zero, and the argument is two-deep
+### §5.1 — GSP EMEM: serve zero, and the argument is two-deep
 
 1. **The gate means it is never read.** `FALCON_DEBUGINFO = 0` ⇒ WFL0 fails
    `crashcatWayfinderL0Valid` (which requires bits 15:0 == `NV_CRASHCAT_SIGNATURE`,
@@ -157,7 +174,7 @@ GSP.* There is no real GSP behind us to crash, so a crash dump is not a feature 
 to implement — **it is a feature that does not exist in our model**, and a guest asking for one is
 asking about a processor it must never see. ⇒ Serving 0 is not a stub; it is the truthful answer.
 
-### §4A.2 — FSP / SEC2 EMEM: the opposite — this IS how GSP gets booted
+### §5.2 — FSP / SEC2 EMEM: the opposite — this IS how GSP gets booted
 
 ⊘ These are **not** debug channels. On Hopper+ the boot sequence changed: a **security processor
 comes up first out of chip reset**, and RM asks *it* to bring GSP up, over a **packetised message
@@ -178,7 +195,7 @@ processor plays the role is a per-family assignment: **FSP** on Hopper and discr
 ⇒ **Zeros are not an option here.** RM parses the MCTP header, validates SOM/EOM/TAG, dispatches
 on the NVDM type, **and** asserts the cursor advanced by exactly `packetSize/4` (§52).
 
-### §4A.3 — ⊘ THE 1-DWORD ESCAPE IS CLOSED. Recorded so nobody re-opens it.
+### §5.3 — ⊘ THE 1-DWORD ESCAPE IS CLOSED. Recorded so nobody re-opens it.
 
 §52 floated an avenue: *we* author the responses, so if every reply were a **single dword** the
 read loop would run once (`N = 1`) and a pre-advanced `EMEMC` shadow would pass the assert ⇒ **B,
@@ -194,7 +211,7 @@ a 1-dword packet is header-only and carries no payload.
 **boot-only**, they carry nothing polled at runtime, and **neither family is the current target** —
 GSP Turing/Ampere/Ada has **zero** disposition-D pages.
 
-## §4B — ✔ MEASURED w824: the OPEN module has NO non-GSP mode, and it lies about it
+## §6 — ✔ MEASURED w824: the OPEN module has NO non-GSP mode, and it lies about it
 
 `[owner]` *"for non GSP we don't know ofc. thats worth a test with proprietary driver or if you can
 satisfy from nouveau measurements."* ⇒ Ran the cheap half on the bench box (GA106,
@@ -236,10 +253,10 @@ The **proprietary** module (`--kernel-module-type=proprietary`) is the only plac
 Turing/Ampere/Ada path could exist, and it is **not installed on the bench**. ⚠ Swapping the bench
 box's driver would disturb the 30/30 bare-metal baseline that the whole guest lane indicts against,
 so this needs **its own box or a deliberate window** — it was not done silently. ⇒ Until then the
-three proprietary-GSP-off rows in §6 stay **UNKNOWN**, and the non-GSP map rests on **nouveau**,
+three proprietary-GSP-off rows in §8 stay **UNKNOWN**, and the non-GSP map rests on **nouveau**,
 which is source we can read.
 
-## §5 — Everything else is B: the non-GSP block census (nouveau)
+## §7 — Everything else is B: the non-GSP block census (nouveau)
 
 All rows: writes trap (W1C acks, enables, triggers); reads are plain or producer-updated.
 
@@ -262,14 +279,14 @@ All rows: writes trap (W1C acks, enables, triggers); reads are plain or producer
 | PRAMIN | `0x700000` | **A** — r/w memslot re-pointed inside the `0x1700` write trap (297 µs worst, ~22 moves/boot) |
 | PDISP | `0x610000+` | out of scope (displayless) |
 
-## §6 — The family matrix
+## §8 — The family matrix
 
 | family | GSP path | non-GSP path |
 |---|---|---|
 | **Maxwell** | n/a | **GM107/GM108: D `0x10a000`**; GM200+: no D. `0x9000` refreshed-B |
 | **Pascal** | n/a | GP102+: **D SEC2 `0x087000`** ⚠ base inferred; `0x9000` refreshed-B |
 | **Volta** | n/a | D SEC2 ⚠ inferred via `gv100_acr`; `0x9000` refreshed-B |
-| **Turing** | **no D**; C `0xbb0000`; E `0x9400/10` | nouveau: **D `0x840000`**; `0x9000` refreshed-B. ⊘ **OPEN module: no non-GSP mode at all — measured §4B.** ⚠ Proprietary GSP-off: **UNKNOWN**, needs its own box |
+| **Turing** | **no D**; C `0xbb0000`; E `0x9400/10` | nouveau: **D `0x840000`**; `0x9000` refreshed-B. ⊘ **OPEN module: no non-GSP mode at all — measured §6.** ⚠ Proprietary GSP-off: **UNKNOWN**, needs its own box |
 | **Ampere** | as Turing — **this is the bench, and it is measured** | as Turing non-GSP (`ga102_sec2`) |
 | **Ada** | as Turing | ⚠ nouveau has **no non-GSP Ada**; proprietary GSP-off **UNKNOWN** |
 | **Hopper** | **D `0x8F2000`** (FSP, boot); E `0x118df4/f8` | n/a (GSP mandatory) |
@@ -280,16 +297,210 @@ would back a support-matrix claim: proprietary-GSP-off SEC2 on Turing/Ampere, al
 and pre-Turing proprietary timer. ⊘ And one row is **inferred, not read**: the Pascal/Volta SEC2
 base `0x087000`.
 
-## §7 — What was searched, so the zeros mean something
+## §9 — What was searched, so the zeros mean something
 
 - **ogkm-580**: every `RD32`/`RegRead` line matching `EMEMD|DMEMD|IMEMD` — **4 hits, all listed**;
   every caller of `kgspReadEmem` / `kcrashcatEngineRead*` / `SyncBufferDescriptor`. `IMEMD` has
   **zero** GPU read sites.
 - **nouveau**: every `nvkm_falcon_pio_rd` caller; every `rd32` of `0x1c4+|0x184+|0x10a1c4|0xac4+`;
-  the block-by-block ISR review in §5; a corpus grep for read-clear/latch language (hits only in
+  the block-by-block ISR review in §7; a corpus grep for read-clear/latch language (hits only in
   VBIOS opcode names).
 - ★ **Positive control**: the grep surfaced the known `gt215.c:106-109` and `gm200.c:47` reads
   **before** anything was concluded. ⊘ This is the discipline my own first sweep skipped — see
   `a_sweep_that_reports_zero_must_first_report_one` — and it is why these zeros carry weight and
   that one did not.
 - ⊘ **Access codes were not used**: both ports carry `RW-4A`, identical to any array register.
+
+---
+
+## §10 — THE UNIT OF DECISION IS THE PAGE, AND THE COST OF A HOLE IS "IMPLEMENT THE PAGE"
+
+`[owner w824]` *"if one thing must be trapped (really) then the entire page is trapped ofc,
+granular below 4kib is not possible, so then you need to implement the traps for any adjecent
+register that cannot be aligned out with kvm memslots."*
+
+★★★ **Correct, and it sharpens §53.3 from a performance note into a scope estimate.** A KVM
+memslot is page-granular. ⇒ A disposition-D page does not merely make its neighbours slow — **every
+register on that page that the driver touches must now be IMPLEMENTED as a trap handler**, because
+there is no longer any memory behind them to answer from. The cost of a hole is not "one exit per
+access"; it is **"model this entire page."**
+
+### §10.1 — Registers per candidate D page
+
+| page | what must be implemented | verdict |
+|---|---|---|
+| **`0x8F2000`** FSP | **6 registers, and that is all of them**: `EMEMC`, `EMEMD`, `QUEUE_HEAD`, `QUEUE_TAIL`, `MSGQ_HEAD`, `MSGQ_TAIL` | ★ **genuinely cheap** — it is a message queue with a cursor, a shape we already model |
+| **`0x840000`** SEC2 | 13 `NV_PSEC_*` **plus the entire `NV_PFALCON_FALCON_*` block** — `CPUCTL`, `BOOTVEC`, the `DMATRF*` transfer engine, `IMEMC/D/T`, `DMEMC/D`, `FBIF_*`, mailboxes, `IRQSCLR`, `ENGINE` | ⊘ **expensive — this is synchronously emulating a falcon**, not punching a hole |
+| ~~**`0x10a000`** PMU~~ | ⊘ **NOT a hole after all — see §1.1** | ✔ **B** |
+| **`0x009000`** PTIMER | 15 registers incl. `ALARM_0`, `ALARM_INTR`, `INTR_0`, `INTR_EN_0`, `TIMER_CFG0/1`, `GR_TICK_FREQ`, the PLM | ⊘ and **unnecessary** — see §10.3 |
+
+### §10.2 — ⚠ MY OWN COUNT UNDERCOUNTED. Third time this session, same class.
+
+The table above was first produced by scanning the published headers for **absolute** register
+addresses and bucketing by page. ⊘ That **misses every register declared relative to a base** — and
+the entire falcon register file is declared as `PFalconBase + 0x…`, so the scan reported
+`0x840000` as **13 registers** when the real figure is **13 plus the whole falcon block** (nova
+alone uses **24** `NV_PFALCON_FALCON_*` plus **7** `PFALCON2`/`PRISCV`). It also reported
+`0x10a000` and `0x087000` as **zero**, which simply means ogkm ships no PMU headers — an absence of
+*headers*, read as an absence of *registers*.
+
+⇒ Same failure shape as the AINCR sweep and the `EnableGpuFirmware` readback: **the instrument's
+partition excluded the answer by construction.** ★ The tell is identical each time — a count that
+comes out suspiciously small or exactly zero. **Treat a zero from a census as a claim about the
+census until a planted positive says otherwise.**
+
+### §10.3 — ⇒ The ranking changes, and `0x9000` stays B
+
+★ **`0x8F2000` is a cheap hole** (6 registers, boot-only, a queue we author) — the Hopper/Blackwell
+cost is real but small. ⊘ **The falcon pages are not**: trapping `0x840000` or `0x10a000` means
+implementing a falcon's control model on the vCPU. That is a strong argument for hunting the
+*control-path dodge* (§5.3 and the open fable question) rather than accepting those holes.
+
+⊘ **And `0x9000` must NOT become D**: 15 registers with real semantics (alarms, interrupt enables,
+tick frequency), on the page a non-GSP driver polls millions of times. **B with a refreshed shadow
+stands**, sourced from the VF pair on the usermode page we already map (§4.0).
+
+---
+
+## §11 — NOVA (`drivers/gpu/nova-core`) AS AN ORACLE. Added w824, owner's suggestion.
+
+`[owner]` *"nova might contain non gsp boot parts … NVIDIA is also contributing to that project
+(maybe more than nouveau) might contain better information from the vendor."*
+
+⊘ Already in the tree — `research_clones/linux/drivers/gpu/nova-core`, **no clone needed**.
+**11 027 lines of Rust**, in-tree, with NVIDIA engineers as direct contributors. ⇒ Its register
+definitions carry **vendor intent**, where nouveau's carry reverse-engineering. Call it **§50
+level 5+**: compilable, and authored with vendor participation.
+
+### §11.1 — ★★★ Nova boots a real GPU with **50 BAR0 registers**
+
+That is close to a **minimal boot surface**, and it is the most useful thing nova gives us: a
+working existence proof of how little of BAR0 a driver must touch. By base: **19 absolute**
+(PMC_BOOT_0/42, PBUS_SW_SCRATCH, PFB NISO/WPR2, PGSP_QUEUE_HEAD, PGC6 scratch, VGA workspace,
+FPF fuses), **24 `PFalconBase`-relative**, **7 `PFalcon2Base`/RISCV**.
+
+### §11.2 — ✔ THIRD INDEPENDENT SOURCE: the boot use of falcon PIO is WRITE-ONLY
+
+★★★ Nova's register definition declares **only `aincw`**:
+```rust
+/// DMEM access control register. Up to 8 ports are available for DMEM access.
+pub(crate) NV_PFALCON_FALCON_DMEMC(u32)[8, stride = 8] @ PFalconBase + 0x000001c0 {
+    /// Auto-increment on write.
+    24:24     aincw => bool;
+    15:0      offs;
+}
+```
+⊘ **`AINCR` (bit 25) is not declared at all** — the vendor-contributed driver had no use for it.
+And the data ports are **written, never read**: `falcon.rs:415-432` (IMEM) and `:452-461` (DMEM)
+both `.with_aincw(true)` then stream `.with_data(...)`. A tree-wide search for a read of
+`IMEMD`/`DMEMD`/`EMEMD` returns **nothing**.
+
+⇒ Confirms §53.6 from a third source: **firmware load is write-only ⇒ disposition B.** Only the
+*crash-dump* (GSP EMEM) and *message-queue* (FSP/SEC2 EMEM, nouveau's SEC2/PMU msgq) uses read, and
+those are the only D rows.
+
+### §11.3 — ★ Nova touches **nothing** at `0x9000`
+
+There is **no PTIMER register in nova's entire census**. ⇒ **A working driver boots a GPU without
+ever reading the GPU's timer.** nouveau's constant use of `TIME_0/1` in `nvkm_msec` is *nouveau's
+choice of timebase*, not a hardware requirement — which is why §4's refreshed shadow is a
+legitimate answer rather than a workaround, and why the GSP path never had this problem at all.
+
+⚠ **What nova is NOT an oracle for:** it is built around **GSP** (`gsp/boot.rs`, `gsp/cmdq.rs`,
+`gsp/fw/r570_144`). It has **no non-GSP mode**. Its value for the non-GSP question is the
+**pre-GSP boot** — VBIOS parsing, FWSEC/FRTS, falcon bring-up, `gfw` wait — which any driver must
+do regardless, and which nova states more cleanly than any other source we have.
+
+---
+
+## §12 — ORACLE SOURCE REVISIONS. Pin these, or a citation means nothing.
+
+⊘ §50 and `a_rulings_date_is_part_of_the_citation`: *"ogkm says X"* is not a citation without a
+revision. Every source in `research_clones/` is a git repo; these are the revisions every claim in
+this file was derived at.
+
+| source | revision | what it is the oracle for |
+|---|---|---|
+| `ogkm` | `57130a2` — **610.43.02** | RM semantics, register headers, the driver's acceptance criteria (§50 level 2) |
+| `ogkm-580.159.04` | `b81d58e` — **580.159.04** | the version the bench actually runs; the diff against 610 is the version axis |
+| `nouveau-src` | `156fa74` | **non-GSP** RM behaviour — the only readable non-GSP driver (§50 level 5) |
+| `linux` | `6f3ed7fec` (7.1-era) | **nova-core** (§11) + a second nouveau copy |
+| `gvisor/pkg/sentry/devices/nvproxy` | (in tree, unpinned ⚠) | **ioctl formats to host userspace**, the raw client, and the **allowlists** |
+
+### §12.1 — ★ THE FOUR PRIMARY SOURCES, and what each is FOR (owner ruling, w824)
+
+`[owner]` *"Use (primary reference): nouveau · nova · ogkm · nvproxy"*, *"with ogkm most important
+ofc"*, *"nvproxy is most useful for the ioctl formats to host userspace, raw client and the
+allowlists"*.
+
+| source | rank | the question it answers |
+|---|---|---|
+| **ogkm** | ★★★ **primary** | what the driver we must satisfy actually *requires* — §50 level 2, and the only source that is the acceptance criterion itself |
+| **nouveau** | ★★ | **non-GSP** behaviour — the only readable driver that drives the silicon directly |
+| **nova** | ★★ | the **minimal boot surface** and vendor intent in register semantics (§11); NVIDIA contributes directly |
+| **nvproxy** | ★★ | **not a register source at all** — it is the oracle for the *other* boundary: **ioctl formats to host userspace**, the **raw client**, and the **forwarded-RM allowlists** |
+
+⊘ **nvproxy answers a different question from the other three**, and conflating them would be a
+category error: nouveau/nova/ogkm describe *the guest driver talking to hardware*; nvproxy
+describes *a host process talking to `/dev/nvidia*`* — which is exactly kayfabe's host side. ⇒ It
+is the reference for the allowlist and the ioctl struct layouts, and says nothing about BAR0.
+
+⚠ **`gvisor` is untracked and unpinned** (`?? gvisor/` in the oracle repo's git status). A
+revision-less source cannot carry a citation (§50). ⇒ **Pin it** — the owner's suggestion of git
+submodules would do exactly this for all four.
+
+⚠ **`nouveau-src` and `linux` are both Linux clones at different revisions**, and nouveau exists in
+both. That is a real hazard — *"nouveau says X"* is ambiguous between two trees that can disagree.
+⇒ **Consolidate to one kernel clone, or state which one every nouveau citation means.** The
+citations in this file are against **`nouveau-src` @ `156fa74`**.
+
+
+---
+
+## §13 — SERVE-0 AND THE DODGE PATHS: what actually happens. `[fable w824]`
+
+Owner's question: *"even if it has side effect, check if not serving it or showing a 0x0 for any of
+these registers would let it boot and run apps (we only need to be sufficient to satisfy ogkm)."*
+
+| D register | serve-0 outcome | a path that avoids the read? | disposition |
+|---|---|---|---|
+| **FSP `EMEMD`** | **boot abort** — *"FSP boot cmds failed. RM cannot boot."* (`kern_fsp_gh100.c:1573-1580`) ⇒ `kgspBootstrap` fails ⇒ `RmInitAdapter` fails | guest regkey only (below) | **D** for stock guests |
+| **SEC2 `EMEMD`** (GB10B/20B) | **boot abort** — same packet validation plus an `EMEMC` advance assert (`kernel_sec2_gb20b.c:527-530`) | same regkeys only | **D** (outside the product axis) |
+| **nouveau SEC2 `DMEMD`** | `hdr->size(0) != size` ⇒ `-EINVAL` ⇒ `cmdq->ready` never completes ⇒ ACR bootstrap `-ETIMEDOUT` ⇒ `gf100_gr_init` fails ⇒ **no DRM device, no apps** | **none.** ACR is not optional on Pascal+ (`gm200_gr_nofw` returns `-ENODEV`) | **D**, boot-only |
+| **nouveau PMU `0x10a1c4`** | n/a — never read at boot | ✔ **don't raise the PMU message IRQ** | **B** |
+| **GSP `EMEMD`** | n/a — never read | ✔ `DEBUGINFO = 0` (§5.1) | **B** |
+
+### §13.1 — ⊘ THE `IS_EMULATION` LEAD IS DEAD. I was wrong to rate it first.
+
+I flagged `PDB_PROP_KFSP_IS_MISSING` as the most promising dodge because it short-circuits the
+whole FSP engine. ⊘ **All three of its triggers are constant false in ogkm**: `IS_EMULATION` reads
+`PDB_PROP_GPU_EMULATION`, which the entire tree — `src`, `generated`, `kernel-open` — **never
+`setProperty`s**; `bIsFmodel` and `bIsRtlsim` are declared (`g_gpu_nvoc.h:1421-1422`) and
+**assigned nowhere**. ⇒ **No register, fuse or `PMC_BOOT` value we author can reach it.** The
+blast-radius question I asked is moot — though for the record it would have been severe (46
+`IS_EMULATION` sites: global CeUtils skipped, GSP RPC timeouts maxed, SEC2 disabled).
+
+★ **The lesson is about how I ranked it**: a property with a named disable path *looks* like a
+control knob. Whether anything can *set* it is a separate question, and it is the one that decides.
+⇒ **Trace a property to its writer before costing a plan on it.**
+
+### §13.2 — The one real dodge, and why it is a bring-up lever, not a product answer
+
+`RmDisableCotCmd`'s GSPFMC bit ⇒ `PDB_PROP_KFSP_DISABLE_GSPFMC` ⇒ `kgspBootstrap_GH100` takes
+`_kgspBootstrapGspFmc_GH100` instead (`kernel_gsp_gh100.c:698-735`) — **MAILBOX/BCR writes only,
+RM boots the GSP-FMC itself, no `EMEMD` read.** Page `0x8F2000` becomes **B**.
+
+⚠ **But it is a GUEST-SIDE regkey** (`NVreg_RegistryDwords="RmDisableCotCmd=…"`). ⇒ It is not
+stock-guest behaviour, and §"a stock, unpatched driver" is the whole product claim. **Record it as
+a bring-up lever** — genuinely useful for getting a Hopper guest up before the hole is implemented
+— and not as the answer.
+
+⊘ Residual with the dodge, GB100+ only: `kfspCheckForClockBoostCapability_GB100` after GSP boot
+fails to one timeout and leaves `bClockBoostSupported = false` ⇒ **degrade, not abort.**
+
+### §13.3 — ⊘ "One repeated dword" cannot satisfy any of them
+
+A RAM page returns the same word X at every read. An FSP/SEC2 reply needs dword1 byte0 = `0x7e`
+(MCTP type) **and** dword2 byte0 = `0x15` (`NVDM_TYPE_FSP_RESPONSE`) **and** `errorCode` = 0 while
+X is nonzero — three mutual contradictions. nouveau's SEC2 init message needs `error_code == 0`
+while `hdr.size == 12`. ⇒ **Closed for every D row**, alongside the 1-dword escape of §5.3.

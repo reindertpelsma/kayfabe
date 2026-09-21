@@ -10,26 +10,57 @@
 //! input is worse than no test. The `absent` path is itself asserted, so it cannot become the
 //! only path by accident.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-const NVKM: &str = "/workspace/nvidia-gpu-passthrough/research_clones/nouveau-src/drivers/gpu/drm/nouveau/nvkm";
+/// ★ Where the oracle sources live, in preference order.
+///
+/// ⊘ The first entry is the **pinned submodule** (`.gitmodules`, see `THE_BAR0_DISPOSITION_MAP.md`
+/// §12) — that is the durable, revision-bearing location and the one CI would use. The second is
+/// this machine's pre-existing clone, kept so the tests keep running without a 2 GB checkout.
+/// ⚠ The two kernel clones were verified byte-identical on every file cited here before they were
+/// consolidated; if that ever stops holding, these tests are what will say so.
+const ROOTS: &[&str] = &[
+    concat!(env!("CARGO_MANIFEST_DIR"), "/../../third_party"),
+    "/workspace/nvidia-gpu-passthrough/research_clones",
+];
 
-fn oracle(rel: &str) -> Option<(PathBuf, String)> {
-    let p = Path::new(NVKM).join(rel);
-    std::fs::read_to_string(&p).ok().map(|s| (p, s))
+/// Resolve `rel` under whichever root has it. `rel` is given for BOTH layouts because the
+/// submodule consolidates `nouveau-src` and `linux` into one `linux` checkout.
+fn source(candidates: &[&str]) -> Option<(PathBuf, String)> {
+    for root in ROOTS {
+        for rel in candidates {
+            let p = PathBuf::from(root).join(rel);
+            if let Ok(s) = std::fs::read_to_string(&p) {
+                return Some((p, s));
+            }
+        }
+    }
+    eprintln!(
+        "⊘ SKIPPED — no oracle source found for {candidates:?} under any of {ROOTS:?}. \
+         This test's evidence is NOT checked in this run. Fetch it with:\n    \
+         git submodule update --init --depth 1 third_party/linux"
+    );
+    None
 }
 
-fn skipped(rel: &str) -> bool {
-    eprintln!("⊘ SKIPPED — the nouveau oracle is absent at {NVKM}/{rel}. §52's evidence is NOT \
-               checked in this run. Clone `research_clones/nouveau-src` to check it.");
-    true
+/// nouveau: present as `linux/drivers/.../nvkm/<rel>` (submodule) or `nouveau-src/...` (local).
+fn oracle(rel: &str) -> Option<(PathBuf, String)> {
+    let a = format!("linux/drivers/gpu/drm/nouveau/nvkm/{rel}");
+    let b = format!("nouveau-src/drivers/gpu/drm/nouveau/nvkm/{rel}");
+    source(&[&a, &b])
+}
+
+/// ogkm: `ogkm/src/nvidia/<rel>` under either root.
+fn ogkm(rel: &str) -> Option<String> {
+    let a = format!("ogkm/src/nvidia/{rel}");
+    source(&[&a]).map(|(_, s)| s)
 }
 
 #[test]
 fn the_ptimer_read_is_a_retry_loop_which_proves_there_is_no_latch() {
     // §52.3. A retry loop is only necessary if reading TIME_0 does NOT latch TIME_1 — so this
     // shape IS the proof that the 64-bit timer read has no side effect, on the non-GSP path.
-    let Some((p, s)) = oracle("subdev/timer/nv04.c") else { assert!(skipped("subdev/timer/nv04.c")); return };
+    let Some((p, s)) = oracle("subdev/timer/nv04.c") else { return };
     let body = s
         .split("nv04_timer_read")
         .nth(1)
@@ -47,8 +78,8 @@ fn the_ptimer_read_is_a_retry_loop_which_proves_there_is_no_latch() {
 fn every_falcon_queue_cursor_is_advanced_by_a_write_never_by_a_read() {
     // §52.3. This was the one place a read-to-pop was plausible: a message queue. It is not one —
     // each side WRITES only the cursor it owns and READS only the cursor the other owns.
-    let Some((_, cmdq)) = oracle("falcon/cmdq.c") else { assert!(skipped("falcon/cmdq.c")); return };
-    let Some((_, msgq)) = oracle("falcon/msgq.c") else { assert!(skipped("falcon/msgq.c")); return };
+    let Some((_, cmdq)) = oracle("falcon/cmdq.c") else { return };
+    let Some((_, msgq)) = oracle("falcon/msgq.c") else { return };
 
     // cmdq: the driver PRODUCES ⇒ it writes head, and never writes tail.
     assert!(cmdq.contains("nvkm_falcon_wr32(cmdq->qmgr->falcon, cmdq->head_reg"), "cmdq head write gone");
@@ -64,7 +95,7 @@ fn the_mmu_fault_buffer_is_acknowledged_by_a_write_in_the_pascal_plus_era() {
     // §52.3. `get` is advanced by a write; the replayable-fault register block is cleared by a
     // write of 0x80000000 to 0x100e60. Neither is a read-to-clear.
     let rel = "subdev/fault/gv100.c";
-    let Some((p, s)) = oracle(rel) else { assert!(skipped(rel)); return };
+    let Some((p, s)) = oracle(rel) else { return };
     assert!(s.contains("nvkm_wr32(device, buffer->get, get)"), "{}: the get cursor is no longer \
         advanced by a write", p.display());
     assert!(s.contains("nvkm_wr32(device, 0x100e60, 0x80000000)"), "{}: the fault clear is no \
@@ -82,7 +113,7 @@ fn the_falcon_pio_data_port_advances_on_a_READ_which_is_the_one_real_read_side_e
     // port is READ AND WRITTEN (`pio_emem_wr` writes the same 0xac4), so it was excluded from the
     // candidate set BY CONSTRUCTION. A census zero needs a known-positive; this test is it.
     let rel = "falcon/gp102.c";
-    let Some((p, s)) = oracle(rel) else { assert!(skipped(rel)); return };
+    let Some((p, s)) = oracle(rel) else { return };
 
     let rd = s.split("gp102_flcn_pio_emem_rd(").nth(1).expect("pio_emem_rd is gone");
     let rd = &rd[..rd.find("\n}").expect("unterminated fn")];
@@ -107,12 +138,7 @@ fn ogkm_asserts_that_the_emem_read_advanced_the_offset() {
     // ★★★ The decisive half, at §50 level 2 (compilable ogkm C): Hopper's FSP path does not merely
     // RELY on the read side effect — it CHECKS it. ⇒ No shadow can satisfy a driver that verifies
     // whether reads happened.
-    let p = "/workspace/nvidia-gpu-passthrough/research_clones/ogkm/src/nvidia/src/kernel/gpu/\
-             fsp/arch/hopper/kern_fsp_gh100.c";
-    let Ok(s) = std::fs::read_to_string(p) else {
-        eprintln!("⊘ SKIPPED — ogkm absent at {p}. §52's decisive citation is NOT checked.");
-        return;
-    };
+    let Some(s) = ogkm("src/kernel/gpu/fsp/arch/hopper/kern_fsp_gh100.c") else { return };
     assert!(s.contains("GPU_REG_RD32(pGpu, NV_PFSP_EMEMD(FSP_EMEM_CHANNEL_RM))"), "EMEMD read gone");
     assert!(s.contains("If this fails, the autoincrement did not work"),
         "the sanity-check comment is gone — re-read the function before trusting §52's exception");
@@ -123,14 +149,6 @@ fn ogkm_asserts_that_the_emem_read_advanced_the_offset() {
     );
 }
 
-/// ogkm lives beside nouveau; same skip-loudly discipline.
-fn ogkm(rel: &str) -> Option<String> {
-    let p = format!("/workspace/nvidia-gpu-passthrough/research_clones/ogkm/src/nvidia/{rel}");
-    match std::fs::read_to_string(&p) {
-        Ok(s) => Some(s),
-        Err(_) => { eprintln!("⊘ SKIPPED — ogkm absent at {p}. §53.3's gate is NOT checked."); None }
-    }
-}
 
 #[test]
 fn gsp_emem_is_crashcat_only_which_is_what_keeps_page_0x110000_out_of_the_hole_list() {
