@@ -1,10 +1,31 @@
 //! The swref descriptor parser — P1's *"that generator does not exist today"*.
 //!
-//! ## ⊘ Why this is not a C parser
+//! ## ⊘⊘⊘ Why this is not a C parser — and the reason is NOT the one first written here
 //!
-//! P1: *"Its input is **not parseable as C**: `NV_CTRL_VF_DOORBELL_VECTOR 11:0` and
-//! `NV_VIRTUAL_FUNCTION 0x0003FFFF:0x00030000` are not C expressions, so libclang yields
-//! nothing. It needs a **token-level `hi:lo` + access-code parser**."*
+//! `[owner, 2026-09-21]` *"how can a C header file `*.h` not be valid C"* — **it is valid C, and
+//! the claim that it was not was wrong.** Measured:
+//!
+//! | | result |
+//! |---|---|
+//! | `#include` the header and compile | ✔ **compiles fine** — a `#define` body is never parsed as C at definition time; `11:0` is three legal preprocessing tokens |
+//! | expand it in an expression (`printf("%d", NV_CTRL_VF_DOORBELL_VECTOR)`) | ⊘ `error: expected ')' before ':' token` |
+//! | `gcc -E -dM` | ✔ reports `#define NV_CTRL_VF_DOORBELL_VECTOR 11:0` |
+//!
+//! ⇒ The accurate statement is **the file is valid C; the macro BODY is not a C expression.**
+//! That rules out *compiler-based value extraction* — the technique `tools/derive_classes.sh`
+//! uses for the class headers — because there is no value to evaluate. It does not make the file
+//! unparseable.
+//!
+//! ## ★★★ So why not use `gcc -E -dM`, which resolves bodies with the real preprocessor?
+//!
+//! **Because it drops the comments, and the comments are the data.** `[measured]` the access code
+//! `/* -WXUF */` — which is the *entire* source of read/write-only-ness — is gone from `-dM`
+//! output, since removing comments is exactly the preprocessor's job.
+//!
+//! ⇒ A line-level reader is correct here **not** because the grammar defeats a parser, but
+//! because the fact we need lives in a place every C-aware tool is obliged to discard. ⚠ That is
+//! a much narrower justification than the one first written, and the difference matters: a design
+//! resting on a wrong reason is one nobody can re-derive.
 //!
 //! ⇒ A `#define` here carries one of three shapes, and the trailing comment is the access code:
 //!

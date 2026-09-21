@@ -13,12 +13,18 @@
 #
 # ## ★ Why this file uses a compiler and `swref` deliberately does not
 #
-# These headers are valid C: `#define ADA_COMPUTE_A 0xC9C0`.
-# ⊘ The `swref` register headers are **not** — they carry `11:0` and
-# `0x0003FFFF:0x00030000`, which are not C expressions, so a C parser yields **nothing** for them
-# (`THE_V3_PLAN.md` P1 states this). For those a token-level parser is not a shortcut, it is the
-# only thing that can read them, and `crates/kayfabe-doorbell/src/swref.rs` is that parser.
-# ⇒ **The tool follows the grammar of the file, not a blanket rule.**
+# These headers define integer constants: `#define ADA_COMPUTE_A 0xC9C0`, so the preprocessor can
+# EVALUATE them and this script asks it to.
+#
+# ⊘⊘ CORRECTED 2026-09-21: an earlier version of this comment said the `swref` register headers
+# are "not valid C". That is wrong — they compile fine, because a `#define` body is not parsed as
+# C at definition time. What is true is narrower: their bodies (`11:0`,
+# `0x0003FFFF:0x00030000`) are **not C expressions**, so there is no value for a compiler to
+# print. And the fact we actually need from them — the access code in the trailing
+# `/* -WXUF */` comment — is **discarded by the preprocessor by definition**, so `-E -dM` cannot
+# supply it either.
+# ⇒ That is why `crates/kayfabe-doorbell/src/swref.rs` reads them at line level. **The tool
+# follows what the file can be asked, not a blanket rule.**
 #
 # Runs as any user. No driver, no device node, no blob, no root.
 #
