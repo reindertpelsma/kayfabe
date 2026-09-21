@@ -1,3 +1,14 @@
+//! ⊘⊘⊘ **THIS MODULE NO LONGER AUTHORISES A READ EXIT.** Owner ruling w823, folded into
+//! `THE_DESIGN.md` §5: **there is no read trap anywhere.** See [`crate::trappolicy::may_trap_read`],
+//! which returns `false` unconditionally.
+//!
+//! ★ What survives, and why the module is kept rather than deleted: the **phase** distinction is
+//! still real. A page whose value resolves through a latch needs its shadow **recomputed on the
+//! trapped write that moves the latch**, and a boot-state page stops needing even that once boot
+//! completes. ⇒ [`ReadPolicy::Trap`] now means *"this shadow is COMPUTED, not plain"* — never
+//! *"exit to us"*. ⚠ The variant keeps its name only because renaming it across the tree is a
+//! larger change than the ruling needs; the meaning is the one stated here.
+//!
 //! The read-trap allowlist — §5, and it is a **parity** hazard before it is a correctness one.
 //!
 //! ## *"Only writes trap"* is false for about 524 of 4096 BAR0 pages

@@ -174,6 +174,41 @@ Only **writes** trap. Reads are served from ordinary DRAM the guest reads direct
 and no code — because a vCPU inside an MMIO exit is not preemptible, and driver init polls some
 registers thousands of times.
 
+> ## ⊘⊘⊘ SUPERSEDED 2026-09-21 (w823), OWNER RULING — **THERE IS NO READ TRAP. ANYWHERE.**
+>
+> `[owner]` *"the no read trap everywhere, and write trap allowed in bar0 (not in pramin), but is
+> allowed only if doorbell is mapped in bar1 and then only that page."*
+>
+> ⇒ The paragraph below describes a **524-page read-trap allowlist that no longer exists.** It is
+> kept because the *reasons* it gives — the latch, the boot state machine — are the real cases
+> that still have to be answered, and the ruling answers them differently.
+>
+> ★★★ **And this section already contains the argument against itself.** Two paragraphs down it
+> measures what one read-trapped page cost: *"**99 %** of its 1 000–3 000 exits per token were
+> READS of a single firmware debug register … that one page cost a **2.5× loss on LLM decode**."*
+> ⇒ An allowlist only has to be **wrong about one page** to pay that, and nothing tells you which
+> page until a parity run does.
+>
+> ★ **The latch case does not need an exit.** A latch is *set by a write*, and writes **are**
+> trapped — so the value a later read must return is **computed into the shadow at write time**.
+> This section already does exactly that for the timer page (*"a **computed shadow**"*); the
+> ruling generalises it and removes the last reason to exit on a read.
+>
+> ⚠ **What it costs, stated rather than glossed:** every latch-resolved register now needs its
+> shadow recomputed on the write that moves it, and a register that changes for a reason we do
+> **not** observe — a live hardware counter — **cannot be served this way at all**. ⊘ That is a
+> real bound on what we may emulate. It is better as a design boundary than as a read exit nobody
+> notices until a parity run.
+>
+> ⇒ The trap-placement rule is now: **BAR0 writes may trap except in PRAMIN; BAR1 never traps
+> except the single doorbell page, and only where the doorbell is mapped in BAR1 (Hopper+); BAR2
+> never traps; no read traps anywhere.** Encoded structurally in
+> `crates/kayfabe-doorbell/src/trappolicy.rs`, above the classifier, so a classifier bug cannot
+> install a trap this forbids.
+
+⊘ **The text below is the SUPERSEDED read-trap design.** Read it for the cases it names, not for
+the mechanism.
+
 ⚠ **Not every read, though.** Roughly **524 of 4096** BAR0 pages must still read-trap — the
 framebuffer window resolves through a latch, and the firmware-boot pages are state-machine state.
 **The read-trap set is an allowlist, written down, exactly like the write list.**
@@ -214,6 +249,10 @@ nvkvm_trap_write(bar, off, val):
         bump work_seq; maybe write(eventfd)
         Return.
 ```
+
+⚠ **And a trap may only exist where §5's placement rule allows one** — BAR0 outside PRAMIN, plus
+the single BAR1 doorbell page on Hopper+. `trappolicy::may_trap_write` gates this *above* the
+classifier, so the three arms below decide what a trapped write DOES, never whether one may exist.
 
 ★ **The middle arm is the one the threat model needs.** The doorbell page is 64 KiB and the
 doorbell is four bytes of it; every other offset on it is guest-userspace-writable, and without

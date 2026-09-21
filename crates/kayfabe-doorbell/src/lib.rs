@@ -45,6 +45,8 @@ pub mod shadow;
 pub mod swref;
 pub mod token;
 pub mod trap;
+pub mod trappolicy;
+pub mod vmm;
 pub mod wake;
 
 pub use bitmap::RungBitmap;

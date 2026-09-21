@@ -506,3 +506,63 @@ fn bar0_size_comes_from_card_info_and_the_ga106_value_is_a_named_default() {
     assert_eq!(readtrap::ReadTrapSet::with_bar0_bytes(64 << 20).bar0_pages(), 16384);
     assert_eq!(readtrap::GA106_BAR0_BYTES, accessmap::GA106_BAR0_BYTES, "one default, two consumers");
 }
+
+// ---- owner ruling w823: where a trap may exist at all ------------------------------------------
+
+#[test]
+fn bar2_is_never_trapped_and_bar1_only_for_the_doorbell_page() {
+    // `[owner]` "no traps for bar1/2 (except doorbell in bar1)".
+    use trappolicy::{may_trap_write, DoorbellPlacement};
+    use vmm::Bar;
+    let pre_hopper = DoorbellPlacement::Bar0 { offset: 0x90 };
+    let hopper = DoorbellPlacement::Bar1 { page_base: 0x9_0000 };
+
+    // BAR2: never, under any placement.
+    for d in [pre_hopper, hopper] {
+        for off in [0u64, 0x1000, 0x10_0000, 0x1FF_F000] {
+            assert!(!may_trap_write(Bar(2), off, d), "BAR2 must never trap ({off:#x})");
+        }
+    }
+    // BAR1 with the doorbell elsewhere: never.
+    for off in [0u64, 0x9_0000, 0x10_0000] {
+        assert!(!may_trap_write(Bar(1), off, pre_hopper), "BAR1 must not trap pre-Hopper");
+    }
+    // BAR1 on Hopper+: exactly the doorbell page, and nothing either side of it.
+    assert!(may_trap_write(Bar(1), 0x9_0000, hopper));
+    assert!(may_trap_write(Bar(1), 0x9_FFFF, hopper), "the whole 64 KiB page");
+    assert!(!may_trap_write(Bar(1), 0x8_FFFF, hopper), "⊘ not the page below");
+    assert!(!may_trap_write(Bar(1), 0xA_0000, hopper), "⊘ not the page above");
+}
+
+#[test]
+fn bar0_may_trap_writes_but_never_in_pramin() {
+    // `[owner]` "write trap allowed in bar0 (not in pramin)". PRAMIN is a BRING-UP aperture:
+    // trapping it puts a boot-time loop through the privileged ring.
+    use trappolicy::{may_trap_write, DoorbellPlacement, PRAMIN_BASE, PRAMIN_LEN};
+    use vmm::Bar;
+    let d = DoorbellPlacement::Bar0 { offset: 0x90 };
+    assert!(may_trap_write(Bar(0), 0x110c00, d), "the GSP RPC submit register is trappable");
+    assert!(!may_trap_write(Bar(0), PRAMIN_BASE, d), "⊘ PRAMIN start");
+    assert!(!may_trap_write(Bar(0), PRAMIN_BASE + PRAMIN_LEN - 4, d), "⊘ PRAMIN end");
+    assert!(may_trap_write(Bar(0), PRAMIN_BASE - 4, d), "just below PRAMIN is fine");
+    assert!(may_trap_write(Bar(0), PRAMIN_BASE + PRAMIN_LEN, d), "just above PRAMIN is fine");
+}
+
+#[test]
+fn no_read_is_ever_trapped_anywhere() {
+    // ⊘⊘⊘ `[owner]` "no read trap everywhere" -- and this SUPERSEDES §5's 524-page read-trap
+    // allowlist. §5 itself measured the cost: 99% of the C artifact's exits per token were READS
+    // of ONE firmware debug register, costing 2.5x on LLM decode. An allowlist only has to be
+    // wrong about one page to pay that.
+    //
+    // ★ The latch case does not need an exit: a latch is SET BY A WRITE, and writes are trapped,
+    // so the value a read must return is computed into the shadow at write time -- which §5
+    // already does for the timer page.
+    use trappolicy::may_trap_read;
+    use vmm::Bar;
+    for bar in [0u8, 1, 2] {
+        for off in [0u64, 0x9000, 0x110c00, 0x70_0000, 0x81_0000] {
+            assert!(!may_trap_read(Bar(bar), off), "BAR{bar}+{off:#x} must not read-trap");
+        }
+    }
+}
