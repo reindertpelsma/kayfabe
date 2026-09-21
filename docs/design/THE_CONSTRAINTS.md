@@ -3564,3 +3564,55 @@ on an explicit control write** (which we trap, and which is why PRAMIN is dispos
 ⚠ **Access codes cannot find these.** The EMEMD ports carry `RW-4A`, the same code as any ordinary
 array register. ⇒ The disposition map must be driven by **driver usage**, never by the header's
 access field.
+
+### §53.5 — ✔ ARE THESE ALSO GSP-BOOT REGISTERS? Traced to the bottom (owner's question, w824)
+
+★★★ **Only on Hopper and Blackwell — and on Turing/Ampere/Ada the answer is NO, which closes
+§53.3's risk.**
+
+| family | does a GSP **boot** read an AINCR port? | which | ⇒ page |
+|---|---|---|---|
+| Turing · Ampere · Ada | **NO** | — | `0x110000` stays **B** ✔ |
+| Hopper | **YES** | `NV_PFSP_EMEMD` | `0x8F2000` ⇒ **D** |
+| Blackwell, discrete (gb100) | **YES** | `NV_PFSP_EMEMD` | `0x8F2000` ⇒ **D** |
+| Blackwell, Tegra (gb10b/gb20b) | **YES** | `NV_PSEC_EMEMD` | `0x840000` ⇒ **D** |
+
+⊘ Note each new family put the **same mechanism** behind a **different falcon**: FSP on Hopper,
+SEC2 on Tegra Blackwell. Both play the identical role — the **boot-time secure-messaging channel
+that brings GSP up** (`ksec2SetupGspImages_GB20B`, `ksec2GetGspBootArgs`,
+`ksec2WaitForSecureBoot_GB20B`). ⇒ Track this as a **per-family port assignment**, not as "the FSP
+case", or the next family's rename reads as absence.
+
+**The Turing/Ampere/Ada answer is a complete call-graph trace, not an inference:**
+1. `NV_PGSP_EMEMD` is read in **exactly one function** in all of ogkm — `kgspReadEmem_TU102`
+   (`kernel_gsp_tu102.c:1329-1358`).
+2. That function has **zero direct callers**. It is reachable only as the NVOC override of
+   `kcrashcatEngineReadEmem` (`generated/g_kernel_gsp_nvoc.c:273-276`) ⇒ **CrashCat-only.**
+3. CrashCat will not probe: `crashcatEngineGetNextCrashReport_IMPL` returns `NULL` unless
+   `crashcatEngineLoadWayfinder` succeeds (`crashcat_engine.c:58-66`).
+4. The wayfinder refuses: `NV_WARN_NOTHING_TO_DO` unless `crashcatWayfinderL0Valid(wfl0)` (`:42-47`).
+5. WFL0 is read from **`NV_PFALCON_FALCON_DEBUGINFO`** on Turing+
+   (`kernel_crashcat_engine_tu102.c:55-58`) — **and we serve it as 0**, as the C did
+   (`nvkvm_gpu_emul.c:1588`).
+
+⇒ **The gate is shut, so page `0x110000` never needs to be a hole, and the 2.5× regression is not
+re-imported.** ★ The same gate also covers the generic falcon `DMEMD`/`IMEMD` ports on the GSP
+path — `kcrashcatEngineReadDmem_TU102` is behind the identical WFL0 check.
+
+⚠⚠⚠ **This makes `FALCON_DEBUGINFO = 0` a DESIGN OBLIGATION, not an implementation detail.** It is
+the single fact holding `0x110000` at disposition B. Anything that makes us advertise a crash
+report — a debug feature, a fidelity improvement, an idly-copied nonzero — converts the hottest
+page in BAR0 into a memslot hole. Pinned as
+`gsp_emem_is_crashcat_only_which_is_what_keeps_page_0x110000_out_of_the_hole_list`.
+
+### §53.6 — ⊘ WRITES TO A DATA PORT ARE NOT A PROBLEM. Only reads are.
+
+`AINCW` (bit 24) makes **writes** auto-increment too — `_kfspWriteToEmem_GH100` uses it — and that
+costs us nothing: **every write traps anyway** under disposition B *and* D, so we observe each one
+and advance **our own** cursor in lockstep. ⇒ A falcon PIO port used **write-only** (firmware load
+into IMEM/DMEM is the common case) is plain **B** and needs no hole.
+
+★ So the criterion for disposition D is narrower than "the register has an AINCR field": it is
+**"the driver READS this data port"**. `NV_PFSP_EMEMD` qualifies because `_kfspReadPacket_GH100`
+reads it *and* then asserts the offset advanced; `NV_PFALCON_FALCON_IMEMD` on the GSP path does
+not, because firmware load only writes.
