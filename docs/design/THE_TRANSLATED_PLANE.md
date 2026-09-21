@@ -211,8 +211,56 @@ already prints); and **nothing is deleted before its replacement re-greens** —
 | **A** | 8 | blockage-coverage · late-map-race · executor-vas · dictated-ring · ce-client · cross-client-leak · engines · rpc-mixed-allocs | steps **1+4+5** — *one change* |
 | **B** | 3 | defer-liveness · uvm-mean · map-stress | per-invalidate cost falling (7.34 ms sweep → **205 µs** GPU walk) + a budget matched to the 3.8× guest ratio |
 | **C** | 1 | ce-client-guest-ram | step **2** — 13 000 per-row pins become slices of one window |
-| **D** | 2 | concurrency · concurrent-fuzz | ⊘ **uncharacterised.** Plausibly isolate spawn at **1.7 s × N clients**, which v3 deletes. **Needs a 300 s diagnostic before any estimate** |
+| **D** | 2 | concurrency · concurrent-fuzz | ★ **the acceptance test for the async design** — see §10.1. Not a performance unknown |
 | **E** | 1 | gpga-reserve-probe | budget ≥ 90 s **and** the BAR1 device-view path |
+
+### §10.1 — ★★★ GROUP D IS NOT UNCHARACTERISED. IT IS THE FALSIFIER FOR THE WORKER/EPOLL DESIGN.
+
+> `[owner, 2026-09-22]` *"we have workers and the epoll loop, it stress tests that design. if its
+> proper then it should work. No nvidia ioctl can actually stall for longer, eventfds are used to
+> signal completion if sempahore fallback kicks in what libcuda in guest userspace does (or for
+> translated channels automatically, we don't have to specially handle it anymore), and then its
+> just one of the entries in the epoll list. The entire epoll loop worker thats asynchronous is
+> PRECISELY designed to exist for that in the first place. **Thats why I said to add these
+> tests.**"*
+
+⊘⊘⊘ **Two hypotheses were offered for group D and BOTH were wrong**, in the same way: each
+proposed a *cost* to be found, when the arms exist to test a *design*.
+
+- `[fable w824]` per-process isolate spawn, 1.7 s × N clients. ⊘ Refuted for `--concurrency`: it
+  was rewritten **in-process**, and its own comment says so — *"The verb is called **DIRECTLY**
+  now. The old `with_rm` closure existed to cross the isolate's IPC boundary; in-process there is
+  no boundary to cross."* No spawn per thread.
+- **Mine**: a super-linear sweep over live VA spaces. ⊘ Plausible arithmetic, wrong frame — it
+  assumed the work is synchronous and asked how expensive it is.
+
+★ **The arms were added on purpose, as the stress test for the asynchronous plane.** The shape of
+the answer is therefore not *"how many ms per verb"* but **"did the work go through the loop at
+all?"**
+
+**Why it must pass if the design is right:**
+
+1. **No NVIDIA ioctl stalls for long.** A verb is bounded; nothing in the RM path is a long block.
+2. **Completion arrives on an eventfd** — either the semaphore fallback that guest-userspace
+   libcuda drives, or, for **Translated** channels, automatically. ⊘ *"we don't have to specially
+   handle it anymore"* — a Translated completion is native (§7), so it needs no bespoke path.
+3. **Therefore a completion is just another entry in the epoll list**, and 4 threads × 200
+   alloc/free pairs is 800 bounded verbs and 800 fd readinesses. That finishes.
+
+⇒ **A hang at 300 s does not mean the work is slow. It means something BLOCKED where the design
+says it should have been an epoll entry.** That is a *structural* defect and it is visible without
+timing anything: find the synchronous wait.
+
+⚠ **And this is why group D belongs to v3 rather than to the old tree.** The epoll machinery lives
+in `kayfabe-shell/src/reactor.rs` and `kayfabe-isolate-host/src/planreactor.rs` — **both inside the
+isolate plane v3 deletes.** v3's replacement is the wake word plus `VmmOps::signal_worker` /
+`signal_drainer`, with the loop itself in **`kf-qemu`, currently 0 lines.** ⇒ Group D is not
+outstanding *diagnosis*; it is the **acceptance test for a component not yet written**, and it
+should be run against `kf-qemu` the day it exists — exactly the role the owner added it for.
+
+★ **So the estimate does not need a 300 s diagnostic first.** It needs `kf-qemu`. If group D still
+hangs once the worker/epoll plane is v3's, **the design is wrong and that is worth knowing early** —
+which is the whole point of having written the test before the code.
 
 **Verdict: no arm is unreachable by construction.** 30/30 is reachable once: **X1** the identity
 window · **X2** walk-at-invalidate with the handle ledger · **X3** user CE off `CpuCe` · **X4** the
@@ -226,8 +274,9 @@ circled, and its cost now sits inside the guest's own **4 s TLB-invalidate budge
 already measured — walker 72/72, R17 CE, `map_store_slice`, the invalidate trigger — and that
 **nothing sits between the walk and the map**: no gate, no latch, no shadow.
 
-⇒ **15 → 23/30 in ~2 weeks** if step 1 is green in the first hour. **30/30 in 3–4 weeks** if group
-D is spawn cost, **5+** if it is something else. ⚠ *Significant improvement* inside 1–2 weeks is
+⇒ **15 → 23/30 in ~2 weeks** if step 1 is green in the first hour. **30/30 in 3–4 weeks**; group D no longer
+carries a separate unknown — it passes when the async plane is right, or it reports that the plane
+is wrong, and either outcome arrives with `kf-qemu` rather than after it. ⚠ *Significant improvement* inside 1–2 weeks is
 credible for group A; **30/30 inside it is not**, and should not be promised.
 
 ---
