@@ -232,3 +232,36 @@ fn we_author_the_user_register_access_map_rather_than_deriving_it() {
         "the map we declare needs a matching classifier arm, or the two cannot agree"
     );
 }
+
+#[test]
+fn the_access_map_we_serve_is_deny_by_default_not_the_0xff_fallback() {
+    // ⊘⊘⊘ ogkm: `if (!bUseRegisterAccessMap || compressedSize == 0) memset(map, 0xFF, ...)`.
+    // Returning compressedSize=0 is the CHEAPEST satisfying answer -- and the wrong one: 0xFF
+    // tells the guest EVERY BAR0 register is userspace-accessible, and §47 forbids trapping a
+    // page guest userspace can map. ⇒ We could then trap nothing, and the privileged arm of the
+    // classifier would cease to exist.
+    use accessmap::AccessMap;
+    let mut m = AccessMap::deny_all();
+    assert!(!m.is_allowed(0x110c00), "deny by default");
+    // The usermode window (the doorbell page) is the thing userspace legitimately maps.
+    m.allow_range(0x810000, 0x10000);
+    assert!(m.is_allowed(0x810000) && m.is_allowed(0x810090));
+    assert!(!m.is_allowed(0x820000), "one range, not a blanket");
+    // ⊘ And a privileged register stays denied -- that is what lets us trap it.
+    assert!(!m.is_allowed(0x110c00), "the GSP RPC submit register must NOT be userspace-mappable");
+}
+
+#[test]
+fn our_bit_order_matches_the_guests_nvbitfieldtest() {
+    // ⊘ ogkm computes `bitOffset = offset / sizeof(NvU32)` and tests one bit. If our bit order
+    // differed, every allowed range would be off by a factor of 4 or mirrored within each byte,
+    // and the guest would map the wrong pages -- silently.
+    use accessmap::AccessMap;
+    let mut m = AccessMap::deny_all();
+    m.allow_range(0x1000, 4); // exactly ONE 32-bit register
+    assert!(m.is_allowed(0x1000));
+    assert!(!m.is_allowed(0x1004), "the next register must not be caught");
+    assert!(!m.is_allowed(0xFFC));
+    // register index 0x1000/4 = 1024 ⇒ byte 128, bit 0
+    assert_eq!(m.raw()[128], 0x01, "bit order: LSB-first within the byte");
+}

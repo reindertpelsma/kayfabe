@@ -25,6 +25,7 @@
 //! load happens-before the scan.** ⚠ A test on x86 cannot catch a missing fence here; the
 //! orderings are argued from the spec, not measured.
 
+pub mod accessmap;
 pub mod bitmap;
 pub mod caps;
 pub mod channel;

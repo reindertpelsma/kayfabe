@@ -3162,3 +3162,56 @@ files whose own headers say *superseded*. ★ The w822 archive move did **not cr
 ⇒ The gate is a **ratchet, not a zero**: most such citations are legitimate provenance, and
 demanding zero would delete the reasoning this tree runs on. ⚠ **What it forbids:** a *new* comment
 citing an archived doc as though it described current behaviour.
+
+---
+
+## §50 — THE PROVENANCE HIERARCHY. Where a fact may come from. Added 2026-09-21 (w823), owner ruling.
+
+`[owner, 2026-09-21]` — stated as an order, best first. **Every constant, table, offset and
+threshold in kayfabe must be attributable to one of these levels, and to the best one available.**
+
+| # | source | trust |
+|---|---|---|
+| **1** | **host userspace ioctls**, *unprivileged only* | ★ **100 %. WINS over any ogkm derivation** |
+| **2** | **compilable C in ogkm** | trusted — guaranteed used by the ogkm kernel, so it provably works |
+| **3** | **fabricated**, *iff guest userspace does not read it* (e.g. VBIOS) | generate it so it satisfies ogkm; guest userspace must see substantially the same GPU facts as host userspace |
+| **4** | comments / structures in ogkm | ⊘ not preferred — unclear whether it is a source of truth |
+| **5** | nouveau source (measurements, expectations) | primarily the **non-GSP** plane, only if the above do not satisfy |
+| **6** | hardcoded | ⊘ last resort, and **only per LARGE FAMILY**, never per die |
+
+★ **Computation is free.** Deriving a value from already-obtained data costs nothing and inherits
+its inputs' level — *provided the computation satisfies ogkm source.*
+
+⊘ **Two absolutes, from the same ruling:** no blob is extracted from a running driver, and **root
+is never required to set the project up**. A fact that can only be had by loading a driver as root
+is not a fact this project may depend on.
+
+### ★★★ Why the per-family rule is the one that decides maintainability
+
+`[owner]` *"Doing things per the large family series — so all of Turing, all of Blackwell, all of
+Ada — is the thing that's only maintainable actually long term."*
+
+⚠ **And ogkm is already organised that way, which is the evidence the rule is right rather than
+merely tidy.** `[measured w823]` `NV_PTIMER_TIME_0` is defined in `kepler/gk104/dev_timer.h`,
+`maxwell/gm107/` and `volta/gv100/` — **and in no Turing, Ampere, Ada, Hopper or Blackwell header
+at all.** There is no `dev_timer.h` for those families: the value is defined once at the family
+where it was introduced and **inherited forward**.
+⇒ A per-die table would have four empty rows and one real one, and would rot the first time a
+family inherited rather than redefined. ★ Deriving asks the headers the question ogkm itself asks.
+
+⊘ **And a value appearing more than once is not a contradiction until the devices agree.**
+`NV_PTIMER_TIME_0` also appears as `0x00000400` — in `nvswitch/ls10/dev_timer_ip.h`. That is a
+**different device**, not a different die. ⚠ A search that treats the whole corpus as one namespace
+manufactures a conflict that is not there; the family path is part of the identity.
+
+### ⊘ What this forbids, by name
+
+- A per-die constant table in kayfabe. If a fact varies per die, **derive it**; if it cannot be
+  derived, group it per family and say which families were checked.
+- A magic number with no recorded level. ⚠ *"It works"* is not a provenance.
+- Claiming level 2 for something read out of a **comment** — comments are level 4, and §5.5 has
+  already measured them insufficient for `write_semantics`.
+- Taking the cheap satisfying answer when it weakens a boundary. `[w823]` ogkm's
+  `gpu_register_access_map.c` fills the map with `0xFF` when `compressedSize == 0`; that is the
+  cheapest way to satisfy the guest **and** it declares every BAR0 register userspace-accessible,
+  which under §47 means we may then trap nothing.
