@@ -3678,3 +3678,57 @@ is the driver we are actually judged by.
 ★ And nova has already paid for its place today: it independently confirmed that falcon PIO is
 used **write-only** at boot (it declares `aincw` and **not** `AINCR` at all), and that a working
 driver boots **without ever reading the GPU timer** — a fact neither ogkm nor nouveau made visible.
+
+---
+
+## §55 — THE SCRUB CAN GO TO THE GPU, AND IT IS THE SAME FIX AS `forwarded=0`. Added w824.
+
+**STATUS: LIVE.** Answers §46's own outstanding violation, and collapses two work items into one.
+
+`[owner w824]` *"can we not do the scrub on the GPU, I mean a scrub channel can be used
+unprivileged right?"*
+
+### §55.1 — ✔ Yes. Unprivileged CE is not a hope; it is proven on hardware.
+
+- **The premise**: `THE_DESIGN.md:13` — a real GPU *"driven by an **unprivileged** host process"*.
+- **The proof**: `kayfabe-isolate-host/src/rm.rs:87` — **R17, *"a real copy engine moved device
+  memory. Destination read before and after"***, and `:60` — *"`ce_copy`'s **`HostCe` arm** is real
+  (R17), proven on hardware."*
+
+⇒ **There is no privilege problem and no missing channel type.** Our own unprivileged host RM
+client already allocates a channel and runs a real CE copy. CUDA does the same thing from any
+unprivileged process; a copy engine is not a privileged resource.
+
+### §55.2 — ⊘ So why is the scrub on the CPU? Because of its TARGET, not its operation.
+
+`cpu_ce.rs:4` states it exactly: a `CeExecutor::Ours` sub-copy *"names **fabricated** space **no
+real engine can be pointed at** — the emulated framebuffer, or a physical-mode operand in guest
+RAM."* The executor is selected by **`Residency`/`CpuPlane`** (`Fb` vs `GuestRam`,
+`ceutils.rs:428-429,631`) — i.e. by **where the memory lives**, never by what the operation is.
+
+⇒ The CPU is not chosen because a scrub is special. It is chosen because **nothing exists on the
+host that a real engine could be aimed at.** Fabricated space has no host object behind it.
+
+### §55.3 — ★★★ THEREFORE IT IS THE SAME FIX AS THE SEVEN FAILING ARMS
+
+The thin guest's `forwarded=0` cluster and this §46 violation have **one** cause and **one** fix:
+
+| | today | why |
+|---|---|---|
+| seven thin-guest arms | `forwarded=0`, CE on CPU | operands name fabricated space |
+| the CeUtils scrub | `execute_ours_spans`, CPU memcpy | target names fabricated space |
+
+⇒ **Join the target — give it a host object — and the already-proven `HostCe` arm can be pointed
+at it.** The scrub stops violating §46 and the seven arms stop falling back, from the *same* work.
+⊘ This is one item on the plan, not two, and it is `kf-mem`'s join plus `kf-host`'s verb layer.
+
+★ **And it retires the CPU executor rather than bounding it.** §46 wanted `execute_ours_spans`
+gone; `channel::may_cpu_move` bounds it to 8 bytes in the meantime (§46's measured hazard: `[w797]`
+the CPU executor was worth **three** flattering passes, 18 vs 15). Once the join exists, the bound
+is enforcing a rule nothing wants to break anyway — which is the right end state for a constraint.
+
+⚠ **What is still unproven**, stated so this is not read as done: that a join can be made for
+*every* operand the scrub and the seven arms name. `route_of_engine` currently maps
+`EngineKind::Ce => DoorbellRoute::CpuCe` unconditionally (`kayfabe-rt/src/device.rs:8978`), so
+nothing has ever *asked* for the translated arm on those paths. ⇒ The first measurement to take is
+not "does the copy work" — R17 says it does — but **"can every operand be joined?"**
