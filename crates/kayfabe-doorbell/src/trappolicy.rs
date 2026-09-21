@@ -1,8 +1,29 @@
 //! Where a trap may be installed at all — the structural rule, above the classifier.
 //!
-//! `[owner, 2026-09-21]` *"remember the no traps for bar1/2 (except doorbell in bar1), and the no
-//! read trap everywhere, and write trap allowed in bar0 (not in pramin, but is allowed only if
-//! doorbell is mapped in bar1 and then only that page)."*
+//! ## ⊘⊘⊘ MOST OF THIS WAS ALREADY IN v3. I DID NOT IMPLEMENT IT.
+//!
+//! `[owner, 2026-09-21]` *"**remember** the no traps for bar1/2 (except doorbell in bar1), and the
+//! no read trap everywhere, and write trap allowed in bar0 (not in pramin, but is allowed only if
+//! doorbell is mapped in bar1 and then only that page)."* — the word is **remember**, not decide.
+//! `THE_DESIGN.md` already said it, in two places:
+//!
+//! | already stated | where |
+//! |---|---|
+//! | *"**BAR1 is never trapped**, with exactly one exception: the page the guest maps the usermode object at"* | §5.7 |
+//! | BAR2 is *"**mapped, not trapped and not served**"* | §6.5 |
+//!
+//! ⇒ `trap.rs` took `Class` as a **caller-supplied input** and never derived it from
+//! `(bar, offset)`. A review had already flagged exactly that — *"the three-way classifier is not
+//! in this crate; nothing derives it"* — and it was left. ⚠ **The rule was not missing from the
+//! design; it was missing from the code**, and this file is the implementation catching up.
+//!
+//! ⊘ **Why the distinction is worth writing down:** filing an unimplemented rule as a fresh
+//! decision makes the history say *"the design evolved"* when it actually says *"the code
+//! lagged."* The first invites no fix; the second is a defect with an owner.
+//!
+//! ★ **One part genuinely IS a change**, and only one: §5's **524-page read-trap allowlist** is
+//! superseded by *"no read trap everywhere"*. That supersession is folded into §5 itself, above
+//! the text it corrects.
 //!
 //! ## The rule, as a table
 //!
