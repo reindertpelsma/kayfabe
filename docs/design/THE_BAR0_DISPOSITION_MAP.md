@@ -67,6 +67,26 @@ zero — the search demonstrated it could find candidates before concluding ther
 latch. The problem is different: **it is a live counter with no host mapping to alias.** The VF
 usermode page can be C because the host's own driver maps it; BAR0 `0x9000` cannot.
 
+### §4.0 — Which page, and can we map it from the host? ⊘ No.
+
+**The whole PTIMER block is one page: `0x9000`.** `INTR_0 +0x100`, `INTR_EN_0 +0x140`,
+`TIME_0 +0x400`, `TIME_1 +0x410`, `ALARM_0 +0x420`, PLM `+0x430` — all inside `0x9000–0x9FFF`.
+
+⊘ **It is NOT mappable from host userspace.** The only BAR0 region RM hands to an unprivileged
+client is the **usermode/VF window** — `DRF_BASE(NV_VIRTUAL_FUNCTION_FULL_PHYS_OFFSET)` = `0xB80000`
+(`kern_gpu_tu102.c:100`), allocated as `VOLTA_USERMODE_A`/`HOPPER_USERMODE_A`. That is the page
+holding the doorbell, which is *why* it is exposed. PTIMER at `0x9000` is ordinary privileged PRI
+space and RM never maps it out — and §"no root required" closes the other routes.
+
+⊘ **Aliasing the VF page onto it is also impossible**: the same counter appears there as
+`VF_TIME_0/1` at `0xbb0080/84`, but a memslot maps page-to-page and the **offsets inside the page
+differ** (`+0x400/+0x410` vs `+0x080/+0x084`), so no mapping can make one serve the other.
+
+★ **But the VALUE is available, and that is what matters.** `VF_TIME_0/1` on the usermode page we
+**do** map for the doorbell is the *same underlying PTIMER counter*. ⇒ The refresher should read
+the host's mapped usermode page and store those two words into the guest's `0x9000` shadow —
+**the same counter, so no drift, no rate conversion, no `clock_gettime` skew.**
+
 ⇒ **It cannot be C, and it must not be D**: a hole puts *three exits* through every wait-loop
 iteration. The C artifact did exactly that (`nvkvm_gpu_emul.c:1517-1524`, whose own comment notes
 *"RM timeout loops poll millions of times"*). **The answer is B with a VMM thread refreshing the
@@ -174,6 +194,51 @@ a 1-dword packet is header-only and carries no payload.
 **boot-only**, they carry nothing polled at runtime, and **neither family is the current target** —
 GSP Turing/Ampere/Ada has **zero** disposition-D pages.
 
+## §4B — ✔ MEASURED w824: the OPEN module has NO non-GSP mode, and it lies about it
+
+`[owner]` *"for non GSP we don't know ofc. thats worth a test with proprietary driver or if you can
+satisfy from nouveau measurements."* ⇒ Ran the cheap half on the bench box (GA106,
+`580.159.04`, vast `51894520`).
+
+**Measured, 2026-09-21:**
+
+| step | result |
+|---|---|
+| `modprobe nvidia NVreg_EnableGpuFirmware=0` | loads, **rc=0** |
+| `/proc/driver/nvidia/params` | `EnableGpuFirmware: 0` ✔ *(accepted)* |
+| `nvidia-smi` | `NVIDIA GeForce RTX 3060` — the GPU comes up |
+| **`nvidia-smi -q` → GSP Firmware Version** | **`580.159.04`** ⊘ **GSP IS RUNNING** |
+
+⇒ **The open kernel module accepts `EnableGpuFirmware=0`, echoes it back as `0`, and boots GSP
+anyway.** It is GSP-only on Turing+ by construction, and it **silently overrides** the request
+rather than refusing it. ★ So for the **open** driver the non-GSP axis **does not exist** on
+Turing+ — no UNKNOWN, a measured absence. This is §51's premise confirmed rather than assumed.
+
+### ⚠⚠⚠ TWO FALSE POSITIVES IN ONE EXPERIMENT — both of the tree's standing classes
+
+1. **The parameter readback is what we ASKED FOR, not what the driver DID.** `params` reporting
+   `EnableGpuFirmware: 0` is the *request*, echoed. Reading it as the outcome would have produced
+   the confident, wrong headline *"GSP-off works on the open module"*. ⇒ **The observable had to be
+   the thing itself** — `nvidia-smi -q`'s GSP Firmware Version — not the knob.
+2. ⊘⊘ **And the obvious-looking direct observable is ALSO wrong.**
+   `/proc/driver/nvidia/gpus/*/information` reports **`GPU Firmware: N/A`** on this very box **while
+   GSP is running**. Two fields, same driver, opposite answers — and the one whose *name* matches
+   the question is the misleading one. ⇒ Had I used procfs as the check, I would have "confirmed"
+   GSP was off with a direct measurement. **Only `nvidia-smi -q` reports it correctly.**
+
+⇒ Recorded as the instrument, not just the result: **when testing whether a knob took effect, the
+observable must be downstream of the behaviour, never the knob's own readback — and check that the
+field you picked actually tracks the behaviour, because a plausibly-named one may not.**
+
+### ⊘ What is still UNKNOWN, and what would settle it
+
+The **proprietary** module (`--kernel-module-type=proprietary`) is the only place a non-GSP
+Turing/Ampere/Ada path could exist, and it is **not installed on the bench**. ⚠ Swapping the bench
+box's driver would disturb the 30/30 bare-metal baseline that the whole guest lane indicts against,
+so this needs **its own box or a deliberate window** — it was not done silently. ⇒ Until then the
+three proprietary-GSP-off rows in §6 stay **UNKNOWN**, and the non-GSP map rests on **nouveau**,
+which is source we can read.
+
 ## §5 — Everything else is B: the non-GSP block census (nouveau)
 
 All rows: writes trap (W1C acks, enables, triggers); reads are plain or producer-updated.
@@ -204,7 +269,7 @@ All rows: writes trap (W1C acks, enables, triggers); reads are plain or producer
 | **Maxwell** | n/a | **GM107/GM108: D `0x10a000`**; GM200+: no D. `0x9000` refreshed-B |
 | **Pascal** | n/a | GP102+: **D SEC2 `0x087000`** ⚠ base inferred; `0x9000` refreshed-B |
 | **Volta** | n/a | D SEC2 ⚠ inferred via `gv100_acr`; `0x9000` refreshed-B |
-| **Turing** | **no D**; C `0xbb0000`; E `0x9400/10` | nouveau: **D `0x840000`**; `0x9000` refreshed-B. ⚠ Proprietary GSP-off: SEC2 **UNKNOWN** (no source) |
+| **Turing** | **no D**; C `0xbb0000`; E `0x9400/10` | nouveau: **D `0x840000`**; `0x9000` refreshed-B. ⊘ **OPEN module: no non-GSP mode at all — measured §4B.** ⚠ Proprietary GSP-off: **UNKNOWN**, needs its own box |
 | **Ampere** | as Turing — **this is the bench, and it is measured** | as Turing non-GSP (`ga102_sec2`) |
 | **Ada** | as Turing | ⚠ nouveau has **no non-GSP Ada**; proprietary GSP-off **UNKNOWN** |
 | **Hopper** | **D `0x8F2000`** (FSP, boot); E `0x118df4/f8` | n/a (GSP mandatory) |
