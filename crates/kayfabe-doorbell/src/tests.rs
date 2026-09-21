@@ -1078,3 +1078,87 @@ fn the_model_check_clears_the_retrying_claim() {
         Err(why) => panic!("the shipped claim() has a losing interleaving:\n{why}"),
     }
 }
+
+// ---- §5 the read-trap allowlist ---------------------------------------------------------------
+
+#[test]
+fn a_boot_state_page_stops_read_trapping_at_runtime() {
+    // ⊘⊘⊘ §5's measured parity disaster, as a test: "99% of its 1000-3000 exits per token were
+    // READS of a single firmware debug register on a page this design keeps read-trapped as 'boot
+    // state'. That one page cost a 2.5x LOSS ON LLM DECODE."
+    let mut s = ReadTrapSet::new();
+    const FW_DEBUG_PAGE: u32 = 0x110;
+    s.add(FW_DEBUG_PAGE, ReadReason::BootStateMachine);
+    assert_eq!(
+        s.policy(FW_DEBUG_PAGE, 0x110000, Phase::Boot),
+        ReadPolicy::Trap(ReadReason::BootStateMachine)
+    );
+    assert_eq!(
+        s.policy(FW_DEBUG_PAGE, 0x110000, Phase::Runtime),
+        ReadPolicy::FromShadow,
+        "⊘ a boot-state page MUST stop trapping at runtime — this arm is the 2.5x"
+    );
+}
+
+#[test]
+fn a_latch_backed_page_traps_in_every_phase() {
+    // ⊘ The framebuffer window "resolves through a latch": the value the guest must see does not
+    // exist in DRAM to be read, so no phase can drop it.
+    let mut s = ReadTrapSet::new();
+    const FB_WINDOW_PAGE: u32 = 0x700;
+    s.add(FB_WINDOW_PAGE, ReadReason::ResolvesThroughLatch);
+    for phase in [Phase::Boot, Phase::Runtime] {
+        assert_eq!(
+            s.policy(FB_WINDOW_PAGE, 0, phase),
+            ReadPolicy::Trap(ReadReason::ResolvesThroughLatch),
+            "a latch cannot be served from a shadow in {phase:?}"
+        );
+    }
+}
+
+#[test]
+fn an_unlisted_page_never_traps_which_is_the_default_that_matters() {
+    // ★ §5: reads are served from ordinary DRAM "with no exit and no code -- because a vCPU inside
+    // an MMIO exit is not preemptible, and driver init polls some registers thousands of times."
+    let s = ReadTrapSet::new();
+    for page in [0u32, 1, 42, 0x500, readtrap::BAR0_PAGES - 1] {
+        assert_eq!(s.policy(page, page * 4096, Phase::Boot), ReadPolicy::FromShadow);
+        assert_eq!(s.policy(page, page * 4096, Phase::Runtime), ReadPolicy::FromShadow);
+    }
+}
+
+#[test]
+fn the_timer_pages_settable_registers_are_refused_by_name() {
+    // ⊘ §5: "the two time-register writes refused by name, so guest and host cannot drift onto
+    // different timebases." A refusal, not a trap: letting the guest SET time makes every later
+    // comparison between guest and host silently wrong.
+    let s = ReadTrapSet::new();
+    assert_eq!(s.policy(readtrap::LEGACY_TIMER_PAGE, 0x9400, Phase::Runtime), ReadPolicy::RefuseByName);
+    assert_eq!(s.policy(readtrap::LEGACY_TIMER_PAGE, 0x9410, Phase::Runtime), ReadPolicy::RefuseByName);
+    // ★ And the timer page itself is NOT read-trapped -- it is a computed shadow.
+    assert_eq!(
+        s.policy(readtrap::LEGACY_TIMER_PAGE, 0x9000, Phase::Runtime),
+        ReadPolicy::FromShadow,
+        "the legacy timer page is a computed shadow, not a read-trap"
+    );
+}
+
+#[test]
+fn the_read_trap_set_shrinks_between_boot_and_runtime() {
+    // ⚠ §5 puts a number on it: "roughly 524 of 4096". The property under test is not the exact
+    // count -- it is that the set is SMALLER at runtime, because a set that only ever grows has
+    // given up the "only writes trap" property the design rests on.
+    let mut s = ReadTrapSet::new();
+    for p in 0..500u32 {
+        s.add(0x100 + p, ReadReason::BootStateMachine);
+    }
+    for p in 0..24u32 {
+        s.add(0x700 + p, ReadReason::ResolvesThroughLatch);
+    }
+    assert_eq!(s.trapped_at(Phase::Boot), 524, "§5's figure");
+    assert_eq!(s.trapped_at(Phase::Runtime), 24, "only the latch-backed pages survive");
+    assert!(
+        s.trapped_at(Phase::Runtime) < s.trapped_at(Phase::Boot),
+        "the set MUST shrink; a permanently-growing read-trap set is the 2.5x defect"
+    );
+}
