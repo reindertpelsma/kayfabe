@@ -132,9 +132,33 @@ if [ "${SKIP_NBD:-0}" != "1" ]; then
 modprobe nbd max_part=8 2>/dev/null
 mkdir -p "$ROOT/mnt"
 qemu-nbd --read-only --connect=/dev/nbd0 -f qcow2 "$IMG" || die "qemu-nbd could not attach $IMG"
-sleep 1
-partprobe /dev/nbd0 2>/dev/null
-mount -o ro /dev/nbd0p1 "$ROOT/mnt" 2>/dev/null || mount -o ro /dev/nbd0 "$ROOT/mnt" || die "cannot mount the guest root"
+
+# ⊘⊘⊘ RACE, MEASURED w824. `qemu-nbd --connect` RETURNS BEFORE THE KERNEL HAS ENUMERATED THE
+# PARTITIONS, and `sleep 1` + one `partprobe` was not enough on this box. Clean A/B on
+# `/workspace/bench/guest.qcow2`:
+#     connect; partprobe immediately  ->  /dev/nbd0p1 ABSENT   ⇒ mount fails
+#     connect; settle; partprobe      ->  /dev/nbd0p1 PRESENT  ⇒ mount OK, real rootfs
+#
+# ⚠ AND THE FAILURE READ AS SOMETHING ELSE ENTIRELY. The mount fell through to the bare
+# `/dev/nbd0` arm, failed too, and died with "cannot mount the guest root" — which reads as a
+# CORRUPT OR MISSING IMAGE. The image was fine; only the partition nodes were late. An error
+# message naming the wrong layer sends the next person to check the wrong thing.
+#
+# ⇒ POLL FOR THE ARTEFACT instead of sleeping a guess: a fixed sleep is either too short on a
+# slow box or wasted on a fast one, and it encodes no evidence about what it is waiting for.
+_p1_ready() { [ -b /dev/nbd0p1 ]; }
+for _try in $(seq 1 25); do
+    _p1_ready && break
+    partprobe /dev/nbd0 2>/dev/null || true
+    sleep 0.2
+done
+if _p1_ready; then
+    mount -o ro /dev/nbd0p1 "$ROOT/mnt" || die "/dev/nbd0p1 appeared but would not mount"
+else
+    # ⊘ No partition table at all is a DIFFERENT thing from one that was late — say which.
+    echo "build_fast_guest: /dev/nbd0p1 never appeared after 5s; trying the whole-device arm" >&2
+    mount -o ro /dev/nbd0 "$ROOT/mnt" || die "cannot mount the guest root (no nbd0p1, and nbd0 is not a filesystem either — is $IMG a partitioned image?)"
+fi
 
 KREL=$(ls "$ROOT/mnt/lib/modules" | head -1)
 [ -n "$KREL" ] || die "no /lib/modules in the guest image"
