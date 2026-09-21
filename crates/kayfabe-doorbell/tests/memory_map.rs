@@ -146,3 +146,93 @@ fn known_positive_the_tiling_check_can_actually_fail() {
     m.regions.push(Region { bar: Bar(0), base: 0, len: PAGE, how: Disposition::PlainRam });
     assert!(m.tiles().is_err(), "⊘ a duplicated region must NOT tile");
 }
+
+// ---- the seam: can a VMM actually install this map? -------------------------------------------
+
+use kayfabe_doorbell::vmm::{HostMapping, SlotId, VmmError, VmmOps};
+use std::sync::Mutex;
+
+/// Where the guest programmed each BAR. ⊘ Deliberately far apart and NOT at 0, so a bug that
+/// confuses a BAR-relative offset for a GPA lands outside every BAR instead of accidentally
+/// inside one — which is exactly the bug that slipped through the first version of this test.
+fn bar_base(bar: kayfabe_doorbell::vmm::Bar) -> Option<u64> {
+    match bar.0 {
+        0 => Some(0xF000_0000),
+        1 => Some(0x10_0000_0000),
+        2 => Some(0x20_0000_0000),
+        _ => None,
+    }
+}
+
+/// A recording VMM. ⊘ It exists to answer one question the trait alone cannot: **is the seam
+/// COMPLETE** — can a map be installed through it without any verb the trait is missing?
+#[derive(Default)]
+struct RecordingVmm {
+    slots: Mutex<Vec<(u64, u64, bool)>>, // (gpa, len, readonly)
+}
+impl VmmOps for RecordingVmm {
+    fn guest_read(&self, _: u64, _: &mut [u8]) -> Result<(), VmmError> { Ok(()) }
+    fn guest_write(&self, _: u64, _: &[u8]) -> Result<(), VmmError> { Ok(()) }
+    fn install_memslot(&self, gpa: u64, len: u64, _h: HostMapping, ro: bool) -> Result<SlotId, VmmError> {
+        let mut s = self.slots.lock().unwrap();
+        s.push((gpa, len, ro));
+        Ok(SlotId(s.len() as u32 - 1))
+    }
+    fn remove_memslot(&self, _: SlotId) -> Result<(), VmmError> { Ok(()) }
+    fn raise_irq(&self, _: u32) -> Result<(), VmmError> { Ok(()) }
+    fn signal_worker(&self) {}
+    fn signal_drainer(&self) {}
+}
+
+#[test]
+fn the_seam_is_complete_enough_to_install_the_whole_map() {
+    // ⊘ `VmmOps` had ZERO implementors — a trait nothing implements is an island the orphan gate
+    // cannot see, because the gate asks which MODULES are reached, not which traits are inhabited.
+    // This test is the smallest thing that proves the seam is implementable and sufficient.
+    for f in FAMILIES {
+        let m = map_for(f);
+        let vmm = RecordingVmm::default();
+        let n = install(&m, &vmm, bar_base, |r| Some(HostMapping(r.base))).unwrap();
+        let slots = vmm.slots.lock().unwrap();
+
+        // Every region EXCEPT the holes became a memslot.
+        let expect = m.regions.len() - m.read_exit_regions().len();
+        assert_eq!(slots.len(), expect, "{f:?}");
+        assert_eq!(n.len(), expect);
+
+        // ★ And the readonly flag IS the disposition — that is the whole translation.
+        for (r, _) in &n {
+            let gpa = bar_base(r.bar).unwrap() + r.base;
+            let (_, _, ro) = slots.iter().find(|(g, l, _)| *g == gpa && *l == r.len).unwrap();
+            match r.how {
+                Disposition::PlainRam => assert!(!ro, "PRAMIN/BAR1/BAR2 must be r/w: {r:?}"),
+                Disposition::ShadowWriteTrapped | Disposition::HostPassthrough =>
+                    assert!(ro, "reads-from-DRAM/writes-exit must be READ-ONLY: {r:?}"),
+                Disposition::Hole { .. } => unreachable!("a hole must not be installed"),
+            }
+        }
+    }
+}
+
+#[test]
+fn a_hole_is_installed_by_NOT_installing_it() {
+    // ★★★ The design in one assertion. kayfabe's only read traps are produced by a `continue`.
+    // ⚠ KNOWN-POSITIVE built in: Ampere must install its 0x8F2000 span (it is ordinary B there),
+    // and Hopper must NOT — so a bug that installed holes anyway would fail on Hopper, and a bug
+    // that skipped that address everywhere would fail on Ampere.
+    let probe = bar_base(kayfabe_doorbell::vmm::Bar(0)).unwrap() + 0x008F_2000;
+
+    let vmm = RecordingVmm::default();
+    let m = map_for(Family::Hopper);
+    install(&m, &vmm, bar_base, |r| Some(HostMapping(r.base))).unwrap();
+    let covered = |v: &RecordingVmm, a: u64| {
+        v.slots.lock().unwrap().iter().any(|(g, l, _)| (*g..*g + *l).contains(&a))
+    };
+    assert!(!covered(&vmm, probe), "⊘ Hopper's FSP page must have NO memslot — that IS the trap");
+    assert!(covered(&vmm, probe - PAGE), "…and the page before it must still be backed");
+    assert!(covered(&vmm, probe + PAGE), "…and the page after it");
+
+    let vmm2 = RecordingVmm::default();
+    install(&map_for(Family::Ampere), &vmm2, bar_base, |r| Some(HostMapping(r.base))).unwrap();
+    assert!(covered(&vmm2, probe), "⊘ on Ampere 0x8F2000 is ordinary B and MUST be backed");
+}

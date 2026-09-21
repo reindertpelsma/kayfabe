@@ -227,3 +227,55 @@ impl MemoryMap {
             .map(|r| r.how)
     }
 }
+
+/// ★★★ **Install the map through the VMM seam.** The one translation from *disposition* to
+/// *memslot*, written once so QEMU and Cloud Hypervisor cannot each invent their own.
+///
+/// ⊘ **The `Hole` arm is the important one, and it is the arm that does NOTHING.** A read exit is
+/// produced by *not installing a memslot* — so the code that creates kayfabe's only read traps is
+/// a `continue`. That is the whole design in one line: mapping code, not trapping code.
+///
+/// ⊘⊘⊘ **`bar_base` IS NOT OPTIONAL BOOKKEEPING — it was a real hole in this seam.** A [`Region`]
+/// carries a **BAR-relative** offset, while [`crate::vmm::VmmOps::install_memslot`] takes a
+/// **guest-physical address**. Nothing in the seam knew where a BAR is programmed, so the two
+/// could not be connected at all. ⚠ Found by writing the test below, not by reading the code: the
+/// first version silently treated BAR-relative offsets as GPAs, and BAR1 (256 MiB from 0) then
+/// "covered" a BAR0 hole at `0x8F2000`. ⇒ **Two address spaces that are both plain `u64` will be
+/// confused**, and only something that checks a concrete address catches it.
+///
+/// `bar_base` returns the GPA a BAR is currently mapped at, or `None` if the guest has not
+/// programmed it yet — an unprogrammed BAR installs nothing, which is correct rather than an error.
+///
+/// `host_for` supplies the backing for one region; returning `None` leaves it uncovered, which is
+/// itself a read exit, so a caller that cannot back a region must know that is what it is asking
+/// for. ⚠ Regions are installed in address order and the caller gets the slots back in that order.
+pub fn install(
+    map: &MemoryMap,
+    vmm: &dyn crate::vmm::VmmOps,
+    mut bar_base: impl FnMut(crate::vmm::Bar) -> Option<u64>,
+    mut host_for: impl FnMut(&Region) -> Option<crate::vmm::HostMapping>,
+) -> Result<Vec<(Region, crate::vmm::SlotId)>, crate::vmm::VmmError> {
+    // ⊘ Refuse to install a map that does not tile. A gap would become a read exit nobody chose,
+    // and the point of failing here is that the VMM never sees a half-installed device.
+    debug_assert!(map.tiles().is_ok(), "{:?}", map.tiles());
+
+    let mut installed = Vec::new();
+    let mut regions: Vec<&Region> = map.regions.iter().collect();
+    regions.sort_by_key(|r| (r.bar.0, r.base));
+
+    for r in regions {
+        let readonly = match r.how {
+            // A — plain RAM: no exit in either direction.
+            Disposition::PlainRam => false,
+            // B and C — reads from memory, writes exit. THE default.
+            Disposition::ShadowWriteTrapped | Disposition::HostPassthrough => true,
+            // ★ D — install NOTHING. This `continue` is the entire read-trap implementation.
+            Disposition::Hole { .. } => continue,
+        };
+        let Some(base) = bar_base(r.bar) else { continue }; // BAR not yet programmed by the guest
+        let Some(host) = host_for(r) else { continue };
+        let gpa = base.checked_add(r.base).ok_or(crate::vmm::VmmError::BadGpa)?;
+        installed.push((*r, vmm.install_memslot(gpa, r.len, host, readonly)?));
+    }
+    Ok(installed)
+}
