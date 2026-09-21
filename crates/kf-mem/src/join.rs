@@ -1,3 +1,31 @@
+//! ⊘⊘⊘⊘ **THIS WHOLE MODULE IS THE SUPERSEDED SHAPE. DO NOT BUILD ON IT.** `[w824]`
+//!
+//! `docs/design/gpga_is_one_reserved_object.md` — **the owner's design, LIVE since 2026-09-10** —
+//! says the framebuffer is **ONE reserved RM object** and *"every mapping … is a **slice** of it
+//! at an offset. **There is no second memory for any address.**"* It names the per-leaf join in
+//! `fbwin.rs` and schedules it **for deletion**.
+//!
+//! ⇒ **Under that design there is nothing to join.** Resolving a guest FB address is
+//! `StoreOffset(fb - fb_base)` — offset arithmetic into one object — and a lookup table of any
+//! kind is the thing being removed, not the thing being written.
+//!
+//! ## How this got written anyway, because the mechanism matters more than the mistake
+//!
+//! I read the old `fbjoin.rs`, found its lookup matched by **equality** where containment was
+//! wanted, fixed that, and carried the surrounding **concept** across without checking whether
+//! the concept survived. ⊘ The improvement was real and the shape was already dead. ⚠ This tree
+//! records exactly this failure — *"the new design was unreachable by default"*, five arms
+//! defaulting to a superseded path — and I reproduced it **in fresh code, in a crate created to
+//! escape it**, on the same day I wrote the rule that a port must not carry a causal claim.
+//!
+//! ⇒ **The rule this adds: before porting a shape, find the design note that governs it and check
+//! its STATUS.** Reading the old code tells you what the code does; only the design tells you
+//! whether it should still exist. `grep -rl "STATUS.*LIVE" docs/design/` is cheaper than a day.
+//!
+//! ⊘ Kept, unbuilt-on, until the replacement lands, because its **tests** still document two real
+//! facts — the equality-vs-containment difference, and w392j's newest-join-wins — that whatever
+//! replaces it must not silently lose. Delete this module with the commit that replaces it.
+
 //! The **join**: a guest framebuffer range ⇄ a host object, looked up by containment.
 //!
 //! ## ⊘⊘⊘ THIS FILE'S OPENING CLAIM WAS WRONG, AND IT IS KEPT AS THE CORRECTION
