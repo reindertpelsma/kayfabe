@@ -136,7 +136,7 @@ computed fill); the **VA-manager thread** (only its seam exists, as `HostOps`); 
 exist today"* and needs a token-level `hi:lo` parser because its input **is not parseable as C**;
 and the **read-trap allowlist** for the 524 of 4096 pages where *"only writes trap"* is false.
 
-### ★★★ The gate: 7 of the 8 named interleavings are tests
+### ✔ The gate: all 8 named interleavings are tests
 
 P1's gate names them individually, so they are checked off individually rather than by a pass rate:
 
@@ -149,12 +149,39 @@ P1's gate names them individually, so they are checked off individually rather t
 | ring-full poison | `full_poisons_and_claims_nothing_and_then_drops_by_name` |
 | cross-vCPU register order | `the_drainer_applies_registers_in_global_order_across_vcpus` |
 | the **unowned-token amplifier** | `an_unprivileged_process_cannot_keep_workers_from_parking` |
-| ⊘ **loom-style / exhaustive model check of the wakeup word** | **NOT DONE** |
+| ✔ **exhaustive model check** | `model.rs` — `the_model_check_FINDS_the_single_cas_claim_bug` / `..._clears_the_retrying_claim` |
 
-⚠ **The missing one is not a formality.** §5.3 says the orderings *"are load-bearing and x86 TSO
-hides their absence"* — so the 48 passing tests, all run on x86, **cannot** establish the fences.
-⇒ Until the model check exists, the memory orderings in `wake.rs` and `token.rs` are **argued from
-the spec, not verified**, and that is their actual status.
+⇒ **8 of 8.** ⊘ `loom` is not in the offline registry, and P1 requires this crate carry no
+dependencies, so it is a hand-written exhaustive interleaving explorer.
+
+★★★ **It is validated against a bug that was really there.** It derives the w823 `claim()` race
+mechanically, and names the interleaving:
+
+```
+T0:Ring → T0:PublishIfOwed → T1:TakeBit → T1:ClaimLoad → T0:Ring → T1:ClaimCas → T1:Release → …
+LOST: state=Rung stamp=2 queued=2 served=0 bit=false, nobody holding
+```
+
+That race took **2-in-40** real-thread runs to surface; the model finds it in the **first** run.
+The shipped claim is **clear over all 67 reachable states**.
+
+⚠⚠ **But the orderings are STILL not established, and the model check does not change that.**
+§5.3 says they *"are load-bearing and x86 TSO hides their absence"* — and this checker explores
+**sequential consistency**, which is *stronger* than any hardware, so it hides a missing fence
+**exactly as x86 TSO does**. ⇒ The memory orderings in `wake.rs` and `token.rs` remain **argued
+from the spec, not verified**. That gap closes only on a weakly-ordered target or with a checker
+that models the C++ memory model — neither of which exists here.
+
+⊘ **And the checker itself needed a known-positive, which took three attempts** — the lesson is
+transferable to any model written for this tree:
+1. `claim()` modelled as **one atomic step** ⇒ 35 states, bug reported absent. **The defect IS the
+   gap between the load and the CAS.** ⇒ *Model the operations a thread can be preempted between,
+   not the functions you wrote.*
+2. Load/CAS split, but the worker kept holding the bit after a failed claim ⇒ 67 states, still
+   absent, because the invariant's *"is anyone holding it?"* clause answered yes. In reality the
+   scan **consumed** the bit and the worker moves on. ⇒ *Model what the worker does, not what you
+   wish it did.*
+3. Correct — and it fired immediately.
 
 ★ **And the gate earned itself on the first night**: it caught a real race in `claim()` that would
 have stranded tokens permanently — a CAS failure read as evidence of ownership. Reproduced 2/40,
