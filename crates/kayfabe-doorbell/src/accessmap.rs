@@ -34,14 +34,31 @@
 //! `[final, LEN, ~LEN, raw bytes]` blocks, and an Adler-32 trailer. ⇒ **No deflate encoder, no
 //! dependency, and nothing to get subtly wrong** — the bytes we emit are the bytes the guest gets.
 
-/// One bit per 32-bit register. BAR0 is 16 MiB ⇒ 4 Mi registers ⇒ 512 KiB of bitmap.
-pub const BAR0_BYTES: u32 = 16 << 20;
+/// One bit per 32-bit register. On the GA106 bench BAR0 is 16 MiB ⇒ 4 Mi registers ⇒ 512 KiB of
+/// bitmap. ⊘ **A named default, not a fact about GPUs** (`[fable w824, LOW 5]`).
+///
+/// §50 level 1 for the real size is `NV_ESC_CARD_INFO.reg_size`
+/// (`kernel-open/common/inc/nv-ioctl.h:63`, filled from `nv->regs->size` at `nv.c:2384`,
+/// dispatched at `nv.c:2593` under `NV_CTL_DEVICE_ONLY` — no admin check): an unprivileged host
+/// ioctl. ogkm sizes the map from the same number — `userRegisterAccessMapSize` is what the
+/// inflate must produce exactly (`gpu_register_access_map.c:364-366`) — so when the host binding
+/// exists, [`AccessMap::deny_all_for`] takes `reg_size` and this constant stops being consulted.
+pub const GA106_BAR0_BYTES: u32 = 16 << 20;
+/// ⊘ Kept under the old names as the GA106 default so the size-contract tests still say what
+/// they said. [`map_bytes_for`] is the general form.
+pub const BAR0_BYTES: u32 = GA106_BAR0_BYTES;
 pub const MAP_BITS: usize = (BAR0_BYTES / 4) as usize;
 pub const MAP_BYTES: usize = MAP_BITS / 8;
+
+/// The inflated map size ogkm will demand for a BAR0 of `bar0_bytes`: one bit per 32-bit register.
+pub const fn map_bytes_for(bar0_bytes: u32) -> usize {
+    (bar0_bytes / 4 / 8) as usize
+}
 
 /// The map, as the guest will test it.
 pub struct AccessMap {
     bits: Vec<u8>,
+    bar0_bytes: u32,
 }
 
 impl Default for AccessMap {
@@ -52,16 +69,26 @@ impl Default for AccessMap {
 
 impl AccessMap {
     /// ⊘ **Deny by default**, so a register becomes userspace-reachable only by being named —
-    /// the same posture as the class allowlist and the control allowlist.
+    /// the same posture as the class allowlist and the control allowlist. GA106-sized.
     pub fn deny_all() -> AccessMap {
-        AccessMap { bits: vec![0u8; MAP_BYTES] }
+        Self::deny_all_for(GA106_BAR0_BYTES)
+    }
+
+    /// The general form: `bar0_bytes` is `NV_ESC_CARD_INFO.reg_size` for this device.
+    pub fn deny_all_for(bar0_bytes: u32) -> AccessMap {
+        AccessMap { bits: vec![0u8; map_bytes_for(bar0_bytes)], bar0_bytes }
+    }
+
+    #[inline]
+    pub fn bar0_bytes(&self) -> u32 {
+        self.bar0_bytes
     }
 
     /// Allow one byte-range of BAR0. ⚠ `offset` and `len` are BYTE addresses, converted to
     /// register indices exactly as ogkm does (`offset / sizeof(NvU32)`).
     pub fn allow_range(&mut self, offset: u32, len: u32) {
         // ⊘ `[fable]` checked add: `offset + len` wrapped before `.min()`, silently allowing nothing.
-        let end = offset.saturating_add(len).min(BAR0_BYTES);
+        let end = offset.saturating_add(len).min(self.bar0_bytes);
         let first = (offset / 4) as usize;
         let last = (end / 4) as usize;
         for reg in first..last {

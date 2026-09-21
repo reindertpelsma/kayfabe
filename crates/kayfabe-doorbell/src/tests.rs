@@ -642,6 +642,7 @@ impl Fixture {
             token_mask: 0x1f,
             read_traps: &self.read_traps,
             phase: readtrap::Phase::Boot,
+            timer: readtrap::TIMER_GV100,
         }
     }
 }
@@ -1169,19 +1170,106 @@ fn an_unlisted_page_never_traps_which_is_the_default_that_matters() {
 }
 
 #[test]
-fn the_timer_pages_settable_registers_are_refused_by_name() {
+fn the_timer_pages_settable_registers_are_refused_by_name_on_the_write_path() {
     // ⊘ §5: "the two time-register writes refused by name, so guest and host cannot drift onto
     // different timebases." A refusal, not a trap: letting the guest SET time makes every later
     // comparison between guest and host silently wrong.
+    //
+    // ⊘⊘⊘ THIS TEST WAS WRONG, AND IT WAS CHANGED, NOT WEAKENED. `[fable w824, HIGH 2]` Its first
+    // version asserted `policy(.., 0x9400, ..) == ReadPolicy::RefuseByName` -- a refusal of a
+    // READ. Measured from ogkm: Turing+ RM never reads 0x9400/0x9410 (`tmrReadTimeLoReg_TU102`
+    // reads NV_VIRTUAL_FUNCTION_TIME_0/1 at 0x30080/0x30084, `timer_tu102.c:142,159`), it WRITES
+    // them at boot and resume (`timer_gv100.c:71-72`), and a read of a readable register cannot
+    // be "refused" at all -- a load returns something. So the old assertion pinned a refusal on a
+    // path the driver does not take, and the path it DOES take had no refusal. ⇒ The property
+    // §5 states is asserted here where it can actually bite: on the privileged WRITE arm.
+    let f = Fixture::new(4);
+    let p = f.path();
+    let sem = shadow::WriteSemantics::Plain;
+    for off in [0x9400u32, 0x9410] {
+        assert_eq!(
+            p.write(Class::Privileged { readable: true, semantics: sem }, 0, off, 0x1234_5678, 4),
+            Action::RefusedByName,
+            "a write to {off:#x} must be refused by name"
+        );
+    }
+    assert_eq!(f.ring.occupancy(), 0, "a refused write never enters the privileged ring");
+    // ★ And the READ of the legacy timer page is served, not refused -- it is a computed shadow.
     let s = ReadTrapSet::new();
-    assert_eq!(s.policy(readtrap::LEGACY_TIMER_PAGE, 0x9400, Phase::Runtime), ReadPolicy::RefuseByName);
-    assert_eq!(s.policy(readtrap::LEGACY_TIMER_PAGE, 0x9410, Phase::Runtime), ReadPolicy::RefuseByName);
-    // ★ And the timer page itself is NOT read-trapped -- it is a computed shadow.
-    assert_eq!(
-        s.policy(readtrap::LEGACY_TIMER_PAGE, 0x9000, Phase::Runtime),
-        ReadPolicy::FromShadow,
-        "the legacy timer page is a computed shadow, not a read-trap"
-    );
+    for off in [0x9000u32, 0x9400, 0x9410, 0x9430] {
+        assert_eq!(
+            s.policy(readtrap::LEGACY_TIMER_PAGE, off, Phase::Runtime),
+            ReadPolicy::FromShadow,
+            "the legacy timer page is a computed shadow, not a read-trap and not a refusal"
+        );
+    }
+    // ★ The registers RM actually reads time from are not refused on any path.
+    for off in [readtrap::VF_TIME_0, readtrap::VF_TIME_1] {
+        assert!(!p.timer.is_refused_write(off));
+        assert_eq!(s.policy(off >> 12, off, Phase::Runtime), ReadPolicy::FromShadow);
+    }
+}
+
+#[test]
+fn a_refused_time_write_touches_nothing_a_neighbour_write_still_queues() {
+    // ⊘ The refusal is by NAME: the register next door on the same page is an ordinary
+    // privileged write and must still reach the ring, or the refusal has become a page-wide hole.
+    let f = Fixture::new(4);
+    let p = f.path();
+    let sem = shadow::WriteSemantics::Plain;
+    let priv_ = Class::Privileged { readable: true, semantics: sem };
+    assert_eq!(p.write(priv_, 0, 0x9400, 1, 4), Action::RefusedByName);
+    assert_eq!(f.ring.occupancy(), 0);
+    assert_ne!(p.write(priv_, 0, 0x9404, 1, 4), Action::RefusedByName, "0x9404 is not named");
+    assert_eq!(f.ring.occupancy(), 1, "the neighbour was queued");
+    // And the refusal is BAR0-scoped: the same offset on another BAR is not the timer.
+    assert_ne!(p.write(priv_, 1, 0x9400, 1, 4), Action::RefusedByName);
+}
+
+#[test]
+fn the_timer_hal_is_per_family_and_only_gv100_has_a_priv_level_mask() {
+    use readtrap::*;
+    use classgen::Family;
+    assert_eq!(timer_regs_for(Family::Turing), TIMER_GV100);
+    assert_eq!(timer_regs_for(Family::Ampere), TIMER_GV100);
+    assert_eq!(timer_regs_for(Family::Ada), TIMER_GV100);
+    assert_eq!(timer_regs_for(Family::Hopper), TIMER_GH100);
+    assert_eq!(timer_regs_for(Family::Blackwell), TIMER_GH100);
+    // The PLM shadow: bit 4 = WRITE_PROTECTION_LEVEL0_ENABLE, so ogkm takes its `if` branch and
+    // never reaches the NV_ASSERT(0) in the else (`timer_gv100.c:56,77-81`).
+    assert_eq!(TIMER_GV100.plm_shadow(), Some((0x9430, 1 << 4)));
+    assert_eq!(TIMER_GH100.plm_shadow(), None, "the GH100 body has no privilege test");
+    assert_eq!(TIMER_GB10B.plm_shadow(), None);
+    assert!(TIMER_GB10B.refused_writes.is_empty(), "GB10B writes no time register at all");
+}
+
+#[test]
+fn bar0_size_is_a_parameter_and_the_ga106_value_is_only_a_named_default() {
+    // `[fable w824, LOW 5]` 16 MiB was hard-coded in two files. The level-1 source is
+    // NV_ESC_CARD_INFO.reg_size; until that binding exists the constructor takes the value.
+    let s = ReadTrapSet::with_bar0_bytes(32 << 20);
+    assert_eq!(s.bar0_pages(), 8192);
+    assert_eq!(ReadTrapSet::new().bar0_pages(), readtrap::GA106_BAR0_PAGES);
+    let m = accessmap::AccessMap::deny_all_for(32 << 20);
+    assert_eq!(m.raw().len(), accessmap::map_bytes_for(32 << 20));
+    assert_eq!(m.raw().len(), 2 * accessmap::MAP_BYTES, "twice the BAR ⇒ twice the map");
+    assert_eq!(m.bar0_bytes(), 32 << 20);
+    // allow_range clamps at THIS map's BAR, not at the GA106 constant.
+    let mut m = accessmap::AccessMap::deny_all_for(32 << 20);
+    m.allow_range(17 << 20, 4096);
+    assert!(m.is_allowed(17 << 20), "an offset past 16 MiB is inside a 32 MiB BAR");
+    let mut g = accessmap::AccessMap::deny_all();
+    g.allow_range(17 << 20, 4096);
+    assert!(!g.is_allowed(17 << 20), "…and outside a 16 MiB one");
+}
+
+#[test]
+#[should_panic(expected = "outside BAR0")]
+fn a_read_trap_page_outside_the_bar_is_a_loud_configuration_error() {
+    // ⊘ Put the check where the bound lives: the set knows its BAR; an entry naming a page the
+    // BAR does not have must not become a silently-ignored line.
+    let mut s = ReadTrapSet::with_bar0_bytes(16 << 20);
+    s.add(4096, ReadReason::BootStateMachine);
 }
 
 #[test]
@@ -1817,6 +1905,45 @@ fn a_short_element_refuses_rather_than_reading_past_it() {
     let short = [0u8; 8];
     assert_eq!(LAYOUT_580.seq_num(&short), None);
     assert_eq!(LAYOUT_580.checksum(&short), None);
+}
+
+#[test]
+fn the_layout_is_detected_from_the_element_not_from_a_version_number() {
+    // ⊘⊘⊘ `[fable w824, MEDIUM 3]` `layout_for(driver_major >= 595)` was a guess: nobody measured
+    // where between 580 and 610 the header changed. The element itself says which it is.
+    use element::*;
+    // A 610 element starts with the exact two words gspMsgQueueSendCommand writes
+    // (`message_queue_cpu.c:505-512`): MCTP version 1 + SOM + EOM, then vendor-PCI / 0x10de / RPC.
+    let mut e610 = [0u8; 64];
+    e610[0..4].copy_from_slice(&MCTP_WORDS_610[0].to_le_bytes());
+    e610[4..8].copy_from_slice(&MCTP_WORDS_610[1].to_le_bytes());
+    assert_eq!(detect_layout(&e610), Some(LAYOUT_610));
+    assert_eq!(MCTP_WORDS_610[0], 0xC000_0001, "version nibble 1, SOM|EOM, everything else 0");
+    // A 580 element's word 0 is authTagBuffer[0..4]: zero outside CC (work area zeroed at init).
+    let e580 = [0u8; 64];
+    assert_eq!(detect_layout(&e580), Some(LAYOUT_580));
+    // A short buffer is refused, not guessed.
+    assert_eq!(detect_layout(&[0u8; 7]), None);
+    assert_eq!(detect_layout(&e610[..8]), Some(LAYOUT_610), "two words is enough");
+}
+
+#[test]
+fn a_version_nibble_alone_does_not_make_an_element_mctp() {
+    // ⊘ Under CC a 580 authTag is 16 random bytes, so 1 in 16 have a low nibble of 1. The vendor
+    // and type fields in word 1 are what ogkm ALSO validates (`message_queue_cpu.c:750`), and
+    // they are required here too -- a false match needs 27 specific bits, not 4.
+    use element::*;
+    let mut e = [0u8; 64];
+    e[0] = 0x01; // version 1, nothing else
+    assert_eq!(detect_layout(&e), Some(LAYOUT_580), "no vendor id ⇒ not MCTP");
+    e[4..8].copy_from_slice(&(0x7eu32 | (0x1234 << 8)).to_le_bytes());
+    assert_eq!(detect_layout(&e), Some(LAYOUT_580), "wrong vendor ⇒ not MCTP");
+    e[4..8].copy_from_slice(&(0x10u32 | (0x10de << 8)).to_le_bytes());
+    assert_eq!(detect_layout(&e), Some(LAYOUT_580), "wrong type ⇒ not MCTP");
+    e[4..8].copy_from_slice(&MCTP_WORDS_610[1].to_le_bytes());
+    assert_eq!(detect_layout(&e), Some(LAYOUT_610), "version + type + vendor ⇒ MCTP");
+    e[0] = 0x02;
+    assert_eq!(detect_layout(&e), Some(LAYOUT_580), "version 2 is what ogkm rejects too");
 }
 
 #[test]

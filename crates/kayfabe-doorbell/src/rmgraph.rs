@@ -56,7 +56,12 @@ pub fn class_policy(class: ClassId) -> ClassPolicy {
         0x90f1 => ClassPolicy::EmulateAndHost,  // FERMI_VASPACE_A (family-independent)
         0xa06c => ClassPolicy::Emulate,         // KEPLER_CHANNEL_GROUP_A (TSG)
         0x9067 => ClassPolicy::Emulate,         // FERMI_CONTEXT_SHARE_A
-        0xc797 => ClassPolicy::Emulate,         // AMPERE_B (3D sibling)
+        // ⊘ `[fable w824, MEDIUM 4]` this arm used to read `0xc797 => Emulate // AMPERE_B`. The 3D
+        // class is per die-group (TURING_A 0xC597 … BLACKWELL_B 0xCE97), so it now comes from the
+        // derived set below as `Kind::ThreeD`, with the SAME policy it had: modelled, not hosted.
+        c if crate::classgen::engine_class_kind(c) == Some(crate::classgen::Kind::ThreeD) => {
+            ClassPolicy::Emulate
+        }
         0xc574 => ClassPolicy::Emulate,         // UVM_CHANNEL_RETAINER — ⊘ never forwarded
         // ⊘⊘ [MEASURED] all 4 requests in a boot refused 0x56.
         0xc076 => ClassPolicy::Deny("GP100_UVM_SW: measured refused in every boot"),
@@ -68,10 +73,33 @@ pub fn class_policy(class: ClassId) -> ClassPolicy {
         // ⚠ §2.2 marks this justification UNVERIFIED: i2capiConstruct_IMPL returns NV_OK
         // unconditionally, so "RM expects it to fail" is not true. Refusal kept, reason flagged.
         0x402c => ClassPolicy::Deny("NV40_I2C: no physical board bus [reason UNVERIFIED w821]"),
-        // ★★★ EVERY FAMILY'S engine objects, from the DERIVED table — not a GA10x literal.
-        // `[fable A1]` hard-coding Ampere's ids denied an Ada guest's cuCtxCreate by default.
-        c if crate::classgen::engine_class_family(c).is_some() => ClassPolicy::EmulateAndHost,
+        // ★★★ EVERY FAMILY'S engine objects, from the DERIVED SETS — not a GA10x literal, and not
+        // one hand-picked id per kind either. `[fable A1]` hard-coding Ampere's ids denied an Ada
+        // guest's cuCtxCreate; `[fable w824 HIGH 1]` one-id-per-kind denied GA100's
+        // AMPERE_COMPUTE_A and GB202's BLACKWELL_COMPUTE_B the same way.
+        // ⊘ This is the UNION over families. The host RM refuses a class its own chip does not
+        // list (§50 level 1 answers that); [`class_policy_on`] is the per-family form.
+        c if crate::classgen::engine_class_kind(c).is_some() => ClassPolicy::EmulateAndHost,
         _ => ClassPolicy::Deny("not on the allowlist — default deny"),
+    }
+}
+
+/// The per-family form of [`class_policy`]: an engine class is admitted only if **this** family's
+/// chips list it. ⊘ Default-deny at the family, so a Turing guest asking for `HOPPER_COMPUTE_A`
+/// is refused by us rather than bounced off the host RM.
+pub fn class_policy_on(family: crate::classgen::Family, class: ClassId) -> ClassPolicy {
+    use crate::classgen::{classes_for, engine_class_kind, Kind};
+    match engine_class_kind(class) {
+        // Not an engine class anywhere: the family-independent table decides.
+        None => class_policy(class),
+        Some(kind) => match classes_for(family).kind_of(class) {
+            Some(Kind::ThreeD) => ClassPolicy::Emulate,
+            Some(_) => ClassPolicy::EmulateAndHost,
+            None => {
+                let _ = kind;
+                ClassPolicy::Deny("engine class not listed by any chip of this family")
+            }
+        },
     }
 }
 

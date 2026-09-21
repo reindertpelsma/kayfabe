@@ -105,40 +105,68 @@ fn rm_serialises_on_a_device_global_lock_so_parallelism_buys_nothing() {
 // ---- the compatibility axes --------------------------------------------------------------------
 
 #[test]
-fn every_supported_family_can_allocate_its_engine_objects() {
+fn every_supported_family_can_allocate_every_engine_object_its_chips_list() {
     // ⊘⊘ `[fable w823, A1]` the class table hard-coded GA10x, so an Ada guest's cuCtxCreate
     // (ADA_COMPUTE_A 0xC9C0) was DENIED by default. Every non-Ampere guest had no channel, no
     // compute object, no copy engine and no doorbell page.
-    // ⇒ Ids derived from ogkm's published headers by tools/derive_classes.sh.
-    use classgen::{classes_for, Family};
+    // ⊘⊘ `[fable w824, HIGH 1]` and the fix carried ONE id per kind, hand-picked per die-group.
+    // ⇒ Sets, unioned per family by tools/derive_classes.sh from ogkm's own per-chip lists.
+    use classgen::{classes_for, Family, Kind};
     for f in [Family::Turing, Family::Ampere, Family::Ada, Family::Hopper, Family::Blackwell] {
         let c = classes_for(f);
-        for (what, id) in [
-            ("channel", c.channel_gpfifo), ("compute", c.compute),
-            ("dma_copy", c.dma_copy), ("usermode", c.usermode),
-        ] {
-            assert_ne!(
-                rmgraph::class_policy(id),
-                rmgraph::ClassPolicy::Deny("not on the allowlist — default deny"),
-                "{f:?} {what} ({id:#x}) is denied — that guest cannot start"
-            );
+        for k in Kind::ALL {
+            assert!(!c.of_kind(k).is_empty(), "{f:?} lists no {k:?} class at all");
+            for &id in c.of_kind(k) {
+                let pol = rmgraph::class_policy(id);
+                assert_ne!(
+                    pol,
+                    rmgraph::ClassPolicy::Deny("not on the allowlist — default deny"),
+                    "{f:?} {k:?} ({id:#x}) is denied — that guest cannot start"
+                );
+                assert_eq!(rmgraph::class_policy_on(f, id), pol, "the per-family form agrees");
+            }
         }
     }
 }
 
 #[test]
-fn the_derived_class_ids_match_ogkms_published_headers() {
-    // ★ The numbers are transcribed from MIT/GPL source, not measured from a running driver and
-    // not invented. `[owner]` "don't extract blobs from the running driver or require root".
-    use classgen::{classes_for, Family};
-    assert_eq!(classes_for(Family::Ada).compute, 0xC9C0, "ADA_COMPUTE_A");
-    assert_eq!(classes_for(Family::Hopper).compute, 0xCBC0, "HOPPER_COMPUTE_A");
-    assert_eq!(classes_for(Family::Blackwell).compute, 0xCDC0, "BLACKWELL_COMPUTE_A");
-    assert_eq!(classes_for(Family::Turing).channel_gpfifo, 0xC46F, "TURING_CHANNEL_GPFIFO_A");
-    // ⊘ Ada has NO channel/copy/usermode define of its own -- it reuses Ampere's. That is a fact
-    // from the headers, and inventing an ADA_CHANNEL_GPFIFO_A would be fabrication.
-    assert_eq!(classes_for(Family::Ada).channel_gpfifo, classes_for(Family::Ampere).channel_gpfifo);
-    assert_eq!(classes_for(Family::Ada).usermode, classes_for(Family::Ampere).usermode);
+fn ga100_and_gb202_guests_are_not_denied_their_own_engine_classes() {
+    // ★★★ THE FAIL-BEFORE TEST for `[fable w824, HIGH 1]`. These are exactly the ids the
+    // one-id-per-kind table lacked, read off `g_gpu_class_list.c`'s halGA100 / halGB202 /
+    // halGB20B lists. An A100 or an RTX 50xx guest allocates them for cuCtxCreate.
+    use rmgraph::{class_policy, ClassPolicy::*};
+    for (id, what) in [
+        (0xC6C0, "AMPERE_COMPUTE_A (GA100)"),
+        (0xC6B5, "AMPERE_DMA_COPY_A (GA100)"),
+        (0xCEC0, "BLACKWELL_COMPUTE_B (GB202/GB20B)"),
+        (0xCAB5, "BLACKWELL_DMA_COPY_B (GB202/GB20B)"),
+        (0xCA6F, "BLACKWELL_CHANNEL_GPFIFO_B (GB202/GB20B)"),
+    ] {
+        assert_eq!(class_policy(id), EmulateAndHost, "{what} {id:#x} must be admitted");
+    }
+    // `[fable w824, MEDIUM 4]` the 3D class, per family, with the policy AMPERE_B had.
+    for (id, what) in [
+        (0xC597, "TURING_A"), (0xC697, "AMPERE_A (GA100)"), (0xC797, "AMPERE_B"),
+        (0xC997, "ADA_A"), (0xCB97, "HOPPER_A"), (0xCD97, "BLACKWELL_A"), (0xCE97, "BLACKWELL_B"),
+    ] {
+        assert_eq!(class_policy(id), Emulate, "{what} {id:#x} is the 3D sibling: modelled, not hosted");
+    }
+}
+
+#[test]
+fn a_family_lists_its_predecessors_channel_and_usermode_classes_too() {
+    // ⊘ Found by the compiler, missed by the audit: Hopper's list carries AMPERE_CHANNEL_GPFIFO_A
+    // and TURING_USERMODE_A; Turing's carries VOLTA_*. A driver may allocate any of them and the
+    // host RM will accept; refusing them would diverge from hardware.
+    use classgen::{classes_for, Family, Kind};
+    assert!(classes_for(Family::Hopper).channel_gpfifo.contains(&0xC56F), "AMPERE_CHANNEL_GPFIFO_A on GH100");
+    assert!(classes_for(Family::Turing).usermode.contains(&0xC361), "VOLTA_USERMODE_A on TU10x");
+    assert_eq!(classes_for(Family::Blackwell).kind_of(0xC461), Some(Kind::Usermode), "TURING_USERMODE_A on GB");
+    // …but the compute/copy/3D classes are NOT inherited: a Turing guest gets no HOPPER_COMPUTE_A.
+    assert_eq!(
+        rmgraph::class_policy_on(Family::Turing, 0xCBC0),
+        rmgraph::ClassPolicy::Deny("engine class not listed by any chip of this family")
+    );
 }
 
 #[test]
@@ -162,17 +190,18 @@ fn the_element_header_broke_between_580_and_610() {
 }
 
 #[test]
-fn the_class_table_matches_what_the_c_compiler_says_the_headers_define() {
+fn the_class_sets_match_what_the_c_compiler_says_each_chip_lists() {
     // ★★★ `[owner]` "don't use regex to parse C code -- use proper parsers/compilers."
     //
-    // ⊘ This does not re-implement a parser: it runs `tools/derive_classes.sh`, which COMPILES a
-    // generated program against ogkm's class headers and prints what the preprocessor resolved.
-    // A grep would see the first textual `#define` and call it the value; the compiler sees
-    // conditionals, redefinitions and macro expansion. ⇒ If our table ever drifts from the
-    // headers, this fails.
+    // ⊘ This does not re-implement a parser: it runs `tools/derive_classes.sh`, which COMPILES
+    // ogkm's `g_gpu_class_list.c` against a shim, reads the chips off the object's symbol table,
+    // joins ids to names through the preprocessor's macro table, and unions per family. If our
+    // table ever drifts from what the chips list -- an id missing, an id extra, a chip moved --
+    // this fails. ⇒ Set EQUALITY per (family, kind), not membership of a hand-picked few.
     //
     // ⚠ SKIPS (rather than fails) when ogkm or gcc is absent -- "we could not ask" is not "the
     // answer was no", and a box without the oracle must not manufacture a green.
+    use std::collections::BTreeSet;
     use std::process::Command;
     let script = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tools/derive_classes.sh");
     if !std::path::Path::new(script).exists() {
@@ -182,38 +211,51 @@ fn the_class_table_matches_what_the_c_compiler_says_the_headers_define() {
     let out = match Command::new("bash").arg(script).output() {
         Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).into_owned(),
         _ => {
-            eprintln!("SKIP: ogkm headers or gcc unavailable — NOT a pass");
+            eprintln!("SKIP: ogkm or gcc unavailable — NOT a pass");
             return;
         }
     };
-    let want = |name: &str| -> Option<u32> {
-        out.lines().find(|l| l.starts_with(name)).and_then(|l| {
-            let t = l.split_whitespace().nth(1)?;
-            u32::from_str_radix(t.strip_prefix("0x")?, 16).ok()
-        })
+    use classgen::{Family, Kind, FAMILIES};
+    let fam = |s: &str| match s {
+        "Turing" => Family::Turing, "Ampere" => Family::Ampere, "Ada" => Family::Ada,
+        "Hopper" => Family::Hopper, "Blackwell" => Family::Blackwell, o => panic!("unknown family {o}"),
     };
-    use classgen::{classes_for, Family};
-    for (sym, got) in [
-        ("TURING_CHANNEL_GPFIFO_A", classes_for(Family::Turing).channel_gpfifo),
-        ("TURING_COMPUTE_A", classes_for(Family::Turing).compute),
-        ("AMPERE_CHANNEL_GPFIFO_A", classes_for(Family::Ampere).channel_gpfifo),
-        ("AMPERE_COMPUTE_B", classes_for(Family::Ampere).compute),
-        ("ADA_COMPUTE_A", classes_for(Family::Ada).compute),
-        ("HOPPER_COMPUTE_A", classes_for(Family::Hopper).compute),
-        ("HOPPER_USERMODE_A", classes_for(Family::Hopper).usermode),
-        ("BLACKWELL_COMPUTE_A", classes_for(Family::Blackwell).compute),
-        ("BLACKWELL_DMA_COPY_A", classes_for(Family::Blackwell).dma_copy),
-    ] {
-        match want(sym) {
-            Some(w) => assert_eq!(
-                got, w,
-                "⊘ {sym}: our table says {got:#06X}, the COMPILER says the header defines {w:#06X}"
-            ),
-            None => panic!("⊘ {sym} is ABSENT from the headers but present in our table"),
+    let kind = |s: &str| match s {
+        "channel_gpfifo" => Kind::ChannelGpfifo, "compute" => Kind::Compute, "dma_copy" => Kind::DmaCopy,
+        "usermode" => Kind::Usermode, "threed" => Kind::ThreeD, o => panic!("unknown kind {o}"),
+    };
+    let mut derived: std::collections::BTreeMap<(Family, Kind), BTreeSet<u32>> = Default::default();
+    let mut chips: std::collections::BTreeMap<Family, BTreeSet<String>> = Default::default();
+    let mut n = 0;
+    for l in out.lines() {
+        let t: Vec<&str> = l.split_whitespace().collect();
+        match t.first() {
+            Some(&"CLASS") => {
+                let id = u32::from_str_radix(t[3].trim_start_matches("0x"), 16).unwrap();
+                derived.entry((fam(t[1]), kind(t[2]))).or_default().insert(id);
+                n += 1;
+            }
+            Some(&"FAMILY") => {
+                chips.entry(fam(t[1])).or_default().extend(t[2..].iter().map(|s| s.to_string()));
+            }
+            _ => {}
         }
     }
+    assert!(n >= 40, "the script printed {n} CLASS rows — that is not the class list");
+    for c in FAMILIES.iter() {
+        for k in Kind::ALL {
+            let ours: BTreeSet<u32> = c.of_kind(k).iter().copied().collect();
+            let theirs = derived.get(&(c.family, k)).cloned().unwrap_or_default();
+            assert_eq!(
+                ours, theirs,
+                "⊘ {:?} {k:?}: our table {ours:#x?} vs what the COMPILER says the chips list {theirs:#x?}",
+                c.family
+            );
+        }
+        let ours: BTreeSet<String> = c.chips.iter().map(|s| s.to_string()).collect();
+        assert_eq!(&ours, chips.get(&c.family).unwrap(), "{:?} chip membership", c.family);
+    }
 }
-
 #[test]
 fn we_author_the_user_register_access_map_rather_than_deriving_it() {
     // ★★★ `[owner, 2026-09-21]` asked where the compilable source for register access semantics
@@ -346,4 +388,121 @@ fn the_run_scanner_is_not_capped_at_the_match_length() {
     );
     // And the ratio itself, as the canary: >100x on uniform input.
     assert!(m.raw().len() / g.len() > 100, "ratio {}x", m.raw().len() / g.len());
+}
+
+// ---- fable w824: the timer is written, not read; and per HAL -----------------------------------
+
+#[test]
+fn turing_plus_rm_writes_the_legacy_ptimer_and_reads_the_vf_pair() {
+    // `[measured in ogkm 610.43.02]` `tmrReadTimeLoReg_TU102`/`_HiReg_TU102` read
+    // NV_VIRTUAL_FUNCTION_TIME_0/1 = 0x30080/0x30084 (`timer_tu102.c:135-165`,
+    // `tu102/dev_vm.h:224,226`) for every non-Tegra chip (`g_objtmr_nvoc.c:499-503`).
+    // `tmrSetCurrentTime_GV100` WRITES NV_PTIMER_TIME_1 (0x9410) then _0 (0x9400)
+    // (`timer_gv100.c:71-72`) once at boot (`kernel_gsp.c:5039`) and at resume
+    // (`gpu_suspend.c:236`), after testing PLM 0x9430 bit 4 (`:56`).
+    // ⇒ The refusal is on the WRITE arm and the VF pair is never refused.
+    // Contradicted by: a read-path refusal (the old shape), or a VF_TIME offset in any refusal set.
+    use readtrap::*;
+    assert_eq!((VF_TIME_0, VF_TIME_1), (0x30080, 0x30084));
+    assert_eq!(TIMER_GV100.refused_writes, &[0x9400, 0x9410]);
+    for t in [TIMER_GV100, TIMER_GH100, TIMER_GB10B] {
+        assert!(!t.is_refused_write(VF_TIME_0) && !t.is_refused_write(VF_TIME_1), "{:?}", t.hal);
+    }
+    // ⊘ A COMPILE-TIME gate, not a text one: this match is exhaustive only while ReadPolicy has
+    // no read-side refusal variant. (A `contains("RefuseByName")` gate matched the doc comment
+    // that DESCRIBES the old defect -- visibility, not reachability.)
+    let s = ReadTrapSet::new();
+    match s.policy(readtrap::LEGACY_TIMER_PAGE, 0x9400, Phase::Runtime) {
+        ReadPolicy::FromShadow => {}
+        ReadPolicy::Trap(_) => panic!("the legacy timer page is a computed shadow"),
+    }
+    // And the write side must actually be consulted on the privileged arm -- in code, not prose.
+    let trap: String = include_str!("../src/trap.rs")
+        .lines().filter(|l| !l.trim_start().starts_with("//")).collect::<Vec<_>>().join("\n");
+    assert!(trap.contains("self.timer.is_refused_write(off)"), "the refusal must be consulted on the write path");
+}
+
+#[test]
+fn the_ptimer_write_is_refused_by_name_and_the_plm_shadow_lets_ogkm_succeed() {
+    // ★ The decision, pinned (see `readtrap::TimerRegs`): drop the write, answer
+    // WRITE_PROTECTION_LEVEL0 = ENABLE (bit 4, `gv100/dev_timer.h:29-30`) so ogkm takes its `if`
+    // branch and returns NV_OK rather than NV_ASSERT(0) + NV_ERR_PRIV_SEC_VIOLATION
+    // (`timer_gv100.c:77-81`). An offset is not an option because the VF pair is a read-only
+    // memslot over live host time with no exit to add it in.
+    // Contradicted by: serving PLM = DISABLE, or accepting the write as Plain.
+    let vmm = Vmm::new();
+    let p = Plane::for_family(&vmm, 4, 0x3, classgen::Family::Ampere, readtrap::GA106_BAR0_BYTES);
+    let priv_ = Class::Privileged { readable: true, semantics: WriteSemantics::Plain };
+    assert_eq!(p.trap_write(priv_, 0, 0x9410, 0x1234, 4), Action::RefusedByName);
+    assert_eq!(p.trap_write(priv_, 0, 0x9400, 0x5678, 4), Action::RefusedByName);
+    assert_eq!(p.ring.occupancy(), 0, "nothing queued for the drainer to apply to the host");
+    assert_eq!(p.timer.plm_shadow(), Some((0x9430, readtrap::PLM_WRITE_PROTECTION_LEVEL0_ENABLE)));
+}
+
+#[test]
+fn hopper_and_blackwell_set_time_through_the_sci_offset_and_gb10b_writes_nothing() {
+    // `[measured in ogkm 610.43.02]` `g_objtmr_nvoc.c:420-445` dispatches tmrSetCurrentTime by
+    // HAL: GV100 for TU/GA/AD; GB10B for GB10B|GB20B|GB20C; GH100 for everything else (GH100,
+    // GB100/102/110/112, GB202-207, GR100/102). GH100 writes NV_PGC6_SCI_SYS_TIMER_OFFSET_1/0
+    // (0x118df8/0x118df4, `gh100/dev_gc6_island.h:35,41`, `timer_gh100.c:89-91`); GB10B keeps
+    // the offset in software (`timer_gb10b.c:46-73`) and writes NO register.
+    // ⊘ The audit said "Hopper/Blackwell use NV_PGC6_SCI_SEC_TIMER"; the integrated Blackwell
+    // parts do not -- found while reading the dispatch, pinned so it is not re-derived.
+    use readtrap::*;
+    assert_eq!(timer_regs_for(classgen::Family::Hopper), TIMER_GH100);
+    assert_eq!(timer_regs_for(classgen::Family::Blackwell), TIMER_GH100);
+    assert_eq!(TIMER_GH100.refused_writes, &[0x118df4, 0x118df8]);
+    assert!(TIMER_GB10B.refused_writes.is_empty());
+    // The GV100 pair is NOT refused on the GH100 HAL: those offsets are not the timer there.
+    assert!(!TIMER_GH100.is_refused_write(0x9400));
+    let vmm = Vmm::new();
+    let p = Plane::for_family(&vmm, 4, 0x3, classgen::Family::Hopper, readtrap::GA106_BAR0_BYTES);
+    let priv_ = Class::Privileged { readable: true, semantics: WriteSemantics::Plain };
+    assert_eq!(p.trap_write(priv_, 0, 0x118df4, 1, 4), Action::RefusedByName);
+    assert_ne!(p.trap_write(priv_, 0, 0x9400, 1, 4), Action::RefusedByName);
+}
+
+#[test]
+fn the_element_layout_is_selected_by_the_mctp_header_ogkm_itself_validates() {
+    // `[measured in ogkm 610.43.02]` word 0 is built with MCTP_HEADER_VERSION 3:0 = 1
+    // (`mctp_format.h:40,79`; `message_queue_cpu.c:505-511`) and rejected on receive unless 1
+    // (`:739-746`); word 1 carries type 0x7e / vendor 0x10de (`:750`). At 580 word 0 is
+    // authTagBuffer[0..4] (`message_queue_priv.h:45`), zero outside CC.
+    // Contradicted by: any `driver_major >= N` selection returning.
+    // Code lines only: the module doc legitimately NAMES the old `layout_for(driver_major)`.
+    let code: String = include_str!("../src/element.rs")
+        .lines().filter(|l| !l.trim_start().starts_with("//")).collect::<Vec<_>>().join("\n");
+    assert!(!code.contains("driver_major"), "version-sniffing must stay gone");
+    let mut e = [0u8; 16];
+    e[0..4].copy_from_slice(&element::MCTP_WORDS_610[0].to_le_bytes());
+    e[4..8].copy_from_slice(&element::MCTP_WORDS_610[1].to_le_bytes());
+    assert_eq!(element::detect_layout(&e), Some(element::LAYOUT_610));
+    assert_eq!(element::detect_layout(&[0u8; 48]), Some(element::LAYOUT_580));
+}
+
+#[test]
+fn bar0_size_comes_from_card_info_and_the_ga106_value_is_a_named_default() {
+    // `[fable w824, LOW 5]` §50 level 1: NV_ESC_CARD_INFO.reg_size (`nv-ioctl.h:63`, from
+    // `nv->regs->size` at `nv.c:2384`, dispatched `nv.c:2593` under NV_CTL_DEVICE_ONLY, no admin
+    // check). Both consumers now take the value; 16 MiB is named as GA106's, not as BAR0's.
+    // Contradicted by: a constructor that ignores its bar0_bytes argument.
+    use accessmap::AccessMap;
+    let m = AccessMap::deny_all_for(64 << 20);
+    assert_eq!(m.raw().len(), accessmap::map_bytes_for(64 << 20));
+    assert_eq!(m.raw().len(), 4 * accessmap::MAP_BYTES);
+    // ⊘⊘ MEASURED while writing this test, and it is a finding the audit missed: the fixed-Huffman
+    // encoder costs 13 bits per 258-byte run (length code 285 = 8 bits + distance code = 5), so a
+    // deny-all map compresses LINEARLY in BAR0 size: 16 MiB → 3 320 B, 64 MiB → 13 223 B. That
+    // fits 610's 16 384-byte cap and does NOT fit 580's 4 096 -- a 580 guest on a device with
+    // BAR0 above ~20 MiB could not be served this map at all, and the only fallback ogkm offers
+    // is compressedSize=0 ⇒ the 0xFF "everything is userspace-mappable" map that §47 forbids.
+    // ⇒ Pinned as measured. Lifting it needs a dynamic-Huffman block (≈6 bits/run), not a tweak.
+    let g = m.to_gzip_deflate();
+    assert!(g.len() <= AccessMap::MAX_COMPRESSED_610, "64 MiB deny-all map compressed to {}", g.len());
+    assert!(
+        g.len() > AccessMap::MAX_COMPRESSED_580,
+        "if this now FITS 580's cap the encoder improved — move the bound, and re-check the 16 MiB size"
+    );
+    assert_eq!(readtrap::ReadTrapSet::with_bar0_bytes(64 << 20).bar0_pages(), 16384);
+    assert_eq!(readtrap::GA106_BAR0_BYTES, accessmap::GA106_BAR0_BYTES, "one default, two consumers");
 }

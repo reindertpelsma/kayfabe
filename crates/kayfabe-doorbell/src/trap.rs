@@ -30,7 +30,7 @@
 
 use crate::bitmap::RungBitmap;
 use crate::ring::{PrivRing, Push, RegWrite};
-use crate::readtrap::{Phase, ReadPolicy, ReadTrapSet};
+use crate::readtrap::{Phase, ReadPolicy, ReadTrapSet, TimerRegs};
 use crate::shadow::WriteSemantics;
 use crate::token::{Route, TokenWord};
 use crate::wake::{WakeWord, Wake};
@@ -64,6 +64,12 @@ pub enum Action {
     WakeDrainer,
     /// ⊘ The privileged ring was full. The device is poisoned; raise a guest-visible fault.
     PoisonDevice,
+    /// ⊘ A privileged write REFUSED BY NAME: not queued, not applied to the host, shadow
+    /// untouched. Today that is the time-setting registers ([`crate::readtrap::TimerRegs`]):
+    /// §5, *"so guest and host cannot drift onto different timebases."* ★ Distinct from `None`
+    /// so the caller can count it — this arm is guest-root-only, so a counter here is not an
+    /// adversary-controlled metric the way one on the doorbell arm would be.
+    RefusedByName,
 }
 
 /// The trap path's immutable wiring.
@@ -80,6 +86,9 @@ pub struct TrapPath<'a> {
     pub read_traps: &'a ReadTrapSet,
     /// §5: a page is read-trapped for a PHASE, not forever.
     pub phase: Phase,
+    /// The time-setting registers this device's timer HAL writes — refused by name on the
+    /// privileged arm. `[fable w824, HIGH 2]`: the refusal used to sit on the READ path.
+    pub timer: TimerRegs,
 }
 
 impl TrapPath<'_> {
@@ -173,6 +182,15 @@ impl TrapPath<'_> {
         // ⚠ The caller owns the shadow store (it holds the page); we report that it is owed by
         // ordering it FIRST here and returning only afterwards.
         let _ = (readable, semantics);
+
+        // ⊘ THE TIMEBASE REFUSAL, on the WRITE path where ogkm actually touches these registers
+        // (`timer_gv100.c:71-72`, boot + resume). Never queued, never applied, shadow untouched;
+        // the PLM shadow says "level 0 may write" so ogkm's success branch runs and it never
+        // asserts. Why not an offset: the guest READS time from a memslot with no exit. See
+        // `readtrap::TimerRegs`.
+        if bar == 0 && self.timer.is_refused_write(off) {
+            return Action::RefusedByName;
+        }
 
         // ⊘ §5.4: a data port must NEVER enter the ring — Turing/GA100 firmware load is
         // 16 000–65 000 back-to-back writes and would overflow any ring that exists. It is a

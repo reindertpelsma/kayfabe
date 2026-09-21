@@ -141,12 +141,36 @@ pub struct Plane<'v> {
     pub read_traps: crate::readtrap::ReadTrapSet,
     /// §5: the phase the device is in. Boot-state pages stop trapping when this moves.
     pub phase: crate::readtrap::Phase,
+    /// The time-setting registers of this device's timer HAL, refused by name on the privileged
+    /// write arm (`readtrap::TimerRegs`). Per family, never per die.
+    pub timer: crate::readtrap::TimerRegs,
     /// Which tokens are guest-KERNEL channels (§7's failure-policy selector).
     kernel_tokens: Vec<u32>,
 }
 
 impl<'v> Plane<'v> {
+    /// The GA106 bench shape: Ampere timer HAL, 16 MiB BAR0. ⊘ A named default — see
+    /// [`Plane::for_family`] for the general form and `readtrap::GA106_BAR0_BYTES` for where the
+    /// real BAR0 size comes from.
     pub fn new(vmm: &'v Vmm, n_tokens: usize, token_mask: u32) -> Plane<'v> {
+        Self::for_family(
+            vmm,
+            n_tokens,
+            token_mask,
+            crate::classgen::Family::Ampere,
+            crate::readtrap::GA106_BAR0_BYTES,
+        )
+    }
+
+    /// ★ The general constructor: the family selects the timer HAL (`readtrap::timer_regs_for`),
+    /// and `bar0_bytes` is `NV_ESC_CARD_INFO.reg_size` for this device.
+    pub fn for_family(
+        vmm: &'v Vmm,
+        n_tokens: usize,
+        token_mask: u32,
+        family: crate::classgen::Family,
+        bar0_bytes: u32,
+    ) -> Plane<'v> {
         Plane {
             tokens: (0..n_tokens).map(|_| TokenWord::new()).collect(),
             bits: RungBitmap::new(),
@@ -154,8 +178,9 @@ impl<'v> Plane<'v> {
             drainer_wake: WakeWord::new(),
             ring: PrivRing::new(),
             token_mask,
-            read_traps: crate::readtrap::ReadTrapSet::new(),
+            read_traps: crate::readtrap::ReadTrapSet::with_bar0_bytes(bar0_bytes),
             phase: crate::readtrap::Phase::Boot,
+            timer: crate::readtrap::timer_regs_for(family),
             kernel_tokens: Vec::new(),
         }
     }
@@ -236,6 +261,7 @@ impl<'v> Plane<'v> {
             token_mask: self.token_mask,
             read_traps: &self.read_traps,
             phase: self.phase,
+            timer: self.timer,
         }
     }
 
