@@ -3618,3 +3618,63 @@ into IMEM/DMEM is the common case) is plain **B** and needs no hole.
 **"the driver READS this data port"**. `NV_PFSP_EMEMD` qualifies because `_kfspReadPacket_GH100`
 reads it *and* then asserts the offset advanced; `NV_PFALCON_FALCON_IMEMD` on the GSP path does
 not, because firmware load only writes.
+
+---
+
+## §54 — THE GUEST IS STOCK. A DODGE THAT TOUCHES IT IS NOT A DODGE. Added 2026-09-21 (w824), owner ruling.
+
+**STATUS: LIVE.** The filter every *"we could just make the driver not do that"* idea must pass.
+
+`[owner, w824]` *"pls do note guest must remain stock os. so if debuginfo=0 is a guest kernel
+module flag then we can't touch it. only what we deliver as fake gsp or registers … or if the guest
+doesn't parse … like a 0x0 read is accepted … so if that cannot be satisfied we need to trap … and
+then supply what a driver finds acceptable … based on ogkm, nova or as last nouveau."*
+
+### §54.1 — The filter: WHO owns the knob?
+
+★★★ **We may author only what we deliver — the emulated registers and the faked GSP. Anything
+that lives in the guest is off limits**, because *"a stock, unpatched NVIDIA driver"* **is the
+product claim**, not a convenience.
+
+| dodge | knob lives in | verdict |
+|---|---|---|
+| **`FALCON_DEBUGINFO = 0`** (shuts CrashCat, keeps page `0x110000` at disposition **B**) | ✔ **a BAR0 REGISTER WE SERVE** — `NV_PFALCON_FALCON_DEBUGINFO` is offset `0x94` (`dev_falcon_v4.h:45`), i.e. `0x110094` for GSP, read through `crashcatEnginePriRead` → `kcrashcatEngineRegRead`, an ordinary PRI read | ★ **LEGITIMATE.** Zero guest modification. |
+| **`RmDisableCotCmd`** (would make `0x8F2000` **B** on Hopper) | ✘ a **guest-side regkey**, `NVreg_RegistryDwords` | ⊘ **DISQUALIFIED as a product answer.** Keep it as a labelled **bring-up lever** only. |
+| `IS_EMULATION` / `IS_FMODEL` / `IS_RTLSIM` | — | ⊘ already dead: ogkm never sets them from anything (§13.1 of the map). |
+
+⇒ **Verified, not assumed:** the one dodge we rely on is a register, and the one that would have
+been convenient is a guest flag. ⚠ The distinction is invisible from the *name* — both read like
+driver configuration — so **trace the knob to where it is written before counting on it.** This is
+the same failure I already made once today by rating `PDB_PROP_KFSP_IS_MISSING` first without
+checking whether anything could set it.
+
+### §54.2 — The decision order for any register we are unsure about
+
+1. **Serve `0x0` / don't serve it.** ★ If the guest accepts it, or never parses it, **there is no
+   trap** — this is the cheapest outcome and it must be tried first. (`0x110000` is the worked
+   example: the guest reads `DEBUGINFO`, gets 0, and the whole CrashCat path never engages.)
+2. **If that cannot be satisfied, trap** — and then **supply what the driver finds acceptable.**
+   ⊘ Not what the hardware would return: *acceptable* is the bar, and it is lower.
+3. **Derive the acceptable value in this order** — see §54.3.
+
+⊘ Note what step 1 means for the **cost model**: the question is never *"is this register
+important?"* but *"does the guest CHECK it?"* A register the driver reads and discards is free at
+any value.
+
+### §54.3 — ⊘ §50 IS AMENDED: **nova** enters the hierarchy, ABOVE nouveau
+
+`[owner]` *"based on ogkm, nova or as last nouveau."*
+
+| order | source | why it ranks there |
+|---|---|---|
+| **1** | **ogkm** | it *is* the acceptance criterion — the thing we must satisfy, not a description of it |
+| **2** | **nova** | `drivers/gpu/nova-core`, in-tree Rust with **NVIDIA engineers contributing directly** ⇒ vendor intent, and it demonstrates a **minimal** accepted surface: it boots a real GPU touching **50 BAR0 registers** |
+| **3** | **nouveau** — *last* | reverse-engineered. It works, but it encodes what someone **inferred** was acceptable, not what the vendor says is |
+
+⇒ **This amends §50**, which placed nouveau at level 5 and did not know about nova. Nova slots
+**between** them: better than nouveau because the vendor contributes, still below ogkm because ogkm
+is the driver we are actually judged by.
+
+★ And nova has already paid for its place today: it independently confirmed that falcon PIO is
+used **write-only** at boot (it declares `aincw` and **not** `AINCR` at all), and that a working
+driver boots **without ever reading the GPU timer** — a fact neither ogkm nor nouveau made visible.

@@ -92,10 +92,30 @@ pub trait VmmOps: Send + Sync {
     /// Write guest RAM.
     fn guest_write(&self, gpa: u64, buf: &[u8]) -> Result<(), VmmError>;
 
-    /// Install a host page as guest-physical memory — the doorbell page, the read shadow.
-    /// ⊘ §6.2: this is the **only** memslot the design installs, and it is the one place a vCPU
-    /// may block.
-    fn install_memslot(&self, gpa: u64, len: u64, host: HostMapping) -> Result<SlotId, VmmError>;
+    /// Install a host mapping as guest-physical memory.
+    ///
+    /// ⊘⊘⊘ **`readonly` IS NOT A DETAIL — IT IS HOW THE WHOLE TRAP POLICY IS EXPRESSED.** A
+    /// read-only memslot serves **reads from DRAM with no exit** and sends **writes to
+    /// [`GpuDevice::mmio_write`]**, which is exactly `Disposition::ShadowWriteTrapped` — the
+    /// default for almost all of BAR0, and what *"no read traps"* means in implementation terms.
+    /// `readonly = false` is `Disposition::PlainRam` (PRAMIN, BAR1, BAR2): no exit in either
+    /// direction.
+    ///
+    /// ⊘ CH: `KVM_MEM_READONLY` on the user memory region. QEMU: `memory_region_init_rom_device`,
+    /// which the C artifact already used for page `0x110000` and which booted a real driver.
+    /// ⚠ **QEMU trap, measured (`m582`):** the BAR must be a **container** `MemoryRegion` with
+    /// these added as subregions. A leaf `memory_region_init_io` with overlays **silently fails to
+    /// reach KVM** — everything looks configured while reads keep exiting.
+    ///
+    /// ★ A region with **no** memslot at all is `Disposition::Hole`: both reads and writes exit.
+    /// It is expressed by *not calling this*, which is the point — see [`crate::memmap`].
+    fn install_memslot(
+        &self,
+        gpa: u64,
+        len: u64,
+        host: HostMapping,
+        readonly: bool,
+    ) -> Result<SlotId, VmmError>;
     fn remove_memslot(&self, slot: SlotId) -> Result<(), VmmError>;
 
     /// Deliver an interrupt. ⊘ CH: `InterruptSourceGroup::trigger(index)`. QEMU: `msix_notify`.
@@ -126,13 +146,29 @@ pub enum VmmError {
 /// The device model, as a VMM sees it. ⊘ `&self` throughout, because CH requires it and because
 /// §3's trap path is lock-free anyway.
 pub trait GpuDevice: Send + Sync {
-    /// ⚠ **Only writes trap.** §5: reads are served from DRAM the guest reads directly, with no
-    /// exit — except the ~524 pages the read-trap allowlist names, which reach [`Self::mmio_read`].
+    /// ⚠ **On the product target, only writes trap.** Reads are served from DRAM the guest reads
+    /// directly, with no exit at all — see [`crate::memmap`].
     fn mmio_write(&self, bar: Bar, offset: u64, data: &[u8]) -> MmioOutcome;
 
-    // ⊘ NO `mmio_read`. §5 (superseded w823): reads are served from ordinary DRAM the guest reads
-    // directly — there is no exit, so there is nothing for a device model to answer. A read verb
-    // on this trait would be an invitation to add the mechanism back.
+    /// ⊘⊘⊘ **THE READ VERB, AND ITS NAME IS ITS CONTRACT.** Called **only** for a page the map
+    /// marks [`crate::memmap::Disposition::Hole`] — never as a general read path.
+    ///
+    /// ★ There is exactly one reason a hole exists, and it is not performance: a register whose
+    /// **read has a side effect the guest verifies**. Today that is the **falcon PIO
+    /// auto-increment data port** (`EMEMD`/`DMEMD`) — armed once with `AINCR`, each read advances
+    /// a hardware cursor, and ogkm then *asserts the cursor moved*, so no shadow can satisfy it.
+    ///
+    /// ⇒ **On Turing, Ampere and Ada this method is DEAD CODE**, because
+    /// [`crate::memmap::holes_for`] is empty for them — asserted by
+    /// `the_current_product_target_has_no_read_exits_at_all`. It exists so Hopper and Blackwell
+    /// can boot at all, and the map — not this trait — is what decides whether it is ever reached.
+    ///
+    /// ⚠ The default **refuses**: an adapter that has not thought about holes returns zeros rather
+    /// than inventing a read path, and a family with no holes never calls it.
+    fn mmio_read_hole(&self, _bar: Bar, _offset: u64, data: &mut [u8]) -> MmioOutcome {
+        data.fill(0);
+        MmioOutcome::Done
+    }
 }
 
 /// ⊘ CH hands a byte slice; QEMU hands a value and a size. This is the one conversion the seam
