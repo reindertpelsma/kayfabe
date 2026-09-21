@@ -1693,3 +1693,86 @@ fn only_four_leaf_bits_are_translated_and_the_rest_are_refused() {
     let translated = [hostverb::TranslatedLeafBit::ReadOnly];
     assert_eq!(translated.len(), 1, "read-only is the only leaf BIT we carry through");
 }
+
+// ---- §2.2 the RM object graph ------------------------------------------------------------------
+
+#[test]
+fn the_os_descriptor_class_is_denied_because_it_would_carry_a_guest_pointer() {
+    // ★★★ §2.2's denial that connects to the pointer discipline: NV01_MEMORY_SYSTEM_OS_DESCRIPTOR
+    // "would hand the host a GUEST-CHOSEN POINTER".
+    // ⊘ §6.4 calls this denial "decorative" because the class never reaches us -- the real guard
+    // is the leaf bound. Both exist; NEITHER is load-bearing alone, and saying so matters because
+    // removing one on the grounds that the other covers it would be wrong twice.
+    let mut g = rmgraph::ObjectGraph::new();
+    g.alloc(1, 0x41, None).unwrap(); // a root
+    match g.alloc(2, 0x71, Some(1)) {
+        Err(rmgraph::GraphError::DeniedClass(why)) => {
+            assert!(why.contains("guest-chosen pointer"), "{why}");
+        }
+        other => panic!("OS_DESCRIPTOR must be denied, got {other:?}"),
+    }
+    assert_eq!(g.denied(), 1, "and counted");
+}
+
+#[test]
+fn an_unlisted_class_is_denied_by_default() {
+    // ⊘ Default-deny is what makes the allowlist a boundary rather than a hint.
+    let mut g = rmgraph::ObjectGraph::new();
+    g.alloc(1, 0x41, None).unwrap();
+    for class in [0xdeadu32, 0x1234, 0xffff] {
+        assert!(matches!(g.alloc(99, class, Some(1)), Err(rmgraph::GraphError::DeniedClass(_))));
+    }
+}
+
+#[test]
+fn dup_object_aliases_and_does_not_copy() {
+    // ⊘ §1.3: "It ALIASES, refcount++; it does not copy -- this is the normal UVM flow."
+    // ⚠ Treating it as a copy is how two namespaces end up with independent lifetimes for one
+    // host object.
+    let mut g = rmgraph::ObjectGraph::new();
+    g.alloc(1, 0x41, None).unwrap();
+    g.alloc(2, 0x90f1, Some(1)).unwrap(); // a VA space
+    g.dup(2, 200).unwrap();
+    assert_eq!(g.get(2).unwrap().refs, 2, "the source's refcount must rise");
+    assert_eq!(g.get(200).unwrap().class, 0x90f1, "the alias names the same class");
+    assert_eq!(g.get(200).unwrap().parent, g.get(2).unwrap().parent, "and the same parent");
+}
+
+#[test]
+fn free_takes_the_whole_subtree() {
+    // ⊘ RM's teardown is ordered by its own dependency rules; a child outliving its parent is a
+    // dangling host object.
+    let mut g = rmgraph::ObjectGraph::new();
+    g.alloc(1, 0x41, None).unwrap();       // root
+    g.alloc(2, 0x80, Some(1)).unwrap();    // device
+    g.alloc(3, 0x2080, Some(2)).unwrap();  // subdevice
+    g.alloc(4, 0x90f1, Some(2)).unwrap();  // vaspace
+    g.alloc(5, 0xc56f, Some(4)).unwrap();  // channel under the vaspace
+    assert_eq!(g.len(), 5);
+    assert_eq!(g.free(2).unwrap(), 4, "device + subdevice + vaspace + channel");
+    assert_eq!(g.len(), 1, "only the root survives");
+}
+
+#[test]
+fn a_child_cannot_be_allocated_under_an_unknown_parent() {
+    let mut g = rmgraph::ObjectGraph::new();
+    assert_eq!(g.alloc(9, 0x80, Some(404)), Err(rmgraph::GraphError::UnknownParent));
+}
+
+#[test]
+fn the_usermode_class_is_allocated_on_the_host_because_its_mapping_IS_the_doorbell() {
+    // ★ §2.2: AMPERE_USERMODE_A is "the object whose 64 KiB CPU mapping IS the doorbell page".
+    // ⊘ Emulating it would leave the guest's doorbell writes landing nowhere real.
+    assert_eq!(rmgraph::class_policy(0xc561), rmgraph::ClassPolicy::EmulateAndHost);
+    // And the ones that must reach hardware to do real work.
+    for c in [0x90f1u32, 0xc56f, 0xc7c0, 0xc7b5] {
+        assert_eq!(rmgraph::class_policy(c), rmgraph::ClassPolicy::EmulateAndHost, "{c:#x}");
+    }
+}
+
+#[test]
+fn binapi_is_opaque_and_that_is_load_bearing_for_cuinit() {
+    // ⊘ §2.2: NV2081_BINAPI's "controls tunnel whole to firmware, uninterpreted by the kernel".
+    // ★ Decoding it would be inventing meaning; refusing it breaks cuInit.
+    assert_eq!(rmgraph::class_policy(0x2081), rmgraph::ClassPolicy::OpaqueAllow);
+}

@@ -34,6 +34,7 @@ pub mod lifetime;
 pub mod model;
 pub mod plane;
 pub mod readtrap;
+pub mod rmgraph;
 pub mod rpc;
 pub mod ring;
 pub mod completion;
