@@ -135,7 +135,9 @@ wrong reason (to make promotion affordable); the placement stands on its own.
 2. a `MEM_OP_D MMU_TLB_INVALIDATE[_TARGETED]` method **in a Translated pushbuffer** — UVM's path
    (`clc56f.h:132-176`), which carries PDB, aperture, target VA and size, i.e. the guest tells us
    both the space and the extent. ⚠ It must be honoured at **execution** time, after the CE
-   page-table writes that precede it in the same stream have retired on the host — the C latched
+   page-table writes that precede it in the same stream have retired on the host — `[w824b]`
+   *retired* meaning their completion fd became ready in the loop, **never** a wait on the
+   worker's stack (`THE_TRANSLATED_PLANE.md` §5) — the C latched
    at the release semaphore for this reason (`nvkvm_m2_cpt_sync_at_release`,
    `nvkvm_gpu_emul.c:596-604`). Honouring it at decode time reads tables the engine has not
    written yet;

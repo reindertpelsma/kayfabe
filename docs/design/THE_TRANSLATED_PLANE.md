@@ -1,6 +1,9 @@
 # THE TRANSLATED PLANE — how a guest's work reaches the real GPU
 
-**STATUS: LIVE.** Written 2026-09-21/22 (w824). Settles the design that closes `forwarded=0`.
+**STATUS: LIVE.** Written 2026-09-21/22 (w824); **amended in place 2026-09-22 (w824b)** — a
+synchrony audit after the owner's group-D correction (§10.1). Each amendment is marked `[w824b]`
+and says measured / cited / inferred; §5, §7, §9, §10-B, the verdict's X5 and §12 are corrected
+**above** the text they correct. Settles the design that closes `forwarded=0`.
 Sources: owner rulings of 2026-09-21, `[fable w824]`'s investigation, and ogkm-610 read directly.
 Supersedes nothing; **collects** `gpga_is_one_reserved_object.md` (LIVE 09-10),
 `THE_CONSTRAINTS.md` §46 · §55 · §56, and `THE_V3_PLAN.md` P4/P7 into one statement.
@@ -118,6 +121,41 @@ its page tables and *then* issues an invalidate (`ogkm-580 uvm_mmu.c:800-809`: w
 - **`MEM_OP_D MMU_TLB_INVALIDATE[_TARGETED]`** in a UVM pushbuffer (`clc56f.h:132-176`, carrying
   PDB + aperture + VA + size — far more precise).
 
+### `[w824b]` ⊘ WHERE THIS RUNS, AND WHAT THE GUEST SEES WHILE IT RUNS — the text below did not say, and that silence is the synchrony mistake §10.1 names, one section earlier
+
+The three steps below read as a sequence executed *at* the invalidate. They are not, and cannot
+be: the BAR0 `MMU_INVALIDATE` is a **vCPU MMIO write**, and §41/§48 forbid anything in that trap
+beyond an enqueue and a wake. So the shape is:
+
+| who | does | blocks on |
+|---|---|---|
+| the **vCPU** in the write trap | records `(pdb, aperture, depth)` in a preallocated slot, bumps the wake word, **returns** | nothing (§48: µs, tail) |
+| the **guest** | spins reading `TRIGGER` until it clears — `kgmmuCheckPendingInvalidates_TU102`, a bare `osSpinLoop`, **4 s graphics / 30 s compute** | ✔ its own decision (§48.1); served from a **page**, so it is not even a read trap (§53) |
+| a **worker** | launches the walk kernel; on its completion issues the bounded map ioctls; **then clears `TRIGGER` in the served page** — that clear is the observability edge §49.1 protects | ⊘ **never a CUDA sync on its stack.** `[inferred]` the walk's completion reaches the loop as an fd: `cuLaunchHostFunc` on the walk stream writing an eventfd, so the walk is one more epoll entry like any CE completion |
+
+⇒ The **4 s budget bounds the worker's tail-to-clear**, not the trap, and on overrun the guest
+proceeds with stale TLBs *and a skipped `sysmembar`*, reporting nothing
+(`rm_cannot_express_a_narrow_invalidate`). That is why §10's *"4 s budget"* sentence is a latency
+bound and **not** a cost to be optimised: the structural question is the same as §10.1's — does
+the walk go **through the loop**, or does some step wait on its own stack.
+
+⚠ **The `MEM_OP` split has the same shape and the old tree never built it.** A UVM pushbuffer is
+*CE page-table writes* → `MEM_OP` invalidate → (a release the guest waits on). The walk must read
+tables the CE has **finished** writing, so the Translated worker submits the entries before the
+`MEM_OP` with a release semaphore + an armed event, **returns to the loop**, and on that fd's
+readiness walks, maps, and resumes the channel from the `MEM_OP`. ⇒ **A Translated channel is a
+resumable state machine with a suspension point per `MEM_OP`.** `planreactor.rs` §3 named this
+exact requirement — *"interleaving two chains on one thread needs the chain to be resumable — a
+state machine over every `VerbPlan` variant"* — and the old tree answered it with a single
+blocking lane. ⊘ A `wait_for_completion()` call anywhere on the Translated worker's stack is the
+defect, however short it measures.
+
+⚠ **And one deadlock to check rather than assume away** `[inferred, unmeasured]`: the walk is a
+CUDA kernel on the **same GPU** the guest's channels run on. It cannot wait on the guest (compute
+preemption time-slices it in), but the *converse* must be verified on hardware: a guest channel
+that has stalled on a fault we have not yet mapped must not hold a resource the walker's context
+needs. If it can, the walker must run on a channel the guest's work cannot block.
+
 ⇒ **At that point, and only then:**
 
 1. Walk the guest's tables **in place in GPGA** — the PTX walker, **72/72 on hardware**, reading
@@ -163,6 +201,14 @@ nothing is owed, because the GPU did it.
 
 1. **The interrupt** — relayed through our client's OS event. Whether a release posts one is *"not
    yet established"* (`the_interrupt_arming_model`).
+   `[w824b]` ⊘ **"Relayed" is where the synchronous frame hides a second time.** A relay that is a
+   worker thread reading the fd and calling into QEMU's interrupt controller under the BQL is the
+   old shape wearing a new name. The hardware shape is **fd → KVM irqfd → guest MSI, with no
+   thread in between** — the same eventfd that is an epoll entry for our loop is registered as
+   the guest's interrupt source; the loop only *arms* (`the_interrupt_arming_model`: arm-directed,
+   never broadcast). `[inferred]` — the mechanism is standard KVM; that a release on our channel
+   posts the OS event at all is the unmeasured half, and it is the first thing step 3 should
+   record beside `forwarded=`.
 2. **`GP_GET`** — hardware writes the **host twin's** USERD, and a Translated channel's ring is
    ours. ⇒ The guest's `GP_GET` is **one word we author**, by construction.
 
@@ -193,9 +239,9 @@ never seven mechanisms to choose between: they are seven answers to a question t
 | **1** | **Identity window** — reserve, one FIXED map of the whole object into a fresh VAS at a 1 GiB-aligned base above 1 TiB | `IDENTITY_WINDOW mib=<n> placed_as_asked=true map_ms=<n> copy_from_window=MAGIC`, magic written at an offset **> 4 GiB**. ⊘ Bare metal; **no KVM needed** |
 | **2** | **Guest-RAM window** — whole memfd as one `OS_DESCRIPTOR` | pinned bytes = guest RAM; a CE copy vidmem→RAM lands (R17 shape) |
 | **3** | **Translated for the scrub + kernel CE** (phys-only ⇒ pure §3 rewrite) | `forwarded=N` on tokens `0x00010001`/`0x00010004` (w801 measured **0**); `execute_ours_spans` calls **= 0** ⇒ §46 satisfied |
-| **4** | **Walk-at-invalidate → host slice maps** (§5) | `MMUINVAL … named & missed` → **0** for store-resident roots; ms per invalidate printed |
+| **4** | **Walk-at-invalidate → host slice maps** (§5) | `MMUINVAL … named & missed` → **0** for store-resident roots; `[w824b]` **and the structural gate first**: `TRIGGER` read traps = **0** (served from a page), `worst_trap` on the invalidate write in **µs**, worker tail-to-clear printed as a tail, not a mean |
 | **5** | **`route_of_engine`: user CE off `CpuCe`** | `stranded=0` on `--ce-client`, then group A |
-| **6** | **UVM Translated channel** (the `MEM_OP` split) | `--uvm-mean` PASS **with `forwarded>0`**, and the UVM join path deleted |
+| **6** | **UVM Translated channel** (the `MEM_OP` split) | `--uvm-mean` PASS **with `forwarded>0`**, and the UVM join path deleted; `[w824b]` the channel **suspends** at each `MEM_OP` and resumes on an fd — a blocking completion wait on the worker's stack fails this gate even when the arm passes |
 | **7** | **GR on the mirrored VAS** | `cuCtxCreate → matmul bad=0 maxerr=0` |
 
 ⊘ **Order matters twice:** step 3 before step 6 (the scrub is phys-only, two tokens, and its gate
@@ -209,7 +255,7 @@ already prints); and **nothing is deleted before its replacement re-greens** —
 | group | n | arms | unblocked by |
 |---|---|---|---|
 | **A** | 8 | blockage-coverage · late-map-race · executor-vas · dictated-ring · ce-client · cross-client-leak · engines · rpc-mixed-allocs | steps **1+4+5** — *one change* |
-| **B** | 3 | defer-liveness · uvm-mean · map-stress | per-invalidate cost falling (7.34 ms sweep → **205 µs** GPU walk) + a budget matched to the 3.8× guest ratio |
+| **B** | 3 | defer-liveness · uvm-mean · map-stress | `[w824b]` ⊘ **not "merely slow" — the same falsifier as D at lower intensity.** The 3.8× is the old tree's off-trap path being **one blocking lane** (`planreactor.rs` §1: *"totally ordered … while it is parked in one isolate's `read`, no other isolate's work can even be started"*) plus a 7.34 ms synchronous sweep per invalidate. Under v3 these run at bare speed **or** they report the structural defect D reports. A budget ratio is the fallback only if the loop is proven and the residue is the walk itself |
 | **C** | 1 | ce-client-guest-ram | step **2** — 13 000 per-row pins become slices of one window |
 | **D** | 2 | concurrency · concurrent-fuzz | ★ **the acceptance test for the async design** — see §10.1. Not a performance unknown |
 | **E** | 1 | gpga-reserve-probe | budget ≥ 90 s **and** the BAR1 device-view path |
@@ -264,7 +310,7 @@ which is the whole point of having written the test before the code.
 
 **Verdict: no arm is unreachable by construction.** 30/30 is reachable once: **X1** the identity
 window · **X2** walk-at-invalidate with the handle ledger · **X3** user CE off `CpuCe` · **X4** the
-guest-RAM window · **X5** a diagnosed cause for group D.
+guest-RAM window · **X5** `kf-qemu`'s worker/epoll plane exists and group D passes through it (§10.1). `[w824b]` — was *"a diagnosed cause for group D"*, the cost frame §10.1 refutes.
 
 **Shape, stated honestly in both directions.** The deletions remove **code and the tail** —
 promote/demote, dirty tracking, seven designs — which is most of what the earlier 4–6 week estimate
@@ -325,6 +371,7 @@ generally, **silently aliases a different object.** Keep this port's `VA_ALREADY
 - Re-enable the CPU executor to move the scoreboard.
 - Start with the UVM channel; start with the **scrub** — phys-only, two tokens, gate already prints.
 - Delete the UVM join path before its replacements re-green.
-- Estimate group D without the 300 s diagnostic.
+- `[w824b]` Read a group-D **or group-B** hang as a *cost* — it is a synchronous wait where the design says there is an epoll entry; find the wait. (Was: *"Estimate group D without the 300 s diagnostic"* — the cost frame.)
+- `[w824b]` Put a `wait_for_completion()` — CUDA sync, semaphore poll, socket read — on any worker's stack "because it is short". The mean is short; §48's tail is the statistic, and it is the shape that produced group D.
 - Keep `Store::carve`: under one object the **guest's** RM heap chooses offsets; we never carve the
   guest's object. `Store` collapses to `{token, len}` + a bounds-checked `slice()`.
