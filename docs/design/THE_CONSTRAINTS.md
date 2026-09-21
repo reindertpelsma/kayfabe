@@ -3732,3 +3732,54 @@ is enforcing a rule nothing wants to break anyway — which is the right end sta
 `EngineKind::Ce => DoorbellRoute::CpuCe` unconditionally (`kayfabe-rt/src/device.rs:8978`), so
 nothing has ever *asked* for the translated arm on those paths. ⇒ The first measurement to take is
 not "does the copy work" — R17 says it does — but **"can every operand be joined?"**
+
+---
+
+## §56 — FOUR THINGS ARE DEAD. The translation plane is arithmetic plus the guest's own map calls.
+
+**STATUS: LIVE.** Added 2026-09-21 (w824), owner ruling. Consequence of
+`gpga_is_one_reserved_object.md` (LIVE 2026-09-10), stated as the four negatives it implies.
+
+> `[owner, w824]` *"joins is dead, we don't store va tables, we don't auto-map leaves in MMIO if
+> the guest didn't told to, we don't have per GPGA phys backings"*
+
+### §56.1 — The four, and the code each one deletes
+
+| # | dead | why | what it removes |
+|---|---|---|---|
+| **1** | **Joins** | there is ONE GPGA object; a guest FB address is an **offset into it** | `fbjoin.rs`, `install_join`, and `kf-mem::JoinTable` — my own, written today |
+| **2** | **Stored VA tables** | we keep **no mirror** of the guest's page tables, no address table, no VA→GPGA shadow we maintain | the `mode2_address_table.md` lineage; `kayfabe-mmu`'s walkers as a *storage* mechanism |
+| **3** | **Auto-mapping leaves from observed MMIO** | ★ the trigger is the guest's **explicit map call** — never our observation of a write | the page-table-write latch, the dirty gate, the whole-VAS sweep, `witness_writes`, `ReachShadow` |
+| **4** | **Per-GPGA phys backings** | backing exists because **the one object** exists, not because we allocated per leaf | per-leaf allocation in `fbwin.rs`/`device.rs` |
+
+⇒ **Together these delete most of what a review called *"the translation plane"*** — the seven
+coexisting designs in `kayfabe-core/src/gpu.rs`, all on the default path, each added when the
+previous did not work and none removed. ★ They are not seven mechanisms to choose between. They
+are seven answers to a question this ruling **stops asking**.
+
+### §56.2 — ★★★ What replaces them is smaller than any one of them
+
+- **A phys-aperture operand** is `GPGA_VA_BASE + guest_fb_phys`. Arithmetic. No table, no lookup,
+  no refresh, no dirty tracking, no race with a guest that writes while we copy.
+- **A mapping exists** because the guest **asked for it** through an RM map call we serve — the
+  same event that makes the range real. ⊘ *"Backing follows USE, not address"*
+  (`gpga_is_one_reserved_object.md`), and rule 3 fixes **when** we learn: at the guest's request,
+  not by inference.
+
+⚠ **The load-bearing open question, stated so it is not lost in the simplification:** a
+**virtual**-aperture operand still needs a VA→phys answer, and §56.1 rule 2 says we keep none. ⇒
+Either the guest's map call already told us, or we ask host RM at decode time, or that operand
+class is **refused by name**. **This is unresolved**, it is per operand class, and the count of
+classes that fall through is the residual risk in the whole `Translated` plan.
+
+### §56.3 — ⊘ AND THE LESSON THAT COST A MODULE TODAY
+
+`kf-mem::JoinTable` was written **today**, after reading the old `fbjoin.rs` carefully enough to
+find a real defect in its lookup — and it implements rule 1's dead shape. The old code was
+**accurate about itself**; what I failed to check was **which design governed it**, and that design
+had been LIVE for eleven days saying the shape was scheduled for deletion.
+
+⇒ **Before porting a shape, find the design note that governs it and read its STATUS.** Reading
+old code tells you what the code does. Only the design tells you whether it should still exist.
+★ The same failure, twice in one day, in the same direction: the source was right and I had not
+asked what superseded it.
