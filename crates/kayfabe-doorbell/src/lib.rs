@@ -43,6 +43,7 @@ pub mod ring;
 pub mod completion;
 pub mod shadow;
 pub mod swref;
+pub mod memmap;
 pub mod token;
 pub mod trap;
 pub mod trappolicy;

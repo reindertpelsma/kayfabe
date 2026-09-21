@@ -27,10 +27,11 @@ const MUST_CALL: [(&str, &str); 4] = [
     ("trappolicy::may_trap_read", "§5 — reads are never trapped, and the answer is a call site"),
 ];
 
-const MUST_BE_REACHED: [(&str, &str); 8] = [
+const MUST_BE_REACHED: [(&str, &str); 9] = [
     ("channel", "§7 — an untranslatable operand on a KERNEL channel must refuse, never fault"),
     ("completion", "§8 — a forge is licensed only where no GPU work ran"),
-    ("trappolicy", "§5 — where a trap may exist at all; reads: nowhere"),
+    ("trappolicy", "§5 — where a trap may exist at all; reads: nowhere on the product target"),
+    ("memmap", "§53 — the tiled map the VMM installs; a GAP in it is an accidental read exit"),
     ("caps", "§9.1 — per-VM twin caps, the only thing stopping one guest starving another"),
     ("wake", "§5.3 — the single wakeup word"),
     ("leaf", "§6.4 — the system-memory bound; a guest leaf may never name OUR memslots"),

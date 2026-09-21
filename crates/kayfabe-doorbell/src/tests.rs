@@ -1148,13 +1148,13 @@ fn the_timer_pages_settable_registers_are_refused_by_name_on_the_write_path() {
     // trapped. `[w824]` The PLM answer (0x9430 bit 4) is recomputed on the trapped WRITE that
     // moves it, so no read ever leaves the guest.
     for off in [0x9000u64, 0x9400, 0x9410, 0x9430] {
-        assert!(!trappolicy::may_trap_read(vmm::Bar(0), off));
+        assert!(!trappolicy::may_trap_read(vmm::Bar(0), off, classgen::Family::Ampere));
     }
     // ★ The registers RM actually reads time from are not refused on any path, and the VF pair is
     // a read-only passthrough memslot over live host time -- there is no exit there to refuse in.
     for off in [timer::VF_TIME_0, timer::VF_TIME_1] {
         assert!(!p.timer.is_refused_write(off));
-        assert!(!trappolicy::may_trap_read(vmm::Bar(0), off as u64));
+        assert!(!trappolicy::may_trap_read(vmm::Bar(0), off as u64, classgen::Family::Ampere));
     }
 }
 

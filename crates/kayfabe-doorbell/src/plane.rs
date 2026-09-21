@@ -146,6 +146,9 @@ pub struct Plane<'v> {
     /// This device's `NV_ESC_CARD_INFO.reg_size`. ⊘ Not the GA106 constant — the region list the
     /// VMM registers is derived from it, so a wrong value under-traps or over-traps BAR0.
     pub bar0_bytes: u64,
+    /// The family this plane was built for. ⊘ Kept because the **read-exit set is family-scoped**
+    /// (`memmap::holes_for`) — Turing/Ampere/Ada have none, Hopper/Blackwell have named boot pages.
+    pub family: crate::classgen::Family,
     /// Which tokens are guest-KERNEL channels (§7's failure-policy selector).
     kernel_tokens: Vec<u32>,
 }
@@ -183,6 +186,7 @@ impl<'v> Plane<'v> {
             timer: crate::timer::timer_regs_for(family),
             doorbell: crate::trappolicy::doorbell_for(family),
             bar0_bytes: bar0_bytes as u64,
+            family,
             kernel_tokens: Vec::new(),
         }
     }
@@ -315,6 +319,22 @@ impl<'v> Plane<'v> {
     /// property of the type, not of a caller remembering not to ask.
     pub fn trap_regions(&self) -> Vec<crate::trappolicy::TrapRegion> {
         crate::trappolicy::trap_regions(self.doorbell, self.bar0_bytes)
+    }
+
+    /// ★★★ **The complete memory map the VMM installs** — every byte of every BAR, tiled.
+    ///
+    /// ⊘ This supersedes [`Plane::trap_regions`] as the thing a VMM should consume: a map of
+    /// *exceptions* leaves each VMM to derive the default for everything else, and one of them to
+    /// get it wrong. A map that **tiles** can be installed blindly.
+    /// See `crate::memmap` and `THE_CONSTRAINTS.md` §53.
+    pub fn memory_map(&self, bar1_bytes: u64, bar2_bytes: u64) -> crate::memmap::MemoryMap {
+        crate::memmap::memory_map(
+            self.family,
+            self.doorbell,
+            self.bar0_bytes,
+            bar1_bytes,
+            bar2_bytes,
+        )
     }
 
     /// ★ THE ONLY vCPU WRITE ENTRY POINT.

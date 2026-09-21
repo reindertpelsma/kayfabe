@@ -96,7 +96,7 @@ fn one_read_trapped_page_cost_a_2_5x_loss_on_llm_decode() {
     // Contradicted by: `may_trap_read` returning true anywhere, or a read-policy type reappearing.
     for bar in [0u8, 1, 2] {
         for off in [0u64, 0x110, 0x1000, trappolicy::PRAMIN_BASE, trappolicy::PRAMIN_BASE + trappolicy::PRAMIN_LEN, 0xFF_F000] {
-            assert!(!trappolicy::may_trap_read(vmm::Bar(bar), off), "read trap at bar{bar}+{off:#x}");
+            assert!(!trappolicy::may_trap_read(vmm::Bar(bar), off, classgen::Family::Ampere), "read trap at bar{bar}+{off:#x}");
         }
     }
 }
@@ -428,7 +428,7 @@ fn turing_plus_rm_writes_the_legacy_ptimer_and_reads_the_vf_pair() {
         trappolicy::ReadSource::Shadow => {}
         trappolicy::ReadSource::ComputedShadow => {}
     }
-    assert!(!trappolicy::may_trap_read(vmm::Bar(0), 0x9400));
+    assert!(!trappolicy::may_trap_read(vmm::Bar(0), 0x9400, classgen::Family::Ampere));
     // And the write side must actually be consulted on the privileged arm -- in code, not prose.
     let trap: String = include_str!("../src/trap.rs")
         .lines().filter(|l| !l.trim_start().starts_with("//")).collect::<Vec<_>>().join("\n");
@@ -566,7 +566,7 @@ fn bar0_may_trap_writes_but_never_in_pramin() {
 }
 
 #[test]
-fn no_read_is_ever_trapped_anywhere() {
+fn no_read_is_trapped_on_the_product_target_and_hopper_blackwell_are_bounded() {
     // ⊘⊘⊘ `[owner]` "no read trap everywhere" -- and this SUPERSEDES §5's 524-page read-trap
     // allowlist. §5 itself measured the cost: 99% of the C artifact's exits per token were READS
     // of ONE firmware debug register, costing 2.5x on LLM decode. An allowlist only has to be
@@ -575,11 +575,45 @@ fn no_read_is_ever_trapped_anywhere() {
     // ★ The latch case does not need an exit: a latch is SET BY A WRITE, and writes are trapped,
     // so the value a read must return is computed into the shadow at write time -- which §5
     // already does for the timer page.
+    //
+    // ⊘⊘⊘ AND THIS TEST'S CLAIM WAS TOO STRONG — CORRECTED w824, NOT PATCHED. Its title says
+    // "anywhere" and it asserted exactly that, family-blind. `[fable w824]` produced a real
+    // counterexample: the falcon PIO auto-increment data port, where each READ advances a
+    // hardware cursor and ogkm then ASSERTS the cursor moved. ⇒ "no read trap anywhere" is true
+    // of the PRODUCT TARGET and false of Hopper/Blackwell, and a test that keeps asserting the
+    // strong form would have to be deleted the day Hopper is supported — which is how a green
+    // test holds a wall in place.
     use trappolicy::may_trap_read;
     use vmm::Bar;
-    for bar in [0u8, 1, 2] {
+
+    // ★ The product target: no read exit, anywhere, at any offset, on any BAR.
+    for family in [classgen::Family::Turing, classgen::Family::Ampere, classgen::Family::Ada] {
+        for bar in [0u8, 1, 2] {
+            for off in [0u64, 0x9000, 0x110c00, 0x70_0000, 0x81_0000, 0x8F_2000, 0x84_0000] {
+                assert!(
+                    !may_trap_read(Bar(bar), off, family),
+                    "{family:?} BAR{bar}+{off:#x} must not read-trap"
+                );
+            }
+        }
+    }
+
+    // ⊘ Hopper/Blackwell: read exits exist, and they are EXACTLY the named boot pages. The bound
+    // is the claim now — an unbounded exception would be the same rot under a new name.
+    for family in [classgen::Family::Hopper, classgen::Family::Blackwell] {
+        let holes: Vec<u64> = memmap::holes_for(family).iter().map(|(p, _)| *p).collect();
         for off in [0u64, 0x9000, 0x110c00, 0x70_0000, 0x81_0000] {
-            assert!(!may_trap_read(Bar(bar), off), "BAR{bar}+{off:#x} must not read-trap");
+            assert!(!may_trap_read(Bar(0), off, family), "{family:?} {off:#x}");
+        }
+        for page in &holes {
+            assert!(may_trap_read(Bar(0), *page, family), "{family:?} {page:#x} should read-trap");
+            assert!(may_trap_read(Bar(0), page + 0xFFC, family), "the whole page, not one register");
+        }
+        // ★ Never outside BAR0, whatever the family.
+        for bar in [1u8, 2] {
+            for page in &holes {
+                assert!(!may_trap_read(Bar(bar), *page, family), "{family:?} BAR{bar}");
+            }
         }
     }
 }

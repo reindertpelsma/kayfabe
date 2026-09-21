@@ -108,12 +108,31 @@ pub fn may_trap_write(bar: Bar, offset: u64, doorbell: DoorbellPlacement) -> boo
     }
 }
 
-/// ★ May a READ at `(bar, offset)` be trapped? ⊘ **Never, anywhere.**
+/// ★ May a READ at `(bar, offset)` be trapped?
 ///
-/// The function exists so the answer is a *call site* rather than an absence — a reviewer can see
-/// that reads were considered and refused, and a future change has somewhere to be argued.
-pub fn may_trap_read(_bar: Bar, _offset: u64) -> bool {
-    false
+/// ⊘⊘⊘ **CORRECTED w824. This returned `false` unconditionally, and that had become a LIE THE
+/// CODE TELLS.** `[fable w824]` found the counterexample and it is real: the **falcon PIO
+/// auto-increment data port**, where a control register is armed once with `AINCR` and each
+/// subsequent READ of the data port advances a hardware cursor — and ogkm then **asserts the
+/// cursor moved** (`_kfspReadPacket_GH100`), so no shadow can satisfy it.
+///
+/// ★★★ **The honest answer is family-scoped, and for the current product target it is still NO:**
+///
+/// | family | read exits |
+/// |---|---|
+/// | Turing · Ampere · Ada (the bench, the target) | **none** |
+/// | Hopper | one page — FSP boot handshake |
+/// | Blackwell | two — FSP (discrete) and SEC2 (integrated) |
+///
+/// ⊘ **The authority is [`crate::memmap::holes_for`], not this function.** A read exit is the
+/// absence of a memslot, so the map is where it is decided; this predicate merely reads the map,
+/// and exists so the question has a call site a reviewer can find.
+pub fn may_trap_read(bar: Bar, offset: u64, family: crate::classgen::Family) -> bool {
+    if bar.0 != 0 {
+        return false; // ⊘ BAR1/BAR2 never read-exit, under any family.
+    }
+    let page = offset & !(crate::memmap::PAGE - 1);
+    crate::memmap::holes_for(family).iter().any(|(p, _)| *p == page)
 }
 
 /// How a read must be satisfied instead.
@@ -162,7 +181,7 @@ pub fn trap_regions(doorbell: DoorbellPlacement, bar0_bytes: u64) -> Vec<TrapReg
     // ⊘ BAR2 contributes no region, in any configuration.
     debug_assert!(v.iter().all(|r| {
         (r.base..r.base + r.len).step_by(0x1000).all(|o| may_trap_write(r.bar, o, doorbell))
-            && !may_trap_read(r.bar, r.base)
+            && !may_trap_read(r.bar, r.base, crate::classgen::Family::Ampere)
     }));
     v
 }
