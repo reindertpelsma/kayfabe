@@ -3259,9 +3259,92 @@ refuse, the refusal is attributable to a line. ⊘ A proprietary refusal is a st
 
 ---
 
-## §52 — **NO READ TRAP, ON THE NON-GSP PATH EITHER.** Added 2026-09-21 (w824).
+## §52 — READ TRAPS: ONE REGISTER FAMILY, AND MY FIRST ANSWER WAS WRONG. Added 2026-09-21 (w824).
 
-**STATUS: LIVE.** Answers the one half the owner said was still open, and the answer is *no*.
+> ### ⊘⊘⊘ CORRECTED WITHIN THE HOUR, BY `[fable w824]`, AND THE CORRECTION IS THE WHOLE SECTION
+>
+> **STATUS: LIVE, as corrected.** The title below used to read *"NO READ TRAP, ON THE NON-GSP PATH
+> EITHER"* and §52.4 called the rule **unconditional across the GSP axis**. ⊘ **That was wrong.**
+> There is exactly one register family with a genuine read side effect, it is real on both paths,
+> and on Hopper+ it is **boot-fatal**:
+>
+> ★★★ **THE FALCON PIO AUTO-INCREMENT DATA PORT** — `DMEMD` / `EMEMD` (`0x1c4 + port*8`,
+> `0xac4 + port*8`, and `NV_PFSP_EMEMD`). A *control* register (`DMEMC`/`EMEMC`) is armed **once**
+> with `AINCR` (bit 25), and **each subsequent READ of the data port advances the address**.
+>
+> Verified in both drivers, independently, at levels 5 and 2 of §50:
+> - **nouveau** (`falcon/gp102.c:25-38`): `rd_init` writes `0xac0 = BIT(25) | base` **once**, then
+>   `rd` loops `nvkm_falcon_rd32(falcon, 0xac4 + port*8)` **N times with no intervening write**.
+>   Same shape for DMEM at `falcon/gm200.c:44-67`. Driven from `nvkm_falcon_pio_rd`
+>   (`falcon/base.c:154-159`: one `rd_init`, then a `do { pio->rd(...) } while (len)`).
+> - **ogkm**, and it is decisive because the driver **CHECKS that the read had an effect**.
+>   `_kfspReadPacket_GH100` (`kernel/gpu/fsp/arch/hopper/kern_fsp_gh100.c:708-724`):
+>   ```c
+>   for (i = 0; i < (packetSize / sizeof(NvU32)); i++)
+>       ((NvU32 *)pPacket)[i] = GPU_REG_RD32(pGpu, NV_PFSP_EMEMD(FSP_EMEM_CHANNEL_RM));
+>   // Sanity check offset. If this fails, the autoincrement did not work
+>   reg32 = GPU_REG_RD32(pGpu, NV_PFSP_EMEMC(FSP_EMEM_CHANNEL_RM));
+>   ememOffsetEnd = DRF_VAL(_PFSP,_EMEMC,_OFFS, reg32)
+>                 + DRF_VAL(_PFSP,_EMEMC,_BLK, reg32) * DWORDS_PER_EMEM_BLOCK;
+>   NV_ASSERT_OR_RETURN(ememOffsetEnd == (packetSize / sizeof(NvU32)), NV_ERR_INVALID_STATE);
+>   ```
+>   ⇒ A DRAM-backed `EMEMD` fails **twice**: it returns the same dword N times, **and** the
+>   driver then asserts that the offset advanced by exactly N. ⚠ **The guest verifies the side
+>   effect.** There is no shadow that satisfies a check on whether reads happened.
+>
+> ### ⊘⊘⊘ AND HERE IS THE PART THAT IS ABOUT THE INSTRUMENT, NOT THE HARDWARE
+>
+> §52.2 below sweeps 807 nouveau files and reports **zero**, and then says the sweep *"errs toward
+> **false alarms, never toward a false clear**."* ⊘⊘ **That claim is false, and this is the defect
+> it hid.** The sweep partitions registers into *read somewhere* vs *written or masked **anywhere***
+> and inspects only the never-written set. ★ **An auto-increment data port is read AND written** —
+> `gp102_flcn_pio_emem_wr` writes the very same `0xac4` (`gp102.c:41-44`) — so `EMEMD` was
+> **excluded from the candidate set by construction**. The instrument was not biased toward false
+> alarms for this class; it was **structurally blind to it**, and its zero was worth nothing here.
+>
+> ⚠ This is the tree's **"a census ZERO needs a KNOWN-POSITIVE"** lesson, paid for again. I ran a
+> known-positive on the *citation* tests (breaking the msgq assertion failed the named test) and
+> **none on the sweep itself** — so I checked that my quotes were real and never checked that my
+> search could find the thing it was searching for. ⇒ **A sweep that reports zero must first be
+> shown to report one.** Had I planted a known auto-increment port, the partition would have
+> dropped it and said so.
+>
+> ### ★ WHAT IS ACTUALLY AFFECTED — the scope is narrow, and the current target is not in it
+>
+> | configuration | falcon PIO reachable? | consequence |
+> |---|---|---|
+> | **Turing / Ampere / Ada, GSP** — the bench, the current target | **no** | GSP bootstrap uses the **sysmem libos message queue**, not falcon PIO. ⇒ consistent with `TRAP_FILLS=0` at w708–w710; that measurement is **not** contradicted. |
+> | **Hopper / discrete Blackwell, GSP** | **yes — boot-fatal** | `kgspBootstrap_GH100` → `kfspSendBootCommands` → `_kfspReadPacket_GH100`. HAL-dispatched for GH100 and every discrete Blackwell; the default arm is a stub. |
+> | **non-GSP, Maxwell+** | **yes** | SEC2 message queue for ACR secure boot (`engine/sec2/gp102.c:173` → `falcon/msgq.c:71` → `pio_rd`), and FSP on Hopper+. |
+> | CrashCat (`kcrashcatEngineReadDmem_TU102`) | **no**, gated | engages only on a valid WFL0 in `FALCON_DEBUGINFO`; we serve 0, as the C did. Reachable only if we ever advertise a crash report. |
+>
+> ### ⇒ THE RULE, RESTATED HONESTLY — and this needs an owner ruling, not my say-so
+>
+> **BAR0 writes may trap except in PRAMIN; BAR1 never traps except the single doorbell page
+> (Hopper+); BAR2 never traps; and reads never trap — EXCEPT the falcon PIO data port, where the
+> guest's own assert proves a read must have an effect.**
+>
+> ★ **The product argument for the exception, stated as §"relax only with a product argument"
+> demands:** without it **Hopper and Blackwell cannot boot at all** — a compatibility-axis loss,
+> not a convenience. And it is nothing like the thing that was deleted: the 524-page phase-scoped
+> allowlist was a **subsystem**, polled at **runtime**, and it cost a **2.5× LLM-decode
+> regression**. This is **one register per falcon**, armed by a **trapped write** we already see,
+> read a handful of times **at boot**. ⇒ `readtrap.rs`'s deletion stays correct; what replaces it
+> is a named exception, not an allowlist.
+>
+> ⊘ **One avenue that would remove even this, recorded because it is worth an hour before
+> conceding the exception:** *we* author the FSP messages, so if every response were a **single
+> dword** (`packetSize == 4`) the loop would read once, and the `EMEMC` shadow could be
+> pre-advanced to `1` on the trapped arming write. ⚠ **Unproven** — FSP boot-command payloads have
+> shapes the driver parses, and I have not checked that a 1-dword response is legal for each. It
+> is an avenue, not a plan.
+>
+> ⊘ Everything below this block is the **original, over-broad** §52. Its sweep and its four
+> checked cases are still correct **as far as they go** — read-to-clear really is absent, and the
+> timer really has no latch. Read it for those; do **not** read §52.4 as the rule.
+
+**STATUS: LIVE.** Answers the one half the owner said was still open — and the first answer was
+wrong; see the correction above.
 
 `[owner, w824]` *"the only thing I am completely unknown of is if non GSP needs read traps for
 side effects, but for with GSP I think its settled."*
@@ -3351,18 +3434,24 @@ toward **false alarms, never toward a false clear**, and it still found nothing.
   advance. The replayable-fault register block `0x100e4c…0x100e5c` (`:134-138`) is read as five
   plain values and cleared by a **write** of `0x8000_0000` to `0x100e60` (`:163`).
 
-### §52.4 — The ruling
+### §52.4 — ⊘⊘⊘ THE RULING, **SUPERSEDED BY THE CORRECTION AT THE HEAD OF §52**
 
-★★★ **Non-GSP needs no read trap either.** Every acknowledgement in nouveau's register discipline
+⊘ Read this paragraph as *"read-to-clear does not occur"*, which is true. Its word
+**"unconditional"** is what the correction retracts: the falcon PIO auto-increment data port is a
+real read side effect on both paths.
+
+★★★ **Non-GSP has no read-to-CLEAR register.** Every acknowledgement in nouveau's register discipline
 is a **write** — W1C, a cursor advance, or a CLEAR_TRIGGER — and every register it reads without
 writing is a value the *other* side produces, which is precisely what a DRAM page updated by our
 worker is for.
 
-⇒ **The rule is now unconditional across the GSP axis:** *BAR0 writes may trap except in PRAMIN;
+⊘ ~~**The rule is now unconditional across the GSP axis:**~~ — RETRACTED, see the head of §52.
+*BAR0 writes may trap except in PRAMIN;
 BAR1 never traps except the single doorbell page (Hopper+); BAR2 never traps; **no read traps
 anywhere, GSP or not**.* Encoded in `crates/kayfabe-doorbell/src/trappolicy.rs`, above the
 classifier, and reachable as `Plane::trap_regions()` — `TrapRegion` has **no read field**, so a
-read exit is not expressible rather than merely discouraged.
+read exit is not expressible rather than merely discouraged. ⚠ **That type will have to change**
+if the owner sanctions the falcon-PIO exception; it is correct for every family we target today.
 
 ⚠ **What would refute this, named so the claim is falsifiable:** a register in a non-GSP boot
 whose *read* is the only mechanism that clears it. Two honest limits on the above: (a) it is

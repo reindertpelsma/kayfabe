@@ -70,3 +70,55 @@ fn the_mmu_fault_buffer_is_acknowledged_by_a_write_in_the_pascal_plus_era() {
     assert!(s.contains("nvkm_wr32(device, 0x100e60, 0x80000000)"), "{}: the fault clear is no \
         longer a write", p.display());
 }
+
+#[test]
+fn the_falcon_pio_data_port_advances_on_a_READ_which_is_the_one_real_read_side_effect() {
+    // ⊘⊘⊘ `[fable w824]` THE COUNTEREXAMPLE to §52's first answer, and the reason that answer was
+    // corrected within the hour. `rd_init` arms AINCR (bit 25) with ONE control write, then `rd`
+    // reads the data port N times with NO intervening write — so each READ advances the address.
+    //
+    // ⚠ And note WHY my sweep could not find this: it partitioned registers into
+    // "read somewhere" vs "written ANYWHERE" and inspected only the never-written set. The data
+    // port is READ AND WRITTEN (`pio_emem_wr` writes the same 0xac4), so it was excluded from the
+    // candidate set BY CONSTRUCTION. A census zero needs a known-positive; this test is it.
+    let rel = "falcon/gp102.c";
+    let Some((p, s)) = oracle(rel) else { assert!(skipped(rel)); return };
+
+    let rd = s.split("gp102_flcn_pio_emem_rd(").nth(1).expect("pio_emem_rd is gone");
+    let rd = &rd[..rd.find("\n}").expect("unterminated fn")];
+    assert!(rd.contains("while (len >= 4)"), "{}: the read is no longer a loop", p.display());
+    assert!(
+        !rd.contains("nvkm_falcon_wr32"),
+        "{}: the read loop now writes — if the address is re-armed per dword the read has NO side \
+         effect and §52's exception can be withdrawn", p.display()
+    );
+    // ★ The arming is a SINGLE write, outside the loop, and it carries AINCR.
+    assert!(s.contains("nvkm_falcon_wr32(falcon, 0xac0 + (port * 8), BIT(25) | dmem_base)"),
+        "{}: AINCR arming gone — re-derive §52", p.display());
+    // ★ KNOWN-POSITIVE for the blindness itself: the data port IS written elsewhere, which is
+    // exactly what hid it from a never-written partition.
+    assert!(s.contains("nvkm_falcon_wr32(falcon, 0xac4 + (port * 8)"),
+        "{}: if the data port is no longer written, a never-written sweep WOULD have caught it \
+         and this test's lesson no longer applies", p.display());
+}
+
+#[test]
+fn ogkm_asserts_that_the_emem_read_advanced_the_offset() {
+    // ★★★ The decisive half, at §50 level 2 (compilable ogkm C): Hopper's FSP path does not merely
+    // RELY on the read side effect — it CHECKS it. ⇒ No shadow can satisfy a driver that verifies
+    // whether reads happened.
+    let p = "/workspace/nvidia-gpu-passthrough/research_clones/ogkm/src/nvidia/src/kernel/gpu/\
+             fsp/arch/hopper/kern_fsp_gh100.c";
+    let Ok(s) = std::fs::read_to_string(p) else {
+        eprintln!("⊘ SKIPPED — ogkm absent at {p}. §52's decisive citation is NOT checked.");
+        return;
+    };
+    assert!(s.contains("GPU_REG_RD32(pGpu, NV_PFSP_EMEMD(FSP_EMEM_CHANNEL_RM))"), "EMEMD read gone");
+    assert!(s.contains("If this fails, the autoincrement did not work"),
+        "the sanity-check comment is gone — re-read the function before trusting §52's exception");
+    assert!(
+        s.contains("NV_ASSERT_OR_RETURN((ememOffsetEnd) == (packetSize / sizeof(NvU32))"),
+        "⊘ the ASSERT is gone. If ogkm no longer verifies the advance, a pre-advanced EMEMC shadow \
+         might serve this path and the Hopper read-exit exception could be withdrawn."
+    );
+}
