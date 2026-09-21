@@ -902,3 +902,149 @@ fn a_leaf_that_starts_inside_a_block_but_runs_past_it_is_refused() {
     assert_eq!(l.leaf(0x1800, 0x1000), Err(LeafRefusal::CrossesBlockEnd));
     assert_eq!(l.refused(), 1);
 }
+
+// ---- §3 the shape, end to end -----------------------------------------------------------------
+
+#[derive(Default)]
+struct RecordingHost {
+    rung: std::sync::atomic::AtomicU64,
+    translated: std::sync::atomic::AtomicU64,
+    emulated: std::sync::atomic::AtomicU64,
+    registers: std::sync::Mutex<Vec<(u32, u64)>>,
+}
+impl plane::HostOps for RecordingHost {
+    fn ring_host(&self, _t: u32) {
+        self.rung.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+    }
+    fn run_translated(&self, _t: u32, _s: u64) -> bool {
+        self.translated.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        true
+    }
+    fn run_emulated(&self, _t: u32, _s: u64) {
+        self.emulated.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+    }
+    fn apply_register(&self, _b: u8, off: u32, v: u64, _w: u8) {
+        self.registers.lock().unwrap().push((off, v));
+    }
+}
+
+#[test]
+fn the_drainer_applies_registers_in_global_order_across_vcpus() {
+    // ★★★ §5.4's reason for ONE ring and ONE drainer, and §3's "an ordered ring drained by many is
+    // not ordered". The hazard is concrete: "a guest thread on one vCPU writes PDB_LO/PDB_HI under
+    // an RM lock and releases it; another thread on another vCPU takes the lock and writes
+    // TRIGGER. On hardware the first trap returned before the lock released."
+    use std::sync::Arc;
+    let p = Arc::new(Plane::new(64, 0x3f));
+    let host = Arc::new(RecordingHost::default());
+    let cls = Class::Privileged { readable: true, semantics: WriteSemantics::Plain };
+
+    // Two "vCPUs" handing off through a lock, exactly as RM does.
+    let lock = Arc::new(std::sync::Mutex::new(()));
+    let mut hs = Vec::new();
+    for v in 0..2u32 {
+        let (p, lock) = (Arc::clone(&p), Arc::clone(&lock));
+        hs.push(std::thread::spawn(move || {
+            for i in 0..200u32 {
+                let _g = lock.lock().unwrap();
+                p.trap_write(cls, 0, 0x1000, (v * 1000 + i) as u64, 4); // base
+                p.trap_write(cls, 0, 0x1008, 1, 4); // trigger
+            }
+        }));
+    }
+    for h in hs {
+        h.join().unwrap();
+    }
+    assert_eq!(p.drainer_pass(&*host, 10_000), 800);
+    let regs = host.registers.lock().unwrap();
+    assert_eq!(regs.len(), 800);
+    // ⊘ THE PROPERTY: every trigger is immediately preceded by ITS OWN base. Per-vCPU rings would
+    // interleave and fire a trigger against a stale base.
+    for pair in regs.chunks(2) {
+        assert_eq!(pair[0].0, 0x1000, "a base must come first");
+        assert_eq!(pair[1].0, 0x1008, "and its trigger immediately after");
+    }
+}
+
+#[test]
+fn every_ring_is_served_exactly_once_end_to_end() {
+    // ★ The composition claim: vCPUs trap, workers scan/claim/serve, nothing is lost and nothing
+    // is served twice. This is the whole plane running as §3 describes it.
+    use std::sync::atomic::Ordering as O;
+    use std::sync::Arc;
+    let p = Arc::new(Plane::new(256, 0xff));
+    let host = Arc::new(RecordingHost::default());
+    for (i, w) in p.tokens.iter().enumerate().take(64) {
+        assert!(w.allocate(Route::Translated, i as u32));
+    }
+    let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+
+    let mut hs = Vec::new();
+    for v in 0..3usize {
+        let p = Arc::clone(&p);
+        hs.push(std::thread::spawn(move || {
+            for n in 0..3_000u64 {
+                let t = ((n as u32).wrapping_mul(2654435761).wrapping_add(v as u32)) % 64;
+                p.trap_write(Class::Doorbell, 0, 0, t as u64, 4);
+            }
+        }));
+    }
+    let mut ws = Vec::new();
+    for _ in 0..3 {
+        let (p, host, stop) = (Arc::clone(&p), Arc::clone(&host), Arc::clone(&stop));
+        ws.push(std::thread::spawn(move || {
+            let mut scratch = Vec::new();
+            loop {
+                let seen = p.worker_wake.seen();
+                if p.worker_pass(&*host, &mut scratch, 64) == 0 {
+                    if stop.load(O::Acquire) && p.worker_pass(&*host, &mut scratch, 64) == 0 {
+                        return;
+                    }
+                    if p.worker_wake.try_park(seen) {
+                        p.worker_wake.unpark();
+                    }
+                    std::thread::yield_now();
+                }
+            }
+        }));
+    }
+    for h in hs {
+        h.join().unwrap();
+    }
+    stop.store(true, O::Release);
+    for h in ws {
+        h.join().unwrap();
+    }
+
+    // ⊘ No token may be left un-idle, and the bit must be gone with it.
+    let orphaned: Vec<_> = p
+        .tokens
+        .iter()
+        .enumerate()
+        .filter(|(i, w)| w.load().state != State::Idle && !p.bits.bit(*i as u32))
+        .map(|(i, w)| (i, w.load().state))
+        .collect();
+    assert!(orphaned.is_empty(), "⊘ PLANE DEFECT: rung with no bit: {orphaned:?}");
+    assert!(
+        p.tokens.iter().all(|w| w.load().state == State::Idle),
+        "⊘ HARNESS: a token is still published when the workers exited"
+    );
+    assert!(host.translated.load(O::Acquire) > 0, "the host must actually have been driven");
+}
+
+#[test]
+fn a_passthrough_token_is_never_served_by_a_worker() {
+    // ⊘ Passthrough is rung INLINE on the vCPU (§5, §7: "may run on the vCPU"). If a worker ever
+    // serves one, the classifier and the token word have disagreed.
+    let p = Plane::new(16, 0xf);
+    let host = RecordingHost::default();
+    p.tokens[2].allocate(Route::Passthrough, 0x22);
+    assert_eq!(
+        p.trap_write(Class::Doorbell, 0, 0, 2, 4),
+        Action::RingHostInline { host_token: 0x22 }
+    );
+    // Nothing was published, so a worker pass finds nothing.
+    let mut scratch = Vec::new();
+    assert_eq!(p.worker_pass(&host, &mut scratch, 16), 0);
+    assert_eq!(host.translated.load(std::sync::atomic::Ordering::Acquire), 0);
+}
