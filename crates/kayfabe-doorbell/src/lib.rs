@@ -28,6 +28,7 @@
 pub mod bitmap;
 pub mod caps;
 pub mod channel;
+pub mod hostverb;
 pub mod leaf;
 pub mod lifetime;
 pub mod model;

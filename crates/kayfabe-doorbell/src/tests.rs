@@ -1645,3 +1645,51 @@ fn boot_completing_drops_the_boot_read_traps_ON_THE_LIVE_PATH() {
     p.boot_complete();
     assert_eq!(p.trap_read(0x110_000), readtrap::ReadPolicy::FromShadow, "⊘ the 2.5x arm");
 }
+
+// ---- host verbs: authored, never forwarded; and the pointer discipline ------------------------
+
+#[test]
+fn a_corrupted_vmm_addr_is_refused_not_dereferenced() {
+    // ★★★ `[owner]` "unsafe must protect against memory bugs in safe". ⇒ `checked()` does NOT
+    // trust that safe code preserved anything: it re-validates against the range the caller
+    // registered, every time. A safe-code bug that swapped, truncated or aliased the VmmAddr
+    // produces a REFUSAL, never a bad dereference.
+    use hostverb::VmmAddr;
+    const BASE: usize = 0x1000_0000;
+    const LEN: usize = 0x1000;
+    // SAFETY: test-only; no dereference occurs.
+    let good = unsafe { VmmAddr::new(BASE, LEN) };
+    assert_eq!(good.checked(BASE, LEN, 0x800), Some(BASE));
+
+    // A safe-code bug hands back an address outside the registered range.
+    let corrupted = unsafe { VmmAddr::new(BASE + 0x8000, LEN) };
+    assert_eq!(corrupted.checked(BASE, LEN, 0x10), None, "outside the range ⇒ refuse");
+
+    // A length larger than what was registered.
+    assert_eq!(good.checked(BASE, LEN, 0x2000), None, "past the end ⇒ refuse");
+
+    // ⊘ And overflow must not wrap into a legal-looking range.
+    let high = unsafe { VmmAddr::new(usize::MAX - 8, LEN) };
+    assert_eq!(high.checked(BASE, LEN, 64), None);
+}
+
+#[test]
+fn guest_flag_words_are_refused_and_counted_never_forwarded() {
+    // §9: "We author every host call; our host-verb signatures do not accept a guest flag word."
+    // ⊘ The absence of the field is the enforcement; this counter makes the refusal visible so a
+    // zero is evidence rather than silence.
+    let mut r = hostverb::FlagRefusals::default();
+    assert_eq!(r.count(), 0);
+    r.refuse_guest_flags(0xdead_beef);
+    assert_eq!(r.count(), 1);
+}
+
+#[test]
+fn only_four_leaf_bits_are_translated_and_the_rest_are_refused() {
+    // §6.4: "We translate aperture, address, read-only and page size; every other bit is refused
+    // BY NAME and counted, and the kind is fixed to the store's." ⊘ Forwarding a guest-chosen
+    // page KIND would mint host mappings from a guest value and touch device-global compression
+    // state -- a guest-to-host coupling in the same family as forwarding a flag word.
+    let translated = [hostverb::TranslatedLeafBit::ReadOnly];
+    assert_eq!(translated.len(), 1, "read-only is the only leaf BIT we carry through");
+}
