@@ -1162,3 +1162,102 @@ fn the_read_trap_set_shrinks_between_boot_and_runtime() {
         "the set MUST shrink; a permanently-growing read-trap set is the 2.5x defect"
     );
 }
+
+// ---- the swref descriptor parser ---------------------------------------------------------------
+
+#[test]
+fn the_parser_handles_the_three_real_shapes_from_the_headers() {
+    // ⊘ These lines are copied VERBATIM from ogkm's swref headers, not invented -- a parser
+    // tested only on its author's examples proves nothing about the corpus.
+    use swref::{parse_line, Value};
+
+    // research_clones/ogkm/.../ampere/ga100/dev_ctrl.h:26 -- the bit range P1 names
+    let d = parse_line("#define NV_CTRL_VF_DOORBELL_VECTOR                                  11:0 /* -WXUF */").unwrap();
+    assert_eq!(d.name, "NV_CTRL_VF_DOORBELL_VECTOR");
+    assert_eq!(d.value, Value::BitRange { hi: 11, lo: 0 });
+    assert!(!d.readable, "-W... is write-only");
+    assert!(d.writable);
+
+    // .../turing/tu102/dev_vm.h:27 -- the aperture P1 names
+    let d = parse_line("#define NV_VIRTUAL_FUNCTION                                    0x0003FFFF:0x00030000 /* RW--D */").unwrap();
+    assert_eq!(d.value, Value::Aperture { hi: 0x0003FFFF, lo: 0x00030000 });
+    assert!(d.readable && d.writable);
+
+    // A plain offset.
+    let d = parse_line("#define NV_PBUS_FOO                          0x00001700 /* R---V */").unwrap();
+    assert_eq!(d.value, Value::Offset(0x1700));
+    assert!(d.readable && !d.writable);
+}
+
+#[test]
+fn a_constant_coded_register_is_READABLE() {
+    // ⊘ `C` in position 1 was not obvious and was CHECKED against the corpus rather than guessed:
+    // it appears on `NV_CONFIG_PCI_NV_0_VENDOR_ID` and on value defines like `..._NVIDIA`.
+    // It means CONSTANT, and a constant is readable. Treating it as unreadable would have
+    // shadowed the wrong set.
+    let d = swref::parse_line("#define NV_CONFIG_PCI_NV_0_VENDOR_ID                           15:0 /* C--UF */").unwrap();
+    assert!(d.readable, "C is CONSTANT, and a constant is readable");
+    assert!(!d.writable);
+}
+
+#[test]
+fn uncoded_and_odd_length_codes_are_skipped_not_guessed() {
+    // ⚠ All 24 042 observed codes are exactly 5 chars. A 4- or 6-char code is a corpus we have
+    // not seen; guessing its layout is how a capture-derived table expires as a vendor
+    // regression. ⇒ Skip, never assume.
+    assert!(swref::parse_line("#define NV_SOMETHING 0x1234").is_none(), "uncoded define");
+    assert!(swref::parse_line("#define NV_ODD 0x1234 /* RWXY */").is_none(), "4-char code");
+    assert!(swref::parse_line("/* just a comment */").is_none());
+    assert!(swref::parse_line("#ifndef _DEV_VM_H_").is_none());
+}
+
+#[test]
+fn the_overlay_cross_check_fails_the_build_on_a_vendor_rename() {
+    // ★★★ §5.5's build gate: "it must fail the build when a register in the generated set has no
+    // entry". A hand-maintained overlay whose names silently stop resolving is exactly the
+    // failure `a_capture_derived_table_expires_as_a_vendor_regression` records.
+    let generated = swref::parse_header(
+        "#define NV_PFIFO_INTR_0 0x00002100 /* RW--V */\n\
+         #define NV_PFIFO_INTR_EN_0 0x00002140 /* RW--V */\n",
+    );
+    assert_eq!(generated.len(), 2);
+    assert!(swref::overlay_names_all_exist(&generated, &["NV_PFIFO_INTR_0"]).is_ok());
+    // The vendor renames it in a new driver version:
+    let missing = swref::overlay_names_all_exist(&generated, &["NV_PFIFO_INTR_0", "NV_PFIFO_INTR_LEAF"])
+        .unwrap_err();
+    assert_eq!(missing, vec!["NV_PFIFO_INTR_LEAF"], "the build must name what vanished");
+}
+
+#[test]
+fn a_five_letter_english_word_is_not_an_access_code() {
+    // ⊘ The defect that the corpus cross-check caught: "/* Fermi and later */" has a 5-character
+    // first token, and length-only validation accepted it -- producing a silently unreadable,
+    // unwritable descriptor. 1 975 rows of the corpus were wrong this way.
+    assert!(swref::parse_line("#define NV_X 0x100 /* Fermi and later */").is_none());
+    assert!(swref::parse_line("#define NV_Y 0x100 /* TODO: check */").is_none());
+    // And a real code still parses.
+    assert!(swref::parse_line("#define NV_Z 0x100 /* RW--V */").is_some());
+}
+
+#[test]
+fn structure_bit_fields_give_the_userd_geometry() {
+    // ★ NV_RAMUSERD_GP_GET is word 34 of USERD ⇒ byte 0x88. This is real geometry the doorbell
+    // plane needs, and it only exists because the arithmetic form is evaluated rather than
+    // skipped.
+    use swref::Value;
+    let d = swref::parse_line(
+        "#define NV_RAMUSERD_GP_GET                     (34*32+31):(34*32+0) /* RWXUF */",
+    )
+    .unwrap();
+    assert_eq!(d.value, Value::StructBits { hi: 34 * 32 + 31, lo: 34 * 32 });
+    assert_eq!(d.value.byte_offset(), Some(0x88), "word 34 = byte 0x88");
+    // ⊘ And it must NOT be mistaken for a register bit range -- 1120 would truncate to nonsense.
+    assert!(!matches!(d.value, Value::BitRange { .. }));
+}
+
+#[test]
+fn arithmetic_bit_positions_are_evaluated() {
+    use swref::Value;
+    let d = swref::parse_line("#define NV_X (0*32+31-3):(0*32+4) /* RW--V */").unwrap();
+    assert_eq!(d.value, Value::BitRange { hi: 28, lo: 4 });
+}
