@@ -1093,7 +1093,7 @@ fn a_passthrough_token_is_never_served_by_a_worker() {
 // ---- P1's last gate item: the exhaustive interleaving check -----------------------------------
 
 #[test]
-fn the_model_check_FINDS_the_single_cas_claim_bug() {
+fn the_model_check_finds_the_single_cas_claim_bug() {
     // ★★★ THE KNOWN-POSITIVE FOR THE CHECKER ITSELF. A model checker that reports "no
     // counterexample" is worthless unless it can be shown to find a bug that is really there.
     //
@@ -1231,7 +1231,7 @@ fn the_parser_handles_the_three_real_shapes_from_the_headers() {
 }
 
 #[test]
-fn a_constant_coded_register_is_READABLE() {
+fn a_constant_coded_register_is_readable() {
     // ⊘ `C` in position 1 was not obvious and was CHECKED against the corpus rather than guessed:
     // it appears on `NV_CONFIG_PCI_NV_0_VENDOR_ID` and on value defines like `..._NVIDIA`.
     // It means CONSTANT, and a constant is readable. Treating it as unreadable would have
@@ -1540,7 +1540,7 @@ fn an_unbackable_aperture_page_is_refused_not_holed() {
 // ---- THE WIRING, exercised end to end ---------------------------------------------------------
 
 #[test]
-fn a_kernel_channel_with_an_untranslatable_operand_is_refused_not_faulted_ON_THE_LIVE_PATH() {
+fn a_kernel_channel_with_an_untranslatable_operand_is_refused_not_faulted_on_the_live_path() {
     // ★★★ §7 was a correct, tested COMPONENT calling nobody. This asserts it on the path: the
     // worker must consult it before handing work to the host.
     // ⊘ A fault here would be a guest-wide DoS -- UVM treats any channel error as globally fatal.
@@ -1562,7 +1562,7 @@ fn a_kernel_channel_with_an_untranslatable_operand_is_refused_not_faulted_ON_THE
 }
 
 #[test]
-fn a_user_channel_with_the_same_miss_faults_ON_THE_LIVE_PATH() {
+fn a_user_channel_with_the_same_miss_faults_on_the_live_path() {
     use std::sync::atomic::Ordering as O;
     let vmm = plane::Vmm::new();
     let mut p = Plane::new(&vmm, 32, 0x1f);
@@ -1578,7 +1578,7 @@ fn a_user_channel_with_the_same_miss_faults_ON_THE_LIVE_PATH() {
 }
 
 #[test]
-fn a_forge_happens_only_for_emulated_work_ON_THE_LIVE_PATH() {
+fn a_forge_happens_only_for_emulated_work_on_the_live_path() {
     // §8, wired: an Emulated route did no GPU work, so a completion is owed; a Translated route
     // had its semaphore forwarded, so forging would be a second author for one value.
     use std::sync::atomic::Ordering as O;
@@ -1598,7 +1598,7 @@ fn a_forge_happens_only_for_emulated_work_ON_THE_LIVE_PATH() {
 }
 
 #[test]
-fn the_cap_refuses_a_channel_ON_THE_LIVE_PATH() {
+fn the_cap_refuses_a_channel_on_the_live_path() {
     // §9.1 wired into allocation, which is the only place it can stop a guest starving a neighbour.
     let vmm = plane::Vmm::new();
     let mut p = Plane::new(&vmm, 32, 0x1f);
@@ -1613,7 +1613,7 @@ fn the_cap_refuses_a_channel_ON_THE_LIVE_PATH() {
 }
 
 #[test]
-fn a_leaf_naming_our_memslot_never_reaches_a_host_map_ON_THE_LIVE_PATH() {
+fn a_leaf_naming_our_memslot_never_reaches_a_host_map_on_the_live_path() {
     // ★★★ §6.4 wired. The signature is the guard: map_guest_slice takes a HostSlice, which can
     // only come from a block we minted -- so there is no way to reach it with a raw gpa.
     let vmm = plane::Vmm::new();
@@ -1632,7 +1632,7 @@ fn a_leaf_naming_our_memslot_never_reaches_a_host_map_ON_THE_LIVE_PATH() {
 }
 
 #[test]
-fn teardown_runs_the_whole_ordered_sequence_ON_THE_LIVE_PATH() {
+fn teardown_runs_the_whole_ordered_sequence_on_the_live_path() {
     let vmm = plane::Vmm::new();
     let mut p = Plane::new(&vmm, 32, 0x1f);
     let host = RecordingHost::default();
@@ -1644,7 +1644,7 @@ fn teardown_runs_the_whole_ordered_sequence_ON_THE_LIVE_PATH() {
 }
 
 #[test]
-fn boot_completing_drops_the_boot_read_traps_ON_THE_LIVE_PATH() {
+fn boot_completing_drops_the_boot_read_traps_on_the_live_path() {
     // §5 wired: the phase is the Plane's, and boot_complete() is what makes the 2.5x real.
     let vmm = plane::Vmm::new();
     let mut p = Plane::new(&vmm, 32, 0x1f);
@@ -1820,7 +1820,7 @@ fn a_short_element_refuses_rather_than_reading_past_it() {
 }
 
 #[test]
-fn the_no_gsp_plane_is_a_SEAM_not_a_bolt_on() {
+fn the_no_gsp_plane_is_a_seam_not_a_bolt_on() {
     // ★★★ `[owner]` "with non gsp for later but not a bolt on, core part". If the control plane
     // were written as "the GSP path", adding a non-GSP path later means a SECOND COPY of every
     // decision. ⇒ The plane is a parameter, and the absence of a message queue is expressible.

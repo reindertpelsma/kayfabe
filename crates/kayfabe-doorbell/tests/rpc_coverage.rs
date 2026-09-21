@@ -45,7 +45,7 @@ fn every_required_rpc_has_a_disposition() {
 }
 
 #[test]
-fn the_two_no_reply_functions_are_IGNORE_not_REFUSE() {
+fn the_two_no_reply_functions_are_ignore_not_refuse() {
     // ⊘ §1.3: "no reply at all; ECHOING WOULD DESYNC THE GUEST'S SEQUENCE COUNTER." A refusal IS
     // a reply, so classifying these as Refuse would desync the guest just as an echo would.
     assert_eq!(rpc::classify(72), Disposition::Ignore, "GSP_SET_SYSTEM_INFO");

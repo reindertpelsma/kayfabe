@@ -53,15 +53,10 @@ pub fn class_policy(class: ClassId) -> ClassPolicy {
         0x79 => ClassPolicy::Emulate,           // NV01_EVENT_OS_EVENT
         // ⊘ params are a guest-KERNEL function pointer and are deliberately not decoded.
         0x7e => ClassPolicy::Emulate,           // NV01_EVENT_KERNEL_CALLBACK_EX
-        0x90f1 => ClassPolicy::EmulateAndHost,  // FERMI_VASPACE_A
+        0x90f1 => ClassPolicy::EmulateAndHost,  // FERMI_VASPACE_A (family-independent)
         0xa06c => ClassPolicy::Emulate,         // KEPLER_CHANNEL_GROUP_A (TSG)
         0x9067 => ClassPolicy::Emulate,         // FERMI_CONTEXT_SHARE_A
-        0xc56f => ClassPolicy::EmulateAndHost,  // AMPERE_CHANNEL_GPFIFO_A
-        0xc7c0 => ClassPolicy::EmulateAndHost,  // AMPERE_COMPUTE_B
-        0xc797 => ClassPolicy::Emulate,         // AMPERE_B
-        0xc7b5 => ClassPolicy::EmulateAndHost,  // AMPERE_DMA_COPY_B
-        // ★ The object whose 64 KiB CPU mapping IS the doorbell page.
-        0xc561 => ClassPolicy::EmulateAndHost,  // AMPERE_USERMODE_A
+        0xc797 => ClassPolicy::Emulate,         // AMPERE_B (3D sibling)
         0xc574 => ClassPolicy::Emulate,         // UVM_CHANNEL_RETAINER — ⊘ never forwarded
         // ⊘⊘ [MEASURED] all 4 requests in a boot refused 0x56.
         0xc076 => ClassPolicy::Deny("GP100_UVM_SW: measured refused in every boot"),
@@ -73,6 +68,9 @@ pub fn class_policy(class: ClassId) -> ClassPolicy {
         // ⚠ §2.2 marks this justification UNVERIFIED: i2capiConstruct_IMPL returns NV_OK
         // unconditionally, so "RM expects it to fail" is not true. Refusal kept, reason flagged.
         0x402c => ClassPolicy::Deny("NV40_I2C: no physical board bus [reason UNVERIFIED w821]"),
+        // ★★★ EVERY FAMILY'S engine objects, from the DERIVED table — not a GA10x literal.
+        // `[fable A1]` hard-coding Ampere's ids denied an Ada guest's cuCtxCreate by default.
+        c if crate::classgen::engine_class_family(c).is_some() => ClassPolicy::EmulateAndHost,
         _ => ClassPolicy::Deny("not on the allowlist — default deny"),
     }
 }
