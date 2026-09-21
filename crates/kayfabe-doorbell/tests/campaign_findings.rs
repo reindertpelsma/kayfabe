@@ -695,3 +695,42 @@ fn a_write_the_design_forbids_never_reaches_the_classifier() {
         trappolicy::doorbell_for(classgen::Family::Ampere)
     ));
 }
+
+#[test]
+fn the_cpu_may_move_a_register_and_nothing_larger() {
+    // `[owner w824]` "confirm that CPU copies are dead and dead from gpu vidmem ... anything
+    // larger than some trivial integer size from mmio reads then".
+    //
+    // ⊘⊘⊘ §46, AND THE MEASUREMENT THAT MAKES IT A CONSTRAINT RATHER THAN A PREFERENCE:
+    // `[w797]` turning the CPU executor off took the 30-arm suite from 18 PASS to 15. The six
+    // arms that "regressed" had been passing BECAUSE OUR CPU WAS DOING THE GPU'S WORK. ⇒ 15/30
+    // is the HONEST number and 18 was the flattering one — the CPU executor buys green arms with
+    // a lie the content ledger cannot see (both executors write identical bytes).
+    use channel::{may_cpu_move, CpuMoveRefusal, CPU_MOVE_MAX_BYTES};
+
+    // ★ A register-sized answer is fine — that is what an MMIO read IS.
+    for len in [1u64, 2, 4, 8] {
+        assert!(may_cpu_move(len, false).is_ok(), "{len} bytes is a register, not a copy");
+    }
+    // ⊘ One byte past a 64-bit access is DATA, and data is the engine's job.
+    assert_eq!(
+        may_cpu_move(9, false).unwrap_err().name(),
+        "cpu_move_too_large",
+        "9 bytes is no longer a register access"
+    );
+    // ⚠ KNOWN-POSITIVE for the bound itself: the CeUtils scrub measured FOUR bytes `[w740]`, so
+    // it passes — and a scrub that grew to a page would be refused, which is the case that
+    // matters. If this ever starts failing, the scrub changed shape and §46 needs re-deriving.
+    assert!(may_cpu_move(4, false).is_ok(), "the measured 4-byte CeUtils scrub");
+    assert!(may_cpu_move(4096, false).is_err(), "a page-sized 'scrub' is the GPU's work");
+
+    // ★★★ And real card vidmem is refused at ANY size, including a register.
+    for len in [1u64, 4, 8, 4096] {
+        assert_eq!(
+            may_cpu_move(len, true).unwrap_err().name(),
+            "cpu_move_names_real_vidmem",
+            "card vidmem is refused at {len} bytes — size does not buy access"
+        );
+    }
+    assert_eq!(CPU_MOVE_MAX_BYTES, 8, "the widest single MMIO access");
+}

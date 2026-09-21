@@ -116,3 +116,60 @@ pub fn size_is_total(form_known_to_model: bool, words: u8) -> (u8, Decoded) {
         if form_known_to_model { Decoded::Modelled { operand_words: words } } else { Decoded::SizedOnly },
     )
 }
+
+// ---- §46: what the CPU may move, and it is almost nothing --------------------------------------
+
+/// ★★★ **The largest number of bytes the CPU may ever move on a guest's behalf.**
+///
+/// `[owner w824]` *"confirm that CPU copies are dead and dead from gpu vidmem … anything larger
+/// than some trivial integer size from mmio reads then"*.
+///
+/// ⊘ **Eight bytes: the widest single MMIO access.** A register read or a 64-bit doorbell word is
+/// a value we author; anything wider is *data*, and data is the GPU's job (§46). ⇒ The bound is
+/// not a performance tuning knob — it is the line between **answering a register** and
+/// **doing the engine's work**.
+pub const CPU_MOVE_MAX_BYTES: u64 = 8;
+
+/// Why a CPU-side move was refused. ⊘ Refused **by name**, so `refused=0` means nothing was.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CpuMoveRefusal {
+    /// ⊘⊘⊘ **§46.** *"The CeUtils scrub genuinely clears memory; kernel CE genuinely moves
+    /// bytes."* A scrub whose bytes our CPU wrote is not a scrub that happened on the GPU, and
+    /// **the guest cannot tell until something depends on the GPU having done it.**
+    ///
+    /// ⚠ `[measured w797]` turning the CPU executor off took the 30-arm suite from **18 PASS to
+    /// 15** — every one of the six arms that "regressed" had been passing **because our CPU was
+    /// doing the GPU's work.** ⇒ The CPU executor is faster to make green, and that is precisely
+    /// the hazard: it buys passing arms with a lie the ledger cannot see.
+    TooLarge { want: u64, max: u64 },
+    /// ★ The operand names **real card vidmem**. Unreachable by construction today — the executor
+    /// that could move bytes holds neither the emulated framebuffer nor guest RAM — but named so
+    /// that a future executor which *could* reach it is refused rather than silently permitted.
+    NamesRealVidmem,
+}
+
+impl CpuMoveRefusal {
+    pub fn name(&self) -> &'static str {
+        match self {
+            CpuMoveRefusal::TooLarge { .. } => "cpu_move_too_large",
+            CpuMoveRefusal::NamesRealVidmem => "cpu_move_names_real_vidmem",
+        }
+    }
+}
+
+/// ★★★ May the CPU move `len` bytes itself?
+///
+/// ⊘ **`real_vidmem` is a parameter and not an assertion.** Today no CPU executor can address card
+/// vidmem — `CeExecutor::Ours` names only fabricated space, and the isolate holding the real host
+/// RM handles refuses it before any ring store. That is a property of *which process holds what*,
+/// and process layout is exactly the kind of thing a refactor changes quietly. ⇒ The predicate
+/// takes the fact as an input so the answer stays correct if the layout stops being.
+pub fn may_cpu_move(len: u64, names_real_vidmem: bool) -> Result<(), CpuMoveRefusal> {
+    if names_real_vidmem {
+        return Err(CpuMoveRefusal::NamesRealVidmem);
+    }
+    if len > CPU_MOVE_MAX_BYTES {
+        return Err(CpuMoveRefusal::TooLarge { want: len, max: CPU_MOVE_MAX_BYTES });
+    }
+    Ok(())
+}
