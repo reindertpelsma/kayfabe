@@ -3462,3 +3462,105 @@ convention is a hardware property, not a driver choice, but it is an inference; 
 read depends on one. ⇒ **The test that settles it is booting nouveau non-GSP against kayfabe**,
 which §51 already puts on the path for its own reasons. Until then this is a **ruling with its
 evidence and its gap both written down**, not a measurement.
+
+---
+
+## §53 — A "READ TRAP" IS THE ABSENCE OF A MEMSLOT. Added 2026-09-21 (w824), owner ruling.
+
+**STATUS: LIVE.** The implementation reframe that makes §52's one exception cheap.
+
+`[owner]` *"can we then ensure exactly the pages where we need read trap, only there is no kvm
+memslot, but surrounded we have kvm memslot coverage read_only and for PRAMIN r/w (no trap)"*
+
+★★★ **Yes — and this is the right way to say the whole trap policy.** KVM's model is not
+"install a trap"; it is *"is this GPA covered by a memslot?"* Covered ⇒ the guest touches memory
+at full speed. Not covered ⇒ `KVM_EXIT_MMIO`. ⇒ **Every register's disposition is a memslot
+decision, and "trap code" is what happens *after* an exit we chose not to avoid.** This is why
+the owner's objection to `readtrap.rs` was right in a way deeper than cost: *"mapping code is very
+different from trapping code"* — a read exit is **not** a feature you implement, it is a **hole
+you leave**.
+
+### §53.1 — The five dispositions, and the KVM mechanism for each
+
+| | disposition | KVM mechanism | cost |
+|---|---|---|---|
+| **A** | passthrough R/W, DRAM-backed | ordinary r/w memslot | **zero** |
+| **B** | passthrough READ (DRAM), **trap WRITE** | **read-only memslot** (`KVM_MEM_READONLY`) | one exit per **write** |
+| **C** | passthrough READ to a **host** mapping, trap write | read-only memslot over the **host's live page** | **zero** for reads |
+| **D** | **trap READ and WRITE** | **no memslot — a hole** | one exit per **access**, and see §53.3 |
+| **E** | refuse-by-name | read-only memslot + a named case in the write handler | one exit per write |
+
+⊘ **B is the default, and B *is* what "no read traps" means in implementation terms.** Almost all
+of BAR0 is B. PRAMIN is **A** (the owner's *"r/w, no trap"*) — its window moves by an `mmap`
+`MAP_FIXED` re-point performed synchronously inside the trapped `BAR0_WINDOW` write, which is
+**outside** PRAMIN and therefore a B register. The doorbell/usermode page is **C**.
+
+### §53.2 — ✔ NOT SPECULATIVE: the C artifact already did this, on the exact page in question
+
+`src/qemu/nvkvm_gpu_emul.c:9790-9803`, and its own comment states the mechanism:
+
+> *"rom-device overlays page **0x110000** at priority 1 so its **poll-READS hit RAM (no vmexit)**
+> while **WRITES fall through the rom-device thunk** to the side-effect handler."*
+
+⇒ **Disposition B, implemented as QEMU `memory_region_init_rom_device`, booted a real unpatched
+NVIDIA driver.** The raw `KVM_MEM_READONLY` path exists too (`src/qemu/nvkvm_mmap_host.c:450-469`).
+
+⚠ **And the C recorded the QEMU trap that costs a day if rediscovered**, in the same comment:
+
+> *"(A plain **leaf-with-subregion overlay did NOT take effect for KVM — m582**; a **container**
+> renders subregions reliably.)"*
+
+⇒ In QEMU the BAR must be a **container** `MemoryRegion` with the io region and the rom-device
+regions added as subregions with priorities — a leaf `memory_region_init_io` with subregions laid
+over it **silently fails to reach KVM**, and the symptom is that reads keep exiting while
+everything *looks* configured. ★ This is the exact failure class this tree keeps paying for: the
+step reports nothing wrong and the experiment measures the old behaviour.
+
+⊘ **Cloud Hypervisor: UNVERIFIED.** CH is not cloned here. The VMM-agnostic seam must therefore
+express *disposition*, not QEMU's `rom_device`, and the CH side needs checking before the seam is
+called validated for this. **Do not record CH as working until someone has read its
+`create_userspace_mapping` and confirmed a read-only user memory region with write exits.**
+
+### §53.3 — ⚠ THE COST OF A HOLE IS PAGE-GRANULAR, AND THAT IS THE WHOLE RISK
+
+A memslot hole takes the **entire 4 KiB page** with it: every *other* register on that page loses
+its free reads too. ⇒ **A disposition-D page is cheap only if nothing else on it is polled at
+runtime.**
+
+★★★ **And that is exactly where the danger sits.** §52's `NV_PGSP_EMEMD` is at `0x110ac4` — on
+page **`0x110000`**, which is *the* runtime-hot GSP falcon page: it also carries `0x110c00`, this
+campaign's recorded `worst_trap` (the GSP RPC submit), and it is the page whose read-trapping cost
+the **2.5× LLM-decode regression**. ⇒ **If `0x110000` ever has to become a hole, we re-import the
+precise regression the `readtrap.rs` deletion was meant to prevent.**
+
+⊘ The escape, and it must be verified rather than assumed: GSP `EMEMD` is read only by
+**CrashCat** (`kgspReadEmem_TU102`), which engages only on a valid WFL0 in
+`NV_PFALCON_FALCON_DEBUGINFO` — and **we serve `DEBUGINFO = 0`**, as the C did
+(`nvkvm_gpu_emul.c:1588`). If that gate is total, `0x110000` stays **B** and costs nothing.
+⇒ **Pending: confirm every caller of a GSP EMEM read is behind that gate**, not just the one.
+
+### §53.4 — The registers that are NOT read-passthrough compliant, enumerated mechanically
+
+Swept every `*_AINCR` field definition across all of ogkm's published swref headers — **exactly 8
+control registers** define auto-increment-on-read, hence 8 data ports. Dropping the nvswitch-only
+parts (`NV_CMINION_*`, `NV_SOE_*`, and the LR10/LS10 copies):
+
+| data port (**disposition D**) | address | BAR0 page | families | boot-only? |
+|---|---|---|---|---|
+| `NV_PGSP_EMEMD` | `0x110ac4+i*8` | `0x110000` | Turing, Hopper, Blackwell | ⚠ page is runtime-hot — see §53.3 |
+| `NV_PSEC_EMEMD` | `0x840ac4+i*8` | `0x840000` | Blackwell (gb10b, gb20b) | yes (ACR secure boot) |
+| `NV_PFSP_EMEMD` | `0x8F2ac4+i*8` | `0x8F2000` | Hopper | yes (FSP boot handshake) |
+| `NV_PFALCON_FALCON_DMEMD` | `base+0x1c4+i*8` | per-falcon base page | Turing+ (generic falcon block) | yes (firmware load / msgq) |
+| `NV_PFALCON_FALCON_IMEMD` | `base+0x184+i*16` | per-falcon base page | check GPU falcons | yes (firmware load) |
+
+⇒ **Every one of them is the same thing: an indexed access port.** `*MEMC` is a cursor
+(`OFFS`/`BLK` plus `AINCW` bit 24 and `AINCR` bit 25); `*MEMD` is the data window into the
+falcon's private DMEM/IMEM/EMEM. Arm the cursor with one write, then stream dwords through the
+data port — and with `AINCR` set, **each read both returns a dword and advances the cursor.**
+★ It is PRAMIN's shape with one difference that changes everything: **PRAMIN's window moves only
+on an explicit control write** (which we trap, and which is why PRAMIN is disposition A), while
+**this window moves on the read itself** (which we cannot observe without an exit).
+
+⚠ **Access codes cannot find these.** The EMEMD ports carry `RW-4A`, the same code as any ordinary
+array register. ⇒ The disposition map must be driven by **driver usage**, never by the header's
+access field.
