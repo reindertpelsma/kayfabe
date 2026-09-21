@@ -36,7 +36,7 @@ pub mod leaf;
 pub mod lifetime;
 pub mod model;
 pub mod plane;
-pub mod readtrap;
+pub mod timer;
 pub mod rmgraph;
 pub mod rpc;
 pub mod ring;
@@ -55,7 +55,6 @@ pub use channel::{size_is_total, Birth, Decoded, Disposition, Owner, Submission}
 pub use leaf::{GuestRamBlock, GuestRamLayout, HostSlice, LeafRefusal};
 pub use lifetime::{Step, Teardown, TeardownError, WalkerState};
 pub use plane::{HostOps, Plane, Vmm};
-pub use readtrap::{Phase, ReadPolicy, ReadReason, ReadTrapSet};
 pub use ring::{PrivRing, Push, RegWrite};
 pub use completion::{Completion, EngineIrq, Raise};
 pub use shadow::{Cell, ClearOutcome, Trigger, WriteSemantics};

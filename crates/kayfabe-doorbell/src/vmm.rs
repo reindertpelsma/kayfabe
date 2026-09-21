@@ -38,7 +38,6 @@
 //! ⊘ The barrier is the one that cannot be bolted on later: a return type must exist from the
 //! start, or every call site has to change. [`MmioOutcome`] carries it, and QEMU simply drops it.
 
-use crate::readtrap::ReadPolicy;
 use crate::trap::Action;
 
 /// Which BAR a guest access landed in. ⊘ `base`/`offset` is CH's shape; QEMU gives only the
@@ -131,11 +130,9 @@ pub trait GpuDevice: Send + Sync {
     /// exit — except the ~524 pages the read-trap allowlist names, which reach [`Self::mmio_read`].
     fn mmio_write(&self, bar: Bar, offset: u64, data: &[u8]) -> MmioOutcome;
 
-    /// Serve a read that the allowlist says must trap.
-    /// ⊘ Returns the policy as well as the value so the adapter can tell *"served from shadow"*
-    /// from *"we were asked about a page we do not trap"* — which is a bug in the adapter's
-    /// region registration, not a guest error.
-    fn mmio_read(&self, bar: Bar, offset: u64, data: &mut [u8]) -> ReadPolicy;
+    // ⊘ NO `mmio_read`. §5 (superseded w823): reads are served from ordinary DRAM the guest reads
+    // directly — there is no exit, so there is nothing for a device model to answer. A read verb
+    // on this trait would be an invitation to add the mechanism back.
 }
 
 /// ⊘ CH hands a byte slice; QEMU hands a value and a size. This is the one conversion the seam

@@ -22,13 +22,15 @@ const MUST_CALL: [(&str, &str); 4] = [
     ("Submission", "§7 — the kernel-channel refusal"),
     ("Completion::for_route", "§8 — the forge licence"),
     ("VmCaps", "§9.1 — per-VM twin caps"),
-    ("read_traps.policy", "§5 — the read-trap allowlist"),
+    // ⊘⊘⊘ w824 — `read_traps.policy` used to sit here. It is a DELETE, not an omission: there is
+    // no read-trap allowlist, no phase, and no read exit anywhere. See the gate below.
+    ("trappolicy::may_trap_read", "§5 — reads are never trapped, and the answer is a call site"),
 ];
 
 const MUST_BE_REACHED: [(&str, &str); 8] = [
     ("channel", "§7 — an untranslatable operand on a KERNEL channel must refuse, never fault"),
     ("completion", "§8 — a forge is licensed only where no GPU work ran"),
-    ("readtrap", "§5 — the read-trap allowlist, and its phase scoping"),
+    ("trappolicy", "§5 — where a trap may exist at all; reads: nowhere"),
     ("caps", "§9.1 — per-VM twin caps, the only thing stopping one guest starving another"),
     ("wake", "§5.3 — the single wakeup word"),
     ("leaf", "§6.4 — the system-memory bound; a guest leaf may never name OUR memslots"),

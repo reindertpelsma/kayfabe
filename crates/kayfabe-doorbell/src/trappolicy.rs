@@ -57,8 +57,14 @@
 //! constraint on what we may emulate — and it is better as a design boundary than as a read exit
 //! nobody notices until a parity run.
 //!
-//! ⇒ [`crate::readtrap`] is retained **only** as the phase-scoped record of which pages are
-//! *computed* rather than plain — it no longer authorises an exit. See [`may_trap_read`].
+//! ⊘⊘⊘ **w824 — `crate::readtrap` IS GONE, and that is a DELETE, not a refactor.** It held a
+//! 524-page phase-scoped allowlist. The owner's ruling: *"read traps cost code implementation,
+//! and then we get that rot back in v3 while my idea was to get it removed. its useless to
+//! implement trap code for something thats intended to not trap, mapping code is very different
+//! from trapping code."* The evidence it was already settled is THE_CONSTRAINTS.md:28, measured
+//! `[w708-w710, 2026-09-14]` across raw client + cup3 + LLM, all with `TRAP_FILLS=0`:
+//! *"Constraints 1 (no BAR1/BAR2/PRAMIN traps), 2 (BAR0 write-only bar the counter page) ... hold
+//! across all three workloads."* See [`may_trap_read`] and [`ReadSource`].
 
 use crate::vmm::Bar;
 
@@ -118,4 +124,55 @@ pub enum ReadSource {
     /// ⊘ A value that resolves through a latch ⇒ the shadow is **recomputed on the trapped write
     /// that moves the latch**, never read-exited.
     ComputedShadow,
+}
+
+
+/// ★ One MMIO region as the VMM must register it. ⊘ There is no `reads` field: a region that
+/// trapped reads cannot be expressed, which is the point — an absent field cannot be set by
+/// mistake, while a `reads: false` field is one keystroke from a read exit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TrapRegion {
+    pub bar: Bar,
+    pub base: u64,
+    pub len: u64,
+}
+
+/// ★★★ **THE authoritative answer to "what does the VMM trap?"** — QEMU and Cloud Hypervisor both
+/// build their MMIO registrations from exactly this list, so neither can install a region the
+/// design forbids, and neither can install a READ region at all.
+///
+/// ⊘ BAR0 is returned as the two spans *around* PRAMIN rather than as one span with a hole,
+/// because a VMM registers regions, not exclusions — expressing the carve-out as an exclusion
+/// would leave each VMM to re-derive it, and one of them to get it wrong.
+pub fn trap_regions(doorbell: DoorbellPlacement, bar0_bytes: u64) -> Vec<TrapRegion> {
+    let mut v = Vec::new();
+    // BAR0, below PRAMIN.
+    if PRAMIN_BASE > 0 {
+        v.push(TrapRegion { bar: Bar(0), base: 0, len: PRAMIN_BASE.min(bar0_bytes) });
+    }
+    // BAR0, above PRAMIN.
+    let after = PRAMIN_BASE + PRAMIN_LEN;
+    if bar0_bytes > after {
+        v.push(TrapRegion { bar: Bar(0), base: after, len: bar0_bytes - after });
+    }
+    // BAR1: the doorbell page, and nothing else, and only when the doorbell is there at all.
+    if let DoorbellPlacement::Bar1 { page_base } = doorbell {
+        v.push(TrapRegion { bar: Bar(1), base: page_base, len: 0x1_0000 });
+    }
+    // ⊘ BAR2 contributes no region, in any configuration.
+    debug_assert!(v.iter().all(|r| {
+        (r.base..r.base + r.len).step_by(0x1000).all(|o| may_trap_write(r.bar, o, doorbell))
+            && !may_trap_read(r.bar, r.base)
+    }));
+    v
+}
+
+/// Where this family puts the doorbell. ⊘ Per LARGE FAMILY, never per die — §50's level 6.
+pub fn doorbell_for(family: crate::classgen::Family) -> DoorbellPlacement {
+    use crate::classgen::Family::*;
+    match family {
+        // ⊘ §5: "generated per die/arch; Hopper+ maps it over BAR1".
+        Hopper | Blackwell => DoorbellPlacement::Bar1 { page_base: 0x9_0000 },
+        _ => DoorbellPlacement::Bar0 { offset: 0x90 },
+    }
 }

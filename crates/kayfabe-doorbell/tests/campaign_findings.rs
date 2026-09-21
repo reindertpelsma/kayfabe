@@ -85,9 +85,20 @@ fn one_read_trapped_page_cost_a_2_5x_loss_on_llm_decode() {
     // `[measured, the C artifact]` 99% of its 1000-3000 exits per token were READS of a single
     // firmware debug register on a page kept read-trapped as "boot state".
     // ⇒ A page is read-trapped for a PHASE. Contradicted by: BootStateMachine trapping at Runtime.
-    let mut s = readtrap::ReadTrapSet::new();
-    s.add(0x110, readtrap::ReadReason::BootStateMachine);
-    assert_eq!(s.policy(0x110, 0, readtrap::Phase::Runtime), readtrap::ReadPolicy::FromShadow);
+    // ⊘⊘⊘ SUPERSEDED w824 — the finding held, and its conclusion was WEAKER than the truth.
+    // The old pin allowed a read trap to exist so long as it was scoped to a PHASE. The owner's
+    // question ("none of the reads in bar0 had side effects ... so why is it suddenly that read
+    // traps are needed in v3") forced the stronger reading, and it is the one the tree already
+    // recorded: THE_CONSTRAINTS.md:28, measured w708-w710, "BAR0 write-only bar the counter
+    // page", holding across raw client + cup3 + LLM with TRAP_FILLS=0.
+    // ⇒ The pin is now that read-trap machinery DOES NOT EXIST. A phase-scoped read trap cannot
+    // cost 2.5x if there is no read exit to scope.
+    // Contradicted by: `may_trap_read` returning true anywhere, or a read-policy type reappearing.
+    for bar in [0u8, 1, 2] {
+        for off in [0u64, 0x110, 0x1000, trappolicy::PRAMIN_BASE, trappolicy::PRAMIN_BASE + trappolicy::PRAMIN_LEN, 0xFF_F000] {
+            assert!(!trappolicy::may_trap_read(vmm::Bar(bar), off), "read trap at bar{bar}+{off:#x}");
+        }
+    }
 }
 
 #[test]
@@ -402,20 +413,22 @@ fn turing_plus_rm_writes_the_legacy_ptimer_and_reads_the_vf_pair() {
     // (`gpu_suspend.c:236`), after testing PLM 0x9430 bit 4 (`:56`).
     // ⇒ The refusal is on the WRITE arm and the VF pair is never refused.
     // Contradicted by: a read-path refusal (the old shape), or a VF_TIME offset in any refusal set.
-    use readtrap::*;
+    use timer::*;
     assert_eq!((VF_TIME_0, VF_TIME_1), (0x30080, 0x30084));
     assert_eq!(TIMER_GV100.refused_writes, &[0x9400, 0x9410]);
     for t in [TIMER_GV100, TIMER_GH100, TIMER_GB10B] {
         assert!(!t.is_refused_write(VF_TIME_0) && !t.is_refused_write(VF_TIME_1), "{:?}", t.hal);
     }
-    // ⊘ A COMPILE-TIME gate, not a text one: this match is exhaustive only while ReadPolicy has
-    // no read-side refusal variant. (A `contains("RefuseByName")` gate matched the doc comment
-    // that DESCRIBES the old defect -- visibility, not reachability.)
-    let s = ReadTrapSet::new();
-    match s.policy(readtrap::LEGACY_TIMER_PAGE, 0x9400, Phase::Runtime) {
-        ReadPolicy::FromShadow => {}
-        ReadPolicy::Trap(_) => panic!("the legacy timer page is a computed shadow"),
+    // ⊘ A COMPILE-TIME gate, not a text one: the match below is exhaustive only while
+    // `ReadSource` has no trapping variant. (A `contains("RefuseByName")` gate matched the doc
+    // comment that DESCRIBES the old defect -- visibility, not reachability.)
+    // ⊘⊘ w824: the legacy timer page is no longer *a shadow chosen over a trap* -- there is no
+    // trap arm to choose against. The PLM value is recomputed on the trapped WRITE that moves it.
+    match trappolicy::ReadSource::ComputedShadow {
+        trappolicy::ReadSource::Shadow => {}
+        trappolicy::ReadSource::ComputedShadow => {}
     }
+    assert!(!trappolicy::may_trap_read(vmm::Bar(0), 0x9400));
     // And the write side must actually be consulted on the privileged arm -- in code, not prose.
     let trap: String = include_str!("../src/trap.rs")
         .lines().filter(|l| !l.trim_start().starts_with("//")).collect::<Vec<_>>().join("\n");
@@ -424,19 +437,19 @@ fn turing_plus_rm_writes_the_legacy_ptimer_and_reads_the_vf_pair() {
 
 #[test]
 fn the_ptimer_write_is_refused_by_name_and_the_plm_shadow_lets_ogkm_succeed() {
-    // ★ The decision, pinned (see `readtrap::TimerRegs`): drop the write, answer
+    // ★ The decision, pinned (see `timer::TimerRegs`): drop the write, answer
     // WRITE_PROTECTION_LEVEL0 = ENABLE (bit 4, `gv100/dev_timer.h:29-30`) so ogkm takes its `if`
     // branch and returns NV_OK rather than NV_ASSERT(0) + NV_ERR_PRIV_SEC_VIOLATION
     // (`timer_gv100.c:77-81`). An offset is not an option because the VF pair is a read-only
     // memslot over live host time with no exit to add it in.
     // Contradicted by: serving PLM = DISABLE, or accepting the write as Plain.
     let vmm = Vmm::new();
-    let p = Plane::for_family(&vmm, 4, 0x3, classgen::Family::Ampere, readtrap::GA106_BAR0_BYTES);
+    let p = Plane::for_family(&vmm, 4, 0x3, classgen::Family::Ampere, timer::GA106_BAR0_BYTES);
     let priv_ = Class::Privileged { readable: true, semantics: WriteSemantics::Plain };
     assert_eq!(p.trap_write(priv_, 0, 0x9410, 0x1234, 4), Action::RefusedByName);
     assert_eq!(p.trap_write(priv_, 0, 0x9400, 0x5678, 4), Action::RefusedByName);
     assert_eq!(p.ring.occupancy(), 0, "nothing queued for the drainer to apply to the host");
-    assert_eq!(p.timer.plm_shadow(), Some((0x9430, readtrap::PLM_WRITE_PROTECTION_LEVEL0_ENABLE)));
+    assert_eq!(p.timer.plm_shadow(), Some((0x9430, timer::PLM_WRITE_PROTECTION_LEVEL0_ENABLE)));
 }
 
 #[test]
@@ -448,7 +461,7 @@ fn hopper_and_blackwell_set_time_through_the_sci_offset_and_gb10b_writes_nothing
     // the offset in software (`timer_gb10b.c:46-73`) and writes NO register.
     // ⊘ The audit said "Hopper/Blackwell use NV_PGC6_SCI_SEC_TIMER"; the integrated Blackwell
     // parts do not -- found while reading the dispatch, pinned so it is not re-derived.
-    use readtrap::*;
+    use timer::*;
     assert_eq!(timer_regs_for(classgen::Family::Hopper), TIMER_GH100);
     assert_eq!(timer_regs_for(classgen::Family::Blackwell), TIMER_GH100);
     assert_eq!(TIMER_GH100.refused_writes, &[0x118df4, 0x118df8]);
@@ -456,7 +469,7 @@ fn hopper_and_blackwell_set_time_through_the_sci_offset_and_gb10b_writes_nothing
     // The GV100 pair is NOT refused on the GH100 HAL: those offsets are not the timer there.
     assert!(!TIMER_GH100.is_refused_write(0x9400));
     let vmm = Vmm::new();
-    let p = Plane::for_family(&vmm, 4, 0x3, classgen::Family::Hopper, readtrap::GA106_BAR0_BYTES);
+    let p = Plane::for_family(&vmm, 4, 0x3, classgen::Family::Hopper, timer::GA106_BAR0_BYTES);
     let priv_ = Class::Privileged { readable: true, semantics: WriteSemantics::Plain };
     assert_eq!(p.trap_write(priv_, 0, 0x118df4, 1, 4), Action::RefusedByName);
     assert_ne!(p.trap_write(priv_, 0, 0x9400, 1, 4), Action::RefusedByName);
@@ -503,8 +516,12 @@ fn bar0_size_comes_from_card_info_and_the_ga106_value_is_a_named_default() {
         g.len() > AccessMap::MAX_COMPRESSED_580,
         "if this now FITS 580's cap the encoder improved — move the bound, and re-check the 16 MiB size"
     );
-    assert_eq!(readtrap::ReadTrapSet::with_bar0_bytes(64 << 20).bar0_pages(), 16384);
-    assert_eq!(readtrap::GA106_BAR0_BYTES, accessmap::GA106_BAR0_BYTES, "one default, two consumers");
+    assert_eq!(
+        AccessMap::deny_all_for(64 << 20).raw().len(),
+        accessmap::map_bytes_for(64 << 20),
+        "one bit per 32-bit register — the inflated size ogkm demands"
+    );
+    assert_eq!(timer::GA106_BAR0_BYTES, accessmap::GA106_BAR0_BYTES, "one default, two consumers");
 }
 
 // ---- owner ruling w823: where a trap may exist at all ------------------------------------------
@@ -565,4 +582,82 @@ fn no_read_is_ever_trapped_anywhere() {
             assert!(!may_trap_read(Bar(bar), off), "BAR{bar}+{off:#x} must not read-trap");
         }
     }
+}
+
+// ---- w824: the read trap is a DELETE, and the non-GSP half of the argument --------------------
+
+#[test]
+fn the_vmm_registers_write_regions_only_and_pramin_is_not_among_them() {
+    // `[owner w824]` "no read trap everywhere, and write trap allowed in bar0 (not in pramin, but
+    // is allowed only if doorbell is mapped in bar1 and then only that page)".
+    // ⇒ Asserted on the LIST THE VMM ACTUALLY REGISTERS, not on the predicate — a correct
+    // predicate consulted by nobody is the orphan class this suite exists to catch.
+    use trappolicy::{doorbell_for, trap_regions, DoorbellPlacement, PRAMIN_BASE, PRAMIN_LEN};
+    use classgen::Family;
+
+    for f in [Family::Turing, Family::Ampere, Family::Ada, Family::Hopper, Family::Blackwell] {
+        let d = doorbell_for(f);
+        let regions = trap_regions(d, 16 << 20);
+
+        // ⊘ PRAMIN is in NO region, under any family.
+        for r in &regions {
+            let overlaps = r.bar.0 == 0
+                && r.base < PRAMIN_BASE + PRAMIN_LEN
+                && PRAMIN_BASE < r.base + r.len;
+            assert!(!overlaps, "{f:?}: region {r:?} overlaps PRAMIN");
+        }
+        // ⊘ BAR2 is in NO region, under any family.
+        assert!(regions.iter().all(|r| r.bar.0 != 2), "{f:?}: BAR2 registered");
+
+        // ★ BAR1 appears exactly when the doorbell is there, and then only as that one page.
+        let bar1: Vec<_> = regions.iter().filter(|r| r.bar.0 == 1).collect();
+        match d {
+            DoorbellPlacement::Bar0 { .. } => {
+                assert!(bar1.is_empty(), "{f:?}: BAR1 trapped with a BAR0 doorbell");
+            }
+            DoorbellPlacement::Bar1 { page_base } => {
+                assert_eq!(bar1.len(), 1, "{f:?}: BAR1 must contribute exactly one region");
+                assert_eq!((bar1[0].base, bar1[0].len), (page_base, 0x1_0000));
+            }
+        }
+    }
+    // ★ And the BAR0 total is the BAR minus PRAMIN exactly — no silent under- or over-trapping.
+    let r = trap_regions(doorbell_for(Family::Ampere), 16 << 20);
+    let bar0: u64 = r.iter().filter(|r| r.bar.0 == 0).map(|r| r.len).sum();
+    assert_eq!(bar0, (16 << 20) - PRAMIN_LEN, "BAR0 traps everything but PRAMIN");
+}
+
+#[test]
+fn a_write_the_design_forbids_never_reaches_the_classifier() {
+    // ⊘ The structural gate runs ABOVE the three-way classifier. A VMM that registers a region we
+    // never asked for (or a future BAR2 fill path) must be a no-op, not a classifier decision.
+    // Contradicted by: trap_write dispatching on PRAMIN or BAR2.
+    let vmm = Vmm::new();
+    let p = Plane::for_family(&vmm, 4, 0x3, classgen::Family::Ampere, timer::GA106_BAR0_BYTES);
+    let priv_ = Class::Privileged { readable: true, semantics: WriteSemantics::Plain };
+    for (bar, off) in [(0u8, 0x0070_0000u32), (0, 0x0077_FFFC), (2, 0x1000), (1, 0x9_0000)] {
+        assert_eq!(
+            p.trap_write(priv_, bar, off, 0xdead_beef, 4),
+            Action::None,
+            "bar{bar}+{off:#x} is outside the sanctioned set and must be a no-op"
+        );
+    }
+    // ★ KNOWN-POSITIVE, and it took two tries to make it one. The first version used an offset
+    // just past PRAMIN's end and asserted the action was not `None` — but a plain privileged
+    // write to an unremarkable register IS `None`, so that assertion failed against a CORRECT
+    // gate. `Action::None` is overloaded: "structurally refused" and "classified, nothing to do"
+    // are the same value. ⇒ The known-positive must use an offset where the classifier produces a
+    // DISTINGUISHABLE action, and `Action::None` alone can never witness the gate.
+    assert_eq!(
+        p.trap_write(priv_, 0, 0x9400, 0xdead_beef, 4),
+        Action::RefusedByName,
+        "⊘ if this is None too, the gate is refusing everything and the test above proves nothing"
+    );
+    // ★ And the span past PRAMIN is genuinely registered — the gate lets it through, the
+    // classifier simply has nothing to do there.
+    assert!(trappolicy::may_trap_write(
+        vmm::Bar(0),
+        0x0080_0000,
+        trappolicy::doorbell_for(classgen::Family::Ampere)
+    ));
 }

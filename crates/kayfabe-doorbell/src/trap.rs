@@ -30,8 +30,8 @@
 
 use crate::bitmap::RungBitmap;
 use crate::ring::{PrivRing, Push, RegWrite};
-use crate::readtrap::{Phase, ReadPolicy, ReadTrapSet, TimerRegs};
 use crate::shadow::WriteSemantics;
+use crate::timer::TimerRegs;
 use crate::token::{Route, TokenWord};
 use crate::wake::{WakeWord, Wake};
 
@@ -65,7 +65,7 @@ pub enum Action {
     /// ⊘ The privileged ring was full. The device is poisoned; raise a guest-visible fault.
     PoisonDevice,
     /// ⊘ A privileged write REFUSED BY NAME: not queued, not applied to the host, shadow
-    /// untouched. Today that is the time-setting registers ([`crate::readtrap::TimerRegs`]):
+    /// untouched. Today that is the time-setting registers ([`crate::timer::TimerRegs`]):
     /// §5, *"so guest and host cannot drift onto different timebases."* ★ Distinct from `None`
     /// so the caller can count it — this arm is guest-root-only, so a counter here is not an
     /// adversary-controlled metric the way one on the doorbell arm would be.
@@ -82,26 +82,15 @@ pub struct TrapPath<'a> {
     pub drainer_wake: &'a WakeWord,
     pub ring: &'a PrivRing,
     pub token_mask: u32,
-    /// §5's read-trap allowlist. ⊘ On the live read path, not consulted elsewhere.
-    pub read_traps: &'a ReadTrapSet,
-    /// §5: a page is read-trapped for a PHASE, not forever.
-    pub phase: Phase,
     /// The time-setting registers this device's timer HAL writes — refused by name on the
     /// privileged arm. `[fable w824, HIGH 2]`: the refusal used to sit on the READ path.
     pub timer: TimerRegs,
 }
 
 impl TrapPath<'_> {
-    /// ★★★ THE READ PATH. §5: *"Only writes trap. Reads are served from ordinary DRAM the guest
-    /// reads directly, with no exit and no code."* ⚠ *"Not every read, though"* — roughly 524 of
-    /// 4096 BAR0 pages still read-trap, and **this is where that allowlist is consulted**.
-    ///
-    /// ⊘ The phase is an argument because a boot-state page must stop trapping at runtime: one
-    /// such page cost the C artifact a **2.5× loss on LLM decode**.
-    pub fn read(&self, bar0_offset: u32) -> ReadPolicy {
-        let _ = bar0_offset;
-        self.read_traps.policy(bar0_offset >> 12, bar0_offset, self.phase)
-    }
+    // ⊘ There is deliberately NO read path on this type. §5 (superseded w823): no read traps
+    // anywhere. A `read()` here "for the hard cases" is exactly how the old tree reached
+    // 161 422 read exits — the mechanism gets used because it exists.
 
     /// ★ THE WHOLE TRAP. Mirrors §5's pseudocode arm for arm.
     pub fn write(&self, class: Class, bar: u8, off: u32, val: u64, width: u8) -> Action {
@@ -187,7 +176,7 @@ impl TrapPath<'_> {
         // (`timer_gv100.c:71-72`, boot + resume). Never queued, never applied, shadow untouched;
         // the PLM shadow says "level 0 may write" so ogkm's success branch runs and it never
         // asserts. Why not an offset: the guest READS time from a memslot with no exit. See
-        // `readtrap::TimerRegs`.
+        // `timer::TimerRegs`.
         if bar == 0 && self.timer.is_refused_write(off) {
             return Action::RefusedByName;
         }

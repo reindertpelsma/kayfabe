@@ -137,20 +137,22 @@ pub struct Plane<'v> {
     pub drainer_wake: WakeWord,
     pub ring: PrivRing,
     pub token_mask: u32,
-    /// §5's read-trap allowlist, consulted by [`Plane::trap_read`].
-    pub read_traps: crate::readtrap::ReadTrapSet,
-    /// §5: the phase the device is in. Boot-state pages stop trapping when this moves.
-    pub phase: crate::readtrap::Phase,
     /// The time-setting registers of this device's timer HAL, refused by name on the privileged
-    /// write arm (`readtrap::TimerRegs`). Per family, never per die.
-    pub timer: crate::readtrap::TimerRegs,
+    /// write arm (`timer::TimerRegs`). Per family, never per die.
+    pub timer: crate::timer::TimerRegs,
+    /// ★ Where the doorbell is, which is what decides whether BAR1 may trap at all
+    /// (`trappolicy::doorbell_for`). Per family, never per die.
+    pub doorbell: crate::trappolicy::DoorbellPlacement,
+    /// This device's `NV_ESC_CARD_INFO.reg_size`. ⊘ Not the GA106 constant — the region list the
+    /// VMM registers is derived from it, so a wrong value under-traps or over-traps BAR0.
+    pub bar0_bytes: u64,
     /// Which tokens are guest-KERNEL channels (§7's failure-policy selector).
     kernel_tokens: Vec<u32>,
 }
 
 impl<'v> Plane<'v> {
     /// The GA106 bench shape: Ampere timer HAL, 16 MiB BAR0. ⊘ A named default — see
-    /// [`Plane::for_family`] for the general form and `readtrap::GA106_BAR0_BYTES` for where the
+    /// [`Plane::for_family`] for the general form and `timer::GA106_BAR0_BYTES` for where the
     /// real BAR0 size comes from.
     pub fn new(vmm: &'v Vmm, n_tokens: usize, token_mask: u32) -> Plane<'v> {
         Self::for_family(
@@ -158,11 +160,11 @@ impl<'v> Plane<'v> {
             n_tokens,
             token_mask,
             crate::classgen::Family::Ampere,
-            crate::readtrap::GA106_BAR0_BYTES,
+            crate::timer::GA106_BAR0_BYTES,
         )
     }
 
-    /// ★ The general constructor: the family selects the timer HAL (`readtrap::timer_regs_for`),
+    /// ★ The general constructor: the family selects the timer HAL (`timer::timer_regs_for`),
     /// and `bar0_bytes` is `NV_ESC_CARD_INFO.reg_size` for this device.
     pub fn for_family(
         vmm: &'v Vmm,
@@ -178,9 +180,9 @@ impl<'v> Plane<'v> {
             drainer_wake: WakeWord::new(),
             ring: PrivRing::new(),
             token_mask,
-            read_traps: crate::readtrap::ReadTrapSet::with_bar0_bytes(bar0_bytes),
-            phase: crate::readtrap::Phase::Boot,
-            timer: crate::readtrap::timer_regs_for(family),
+            timer: crate::timer::timer_regs_for(family),
+            doorbell: crate::trappolicy::doorbell_for(family),
+            bar0_bytes: bar0_bytes as u64,
             kernel_tokens: Vec::new(),
         }
     }
@@ -259,8 +261,6 @@ impl<'v> Plane<'v> {
             drainer_wake: &self.drainer_wake,
             ring: &self.ring,
             token_mask: self.token_mask,
-            read_traps: &self.read_traps,
-            phase: self.phase,
             timer: self.timer,
         }
     }
@@ -306,21 +306,28 @@ impl<'v> Plane<'v> {
         Ok(())
     }
 
-    /// ★ The vCPU READ path — §5's allowlist, live.
-    #[inline]
-    pub fn trap_read(&self, bar0_offset: u32) -> crate::readtrap::ReadPolicy {
-        self.path().read(bar0_offset)
-    }
 
-    /// ⊘ §5: *"A page is read-trapped for a phase, not forever."* Boot completing is what drops
-    /// the boot-state pages out of the set, and it is the 2.5× on LLM decode.
-    pub fn boot_complete(&mut self) {
-        self.phase = crate::readtrap::Phase::Runtime;
+
+    /// ★★★ **What the VMM registers as trapped** — the whole answer, in one place.
+    ///
+    /// ⊘ There is no companion `read_regions()`. `trappolicy::may_trap_read` is `false` for every
+    /// `(bar, offset)` and [`trappolicy::TrapRegion`] has no read field, so "no read exits" is a
+    /// property of the type, not of a caller remembering not to ask.
+    pub fn trap_regions(&self) -> Vec<crate::trappolicy::TrapRegion> {
+        crate::trappolicy::trap_regions(self.doorbell, self.bar0_bytes)
     }
 
     /// ★ THE ONLY vCPU WRITE ENTRY POINT.
+    ///
+    /// ⊘ The structural gate runs **above** the three-way classifier: a classifier bug cannot act
+    /// on a write the design forbids, because such a write never reaches the classifier. In a
+    /// correct VMM this is unreachable — [`Plane::trap_regions`] never registered that address —
+    /// so reaching it means the VMM registered a region we did not ask for.
     #[inline]
     pub fn trap_write(&self, class: Class, bar: u8, off: u32, val: u64, width: u8) -> Action {
+        if !crate::trappolicy::may_trap_write(crate::vmm::Bar(bar), off as u64, self.doorbell) {
+            return Action::None;
+        }
         self.path().write(class, bar, off, val, width)
     }
 

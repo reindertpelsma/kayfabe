@@ -619,7 +619,6 @@ struct Fixture {
     wworker: WakeWord,
     wdrainer: WakeWord,
     ring: PrivRing,
-    read_traps: readtrap::ReadTrapSet,
 }
 impl Fixture {
     fn new(n: usize) -> Fixture {
@@ -629,7 +628,6 @@ impl Fixture {
             wworker: WakeWord::new(),
             wdrainer: WakeWord::new(),
             ring: PrivRing::new(),
-            read_traps: readtrap::ReadTrapSet::new(),
         }
     }
     fn path(&self) -> TrapPath<'_> {
@@ -640,9 +638,7 @@ impl Fixture {
             drainer_wake: &self.wdrainer,
             ring: &self.ring,
             token_mask: 0x1f,
-            read_traps: &self.read_traps,
-            phase: readtrap::Phase::Boot,
-            timer: readtrap::TIMER_GV100,
+            timer: timer::TIMER_GV100,
         }
     }
 }
@@ -1124,52 +1120,6 @@ fn the_model_check_clears_the_retrying_claim() {
 // ---- §5 the read-trap allowlist ---------------------------------------------------------------
 
 #[test]
-fn a_boot_state_page_stops_read_trapping_at_runtime() {
-    // ⊘⊘⊘ §5's measured parity disaster, as a test: "99% of its 1000-3000 exits per token were
-    // READS of a single firmware debug register on a page this design keeps read-trapped as 'boot
-    // state'. That one page cost a 2.5x LOSS ON LLM DECODE."
-    let mut s = ReadTrapSet::new();
-    const FW_DEBUG_PAGE: u32 = 0x110;
-    s.add(FW_DEBUG_PAGE, ReadReason::BootStateMachine);
-    assert_eq!(
-        s.policy(FW_DEBUG_PAGE, 0x110000, Phase::Boot),
-        ReadPolicy::Trap(ReadReason::BootStateMachine)
-    );
-    assert_eq!(
-        s.policy(FW_DEBUG_PAGE, 0x110000, Phase::Runtime),
-        ReadPolicy::FromShadow,
-        "⊘ a boot-state page MUST stop trapping at runtime — this arm is the 2.5x"
-    );
-}
-
-#[test]
-fn a_latch_backed_page_traps_in_every_phase() {
-    // ⊘ The framebuffer window "resolves through a latch": the value the guest must see does not
-    // exist in DRAM to be read, so no phase can drop it.
-    let mut s = ReadTrapSet::new();
-    const FB_WINDOW_PAGE: u32 = 0x700;
-    s.add(FB_WINDOW_PAGE, ReadReason::ResolvesThroughLatch);
-    for phase in [Phase::Boot, Phase::Runtime] {
-        assert_eq!(
-            s.policy(FB_WINDOW_PAGE, 0, phase),
-            ReadPolicy::Trap(ReadReason::ResolvesThroughLatch),
-            "a latch cannot be served from a shadow in {phase:?}"
-        );
-    }
-}
-
-#[test]
-fn an_unlisted_page_never_traps_which_is_the_default_that_matters() {
-    // ★ §5: reads are served from ordinary DRAM "with no exit and no code -- because a vCPU inside
-    // an MMIO exit is not preemptible, and driver init polls some registers thousands of times."
-    let s = ReadTrapSet::new();
-    for page in [0u32, 1, 42, 0x500, readtrap::BAR0_PAGES - 1] {
-        assert_eq!(s.policy(page, page * 4096, Phase::Boot), ReadPolicy::FromShadow);
-        assert_eq!(s.policy(page, page * 4096, Phase::Runtime), ReadPolicy::FromShadow);
-    }
-}
-
-#[test]
 fn the_timer_pages_settable_registers_are_refused_by_name_on_the_write_path() {
     // ⊘ §5: "the two time-register writes refused by name, so guest and host cannot drift onto
     // different timebases." A refusal, not a trap: letting the guest SET time makes every later
@@ -1194,19 +1144,17 @@ fn the_timer_pages_settable_registers_are_refused_by_name_on_the_write_path() {
         );
     }
     assert_eq!(f.ring.occupancy(), 0, "a refused write never enters the privileged ring");
-    // ★ And the READ of the legacy timer page is served, not refused -- it is a computed shadow.
-    let s = ReadTrapSet::new();
-    for off in [0x9000u32, 0x9400, 0x9410, 0x9430] {
-        assert_eq!(
-            s.policy(readtrap::LEGACY_TIMER_PAGE, off, Phase::Runtime),
-            ReadPolicy::FromShadow,
-            "the legacy timer page is a computed shadow, not a read-trap and not a refusal"
-        );
+    // ★ And the READ of the legacy timer page is SERVED FROM MEMORY -- not refused, and not
+    // trapped. `[w824]` The PLM answer (0x9430 bit 4) is recomputed on the trapped WRITE that
+    // moves it, so no read ever leaves the guest.
+    for off in [0x9000u64, 0x9400, 0x9410, 0x9430] {
+        assert!(!trappolicy::may_trap_read(vmm::Bar(0), off));
     }
-    // ★ The registers RM actually reads time from are not refused on any path.
-    for off in [readtrap::VF_TIME_0, readtrap::VF_TIME_1] {
+    // ★ The registers RM actually reads time from are not refused on any path, and the VF pair is
+    // a read-only passthrough memslot over live host time -- there is no exit there to refuse in.
+    for off in [timer::VF_TIME_0, timer::VF_TIME_1] {
         assert!(!p.timer.is_refused_write(off));
-        assert_eq!(s.policy(off >> 12, off, Phase::Runtime), ReadPolicy::FromShadow);
+        assert!(!trappolicy::may_trap_read(vmm::Bar(0), off as u64));
     }
 }
 
@@ -1228,7 +1176,7 @@ fn a_refused_time_write_touches_nothing_a_neighbour_write_still_queues() {
 
 #[test]
 fn the_timer_hal_is_per_family_and_only_gv100_has_a_priv_level_mask() {
-    use readtrap::*;
+    use timer::*;
     use classgen::Family;
     assert_eq!(timer_regs_for(Family::Turing), TIMER_GV100);
     assert_eq!(timer_regs_for(Family::Ampere), TIMER_GV100);
@@ -1247,10 +1195,10 @@ fn the_timer_hal_is_per_family_and_only_gv100_has_a_priv_level_mask() {
 fn bar0_size_is_a_parameter_and_the_ga106_value_is_only_a_named_default() {
     // `[fable w824, LOW 5]` 16 MiB was hard-coded in two files. The level-1 source is
     // NV_ESC_CARD_INFO.reg_size; until that binding exists the constructor takes the value.
-    let s = ReadTrapSet::with_bar0_bytes(32 << 20);
-    assert_eq!(s.bar0_pages(), 8192);
-    assert_eq!(ReadTrapSet::new().bar0_pages(), readtrap::GA106_BAR0_PAGES);
     let m = accessmap::AccessMap::deny_all_for(32 << 20);
+    assert_eq!(m.raw().len(), accessmap::map_bytes_for(32 << 20), "one bit per 32-bit register");
+    assert_eq!(accessmap::AccessMap::deny_all().raw().len(), accessmap::MAP_BYTES);
+    assert_eq!(timer::GA106_BAR0_PAGES, 4096, "the BAR is still 4096 pages of 4 KiB");
     assert_eq!(m.raw().len(), accessmap::map_bytes_for(32 << 20));
     assert_eq!(m.raw().len(), 2 * accessmap::MAP_BYTES, "twice the BAR ⇒ twice the map");
     assert_eq!(m.bar0_bytes(), 32 << 20);
@@ -1261,35 +1209,6 @@ fn bar0_size_is_a_parameter_and_the_ga106_value_is_only_a_named_default() {
     let mut g = accessmap::AccessMap::deny_all();
     g.allow_range(17 << 20, 4096);
     assert!(!g.is_allowed(17 << 20), "…and outside a 16 MiB one");
-}
-
-#[test]
-#[should_panic(expected = "outside BAR0")]
-fn a_read_trap_page_outside_the_bar_is_a_loud_configuration_error() {
-    // ⊘ Put the check where the bound lives: the set knows its BAR; an entry naming a page the
-    // BAR does not have must not become a silently-ignored line.
-    let mut s = ReadTrapSet::with_bar0_bytes(16 << 20);
-    s.add(4096, ReadReason::BootStateMachine);
-}
-
-#[test]
-fn the_read_trap_set_shrinks_between_boot_and_runtime() {
-    // ⚠ §5 puts a number on it: "roughly 524 of 4096". The property under test is not the exact
-    // count -- it is that the set is SMALLER at runtime, because a set that only ever grows has
-    // given up the "only writes trap" property the design rests on.
-    let mut s = ReadTrapSet::new();
-    for p in 0..500u32 {
-        s.add(0x100 + p, ReadReason::BootStateMachine);
-    }
-    for p in 0..24u32 {
-        s.add(0x700 + p, ReadReason::ResolvesThroughLatch);
-    }
-    assert_eq!(s.trapped_at(Phase::Boot), 524, "§5's figure");
-    assert_eq!(s.trapped_at(Phase::Runtime), 24, "only the latch-backed pages survive");
-    assert!(
-        s.trapped_at(Phase::Runtime) < s.trapped_at(Phase::Boot),
-        "the set MUST shrink; a permanently-growing read-trap set is the 2.5x defect"
-    );
 }
 
 // ---- the swref descriptor parser ---------------------------------------------------------------
@@ -1729,17 +1648,6 @@ fn teardown_runs_the_whole_ordered_sequence_on_the_live_path() {
     p.teardown(&host, &mut w).unwrap();
     assert_eq!(*host.teardown.lock().unwrap(), lifetime::ORDER.to_vec(), "in §9's order");
     assert_eq!(w.diff(9), lifetime::Diff::Changed(9), "the second instance must map");
-}
-
-#[test]
-fn boot_completing_drops_the_boot_read_traps_on_the_live_path() {
-    // §5 wired: the phase is the Plane's, and boot_complete() is what makes the 2.5x real.
-    let vmm = plane::Vmm::new();
-    let mut p = Plane::new(&vmm, 32, 0x1f);
-    p.read_traps.add(0x110, readtrap::ReadReason::BootStateMachine);
-    assert_eq!(p.trap_read(0x110_000), readtrap::ReadPolicy::Trap(readtrap::ReadReason::BootStateMachine));
-    p.boot_complete();
-    assert_eq!(p.trap_read(0x110_000), readtrap::ReadPolicy::FromShadow, "⊘ the 2.5x arm");
 }
 
 // ---- host verbs: authored, never forwarded; and the pointer discipline ------------------------
