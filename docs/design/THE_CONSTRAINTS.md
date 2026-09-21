@@ -3612,6 +3612,8 @@ costs us nothing: **every write traps anyway** under disposition B *and* D, so w
 and advance **our own** cursor in lockstep. ⇒ A falcon PIO port used **write-only** (firmware load
 into IMEM/DMEM is the common case) is plain **B** and needs no hole.
 
+★ The full per-page, per-family table lives in `THE_BAR0_DISPOSITION_MAP.md`.
+
 ★ So the criterion for disposition D is narrower than "the register has an AINCR field": it is
 **"the driver READS this data port"**. `NV_PFSP_EMEMD` qualifies because `_kfspReadPacket_GH100`
 reads it *and* then asserts the offset advanced; `NV_PFALCON_FALCON_IMEMD` on the GSP path does
