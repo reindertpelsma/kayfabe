@@ -76,13 +76,30 @@ impl Route {
 
 // ---- the layout -----------------------------------------------------------------------------
 //
-// ⚠ §5.1 sizes the token from **what the register can express, not what is legal**: 12 bits of
-// channel + 7 of runlist on Ampere, plus a doorbell-type bit on Blackwell ⇒ 19–21 bits. We carry
-// 21 and mask.
+// ⊘⊘⊘ **21 BITS WAS WRONG ON EVERY ARCHITECTURE, AND MY OWN "FINDINGS" TEST PINNED IT.**
+//
+// `[fable w823, CRITICAL]` the fields are **not** 12+7 contiguous. From ogkm's swref:
+//   * `NV_CTRL_VF_DOORBELL_VECTOR      11:0`   (`ampere/ga100/dev_ctrl.h:26`)
+//   * `NV_CTRL_VF_DOORBELL_RUNLIST_ID  22:16`  (`:27`) ⇒ a **23-bit span**, with a gap at 15:12
+//   * GB202: `RUNLIST_DOORBELL 30:30`, set **unconditionally** by the token generator
+//     (`kernel_fifo_gb202.c:71-74`, `blackwell/gb202/dev_vm.h:30-32`)
+//   * GB100: `RUNLIST_DOORBELL 22:22` and `GSP_DOORBELL 31:31` (`blackwell/gb100/dev_vm.h:624`)
+//
+// ⇒ A 21-bit mask silently drops **bit 30 on every GB202 doorbell**, bits 22 and 31 on GB100, and
+// the top of `RUNLIST_ID` for any runlist ≥ 32 (Hopper has many). The host doorbell is then rung
+// with `RUNLIST_DOORBELL_DISABLE` — a write that goes to hardware and does the wrong thing.
+//
+// ★★★ **And the host token is not ours to decode at all.** It arrives whole from
+// `NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN` (§50 level 1 — an unprivileged host ioctl, which
+// outranks any ogkm derivation). ⇒ **Store all 32 bits and never interpret them.** Masking a value
+// we did not construct is how a per-die encoding becomes a silent corruption.
+//
+// ⚠ The guest-side *table index* is a different quantity and stays bounded — see `INDEX_BITS`.
 const STATE_BITS: u32 = 3;
 const ROUTE_BITS: u32 = 2;
-pub const HOST_TOKEN_BITS: u32 = 21;
-const SEQ_BITS: u32 = 64 - STATE_BITS - ROUTE_BITS - HOST_TOKEN_BITS; // 38
+/// ⊘ The opaque host token, stored whole. **Never masked, never decoded.**
+pub const HOST_TOKEN_BITS: u32 = 32;
+const SEQ_BITS: u32 = 64 - STATE_BITS - ROUTE_BITS - HOST_TOKEN_BITS; // 27
 
 const STATE_SHIFT: u32 = 0;
 const ROUTE_SHIFT: u32 = STATE_SHIFT + STATE_BITS;

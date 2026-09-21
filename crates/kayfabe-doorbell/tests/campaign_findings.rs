@@ -24,9 +24,24 @@ fn blackwell_doorbell_encoding_differs_per_die_group() {
     // (`kernel_fifo_gb202.c:73` vs `kernel_fifo_gb100.c:114`).
     // ⇒ The token field is MASKED, never validated, so an encoding difference cannot become a
     // refusal. Contradicted by: any validation added to the doorbell arm.
-    let masked = (0xFFFF_FFFFu64 as u32) & ((1 << token::HOST_TOKEN_BITS) - 1);
-    assert_eq!(masked, (1 << token::HOST_TOKEN_BITS) - 1, "masking must not refuse a token");
-    assert_eq!(token::HOST_TOKEN_BITS, 21, "19-21 bits is what the register can EXPRESS (§5.1)");
+    // ⊘⊘⊘ THIS TEST USED TO PIN THE DEFECT. It asserted `HOST_TOKEN_BITS == 21`, which
+    // *locked in* a mask that drops GB202's bit 30 on every doorbell. A findings file that
+    // freezes a bug is worse than no findings file — it converts a defect into a requirement.
+    //
+    // ⇒ The host token is opaque and stored WHOLE: it comes from
+    // `NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN`, a §50 level-1 unprivileged host ioctl, and
+    // we never decode it.
+    assert_eq!(token::HOST_TOKEN_BITS, 32, "the host token is opaque — store it whole");
+    let round_trip = Token {
+        state: State::Idle, route: Route::Passthrough,
+        host_token: 0x4000_0DEF, // GB202: RUNLIST_DOORBELL (bit 30) set
+        applied_seq: 0,
+    };
+    assert_eq!(
+        Token::decode(round_trip.encode()).host_token,
+        0x4000_0DEF,
+        "⊘ bit 30 must survive — dropping it rings the host doorbell with RUNLIST_DOORBELL_DISABLE"
+    );
 }
 
 #[test]
@@ -264,4 +279,48 @@ fn our_bit_order_matches_the_guests_nvbitfieldtest() {
     assert!(!m.is_allowed(0xFFC));
     // register index 0x1000/4 = 1024 ⇒ byte 128, bit 0
     assert_eq!(m.raw()[128], 0x01, "bit order: LSB-first within the byte");
+}
+
+
+#[test]
+fn the_access_map_stream_is_gzip_and_fits_both_drivers_caps() {
+    // ⊘⊘⊘ `[fable w823, CRITICAL]` the first version emitted ZLIB and I verified it with Python's
+    // `zlib.decompress` — which accepts zlib. **The consumer does not.** ogkm skips a 10-byte
+    // GZIP header and RAW-inflates (`gpu_register_access_map.c:362-364`), under
+    // `NV_ASSERT_OK_OR_RETURN` (`gpu.c:2183`) ⇒ a wrong container **aborts GPU init on every
+    // guest, on every die**. Testing against a different decoder than the consumer uses is worth
+    // less than no test.
+    use accessmap::AccessMap;
+    let mut m = AccessMap::deny_all();
+    m.allow_range(0x810000, 0x10000);
+    let g = m.to_gzip_deflate();
+
+    // The container ogkm expects, byte for byte.
+    assert_eq!(&g[..3], &[0x1f, 0x8b, 0x08], "gzip magic + CM=deflate");
+    assert!(g.len() > 10, "ogkm does `pComprData += 10` — the header must be exactly 10 bytes");
+    assert_eq!(g[3], 0x00, "no FLG bits: FNAME/FEXTRA would make the header longer than 10");
+
+    // ⊘ And it must FIT. The reply struct caps the payload, and the first version was 128x over:
+    // 524 339 bytes of stored blocks against a 4 096-byte cap on 580.
+    assert!(
+        g.len() <= AccessMap::MAX_COMPRESSED_580,
+        "{} bytes exceeds 580's {}-byte cap — the reply cannot carry it",
+        g.len(),
+        AccessMap::MAX_COMPRESSED_580
+    );
+    assert!(g.len() <= AccessMap::MAX_COMPRESSED_610);
+}
+
+#[test]
+fn the_deflate_stream_round_trips_through_a_raw_inflater() {
+    // ★ Decoded the way ogkm decodes it: skip 10, raw-inflate, and the result must be EXACTLY
+    // `userRegisterAccessMapSize` bytes or ogkm returns NV_ERR_INFLATE_COMPRESSED_DATA_FAILED.
+    // ⚠ This test cannot run a real inflater in-crate (no dependencies), so it asserts the
+    // structural preconditions and the size contract; `examples/zlib_emit.rs` + the shell check
+    // does the end-to-end decode. ⊘ Stated rather than implied: this is a PARTIAL check.
+    use accessmap::{AccessMap, MAP_BYTES};
+    let m = AccessMap::deny_all();
+    let g = m.to_gzip_deflate();
+    assert_eq!(m.raw().len(), MAP_BYTES, "the inflated size is the contract");
+    assert!(g.len() < MAP_BYTES / 8, "a near-uniform map must compress hard, not merely store");
 }

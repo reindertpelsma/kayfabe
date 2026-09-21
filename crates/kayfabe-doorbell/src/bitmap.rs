@@ -11,7 +11,15 @@ use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
 /// 2²¹ tokens ⇒ 2²¹ bits = 256 KiB of bits... §5.1 quotes 64 KiB for the *expressible* range in
 /// the common (Ampere, 19-bit) case. We size from the constant so the two cannot drift.
-pub const TOKEN_BITS: u32 = crate::token::HOST_TOKEN_BITS;
+/// ⊘⊘ **This is a TABLE INDEX, not the host token.** `[fable w823]` they were the same constant,
+/// so widening the host token to 32 bits would have allocated a 4-billion-entry bitmap, and
+/// narrowing the index would have silently aliased guest tokens.
+///
+/// ★ The index is bounded by what the guest's doorbell register can *address*:
+/// `VECTOR 11:0` + `RUNLIST_ID 22:16` ⇒ 12 + 7 = **19 bits** of addressable channel on Ampere,
+/// and the per-die doorbell-type bits (GB202 bit 30, GB100 bits 22/31) are **not** part of the
+/// index — they are flags on the value, which is exactly why the two must not share a constant.
+pub const TOKEN_BITS: u32 = 19;
 pub const N_TOKENS: usize = 1 << TOKEN_BITS;
 pub const N_WORDS: usize = N_TOKENS / 64;
 pub const N_SUMMARY: usize = N_WORDS / 64;
