@@ -935,7 +935,8 @@ fn the_drainer_applies_registers_in_global_order_across_vcpus() {
     // an RM lock and releases it; another thread on another vCPU takes the lock and writes
     // TRIGGER. On hardware the first trap returned before the lock released."
     use std::sync::Arc;
-    let p = Arc::new(Plane::new(64, 0x3f));
+    let vmm = Box::leak(Box::new(plane::Vmm::new()));
+    let p = Arc::new(Plane::new(vmm, 64, 0x3f));
     let host = Arc::new(RecordingHost::default());
     let cls = Class::Privileged { readable: true, semantics: WriteSemantics::Plain };
 
@@ -972,7 +973,8 @@ fn every_ring_is_served_exactly_once_end_to_end() {
     // is served twice. This is the whole plane running as §3 describes it.
     use std::sync::atomic::Ordering as O;
     use std::sync::Arc;
-    let p = Arc::new(Plane::new(256, 0xff));
+    let vmm = Box::leak(Box::new(plane::Vmm::new()));
+    let p = Arc::new(Plane::new(vmm, 256, 0xff));
     let host = Arc::new(RecordingHost::default());
     for (i, w) in p.tokens.iter().enumerate().take(64) {
         assert!(w.allocate(Route::Translated, i as u32));
@@ -995,13 +997,13 @@ fn every_ring_is_served_exactly_once_end_to_end() {
         ws.push(std::thread::spawn(move || {
             let mut scratch = Vec::new();
             loop {
-                let seen = p.worker_wake.seen();
+                let seen = p.worker_wake().seen();
                 if p.worker_pass(&*host, &mut scratch, 64) == 0 {
                     if stop.load(O::Acquire) && p.worker_pass(&*host, &mut scratch, 64) == 0 {
                         return;
                     }
-                    if p.worker_wake.try_park(seen) {
-                        p.worker_wake.unpark();
+                    if p.worker_wake().try_park(seen) {
+                        p.worker_wake().unpark();
                     }
                     std::thread::yield_now();
                 }
@@ -1036,7 +1038,8 @@ fn every_ring_is_served_exactly_once_end_to_end() {
 fn a_passthrough_token_is_never_served_by_a_worker() {
     // ⊘ Passthrough is rung INLINE on the vCPU (§5, §7: "may run on the vCPU"). If a worker ever
     // serves one, the classifier and the token word have disagreed.
-    let p = Plane::new(16, 0xf);
+    let vmm = plane::Vmm::new();
+    let p = Plane::new(&vmm, 16, 0xf);
     let host = RecordingHost::default();
     p.tokens[2].allocate(Route::Passthrough, 0x22);
     assert_eq!(
@@ -1362,4 +1365,136 @@ fn skipping_the_walker_reset_reproduces_the_second_boot_bug() {
         lifetime::Diff::Unchanged,
         "this is the defect: a surviving snapshot makes the next instance map nothing"
     );
+}
+
+// ---- §9.3 what is per GPU and what is per VMM -------------------------------------------------
+
+#[test]
+fn one_wakeup_word_serves_every_gpu() {
+    // ⊘⊘⊘ §9.3: "ONE wakeup word and one eventfd -- a worker registers on exactly one word, and
+    // N WORDS WOULD NEED N ATOMICS AND REOPEN THE LOST-WAKEUP PROOF."
+    //
+    // ★ This is the test that would have caught the original composition, where `Plane` owned its
+    // own `worker_wake`: with one Plane per GPU, a worker parked for GPU 0 never learns about
+    // GPU 1's work. ⚠ Each word is individually correct -- the bug needs a SECOND GPU to appear,
+    // so no single-GPU test could find it.
+    let vmm = plane::Vmm::new();
+    let gpu0 = Plane::new(&vmm, 32, 0x1f);
+    let gpu1 = Plane::new(&vmm, 32, 0x1f);
+    gpu0.tokens[1].allocate(Route::Translated, 0x11);
+    gpu1.tokens[2].allocate(Route::Translated, 0x22);
+
+    // A worker parks. It registers on THE word, not on a per-GPU one.
+    let seen = vmm.worker_wake.seen();
+    assert!(vmm.worker_wake.try_park(seen));
+
+    // Work arrives on the OTHER GPU.
+    assert_eq!(
+        gpu1.trap_write(Class::Doorbell, 0, 0, 2, 4),
+        Action::WakeWorker,
+        "a doorbell on GPU 1 must wake the worker parked through the VMM"
+    );
+    vmm.worker_wake.unpark();
+
+    // And on the first, equally.
+    let seen = vmm.worker_wake.seen();
+    assert!(vmm.worker_wake.try_park(seen));
+    assert_eq!(gpu0.trap_write(Class::Doorbell, 0, 0, 1, 4), Action::WakeWorker);
+}
+
+#[test]
+fn each_gpu_has_its_own_ring_because_ordering_is_per_pci_function() {
+    // §9.3's left column: "the ring and its drainer -- ordering is per PCI function". A shared
+    // ring would impose an order ACROSS devices that the hardware does not have, and would make
+    // one GPU's full ring poison another's device.
+    let vmm = plane::Vmm::new();
+    let gpu0 = Plane::new(&vmm, 32, 0x1f);
+    let gpu1 = Plane::new(&vmm, 32, 0x1f);
+    let cls = Class::Privileged { readable: true, semantics: WriteSemantics::Plain };
+    for i in 0..ring::CAPACITY {
+        gpu0.trap_write(cls, 0, i as u32, 0, 4);
+    }
+    assert_eq!(gpu0.trap_write(cls, 0, 0xffff, 0, 4), Action::PoisonDevice);
+    assert!(gpu0.ring.is_poisoned());
+    assert!(!gpu1.ring.is_poisoned(), "⊘ one GPU's full ring must NOT poison another device");
+    assert_eq!(gpu1.occupancy_for_test(), 0);
+}
+
+#[test]
+fn token_spaces_overlap_across_gpus_and_that_is_fine() {
+    // §9.3: "token words and rung bitmap (token spaces overlap across GPUs)". The same token
+    // number on two GPUs is two different channels, and must not alias.
+    let vmm = plane::Vmm::new();
+    let gpu0 = Plane::new(&vmm, 32, 0x1f);
+    let gpu1 = Plane::new(&vmm, 32, 0x1f);
+    gpu0.tokens[5].allocate(Route::Passthrough, 0xAAA);
+    gpu1.tokens[5].allocate(Route::Passthrough, 0xBBB);
+    assert_eq!(
+        gpu0.trap_write(Class::Doorbell, 0, 0, 5, 4),
+        Action::RingHostInline { host_token: 0xAAA }
+    );
+    assert_eq!(
+        gpu1.trap_write(Class::Doorbell, 0, 0, 5, 4),
+        Action::RingHostInline { host_token: 0xBBB },
+        "the same guest token on another GPU is a DIFFERENT host channel"
+    );
+}
+
+// ---- §9.1 per-VM caps --------------------------------------------------------------------------
+
+#[test]
+fn a_guest_cannot_starve_its_neighbours_by_allocating_twins() {
+    // §9.1: "The host driver enforces NO per-client quota. On a host with more than one VM, one
+    // guest can STARVE THE OTHERS by allocating twins."
+    let mut vm = VmCaps::from_declared(4, 8, 2, 16);
+    for _ in 0..4 {
+        assert_eq!(vm.acquire(Twin::Channel), Ok(()));
+    }
+    assert_eq!(
+        vm.acquire(Twin::Channel),
+        Err(Refusal::OverDeclaredCap { twin: Twin::Channel, cap: 4, asked: 5 }),
+        "past the cap must be refused BY NAME, carrying the cap and the ask"
+    );
+    assert_eq!(vm.refused(Twin::Channel), 1, "and counted — a zero here must be evidence");
+    // ⊘ Refusing one class must not disturb another.
+    assert_eq!(vm.acquire(Twin::AddressSpace), Ok(()));
+    vm.release(Twin::Channel);
+    assert_eq!(vm.acquire(Twin::Channel), Ok(()), "a freed twin returns capacity");
+}
+
+#[test]
+fn the_cap_is_what_we_already_told_the_guest() {
+    // ★★★ §9.1: "We already told the guest how many channels it may have, so THAT NUMBER is the
+    // cap." ⇒ Enforcing it is not a policy choice; a guest past it has ignored what we told it.
+    // ⊘ Inventing a different number would be a policy, wrong in one direction or the other for
+    // every workload.
+    const DECLARED_CHANNELS: u32 = 2048; // the figure handed out in GET_GSP_STATIC_INFO
+    let mut vm = VmCaps::from_declared(DECLARED_CHANNELS, 0, 0, 0);
+    for _ in 0..DECLARED_CHANNELS {
+        vm.acquire(Twin::Channel).unwrap();
+    }
+    match vm.acquire(Twin::Channel) {
+        Err(Refusal::OverDeclaredCap { cap, .. }) => {
+            assert_eq!(cap, DECLARED_CHANNELS, "the refusal must cite the DECLARED number");
+        }
+        Ok(()) => panic!("the declared cap was not enforced"),
+    }
+}
+
+#[test]
+fn an_unbackable_aperture_page_is_refused_not_holed() {
+    // ⊘⊘ §9.1: "make an unbackable page a NAMED REFUSAL rather than a silent hole — the guest
+    // reading an unbacked hole is A WRONG ANSWER, NOT AN ERROR." A hole returns plausible bytes
+    // and the guest proceeds on them.
+    let mut a = Aperture::size_from_free(256 << 20, 128 << 20);
+    assert_eq!(a.len(), 128 << 20, "sized from what is actually FREE, not from the request");
+    assert_eq!(a.back(0, 4096), Backing::Backed { host_offset: 0 });
+    assert_eq!(
+        a.back((128 << 20) - 2048, 4096),
+        Backing::RefusedUnbackable,
+        "a page running past the backed length must be refused, never holed"
+    );
+    assert_eq!(a.refusals(), 1);
+    // Overflow must not wrap into a legal-looking range.
+    assert_eq!(a.back(u64::MAX, 4096), Backing::RefusedUnbackable);
 }

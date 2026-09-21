@@ -26,6 +26,7 @@
 //! orderings are argued from the spec, not measured.
 
 pub mod bitmap;
+pub mod caps;
 pub mod channel;
 pub mod leaf;
 pub mod lifetime;
@@ -41,10 +42,11 @@ pub mod trap;
 pub mod wake;
 
 pub use bitmap::RungBitmap;
+pub use caps::{Aperture, Backing, Refusal, Twin, VmCaps};
 pub use channel::{size_is_total, Birth, Decoded, Disposition, Owner, Submission};
 pub use leaf::{GuestRamBlock, GuestRamLayout, HostSlice, LeafRefusal};
 pub use lifetime::{Step, Teardown, TeardownError, WalkerState};
-pub use plane::{HostOps, Plane};
+pub use plane::{HostOps, Plane, Vmm};
 pub use readtrap::{Phase, ReadPolicy, ReadReason, ReadTrapSet};
 pub use ring::{PrivRing, Push, RegWrite};
 pub use completion::{Completion, EngineIrq, Raise};

@@ -47,33 +47,73 @@ pub trait HostOps: Send + Sync {
     fn apply_register(&self, bar: u8, offset: u32, value: u64, width: u8);
 }
 
-/// Everything the trap path and the workers share.
-pub struct Plane {
+/// ★★★ **PER-VMM state.** §9.3 is explicit that this is not per GPU:
+///
+/// > *"the **worker pool**; ★ **one** wakeup word and one eventfd — a worker registers on exactly
+/// > one word, and **N words would need N atomics and reopen the lost-wakeup proof**; **one** VA
+/// > manager … the object graph, since client handles are one namespace"*
+///
+/// ⊘⊘ **This type exists because the first composition got it wrong.** `Plane` originally held
+/// `worker_wake` itself, so one `Plane` per GPU meant **N wakeup words** — which is exactly the
+/// shape §9.3 refuses, and it would have reopened the lost-wakeup proof silently: each word is
+/// individually correct, and a worker parked on GPU 0's word simply never learns about GPU 1's
+/// work. ⚠ A bug that needs a second GPU to appear would not have shown up in any test here.
+pub struct Vmm {
+    /// One word, one eventfd, for every GPU.
+    pub worker_wake: WakeWord,
+}
+
+impl Default for Vmm {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Vmm {
+    pub const fn new() -> Vmm {
+        Vmm { worker_wake: WakeWord::new() }
+    }
+}
+
+/// **PER-GPU state.** §9.3's left column: the register shadow and classifier keyed by
+/// `(gpu, bar, offset)`, the token words and rung bitmap (*"token spaces overlap across GPUs"*),
+/// and ⊘ **the ring and its drainer — because ordering is per PCI function**, so a shared ring
+/// would impose an order across devices that hardware does not have.
+pub struct Plane<'v> {
     pub tokens: Vec<TokenWord>,
     pub bits: RungBitmap,
-    pub worker_wake: WakeWord,
+    /// Borrowed from the VMM: **one** word across all GPUs.
+    pub vmm: &'v Vmm,
+    /// Per GPU, like the ring it wakes.
     pub drainer_wake: WakeWord,
     pub ring: PrivRing,
     pub token_mask: u32,
 }
 
-impl Plane {
-    pub fn new(n_tokens: usize, token_mask: u32) -> Plane {
+impl<'v> Plane<'v> {
+    pub fn new(vmm: &'v Vmm, n_tokens: usize, token_mask: u32) -> Plane<'v> {
         Plane {
             tokens: (0..n_tokens).map(|_| TokenWord::new()).collect(),
             bits: RungBitmap::new(),
-            worker_wake: WakeWord::new(),
+            vmm,
             drainer_wake: WakeWord::new(),
             ring: PrivRing::new(),
             token_mask,
         }
     }
 
+    /// ★ The single wakeup word, reached through the VMM. ⊘ There is deliberately no per-plane
+    /// `worker_wake` field to reach instead.
+    #[inline]
+    pub fn worker_wake(&self) -> &WakeWord {
+        &self.vmm.worker_wake
+    }
+
     fn path(&self) -> TrapPath<'_> {
         TrapPath {
             tokens: &self.tokens,
             bits: &self.bits,
-            worker_wake: &self.worker_wake,
+            worker_wake: &self.vmm.worker_wake,
             drainer_wake: &self.drainer_wake,
             ring: &self.ring,
             token_mask: self.token_mask,
@@ -84,6 +124,11 @@ impl Plane {
     #[inline]
     pub fn trap_write(&self, class: Class, bar: u8, off: u32, val: u64, width: u8) -> Action {
         self.path().write(class, bar, off, val, width)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn occupancy_for_test(&self) -> usize {
+        self.ring.occupancy()
     }
 
     /// One worker pass. Returns how many tokens it served.
@@ -120,7 +165,7 @@ impl Plane {
                         // ⊘ bit then summary, then a bump — the same order the trap uses, because
                         // it is the same function.
                         self.bits.publish(tok);
-                        let _ = self.worker_wake.bump();
+                        let _ = self.vmm.worker_wake.bump();
                         break;
                     }
                 }
