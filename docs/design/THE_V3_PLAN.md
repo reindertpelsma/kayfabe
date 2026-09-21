@@ -115,6 +115,51 @@ amplifier. Plus a loom-style or exhaustive model check of the wakeup word.
 ⊘ **No guest needed, and that is the point** — this is the one crate whose correctness cannot be
 established by booting.
 
+### ◐ P1 STATUS, 2026-09-21 (w823) — `crates/kayfabe-doorbell`, 2 681 lines, 48 tests, 0.02 s
+
+⊘ **Partially built. Stated as what is and is not there, because "P1 is done" would be false.**
+
+**Built and tested** (`cargo test -p kayfabe-doorbell`, no GPU, no guest, no hypervisor):
+
+| P1 item | file |
+|---|---|
+| the **three-way** classifier | `trap.rs` |
+| per-token table + summary bitmap | `token.rs`, `bitmap.rs` |
+| `worker_vcpu_poll` | `wake.rs` |
+| lock-free MPSC register ring + one drainer | `ring.rs`, `plane.rs` |
+| synchronous shadow write, `write_semantics` | `shadow.rs` |
+| (beyond P1) §7 routing, §8 completions, §6.4 leaf bound | `channel.rs`, `completion.rs`, `leaf.rs` |
+
+⊘ **NOT built, and each is named in P1's own list:** the BAR0 read shadow (backable-run sweep,
+computed fill); the **VA-manager thread** (only its seam exists, as `HostOps`); **irqfd**; the
+**swref descriptor generator** with the `write_semantics` field — which P1 already warns *"does not
+exist today"* and needs a token-level `hi:lo` parser because its input **is not parseable as C**;
+and the **read-trap allowlist** for the 524 of 4096 pages where *"only writes trap"* is false.
+
+### ★★★ The gate: 7 of the 8 named interleavings are tests
+
+P1's gate names them individually, so they are checked off individually rather than by a pass rate:
+
+| §2.4 interleaving | test |
+|---|---|
+| lost-wakeup | `a_bump_during_a_scan_refuses_the_park` |
+| summary-clear race | `a_token_published_during_a_scan_is_not_lost` |
+| double-take | `claim_excludes_a_second_worker` |
+| `BUSY → RUNG` | `ring_while_busy_becomes_busy_rung_and_is_re_acted` |
+| ring-full poison | `full_poisons_and_claims_nothing_and_then_drops_by_name` |
+| cross-vCPU register order | `the_drainer_applies_registers_in_global_order_across_vcpus` |
+| the **unowned-token amplifier** | `an_unprivileged_process_cannot_keep_workers_from_parking` |
+| ⊘ **loom-style / exhaustive model check of the wakeup word** | **NOT DONE** |
+
+⚠ **The missing one is not a formality.** §5.3 says the orderings *"are load-bearing and x86 TSO
+hides their absence"* — so the 48 passing tests, all run on x86, **cannot** establish the fences.
+⇒ Until the model check exists, the memory orderings in `wake.rs` and `token.rs` are **argued from
+the spec, not verified**, and that is their actual status.
+
+★ **And the gate earned itself on the first night**: it caught a real race in `claim()` that would
+have stranded tokens permanently — a CAS failure read as evidence of ownership. Reproduced 2/40,
+fixed, 0/80. ⇒ *"the one crate whose correctness cannot be established by booting"* was correct.
+
 ### P2 — GSP boot to `INIT_DONE`
 **Build:** the boot FSM (GFW progress, falcon/RISC-V CPUCTL, SEC2 booter, WPR2); msgq geometry;
 `ElementLayout` as a **descriptor** covering 580 **and** 610 framing.
