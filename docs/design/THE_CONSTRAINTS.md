@@ -3794,3 +3794,34 @@ had been LIVE for eleven days saying the shape was scheduled for deletion.
 old code tells you what the code does. Only the design tells you whether it should still exist.
 ★ The same failure, twice in one day, in the same direction: the source was right and I had not
 asked what superseded it.
+
+
+---
+
+## §57 — PHYSICAL APERTURES COME ONLY FROM ogkm. Added 2026-09-22 (w824), owner ruling.
+
+**STATUS: LIVE.** The sentence that closed the Translated design. Full statement:
+**`docs/design/THE_TRANSLATED_PLANE.md`**.
+
+> `[owner]` *"there is no compute on phys aperatures, phys aperatures can only come from ogkm
+> anyways."*
+
+★★★ **This settles WHO PRODUCES each aperture, and that is what makes the two halves disjoint
+rather than competing:**
+
+| aperture | produced by | our answer |
+|---|---|---|
+| **physical** | **ogkm itself** — the CeUtils scrub, UVM's page-table writes, UVM vidmem migrations | the **`fbAliasVA` rewrite**: `addr + GPGA_VA_BASE`, flip the type bit to `_VIRTUAL` |
+| **virtual** | **every guest program** — user channels, compute, pushbuffer VAs, semaphores | a host VAS mirroring the guest's VAs, built at the guest's own invalidate |
+
+⊘ Measured, not assumed: `clc7c0.h` (GR/compute) declares `PHYS` **zero** times; `clc7b5.h` (CE)
+declares it **20** times. ⇒ Compute **cannot** present a physical operand.
+
+★ And the rewrite is **NVIDIA's own** — `ogkm-610 channel_utils.c:1055-1056`:
+`srcAddr + pChannel->fbAliasVA - pChannel->startFbOffset`, then `_SRC_TYPE → _VIRTUAL`. We are not
+emulating a mechanism; we are using the one RM uses internally, under RM's own name for it.
+
+⇒ **Each half has exactly one answer, and neither is a fallback.** A review had read the
+zero-`PHYS`-in-GR fact as a *limit* on the rewrite; this ruling shows it is instead the boundary
+that makes the split clean — the rewrite was never needed for compute, and RM's kernel work is
+precisely what it was written to serve.

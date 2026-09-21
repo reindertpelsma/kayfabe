@@ -1,5 +1,9 @@
 # The v3 plan — what gets built, in what order, and what proves each step
 
+> ⊘ **`[w824]` The Translated plane is now specified end to end in
+> `THE_TRANSLATED_PLANE.md`** — the model, the build order with a measurement per gate, and the
+> 30/30 feasibility per arm. Read it before P4 or P7.
+
 **STATUS: LIVE, 2026-09-20 (w821). PROPOSAL — this is the thing to argue with.**
 
 ⊘ **This document is about the target, not the current tree.** `[owner]` *"you don't have to be
