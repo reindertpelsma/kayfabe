@@ -3176,7 +3176,7 @@ threshold in kayfabe must be attributable to one of these levels, and to the bes
 | **2** | **compilable C in ogkm** | trusted — guaranteed used by the ogkm kernel, so it provably works |
 | **3** | **fabricated**, *iff guest userspace does not read it* (e.g. VBIOS) | generate it so it satisfies ogkm; guest userspace must see substantially the same GPU facts as host userspace |
 | **4** | comments / structures in ogkm | ⊘ not preferred — unclear whether it is a source of truth |
-| **5** | nouveau source (measurements, expectations) | primarily the **non-GSP** plane, only if the above do not satisfy |
+| **5** | nouveau source — **compilable C included**, not only measurements and expectations | primarily the **non-GSP** plane, only if the above do not satisfy. ★ `[owner, 2026-09-21]` nouveau's compilable C carries **real constants for the non-GSP path**, which ogkm does not have at all: openrm is GSP-only |
 | **6** | hardcoded | ⊘ last resort, and **only per LARGE FAMILY**, never per die |
 
 ★ **Computation is free.** Deriving a value from already-obtained data costs nothing and inherits
@@ -3215,3 +3215,44 @@ manufactures a conflict that is not there; the family path is part of the identi
   `gpu_register_access_map.c` fills the map with `0xFF` when `compressedSize == 0`; that is the
   cheapest way to satisfy the guest **and** it declares every BAR0 register userspace-accessible,
   which under §47 means we may then trap nothing.
+
+
+---
+
+## §51 — NOUVEAU FIRST, PROPRIETARY BY DIFFERENCE. Added 2026-09-21 (w823), owner ruling.
+
+`[owner, 2026-09-21]` *"getting the nouveau driver to boot for non-GSP is a good test target
+later, as we then know if proprietary fails but nouveau works we only need to find the diff — what
+the proprietary needs that nouveau doesn't check — and can then also use the measurements of the
+proprietary one. Rather than deriving directly from proprietary and doing the hardest path first."*
+
+### ★★★ Why this is the right order, stated as the mechanism
+
+**Nouveau is a more permissive consumer: it checks less.** ⇒ It fails **later**, so it reaches a
+booting state against an incomplete emulation sooner. That converts the proprietary driver's
+requirements from an **open search** — *"what does this closed driver want that we are not
+giving it?"* — into a **bounded diff**: everything nouveau accepted and the proprietary driver did
+not.
+
+★ And the diff is readable from both ends: nouveau's source is fully available, so when it does
+refuse, the refusal is attributable to a line. ⊘ A proprietary refusal is a status code.
+
+⇒ **Two different jobs, and nouveau is the cheap one first:**
+
+| target | what it buys |
+|---|---|
+| **nouveau, no GSP** | the first bar we can actually clear, and a readable oracle for every refusal on the way |
+| **proprietary, no GSP** | the remaining delta, now enumerable rather than searched — and its own measurements become usable once the plane works at all |
+| ★ **nouveau, WITH GSP** | *`[owner]` a bonus* — it proves kayfabe is a **GPU**, not a kayfabe-shaped thing one driver happens to accept. ⇒ Evidence for the **guest-driver axis** that no amount of proprietary testing can give |
+
+### ⚠ Two caveats, so the milestone is not over-read
+
+1. ⊘ **"nouveau boots" is necessary, not sufficient.** It checks less *by definition*, so passing
+   it cannot imply the proprietary driver passes. It is a **floor that can be cleared**, not a
+   proof of correctness — and reporting it as the latter would be the same over-claim this
+   campaign keeps paying for.
+2. ⚠ **nouveau's own Turing+ native support is known-incomplete** (no reclocking, signed-firmware
+   limits — `THE_WINDOWS_AXIS.md` §10). ⇒ On Turing and newer, a nouveau non-GSP failure may be
+   **nouveau's limit rather than ours**, and that has to be told apart before it is read as a
+   kayfabe defect. ★ Pre-Turing is where the target is cleanest, which is also where the non-GSP
+   plane matters most.
