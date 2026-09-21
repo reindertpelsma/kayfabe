@@ -1261,3 +1261,105 @@ fn arithmetic_bit_positions_are_evaluated() {
     let d = swref::parse_line("#define NV_X (0*32+31-3):(0*32+4) /* RW--V */").unwrap();
     assert_eq!(d.value, Value::BitRange { hi: 28, lo: 4 });
 }
+
+// ---- §9 lifetime and teardown -----------------------------------------------------------------
+
+#[test]
+fn closing_without_the_explicit_free_is_refused_by_name() {
+    // ⊘⊘⊘ §9's central refusal. close() is NOT a synchronous free: "release runs on the LAST FILE
+    // REFERENCE, not on close", and "the driver's close path defers the whole cleanup to a kernel
+    // thread when its interruptible wait fails -- which a pending signal causes."
+    //
+    // ★ And why it is not hygiene: "a still-scheduled host channel whose ring lives in guest RAM
+    // the guest has since reused is A LIVE DMA ENGINE WRITING INTO ANOTHER GUEST'S MEMORY."
+    let mut t = Teardown::new();
+    assert_eq!(
+        t.run(Step::CloseDescriptor),
+        Err(TeardownError::ClosedWithoutExplicitFree),
+        "close before the ordered teardown must be refused BY NAME, not generically"
+    );
+}
+
+#[test]
+fn the_teardown_order_is_enforced_step_by_step() {
+    let mut t = Teardown::new();
+    for s in lifetime::ORDER {
+        assert_eq!(t.run(s), Ok(()), "{s:?} should be next");
+    }
+    assert!(t.complete());
+
+    // Any transposition is refused, naming what was expected.
+    let mut t = Teardown::new();
+    assert_eq!(
+        t.run(Step::UnmapAll),
+        Err(TeardownError::OutOfOrder {
+            attempted: Step::UnmapAll,
+            expected: Step::QuiesceWorkers
+        })
+    );
+}
+
+#[test]
+fn signals_are_blocked_before_the_free_not_after() {
+    // ⊘ Ordering with teeth: a pending signal is exactly what pushes the driver's close path onto
+    // a kernel thread. Blocking AFTER the free would leave the free asynchronous -- the thing the
+    // whole sequence exists to prevent.
+    let bs = lifetime::ORDER.iter().position(|s| *s == Step::BlockSignals).unwrap();
+    let fr = lifetime::ORDER.iter().position(|s| *s == Step::FreeClientTree).unwrap();
+    assert!(bs < fr, "BlockSignals must precede FreeClientTree");
+    let cl = lifetime::ORDER.iter().position(|s| *s == Step::CloseDescriptor).unwrap();
+    assert!(fr < cl, "FreeClientTree must precede CloseDescriptor");
+}
+
+#[test]
+fn mappings_and_in_flight_calls_are_released_before_the_free() {
+    // ⊘ Each holds a FILE REFERENCE, and release runs on the last one. Freeing while either is
+    // outstanding makes the free a no-op that returns success.
+    let idx = |s: Step| lifetime::ORDER.iter().position(|x| *x == s).unwrap();
+    assert!(idx(Step::UnmapAll) < idx(Step::FreeClientTree));
+    assert!(idx(Step::JoinInFlight) < idx(Step::FreeClientTree));
+}
+
+#[test]
+fn a_second_driver_instance_does_not_map_nothing() {
+    // ⊘⊘⊘ §9's subtle one, and it is why "run every gate TWICE in one process" is the design's own
+    // rule: the walker's previous-state snapshot "lives across a driver instance; if it survives
+    // while every mapping is dropped, the next instance's first diff reports 'unchanged' and maps
+    // NOTHING -- a second boot that faults for reasons the first did not."
+    let mut w = WalkerState::default();
+
+    // First driver instance: the walk maps everything.
+    assert_eq!(w.diff(7), lifetime::Diff::Changed(7));
+    assert_eq!(w.diff(7), lifetime::Diff::Unchanged, "no change within one instance is correct");
+
+    // Teardown drops every mapping -- and MUST reset the walker.
+    let mut t = Teardown::new();
+    for s in lifetime::ORDER {
+        if s == Step::ResetWalkerState {
+            w.reset();
+        }
+        t.run(s).unwrap();
+    }
+
+    // Second instance: the guest rebuilds the same generation number, and the walker must NOT
+    // report "unchanged" over mappings that no longer exist.
+    assert_eq!(
+        w.diff(7),
+        lifetime::Diff::Changed(7),
+        "⊘ the second boot must map -- 'unchanged' here is the fault-for-no-reason bug"
+    );
+}
+
+#[test]
+fn skipping_the_walker_reset_reproduces_the_second_boot_bug() {
+    // ★ The known-positive, stated as a test rather than as prose: omit ONE step and the second
+    // instance maps nothing.
+    let mut w = WalkerState::default();
+    assert_eq!(w.diff(7), lifetime::Diff::Changed(7));
+    // teardown WITHOUT ResetWalkerState
+    assert_eq!(
+        w.diff(7),
+        lifetime::Diff::Unchanged,
+        "this is the defect: a surviving snapshot makes the next instance map nothing"
+    );
+}

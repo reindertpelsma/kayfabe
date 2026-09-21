@@ -28,6 +28,7 @@
 pub mod bitmap;
 pub mod channel;
 pub mod leaf;
+pub mod lifetime;
 pub mod model;
 pub mod plane;
 pub mod readtrap;
@@ -42,6 +43,7 @@ pub mod wake;
 pub use bitmap::RungBitmap;
 pub use channel::{size_is_total, Birth, Decoded, Disposition, Owner, Submission};
 pub use leaf::{GuestRamBlock, GuestRamLayout, HostSlice, LeafRefusal};
+pub use lifetime::{Step, Teardown, TeardownError, WalkerState};
 pub use plane::{HostOps, Plane};
 pub use readtrap::{Phase, ReadPolicy, ReadReason, ReadTrapSet};
 pub use ring::{PrivRing, Push, RegWrite};
