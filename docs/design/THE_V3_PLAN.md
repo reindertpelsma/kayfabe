@@ -105,9 +105,17 @@ shadow write for read-registers; the VA-manager thread.
   ⊘ **Its input is not parseable as C**: `NV_CTRL_VF_DOORBELL_VECTOR 11:0` and
   `NV_VIRTUAL_FUNCTION 0x0003FFFF:0x00030000` are not C expressions, so libclang yields nothing.
   It needs a **token-level `hi:lo` + access-code parser**. That generator does not exist today.
-- ⊘ **The read-trap allowlist.** *"Only writes trap"* is **false for 524 of 4096 BAR0 pages** —
-  PRAMIN, the GSP falcon pages, WPR2, `NV_PTIMER`. v3 has no analogue of §41 for reads. **Write
-  one.**
+- ⊘⊘⊘ ~~**The read-trap allowlist.**~~ **DELETED w824 — this deliverable was scheduled against a
+  requirement that had already been measured away a week earlier.** `[owner]` *"read traps cost
+  code implementation, and then we get that rot back in v3 while my idea was to get it removed."*
+  `THE_CONSTRAINTS.md:28` had already recorded, measured `[w708–w710, 2026-09-14]` across the raw
+  client + cup3 + the LLM with `TRAP_FILLS=0`, that **BAR0 is write-trap-only bar the counter
+  page**. The four cases this line named all reduce to mapping, not trapping: **PRAMIN** is an
+  mmap window re-pointed synchronously inside the (trappable, non-PRAMIN) `BAR0_WINDOW` write;
+  the **GSP falcon pages** and **WPR2** are DRAM we author; **`NV_PTIMER`** is the read-only
+  passthrough memslot over live host time. ⇒ **`readtrap.rs` is deleted**, and
+  `trappolicy::may_trap_read` is `false` everywhere so the answer is a call site rather than an
+  absence. ⚠ The one half still open is **non-GSP** — see `THE_CONSTRAINTS.md` §52.
 
 **Gate:** ★ **GPU-free**. Every interleaving in §2.4 as a test: lost-wakeup, summary-clear race,
 double-take, `BUSY→RUNG`, ring-full poison, cross-vCPU register order, and the unowned-token
@@ -134,7 +142,9 @@ established by booting.
 computed fill); the **VA-manager thread** (only its seam exists, as `HostOps`); **irqfd**; the
 **swref descriptor generator** with the `write_semantics` field — which P1 already warns *"does not
 exist today"* and needs a token-level `hi:lo` parser because its input **is not parseable as C**;
-and the **read-trap allowlist** for the 524 of 4096 pages where *"only writes trap"* is false.
+⊘ and ~~the **read-trap allowlist**~~ — **deleted w824, see the P1 entry above**: it was already
+measured unnecessary at w708–w710, and implementing it would have re-imported the exact rot v3
+exists to remove.
 
 ### ✔ The gate: all 8 named interleavings are tests
 

@@ -205,6 +205,42 @@ registers thousands of times.
 > never traps; no read traps anywhere.** Encoded structurally in
 > `crates/kayfabe-doorbell/src/trappolicy.rs`, above the classifier, so a classifier bug cannot
 > install a trap this forbids.
+>
+> ### ⊘⊘⊘ AND THE RULING WAS NOT NEW — IT WAS ALREADY MEASURED, A WEEK EARLIER (added w824)
+>
+> `[owner, when I filed it as a new ruling]` *"huh, v3 should have contained all of it, nothing
+> what I said in that prompt should have been new in v3."* They were right, and here is the text:
+> **`THE_CONSTRAINTS.md:28`**, measured `[w708–w710, 2026-09-14]` —
+>
+> > *"Constraints **1** (no BAR1/BAR2/PRAMIN traps), **2** (BAR0 write-only bar the counter page),
+> > **4/8** (the only vCPU blocking is the boot-time PRAMIN re-point you ruled sufficient) and
+> > **5** hold across all three workloads."*
+>
+> ⇒ The evidence table at `:19–23`: the **raw client** (`MEAN_FALSIFIER=PASS`), **cup3**
+> (`CUP3_VAL=43`, first compute) and the **Qwen2-0.5B LLM** (`LLM_OK=1 LLM_TOKENS=16`, 22 671
+> doorbells), **all three with `TRAP_FILLS=0` and `HOST_DMESG_XID=0`**. ★★★ So *"BAR0 is
+> write-trap-only"* was never a proposal to be argued — it is a property that was **measured to
+> hold through first compute and an LLM**, while this section sat one file away still describing
+> the allowlist it had already outlived.
+>
+> ⚠ **The lesson is the tree's own recurring one**, and this is its most expensive instance yet: a
+> **correct document that stopped being true and did not say so**. The measurement went into
+> `THE_CONSTRAINTS.md`; the design paragraph it refuted went unedited; and a week later the read
+> trap was on the v3 plan as a **P1 deliverable** — real implementation work scheduled against a
+> requirement that had already been measured away. ⇒ **Record supersession IN the superseded
+> text.** Nobody reads forward from a stale doc.
+>
+> ### ★ THE TWO FACTS THAT CLOSE THE LAST TWO CASES (owner, w824)
+>
+> - **The counter page.** The host-userspace-obtainable mapping — the doorbell page — is a **KVM
+>   read-only passthrough mapping**, so the microsecond counter is served from the host's live
+>   page. ⇒ *"a register that changes for a reason we do not observe"* has an answer that is not a
+>   read exit: **map it**. The bound stated above is real but narrower than it reads.
+> - **PRAMIN.** It is an **mmap window re-pointed synchronously inside the WRITE trap** — the
+>   single sanctioned synchronous RM map on a vCPU. The `NV_PBUS_BAR0_WINDOW` latch write is
+>   *outside* PRAMIN and therefore trappable, so a subsequent PRAMIN read hits correct memory
+>   with no exit. ⇒ PRAMIN is the **worked example** of the general claim: a latch is set by a
+>   write, and writes are trapped.
 
 ⊘ **The text below is the SUPERSEDED read-trap design.** Read it for the cases it names, not for
 the mechanism.

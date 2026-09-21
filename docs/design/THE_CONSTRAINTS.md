@@ -3256,3 +3256,120 @@ refuse, the refusal is attributable to a line. ⊘ A proprietary refusal is a st
    **nouveau's limit rather than ours**, and that has to be told apart before it is read as a
    kayfabe defect. ★ Pre-Turing is where the target is cleanest, which is also where the non-GSP
    plane matters most.
+
+---
+
+## §52 — **NO READ TRAP, ON THE NON-GSP PATH EITHER.** Added 2026-09-21 (w824).
+
+**STATUS: LIVE.** Answers the one half the owner said was still open, and the answer is *no*.
+
+`[owner, w824]` *"the only thing I am completely unknown of is if non GSP needs read traps for
+side effects, but for with GSP I think its settled."*
+
+⊘ The GSP half was settled at **w708–w710** and is recorded at the top of this file (§the
+evidence table, line 28): *"Constraints **1** (no BAR1/BAR2/PRAMIN traps), **2** (BAR0 write-only
+bar the counter page) … hold across all three workloads"* — raw client, cup3 (`CUP3_VAL=43`) and
+the Qwen2-0.5B LLM, all with `TRAP_FILLS=0`. This section answers the **non-GSP** half, which that
+measurement does not cover because every one of those workloads ran a GSP guest.
+
+### §52.1 — The question, stated so it can be wrong
+
+⊘ It is **not** *"does the non-GSP driver read BAR0 a lot?"* — it obviously does, and reads are
+**free** when the page is ordinary DRAM and a worker updates it. Polling is not a problem; polling
+is the *good* case, because a RAM-backed poll costs us nothing at all.
+
+★ The question is the only thing a RAM page cannot emulate:
+
+> **Is there a BAR0 register the non-GSP driver reads where the READ ITSELF must change device
+> state for the driver to make progress?**
+
+Two shapes, hunted separately:
+1. **Read-to-clear / read-to-pop** — a status register acknowledged by *reading* it, never
+   written. A DRAM page would never clear and the driver's loop would never terminate.
+2. **A latching pair** — reading word A latches word B, so the read has an effect even though
+   nothing is cleared. The 64-bit timer is the canonical suspect.
+
+### §52.2 — Evidence: **nouveau**, compiled-C provenance (§50 level 5)
+
+⊘ ogkm is **not** the oracle for this half: the open module is GSP-only on Turing+, so its
+*absence* of a case is not evidence of absence. `nouveau` drives the hardware directly on
+Maxwell/Pascal/Volta and on Turing/Ampere in non-GSP mode, and it is readable. Tree:
+`research_clones/nouveau-src/drivers/gpu/drm/nouveau/nvkm` — **807 files**.
+
+**A whole-tree sweep of every MMIO accessor**, keyed on the register expression, partitioning
+registers into *read somewhere* vs *written or masked anywhere*:
+
+| primitive | read sites | write/mask sites |
+|---|---|---|
+| `nvkm_rd32` / `nvkm_wr32` / `nvkm_mask` | 1 195 | 1 710 |
+| `nvkm_falcon_rd32` / `_wr32` / `_mask` | 49 | 72 |
+| `nvkm_rd08` | 4 (all VGA/CRTC — display, out of scope) | 9 |
+
+⇒ **731 distinct register expressions read; 426 of them never written anywhere.** Filtering those
+426 for names that could plausibly be status or interrupt state leaves **ten**:
+
+```
+NV03_PGRAPH_NSTATUS   NV04_PGRAPH_STATUS   NV10_PGRAPH_GLOBALSTATE1
+ustatus_addr + 0x04 … + 0x1c   (seven, nv50 PGRAPH trap reporting)
+```
+
+★ **All ten are pure read-only status words** — idle polls and diagnostic dumps. Not one is an
+acknowledgement. **Every register nouveau acknowledges, it acknowledges with a WRITE.**
+
+⚠ **State the instrument's bias, because it is what makes the zero worth anything.** The sweep
+keys on *expression text*, so `nvkm_rd32(device, 0x100e34 + foff)` and a mask of the same computed
+address under a different spelling count as different registers. That makes the "never written"
+set **over-report** — it lists registers that *are* written under another spelling (`0x100e34 +
+foff` is both read at `subdev/fault/gv100.c:114` and masked at `:91`). ⇒ The instrument errs
+toward **false alarms, never toward a false clear**, and it still found nothing.
+
+### §52.3 — The four places a read side effect would have hidden, each checked
+
+- ⊘ **The timer, and it is decisive.** `nv04_timer_read` (`subdev/timer/nv04.c:43-53`) is
+  ```c
+  do { hi = nvkm_rd32(device, NV04_PTIMER_TIME_1);
+       lo = nvkm_rd32(device, NV04_PTIMER_TIME_0);
+  } while (hi != nvkm_rd32(device, NV04_PTIMER_TIME_1));
+  ```
+  ★ **A retry loop is proof there is NO hardware latch.** If reading `TIME_0` latched `TIME_1`,
+  the re-read would be unnecessary — and wrong. ⇒ **Shape 2 does not occur on the timer**, which
+  was the only register anyone suspected of it.
+- ★ **Interrupt acknowledgement is write-1-to-clear, throughout.** `nv04_timer_intr` (`:72-80`)
+  reads `INTR_0` for its bits and then **writes** `INTR_0 = 0x1`. ⇒ **W1C puts the side effect on
+  the WRITE — which we already trap.** The convention is evidence *for* the no-read-trap position,
+  not against it.
+- ★ **The falcon command and message queues are explicit cursor pairs, and each side writes only
+  its own.** `cmdq.c` — the driver **writes** `head_reg` (`:95`) to publish and **reads**
+  `tail_reg` (`:29`) to see what the falcon consumed. `msgq.c` — the driver **writes** `tail_reg`
+  (`:38`) to acknowledge and **reads** `head_reg` (`:46,57`) to see what the falcon produced.
+  ⇒ The consumer acks with a **write**, never by reading. This is the one place a read-pop was
+  plausible, and it is not one. ⊘ Note the queues therefore appear in §52.2's "never written" list
+  *correctly*: `cmdq->tail_reg` and `msgq->head_reg` are values the **other side** produces —
+  exactly the shape a worker-updated DRAM page serves perfectly.
+- ★ **MMU fault reporting acks with a write, in both eras.** Pascal+ (`subdev/fault/gv100.c:37-57`)
+  reads the `get`/`put` cursor pair of a **memory** fault buffer and **writes** `get` back to
+  advance. The replayable-fault register block `0x100e4c…0x100e5c` (`:134-138`) is read as five
+  plain values and cleared by a **write** of `0x8000_0000` to `0x100e60` (`:163`).
+
+### §52.4 — The ruling
+
+★★★ **Non-GSP needs no read trap either.** Every acknowledgement in nouveau's register discipline
+is a **write** — W1C, a cursor advance, or a CLEAR_TRIGGER — and every register it reads without
+writing is a value the *other* side produces, which is precisely what a DRAM page updated by our
+worker is for.
+
+⇒ **The rule is now unconditional across the GSP axis:** *BAR0 writes may trap except in PRAMIN;
+BAR1 never traps except the single doorbell page (Hopper+); BAR2 never traps; **no read traps
+anywhere, GSP or not**.* Encoded in `crates/kayfabe-doorbell/src/trappolicy.rs`, above the
+classifier, and reachable as `Plane::trap_regions()` — `TrapRegion` has **no read field**, so a
+read exit is not expressible rather than merely discouraged.
+
+⚠ **What would refute this, named so the claim is falsifiable:** a register in a non-GSP boot
+whose *read* is the only mechanism that clears it. Two honest limits on the above: (a) it is
+evidence from **nouveau**, and the **proprietary driver with `NVreg_EnableGpuFirmware=0`** has no
+source — the inference from (a) to (b) is that both drive the *same silicon*, whose W1C
+convention is a hardware property, not a driver choice, but it is an inference; (b) nouveau not
+*using* a read-to-clear register does not prove the silicon has none — only that no driver we can
+read depends on one. ⇒ **The test that settles it is booting nouveau non-GSP against kayfabe**,
+which §51 already puts on the path for its own reasons. Until then this is a **ruling with its
+evidence and its gap both written down**, not a measurement.
