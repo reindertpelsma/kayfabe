@@ -198,3 +198,37 @@ fn the_class_table_matches_what_the_c_compiler_says_the_headers_define() {
         }
     }
 }
+
+#[test]
+fn we_author_the_user_register_access_map_rather_than_deriving_it() {
+    // ★★★ `[owner, 2026-09-21]` asked where the compilable source for register access semantics
+    // is, since "the data must be in normal constants, arrays, C files as well".
+    //
+    // ⊘ MEASURED in ogkm: for THIS fact there is none. `gpuConstructUserRegisterAccessMap_IMPL`
+    // (`src/kernel/gpu/gpu_register_access_map.c:208`) obtains the map as **zlib-compressed
+    // bytes** delivered over `NV2080_CTRL_CMD_INTERNAL_GPU_GET_USER_REGISTER_ACCESS_MAP`, and the
+    // *physical* implementation of that control is **not in the open tree at all** — the data
+    // lives in the GSP firmware blob.
+    //
+    // ★★★ And that inverts the question rather than leaving it unanswered: **we ARE the GSP.**
+    // `0x20800a41 GET_USER_REGISTER_ACCESS_MAP` is on our served list, so kayfabe does not need
+    // to DISCOVER which BAR0 registers guest userspace may touch — **it DECLARES them.**
+    //
+    // ⇒ THE INVARIANT THAT FOLLOWS, and it is new: the map we serve and the classifier's middle
+    // arm (`Class::UserspaceMappable`) are **one fact**. If they drift, one of two things breaks:
+    //   * we declare a page mappable and then TRAP it ⇒ an unprivileged guest process can reach
+    //     the privileged ring — §4's inner boundary breached;
+    //   * we declare it unmappable and serve it anyway ⇒ the guest's driver never maps it and the
+    //     userspace path silently does not work.
+    // ⊘ Neither failure is visible from either side alone, which is why this is pinned here.
+    assert!(
+        rpc::control_is_served(0x20800a41),
+        "GET_USER_REGISTER_ACCESS_MAP must be served — we are the authority for it"
+    );
+    // The classifier must therefore HAVE a userspace-mappable arm to keep consistent with it.
+    let src = include_str!("../src/trap.rs");
+    assert!(
+        src.contains("UserspaceMappable"),
+        "the map we declare needs a matching classifier arm, or the two cannot agree"
+    );
+}

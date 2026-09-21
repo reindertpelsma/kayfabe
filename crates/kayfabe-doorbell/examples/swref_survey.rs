@@ -14,8 +14,8 @@ fn main() {
             files += 1;
             for d in swref::parse_header(&text) {
                 n += 1;
-                if d.readable { r += 1 }
-                if d.writable { w += 1 }
+                if d.readable_hint { r += 1 }
+                if d.writable_hint { w += 1 }
                 match d.value {
                     swref::Value::Offset(_) => off += 1,
                     swref::Value::BitRange { .. } => br += 1,

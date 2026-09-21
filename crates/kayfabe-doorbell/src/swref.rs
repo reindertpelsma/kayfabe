@@ -42,8 +42,8 @@
 //!
 //! | position | alphabet | meaning used here |
 //! |---|---|---|
-//! | 1 | `- C R` | **readable** iff `R` or `C`. ⊘ `C` is *constant* — it is on `VENDOR_ID` and on value defines, and it **is** readable |
-//! | 2 | `- W` | **writable** iff `W` |
+//! | 1 | `- C R` | **readable** iff `R` or `C` — ⚠ a HINT, see [`Descriptor`]. ⊘ `C` is *constant* |
+//! | 2 | `- W` | **writable** iff `W` — ⚠ a HINT |
 //! | 3 | `- A B C D E H I X` | not used here |
 //! | 4 | `- U V` | not used here |
 //! | 5 | `C D F G L M T V` | not used here |
@@ -97,13 +97,41 @@ pub enum Value {
     StructBits { hi: u32, lo: u32 },
 }
 
+/// ⊘⊘⊘ **HOW MUCH THE ACCESS CODE IS WORTH — and it is less than "derived".**
+///
+/// `[owner, 2026-09-21]` *"how can there be useful data in the comments, when comments don't
+/// compile and ogkm can't use it"* — a fair challenge, and the answer is a narrower claim than
+/// the one this module first made.
+///
+/// **Measured, three ways:**
+/// 1. ⊘ **Nothing in ogkm's code consumes an access code.** Every occurrence is another
+///    *definition* in a header; no driver path branches on one. ⇒ They are **validated by no
+///    build**, and a comment that nothing compiles can rot without anything noticing.
+/// 2. ★ **They are machine-generated, and the regularity is the evidence:** **63** distinct codes
+///    across **24 042** instances in 416 files, with **zero** deviations from exactly 5
+///    characters. Human prose written by many authors over that corpus does not come out regular.
+///    ⇒ Same emitter as the offsets beside them.
+/// 3. ⊘⊘ **And they are already known to be WRONG for the question that matters.** §5.5, measured:
+///    the interrupt-pending register (write-1-to-clear) and its enable-set port carry the **same**
+///    code, and the invalidate trigger reads as plain read-write.
+///
+/// ⇒ **The honest standing:** an offset is validated by the driver working; a code is validated by
+/// nothing. So `readable`/`writable` below is a **generated hypothesis**, not a derived fact — the
+/// best published starting point, and not evidence.
+///
+/// ⚠ **What would actually settle it** — and it is allowed by the owner's own rule
+/// (*"host userspace measurements (unprivileged)"*): read and write the offsets on a real GPU from
+/// **unprivileged** userspace and compare. That is a measurement this tree can make and has not.
+/// ⊘ Until it does, nothing may treat these two fields as ground truth, which is why
+/// `write_semantics` is a **hand-maintained overlay** and not read from here.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Descriptor {
     pub name: String,
     pub value: Value,
-    /// Generated. §5.5: *"Read/write-only-ness is generated."*
-    pub readable: bool,
-    pub writable: bool,
+    /// ⚠ **HYPOTHESIS, not fact.** Generated metadata that no compiler checks. See the note above.
+    pub readable_hint: bool,
+    /// ⚠ **HYPOTHESIS, not fact.**
+    pub writable_hint: bool,
 }
 
 /// Parse one line. Returns `None` for anything that is not a coded `#define` — ⊘ deliberately
@@ -131,8 +159,8 @@ pub fn parse_line(line: &str) -> Option<Descriptor> {
     Some(Descriptor {
         name,
         value,
-        readable: b[0] == b'R' || b[0] == b'C',
-        writable: b[1] == b'W',
+        readable_hint: b[0] == b'R' || b[0] == b'C',
+        writable_hint: b[1] == b'W',
     })
 }
 

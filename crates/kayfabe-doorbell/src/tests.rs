@@ -1216,18 +1216,18 @@ fn the_parser_handles_the_three_real_shapes_from_the_headers() {
     let d = parse_line("#define NV_CTRL_VF_DOORBELL_VECTOR                                  11:0 /* -WXUF */").unwrap();
     assert_eq!(d.name, "NV_CTRL_VF_DOORBELL_VECTOR");
     assert_eq!(d.value, Value::BitRange { hi: 11, lo: 0 });
-    assert!(!d.readable, "-W... is write-only");
-    assert!(d.writable);
+    assert!(!d.readable_hint, "-W... is write-only");
+    assert!(d.writable_hint);
 
     // .../turing/tu102/dev_vm.h:27 -- the aperture P1 names
     let d = parse_line("#define NV_VIRTUAL_FUNCTION                                    0x0003FFFF:0x00030000 /* RW--D */").unwrap();
     assert_eq!(d.value, Value::Aperture { hi: 0x0003FFFF, lo: 0x00030000 });
-    assert!(d.readable && d.writable);
+    assert!(d.readable_hint && d.writable_hint);
 
     // A plain offset.
     let d = parse_line("#define NV_PBUS_FOO                          0x00001700 /* R---V */").unwrap();
     assert_eq!(d.value, Value::Offset(0x1700));
-    assert!(d.readable && !d.writable);
+    assert!(d.readable_hint && !d.writable_hint);
 }
 
 #[test]
@@ -1237,8 +1237,8 @@ fn a_constant_coded_register_is_readable() {
     // It means CONSTANT, and a constant is readable. Treating it as unreadable would have
     // shadowed the wrong set.
     let d = swref::parse_line("#define NV_CONFIG_PCI_NV_0_VENDOR_ID                           15:0 /* C--UF */").unwrap();
-    assert!(d.readable, "C is CONSTANT, and a constant is readable");
-    assert!(!d.writable);
+    assert!(d.readable_hint, "C is CONSTANT, and a constant is readable");
+    assert!(!d.writable_hint);
 }
 
 #[test]
