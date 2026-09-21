@@ -1776,3 +1776,55 @@ fn binapi_is_opaque_and_that_is_load_bearing_for_cuinit() {
     // ★ Decoding it would be inventing meaning; refusing it breaks cuInit.
     assert_eq!(rmgraph::class_policy(0x2081), rmgraph::ClassPolicy::OpaqueAllow);
 }
+
+// ---- §1.2 the Dg axis, as a descriptor ---------------------------------------------------------
+
+#[test]
+fn the_element_header_changes_size_and_every_offset_between_580_and_610() {
+    // §1.2's worked example: "Size AND every field offset changed between two versions we must
+    // both support, and the elemCount field DISAPPEARED."
+    use element::*;
+    assert_eq!(LAYOUT_580.header_bytes, 48);
+    assert_eq!(LAYOUT_610.header_bytes, 16);
+    assert_ne!(LAYOUT_580.checksum_off, LAYOUT_610.checksum_off);
+    assert_ne!(LAYOUT_580.seq_num_off, LAYOUT_610.seq_num_off);
+}
+
+#[test]
+fn a_vanished_field_is_None_not_a_sentinel() {
+    // ⊘ THE POINT of the descriptor: elemCount does not exist at 610. A sentinel (0, or
+    // usize::MAX) would later read as a real offset and decode whatever is at that address.
+    use element::*;
+    assert_eq!(LAYOUT_580.elem_count_off, Some(40));
+    assert_eq!(LAYOUT_610.elem_count_off, None, "gone, not zero");
+    let buf = [0xAAu8; 64];
+    assert_eq!(LAYOUT_610.elem_count(&buf), None, "and reading it yields a FACT, not a value");
+    assert_eq!(LAYOUT_580.elem_count(&buf), Some(0xAAAA_AAAA));
+}
+
+#[test]
+fn a_short_element_refuses_rather_than_reading_past_it() {
+    // ⊘ The element comes from GUEST memory.
+    use element::*;
+    let short = [0u8; 8];
+    assert_eq!(LAYOUT_580.seq_num(&short), None);
+    assert_eq!(LAYOUT_580.checksum(&short), None);
+}
+
+#[test]
+fn the_no_gsp_plane_is_a_SEAM_not_a_bolt_on() {
+    // ★★★ `[owner]` "with non gsp for later but not a bolt on, core part". If the control plane
+    // were written as "the GSP path", adding a non-GSP path later means a SECOND COPY of every
+    // decision. ⇒ The plane is a parameter, and the absence of a message queue is expressible.
+    use element::*;
+    let gsp = ControlPlane::Gsp { layout: LAYOUT_580 };
+    let nogsp = ControlPlane::NoGsp;
+    assert!(gsp.has_message_queue());
+    assert!(!nogsp.has_message_queue(), "pre-Turing, and Turing+ with firmware disabled");
+    assert!(gsp.element_layout().is_some());
+    assert_eq!(
+        nogsp.element_layout(),
+        None,
+        "⊘ a caller assuming an element layout cannot compile against NoGsp without handling it"
+    );
+}
