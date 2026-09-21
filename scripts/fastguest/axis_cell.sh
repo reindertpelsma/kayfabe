@@ -15,7 +15,19 @@
 # ⚠ It measures the `(die x host driver)` cell ONLY. It says nothing about kayfabe's guest path —
 # that is deliberate, and is what makes a red arm here attributable to the die.
 set -uo pipefail
-REPO=${KAYFABE_REPO:-/root/kayfabe}
+
+# ⊘⊘⊘ REPO PATH AND REVISION, PRINTED — w824. `REPO=${KAYFABE_REPO:-/root/kayfabe}` cost a full
+# diagnostic pass: the box carried TWO trees, the script read the one nobody updates, and the
+# build failed on a feature HEAD has. A `${VAR:-default}` is invisible to every reader who does
+# not open the file, and it is the single fact that decides whether a measurement means anything.
+# ⚠ `/root` is the container image; `/workspace` is the persistent volume — and our own directive
+# is that the WHOLE box is scratch, so the only safe move is to SAY which tree ran.
+_kf_say_repo() {
+  local r="${1:-}"
+  [ -d "$r" ] || { echo "⊘ REPO $r does not exist" >&2; return 1; }
+  echo "== repo: $r  rev: $(git -C "$r" log --oneline -1 2>/dev/null || echo 'NOT-A-GIT-TREE')" >&2
+}
+REPO=${KAYFABE_REPO:-/workspace/kayfabe}
 BRANCH=${KF_BRANCH:-w749-fable-legb}
 
 # ⊘ PULL FIRST. `[measured w822]` a runner that built without fetching re-ran a stale harness and
