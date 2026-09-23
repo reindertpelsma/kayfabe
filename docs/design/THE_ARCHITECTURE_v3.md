@@ -962,6 +962,29 @@ addresses. The review gives three independent defeaters, any one of which is fat
 
 ### 4.2 The diff
 
+> ### ⊘⊘⊘ SUPERSEDED IN PART `[w825]` — THE SNAPSHOT IS A SHADOW; THE LEDGER REPLACES IT
+>
+> `[fable w825]` flagged the paragraph below as contradicting `THE_TRANSLATED_PLANE.md` §18
+> (owner, w825: *"only gpa and gpga ground truths, the rest is maps"*). It keeps *"a snapshot of
+> the full PD/PT tree per VA space"* to diff against — a **copy of guest page-table content that
+> must be kept in sync with the real tables**. §18.2's test names that a shadow, whatever it is
+> called.
+>
+> ★ **It is also redundant.** The delta needs two inputs: what the guest's tables say **now**,
+> and what **we** have mapped. The first is read **in place** in GPGA (the PTX walker, 72/72).
+> The second is the **ledger of our own host map handles**, `(pdb, va) → (handle, offset, len,
+> page_size)` — which must exist anyway, because RM's `UNMAP` needs the handle back. ⇒ **Diff the
+> guest's live tables against our ledger.** Nothing of the guest's is copied; the only
+> "previous state" is a record of our own actions.
+>
+> ⚠ This rests on the handle ledger being permitted under §56 rule 2 — the default taken at w825
+> pending an owner ruling (rule 2 plainly forbids mirroring the *guest's* tables; the ledger is a
+> record of *ours*). If the owner rules the ledger out too, the fallback is unmap-all/map-all per
+> invalidate (~1 800 RM calls), to be measured before chosen.
+>
+> ⊘ The rest of §4.2 — batching with the TLB-defer flag, one invalidate per batch — is
+> unaffected.
+
 The PTX walk kernel produces a **per-VA-space delta**: a list of VA spaces that changed, and
 the entries to apply to each. ⊘ **The previous state lives in vidmem, held by the PTX itself**
 — a snapshot of the full PD/PT tree per VA space, keyed by root address, with allocations

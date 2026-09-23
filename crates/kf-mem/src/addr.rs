@@ -36,11 +36,10 @@ pub const PAGE: u64 = 0x1000;
 
 /// ★ Round a range out to page boundaries.
 ///
-/// ⊘⊘⊘ **NOT COSMETIC — this is the sub-page-hole defect.** `CLAUDE.md` records it: the C artifact
-/// rounded every promote-derived mapping **up to 64 KiB** (`nvkvm_gpu_emul.c:7920`), while the
-/// Rust port bound at the **declared length** and produced *"2 560 bytes our own `resolve` answers
-/// `Miss` for inside a page the guest has mapped"*. ⇒ A join must cover whole pages, because the
-/// guest's own mapping does, and a join narrower than a page leaves a hole the guest can reach.
+/// ⊘ A host map is page-granular (a FIXED slice map rounds to at least 4 KiB), so any range we
+/// hand RM must cover whole pages. `CLAUDE.md` records the cost of not doing so: a port that bound
+/// at a declared, non-page-aligned length left *"2 560 bytes our own resolve answers Miss for
+/// inside a page the guest has mapped."*
 #[must_use]
 pub fn page_cover(base: u64, len: u64) -> (u64, u64) {
     let start = base & !(PAGE - 1);

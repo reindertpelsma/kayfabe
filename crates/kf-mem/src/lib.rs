@@ -1,20 +1,12 @@
-//! `kf-mem` — the single store, the join, the VA manager, the BAR windows.
+//! `kf-mem` — the one-object model of `THE_TRANSLATED_PLANE.md` §18.
 //!
-//! ⊘ **Scope, stated so the gap is visible:** this crate's budget is ~7 k lines
-//! (`THE_V3_PLAN.md` §1). Landed so far is the half the thin guest's failure lives in — the
-//! **join** — plus the store it carves from. The VA manager, the page-table mirror and the BAR
-//! windows are named here and not yet written.
-//!
-//! ## Why the join came first
-//!
-//! The thin guest measures **15/30** against a bare-metal **30/30**, and seven of the fifteen
-//! share one signature: `forwarded=0`, work on the CPU, `refused=0`. The operands had no host
-//! object behind them. See [`join`].
+//! Two ground truths: guest RAM (the hypervisor's memfd) and guest VRAM (GPGA, one RM object).
+//! Everything else is a map onto one of them. ⊘ This crate holds no join, no table of FB ranges,
+//! and no copy of anything — see §18.2's test: bytes that are neither guest RAM nor GPGA, with
+//! something to copy/sync between them, is a shadow and forbidden.
 
 pub mod addr;
-pub mod join;
 pub mod store;
 
 pub use addr::{Fb, Gpa, Gva, HostToken, StoreOffset, PAGE};
-pub use join::{Backing, Join, JoinRefusal, JoinTable};
 pub use store::{Store, StoreRefusal};

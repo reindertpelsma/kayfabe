@@ -236,3 +236,18 @@ fn a_hole_is_installed_by_NOT_installing_it() {
     install(&map_for(Family::Ampere), &vmm2, bar_base, |r| Some(HostMapping(r.base))).unwrap();
     assert!(covered(&vmm2, probe), "⊘ on Ampere 0x8F2000 is ordinary B and MUST be backed");
 }
+
+#[test]
+fn install_refuses_by_name_when_a_region_has_no_backing() {
+    // ⊘ `[fable w825]` install() used to `continue` here — silently leaving a hole, which by its
+    // own doc is an accidental read exit. ★ KNOWN-POSITIVE: withhold backing for PRAMIN only.
+    let m = map_for(Family::Ampere);
+    let vmm = RecordingVmm::default();
+    let r = install(&m, &vmm, bar_base, |r| {
+        if r.bar == Bar(0) && r.base == PRAMIN_BASE { None } else { Some(HostMapping(r.base)) }
+    });
+    assert!(
+        matches!(r, Err(kayfabe_doorbell::vmm::VmmError::Unbacked { bar: 0, base, .. }) if base == PRAMIN_BASE),
+        "got {r:?}"
+    );
+}

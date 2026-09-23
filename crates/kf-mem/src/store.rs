@@ -1,53 +1,42 @@
-//! The **single store**: one host memory object for the VM's lifetime, carved into slices.
+//! The **one object** — GPGA — as a bounds-checked range. `THE_TRANSLATED_PLANE.md` §18.
 //!
-//! ⊘ `[measured, w724/E1]` the store reserves the guest's framebuffer as **ONE** host object
-//! (11 904 MiB in that run) rather than one object per leaf. The reason is a measured ceiling, not
-//! tidiness: `vm.max_map_count` is **65 530** and a per-leaf scheme reached **15 845** live pins
-//! on one workload (w291), so per-leaf objects do not scale to a large guest.
+//! ⊘⊘⊘ `[w825]` This used to be a bump allocator (`Store::carve`). Under §18 that is the wrong
+//! shape: the guest's **own** RM heap chooses offsets inside its framebuffer, and we never carve
+//! the guest's object. What we need is only to know the object exists, how long it is, and that
+//! an offset the guest names lies inside it. ⇒ `{token, len}` plus a bounds check. No cursor.
 //!
-//! ★ Safe code holds a [`StoreOffset`], never a pointer. Turning an offset into something
-//! dereferenceable is the host adapter's job, behind its own `unsafe` — so a bug in this crate
-//! cannot become a bad dereference (§"no VMM pointer in safe code").
+//! ★ Our *own* buffers (Translated twin rings, staging) come from **our own** objects, never from
+//! this one.
 
-use crate::addr::{page_cover, HostToken, StoreOffset, PAGE};
+use crate::addr::{HostToken, StoreOffset};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StoreRefusal {
-    /// The store is full. ⊘ Refused by name — never grown, because the store's whole point is
-    /// that its size is decided once and its address never moves.
-    Exhausted { want: u64, left: u64 },
-    /// A zero-length carve.
+    /// The range `[offset, offset+len)` is not wholly inside the object. Refused by name.
+    OutOfObject { offset: u64, len: u64, object: u64 },
     ZeroLength,
-    /// The requested span is larger than the store could ever hold.
-    LargerThanStore { want: u64, store: u64 },
 }
 
 impl StoreRefusal {
     pub fn name(&self) -> &'static str {
         match self {
-            StoreRefusal::Exhausted { .. } => "store_exhausted",
+            StoreRefusal::OutOfObject { .. } => "out_of_object",
             StoreRefusal::ZeroLength => "store_zero_length",
-            StoreRefusal::LargerThanStore { .. } => "larger_than_store",
         }
     }
 }
 
-/// One host object, carved bump-wise. ⊘ No free list yet: the store is VM-lifetime and the
-/// teardown order (§9) frees it whole. A free list is where a use-after-free would live, so it is
-/// not added until something needs it.
-#[derive(Debug)]
+/// The guest's framebuffer: one RM object. ⊘ A name and a length — never an address.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Store {
     token: HostToken,
     len: u64,
-    next: u64,
 }
 
 impl Store {
-    /// ⊘ `token` names a host object the adapter already created. This crate never allocates.
     pub fn new(token: HostToken, len: u64) -> Store {
-        Store { token, len: len & !(PAGE - 1), next: 0 }
+        Store { token, len }
     }
-
     pub fn token(&self) -> HostToken {
         self.token
     }
@@ -57,28 +46,15 @@ impl Store {
     pub fn is_empty(&self) -> bool {
         self.len == 0
     }
-    pub fn used(&self) -> u64 {
-        self.next
-    }
-    pub fn left(&self) -> u64 {
-        self.len - self.next
-    }
-
-    /// Carve `len` bytes. ⊘ Page-covered, for the same reason the join is: a sub-page carve would
-    /// let two leaves share a page and make one guest's write visible in another's window.
-    pub fn carve(&mut self, len: u64) -> Result<StoreOffset, StoreRefusal> {
+    /// Is `[offset, offset+len)` inside the object? ⊘ `checked_add`, because a guest-named
+    /// offset near `u64::MAX` must not wrap into range.
+    pub fn slice(&self, offset: u64, len: u64) -> Result<StoreOffset, StoreRefusal> {
         if len == 0 {
             return Err(StoreRefusal::ZeroLength);
         }
-        let (_, need) = page_cover(0, len);
-        if need > self.len {
-            return Err(StoreRefusal::LargerThanStore { want: need, store: self.len });
+        match offset.checked_add(len) {
+            Some(end) if end <= self.len => Ok(StoreOffset(offset)),
+            _ => Err(StoreRefusal::OutOfObject { offset, len, object: self.len }),
         }
-        if need > self.left() {
-            return Err(StoreRefusal::Exhausted { want: need, left: self.left() });
-        }
-        let at = StoreOffset(self.next);
-        self.next += need;
-        Ok(at)
     }
 }

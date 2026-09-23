@@ -273,7 +273,13 @@ pub fn install(
             Disposition::Hole { .. } => continue,
         };
         let Some(base) = bar_base(r.bar) else { continue }; // BAR not yet programmed by the guest
-        let Some(host) = host_for(r) else { continue };
+        // ⊘⊘⊘ `[fable w825]` This was `else { continue }`. By this function's OWN doc an
+        // uncovered span is an ACCIDENTAL READ EXIT — so silently skipping a region the map says
+        // must be backed was a check that reported nothing and gated nothing. ⇒ Refuse by name;
+        // the VMM must not come up with a hole it did not choose.
+        let Some(host) = host_for(r) else {
+            return Err(crate::vmm::VmmError::Unbacked { bar: r.bar.0, base: r.base, len: r.len });
+        };
         let gpa = base.checked_add(r.base).ok_or(crate::vmm::VmmError::BadGpa)?;
         installed.push((*r, vmm.install_memslot(gpa, r.len, host, readonly)?));
     }
