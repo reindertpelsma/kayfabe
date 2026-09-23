@@ -5534,35 +5534,48 @@ fn identity_window(rm: &mut HostRmBackend) -> bool {
         return false;
     }
 
-    // ⊘ 1 GiB-aligned, above 1 TiB: clear of what host RM self-reserves low and of the guest's
-    // own range. §12 — the window goes in EVERY host VAS we create, not a Translated-only one.
-    const GPGA_VA_BASE: u64 = 1 << 40;
+    // ⊘ A LADDER OF BASES, not one guess. v1 asked for 1 TiB, got a bare "REFUSED", and could
+    // not tell "outside this VA space's range" from "RM will not do this at all" — the arm threw
+    // the error away. Ask RM where IT would put the object first, then probe outward.
     let bytes = (mb as u64) << 20;
+    let bases: Vec<u64> = vec![
+        1u64 << 40,  // 1 TiB — the original ask, kept so the ladder explains the first result
+        1u64 << 38,  // 256 GiB
+        1u64 << 37,  // 128 GiB
+        1u64 << 36,  // 64 GiB
+        1u64 << 35,  // 32 GiB
+        bytes.next_power_of_two(),               // just above the object itself
+    ];
 
-    match rm.prove_identity_window(bytes, GPGA_VA_BASE) {
+    match rm.prove_identity_window(bytes, &bases) {
         Ok(ev) => {
-            let placed = ev.got == Some(ev.asked);
+            // ★ RM's OWN choice first — it bounds the space and explains every refusal below.
+            match &ev.rm_choice {
+                Ok(va) => println!("IDENTITY_WINDOW_RM_CHOICE={va:#x}  (whole object, RM picked)"),
+                Err(e) => println!("IDENTITY_WINDOW_RM_CHOICE=REFUSED {e}"),
+            }
+            for (asked, got) in &ev.attempts {
+                match got {
+                    Ok(v) if v == asked => println!("IDENTITY_WINDOW_TRY asked={asked:#x} got={v:#x} EXACT"),
+                    Ok(v) => println!("IDENTITY_WINDOW_TRY asked={asked:#x} got={v:#x} MOVED"),
+                    Err(e) => println!("IDENTITY_WINDOW_TRY asked={asked:#x} REFUSED {e}"),
+                }
+            }
+            let placed = ev.placed_as_asked();
             println!(
-                "IDENTITY_WINDOW mib={} asked={:#x} got={} placed_as_asked={} map_ms={} \
-                 ce_still_works={}",
+                "IDENTITY_WINDOW mib={} placed_as_asked={} at={} map_ms={} ce_still_works={}",
                 ev.reserved_bytes >> 20,
-                ev.asked,
-                ev.got
-                    .map(|v| format!("{v:#x}"))
-                    .unwrap_or_else(|| "REFUSED".to_string()),
-                placed,
+                placed.is_some(),
+                placed.map(|v| format!("{v:#x}")).unwrap_or_else(|| "none".to_string()),
                 ev.map_ms,
                 ev.ce_still_works
             );
-            if !placed {
-                // ⚠ The whole construction then needs slices after all.
-                println!("FAIL  identity window    = RM placed the object elsewhere");
+            if placed.is_none() {
+                println!("FAIL  identity window    = no base was honoured exactly");
                 println!("RUNGCTL_identity_window=FAIL");
                 return false;
             }
             if !ev.ce_still_works {
-                // ⊘ Placement alone is not enough: the space must remain usable for the channel
-                // operands that live beside the window.
                 println!("FAIL  identity window    = a plain CE copy broke with the window installed");
                 println!("RUNGCTL_identity_window=FAIL");
                 return false;
@@ -5572,57 +5585,13 @@ fn identity_window(rm: &mut HostRmBackend) -> bool {
             true
         }
         Err(e) => {
-            // ⚠ `0x51` on a FIXED map is ADDRESS OCCUPANCY, not "already mapped there". Reported
-            // as a refusal by name — never as success, which is the C artifact's policy and
-            // silently aliases a different object.
-            println!("IDENTITY_WINDOW mib={mb} placed_as_asked=false ⊘ REFUSED {e:?}");
+            println!("IDENTITY_WINDOW mib={mb} placed_as_asked=false ⊘ SETUP REFUSED {e:?}");
             println!("RUNGCTL_identity_window=FAIL");
             false
         }
     }
 }
 
-/// ★★★★★ **w379 R1′ — CAN ONE ALLOCATION BE LIVE AT TWO GPU VAs AT THE SAME TIME?**
-///
-/// The w377 correction (2026-09-06) named the LLM wall as **FB-join aliasing**: the join
-/// store is keyed by physical frame alone (`install_join(phys, region)` /
-/// `release_join(phys)`), so one framebuffer frame can be host-backed at exactly **one** GPU
-/// VA. The guest holds 17 frames aliased at two VAs each, so publishing either VA revokes
-/// the other, and the `Xid 31` lands at a VA we un-published ourselves.
-///
-/// This rung is that hazard in fifteen lines of raw client, with no libcuda anywhere:
-///
-/// ```text
-///   1  allocate ONE device-local object
-///   2  map it at VA_A                          -> release through VA_A must land   [CONTROL]
-///   3  map the SAME object at VA_B             -> release through VA_B must land
-///   4  release through VA_A AGAIN              -> must STILL land                  [THE ASK]
-/// ```
-///
-/// ★★ **Step 4 is the whole rung.** Steps 2 and 3 pass even in a world where the second
-/// mapping revokes the first, because each is exercised immediately after it is made. Only
-/// coming back to VA_A *after* VA_B exists can see a revoke.
-///
-/// ★ **And the aliasing itself is proved, not assumed.** The three releases land at three
-/// distinct offsets of the **one object** the caller allocated, read back through an
-/// independent mapping. A release through VA_B that lands at `mem + 0x40` cannot have
-/// reached anything but the object we mapped once — so `Landed` at both offsets is a
-/// measurement that the two VAs name the same memory, not an inference from having asked
-/// for it.
-///
-/// ## ★★★ PRE-REGISTERED, BEFORE THE RUN
-///
-/// - **all three land** ⇒ two VAs over one frame both stay live. On **bare metal** this is
-///   the expected answer and is the control for the guest arm. In the **guest** it would
-///   mean the aliasing diagnosis is wrong — and that must be said loudly rather than filed
-///   as a green.
-/// - **A lands, B lands, A2 lost** ⇒ ★★★★★ **THE REPRO.** Mapping the second VA revoked the
-///   first. This is the LLM's wall, deterministic, ours, no proprietary runtime in it.
-/// - **A lands, B lost** ⇒ the second mapping never took effect at all. A different defect
-///   from the revoke, and it must not be reported as one.
-/// - **A lost** ⇒ ⊘ **the control failed and the rung is UNINTERPRETABLE.** Prints `NOTRUN`.
-/// - **a map is refused / placed elsewhere** ⇒ ⊘ `NOTRUN`. RM declining a fixed placement is
-///   a statement about our address choice, not about aliasing.
 fn alias_two_vas(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> bool {
     // Ring, VA_A and VA_B are ≥ 4 GiB apart. A VA_B adjacent to VA_A could be covered by a
     // big PTE VA_A's mapping already installed, which would make step 4 pass for a reason

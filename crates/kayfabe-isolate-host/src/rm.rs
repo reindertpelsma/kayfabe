@@ -6379,29 +6379,39 @@ impl UnmapRetiresProbe {
     }
 }
 
-/// What `prove_identity_window` established. ⊘ Every field is a measurement, not a verdict — the
-/// caller prints them and the gate line decides.
-#[derive(Debug, Clone, Copy)]
+/// What `prove_identity_window` established.
+///
+/// ⊘⊘⊘ **v1 OF THIS STRUCT DISCARDED THE ERROR** — it stored `mapped.ok()`, so a refusal
+/// reached the log as the bare word `REFUSED` with no status, no reason and nothing to act on.
+/// `[w825]` That is the same defect this session spent a day fixing in shell scripts: **a step
+/// that reports failure without reporting WHY sends the next reader to the wrong layer.** The
+/// first run was wasted on it. Every refusal now carries its `RmError`.
+#[derive(Debug, Clone)]
 pub struct IdentityWindowEvidence {
     /// Bytes actually reserved as ONE object.
     pub reserved_bytes: u64,
-    /// The VA we ASKED for.
-    pub asked: u64,
-    /// The VA RM RETURNED. ★ `placed_as_asked` is `asked == got`, and it is the whole question.
-    pub got: Option<u64>,
-    /// How long the whole-object FIXED map took. ⚠ Seconds here would put §10's group B in
-    /// trouble: this runs once per VM start, but it runs on the path to a guest's first boot.
+    /// ★ Where RM places the whole object when we **do not ask** for an address. This is the
+    /// diagnostic the first version lacked: it shows the VA space's usable range, so an
+    /// out-of-range request is distinguishable from a refused one.
+    pub rm_choice: Result<u64, String>,
+    /// Every base we asked for, and what came back. `(asked, Ok(got) | Err(why))`.
+    pub attempts: Vec<(u64, Result<u64, String>)>,
+    /// How long the **successful** whole-object FIXED map took, if any.
     pub map_ms: u128,
-    /// ✔ An ordinary CE copy still works in the VAS **with the window installed** — i.e. the
-    /// window did not consume the space or break RM's own placement.
+    /// ✔ An ordinary CE copy still works in the VAS with the window installed.
     pub ce_still_works: bool,
 }
 
-/// What [`HostRmBackend::prove_ce_copy`] observed in **device memory**, before and after.
-///
-/// ★ The expectations travel with the observations rather than being re-derived by the
-/// caller: a diagnostic that computes its own expected value from the same variable it
-/// printed is how a copy of the wrong length reads as a pass.
+impl IdentityWindowEvidence {
+    /// The first base that was honoured **exactly**, if any.
+    pub fn placed_as_asked(&self) -> Option<u64> {
+        self.attempts.iter().find_map(|(asked, got)| match got {
+            Ok(v) if v == asked => Some(*asked),
+            _ => None,
+        })
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CeEvidence {
     /// The destination's first word **before** the copy — the sentinel, i.e. `!pattern`.
@@ -13255,7 +13265,7 @@ impl HostRmBackend {
     pub fn prove_identity_window(
         &mut self,
         bytes: u64,
-        base: u64,
+        bases: &[u64],
     ) -> Result<IdentityWindowEvidence, RmError> {
         use std::time::Instant;
 
@@ -13268,26 +13278,45 @@ impl HostRmBackend {
             }
         };
 
-        let t0 = Instant::now();
-        let mapped = self.map_local_at(vas, self.stamp(obj), bytes, Some(base));
-        let map_ms = t0.elapsed().as_millis();
+        // ★ FIRST, and it is the diagnostic v1 lacked: let RM choose. Where it puts a
+        // whole-object mapping tells us the space's usable range, so "you asked outside the
+        // VAS" is distinguishable from "RM will not do this at all".
+        let rm_choice = match self.map_local_at(vas, self.stamp(obj), bytes, None) {
+            Ok(va) => {
+                let _ = self.unmap_local(vas, va);
+                Ok(va)
+            }
+            Err(e) => Err(format!("{e:?}")),
+        };
 
-        // ⊘ An ordinary CE copy in the SAME space, after the window is installed. It answers a
-        // question the placement alone does not: whether a multi-GiB mapping leaves the VA space
-        // usable for the channel operands that must live beside it.
-        let ce_still_works = matches!(self.prove_ce_copy(vas, 0xA5A5_1234), Ok(ev) if ev.copied());
-
-        let got = mapped.as_ref().ok().copied();
-        if let Ok(va) = mapped {
-            let _ = self.unmap_local(vas, va);
+        let mut attempts = Vec::new();
+        let mut map_ms = 0u128;
+        for &base in bases {
+            let t0 = Instant::now();
+            match self.map_local_at(vas, self.stamp(obj), bytes, Some(base)) {
+                Ok(va) => {
+                    if va == base {
+                        map_ms = t0.elapsed().as_millis();
+                    }
+                    attempts.push((base, Ok(va)));
+                    let _ = self.unmap_local(vas, va);
+                }
+                // ⚠ `0x51` here is ADDRESS OCCUPANCY, not "already mapped there"
+                // (`gpu_vaspace.c:1372-1380`). Carried verbatim; never read as success.
+                Err(e) => attempts.push((base, Err(format!("{e:?}")))),
+            }
         }
+
+        let ce_still_works =
+            matches!(self.prove_ce_copy(vas, 0xA5A5_1234), Ok(ev) if ev.copied());
+
         let _ = self.free(vas);
         let _ = self.free(self.stamp(obj));
 
         Ok(IdentityWindowEvidence {
             reserved_bytes: bytes,
-            asked: base,
-            got,
+            rm_choice,
+            attempts,
             map_ms,
             ce_still_works,
         })
