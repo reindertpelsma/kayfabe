@@ -5641,6 +5641,22 @@ fn identity_window(rm: &mut HostRmBackend) -> bool {
                          GPU VA {va:#x}+p",
                         window_bytes >> 20
                     );
+                    // ★★★ STEP 2 of §9: the GUEST-RAM window, the same trick one level out.
+                    // ⊘ Halve down from a plausible guest size; the first success is the answer.
+                    let mut ram_mb = 8192u64;
+                    while ram_mb >= 256 {
+                        match rm.prove_guest_ram_window(ram_mb << 20) {
+                            Ok((base, ms)) => {
+                                println!(
+                                    "GUEST_RAM_WINDOW mib={ram_mb} base={base:#x} map_ms={ms} OK \
+                                     ⇒ guest gpa g is GPU VA {base:#x}+g"
+                                );
+                                break;
+                            }
+                            Err(e) => println!("GUEST_RAM_WINDOW mib={ram_mb} REFUSED {e}"),
+                        }
+                        ram_mb /= 2;
+                    }
                     println!("RUNGCTL_identity_window=PASS");
                     println!("RUNG_identity_window=PASS");
                     return true;

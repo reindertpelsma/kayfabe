@@ -13401,6 +13401,62 @@ impl HostRmBackend {
     /// **N contiguous maps still satisfy** so long as they tile the object at fixed offsets.
     ///
     /// Returns `(mib, ms)` for the largest power-of-two-ish size that mapped whole.
+    /// ★★★★★ **THE GUEST-RAM WINDOW** — `THE_TRANSLATED_PLANE.md` §6, step 2 of §9.
+    ///
+    /// The same trick one level out. UVM's sysmem-side operands are **guest DMA addresses**, not
+    /// GPGA offsets, so they need their own window: the whole guest `memfd` described to RM as
+    /// **one** `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` and mapped whole, making a guest physical
+    /// address `g` the GPU VA `RAM_VA_BASE + g`.
+    ///
+    /// ⊘ Bare metal has no guest, so the probe creates a `SharedRam` (`memfd_create` +
+    /// `ftruncate` + seal) of the size a guest would have. **That is the same object a real
+    /// guest's RAM is** — QEMU's `memory-backend-memfd,share=on` — so the measurement transfers.
+    ///
+    /// ⚠ This **pins** `len` bytes. The caller halves down from `start_mb`, and the first
+    /// success is the answer; nothing larger is attempted after one succeeds.
+    pub fn prove_guest_ram_window(&mut self, len: u64) -> Result<(u64, u64), String> {
+        use kayfabe_linux_raw::{Backing, CachePolicy, HostPageSize, HostProt, MappedRegion, SharedRam};
+        use std::time::Instant;
+
+        let ram = SharedRam::create(len).map_err(|e| format!("memfd {len:#x}: {e:?}"))?;
+        let region = MappedRegion::map(
+            Backing::SharedFile { fd: ram.as_backing_fd(), offset: 0 },
+            len,
+            HostProt::ReadWrite,
+            // ⊘ Guest RAM is ordinary write-back system memory, never write-combining:
+            // `nvkvm_mmap_host.c` — "system memory (pinned, write-back) ... the guest should see
+            // them as write-back cached".
+            CachePolicy::WriteBack,
+            HostPageSize::query(),
+        )
+        .map_err(|e| format!("mmap {len:#x}: {e:?}"))?;
+
+        let obj = self
+            .conn
+            .alloc_os_descriptor(&region, kayfabe_linux_raw::HostOffset::new(0), len)
+            .map_err(|e| format!("os_descriptor: {e:?}"))?;
+
+        let vas = match self.alloc_vaspace() {
+            Ok(v) => v,
+            Err(e) => {
+                let _ = self.free(self.stamp(obj));
+                return Err(format!("vaspace: {e:?}"));
+            }
+        };
+        let t0 = Instant::now();
+        let out = match self.map_local_at(vas, self.stamp(obj), len, None) {
+            Ok(va) => {
+                let ms = t0.elapsed().as_millis() as u64;
+                let _ = self.unmap_local(vas, va);
+                Ok((va, ms))
+            }
+            Err(e) => Err(format!("{e:?}")),
+        };
+        let _ = self.free(vas);
+        let _ = self.free(self.stamp(obj));
+        out
+    }
+
     /// ★★★ **NARROW THE CEILING.** `largest_mappable_mb` halves and stops at the first success,
     /// so it brackets rather than answers. This bisects `(good, bad)` to the nearest MiB step.
     pub fn narrow_map_ceiling_mb(&mut self, good_mb: u64, bad_mb: u64) -> u64 {
