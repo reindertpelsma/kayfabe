@@ -6288,6 +6288,11 @@ fn doorbell_publish_loop(
         // forwarded arm the moment the lane was armed.
         if let (Some(report), Some(plane)) = (report.as_ref(), port.plane.upgrade()) {
             plane.account_doorbell_report(token, report);
+            // ★ w825 — the ledger's trap-time entry said `Scheduled` ⇒ emulated; the forward
+            // happened HERE, so it is recorded here. See `record_deferred_forward`.
+            if let kayfabe_device::DoorbellReport::Served { .. } = report {
+                plane.doorbell_ledger().record_deferred_forward(token);
+            }
             // ★★★★★ **THE LOCALLY-SERVED ARM, AND IT IS NOT DEAD CODE — it is a guard.**
             //
             // `[measured w380llm2]` the deferred population is the forwarding path, whose

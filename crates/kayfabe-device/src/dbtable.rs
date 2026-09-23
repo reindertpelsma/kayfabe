@@ -634,6 +634,29 @@ impl DoorbellLedger {
         g.insert(token, e);
     }
 
+    /// ★★★★★ **w825 — a DEFERRED doorbell's outcome, recorded when the worker has it.**
+    ///
+    /// `[measured w825base]` [`record`](Self::record) runs on the trap, where a deferred
+    /// doorbell is only `Scheduled` ⇒ `emulated`. The worker then stored it to hardware
+    /// (`DOORBELL-STORE … WROTE`) and **nothing told the ledger**, so every worker-forwarded
+    /// token read `emulated=1 forwarded=0` — the ledger's own words for *"never went to
+    /// hardware"* — and five arms whose client said `ALL ARMS MET, rc=0` were graded FAIL.
+    /// ⊘ This bumps `forwarded` only: the trap-time `emulated` stays, because the guest did
+    /// ring a deferred doorbell and that is also true.
+    pub fn record_deferred_forward(&self, token: u64) {
+        let mut g = self.seen.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(e) = g.get_mut(&token) {
+            e[3] = e[3].saturating_add(1);
+            return;
+        }
+        if g.len() >= Self::MAX_TOKENS {
+            self.dropped
+                .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+            return;
+        }
+        g.insert(token, [0, 0, 0, 1]);
+    }
+
     /// One line per token: `tok=0x… passthrough=N emulated=N other=N forwarded=N`.
     #[must_use]
     pub fn render(&self) -> String {
