@@ -13322,6 +13322,57 @@ impl HostRmBackend {
     /// ⇒ So: **one VA space per candidate base**, each declared to span exactly the region the
     /// object will occupy. That is also how it would be used in production — `GPGA_VA_BASE` is
     /// ours to choose, and the space exists to hold the window.
+    /// ★★★★★ **HOW BIG A MAPPING WILL RM BUILD AT ALL?** — the question four runs converged on.
+    ///
+    /// ⊘ `[w825]` With the probe finally asking correctly, the **RM-managed control** refused:
+    /// a default VA space, RM choosing the address, `None` legal — and an **11 904 MiB** object
+    /// still returns `NV_ERR_NO_MEMORY`. ⇒ It is **not** placement, **not** the declared range
+    /// and **not** `SHARED_MANAGEMENT`. **It is the size.**
+    ///
+    /// ★ So the design question is no longer *"does the identity window work"* but **"how many
+    /// maps does it take"** — and that is a number, not an argument. One map is the ideal;
+    /// `THE_TRANSLATED_PLANE.md` §2 only needs *"a guest FB-physical `p` is `base + p`"*, which
+    /// **N contiguous maps still satisfy** so long as they tile the object at fixed offsets.
+    ///
+    /// Returns `(mib, ms)` for the largest power-of-two-ish size that mapped whole.
+    pub fn largest_mappable_mb(&mut self, start_mb: u64) -> Vec<(u64, Result<u64, String>)> {
+        use std::time::Instant;
+        let mut out = Vec::new();
+        let mut mb = start_mb;
+        while mb >= 16 {
+            let bytes = mb << 20;
+            let r = (|| -> Result<u64, String> {
+                let obj = self.conn.reserve_gpga(bytes).map_err(|e| format!("reserve: {e:?}"))?;
+                let vas = match self.alloc_vaspace() {
+                    Ok(v) => v,
+                    Err(e) => {
+                        let _ = self.free(self.stamp(obj));
+                        return Err(format!("vaspace: {e:?}"));
+                    }
+                };
+                let t0 = Instant::now();
+                let res = match self.map_local_at(vas, self.stamp(obj), bytes, None) {
+                    Ok(va) => {
+                        let ms = t0.elapsed().as_millis() as u64;
+                        let _ = self.unmap_local(vas, va);
+                        Ok(ms)
+                    }
+                    Err(e) => Err(format!("{e:?}")),
+                };
+                let _ = self.free(vas);
+                let _ = self.free(self.stamp(obj));
+                res
+            })();
+            let ok = r.is_ok();
+            out.push((mb, r));
+            if ok {
+                break; // ⊘ the largest that works is the answer; smaller ones are implied
+            }
+            mb /= 2;
+        }
+        out
+    }
+
     pub fn prove_identity_window(
         &mut self,
         bytes: u64,

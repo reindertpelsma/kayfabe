@@ -5547,6 +5547,19 @@ fn identity_window(rm: &mut HostRmBackend) -> bool {
         bytes.next_power_of_two(),
     ];
 
+    // ★★★ THE SIZE BISECT, and it is now the decisive measurement. `[w825]` The RM-managed
+    // control refuses 11904 MiB with NV_ERR_NO_MEMORY in a DEFAULT space where RM picks the
+    // address — so the limit is the SIZE, not the placement. ⇒ The design question becomes "how
+    // many maps does the window take", which §2 tolerates: "a guest FB-physical p is base + p"
+    // holds for N contiguous maps that tile the object at fixed offsets, just not for one.
+    println!("--- how large a mapping will RM build at all? ---");
+    for (try_mb, r) in rm.largest_mappable_mb(mb) {
+        match r {
+            Ok(ms) => println!("IDENTITY_WINDOW_MAPPABLE mib={try_mb} OK map_ms={ms}  ⇐ LARGEST"),
+            Err(e) => println!("IDENTITY_WINDOW_MAPPABLE mib={try_mb} REFUSED {e}"),
+        }
+    }
+
     match rm.prove_identity_window(bytes, &bases) {
         Ok(ev) => {
             // ★ The RM-managed control: will RM map this object ANYWHERE, given a default space?
