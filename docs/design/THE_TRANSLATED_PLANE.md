@@ -238,7 +238,7 @@ never seven mechanisms to choose between: they are seven answers to a question t
 |---|---|---|
 | **1** | **Identity window** — reserve, one FIXED map of the whole object into a fresh VAS at a 1 GiB-aligned base above 1 TiB | `IDENTITY_WINDOW mib=<n> placed_as_asked=true map_ms=<n> copy_from_window=MAGIC`, magic written at an offset **> 4 GiB**. ⊘ Bare metal; **no KVM needed** |
 | **2** | **Guest-RAM window** — whole memfd as one `OS_DESCRIPTOR` | pinned bytes = guest RAM; a CE copy vidmem→RAM lands (R17 shape) |
-| **3** | **Translated for the scrub + kernel CE** (phys-only ⇒ pure §3 rewrite) | `forwarded=N` on tokens `0x00010001`/`0x00010004` (w801 measured **0**); `execute_ours_spans` calls **= 0** ⇒ §46 satisfied |
+| **3** | ⊘ ~~**phys-only ⇒ pure §3 rewrite**~~ — **FALSE, see §19.** Needs step 4 first | `forwarded=N` on tokens `0x00010001`/`0x00010004` (w801 measured **0**); `execute_ours_spans` calls **= 0** ⇒ §46 satisfied |
 | **4** | **Walk-at-invalidate → host slice maps** (§5) | `MMUINVAL … named & missed` → **0** for store-resident roots; `[w824b]` **and the structural gate first**: `TRIGGER` read traps = **0** (served from a page), `worst_trap` on the invalidate write in **µs**, worker tail-to-clear printed as a tail, not a mean |
 | **5** | **`route_of_engine`: user CE off `CpuCe`** | `stranded=0` on `--ce-client`, then group A |
 | **6** | **UVM Translated channel** (the `MEM_OP` split) | `--uvm-mean` PASS **with `forwarded>0`**, and the UVM join path deleted; `[w824b]` the channel **suspends** at each `MEM_OP` and resumes on an fd — a blocking completion wait on the worker's stack fails this gate even when the arm passes |
@@ -752,3 +752,39 @@ is no longer asked.**
 
 ⚠ This is a *structural* test, not a naming one. `install_join`, `ReachShadow`, `promote`,
 `refresh`, `witness_writes` and the address table were all different names for the same thing.
+
+
+---
+
+## §19 — ⊘⊘⊘ `[fable w825]` STEP 3 IS NOT PHYS-ONLY, AND THE BUILD ORDER IS WRONG
+
+§9 ordered step **3** (Translated for the CeUtils scrub and kernel CE) before step **4** (the
+walk), on the grounds that the scrub is *"phys-only and therefore pure §3 rewrite"*. **That is
+false, from ogkm's own source, and I wrote it without checking.**
+
+`ogkm channel_utils.c` — the CeUtils channel's own plumbing is **virtual**:
+
+```c
+:489  pbPutOffset = (pChannel->pbGpuVA + (putIndex * pChannel->methodSizePerBlock));
+:671  NVC8B5_SET_SEMAPHORE_A, NvU64_HI32(pChannel->pbGpuVA + pChannel->finishPayloadOffset),
+:702  pSemaAddr = (pChannel->pbGpuVA + pChannel->semaOffset);
+```
+
+⇒ The scrub's **data operands** are physical on GA106 — that part was right — but its
+**pushbuffer lives at a GPU VA** and its **completion semaphore is `pbGpuVA + offset`**, both in
+the guest's RM-internal VA space. ★ So to **read** the guest's scrub pushbuffer at all, and to let
+the GPU write its completion **natively** (§7), step 3 needs **VA→phys for that VAS** — which *is*
+step 4's walk.
+
+⇒ **`3 before 6` stands. `3 before 4` does not.** The order is **4, then 3**.
+
+⚠ **And one more family caveat on the same step:** the scrub being physical is **not
+structural**. `mem_scrub.c:152-154` flips to `VIRTUAL_MODE` when `bUseVasForCeMemoryOps` is set —
+SR-IOV heavy, APM, 1:1 comptag (`mem_mgr_gm107.c:1490-1494`, `mem_mgr_ga100.c:139-145`) — and
+self-hosted Hopper forces virtual (`ce_utils.c:258-262`). ⇒ On GA106/GSP it is phys; **on Hopper
+it may be virtual, and then step 3 collapses into step 4 entirely.**
+
+⊘ **A second hardware gap on the same step, worth stating before it is designed around:**
+`rm.rs:66` records that `ce_copy`'s `Constant` (fill) arm was **never proven on hardware**. The
+scrub is a fill. ⇒ Step 3's gate must check **the bytes actually went to zero**, not only
+`forwarded>0` — a forwarded fill that writes nothing is exactly the shape §46 was written about.

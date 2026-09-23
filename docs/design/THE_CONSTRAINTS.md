@@ -3734,7 +3734,13 @@ seven arms stop falling back, from the *same* work.
 > compute operands are all VAs and need the mirrored VAS instead — see §56's open question.
 
 ★ **And it retires the CPU executor rather than bounding it.** §46 wanted `execute_ours_spans`
-gone; `channel::may_cpu_move` bounds it to 8 bytes in the meantime (§46's measured hazard: `[w797]`
+gone; ⊘⊘⊘ **CORRECTED `[fable w825]`: `channel::may_cpu_move` has ZERO PRODUCTION CALLERS** — only
+`tests/campaign_findings.rs` references it (verified). ⇒ *"it bounds the CPU executor to 8 bytes
+in the meantime"* was **a claim about a function nothing calls**, and the unbounded
+`cpu_ce::execute_ours_spans` is still on the default path via `device.rs:8978`. ★ The predicate
+is correct and **the bound is not in force**; it becomes real only when the Translated path calls
+it. ⚠ A refusal nothing consults is the orphan class this tree's own gate exists to catch, written
+by me on the same day I repointed that gate (§46's measured hazard: `[w797]`
 the CPU executor was worth **three** flattering passes, 18 vs 15). Once the join exists, the bound
 is enforcing a rule nothing wants to break anyway — which is the right end state for a constraint.
 
