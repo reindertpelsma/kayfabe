@@ -653,3 +653,52 @@ the framebuffer object and the guest-RAM descriptor into it, print both bases. U
 ⚠ Recorded as a gap rather than an assumption, because the attractive reading — *"both work, so
 both work together"* — is exactly the composition error this tree keeps paying for: every
 individual mechanism in the old `gpu.rs` worked in isolation too.
+
+
+---
+
+## §17 — ✔✔✔ `[MEASURED w825]` **BOTH WINDOWS COEXIST.** Steps 1 and 2 are done, and composed.
+
+```
+BOTH_WINDOWS fb_base=0x120000000 ram_base=0x405200000 ms=306 distinct=true overlap=false
+```
+
+★★★ **One VA space. Both windows. Distinct, non-overlapping, 306 ms.** §16.3's option **1** — the
+design is unchanged and there are **two constants**, not one and a problem.
+
+### §17.1 — RM packs them by first fit, and the arithmetic confirms it
+
+`0x120000000` + **11 857 MiB** = `0x405200000`, **exactly**. ⇒ The guest-RAM window begins where
+the framebuffer window ends; RM is allocating first-fit and deterministically.
+
+⚠ **Predictable is not guaranteed.** Read both bases back; never compute the second from the
+first. A future driver that reserves something between them, or orders them differently, changes
+the number without changing anything we would notice — and the whole design rests on `base` being
+**right**, not on it being where we expected.
+
+### §17.2 — The translation plane, as measured
+
+| | |
+|---|---|
+| GPGA as **one** RM object | ✔ 11 904 MiB reservable, contiguous, 1 GiB-aligned |
+| framebuffer window | ✔ **11 857 MiB mapped whole**, base `0x120000000`, ~1 ms |
+| `GPGA_VA_BASE` | ✔ **one constant** across VA spaces |
+| guest-RAM window | ✔ **8 GiB as one `OS_DESCRIPTOR`**, base `0x405200000`, ~300 ms |
+| **both in one space** | ✔ **distinct, no overlap** |
+| §4 `p → GPGA_VA_BASE + p` | ✔ measured |
+| §6 `g → RAM_VA_BASE + g` | ✔ measured |
+
+⇒ **Every physical-aperture operand in the design is now arithmetic on a measured base.** §9's
+steps **1 and 2** are complete, on hardware, with no KVM and no guest.
+
+### §17.3 — What remains, unchanged by this
+
+⊘ The residual is exactly where §5 said it was and nowhere else: **virtual-aperture operands**,
+which need the mirrored host VAS built by walking the guest's tables at its own invalidate. The
+windows do not address it and were never meant to — they make the *physical* half free so that
+the *virtual* half is the only thing left to build.
+
+⇒ Next on §9: **step 3** — Translated for the CeUtils scrub and kernel CE, which are phys-only
+and therefore pure §3 rewrite. Its gate is already printed by the existing ledger:
+`forwarded=N` on tokens `0x00010001` / `0x00010004`, where w801 measured **0**, and
+`execute_ours_spans` calls **= 0**.
