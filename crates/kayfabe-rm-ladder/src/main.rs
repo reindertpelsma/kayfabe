@@ -5368,6 +5368,9 @@ struct W381Chan {
 /// produced a confident, plausible, always-wrong `NeverFetched` — and a channel semaphore
 /// is the same class of secondary evidence.
 const W381_RETIRE_PAYLOAD: u32 = 0x8138_1381;
+/// The high byte every w381 retirement payload carries — the constant above AND the
+/// per-call sequenced ones `w381_engine_write` uses (w825), so `w381_retired` reads both.
+const W381_RETIRE_TAG: u32 = 0x8100_0000;
 
 /// What the **host driver** — not our bookkeeping — says about one VA in one address space.
 ///
@@ -5496,7 +5499,7 @@ fn w379_release_through(
 fn w381_retired(rm: &HostRmBackend, chan: kayfabe_isolate::HostHandle) -> &'static str {
     let (_src_off, sem_off) = kayfabe_isolate_host::rm::HostRmBackend::copy_probe_offsets();
     match rm.ring_load_u32(chan, sem_off) {
-        Ok(v) if v == W381_RETIRE_PAYLOAD => "RETIRED",
+        Ok(v) if v & 0xFF00_0000 == W381_RETIRE_TAG => "RETIRED",
         Ok(0) => "NOT-RETIRED(sem still 0)",
         Ok(_) => "NOT-RETIRED(sem holds something else)",
         Err(_) => "UNMEASURED(ring read refused)",
@@ -7040,11 +7043,36 @@ fn w381_engine_write(
             .submit_release_at(chan, token, obj_va + off, magic)
             .is_ok(),
         W381Probe::LaunchDma => {
-            let (src_off, _) = kayfabe_isolate_host::rm::HostRmBackend::copy_probe_offsets();
-            rm.ring_store_u32(chan, src_off, magic).is_ok()
+            // ⊘⊘⊘ **w825 — WAIT FOR THIS COPY TO RETIRE before returning.** The source is ONE
+            // staging word in the ring, and the next call overwrites it with the CPU. With
+            // no wait, whether a copy read ITS magic or the NEXT one's is a race the GPU
+            // usually wins on bare metal by microseconds — and loses whenever the submission
+            // is slower than the CPU's next store. `[measured w825f --rpc-mixed-allocs]` the
+            // guest's first doorbells are deferred through the worker (ms), and VIDMEM #0
+            // held SYSMEM #0's magic: read as CROSSTALK, it was this client racing itself.
+            // A unique payload per call, because a constant one cannot tell this copy's
+            // retirement from the previous one's.
+            static SEQ: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+            let payload = W381_RETIRE_TAG
+                | (SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed) & 0x00FF_FFFF);
+            let (src_off, sem_off) = kayfabe_isolate_host::rm::HostRmBackend::copy_probe_offsets();
+            if !(rm.ring_store_u32(chan, src_off, magic).is_ok()
                 && rm
-                    .submit_copy_at(chan, token, src_off, obj_va + off, 4, W381_RETIRE_PAYLOAD)
-                    .is_ok()
+                    .submit_copy_at(chan, token, src_off, obj_va + off, 4, payload)
+                    .is_ok())
+            {
+                return false;
+            }
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+            while std::time::Instant::now() < deadline {
+                if matches!(rm.ring_load_u32(chan, sem_off), Ok(v) if v == payload) {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_micros(200));
+            }
+            // A copy that never retires is NOT refused here: the readback that follows grades
+            // it, and a slot still holding the poison says so by name.
+            true
         }
     }
 }
