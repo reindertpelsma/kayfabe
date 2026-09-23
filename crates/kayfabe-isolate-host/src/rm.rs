@@ -13273,8 +13273,26 @@ impl HostRmBackend {
     /// ⇒ This exists so the two can be told apart. `va_size` is the range; `va_base` is where it
     /// starts. Nothing else in the tree sets either.
     fn alloc_vaspace_sized(&mut self, va_base: u64, va_size: u64) -> Result<HostHandle, RmError> {
+        // ⊘⊘⊘ `[w825]` THE FLAG IS NOT OPTIONAL, AND GUESSING COST TWO RUNS. A first attempt set
+        // only `va_size`/`va_base` and produced a VA space in which **a plain CE copy failed**
+        // (`ce_still_works=false`) — i.e. a broken space, so its refusals meant nothing.
+        //
+        // ★ RM's own UVM path says what is required (`nv_gpu_ops.c:2632-2637`):
+        //     vaParams.index = NV_VASPACE_ALLOCATION_INDEX_GPU_NEW;
+        //     vaParams.vaBase = vaBase; vaParams.vaSize = vaSize;
+        //     vaParams.flags = vaSize ? NV_VASPACE_ALLOCATION_FLAGS_SHARED_MANAGEMENT
+        //                             : NV_VASPACE_ALLOCATION_FLAGS_NONE;
+        // ⇒ **An explicit range REQUIRES `SHARED_MANAGEMENT`** (`nvos.h:3161`, `BIT(2)`); index 0
+        // is `..._INDEX_GPU_NEW` (`nvos.h:3175`) and is correct by default.
+        //
+        // ⚠ This is §50's hierarchy paying for itself: two guesses produced two meaningless runs,
+        // and reading ogkm answered it in one grep. **Read the driver before inventing the call.**
+        /// `nvos.h:3161`.
+        const SHARED_MANAGEMENT: u32 = 1 << 2;
         let mut params = [0u8; NvVaspaceAllocationParameters::SIZE];
         NvVaspaceAllocationParameters {
+            index: 0, // NV_VASPACE_ALLOCATION_INDEX_GPU_NEW
+            flags: if va_size != 0 { SHARED_MANAGEMENT } else { 0 },
             va_size,
             va_base,
             ..NvVaspaceAllocationParameters::default()
