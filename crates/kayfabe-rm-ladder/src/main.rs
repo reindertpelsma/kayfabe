@@ -5622,6 +5622,20 @@ fn identity_window(rm: &mut HostRmBackend) -> bool {
             match &ev.rm_choice {
                 Ok(va) => {
                     println!("IDENTITY_FIXED_RM_CHOICE={va:#x} (mappable size, default VAS)");
+                    match ev.second_space_base {
+                        Some(b2) if b2 == *va => println!(
+                            "IDENTITY_WINDOW_SECOND_VAS base={b2:#x} SAME ⇒ GPGA_VA_BASE is ONE \
+                             CONSTANT for the VMM"
+                        ),
+                        Some(b2) => println!(
+                            "IDENTITY_WINDOW_SECOND_VAS base={b2:#x} DIFFERS from {va:#x} ⇒ the \
+                             base is PER-VAS and must be tracked per space"
+                        ),
+                        None => println!(
+                            "IDENTITY_WINDOW_SECOND_VAS=REFUSED ⊘ a second space could not take \
+                             the window — §12 needs it in every VAS"
+                        ),
+                    }
                     println!(
                         "IDENTITY_WINDOW_ESTABLISHED base={va:#x} mib={} ⇒ guest fb_phys p is \
                          GPU VA {va:#x}+p",

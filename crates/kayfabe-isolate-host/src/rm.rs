@@ -6425,6 +6425,9 @@ pub struct IdentityWindowEvidence {
     pub map_ms: u128,
     /// ✔ An ordinary CE copy still works in the VAS with the window installed.
     pub ce_still_works: bool,
+    /// ★ Where the SAME object landed in a SECOND VA space. `[w825]` Decides whether
+    /// `GPGA_VA_BASE` can be one constant for the VMM or must be tracked per space.
+    pub second_space_base: Option<u64>,
 }
 
 impl IdentityWindowEvidence {
@@ -13495,6 +13498,25 @@ impl HostRmBackend {
 
         let obj = self.conn.reserve_gpga(bytes)?;
 
+        // ⊘ §12 puts the window in EVERY host VAS we create, so the base being *known* is only
+        // useful if we know it PER SPACE. `[w825]` Two spaces, same object: if RM returns the
+        // same base for both, one constant serves the whole VMM; if it differs, the base is
+        // per-VAS bookkeeping. The arithmetic is unaffected either way — this decides whether
+        // `GPGA_VA_BASE` is a constant or a field.
+        let second_space_base = match self.alloc_vaspace() {
+            Ok(v2) => {
+                let r = self
+                    .map_local_at(v2, self.stamp(obj), bytes, None)
+                    .ok()
+                    .inspect(|va| {
+                        let _ = self.unmap_local(v2, *va);
+                    });
+                let _ = self.free(v2);
+                r
+            }
+            Err(_) => None,
+        };
+
         // ⊘ The control, in a DEFAULT (RM-managed) space, where `None` is legal. It answers
         // "will RM map this object at all, anywhere" independently of the placement question.
         let rm_choice = match self.alloc_vaspace() {
@@ -13560,6 +13582,7 @@ impl HostRmBackend {
             attempts,
             map_ms,
             ce_still_works,
+            second_space_base,
         })
     }
 
