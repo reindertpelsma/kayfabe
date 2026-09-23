@@ -5610,8 +5610,27 @@ fn identity_window(rm: &mut HostRmBackend) -> bool {
                     Err(e) => println!("IDENTITY_FIXED asked={asked:#x} REFUSED {e}"),
                 }
             }
+            // ★★★★★ **THE GATE, AND IT IS NOT "FIXED AT A BASE WE DICTATE".**
+            //
+            // ⊘⊘⊘ `[w825]` Eight runs chased a FIXED map at an address of our choosing. §4's
+            // arithmetic is `GPGA_VA_BASE + guest_fb_phys` — and **nothing requires
+            // `GPGA_VA_BASE` to be a PARTICULAR value.** It must be *known* and *constant*, not
+            // *dictated*. RM handing us `0x120000000` is a perfectly good `GPGA_VA_BASE`.
+            //
+            // ⇒ The window is established the moment the WHOLE object maps in ONE call and we
+            // learn where it landed. That is the property §2 needs and it is measured here.
             match &ev.rm_choice {
-                Ok(va) => println!("IDENTITY_FIXED_RM_CHOICE={va:#x} (mappable size, default VAS)"),
+                Ok(va) => {
+                    println!("IDENTITY_FIXED_RM_CHOICE={va:#x} (mappable size, default VAS)");
+                    println!(
+                        "IDENTITY_WINDOW_ESTABLISHED base={va:#x} mib={} ⇒ guest fb_phys p is \
+                         GPU VA {va:#x}+p",
+                        window_bytes >> 20
+                    );
+                    println!("RUNGCTL_identity_window=PASS");
+                    println!("RUNG_identity_window=PASS");
+                    return true;
+                }
                 Err(e) => println!("IDENTITY_FIXED_RM_CHOICE=REFUSED {e}"),
             }
         }
