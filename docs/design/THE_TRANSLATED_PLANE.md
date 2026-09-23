@@ -619,8 +619,14 @@ GUEST_RAM_WINDOW          mib=8192  base=0x120000000 map_ms=299 OK
 
 ### §16.1 — ✔ `GPGA_VA_BASE` is a constant, not a field
 
-Two VA spaces, the same object, **the same base**. ⇒ `GPGA_VA_BASE` is a `#define` for the whole
-VMM, not a per-space lookup on every operand translation. §15.4's caveat is closed, the good way.
+Two VA spaces, the same object, **the same base**. ⇒ `GPGA_VA_BASE` is **one value for the whole
+VMM**, not a per-space lookup on every operand translation.
+
+> ⊘ **CORRECTED `[fable w825]` — "one value", NOT "a `#define`".** The first wording said
+> `#define`. The base is **returned by RM** (§50 level 1); a compile-time constant would demote it
+> to level 6 and make it silently wrong on the next driver, chip, or host state. ⇒ **Read it back
+> once at start, hold it in one place, use it everywhere.** Constant *for the life of the VM*;
+> never constant *in the source*. §15.4's caveat is closed, the good way.
 
 ### §16.2 — ✔ The guest-RAM window works
 

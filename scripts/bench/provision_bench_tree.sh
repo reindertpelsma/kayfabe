@@ -41,6 +41,13 @@ _kf_say_repo() {
   echo "== repo: $r  rev: $(git -C "$r" log --oneline -1 2>/dev/null || echo 'NOT-A-GIT-TREE')" >&2
 }
 BENCH=/workspace/bench
+# ⊘⊘⊘ `[w825]` FATAL IS A FLAG, SET WHERE THE FAILURE IS SAID AND READ AT THE END. This script
+# narrated three fatal conditions in exactly the right words — "the built QEMU has NO host-isolate
+# plane", "cargo is not on PATH", "guest ladder MISSING — every later boot will report
+# UNMEASURED_NO_BINARY" — and then printed BENCH_TREE_DONE and exited 0. The other tracks are
+# still worth finishing, so the flag does not stop the run; it decides the verdict.
+KF_FATAL=""
+kf_fatal() { say "⊘ FATAL: $*"; KF_FATAL="${KF_FATAL:+$KF_FATAL; }$*"; }
 REPO=$(kf_resolve_repo) || exit 1
 echo "== repo: $REPO  rev: $(git -C "$REPO" log --oneline -1 2>/dev/null || echo UNKNOWN)"
 QEMU_VER=10.2.4
@@ -117,7 +124,7 @@ track_a() {
   if [ "${_iso_n:-0}" -gt 0 ]; then
       say "A: host-isolate plane present in the archive ✔"
   else
-      say "A: ⊘ the built QEMU has NO host-isolate plane — the fast-guest lane will refuse it"
+      kf_fatal "A: the built QEMU has NO host-isolate plane — the fast-guest lane will refuse it"
   fi
   say "A: binary = $(ls -la $BENCH/qemu-build/qemu-system-x86_64 2>/dev/null | awk '{print $5}' || echo MISSING)"
   tail -5 /tmp/trackA.log
@@ -370,7 +377,7 @@ UD
   #    completed phase, and the next step boots a guest with no driver in it.
   case "$MI" in
     *580.159.04*) say "B2: guest driver VERIFIED on content" ;;
-    *) say "⊘ B2: guest driver NOT verified -- leaving the guest UP for inspection"
+    *) kf_fatal "B2: guest driver NOT verified -- leaving the guest UP for inspection"
     say "   ⚠ FIRST check the guest has a COMPILER: \`cc\` missing means this step's apt never"
     say "     finished, which on a fresh cloud image is almost always the mirror. The next boot"
     say "     will report MODPROBE_RC=1, which reads as a kernel mismatch and is not one."
@@ -412,14 +419,21 @@ say "B4: building the guest-side mean client (musl)"
 # have on PATH (~/.bashrc returns early before the cargo env line). Export it here rather than
 # relying on the caller's shell being interactive.
 export PATH="$HOME/.cargo/bin:$PATH"
-command -v cargo >/dev/null || say "⊘ B4: cargo is not on PATH even after \$HOME/.cargo/bin -- the ladder cannot build"
+command -v cargo >/dev/null || kf_fatal "B4: cargo is not on PATH even after \$HOME/.cargo/bin -- the ladder cannot build"
 ( cd "$REPO" \
   && cargo build --release --target x86_64-unknown-linux-musl --bin kayfabe-rm-ladder 2>&1 | tail -2 )
 GUEST_LADDER="$REPO/target/x86_64-unknown-linux-musl/release/kayfabe-rm-ladder"
 if [ -x "$GUEST_LADDER" ]; then
   say "B4: guest ladder built: $(stat -c %s "$GUEST_LADDER") bytes"
 else
-  say "⊘ B4: guest ladder MISSING — every later boot will report UNMEASURED_NO_BINARY"
+  kf_fatal "B4: guest ladder MISSING — every later boot will report UNMEASURED_NO_BINARY"
 fi
 
+# ⊘ And the artefact the whole guest lane needs, checked here rather than trusted from track A.
+[ -x "$BENCH/qemu-build/qemu-system-x86_64" ] || kf_fatal "no QEMU at $BENCH/qemu-build — read /tmp/trackA.log"
+
+if [ -n "$KF_FATAL" ]; then
+  say "BENCH_TREE_FAILED: $KF_FATAL"
+  exit 1
+fi
 say "BENCH_TREE_DONE"
