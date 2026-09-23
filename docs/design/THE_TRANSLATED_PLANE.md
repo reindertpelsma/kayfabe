@@ -375,3 +375,63 @@ generally, **silently aliases a different object.** Keep this port's `VA_ALREADY
 - `[w824b]` Put a `wait_for_completion()` — CUDA sync, semaphore poll, socket read — on any worker's stack "because it is short". The mean is short; §48's tail is the statistic, and it is the shape that produced group D.
 - Keep `Store::carve`: under one object the **guest's** RM heap chooses offsets; we never carve the
   guest's object. `Store` collapses to `{token, len}` + a bounds-checked `slice()`.
+
+
+---
+
+## §13 — `[MEASURED w825]` THE FIRST EXPERIMENT RAN. Half the construction holds; half is refused.
+
+**Box 52236011, GA106, driver 580.159.04, bare metal, no KVM.** Rev `84f6347e`.
+
+### ✔ The reservation holds, and better than required
+
+```
+IDENTITY_WINDOW_LARGEST_RESERVABLE_MB=11904      (advertised 12288)
+STORE-RESERVE ★ CONTIGUOUS and 1 GiB-ALIGNED, 11904 MiB — every slice's physical address is
+  `base + offset` with `base ≡ 0`, so a FIXED map is congruent at EVERY page size and store
+  slices need no small-page pin.
+```
+
+⇒ **GPGA as ONE object is measured.** 11 904 MiB, **contiguous**, **1 GiB-aligned** — so
+congruence holds at every page size and §2's premise stands. `ce_still_works=true` throughout.
+
+### ⊘ The whole-object VA mapping is REFUSED, in every configuration tried
+
+```
+IDENTITY_WINDOW_RM_CHOICE=REFUSED NoMemory                    ← RM picks the address: refused
+IDENTITY_WINDOW_TRY asked=0x10000000000 REFUSED Other(19305)  ← 1 TiB
+IDENTITY_WINDOW_TRY asked=0x4000000000  REFUSED Other(19305)  ← 256 GiB
+IDENTITY_WINDOW_TRY asked=0x2000000000  REFUSED Other(19305)  ← 128 GiB
+IDENTITY_WINDOW_TRY asked=0x1000000000  REFUSED Other(19305)  ← 64 GiB
+IDENTITY_WINDOW_TRY asked=0x800000000   REFUSED Other(19305)  ← 32 GiB
+IDENTITY_WINDOW_TRY asked=0x400000000   REFUSED Other(19305)  ← just above the object
+IDENTITY_WINDOW mib=11904 placed_as_asked=false at=none map_ms=0 ce_still_works=true
+```
+
+`Other(19305)` is **`VA_ALREADY_MAPPED = 0x4B69`** — this port's name for RM's **`0x51`
+(`NV_ERR_NO_MEMORY`) on a FIXED map**, which §11 says must **never** be read as success.
+
+★★★ **The address is not the variable.** Six bases spanning 16 GiB → 1 TiB refuse identically,
+and RM refuses its *own* choice with the same status. ⇒ It is not placement. **RM will not build
+the mapping at this size**, and `map_ms=0` says it decides instantly — not a timeout, not a cost.
+
+### ⊘ What this does NOT yet show, stated so the result is not over-read
+
+⚠ **The VAS was allocated with `vaSize = 0`** — *"the default range"* (`rm.rs:7377`, and the
+comment says so: *"Per-`Vas` separation is the property that matters, not the geometry"*). **An
+11.6 GiB mapping may simply not fit the default range**, in which case this is a limit of **how we
+asked**, not of what RM will do. `NvVaspaceAllocationParameters` carries `va_start_internal` and
+`va_limit_internal` (`kayfabe-abi/src/bringup.rs:282-284`) and neither has ever been set here.
+
+⇒ **The next experiment is one field, not a redesign:** allocate the VAS with an explicit range
+covering the object and re-run the same ladder. Until then §10's estimate stands unchanged — this
+is **not** a refutation of the identity window, and must not be reported as one.
+
+### ★ And two instrument lessons, both mine
+
+1. **v1 of this arm discarded the error** (`mapped.ok()`), so the first run reported the bare word
+   `REFUSED` and cost a full round trip. The same defect I spent the day fixing in five shell
+   scripts — **reporting failure without reporting why** — written fresh, by me, hours later.
+2. **One guess is not an experiment.** v1 asked for a single base; the *ladder* is what showed the
+   address is not the variable, and RM's own choice is what showed it is not our arithmetic. Both
+   cost nothing and both were absent from v1.
