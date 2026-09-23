@@ -5504,6 +5504,48 @@ fn w381_retired(rm: &HostRmBackend, chan: kayfabe_isolate::HostHandle) -> &'stat
 }
 
 
+/// ★★★★★ FIXED placement at guest-shaped VAs in a DEFAULT VA space — step 4's output shape.
+fn fixed_placement(rm: &mut HostRmBackend) -> bool {
+    println!("REV_UNDER_TEST={}", option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped"));
+    // ⊘ VAs a real guest uses (§21 live boot, the native oracle's semaphore page, typical UVM
+    // and CUDA heap addresses), each backed by a slice at a DIFFERENT object offset — including
+    // one near the top where the guest's own tables live.
+    let cases: &[(u64, u64)] = &[
+        (0x0000_0001_2000_0000, 0),                 // the corpus/live CE channel VA
+        (0x0000_0002_0440_0000, 0x10_0000),         // the native oracle's semaphore page region
+        (0x0000_0020_0000_0000, 0x200_0000),        // 128 GiB — a CUDA-heap-shaped VA
+        (0x0000_7f00_0000_0000, 0x4000_0000),       // high — near a 47-bit user VA top
+        (0x0000_0001_2001_0000, 0x2cea0_0000),      // adjacent VA, slice at the tables' offset
+    ];
+    let obj_mb = 11760u64;
+    match rm.prove_fixed_placement(obj_mb << 20, cases) {
+        Ok(rows) => {
+            let mut exact = 0;
+            for (va, off, r) in &rows {
+                match r {
+                    Ok(g) if g == va => { exact += 1; println!("FIXED_PLACE va={va:#x} off={off:#x} got={g:#x} EXACT") }
+                    Ok(g) => println!("FIXED_PLACE va={va:#x} off={off:#x} got={g:#x} MOVED"),
+                    Err(e) => println!("FIXED_PLACE va={va:#x} off={off:#x} REFUSED {e}"),
+                }
+            }
+            println!("FIXED_PLACEMENT exact={exact}/{} obj_mib={obj_mb}", rows.len());
+            if exact == rows.len() {
+                println!("RUNGCTL_fixed_placement=PASS");
+                println!("RUNG_fixed_placement=PASS");
+                true
+            } else {
+                println!("RUNGCTL_fixed_placement=FAIL");
+                false
+            }
+        }
+        Err(e) => {
+            println!("FIXED_PLACEMENT ⊘ SETUP REFUSED {e}");
+            println!("RUNGCTL_fixed_placement=FAIL");
+            false
+        }
+    }
+}
+
 /// ★★★★★ **THE CUDA WINDOW** — step 4's precondition: the walker, in libcuda's VA space, reads the
 /// guest's page tables IN PLACE in the one GPGA object. See `HostRmBackend::prove_cuda_window`.
 fn cuda_window(rm: &mut HostRmBackend) -> bool {
@@ -14157,6 +14199,7 @@ fn main() -> std::process::ExitCode {
     let mut want_gpga_probe = false;
     let mut want_identity_window = false;
     let mut want_cuda_window = false;
+    let mut want_fixed_placement = false;
     let mut want_atomics = false;
     // ★★★★★ w750 — ROUTE K, PHASE 1. Parsed and dispatched HERE, before every other flag,
     // because two of the three arms are **this same binary re-executed** by
@@ -14380,6 +14423,7 @@ fn main() -> std::process::ExitCode {
             "--gpga-reserve-probe" => want_gpga_probe = true,
             "--identity-window" => want_identity_window = true,
             "--cuda-window" => want_cuda_window = true,
+            "--fixed-placement" => want_fixed_placement = true,
             "--atomics-probe" => want_atomics = true,
             "--pce-mask-probe" => want_pce_mask = true,
             "--osdesc-probe" => want_osdesc = Some(OsDescSeed::BeforeDescribe),
@@ -15963,6 +16007,10 @@ fn main() -> std::process::ExitCode {
             }
             isolate.checkin(w);
         }
+    }
+
+    if want_fixed_placement && !fixed_placement(&mut rm) {
+        return std::process::ExitCode::from(1);
     }
 
     if want_cuda_window && !cuda_window(&mut rm) {

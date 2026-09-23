@@ -13608,6 +13608,46 @@ impl HostRmBackend {
         out
     }
 
+    /// ★★★★★ **FIXED PLACEMENT AT GUEST-SHAPED VAs, in a DEFAULT (RM-managed) VA space.**
+    ///
+    /// ⊘ `[w825]` Every FIXED refusal in `THE_TRANSLATED_PLANE.md` §13–§16 ran in one of two
+    /// broken shapes: a **shared-managed** space (where even a plain CE copy failed — the space
+    /// itself was unusable), or a default space at **11 904 MiB**, over the ceiling. ⇒ "FIXED at a
+    /// chosen VA, in a normal space, at a size RM accepts" was never run — and it is exactly the
+    /// production shape of step 4, which maps slices of the one object at the GUEST's own VAs.
+    ///
+    /// Each VA gets a 64 KiB slice of the object at offset `off`, FIXED, then is unmapped.
+    /// Returns `(va, Ok(got) | Err(why))` per VA.
+    pub fn prove_fixed_placement(
+        &mut self,
+        obj_bytes: u64,
+        vas_list: &[(u64, u64)],
+    ) -> Result<Vec<(u64, u64, Result<u64, String>)>, String> {
+        let obj = self.conn.reserve_gpga(obj_bytes).map_err(|e| format!("reserve: {e:?}"))?;
+        let vas = match self.alloc_vaspace() {
+            Ok(v) => v,
+            Err(e) => {
+                let _ = self.free(self.stamp(obj));
+                return Err(format!("vaspace: {e:?}"));
+            }
+        };
+        let h_dma = self.narrow(vas).map_err(|e| format!("narrow: {e:?}"))?;
+        let mut out = Vec::new();
+        for &(va, off) in vas_list {
+            let r = self
+                .conn
+                .raw_map_dma_slice(h_dma, obj, off, 0x1_0000, Some(va), 0, true)
+                .map_err(|e| format!("{e:?}"));
+            if let Ok(got) = r {
+                let _ = self.unmap_local(vas, got);
+            }
+            out.push((va, off, r));
+        }
+        let _ = self.free(vas);
+        let _ = self.free(self.stamp(obj));
+        Ok(out)
+    }
+
     /// ★★★ **NARROW THE CEILING.** `largest_mappable_mb` halves and stops at the first success,
     /// so it brackets rather than answers. This bisects `(good, bad)` to the nearest MiB step.
     pub fn narrow_map_ceiling_mb(&mut self, good_mb: u64, bad_mb: u64) -> u64 {
