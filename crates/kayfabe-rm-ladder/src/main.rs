@@ -5504,6 +5504,59 @@ fn w381_retired(rm: &HostRmBackend, chan: kayfabe_isolate::HostHandle) -> &'stat
 }
 
 
+/// ★★★★★ **THE CUDA WINDOW** — step 4's precondition: the walker, in libcuda's VA space, reads the
+/// guest's page tables IN PLACE in the one GPGA object. See `HostRmBackend::prove_cuda_window`.
+fn cuda_window(rm: &mut HostRmBackend) -> bool {
+    println!("REV_UNDER_TEST={}", option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped"));
+    #[cfg(not(feature = "cuda-window"))]
+    {
+        let _ = rm;
+        // ⊘ NOTRUN, not FAIL: a binary built without the feature has not tested anything.
+        println!("CUDA_WINDOW ⊘ NOTRUN — built without --features cuda-window");
+        println!("RUNG_cuda_window=NOTRUN");
+        return false;
+    }
+    #[cfg(feature = "cuda-window")]
+    {
+        // ⊘ Sized like the identity window (§15): what is MAPPABLE, not what is reservable.
+        let mb = rm.largest_reservable_mb(12288);
+        let bytes = mb.min(11857) << 20;
+        // ★ Near the live guest's own roots (§21: pdb≈0x2cea9c000 ≈ 11498 MiB), page-aligned.
+        let origin: u64 = 0x2cea0_0000;
+        println!("CUDA_WINDOW object_mib={} origin={origin:#x} ({} MiB)", bytes >> 20, origin >> 20);
+        match rm.prove_cuda_window(bytes, origin) {
+            Ok(ev) => {
+                println!(
+                    "CUDA_WINDOW dptr={:#x} root={:#x} found={} runs={} walk_us={} \
+                     control_found_nothing={} control_runs={}",
+                    ev.dptr, ev.root, ev.found, ev.runs, ev.walk_us,
+                    ev.control_found_nothing, ev.control_runs
+                );
+                if ev.found && ev.control_found_nothing {
+                    println!("CUDA_WINDOW ✔ the walker reads the guest's tables IN PLACE at {} MiB", origin >> 20);
+                    println!("RUNGCTL_cuda_window=PASS");
+                    println!("RUNG_cuda_window=PASS");
+                    true
+                } else {
+                    println!(
+                        "FAIL  cuda window        = found={} control_found_nothing={} — {}",
+                        ev.found, ev.control_found_nothing,
+                        if !ev.found { "the walk did not find the fixture in the object" }
+                        else { "the walk still found it after the root was zeroed: NOT reading the live object" }
+                    );
+                    println!("RUNGCTL_cuda_window=FAIL");
+                    false
+                }
+            }
+            Err(e) => {
+                println!("CUDA_WINDOW ⊘ REFUSED {e}");
+                println!("RUNGCTL_cuda_window=FAIL");
+                false
+            }
+        }
+    }
+}
+
 /// ★★★★★ **THE IDENTITY WINDOW** — the first experiment of `THE_TRANSLATED_PLANE.md` §11.
 ///
 /// Reserve the guest's whole framebuffer as **one** RM object and map **all of it** into a fresh
@@ -14104,6 +14157,7 @@ fn main() -> std::process::ExitCode {
     // ⊘ w735: this was declared TWICE in a row; the first was dead and warned. One only.
     let mut want_gpga_probe = false;
     let mut want_identity_window = false;
+    let mut want_cuda_window = false;
     let mut want_atomics = false;
     // ★★★★★ w750 — ROUTE K, PHASE 1. Parsed and dispatched HERE, before every other flag,
     // because two of the three arms are **this same binary re-executed** by
@@ -14326,6 +14380,7 @@ fn main() -> std::process::ExitCode {
             // PCIe? Both answers decide the design before a five-minute boot can.
             "--gpga-reserve-probe" => want_gpga_probe = true,
             "--identity-window" => want_identity_window = true,
+            "--cuda-window" => want_cuda_window = true,
             "--atomics-probe" => want_atomics = true,
             "--pce-mask-probe" => want_pce_mask = true,
             "--osdesc-probe" => want_osdesc = Some(OsDescSeed::BeforeDescribe),
@@ -15909,6 +15964,10 @@ fn main() -> std::process::ExitCode {
             }
             isolate.checkin(w);
         }
+    }
+
+    if want_cuda_window && !cuda_window(&mut rm) {
+        return std::process::ExitCode::from(1);
     }
 
     if want_identity_window && !identity_window(&mut rm) {

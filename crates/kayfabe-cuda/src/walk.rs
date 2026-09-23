@@ -664,6 +664,43 @@ impl WalkKernel {
         })
     }
 
+    /// ★★★ **Import an RM-exported object into THIS kernel's context** and map it whole.
+    ///
+    /// ⊘ `[w825]` It must be this context. `arm_store_device_pointer` imports through a
+    /// separately-opened `Cuda` handle; a pointer minted in another context is not one this
+    /// kernel can dereference, and nothing would say so until a walk read garbage. ⇒ The import
+    /// lives on the kernel, with the kernel's context made current first.
+    ///
+    /// `fd` is the `/dev/nvidiactl` fd RM exported the object to (`w755i`: RM imports and
+    /// exports only through a control fd, never a dma-buf).
+    ///
+    /// # Errors
+    /// [`CudaError::Refused`] naming the import step that failed.
+    pub fn import_store(&self, fd: i32, bytes: u64) -> Result<CUdeviceptr, CudaError> {
+        self.make_current()?;
+        let n = usize::try_from(bytes).map_err(|_| CudaError::Refused {
+            what: "import_store: object length does not fit usize",
+            code: 0,
+            name: format!("{bytes:#x}"),
+        })?;
+        // ⊘ `import_and_map` reports which of its four steps refused as a string; carried in
+        // `name` verbatim so the step is not lost to a generic code.
+        self.cu.import_and_map(0, fd, n).map_err(|name| CudaError::Refused {
+            what: "cuMemImportFromShareableHandle + cuMemMap",
+            code: 0,
+            name,
+        })
+    }
+
+    /// Copy host bytes to an **arbitrary** device address — used to place tables at the
+    /// offsets the guest actually uses, inside an imported object, without relocating them.
+    ///
+    /// # Errors
+    /// [`CudaError`].
+    pub fn write_at(&self, dst: CUdeviceptr, bytes: &[u8]) -> Result<(), CudaError> {
+        self.cu.memcpy_h2d(dst, bytes, "cuMemcpyHtoD(write_at)")
+    }
+
     /// Release an image returned by [`WalkKernel::upload`].
     pub fn release(&self, img: DeviceImage) {
         self.cu.mem_free(img.ptr);

@@ -6404,6 +6404,25 @@ impl TiledWindowEvidence {
     }
 }
 
+/// What `prove_cuda_window` established. ⊘ Every field is a measurement; the arm decides.
+#[cfg(feature = "cuda-scratchpad")]
+#[derive(Debug, Clone)]
+pub struct CudaWindowEvidence {
+    pub object_bytes: u64,
+    /// The object's base in the WALKER's (libcuda's) address space.
+    pub dptr: u64,
+    /// Where the fixture's tables were written — the guest's real neighbourhood.
+    pub origin: u64,
+    pub root: u64,
+    /// The walk over the live object found exactly the fixture's mapping.
+    pub found: bool,
+    pub runs: usize,
+    /// ★ The control: after zeroing the root IN PLACE, a second walk found nothing.
+    pub control_found_nothing: bool,
+    pub control_runs: usize,
+    pub walk_us: u128,
+}
+
 /// What `prove_identity_window` established.
 ///
 /// ⊘⊘⊘ **v1 OF THIS STRUCT DISCARDED THE ERROR** — it stored `mapped.ok()`, so a refusal
@@ -13512,6 +13531,69 @@ impl HostRmBackend {
         let _ = self.free(vas);
         let _ = self.free(self.stamp(ramobj));
         let _ = self.free(self.stamp(fb));
+        out
+    }
+
+    /// ★★★★★ **THE CUDA WINDOW — the walker reads the guest's tables IN PLACE, in the ONE object.**
+    ///
+    /// Step 4 of `THE_TRANSLATED_PLANE.md` §9 runs the walk kernel in **libcuda's** VA space (the
+    /// owner's VA #1), so the GPGA object must be visible *there*, not only in our RM space where
+    /// §15 measured it. `[measured w755x]` the import path works (RM exports to a control fd,
+    /// CUDA imports + maps); `[w758]` recorded that the resulting pointer had **zero readers**.
+    /// ⇒ This is the reader.
+    ///
+    /// ⊘ The fixture's tables are written at `origin` — chosen near the live guest's own roots
+    /// (`pdb≈0x2cea9c000`, §21) — with **absolute** entries (`synth::Image::at`), so nothing is
+    /// relocated on the way in. The kernel is handed the object's base and length and nothing else.
+    ///
+    /// ★ **The control is what makes it evidence.** After the walk, the root is **zeroed in place**
+    /// and the walk repeated. It must find nothing. A walker reading a staged copy — the shape
+    /// w758 caught — would still find the mapping.
+    #[cfg(feature = "cuda-scratchpad")]
+    pub fn prove_cuda_window(&mut self, bytes: u64, origin: u64) -> Result<CudaWindowEvidence, String> {
+        use kayfabe_cuda::{abi::kf_format_ver2, synth, WalkCfg, WalkKernel};
+
+        let obj = self.conn.reserve_gpga(bytes).map_err(|e| format!("reserve: {e:?}"))?;
+        let out = (|| -> Result<CudaWindowEvidence, String> {
+            let ctl = CharDevice::openat(&self.conn.dev, c"nvidiactl")
+                .map_err(|e| format!("open nvidiactl: {e:?}"))?;
+            self.conn
+                .export_object_to_fd(obj, ctl.fd_number())
+                .map_err(|e| format!("rm export: {e:?}"))?;
+            let mut k = WalkKernel::bring_up(WalkCfg::default(), kf_format_ver2())
+                .map_err(|e| format!("walk bring_up: {e}"))?;
+            let dptr = k.import_store(ctl.fd_number(), bytes).map_err(|e| format!("{e}"))?;
+
+            const VA: u64 = 0x1_2000_0000;
+            const PHYS: u64 = 0x4000_0000;
+            let (img, root, want) = synth::contiguous_small_pages_at(origin, VA, 16, PHYS);
+            if origin + img.mem.len() as u64 > bytes {
+                return Err(format!("fixture at {origin:#x} runs past the object ({bytes:#x})"));
+            }
+            k.write_at(dptr + origin, &img.mem).map_err(|e| format!("write fixture: {e}"))?;
+
+            let t0 = std::time::Instant::now();
+            let rep = k.refresh(dptr, bytes, &[root]).map_err(|e| format!("walk: {e}"))?;
+            let walk_us = t0.elapsed().as_micros();
+            rep.validate().map_err(|e| format!("report invalid: {e:?}"))?;
+            let found = rep.runs.iter().any(|r| r.va == want.va && r.gpga == want.gpga && r.len == want.len);
+            let runs = rep.runs.len();
+
+            // ★ THE CONTROL — zero the root IN THE OBJECT and walk again.
+            let zeros = vec![0u8; 4096];
+            k.write_at(dptr + root, &zeros).map_err(|e| format!("zero root: {e}"))?;
+            let rep2 = k.refresh(dptr, bytes, &[root]).map_err(|e| format!("control walk: {e}"))?;
+            let control_found_nothing = !rep2.runs.iter().any(|r| r.va == want.va && r.gpga == want.gpga);
+            let control_runs = rep2.runs.len();
+
+            drop(k);   // destroys the context, releasing the import and its mapping
+            drop(ctl); // then the export fd
+            Ok(CudaWindowEvidence {
+                object_bytes: bytes, dptr, origin, root, found, runs,
+                control_found_nothing, control_runs, walk_us,
+            })
+        })();
+        let _ = self.free(self.stamp(obj));
         out
     }
 

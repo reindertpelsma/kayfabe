@@ -108,19 +108,27 @@ pub fn vis(va: u64) -> usize {
 /// `nvkvm_gpu_emul.c:8615`), so a table placed there would be invisible rather than wrong —
 /// the worst kind of test fixture.
 pub struct Image {
-    /// The bytes.
+    /// The bytes. `mem[0]` sits at GPGA offset [`Image::origin`].
     pub mem: Vec<u8>,
     bump: u64,
+    /// ★ `[w825]` The GPGA offset of `mem[0]`. Every offset this image hands out and every
+    /// entry it writes is ABSOLUTE — so an image built at `origin = 11.5 GiB` names the
+    /// addresses a real guest's tables name, and is copied there verbatim. ⊘ No entry is ever
+    /// rewritten on the way: rewriting is the relocation the identity window exists to remove.
+    pub origin: u64,
 }
 
 impl Image {
     /// A zeroed image of `bytes`.
     #[must_use]
     pub fn new(bytes: usize) -> Image {
-        Image {
-            mem: vec![0u8; bytes],
-            bump: 4096,
-        }
+        Image::at(0, bytes)
+    }
+
+    /// An image whose first byte is GPGA offset `origin`. Offset 0 is still never handed out.
+    #[must_use]
+    pub fn at(origin: u64, bytes: usize) -> Image {
+        Image { mem: vec![0u8; bytes], bump: origin.max(4096), origin }
     }
 
     /// Carve `bytes` at `align`. Panics if the image is too small — a fixture that silently
@@ -133,7 +141,7 @@ impl Image {
         let o = self.bump;
         self.bump += bytes;
         assert!(
-            self.bump <= self.mem.len() as u64,
+            self.bump - self.origin <= self.mem.len() as u64,
             "the synthetic GPGA image is too small: wanted {} bytes, have {}",
             self.bump,
             self.mem.len()
@@ -146,7 +154,7 @@ impl Image {
     /// # Panics
     /// If `off` is out of range.
     pub fn put64(&mut self, off: u64, v: u64) {
-        let o = usize::try_from(off).expect("a GPGA offset fits usize");
+        let o = usize::try_from(off - self.origin).expect("a GPGA offset fits usize");
         self.mem[o..o + 8].copy_from_slice(&v.to_le_bytes());
     }
 
@@ -189,11 +197,26 @@ pub struct Expect {
 /// If `pages` is zero, or the image is too small for the tables it implies.
 #[must_use]
 pub fn contiguous_small_pages(va_base: u64, pages: u64, phys_base: u64) -> (Image, u64, Expect) {
+    contiguous_small_pages_at(0, va_base, pages, phys_base)
+}
+
+/// [`contiguous_small_pages`], with the TABLES placed at GPGA offset `origin` and upward.
+///
+/// ⊘ `[w825]` The live guest's VAS roots sit near **11.5 GiB** (`pdb=0x2cea9c000`). A fixture
+/// laid out from offset 4096 never exercises the question that matters for an identity window:
+/// whether the kernel can reach tables *that high*, in place.
+#[must_use]
+pub fn contiguous_small_pages_at(
+    origin: u64,
+    va_base: u64,
+    pages: u64,
+    phys_base: u64,
+) -> (Image, u64, Expect) {
     assert!(pages > 0, "a fixture with no mappings proves nothing");
     // ⊘ Sized from the fixture rather than a round number, so growing `pages` cannot silently
     // outgrow the image: five tables plus the pages' own backing, plus slack for alignment.
     let bytes = 0x40_0000 + usize::try_from(pages * 4096).expect("pages fit usize");
-    let mut img = Image::new(bytes);
+    let mut img = Image::at(origin, bytes);
 
     let pd3 = img.alloc(4 * 8, 4096);
     let pd2 = img.alloc(512 * 8, 4096);
