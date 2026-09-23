@@ -2522,7 +2522,18 @@ impl BarMirror {
             self.repoint_pramin();
         }
         let mut why = 0u64;
-        if out.invalidate.as_ref().is_some_and(|inv| inv.trigger) {
+        // ⊘⊘ **w825 — only an invalidate that can reach a BAR space.** The mirror's slots are
+        // BAR1/BAR2 translations; an invalidate naming a USER address space cannot change one.
+        // `[measured w825f --ce-client-guest-ram]` every one of 1 339 invalidates re-walked
+        // every slot (`reval` ≈ 5.3 ms flat), and the guest was held for it on each map:
+        // 13 000 maps ≈ 70 s of pure revalidation. BAR invalidates carry `hubtlb_only`
+        // (measured: `named=[0]`/`[2d0cac000]` hubtlb_only=1, user roots hubtlb_only=0), and
+        // `all_pdb` names every space. ⊘ A BAR PDE rewrite still revalidates through `why |= 2`.
+        if out
+            .invalidate
+            .as_ref()
+            .is_some_and(|inv| inv.trigger && (inv.all_pdb || inv.hubtlb_only))
+        {
             why |= 1;
         }
         let u = self.plane.bar_pde_counts().0;
