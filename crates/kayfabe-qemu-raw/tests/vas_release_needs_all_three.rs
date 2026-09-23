@@ -108,14 +108,14 @@ fn release_checks_mappings_and_table_separately() {
          reported as a success."
     );
     assert!(
-        body.contains(".remove(&vas.raw())"),
+        body.contains(".remove(&vas)"),
         "★★★★★ `release_vas` no longer forgets the space. A ledger that keeps a released \
          space refuses every later adopt of the same handle."
     );
     // ⊘ ORDER: RM must agree BEFORE the ledger forgets. A ledger that forgets a range RM
     //   still holds is a leak this port can no longer even name.
     let freed = body.find("rm.free(range)").expect("pinned above");
-    let forgot = body.find(".remove(&vas.raw())").expect("pinned above");
+    let forgot = body.find(".remove(&vas)").expect("pinned above");
     assert!(
         freed < forgot,
         "★★★★★ `release_vas` forgets the space before RM frees the range. If the free then \

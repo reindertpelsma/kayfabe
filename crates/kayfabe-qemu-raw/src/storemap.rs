@@ -53,6 +53,10 @@ use crate::scratchpad::SharedIsolate;
 pub enum StoreMapRefusal {
     /// The scratchpad offered no worker. Its pool is saturated or it is retired.
     NoWorker,
+    /// ★★★★★ **§18 — the guest-RAM object does not exist**, and `why` says whether it was
+    /// never asked for (no guest RAM armed), is being built right now, or RM refused it.
+    /// ⊘ Never degraded to a per-page pin: that path is the one this object retires.
+    NoGuestRamObject { why: String },
     /// RM refused, verbatim.
     Rm(String),
     /// ★ The address space was never handed over, so this port has no `hDma` for it.
@@ -160,6 +164,7 @@ impl StoreMapRefusal {
     pub fn name(&self) -> &'static str {
         match self {
             StoreMapRefusal::NoWorker => "NoWorker",
+            StoreMapRefusal::NoGuestRamObject { .. } => "NoGuestRamObject",
             StoreMapRefusal::Rm(_) => "Rm",
             StoreMapRefusal::NotAdopted { .. } => "NotAdopted",
             StoreMapRefusal::OutOfRange { .. } => "OutOfRange",
@@ -191,6 +196,87 @@ impl StoreMapRefusal {
             other => format!("{other:?}"),
         }
     }
+}
+
+/// ★★★★★ §18 — WHICH ground truth a diff list's runs are slices of. Named by the caller at
+/// the one door ([`StoreMapPort::apply_ops`]), so the diff list stays the only executor for
+/// BOTH objects rather than growing a second mutator for the second one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SliceOf {
+    /// The ONE reserved video-memory object (GPGA); a run's `gpga` is an offset into it.
+    Store,
+    /// The ONE guest-RAM object; a run's `gpga` field carries the memfd FILE OFFSET, and
+    /// `bytes` is the block's extent (used only to build the object the first time).
+    GuestRam { bytes: u64 },
+}
+
+/// The resolved object behind a [`SliceOf`]. Private: callers name the ground truth, never a
+/// handle.
+#[derive(Debug, Clone, Copy)]
+struct SliceTarget {
+    obj: HostHandle,
+    len: u64,
+    ram: bool,
+}
+
+/// ★★★★★ §18 — where the one guest-RAM object stands.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum RamObject {
+    /// Nobody has asked for it yet.
+    NotAsked,
+    /// A publication is building it right now; a concurrent caller is told so, by name,
+    /// rather than building a second object.
+    Asking,
+    /// Held: the scratchpad's `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` over the whole block.
+    Held { obj: HostHandle, len: u64 },
+    /// Refused once; never re-asked (a retry per publish is the per-row pin storm again,
+    /// one level up).
+    Refused(String),
+}
+
+/// ★ The bounds rule for a slice of the guest-RAM object, kept a free function so it is
+/// testable with no GPU: `[file_offset, file_offset + len)` must lie inside `[0, obj_len)`,
+/// and a zero-length slice is refused rather than mapped as nothing.
+///
+/// # Errors
+/// [`StoreMapRefusal::OutOfRange`], carrying the numbers.
+pub fn ram_slice_in_bounds(
+    file_offset: u64,
+    len: u64,
+    obj_len: u64,
+) -> Result<(), StoreMapRefusal> {
+    if len == 0 || file_offset.checked_add(len).is_none_or(|end| end > obj_len) {
+        return Err(StoreMapRefusal::OutOfRange {
+            offset: file_offset,
+            len,
+            obj_len,
+        });
+    }
+    Ok(())
+}
+
+/// ★ Merge guest-RAM rows `(va, file_offset, len)` into maximal runs that are contiguous in
+/// BOTH the guest VA and the file, so one FIXED map covers what the guest mapped as many
+/// pages. Rows must arrive in VA order (the address table iterates in VA order); an
+/// out-of-order or overlapping row simply starts a new run.
+#[must_use]
+pub fn coalesce_ram_rows(rows: &[(u64, u64, u64)]) -> Vec<(u64, u64, u64)> {
+    let mut out: Vec<(u64, u64, u64)> = Vec::new();
+    for &(va, off, len) in rows {
+        if len == 0 {
+            continue;
+        }
+        if let Some(last) = out.last_mut()
+            && last.0.checked_add(last.2) == Some(va)
+            && last.1.checked_add(last.2) == Some(off)
+            && let Some(n) = last.2.checked_add(len)
+        {
+            last.2 = n;
+            continue;
+        }
+        out.push((va, off, len));
+    }
+    out
 }
 
 /// One placed slice, as this port remembers it.
@@ -226,6 +312,18 @@ pub struct StoreMapPort {
     /// `(scratchpad range, guest VA) -> what was placed there`. **The ledger the restated
     /// ring assertion reads.**
     placed: std::sync::Mutex<std::collections::BTreeMap<(u64, u64), Placed>>,
+    /// ★★★★★ **§18 — the SECOND ground truth: guest RAM as ONE RM object.** Built once,
+    /// lazily, off-vCPU, from the scratchpad's spawn-time guest-RAM grant. See
+    /// [`StoreMapPort::guest_ram_object`].
+    ram: std::sync::Mutex<RamObject>,
+    /// `(scratchpad range, guest VA) -> slice of the guest-RAM object placed there`.
+    /// ⊘ A SEPARATE ledger from `placed`: `is_slice_of_the_store` and `slice_offset` read
+    /// `placed` as "a slice of the GPGA object", and a RAM slice answering yes there would be
+    /// a ring adopted over bytes that are not the store.
+    ram_placed: std::sync::Mutex<std::collections::BTreeMap<(u64, u64), Placed>>,
+    ram_maps: AtomicU64,
+    ram_map_refused: AtomicU64,
+    ram_bytes_mapped: AtomicU64,
     adopts: AtomicU64,
     adopt_refused: AtomicU64,
     maps: AtomicU64,
@@ -373,6 +471,11 @@ impl StoreMapPort {
             obj_len,
             adopted: std::sync::Mutex::new(std::collections::BTreeMap::new()),
             placed: std::sync::Mutex::new(std::collections::BTreeMap::new()),
+            ram: std::sync::Mutex::new(RamObject::NotAsked),
+            ram_placed: std::sync::Mutex::new(std::collections::BTreeMap::new()),
+            ram_maps: AtomicU64::new(0),
+            ram_map_refused: AtomicU64::new(0),
+            ram_bytes_mapped: AtomicU64::new(0),
             adopts: AtomicU64::new(0),
             adopt_refused: AtomicU64::new(0),
             maps: AtomicU64::new(0),
@@ -565,6 +668,7 @@ impl StoreMapPort {
     /// relocated arrives as a refusal rather than as an `Ok` naming the wrong address.
     fn map(
         &self,
+        target: SliceTarget,
         vas: HostHandle,
         offset: u64,
         len: u64,
@@ -573,16 +677,16 @@ impl StoreMapPort {
         // ⊘ The bounds check is OURS. RM maps whatever offset it is handed; a run past the
         // reservation's end is a guest range pointed at memory this object does not cover,
         // and it would fault later, somewhere else, as somebody else's bug.
-        if offset.checked_add(len).is_none_or(|end| end > self.obj_len) {
-            self.map_refused.fetch_add(1, Ordering::Relaxed);
+        if offset.checked_add(len).is_none_or(|end| end > target.len) {
+            self.count_map_refused(target);
             return Err(self.note(StoreMapRefusal::OutOfRange {
                 offset,
                 len,
-                obj_len: self.obj_len,
+                obj_len: target.len,
             }));
         }
         // ★★★ w755 — see `Self::offset_less_aligned_than_len`. A count, never a refusal.
-        if len > 0 && len.is_power_of_two() && offset % len != 0 {
+        if !target.ram && len > 0 && len.is_power_of_two() && offset % len != 0 {
             self.offset_less_aligned_than_len
                 .fetch_add(1, Ordering::Relaxed);
         }
@@ -608,16 +712,32 @@ impl StoreMapPort {
         // is two memories at one address, the state the single store exists to abolish — so
         // it is refused by name rather than silently re-placed.
         {
-            let placed = self
-                .placed
+            // ★ w825 (§18) — TWO ledgers, one per ground truth, and a VA holds at most one
+            // slice across BOTH: the guest may move a VA between guest RAM and vidmem, and RM
+            // refuses a FIXED map over a live one (0x51). So "already placed" is asked of the
+            // SAME object's ledger, and the re-point below fires for a slice of EITHER.
+            let key = (vas.raw(), at.0);
+            let (same_ledger, other_ledger) = if target.ram {
+                (&self.ram_placed, &self.placed)
+            } else {
+                (&self.placed, &self.ram_placed)
+            };
+            let same = same_ledger
                 .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if let Some(prev) = placed.get(&(vas.raw(), at.0)) {
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get(&key)
+                .copied();
+            let other = other_ledger
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get(&key)
+                .copied();
+            if let (Some(prev), None) = (same, other) {
                 if prev.offset == offset && prev.len == len {
                     return Ok(at.0);
                 }
-                let prev = *prev;
-                drop(placed);
+            }
+            if let Some(prev) = same.or(other) {
                 // ★★★★★ **w755g — THE RE-POINT: UNMAP THE OLD SLICE, THEN MAP THE NEW.**
                 //
                 // ⊘⊘⊘ This arm used to refuse `AlreadyPlacedDifferently`. That is right for
@@ -644,7 +764,7 @@ impl StoreMapPort {
                 // "the old one is probably gone" is the assumption this whole defect was.
                 self.replaced.fetch_add(1, Ordering::Relaxed);
                 if let Err(e) = self.unmap(vas, at) {
-                    self.map_refused.fetch_add(1, Ordering::Relaxed);
+                    self.count_map_refused(target);
                     return Err(self.note(StoreMapRefusal::ReplaceUnmapRefused {
                         at: at.0,
                         had_offset: prev.offset,
@@ -657,14 +777,14 @@ impl StoreMapPort {
             }
         }
         let off = self.off_vcpu()?;
-        let obj = self.obj;
+        let obj = target.obj;
         let out = self.iso.with_worker(|worker| {
             worker.with_rm(&off, |rm| rm.map_store_slice(vas, obj, offset, len, at))
         });
         match out {
             None => Err(self.note(StoreMapRefusal::NoWorker)),
             Some(Err(e)) => {
-                self.map_refused.fetch_add(1, Ordering::Relaxed);
+                self.count_map_refused(target);
                 // ★★★★★ w755 — constraint 28 gets its OWN arm. See `StoreMapRefusal::Placement`.
                 Err(self.note(match e {
                     kayfabe_isolate::RmError::PlacementRefused { want, got } => {
@@ -674,14 +794,35 @@ impl StoreMapPort {
                 }))
             }
             Some(Ok(va)) => {
-                self.maps.fetch_add(1, Ordering::Relaxed);
-                self.bytes_mapped.fetch_add(len, Ordering::Relaxed);
-                self.placed
+                if target.ram {
+                    self.ram_maps.fetch_add(1, Ordering::Relaxed);
+                    self.ram_bytes_mapped.fetch_add(len, Ordering::Relaxed);
+                } else {
+                    self.maps.fetch_add(1, Ordering::Relaxed);
+                    self.bytes_mapped.fetch_add(len, Ordering::Relaxed);
+                }
+                self.ledger(target.ram)
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .insert((vas.raw(), at.0), Placed { offset, len });
                 Ok(va)
             }
+        }
+    }
+
+    /// The ledger for one ground truth: `placed` for the store, `ram_placed` for guest RAM.
+    fn ledger(
+        &self,
+        ram: bool,
+    ) -> &std::sync::Mutex<std::collections::BTreeMap<(u64, u64), Placed>> {
+        if ram { &self.ram_placed } else { &self.placed }
+    }
+
+    fn count_map_refused(&self, target: SliceTarget) {
+        if target.ram {
+            self.ram_map_refused.fetch_add(1, Ordering::Relaxed);
+        } else {
+            self.map_refused.fetch_add(1, Ordering::Relaxed);
         }
     }
 
@@ -694,6 +835,178 @@ impl StoreMapPort {
     ///
     /// # Errors
     /// [`StoreMapRefusal`], by name.
+    /// ★★★★★ **§18 — THE ONE GUEST-RAM OBJECT.** Maps the scratchpad's spawn-time guest-RAM
+    /// grant whole and describes it to RM as ONE `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR`, once per
+    /// VM. `bytes` is the block's extent as the composition root adopted it.
+    ///
+    /// ⊘ Asked ONCE: a refusal is remembered and returned by name on every later call. The
+    /// per-row pin path re-asked on every publish and `[measured w825base --engines]` served
+    /// ~99 000 worker requests doing so while the guest's RM replies queued behind them.
+    ///
+    /// # Errors
+    /// [`StoreMapRefusal::NoGuestRamObject`] / [`StoreMapRefusal::OnVcpu`] /
+    /// [`StoreMapRefusal::NoWorker`], by name.
+    pub fn guest_ram_object(&self, bytes: u64) -> Result<(HostHandle, u64), StoreMapRefusal> {
+        {
+            let mut g = self
+                .ram
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            match &*g {
+                RamObject::Held { obj, len } => return Ok((*obj, *len)),
+                RamObject::Asking => {
+                    return Err(StoreMapRefusal::NoGuestRamObject {
+                        why: "being built by another publication right now".to_string(),
+                    });
+                }
+                RamObject::Refused(why) => {
+                    return Err(StoreMapRefusal::NoGuestRamObject { why: why.clone() });
+                }
+                RamObject::NotAsked => {}
+            }
+            if bytes == 0 {
+                return Err(StoreMapRefusal::NoGuestRamObject {
+                    why: "no guest-RAM block was adopted (KAYFABE_GUEST_RAM unset?)".to_string(),
+                });
+            }
+            *g = RamObject::Asking;
+        }
+        let off = match self.off_vcpu() {
+            Ok(o) => o,
+            Err(e) => {
+                // ⊘ Not a refusal of the object: we did not ask. Back to NotAsked.
+                *self
+                    .ram
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = RamObject::NotAsked;
+                return Err(e);
+            }
+        };
+        let t0 = std::time::Instant::now();
+        let out = self.iso.with_worker(|worker| {
+            worker.with_rm(&off, |rm| {
+                let grant = kayfabe_isolate::GuestRamGrant::originated_by_the_vmm(
+                    0,
+                    bytes,
+                    kayfabe_vmm::Prot::ReadWrite,
+                );
+                let mapped = rm.map_guest_ram(grant)?;
+                match rm.describe_guest_ram(mapped) {
+                    Ok(obj) => Ok(obj),
+                    Err(e) => {
+                        let _ = rm.unmap_guest_ram(mapped);
+                        Err(e)
+                    }
+                }
+            })
+        });
+        let (next, ret) = match out {
+            None => (
+                RamObject::NotAsked,
+                Err(self.note(StoreMapRefusal::NoWorker)),
+            ),
+            Some(Err(e)) => {
+                let why = format!("RM refused the OS_DESCRIPTOR over {bytes:#x} bytes: {e:?}");
+                (
+                    RamObject::Refused(why.clone()),
+                    Err(self.note(StoreMapRefusal::NoGuestRamObject { why })),
+                )
+            }
+            Some(Ok(obj)) => (RamObject::Held { obj, len: bytes }, Ok((obj, bytes))),
+        };
+        eprintln!(
+            "kayfabe: GUEST-RAM-OBJECT bytes={bytes:#x} in {} ms → {} ⇒ §18: guest RAM is ONE RM \
+             object in the scratchpad; every sysmem row is a FIXED slice of it at the guest's \
+             own VA. ⊘ Asked once per VM.",
+            t0.elapsed().as_millis(),
+            match &ret {
+                Ok((obj, _)) => format!("★★★★★ HELD obj={obj:?}"),
+                Err(e) => format!("⊘⊘ REFUSED {e:?}"),
+            }
+        );
+        *self
+            .ram
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = next;
+        ret
+    }
+
+    /// ★★★★★ **§18 — map `[file_offset, file_offset+len)` of the guest-RAM object FIXED at
+    /// `at` in the adopted range `vas`.** The sysmem twin of the store's `map`: same verb
+    /// (`map_store_slice`, which takes the object as a parameter), same birth-client dup,
+    /// same checked placement, its own ledger.
+    ///
+    /// Idempotent: an identical placement is answered from the ledger with no IPC — which is
+    /// what lets every publish re-offer every row without a request storm.
+    ///
+    /// # Errors
+    /// [`StoreMapRefusal`], by name.
+    pub fn map_ram_slice(
+        &self,
+        vas: HostHandle,
+        bytes: u64,
+        file_offset: u64,
+        len: u64,
+        at: GpuVa,
+    ) -> Result<u64, StoreMapRefusal> {
+        // ⊘ The zero-length / overflow rule is checked here, before the batch: `apply_ops`'
+        // containment check cannot see a zero-length run as wrong.
+        let (_, obj_len) = self.guest_ram_object(bytes)?;
+        if let Err(e) = ram_slice_in_bounds(file_offset, len, obj_len) {
+            self.ram_map_refused.fetch_add(1, Ordering::Relaxed);
+            return Err(self.note(e));
+        }
+        let op = kayfabe_mmu::walkdiff::MapOp::Map(kayfabe_mmu::walkdiff::Run {
+            va: at.0,
+            gpga: file_offset,
+            len,
+            flags: 0,
+            class: kayfabe_mmu::walkdiff::PageClass::P4K,
+        });
+        let done = self.apply_ops(vas, core::slice::from_ref(&op), SliceOf::GuestRam { bytes })?;
+        done.placed
+            .first()
+            .copied()
+            .ok_or_else(|| self.note_applied_nothing())
+    }
+
+    /// ★ Whether `[va, va+len)` is already covered by ONE placed guest-RAM slice in `vas`
+    /// that maps it to `[file_offset, file_offset+len)`. Answered from the ledger alone.
+    ///
+    /// ⊘ This is what keeps coalescing from tearing a live slice down: rows already covered
+    /// are dropped BEFORE runs are merged, so a run that grows is mapped as its new tail,
+    /// never re-mapped whole under an engine that may be using its head.
+    #[must_use]
+    pub fn ram_covers(&self, vas: HostHandle, va: u64, len: u64, file_offset: u64) -> bool {
+        let g = self
+            .ram_placed
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        g.range((vas.raw(), 0)..=(vas.raw(), va))
+            .next_back()
+            .is_some_and(|(&(_, start), p)| {
+                let Some(delta) = va.checked_sub(start) else {
+                    return false;
+                };
+                delta.checked_add(len).is_some_and(|e| e <= p.len)
+                    && p.offset.checked_add(delta) == Some(file_offset)
+            })
+    }
+
+    /// `(ram_maps, ram_map_refused, ram_bytes_mapped, ram_slices_held)` — the §18 census.
+    #[must_use]
+    pub fn ram_census(&self) -> (u64, u64, u64, usize) {
+        (
+            self.ram_maps.load(Ordering::Relaxed),
+            self.ram_map_refused.load(Ordering::Relaxed),
+            self.ram_bytes_mapped.load(Ordering::Relaxed),
+            self.ram_placed
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .len(),
+        )
+    }
+
     fn unmap(&self, vas: HostHandle, at: GpuVa) -> Result<(), StoreMapRefusal> {
         let off = self.off_vcpu()?;
         let out = self
@@ -713,6 +1026,10 @@ impl StoreMapPort {
             Some(Ok(())) => {
                 self.unmaps.fetch_add(1, Ordering::Relaxed);
                 self.placed
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .remove(&(vas.raw(), at.0));
+                self.ram_placed
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .remove(&(vas.raw(), at.0));
@@ -888,8 +1205,26 @@ impl StoreMapPort {
         &self,
         vas: HostHandle,
         ops: &[kayfabe_mmu::walkdiff::MapOp],
+        of: SliceOf,
     ) -> Result<AppliedOps, StoreMapRefusal> {
         use kayfabe_mmu::walkdiff::MapOp;
+        // ★★★★★ §18 (w825) — the ground truth the runs are slices of, resolved ONCE here so
+        // the bound below and every map below use the same object.
+        let target = match of {
+            SliceOf::Store => SliceTarget {
+                obj: self.obj,
+                len: self.obj_len,
+                ram: false,
+            },
+            SliceOf::GuestRam { bytes } => {
+                let (obj, len) = self.guest_ram_object(bytes)?;
+                SliceTarget {
+                    obj,
+                    len,
+                    ram: true,
+                }
+            }
+        };
         let mut done = AppliedOps::default();
         // ⊘ Two passes over one list, not a sort: the list's own order is meaningful within
         // each kind (the differ emits coalesced runs), and sorting would discard it.
@@ -912,12 +1247,12 @@ impl StoreMapPort {
                 MapOp::Map(r) | MapOp::Remap(r) => r,
                 MapOp::Unmap(_) => continue,
             };
-            if r.gpga > self.obj_len || r.len > self.obj_len - r.gpga {
-                self.map_refused.fetch_add(1, Ordering::Relaxed);
+            if r.gpga > target.len || r.len > target.len - r.gpga {
+                self.count_map_refused(target);
                 return Err(StoreMapRefusal::OutOfRange {
                     offset: r.gpga,
                     len: r.len,
-                    obj_len: self.obj_len,
+                    obj_len: target.len,
                 });
             }
         }
@@ -934,7 +1269,8 @@ impl StoreMapPort {
                     // framebuffer address is an offset into the one reserved object. That is
                     // the whole reason the window must stay identity.
                     // ⊘ RM's ANSWER is kept, never the request. See `AppliedOps::placed`.
-                    done.placed.push(self.map(vas, r.gpga, r.len, GpuVa(r.va))?);
+                    let (off, len, at) = (r.gpga, r.len, GpuVa(r.va));
+                    done.placed.push(self.map(target, vas, off, len, at)?);
                     done.mapped += 1;
                 }
                 MapOp::Unmap(_) => {}
@@ -1034,6 +1370,15 @@ impl StoreMapPort {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .remove(&vas);
+            // ★ w825 — freeing the range took every guest-RAM slice in it down with it; the
+            // ledger forgets them here so a later map is not answered from a dead entry.
+            // ⊘ Not counted as "holding" the space above: nothing unmaps RAM slices on a
+            // guest unmap yet, so counting them would refuse every release forever.
+            let r = range.raw();
+            self.ram_placed
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .retain(|(v, _), _| *v != r);
         }
         // Condition 3 is the witness's existence: it cannot be constructed with a channel
         // still using the space.

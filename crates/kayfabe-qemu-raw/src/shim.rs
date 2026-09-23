@@ -6895,6 +6895,20 @@ impl kayfabe_device::DoorbellPort for SharedDoorbell {
 /// reach it until the forward, and the forward waits for this.
 impl kayfabe_fwd::InvalidateRefresh for SharedDoorbell {
     fn refresh_pdb(&self, pid: kayfabe_core::ProcId, pdb: kayfabe_rt::Pdb) -> (usize, usize) {
+        // ★★★★★ w825 — K arm: the rows are slices of the ONE guest-RAM object, not per-row
+        // pins through a bare space that refuses every one of them.
+        if k_arm_owns_guest_ram() {
+            note_pin_path_skipped("refresh_pdb");
+            let (m, r, _line) = publish_guest_ram_slices(
+                "INVALIDATE-REFRESH",
+                &self.device,
+                &self.ce,
+                self.guest_ram_backing,
+                pid,
+                pdb,
+            );
+            return (m, r);
+        }
         let Some(backing) = self.guest_ram_backing else {
             // ⊘ UNMEASURED, not zero: with no hypervisor layout there is nothing to resolve a
             // GPA against, so nothing was ASKED of the host. Reporting (0, 0) would read as
@@ -10377,6 +10391,20 @@ impl SharedDoorbell {
                 f.proc.0, f.chan.0
             ));
         };
+        // ★★★★★ w825 — K arm: publish this channel's space's guest-RAM rows as slices of the
+        // ONE guest-RAM object BEFORE the doorbell, instead of pinning the ring page by page.
+        if k_arm_owns_guest_ram() {
+            note_pin_path_skipped("pin_ring_guest_ram");
+            let (_m, _r, line) = publish_guest_ram_slices(
+                &head,
+                &self.device,
+                &self.ce,
+                self.guest_ram_backing,
+                f.proc,
+                pdb,
+            );
+            return Some(line);
+        }
         let who = format!(
             "{head} proc={} chan={} pdb=0x{:x} ring=0x{ring_va:x}",
             f.proc.0, f.chan.0, pdb.0
@@ -13308,7 +13336,13 @@ impl PublishContext {
         // one boot carries both halves and the line carries both sentences. ⊘ The two are
         // printed as separate clauses and never summed into one counter — they are different
         // chains over disjoint populations, and one number could not see the substitution.
-        let pin_clause = if self.vas_publish.measures_pin_rate() {
+        // ★ w825 — on the K arm guest-RAM rows are slices of the ONE guest-RAM object; the
+        // per-proc pin measurement is skipped BY NAME (see `k_arm_owns_guest_ram`).
+        let k_arm_ram = k_arm_owns_guest_ram();
+        if k_arm_ram && self.vas_publish.measures_pin_rate() {
+            note_pin_path_skipped("publish_vas_rows");
+        }
+        let pin_clause = if self.vas_publish.measures_pin_rate() && !k_arm_ram {
             let line = self.measure_guest_ram_pin_rate(&head, seen, true);
             if !self.vas_publish.publishes() {
                 return Some(line);
@@ -13479,6 +13513,19 @@ impl PublishContext {
                 }
                 published += done;
                 refused += failed;
+                // ★★★★★ §18 — and this space's guest-RAM rows, as slices of the ONE object.
+                // ⊘ Counted in their own line (`GUEST-RAM-SLICE`), not folded into the leaf
+                // counts above, which grade the vidmem publication.
+                if k_arm_ram && !system && self.vas_publish.publishes() {
+                    let _ = publish_guest_ram_slices(
+                        &head,
+                        &self.device,
+                        &self.ce,
+                        self.guest_ram_backing,
+                        pid,
+                        pdb,
+                    );
+                }
                 // ★★★★★ **w328 — ATTRIBUTE THIS VAS's WALL TIME AS IT IS SPENT.**
                 //
                 // ⊘ The census WALK is inside the bracket as well as the joins, so the two
@@ -14766,6 +14813,157 @@ fn store_owns_vas() -> bool {
 /// ledger, so the next publish re-offers the same leaf and `map` answers `0x51` for the VA it
 /// already holds — the idempotent replay, not a leak. ⊘ The alternative, unmapping here,
 /// would take a live mapping away from a channel that may already be born over it.
+/// ★★★★★ **§18 on the K arm — is this boot's VA space owned by the birth client?** When it
+/// is, guest-RAM rows are FIXED slices of the scratchpad's ONE guest-RAM object and the
+/// per-proc per-page pin path must not run: on a bare space every one of its maps is refused
+/// (`MAP_THROUGH_A_BARE_SPACE`) and `[measured w825base --engines]` it served ~99 000 worker
+/// requests re-asking, while the guest's RM replies queued behind it until the budget.
+fn k_arm_owns_guest_ram() -> bool {
+    crate::scratchpad::selected_vas_owner()
+        .map(crate::scratchpad::VasOwner::birth_client)
+        .unwrap_or(false)
+}
+
+/// Rows offered per publication. ⊘ A cap, reported when hit — never a silent truncation.
+const RAM_SLICE_ROW_CAP: usize = 65_536;
+/// How many `GUEST-RAM-SLICE` lines one boot prints; the totals ride `STORE-MAP ram=`.
+const RAM_SLICE_LINES_MAX: u64 = 24;
+static RAM_SLICE_LINES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+/// The one-shot line saying the per-proc pin path is skipped BY NAME on the K arm.
+static PIN_PATH_SKIPPED_LINES: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+
+/// ★ Say, once per site and capped, that the per-proc pin path did not run and why.
+fn note_pin_path_skipped(site: &str) {
+    let n = PIN_PATH_SKIPPED_LINES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    if n < 4 {
+        eprintln!(
+            "kayfabe: GUEST-RAM-PIN SKIPPED at={site} ⇒ ★ K arm: sysmem rows are FIXED slices \
+             of the ONE guest-RAM object (GUEST-RAM-SLICE lines), so the per-proc per-page \
+             pin path is not run. ⊘ Not deleted — other arms use it. (printed {} of 4)",
+            n + 1
+        );
+    }
+}
+
+/// ★★★★★ **§18 — publish one VA space's guest-RAM rows as FIXED slices of the ONE guest-RAM
+/// object**, at the guest's own VAs, in the range the scratchpad adopted for that space.
+///
+/// Rows come from the address table (`vas_guest_ram_rows`); each GPA is turned into a file
+/// offset by the VMM's own layout (`resolve_guest_ram`) and nowhere else; rows the ledger
+/// already covers are dropped, the rest are coalesced and mapped. Idempotent, so every
+/// publication may re-offer every row.
+///
+/// ⊘ Off-vCPU only — every verb here is an IPC round trip. Returns `(mapped_runs, refused)`
+/// and one line for the caller's log.
+#[cfg(feature = "host-isolates")]
+fn publish_guest_ram_slices(
+    head: &str,
+    device: &kayfabe_rt::device::SharedDevice,
+    ce: &CeShellState,
+    backing: Option<kayfabe_vmm_qemu::layout::BackingId>,
+    pid: kayfabe_core::ProcId,
+    pdb: kayfabe_rt::Pdb,
+) -> (usize, usize, String) {
+    let who = format!("{head} GUEST-RAM-SLICE proc={} pdb=0x{:x}", pid.0, pdb.0);
+    if kayfabe_util::lockwitness::on_vcpu_thread() || kayfabe_util::trapwitness::in_trap() {
+        return (0, 0, format!("{who} → ⊘ DECLINED on a vCPU/trap; re-offered next publish"));
+    }
+    let Some(backing) = backing else {
+        return (0, 0, format!("{who} → ⊘ NO GUEST-RAM BLOCK ADOPTED; nothing to slice"));
+    };
+    let Some(sp) = crate::storemap::store_map_port(DOORBELL_TARGET_GPU) else {
+        return (0, 0, format!("{who} → ⊘ NO STORE-MAP PORT (scratchpad not held)"));
+    };
+    let Some(store_vas) = device.store_vas(DOORBELL_TARGET_GPU, pdb) else {
+        return (
+            0,
+            0,
+            format!(
+                "{who} → ⊘ NO ADOPTED RANGE YET — this space's first vidmem leaf hands it \
+                 over; its guest-RAM rows are re-offered on the next publish"
+            ),
+        );
+    };
+    let rows = device.vas_guest_ram_rows(pid, DOORBELL_TARGET_GPU, pdb, RAM_SLICE_ROW_CAP);
+    let capped = rows.len() == RAM_SLICE_ROW_CAP;
+    let bytes = GUEST_RAM_BYTES.load(std::sync::atomic::Ordering::Relaxed);
+    let (mut unresolved, mut covered) = (0usize, 0usize);
+    let mut want: Vec<(u64, u64, u64)> = Vec::new();
+    {
+        let held = ce.vmm.lock().unwrap_or_else(|e| e.into_inner());
+        let Some(vmm) = held.as_ref() else {
+            return (0, 0, format!("{who} → ⊘ NO VMM (the layout is not attached yet)"));
+        };
+        for &(va, gpa, len) in &rows {
+            match vmm.resolve_guest_ram(backing, gpa, len) {
+                Ok(run) => {
+                    if sp.ram_covers(store_vas, va, len, run.file_offset) {
+                        covered += 1;
+                    } else {
+                        want.push((va, run.file_offset, len));
+                    }
+                }
+                Err(_) => unresolved += 1,
+            }
+        }
+    }
+    let runs = crate::storemap::coalesce_ram_rows(&want);
+    let (mut mapped, mut refused) = (0usize, 0usize);
+    let mut first_refusal: Option<String> = None;
+    for &(va, off, len) in &runs {
+        match sp.map_ram_slice(store_vas, bytes, off, len, kayfabe_rt::GpuVa(va)) {
+            Ok(_) => mapped += 1,
+            Err(e) => {
+                refused += 1;
+                if first_refusal.is_none() {
+                    first_refusal = Some(format!("va={va:#x} off={off:#x} len={len:#x}: {e:?}"));
+                }
+            }
+        }
+    }
+    let refused_total = refused + unresolved;
+    let line = format!(
+        "{who} rows={}{} covered={covered} runs={} mapped={mapped} refused={refused} \
+         unresolved={unresolved}{} ⇒ §18: each run is a FIXED slice of the ONE guest-RAM object \
+         at the guest's own VA. ⊘ `unresolved` = the VMM's layout does not state that GPA — \
+         refused by name, never guessed",
+        rows.len(),
+        if capped { " (CAPPED — the rest are offered next publish)" } else { "" },
+        runs.len(),
+        first_refusal
+            .map(|r| format!(" FIRST-REFUSAL[{r}]"))
+            .unwrap_or_default(),
+    );
+    if mapped + refused_total > 0 {
+        let n = RAM_SLICE_LINES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if n < RAM_SLICE_LINES_MAX {
+            eprintln!("kayfabe: {line}");
+        }
+    }
+    (mapped, refused_total, line)
+}
+
+#[cfg(not(feature = "host-isolates"))]
+fn publish_guest_ram_slices(
+    head: &str,
+    _device: &kayfabe_rt::device::SharedDevice,
+    _ce: &CeShellState,
+    _backing: Option<kayfabe_vmm_qemu::layout::BackingId>,
+    pid: kayfabe_core::ProcId,
+    pdb: kayfabe_rt::Pdb,
+) -> (usize, usize, String) {
+    (
+        0,
+        0,
+        format!(
+            "{head} GUEST-RAM-SLICE proc={} pdb=0x{:x} → ⊘ host_isolates=NO: this archive has no \
+             scratchpad and cannot slice guest RAM",
+            pid.0, pdb.0
+        ),
+    )
+}
+
 #[cfg(feature = "host-isolates")]
 fn map_store_slice_for_leaf(
     head: &str,
@@ -14968,7 +15166,11 @@ fn map_store_slice_for_leaf(
     // from `P1/P2/P3 ✔ VERIFIED` to `NEVER RETIRED`. `placed_as_asked` exists precisely
     // because RM may place elsewhere, and a caller handed back its own request cannot see it.
     let host_va = match sp
-        .apply_ops(store_vas, core::slice::from_ref(&op))
+        .apply_ops(
+            store_vas,
+            core::slice::from_ref(&op),
+            crate::storemap::SliceOf::Store,
+        )
         .and_then(|done| {
             done.placed.first().copied().ok_or_else(|| {
                 // A `Map` op that mapped nothing is not a success with a missing field; it is
@@ -20911,6 +21113,12 @@ fn selected_isolate_plane() -> Result<IsolatePlane, (Status, &'static str)> {
 /// same owner: a hypervisor with two `nvkvm-gpu` devices gets one answer for both.
 pub const GUEST_RAM_ENV: &str = "KAYFABE_GUEST_RAM";
 
+/// ★★★★★ §18 — the adopted guest-RAM block's extent, in bytes; `0` when none was adopted.
+/// Written once, by [`with_guest_ram`], at the one selection of which block is guest RAM, and
+/// read by the scratchpad's guest-RAM object (`StoreMapPort::guest_ram_object`). ⊘ Carried,
+/// not re-derived — the same reason `guest_ram_backing` travels beside the factory.
+pub static GUEST_RAM_BYTES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 /// ★★ The `memfd` creation name QEMU gives the machine's RAM backend.
 ///
 /// ⊘ **It is the backend TYPE, not your `id=`** — `guest_ram_crossing.md` §1.1 trap 1. A
@@ -23427,6 +23635,7 @@ fn with_guest_ram(
                 backing.ino
             );
             let (fd, bytes) = found.into_descriptor();
+            GUEST_RAM_BYTES.store(bytes, std::sync::atomic::Ordering::Relaxed);
             Ok((factory.with_guest_ram(fd, bytes), Some(backing)))
         }
         Err(kayfabe_linux_raw::MemfdRefusal::NoSuchMemfd) => Err((
