@@ -6379,6 +6379,31 @@ impl UnmapRetiresProbe {
     }
 }
 
+/// What `prove_tiled_window` established — the production shape of the identity window.
+#[derive(Debug, Clone)]
+pub struct TiledWindowEvidence {
+    pub object_bytes: u64,
+    pub tile_bytes: u64,
+    pub base: u64,
+    /// One row per tile: `(offset_into_object, asked_va, Ok(got_va) | Err(why))`.
+    pub tiles: Vec<(u64, u64, Result<u64, String>)>,
+    pub total_ms: u128,
+}
+
+impl TiledWindowEvidence {
+    /// ★★★ **The property the whole design rests on**: every tile landed at exactly
+    /// `base + offset`, so a guest FB-physical `p` **is** the GPU VA `base + p`.
+    pub fn is_identity(&self) -> bool {
+        !self.tiles.is_empty()
+            && self.tiles.iter().all(|(off, asked, got)| {
+                matches!(got, Ok(v) if *v == *asked && *asked == self.base + off)
+            })
+    }
+    pub fn landed(&self) -> usize {
+        self.tiles.iter().filter(|(_, a, g)| matches!(g, Ok(v) if v == a)).count()
+    }
+}
+
 /// What `prove_identity_window` established.
 ///
 /// ⊘⊘⊘ **v1 OF THIS STRUCT DISCARDED THE ERROR** — it stored `mapped.ok()`, so a refusal
@@ -13307,34 +13332,6 @@ impl HostRmBackend {
         Ok(self.stamp(space))
     }
 
-    /// ★★★★★ **THE IDENTITY WINDOW**, as `SHARED_MANAGEMENT` actually requires it.
-    ///
-    /// ⊘⊘⊘ `[w825]` Four earlier runs measured my instrument, not RM. The contract, from RM's
-    /// own UVM path (`nv_gpu_ops.c:2632-2637`) and `nvos.h:3161`:
-    ///
-    /// > An explicit `vaSize` **requires** `NV_VASPACE_ALLOCATION_FLAGS_SHARED_MANAGEMENT`, and
-    /// > under it **the CLIENT manages the range** — so RM will not choose an address inside it.
-    ///
-    /// ⇒ Two consequences that invalidated every earlier attempt: **every map must be FIXED**
-    /// (passing `None` must refuse, and did), and the declared range must **contain** the base
-    /// we then ask for (v4 declared `[64 GiB, 128 GiB)` and asked for five bases outside it).
-    ///
-    /// ⇒ So: **one VA space per candidate base**, each declared to span exactly the region the
-    /// object will occupy. That is also how it would be used in production — `GPGA_VA_BASE` is
-    /// ours to choose, and the space exists to hold the window.
-    /// ★★★★★ **HOW BIG A MAPPING WILL RM BUILD AT ALL?** — the question four runs converged on.
-    ///
-    /// ⊘ `[w825]` With the probe finally asking correctly, the **RM-managed control** refused:
-    /// a default VA space, RM choosing the address, `None` legal — and an **11 904 MiB** object
-    /// still returns `NV_ERR_NO_MEMORY`. ⇒ It is **not** placement, **not** the declared range
-    /// and **not** `SHARED_MANAGEMENT`. **It is the size.**
-    ///
-    /// ★ So the design question is no longer *"does the identity window work"* but **"how many
-    /// maps does it take"** — and that is a number, not an argument. One map is the ideal;
-    /// `THE_TRANSLATED_PLANE.md` §2 only needs *"a guest FB-physical `p` is `base + p`"*, which
-    /// **N contiguous maps still satisfy** so long as they tile the object at fixed offsets.
-    ///
-    /// Returns `(mib, ms)` for the largest power-of-two-ish size that mapped whole.
     pub fn largest_mappable_mb(&mut self, start_mb: u64) -> Vec<(u64, Result<u64, String>)> {
         use std::time::Instant;
         let mut out = Vec::new();
@@ -13371,6 +13368,122 @@ impl HostRmBackend {
             mb /= 2;
         }
         out
+    }
+
+    /// ★★★★★ **THE IDENTITY WINDOW**, as `SHARED_MANAGEMENT` actually requires it.
+    ///
+    /// ⊘⊘⊘ `[w825]` Four earlier runs measured my instrument, not RM. The contract, from RM's
+    /// own UVM path (`nv_gpu_ops.c:2632-2637`) and `nvos.h:3161`:
+    ///
+    /// > An explicit `vaSize` **requires** `NV_VASPACE_ALLOCATION_FLAGS_SHARED_MANAGEMENT`, and
+    /// > under it **the CLIENT manages the range** — so RM will not choose an address inside it.
+    ///
+    /// ⇒ Two consequences that invalidated every earlier attempt: **every map must be FIXED**
+    /// (passing `None` must refuse, and did), and the declared range must **contain** the base
+    /// we then ask for (v4 declared `[64 GiB, 128 GiB)` and asked for five bases outside it).
+    ///
+    /// ⇒ So: **one VA space per candidate base**, each declared to span exactly the region the
+    /// object will occupy. That is also how it would be used in production — `GPGA_VA_BASE` is
+    /// ours to choose, and the space exists to hold the window.
+    /// ★★★★★ **HOW BIG A MAPPING WILL RM BUILD AT ALL?** — the question four runs converged on.
+    ///
+    /// ⊘ `[w825]` With the probe finally asking correctly, the **RM-managed control** refused:
+    /// a default VA space, RM choosing the address, `None` legal — and an **11 904 MiB** object
+    /// still returns `NV_ERR_NO_MEMORY`. ⇒ It is **not** placement, **not** the declared range
+    /// and **not** `SHARED_MANAGEMENT`. **It is the size.**
+    ///
+    /// ★ So the design question is no longer *"does the identity window work"* but **"how many
+    /// maps does it take"** — and that is a number, not an argument. One map is the ideal;
+    /// `THE_TRANSLATED_PLANE.md` §2 only needs *"a guest FB-physical `p` is `base + p`"*, which
+    /// **N contiguous maps still satisfy** so long as they tile the object at fixed offsets.
+    ///
+    /// Returns `(mib, ms)` for the largest power-of-two-ish size that mapped whole.
+    /// ★★★ **NARROW THE CEILING.** `largest_mappable_mb` halves and stops at the first success,
+    /// so it brackets rather than answers. This bisects `(good, bad)` to the nearest MiB step.
+    pub fn narrow_map_ceiling_mb(&mut self, good_mb: u64, bad_mb: u64) -> u64 {
+        let (mut lo, mut hi) = (good_mb, bad_mb);
+        while hi - lo > 64 {
+            let mid = lo + (hi - lo) / 2;
+            let ok = (|| -> bool {
+                let bytes = mid << 20;
+                let Ok(obj) = self.conn.reserve_gpga(bytes) else { return false };
+                let Ok(vas) = self.alloc_vaspace() else {
+                    let _ = self.free(self.stamp(obj));
+                    return false;
+                };
+                let ok = match self.map_local_at(vas, self.stamp(obj), bytes, None) {
+                    Ok(va) => {
+                        let _ = self.unmap_local(vas, va);
+                        true
+                    }
+                    Err(_) => false,
+                };
+                let _ = self.free(vas);
+                let _ = self.free(self.stamp(obj));
+                ok
+            })();
+            if ok { lo = mid } else { hi = mid }
+        }
+        lo
+    }
+
+    /// ★★★★★ **THE PRODUCTION SHAPE: the identity window as N FIXED tiles.**
+    ///
+    /// ⊘ `[w825]` RM refuses an 11 904 MiB mapping in one call but accepts 5 952 MiB in ~1 ms.
+    /// `THE_TRANSLATED_PLANE.md` §2 needs only *"a guest FB-physical `p` is the GPU VA
+    /// `base + p`"*, which **N contiguous tiles at fixed offsets satisfy exactly as one map
+    /// does** — so the design's requirement was never "one call".
+    ///
+    /// Each tile is `[offset, offset + tile)` of the **one** object, mapped **FIXED** at
+    /// `base + offset`. ⇒ If every tile lands where asked, the window is an identity map of the
+    /// whole framebuffer and the arithmetic in §4 is sound.
+    pub fn prove_tiled_window(
+        &mut self,
+        bytes: u64,
+        base: u64,
+        tile: u64,
+    ) -> Result<TiledWindowEvidence, RmError> {
+        use std::time::Instant;
+
+        let obj = self.conn.reserve_gpga(bytes)?;
+        // ⊘ The declared range must CONTAIN the whole window (w825's lesson): base .. base+bytes,
+        // rounded up, with headroom for the operands that live beside it in production.
+        let span = (bytes * 2).next_power_of_two();
+        let vas = match self.alloc_vaspace_sized(base, span) {
+            Ok(v) => v,
+            Err(e) => {
+                let _ = self.free(self.stamp(obj));
+                return Err(e);
+            }
+        };
+
+        let h_dma = self.narrow(vas)?;
+        let h_mem = obj;
+        let mut tiles = Vec::new();
+        let t0 = Instant::now();
+        let mut off = 0u64;
+        while off < bytes {
+            let len = tile.min(bytes - off);
+            let at = base + off;
+            let r = self
+                .conn
+                .raw_map_dma_slice(h_dma, h_mem, off, len, Some(at), 0, true)
+                .map_err(|e| format!("{e:?}"));
+            tiles.push((off, at, r));
+            off += len;
+        }
+        let total_ms = t0.elapsed().as_millis();
+
+        // ⊘ Leave nothing mapped: the next run must start from the same state this one did.
+        for (_, _, got) in &tiles {
+            if let Ok(va) = got {
+                let _ = self.unmap_local(vas, *va);
+            }
+        }
+        let _ = self.free(vas);
+        let _ = self.free(self.stamp(obj));
+
+        Ok(TiledWindowEvidence { object_bytes: bytes, tile_bytes: tile, base, tiles, total_ms })
     }
 
     pub fn prove_identity_window(

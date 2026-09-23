@@ -5560,6 +5560,57 @@ fn identity_window(rm: &mut HostRmBackend) -> bool {
         }
     }
 
+    // ★★★ (2) NARROW THE CEILING. The halving bisect brackets; this answers.
+    let mut ceiling_mb = 0u64;
+    if let Some((good, _)) = rm.largest_mappable_mb(mb).into_iter().find(|(_, r)| r.is_ok()) {
+        ceiling_mb = rm.narrow_map_ceiling_mb(good, mb);
+        println!("IDENTITY_WINDOW_CEILING_MB={ceiling_mb}  (largest single whole-object map)");
+    }
+
+    // ★★★★★ (3) THE PRODUCTION SHAPE: the window as N FIXED tiles of the ONE object.
+    // ⊘ §2 needs only "a guest FB-physical p is the GPU VA base + p", which N contiguous tiles
+    // at fixed offsets satisfy exactly as one map does. This is the gate §9 step 1 should carry.
+    const GPGA_VA_BASE: u64 = 1 << 40;
+    let tile = if ceiling_mb >= 64 { (ceiling_mb / 2) << 20 } else { 1u64 << 30 };
+    match rm.prove_tiled_window(bytes, GPGA_VA_BASE, tile) {
+        Ok(ev) => {
+            for (off, asked, got) in &ev.tiles {
+                match got {
+                    Ok(v) if v == asked => println!(
+                        "IDENTITY_TILE off={off:#x} asked={asked:#x} got={v:#x} EXACT"
+                    ),
+                    Ok(v) => println!("IDENTITY_TILE off={off:#x} asked={asked:#x} got={v:#x} MOVED"),
+                    Err(e) => println!("IDENTITY_TILE off={off:#x} asked={asked:#x} REFUSED {e}"),
+                }
+            }
+            println!(
+                "IDENTITY_WINDOW_TILED mib={} tile_mib={} tiles={} landed={} identity={} total_ms={}",
+                ev.object_bytes >> 20,
+                ev.tile_bytes >> 20,
+                ev.tiles.len(),
+                ev.landed(),
+                ev.is_identity(),
+                ev.total_ms
+            );
+            if ev.is_identity() {
+                // ★ THE GATE. Every tile at base+offset ⇒ p -> base + p holds for the whole
+                // framebuffer, which is all §4's arithmetic ever needed.
+                println!("RUNGCTL_identity_window=PASS");
+                println!("RUNG_identity_window=PASS");
+                return true;
+            }
+            println!("FAIL  identity window    = the tiles do not form an identity map");
+            println!("RUNGCTL_identity_window=FAIL");
+            return false;
+        }
+        Err(e) => {
+            println!("IDENTITY_WINDOW_TILED ⊘ SETUP REFUSED {e:?}");
+            println!("RUNGCTL_identity_window=FAIL");
+            return false;
+        }
+    }
+
+    #[allow(unreachable_code)]
     match rm.prove_identity_window(bytes, &bases) {
         Ok(ev) => {
             // ★ The RM-managed control: will RM map this object ANYWHERE, given a default space?
