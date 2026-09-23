@@ -993,6 +993,48 @@ impl StoreMapPort {
             })
     }
 
+    /// ★★★★★ **w825 — the RAM slices this port holds in `vas` that the guest's CURRENT rows
+    /// no longer back**, i.e. the handle-ledger half of v3's *"diff the live tables against
+    /// the ledger"*. `live` is every resolved guest-RAM row `(va, file_offset, len)` of the
+    /// space; a slice is stale unless every byte of it is covered by live rows that map it to
+    /// the SAME file offsets. ⊘ The caller must pass the COMPLETE row set — a capped list
+    /// would read as stale everything past the cap.
+    #[must_use]
+    pub fn ram_stale(&self, vas: HostHandle, live: &[(u64, u64, u64)]) -> Vec<(u64, u64)> {
+        let mut rows: Vec<(u64, u64, u64)> = live.to_vec();
+        rows.sort_unstable();
+        let g = self
+            .ram_placed
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        g.range((vas.raw(), 0)..=(vas.raw(), u64::MAX))
+            .filter(|((_, start), p)| !ram_slice_backed(*start, p.offset, p.len, &rows))
+            .map(|(&(_, start), p)| (start, p.len))
+            .collect()
+    }
+
+    /// Unmap one guest-RAM slice through [`Self::apply_ops`] — the one mapper.
+    ///
+    /// # Errors
+    /// [`StoreMapRefusal`], by name.
+    pub fn unmap_ram_slice(
+        &self,
+        vas: HostHandle,
+        bytes: u64,
+        va: u64,
+        len: u64,
+    ) -> Result<(), StoreMapRefusal> {
+        let op = kayfabe_mmu::walkdiff::MapOp::Unmap(kayfabe_mmu::walkdiff::Run {
+            va,
+            gpga: 0,
+            len,
+            flags: 0,
+            class: kayfabe_mmu::walkdiff::PageClass::P4K,
+        });
+        self.apply_ops(vas, core::slice::from_ref(&op), SliceOf::GuestRam { bytes })
+            .map(|_| ())
+    }
+
     /// `(ram_maps, ram_map_refused, ram_bytes_mapped, ram_slices_held)` — the §18 census.
     #[must_use]
     pub fn ram_census(&self) -> (u64, u64, u64, usize) {
@@ -1862,4 +1904,35 @@ pub fn store_map_port(gpu: kayfabe_rt::GpuId) -> Option<std::sync::Arc<StoreMapP
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .get(&gpu.0)
         .and_then(std::sync::Weak::upgrade)
+}
+
+/// Whether `[start, start+len)` mapped to `[off, off+len)` is fully covered by `rows`
+/// (sorted `(va, file_offset, len)`), each row agreeing on the offset. See
+/// [`StoreMapPort::ram_stale`].
+#[must_use]
+pub fn ram_slice_backed(start: u64, off: u64, len: u64, rows: &[(u64, u64, u64)]) -> bool {
+    let Some(end) = start.checked_add(len) else {
+        return false;
+    };
+    let mut at = start;
+    for &(va, foff, rlen) in rows {
+        if at >= end {
+            break;
+        }
+        let Some(rend) = va.checked_add(rlen) else {
+            return false;
+        };
+        if rend <= at {
+            continue;
+        }
+        if va > at {
+            return false;
+        }
+        let delta = at - va;
+        if foff.checked_add(delta) != off.checked_add(at - start) {
+            return false;
+        }
+        at = rend.min(end);
+    }
+    at >= end
 }

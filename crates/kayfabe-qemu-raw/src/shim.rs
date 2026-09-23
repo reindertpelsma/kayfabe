@@ -14889,7 +14889,7 @@ fn publish_guest_ram_slices(
     let capped = rows.len() == RAM_SLICE_ROW_CAP;
     let bytes = GUEST_RAM_BYTES.load(std::sync::atomic::Ordering::Relaxed);
     let (mut unresolved, mut covered) = (0usize, 0usize);
-    let mut want: Vec<(u64, u64, u64)> = Vec::new();
+    let mut live: Vec<(u64, u64, u64)> = Vec::new();
     {
         let held = ce.vmm.lock().unwrap_or_else(|e| e.into_inner());
         let Some(vmm) = held.as_ref() else {
@@ -14897,15 +14897,29 @@ fn publish_guest_ram_slices(
         };
         for &(va, gpa, len) in &rows {
             match vmm.resolve_guest_ram(backing, gpa, len) {
-                Ok(run) => {
-                    if sp.ram_covers(store_vas, va, len, run.file_offset) {
-                        covered += 1;
-                    } else {
-                        want.push((va, run.file_offset, len));
-                    }
-                }
+                Ok(run) => live.push((va, run.file_offset, len)),
                 Err(_) => unresolved += 1,
             }
+        }
+    }
+    // ★★★★★ w825 — THE DIFF AGAINST THE HANDLE LEDGER, before anything is mapped: a slice the
+    // guest's rows no longer back (unmapped, or re-pointed at other RAM) is taken down, so
+    // the host VAS never answers a VA the guest's own tables do not. ⊘ Only over a COMPLETE
+    // row set — a capped list would read the tail as stale.
+    let mut unmapped = 0usize;
+    if !capped && unresolved == 0 {
+        for (va, len) in sp.ram_stale(store_vas, &live) {
+            if sp.unmap_ram_slice(store_vas, bytes, va, len).is_ok() {
+                unmapped += 1;
+            }
+        }
+    }
+    let mut want: Vec<(u64, u64, u64)> = Vec::new();
+    for &(va, off, len) in &live {
+        if sp.ram_covers(store_vas, va, len, off) {
+            covered += 1;
+        } else {
+            want.push((va, off, len));
         }
     }
     let runs = crate::storemap::coalesce_ram_rows(&want);
@@ -14924,8 +14938,8 @@ fn publish_guest_ram_slices(
     }
     let refused_total = refused + unresolved;
     let line = format!(
-        "{who} rows={}{} covered={covered} runs={} mapped={mapped} refused={refused} \
-         unresolved={unresolved}{} ⇒ §18: each run is a FIXED slice of the ONE guest-RAM object \
+        "{who} rows={}{} covered={covered} stale_unmapped={unmapped} runs={} mapped={mapped} \
+         refused={refused} unresolved={unresolved}{} ⇒ §18: each run is a FIXED slice of the ONE guest-RAM object \
          at the guest's own VA. ⊘ `unresolved` = the VMM's layout does not state that GPA — \
          refused by name, never guessed",
         rows.len(),
@@ -14935,7 +14949,7 @@ fn publish_guest_ram_slices(
             .map(|r| format!(" FIRST-REFUSAL[{r}]"))
             .unwrap_or_default(),
     );
-    if mapped + refused_total > 0 {
+    if mapped + refused_total + unmapped > 0 {
         let n = RAM_SLICE_LINES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         if n < RAM_SLICE_LINES_MAX {
             eprintln!("kayfabe: {line}");

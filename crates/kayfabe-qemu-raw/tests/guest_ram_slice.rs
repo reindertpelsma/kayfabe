@@ -61,3 +61,15 @@ fn a_va_gap_splits_and_zero_length_rows_vanish() {
         vec![(0x10_0000, 0x5000, 0x1000), (0x10_3000, 0x6000, 0x1000)]
     );
 }
+
+#[test]
+fn a_slice_is_stale_when_any_byte_lost_its_row_or_moved() {
+    use kayfabe_qemu_raw::storemap::ram_slice_backed as b;
+    let rows = [(0x1000, 0x10_000, 0x1000), (0x2000, 0x11_000, 0x1000)];
+    assert!(b(0x1000, 0x10_000, 0x2000, &rows), "two contiguous rows back a coalesced slice");
+    assert!(!b(0x1000, 0x10_000, 0x3000, &rows), "a tail with no row is stale");
+    let moved = [(0x1000, 0x10_000, 0x1000), (0x2000, 0x99_000, 0x1000)];
+    assert!(!b(0x1000, 0x10_000, 0x2000, &moved), "a re-pointed page is stale");
+    assert!(!b(0x1000, 0x10_000, 0x2000, &[(0x2000, 0x11_000, 0x1000)]), "a head with no row is stale");
+    assert!(!b(u64::MAX, 0, 2, &rows), "overflow refuses");
+}
