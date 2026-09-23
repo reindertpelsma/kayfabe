@@ -29,7 +29,7 @@ OUT=$BENCH/${TAG}_suite.out
   echo "rev=$(git -C "$(dirname "$0")/../.." rev-parse --short HEAD 2>/dev/null || echo ?)"
   printf '%-28s %-9s %-5s %s\n' ARM VERDICT secs why
 } > "$OUT"
-pass=0; fail=0; crash=0
+pass=0; fail=0; crash=0; notrun=0
 for arm in "${ARMS[@]}"; do
     name=${arm#--}
     line=$(KF_ARMS="$arm" bash "$(dirname "$0")/run_fast_guest.sh" "${TAG}_${name}" "$BUDGET" 2>&1)
@@ -48,16 +48,49 @@ for arm in "${ARMS[@]}"; do
         *"DONE marker"*) v=VMM_DIED ;;
     esac
     secs=$(echo "$line" | grep -oE '— [0-9]+s of a' | grep -oE '[0-9]+' | head -1)
+    # ⊘⊘⊘ **FOURTH CONFLATION, AND IT COST A WHOLE READING `[w824]`.** This `case` used to end
+    # `*) v=${v:-TIMEOUT}` — so an arm that produced **no verdict at all** was scored `TIMEOUT`,
+    # the word reserved for *"ran and exceeded its budget"*. On 2026-09-21 that printed
+    # **30/30 TIMEOUT**, which reads as a catastrophic regression. The truth was a missing
+    # `vmlinuz`: `run_fast_guest.sh` had refused in one clear line and nothing was ever booted.
+    #
+    # ★ **`?s` was the only tell, and it is not a word anyone reads.** A real timeout records its
+    # seconds; an arm that never began cannot. ⇒ A verdict and a missing field disagreed, and the
+    # verdict is what a reader believes.
+    #
+    # ⇒ **NOTRUN is its own word.** "Never started" and "took too long" are different causes, and
+    # this harness already learned that twice (CRASH split into VMM_DIED, and w823's three 45 s
+    # TIMEOUTs splitting at 300 s into a correctness bug, a hang and a 3.8x slowdown). ⚠ The arm
+    # binary has had `RUNG_<arm>=NOTRUN` since w381; only this script lacked it.
+    notrun_this=0
     case "$v" in
         PASS)     pass=$((pass+1)) ;;
         FAIL)     fail=$((fail+1)) ;;
         VMM_DIED) crash=$((crash+1)) ;;
-        *)        v=${v:-TIMEOUT}; crash=$((crash+1)) ;;
+        TIMEOUT)  crash=$((crash+1)) ;;
+        "")       v=NOTRUN; notrun=$((notrun+1)); notrun_this=1
+                  [ -n "$why" ] || why="no FAST_VERDICT line — a precondition refused before the arm ran" ;;
+        *)        crash=$((crash+1)) ;;
     esac
+    [ "$notrun_this" = 1 ] && [ -z "$secs" ] && secs="-"
     printf '%-28s %-9s %-5s %s\n' "$arm" "$v" "${secs:-?}s" "$why" >> "$OUT"
 done
+# ⊘⊘⊘ **AND THE SUITE USED TO HARDCODE `FAST_SUITE_RC=0`** — it reported a scoreboard and
+# gated on nothing, so a caller chaining on it proceeded over any result at all. `[w824]` five
+# scripts in this tree did the same thing in one session. ⇒ The exit code IS the verdict.
+# ⊘ Explicit `if`, not an `A || B && C` chain: shell precedence there is left-to-right and
+# reads as if it were grouped the other way. A gate whose own logic needs a second look is the
+# kind that silently passes.
+rc=0
+if [ "$notrun" -gt 0 ]; then
+    rc=2                                   # the suite did NOT run — distinct from "ran and failed"
+elif [ "$fail" -gt 0 ] || [ "$crash" -gt 0 ]; then
+    rc=1
+fi
 { echo
-  echo "FAST_SUITE_PASS=$pass FAST_SUITE_FAIL=$fail FAST_SUITE_CRASH=$crash ARMS=${#ARMS[@]}"
-  echo "FAST_SUITE_RC=0"
+  echo "FAST_SUITE_PASS=$pass FAST_SUITE_FAIL=$fail FAST_SUITE_CRASH=$crash NOTRUN=$notrun ARMS=${#ARMS[@]}"
+  echo "FAST_SUITE_RC=$rc"
+  [ "$notrun" -gt 0 ] && echo "⊘ $notrun arm(s) NEVER RAN — this is not a measurement. Fix the precondition and re-run."
 } >> "$OUT"
 cat "$OUT"
+exit "$rc"
