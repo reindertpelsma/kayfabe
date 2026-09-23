@@ -5587,7 +5587,21 @@ fn identity_window(rm: &mut HostRmBackend) -> bool {
     );
     // ★ FIRST: one whole map at OUR base, at the mappable size, in a DEFAULT (RM-managed) space.
     // If this lands, the window needs no tiling at all and the shared-managed detour was moot.
-    match rm.prove_identity_window(window_bytes, &[GPGA_VA_BASE]) {
+    // ⊘⊘⊘ `[w825]` AND HERE IS WHY EVERY BASE REFUSED: RM's own choice is **0x120000000**
+    // (4.5 GiB). The default VA space does not reach 1 TiB — nor 256 GiB, nor 32 GiB — so every
+    // base this arm has asked for since v1 was **outside the space**, and `0x51` was telling us
+    // so each time. ★ I picked bases to be "clear of everything", which put them clear of the
+    // space itself.
+    // ⇒ Probe LOW, from just above RM's own choice, and let the ladder find the boundary.
+    let low_bases: Vec<u64> = vec![
+        1u64 << 33,  // 8 GiB
+        1u64 << 34,  // 16 GiB
+        0x2_0000_0000 + (window_bytes.next_power_of_two()), // above RM's pick + the object
+        1u64 << 35,  // 32 GiB
+        1u64 << 36,  // 64 GiB
+        GPGA_VA_BASE, // 1 TiB, kept so the ladder still explains v1
+    ];
+    match rm.prove_identity_window(window_bytes, &low_bases) {
         Ok(ev) => {
             for (asked, got) in &ev.attempts {
                 match got {
