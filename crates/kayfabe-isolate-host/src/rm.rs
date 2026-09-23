@@ -13550,9 +13550,22 @@ impl HostRmBackend {
     /// and the walk repeated. It must find nothing. A walker reading a staged copy — the shape
     /// w758 caught — would still find the mapping.
     #[cfg(feature = "cuda-scratchpad")]
-    pub fn prove_cuda_window(&mut self, bytes: u64, origin: u64) -> Result<CudaWindowEvidence, String> {
+    pub fn prove_cuda_window(&mut self, start_mb: u64, origin: u64) -> Result<CudaWindowEvidence, String> {
         use kayfabe_cuda::{abi::kf_format_ver2, synth, WalkCfg, WalkKernel};
 
+        // ⊘⊘⊘ `[measured w825]` THE WALKER COMES FIRST. The first run reserved 11857 MiB and THEN
+        // brought the walker up: `cuCtxCreate_v2 refused: 2 (CUDA_ERROR_OUT_OF_MEMORY)`. A CUDA
+        // context needs its own vidmem, and after the guest's framebuffer is reserved there is
+        // none left. ⇒ Production order: walker context, THEN reserve GPGA from what remains —
+        // and the context's footprint comes out of the guest's advertised framebuffer.
+        let mut k = WalkKernel::bring_up(WalkCfg::default(), kf_format_ver2())
+            .map_err(|e| format!("walk bring_up: {e}"))?;
+        let mb = self.largest_reservable_mb(start_mb);
+        if mb == 0 {
+            return Err("nothing reservable after the walker's context".into());
+        }
+        let bytes = mb << 20;
+        eprintln!("CUDA_WINDOW_SIZED reservable_after_walker_mib={mb} (start {start_mb})");
         let obj = self.conn.reserve_gpga(bytes).map_err(|e| format!("reserve: {e:?}"))?;
         let out = (|| -> Result<CudaWindowEvidence, String> {
             let ctl = CharDevice::openat(&self.conn.dev, c"nvidiactl")
@@ -13560,8 +13573,6 @@ impl HostRmBackend {
             self.conn
                 .export_object_to_fd(obj, ctl.fd_number())
                 .map_err(|e| format!("rm export: {e:?}"))?;
-            let mut k = WalkKernel::bring_up(WalkCfg::default(), kf_format_ver2())
-                .map_err(|e| format!("walk bring_up: {e}"))?;
             let dptr = k.import_store(ctl.fd_number(), bytes).map_err(|e| format!("{e}"))?;
 
             const VA: u64 = 0x1_2000_0000;
@@ -13586,13 +13597,13 @@ impl HostRmBackend {
             let control_found_nothing = !rep2.runs.iter().any(|r| r.va == want.va && r.gpga == want.gpga);
             let control_runs = rep2.runs.len();
 
-            drop(k);   // destroys the context, releasing the import and its mapping
-            drop(ctl); // then the export fd
+            drop(ctl); // the export fd; the context (and the import) goes when `k` drops below
             Ok(CudaWindowEvidence {
                 object_bytes: bytes, dptr, origin, root, found, runs,
                 control_found_nothing, control_runs, walk_us,
             })
         })();
+        drop(k);
         let _ = self.free(self.stamp(obj));
         out
     }

@@ -5519,12 +5519,11 @@ fn cuda_window(rm: &mut HostRmBackend) -> bool {
     #[cfg(feature = "cuda-window")]
     {
         // ⊘ Sized like the identity window (§15): what is MAPPABLE, not what is reservable.
-        let mb = rm.largest_reservable_mb(12288);
-        let bytes = mb.min(11857) << 20;
         // ★ Near the live guest's own roots (§21: pdb≈0x2cea9c000 ≈ 11498 MiB), page-aligned.
+        // ⊘ The object's size is derived INSIDE the probe, after the walker's context exists.
         let origin: u64 = 0x2cea0_0000;
-        println!("CUDA_WINDOW object_mib={} origin={origin:#x} ({} MiB)", bytes >> 20, origin >> 20);
-        match rm.prove_cuda_window(bytes, origin) {
+        println!("CUDA_WINDOW origin={origin:#x} ({} MiB)", origin >> 20);
+        match rm.prove_cuda_window(12288, origin) {
             Ok(ev) => {
                 println!(
                     "CUDA_WINDOW dptr={:#x} root={:#x} found={} runs={} walk_us={} \
