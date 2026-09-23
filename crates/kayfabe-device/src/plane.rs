@@ -1663,6 +1663,26 @@ pub enum WindowRefusal {
 /// back at all, and *that* is what the walker must see as a miss.
 struct FbStoreReader<'a> {
     fb: &'a mut dyn FbStore,
+    /// ★ w825 — a page-table read memo that outlives ONE lock acquisition but not one pass.
+    /// See [`PtReadMemo`].
+    memo: Option<&'a mut PtReadMemo>,
+}
+
+/// ★★★★★ **w825 — page-table bytes read once per REVALIDATION PASS, not once per slot.**
+///
+/// `[measured w825h --uvm-mean]` 256 genuine BAR invalidates, each re-walking ~365 mirror
+/// slots from the root through vidmem read by the CPU (~24 MB/s device views): `reval` avg
+/// 8.9 ms, worst 139 ms, with the guest held for all of it. Every slot shares the upper
+/// levels, so they are read once here. ⊘ Scoped to one pass by construction — the caller
+/// builds it, passes it through every slot, and drops it — so it can never answer a later
+/// invalidate from bytes the guest has since rewritten.
+#[derive(Debug, Default)]
+pub struct PtReadMemo {
+    bytes: std::collections::HashMap<(u64, usize), Vec<u8>>,
+    /// Reads answered from the memo, for the census.
+    pub hits: u64,
+    /// Reads that went to the store.
+    pub misses: u64,
 }
 
 /// ★★★★ **G3 — [`FbRead`] over this plane's own framebuffer, one lock acquisition per
@@ -2360,6 +2380,28 @@ impl FbRead for PlanePtBytes<'_> {
     }
 }
 
+impl FbStoreReader<'_> {
+    fn read_memo(&mut self, phys: u64, buf: &mut [u8]) -> bool {
+        let key = (phys, buf.len());
+        if let Some(m) = self.memo.as_deref_mut() {
+            if let Some(b) = m.bytes.get(&key) {
+                buf.copy_from_slice(b);
+                m.hits += 1;
+                return true;
+            }
+        }
+        note_fb_read(FbIoRole::WalkInPlane, phys, buf.len());
+        let ok = self.fb.read(phys, buf).is_ok();
+        if ok {
+            if let Some(m) = self.memo.as_deref_mut() {
+                m.misses += 1;
+                m.bytes.insert(key, buf.to_vec());
+            }
+        }
+        ok
+    }
+}
+
 impl FbRead for FbStoreReader<'_> {
     /// ⊘ This reader holds ONLY a framebuffer store — it has no guest-RAM source at all. So a
     /// sysmem or peer aperture is `false` ("cannot serve"), never a silent framebuffer read of
@@ -2367,17 +2409,13 @@ impl FbRead for FbStoreReader<'_> {
     /// signature exists to prevent, and a reader with one source must say so rather than guess.
     fn read_in(&mut self, phys: u64, aperture: kayfabe_arch::Aperture, buf: &mut [u8]) -> bool {
         match aperture {
-            kayfabe_arch::Aperture::Vidmem => {
-                note_fb_read(FbIoRole::WalkInPlane, phys, buf.len());
-                self.fb.read(phys, buf).is_ok()
-            }
+            kayfabe_arch::Aperture::Vidmem => self.read_memo(phys, buf),
             _ => false,
         }
     }
 
     fn read(&mut self, phys: u64, buf: &mut [u8]) -> bool {
-        note_fb_read(FbIoRole::WalkInPlane, phys, buf.len());
-        self.fb.read(phys, buf).is_ok()
+        self.read_memo(phys, buf)
     }
 
     /// ★★★★ **This store CAN answer, and it is the only byte source on any walk path that
@@ -2517,7 +2555,7 @@ fn resolve_locked(
     let Some(fmt) = mmu.as_deref() else {
         return crate::ceresolve::CeResolve::NoMmuPort;
     };
-    let mut src = FbStoreReader { fb: fb.as_mut() };
+    let mut src = FbStoreReader { fb: fb.as_mut(), memo: None };
     crate::ceresolve::resolve(fmt, &mut src, root, va, limits, demand)
 }
 
@@ -3296,6 +3334,19 @@ impl RegPlane {
         off: u64,
         materialise: bool,
     ) -> Result<WindowPageResolution, WindowRefusal> {
+        self.window_page_backing_memo(w, off, materialise, None)
+    }
+
+    /// [`Self::window_page_backing`] reading page tables through a pass-scoped
+    /// [`PtReadMemo`]. ⊘ The plane lock is still taken per call — the memo lives OUTSIDE it,
+    /// so a vCPU trap never waits behind a whole pass.
+    pub fn window_page_backing_memo(
+        &self,
+        w: FbWindow,
+        off: u64,
+        materialise: bool,
+        memo: Option<&mut PtReadMemo>,
+    ) -> Result<WindowPageResolution, WindowRefusal> {
         let page_off = off & !(crate::fbwin::FB_PAGE - 1);
         // ★★★★★ **w755 — CONSTRAINT 4: RANK 0 IS TAKEN BY THE ONE ARM THAT READS IT, NOT BY
         // ALL THREE.**
@@ -3340,11 +3391,11 @@ impl RegPlane {
             }
             FbWindow::FbAperture => {
                 s = self.mem.lock();
-                self.bar1_translate(page_off, &mut s)?
+                self.bar1_translate(page_off, &mut s, memo)?
             }
             FbWindow::InstanceWindow => {
                 s = self.mem.lock();
-                self.bar2_translate(page_off, &mut s)?
+                self.bar2_translate(page_off, &mut s, memo)?
             }
         };
         let phys = phys & !(crate::fbwin::FB_PAGE - 1);
@@ -4246,7 +4297,7 @@ impl RegPlane {
         let Some(fmt) = mmu.as_deref() else {
             return " walk=NO-MMU-PORT".to_string();
         };
-        let mut src = FbStoreReader { fb: fb.as_mut() };
+        let mut src = FbStoreReader { fb: fb.as_mut(), memo: None };
         crate::ceresolve::walk_trace(fmt, &mut src, &root, va)
     }
 
@@ -4498,7 +4549,7 @@ impl RegPlane {
         let Some(fmt) = mmu.as_deref() else {
             return " walk=NO-MMU-PORT".to_string();
         };
-        let mut src = FbStoreReader { fb: fb.as_mut() };
+        let mut src = FbStoreReader { fb: fb.as_mut(), memo: None };
         crate::ceresolve::walk_trace(fmt, &mut src, root, va)
     }
 
@@ -5940,7 +5991,7 @@ impl RegPlane {
     /// well-formed *"maps nothing"* and a zero-filled data read is a well-formed *"the guest
     /// wrote nothing"*, and a guest acts on both.
     fn bar1_phys(&self, va: u64, write: bool, s: &mut PlaneMem) -> Result<u64, WindowRefusal> {
-        let (phys, read_only) = self.bar1_translate(va, s)?;
+        let (phys, read_only) = self.bar1_translate(va, s, None)?;
         if write && read_only {
             return Err(WindowRefusal::Translated {
                 va,
@@ -6015,7 +6066,7 @@ impl RegPlane {
         // `pRootFmt->virtAddrBitLo` precisely because the entry alone does not say which format
         // row it belongs to). **That is what makes "a wrong root yields a plausible, WRONG list
         // of leaves" not apply**: the level is not guessed, it is the guest's own.
-        let mut src = FbStoreReader { fb: fb.as_mut() };
+        let mut src = FbStoreReader { fb: fb.as_mut(), memo: None };
         let decoded = match w {
             FbWindow::FbAperture => {
                 let root = self.chip.bar1_pde_base;
@@ -6110,7 +6161,12 @@ impl RegPlane {
         })
     }
 
-    fn bar1_translate(&self, va: u64, s: &mut PlaneMem) -> Result<(u64, bool), WindowRefusal> {
+    fn bar1_translate(
+        &self,
+        va: u64,
+        s: &mut PlaneMem,
+        memo: Option<&mut PtReadMemo>,
+    ) -> Result<(u64, bool), WindowRefusal> {
         let PlaneMem { mmu, fb } = s;
         let Some(fmt) = mmu.as_deref() else {
             return Err(WindowRefusal::Translated {
@@ -6128,7 +6184,7 @@ impl RegPlane {
                 why: BAR1_NO_ROOT_DECLARED,
             });
         }
-        let mut src = FbStoreReader { fb: fb.as_mut() };
+        let mut src = FbStoreReader { fb: fb.as_mut(), memo };
         let t = translate(
             fmt,
             &mut src,
@@ -6173,7 +6229,7 @@ impl RegPlane {
     /// page-table entry is a well-formed *"this maps nothing"* and a zero-filled data read
     /// is a well-formed *"the guest wrote nothing"*. Both are answers a guest acts on.
     fn bar2_phys(&self, va: u64, write: bool, s: &mut PlaneMem) -> Result<u64, WindowRefusal> {
-        let (phys, read_only) = self.bar2_translate(va, s)?;
+        let (phys, read_only) = self.bar2_translate(va, s, None)?;
         if write && read_only {
             return Err(WindowRefusal::Translated {
                 va,
@@ -6185,7 +6241,12 @@ impl RegPlane {
 
     /// The walk half of [`RegPlane::bar2_phys`]: `(phys, read_only)` — see
     /// [`RegPlane::bar1_translate`] for why the write check is the caller's.
-    fn bar2_translate(&self, va: u64, s: &mut PlaneMem) -> Result<(u64, bool), WindowRefusal> {
+    fn bar2_translate(
+        &self,
+        va: u64,
+        s: &mut PlaneMem,
+        memo: Option<&mut PtReadMemo>,
+    ) -> Result<(u64, bool), WindowRefusal> {
         // ★ Destructured so the format and the byte store can be borrowed at once. They
         // are different fields and the borrow checker knows it; a method call on `s`
         // would not let it.
@@ -6228,7 +6289,7 @@ impl RegPlane {
                 why: BAR2_OUTSIDE_PUBLISHED_SLOT,
             });
         }
-        let mut src = FbStoreReader { fb: fb.as_mut() };
+        let mut src = FbStoreReader { fb: fb.as_mut(), memo };
         let t = translate_from_entry(fmt, &mut src, level, u128::from(root.entry), va)
             .map_err(|f| WindowRefusal::Translated { va, why: f.why() })?;
         // ⊘ Vidmem only, and by NAME. The guest's page tables can legitimately name

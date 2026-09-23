@@ -1705,10 +1705,12 @@ impl BarMirror {
         };
         let mut kept = 0u64;
         let mut gone: Vec<Retired> = Vec::new();
+        // ★ w825 — one page-table memo for this PASS: the slots share their upper levels.
+        let mut memo = kayfabe_device::plane::PtReadMemo::default();
         for (gpa, s) in snapshot {
             let same = self
                 .plane
-                .window_page_backing(s.window, s.page_off, false)
+                .window_page_backing_memo(s.window, s.page_off, false, Some(&mut memo))
                 .ok()
                 .and_then(|r| key_of(&r))
                 .is_some_and(|k| k == s.key);
@@ -1736,9 +1738,12 @@ impl BarMirror {
         if removed > 0 && self.census.reval_printed.fetch_add(1, Ordering::Relaxed) < REVAL_LIVE {
             eprintln!(
                 "kayfabe: BAR-MIRROR REVALIDATE #{runs} [{why}]: kept={kept} removed={removed} \
+                 pt_reads[memo_hits={} store={}] \
                  — the guest declared its BAR page tables live and {removed} slot(s) named a \
                  translation or a backing that is no longer what it was (printed only when \
                  something was removed, at most {REVAL_LIVE} times; totals in the census)",
+                memo.hits,
+                memo.misses,
             );
         }
     }
