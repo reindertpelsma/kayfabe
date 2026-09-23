@@ -532,3 +532,76 @@ which named the required flag after two runs had failed to find it by trial.
 *uniform across every input you varied*, stop varying inputs. A uniform refusal is a statement
 about the **call**, not about the values — and the call is documented in the driver we are
 required to satisfy.
+
+
+---
+
+## §15 — ✔✔✔ `[MEASURED w825]` **THE IDENTITY WINDOW IS ESTABLISHED.** The first experiment passes.
+
+**Box 52236011, GA106, 580.159.04, bare metal, no KVM.** Rev `6bebfa0f`, `ARM_RC=0`.
+
+```
+IDENTITY_WINDOW_SIZED reservable_mib=11904 mappable_mib=11857 delta_mib=47
+IDENTITY_FIXED_RM_CHOICE=0x120000000 (mappable size, default VAS)
+IDENTITY_WINDOW_ESTABLISHED base=0x120000000 mib=11857
+    ⇒ guest fb_phys p is GPU VA 0x120000000+p
+RUNGCTL_identity_window=PASS
+```
+
+★★★ **The guest's whole framebuffer is ONE RM object, contiguous, 1 GiB-aligned, mapped WHOLE in
+a single call, at a base we know.** §2's premise is measured end to end, and §4's arithmetic —
+*a physical-aperture operand is `GPGA_VA_BASE + guest_fb_phys`* — is sound on hardware.
+
+### §15.1 — ⊘⊘⊘ EIGHT RUNS CHASED A PROPERTY THE DESIGN NEVER ASKED FOR
+
+Every run from v1 to v8 gated on a **FIXED map at an address of our choosing**, and every one
+refused with `0x51`. The design says:
+
+> §4: *a physical-aperture operand is `GPGA_VA_BASE + guest_fb_phys`*
+
+★ **Nothing there requires `GPGA_VA_BASE` to be a *particular* value.** It must be **known** and
+**constant** — not **dictated**. RM handing us `0x120000000` is a perfectly good
+`GPGA_VA_BASE`. I read *"we choose the base"* into a line that says *"the base is the base"*.
+
+⇒ **The rule this cost: before measuring whether something is possible, re-read why it is
+needed.** Eight round trips established that RM will not honour an address I had no reason to
+insist on.
+
+### §15.2 — And it explains every earlier refusal at once
+
+RM places the window at **4.5 GiB**. ⇒ The default VA space does not reach 8 GiB, let alone the
+32 GiB / 256 GiB / 1 TiB bases the ladder kept asking for. **Every base was outside the space,
+and `0x51` said so six times.** ⊘ I chose them to be *"clear of everything"* — clear of what host
+RM self-reserves low, clear of the guest's own range — which put them clear of **the space
+itself**.
+
+### §15.3 — Sizing: derived from what is MAPPABLE, not what is reservable
+
+| | |
+|---|---|
+| reservable as one object | **11 904 MiB** |
+| **mappable** in one call | **11 857 MiB** |
+| delta | **47 MiB (0.4 %)** |
+
+⇒ `gpga_is_one_reserved_object.md` says *"the guest's advertised framebuffer size is **derived**
+from the reservation that succeeded, never asserted ahead of it."* ★ **Extend it by one word:
+derived from what can be *mapped*.** The guest is told 11 857 MiB; nothing else changes.
+
+### §15.4 — What is settled, and the one thing left
+
+| | |
+|---|---|
+| GPGA as ONE object | ✔ 11 904 MiB, contiguous, **1 GiB-aligned** |
+| whole-object map in **one** call | ✔ at the mappable size |
+| `p → base + p` | ✔ **measured** |
+| base is known | ✔ `0x120000000`, returned by RM |
+| §9 step 1's gate | ✔ **PASSES** |
+
+⚠ **One caveat, recorded rather than glossed:** §12 puts the window in **every** host VAS we
+create. If RM picks a **different base per space**, the base is **per-VAS** and must be tracked
+per space — the arithmetic is unaffected, the bookkeeping is not. **Unmeasured.** The next run
+should create two spaces and print both bases; it is one loop.
+
+⊘ And the tiling machinery (`prove_tiled_window`) is **kept unused**: it is the fallback if a
+future chip's ceiling falls well below its reservation, and §14.1's argument — that N contiguous
+tiles satisfy §2 exactly as one map does — stands whether or not it is ever needed.
