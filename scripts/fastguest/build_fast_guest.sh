@@ -153,7 +153,16 @@ for _try in $(seq 1 25); do
     sleep 0.2
 done
 if _p1_ready; then
-    mount -o ro /dev/nbd0p1 "$ROOT/mnt" || die "/dev/nbd0p1 appeared but would not mount"
+    # ⊘ [measured w825g] "special device /dev/nbd0p1 does not exist" RIGHT AFTER the poll saw
+    # it: the poll's own `partprobe` rescans by deleting and re-creating the partition nodes,
+    # so the node can be observed mid-rescan. Settle, then retry the MOUNT itself.
+    udevadm settle 2>/dev/null || true
+    _mounted=0
+    for _try in $(seq 1 25); do
+        if mount -o ro /dev/nbd0p1 "$ROOT/mnt" 2>/dev/null; then _mounted=1; break; fi
+        sleep 0.2
+    done
+    [ "$_mounted" = 1 ] || die "/dev/nbd0p1 appeared but would not mount (25 tries over 5s)"
 else
     # ⊘ No partition table at all is a DIFFERENT thing from one that was late — say which.
     echo "build_fast_guest: /dev/nbd0p1 never appeared after 5s; trying the whole-device arm" >&2
