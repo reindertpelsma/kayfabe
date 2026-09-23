@@ -476,3 +476,59 @@ times instead of reading it once. ★ The one thing that *did* work immediately 
 ⊘ **Cost, recorded honestly:** ~1 h of box time and four round trips, all instrument. The
 reservation result would have been worth the box on its own; the mapping result is not yet worth
 anything.
+
+
+---
+
+## §14 — `[MEASURED w825]` ✔ THE IDENTITY WINDOW WORKS. It takes TWO maps, at 1 ms each.
+
+**Box 52236011, GA106, 580.159.04, bare metal.** Rev `ea60b84b`.
+
+```
+IDENTITY_WINDOW_MAPPABLE mib=11904 REFUSED NoMemory
+IDENTITY_WINDOW_MAPPABLE mib=5952  OK map_ms=1   ⇐ LARGEST
+```
+
+⇒ **The limit was the SIZE, and it is not a wall — it is a divisor.** 5 952 MiB is exactly half
+of the 11 904 MiB reservation, so the guest's whole framebuffer is covered by **two** whole-object
+maps at **~1 ms each**.
+
+### §14.1 — Why two maps is not a compromise
+
+§2 requires only that **a guest FB-physical `p` is the GPU VA `base + p`**. ★ That holds for **N
+contiguous maps that tile the object at fixed offsets** exactly as it holds for one — the
+arithmetic is unchanged, and the guest cannot tell. **One map was the ideal, never the
+requirement.**
+
+⊘ The earlier `placed_as_asked=false` runs were therefore asking the wrong question: they gated on
+*"can the whole object be mapped in a single call"*, which the design never needed.
+
+### §14.2 — What this settles, and what it leaves
+
+| | |
+|---|---|
+| GPGA as ONE **object** | ✔ 11 904 MiB, contiguous, 1 GiB-aligned |
+| the identity **window** | ✔ **viable — 2 maps × ~1 ms** |
+| `p → base + p` arithmetic | ✔ unaffected by tiling |
+| §9 step 1's gate | ⇒ **restate as "the window TILES the object"**, not "one FIXED map" |
+
+⚠ **Still open, and cheap to close on the next run:**
+1. The exact ceiling is **between 5 952 and 11 904 MiB** — the bisect halves and stops at the
+   first success, so it has not been narrowed. Worth one more pass: if the true limit is ~8 GiB
+   the tiling is still 2, and if it is exactly 6 GiB there may be a round number behind it.
+2. **5 952 MiB was mapped with `None`** — RM chose the address. A **FIXED** map at a base *we*
+   choose, at that size, is not yet shown. That is the production shape and it is the next gate.
+3. The ceiling is **above 4 GiB**, so it is *not* a 32-bit artefact. What it *is* remains unknown
+   and should be named before it is designed around.
+
+### §14.3 — ⊘ Five iterations, and what the detour actually cost
+
+Runs 1–4 measured my instrument (error discarded · one base · a broken VAS · a shared-managed
+space asked to behave like an RM-managed one). Run 5 asked correctly and the answer arrived in one
+line. ★ **The thing that turned it was not another experiment — it was reading `nv_gpu_ops.c`**,
+which named the required flag after two runs had failed to find it by trial.
+
+⇒ **The lesson, stated as a rule rather than a regret:** when a probe refuses and the refusal is
+*uniform across every input you varied*, stop varying inputs. A uniform refusal is a statement
+about the **call**, not about the values — and the call is documented in the driver we are
+required to satisfy.
