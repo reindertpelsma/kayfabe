@@ -871,3 +871,64 @@ top 47 MiB — the tables — outside the window. ⇒ When the fb-size derivatio
 the reconciling rule the audit found missing between `THE_ARCHITECTURE_v3.md:936` (*"operator asks,
 or gets a refusal"*) and §15.3 (*"derived from what can be mapped"*): **the operator asks; the
 answer is refused if it exceeds the mappable window.**
+
+---
+
+## §22 — ✔✔✔ `[MEASURED w825]` THE WALKER READS THE GUEST'S TABLES IN PLACE, IN THE ONE OBJECT
+
+**Box 52236011, GA106, 580.159.04, bare metal, rev `4323895f`, `--cuda-window`, `ARM_RC=0`.**
+
+```
+CUDA_WINDOW_SIZED reservable_after_walker_mib=11760 (start 12288)
+STORE-RESERVE ★ CONTIGUOUS and 1 GiB-ALIGNED, 11760 MiB
+CUDA_WINDOW dptr=0x302000000 root=0x2cea00000 found=true runs=1 walk_us=1610
+            control_found_nothing=true control_runs=0
+RUNGCTL_cuda_window=PASS
+```
+
+★★★ The walk kernel, in **libcuda's** VA space (the owner's VA #1), was handed the one GPGA object
+(RM-reserved, exported to a control fd, imported into the walker's own context) and walked tables
+written at **11498 MiB** — the live guest's own neighbourhood (§21) — **with no relocation**, in
+**1.6 ms**. `[w758]`'s *"the pointer has zero readers"* is closed.
+
+⊘ **The control is what makes it evidence:** after the walk the root was **zeroed in the object** and
+the walk repeated — **0 runs**. A walker reading a staged copy would still have found the mapping.
+
+### §22.1 — ⊘ ORDER: the walker's context first, then GPGA
+
+The first run reserved GPGA and then brought the walker up: `cuCtxCreate_v2 refused:
+CUDA_ERROR_OUT_OF_MEMORY`. A CUDA context needs its own vidmem. ⇒ **Production order: walker
+context, then reserve GPGA from what remains.**
+
+### §22.2 — ★ That also explains the live guest's `advertised=11760`
+
+| | reservable |
+|---|---|
+| no CUDA context | 11 904 MiB |
+| **after the walker's context** | **11 760 MiB** |
+| live guest advertised (§21) | **11 760 MiB** |
+
+⇒ The walker's context costs **~144 MiB**, and it comes out of the guest's framebuffer. The live
+single-store path already brings CUDA up first (increment 4), which is **very likely** why §21 found
+the guest told 11 760. ⚠ Consistent, not proven — the two numbers were produced by different code
+paths on different boxes.
+
+⊘ **And §21's invariant simplifies.** The window no longer needs a separately-measured mappable
+ceiling if the object is sized *after* the walker: the object **is** what is left, the window maps
+**all of it**, and the guest is told **that**. Advertised = object = window. One number, derived once.
+
+### §22.3 — What step 4 now has, and what it still lacks
+
+| | |
+|---|---|
+| identity window in our RM VAS (§15, §17) | ✔ |
+| the same object in the walker's VAS | ✔ **this section** |
+| walk in place at the guest's table offsets | ✔ 1.6 ms |
+| **the trigger** — guest `MMU_INVALIDATE` → enqueue → wake worker | ✘ exists only in the old tree |
+| **the diff** — live tables vs our handle ledger | ✘ ledger shape exists in `storemap.rs`; not ported |
+| **the maps** — FIXED slices at the guest's VAs, TLB-defer + one refresh | ✘ `raw_map_dma_slice` exists; the placement question (§19 audit: FIXED refusals *unexplained*) is **open** |
+| **the `TRIGGER` clear** as the observability edge | ✘ |
+
+⚠ The placement question is now the critical one. Step 4's output is a FIXED map **at the guest's
+own VA** in a mirrored host VAS — and every FIXED attempt in §13–§16 refused, with §15.2's
+explanation contradicted by §17.1. That is the next measurement.
