@@ -5547,23 +5547,54 @@ fn identity_window(rm: &mut HostRmBackend) -> bool {
         bytes.next_power_of_two(),               // just above the object itself
     ];
 
-    match rm.prove_identity_window(bytes, &bases) {
+    // ⊘ TWO RUNS, and the pair is the experiment. `[w825]` run A used `vaSize = 0` — "the
+    // default range" — and every base refused with NV_ERR_NO_MEMORY, including RM's own choice.
+    // That is consistent with "the default range cannot hold 11.6 GiB", which is a fact about
+    // HOW WE ASKED. Run B asks for a range that provably can. If B succeeds, A was our bug; if B
+    // refuses identically, the refusal is RM's and the construction needs slices.
+    let span = (bytes * 4).next_power_of_two().max(64u64 << 30);
+    for (label, range) in [
+        ("default_range", None),
+        ("explicit_range", Some((1u64 << 36, span))),
+    ] {
+        println!("--- identity window: {label} ---");
+        if let Some((b, sz)) = range {
+            println!("IDENTITY_WINDOW_VAS base={b:#x} size={sz:#x} ({} GiB)", sz >> 30);
+        }
+        let _ = run_identity_window_once(rm, bytes, mb, &bases, range, label);
+    }
+    // The verdict is the EXPLICIT-range run: it is the one whose premise we control.
+    let span_ok = run_identity_window_once(rm, bytes, mb, &bases, Some((1u64 << 36, span)), "verdict");
+    return span_ok;
+}
+
+/// One pass of the identity-window probe. ⊘ Split out so the arm can run it twice and print the
+/// pair, because a single refusal cannot distinguish "RM will not" from "we asked wrong".
+fn run_identity_window_once(
+    rm: &mut HostRmBackend,
+    bytes: u64,
+    mb: u64,
+    bases: &[u64],
+    explicit_range: Option<(u64, u64)>,
+    label: &str,
+) -> bool {
+    match rm.prove_identity_window(bytes, bases, explicit_range) {
         Ok(ev) => {
             // ★ RM's OWN choice first — it bounds the space and explains every refusal below.
             match &ev.rm_choice {
-                Ok(va) => println!("IDENTITY_WINDOW_RM_CHOICE={va:#x}  (whole object, RM picked)"),
-                Err(e) => println!("IDENTITY_WINDOW_RM_CHOICE=REFUSED {e}"),
+                Ok(va) => println!("IDENTITY_WINDOW_RM_CHOICE[{label}]={va:#x}  (whole object, RM picked)"),
+                Err(e) => println!("IDENTITY_WINDOW_RM_CHOICE[{label}]=REFUSED {e}"),
             }
             for (asked, got) in &ev.attempts {
                 match got {
-                    Ok(v) if v == asked => println!("IDENTITY_WINDOW_TRY asked={asked:#x} got={v:#x} EXACT"),
-                    Ok(v) => println!("IDENTITY_WINDOW_TRY asked={asked:#x} got={v:#x} MOVED"),
-                    Err(e) => println!("IDENTITY_WINDOW_TRY asked={asked:#x} REFUSED {e}"),
+                    Ok(v) if v == asked => println!("IDENTITY_WINDOW_TRY[{label}] asked={asked:#x} got={v:#x} EXACT"),
+                    Ok(v) => println!("IDENTITY_WINDOW_TRY[{label}] asked={asked:#x} got={v:#x} MOVED"),
+                    Err(e) => println!("IDENTITY_WINDOW_TRY[{label}] asked={asked:#x} REFUSED {e}"),
                 }
             }
             let placed = ev.placed_as_asked();
             println!(
-                "IDENTITY_WINDOW mib={} placed_as_asked={} at={} map_ms={} ce_still_works={}",
+                "IDENTITY_WINDOW[{label}] mib={} placed_as_asked={} at={} map_ms={} ce_still_works={}",
                 ev.reserved_bytes >> 20,
                 placed.is_some(),
                 placed.map(|v| format!("{v:#x}")).unwrap_or_else(|| "none".to_string()),

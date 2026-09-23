@@ -13262,15 +13262,46 @@ impl HostRmBackend {
     /// ⊘ **`0x51` on a FIXED map is ADDRESS OCCUPANCY**, not *"the same object is already
     /// there"* (`gpu_vaspace.c:1372-1380`). The C artifact treated it as success; adopted
     /// generally that silently aliases a different object. It is reported here as a refusal.
+    /// Allocate a VA space with an **explicit** range rather than `vaSize = 0`.
+    ///
+    /// ⊘⊘⊘ `[w825]` `alloc_vaspace` asks for *"the default range"* and its comment says why —
+    /// *"Per-`Vas` separation is the property that matters, **not the geometry**"*. That was true
+    /// for every use this tree had. It stops being true the moment we try to map an **11.6 GiB
+    /// object in one go**: if the default range cannot hold it, `NV_ERR_NO_MEMORY` is a fact
+    /// about our request, not about RM.
+    ///
+    /// ⇒ This exists so the two can be told apart. `va_size` is the range; `va_base` is where it
+    /// starts. Nothing else in the tree sets either.
+    fn alloc_vaspace_sized(&mut self, va_base: u64, va_size: u64) -> Result<HostHandle, RmError> {
+        let mut params = [0u8; NvVaspaceAllocationParameters::SIZE];
+        NvVaspaceAllocationParameters {
+            va_size,
+            va_base,
+            ..NvVaspaceAllocationParameters::default()
+        }
+        .encode_into(&mut params)
+        .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
+        let want = self.conn.mint();
+        let space = self
+            .conn
+            .raw_alloc(self.conn.device, want, VA_SPACE, &mut params)?;
+        self.conn.remember(space, self.conn.device);
+        Ok(self.stamp(space))
+    }
+
     pub fn prove_identity_window(
         &mut self,
         bytes: u64,
         bases: &[u64],
+        explicit_range: Option<(u64, u64)>,
     ) -> Result<IdentityWindowEvidence, RmError> {
         use std::time::Instant;
 
         let obj = self.conn.reserve_gpga(bytes)?;
-        let vas = match self.alloc_vaspace() {
+        let vas = match match explicit_range {
+            Some((base, size)) => self.alloc_vaspace_sized(base, size),
+            None => self.alloc_vaspace(),
+        } {
             Ok(v) => v,
             Err(e) => {
                 let _ = self.free(self.stamp(obj));
