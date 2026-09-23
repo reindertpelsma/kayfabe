@@ -1004,6 +1004,11 @@ mod birth_conn {
     /// by `the_two_handle_spaces_cannot_collide`.
     const BIRTH_HANDLE_BASE: u32 = 0xB147_0000;
 
+    /// The next handle any [`BirthConn`] in this process mints. One counter for every B —
+    /// see [`BirthConn::minted`] for the measured collision a per-connection counter caused.
+    static BIRTH_NEXT: std::sync::atomic::AtomicU32 =
+        std::sync::atomic::AtomicU32::new(BIRTH_HANDLE_BASE);
+
     /// ★★★★★ **CONSTRAINT 32 — ONE GUEST PROCESS'S BIRTH CLIENT, AND THE SESSION THAT
     /// REACHES IT.**
     pub(super) struct BirthConn {
@@ -1025,8 +1030,17 @@ mod birth_conn {
         device: u32,
         /// `NV20_SUBDEVICE_0` under `device`.
         _subdevice: u32,
-        /// The next handle to mint inside B.
-        next: Mutex<u32>,
+        /// Every handle THIS connection minted inside B — the answer [`Self::is_ours`] gives.
+        ///
+        /// ⊘⊘⊘ **w825 — the NUMBERS come from ONE process-wide counter, [`BIRTH_NEXT`], not
+        /// a per-connection one.** There is one `BirthConn` per guest proc, and each used to
+        /// start at [`BIRTH_HANDLE_BASE`]. `[measured w825c --cross-client-leak]` proc 1's and
+        /// proc 2's birth clients both minted range `0xb1470003`; the reverse index and the
+        /// `placed` ledger key on the VALUE (see [`BIRTH_HANDLE_BASE`]'s own warning), so
+        /// proc 2's slice at the shared VA read as already placed and was never mapped —
+        /// client B could not write its own object. Distinct values across every B make
+        /// every value-keyed ledger correct without re-keying each one.
+        minted: Mutex<std::collections::BTreeSet<u32>>,
     }
 
     impl core::fmt::Debug for BirthConn {
@@ -1065,7 +1079,7 @@ mod birth_conn {
                 handed,
                 device: 0,
                 _subdevice: 0,
-                next: Mutex::new(BIRTH_HANDLE_BASE),
+                minted: Mutex::new(std::collections::BTreeSet::new()),
             };
             // ⊘⊘ **THE TYPED STRUCTS AND THE REAL `deviceId`, not a zeroed byte array.**
             // My first version sent `[0u8; 40]` — a GUESSED size with `deviceId = 0` — which
@@ -1106,12 +1120,11 @@ mod birth_conn {
         }
 
         fn mint(&self) -> u32 {
-            let mut n = self
-                .next
+            let h = BIRTH_NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            self.minted
                 .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let h = *n;
-            *n = n.wrapping_add(1);
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .insert(h);
             h
         }
 
@@ -1264,11 +1277,10 @@ mod birth_conn {
         /// rather than about the mistake. Latent today — no caller does it — and named now
         /// because the delegation added in w755r is the first path that could.
         pub(super) fn is_ours(&self, h: u32) -> bool {
-            h >= BIRTH_HANDLE_BASE
-                && h < *self
-                    .next
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+            self.minted
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .contains(&h)
         }
 
         /// ★★★★★ **w755l — ROUTE K INCREMENT 6: THE CHANNEL IS BORN IN B, OVER THE GUEST'S
