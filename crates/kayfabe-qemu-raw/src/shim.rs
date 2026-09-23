@@ -6075,7 +6075,7 @@ fn doorbell_publish_loop(
             // premapped device 0's BARs when device 1 invalidated.
             #[cfg(feature = "host-isolates")]
             if let Some(m) = port.bar_mirror.get().and_then(std::sync::Weak::upgrade) {
-                m.premap_bars();
+                let _ = m.premap_bars_if_bar_changed();
             }
             // ⊘ w763q — the FOURTH phase, and the first three all measured 0.00 ms.
             let premap_ms = t_premap.elapsed().as_secs_f64() * 1e3;

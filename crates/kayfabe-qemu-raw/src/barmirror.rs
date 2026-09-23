@@ -727,6 +727,10 @@ pub struct BarMirror {
     /// value it observed. A request is outstanding exactly while `req > done`.
     reval_req: AtomicU64,
     reval_done: AtomicU64,
+    /// ★ w825 — BAR-relevant events seen by `after_write` / consumed by the invalidate-path
+    /// premap. See [`BarMirror::premap_bars_if_bar_changed`].
+    premap_req: AtomicU64,
+    premap_done: AtomicU64,
     /// Which reason armed the outstanding request, for the log line only. Bit 0 =
     /// `mmu-invalidate`, bit 1 = `bar-pde-update`.
     reval_why: AtomicU64,
@@ -915,6 +919,8 @@ impl BarMirror {
             last_bar_pde_updates: AtomicU64::new(plane.bar_pde_counts().0),
             reval_req: AtomicU64::new(0),
             reval_done: AtomicU64::new(0),
+            premap_req: AtomicU64::new(0),
+            premap_done: AtomicU64::new(0),
             reval_why: AtomicU64::new(0),
             defer_reval,
             device_port,
@@ -2226,6 +2232,23 @@ impl BarMirror {
     /// ★ w624 — both apertures. BAR2 became enumerable when `decode_subtree_from_entry`
     /// landed; before that `window_leaves` refused it by name and BAR2's 121 pages stayed on
     /// demand. ⊘ Ordered BAR1 first so a BAR2 regression cannot be mistaken for a BAR1 one.
+    /// ★★★★★ **w825 — the invalidate path's premap, only when a BAR space can have changed.**
+    ///
+    /// `[measured w825f --ce-client-guest-ram]` `premap_ms` ≈ 6.8 ms on EVERY one of 1 339
+    /// invalidates, nearly all naming USER spaces — which cannot add a BAR1/BAR2 leaf. The
+    /// events that can (a BAR invalidate, a BAR PDE rewrite) are exactly the ones
+    /// `after_write` already counts, so this consumes that count. ⊘ Other callers keep
+    /// calling [`Self::premap_bars`] unconditionally.
+    pub fn premap_bars_if_bar_changed(&self) -> bool {
+        let req = self.premap_req.load(Ordering::Acquire);
+        if req == self.premap_done.load(Ordering::Relaxed) {
+            return false;
+        }
+        self.premap_bars();
+        self.premap_done.store(req, Ordering::Release);
+        true
+    }
+
     pub fn premap_bars(&self) {
         self.premap_bar1();
         self.premap_window(FbWindow::InstanceWindow);
@@ -2543,6 +2566,7 @@ impl BarMirror {
         if why == 0 {
             return;
         }
+        self.premap_req.fetch_add(1, Ordering::Release);
         // ⊘ **THE w468 A/B IS SETTLED AND ITS LOSING ARM IS GONE.**
         // `KAYFABE_MIRROR_REVAL_INLINE` compared the inline walk against the deferred one in
         // a single binary. `[measured w469, one binary, two arms]` deferred: `bar0+0xb830b0`
