@@ -435,3 +435,44 @@ is **not** a refutation of the identity window, and must not be reported as one.
 2. **One guess is not an experiment.** v1 asked for a single base; the *ladder* is what showed the
    address is not the variable, and RM's own choice is what showed it is not our arithmetic. Both
    cost nothing and both were absent from v1.
+
+
+### §13.1 — `[w825]` FOUR ITERATIONS, AND THE MAPPING QUESTION IS STILL OPEN. What is settled and what is not.
+
+⊘ **Settled, and it is the valuable half:**
+
+| | |
+|---|---|
+| GPGA as **ONE** object | ✔ **11 904 MiB**, measured |
+| **contiguous** | ✔ |
+| **1 GiB-aligned** | ✔ ⇒ congruent at every page size; store slices need no small-page pin |
+| an ordinary CE copy in a default VAS | ✔ `ce_still_works=true` |
+
+⊘ **NOT settled: whether the whole object can be mapped into one VA space.** Four runs, and
+**every one of the four was limited by my instrument rather than by RM:**
+
+1. v1 **discarded the error** — reported the bare word `REFUSED`.
+2. v2 asked **one base**; the ladder later showed the address is not the variable.
+3. v3 built an explicit-range VAS with `va_size`/`va_base` only — **`ce_still_works=false`**, i.e.
+   a broken space whose refusals meant nothing.
+4. v4 added `SHARED_MANAGEMENT` per `nv_gpu_ops.c:2632-2637` — and **`ce_still_works` is still
+   false**, which is now *expected*: `SHARED_MANAGEMENT` means **the client manages the range**,
+   so RM will not choose addresses in it. Both `rm_choice` and `prove_ce_copy` pass `None`, so
+   both must refuse. ⇒ **The probe is asking a shared-managed space to behave like an RM-managed
+   one.**
+
+⇒ **The open question is now precise**, which is the one thing four runs did buy:
+
+> Under `SHARED_MANAGEMENT`, **every** map must be FIXED and inside the declared range. So the
+> probe must (a) declare a range that *contains* the base it then asks for — v4's range was
+> `[64 GiB, 128 GiB)` while five of its six bases sat outside it — and (b) stop using `None`
+> anywhere, including in the CE-copy control.
+
+⚠ **Do not read any of §13 as evidence against the identity window.** It is evidence that this
+tree has never built a shared-managed VA space before, and that I guessed at the contract four
+times instead of reading it once. ★ The one thing that *did* work immediately was reading ogkm —
+`nv_gpu_ops.c` named the required flag in a single grep after two runs had failed to find it.
+
+⊘ **Cost, recorded honestly:** ~1 h of box time and four round trips, all instrument. The
+reservation result would have been worth the box on its own; the mapping result is not yet worth
+anything.
