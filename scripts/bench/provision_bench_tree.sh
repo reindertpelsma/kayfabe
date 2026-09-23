@@ -7,6 +7,28 @@
 # everything else is serial.
 set -uo pipefail
 
+# ⊘⊘⊘ **ONE RESOLVER, BECAUSE I BROKE THIS BY FIXING HALF OF IT — w825.**
+#
+# `provision_bench_tree.sh` defaulted to `/root/kayfabe`; I changed it to `/workspace/kayfabe`
+# reasoning that `/root` is the container image and `/workspace` the persistent volume. ⚠ But
+# `provision_box.sh` clones to `~/kayfabe` = **`/root/kayfabe`**, so a freshly provisioned box
+# then failed with `cd: /workspace/kayfabe: No such file or directory` — and the QEMU build was
+# skipped with the error going to a log nobody had read yet.
+#
+# ★ **I fixed one side of a pair.** The original defect was an invisible default; changing the
+# default to a different invisible one is the same defect with a new value. ⇒ RESOLVE, don't
+# default — and **print what was chosen**, which is the part that makes it checkable.
+kf_resolve_repo() {
+    if [ -n "${KAYFABE_REPO:-}" ]; then
+        printf '%s' "$KAYFABE_REPO"; return 0
+    fi
+    for _d in /workspace/kayfabe "$HOME/kayfabe" /root/kayfabe; do
+        [ -d "$_d/.git" ] && { printf '%s' "$_d"; return 0; }
+    done
+    echo "kf_resolve_repo: no kayfabe checkout found in /workspace/kayfabe, \$HOME/kayfabe or /root/kayfabe" >&2
+    return 1
+}
+
 # ⊘⊘⊘ REPO PATH AND REVISION, PRINTED — w824. `REPO=${KAYFABE_REPO:-/root/kayfabe}` cost a full
 # diagnostic pass: the box carried TWO trees, the script read the one nobody updates, and the
 # build failed on a feature HEAD has. A `${VAR:-default}` is invisible to every reader who does
@@ -19,7 +41,8 @@ _kf_say_repo() {
   echo "== repo: $r  rev: $(git -C "$r" log --oneline -1 2>/dev/null || echo 'NOT-A-GIT-TREE')" >&2
 }
 BENCH=/workspace/bench
-REPO=${KAYFABE_REPO:-/workspace/kayfabe}
+REPO=$(kf_resolve_repo) || exit 1
+echo "== repo: $REPO  rev: $(git -C "$REPO" log --oneline -1 2>/dev/null || echo UNKNOWN)"
 QEMU_VER=10.2.4
 RUN=/root/NVIDIA-Linux-x86_64-580.159.04.run
 say(){ echo "[$(date -Is)] $*"; }
@@ -390,9 +413,9 @@ say "B4: building the guest-side mean client (musl)"
 # relying on the caller's shell being interactive.
 export PATH="$HOME/.cargo/bin:$PATH"
 command -v cargo >/dev/null || say "⊘ B4: cargo is not on PATH even after \$HOME/.cargo/bin -- the ladder cannot build"
-( cd "${KAYFABE_REPO:-/workspace/kayfabe}" \
+( cd "$REPO" \
   && cargo build --release --target x86_64-unknown-linux-musl --bin kayfabe-rm-ladder 2>&1 | tail -2 )
-GUEST_LADDER="${KAYFABE_REPO:-/workspace/kayfabe}/target/x86_64-unknown-linux-musl/release/kayfabe-rm-ladder"
+GUEST_LADDER="$REPO/target/x86_64-unknown-linux-musl/release/kayfabe-rm-ladder"
 if [ -x "$GUEST_LADDER" ]; then
   say "B4: guest ladder built: $(stat -c %s "$GUEST_LADDER") bytes"
 else
