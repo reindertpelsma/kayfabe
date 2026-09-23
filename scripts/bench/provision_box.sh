@@ -13,6 +13,7 @@
 # build.rs says so itself at `:41-44` ("every CI job simply declares the musl target
 # alongside its own"); the error surfaces far from the cause.
 set -euo pipefail
+die() { echo "provision_box: $*" >&2; exit 1; }
 echo "PROVISION_START $(date -Is)"
 
 export DEBIAN_FRONTEND=noninteractive
@@ -140,7 +141,29 @@ else
   rustup target add x86_64-unknown-linux-musl && echo "musl target ADDED"
 fi
 
-[ -d ~/kayfabe ] || git clone -q https://github.com/reindertpelsma/kayfabe.git ~/kayfabe
+# ⊘⊘⊘ **THE BRANCH, EXPLICITLY, AND THE REVISION, PRINTED — w825.**
+#
+# This was `git clone -q <url> ~/kayfabe` with **no branch**, so it took the repo's DEFAULT
+# branch. `[measured w825]` a freshly provisioned box therefore arrived at **`e24bc063`
+# (w720l)** — the default branch, ~100 commits behind the work branch — and the first build
+# against it failed on a cargo feature HEAD has. ⚠ The box looked correctly provisioned:
+# `PROVISION_DONE rc=0`, driver swapped, cargo present, a repo at the expected path.
+#
+# ★ Same class as `REPO=${KAYFABE_REPO:-/root/kayfabe}` (w824) and as CLAUDE.md's oldest trap
+# ("the bench silently served a binary built from `862c7c2` for weeks"): **an invisible default
+# deciding which code a measurement is about.** ⇒ Name the branch, and PRINT what you got.
+KF_BRANCH=${KAYFABE_BRANCH:-w749-fable-legb}
+if [ ! -d ~/kayfabe/.git ]; then
+    git clone -q --branch "$KF_BRANCH" https://github.com/reindertpelsma/kayfabe.git ~/kayfabe \
+        || die "clone of branch $KF_BRANCH failed"
+else
+    git -C ~/kayfabe fetch -q origin "$KF_BRANCH" \
+        && git -C ~/kayfabe checkout -q -B "$KF_BRANCH" "origin/$KF_BRANCH" \
+        || die "could not put ~/kayfabe on $KF_BRANCH"
+fi
+# ⊘ The revision is part of every claim this box will produce. Print it where the provisioning
+# log keeps it, next to the artefacts.
+echo "PROVISION_REPO=$HOME/kayfabe branch=$KF_BRANCH rev=$(git -C ~/kayfabe rev-parse --short HEAD)"
 cd ~/kayfabe
 git fetch -q origin && git reset -q --hard origin/master
 echo "HEAD=$(git rev-parse --short HEAD)"
