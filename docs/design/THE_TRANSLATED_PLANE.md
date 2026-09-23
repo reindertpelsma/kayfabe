@@ -830,3 +830,44 @@ physical half free; they do not route a single doorbell.
 `NOTRUN=0` and **`FAST_SUITE_RC=1`**. The suite that hardcoded `FAST_SUITE_RC=0` all session now
 **fails when the run fails**, and would have said `NOTRUN` + `rc=2` had a precondition been
 missing instead of printing thirty phantom `TIMEOUT`s.
+
+---
+
+## §21 — `[MEASURED w825]` THE WALKER CAN READ THE GUEST'S TABLES THROUGH THE WINDOW — today, by a margin nothing enforces
+
+Step 4 reads the guest's page tables **in place, through the identity window**. That only works if
+the tables sit **below the window's top**. A w731 finding (`the_kernel_cannot_be_pointed_at_the_tables_where_they_are`)
+said they do not — and its own EXPIRY section predicted that the one-object window would dissolve
+the problem. Checked against the **live guest**, not against reasoning:
+
+```
+live guest advertised        11760 MiB      (fast_w825base_*_qemu.log: advertised=11760)
+live guest VAS roots         pdb=0x2cea9c000, 0x2cea7e000  ≈ 11498 MiB
+identity window top          11857 MiB      (§15)
+                             ⇒ INSIDE, 358 MiB of headroom
+```
+
+### §21.1 — ⊘ My first comparison was against the wrong reference
+
+I first placed the window against `cuda/walk/corpus/real_leaves.txt`, whose VAS roots sit at
+**12026–12060 MiB** — *above* the window by 169–203 MiB. ⊘ That capture is the **host's own RM on a
+full 12 GiB board**, not our guest. The guest's RM allocates tables from the top of **the
+framebuffer it is told**, so the guest's roots follow the advertised size, not the card's.
+⇒ The live boot answered in one grep what the corpus answered wrongly. **Measure the thing, not a
+neighbour of it.**
+
+### §21.2 — ★★★ THE INVARIANT, because today's margin is an accident
+
+> **advertised guest framebuffer ≤ mappable identity window**
+
+The guest's tables sit near the top of what it is told. If the advertised size ever exceeds the
+window, the tables land in the **uncovered stripe at the top** — precisely the pages the walker
+must read — and step 4 walks into nothing.
+
+⊘ Today it holds because the single-store derivation yields **11760**, 97 MiB under the mappable
+11857. But the obvious "fix" of deriving the size from the **reservation** (11904) would put the
+top 47 MiB — the tables — outside the window. ⇒ When the fb-size derivation is ported, it must be
+`min(requested, mappable_window)`, asserted at start, refused by name if violated. ⚠ This is also
+the reconciling rule the audit found missing between `THE_ARCHITECTURE_v3.md:936` (*"operator asks,
+or gets a refusal"*) and §15.3 (*"derived from what can be mapped"*): **the operator asks; the
+answer is refused if it exceeds the mappable window.**
