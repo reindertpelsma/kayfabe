@@ -702,3 +702,53 @@ the *virtual* half is the only thing left to build.
 and therefore pure §3 rewrite. Its gate is already printed by the existing ledger:
 `forwarded=N` on tokens `0x00010001` / `0x00010004`, where w801 measured **0**, and
 `execute_ours_spans` calls **= 0**.
+
+---
+
+## §18 — TWO GROUND TRUTHS, AND EVERYTHING ELSE IS A MAP. `[owner, w825]`
+
+> *"Shadowing is dead right? Join as well? Only gpa (vidmem from hypervisor) and gpga (one large
+> our rm allocated object) ground truths, the rest is maps for data right."*
+
+★★★ **That is the architecture in one sentence, and it is the clearest statement of it anywhere in
+this tree.** Recorded here as the invariant the rest of the design must not break.
+
+| | ground truth | it is |
+|---|---|---|
+| guest **RAM** | the hypervisor's **memfd** | one `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR`, mapped whole at `RAM_VA_BASE` |
+| guest **VRAM** | **GPGA** | **one** RM-allocated object, mapped whole at `GPGA_VA_BASE` |
+
+⊘ **There is no third memory.** Every other structure in the system — the VA spaces, host RM's
+page tables, the windows themselves, BAR1/BAR2 views — is a **map onto one of those two**. Bytes
+live in exactly one place and are *reached* from several.
+
+### §18.1 — Why this is the whole point, and what it deletes
+
+★ A **shadow** is two memories for one address across time. It forces three things that then
+cannot be got right: something must decide **when** to copy, a guest write that lands mid-copy is
+**lost**, and a correct guest — not a hostile one — **races us**, because the guest does not
+participate in our locking.
+
+⇒ With one memory per address, all three questions **stop existing**:
+
+| dead | why it cannot come back |
+|---|---|
+| **shadowing** | there is no second copy to be stale |
+| **the join** | nothing to join — a guest FB address is an **offset into the one object** |
+| **stored VA tables** | we keep no mirror; we **read the guest's own tables in place**, in GPGA |
+| **auto-mapping from MMIO** | the trigger is the guest's **own** map/invalidate, never our inference |
+| **per-leaf backings** | backing exists because **the object** exists |
+| **promote/demote** | there is nowhere to promote *to* |
+
+⊘ And this is why `gpu.rs`'s **seven coexisting translation designs** are not seven options. Each
+was an attempt to keep a shadow correct. **The shadow is gone, so all seven answer a question that
+is no longer asked.**
+
+### §18.2 — The test, stated so a future change can be checked against it
+
+> ★ **If a proposed mechanism requires bytes to exist anywhere that is neither guest RAM nor GPGA,
+> and something must copy, sync or invalidate between them — it is a shadow, whatever it is
+> called, and it is forbidden.**
+
+⚠ This is a *structural* test, not a naming one. `install_join`, `ReachShadow`, `promote`,
+`refresh`, `witness_writes` and the address table were all different names for the same thing.
