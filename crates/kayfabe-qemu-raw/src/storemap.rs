@@ -215,7 +215,14 @@ pub struct StoreMapPort {
     /// Its length, for the bounds check no ioctl will make for us.
     obj_len: u64,
     /// `per-proc space handle -> the scratchpad's own range over the dup`.
-    adopted: std::sync::Mutex<std::collections::BTreeMap<u64, HostHandle>>,
+    ///
+    /// ⊘⊘⊘ **w825 — keyed by the WHOLE handle, isolate included, never by `.raw()`.**
+    /// Each per-proc isolate is its own RM client, so handle NUMBERS repeat across procs.
+    /// `[measured w825base --cross-client-leak]` two guest clients' spaces were both
+    /// `0xcafe0004`; keyed by the number, proc 2 was handed proc 1's range, both host
+    /// channels ran in ONE address space, B's FIXED map at the shared VA replaced A's, and
+    /// A's next copy landed in B's object — a cross-client write the isolation rung caught.
+    adopted: std::sync::Mutex<std::collections::BTreeMap<HostHandle, HostHandle>>,
     /// `(scratchpad range, guest VA) -> what was placed there`. **The ledger the restated
     /// ring assertion reads.**
     placed: std::sync::Mutex<std::collections::BTreeMap<(u64, u64), Placed>>,
@@ -410,7 +417,7 @@ impl StoreMapPort {
     /// Through `Worker::with_rm`'s `assert_lock_free`, if a caller reaches this holding a
     /// ranked lock. That is the invariant, not a bug to be caught.
     pub fn adopt(&self, bare: BareVaSpace) -> Result<HostHandle, StoreMapRefusal> {
-        let key = bare.space.raw();
+        let key = bare.space;
         if let Some(h) = self
             .adopted
             .lock()
@@ -784,7 +791,7 @@ impl StoreMapPort {
             .adopted
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .get(&host_vas.raw())
+            .get(&host_vas)
             .copied()
         else {
             self.chan_birth_refused.fetch_add(1, Ordering::Relaxed);
@@ -1001,7 +1008,7 @@ impl StoreMapPort {
             .adopted
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .get(&vas.raw())
+            .get(&vas)
             .copied();
         if let Some(range) = range {
             let off = self.off_vcpu()?;
@@ -1026,7 +1033,7 @@ impl StoreMapPort {
             self.adopted
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .remove(&vas.raw());
+                .remove(&vas);
         }
         // Condition 3 is the witness's existence: it cannot be constructed with a channel
         // still using the space.
