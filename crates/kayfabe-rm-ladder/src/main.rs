@@ -5503,6 +5503,85 @@ fn w381_retired(rm: &HostRmBackend, chan: kayfabe_isolate::HostHandle) -> &'stat
     }
 }
 
+
+/// ★★★★★ **THE IDENTITY WINDOW** — the first experiment of `THE_TRANSLATED_PLANE.md` §11.
+///
+/// Reserve the guest's whole framebuffer as **one** RM object and map **all of it** into a fresh
+/// VA space at a chosen base, so a guest FB-physical `p` becomes the GPU virtual address
+/// `base + p`.
+///
+/// ⊘ **NVIDIA's own construction** — `ogkm-610 channel_utils.c:1055-1056` does exactly this
+/// rewrite and RM calls the mapping *"identity mapped to VAS"*. We are measuring whether host RM
+/// will give us the placement at **whole-object size**, which this tree has never attempted:
+/// every path maps 64 KiB slices.
+///
+/// ⚠ Every gate in `THE_TRANSLATED_PLANE.md` §9 steps 3-7 reads through this window, so
+/// `placed_as_asked=false` moves the schedule by weeks. It costs one arm, no KVM and no guest.
+fn identity_window(rm: &mut HostRmBackend) -> bool {
+    println!(
+        "REV_UNDER_TEST={}",
+        option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
+    );
+    // ⊘ DERIVED, never asserted — `gpga_is_one_reserved_object.md`: "the guest's advertised
+    // framebuffer size is derived from the reservation that succeeded, never asserted ahead of
+    // it."
+    let mb = rm.largest_reservable_mb(12288);
+    println!("IDENTITY_WINDOW_LARGEST_RESERVABLE_MB={mb}  (advertised today: 12288)");
+    if mb == 0 {
+        println!("FAIL  identity window    = nothing reservable down to 256 MiB");
+        println!("RUNGCTL_identity_window=FAIL");
+        println!("RUNG_identity_window=NOTRUN");
+        return false;
+    }
+
+    // ⊘ 1 GiB-aligned, above 1 TiB: clear of what host RM self-reserves low and of the guest's
+    // own range. §12 — the window goes in EVERY host VAS we create, not a Translated-only one.
+    const GPGA_VA_BASE: u64 = 1 << 40;
+    let bytes = (mb as u64) << 20;
+
+    match rm.prove_identity_window(bytes, GPGA_VA_BASE) {
+        Ok(ev) => {
+            let placed = ev.got == Some(ev.asked);
+            println!(
+                "IDENTITY_WINDOW mib={} asked={:#x} got={} placed_as_asked={} map_ms={} \
+                 ce_still_works={}",
+                ev.reserved_bytes >> 20,
+                ev.asked,
+                ev.got
+                    .map(|v| format!("{v:#x}"))
+                    .unwrap_or_else(|| "REFUSED".to_string()),
+                placed,
+                ev.map_ms,
+                ev.ce_still_works
+            );
+            if !placed {
+                // ⚠ The whole construction then needs slices after all.
+                println!("FAIL  identity window    = RM placed the object elsewhere");
+                println!("RUNGCTL_identity_window=FAIL");
+                return false;
+            }
+            if !ev.ce_still_works {
+                // ⊘ Placement alone is not enough: the space must remain usable for the channel
+                // operands that live beside the window.
+                println!("FAIL  identity window    = a plain CE copy broke with the window installed");
+                println!("RUNGCTL_identity_window=FAIL");
+                return false;
+            }
+            println!("RUNGCTL_identity_window=PASS");
+            println!("RUNG_identity_window=PASS");
+            true
+        }
+        Err(e) => {
+            // ⚠ `0x51` on a FIXED map is ADDRESS OCCUPANCY, not "already mapped there". Reported
+            // as a refusal by name — never as success, which is the C artifact's policy and
+            // silently aliases a different object.
+            println!("IDENTITY_WINDOW mib={mb} placed_as_asked=false ⊘ REFUSED {e:?}");
+            println!("RUNGCTL_identity_window=FAIL");
+            false
+        }
+    }
+}
+
 /// ★★★★★ **w379 R1′ — CAN ONE ALLOCATION BE LIVE AT TWO GPU VAs AT THE SAME TIME?**
 ///
 /// The w377 correction (2026-09-06) named the LLM wall as **FB-join aliasing**: the join
@@ -13859,6 +13938,7 @@ fn main() -> std::process::ExitCode {
     let mut want_bus_info = false;
     // ⊘ w735: this was declared TWICE in a row; the first was dead and warned. One only.
     let mut want_gpga_probe = false;
+    let mut want_identity_window = false;
     let mut want_atomics = false;
     // ★★★★★ w750 — ROUTE K, PHASE 1. Parsed and dispatched HERE, before every other flag,
     // because two of the three arms are **this same binary re-executed** by
@@ -14080,6 +14160,7 @@ fn main() -> std::process::ExitCode {
             // guest framebuffer be reserved as ONE object, and how fast is it to READ over
             // PCIe? Both answers decide the design before a five-minute boot can.
             "--gpga-reserve-probe" => want_gpga_probe = true,
+            "--identity-window" => want_identity_window = true,
             "--atomics-probe" => want_atomics = true,
             "--pce-mask-probe" => want_pce_mask = true,
             "--osdesc-probe" => want_osdesc = Some(OsDescSeed::BeforeDescribe),
@@ -15663,6 +15744,10 @@ fn main() -> std::process::ExitCode {
             }
             isolate.checkin(w);
         }
+    }
+
+    if want_identity_window && !identity_window(&mut rm) {
+        return std::process::ExitCode::from(1);
     }
 
     if want_concurrency && !concurrency(gpu, 4, 200) {

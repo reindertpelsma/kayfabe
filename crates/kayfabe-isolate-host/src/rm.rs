@@ -6379,6 +6379,24 @@ impl UnmapRetiresProbe {
     }
 }
 
+/// What `prove_identity_window` established. ⊘ Every field is a measurement, not a verdict — the
+/// caller prints them and the gate line decides.
+#[derive(Debug, Clone, Copy)]
+pub struct IdentityWindowEvidence {
+    /// Bytes actually reserved as ONE object.
+    pub reserved_bytes: u64,
+    /// The VA we ASKED for.
+    pub asked: u64,
+    /// The VA RM RETURNED. ★ `placed_as_asked` is `asked == got`, and it is the whole question.
+    pub got: Option<u64>,
+    /// How long the whole-object FIXED map took. ⚠ Seconds here would put §10's group B in
+    /// trouble: this runs once per VM start, but it runs on the path to a guest's first boot.
+    pub map_ms: u128,
+    /// ✔ An ordinary CE copy still works in the VAS **with the window installed** — i.e. the
+    /// window did not consume the space or break RM's own placement.
+    pub ce_still_works: bool,
+}
+
 /// What [`HostRmBackend::prove_ce_copy`] observed in **device memory**, before and after.
 ///
 /// ★ The expectations travel with the observations rather than being re-derived by the
@@ -13212,6 +13230,67 @@ impl HostRmBackend {
         let _ = self.free(self.stamp(dst));
         let _ = self.free(self.stamp(src));
         r.map(|()| out)
+    }
+
+    /// ★★★★★ **THE IDENTITY WINDOW — the first experiment of `THE_TRANSLATED_PLANE.md` §11.**
+    ///
+    /// Reserve the guest's whole framebuffer as **one** RM object and map **all of it** into a
+    /// fresh VA space at a chosen base, so that a guest framebuffer-physical address `p` becomes
+    /// the GPU virtual address `base + p`.
+    ///
+    /// ⊘ **This is NVIDIA's own construction.** `ogkm-610 channel_utils.c:1055-1056`:
+    /// `srcAddr + pChannel->fbAliasVA - pChannel->startFbOffset`, then `_SRC_TYPE → _VIRTUAL`.
+    /// RM calls the mapping *"identity mapped to VAS"*. We are not inventing a mechanism.
+    ///
+    /// ## ⚠ Why this is the first thing to measure, before any of v3 is written
+    ///
+    /// Every gate in §9's steps 3–7 reads through this window, and **a FIXED map of the WHOLE
+    /// object has never been attempted in this tree** — every path maps slices, and
+    /// `DL_MAP_BYTES` is deliberately 64 KiB. ⇒ `placed_as_asked=false` means the construction
+    /// needs slices after all and the schedule moves by weeks. It costs one arm and no KVM.
+    ///
+    /// ⊘ **`0x51` on a FIXED map is ADDRESS OCCUPANCY**, not *"the same object is already
+    /// there"* (`gpu_vaspace.c:1372-1380`). The C artifact treated it as success; adopted
+    /// generally that silently aliases a different object. It is reported here as a refusal.
+    pub fn prove_identity_window(
+        &mut self,
+        bytes: u64,
+        base: u64,
+    ) -> Result<IdentityWindowEvidence, RmError> {
+        use std::time::Instant;
+
+        let obj = self.conn.reserve_gpga(bytes)?;
+        let vas = match self.alloc_vaspace() {
+            Ok(v) => v,
+            Err(e) => {
+                let _ = self.free(self.stamp(obj));
+                return Err(e);
+            }
+        };
+
+        let t0 = Instant::now();
+        let mapped = self.map_local_at(vas, self.stamp(obj), bytes, Some(base));
+        let map_ms = t0.elapsed().as_millis();
+
+        // ⊘ An ordinary CE copy in the SAME space, after the window is installed. It answers a
+        // question the placement alone does not: whether a multi-GiB mapping leaves the VA space
+        // usable for the channel operands that must live beside it.
+        let ce_still_works = matches!(self.prove_ce_copy(vas, 0xA5A5_1234), Ok(ev) if ev.copied());
+
+        let got = mapped.as_ref().ok().copied();
+        if let Ok(va) = mapped {
+            let _ = self.unmap_local(vas, va);
+        }
+        let _ = self.free(vas);
+        let _ = self.free(self.stamp(obj));
+
+        Ok(IdentityWindowEvidence {
+            reserved_bytes: bytes,
+            asked: base,
+            got,
+            map_ms,
+            ce_still_works,
+        })
     }
 
     pub fn prove_ce_copy(&mut self, vas: HostHandle, pattern: u32) -> Result<CeEvidence, RmError> {
