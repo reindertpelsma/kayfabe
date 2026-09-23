@@ -5657,6 +5657,33 @@ fn identity_window(rm: &mut HostRmBackend) -> bool {
                         }
                         ram_mb /= 2;
                     }
+                    // ★★★★★ THE COMPOSITION: both windows in ONE space, which is what §12
+                    // actually requires. Each was measured alone and each got 0x120000000 — in
+                    // SEPARATE spaces. This is the pair.
+                    match rm.prove_both_windows(window_bytes, 8192 << 20) {
+                        Ok((fb, ram, ms)) => {
+                            let overlap = fb < ram + (8192u64 << 20) && ram < fb + window_bytes;
+                            println!(
+                                "BOTH_WINDOWS fb_base={fb:#x} ram_base={ram:#x} ms={ms} \
+                                 distinct={} overlap={}",
+                                fb != ram,
+                                overlap
+                            );
+                            if fb == ram || overlap {
+                                println!(
+                                    "FAIL  both windows       = the two windows collide in one \
+                                     space — §4 and §6 cannot both be arithmetic"
+                                );
+                                println!("RUNGCTL_identity_window=FAIL");
+                                return false;
+                            }
+                        }
+                        Err(e) => {
+                            println!("BOTH_WINDOWS ⊘ REFUSED {e}");
+                            println!("RUNGCTL_identity_window=FAIL");
+                            return false;
+                        }
+                    }
                     println!("RUNGCTL_identity_window=PASS");
                     println!("RUNG_identity_window=PASS");
                     return true;

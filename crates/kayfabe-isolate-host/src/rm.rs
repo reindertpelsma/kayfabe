@@ -13457,6 +13457,64 @@ impl HostRmBackend {
         out
     }
 
+    /// ★★★★★ **BOTH WINDOWS IN ONE VA SPACE** — the composition §12 actually requires.
+    ///
+    /// ⊘ `[w825]` §4 (framebuffer) and §6 (guest RAM) are each measured **alone**, and each was
+    /// handed `0x120000000` — but in **separate** spaces. §12 puts the window in *every* host VAS
+    /// we create, so the two must coexist in **one**. ⚠ *"Both work, so both work together"* is
+    /// the composition error this tree keeps paying for: every mechanism in the old `gpu.rs`
+    /// worked in isolation too.
+    ///
+    /// Returns `(fb_base, ram_base, ms)` — and it is the **pair** that is the result.
+    pub fn prove_both_windows(
+        &mut self,
+        fb_bytes: u64,
+        ram_bytes: u64,
+    ) -> Result<(u64, u64, u128), String> {
+        use kayfabe_linux_raw::{Backing, CachePolicy, HostPageSize, HostProt, MappedRegion, SharedRam};
+        use std::time::Instant;
+
+        let fb = self.conn.reserve_gpga(fb_bytes).map_err(|e| format!("reserve: {e:?}"))?;
+        let ram = SharedRam::create(ram_bytes).map_err(|e| format!("memfd: {e:?}"))?;
+        let region = MappedRegion::map(
+            Backing::SharedFile { fd: ram.as_backing_fd(), offset: 0 },
+            ram_bytes,
+            HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            HostPageSize::query(),
+        )
+        .map_err(|e| format!("mmap: {e:?}"))?;
+        let ramobj = self
+            .conn
+            .alloc_os_descriptor(&region, kayfabe_linux_raw::HostOffset::new(0), ram_bytes)
+            .map_err(|e| format!("os_descriptor: {e:?}"))?;
+
+        // ★ ONE space for both.
+        let vas = self.alloc_vaspace().map_err(|e| format!("vaspace: {e:?}"))?;
+
+        let t0 = Instant::now();
+        let fb_va = self.map_local_at(vas, self.stamp(fb), fb_bytes, None);
+        let ram_va = self.map_local_at(vas, self.stamp(ramobj), ram_bytes, None);
+        let ms = t0.elapsed().as_millis();
+
+        let out = match (&fb_va, &ram_va) {
+            (Ok(a), Ok(b)) => Ok((*a, *b, ms)),
+            (Err(e), _) => Err(format!("fb window in shared space: {e:?}")),
+            (_, Err(e)) => Err(format!("ram window in shared space: {e:?}")),
+        };
+
+        if let Ok(va) = fb_va {
+            let _ = self.unmap_local(vas, va);
+        }
+        if let Ok(va) = ram_va {
+            let _ = self.unmap_local(vas, va);
+        }
+        let _ = self.free(vas);
+        let _ = self.free(self.stamp(ramobj));
+        let _ = self.free(self.stamp(fb));
+        out
+    }
+
     /// ★★★ **NARROW THE CEILING.** `largest_mappable_mb` halves and stops at the first success,
     /// so it brackets rather than answers. This bisects `(good, bad)` to the nearest MiB step.
     pub fn narrow_map_ceiling_mb(&mut self, good_mb: u64, bad_mb: u64) -> u64 {
