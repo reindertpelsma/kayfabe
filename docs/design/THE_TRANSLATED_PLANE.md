@@ -938,3 +938,23 @@ ceiling if the object is sized *after* the walker: the object **is** what is lef
 ⚠ The placement question is now the critical one. Step 4's output is a FIXED map **at the guest's
 own VA** in a mirrored host VAS — and every FIXED attempt in §13–§16 refused, with §15.2's
 explanation contradicted by §17.1. That is the next measurement.
+
+---
+
+## §23 — ✔ `[MEASURED w825]` FIXED PLACEMENT AT GUEST VAs WORKS. Every earlier refusal was the probe.
+
+```
+FIXED_PLACE va=0x120000000    off=0x0          EXACT
+FIXED_PLACE va=0x204400000    off=0x100000     EXACT   (native oracle's semaphore region)
+FIXED_PLACE va=0x2000000000   off=0x2000000    EXACT   (128 GiB, CUDA-heap shaped)
+FIXED_PLACE va=0x7f0000000000 off=0x40000000   EXACT   (near a 47-bit top)
+FIXED_PLACE va=0x120010000    off=0x2cea00000  EXACT   (slice at the guest's table offset)
+FIXED_PLACEMENT exact=5/5 obj_mib=11760    RUNGCTL_fixed_placement=PASS
+```
+
+★ In a **default, RM-managed** VA space, 64 KiB slices of the one object land **exactly** at every
+guest-shaped VA asked. ⇒ **Step 4's output shape works on hardware.** The §13–§16 refusals all ran
+in a broken shape — a shared-managed space (unusable even for a plain CE copy) or a default space at
+11 904 MiB, over the ceiling. §15.2's explanation *and* the audit's "unexplained" are both resolved:
+**it was the probe.** ⊘ This also means the mirrored host VAS is an ordinary RM-managed space — no
+`SHARED_MANAGEMENT`, no declared range.
