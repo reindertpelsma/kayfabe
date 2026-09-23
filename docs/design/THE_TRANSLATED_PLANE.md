@@ -788,3 +788,45 @@ it may be virtual, and then step 3 collapses into step 4 entirely.**
 `rm.rs:66` records that `ce_copy`'s `Constant` (fill) arm was **never proven on hardware**. The
 scrub is a fill. ⇒ Step 3's gate must check **the bytes actually went to zero**, not only
 `forwarded>0` — a forwarded fill that writes nothing is exactly the shape §46 was written about.
+
+---
+
+## §20 — `[MEASURED w825]` THE BASELINE AT HEAD: 17/30, and TWO OF THEM ARE NOISE
+
+**Box 52236011, GA106, 580.159.04, rev `95f9205f`, 45 s budget** — the same budget as w823's
+15/30, so the numbers are comparable.
+
+```
+FAST_SUITE_PASS=17 FAST_SUITE_FAIL=7 FAST_SUITE_CRASH=6 NOTRUN=0
+FAST_SUITE_RC=1
+```
+
+### §20.1 — ⊘ 15 → 17 IS NOT AN IMPROVEMENT. Both movers passed AT THE BUDGET.
+
+`--uvm-mean` **45 s of 45 s**. `--map-stress` **45 s of 45 s**. Both were TIMEOUT at w823 and both
+now pass **at the edge**, on a box with **15 cores at 2.4 GHz** against the previous **25**. ⇒ They
+are **budget noise**, not work.
+
+⚠ The tree already recorded this exact shape: *"`--doorbell-census` PASSED at **43 s of 45 s**. At
+a 40 s budget it reads as a crash. **Record an edge as an edge.**"* ⇒ **The honest baseline is
+still 15/30**, and a number that moves without a mechanism is the w797 lie in a new costume —
+there `18` was our CPU doing the GPU's work.
+
+### §20.2 — ✔ The structure is intact, and that is the RIGHT result
+
+| | |
+|---|---|
+| the `forwarded=0` cluster | ✔ **still there** — `blockage-coverage`, `late-map-race`, `executor-vas`, `dictated-ring`, `ce-client` |
+| `--alias-two-vas` | ✔ **PASS** — the known-positive; the gate still discriminates on real data |
+| `raw client rc=1` | 2 arms, unchanged |
+| group D (`concurrency`, `concurrent-fuzz`) | ✔ still hung — **as §10.1 predicts**, `kf-qemu` does not exist |
+
+★ **Nothing built this session touches `route_of_engine`**, so an *unchanged* cluster is the
+expected result and a *changed* one would have been the alarming one. The windows make the
+physical half free; they do not route a single doorbell.
+
+### §20.3 — ✔ And the harness fix earned itself
+
+`NOTRUN=0` and **`FAST_SUITE_RC=1`**. The suite that hardcoded `FAST_SUITE_RC=0` all session now
+**fails when the run fails**, and would have said `NOTRUN` + `rc=2` had a precondition been
+missing instead of printing thirty phantom `TIMEOUT`s.
