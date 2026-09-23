@@ -13307,59 +13307,87 @@ impl HostRmBackend {
         Ok(self.stamp(space))
     }
 
+    /// ★★★★★ **THE IDENTITY WINDOW**, as `SHARED_MANAGEMENT` actually requires it.
+    ///
+    /// ⊘⊘⊘ `[w825]` Four earlier runs measured my instrument, not RM. The contract, from RM's
+    /// own UVM path (`nv_gpu_ops.c:2632-2637`) and `nvos.h:3161`:
+    ///
+    /// > An explicit `vaSize` **requires** `NV_VASPACE_ALLOCATION_FLAGS_SHARED_MANAGEMENT`, and
+    /// > under it **the CLIENT manages the range** — so RM will not choose an address inside it.
+    ///
+    /// ⇒ Two consequences that invalidated every earlier attempt: **every map must be FIXED**
+    /// (passing `None` must refuse, and did), and the declared range must **contain** the base
+    /// we then ask for (v4 declared `[64 GiB, 128 GiB)` and asked for five bases outside it).
+    ///
+    /// ⇒ So: **one VA space per candidate base**, each declared to span exactly the region the
+    /// object will occupy. That is also how it would be used in production — `GPGA_VA_BASE` is
+    /// ours to choose, and the space exists to hold the window.
     pub fn prove_identity_window(
         &mut self,
         bytes: u64,
         bases: &[u64],
-        explicit_range: Option<(u64, u64)>,
     ) -> Result<IdentityWindowEvidence, RmError> {
         use std::time::Instant;
 
         let obj = self.conn.reserve_gpga(bytes)?;
-        let vas = match match explicit_range {
-            Some((base, size)) => self.alloc_vaspace_sized(base, size),
-            None => self.alloc_vaspace(),
-        } {
-            Ok(v) => v,
-            Err(e) => {
-                let _ = self.free(self.stamp(obj));
-                return Err(e);
-            }
-        };
 
-        // ★ FIRST, and it is the diagnostic v1 lacked: let RM choose. Where it puts a
-        // whole-object mapping tells us the space's usable range, so "you asked outside the
-        // VAS" is distinguishable from "RM will not do this at all".
-        let rm_choice = match self.map_local_at(vas, self.stamp(obj), bytes, None) {
-            Ok(va) => {
-                let _ = self.unmap_local(vas, va);
-                Ok(va)
+        // ⊘ The control, in a DEFAULT (RM-managed) space, where `None` is legal. It answers
+        // "will RM map this object at all, anywhere" independently of the placement question.
+        let rm_choice = match self.alloc_vaspace() {
+            Ok(vas) => {
+                let r = match self.map_local_at(vas, self.stamp(obj), bytes, None) {
+                    Ok(va) => {
+                        let _ = self.unmap_local(vas, va);
+                        Ok(va)
+                    }
+                    Err(e) => Err(format!("{e:?}")),
+                };
+                let _ = self.free(vas);
+                r
             }
-            Err(e) => Err(format!("{e:?}")),
+            Err(e) => Err(format!("vaspace: {e:?}")),
         };
 
         let mut attempts = Vec::new();
         let mut map_ms = 0u128;
+        let mut ce_still_works = false;
+
         for &base in bases {
+            // ★ The range CONTAINS the base and the whole object, with headroom for the
+            // operands that live beside the window in production.
+            let span = (bytes * 2).next_power_of_two();
+            let vas = match self.alloc_vaspace_sized(base, span) {
+                Ok(v) => v,
+                Err(e) => {
+                    attempts.push((base, Err(format!("vaspace(base={base:#x},span={span:#x}): {e:?}"))));
+                    continue;
+                }
+            };
             let t0 = Instant::now();
             match self.map_local_at(vas, self.stamp(obj), bytes, Some(base)) {
                 Ok(va) => {
                     if va == base {
                         map_ms = t0.elapsed().as_millis();
+                        // ⊘ The control that MATTERS here: a second FIXED map beside the window,
+                        // inside the same declared range. `prove_ce_copy` cannot be used — it
+                        // maps with `None`, which a shared-managed space must refuse.
+                        let probe_at = base + bytes; // immediately past the window
+                        ce_still_works = match self.map_local_at(vas, self.stamp(obj), 4096, Some(probe_at)) {
+                            Ok(v2) => {
+                                let _ = self.unmap_local(vas, v2);
+                                v2 == probe_at
+                            }
+                            Err(_) => false,
+                        };
                     }
                     attempts.push((base, Ok(va)));
                     let _ = self.unmap_local(vas, va);
                 }
-                // ⚠ `0x51` here is ADDRESS OCCUPANCY, not "already mapped there"
-                // (`gpu_vaspace.c:1372-1380`). Carried verbatim; never read as success.
                 Err(e) => attempts.push((base, Err(format!("{e:?}")))),
             }
+            let _ = self.free(vas);
         }
 
-        let ce_still_works =
-            matches!(self.prove_ce_copy(vas, 0xA5A5_1234), Ok(ev) if ev.copied());
-
-        let _ = self.free(vas);
         let _ = self.free(self.stamp(obj));
 
         Ok(IdentityWindowEvidence {

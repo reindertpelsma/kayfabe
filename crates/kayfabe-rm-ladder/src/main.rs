@@ -5523,8 +5523,7 @@ fn identity_window(rm: &mut HostRmBackend) -> bool {
         option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
     );
     // ⊘ DERIVED, never asserted — `gpga_is_one_reserved_object.md`: "the guest's advertised
-    // framebuffer size is derived from the reservation that succeeded, never asserted ahead of
-    // it."
+    // framebuffer size is derived from the reservation that succeeded, never asserted ahead of it."
     let mb = rm.largest_reservable_mb(12288);
     println!("IDENTITY_WINDOW_LARGEST_RESERVABLE_MB={mb}  (advertised today: 12288)");
     if mb == 0 {
@@ -5533,71 +5532,46 @@ fn identity_window(rm: &mut HostRmBackend) -> bool {
         println!("RUNG_identity_window=NOTRUN");
         return false;
     }
+    let bytes = mb << 20;
 
-    // ⊘ A LADDER OF BASES, not one guess. v1 asked for 1 TiB, got a bare "REFUSED", and could
-    // not tell "outside this VA space's range" from "RM will not do this at all" — the arm threw
-    // the error away. Ask RM where IT would put the object first, then probe outward.
-    let bytes = (mb as u64) << 20;
+    // ⊘ A LADDER, not one guess — and now ONE VA SPACE PER BASE, each declared to span the
+    // region the object will occupy. `[w825]` SHARED_MANAGEMENT requires the declared range to
+    // CONTAIN the base, so "one space, many bases" was never expressible; four runs failed
+    // before that was read out of `nv_gpu_ops.c` rather than guessed.
     let bases: Vec<u64> = vec![
-        1u64 << 40,  // 1 TiB — the original ask, kept so the ladder explains the first result
-        1u64 << 38,  // 256 GiB
-        1u64 << 37,  // 128 GiB
-        1u64 << 36,  // 64 GiB
-        1u64 << 35,  // 32 GiB
-        bytes.next_power_of_two(),               // just above the object itself
+        1u64 << 40, // 1 TiB
+        1u64 << 38, // 256 GiB
+        1u64 << 37, // 128 GiB
+        1u64 << 36, // 64 GiB
+        1u64 << 35, // 32 GiB
+        bytes.next_power_of_two(),
     ];
 
-    // ⊘ TWO RUNS, and the pair is the experiment. `[w825]` run A used `vaSize = 0` — "the
-    // default range" — and every base refused with NV_ERR_NO_MEMORY, including RM's own choice.
-    // That is consistent with "the default range cannot hold 11.6 GiB", which is a fact about
-    // HOW WE ASKED. Run B asks for a range that provably can. If B succeeds, A was our bug; if B
-    // refuses identically, the refusal is RM's and the construction needs slices.
-    let span = (bytes * 4).next_power_of_two().max(64u64 << 30);
-    for (label, range) in [
-        ("default_range", None),
-        ("explicit_range", Some((1u64 << 36, span))),
-    ] {
-        println!("--- identity window: {label} ---");
-        if let Some((b, sz)) = range {
-            println!("IDENTITY_WINDOW_VAS base={b:#x} size={sz:#x} ({} GiB)", sz >> 30);
-        }
-        let _ = run_identity_window_once(rm, bytes, mb, &bases, range, label);
-    }
-    // The verdict is the EXPLICIT-range run: it is the one whose premise we control.
-    let span_ok = run_identity_window_once(rm, bytes, mb, &bases, Some((1u64 << 36, span)), "verdict");
-    return span_ok;
-}
-
-/// One pass of the identity-window probe. ⊘ Split out so the arm can run it twice and print the
-/// pair, because a single refusal cannot distinguish "RM will not" from "we asked wrong".
-fn run_identity_window_once(
-    rm: &mut HostRmBackend,
-    bytes: u64,
-    mb: u64,
-    bases: &[u64],
-    explicit_range: Option<(u64, u64)>,
-    label: &str,
-) -> bool {
-    match rm.prove_identity_window(bytes, bases, explicit_range) {
+    match rm.prove_identity_window(bytes, &bases) {
         Ok(ev) => {
-            // ★ RM's OWN choice first — it bounds the space and explains every refusal below.
+            // ★ The RM-managed control: will RM map this object ANYWHERE, given a default space?
+            // Independent of placement, and the thing that separates "too big" from "wrong ask".
             match &ev.rm_choice {
-                Ok(va) => println!("IDENTITY_WINDOW_RM_CHOICE[{label}]={va:#x}  (whole object, RM picked)"),
-                Err(e) => println!("IDENTITY_WINDOW_RM_CHOICE[{label}]=REFUSED {e}"),
+                Ok(va) => println!("IDENTITY_WINDOW_RM_CHOICE={va:#x}  (default VAS, RM picked)"),
+                Err(e) => println!("IDENTITY_WINDOW_RM_CHOICE=REFUSED {e}"),
             }
             for (asked, got) in &ev.attempts {
                 match got {
-                    Ok(v) if v == asked => println!("IDENTITY_WINDOW_TRY[{label}] asked={asked:#x} got={v:#x} EXACT"),
-                    Ok(v) => println!("IDENTITY_WINDOW_TRY[{label}] asked={asked:#x} got={v:#x} MOVED"),
-                    Err(e) => println!("IDENTITY_WINDOW_TRY[{label}] asked={asked:#x} REFUSED {e}"),
+                    Ok(v) if v == asked => {
+                        println!("IDENTITY_WINDOW_TRY asked={asked:#x} got={v:#x} EXACT")
+                    }
+                    Ok(v) => println!("IDENTITY_WINDOW_TRY asked={asked:#x} got={v:#x} MOVED"),
+                    Err(e) => println!("IDENTITY_WINDOW_TRY asked={asked:#x} REFUSED {e}"),
                 }
             }
             let placed = ev.placed_as_asked();
             println!(
-                "IDENTITY_WINDOW[{label}] mib={} placed_as_asked={} at={} map_ms={} ce_still_works={}",
+                "IDENTITY_WINDOW mib={} placed_as_asked={} at={} map_ms={} second_fixed_map={}",
                 ev.reserved_bytes >> 20,
                 placed.is_some(),
-                placed.map(|v| format!("{v:#x}")).unwrap_or_else(|| "none".to_string()),
+                placed
+                    .map(|v| format!("{v:#x}"))
+                    .unwrap_or_else(|| "none".to_string()),
                 ev.map_ms,
                 ev.ce_still_works
             );
@@ -5607,7 +5581,11 @@ fn run_identity_window_once(
                 return false;
             }
             if !ev.ce_still_works {
-                println!("FAIL  identity window    = a plain CE copy broke with the window installed");
+                // ⊘ Placement alone is not enough: the space must still take the operands that
+                // live beside the window. A SECOND FIXED map past the object is that check —
+                // `prove_ce_copy` cannot be, because it maps with `None`, which a shared-managed
+                // space must refuse by contract.
+                println!("FAIL  identity window    = a second FIXED map beside the window refused");
                 println!("RUNGCTL_identity_window=FAIL");
                 return false;
             }
