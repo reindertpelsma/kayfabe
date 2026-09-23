@@ -605,3 +605,51 @@ should create two spaces and print both bases; it is one loop.
 ⊘ And the tiling machinery (`prove_tiled_window`) is **kept unused**: it is the fallback if a
 future chip's ceiling falls well below its reservation, and §14.1's argument — that N contiguous
 tiles satisfy §2 exactly as one map does — stands whether or not it is ever needed.
+
+
+---
+
+## §16 — ✔ `[MEASURED w825]` STEP 2 PASSES, AND IT EXPOSES A COLLISION THE DESIGN MUST SETTLE
+
+```
+IDENTITY_WINDOW_SECOND_VAS base=0x120000000 SAME ⇒ GPGA_VA_BASE is ONE CONSTANT for the VMM
+IDENTITY_WINDOW_ESTABLISHED base=0x120000000 mib=11857
+GUEST_RAM_WINDOW          mib=8192  base=0x120000000 map_ms=299 OK
+```
+
+### §16.1 — ✔ `GPGA_VA_BASE` is a constant, not a field
+
+Two VA spaces, the same object, **the same base**. ⇒ `GPGA_VA_BASE` is a `#define` for the whole
+VMM, not a per-space lookup on every operand translation. §15.4's caveat is closed, the good way.
+
+### §16.2 — ✔ The guest-RAM window works
+
+**8 GiB** of guest RAM, described as **one** `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` and mapped
+**whole**, in **299 ms**. ⇒ §6 is measured: a guest physical address `g` is the GPU VA
+`RAM_VA_BASE + g`, and UVM's sysmem-side operands are arithmetic too.
+
+⊘ **299 ms against the framebuffer's 1 ms**, and the asymmetry is expected rather than alarming:
+pinning 8 GiB of system memory is real work where mapping already-reserved vidmem is not. It is
+paid **once at VM start**. ⚠ It is also ~0.3 s of a guest's boot budget, so it belongs on the
+start-up path and **never** on anything a guest can trigger repeatedly.
+
+### §16.3 — ⚠⚠⚠ THE COLLISION, AND THE PROBE'S OWN LIMIT
+
+**Both windows were handed `0x120000000`.** They were measured in **separate VA spaces**, so this
+is RM deterministically choosing the first free address — not a conflict *yet*.
+
+★ **But §12 puts the window in EVERY host VAS we create, and the two windows must coexist in the
+SAME space.** So exactly one of these is true and **the probe did not distinguish them**:
+
+1. RM allocates the second window **elsewhere** in the same space, both bases are known, and the
+   design is unchanged — ⇒ two constants, not one.
+2. RM refuses, or the caller must place one of them — ⇒ back to a **FIXED** map, which §15 spent
+   eight runs discovering this VA space will not honour at an address of our choosing.
+
+⊘ **This is the next measurement, and it is one function:** allocate **one** VAS, map **both**
+the framebuffer object and the guest-RAM descriptor into it, print both bases. Until it runs,
+§4's and §6's arithmetic are each proven **alone** and **not together**.
+
+⚠ Recorded as a gap rather than an assumption, because the attractive reading — *"both work, so
+both work together"* — is exactly the composition error this tree keeps paying for: every
+individual mechanism in the old `gpu.rs` worked in isolation too.
