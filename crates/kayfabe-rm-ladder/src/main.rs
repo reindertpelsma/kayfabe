@@ -5571,8 +5571,41 @@ fn identity_window(rm: &mut HostRmBackend) -> bool {
     // ⊘ §2 needs only "a guest FB-physical p is the GPU VA base + p", which N contiguous tiles
     // at fixed offsets satisfy exactly as one map does. This is the gate §9 step 1 should carry.
     const GPGA_VA_BASE: u64 = 1 << 40;
+    // ⊘⊘⊘ `[w825]` SIZE THE WINDOW BY WHAT IS MAPPABLE, NOT BY WHAT IS RESERVABLE. The ceiling
+    // is 11857 MiB against an 11904 MiB reservation — **47 MiB**, 0.4%. Every earlier FIXED
+    // refusal asked for the full reservation, i.e. 47 MiB MORE THAN RM WILL MAP, so those runs
+    // may have been measuring the size all along and not the placement.
+    // ★ And `gpga_is_one_reserved_object.md` already has the rule for this: "the guest's
+    // advertised framebuffer size is DERIVED from the reservation that succeeded, never asserted
+    // ahead of it." ⇒ Extend it by one word: derived from what can be **mapped**.
+    let window_bytes = if ceiling_mb > 0 { ceiling_mb << 20 } else { bytes };
+    println!(
+        "IDENTITY_WINDOW_SIZED reservable_mib={} mappable_mib={} delta_mib={}",
+        bytes >> 20,
+        window_bytes >> 20,
+        (bytes - window_bytes) >> 20
+    );
+    // ★ FIRST: one whole map at OUR base, at the mappable size, in a DEFAULT (RM-managed) space.
+    // If this lands, the window needs no tiling at all and the shared-managed detour was moot.
+    match rm.prove_identity_window(window_bytes, &[GPGA_VA_BASE]) {
+        Ok(ev) => {
+            for (asked, got) in &ev.attempts {
+                match got {
+                    Ok(v) if v == asked => println!("IDENTITY_FIXED asked={asked:#x} got={v:#x} EXACT"),
+                    Ok(v) => println!("IDENTITY_FIXED asked={asked:#x} got={v:#x} MOVED"),
+                    Err(e) => println!("IDENTITY_FIXED asked={asked:#x} REFUSED {e}"),
+                }
+            }
+            match &ev.rm_choice {
+                Ok(va) => println!("IDENTITY_FIXED_RM_CHOICE={va:#x} (mappable size, default VAS)"),
+                Err(e) => println!("IDENTITY_FIXED_RM_CHOICE=REFUSED {e}"),
+            }
+        }
+        Err(e) => println!("IDENTITY_FIXED ⊘ SETUP REFUSED {e:?}"),
+    }
+
     let tile = if ceiling_mb >= 64 { (ceiling_mb / 2) << 20 } else { 1u64 << 30 };
-    match rm.prove_tiled_window(bytes, GPGA_VA_BASE, tile) {
+    match rm.prove_tiled_window(window_bytes, GPGA_VA_BASE, tile) {
         Ok(ev) => {
             for (off, asked, got) in &ev.tiles {
                 match got {
