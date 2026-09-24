@@ -6,17 +6,49 @@
 //! lives in `libcudart`, which a driver-only box does not have, and it owns a context
 //! lifecycle this process wants to own itself. ⊘ The device half is untouched — it is the
 //! committed PTX, built from that same file.
+//!
+//! # ★★★★★ P4 (w826) — THE WALK NEVER BLOCKS THE THREAD THAT SUBMITS IT
+//!
+//! `V3_P4_PORT_MAP.md` §2.1(d) / Q6: `refresh` used to call `cuCtxSynchronize` **twice on the
+//! caller's stack** (between the parallel walk and the diff, and again before the read-back),
+//! which `THE_TRANSLATED_PLANE.md` §5 and `THE_CONSTRAINTS.md` §41 forbid for a worker. Now:
+//! - [`WalkKernel::submit`] queues the whole walk on the kernel's **own stream** — the pdb
+//!   upload, every launch, the report read-back into **pinned** host memory — and ends it with
+//!   a `cuLaunchHostFunc` that writes an **eventfd** ([`WalkKernel::completion_fd`]). It returns
+//!   as soon as the work is queued.
+//! - [`WalkKernel::try_collect`] never blocks: it drains the fd (or, when the fd is silent,
+//!   asks `cuEventQuery` so a device fault is still named) and, once the walk is done, decodes
+//!   the report from pinned memory.
+//! - [`WalkKernel::refresh`] survives as `submit` + a `poll(2)` on the fd, **for harnesses and
+//!   the selftest only**. It runs no `cuCtxSynchronize` either; [`WalkKernel::ctx_sync_calls`]
+//!   is the counter gate 8 reads to prove it.
+//!
+//! # ⊘⊘⊘ AND THE DELTA-SNAPSHOT HANDSHAKE IS GONE FROM THE HOST
+//!
+//! `V3_BUILD.md` rules out *"snapshots of the guest's tables (the walk kernel's delta snapshot
+//! … included — v3 §4.2 w825: the snapshot is a shadow; the ledger replaces it)"*. The host half
+//! of that handshake was `ack()`, which wrote `KfDev::acked`; it is deleted, together with the
+//! prefix/suffix trim launch that only a delta uses. With `acked` never written, the kernel's
+//! own rule (`kf_walk.cu:1078`: `resync = !have_prev || acked != generation`) makes **every
+//! report a full RESYNC** — the complete state of every space asked for — and
+//! [`Report::require_full`] refuses by name any report that is not, so a future re-introduction
+//! of an ack cannot silently turn reports back into deltas that `kf_mem::ledger::plan_reconcile`
+//! would misread as the whole truth.
+//! ⚠ **Known residue, stated rather than hidden:** the `.cu` still keeps its two run tables
+//! (`KfDev::tbl_*`, `KfArgs::tbl[2]`) and computes a diff against the previous one — under
+//! RESYNC that diff has no previous side, so it emits the current table whole. Deleting the
+//! device-side snapshot needs a `.cu` edit and a PTX regeneration (`cuda/walk/make_ptx.py`,
+//! NVRTC) and a re-run of the 58-assertion CUDA suite on hardware; the host no longer depends on
+//! it, which is the part v3's rule is about.
 
 use crate::abi::{
-    KF_ABI_VERSION, KF_MAX_PDB, KF_TBL_VER2, KFWR_HF_TRUNCATED, KFWR_MAGIC, KFWR_OP_UNMAP, KfArgs,
-    KfDev, KfFormat, KfMapRun, KfPdbEntry, KfReportHeader, KfScope,
+    KF_ABI_VERSION, KF_MAX_PDB, KF_TBL_VER2, KFWR_HF_RESYNC, KFWR_HF_TRUNCATED, KFWR_MAGIC,
+    KFWR_OP_UNMAP, KfArgs, KfDev, KfFormat, KfMapRun, KfPdbEntry, KfReportHeader, KfScope,
 };
-use crate::driver_unsafe::{CUdeviceptr, CtxHandle, Cuda, CudaError, Func};
-
-/// Byte offset of `KfDev::acked`. ⊘ Derived with `offset_of!` rather than written as `8`, so a
-/// field inserted before it is a compile-time relocation and not a silent write to the wrong
-/// word — `generation` sits immediately before it and the two are the same type.
-const ACKED_BYTE_OFFSET: u64 = core::mem::offset_of!(KfDev, acked) as u64;
+use crate::driver_unsafe::{
+    CUdeviceptr, CompletionFd, CtxHandle, Cuda, CudaError, EventHandle, Func, PinnedBuf,
+    StreamHandle,
+};
 
 /// ★★★ **The committed PTX.** Built from `cuda/walk/kf_walk.cu` by
 /// `cuda/walk/make_ptx.py` — NVRTC, no GPU and no nvcc, so it is generated where the rest of
@@ -34,8 +66,9 @@ pub static WALK_PTX: &[u8] = include_bytes!("../../../cuda/walk/kf_walk.ptx");
 const SYM_BEGIN: &str = "_Z15kf_begin_kernelP5KfDev";
 const SYM_WALK: &str = "_Z14kf_walk_kernel6KfArgs";
 const SYM_DIFF: &str = "_Z14kf_diff_kernel6KfArgsPKj";
-/// w826 — the parallel prefix/suffix trim that bounds the serial diff to what changed.
-const SYM_TRIM: &str = "_Z19kf_diff_trim_kernel6KfArgsPj";
+// ⊘ P4: `kf_diff_trim_kernel` (`_Z19kf_diff_trim_kernel6KfArgsPj`) is no longer resolved or
+// launched. It bounds a DELTA to what changed; every report is now a full RESYNC, for which the
+// trim writes `0, 0` and the diff kernel never reads it (`kf_walk.cu:1046`, `:1137`).
 
 // ★ w826 — THE PARALLEL WALK's entry points (mangled; `kf_walk.cu`'s `kf_run_parallel`).
 const SYM_PAR: [&str; 9] = [
@@ -202,6 +235,16 @@ pub enum ReportError {
         /// The span it had to lie inside.
         span: u64,
     },
+    /// ★ P4: the report is not a FULL report — no `KFWR_HF_RESYNC`, or it carries an UNMAP run.
+    /// v3 diffs every walk against OUR ledger (`kf_mem::ledger::plan_reconcile`), which reads
+    /// a report as the complete state of each space; a delta read that way unmaps everything
+    /// that did not change. Refused by name (`V3_BUILD.md`: no delta snapshot).
+    NotFull {
+        /// The header flags seen.
+        flags: u16,
+        /// The first UNMAP run, if that is why.
+        unmap_run: Option<usize>,
+    },
 }
 
 impl core::fmt::Display for ReportError {
@@ -240,6 +283,12 @@ impl core::fmt::Display for ReportError {
                  {:#x}, span is {span:#x} — mapping it would hand the guest memory that is \
                  not its own",
                 gpga.saturating_add(*len)
+            ),
+            ReportError::NotFull { flags, unmap_run } => write!(
+                f,
+                "not a full report (flags={flags:#x}, first unmap run={unmap_run:?}): the ledger \
+                 diff reads a report as the whole state of each space, and a delta would unmap \
+                 everything that did not change"
             ),
         }
     }
@@ -319,12 +368,68 @@ impl Report {
         Ok(())
     }
 
-    /// Whether the walk was truncated — in which case it is **not** a delta and the walker
-    /// must not be acked.
+    /// Whether the walk was truncated — in which case it is not the whole state of any space
+    /// and must never be reconciled against.
     #[must_use]
     pub fn truncated(&self) -> bool {
         (self.header.flags & KFWR_HF_TRUNCATED) != 0
     }
+
+    /// ★ P4: require a FULL report — `KFWR_HF_RESYNC` set and no UNMAP run. See
+    /// [`ReportError::NotFull`] for why a delta must never reach the ledger diff.
+    ///
+    /// # Errors
+    /// [`ReportError::NotFull`].
+    pub fn require_full(&self) -> Result<(), ReportError> {
+        let unmap_run = self.runs.iter().position(|r| r.op == KFWR_OP_UNMAP);
+        if (self.header.flags & KFWR_HF_RESYNC) == 0 || unmap_run.is_some() {
+            return Err(ReportError::NotFull {
+                flags: self.header.flags,
+                unmap_run,
+            });
+        }
+        Ok(())
+    }
+}
+
+/// One collected walk: the report and what it cost.
+#[derive(Debug, Clone)]
+pub struct Collected {
+    /// The report (validate it, and [`Report::require_full`], before acting on it).
+    pub report: Report,
+    /// GPU time from the first queued operation to the last read-back copy, from CUDA events.
+    pub gpu_us: u64,
+    /// Wall time from `submit` returning to `try_collect` seeing the completion.
+    pub submit_to_collect_us: u64,
+}
+
+/// Where the report pieces live in the pinned buffer.
+#[derive(Debug, Clone, Copy)]
+struct PinLayout {
+    pdbs: usize,
+    hdr: usize,
+    rpdb: usize,
+    rrun: usize,
+    total: usize,
+}
+
+impl PinLayout {
+    fn for_cfg(cfg: &WalkCfg) -> PinLayout {
+        let pdbs = 0;
+        let hdr = KF_MAX_PDB * 8;
+        let rpdb = hdr + core::mem::size_of::<KfReportHeader>().next_multiple_of(64);
+        let rrun = rpdb
+            + (cfg.pdb_capacity as usize * core::mem::size_of::<KfPdbEntry>()).next_multiple_of(64);
+        let total = rrun + cfg.run_capacity as usize * core::mem::size_of::<KfMapRun>();
+        PinLayout { pdbs, hdr, rpdb, rrun, total }
+    }
+}
+
+/// The walk in flight (at most one).
+#[derive(Debug, Clone, Copy)]
+struct InFlight {
+    gpga_len: u64,
+    submitted: std::time::Instant,
 }
 
 /// A device allocation, freed on drop.
@@ -351,8 +456,16 @@ pub struct WalkKernel {
     f_begin: Func,
     f_walk: Func,
     f_diff: Func,
-    f_trim: Func,
     f_par: [Func; 9],
+    /// ★ P4: the walk's own stream, its events, the pinned read-back and the completion fd.
+    stream: StreamHandle,
+    ev_start: EventHandle,
+    ev_copied: EventHandle,
+    ev_done: EventHandle,
+    pin: PinnedBuf,
+    pin_at: PinLayout,
+    done_fd: CompletionFd,
+    inflight: Option<InFlight>,
     par: ParBufs,
     fmt: KfFormat,
     cfg: WalkCfg,
@@ -459,7 +572,6 @@ impl WalkKernel {
         let f_begin = cu.module_function(module, SYM_BEGIN)?;
         let f_walk = cu.module_function(module, SYM_WALK)?;
         let f_diff = cu.module_function(module, SYM_DIFF)?;
-        let f_trim = cu.module_function(module, SYM_TRIM)?;
         let mut f_par = [f_begin; 9];
         for (i, sym) in SYM_PAR.iter().enumerate() {
             f_par[i] = cu.module_function(module, sym)?;
@@ -529,14 +641,30 @@ impl WalkKernel {
         };
         cu.memcpy_h2d(dev.ptr, bytes_of(&h), "cuMemcpyHtoD(KfDev)")?;
 
+        // ★ P4: the asynchronous half, brought up here with everything else lazy (§w724d).
+        let stream = cu.stream_create()?;
+        let ev_start = cu.event_create()?;
+        let ev_copied = cu.event_create()?;
+        let ev_done = cu.event_create()?;
+        let pin_at = PinLayout::for_cfg(&cfg);
+        let pin = cu.pinned_alloc(pin_at.total, "cuMemAllocHost(report read-back)")?;
+        let done_fd = CompletionFd::new()?;
+
         Ok(WalkKernel {
             cu,
             ctx,
             f_begin,
             f_walk,
             f_diff,
-            f_trim,
             f_par,
+            stream,
+            ev_start,
+            ev_copied,
+            ev_done,
+            pin,
+            pin_at,
+            done_fd,
+            inflight: None,
             par,
             fmt,
             cfg,
@@ -592,152 +720,241 @@ impl WalkKernel {
         a
     }
 
-    /// One refresh over `gpga` (a device pointer and a length) for the ascending `pdbs`.
+    /// ★★★★★ **Queue one walk over `gpga` for the ascending `pdbs`, and return.**
+    ///
+    /// Everything — the pdb upload, `kf_begin_kernel`, the parallel walk, the diff (which under
+    /// RESYNC emits each space whole), the header/pdb/run read-back into pinned memory — goes on
+    /// the walker's own stream, followed by a host function that signals
+    /// [`WalkKernel::completion_fd`]. **Nothing here waits on the GPU**; the cost on the calling
+    /// thread is the launch calls themselves (gate 8 measures it).
+    ///
+    /// ⊘ The read-back copies the report buffers at their **capacity**, not at the run count —
+    /// the count is not known until the walk has run, and learning it first would be the
+    /// synchronisation this exists to remove. 16 384 runs × 32 B = 512 KiB of PCIe per walk.
+    ///
+    /// # Errors
+    /// [`CudaError::Refused`] naming the call; also refused, by name, when a walk is already in
+    /// flight (the pinned read-back is single-buffered, and one walker context walks one thing
+    /// at a time — the VA manager coalesces behind it) or when more than [`KF_MAX_PDB`] spaces
+    /// are asked for.
+    pub fn submit(&mut self, gpga: CUdeviceptr, gpga_len: u64, pdbs: &[u64]) -> Result<(), CudaError> {
+        if self.inflight.is_some() {
+            return Err(CudaError::Refused {
+                what: "WalkKernel::submit",
+                code: 0,
+                name: "a walk is already in flight; collect it first (one pinned read-back, one \
+                       walk at a time)"
+                    .to_string(),
+            });
+        }
+        if pdbs.len() > KF_MAX_PDB {
+            return Err(CudaError::Refused {
+                what: "WalkKernel::submit",
+                code: 0,
+                name: format!(
+                    "the kernel's table holds {KF_MAX_PDB} address spaces and was handed {}",
+                    pdbs.len()
+                ),
+            });
+        }
+        self.make_current()?;
+        let npdb = u32::try_from(pdbs.len()).unwrap_or(0);
+        let mut pdb_bytes = Vec::with_capacity(pdbs.len() * 8);
+        for p in pdbs {
+            pdb_bytes.extend_from_slice(&p.to_le_bytes());
+        }
+        let s = self.stream;
+        let at = self.pin_at;
+        self.pin.write(at.pdbs, &pdb_bytes);
+        self.cu.event_record(self.ev_start, s)?;
+        if !pdb_bytes.is_empty() {
+            self.cu.memcpy_h2d_async(s, self.pdbs.ptr, &self.pin, at.pdbs, pdb_bytes.len(), "cuMemcpyHtoDAsync(pdbs)")?;
+        }
+
+        let args = self.args_for(gpga, gpga_len, npdb);
+        self.cu.launch_args(
+            s,
+            self.f_begin,
+            1,
+            1,
+            0,
+            &mut [param_bytes(&self.dev.ptr)],
+            "cuLaunchKernel(kf_begin_kernel)",
+        )?;
+        // ★★★★★ w826 — THE PARALLEL WALK (`kf_run_parallel`, ported to the driver API).
+        // `[w726]` ~0.6 ms fixed cost vs the serial walk's one-thread-per-space. The serial
+        // kernel stays in the PTX for the scoped path the .cu keeps; this walk is never scoped.
+        let _ = self.f_walk;
+        self.run_parallel(&args, npdb)?;
+        // ⊘ The trim pointer is NULL: every report is a RESYNC, whose diff never reads it.
+        self.cu.launch_args(
+            s,
+            self.f_diff,
+            1,
+            1,
+            0,
+            &mut [param_bytes(&args), 0u64.to_le_bytes().to_vec()],
+            "cuLaunchKernel(kf_diff_kernel)",
+        )?;
+        let hdr_n = core::mem::size_of::<KfReportHeader>();
+        let rpdb_n = self.cfg.pdb_capacity as usize * core::mem::size_of::<KfPdbEntry>();
+        let rrun_n = self.cfg.run_capacity as usize * core::mem::size_of::<KfMapRun>();
+        self.cu.memcpy_d2h_async(s, &self.pin, at.hdr, self.hdr.ptr, hdr_n, "cuMemcpyDtoHAsync(hdr)")?;
+        self.cu.memcpy_d2h_async(s, &self.pin, at.rpdb, self.rpdb.ptr, rpdb_n, "cuMemcpyDtoHAsync(rpdb)")?;
+        self.cu.memcpy_d2h_async(s, &self.pin, at.rrun, self.rrun.ptr, rrun_n, "cuMemcpyDtoHAsync(rrun)")?;
+        self.cu.event_record(self.ev_copied, s)?;
+        // ⊘ ORDER: the host signal BEFORE `ev_done`. Then `ev_done` complete ⇒ the fd was
+        // written, so a collect that saw the event can always drain the signal — a signal left
+        // behind would complete the NEXT walk before it ran.
+        self.cu.launch_host_signal(s, &self.done_fd)?;
+        self.cu.event_record(self.ev_done, s)?;
+        self.inflight = Some(InFlight {
+            gpga_len,
+            submitted: std::time::Instant::now(),
+        });
+        Ok(())
+    }
+
+    /// Whether a walk is queued and not yet collected.
+    #[must_use]
+    pub fn in_flight(&self) -> bool {
+        self.inflight.is_some()
+    }
+
+    /// ★ The fd a walk's completion is signalled on — put it in the worker's `epoll` set.
+    #[must_use]
+    pub fn completion_fd(&self) -> &CompletionFd {
+        &self.done_fd
+    }
+
+    /// `cuCtxSynchronize` calls made by this walker's binding since bring-up (see
+    /// [`Cuda::ctx_sync_calls`]). A walk adds **zero**.
+    #[must_use]
+    pub fn ctx_sync_calls(&self) -> u64 {
+        self.cu.ctx_sync_calls()
+    }
+
+    /// ★★★ **Collect the walk in flight if it has finished — never blocks.**
+    ///
+    /// `Ok(None)`: nothing in flight, or not done yet. `Ok(Some(_))`: done; the report was
+    /// decoded from pinned memory. `Err`: the stream failed (a device fault in the walk surfaces
+    /// here, named by `cuEventQuery`), and the walk is dropped.
+    ///
+    /// # Errors
+    /// [`CudaError`].
+    pub fn try_collect(&mut self) -> Result<Option<Collected>, CudaError> {
+        let Some(f) = self.inflight else {
+            return Ok(None);
+        };
+        if self.done_fd.drain() == 0 {
+            // The fd is silent. Ask the event, so a failed stream — whose host function may
+            // never run — is named rather than waited on forever.
+            match self.cu.event_query(self.ev_done) {
+                Ok(false) => return Ok(None),
+                Ok(true) => {
+                    // `ev_done` follows the host signal in the stream, so the fd was written;
+                    // consume it now so it cannot complete the next walk.
+                    let _ = self.done_fd.drain();
+                }
+                Err(e) => {
+                    self.inflight = None;
+                    return Err(e);
+                }
+            }
+        }
+        self.inflight = None;
+        let submit_to_collect_us = u64::try_from(f.submitted.elapsed().as_micros()).unwrap_or(u64::MAX);
+        let gpu_us = self.cu.event_elapsed_us(self.ev_start, self.ev_copied).unwrap_or(0);
+        let at = self.pin_at;
+        let hb = self.pin.read(at.hdr, core::mem::size_of::<KfReportHeader>());
+        let header = crate::driver_unsafe::read_struct::<KfReportHeader>(&hb);
+        // ⊘ Clamped to the CAPACITY: a truncated report legitimately declares more than it
+        // carries (invariant I3), and reading `run_count` elements out of a `run_capacity`
+        // buffer would turn "loud truncation" into a host-side overrun.
+        let npdb = header.pdb_count.min(self.cfg.pdb_capacity) as usize;
+        let nrun = header.run_count.min(self.cfg.run_capacity) as usize;
+        let pb = self.pin.read(at.rpdb, npdb * core::mem::size_of::<KfPdbEntry>());
+        let pdbs = pb
+            .chunks_exact(core::mem::size_of::<KfPdbEntry>())
+            .map(crate::driver_unsafe::read_struct::<KfPdbEntry>)
+            .collect();
+        let rb = self.pin.read(at.rrun, nrun * core::mem::size_of::<KfMapRun>());
+        let runs = rb
+            .chunks_exact(core::mem::size_of::<KfMapRun>())
+            .map(crate::driver_unsafe::read_struct::<KfMapRun>)
+            .collect();
+        Ok(Some(Collected {
+            report: Report {
+                header,
+                pdbs,
+                runs,
+                gpga_span: f.gpga_len,
+            },
+            gpu_us,
+            submit_to_collect_us,
+        }))
+    }
+
+    /// ⚠ **HARNESS / SELFTEST ONLY — this blocks the calling thread** (in `poll(2)` on the
+    /// completion fd, never in `cuCtxSynchronize`). A worker uses [`WalkKernel::submit`] and
+    /// [`WalkKernel::try_collect`] from its `epoll` loop instead.
+    ///
+    /// # Errors
+    /// [`CudaError`], or a refusal naming the timeout.
+    pub fn wait(&mut self, timeout_ms: u64) -> Result<Collected, CudaError> {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
+        loop {
+            if let Some(c) = self.try_collect()? {
+                return Ok(c);
+            }
+            if !self.in_flight() {
+                return Err(CudaError::Refused {
+                    what: "WalkKernel::wait",
+                    code: 0,
+                    name: "no walk in flight".to_string(),
+                });
+            }
+            let left = deadline.saturating_duration_since(std::time::Instant::now());
+            if left.is_zero() {
+                return Err(CudaError::Refused {
+                    what: "WalkKernel::wait",
+                    code: 0,
+                    name: format!("the walk did not complete within {timeout_ms} ms"),
+                });
+            }
+            // ⊘ Short slices, so a failed stream (no host function will ever run) is named by
+            // the next `try_collect`'s event query rather than waited out.
+            let slice = i32::try_from(left.as_millis().min(50)).unwrap_or(50);
+            let _ = self.done_fd.wait_readable(slice);
+        }
+    }
+
+    /// One walk, start to finish: [`WalkKernel::submit`] then [`WalkKernel::wait`] (10 s).
+    /// ⚠ **Blocks the caller** — harnesses and the selftest only (see [`WalkKernel::wait`]).
     ///
     /// # Errors
     /// [`CudaError`], naming the call that refused.
-    ///
-    /// # Panics
-    /// If more than [`KF_MAX_PDB`] address spaces are asked for — a cap the caller can see and
-    /// must not exceed silently.
     pub fn refresh(
         &mut self,
         gpga: CUdeviceptr,
         gpga_len: u64,
         pdbs: &[u64],
     ) -> Result<Report, CudaError> {
-        assert!(
-            pdbs.len() <= KF_MAX_PDB,
-            "the kernel's table holds {KF_MAX_PDB} address spaces and was handed {}",
-            pdbs.len()
-        );
-        let mut pdb_bytes = Vec::with_capacity(pdbs.len() * 8);
-        for p in pdbs {
-            pdb_bytes.extend_from_slice(&p.to_le_bytes());
-        }
-        self.cu
-            .memcpy_h2d(self.pdbs.ptr, &pdb_bytes, "cuMemcpyHtoD(pdbs)")?;
-
-        let args = self.args_for(gpga, gpga_len, u32::try_from(pdbs.len()).unwrap_or(0));
-        let mut dev_param = param_bytes(&self.dev.ptr);
-        let mut args_param = param_bytes(&args);
-
-        self.cu.launch(
-            self.f_begin,
-            1,
-            1,
-            &mut dev_param,
-            "cuLaunchKernel(kf_begin_kernel)",
-        )?;
-        // ★★★★★ w826 — THE PARALLEL WALK (`kf_run_parallel`, ported to the driver API).
-        // `[w726]` ~0.6 ms fixed cost vs the serial walk's one-thread-per-space (2.4 ms on the
-        // live guest, 450 ms on the measured working set). The serial kernel stays in the PTX
-        // for the scoped path the .cu keeps; this refresh is never scoped.
-        let _ = self.f_walk;
-        let t0 = std::time::Instant::now();
-        self.run_parallel(&args, u32::try_from(pdbs.len()).unwrap_or(0))?;
-        // w826 — phase census: the walk vs the (single-thread) diff, every 512 refreshes.
-        self.cu.ctx_synchronize()?;
-        let t_walk = t0.elapsed();
-        let _ = &mut args_param;
-        let trim = self.par.cnt.ptr;
-        self.cu.launch_args(
-            self.f_trim,
-            u32::try_from(pdbs.len()).unwrap_or(0).max(1),
-            256,
-            0,
-            &mut [param_bytes(&args), trim.to_le_bytes().to_vec()],
-            "cuLaunchKernel(kf_diff_trim_kernel)",
-        )?;
-        self.cu.launch_args(
-            self.f_diff,
-            1,
-            1,
-            0,
-            &mut [param_bytes(&args), trim.to_le_bytes().to_vec()],
-            "cuLaunchKernel(kf_diff_kernel)",
-        )?;
-        self.cu.ctx_synchronize()?;
-        phase_census(t_walk, t0.elapsed() - t_walk);
-
-        let mut hb = vec![0u8; core::mem::size_of::<KfReportHeader>()];
-        self.cu
-            .memcpy_d2h(&mut hb, self.hdr.ptr, "cuMemcpyDtoH(hdr)")?;
-        let header = crate::driver_unsafe::read_struct::<KfReportHeader>(&hb);
-
-        // ⊘ Clamped to the CAPACITY before the copy: a truncated report legitimately declares
-        // more than it carries (invariant I3), and reading `run_count` elements out of a
-        // `run_capacity` buffer would turn "loud truncation" into a host-side overrun.
-        let npdb = header.pdb_count.min(self.cfg.pdb_capacity) as usize;
-        let nrun = header.run_count.min(self.cfg.run_capacity) as usize;
-        let mut pdbs_out = Vec::with_capacity(npdb);
-        let mut runs_out = Vec::with_capacity(nrun);
-        if npdb > 0 {
-            let mut b = vec![0u8; npdb * core::mem::size_of::<KfPdbEntry>()];
-            self.cu
-                .memcpy_d2h(&mut b, self.rpdb.ptr, "cuMemcpyDtoH(rpdb)")?;
-            for c in b.chunks_exact(core::mem::size_of::<KfPdbEntry>()) {
-                pdbs_out.push(crate::driver_unsafe::read_struct::<KfPdbEntry>(c));
-            }
-        }
-        if nrun > 0 {
-            let mut b = vec![0u8; nrun * core::mem::size_of::<KfMapRun>()];
-            self.cu
-                .memcpy_d2h(&mut b, self.rrun.ptr, "cuMemcpyDtoH(rrun)")?;
-            for c in b.chunks_exact(core::mem::size_of::<KfMapRun>()) {
-                runs_out.push(crate::driver_unsafe::read_struct::<KfMapRun>(c));
-            }
-        }
-        Ok(Report {
-            header,
-            pdbs: pdbs_out,
-            runs: runs_out,
-            gpga_span: gpga_len,
-        })
+        self.submit(gpga, gpga_len, pdbs)?;
+        Ok(self.wait(10_000)?.report)
     }
 
-    /// ★★★★★ **ACK A GENERATION — the host half of the snapshot handshake.**
-    ///
-    /// ⊘⊘⊘ **This had NO CALLER.** `KfDev` has carried `generation`/`acked` and the `.cu` has
-    /// carried `kf_ack` since the walker was written, and nothing in the Rust tree ever acked:
-    /// `acked` sat at 0 for the life of every VM. The handshake was built and orphaned.
-    ///
-    /// # The race it closes
-    ///
-    /// Owner, 2026-09-18: *"worker 1 is applying mmio refresh but worker 2 started refresh in
-    /// scratchpad."* Without an ack the kernel has no way to know a report was consumed, so a
-    /// second refresh may install a new snapshot while the first one's delta is still being
-    /// applied. The second delta is then computed against a snapshot that assumes the first
-    /// one's mappings are live when they are not — and the difference between those two
-    /// worlds is silent: both are well-formed reports.
-    ///
-    /// ⚠ **ACK AFTER APPLYING, NEVER ON RECEIPT.** Acking when the bytes arrive leaves exactly
-    /// the window open that this exists to close. The caller's contract is: apply the delta,
-    /// then ack the generation it came from.
-    ///
-    /// ⊘ A **truncated** report is not a delta and must NOT be acked — see
-    /// [`Report::truncated`], whose doc has said so since before anything could ack.
-    ///
-    /// # Why a memcpy and not `kf_ack_kernel`
-    ///
-    /// The `.cu` provides `kf_ack_kernel(KfDev*, u64)`, and it is in the shipped PTX. But it
-    /// takes **two** by-value parameters while [`Cuda::launch_raw`] passes exactly one, so
-    /// using it would mean widening the unsafe launch surface for a single `u64` store. A
-    /// device-to-device write of one field through the existing bounded `memcpy_h2d` adds no
-    /// `unsafe` at all. ⊘ `self.dev.ptr` is a **device** address, not a host-process VA, so it
-    /// is legal to compute on in safe Rust (the constraint is about VMM virtual addresses).
-    ///
-    /// # Errors
-    /// The CUDA error, if the copy fails.
     fn run_parallel(&self, a: &KfArgs, npdb: u32) -> Result<(), CudaError> {
         let p = |v: u64| v.to_le_bytes().to_vec();
         let u = |v: u32| v.to_le_bytes().to_vec();
         let ab = || param_bytes(a);
         let par = &self.par;
+        let s = self.stream;
         let shm = (KF_PAR_BLOCK / KF_WARP) * KF_SHWORDS * 8;
         let [f_seed, f_expand, f_scan, f_compact, f_leaf, f_heads, f_bases, f_emit, f_join] =
             self.f_par;
         self.cu.launch_args(
+            s,
             f_seed,
             npdb.div_ceil(128).max(1),
             128,
@@ -751,6 +968,7 @@ impl WalkKernel {
             let nout = par.nfr.ptr + ((src ^ 1) as u64) * 4;
             let dst = if k + 1 < KF_DIRS { par.fr[src ^ 1].ptr } else { par.task.ptr };
             self.cu.launch_args(
+                s,
                 f_expand,
                 KF_PAR_GRID,
                 KF_PAR_BLOCK,
@@ -769,6 +987,7 @@ impl WalkKernel {
                 "cuLaunchKernel(kf_par_expand)",
             )?;
             self.cu.launch_args(
+                s,
                 f_scan,
                 1,
                 KF_SCAN_BLOCK,
@@ -777,6 +996,7 @@ impl WalkKernel {
                 "cuLaunchKernel(kf_par_scan)",
             )?;
             self.cu.launch_args(
+                s,
                 f_compact,
                 KF_PAR_GRID,
                 KF_PAR_BLOCK,
@@ -796,11 +1016,12 @@ impl WalkKernel {
             if k + 1 < KF_DIRS {
                 src ^= 1;
             } else {
-                self.cu.memcpy_d2d(par.ntask.ptr, nout, 4, "cuMemcpyDtoD(ntask)")?;
+                self.cu.memcpy_d2d_async(s, par.ntask.ptr, nout, 4, "cuMemcpyDtoDAsync(ntask)")?;
             }
-            self.cu.memset_d8(par.used.ptr, 0, 4, "cuMemsetD8(used)")?;
+            self.cu.memset_d8_async(s, par.used.ptr, 0, 4, "cuMemsetD8Async(used)")?;
         }
         self.cu.launch_args(
+            s,
             f_leaf,
             KF_PAR_GRID,
             KF_PAR_BLOCK,
@@ -817,6 +1038,7 @@ impl WalkKernel {
             "cuLaunchKernel(kf_par_leaf)",
         )?;
         self.cu.launch_args(
+            s,
             f_heads,
             KF_PAR_GRID,
             128,
@@ -832,6 +1054,7 @@ impl WalkKernel {
             "cuLaunchKernel(kf_par_heads)",
         )?;
         self.cu.launch_args(
+            s,
             f_scan,
             1,
             KF_SCAN_BLOCK,
@@ -840,6 +1063,7 @@ impl WalkKernel {
             "cuLaunchKernel(kf_par_scan tasks)",
         )?;
         self.cu.launch_args(
+            s,
             f_bases,
             1,
             1,
@@ -848,6 +1072,7 @@ impl WalkKernel {
             "cuLaunchKernel(kf_par_bases)",
         )?;
         self.cu.launch_args(
+            s,
             f_emit,
             KF_PAR_GRID,
             KF_PAR_BLOCK,
@@ -865,6 +1090,7 @@ impl WalkKernel {
             "cuLaunchKernel(kf_par_emit)",
         )?;
         self.cu.launch_args(
+            s,
             f_join,
             KF_PAR_GRID,
             128,
@@ -880,12 +1106,6 @@ impl WalkKernel {
             ],
             "cuLaunchKernel(kf_par_join)",
         )
-    }
-
-    pub fn ack(&mut self, generation: u64) -> Result<(), CudaError> {
-        let at = self.dev.ptr + ACKED_BYTE_OFFSET;
-        self.cu
-            .memcpy_h2d(at, &generation.to_le_bytes(), "cuMemcpyHtoD(KfDev::acked)")
     }
 
     /// ★★★★★ **MAKE THIS KERNEL'S CONTEXT CURRENT ON THE CALLING THREAD.**
@@ -942,12 +1162,9 @@ impl WalkKernel {
         })
     }
 
-    /// Copy host bytes to an **arbitrary** device address — used to place tables at the
-    /// offsets the guest actually uses, inside an imported object, without relocating them.
-    ///
-    /// # Errors
-    /// [`CudaError`].
     /// Read `buf.len()` bytes of device memory at `src` (a harness check, never a data path).
+    /// ⊘ A synchronous legacy-stream copy: the walker's stream is a BLOCKING stream, so this
+    /// is ordered after every walk already queued.
     ///
     /// # Errors
     /// The CUDA error.
@@ -955,6 +1172,13 @@ impl WalkKernel {
         self.cu.memcpy_d2h(buf, src, "cuMemcpyDtoH(read_at)")
     }
 
+    /// Copy host bytes to an **arbitrary** device address — used to place tables at the
+    /// offsets the guest actually uses, inside an imported object, without relocating them.
+    /// ⊘ Synchronous, on the legacy stream, which the walker's blocking stream is ordered
+    /// behind: a walk submitted after this returns reads these bytes.
+    ///
+    /// # Errors
+    /// [`CudaError`].
     pub fn write_at(&self, dst: CUdeviceptr, bytes: &[u8]) -> Result<(), CudaError> {
         self.cu.memcpy_h2d(dst, bytes, "cuMemcpyHtoD(write_at)")
     }
@@ -1010,6 +1234,14 @@ impl Drop for WalkKernel {
         self.hdr.ptr = 0;
         self.rpdb.ptr = 0;
         self.rrun.ptr = 0;
+        // ★ P4: the stream and events are destroyed explicitly (the context would reclaim them
+        // too); `ctx_destroy` then drains anything still queued — including a host function
+        // that names `done_fd` — BEFORE the `CompletionFd` field closes the fd.
+        let _ = self.make_current();
+        self.cu.event_destroy(self.ev_start);
+        self.cu.event_destroy(self.ev_copied);
+        self.cu.event_destroy(self.ev_done);
+        self.cu.stream_destroy(self.stream);
         self.cu.ctx_destroy(self.ctx);
         self.ctx = CtxHandle::null();
     }
@@ -1042,25 +1274,5 @@ impl DeviceImage {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.len == 0
-    }
-}
-
-/// ★ w826 — where a refresh's time goes: the parallel walk vs the diff kernel (`<<<1,1>>>`).
-fn phase_census(walk: std::time::Duration, diff: std::time::Duration) {
-    use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
-    static N: AtomicU64 = AtomicU64::new(0);
-    static W: AtomicU64 = AtomicU64::new(0);
-    static D: AtomicU64 = AtomicU64::new(0);
-    let n = N.fetch_add(1, Relaxed) + 1;
-    let w = W.fetch_add(walk.as_micros() as u64, Relaxed) + walk.as_micros() as u64;
-    let d = D.fetch_add(diff.as_micros() as u64, Relaxed) + diff.as_micros() as u64;
-    if n % 512 == 0 {
-        eprintln!(
-            "kayfabe-isolate: WALK-PHASES n={n} avg_us[walk={} diff={}] last_us[walk={} diff={}]",
-            w / n,
-            d / n,
-            walk.as_micros(),
-            diff.as_micros()
-        );
     }
 }

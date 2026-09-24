@@ -96,24 +96,36 @@ fn an_unmap_is_exempt_because_it_names_no_memory() {
     );
 }
 
-/// ★★★★★ **The `acked` offset is DERIVED, and this pins that it is the field we think.**
+/// ★★★★★ **P4 — every report the ledger diff sees must be FULL.**
 ///
-/// ⊘ `WalkKernel::ack` writes one `u64` at `dev.ptr + ACKED_BYTE_OFFSET`. `generation` is the
-/// same type and sits immediately before it, so an off-by-one field would overwrite the
-/// generation counter with the generation number — a write that looks plausible in a dump and
-/// makes the handshake silently self-satisfying.
+/// ⊘ `WalkKernel::ack` is deleted (`V3_BUILD.md`: no delta snapshot), so the kernel's own rule
+/// (`kf_walk.cu:1078`) makes every report a RESYNC. `Report::require_full` is the host's check
+/// that this stays true: a delta handed to `plan_reconcile` would read as the whole state and
+/// unmap every mapping that did not change.
 #[test]
-fn the_acked_offset_names_acked_and_not_its_neighbour() {
-    use kf_cuda::abi::KfDev;
-    assert_eq!(
-        core::mem::offset_of!(KfDev, generation),
-        0,
-        "generation is expected first; if it moved, re-read ack()'s doc before trusting it"
-    );
-    assert_eq!(
-        core::mem::offset_of!(KfDev, acked),
-        8,
-        "★ `acked` must follow `generation`. A change here is not cosmetic: `ack()` writes at \
-         this offset and its neighbour is the counter the kernel compares against."
-    );
+fn a_resync_report_is_full() {
+    let mut r = report(vec![run(0, 4096, 0)]);
+    r.header.flags = kf_cuda::abi::KFWR_HF_RESYNC;
+    assert_eq!(r.require_full(), Ok(()));
+}
+
+/// The falsifier: the same report WITHOUT the resync flag is a delta, refused by name.
+#[test]
+fn a_report_without_resync_is_refused_as_not_full() {
+    let r = report(vec![run(0, 4096, 0)]);
+    assert!(matches!(
+        r.require_full(),
+        Err(ReportError::NotFull { flags: 0, unmap_run: None })
+    ));
+}
+
+/// And a resync that nevertheless carries an UNMAP run is not a full state either.
+#[test]
+fn an_unmap_run_makes_a_report_not_full() {
+    let mut r = report(vec![run(0, 4096, 0), run(0, 4096, KFWR_OP_UNMAP)]);
+    r.header.flags = kf_cuda::abi::KFWR_HF_RESYNC;
+    assert!(matches!(
+        r.require_full(),
+        Err(ReportError::NotFull { unmap_run: Some(1), .. })
+    ));
 }
