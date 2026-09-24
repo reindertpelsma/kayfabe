@@ -597,17 +597,6 @@ impl MappedRegion {
         // borrow into this mapping is ever handed out (that is refusal 1, compile-fail
         // tested), so no caller can construct a `dst` that aliases it. Alignment — `u8`.
         // Concurrency — the guest may be writing the source; see the type's "residual".
-        #[cfg(target_arch = "x86_64")]
-        if nt_read_enabled() {
-            // SAFETY: same source/destination argument as below — `start + n <= len` was
-            // proved by `checked_span`, `dst` is writable for `n` bytes, nothing aliases.
-            // `stream_copy` only issues loads inside `[src, src+n)` and stores inside
-            // `[dst, dst+n)`; its SSE4.1 path is taken only after runtime detection.
-            unsafe {
-                stream_copy(self.map.base.as_ptr().add(start), dst.as_mut_ptr(), n);
-            }
-            return Ok(());
-        }
         unsafe {
             core::ptr::copy_nonoverlapping(self.map.base.as_ptr().add(start), dst.as_mut_ptr(), n);
         }
@@ -2126,51 +2115,5 @@ mod tests {
             msg.contains("R1 no-blocking-under-lock violation"),
             "unexpected panic message: {msg}"
         );
-    }
-}
-
-/// ★ w825 — `KAYFABE_NT_READ=1`: read mappings with SSE4.1 streaming loads (`MOVNTDQA`).
-///
-/// `[measured w825]` device views of the reserved object read at ~24 MB/s against ~10.8 GB/s
-/// for writes — the signature of a write-combined mapping read with ordinary loads, and the
-/// CPU page-table sweep on every invalidate hold reads through exactly that. Streaming loads
-/// are the architected way to read WC memory. ⊘ Opt-in and measured: whether it helps on a
-/// given CPU (the bench is AMD Zen 2) is an experiment, not an assumption.
-#[cfg(target_arch = "x86_64")]
-fn nt_read_enabled() -> bool {
-    static STATE: AtomicU32 = AtomicU32::new(0); // 0 unknown, 1 off, 2 on
-    match STATE.load(Ordering::Relaxed) {
-        1 => false,
-        2 => true,
-        _ => {
-            let on = std::env::var("KAYFABE_NT_READ").is_ok_and(|v| v == "1")
-                && std::arch::is_x86_feature_detected!("sse4.1");
-            STATE.store(if on { 2 } else { 1 }, Ordering::Relaxed);
-            on
-        }
-    }
-}
-
-/// Copy `n` bytes from `src` to `dst`, reading 16-byte-aligned chunks of the source with
-/// streaming loads and the unaligned head/tail with plain byte copies.
-///
-/// # Safety
-/// `src` readable and `dst` writable for `n` bytes, non-overlapping; SSE4.1 present.
-#[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "sse4.1")]
-unsafe fn stream_copy(src: *const u8, dst: *mut u8, n: usize) {
-    use core::arch::x86_64::{__m128i, _mm_storeu_si128, _mm_stream_load_si128};
-    let head = (src as usize).wrapping_neg() & 15;
-    let head = head.min(n);
-    // SAFETY: all offsets below stay inside [0, n) of both buffers (caller contract).
-    unsafe {
-        core::ptr::copy_nonoverlapping(src, dst, head);
-        let mut i = head;
-        while i + 16 <= n {
-            let v = _mm_stream_load_si128(src.add(i).cast::<__m128i>().cast_mut());
-            _mm_storeu_si128(dst.add(i).cast::<__m128i>(), v);
-            i += 16;
-        }
-        core::ptr::copy_nonoverlapping(src.add(i), dst.add(i), n - i);
     }
 }
