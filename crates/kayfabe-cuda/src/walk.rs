@@ -621,8 +621,14 @@ impl WalkKernel {
         // `[w726]` ~0.6 ms fixed cost vs the serial walk's one-thread-per-space (2.4 ms on the
         // live guest, 450 ms on the measured working set). The serial kernel stays in the PTX
         // for the scoped path the .cu keeps; this refresh is never scoped.
-        let _ = self.f_walk;
-        self.run_parallel(&args, u32::try_from(pdbs.len()).unwrap_or(0))?;
+        // ⊘ w826 diag — `KAYFABE_WALK_SERIAL=1` launches the serial kernel instead, to A/B the
+        // parallel port against a reconcile thrash.
+        if std::env::var("KAYFABE_WALK_SERIAL").is_ok_and(|v| v == "1") {
+            let blocks = u32::try_from(pdbs.len().div_ceil(32)).unwrap_or(1).max(1);
+            self.cu.launch(self.f_walk, blocks, 32, &mut args_param, "cuLaunchKernel(kf_walk_kernel)")?;
+        } else {
+            self.run_parallel(&args, u32::try_from(pdbs.len()).unwrap_or(0))?;
+        }
         self.cu.launch(
             self.f_diff,
             1,
