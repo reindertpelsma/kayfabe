@@ -77,6 +77,13 @@ written by our CPU-CE executor and invalidated in-band, were never swept).
 maxerr=0 C[0]=2048(exp 2048) -> PASS`, host Xid 0, 37 s wall. `CUP8_SAME_PROGRAM=yes` — md5
 `593c1ef9…`, the program the C artifact ran to `bad=0 maxerr=0`. Same conditions as cup3.
 
+**Suite regression check at `518726d3` (after the CUDA fixes): 25/30, FAIL=0.** The one
+difference from 26/30 is `--defer-liveness`, whose rung PASSES at ~33 s and whose guest then
+exceeds 45 s in TEARDOWN — the same budget-edge seen at baseline (it passed at 47 s under a
+90 s budget). The new sweeps cost it 364 ms total. ⚠ Every arm pays a 4 s
+`_threadNodeCheckTimeout` in guest RM teardown: some teardown request is never answered.
+Not yet diagnosed; fixing it would buy every arm 4 s.
+
 ## Step 4 (walk-at-invalidate on the GPU) — mapped, NOT built tonight, and why
 
 The seam exists (`PtSweepDecider::decide`, `kayfabe-rt/src/device.rs:9175`), but the in-place
