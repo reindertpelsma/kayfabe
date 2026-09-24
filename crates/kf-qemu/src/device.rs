@@ -473,7 +473,12 @@ impl Device {
             eprintln!("kf3: GSP rpc {:?} seq={}", c.function, c.sequence);
         }
         for u in &r.unserviced {
-            eprintln!("kf3: GSP rpc UNSERVICED {u:?}");
+            // The ledger's record names the control id the RPC code alone hides.
+            let last = self.chain_logs.unserviced.sample().last().copied();
+            match last.and_then(|c| c.cmd) {
+                Some(cmd) => eprintln!("kf3: GSP rpc UNSERVICED {u:?} cmd={cmd:#010x}"),
+                None => eprintln!("kf3: GSP rpc UNSERVICED {u:?}"),
+            }
         }
     }
 
