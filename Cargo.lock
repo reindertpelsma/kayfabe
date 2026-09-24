@@ -435,7 +435,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "kf-abi"
+version = "0.1.0"
+dependencies = [
+ "kf-arch",
+ "kf-util",
+]
+
+[[package]]
+name = "kf-arch"
+version = "0.1.0"
+dependencies = [
+ "kf-util",
+]
+
+[[package]]
+name = "kf-gsp"
+version = "0.1.0"
+dependencies = [
+ "kf-abi",
+ "kf-arch",
+ "kf-util",
+]
+
+[[package]]
 name = "kf-mem"
+version = "0.1.0"
+
+[[package]]
+name = "kf-util"
 version = "0.1.0"
 
 [[package]]
