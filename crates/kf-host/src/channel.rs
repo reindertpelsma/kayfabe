@@ -266,6 +266,29 @@ impl HostRm {
         Ok(h)
     }
 
+    /// The family's COMPUTE object under a GR channel — RM builds the channel's GR context
+    /// (golden image, context buffers) as part of this alloc. Returns `(handle, class)`.
+    /// `NV_GR_ALLOCATION_PARAMETERS` is `{version = 2, flags, size = 16, caps}`
+    /// (`ogkm-580: nvos.h:2716-2721`); the construct path reads none of it, CUDA passes it anyway.
+    ///
+    /// # Errors
+    /// The host's refusal, or [`RmError::Other`] when the family declares no compute class.
+    pub fn alloc_compute_object(&self, chan: Channel) -> Result<(u32, u32), RmError> {
+        let class = self
+            .classes
+            .compute_object()
+            .ok_or(RmError::Other(crate::NOT_ON_THIS_RUNG))?
+            .compute_object_id()
+            .0;
+        let mut params = [0u8; 16];
+        params[0..4].copy_from_slice(&2u32.to_le_bytes());
+        params[8..12].copy_from_slice(&16u32.to_le_bytes());
+        let want = self.mint();
+        let h = self.raw_alloc(chan.chan, want, class, &mut params)?;
+        self.remember(h, chan.chan);
+        Ok((h, class))
+    }
+
     /// `GPFIFO_SCHEDULE` (`bEnable = 1`) on the channel's group — the channel starts fetching.
     ///
     /// # Errors

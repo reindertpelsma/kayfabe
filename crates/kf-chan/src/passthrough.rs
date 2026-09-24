@@ -12,7 +12,7 @@
 //! allocation reaches us as an RPC we answer, so [`birth`] runs INSIDE that answer, before the guest
 //! can have written anything to its USERD.
 
-use kf_abi::submit::ENGINE_TYPE_COPY0;
+use kf_abi::submit::{ENGINE_TYPE_COPY0, ENGINE_TYPE_GRAPHICS};
 use kf_host::{Channel, HostRm, RingSpec, VaSpace};
 
 /// Where the guest put its USERD: a slice of one of the two ground truths.
@@ -67,8 +67,17 @@ pub fn birth(rm: &HostRm, space: VaSpace, g: GuestChannel) -> Result<Channel, St
             err_notifier: 0,
         })
         .map_err(|e| format!("birth: {e:?}"))?;
-    if g.engine == ENGINE_TYPE_COPY0 {
-        rm.alloc_ce_object(chan, g.engine).map_err(|e| format!("ce object: {e:?}"))?;
+    // The engine object the guest's own allocation named. ⊘ GR's context is built here, by host
+    // RM, in the host VA space — RM places its context buffers at RM-chosen VAs, which is where a
+    // collision with the guest's own VAs would surface (named `0x51` at reconcile, never silent).
+    match g.engine {
+        ENGINE_TYPE_COPY0 => {
+            rm.alloc_ce_object(chan, g.engine).map_err(|e| format!("ce object: {e:?}"))?;
+        }
+        ENGINE_TYPE_GRAPHICS => {
+            rm.alloc_compute_object(chan).map_err(|e| format!("compute object: {e:?}"))?;
+        }
+        other => return Err(format!("no engine object for engine type {other:#x}")),
     }
     rm.schedule(chan).map_err(|e| format!("schedule: {e:?}"))?;
     Ok(chan)

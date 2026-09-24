@@ -1427,6 +1427,12 @@ impl HostRm {
         self.classes.ce_object().ce_object_id().0
     }
 
+    /// The family's compute object class, if it has one.
+    #[must_use]
+    pub fn compute_class_id(&self) -> Option<u32> {
+        self.classes.compute_object().map(|c| c.compute_object_id().0)
+    }
+
     /// The host driver version string this session gated on (the driver-version axis).
     #[must_use]
     pub fn driver_version(&self) -> &str {

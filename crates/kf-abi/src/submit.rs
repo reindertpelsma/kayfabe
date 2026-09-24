@@ -2085,6 +2085,20 @@ pub const fn method_header_inc(subchannel: u32, method: u32, count: u32) -> Opti
     Some(addr | (subchannel << 13) | (count << 16) | (1 << 29))
 }
 
+/// Build a **non-incrementing** pushbuffer method header: `count` dwords follow, ALL applied to
+/// `method` — the shape of an inline data stream (`LOAD_INLINE_DATA`), where each dword is the
+/// next word of the payload, not the next register. Same fields as [`method_header_inc`] with
+/// `SEC_OP = NON_INC_METHOD` (3) at `31:29` (`ogkm-580: clc56f.h:301-308`) — CUDA's own
+/// `6001206d` for one inline dword on subchannel 1 decodes exactly so.
+#[must_use]
+pub const fn method_header_non_inc(subchannel: u32, method: u32, count: u32) -> Option<u32> {
+    match method_header_inc(subchannel, method, count) {
+        // Same address/subchannel/count bounds; only the opcode differs.
+        Some(h) => Some((h & !(0x7 << 29)) | (3 << 29)),
+        None => None,
+    }
+}
+
 /// ★★★ The `NVC56F_DMA_SEC_OP` universe — **all eight**, as the class header enumerates
 /// them (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:301-308`).
 ///
@@ -5804,5 +5818,16 @@ mod nvos34_tests {
             32,
             "NVOS34 is the plain SDK struct — unlike the MAP, it takes no fd wrapper"
         );
+    }
+}
+
+#[cfg(test)]
+mod non_inc_header {
+    /// CUDA's recorded header for one `LOAD_INLINE_DATA` dword on subchannel 1 (native GA106,
+    /// `native_dataplane_cup2_ga106.md`): `6001206d`.
+    #[test]
+    fn matches_cudas_recorded_inline_header() {
+        assert_eq!(super::method_header_non_inc(1, 0x1b4, 1), Some(0x6001_206d));
+        assert_eq!(super::method_header_inc(1, 0x188, 2), Some(0x2002_2062));
     }
 }
