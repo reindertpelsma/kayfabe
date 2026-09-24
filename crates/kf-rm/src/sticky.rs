@@ -371,6 +371,12 @@ impl CommandPolicy for StickyAnswerGuard {
         self.inner.holds_for_refresh(cmd)
     }
 
+    /// ★ P5b: a deferred status is the inner chain's, unchanged — dropping it would post a
+    /// channel's reply before its birth.
+    fn defers(&mut self, cmd: &RpcCommand) -> Option<kf_gsp::Deferred> {
+        self.inner.defers(cmd)
+    }
+
     fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
         let mut reply = self.inner.respond(cmd)?;
         // ⊘ A declined command is still declined: the FSM's named refusal is what it gets,

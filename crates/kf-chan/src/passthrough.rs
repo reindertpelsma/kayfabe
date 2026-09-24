@@ -47,26 +47,80 @@ pub struct GuestChannel {
     pub engine: u32,
 }
 
+/// A copy engine: `NV2080_ENGINE_TYPE_COPY0..9` (`0x09..=0x12`) or `COPY10..19` (`0x34..=0x3d`)
+/// — `kf_abi::submit::copy_index_of_engine_type`, the header's own inverse.
+#[must_use]
+pub fn is_copy_engine(engine_type: u32) -> bool {
+    kf_abi::submit::copy_index_of_engine_type(engine_type).is_some()
+}
+
+/// `NV2080_ENGINE_TYPE_COPY(i)` for BOTH blocks (`kf_abi::submit::engine_type_copy` stops at 9).
+#[must_use]
+pub fn copy_engine_type(i: u32) -> Option<u32> {
+    match i {
+        0..=9 => kf_abi::submit::engine_type_copy(i),
+        10..=19 => Some(kf_abi::submit::ENGINE_TYPE_COPY10 + i - 10),
+        _ => None,
+    }
+}
+
 /// ★ Birth the host twin of a guest channel in `space` (the host VA space mirroring the guest's),
-/// over the guest's own ring and USERD. Returns the host channel; its `token` is what the trap
-/// rings inline.
+/// over the guest's own ring and USERD — the channel alone: TSG, channel, `BIND`, token. Engine
+/// objects follow the guest's own allocs ([`engine_object`]), scheduling the guest's own
+/// `GPFIFO_SCHEDULE` (P5b). Returns the host channel; its `token` is what the trap rings inline.
+///
+/// ★ The host engine IS the guest's `engineType`: the device's engine list is the host's
+/// (`kf_rm::hostfacts` `engines`), so the guest's COPY`n` names host COPY`n` — including a GRCE,
+/// whose subchannel routing the guest's own pushbuffer already honours, exactly as on bare metal.
+/// Only a copy engine or GR0 is expressible here; anything else is refused by name.
 ///
 /// # Errors
 /// The host's refusal, by name.
-pub fn birth(rm: &HostRm, space: VaSpace, g: GuestChannel) -> Result<Channel, String> {
+pub fn birth_twin(rm: &HostRm, space: VaSpace, g: GuestChannel) -> Result<Channel, String> {
+    if !is_copy_engine(g.engine) && g.engine != ENGINE_TYPE_GRAPHICS {
+        return Err(format!("engine type {:#x}: only a copy engine or GR0 has a passthrough twin", g.engine));
+    }
     let (userd_memory, userd_offset) = match g.userd {
         UserdAt::Store { store, off } => (store, off),
         UserdAt::Ram { ram, off } => (ram, off),
     };
-    let chan = rm
-        .birth_channel(space, g.engine, RingSpec {
-            gp_fifo_va: g.gpfifo_va,
-            gp_fifo_entries: g.entries,
-            userd_memory,
-            userd_offset,
-            err_notifier: 0,
-        })
-        .map_err(|e| format!("birth: {e:?}"))?;
+    rm.birth_channel(space, g.engine, RingSpec {
+        gp_fifo_va: g.gpfifo_va,
+        gp_fifo_entries: g.entries,
+        userd_memory,
+        userd_offset,
+        err_notifier: 0,
+    })
+    .map_err(|e| format!("birth: {e:?}"))
+}
+
+/// ★ The engine object the guest allocated on its channel, allocated on the twin with the guest's
+/// CLASS (its pushbuffer `SET_OBJECT`s that id) and params WE author. `class_kind` is the class's
+/// kind in the HOST family's generated set — the caller's check; a kind that does not match the
+/// twin's engine is refused here. ⊘ GR's context is built by host RM, in the host VA space, at
+/// RM-chosen VAs — which is where a collision with the guest's own VAs would surface.
+///
+/// # Errors
+/// A kind/engine mismatch or the host's refusal, by name.
+pub fn engine_object(rm: &HostRm, chan: Channel, engine: u32, class: u32, class_kind: kf_chip::classes::Kind) -> Result<u32, String> {
+    use kf_chip::classes::Kind;
+    let copy = match class_kind {
+        Kind::DmaCopy if is_copy_engine(engine) => Some(engine),
+        Kind::Compute | Kind::ThreeD if engine == ENGINE_TYPE_GRAPHICS => None,
+        k => return Err(format!("class {class:#x} ({k:?}) on a twin of engine {engine:#x}")),
+    };
+    rm.alloc_engine_object(chan, class, copy).map_err(|e| format!("engine object {class:#x}: {e:?}"))
+}
+
+/// ★ Birth the host twin of a guest channel in `space`, give it the engine object its engine
+/// needs (this host's CE class / compute class), and schedule it — the one-call shape gates 5/6
+/// prove (`kf-harness`). The device takes the three steps separately, each at the guest's own
+/// statement ([`birth_twin`], [`engine_object`], `HostRm::schedule_enable`).
+///
+/// # Errors
+/// The host's refusal, by name.
+pub fn birth(rm: &HostRm, space: VaSpace, g: GuestChannel) -> Result<Channel, String> {
+    let chan = birth_twin(rm, space, g)?;
     // The engine object the guest's own allocation named. ⊘ GR's context is built here, by host
     // RM, in the host VA space — RM places its context buffers at RM-chosen VAs, which is where a
     // collision with the guest's own VAs would surface (named `0x51` at reconcile, never silent).

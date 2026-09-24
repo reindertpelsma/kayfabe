@@ -1301,7 +1301,7 @@ fn translate_alloc(
         });
     }
 
-    let Some(shape) = abi.alloc_params(class) else {
+    let Some(shape) = crate::chanlink::alloc_shape(abi, class.0) else {
         return Err(BridgeRefusal::UnmappedAllocClass { class: h.class });
     };
 

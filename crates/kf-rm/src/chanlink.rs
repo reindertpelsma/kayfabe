@@ -69,6 +69,9 @@ pub struct ChannelAlloc {
     pub userd: Option<kf_arch::UserdMem>,
     /// The client declared the kernel sentinel pid (a guest-KERNEL channel, §7's policy).
     pub kernel_client: bool,
+    /// ★ P5b: the channel group it was allocated under (`hParent`), when that is a TSG this link
+    /// saw allocated — the group `GPFIFO_SCHEDULE` names.
+    pub tsg: Option<u32>,
 }
 
 /// A statement for the channel plane.
@@ -93,6 +96,18 @@ pub enum ChanStatement {
         object: u32,
         /// `engineType` (`NV2080_ENGINE_TYPE_*`).
         engine_type: u32,
+    },
+    /// ★ P5b: an ENGINE object (a copy, compute or 3D class — `kf_chip`'s generated sets)
+    /// allocated under a channel.
+    EngineObject {
+        /// `hClient`.
+        client: u32,
+        /// The channel (`hParent`).
+        parent: u32,
+        /// The object's handle.
+        handle: u32,
+        /// Its class.
+        class: u32,
     },
     /// `GET_WORK_SUBMIT_TOKEN` on a channel.
     Token {
@@ -119,6 +134,9 @@ pub enum ChanAnswer {
     Done,
     /// Done; the guest's work-submit token.
     Token(u32),
+    /// ★ P5b: accepted, and the host act runs OFF the drainer (never under the GSP lock); the
+    /// reply is HELD until the act resolves the cell with its status (`kf_gsp::Deferred`).
+    Deferred(kf_gsp::Deferred),
     /// Refused by name, with the NV status the guest reads.
     Refused {
         /// `NV_ERR_*`.
@@ -128,8 +146,9 @@ pub enum ChanAnswer {
     },
 }
 
-/// ★ Where statements go. Called on the register drainer (never a vCPU): the plane does its host
-/// verbs there, bounded, and answers — a channel's birth is part of the answer to its alloc.
+/// ★ Where statements go. Called on the register drainer (never a vCPU) under the GSP lock, so it
+/// must not block: a statement whose answer is a host act returns [`ChanAnswer::Deferred`] and the
+/// plane performs the act on its own thread (P5b) — the reply waits, the drainer does not.
 pub type ChanSink = std::sync::Arc<dyn Fn(ChanStatement) -> ChanAnswer + Send + Sync>;
 
 /// ★★★ The link. Seated at the FRONT of the chain (ahead of the object seat, which terminates
@@ -147,6 +166,14 @@ pub struct ChannelPolicy {
     /// internal client is constructed CPU-side (`vaspaceGetByHandleOrDeviceDefault`), and only its
     /// `COPY_SERVER_RESERVED_PDES` is RPC'd (`[measured p5b]`: no `FERMI_VASPACE_A` alloc seen).
     vas_stated: std::collections::BTreeMap<u32, std::collections::BTreeSet<u32>>,
+    /// ★ P5b: `(hClient, hTsg)` → `(parent device, hVASpace, engineType)` of every channel group
+    /// allocated — a member channel's VA space (`hVASpace = 0` ⇒ the group's) and engine
+    /// (`ENGINE_TYPE_NULL` ⇒ the group's, libcuda's CE channels).
+    tsgs: std::collections::BTreeMap<(u32, u32), (u32, u32, u32)>,
+    /// ★ P5b: `(hClient, hCtxShare)` → its `hVASpace`.
+    ctxshares: std::collections::BTreeMap<(u32, u32), u32>,
+    /// The deferred outcome of the command last carried (`CommandPolicy::defers`).
+    pending: Option<kf_gsp::Deferred>,
     /// Statements carried.
     pub carried: u64,
     /// Allocs the plane refused.
@@ -157,7 +184,19 @@ impl ChannelPolicy {
     /// A link for one guest driver's wire.
     #[must_use]
     pub fn new(abi: DriverAbiTable, guest_os: kf_abi::GuestOs, sink: ChanSink) -> ChannelPolicy {
-        ChannelPolicy { abi, guest_os, sink, kernel_clients: Default::default(), vas_under: Default::default(), vas_stated: Default::default(), carried: 0, refused: 0 }
+        ChannelPolicy {
+            abi,
+            guest_os,
+            sink,
+            kernel_clients: Default::default(),
+            vas_under: Default::default(),
+            vas_stated: Default::default(),
+            tsgs: Default::default(),
+            ctxshares: Default::default(),
+            pending: None,
+            carried: 0,
+            refused: 0,
+        }
     }
 
     fn refusal(status: u32, why: &str, cmd: &RpcCommand) -> Reply {
@@ -178,7 +217,13 @@ impl ChannelPolicy {
             }
             return None;
         }
-        match self.abi.alloc_params(kf_arch::ids::ClassId(h.class)) {
+        // ⊘ P5b: a class the boundary refuses is never carried — the object seat refuses it next,
+        // and a twin born for it would be a host channel for an object that does not exist
+        // (`[measured kf3m2]` the RC watchdog's `VOLTA_CHANNEL_GPFIFO_A` is such a class).
+        if !self.abi.capabilities().alloc_class(kf_arch::ids::ClassId(h.class)).is_permitted() {
+            return None;
+        }
+        match alloc_shape(&self.abi, h.class) {
             Some(AllocParams::VaSpace) => {
                 let first = *self.vas_under.entry((h.client, h.parent)).or_insert(h.handle);
                 eprintln!(
@@ -187,11 +232,64 @@ impl ChannelPolicy {
                 );
                 return None;
             }
+            Some(AllocParams::Tsg) => {
+                let params = crate::rmrpc::alloc_params_window(&self.abi, body)?;
+                let t = self.abi.decode_tsg_alloc_facts(params).ok()?;
+                self.tsgs.insert((h.client, h.handle), (h.parent, t.h_vaspace, t.engine_type));
+                return None;
+            }
+            Some(AllocParams::CtxShare) => {
+                let params = crate::rmrpc::alloc_params_window(&self.abi, body)?;
+                let c = self.abi.decode_ctxshare_alloc_facts(params).ok()?;
+                self.ctxshares.insert((h.client, h.handle), c.h_vaspace);
+                return None;
+            }
             Some(AllocParams::Channel) => {}
+            Some(AllocParams::NoDeclaredFacts)
+                if matches!(
+                    engine_class_kind(h.class),
+                    Some(kf_chip::classes::Kind::Compute | kf_chip::classes::Kind::DmaCopy | kf_chip::classes::Kind::ThreeD)
+                ) =>
+            {
+                self.carried += 1;
+                let st = ChanStatement::EngineObject { client: h.client, parent: h.parent, handle: h.handle, class: h.class };
+                return self.carry_alloc(st, cmd, h.client, h.handle);
+            }
             _ => return None,
         }
         let params = crate::rmrpc::alloc_params_window(&self.abi, body)?;
         let f = self.abi.decode_channel_alloc_facts(params).ok()?;
+        let tsg = self.tsgs.get(&(h.client, h.parent)).copied();
+        // The device the channel hangs off: its parent, or its group's parent.
+        let device = tsg.map_or(h.parent, |t| t.0);
+        let default_vas = |me: &Self| {
+            // The device's default VAS: allocated under the parent device, or else the ONE VA
+            // space this client ever stated a page directory for. Two candidates and no alloc to
+            // decide between them is refused by name at birth (`None`).
+            me.vas_under.get(&(h.client, device)).copied().or_else(|| {
+                let set = me.vas_stated.get(&h.client)?;
+                (set.len() == 1).then(|| set.iter().next().copied()).flatten()
+            })
+        };
+        let ctx_vas = self.abi.decode_channel_alloc_facts(params).ok().and_then(|c| {
+            (c.h_ctx_share != 0).then(|| self.ctxshares.get(&(h.client, c.h_ctx_share)).copied()).flatten()
+        });
+        let vaspace = if f.h_vaspace != 0 {
+            Some(f.h_vaspace)
+        } else if let Some(v) = ctx_vas.filter(|v| *v != 0) {
+            Some(v)
+        } else if let Some(v) = tsg.map(|t| t.1).filter(|v| *v != 0) {
+            // ★ P5b: a group member's VA space is the GROUP's (`kernel_channel.c` takes it from
+            // the TSG when the channel names none).
+            Some(v)
+        } else {
+            default_vas(self)
+        };
+        // ★ P5b: `ENGINE_TYPE_NULL` names the group's engine (libcuda's CE channels).
+        let engine_type = match self.abi.decode_channel_engine_type(params).ok().flatten() {
+            Some(0) | None => tsg.map(|t| t.2).filter(|e| *e != 0),
+            e => e,
+        };
         let st = ChannelAlloc {
             client: h.client,
             parent: h.parent,
@@ -200,30 +298,33 @@ impl ChannelPolicy {
             gpfifo_va: f.gp_fifo_offset,
             entries: f.gp_fifo_entries,
             h_vaspace: f.h_vaspace,
-            vaspace: if f.h_vaspace != 0 {
-                Some(f.h_vaspace)
-            } else {
-                // The device's default VAS: allocated under the parent device, or else the ONE
-                // VA space this client ever stated a page directory for. Two candidates and no
-                // alloc to decide between them is refused by name at birth (`None`).
-                self.vas_under.get(&(h.client, h.parent)).copied().or_else(|| {
-                    let set = self.vas_stated.get(&h.client)?;
-                    (set.len() == 1).then(|| set.iter().next().copied()).flatten()
-                })
-            },
+            vaspace,
             chid: decode_userd_index_chid(f.flags),
             flags: f.flags,
-            engine_type: self.abi.decode_channel_engine_type(params).ok().flatten(),
+            engine_type,
             userd: self.abi.decode_channel_userd_mem(params).ok().flatten(),
             kernel_client: self.kernel_clients.contains(&h.client) || is_rm_internal_client(h.client),
+            tsg: tsg.map(|_| h.parent),
         };
         self.carried += 1;
-        match (self.sink)(ChanStatement::Alloc(st)) {
+        self.carry_alloc(ChanStatement::Alloc(st), cmd, h.client, h.handle)
+    }
+
+    /// An alloc statement's answer: a refusal is refused, a deferred act holds the reply, and
+    /// anything else lets the object seat record the object and answer.
+    fn carry_alloc(&mut self, st: ChanStatement, cmd: &RpcCommand, client: u32, handle: u32) -> Option<Reply> {
+        match (self.sink)(st) {
             ChanAnswer::Refused { status, why } => {
                 self.refused += 1;
-                Some(Self::refusal(status, &format!("channel {:#x}:{:#x} alloc: {why}", h.client, h.handle), cmd))
+                Some(Self::refusal(status, &format!("{client:#x}:{handle:#x} alloc: {why}"), cmd))
             }
-            // Born (or not ours): the object seat records the object and answers.
+            // ⊘ The object seat still records the object and builds the reply; the FSM holds it
+            // until the act resolves. A failed act posts that reply as the refusal — and leaves a
+            // node the guest never frees in the graph until its parent goes (named in the log).
+            ChanAnswer::Deferred(d) => {
+                self.pending = Some(d);
+                None
+            }
             _ => None,
         }
     }
@@ -256,6 +357,12 @@ impl ChannelPolicy {
             // ★ The [IN] params echoed: the transport copies a non-empty reply over the caller's
             // struct (`ogkm-580: rpc.c:11085-11090`), so a zeroed body would rewrite bEnable.
             ChanAnswer::Done => Some(Reply { rpc_result: NV_OK, body: cmd.payload.clone() }),
+            // ★ P5b: the same reply, HELD until the host act resolves it (a failure posts it as
+            // that status — the envelope result, which a control's caller does read).
+            ChanAnswer::Deferred(d) => {
+                self.pending = Some(d);
+                Some(Reply { rpc_result: NV_OK, body: cmd.payload.clone() })
+            }
             ChanAnswer::Token(t) => {
                 let mut body = cmd.payload.clone();
                 let at = h.params_at;
@@ -278,7 +385,11 @@ impl ChannelPolicy {
             self.kernel_clients.remove(&client);
             self.vas_under.retain(|k, _| k.0 != client);
             self.vas_stated.remove(&client);
+            self.tsgs.retain(|k, _| k.0 != client);
+            self.ctxshares.retain(|k, _| k.0 != client);
         } else {
+            self.tsgs.remove(&(client, object));
+            self.ctxshares.remove(&(client, object));
             // ★ Only the DEVICE's free forgets its default VAS. The VASpace handle itself is a
             // transient NAME (`index = GPU_DEVICE`, "acquire reference to device vaspace",
             // `nvos.h:3187`): RM allocs it, publishes the PDEs, and FREES it — `[measured p5c]`
@@ -286,9 +397,40 @@ impl ChannelPolicy {
             // the same way (`RmGraph::device_default_vas`, outliving the handle's own free).
             self.vas_under.retain(|k, _| !(k.0 == client && k.1 == object));
         }
-        let _ = (self.sink)(ChanStatement::Free { client, object });
+        // ★ P5b: a twin's free is a host act too — its reply waits for it (the guest's next step
+        // may unmap what the twin fetches from).
+        if let ChanAnswer::Deferred(d) = (self.sink)(ChanStatement::Free { client, object }) {
+            self.pending = Some(d);
+        }
         None
     }
+}
+
+/// ★ P5b (Q6a) — **the alloc-params shape of a class, for EVERY family.** `kf_abi`'s table maps
+/// the family-invariant classes and, of the engine classes, only the Ampere ids it was first
+/// written for (`AMPERE_CHANNEL_GPFIFO_A`, `AMPERE_DMA_COPY_B`, …) — so a Turing (`0xc46f`),
+/// Hopper (`0xc86f`) or Blackwell (`0xc96f`/`0xca6f`) channel alloc was `UnmappedAllocClass` and
+/// never reached the channel plane. The engine classes come from `kf_chip`'s GENERATED per-family
+/// sets (`classes::FAMILIES`, compiled from ogkm's `g_gpu_class_list.c`): every GPFIFO channel
+/// class takes the one `NV_CHANNEL_ALLOC_PARAMS` (ogkm `resource_list.h`), every compute / copy /
+/// 3D object is an edge whose params the object model does not read. ⊘ Class ids are unique
+/// across families, so no family argument is needed (a class not listed for the guest's own
+/// family is still refused earlier, by the capability allowlist).
+#[must_use]
+pub fn alloc_shape(abi: &DriverAbiTable, class: u32) -> Option<AllocParams> {
+    abi.alloc_params(kf_arch::ids::ClassId(class)).or_else(|| match engine_class_kind(class)? {
+        kf_chip::classes::Kind::ChannelGpfifo => Some(AllocParams::Channel),
+        kf_chip::classes::Kind::Compute | kf_chip::classes::Kind::DmaCopy | kf_chip::classes::Kind::ThreeD => {
+            Some(AllocParams::NoDeclaredFacts)
+        }
+        kf_chip::classes::Kind::Usermode => None,
+    })
+}
+
+/// The engine-class kind of `class` on ANY family (generated sets; ids are unique across them).
+#[must_use]
+pub fn engine_class_kind(class: u32) -> Option<kf_chip::classes::Kind> {
+    kf_chip::classes::FAMILIES.iter().find_map(|f| f.kind_of(class))
 }
 
 /// `RS_CLIENT_INTERNAL_HANDLE_BASE` (`ogkm-580: inc/libraries/resserv/resserv.h:138`).
@@ -335,7 +477,14 @@ impl core::fmt::Debug for ChannelPolicy {
 }
 
 impl CommandPolicy for ChannelPolicy {
+    fn defers(&mut self, _cmd: &RpcCommand) -> Option<kf_gsp::Deferred> {
+        self.pending.take()
+    }
+
     fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
+        // ⊘ Reset per command: a cell from a command whose reply was not ours must not ride on
+        // the next one.
+        self.pending = None;
         match cmd.function {
             RpcFunction::RmAlloc => self.on_alloc(cmd),
             RpcFunction::RmControl => self.on_control(cmd),

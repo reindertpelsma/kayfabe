@@ -352,6 +352,12 @@ impl<P: CommandPolicy> CommandPolicy for ControlCensus<P> {
         self.inner.holds_for_refresh(cmd)
     }
 
+    /// ★ P5b: a deferred status is the inner chain's, unchanged — dropping it would post a
+    /// channel's reply before its birth.
+    fn defers(&mut self, cmd: &RpcCommand) -> Option<kf_gsp::Deferred> {
+        self.inner.defers(cmd)
+    }
+
     fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
         let req = if cmd.function == RpcFunction::RmControl {
             self.driver.decode_rpc_control(&cmd.payload).ok()

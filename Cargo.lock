@@ -454,6 +454,7 @@ name = "kf-chan"
 version = "0.1.0"
 dependencies = [
  "kf-abi",
+ "kf-chip",
  "kf-core",
  "kf-host",
  "kf-linux-raw",

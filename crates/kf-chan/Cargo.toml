@@ -11,6 +11,7 @@ kf-host.workspace = true
 kf-linux-raw.workspace = true
 kf-trap.workspace = true
 kf-core.workspace = true
+kf-chip.workspace = true
 
 [lints]
 workspace = true

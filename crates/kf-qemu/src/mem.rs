@@ -357,6 +357,8 @@ pub struct Mirror {
     pub ram: Option<(u64, u64)>,
     /// Our placements.
     pub rows: PlacedRows,
+    /// ★ P5b: the guest-RAM host object mapped at `ram` (a sysmem USERD's twin names it).
+    pub ram_obj: Option<u32>,
 }
 
 /// ★ P5: the mirrors, by VA-space object — written by the VA thread when it creates one, read by
@@ -724,13 +726,13 @@ pub fn apply_statement(
                         let line = match (&fb_base, &ram_base) {
                             (Ok(fb), Some(Ok((rb, rl)))) => {
                                 if let Ok(mut mm) = plane.mirrors.lock() {
-                                    mm.insert(key, Mirror { space, fb_base: *fb, fb_len: plane.fb_len, ram: Some((*rb, *rl)), rows: rows.clone() });
+                                    mm.insert(key, Mirror { space, fb_base: *fb, fb_len: plane.fb_len, ram: Some((*rb, *rl)), rows: rows.clone(), ram_obj: ram_obj.map(|(o, _)| o) });
                                 }
                                 format!("windows fb={fb:#x}+{:#x} ram={rb:#x}+{rl:#x}", plane.fb_len)
                             }
                             (Ok(fb), None) => {
                                 if let Ok(mut mm) = plane.mirrors.lock() {
-                                    mm.insert(key, Mirror { space, fb_base: *fb, fb_len: plane.fb_len, ram: None, rows: rows.clone() });
+                                    mm.insert(key, Mirror { space, fb_base: *fb, fb_len: plane.fb_len, ram: None, rows: rows.clone(), ram_obj: None });
                                 }
                                 format!("windows fb={fb:#x} ram=NONE")
                             }

@@ -618,15 +618,21 @@ impl RpcCommand {
         if self.function != RpcFunction::RmAlloc {
             return self.reply(rpc_result, body);
         }
+        // ★ P5b: a REFUSED alloc carries its status in the params `status` field too — the only
+        // place a GSP client reads it (`crate::boot::stamp_alloc_status`).
+        let refused = |mut r: OutgoingRpc| {
+            crate::boot::stamp_alloc_status(&mut r, rpc_result);
+            r
+        };
         let wire = self.wire_body();
         let Ok(h) = abi.decode_rpc_alloc(wire) else {
-            return self.reply(rpc_result, body);
+            return refused(self.reply(rpc_result, body));
         };
         // ★ Exactly the fixed header, never "at least": a longer `body` would put the
         // echoed params at the wrong offset, and this port produces no such body. An
         // empty one is the named-refusal shape and takes the general clamp.
         if body.len() != h.params_at {
-            return self.reply(rpc_result, body);
+            return refused(self.reply(rpc_result, body));
         }
         let arrived = wire.len().saturating_sub(h.params_at);
         let room = payload_max.saturating_sub(h.params_at);
@@ -634,13 +640,13 @@ impl RpcCommand {
         let mut payload = vec![0u8; h.params_at + n];
         payload[..h.params_at].copy_from_slice(body);
         payload[h.params_at..].copy_from_slice(&wire[h.params_at..h.params_at + n]);
-        OutgoingRpc {
+        refused(OutgoingRpc {
             function: self.code,
             sequence: self.sequence,
             rpc_result,
             rpc_result_private: rpc_result,
             payload,
-        }
+        })
     }
 
     /// The bare acknowledgement: `(function, sequence)` echoed with a result and the

@@ -347,6 +347,86 @@ pub struct Reply {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct HeldReply {
     rpc: OutgoingRpc,
+    /// ★ P5b: the host act this reply's STATUS waits on ([`CommandPolicy::defers`]), if any.
+    deferred: Option<Deferred>,
+    /// The command was a `GSP_RM_ALLOC` — a failed outcome is stamped into its params status too.
+    alloc: bool,
+}
+
+/// ★★★ **A reply whose STATUS is the outcome of a host act still in progress** (P5b).
+///
+/// The answer to a channel's allocation IS its birth (`THE_ARCHITECTURE_v3.md` §7), and a birth
+/// is several host ioctls (~4 ms). Run on the register drainer while it holds the GSP lock, that
+/// is blocking under a lock (owner invariant). ⇒ The link hands the act to a non-vCPU thread and
+/// the FSM HOLDS the reply — exactly the RPC-map sync point's shape — until the act resolves this
+/// cell; [`GspFsm::release_held`] then posts it with the act's status: `0` posts the reply as
+/// built, anything else posts it as that refusal (envelope result, and for an alloc the params
+/// `status` the guest actually reads, `ogkm-580: rpc.c:11236-11241`).
+///
+/// ⊘ The guest cannot race it: a GSP client's RPCs are synchronous, so nothing the guest sends
+/// about this object can arrive before the reply does.
+#[derive(Debug, Clone)]
+pub struct Deferred(std::sync::Arc<core::sync::atomic::AtomicU64>);
+
+impl Deferred {
+    const PENDING: u64 = u64::MAX;
+
+    /// A pending outcome.
+    #[must_use]
+    pub fn new() -> Deferred {
+        Deferred(std::sync::Arc::new(core::sync::atomic::AtomicU64::new(Self::PENDING)))
+    }
+
+    /// Resolve with an `NV_STATUS` (`0` = the act succeeded). The first resolution wins.
+    pub fn resolve(&self, status: u32) {
+        let _ = self.0.compare_exchange(
+            Self::PENDING,
+            u64::from(status),
+            core::sync::atomic::Ordering::AcqRel,
+            core::sync::atomic::Ordering::Acquire,
+        );
+    }
+
+    /// The outcome, once resolved.
+    #[must_use]
+    pub fn outcome(&self) -> Option<u32> {
+        match self.0.load(core::sync::atomic::Ordering::Acquire) {
+            Self::PENDING => None,
+            s => Some(s as u32),
+        }
+    }
+}
+
+impl Default for Deferred {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl PartialEq for Deferred {
+    fn eq(&self, other: &Self) -> bool {
+        std::sync::Arc::ptr_eq(&self.0, &other.0)
+    }
+}
+impl Eq for Deferred {}
+
+/// `rpc_gsp_rm_alloc_v03_00.status` — the `[OUT]` field a GSP client reads as the alloc's
+/// result when the transport status is not `NV_OK` (`ogkm-580: g_rpc-structures.h:1491-1502`,
+/// `rpc.c:11236-11241`: `status = rpc_params->status`).
+pub const RM_ALLOC_PARAMS_STATUS_AT: usize = 16;
+
+/// ★ Stamp a refusal into an alloc reply's params `status`. ⊘ Without it a refused alloc reads as
+/// SUCCESS in the guest: `rpcRmApiAlloc_GSP` replaces the transport status with the params status
+/// (`rpc.c:11236-11241`), which an echoed request carries as `0` — `[measured kf3m2]` every
+/// refused `NV01_MEMORY_VIRTUAL` "succeeded" in the guest and was later freed as an unknown object.
+pub fn stamp_alloc_status(rpc: &mut OutgoingRpc, status: u32) {
+    if status == 0 {
+        return;
+    }
+    if rpc.payload.len() < RM_ALLOC_PARAMS_STATUS_AT + 4 {
+        rpc.payload.resize(RM_ALLOC_PARAMS_STATUS_AT + 4, 0);
+    }
+    rpc.payload[RM_ALLOC_PARAMS_STATUS_AT..RM_ALLOC_PARAMS_STATUS_AT + 4].copy_from_slice(&status.to_le_bytes());
 }
 
 /// How a command is answered — the seam the forwarding plane implements.
@@ -388,6 +468,13 @@ pub trait CommandPolicy: Send {
     /// hold a reply, because a held reply nobody releases is a guest hang.
     fn holds_for_refresh(&self, _cmd: &RpcCommand) -> bool {
         false
+    }
+
+    /// ★ P5b: **does this command's reply STATUS wait on a host act?** ([`Deferred`]). Asked
+    /// right after [`CommandPolicy::respond`]; `Some` holds the reply until the cell resolves.
+    /// The default is `None`: a policy that has not thought about it holds nothing.
+    fn defers(&mut self, _cmd: &RpcCommand) -> Option<Deferred> {
+        None
     }
 }
 
@@ -605,6 +692,18 @@ impl CommandPolicy for PolicyChain {
     /// space moved — so this is an `any`, not a "whoever answered".
     fn holds_for_refresh(&self, cmd: &RpcCommand) -> bool {
         self.links.iter().any(|p| p.holds_for_refresh(cmd))
+    }
+
+    /// ⊘ Any link may defer (the channel link is seated ahead of the answerer), and at most one
+    /// does per command; every link is asked so none keeps a stale cell for the next command.
+    fn defers(&mut self, cmd: &RpcCommand) -> Option<Deferred> {
+        let mut out = None;
+        for p in &mut self.links {
+            if let Some(d) = p.defers(cmd) {
+                out.get_or_insert(d);
+            }
+        }
+        out
     }
 }
 
@@ -1739,7 +1838,13 @@ impl GspFsm {
                     code: cmd.code,
                     sequence: cmd.sequence,
                 });
-                cmd.reply(NV_ERR_NOT_SUPPORTED, &[])
+                // ⊘ An alloc refusal must carry its status IN the params (see
+                // `stamp_alloc_status`): an empty body leaves the guest reading `0`.
+                if cmd.function == RpcFunction::RmAlloc {
+                    cmd.reply_alloc(NV_ERR_NOT_SUPPORTED, &cmd.payload, &self.abi.driver, payload_max)
+                } else {
+                    cmd.reply(NV_ERR_NOT_SUPPORTED, &[])
+                }
             }
         };
         // ⊘ ASKED **AFTER** `respond`, and the order is the whole point. The question is
@@ -1748,6 +1853,8 @@ impl GspFsm {
         // function id — and the function that binds rows is `RmControl`, which is also the
         // function for a hundred controls that bind nothing.
         let held_this_command = policy.holds_for_refresh(cmd);
+        let deferred = policy.defers(cmd);
+        let held_this_command = held_this_command || deferred.is_some();
         // ★★★ THE HOLD. `held` is a queue of ONE-per-command replies whose rows are not on
         // the host yet; `release_held` posts them. ⊘ The `UnloadingGuestDriver` arm below is
         // deliberately not reachable through it: a teardown reply must never wait on a
@@ -1769,7 +1876,7 @@ impl GspFsm {
                 cmd.function,
                 self.held.len() + 1
             );
-            self.held.push(HeldReply { rpc: out });
+            self.held.push(HeldReply { rpc: out, deferred, alloc: cmd.function == RpcFunction::RmAlloc });
         } else {
             self.post(ram, &out)?;
         }
@@ -1983,7 +2090,31 @@ impl GspFsm {
             // ⊘ Cloned before the post and removed only AFTER it succeeds. `post` can refuse
             // (an unbound queue, a full ring), and a reply removed by a FAILED post is a
             // reply nobody will ever send — which is a guest hang, not a dropped message.
-            let rpc = h.rpc.clone();
+            let mut rpc = h.rpc.clone();
+            // ★ P5b: a reply whose status waits on a host act stays held — and so does every
+            // reply behind it (the order posted is the order asked).
+            if let Some(d) = &h.deferred {
+                match d.outcome() {
+                    None => break,
+                    Some(0) if rpc.rpc_result != 0 => {
+                        // ⊘ The act succeeded for a command another link refused: the guest sees
+                        // the refusal, and whatever the act built is orphaned until its owner is
+                        // freed. Named, never silent.
+                        eprintln!(
+                            "kayfabe: HELD-REPLY fn={:#x} seq={}: its deferred act SUCCEEDED but the reply is a refusal ({:#x}) — the act's object is orphaned",
+                            rpc.function, rpc.sequence, rpc.rpc_result
+                        );
+                    }
+                    Some(0) => {}
+                    Some(status) => {
+                        rpc.rpc_result = status;
+                        rpc.rpc_result_private = status;
+                        if h.alloc {
+                            stamp_alloc_status(&mut rpc, status);
+                        }
+                    }
+                }
+            }
             self.post(ram, &rpc)?;
             self.held.remove(0);
             posted += 1;
@@ -2272,5 +2403,61 @@ mod holding_a_reply_until_the_refresh_lands {
     fn a_chain_of_non_holders_holds_nothing() {
         let chain = PolicyChain::new(vec![Box::new(Never), Box::new(Never)]);
         assert!(!chain.holds_for_refresh(&cmd()));
+    }
+}
+
+#[cfg(test)]
+mod a_reply_whose_status_is_a_host_act {
+    //! ★ P5b — the channel plane's births moved off the GSP lock: the reply is HELD on a
+    //! [`Deferred`] and posted with the act's status.
+    use super::*;
+
+    struct Defers(Option<Deferred>);
+    impl CommandPolicy for Defers {
+        fn respond(&mut self, _cmd: &RpcCommand) -> Option<Reply> {
+            None
+        }
+        fn defers(&mut self, _cmd: &RpcCommand) -> Option<Deferred> {
+            self.0.take()
+        }
+    }
+
+    fn cmd() -> RpcCommand {
+        RpcCommand { function: RpcFunction::RmAlloc, code: 103, sequence: 9, payload: vec![0u8; 32], elements: 1, delivered: Vec::new() }
+    }
+
+    #[test]
+    fn a_deferred_is_pending_until_resolved_and_the_first_resolution_wins() {
+        let d = Deferred::new();
+        assert_eq!(d.outcome(), None);
+        let seen = d.clone();
+        d.resolve(0x56);
+        d.resolve(0);
+        assert_eq!(seen.outcome(), Some(0x56), "a clone sees the act's outcome, and a second resolve cannot rewrite it");
+    }
+
+    /// ⊘ The default defers nothing, and a chain reports the one link that deferred wherever it
+    /// sits — the channel link is seated ahead of the answerer.
+    #[test]
+    fn a_chain_reports_the_link_that_deferred() {
+        let d = Deferred::new();
+        let mut chain = PolicyChain::new(vec![Box::new(Defers(None)), Box::new(Defers(Some(d.clone())))]);
+        assert_eq!(chain.defers(&cmd()), Some(d));
+        assert_eq!(chain.defers(&cmd()), None, "a cell is carried for ONE command");
+    }
+
+    /// ★ A refused alloc's status is where the guest reads it — the params `status`, not only the
+    /// envelope (`rpc.c:11236-11241`). `[measured kf3m2]` without it every refusal was a success.
+    #[test]
+    fn a_refused_alloc_carries_its_status_in_the_params() {
+        let mut rpc = OutgoingRpc { function: 103, sequence: 9, rpc_result: 0x56, rpc_result_private: 0x56, payload: vec![0u8; 40] };
+        stamp_alloc_status(&mut rpc, 0x56);
+        assert_eq!(&rpc.payload[RM_ALLOC_PARAMS_STATUS_AT..RM_ALLOC_PARAMS_STATUS_AT + 4], &0x56u32.to_le_bytes());
+        let mut empty = OutgoingRpc { payload: Vec::new(), ..rpc.clone() };
+        stamp_alloc_status(&mut empty, 0x40);
+        assert_eq!(&empty.payload[RM_ALLOC_PARAMS_STATUS_AT..], &0x40u32.to_le_bytes(), "an empty body grows to hold it");
+        let mut ok = OutgoingRpc { payload: vec![0u8; 40], ..rpc };
+        stamp_alloc_status(&mut ok, 0);
+        assert!(ok.payload.iter().all(|&b| b == 0), "a success stamps nothing");
     }
 }

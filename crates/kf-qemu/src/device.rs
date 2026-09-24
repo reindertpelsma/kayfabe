@@ -136,7 +136,7 @@ pub struct Device {
     boot: Vec<BootReg>,
     vbios: Vec<u8>,
     worker_efd: &'static Notifier,
-    drainer_efd: Notifier,
+    drainer_efd: &'static Notifier,
     /// ★ P5: the channel plane (the guest kernel's CE channels, Translated).
     pub chans: &'static crate::chan::ChanPlane,
     /// The workers' counters.
@@ -269,6 +269,9 @@ impl Device {
         // ⊘ The token table is indexed by the doorbell's VECTOR (11:0) — the guest's chid, which is
         // device-unique on the GSP families (one global CHID_MGR, `kf_arch::DoorbellTarget`).
         let worker_efd: &'static Notifier = Box::leak(Box::new(Notifier::create().map_err(|e| format!("eventfd: {e:?}"))?));
+        // ★ P5b: the drainer's wake exists before the channel plane: an act that resolves a held
+        // reply signals it.
+        let drainer_efd: &'static Notifier = Box::leak(Box::new(Notifier::create().map_err(|e| format!("eventfd: {e:?}"))?));
         let mirrors = crate::mem::Mirrors::default();
         let chans: &'static crate::chan::ChanPlane = Box::leak(Box::new(crate::chan::ChanPlane::new(
             rm,
@@ -277,8 +280,12 @@ impl Device {
             ram,
             mirrors.clone(),
             worker_efd,
+            drainer_efd,
             plane.tokens.len(),
+            family,
+            &host.intr_table,
         )?));
+        chans.start()?;
         // ★ The served chain (census → sticky guard → init tables, static info, guest sys info,
         // inert, the object seat, the unserviced ledger). The object seat is the host-free graph
         // (`GraphObjects`): it answers ALLOC/FREE/DUP from the object model and refuses every
@@ -392,7 +399,7 @@ impl Device {
                 .map(|_| Notifier::create().map_err(|e| format!("irq eventfd: {e:?}")))
                 .collect::<Result<Vec<_>, _>>()?,
             irq_counts: IrqCounts::default(),
-            drainer_efd: Notifier::create().map_err(|e| format!("eventfd: {e:?}"))?,
+            drainer_efd,
             stop: AtomicBool::new(false),
             counters: Counters::default(),
         })
@@ -831,9 +838,21 @@ impl Device {
                 )
             })
             .collect();
+        let nsi: Vec<String> = self
+            .chans
+            .engines
+            .iter()
+            .filter(|e| e.wakes.load(o) > 0)
+            .map(|e| format!("{}:{}", e.name, e.wakes.load(o)))
+            .collect();
         let chan = format!(
-            " chan[births={} served={} parks={} host_rings={} contended={} poisoned={} tokens=[{}]]",
+            " chan[births={} pt_births={} acts={}/{}refused worst_act_us={} nsi=[{}] served={} parks={} host_rings={} contended={} poisoned={} tokens=[{}]]",
             self.chans.births.load(o),
+            self.chans.pt_births.load(o),
+            self.chans.acts_run.load(o),
+            self.chans.acts_refused.load(o),
+            self.chans.act_worst_us.load(o),
+            nsi.join(" "),
             ws.served.load(o),
             ws.parks.load(o),
             ws.host_rings.load(o),
@@ -913,7 +932,23 @@ impl Device {
             eprintln!("kf3: worker: epoll watch refused — the channel plane is DOWN");
             return;
         }
-        kf_chan::worker::run(self.plane, self, &poller, self.worker_efd, &self.chans.completions, &self.worker_stats, &self.stop);
+        // ★ P5b §2.7: every host engine's non-stall event, in the same poller — its readiness is a
+        // completion on that engine, announced to the guest on the engine's authored vector.
+        for (i, e) in self.chans.engines.iter().enumerate() {
+            if poller.watch(e.ev.as_fd(), kf_chan::worker::OTHER_TAG_BASE + i as u64).is_err() {
+                eprintln!("kf3: worker: epoll watch of {} refused — its completions are not announced", e.name);
+            }
+        }
+        let on_other = |tag: u64| {
+            let Some(e) = tag.checked_sub(kf_chan::worker::OTHER_TAG_BASE).and_then(|i| self.chans.engines.get(i as usize)) else {
+                return;
+            };
+            e.wakes.fetch_add(1, Ordering::Relaxed);
+            if let Some(v) = e.vector {
+                self.latch_and_deliver(v);
+            }
+        };
+        kf_chan::worker::run(self.plane, self, &poller, self.worker_efd, &self.chans.completions, &self.worker_stats, &self.stop, &on_other);
     }
 }
 

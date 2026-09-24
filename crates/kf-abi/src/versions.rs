@@ -1346,6 +1346,18 @@ impl DriverAbiTable {
             // and give this arm a decoder that the pointer argument above says it must not
             // have.
             classes::NV01_EVENT_OS_EVENT => Some(AllocParams::NoDeclaredFacts),
+            // ★ P5b — `NV01_MEMORY_VIRTUAL` (`0x70`), the VA RANGE every user `MAP_MEMORY_DMA`
+            // names as `hDma`. A GSP client RPCs its alloc even with guest-managed VA *"because
+            // virtual ContextDma and the memory destructor depend on it"*
+            // (`ogkm-580: virt_mem_range.c:120-133`). `[measured kf3m2]` it was
+            // `UnmappedAllocClass` on every raw-client VA space — and the guest read the refusal
+            // as success (the params `status` was the request's `0`), so each later free reached
+            // the graph as `FreeUnknown`.
+            // ⊘ `NoDeclaredFacts`: `NV_MEMORY_VIRTUAL_ALLOCATION_PARAMS {offset, limit,
+            // hVASpace}` are all `[IN]` on this path — the guest computes the returned limit
+            // itself AFTER the RPC (`virt_mem_range.c:136`), so the echoed params change nothing
+            // it reads, and nothing GSP-side is ours to build (the page tables are the guest's).
+            crate::bringup::NV01_MEMORY_VIRTUAL => Some(AllocParams::NoDeclaredFacts),
             // ★★★ `NV2081_BINAPI` (`0x2081`) — the class **libcuda** needs, and the first
             // row in this table admitted because an *injection experiment* named it rather
             // than because a boot logged it. `[measured 2026-08-08, real GA106, real

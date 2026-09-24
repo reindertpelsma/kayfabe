@@ -202,6 +202,26 @@ pub fn engine_notification_rows(engines: &[EngineKind]) -> Vec<IntrTableEntry> {
     out
 }
 
+/// ★ P5b §2.7 — **the guest vector a HOST engine's non-stall completion is announced on**, read
+/// back out of the table the guest was served (`intr_table`), never restated: `GR<i>` → the
+/// `MC_ENGINE_IDX_GR<i>` row, async `CE<i>` → the `MC_ENGINE_IDX_CE<i>` row, and a GRCE — which
+/// [`engine_notification_rows`] gives no row because it notifies through its GR — → `GR0`'s.
+/// `None` when the table carries no non-stall vector for it (then nothing is raised, by name).
+#[must_use]
+pub fn non_stall_vector_for(table: &[IntrTableEntry], engine: EngineKind) -> Option<u32> {
+    let row = |idx: u32| {
+        table
+            .iter()
+            .find(|e| u32::from(e.engine_idx) == idx && e.vector_non_stall != INTR_VECTOR_INVALID)
+            .map(|e| e.vector_non_stall)
+    };
+    match engine {
+        EngineKind::Graphics(i) => row(MC_GR0 + i),
+        EngineKind::Copy(i) => row(MC_CE0 + i).or_else(|| row(MC_GR0)),
+        EngineKind::Software => None,
+    }
+}
+
 // =====================================================================================
 // The FIFO engine table of the device we present
 // =====================================================================================

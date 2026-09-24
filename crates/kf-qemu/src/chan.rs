@@ -12,7 +12,27 @@
 //! (`GP_PUT` read, `GP_GET` write — `kf_core::channel::CPU_MOVE_MAX_BYTES`), and reads the guest's
 //! GP entries and pushbuffer segments (method words, never data) from guest RAM. A pushbuffer in
 //! vidmem is REFUSED by name (a GPU read of it is not wired — `V3_P5_PORT_MAP.md` §4 Q3).
-//! ⊘ **Nothing here runs on a vCPU.** Births are the drainer's; pumps are the workers'.
+//! ⊘ **Nothing here runs on a vCPU.** Pumps are the workers'. ★ P5b: every host ACT a statement
+//! implies (a birth, an engine object, a schedule, a free) runs on the plane's own ACT thread
+//! (`kf3-chan-act`), never on the register drainer — which serves statements under the GSP lock
+//! (owner invariant: no blocking under a lock). The statement's reply is HELD (`kf_gsp::Deferred`)
+//! until the act resolves it: the reply still IS the act, the drainer just does not wait for it.
+//!
+//! ## ★ P5b — guest USER channels are PASSTHROUGH twins
+//!
+//! A user channel names only VIRTUAL addresses in a VA space the memory plane mirrors, so its twin
+//! is born over the guest's own GPFIFO VA and USERD (`kf_chan::passthrough`), its engine objects
+//! follow the guest's own allocs (the guest's class, our params), its schedule the guest's own
+//! `GPFIFO_SCHEDULE`, and its token is `Route::Passthrough` — the vCPU rings the twin INLINE
+//! (`Action::RingHostInline`). ⊘ Nothing here reads its pushbuffer, GP entries or cursors.
+//!
+//! ## ★ P5b §2.7 — completion interrupts
+//!
+//! One host event fd per host ENGINE (GR0, every copy engine), dataless + non-stall + REPEAT. Its
+//! readiness in a worker's poller latches the guest's non-stall vector for that engine (read back
+//! out of the served `intr_table`, `kf_rm::authored::non_stall_vector_for`) and writes the MSI-X
+//! irqfd — `Device::latch_and_deliver`. ⊘ Never forged, never inline: a host NSI is the only
+//! trigger, and it carries no channel identity (RM's waiters re-check their semaphores).
 
 use crate::mem::{Mirror, Mirrors, RamMap, resolve_placed};
 use crate::raw_unsafe::RawRegion;
@@ -36,6 +56,40 @@ const NV_ERR_INVALID_STATE: u32 = 0x40;
 const NV_ERR_INSUFFICIENT_RESOURCES: u32 = 0x1A;
 /// `NV_ERR_NOT_SUPPORTED`.
 const NV_ERR_NOT_SUPPORTED: u32 = 0x56;
+/// `NV_ERR_INVALID_CLASS` (`ogkm-580: nvstatuscodes.h:63`).
+const NV_ERR_INVALID_CLASS: u32 = 0x22;
+/// `NV2080_NOTIFIERS_GR0` = `NV2080_NOTIFIERS_GRAPHICS` (`ogkm-580: cl2080_notification.h:48,185`).
+const NV2080_NOTIFIERS_GR0: u32 = 12;
+
+/// ★ P5b: one host act, run on the plane's act thread. `Err((status, why))` refuses by name.
+type Act = Box<dyn FnOnce(&ChanPlane) -> Result<String, (u32, String)> + Send>;
+
+/// ★ P5b: a guest USER channel's host twin (Passthrough).
+struct PtChan {
+    chan: kf_host::Channel,
+    /// The guest token (table index = the guest's chid).
+    idx: u32,
+    /// The channel group it was allocated under.
+    tsg: Option<u32>,
+    /// The channel's parent (its TSG, or its device).
+    parent: u32,
+    /// The host engine (= the guest's `engineType`).
+    engine: u32,
+    /// Engine objects on the twin: guest handle → host handle.
+    objects: HashMap<u32, u32>,
+}
+
+/// ★ P5b §2.7: one host engine's non-stall event, and the guest vector it is announced on.
+pub struct EngineEvent {
+    /// The engine (`kf_rm::authored::EngineKind` naming).
+    pub name: String,
+    /// The host event fd (a worker's poller watches it).
+    pub ev: kf_host::EventFd,
+    /// The guest vector (`None`: the served table has none — counted, never raised).
+    pub vector: Option<u32>,
+    /// Wakes seen.
+    pub wakes: AtomicU64,
+}
 
 /// A CE class id on ANY family — the class tables are generated per family and class ids are
 /// unique across them, so this needs no family argument (the rewriter takes a plain `fn`).
@@ -43,10 +97,10 @@ fn is_any_ce_class(c: u32) -> bool {
     kf_chip::Family::ALL.iter().any(|f| kf_chip::classes_for(*f).dma_copy.contains(&c))
 }
 
-/// `NV2080_ENGINE_TYPE_COPY0..9` = `9..=18`, `COPY10..19` = `0x28..` — a copy engine
-/// (`ogkm-580: cl2080_notification.h`).
+/// A copy engine — `kf_chan::passthrough::is_copy_engine` (both of the header's blocks; the P5
+/// copy of this read `0x28..` for COPY10, which is not a copy engine).
 fn is_copy_engine(engine_type: u32) -> bool {
-    (9..=18).contains(&engine_type) || (0x28..0x28 + 10).contains(&engine_type)
+    kf_chan::passthrough::is_copy_engine(engine_type)
 }
 
 /// ★ The guest's USERD: two 4-byte cursors, reached through a CPU view WE armed at birth (vidmem)
@@ -207,6 +261,26 @@ pub struct ChanPlane {
     /// says is not a GRCE).
     pub host_ce: u32,
     stop: AtomicBool,
+    /// The host family (its generated class sets check a guest engine-object class).
+    family: kf_chip::Family,
+    /// ★ P5b: the guest's user channels' twins, by `(hClient, hChannel)`.
+    pt: Mutex<HashMap<(u32, u32), PtChan>>,
+    /// ★ P5b: guest engine object `(hClient, hObject)` → its channel's key.
+    pt_objs: Mutex<HashMap<(u32, u32), (u32, u32)>>,
+    /// ★ P5b: the act thread's queue (`None` until [`ChanPlane::start`]).
+    acts: Mutex<Option<std::sync::mpsc::Sender<(Act, kf_gsp::Deferred, &'static str)>>>,
+    /// The register drainer's wake: an act that resolved a held reply signals it.
+    release: &'static kf_linux_raw::Notifier,
+    /// ★ P5b §2.7: the per-engine host non-stall events.
+    pub engines: Vec<EngineEvent>,
+    /// Acts run, refused, and the slowest (µs) — the log's proof that births left the lock.
+    pub acts_run: AtomicU64,
+    /// Acts refused.
+    pub acts_refused: AtomicU64,
+    /// Slowest act, µs.
+    pub act_worst_us: AtomicU64,
+    /// Passthrough twins born.
+    pub pt_births: AtomicU64,
 }
 
 impl ChanPlane {
@@ -214,6 +288,7 @@ impl ChanPlane {
     ///
     /// # Errors
     /// The host's refusal, by name.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         rm: &'static HostRm,
         plane: &'static Plane<'static>,
@@ -221,7 +296,10 @@ impl ChanPlane {
         ram: &'static RamMap,
         mirrors: Mirrors,
         wake: &'static kf_linux_raw::Notifier,
+        release: &'static kf_linux_raw::Notifier,
         tokens: usize,
+        family: kf_chip::Family,
+        intr_table: &[kf_abi::inittables::IntrTableEntry],
     ) -> Result<ChanPlane, String> {
         // ★ Authored, never the guest's engine number: the first HOST copy engine that is not a
         // graphics CE. ⊘ A GRCE shares the GR runlist and routes subchannels 0-3 to GR — RM's
@@ -235,6 +313,29 @@ impl ChanPlane {
         let lce = host_ce - kf_abi::submit::ENGINE_TYPE_COPY0;
         completions.also(rm, kf_host::event::notifier_ce(lce))?;
         eprintln!("kf3: channel plane: Translated rings on host COPY{lce} (engine {host_ce:#x}); completions on FIFO_EVENT_MTHD + CE{lce}");
+        // ★ P5b §2.7: one non-stall event per HOST engine a twin can run on — GR0 and every copy
+        // engine the host has (`CE_GET_CAPS_V2` answers for it). Realize-time host ioctls, never a
+        // vCPU. A GRCE's completions announce on GR0's vector (it has no row of its own).
+        let mut engines = Vec::new();
+        let mut kinds = vec![(kf_rm::authored::EngineKind::Graphics(0), NV2080_NOTIFIERS_GR0)];
+        for i in 0..20u32 {
+            if let Some(et) = kf_chan::passthrough::copy_engine_type(i)
+                && rm.ce_is_grce(et).is_ok()
+            {
+                kinds.push((kf_rm::authored::EngineKind::Copy(i), kf_host::event::notifier_ce(i)));
+            }
+        }
+        for (kind, notify) in kinds {
+            let ev = rm.open_event_fd().map_err(|e| format!("{} event fd: {e:?}", kind.name()))?;
+            rm.alloc_os_event(rm.subdevice(), notify, true, &ev).map_err(|e| format!("{} os event: {e:?}", kind.name()))?;
+            rm.arm_repeat(notify).map_err(|e| format!("{} notify: {e:?}", kind.name()))?;
+            let vector = kf_rm::authored::non_stall_vector_for(intr_table, kind);
+            engines.push(EngineEvent { name: kind.name(), ev, vector, wakes: AtomicU64::new(0) });
+        }
+        eprintln!(
+            "kf3: interrupt plane: host non-stall events -> guest vectors [{}]",
+            engines.iter().map(|e| format!("{}->{:x?}", e.name, e.vector)).collect::<Vec<_>>().join(" ")
+        );
         Ok(ChanPlane {
             rm,
             plane,
@@ -252,90 +353,296 @@ impl ChanPlane {
             births: AtomicU64::new(0),
             host_ce,
             stop: AtomicBool::new(false),
+            family,
+            pt: Mutex::new(HashMap::new()),
+            pt_objs: Mutex::new(HashMap::new()),
+            acts: Mutex::new(None),
+            release,
+            engines,
+            acts_run: AtomicU64::new(0),
+            acts_refused: AtomicU64::new(0),
+            act_worst_us: AtomicU64::new(0),
+            pt_births: AtomicU64::new(0),
         })
     }
 
-    /// ★ The drainer's entry: one statement from the served chain (`kf_rm::chanlink`).
+    /// ★ P5b: start the ACT thread — every host act a statement implies runs here, in statement
+    /// order, off the drainer and off every lock the drainer holds.
+    ///
+    /// # Errors
+    /// The spawn.
+    pub fn start(&'static self) -> Result<(), String> {
+        let (tx, rx) = std::sync::mpsc::channel::<(Act, kf_gsp::Deferred, &'static str)>();
+        std::thread::Builder::new()
+            .name("kf3-chan-act".into())
+            .spawn(move || {
+                while let Ok((act, d, what)) = rx.recv() {
+                    let t0 = std::time::Instant::now();
+                    let r = act(self);
+                    let us = u64::try_from(t0.elapsed().as_micros()).unwrap_or(u64::MAX);
+                    self.act_worst_us.fetch_max(us, Ordering::Relaxed);
+                    self.acts_run.fetch_add(1, Ordering::Relaxed);
+                    match r {
+                        Ok(line) => {
+                            eprintln!("kf3: act {what}: {line} ({us} us, off the GSP lock)");
+                            d.resolve(0);
+                        }
+                        Err((status, why)) => {
+                            self.acts_refused.fetch_add(1, Ordering::Relaxed);
+                            eprintln!("kf3: act {what} REFUSED ({status:#x}): {why} ({us} us)");
+                            d.resolve(status);
+                        }
+                    }
+                    // The held reply may go now: the drainer posts it.
+                    let _ = self.release.signal();
+                }
+            })
+            .map_err(|e| format!("act thread: {e}"))?;
+        if let Ok(mut a) = self.acts.lock() {
+            *a = Some(tx);
+        }
+        Ok(())
+    }
+
+    /// Queue `act` and answer [`ChanAnswer::Deferred`] — the drainer returns at once.
+    fn defer(&self, what: &'static str, act: Act) -> ChanAnswer {
+        let d = kf_gsp::Deferred::new();
+        let sent = self.acts.lock().ok().and_then(|a| a.as_ref().map(|tx| tx.send((act, d.clone(), what)).is_ok()));
+        if sent == Some(true) {
+            ChanAnswer::Deferred(d)
+        } else {
+            ChanAnswer::Refused { status: NV_ERR_INVALID_STATE, why: format!("{what}: the act thread is not running") }
+        }
+    }
+
+    /// The passthrough twins matching `f`, removed.
+    fn take_pt(&self, f: impl Fn(&(u32, u32), &PtChan) -> bool) -> Vec<((u32, u32), PtChan)> {
+        let Ok(mut m) = self.pt.lock() else { return Vec::new() };
+        let keys: Vec<(u32, u32)> = m.iter().filter(|(k, v)| f(k, v)).map(|(k, _)| *k).collect();
+        keys.into_iter().filter_map(|k| m.remove(&k).map(|v| (k, v))).collect()
+    }
+
+    /// ★ The drainer's entry: one statement from the served chain (`kf_rm::chanlink`). ⊘ Never
+    /// blocks: a statement that implies a host act answers [`ChanAnswer::Deferred`] and the act
+    /// runs on the act thread (P5b).
     pub fn statement(&self, st: ChanStatement) -> ChanAnswer {
         match st {
             ChanStatement::Alloc(a) => self.birth(a),
             ChanStatement::Schedule { client, object, enable } => {
-                let Some(ht) = self.by_obj.lock().ok().and_then(|m| m.get(&(client, object)).copied()) else {
-                    return ChanAnswer::NotOurs;
-                };
-                let Some(slot) = self.slot(ht) else { return ChanAnswer::NotOurs };
-                let idx = match slot.lock() {
-                    Ok(mut g) => {
-                        g.scheduled = enable;
-                        g.guest_idx
-                    }
-                    Err(_) => return ChanAnswer::Refused { status: NV_ERR_INVALID_STATE, why: "slot poisoned".into() },
-                };
-                eprintln!("kf3: chan {client:#x}:{object:#x} GPFIFO_SCHEDULE enable={enable} (token {idx:#x}, host {ht:#x})");
-                // Work the guest queued before scheduling is picked up now.
-                if enable && self.plane.ring_internal(idx) {
-                    let _ = self.wake.signal();
+                if let Some(ht) = self.by_obj.lock().ok().and_then(|m| m.get(&(client, object)).copied()) {
+                    return self.schedule_translated(client, object, ht, enable);
                 }
-                ChanAnswer::Done
+                // ★ P5b: a user channel (or its group) — the twin's own schedule, as an act.
+                let twins: Vec<kf_host::Channel> = self
+                    .pt
+                    .lock()
+                    .map(|m| {
+                        m.iter()
+                            .filter(|(k, v)| k.0 == client && (k.1 == object || v.tsg == Some(object)))
+                            .map(|(_, v)| v.chan)
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                if twins.is_empty() {
+                    return ChanAnswer::NotOurs;
+                }
+                self.defer(
+                    "schedule",
+                    Box::new(move |me: &ChanPlane| {
+                        for c in &twins {
+                            me.rm.schedule_enable(*c, enable).map_err(|e| (NV_ERR_INVALID_STATE, format!("host {:#x}: {e:?}", c.token)))?;
+                        }
+                        Ok(format!("{client:#x}:{object:#x} GPFIFO_SCHEDULE enable={enable} on {} twin(s)", twins.len()))
+                    }),
+                )
             }
             ChanStatement::Bind { client, object, engine_type } => {
-                let Some(ht) = self.by_obj.lock().ok().and_then(|m| m.get(&(client, object)).copied()) else {
-                    return ChanAnswer::NotOurs;
-                };
-                // ★ The guest's statement that this channel runs on a copy engine. Our twin's host
-                // TSG was bound to OUR engine at birth (`HostRm::birth_channel`); a bind to anything
-                // but a copy engine contradicts the Translated route and is refused by name.
-                if !is_copy_engine(engine_type) {
-                    return ChanAnswer::Refused {
-                        status: NV_ERR_INVALID_STATE,
-                        why: format!("BIND of a Translated CE channel (host {ht:#x}) to engine {engine_type:#x}"),
-                    };
+                if let Some(ht) = self.by_obj.lock().ok().and_then(|m| m.get(&(client, object)).copied()) {
+                    // ★ The guest's statement that this channel runs on a copy engine. Our twin's
+                    // host TSG was bound to OUR engine at birth; a bind to anything but a copy
+                    // engine contradicts the Translated route and is refused by name.
+                    if !is_copy_engine(engine_type) {
+                        return ChanAnswer::Refused {
+                            status: NV_ERR_INVALID_STATE,
+                            why: format!("BIND of a Translated CE channel (host {ht:#x}) to engine {engine_type:#x}"),
+                        };
+                    }
+                    eprintln!("kf3: chan {client:#x}:{object:#x} BIND engine={engine_type:#x} (host {ht:#x})");
+                    return ChanAnswer::Done;
                 }
-                eprintln!("kf3: chan {client:#x}:{object:#x} BIND engine={engine_type:#x} (host {ht:#x})");
-                ChanAnswer::Done
+                // ★ P5b: the twin's TSG was bound to the guest's engine at birth; the guest's own
+                // BIND must name that engine (the runlist the guest computes its token from).
+                let twin = self.pt.lock().ok().and_then(|m| m.get(&(client, object)).map(|v| (v.engine, v.chan.token)));
+                match twin {
+                    None => ChanAnswer::NotOurs,
+                    Some((e, ht)) if e == engine_type => {
+                        eprintln!("kf3: chan {client:#x}:{object:#x} BIND engine={engine_type:#x} (passthrough host {ht:#x})");
+                        ChanAnswer::Done
+                    }
+                    Some((e, ht)) => ChanAnswer::Refused {
+                        status: NV_ERR_INVALID_STATE,
+                        why: format!("BIND to engine {engine_type:#x} of a twin born on {e:#x} (host {ht:#x})"),
+                    },
+                }
             }
             ChanStatement::Token { client, object } => {
-                let Some(ht) = self.by_obj.lock().ok().and_then(|m| m.get(&(client, object)).copied()) else {
-                    return ChanAnswer::NotOurs;
-                };
-                match self.slot(ht).and_then(|s| s.lock().ok().map(|g| g.guest_idx)) {
-                    // ★ The token is OUR doorbell's vocabulary (we are the host): the table index,
-                    // in the VECTOR field the trap masks (`kf_trap::trap`). Its RUNLIST_ID/flag bits
-                    // are the guest's own when it computes the token itself (GA10x kernel channels).
+                if let Some(ht) = self.by_obj.lock().ok().and_then(|m| m.get(&(client, object)).copied()) {
+                    return match self.slot(ht).and_then(|s| s.lock().ok().map(|g| g.guest_idx)) {
+                        // ★ The token is OUR doorbell's vocabulary (we are the host): the table
+                        // index, in the VECTOR field the trap masks (`kf_trap::trap`).
+                        Some(idx) => ChanAnswer::Token(idx),
+                        None => ChanAnswer::NotOurs,
+                    };
+                }
+                match self.pt.lock().ok().and_then(|m| m.get(&(client, object)).map(|v| v.idx)) {
                     Some(idx) => ChanAnswer::Token(idx),
                     None => ChanAnswer::NotOurs,
                 }
             }
-            ChanStatement::Free { client, object } => {
-                let Some(ht) = self.by_obj.lock().ok().and_then(|mut m| m.remove(&(client, object))) else {
-                    return ChanAnswer::NotOurs;
-                };
-                self.retire(ht);
-                ChanAnswer::Done
+            ChanStatement::EngineObject { client, parent, handle, class } => self.engine_object(client, parent, handle, class),
+            ChanStatement::Free { client, object } => self.free(client, object),
+        }
+    }
+
+    fn schedule_translated(&self, client: u32, object: u32, ht: u32, enable: bool) -> ChanAnswer {
+        let Some(slot) = self.slot(ht) else { return ChanAnswer::NotOurs };
+        let idx = match slot.lock() {
+            Ok(mut g) => {
+                g.scheduled = enable;
+                g.guest_idx
+            }
+            Err(_) => return ChanAnswer::Refused { status: NV_ERR_INVALID_STATE, why: "slot poisoned".into() },
+        };
+        eprintln!("kf3: chan {client:#x}:{object:#x} GPFIFO_SCHEDULE enable={enable} (token {idx:#x}, host {ht:#x})");
+        // Work the guest queued before scheduling is picked up now.
+        if enable && self.plane.ring_internal(idx) {
+            let _ = self.wake.signal();
+        }
+        ChanAnswer::Done
+    }
+
+    /// ★ P5b: an engine object under a PASSTHROUGH twin — allocated on the twin with the guest's
+    /// class (checked against the HOST family's generated set for the twin's engine) and params
+    /// we author. Under a Translated channel it is a graph node only (our ring owns its object).
+    fn engine_object(&self, client: u32, parent: u32, handle: u32, class: u32) -> ChanAnswer {
+        let Some((chan, engine)) = self.pt.lock().ok().and_then(|m| m.get(&(client, parent)).map(|v| (v.chan, v.engine))) else {
+            return ChanAnswer::NotOurs;
+        };
+        let Some(kind) = kf_chip::classes_for(self.family).kind_of(class) else {
+            return ChanAnswer::Refused {
+                status: NV_ERR_INVALID_CLASS,
+                why: format!("class {class:#x} is not an engine class of the host family {:?}", self.family),
+            };
+        };
+        self.defer(
+            "engine object",
+            Box::new(move |me: &ChanPlane| {
+                let h = kf_chan::passthrough::engine_object(me.rm, chan, engine, class, kind).map_err(|e| (NV_ERR_INVALID_CLASS, e))?;
+                if let Ok(mut m) = me.pt.lock()
+                    && let Some(v) = m.get_mut(&(client, parent))
+                {
+                    v.objects.insert(handle, h);
+                }
+                if let Ok(mut m) = me.pt_objs.lock() {
+                    m.insert((client, handle), (client, parent));
+                }
+                Ok(format!("{client:#x}:{handle:#x} class {class:#x} ({kind:?}) on twin host {:#x} -> host object {h:#x}", chan.token))
+            }),
+        )
+    }
+
+    /// ★ A free the plane may own: a Translated channel, a passthrough twin (by channel, its group,
+    /// its device, or its client), or an engine object on one. Tokens stop routing to a twin NOW
+    /// (atomics, no host call); the host frees run as ONE act whose outcome the reply waits for.
+    fn free(&self, client: u32, object: u32) -> ChanAnswer {
+        // Translated channels: by object, or every one of the client's.
+        let translated: Vec<u32> = self
+            .by_obj
+            .lock()
+            .map(|mut m| {
+                let keys: Vec<(u32, u32)> = m.keys().copied().filter(|k| k.0 == client && (object == client || k.1 == object)).collect();
+                keys.into_iter().filter_map(|k| m.remove(&k)).collect()
+            })
+            .unwrap_or_default();
+        let twins = self.take_pt(|k, v| k.0 == client && (object == client || k.1 == object || v.tsg == Some(object) || v.parent == object));
+        // Engine objects freed on their own (their twin still lives).
+        let obj = if twins.is_empty() {
+            self.pt_objs.lock().ok().and_then(|mut m| m.remove(&(client, object))).and_then(|key| {
+                self.pt.lock().ok().and_then(|mut m| m.get_mut(&key).and_then(|v| v.objects.remove(&object)))
+            })
+        } else {
+            None
+        };
+        if translated.is_empty() && twins.is_empty() && obj.is_none() {
+            return ChanAnswer::NotOurs;
+        }
+        if !twins.is_empty() {
+            if let Ok(mut m) = self.pt_objs.lock() {
+                m.retain(|_, key| !twins.iter().any(|(k, _)| k == key));
+            }
+            // ★ The guest's token stops ringing the twin before its host free (a Passthrough token
+            // is never BUSY: no worker ever claims one).
+            if let Ok(mut c) = self.caps.lock() {
+                for (_, t) in &twins {
+                    let _ = self.plane.free_channel(&mut c, t.idx);
+                }
             }
         }
+        for ht in &translated {
+            // Stop the pump before the act frees its twin (the slot lock is the worker's).
+            if let Some(s) = self.slot(*ht)
+                && let Ok(mut g) = s.try_lock()
+            {
+                g.scheduled = false;
+            }
+        }
+        self.defer(
+            "free",
+            Box::new(move |me: &ChanPlane| {
+                let mut line = Vec::new();
+                for ht in translated {
+                    me.retire(ht);
+                    line.push(format!("translated host {ht:#x}"));
+                }
+                for ((c, h), t) in twins {
+                    let r = me.rm.free_channel(t.chan);
+                    line.push(format!("passthrough {c:#x}:{h:#x} token {:#x} host {:#x} objects={} {}", t.idx, t.chan.token, t.objects.len(), if r.is_ok() { "freed" } else { "FREE REFUSED" }));
+                }
+                if let Some(h) = obj {
+                    let r = me.rm.free(h);
+                    line.push(format!("engine object host {h:#x} {}", if r.is_ok() { "freed" } else { "FREE REFUSED" }));
+                }
+                // ⊘ A host free that refuses leaks a host object; the guest's object is gone
+                // either way, so the guest is answered OK and the leak is named here.
+                Ok(format!("{client:#x}:{object:#x}: {}", line.join("; ")))
+            }),
+        )
     }
 
     fn slot(&self, ht: u32) -> Option<Arc<Mutex<Slot>>> {
         self.slots.read().ok()?.get(&ht).cloned()
     }
 
-    /// ★ Birth AT ALLOCATION (§7). Only the guest-KERNEL copy-engine channels are Translated; any
-    /// other channel is NOT ours yet (user channels are Passthrough, P5 step 5) and the chain answers
-    /// as before.
+    /// ★ Birth AT ALLOCATION (§7). A guest-KERNEL copy-engine channel is Translated; a guest USER
+    /// channel on a copy engine or GR0 is Passthrough (P5b). Everything the drainer can check
+    /// without the host is checked HERE (a refusal is immediate); the host verbs are an act.
     fn birth(&self, a: ChannelAlloc) -> ChanAnswer {
         let engine = a.engine_type.unwrap_or(0);
-        if !a.kernel_client || !is_copy_engine(engine) {
-            eprintln!(
-                "kf3: chan {:#x}:{:#x} class={:#x} engine={engine:#x} kernel={} vaspace={:x?} chid={:x?} — not a kernel CE channel: not born (Passthrough is P5 step 5)",
-                a.client, a.handle, a.class, a.kernel_client, a.vaspace, a.chid
-            );
-            return ChanAnswer::NotOurs;
-        }
         let refuse = |status: u32, why: String| {
             eprintln!("kf3: chan {:#x}:{:#x} birth REFUSED: {why} (decl {a:x?})", a.client, a.handle);
             ChanAnswer::Refused { status, why }
         };
+        let passthrough = !a.kernel_client;
+        if a.kernel_client && !is_copy_engine(engine) {
+            eprintln!(
+                "kf3: chan {:#x}:{:#x} class={:#x} engine={engine:#x} kernel=true vaspace={:x?} chid={:x?} — a KERNEL non-CE channel: not born (kernel GR is P7)",
+                a.client, a.handle, a.class, a.vaspace, a.chid
+            );
+            return ChanAnswer::NotOurs;
+        }
+        if passthrough && !is_copy_engine(engine) && engine != kf_abi::submit::ENGINE_TYPE_GRAPHICS {
+            return refuse(NV_ERR_NOT_SUPPORTED, format!("user channel on engine type {engine:#x}: only a copy engine or GR0 has a passthrough twin"));
+        }
         let Some(vas) = a.vaspace else {
             return refuse(NV_ERR_INVALID_STATE, format!("no VA space resolved (hVASpace={:#x}, parent {:#x})", a.h_vaspace, a.parent));
         };
@@ -350,44 +657,77 @@ impl ChanPlane {
         if idx != chid || (idx as usize) >= self.plane.tokens.len() {
             return refuse(NV_ERR_INSUFFICIENT_RESOURCES, format!("chid {chid:#x} outside the token table"));
         }
-        let userd = match self.userd_view(a.userd) {
-            Ok(u) => u,
-            Err(e) => return refuse(NV_ERR_NOT_SUPPORTED, e),
-        };
-        let t0 = std::time::Instant::now();
-        let host = match HostRing::on_engine(self.rm, mirror.space, self.host_ce) {
-            Ok(h) => h,
-            Err(e) => return refuse(NV_ERR_INSUFFICIENT_RESOURCES, format!("host ring: {e}")),
-        };
-        let ht = host.channel().token;
+        if passthrough {
+            // ★ The guest's USERD, adopted AT CREATION (RM zeroes it — `rm_takes_a_guest_userd`):
+            // a store slice, or guest RAM through the mirror's RAM object.
+            let userd = match a.userd {
+                Some(kf_arch::UserdMem::Framebuffer { base, .. }) => kf_chan::passthrough::UserdAt::Store { store: self.store, off: base },
+                Some(kf_arch::UserdMem::Sysmem { base, .. }) => {
+                    let (Some(ram), Some((_, off))) = (mirror.ram_obj, self.ram.file_range(base, 0x200)) else {
+                        return refuse(NV_ERR_NOT_SUPPORTED, format!("sysmem USERD at {base:#x}: no guest-RAM object or memfd offset"));
+                    };
+                    kf_chan::passthrough::UserdAt::Ram { ram, off }
+                }
+                other => return refuse(NV_ERR_NOT_SUPPORTED, format!("USERD not declared as a physical descriptor ({other:?})")),
+            };
+            let g = kf_chan::passthrough::GuestChannel { gpfifo_va: a.gpfifo_va, entries: a.entries.max(1), userd, engine };
+            let space = mirror.space;
+            return self.defer(
+                "birth passthrough",
+                Box::new(move |me: &ChanPlane| {
+                    let chan = kf_chan::passthrough::birth_twin(me.rm, space, g).map_err(|e| (NV_ERR_INSUFFICIENT_RESOURCES, e))?;
+                    let owner = if a.kernel_client { Owner::Kernel } else { Owner::User };
+                    let alloc = me
+                        .caps
+                        .lock()
+                        .map_err(|_| "caps poisoned".to_string())
+                        .and_then(|mut c| me.plane.allocate_channel(&mut c, idx, Route::Passthrough, chan.token, owner).map_err(|e| format!("{e:?}")));
+                    if let Err(e) = alloc {
+                        let _ = me.rm.free_channel(chan);
+                        return Err((NV_ERR_INSUFFICIENT_RESOURCES, format!("token {idx:#x}: {e}")));
+                    }
+                    if let Ok(mut m) = me.pt.lock() {
+                        m.insert((a.client, a.handle), PtChan { chan, idx, tsg: a.tsg, parent: a.parent, engine, objects: HashMap::new() });
+                    }
+                    me.pt_births.fetch_add(1, Ordering::Relaxed);
+                    Ok(format!(
+                        "chan {:#x}:{:#x} BORN Passthrough: token {idx:#x} -> host {:#x} in {key:?} gpfifo={:#x}x{} userd={userd:?} engine={engine:#x}",
+                        a.client, a.handle, chan.token, a.gpfifo_va, g.entries
+                    ))
+                }),
+            );
+        }
         let entries = a.entries.max(1);
-        let chan = TranslatedChannel::new(TranslatedRing::new(a.gpfifo_va, entries, 0), host, idx);
-        let alloc = self
-            .caps
-            .lock()
-            .map_err(|_| "caps poisoned".to_string())
-            .and_then(|mut c| self.plane.allocate_channel(&mut c, idx, Route::Translated, ht, Owner::Kernel).map_err(|e| format!("{e:?}")));
-        if let Err(e) = alloc {
-            return refuse(NV_ERR_INSUFFICIENT_RESOURCES, format!("token {idx:#x}: {e}"));
-        }
-        let slot = Slot { chan, key, mirror, userd, guest_idx: idx, scheduled: false, dead: None, serves: 0, last_put: None };
-        if let Ok(mut s) = self.slots.write() {
-            s.insert(ht, Arc::new(Mutex::new(slot)));
-        }
-        if let Ok(mut m) = self.by_obj.lock() {
-            m.insert((a.client, a.handle), ht);
-        }
-        self.births.fetch_add(1, Ordering::Relaxed);
-        eprintln!(
-            "kf3: chan {:#x}:{:#x} BORN Translated: token {idx:#x} -> host {ht:#x} in {key:?} gpfifo={:#x}x{} userd={:?} engine={engine:#x} ({} us)",
-            a.client,
-            a.handle,
-            a.gpfifo_va,
-            entries,
-            a.userd,
-            t0.elapsed().as_micros()
-        );
-        ChanAnswer::Done
+        self.defer(
+            "birth translated",
+            Box::new(move |me: &ChanPlane| {
+                let userd = me.userd_view(a.userd).map_err(|e| (NV_ERR_NOT_SUPPORTED, e))?;
+                let host = HostRing::on_engine(me.rm, mirror.space, me.host_ce).map_err(|e| (NV_ERR_INSUFFICIENT_RESOURCES, format!("host ring: {e}")))?;
+                let ht = host.channel().token;
+                let chan = TranslatedChannel::new(TranslatedRing::new(a.gpfifo_va, entries, 0), host, idx);
+                let alloc = me
+                    .caps
+                    .lock()
+                    .map_err(|_| "caps poisoned".to_string())
+                    .and_then(|mut c| me.plane.allocate_channel(&mut c, idx, Route::Translated, ht, Owner::Kernel).map_err(|e| format!("{e:?}")));
+                if let Err(e) = alloc {
+                    let _ = me.rm.free_channel(chan.host().channel());
+                    return Err((NV_ERR_INSUFFICIENT_RESOURCES, format!("token {idx:#x}: {e}")));
+                }
+                let slot = Slot { chan, key, mirror, userd, guest_idx: idx, scheduled: false, dead: None, serves: 0, last_put: None };
+                if let Ok(mut s) = me.slots.write() {
+                    s.insert(ht, Arc::new(Mutex::new(slot)));
+                }
+                if let Ok(mut m) = me.by_obj.lock() {
+                    m.insert((a.client, a.handle), ht);
+                }
+                me.births.fetch_add(1, Ordering::Relaxed);
+                Ok(format!(
+                    "chan {:#x}:{:#x} BORN Translated: token {idx:#x} -> host {ht:#x} in {key:?} gpfifo={:#x}x{entries} userd={:?} engine={engine:#x}",
+                    a.client, a.handle, a.gpfifo_va, a.userd
+                ))
+            }),
+        )
     }
 
     /// The guest's USERD, reached through a CPU view WE arm now (off the vCPU).
@@ -414,9 +754,21 @@ impl ChanPlane {
     fn retire(&self, ht: u32) {
         let Some(slot) = self.slots.write().ok().and_then(|mut s| s.remove(&ht)) else { return };
         let Ok(g) = slot.lock() else { return };
-        if let Ok(mut c) = self.caps.lock() {
-            // §5.2: free waits out BUSY; the slot lock is held, so no worker is inside it.
-            let _ = self.plane.free_channel(&mut c, g.guest_idx);
+        // §5.2: free waits out BUSY. The slot lock is held, so no worker is inside the pump — but
+        // one may still hold the TOKEN for a moment after it: retry on the act thread (never a
+        // lock the drainer holds), bounded, and name a token that stays stranded.
+        let mut freed = false;
+        for _ in 0..200 {
+            if let Ok(mut c) = self.caps.lock()
+                && self.plane.free_channel(&mut c, g.guest_idx)
+            {
+                freed = true;
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        if !freed {
+            eprintln!("kf3: chan token {:#x} (host {ht:#x}) STRANDED: still BUSY after 200 ms", g.guest_idx);
         }
         let _ = self.rm.free_channel(g.chan.host().channel());
         if let UserdView::Store { cookie, .. } = &g.userd {

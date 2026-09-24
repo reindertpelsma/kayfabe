@@ -32,8 +32,15 @@ pub struct WorkerStats {
     pub host_rings: AtomicU64,
 }
 
+/// ★ P5b: the first tag a caller may give an EXTRA fd in the same poller (a per-engine host
+/// non-stall event, whose readiness `on_other` turns into a guest interrupt). Tags at or above it
+/// are handed to `on_other`; nothing else reaches it.
+pub const OTHER_TAG_BASE: u64 = 2 << 32;
+
 /// One worker thread's loop, until `stop`. `poller` watches `efd` at [`WORKER_EFD_TAG`] and
-/// `completions` at [`COMPLETIONS_TAG`].
+/// `completions` at [`COMPLETIONS_TAG`]; any fd the caller watched at a tag `>=`
+/// [`OTHER_TAG_BASE`] is reported to `on_other` (P5b: engine non-stall events → guest MSI-X).
+#[allow(clippy::too_many_arguments)]
 pub fn run(
     plane: &Plane<'_>,
     host: &dyn HostOps,
@@ -42,6 +49,7 @@ pub fn run(
     completions: &Completions,
     stats: &WorkerStats,
     stop: &AtomicBool,
+    on_other: &dyn Fn(u64),
 ) {
     let mut scratch = Vec::with_capacity(SCAN_LIMIT);
     while !stop.load(Ordering::Acquire) {
@@ -61,7 +69,9 @@ pub fn run(
         plane.worker_wake().unpark();
         if got.is_ok() {
             for tag in ready.iter() {
-                if tag == COMPLETIONS_TAG {
+                if tag >= OTHER_TAG_BASE {
+                    on_other(tag);
+                } else if tag == COMPLETIONS_TAG {
                     completions.for_each_inflight(|t| {
                         stats.host_rings.fetch_add(1, Ordering::Relaxed);
                         if plane.ring_internal(t) {

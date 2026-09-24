@@ -289,14 +289,54 @@ impl HostRm {
         Ok((h, class))
     }
 
+    /// ★ P5b: an engine object of `class` on `chan`, with params WE author: a copy class gets
+    /// `NVB0B5_ALLOCATION_PARAMETERS {version 1, engineType = the twin's engine}`, a compute/3D
+    /// class `NV_GR_ALLOCATION_PARAMETERS {version 2, size 16}` (as [`HostRm::alloc_compute_object`]).
+    /// ⊘ The class is the one the guest's pushbuffer will `SET_OBJECT` (so it must be the guest's),
+    /// and the caller has already checked it against the host family's generated set; nothing else
+    /// of the guest's alloc reaches the host.
+    ///
+    /// # Errors
+    /// The host's refusal.
+    pub fn alloc_engine_object(&self, chan: Channel, class: u32, copy_engine: Option<u32>) -> Result<u32, RmError> {
+        let mut ce = [0u8; CeAllocParams::SIZE];
+        let mut gr = [0u8; 16];
+        let params: &mut [u8] = match copy_engine {
+            Some(engine_type) => {
+                CeAllocParams { version: CeAllocParams::VERSION_1, engine_type }
+                    .encode_into(&mut ce)
+                    .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
+                &mut ce
+            }
+            None => {
+                gr[0..4].copy_from_slice(&2u32.to_le_bytes());
+                gr[8..12].copy_from_slice(&16u32.to_le_bytes());
+                &mut gr
+            }
+        };
+        let want = self.mint();
+        let h = self.raw_alloc(chan.chan, want, class, params)?;
+        self.remember(h, chan.chan);
+        Ok(h)
+    }
+
     /// `GPFIFO_SCHEDULE` (`bEnable = 1`) on the channel's group — the channel starts fetching.
     ///
     /// # Errors
     /// The host's status.
     pub fn schedule(&self, chan: Channel) -> Result<(), RmError> {
+        self.schedule_enable(chan, true)
+    }
+
+    /// `GPFIFO_SCHEDULE` on the channel's group with `bEnable = enable` (P5b: the guest's own
+    /// schedule statement, carried to its twin — the flag is the guest's intent, the verb ours).
+    ///
+    /// # Errors
+    /// The host's status.
+    pub fn schedule_enable(&self, chan: Channel, enable: bool) -> Result<(), RmError> {
         let mut params = [0u8; GpfifoScheduleParams::SIZE];
         GpfifoScheduleParams {
-            b_enable: 1,
+            b_enable: u8::from(enable),
             b_skip_submit: 0,
             b_skip_enable: 0,
         }

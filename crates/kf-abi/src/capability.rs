@@ -2939,7 +2939,13 @@ mod tests {
         // `[IN]` and `uvmchanrtnrConstruct_IMPL` writes nothing back, so `NoDeclaredFacts`
         // plus an echoed body forges no value. ⊘ Cheap and correct is the whole claim; it is
         // not claimed to be the wall.
-        assert_eq!(seen, 16, "the port decodes sixteen classes today");
+        // 16 → 17 on 2026-09-25 (P5b, `kf3m2`): `NV01_MEMORY_VIRTUAL` (`0x70`), the VA range
+        // every user map names as `hDma` — permitted from the beginning, undecodable here, and
+        // its refusal read as SUCCESS by the guest (the params `status` it reads was `0`).
+        // ⊘ The engine classes of the other families (Turing/Hopper/Blackwell channels, copy
+        // and compute objects) are mapped one layer up, from `kf_chip`'s generated sets
+        // (`kf_rm::chanlink::alloc_shape`), and are not counted by this sweep.
+        assert_eq!(seen, 17, "the port decodes seventeen classes today");
         // The sweep must really have covered a class the table refuses, or it proves
         // nothing about the table.
         assert!(
