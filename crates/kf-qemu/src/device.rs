@@ -366,6 +366,15 @@ impl Device {
         }
     }
 
+    fn log_report(&self, r: &kf_gsp::ServiceReport) {
+        for c in &r.commands {
+            eprintln!("kf3: GSP rpc {:?} seq={}", c.function, c.sequence);
+        }
+        for u in &r.unserviced {
+            eprintln!("kf3: GSP rpc UNSERVICED {u:?}");
+        }
+    }
+
     /// Stop the device's threads.
     pub fn stop(&self) {
         self.stop.store(true, Ordering::Release);
@@ -419,12 +428,25 @@ impl HostOps for Device {
         let g = &mut *g;
         self.counters.applied.fetch_add(1, Ordering::Relaxed);
         let mut ram = Ram(self);
-        let _ = g.fsm.mmio_write_with(&mut ram, g.model.as_ref(), &mut g.policy, bar, u64::from(offset), value);
+        let before = g.fsm.phase();
+        match g.fsm.mmio_write_with(&mut ram, g.model.as_ref(), &mut g.policy, bar, u64::from(offset), value) {
+            Ok(r) => self.log_report(&r),
+            Err(e) => eprintln!("kf3: GSP write @{offset:#x}={value:#x} REFUSED: {e:?}"),
+        }
         while g.fsm.pending_command_doorbells() > 0 {
             self.counters.serviced.fetch_add(1, Ordering::Relaxed);
-            if g.fsm.service_one_deferred_command(&mut ram, &mut g.policy).is_err() {
-                break;
+            match g.fsm.service_one_deferred_command(&mut ram, &mut g.policy) {
+                Ok(r) => self.log_report(&r),
+                Err(e) => {
+                    eprintln!("kf3: GSP command service REFUSED: {e:?}");
+                    break;
+                }
             }
+        }
+        let after = g.fsm.phase();
+        if after != before {
+            // ★ The P2 gate's observable: the boot phase, logged by the drainer (never a vCPU).
+            eprintln!("kf3: GSP phase {before:?} -> {after:?}");
         }
         let _ = g.fsm.release_held(&mut ram);
         self.publish(g);
