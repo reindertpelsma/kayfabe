@@ -263,10 +263,12 @@ impl ChannelPolicy {
             self.vas_under.retain(|k, _| k.0 != client);
             self.vas_stated.remove(&client);
         } else {
-            if let Some(set) = self.vas_stated.get_mut(&client) {
-                set.remove(&object);
-            }
-            self.vas_under.retain(|k, v| !(k.0 == client && (k.1 == object || *v == object)));
+            // ★ Only the DEVICE's free forgets its default VAS. The VASpace handle itself is a
+            // transient NAME (`index = GPU_DEVICE`, "acquire reference to device vaspace",
+            // `nvos.h:3187`): RM allocs it, publishes the PDEs, and FREES it — `[measured p5c]`
+            // forgetting it there left the scrubber's channel with no VA space. The graph files it
+            // the same way (`RmGraph::device_default_vas`, outliving the handle's own free).
+            self.vas_under.retain(|k, _| !(k.0 == client && k.1 == object));
         }
         let _ = (self.sink)(ChanStatement::Free { client, object });
         None
