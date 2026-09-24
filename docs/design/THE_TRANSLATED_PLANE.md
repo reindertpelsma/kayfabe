@@ -1012,3 +1012,42 @@ paths; the CPU CE executor's data mover and table-based operand resolution
 (`WalkOperands`, `partition_ce`, `execute_ours_spans`); the address table's publish role;
 `vaspace_handover`'s table cross-check; the BAR1 mirror's fill trap and the page arena.
 Graded by the 30-arm suite, `cup3`/`cup8` and the LLM lane, each with `forwarded>0`.
+
+---
+
+## §25 — ✔✔✔ `[MEASURED w826]` **v3 GATE 3 PASSES: a guest KERNEL CE channel, Translated, on the real engine.**
+
+**Box 52430332, GA106, 580.159.04, bare metal, no QEMU.** Rev `803da0f1`, `kf-gate3`, first run.
+The harness plays RM's CeUtils channel: tables, GPFIFO, pushbuffer, semaphore and USERD in the one
+store object at kernel VAs; data operands FB- and SYSMEM-PHYSICAL.
+
+```
+identity_window base=0x1fffff0000000 bytes=256MiB us=96      (GROWS_DOWN, read back)
+ram_window      base=0x1ffffec000000 bytes=64MiB  us=43900   (one OS_DESCRIPTOR over the memfd)
+translated fetched=3 submissions=3 splits=1 wakes=2 pumps=3 us=829
+fill_zeroed · phys_copy · split_walked_the_named_root · virtual_copy_after_split ·
+sysmem_to_fb · fb_to_sysmem · guest_semaphore_written_natively · gp_get_authored_on_completion=3 ·
+hostile_entry_refused_by_name (Rewrite{gp:3, PeerOperand}) · hostile_entry_not_retired   ALL PASS
+```
+
+★ What is now measured rather than designed:
+- **§3's `fbAliasVA` rewrite works on our own channel** — including the scrub's shape (a REMAPPED
+  CONSTANT fill, `LINE_LENGTH_IN` in elements), which `rm.rs:66` had recorded as never proven.
+- **§6's guest-RAM window works for CE operands in both directions.**
+- **§24.2's split is correct by construction and by measurement**: the virtual copy after the
+  `MEM_OP` reads through a VA the guest mapped just before it — it can only have landed if the walk
+  ran after the prior work completed and before the rest was submitted.
+- **§7's native completion**: the engine wrote the guest's semaphore through the mirrored kernel VAS.
+- **The runner never waits**: 3 pumps (doorbell, wake, wake), each returning on its own.
+
+⚠ **Two facts the window placement exposes, recorded before they bite:**
+1. `GROWS_DOWN` put the identity window at `0x1fffff0000000` — the **top of the 49-bit space**. CE
+   `OFFSET_*_UPPER` is 17 bits (`clc7b5.h:162`), so `>> 32 = 0x1ffff` is **exactly** the maximum.
+   A window larger than the space's top 4 GiB-aligned slack still fits; one placed higher cannot
+   exist. Our host RING must stay **below 2^40** (GP entries carry 40 bits), so it is placed
+   grows-UP — where a guest kernel's own allocations also live. ⇒ **the collision is between OUR ring
+   and the guest's low VAs, not the windows.** A reconcile that meets it is refused `0x51` by name.
+2. The RAM window cost **44 ms for 64 MiB** (pinning); §16.2 measured 299 ms for 8 GiB. VM-start only.
+
+⊘ Not yet covered: a guest pushbuffer IN guest RAM (read path `ram=true`), segments crossing ledger
+rows, and more than one Translated channel on one worker. Next: the doorbell → worker wiring.
