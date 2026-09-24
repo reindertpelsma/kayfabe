@@ -119,8 +119,12 @@ pub struct Device {
     gsp: Mutex<Gsp>,
     boot: Vec<BootReg>,
     vbios: Vec<u8>,
-    worker_efd: Notifier,
+    worker_efd: &'static Notifier,
     drainer_efd: Notifier,
+    /// ★ P5: the channel plane (the guest kernel's CE channels, Translated).
+    pub chans: &'static crate::chan::ChanPlane,
+    /// The workers' counters.
+    pub worker_stats: kf_chan::worker::WorkerStats,
     stop: AtomicBool,
     /// Boot-log counters.
     pub counters: Counters,
@@ -226,6 +230,32 @@ impl Device {
                 kf_abi::pcibars::PciBarRow { name: "io", size_bytes: 0 },
             ],
         });
+        // The plane lives for the process (a device is realized once): leaked so the vCPU path
+        // holds a plain `&'static`, never a lock or a refcount.
+        let vmm: &'static Vmm = Box::leak(Box::new(Vmm::new()));
+        let bar0_bytes = if pci.bar0_bytes != 0 { pci.bar0_bytes } else { 16 << 20 };
+        let plane: &'static Plane<'static> = Box::leak(Box::new(Plane::for_family(
+            vmm,
+            1 << 12,
+            0xFFF,
+            family,
+            u32::try_from(bar0_bytes).map_err(|_| "BAR0 larger than 4 GiB")?,
+        )));
+        // ★ P5: the channel plane — built BEFORE the served chain, which carries the guest's channel
+        // statements to it. Its completion fd is opened here (host ioctls at realize, never a vCPU).
+        // ⊘ The token table is indexed by the doorbell's VECTOR (11:0) — the guest's chid, which is
+        // device-unique on the GSP families (one global CHID_MGR, `kf_arch::DoorbellTarget`).
+        let worker_efd: &'static Notifier = Box::leak(Box::new(Notifier::create().map_err(|e| format!("eventfd: {e:?}"))?));
+        let mirrors = crate::mem::Mirrors::default();
+        let chans: &'static crate::chan::ChanPlane = Box::leak(Box::new(crate::chan::ChanPlane::new(
+            rm,
+            plane,
+            store.handle,
+            ram,
+            mirrors.clone(),
+            worker_efd,
+            plane.tokens.len(),
+        )?));
         // ★ The served chain (census → sticky guard → init tables, static info, guest sys info,
         // inert, the object seat, the unserviced ledger). The object seat is the host-free graph
         // (`GraphObjects`): it answers ALLOC/FREE/DUP from the object model and refuses every
@@ -258,22 +288,14 @@ impl Device {
                     },
                     guest_os: kf_abi::GuestOs::Linux,
                 }),
+                // ★ P5: channel allocs, GPFIFO_SCHEDULE, the token and frees reach the plane,
+                // on the drainer; each answer IS the plane's act.
+                channels: Some(std::sync::Arc::new(move |st| chans.statement(st))),
             },
         );
         let model = family.gsp_model(cfg.fb_mb).map_err(|e| format!("{e:?}"))?;
         let gsp = Gsp { fsm: GspFsm::new(abi), model, policy, published: std::collections::HashMap::new() };
 
-        // The plane lives for the process (a device is realized once): leaked so the vCPU path
-        // holds a plain `&'static`, never a lock or a refcount.
-        let vmm: &'static Vmm = Box::leak(Box::new(Vmm::new()));
-        let bar0_bytes = if pci.bar0_bytes != 0 { pci.bar0_bytes } else { 16 << 20 };
-        let plane: &'static Plane<'static> = Box::leak(Box::new(Plane::for_family(
-            vmm,
-            1 << 12,
-            0xFFF,
-            family,
-            u32::try_from(bar0_bytes).map_err(|_| "BAR0 larger than 4 GiB")?,
-        )));
 
         // ★ P4: the windows, their scratch, the PRAMIN views (armed HERE, off every vCPU), the
         // invalidate port; and the VA manager with OUR BAR2 aperture as its first object.
@@ -287,6 +309,7 @@ impl Device {
             cfg.bar2_bytes,
             ram,
             inbox,
+            mirrors,
         )?;
         let walker = kf_mem::vasmgr::GpuWalker { kernel, store_ptr, store_bytes: fb_length };
         let mut va: crate::mem::Manager = kf_mem::vasmgr::VaManager::new(
@@ -330,7 +353,9 @@ impl Device {
             gsp: Mutex::new(gsp),
             boot,
             vbios,
-            worker_efd: Notifier::create().map_err(|e| format!("eventfd: {e:?}"))?,
+            worker_efd,
+            chans,
+            worker_stats: kf_chan::worker::WorkerStats::default(),
             drainer_efd: Notifier::create().map_err(|e| format!("eventfd: {e:?}"))?,
             stop: AtomicBool::new(false),
             counters: Counters::default(),
@@ -700,8 +725,25 @@ impl Device {
             mc.pramin_last_miss.load(o),
             self.mem.pramin.worst_ns.load(o) / 1000,
         );
+        let ws = &self.worker_stats;
+        let toks: Vec<String> = self
+            .chans
+            .counts()
+            .iter()
+            .map(|t| format!("{:#x}:fwd={},subs={},gp_get={:?}{}", t.token, t.forwarded, t.submissions, t.gp_get, if t.dead.is_some() { ",DEAD" } else { "" }))
+            .collect();
+        let chan = format!(
+            " chan[births={} served={} parks={} host_rings={} contended={} poisoned={} tokens=[{}]]",
+            self.chans.births.load(o),
+            ws.served.load(o),
+            ws.parks.load(o),
+            ws.host_rings.load(o),
+            self.chans.contended.load(o),
+            self.chans.poisoned.load(o),
+            toks.join(" ")
+        );
         format!(
-            "kf3: family={:?} phase={phase} trapped={} applied={} refused={} serviced={} ram_refused={} unshadowed_writes={} last_off={:#x}{mem} unserviced=[{}]",
+            "kf3: family={:?} phase={phase} trapped={} applied={} refused={} serviced={} ram_refused={} unshadowed_writes={} last_off={:#x}{mem}{chan} unserviced=[{}]",
             self.family,
             c.trapped.load(o),
             c.applied.load(o),
@@ -747,6 +789,24 @@ impl Device {
         let _ = self.drainer_efd.signal();
         let _ = self.worker_efd.signal();
         let _ = self.mem.inbox.wake.signal();
+        self.chans.stop();
+    }
+
+    /// ★ P5: one WORKER thread — `kf_chan::worker::run` (the ONE worker loop) over this device's
+    /// plane: a doorbell or a host completion wakes it; it claims a token and pumps the channel.
+    /// ⊘ Never a vCPU; never waits on the GPU (a completion is an fd in its epoll set).
+    pub fn worker_loop(&self) {
+        let Ok(poller) = Poller::create() else {
+            eprintln!("kf3: worker: epoll refused — the channel plane is DOWN");
+            return;
+        };
+        if poller.watch(self.worker_efd.as_source_fd(), kf_chan::worker::WORKER_EFD_TAG).is_err()
+            || poller.watch(self.chans.completions.event_fd(), kf_chan::worker::COMPLETIONS_TAG).is_err()
+        {
+            eprintln!("kf3: worker: epoll watch refused — the channel plane is DOWN");
+            return;
+        }
+        kf_chan::worker::run(self.plane, self, &poller, self.worker_efd, &self.chans.completions, &self.worker_stats, &self.stop);
     }
 }
 
@@ -780,8 +840,8 @@ impl HostOps for Device {
     fn ring_host(&self, host_token: u32) {
         let _ = self.rm.doorbell(host_token);
     }
-    fn run_translated(&self, _host_token: u32, _up_to_seq: u64) -> bool {
-        false
+    fn run_translated(&self, host_token: u32, _up_to_seq: u64) -> bool {
+        self.chans.serve(host_token)
     }
     fn run_emulated(&self, _host_token: u32, _up_to_seq: u64) {}
     fn apply_register(&self, bar: u8, offset: u32, value: u64, _width: u8) {
@@ -827,11 +887,22 @@ impl HostOps for Device {
         }
         self.publish(g);
     }
-    fn operands_translatable(&self, _host_token: u32, _up_to_seq: u64) -> Translatable {
-        Translatable::No
+    fn operands_translatable(&self, host_token: u32, _up_to_seq: u64) -> Translatable {
+        // A channel whose pump REFUSED is dead: the plane then poisons (kernel), never faults.
+        if self.chans.alive(host_token) { Translatable::Yes } else { Translatable::No }
     }
-    fn forge_completion(&self, _host_token: u32) {}
-    fn refuse_and_poison(&self, _host_token: u32) {}
+    fn forge_completion(&self, host_token: u32) {
+        // ⊘ §8: never reached for a Translated route (`Completion::for_route`); counted if it is.
+        eprintln!("kf3: FORGE requested for host token {host_token:#x} — refused (no Emulated channel exists)");
+    }
+    fn refuse_and_poison(&self, host_token: u32) {
+        // §7: a kernel channel is NEVER faulted — its work is refused and the device counted
+        // poisoned, visibly (a translation miss on the scrubber is not the guest's fault to take).
+        if self.chans.poisoned.fetch_add(1, Ordering::Relaxed) < 8 {
+            eprintln!("kf3: kernel channel host {host_token:#x} REFUSED-AND-POISONED (§7)");
+        }
+        self.counters.refused.fetch_add(1, Ordering::Relaxed);
+    }
     fn fault_channel(&self, _host_token: u32) {}
     fn map_guest_slice(&self, _slice: HostSlice) {}
     fn teardown_step(&self, _step: Step) {}

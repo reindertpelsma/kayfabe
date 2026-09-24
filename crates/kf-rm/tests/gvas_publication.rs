@@ -144,6 +144,7 @@ fn with_the_memory_plane_seated_every_statement_is_carried_and_held() {
                 sink: std::sync::Arc::new(move |s| g.lock().unwrap().push(s)),
                 guest_os: kf_abi::GuestOs::Linux,
             }),
+            channels: None,
         },
     );
     // The publication: carried, held, and answered exactly as before.

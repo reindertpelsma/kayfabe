@@ -149,8 +149,10 @@ pub struct Plane<'v> {
     /// The family this plane was built for. ⊘ Kept because the **read-exit set is family-scoped**
     /// (`memmap::holes_for`) — Turing/Ampere/Ada have none, Hopper/Blackwell have named boot pages.
     pub family: kf_chip::Family,
-    /// Which tokens are guest-KERNEL channels (§7's failure-policy selector).
-    kernel_tokens: Vec<u32>,
+    /// Which tokens are guest-KERNEL channels (§7's failure-policy selector). ⊘ Behind a lock so
+    /// a channel can be allocated through the SHARED plane (the device holds `&'static Plane`):
+    /// taken only on the allocate/free path and by a worker's `owner_of` — never on a vCPU.
+    kernel_tokens: std::sync::Mutex<Vec<u32>>,
 }
 
 impl<'v> Plane<'v> {
@@ -187,7 +189,7 @@ impl<'v> Plane<'v> {
             doorbell: kf_trap::trappolicy::doorbell_for(family),
             bar0_bytes: bar0_bytes as u64,
             family,
-            kernel_tokens: Vec::new(),
+            kernel_tokens: std::sync::Mutex::new(Vec::new()),
         }
     }
 
@@ -214,13 +216,17 @@ impl<'v> Plane<'v> {
     /// ⊘ §7 needs to know whether a channel is the guest's KERNEL or a user channel, because that
     /// selects the failure policy. It is recorded at allocation, never inferred at submit time.
     fn owner_of(&self, tok: u32) -> Owner {
-        if self.kernel_tokens.iter().any(|t| *t == tok) { Owner::Kernel } else { Owner::User }
+        // ⊘ A poisoned lock answers KERNEL: the stricter policy (refuse, never fault).
+        match self.kernel_tokens.lock() {
+            Ok(k) if !k.contains(&tok) => Owner::User,
+            _ => Owner::Kernel,
+        }
     }
 
     /// ★ Twin allocation goes through §9.1's caps. ⊘ On a shared host GPU the driver enforces no
     /// per-client quota, so this is the only thing standing between one guest and its neighbours.
     pub fn allocate_channel(
-        &mut self,
+        &self,
         caps: &mut VmCaps,
         tok: u32,
         route: Route,
@@ -248,9 +254,11 @@ impl<'v> Plane<'v> {
         // device guest-wide, defeating §7's blast-radius argument entirely.
         // ⇒ Ownership is set per allocation, and cleared for the other case. It is also a set
         // rather than a growing Vec, so a guest allocating and freeing in a loop cannot grow it.
-        self.kernel_tokens.retain(|t| *t != tok);
-        if owner == Owner::Kernel {
-            self.kernel_tokens.push(tok);
+        if let Ok(mut k) = self.kernel_tokens.lock() {
+            k.retain(|t| *t != tok);
+            if owner == Owner::Kernel {
+                k.push(tok);
+            }
         }
         Ok(())
     }
@@ -258,14 +266,16 @@ impl<'v> Plane<'v> {
     /// The free path. ⊘ `[fable H3]` there was no free at all: caps were acquired and never
     /// released, so a guest that allocated and freed more than its cap over its life was refused
     /// forever.
-    pub fn free_channel(&mut self, caps: &mut VmCaps, tok: u32) -> bool {
+    pub fn free_channel(&self, caps: &mut VmCaps, tok: u32) -> bool {
         let idx = (tok & self.token_mask) as usize;
         let Some(w) = self.tokens.get(idx) else { return false };
         // §5.2: free waits out BUSY before the twin may be dropped.
         if !w.retire() {
             return false;
         }
-        self.kernel_tokens.retain(|t| *t != tok);
+        if let Ok(mut k) = self.kernel_tokens.lock() {
+            k.retain(|t| *t != tok);
+        }
         caps.release(Twin::Channel);
         true
     }
@@ -314,8 +324,10 @@ impl<'v> Plane<'v> {
             if step == Step::ResetWalkerState {
                 walker.reset();
             }
-            if step == Step::ResetRing {
-                self.kernel_tokens.clear();
+            if step == Step::ResetRing
+                && let Ok(mut k) = self.kernel_tokens.lock()
+            {
+                k.clear();
             }
             host.teardown_step(step);
         }

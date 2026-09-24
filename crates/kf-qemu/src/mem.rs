@@ -100,6 +100,19 @@ impl RamMap {
             .copied()
     }
 
+    /// ★ P5: the host mapping of guest-RAM memfd bytes `[off, off+len)` — the inverse of
+    /// [`Self::file_range`], for reading a sysmem row the reconcile placed (whose offset is a FILE
+    /// offset). `None` when no single fd-backed block covers it.
+    #[must_use]
+    pub fn at_file_offset(&self, off: u64, len: u64) -> Option<(RawRegion, usize)> {
+        let v = self.blocks.read().ok()?;
+        let first = v.iter().find(|x| x.fd >= 0)?.fd;
+        v.iter()
+            .filter(|b| b.fd == first)
+            .find(|b| off >= b.fd_off && off.checked_add(len).is_some_and(|e| e - b.fd_off <= b.mem.len() as u64))
+            .map(|b| (b.mem, (off - b.fd_off) as usize))
+    }
+
     /// ★ The guest-RAM object's fd and the file offset of `[gpa, gpa+len)`. `None` when no single
     /// fd-backed block covers it. ⊘ Every block must share ONE fd (q35's `memory-backend=ram0`
     /// aliases one memfd above and below the hole); a second fd is refused, never guessed at.
@@ -176,8 +189,78 @@ pub enum Target {
     /// A guest BAR aperture.
     Window(CpuWindow<WindowOps>),
     /// A host GPU VA space mirroring a guest one (the Translated plane's target).
-    Gpu(HostVas<'static>),
+    Gpu(GpuMirror),
 }
+
+/// ★ P5: OUR placements in one mirrored host VA space, `va → (len, offset, ram)` — the rows the
+/// reconcile made, recorded AS it makes them, so a Translated channel can find the bytes behind a
+/// guest VA (its GPFIFO, a pushbuffer segment) through what WE mapped (`THE_TRANSLATED_PLANE.md`
+/// §24.2). ⊘ Never a copy of the guest's tables: every row is one of our own map calls.
+///
+/// ★ Written INSIDE the apply, before the invalidate's `TRIGGER` is cleared — so a doorbell the
+/// guest rings after its invalidate completed always finds the rows that invalidate published.
+pub type PlacedRows = std::sync::Arc<RwLock<std::collections::BTreeMap<u64, (u64, u64, bool)>>>;
+
+/// Resolve `[va, va+len)` against `rows`: `(ram, offset)` when ONE placement covers it whole.
+#[must_use]
+pub fn resolve_placed(rows: &PlacedRows, va: u64, len: u64) -> Option<(bool, u64)> {
+    let r = rows.read().ok()?;
+    let (&start, &(rlen, off, ram)) = r.range(..=va).next_back()?;
+    let end = va.checked_add(len)?;
+    (end <= start.checked_add(rlen)?).then(|| (ram, off + (va - start)))
+}
+
+/// ★ A mirrored host VA space: the reconcile's target, and the row record beside it.
+pub struct GpuMirror {
+    /// The host VA space and its objects.
+    pub vas: HostVas<'static>,
+    /// Our placements (see [`PlacedRows`]).
+    pub rows: PlacedRows,
+}
+
+impl MapTarget for GpuMirror {
+    fn map(&self, d: &Desired, defer: bool) -> Result<(), String> {
+        self.vas.map(d, defer)?;
+        if let Ok(mut r) = self.rows.write() {
+            r.insert(d.va, (d.len, d.off, d.ram));
+        }
+        Ok(())
+    }
+    fn unmap(&self, va: u64, defer: bool) -> Result<(), String> {
+        // ⊘ Forget the row FIRST: a reader must never resolve through a mapping being torn down.
+        if let Ok(mut r) = self.rows.write() {
+            r.remove(&va);
+        }
+        self.vas.unmap(va, defer)
+    }
+    fn invalidate(&self) -> Result<(), String> {
+        self.vas.invalidate()
+    }
+    fn va_extent(&self) -> Option<u64> {
+        self.vas.va_extent()
+    }
+}
+
+/// ★ P5: one mirrored guest VA space as the channel plane sees it — the host space, its two
+/// windows (`THE_TRANSLATED_PLANE.md` §2, §6, §12: in EVERY host VAS we create), and our rows.
+#[derive(Clone)]
+pub struct Mirror {
+    /// The host VA space.
+    pub space: kf_host::VaSpace,
+    /// Guest FB-physical `p` is host VA `fb_base + p` (`p < fb_len`).
+    pub fb_base: u64,
+    /// The identity window's length (the store's).
+    pub fb_len: u64,
+    /// Guest-RAM memfd offset `o` is host VA `ram_base + o` (`o < ram_len`); `None` when the space
+    /// has no guest-RAM object.
+    pub ram: Option<(u64, u64)>,
+    /// Our placements.
+    pub rows: PlacedRows,
+}
+
+/// ★ P5: the mirrors, by VA-space object — written by the VA thread when it creates one, read by
+/// the channel plane when a channel names it.
+pub type Mirrors = std::sync::Arc<Mutex<std::collections::HashMap<VasKey, Mirror>>>;
 
 impl MapTarget for Target {
     fn map(&self, d: &Desired, defer: bool) -> Result<(), String> {
@@ -313,8 +396,12 @@ pub struct MemPlane {
     /// Guest RAM as QEMU registered it.
     ram: &'static RamMap,
     /// ★ The guest-RAM host object — an OS descriptor over the WHOLE guest memfd (gate 3's
-    /// recipe), created once, on the VA thread, the first time a space needs it.
-    ram_obj: std::sync::OnceLock<Result<u32, String>>,
+    /// recipe), created once, on the VA thread, the first time a space needs it: `(handle, len)`.
+    ram_obj: std::sync::OnceLock<Result<(u32, u64), String>>,
+    /// ★ P5: every mirrored space, for the channel plane.
+    pub mirrors: Mirrors,
+    /// The store's length (the identity window's).
+    pub fb_len: u64,
 }
 
 /// ★ The store ranges whose PRAMIN views are armed at realize (`V3_P4_PORT_MAP.md` Q2, measured).
@@ -350,6 +437,7 @@ impl MemPlane {
         bar2_bytes: u64,
         ram: &'static RamMap,
         inbox: std::sync::Arc<Inbox>,
+        mirrors: Mirrors,
     ) -> Result<(MemPlane, WindowOps), String> {
         let page = HostPageSize::query();
         let window = |len: u64, what: &str| -> Result<(&'static GuestWindow, &'static SharedRam), String> {
@@ -391,6 +479,8 @@ impl MemPlane {
                 counters: MemCounters::default(),
                 ram,
                 ram_obj: std::sync::OnceLock::new(),
+                mirrors,
+                fb_len: layout.fb_length,
             },
             ops(bar2_win, bar2_scratch),
         ))
@@ -405,7 +495,7 @@ impl MemPlane {
     ///
     /// # Errors
     /// No fd-backed guest RAM, the mapping, or the host's refusal — by name, and remembered.
-    pub fn guest_ram_object(&self, rm: &'static HostRm) -> Result<u32, String> {
+    pub fn guest_ram_object(&self, rm: &'static HostRm) -> Result<(u32, u64), String> {
         self.ram_obj
             .get_or_init(|| {
                 let fd = self.ram.backing_fd().ok_or("no fd-backed guest RAM block (memory-backend-memfd,share=on?)")?;
@@ -429,7 +519,7 @@ impl MemPlane {
                     .alloc_os_descriptor(view, HostOffset::new(0), len)
                     .map_err(|e| format!("guest-RAM OS descriptor of {len:#x}: {e:?}"))?;
                 eprintln!("kf3: guest-RAM object {obj:#x} over {len:#x} bytes of the guest memfd");
-                Ok(obj)
+                Ok((obj, len))
             })
             .clone()
     }
@@ -540,7 +630,30 @@ pub fn apply_statement(
                                 None
                             }
                         };
-                        m.table.insert(key, Target::Gpu(HostVas { rm, space, store, ram_obj }))
+                        // ★ P5: the two windows, in EVERY mirrored space (§12) — GROWS_DOWN, away
+                        // from the guest's bottom-up VAs (§24.2). A space whose windows refuse is
+                        // still a mirror (its virtual rows work); a Translated channel naming it
+                        // refuses by name at birth.
+                        let fb_base = rm.map_window(space, store, plane.fb_len, true);
+                        let ram_base = ram_obj.map(|(o, len)| rm.map_window(space, o, len, true).map(|b| (b, len)));
+                        let rows = PlacedRows::default();
+                        let line = match (&fb_base, &ram_base) {
+                            (Ok(fb), Some(Ok((rb, rl)))) => {
+                                if let Ok(mut mm) = plane.mirrors.lock() {
+                                    mm.insert(key, Mirror { space, fb_base: *fb, fb_len: plane.fb_len, ram: Some((*rb, *rl)), rows: rows.clone() });
+                                }
+                                format!("windows fb={fb:#x}+{:#x} ram={rb:#x}+{rl:#x}", plane.fb_len)
+                            }
+                            (Ok(fb), None) => {
+                                if let Ok(mut mm) = plane.mirrors.lock() {
+                                    mm.insert(key, Mirror { space, fb_base: *fb, fb_len: plane.fb_len, ram: None, rows: rows.clone() });
+                                }
+                                format!("windows fb={fb:#x} ram=NONE")
+                            }
+                            (fb, ram) => format!("windows REFUSED fb={fb:?} ram={ram:?}"),
+                        };
+                        eprintln!("kf3: {key:?} mirror space={:#x}: {line}", space.space);
+                        m.table.insert(key, Target::Gpu(GpuMirror { vas: HostVas { rm, space, store, ram_obj: ram_obj.map(|(o, _)| o) }, rows }))
                     }
                     Err(e) => {
                         plane.counters.refused.fetch_add(1, Ordering::Relaxed);

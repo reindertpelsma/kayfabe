@@ -16,6 +16,7 @@ pub mod abi;
 pub mod authored;
 pub mod barpde;
 pub mod census;
+pub mod chanlink;
 pub mod faultbuffer;
 pub mod guestsysinfo;
 pub mod hostfacts;
@@ -117,6 +118,10 @@ pub struct ObjectLinks {
     /// `None` is the plane absent: fn 70 then reaches the object link (inert) as before, and the
     /// page-directory controls are answered without anything acting on them.
     pub memory: Option<MemoryLink>,
+    /// ★ P5: the channel plane's seat — channel allocs, `GPFIFO_SCHEDULE`, the work-submit token
+    /// and frees ([`chanlink::ChannelPolicy`]). `None` is the plane absent: those reach the object
+    /// seat and the ledger as before (the controls then answer `NV_ERR_NOT_SUPPORTED`).
+    pub channels: Option<chanlink::ChanSink>,
 }
 
 /// ★ P4: the memory plane's seat — where statements go, and the guest OS the page-directory
@@ -134,6 +139,7 @@ impl core::fmt::Debug for ObjectLinks {
         f.debug_struct("ObjectLinks")
             .field("objects", &self.objects.is_some())
             .field("memory", &self.memory.is_some())
+            .field("channels", &self.channels.is_some())
             .finish()
     }
 }
@@ -205,12 +211,18 @@ pub fn served_chain(
 ) -> Box<dyn kf_gsp::CommandPolicy> {
     // ★★★ EXHAUSTIVE: a latch added to `ChainLogs` and not seated below is a compile error.
     let ChainLogs { unserviced, fault_buffer, os_events } = logs;
-    let ObjectLinks { objects, memory } = links;
+    let ObjectLinks { objects, memory, channels } = links;
     let mut static_info = staticinfo::StaticInfoPolicy::new(board.clone(), driver);
     if let (Some(n), Some(sn)) = (host.gpu_name, host.gpu_short_name.or(host.gpu_name)) {
         static_info = static_info.with_name(n, sn);
     }
     let mut chain: Vec<Box<dyn kf_gsp::CommandPolicy>> = Vec::new();
+    // ★ P5: the channel link is FIRST — ahead of the object seat (which terminates the alloc and
+    // free it must see) and of the ledger (which would record its controls unserviced).
+    if let Some(sink) = channels {
+        let guest_os = memory.as_ref().map_or(kf_abi::GuestOs::Linux, |m| m.guest_os);
+        chain.push(Box::new(chanlink::ChannelPolicy::new(driver, guest_os, sink)));
+    }
     // ★ P4: the page-directory carrier is FIRST — ahead of `InitTablePolicy`, which terminates
     // the chain for the publication ids — and answers nothing; fn 70's link answers only fn 70.
     if let Some(MemoryLink { sink, guest_os }) = memory {

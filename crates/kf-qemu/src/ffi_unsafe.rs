@@ -101,6 +101,13 @@ pub unsafe extern "C" fn kf3_realize(
                 write_err(err, err_len, "could not start the register drainer thread");
                 return -1;
             }
+            // ★ P5: the workers — they serve rung Translated tokens and host completions.
+            for i in 0..2 {
+                if std::thread::Builder::new().name(format!("kf3-worker{i}")).spawn(move || d.worker_loop()).is_err() {
+                    write_err(err, err_len, "could not start a worker thread");
+                    return -1;
+                }
+            }
             // ★ P4: the VA-manager thread — the one owner of the GPU walker.
             if std::thread::Builder::new().name("kf3-vamgr".into()).spawn(move || d.va_loop()).is_err() {
                 write_err(err, err_len, "could not start the VA-manager thread");
