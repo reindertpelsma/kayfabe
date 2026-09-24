@@ -2414,9 +2414,15 @@ impl BarMirror {
         if b.first_refusal.is_none() {
             b.first_refusal.clone_from(&first);
         }
+        let head: Vec<String> = runs
+            .iter()
+            .take(4)
+            .map(|(va, len, off)| format!("0x{va:x}+0x{len:x}->0x{off:x}"))
+            .collect();
         format!(
-            "BAR1 runs={} kept={kept} mapped={mapped} unmapped={unmapped} refused={refused} live={}{}",
+            "BAR1 runs={} [{}] kept={kept} mapped={mapped} unmapped={unmapped} refused={refused} live={}{}",
             runs.len(),
+            head.join(" "),
             b.placed.len(),
             first
                 .map(|f| format!(" FIRST-REFUSAL[{f}]"))
