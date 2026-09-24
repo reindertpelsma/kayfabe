@@ -1,437 +1,97 @@
-//! # The host-forwarding class profiles — one per generation (`#156`)
+//! ★★★ **The classes WE allocate on the host — derived, never hand-picked.**
 //!
-//! Three NVIDIA class ids, per GPU generation, that the unprivileged host isolate hands
-//! to a real `NV_ESC_RM_ALLOC` on a real board. The seam is
-//! [`kf_arch::HostClasses`]; this module is where the numbers are allowed to live.
+//! The old tree kept one hand-written profile per family (`Ga10xHostClasses`, …) naming one id per
+//! kind, and they were wrong exactly where a family spans die groups: GA100 lists
+//! `AMPERE_COMPUTE_A`/`AMPERE_DMA_COPY_A`, GA10x the `_B` classes; GB202 lists `BLACKWELL_*_B` where
+//! GB100 lists `_A` (`classes.rs` header). ⇒ v3 asks the HOST: `NV0080_CTRL_CMD_GPU_GET_CLASSLIST_V2`
+//! (`0x800292`, NON_PRIVILEGED — `g_device_nvoc.c:333` flags `0x1010b`) returns the classes this die
+//! supports, and the choice per kind is the NEWEST id in *family set ∩ host list*.
 //!
-//! ## What made these a seam rather than documented coupling
-//!
-//! The owner's ruling, 2026-08-01, on whether the host path's hardcoded `AMPERE_*` ids
-//! should get an arch trait now or later: *"yes hopper is important, not a retrofit"* —
-//! and the standing rule that follows it, that anything new on the exec path gets its
-//! arch seam **at the time it is written**.
-//!
-//! ## ★★★ The oracle these values come from, and why it is not a guess
-//!
-//! NVIDIA generates a per-chip class table: `ogkm-580:
-//! src/nvidia/generated/g_gpu_class_list.c`, one
-//! `gpuGetEngClassDescriptorList_<CHIP>` per part, each row a `{ class, engine }` pair.
-//! That file states which classes a given board **has**. Every number below is read out
-//! of it at a cited line, for the chip each profile is named after — `GA106` (the bench
-//! part), `AD106` and `GH100` (the two generations `kayfabe-chips` already models).
-//!
-//! The *selection* rule is NVIDIA's too. RM's own UVM-facing client does not hardcode a
-//! chip either: `findDeviceClasses` reads `NV0080_CTRL_CMD_GPU_GET_CLASSLIST` off the
-//! live device and takes the **numerically largest** member of each family
-//! (`isClassHost` / `isClassCE` / `isClassCompute`), i.e. the newest class the part
-//! supports (`ogkm-580: src/nvidia/src/kernel/rmapi/nv_gpu_ops.c:8630-8699`, families at
-//! `:8543-8601`). Each profile below is therefore a **compile-time statement of what
-//! that runtime query would return** on that generation.
-//!
-//! ## ★★★ What is pinned, and what is still not (`#166`)
-//!
-//! Two independent things can be wrong about a host class, and they are pinned by two
-//! different instruments — worth separating, because each is blind to the other's half:
-//!
-//! | wrong thing | example | what refuses it |
-//! |---|---|---|
-//! | the **value** in a role | `Gh100HostClasses::ce_object` answers `0xc7b5` | `crates/kayfabe-chips/tests/host_classes.rs` — nine comparisons against NVIDIA's own per-chip table, plus the max-in-family selection rule `findDeviceClasses` applies to it |
-//! | the **role** a call site asks for | the doorbell window allocated as `gpfifo_channel()` | **the type system**: the three methods return `ChannelClass` / `UsermodeClass` / `CeObjectClass`, and every consumer names the role, so the swap does not compile |
-//!
-//! ★ The second was measured to be pinned **zero** ways at `36f746a`
-//! (`scripts/bite_host_classes.py`: `PROFILE 9/9 caught, WIRING 0/3 caught`) — nine value
-//! bites all fired and not one role bite did. `#166` closed it with types rather than
-//! tests because rustc quantifies over every call site, including ones written later.
-//! `tests/tests/host_class_role_wiring.rs` guards the three one-line edits that would
-//! dismantle that (alias two roles, add a uniform escape, untag at the call site).
-//!
-//! ⊘ **What is still NOT pinned by either**, stated so it is not read as closed:
-//!
-//! - **A profile that puts the wrong number under the right role tag.** The types cannot
-//!   see it — `UsermodeClass::new(ClassId(AMPERE_CHANNEL_GPFIFO_A))` type-checks
-//!   perfectly. Only the value oracle above catches that, which is why both instruments
-//!   have to exist.
-//! - **Whether a real board accepts any of it.** Nothing below has run on Ada or Hopper.
-//! - **Which generation the host actually is.** Everything here is a pin; see below.
-//!
-//! ## ⊘ What this module is NOT, stated before anything reads it as more
-//!
-//! **Compiling for a generation is not booting on one.** Nothing here has been run
-//! against Ada or Hopper silicon, and this project has exactly one host part on which
-//! any of it has ever been measured. What a green build establishes is that the *numbers
-//! the vendored driver states* are the numbers this port would send — not that the send
-//! works.
-//!
-//! ★ **The increment that would replace this table with a measurement** is small and
-//! named: issue `NV0080_CTRL_CMD_GPU_GET_CLASSLIST` on the host device from
-//! `RmConnection::open` and apply `findDeviceClasses`' own max-per-family rule to the
-//! answer, then either *select* the profile or *check* the pinned one against it. It is
-//! deliberately not done here because it cannot be exercised without a host GPU, and an
-//! untested refusal path on a forwarding boundary is worth less than a pinned one that
-//! says it is pinned.
+//! ⊘ Zero per-die maintenance: a new die of a known family is covered by the family's generated set
+//! and its own class list. A kind the host does not list is refused by name — never a guessed id.
 
-use kf_abi::generated::classes as nv;
+use crate::classes::{Kind, classes_for};
+use crate::Family;
 use kf_arch::ids::ClassId;
 use kf_arch::{CeObjectClass, ChannelClass, ComputeObjectClass, HostClasses, UsermodeClass};
 
-/// The GA10x host-class profile — the **bench** part, and the only one any of this has
-/// been measured on.
-///
-/// | role | class | `g_gpu_class_list.c` (GA106) |
-/// |---|---|---|
-/// | channel | `AMPERE_CHANNEL_GPFIFO_A` (`0xc56f`) | `:1113` |
-/// | usermode | `AMPERE_USERMODE_A` (`0xc561`) | `:1120` |
-/// | CE object | `AMPERE_DMA_COPY_B` (`0xc7b5`) | `:1115-1119` (`ENG_CE(0..4)`) |
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct Ga10xHostClasses;
+/// `NV0080_CTRL_CMD_GPU_GET_CLASSLIST_V2` (`ogkm-580: ctrl0080gpu.h:506`).
+pub const NV0080_CTRL_CMD_GPU_GET_CLASSLIST_V2: u32 = 0x0080_0292;
+/// `NV0080_CTRL_GPU_CLASSLIST_MAX_SIZE` (`ctrl0080gpu.h:504`).
+pub const CLASSLIST_MAX: usize = 200;
+/// `sizeof(NV0080_CTRL_GPU_GET_CLASSLIST_V2_PARAMS)` — `{numClasses, classList[200]}`.
+pub const CLASSLIST_V2_SIZE: usize = 4 + 4 * CLASSLIST_MAX;
 
-impl HostClasses for Ga10xHostClasses {
-    fn name(&self) -> &'static str {
-        "GA10x host classes (GA106)"
+/// Decode a `GET_CLASSLIST_V2` reply. `None` if `numClasses` exceeds the array.
+#[must_use]
+pub fn decode_classlist(buf: &[u8]) -> Option<Vec<u32>> {
+    let w = |o: usize| buf.get(o..o + 4).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]));
+    let n = w(0)? as usize;
+    if n > CLASSLIST_MAX {
+        return None;
     }
-    fn gpfifo_channel(&self) -> ChannelClass {
-        ChannelClass::new(ClassId(nv::AMPERE_CHANNEL_GPFIFO_A))
-    }
-    fn usermode(&self) -> UsermodeClass {
-        UsermodeClass::new(ClassId(nv::AMPERE_USERMODE_A))
-    }
-    fn ce_object(&self) -> CeObjectClass {
-        CeObjectClass::new(ClassId(nv::AMPERE_DMA_COPY_B))
-    }
-
-    fn compute_object(&self) -> Option<ComputeObjectClass> {
-        // `ogkm-580: src/common/sdk/nvidia/inc/class/clc7c0.h:32`. ★ The one compute class
-        // this tree has a verified constant for, and the one the bench's GA106 accepts.
-        Some(ComputeObjectClass::new(ClassId(nv::AMPERE_COMPUTE_B)))
-    }
+    (0..n).map(|i| w(4 + 4 * i)).collect()
 }
 
-/// The AD10x host-class profile — **identical to GA10x in all three roles**, and that is
-/// a sourced result rather than a copy.
-///
-/// | role | class | `g_gpu_class_list.c` (AD106) |
-/// |---|---|---|
-/// | channel | `AMPERE_CHANNEL_GPFIFO_A` | `:1738` |
-/// | usermode | `AMPERE_USERMODE_A` | `:1744` |
-/// | CE object | `AMPERE_DMA_COPY_B` | `:1739-1743` (`ENG_CE(0..4)`) |
-///
-/// ★★ Ada defines **no** `ADA_CHANNEL_GPFIFO_*`, `ADA_USERMODE_*` or `ADA_DMA_COPY_*` at
-/// all — the only `ADA_*` row in AD106's list is `ADA_COMPUTE_A` (`:1737`), which is a
-/// *compute* object and not one of these three roles. This is the same shape the crate
-/// docs already record for Ada's GSP registers: Ada is the **easy** member of the
-/// universe, and a seam validated only against it would be validated against a copy.
-/// Hopper is where the three roles actually diverge.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct Ad10xHostClasses;
-
-impl HostClasses for Ad10xHostClasses {
-    fn name(&self) -> &'static str {
-        "AD10x host classes (AD106)"
-    }
-    fn gpfifo_channel(&self) -> ChannelClass {
-        ChannelClass::new(ClassId(nv::AMPERE_CHANNEL_GPFIFO_A))
-    }
-    fn usermode(&self) -> UsermodeClass {
-        UsermodeClass::new(ClassId(nv::AMPERE_USERMODE_A))
-    }
-    fn ce_object(&self) -> CeObjectClass {
-        CeObjectClass::new(ClassId(nv::AMPERE_DMA_COPY_B))
-    }
-
-    fn compute_object(&self) -> Option<ComputeObjectClass> {
-        // ⊘⊘ THIS REFUSED UNTIL w568, and the refusal's reason was TRUE WHEN WRITTEN and
-        // stale by the time anyone read it: *"`kayfabe-abi` carries no value for it"* was a
-        // statement about the GENERATED table, never about the silicon — `clc9c0.h:27` has
-        // carried `ADA_COMPUTE_A = 0xC9C0` the whole time.
-        //
-        // ★ The fix was to GENERATE it, not to type the number here. A hand-written class id
-        // is exactly the per-model rot the maintainability contract forbids; a generated one
-        // cannot drift from the vendored header it came from.
-        Some(ComputeObjectClass::new(ClassId(nv::ADA_COMPUTE_A)))
-    }
+/// A kind the host lists none of — refused by name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HostLacksKind {
+    /// The family.
+    pub family: Family,
+    /// The kind.
+    pub kind: Kind,
 }
 
-/// The GH100 host-class profile — **all three roles differ**, and two of the three wrong
-/// answers are SERVED rather than refused.
-///
-/// | role | class | `g_gpu_class_list.c` (GH100) | what the Ampere id does here |
-/// |---|---|---|---|
-/// | channel | `HOPPER_CHANNEL_GPFIFO_A` (`0xc86f`) | `:2009` | ★ also listed (`:1996`) — **allocates** |
-/// | usermode | `HOPPER_USERMODE_A` (`0xc661`) | `:2029` | ★ also listed (`:1997`) — **allocates** |
-/// | CE object | `HOPPER_DMA_COPY_A` (`0xc8b5`) | `:2018-2027` (`ENG_CE(0..9)`) | absent — fails |
-///
-/// ## ★★★ Why the first two rows are the reason this is a trait
-///
-/// A Hopper board's class list still carries `AMPERE_CHANNEL_GPFIFO_A` and
-/// `AMPERE_USERMODE_A` as legacy-compatible classes, and RM has a live
-/// `CliGetChannelClassInfo` arm for the former (`ogkm-580:
-/// src/nvidia/src/kernel/gpu/fifo/kernel_channel.c:1588-1594`). Allocating the Ampere
-/// id on Hopper therefore **succeeds**, and the channel simply carries `NVC56F` notifier
-/// geometry on a part whose driver expects `NVC86F`. There is no status code anywhere
-/// that says so. Only `AMPERE_DMA_COPY_B` is genuinely absent from GH100 and fails at
-/// alloc — one loud member out of three.
-///
-/// ## ★ The alloc *shape* is unchanged, which was checked rather than assumed
-///
-/// `HOPPER_USERMODE_A` is the first usermode class to accept alloc parameters
-/// (`NV_HOPPER_USERMODE_A_PARAMS`: `bBar1Mapping`, `bPriv`), and they are **optional**.
-/// Passing none leaves `bBar1Mapping = NV_FALSE`, which selects `pKernelFifo->pRegVF` —
-/// the BAR0 register window — exactly what every earlier usermode class gives
-/// unconditionally (`ogkm-580: src/nvidia/src/kernel/gpu/fifo/usermode_api.c:61-98`). So
-/// the host path's existing "no parameters, map `Uncached`" call is correct here too, and
-/// the profile needs no fourth method to say so.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct Gh100HostClasses;
-
-impl HostClasses for Gh100HostClasses {
-    fn name(&self) -> &'static str {
-        "GH100 host classes"
-    }
-    fn gpfifo_channel(&self) -> ChannelClass {
-        ChannelClass::new(ClassId(nv::HOPPER_CHANNEL_GPFIFO_A))
-    }
-    fn usermode(&self) -> UsermodeClass {
-        UsermodeClass::new(ClassId(nv::HOPPER_USERMODE_A))
-    }
-    fn ce_object(&self) -> CeObjectClass {
-        CeObjectClass::new(ClassId(nv::HOPPER_DMA_COPY_A))
-    }
-
-    fn compute_object(&self) -> Option<ComputeObjectClass> {
-        // ⊘ Same correction as the Ada arm — `clcbc0.h:26` carries `HOPPER_COMPUTE_A = 0xCBC0`.
-        Some(ComputeObjectClass::new(ClassId(nv::HOPPER_COMPUTE_A)))
-    }
+/// ★ The host class profile for THIS die: family set ∩ host list, newest per kind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DerivedHostClasses {
+    family: Family,
+    channel: u32,
+    usermode: u32,
+    ce: u32,
+    compute: Option<u32>,
 }
 
-// ══════════════════════════════════════════════════════════════════════════════════════
-// GB20x — consumer Blackwell. THE ONE PROFILE HERE WITH A HARDWARE MEASUREMENT BEHIND IT
-// ══════════════════════════════════════════════════════════════════════════════════════
-
-/// `BLACKWELL_CHANNEL_GPFIFO_A` (`ogkm-580:
-/// src/common/sdk/nvidia/inc/class/clc96f.h:27`).
-///
-/// ⊘ **Written here rather than taken from `kf_abi::generated::classes`, and that is
-/// a deviation from this module's own rule** — the Ada/Hopper compute arms record that the
-/// fix for a missing id is to GENERATE it, never to type it. `kayfabe-abi`'s generator
-/// input carries no Blackwell row yet and this change may not edit that crate, so the four
-/// ids below are typed **and pinned by an independent oracle instead**:
-/// `crates/kayfabe-chips/tests/host_classes.rs::blackwell_ids_match_the_vendored_capability_table`
-/// looks each one up **by NVIDIA's own name** in `kf_abi::capability`'s vendored
-/// nvproxy table and asserts equality. A fabricated number fails that test, which is the
-/// property the generation rule exists to buy. ★ The proper fix is still to generate them:
-/// add `clc96f.h` / `clc761.h` / `clcab5.h` / `clcec0.h` rows to
-/// `crates/kayfabe-abi/gen/src/main.rs` and re-run the generator, then delete these four
-/// constants.
-const BLACKWELL_CHANNEL_GPFIFO_A: u32 = 0xc96f;
-/// `BLACKWELL_USERMODE_A` (`ogkm-580: src/common/sdk/nvidia/inc/class/clc761.h:27`).
-const BLACKWELL_USERMODE_A: u32 = 0xc761;
-/// `BLACKWELL_DMA_COPY_B` (`ogkm-580: src/common/sdk/nvidia/inc/class/clcab5.h:27`).
-const BLACKWELL_DMA_COPY_B: u32 = 0xcab5;
-/// `BLACKWELL_COMPUTE_B` (`ogkm-580: src/common/sdk/nvidia/inc/class/clcec0.h:27`).
-const BLACKWELL_COMPUTE_B: u32 = 0xcec0;
-
-/// The GB20x (consumer Blackwell) host-class profile — **all four roles differ from
-/// Ampere**, and two of the four are backed by a trace from a real RTX 5090.
-///
-/// | role | class | `g_gpu_class_list.c` (GB202) | measured? |
-/// |---|---|---|---|
-/// | channel | `BLACKWELL_CHANNEL_GPFIFO_A` (`0xc96f`) | `:2845` | ★ **yes** — see below |
-/// | usermode | `BLACKWELL_USERMODE_A` (`0xc761`) | `:2867` | no |
-/// | CE object | `BLACKWELL_DMA_COPY_B` (`0xcab5`) | `:2855-2862` (`ENG_CE(0..7)`) | ★ **yes** — see below |
-/// | compute | `BLACKWELL_COMPUTE_B` (`0xcec0`) | `:2847-2854` (`ENG_GR(0..7)`) | no |
-///
-/// ## ★★★ The measurement, and it is not this project's
-///
-/// The Mode-1 sibling `nvkvm-pv` runs its 28-check suite at **28/28 on an RTX 5090
-/// (GB202, sm_120) under driver 580.178.04**, reproduced twice
-/// (`/workspace/nvkvm-pv/tests/BOOT_MATRIX.md:1050-1070`). Its guest-side `RM_ALLOC` trace
-/// for the last allocation of `cuCtxCreate` reads:
-///
-/// ```text
-/// alloc hClass=0xc96f ap_size=368  status=0x0
-/// alloc hClass=0xcab5 ap_size=8    status=0x0
-/// ```
-///
-/// ⇒ a **real** host RM accepted `0xc96f` as the channel and `0xcab5` as the copy object,
-/// on real Blackwell silicon. That is more than any other profile in this module has.
-///
-/// ⊘ **It is also all it is.** Mode 1 forwards ioctls; it emulates no register aperture,
-/// no GSP and no doorbell window. The 28/28 says nothing about [`crate::gb20x`]'s offsets
-/// or its boot sequence, and the two halves must not be quoted for each other.
-///
-/// ## ⊘ Where this DEPARTS from the module's selection rule, and why
-///
-/// `findDeviceClasses` takes the numerically largest member of each family
-/// (`ogkm-580: src/nvidia/src/kernel/rmapi/nv_gpu_ops.c:8684-8699`). Applied to GB202's
-/// class list that would choose **`BLACKWELL_CHANNEL_GPFIFO_B` (`0xca6f`, `:2846`)**, not
-/// `_A`. This profile chooses `_A` anyway, because `_A` is the id a real 5090's RM
-/// *accepted* and `_B` is an id nothing has ever sent. ★ Measured beats derived; the
-/// divergence is recorded rather than smoothed, and
-/// `tests/host_classes.rs` asserts **both** facts so neither can be lost.
-///
-/// ## ⊘ And where the selection rule simply DOES NOT ANSWER
-///
-/// `isClassCompute` at 580 lists nothing past `HOPPER_COMPUTE_A`
-/// (`ogkm-580: nv_gpu_ops.c:8584-8603`) — no `ADA_COMPUTE_A`, no `BLACKWELL_COMPUTE_*` —
-/// while GB202's class list contains **no** compute class other than `BLACKWELL_COMPUTE_B`.
-/// So on a Blackwell board `findDeviceClasses` resolves `computeClass` to **zero**. The
-/// compute id below therefore comes from the *class list* alone, which is the same source
-/// the Ada arm uses and a strictly weaker instrument than the CE and channel rows.
-///
-/// ## ⚠ The trap this generation already sprang once, in the other tree
-///
-/// `0xc96f` was **allowlisted but unsized** in `nvkvm-pv`: the class was permitted, the
-/// alloc was forwarded, and **0 bytes of parameters** went with it, so the host RM answered
-/// `NV_ERR_INVALID_ARGUMENT` and `cuCtxCreate` surfaced `CUDA_ERROR_INVALID_VALUE` several
-/// layers away with nothing denied and nothing logged
-/// (`/workspace/nvkvm-pv/src/abi/nvgpu.h:66-77`). A second, latent instance sat behind it:
-/// `BLACKWELL_DMA_COPY_A` had been recorded as `0xcbb5`, **an id NVIDIA does not ship**, so
-/// the real classes had no size entry either (`:104-113`).
-///
-/// ⇒ **The sizes are part of the answer, not a follow-up.** For the two roles measured:
-/// the channel takes `NV_CHANNEL_ALLOC_PARAMS` unchanged — **368 bytes** on the 580 ABI,
-/// the same struct and the same size as Turing/Ampere/Hopper — and the copy object takes
-/// `NVB0B5_ALLOCATION_PARAMETERS`, **8 bytes**
-/// (`/workspace/nvkvm-pv/src/guest/nvkvm_main.c:2522-2557`). Blackwell introduces no new
-/// alloc-param struct for either. This trait carries only ids, so the sizes live here as
-/// a doc obligation on whoever wires the host isolate; they are the first thing to check
-/// if a Blackwell alloc returns `0x1f`.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct Gb20xHostClasses;
-
-impl HostClasses for Gb20xHostClasses {
-    fn name(&self) -> &'static str {
-        "GB20x host classes (GB202)"
-    }
-    fn gpfifo_channel(&self) -> ChannelClass {
-        ChannelClass::new(ClassId(BLACKWELL_CHANNEL_GPFIFO_A))
-    }
-    fn usermode(&self) -> UsermodeClass {
-        UsermodeClass::new(ClassId(BLACKWELL_USERMODE_A))
-    }
-    fn ce_object(&self) -> CeObjectClass {
-        CeObjectClass::new(ClassId(BLACKWELL_DMA_COPY_B))
-    }
-
-    fn compute_object(&self) -> Option<ComputeObjectClass> {
-        // ⊘ The ONLY compute class GB202's own list carries (`:2847-2854`), and NOT the one
-        // `findDeviceClasses` would return — that rule answers zero here, see the type docs.
-        Some(ComputeObjectClass::new(ClassId(BLACKWELL_COMPUTE_B)))
-    }
-}
-
-
-kf_util::assert_send_sync!(
-    Ga10xHostClasses,
-    Ad10xHostClasses,
-    Gh100HostClasses,
-    Gb20xHostClasses
-);
-
-#[cfg(test)]
-mod compute_object_tests {
-    use super::*;
-
-    /// ★★★ The pinned generation MUST declare a compute object, or `--w392` P3 cannot run.
+impl DerivedHostClasses {
+    /// Choose for `family` given the host's own class list.
     ///
-    /// ⊘ This is not a tautology over the constant: it asserts that the generation the build
-    /// actually pins (`pinned_host_classes`) is one we have a measured compute class for. A
-    /// future re-pin to a generation whose class is unmeasured would silently turn P3 into
-    /// `Unexercised` — a rung that stops testing and still prints a state.
-    #[test]
-    fn every_family_declares_a_compute_object() {
-        for f in crate::Family::ALL {
-            assert!(
-                f.host_classes().compute_object().is_some(),
-                "{f:?} must name a compute object: v3 has no pinned generation, so every \
-                 family row the host can report must carry one"
-            );
+    /// # Errors
+    /// [`HostLacksKind`] when the host lists no class of a REQUIRED kind (channel, usermode, CE).
+    /// Compute is optional (a CE-only host still runs the copy planes).
+    pub fn choose(family: Family, host: &[u32]) -> Result<DerivedHostClasses, HostLacksKind> {
+        let set = classes_for(family);
+        let newest = |k: Kind| set.of_kind(k).iter().copied().filter(|c| host.contains(c)).max();
+        let need = |k: Kind| newest(k).ok_or(HostLacksKind { family, kind: k });
+        Ok(DerivedHostClasses {
+            family,
+            channel: need(Kind::ChannelGpfifo)?,
+            usermode: need(Kind::Usermode)?,
+            ce: need(Kind::DmaCopy)?,
+            compute: newest(Kind::Compute),
+        })
+    }
+}
+
+impl HostClasses for DerivedHostClasses {
+    fn name(&self) -> &'static str {
+        match self.family {
+            Family::Turing => "Turing (derived: family set ∩ host class list)",
+            Family::Ampere => "Ampere (derived: family set ∩ host class list)",
+            Family::Ada => "Ada (derived: family set ∩ host class list)",
+            Family::Hopper => "Hopper (derived: family set ∩ host class list)",
+            Family::Blackwell => "Blackwell (derived: family set ∩ host class list)",
         }
     }
-
-    /// ⊘ An UNMEASURED generation must answer `None` — never a guessed id.
-    ///
-    /// ⚠ The failure this guards is specific: inventing a plausible class id for Ada or
-    /// Hopper would make the refusal disappear and replace it with `NV_ERR_INVALID_CLASS`
-    /// from a real board, or worse, silent acceptance of the wrong object. *"An empty
-    /// capture is evidence of NOTHING, not evidence of emptiness"* — and a fabricated
-    /// value is worse than an empty one, because it reads as measured.
-    #[test]
-    fn every_generation_answers_a_class_it_can_cite() {
-        // ⊘⊘ THIS TEST USED TO ASSERT THE OPPOSITE, and both versions were right in turn.
-        //
-        // It pinned `None` for Ada and Hopper on the ground that *"this tree has no verified
-        // compute class"* for them. That was true of the GENERATED table and never true of
-        // the vendored headers — `clc9c0.h:27` and `clcbc0.h:26` have carried the values all
-        // along. w568 generated them, so the premise the assertion rested on is gone.
-        //
-        // ⚠ Rewritten rather than deleted: the property worth keeping is not *"these two
-        // answer None"* but *"nobody answers with a number that has no source"*. So it now
-        // pins that every generation answers a class equal to its own generated constant —
-        // which a fabricated value could not satisfy.
-        assert_eq!(
-            Ad10xHostClasses
-                .compute_object()
-                .map(|c| c.compute_object_id().0),
-            Some(nv::ADA_COMPUTE_A),
-            "Ada must answer its own generated constant"
-        );
-        assert_eq!(
-            Gh100HostClasses
-                .compute_object()
-                .map(|c| c.compute_object_id().0),
-            Some(nv::HOPPER_COMPUTE_A),
-            "Hopper must answer its own generated constant"
-        );
-        // ⊘ Blackwell's constant is NOT generated (see `BLACKWELL_COMPUTE_B`'s docs), so
-        // this arm cannot compare against `nv::`. Its value oracle is the vendored
-        // capability table, in `tests/host_classes.rs`; here it only has to be present,
-        // and the distinctness sweep below has to see it.
-        assert!(
-            Gb20xHostClasses.compute_object().is_some(),
-            "Blackwell must declare a compute object: GB202's class list carries exactly \
-             one (`BLACKWELL_COMPUTE_B`), so `None` here would be an omission, not a refusal"
-        );
-        // ★ And the three must be DISTINCT — one generation accidentally answering another's
-        // class is the failure a per-generation table exists to prevent, and it would pass
-        // every assertion above if they were all wired to the same constant.
-        let all = [
-            Ga10xHostClasses
-                .compute_object()
-                .map(|c| c.compute_object_id().0),
-            Ad10xHostClasses
-                .compute_object()
-                .map(|c| c.compute_object_id().0),
-            Gh100HostClasses
-                .compute_object()
-                .map(|c| c.compute_object_id().0),
-            Gb20xHostClasses
-                .compute_object()
-                .map(|c| c.compute_object_id().0),
-        ];
-        let mut seen = std::collections::BTreeSet::new();
-        for c in all {
-            let c = c.expect("every generation now declares a compute object");
-            assert!(
-                seen.insert(c),
-                "two generations answer the same compute class {c:#x}"
-            );
-        }
+    fn gpfifo_channel(&self) -> ChannelClass {
+        ChannelClass::new(ClassId(self.channel))
     }
-
-    /// ★ Compute and copy are DIFFERENT ENGINES, and the types must not let them merge.
-    #[test]
-    fn the_compute_object_is_not_the_copy_object() {
-        for f in crate::Family::ALL {
-        let hc = f.host_classes();
-        assert_ne!(
-            hc.compute_object()
-                .expect("every family declares one")
-                .compute_object_id(),
-            hc.ce_object().ce_object_id(),
-            "a compute object and a copy object are different engines; equal ids would mean \
-             one of the two tables is wrong"
-        );
-        }
+    fn usermode(&self) -> UsermodeClass {
+        UsermodeClass::new(ClassId(self.usermode))
+    }
+    fn ce_object(&self) -> CeObjectClass {
+        CeObjectClass::new(ClassId(self.ce))
+    }
+    fn compute_object(&self) -> Option<ComputeObjectClass> {
+        self.compute.map(|c| ComputeObjectClass::new(ClassId(c)))
     }
 }

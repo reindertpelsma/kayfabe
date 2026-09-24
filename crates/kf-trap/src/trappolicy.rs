@@ -181,7 +181,7 @@ pub fn trap_regions(doorbell: DoorbellPlacement, bar0_bytes: u64) -> Vec<TrapReg
     // ⊘ BAR2 contributes no region, in any configuration.
     debug_assert!(v.iter().all(|r| {
         (r.base..r.base + r.len).step_by(0x1000).all(|o| may_trap_write(r.bar, o, doorbell))
-            && !may_trap_read(r.bar, r.base, kf_chip::Family::Ga10x)
+            && !may_trap_read(r.bar, r.base, kf_chip::Family::Ampere)
     }));
     v
 }
@@ -191,7 +191,7 @@ pub fn doorbell_for(family: kf_chip::Family) -> DoorbellPlacement {
     use kf_chip::Family::*;
     match family {
         // ⊘ §5: "generated per die/arch; Hopper+ maps it over BAR1".
-        Gh100 | Gb20x => DoorbellPlacement::Bar1 { page_base: 0x9_0000 },
-        Ga10x | Ad10x => DoorbellPlacement::Bar0 { offset: 0x90 },
+        Hopper | Blackwell => DoorbellPlacement::Bar1 { page_base: 0x9_0000 },
+        Turing | Ampere | Ada => DoorbellPlacement::Bar0 { offset: 0x90 },
     }
 }

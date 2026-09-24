@@ -18,7 +18,6 @@ use kf_chan::ring::{GuestMemory, TranslatedRing};
 use kf_chan::translated::{Target, Window};
 use kf_chan::completions::Completions;
 use kf_chan::worker::{COMPLETIONS_TAG, Serve, WORKER_EFD_TAG, WorkerPlane, WorkerStats};
-use kf_chip::Family;
 use kf_cuda::abi::kf_format_ver2;
 use kf_cuda::walk::{WalkCfg, WalkKernel};
 use kf_harness::Ledger as Checks;
@@ -225,8 +224,7 @@ impl Serve for Channels<'_, '_> {
 #[allow(clippy::too_many_lines)]
 fn run(l: &mut Checks) -> Result<(), String> {
     let dev = DevDir::open(c"/dev").map_err(|e| format!("open /dev: {e:?}"))?;
-    let pick = |a: u32, i: u32| Family::from_arch(a, i).ok().map(Family::host_classes);
-    let rm = HostRm::open(&dev, kf_arch::ids::GpuId(0), &pick).map_err(|e| e.to_string())?;
+    let rm = HostRm::open(&dev, kf_arch::ids::GpuId(0), &kf_chip::choose_host_classes).map_err(|e| e.to_string())?;
     let ce_class = rm.ce_class_id();
     let res = rm.reserve_gpga(STORE_BYTES).map_err(|e| format!("reserve: {e:?}"))?;
     let store = res.handle;

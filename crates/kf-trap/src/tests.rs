@@ -569,10 +569,10 @@ fn the_scan_start_rotates_so_no_group_holds_priority() {
 fn the_timer_hal_is_per_family_and_only_gv100_has_a_priv_level_mask() {
     use kf_chip::Family;
     use timer::*;
-    assert_eq!(timer_regs_for(Family::Ga10x), TIMER_GV100);
-    assert_eq!(timer_regs_for(Family::Ad10x), TIMER_GV100);
-    assert_eq!(timer_regs_for(Family::Gh100), TIMER_GH100);
-    assert_eq!(timer_regs_for(Family::Gb20x), TIMER_GH100);
+    assert_eq!(timer_regs_for(Family::Ampere), TIMER_GV100);
+    assert_eq!(timer_regs_for(Family::Ada), TIMER_GV100);
+    assert_eq!(timer_regs_for(Family::Hopper), TIMER_GH100);
+    assert_eq!(timer_regs_for(Family::Blackwell), TIMER_GH100);
     // The PLM shadow: bit 4 = WRITE_PROTECTION_LEVEL0_ENABLE, so ogkm takes its `if` branch and
     // never reaches the NV_ASSERT(0) in the else (`timer_gv100.c:56,77-81`).
     assert_eq!(TIMER_GV100.plm_shadow(), Some((0x9430, 1 << 4)));

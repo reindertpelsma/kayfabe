@@ -18,7 +18,6 @@ use kf_abi::submit::{SET_OBJECT, ce, gp_entry, method_header_inc};
 use kf_chan::host::{GuestUserd, HostRing, Publisher, Pumped, TranslatedChannel};
 use kf_chan::ring::{GuestMemory, RingRefusal, TranslatedRing};
 use kf_chan::translated::{Refusal, Target, Window};
-use kf_chip::Family;
 use kf_cuda::abi::kf_format_ver2;
 use kf_cuda::walk::{WalkCfg, WalkKernel};
 use kf_harness::Ledger as Checks;
@@ -185,8 +184,7 @@ fn is_ce(c: u32) -> bool {
 #[allow(clippy::too_many_lines)]
 fn run(l: &mut Checks) -> Result<(), String> {
     let dev = DevDir::open(c"/dev").map_err(|e| format!("open /dev: {e:?}"))?;
-    let pick = |a: u32, i: u32| Family::from_arch(a, i).ok().map(Family::host_classes);
-    let rm = HostRm::open(&dev, kf_arch::ids::GpuId(0), &pick).map_err(|e| e.to_string())?;
+    let rm = HostRm::open(&dev, kf_arch::ids::GpuId(0), &kf_chip::choose_host_classes).map_err(|e| e.to_string())?;
     let ce_class = rm.ce_class_id();
     let res = rm.reserve_gpga(STORE_BYTES).map_err(|e| format!("reserve: {e:?}"))?;
     let store = res.handle;

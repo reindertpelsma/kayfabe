@@ -11,11 +11,11 @@ use kf_arch::gsp::GspModel;
 /// build its model at the same size to be comparable.
 pub const CAPTURE_FB_SIZE_MB: u64 = 12288;
 
-/// The GA10x GSP model at the capture's size.
+/// The Ampere (falcon) GSP model at the capture's size — the capture is of a GA106.
 ///
 /// # Panics
 /// Never: GA10x's row is built (`kf_chip::Family::gsp_model`).
 #[must_use]
 pub fn gsp_model() -> Box<dyn GspModel> {
-    kf_chip::Family::Ga10x.gsp_model(CAPTURE_FB_SIZE_MB).expect("the GA10x row is built")
+    kf_chip::Family::Ampere.gsp_model(CAPTURE_FB_SIZE_MB).expect("the Ampere model is built")
 }

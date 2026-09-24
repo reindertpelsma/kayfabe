@@ -141,7 +141,7 @@ const SEC2_BOOTER_UNLOAD: u32 = 0xff;
 /// register belongs to the GSP plane only if its served value is a function of the boot
 /// FSM's state, and this one is a devinit constant. It is recorded here because it is the
 /// *input* to the WPR2 derivation below, and whichever plane serves it must answer the SAME
-/// size the model was built with ([`Ga10xGspModel::with_fb_size_mb`]) — never a second literal.
+/// size the model was built with ([`FalconGspModel::with_fb_size_mb`]) — never a second literal.
 ///
 /// ★ Measured 2026-07-31: the C's `cap1_coldboot_hermetic` capture contains **exactly 3**
 /// reads of this address. Teaching this model to decode it moves every positional golden
@@ -248,7 +248,7 @@ pub const RMARGS_ID: u64 = 0x0000_524d_4152_4753;
 /// returning a process-wide singleton is what keeps it that way: two `GpuId`s can hold
 /// two models selecting two different sequences without anything in this crate changing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Ga10xGspModel {
+pub struct FalconGspModel {
     boot: FalconSecureBooterBoot,
     /// ★★★★★ **The advertised framebuffer size this model answers WPR2 for — w696h.**
     ///
@@ -261,7 +261,7 @@ pub struct Ga10xGspModel {
     fb_size_mb: u64,
 }
 
-impl Ga10xGspModel {
+impl FalconGspModel {
     /// The model, answering WPR2 for a **given** advertised framebuffer size.
     ///
     /// ★ `[measured w696g]` a guest booted against 6144 MiB — half the shipped 12288 and the
@@ -269,8 +269,8 @@ impl Ga10xGspModel {
     /// operator's `vidmem` argument reach the two registers that would otherwise keep
     /// answering the compile-time constant.
     #[must_use]
-    pub fn with_fb_size_mb(fb_size_mb: u64) -> Ga10xGspModel {
-        Ga10xGspModel {
+    pub fn with_fb_size_mb(fb_size_mb: u64) -> FalconGspModel {
+        FalconGspModel {
             boot: FalconSecureBooterBoot::new(),
             fb_size_mb,
         }
@@ -309,7 +309,7 @@ impl Ga10xGspModel {
     }
 }
 
-impl GspModel for Ga10xGspModel {
+impl GspModel for FalconGspModel {
     fn decode_reg(&self, bar: u8, off: u64) -> Option<GspReg> {
         if bar != 0 {
             return None;
@@ -399,7 +399,7 @@ impl GspModel for Ga10xGspModel {
                     0
                 }
             }
-            // Derived from THIS MODEL'S size (`Ga10xGspModel::fb_size_mb`) — there is no other.
+            // Derived from THIS MODEL'S size (`FalconGspModel::fb_size_mb`) — there is no other.
             GspReg::Wpr2AddrLo => {
                 if obs.wpr2_up {
                     wpr2_reg(frts_offset_for(self.fb_size_mb))

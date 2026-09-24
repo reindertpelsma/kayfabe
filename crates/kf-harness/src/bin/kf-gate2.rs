@@ -6,7 +6,6 @@
 //! VA space whose translations are the guest's. Proved with a REAL copy engine copying through guest
 //! VAs, then again after the guest REMAPS a range. No CPU read of any page table anywhere.
 
-use kf_chip::Family;
 use kf_cuda::abi::kf_format_ver2;
 use kf_cuda::walk::{WalkCfg, WalkKernel};
 use kf_harness::{CeRig, Ledger as Checks, tables::Tree};
@@ -41,8 +40,7 @@ fn pattern(seed: u32) -> Vec<u8> {
 
 fn run(l: &mut Checks) -> Result<(), String> {
     let dev = DevDir::open(c"/dev").map_err(|e| format!("open /dev: {e:?}"))?;
-    let pick = |a: u32, i: u32| Family::from_arch(a, i).ok().map(Family::host_classes);
-    let rm = HostRm::open(&dev, kf_arch::ids::GpuId(0), &pick).map_err(|e| e.to_string())?;
+    let rm = HostRm::open(&dev, kf_arch::ids::GpuId(0), &kf_chip::choose_host_classes).map_err(|e| e.to_string())?;
     let res = rm.reserve_gpga(STORE_BYTES).map_err(|e| format!("reserve: {e:?}"))?;
     let store = res.handle;
     let fd = rm.export_to_new_fd(store).map_err(|e| format!("export: {e:?}"))?;

@@ -136,8 +136,8 @@ pub const TIMER_GB10B: TimerRegs = TimerRegs {
 pub fn timer_regs_for(f: kf_chip::Family) -> TimerRegs {
     use kf_chip::Family::*;
     match f {
-        Ga10x | Ad10x => TIMER_GV100,
-        Gh100 | Gb20x => TIMER_GH100,
+        Turing | Ampere | Ada => TIMER_GV100,
+        Hopper | Blackwell => TIMER_GH100,
     }
 }
 impl TimerRegs {

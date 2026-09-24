@@ -102,16 +102,16 @@ pub fn holes_for(family: Family) -> &'static [(u64, &'static str)] {
     match family {
         // ⊘ GSP boots here via the sysmem libos message queue, never through falcon PIO. GSP's own
         // EMEM port at 0x110ac4 is CrashCat-only and gated shut by serving FALCON_DEBUGINFO = 0.
-        Family::Ga10x | Family::Ad10x => &[],
+        Family::Turing | Family::Ampere | Family::Ada => &[],
 
         // FSP comes up first out of chip reset and RM asks IT to boot GSP, over MCTP/NVDM packets
         // carried in FSP's EMEM. `_kfspReadPacket_GH100` reads NV_PFSP_EMEMD in a burst and then
         // asserts EMEMC advanced by exactly packetSize/4.
-        Family::Gh100 => &[(0x008F_2000, "NV_PFSP_EMEMD 0x8F2ac4 — FSP boot handshake, AINCR burst")],
+        Family::Hopper => &[(0x008F_2000, "NV_PFSP_EMEMD 0x8F2ac4 — FSP boot handshake, AINCR burst")],
 
         // ⚠ Blackwell is split by die group: discrete parts use FSP like Hopper; the integrated
         // GB10B/GB20B parts have no FSP and put the identical protocol behind SEC2.
-        Family::Gb20x => &[
+        Family::Blackwell => &[
             (0x008F_2000, "NV_PFSP_EMEMD 0x8F2ac4 — FSP boot handshake (discrete)"),
             (0x0084_0000, "NV_PSEC_EMEMD 0x840ac4 — SEC2 boot handshake (integrated GB10B/GB20B)"),
         ],

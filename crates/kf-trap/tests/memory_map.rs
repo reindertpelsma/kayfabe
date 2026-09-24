@@ -8,7 +8,7 @@ use kf_trap::trappolicy::{doorbell_for, PRAMIN_BASE, PRAMIN_LEN};
 use kf_trap::vmm::Bar;
 
 /// ⊘ v3's `kf_chip::Family` has no Turing row yet (the old `classgen::Family` did) — every row it has.
-const FAMILIES: [Family; 4] = Family::ALL;
+const FAMILIES: [Family; 5] = Family::ALL;
 
 fn map_for(f: Family) -> MemoryMap {
     memory_map(f, doorbell_for(f), 16 << 20, 256 << 20, 32 << 20)
@@ -37,7 +37,7 @@ fn the_current_product_target_has_no_read_exits_at_all() {
     // ★★★ The headline, asserted rather than asserted-in-prose: GSP Turing/Ampere/Ada boots with
     // ZERO disposition-D pages. This is what THE_CONSTRAINTS.md:28 measured at w708-w710
     // (raw client + cup3 + LLM, all TRAP_FILLS=0) and what the source review re-derived.
-    for f in [Family::Ga10x, Family::Ad10x] {
+    for f in [Family::Turing, Family::Ampere, Family::Ada] {
         let m = map_for(f);
         assert_eq!(m.read_exit_pages(), 0, "{f:?} grew a read exit: {:?}", m.read_exit_regions());
         assert!(holes_for(f).is_empty(), "{f:?}");
@@ -49,10 +49,10 @@ fn hopper_and_blackwell_have_a_read_exit_and_each_one_is_NAMED() {
     // ⊘ The exception §52 was forced to concede. It is bounded, and the bound is what matters:
     // one page per family (two for Blackwell, which is split by die group), each boot-only.
     // ⚠ Contradicted by: an unnamed hole, or a hole count that grows without a source citation.
-    assert_eq!(map_for(Family::Gh100).read_exit_pages(), 1);
-    assert_eq!(map_for(Family::Gb20x).read_exit_pages(), 2);
+    assert_eq!(map_for(Family::Hopper).read_exit_pages(), 1);
+    assert_eq!(map_for(Family::Blackwell).read_exit_pages(), 2);
 
-    for f in [Family::Gh100, Family::Gb20x] {
+    for f in [Family::Hopper, Family::Blackwell] {
         for r in map_for(f).read_exit_regions() {
             let Disposition::Hole { why } = r.how else { unreachable!() };
             // A hole must say WHICH register dragged the page in — the page costs 4 KiB of
@@ -70,7 +70,7 @@ fn pramin_is_plain_ram_and_the_window_latch_that_moves_it_is_not() {
     // register that re-points it (NV_PBUS_BAR0_WINDOW, 0x1700) lives OUTSIDE PRAMIN and is
     // therefore a plain B register we already trap. The trapped write does the mmap re-point
     // synchronously; the reads that follow hit correct memory with no exit.
-    let m = map_for(Family::Ga10x);
+    let m = map_for(Family::Ampere);
     for off in [PRAMIN_BASE, PRAMIN_BASE + 0x1000, PRAMIN_BASE + PRAMIN_LEN - 4] {
         assert_eq!(m.disposition_at(Bar(0), off), Some(Disposition::PlainRam), "{off:#x}");
     }
@@ -85,7 +85,7 @@ fn the_counter_page_is_a_host_mapping_and_it_is_the_only_one() {
     // ⊘ §53 disposition C. The usermode/VF page is the only BAR0 region RM maps to an
     // unprivileged host process (that is WHY it is exposed — it holds the doorbell), so it is the
     // only region we can alias to live host values instead of authoring.
-    let m = map_for(Family::Ga10x);
+    let m = map_for(Family::Ampere);
     assert_eq!(m.disposition_at(Bar(0), VF_USERMODE_PAGE), Some(Disposition::HostPassthrough));
     assert_eq!(m.disposition_at(Bar(0), VF_USERMODE_PAGE + 0x80), Some(Disposition::HostPassthrough),
         "VF_TIME_0 must be inside it");
@@ -131,7 +131,7 @@ fn known_positive_the_tiling_check_can_actually_fail() {
     // (an 807-file sweep blind by construction; a param readback; a register count that missed
     // everything declared relative to a base). ⇒ Before trusting `tiles()` returning Ok, prove it
     // returns Err on a map that genuinely has a gap.
-    let mut m = map_for(Family::Ga10x);
+    let mut m = map_for(Family::Ampere);
     assert!(m.tiles().is_ok());
 
     let gapped = {
@@ -223,7 +223,7 @@ fn a_hole_is_installed_by_NOT_installing_it() {
     let probe = bar_base(kf_trap::vmm::Bar(0)).unwrap() + 0x008F_2000;
 
     let vmm = RecordingVmm::default();
-    let m = map_for(Family::Gh100);
+    let m = map_for(Family::Hopper);
     install(&m, &vmm, bar_base, |r| Some(HostMapping(r.base))).unwrap();
     let covered = |v: &RecordingVmm, a: u64| {
         v.slots.lock().unwrap().iter().any(|(g, l, _)| (*g..*g + *l).contains(&a))
@@ -233,7 +233,7 @@ fn a_hole_is_installed_by_NOT_installing_it() {
     assert!(covered(&vmm, probe + PAGE), "…and the page after it");
 
     let vmm2 = RecordingVmm::default();
-    install(&map_for(Family::Ga10x), &vmm2, bar_base, |r| Some(HostMapping(r.base))).unwrap();
+    install(&map_for(Family::Ampere), &vmm2, bar_base, |r| Some(HostMapping(r.base))).unwrap();
     assert!(covered(&vmm2, probe), "⊘ on Ampere 0x8F2000 is ordinary B and MUST be backed");
 }
 
@@ -241,7 +241,7 @@ fn a_hole_is_installed_by_NOT_installing_it() {
 fn install_refuses_by_name_when_a_region_has_no_backing() {
     // ⊘ `[fable w825]` install() used to `continue` here — silently leaving a hole, which by its
     // own doc is an accidental read exit. ★ KNOWN-POSITIVE: withhold backing for PRAMIN only.
-    let m = map_for(Family::Ga10x);
+    let m = map_for(Family::Ampere);
     let vmm = RecordingVmm::default();
     let r = install(&m, &vmm, bar_base, |r| {
         if r.bar == Bar(0) && r.base == PRAMIN_BASE { None } else { Some(HostMapping(r.base)) }

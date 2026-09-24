@@ -18,7 +18,6 @@
 
 use kf_abi::submit::{ENGINE_TYPE_GRAPHICS, SET_OBJECT, USERD_GP_GET, USERD_GP_PUT, gp_entry, method_header_inc};
 use kf_chan::passthrough::{GuestChannel, UserdAt, birth};
-use kf_chip::Family;
 use kf_cuda::abi::kf_format_ver2;
 use kf_cuda::walk::{WalkCfg, WalkKernel};
 use kf_harness::Ledger as Checks;
@@ -79,8 +78,7 @@ fn bytes(w: &[u32]) -> Vec<u8> {
 #[allow(clippy::too_many_lines)]
 fn run(l: &mut Checks) -> Result<(), String> {
     let dev = DevDir::open(c"/dev").map_err(|e| format!("open /dev: {e:?}"))?;
-    let pick = |a: u32, i: u32| Family::from_arch(a, i).ok().map(Family::host_classes);
-    let rm = HostRm::open(&dev, kf_arch::ids::GpuId(0), &pick).map_err(|e| e.to_string())?;
+    let rm = HostRm::open(&dev, kf_arch::ids::GpuId(0), &kf_chip::choose_host_classes).map_err(|e| e.to_string())?;
     let gr_class = rm.compute_class_id().ok_or("this family declares no compute class")?;
     let res = rm.reserve_gpga(STORE_BYTES).map_err(|e| format!("reserve: {e:?}"))?;
     let store = res.handle;

@@ -13,7 +13,6 @@
 //! VA space with nothing stale to invalidate, so they would pass with the defer bit ignored. Gate 2's
 //! remap (a warm TLB, then deferred unmap+map, then one invalidate) is the arm that can fail.
 
-use kf_chip::Family;
 use kf_harness::{CeRig, Ledger, Trigger};
 use kf_host::{HostRm, event::notifier_ce};
 use kf_linux_raw::{CachePolicy, DevDir, HostOffset};
@@ -34,8 +33,7 @@ fn main() {
 
 fn run(l: &mut Ledger) -> Result<(), String> {
     let dev = DevDir::open(c"/dev").map_err(|e| format!("open /dev: {e:?}"))?;
-    let pick = |a: u32, i: u32| Family::from_arch(a, i).ok().map(Family::host_classes);
-    let rm = HostRm::open(&dev, kf_arch::ids::GpuId(0), &pick).map_err(|e| e.to_string())?;
+    let rm = HostRm::open(&dev, kf_arch::ids::GpuId(0), &kf_chip::choose_host_classes).map_err(|e| e.to_string())?;
     l.measure("session", format!("driver {}", rm.driver_version()));
 
     let space = rm.alloc_vaspace().map_err(|e| format!("vaspace: {e:?}"))?;

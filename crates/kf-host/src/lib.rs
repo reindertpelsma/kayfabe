@@ -305,7 +305,7 @@ pub struct HostRm {
     armed: Mutex<std::collections::BTreeSet<u32>>,
     cpu_maps: std::sync::atomic::AtomicU64,
     usermode: Result<UsermodeWindow, RmError>,
-    classes: &'static dyn HostClasses,
+    classes: Box<dyn HostClasses>,
 }
 
 impl HostRm {
@@ -317,13 +317,13 @@ impl HostRm {
     pub fn open(
         dev: &DevDir,
         gpu: GpuId,
-        classes_for: &dyn Fn(u32, u32) -> Option<&'static dyn HostClasses>,
+        classes_for: &dyn Fn(u32, u32, &[u32]) -> Result<Box<dyn HostClasses>, String>,
     ) -> Result<Self, BringUpError> {
         // ⊘ v3: no pinned generation. The session opens with a placeholder class profile only
         // long enough to ask the HOST its architecture (`MC_GET_ARCH_INFO`, NON_PRIVILEGED);
         // `classes_for` (the family row, `kf-chip::Family`) then chooses. No class id is used
         // before the choice: device/subdevice classes are generation-invariant.
-        let classes: &'static dyn HostClasses = &UnchosenClasses;
+        let classes: Box<dyn HostClasses> = Box::new(UnchosenClasses);
         // R0/R1 — the two nodes, by name, relative to the granted directory. The naming is
         // the C's `dev_id_to_path`: the control node is the literal `nvidiactl`, NOT
         // `nvidia` with an index (`C: src/stub/nvkvm_stub.c:1544-1563`).
@@ -442,11 +442,24 @@ impl HostRm {
         )?;
         let w = |o: usize| u32::from_le_bytes([arch[o], arch[o + 1], arch[o + 2], arch[o + 3]]);
         let (architecture, implementation) = (w(0), w(4));
-        let classes = classes_for(architecture, implementation).ok_or_else(|| BringUpError {
-            rung: "R6c family row",
+        // ★ The host's OWN class list (`NV0080_CTRL_CMD_GPU_GET_CLASSLIST_V2`, NON_PRIVILEGED):
+        // the chooser intersects it with the family's generated set, so the classes we allocate
+        // are ones THIS die supports (GA100 `_A` vs GA10x `_B`; GB100 vs GB202) — derived, never
+        // a hand-picked per-family profile.
+        let mut list = vec![0u8; 4 + 4 * 200];
+        rung(
+            "R6c GPU_GET_CLASSLIST_V2",
+            conn.raw_control(conn.device, 0x0080_0292, &mut list),
+        )?;
+        let n = (u32::from_le_bytes([list[0], list[1], list[2], list[3]]) as usize).min(200);
+        let host_classes: Vec<u32> = (0..n)
+            .map(|i| u32::from_le_bytes([list[4 + 4 * i], list[5 + 4 * i], list[6 + 4 * i], list[7 + 4 * i]]))
+            .collect();
+        let classes = classes_for(architecture, implementation, &host_classes).map_err(|detail| BringUpError {
+            rung: "R6d family row",
             detail: format!(
-                "no family row for architecture {architecture:#x} implementation \
-                 {implementation:#x} — refused by name, never a nearest guess"
+                "architecture {architecture:#x} implementation {implementation:#x}: {detail} — \
+                 refused by name, never a nearest guess"
             ),
         })?;
         let conn = HostRm { classes, ..conn };
