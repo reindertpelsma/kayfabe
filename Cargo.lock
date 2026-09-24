@@ -525,6 +525,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "kf-rm"
+version = "0.1.0"
+dependencies = [
+ "kf-abi",
+ "kf-gsp",
+ "kf-util",
+]
+
+[[package]]
 name = "kf-trap"
 version = "0.1.0"
 dependencies = [

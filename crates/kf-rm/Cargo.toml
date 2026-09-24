@@ -1,0 +1,14 @@
+[package]
+name = "kf-rm"
+description = "v3 emulated-GSP RM: RPC answers (static info, init tables, sys info), the object graph, host-fact controls. Built on BoardFacts, never a captured per-die row."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+kf-abi.workspace = true
+kf-util.workspace = true
+kf-gsp.workspace = true
+
+[lints]
+workspace = true
