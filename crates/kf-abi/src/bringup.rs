@@ -573,6 +573,11 @@ pub const NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE: u32 = 1 << 15;
 /// was already walked and cached. Nothing in the forwarding plane sets it.
 pub const NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE: u32 = 1 << 31;
 
+/// `NVOS47_FLAGS_DEFER_TLB_INVALIDATION_TRUE` — field `0:0`, value 1, on the UNMAP escape
+/// (`ogkm-580: src/common/sdk/nvidia/inc/nvos.h:2190-2192`). ⚠ A different bit from the map's
+/// `31:31`: the two escapes name the same idea at different positions.
+pub const NVOS47_FLAGS_DEFER_TLB_INVALIDATION_TRUE: u32 = 1;
+
 /// ★★ `NVOS46_FLAGS_PAGE_SIZE_4KB` — field `11:8`, value 1
 /// (`ogkm-580: src/common/sdk/nvidia/inc/nvos.h:2036-2038`), i.e. `0x0000_0100`.
 ///

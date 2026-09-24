@@ -9,6 +9,11 @@
 
 #![allow(clippy::too_many_arguments)]
 
+pub mod channel;
+pub mod event;
+pub use event::{EventFd, HostEvent};
+pub use channel::{Channel, RingSpec, VaSpace};
+
 use kf_abi::bringup::{
     NV_ESC_CHECK_VERSION_STR, NV_ESC_REGISTER_FD, NV_ESC_RM_ALLOC_MEMORY, NV_IOCTL_MAGIC,
     NV01_MEMORY_SYSTEM_OS_DESCRIPTOR, NV01_MEMORY_VIRTUAL, NV20_SUBDEVICE_0,
@@ -927,13 +932,27 @@ impl HostRm {
 
     /// One `NV_ESC_RM_UNMAP_MEMORY_DMA`, undoing a [`HostRm::raw_map_dma`].
     pub fn raw_unmap_dma(&self, h_dma: u32, gpu_va: u64) -> Result<(), RmError> {
+        self.raw_unmap_dma_flags(h_dma, gpu_va, 0)
+    }
+
+    /// `NV_ESC_RM_UNMAP_MEMORY_DMA` with explicit `NVOS47` flags — the deferred-TLB unmap
+    /// the batched reconcile needs (one [`HostRm::invalidate_tlb`] after the batch).
+    ///
+    /// # Errors
+    /// The host's status.
+    pub fn raw_unmap_dma_flags(
+        &self,
+        h_dma: u32,
+        gpu_va: u64,
+        flags: u32,
+    ) -> Result<(), RmError> {
         let mut arg = [0u8; Nvos47Parameters::SIZE];
         Nvos47Parameters {
             h_client: self.client.raw(),
             h_device: self.device,
             h_dma,
             h_memory: 0,
-            flags: 0,
+            flags,
             dma_offset: gpu_va,
             size: 0,
             status: 0,
