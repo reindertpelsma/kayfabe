@@ -293,6 +293,13 @@ pub struct Vas {
     /// failure mode is a table that is correct immediately after the control and empty a
     /// moment later, which reads as a race and is not one.
     pub promote_bound: BTreeSet<u64>,
+    /// ★★★★★ w826 — **what we, as server RM, were asked to map**: every range a
+    /// `GPU_PROMOTE_CTX` bound, `va -> (len, phys, aperture)`. A record of OUR actions (v3 §4.4:
+    /// the server-reserved window is ours to write), not a mirror of the guest's tables — the
+    /// guest's tables never contain these, so the in-place walk cannot see them.
+    /// `[measured w826 s3]` without it every GR context buffer went unmapped once the table
+    /// publishers were removed, and `cuCtxCreate` failed 719.
+    pub server_rows: std::collections::BTreeMap<u64, (u64, u64, kayfabe_arch::Aperture)>,
     /// ★★★★★ §16.48 — **the two-phase promote join's parked halves**, keyed by
     /// `NV2080_CTRL_GPU_PROMOTE_CTX_BUFFER_ID_*`.
     ///
@@ -642,6 +649,7 @@ impl Vas {
             guest_ram_pins: BTreeMap::new(),
             rpc_bound: BTreeSet::new(),
             promote_bound: BTreeSet::new(),
+            server_rows: std::collections::BTreeMap::new(),
             promote_halves: BTreeMap::new(),
             guest_invalidates: 0,
             sweep: PtSweepState::default(),

@@ -1213,6 +1213,7 @@ pub fn apply_promote_ctx(
                 len: r.len,
             })?;
         vas.promote_bound.insert(r.va.0);
+        vas.server_rows.insert(r.va.0, (r.len, r.phys, r.aperture));
         // ★ `bound` and `joined` are counted apart, never summed here: see
         // [`PromoteJoin::joined`]. A caller wanting the total adds them itself and is
         // then visibly making that choice.

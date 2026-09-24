@@ -5725,6 +5725,29 @@ impl SharedDevice {
     /// device's locks again per leaf: holding the proc across the whole pass would put a
     /// round trip to another process under a rank-0 lock.
     #[must_use]
+    /// ★ w826 — the ranges this space's promotions asked US to map (`Vas::server_rows`).
+    #[must_use]
+    pub fn server_rows(
+        &self,
+        pid: ProcId,
+        gpu: GpuId,
+        pdb: Pdb,
+    ) -> Vec<(u64, u64, u64, bool)> {
+        self.with_proc_mut(pid, |p| {
+            p.vas_by_pdb(gpu, pdb)
+                .map(|v| {
+                    v.server_rows
+                        .iter()
+                        .map(|(&va, &(len, phys, ap))| {
+                            (va, len, phys, ap == kayfabe_arch::Aperture::Vidmem)
+                        })
+                        .collect()
+                })
+                .unwrap_or_default()
+        })
+        .unwrap_or_default()
+    }
+
     pub fn vas_keys(&self, pid: ProcId) -> Vec<(GpuId, Pdb)> {
         // ⊘ w555 — the publication pass still walks spaces BY BASE, so a space with none is
         // not in this list and is not published. ⚠ That is the gap stated, not hidden: it is
