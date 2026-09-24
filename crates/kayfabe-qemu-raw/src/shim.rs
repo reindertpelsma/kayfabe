@@ -24727,7 +24727,10 @@ impl SharedDoorbell {
                 continue;
             }
             for (gpu, pdb) in self.device.vas_keys(pid) {
-                if gpu == DOORBELL_TARGET_GPU && pdb.0 != 0 {
+                // ⊘ w826 — `pdb == 0` is a REAL root at FB offset 0 (`vas_keys` already drops
+                // the absent ones, v3 §4.3). `[measured v1]` filtering it out skipped the raw
+                // client's own space and regressed rpc-mixed-allocs/uvm-mean.
+                if gpu == DOORBELL_TARGET_GPU {
                     roots.push((pid, pdb));
                 }
             }
