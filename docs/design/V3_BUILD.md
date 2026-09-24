@@ -15,6 +15,26 @@
 - The target is the v3 architecture; **LLM parity is what v3 must deliver**, never a shortcut.
   Temporary breakage is accepted.
 
+## Reference sources, per open question (checked w826)
+
+Pinned in `third_party/` (ogkm 610 + 580, linux for nouveau/nova, gvisor for nvproxy); nvkvm-pv at
+`/workspace/nvkvm-pv`. Rank: ogkm > nova > nouveau (THE_CONSTRAINTS §50); nvproxy answers the
+host-userspace question only.
+
+- **Per-die tables** → HOST-QUERY, unprivileged (ogkm `g_subdevice_nvoc.c` flags, `0x8` =
+  NON_PRIVILEGED): interrupt data via `MC_GET_STATIC_INTR_TABLE 0x2080170e`,
+  `MC_GET_ENGINE_NOTIFICATION_INTR_VECTORS 0x2080170d`, `MC_GET_INTR_CATEGORY_SUBTREE_MAP 0x2080170f`
+  (the INTERNAL `0x20800a5c` and `FIFO_GET_DEVICE_INFO_TABLE 0x20801112` are kernel-only); engines
+  `GET_ENGINES_V2`, `GET_HW_ENGINE_ID`; GR info, CE PCE mask, CE caps, FB info V2, arch info, name,
+  GPU info V2 — all NON_PRIVILEGED. Gaps: nova/nouveau device-info decoding as family rules. ★ The
+  old tree's captured GA106 rows are the TEST ORACLE: on a GA106 host, derived == captured.
+- **Host event → guest MSI** → nvkvm-pv already materialises a host eventfd for
+  `NV01_EVENT_OS_EVENT` (`src/qemu/nvkvm_handle.c:134-142`; the event fd is a `/dev/nvidia*` fd,
+  `nvkvm_isolate_handlers.c:2615-2618`); the eventfd → KVM irqfd → MSI-X hop is standard KVM/QEMU.
+- **Per-family GSP boot** → nova-core (`linux/drivers/gpu/nova-core`, Rust, GA10x+ FWSEC/WPR2).
+- **Host control allowlist + layouts across driver versions** → nvproxy.
+- **Bench grading** → the old project's nvdiff live oracle + bare-metal suite.
+
 ## The crate map (from the w826 five-way inventory)
 
 | v3 crate | built from (copy / adapt) | new |
