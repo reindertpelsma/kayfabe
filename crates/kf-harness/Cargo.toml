@@ -1,0 +1,16 @@
+[package]
+name = "kf-harness"
+description = "v3 GPU harness: plays the guest against the REAL planes on a real GPU, with no QEMU. The gate before any guest boot (V3_BUILD.md)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+kf-arch.workspace = true
+kf-abi.workspace = true
+kf-linux-raw.workspace = true
+kf-host.workspace = true
+kf-chip.workspace = true
+
+[lints]
+workspace = true

@@ -9,6 +9,7 @@ members = [
     "crates/kf-linux-raw",
     "crates/kf-host",
     "crates/kf-chip",
+    "crates/kf-harness",
     "crates/kayfabe-doorbell",
     "crates/kayfabe-rm-ladder",
     "crates/kayfabe-util",

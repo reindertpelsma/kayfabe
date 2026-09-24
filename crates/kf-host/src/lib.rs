@@ -1605,6 +1605,12 @@ impl HostRm {
     }
 
 
+    /// This family's CE object class id.
+    #[must_use]
+    pub fn ce_class_id(&self) -> u32 {
+        self.classes.ce_object().ce_object_id().0
+    }
+
     /// The host driver version string this session gated on (the driver-version axis).
     #[must_use]
     pub fn driver_version(&self) -> &str {

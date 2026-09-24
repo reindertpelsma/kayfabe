@@ -468,6 +468,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "kf-harness"
+version = "0.1.0"
+dependencies = [
+ "kf-abi",
+ "kf-arch",
+ "kf-chip",
+ "kf-host",
+ "kf-linux-raw",
+]
+
+[[package]]
 name = "kf-host"
 version = "0.1.0"
 dependencies = [
