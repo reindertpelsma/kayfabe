@@ -225,16 +225,7 @@ pub extern "C" fn kf3_ram_del(h: *mut c_void, gpa: u64) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn kf3_status(h: *mut c_void, buf: *mut c_char, len: usize) {
     let Some(d) = dev(h) else { return };
-    let c = &d.counters;
-    let o = std::sync::atomic::Ordering::Relaxed;
-    let s = format!(
-        "kf3: family={:?} applied={} serviced={} ram_refused={} unshadowed_writes={}",
-        d.family,
-        c.applied.load(o),
-        c.serviced.load(o),
-        c.ram_refused.load(o),
-        c.unshadowed_writes.load(o)
-    );
+    let s = d.status_line();
     write_err(buf, len, &s);
 }
 

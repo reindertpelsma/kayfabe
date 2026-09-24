@@ -83,6 +83,12 @@ pub struct Counters {
     pub ram_refused: AtomicU64,
     /// Writes to a BAR0 offset with no shadow piece (P4 regions, or outside the aperture).
     pub unshadowed_writes: AtomicU64,
+    /// Every BAR0 write the vCPU delivered (before classification).
+    pub trapped: AtomicU64,
+    /// Writes the plane refused by name or answered with poison.
+    pub refused: AtomicU64,
+    /// The BAR0 offset of the most recent write.
+    pub last_off: AtomicU64,
 }
 
 /// ★ The device.
@@ -296,6 +302,8 @@ impl Device {
     /// back what was written, as hardware does), the plane's trap, and at most one eventfd write
     /// when a waiter is parked. ⊘ Never blocks, never services.
     pub fn bar0_write(&self, off: u64, val: u64, width: u8) {
+        self.counters.trapped.fetch_add(1, Ordering::Relaxed);
+        self.counters.last_off.store(off, Ordering::Relaxed);
         let doorbell = match self.plane.doorbell {
             kf_trap::trappolicy::DoorbellPlacement::Bar0 { offset } => {
                 off == kf_trap::memmap::VF_USERMODE_PAGE + u64::from(offset)
@@ -323,7 +331,10 @@ impl Device {
             Action::WakeDrainer => {
                 let _ = self.drainer_efd.signal();
             }
-            Action::None | Action::RefusedByName | Action::PoisonDevice => {}
+            Action::RefusedByName | Action::PoisonDevice => {
+                self.counters.refused.fetch_add(1, Ordering::Relaxed);
+            }
+            Action::None => {}
         }
     }
 
@@ -364,7 +375,16 @@ impl Device {
         if poller.watch(self.drainer_efd.as_source_fd(), 0).is_err() {
             return;
         }
+        let mut beat = (std::time::Instant::now(), String::new());
         while !self.stop.load(Ordering::Acquire) {
+            // A heartbeat for the boot log, on the drainer (never a vCPU): printed only on change.
+            if beat.0.elapsed() >= std::time::Duration::from_secs(2) {
+                let now = self.status_line();
+                if now != beat.1 {
+                    eprintln!("{now}");
+                }
+                beat = (std::time::Instant::now(), now);
+            }
             let seen = self.plane.drainer_wake.seen();
             if self.plane.drainer_pass(self, 256) > 0 {
                 continue;
@@ -377,6 +397,25 @@ impl Device {
             self.plane.drainer_wake.unpark();
             let _ = self.drainer_efd.drain();
         }
+    }
+
+    /// One line of counters and the GSP phase — for the boot log, never a decision input.
+    #[must_use]
+    pub fn status_line(&self) -> String {
+        let c = &self.counters;
+        let o = Ordering::Relaxed;
+        let phase = self.gsp.try_lock().map(|g| format!("{:?}", g.fsm.phase())).unwrap_or_else(|_| "busy".into());
+        format!(
+            "kf3: family={:?} phase={phase} trapped={} applied={} refused={} serviced={} ram_refused={} unshadowed_writes={} last_off={:#x}",
+            self.family,
+            c.trapped.load(o),
+            c.applied.load(o),
+            c.refused.load(o),
+            c.serviced.load(o),
+            c.ram_refused.load(o),
+            c.unshadowed_writes.load(o),
+            c.last_off.load(o),
+        )
     }
 
     fn log_report(&self, r: &kf_gsp::ServiceReport) {
