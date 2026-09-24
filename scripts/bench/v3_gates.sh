@@ -22,7 +22,10 @@ export PATH="$HOME/.cargo/bin:$PATH"
     echo "BUILD=FAIL"; echo "V3_GATES_EXIT pass=0 fail=all $(date -Is)"; exit 1
   fi
   pass=0; fail=0; failed=""
-  for bin in $(ls target/release/kf-gate[0-9]* 2>/dev/null | sort -V); do
+  # Executables only: cargo also leaves `kf-gateN.d` dep files beside them (measured: a bare glob
+  # ran them as six extra "gates" — counted FAIL, correctly, but they are not gates).
+  for bin in $(ls target/release/kf-gate[0-9]* 2>/dev/null | grep -v '\.' | sort -V); do
+    [ -x "$bin" ] || continue
     g=$(basename "$bin")
     echo "=== $g"
     out=$(timeout 180 "$bin" 2>&1); rc=$?
