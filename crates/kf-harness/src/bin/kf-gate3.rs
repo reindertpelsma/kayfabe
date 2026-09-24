@@ -5,6 +5,8 @@
 //! guest's own kernel VAs; its data operands are FB-PHYSICAL. v3's Translated plane must:
 //! - read the guest's GP entries and segments through OUR mappings (ledger VA → store offset);
 //! - rewrite PHYSICAL operands onto the identity window and run them on OUR host ring;
+//! - rewrite PHYSICAL SYSMEM operands onto the guest-RAM window (one `OS_DESCRIPTOR` over the
+//!   guest's memfd, §6), both directions;
 //! - let the engine write the guest's semaphore NATIVELY, through the mirrored kernel VAS;
 //! - split at the guest's `MEM_OP` invalidate: everything before it COMPLETES, then walk + publish,
 //!   then the rest — proved by a VIRTUAL copy through a VA the guest mapped just before the split;
@@ -43,12 +45,18 @@ const DST: u64 = 0x0410_0000;
 const FILL: u64 = 0x0420_0000;
 const NEW: u64 = 0x0430_0000;
 const DST2: u64 = 0x0440_0000;
+const DST3: u64 = 0x0450_0000;
 const BYTES: u64 = 0x1_0000;
+/// Guest RAM: a memfd, and two guest-physical addresses in it.
+const RAM_BYTES: u64 = 64 << 20;
+const R_SRC: u64 = 0x10_0000;
+const R_DST: u64 = 0x20_0000;
 /// The guest kernel's VAs.
 const VA_CHAN: u64 = 0x20_0000_0000;
 const VA_NEW: u64 = 0x20_4000_0000;
 const P1: u32 = 0x5C0B_0001;
 const P2: u32 = 0x5C0B_0002;
+const P3: u32 = 0x5C0B_0003;
 
 fn main() {
     let mut l = Checks::default();
@@ -150,14 +158,17 @@ impl Publisher for Pub<'_, '_> {
     }
 }
 
-/// Guest FB-physical `p` ⇒ `base + p`, inside the store only.
-struct IdentityWindow {
-    base: u64,
+/// Guest FB-physical `p` ⇒ `fb + p` inside the store; guest-physical `g` ⇒ `ram + g` inside RAM.
+struct Windows {
+    fb: u64,
+    ram: u64,
 }
-impl Window for IdentityWindow {
+impl Window for Windows {
     fn translate(&self, t: Target, phys: u64, len: u64) -> Option<u64> {
+        let end = phys.checked_add(len)?;
         match t {
-            Target::LocalFb if phys.checked_add(len)? <= STORE_BYTES => Some(self.base + phys),
+            Target::LocalFb if end <= STORE_BYTES => Some(self.fb + phys),
+            Target::CoherentSysmem | Target::NonCoherentSysmem if end <= RAM_BYTES => Some(self.ram + phys),
             _ => None,
         }
     }
@@ -182,7 +193,25 @@ fn run(l: &mut Checks) -> Result<(), String> {
     let t0 = std::time::Instant::now();
     let base = rm.map_window(space, store, STORE_BYTES, true).map_err(|e| format!("identity window: {e:?}"))?;
     l.measure("identity_window", format!("base={base:#x} bytes={STORE_BYTES:#x} us={} (GROWS_DOWN, read back)", t0.elapsed().as_micros()));
-    let win = IdentityWindow { base };
+    let ram = kf_linux_raw::SharedRam::create(RAM_BYTES).map_err(|e| format!("memfd: {e:?}"))?;
+    let ram_view = kf_linux_raw::MappedRegion::map(
+        kf_linux_raw::Backing::SharedFile { fd: ram.as_backing_fd(), offset: 0 },
+        RAM_BYTES,
+        kf_linux_raw::HostProt::ReadWrite,
+        kf_linux_raw::CachePolicy::WriteBack,
+        kf_linux_raw::HostPageSize::query(),
+    )
+    .map_err(|e| format!("map ram: {e:?}"))?;
+    let t0 = std::time::Instant::now();
+    let desc = rm
+        .alloc_os_descriptor(&ram_view, kf_linux_raw::HostOffset::new(0), RAM_BYTES)
+        .map_err(|e| format!("ram descriptor: {e:?}"))?;
+    let ram_base = rm.map_window(space, desc, RAM_BYTES, true).map_err(|e| format!("ram window: {e:?}"))?;
+    let overlap = ram_base < base + STORE_BYTES && base < ram_base + RAM_BYTES;
+    l.measure("ram_window", format!("base={ram_base:#x} bytes={RAM_BYTES:#x} us={}", t0.elapsed().as_micros()));
+    l.check("windows_distinct", !overlap, format!("fb={base:#x} ram={ram_base:#x}"));
+    ram_view.write_from(kf_linux_raw::HostOffset::new(R_SRC), &pattern(0x5A5A_0000)).map_err(|e| format!("{e:?}"))?;
+    let win = Windows { fb: base, ram: ram_base };
 
     // ── the guest kernel: tables, data, and its channel's memory ──────────────────────────
     let mut tree = Tree::new(PT_BASE, PT_BYTES);
@@ -195,6 +224,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
     w(NEW, &pattern(0x0E1E_0000))?;
     w(DST, &vec![0u8; BYTES as usize])?;
     w(DST2, &vec![0u8; BYTES as usize])?;
+    w(DST3, &vec![0u8; BYTES as usize])?;
     w(FILL, &vec![0xABu8; BYTES as usize])?;
     w(CHAN, &vec![0u8; (CHAN_PAGES * 4096) as usize])?;
 
@@ -232,12 +262,21 @@ fn run(l: &mut Checks) -> Result<(), String> {
         | ce::LAUNCH_SEMAPHORE_RELEASE_ONE_WORD
         | ce::LAUNCH_DST_PHYSICAL
         | pitch]));
-    // GP 2 — hostile: a PEERMEM destination.
-    let mut g2 = m(4, ce::SET_DST_PHYS_MODE, &[3]);
-    g2.extend(m(4, ce::LAUNCH_DMA, &[ce::LAUNCH_TRANSFER_NON_PIPELINED | ce::LAUNCH_DST_PHYSICAL | pitch]));
+    // GP 2 — UVM's shape: guest-RAM → FB, then FB → guest-RAM, sysmem operands PHYSICAL.
+    let both_phys = ce::LAUNCH_TRANSFER_NON_PIPELINED | ce::LAUNCH_FLUSH_ENABLE | ce::LAUNCH_SRC_PHYSICAL | ce::LAUNCH_DST_PHYSICAL | pitch;
+    let mut g2 = m(4, ce::SET_SRC_PHYS_MODE, &[1, 0]); // SRC coherent sysmem, DST local FB
+    g2.extend(m(4, ce::OFFSET_IN_UPPER, &[hi(R_SRC), lo(R_SRC), hi(DST3), lo(DST3)]));
+    g2.extend(m(4, ce::LAUNCH_DMA, &[both_phys]));
+    g2.extend(m(4, ce::SET_SRC_PHYS_MODE, &[0, 1])); // SRC local FB, DST coherent sysmem
+    g2.extend(m(4, ce::OFFSET_IN_UPPER, &[hi(SRC), lo(SRC), hi(R_DST), lo(R_DST)]));
+    g2.extend(m(4, ce::SET_SEMAPHORE_A, &[hi(VA_CHAN + SEM), lo(VA_CHAN + SEM), P3]));
+    g2.extend(m(4, ce::LAUNCH_DMA, &[both_phys | ce::LAUNCH_SEMAPHORE_RELEASE_ONE_WORD]));
+    // GP 3 — hostile: a PEERMEM destination.
+    let mut g3 = m(4, ce::SET_DST_PHYS_MODE, &[3]);
+    g3.extend(m(4, ce::LAUNCH_DMA, &[ce::LAUNCH_TRANSFER_NON_PIPELINED | ce::LAUNCH_DST_PHYSICAL | pitch]));
     let words = |v: &[u32]| -> Vec<u8> { v.iter().flat_map(|x| x.to_le_bytes()).collect() };
     let mut seg_off = SEG;
-    for (gp, seg) in [&g0, &g1, &g2].into_iter().enumerate() {
+    for (gp, seg) in [&g0, &g1, &g2, &g3].into_iter().enumerate() {
         w(CHAN + seg_off, &words(seg))?;
         let e = gp_entry(VA_CHAN + seg_off, 4 * seg.len() as u64).ok_or("gp entry")?;
         w(CHAN + GPFIFO + 8 * gp as u64, &e.to_le_bytes())?;
@@ -253,7 +292,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
     poller.watch(host.event_fd(), 1).map_err(|e| format!("watch: {e:?}"))?;
     let mut chan = TranslatedChannel::new(TranslatedRing::new(VA_CHAN + GPFIFO, ENTRIES, 0), host);
 
-    // The guest maps VA_NEW (it will invalidate in GP 1), then rings entries 0 and 1.
+    // The guest maps VA_NEW (it will invalidate in GP 1), then rings entries 0, 1 and 2.
     let mut t = tree;
     for i in 0..BYTES / 4096 {
         t.map4k(VA_NEW + i * 4096, NEW + i * 4096);
@@ -265,7 +304,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
             .write_at(g.dptr + CHAN + USERD + kf_abi::submit::USERD_GP_PUT, &v.to_le_bytes())
             .map_err(|e| e.to_string())
     };
-    put(&guest, 2)?;
+    put(&guest, 3)?;
 
     // The worker: pump on the doorbell, then on every wake, until caught up and retired.
     let t0 = std::time::Instant::now();
@@ -277,7 +316,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
     };
     let mut state = pump(&mut chan).map_err(|e| format!("pump: {e:?}"))?;
     pumps += 1;
-    while !(state == Pumped::Caught && chan.last_gp_get() == Some(2)) && std::time::Instant::now() < deadline {
+    while !(state == Pumped::Caught && chan.last_gp_get() == Some(3)) && std::time::Instant::now() < deadline {
         let mut ready = ReadyTokens::new();
         if poller.wait(&mut ready, PollTimeout::Millis(500)).map_err(|e| format!("wait: {e:?}"))? > 0 {
             wakes += 1;
@@ -299,7 +338,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
         let b = rd(off, 4)?;
         Ok(u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
     };
-    l.check("forwarded_per_token", fetched == 2 && submissions >= 2, format!("fetched={fetched} submissions={submissions}"));
+    l.check("forwarded_per_token", fetched == 3 && submissions >= 3, format!("fetched={fetched} submissions={submissions}"));
     l.check("fill_zeroed_by_engine", rd(FILL, BYTES as usize)?.iter().all(|&b| b == 0), "FILL all zero (was 0xAB)");
     l.check("phys_copy_by_engine", rd(DST, BYTES as usize)? == pattern(0xC0DE_0000), "DST == SRC pattern");
     l.check(
@@ -308,16 +347,20 @@ fn run(l: &mut Checks) -> Result<(), String> {
         format!("walks={:x?} root={root:#x}", g.walks),
     );
     l.check("virtual_copy_after_split", rd(DST2, BYTES as usize)? == pattern(0x0E1E_0000), "DST2 == NEW pattern (read through VA_NEW)");
+    l.check("sysmem_to_fb_by_engine", rd(DST3, BYTES as usize)? == pattern(0x5A5A_0000), "DST3 == guest-RAM R_SRC pattern");
+    let mut back = vec![0u8; BYTES as usize];
+    ram_view.read_into(kf_linux_raw::HostOffset::new(R_DST), &mut back).map_err(|e| format!("{e:?}"))?;
+    l.check("fb_to_sysmem_by_engine", back == pattern(0xC0DE_0000), "guest-RAM R_DST == SRC pattern");
     let sem = word(CHAN + SEM)?;
-    l.check("guest_semaphore_written_natively", sem == P2, format!("sem={sem:#x} want={P2:#x}"));
+    l.check("guest_semaphore_written_natively", sem == P3, format!("sem={sem:#x} want={P3:#x}"));
     let gp_get = word(CHAN + USERD + kf_abi::submit::USERD_GP_GET)?;
-    l.check("gp_get_authored_on_completion", gp_get == 2, format!("guest GP_GET={gp_get}"));
+    l.check("gp_get_authored_on_completion", gp_get == 3, format!("guest GP_GET={gp_get}"));
     drop(g);
 
-    // Hostile: GP 2 must be refused by name, and GP_GET must not move.
-    put(&guest, 3)?;
+    // Hostile: GP 3 must be refused by name, and GP_GET must not move.
+    put(&guest, 4)?;
     let r = pump(&mut chan);
-    let named = matches!(r, Err(kf_chan::host::ChanError::Ring(RingRefusal::Rewrite { gp: 2, why: Refusal::PeerOperand })));
+    let named = matches!(r, Err(kf_chan::host::ChanError::Ring(RingRefusal::Rewrite { gp: 3, why: Refusal::PeerOperand })));
     l.check("hostile_entry_refused_by_name", named, format!("{r:?}"));
     let gp_get = {
         let g = guest.borrow();
@@ -325,6 +368,6 @@ fn run(l: &mut Checks) -> Result<(), String> {
         g.walk.read_at(g.dptr + CHAN + USERD + kf_abi::submit::USERD_GP_GET, &mut b).map_err(|e| e.to_string())?;
         u32::from_le_bytes(b)
     };
-    l.check("hostile_entry_not_retired", gp_get == 2, format!("guest GP_GET={gp_get}"));
+    l.check("hostile_entry_not_retired", gp_get == 3, format!("guest GP_GET={gp_get}"));
     Ok(())
 }
