@@ -1079,3 +1079,23 @@ GPU-wide and carries no identity, so every completion flags EVERY host ring's ev
 every channel — including idle ones. ⇒ Next: **one session event fd**, and on its readiness ring
 only the tokens with a fence **in flight** (a set the rings maintain). The wake cannot be narrower
 than "someone finished"; the ring can be narrower than "everyone".
+
+## §27 — ✔✔ `[MEASURED w826]` **v3 GATES 5 + 6: PASSTHROUGH on CE and on GR, unparsed, inline doorbell.**
+
+**Box 52430332, GA106, 580.159.04, Xid 0.** Revs `1acb994b` (5), `5a8c1f38` (6). A guest USER
+process: its own page-table root, ring + USERD in the store, virtual operands only.
+
+```
+gate 5 (CE)  birth 3.1 ms · rm_adopted_the_guest_userd · 32/32 rings INLINE · 32 virtual copies ·
+             hardware_advanced_the_guest_gp_get=32 · no_worker_ever_saw_the_token · ring→sem p50 6 µs
+gate 6 (GR)  birth 4.4 ms (compute object ⇒ host RM builds the GR context) · same checks ·
+             32 compute-I2M LITERAL writes (CUDA's own small-HtoD push) · ring→sem p50 77 µs
+```
+
+★ **§9 step 7's data-plane half is measured: GR executes the guest's own pushbuffer through a host
+VAS built only by walking the guest's tables.** No pushbuffer is read, no cursor authored: the
+engine fetched the guest's GPFIFO and wrote the guest's `GP_GET`. The birth adopted the guest's
+USERD at creation (poison → zero), per `rm_takes_a_guest_userd_and_zeroes_it`.
+⊘ Not yet: a real kernel launch (QMD + shader + constant buffers) — `cuCtxCreate → matmul` needs the
+guest driver; GR context buffers were placed by host RM at RM-chosen VAs in the mirrored space and did
+not collide here (guest VAs at 64 GiB+); in the product that collision is refused `0x51` by name.
