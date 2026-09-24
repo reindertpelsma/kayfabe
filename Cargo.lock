@@ -477,6 +477,7 @@ dependencies = [
  "kf-arch",
  "kf-chip",
  "kf-gsp",
+ "kf-rm",
  "kf-trace",
  "kf-util",
 ]
