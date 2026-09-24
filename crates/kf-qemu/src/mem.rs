@@ -85,6 +85,12 @@ impl RamMap {
         }
     }
 
+    /// The ONE backend fd every fd-backed block shares, if any.
+    #[must_use]
+    pub fn backing_fd(&self) -> Option<i32> {
+        self.blocks.read().ok()?.iter().find(|b| b.fd >= 0).map(|b| b.fd)
+    }
+
     /// The block wholly covering `[gpa, gpa+len)`.
     #[must_use]
     pub fn block_for(&self, gpa: u64, len: u64) -> Option<RamBlock> {
@@ -304,6 +310,11 @@ pub struct MemPlane {
     pub store_ptr: u64,
     /// Counters.
     pub counters: MemCounters,
+    /// Guest RAM as QEMU registered it.
+    ram: &'static RamMap,
+    /// ★ The guest-RAM host object — an OS descriptor over the WHOLE guest memfd (gate 3's
+    /// recipe), created once, on the VA thread, the first time a space needs it.
+    ram_obj: std::sync::OnceLock<Result<u32, String>>,
 }
 
 /// ★ The store ranges whose PRAMIN views are armed at realize (`V3_P4_PORT_MAP.md` Q2, measured).
@@ -378,9 +389,49 @@ impl MemPlane {
                 bar2_root: layout.bar2_pde_base,
                 store_ptr,
                 counters: MemCounters::default(),
+                ram,
+                ram_obj: std::sync::OnceLock::new(),
             },
             ops(bar2_win, bar2_scratch),
         ))
+    }
+
+    /// ★ The guest-RAM object: an OS descriptor over the whole guest memfd, so a sysmem leaf at
+    /// memfd offset `o` is object offset `o` — the same numbering `RamMap::file_range` gives the
+    /// VA manager. Created ONCE, on the VA thread (never a vCPU: it pins every page).
+    ///
+    /// ⚠ It pins all of guest RAM on the host for the VM's life — the same posture as gate 3's
+    /// Translated channel, and the reason `memory-backend-memfd,share=on` is required.
+    ///
+    /// # Errors
+    /// No fd-backed guest RAM, the mapping, or the host's refusal — by name, and remembered.
+    pub fn guest_ram_object(&self, rm: &'static HostRm) -> Result<u32, String> {
+        self.ram_obj
+            .get_or_init(|| {
+                let fd = self.ram.backing_fd().ok_or("no fd-backed guest RAM block (memory-backend-memfd,share=on?)")?;
+                let borrowed = crate::raw_unsafe::borrow_process_fd(fd);
+                let len = borrowed
+                    .try_clone_to_owned()
+                    .map(std::fs::File::from)
+                    .and_then(|f| f.metadata())
+                    .map_err(|e| format!("guest memfd size: {e}"))?
+                    .len();
+                let view = kf_linux_raw::MappedRegion::map(
+                    Backing::SharedFile { fd: borrowed, offset: 0 },
+                    len,
+                    kf_linux_raw::HostProt::ReadWrite,
+                    kf_linux_raw::CachePolicy::WriteBack,
+                    HostPageSize::query(),
+                )
+                .map_err(|e| format!("guest memfd view of {len:#x}: {e:?}"))?;
+                let view: &'static kf_linux_raw::MappedRegion = Box::leak(Box::new(view));
+                let obj = rm
+                    .alloc_os_descriptor(view, HostOffset::new(0), len)
+                    .map_err(|e| format!("guest-RAM OS descriptor of {len:#x}: {e:?}"))?;
+                eprintln!("kf3: guest-RAM object {obj:#x} over {len:#x} bytes of the guest memfd");
+                Ok(obj)
+            })
+            .clone()
     }
 
     /// The PRAMIN plan for a window-base word: what each slot must show.
@@ -479,7 +530,18 @@ pub fn apply_statement(
             };
             if m.table.target(key).is_none() {
                 match rm.alloc_vaspace() {
-                    Ok(space) => m.table.insert(key, Target::Gpu(HostVas { rm, space, store, ram_obj: None })),
+                    Ok(space) => {
+                        // ⊘ A space without the RAM object refuses every sysmem leaf and leaves the
+                        // trigger armed — measured p4b4: a ~22 s guest stall per boot.
+                        let ram_obj = match plane.guest_ram_object(rm) {
+                            Ok(o) => Some(o),
+                            Err(e) => {
+                                eprintln!("kf3: {key:?}: {e} — its sysmem leaves will be refused");
+                                None
+                            }
+                        };
+                        m.table.insert(key, Target::Gpu(HostVas { rm, space, store, ram_obj }))
+                    }
                     Err(e) => {
                         plane.counters.refused.fetch_add(1, Ordering::Relaxed);
                         return format!("pagedir {key:?}: host VA space refused: {e:?}");

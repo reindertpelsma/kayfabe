@@ -63,6 +63,8 @@ struct Gsp {
     fsm: GspFsm,
     model: Box<dyn GspModel>,
     policy: Box<dyn CommandPolicy>,
+    /// The value last PUBLISHED per BAR0 offset — [`Device::publish`] stores only what changed.
+    published: std::collections::HashMap<u64, u64>,
 }
 
 /// Counters, for the boot log — never a decision input.
@@ -259,7 +261,7 @@ impl Device {
             },
         );
         let model = family.gsp_model(cfg.fb_mb).map_err(|e| format!("{e:?}"))?;
-        let gsp = Gsp { fsm: GspFsm::new(abi), model, policy };
+        let gsp = Gsp { fsm: GspFsm::new(abi), model, policy, published: std::collections::HashMap::new() };
 
         // The plane lives for the process (a device is realized once): leaked so the vCPU path
         // holds a plain `&'static`, never a lock or a refcount.
@@ -383,8 +385,8 @@ impl Device {
         let mut v = self.staged.lock().map(|mut s| std::mem::take(&mut *s)).unwrap_or_default();
         v.sort_by_key(|p| p.base);
         let _ = self.pieces.set(v);
-        if let Ok(g) = self.gsp.lock() {
-            self.publish(&g);
+        if let Ok(mut g) = self.gsp.lock() {
+            self.publish(&mut g);
         }
     }
 
@@ -595,13 +597,22 @@ impl Device {
     /// before `WPR2_ADDR_HI`: the guest saw FWSEC halt, read WPR2 in the gap, and failed
     /// *"no initialized WPR2 found"*. When reads trapped, the FSM answered each read in order and
     /// this could not happen; with shadow reads, **publication order IS the guest-visible order**.
-    fn publish(&self, g: &Gsp) {
+    ///
+    /// ⊘⊘ **Only what CHANGED.** `[measured p4b1, 1 boot in 5]` re-storing every register after
+    /// every applied write raced the vCPU: a guest write the vCPU had already put in the shadow,
+    /// but which the drainer had not yet applied, was overwritten with the FSM's older answer —
+    /// and the FWSEC handshake failed *"no initialized WPR2 found"* intermittently. A register
+    /// the FSM did not move is the guest's to own; we store only the ones the FSM moved.
+    fn publish(&self, g: &mut Gsp) {
         const EDGES: [GspReg; 4] =
             [GspReg::GspFalconCpuctl, GspReg::GspRiscvCpuctl, GspReg::Sec2FalconCpuctl, GspReg::GspFalconIrqstat];
-        let store = |reg: GspReg| {
-            let Some((0, off)) = g.model.at(reg) else { return };
-            if let Some(Ok(v)) = g.fsm.mmio_read_with(g.model.as_ref(), 0, off) {
-                self.shadow_store(off, v, 4);
+        let Gsp { fsm, model, published, .. } = g;
+        let mut store = |reg: GspReg| {
+            let Some((0, off)) = model.at(reg) else { return };
+            if let Some(Ok(v)) = fsm.mmio_read_with(model.as_ref(), 0, off) {
+                if published.insert(off, v) != Some(v) {
+                    self.shadow_store(off, v, 4);
+                }
             }
         };
         for reg in GspReg::FIXED.into_iter().chain((0..8u8).map(GspReg::GspQueueHead)) {
