@@ -476,9 +476,8 @@ struct GraphKernel {
 ///
 /// ⊘ **What changes per walk, and how it reaches the graph.** Every buffer is allocated at
 /// bring-up and never moves, so the graph's pointers are constants. The per-walk inputs are
-/// (a) the pdb list — staged in PINNED memory the graph's first node copies from, so it needs
-/// no graph change at all (the copy is always the full `KF_MAX_PDB` slots; the kernels read
-/// only `npdb`) — and (b) the by-value `KfArgs` (`win.base`/`len`/`span` = the store, `npdb`)
+/// (a) the pdb list — written into PINNED memory whose device address IS `KfArgs::pdbs`, so
+/// the kernels read it in place and it needs no graph change and no upload node — and (b) the by-value `KfArgs` (`win.base`/`len`/`span` = the store, `npdb`)
 /// plus `kf_par_seed`'s grid (`ceil(npdb/128)`). (b) goes through
 /// `cuGraphExecKernelNodeSetParams`, **and only when it differs from what the graph already
 /// carries** — in steady state the store never moves and the address-space count changes
@@ -487,6 +486,14 @@ struct GraphKernel {
 /// needs a `.cu` edit, a PTX regeneration (`cuda/walk/make_ptx.py`) and the 58-assertion CUDA
 /// suite re-run; every kernel takes `KfArgs` BY VALUE today, so no host-side choice can make
 /// it indirect. The setter path is the one available without touching the device half.
+///
+/// ⚠ `[measured GA106, w827]` what is left is per-NODE driver cost, ~0.5 µs/node with a warm
+/// submitting thread and ~2 µs/node when it was idle (sleeping) just before — the case a
+/// worker woken by its epoll is in. Nodes are therefore cut wherever the device half allows
+/// (one cursor reset, no `ntask` copy, pdbs read in place, one read-back copy): VER2 27
+/// nodes, VER3 30. Below that needs FEWER KERNELS (fusing each level's expand/scan/compact),
+/// which is a `.cu` change. A walk that must rewrite the setters (first walk; the space count
+/// changed) pays ~1-2 µs more per `KfArgs`-bearing node (VER2 15, VER3 17).
 #[derive(Debug)]
 struct WalkGraph {
     graph: GraphHandle,
