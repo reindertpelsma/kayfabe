@@ -1803,6 +1803,17 @@ impl kayfabe_fwd::RingSliceOracle for StoreMapPort {
     fn is_slice_of_the_store(&self, vas: HostHandle, at: GpuVa, len: u64) -> bool {
         StoreMapPort::is_slice_of_the_store(self, vas, at, len)
     }
+
+    fn store_slice_covering(&self, vas: HostHandle, at: GpuVa) -> Option<(u64, u64, u64)> {
+        let g = self
+            .placed
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        g.range((vas.raw(), 0)..=(vas.raw(), at.0))
+            .next_back()
+            .filter(|((_, start), p)| at.0 < start.saturating_add(p.len))
+            .map(|(&(_, start), p)| (start, p.offset, p.len))
+    }
 }
 
 /// ★★★★★ **w755r, CONSTRAINT 32 — THE PORT IS ALSO THE BIRTH PARTY, for the oracle's reason.**

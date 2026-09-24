@@ -5044,6 +5044,25 @@ fn adopted_guest_ring(
         );
         return None;
     };
+    // ★★★★★ w826 — THE LEDGER FIRST. A ring the walk placed as a slice of the one reserved
+    // object is the guest's own bytes by construction; nothing about it needs the old table.
+    if let (Some(o), Some(store_vas)) = (oracle, vas.store_vas)
+        && let Some((start, offset, len)) =
+            o.store_slice_covering(store_vas, kayfabe_arch::ids::GpuVa(ring.va))
+    {
+        kayfabe_util::lock_safe_eprintln!(
+            "kayfabe: ADOPT-WHY ring=0x{:x} ✔ ADOPTABLE FROM THE LEDGER — store slice \
+             [0x{start:x}+0x{len:x}] at store offset 0x{offset:x}",
+            ring.va
+        );
+        return Some(kayfabe_isolate::AdoptedGuestRing {
+            ring: kayfabe_isolate::RingProvenance::StoreSlice { offset, len },
+            ring_va: start,
+            gp_fifo_va: ring.va,
+            gp_fifo_entries: ring.entries,
+            userd: adopted_guest_userd_in_store(userd),
+        });
+    }
     let Some((start, len, binding)) = vas.table.binding_at(kayfabe_arch::ids::GpuVa(ring.va))
     else {
         kayfabe_util::lock_safe_eprintln!(
@@ -7054,6 +7073,13 @@ pub trait RingSliceOracle: Send + Sync {
     /// ⊘ `vas` is the **scratchpad's** range over the guest's space, not the per-proc
     /// handle: the ledger is keyed by what the mapper used.
     fn is_slice_of_the_store(&self, vas: HostHandle, at: GpuVa, len: u64) -> bool;
+
+    /// ★ w826 — the store slice this port placed in `vas` that COVERS `at`, as
+    /// `(start_va, store_offset, len)`: the v3 answer to "is this ring the guest's own bytes",
+    /// asked of OUR ledger instead of the old address table. `None` by default.
+    fn store_slice_covering(&self, _vas: HostHandle, _at: GpuVa) -> Option<(u64, u64, u64)> {
+        None
+    }
 }
 
 /// ★★★★★ **w755r, CONSTRAINT 32 — THE PARTY THAT CAN BIRTH A CHANNEL OVER THE STORE.**
