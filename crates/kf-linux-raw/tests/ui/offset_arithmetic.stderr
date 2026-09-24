@@ -1,0 +1,49 @@
+error[E0369]: cannot add `{integer}` to `HostOffset`
+  --> tests/ui/offset_arithmetic.rs:12:28
+   |
+12 |     let _advanced = offset + 0x1000;
+   |                     ------ ^ ------ {integer}
+   |                     |
+   |                     HostOffset
+   |
+note: `HostOffset` does not implement `Add<{integer}>`
+  --> src/bounds.rs
+   |
+   | pub struct HostOffset(u64);
+   | ^^^^^^^^^^^^^^^^^^^^^ `HostOffset` is defined in another crate
+
+error[E0369]: cannot subtract `{integer}` from `HostOffset`
+  --> tests/ui/offset_arithmetic.rs:13:27
+   |
+13 |     let _rewound = offset - 0x800;
+   |                    ------ ^ ----- {integer}
+   |                    |
+   |                    HostOffset
+   |
+note: `HostOffset` does not implement `Sub<{integer}>`
+  --> src/bounds.rs
+   |
+   | pub struct HostOffset(u64);
+   | ^^^^^^^^^^^^^^^^^^^^^ `HostOffset` is defined in another crate
+
+error[E0308]: mismatched types
+  --> tests/ui/offset_arithmetic.rs:14:52
+   |
+14 |     let _from_guest: HostOffset = HostOffset::from(Gpa(0x1000));
+   |                                   ---------------- ^^^^^^^^^^^ expected `HostOffset`, found `Gpa`
+   |                                   |
+   |                                   arguments to this function are incorrect
+   |
+note: associated function defined here
+  --> $RUST/core/src/convert/mod.rs
+
+error[E0308]: mismatched types
+  --> tests/ui/offset_arithmetic.rs:15:36
+   |
+15 |     let _to_guest: Gpa = Gpa::from(offset);
+   |                          --------- ^^^^^^ expected `Gpa`, found `HostOffset`
+   |                          |
+   |                          arguments to this function are incorrect
+   |
+note: associated function defined here
+  --> $RUST/core/src/convert/mod.rs

@@ -1,0 +1,41 @@
+error[E0599]: no method named `as_slice` found for struct `MappedRegion` in the current scope
+  --> tests/ui/no_borrow_escape.rs:18:33
+   |
+18 |     let _direct: &[u8] = region.as_slice();
+   |                                 ^^^^^^^^
+   |
+help: there is a method `slice` with a similar name, but with different arguments
+  --> src/mapping_unsafe.rs
+   |
+   |     pub fn slice(&self, offset: HostOffset, len: u64) -> Result<RegionView<'_>, RawError> {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `as_ptr` found for struct `MappedRegion` in the current scope
+  --> tests/ui/no_borrow_escape.rs:19:27
+   |
+19 |     let _pointer = region.as_ptr();
+   |                           ^^^^^^ method not found in `MappedRegion`
+
+error[E0614]: type `MappedRegion` cannot be dereferenced
+  --> tests/ui/no_borrow_escape.rs:20:26
+   |
+20 |     let _deref: &[u8] = &*region;
+   |                          ^^^^^^^ can't be dereferenced
+
+error[E0599]: no method named `as_ref` found for struct `MappedRegion` in the current scope
+  --> tests/ui/no_borrow_escape.rs:21:33
+   |
+21 |     let _as_ref: &[u8] = region.as_ref();
+   |                                 ^^^^^^ method not found in `MappedRegion`
+
+error[E0608]: cannot index into a value of type `MappedRegion`
+  --> tests/ui/no_borrow_escape.rs:22:26
+   |
+22 |     let _indexed = region[0];
+   |                          ^^^
+
+error[E0608]: cannot index into a value of type `MappedRegion`
+  --> tests/ui/no_borrow_escape.rs:23:26
+   |
+23 |     let _sliced = &region[0..4];
+   |                          ^^^^^^

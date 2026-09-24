@@ -1,0 +1,5 @@
+error[E0425]: cannot find function `map_fixed` in crate `kf_linux_raw`
+ --> tests/ui/map_fixed_bare_address.rs:9:27
+  |
+9 |     let _ = kf_linux_raw::map_fixed(
+  |                           ^^^^^^^^^ not found in `kf_linux_raw`
