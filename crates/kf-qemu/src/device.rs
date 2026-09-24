@@ -679,7 +679,7 @@ impl Device {
         let va = self.va_stats.lock().map(|v| v.clone()).unwrap_or_default();
         let (recv, settled) = self.mem.inbox.counts();
         let mem = format!(
-            " mem[inval={} walks={}/{} cleared={} superseded={} named_missed={} unreconciled={} mapped={} unmapped={} clipped={:#x} fn70={} roots={} stmts={recv}/{settled} refused={} pramin_repoints={} pramin_miss={} last_miss={:#x} pramin_worst_us={} pramin_maps={} pramin_mmaps={} inline_opens={} reaped={}]",
+            " mem[inval={} walks={}/{} cleared={} superseded={} named_missed={} unreconciled={} mapped={} unmapped={} clipped={:#x} fn70={} roots={} stmts={recv}/{settled} refused={} pramin_repoints={} pramin_miss={} last_miss={:#x} pramin_worst_us={} (map {} mmap {}) pramin_maps={} pramin_mmaps={} inline_opens={} reaped={}]",
             mc.invalidates.load(o),
             va.walks_reconciled,
             va.walks_submitted,
@@ -697,6 +697,8 @@ impl Device {
             self.mem.pramin.missed.load(o),
             mc.pramin_last_miss.load(o),
             self.mem.pramin.worst_ns.load(o) / 1000,
+            self.mem.pramin.worst_map_ns.load(o) / 1000,
+            self.mem.pramin.worst_mmap_ns.load(o) / 1000,
             self.mem.pramin.maps.load(o),
             self.mem.pramin.mmaps.load(o),
             self.mem.pramin_trap.inline_opens.load(o),

@@ -316,6 +316,14 @@ pub struct PraminPool<V: ViewOps> {
     pub mmaps: AtomicU64,
     /// Worst re-point wall time, ns (measured by the caller, stored here).
     pub worst_ns: AtomicU64,
+    /// Worst single host map (the ioctl) in the trap, ns.
+    pub worst_map_ns: AtomicU64,
+    /// Worst single `mmap` placement in the trap, ns.
+    pub worst_mmap_ns: AtomicU64,
+}
+
+fn elapsed_ns(t: std::time::Instant) -> u64 {
+    u64::try_from(t.elapsed().as_nanos()).unwrap_or(u64::MAX)
 }
 
 impl<V: ViewOps> PraminPool<V> {
@@ -333,6 +341,8 @@ impl<V: ViewOps> PraminPool<V> {
             maps: AtomicU64::new(0),
             mmaps: AtomicU64::new(0),
             worst_ns: AtomicU64::new(0),
+            worst_map_ns: AtomicU64::new(0),
+            worst_mmap_ns: AtomicU64::new(0),
         }
     }
 
@@ -355,10 +365,15 @@ impl<V: ViewOps> PraminPool<V> {
             let r = match run {
                 Run::Store { off, .. } => {
                     out.maps += 1;
-                    match self.ops.arm_store_in_trap(off, len) {
+                    let t = std::time::Instant::now();
+                    let armed = self.ops.arm_store_in_trap(off, len);
+                    self.worst_map_ns.fetch_max(elapsed_ns(t), Ordering::Relaxed);
+                    match armed {
                         Ok(v) => {
                             out.mmaps += 1;
+                            let t = std::time::Instant::now();
                             let r = self.ops.place_view(at, len, &v).map(|()| out.views += n32);
+                            self.worst_mmap_ns.fetch_max(elapsed_ns(t), Ordering::Relaxed);
                             fresh.push(v);
                             r
                         }
