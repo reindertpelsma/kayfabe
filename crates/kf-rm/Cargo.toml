@@ -9,6 +9,7 @@ license.workspace = true
 kf-abi.workspace = true
 kf-util.workspace = true
 kf-gsp.workspace = true
+kf-chip.workspace = true
 
 [lints]
 workspace = true
