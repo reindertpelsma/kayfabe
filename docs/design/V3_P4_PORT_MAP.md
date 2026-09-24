@@ -16,6 +16,23 @@ kf-qemu wiring of the three registers (device.rs is owned elsewhere), Q6's fault
 Q7's pre-walk uncached read, and the device-side snapshot tables in `kf_walk.cu` (host no longer
 uses them; removing them needs a PTX regen and the CUDA suite on hardware).
 
+**STATUS UPDATE, 2026-09-25 (w826, branch `v3-p4b`): the guest-facing pieces are BUILT and the
+thin guest is PAST `kbusVerifyBar2` on GA106 (rev `94d05853`, boots `p4b4`-`p4b6`).** Built:
+§2.0 (`bar2PdeBase` declared, both roots zeroed on the GPU; realize = walker → reserve → import),
+§2.1(a-c) wired into kf3 (the three `MMU_INVALIDATE` registers trap on the vCPU; ONE VA-manager
+thread owns the walker and completes them), §2.2 (fn 70 writes the guest's `PDE3[0]` into our
+root on the GPU; `SET_PAGE_DIRECTORY` and the `COPY_SERVER_RESERVED_PDES` publications become
+`VasTable` roots; replies held until settled), §2.3(a,b) for BAR2 (`kf_mem::cpuwin::CpuWindow`)
+and §2.4 (PRAMIN from 160 pre-armed 64 KiB views; Q2 as recommended). Q1, Q3 (per-BAR scratch
+memfd) and Q4 taken as recommended. BAR1 stays on scratch (row 6 not built).
+`[measured p4b4]` 25 invalidates: 24 cleared after the reconcile, 4 of them `named_missed`; 18
+BAR2 views placed and all 18 released at teardown; PRAMIN 22 re-points, 0 misses, worst trap
+542 µs. The boot now stops at the P6 wall (`_memmgrMemUtilsScrubInitScheduleChannel: Unable to
+schedule channel, status: 56` — `0xa06f0103` GPFIFO_SCHEDULE unserviced), as §3 row 5 predicts.
+⚠ Open: invalidate #24 (the guest kernel VAS `0xc1e00006:0xc`) stays ARMED by design — its walk
+has 6 sysmem leaves and the host VA space has no guest-RAM object yet — so the guest spins ~22 s
+to its own timeout. The guest-RAM object (`alloc_os_descriptor` over the memfd) is the fix.
+
 **Summary.** P4 is **~2.2k lines of product code plus ~0.9k of harness**. Only **~0.4k** of it is
 copied old-tree code; the rest is new, because the old tree walked and mirrored guest tables on
 the CPU and v3 forbids both. The main parts already exist in v3:
