@@ -52,8 +52,13 @@ host-userspace question only.
 | `kf-core` | doorbell `vmm.rs` seam | — |
 | `kf-qemu` + `qemu/hw/misc/kf3/` | QOM glue + `KayfabeHostOps` from `nvkvm.c` / `shim_unsafe.rs`; `vmm-qemu` window verbs | device `kf3-gpu`, `kf3_` symbols, `KF_DEVICE` in the 3 harness sites |
 
+⊘ **CORRECTED w826 (`V3_P2_PORT_MAP.md` §4.1): `kayfabe-device/sweep.rs` is NOT a publication
+sweep** — it is the control TRIAGE table (`SWEEP_TRIAGE`, :83-171) for the guest's engine sweep, and
+dropping it re-creates `t134a`'s silent engine amputation. It is COPIED into kf-rm. The name misled
+the list below. The full P2/P3 copy order is `V3_P2_PORT_MAP.md`.
+
 **Dropped outright:** `kayfabe-device/plane.rs` (except GSP dispatch ideas), fbwin/gpgaview/ceresolve/
-gvaspub/pubqueue/sweep/mmuinval/bar2/setpagedir, `kayfabe-core` gpu/project/gpa/reactor/promote-join,
+gvaspub/pubqueue/mmuinval/bar2/setpagedir, `kayfabe-core` gpu/project/gpa/reactor/promote-join,
 `kayfabe-rt` device/ceutils/completion_watch, `kayfabe-fwd` CE half, isolate crates, barmirror,
 deviceview, walkmirror, delta/ack.
 
