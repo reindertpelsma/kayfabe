@@ -9842,6 +9842,15 @@ impl SharedDoorbell {
                         Some(w) => {
                             // ⊘ No dirty set at this seam — it is not the invalidate path,
                             // so it asks for the full sweep exactly as before w793.
+                            // ★★★★★ w825 — THE EXECUTOR JUST WROTE THE STORE, and under the single store no
+                            // witness can say which frames (`fb_writes_by(Executor)` answers None). `[measured
+                            // w825cup3m]` every sweep here ran `tasks=0`, and UVM's MAP_EXTERNAL PTEs — written
+                            // by THIS executor, invalidated in-band — never became rows. Mark every space dirty
+                            // first, as an ALL_PDB invalidate would.
+                            if run.bytes > 0 {
+                                let _ = self.device.note_guest_invalidate(None, None);
+                                GUEST_INVALIDATES_DECLARED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                            }
                             let r = self.refresh_page_tables(w, None);
                             let mut ctx = self.publish_ctx();
                             // ⊘ `Drain`, not `Publish` — the same argument the invalidate arm
