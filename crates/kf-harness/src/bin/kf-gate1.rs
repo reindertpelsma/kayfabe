@@ -62,7 +62,7 @@ fn run(l: &mut Ledger) -> Result<(), String> {
     // so arm all ten and let the drained record say which one fired.
     let mut armed = Vec::new();
     for n in 0..10u32 {
-        let o = rm.alloc_os_event(rm.subdevice(), notifier_ce(n), &ev);
+        let o = rm.alloc_os_event(rm.subdevice(), notifier_ce(n), true, &ev);
         let a = rm.set_notification(notifier_ce(n), kf_abi::eventnotify::ACTION_REPEAT);
         armed.push(format!("CE{n}:{}/{}", o.is_ok(), a.is_ok()));
     }

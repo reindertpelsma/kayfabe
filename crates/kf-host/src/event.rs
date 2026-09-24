@@ -44,6 +44,13 @@ const NVOS41_SIZE: usize = 16;
 /// `sizeof(NvUnixEvent)` — `{hObject, NotifyIndex, info32, NvU16 info16}` + 2 pad
 /// (`nvos.h:1926-1937`).
 const NV_UNIX_EVENT_SIZE: usize = 16;
+/// `NV01_EVENT_NONSTALL_INTR` (`ogkm-580: nvos.h:433`), OR-ed into `notifyIndex`. ★ Without it an
+/// engine event lands on the subdevice's ORDINARY notifier list, which a CE non-stall interrupt never
+/// walks: `engineNonStallIntrNotify` notifies only `pGpu->engineNonstallIntrEventNotifications`,
+/// and an event joins that list only when this bit is set (`event_notification.c:683-737`).
+/// `[measured w826 gate 1]` without it: copy + semaphore done, event fd silent on all ten CEs.
+pub const NV01_EVENT_NONSTALL_INTR: u32 = 0x0800_0000;
+
 /// Drain bound per readiness — the queue is RM's; we never loop on its word alone.
 pub const DRAIN_MAX: usize = 64;
 
@@ -147,11 +154,20 @@ impl HostRm {
         Ok(EventFd { node, key })
     }
 
-    /// `NV01_EVENT_OS_EVENT` under `source` for `notify_index`, delivered to `ev`.
+    /// `NV01_EVENT_OS_EVENT` under `source` for `notify_index`, delivered to `ev`. `nonstall`
+    /// registers it on the ENGINE's non-stall list (source must be the subdevice) — the edge a copy
+    /// engine's `LAUNCH_DMA` interrupt raises.
     ///
     /// # Errors
     /// The host's refusal.
-    pub fn alloc_os_event(&self, source: u32, notify_index: u32, ev: &EventFd) -> Result<u32, RmError> {
+    pub fn alloc_os_event(
+        &self,
+        source: u32,
+        notify_index: u32,
+        nonstall: bool,
+        ev: &EventFd,
+    ) -> Result<u32, RmError> {
+        let notify_index = if nonstall { notify_index | NV01_EVENT_NONSTALL_INTR } else { notify_index };
         let mut params = [0u8; NV0005_PARAMS_SIZE];
         params[0..4].copy_from_slice(&self.client.raw().to_le_bytes());
         params[4..8].copy_from_slice(&source.to_le_bytes());
