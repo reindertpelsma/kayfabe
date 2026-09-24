@@ -14972,8 +14972,34 @@ fn publish_guest_ram_slices(
     let runs = crate::storemap::coalesce_ram_rows(&want);
     let (mut mapped, mut refused) = (0usize, 0usize);
     let mut first_refusal: Option<String> = None;
+    let probe = std::env::var("KAYFABE_PROBE_VA").ok().and_then(|v| {
+        v.strip_prefix("0x")
+            .and_then(|h| u64::from_str_radix(h, 16).ok())
+            .or_else(|| v.parse::<u64>().ok())
+    });
+    if let Some(p) = probe
+        && let Some(&(lva, loff, llen)) = live.iter().find(|&&(va, _, len)| va <= p && p < va + len)
+    {
+        eprintln!(
+            "kayfabe: GUEST-RAM-SLICE PROBE-ROW proc={} pdb=0x{:x} va=0x{p:x} row=[0x{lva:x}+0x{llen:x} \
+             -> file 0x{loff:x}] covered_before_this_pass={}",
+            pid.0,
+            pdb.0,
+            sp.ram_covers(store_vas, lva, llen, loff)
+        );
+    }
     for &(va, off, len) in &runs {
-        match sp.map_ram_slice(store_vas, bytes, off, len, kayfabe_rt::GpuVa(va)) {
+        let res = sp.map_ram_slice(store_vas, bytes, off, len, kayfabe_rt::GpuVa(va));
+        if let Some(p) = probe
+            && va <= p
+            && p < va + len
+        {
+            eprintln!(
+                "kayfabe: GUEST-RAM-SLICE PROBE-MAP va=0x{p:x} run=[0x{va:x}+0x{len:x} -> file \
+                 0x{off:x}] → {res:?}"
+            );
+        }
+        match res {
             Ok(_) => mapped += 1,
             Err(e) => {
                 refused += 1;
