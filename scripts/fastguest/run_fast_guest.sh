@@ -117,6 +117,21 @@ echo "== arms: $ARMS_TOK   budget: ${BUDGET}s   self-deadline: ${DEADLINE_MS}ms 
 # did not take" for one whole cycle; the binary predated it by four minutes.
 # ⊘ Printed rather than checked: a check would need a provenance stamp inside the binary, and
 # `strings | grep -q` as a gate is a trap this campaign has already paid for.
+# ⊘⊘⊘ **w826 — THE PREVIOUS VM'S GPU MEMORY OUTLIVES ITS QEMU FOR A MOMENT.** `[measured w826
+# q10/q11]` twice, the next run's store reservation probe answered NOTHING_RESERVABLE in 0.6 ms
+# and realize refused (empty serial log) — while nvidia-smi showed 0 MiB used seconds later. The
+# run lock releases when QEMU exits; the isolate child holding the ~11 GiB reservation exits
+# after it. ⇒ Wait for the GPU to drain before launching, and say so if it never does.
+if command -v nvidia-smi >/dev/null 2>&1; then
+    KF_GPU_IDLE_MIB=${KF_GPU_IDLE_MIB:-512}
+    for _i in $(seq 1 60); do
+        _used=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits 2>/dev/null | head -1 | tr -dc 0-9)
+        [ -n "$_used" ] && [ "$_used" -le "$KF_GPU_IDLE_MIB" ] && break
+        sleep 0.5
+    done
+    [ -n "${_used:-}" ] && [ "$_used" -gt "$KF_GPU_IDLE_MIB" ] && \
+        echo "run_fast_guest: ⚠ the GPU still holds ${_used} MiB after 30 s — a previous VM did not release it; the store reservation will likely fail" >&2
+fi
 echo "== qemu:  $Q  (built $(date -r "$Q" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || echo unknown))"
 # ⊘⊘⊘ **w793 — PRINTING THE AGE WAS NOT ENOUGH, AND IT COST A RUN THE SAME DAY IT WAS WRITTEN.**
 #
