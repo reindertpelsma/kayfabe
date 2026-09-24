@@ -438,6 +438,28 @@ static void t_dual_pde_both_halves(void)
     });
 }
 
+static void t_dual_pde_mixed_slots_live_w826(void)
+{
+    /* `[measured w826 ct10]` the live GA106 shape that lost two 4 KiB leaves: the small
+     * table exists first (slots 0 and 1 mapped), THEN RM adds a big table at a 256-byte
+     * aligned address whose bit 9 is set (0x11300 -> dual low word 0x1132) and maps slot 2
+     * as a 64 KiB page. Big PTEs 0 and 1 are ZERO, so hardware uses the small PTEs there. */
+    Fix f(8u << 20, cfg_default());
+    Tree t(f.g);
+    t.map4k(VBASE, 0x490000ull);
+    t.map4k(VBASE + 0x10000ull, 0x4a0000ull);
+    f.g.alloc(0x300, 256);                      /* push the big table to ...300 */
+    t.map64k(VBASE + 0x20000ull, 0x4b0000ull);
+    CHECK_M((t.ptb(VBASE, false) & 0x200ull) != 0ull, "fixture: big table must have bit 9 set");
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    expect(f, {
+        {VBASE,             0x490000ull, 4096ull, F4K, KFWR_OP_MAP},
+        {VBASE + 0x10000ull, 0x4a0000ull, 4096ull, F4K, KFWR_OP_MAP},
+        {VBASE + 0x20000ull, 0x4b0000ull, 64ull << 10, F64K, KFWR_OP_MAP},
+    });
+}
+
 static void t_multiple_pdbs(void)
 {
     Fix f(16u << 20, cfg_default());
@@ -3253,6 +3275,7 @@ static const Case CASES[] = {
     { "correctness/sparse_and_invalid_skipped", t_sparse_and_invalid_skipped },
     { "correctness/flags_decoded",              t_flags_decoded },
     { "correctness/dual_pde_both_halves",       t_dual_pde_both_halves },
+    { "correctness/dual_pde_mixed_slots_live_w826", t_dual_pde_mixed_slots_live_w826 },
     { "correctness/multiple_pdbs",              t_multiple_pdbs },
 
     { "delta/nothing_changed",                  t_delta_nothing_changed },
