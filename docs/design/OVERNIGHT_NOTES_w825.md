@@ -3,6 +3,36 @@
 STATUS: LIVE — the running log of the overnight autonomy session. Box 52236011 (RTX 3060,
 GA106, 580.159.04). Baseline `w825base`: thin guest 17/30 (honest 15/30).
 
+
+## ★ MORNING SUMMARY (read this first) — 2026-09-24 ~01:50
+
+| goal | result | evidence |
+|---|---|---|
+| thin/fast guest (raw client, 30 arms) | **26/30** at `47029f0c`, **25/30** at `518726d3`; FAIL=0 both | all misses are TIMEOUTs; `defer-liveness` flips on the budget edge |
+| CUDA ladder | ✔ `cup3` **43**, ✔ `cup8` **N=2048 bad=0 maxerr=0** | Xid 0; GR forwarded; same program as the C's green |
+| LLM | ✔ **PASS** — GPU text == CPU text, 16 tokens | `LLM_PARAM_DEVICE=cuda`, 21 055 forwarded GR doorbells, Xid 0; ⚠ 9.5 s vs CPU 1.2 s |
+
+**Why I stopped rather than kept going:** the four remaining thin-guest arms are each blocked on a
+multi-day build or on an owner decision, not on a bug I can find tonight:
+- `ce-client-guest-ram`, `concurrency`, `concurrent-fuzz` — the invalidate hold is now ≈ the CPU
+  page-table sweep alone (~3.5–8 ms: ~29 PT pages read at ~25 MB/s through device views).
+  Only §9 step 4 (GPU walker) removes it, and that needs a new kernel report format (see the step-4
+  section). Group D is also §10.1's acceptance test for the worker/epoll plane (`kf-qemu`, 0 lines).
+- `gpga-reserve-probe` — §10 group E: a 256 MiB CPU read sweep, bound by construction; the plan
+  already says it needs a budget ≥ 90 s.
+
+**Owner questions (decisions I did not take):**
+1. **GPGA reservation headroom.** The default reserves the maximum (11 760 MiB of 12 GiB); host RM
+   then has no vidmem for per-channel GR context and CUDA's 3rd GR channel birth fails NoMemory.
+   Everything CUDA/LLM above ran with `KAYFABE_SCRATCHPAD_START_MB=10240`. What policy? (per-channel
+   headroom × max channels, or a fixed reserve?) I did NOT change the default.
+2. **CPU PT sweep on the hold until step 4 lands** — v3 declares CPU reads of vidmem dead; the
+   sweep is exactly that, and it is now the whole hold. OK to keep it as the bridge?
+3. **`gpga-reserve-probe` budget** — raise that arm's budget to ≥ 90 s, or keep 45 s and accept
+   it as a known E-group miss until the BAR1 device-view path is faster?
+
+**Box 52236011 destroyed at the end of the session (verified), timer removed.**
+
 ## Measured and fixed
 
 1. **The doorbell ledger never saw a WORKER forward** (`c61f4a49`). A deferred doorbell is
@@ -83,6 +113,14 @@ exceeds 45 s in TEARDOWN — the same budget-edge seen at baseline (it passed at
 90 s budget). The new sweeps cost it 364 ms total. ⚠ Every arm pays a 4 s
 `_threadNodeCheckTimeout` in guest RM teardown: some teardown request is never answered.
 Not yet diagnosed; fixing it would buy every arm 4 s.
+
+## ✔✔✔ LLM lane — PASS, 2026-09-24 01:49 (run `w825llm`, `518726d3`)
+
+`provision_guest_llm.sh` (CPU control PASSED, receipt written) then `w409_llm_boot.sh` with
+`KAYFABE_SCRATCHPAD_START_MB=10240`: `W392_OUTCOME=(P) PASS — 16 tokens AND the text matches the
+CPU`; GPU text `[ ______. A. Paris B. London C. New York D]` == CPU text; Xid 0;
+`LLM_PARAM_DEVICE=cuda`; GR token forwarded=21 055. ⚠ `LLM_MS` 9 511 (GPU) vs 1 211 (guest CPU)
+— correct but ~8× slower than the CPU; parity is the next LLM question, not this one.
 
 ## Step 4 (walk-at-invalidate on the GPU) — mapped, NOT built tonight, and why
 
