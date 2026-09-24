@@ -949,6 +949,14 @@ impl WalkKernel {
     ///
     /// # Errors
     /// [`CudaError`].
+    /// Read `buf.len()` bytes of device memory at `src` (a harness check, never a data path).
+    ///
+    /// # Errors
+    /// The CUDA error.
+    pub fn read_at(&self, src: CUdeviceptr, buf: &mut [u8]) -> Result<(), CudaError> {
+        self.cu.memcpy_d2h(buf, src, "cuMemcpyDtoH(read_at)")
+    }
+
     pub fn write_at(&self, dst: CUdeviceptr, bytes: &[u8]) -> Result<(), CudaError> {
         self.cu.memcpy_h2d(dst, bytes, "cuMemcpyHtoD(write_at)")
     }

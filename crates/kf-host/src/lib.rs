@@ -1647,6 +1647,17 @@ impl HostRm {
     }
 
 
+    /// Export `object` to a FRESH control-node fd (owned by the returned device) — how the store
+    /// is handed to the CUDA walk context (`WalkKernel::import_store`).
+    ///
+    /// # Errors
+    /// The open, or the host's refusal.
+    pub fn export_to_new_fd(&self, object: u32) -> Result<CharDevice, RmError> {
+        let ctl = CharDevice::openat(&self.dev, c"nvidiactl").map_err(|e| ioctl_error(&e))?;
+        self.export_object_to_fd(object, ctl.fd_number())?;
+        Ok(ctl)
+    }
+
     /// This family's CE object class id.
     #[must_use]
     pub fn ce_class_id(&self) -> u32 {

@@ -485,8 +485,10 @@ dependencies = [
  "kf-abi",
  "kf-arch",
  "kf-chip",
+ "kf-cuda",
  "kf-host",
  "kf-linux-raw",
+ "kf-mem",
 ]
 
 [[package]]

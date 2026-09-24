@@ -58,6 +58,7 @@ kf-host = { path = "crates/kf-host" }
 kf-chip = { path = "crates/kf-chip" }
 kf-chan = { path = "crates/kf-chan" }
 kf-cuda = { path = "crates/kf-cuda" }
+kf-mem = { path = "crates/kf-mem" }
 kayfabe-doorbell = { path = "crates/kayfabe-doorbell" }
 kayfabe-rm-ladder = { path = "crates/kayfabe-rm-ladder" }
 kayfabe-cuda = { path = "crates/kayfabe-cuda" }
