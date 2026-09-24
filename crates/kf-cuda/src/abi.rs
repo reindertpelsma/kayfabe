@@ -553,6 +553,49 @@ pub fn kf_format_ver2() -> KfFormat {
     f
 }
 
+/// ★ The VER3 (Hopper, Blackwell) descriptor — a hand transcription of `kf_walk.cu`'s own
+/// `kf_format_ver3_untested()`, pinned byte for byte by the descriptor differential exactly as VER2
+/// is. Every field was re-checked against `ogkm-580 hopper/gh100/dev_mmu.h:53-187` and the level
+/// geometry against `kern_gmmu_fmt_gh10x.c:53-114` (w826): PD4 `56:56` (2 entries) → PD3 `55:47` →
+/// PD2 `46:38` → PD1 `37:29` (512 MiB leaf) → PD0 `28:21` dual (2 MiB leaf) → big `20:16` / small
+/// `20:12`; ONE address field `51:12` (no vid/sys split); PCF `7:3` whose low four enumerant bits
+/// are UNCACHED/PRIVILEGE/RO/NO_ATOMIC; `PCF_SPARSE = 1`; KIND `11:8`.
+///
+/// ⚠ Built from [`kf_format_ver2`] and overridden field by field, so the zeroed padding the ABI
+/// depends on is inherited, never re-created by a struct literal.
+#[must_use]
+pub fn kf_format_ver3() -> KfFormat {
+    let mut f = kf_format_ver2();
+    f.table_version = KF_TBL_VER3;
+    f.first_dir = 0;
+    let dir = |va_lo: u8, va_hi: u8, entry_bytes: u8, leaf_ps: u8| KfDir {
+        active: 1,
+        va_lo,
+        entry_bytes,
+        leaf_ps,
+        entries: 1u16 << (va_hi - va_lo + 1),
+        pad: 0,
+    };
+    f.dir[0] = dir(56, 56, 8, KF_PS_NONE);
+    f.dir[1] = dir(47, 55, 8, KF_PS_NONE);
+    f.dir[2] = dir(38, 46, 8, KF_PS_NONE);
+    f.dir[3] = dir(29, 37, 8, PS_512M);
+    f.dir[4] = dir(21, 28, 16, PS_2M);
+    f.addr_sel = [0, 0, 0, 0];
+    f.addr_local = KfField { lo: 12, bits: 40, shift: 12, pad: 0 };
+    f.addr_sys = f.addr_local;
+    f.big_addr_local = KfField { lo: 8, bits: 44, shift: 8, pad: 0 };
+    f.big_addr_sys = f.big_addr_local;
+    f.bit_volatile = 3;
+    f.bit_privilege = 4;
+    f.bit_read_only = 5;
+    f.bit_atomic_disable = 6;
+    f.pcf = KfField { lo: 3, bits: 5, shift: 0, pad: 0 };
+    f.pcf_sparse = 1;
+    f.kind = KfField { lo: 8, bits: 4, shift: 0, pad: 0 };
+    f
+}
+
 /// Aperture code: video memory.
 pub const AP_VID: u8 = 0;
 /// Aperture code: peer.

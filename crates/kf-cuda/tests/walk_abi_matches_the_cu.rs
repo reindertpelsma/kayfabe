@@ -350,6 +350,16 @@ fn extract_fn(src: &str, sig: &str) -> String {
 /// the transcription safe to rely on.
 #[test]
 fn the_rust_ver2_descriptor_matches_the_cu_byte_for_byte() {
+    assert_descriptor_matches("kf_format_ver2", &kf_format_ver2(), "VER2");
+}
+
+/// ★ Hopper and Blackwell's format, pinned the same way (w826: every family first-class).
+#[test]
+fn the_rust_ver3_descriptor_matches_the_cu_byte_for_byte() {
+    assert_descriptor_matches("kf_format_ver3_untested", &kf_cuda::abi::kf_format_ver3(), "VER3");
+}
+
+fn assert_descriptor_matches(cu_fn: &str, rust: &kf_cuda::abi::KfFormat, tag: &str) {
     let root = repo_root();
     let cu = std::fs::read_to_string(root.join("cuda/walk/kf_walk.cu")).expect("the .cu");
     let h = std::fs::read_to_string(root.join("cuda/walk/kf_walk.h")).expect("the .h");
@@ -364,6 +374,7 @@ fn the_rust_ver2_descriptor_matches_the_cu_byte_for_byte() {
         "KF_PS_NONE",
         "KF_ABI_VERSION",
         "KF_TBL_VER2",
+        "KF_TBL_VER3",
         "KFWR_AP_VIDMEM",
         "KFWR_AP_PEER",
         "KFWR_AP_SYSCOH",
@@ -401,14 +412,14 @@ fn the_rust_ver2_descriptor_matches_the_cu_byte_for_byte() {
         "static void kf_set_dir(KfDir *d, int active, uint8_t va_lo, uint8_t va_hi,",
     ));
     prog.push('\n');
-    prog.push_str(&extract_fn(&cu, "static KfFormat kf_format_ver2(void)"));
-    prog.push_str(
-        "\nint main(void){ KfFormat F = kf_format_ver2(); const unsigned char *p = \
+    prog.push_str(&extract_fn(&cu, &format!("static KfFormat {cu_fn}(void)")));
+    prog.push_str(&format!(
+        "\nint main(void){{ KfFormat F = {cu_fn}(); const unsigned char *p = \
          (const unsigned char *)&F; for (size_t i = 0; i < sizeof F; i++) printf(\"%02x\", \
-         p[i]); printf(\"\\n\"); return 0; }\n",
-    );
+         p[i]); printf(\"\\n\"); return 0; }}\n"
+    ));
 
-    let dir = std::env::temp_dir().join(format!("kf_fmt_{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("kf_fmt_{tag}_{}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("a temp dir");
     let src = dir.join("fmt.cpp");
     let bin = dir.join("fmt");
@@ -428,8 +439,7 @@ fn the_rust_ver2_descriptor_matches_the_cu_byte_for_byte() {
     let run = Command::new(&bin).output().expect("run the probe");
     let c_hex = String::from_utf8_lossy(&run.stdout).trim().to_string();
 
-    let rust = kf_format_ver2();
-    let rust_hex: String = kf_cuda::driver_unsafe::view_bytes(&rust)
+    let rust_hex: String = kf_cuda::driver_unsafe::view_bytes(rust)
         .iter()
         .map(|b| format!("{b:02x}"))
         .collect();
@@ -440,14 +450,14 @@ fn the_rust_ver2_descriptor_matches_the_cu_byte_for_byte() {
         let cb: Vec<u8> = (0..c_hex.len() / 2)
             .map(|i| u8::from_str_radix(&c_hex[i * 2..i * 2 + 2], 16).unwrap_or(0))
             .collect();
-        let rb = kf_cuda::driver_unsafe::view_bytes(&rust);
+        let rb = kf_cuda::driver_unsafe::view_bytes(rust);
         let at = cb
             .iter()
             .zip(rb.iter())
             .position(|(a, b)| a != b)
             .unwrap_or(cb.len().min(rb.len()));
         panic!(
-            "★ THE VER2 DESCRIPTOR DIFFERS at byte {at}: the .cu says {:#04x}, abi.rs says \
+            "★ THE {tag} DESCRIPTOR DIFFERS at byte {at}: the .cu says {:#04x}, abi.rs says \
              {:#04x}.\n  .cu  = {c_hex}\n  rust = {rust_hex}\nOne wrong number here decodes \
              every address at the wrong offset and reads as a page-table bug.",
             cb.get(at).copied().unwrap_or(0),

@@ -83,6 +83,42 @@ pub fn pte_sys(gpa: u64) -> u64 {
         | (((gpa >> 12) & mask(ver2::ADDR_SYS_BITS)) << ver2::ADDR_LO)
 }
 
+/// ★ `NV_MMU_VER3` (Hopper, Blackwell) builders — `ogkm-580 hopper/gh100/dev_mmu.h:53-187`.
+/// ONE address field `51:12` (no vid/sys split); a PDE at a level that cannot hold a PTE carries
+/// `VALID` (bit 0); at a leaf-capable level bit 0 is `IS_PTE` and is CLEAR for a PDE.
+pub mod ver3 {
+    /// `_ADDRESS 51:12`, kept in place (`SHIFT 12`).
+    const ADDR_MASK: u64 = ((1u64 << 40) - 1) << 12;
+    /// A PDE pointing at `child` (vidmem). `valid` for PD4/PD3/PD2; clear (IS_PTE = 0) for PD1/PD0.
+    #[must_use]
+    pub fn pde(child: u64, valid: bool) -> u64 {
+        u64::from(valid) | (1 << 1) | (child & ADDR_MASK)
+    }
+    /// A dual PDE (PD0): big half INVALID (no 64 KiB table), small half → `small` (vidmem):
+    /// `_APERTURE_SMALL 66:65`, `_ADDRESS_SMALL 115:76` — the high word's `2:1` and `51:12`.
+    #[must_use]
+    pub fn dual_small(small: u64) -> [u64; 2] {
+        [0, (1 << 1) | (small & ADDR_MASK)]
+    }
+    /// A valid 4 KiB PTE mapping vidmem `phys` (`_APERTURE_VIDEO_MEMORY`, `PCF` 0 = RW atomic cached).
+    #[must_use]
+    pub fn pte(phys: u64) -> u64 {
+        1 | (phys & ADDR_MASK)
+    }
+    /// A valid 4 KiB PTE mapping coherent SYSTEM memory at `gpa`.
+    #[must_use]
+    pub fn pte_sys(gpa: u64) -> u64 {
+        1 | (2 << 1) | (gpa & ADDR_MASK)
+    }
+    /// VA index at PD4 (`[56]`), PD3 (`[55:47]`), PD2 (`[46:38]`), PD1 (`[37:29]`), PD0 (`[28:21]`),
+    /// PT (`[20:12]`) — `kern_gmmu_fmt_gh10x.c:53-114`.
+    #[must_use]
+    pub fn idx(va: u64) -> [usize; 6] {
+        let f = |lo: u32, bits: u32| ((va >> lo) & ((1 << bits) - 1)) as usize;
+        [f(56, 1), f(47, 9), f(38, 9), f(29, 9), f(21, 8), f(12, 9)]
+    }
+}
+
 /// The SPARSE encoding: VALID clear, VOLATILE set.
 #[must_use]
 pub fn sparse_pte() -> u64 {

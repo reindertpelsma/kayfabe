@@ -54,3 +54,58 @@ impl Tree {
     }
 }
 
+
+/// ★ A VER3 (Hopper, Blackwell) tree — PD4 → PD3 → PD2 → PD1 → PD0 (dual) → PT — built exactly as the
+/// family's driver lays it out, so the walk kernel's VER3 decode can be proved on ANY GPU (the walker
+/// decodes guest bytes; the host's own MMU never walks these tables).
+pub struct Tree3 {
+    /// The image.
+    pub img: Image,
+    /// The root (PD4) — a store offset.
+    pub root: u64,
+    tables: HashMap<(u8, u64, usize), u64>,
+}
+
+impl Tree3 {
+    /// An empty tree whose image starts at store offset `base`.
+    #[must_use]
+    pub fn new(base: u64, bytes: usize) -> Tree3 {
+        let mut img = Image::at(base, bytes);
+        let root = img.alloc(2 * 8, 4096);
+        Tree3 { img, root, tables: HashMap::new() }
+    }
+
+    fn child(&mut self, level: u8, parent: u64, idx: usize, bytes: u64, stride: u64, valid: bool) -> u64 {
+        if let Some(&c) = self.tables.get(&(level, parent, idx)) {
+            return c;
+        }
+        let c = self.img.alloc(bytes, 4096);
+        let at = parent + stride * idx as u64;
+        if level == 0 {
+            let [lo, hi] = kf_cuda::synth::ver3::dual_small(c);
+            self.img.put64(at, lo);
+            self.img.put64(at + 8, hi);
+        } else {
+            self.img.put64(at, kf_cuda::synth::ver3::pde(c, valid));
+        }
+        self.tables.insert((level, parent, idx), c);
+        c
+    }
+
+    fn leaf4k(&mut self, va: u64, leaf: u64) {
+        let [i4, i3, i2, i1, i0, it] = kf_cuda::synth::ver3::idx(va);
+        // PD4/PD3/PD2 cannot hold a PTE ⇒ their PDEs carry VALID; PD1 (512 MiB) and PD0 (2 MiB)
+        // can ⇒ bit 0 is IS_PTE, clear for a PDE (`gh100/dev_mmu.h:53-56`).
+        let pd3 = self.child(4, self.root, i4, 512 * 8, 8, true);
+        let pd2 = self.child(3, pd3, i3, 512 * 8, 8, true);
+        let pd1 = self.child(2, pd2, i2, 512 * 8, 8, true);
+        let pd0 = self.child(1, pd1, i1, 256 * 16, 8, false);
+        let pt = self.child(0, pd0, i0, 512 * 8, 16, false);
+        self.img.put64(pt + 8 * it as u64, leaf);
+    }
+
+    /// Map the 4 KiB page at `va` to FB-physical `phys`.
+    pub fn map4k(&mut self, va: u64, phys: u64) {
+        self.leaf4k(va, kf_cuda::synth::ver3::pte(phys));
+    }
+}

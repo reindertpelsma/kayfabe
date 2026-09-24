@@ -418,16 +418,14 @@ impl WalkKernel {
                 ),
             });
         }
-        if fmt.table_version == KF_TBL_VER3 {
-            return Err(CudaError::Refused {
-                what: "the walk kernel's setup data (table_version)",
-                code: i32::try_from(fmt.table_version).unwrap_or(-1),
-                name: "VER3 (Hopper/Blackwell) is a SKETCH that has never decoded a real \
-                       table; `kf_create` in the .cu refuses it unless KF_ALLOW_UNTESTED_VER3 \
-                       is defined and so does this. Refusing is the honest answer."
-                    .to_string(),
-            });
-        }
+        // ★ VER3 (Hopper, Blackwell) is ACCEPTED (w826, owner: every family first-class). Its
+        // descriptor is pinned byte for byte against the `.cu` (`kf_format_ver3`), every field
+        // re-checked against ogkm-580's `hopper/gh100/dev_mmu.h`, and `kf-gate7` walks REAL VER3
+        // tables on any GPU — the walker decodes guest bytes; the host's own MMU never sees them.
+        // ⚠ KNOWN GAP (w826): the .cu's big-PTE veto (`kf_big_pte_unmapped`, the w826 ct4 fix) is
+        // VER2-only. VER3 spells "no valid 4 KiB page under this big PTE" as `PCF = 0x3`
+        // (`NV_MMU_VER3_PTE_PCF_NO_VALID_4KB_PAGE`, `gh100/dev_mmu.h:140`), which the kernel does
+        // not yet test — a Hopper guest mixing big and small pages in one 2 MiB slot is the case.
 
         let cu = Cuda::open()?;
         cu.init()?;
