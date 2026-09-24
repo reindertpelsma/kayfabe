@@ -22,11 +22,16 @@
 //!
 //! ## PRAMIN: [`PraminPool`]
 //!
-//! Arming a view is an RM ioctl, and §41 forbids one on the vCPU path — but the window is
-//! re-pointed INSIDE the trapped window-base write. ⇒ Views are armed OFF the vCPU at realize, one
-//! per 64 KiB granule of the ranges the guest is measured to use, and the trap only places them
-//! (`V3_P4_PORT_MAP.md` Q2). A slot whose granule has no view shows scratch and is **counted and
-//! named** — a visible failure, never a silent zero passed off as the store.
+//! The window is re-pointed INSIDE the trapped window-base write, synchronously: the guest's next
+//! PRAMIN access must see the new window and there is no later point to defer to. ★ **Owner ruling
+//! 2026-09-25: this is the ONE sanctioned exception to "no syscalls on a vCPU", and it gets ONE host
+//! map + ONE `mmap` per window move** — not the 16 per-granule placements of pre-armed views it
+//! replaces (`[measured 5dd01b48]` ~400-540 µs worst in the trap, each `mmap` under the driver's
+//! per-device semaphore). The 16 slots coalesce into runs (normally ONE: 1 MiB of store, or of
+//! guest RAM); a store run costs one `NV_ESC_RM_MAP_MEMORY` on a node opened AHEAD of time plus one
+//! `mmap(MAP_FIXED)`; a RAM or scratch run costs one `mmap`. The replaced views are handed to
+//! [`ViewOps::retire`], which releases them OFF the vCPU. A slot with no addressable source shows
+//! scratch and is **counted and named**.
 //!
 //! ⊘ Nothing here reads or writes a byte of guest memory.
 
@@ -71,6 +76,21 @@ pub trait ViewOps {
     /// # Errors
     /// The host's refusal, by name.
     fn release(&self, view: Self::View) -> Result<(), String>;
+
+    /// Arm a view ON THE vCPU — the PRAMIN re-point's single RM call. Production uses a node
+    /// opened ahead of time (so this is exactly one ioctl); the default is [`ViewOps::arm_store`].
+    ///
+    /// # Errors
+    /// As [`ViewOps::arm_store`].
+    fn arm_store_in_trap(&self, off: u64, len: u64) -> Result<Self::View, String> {
+        self.arm_store(off, len)
+    }
+
+    /// Hand a view no longer placed anywhere to be released OFF the vCPU. The default releases
+    /// inline (tests); production queues it to a reaper thread.
+    fn retire(&self, view: Self::View) {
+        let _ = self.release(view);
+    }
 }
 
 /// One placement WE made in a [`CpuWindow`].
@@ -210,14 +230,18 @@ impl<V: ViewOps> MapTarget for CpuWindow<V> {
 /// What one PRAMIN re-point did.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct Repointed {
-    /// Slots now showing a pre-armed store view.
+    /// Slots now showing the store.
     pub views: u32,
     /// Slots now showing guest RAM.
     pub ram: u32,
-    /// ★ Slots showing scratch because nothing was armed for them — a named failure.
+    /// ★ Slots showing scratch because nothing addressable backs them — a named failure.
     pub missed: u32,
-    /// Placements the kernel refused.
+    /// Placements (or maps) the kernel refused.
     pub refused: u32,
+    /// Host maps (`NV_ESC_RM_MAP_MEMORY`) made on the vCPU — 1 for a store window.
+    pub maps: u32,
+    /// `mmap` placements made on the vCPU — 1 for a window that is one run.
+    pub mmaps: u32,
 }
 
 /// Where a PRAMIN slot must point.
@@ -231,106 +255,151 @@ pub enum SlotSource {
     Nothing,
 }
 
-/// ★★★ **The PRAMIN window: pre-armed 64 KiB views, placed by the trapped window-base write.**
+/// One contiguous run of slots with one source.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Run {
+    Store { first: usize, n: usize, off: u64 },
+    Ram { first: usize, n: usize, gpa: u64 },
+    Nothing { first: usize, n: usize },
+}
+
+/// Coalesce slots into maximal runs: consecutive slots whose sources continue each other.
+fn runs(slots: &[SlotSource], granule: u64) -> Vec<Run> {
+    let mut out: Vec<Run> = Vec::new();
+    for (i, src) in slots.iter().enumerate() {
+        let extended = match (out.last_mut(), *src) {
+            (Some(Run::Store { n, off, .. }), SlotSource::Store(o)) if *off + *n as u64 * granule == o => {
+                *n += 1;
+                true
+            }
+            (Some(Run::Ram { n, gpa, .. }), SlotSource::Ram(g)) if *gpa + *n as u64 * granule == g => {
+                *n += 1;
+                true
+            }
+            (Some(Run::Nothing { n, .. }), SlotSource::Nothing) => {
+                *n += 1;
+                true
+            }
+            _ => false,
+        };
+        if !extended {
+            out.push(match *src {
+                SlotSource::Store(off) => Run::Store { first: i, n: 1, off },
+                SlotSource::Ram(gpa) => Run::Ram { first: i, n: 1, gpa },
+                SlotSource::Nothing => Run::Nothing { first: i, n: 1 },
+            });
+        }
+    }
+    out
+}
+
+/// ★★★ **The PRAMIN window: one host map + one `mmap` per window move** (owner ruling
+/// 2026-09-25; see the module doc).
 ///
-/// `Sync` by construction: the pool is built at realize and read-only afterwards; the re-point
-/// performs only `mmap(MAP_FIXED)` placements (no lock, no RM ioctl) and atomic counters.
+/// ⊘ Re-points are serialised by one mutex, held across the map and the placement: two vCPUs
+/// racing on the window-base register must not retire a view the other just placed. The lock
+/// guards only this operation (the sanctioned synchronous one); nothing else ever takes it.
 pub struct PraminPool<V: ViewOps> {
     ops: V,
     granule: u64,
-    views: BTreeMap<u64, V::View>,
     ram_offset: Box<dyn Fn(u64, u64) -> Option<u64> + Send + Sync>,
+    placed: std::sync::Mutex<Vec<V::View>>,
     /// Re-points done.
     pub repoints: AtomicU64,
-    /// Slots that showed scratch because no view was armed (see [`Repointed::missed`]).
+    /// Slots that showed scratch because nothing addressable backed them.
     pub missed: AtomicU64,
     /// Placements the kernel refused.
     pub refused: AtomicU64,
+    /// Host maps made in the trap.
+    pub maps: AtomicU64,
+    /// `mmap`s made in the trap.
+    pub mmaps: AtomicU64,
     /// Worst re-point wall time, ns (measured by the caller, stored here).
     pub worst_ns: AtomicU64,
 }
 
 impl<V: ViewOps> PraminPool<V> {
-    /// Arm one view per `granule` of every range in `ranges` (store offsets, `[start, end)`), OFF
-    /// the vCPU. `ram_offset(gpa, len)` maps a sysmem target to the guest-RAM memfd.
-    ///
-    /// # Errors
-    /// The first arm the host refused, by name — the VM must not start with a PRAMIN that would
-    /// silently show scratch where the guest is measured to look.
-    pub fn arm(
-        ops: V,
-        granule: u64,
-        ranges: &[(u64, u64)],
-        ram_offset: Box<dyn Fn(u64, u64) -> Option<u64> + Send + Sync>,
-    ) -> Result<PraminPool<V>, String> {
-        let mut views = BTreeMap::new();
-        for &(start, end) in ranges {
-            let mut at = start - start % granule;
-            while at < end {
-                if let std::collections::btree_map::Entry::Vacant(e) = views.entry(at) {
-                    let v = ops.arm_store(at, granule).map_err(|e| format!("PRAMIN view @{at:#x}: {e}"))?;
-                    e.insert(v);
-                }
-                at += granule;
-            }
-        }
-        Ok(PraminPool {
+    /// A pool over `ops`. `ram_offset(gpa, len)` maps a sysmem target to the guest-RAM memfd.
+    #[must_use]
+    pub fn new(ops: V, granule: u64, ram_offset: Box<dyn Fn(u64, u64) -> Option<u64> + Send + Sync>) -> Self {
+        PraminPool {
             ops,
             granule,
-            views,
             ram_offset,
+            placed: std::sync::Mutex::new(Vec::new()),
             repoints: AtomicU64::new(0),
             missed: AtomicU64::new(0),
             refused: AtomicU64::new(0),
+            maps: AtomicU64::new(0),
+            mmaps: AtomicU64::new(0),
             worst_ns: AtomicU64::new(0),
-        })
+        }
     }
 
-    /// Views armed.
-    #[must_use]
-    pub fn armed(&self) -> usize {
-        self.views.len()
-    }
-
-    /// The store ranges covered, merged — for the boot log.
-    #[must_use]
-    pub fn coverage(&self) -> Vec<(u64, u64)> {
-        crate::ledger::merge_ranges(self.views.keys().map(|&k| (k, k + self.granule)).collect())
-    }
-
-    /// ★ The vCPU path: point each slot at its source. `slots[i]` is what slot `i` (window offset
-    /// `i * granule`) must show. No lock, no RM ioctl, no allocation.
+    /// ★ The vCPU path: point the window at `slots` (slot `i` = window offset `i * granule`).
+    /// One map + one `mmap` per run; the replaced views are retired off the vCPU.
     pub fn repoint(&self, slots: &[SlotSource]) -> Repointed {
         let mut out = Repointed::default();
-        for (i, src) in slots.iter().enumerate() {
-            let at = i as u64 * self.granule;
-            let placed = match *src {
-                SlotSource::Store(off) => match self.views.get(&off) {
-                    Some(v) => self.ops.place_view(at, self.granule, v).map(|()| out.views += 1),
-                    None => {
-                        out.missed += 1;
-                        self.ops.sink(at, self.granule)
+        let g = self.granule;
+        let Ok(mut placed) = self.placed.lock() else {
+            out.refused += 1;
+            return out;
+        };
+        let mut fresh = Vec::new();
+        for run in runs(slots, g) {
+            let (first, n) = match run {
+                Run::Store { first, n, .. } | Run::Ram { first, n, .. } | Run::Nothing { first, n } => (first, n),
+            };
+            let (at, len) = (first as u64 * g, n as u64 * g);
+            let n32 = u32::try_from(n).unwrap_or(u32::MAX);
+            let r = match run {
+                Run::Store { off, .. } => {
+                    out.maps += 1;
+                    match self.ops.arm_store_in_trap(off, len) {
+                        Ok(v) => {
+                            out.mmaps += 1;
+                            let r = self.ops.place_view(at, len, &v).map(|()| out.views += n32);
+                            fresh.push(v);
+                            r
+                        }
+                        Err(e) => {
+                            out.missed += n32;
+                            out.mmaps += 1;
+                            self.ops.sink(at, len).and(Err(e))
+                        }
                     }
-                },
-                SlotSource::Ram(gpa) => match (self.ram_offset)(gpa, self.granule) {
-                    Some(foff) => self.ops.place_ram(at, self.granule, foff).map(|()| out.ram += 1),
-                    None => {
-                        out.missed += 1;
-                        self.ops.sink(at, self.granule)
+                }
+                Run::Ram { gpa, .. } => {
+                    out.mmaps += 1;
+                    match (self.ram_offset)(gpa, len) {
+                        Some(foff) => self.ops.place_ram(at, len, foff).map(|()| out.ram += n32),
+                        None => {
+                            out.missed += n32;
+                            self.ops.sink(at, len)
+                        }
                     }
-                },
-                SlotSource::Nothing => {
-                    out.missed += 1;
-                    self.ops.sink(at, self.granule)
+                }
+                Run::Nothing { .. } => {
+                    out.missed += n32;
+                    out.mmaps += 1;
+                    self.ops.sink(at, len)
                 }
             };
-            if placed.is_err() {
+            if r.is_err() {
                 out.refused += 1;
             }
+        }
+        let old = std::mem::replace(&mut *placed, fresh);
+        drop(placed);
+        // Every old view was covered by a MAP_FIXED placement above: none is reachable now.
+        for v in old {
+            self.ops.retire(v);
         }
         self.repoints.fetch_add(1, Ordering::Relaxed);
         self.missed.fetch_add(u64::from(out.missed), Ordering::Relaxed);
         self.refused.fetch_add(u64::from(out.refused), Ordering::Relaxed);
+        self.maps.fetch_add(u64::from(out.maps), Ordering::Relaxed);
+        self.mmaps.fetch_add(u64::from(out.mmaps), Ordering::Relaxed);
         out
     }
 }
@@ -456,29 +525,67 @@ mod tests {
     }
 
     #[test]
-    fn the_pool_arms_every_granule_once_and_repoints_without_arming() {
+    fn a_store_window_is_one_map_and_one_mmap() {
         let r = Rec::default();
         let g = 0x1_0000;
-        let pool = PraminPool::arm(&r, g, &[(0x10_0000, 0x12_0000), (0x11_0000, 0x13_0000)], Box::new(|gpa, _| Some(gpa + 7)))
-            .unwrap();
-        assert_eq!(pool.armed(), 3, "overlapping ranges arm each granule once");
-        assert_eq!(pool.coverage(), vec![(0x10_0000, 0x13_0000)]);
-        r.ops.lock().unwrap().clear();
-        let out = pool.repoint(&[SlotSource::Store(0x11_0000), SlotSource::Store(0x20_0000), SlotSource::Ram(0x9000_0000), SlotSource::Nothing]);
-        assert_eq!(out, Repointed { views: 1, ram: 1, missed: 2, refused: 0 });
-        let ops = r.ops.lock().unwrap();
-        assert!(ops.iter().all(|o| !matches!(o, Op::Arm(..))), "the vCPU path never arms: {ops:?}");
-        assert_eq!(
-            *ops,
-            vec![Op::View(0, g, 0x11_0000), Op::Sink(g, g), Op::Ram(2 * g, g, 0x9000_0007), Op::Sink(3 * g, g)]
-        );
-        assert_eq!(pool.missed.load(Ordering::Relaxed), 2);
+        let pool = PraminPool::new(&r, g, Box::new(|gpa, _| Some(gpa + 7)));
+        let slots: Vec<_> = (0..16).map(|i| SlotSource::Store(0x2_0000_0000 + i * g)).collect();
+        let out = pool.repoint(&slots);
+        assert_eq!(out, Repointed { views: 16, ram: 0, missed: 0, refused: 0, maps: 1, mmaps: 1 });
+        assert_eq!(*r.ops.lock().unwrap(), vec![Op::Arm(0x2_0000_0000, 16 * g), Op::View(0, 16 * g, 0x2_0000_0000)]);
     }
 
     #[test]
-    fn a_pool_the_host_cannot_arm_refuses_realize_by_name() {
+    fn a_move_retires_the_previous_view_after_placing_the_new_one() {
+        let r = Rec::default();
+        let g = 0x1_0000;
+        let pool = PraminPool::new(&r, g, Box::new(|_, _| None));
+        let at = |base: u64| (0..16).map(|i| SlotSource::Store(base + i * g)).collect::<Vec<_>>();
+        pool.repoint(&at(0x10_0000));
+        r.ops.lock().unwrap().clear();
+        pool.repoint(&at(0x40_0000));
+        assert_eq!(
+            *r.ops.lock().unwrap(),
+            vec![Op::Arm(0x40_0000, 16 * g), Op::View(0, 16 * g, 0x40_0000), Op::Release(0x10_0000)]
+        );
+    }
+
+    #[test]
+    fn a_ram_window_is_one_mmap_and_no_map() {
+        let r = Rec::default();
+        let g = 0x1_0000;
+        let pool = PraminPool::new(&r, g, Box::new(|gpa, _| Some(gpa + 7)));
+        let slots: Vec<_> = (0..16).map(|i| SlotSource::Ram(0x9000_0000 + i * g)).collect();
+        let out = pool.repoint(&slots);
+        assert_eq!((out.maps, out.mmaps, out.ram), (0, 1, 16));
+        assert_eq!(*r.ops.lock().unwrap(), vec![Op::Ram(0, 16 * g, 0x9000_0007)]);
+    }
+
+    #[test]
+    fn mixed_slots_coalesce_into_runs_and_name_the_misses() {
+        let r = Rec::default();
+        let g = 0x1_0000;
+        let pool = PraminPool::new(&r, g, Box::new(|gpa, _| Some(gpa + 7)));
+        let out = pool.repoint(&[
+            SlotSource::Store(0x11_0000),
+            SlotSource::Store(0x12_0000),
+            SlotSource::Ram(0x9000_0000),
+            SlotSource::Nothing,
+        ]);
+        assert_eq!(out, Repointed { views: 2, ram: 1, missed: 1, refused: 0, maps: 1, mmaps: 3 });
+        assert_eq!(
+            *r.ops.lock().unwrap(),
+            vec![Op::Arm(0x11_0000, 2 * g), Op::View(0, 2 * g, 0x11_0000), Op::Ram(2 * g, g, 0x9000_0007), Op::Sink(3 * g, g)]
+        );
+    }
+
+    #[test]
+    fn a_refused_map_shows_scratch_and_is_counted() {
         let r = Rec { refuse_arm_at: Some(0x2_0000), ..Rec::default() };
-        let e = PraminPool::arm(&r, 0x1_0000, &[(0, 0x4_0000)], Box::new(|_, _| None)).err().unwrap();
-        assert!(e.contains("@0x20000") && e.contains("NV_ERR_NO_MEMORY"), "{e}");
+        let g = 0x1_0000;
+        let pool = PraminPool::new(&r, g, Box::new(|_, _| None));
+        let out = pool.repoint(&[SlotSource::Store(0x2_0000), SlotSource::Store(0x3_0000)]);
+        assert_eq!((out.missed, out.refused, out.maps), (2, 1, 1));
+        assert_eq!(*r.ops.lock().unwrap(), vec![Op::Sink(0, 2 * g)]);
     }
 }

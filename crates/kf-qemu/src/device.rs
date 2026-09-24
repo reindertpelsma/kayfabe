@@ -302,12 +302,10 @@ impl Device {
             .set_root(crate::mem::K_BAR2, layout.bar2_pde_base, kf_trap::PdbAperture::Vidmem)
             .map_err(|e| format!("our BAR2 root: {e:?}"))?;
         eprintln!(
-            "kf3: P4 memory plane: store {} MiB @dev {store_ptr:#x}, roots bar1={:#x} bar2={:#x}, PRAMIN views={} over {:x?}, trigger @{:#x}",
+            "kf3: P4 memory plane: store {} MiB @dev {store_ptr:#x}, roots bar1={:#x} bar2={:#x}, PRAMIN one map+mmap per move, trigger @{:#x}",
             cfg.fb_mb,
             layout.bar1_pde_base,
             layout.bar2_pde_base,
-            mem.pramin.armed(),
-            mem.pramin.coverage(),
             mem.port.regs().trigger,
         );
 
@@ -681,7 +679,7 @@ impl Device {
         let va = self.va_stats.lock().map(|v| v.clone()).unwrap_or_default();
         let (recv, settled) = self.mem.inbox.counts();
         let mem = format!(
-            " mem[inval={} walks={}/{} cleared={} superseded={} named_missed={} unreconciled={} mapped={} unmapped={} clipped={:#x} fn70={} roots={} stmts={recv}/{settled} refused={} pramin_repoints={} pramin_miss={} last_miss={:#x} pramin_worst_us={}]",
+            " mem[inval={} walks={}/{} cleared={} superseded={} named_missed={} unreconciled={} mapped={} unmapped={} clipped={:#x} fn70={} roots={} stmts={recv}/{settled} refused={} pramin_repoints={} pramin_miss={} last_miss={:#x} pramin_worst_us={} pramin_maps={} pramin_mmaps={} inline_opens={} reaped={}]",
             mc.invalidates.load(o),
             va.walks_reconciled,
             va.walks_submitted,
@@ -699,6 +697,10 @@ impl Device {
             self.mem.pramin.missed.load(o),
             mc.pramin_last_miss.load(o),
             self.mem.pramin.worst_ns.load(o) / 1000,
+            self.mem.pramin.maps.load(o),
+            self.mem.pramin.mmaps.load(o),
+            self.mem.pramin_trap.inline_opens.load(o),
+            self.mem.pramin_trap.reaped.load(o),
         );
         format!(
             "kf3: family={:?} phase={phase} trapped={} applied={} refused={} serviced={} ram_refused={} unshadowed_writes={} last_off={:#x}{mem} unserviced=[{}]",
