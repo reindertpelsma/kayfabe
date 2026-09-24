@@ -46,8 +46,8 @@ use crate::abi::{
     KFWR_OP_UNMAP, KfArgs, KfDev, KfFormat, KfMapRun, KfPdbEntry, KfReportHeader, KfScope,
 };
 use crate::driver_unsafe::{
-    CUdeviceptr, CompletionFd, CtxHandle, Cuda, CudaError, EventHandle, Func, PinnedBuf,
-    StreamHandle,
+    CUdeviceptr, CompletionFd, CtxHandle, Cuda, CudaError, EventHandle, Func, GraphExecHandle,
+    GraphHandle, GraphNode, PinnedBuf, StreamHandle,
 };
 
 /// ★★★ **The committed PTX.** Built from `cuda/walk/kf_walk.cu` by
@@ -92,6 +92,10 @@ const KF_SCAN_BLOCK: u32 = 1024;
 const KF_WARP: u32 = 32;
 const KF_MAX_ENT: u32 = 512;
 const KF_SHWORDS: u32 = KF_MAX_ENT + 64;
+/// ★ P4b: `used` (the staging cursor) holds one slot PER LEVEL plus one for the leaf pass, all
+/// zeroed by ONE memset at the start of the walk — instead of a reset node after every level.
+/// Slot `KF_DIRS` is the leaf pass's; slots `0..KF_DIRS` the expand levels'.
+const KF_USED_SLOTS: usize = KF_DIRS as usize + 1;
 /// `sizeof(KfEnt)` — 3×u64 + 2×u32 + u16 + 2×u8, padded to 8.
 const KF_ENT_BYTES: usize = 40;
 /// `sizeof(KfSum)` — 6×u64 + 4×u32.
@@ -108,7 +112,6 @@ struct ParBufs {
     off: DevBuf,
     start: DevBuf,
     nfr: DevBuf,
-    ntask: DevBuf,
     pdbbase: DevBuf,
     used: DevBuf,
     sum: DevBuf,
@@ -442,6 +445,67 @@ struct DevBuf {
     ptr: CUdeviceptr,
 }
 
+/// One kernel launch of the captured walk graph, with the parameters it currently carries in
+/// the instantiated graph — kept so a per-walk parameter change is ONE setter call per node,
+/// never a re-capture.
+#[derive(Debug)]
+struct GraphKernel {
+    node: GraphNode,
+    f: Func,
+    grid: u32,
+    block: u32,
+    shm: u32,
+    params: Vec<Vec<u8>>,
+    what: &'static str,
+    /// Parameter 0 is the by-value `KfArgs` (every kernel but `kf_begin_kernel`/`kf_par_scan`).
+    takes_args: bool,
+    /// `kf_par_seed`, whose grid is sized by `npdb`.
+    seed: bool,
+}
+
+/// ★★★★★ **P4b (w827) — THE WALK, CAPTURED ONCE AS A CUDA GRAPH.**
+///
+/// `[measured GA106 cc3caf1f, gate 8]` `submit_us p50=172 max=429` (VER2), `p50=212` (VER3)
+/// against a 50 µs budget — ~25 stream operations, each paying the driver's per-call cost on
+/// the submitting thread, while the GPU needs only ~190-240 µs for the whole walk. The launch
+/// SEQUENCE is fixed per format: it depends only on `KfFormat::first_dir` (the number of
+/// directory levels expanded), never on the data — every kernel is sized by fixed grids and
+/// reads its live counts (`nfr`, `ntask`, `used`) from device memory, so an empty frontier is
+/// a launch that exits early, not a launch that is skipped. ⇒ one graph per `WalkKernel`
+/// (= per format and `WalkCfg` shape), captured at bring-up, replayed by one `cuGraphLaunch`.
+///
+/// ⊘ **What changes per walk, and how it reaches the graph.** Every buffer is allocated at
+/// bring-up and never moves, so the graph's pointers are constants. The per-walk inputs are
+/// (a) the pdb list — written into PINNED memory whose device address IS `KfArgs::pdbs`, so
+/// the kernels read it in place and it needs no graph change and no upload node — and (b) the by-value `KfArgs` (`win.base`/`len`/`span` = the store, `npdb`)
+/// plus `kf_par_seed`'s grid (`ceil(npdb/128)`). (b) goes through
+/// `cuGraphExecKernelNodeSetParams`, **and only when it differs from what the graph already
+/// carries** — in steady state the store never moves and the address-space count changes
+/// only when the guest creates or destroys a space, so a walk makes zero setter calls.
+/// ⚠ The preferred alternative — kernels reading `KfArgs` from a device-side parameter block —
+/// needs a `.cu` edit, a PTX regeneration (`cuda/walk/make_ptx.py`) and the 58-assertion CUDA
+/// suite re-run; every kernel takes `KfArgs` BY VALUE today, so no host-side choice can make
+/// it indirect. The setter path is the one available without touching the device half.
+///
+/// ⚠ `[measured GA106, w827]` what is left is per-NODE driver cost, ~0.5 µs/node with a warm
+/// submitting thread and ~2 µs/node when it was idle (sleeping) just before — the case a
+/// worker woken by its epoll is in. Nodes are therefore cut wherever the device half allows
+/// (one cursor reset, no `ntask` copy, pdbs read in place, one read-back copy): VER2 27
+/// nodes, VER3 30. Below that needs FEWER KERNELS (fusing each level's expand/scan/compact),
+/// which is a `.cu` change. A walk that must rewrite the setters (first walk; the space count
+/// changed) pays ~1-2 µs more per `KfArgs`-bearing node (VER2 15, VER3 17).
+#[derive(Debug)]
+struct WalkGraph {
+    graph: GraphHandle,
+    exec: GraphExecHandle,
+    kernels: Vec<GraphKernel>,
+    /// The `KfArgs` bytes every `takes_args` node currently carries. Empty = unknown (an
+    /// update failed part-way), which forces the next walk to rewrite every node.
+    baked_args: Vec<u8>,
+    baked_npdb: u32,
+    updates: u64,
+}
+
 /// ★★★★★ **CUDA, up and holding the walk kernel.** One per VM, in the scratchpad isolate.
 ///
 /// ⚠ **Everything lazy is walked during [`WalkKernel::bring_up`]**, deliberately and in
@@ -466,11 +530,16 @@ pub struct WalkKernel {
     pin_at: PinLayout,
     done_fd: CompletionFd,
     inflight: Option<InFlight>,
+    /// ★ P4b: the captured walk; `None` only when this driver has no graph API (then every
+    /// walk is submitted launch by launch, and [`WalkKernel::submits_as_graph`] says so).
+    graph: Option<WalkGraph>,
     par: ParBufs,
     fmt: KfFormat,
     cfg: WalkCfg,
     dev: DevBuf,
     tbl: [DevBuf; 2],
+    /// ★ P4b: the DEVICE address of the pinned pdb stage (`pin` at `pin_at.pdbs`). The kernels
+    /// read the list in place over PCIe — 64 × 8 bytes — so no upload node is needed.
     pdbs: DevBuf,
     scopes: DevBuf,
     hdr: DevBuf,
@@ -594,20 +663,19 @@ impl WalkKernel {
                 "cuMemAlloc(tbl1)",
             )?,
         ];
-        let pdbs = a(KF_MAX_PDB * 8, "cuMemAlloc(pdbs)")?;
         let scopes = a(
             crate::abi::KF_MAX_SCOPE * core::mem::size_of::<KfScope>(),
             "cuMemAlloc(scopes)",
         )?;
-        let hdr = a(core::mem::size_of::<KfReportHeader>(), "cuMemAlloc(hdr)")?;
-        let rpdb = a(
-            cfg.pdb_capacity as usize * core::mem::size_of::<KfPdbEntry>(),
-            "cuMemAlloc(rpdb)",
-        )?;
-        let rrun = a(
-            cfg.run_capacity as usize * core::mem::size_of::<KfMapRun>(),
-            "cuMemAlloc(rrun)",
-        )?;
+        // ★ P4b: the report (header, pdb entries, runs) is ONE device allocation laid out
+        // exactly as its pinned read-back (`PinLayout`, from `hdr` on), so the read-back is ONE
+        // copy node rather than three — each node is paid again on every `cuGraphLaunch`.
+        let pin_at = PinLayout::for_cfg(&cfg);
+        let report = a(pin_at.total - pin_at.hdr, "cuMemAlloc(report)")?;
+        let at_rep = |off: usize| DevBuf {
+            ptr: report.ptr + (off - pin_at.hdr) as u64,
+        };
+        let (hdr, rpdb, rrun) = (at_rep(pin_at.hdr), at_rep(pin_at.rpdb), at_rep(pin_at.rrun));
 
         // The device-side configuration, written exactly as the `.cu`'s `kf_create` does.
         // ⊘ Same padding hazard as `args_for`: `KfDev` carries 4 uninitialised bytes and is
@@ -624,9 +692,8 @@ impl WalkKernel {
             off: a(KF_MAX_FRONTIER * 4, "cuMemAlloc(par.off)")?,
             start: a(KF_MAX_FRONTIER * 4, "cuMemAlloc(par.start)")?,
             nfr: a(4 * 4, "cuMemAlloc(par.nfr)")?,
-            ntask: a(4, "cuMemAlloc(par.ntask)")?,
             pdbbase: a(KF_MAX_PDB * 4, "cuMemAlloc(par.pdbbase)")?,
-            used: a(4 * 4, "cuMemAlloc(par.used)")?,
+            used: a(KF_USED_SLOTS * 4, "cuMemAlloc(par.used)")?,
             sum: a(KF_MAX_FRONTIER * KF_SUM_BYTES, "cuMemAlloc(par.sum)")?,
             head: a(KF_MAX_FRONTIER, "cuMemAlloc(par.head)")?,
         };
@@ -646,11 +713,13 @@ impl WalkKernel {
         let ev_start = cu.event_create()?;
         let ev_copied = cu.event_create()?;
         let ev_done = cu.event_create()?;
-        let pin_at = PinLayout::for_cfg(&cfg);
         let pin = cu.pinned_alloc(pin_at.total, "cuMemAllocHost(report read-back)")?;
+        let pdbs = DevBuf {
+            ptr: cu.pinned_device_ptr(&pin, pin_at.pdbs)?,
+        };
         let done_fd = CompletionFd::new()?;
 
-        Ok(WalkKernel {
+        let mut k = WalkKernel {
             cu,
             ctx,
             f_begin,
@@ -665,6 +734,7 @@ impl WalkKernel {
             pin_at,
             done_fd,
             inflight: None,
+            graph: None,
             par,
             fmt,
             cfg,
@@ -676,9 +746,79 @@ impl WalkKernel {
             rpdb,
             rrun,
             device_name,
-            bring_up_us: u64::try_from(t0.elapsed().as_micros()).unwrap_or(u64::MAX),
+            bring_up_us: 0,
             jit_us,
-        })
+        };
+        // ★ P4b: capture + instantiate the walk graph HERE, with every other lazy path
+        // (§w724d) — not on the first submit, after the sandbox may have closed paths.
+        k.graph = k.build_graph()?;
+        k.warm_up()?;
+        k.bring_up_us = u64::try_from(t0.elapsed().as_micros()).unwrap_or(u64::MAX);
+        Ok(k)
+    }
+
+    /// ★ P4b: pay the two remaining first-use costs HERE rather than on the first walk's
+    /// submitting thread. `[measured GA106, w827]` the first walk's `cuGraphLaunch` cost
+    /// 66-130 µs (graph upload) and its first `cuLaunchHostFunc` ~260 µs (the driver starts
+    /// its callback thread lazily). ⇒ `cuGraphUpload`, then one host signal on the stream,
+    /// waited for on the fd and drained so it cannot complete the first real walk.
+    /// ⊘ The wait is `poll(2)` on the fd, at bring-up — not a context synchronize, and not on
+    /// the walk path.
+    fn warm_up(&self) -> Result<(), CudaError> {
+        let s = self.stream;
+        if let Some(g) = &self.graph {
+            self.cu.graph_upload(g.exec, s)?;
+        }
+        self.cu.launch_host_signal(s, &self.done_fd)?;
+        if !self.done_fd.wait_readable(10_000) || self.done_fd.drain() == 0 {
+            return Err(CudaError::Refused {
+                what: "WalkKernel::bring_up (warm-up host signal)",
+                code: 0,
+                name: "the warm-up host function did not signal the completion fd within 10 s"
+                    .to_string(),
+            });
+        }
+        Ok(())
+    }
+
+    /// Capture the whole walk on the walker's stream (placeholder `KfArgs`: no store, no
+    /// spaces — the first `submit` rewrites them) and instantiate it. `Ok(None)` when the
+    /// driver lacks the graph API; any failure of a capture the API claimed to support is a
+    /// refusal, never a silent fallback to per-launch submission.
+    fn build_graph(&self) -> Result<Option<WalkGraph>, CudaError> {
+        if !self.cu.has_graph_api() {
+            return Ok(None);
+        }
+        let s = self.stream;
+        let args = self.args_for(0, 0, 0);
+        self.cu.stream_begin_capture(s)?;
+        let mut rec = Some(Vec::new());
+        let queued = self.enqueue_walk(&args, 0, &mut rec);
+        // ⊘ End the capture on EVERY path: a stream left capturing records every later walk.
+        let ended = self.cu.stream_end_capture(s);
+        let graph = match (queued, ended) {
+            (Ok(()), Ok(g)) => g,
+            (Err(e), Ok(g)) => {
+                self.cu.graph_destroy(g);
+                return Err(e);
+            }
+            (Err(e), Err(_)) | (Ok(()), Err(e)) => return Err(e),
+        };
+        let exec = match self.cu.graph_instantiate(graph) {
+            Ok(e) => e,
+            Err(e) => {
+                self.cu.graph_destroy(graph);
+                return Err(e);
+            }
+        };
+        Ok(Some(WalkGraph {
+            graph,
+            exec,
+            kernels: rec.unwrap_or_default(),
+            baked_args: param_bytes(&args),
+            baked_npdb: 0,
+            updates: 0,
+        }))
     }
 
     fn args_for(&self, gpga: CUdeviceptr, gpga_len: u64, npdb: u32) -> KfArgs {
@@ -765,49 +905,21 @@ impl WalkKernel {
         }
         let s = self.stream;
         let at = self.pin_at;
+        // The pdb list goes through the pinned stage the graph's first node copies from; the
+        // previous walk has been collected (checked above), so nothing is still reading it.
         self.pin.write(at.pdbs, &pdb_bytes);
-        self.cu.event_record(self.ev_start, s)?;
-        if !pdb_bytes.is_empty() {
-            self.cu.memcpy_h2d_async(s, self.pdbs.ptr, &self.pin, at.pdbs, pdb_bytes.len(), "cuMemcpyHtoDAsync(pdbs)")?;
-        }
-
         let args = self.args_for(gpga, gpga_len, npdb);
-        self.cu.launch_args(
-            s,
-            self.f_begin,
-            1,
-            1,
-            0,
-            &mut [param_bytes(&self.dev.ptr)],
-            "cuLaunchKernel(kf_begin_kernel)",
-        )?;
-        // ★★★★★ w826 — THE PARALLEL WALK (`kf_run_parallel`, ported to the driver API).
-        // `[w726]` ~0.6 ms fixed cost vs the serial walk's one-thread-per-space. The serial
-        // kernel stays in the PTX for the scoped path the .cu keeps; this walk is never scoped.
-        let _ = self.f_walk;
-        self.run_parallel(&args, npdb)?;
-        // ⊘ The trim pointer is NULL: every report is a RESYNC, whose diff never reads it.
-        self.cu.launch_args(
-            s,
-            self.f_diff,
-            1,
-            1,
-            0,
-            &mut [param_bytes(&args), 0u64.to_le_bytes().to_vec()],
-            "cuLaunchKernel(kf_diff_kernel)",
-        )?;
-        let hdr_n = core::mem::size_of::<KfReportHeader>();
-        let rpdb_n = self.cfg.pdb_capacity as usize * core::mem::size_of::<KfPdbEntry>();
-        let rrun_n = self.cfg.run_capacity as usize * core::mem::size_of::<KfMapRun>();
-        self.cu.memcpy_d2h_async(s, &self.pin, at.hdr, self.hdr.ptr, hdr_n, "cuMemcpyDtoHAsync(hdr)")?;
-        self.cu.memcpy_d2h_async(s, &self.pin, at.rpdb, self.rpdb.ptr, rpdb_n, "cuMemcpyDtoHAsync(rpdb)")?;
-        self.cu.memcpy_d2h_async(s, &self.pin, at.rrun, self.rrun.ptr, rrun_n, "cuMemcpyDtoHAsync(rrun)")?;
-        self.cu.event_record(self.ev_copied, s)?;
-        // ⊘ ORDER: the host signal BEFORE `ev_done`. Then `ev_done` complete ⇒ the fd was
-        // written, so a collect that saw the event can always drain the signal — a signal left
-        // behind would complete the NEXT walk before it ran.
-        self.cu.launch_host_signal(s, &self.done_fd)?;
-        self.cu.event_record(self.ev_done, s)?;
+        if let Some(mut g) = self.graph.take() {
+            // ★ P4b: ONE driver call for the whole walk, plus a setter per args-bearing node
+            // only when the store or the space count changed since the last walk.
+            // The graph carries the events and the eventfd host node too (`enqueue_walk`).
+            let r = Self::update_graph(&self.cu, &mut g, &args, npdb)
+                .and_then(|()| self.cu.graph_launch(g.exec, s));
+            self.graph = Some(g);
+            r?;
+        } else {
+            self.enqueue_walk(&args, npdb, &mut None)?;
+        }
         self.inflight = Some(InFlight {
             gpga_len,
             submitted: std::time::Instant::now(),
@@ -845,6 +957,21 @@ impl WalkKernel {
     #[must_use]
     pub fn ctx_sync_calls(&self) -> u64 {
         self.cu.ctx_sync_calls()
+    }
+
+    /// ★ P4b: whether [`WalkKernel::submit`] queues the walk as ONE `cuGraphLaunch` (`true`) or
+    /// launch by launch (`false`: this driver has no graph API). Gate 8 prints it beside the
+    /// submit cost, so a fallback cannot pass as the fast path.
+    #[must_use]
+    pub fn submits_as_graph(&self) -> bool {
+        self.graph.is_some()
+    }
+
+    /// ★ P4b: how many walks had to rewrite the graph's by-value parameters (the store moved
+    /// or the address-space count changed). `0` extra per walk is the steady state.
+    #[must_use]
+    pub fn graph_param_updates(&self) -> u64 {
+        self.graph.as_ref().map_or(0, |g| g.updates)
     }
 
     /// ★★★ **Collect the walk in flight if it has finished — never blocks.**
@@ -957,64 +1084,178 @@ impl WalkKernel {
         Ok(self.wait(10_000)?.report)
     }
 
-    fn run_parallel(&self, a: &KfArgs, npdb: u32) -> Result<(), CudaError> {
+    /// ★ P4b — bring the instantiated graph's by-value parameters up to `args`/`npdb`. A no-op
+    /// (zero driver calls) when they already match, which is every walk in steady state.
+    fn update_graph(cu: &Cuda, g: &mut WalkGraph, args: &KfArgs, npdb: u32) -> Result<(), CudaError> {
+        let ab = param_bytes(args);
+        if ab == g.baked_args && npdb == g.baked_npdb {
+            return Ok(());
+        }
+        // Unknown until every node has taken the new values: a failure part-way leaves some
+        // nodes old and some new, and the next walk must rewrite them all.
+        g.baked_args.clear();
+        for k in g.kernels.iter_mut().filter(|k| k.takes_args) {
+            k.params[0].clone_from(&ab);
+            if k.seed {
+                k.grid = npdb.div_ceil(128).max(1);
+            }
+            cu.graph_exec_kernel_set(g.exec, k.node, k.f, k.grid, k.block, k.shm, &mut k.params, k.what)?;
+        }
+        g.baked_args = ab;
+        g.baked_npdb = npdb;
+        g.updates += 1;
+        Ok(())
+    }
+
+    /// Queue (or, under capture, record) the whole walk on the walker's stream: pdb upload,
+    /// `kf_begin_kernel`, the parallel walk, the diff, the report read-back. `rec` is
+    /// `Some` exactly while the stream is capturing; each kernel launch is then recorded with
+    /// its graph node so its parameters can be updated later.
+    fn enqueue_walk(
+        &self,
+        args: &KfArgs,
+        npdb: u32,
+        rec: &mut Option<Vec<GraphKernel>>,
+    ) -> Result<(), CudaError> {
+        let s = self.stream;
+        let at = self.pin_at;
+        self.record(self.ev_start, rec.is_some())?;
+        // ⊘ No pdb upload: `a.pdbs` IS the pinned stage `submit` wrote (see `pdbs`). Every
+        // level's staging cursor is zeroed here, once (see `KF_USED_SLOTS`).
+        self.cu.memset_d8_async(s, self.par.used.ptr, 0, KF_USED_SLOTS * 4, "cuMemsetD8Async(used)")?;
+        self.kl(rec, self.f_begin, 1, 1, 0, vec![param_bytes(&self.dev.ptr)], "cuLaunchKernel(kf_begin_kernel)")?;
+        // ★★★★★ w826 — THE PARALLEL WALK (`kf_run_parallel`, ported to the driver API).
+        // `[w726]` ~0.6 ms fixed cost vs the serial walk's one-thread-per-space. The serial
+        // kernel stays in the PTX for the scoped path the .cu keeps; this walk is never scoped.
+        let _ = self.f_walk;
+        self.run_parallel(args, npdb, rec)?;
+        // ⊘ The trim pointer is NULL: every report is a RESYNC, whose diff never reads it.
+        self.kl(
+            rec,
+            self.f_diff,
+            1,
+            1,
+            0,
+            vec![param_bytes(args), 0u64.to_le_bytes().to_vec()],
+            "cuLaunchKernel(kf_diff_kernel)",
+        )?;
+        // One copy of the whole report block (`hdr`, `rpdb`, `rrun` are one allocation laid
+        // out as the pinned buffer from `at.hdr` on; see `bring_up`).
+        self.cu.memcpy_d2h_async(s, &self.pin, at.hdr, self.hdr.ptr, at.total - at.hdr, "cuMemcpyDtoHAsync(report)")?;
+        let capturing = rec.is_some();
+        self.record(self.ev_copied, capturing)?;
+        // ⊘ ORDER: the host signal BEFORE `ev_done`. Then `ev_done` complete ⇒ the fd was
+        // written, so a collect that saw the event can always drain the signal — a signal left
+        // behind would complete the NEXT walk before it ran. Under capture the host function
+        // becomes a HOST NODE of the graph: it runs on every replay, same fd, same order.
+        self.cu.launch_host_signal(s, &self.done_fd)?;
+        self.record(self.ev_done, capturing)
+    }
+
+    /// `cuEventRecord`, or — under capture — the external record that becomes a graph node.
+    fn record(&self, e: EventHandle, capturing: bool) -> Result<(), CudaError> {
+        if capturing {
+            self.cu.event_record_external(e, self.stream)
+        } else {
+            self.cu.event_record(e, self.stream)
+        }
+    }
+
+    /// One kernel launch on the walker's stream; under capture, also records its node.
+    #[allow(clippy::too_many_arguments)]
+    fn kl(
+        &self,
+        rec: &mut Option<Vec<GraphKernel>>,
+        f: Func,
+        grid: u32,
+        block: u32,
+        shm: u32,
+        mut params: Vec<Vec<u8>>,
+        what: &'static str,
+    ) -> Result<(), CudaError> {
+        self.cu.launch_args(self.stream, f, grid, block, shm, &mut params, what)?;
+        if let Some(v) = rec {
+            let node = self.cu.capture_leaf(self.stream)?;
+            v.push(GraphKernel {
+                node,
+                f,
+                grid,
+                block,
+                shm,
+                params,
+                what,
+                takes_args: f != self.f_begin && f != self.f_par[2],
+                seed: f == self.f_par[0],
+            });
+        }
+        Ok(())
+    }
+
+    fn run_parallel(
+        &self,
+        a: &KfArgs,
+        npdb: u32,
+        rec: &mut Option<Vec<GraphKernel>>,
+    ) -> Result<(), CudaError> {
         let p = |v: u64| v.to_le_bytes().to_vec();
         let u = |v: u32| v.to_le_bytes().to_vec();
         let ab = || param_bytes(a);
         let par = &self.par;
-        let s = self.stream;
         let shm = (KF_PAR_BLOCK / KF_WARP) * KF_SHWORDS * 8;
         let [f_seed, f_expand, f_scan, f_compact, f_leaf, f_heads, f_bases, f_emit, f_join] =
             self.f_par;
-        self.cu.launch_args(
-            s,
+        self.kl(
+            rec,
             f_seed,
             npdb.div_ceil(128).max(1),
             128,
             0,
-            &mut [ab(), p(par.fr[0].ptr), p(par.nfr.ptr), p(par.used.ptr)],
+            vec![ab(), p(par.fr[0].ptr), p(par.nfr.ptr), p(par.used.ptr)],
             "cuLaunchKernel(kf_par_seed)",
         )?;
         let mut src = 0usize;
+        // The last level's output count IS the task count; it is read where it lies (no copy).
+        let mut ntask = par.nfr.ptr;
         for k in u32::from(self.fmt.first_dir)..KF_DIRS {
+            let used = par.used.ptr + u64::from(k) * 4;
             let nin = par.nfr.ptr + (src as u64) * 4;
             let nout = par.nfr.ptr + ((src ^ 1) as u64) * 4;
             let dst = if k + 1 < KF_DIRS { par.fr[src ^ 1].ptr } else { par.task.ptr };
-            self.cu.launch_args(
-                s,
+            self.kl(
+                rec,
                 f_expand,
                 KF_PAR_GRID,
                 KF_PAR_BLOCK,
                 shm,
-                &mut [
+                vec![
                     ab(),
                     u(k),
                     p(par.fr[src].ptr),
                     p(nin),
                     p(par.stage.ptr),
                     u(KF_MAX_FRONTIER as u32),
-                    p(par.used.ptr),
+                    p(used),
                     p(par.start.ptr),
                     p(par.cnt.ptr),
                 ],
                 "cuLaunchKernel(kf_par_expand)",
             )?;
-            self.cu.launch_args(
-                s,
+            self.kl(
+                rec,
                 f_scan,
                 1,
                 KF_SCAN_BLOCK,
                 0,
-                &mut [p(par.cnt.ptr), p(nin), p(par.off.ptr), p(nout)],
+                vec![p(par.cnt.ptr), p(nin), p(par.off.ptr), p(nout)],
                 "cuLaunchKernel(kf_par_scan)",
             )?;
-            self.cu.launch_args(
-                s,
+            self.kl(
+                rec,
                 f_compact,
                 KF_PAR_GRID,
                 KF_PAR_BLOCK,
                 0,
-                &mut [
+                vec![
                     ab(),
                     p(par.stage.ptr),
                     p(par.start.ptr),
@@ -1029,72 +1270,71 @@ impl WalkKernel {
             if k + 1 < KF_DIRS {
                 src ^= 1;
             } else {
-                self.cu.memcpy_d2d_async(s, par.ntask.ptr, nout, 4, "cuMemcpyDtoDAsync(ntask)")?;
+                ntask = nout;
             }
-            self.cu.memset_d8_async(s, par.used.ptr, 0, 4, "cuMemsetD8Async(used)")?;
         }
-        self.cu.launch_args(
-            s,
+        self.kl(
+            rec,
             f_leaf,
             KF_PAR_GRID,
             KF_PAR_BLOCK,
             shm,
-            &mut [
+            vec![
                 ab(),
                 p(par.task.ptr),
-                p(par.ntask.ptr),
+                p(ntask),
                 p(par.runstage.ptr),
                 u(KF_MAX_SCRATCH as u32),
-                p(par.used.ptr),
+                p(par.used.ptr + u64::from(KF_DIRS) * 4),
                 p(par.sum.ptr),
             ],
             "cuLaunchKernel(kf_par_leaf)",
         )?;
-        self.cu.launch_args(
-            s,
+        self.kl(
+            rec,
             f_heads,
             KF_PAR_GRID,
             128,
             0,
-            &mut [
+            vec![
                 ab(),
                 p(par.task.ptr),
                 p(par.sum.ptr),
-                p(par.ntask.ptr),
+                p(ntask),
                 p(par.cnt.ptr),
                 p(par.head.ptr),
             ],
             "cuLaunchKernel(kf_par_heads)",
         )?;
-        self.cu.launch_args(
-            s,
+        self.kl(
+            rec,
             f_scan,
             1,
             KF_SCAN_BLOCK,
             0,
-            &mut [p(par.cnt.ptr), p(par.ntask.ptr), p(par.off.ptr), p(par.nfr.ptr + 12)],
+            vec![p(par.cnt.ptr), p(ntask), p(par.off.ptr), p(par.nfr.ptr + 12)],
             "cuLaunchKernel(kf_par_scan tasks)",
         )?;
-        self.cu.launch_args(
-            s,
+        self.kl(
+            rec,
             f_bases,
             1,
             1,
             0,
-            &mut [ab(), p(par.pdbbase.ptr)],
+            vec![ab(), p(par.pdbbase.ptr)],
             "cuLaunchKernel(kf_par_bases)",
         )?;
-        self.cu.launch_args(
-            s,
+        self.kl(
+            rec,
             f_emit,
             KF_PAR_GRID,
             KF_PAR_BLOCK,
             0,
-            &mut [
+            vec![
                 ab(),
                 p(par.task.ptr),
                 p(par.sum.ptr),
-                p(par.ntask.ptr),
+                p(ntask),
                 p(par.off.ptr),
                 p(par.head.ptr),
                 p(par.pdbbase.ptr),
@@ -1102,17 +1342,17 @@ impl WalkKernel {
             ],
             "cuLaunchKernel(kf_par_emit)",
         )?;
-        self.cu.launch_args(
-            s,
+        self.kl(
+            rec,
             f_join,
             KF_PAR_GRID,
             128,
             0,
-            &mut [
+            vec![
                 ab(),
                 p(par.task.ptr),
                 p(par.sum.ptr),
-                p(par.ntask.ptr),
+                p(ntask),
                 p(par.off.ptr),
                 p(par.head.ptr),
                 p(par.pdbbase.ptr),
@@ -1251,6 +1491,10 @@ impl Drop for WalkKernel {
         // too); `ctx_destroy` then drains anything still queued — including a host function
         // that names `done_fd` — BEFORE the `CompletionFd` field closes the fd.
         let _ = self.make_current();
+        if let Some(g) = self.graph.take() {
+            self.cu.graph_exec_destroy(g.exec);
+            self.cu.graph_destroy(g.graph);
+        }
         self.cu.event_destroy(self.ev_start);
         self.cu.event_destroy(self.ev_copied);
         self.cu.event_destroy(self.ev_done);

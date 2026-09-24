@@ -453,10 +453,13 @@ fn phase(l: &mut Checks, rm: &HostRm, store: u32, tag: &str, fmt: KfFormat, v3: 
     l.measure(
         "walk_submit",
         format!(
-            "{tag} walks={} submit_us p50={p50} max={max} budget={SUBMIT_BUDGET_US} ({}) gpu_us={:?}",
+            "{tag} walks={} submit_us p50={p50} max={max} budget={SUBMIT_BUDGET_US} ({}) gpu_us={:?} graph={} param_updates={} submit_ns={:?}",
             sorted.len(),
             if max <= SUBMIT_BUDGET_US { "met" } else { "MISSED" },
-            t.gpu_us
+            t.gpu_us,
+            t.inner.kernel.submits_as_graph(),
+            t.inner.kernel.graph_param_updates(),
+            t.submit_ns
         ),
     );
     l.check(
