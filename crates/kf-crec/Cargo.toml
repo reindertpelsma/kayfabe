@@ -1,0 +1,17 @@
+[package]
+name = "kf-crec"
+description = "v3 C-trace differential: replay the C artifact's recorded cold boot (traces/mode2_c_reference) against kf-gsp + kf-chip. Oracle-only."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+kf-util.workspace = true
+kf-arch.workspace = true
+kf-abi.workspace = true
+kf-gsp.workspace = true
+kf-chip.workspace = true
+kf-trace.workspace = true
+
+[lints]
+workspace = true

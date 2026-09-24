@@ -470,6 +470,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "kf-crec"
+version = "0.1.0"
+dependencies = [
+ "kf-abi",
+ "kf-arch",
+ "kf-chip",
+ "kf-gsp",
+ "kf-trace",
+ "kf-util",
+]
+
+[[package]]
 name = "kf-cuda"
 version = "0.1.0"
 
@@ -531,6 +543,13 @@ dependencies = [
  "kf-abi",
  "kf-gsp",
  "kf-util",
+]
+
+[[package]]
+name = "kf-trace"
+version = "0.1.0"
+dependencies = [
+ "kf-arch",
 ]
 
 [[package]]
