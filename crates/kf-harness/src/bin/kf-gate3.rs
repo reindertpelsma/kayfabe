@@ -291,10 +291,11 @@ fn run(l: &mut Checks) -> Result<(), String> {
     let guest = RefCell::new(Guest { rm: &rm, ram_view: &ram_view, walk, dptr, ledger: Ledger::default(), space, store, ram_desc: desc, root, walks: Vec::new() });
     let (mapped, _) = guest.borrow_mut().publish("boot")?;
     l.check("kernel_vas_published", mapped >= 1, format!("{mapped} runs"));
+    let done = kf_chan::completions::Completions::open(&rm, 64)?;
     let host = HostRing::new(&rm, space)?;
     let poller = Poller::create().map_err(|e| format!("epoll: {e:?}"))?;
-    poller.watch(host.event_fd(), 1).map_err(|e| format!("watch: {e:?}"))?;
-    let mut chan = TranslatedChannel::new(TranslatedRing::new(VA_CHAN + GPFIFO, ENTRIES, 0), host);
+    poller.watch(done.event_fd(), 1).map_err(|e| format!("watch: {e:?}"))?;
+    let mut chan = TranslatedChannel::new(TranslatedRing::new(VA_CHAN + GPFIFO, ENTRIES, 0), host, 1);
 
     // The guest maps VA_NEW (it will invalidate in GP 1), then rings entries 0, 1 and 2.
     let mut t = tree;
@@ -316,7 +317,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
     let mut wakes = 0u32;
     let mut pumps = 0u32;
     let pump = |chan: &mut TranslatedChannel| {
-        chan.pump(&rm, &mut Mem(&guest), &mut Userd(&guest), &mut Pub(&guest), is_ce, &win)
+        chan.pump(&rm, &done, &mut Mem(&guest), &mut Userd(&guest), &mut Pub(&guest), is_ce, &win)
     };
     let mut state = pump(&mut chan).map_err(|e| format!("pump: {e:?}"))?;
     pumps += 1;

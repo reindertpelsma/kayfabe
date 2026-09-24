@@ -16,7 +16,8 @@ use kf_abi::submit::{SET_OBJECT, USERD_GP_GET, USERD_GP_PUT, ce, gp_entry, metho
 use kf_chan::host::{GuestUserd, HostRing, Publisher, TranslatedChannel};
 use kf_chan::ring::{GuestMemory, TranslatedRing};
 use kf_chan::translated::{Target, Window};
-use kf_chan::worker::{HOST_EVENT_TAG, Serve, WORKER_EFD_TAG, WorkerPlane, WorkerStats};
+use kf_chan::completions::Completions;
+use kf_chan::worker::{COMPLETIONS_TAG, Serve, WORKER_EFD_TAG, WorkerPlane, WorkerStats};
 use kf_chip::Family;
 use kf_cuda::abi::kf_format_ver2;
 use kf_cuda::walk::{WalkCfg, WalkKernel};
@@ -193,6 +194,7 @@ fn is_ce(c: u32) -> bool {
 
 struct Channels<'a, 'b> {
     s: &'a Shared<'b>,
+    done: &'a Completions,
     win: &'a Windows,
     chans: Vec<Mutex<(TranslatedChannel, Option<String>)>>,
     contended: AtomicU64,
@@ -214,7 +216,7 @@ impl Serve for Channels<'_, '_> {
         }
         let io = || Io { s: self.s, c: token - 1 };
         let (mut mem, mut userd, mut publisher) = (io(), io(), io());
-        if let Err(e) = chan.pump(self.s.rm, &mut mem, &mut userd, &mut publisher, is_ce, self.win) {
+        if let Err(e) = chan.pump(self.s.rm, self.done, &mut mem, &mut userd, &mut publisher, is_ce, self.win) {
             *err = Some(format!("{e:?}"));
         }
     }
@@ -303,15 +305,16 @@ fn run(l: &mut Checks) -> Result<(), String> {
     let priv_ring = PrivRing::new();
     let efd = Notifier::create().map_err(|e| format!("eventfd: {e:?}"))?;
     let stats = WorkerStats::default();
+    let done = Completions::open(&rm, TOKEN_TABLE)?;
     let mut chans = Vec::new();
     for c in 0..CHANNELS {
         let host = HostRing::new(&rm, space)?;
         if !tokens[(c + 1) as usize].allocate_fresh(Route::Translated, host.channel().token) {
             return Err(format!("token {} not fresh", c + 1));
         }
-        chans.push(Mutex::new((TranslatedChannel::new(TranslatedRing::new(va(c) + GPFIFO, ENTRIES, 0), host), None)));
+        chans.push(Mutex::new((TranslatedChannel::new(TranslatedRing::new(va(c) + GPFIFO, ENTRIES, 0), host, c + 1), None)));
     }
-    let channels = Channels { s: &shared, win: &win, chans, contended: AtomicU64::new(0) };
+    let channels = Channels { s: &shared, done: &done, win: &win, chans, contended: AtomicU64::new(0) };
     let trap = TrapPath {
         tokens: &tokens,
         bits: &bits,
@@ -321,7 +324,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
         token_mask: (TOKEN_TABLE - 1) as u32,
         timer: kf_trap::timer::TIMER_GV100,
     };
-    let plane = WorkerPlane { tokens: &tokens, bits: &bits, wake: &wake, efd: &efd, stats: &stats };
+    let plane = WorkerPlane { tokens: &tokens, bits: &bits, wake: &wake, efd: &efd, completions: &done, stats: &stats };
     let stop = AtomicBool::new(false);
     let hostile_actions = AtomicU64::new(0);
     let wakes_signalled = AtomicU64::new(0);
@@ -331,10 +334,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
         for _ in 0..WORKERS {
             let poller = Poller::create().map_err(|e| format!("epoll: {e:?}"))?;
             poller.watch(efd.as_source_fd(), WORKER_EFD_TAG).map_err(|e| format!("watch: {e:?}"))?;
-            for (c, slot) in channels.chans.iter().enumerate() {
-                let g = slot.lock().map_err(|_| "poisoned")?;
-                poller.watch(g.0.host().event_fd(), HOST_EVENT_TAG | (c as u64 + 1)).map_err(|e| format!("watch: {e:?}"))?;
-            }
+            poller.watch(done.event_fd(), COMPLETIONS_TAG).map_err(|e| format!("watch: {e:?}"))?;
             let (plane, channels, stop) = (&plane, &channels, &stop);
             sc.spawn(move || plane.run(channels, &poller, stop));
         }

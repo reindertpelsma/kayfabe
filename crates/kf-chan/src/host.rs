@@ -61,13 +61,13 @@ struct Region {
     seq: u32,
 }
 
-/// ★ A copy-engine host channel we own, completing through the host event fd.
+/// ★ A copy-engine host channel we own. Its completions reach the worker through the SESSION's one
+/// completion fd ([`crate::completions::Completions`]), never an fd of its own.
 pub struct HostRing {
     cpu: kf_linux_raw::VolatileRegion,
     _node: kf_linux_raw::CharDevice,
     va: u64,
     chan: kf_host::Channel,
-    ev: kf_host::EventFd,
     head: u64,
     put: u32,
     seq: u32,
@@ -87,9 +87,6 @@ impl HostRing {
         let (node, cpu) = rm
             .map_cpu(mem, RING_BYTES, kf_linux_raw::CachePolicy::Uncached)
             .map_err(|e| format!("cpu ring: {e:?}"))?;
-        let ev = rm.open_event_fd().map_err(|e| format!("event fd: {e:?}"))?;
-        rm.alloc_os_event(rm.subdevice(), FIFO_EVENT_MTHD, true, &ev).map_err(|e| format!("os event: {e:?}"))?;
-        rm.arm_repeat(FIFO_EVENT_MTHD).map_err(|e| format!("notify: {e:?}"))?;
         let chan = rm
             .birth_channel(space, ENGINE_TYPE_COPY0, kf_host::RingSpec {
                 gp_fifo_va: va + GPFIFO_OFF,
@@ -102,13 +99,13 @@ impl HostRing {
         rm.alloc_ce_object(chan, ENGINE_TYPE_COPY0).map_err(|e| format!("ce object: {e:?}"))?;
         rm.schedule(chan).map_err(|e| format!("schedule: {e:?}"))?;
         cpu.store_u32(At::new(FENCE_OFF), 0).map_err(|e| format!("{e:?}"))?;
-        Ok(HostRing { cpu, _node: node, va, chan, ev, head: 0, put: 0, seq: 0, live: VecDeque::new() })
+        Ok(HostRing { cpu, _node: node, va, chan, head: 0, put: 0, seq: 0, live: VecDeque::new() })
     }
 
-    /// The fd to watch (level-triggered) — a WAKE only.
+    /// Nothing pushed is still unfinished (as of the last [`HostRing::completed`]).
     #[must_use]
-    pub fn event_fd(&self) -> std::os::fd::BorrowedFd<'_> {
-        self.ev.as_fd()
+    pub fn idle(&self) -> bool {
+        self.live.is_empty()
     }
 
     /// The host channel.
@@ -245,6 +242,7 @@ pub enum Pumped {
 pub struct TranslatedChannel {
     ring: TranslatedRing,
     host: HostRing,
+    token: u32,
     retire: VecDeque<(u32, u32)>,
     suspended: Option<(u32, Option<u64>, Option<u32>)>,
     stash: Option<Next>,
@@ -254,12 +252,14 @@ pub struct TranslatedChannel {
 }
 
 impl TranslatedChannel {
-    /// A Translated channel over the guest ring `ring`, executing on `host`.
+    /// A Translated channel over the guest ring `ring`, executing on `host`, known to the doorbell
+    /// plane as `token`.
     #[must_use]
-    pub fn new(ring: TranslatedRing, host: HostRing) -> TranslatedChannel {
+    pub fn new(ring: TranslatedRing, host: HostRing, token: u32) -> TranslatedChannel {
         TranslatedChannel {
             ring,
             host,
+            token,
             retire: VecDeque::new(),
             suspended: None,
             stash: None,
@@ -301,6 +301,7 @@ impl TranslatedChannel {
     pub fn pump(
         &mut self,
         rm: &kf_host::HostRm,
+        done_edge: &crate::completions::Completions,
         mem: &mut dyn GuestMemory,
         userd: &mut dyn GuestUserd,
         publisher: &mut dyn Publisher,
@@ -314,6 +315,11 @@ impl TranslatedChannel {
         }
         if let Some(g) = newest {
             self.author(userd, g)?;
+        }
+        if self.host.idle() && self.retire.is_empty() && self.suspended.is_none() {
+            // Nothing of ours is in flight: completions need not ring us. Only the BUSY owner
+            // clears, so this cannot race a mark by another thread.
+            done_edge.clear(self.token);
         }
         if let Some((seq, pdb, retires)) = self.suspended {
             if !reached(done, seq) {
@@ -352,6 +358,7 @@ impl TranslatedChannel {
                 Next::Walk { pdb, retires } => {
                     // Everything before the split must COMPLETE before the walk: the guest may
                     // have written the very page tables it is invalidating with that work.
+                    done_edge.mark(self.token); // BEFORE the doorbell — see `completions`
                     match self.host.fence(rm).map_err(ChanError::Host)? {
                         Ok(seq) => {
                             if let Some(g) = last_retire.take() {
@@ -369,6 +376,7 @@ impl TranslatedChannel {
             }
         };
         if pushed || last_retire.is_some() {
+            done_edge.mark(self.token); // BEFORE the doorbell — see `completions`
             match self.host.fence(rm).map_err(ChanError::Host)? {
                 Ok(seq) => {
                     if let Some(g) = last_retire {

@@ -3,8 +3,8 @@
 //!
 //! The vCPU side is `kf_trap::TrapPath` (stamp + RUNG in one CAS, bit then summary, bump); this is
 //! the other side. ★ **A host completion is an internal RING of the channel's own token**: the
-//! host event fd's readiness does not call the channel — it rings its token exactly as a doorbell
-//! would. So doorbells and completions share ONE path, and a channel's pump is serialized by the
+//! session completion fd's readiness does not call a channel — it rings every token with a fence in
+//! flight, exactly as a doorbell would. So doorbells and completions share ONE path, and a channel's pump is serialized by the
 //! token's `BUSY` state, never by a lock.
 //!
 //! The only waits are the `epoll` below (§35); the serve callback must never block (§2 — it runs
@@ -14,8 +14,8 @@ use kf_linux_raw::{Notifier, PollTimeout, Poller, ReadyTokens};
 use kf_trap::{Claim, REACT_ROUNDS, Release, RungBitmap, TokenWord, Wake, WakeWord};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
-/// A poller tag with this bit set is a HOST EVENT fd; the low 32 bits are its channel's token.
-pub const HOST_EVENT_TAG: u64 = 1 << 32;
+/// The poller tag of the session's completion fd ([`crate::completions::Completions`]).
+pub const COMPLETIONS_TAG: u64 = 1 << 32;
 /// The poller tag of the worker eventfd.
 pub const WORKER_EFD_TAG: u64 = 0;
 /// Tokens taken per scan.
@@ -52,6 +52,8 @@ pub struct WorkerPlane<'a> {
     pub wake: &'a WakeWord,
     /// The worker eventfd.
     pub efd: &'a Notifier,
+    /// The session completion edge and its in-flight set.
+    pub completions: &'a crate::completions::Completions,
     /// Counters.
     pub stats: &'a WorkerStats,
 }
@@ -76,7 +78,7 @@ impl WorkerPlane<'_> {
     }
 
     /// One worker's loop, until `stop`. `poller` must watch the worker eventfd at
-    /// [`WORKER_EFD_TAG`] and each channel's host event fd at `HOST_EVENT_TAG | token`.
+    /// [`WORKER_EFD_TAG`] and the session completion fd at [`COMPLETIONS_TAG`].
     pub fn run(&self, serve: &dyn Serve, poller: &Poller, stop: &AtomicBool) {
         let mut toks = Vec::with_capacity(SCAN_LIMIT);
         while !stop.load(Ordering::Acquire) {
@@ -118,8 +120,8 @@ impl WorkerPlane<'_> {
             self.wake.unpark();
             if got.is_ok() {
                 for tag in ready.iter() {
-                    if tag & HOST_EVENT_TAG != 0 {
-                        self.ring_internal((tag & 0xFFFF_FFFF) as u32);
+                    if tag == COMPLETIONS_TAG {
+                        self.completions.for_each_inflight(|t| self.ring_internal(t));
                     } else {
                         let _ = self.efd.drain();
                     }
