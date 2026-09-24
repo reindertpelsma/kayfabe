@@ -512,6 +512,9 @@ dependencies = [
 [[package]]
 name = "kf-mem"
 version = "0.1.0"
+dependencies = [
+ "kf-host",
+]
 
 [[package]]
 name = "kf-util"

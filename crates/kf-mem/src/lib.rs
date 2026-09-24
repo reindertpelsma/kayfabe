@@ -10,3 +10,4 @@ pub mod store;
 
 pub use addr::{Fb, Gpa, Gva, HostToken, StoreOffset, PAGE};
 pub use store::{Store, StoreRefusal};
+pub mod ledger;

@@ -1,7 +1,12 @@
 [package]
 name = "kf-mem"
-version = "0.1.0"
-edition = "2021"
-publish = false
+description = "v3 memory plane: the one store, the ledger of OUR OWN host mappings, the walk-vs-ledger planner, batched apply with one TLB invalidate."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
 
 [dependencies]
+kf-host.workspace = true
+
+[lints]
+workspace = true
