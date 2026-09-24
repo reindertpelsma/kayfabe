@@ -19744,6 +19744,17 @@ impl SharedDoorbell {
                         }
                     }
                 }
+                if let Some(pv) = std::env::var("KAYFABE_PROBE_VA").ok().and_then(|v| {
+                    u64::from_str_radix(v.trim_start_matches("0x"), 16).ok()
+                }) {
+                    let hit = desired.iter().find(|d| d.va <= pv && pv < d.va + d.len);
+                    eprintln!(
+                        "kayfabe: WALK-PROBE pid={} pdb={:#x} va={pv:#x} desired={:?}",
+                        pid.0,
+                        pdb.0,
+                        hit
+                    );
+                }
                 let rec = sp.reconcile(vas, &desired, ram_bytes);
                 if let Some((uva, ulen)) = rec.first_unmap {
                     first.get_or_insert(format!(
