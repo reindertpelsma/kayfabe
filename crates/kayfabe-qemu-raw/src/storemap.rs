@@ -2048,6 +2048,8 @@ pub struct Reconciled {
     pub refused: usize,
     /// The first refusal, by name.
     pub first_refusal: Option<String>,
+    /// The first slice taken down, `(va, len)` — for the thrash diagnosis.
+    pub first_unmap: Option<(u64, u64)>,
 }
 
 impl StoreMapPort {
@@ -2106,7 +2108,10 @@ impl StoreMapPort {
         };
         for &(va, len) in &plan.unmap {
             match self.apply_ops(vas, &[MapOp::Unmap(run(va, len, 0))], SliceOf::Store) {
-                Ok(_) => out.unmapped += 1,
+                Ok(_) => {
+                    out.unmapped += 1;
+                    out.first_unmap.get_or_insert((va, len));
+                }
                 Err(e) => {
                     out.refused += 1;
                     out.first_refusal.get_or_insert_with(|| format!("unmap {va:#x}: {e:?}"));

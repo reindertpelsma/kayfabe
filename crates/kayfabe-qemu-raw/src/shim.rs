@@ -19745,6 +19745,15 @@ impl SharedDoorbell {
                     }
                 }
                 let rec = sp.reconcile(vas, &desired, ram_bytes);
+                if let Some((uva, ulen)) = rec.first_unmap {
+                    first.get_or_insert(format!(
+                        "UNMAP pid={} pdb={:#x} vas={:#x} va={uva:#x}+{ulen:#x} desired_here={}",
+                        pid.0,
+                        pdb.0,
+                        vas.raw(),
+                        desired.iter().any(|d| d.va <= uva && uva < d.va + d.len)
+                    ));
+                }
                 mapped += rec.mapped;
                 unmapped += rec.unmapped;
                 kept += rec.kept;
