@@ -1,6 +1,16 @@
 //! ★★★★★ §16.76 — **the os-event registry**: which `(hClient, hEvent, notifyIndex)` this
 //! device may post a wakeup to, and when it stops being allowed to.
 //!
+//! ## ⊘ v3 port note
+//!
+//! The registry and its retire path are kept verbatim. What is NOT kept is the old delivery
+//! shape: a broadcast `batch()` of every live registration, posted whenever anything might
+//! have completed, plus a `note_join` instrument joined to the old CPU copy-engine executor's
+//! counters. In v3 each registration is paired with a HOST event (`kf_host` os-event + event
+//! fd, P5) and a wakeup is posted only for the registration whose host event fired —
+//! [`OsEventLog::find`] is that seam, with the pairing marked `TODO(P5)` there. This crate
+//! posts nothing and writes no guest semaphore.
+//!
 //! # Why a registry exists at all
 //!
 //! `kf_gsp::GspFsm::deliver_events` posts one
