@@ -5,6 +5,7 @@ members = [
     "crates/kf-trap",
     "crates/kf-rm",
     "crates/kf-core",
+    "crates/kf-qemu",
     "crates/kf-trace",
     "crates/kf-crec",
     "crates/kf-util",
@@ -67,6 +68,7 @@ kf-mem = { path = "crates/kf-mem" }
 kf-trap = { path = "crates/kf-trap" }
 kf-rm = { path = "crates/kf-rm" }
 kf-core = { path = "crates/kf-core" }
+kf-qemu = { path = "crates/kf-qemu" }
 kf-trace = { path = "crates/kf-trace" }
 kf-crec = { path = "crates/kf-crec" }
 kayfabe-doorbell = { path = "crates/kayfabe-doorbell" }

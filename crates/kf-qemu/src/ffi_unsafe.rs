@@ -1,0 +1,245 @@
+//! ★ The `extern "C"` surface the kf3-gpu QOM device calls. Every entry point validates its handle
+//! and pointers and hands off to the safe [`crate::device::Device`] immediately.
+
+use crate::device::{Config, Device};
+use crate::raw_unsafe::RawRegion;
+use core::ffi::{c_char, c_void};
+use std::ffi::CStr;
+
+/// Wire ABI of this surface; the C device refuses a mismatched archive.
+pub const KF3_ABI: u32 = 1;
+
+/// The PCI identity the C device presents.
+#[repr(C)]
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Kf3Identity {
+    /// Vendor id.
+    pub vendor: u16,
+    /// Device id.
+    pub device: u16,
+    /// Subsystem vendor id.
+    pub subsystem_vendor: u16,
+    /// Subsystem id.
+    pub subsystem: u16,
+    /// Class code (24 bits).
+    pub class: u32,
+    /// Revision id.
+    pub revision: u8,
+    /// Padding.
+    pub pad: [u8; 3],
+    /// BAR0 bytes.
+    pub bar0_bytes: u64,
+}
+
+/// One memory-map region: `how` = 0 plain RAM, 1 shadow + write trap, 2 host passthrough, 3 hole.
+#[repr(C)]
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Kf3Region {
+    /// PCI BAR index as the guest numbers it (0, 1, 2 = RM's BAR2).
+    pub bar: u8,
+    /// Disposition.
+    pub how: u8,
+    /// Padding.
+    pub pad: [u8; 6],
+    /// Offset inside the BAR.
+    pub base: u64,
+    /// Length.
+    pub len: u64,
+}
+
+fn dev<'a>(h: *mut c_void) -> Option<&'a Device> {
+    // SAFETY: a non-null handle is only ever a pointer `kf3_realize` produced from `Box::into_raw`
+    // and that `kf3_unrealize` has not yet freed (the C device drops it exactly once, at unrealize).
+    (!h.is_null()).then(|| unsafe { &*h.cast::<Device>() })
+}
+
+fn write_err(buf: *mut c_char, len: usize, msg: &str) {
+    if buf.is_null() || len == 0 {
+        return;
+    }
+    let n = msg.len().min(len - 1);
+    // SAFETY: the caller passed a writable buffer of `len` bytes; we write `n + 1 <= len`.
+    unsafe {
+        core::ptr::copy_nonoverlapping(msg.as_ptr(), buf.cast::<u8>(), n);
+        *buf.add(n) = 0;
+    }
+}
+
+/// The archive's ABI.
+#[unsafe(no_mangle)]
+pub extern "C" fn kf3_abi_version() -> u32 {
+    KF3_ABI
+}
+
+/// Realize the device and start its register drainer. Returns 0 and a handle, or -1 with a message.
+///
+/// # Safety
+/// `guest_driver` is null or a NUL-terminated string; `out` is writable; `err` is null or writable
+/// for `err_len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kf3_realize(
+    gpu_minor: u32,
+    fb_mb: u64,
+    guest_driver: *const c_char,
+    out: *mut *mut c_void,
+    err: *mut c_char,
+    err_len: usize,
+) -> i32 {
+    let guest = if guest_driver.is_null() {
+        None
+    } else {
+        // SAFETY: the caller promises a NUL-terminated string.
+        Some(unsafe { CStr::from_ptr(guest_driver) }.to_string_lossy().into_owned()).filter(|s| !s.is_empty())
+    };
+    let cfg = Config { gpu_minor, fb_mb, guest_driver: guest };
+    match Device::realize(&cfg) {
+        Ok(d) => {
+            let d: &'static Device = Box::leak(Box::new(d));
+            if std::thread::Builder::new().name("kf3-drainer".into()).spawn(move || d.drainer_loop()).is_err() {
+                write_err(err, err_len, "could not start the register drainer thread");
+                return -1;
+            }
+            if !out.is_null() {
+                // SAFETY: `out` is writable (caller contract).
+                unsafe { *out = (d as *const Device).cast_mut().cast::<c_void>() };
+            }
+            0
+        }
+        Err(e) => {
+            write_err(err, err_len, &e);
+            -1
+        }
+    }
+}
+
+/// Fill `out` with the PCI identity.
+///
+/// # Safety
+/// `out` is writable.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kf3_identity(h: *mut c_void, out: *mut Kf3Identity) -> i32 {
+    let (Some(d), false) = (dev(h), out.is_null()) else { return -1 };
+    let p = d.identity.pci;
+    let id = Kf3Identity {
+        vendor: p.vendor,
+        device: p.device,
+        subsystem_vendor: p.subsystem_vendor,
+        subsystem: p.subsystem,
+        class: p.class,
+        revision: p.revision,
+        pad: [0; 3],
+        bar0_bytes: d.identity.bar0_bytes,
+    };
+    // SAFETY: `out` is writable (caller contract).
+    unsafe { *out = id };
+    0
+}
+
+/// The memory map: writes up to `cap` regions to `out`, returns the total count.
+///
+/// # Safety
+/// `out` is null or writable for `cap` regions.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kf3_memory_map(h: *mut c_void, bar1: u64, bar2: u64, out: *mut Kf3Region, cap: usize) -> i64 {
+    let Some(d) = dev(h) else { return -1 };
+    let map = d.memory_map(bar1, bar2);
+    let regs: Vec<Kf3Region> = map
+        .regions
+        .iter()
+        .map(|r| Kf3Region {
+            bar: r.bar.0,
+            how: match r.how {
+                kf_trap::memmap::Disposition::PlainRam => 0,
+                kf_trap::memmap::Disposition::ShadowWriteTrapped => 1,
+                kf_trap::memmap::Disposition::HostPassthrough => 2,
+                kf_trap::memmap::Disposition::Hole { .. } => 3,
+            },
+            pad: [0; 6],
+            base: r.base,
+            len: r.len,
+        })
+        .collect();
+    if !out.is_null() {
+        for (i, r) in regs.iter().take(cap).enumerate() {
+            // SAFETY: `i < cap`, and `out` is writable for `cap` regions (caller contract).
+            unsafe { *out.add(i) = *r };
+        }
+    }
+    regs.len() as i64
+}
+
+/// Attach a BAR0 shadow piece (a ROM device's RAM) at BAR0 offset `base`; Rust fills it.
+///
+/// # Safety
+/// `mem` is valid for `len` bytes until the device is unrealized.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kf3_shadow_attach(h: *mut c_void, base: u64, mem: *mut u8, len: u64) -> i32 {
+    let (Some(d), false) = (dev(h), mem.is_null()) else { return -1 };
+    // SAFETY: the caller keeps `[mem, mem+len)` mapped until unrealize.
+    d.attach_shadow(base, unsafe { RawRegion::adopt(mem, len as usize) });
+    0
+}
+
+/// Seal the shadow and publish the GSP registers' initial values.
+#[unsafe(no_mangle)]
+pub extern "C" fn kf3_shadow_seal(h: *mut c_void) {
+    if let Some(d) = dev(h) {
+        d.seal_shadow();
+    }
+}
+
+/// ★ The vCPU path: a BAR0 write.
+#[unsafe(no_mangle)]
+pub extern "C" fn kf3_bar0_write(h: *mut c_void, off: u64, val: u64, width: u32) {
+    if let Some(d) = dev(h) {
+        d.bar0_write(off, val, u8::try_from(width).unwrap_or(4));
+    }
+}
+
+/// Register guest RAM `[gpa, gpa+len)` at `hva`.
+///
+/// # Safety
+/// `hva` is valid for `len` bytes until `kf3_ram_del` for the same `gpa`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kf3_ram_add(h: *mut c_void, gpa: u64, hva: *mut u8, len: u64) -> i32 {
+    let (Some(d), false) = (dev(h), hva.is_null()) else { return -1 };
+    // SAFETY: the caller keeps the RAM mapped until it unregisters it.
+    d.ram_add(gpa, unsafe { RawRegion::adopt(hva, len as usize) });
+    0
+}
+
+/// Unregister the guest RAM block at `gpa`.
+#[unsafe(no_mangle)]
+pub extern "C" fn kf3_ram_del(h: *mut c_void, gpa: u64) {
+    if let Some(d) = dev(h) {
+        d.ram_del(gpa);
+    }
+}
+
+/// A one-line status for the QEMU log (written to `buf`, NUL-terminated).
+///
+/// # Safety
+/// `buf` is writable for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kf3_status(h: *mut c_void, buf: *mut c_char, len: usize) {
+    let Some(d) = dev(h) else { return };
+    let c = &d.counters;
+    let o = std::sync::atomic::Ordering::Relaxed;
+    let s = format!(
+        "kf3: family={:?} applied={} serviced={} ram_refused={} unshadowed_writes={}",
+        d.family,
+        c.applied.load(o),
+        c.serviced.load(o),
+        c.ram_refused.load(o),
+        c.unshadowed_writes.load(o)
+    );
+    write_err(buf, len, &s);
+}
+
+/// Stop the device's threads (the device itself lives for the process).
+#[unsafe(no_mangle)]
+pub extern "C" fn kf3_unrealize(h: *mut c_void) {
+    if let Some(d) = dev(h) {
+        d.stop();
+    }
+}

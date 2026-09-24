@@ -1,0 +1,30 @@
+[package]
+name = "kf-qemu"
+description = "v3 QEMU adapter: the kf3-gpu device's Rust half — realize (host session, store, family, derived BAR0), the plane, the register drainer, the FFI a small C QOM device calls. The SECOND audited unsafe crate (hypervisor FFI), as kayfabe-qemu-raw was."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["rlib", "staticlib"]
+
+[dependencies]
+kf-abi.workspace = true
+kf-arch.workspace = true
+kf-chip.workspace = true
+kf-core.workspace = true
+kf-gsp.workspace = true
+kf-host.workspace = true
+kf-linux-raw.workspace = true
+kf-rm.workspace = true
+kf-trap.workspace = true
+
+# ★ DELIBERATELY NOT `[lints] workspace = true` — this is the hypervisor FFI crate (extern "C"
+# entry points, pointers QEMU owns). Every `unsafe` lives in a `*_unsafe.rs` file and carries a
+# `// SAFETY:` naming its invariant; the safe composition lives beside it.
+[lints.rust]
+unsafe_code = "allow"
+missing_docs = "warn"
+
+[lints.clippy]
+undocumented_unsafe_blocks = "deny"

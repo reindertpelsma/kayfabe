@@ -547,6 +547,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "kf-qemu"
+version = "0.1.0"
+dependencies = [
+ "kf-abi",
+ "kf-arch",
+ "kf-chip",
+ "kf-core",
+ "kf-gsp",
+ "kf-host",
+ "kf-linux-raw",
+ "kf-rm",
+ "kf-trap",
+]
+
+[[package]]
 name = "kf-rm"
 version = "0.1.0"
 dependencies = [
