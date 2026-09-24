@@ -4538,6 +4538,21 @@ impl RegPlane {
         }
     }
 
+    /// DIAGNOSTIC (w826 cutover branch): `n` raw u64 words of the fake FB at `phys`, through
+    /// the same reader the walk trace uses. `None` where the store cannot serve.
+    #[must_use]
+    pub fn diag_fb_words(&self, phys: u64, n: usize) -> Vec<Option<u64>> {
+        let mut s = self.mem.lock();
+        let PlaneMem { fb, .. } = &mut *s;
+        let mut src = FbStoreReader { fb: fb.as_mut(), memo: None };
+        (0..n as u64)
+            .map(|i| {
+                let mut b = [0u8; 8];
+                kayfabe_mmu::walker::FbRead::read(&mut src, phys + i * 8, &mut b).then(|| u64::from_le_bytes(b))
+            })
+            .collect()
+    }
+
     /// ★★★ **§16.64 — the per-level descent trace for a root the caller already holds.**
     ///
     /// [`RegPlane::published_walk_trace`]'s sibling; produces a **sentence**, no address,

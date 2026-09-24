@@ -19753,7 +19753,42 @@ impl SharedDoorbell {
                         .plane
                         .upgrade()
                         .map(|pl| match pl.root_from_declared_pdb(pdb.0 & !0xfff) {
-                            Ok(root) => pl.walk_trace_from_root(&root, pv),
+                            Ok(root) => {
+                                let t = pl.walk_trace_from_root(&root, pv);
+                                // Raw words of the dual PDE and of every sub-table it names.
+                                let hex = |v: Vec<Option<u64>>| {
+                                    v.iter()
+                                        .map(|w| w.map_or("?".into(), |w| format!("{w:#x}")))
+                                        .collect::<Vec<_>>()
+                                        .join(",")
+                                };
+                                let mut raw = String::new();
+                                if let Some(d) = t.split("L3@").nth(1).and_then(|r| r.split('/').next()) {
+                                    if let Ok(l3) = u64::from_str_radix(d.trim_start_matches("0x"), 16) {
+                                        let idx = (pv >> 21) & 0xff;
+                                        let w = pl.diag_fb_words(l3 + idx * 16, 2);
+                                        raw.push_str(&format!(" RAW-DUAL[{}]", hex(w.clone())));
+                                        // big half: ADDRESS_BIG bits 32:4 of the low word, <<8
+                                        if let Some(Some(lo)) = w.first() {
+                                            let big = ((lo >> 4) & ((1u64 << 29) - 1)) << 8;
+                                            let slot = (pv >> 16) & 0x1f;
+                                            raw.push_str(&format!(
+                                                " BIG@{big:#x}[{slot}..+2]=[{}]",
+                                                hex(pl.diag_fb_words(big + slot * 8, 2))
+                                            ));
+                                        }
+                                        if let Some(Some(hi)) = w.get(1) {
+                                            let sm = ((hi >> 8) & ((1u64 << 28) - 1)) << 12;
+                                            let si = (pv >> 12) & 0x1ff;
+                                            raw.push_str(&format!(
+                                                " SMALL@{sm:#x}[{si}]=[{}]",
+                                                hex(pl.diag_fb_words(sm + si * 8, 1))
+                                            ));
+                                        }
+                                    }
+                                }
+                                t + &raw
+                            }
                             Err(e) => format!(" root⊘{e:?}"),
                         })
                         .unwrap_or_default();
