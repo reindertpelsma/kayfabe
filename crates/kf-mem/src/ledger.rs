@@ -79,7 +79,7 @@ pub fn ram_slice_backed(start: u64, off: u64, len: u64, rows: &[(u64, u64, u64)]
     at >= end
 }
 
-/// ★★★★★ **The pure half of the reconcile — no GPU, no isolate, fully testable.**
+/// ★★★★★ **The pure half of the reconcile — no GPU, fully testable.**
 ///
 /// `ledger` is every slice this port holds in one VA space, `(va, len, off, ram)`; `desired`
 /// is the COMPLETE state a walk reported for that space. A ledger slice is kept iff desired
@@ -277,7 +277,7 @@ impl Ledger {
             } else {
                 store
             };
-            match rm.map(space, obj, d.off, d.len, Some(d.va), true) {
+            match rm.map(space, obj, kf_host::MapBacking::SharedSlice, d.off, d.len, Some(d.va), true) {
                 Ok(_) => {
                     self.placed.insert(d.va, Placed { len: d.len, off: d.off, ram: d.ram });
                     out.mapped += 1;

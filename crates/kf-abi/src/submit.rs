@@ -2353,6 +2353,18 @@ pub mod fifo {
     /// `NVC56F_MEM_OP_D_OPERATION_MMU_TLB_INVALIDATE_TARGETED` = 0xa
     /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:186`).
     pub const MEM_OP_D_OPERATION_MMU_TLB_INVALIDATE_TARGETED: u32 = 0xa;
+
+    /// `NVC56F_SEM_EXECUTE_RELEASE_WFI` is `20:20`, `_EN` = 1
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:226-228`). ★ The release waits for
+    /// the channel's engine to go IDLE first — the only thing that orders a host release (and the
+    /// interrupt after it) behind the engine's work. NVIDIA's own completion pattern
+    /// (`nvidia-push.c:1047-1059`, `VoltaReleaseTimelineSemaphore`) always sets it.
+    pub const SEM_EXECUTE_RELEASE_WFI_EN: u32 = 1 << 20;
+    /// `NVC56F_NON_STALL_INTERRUPT` @ `0x20`, data = handle (ignored, 0)
+    /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:110-111`). Raises the host engine's
+    /// non-stall interrupt ⇒ `NV2080_NOTIFIERS_FIFO_EVENT_MTHD`. ⊘ Carries no identity: RM posts
+    /// it to every armed listener on the GPU (`intr.c:1195-1205`), so a wake is never a verdict.
+    pub const NON_STALL_INTERRUPT: u32 = 0x0000_0020;
 }
 
 /// `NVC56F_SET_OBJECT_NVCLASS` is `15:0`

@@ -1,21 +1,26 @@
-//! ★★★ **Host events as a pollable fd — the completion edge, never an inline completion.**
+//! ★★★ **Host events as a pollable fd — a WAKE, never a verdict, never an inline completion.**
 //!
 //! Owner ruling §37: *"with raw client you can obtain an eventfd and do the semaphore polling
 //! yourself, keeping the big loop in the worker"*. The worker's only waits are its work mutex
-//! and `epoll` (§35); a host completion reaches it as **readiness on this fd**.
+//! and `epoll` (§35); a host completion reaches it as **readiness on this fd**, and the worker
+//! then reads the SEMAPHORE — the only source of truth.
 //!
-//! The protocol is the OS layer's own (ogkm-580 `osapi.c:2782-2820`, never reaching RM core):
-//! 1. open a dedicated `/dev/nvidiactl` — events bind to the file the ioctl is issued on;
+//! The protocol is CUDA's own, read off the host trace (`traces/host_reference_ga106/ce_r1`,
+//! records 260-262) and the OS layer (ogkm-580 `osapi.c:2782-2820`):
+//! 1. open a fresh GPU node `nvidia<N>` and `REGISTER_FD` it against the control fd;
 //! 2. `NV_ESC_ALLOC_OS_EVENT` **on that file** with `{hClient, hDevice, fd}` — `fd` is only a KEY
-//!    (`allocate_os_event`, `osapi.c:505`), one event per `(hClient, fd)`;
-//! 3. `RM_ALLOC NV01_EVENT_OS_EVENT` under the source object with `data = the same key`;
+//!    (`allocate_os_event`, `osapi.c:505`);
+//! 3. `RM_ALLOC NV01_EVENT_OS_EVENT` **on that same file**, `data = the key`;
 //! 4. arm the notifier (`EVENT_SET_NOTIFICATION`, action REPEAT) on the subdevice;
-//! 5. `poll` the file (`nvidia_fops.poll`, `nv.c:238`), then drain with
-//!    `NV_ESC_RM_GET_EVENT_DATA` until `MoreEvents == 0` (`nv_get_event`, `nv.c:4149`).
+//! 5. `poll`/`epoll` the file (`nvidia_poll`, `nv.c:2287-2296`).
 //!
-//! ⚠ `[not yet measured]` whether our own CE channel's non-stall interrupt reaches the
-//! `NV2080_NOTIFIERS_CE(n)` event at the granularity the planes need. The harness measures it;
-//! until then a semaphore POLL stays legal (§35), with this fd as the wake.
+//! ★ **Every event is registered DATALESS** (`NV01_EVENT_WITHOUT_EVENT_DATA`,
+//! `event_notification.c:809`). A data event makes `nv_post_event` `KMALLOC_ATOMIC` one record per
+//! interrupt per listener with no cap (`nv.c:3997-4015`); a dataless one sets ONE flag that
+//! `nvidia_poll` reports and clears (`nv.c:4026`, `:2292-2295`) — a coalesced, bounded wake. The
+//! records carried nothing we could use anyway: the non-stall notifiers are GPU-wide and
+//! `osNotifyEvent` posts `info32 = info16 = 0`, so a record cannot say WHOSE work finished.
+//! ⊘ Hence no drain verb: readiness says "look", the semaphore says "done".
 
 use crate::{
     ABI_DECODE_FAILED, ABI_ENCODE_FAILED, HostRm, IOCTL_NUMBER_UNBUILDABLE, RmError, ioctl_error,
@@ -27,23 +32,16 @@ use kf_abi::eventnotify::{
     NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION,
 };
 use kf_abi::generated::classes::NV01_EVENT_OS_EVENT;
-use kf_linux_raw::{CharDevice, Indirect, ioctl};
+use kf_linux_raw::{CharDevice, ioctl};
 use std::os::fd::BorrowedFd;
 
 /// `NV_ESC_ALLOC_OS_EVENT` = `NV_IOCTL_BASE + 6` (`ogkm-580: nv-ioctl-numbers.h:33`).
 const NV_ESC_ALLOC_OS_EVENT: u8 = 206;
-/// `NV_ESC_RM_GET_EVENT_DATA` (`ogkm-580: nv_escape.h:44`).
-const NV_ESC_RM_GET_EVENT_DATA: u8 = 0x52;
 /// `sizeof(nv_ioctl_alloc_os_event_t)` — `{hClient, hDevice, fd, Status}`.
 const ALLOC_OS_EVENT_SIZE: usize = 16;
 /// `sizeof(NV0005_ALLOC_PARAMETERS)` — `{hParentClient, hSrcResource, hClass, notifyIndex,
 /// NvP64 data}` (`ogkm-580: class/cl0005.h:39-47`).
 const NV0005_PARAMS_SIZE: usize = 24;
-/// `sizeof(NVOS41_PARAMETERS)` — `{NvP64 pEvent, MoreEvents, status}` (`nvos.h:1940-1945`).
-const NVOS41_SIZE: usize = 16;
-/// `sizeof(NvUnixEvent)` — `{hObject, NotifyIndex, info32, NvU16 info16}` + 2 pad
-/// (`nvos.h:1926-1937`).
-const NV_UNIX_EVENT_SIZE: usize = 16;
 /// `NV01_EVENT_NONSTALL_INTR` (`ogkm-580: nvos.h:433`), OR-ed into `notifyIndex`. ★ Without it an
 /// engine event lands on the subdevice's ORDINARY notifier list, which a CE non-stall interrupt never
 /// walks: `engineNonStallIntrNotify` notifies only `pGpu->engineNonstallIntrEventNotifications`,
@@ -51,8 +49,9 @@ const NV_UNIX_EVENT_SIZE: usize = 16;
 /// `[measured w826 gate 1]` without it: copy + semaphore done, event fd silent on all ten CEs.
 pub const NV01_EVENT_NONSTALL_INTR: u32 = 0x0800_0000;
 
-/// Drain bound per readiness — the queue is RM's; we never loop on its word alone.
-pub const DRAIN_MAX: usize = 64;
+/// `NV01_EVENT_WITHOUT_EVENT_DATA` (`ogkm-580: nvos.h:430`), OR-ed into `notifyIndex` on EVERY
+/// registration — see the module doc.
+pub const NV01_EVENT_WITHOUT_EVENT_DATA: u32 = 0x1000_0000;
 
 /// `NV2080_NOTIFIERS_CE0` (`ogkm-580: class/cl2080_notification.h:60`).
 pub const NV2080_NOTIFIERS_CE0: u32 = 23;
@@ -66,25 +65,12 @@ pub const fn notifier_ce(n: u32) -> u32 {
     if n < 10 { NV2080_NOTIFIERS_CE0 + n } else { NV2080_NOTIFIERS_CE10 + n - 10 }
 }
 
-/// One drained event record.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct HostEvent {
-    /// The event object RM posted for.
-    pub object: u32,
-    /// Its notifier index.
-    pub notify_index: u32,
-    /// `NvNotification::info32`.
-    pub info32: u32,
-    /// `NvNotification::info16`.
-    pub info16: u16,
-}
-
 /// ★ A pollable host event source: register [`EventFd::as_fd`] with the worker's `epoll`.
+/// Readiness is a coalesced WAKE; the caller must read its semaphore to learn what completed.
 #[derive(Debug)]
 pub struct EventFd {
     node: CharDevice,
     key: u32,
-    last_status: std::cell::Cell<u32>,
 }
 
 impl EventFd {
@@ -94,61 +80,15 @@ impl EventFd {
         self.node.as_fd()
     }
 
-    /// The status of the last drain that stopped on a non-empty refusal (0 = none seen).
-    #[must_use]
-    pub fn last_status(&self) -> u32 {
-        self.last_status.get()
-    }
-
     /// The key events are bound under (`data` of every `NV01_EVENT_OS_EVENT` on this fd).
     #[must_use]
     pub fn key(&self) -> u32 {
         self.key
     }
-
-    /// Drain up to [`DRAIN_MAX`] pending records (`NV_ESC_RM_GET_EVENT_DATA`). An empty queue is
-    /// `Ok(empty)`: RM answers `NV_ERR_GENERIC` for "nothing pending" (`nv_get_event`).
-    ///
-    /// # Errors
-    /// An ioctl-level failure.
-    pub fn drain(&self) -> Result<Vec<HostEvent>, RmError> {
-        let mut out = Vec::new();
-        for _ in 0..DRAIN_MAX {
-            let mut rec = [0u8; NV_UNIX_EVENT_SIZE];
-            let mut arg = [0u8; NVOS41_SIZE];
-            let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_GET_EVENT_DATA, arg.len())
-                .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
-            let mut patches = [Indirect::new(0, &mut rec)];
-            self.node
-                .ioctl(req, &mut arg, &mut patches)
-                .map_err(|e| ioctl_error(&e))?;
-            let more = u32::from_le_bytes(arg[8..12].try_into().unwrap_or([0; 4]));
-            let status = u32::from_le_bytes(arg[12..16].try_into().unwrap_or([0; 4]));
-            if status != 0 {
-                // RM answers a non-zero status for "nothing pending" (`nv_get_event` returns
-                // NV_ERR_GENERIC); anything ELSE is surfaced, never read as empty.
-                if status != 0x0000_FFFF {
-                    self.last_status.set(status);
-                }
-                break;
-            }
-            let w = |o: usize| u32::from_le_bytes(rec[o..o + 4].try_into().unwrap_or([0; 4]));
-            out.push(HostEvent {
-                object: w(0),
-                notify_index: w(4),
-                info32: w(8),
-                info16: u16::from_le_bytes([rec[12], rec[13]]),
-            });
-            if more == 0 {
-                break;
-            }
-        }
-        Ok(out)
-    }
 }
 
 impl HostRm {
-    /// Open a dedicated `/dev/nvidiactl` and register it as an OS-event target for our client.
+    /// Open a fresh GPU node and register it as an OS-event target for our client.
     ///
     /// # Errors
     /// The open, or the host's refusal of the registration.
@@ -177,12 +117,13 @@ impl HostRm {
             .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
         node.ioctl(req, &mut arg, &mut []).map_err(|e| ioctl_error(&e))?;
         status_check(u32::from_le_bytes(arg[12..16].try_into().map_err(|_| RmError::Other(ABI_DECODE_FAILED))?))?;
-        Ok(EventFd { node, key, last_status: std::cell::Cell::new(0) })
+        Ok(EventFd { node, key })
     }
 
-    /// `NV01_EVENT_OS_EVENT` under `source` for `notify_index`, delivered to `ev`. `nonstall`
-    /// registers it on the ENGINE's non-stall list (source must be the subdevice) — the edge a copy
-    /// engine's `LAUNCH_DMA` interrupt raises.
+    /// A dataless `NV01_EVENT_OS_EVENT` under `source` for `notify_index`, delivered to `ev`.
+    /// `nonstall` registers it on the ENGINE's non-stall list (source must be the subdevice).
+    /// ⚠ The object lives until the session's client is freed: the event file closing only marks
+    /// it inactive (`free_os_events`), so allocate these once per session, never per submit.
     ///
     /// # Errors
     /// The host's refusal.
@@ -193,7 +134,9 @@ impl HostRm {
         nonstall: bool,
         ev: &EventFd,
     ) -> Result<u32, RmError> {
-        let notify_index = if nonstall { notify_index | NV01_EVENT_NONSTALL_INTR } else { notify_index };
+        let notify_index = notify_index
+            | NV01_EVENT_WITHOUT_EVENT_DATA
+            | if nonstall { NV01_EVENT_NONSTALL_INTR } else { 0 };
         let mut params = [0u8; NV0005_PARAMS_SIZE];
         params[0..4].copy_from_slice(&self.client.raw().to_le_bytes());
         params[4..8].copy_from_slice(&source.to_le_bytes());

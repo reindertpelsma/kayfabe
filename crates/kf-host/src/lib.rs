@@ -11,23 +11,23 @@
 
 pub mod channel;
 pub mod event;
-pub use event::{EventFd, HostEvent};
-pub use channel::{Channel, RingSpec, VaSpace};
+pub use event::EventFd;
+pub use channel::{Channel, MapBacking, RingSpec, VaSpace};
 
 use kf_abi::bringup::{
     NV_ESC_CHECK_VERSION_STR, NV_ESC_REGISTER_FD, NV_ESC_RM_ALLOC_MEMORY, NV_IOCTL_MAGIC,
-    NV01_MEMORY_SYSTEM_OS_DESCRIPTOR, NV01_MEMORY_VIRTUAL, NV20_SUBDEVICE_0,
+    NV01_MEMORY_SYSTEM_OS_DESCRIPTOR, NV20_SUBDEVICE_0,
     NVOS02_FLAGS_COHERENCY_CACHED, NVOS02_FLAGS_LOCATION_PCI, NVOS02_FLAGS_MAPPING_NO_MAP,
     NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS, NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE,
-    Nv2080AllocParameters, NvMemoryVirtualAllocationParams, Nvos02ParametersWithFd, RegisterFd,
+    Nv2080AllocParameters, Nvos02ParametersWithFd, RegisterFd,
 };
 use kf_abi::generated::classes::{
     NV01_DEVICE_0, NV01_ROOT_CLIENT, Nv0080AllocParameters,
 };
 use kf_abi::generated::nvos::{
-    NV_ESC_RM_ALLOC, NV_ESC_RM_CONTROL, NV_ESC_RM_DUP_OBJECT, NV_ESC_RM_FREE,
+    NV_ESC_RM_ALLOC, NV_ESC_RM_CONTROL, NV_ESC_RM_FREE,
     NV_ESC_RM_MAP_MEMORY_DMA, NV_ESC_RM_UNMAP_MEMORY_DMA, Nvos00Parameters, Nvos21Parameters,
-    Nvos46Parameters, Nvos47Parameters, Nvos54Parameters, Nvos55Parameters,
+    Nvos46Parameters, Nvos47Parameters, Nvos54Parameters,
 };
 use kf_abi::submit::*;
 use kf_arch::ids::GpuId;
@@ -39,7 +39,6 @@ use kf_linux_raw::{
 use kf_util::leafwitness;
 use std::collections::BTreeMap;
 use std::ffi::CString;
-use std::sync::atomic::Ordering;
 use std::sync::Mutex;
 
 /// A host RM refusal, by name. ⊘ No isolate-stamped handle variant: there is one session.
@@ -89,10 +88,14 @@ pub const NOT_IN_THIS_OBJECT: u32 = 0x4B47;
 pub const MAPPING_ATTRIBUTE_REFUSED: u32 = 0x4B48;
 /// A FIXED map at a VA that is already mapped.
 pub const VA_ALREADY_MAPPED: u32 = 0x4B69;
-/// Whether the reserved store came back contiguous and 1 GiB-aligned (the identity window's
-/// precondition). Set by [`HostRm::reserve_gpga`].
-pub static STORE_IS_CONTIGUOUS_AND_ALIGNED: std::sync::atomic::AtomicBool =
-    std::sync::atomic::AtomicBool::new(false);
+/// The store reservation and which form RM granted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Reservation {
+    /// The `NV01_MEMORY_LOCAL_USER` handle.
+    pub handle: u32,
+    /// Contiguous and 1 GiB-aligned (`phys ≡ offset` at every page size) — else the fallback.
+    pub contiguous_aligned: bool,
+}
 
 const FIRST_HANDLE: u32 = 0xCAFE_0001;
 const REQUESTED_CLIENT_HANDLE: u32 = 0xCAFE_0000;
@@ -257,7 +260,6 @@ struct UsermodeWindow {
 struct Objects {
     next: u32,
     parents: BTreeMap<u32, u32>,
-    companions: BTreeMap<u32, u32>,
 }
 
 /// `NV2080_CTRL_CMD_MC_GET_ARCH_INFO` — NON_PRIVILEGED (`ogkm-580: ctrl2080mc.h:61`).
@@ -380,7 +382,6 @@ impl HostRm {
             objects: Mutex::new(Objects {
                 next: FIRST_HANDLE,
                 parents: BTreeMap::new(),
-                companions: BTreeMap::new(),
             }),
             cpu_maps: std::sync::atomic::AtomicU64::new(0),
             // Filled in below, once there is a subdevice to parent it to.
@@ -451,7 +452,7 @@ impl HostRm {
 
     /// ★★★ Allocate the profile's usermode class under the **subdevice** and CPU-map its
     /// 64 KiB
-    /// BAR0 window — the mapping whose existence *is* [`RmBackend::ring_doorbell`].
+    /// BAR0 window — the mapping whose existence *is* [`HostRm::doorbell`].
     ///
     /// Three things here are not obvious and each was read out of the driver or the C:
     ///
@@ -722,105 +723,21 @@ impl HostRm {
         status_check(out.status)
     }
 
-    /// One `NV_ESC_RM_MAP_MEMORY_DMA`. `at = Some(va)` sets
-    /// `NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE` and demands that address; `at = None` lets RM
-    /// choose and reports back where it put the mapping.
+    /// ★★★★★ **The ONE place an `NVOS46` is built** — every GPU map in v3 goes through
+    /// [`HostRm::map`](crate::HostRm::map), which delegates here, so constraint 28's placement
+    /// assertion below covers every fixed map.
     ///
-    /// ★★ `None` is **not** a weakening of `#102`. Address identity exists so a
-    /// *forwarded* pushbuffer's guest VAs resolve; it says nothing about memory the
-    /// isolate allocated for itself. A channel's own ring is exactly that.
+    /// `NVOS46_PARAMETERS::offset` is the offset **inside `hMemory`**: it is what makes *"one
+    /// reserved object, many guest ranges"* expressible — the store maps `[offset, offset+len)`
+    /// at the guest's own VA, once per coalesced run.
     ///
-    /// # ⊘⊘⊘ THE SENTENCE THAT USED TO FOLLOW WAS FALSE, AND IT WAS THE INVARIANT
-    ///
-    /// This paragraph read *"…memory the isolate allocated for itself, **which no guest
-    /// ever names**"*, and the owner's invariant — *"VMM state must never be placed where a
-    /// guest VA can name it"* — rested on it and on nothing else. It was **untrue as
-    /// placement** for as long as the copy-engine path existed. `plan_ce` →
-    /// `ce_channel(vas)` → `alloc_channel_on(vas, COPY0)` put the isolate's ring, USERD and
-    /// completion semaphore in **the one address space a guest channel is bound to**, at an
-    /// RM-chosen address — which makes it *unpredictable, not unnameable*, and
-    /// unpredictability is not a boundary
-    /// (`C: docs/design/s1_what_does_it_protect.md` §3).
-    ///
-    /// ⚠ **[measured 2026-08-10, `vh`, at `cc5d55c`]** a copy engine bound to that space
-    /// retired a read of the semaphore's VA and moved `0x00000001` — **the exact payload
-    /// the isolate's own last copy had released**, a number that channel has no other way
-    /// to obtain (`kayfabe-rm-ladder --executor-vas-alias`, arm C).
-    ///
-    /// ⇒ Closed by **separation**, not by a reservation: see [`ExecutorVas`]. ⊘ A reserved
-    /// window inside this space would have stopped RM's *allocator* from colliding with our
-    /// objects and done nothing about a guest **naming** them, because the mapping would
-    /// still be in the page tables the guest's engine walks. The two fixes are easy to
-    /// confuse and only one of them is this one. At `2ce8bd0` the same probe faults:
-    /// `Xid 31 … ENGINE CE0 … FAULT_PDE ACCESS_TYPE_VIRT_READ @ 0x1_20022000`.
-    ///
-    /// ★ The residual, still named and now *only* a collision: RM's own VA allocator and
-    /// our fixed publishes share the guest-facing space, so RM could place something where
-    /// a guest later demands a fixed mapping. That surfaces as a refused fixed map with an
-    /// RM status, which is loud; it is not silent corruption, and it is a different problem
-    /// from the one above.
-    ///
-    /// ⚠ **Amended by R26.** The first paragraph once said *"demanding a fixed address for
-    /// a ring would mean inventing a host-private VA window"*, which no longer describes
-    /// the tree: [`HostRmBackend::alloc_channel_at`] takes `Some` here and a **caller**
-    /// supplies the address, which is what a shadow-forwarded channel needs. What it got
-    /// right is that the *policy* is not this function's — it is still the caller's.
-    pub fn raw_map_dma(
-        &self,
-        h_dma: u32,
-        h_memory: u32,
-        len: u64,
-        at: Option<u64>,
-    ) -> Result<u64, RmError> {
-        self.raw_map_dma_flags(h_dma, h_memory, len, at, 0)
-    }
-
-    /// ★★★ [`HostRm::raw_map_dma`] with **extra `NVOS46_PARAMETERS::flags` bits
-    /// OR-ed in** — every caller of the plain verb is byte-identical to what it sent
-    /// before, because `extra == 0` is the only value it passes.
-    ///
-    /// # ⊘ Why the extra bits are a parameter rather than four more `bool`s
-    ///
-    /// The flag word is a bag of unrelated bit-fields (`ogkm-580:
-    /// src/common/sdk/nvidia/inc/nvos.h:2030-2152`) and this crate deliberately understands
-    /// exactly two of them. A `bool` per field would be a claim that the port has an opinion
-    /// on each; a raw word says what is true — the **caller** names bits it has read the
-    /// header for, and everything else stays zero.
-    ///
-    /// ⚠ `DMA_OFFSET_FIXED` is still owned HERE and is not expressible through `extra`: it
-    /// is derived from `at` so that *"which address"* and *"is the address binding"* cannot
-    /// disagree. A caller that OR-ed the bit in by hand with `at = None` would be asking RM
-    /// to place a mapping at offset zero.
+    /// `is_shared_slice` (from [`crate::MapBacking`]) is stated by the caller, never inferred from
+    /// `offset` — the store's first page is a slice at offset 0.
     ///
     /// # Errors
-    /// As [`HostRm::raw_map_dma`].
-    pub fn raw_map_dma_flags(
-        &self,
-        h_dma: u32,
-        h_memory: u32,
-        len: u64,
-        at: Option<u64>,
-        extra: u32,
-    ) -> Result<u64, RmError> {
-        self.raw_map_dma_slice(h_dma, h_memory, 0, len, at, extra, false)
-    }
-
-    /// ★★★★★ **CONSTRAINT 26 — the same map, over a SLICE of the object.**
-    ///
-    /// `NVOS46_PARAMETERS::offset` is the offset **inside `hMemory`**, and it is the field
-    /// that makes *"one reserved object, many guest ranges"* expressible at all: the
-    /// scratchpad maps `[offset, offset+len)` of the one `NV01_MEMORY_LOCAL_USER` at the
-    /// guest's own VA, and does it once per coalesced run rather than once per object.
-    ///
-    /// ⊘ **This is where the `NVOS46` is built, and it is the ONLY place in the crate.**
-    /// [`HostRm::raw_map_dma_flags`] delegates here with `offset = 0`, so constraint
-    /// 28's placement assertion below covers every fixed map in the tree — including this
-    /// one — rather than covering whichever sites remembered to compare.
-    ///
-    /// # Errors
-    /// As [`HostRm::raw_map_dma`], plus [`RmError::PlacementRefused`] when RM placed
-    /// the mapping somewhere other than `at`.
-    pub fn raw_map_dma_slice(
+    /// The host's refusal, or [`RmError::PlacementRefused`] when RM placed the mapping
+    /// somewhere other than `at`.
+    pub(crate) fn raw_map_dma_slice(
         &self,
         h_dma: u32,
         h_memory: u32,
@@ -828,37 +745,8 @@ impl HostRm {
         len: u64,
         at: Option<u64>,
         extra: u32,
-        // ★★★★★ **w755 — IS THIS A SLICE OF AN OBJECT WHOSE BASE WE DO NOT KNOW?**
-        //
-        // ⊘ An explicit parameter and NOT `offset != 0`: the first page of the store is a
-        // store slice at offset 0, and inferring the caller's situation from an operand is
-        // exactly the "second source of truth" shape this crate keeps paying for. The two
-        // callers are `raw_map_dma` (a whole dedicated object — its base IS the mapping base,
-        // and RM aligned it) and `map_store_slice` (a slice of the one reservation).
-        is_store_slice: bool,
+        is_shared_slice: bool,
     ) -> Result<u64, RmError> {
-        // ★★★★★ **CONSTRAINT 26/29 — THE BARE-SPACE REFUSAL, AT THE ONE PLACE EVERY MAP
-        // GOES THROUGH.** `[measured from w745's own committed evidence, w746]`
-        //
-        // The same refusal has lived in the four `RmBackend` verbs (`map_gpu_va`,
-        // `unmap_gpu_va`, `map_local_at`, `unmap_local`) since constraint 26b — and
-        // `alloc_channel_in` does not call any of them. It reaches RM through
-        // [`HostRm::raw_map_dma`] **directly**, so a channel birth mapping its own
-        // 64 KiB ring into a bare space could never increment that counter.
-        //
-        // ⊘⊘⊘ w745 pre-registered *"`RmInitAdapter failed!` ≥ 1 **and**
-        // `W745-BARE-SPACE-REFUSED` ≥ 1"* as the row that would confirm exactly this
-        // mechanism, measured `BARE-SPACE-REFUSED=0`, and read the third row — *"better
-        // than predicted: the emulated path did not need a map on this boot"*. **The zero
-        // was guaranteed by this function's own plumbing.** The map DID happen; RM answered
-        // it `0x51` and the isolate reported that instead, ten times
-        // (`traces/w745_split/…/run_w745split_qemu.log`, every `ENGINE-OBJECT … REFUSED`).
-        //
-        // ⇒ Restated HERE, where `Nvos46Parameters` is built and therefore where every map
-        // in the crate is expressible, so the counter cannot be zero by construction again.
-        // ⚠ It is a **widening of the same refusal, not a new policy**: the four verbs keep
-        // theirs (they refuse before building anything and say which verb asked), and this
-        // one is the backstop that makes their question total.
         let mut arg = [0u8; Nvos46Parameters::SIZE];
         // ★★★★★ **CONSTRAINT 28, HALF ONE — THE PAGE-SIZE FLAG MATCHES THE REQUEST.**
         // `[measured w744]` `DMA_OFFSET_FIXED_TRUE` alone is **not** address identity: RM
@@ -872,10 +760,10 @@ impl HostRm {
             // ★★★★★ w755 — a store slice is a slice of an object whose base we do not know,
             // so its page size is settled by congruence, not by alignment. See
             // [`kf_abi::bringup::nvos46_page_size_flag_for_store_slice`].
-            Some(_) if is_store_slice => {
-                kf_abi::bringup::nvos46_page_size_flag_for_store_slice(
-                    STORE_IS_CONTIGUOUS_AND_ALIGNED.load(Ordering::Relaxed),
-                )
+            Some(_) if is_shared_slice => {
+                // ⊘ The argument is ignored by design (w755e: FIXED is honoured only under the
+                // 4 KiB pin, contiguous or not); `false` states the conservative case honestly.
+                kf_abi::bringup::nvos46_page_size_flag_for_store_slice(false)
             }
             Some(a) => kf_abi::bringup::nvos46_page_size_flag(a, offset, len),
             None => 0,
@@ -937,89 +825,7 @@ impl HostRm {
         Ok(out.dma_offset)
     }
 
-    /// ★★★★★ **CONSTRAINT 26 — DUP A PER-PROC ISOLATE'S ADDRESS SPACE INTO THIS CLIENT.**
-    ///
-    /// `[measured w744, GA106, on two driver builds]` `NV_ESC_RM_DUP_OBJECT` of a
-    /// `FERMI_VASPACE_A` answers `status=0x0000`, and the two clients then share **one**
-    /// address space rather than getting a copy — proved by the falsifier, not assumed: a
-    /// map by the source client at a VA the destination had already taken was refused
-    /// `0x51`, with the control passing at an unclaimed VA
-    /// (`traces/w744_b1d_probe/run3_FINAL_ga106_580.126.20.log`, `B1D_SHARING=ONE SPACE`).
-    ///
-    /// ⊘ `NV01_MEMORY_VIRTUAL` is **not** dupable — `0x26 NV_ERR_INVALID_DEVICE` at the
-    /// device, `0x36` at the root — which is why the scratchpad builds its **own** range
-    /// inside the duped space (route B) instead of duping the source's.
-    ///
-    /// ## ⚠ THE ONE `hClientSrc` IN THE CRATE
-    ///
-    /// `handed` is a [`HandedVaSpace`], which cannot be built by a per-proc backend. See
-    /// [`mod@handed_vaspace`] for what that does and does not prove; the short form is that
-    /// F11's *"we cannot name a client we did not mint"* is **scoped to this call**, by a
-    /// type, rather than weakened by an allowlist entry.
-    ///
-    /// # Errors
-    /// Whatever RM refused the dup with.
-    pub fn raw_dup_object(
-        &self,
-        parent: u32,
-        want: u32,
-        src_object: u32,
-    ) -> Result<u32, RmError> {
-        let mut arg = [0u8; Nvos55Parameters::SIZE];
-        Nvos55Parameters {
-            h_client: self.client.raw(),
-            h_parent: parent,
-            h_object: want,
-            // v3: one session — the source is always OUR OWN client's object.
-            h_client_src: self.client.raw(),
-            h_object_src: src_object,
-            flags: 0,
-            status: 0,
-        }
-        .encode_into(&mut arg)
-        .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
-        let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_DUP_OBJECT as u8, arg.len())
-            .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
-        self.ctl
-            .ioctl(req, &mut arg, &mut [])
-            .map_err(|e| ioctl_error(&e))?;
-        let out = Nvos55Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
-        status_check(out.status)?;
-        self.remember(out.h_object, parent);
-        Ok(out.h_object)
-    }
-
-    /// ★★★ **CONSTRAINT 26 — an `NV01_MEMORY_VIRTUAL` range over an address space this
-    /// client did not create.**
-    ///
-    /// [`HostRmBackend::alloc_vaspace_raw`] mints space and range together, which is right
-    /// for a client that owns both and useless here: the scratchpad's range has to be built
-    /// over a **duped-in** handle. `[measured w744]` `B1D_Q1C3_RANGE_IN_CLEAN_DUPED_SPACE
-    /// status=0x0000` — and it works **only** if the space is bare, because a second
-    /// whole-space range collides `0x19 INSERT_DUPLICATE_NAME`.
-    ///
-    /// # Errors
-    /// Whatever RM refused the range with.
-    pub fn raw_alloc_range_over(&self, h_va_space: u32) -> Result<u32, RmError> {
-        let mut range = [0u8; NvMemoryVirtualAllocationParams::SIZE];
-        NvMemoryVirtualAllocationParams {
-            offset: 0,
-            limit: 0,
-            h_va_space,
-        }
-        .encode_into(&mut range)
-        .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
-        let want = self.mint();
-        let h = self.raw_alloc(self.device, want, NV01_MEMORY_VIRTUAL, &mut range)?;
-        self.remember(h, self.device);
-        // ⊘ Paired with the DUPED space, not with the source's: freeing this range must
-        // free the dup (this client's reference), and must NOT reach into the per-proc
-        // client's namespace, which is not ours to free.
-        self.pair(h, h_va_space);
-        Ok(h)
-    }
-
-    /// One `NV_ESC_RM_UNMAP_MEMORY_DMA`, undoing a [`HostRm::raw_map_dma`].
+    /// One `NV_ESC_RM_UNMAP_MEMORY_DMA`, undoing a [`HostRm::map`](crate::HostRm::map).
     pub fn raw_unmap_dma(&self, h_dma: u32, gpu_va: u64) -> Result<(), RmError> {
         self.raw_unmap_dma_flags(h_dma, gpu_va, 0)
     }
@@ -1153,8 +959,7 @@ impl HostRm {
         self.cpu_maps
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         // ★ w393 — the registration is its own verb now, because the armed node is a thing
-        // this crate hands to ANOTHER process without ever `mmap`ing it here
-        // (`HostRmBackend::export_device_view`). Everything below this line is the `mmap`.
+        // a caller may hand on without `mmap`ing it here. Everything below this line is the `mmap`.
         let (node, _cookie) =
             self.arm_cpu_view(which, h_memory, 0, register_len, ViewAccess::ReadWrite)?;
 
@@ -1187,10 +992,8 @@ impl HostRm {
     /// FRESH node and register an `mmap` context for `[offset, offset+len)` of `h_memory`
     /// against it, and hand the ARMED NODE back un-`mmap`ed.**
     ///
-    /// Split out because the node is now something this process may hand to **another**
-    /// process — the VMM — which performs the `mmap` itself and installs a guest memslot
-    /// over it (`kayfabe_isolate::DeviceView`; the host-visible half of
-    /// `DEVICE_LOCAL | HOST_VISIBLE`). Nothing on the driver's framebuffer `mmap` path names
+    /// Split out so a caller can perform the `mmap` itself (e.g. to install a guest memslot
+    /// over it — the host-visible half of `DEVICE_LOCAL | HOST_VISIBLE`). Nothing on the driver's framebuffer `mmap` path names
     /// the calling process (`ogkm-580: kernel-open/nvidia/nv-mmap.c:505-641`, a reading),
     /// so the node's `struct file` carries the whole context wherever the descriptor goes.
     ///
@@ -1267,7 +1070,7 @@ impl HostRm {
     pub fn release_cpu_view(&self, r: CpuViewRelease) -> Result<(), RmError> {
         let mut arg = [0u8; Nvos34Parameters::SIZE];
         Nvos34Parameters {
-            // ⊘ F11: this isolate's OWN client and device, read here — never carried in from the
+            // ⊘ F11: this session's OWN client and device, read here — never carried in from the
             // release key. See `CpuViewRelease`'s comment for the invariant that forbids it.
             h_client: self.client.raw(),
             h_device: self.device,
@@ -1290,7 +1093,7 @@ impl HostRm {
     /// Allocate `len` bytes of **device-local** memory — the only kind a ring, a USERD
     /// block or a semaphore can be built from.
     ///
-    /// Not [`RmBackend::alloc_sysmem`]: that verb asks for `MAPPING_NO_MAP`, which makes
+    /// Not a `MAPPING_NO_MAP` sysmem object, which makes
     /// the object deliberately un-CPU-mappable. See
     /// `kf_abi::submit::NV01_MEMORY_LOCAL_USER`.
     /// ★★★★★ **RESERVE THE GUEST'S WHOLE VIDEO MEMORY AS ONE OBJECT** —
@@ -1420,36 +1223,13 @@ impl HostRm {
     }
 
     /// ★ Reserve THE one device-local object that is the guest's whole framebuffer (GPGA =
-    /// offset into it). Contiguous and 1 GiB-aligned first, the identity window's precondition.
+    /// offset into it). Contiguous and 1 GiB-aligned first, the identity window's precondition;
+    /// which one RM granted is RETURNED to the caller, never stored in a process global (review
+    /// w826 #5).
     ///
     /// # Errors
     /// The host's refusal.
-    pub fn reserve_gpga(&self, len: u64) -> Result<u32, RmError> {
-        self.reserve_gpga_inner(len, true)
-    }
-
-    /// ★★★★★ **w755c — THE SIZE PROBE'S RESERVATION, WHICH MUST NOT SPEAK FOR THE REAL ONE.**
-    ///
-    /// ⊘⊘ `HostRmBackend::largest_reservable_mb` bisects by **really allocating and freeing**,
-    /// ~13 times. Routing those through [`HostRm::reserve_gpga`] would have every probe step
-    /// set [`STORE_IS_CONTIGUOUS_AND_ALIGNED`] and print a headline claiming a reservation —
-    /// so the flag the page-size decision reads would be a fact about a **throwaway probe**,
-    /// and the log would carry a dozen contradictory claims about a store that does not exist
-    /// yet.
-    ///
-    /// ⚠ Caught by asking where `reserve_gpga` is called from, not by a test: the last probe
-    /// step usually IS the real size, so the flag would usually be right — and "usually
-    /// right, by accident of ordering" is the
-    /// `correct_by_accident_under_a_temporary_condition` shape this campaign has recorded
-    /// five times in two days.
-    ///
-    /// # Errors
-    /// Whatever RM refused the allocation with.
-    pub fn reserve_gpga_probe(&self, len: u64) -> Result<u32, RmError> {
-        self.reserve_gpga_inner(len, false)
-    }
-
-    fn reserve_gpga_inner(&self, len: u64, is_the_real_store: bool) -> Result<u32, RmError> {
+    pub fn reserve_gpga(&self, len: u64) -> Result<Reservation, RmError> {
         // ★★★★★ **w755c — TRY CONTIGUOUS AND 1 GiB-ALIGNED FIRST, FALL BACK, AND SAY WHICH.**
         //
         // > Owner, 2026-09-16: *"ensure the gpga rm object in the scratchpad va is aligned
@@ -1494,17 +1274,8 @@ impl HostRm {
         .encode_into(&mut params)
         .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         if let Ok(h) = self.raw_alloc(self.device, want, NV01_MEMORY_LOCAL_USER, &mut params) {
-            if is_the_real_store {
-                STORE_IS_CONTIGUOUS_AND_ALIGNED.store(true, Ordering::Relaxed);
-            }
-            if is_the_real_store {
-                eprintln!(
-                    "kayfabe-isolate: STORE-RESERVE ★ CONTIGUOUS and 1 GiB-ALIGNED, {} MiB —                  every slice's physical address is `base + offset` with `base ≡ 0`, so a                  FIXED map is congruent at EVERY page size and store slices need no                  small-page pin.",
-                    len >> 20
-                );
-            }
             self.remember(h, self.device);
-            return Ok(h);
+            return Ok(Reservation { handle: h, contiguous_aligned: true });
         }
         // ⊘ The fallback is not a degraded mode, it is the documented one. Only the page-size
         // freedom is lost.
@@ -1520,17 +1291,8 @@ impl HostRm {
         .encode_into(&mut params)
         .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         let h = self.raw_alloc(self.device, want, NV01_MEMORY_LOCAL_USER, &mut params)?;
-        if is_the_real_store {
-            STORE_IS_CONTIGUOUS_AND_ALIGNED.store(false, Ordering::Relaxed);
-        }
-        if is_the_real_store {
-            eprintln!(
-                "kayfabe-isolate: STORE-RESERVE ⊘ NONCONTIGUOUS, {} MiB — the contiguous              1 GiB-aligned form was refused (fragmentation, not capacity). A slice's physical              address is then whatever RM's page list says, so store slices PIN THE 4 KiB PAGE              TABLE, where congruence holds however the pages fell.",
-                len >> 20
-            );
-        }
         self.remember(h, self.device);
-        Ok(h)
+        Ok(Reservation { handle: h, contiguous_aligned: false })
     }
 
     /// A device-local memory object of `len` bytes.
@@ -1559,10 +1321,8 @@ impl HostRm {
     /// `region`.
     ///
     /// This is the one primitive that makes *guest* RAM addressable by the host GPU: the
-    /// VMM maps a slice of the guest's `memfd`, the isolate maps the same pages, and this
-    /// call turns that range into an RM memory object that
-    /// [`RmBackend::map_gpu_va`](kayfabe_isolate::RmBackend::map_gpu_va) can then place in
-    /// a host VAS. Everything after it is machinery that already exists.
+    /// VMM maps the guest's `memfd`, and this call turns a range of it into an RM memory
+    /// object that [`HostRm::map`](crate::HostRm::map) can then place in a host VAS. Everything after it is machinery that already exists.
     ///
     /// ## The four things that are easy to get wrong
     ///
@@ -1578,8 +1338,7 @@ impl HostRm {
     ///    before this function can observe it — §4.2.1's rule, and the reason
     ///    [`Nvos02ParametersWithFd::p_memory`]'s own docs forbid this crate from writing it.
     /// 2. **The node.** `NV_ESC_RM_ALLOC_MEMORY` is `NV_ACTUAL_DEVICE_ONLY`, so it goes on
-    ///    the per-GPU node exactly as [`RmBackend::alloc_sysmem`](kayfabe_isolate::RmBackend::alloc_sysmem)
-    ///    does. The C found the same thing the same way: *"ctl fd -> EINVAL"*
+    ///    the per-GPU node. The C found the same thing the same way: *"ctl fd -> EINVAL"*
     ///    (`C: nvkvm_gpu_emul.c:7530-7532`).
     /// 3. **`REGISTER_FD` is a prerequisite** — without it RM answers `0x23
     ///    INVALID_CLIENT` (`C: nvkvm_gpu_emul.c:7503-7509`). ⊘ **Already done, and this is
@@ -1670,23 +1429,27 @@ impl HostRm {
         &self.version
     }
 
-    fn pair(&self, object: u32, companion: u32) {
-        let _leaf = leafwitness::Held::enter();
-        self.objects
-            .lock()
-            .expect("objects")
-            .companions
-            .insert(object, companion);
-    }
-
     fn parent_of(&self, child: u32) -> Option<u32> {
         let _leaf = leafwitness::Held::enter();
         self.objects.lock().expect("objects").parents.get(&child).copied()
     }
 
-    fn forget(&self, child: u32) {
+    /// Drop `object` AND every descendant from the parent map — RM's `NV_ESC_RM_FREE` frees the
+    /// subtree, so a child left here would name a handle RM has already released (review w826
+    /// #6: CE and event objects outliving `free_channel`).
+    fn forget(&self, object: u32) {
         let _leaf = leafwitness::Held::enter();
-        self.objects.lock().expect("objects").parents.remove(&child);
+        let mut o = self.objects.lock().expect("objects");
+        let mut doomed = vec![object];
+        let mut i = 0;
+        while i < doomed.len() {
+            let p = doomed[i];
+            doomed.extend(o.parents.iter().filter(|&(_, &par)| par == p).map(|(&c, _)| c));
+            i += 1;
+        }
+        for h in doomed {
+            o.parents.remove(&h);
+        }
     }
 
     /// `NV_ESC_RM_FREE` of an object this session allocated.

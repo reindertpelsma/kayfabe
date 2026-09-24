@@ -69,6 +69,16 @@ pub struct RingSpec {
     pub err_notifier: u32,
 }
 
+/// What a mapped object is to the caller — the fact the page-size rule turns on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MapBacking {
+    /// An object allocated for this one mapping: its base IS the mapping base, RM aligned it.
+    Dedicated,
+    /// A slice of a shared object whose base we never learn (the store, guest RAM): pinned to
+    /// 4 KiB pages so `FIXED` is honoured at every offset, including 0.
+    SharedSlice,
+}
+
 impl HostRm {
     /// A fresh host VA space and its virtual range.
     ///
@@ -107,19 +117,24 @@ impl HostRm {
     /// `DEFER_TLB_INVALIDATION` — ★ v3 §4.2: every map of a batch defers except that the batch
     /// ends with ONE [`HostRm::invalidate_tlb`].
     ///
+    /// ★ `backing` is STATED by the caller, never inferred from `offset` (review w826 #5): the
+    /// store's first page is a slice at offset 0, and a slice mapped under the dedicated-object
+    /// page-size rule has `FIXED` ignored outright (`[measured w755e]`, 4 633 relocations).
+    ///
     /// # Errors
     /// The host's refusal, or [`RmError::PlacementRefused`] for a FIXED map RM placed elsewhere.
     pub fn map(
         &self,
         space: VaSpace,
         memory: u32,
+        backing: MapBacking,
         offset: u64,
         len: u64,
         at: Option<u64>,
         defer: bool,
     ) -> Result<u64, RmError> {
         let extra = if defer { NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE } else { 0 };
-        self.raw_map_dma_slice(space.range, memory, offset, len, at, extra, offset != 0)
+        self.raw_map_dma_slice(space.range, memory, offset, len, at, extra, backing == MapBacking::SharedSlice)
     }
 
     /// Unmap the mapping at `va` in `space`; `defer` as for [`HostRm::map`].

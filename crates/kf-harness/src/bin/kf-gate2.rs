@@ -81,11 +81,12 @@ fn run(l: &mut Checks) -> Result<(), String> {
     let dev = DevDir::open(c"/dev").map_err(|e| format!("open /dev: {e:?}"))?;
     let pick = |a: u32, i: u32| Family::from_arch(a, i).ok().map(Family::host_classes);
     let rm = HostRm::open(&dev, kf_arch::ids::GpuId(0), &pick).map_err(|e| e.to_string())?;
-    let store = rm.reserve_gpga(STORE_BYTES).map_err(|e| format!("reserve: {e:?}"))?;
+    let res = rm.reserve_gpga(STORE_BYTES).map_err(|e| format!("reserve: {e:?}"))?;
+    let store = res.handle;
     let fd = rm.export_to_new_fd(store).map_err(|e| format!("export: {e:?}"))?;
     let mut walk = WalkKernel::bring_up(WalkCfg::default(), kf_format_ver2()).map_err(|e| e.to_string())?;
     let dptr = walk.import_store(fd.fd_number(), STORE_BYTES).map_err(|e| e.to_string())?;
-    l.check("store", true, format!("store {store:#x} {} MiB imported at {dptr:#x}", STORE_BYTES >> 20));
+    l.measure("store", format!("store {store:#x} {} MiB contiguous_aligned={} imported at {dptr:#x}", STORE_BYTES >> 20, res.contiguous_aligned));
 
     // The guest kernel's tables: VA_A -> DATA_A, VA_B -> DATA_B, 16 pages each.
     let mut tree = Tree::new();
@@ -125,7 +126,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
 
     let mut rig = CeRig::new(&rm, space)?;
     let s = rig.copy(&rm, VA_A, VA_B, BYTES)?;
-    l.check("copy1_completes_by_event", s.ready > 0 && s.released, format!("{s:?}"));
+    l.check("copy1_completes_by_event", s.seen_at_wake && s.ce_released, format!("{s:?}"));
     let mut got = vec![0u8; BYTES as usize];
     walk.read_at(dptr + DATA_B, &mut got).map_err(|e| e.to_string())?;
     l.check("copy1_lands_where_the_guest_mapped_it", got == pattern(0xA5A5_0000), "DATA_B == DATA_A pattern");
@@ -142,7 +143,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
     let (_, mapped, unmapped) = publish(&mut walk, &mut ledger, "remap")?;
     l.check("remap_reconciles", mapped == 1 && unmapped == 1, format!("mapped={mapped} unmapped={unmapped}"));
     let s = rig.copy(&rm, VA_A, VA_B, BYTES)?;
-    l.check("copy2_completes_by_event", s.ready > 0 && s.released, format!("{s:?}"));
+    l.check("copy2_completes_by_event", s.seen_at_wake && s.ce_released, format!("{s:?}"));
     walk.read_at(dptr + DATA_C, &mut got).map_err(|e| e.to_string())?;
     l.check("copy2_follows_the_remap", got == pattern(0xA5A5_0000), "DATA_C == DATA_A pattern");
     walk.read_at(dptr + DATA_B, &mut got).map_err(|e| e.to_string())?;

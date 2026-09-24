@@ -59,6 +59,21 @@ pub enum FamilyRefusal {
     AmpereNotGa10x(u32),
     /// Blackwell datacenter: no family row yet.
     BlackwellDatacenter,
+    /// An integrated (SoC) part — `GA10B`/`AD10B`/`GB20B` `0xB`, `GB20C` `0xC`, `GH100_SOC` `1`
+    /// (`ogkm-580: ctrl2080mc.h:114-151`). No vidmem: every family row assumes a framebuffer.
+    Integrated {
+        /// `MC_GET_ARCH_INFO` architecture.
+        architecture: u32,
+        /// `MC_GET_ARCH_INFO` implementation.
+        implementation: u32,
+    },
+    /// An implementation id outside the discrete range this family row was written for.
+    UnlistedImplementation {
+        /// `MC_GET_ARCH_INFO` architecture.
+        architecture: u32,
+        /// `MC_GET_ARCH_INFO` implementation.
+        implementation: u32,
+    },
 }
 
 impl Family {
@@ -70,14 +85,28 @@ impl Family {
     /// # Errors
     /// [`FamilyRefusal`], by name.
     pub fn from_arch(architecture: u32, implementation: u32) -> Result<Family, FamilyRefusal> {
+        // Implementation ids are `ogkm-580: ctrl2080mc.h:106-151`. ⊘ Integrated parts are refused
+        // BEFORE the family match (review w826 #8: `>= 2` used to admit GA10B `0xB`).
+        let integrated = match architecture {
+            arch::GA100 | arch::AD100 | arch::GB200 => matches!(implementation, 0xB | 0xC),
+            arch::GH100 => implementation == 1,
+            _ => false,
+        };
+        if integrated {
+            return Err(FamilyRefusal::Integrated { architecture, implementation });
+        }
+        let unlisted = || FamilyRefusal::UnlistedImplementation { architecture, implementation };
         match architecture {
-            // GA100 is implementation 0; GA102/103/104/106/107 are 2..=7.
-            arch::GA100 if implementation >= 2 => Ok(Family::Ga10x),
-            arch::GA100 => Err(FamilyRefusal::AmpereNotGa10x(implementation)),
-            arch::AD100 => Ok(Family::Ad10x),
-            arch::GH100 => Ok(Family::Gh100),
-            arch::GB200 => Ok(Family::Gb20x),
+            // GA100 (0) is datacenter Ampere with a different class set; GA102..GA107 are 2..=7.
+            arch::GA100 if (2..=7).contains(&implementation) => Ok(Family::Ga10x),
+            arch::GA100 if implementation == 0 => Err(FamilyRefusal::AmpereNotGa10x(implementation)),
+            // AD102..AD107 are 2..=7 (AD100/AD000/AD101 are 0/1: never shipped discrete).
+            arch::AD100 if (2..=7).contains(&implementation) => Ok(Family::Ad10x),
+            arch::GH100 if implementation == 0 => Ok(Family::Gh100),
+            // GB202..GB207 are 2..=7.
+            arch::GB200 if (2..=7).contains(&implementation) => Ok(Family::Gb20x),
             arch::GB100 => Err(FamilyRefusal::BlackwellDatacenter),
+            arch::GA100 | arch::AD100 | arch::GH100 | arch::GB200 => Err(unlisted()),
             other => Err(FamilyRefusal::UnknownArchitecture(other)),
         }
     }

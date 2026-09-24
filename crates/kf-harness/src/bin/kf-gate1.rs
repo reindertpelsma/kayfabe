@@ -1,31 +1,30 @@
 //! ★★★ **v3 gate 1 — a REAL copy engine, on our own ring, completing through the host EVENT.**
 //!
-//! No QEMU, no guest, no CPU copy anywhere. Asserts: the host session opens on the family the
-//! host reports; a CE channel is born, bound and scheduled; one copy moves real bytes; the
-//! semaphore is released BY THE ENGINE; and MEASURES whether the non-stall interrupt reaches our
-//! `NV2080_NOTIFIERS_CE(0)` event fd (the unmeasured §37 question).
+//! No QEMU, no guest, no CPU copy anywhere. Every copy ends in NVIDIA's own completion tail — a host
+//! fence release **with `RELEASE_WFI`**, then the chosen trigger — and a wake counts only if the
+//! fence holds OUR payload when re-read AT that wake (the non-stall notifiers are GPU-wide and carry
+//! no identity, `intr.c:1195-1205`). Arms, one trigger each, so the edge is attributed, not assumed:
+//! - `quiet`   — nothing submitted: the background wake rate on this fd (another tenant, stale).
+//! - `none`    — fence, no trigger: work completes, and no edge of ours should arrive.
+//! - `ce_intr` — only the CE `LAUNCH_DMA` non-blocking interrupt (the CE(n) notifiers).
+//! - `nsi`     — only the host `NON_STALL_INTERRUPT` (`FIFO_EVENT_MTHD`), ×20: the gating arm.
+//!
+//! ⊘ The deferred-map/one-invalidate property is NOT asserted here: these maps land in a fresh
+//! VA space with nothing stale to invalidate, so they would pass with the defer bit ignored. Gate 2's
+//! remap (a warm TLB, then deferred unmap+map, then one invalidate) is the arm that can fail.
 
-use kf_abi::submit::{ENGINE_TYPE_COPY0, USERD_GP_PUT, gp_entry};
 use kf_chip::Family;
-use kf_harness::{Ledger, ce_copy_push};
-use kf_host::{HostRm, RingSpec, event::notifier_ce};
-use kf_linux_raw::{CachePolicy, DevDir, HostOffset, PollTimeout, Poller, ReadyTokens, release_fence};
-use std::time::{Duration, Instant};
+use kf_harness::{CeRig, Ledger, Trigger};
+use kf_host::{HostRm, event::notifier_ce};
+use kf_linux_raw::{CachePolicy, DevDir, HostOffset};
 
-const RING_BYTES: u64 = 0x1_0000;
-const PB_OFF: u64 = 0x0;
-const GPFIFO_OFF: u64 = 0x1000;
-const GPFIFO_ENTRIES: u32 = 64;
-const SEM_OFF: u64 = 0x2000;
-const USERD_OFF: u64 = 0x3000;
 const DATA_BYTES: u64 = 0x1_0000;
 const COPY_LEN: u32 = 4096;
-const PAYLOAD: u32 = 0xC0FF_EE01;
+const NSI_REPS: u32 = 20;
 
 fn main() {
     let mut l = Ledger::default();
-    let ok = run(&mut l);
-    if let Err(e) = ok {
+    if let Err(e) = run(&mut l) {
         l.check("run", false, e);
     }
     let v = l.verdict();
@@ -37,98 +36,78 @@ fn run(l: &mut Ledger) -> Result<(), String> {
     let dev = DevDir::open(c"/dev").map_err(|e| format!("open /dev: {e:?}"))?;
     let pick = |a: u32, i: u32| Family::from_arch(a, i).ok().map(Family::host_classes);
     let rm = HostRm::open(&dev, kf_arch::ids::GpuId(0), &pick).map_err(|e| e.to_string())?;
-    l.check("session", true, format!("driver {}", rm.driver_version()));
+    l.measure("session", format!("driver {}", rm.driver_version()));
 
     let space = rm.alloc_vaspace().map_err(|e| format!("vaspace: {e:?}"))?;
-    let ring = rm.alloc_device_local(RING_BYTES).map_err(|e| format!("ring obj: {e:?}"))?;
     let data = rm.alloc_device_local(DATA_BYTES).map_err(|e| format!("data obj: {e:?}"))?;
-    let ring_va = rm.map(space, ring, 0, RING_BYTES, None, true).map_err(|e| format!("map ring: {e:?}"))?;
-    let data_va = rm.map(space, data, 0, DATA_BYTES, None, true).map_err(|e| format!("map data: {e:?}"))?;
+    let data_va = rm.map(space, data, kf_host::MapBacking::Dedicated, 0, DATA_BYTES, None, true).map_err(|e| format!("map data: {e:?}"))?;
     rm.invalidate_tlb(space).map_err(|e| format!("invalidate: {e:?}"))?;
-    l.check("batched_map", true, format!("ring@{ring_va:#x} data@{data_va:#x}, 2 deferred maps + 1 invalidate"));
-
-    let (_rn, ring_cpu) = rm.map_cpu(ring, RING_BYTES, CachePolicy::Uncached).map_err(|e| format!("cpu ring: {e:?}"))?;
     let (_dn, data_cpu) = rm.map_cpu(data, DATA_BYTES, CachePolicy::Uncached).map_err(|e| format!("cpu data: {e:?}"))?;
     let at = HostOffset::new;
-    for i in 0..(COPY_LEN / 4) {
-        data_cpu.store_u32(at(u64::from(i) * 4), 0x5A00_0000 | i).map_err(|e| format!("{e:?}"))?;
-        data_cpu.store_u32(at(0x8000 + u64::from(i) * 4), 0).map_err(|e| format!("{e:?}"))?;
-    }
-    ring_cpu.store_u32(at(SEM_OFF), 0).map_err(|e| format!("{e:?}"))?;
 
-    let ev = rm.open_event_fd().map_err(|e| format!("event fd: {e:?}"))?;
-    // ★ Which notifier a CE completion posts to is the PHYSICAL CE's publicID
-    // (`kceServiceNotificationInterrupt`, ogkm-580 kernel_ce.c:703), not our logical COPY0 —
-    // so arm all ten and let the drained record say which one fired.
+    let mut rig = CeRig::new(&rm, space)?;
+    let chan = rig.channel();
+    l.measure("channel", format!("tsg={:#x} chan={:#x} token={:#x}", chan.tsg, chan.chan, chan.token));
     let mut armed = Vec::new();
     for n in 0..10u32 {
-        let o = rm.alloc_os_event(rm.subdevice(), notifier_ce(n), true, &ev);
-        let a = rm.set_notification(notifier_ce(n), kf_abi::eventnotify::ACTION_REPEAT);
-        armed.push(format!("CE{n}:{}/{}", o.is_ok(), a.is_ok()));
+        armed.push(format!("CE{n}:{}", rig.arm(&rm, notifier_ce(n)).is_ok()));
     }
-    // The host NON_STALL_INTERRUPT method's own edge: NV2080_NOTIFIERS_FIFO_EVENT_MTHD (35),
-    // which `eventGetEngineTypeFromSubNotifyIndex` maps to RM_ENGINE_TYPE_HOST.
-    let o = rm.alloc_os_event(rm.subdevice(), 35, true, &ev);
-    let a = rm.set_notification(35, kf_abi::eventnotify::ACTION_REPEAT);
-    armed.push(format!("FIFO_MTHD:{}/{}", o.is_ok(), a.is_ok()));
-    l.measure("events_armed", armed.join(" "));
+    l.measure("ce_notifiers_armed", armed.join(" "));
 
-    let chan = rm
-        .birth_channel(space, ENGINE_TYPE_COPY0, RingSpec {
-            gp_fifo_va: ring_va + GPFIFO_OFF,
-            gp_fifo_entries: GPFIFO_ENTRIES,
-            userd_memory: ring,
-            userd_offset: USERD_OFF,
-            err_notifier: 0,
-        })
-        .map_err(|e| format!("birth: {e:?}"))?;
-    rm.alloc_ce_object(chan, ENGINE_TYPE_COPY0).map_err(|e| format!("ce object: {e:?}"))?;
-    rm.schedule(chan).map_err(|e| format!("schedule: {e:?}"))?;
-    l.check("channel", true, format!("tsg={:#x} chan={:#x} token={:#x}", chan.tsg, chan.chan, chan.token));
-
-    let ce_class = rm.ce_class_id();
-    let mut words = ce_copy_push(ce_class, data_va, data_va + 0x8000, COPY_LEN, ring_va + SEM_OFF, PAYLOAD, true)
-        .ok_or("push encode")?;
-    // A second trigger: the host class's own NON_STALL_INTERRUPT method (`NVC56F_NON_STALL_INTERRUPT`
-    // 0x20, `ogkm-580: clc56f.h:110`), on subchannel 0.
-    words.push(kf_abi::submit::method_header_inc(0, 0x20, 1).ok_or("nsi header")?);
-    words.push(0);
-    for (i, w) in words.iter().enumerate() {
-        ring_cpu.store_u32(at(PB_OFF + 4 * i as u64), *w).map_err(|e| format!("{e:?}"))?;
-    }
-    let entry = gp_entry(ring_va + PB_OFF, 4 * words.len() as u64).ok_or("gp entry")?;
-    ring_cpu.store_u32(at(GPFIFO_OFF), entry as u32).map_err(|e| format!("{e:?}"))?;
-    ring_cpu.store_u32(at(GPFIFO_OFF + 4), (entry >> 32) as u32).map_err(|e| format!("{e:?}"))?;
-    release_fence();
-    ring_cpu.store_u32(at(USERD_OFF + USERD_GP_PUT), 1).map_err(|e| format!("{e:?}"))?;
-    release_fence();
-
-    let poller = Poller::create().map_err(|e| format!("epoll: {e:?}"))?;
-    poller.watch(ev.as_fd(), 1).map_err(|e| format!("watch: {e:?}"))?;
-    let t0 = Instant::now();
-    rm.doorbell(chan.token).map_err(|e| format!("doorbell: {e:?}"))?;
-
-    let mut ready = ReadyTokens::new();
-    let n = poller.wait(&mut ready, PollTimeout::Millis(2000)).map_err(|e| format!("wait: {e:?}"))?;
-    let event_us = t0.elapsed().as_micros();
-    let drained = ev.drain().map_err(|e| format!("drain: {e:?}"))?;
-    l.measure("event_fd", format!("ready={n} after_us={event_us} records={drained:?} drain_status={:#x}", ev.last_status()));
-
-    let deadline = Instant::now() + Duration::from_secs(2);
-    let mut sem = ring_cpu.load_u32(at(SEM_OFF)).map_err(|e| format!("{e:?}"))?;
-    while sem != PAYLOAD && Instant::now() < deadline {
-        std::thread::sleep(Duration::from_micros(200));
-        sem = ring_cpu.load_u32(at(SEM_OFF)).map_err(|e| format!("{e:?}"))?;
-    }
-    l.check("semaphore_released_by_engine", sem == PAYLOAD, format!("sem={sem:#x} want={PAYLOAD:#x}"));
-    let mut bad = 0u32;
+    // Source pattern once; each arm copies into its own zeroed 4 KiB destination.
     for i in 0..(COPY_LEN / 4) {
-        let v = data_cpu.load_u32(at(0x8000 + u64::from(i) * 4)).map_err(|e| format!("{e:?}"))?;
-        if v != 0x5A00_0000 | i {
-            bad += 1;
-        }
+        data_cpu.store_u32(at(u64::from(i) * 4), 0x5A00_0000 | i).map_err(|e| format!("{e:?}"))?;
     }
-    l.check("bytes_copied_by_engine", bad == 0, format!("{} words, {bad} wrong", COPY_LEN / 4));
-    l.check("completion_edge_is_an_event", n > 0 && !drained.is_empty(), format!("ready={n} records={}", drained.len()));
+    let mut dst_slot = 0u64;
+    let mut fresh_dst = |cpu: &kf_linux_raw::VolatileRegion| -> Result<u64, String> {
+        dst_slot += 1;
+        let off = (dst_slot % 15 + 1) * u64::from(COPY_LEN);
+        for i in 0..(COPY_LEN / 4) {
+            cpu.store_u32(at(off + u64::from(i) * 4), 0).map_err(|e| format!("{e:?}"))?;
+        }
+        Ok(off)
+    };
+    let bad_words = |cpu: &kf_linux_raw::VolatileRegion, off: u64| -> Result<u32, String> {
+        let mut bad = 0;
+        for i in 0..(COPY_LEN / 4) {
+            if cpu.load_u32(at(off + u64::from(i) * 4)).map_err(|e| format!("{e:?}"))? != 0x5A00_0000 | i {
+                bad += 1;
+            }
+        }
+        Ok(bad)
+    };
+
+    let quiet = rig.quiet_wakes(300)?;
+    l.measure("quiet", format!("wakes={quiet} in 300 ms with nothing submitted"));
+
+    let off = fresh_dst(&data_cpu)?;
+    let s = rig.submit(&rm, data_va, data_va + off, COPY_LEN, Trigger::None, 300)?;
+    l.check("none_arm_work_completes", s.ce_released && s.fence_landed && bad_words(&data_cpu, off)? == 0, format!("{s:?}"));
+    l.measure("none_arm_wakes", format!("wakes={} (an edge with no trigger of ours = someone else's)", s.wakes));
+
+    let off = fresh_dst(&data_cpu)?;
+    let s = rig.submit(&rm, data_va, data_va + off, COPY_LEN, Trigger::CeInterrupt, 500)?;
+    l.check("ce_intr_arm_work_completes", s.ce_released && s.fence_landed && bad_words(&data_cpu, off)? == 0, format!("{s:?}"));
+    l.measure("ce_intr_arm_edge", format!("seen_at_wake={} wakes={} after_us={}", s.seen_at_wake, s.wakes, s.event_us));
+
+    let (mut seen, mut early, mut bad, mut lat) = (0u32, 0u32, 0u32, Vec::new());
+    for _ in 0..NSI_REPS {
+        let off = fresh_dst(&data_cpu)?;
+        let s = rig.submit(&rm, data_va, data_va + off, COPY_LEN, Trigger::HostNsi, 2000)?;
+        if s.seen_at_wake {
+            seen += 1;
+            lat.push(s.event_us);
+        }
+        early += s.early_wakes;
+        bad += bad_words(&data_cpu, off)?;
+    }
+    lat.sort_unstable();
+    let pct = |p: usize| lat.get((lat.len().saturating_sub(1)) * p / 100).copied().unwrap_or(0);
+    l.check("bytes_copied_by_engine", bad == 0, format!("{NSI_REPS} copies x {} words, {bad} wrong", COPY_LEN / 4));
+    l.check(
+        "nsi_completion_seen_at_wake",
+        seen == NSI_REPS,
+        format!("{seen}/{NSI_REPS} fences read AT a wake; early_wakes={early}; us p50={} p90={} max={}", pct(50), pct(90), pct(100)),
+    );
     Ok(())
 }
