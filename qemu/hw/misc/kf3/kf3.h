@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#define KF3_ABI 1
+#define KF3_ABI 2
 
 typedef struct Kf3Identity {
     uint16_t vendor, device, subsystem_vendor, subsystem;
@@ -20,7 +20,8 @@ typedef struct Kf3Region {
 } Kf3Region;
 
 uint32_t kf3_abi_version(void);
-int32_t kf3_realize(uint32_t gpu_minor, uint64_t fb_mb, const char *guest_driver, void **out,
+int32_t kf3_realize(uint32_t gpu_minor, uint64_t fb_mb, uint64_t bar1_bytes, uint64_t bar2_bytes,
+                    const char *guest_driver, void **out,
                     char *err, size_t err_len);
 int32_t kf3_identity(void *h, Kf3Identity *out);
 int64_t kf3_memory_map(void *h, uint64_t bar1, uint64_t bar2, Kf3Region *out, size_t cap);

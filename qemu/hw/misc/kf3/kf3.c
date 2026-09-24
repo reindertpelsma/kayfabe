@@ -202,7 +202,7 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
         error_setg(errp, "kf3: archive ABI %u, device ABI %u", kf3_abi_version(), KF3_ABI);
         return;
     }
-    if (kf3_realize(s->gpu_minor, s->fb_mb, s->guest_driver, &s->h, err, sizeof(err)) != 0) {
+    if (kf3_realize(s->gpu_minor, s->fb_mb, s->bar1_size, s->bar2_size, s->guest_driver, &s->h, err, sizeof(err)) != 0) {
         error_setg(errp, "kf3: realize refused: %s", err);
         return;
     }

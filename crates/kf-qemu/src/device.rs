@@ -34,6 +34,10 @@ pub struct Config {
     /// The framebuffer the guest gets, in MiB — reserved as ONE store object. ⊘ If the host refuses
     /// the reservation, the VM does not start (constraint 15: the size is what we could reserve).
     pub fb_mb: u64,
+    /// The BAR1 (framebuffer window) aperture the C device decodes, in bytes.
+    pub bar1_bytes: u64,
+    /// The BAR2/BAR3 (instance window) aperture the C device decodes, in bytes.
+    pub bar2_bytes: u64,
     /// The GUEST driver's version (its GSP wire layout), e.g. `580.159.04`. Defaults to the host's.
     pub guest_driver: Option<String>,
 }
@@ -159,10 +163,19 @@ impl Device {
             fb_regions: layout.regions.clone(),
             fb_length,
             bar1_pde_base: layout.bar1_pde_base,
+            pci_vendor_id: pci.vendor,
             pci_device_id: pci.device,
             pci_revision: pci.revision,
             pci_subsystem_vendor_id: pci.subsystem_vendor,
             pci_subsystem_id: pci.subsystem,
+            // ★ The apertures THIS device decodes (never the host card's): BAR0 is the host's
+            // register span, BAR1/BAR2 are the C device's properties, and there is no I/O BAR.
+            pci_bars: vec![
+                kf_abi::pcibars::PciBarRow { name: "registers", size_bytes: pci.bar0_bytes },
+                kf_abi::pcibars::PciBarRow { name: "framebuffer-window", size_bytes: cfg.bar1_bytes },
+                kf_abi::pcibars::PciBarRow { name: "instance-window", size_bytes: cfg.bar2_bytes },
+                kf_abi::pcibars::PciBarRow { name: "io", size_bytes: 0 },
+            ],
         });
         // ⊘ The P2 chain: the answers the GSP boot needs, then the ledger that NAMES every command
         // nothing answered (never a silent echo). P3 replaces this with kf-rm's served chain.
