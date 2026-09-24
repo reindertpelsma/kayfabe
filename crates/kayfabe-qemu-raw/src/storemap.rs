@@ -1979,6 +1979,60 @@ pub struct ReconcilePlan {
     pub kept: usize,
 }
 
+/// ★★★★★ **w826 — a server row, made mappable and made SUBORDINATE to the walk.**
+///
+/// A `GPU_PROMOTE_CTX` row is what RM asked US to map; the walk is what the guest's own
+/// tables say. Two rules, both measured `[w826 m2 cup3: cuCtxCreate 719]`:
+/// 1. **Whole pages.** RM refuses a mapping that is not a page multiple (`0x20409d000+0x8600`
+///    → `Other(19305)`); the C rounds every promote mapping (`nvkvm_gpu_emul.c:7920`). A row
+///    that is 64 KiB-aligned on both sides takes the C's 64 KiB round-up; any other row rounds
+///    to 4 KiB. A row whose VA and backing disagree inside a page cannot be expressed → none.
+/// 2. **The walk wins where both speak.** A row overlapping walked runs contributes only the
+///    pieces the walk left empty — otherwise the two fight over one slice and every pass
+///    unmaps and remaps it (`mapped=1 unmapped=1`, measured).
+///
+/// Returns `(va, len, backing offset)` pieces, page-aligned, ascending.
+#[must_use]
+pub fn server_row_pieces(
+    va: u64,
+    len: u64,
+    phys: u64,
+    walked: &[(u64, u64)],
+) -> Vec<(u64, u64, u64)> {
+    const PAGE: u64 = 0x1000;
+    const BIG: u64 = 0x1_0000;
+    if len == 0 || (va % PAGE) != (phys % PAGE) {
+        return Vec::new();
+    }
+    let lead = va % PAGE;
+    let (va, phys, len) = (va - lead, phys - lead, len + lead);
+    let grain = if va % BIG == 0 && phys % BIG == 0 { BIG } else { PAGE };
+    let Some(end) = len.checked_next_multiple_of(grain).and_then(|l| va.checked_add(l)) else {
+        return Vec::new();
+    };
+    let mut cover: Vec<(u64, u64)> = walked
+        .iter()
+        .filter(|(w, l)| *l > 0 && *w < end && w.saturating_add(*l) > va)
+        .map(|&(w, l)| (w, w.saturating_add(l)))
+        .collect();
+    cover.sort_unstable();
+    let mut out = Vec::new();
+    let mut at = va;
+    for (s, e) in cover {
+        if s > at {
+            out.push((at, s.min(end) - at, phys + (at - va)));
+        }
+        at = at.max(e);
+        if at >= end {
+            break;
+        }
+    }
+    if at < end {
+        out.push((at, end - at, phys + (at - va)));
+    }
+    out
+}
+
 /// ★★★★★ **The pure half of the reconcile — no GPU, no isolate, fully testable.**
 ///
 /// `ledger` is every slice this port holds in one VA space, `(va, len, off, ram)`; `desired`

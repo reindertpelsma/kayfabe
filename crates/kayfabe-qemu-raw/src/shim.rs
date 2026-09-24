@@ -18555,17 +18555,17 @@ impl SharedDoorbell {
                 // map (v3 §4.4). They are never in the guest's tables, so the walk cannot see
                 // them; without them every GR context buffer is unmapped (cuCtxCreate 719).
                 // Vidmem rows take the C's 64 KiB round-up (`nvkvm_gpu_emul.c:7920`).
+                let walked: Vec<(u64, u64)> = desired.iter().map(|d| (d.va, d.len)).collect();
                 let mut desired = desired.clone();
                 for (va, len, phys, vidmem) in
                     self.device.server_rows(pid, DOORBELL_TARGET_GPU, pdb)
                 {
                     if vidmem {
-                        let len = if va % 0x1_0000 == 0 && phys % 0x1_0000 == 0 {
-                            len.div_ceil(0x1_0000) * 0x1_0000
-                        } else {
-                            len
-                        };
-                        desired.push(crate::storemap::Desired { va, len, off: phys, ram: false });
+                        // Rounded to whole pages and subordinate to the walk — see
+                        // `server_row_pieces` for both measured rules.
+                        for (va, len, off) in crate::storemap::server_row_pieces(va, len, phys, &walked) {
+                            desired.push(crate::storemap::Desired { va, len, off, ram: false });
+                        }
                     } else {
                         let held = self.ce.vmm.lock().unwrap_or_else(|e| e.into_inner());
                         match (held.as_ref(), self.guest_ram_backing) {

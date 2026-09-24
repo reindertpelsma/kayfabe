@@ -44,3 +44,34 @@ fn store_and_ram_never_back_each_other() {
     assert_eq!(p.unmap.len(), 1);
     assert_eq!(p.map.len(), 1);
 }
+
+// ── w826: server rows are whole pages and subordinate to the walk ───────────────────────────
+
+use kayfabe_qemu_raw::storemap::server_row_pieces;
+
+#[test]
+fn an_unaligned_promote_row_rounds_to_whole_pages() {
+    // `[measured w826 m2]` 0x20409d000+0x8600 was refused by RM as a non-page multiple.
+    assert_eq!(server_row_pieces(0x2_0409_d000, 0x8600, 0x40_d000, &[]), vec![(0x2_0409_d000, 0x9000, 0x40_d000)]);
+}
+
+#[test]
+fn a_64k_aligned_row_takes_the_c_round_up() {
+    assert_eq!(server_row_pieces(0x10_0000, 0x1234, 0x20_0000, &[]), vec![(0x10_0000, 0x1_0000, 0x20_0000)]);
+}
+
+#[test]
+fn the_walk_wins_where_both_speak() {
+    // A walked run in the middle of the row leaves only the two holes around it.
+    let got = server_row_pieces(0x10_0000, 0x1_0000, 0x20_0000, &[(0x10_4000, 0x2000)]);
+    assert_eq!(got, vec![(0x10_0000, 0x4000, 0x20_0000), (0x10_6000, 0xa000, 0x20_6000)]);
+    // Fully covered ⇒ nothing, so the two never fight over one slice.
+    assert!(server_row_pieces(0x10_0000, 0x1_0000, 0x20_0000, &[(0xf_0000, 0x3_0000)]).is_empty());
+}
+
+#[test]
+fn a_row_whose_va_and_backing_disagree_inside_a_page_is_inexpressible() {
+    assert!(server_row_pieces(0x10_0800, 0x100, 0x20_0000, &[]).is_empty());
+    // Same in-page offset on both sides is expressible: it widens to the page.
+    assert_eq!(server_row_pieces(0x10_0800, 0x100, 0x20_1800, &[]), vec![(0x10_0000, 0x1000, 0x20_1000)]);
+}
