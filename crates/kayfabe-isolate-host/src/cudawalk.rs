@@ -257,6 +257,16 @@ pub fn stage(span: u64, off: u64, bytes: &[u8]) -> Result<(), u32> {
 static STORE_WINDOW: std::sync::Mutex<Option<(u64, u64)>> = std::sync::Mutex::new(None);
 
 /// Record the store's CUDA device pointer and length. Called once, at reservation.
+/// ★ w826 — the store's RM export `(nvidiactl fd, len)`, imported lazily by [`run`] through the
+/// kernel's own context. See `arm_store_device_pointer`.
+static STORE_EXPORT: std::sync::Mutex<Option<(i32, u64)>> = std::sync::Mutex::new(None);
+
+pub fn arm_store_export(fd: i32, len: u64) {
+    *STORE_EXPORT
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some((fd, len));
+}
+
 pub fn arm_store_window(dptr: u64, len: u64) {
     *STORE_WINDOW
         .lock()
@@ -281,16 +291,8 @@ pub fn run(pdbs: &[u64]) -> Result<Vec<u8>, u32> {
         );
         return Err(WS_TOO_MANY_PDBS);
     }
-    let image = {
-        let g = IMAGE
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if g.is_empty() {
-            eprintln!("kayfabe-isolate: ⊘ WALK-SHADOW run refused: no image was staged");
-            return Err(WS_NO_IMAGE);
-        }
-        g.clone()
-    };
+    // ⊘ w826 — no staged image is required: the walk is IN PLACE over the store window, and
+    // the image this used to demand was never read on that path.
     let mut st = STATE
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -349,6 +351,23 @@ pub fn run(pdbs: &[u64]) -> Result<Vec<u8>, u32> {
     // re-enter a walk that cannot see, and report its emptiness as `bound=0 published=0`,
     // i.e. as *"there was nothing to publish"* rather than *"we could not look"*. A fallback
     // that silently answers wrong is worse than a refusal.
+    if store_window().is_none() {
+        let export = *STORE_EXPORT
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some((fd, len)) = export {
+            match k.import_store(fd, len) {
+                Ok(dptr) => {
+                    arm_store_window(dptr, len);
+                    eprintln!(
+                        "kayfabe-isolate: STORE-DPTR ✔ IMPORTED into the walk kernel's context \
+                         dptr={dptr:#x} len={len}"
+                    );
+                }
+                Err(e) => eprintln!("kayfabe-isolate: STORE-DPTR ⊘ import refused: {e}"),
+            }
+        }
+    }
     let Some((win_base, win_len)) = store_window() else {
         eprintln!(
             "kayfabe-isolate: ⊘⊘ WALK-IN-PLACE REFUSED — the store has no device window, so \

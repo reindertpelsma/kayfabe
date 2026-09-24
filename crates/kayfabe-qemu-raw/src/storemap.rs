@@ -1936,3 +1936,187 @@ pub fn ram_slice_backed(start: u64, off: u64, len: u64, rows: &[(u64, u64, u64)]
     }
     at >= end
 }
+
+// ════════════════════════════════════════════════════════════════════════════════════════════
+// ★★★★★ w826 — THE v3 PUBLISHER: walk the guest's roots IN PLACE on the GPU, reconcile the
+// result against OUR OWN handle ledger. No CPU read of a page table, no address table.
+// ════════════════════════════════════════════════════════════════════════════════════════════
+
+/// One mapping a walk says the guest's tables currently express, as a slice of one of the two
+/// ground truths: the reserved store (`ram == false`, `off` = GPGA offset) or the guest-RAM
+/// object (`ram == true`, `off` = memfd file offset).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Desired {
+    /// Guest VA.
+    pub va: u64,
+    /// Bytes.
+    pub len: u64,
+    /// Offset into the object named by `ram`.
+    pub off: u64,
+    /// Which ground truth.
+    pub ram: bool,
+}
+
+/// What [`plan_reconcile`] asks for. Unmaps are applied FIRST.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct ReconcilePlan {
+    /// `(va, len)` of ledger slices to take down.
+    pub unmap: Vec<(u64, u64)>,
+    /// Desired runs to map.
+    pub map: Vec<Desired>,
+    /// Ledger slices left exactly as they are.
+    pub kept: usize,
+}
+
+/// ★★★★★ **The pure half of the reconcile — no GPU, no isolate, fully testable.**
+///
+/// `ledger` is every slice this port holds in one VA space, `(va, len, off, ram)`; `desired`
+/// is the COMPLETE state a walk reported for that space. A ledger slice is kept iff desired
+/// runs of the SAME ground truth back every byte of it at the same offsets; every other slice
+/// is unmapped. A desired run already backed by kept slices is left alone; otherwise every kept
+/// slice that overlaps it is unmapped too and the run is mapped whole — a FIXED map over a live
+/// slice is refused by RM, so overlap is resolved here, not discovered there.
+#[must_use]
+pub fn plan_reconcile(ledger: &[(u64, u64, u64, bool)], desired: &[Desired]) -> ReconcilePlan {
+    let rows = |ram: bool| -> Vec<(u64, u64, u64)> {
+        let mut v: Vec<(u64, u64, u64)> = desired
+            .iter()
+            .filter(|d| d.ram == ram)
+            .map(|d| (d.va, d.off, d.len))
+            .collect();
+        v.sort_unstable();
+        v
+    };
+    let (want_store, want_ram) = (rows(false), rows(true));
+    let mut plan = ReconcilePlan::default();
+    let mut kept: Vec<(u64, u64, u64, bool)> = Vec::new();
+    for &(va, len, off, ram) in ledger {
+        let want = if ram { &want_ram } else { &want_store };
+        if ram_slice_backed(va, off, len, want) {
+            kept.push((va, len, off, ram));
+        } else {
+            plan.unmap.push((va, len));
+        }
+    }
+    kept.sort_unstable();
+    let kept_rows = |ram: bool| -> Vec<(u64, u64, u64)> {
+        kept.iter()
+            .filter(|k| k.3 == ram)
+            .map(|&(va, len, off, _)| (va, off, len))
+            .collect()
+    };
+    let (have_store, have_ram) = (kept_rows(false), kept_rows(true));
+    let mut dropped: std::collections::BTreeSet<u64> = std::collections::BTreeSet::new();
+    for d in desired {
+        let have = if d.ram { &have_ram } else { &have_store };
+        if ram_slice_backed(d.va, d.off, d.len, have) {
+            continue;
+        }
+        for &(kva, klen, _, _) in &kept {
+            let overlaps = kva < d.va.saturating_add(d.len) && d.va < kva.saturating_add(klen);
+            if overlaps && dropped.insert(kva) {
+                plan.unmap.push((kva, klen));
+            }
+        }
+        plan.map.push(*d);
+    }
+    plan.kept = kept.len() - dropped.len();
+    plan
+}
+
+/// What [`StoreMapPort::reconcile`] did.
+#[derive(Debug, Default, Clone)]
+pub struct Reconciled {
+    /// Slices left in place.
+    pub kept: usize,
+    /// Slices taken down.
+    pub unmapped: usize,
+    /// Runs mapped.
+    pub mapped: usize,
+    /// Operations RM refused.
+    pub refused: usize,
+    /// The first refusal, by name.
+    pub first_refusal: Option<String>,
+}
+
+impl StoreMapPort {
+    /// ★★★★★ **Walk the guest's roots IN PLACE** — the scratchpad's walk kernel reads the
+    /// tables where they live, inside the one reserved object. `pdbs` are GPGA offsets,
+    /// strictly ascending, at most `KF_MAX_PDB`. ⊘ Never acked: every report is a full
+    /// RESYNC, so [`Self::reconcile`] always sees complete state and trusts no delta.
+    ///
+    /// # Errors
+    /// The refusal, by name.
+    pub fn walk_in_place(&self, pdbs: &[u64]) -> Result<kayfabe_mmu::walkreport::Report, String> {
+        let off = self
+            .off_vcpu()
+            .map_err(|r| format!("declined: {r:?}"))?;
+        let bytes = self
+            .iso
+            .with_worker(|worker| {
+                worker
+                    .with_rm(&off, |rm| rm.walk_shadow_run(pdbs))
+                    .map_err(|e| format!("walk refused: {e:?}"))
+            })
+            .unwrap_or_else(|| Err("the scratchpad isolate offered no worker".to_string()))?;
+        kayfabe_mmu::walkreport::Report::parse(&bytes).map_err(|e| format!("report: {e:?}"))
+    }
+
+    /// Every slice this port holds in `vas`, from both ledgers, as `(va, len, off, ram)`.
+    #[must_use]
+    pub fn ledger_of(&self, vas: HostHandle) -> Vec<(u64, u64, u64, bool)> {
+        let mut out = Vec::new();
+        for (ledger, ram) in [(&self.placed, false), (&self.ram_placed, true)] {
+            let g = ledger
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            for (&(_, va), p) in g.range((vas.raw(), 0)..=(vas.raw(), u64::MAX)) {
+                out.push((va, p.len, p.offset, ram));
+            }
+        }
+        out
+    }
+
+    /// ★★★★★ **Make the host VA space say exactly what the walk said** — through
+    /// [`Self::apply_ops`], the one mapper. Unmaps first, then maps.
+    pub fn reconcile(&self, vas: HostHandle, desired: &[Desired], ram_bytes: u64) -> Reconciled {
+        use kayfabe_mmu::walkdiff::{MapOp, PageClass, Run};
+        let plan = plan_reconcile(&self.ledger_of(vas), desired);
+        let mut out = Reconciled {
+            kept: plan.kept,
+            ..Reconciled::default()
+        };
+        let run = |va: u64, len: u64, off: u64| Run {
+            va,
+            gpga: off,
+            len,
+            flags: 0,
+            class: PageClass::P4K,
+        };
+        for &(va, len) in &plan.unmap {
+            match self.apply_ops(vas, &[MapOp::Unmap(run(va, len, 0))], SliceOf::Store) {
+                Ok(_) => out.unmapped += 1,
+                Err(e) => {
+                    out.refused += 1;
+                    out.first_refusal.get_or_insert_with(|| format!("unmap {va:#x}: {e:?}"));
+                }
+            }
+        }
+        for d in &plan.map {
+            let of = if d.ram {
+                SliceOf::GuestRam { bytes: ram_bytes }
+            } else {
+                SliceOf::Store
+            };
+            match self.apply_ops(vas, &[MapOp::Map(run(d.va, d.len, d.off))], of) {
+                Ok(_) => out.mapped += 1,
+                Err(e) => {
+                    out.refused += 1;
+                    out.first_refusal
+                        .get_or_insert_with(|| format!("map {:#x}+{:#x}: {e:?}", d.va, d.len));
+                }
+            }
+        }
+        out
+    }
+}

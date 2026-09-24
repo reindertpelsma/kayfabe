@@ -10537,48 +10537,17 @@ impl HostRmBackend {
             eprintln!("kayfabe-isolate: STORE-DPTR ⊘ UNARMED rm-export {e:?}");
             return;
         }
-        let cuda = match kayfabe_cuda::driver_unsafe::Cuda::open() {
-            Ok(c) => c,
-            Err(e) => {
-                eprintln!("kayfabe-isolate: STORE-DPTR ⊘ UNARMED no-libcuda {e}");
-                return;
-            }
-        };
-        if let Err(e) = cuda.init() {
-            eprintln!("kayfabe-isolate: STORE-DPTR ⊘ UNARMED cuInit {e}");
-            return;
-        }
-        match cuda.import_and_map(0, ctl.fd_number(), usize::try_from(len).unwrap_or(0)) {
-            Ok(dptr) => {
-                // ⊘⊘⊘ **w758 — THIS LINE USED TO CLAIM THE WALK WAS IN PLACE. IT IS NOT.**
-                //
-                // The first version read *"⇒ the walk kernel can be pointed at the store and
-                // walk the guest's tables IN PLACE"*. `store_dptr` has **zero readers**:
-                // `cudawalk::run` still calls `k.upload(&image)` and points `KfWin.base` at
-                // the STAGED COPY. So the line asserted a capability that is unreachable by
-                // construction — the tree's own *"BUILT AND ORPHANED"* shape, written in the
-                // same session that names it, and worse than silence because a boot log is
-                // what a later reader treats as evidence.
-                //
-                // ⇒ The arming is real and the pointer is real; what is missing is the
-                // consumer. The line now says exactly that, so a boot cannot be read as
-                // proving the in-place walk until the wiring lands.
-                eprintln!(
-                    "kayfabe-isolate: STORE-DPTR ✔ ARMED store={store:#010x} len={len} \
-                     dptr={dptr:#x} ⇒ CONSUMED by the walk kernel: `cudawalk` points \
-                     `KfWin.base` here and the guest's tables are walked WHERE THEY LIVE. \
-                     ⊘ Look for `WALK-IN-PLACE` to see it actually used on a given refresh."
-                );
-                // ★★★ w760 — recorded where the WALK KERNEL can reach it. A backend field
-                // could not be read by `cudawalk::run`, which is a free function with no
-                // backend in hand — and that is precisely why the pointer sat unconsumed.
-                crate::cudawalk::arm_store_window(dptr, len);
-                // ⊘ The fd is kept for the life of the process: closing it would drop the
-                // export RM registered on it, and the mapping with it.
-                core::mem::forget(ctl);
-            }
-            Err(e) => eprintln!("kayfabe-isolate: STORE-DPTR ⊘ UNARMED cuda-import {e}"),
-        }
+        // ⊘⊘ w826 — NOT imported here. `[w825]` this used to import through a separately
+        // opened `Cuda` handle, and a pointer minted in another context is not one the walk
+        // kernel can dereference (`WalkKernel::import_store`'s doc). The export fd is handed
+        // to `cudawalk`, which imports it INTO THE KERNEL'S OWN CONTEXT on first use —
+        // correct whichever of CUDA bring-up and the reservation happens first.
+        crate::cudawalk::arm_store_export(ctl.fd_number(), len);
+        eprintln!(
+            "kayfabe-isolate: STORE-DPTR ✔ EXPORTED store={store:#010x} len={len} ⇒ imported \
+             into the walk kernel's own context on its first refresh (`WALK-IN-PLACE`)"
+        );
+        core::mem::forget(ctl);
     }
 
     /// ★★★★★ **w755r — DESCRIBE THE GUEST'S ERROR NOTIFIER INSIDE B.**
