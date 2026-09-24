@@ -447,6 +447,18 @@ impl ChanPlane {
             return false;
         }
         g.last_put = g.userd.load(kf_abi::submit::USERD_GP_PUT).ok();
+        // Diagnostic (first 3 serves that find nothing to do): which words of the USERD page are
+        // non-zero — a GP_PUT that landed elsewhere in the page shows up here. Worker thread only.
+        if g.last_put == Some(0) && g.serves <= 3 {
+            if let UserdView::Store { region, at, .. } = &g.userd {
+                let nz: Vec<String> = (0..0x1000u64)
+                    .step_by(4)
+                    .filter_map(|o| region.load_u32(HostOffset::new(o)).ok().filter(|v| *v != 0).map(|v| format!("+{o:#x}={v:#x}")))
+                    .take(16)
+                    .collect();
+                eprintln!("kf3: chan token {:#x}: GP_PUT=0 at USERD+{at:#x}+0x8c; non-zero words in its page: [{}]", g.guest_idx, nz.join(" "));
+            }
+        }
         let before = g.chan.counts().1;
         let mirror = g.mirror.clone();
         let mut mem = Mem { mirror: &mirror, ram: self.ram };
