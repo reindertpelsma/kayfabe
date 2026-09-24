@@ -11832,6 +11832,22 @@ impl SharedDoorbell {
         }
         self.dirty.tally(DirtyGate::WITNESS, true);
         let Some(frames) = plane.fb_resident_frames() else {
+            // ★★★★★ w825 — BLIND IS NOT CLEAN. The executor HAS written the store since the
+            // last pass (`clean` was false above) and the single store cannot say which
+            // frames, so the only safe reading is "any table may have changed": mark every
+            // space dirty, exactly as an ALL_PDB invalidate does. `[measured w825cup3l]`
+            // UVM writes its MAP_EXTERNAL PTEs through its kernel CE channel — OUR CPU-CE
+            // executor — and invalidates in-band (MEM_OP), never through BAR0; every sweep
+            // then reported `tasks=0 skipped=3`, the 2 MiB mappings never became rows, and
+            // libcuda's first GR use of them failed `cuCtxCreate` with 999.
+            if now.is_some() {
+                let marked = self.device.note_guest_invalidate(None, None);
+                GUEST_INVALIDATES_DECLARED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                return format!(
+                    " | EXEC-WITNESS ARMED, frames NOT enumerable — executor wrote ⇒ marked \
+                     {marked} space(s) dirty (ALL_PDB-equivalent)"
+                );
+            }
             return " | EXEC-WITNESS ARMED but the store cannot enumerate frames".to_string();
         };
         let total = frames.len();
