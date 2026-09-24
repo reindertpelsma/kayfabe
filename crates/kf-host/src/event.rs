@@ -161,6 +161,22 @@ impl HostRm {
         self.raw_control(self.subdevice, NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION, &mut p)
     }
 
+    /// ★ Arm `notify_index` REPEAT for the session, once. Idempotent: a second caller (another
+    /// channel's ring) is a no-op, never the `NV_ERR_INVALID_STATE` a re-arm earns
+    /// (`subdevice_ctrl_event_kernel.c:123-130` — `[measured w826 gate 4]` `0x40` on the second).
+    ///
+    /// # Errors
+    /// The host's status on the first arm.
+    pub fn arm_repeat(&self, notify_index: u32) -> Result<(), RmError> {
+        let mut armed = self.armed.lock().map_err(|_| RmError::Other(crate::NOT_ON_THIS_RUNG))?;
+        if armed.contains(&notify_index) {
+            return Ok(());
+        }
+        self.set_notification(notify_index, kf_abi::eventnotify::ACTION_REPEAT)?;
+        armed.insert(notify_index);
+        Ok(())
+    }
+
     /// The session's subdevice handle (the parent of engine notifiers).
     #[must_use]
     pub fn subdevice(&self) -> u32 {

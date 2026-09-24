@@ -215,8 +215,7 @@ impl CeRig {
     pub fn arm(&self, rm: &kf_host::HostRm, notify_index: u32) -> Result<(), String> {
         rm.alloc_os_event(rm.subdevice(), notify_index, true, &self.ev)
             .map_err(|e| format!("os event {notify_index}: {e:?}"))?;
-        rm.set_notification(notify_index, kf_abi::eventnotify::ACTION_REPEAT)
-            .map_err(|e| format!("notify {notify_index}: {e:?}"))
+        rm.arm_repeat(notify_index).map_err(|e| format!("notify {notify_index}: {e:?}"))
     }
 
     /// The rig's channel.

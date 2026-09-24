@@ -89,8 +89,7 @@ impl HostRing {
             .map_err(|e| format!("cpu ring: {e:?}"))?;
         let ev = rm.open_event_fd().map_err(|e| format!("event fd: {e:?}"))?;
         rm.alloc_os_event(rm.subdevice(), FIFO_EVENT_MTHD, true, &ev).map_err(|e| format!("os event: {e:?}"))?;
-        rm.set_notification(FIFO_EVENT_MTHD, kf_abi::eventnotify::ACTION_REPEAT)
-            .map_err(|e| format!("notify: {e:?}"))?;
+        rm.arm_repeat(FIFO_EVENT_MTHD).map_err(|e| format!("notify: {e:?}"))?;
         let chan = rm
             .birth_channel(space, ENGINE_TYPE_COPY0, kf_host::RingSpec {
                 gp_fifo_va: va + GPFIFO_OFF,

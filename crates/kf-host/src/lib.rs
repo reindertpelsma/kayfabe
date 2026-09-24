@@ -300,6 +300,9 @@ pub struct HostRm {
     subdevice: u32,
     version: String,
     objects: Mutex<Objects>,
+    /// Subdevice notifiers this session has armed REPEAT — arming is per SUBDEVICE and legal only
+    /// from `DISABLE` (`subdevice_ctrl_event_kernel.c:123-130`), so it is done once, here.
+    armed: Mutex<std::collections::BTreeSet<u32>>,
     cpu_maps: std::sync::atomic::AtomicU64,
     usermode: Result<UsermodeWindow, RmError>,
     classes: &'static dyn HostClasses,
@@ -379,6 +382,7 @@ impl HostRm {
             subdevice: 0,
             version,
             classes,
+            armed: Mutex::new(std::collections::BTreeSet::new()),
             objects: Mutex::new(Objects {
                 next: FIRST_HANDLE,
                 parents: BTreeMap::new(),
