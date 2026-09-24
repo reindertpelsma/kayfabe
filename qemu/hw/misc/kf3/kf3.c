@@ -19,6 +19,7 @@
 #include "qapi/error.h"
 #include "qemu/error-report.h"
 #include "qemu/module.h"
+#include "qemu/units.h"
 #include "qom/object.h"
 #include "system/memory.h"
 #include "system/address-spaces.h"
@@ -186,7 +187,7 @@ static void kf3_region_del(MemoryListener *l, MemoryRegionSection *sec)
 
 /* ── realize / exit ─────────────────────────────────────────────────────────────────────── */
 
-static void kf3_realize(PCIDevice *pci, Error **errp)
+static void kf3_dev_realize(PCIDevice *pci, Error **errp)
 {
     Kf3State *s = KF3(pci);
     Kf3Identity id;
@@ -255,7 +256,7 @@ static void kf3_realize(PCIDevice *pci, Error **errp)
     info_report("%s (BAR0 pieces=%u)", err, s->n_pieces);
 }
 
-static void kf3_exit(PCIDevice *pci)
+static void kf3_dev_exit(PCIDevice *pci)
 {
     Kf3State *s = KF3(pci);
     char st[512] = "";
@@ -284,8 +285,8 @@ static void kf3_class_init(ObjectClass *klass, const void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(klass);
     PCIDeviceClass *k = PCI_DEVICE_CLASS(klass);
-    k->realize = kf3_realize;
-    k->exit = kf3_exit;
+    k->realize = kf3_dev_realize;
+    k->exit = kf3_dev_exit;
     k->vendor_id = 0x10de;
     k->device_id = 0xffff;   /* replaced at realize with the host's own */
     k->class_id = PCI_CLASS_DISPLAY_VGA;
