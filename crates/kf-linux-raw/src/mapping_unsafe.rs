@@ -900,6 +900,14 @@ impl VolatileRegion {
         self.map.len_bytes()
     }
 
+    /// The mapping's host virtual address, as a number — for handing the SAME pages to a VMM as a
+    /// memslot (§53.1 disposition C). ⊘ An address, not a pointer: nothing in this crate
+    /// dereferences it, and the caller must keep `self` alive for as long as the slot exists.
+    #[must_use]
+    pub fn host_address(&self) -> usize {
+        self.map.base_ptr().as_ptr() as usize
+    }
+
     /// A naturally-aligned atomic view of the word at `offset`.
     ///
     /// The returned reference borrows `&self`, so it cannot outlive the mapping — that is

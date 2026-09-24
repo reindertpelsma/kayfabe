@@ -24,6 +24,7 @@ int32_t kf3_realize(uint32_t gpu_minor, uint64_t fb_mb, uint64_t bar1_bytes, uin
                     const char *guest_driver, void **out,
                     char *err, size_t err_len);
 int32_t kf3_identity(void *h, Kf3Identity *out);
+int32_t kf3_usermode_view(void *h, void **ptr, uint64_t *len);
 int64_t kf3_memory_map(void *h, uint64_t bar1, uint64_t bar2, Kf3Region *out, size_t cap);
 int32_t kf3_shadow_attach(void *h, uint64_t base, uint8_t *mem, uint64_t len);
 void kf3_shadow_seal(void *h);

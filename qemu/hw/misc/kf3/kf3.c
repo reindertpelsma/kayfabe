@@ -20,6 +20,7 @@
 #include "qemu/error-report.h"
 #include "qemu/module.h"
 #include "qemu/units.h"
+#include "system/ram_addr.h"
 #include "qom/object.h"
 #include "system/memory.h"
 #include "system/address-spaces.h"
@@ -84,6 +85,40 @@ static const MemoryRegionOps kf3_piece_ops = {
     .impl = { .min_access_size = 1, .max_access_size = 8 },
 };
 
+/* A ROM device over pages we did not allocate: memory_region_init_rom_device_nomigrate, with the
+ * RAM block taken from the host usermode window instead of qemu_ram_alloc. The window outlives
+ * the region (the Rust device lives for the process). */
+static void kf3_host_rom_free(MemoryRegion *mr)
+{
+    /* The RAM block only: its pages are the host window (RAM_PREALLOC), never freed here. */
+    qemu_ram_free(mr->ram_block);
+}
+
+static bool kf3_host_rom(Kf3State *s, Kf3Piece *p, const char *name, uint64_t len, Error **errp)
+{
+    void *host = NULL;
+    uint64_t have = 0;
+    Error *err = NULL;
+
+    if (kf3_usermode_view(s->h, &host, &have) != 0 || !host || have < len) {
+        error_setg(errp, "kf3: no host usermode window for the %" PRIu64 "-byte passthrough page",
+                   len);
+        return false;
+    }
+    memory_region_init(&p->mr, OBJECT(s), name, len);
+    p->mr.ops = &kf3_piece_ops;
+    p->mr.opaque = p;
+    p->mr.terminates = true;
+    p->mr.rom_device = true;
+    p->mr.destructor = kf3_host_rom_free;
+    p->mr.ram_block = qemu_ram_alloc_from_ptr(len, host, &p->mr, &err);
+    if (err) {
+        error_propagate(errp, err);
+        return false;
+    }
+    return true;
+}
+
 static bool kf3_bar0_build(Kf3State *s, uint64_t size, Error **errp)
 {
     Kf3Region regs[KF3_MAX_PIECES * 2];
@@ -115,9 +150,16 @@ static bool kf3_bar0_build(Kf3State *s, uint64_t size, Error **errp)
         if (r->how == 3) {
             /* HOLE: a read that must exit (Hopper+ FSP EMEM). Trapping IO both ways. */
             memory_region_init_io(&p->mr, OBJECT(s), &kf3_piece_ops, p, name, r->len);
+        } else if (r->how == 2) {
+            /* HOST PASSTHROUGH (§53.1 C): a ROM device whose RAM IS the host's usermode window —
+             * reads hit the live microsecond counter with no exit, writes (the doorbell) trap.
+             * ⊘ A static shadow here froze the timer and every RM timeout spun forever. */
+            if (!kf3_host_rom(s, p, name, r->len, errp)) {
+                return false;
+            }
         } else {
-            /* Shadow (1), and for P2 also PRAMIN (0) and the usermode page (2): reads from RAM with
-             * no exit, writes trap. ⊘ PRAMIN's store window and the usermode passthrough are P4. */
+            /* Shadow (1), and for P2 also PRAMIN (0): reads from RAM with no exit, writes trap.
+             * ⊘ PRAMIN's store window is P4. */
             if (!memory_region_init_rom_device_nomigrate(&p->mr, OBJECT(s), &kf3_piece_ops, p,
                                                          name, r->len, errp)) {
                 return false;

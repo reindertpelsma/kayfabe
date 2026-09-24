@@ -229,6 +229,26 @@ pub unsafe extern "C" fn kf3_status(h: *mut c_void, buf: *mut c_char, len: usize
     write_err(buf, len, &s);
 }
 
+/// The host usermode window (§53.1 disposition C): `*ptr`, `*len`. Returns 0, or -1 if the session
+/// has none. The pages live as long as the device (which lives for the process).
+///
+/// # Safety
+/// `ptr` and `len` are writable.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kf3_usermode_view(h: *mut c_void, ptr: *mut *mut c_void, len: *mut u64) -> i32 {
+    let Some(d) = dev(h) else { return -1 };
+    let Ok((addr, n)) = d.rm.usermode_view() else { return -1 };
+    if ptr.is_null() || len.is_null() {
+        return -1;
+    }
+    // SAFETY: the caller promised both are writable.
+    unsafe {
+        *ptr = addr as *mut c_void;
+        *len = n;
+    }
+    0
+}
+
 /// Stop the device's threads (the device itself lives for the process).
 #[unsafe(no_mangle)]
 pub extern "C" fn kf3_unrealize(h: *mut c_void) {
