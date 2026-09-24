@@ -1018,7 +1018,7 @@ fn all_three_synchronization_points_consume_their_barrier() {
 
     // (1) the invalidate register — its lane refreshes on the worker and only then completes.
     assert!(
-        shim.contains("refresh_page_tables(off_vcpu)"),
+        shim.contains("refresh_page_tables(off_vcpu, "),
         "entry point (1): the invalidate lane must refresh off the vCPU before completing"
     );
 
