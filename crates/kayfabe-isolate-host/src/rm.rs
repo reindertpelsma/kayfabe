@@ -7956,7 +7956,12 @@ impl RmBackend for HostRmBackend {
         // BOTH are absent: a channel with no engine type is not a channel with a default
         // one, it is a channel on runlist 0.
         let (engine_kind, declared) = engine.parts();
+        // ⊘ w825 — a declared `0` is `NV2080_ENGINE_TYPE_NULL` (ogkm `cl2080.h`), i.e. NOT a
+        // declaration: libcuda allocates its GR channels with engineType 0 and lets the TSG
+        // carry the engine. `[measured w825cup3e]` forwarding the 0 got every `cuCtxCreate`
+        // GR channel refused at birth with RM status 0x1F.
         let engine_type = declared
+            .filter(|&t| t != NV2080_ENGINE_TYPE_NULL)
             .or_else(|| engine_type_for(engine_kind))
             .ok_or(RmError::Other(NOT_ON_THIS_RUNG))?;
         // ★★★ **THE NOTIFIER IS BUILT IN B, BEFORE THE CHANNEL**, for `w288`'s reason:
@@ -16313,3 +16318,7 @@ mod tests {
         );
     }
 }
+
+/// `NV2080_ENGINE_TYPE_NULL` — ogkm-580 `src/common/sdk/nvidia/inc/class/cl2080_notification.h:281`
+/// (also nouveau `gsp/rm/r570/nvrm/engine.h:227`): engine type 0 names no engine. See the GR-birth engine-type selection.
+const NV2080_ENGINE_TYPE_NULL: u32 = 0;

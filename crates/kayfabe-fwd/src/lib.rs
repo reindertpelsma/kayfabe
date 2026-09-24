@@ -3474,6 +3474,19 @@ fn bind_backed_fb_leaf(
                 });
             }
             if let Some(h) = b.host() {
+                // ★★★★★ w825 — THE SAME SLICE, BOUND TWICE, IS ONE BINDING. `[measured
+                // w825cup3e]` a CUDA GR ring's leaf was bound by the publish and offered
+                // again by the ring join; the re-bind was refused as "taken" and its orphans
+                // — an unmap of the LIVE slice and a free of the ONE reserved object — were
+                // staged, and every GR channel of `cuCtxCreate` was refused birth. Identical
+                // object + host VA + slice offset is idempotent success, with NO orphans.
+                if let FbLeafBacking::StoreSlice { offset } = plan.how
+                    && h.memory() == memory
+                    && h.host_va() == host_va
+                    && matches!(h.extent(), kayfabe_mmu::HostExtent::Slice(s) if s.offset() == offset)
+                {
+                    return Ok(());
+                }
                 // A sibling won the race. Ours is an orphan; theirs is the answer, and it
                 // is a *retry* rather than a failure because re-planning finds it and
                 // replays.
