@@ -75,11 +75,20 @@ pub struct HostRing {
 }
 
 impl HostRing {
-    /// Build the ring in `space` (RM places it; its VA must be below 2^40 for GP entries).
+    /// Build the ring in `space` on host COPY0 (RM places it; its VA must be below 2^40).
     ///
     /// # Errors
     /// Any step's refusal, by name.
     pub fn new(rm: &kf_host::HostRm, space: kf_host::VaSpace) -> Result<HostRing, String> {
+        Self::on_engine(rm, space, ENGINE_TYPE_COPY0)
+    }
+
+    /// ★ Build the ring on host copy engine `engine` (an `NV2080_ENGINE_TYPE_COPYn` the CALLER
+    /// authored — for a guest's CE pushbuffer, an ASYNC copy engine: see `HostRm::ce_is_grce`).
+    ///
+    /// # Errors
+    /// Any step's refusal, by name.
+    pub fn on_engine(rm: &kf_host::HostRm, space: kf_host::VaSpace, engine: u32) -> Result<HostRing, String> {
         let mem = rm.alloc_device_local(RING_BYTES).map_err(|e| format!("ring obj: {e:?}"))?;
         let va = rm
             .map(space, mem, kf_host::MapBacking::Dedicated, 0, RING_BYTES, None, false)
@@ -88,7 +97,7 @@ impl HostRing {
             .map_cpu(mem, RING_BYTES, kf_linux_raw::CachePolicy::Uncached)
             .map_err(|e| format!("cpu ring: {e:?}"))?;
         let chan = rm
-            .birth_channel(space, ENGINE_TYPE_COPY0, kf_host::RingSpec {
+            .birth_channel(space, engine, kf_host::RingSpec {
                 gp_fifo_va: va + GPFIFO_OFF,
                 gp_fifo_entries: GPFIFO_ENTRIES,
                 userd_memory: mem,
@@ -96,7 +105,7 @@ impl HostRing {
                 err_notifier: 0,
             })
             .map_err(|e| format!("birth: {e:?}"))?;
-        rm.alloc_ce_object(chan, ENGINE_TYPE_COPY0).map_err(|e| format!("ce object: {e:?}"))?;
+        rm.alloc_ce_object(chan, engine).map_err(|e| format!("ce object: {e:?}"))?;
         rm.schedule(chan).map_err(|e| format!("schedule: {e:?}"))?;
         cpu.store_u32(At::new(FENCE_OFF), 0).map_err(|e| format!("{e:?}"))?;
         Ok(HostRing { cpu, _node: node, va, chan, head: 0, put: 0, seq: 0, live: VecDeque::new() })

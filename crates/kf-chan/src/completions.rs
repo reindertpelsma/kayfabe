@@ -35,6 +35,16 @@ impl Completions {
         Ok(Completions { ev, inflight: (0..words).map(|_| AtomicU64::new(0)).collect() })
     }
 
+    /// ★ Also wake on engine `notify_index`'s non-stall notifier (e.g. `kf_host::notifier_ce(n)` for
+    /// the async copy engine our rings run on) — the same fd, dataless, REPEAT once per session.
+    ///
+    /// # Errors
+    /// The host's refusal, by name.
+    pub fn also(&self, rm: &kf_host::HostRm, notify_index: u32) -> Result<(), String> {
+        rm.alloc_os_event(rm.subdevice(), notify_index, true, &self.ev).map_err(|e| format!("os event {notify_index}: {e:?}"))?;
+        rm.arm_repeat(notify_index).map_err(|e| format!("notify {notify_index}: {e:?}"))
+    }
+
     /// The fd every worker's poller watches (level-triggered; a coalesced WAKE).
     #[must_use]
     pub fn event_fd(&self) -> std::os::fd::BorrowedFd<'_> {

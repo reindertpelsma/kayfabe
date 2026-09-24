@@ -195,6 +195,9 @@ pub struct ChanPlane {
     pub poisoned: AtomicU64,
     /// Births.
     pub births: AtomicU64,
+    /// ★ The HOST async copy engine our rings run on (authored: the first copy engine the host
+    /// says is not a GRCE).
+    pub host_ce: u32,
     stop: AtomicBool,
 }
 
@@ -212,13 +215,25 @@ impl ChanPlane {
         wake: &'static kf_linux_raw::Notifier,
         tokens: usize,
     ) -> Result<ChanPlane, String> {
+        // ★ Authored, never the guest's engine number: the first HOST copy engine that is not a
+        // graphics CE. ⊘ A GRCE shares the GR runlist and routes subchannels 0-3 to GR — RM's
+        // CeUtils pushes on subchannel 0, and `[measured p5f]` our ring on host COPY0 faulted
+        // CTXNOTVALID (Xid 32) on the first guest segment.
+        let host_ce = (0..10u32)
+            .filter_map(kf_abi::submit::engine_type_copy)
+            .find(|&et| rm.ce_is_grce(et) == Ok(false))
+            .ok_or("no async (non-GRCE) copy engine on the host — a Translated ring has nowhere to run")?;
+        let completions = Completions::open(rm, tokens)?;
+        let lce = host_ce - kf_abi::submit::ENGINE_TYPE_COPY0;
+        completions.also(rm, kf_host::event::notifier_ce(lce))?;
+        eprintln!("kf3: channel plane: Translated rings on host COPY{lce} (engine {host_ce:#x}); completions on FIFO_EVENT_MTHD + CE{lce}");
         Ok(ChanPlane {
             rm,
             plane,
             store,
             ram,
             mirrors,
-            completions: Completions::open(rm, tokens)?,
+            completions,
             // Declared caps: channels are the only twin this plane mints.
             caps: Mutex::new(VmCaps::from_declared(64, 64, 64, 64)),
             slots: RwLock::new(HashMap::new()),
@@ -227,6 +242,7 @@ impl ChanPlane {
             contended: AtomicU64::new(0),
             poisoned: AtomicU64::new(0),
             births: AtomicU64::new(0),
+            host_ce,
             stop: AtomicBool::new(false),
         })
     }
@@ -331,7 +347,7 @@ impl ChanPlane {
             Err(e) => return refuse(NV_ERR_NOT_SUPPORTED, e),
         };
         let t0 = std::time::Instant::now();
-        let host = match HostRing::new(self.rm, mirror.space) {
+        let host = match HostRing::on_engine(self.rm, mirror.space, self.host_ce) {
             Ok(h) => h,
             Err(e) => return refuse(NV_ERR_INSUFFICIENT_RESOURCES, format!("host ring: {e}")),
         };

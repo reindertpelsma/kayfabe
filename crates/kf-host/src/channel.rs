@@ -305,6 +305,21 @@ impl HostRm {
         self.raw_control(chan.tsg, NVA06C_CTRL_CMD_GPFIFO_SCHEDULE, &mut params)
     }
 
+    /// ★ Is host copy engine `engine_type` a GRAPHICS copy engine (it shares the GR runlist)?
+    /// `NV2080_CTRL_CMD_CE_GET_CAPS_V2` (`0x20802a03`, `ogkm-580: ctrl2080ce.h:78-91`):
+    /// `capsTbl[0] & NV2080_CTRL_CE_CAPS_CE_GRCE`. ⊘ Asked of the HOST, never assumed from a mask:
+    /// a channel on a GRCE's runlist routes subchannels 0-3 to GR, so a CE pushbuffer on
+    /// subchannel 0 (RM's own `RM_SUBCHANNEL`) faults `CTXNOTVALID` there (`[measured p5f]`, Xid 32).
+    ///
+    /// # Errors
+    /// The host's refusal (e.g. an engine the host does not have).
+    pub fn ce_is_grce(&self, engine_type: u32) -> Result<bool, RmError> {
+        let mut p = [0u8; 8];
+        p[0..4].copy_from_slice(&engine_type.to_le_bytes());
+        self.raw_control(self.subdevice, 0x2080_2a03, &mut p)?;
+        Ok(p[4] & 0x01 != 0)
+    }
+
     /// Free a channel and its group.
     ///
     /// # Errors
