@@ -156,6 +156,10 @@ struct Slot {
     guest_idx: u32,
     scheduled: bool,
     dead: Option<String>,
+    /// Serves (doorbells + completion rings that reached this channel).
+    serves: u64,
+    /// The last `GP_PUT` the pump read (for the log).
+    last_put: Option<u32>,
 }
 
 /// Per-token counters for the gate (`forwarded=` per token), never a decision input.
@@ -171,6 +175,10 @@ pub struct TokenCount {
     pub gp_get: Option<u32>,
     /// Why it died, if it did.
     pub dead: Option<String>,
+    /// Serves that reached the channel.
+    pub serves: u64,
+    /// The guest's `GP_PUT` at the last serve.
+    pub last_put: Option<u32>,
 }
 
 /// ★★★ The channel plane.
@@ -362,7 +370,7 @@ impl ChanPlane {
         if let Err(e) = alloc {
             return refuse(NV_ERR_INSUFFICIENT_RESOURCES, format!("token {idx:#x}: {e}"));
         }
-        let slot = Slot { chan, key, mirror, userd, guest_idx: idx, scheduled: false, dead: None };
+        let slot = Slot { chan, key, mirror, userd, guest_idx: idx, scheduled: false, dead: None, serves: 0, last_put: None };
         if let Ok(mut s) = self.slots.write() {
             s.insert(ht, Arc::new(Mutex::new(slot)));
         }
@@ -414,7 +422,14 @@ impl ChanPlane {
         if let UserdView::Store { cookie, .. } = &g.userd {
             let _ = self.rm.release_cpu_view(kf_host::CpuViewRelease { h_memory: self.store, p_linear_address: *cookie });
         }
-        eprintln!("kf3: chan token {:#x} (host {ht:#x}) RETIRED, forwarded={}", g.guest_idx, g.chan.counts().0);
+        eprintln!(
+            "kf3: chan token {:#x} (host {ht:#x}) RETIRED, forwarded={} serves={} last_put={:?} gp_get={:?}",
+            g.guest_idx,
+            g.chan.counts().0,
+            g.serves,
+            g.last_put,
+            g.chan.last_gp_get()
+        );
     }
 
     /// ★ A WORKER's entry (`HostOps::run_translated`): pump the channel behind `ht`. Never waits.
@@ -427,9 +442,11 @@ impl ChanPlane {
             return false;
         };
         let g = &mut *g;
+        g.serves += 1;
         if g.dead.is_some() || !g.scheduled || self.stop.load(Ordering::Acquire) {
             return false;
         }
+        g.last_put = g.userd.load(kf_abi::submit::USERD_GP_PUT).ok();
         let before = g.chan.counts().1;
         let mirror = g.mirror.clone();
         let mut mem = Mem { mirror: &mirror, ram: self.ram };
@@ -464,7 +481,15 @@ impl ChanPlane {
             .filter_map(|slot| {
                 let g = slot.try_lock().ok()?;
                 let (fwd, subs, _) = g.chan.counts();
-                Some(TokenCount { token: g.guest_idx, forwarded: fwd, submissions: subs, gp_get: g.chan.last_gp_get(), dead: g.dead.clone() })
+                Some(TokenCount {
+                    token: g.guest_idx,
+                    forwarded: fwd,
+                    submissions: subs,
+                    gp_get: g.chan.last_gp_get(),
+                    dead: g.dead.clone(),
+                    serves: g.serves,
+                    last_put: g.last_put,
+                })
             })
             .collect();
         v.sort_by_key(|c| c.token);

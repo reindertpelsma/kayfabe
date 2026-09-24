@@ -809,7 +809,18 @@ impl Device {
             .chans
             .counts()
             .iter()
-            .map(|t| format!("{:#x}:fwd={},subs={},gp_get={:?}{}", t.token, t.forwarded, t.submissions, t.gp_get, if t.dead.is_some() { ",DEAD" } else { "" }))
+            .map(|t| {
+                format!(
+                    "{:#x}:fwd={},subs={},serves={},put={:?},gp_get={:?}{}",
+                    t.token,
+                    t.forwarded,
+                    t.submissions,
+                    t.serves,
+                    t.last_put,
+                    t.gp_get,
+                    if t.dead.is_some() { ",DEAD" } else { "" }
+                )
+            })
             .collect();
         let chan = format!(
             " chan[births={} served={} parks={} host_rings={} contended={} poisoned={} tokens=[{}]]",
