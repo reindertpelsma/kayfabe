@@ -1,0 +1,12 @@
+[package]
+name = "kf-chan"
+description = "v3 channels: passthrough birth, TRANSLATED execution (kernel CE pushbuffers rewritten onto the identity window and run on the real engine), VMM-executed emulated channels (§37), completions as host events. Never a CPU executor."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+kf-abi.workspace = true
+
+[lints]
+workspace = true
