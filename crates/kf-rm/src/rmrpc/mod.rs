@@ -1750,10 +1750,13 @@ fn translate_published_pdes(
         client,
         vaspace,
         pdb: Pdb(root.phys_address),
-        // ★ Same rule on this arm: carry it, never fold `Undefined` into vidmem.
-        // ⊘ Raw `flags` on this arm, so decode it through the same function the other arm's
-        // value came from — never a second, hand-rolled reading of the same two bits.
-        pdb_aperture: kf_abi::view::PdbAperture::from_flags(root.aperture).to_domain(),
+        // ⊘⊘ DEFECT FIXED IN THE PORT (carried from old kayfabe-rmrpc lib.rs:1727): this arm
+        // decoded `root.aperture` with `PdbAperture::from_flags`, the SET_PAGE_DIRECTORY
+        // *flags* encoding, where 1 = sysmem coherent. `root.aperture` is a `GMMU_APERTURE_*`
+        // value, where 1 = VIDEO — and the guard above admits only VIDEO. So every
+        // vidmem-rooted publication was stated as `SysmemCoherent`. Decode it with the
+        // encoding it is actually in.
+        pdb_aperture: kf_abi::gvaspacepdes::decode_aperture(root.aperture),
     }))
 }
 
