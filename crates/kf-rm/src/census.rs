@@ -346,6 +346,12 @@ impl<P: CommandPolicy> ControlCensus<P> {
 }
 
 impl<P: CommandPolicy> CommandPolicy for ControlCensus<P> {
+    /// ★ P4: WHEN a reply may be delivered is the inner chain's answer, unchanged — a wrapper
+    /// that dropped it would silently turn every held reply into an early one (§49.1).
+    fn holds_for_refresh(&self, cmd: &RpcCommand) -> bool {
+        self.inner.holds_for_refresh(cmd)
+    }
+
     fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
         let req = if cmd.function == RpcFunction::RmControl {
             self.driver.decode_rpc_control(&cmd.payload).ok()

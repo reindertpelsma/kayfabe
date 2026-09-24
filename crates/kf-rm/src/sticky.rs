@@ -365,6 +365,12 @@ impl core::fmt::Debug for StickyAnswerGuard {
 }
 
 impl CommandPolicy for StickyAnswerGuard {
+    /// ★ P4: WHEN a reply may be delivered is the inner chain's answer, unchanged — a wrapper
+    /// that dropped it would silently turn every held reply into an early one (§49.1).
+    fn holds_for_refresh(&self, cmd: &RpcCommand) -> bool {
+        self.inner.holds_for_refresh(cmd)
+    }
+
     fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
         let mut reply = self.inner.respond(cmd)?;
         // ⊘ A declined command is still declined: the FSM's named refusal is what it gets,
@@ -482,7 +488,7 @@ pub struct PolicyDisposition {
 /// ⊘ Test-only implementations are out of scope by the same derivation: the test filters
 /// `git ls-files` to `crates/*/src/**`, so a `CommandPolicy` written inside a `#[test]`
 /// module or a `tests/` target is neither required here nor forbidden there.
-pub const POLICY_DISPOSITIONS: [PolicyDisposition; 15] = [
+pub const POLICY_DISPOSITIONS: [PolicyDisposition; 16] = [
     // ★★★ `SetPageDirPolicy` (§16.30, row added §16.33). `Guarded`, and for this one the
     // guard is doing REAL work rather than discharging a formality.
     //
@@ -645,8 +651,17 @@ pub const POLICY_DISPOSITIONS: [PolicyDisposition; 15] = [
     // and is answered here.
     PolicyDisposition {
         name: "BarPdePolicy",
-        path: "crates/kayfabe-device/src/bar2.rs",
+        path: "crates/kf-rm/src/barpde.rs",
         disposition: StickyDisposition::NotAControl,
+    },
+    // ★ P4 (w826): the page-directory statements' carrier. It answers exactly
+    // `SET_PAGE_DIRECTORY` (NV_OK, params echoed — the old `SetPageDirPolicy`'s shape, whose row
+    // above argues why the echo is safe only behind the guard) and observes the publications.
+    // `Guarded`: `served_policy` wraps the whole chain, this link included.
+    PolicyDisposition {
+        name: "PageDirPolicy",
+        path: "crates/kf-rm/src/barpde.rs",
+        disposition: StickyDisposition::Guarded,
     },
 ];
 

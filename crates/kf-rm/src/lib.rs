@@ -14,6 +14,7 @@
 
 pub mod abi;
 pub mod authored;
+pub mod barpde;
 pub mod census;
 pub mod faultbuffer;
 pub mod guestsysinfo;
@@ -111,11 +112,29 @@ pub struct ChainLogs {
 pub struct ObjectLinks {
     /// The object-model link.
     pub objects: Option<Box<dyn kf_gsp::CommandPolicy>>,
+    /// ★ P4: the memory plane's inbox for the guest's address-space statements — fn 70
+    /// ([`barpde::BarPdePolicy`]) and the page-directory controls ([`barpde::PageDirPolicy`]).
+    /// `None` is the plane absent: fn 70 then reaches the object link (inert) as before, and the
+    /// page-directory controls are answered without anything acting on them.
+    pub memory: Option<MemoryLink>,
+}
+
+/// ★ P4: the memory plane's seat — where statements go, and the guest OS the page-directory
+/// controls are decoded for (DECLARED by the device, never sniffed; see `ObjectPolicy::over`).
+#[derive(Clone)]
+pub struct MemoryLink {
+    /// The plane's inbox.
+    pub sink: barpde::MemSink,
+    /// The guest OS.
+    pub guest_os: kf_abi::GuestOs,
 }
 
 impl core::fmt::Debug for ObjectLinks {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("ObjectLinks").field("objects", &self.objects.is_some()).finish()
+        f.debug_struct("ObjectLinks")
+            .field("objects", &self.objects.is_some())
+            .field("memory", &self.memory.is_some())
+            .finish()
     }
 }
 
@@ -170,9 +189,11 @@ pub fn served_policy(
 /// - **The ledger** ([`unserviced::UnservicedLedger`]), last: answers nothing, writes down
 ///   exactly what every link above declined.
 ///
-/// ⊘ Cut from the old chain, all P4: the `gvaspub` recorder (front), `BarPdePolicy` (fn 70)
-/// and `SetPageDirPolicy` (`0x00801813`). Their commands now reach the ledger and are refused by
-/// name until the memory plane lands — a visible gap, not a silent one.
+/// ★ P4 (w826): with [`ObjectLinks::memory`] seated, [`barpde::PageDirPolicy`] (front: observes
+/// the publications, answers `SET_PAGE_DIRECTORY`) and [`barpde::BarPdePolicy`] (fn 70) carry the
+/// guest's address-space statements to the memory plane and HOLD their replies for its
+/// reconcile. Without it (the register-only configuration and most tests), fn 70 is inert and
+/// `0x00801813` reaches the ledger and is refused by name, as before.
 #[must_use]
 pub fn served_chain(
     board: std::sync::Arc<BoardFacts>,
@@ -184,12 +205,19 @@ pub fn served_chain(
 ) -> Box<dyn kf_gsp::CommandPolicy> {
     // ★★★ EXHAUSTIVE: a latch added to `ChainLogs` and not seated below is a compile error.
     let ChainLogs { unserviced, fault_buffer, os_events } = logs;
-    let ObjectLinks { objects } = links;
+    let ObjectLinks { objects, memory } = links;
     let mut static_info = staticinfo::StaticInfoPolicy::new(board.clone(), driver);
     if let (Some(n), Some(sn)) = (host.gpu_name, host.gpu_short_name.or(host.gpu_name)) {
         static_info = static_info.with_name(n, sn);
     }
-    let mut chain: Vec<Box<dyn kf_gsp::CommandPolicy>> = vec![
+    let mut chain: Vec<Box<dyn kf_gsp::CommandPolicy>> = Vec::new();
+    // ★ P4: the page-directory carrier is FIRST — ahead of `InitTablePolicy`, which terminates
+    // the chain for the publication ids — and answers nothing; fn 70's link answers only fn 70.
+    if let Some(MemoryLink { sink, guest_os }) = memory {
+        chain.push(Box::new(barpde::PageDirPolicy::new(driver, guest_os, sink.clone())));
+        chain.push(Box::new(barpde::BarPdePolicy::new(sink)));
+    }
+    chain.extend::<[Box<dyn kf_gsp::CommandPolicy>; 6]>([
         Box::new(kf_gsp::Observing(Box::new(faultbuffer::FaultBufferRecorder::new(
             driver,
             fault_buffer,
@@ -199,7 +227,7 @@ pub fn served_chain(
         Box::new(static_info),
         Box::new(guestsysinfo::GuestSystemInfoPolicy::new(driver)),
         Box::new(inert::InertPolicy::new()),
-    ];
+    ]);
     chain.extend(objects);
     chain.push(Box::new(unserviced::UnservicedLedger::new(driver, unserviced)));
     Box::new(kf_gsp::PolicyChain::new(chain))

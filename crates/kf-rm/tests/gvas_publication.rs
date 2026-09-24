@@ -120,3 +120,67 @@ fn set_page_directory_reaches_the_ledger_until_the_memory_plane_answers_it() {
     assert!(reply.is_none_or(|r| r.rpc_result != 0), "0x00801813 must not be answered NV_OK by a P3 chain");
     assert_eq!(log.total(), 1, "the ledger names it");
 }
+
+/// ★ P4: with the memory plane seated (`ObjectLinks::memory`), every page-directory statement
+/// reaches it, its reply is HELD for the reconcile, and the publications' replies are still
+/// `InitTablePolicy`'s own, byte for byte. `SET_PAGE_DIRECTORY` is answered `NV_OK` with its
+/// params echoed instead of reaching the ledger.
+#[test]
+fn with_the_memory_plane_seated_every_statement_is_carried_and_held() {
+    use kf_rm::barpde::MemStatement;
+    let got: std::sync::Arc<std::sync::Mutex<Vec<MemStatement>>> = std::sync::Arc::default();
+    let g = got.clone();
+    let g2 = got.clone();
+    let log = kf_rm::unserviced::UnservicedLog::new();
+    let mut chain = kf_rm::served_policy(
+        ga106::board(),
+        ga106::host(),
+        driver(),
+        kf_rm::ChainLogs { unserviced: log.clone(), ..Default::default() },
+        kf_rm::census::ControlCensusLog::new(),
+        kf_rm::ObjectLinks {
+            objects: None,
+            memory: Some(kf_rm::MemoryLink {
+                sink: std::sync::Arc::new(move |s| g.lock().unwrap().push(s)),
+                guest_os: kf_abi::GuestOs::Linux,
+            }),
+        },
+    );
+    // The publication: carried, held, and answered exactly as before.
+    let pub_cmd = control_command(0xc1e0_0004, 0x0000_5c01, NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES, &oracle_body());
+    let r = chain.respond(&pub_cmd).expect("answered");
+    let mut alone = kf_rm::inittables::InitTablePolicy::new(ga106::board(), ga106::host(), driver());
+    let direct = alone.respond(&pub_cmd).expect("InitTablePolicy answers");
+    assert_eq!((r.rpc_result, &r.body), (direct.rpc_result, &direct.body), "the reply is InitTablePolicy's");
+    assert!(chain.holds_for_refresh(&pub_cmd), "held for the reconcile");
+    // SET_PAGE_DIRECTORY: a vidmem root for VA space 0x5c00_0007.
+    let mut p = vec![0u8; kf_abi::generated::ctrl::Nv0080CtrlDmaSetPageDirectoryParams::SIZE];
+    p[0..8].copy_from_slice(&0x0123_4000u64.to_le_bytes());
+    p[16..20].copy_from_slice(&0x5c00_0007u32.to_le_bytes());
+    let set = control_command(0xc1d0_000a, 0x5c00_0002, kf_abi::generated::ctrl::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY, &p);
+    let r = chain.respond(&set).expect("answered");
+    assert_eq!(r.rpc_result, 0);
+    assert!(chain.holds_for_refresh(&set));
+    assert_eq!(log.total(), 0, "nothing reached the ledger");
+    let got = got.lock().unwrap();
+    assert_eq!(got.len(), 2);
+    match got[1] {
+        MemStatement::PageDir(st) => {
+            assert_eq!((st.client.0, st.vaspace.0, st.pdb.0), (0xc1d0_000a, 0x5c00_0007, 0x0123_4000));
+        }
+        MemStatement::BarPde(_) => panic!("wrong statement"),
+    }
+    drop(got);
+    // fn 70: carried as a BAR2 root entry and held.
+    let mut b = vec![0u8; kf_rm::barpde::UPDATE_BAR_PDE_BODY_SIZE];
+    b[0..4].copy_from_slice(&kf_rm::barpde::BAR_TYPE_2.to_le_bytes());
+    b[8..16].copy_from_slice(&0x2_efbc_302u64.to_le_bytes());
+    let fn70 = RpcCommand { function: RpcFunction::UpdateBarPde, code: 0x46, sequence: 26, payload: b, elements: 1, delivered: Vec::new() };
+    assert_eq!(chain.respond(&fn70).expect("answered").rpc_result, 0);
+    assert!(chain.holds_for_refresh(&fn70));
+    assert!(matches!(g2.lock().unwrap()[2], MemStatement::BarPde(p) if p.entry == 0x2_efbc_302));
+    // An ordinary control holds nothing.
+    let other = control_command(0xc1d0_000a, 0x5c00_0002, 0x2080_0110, &[0u8; 8]);
+    let _ = chain.respond(&other);
+    assert!(!chain.holds_for_refresh(&other));
+}

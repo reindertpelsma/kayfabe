@@ -220,7 +220,7 @@ impl Device {
             *table,
             chain_logs.clone(),
             census.clone(),
-            kf_rm::ObjectLinks { objects: Some(Box::new(objects)) },
+            kf_rm::ObjectLinks { objects: Some(Box::new(objects)), memory: None },
         );
         let model = family.gsp_model(cfg.fb_mb).map_err(|e| format!("{e:?}"))?;
         let gsp = Gsp { fsm: GspFsm::new(abi), model, policy };
