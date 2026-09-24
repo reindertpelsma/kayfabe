@@ -5424,6 +5424,9 @@ fn doorbell_publish_loop(
     // convention, by type.
     let off_vcpu = OffVcpu::for_publication_worker();
     while let Some(job) = queue.take_blocking() {
+        // w826 — GSP RPC latency: when did this job start, and how long did it wait queued.
+        let job_t0 = std::time::Instant::now();
+        let job_queued_us = job.queued_for().map_or(0, |d| d.as_micros() as u64);
         // ★★★★★ **w763s — THE QUEUE, SPLIT FROM THE WORK.** `[measured w763]` the guest's
         // hold averaged 24.83 ms while every phase this worker times summed to ~6 ms. The
         // missing ~19 ms is either this queue (the worker is BEHIND) or the wake (it was slow
@@ -6235,7 +6238,14 @@ fn doorbell_publish_loop(
         port.drain_vas_refresh();
 
         if DROPPED.take_gsp_drain() || port.pending_command_doorbells() > 0 {
-            match port.service_deferred_commands() {
+            let pre_us = job_t0.elapsed().as_micros() as u64;
+            let svc_t0 = std::time::Instant::now();
+            let serviced_now = port.service_deferred_commands();
+            let svc_us = svc_t0.elapsed().as_micros() as u64;
+            if let Ok((n, _)) = serviced_now {
+                gsp_latency_note(n as u64, job_queued_us, pre_us, svc_us, job.kind());
+            }
+            match serviced_now {
                 Ok((0, _)) => {}
                 Ok((serviced, owed)) => {
                     GSP_SERVICED_OFF_VCPU
@@ -18612,5 +18622,52 @@ impl SharedDoorbell {
     /// Without a host plane there is no GPU to walk on and nothing to publish into.
     fn publish_walked(&self, _off_vcpu: OffVcpu) -> String {
         "WALK-PUBLISH ⊘ host_isolates=NO: no scratchpad, no walk".to_string()
+    }
+}
+
+/// ★ w826 — where a guest GSP RPC's latency goes, on OUR side: queued (the job waited for a
+/// worker), pre (the job's other work ran before servicing — servicing is at the END of every
+/// job), svc (servicing itself). Summarised every 512 servicing passes that answered ≥1 RPC.
+fn gsp_latency_note(
+    n: u64,
+    queued_us: u64,
+    pre_us: u64,
+    svc_us: u64,
+    kind: kayfabe_device::pubqueue::PublicationKind,
+) {
+    use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
+    static PASSES: AtomicU64 = AtomicU64::new(0);
+    static RPCS: AtomicU64 = AtomicU64::new(0);
+    static Q: AtomicU64 = AtomicU64::new(0);
+    static PRE: AtomicU64 = AtomicU64::new(0);
+    static SVC: AtomicU64 = AtomicU64::new(0);
+    static PRE_MAX: AtomicU64 = AtomicU64::new(0);
+    static SVC_MAX: AtomicU64 = AtomicU64::new(0);
+    static NOT_GSP_JOB: AtomicU64 = AtomicU64::new(0);
+    if n == 0 {
+        return;
+    }
+    let p = PASSES.fetch_add(1, Relaxed) + 1;
+    RPCS.fetch_add(n, Relaxed);
+    Q.fetch_add(queued_us, Relaxed);
+    PRE.fetch_add(pre_us, Relaxed);
+    SVC.fetch_add(svc_us, Relaxed);
+    PRE_MAX.fetch_max(pre_us, Relaxed);
+    SVC_MAX.fetch_max(svc_us, Relaxed);
+    if kind != kayfabe_device::pubqueue::PublicationKind::GspSubmit {
+        NOT_GSP_JOB.fetch_add(1, Relaxed);
+    }
+    if p % 512 == 0 {
+        eprintln!(
+            "kayfabe: GSP-LATENCY passes={p} rpcs={} avg_us[queued={} pre={} svc={}] \
+             max_us[pre={} svc={}] serviced_by_other_job_kinds={}",
+            RPCS.load(Relaxed),
+            Q.load(Relaxed) / p,
+            PRE.load(Relaxed) / p,
+            SVC.load(Relaxed) / p,
+            PRE_MAX.load(Relaxed),
+            SVC_MAX.load(Relaxed),
+            NOT_GSP_JOB.load(Relaxed)
+        );
     }
 }
