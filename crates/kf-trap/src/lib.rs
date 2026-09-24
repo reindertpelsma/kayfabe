@@ -12,6 +12,7 @@
 //! | [`shadow`] | write semantics for privileged registers |
 //! | [`timer`] | the time registers refused by name, per FAMILY (`kf_chip::Family`) |
 //! | [`trap`] | THE trap: doorbell / userspace-mappable (do nothing) / privileged |
+//! | [`mmuinval`] | the MMU invalidate registers: PDB latch + the trigger that arms, publishes, and reads busy until the VA manager clears it (P4) |
 //! | [`memmap`] | the per-family BAR memory map: backed / trap-write / hole (read exits only for PIO auto-increment ports) |
 //! | [`trappolicy`] | which writes trap, where the doorbell lives (BAR0 / Hopper+ BAR1), `may_trap_read` |
 //! | [`vmm`] | the device↔hypervisor seam (`VmmOps`: memslots, guest RAM, irq, wakes) |
@@ -22,6 +23,7 @@
 
 pub mod bitmap;
 pub mod memmap;
+pub mod mmuinval;
 pub mod model;
 pub mod ring;
 pub mod shadow;
@@ -33,6 +35,7 @@ pub mod vmm;
 pub mod wake;
 
 pub use bitmap::RungBitmap;
+pub use mmuinval::{Invalidate, InvalidatePort, InvalidateRegs, InvalidateRequest, PdbAperture, PortWrite};
 pub use ring::{PrivRing, Push, RegWrite};
 pub use shadow::{Cell, ClearOutcome, Trigger, WriteSemantics};
 pub use token::{Claim, Release, Route, State, Token, TokenWord};

@@ -49,7 +49,6 @@ unsafe extern "C" {
     fn eventfd(initval: c_uint, flags: c_int) -> c_int;
     fn read(fd: c_int, buf: *mut c_void, count: usize) -> isize;
     fn write(fd: c_int, buf: *const c_void, count: usize) -> isize;
-    fn close(fd: c_int) -> c_int;
     fn poll(fds: *mut PollFd, nfds: core::ffi::c_ulong, timeout: c_int) -> c_int;
 }
 
@@ -853,7 +852,7 @@ impl Cuda {
             (self.cuLaunchHostFunc)(
                 s.0 as *mut c_void,
                 completion_hostfn,
-                usize::try_from(fd.fd).unwrap_or(usize::MAX) as *mut c_void,
+                usize::try_from(fd.raw()).unwrap_or(usize::MAX) as *mut c_void,
             )
         })
     }
@@ -1025,7 +1024,7 @@ impl PinnedBuf {
 /// worker's `epoll` set; readiness is the wake and [`CompletionFd::drain`] consumes it.
 #[derive(Debug)]
 pub struct CompletionFd {
-    fd: c_int,
+    fd: std::os::fd::OwnedFd,
 }
 
 impl CompletionFd {
@@ -1043,13 +1042,21 @@ impl CompletionFd {
                 name: "eventfd(2) refused".to_string(),
             });
         }
+        // SAFETY: `fd` was just returned by `eventfd`, is open, and is owned by nothing else.
+        let fd = unsafe { <std::os::fd::OwnedFd as std::os::fd::FromRawFd>::from_raw_fd(fd) };
         Ok(CompletionFd { fd })
     }
 
-    /// The fd number, for an `epoll` set. Borrowed: this value owns it.
+    /// The fd number. Borrowed: this value owns it.
     #[must_use]
     pub fn raw(&self) -> i32 {
-        self.fd
+        std::os::fd::AsRawFd::as_raw_fd(&self.fd)
+    }
+
+    /// Signal it once, as the walk's host function does. For a caller that multiplexes other
+    /// work onto the same kind of fd (a harness's request queue); a walk never needs it.
+    pub fn signal(&self) {
+        completion_hostfn(usize::try_from(self.raw()).unwrap_or(usize::MAX) as *mut c_void);
     }
 
     /// Consume every pending signal; `0` when none was pending. **Never blocks.**
@@ -1058,7 +1065,7 @@ impl CompletionFd {
         let mut v: u64 = 0;
         // SAFETY: `v` is a live 8-byte buffer; the fd is non-blocking, so an empty counter
         // returns -1/EAGAIN at once rather than waiting.
-        let n = unsafe { read(self.fd, (&raw mut v).cast::<c_void>(), 8) };
+        let n = unsafe { read(self.raw(), (&raw mut v).cast::<c_void>(), 8) };
         if n == 8 { v } else { 0 }
     }
 
@@ -1067,17 +1074,16 @@ impl CompletionFd {
     /// for a worker, whose only wait is its `epoll` (§35).
     #[must_use]
     pub fn wait_readable(&self, timeout_ms: i32) -> bool {
-        let mut p = PollFd { fd: self.fd, events: POLLIN, revents: 0 };
+        let mut p = PollFd { fd: self.raw(), events: POLLIN, revents: 0 };
         // SAFETY: one live `pollfd`, count 1.
         let r = unsafe { poll(&raw mut p, 1, timeout_ms) };
         r > 0 && (p.revents & POLLIN) != 0
     }
 }
 
-impl Drop for CompletionFd {
-    fn drop(&mut self) {
-        // SAFETY: the fd is owned by this value and closed exactly once.
-        unsafe { close(self.fd) };
+impl std::os::fd::AsFd for CompletionFd {
+    fn as_fd(&self) -> std::os::fd::BorrowedFd<'_> {
+        self.fd.as_fd()
     }
 }
 

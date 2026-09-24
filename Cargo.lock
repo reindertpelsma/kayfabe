@@ -544,7 +544,9 @@ dependencies = [
 name = "kf-mem"
 version = "0.1.0"
 dependencies = [
+ "kf-cuda",
  "kf-host",
+ "kf-trap",
 ]
 
 [[package]]

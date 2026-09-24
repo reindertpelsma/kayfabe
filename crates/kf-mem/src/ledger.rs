@@ -283,6 +283,71 @@ pub struct Applied {
     pub invalidated: bool,
 }
 
+/// ★★★ **Where a reconcile's operations land** — `V3_P4_PORT_MAP.md` §2.3(b).
+///
+/// [`Ledger::apply`] was hard-wired to [`kf_host::HostRm`]. The P4 composition (the invalidate →
+/// walk → reconcile → clear step, [`crate::vasmgr`]) must be testable with no GPU, and §2.3's
+/// BAR windows are a second target of the same plan (`CpuWindow`), so the verbs are a trait.
+/// ⊘ Every verb is one WE author (§9): a guest value never reaches a host flag word here —
+/// `defer` is ours, the backing is decided by `Desired::ram`.
+pub trait MapTarget {
+    /// Map `d` at `d.va`, deferring the TLB invalidate when `defer`.
+    ///
+    /// # Errors
+    /// The host's refusal, by name.
+    fn map(&self, d: &Desired, defer: bool) -> Result<(), String>;
+    /// Unmap the mapping WE placed at `va`, deferring the TLB invalidate when `defer`.
+    ///
+    /// # Errors
+    /// The host's refusal, by name.
+    fn unmap(&self, va: u64, defer: bool) -> Result<(), String>;
+    /// ONE invalidate for everything deferred since the last one.
+    ///
+    /// # Errors
+    /// The host's refusal, by name.
+    fn invalidate(&self) -> Result<(), String>;
+}
+
+/// ★ The GPU VA-space target: one host VA space, the store object, and the guest-RAM object.
+#[derive(Debug, Clone, Copy)]
+pub struct HostVas<'rm> {
+    /// The in-process host RM session.
+    pub rm: &'rm kf_host::HostRm,
+    /// The host VA space that mirrors the guest's.
+    pub space: kf_host::VaSpace,
+    /// The store (guest VRAM) object.
+    pub store: u32,
+    /// The guest-RAM object, if one is registered.
+    pub ram_obj: Option<u32>,
+}
+
+impl MapTarget for HostVas<'_> {
+    fn map(&self, d: &Desired, defer: bool) -> Result<(), String> {
+        let obj = if d.ram {
+            self.ram_obj
+                .ok_or_else(|| format!("map {:#x}: guest-RAM row and no RAM object", d.va))?
+        } else {
+            self.store
+        };
+        self.rm
+            .map(self.space, obj, kf_host::MapBacking::SharedSlice, d.off, d.len, Some(d.va), defer)
+            .map(|_| ())
+            .map_err(|e| format!("map {:#x}+{:#x}: {e:?}", d.va, d.len))
+    }
+
+    fn unmap(&self, va: u64, defer: bool) -> Result<(), String> {
+        self.rm
+            .unmap(self.space, va, defer)
+            .map_err(|e| format!("unmap {va:#x}: {e:?}"))
+    }
+
+    fn invalidate(&self) -> Result<(), String> {
+        self.rm
+            .invalidate_tlb(self.space)
+            .map_err(|e| format!("invalidate: {e:?}"))
+    }
+}
+
 /// ★ The ledger of OUR OWN mappings in one host VA space — never a copy of the guest's tables.
 #[derive(Debug, Default)]
 pub struct Ledger {
@@ -323,6 +388,7 @@ impl Ledger {
     /// ★ Execute `plan` in `space`: every unmap and map DEFERS its TLB invalidate, and the batch
     /// ends with ONE [`kf_host::HostRm::invalidate_tlb`] (v3 §4.2). Unmaps run first. The ledger
     /// records only what the host actually did; a refusal is counted and named, never assumed.
+    /// ⊘ Now a thin wrapper over [`Ledger::apply_to`] with a [`HostVas`] target.
     pub fn apply(
         &mut self,
         rm: &kf_host::HostRm,
@@ -331,46 +397,42 @@ impl Ledger {
         ram_obj: Option<u32>,
         plan: &ReconcilePlan,
     ) -> Applied {
+        self.apply_to(&HostVas { rm, space, store, ram_obj }, plan)
+    }
+
+    /// ★ Execute `plan` against any [`MapTarget`]: deferred unmaps, then deferred maps, then ONE
+    /// invalidate when anything changed. The ledger records only what the target accepted.
+    pub fn apply_to(&mut self, target: &dyn MapTarget, plan: &ReconcilePlan) -> Applied {
         let mut out = Applied::default();
         let refuse = |out: &mut Applied, what: String| {
             out.refused += 1;
             out.first_refusal.get_or_insert(what);
         };
         for &(va, len) in &plan.unmap {
-            match rm.unmap(space, va, true) {
+            match target.unmap(va, true) {
                 Ok(()) => {
                     self.placed.remove(&va);
                     out.unmapped += 1;
                 }
-                Err(e) => refuse(&mut out, format!("unmap {va:#x}+{len:#x}: {e:?}")),
+                Err(e) => refuse(&mut out, format!("{e} (len {len:#x})")),
             }
         }
         for d in &plan.map {
-            let obj = if d.ram {
-                match ram_obj {
-                    Some(o) => o,
-                    None => {
-                        refuse(&mut out, format!("map {:#x}: guest-RAM row and no RAM object", d.va));
-                        continue;
-                    }
-                }
-            } else {
-                store
-            };
-            match rm.map(space, obj, kf_host::MapBacking::SharedSlice, d.off, d.len, Some(d.va), true) {
-                Ok(_) => {
+            match target.map(d, true) {
+                Ok(()) => {
                     self.placed.insert(d.va, Placed { len: d.len, off: d.off, ram: d.ram });
                     out.mapped += 1;
                 }
-                Err(e) => refuse(&mut out, format!("map {:#x}+{:#x}: {e:?}", d.va, d.len)),
+                Err(e) => refuse(&mut out, e),
             }
         }
         if out.mapped + out.unmapped > 0 {
-            match rm.invalidate_tlb(space) {
+            match target.invalidate() {
                 Ok(()) => out.invalidated = true,
-                Err(e) => refuse(&mut out, format!("invalidate: {e:?}")),
+                Err(e) => refuse(&mut out, e),
             }
         }
         out
     }
 }
+
