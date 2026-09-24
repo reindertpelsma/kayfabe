@@ -7,6 +7,7 @@ members = [
     "crates/kf-abi",
     "crates/kf-gsp",
     "crates/kf-linux-raw",
+    "crates/kf-host",
     "crates/kayfabe-doorbell",
     "crates/kayfabe-rm-ladder",
     "crates/kayfabe-util",
@@ -49,6 +50,7 @@ kf-arch = { path = "crates/kf-arch" }
 kf-abi = { path = "crates/kf-abi" }
 kf-gsp = { path = "crates/kf-gsp" }
 kf-linux-raw = { path = "crates/kf-linux-raw" }
+kf-host = { path = "crates/kf-host" }
 kayfabe-doorbell = { path = "crates/kayfabe-doorbell" }
 kayfabe-rm-ladder = { path = "crates/kayfabe-rm-ladder" }
 kayfabe-cuda = { path = "crates/kayfabe-cuda" }
