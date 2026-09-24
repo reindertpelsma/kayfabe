@@ -601,8 +601,9 @@ impl Device {
     /// ⊘⊘ **Only what CHANGED.** `[measured p4b1, 1 boot in 5]` re-storing every register after
     /// every applied write raced the vCPU: a guest write the vCPU had already put in the shadow,
     /// but which the drainer had not yet applied, was overwritten with the FSM's older answer —
-    /// and the FWSEC handshake failed *"no initialized WPR2 found"* intermittently. A register
-    /// the FSM did not move is the guest's to own; we store only the ones the FSM moved.
+    /// and the FWSEC handshake failed *"no initialized WPR2 found"* intermittently. So we store
+    /// the ones the FSM moved, PLUS the register just applied (`apply_register` forgets its
+    /// published value): its shadow holds the guest's write, and the FSM's answer replaces it.
     fn publish(&self, g: &mut Gsp) {
         const EDGES: [GspReg; 4] =
             [GspReg::GspFalconCpuctl, GspReg::GspRiscvCpuctl, GspReg::Sec2FalconCpuctl, GspReg::GspFalconIrqstat];
@@ -790,6 +791,12 @@ impl HostOps for Device {
         // The first writes ARE the boot sequence; logged on the drainer (never a vCPU).
         if n < 512 {
             eprintln!("kf3: w#{n} bar{bar} @{offset:#08x} = {value:#x} phase={:?}", g.fsm.phase());
+        }
+        // ★ The register just applied is re-published unconditionally: the vCPU already stored
+        // the GUEST's value there, and the FSM's answer may equal what was last published
+        // (`[measured edfff3a9, 3/3 boots]` DMATRFCMD read back 'busy' forever: FWSEC timed out).
+        if bar == 0 {
+            g.published.remove(&u64::from(offset));
         }
         let mut ram = Ram(self);
         let before = g.fsm.phase();
