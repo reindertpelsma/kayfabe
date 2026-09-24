@@ -11,6 +11,7 @@
 //! |---|---|---|
 //! | `GSP_RM_ALLOC` of the GPFIFO channel class | carries the declaration ([`ChannelAlloc`]); **refuses the alloc** if the plane refused the birth, else declines (the object seat records it) | births the host twin **at allocation** (§7: never lazily) |
 //! | `NVA06F_CTRL_CMD_GPFIFO_SCHEDULE` (`0xa06f0103`) | answers `NV_OK` + the `[IN]` echo **iff** the plane scheduled | `GPFIFO_SCHEDULE` on the host twin |
+//! | `NVA06F_CTRL_CMD_BIND` (`0xa06f0104`) | answers `NV_OK` + the `[IN]` echo iff the plane owns the twin and the engine is a copy engine | nothing more: the twin's host TSG was bound at birth |
 //! | `NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN` (`0xc36f0108`) | answers the plane's GUEST token | a token-table slot routed to the twin |
 //! | `GSP_RM_FREE` | observes | retires the token, frees the twin |
 //!
@@ -30,6 +31,8 @@ const NV_OK: u32 = 0;
 pub const GPFIFO_SCHEDULE: u32 = 0xa06f_0103;
 /// `NVA06C_CTRL_CMD_GPFIFO_SCHEDULE` — the TSG form (`ctrla06c.h`).
 pub const TSG_GPFIFO_SCHEDULE: u32 = 0xa06c_0101;
+/// `NVA06F_CTRL_CMD_BIND` (`ogkm-580: ctrla06fgpfifo.h:96`) — one `[IN]` `engineType`.
+pub const BIND: u32 = 0xa06f_0104;
 /// `NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN` (`ogkm-580: ctrlc36f.h:79`).
 pub const GET_WORK_SUBMIT_TOKEN: u32 = 0xc36f_0108;
 
@@ -81,6 +84,15 @@ pub enum ChanStatement {
         object: u32,
         /// `bEnable`.
         enable: bool,
+    },
+    /// `BIND` a channel to an engine (`kchannelBindToRunlist`, `kernel_channel.c:2878-2886`).
+    Bind {
+        /// `hClient`.
+        client: u32,
+        /// The channel.
+        object: u32,
+        /// `engineType` (`NV2080_ENGINE_TYPE_*`).
+        engine_type: u32,
     },
     /// `GET_WORK_SUBMIT_TOKEN` on a channel.
     Token {
@@ -232,6 +244,10 @@ impl ChannelPolicy {
                 ChanStatement::Schedule { client: h.client, object: h.object, enable: params.first().is_some_and(|&b| b != 0) }
             }
             GET_WORK_SUBMIT_TOKEN => ChanStatement::Token { client: h.client, object: h.object },
+            BIND => {
+                let engine_type = params.get(..4).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))?;
+                ChanStatement::Bind { client: h.client, object: h.object, engine_type }
+            }
             _ => return None,
         };
         self.carried += 1;

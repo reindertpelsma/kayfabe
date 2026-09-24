@@ -86,6 +86,22 @@ pub struct Counters {
     pub last_off: AtomicU64,
 }
 
+/// Interrupt counters — boot log only.
+#[derive(Debug, Default)]
+pub struct IrqCounts {
+    /// Messages sent (eventfd writes).
+    pub raised: AtomicU64,
+    /// Latches that stayed pending (a leaf or top enable clear).
+    pub held: AtomicU64,
+    /// Vectors outside this family's leaves.
+    pub out_of_range: AtomicU64,
+    /// Writes to the tree.
+    pub writes: AtomicU64,
+}
+
+/// The MSI-X vector count the C device exposes (its `msix-vectors` default).
+pub const MSIX_VECTORS: usize = 32;
+
 /// ★ The device.
 pub struct Device {
     /// The host RM session (process-lifetime: the memory plane's views borrow it).
@@ -125,6 +141,13 @@ pub struct Device {
     pub chans: &'static crate::chan::ChanPlane,
     /// The workers' counters.
     pub worker_stats: kf_chan::worker::WorkerStats,
+    /// ★ P5 §2.7: the CPU interrupt tree (atomic; applied synchronously on the vCPU).
+    pub intr: kf_trap::cpuintr::CpuIntr,
+    /// ★ P5 §2.7: one eventfd per MSI-X vector, registered by the C device as a KVM irqfd — a
+    /// raise is ONE `write(2)` from any thread, no BQL (`THE_TRANSLATED_PLANE.md` §7).
+    irq_lines: Vec<Notifier>,
+    /// Interrupt counters for the boot log.
+    pub irq_counts: IrqCounts,
     stop: AtomicBool,
     /// Boot-log counters.
     pub counters: Counters,
@@ -354,6 +377,12 @@ impl Device {
             worker_efd,
             chans,
             worker_stats: kf_chan::worker::WorkerStats::default(),
+            intr: kf_trap::cpuintr::CpuIntr::new(family, kf_trap::memmap::VF_USERMODE_PAGE)
+                .ok_or("CPU interrupt tree: the usermode base is below the PRIV delta")?,
+            irq_lines: (0..MSIX_VECTORS)
+                .map(|_| Notifier::create().map_err(|e| format!("irq eventfd: {e:?}")))
+                .collect::<Result<Vec<_>, _>>()?,
+            irq_counts: IrqCounts::default(),
             drainer_efd: Notifier::create().map_err(|e| format!("eventfd: {e:?}"))?,
             stop: AtomicBool::new(false),
             counters: Counters::default(),
@@ -457,6 +486,19 @@ impl Device {
             self.shadow_store(off, u64::from(v), 4);
             return;
         }
+        // ★ P5 §2.7: the CPU interrupt tree — applied HERE, synchronously and lock-free (§5.5: the
+        // ISR writes a mask then reads pending), its read-back published before any message.
+        if !doorbell
+            && !in_usermode
+            && width == 4
+            && let Some(r) = self.intr.decode(off)
+        {
+            self.irq_counts.writes.fetch_add(1, Ordering::Relaxed);
+            let raise = self.intr.write(r, val as u32);
+            self.intr.shadow(r, |o, v| self.shadow_store(o, u64::from(v), 4));
+            self.deliver(raise);
+            return;
+        }
         let class = if doorbell {
             Class::Doorbell
         } else if in_usermode {
@@ -486,6 +528,39 @@ impl Device {
             }
             Action::None => {}
         }
+    }
+
+    /// ★ Send what a tree write or latch asked for: ONE eventfd write on MSI-X vector 0 (RM reads
+    /// TOP/LEAF to demultiplex — `intr_tu102.c:729-744`; the C artifact used one vector too).
+    /// ⊘ Never a BQL-taking notify: the C device registered the eventfd as a KVM irqfd.
+    fn deliver(&self, raise: kf_trap::cpuintr::Raise) {
+        match raise {
+            kf_trap::cpuintr::Raise::Message => {
+                let _ = self.irq_lines[0].signal();
+                self.irq_counts.raised.fetch_add(1, Ordering::Relaxed);
+            }
+            kf_trap::cpuintr::Raise::None => {}
+            kf_trap::cpuintr::Raise::OutOfRange => {
+                self.irq_counts.out_of_range.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+    }
+
+    /// ★ Latch `vector` (a completion this device announces) and deliver — any thread.
+    pub fn latch_and_deliver(&self, vector: u32) {
+        let raise = self.intr.latch(vector);
+        self.intr.shadow_all(|o, v| self.shadow_store(o, u64::from(v), 4));
+        if raise == kf_trap::cpuintr::Raise::None {
+            self.irq_counts.held.fetch_add(1, Ordering::Relaxed);
+        }
+        self.deliver(raise);
+    }
+
+    /// The eventfd of MSI-X vector `v`, for the C device to register as a KVM irqfd.
+    #[must_use]
+    pub fn irq_fd(&self, v: usize) -> Option<i32> {
+        use std::os::fd::AsRawFd;
+        self.irq_lines.get(v).map(|n| n.as_source_fd().as_raw_fd())
     }
 
     /// Register guest RAM: guest-physical `[gpa, gpa+len)` at `mem`, backed by `fd` at `fd_off`
@@ -746,8 +821,16 @@ impl Device {
             self.chans.poisoned.load(o),
             toks.join(" ")
         );
+        let ic = &self.irq_counts;
+        let irq = format!(
+            " irq[writes={} raised={} held={} oor={}]",
+            ic.writes.load(o),
+            ic.raised.load(o),
+            ic.held.load(o),
+            ic.out_of_range.load(o)
+        );
         format!(
-            "kf3: family={:?} phase={phase} trapped={} applied={} refused={} serviced={} ram_refused={} unshadowed_writes={} last_off={:#x}{mem}{chan} unserviced=[{}]",
+            "kf3: family={:?} phase={phase} trapped={} applied={} refused={} serviced={} ram_refused={} unshadowed_writes={} last_off={:#x}{mem}{chan}{irq} unserviced=[{}]",
             self.family,
             c.trapped.load(o),
             c.applied.load(o),

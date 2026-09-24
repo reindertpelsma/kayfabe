@@ -254,6 +254,22 @@ impl ChanPlane {
                 }
                 ChanAnswer::Done
             }
+            ChanStatement::Bind { client, object, engine_type } => {
+                let Some(ht) = self.by_obj.lock().ok().and_then(|m| m.get(&(client, object)).copied()) else {
+                    return ChanAnswer::NotOurs;
+                };
+                // ★ The guest's statement that this channel runs on a copy engine. Our twin's host
+                // TSG was bound to OUR engine at birth (`HostRm::birth_channel`); a bind to anything
+                // but a copy engine contradicts the Translated route and is refused by name.
+                if !is_copy_engine(engine_type) {
+                    return ChanAnswer::Refused {
+                        status: NV_ERR_INVALID_STATE,
+                        why: format!("BIND of a Translated CE channel (host {ht:#x}) to engine {engine_type:#x}"),
+                    };
+                }
+                eprintln!("kf3: chan {client:#x}:{object:#x} BIND engine={engine_type:#x} (host {ht:#x})");
+                ChanAnswer::Done
+            }
             ChanStatement::Token { client, object } => {
                 let Some(ht) = self.by_obj.lock().ok().and_then(|m| m.get(&(client, object)).copied()) else {
                     return ChanAnswer::NotOurs;

@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#define KF3_ABI 3
+#define KF3_ABI 4
 
 typedef struct Kf3Identity {
     uint16_t vendor, device, subsystem_vendor, subsystem;
@@ -33,5 +33,6 @@ int32_t kf3_ram_add(void *h, uint64_t gpa, uint8_t *hva, uint64_t len, int32_t f
 int32_t kf3_bar_ram(void *h, uint32_t bar, uint64_t base, uint64_t len, void **ptr);
 void kf3_ram_del(void *h, uint64_t gpa);
 void kf3_status(void *h, char *buf, size_t len);
+int32_t kf3_irq_fd(void *h, uint32_t vector);
 void kf3_unrealize(void *h);
 #endif

@@ -13,7 +13,10 @@
  *    exit either way. What each page shows (a store view, guest RAM, or per-BAR scratch — never a
  *    hole) is re-pointed inside it by Rust with mmap(MAP_FIXED); QEMU never learns of a re-point.
  *    The only trapped piece left in BAR1 is the Hopper+ doorbell page (counted until P5).
- *  - MSI-X lives in its own BAR; interrupts arrive with P5 (irqfd, never a BQL-taking notify).
+ *  - MSI-X lives in its own BAR. Interrupts (P5, V3_P5_PORT_MAP.md §2.7): Rust owns one eventfd
+ *    per vector (kf3_irq_fd); this device registers each as a KVM irqfd on the vector's MSI route
+ *    when the guest unmasks it (msix vector notifiers, virtio-pci's pattern). A raise is then one
+ *    write(2) from any Rust thread — never a BQL-taking msix_notify.
  */
 #include "qemu/osdep.h"
 #include "hw/pci/pci.h"
@@ -29,6 +32,7 @@
 #include "system/memory.h"
 #include "system/address-spaces.h"
 #include "system/kvm.h"
+#include "qemu/event_notifier.h"
 #include "kf3.h"
 
 #if QEMU_VERSION_MAJOR < 10 || (QEMU_VERSION_MAJOR == 10 && QEMU_VERSION_MINOR < 2)
@@ -40,6 +44,13 @@ OBJECT_DECLARE_SIMPLE_TYPE(Kf3State, KF3)
 
 #define KF3_MAX_PIECES 64
 #define KF3_MSIX_BAR 5
+#define KF3_MAX_VECTORS 32
+
+typedef struct Kf3Vec {
+    EventNotifier e;   /* wraps the Rust-owned eventfd (never closed here) */
+    int virq;          /* the KVM MSI route while the vector is in use, else -1 */
+    bool have;
+} Kf3Vec;
 
 typedef struct Kf3Piece {
     struct Kf3State *s;
@@ -66,6 +77,8 @@ struct Kf3State {
     unsigned n_bar_pieces[2];
     uint64_t bar12_reads, bar12_writes;
     MemoryListener listener;
+    Kf3Vec vec[KF3_MAX_VECTORS];
+    uint64_t irq_routes, irq_route_fail;
 };
 
 /* ── BAR0 ───────────────────────────────────────────────────────────────────────────────── */
@@ -289,6 +302,63 @@ static void kf3_region_del(MemoryListener *l, MemoryRegionSection *sec)
     }
 }
 
+/* ── MSI-X → KVM irqfd ───────────────────────────────────────────────────────────────────── */
+
+static int kf3_vector_use(PCIDevice *pci, unsigned v, MSIMessage msg)
+{
+    Kf3State *s = KF3(pci);
+    Kf3Vec *x;
+    int virq;
+
+    if (v >= KF3_MAX_VECTORS || !s->vec[v].have) {
+        return 0;
+    }
+    x = &s->vec[v];
+    if (x->virq >= 0) {
+        if (kvm_irqchip_update_msi_route(kvm_state, x->virq, msg, pci) < 0) {
+            s->irq_route_fail++;
+            return -1;
+        }
+        kvm_irqchip_commit_routes(kvm_state);
+        return 0;
+    }
+    {
+        KVMRouteChange c = kvm_irqchip_begin_route_changes(kvm_state);
+        virq = kvm_irqchip_add_msi_route(&c, v, pci);
+        if (virq < 0) {
+            s->irq_route_fail++;
+            return virq;
+        }
+        kvm_irqchip_commit_route_changes(&c);
+    }
+    /* A raise that arrived while the vector was masked is still counted in the eventfd; KVM
+     * injects it on assignment (irqfd polls the eventfd when it is registered). */
+    if (kvm_irqchip_add_irqfd_notifier_gsi(kvm_state, &x->e, NULL, virq) < 0) {
+        kvm_irqchip_release_virq(kvm_state, virq);
+        s->irq_route_fail++;
+        return -1;
+    }
+    x->virq = virq;
+    s->irq_routes++;
+    return 0;
+}
+
+static void kf3_vector_release(PCIDevice *pci, unsigned v)
+{
+    Kf3State *s = KF3(pci);
+    Kf3Vec *x;
+
+    if (v >= KF3_MAX_VECTORS) {
+        return;
+    }
+    x = &s->vec[v];
+    if (x->virq >= 0) {
+        kvm_irqchip_remove_irqfd_notifier_gsi(kvm_state, &x->e, x->virq);
+        kvm_irqchip_release_virq(kvm_state, x->virq);
+        x->virq = -1;
+    }
+}
+
 /* ── realize / exit ─────────────────────────────────────────────────────────────────────── */
 
 static void kf3_dev_realize(PCIDevice *pci, Error **errp)
@@ -348,6 +418,23 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
         for (unsigned i = 0; i < s->msix_vectors; i++) {
             msix_vector_use(pci, i);
         }
+        /* ⊘ No irqfd, no interrupts: refuse rather than fall back to a BQL-taking notify. */
+        if (!kvm_msi_via_irqfd_enabled()) {
+            error_setg(errp, "kf3: KVM MSI-via-irqfd is not available (kernel irqchip required)");
+            return;
+        }
+        for (unsigned i = 0; i < s->msix_vectors && i < KF3_MAX_VECTORS; i++) {
+            int fd = kf3_irq_fd(s->h, i);
+            s->vec[i].virq = -1;
+            if (fd >= 0) {
+                event_notifier_init_fd(&s->vec[i].e, fd);
+                s->vec[i].have = true;
+            }
+        }
+        if (msix_set_vector_notifiers(pci, kf3_vector_use, kf3_vector_release, NULL) < 0) {
+            error_setg(errp, "kf3: MSI-X vector notifiers refused");
+            return;
+        }
     }
 
     s->listener = (MemoryListener){
@@ -368,12 +455,15 @@ static void kf3_dev_exit(PCIDevice *pci)
     char st[512] = "";
     if (s->h) {
         kf3_status(s->h, st, sizeof(st));
-        info_report("%s bar12_reads=%" PRIu64 " bar12_writes=%" PRIu64, st,
-                    qatomic_read(&s->bar12_reads), qatomic_read(&s->bar12_writes));
+        info_report("%s bar12_reads=%" PRIu64 " bar12_writes=%" PRIu64 " irq_routes=%" PRIu64
+                    " irq_route_fail=%" PRIu64, st,
+                    qatomic_read(&s->bar12_reads), qatomic_read(&s->bar12_writes),
+                    s->irq_routes, s->irq_route_fail);
         memory_listener_unregister(&s->listener);
         kf3_unrealize(s->h);
     }
     if (s->msix_vectors > 0) {
+        msix_unset_vector_notifiers(pci);
         msix_uninit(pci, &s->msix_bar, &s->msix_bar);
     }
 }

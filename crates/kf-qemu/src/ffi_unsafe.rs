@@ -7,7 +7,7 @@ use core::ffi::{c_char, c_void};
 use std::ffi::CStr;
 
 /// Wire ABI of this surface; the C device refuses a mismatched archive.
-pub const KF3_ABI: u32 = 3;
+pub const KF3_ABI: u32 = 4;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -277,6 +277,13 @@ pub unsafe extern "C" fn kf3_usermode_view(h: *mut c_void, ptr: *mut *mut c_void
         *len = n;
     }
     0
+}
+
+/// ★ P5 §2.7: the eventfd of MSI-X vector `vector` — the C device wraps it in an EventNotifier and
+/// registers it as a KVM irqfd on the vector's MSI route. Returns the fd, or -1.
+#[unsafe(no_mangle)]
+pub extern "C" fn kf3_irq_fd(h: *mut c_void, vector: u32) -> i32 {
+    dev(h).and_then(|d| d.irq_fd(vector as usize)).unwrap_or(-1)
 }
 
 /// Stop the device's threads (the device itself lives for the process).
