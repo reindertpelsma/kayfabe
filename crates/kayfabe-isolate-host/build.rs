@@ -158,6 +158,16 @@ fn main() {
                 .display()
         );
     }
+    // ★★★★★ **w826 — THE SAME CLASS, ONE LEVEL FURTHER OUT.** `kayfabe-cuda` embeds
+    // `cuda/walk/kf_walk.ptx` with `include_bytes!`, and that file lives OUTSIDE every
+    // `crates/*/src` above. `[measured w826 ct4–ct13]` a walker fix to the PTX never reached
+    // the scratchpad image: it stayed at exactly 1 203 872 bytes across the pre-fix and the
+    // post-fix builds, five boots "proved the fix did not work", and a diagnosis was built
+    // on them. It changed only when an unrelated edit to `cudawalk.rs` re-ran this script.
+    println!(
+        "cargo::rerun-if-changed={}",
+        root.join("cuda").join("walk").join("kf_walk.ptx").display()
+    );
     println!(
         "cargo::rerun-if-changed={}",
         root.join("Cargo.lock").display()
