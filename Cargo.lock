@@ -456,6 +456,7 @@ dependencies = [
  "kf-abi",
  "kf-host",
  "kf-linux-raw",
+ "kf-trap",
 ]
 
 [[package]]
@@ -492,6 +493,7 @@ dependencies = [
  "kf-host",
  "kf-linux-raw",
  "kf-mem",
+ "kf-trap",
 ]
 
 [[package]]
@@ -519,6 +521,13 @@ name = "kf-mem"
 version = "0.1.0"
 dependencies = [
  "kf-host",
+]
+
+[[package]]
+name = "kf-trap"
+version = "0.1.0"
+dependencies = [
+ "kf-chip",
 ]
 
 [[package]]

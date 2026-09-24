@@ -25,7 +25,7 @@ use kf_harness::Ledger as Checks;
 use kf_harness::tables::Tree;
 use kf_host::{HostRm, VaSpace};
 use kf_linux_raw::{DevDir, PollTimeout, Poller, ReadyTokens};
-use kf_mem::ledger::{Desired, Ledger, plan_reconcile};
+use kf_mem::ledger::{Ledger, desired_from_leaves, plan_reconcile};
 use std::cell::RefCell;
 
 const STORE_BYTES: u64 = 256 << 20;
@@ -88,11 +88,13 @@ fn lo(a: u64) -> u32 {
 /// The shared state every adapter needs: the walk kernel's store window and our ledger.
 struct Guest<'a> {
     rm: &'a HostRm,
+    ram_view: &'a kf_linux_raw::MappedRegion,
     walk: WalkKernel,
     dptr: u64,
     ledger: Ledger,
     space: VaSpace,
     store: u32,
+    ram_desc: u32,
     root: u64,
     walks: Vec<Option<u64>>,
 }
@@ -102,10 +104,12 @@ impl Guest<'_> {
         let t0 = std::time::Instant::now();
         let r = self.walk.refresh(self.dptr, STORE_BYTES, &[self.root]).map_err(|e| e.to_string())?;
         r.validate().map_err(|e| format!("{tag}: report {e}"))?;
-        let desired: Vec<Desired> =
-            r.runs.iter().map(|m| Desired { va: m.va, len: m.len, off: m.gpga, ram: false }).collect();
+        // Guest RAM is one memfd from GPA 0 (no hole in this harness's layout).
+        let ram_offset = |gpa: u64, len: u64| gpa.checked_add(len).filter(|&e| e <= RAM_BYTES).map(|_| gpa);
+        let desired = desired_from_leaves(r.runs.iter().map(|m| (m.va, m.gpga, m.len, m.aperture())), STORE_BYTES, &ram_offset)
+            .map_err(|e| format!("{tag}: {e:?}"))?;
         let plan = plan_reconcile(&self.ledger.rows(), &desired);
-        let a = self.ledger.apply(self.rm, self.space, self.store, None, &plan);
+        let a = self.ledger.apply(self.rm, self.space, self.store, Some(self.ram_desc), &plan);
         println!(
             "MEASURE publish_{tag} runs={} kept={} mapped={} unmapped={} refused={} us={}{}",
             r.runs.len(), plan.kept, a.mapped, a.unmapped, a.refused, t0.elapsed().as_micros(),
@@ -124,7 +128,7 @@ impl GuestMemory for Mem<'_, '_> {
         let g = self.0.borrow();
         let (ram, off) = g.ledger.resolve(va, out.len() as u64).ok_or(format!("{va:#x} not mapped by us"))?;
         if ram {
-            return Err("guest-RAM read not wired in gate 3".into());
+            return g.ram_view.read_into(kf_linux_raw::HostOffset::new(off), out).map_err(|e| format!("{e:?}"));
         }
         g.walk.read_at(g.dptr + off, out).map_err(|e| e.to_string())
     }
@@ -284,7 +288,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
     }
 
     // ── v3: the kernel VAS is mirrored by walking the guest's own tables ─────────────────────
-    let guest = RefCell::new(Guest { rm: &rm, walk, dptr, ledger: Ledger::default(), space, store, root, walks: Vec::new() });
+    let guest = RefCell::new(Guest { rm: &rm, ram_view: &ram_view, walk, dptr, ledger: Ledger::default(), space, store, ram_desc: desc, root, walks: Vec::new() });
     let (mapped, _) = guest.borrow_mut().publish("boot")?;
     l.check("kernel_vas_published", mapped >= 1, format!("{mapped} runs"));
     let host = HostRing::new(&rm, space)?;

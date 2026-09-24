@@ -13,3 +13,4 @@
 pub mod host;
 pub mod ring;
 pub mod translated;
+pub mod worker;

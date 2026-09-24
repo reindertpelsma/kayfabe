@@ -11,7 +11,7 @@ use kf_cuda::abi::kf_format_ver2;
 use kf_cuda::walk::{WalkCfg, WalkKernel};
 use kf_harness::{CeRig, Ledger as Checks, tables::Tree};
 use kf_host::HostRm;
-use kf_mem::ledger::{Desired, Ledger, plan_reconcile};
+use kf_mem::ledger::{Ledger, desired_from_leaves, plan_reconcile};
 use kf_linux_raw::DevDir;
 
 const STORE_BYTES: u64 = 256 << 20;
@@ -68,8 +68,9 @@ fn run(l: &mut Checks) -> Result<(), String> {
         let t0 = std::time::Instant::now();
         let r = walk.refresh(dptr, STORE_BYTES, &[root]).map_err(|e| e.to_string())?;
         r.validate().map_err(|e| format!("{tag}: report {e}"))?;
-        let desired: Vec<Desired> =
-            r.runs.iter().map(|m| Desired { va: m.va, len: m.len, off: m.gpga, ram: false }).collect();
+        // Gate 2 has no guest RAM: a sysmem leaf is refused by name, never mapped as a store slice.
+        let desired = desired_from_leaves(r.runs.iter().map(|m| (m.va, m.gpga, m.len, m.aperture())), STORE_BYTES, &|_, _| None)
+            .map_err(|e| format!("{tag}: {e:?}"))?;
         let plan = plan_reconcile(&ledger.rows(), &desired);
         let a = ledger.apply(&rm, space, store, None, &plan);
         println!(

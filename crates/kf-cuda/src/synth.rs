@@ -30,6 +30,11 @@ mod ver2 {
     pub const AP_SHIFT: u32 = 1;
     /// A PTE's `VIDEO_MEMORY` aperture value.
     pub const AP_PTE_VID: u64 = 0;
+    /// A PTE's `SYSTEM_COHERENT_MEMORY` aperture value (`NV_MMU_PTE_APERTURE_*`, gp100
+    /// `dev_mmu.h:82`).
+    pub const AP_PTE_SYS_COH: u64 = 2;
+    /// `_ADDRESS_SYS` is 53:8, i.e. 46 bits at offset 8, holding a 4 KiB page number (`:139`).
+    pub const ADDR_SYS_BITS: u32 = 46;
     /// A PDE's `VIDEO_MEMORY` aperture value. ⊘ Not the same number as a PTE's: `0` on a PDE
     /// means *"no sub-level"*, which is why `pde_ap_invalid` exists in the descriptor.
     pub const AP_PDE_VID: u64 = 1;
@@ -67,6 +72,15 @@ pub fn pte(phys: u64) -> u64 {
     ver2::PTE_VALID
         | (ver2::AP_PTE_VID << ver2::AP_SHIFT)
         | (((phys >> 12) & mask(ver2::ADDR_BITS)) << ver2::ADDR_LO)
+}
+
+/// A valid page-table entry mapping guest-physical `gpa` in coherent SYSTEM memory — the leaf a
+/// guest kernel writes for a pushbuffer, GPFIFO or USERD it placed in its own RAM.
+#[must_use]
+pub fn pte_sys(gpa: u64) -> u64 {
+    ver2::PTE_VALID
+        | (ver2::AP_PTE_SYS_COH << ver2::AP_SHIFT)
+        | (((gpa >> 12) & mask(ver2::ADDR_SYS_BITS)) << ver2::ADDR_LO)
 }
 
 /// The SPARSE encoding: VALID clear, VOLATILE set.

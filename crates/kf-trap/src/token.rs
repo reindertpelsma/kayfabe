@@ -1,0 +1,363 @@
+//! The token word — one `u64` per token, and the only thing any CAS touches.
+//!
+//! `THE_DESIGN.md` §5.1: *"one `u64` per token: route, state, `applied_seq` stamp, host token —
+//! every CAS. No neighbour can fail it."* ⇒ The whole point of packing into one word is that a
+//! token's CAS can never be failed by a NEIGHBOUR's activity. A struct-of-fields, or a word
+//! shared between two tokens, reintroduces exactly the false contention this removes.
+//!
+//! ⊘ **The token is MASKED, not validated** (§5.1). Masking is what the hardware does with
+//! undecoded bits, and it removes an error path — a validation branch here would be a refusal
+//! the hardware itself does not make.
+
+use core::sync::atomic::{AtomicU64, Ordering};
+
+/// The token's state. §5.2 names four, **plus a retired state** the same section then shows is
+/// mandatory: *"A token needs a retired state, or channel recycling is a use-after-free."*
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum State {
+    /// Nothing queued, nobody acting.
+    Idle = 0,
+    /// The guest rang; no worker has claimed it.
+    Rung = 1,
+    /// A worker owns it. ★ §5.2: *"A bit that says work exists is not a bit that says you may
+    /// touch the hardware."* Without this exclusion two workers walk one channel against one
+    /// cursor and `[c0,p1)` executes twice.
+    Busy = 2,
+    /// Owned, and rung again while owned. The put-back case.
+    BusyRung = 3,
+    /// Retired. §5.2: free goes `IDLE|RUNG → DEAD` and **waits out `BUSY`** before dropping the
+    /// twin; allocation goes `DEAD → IDLE` with the new route. ⊘ Without it: the guest frees a
+    /// channel while its token is `BUSY`, recycles the channel id, and the new channel's first
+    /// ring lands on a word still carrying the OLD route — while the old worker is still reading
+    /// what it believes is a pushbuffer.
+    Dead = 4,
+}
+
+impl State {
+    #[inline]
+    fn from_bits(b: u64) -> State {
+        match b & STATE_MASK {
+            0 => State::Idle,
+            1 => State::Rung,
+            2 => State::Busy,
+            3 => State::BusyRung,
+            _ => State::Dead,
+        }
+    }
+}
+
+/// How a token's work is served. §7's vocabulary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum Route {
+    /// We do not know this token. ⊘ The DEFAULT, deliberately: an unknown token must not be
+    /// guessed into a plane.
+    Unknown = 0,
+    /// The guest's ring reaches hardware unparsed.
+    Passthrough = 1,
+    /// We translate addresses and submit.
+    Translated = 2,
+    /// We implement it; there is no GPU counterpart.
+    Emulated = 3,
+}
+
+impl Route {
+    #[inline]
+    fn from_bits(b: u64) -> Route {
+        match b & ROUTE_MASK {
+            1 => Route::Passthrough,
+            2 => Route::Translated,
+            3 => Route::Emulated,
+            _ => Route::Unknown,
+        }
+    }
+}
+
+// ---- the layout -----------------------------------------------------------------------------
+//
+// ⊘⊘⊘ **21 BITS WAS WRONG ON EVERY ARCHITECTURE, AND MY OWN "FINDINGS" TEST PINNED IT.**
+//
+// `[fable w823, CRITICAL]` the fields are **not** 12+7 contiguous. From ogkm's swref:
+//   * `NV_CTRL_VF_DOORBELL_VECTOR      11:0`   (`ampere/ga100/dev_ctrl.h:26`)
+//   * `NV_CTRL_VF_DOORBELL_RUNLIST_ID  22:16`  (`:27`) ⇒ a **23-bit span**, with a gap at 15:12
+//   * GB202: `RUNLIST_DOORBELL 30:30`, set **unconditionally** by the token generator
+//     (`kernel_fifo_gb202.c:71-74`, `blackwell/gb202/dev_vm.h:30-32`)
+//   * GB100: `RUNLIST_DOORBELL 22:22` and `GSP_DOORBELL 31:31` (`blackwell/gb100/dev_vm.h:624`)
+//
+// ⇒ A 21-bit mask silently drops **bit 30 on every GB202 doorbell**, bits 22 and 31 on GB100, and
+// the top of `RUNLIST_ID` for any runlist ≥ 32 (Hopper has many). The host doorbell is then rung
+// with `RUNLIST_DOORBELL_DISABLE` — a write that goes to hardware and does the wrong thing.
+//
+// ★★★ **And the host token is not ours to decode at all.** It arrives whole from
+// `NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN` (§50 level 1 — an unprivileged host ioctl, which
+// outranks any ogkm derivation). ⇒ **Store all 32 bits and never interpret them.** Masking a value
+// we did not construct is how a per-die encoding becomes a silent corruption.
+//
+// ⚠ The guest-side *table index* is a different quantity and stays bounded — see `INDEX_BITS`.
+const STATE_BITS: u32 = 3;
+const ROUTE_BITS: u32 = 2;
+/// ⊘ The opaque host token, stored whole. **Never masked, never decoded.**
+pub const HOST_TOKEN_BITS: u32 = 32;
+const SEQ_BITS: u32 = 64 - STATE_BITS - ROUTE_BITS - HOST_TOKEN_BITS; // 27
+
+const STATE_SHIFT: u32 = 0;
+const ROUTE_SHIFT: u32 = STATE_SHIFT + STATE_BITS;
+const HOST_SHIFT: u32 = ROUTE_SHIFT + ROUTE_BITS;
+const SEQ_SHIFT: u32 = HOST_SHIFT + HOST_TOKEN_BITS;
+
+const STATE_MASK: u64 = (1 << STATE_BITS) - 1;
+const ROUTE_MASK: u64 = (1 << ROUTE_BITS) - 1;
+pub const HOST_TOKEN_MASK: u64 = (1 << HOST_TOKEN_BITS) - 1;
+const SEQ_MASK: u64 = (1 << SEQ_BITS) - 1;
+
+/// The decoded token word.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Token {
+    pub state: State,
+    pub route: Route,
+    pub host_token: u32,
+    /// §5.2: *"stamp the ring position, THEN `fetch_or(RUNG)` — order matters."*
+    pub applied_seq: u64,
+}
+
+impl Token {
+    #[inline]
+    pub fn decode(w: u64) -> Token {
+        Token {
+            state: State::from_bits(w >> STATE_SHIFT),
+            route: Route::from_bits(w >> ROUTE_SHIFT),
+            host_token: ((w >> HOST_SHIFT) & HOST_TOKEN_MASK) as u32,
+            applied_seq: (w >> SEQ_SHIFT) & SEQ_MASK,
+        }
+    }
+    #[inline]
+    pub fn encode(self) -> u64 {
+        // ⊘ MASK, never assert. §5.1: masking is what the hardware does with undecoded bits.
+        ((self.state as u64 & STATE_MASK) << STATE_SHIFT)
+            | ((self.route as u64 & ROUTE_MASK) << ROUTE_SHIFT)
+            | ((self.host_token as u64 & HOST_TOKEN_MASK) << HOST_SHIFT)
+            | ((self.applied_seq & SEQ_MASK) << SEQ_SHIFT)
+    }
+}
+
+/// One token's word.
+#[derive(Debug, Default)]
+#[repr(transparent)]
+pub struct TokenWord(AtomicU64);
+
+/// What a claim attempt found.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Claim {
+    /// We own it; act.
+    Won(Token),
+    /// Someone else owns it, or it is not rung, or it is retired. ⊘ §5.2: *"fail ⇒ not ours"* —
+    /// and that is a normal outcome, never an error.
+    NotOurs,
+}
+
+/// What releasing a claim asks the caller to do next.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Release {
+    /// Clean exit; nothing more to do.
+    Idled,
+    /// It was rung while we held it — act again without republishing. §5.2's `BUSY_RUNG → BUSY`.
+    ActAgain,
+    /// ⊘ The bounded loop expired. §5.2: *"After K rounds the worker republishes and moves on.
+    /// ★ That is a timeslice, and it is what hardware does for the same reason."*
+    /// The caller MUST republish (bit then summary) — see [`crate::bitmap`].
+    RepublishAndMoveOn,
+}
+
+impl TokenWord {
+    pub const fn new() -> TokenWord {
+        TokenWord(AtomicU64::new(0))
+    }
+
+    #[inline]
+    pub fn load(&self) -> Token {
+        Token::decode(self.0.load(Ordering::Acquire))
+    }
+
+    /// Install a route at allocation. §5.2: allocation is `DEAD → IDLE` **with the new route**.
+    /// Returns false if the token was not retired — allocating over a live token is the
+    /// use-after-free this state exists to prevent.
+    /// ⊘⊘⊘ **RETIRED ONLY, AND IT RETRIES.** `[fable w823, HIGH S3]` the first version accepted
+    /// `Idle` as well as `Dead` — while its own doc said *"returns false if the token was not
+    /// retired"* — and was a single non-retrying CAS, so a concurrent ring failed it.
+    ///
+    /// ⇒ The failure it produced: the kernel recycles chid 7 for process B; a spinning process A
+    /// rings 7 between the load and the CAS; `allocate` returns false; the caller ignored it; the
+    /// word still carries **A's old `host_token`**, and B's rings are served on **A's freed host
+    /// channel**. That is work attributed to the wrong channel across the inner boundary.
+    ///
+    /// ★ `Idle` is refused because an idle token is a LIVE token nobody is acting on — allocating
+    /// over it silently rehomes whatever it named. Only `Dead` means "the free path finished".
+    pub fn allocate(&self, route: Route, host_token: u32) -> bool {
+        let mut cur = self.0.load(Ordering::Acquire);
+        loop {
+            let t = Token::decode(cur);
+            if t.state != State::Dead {
+                return false;
+            }
+            let next = Token { state: State::Idle, route, host_token, applied_seq: 0 }.encode();
+            match self.0.compare_exchange_weak(cur, next, Ordering::AcqRel, Ordering::Acquire) {
+                Ok(_) => return true,
+                // ⊘ A CAS failure is not evidence of another owner — the same rule the claim()
+                // race taught. Re-read; give up only on the STATE.
+                Err(seen) => cur = seen,
+            }
+        }
+    }
+
+    /// Bring a never-used token into service. ⊘ Separate from [`Self::allocate`] so that
+    /// "first use" and "reuse after free" cannot be confused: only this one accepts a zeroed word.
+    pub fn allocate_fresh(&self, route: Route, host_token: u32) -> bool {
+        let cur = self.0.load(Ordering::Acquire);
+        if Token::decode(cur).state != State::Idle || cur != 0 {
+            return false;
+        }
+        let next = Token { state: State::Idle, route, host_token, applied_seq: 0 }.encode();
+        self.0.compare_exchange(cur, next, Ordering::AcqRel, Ordering::Acquire).is_ok()
+    }
+
+    /// ★ THE vCPU PATH. §5.2: *"stamp the ring position, THEN `fetch_or(RUNG)`"*.
+    ///
+    /// Returns `true` when this ring produced a **transition into RUNG** — i.e. the caller must
+    /// publish a bitmap bit and bump the wake word. ⊘ Returning `false` is the case §5.2 warns
+    /// about: *"a further ring from the guest returns early because `RUNG` is already set, so it
+    /// produces no bit and no wake"* — which is CORRECT here (a bit is already published) and is
+    /// only a bug if a put-back failed to republish.
+    ///
+    /// ⚠ Never blocks, never allocates, takes no lock: §48 and §41.
+    pub fn ring(&self, applied_seq: u64) -> bool {
+        let mut cur = self.0.load(Ordering::Acquire);
+        loop {
+            let t = Token::decode(cur);
+            // ⊘ A retired token absorbs the ring. The guest may ring a channel it just freed;
+            // that is not an error and must not resurrect the token.
+            if t.state == State::Dead {
+                return false;
+            }
+            let next_state = match t.state {
+                State::Idle => State::Rung,
+                State::Rung => State::Rung,
+                State::Busy => State::BusyRung,
+                State::BusyRung => State::BusyRung,
+                State::Dead => unreachable!(),
+            };
+            // ⚠ The stamp is written in the SAME word as the state, so "stamp then set RUNG"
+            // is one CAS and cannot be observed half-done. That is stronger than the two-step
+            // §5.2 describes and satisfies it by construction.
+            let next = Token { state: next_state, applied_seq, ..t }.encode();
+            match self.0.compare_exchange_weak(cur, next, Ordering::AcqRel, Ordering::Acquire) {
+                // Publish iff we moved IDLE → RUNG. Every other transition already has a bit
+                // outstanding or is owned by a worker who will re-check.
+                Ok(_) => return t.state == State::Idle,
+                Err(seen) => cur = seen,
+            }
+        }
+    }
+
+    /// Worker: `CAS RUNG → BUSY`. §5.2.
+    /// ⊘⊘⊘ **THIS MUST RETRY, AND THE FIRST VERSION DID NOT — measured w823.**
+    ///
+    /// Written as a single CAS that returned `NotOurs` on any failure, it **stranded tokens
+    /// permanently**, reproducing at ~1 in 20 full-suite runs:
+    ///
+    /// 1. `T` is `RUNG` with a bitmap bit. A worker's `scan()` **consumes the bit**.
+    /// 2. Before the worker's CAS lands, a vCPU rings `T` again. `T` is already `RUNG`, so
+    ///    [`TokenWord::ring`] changes **only the `applied_seq` stamp** and returns `false` —
+    ///    correctly, because a bit is already outstanding.
+    /// 3. But the *word* changed, so the worker's `compare_exchange` **fails**.
+    /// 4. The single-CAS version returned `NotOurs`; the worker dropped `T`.
+    ///
+    /// ⇒ `T` is left **`RUNG` with no bit and no summary** — the permanent loss §5.2 describes,
+    /// caused by a *legitimate concurrent ring* rather than by any contention for ownership.
+    ///
+    /// ★ The distinction the loop encodes: **a CAS failure is not evidence that someone else owns
+    /// the token.** Only `state != RUNG` is. Re-read and retry; give up solely on the state.
+    pub fn claim(&self) -> Claim {
+        let mut cur = self.0.load(Ordering::Acquire);
+        loop {
+            let t = Token::decode(cur);
+            if t.state != State::Rung {
+                // ⚠ §5.1: *"The bitmap is a hint; the word is the truth. A bit set over an IDLE
+                // word costs one look."* This is that look, and it is the whole cost.
+                return Claim::NotOurs;
+            }
+            let next = Token { state: State::Busy, ..t }.encode();
+            match self.0.compare_exchange_weak(cur, next, Ordering::AcqRel, Ordering::Acquire) {
+                // ⊘ `t` is the token AS CLAIMED, carrying the newest stamp we observed — which is
+                // what the worker must act up to.
+                Ok(_) => return Claim::Won(t),
+                Err(seen) => cur = seen,
+            }
+        }
+    }
+
+    /// Worker: finished a round of acting. `rounds_done` is how many times we have already acted
+    /// on this claim; `k` is the bound from §5.2.
+    ///
+    /// ⊘ **The bound is not tuning — it is the inner privilege boundary (§4).** *"A process
+    /// ringing its own channel in a tight loop keeps a worker in act → CAS fails → act forever;
+    /// with enough channels it pins every worker and the guest kernel's own scrub and UVM
+    /// channels starve."*
+    pub fn release(&self, rounds_done: u32, k: u32) -> Release {
+        let mut cur = self.0.load(Ordering::Acquire);
+        loop {
+            let t = Token::decode(cur);
+            let (next_state, out) = match t.state {
+                State::Busy => (State::Idle, Release::Idled),
+                State::BusyRung if rounds_done < k => (State::Busy, Release::ActAgain),
+                // Timeslice expired: hand it back as RUNG and make the caller republish.
+                State::BusyRung => (State::Rung, Release::RepublishAndMoveOn),
+                // ⊘ Freed under us. Leave it retired; the free path is waiting on exactly this.
+                State::Dead => return Release::Idled,
+                s => panic!("release() on a token in state {s:?} — not owned by this worker"),
+            };
+            let next = Token { state: next_state, ..t }.encode();
+            match self.0.compare_exchange_weak(cur, next, Ordering::AcqRel, Ordering::Acquire) {
+                Ok(_) => return out,
+                Err(seen) => cur = seen,
+            }
+        }
+    }
+
+    /// Worker: claimed it, but cannot act yet. §5.2: *"cannot act yet ⇒ `CAS BUSY → RUNG`, then
+    /// re-publish"*.
+    ///
+    /// ⚠ §5.2 also says *"found but unactionable counts as NO WORK for the purpose of sleeping;
+    /// otherwise a worker spins on a token whose enabling register write also needs a worker."*
+    /// The caller must not count this as progress.
+    pub fn put_back(&self) -> Release {
+        let mut cur = self.0.load(Ordering::Acquire);
+        loop {
+            let t = Token::decode(cur);
+            if t.state == State::Dead {
+                return Release::Idled;
+            }
+            let next = Token { state: State::Rung, ..t }.encode();
+            match self.0.compare_exchange_weak(cur, next, Ordering::AcqRel, Ordering::Acquire) {
+                Ok(_) => return Release::RepublishAndMoveOn,
+                Err(seen) => cur = seen,
+            }
+        }
+    }
+
+    /// Free path, first half. §5.2: `IDLE|RUNG → DEAD`, and **waits out `BUSY`**.
+    /// Returns `false` while a worker still owns it — the caller must retry, and must NOT drop
+    /// the twin until this returns `true`.
+    pub fn retire(&self) -> bool {
+        let cur = self.0.load(Ordering::Acquire);
+        let t = Token::decode(cur);
+        match t.state {
+            State::Busy | State::BusyRung => false,
+            State::Dead => true,
+            _ => {
+                let next = Token { state: State::Dead, route: Route::Unknown, host_token: 0, applied_seq: 0 }.encode();
+                self.0.compare_exchange(cur, next, Ordering::AcqRel, Ordering::Acquire).is_ok()
+            }
+        }
+    }
+}

@@ -394,6 +394,15 @@ pub struct KfMapRun {
     pub pdb_index: u16,
 }
 
+impl KfMapRun {
+    /// The leaf aperture code: `flags` bits `KFWR_RF_AP_SHIFT`/`KFWR_RF_AP_MASK`
+    /// (`cuda/walk/kf_walk.h:92-97` — 0 vidmem, 1 peer, 2 sys-coherent, 3 sys-noncoherent).
+    #[must_use]
+    pub fn aperture(&self) -> u8 {
+        (self.flags & 0x7) as u8
+    }
+}
+
 /// `{pdb, va_base, va_len}`; `va_len == 0` means "walk this whole PDB".
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 #[repr(C)]

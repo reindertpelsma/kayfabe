@@ -75,3 +75,43 @@ fn a_row_whose_va_and_backing_disagree_inside_a_page_is_inexpressible() {
     // Same in-page offset on both sides is expressible: it widens to the page.
     assert_eq!(server_row_pieces(0x10_0800, 0x100, 0x20_1800, &[]), vec![(0x10_0000, 0x1000, 0x20_1000)]);
 }
+
+mod leaves {
+    use kf_mem::ledger::{AP_PEER, AP_SYS_COHERENT, AP_VIDMEM, Desired, LeafRefusal, desired_from_leaves};
+
+    /// A layout with a hole: GPA [0, 3 GiB) is memfd [0, 3 GiB); GPA [4 GiB, 5 GiB) is memfd
+    /// [3 GiB, 4 GiB). A leaf across the hole is not contiguous RAM.
+    fn layout(gpa: u64, len: u64) -> Option<u64> {
+        const G: u64 = 1 << 30;
+        let end = gpa.checked_add(len)?;
+        if end <= 3 * G {
+            Some(gpa)
+        } else if gpa >= 4 * G && end <= 5 * G {
+            Some(gpa - G)
+        } else {
+            None
+        }
+    }
+
+    #[test]
+    fn leaves_are_classified_by_aperture_and_sysmem_goes_through_the_layout() {
+        let got = desired_from_leaves(
+            [(0x1000, 0x2000, 0x1000, AP_VIDMEM), (0x9000, (4 << 30) + 0x5000, 0x2000, AP_SYS_COHERENT)],
+            1 << 20,
+            &layout,
+        )
+        .unwrap();
+        assert_eq!(got, vec![
+            Desired { va: 0x1000, len: 0x1000, off: 0x2000, ram: false },
+            Desired { va: 0x9000, len: 0x2000, off: (3 << 30) + 0x5000, ram: true },
+        ]);
+    }
+
+    #[test]
+    fn out_of_store_across_the_hole_and_peer_are_refused_by_name() {
+        let r = |l| desired_from_leaves([l], 1 << 20, &layout);
+        assert!(matches!(r((0, 0xF_F000, 0x2000, AP_VIDMEM)), Err(LeafRefusal::OutsideStore { .. })));
+        assert!(matches!(r((0, (3 << 30) - 0x1000, 0x2000, AP_SYS_COHERENT)), Err(LeafRefusal::NotGuestRam { .. })));
+        assert_eq!(r((0x5000, 0, 0x1000, AP_PEER)), Err(LeafRefusal::Aperture { va: 0x5000, ap: AP_PEER }));
+    }
+}

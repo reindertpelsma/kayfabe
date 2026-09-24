@@ -9,6 +9,7 @@ license.workspace = true
 kf-abi.workspace = true
 kf-host.workspace = true
 kf-linux-raw.workspace = true
+kf-trap.workspace = true
 
 [lints]
 workspace = true

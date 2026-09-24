@@ -14,6 +14,7 @@ kf-chip.workspace = true
 kf-mem.workspace = true
 kf-cuda.workspace = true
 kf-chan.workspace = true
+kf-trap.workspace = true
 
 [lints]
 workspace = true

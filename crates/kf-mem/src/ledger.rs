@@ -22,6 +22,74 @@ pub struct Desired {
     pub ram: bool,
 }
 
+/// A walked leaf's aperture, as the walk kernel reports it (`KFWR_RF_AP_*`, `cuda/walk/kf_walk.h:92-97`).
+pub const AP_VIDMEM: u8 = 0;
+/// Peer memory — meaningless for a single-GPU guest; the walker refuses it too.
+pub const AP_PEER: u8 = 1;
+/// System memory, coherent.
+pub const AP_SYS_COHERENT: u8 = 2;
+/// System memory, non-coherent.
+pub const AP_SYS_NONCOHERENT: u8 = 3;
+
+/// Why a walked leaf could not become a [`Desired`] row. Refused by name, never clamped.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LeafRefusal {
+    /// A vidmem leaf outside the store (the walker bounds these too; this is the host's copy).
+    OutsideStore {
+        /// Guest VA.
+        va: u64,
+        /// GPGA offset.
+        gpga: u64,
+        /// Bytes.
+        len: u64,
+    },
+    /// A sysmem leaf naming guest-physical memory the VMM's layout does not back contiguously.
+    NotGuestRam {
+        /// Guest VA.
+        va: u64,
+        /// Guest-physical address.
+        gpa: u64,
+        /// Bytes.
+        len: u64,
+    },
+    /// Peer or an unknown aperture.
+    Aperture {
+        /// Guest VA.
+        va: u64,
+        /// The code.
+        ap: u8,
+    },
+}
+
+/// ★ **Classify walked leaves by APERTURE** into rows of the two ground truths. A vidmem leaf is a
+/// slice of the store (`off` = GPGA); a sysmem leaf is a slice of the guest-RAM object, at the
+/// memfd offset `ram_offset(gpa, len)` gives — the VMM's own guest-physical layout, which is NOT
+/// the identity once there is a PCI hole. ⊘ The walker deliberately leaves sysmem leaves unbounded
+/// (w825: it cannot know the layout); THIS is the bound.
+///
+/// # Errors
+/// The first leaf refused, by name.
+pub fn desired_from_leaves(
+    leaves: impl IntoIterator<Item = (u64, u64, u64, u8)>,
+    store_bytes: u64,
+    ram_offset: &dyn Fn(u64, u64) -> Option<u64>,
+) -> Result<Vec<Desired>, LeafRefusal> {
+    leaves
+        .into_iter()
+        .map(|(va, at, len, ap)| match ap {
+            AP_VIDMEM => at
+                .checked_add(len)
+                .filter(|&e| e <= store_bytes)
+                .map(|_| Desired { va, len, off: at, ram: false })
+                .ok_or(LeafRefusal::OutsideStore { va, gpga: at, len }),
+            AP_SYS_COHERENT | AP_SYS_NONCOHERENT => ram_offset(at, len)
+                .map(|off| Desired { va, len, off, ram: true })
+                .ok_or(LeafRefusal::NotGuestRam { va, gpa: at, len }),
+            _ => Err(LeafRefusal::Aperture { va, ap }),
+        })
+        .collect()
+}
+
 /// Sort and merge half-open `[a, b)` ranges; touching ranges merge; empty ones are dropped.
 #[must_use]
 pub fn merge_ranges(mut r: Vec<(u64, u64)>) -> Vec<(u64, u64)> {

@@ -1,0 +1,12 @@
+[package]
+name = "kf-trap"
+description = "v3 vCPU trap path and doorbell plane: token words, rung bitmap, wake word, privileged ring. Lock-free, allocation-free, no OS call."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+kf-chip.workspace = true
+
+[lints]
+workspace = true
