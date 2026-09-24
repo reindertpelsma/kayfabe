@@ -117,6 +117,22 @@ impl Trigger {
         self.issued.fetch_add(1, Ordering::AcqRel);
     }
 
+    /// ★ P4 (w826): vCPU, in the trap — arm under a sequence this trigger MINTS, and return it.
+    ///
+    /// ⊘ Why not [`Trigger::arm`] with the ring's sequence: the ring hands out its position only
+    /// once the write is PUSHED, and a pushed write can be drained, walked, reconciled and
+    /// `complete`d before the vCPU gets back to `arm` — which would find the trigger idle
+    /// ([`ClearOutcome::AlreadyIdle`]) and then arm it forever. Minting the sequence here lets
+    /// the trap arm FIRST and publish second, so the completion can never overtake the arm.
+    ///
+    /// `fetch_max`, not `store`: two vCPUs racing here must leave the trigger naming the LATER
+    /// write, or completing the earlier one would clear the later one early (§5.5's corruption).
+    pub fn arm_next(&self) -> u64 {
+        let seq = self.issued.fetch_add(1, Ordering::AcqRel);
+        self.armed_at.fetch_max(seq + 1, Ordering::AcqRel);
+        seq
+    }
+
     /// The guest's spin-read. Non-zero means "still working".
     #[inline]
     pub fn read(&self) -> u64 {

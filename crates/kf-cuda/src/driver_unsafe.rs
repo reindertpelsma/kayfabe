@@ -44,7 +44,27 @@ unsafe extern "C" {
     fn dlopen(filename: *const c_char, flag: c_int) -> *mut c_void;
     fn dlsym(handle: *mut c_void, symbol: *const c_char) -> *mut c_void;
     fn dlerror() -> *const c_char;
+    // ★ P4 (w826, `V3_P4_PORT_MAP.md` §2.1(d)) — the walk's completion fd. libc, which every
+    // glibc process already links; no new build dependency.
+    fn eventfd(initval: c_uint, flags: c_int) -> c_int;
+    fn read(fd: c_int, buf: *mut c_void, count: usize) -> isize;
+    fn write(fd: c_int, buf: *const c_void, count: usize) -> isize;
+    fn poll(fds: *mut PollFd, nfds: core::ffi::c_ulong, timeout: c_int) -> c_int;
 }
+
+/// `struct pollfd`.
+#[repr(C)]
+struct PollFd {
+    fd: c_int,
+    events: i16,
+    revents: i16,
+}
+/// `POLLIN`.
+const POLLIN: i16 = 0x1;
+/// `EFD_NONBLOCK | EFD_CLOEXEC` (`<sys/eventfd.h>`; the same values on x86-64 and aarch64).
+const EFD_NONBLOCK_CLOEXEC: c_int = 0o4000 | 0o2_000_000;
+/// `CUDA_ERROR_NOT_READY` — `cuEventQuery`'s "not yet", which is an answer and not a failure.
+pub const CUDA_ERROR_NOT_READY: CUresult = 600;
 
 const RTLD_NOW: c_int = 2;
 const RTLD_GLOBAL: c_int = 0x100;
@@ -115,7 +135,6 @@ pub struct Cuda {
     pub(crate) cuMemsetD8: unsafe extern "C" fn(CUdeviceptr, u8, usize) -> CUresult,
     pub(crate) cuMemcpyHtoD: unsafe extern "C" fn(CUdeviceptr, *const c_void, usize) -> CUresult,
     pub(crate) cuMemcpyDtoH: unsafe extern "C" fn(*mut c_void, CUdeviceptr, usize) -> CUresult,
-    pub(crate) cuMemcpyDtoD: unsafe extern "C" fn(CUdeviceptr, CUdeviceptr, usize) -> CUresult,
     pub(crate) cuLaunchKernel: unsafe extern "C" fn(
         *mut c_void,
         c_uint,
@@ -130,6 +149,33 @@ pub struct Cuda {
         *mut *mut c_void,
     ) -> CUresult,
     cuGetErrorName: Option<unsafe extern "C" fn(CUresult, *mut *const c_char) -> CUresult>,
+    // ★★★★★ **P4 — THE ASYNCHRONOUS WALK** (`V3_P4_PORT_MAP.md` §2.1(d), Q6). A walk is a
+    // stream of launches ending in a host function that writes an eventfd; the submitting
+    // thread never waits on the GPU. Required, not optional: every driver since CUDA 10 exports
+    // them, and a walker that cannot complete asynchronously is one v3 refuses (§5, §41).
+    pub(crate) cuStreamCreate: unsafe extern "C" fn(*mut *mut c_void, c_uint) -> CUresult,
+    pub(crate) cuStreamDestroy: unsafe extern "C" fn(*mut c_void) -> CUresult,
+    pub(crate) cuEventCreate: unsafe extern "C" fn(*mut *mut c_void, c_uint) -> CUresult,
+    pub(crate) cuEventDestroy: unsafe extern "C" fn(*mut c_void) -> CUresult,
+    pub(crate) cuEventRecord: unsafe extern "C" fn(*mut c_void, *mut c_void) -> CUresult,
+    pub(crate) cuEventQuery: unsafe extern "C" fn(*mut c_void) -> CUresult,
+    pub(crate) cuEventElapsedTime:
+        unsafe extern "C" fn(*mut f32, *mut c_void, *mut c_void) -> CUresult,
+    pub(crate) cuLaunchHostFunc:
+        unsafe extern "C" fn(*mut c_void, extern "C" fn(*mut c_void), *mut c_void) -> CUresult,
+    pub(crate) cuMemAllocHost: unsafe extern "C" fn(*mut *mut c_void, usize) -> CUresult,
+    pub(crate) cuMemcpyHtoDAsync:
+        unsafe extern "C" fn(CUdeviceptr, *const c_void, usize, *mut c_void) -> CUresult,
+    pub(crate) cuMemcpyDtoHAsync:
+        unsafe extern "C" fn(*mut c_void, CUdeviceptr, usize, *mut c_void) -> CUresult,
+    pub(crate) cuMemcpyDtoDAsync:
+        unsafe extern "C" fn(CUdeviceptr, CUdeviceptr, usize, *mut c_void) -> CUresult,
+    pub(crate) cuMemsetD8Async:
+        unsafe extern "C" fn(CUdeviceptr, u8, usize, *mut c_void) -> CUresult,
+    /// ★ How many times `cuCtxSynchronize` ran through this binding — the falsifier of
+    /// `V3_P4_PORT_MAP.md` §3 row 2 (*"fails if any `cuCtxSynchronize` runs on the worker
+    /// (count the calls)"*). A counter, not a promise: gate 8 reads it around its walks.
+    ctx_sync_calls: core::sync::atomic::AtomicU64,
     // ★★★★★ **w755i — THE VMM (virtual-memory-management) ENTRY POINTS, OPTIONAL BY DESIGN.**
     //
     // They exist to answer ONE question: can a device allocation CUDA owns be exported to an
@@ -296,8 +342,21 @@ impl Cuda {
             cuMemsetD8: sym!("cuMemsetD8_v2"),
             cuMemcpyHtoD: sym!("cuMemcpyHtoD_v2"),
             cuMemcpyDtoH: sym!("cuMemcpyDtoH_v2"),
-            cuMemcpyDtoD: sym!("cuMemcpyDtoD_v2"),
             cuLaunchKernel: sym!("cuLaunchKernel"),
+            cuStreamCreate: sym!("cuStreamCreate"),
+            cuStreamDestroy: sym!("cuStreamDestroy_v2"),
+            cuEventCreate: sym!("cuEventCreate"),
+            cuEventDestroy: sym!("cuEventDestroy_v2"),
+            cuEventRecord: sym!("cuEventRecord"),
+            cuEventQuery: sym!("cuEventQuery"),
+            cuEventElapsedTime: sym!("cuEventElapsedTime"),
+            cuLaunchHostFunc: sym!("cuLaunchHostFunc"),
+            cuMemAllocHost: sym!("cuMemAllocHost_v2"),
+            cuMemcpyHtoDAsync: sym!("cuMemcpyHtoDAsync_v2"),
+            cuMemcpyDtoHAsync: sym!("cuMemcpyDtoHAsync_v2"),
+            cuMemcpyDtoDAsync: sym!("cuMemcpyDtoDAsync_v2"),
+            cuMemsetD8Async: sym!("cuMemsetD8Async"),
+            ctx_sync_calls: core::sync::atomic::AtomicU64::new(0),
             // ⊘ Resolved with a NULL-tolerant lookup, unlike `sym!`, for the reason the field
             // docs give: absent is an ANSWER here, not a load failure.
             cuMemGetAllocationGranularity: opt!("cuMemGetAllocationGranularity"),
@@ -463,6 +522,8 @@ impl Cuda {
     /// [`CudaError::Refused`] — including a device-side fault raised by an earlier launch,
     /// which is where an illegal access surfaces.
     pub fn ctx_synchronize(&self) -> Result<(), CudaError> {
+        self.ctx_sync_calls
+            .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
         // SAFETY: no arguments.
         self.check("cuCtxSynchronize", unsafe { (self.cuCtxSynchronize)() })
     }
@@ -608,6 +669,7 @@ impl Cuda {
     /// [`CudaError::Refused`].
     pub fn launch_args(
         &self,
+        stream: StreamHandle,
         f: Func,
         grid: u32,
         block: u32,
@@ -632,7 +694,7 @@ impl Cuda {
                 1,
                 1,
                 shmem,
-                core::ptr::null_mut(),
+                stream.0 as *mut c_void,
                 p.as_mut_ptr(),
                 core::ptr::null_mut(),
             )
@@ -640,29 +702,225 @@ impl Cuda {
         self.check(what, r)
     }
 
-    /// `cuMemcpyDtoD_v2` — device to device, stream-ordered with the kernels around it.
+    /// `cuMemcpyDtoDAsync_v2` — device to device, ordered in `stream` with the kernels around
+    /// it. ⊘ Was the synchronous `cuMemcpyDtoD_v2` on the legacy stream until P4 moved the walk
+    /// onto its own stream; a legacy-stream copy between two stream launches is ordered only
+    /// by the blocking-stream rule, which is a property of how the stream was created and not
+    /// something this call site should lean on.
     ///
     /// # Errors
     /// [`CudaError::Refused`].
-    pub fn memcpy_d2d(
+    pub fn memcpy_d2d_async(
         &self,
+        stream: StreamHandle,
         dst: CUdeviceptr,
         src: CUdeviceptr,
         n: usize,
         what: &'static str,
     ) -> Result<(), CudaError> {
         // SAFETY: both are live device allocations of at least `n` bytes (callers size them
-        // from the same constants); the driver reads and writes device memory only.
-        self.check(what, unsafe { (self.cuMemcpyDtoD)(dst, src, n) })
+        // from the same constants); the driver reads and writes device memory only, and
+        // `stream` is a handle this binding produced.
+        self.check(what, unsafe {
+            (self.cuMemcpyDtoDAsync)(dst, src, n, stream.0 as *mut c_void)
+        })
     }
 
-    /// `cuMemsetD8_v2` over `n` bytes.
+    /// `cuMemsetD8Async` over `n` bytes, in `stream`.
     ///
     /// # Errors
     /// [`CudaError::Refused`].
-    pub fn memset_d8(&self, dst: CUdeviceptr, v: u8, n: usize, what: &'static str) -> Result<(), CudaError> {
-        // SAFETY: `dst` is a live device allocation of at least `n` bytes.
-        self.check(what, unsafe { (self.cuMemsetD8)(dst, v, n) })
+    pub fn memset_d8_async(
+        &self,
+        stream: StreamHandle,
+        dst: CUdeviceptr,
+        v: u8,
+        n: usize,
+        what: &'static str,
+    ) -> Result<(), CudaError> {
+        // SAFETY: `dst` is a live device allocation of at least `n` bytes; `stream` is ours.
+        self.check(what, unsafe {
+            (self.cuMemsetD8Async)(dst, v, n, stream.0 as *mut c_void)
+        })
+    }
+
+    /// How many `cuCtxSynchronize` calls this binding has made — see the field.
+    #[must_use]
+    pub fn ctx_sync_calls(&self) -> u64 {
+        self.ctx_sync_calls
+            .load(core::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// `cuStreamCreate(flags = 0)` — ★ a **blocking** stream, deliberately.
+    ///
+    /// ⊘ Not `CU_STREAM_NON_BLOCKING`: a blocking stream is ordered against the legacy default
+    /// stream, so a synchronous `cuMemcpyHtoD` a harness issues before a walk (writing the
+    /// guest's tables, `WalkKernel::write_at`) is complete before the walk reads them, and a
+    /// synchronous read-back after a collected walk sees what the walk saw. A non-blocking
+    /// stream would make that ordering every caller's problem, silently.
+    ///
+    /// # Errors
+    /// [`CudaError::Refused`].
+    pub fn stream_create(&self) -> Result<StreamHandle, CudaError> {
+        let mut h: *mut c_void = core::ptr::null_mut();
+        // SAFETY: one live out-pointer; the driver writes an opaque handle.
+        self.check("cuStreamCreate", unsafe { (self.cuStreamCreate)(&raw mut h, 0) })?;
+        Ok(StreamHandle(h as usize))
+    }
+
+    /// `cuStreamDestroy_v2`. ⊘ Infallible: it runs in a `Drop`.
+    pub fn stream_destroy(&self, s: StreamHandle) {
+        if s.0 != 0 {
+            // SAFETY: `s` came from `stream_create` and is destroyed once by its owner.
+            unsafe { (self.cuStreamDestroy)(s.0 as *mut c_void) };
+        }
+    }
+
+    /// `cuEventCreate(flags = 0)` — timing enabled, so a walk's GPU time is measurable.
+    ///
+    /// # Errors
+    /// [`CudaError::Refused`].
+    pub fn event_create(&self) -> Result<EventHandle, CudaError> {
+        let mut h: *mut c_void = core::ptr::null_mut();
+        // SAFETY: one live out-pointer.
+        self.check("cuEventCreate", unsafe { (self.cuEventCreate)(&raw mut h, 0) })?;
+        Ok(EventHandle(h as usize))
+    }
+
+    /// `cuEventDestroy_v2`. ⊘ Infallible: it runs in a `Drop`.
+    pub fn event_destroy(&self, e: EventHandle) {
+        if e.0 != 0 {
+            // SAFETY: `e` came from `event_create` and is destroyed once by its owner.
+            unsafe { (self.cuEventDestroy)(e.0 as *mut c_void) };
+        }
+    }
+
+    /// `cuEventRecord(e, stream)`.
+    ///
+    /// # Errors
+    /// [`CudaError::Refused`].
+    pub fn event_record(&self, e: EventHandle, s: StreamHandle) -> Result<(), CudaError> {
+        // SAFETY: both handles came from this binding.
+        self.check("cuEventRecord", unsafe {
+            (self.cuEventRecord)(e.0 as *mut c_void, s.0 as *mut c_void)
+        })
+    }
+
+    /// `cuEventQuery` — **never blocks.** `Ok(true)`: the work before the record is done;
+    /// `Ok(false)`: not yet ([`CUDA_ERROR_NOT_READY`]); `Err`: the stream failed (a device
+    /// fault in an earlier launch surfaces here, by name).
+    ///
+    /// # Errors
+    /// [`CudaError::Refused`].
+    pub fn event_query(&self, e: EventHandle) -> Result<bool, CudaError> {
+        // SAFETY: `e` came from this binding.
+        let r = unsafe { (self.cuEventQuery)(e.0 as *mut c_void) };
+        if r == CUDA_ERROR_NOT_READY {
+            return Ok(false);
+        }
+        self.check("cuEventQuery", r).map(|()| true)
+    }
+
+    /// `cuEventElapsedTime(start, end)`, in microseconds. Both must have completed.
+    ///
+    /// # Errors
+    /// [`CudaError::Refused`].
+    pub fn event_elapsed_us(&self, start: EventHandle, end: EventHandle) -> Result<u64, CudaError> {
+        let mut ms: f32 = 0.0;
+        // SAFETY: one live out-pointer; both handles came from this binding.
+        self.check("cuEventElapsedTime", unsafe {
+            (self.cuEventElapsedTime)(&raw mut ms, start.0 as *mut c_void, end.0 as *mut c_void)
+        })?;
+        Ok((f64::from(ms) * 1000.0) as u64)
+    }
+
+    /// ★★★ `cuLaunchHostFunc(stream, signal, fd)` — once every earlier operation in `stream`
+    /// has completed, a driver thread writes `1` to `fd`. **This is how a walk completes: a
+    /// host event on an fd, never an inline wait** (owner rule; `THE_TRANSLATED_PLANE.md` §5,
+    /// *"the walk is one more epoll entry"*).
+    ///
+    /// ⊘ The callback makes no CUDA call (the driver forbids it) — it is one `write(2)`.
+    ///
+    /// # Errors
+    /// [`CudaError::Refused`].
+    pub fn launch_host_signal(&self, s: StreamHandle, fd: &CompletionFd) -> Result<(), CudaError> {
+        // SAFETY: `s` came from this binding; the user datum is the fd NUMBER cast to a
+        // pointer, never dereferenced by `completion_hostfn`. The fd outlives every queued
+        // callback because `WalkKernel::drop` destroys the context (which drains the stream)
+        // before its `CompletionFd` field drops.
+        self.check("cuLaunchHostFunc", unsafe {
+            (self.cuLaunchHostFunc)(
+                s.0 as *mut c_void,
+                completion_hostfn,
+                usize::try_from(fd.raw()).unwrap_or(usize::MAX) as *mut c_void,
+            )
+        })
+    }
+
+    /// `cuMemAllocHost_v2` — page-locked host memory an async copy can target.
+    ///
+    /// # Errors
+    /// [`CudaError::Refused`].
+    pub(crate) fn pinned_alloc(&self, len: usize, what: &'static str) -> Result<PinnedBuf, CudaError> {
+        let mut p: *mut c_void = core::ptr::null_mut();
+        // SAFETY: one live out-pointer; `len` is owned by the driver entirely.
+        self.check(what, unsafe { (self.cuMemAllocHost)(&raw mut p, len) })?;
+        Ok(PinnedBuf { ptr: p as usize, len })
+    }
+
+    /// `cuMemcpyHtoDAsync_v2` from `buf[off..off+n]`, in `stream`.
+    ///
+    /// # Errors
+    /// [`CudaError::Refused`].
+    ///
+    /// # Panics
+    /// If the range leaves `buf`.
+    pub(crate) fn memcpy_h2d_async(
+        &self,
+        s: StreamHandle,
+        dst: CUdeviceptr,
+        buf: &PinnedBuf,
+        off: usize,
+        n: usize,
+        what: &'static str,
+    ) -> Result<(), CudaError> {
+        assert!(
+            off.checked_add(n).is_some_and(|e| e <= buf.len),
+            "{what}: range leaves the pinned buffer"
+        );
+        // SAFETY: `[off, off+n)` lies inside the pinned allocation (asserted above); the
+        // caller (`WalkKernel`) does not rewrite that range until the stream has passed this
+        // copy — at most one walk is in flight, which `WalkKernel::submit` enforces.
+        self.check(what, unsafe {
+            (self.cuMemcpyHtoDAsync)(dst, (buf.ptr + off) as *const c_void, n, s.0 as *mut c_void)
+        })
+    }
+
+    /// `cuMemcpyDtoHAsync_v2` into `buf[off..off+n]`, in `stream`.
+    ///
+    /// # Errors
+    /// [`CudaError::Refused`].
+    ///
+    /// # Panics
+    /// If the range leaves `buf`.
+    pub(crate) fn memcpy_d2h_async(
+        &self,
+        s: StreamHandle,
+        buf: &PinnedBuf,
+        off: usize,
+        src: CUdeviceptr,
+        n: usize,
+        what: &'static str,
+    ) -> Result<(), CudaError> {
+        assert!(
+            off.checked_add(n).is_some_and(|e| e <= buf.len),
+            "{what}: range leaves the pinned buffer"
+        );
+        // SAFETY: as `memcpy_h2d_async`; `WalkKernel` reads the range only after the walk's
+        // completion was observed (the host function ran, so this copy had finished).
+        self.check(what, unsafe {
+            (self.cuMemcpyDtoHAsync)((buf.ptr + off) as *mut c_void, src, n, s.0 as *mut c_void)
+        })
     }
 
     /// As [`Cuda::launch_raw`], checked.
@@ -696,6 +954,168 @@ impl CtxHandle {
     #[must_use]
     pub fn null() -> Self {
         CtxHandle(0)
+    }
+}
+
+/// An opaque CUDA stream handle.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StreamHandle(usize);
+
+impl StreamHandle {
+    /// The legacy default stream (`0`).
+    #[must_use]
+    pub fn legacy() -> Self {
+        StreamHandle(0)
+    }
+}
+
+/// An opaque CUDA event handle.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EventHandle(usize);
+
+/// ★ Page-locked host memory the walk's async copies land in. `pub(crate)` on purpose: its
+/// bytes are written by DMA **after** the call that queued the copy returns, so reading them
+/// means something only once the walk's completion was observed — a state machine
+/// `WalkKernel` owns and nothing outside this crate can be trusted to follow. Reclaimed by
+/// `cuCtxDestroy`, like every other allocation of the walker's context.
+#[derive(Debug)]
+pub(crate) struct PinnedBuf {
+    ptr: usize,
+    len: usize,
+}
+
+impl PinnedBuf {
+    /// Copy `n` bytes at `off` out. ⊘ Only after the copy that filled them completed.
+    ///
+    /// # Panics
+    /// If the range leaves the buffer.
+    pub(crate) fn read(&self, off: usize, n: usize) -> Vec<u8> {
+        assert!(
+            off.checked_add(n).is_some_and(|e| e <= self.len),
+            "pinned read leaves the buffer"
+        );
+        let mut out = vec![0u8; n];
+        // SAFETY: the range is inside the live pinned allocation (asserted); `out` is a fresh
+        // local of exactly `n` bytes, so the regions cannot overlap. The DMA that wrote the
+        // range completed before the caller's completion observation (see the type doc).
+        unsafe { core::ptr::copy_nonoverlapping((self.ptr + off) as *const u8, out.as_mut_ptr(), n) };
+        out
+    }
+
+    /// Copy `bytes` in at `off`. ⊘ Only while no queued copy reads the range.
+    ///
+    /// # Panics
+    /// If the range leaves the buffer.
+    pub(crate) fn write(&mut self, off: usize, bytes: &[u8]) {
+        assert!(
+            off.checked_add(bytes.len()).is_some_and(|e| e <= self.len),
+            "pinned write leaves the buffer"
+        );
+        // SAFETY: the range is inside the live pinned allocation (asserted) and `bytes` is a
+        // distinct Rust slice; no queued copy reads it (`WalkKernel` writes only between walks).
+        unsafe {
+            core::ptr::copy_nonoverlapping(bytes.as_ptr(), (self.ptr + off) as *mut u8, bytes.len());
+        }
+    }
+}
+
+/// ★★★ **THE WALK'S COMPLETION FD** — an `eventfd(EFD_NONBLOCK|EFD_CLOEXEC)` a CUDA host
+/// function writes when a walk's last copy has landed. Put [`CompletionFd::raw`] in the
+/// worker's `epoll` set; readiness is the wake and [`CompletionFd::drain`] consumes it.
+#[derive(Debug)]
+pub struct CompletionFd {
+    fd: std::os::fd::OwnedFd,
+}
+
+impl CompletionFd {
+    /// A fresh non-blocking eventfd.
+    ///
+    /// # Errors
+    /// [`CudaError::Refused`] naming `eventfd`.
+    pub fn new() -> Result<CompletionFd, CudaError> {
+        // SAFETY: `eventfd` takes two integers and returns an fd or -1.
+        let fd = unsafe { eventfd(0, EFD_NONBLOCK_CLOEXEC) };
+        if fd < 0 {
+            return Err(CudaError::Refused {
+                what: "eventfd (the walk's completion fd)",
+                code: fd,
+                name: "eventfd(2) refused".to_string(),
+            });
+        }
+        // SAFETY: `fd` was just returned by `eventfd`, is open, and is owned by nothing else.
+        let fd = unsafe { <std::os::fd::OwnedFd as std::os::fd::FromRawFd>::from_raw_fd(fd) };
+        Ok(CompletionFd { fd })
+    }
+
+    /// The fd number. Borrowed: this value owns it.
+    #[must_use]
+    pub fn raw(&self) -> i32 {
+        std::os::fd::AsRawFd::as_raw_fd(&self.fd)
+    }
+
+    /// Signal it once, as the walk's host function does. For a caller that multiplexes other
+    /// work onto the same kind of fd (a harness's request queue); a walk never needs it.
+    pub fn signal(&self) {
+        completion_hostfn(usize::try_from(self.raw()).unwrap_or(usize::MAX) as *mut c_void);
+    }
+
+    /// Consume every pending signal; `0` when none was pending. **Never blocks.**
+    #[must_use]
+    pub fn drain(&self) -> u64 {
+        let mut v: u64 = 0;
+        // SAFETY: `v` is a live 8-byte buffer; the fd is non-blocking, so an empty counter
+        // returns -1/EAGAIN at once rather than waiting.
+        let n = unsafe { read(self.raw(), (&raw mut v).cast::<c_void>(), 8) };
+        if n == 8 { v } else { 0 }
+    }
+
+    /// `poll(2)` for readability, up to `timeout_ms`; whether it became readable.
+    /// ⚠ This **blocks the calling thread**. It exists for harnesses and the selftest — never
+    /// for a worker, whose only wait is its `epoll` (§35).
+    #[must_use]
+    pub fn wait_readable(&self, timeout_ms: i32) -> bool {
+        let mut p = PollFd { fd: self.raw(), events: POLLIN, revents: 0 };
+        // SAFETY: one live `pollfd`, count 1.
+        let r = unsafe { poll(&raw mut p, 1, timeout_ms) };
+        r > 0 && (p.revents & POLLIN) != 0
+    }
+}
+
+impl std::os::fd::AsFd for CompletionFd {
+    fn as_fd(&self) -> std::os::fd::BorrowedFd<'_> {
+        self.fd.as_fd()
+    }
+}
+
+/// ★ The host function every walk's stream ends with: `write(fd, 1)`, `user` being the fd
+/// NUMBER. ⊘ A plain `extern "C" fn`: it dereferences nothing it is handed. It runs on a CUDA
+/// driver thread and makes no CUDA call (the driver forbids that).
+pub(crate) extern "C" fn completion_hostfn(user: *mut c_void) {
+    let fd = c_int::try_from(user as usize).unwrap_or(-1);
+    let one: u64 = 1;
+    // SAFETY: `one` is a live 8-byte value; `write` on a bad fd returns -1 and touches nothing.
+    let _ = unsafe { write(fd, (&raw const one).cast::<c_void>(), 8) };
+}
+
+#[cfg(test)]
+mod completion_fd_tests {
+    use super::*;
+
+    /// ★ The completion path WITHOUT a GPU: the exact function the driver will call, called
+    /// here, must make the fd readable and drain to exactly one signal.
+    #[test]
+    fn the_host_function_signals_the_fd_and_drain_consumes_it() {
+        let fd = CompletionFd::new().expect("eventfd");
+        assert_eq!(fd.drain(), 0, "a fresh fd has nothing pending");
+        assert!(!fd.wait_readable(0), "and is not readable");
+        completion_hostfn(usize::try_from(fd.raw()).unwrap() as *mut c_void);
+        assert!(fd.wait_readable(0), "the host function must make the fd readable");
+        assert_eq!(fd.drain(), 1, "exactly one signal per walk");
+        assert_eq!(
+            fd.drain(),
+            0,
+            "drain consumed it — a stale count would complete the NEXT walk early"
+        );
     }
 }
 

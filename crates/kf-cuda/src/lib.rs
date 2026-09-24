@@ -32,5 +32,5 @@ pub mod selftest;
 pub mod synth;
 pub mod walk;
 
-pub use driver_unsafe::{Cuda, CudaError};
-pub use walk::{Report, ReportError, WALK_PTX, WalkCfg, WalkKernel};
+pub use driver_unsafe::{CompletionFd, Cuda, CudaError};
+pub use walk::{Collected, Report, ReportError, WALK_PTX, WalkCfg, WalkKernel};

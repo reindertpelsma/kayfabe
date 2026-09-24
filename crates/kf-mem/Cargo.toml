@@ -1,12 +1,14 @@
 [package]
 name = "kf-mem"
-description = "v3 memory plane: the one store, the ledger of OUR OWN host mappings, the walk-vs-ledger planner, batched apply with one TLB invalidate."
+description = "v3 memory plane: the one store, the ledger of OUR OWN host mappings, the walk-vs-ledger planner, batched apply with one TLB invalidate, and the VA manager step (invalidate -> walk -> reconcile -> clear)."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
 kf-host.workspace = true
+kf-trap.workspace = true
+kf-cuda.workspace = true
 
 [lints]
 workspace = true
