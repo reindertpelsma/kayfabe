@@ -101,6 +101,22 @@ use std::path::{Path, PathBuf};
 /// across a policy chain on the MMIO trap. That is a weaker list than it used to be, which is
 /// the point: **the strongest entry left this table by being fixed, not by being reworded.**
 const UNRANKED_VCPU_PATH_LOCKS: &[(&str, &str, &str)] = &[
+    // ═══ w826 — three added by the w825/w826 work, ruled at the time they were added ═══
+    (
+        "crates/kayfabe-qemu-raw/src/shim.rs",
+        "Mutex<std::collections::BTreeMap<(u32, u32), (u32, u32, u64)>>",
+        "⊘ NOTHING MAY BLOCK BENEATH IT. `CeShellState::owners` — which channel owns a `(proc, chan)` cursor key (w825). Taken only by `claim_channel_key` on the CE-local serving path, which runs on the publication WORKER; held for one BTreeMap insert and dropped before the two follow-up removals take their own locks. No IPC, no print, no allocation beyond the insert.",
+    ),
+    (
+        "crates/kayfabe-qemu-raw/src/storemap.rs",
+        "Mutex<RamObject>",
+        "★ IPC BENEATH IT, OFF-VCPU ONLY. `StoreMapPort::ram_obj` — the one guest-RAM OS_DESCRIPTOR (w825). Held across the scratchpad round trip that builds the object ONCE, so two callers cannot build two; every path into it calls `off_vcpu()` first and refuses on a vCPU or in a trap, so no guest MMIO exit can wait here.",
+    ),
+    (
+        "crates/kayfabe-qemu-raw/src/storemap.rs",
+        "Mutex<std::collections::BTreeMap<HostHandle, HostHandle>>",
+        "⊘ NOTHING MAY BLOCK BENEATH IT. `StoreMapPort::adopted` — per-proc space -> scratchpad range, keyed by the WHOLE handle since w825 (the raw-number key was a real cross-client leak). Every access is a get/insert/remove with the guard dropped before the IPC it guards the result of; reached only from worker paths behind `off_vcpu()`.",
+    ),
 
     // ═══ w816 — TWENTY-ONE MORE, FOUND AFTER THE ALLOWLIST WENT STALE AT w737 ═══
     //
@@ -192,11 +208,6 @@ const UNRANKED_VCPU_PATH_LOCKS: &[(&str, &str, &str)] = &[
         "crates/kayfabe-qemu-raw/src/storemap.rs",
         "Mutex<std::collections::BTreeMap<(u64, u64), Placed>>",
         "`StoreMapPort::placed` — (scratchpad range, guest VA) -> what was placed there; the ledger the restated ring assertion reads. Taken on the **vCPU** via `is_slice_of_the_store` (`:731` <- `kayfabe-fwd/src/lib.rs:5123`, which is NOT gated) and on the **worker** via `map`/`unmap`. ⊘ NOTHING BLOCKS BENEATH IT at any of seven sites: each is one `get`/`insert`/`remove`/`len`. The two that could have been long explicitly `drop()` the guard first (`:615`, `:974`), and every `with_worker` IPC is outside. ★ THE EDIT THAT WOULD MAKE THIS ROW WRONG: removing either explicit `drop`.",
-    ),
-    (
-        "crates/kayfabe-qemu-raw/src/storemap.rs",
-        "Mutex<std::collections::BTreeMap<u64, HostHandle>>",
-        "`StoreMapPort::adopted` — per-proc space handle -> the scratchpad's own range over the dup. ⚠ The fast-path `get` at `:414` runs BEFORE the `off_vcpu()` gate at `:427`, so a vCPU does touch this lock on a hit. ⊘ Nothing blocks beneath it: single map `get`/`insert`/`remove` on Copy values, all statement temporaries; the IPC at `:428` and `:1007` is outside them.",
     ),
     (
         "crates/kayfabe-qemu-raw/src/storemap.rs",
@@ -370,58 +381,6 @@ const UNRANKED_VCPU_PATH_LOCKS: &[(&str, &str, &str)] = &[
          would put an unranked lock under a ranked one with the witness blind to the pair.",
     ),
     (
-        "crates/kayfabe-qemu-raw/src/shim.rs",
-        "Mutex<std::collections::HashMap<u64, (usize, usize)>>",
-        "★★★★★ FOUND BY THIS GATE, 2026-09-06, AND IT IS NOT A CLEAN BILL OF HEALTH — read \
-         the second paragraph before trusting this row. `namer_census_cache()` — the \
-         per-frame memo for `fb_join_namers`, so the first refusal on a frame pays for the \
-         scan and every later one reads the cache. Reached on the vCPU in the FB-join \
-         refusal path (`shim.rs:11065`). \
-         ⊘ **A BLOCKING CALL MAY NOT RUN BENEATH IT AND NONE DOES — BUT TWO OTHER LOCKS \
-         ARE TAKEN BENEATH IT, AND THAT ORDERING WAS WRITTEN DOWN NOWHERE.** The cache miss \
-         computes `device.fb_join_namers(leaf.phys)` **with this guard held**, which the \
-         site says is deliberate (two vCPUs racing one fresh frame would otherwise both pay \
-         the scan). What the site does NOT say is what that call does: \
-         `fb_join_namers` (`kayfabe-rt/src/device.rs:3902`) calls `live_pids()`, which takes \
-         `self.state.read()` (`:1381`), and then `with_proc` per pid (`:1345`), which routes \
-         through `route_act` into the per-proc locks. \
-         ⇒ The live order on this path is **unranked process-global cache → device state \
-         read → per-proc**. It is consistent today because nothing takes a proc lock and \
-         then wants this cache. \
-         ★★★ **THE EDIT THAT WOULD MAKE THIS ROW WRONG:** any path that holds a proc lock \
-         and then reaches the namer census — that closes the cycle, and because the outer \
-         lock is UNRANKED, `lockwitness::assert_lock_free` cannot see either half of it. \
-         ⚠ The memo is also why the exposure is bounded rather than absent: the scan runs \
-         **once per frame**, so the window is one cold miss, not every refusal. \
-         ⊘ Deliberately unranked, but note this is the one row in this list where that is a \
-         COST rather than a free choice: ranking it would let the witness see the order \
-         above.",
-    ),
-    (
-        "crates/kayfabe-qemu-raw/src/shim.rs",
-        "Mutex<std::collections::HashMap<(u64, u64), usize>>",
-        "★★★★ FOUND BY THIS GATE, 2026-09-06, and classified rather than listed. \
-         `supersede_ledger()` — the per-(frame, VA) takeover counter that bounds the \
-         supersede ping-pong. Process-global on purpose: it is a COUNTER, not a source of \
-         truth; nothing reads it to decide what a frame IS, only to stop an unbounded loop. \
-         It is reached on the vCPU inside the framebuffer-join settlement. \
-         ⊘ **NOTHING MAY BLOCK BENEATH IT AND NOTHING DOES, and the scoping is STRUCTURAL \
-         rather than incidental.** Both uses hold the guard for exactly one map operation: \
-         the read is inside an explicit `let over = { … }` block whose value is a `bool` \
-         (`shim.rs:10763-10766`), and the write is a statement temporary dropped at its own \
-         semicolon (`:10788-10792`). Every `eprintln!` and every device or host call sits \
-         OUTSIDE both. \
-         ★★★ **THE EDIT THAT WOULD MAKE THIS ROW WRONG, named so it is greppable:** widening \
-         the `let over` block to enclose the `else if` branch beside it. That branch calls \
-         `supersede_joined_fb_leaf`, `release_fb_join`, `revoke_published_fb_leaf` and \
-         `drain_pending_releases` — the host plane, the store and the disposal queue — so a \
-         guard held across it would put a vCPU behind host work while every existing \
-         assertion stayed green. `lockwitness::assert_lock_free` CANNOT see it: it masks \
-         only ranked locks. \
-         ⊘ Deliberately unranked: a leaf no other trap path takes, holding no reference to \
-         anything that could take a second lock.",
-    ),
-    (
         "crates/kayfabe-device/src/mmuinval.rs",
         "Mutex<Inner>",
         "★★★★★ FOUND BY THIS GATE, 2026-08-14 (w326), beside `reclaimtick`'s — the gate caught \
@@ -564,20 +523,6 @@ const UNRANKED_VCPU_PATH_LOCKS: &[(&str, &str, &str)] = &[
          BTreeMap rather than an atomic because the budget is per `(proc, chan)` — a single \
          global counter is the shape `w383` measured forging an absence, where one proc ate \
          all 128 dumps and another's rows read as `the machinery never ran`.",
-    ),
-    (
-        "crates/kayfabe-qemu-raw/src/shim.rs",
-        "Mutex< std::collections::HashMap< (kayfabe_core::ProcId, kayfabe_rt::GpuId, kayfabe_rt::Pdb), PublishStamp, >, >",
-        "★★★ FOUND BY THIS GATE, w318, 2026-08-14, AND IT WAS A REAL INVERSION — not a \
-         classification. `DirtyGate::published`, the per-VAS stamp the publication gate skips \
-         on, taken on the vCPU inside the doorbell trap. Written the obvious way — the stamp \
-         built as an ARGUMENT to `insert` — the receiver locks FIRST and the arguments are \
-         evaluated underneath it, so `plane.joined_fb_ranges()` (rank `Plane`) and a `format!` \
-         ran BENEATH this unranked mutex. ⊘ `assert_lock_free` masks only RANKED locks, so \
-         that inversion would have passed every assertion in the tree. Fixed by building the \
-         whole `PublishStamp` before the lock is taken (shim.rs, `publish_vas_rows`); the read \
-         side already `.cloned()`s out of a statement-temporary guard. **Nothing blocks \
-         beneath it and nothing ranked is acquired beneath it now.**",
     ),
     (
         "crates/kayfabe-qemu-raw/src/shim.rs",
