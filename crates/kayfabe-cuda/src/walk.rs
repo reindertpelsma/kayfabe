@@ -114,8 +114,17 @@ impl Default for WalkCfg {
         // 1 MiB; a `KfMapRun` is 32 bytes. 16 384 runs is 512 KiB — half the frame, with room
         // for the header and the `PdbEntry` array. Raising this further requires chunking the
         // reply, not a bigger number.
+        // ★★★★★ w826 — `runs_per_pdb` RAISED 2048 → 16 384, to the report's own ceiling.
+        // `[measured w826 q9]` `--ce-client-guest-ram` maps 13 000 separate 4 KiB guest-RAM
+        // pages in ONE space; past 2 048 runs every walk truncated (`KFWR_R_RUN_CAP`), a
+        // truncated walk is never reconciled, and new mappings STOPPED being published — the
+        // arm read as slow and was stalled. With C4's deltas a report carries a space's full
+        // state only on a RESYNC, so the table, not the wire, was the binding limit. Cost:
+        // 64 spaces × 16 384 × 32 B × 2 snapshots = 64 MiB of device memory.
+        // ⚠ A space with more than 16 384 non-coalescing runs still truncates: that needs a
+        // chunked reply (the wire), not a bigger number here.
         WalkCfg {
-            runs_per_pdb: 2048,
+            runs_per_pdb: 16384,
             run_capacity: 16384,
             pdb_capacity: 64,
             entry_budget: 1 << 22,
