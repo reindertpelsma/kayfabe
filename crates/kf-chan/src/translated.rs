@@ -39,6 +39,13 @@ const PITCH_OUT: u32 = 0x414;
 /// `NVC7B5_SET_REMAP_COMPONENTS_NUM_SRC_COMPONENTS` 21:20, size-minus-one (`clc7b5.h:219-223`).
 const REMAP_NUM_SRC_SHIFT: u32 = 20;
 
+/// `GP100_UVM_SW` — the software class UVM binds on a subchannel of its kernel channels
+/// (`ogkm-580: clc076.h:33`, `uvm_pascal_host.c:317`). No engine executes it: on bare metal its
+/// methods trap to RM. ⇒ It never reaches our host channel.
+pub const GP100_UVM_SW: u32 = 0xc076;
+/// `NVC076_NO_OPERATION` (`clc076.h:36`).
+const SW_NO_OPERATION: u32 = 0x100;
+
 /// `NVC7B5_SET_*_PHYS_MODE_TARGET` — `clc7b5.h:67-71`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Target {
@@ -77,6 +84,8 @@ pub trait Window {
 pub struct CeState {
     /// Subchannels bound to a CE class, as a bit mask.
     pub ce_subch: u8,
+    /// Subchannels bound to `GP100_UVM_SW`, as a bit mask — consumed here, never forwarded.
+    pub sw_subch: u8,
     /// `OFFSET_IN` as the guest wrote it.
     pub off_in: u64,
     /// `OFFSET_OUT` as the guest wrote it.
@@ -129,6 +138,20 @@ pub enum Refusal {
     BlockLinearPhysical,
     /// A launch whose byte extent overflows 64 bits.
     ExtentOverflow,
+    /// `SET_OBJECT` of a class that is neither a copy engine nor `GP100_UVM_SW`: our host channel
+    /// has no such object, and forwarding it would fault OUR channel.
+    ForeignClass {
+        /// The subchannel.
+        subch: u32,
+        /// The class named.
+        class: u32,
+    },
+    /// A `GP100_UVM_SW` method with work behind it (`FAULT_CANCEL_*`, `CLEAR_FAULTED_*`): the fault
+    /// plane that would serve it does not exist yet — refused rather than silently dropped.
+    SwMethod {
+        /// The method.
+        method: u32,
+    },
 }
 
 /// A CE class id? Supplied by the caller from the chip's class table.
@@ -222,16 +245,25 @@ fn one_write(
     v: u32,
 ) -> Result<(), Refusal> {
     // ── host methods (any subchannel, below 0x100) ─────────────────────────────────────────
+    let bit = 1u8 << (sub & 7);
     if m == 0 {
-        // SET_OBJECT: track which subchannels hold a CE.
-        let bit = 1u8 << (sub & 7);
-        if is_ce(v & 0xFFFF) {
+        // SET_OBJECT: which subchannels hold a CE, which hold the SW class; nothing else is ours.
+        let class = v & 0xFFFF;
+        st.ce_subch &= !bit;
+        st.sw_subch &= !bit;
+        if is_ce(class) {
             st.ce_subch |= bit;
+            emit(cur, sub, m, v);
+        } else if class == GP100_UVM_SW {
+            st.sw_subch |= bit; // consumed: no host object stands behind it
         } else {
-            st.ce_subch &= !bit;
+            return Err(Refusal::ForeignClass { subch: sub, class });
         }
-        emit(cur, sub, m, v);
         return Ok(());
+    }
+    if st.sw_subch & bit != 0 && m >= 0x100 {
+        // A SW subchannel's own methods (host methods below 0x100 still apply to the channel).
+        return if m == SW_NO_OPERATION { Ok(()) } else { Err(Refusal::SwMethod { method: m }) };
     }
     if m == MEM_OP_A || m == MEM_OP_B {
         return Ok(()); // dropped: privileged, and consumed by the split point below

@@ -178,3 +178,25 @@ fn a_block_linear_physical_operand_is_refused() {
     pb.extend(m(SUB, ce::LAUNCH_DMA, &[0x2 | ce::LAUNCH_DST_PHYSICAL]));
     assert_eq!(vetted(&pb), Err(Refusal::BlockLinearPhysical));
 }
+
+/// UVM binds `GP100_UVM_SW` on a subchannel of its kernel channels: its SET_OBJECT and NOPs are
+/// consumed (no host object stands behind it), its fault methods refused by name, and any other
+/// foreign class refused — never forwarded to a host channel that would fault on it.
+#[test]
+fn the_uvm_sw_class_is_consumed_and_foreign_classes_are_refused() {
+    let mut pb = setup();
+    pb.extend(m(5, 0, &[kf_chan::translated::GP100_UVM_SW]));
+    pb.extend(m(5, 0x100, &[0])); // NO_OPERATION
+    pb.extend(m(SUB, ce::LAUNCH_DMA, &[0]));
+    let mut st = CeState::default();
+    let out = rewrite(&pb, is_ce, &mut st, &W).unwrap();
+    assert!(writes(&out).iter().all(|&(mm, v)| !(mm == 0 && v == kf_chan::translated::GP100_UVM_SW) && mm != 0x100));
+    let mut pb = setup();
+    pb.extend(m(5, 0, &[kf_chan::translated::GP100_UVM_SW]));
+    pb.extend(m(5, 0x104, &[0, 0, 0])); // FAULT_CANCEL_A..C
+    let mut st = CeState::default();
+    assert_eq!(rewrite(&pb, is_ce, &mut st, &W), Err(Refusal::SwMethod { method: 0x104 }));
+    let pb = m(2, 0, &[0xc7c0]);
+    let mut st = CeState::default();
+    assert_eq!(rewrite(&pb, is_ce, &mut st, &W), Err(Refusal::ForeignClass { subch: 2, class: 0xc7c0 }));
+}
