@@ -3,7 +3,7 @@
 //!
 //! # Why this file exists
 //!
-//! `kayfabe_abi::oracle` established that 16 of the C artifact's 56 captured control rows
+//! `kf_abi::oracle` established that 16 of the C artifact's 56 captured control rows
 //! keep only a prefix, and `captured_row_evidence` refuses the whole class. That is a
 //! statement about **the capture**. It is silent on the thing that actually cost four rungs
 //! on `0x20802a08`: a consumer reading a field the capture does not contain, getting a zero
@@ -31,7 +31,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use kayfabe_abi::oracle::{CAPTURE_RELIANCE, TRUNCATED_ROWS, capture_reliance, field_is_captured};
+use kf_abi::oracle::{CAPTURE_RELIANCE, TRUNCATED_ROWS, capture_reliance, field_is_captured};
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

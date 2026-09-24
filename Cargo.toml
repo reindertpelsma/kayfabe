@@ -2,6 +2,10 @@
 resolver = "2"
 members = [
     "crates/kf-mem",
+    "crates/kf-util",
+    "crates/kf-arch",
+    "crates/kf-abi",
+    "crates/kf-gsp",
     "crates/kayfabe-doorbell",
     "crates/kayfabe-rm-ladder",
     "crates/kayfabe-util",
@@ -39,6 +43,10 @@ authors = ["kayfabe"]
 
 [workspace.dependencies]
 kayfabe-util = { path = "crates/kayfabe-util" }
+kf-util = { path = "crates/kf-util" }
+kf-arch = { path = "crates/kf-arch" }
+kf-abi = { path = "crates/kf-abi" }
+kf-gsp = { path = "crates/kf-gsp" }
 kayfabe-doorbell = { path = "crates/kayfabe-doorbell" }
 kayfabe-rm-ladder = { path = "crates/kayfabe-rm-ladder" }
 kayfabe-cuda = { path = "crates/kayfabe-cuda" }

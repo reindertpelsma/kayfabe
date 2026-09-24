@@ -1,0 +1,33 @@
+# `kayfabe-abi-gen` — the OFFLINE ABI generator (a dev tool, NOT a build dependency).
+#
+# Deliberately OUTSIDE the kayfabe workspace (note the empty `[workspace]` table
+# below, which detaches this directory from the parent workspace). Nothing in the
+# kayfabe build graph references it, so:
+#
+#   * a downstream consumer never needs the open kernel modules present,
+#   * a broken generator can never break a customer's `cargo build`,
+#   * the generated code is COMMITTED and reviewed as a normal diff.
+#
+# Run it by hand against a vendored open-gpu-kernel-modules checkout:
+#
+#   cargo run --manifest-path crates/kayfabe-abi/gen/Cargo.toml -- \
+#       <ogkm-root> crates/kayfabe-abi/src/generated
+#
+# Zero third-party dependencies on purpose: the C subset NVIDIA's FINN generator
+# emits is small and rigidly regular, so a hand-rolled scanner is both smaller and
+# far more reviewable than a bindgen pipeline — and it cannot silently
+# pick up host headers or a host target's layout rules.
+
+[package]
+name = "kayfabe-abi-gen"
+version = "0.1.0"
+edition = "2024"
+license = "Proprietary"
+publish = false
+
+[workspace]
+
+[dependencies]
+
+[lints.rust]
+unsafe_code = "forbid"
