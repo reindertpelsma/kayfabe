@@ -1,7 +1,7 @@
 //! ★★★★★ **Filling [`HostFacts`] from the host — which controls are issued, with which
 //! request bytes, and what each reply becomes.**
 //!
-//! [`crate::hostfacts`] holds the struct, its [`PROVENANCE`] table and the pure `derive_*`
+//! [`crate::hostfacts`] holds the struct, its [`PROVENANCE`](crate::hostfacts::PROVENANCE) table and the pure `derive_*`
 //! functions (reply bytes → fact). This module is the other half: the request each field is
 //! asked with, over the [`HostControls`] seam, plus the family rules and authored values the
 //! provenance table names. The composition root implements [`HostControls`] over the real host
@@ -10,18 +10,20 @@
 //!
 //! # The rules this module keeps
 //!
-//! - ★ **Every field from exactly the source [`PROVENANCE`] names.** A [`Source::HostControl`]
-//!   field is asked of the host; a [`Source::FamilyRule`] is computed here for every
-//!   [`Family`]; a [`Source::Authored`] value is written here once; a [`Source::Unsourced`] field
-//!   is refused with the table's own text.
+//! - ★ **Every field from exactly the source [`PROVENANCE`](crate::hostfacts::PROVENANCE)
+//!   names.** A host-control field is asked of the host; a family rule or an authored /
+//!   advertised value — what WE state as the GSP of the device we present (w827 ruling) — comes
+//!   from [`crate::authored`], each with its ogkm citation or its stated reason; an `Unsourced`
+//!   row would be refused with the table's own text.
 //! - ⊘ **A refusal is named, never defaulted.** A control the host refuses, a reply that does
 //!   not decode, a slot with no source: each becomes a [`FieldRefusal`] naming the field and the
 //!   cause. [`query_host_facts`] collects EVERY refusal before returning, so one realize reports
 //!   the whole gap list, not its first line.
-//! - ⊘ **No per-die constant.** Nothing here names a GA106 value; the only numbers are ogkm
-//!   header constants and family rules, each cited.
+//! - ⊘ **No per-die constant.** Nothing here names a GA106 value; the numbers are ogkm header
+//!   constants, family rules, and [`crate::authored`]'s advertised values, each with its reason.
 
-use crate::hostfacts::{self, FactRefusal, HostFacts, PROVENANCE, Source};
+use crate::authored::{self, EngineKind};
+use crate::hostfacts::{self, FactRefusal, HostFacts};
 use kf_abi::bifstatic::BifStaticRow;
 use kf_abi::chipinfo::{ChipInfoRow, RegBaseRow, reg_base};
 use kf_abi::confcompute::ConfComputeRow;
@@ -71,8 +73,11 @@ pub enum FieldCause {
     },
     /// The host answered, and the answer could not become the fact.
     Reply(FactRefusal),
-    /// The field — or the named part of it — has no source ([`Source::Unsourced`]).
+    /// The field — or the named part of it — has no source ([`Source::Unsourced`](crate::hostfacts::Source::Unsourced)).
     Unsourced(&'static str),
+    /// A per-family authored rule needs a number no source states for this family
+    /// ([`authored::LayoutRefusal`]).
+    FamilyLayout(authored::LayoutRefusal),
     /// The host's family is not the family realize chose.
     FamilyMismatch {
         /// The family realize passed in.
@@ -99,7 +104,7 @@ pub struct FieldRefusal {
     pub cause: FieldCause,
 }
 
-/// ★ Every field that could not be filled — the whole list, in [`PROVENANCE`] order.
+/// ★ Every field that could not be filled — the whole list, in [`PROVENANCE`](crate::hostfacts::PROVENANCE) order.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HostFactsRefused {
     /// The refusals.
@@ -132,6 +137,7 @@ impl core::fmt::Display for HostFactsRefused {
                 FieldCause::FamilyMismatch { asked, host } => {
                     write!(f, "realize chose {asked:?}, the host is {host:?}")?;
                 }
+                FieldCause::FamilyLayout(l) => write!(f, "no {:?} rule: {}", l.family, l.missing)?,
                 FieldCause::DependsOn(other) => write!(f, "depends on `{other}`, which was refused")?,
             }
         }
@@ -167,18 +173,6 @@ fn info_list_request(size: usize, indices: &[u32]) -> Vec<u8> {
     p
 }
 
-/// The [`Source::Unsourced`] text [`PROVENANCE`] states for `field` — one statement of each
-/// gap, read here rather than restated.
-fn unsourced_text(field: &str) -> &'static str {
-    PROVENANCE
-        .iter()
-        .find_map(|(f, s)| match s {
-            Source::Unsourced(t) if *f == field => Some(*t),
-            _ => None,
-        })
-        .unwrap_or("no source stated")
-}
-
 // =====================================================================================
 // Architecture
 // =====================================================================================
@@ -196,55 +190,14 @@ pub fn query_arch(host: &mut dyn HostControls) -> Result<(Family, u8), FieldCaus
 // Engines
 // =====================================================================================
 
-/// What kind of engine a row is — the three this port advertises.
+/// Classify an `NV2080_ENGINE_TYPE`, and give its `RM_ENGINE_TYPE`. `None` = not advertised.
 ///
 /// ★ **Authored**: the served engine list is GR, the copy engines and RM's `SW` pseudo-engine
 /// — the old tree's decision (`kf_abi::deviceinfo`: *"an engine we advertise is an engine RM
 /// goes on to USE"*, and no plane drives NVDEC/NVENC/NVJPG/OFA). The host's other engines are
-/// read and deliberately not advertised.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum EngineKind {
-    /// `GRn`.
-    Graphics(u32),
-    /// `CEn` (an LCE).
-    Copy(u32),
-    /// RM's software pseudo-engine.
-    Software,
-}
-
-/// The part of one engine's device-info row a usermode client can learn from the host.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct EngineIdentity {
-    /// The kind and instance.
-    pub kind: EngineKind,
-    /// `NV2080_ENGINE_TYPE_*`, as the host listed it.
-    pub nv2080_engine_type: u32,
-    /// `RM_ENGINE_TYPE_*` — `engineData[RM_ENGINE_TYPE]`.
-    pub rm_engine_type: u32,
-    /// `engineData[FIFO_TAG]` from `GET_HW_ENGINE_ID` (`NULL` for `SW`).
-    pub fifo_tag: u32,
-    /// `engineData[MMU_FAULT_ID]` from `GET_ENGINE_FAULT_INFO`; `None` for `SW`, which has none.
-    pub mmu_fault_id: Option<u32>,
-}
-
-impl EngineIdentity {
-    /// `FifoDeviceEntry::name` for this row — `GR0`, `CE3`, `SOFTWARE` (the names every
-    /// `kf_abi` table keys on).
-    #[must_use]
-    pub fn name(&self) -> String {
-        match self.kind {
-            EngineKind::Graphics(i) => format!("GR{i}"),
-            EngineKind::Copy(i) => format!("CE{i}"),
-            EngineKind::Software => "SOFTWARE".to_string(),
-        }
-    }
-}
-
-/// Classify an `NV2080_ENGINE_TYPE`, and give its `RM_ENGINE_TYPE`. `None` = not advertised.
-///
-/// The RM space is contiguous where the NV2080 space is not (`kf_abi::submit`'s two inverses):
-/// `RM_ENGINE_TYPE_COPY(i) = 0x09 + i` for all twenty, `GR(i) = 0x01 + i`, `SW = 0x2d`
-/// (`ogkm-580: gpu_engine_type.h:34-139`).
+/// read and deliberately not advertised. The RM space is contiguous where the NV2080 space is
+/// not (`kf_abi::submit`'s two inverses): `RM_ENGINE_TYPE_COPY(i) = 0x09 + i` for all twenty,
+/// `GR(i) = 0x01 + i`, `SW = 0x2d` (`ogkm-580: gpu_engine_type.h:34-139`).
 #[must_use]
 pub fn classify_engine(nv2080_engine_type: u32) -> Option<(EngineKind, u32)> {
     if let Some(ce) = kf_abi::submit::copy_index_of_engine_type(nv2080_engine_type) {
@@ -257,54 +210,24 @@ pub fn classify_engine(nv2080_engine_type: u32) -> Option<(EngineKind, u32)> {
     }
 }
 
-/// ★ The advertised engines' host-sourced identity: `GET_ENGINES_V2`, then `GET_HW_ENGINE_ID`
-/// over that list, then `GET_ENGINE_FAULT_INFO` per hardware engine.
+/// ★ The engines the device presents, in host order: the host's `GET_ENGINES_V2` list, kept to
+/// the kinds [`classify_engine`] advertises. The host supplies the TYPES and COUNTS; the rest
+/// of each row is the device's own layout ([`authored::engine_table`]).
 ///
 /// # Errors
 /// [`FieldCause`] — including an empty GR or CE set, which no GSP-client RM boots with.
-pub fn query_engine_identities(host: &mut dyn HostControls) -> Result<Vec<EngineIdentity>, FieldCause> {
-    let list = ask(host, hostfacts::NV2080_CTRL_CMD_GPU_GET_ENGINES_V2, zeroed(hostfacts::GET_ENGINES_V2_PARAMS_SIZE))?;
-    let advertised: Vec<(u32, EngineKind, u32)> = hostfacts::derive_engine_list(&list)?
-        .into_iter()
-        .filter_map(|t| classify_engine(t).map(|(k, rm)| (t, k, rm)))
-        .collect();
-    let cmd = hostfacts::NV2080_CTRL_CMD_GPU_GET_HW_ENGINE_ID;
-    if !advertised.iter().any(|(_, k, _)| matches!(k, EngineKind::Graphics(_)))
-        || !advertised.iter().any(|(_, k, _)| matches!(k, EngineKind::Copy(_)))
-    {
-        return Err(FieldCause::Reply(FactRefusal::Unservable {
-            cmd: hostfacts::NV2080_CTRL_CMD_GPU_GET_ENGINES_V2,
-            why: "the host lists no GR or no copy engine",
-        }));
+pub fn query_engine_list(host: &mut dyn HostControls) -> Result<Vec<EngineKind>, FieldCause> {
+    let cmd = hostfacts::NV2080_CTRL_CMD_GPU_GET_ENGINES_V2;
+    let list = ask(host, cmd, zeroed(hostfacts::GET_ENGINES_V2_PARAMS_SIZE))?;
+    let kinds: Vec<EngineKind> =
+        hostfacts::derive_engine_list(&list)?.into_iter().filter_map(|t| classify_engine(t).map(|(k, _)| k)).collect();
+    if !kinds.iter().any(|k| matches!(k, EngineKind::Graphics(_))) || !kinds.iter().any(|k| matches!(k, EngineKind::Copy(_))) {
+        return Err(FieldCause::Reply(FactRefusal::Unservable { cmd, why: "the host lists no GR or no copy engine" }));
     }
-    let mut req = zeroed(hostfacts::GET_HW_ENGINE_ID_PARAMS_SIZE);
-    for (i, (t, _, _)) in advertised.iter().enumerate() {
-        put32(&mut req, 4 * i, *t);
-    }
-    let tags = hostfacts::derive_hw_engine_ids(&ask(host, cmd, req)?, advertised.len())?;
-    let mut out = Vec::with_capacity(advertised.len());
-    for ((t, kind, rm), fifo_tag) in advertised.into_iter().zip(tags) {
-        let mmu_fault_id = if kind == EngineKind::Software {
-            None
-        } else {
-            let mut req = zeroed(hostfacts::GET_ENGINE_FAULT_INFO_PARAMS_SIZE);
-            put32(&mut req, 0, t);
-            Some(hostfacts::derive_mmu_fault_id(&ask(host, hostfacts::NV2080_CTRL_CMD_GPU_GET_ENGINE_FAULT_INFO, req)?)?)
-        };
-        out.push(EngineIdentity { kind, nv2080_engine_type: t, rm_engine_type: rm, fifo_tag, mmu_fault_id });
-    }
-    Ok(out)
+    Ok(kinds)
 }
 
-/// ⊘ The `engineData[]` slots and PBDMA fields of `FIFO_GET_DEVICE_INFO_TABLE` that NO
-/// unprivileged control reports. [`query_host_facts`] refuses `engines` with this text.
-pub const ENGINE_SLOTS_UNSOURCED: &str = "FifoDeviceEntry slots RUNLIST + RUNLIST_PRI_BASE (only GPU_GET_ENGINE_RUNLIST_PRI_BASE \
-     0x20800179, PRIVILEGED) and RESET, INTR, RC_MASK, CHRAM_PRI_BASE, RUNLIST_ENGINE_ID, pbdmaIds, pbdmaFaultIds, \
-     numPbdmas (only FIFO_GET_DEVICE_INFO_TABLE 0x20801112, KERNEL) have no unprivileged source; FIFO_TAG, \
-     MMU_FAULT_ID and RM_ENGINE_TYPE are host-sourced (query_engine_identities), and ENG_DESC, DEV_TYPE_ENUM, \
-     INSTANCE_ID, IS_HOST_DRIVEN_ENGINE and MC follow by rule, unbuilt while the row as a whole cannot be";
-
-/// ★ `device_info` — the family rule over the host's engine list.
+/// ★ `device_info` — the family rule over the engine list.
 ///
 /// `GR` → `NV_PGRAPH` at `0x400000` (every family since Fermi); an LCE → the `NV_CE` register
 /// block at `0x104000` (`ogkm-580` `dev_ce.h`: `NV_CE_PCE_MAP 0x00104028` on GA100/GA102,
@@ -314,14 +237,14 @@ pub const ENGINE_SLOTS_UNSOURCED: &str = "FifoDeviceEntry slots RUNLIST + RUNLIS
 ///
 /// Leaks the row once (`DeviceInfoRow` holds `&'static`) — call at realize, once per device.
 #[must_use]
-pub fn device_info_rule(engines: &[EngineIdentity]) -> DeviceInfoRow {
+pub fn device_info_rule(engines: &[EngineKind]) -> DeviceInfoRow {
     const NV_PGRAPH: u32 = 0x0040_0000;
     const NV_CE_BLOCK: u32 = 0x0010_4000;
     let rows: Vec<EnginePriBase> = engines
         .iter()
-        .map(|e| EnginePriBase {
-            engine: Box::leak(e.name().into_boxed_str()),
-            pri_base: match e.kind {
+        .map(|&k| EnginePriBase {
+            engine: Box::leak(k.name().into_boxed_str()),
+            pri_base: match k {
                 EngineKind::Graphics(_) => DevicePriBase::At(NV_PGRAPH),
                 EngineKind::Copy(_) => DevicePriBase::At(NV_CE_BLOCK),
                 EngineKind::Software => DevicePriBase::NotADevice,
@@ -366,10 +289,11 @@ pub fn query_lce_pce_masks(host: &mut dyn HostControls) -> Result<Vec<u32>, Fiel
 // Interrupts, chip info, memory
 // =====================================================================================
 
-/// `intr_table` — the static table and the engine notification vectors.
+/// `intr_table` — the host's static table and engine notification vectors, plus the GSP and
+/// DISP stall rows of the device we present ([`authored::with_gsp_and_disp_rows`]).
 ///
 /// # Errors
-/// [`FieldCause`].
+/// [`FieldCause`] — including a host row already on the vector our GSP raises.
 pub fn query_intr_table(host: &mut dyn HostControls) -> Result<Vec<kf_abi::inittables::IntrTableEntry>, FieldCause> {
     let s = ask(host, hostfacts::NV2080_CTRL_CMD_MC_GET_STATIC_INTR_TABLE, zeroed(hostfacts::MC_STATIC_INTR_TABLE_PARAMS_SIZE))?;
     let n = ask(
@@ -377,7 +301,12 @@ pub fn query_intr_table(host: &mut dyn HostControls) -> Result<Vec<kf_abi::initt
         hostfacts::NV2080_CTRL_CMD_MC_GET_ENGINE_NOTIFICATION_INTR_VECTORS,
         zeroed(hostfacts::MC_ENGINE_NOTIFICATION_PARAMS_SIZE),
     )?;
-    Ok(hostfacts::derive_intr_table(&s, &n)?)
+    authored::with_gsp_and_disp_rows(hostfacts::derive_intr_table(&s, &n)?).map_err(|_| {
+        FieldCause::Reply(FactRefusal::Unservable {
+            cmd: hostfacts::NV2080_CTRL_CMD_MC_GET_STATIC_INTR_TABLE,
+            why: "a host interrupt row already uses the GSP or DISP vector this device presents",
+        })
+    })
 }
 
 /// `intr_subtree_map`.
@@ -477,34 +406,39 @@ pub fn query_memory_system(host: &mut dyn HostControls, gr_info: Option<&GrInfoP
 // GR
 // =====================================================================================
 
-/// What the host says about GR's geometry through the controls [`PROVENANCE`] names for
-/// `gr_static` — every member of `kf_abi::grstatic::GrStaticProfile` that HAS a source.
+/// What the host says about GR's geometry — every host-sourced input of
+/// `kf_abi::grstatic::GrStaticProfile`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GrGeometry {
     /// `GR_GET_GPC_MASK`.
     pub gpc_mask: u32,
     /// `(gpcId, tpcMask)` for every set bit of `gpc_mask`, in id order (`GR_GET_TPC_MASK`).
     pub tpc_masks: Vec<(u32, u32)>,
+    /// `zcullMask` per GPC, in the same order (`GR_GET_ZCULL_MASK 0x20801237`, NON_PRIVILEGED; it
+    /// reads the same `floorsweepingMasks.zcullMask[]` the internal control carries,
+    /// `kernel_graphics.c:3808-3822`). The host's `NV_ERR_NOT_SUPPORTED` — RM's answer for a
+    /// `NV_U32_MAX` mask (`:3817-3819`) — is carried as `u32::MAX`.
+    pub zcull_masks: Vec<u32>,
     /// The TPC rows in `globalTpcId` order (`GR_GET_GLOBAL_SM_ORDER`).
     pub tpcs: Vec<TpcRow>,
     /// SMs per TPC (`GR_GET_GLOBAL_SM_ORDER`, cross-checked against `gr_info`).
     pub sms_per_tpc: u16,
     /// The caps table (`GR_GET_CAPS_V2`).
     pub caps: [u8; kf_abi::grstatic::GR_CAPS_TBL_SIZE],
-    /// `bPerSubCtxheaderSupported` — FAMILY RULE: every family this port serves is Volta or
-    /// later, where the per-subcontext context header exists.
-    pub per_subctx_header_supported: bool,
 }
 
-/// ⊘ The `GrStaticProfile` members no unprivileged control reports as RM files them.
-/// [`query_host_facts`] refuses `gr_static` with this text.
-pub const GR_STATIC_MEMBERS_UNSOURCED: &str = "GrStaticProfile members mmu_per_gpc, num_pes_per_gpc, tpc_to_pes_map \
-     (GPU_GET_PES_INFO 0x20800168 is KERNEL-only), zcull_mask (GR_GET_ZCULL_MASK 0x20801237 is NON_PRIVILEGED and \
-     reads the same floorsweeping mask: not yet wired) and fecs_record_size (FECS trace defines: no usermode \
-     control) have no unprivileged source; gpc/tpc masks, SM order, SMs per TPC and caps are host-sourced \
-     (query_gr_geometry)";
+/// `NV2080_CTRL_CMD_GR_GET_ZCULL_MASK`.
+pub const NV2080_CTRL_CMD_GR_GET_ZCULL_MASK: u32 = 0x2080_1237;
+/// `NV2080_CTRL_GR_INFO_INDEX_LITTER_NUM_TPC_PER_GPC`.
+pub const GR_INFO_IDX_LITTER_NUM_TPC_PER_GPC: usize = 0x17;
+/// `NV2080_CTRL_GR_INFO_INDEX_LITTER_NUM_PES_PER_GPC`.
+pub const GR_INFO_IDX_LITTER_NUM_PES_PER_GPC: usize = 0x1c;
+/// `NV2080_CTRL_GR_INFO_INDEX_LITTER_NUM_TPCS_PER_PES`.
+pub const GR_INFO_IDX_LITTER_NUM_TPCS_PER_PES: usize = 0x1e;
+/// `NV2080_CTRL_GR_INFO_INDEX_LITTER_NUM_GPCMMU_PER_GPC`.
+pub const GR_INFO_IDX_LITTER_NUM_GPCMMU_PER_GPC: usize = 0x27;
 
-/// ★ The host-sourced half of `gr_static`.
+/// ★ The host-sourced inputs of `gr_static`.
 ///
 /// # Errors
 /// [`FieldCause`]; the SMs-per-TPC cross-check against `gr_info` is a refusal, not a pick.
@@ -515,11 +449,19 @@ pub fn query_gr_geometry(host: &mut dyn HostControls, gr_info: Option<&GrInfoPro
         zeroed(hostfacts::GR_MASK_PARAMS_SIZE),
     )?)?;
     let mut tpc_masks = Vec::new();
+    let mut zcull_masks = Vec::new();
     for gpc in (0..32).filter(|b| gpc_mask & (1 << b) != 0) {
         let mut req = zeroed(hostfacts::GR_MASK_PARAMS_SIZE);
         put32(&mut req, hostfacts::GR_ROUTE_INFO_SIZE, gpc);
         let r = ask(host, hostfacts::NV2080_CTRL_CMD_GR_GET_TPC_MASK, req)?;
         tpc_masks.push((gpc, hostfacts::derive_tpc_mask(&r, gpc)?));
+        let mut z = zeroed(8);
+        put32(&mut z, 0, gpc);
+        zcull_masks.push(match host.control(NV2080_CTRL_CMD_GR_GET_ZCULL_MASK, &mut z) {
+            Ok(()) => u32::from_le_bytes([z[4], z[5], z[6], z[7]]),
+            Err(HostRefusal { status: Some(NV_ERR_NOT_SUPPORTED), .. }) => u32::MAX,
+            Err(refused) => return Err(FieldCause::Host { cmd: NV2080_CTRL_CMD_GR_GET_ZCULL_MASK, refused }),
+        });
     }
     let (tpcs, sms_per_tpc) = hostfacts::derive_sm_order(&ask(
         host,
@@ -545,7 +487,66 @@ pub fn query_gr_geometry(host: &mut dyn HostControls, gr_info: Option<&GrInfoPro
             why: "the TPC masks' population disagrees with the SM order's TPC count",
         }));
     }
-    Ok(GrGeometry { gpc_mask, tpc_masks, tpcs, sms_per_tpc, caps, per_subctx_header_supported: true })
+    Ok(GrGeometry { gpc_mask, tpc_masks, zcull_masks, tpcs, sms_per_tpc, caps })
+}
+
+/// ★★ `gr_static` from the host geometry, the host's GR litters, and the authored members:
+///
+/// | member | source |
+/// |---|---|
+/// | GPC rows' `tpc_mask` / `tpc_count` | host TPC masks (count = population) |
+/// | `mmu_per_gpc` | host `LITTER_NUM_GPCMMU_PER_GPC` |
+/// | `num_pes_per_gpc` | host `LITTER_NUM_PES_PER_GPC` |
+/// | `zcull_mask` | host `GR_GET_ZCULL_MASK` |
+/// | `tpcs`, `sms_per_tpc` | host SM order |
+/// | `tpc_to_pes_map` | [`authored::tpc_to_pes_map`] over host litters |
+/// | `caps` | host caps |
+/// | `fecs_record_size` | [`authored::FECS_RECORD_SIZE`] |
+/// | `per_subctx_header_supported` | [`authored::PER_SUBCTX_HEADER_SUPPORTED`] |
+///
+/// Leaks the GPC and TPC rows once (`&'static`) — realize, once per device.
+///
+/// # Errors
+/// [`FieldCause`] — a non-contiguous GPC mask (the profile states GPCs by count), a litter
+/// the TPC-to-PES rule cannot use, or a profile `kf_abi` refuses to encode.
+pub fn gr_static_from(g: &GrGeometry, info: &GrInfoProfile) -> Result<kf_abi::grstatic::GrStaticProfile, FieldCause> {
+    use kf_abi::grstatic::{GpcRow, GrStaticProfile};
+    let cmd = hostfacts::NV2080_CTRL_CMD_GR_GET_GPC_MASK;
+    if g.gpc_mask & g.gpc_mask.wrapping_add(1) != 0 {
+        return Err(FieldCause::Reply(FactRefusal::Unservable { cmd, why: "a non-contiguous GPC mask: GrStaticProfile states GPCs 0..n" }));
+    }
+    let gpcs: Vec<GpcRow> = g
+        .tpc_masks
+        .iter()
+        .zip(&g.zcull_masks)
+        .map(|(&(_, tpc_mask), &zcull_mask)| GpcRow {
+            tpc_mask,
+            tpc_count: tpc_mask.count_ones(),
+            mmu_per_gpc: info.data[GR_INFO_IDX_LITTER_NUM_GPCMMU_PER_GPC],
+            num_pes_per_gpc: info.data[GR_INFO_IDX_LITTER_NUM_PES_PER_GPC],
+            zcull_mask,
+        })
+        .collect();
+    let tpc_to_pes_map = authored::tpc_to_pes_map(
+        info.data[GR_INFO_IDX_LITTER_NUM_TPC_PER_GPC],
+        info.data[GR_INFO_IDX_LITTER_NUM_TPCS_PER_PES],
+    )
+    .ok_or(FieldCause::Reply(FactRefusal::Unservable {
+        cmd: hostfacts::NV2080_CTRL_CMD_GR_GET_INFO_V2,
+        why: "LITTER_NUM_TPCS_PER_PES is zero or LITTER_NUM_TPC_PER_GPC exceeds MAX_TPC_PER_GPC",
+    }))?;
+    let p = GrStaticProfile {
+        gpcs: Box::leak(gpcs.into_boxed_slice()),
+        tpcs: Box::leak(g.tpcs.clone().into_boxed_slice()),
+        sms_per_tpc: g.sms_per_tpc,
+        tpc_to_pes_map,
+        caps: g.caps,
+        fecs_record_size: authored::FECS_RECORD_SIZE,
+        per_subctx_header_supported: authored::PER_SUBCTX_HEADER_SUPPORTED,
+    };
+    p.validate()
+        .map_err(|_| FieldCause::Reply(FactRefusal::Unservable { cmd, why: "the GR profile fails kf_abi's own validation" }))?;
+    Ok(p)
 }
 
 /// `gr_context_buffers` — `GR_GET_ENGINE_CONTEXT_PROPERTIES` for every id. The host's
@@ -607,18 +608,6 @@ pub fn query_pcie_max_gen(host: &mut dyn HostControls) -> Result<kf_abi::businfo
     use kf_abi::businfo as bus;
     let req = info_list_request(bus::BUS_GET_INFO_V2_PARAMS_SIZE, &[bus::BUS_INFO_INDEX_PCIE_GEN_INFO]);
     Ok(hostfacts::derive_pcie_max_gen(&ask(host, bus::NV2080_CTRL_CMD_BUS_GET_INFO_V2, req)?)?)
-}
-
-/// `NV2080_CTRL_CMD_CE_GET_FAULT_METHOD_BUFFER_SIZE`.
-pub const NV2080_CTRL_CMD_CE_GET_FAULT_METHOD_BUFFER_SIZE: u32 = 0x2080_2a08;
-
-/// `ce_fault_method_buffer_size`. ⚠ KERNEL_PRIVILEGED on the host — see [`PROVENANCE`].
-///
-/// # Errors
-/// [`FieldCause`] — on a stock host, the host's `INSUFFICIENT_PERMISSIONS`.
-pub fn query_ce_fault_method_buffer_size(host: &mut dyn HostControls) -> Result<u32, FieldCause> {
-    let r = ask(host, NV2080_CTRL_CMD_CE_GET_FAULT_METHOD_BUFFER_SIZE, zeroed(4))?;
-    Ok(hostfacts::derive_ce_fault_method_buffer_size(&r)?)
 }
 
 /// `gsp_features`.
@@ -691,25 +680,26 @@ pub const AUTHORED_FIFO_CHANNELS: FifoChannelsRow = FifoChannelsRow { channels_p
 // The whole struct
 // =====================================================================================
 
-/// ★★★ **Fill every [`HostFacts`] field from its [`PROVENANCE`] source**, or refuse naming
+/// ★★★ **Fill every [`HostFacts`] field from its [`PROVENANCE`](crate::hostfacts::PROVENANCE) source**, or refuse naming
 /// every field that could not be filled.
 ///
 /// `family` is the family realize already chose from the same host; the host's own
 /// `MC_GET_ARCH_INFO` must name it too.
 ///
 /// # Errors
-/// [`HostFactsRefused`] — every refused field, in [`PROVENANCE`] order.
+/// [`HostFactsRefused`] — every refused field, in [`PROVENANCE`](crate::hostfacts::PROVENANCE) order.
 pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<HostFacts, HostFactsRefused> {
     let arch = query_arch(host);
+    let asked = family;
     let family = match &arch {
-        Ok((f, _)) if *f == family => Ok(*f),
-        Ok((f, _)) => Err(FieldCause::FamilyMismatch { asked: family, host: *f }),
+        Ok((f, _)) if *f == asked => Ok(*f),
+        Ok((f, _)) => Err(FieldCause::FamilyMismatch { asked, host: *f }),
         Err(e) => Err(e.clone()),
     };
     let has_c2c = query_has_c2c(host);
-    let identities = query_engine_identities(host);
-    let engines: Result<Vec<kf_abi::inittables::FifoDeviceEntry>, FieldCause> = match &identities {
-        Ok(_) => Err(FieldCause::Unsourced(ENGINE_SLOTS_UNSOURCED)),
+    let kinds = query_engine_list(host);
+    let engines = match &kinds {
+        Ok(k) => authored::engine_table(asked, k).map_err(FieldCause::FamilyLayout),
         Err(e) => Err(e.clone()),
     };
     let lce_pce_masks = query_lce_pce_masks(host);
@@ -721,22 +711,21 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
     };
     let gr_info = query_gr_info(host);
     let memory_system = query_memory_system(host, gr_info.as_ref().ok());
-    let device_info = match &identities {
-        Ok(ids) => Ok(device_info_rule(ids)),
+    let device_info = match &kinds {
+        Ok(k) => Ok(device_info_rule(k)),
         Err(_) => Err(FieldCause::DependsOn("engines")),
     };
-    let gmmu_static: Result<kf_abi::gmmustatic::GmmuStaticRow, FieldCause> =
-        Err(FieldCause::Unsourced(unsourced_text("gmmu_static")));
-    let gr_static: Result<kf_abi::grstatic::GrStaticProfile, FieldCause> =
-        match query_gr_geometry(host, gr_info.as_ref().ok()) {
-            Ok(_) => Err(FieldCause::Unsourced(GR_STATIC_MEMBERS_UNSOURCED)),
-            Err(e) => Err(e),
-        };
+    let gmmu_static: Result<kf_abi::gmmustatic::GmmuStaticRow, FieldCause> = Ok(authored::GMMU_STATIC);
+    let gr_static = match (query_gr_geometry(host, gr_info.as_ref().ok()), &gr_info) {
+        (Ok(g), Ok(info)) => gr_static_from(&g, info),
+        (Err(e), _) => Err(e),
+        (Ok(_), Err(_)) => Err(FieldCause::DependsOn("gr_info")),
+    };
     let gr_context_buffers = query_gr_context_buffers(host);
     let forwarded_gpu_info = query_forwarded_gpu_info(host);
     let smc_mode = query_smc_mode(host);
     let pcie_max_gen = query_pcie_max_gen(host);
-    let ce_fault_method_buffer_size = query_ce_fault_method_buffer_size(host);
+    let ce_fault_method_buffer_size: Result<u32, FieldCause> = Ok(authored::CE_FAULT_METHOD_BUFFER_SIZE);
     let gsp_features = query_gsp_features(host);
     let gpu_name = query_gpu_name(host);
     let gpu_short_name = query_gpu_short_name(host);

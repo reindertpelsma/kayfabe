@@ -43,7 +43,7 @@ impl HostControls for Session<'_> {
 ///
 /// # Errors
 /// Every field that could not be filled, by name, one per line — a control the host refused,
-/// a reply that did not decode, or a field `PROVENANCE` states has no source. ⊘ Never a
+/// a reply that did not decode, or a family an authored rule has no number for. ⊘ Never a
 /// default, never a GA106 row: the VM must not start on a guessed device.
 pub fn host_facts(rm: &kf_host::HostRm, family: Family) -> Result<HostFacts, String> {
     query_host_facts(&mut Session(rm), family).map_err(|e| e.to_string())

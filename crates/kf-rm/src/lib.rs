@@ -13,6 +13,7 @@
 //! captured GA106 rows, kept ONLY as a test fixture (`tests/support/ga106.rs`).
 
 pub mod abi;
+pub mod authored;
 pub mod census;
 pub mod faultbuffer;
 pub mod guestsysinfo;

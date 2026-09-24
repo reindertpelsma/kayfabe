@@ -14,9 +14,11 @@
 //! | `rmladder_r24_pcemask_real_ga106.txt` | `CE_GET_CE_PCE_MASK` for LCE0..4 (LCE4 refused) |
 //!
 //! ⊘ A control no capture holds is REFUSED by the replay (`status: None`, "no capture") — never
-//! answered with a plausible body. So the whole-struct query on this replay cannot succeed, and
-//! the first test states exactly which fields fail and why: that list IS the capture gap plus
-//! the provenance gap, measured rather than asserted.
+//! answered with a plausible body. So the whole-struct query on this replay alone cannot succeed,
+//! and the first test states exactly which fields fail: that list IS the capture gap (no field
+//! lacks a source any more — `kf_rm::authored`). A second host, `CompletedGa106`, answers the
+//! uncaptured controls from the old rows so the whole query reaches `Ok`, and says which fields
+//! that makes a layout round-trip rather than a hardware comparison.
 //!
 //! ★ Every field the captures DO cover is then asserted equal to the old tree's captured GA106
 //! row (`support/ga106.rs`) — *"on a GA106 host, derived must equal captured"*. Where a field
@@ -194,70 +196,158 @@ impl HostControls for Ga106Replay {
 // The whole struct
 // =====================================================================================
 
-/// ★★★ The query over the real GA106 refuses EXACTLY these fields — and each for the stated
-/// reason. Every other field is filled from a real reply (checked equal to the fixture below).
+/// ★★★ Over ONLY what a real GA106 replied, the query refuses EXACTLY the fields whose controls
+/// were never captured — and nothing for want of a source: every field the host cannot state
+/// is now authored (`kf_rm::authored`, w827 ruling).
 #[test]
-fn the_whole_query_over_the_real_ga106_refuses_exactly_the_uncaptured_and_the_unsourced() {
+fn over_the_real_ga106_the_query_refuses_only_the_uncaptured() {
     let mut host = Ga106Replay::load();
-    let refused = hostquery::query_host_facts(&mut host, Family::Ampere).expect_err("some fields have no capture or no source");
+    let refused = hostquery::query_host_facts(&mut host, Family::Ampere).expect_err("some controls have no capture");
     let by_field: BTreeMap<&str, &FieldCause> = refused.refusals.iter().map(|r| (r.field, &r.cause)).collect();
-    let no_capture = |cmd: u32| matches!(by_field.get(hostquery_field_for(cmd)), Some(FieldCause::Host { cmd: c, refused }) if *c == cmd && refused.status.is_none());
-
-    // No capture exists (libcuda's `cuInit` never asks, and no rmladder rung did):
-    assert!(no_capture(0x2080_017a), "engines: GET_HW_ENGINE_ID was never captured: {refused}");
-    assert!(no_capture(0x2080_170e), "intr_table: MC_GET_STATIC_INTR_TABLE was never captured: {refused}");
-    assert!(no_capture(0x2080_170f), "intr_subtree_map: never captured: {refused}");
-    assert!(no_capture(0x2080_1228), "gr_info: GR_GET_INFO_V2 was never captured: {refused}");
-    assert!(no_capture(0x2080_122d), "gr_context_buffers: never captured: {refused}");
-    assert!(no_capture(0x2080_2a08), "ce_fault_method_buffer_size: the only capture is a KERNEL-client probe: {refused}");
-    // Refused because a field they are derived from was:
-    assert_eq!(by_field.get("device_info"), Some(&&FieldCause::DependsOn("engines")));
+    let no_capture = |field: &str, cmd: u32| {
+        matches!(by_field.get(field), Some(FieldCause::Host { cmd: c, refused }) if *c == cmd && refused.status.is_none())
+    };
+    // libcuda's cuInit never asks these, and no rmladder rung did:
+    assert!(no_capture("intr_table", 0x2080_170e), "{refused}");
+    assert!(no_capture("intr_subtree_map", 0x2080_170f), "{refused}");
+    assert!(no_capture("gr_info", 0x2080_1228), "{refused}");
+    assert!(no_capture("gr_context_buffers", 0x2080_122d), "{refused}");
+    assert!(no_capture("gr_static", 0x2080_1237), "GR_GET_ZCULL_MASK was never captured: {refused}");
     assert_eq!(by_field.get("memory_system"), Some(&&FieldCause::DependsOn("gr_info")));
-    // The only SM-order capture is truncated at 4096 of 9240 bytes (`numSm`/`numTpc` lost):
-    assert!(
-        matches!(by_field.get("gr_static"), Some(FieldCause::Host { cmd: 0x2080_121b, refused }) if refused.detail.contains("truncated")),
+    assert_eq!(
+        refused.fields(),
+        ["intr_table", "intr_subtree_map", "memory_system", "gr_static", "gr_info", "gr_context_buffers"],
         "{refused}"
     );
-    // ⊘ No source at all — this one fails on EVERY host, captured or not:
-    assert!(matches!(by_field.get("gmmu_static"), Some(FieldCause::Unsourced(t)) if t.contains("GSP firmware")));
-
-    let expected = [
-        "engines", "intr_table", "intr_subtree_map", "memory_system", "device_info", "gmmu_static", "gr_static",
-        "gr_info", "gr_context_buffers", "ce_fault_method_buffer_size",
-    ];
-    assert_eq!(refused.fields(), expected, "{refused}");
+    assert!(!refused.refusals.iter().any(|r| matches!(r.cause, FieldCause::Unsourced(_))));
     // ★ Refusals come in PROVENANCE order, so the realize log reads like the table.
     let order: Vec<usize> = refused.fields().iter().map(|f| PROVENANCE.iter().position(|(p, _)| p == f).expect("a provenance row")).collect();
     assert!(order.windows(2).all(|w| w[0] < w[1]), "{order:?}");
+    // ⊘ The kernel-only control is no longer asked at all.
+    assert!(!host.asked.contains(&0x2080_2a08));
 }
 
-/// Which field a control's refusal lands on, for the assertion above.
-fn hostquery_field_for(cmd: u32) -> &'static str {
-    match cmd {
-        0x2080_017a => "engines",
-        0x2080_170e => "intr_table",
-        0x2080_170f => "intr_subtree_map",
-        0x2080_1228 => "gr_info",
-        0x2080_122d => "gr_context_buffers",
-        0x2080_2a08 => "ce_fault_method_buffer_size",
-        _ => "",
-    }
-}
-
-/// ★ The two stated gaps refuse the field even on a host that answers everything they ask:
-/// `engines` and `gr_static` name the members with no unprivileged source.
+/// ★★★ **Realize succeeds on a GA106**: the replay, completed for the controls no capture holds
+/// by answering them the way the old captured rows say a GA106 would (so those fields are a
+/// LAYOUT round-trip here, not a hardware comparison — the test says which), fills EVERY field,
+/// and each equals the old captured row except the enumerated, reasoned divergences.
 #[test]
-fn engines_and_gr_static_refuse_the_members_with_no_unprivileged_source_by_name() {
-    for (text, members) in [
-        (hostquery::ENGINE_SLOTS_UNSOURCED, &["RUNLIST", "RUNLIST_PRI_BASE", "RESET", "INTR", "RC_MASK", "pbdmaIds"][..]),
-        (hostquery::GR_STATIC_MEMBERS_UNSOURCED, &["mmu_per_gpc", "num_pes_per_gpc", "tpc_to_pes_map", "zcull_mask", "fecs_record_size"][..]),
-    ] {
-        for m in members {
-            assert!(text.contains(m), "{m} missing from {text}");
+fn a_ga106_host_fills_every_field_and_each_equals_the_captured_row_or_a_stated_divergence() {
+    let f = ga106::host_facts();
+    let mut host = CompletedGa106(Ga106Replay::load());
+    let got = hostquery::query_host_facts(&mut host, Family::Ampere).unwrap_or_else(|e| panic!("{e}"));
+
+    // From real GA106 replies:
+    assert_eq!(got.family, f.family);
+    assert_eq!(got.has_c2c, f.has_c2c);
+    assert_eq!(got.lce_pce_masks, f.lce_pce_masks);
+    assert_eq!(got.chip_info, f.chip_info);
+    assert_eq!(got.device_info, f.device_info);
+    assert_eq!(got.forwarded_gpu_info, f.forwarded_gpu_info);
+    assert_eq!(got.smc_mode, f.smc_mode);
+    assert_eq!(got.pcie_max_gen, f.pcie_max_gen);
+    assert_eq!(got.gsp_features, f.gsp_features);
+    assert_eq!(got.gpu_name.map(|n| n.as_str()), Some("NVIDIA GeForce RTX 3060"));
+    // Authored, and equal to what a stock GA106 GSP states (by choice — see authored.rs):
+    assert_eq!(got.gmmu_static, f.gmmu_static);
+    assert_eq!(got.ce_fault_method_buffer_size, f.ce_fault_method_buffer_size);
+    // Fixed values:
+    assert_eq!(got.user_register_access_map, f.user_register_access_map);
+    assert_eq!(got.constructed_falcons, f.constructed_falcons);
+    assert_eq!(got.conf_compute, f.conf_compute);
+    assert_eq!(got.bif_static, f.bif_static);
+    assert_eq!(got.fifo_channels, f.fifo_channels);
+    // Layout round-trips through the completed controls (GR info / context props / subtree map):
+    assert_eq!(got.gr_info.data, f.gr_info.data);
+    assert_eq!(got.gr_context_buffers, f.gr_context_buffers);
+    assert_eq!(got.intr_subtree_map, f.intr_subtree_map);
+    assert_eq!(got.memory_system, f.memory_system);
+    // gr_static: GPC mask, TPC masks, SM order and caps from real replies; zcull and the GR
+    // litters from the completion; tpc_to_pes / FECS / per-subctx AUTHORED — all equal.
+    assert_eq!(got.gr_static.gpcs, f.gr_static.gpcs);
+    assert_eq!(got.gr_static.tpcs, f.gr_static.tpcs);
+    assert_eq!(got.gr_static.sms_per_tpc, f.gr_static.sms_per_tpc);
+    assert_eq!(got.gr_static.tpc_to_pes_map, f.gr_static.tpc_to_pes_map);
+    assert_eq!(got.gr_static.caps, f.gr_static.caps);
+    assert_eq!(got.gr_static.fecs_record_size, f.gr_static.fecs_record_size);
+    assert_eq!(got.gr_static.per_subctx_header_supported, f.gr_static.per_subctx_header_supported);
+    // intr_table: the host's static + notification rows (completed from the captured table) and
+    // the AUTHORED GSP/DISP rows — the same SET as the captured kernel table.
+    let mut a = got.intr_table.clone();
+    let mut b = f.intr_table.clone();
+    a.sort_by_key(|e| e.engine_idx);
+    b.sort_by_key(|e| e.engine_idx);
+    assert_eq!(a, b);
+    // engines: see the dedicated test.
+    assert_engine_rows_match_except_stated(&got.engines, &f.engines);
+}
+
+/// ⊘ Every slot the authored engine layout does NOT reproduce, with the reason. Everything else
+/// in the six rows equals the old captured table.
+const ENGINE_DIVERGENCES: &[(&str, &str, &str)] = &[
+    ("*", "RC_MASK", "no kernel-RM reader (only kfifoEngineInfoXlate's switch); authored 0"),
+    ("CE1", "INTR", "capture noise (0x82300100): INTR is not stored on Ampere+ (kernel_fifo_ga100.c:52)"),
+    ("CE2", "INTR", "capture noise (0x77f2058f)"),
+    ("CE3", "INTR", "capture noise (0x018e0102)"),
+    ("CE1", "pbdmaFaultIds", "capture says 0x20 for PBDMA 1, contradicting GR0's own 1 -> 0x21"),
+    ("CE2", "pbdmaIds", "the die's PBDMA 5; our device numbers PBDMAs contiguously (2); fault id 0x22 agrees"),
+    ("CE3", "pbdmaIds", "the die's PBDMA 6; ours is 3; fault id 0x23 agrees"),
+    ("SOFTWARE", "*", "RM's pseudo-engine: the capture's RUNLIST/RESET/INTR/MC/INSTANCE/PRI-base/PBDMA are noise (kf_abi::deviceinfo)"),
+];
+
+fn assert_engine_rows_match_except_stated(got: &[kf_abi::inittables::FifoDeviceEntry], want: &[kf_abi::inittables::FifoDeviceEntry]) {
+    use kf_rm::authored::slot;
+    const NAMES: [(usize, &str); 15] = [
+        (slot::ENG_DESC, "ENG_DESC"), (slot::FIFO_TAG, "FIFO_TAG"), (slot::RM_ENGINE_TYPE, "RM_ENGINE_TYPE"),
+        (slot::RUNLIST, "RUNLIST"), (slot::MMU_FAULT_ID, "MMU_FAULT_ID"), (slot::RC_MASK, "RC_MASK"),
+        (slot::RESET, "RESET"), (slot::INTR, "INTR"), (slot::MC, "MC"), (slot::DEV_TYPE_ENUM, "DEV_TYPE_ENUM"),
+        (slot::INSTANCE_ID, "INSTANCE_ID"), (slot::RUNLIST_PRI_BASE, "RUNLIST_PRI_BASE"),
+        (slot::IS_HOST_DRIVEN_ENGINE, "IS_HOST_DRIVEN_ENGINE"), (slot::RUNLIST_ENGINE_ID, "RUNLIST_ENGINE_ID"),
+        (slot::CHRAM_PRI_BASE, "CHRAM_PRI_BASE"),
+    ];
+    let excused = |name: &str, what: &str| {
+        ENGINE_DIVERGENCES.iter().any(|(n, w, _)| (*n == name || *n == "*") && (*w == what || *w == "*"))
+    };
+    assert_eq!(got.len(), want.len());
+    let mut checked = 0;
+    for (g, w) in got.iter().zip(want) {
+        assert_eq!(g.name, w.name);
+        for (s, what) in NAMES {
+            if !excused(g.name, what) {
+                assert_eq!(g.engine_data[s], w.engine_data[s], "{} {what}", g.name);
+                checked += 1;
+            }
+        }
+        let n = w.num_pbdmas as usize;
+        if !excused(g.name, "numPbdmas") {
+            assert_eq!(g.num_pbdmas, w.num_pbdmas, "{} numPbdmas", g.name);
+        }
+        if !excused(g.name, "pbdmaIds") {
+            assert_eq!(g.pbdma_ids[..n], w.pbdma_ids[..n], "{} pbdmaIds", g.name);
+        }
+        if !excused(g.name, "pbdmaFaultIds") {
+            assert_eq!(g.pbdma_fault_ids[..n], w.pbdma_fault_ids[..n], "{} pbdmaFaultIds", g.name);
         }
     }
+    assert_eq!(checked, 5 * 14 - 3, "5 hardware rows × 14 non-RC slots, minus CE1..3 INTR");
 }
 
+/// ★ The engine rows: authored over the host's REAL `GET_ENGINES_V2` list (captured), compared
+/// slot by slot with the old captured table — equal except [`ENGINE_DIVERGENCES`].
+#[test]
+fn the_authored_engine_table_over_the_real_engine_list_equals_the_captured_rows_except_stated() {
+    let f = ga106::host_facts();
+    let kinds = hostquery::query_engine_list(&mut Ga106Replay::load()).expect("captured");
+    assert_eq!(kinds.iter().map(|k| k.name()).collect::<Vec<_>>(), ["GR0", "CE0", "CE1", "CE2", "CE3", "SOFTWARE"]);
+    let rows = kf_rm::authored::engine_table(Family::Ampere, &kinds).expect("Ampere has every constant");
+    assert_engine_rows_match_except_stated(&rows, &f.engines);
+    assert_eq!(hostquery::device_info_rule(&kinds), f.device_info);
+    // ★ And the served CE geometry derived from the authored rows names the LCEs the real GA106
+    // reports present (R18 CE_GET_ALL_CAPS: 0x0f).
+    assert_eq!(kf_abi::cecaps::CeGeometry::from_engines(&rows).expect("LCE rows").present, 0x0f);
+}
+
+/// A host of another family than realize chose is refused by name.
 #[test]
 fn a_host_of_another_family_is_refused_by_name() {
     let mut host = Ga106Replay::load();
@@ -268,15 +358,96 @@ fn a_host_of_another_family_is_refused_by_name() {
         .any(|r| r.field == "family" && r.cause == FieldCause::FamilyMismatch { asked: Family::Hopper, host: Family::Ampere }));
 }
 
-/// Every [`Source::Unsourced`] row is refused by the query with the table's own text.
+/// ★ No field is left without a source any more: the four the first cut refused are
+/// `Advertised` (gmmu, fault-method buffer) or host + authored (engines, gr_static).
 #[test]
-fn every_unsourced_provenance_row_is_refused_with_its_own_text() {
-    let mut host = Ga106Replay::load();
-    let refused = hostquery::query_host_facts(&mut host, Family::Ampere).expect_err("gaps");
-    for (name, src) in PROVENANCE {
-        if let Source::Unsourced(text) = src {
-            let r = refused.refusals.iter().find(|r| r.field == *name).expect("an unsourced field is refused");
-            assert_eq!(r.cause, FieldCause::Unsourced(text));
+fn no_provenance_row_is_unsourced_and_the_authored_ones_say_so() {
+    assert!(!PROVENANCE.iter().any(|(_, s)| matches!(s, Source::Unsourced(_))));
+    for f in ["gmmu_static", "ce_fault_method_buffer_size"] {
+        assert!(PROVENANCE.iter().any(|(n, s)| *n == f && matches!(s, Source::Advertised(_))), "{f}");
+    }
+}
+
+/// The replay, completed for the controls no capture holds by answering them from the old
+/// captured rows — a stand-in for the host, so the WHOLE query can be driven to `Ok`. ⚠ What
+/// this proves for those controls is the request/reply LAYOUT, not a hardware value.
+struct CompletedGa106(Ga106Replay);
+
+impl HostControls for CompletedGa106 {
+    fn control(&mut self, cmd: u32, p: &mut [u8]) -> Result<(), HostRefusal> {
+        let f = ga106::host_facts();
+        let put = |p: &mut [u8], at: usize, v: u32| p[at..at + 4].copy_from_slice(&v.to_le_bytes());
+        match cmd {
+            0x2080_1228 => {
+                for (i, d) in f.gr_info.data.iter().enumerate() {
+                    put(p, 8 + 8 * i, *d);
+                }
+                Ok(())
+            }
+            0x2080_1237 => {
+                let gpc = u32::from_le_bytes(p[0..4].try_into().expect("4")) as usize;
+                put(p, 4, f.gr_static.gpcs[gpc].zcull_mask);
+                Ok(())
+            }
+            0x2080_121b => {
+                // The capture's entries (truncated at 4096 bytes) plus the counts it lost.
+                let (_, _, prefix) = &self.0.ctrls[&cmd][0];
+                p[..prefix.len()].copy_from_slice(prefix);
+                let at = hostfacts::GR_GLOBAL_SM_ORDER_MAX_SM * hostfacts::GR_GLOBAL_SM_ENTRY_SIZE;
+                let tpcs = f.gr_static.tpcs.len() as u16;
+                p[at..at + 2].copy_from_slice(&(tpcs * f.gr_static.sms_per_tpc).to_le_bytes());
+                p[at + 2..at + 4].copy_from_slice(&tpcs.to_le_bytes());
+                Ok(())
+            }
+            0x2080_122d => {
+                let id = u32::from_le_bytes(p[16..20].try_into().expect("4")) as usize;
+                let b = f.gr_context_buffers[id];
+                if b.size == kf_abi::grstatic::CONTEXT_BUFFER_ABSENT {
+                    return Err(HostRefusal { status: Some(0x56), detail: "absent".into() });
+                }
+                put(p, 20, b.alignment);
+                put(p, 24, b.size);
+                p[28] = 1;
+                Ok(())
+            }
+            0x2080_170f => {
+                for (i, m) in f.intr_subtree_map.iter().enumerate() {
+                    p[8 * i..8 * i + 8].copy_from_slice(&m.to_le_bytes());
+                }
+                Ok(())
+            }
+            0x2080_170e => {
+                // The captured kernel table's static-type rows, re-keyed back to NV2080_INTR_TYPE.
+                let rows: Vec<(u32, &kf_abi::inittables::IntrTableEntry)> = f
+                    .intr_table
+                    .iter()
+                    .filter_map(|e| (1..=0x10u32).find(|&t| hostfacts::mc_engine_idx_of_intr_type(t) == Some(e.engine_idx)).map(|t| (t, e)))
+                    .collect();
+                put(p, 0, rows.len() as u32);
+                for (i, (t, e)) in rows.iter().enumerate() {
+                    let at = 4 + 16 * i;
+                    put(p, at, *t);
+                    put(p, at + 4, e.pmc_intr_mask);
+                    put(p, at + 8, e.vector_stall);
+                    put(p, at + 12, e.vector_non_stall);
+                }
+                Ok(())
+            }
+            0x2080_170d => {
+                // The captured table's engine rows, keyed back to NV2080_ENGINE_TYPE.
+                let rows: Vec<(u32, u32)> = f
+                    .intr_table
+                    .iter()
+                    .filter_map(|e| (1..0x54u32).find(|&t| hostfacts::mc_engine_idx_of_engine_type(t) == Some(e.engine_idx)).map(|t| (t, e.vector_non_stall)))
+                    .collect();
+                put(p, 0, rows.len() as u32);
+                for (i, (t, v)) in rows.iter().enumerate() {
+                    put(p, 4 + 8 * i, *t);
+                    put(p, 8 + 8 * i, *v);
+                }
+                Ok(())
+            }
+            _ => self.0.control(cmd, p),
         }
     }
 }
@@ -393,38 +564,6 @@ fn the_captured_sm_order_entries_derive_to_the_captured_tpc_rows() {
     assert_eq!(sms_per_tpc, f.gr_static.sms_per_tpc);
 }
 
-/// `engines`: `GET_ENGINES_V2` IS captured; `GET_HW_ENGINE_ID` and `GET_ENGINE_FAULT_INFO` are
-/// not. So this checks what the capture can: the advertised list (GR, the CEs, `SW` — the
-/// host's NVDEC/NVENC/OFA read and deliberately dropped) names the fixture's rows, in order,
-/// with the fixture's `RM_ENGINE_TYPE`s; and `device_info` built over it equals the fixture's.
-#[test]
-fn the_advertised_engine_list_and_device_info_equal_the_captured_rows() {
-    use kf_abi::inittables::engine_info_type::RM_ENGINE_TYPE;
-    let f = ga106::host_facts();
-    let host = Ga106Replay::load();
-    let list = hostfacts::derive_engine_list(&host.ctrls[&0x2080_0170][0].2).expect("captured");
-    assert_eq!(list.len(), 9, "the real GA106 lists nine engines");
-    let ids: Vec<hostquery::EngineIdentity> = list
-        .iter()
-        .filter_map(|&t| {
-            hostquery::classify_engine(t).map(|(kind, rm)| hostquery::EngineIdentity {
-                kind,
-                nv2080_engine_type: t,
-                rm_engine_type: rm,
-                fifo_tag: 0,
-                mmu_fault_id: None,
-            })
-        })
-        .collect();
-    let names: Vec<String> = ids.iter().map(|e| e.name()).collect();
-    let fixture_names: Vec<&str> = f.engines.iter().map(|e| e.name).collect();
-    assert_eq!(names, fixture_names);
-    let rm: Vec<u32> = ids.iter().map(|e| e.rm_engine_type).collect();
-    let fixture_rm: Vec<u32> = f.engines.iter().map(|e| e.engine_data[RM_ENGINE_TYPE]).collect();
-    assert_eq!(rm, fixture_rm);
-    assert_eq!(hostquery::device_info_rule(&ids), f.device_info);
-}
-
 /// ⊘ `gr_info` — NO capture of `GR_GET_INFO_V2` exists. What CAN be checked is the layout: the
 /// fixture's table, laid out as `GR_GET_INFO_V2`'s reply, must derive back to itself.
 #[test]
@@ -496,9 +635,61 @@ fn intr_table_has_no_capture_so_only_the_mc_engine_idx_keying_is_checked() {
 #[test]
 fn the_family_rules_cover_what_a_ga106_does_not_have() {
     assert_eq!(hostquery::USERMODE_REG_BASE, 0x00BB_0000, "tu102/gb100 dev_vm.h: 0xB80000 + 0x30000");
-    assert_eq!(hostquery::classify_engine(0x34), Some((hostquery::EngineKind::Copy(10), 0x13)), "COPY10: NV2080 0x34, RM 0x13");
-    assert_eq!(hostquery::classify_engine(0x3d), Some((hostquery::EngineKind::Copy(19), 0x1c)));
+    assert_eq!(hostquery::classify_engine(0x34), Some((kf_rm::authored::EngineKind::Copy(10), 0x13)), "COPY10: NV2080 0x34, RM 0x13");
+    assert_eq!(hostquery::classify_engine(0x3d), Some((kf_rm::authored::EngineKind::Copy(19), 0x1c)));
     assert_eq!(hostquery::classify_engine(0x13), None, "NV2080 0x13 is NVDEC0, not a copy engine");
-    assert_eq!(hostquery::classify_engine(0x08), Some((hostquery::EngineKind::Graphics(7), 0x08)), "GR7 (MIG parts)");
+    assert_eq!(hostquery::classify_engine(0x08), Some((kf_rm::authored::EngineKind::Graphics(7), 0x08)), "GR7 (MIG parts)");
     assert_eq!(hostfacts::mc_engine_idx_of_engine_type(0x3d), Some(34), "CE19 = MC_ENGINE_IDX_CE19");
+}
+
+// =====================================================================================
+// The authored rules, for the families a GA106 cannot exercise
+// =====================================================================================
+
+/// `tpc_to_pes_map` from the GA106's own GR litters (6 TPCs per GPC, 2 per PES) is the map the
+/// real GA106 reported.
+#[test]
+fn the_tpc_to_pes_rule_reproduces_the_ga106_map() {
+    let f = ga106::host_facts();
+    let map = kf_rm::authored::tpc_to_pes_map(f.gr_info.data[0x17], f.gr_info.data[0x1e]).expect("usable litters");
+    assert_eq!(map, kf_abi::grstatic::GA106_TPC_TO_PES_MAP);
+    assert_eq!(kf_rm::authored::tpc_to_pes_map(6, 0), None, "zero TPCs per PES is refused");
+}
+
+/// ★ The engine layout for every family: Blackwell's fault ids are its own header's (GR 384,
+/// CE0 65, HOST0 85); Turing has no Esched PRI bases; Hopper is refused BY NAME (no HOST0 in the
+/// tree) and so is a MIG list with a second GR.
+#[test]
+fn the_engine_layout_answers_every_family_or_refuses_one_by_name() {
+    use kf_rm::authored::{EngineKind as K, engine_table, slot};
+    let list = [K::Graphics(0), K::Copy(0), K::Copy(1), K::Copy(2), K::Copy(12), K::Software];
+    for fam in [Family::Turing, Family::Ampere, Family::Ada, Family::Blackwell] {
+        let rows = engine_table(fam, &list).unwrap_or_else(|e| panic!("{fam:?}: {e:?}"));
+        let resets: Vec<u32> = rows[..5].iter().map(|r| r.engine_data[slot::RESET]).collect();
+        let mut uniq = resets.clone();
+        uniq.sort_unstable();
+        uniq.dedup();
+        assert_eq!(uniq.len(), resets.len(), "{fam:?}: reset bits collide: {resets:?}");
+        assert!(resets.iter().all(|&b| b < 32));
+    }
+    let bw = engine_table(Family::Blackwell, &list).expect("Blackwell");
+    assert_eq!(bw[0].engine_data[slot::MMU_FAULT_ID], 384);
+    assert_eq!(bw[4].engine_data[slot::MMU_FAULT_ID], 65 + 12);
+    assert_eq!(bw[0].pbdma_fault_ids, [85, 86]);
+    let tu = engine_table(Family::Turing, &list).expect("Turing");
+    assert_eq!(tu[3].engine_data[slot::RUNLIST_PRI_BASE], 0, "RUNLIST_PRI_BASE is valid only on Ampere+");
+    assert_eq!(tu[3].engine_data[slot::RUNLIST], 1);
+    let hopper = engine_table(Family::Hopper, &list).expect_err("no HOST0");
+    assert!(hopper.missing.contains("HOST0"));
+    assert!(engine_table(Family::Ampere, &[K::Graphics(0), K::Graphics(1), K::Copy(0)]).is_err(), "MIG");
+}
+
+/// The GSP/DISP rows are refused, never doubled, if a host row already sits on either vector.
+#[test]
+fn the_gsp_and_disp_rows_refuse_a_host_vector_collision() {
+    use kf_abi::inittables::{INTR_VECTOR_INVALID, IntrTableEntry};
+    let clash = vec![IntrTableEntry { engine_idx: 59, pmc_intr_mask: 0, vector_stall: 0x9b, vector_non_stall: INTR_VECTOR_INVALID }];
+    assert_eq!(kf_rm::authored::with_gsp_and_disp_rows(clash), Err(0x9b));
+    let rows = kf_rm::authored::with_gsp_and_disp_rows(Vec::new()).expect("no clash");
+    assert_eq!(rows.iter().map(|e| (e.engine_idx, e.vector_stall)).collect::<Vec<_>>(), [(50, 0x9b), (2, 0x9a)]);
 }

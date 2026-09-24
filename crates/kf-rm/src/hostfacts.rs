@@ -86,7 +86,7 @@ pub struct HostFacts {
     pub bif_static: BifStaticRow,
     /// Channels per runlist (ours to set).
     pub fifo_channels: FifoChannelsRow,
-    /// GMMU fault-buffer sizes. ⊘ [`Source::Unsourced`] — see [`PROVENANCE`].
+    /// GMMU fault-buffer sizes — ours to state ([`Source::Advertised`], `crate::authored::GMMU_STATIC`).
     pub gmmu_static: GmmuStaticRow,
     /// GR geometry: GPCs, TPCs, SM order, caps (`GR_GET_INFO_V2` + GPC/TPC masks).
     pub gr_static: GrStaticProfile,
@@ -128,6 +128,9 @@ pub enum Source {
     FamilyRule(&'static str),
     /// A value we author — the board we present, or one fabricated so RM's own code accepts it.
     Authored(&'static str),
+    /// ★ A value WE state as the GSP of the device we present, where the open tree states no
+    /// number (w827 ruling): the text names the constant in [`crate::authored`] and its reason.
+    Advertised(&'static str),
     /// ⊘ **No source exists**: no unprivileged host control reports it and no family rule is
     /// established. [`crate::hostquery::query_host_facts`] refuses the field BY NAME with this
     /// text and never fills it — a row here is a stated gap, not a default.
@@ -139,16 +142,14 @@ pub enum Source {
 pub const PROVENANCE: &[(&str, Source)] = &[
     ("family", Source::HostControl { cmd: 0x2080_1701, name: "MC_GET_ARCH_INFO" }),
     ("has_c2c", Source::HostControl { cmd: 0x2080_182b, name: "BUS_GET_C2C_INFO" }),
-    // ⊘ w827: RM exposes exactly two per-engine projections of its device-info table to a
-    // usermode client, both NON_PRIVILEGED: FIFO_TAG (`GET_HW_ENGINE_ID`) and MMU_FAULT_ID
-    // (`GET_ENGINE_FAULT_INFO`). RUNLIST / RUNLIST_PRI_BASE are only in
-    // `GET_ENGINE_RUNLIST_PRI_BASE 0x20800179` (PRIVILEGED, flags 0x4); RESET, INTR, RC_MASK,
-    // CHRAM_PRI_BASE, RUNLIST_ENGINE_ID and the PBDMA ids only in
-    // `FIFO_GET_DEVICE_INFO_TABLE 0x20801112` (KERNEL, flags 0x5c040). The query refuses the
-    // field naming those slots ([`crate::hostquery::ENGINE_SLOTS_UNSOURCED`]).
-    ("engines", Source::HostControl { cmd: 0x2080_0170, name: "GPU_GET_ENGINES_V2 + GPU_GET_HW_ENGINE_ID 0x2080017a (FIFO_TAG) + GPU_GET_ENGINE_FAULT_INFO 0x20800125 (MMU_FAULT_ID); runlist/PBDMA/reset/intr slots unsourced" }),
+    // ★ w827 ruling: "WE ARE THE GSP". The host supplies the engine TYPES and COUNTS; every
+    // slot of each row describes OUR device (guest channels are re-born on host twins), authored
+    // per family in `crate::authored::engine_table` (ogkm constants + a stated layout). The
+    // host's own runlist/PBDMA/reset slots are unreachable anyway (0x20800179 PRIVILEGED,
+    // 0x20801112 KERNEL). ⊘ Hopper refused by name: no NV_PFAULT_MMU_ENG_ID_HOST0 in the tree.
+    ("engines", Source::HostControl { cmd: 0x2080_0170, name: "GPU_GET_ENGINES_V2 (types, counts); every slot authored per family: authored::engine_table / ENGINE_LAYOUT_WHY" }),
     ("lce_pce_masks", Source::HostControl { cmd: 0x2080_2a02, name: "CE_GET_CE_PCE_MASK" }),
-    ("intr_table", Source::HostControl { cmd: 0x2080_170e, name: "MC_GET_STATIC_INTR_TABLE (static rows) + MC_GET_ENGINE_NOTIFICATION_INTR_VECTORS 0x2080170d (engine non-stall rows), keyed to MC_ENGINE_IDX by rule" }),
+    ("intr_table", Source::HostControl { cmd: 0x2080_170e, name: "MC_GET_STATIC_INTR_TABLE (static rows) + MC_GET_ENGINE_NOTIFICATION_INTR_VECTORS 0x2080170d (engine non-stall rows), keyed to MC_ENGINE_IDX by rule; + the GSP and DISP stall rows of the device we present (authored::GSP_DISP_VECTORS_WHY)" }),
     ("intr_subtree_map", Source::HostControl { cmd: 0x2080_170f, name: "MC_GET_INTR_CATEGORY_SUBTREE_MAP" }),
     ("chip_info", Source::FamilyRule("USERMODE base = DRF_BASE(NV_VIRTUAL_FUNCTION_FULL_PHYS_OFFSET) + NV_VIRTUAL_FUNCTION (ogkm dev_vm.h); sub-rev from MC_GET_ARCH_INFO; isCmpSku from GPU_GET_INFO_V2[CMP_SKU 0x3c]")),
     ("user_register_access_map", Source::Authored("accessmap.rs")),
@@ -158,11 +159,10 @@ pub const PROVENANCE: &[(&str, Source)] = &[
     ("conf_compute", Source::Authored("CC off, fabricated so ogkm accepts it")),
     ("bif_static", Source::Authored("fabricated so ogkm accepts it (no C2C, single function)")),
     ("fifo_channels", Source::Authored("the channel count is ours to set")),
-    // ⊘ w827: there is no family row and the open tree cannot supply one — the sizes come
-    // from `kgmmuSetAndGetDefaultFaultBufferSize_HAL`, whose body is GSP firmware, and no
-    // usermode control reports them without the per-GPU fault-buffer object UVM owns.
-    ("gmmu_static", Source::Unsourced("GMMU fault-buffer sizes are computed inside GSP firmware (kgmmuSetAndGetDefaultFaultBufferSize_HAL); no unprivileged control reports them and no family row is established")),
-    ("gr_static", Source::HostControl { cmd: 0x2080_1228, name: "GR_GET_INFO_V2 (SMs per TPC) + GR_GET_GPC_MASK 0x2080122a / GR_GET_TPC_MASK 0x2080122b / GR_GET_GLOBAL_SM_ORDER 0x2080121b / GR_GET_CAPS_V2 0x20801227; mmu-per-GPC, PES, zcull, TPC-to-PES and FECS record size unsourced" }),
+    // ★ w827 ruling: ours to author. The physical computation IS in the open tree and is a
+    // silicon reset-default read-back, not a formula (kern_gmmu_tu102.c:548-566).
+    ("gmmu_static", Source::Advertised("authored::GMMU_STATIC / GMMU_STATIC_WHY")),
+    ("gr_static", Source::HostControl { cmd: 0x2080_1228, name: "GR_GET_INFO_V2 (SMs per TPC) + GR_GET_GPC_MASK 0x2080122a / GR_GET_TPC_MASK 0x2080122b / GR_GET_GLOBAL_SM_ORDER 0x2080121b / GR_GET_CAPS_V2 0x20801227; + GR_GET_ZCULL_MASK 0x20801237; mmu-per-GPC / PES per GPC from GR info litters; TPC-to-PES map, FECS record size, per-subctx header authored (authored.rs)" }),
     ("gr_info", Source::HostControl { cmd: 0x2080_1228, name: "GR_GET_INFO_V2" }),
     ("gr_context_buffers", Source::HostControl { cmd: 0x2080_122d, name: "GR_GET_ENGINE_CONTEXT_PROPERTIES" }),
     ("forwarded_gpu_info", Source::HostControl { cmd: 0x2080_0102, name: "GPU_GET_INFO_V2" }),
@@ -172,10 +172,9 @@ pub const PROVENANCE: &[(&str, Source)] = &[
     // (`kf_abi::smcmode`; real GA106 R21 sweep: `0x2a NV_OK data=0`).
     ("smc_mode", Source::HostControl { cmd: 0x2080_0102, name: "GPU_GET_INFO_V2[GPU_SMC_MODE 0x2a]" }),
     ("pcie_max_gen", Source::HostControl { cmd: 0x2080_1823, name: "BUS_GET_INFO_V2 (PCIE_GEN_INFO)" }),
-    // ⚠ w827: flags 0x1c040 = KERNEL_PRIVILEGED; a usermode session is refused
-    // `NV_ERR_INSUFFICIENT_PERMISSIONS` (`ogkm-580: rmapi/control.c:702-709`, and
-    // `kf_abi::fmbsize`'s own docs). Still ISSUED, so the refusal is the host's and names itself.
-    ("ce_fault_method_buffer_size", Source::HostControl { cmd: 0x2080_2a08, name: "CE_GET_FAULT_METHOD_BUFFER_SIZE (KERNEL_PRIVILEGED: refused to a usermode session)" }),
+    // ★ w827 ruling: ours to author. 0x20802a08 is KERNEL_PRIVILEGED (flags 0x1c040) and its
+    // physical body is GSP firmware, so it is not asked; see authored::CE_FAULT_METHOD_BUFFER_SIZE_WHY.
+    ("ce_fault_method_buffer_size", Source::Advertised("authored::CE_FAULT_METHOD_BUFFER_SIZE / CE_FAULT_METHOD_BUFFER_SIZE_WHY")),
     ("gsp_features", Source::HostControl { cmd: 0x2080_3601, name: "GSP_GET_FEATURES" }),
     ("gpu_name", Source::HostControl { cmd: 0x2080_0110, name: "GPU_GET_NAME_STRING (ASCII)" }),
     ("gpu_short_name", Source::HostControl { cmd: 0x2080_0111, name: "GPU_GET_SHORT_NAME_STRING" }),
@@ -374,24 +373,11 @@ pub fn derive_has_c2c(reply: &[u8]) -> Result<bool, FactRefusal> {
 
 /// `NV2080_CTRL_CMD_GPU_GET_ENGINES_V2` (`ogkm-580: ctrl2080gpu.h:773`).
 pub const NV2080_CTRL_CMD_GPU_GET_ENGINES_V2: u32 = 0x2080_0170;
-/// `NV2080_CTRL_CMD_GPU_GET_HW_ENGINE_ID` (`ogkm-580: ctrl2080gpu.h:2989`).
-pub const NV2080_CTRL_CMD_GPU_GET_HW_ENGINE_ID: u32 = 0x2080_017a;
-/// `NV2080_CTRL_CMD_GPU_GET_ENGINE_FAULT_INFO` (`ogkm-580: ctrl2080gpu.h`, flags `0x9`).
-pub const NV2080_CTRL_CMD_GPU_GET_ENGINE_FAULT_INFO: u32 = 0x2080_0125;
 /// `NV2080_GPU_MAX_ENGINES_LIST_SIZE` (`ogkm-580: ctrl2080gpu.h:776`).
 pub const GPU_MAX_ENGINES_LIST_SIZE: usize = 0x54;
 /// `sizeof(NV2080_CTRL_GPU_GET_ENGINES_V2_PARAMS)` — `engineCount` + the list. `[measured]`
 /// libcuda asks with 340 on a real GA106.
 pub const GET_ENGINES_V2_PARAMS_SIZE: usize = 4 + 4 * GPU_MAX_ENGINES_LIST_SIZE;
-/// `sizeof(NV2080_CTRL_GPU_GET_HW_ENGINE_ID_PARAMS)` — `engineList[]` then `hwEngineID[]`.
-pub const GET_HW_ENGINE_ID_PARAMS_SIZE: usize = 8 * GPU_MAX_ENGINES_LIST_SIZE;
-/// `sizeof(NV2080_CTRL_GPU_GET_ENGINE_FAULT_INFO_PARAMS)` — two `NvU32` and an `NvBool`,
-/// padded to 12.
-pub const GET_ENGINE_FAULT_INFO_PARAMS_SIZE: usize = 12;
-/// `NV2080_CTRL_GPU_GET_HW_ENGINE_ID_NULL` — the answer for `SW` and `NULL` inputs.
-pub const HW_ENGINE_ID_NULL: u32 = 0xffff_ffff;
-/// `NV2080_CTRL_GPU_GET_HW_ENGINE_ID_ERROR`.
-pub const HW_ENGINE_ID_ERROR: u32 = 0xffff_fffb;
 
 /// The host's engine list (`NV2080_ENGINE_TYPE_*`, host order) from `GET_ENGINES_V2`.
 ///
@@ -405,33 +391,6 @@ pub fn derive_engine_list(reply: &[u8]) -> Result<Vec<u32>, FactRefusal> {
         return Err(FactRefusal::Unservable { cmd, why: "engineCount exceeds NV2080_GPU_MAX_ENGINES_LIST_SIZE" });
     }
     Ok((0..n).filter_map(|i| le32(reply, 4 + 4 * i)).collect())
-}
-
-/// `hwEngineID[0..n]` from `GET_HW_ENGINE_ID` — RM's `ENGINE_INFO_TYPE_FIFO_TAG` projection
-/// (`ogkm-580: subdevice_ctrl_gpu_kernel.c:2588-2592`). `NULL` stays `NULL` (the `SW` row).
-///
-/// # Errors
-/// [`FactRefusal::ShortReply`]; [`FactRefusal::Unservable`] for an `_ERROR` entry.
-pub fn derive_hw_engine_ids(reply: &[u8], n: usize) -> Result<Vec<u32>, FactRefusal> {
-    let cmd = NV2080_CTRL_CMD_GPU_GET_HW_ENGINE_ID;
-    need(cmd, reply, GET_HW_ENGINE_ID_PARAMS_SIZE)?;
-    let base = 4 * GPU_MAX_ENGINES_LIST_SIZE;
-    let ids: Vec<u32> = (0..n.min(GPU_MAX_ENGINES_LIST_SIZE)).filter_map(|i| le32(reply, base + 4 * i)).collect();
-    if ids.contains(&HW_ENGINE_ID_ERROR) {
-        return Err(FactRefusal::Unservable { cmd, why: "an engine's hwEngineID is _ERROR" });
-    }
-    Ok(ids)
-}
-
-/// `mmuFaultId` from `GET_ENGINE_FAULT_INFO` — RM's `ENGINE_INFO_TYPE_MMU_FAULT_ID` projection
-/// (`ogkm-580: subdevice_ctrl_gpu_kernel.c:1748-1751`).
-///
-/// # Errors
-/// [`FactRefusal::ShortReply`].
-pub fn derive_mmu_fault_id(reply: &[u8]) -> Result<u32, FactRefusal> {
-    let cmd = NV2080_CTRL_CMD_GPU_GET_ENGINE_FAULT_INFO;
-    need(cmd, reply, GET_ENGINE_FAULT_INFO_PARAMS_SIZE)?;
-    Ok(le32(reply, 4).unwrap_or(0))
 }
 
 /// `NV2080_CTRL_CMD_MC_GET_ENGINE_NOTIFICATION_INTR_VECTORS` (`ogkm-580: ctrl2080mc.h:250`).

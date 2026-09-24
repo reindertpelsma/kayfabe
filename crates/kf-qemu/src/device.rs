@@ -134,9 +134,10 @@ impl Device {
         let (architecture, implementation, revision) = rm.arch_info();
         let family = Family::from_arch(architecture, implementation).map_err(|e| format!("family: {e:?}"))?;
         // ★ P3: the host die's facts, each from the source `kf_rm::hostfacts::PROVENANCE` names —
-        // asked before anything is reserved, so a refusal costs nothing. ⊘ A field the host
-        // refuses, or that has no source, refuses REALIZE, listing every such field: never a
-        // default, never a GA106 row.
+        // asked before anything is reserved, so a refusal costs nothing. What the host cannot
+        // state is authored as OUR device's (`kf_rm::authored`, cited per value). ⊘ A control the
+        // host refuses, or a family an authored rule has no number for (Hopper's PBDMA fault ids),
+        // refuses REALIZE, listing every such field: never a default, never a GA106 row.
         let host = std::sync::Arc::new(
             crate::rmfacts::host_facts(&rm, family).map_err(|e| format!("host facts: {e}"))?,
         );
