@@ -184,6 +184,7 @@ impl Device {
             fb_regions: layout.regions.clone(),
             fb_length,
             bar1_pde_base: layout.bar1_pde_base,
+            bar2_pde_base: layout.bar2_pde_base,
             pci_vendor_id: pci.vendor,
             pci_device_id: pci.device,
             pci_revision: pci.revision,

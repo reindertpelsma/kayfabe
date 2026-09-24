@@ -41,6 +41,13 @@ pub const fn bar1_pde_base_for(fb_size_mb: u64) -> u64 {
     (kf_chip::falcon_gsp::fb_length_for(fb_size_mb) - FW_CARVE_OUT_BYTES) + ABOVE_CARVE_OUT_BASE
 }
 
+/// The BAR2 root the same GSP declared (`bar2PdeBase`, cap1b record 141977 byte 1672):
+/// `0x2_F339_2000` at 12 GiB, i.e. `0x37B_2000` above the carve-out base.
+pub const fn bar2_pde_base_for(fb_size_mb: u64) -> u64 {
+    const ABOVE_CARVE_OUT_BASE: u64 = 0x37B_2000;
+    (kf_chip::falcon_gsp::fb_length_for(fb_size_mb) - FW_CARVE_OUT_BYTES) + ABOVE_CARVE_OUT_BASE
+}
+
 /// Old `ga10x::GA106_FB_REGIONS`, for any size (old `ga106_profile(fb_size_mb)`).
 pub fn fb_regions(fb_size_mb: u64) -> Vec<FbRegion> {
     let fb_length = kf_chip::falcon_gsp::fb_length_for(fb_size_mb);
@@ -83,6 +90,7 @@ pub fn board_at(fb_size_mb: u64) -> BoardFacts {
         fb_regions: fb_regions(fb_size_mb),
         fb_length: kf_chip::falcon_gsp::fb_length_for(fb_size_mb),
         bar1_pde_base: bar1_pde_base_for(fb_size_mb),
+        bar2_pde_base: bar2_pde_base_for(fb_size_mb),
         pci_vendor_id: 0x10de,
         pci_device_id: 0x2504,
         pci_revision: 0xA1,

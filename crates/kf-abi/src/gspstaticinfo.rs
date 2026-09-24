@@ -223,20 +223,24 @@ pub const BAR1_PDE_BASE_OFF: usize = 1664;
 // moved without the other.
 const _: () = assert!(BAR1_PDE_BASE_OFF >= NAME_STRING_UNICODE_OFF + 2 * NAME_STRING_LEN);
 const _: () = assert!(BAR1_PDE_BASE_OFF + 8 <= GSP_STATIC_CONFIG_INFO_SIZE);
+const _: () = assert!(BAR1_PDE_BASE_OFF + 16 <= GSP_STATIC_CONFIG_INFO_SIZE);
 
-/// ⊘ `bar2PdeBase`, at 1672 — **named and deliberately NOT written**.
+/// ★★★★ `bar2PdeBase`, at 1672 — **WRITTEN since P4 (w826): our BAR2 root is declared.**
 ///
-/// The guest reads it in `kbusPatchBar2Pdb_GSPCLIENT` (`ogkm-580: kern_bus.c:826-878`) to
-/// re-point CPU-RM's *software cache* of the BAR2 page-directory base, and then sends us
-/// the root **entry** it read out of its own old directory. That entry is what
-/// `kayfabe_device::bar2` latches and what the translation actually walks from, so this
-/// port has never needed the address — and `boot s17_e8fde62` served 286 352 BAR2 writes
-/// with 0 refusals while this field read zero.
+/// ⊘⊘ SUPERSEDED (2026-09-24, w826, `V3_P4_PORT_MAP.md` Q4): this field used to be *"named and
+/// deliberately NOT written"*, on the reason that the old tree's CPU plane walked BAR2 from the
+/// fn 70 **entry** and so never needed an address, and that a boot served 286 352 BAR2 writes with
+/// it zero. That reason was an ARCHITECTURE, and v3 dropped it: there is no CPU walk. The GPU
+/// walker walks from a ROOT PAGE in the store, and the guest names that page in every BAR2
+/// `MMU_INVALIDATE` — the PDB it latches is exactly this value
+/// (`kbusPatchBar2Pdb_GSPCLIENT`, `ogkm-580: kern_bus.c:826-878`, re-points
+/// `virtualBar2.pPDB` here; `[measured cap3 #159728]` the guest's first BAR2 invalidate writes
+/// `MMU_INVALIDATE_PDB = 0x2f33920`, i.e. this capture's `0x2_F339_2000`). Left zero, every
+/// BAR2 invalidate names FB address 0 — the *"Pdb(0) meant both at offset 0 and absent"*
+/// ambiguity the thin-guest campaign paid for.
 ///
-/// ★ It is declared here so that *"we left it zero"* is a recorded decision with a reason
-/// rather than a field nobody noticed, and so the next person to need it does not have to
-/// re-derive the offset. ⚠ Writing it would change a plane that is measured working, for
-/// no measured need.
+/// ⇒ The device declares a page it owns (`kf_chip::bar0::FbLayout::bar2_pde_base`, inside the
+/// carve-out), zeroes it, and serves fn 70 by writing the guest's `PDE3[0]` into its entry 0.
 pub const BAR2_PDE_BASE_OFF: usize = BAR1_PDE_BASE_OFF + 8;
 
 /// ★★★ **A model name this device declares** — `gpuNameString` / `gpuShortNameString`.
@@ -522,6 +526,9 @@ pub struct GspStaticInfo<'a> {
     /// page directory. See [`BAR1_PDE_BASE_OFF`] for why writing it is not optional and
     /// what leaving it zero told the guest.
     pub bar1_pde_base: u64,
+    /// ★★★★ `bar2PdeBase` — the framebuffer address of OUR BAR2 root page. See
+    /// [`BAR2_PDE_BASE_OFF`].
+    pub bar2_pde_base: u64,
 }
 
 /// A `GspStaticConfigInfo` this port will not put on the wire.
@@ -717,6 +724,10 @@ pub fn encode_gsp_static_info(
     // is the one [`kayfabe_device::ChipProfile::bar1_pde_base`] spells "no address model".
     body[BAR1_PDE_BASE_OFF..BAR1_PDE_BASE_OFF + 8]
         .copy_from_slice(&info.bar1_pde_base.to_le_bytes());
+    // ★★★★ BAR2's root (P4): the page every later BAR2 invalidate names. Unconditional, for the
+    // same reason as BAR1's.
+    body[BAR2_PDE_BASE_OFF..BAR2_PDE_BASE_OFF + 8]
+        .copy_from_slice(&info.bar2_pde_base.to_le_bytes());
     Ok(body)
 }
 
@@ -790,6 +801,7 @@ mod tests {
                 name: Some(GpuName::declared("AB")),
                 short_name: Some(GpuName::declared("C")),
                 bar1_pde_base: 0,
+                bar2_pde_base: 0,
             },
             GspStaticInfoWire::Pre610,
         )
@@ -880,6 +892,7 @@ mod tests {
                 name: a_name(),
                 short_name: a_short_name(),
                 bar1_pde_base: 0,
+                bar2_pde_base: 0,
             },
             GspStaticInfoWire::Pre610,
         )
@@ -943,6 +956,7 @@ mod tests {
                 name: a_name(),
                 short_name: a_short_name(),
                 bar1_pde_base: 0,
+                bar2_pde_base: 0,
             },
             GspStaticInfoWire::Pre610,
         )
@@ -973,6 +987,7 @@ mod tests {
                 name: a_name(),
                 short_name: a_short_name(),
                 bar1_pde_base: 0,
+                bar2_pde_base: 0,
             },
             GspStaticInfoWire::Pre610,
         )
@@ -999,6 +1014,7 @@ mod tests {
                 name: a_name(),
                 short_name: a_short_name(),
                 bar1_pde_base: 0,
+                bar2_pde_base: 0,
             },
             GspStaticInfoWire::Pre610,
         )
@@ -1043,6 +1059,7 @@ mod tests {
                 name: a_name(),
                 short_name: a_short_name(),
                 bar1_pde_base: 0,
+                bar2_pde_base: 0,
             },
             GspStaticInfoWire::Pre610,
         )
@@ -1068,6 +1085,7 @@ mod tests {
                 name: a_name(),
                 short_name: a_short_name(),
                 bar1_pde_base: 0,
+                bar2_pde_base: 0,
             },
             GspStaticInfoWire::Pre610,
         )
@@ -1092,6 +1110,7 @@ mod tests {
                 name: a_name(),
                 short_name: a_short_name(),
                 bar1_pde_base: 0,
+                bar2_pde_base: 0,
             },
             GspStaticInfoWire::From610_43_02,
         )

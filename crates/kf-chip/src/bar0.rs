@@ -186,6 +186,11 @@ pub struct FbLayout {
     pub regions: Vec<kf_abi::gspstaticinfo::FbRegion>,
     /// Where OUR BAR1 page directory lives (v3: our roots are declared, never adopted).
     pub bar1_pde_base: u64,
+    /// ★ P4 (w826): where OUR BAR2 root page directory lives. The guest publishes its own
+    /// `PDE3[0]` into entry 0 of this page (`UPDATE_BAR_PDE`, fn 70) and from then on names
+    /// THIS page in every BAR2 `MMU_INVALIDATE` (`kbusPatchBar2Pdb_GSPCLIENT`,
+    /// `ogkm-580: kern_bus.c:826-878`). Declared, never adopted — `V3_P4_PORT_MAP.md` Q4.
+    pub bar2_pde_base: u64,
 }
 
 /// The contiguous carve-out at the top of FB the GSP keeps for itself — read off a real RTX 3060's
@@ -197,6 +202,13 @@ pub const FW_CARVE_OUT_BYTES: u64 = 0x1042_0000;
 /// How far above the carve-out base the same GSP placed the BAR1 page directory
 /// (`0x2_F1CA_C000 - (12 GiB - FW_CARVE_OUT_BYTES)`) — a LAYOUT offset, preserved at any size.
 const BAR1_PDE_ABOVE_CARVE_OUT: u64 = 0x20C_C000;
+/// How far above the carve-out base the same GSP placed the BAR2 root page directory
+/// (`0x2_F339_2000 - (12 GiB - FW_CARVE_OUT_BYTES)`, the value `gspstaticinfo::BAR2_PDE_BASE_OFF`
+/// carries in that capture) — a LAYOUT offset, preserved at any size, inside the carve-out.
+const BAR2_PDE_ABOVE_CARVE_OUT: u64 = 0x37B_2000;
+/// The bytes of each root page we declare (one 4 KiB page: a VER2 `PDE3` root is 32 bytes and a
+/// VER3 `PD4` root 16, so one page holds either family's root with its unused tail zero).
+pub const ROOT_PAGE_BYTES: u64 = 0x1000;
 
 /// ★ The layout for a store of `fb_length` bytes. ⊘ `None` if the store cannot hold the carve-out
 /// (the VM must not start on a framebuffer smaller than its own firmware reservation).
@@ -226,5 +238,10 @@ pub fn fb_layout(fb_length: u64) -> Option<FbLayout> {
             protected: false,
         },
     ];
-    Some(FbLayout { fb_length, regions, bar1_pde_base: carve + BAR1_PDE_ABOVE_CARVE_OUT })
+    Some(FbLayout {
+        fb_length,
+        regions,
+        bar1_pde_base: carve + BAR1_PDE_ABOVE_CARVE_OUT,
+        bar2_pde_base: carve + BAR2_PDE_ABOVE_CARVE_OUT,
+    })
 }

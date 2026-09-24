@@ -167,6 +167,7 @@ fn the_encoder_reproduces_the_oracles_own_fb_region_bytes() {
             fb_regions: &ORACLE_ROWS,
             fb_length: TWELVE_GIB,
             bar1_pde_base: ga106::bar1_pde_base_for(ga106::FB_SIZE_MB),
+            bar2_pde_base: ga106::bar2_pde_base_for(ga106::FB_SIZE_MB),
             gid: a_test_gid(),
             // ⊘ The layout test states a name so the FB assertions below run against a
             // fully-populated body; the shipped device states none. See
@@ -195,6 +196,11 @@ fn the_encoder_reproduces_the_oracles_own_fb_region_bytes() {
     assert!(body[632..1248].iter().all(|b| *b == 0), "fbRegion[5..16]");
     // `fb_length`, the second statement of the same 12 GiB.
     assert_eq!(&body[1352..1360], &0x3_0000_0000u64.to_le_bytes()[..]);
+    // ★ P4: both roots, at the capture's own offsets and values (`bar1PdeBase` 1664,
+    // `bar2PdeBase` 1672 — the latter the PDB the guest's first BAR2 invalidate names,
+    // `[cap3 #159728]` `MMU_INVALIDATE_PDB = 0x2f33920`).
+    assert_eq!(&body[1664..1672], &0x2_F1CA_C000u64.to_le_bytes()[..], "bar1PdeBase");
+    assert_eq!(&body[1672..1680], &0x2_F339_2000u64.to_le_bytes()[..], "bar2PdeBase");
     // Bytes 0..24 (`grCapsBits` + its alignment byte) and 292..344 (`SKUInfo`) are real in
     // the capture and left zero here, because this port does not advertise them.
     assert!(body[..24].iter().all(|b| *b == 0), "grCapsBits");

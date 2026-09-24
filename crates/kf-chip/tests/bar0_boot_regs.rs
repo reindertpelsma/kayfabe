@@ -36,6 +36,14 @@ fn the_fb_size_served_is_the_stores_not_a_die_constant() {
 fn the_fb_layout_reproduces_the_captured_bar1_pde_base_at_12_gib() {
     let l = kf_chip::bar0::fb_layout(12288 << 20).unwrap();
     assert_eq!(l.bar1_pde_base, 0x2_F1CA_C000, "the captured RTX 3060 value (cap1b record 141977)");
+    assert_eq!(l.bar2_pde_base, 0x2_F339_2000, "the captured RTX 3060 bar2PdeBase (same record, byte 1672)");
+    // ★ Both roots sit inside the carve-out (reserved == size), so the guest's heap never hands
+    // them out, and they do not overlap each other.
+    let carve = l.regions[1].base;
+    for r in [l.bar1_pde_base, l.bar2_pde_base] {
+        assert!(r >= carve && r + kf_chip::bar0::ROOT_PAGE_BYTES <= 12288 << 20, "{r:#x}");
+    }
+    assert!(l.bar1_pde_base.abs_diff(l.bar2_pde_base) >= kf_chip::bar0::ROOT_PAGE_BYTES);
     assert_eq!(l.regions[1].base + l.regions[1].reserved, 12288 << 20);
     assert!(kf_chip::bar0::fb_layout(0x1000_0000).is_none(), "a 256 MiB store cannot hold the carve-out");
 }

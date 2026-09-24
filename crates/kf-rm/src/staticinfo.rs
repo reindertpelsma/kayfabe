@@ -176,6 +176,9 @@ impl StaticInfoPolicy {
                 // that drift is unobservable by construction, because a wrong root reads as
                 // an unmapped virtual address rather than as a mismatch.
                 bar1_pde_base: self.board.bar1_pde_base,
+                // ★★★★ P4: OUR BAR2 root — the page every BAR2 invalidate will name, and the
+                // one fn 70 writes the guest's `PDE3[0]` into.
+                bar2_pde_base: self.board.bar2_pde_base,
             },
             self.driver.gsp_static_info_wire(),
         )

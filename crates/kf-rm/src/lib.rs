@@ -44,6 +44,8 @@ pub struct BoardFacts {
     pub fb_length: u64,
     /// Where RM's BAR1 page directory lives in the framebuffer (a derivation from `fb_length`).
     pub bar1_pde_base: u64,
+    /// ★ P4: where OUR BAR2 root page lives (`kf_chip::bar0::FbLayout::bar2_pde_base`).
+    pub bar2_pde_base: u64,
     /// PCI vendor id presented to the guest (the host's own: NVIDIA's).
     pub pci_vendor_id: u16,
     /// PCI device id presented to the guest (the host's own, so the guest driver binds).
