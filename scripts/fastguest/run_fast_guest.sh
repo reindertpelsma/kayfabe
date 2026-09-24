@@ -23,7 +23,11 @@ TAG=${1:-fast}
 BUDGET=${2:-20}
 BENCH=${BENCH_DIR:-/workspace/bench}
 FG=$BENCH/fastguest
-Q=${QEMU_BIN:-$BENCH/qemu-build/qemu-system-x86_64}
+if [ "${KF_DEVICE:-nvkvm}" = kf3 ]; then
+    Q=${QEMU_BIN:-$BENCH/qemu-build-kf3/qemu-system-x86_64}
+else
+    Q=${QEMU_BIN:-$BENCH/qemu-build/qemu-system-x86_64}
+fi
 SER=$BENCH/fast_${TAG}_serial.log
 
 for f in "$FG/vmlinuz" "$FG/initrd.cpio.gz" "$Q"; do
@@ -148,6 +152,11 @@ echo "== qemu:  $Q  (built $(date -r "$Q" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || ec
 # ⇒ Refuse when the archive's own sources are newer than the linked binary. ⊘ Source mtime, not
 # a git stamp: an uncommitted edit is exactly the case that bites, and a commit-hash stamp
 # would call that tree clean.
+# ★ v3: KF_DEVICE selects the device. `nvkvm` (default) is the old tree's, with its archive checks;
+# `kf3` is the v3 device (crates/kf-qemu + qemu/hw/misc/kf3), built by scripts/bench/build_kf3.sh
+# into its own QEMU build dir. The suite and the grader are the SAME for both.
+KF_DEVICE=${KF_DEVICE:-nvkvm}
+if [ "$KF_DEVICE" = nvkvm ]; then
 KF_ROOT=${KF_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}
 if [ -d "$KF_ROOT/crates" ]; then
     newest=$(find "$KF_ROOT/crates" -name '*.rs' -newer "$Q" -print -quit 2>/dev/null)
@@ -185,6 +194,7 @@ if [ "${_iso_n:-0}" -eq 0 ]; then
     exit 3
 fi
 echo "== archive feature check: host-isolate plane present ✔"
+fi
 
 # ⊘⊘⊘ **THE DEVICE LINE AND THE RAM BACKING ARE NOT THE FAST LANE’S TO INVENT.** As first
 # written this file said `-device kayfabe-gpu` and `-machine q35,accel=kvm -m 4096`, and BOTH
@@ -220,12 +230,19 @@ export KAYFABE_GUEST_BAR1_MB=${KAYFABE_GUEST_BAR1_MB:-128}
 # ★ w770 — pass an operator-supplied VA through to the device's walk probe.
 [ -n "${KAYFABE_PROBE_VA:-}" ] && export KAYFABE_PROBE_VA
 
+case "$KF_DEVICE" in
+    nvkvm) DEVARGS=(-device "nvkvm-gpu,bar1-size=$BAR1_BYTES,bar2-size=33554432,id=kf0${NVKVM_DEV_EXTRA:+,$NVKVM_DEV_EXTRA}") ;;
+    kf3)   DEVARGS=(-device "kf3-gpu,fb-mb=${KF3_FB_MB:-8192},bar1-size=$BAR1_BYTES,bar2-size=33554432,id=kf0${KF3_DEV_EXTRA:+,$KF3_DEV_EXTRA}") ;;
+    *) echo "run_fast_guest: KF_DEVICE must be nvkvm or kf3, got [$KF_DEVICE]" >&2; exit 2 ;;
+esac
+echo "== device: ${DEVARGS[*]}"
+
 start=$(date +%s)
 timeout --kill-after=3 "$BUDGET" "$Q" \
     "${RAMARGS[@]}" -cpu host -smp "${KF_SMP:-3}" \
     -kernel "$FG/vmlinuz" -initrd "$FG/initrd.cpio.gz" \
     -append "console=ttyS0 panic=1 loglevel=6 KF_ARMS=$ARMS_TOK KF_IOCTL_TRACE=${KF_IOCTL_TRACE:-verbose} KF_BUDGET_S=$BUDGET" \
-    -device "nvkvm-gpu,bar1-size=$BAR1_BYTES,bar2-size=33554432,id=kf0${NVKVM_DEV_EXTRA:+,$NVKVM_DEV_EXTRA}" \
+    "${DEVARGS[@]}" \
     -msg timestamp=on \
     -serial "file:$SER" -display none \
     > "$BENCH/fast_${TAG}_qemu.log" 2>&1
