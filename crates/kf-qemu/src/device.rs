@@ -478,7 +478,11 @@ impl HostOps for Device {
     fn apply_register(&self, bar: u8, offset: u32, value: u64, _width: u8) {
         let Ok(mut g) = self.gsp.lock() else { return };
         let g = &mut *g;
-        self.counters.applied.fetch_add(1, Ordering::Relaxed);
+        let n = self.counters.applied.fetch_add(1, Ordering::Relaxed);
+        // The first writes ARE the boot sequence; logged on the drainer (never a vCPU).
+        if n < 512 {
+            eprintln!("kf3: w#{n} bar{bar} @{offset:#08x} = {value:#x} phase={:?}", g.fsm.phase());
+        }
         let mut ram = Ram(self);
         let before = g.fsm.phase();
         match g.fsm.mmio_write_with(&mut ram, g.model.as_ref(), &mut g.policy, bar, u64::from(offset), value) {
