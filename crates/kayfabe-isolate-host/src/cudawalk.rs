@@ -383,6 +383,24 @@ pub fn run(pdbs: &[u64]) -> Result<Vec<u8>, u32> {
         pdbs.len()
     );
     let report = k.refresh(win_base, win_len, pdbs);
+    // DIAGNOSTIC (w826 cutover branch): the store's words at operator-named GPGAs, as the
+    // kernel sees them — compared against the CPU's `RAW-DUAL` line.
+    if let Ok(v) = std::env::var("KAYFABE_PROBE_PHYS") {
+        let mut out = String::new();
+        for a in v.split(',').filter_map(|h| u64::from_str_radix(h.trim_start_matches("0x"), 16).ok()) {
+            let mut b = [0u8; 24];
+            if a + 24 <= win_len && k.peek(win_base + a, &mut b).is_ok() {
+                let w: Vec<String> = b
+                    .chunks(8)
+                    .map(|c| format!("{:#x}", u64::from_le_bytes(c.try_into().unwrap_or([0; 8]))))
+                    .collect();
+                out.push_str(&format!(" {a:#x}=[{}]", w.join(",")));
+            } else {
+                out.push_str(&format!(" {a:#x}=?"));
+            }
+        }
+        eprintln!("kayfabe-isolate: STORE-PEEK{out}");
+    }
     // ⊘ Released on BOTH paths and before the `?`: a refused launch that leaked its image
     // would run the device out of memory over a boot's worth of refreshes, and the symptom
     // would arrive as a CUDA failure hundreds of refreshes after the one that caused it.

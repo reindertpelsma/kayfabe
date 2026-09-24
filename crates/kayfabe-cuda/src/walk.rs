@@ -892,6 +892,15 @@ impl WalkKernel {
         })
     }
 
+    /// DIAGNOSTIC (w826 cutover branch): read `buf.len()` bytes of device memory at `src` —
+    /// the walk's own view of the store, to compare with the CPU's.
+    ///
+    /// # Errors
+    /// The CUDA error, if the copy fails.
+    pub fn peek(&self, src: CUdeviceptr, buf: &mut [u8]) -> Result<(), CudaError> {
+        self.cu.memcpy_d2h(buf, src, "cuMemcpyDtoH(peek)")
+    }
+
     /// ★★★ **Import an RM-exported object into THIS kernel's context** and map it whole.
     ///
     /// ⊘ `[w825]` It must be this context. `arm_store_device_pointer` imports through a
