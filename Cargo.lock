@@ -454,6 +454,8 @@ name = "kf-chan"
 version = "0.1.0"
 dependencies = [
  "kf-abi",
+ "kf-host",
+ "kf-linux-raw",
 ]
 
 [[package]]
@@ -484,6 +486,7 @@ version = "0.1.0"
 dependencies = [
  "kf-abi",
  "kf-arch",
+ "kf-chan",
  "kf-chip",
  "kf-cuda",
  "kf-host",
