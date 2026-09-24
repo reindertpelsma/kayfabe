@@ -33,7 +33,9 @@ pub static WALK_PTX: &[u8] = include_bytes!("../../../cuda/walk/kf_walk.ptx");
 /// rename in the `.cu` is a named refusal here rather than a null function pointer later.
 const SYM_BEGIN: &str = "_Z15kf_begin_kernelP5KfDev";
 const SYM_WALK: &str = "_Z14kf_walk_kernel6KfArgs";
-const SYM_DIFF: &str = "_Z14kf_diff_kernel6KfArgs";
+const SYM_DIFF: &str = "_Z14kf_diff_kernel6KfArgsPKj";
+/// w826 — the parallel prefix/suffix trim that bounds the serial diff to what changed.
+const SYM_TRIM: &str = "_Z19kf_diff_trim_kernel6KfArgsPj";
 
 // ★ w826 — THE PARALLEL WALK's entry points (mangled; `kf_walk.cu`'s `kf_run_parallel`).
 const SYM_PAR: [&str; 9] = [
@@ -340,6 +342,7 @@ pub struct WalkKernel {
     f_begin: Func,
     f_walk: Func,
     f_diff: Func,
+    f_trim: Func,
     f_par: [Func; 9],
     par: ParBufs,
     fmt: KfFormat,
@@ -449,6 +452,7 @@ impl WalkKernel {
         let f_begin = cu.module_function(module, SYM_BEGIN)?;
         let f_walk = cu.module_function(module, SYM_WALK)?;
         let f_diff = cu.module_function(module, SYM_DIFF)?;
+        let f_trim = cu.module_function(module, SYM_TRIM)?;
         let mut f_par = [f_begin; 9];
         for (i, sym) in SYM_PAR.iter().enumerate() {
             f_par[i] = cu.module_function(module, sym)?;
@@ -524,6 +528,7 @@ impl WalkKernel {
             f_begin,
             f_walk,
             f_diff,
+            f_trim,
             f_par,
             par,
             fmt,
@@ -627,11 +632,22 @@ impl WalkKernel {
         // w826 — phase census: the walk vs the (single-thread) diff, every 512 refreshes.
         self.cu.ctx_synchronize()?;
         let t_walk = t0.elapsed();
-        self.cu.launch(
+        let _ = &mut args_param;
+        let trim = self.par.cnt.ptr;
+        self.cu.launch_args(
+            self.f_trim,
+            u32::try_from(pdbs.len()).unwrap_or(0).max(1),
+            256,
+            0,
+            &mut [param_bytes(&args), trim.to_le_bytes().to_vec()],
+            "cuLaunchKernel(kf_diff_trim_kernel)",
+        )?;
+        self.cu.launch_args(
             self.f_diff,
             1,
             1,
-            &mut args_param,
+            0,
+            &mut [param_bytes(&args), trim.to_le_bytes().to_vec()],
             "cuLaunchKernel(kf_diff_kernel)",
         )?;
         self.cu.ctx_synchronize()?;

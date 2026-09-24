@@ -1008,7 +1008,65 @@ __device__ void kf_diff_old(KfOut &o, KfDev *d, uint16_t pi,
 }
 #endif
 
-__global__ void kf_diff_kernel(KfArgs a)
+/* ★★★★★ w826 — TRIM THE DIFF TO WHAT CHANGED. `[measured w826 q7]` the diff kernel is one
+ * thread and its cost grew linearly with the mapping count (106 → 2 162 µs over one arm) while
+ * the parallel walk stayed flat at ~130 µs; with one mapping changing per invalidate the
+ * publisher went quadratic. This pass finds, per address space and IN PARALLEL, the longest
+ * identical prefix and suffix of the previous and current snapshots; the serial diff then runs
+ * on the middle window only.
+ *
+ * ⊘ EXACT, not a heuristic: an identical pair at an identical index takes kf_diff_class's
+ * "both cover, unchanged" branch, which emits nothing and only breaks the coalescing segment —
+ * and per class, runs are non-overlapping and VA-ordered, so no window run can overlap a
+ * prefix or suffix run of its class. Equality is on {va, gpga, len, flags}: `pdb_index` is the
+ * position in the pdb list and shifts when a new space sorts in front — comparing it would
+ * make every run differ and silently disable the trim.
+ * trim[2*t] = prefix length, trim[2*t+1] = suffix length, for CURRENT pdb index t; both 0 when
+ * the pdb had no previous table or the report is a resync. */
+__device__ __forceinline__ bool kf_run_same(const KfMapRun &x, const KfMapRun &y)
+{
+    return x.va == y.va && x.gpga == y.gpga && x.len == y.len && x.flags == y.flags;
+}
+
+__global__ void kf_diff_trim_kernel(KfArgs a, uint32_t *trim)
+{
+    const uint32_t t = blockIdx.x;
+    if (t >= a.npdb || t >= KF_MAX_PDB) return;
+    KfDev *d = a.dev;
+    const uint32_t cur = d->cur_buf ^ 1u, prv = d->cur_buf;
+    __shared__ uint32_t lo, suf;
+    __shared__ int32_t ip;
+    if (threadIdx.x == 0u) {
+        lo = 0u; suf = 0u; ip = -1;
+        const uint32_t resync = (!d->have_prev) || (d->acked != d->generation);
+        const uint32_t np = resync ? 0u : d->tbl_pdb_count[prv];
+        for (uint32_t j = 0u; j < np && j < KF_MAX_PDB; j++)
+            if (d->tbl_pdb[prv][j] == a.pdbs[t]) { ip = (int32_t)j; break; }
+    }
+    __syncthreads();
+    if (ip < 0) {
+        if (threadIdx.x == 0u) { trim[2u * t] = 0u; trim[2u * t + 1u] = 0u; }
+        return;
+    }
+    const KfMapRun *pr = a.tbl[prv] + (size_t)ip * d->runs_per_pdb;
+    const KfMapRun *cr = a.tbl[cur] + (size_t)t * d->runs_per_pdb;
+    const uint32_t pn = d->tbl_run_count[prv][ip], cn = d->tbl_run_count[cur][t];
+    const uint32_t m = pn < cn ? pn : cn;
+    if (threadIdx.x == 0u) { lo = m; suf = m; }
+    __syncthreads();
+    for (uint32_t k = threadIdx.x; k < m; k += blockDim.x) {
+        if (!kf_run_same(pr[k], cr[k])) atomicMin(&lo, k);
+        if (!kf_run_same(pr[pn - 1u - k], cr[cn - 1u - k])) atomicMin(&suf, k);
+    }
+    __syncthreads();
+    if (threadIdx.x == 0u) {
+        const uint32_t s2 = (suf < m - lo) ? suf : (m - lo);   /* never overlap the prefix */
+        trim[2u * t] = lo;
+        trim[2u * t + 1u] = s2;
+    }
+}
+
+__global__ void kf_diff_kernel(KfArgs a, const uint32_t *trim)
 {
     KfDev *d = a.dev;
     const uint32_t cur = d->cur_buf ^ 1u, prv = d->cur_buf;
@@ -1071,6 +1129,13 @@ __global__ void kf_diff_kernel(KfArgs a)
             const KfMapRun *cr = a.tbl[cur] + (size_t)ic * d->runs_per_pdb;
             uint32_t pn = d->tbl_run_count[prv][ip];
             uint32_t cn = d->tbl_run_count[cur][ic];
+            if (trim && ic < KF_MAX_PDB) {   /* w826: see kf_diff_trim_kernel */
+                const uint32_t lo = trim[2u * ic], sf = trim[2u * ic + 1u];
+                if (lo + sf <= pn && lo + sf <= cn) {
+                    pr += lo; cr += lo;
+                    pn -= lo + sf; cn -= lo + sf;
+                }
+            }
 #ifdef KF_OLD_MERGE
             kf_diff_old(o, d, pi, pr, pn, cr, cn);
 #else
@@ -2298,7 +2363,8 @@ extern "C" int kf_refresh(KfWalk *w,
      * and ordering, so prev from either is valid input to the other. */
     if (nscope == 0u) kf_run_parallel(w, a, npdb);
     else kf_walk_kernel<<<(npdb + 31u) / 32u, 32>>>(a);
-    kf_diff_kernel<<<1, 1>>>(a);
+    kf_diff_trim_kernel<<<npdb, 256>>>(a, w->par.cnt);
+    kf_diff_kernel<<<1, 1>>>(a, w->par.cnt);
     KF_CU_I(cudaGetLastError());
     KF_CU_I(cudaDeviceSynchronize());
 
