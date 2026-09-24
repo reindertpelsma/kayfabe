@@ -486,6 +486,7 @@ dependencies = [
  "kf-arch",
  "kf-chip",
  "kf-gsp",
+ "kf-rm",
  "kf-trace",
  "kf-util",
 ]
@@ -566,7 +567,10 @@ name = "kf-rm"
 version = "0.1.0"
 dependencies = [
  "kf-abi",
+ "kf-arch",
+ "kf-chip",
  "kf-gsp",
+ "kf-trace",
  "kf-util",
 ]
 

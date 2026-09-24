@@ -180,9 +180,10 @@ pub fn bench_abi() -> kf_gsp::GspAbi {
     }
 }
 
-// ⊘ `served_policy()` (the whole guest-facing CommandPolicy chain) returns with P3 — kf-rm
-// does not have the chain yet. Until then the replay answers with `EchoOk`, the C's own
-// acknowledge-everything baseline, which measures the TRANSPORT (see the module doc).
+// ⊘ `served_policy()` (the whole guest-facing CommandPolicy chain) is `kf_rm::served_policy`,
+// built in `tests/cap1b_differential.rs` over the GA106 test fixture — not here, because the
+// lib would then need a per-die row. Without a policy the replay answers with `EchoOk`, the
+// C's own acknowledge-everything baseline, which measures the TRANSPORT (see the module doc).
 
 /// The committed hermetic cold-boot capture.
 ///

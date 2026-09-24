@@ -10,6 +10,9 @@
 //! membership, and `nothing_of_the_guests_request_comes_back` pins the property that
 //! separates an inert acknowledgement from the echo the whole task deleted.
 
+#[path = "support/ga106.rs"]
+mod ga106;
+
 use kf_rm::inert::InertPolicy;
 use kf_gsp::{CommandPolicy, RpcCommand, RpcFunction};
 
@@ -152,3 +155,44 @@ fn every_other_function_falls_through_to_the_chain() {
 }
 
 // ⊘ The served-chain test (the whole CommandPolicy chain) returns with P3 — see V3_P2_PORT_MAP.md.
+
+#[test]
+fn through_the_whole_served_chain_the_teardown_rpc_never_reaches_the_ledger() {
+    // ★★ The unit test above proves the policy answers. This proves the *chain* does — that
+    // no earlier link claims fn 47 first, and that it no longer falls all the way through
+    // to `UnservicedLedger`, whose whole job is to write down what nothing answered.
+    // Testing the policy alone would leave "someone else got there first" undetected, which
+    // is the shape `gsp_static_info.rs::the_two_installed_policies_do_not_both_claim_a_function`
+    // exists to catch one link over.
+    use kf_rm::unserviced::UnservicedLog;
+    let log = UnservicedLog::new();
+    let mut chain = kf_rm::served_policy(
+        ga106::board(),
+        ga106::host(),
+        *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER)
+            .expect("the bench driver has a wire table"),
+        kf_rm::ChainLogs {
+            unserviced: log.clone(),
+            ..Default::default()
+        },
+        kf_rm::census::ControlCensusLog::new(),
+        // ★ No object-model seat. This test is about fn 47 reaching `InertPolicy` and NOT
+        // reaching the ledger; adding one would make the assertion depend on a link that has
+        // no opinion about fn 47 at all.
+        kf_rm::ObjectLinks::default(),
+    );
+    let reply = chain
+        .respond(&command(
+            RpcFunction::UnloadingGuestDriver,
+            47,
+            vec![0u8; 12],
+        ))
+        .expect("the chain answers fn 47");
+    assert_eq!(reply.rpc_result, 0);
+    assert_eq!(log.total(), 0, "fn 47 was recorded as unserviced");
+
+    // Non-vacuity for the ledger half: a command nothing models still lands in it, so a
+    // zero above means "answered" and not "the ledger stopped counting".
+    let _ = chain.respond(&command(RpcFunction::Other(0x777), 0x777, vec![0u8; 8]));
+    assert_eq!(log.total(), 1);
+}

@@ -15,3 +15,8 @@ kf-trace.workspace = true
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+# The served chain for `tests/cap1b_differential.rs` (the reply-plane differential). Test-only:
+# the GA106 facts it runs over are a test fixture, never a lib source.
+kf-rm.workspace = true
