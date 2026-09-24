@@ -454,6 +454,7 @@ name = "kf-chan"
 version = "0.1.0"
 dependencies = [
  "kf-abi",
+ "kf-core",
  "kf-host",
  "kf-linux-raw",
  "kf-trap",
@@ -467,6 +468,14 @@ dependencies = [
  "kf-arch",
  "kf-gsp",
  "kf-util",
+]
+
+[[package]]
+name = "kf-core"
+version = "0.1.0"
+dependencies = [
+ "kf-chip",
+ "kf-trap",
 ]
 
 [[package]]
@@ -502,6 +511,7 @@ dependencies = [
  "kf-arch",
  "kf-chan",
  "kf-chip",
+ "kf-core",
  "kf-cuda",
  "kf-host",
  "kf-linux-raw",

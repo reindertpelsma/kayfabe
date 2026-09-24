@@ -8,7 +8,7 @@
 //! committed PTX, built from that same file.
 
 use crate::abi::{
-    KF_ABI_VERSION, KF_MAX_PDB, KF_TBL_VER2, KF_TBL_VER3, KFWR_HF_TRUNCATED, KFWR_MAGIC, KFWR_OP_UNMAP, KfArgs,
+    KF_ABI_VERSION, KF_MAX_PDB, KF_TBL_VER2, KFWR_HF_TRUNCATED, KFWR_MAGIC, KFWR_OP_UNMAP, KfArgs,
     KfDev, KfFormat, KfMapRun, KfPdbEntry, KfReportHeader, KfScope,
 };
 use crate::driver_unsafe::{CUdeviceptr, CtxHandle, Cuda, CudaError, Func};

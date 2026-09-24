@@ -17,7 +17,8 @@ use kf_chan::host::{GuestUserd, HostRing, Publisher, TranslatedChannel};
 use kf_chan::ring::{GuestMemory, TranslatedRing};
 use kf_chan::translated::{Target, Window};
 use kf_chan::completions::Completions;
-use kf_chan::worker::{COMPLETIONS_TAG, Serve, WORKER_EFD_TAG, WorkerPlane, WorkerStats};
+use kf_chan::worker::{COMPLETIONS_TAG, WORKER_EFD_TAG, WorkerStats};
+use kf_core::{HostOps, HostSlice, Owner, Plane, Step, Translatable, VmCaps, Vmm};
 use kf_cuda::abi::kf_format_ver2;
 use kf_cuda::walk::{WalkCfg, WalkKernel};
 use kf_harness::Ledger as Checks;
@@ -25,7 +26,7 @@ use kf_harness::tables::Tree;
 use kf_host::{HostRm, VaSpace};
 use kf_linux_raw::{Backing, CachePolicy, DevDir, HostOffset as At, HostPageSize, Notifier, Poller, VolatileRegion};
 use kf_mem::ledger::{Ledger, desired_from_leaves, plan_reconcile};
-use kf_trap::{Action, Class, PrivRing, Route, RungBitmap, TokenWord, TrapPath, WakeWord};
+use kf_trap::{Action, Class, Route};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
@@ -195,12 +196,53 @@ struct Channels<'a, 'b> {
     s: &'a Shared<'b>,
     done: &'a Completions,
     win: &'a Windows,
-    chans: Vec<Mutex<(TranslatedChannel, Option<String>)>>,
+    /// `(host token, channel)` — the plane names a channel by its HOST token.
+    chans: Vec<(u32, Mutex<(TranslatedChannel, Option<String>)>)>,
     contended: AtomicU64,
+    /// §8 says a Translated channel is NEVER forged; any forge is a defect this gate counts.
+    forged: AtomicU64,
+    poisoned: AtomicU64,
 }
-impl Serve for Channels<'_, '_> {
-    fn serve(&self, token: u32) {
-        let Some(slot) = token.checked_sub(1).and_then(|c| self.chans.get(c as usize)) else { return };
+
+impl Channels<'_, '_> {
+    fn slot(&self, host_token: u32) -> Option<(u32, &Mutex<(TranslatedChannel, Option<String>)>)> {
+        self.chans.iter().enumerate().find(|(_, (h, _))| *h == host_token).map(|(i, (_, m))| (i as u32, m))
+    }
+}
+
+/// ★ The harness's `HostOps`: the plane decides (claim, submission, §8 completion rule); this only
+/// runs the Translated pump for the channel the plane names.
+impl HostOps for Channels<'_, '_> {
+    fn ring_host(&self, _host_token: u32) {}
+    fn run_translated(&self, host_token: u32, _up_to_seq: u64) -> bool {
+        self.serve(host_token);
+        true
+    }
+    fn run_emulated(&self, _host_token: u32, _up_to_seq: u64) {}
+    fn apply_register(&self, _bar: u8, _offset: u32, _value: u64, _width: u8) {}
+    fn operands_translatable(&self, host_token: u32, _up_to_seq: u64) -> Translatable {
+        // A channel whose pump REFUSED is dead: the plane then poisons (kernel) or faults (user).
+        match self.slot(host_token) {
+            Some((_, m)) if m.try_lock().is_ok_and(|g| g.1.is_some()) => Translatable::No,
+            Some(_) => Translatable::Yes,
+            None => Translatable::No,
+        }
+    }
+    fn forge_completion(&self, _host_token: u32) {
+        self.forged.fetch_add(1, Ordering::Relaxed);
+    }
+    fn refuse_and_poison(&self, _host_token: u32) {
+        self.poisoned.fetch_add(1, Ordering::Relaxed);
+    }
+    fn fault_channel(&self, _host_token: u32) {}
+    fn map_guest_slice(&self, _slice: HostSlice) {}
+    fn teardown_step(&self, _step: Step) {}
+}
+
+impl Channels<'_, '_> {
+    fn serve(&self, host_token: u32) {
+        let Some((c, slot)) = self.slot(host_token) else { return };
+        let token = c + 1;
         // ★ The token's BUSY state is the exclusion; this lock must NEVER be contended.
         let mut g = match slot.try_lock() {
             Ok(g) => g,
@@ -295,34 +337,33 @@ fn run(l: &mut Checks) -> Result<(), String> {
     l.check("kernel_vas_published_as_sysmem", mapped >= 1, format!("{mapped} runs (sysmem rows)"));
     mm.lock().map_err(|_| "poisoned")?.walks.clear();
 
-    // ── the doorbell plane ────────────────────────────────────────────────────────────────
-    let tokens: Vec<TokenWord> = (0..TOKEN_TABLE).map(|_| TokenWord::new()).collect();
-    let bits = RungBitmap::new();
-    let wake = WakeWord::new();
-    let drainer_wake = WakeWord::new();
-    let priv_ring = PrivRing::new();
+    // ── the doorbell plane: kf_core::Plane, for the host's family ─────────────────────────
+    let vmm = Vmm::new();
+    let mut plane = Plane::for_family(&vmm, TOKEN_TABLE, (TOKEN_TABLE - 1) as u32, kf_chip::Family::Ampere, 16 << 20);
+    let mut caps = VmCaps::from_declared(8, 8, 8, 8);
     let efd = Notifier::create().map_err(|e| format!("eventfd: {e:?}"))?;
     let stats = WorkerStats::default();
     let done = Completions::open(&rm, TOKEN_TABLE)?;
     let mut chans = Vec::new();
     for c in 0..CHANNELS {
         let host = HostRing::new(&rm, space)?;
-        if !tokens[(c + 1) as usize].allocate_fresh(Route::Translated, host.channel().token) {
-            return Err(format!("token {} not fresh", c + 1));
-        }
-        chans.push(Mutex::new((TranslatedChannel::new(TranslatedRing::new(va(c) + GPFIFO, ENTRIES, 0), host, c + 1), None)));
+        let ht = host.channel().token;
+        // A guest-KERNEL channel: a translation refusal on it must poison, never fault (§7).
+        plane
+            .allocate_channel(&mut caps, c + 1, Route::Translated, ht, Owner::Kernel)
+            .map_err(|e| format!("token {}: {e:?}", c + 1))?;
+        chans.push((ht, Mutex::new((TranslatedChannel::new(TranslatedRing::new(va(c) + GPFIFO, ENTRIES, 0), host, c + 1), None))));
     }
-    let channels = Channels { s: &shared, done: &done, win: &win, chans, contended: AtomicU64::new(0) };
-    let trap = TrapPath {
-        tokens: &tokens,
-        bits: &bits,
-        worker_wake: &wake,
-        drainer_wake: &drainer_wake,
-        ring: &priv_ring,
-        token_mask: (TOKEN_TABLE - 1) as u32,
-        timer: kf_trap::timer::TIMER_GV100,
+    let channels = Channels {
+        s: &shared,
+        done: &done,
+        win: &win,
+        chans,
+        contended: AtomicU64::new(0),
+        forged: AtomicU64::new(0),
+        poisoned: AtomicU64::new(0),
     };
-    let plane = WorkerPlane { tokens: &tokens, bits: &bits, wake: &wake, efd: &efd, completions: &done, stats: &stats };
+    let plane = &plane;
     let stop = AtomicBool::new(false);
     let hostile_actions = AtomicU64::new(0);
     let wakes_signalled = AtomicU64::new(0);
@@ -333,18 +374,18 @@ fn run(l: &mut Checks) -> Result<(), String> {
             let poller = Poller::create().map_err(|e| format!("epoll: {e:?}"))?;
             poller.watch(efd.as_source_fd(), WORKER_EFD_TAG).map_err(|e| format!("watch: {e:?}"))?;
             poller.watch(done.event_fd(), COMPLETIONS_TAG).map_err(|e| format!("watch: {e:?}"))?;
-            let (plane, channels, stop) = (&plane, &channels, &stop);
-            sc.spawn(move || plane.run(channels, &poller, stop));
+            let (channels, stop, efd, done, stats) = (&channels, &stop, &efd, &done, &stats);
+            sc.spawn(move || kf_chan::worker::run(plane, channels, &poller, efd, done, stats, stop));
         }
         // vCPUs: advance GP_PUT, then ring — exactly what the guest's store to the doorbell does.
         for c in 0..CHANNELS {
-            let (trap, ram, efd, wakes_signalled) = (&trap, &ram, &efd, &wakes_signalled);
+            let (ram, efd, wakes_signalled) = (&ram, &efd, &wakes_signalled);
             sc.spawn(move || {
                 let mut x = 0x9E37_79B9u32 ^ c;
                 for k in 0..PER_CHANNEL {
                     let _ = ram.store_u32(At::new(ch(c) + USERD + USERD_GP_PUT), k + 1);
                     kf_linux_raw::release_fence();
-                    if trap.write(Class::Doorbell, 0, 0x90, u64::from(c + 1), 4) == Action::WakeWorker {
+                    if plane.trap_write(Class::Doorbell, 0, 0x90, u64::from(c + 1), 4) == Action::WakeWorker {
                         wakes_signalled.fetch_add(1, Ordering::Relaxed);
                         let _ = efd.signal();
                     }
@@ -357,13 +398,13 @@ fn run(l: &mut Checks) -> Result<(), String> {
         }
         // The hostile vCPU: an UNKNOWN token and the userspace-mappable arm, in a tight loop.
         {
-            let (trap, hostile_actions) = (&trap, &hostile_actions);
+            let hostile_actions = &hostile_actions;
             sc.spawn(move || {
                 for i in 0..200_000u32 {
                     let a = if i % 2 == 0 {
-                        trap.write(Class::Doorbell, 0, 0x90, u64::from(HOSTILE_TOKEN), 4)
+                        plane.trap_write(Class::Doorbell, 0, 0x90, u64::from(HOSTILE_TOKEN), 4)
                     } else {
-                        trap.write(Class::UserspaceMappable, 0, 0x94, 0xDEAD_BEEF, 4)
+                        plane.trap_write(Class::UserspaceMappable, 0, 0x94, 0xDEAD_BEEF, 4)
                     };
                     if a != Action::None {
                         hostile_actions.fetch_add(1, Ordering::Relaxed);
@@ -377,7 +418,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
             let done = (0..CHANNELS).all(|c| {
                 ram.load_u32(At::new(ch(c) + USERD + USERD_GP_GET)).is_ok_and(|g| g == PER_CHANNEL)
             });
-            let dead = channels.chans.iter().any(|s| s.try_lock().is_ok_and(|g| g.1.is_some()));
+            let dead = channels.chans.iter().any(|(_, s)| s.try_lock().is_ok_and(|g| g.1.is_some()));
             if done || dead || std::time::Instant::now() > deadline {
                 break;
             }
@@ -391,7 +432,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
 
     let mut errors = Vec::new();
     let mut per = Vec::new();
-    for (c, slot) in channels.chans.iter().enumerate() {
+    for (c, (_, slot)) in channels.chans.iter().enumerate() {
         let g = slot.lock().map_err(|_| "poisoned")?;
         if let Some(e) = &g.1 {
             errors.push(format!("ch{c}: {e}"));
@@ -401,16 +442,16 @@ fn run(l: &mut Checks) -> Result<(), String> {
     l.measure(
         "plane",
         format!(
-            "us={us} served={} parks={} host_rings={} timeslices={} vcpu_wakes={} per_channel=[{}]",
+            "us={us} served={} parks={} host_rings={} vcpu_wakes={} per_channel=[{}]",
             stats.served.load(Ordering::Relaxed),
             stats.parks.load(Ordering::Relaxed),
             stats.host_rings.load(Ordering::Relaxed),
-            stats.timeslices.load(Ordering::Relaxed),
             wakes_signalled.load(Ordering::Relaxed),
             per.join(" ")
         ),
     );
     l.check("no_channel_died", errors.is_empty(), errors.join("; "));
+    l.check("translated_never_forged", channels.forged.load(Ordering::Relaxed) == 0 && channels.poisoned.load(Ordering::Relaxed) == 0, format!("forged={} poisoned={} (§8: the GPU writes a Translated completion)", channels.forged.load(Ordering::Relaxed), channels.poisoned.load(Ordering::Relaxed)));
     l.check("pump_never_contended", channels.contended.load(Ordering::Relaxed) == 0, format!("{} contended serves", channels.contended.load(Ordering::Relaxed)));
     l.check("hostile_rings_produce_no_action", hostile_actions.load(Ordering::Relaxed) == 0, format!("{} of 200000", hostile_actions.load(Ordering::Relaxed)));
 

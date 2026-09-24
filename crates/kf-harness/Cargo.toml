@@ -15,6 +15,7 @@ kf-mem.workspace = true
 kf-cuda.workspace = true
 kf-chan.workspace = true
 kf-trap.workspace = true
+kf-core.workspace = true
 
 [lints]
 workspace = true

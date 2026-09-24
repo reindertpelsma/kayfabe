@@ -123,13 +123,15 @@ impl RungBitmap {
         out.len()
     }
 
-    #[cfg(test)]
-    pub(crate) fn summary_bit(&self, token: u32) -> bool {
+    /// Read-only inspection of a summary bit (tests and census; never a decision input).
+    #[must_use]
+    pub fn summary_bit(&self, token: u32) -> bool {
         let w = (token as usize & (N_TOKENS - 1)) / 64;
         self.summary[w / 64].load(Ordering::Acquire) & (1u64 << (w % 64)) != 0
     }
-    #[cfg(test)]
-    pub(crate) fn bit(&self, token: u32) -> bool {
+    /// Read-only inspection of a token's bit (tests and census; never a decision input).
+    #[must_use]
+    pub fn bit(&self, token: u32) -> bool {
         let t = token as usize & (N_TOKENS - 1);
         self.words[t / 64].load(Ordering::Acquire) & (1u64 << (t % 64)) != 0
     }

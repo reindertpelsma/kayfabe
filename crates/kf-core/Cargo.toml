@@ -1,0 +1,13 @@
+[package]
+name = "kf-core"
+description = "v3 plane composition: vCPU trap -> token plane -> workers (Translated/Emulated) + one register drainer, host behind HostOps; completions per §8 (never forged for GPU work)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+kf-trap.workspace = true
+kf-chip.workspace = true
+
+[lints]
+workspace = true
