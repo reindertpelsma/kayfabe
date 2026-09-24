@@ -385,7 +385,9 @@ pub fn run(pdbs: &[u64]) -> Result<Vec<u8>, u32> {
     let report = k.refresh(win_base, win_len, pdbs);
     // DIAGNOSTIC (w826 cutover branch): the store's words at operator-named GPGAs, as the
     // kernel sees them — compared against the CPU's `RAW-DUAL` line.
-    if let Ok(v) = std::env::var("KAYFABE_PROBE_PHYS") {
+    // ⊘ The isolate is execveat-ed with an EMPTY environment, so this list is hardcoded on the
+    // diagnostic branch (the engines arm's R17 tables, measured w826 ct10).
+    if let Some(v) = Some("0x18000,0x11300,0x19000,0x19080".to_string()) {
         let mut out = String::new();
         for a in v.split(',').filter_map(|h| u64::from_str_radix(h.trim_start_matches("0x"), 16).ok()) {
             let mut b = [0u8; 24];
