@@ -5,7 +5,7 @@
 //! |---|---|---|
 //! | PRAMIN (`BAR0 0x700000`, 1 MiB) | **A**: one RAM range under one memslot, no exit | the vCPU re-points it in the trapped window-base write: ONE host map + ONE `mmap` per move (owner ruling 2026-09-25, [`PraminPool`]); old views released by a reaper thread |
 //! | BAR2 (PCI BAR3) | **A**: one RAM range, scratch where nothing is mapped | the VA-manager thread, after the GPU walker walked OUR BAR2 root ([`CpuWindow`] as the reconcile's target) |
-//! | BAR1 | **A**: one RAM range, all scratch | nothing yet — see below |
+//! | BAR1 | **A**: one RAM range, scratch where nothing is mapped | the VA-manager thread, after the GPU walker walked OUR BAR1 root (P5: [`K_BAR1`]) |
 //! | the three `MMU_INVALIDATE` registers | **B** | the vCPU arms + wakes ([`InvalidatePort`]); the VA-manager thread walks, reconciles, and only then clears |
 //!
 //! ## Threads (THE_ARCHITECTURE_v3.md §1)
@@ -27,9 +27,11 @@
 //!
 //! ## BAR1
 //!
-//! Left on scratch (`V3_P4_PORT_MAP.md` §3 row 6 is its own step): `RmInitAdapter` up to the
-//! CeUtils scrub does not read the guest's BAR1 through the CPU. Our BAR1 root page is declared
-//! and zeroed at realize so the guest's own BAR1 PDE writes land in a page of ours.
+//! ★ P5: walked from OUR BAR1 root exactly like BAR2 ([`K_BAR1`]): the guest writes its BAR1 PDEs
+//! straight into that page (no RPC — `THE_OGKM_RESIDUE.md` §3) and invalidates it. `[measured
+//! p5h]` left on scratch, it swallowed the PMA scrubber's `GP_PUT` (its USERD is mapped through
+//! BAR1). ⚠ Each placed view costs host BAR1 aperture (`V3_P4_PORT_MAP.md` Q5 — the budget check
+//! is still not built).
 
 use crate::raw_unsafe::{RawRegion, borrow_process_fd};
 use kf_host::{CpuViewRelease, HostRm, MapNode, ViewAccess};
@@ -46,6 +48,11 @@ use std::sync::{Mutex, RwLock};
 /// OUR BAR2 aperture's object key in the VA table — outside every guest `(hClient << 32) | hObject`
 /// (a guest client handle is never `0xFFFF_FFFF`, RM's reserved value).
 pub const K_BAR2: VasKey = VasKey(0xFFFF_FFFF_0000_0002);
+/// ★ P5: OUR BAR1 aperture's key (`V3_P4_PORT_MAP.md` §3 row 6). `[measured p5h]` the PMA
+/// scrubber's USERD is reached through BAR1 (`bUseBar1` ⇒ `TRANSFER_FLAGS_USE_BAR1`,
+/// `mem_utils_gm107.c:1110-1113`), so a BAR1 left on scratch swallowed its `GP_PUT`: 19 doorbells,
+/// `GP_PUT` read 0, `scrubberDestruct` timed out.
+pub const K_BAR1: VasKey = VasKey(0xFFFF_FFFF_0000_0001);
 
 /// One guest-RAM block QEMU registered: guest-physical `[gpa, gpa+len)` at `mem`, backed by the
 /// memory backend's `fd` at `fd_off` (`-1` when the backend has no fd).
@@ -517,7 +524,7 @@ impl MemPlane {
         ram: &'static RamMap,
         inbox: std::sync::Arc<Inbox>,
         mirrors: Mirrors,
-    ) -> Result<(MemPlane, WindowOps), String> {
+    ) -> Result<(MemPlane, WindowOps, WindowOps), String> {
         let page = HostPageSize::query();
         let window = |len: u64, what: &str| -> Result<(&'static GuestWindow, &'static SharedRam), String> {
             let w = GuestWindow::create(len, page).map_err(|e| format!("{what} window of {len:#x}: {e:?}"))?;
@@ -529,7 +536,7 @@ impl MemPlane {
         };
         let pramin_len = kf_trap::trappolicy::PRAMIN_LEN;
         let (pramin_win, pramin_scratch) = window(pramin_len, "PRAMIN")?;
-        let (bar1_win, _bar1_scratch) = window(bar1_bytes, "BAR1")?;
+        let (bar1_win, bar1_scratch) = window(bar1_bytes, "BAR1")?;
         let (bar2_win, bar2_scratch) = window(bar2_bytes, "BAR2")?;
         let ops = |win, scratch, trap| WindowOps { rm, store, win, scratch, ram, trap };
         let trap = TrapNodes::start(rm, store)?;
@@ -560,6 +567,7 @@ impl MemPlane {
                 mirrors,
                 fb_len: layout.fb_length,
             },
+            ops(bar1_win, bar1_scratch, None),
             ops(bar2_win, bar2_scratch, None),
         ))
     }
@@ -681,9 +689,7 @@ pub fn apply_statement(
                 return format!("fn70 {:?} entry={:#x}: GPU write into our root @{root:#x} REFUSED: {e}", p.bar, p.entry);
             }
             plane.counters.bar_pdes.fetch_add(1, Ordering::Relaxed);
-            if p.bar == BarAperture::Bar2 {
-                m.schedule_walk(K_BAR2, trigger);
-            }
+            m.schedule_walk(if p.bar == BarAperture::Bar2 { K_BAR2 } else { K_BAR1 }, trigger);
             format!("fn70 {:?} entry={:#x} shift={} -> our root @{root:#x}, walk scheduled", p.bar, p.entry, p.level_shift)
         }
         MemStatement::PageDir(s) => {

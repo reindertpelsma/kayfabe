@@ -322,7 +322,7 @@ impl Device {
 
         // ★ P4: the windows, their scratch, the PRAMIN views (armed HERE, off every vCPU), the
         // invalidate port; and the VA manager with OUR BAR2 aperture as its first object.
-        let (mem, bar2_ops) = crate::mem::MemPlane::build(
+        let (mem, bar1_ops, bar2_ops) = crate::mem::MemPlane::build(
             rm,
             family,
             store.handle,
@@ -347,6 +347,15 @@ impl Device {
         va.table
             .set_root(crate::mem::K_BAR2, layout.bar2_pde_base, kf_trap::PdbAperture::Vidmem)
             .map_err(|e| format!("our BAR2 root: {e:?}"))?;
+        // ★ P5 (P4 row 6): BAR1 is walked from OUR BAR1 root like BAR2 — the guest writes its BAR1
+        // PDEs straight into that page (no RPC) and invalidates it; the walk places store views.
+        va.table.insert(
+            crate::mem::K_BAR1,
+            crate::mem::Target::Window(kf_mem::cpuwin::CpuWindow::new(bar1_ops, cfg.bar1_bytes)),
+        );
+        va.table
+            .set_root(crate::mem::K_BAR1, layout.bar1_pde_base, kf_trap::PdbAperture::Vidmem)
+            .map_err(|e| format!("our BAR1 root: {e:?}"))?;
         eprintln!(
             "kf3: P4 memory plane: store {} MiB @dev {store_ptr:#x}, roots bar1={:#x} bar2={:#x}, PRAMIN one map+mmap per move, trigger @{:#x}",
             cfg.fb_mb,
