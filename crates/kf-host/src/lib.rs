@@ -580,6 +580,48 @@ impl HostRm {
         Ok(out.h_object_new)
     }
 
+    /// [`HostRm::raw_alloc`] issued on `node` instead of the control file — an OS event
+    /// object must be allocated on the file its events are bound to.
+    ///
+    /// # Errors
+    /// The host's refusal.
+    pub fn raw_alloc_via(
+        &self,
+        node: &CharDevice,
+        parent: u32,
+        want: u32,
+        class: u32,
+        params: &mut [u8],
+    ) -> Result<u32, RmError> {
+        let mut arg = [0u8; Nvos21Parameters::SIZE];
+        Nvos21Parameters {
+            h_root: self.client.raw(),
+            h_object_parent: parent,
+            h_object_new: want,
+            h_class: class,
+            p_alloc_parms: 0,
+            params_size: params.len() as u32,
+            status: 0,
+        }
+        .encode_into(&mut arg)
+        .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
+        let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_ALLOC as u8, arg.len())
+            .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
+        // `pAllocParms` at +16. An empty params block means a null pointer, which is what
+        // `NV01_ROOT_CLIENT` wants — so the patch list is empty rather than pointing at a
+        // zero-length buffer.
+        let mut patches: Vec<Indirect<'_>> = Vec::new();
+        if !params.is_empty() {
+            patches.push(Indirect::new(16, params));
+        }
+        node
+            .ioctl(req, &mut arg, &mut patches)
+            .map_err(|e| ioctl_error(&e))?;
+        let out = Nvos21Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
+        status_check(out.status)?;
+        Ok(out.h_object_new)
+    }
+
     /// ★★★ [`Self::raw_alloc`] for a class whose parameter block itself carries a
     /// **userspace pointer** — one more level of indirection and nothing else.
     ///

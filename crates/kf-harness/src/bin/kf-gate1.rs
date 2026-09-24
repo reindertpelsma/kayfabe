@@ -66,6 +66,11 @@ fn run(l: &mut Ledger) -> Result<(), String> {
         let a = rm.set_notification(notifier_ce(n), kf_abi::eventnotify::ACTION_REPEAT);
         armed.push(format!("CE{n}:{}/{}", o.is_ok(), a.is_ok()));
     }
+    // The host NON_STALL_INTERRUPT method's own edge: NV2080_NOTIFIERS_FIFO_EVENT_MTHD (35),
+    // which `eventGetEngineTypeFromSubNotifyIndex` maps to RM_ENGINE_TYPE_HOST.
+    let o = rm.alloc_os_event(rm.subdevice(), 35, true, &ev);
+    let a = rm.set_notification(35, kf_abi::eventnotify::ACTION_REPEAT);
+    armed.push(format!("FIFO_MTHD:{}/{}", o.is_ok(), a.is_ok()));
     l.measure("events_armed", armed.join(" "));
 
     let chan = rm
@@ -107,7 +112,7 @@ fn run(l: &mut Ledger) -> Result<(), String> {
     let n = poller.wait(&mut ready, PollTimeout::Millis(2000)).map_err(|e| format!("wait: {e:?}"))?;
     let event_us = t0.elapsed().as_micros();
     let drained = ev.drain().map_err(|e| format!("drain: {e:?}"))?;
-    l.measure("event_fd", format!("ready={n} after_us={event_us} records={drained:?}"));
+    l.measure("event_fd", format!("ready={n} after_us={event_us} records={drained:?} drain_status={:#x}", ev.last_status()));
 
     let deadline = Instant::now() + Duration::from_secs(2);
     let mut sem = ring_cpu.load_u32(at(SEM_OFF)).map_err(|e| format!("{e:?}"))?;

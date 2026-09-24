@@ -84,6 +84,7 @@ pub struct HostEvent {
 pub struct EventFd {
     node: CharDevice,
     key: u32,
+    last_status: std::cell::Cell<u32>,
 }
 
 impl EventFd {
@@ -91,6 +92,12 @@ impl EventFd {
     #[must_use]
     pub fn as_fd(&self) -> BorrowedFd<'_> {
         self.node.as_fd()
+    }
+
+    /// The status of the last drain that stopped on a non-empty refusal (0 = none seen).
+    #[must_use]
+    pub fn last_status(&self) -> u32 {
+        self.last_status.get()
     }
 
     /// The key events are bound under (`data` of every `NV01_EVENT_OS_EVENT` on this fd).
@@ -118,7 +125,12 @@ impl EventFd {
             let more = u32::from_le_bytes(arg[8..12].try_into().unwrap_or([0; 4]));
             let status = u32::from_le_bytes(arg[12..16].try_into().unwrap_or([0; 4]));
             if status != 0 {
-                break; // nothing pending
+                // RM answers a non-zero status for "nothing pending" (`nv_get_event` returns
+                // NV_ERR_GENERIC); anything ELSE is surfaced, never read as empty.
+                if status != 0x0000_FFFF {
+                    self.last_status.set(status);
+                }
+                break;
             }
             let w = |o: usize| u32::from_le_bytes(rec[o..o + 4].try_into().unwrap_or([0; 4]));
             out.push(HostEvent {
@@ -141,7 +153,21 @@ impl HostRm {
     /// # Errors
     /// The open, or the host's refusal of the registration.
     pub fn open_event_fd(&self) -> Result<EventFd, RmError> {
-        let node = CharDevice::openat(&self.dev, c"nvidiactl").map_err(|e| ioctl_error(&e))?;
+        // ★ CUDA's own sequence, read off the host trace (`traces/host_reference_ga106/ce_r1`,
+        // records 260-262): a fresh GPU node, `REGISTER_FD` against the control fd, then
+        // `ALLOC_OS_EVENT` on it keyed by its own fd number — and the event object's `RM_ALLOC`
+        // is issued ON THAT SAME FILE. `[measured w826 gate 1]` a `nvidiactl` event file with the
+        // alloc on the main control file posted nothing on any CE notifier.
+        let name = std::ffi::CString::new(format!("nvidia{}", self.gpu_index))
+            .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
+        let node = CharDevice::openat(&self.dev, &name).map_err(|e| ioctl_error(&e))?;
+        let mut reg = [0u8; 4];
+        kf_abi::bringup::RegisterFd { ctl_fd: self.ctl.fd_number() }
+            .encode_into(&mut reg)
+            .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
+        let req = ioctl::readwrite(NV_IOCTL_MAGIC, kf_abi::bringup::NV_ESC_REGISTER_FD, reg.len())
+            .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
+        node.ioctl(req, &mut reg, &mut []).map_err(|e| ioctl_error(&e))?;
         let key = u32::try_from(node.fd_number()).map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         let mut arg = [0u8; ALLOC_OS_EVENT_SIZE];
         arg[0..4].copy_from_slice(&self.client.raw().to_le_bytes());
@@ -151,7 +177,7 @@ impl HostRm {
             .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
         node.ioctl(req, &mut arg, &mut []).map_err(|e| ioctl_error(&e))?;
         status_check(u32::from_le_bytes(arg[12..16].try_into().map_err(|_| RmError::Other(ABI_DECODE_FAILED))?))?;
-        Ok(EventFd { node, key })
+        Ok(EventFd { node, key, last_status: std::cell::Cell::new(0) })
     }
 
     /// `NV01_EVENT_OS_EVENT` under `source` for `notify_index`, delivered to `ev`. `nonstall`
@@ -175,7 +201,7 @@ impl HostRm {
         params[12..16].copy_from_slice(&notify_index.to_le_bytes());
         params[16..24].copy_from_slice(&u64::from(ev.key).to_le_bytes());
         let want = self.mint();
-        let h = self.raw_alloc(source, want, NV01_EVENT_OS_EVENT, &mut params)?;
+        let h = self.raw_alloc_via(&ev.node, source, want, NV01_EVENT_OS_EVENT, &mut params)?;
         self.remember(h, source);
         Ok(h)
     }
