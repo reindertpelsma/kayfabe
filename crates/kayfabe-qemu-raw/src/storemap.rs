@@ -1968,6 +1968,21 @@ pub struct Desired {
     pub ram: bool,
 }
 
+/// Sort and merge half-open `[a, b)` ranges; touching ranges merge; empty ones are dropped.
+#[must_use]
+pub fn merge_ranges(mut r: Vec<(u64, u64)>) -> Vec<(u64, u64)> {
+    r.retain(|(a, b)| b > a);
+    r.sort_unstable();
+    let mut out: Vec<(u64, u64)> = Vec::with_capacity(r.len());
+    for (a, b) in r {
+        match out.last_mut() {
+            Some(last) if a <= last.1 => last.1 = last.1.max(b),
+            _ => out.push((a, b)),
+        }
+    }
+    out
+}
+
 /// What [`plan_reconcile`] asks for. Unmaps are applied FIRST.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct ReconcilePlan {
@@ -2112,7 +2127,11 @@ impl StoreMapPort {
     ///
     /// # Errors
     /// The refusal, by name.
-    pub fn walk_in_place(&self, pdbs: &[u64]) -> Result<kayfabe_mmu::walkreport::Report, String> {
+    pub fn walk_in_place(
+        &self,
+        pdbs: &[u64],
+        ack: u64,
+    ) -> Result<kayfabe_mmu::walkreport::Report, String> {
         let off = self
             .off_vcpu()
             .map_err(|r| format!("declined: {r:?}"))?;
@@ -2120,7 +2139,7 @@ impl StoreMapPort {
             .iso
             .with_worker(|worker| {
                 worker
-                    .with_rm(&off, |rm| rm.walk_shadow_run(pdbs))
+                    .with_rm(&off, |rm| rm.walk_shadow_run(pdbs, ack))
                     .map_err(|e| format!("walk refused: {e:?}"))
             })
             .unwrap_or_else(|| Err("the scratchpad isolate offered no worker".to_string()))?;
@@ -2145,8 +2164,69 @@ impl StoreMapPort {
     /// ★★★★★ **Make the host VA space say exactly what the walk said** — through
     /// [`Self::apply_ops`], the one mapper. Unmaps first, then maps.
     pub fn reconcile(&self, vas: HostHandle, desired: &[Desired], ram_bytes: u64) -> Reconciled {
+        self.apply_plan(vas, &plan_reconcile(&self.ledger_of(vas), desired), ram_bytes)
+    }
+
+    /// Slices of `vas` overlapping `[a, b)`, from both ledgers. ⊘ Each ledger is
+    /// non-overlapping by construction, so at most ONE slice starting below `a` can reach it.
+    fn ledger_overlapping(&self, vas: HostHandle, a: u64, b: u64) -> Vec<(u64, u64, u64, bool)> {
+        let mut out = Vec::new();
+        for (ledger, ram) in [(&self.placed, false), (&self.ram_placed, true)] {
+            let g = ledger
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if let Some((&(_, va), p)) = g.range((vas.raw(), 0)..(vas.raw(), a)).next_back() {
+                if va.saturating_add(p.len) > a {
+                    out.push((va, p.len, p.offset, ram));
+                }
+            }
+            for (&(_, va), p) in g.range((vas.raw(), a)..(vas.raw(), b)) {
+                out.push((va, p.len, p.offset, ram));
+            }
+        }
+        out
+    }
+
+    /// ★★★★★ **w826 — the DELTA half of [`StoreMapPort::reconcile`].** Plan only the VA ranges
+    /// a walk delta `touched`, CLOSED over every desired run and ledger slice overlapping them
+    /// (a run that crosses the edge of a touched range pulls its whole extent in, until
+    /// nothing new is pulled). `desired_in(a, b)` answers the desired runs overlapping
+    /// `[a, b)`. `[measured w826 q5]` the full reconcile cost ~1.9 µs per run per pass, so a
+    /// 13 000-row arm went quadratic; this costs what the delta touched.
+    pub fn reconcile_scoped(
+        &self,
+        vas: HostHandle,
+        touched: &[(u64, u64)],
+        desired_in: &dyn Fn(u64, u64) -> Vec<Desired>,
+        ram_bytes: u64,
+    ) -> Reconciled {
+        let mut ranges = merge_ranges(touched.to_vec());
+        let (mut desired, mut ledger);
+        loop {
+            desired = Vec::new();
+            ledger = Vec::new();
+            for &(a, b) in &ranges {
+                desired.extend(desired_in(a, b));
+                ledger.extend(self.ledger_overlapping(vas, a, b));
+            }
+            desired.sort_unstable_by_key(|d| (d.va, d.len, d.off, d.ram));
+            desired.dedup_by_key(|d| (d.va, d.len, d.off, d.ram));
+            ledger.sort_unstable();
+            ledger.dedup();
+            let mut next = ranges.clone();
+            next.extend(desired.iter().map(|d| (d.va, d.va.saturating_add(d.len))));
+            next.extend(ledger.iter().map(|l| (l.0, l.0.saturating_add(l.1))));
+            let next = merge_ranges(next);
+            if next == ranges {
+                break;
+            }
+            ranges = next;
+        }
+        self.apply_plan(vas, &plan_reconcile(&ledger, &desired), ram_bytes)
+    }
+
+    fn apply_plan(&self, vas: HostHandle, plan: &ReconcilePlan, ram_bytes: u64) -> Reconciled {
         use kayfabe_mmu::walkdiff::{MapOp, PageClass, Run};
-        let plan = plan_reconcile(&self.ledger_of(vas), desired);
         let mut out = Reconciled {
             kept: plan.kept,
             ..Reconciled::default()

@@ -281,7 +281,7 @@ pub fn store_window() -> Option<(u64, u64)> {
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
-pub fn run(pdbs: &[u64]) -> Result<Vec<u8>, u32> {
+pub fn run(pdbs: &[u64], ack: u64) -> Result<Vec<u8>, u32> {
     if pdbs.is_empty() || pdbs.len() > kayfabe_cuda::abi::KF_MAX_PDB {
         eprintln!(
             "kayfabe-isolate: ⊘ WALK-SHADOW run refused: {} address spaces (the kernel's \
@@ -382,6 +382,15 @@ pub fn run(pdbs: &[u64]) -> Result<Vec<u8>, u32> {
          kernel walks the guest's tables WHERE THEY LIVE; no image, no CPU read of vidmem",
         pdbs.len()
     );
+    // ★★★★★ w826 — ACK what the caller applied in full, so this refresh is a DELTA against it.
+    // `[measured w826 q5]` never acking made every pass a full resync: the publisher's cost
+    // grew ~2.4 µs per run per pass and ce-client-guest-ram went quadratic. ⊘ A failed ack
+    // leaves `acked` behind `generation`, which the kernel reads as RESYNC — the safe side.
+    if ack != 0 {
+        if let Err(e) = k.ack(ack) {
+            eprintln!("kayfabe-isolate: WALK-ACK ⊘ generation {ack} not acked ({e}) — next report is a RESYNC");
+        }
+    }
     let report = k.refresh(win_base, win_len, pdbs);
     // ⊘ Released on BOTH paths and before the `?`: a refused launch that leaked its image
     // would run the device out of memory over a boot's worth of refreshes, and the symptom

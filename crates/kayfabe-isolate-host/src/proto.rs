@@ -222,6 +222,8 @@ pub enum Request {
     WalkShadowRun {
         /// The relocated roots, ascending.
         pdbs: Vec<u64>,
+        /// The report generation applied in full since the last run; `0` = none (resync).
+        ack: u64,
     },
     /// [`kayfabe_isolate::RmBackend::alloc_channel`].
     AllocChannel {
@@ -1244,7 +1246,7 @@ impl Envelope {
                 out.extend_from_slice(&off.to_le_bytes());
                 put_blob(&mut out, bytes);
             }
-            Request::WalkShadowRun { pdbs } => {
+            Request::WalkShadowRun { pdbs, ack } => {
                 out.push(33);
                 out.extend_from_slice(
                     &(u32::try_from(pdbs.len()).unwrap_or(u32::MAX)).to_le_bytes(),
@@ -1252,6 +1254,7 @@ impl Envelope {
                 for p in pdbs {
                     out.extend_from_slice(&p.to_le_bytes());
                 }
+                out.extend_from_slice(&ack.to_le_bytes());
             }
             Request::AllocChannel {
                 vas,
@@ -1594,7 +1597,8 @@ impl Envelope {
                 for _ in 0..n {
                     pdbs.push(c.u64("walk shadow pdb")?);
                 }
-                Request::WalkShadowRun { pdbs }
+                let ack = c.u64("walk shadow ack")?;
+                Request::WalkShadowRun { pdbs, ack }
             }
             30 => Request::ExportDeviceView {
                 memory: c.u64("device view memory")?,
@@ -2264,6 +2268,7 @@ mod tests {
             },
             Request::WalkShadowRun {
                 pdbs: vec![0x1000, 0x2000, 0x3000],
+                ack: 7,
             },
             Request::ExportDeviceView {
                 memory: 0xC1D0_0031,

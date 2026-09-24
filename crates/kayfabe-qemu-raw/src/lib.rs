@@ -104,6 +104,7 @@ pub mod shim_unsafe;
 /// ★★★★★ **CONSTRAINT 26** — the port through which the scratchpad does all GPU-side
 /// mapping, and the home of the restated `RING_NOT_A_JOINED_WINDOW` question.
 pub mod storemap;
+pub mod walkmirror;
 /// ★ w787 — the one enumerable home for process-environment mutation. See the module docs.
 pub mod testenv_unsafe;
 pub mod walkshadow;

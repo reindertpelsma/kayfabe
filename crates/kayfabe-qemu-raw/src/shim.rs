@@ -18475,7 +18475,8 @@ impl SharedDoorbell {
             return "WALK-PUBLISH no roots".to_string();
         }
         let t0 = std::time::Instant::now();
-        let report = match sp.walk_in_place(&pdbs) {
+        let ack = WALK_ACK.swap(0, std::sync::atomic::Ordering::Relaxed);
+        let report = match sp.walk_in_place(&pdbs, ack) {
             Ok(r) => r,
             Err(e) => return format!("WALK-PUBLISH ⊘ walk refused: {e}"),
         };
@@ -18494,64 +18495,130 @@ impl SharedDoorbell {
         let (mut mapped, mut unmapped, mut kept, mut refused, mut unresolved) = (0, 0, 0, 0, 0);
         let mut first: Option<String> = None;
         let mut bar1_line = String::new();
-        for (i, entry) in report.pdbs.iter().enumerate() {
-            if let Some((m, _)) = bar1.as_ref().filter(|(_, r)| *r == entry.pdb) {
-                let mut vid = Vec::new();
-                let mut sys = 0u64;
-                for r in report.runs_of(i) {
-                    match r.aperture() {
-                        RunAperture::Vidmem => vid.push((r.va, r.len, r.gpga)),
-                        // ⊘ Named, never silent: a sysmem BAR1 leaf is left unplaced.
-                        _ => sys += 1,
-                    }
+        let mut mirror = std::mem::take(
+            &mut *WALK_MIRROR
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+        let (mut deltas, mut resyncs, mut touched_n, mut need_resync) = (0u64, 0u64, 0usize, false);
+        // Backing for one mirrored run: vidmem is a store offset; sysmem resolves through
+        // the hypervisor's stated guest-RAM layout, page by page when one run will not do.
+        let unresolved_c = std::cell::Cell::new(0u64);
+        let resolve = |r: crate::walkmirror::MRun| -> Vec<crate::storemap::Desired> {
+            use crate::walkmirror::RunWhere;
+            match r.at {
+                RunWhere::Vidmem => vec![crate::storemap::Desired {
+                    va: r.va,
+                    len: r.len,
+                    off: r.gpga,
+                    ram: false,
+                }],
+                RunWhere::Peer => {
+                    unresolved_c.set(unresolved_c.get() + 1);
+                    Vec::new()
                 }
-                bar1_line = format!(" {} bar1_sysmem_unresolved={sys}", m.apply_bar1_runs(&vid));
-                continue;
-            }
-            let mut desired: Vec<crate::storemap::Desired> = Vec::new();
-            for r in report.runs_of(i) {
-                match r.aperture() {
-                    RunAperture::Vidmem => desired.push(crate::storemap::Desired {
-                        va: r.va,
-                        len: r.len,
-                        off: r.gpga,
-                        ram: false,
-                    }),
-                    RunAperture::SysmemCoherent | RunAperture::SysmemNonCoherent => {
-                        let held = self.ce.vmm.lock().unwrap_or_else(|e| e.into_inner());
-                        let (Some(vmm), Some(backing)) = (held.as_ref(), self.guest_ram_backing)
-                        else {
-                            unresolved += 1;
-                            continue;
-                        };
-                        // Page by page when the whole run does not resolve as one stated run.
-                        match vmm.resolve_guest_ram(backing, r.gpga, r.len) {
-                            Ok(run) => desired.push(crate::storemap::Desired {
-                                va: r.va,
-                                len: r.len,
+                RunWhere::Sysmem => {
+                    let held = self.ce.vmm.lock().unwrap_or_else(|e| e.into_inner());
+                    let (Some(vmm), Some(backing)) = (held.as_ref(), self.guest_ram_backing) else {
+                        unresolved_c.set(unresolved_c.get() + 1);
+                        return Vec::new();
+                    };
+                    if let Ok(run) = vmm.resolve_guest_ram(backing, r.gpga, r.len) {
+                        return vec![crate::storemap::Desired {
+                            va: r.va,
+                            len: r.len,
+                            off: run.file_offset,
+                            ram: true,
+                        }];
+                    }
+                    let mut out = Vec::new();
+                    let mut at = 0u64;
+                    while at < r.len {
+                        match vmm.resolve_guest_ram(backing, r.gpga + at, 0x1000) {
+                            Ok(run) => out.push(crate::storemap::Desired {
+                                va: r.va + at,
+                                len: 0x1000,
                                 off: run.file_offset,
                                 ram: true,
                             }),
-                            Err(_) => {
-                                let mut at = 0u64;
-                                while at < r.len {
-                                    match vmm.resolve_guest_ram(backing, r.gpga + at, 0x1000) {
-                                        Ok(run) => desired.push(crate::storemap::Desired {
-                                            va: r.va + at,
-                                            len: 0x1000,
-                                            off: run.file_offset,
-                                            ram: true,
-                                        }),
-                                        Err(_) => unresolved += 1,
-                                    }
-                                    at += 0x1000;
-                                }
-                            }
+                            Err(_) => unresolved_c.set(unresolved_c.get() + 1),
                         }
+                        at += 0x1000;
                     }
-                    RunAperture::Peer => unresolved += 1,
+                    out
                 }
             }
+        };
+        for (i, entry) in report.pdbs.iter().enumerate() {
+            use kayfabe_mmu::walkreport::{RunOp, V_GONE, V_RESYNC};
+            if entry.vas_flags & V_GONE != 0 {
+                mirror.remove(&entry.pdb);
+                continue;
+            }
+            let full = entry.vas_flags & V_RESYNC != 0;
+            if !full && !mirror.contains_key(&entry.pdb) {
+                // A delta against state we do not hold: apply what we can, and never ack.
+                need_resync = true;
+            }
+            let m = mirror.entry(entry.pdb).or_default();
+            let mut touched: Vec<(u64, u64)> = Vec::new();
+            let as_mrun = |r: &kayfabe_mmu::walkreport::MapRun| crate::walkmirror::MRun {
+                va: r.va,
+                len: r.len,
+                gpga: r.gpga,
+                at: match r.aperture() {
+                    RunAperture::Vidmem => crate::walkmirror::RunWhere::Vidmem,
+                    RunAperture::SysmemCoherent | RunAperture::SysmemNonCoherent => {
+                        crate::walkmirror::RunWhere::Sysmem
+                    }
+                    RunAperture::Peer => crate::walkmirror::RunWhere::Peer,
+                },
+            };
+            if full {
+                resyncs += 1;
+                let bad = m.resync(
+                    report
+                        .runs_of(i)
+                        .iter()
+                        .map(|r| (r.page_size_code() as usize, as_mrun(r))),
+                );
+                if bad != 0 {
+                    need_resync = true;
+                }
+            } else {
+                deltas += 1;
+                let base = entry.first_run as usize;
+                for (k, r) in report.runs_of(i).iter().enumerate() {
+                    let op = match r.op_decoded(base + k) {
+                        Ok(RunOp::Map | RunOp::Remap) => crate::walkmirror::DeltaOp::Put(as_mrun(r)),
+                        Ok(RunOp::Unmap) => crate::walkmirror::DeltaOp::Drop { va: r.va, len: r.len },
+                        Err(_) => {
+                            need_resync = true;
+                            continue;
+                        }
+                    };
+                    if let Some(t) = m.apply(r.page_size_code() as usize, op) {
+                        touched.push(t);
+                    }
+                }
+                touched_n += touched.len();
+            }
+            if let Some((bm, _)) = bar1.as_ref().filter(|(_, r)| *r == entry.pdb) {
+                if full || !touched.is_empty() {
+                    let mut vid = Vec::new();
+                    let mut sys = 0u64;
+                    for r in m.all() {
+                        match r.at {
+                            crate::walkmirror::RunWhere::Vidmem => vid.push((r.va, r.len, r.gpga)),
+                            // ⊘ Named, never silent: a sysmem BAR1 leaf is left unplaced.
+                            _ => sys += 1,
+                        }
+                    }
+                    bar1_line = format!(" {} bar1_sysmem_unresolved={sys}", bm.apply_bar1_runs(&vid));
+                }
+                continue;
+            }
+            let m: &crate::walkmirror::VasMirror = m;
             for &(pid, pdb) in roots.iter().filter(|(_, p)| p.0 & !0xfff == entry.pdb) {
                 let vas = match ensure_store_vas(&self.device, &sp, pid, pdb) {
                     Ok(v) => v,
@@ -18562,39 +18629,60 @@ impl SharedDoorbell {
                     }
                 };
                 // ★★★★★ w826 — the server-side rows: what the guest's promotions asked US to
-                // map (v3 §4.4). They are never in the guest's tables, so the walk cannot see
-                // them; without them every GR context buffer is unmapped (cuCtxCreate 719).
-                // Vidmem rows take the C's 64 KiB round-up (`nvkvm_gpu_emul.c:7920`).
-                let walked: Vec<(u64, u64)> = desired.iter().map(|d| (d.va, d.len)).collect();
-                let mut desired = desired.clone();
-                for (va, len, phys, vidmem) in
-                    self.device.server_rows(pid, DOORBELL_TARGET_GPU, pdb)
-                {
-                    if vidmem {
-                        // Rounded to whole pages and subordinate to the walk — see
-                        // `server_row_pieces` for both measured rules.
-                        for (va, len, off) in crate::storemap::server_row_pieces(va, len, phys, &walked) {
-                            desired.push(crate::storemap::Desired { va, len, off, ram: false });
+                // map (v3 §4.4), never in the guest's tables. Whole pages, and subordinate to
+                // the walk — see `server_row_pieces`.
+                let rows = self.device.server_rows(pid, DOORBELL_TARGET_GPU, pdb);
+                let server_in = |a: u64, b: u64| -> Vec<crate::storemap::Desired> {
+                    let mut out = Vec::new();
+                    for &(va, len, phys, vidmem) in &rows {
+                        let end = va.saturating_add(len.max(1));
+                        if end <= a || va >= b {
+                            continue;
                         }
-                    } else {
-                        let held = self.ce.vmm.lock().unwrap_or_else(|e| e.into_inner());
-                        match (held.as_ref(), self.guest_ram_backing) {
-                            (Some(vmm), Some(backing)) => {
-                                match vmm.resolve_guest_ram(backing, phys, len) {
-                                    Ok(run) => desired.push(crate::storemap::Desired {
-                                        va,
-                                        len,
-                                        off: run.file_offset,
-                                        ram: true,
-                                    }),
-                                    Err(_) => unresolved += 1,
-                                }
+                        if vidmem {
+                            let walked: Vec<(u64, u64)> = m
+                                .overlapping(va, end.saturating_add(0x1_0000))
+                                .iter()
+                                .map(|r| (r.va, r.len))
+                                .collect();
+                            for (va, len, off) in
+                                crate::storemap::server_row_pieces(va, len, phys, &walked)
+                            {
+                                out.push(crate::storemap::Desired { va, len, off, ram: false });
                             }
-                            _ => unresolved += 1,
+                        } else {
+                            out.extend(resolve(crate::walkmirror::MRun {
+                                va,
+                                len,
+                                gpga: phys,
+                                at: crate::walkmirror::RunWhere::Sysmem,
+                            }));
                         }
                     }
-                }
-                let rec = sp.reconcile(vas, &desired, ram_bytes);
+                    out
+                };
+                let rec = if full {
+                    let mut desired: Vec<crate::storemap::Desired> =
+                        m.all().into_iter().flat_map(&resolve).collect();
+                    desired.extend(server_in(0, u64::MAX));
+                    sp.reconcile(vas, &desired, ram_bytes)
+                } else {
+                    // Server rows are few: always in scope, so a new promotion is never missed.
+                    let mut scope = touched.clone();
+                    scope.extend(rows.iter().map(|&(va, len, _, _)| {
+                        (va, va.saturating_add(len.max(1)).saturating_add(0xffff))
+                    }));
+                    if scope.is_empty() {
+                        continue;
+                    }
+                    let desired_in = |a: u64, b: u64| -> Vec<crate::storemap::Desired> {
+                        let mut d: Vec<crate::storemap::Desired> =
+                            m.overlapping(a, b).into_iter().flat_map(&resolve).collect();
+                        d.extend(server_in(a, b));
+                        d
+                    };
+                    sp.reconcile_scoped(vas, &scope, &desired_in, ram_bytes)
+                };
                 mapped += rec.mapped;
                 unmapped += rec.unmapped;
                 kept += rec.kept;
@@ -18604,10 +18692,25 @@ impl SharedDoorbell {
                 }
             }
         }
+        unresolved += unresolved_c.get();
+        // ★ ACK only a pass applied IN FULL: any refusal, unresolved run, or delta we could not
+        // follow leaves the ack unset, so the next report is a RESYNC and heals it.
+        let acked = refused == 0 && unresolved == 0 && !need_resync;
+        {
+            let mut g = WALK_MIRROR
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            *g = mirror;
+            WALK_ACK.store(
+                if acked { report.header.generation } else { 0 },
+                std::sync::atomic::Ordering::Relaxed,
+            );
+        }
+        let mode = format!(" mode[resync={resyncs} delta={deltas} touched={touched_n} acked={acked}]");
         format!(
             "WALK-PUBLISH roots={} runs={} walk_us={walk_us} total_us={} mapped={mapped} \
              unmapped={unmapped} kept={kept} refused={refused} unresolved={unresolved} \
-             foreign_ap={}{bar1_line}{}",
+             foreign_ap={}{mode}{bar1_line}{}",
             pdbs.len(),
             report.runs.len(),
             t0.elapsed().as_micros(),
@@ -18671,3 +18774,15 @@ fn gsp_latency_note(
         );
     }
 }
+
+/// ★★★★★ w826 — the host's mirror of the walk kernel's state, one per address space, kept
+/// current by DELTAS. Taken out for the duration of a publish pass (worker only) and put back;
+/// never held across the reconcile's IPC. See [`crate::walkmirror`].
+#[cfg(feature = "host-isolates")]
+static WALK_MIRROR: std::sync::Mutex<
+    std::collections::BTreeMap<u64, crate::walkmirror::VasMirror>,
+> = std::sync::Mutex::new(std::collections::BTreeMap::new());
+
+/// The report generation the last pass applied IN FULL (`0` = none); sent with the next walk.
+#[cfg(feature = "host-isolates")]
+static WALK_ACK: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);

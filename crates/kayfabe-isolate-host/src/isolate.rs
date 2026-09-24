@@ -1140,9 +1140,10 @@ impl RmBackend for ProxyRmBackend {
         })
     }
 
-    fn walk_shadow_run(&mut self, pdbs: &[u64]) -> Result<Vec<u8>, RmError> {
+    fn walk_shadow_run(&mut self, pdbs: &[u64], ack: u64) -> Result<Vec<u8>, RmError> {
         let reply = self.call(Request::WalkShadowRun {
             pdbs: pdbs.to_vec(),
+            ack,
         })?;
         match self.lift(reply)? {
             Reply::Payload(p) => Ok(p),

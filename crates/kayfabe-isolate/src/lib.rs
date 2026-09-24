@@ -1608,12 +1608,14 @@ pub trait RmBackend: Send + Sync {
     /// header, `PdbEntry`s, `MapRun`s — exactly as `kayfabe_mmu::walkreport::Report::parse`
     /// expects them.
     ///
-    /// `pdbs` are the **relocated** roots, ascending.
+    /// `pdbs` are the **relocated** roots, ascending. `ack` is the report generation the
+    /// caller APPLIED IN FULL since the last run (`0` = none): acking it makes this run a
+    /// DELTA against that report instead of a full resync (w826).
     ///
     /// # Errors
     /// [`RmError`], as above.
-    fn walk_shadow_run(&mut self, pdbs: &[u64]) -> Result<Vec<u8>, RmError> {
-        let _ = pdbs;
+    fn walk_shadow_run(&mut self, pdbs: &[u64], ack: u64) -> Result<Vec<u8>, RmError> {
+        let _ = (pdbs, ack);
         Err(RmError::Other(NOT_A_WALK_SHADOW))
     }
 

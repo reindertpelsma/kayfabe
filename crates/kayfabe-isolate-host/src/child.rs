@@ -1245,17 +1245,17 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
                 Reply::Failed(WireError::Other(kayfabe_isolate::NOT_A_WALK_SHADOW))
             }
         }
-        Request::WalkShadowRun { pdbs } => {
+        Request::WalkShadowRun { pdbs, ack } => {
             #[cfg(feature = "cuda-scratchpad")]
             {
-                match crate::cudawalk::run(&pdbs) {
+                match crate::cudawalk::run(&pdbs, ack) {
                     Ok(bytes) => Reply::Payload(bytes),
                     Err(e) => Reply::Failed(WireError::Other(e)),
                 }
             }
             #[cfg(not(feature = "cuda-scratchpad"))]
             {
-                let _ = pdbs;
+                let _ = (pdbs, ack);
                 Reply::Failed(WireError::Other(kayfabe_isolate::NOT_A_WALK_SHADOW))
             }
         }

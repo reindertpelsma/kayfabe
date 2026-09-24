@@ -333,7 +333,7 @@ impl WalkShadowPort {
             match staged {
                 Err(e) => Err(e),
                 Ok(()) => worker
-                    .with_rm(&off_trap, |rm| rm.walk_shadow_run(&pdbs))
+                    .with_rm(&off_trap, |rm| rm.walk_shadow_run(&pdbs, 0))
                     .map_err(|e| format!("run refused: {e:?}")),
             }
         });

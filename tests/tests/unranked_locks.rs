@@ -138,6 +138,11 @@ const UNRANKED_VCPU_PATH_LOCKS: &[(&str, &str, &str)] = &[
         "⊘ NOTHING MAY BLOCK BENEATH IT — nothing does. `BarMirror::bar1` (w826 C3, v3 §6.2): the walked-BAR1 ledger. Taken by `bar1_walked` (a flag read, also reached from `premap_bar1`), and by `apply_bar1_runs` / `retire_bar1` on the publication worker and at `detach_ram`. ★ Every guard is a copy-out or an insert/remove: the plan is computed under it and DROPPED before any `unplace` (mmap MAP_FIXED), `DeviceViewPort::with_node` (IPC) or `place_device_view_in` runs, and it is re-taken only to record the result. `install_bar1_reservation` takes the mirror's `table` lock, never this one. ★ THE EDIT THAT WOULD MAKE THIS ROW WRONG: holding the guard across the placement loop in `apply_bar1_runs`.",
     ),
     (
+        "crates/kayfabe-qemu-raw/src/shim.rs",
+        "Mutex< std::collections::BTreeMap<u64, crate::walkmirror::VasMirror>, >",
+        "⊘ NOTHING MAY BLOCK BENEATH IT — nothing does. `WALK_MIRROR` (w826): the host's delta-maintained copy of the walk kernel's state. Taken only by `publish_walked` on the publication worker, TWICE per pass and never across work: once to `mem::take` the whole map out, once to put it back with the ack. Every walk IPC, reconcile, guest-RAM resolution and BAR1 placement runs on the taken-out value with no guard live. ★ THE EDIT THAT WOULD MAKE THIS ROW WRONG: reading or editing the mirror through the guard instead of the taken value.",
+    ),
+    (
         "crates/kayfabe-qemu-raw/src/scratchpad.rs",
         "Mutex<IsolateBox>",
         "★★★ `SharedIsolate::iso` — the one VM-lifetime isolate's worker pool. **An IPC round trip runs beneath it BY DESIGN** (`scratchpad.rs:762`, `f(&mut worker)`), which is why its own doc requires that every caller be lock-free and off-trap on arrival. ⊘ That contract is currently VIOLATED by `repoint_pramin` (row above), which arrives on a vCPU holding `pramin`. ⚠ The order `pramin -> iso` is real, and is the only path by which a guest MMIO trap blocks on another PROCESS while holding a lock. ★ Under the single-process proposal this lock and the round trip beneath it both disappear; until then the ruling is that NOTHING may arrive here holding anything.",
