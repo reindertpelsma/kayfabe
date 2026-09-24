@@ -49,3 +49,25 @@ GA106, 580.159.04). Baseline `w825base`: thin guest 17/30 (honest 15/30).
 5. `defer-liveness`: the rung PASSes at 34 s; the guest then hangs in close past 45 s.
 6. `gpga-reserve-probe`: a 256 MiB CPU read sweep through BAR1 device views (~24 MB/s) —
    performance-bound by construction.
+
+## Step 4 (walk-at-invalidate on the GPU) — mapped, NOT built tonight, and why
+
+The seam exists (`PtSweepDecider::decide`, `kayfabe-rt/src/device.rs:9175`), but the in-place
+GPU walk cannot replace the CPU sweep as-is:
+- the kernel's report is **coalesced runs** — no table pages, levels, child edges or sparse
+  slots — so the `SubtreeDecode` every downstream consumer reads (`ReachShadow::observe` →
+  `settle` → `AddressTable::bind`) cannot be rebuilt from it;
+- four wiring defects on the in-place path: `cudawalk::run` refuses without a staged image it
+  then ignores (`cudawalk.rs:288`); the decider sends relocated roots, not real PDBs
+  (`walkshadow.rs:332`); `arm_store_device_pointer` imports the store in a DIFFERENT CUDA
+  context (`rm.rs:10535`, the kernel cannot use it — `walk.rs:669`); a foreign-aperture table
+  refuses the whole report instead of one branch (`kf_walk.cu:512`);
+- ⚠ **and it would not be faster yet**: Rust launches only the SERIAL kernel (1.6–4.5 ms),
+  vs today's CPU sweep ≈ 3.5 ms per invalidate. Only the parallel kernel (205 µs) wins, and no
+  Rust code calls `kf_run_parallel`.
+⇒ Plan (8 steps, file:line anchored) is in the session log; the order is: page-record section
+in the kernel report → per-branch foreign-aperture → same-context import → real-PDB verb →
+`subtree_from_report` → decider-first execute → wire + keep the Shadow arm as a field-by-field
+check → parallel launches. **Owner question:** is it acceptable to keep the CPU sweep (reads of
+vidmem PT pages through device views) on the hold until that lands, given v3 declares CPU reads
+of vidmem dead? Tonight's work kept it and cut everything around it instead.
