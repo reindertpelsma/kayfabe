@@ -19,7 +19,7 @@ use kf_gsp::{CommandPolicy, GspFsm, GuestRam, RamRefused};
 use kf_linux_raw::{Notifier, PollTimeout, Poller, ReadyTokens};
 use kf_trap::{Action, Class, WriteSemantics};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Mutex, OnceLock, RwLock};
+use std::sync::{Mutex, OnceLock};
 
 /// `NV_PROM_DATA(i) = 0x300000 + i`, 1 MiB — where RM streams the VBIOS from.
 pub const PROM_BASE: u64 = 0x0030_0000;
@@ -58,13 +58,6 @@ struct Piece {
     mem: RawRegion,
 }
 
-/// A registered guest-RAM block: guest-physical `[gpa, gpa+len)` at `mem`.
-#[derive(Debug, Clone, Copy)]
-struct RamBlock {
-    gpa: u64,
-    mem: RawRegion,
-}
-
 /// The GSP side the drainer owns.
 struct Gsp {
     fsm: GspFsm,
@@ -93,14 +86,20 @@ pub struct Counters {
 
 /// ★ The device.
 pub struct Device {
-    /// The host RM session.
-    pub rm: kf_host::HostRm,
+    /// The host RM session (process-lifetime: the memory plane's views borrow it).
+    pub rm: &'static kf_host::HostRm,
     /// The host's family.
     pub family: Family,
     /// What the C device presents.
     pub identity: Identity,
     /// The store (the guest's whole framebuffer, one object).
     pub store: kf_host::Reservation,
+    /// ★ P4: the memory plane's shared half (windows, PRAMIN pool, invalidate port, inbox).
+    pub mem: crate::mem::MemPlane,
+    /// ★ P4: the VA manager, until its thread takes it ([`Device::va_loop`]).
+    va: Mutex<Option<crate::mem::Manager>>,
+    /// The VA manager's counters, copied out by its thread for the boot log.
+    va_stats: Mutex<kf_mem::vasmgr::VaStats>,
     /// The plane (trap → workers / drainer).
     pub plane: &'static Plane<'static>,
     /// The host die's facts the served chain answers from (`kf_rm::hostfacts::PROVENANCE`).
@@ -112,7 +111,7 @@ pub struct Device {
     pub census: kf_rm::census::ControlCensusLog,
     pieces: OnceLock<Vec<Piece>>,
     staged: Mutex<Vec<Piece>>,
-    ram: RwLock<Vec<RamBlock>>,
+    ram: &'static crate::mem::RamMap,
     gsp: Mutex<Gsp>,
     boot: Vec<BootReg>,
     vbios: Vec<u8>,
@@ -135,8 +134,10 @@ impl Device {
     /// Any refusal, by name — the VM must not start on a guessed device.
     pub fn realize(cfg: &Config) -> Result<Device, String> {
         let dev = kf_linux_raw::DevDir::open(c"/dev").map_err(|e| format!("open /dev: {e:?}"))?;
-        let rm = kf_host::HostRm::open(&dev, kf_arch::ids::GpuId(cfg.gpu_minor), &kf_chip::choose_host_classes)
-            .map_err(|e| e.to_string())?;
+        let rm: &'static kf_host::HostRm = Box::leak(Box::new(
+            kf_host::HostRm::open(&dev, kf_arch::ids::GpuId(cfg.gpu_minor), &kf_chip::choose_host_classes)
+                .map_err(|e| e.to_string())?,
+        ));
         let (architecture, implementation, revision) = rm.arch_info();
         let family = Family::from_arch(architecture, implementation).map_err(|e| format!("family: {e:?}"))?;
         // ★ P3: the host die's facts, each from the source `kf_rm::hostfacts::PROVENANCE` names —
@@ -145,14 +146,36 @@ impl Device {
         // host refuses, or a family an authored rule has no number for (Hopper's PBDMA fault ids),
         // refuses REALIZE, listing every such field: never a default, never a GA106 row.
         let host = std::sync::Arc::new(
-            crate::rmfacts::host_facts(&rm, family).map_err(|e| format!("host facts: {e}"))?,
+            crate::rmfacts::host_facts(rm, family).map_err(|e| format!("host facts: {e}"))?,
         );
         let sysfs = crate::hostfacts::sysfs_dir_for_minor(cfg.gpu_minor)?;
         let pci = crate::hostfacts::read_host_pci(&sysfs)?;
 
         let fb_length = cfg.fb_mb << 20;
         let layout = fb_layout(fb_length).ok_or(format!("a {} MiB store cannot hold the firmware carve-out", cfg.fb_mb))?;
+        // ★ P4 realize order (`V3_P4_PORT_MAP.md` §2.0): the GPU walker's CUDA context comes up
+        // BEFORE the reservation, then the store is exported into it. ⊘ No walker, no device:
+        // BAR2 and every invalidate are walked by it, and there is no CPU fallback to fall to.
+        let fmt = match family.mmu_format() {
+            kf_chip::MmuFormat::Ver2 => kf_cuda::abi::kf_format_ver2(),
+            kf_chip::MmuFormat::Ver3 => kf_cuda::abi::kf_format_ver3(),
+        };
+        let kernel = kf_cuda::walk::WalkKernel::bring_up(kf_cuda::walk::WalkCfg::default(), fmt)
+            .map_err(|e| format!("GPU walker bring-up: {e}"))?;
         let store = rm.reserve_gpga(fb_length).map_err(|e| format!("store of {} MiB refused: {e:?}", cfg.fb_mb))?;
+        let export = rm.export_to_new_fd(store.handle).map_err(|e| format!("store export: {e:?}"))?;
+        let store_ptr = kernel
+            .import_store(export.fd_number(), fb_length)
+            .map_err(|e| format!("store import into the walker: {e}"))?;
+        // The export node stays open for the process (CUDA holds the import).
+        std::mem::forget(export);
+        // ★ Our two roots, zeroed on the GPU (the pages are ours: no CPU read, no guest table).
+        let zero = vec![0u8; kf_chip::bar0::ROOT_PAGE_BYTES as usize];
+        for root in [layout.bar1_pde_base, layout.bar2_pde_base] {
+            kernel.write_at(store_ptr + root, &zero).map_err(|e| format!("zeroing our root @{root:#x}: {e}"))?;
+        }
+        let ram: &'static crate::mem::RamMap = Box::leak(Box::default());
+        let inbox = std::sync::Arc::new(crate::mem::Inbox::new()?);
 
         let facts = Bar0Facts {
             architecture,
@@ -220,7 +243,18 @@ impl Device {
             *table,
             chain_logs.clone(),
             census.clone(),
-            kf_rm::ObjectLinks { objects: Some(Box::new(objects)), memory: None },
+            kf_rm::ObjectLinks {
+                objects: Some(Box::new(objects)),
+                // ★ P4: fn 70 and the page-directory statements go to the VA thread's inbox;
+                // their replies are held until it has settled them.
+                memory: Some(kf_rm::MemoryLink {
+                    sink: {
+                        let inbox = inbox.clone();
+                        std::sync::Arc::new(move |st| inbox.push(st))
+                    },
+                    guest_os: kf_abi::GuestOs::Linux,
+                }),
+            },
         );
         let model = family.gsp_model(cfg.fb_mb).map_err(|e| format!("{e:?}"))?;
         let gsp = Gsp { fsm: GspFsm::new(abi), model, policy };
@@ -237,18 +271,57 @@ impl Device {
             u32::try_from(bar0_bytes).map_err(|_| "BAR0 larger than 4 GiB")?,
         )));
 
+        // ★ P4: the windows, their scratch, the PRAMIN views (armed HERE, off every vCPU), the
+        // invalidate port; and the VA manager with OUR BAR2 aperture as its first object.
+        let (mem, bar2_ops) = crate::mem::MemPlane::build(
+            rm,
+            family,
+            store.handle,
+            store_ptr,
+            &layout,
+            cfg.bar1_bytes,
+            cfg.bar2_bytes,
+            ram,
+            inbox,
+        )?;
+        let walker = kf_mem::vasmgr::GpuWalker { kernel, store_ptr, store_bytes: fb_length };
+        let mut va: crate::mem::Manager = kf_mem::vasmgr::VaManager::new(
+            walker,
+            fb_length,
+            Box::new(move |gpa, len| ram.file_range(gpa, len).map(|(_, off)| off)),
+        );
+        va.table.insert(
+            crate::mem::K_BAR2,
+            crate::mem::Target::Window(kf_mem::cpuwin::CpuWindow::new(bar2_ops, cfg.bar2_bytes)),
+        );
+        va.table
+            .set_root(crate::mem::K_BAR2, layout.bar2_pde_base, kf_trap::PdbAperture::Vidmem)
+            .map_err(|e| format!("our BAR2 root: {e:?}"))?;
+        eprintln!(
+            "kf3: P4 memory plane: store {} MiB @dev {store_ptr:#x}, roots bar1={:#x} bar2={:#x}, PRAMIN views={} over {:x?}, trigger @{:#x}",
+            cfg.fb_mb,
+            layout.bar1_pde_base,
+            layout.bar2_pde_base,
+            mem.pramin.armed(),
+            mem.pramin.coverage(),
+            mem.port.regs().trigger,
+        );
+
         Ok(Device {
             rm,
             family,
             identity: Identity { pci, bar0_bytes },
             store,
+            mem,
+            va: Mutex::new(Some(va)),
+            va_stats: Mutex::new(kf_mem::vasmgr::VaStats::default()),
             plane,
             host_facts: host,
             chain_logs,
             census,
             pieces: OnceLock::new(),
             staged: Mutex::new(Vec::new()),
-            ram: RwLock::new(Vec::new()),
+            ram,
             gsp: Mutex::new(gsp),
             boot,
             vbios,
@@ -345,12 +418,28 @@ impl Device {
         };
         let in_usermode = (kf_trap::memmap::VF_USERMODE_PAGE..kf_trap::memmap::VF_USERMODE_PAGE + kf_trap::memmap::PAGE)
             .contains(&off);
+        // ★ P4: the three MMU_INVALIDATE registers. The port arms FIRST, then the shadow takes the
+        // word the guest's spin will read (busy), then one wake — never the privileged ring: the
+        // VA thread, not the drainer, completes it (§49.1).
+        if !doorbell
+            && !in_usermode
+            && width == 4
+            && let Some(v) = self.mem.invalidate_write(off, val as u32)
+        {
+            self.shadow_store(off, u64::from(v), 4);
+            return;
+        }
         let class = if doorbell {
             Class::Doorbell
         } else if in_usermode {
             Class::UserspaceMappable
         } else {
             self.shadow_store(off, val, width);
+            // ★ P4: the PRAMIN window base — re-pointed HERE, synchronously, from pre-armed views
+            // (§53.1: the register is B, the window A). The word also goes on to the plane.
+            if off == self.mem.pramin_reg.offset && width == 4 {
+                self.mem.pramin_write(val as u32);
+            }
             Class::Privileged { readable: true, semantics: WriteSemantics::Plain }
         };
         let off32 = u32::try_from(off).unwrap_or(u32::MAX);
@@ -371,19 +460,110 @@ impl Device {
         }
     }
 
-    /// Register guest RAM: guest-physical `[gpa, gpa+len)` at `mem`.
-    pub fn ram_add(&self, gpa: u64, mem: RawRegion) {
-        if let Ok(mut r) = self.ram.write() {
-            r.retain(|b| b.gpa != gpa);
-            r.push(RamBlock { gpa, mem });
-            r.sort_by_key(|b| b.gpa);
-        }
+    /// Register guest RAM: guest-physical `[gpa, gpa+len)` at `mem`, backed by `fd` at `fd_off`
+    /// (`fd < 0`: the backend has none, and sysmem placements are then refused by name).
+    pub fn ram_add(&self, gpa: u64, mem: RawRegion, fd: i32, fd_off: u64) {
+        self.ram.add(crate::mem::RamBlock { gpa, mem, fd, fd_off });
+    }
+
+    /// ★ P4: the host address of `[base, base+len)` of a disposition-A region — PRAMIN (BAR0),
+    /// BAR1 or BAR2 (`bar` 2 = PCI BAR3). `None` when no window covers it.
+    #[must_use]
+    pub fn window_address(&self, bar: u32, base: u64, len: u64) -> Option<usize> {
+        let (win, rel) = match bar {
+            0 => (self.mem.pramin_win, base.checked_sub(kf_trap::trappolicy::PRAMIN_BASE)?),
+            1 => (self.mem.bar1_win, base),
+            2 => (self.mem.bar2_win, base),
+            _ => return None,
+        };
+        (rel.checked_add(len)? <= win.len_bytes()).then(|| win.host_address() + rel as usize)
     }
 
     /// Unregister the guest RAM block at `gpa`.
     pub fn ram_del(&self, gpa: u64) {
-        if let Ok(mut r) = self.ram.write() {
-            r.retain(|b| b.gpa != gpa);
+        self.ram.del(gpa);
+    }
+
+    /// ★ P4: re-publish the invalidate trigger's word into the BAR0 read shadow — after the VA
+    /// thread cleared it. ⊘ Loops until the shadow and the port agree: a vCPU re-arming between
+    /// our read and our store has already stored "busy", and our stale "idle" must not stay.
+    fn publish_trigger(&self) {
+        let off = self.mem.port.regs().trigger;
+        for _ in 0..8 {
+            let Some(v) = self.mem.port.read(off) else { return };
+            self.shadow_store(off, u64::from(v), 4);
+            if self.mem.port.read(off) == Some(v) {
+                return;
+            }
+        }
+    }
+
+    /// ★★★ **The VA-manager thread** (`V3_P4_PORT_MAP.md` §2.1(c), Q6): the ONE thread that
+    /// owns the GPU walker. It waits in `epoll` on two fds only — the inbox wake (statements from
+    /// the drainer, invalidates from a vCPU) and the walker's completion eventfd — and never
+    /// blocks on the GPU: a walk is submitted and collected on its fd.
+    pub fn va_loop(&self) {
+        let Some(mut m) = self.va.lock().ok().and_then(|mut g| g.take()) else { return };
+        if let Err(e) = m.walker().kernel.make_current() {
+            eprintln!("kf3: VA manager: walker context: {e} — the memory plane is DOWN");
+            return;
+        }
+        const WAKE: u64 = 1;
+        const WALK: u64 = 2;
+        let Ok(poller) = Poller::create() else { return };
+        if poller.watch(self.mem.inbox.wake.as_source_fd(), WAKE).is_err()
+            || poller.watch(std::os::fd::AsFd::as_fd(m.walker().kernel.completion_fd()), WALK).is_err()
+        {
+            eprintln!("kf3: VA manager: epoll watch refused — the memory plane is DOWN");
+            return;
+        }
+        let trigger = self.mem.port.trigger();
+        let mut last_seq: Option<u64> = None;
+        let mut taken = 0u64;
+        let mut logged = 0u32;
+        let mut refusals_seen = 0usize;
+        while !self.stop.load(Ordering::Acquire) {
+            let mut ready = ReadyTokens::new();
+            let _ = poller.wait(&mut ready, PollTimeout::Millis(50));
+            let _ = self.mem.inbox.wake.drain();
+            for st in self.mem.inbox.take() {
+                taken += 1;
+                let line = crate::mem::apply_statement(&mut m, &self.mem, self.rm, self.store.handle, st, trigger);
+                if logged < 256 {
+                    logged += 1;
+                    eprintln!("kf3: mem {line}");
+                }
+            }
+            if let Some(req) = self.mem.port.armed_request()
+                && last_seq != Some(req.seq)
+            {
+                last_seq = Some(req.seq);
+                m.on_invalidate(req, trigger);
+            }
+            let r = m.on_walk_ready(trigger);
+            if r.collected && logged < 256 {
+                logged += 1;
+                let applied: Vec<String> =
+                    r.applied.iter().map(|(k, a)| format!("{:#x}:+{}-{}r{}", k.0, a.mapped, a.unmapped, a.refused)).collect();
+                eprintln!(
+                    "kf3: mem walk reconciled [{}] completed={:?} unreconciled={:?}",
+                    applied.join(" "),
+                    r.completed,
+                    r.unreconciled
+                );
+            }
+            for why in m.stats.refusals.iter().skip(refusals_seen) {
+                eprintln!("kf3: mem REFUSED {why}");
+            }
+            refusals_seen = m.stats.refusals.len();
+            self.publish_trigger();
+            // ★ Everything received so far is applied and nothing is walking: held replies go.
+            if !m.in_flight() && m.pending() == 0 && self.mem.inbox.settle(taken) {
+                let _ = self.drainer_efd.signal();
+            }
+            if let Ok(mut s) = self.va_stats.lock() {
+                *s = m.stats.clone();
+            }
         }
     }
 
@@ -440,6 +620,7 @@ impl Device {
             if self.plane.drainer_pass(self, 256) > 0 {
                 continue;
             }
+            self.release_settled();
             if !self.plane.drainer_wake.try_park(seen) {
                 continue;
             }
@@ -464,8 +645,31 @@ impl Device {
             .iter()
             .map(|c| c.cmd.map_or_else(|| format!("fn{}", c.function), |cmd| format!("{cmd:#010x}")))
             .collect();
+        let mc = &self.mem.counters;
+        let va = self.va_stats.lock().map(|v| v.clone()).unwrap_or_default();
+        let (recv, settled) = self.mem.inbox.counts();
+        let mem = format!(
+            " mem[inval={} walks={}/{} cleared={} superseded={} named_missed={} unreconciled={} mapped={} unmapped={} clipped={:#x} fn70={} roots={} stmts={recv}/{settled} refused={} pramin_repoints={} pramin_miss={} last_miss={:#x} pramin_worst_us={}]",
+            mc.invalidates.load(o),
+            va.walks_reconciled,
+            va.walks_submitted,
+            va.cleared,
+            va.superseded,
+            va.named_missed,
+            va.unreconciled,
+            va.mapped,
+            va.unmapped,
+            va.clipped_bytes,
+            mc.bar_pdes.load(o),
+            mc.roots.load(o),
+            mc.refused.load(o) + va.refusals.len() as u64,
+            self.mem.pramin.repoints.load(o),
+            self.mem.pramin.missed.load(o),
+            mc.pramin_last_miss.load(o),
+            self.mem.pramin.worst_ns.load(o) / 1000,
+        );
         format!(
-            "kf3: family={:?} phase={phase} trapped={} applied={} refused={} serviced={} ram_refused={} unshadowed_writes={} last_off={:#x} unserviced=[{}]",
+            "kf3: family={:?} phase={phase} trapped={} applied={} refused={} serviced={} ram_refused={} unshadowed_writes={} last_off={:#x}{mem} unserviced=[{}]",
             self.family,
             c.trapped.load(o),
             c.applied.load(o),
@@ -487,11 +691,30 @@ impl Device {
         }
     }
 
+    /// ★ P4, on the drainer: deliver held replies whose statements the VA thread has settled.
+    fn release_settled(&self) {
+        if !self.mem.inbox.all_settled() {
+            return;
+        }
+        let Ok(mut g) = self.gsp.lock() else { return };
+        if g.fsm.held_len() == 0 {
+            return;
+        }
+        let g = &mut *g;
+        let mut ram = Ram(self);
+        match g.fsm.release_held(&mut ram) {
+            Ok(n) if n > 0 => self.publish(g),
+            Ok(_) => {}
+            Err(e) => eprintln!("kf3: held reply post REFUSED: {e:?}"),
+        }
+    }
+
     /// Stop the device's threads.
     pub fn stop(&self) {
         self.stop.store(true, Ordering::Release);
         let _ = self.drainer_efd.signal();
         let _ = self.worker_efd.signal();
+        let _ = self.mem.inbox.wake.signal();
     }
 }
 
@@ -500,25 +723,19 @@ struct Ram<'a>(&'a Device);
 
 impl GuestRam for Ram<'_> {
     fn read(&mut self, gpa: u64, buf: &mut [u8]) -> Result<(), RamRefused> {
-        let blocks = self.0.ram.read().map_err(|_| RamRefused { gpa, len: buf.len(), why: "no guest-RAM block QEMU registered covers this range" })?;
-        for b in blocks.iter() {
-            if gpa >= b.gpa && gpa - b.gpa + buf.len() as u64 <= b.mem.len() as u64 {
-                if b.mem.read_into((gpa - b.gpa) as usize, buf) {
-                    return Ok(());
-                }
-            }
+        if let Some(b) = self.0.ram.block_for(gpa, buf.len() as u64)
+            && b.mem.read_into((gpa - b.gpa) as usize, buf)
+        {
+            return Ok(());
         }
         self.0.counters.ram_refused.fetch_add(1, Ordering::Relaxed);
         Err(RamRefused { gpa, len: buf.len(), why: "no guest-RAM block QEMU registered covers this range" })
     }
     fn write(&mut self, gpa: u64, bytes: &[u8]) -> Result<(), RamRefused> {
-        let blocks = self.0.ram.read().map_err(|_| RamRefused { gpa, len: bytes.len(), why: "no guest-RAM block QEMU registered covers this range" })?;
-        for b in blocks.iter() {
-            if gpa >= b.gpa && gpa - b.gpa + bytes.len() as u64 <= b.mem.len() as u64 {
-                if b.mem.write_from((gpa - b.gpa) as usize, bytes) {
-                    return Ok(());
-                }
-            }
+        if let Some(b) = self.0.ram.block_for(gpa, bytes.len() as u64)
+            && b.mem.write_from((gpa - b.gpa) as usize, bytes)
+        {
+            return Ok(());
         }
         self.0.counters.ram_refused.fetch_add(1, Ordering::Relaxed);
         Err(RamRefused { gpa, len: bytes.len(), why: "no guest-RAM block QEMU registered covers this range" })
@@ -564,7 +781,12 @@ impl HostOps for Device {
             // ★ The P2 gate's observable: the boot phase, logged by the drainer (never a vCPU).
             eprintln!("kf3: GSP phase {before:?} -> {after:?}");
         }
-        let _ = g.fsm.release_held(&mut ram);
+        // ★ P4: a held reply (fn 70, a page-directory statement) goes only once the VA thread has
+        // settled every statement received — its root written and walked (§49.1 for the RPC
+        // path). Otherwise `release_settled` delivers it when the VA thread wakes this thread.
+        if self.mem.inbox.all_settled() {
+            let _ = g.fsm.release_held(&mut ram);
+        }
         self.publish(g);
     }
     fn operands_translatable(&self, _host_token: u32, _up_to_seq: u64) -> Translatable {

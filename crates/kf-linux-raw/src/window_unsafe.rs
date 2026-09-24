@@ -169,6 +169,15 @@ impl GuestWindow {
         self.len as u64
     }
 
+    /// ★ P4: the window's host address, as an integer — what a hypervisor registers as the
+    /// guest-physical range's backing (QEMU's `memory_region_init_ram_device_ptr`). The window
+    /// is mapped from construction until `Drop`, so the address stays valid that long; this type
+    /// never hands out a reference into it.
+    #[must_use]
+    pub fn host_address(&self) -> usize {
+        self.base.as_ptr() as usize
+    }
+
     /// The host page size this window's geometry is expressed in.
     #[must_use]
     pub fn page_size(&self) -> HostPageSize {

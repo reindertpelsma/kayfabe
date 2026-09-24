@@ -557,9 +557,11 @@ dependencies = [
  "kf-arch",
  "kf-chip",
  "kf-core",
+ "kf-cuda",
  "kf-gsp",
  "kf-host",
  "kf-linux-raw",
+ "kf-mem",
  "kf-rm",
  "kf-trap",
 ]

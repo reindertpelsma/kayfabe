@@ -16,6 +16,8 @@ kf-core.workspace = true
 kf-gsp.workspace = true
 kf-host.workspace = true
 kf-linux-raw.workspace = true
+kf-mem.workspace = true
+kf-cuda.workspace = true
 kf-rm.workspace = true
 kf-trap.workspace = true
 

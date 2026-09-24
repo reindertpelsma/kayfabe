@@ -8,7 +8,11 @@
  *  - BAR0 reads NEVER exit: shadow pieces are ROM devices (reads from RAM Rust fills and the
  *    register drainer re-publishes; writes trap). Registered lockless (QEMU >= 10.2), so a trapped
  *    write reaches Rust without the BQL.
- *  - BAR1 / BAR3 (RM's BAR2) trap and read zero, COUNTED, until P4 maps store slices there.
+ *  - PRAMIN, BAR1 and BAR3 (RM's BAR2) are disposition-A RAM (P4): each is ONE host range Rust
+ *    created and never unmaps (kf3_bar_ram), registered as a ram_device region — one memslot, no
+ *    exit either way. What each page shows (a store view, guest RAM, or per-BAR scratch — never a
+ *    hole) is re-pointed inside it by Rust with mmap(MAP_FIXED); QEMU never learns of a re-point.
+ *    The only trapped piece left in BAR1 is the Hopper+ doorbell page (counted until P5).
  *  - MSI-X lives in its own BAR; interrupts arrive with P5 (irqfd, never a BQL-taking notify).
  */
 #include "qemu/osdep.h"
@@ -58,6 +62,8 @@ struct Kf3State {
     Kf3Piece pieces[KF3_MAX_PIECES];
     unsigned n_pieces;
     MemoryRegion bar1, bar2, msix_bar;
+    Kf3Piece bar_pieces[2][4];
+    unsigned n_bar_pieces[2];
     uint64_t bar12_reads, bar12_writes;
     MemoryListener listener;
 };
@@ -157,9 +163,19 @@ static bool kf3_bar0_build(Kf3State *s, uint64_t size, Error **errp)
             if (!kf3_host_rom(s, p, name, r->len, errp)) {
                 return false;
             }
+        } else if (r->how == 0) {
+            /* PLAIN RAM (§53.1 A) — PRAMIN: Rust's window, re-pointed inside the trapped
+             * window-base write. ram_device: KVM maps it, and kf3_is_guest_ram skips it. */
+            void *ptr = NULL;
+            if (kf3_bar_ram(s->h, 0, r->base, r->len, &ptr) != 0 || !ptr) {
+                error_setg(errp, "kf3: no host window for the plain-RAM piece at 0x%" PRIx64, r->base);
+                return false;
+            }
+            memory_region_init_ram_device_ptr(&p->mr, OBJECT(s), name, r->len, ptr);
+            memory_region_add_subregion(&s->bar0, r->base, &p->mr);
+            continue;
         } else {
-            /* Shadow (1), and for P2 also PRAMIN (0): reads from RAM with no exit, writes trap.
-             * ⊘ PRAMIN's store window is P4. */
+            /* Shadow (1): reads from RAM with no exit, writes trap. */
             if (!memory_region_init_rom_device_nomigrate(&p->mr, OBJECT(s), &kf3_piece_ops, p,
                                                          name, r->len, errp)) {
                 return false;
@@ -177,7 +193,9 @@ static bool kf3_bar0_build(Kf3State *s, uint64_t size, Error **errp)
     return true;
 }
 
-/* ── BAR1 / BAR2: counted until P4 ─────────────────────────────────────────────────────── */
+/* ── BAR1 / BAR2 ──────────────────────────────────────────────────────────────────────────
+ * Plain RAM (Rust's windows). The ops below serve only a TRAPPED page (the Hopper+ BAR1
+ * doorbell), counted until P5 wires it. */
 
 static uint64_t kf3_bar12_read(void *opaque, hwaddr addr, unsigned size)
 {
@@ -200,6 +218,46 @@ static const MemoryRegionOps kf3_bar12_ops = {
     .impl = { .min_access_size = 1, .max_access_size = 8 },
 };
 
+/* Build BAR `bar` (1, or 2 = PCI BAR3) from the Rust memory map: plain-RAM pieces over Rust's
+ * window, a trapped piece (Hopper+ BAR1 doorbell page) as counted IO. */
+static bool kf3_bar_build(Kf3State *s, unsigned bar, MemoryRegion *mr, uint64_t size, Error **errp)
+{
+    Kf3Region regs[KF3_MAX_PIECES * 2];
+    int64_t n = kf3_memory_map(s->h, s->bar1_size, s->bar2_size, regs, G_N_ELEMENTS(regs));
+    int64_t i;
+    unsigned k = bar - 1;
+
+    memory_region_init(mr, OBJECT(s), bar == 1 ? "kf3-bar1" : "kf3-bar2", size);
+    for (i = 0; i < n && i < (int64_t)G_N_ELEMENTS(regs); i++) {
+        Kf3Region *r = &regs[i];
+        Kf3Piece *p;
+        g_autofree char *name = NULL;
+        if (r->bar != bar) {
+            continue;
+        }
+        if (s->n_bar_pieces[k] >= G_N_ELEMENTS(s->bar_pieces[k])) {
+            error_setg(errp, "kf3: BAR%u has more than %zu pieces", bar, G_N_ELEMENTS(s->bar_pieces[k]));
+            return false;
+        }
+        p = &s->bar_pieces[k][s->n_bar_pieces[k]++];
+        p->s = s;
+        p->base = r->base;
+        name = g_strdup_printf("kf3-bar%u@%" PRIx64 "/how%u", bar, r->base, r->how);
+        if (r->how == 0) {
+            void *ptr = NULL;
+            if (kf3_bar_ram(s->h, bar, r->base, r->len, &ptr) != 0 || !ptr) {
+                error_setg(errp, "kf3: no host window for BAR%u 0x%" PRIx64 "+0x%" PRIx64, bar, r->base, r->len);
+                return false;
+            }
+            memory_region_init_ram_device_ptr(&p->mr, OBJECT(s), name, r->len, ptr);
+        } else {
+            memory_region_init_io(&p->mr, OBJECT(s), &kf3_bar12_ops, s, name, r->len);
+        }
+        memory_region_add_subregion(mr, r->base, &p->mr);
+    }
+    return true;
+}
+
 /* ── guest RAM → Rust ──────────────────────────────────────────────────────────────────── */
 
 static bool kf3_is_guest_ram(MemoryRegionSection *sec)
@@ -216,7 +274,11 @@ static void kf3_region_add(MemoryListener *l, MemoryRegionSection *sec)
         return;
     }
     hva = (uint8_t *)memory_region_get_ram_ptr(sec->mr) + sec->offset_within_region;
-    kf3_ram_add(s->h, sec->offset_within_address_space, hva, int128_get64(sec->size));
+    /* The backend's fd and the file offset of this section (memory-backend-memfd): Rust maps
+     * guest RAM from it into a CPU window when a walked leaf or the PRAMIN target is sysmem. */
+    kf3_ram_add(s->h, sec->offset_within_address_space, hva, int128_get64(sec->size),
+                memory_region_get_fd(sec->mr),
+                qemu_ram_get_fd_offset(sec->mr->ram_block) + sec->offset_within_region);
 }
 
 static void kf3_region_del(MemoryListener *l, MemoryRegionSection *sec)
@@ -267,8 +329,10 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
     }
     pci_register_bar(pci, 0, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->bar0);
 
-    memory_region_init_io(&s->bar1, OBJECT(s), &kf3_bar12_ops, s, "kf3-bar1", s->bar1_size);
-    memory_region_init_io(&s->bar2, OBJECT(s), &kf3_bar12_ops, s, "kf3-bar2", s->bar2_size);
+    if (!kf3_bar_build(s, 1, &s->bar1, s->bar1_size, errp) ||
+        !kf3_bar_build(s, 2, &s->bar2, s->bar2_size, errp)) {
+        return;
+    }
     pci_register_bar(pci, 1, PCI_BASE_ADDRESS_SPACE_MEMORY | PCI_BASE_ADDRESS_MEM_TYPE_64 |
                      PCI_BASE_ADDRESS_MEM_PREFETCH, &s->bar1);
     pci_register_bar(pci, 3, PCI_BASE_ADDRESS_SPACE_MEMORY | PCI_BASE_ADDRESS_MEM_TYPE_64 |

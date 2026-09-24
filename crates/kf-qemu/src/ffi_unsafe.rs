@@ -7,7 +7,7 @@ use core::ffi::{c_char, c_void};
 use std::ffi::CStr;
 
 /// Wire ABI of this surface; the C device refuses a mismatched archive.
-pub const KF3_ABI: u32 = 2;
+pub const KF3_ABI: u32 = 3;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -99,6 +99,11 @@ pub unsafe extern "C" fn kf3_realize(
             let d: &'static Device = Box::leak(Box::new(d));
             if std::thread::Builder::new().name("kf3-drainer".into()).spawn(move || d.drainer_loop()).is_err() {
                 write_err(err, err_len, "could not start the register drainer thread");
+                return -1;
+            }
+            // ★ P4: the VA-manager thread — the one owner of the GPU walker.
+            if std::thread::Builder::new().name("kf3-vamgr".into()).spawn(move || d.va_loop()).is_err() {
+                write_err(err, err_len, "could not start the VA-manager thread");
                 return -1;
             }
             if !out.is_null() {
@@ -198,15 +203,33 @@ pub extern "C" fn kf3_bar0_write(h: *mut c_void, off: u64, val: u64, width: u32)
     }
 }
 
-/// Register guest RAM `[gpa, gpa+len)` at `hva`.
+/// Register guest RAM `[gpa, gpa+len)` at `hva`, backed by the memory backend's `fd` at file
+/// offset `fd_off` (`fd < 0`: none).
 ///
 /// # Safety
-/// `hva` is valid for `len` bytes until `kf3_ram_del` for the same `gpa`.
+/// `hva` is valid for `len` bytes, and `fd` (when `>= 0`) stays open, until `kf3_ram_del` for the
+/// same `gpa`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn kf3_ram_add(h: *mut c_void, gpa: u64, hva: *mut u8, len: u64) -> i32 {
+pub unsafe extern "C" fn kf3_ram_add(h: *mut c_void, gpa: u64, hva: *mut u8, len: u64, fd: i32, fd_off: u64) -> i32 {
     let (Some(d), false) = (dev(h), hva.is_null()) else { return -1 };
     // SAFETY: the caller keeps the RAM mapped until it unregisters it.
-    d.ram_add(gpa, unsafe { RawRegion::adopt(hva, len as usize) });
+    d.ram_add(gpa, unsafe { RawRegion::adopt(hva, len as usize) }, fd, fd_off);
+    0
+}
+
+/// ★ P4: the host address backing a plain-RAM (disposition A) region — `[base, base+len)` of
+/// `bar` (0: PRAMIN inside BAR0; 1: BAR1; 2: RM's BAR2 = PCI BAR3). Writes `*ptr`; returns 0, or
+/// -1 when no window covers the region. The pages live for the process and are never unmapped:
+/// every re-point is a `MAP_FIXED` placement inside them.
+///
+/// # Safety
+/// `ptr` is writable.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kf3_bar_ram(h: *mut c_void, bar: u32, base: u64, len: u64, ptr: *mut *mut c_void) -> i32 {
+    let (Some(d), false) = (dev(h), ptr.is_null()) else { return -1 };
+    let Some(addr) = d.window_address(bar, base, len) else { return -1 };
+    // SAFETY: `ptr` is writable (caller contract).
+    unsafe { *ptr = addr as *mut c_void };
     0
 }
 

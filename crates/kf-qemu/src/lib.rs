@@ -10,5 +10,6 @@
 pub mod device;
 pub mod ffi_unsafe;
 pub mod hostfacts;
+pub mod mem;
 pub mod raw_unsafe;
 pub mod rmfacts;
