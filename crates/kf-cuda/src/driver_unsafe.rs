@@ -200,6 +200,9 @@ pub struct Cuda {
     >,
     pub(crate) cuGraphExecDestroy: Option<unsafe extern "C" fn(*mut c_void) -> CUresult>,
     pub(crate) cuGraphDestroy: Option<unsafe extern "C" fn(*mut c_void) -> CUresult>,
+    pub(crate) cuGraphUpload: Option<unsafe extern "C" fn(*mut c_void, *mut c_void) -> CUresult>,
+    pub(crate) cuEventRecordWithFlags:
+        Option<unsafe extern "C" fn(*mut c_void, *mut c_void, c_uint) -> CUresult>,
     /// ★ How many times `cuCtxSynchronize` ran through this binding — the falsifier of
     /// `V3_P4_PORT_MAP.md` §3 row 2 (*"fails if any `cuCtxSynchronize` runs on the worker
     /// (count the calls)"*). A counter, not a promise: gate 8 reads it around its walks.
@@ -399,6 +402,8 @@ impl Cuda {
             },
             cuGraphExecDestroy: opt!("cuGraphExecDestroy"),
             cuGraphDestroy: opt!("cuGraphDestroy"),
+            cuGraphUpload: opt!("cuGraphUpload"),
+            cuEventRecordWithFlags: opt!("cuEventRecordWithFlags"),
             ctx_sync_calls: core::sync::atomic::AtomicU64::new(0),
             // ⊘ Resolved with a NULL-tolerant lookup, unlike `sym!`, for the reason the field
             // docs give: absent is an ANSWER here, not a load failure.
@@ -977,6 +982,8 @@ impl Cuda {
             && self.cuGraphExecKernelNodeSetParams.is_some()
             && self.cuGraphExecDestroy.is_some()
             && self.cuGraphDestroy.is_some()
+            && self.cuGraphUpload.is_some()
+            && self.cuEventRecordWithFlags.is_some()
     }
 
     fn graph_fn<T: Copy>(f: Option<T>, name: &'static str) -> Result<T, CudaError> {
@@ -1115,6 +1122,31 @@ impl Cuda {
         // is a live, fully-initialised `CUDA_KERNEL_NODE_PARAMS_v2`; `e`/`node` came from
         // this binding and `node` belongs to the graph `e` was instantiated from.
         self.check(what, unsafe { set(e.0 as *mut c_void, node.0 as *mut c_void, &raw const kp) })
+    }
+
+    /// `cuGraphUpload(e, s)` — move the instantiated graph's work descriptors to the device
+    /// now, so the FIRST `cuGraphLaunch` does not pay for it on the submitting thread.
+    ///
+    /// # Errors
+    /// [`CudaError`].
+    pub fn graph_upload(&self, e: GraphExecHandle, s: StreamHandle) -> Result<(), CudaError> {
+        let f = Self::graph_fn(self.cuGraphUpload, "cuGraphUpload")?;
+        // SAFETY: both handles came from this binding.
+        self.check("cuGraphUpload", unsafe { f(e.0 as *mut c_void, s.0 as *mut c_void) })
+    }
+
+    /// `cuEventRecordWithFlags(e, s, CU_EVENT_RECORD_EXTERNAL)` — under stream capture this
+    /// becomes an EVENT-RECORD NODE of the graph (a plain `cuEventRecord` during capture only
+    /// expresses a dependency and records nothing), so every replay records `e` on the GPU.
+    ///
+    /// # Errors
+    /// [`CudaError`].
+    pub fn event_record_external(&self, e: EventHandle, s: StreamHandle) -> Result<(), CudaError> {
+        let f = Self::graph_fn(self.cuEventRecordWithFlags, "cuEventRecordWithFlags")?;
+        // SAFETY: both handles came from this binding; `1` is `CU_EVENT_RECORD_EXTERNAL`.
+        self.check("cuEventRecordWithFlags", unsafe {
+            f(e.0 as *mut c_void, s.0 as *mut c_void, 1)
+        })
     }
 
     /// `cuGraphExecDestroy`. ⊘ Infallible: it runs in a `Drop`.

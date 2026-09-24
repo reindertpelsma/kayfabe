@@ -656,15 +656,15 @@ impl WalkKernel {
             crate::abi::KF_MAX_SCOPE * core::mem::size_of::<KfScope>(),
             "cuMemAlloc(scopes)",
         )?;
-        let hdr = a(core::mem::size_of::<KfReportHeader>(), "cuMemAlloc(hdr)")?;
-        let rpdb = a(
-            cfg.pdb_capacity as usize * core::mem::size_of::<KfPdbEntry>(),
-            "cuMemAlloc(rpdb)",
-        )?;
-        let rrun = a(
-            cfg.run_capacity as usize * core::mem::size_of::<KfMapRun>(),
-            "cuMemAlloc(rrun)",
-        )?;
+        // ★ P4b: the report (header, pdb entries, runs) is ONE device allocation laid out
+        // exactly as its pinned read-back (`PinLayout`, from `hdr` on), so the read-back is ONE
+        // copy node rather than three — each node is paid again on every `cuGraphLaunch`.
+        let pin_at = PinLayout::for_cfg(&cfg);
+        let report = a(pin_at.total - pin_at.hdr, "cuMemAlloc(report)")?;
+        let at_rep = |off: usize| DevBuf {
+            ptr: report.ptr + (off - pin_at.hdr) as u64,
+        };
+        let (hdr, rpdb, rrun) = (at_rep(pin_at.hdr), at_rep(pin_at.rpdb), at_rep(pin_at.rrun));
 
         // The device-side configuration, written exactly as the `.cu`'s `kf_create` does.
         // ⊘ Same padding hazard as `args_for`: `KfDev` carries 4 uninitialised bytes and is
@@ -703,7 +703,6 @@ impl WalkKernel {
         let ev_start = cu.event_create()?;
         let ev_copied = cu.event_create()?;
         let ev_done = cu.event_create()?;
-        let pin_at = PinLayout::for_cfg(&cfg);
         let pin = cu.pinned_alloc(pin_at.total, "cuMemAllocHost(report read-back)")?;
         let done_fd = CompletionFd::new()?;
 
@@ -740,8 +739,33 @@ impl WalkKernel {
         // ★ P4b: capture + instantiate the walk graph HERE, with every other lazy path
         // (§w724d) — not on the first submit, after the sandbox may have closed paths.
         k.graph = k.build_graph()?;
+        k.warm_up()?;
         k.bring_up_us = u64::try_from(t0.elapsed().as_micros()).unwrap_or(u64::MAX);
         Ok(k)
+    }
+
+    /// ★ P4b: pay the two remaining first-use costs HERE rather than on the first walk's
+    /// submitting thread. `[measured GA106, w827]` the first walk's `cuGraphLaunch` cost
+    /// 66-130 µs (graph upload) and its first `cuLaunchHostFunc` ~260 µs (the driver starts
+    /// its callback thread lazily). ⇒ `cuGraphUpload`, then one host signal on the stream,
+    /// waited for on the fd and drained so it cannot complete the first real walk.
+    /// ⊘ The wait is `poll(2)` on the fd, at bring-up — not a context synchronize, and not on
+    /// the walk path.
+    fn warm_up(&self) -> Result<(), CudaError> {
+        let s = self.stream;
+        if let Some(g) = &self.graph {
+            self.cu.graph_upload(g.exec, s)?;
+        }
+        self.cu.launch_host_signal(s, &self.done_fd)?;
+        if !self.done_fd.wait_readable(10_000) || self.done_fd.drain() == 0 {
+            return Err(CudaError::Refused {
+                what: "WalkKernel::bring_up (warm-up host signal)",
+                code: 0,
+                name: "the warm-up host function did not signal the completion fd within 10 s"
+                    .to_string(),
+            });
+        }
+        Ok(())
     }
 
     /// Capture the whole walk on the walker's stream (placeholder `KfArgs`: no store, no
@@ -875,22 +899,14 @@ impl WalkKernel {
         if let Some(mut g) = self.graph.take() {
             // ★ P4b: ONE driver call for the whole walk, plus a setter per args-bearing node
             // only when the store or the space count changed since the last walk.
-            let r = Self::update_graph(&self.cu, &mut g, &args, npdb).and_then(|()| {
-                self.cu.event_record(self.ev_start, s)?;
-                self.cu.graph_launch(g.exec, s)
-            });
+            // The graph carries the events and the eventfd host node too (`enqueue_walk`).
+            let r = Self::update_graph(&self.cu, &mut g, &args, npdb)
+                .and_then(|()| self.cu.graph_launch(g.exec, s));
             self.graph = Some(g);
             r?;
         } else {
-            self.cu.event_record(self.ev_start, s)?;
             self.enqueue_walk(&args, npdb, &mut None)?;
         }
-        self.cu.event_record(self.ev_copied, s)?;
-        // ⊘ ORDER: the host signal BEFORE `ev_done`. Then `ev_done` complete ⇒ the fd was
-        // written, so a collect that saw the event can always drain the signal — a signal left
-        // behind would complete the NEXT walk before it ran.
-        self.cu.launch_host_signal(s, &self.done_fd)?;
-        self.cu.event_record(self.ev_done, s)?;
         self.inflight = Some(InFlight {
             gpga_len,
             submitted: std::time::Instant::now(),
@@ -1090,6 +1106,7 @@ impl WalkKernel {
     ) -> Result<(), CudaError> {
         let s = self.stream;
         let at = self.pin_at;
+        self.record(self.ev_start, rec.is_some())?;
         // ⊘ ALWAYS all `KF_MAX_PDB` slots, so the copy node is the same for every walk; the
         // kernels read only the first `npdb` (stale slots past it are never dereferenced).
         self.cu.memcpy_h2d_async(s, self.pdbs.ptr, &self.pin, at.pdbs, KF_MAX_PDB * 8, "cuMemcpyHtoDAsync(pdbs)")?;
@@ -1109,12 +1126,26 @@ impl WalkKernel {
             vec![param_bytes(args), 0u64.to_le_bytes().to_vec()],
             "cuLaunchKernel(kf_diff_kernel)",
         )?;
-        let hdr_n = core::mem::size_of::<KfReportHeader>();
-        let rpdb_n = self.cfg.pdb_capacity as usize * core::mem::size_of::<KfPdbEntry>();
-        let rrun_n = self.cfg.run_capacity as usize * core::mem::size_of::<KfMapRun>();
-        self.cu.memcpy_d2h_async(s, &self.pin, at.hdr, self.hdr.ptr, hdr_n, "cuMemcpyDtoHAsync(hdr)")?;
-        self.cu.memcpy_d2h_async(s, &self.pin, at.rpdb, self.rpdb.ptr, rpdb_n, "cuMemcpyDtoHAsync(rpdb)")?;
-        self.cu.memcpy_d2h_async(s, &self.pin, at.rrun, self.rrun.ptr, rrun_n, "cuMemcpyDtoHAsync(rrun)")
+        // One copy of the whole report block (`hdr`, `rpdb`, `rrun` are one allocation laid
+        // out as the pinned buffer from `at.hdr` on; see `bring_up`).
+        self.cu.memcpy_d2h_async(s, &self.pin, at.hdr, self.hdr.ptr, at.total - at.hdr, "cuMemcpyDtoHAsync(report)")?;
+        let capturing = rec.is_some();
+        self.record(self.ev_copied, capturing)?;
+        // ⊘ ORDER: the host signal BEFORE `ev_done`. Then `ev_done` complete ⇒ the fd was
+        // written, so a collect that saw the event can always drain the signal — a signal left
+        // behind would complete the NEXT walk before it ran. Under capture the host function
+        // becomes a HOST NODE of the graph: it runs on every replay, same fd, same order.
+        self.cu.launch_host_signal(s, &self.done_fd)?;
+        self.record(self.ev_done, capturing)
+    }
+
+    /// `cuEventRecord`, or — under capture — the external record that becomes a graph node.
+    fn record(&self, e: EventHandle, capturing: bool) -> Result<(), CudaError> {
+        if capturing {
+            self.cu.event_record_external(e, self.stream)
+        } else {
+            self.cu.event_record(e, self.stream)
+        }
     }
 
     /// One kernel launch on the walker's stream; under capture, also records its node.
