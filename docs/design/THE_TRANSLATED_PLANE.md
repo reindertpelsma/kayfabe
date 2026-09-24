@@ -958,3 +958,57 @@ in a broken shape — a shared-managed space (unusable even for a plain CE copy)
 11 904 MiB, over the ceiling. §15.2's explanation *and* the audit's "unexplained" are both resolved:
 **it was the probe.** ⊘ This also means the mirrored host VAS is an ordinary RM-managed space — no
 `SHARED_MANAGEMENT`, no declared range.
+
+---
+
+## §24 — `[w826]` THE CUTOVER: what is built, what is measured, and the Translated channel's shape
+
+**STATUS: LIVE — being built.** Owner, w826: *"not only build it, remove cpu work code so it can't
+happen."* The CPU page-table walk, the CPU CE executor and the address table are ONE knot (the
+executor translates through the table the walk fills; births and the old publishers read it),
+so they leave in ONE cutover commit, each after its replacement is measured.
+
+### §24.1 — Built and measured (box 52367653, GA106, 580.159.04)
+
+| piece | commit | measured |
+|---|---|---|
+| walker leaf bound per aperture (sysmem leaves bounded by the host) | `08945f8a` | — |
+| store imported into the walk kernel's OWN context; no staged image | `36e336c0` | selftest `CUDA_WALK=OK` |
+| `plan_reconcile` + `StoreMapPort::reconcile` against the handle ledger | `36e336c0` | 5 GPU-free tests |
+| `publish_walked` replaces `publish_vas_rows` (4 sites) | `0eb6997e` `40478849` | ★ **every pass `kept=N unmapped=0 refused=0`** — the GPU walk reproduces the CPU path's mappings exactly, up to 472 runs |
+| births adopt the ring from the LEDGER | `beb1e1de` | — |
+| PARALLEL walk from Rust (`kf_run_parallel` ported) | `067160e4` | **walk p50 424 µs** (serial 2.4 ms), max 16 ms; `uvm-mean` PASS 40 s |
+
+### §24.2 — The Translated channel (kernel CE: RM's CeUtils scrub, UVM), and why it is NOT a decoder
+
+⊘ The CPU executor decodes every method and resolves every operand through the table. The
+Translated channel does **neither**. It copies the guest's GP entries and pushbuffer segments
+into **our own** host channel and rewrites exactly two things:
+
+1. **A CE `LAUNCH_DMA` whose SRC/DST type is PHYSICAL** — the operand becomes
+   `GPGA_VA_BASE + p` (local FB) or `RAM_VA_BASE + file_offset(p)` (sysmem) and the type bit
+   flips to VIRTUAL. This is RM's own `fbAliasVA` rewrite (§3).
+2. **A `MEM_OP` TLB invalidate** — a split point: submit up to it, and on that submission's
+   completion (an fd, not a wait on the worker's stack) walk the named root, reconcile, resume.
+
+Everything else — semaphores, virtual operands, host methods — runs **verbatim** in a host VA
+space that **mirrors the guest's kernel VA space** (the same walk + reconcile as user spaces,
+now including the system proc).
+
+★ **Reading the guest's pushbuffer is a GPU copy, never a CPU read of vidmem**: the segment's VA
+is translated through our ledger (VA → store offset) and copied out with `cuMemcpyDtoH` from the
+walk kernel's window pointer. A pushbuffer in guest RAM is read from the memfd directly.
+
+⚠ **The window collision.** RM placed the identity window at `0x120000000`, where the guest's
+kernel VA space also maps (its CE ring is at `0x120064000`). In Translated spaces the windows are
+mapped with `DMA_OFFSET_GROWS_DOWN`, so RM places them at the top of the space, away from the
+bottom-up allocations guest RM makes. A remaining collision surfaces as a named `0x51`
+refusal in reconcile — never silently.
+
+### §24.3 — Then the cutover commit deletes
+
+`refresh_page_tables` / `sweep_cpu_pt_tables` / `PlanePtBytes` on the invalidate and sync-3
+paths; the CPU CE executor's data mover and table-based operand resolution
+(`WalkOperands`, `partition_ce`, `execute_ours_spans`); the address table's publish role;
+`vaspace_handover`'s table cross-check; the BAR1 mirror's fill trap and the page arena.
+Graded by the 30-arm suite, `cup3`/`cup8` and the LLM lane, each with `forwarded>0`.
