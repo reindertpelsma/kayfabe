@@ -8,6 +8,42 @@ read-only agents + direct reads) of what `RmInitAdapter` drives after P4, the v3
 `V3_P4_PORT_MAP.md`. ⊘ "P5" here is what `THE_V3_PLAN.md` splits into P5 (channels + doorbell) and
 P6 (Translated): the boot cannot pass `RmInitAdapter` without both, so they are one step.
 
+**STATUS UPDATE, 2026-09-25 (w827, branch `v3-p5`, rev `1198d66d`): ✔ `RmInitAdapter` COMPLETES
+on the correct planes; `/dev/nvidia0` opens and the raw client's first arms run.** Measured on the
+GA106 bench (host 580.159.04), fast-guest boots `p5a`…`p5j`; `v3_gates.sh` 8/8 PASS at `1198d66d`.
+
+```
+kf3: chan 0xc1e00006:0x2 BORN Translated: token 0x1 -> host 0x10018 …   (PMA scrubber, chid 1)
+kf3: chan 0xc1e00007:0x2 BORN Translated: token 0x2 -> host 0x10019 …   (global CeUtils, chid 2)
+kf3: chan 0xc1e00007:0x2 BIND engine=0xb · GPFIFO_SCHEDULE enable=true (both channels)
+chan[… tokens=[0x1:fwd=2,subs=2,… 0x2:fwd=2,subs=2,gp_get=Some(2)]] irq[… raised=1 …]
+kf3: chan token 0x2 (host 0x10019) RETIRED, forwarded=2 serves=5 last_put=Some(2) gp_get=Some(2)
+kf3: chan token 0x1 (host 0x10018) RETIRED, forwarded=18 serves=31 last_put=Some(18) gp_get=Some(18)
+guest: ok R2 version … ok R9 host GPU VA … ok R10 isolate … ok R11 through-isolate
+       FAIL R13.1/R13.2 channel, R16, R17 = Other(86)   ← user channels: §2.8 (Passthrough), not built
+```
+
+`memmgrTestCeUtils` passes (its memset + memcopy ran on the host's COPY2 through our ring, the
+engine wrote the guest's finishPayload natively), the interrupt loopback passes (one MSI-X message via
+the KVM irqfd), the PMA scrubber forwards 18 GP entries for the raw client's frees with no
+`scrubberDestruct` timeout; `poisoned=0`, `contended=0`, no Xid. ⊘ No completion was forged and no
+byte moved by the CPU (the CPU read method words from guest RAM and two 4-byte USERD cursors).
+
+**Five findings the boots made, each folded into the section it corrects:**
+1. `hVASpace = 0` (the PMA scrubber) names the device-default VAS through a TRANSIENT handle: RM
+   allocs `FERMI_VASPACE_A` (index `GPU_DEVICE`), publishes its PDEs, and FREES it before the channel
+   alloc (`p5c`). The link keeps it until the DEVICE is freed (§2.1).
+2. RM's internal clients are NOT marked kernel by the root alloc's pid sentinel (`p5a`); the guest
+   RM's own `serverIsClientInternal` (handle base `0xC1E00000`) is (§2.1).
+3. ⊘ §1.1's *"no guest interrupt is on `RmInitAdapter`'s path"* was **wrong**: `osVerifySystemEnvironment`
+   runs an interrupt LOOPBACK (`os_sanity.c:119-291`) and fails `0x11:0x45` without it (`p5d`). §2.7's
+   tree + irqfd were built in P5 (§1.1 row 15).
+4. Host COPY0 on GA106 is a **GRCE** (on the GR runlist): RM's CeUtils pushes on subchannel 0, which
+   there routes to GR ⇒ Xid 32 `CTXNOTVALID` (`p5f`). Rings now run on the first host copy engine the
+   host's `CE_GET_CAPS_V2` says is not a GRCE (Q4 answered).
+5. The PMA scrubber's USERD is mapped through **BAR1** (`bUseBar1`), which P4 left on scratch: 19
+   doorbells read `GP_PUT = 0` (`p5h`). BAR1 is now walked from our BAR1 root like BAR2 (P4 row 6).
+
 **The wall this closes.** `[measured p4b4-p4b6, kf3s2 at 5dd01b48]` the thin guest stops at
 `_memmgrMemUtilsScrubInitScheduleChannel: Unable to schedule channel, status: 56` — `0xa06f0103`
 (`NVA06F_CTRL_CMD_GPFIFO_SCHEDULE`) unserviced — then `RmInitNvDevice: *** Cannot load state into
@@ -68,9 +104,20 @@ Then, channel 2, `memmgrTestCeUtils` (the first thing that WAITS):
 | 13 | **polls** the finishPayload word (sysmem, pbGpuVA+`0x6c004`) until it reaches the payload; free slots by the host semaphore (+`0x6c000`), never `GP_GET` | `channelWaitForFinishPayload` (`channel_utils.c:344-383`), `channelWaitForFreeEntry` (`:391-440`) | ★ **written by the ENGINE**, through the mirror's sysmem row — native, never ours (§8) |
 | 14 | while polling, if it holds the GPU lock: `channelServiceScrubberInterrupts` → `intrServiceStallList(CE, ESCHED/FIFO)` | `channel_utils.c:355-370` | reads interrupt registers from the BAR0 shadow; nothing pending is a correct answer |
 
-⇒ **No guest interrupt is on `RmInitAdapter`'s path** (completion callbacks are off; step 13 polls).
+⊘⊘ **CORRECTED `[measured p5d]` — the next paragraph was wrong.** No *completion* interrupt is on
+the path (completion callbacks are off; step 13 polls), but **an interrupt is**: after the channels,
+`osVerifySystemEnvironment` → `_osVerifyInterrupts` (`os_sanity.c:119-291`, `osinit.c:2127`) clears
+and enables vector 129, writes it to `CPU_INTR_LEAF_TRIGGER` and spins ~4 s for its own ISR, which
+checks the LEAF pending bit; nothing arriving is `RmInitAdapter failed! (0x11:0x45:2134)`
+(`NV_ERR_IRQ_NOT_FIRING`). ⇒ §2.7 is ON the path — row 15:
+
+| # | guest action | ogkm | where it lands |
+|---|---|---|---|
+| 15 | interrupt loopback: `LEAF(4)` W1C bit 1, `LEAF_EN_SET(4)`, `TOP_EN_SET(0)` bit 2, `LEAF_TRIGGER = 129`; ISR reads `LEAF(4)` | `intr_swintr_tu102.c:40-90`, `intr_tu102.c:648-744` | ★ the CPU interrupt tree, applied on the vCPU (`kf-trap/src/cpuintr.rs`), one MSI-X message via a KVM irqfd (§2.7) — `[measured p5g]` `irq[raised=1]`, loopback passes |
+
+~~⇒ **No guest interrupt is on `RmInitAdapter`'s path** (completion callbacks are off; step 13 polls).
 The interrupt plane (§2.7) is still P5's, because the first user channel (`cuCtxCreate`) and
-libcuda's blocking sync need it — but it is not the wall.
+libcuda's blocking sync need it — but it is not the wall.~~
 
 ### 1.2 The unserviced controls seen at `5dd01b48`, and which are on the path
 
@@ -150,6 +197,14 @@ Legend for the old-tree column: **COPY** / **ADAPT** / ✘ (does not fit, with t
     A pump error kills the channel by name; the plane then refuses-and-poisons (kernel, §7).
   - **Free:** retire the token (`Plane::free_channel` waits out BUSY), free the twin, release the
     USERD view.
+- ★ `[measured p5b-p5d]` two corrections to the resolution, now built: the kernel test is the guest
+  RM's own `serverIsClientInternal` (handle base `0xC1E00000`, `rs_server.c:2618-2623` — a user
+  client's fixed handle is re-encoded onto `0xC1D00000`, `:3267-3271`) OR the pid sentinel; and the
+  device-default VAS outlives its transient handle's free.
+- ★ `[measured p5f]` the host engine is AUTHORED as the first host copy engine that `CE_GET_CAPS_V2`
+  says is not a GRCE — never the guest's `engineType`, and never COPY0 by default (a GRCE routes
+  subchannels 0-3 to GR: Xid 32 `CTXNOTVALID`). The session completion fd also listens on that
+  engine's non-stall notifier.
 - ⊘ **Token index = the doorbell's `VECTOR` (11:0) = the guest's chid.** Every family's generator
   puts the chid there (`kfifoGenerateWorkSubmitTokenHal_{TU102,GA100,GB100,GB202}`); the RUNLIST_ID
   and the Blackwell flag bits (GB202 bit 30, GB100 bits 22/31) are masked by the trap. Sound while
@@ -208,7 +263,17 @@ Legend for the old-tree column: **COPY** / **ADAPT** / ✘ (does not fit, with t
   call except the slot's own (uncontended by construction: BUSY excludes; counted).
 - **≈ 40 lines.**
 
-### 2.7 The interrupt plane — host NSI → guest MSI-X (designed here, built after the scrub)
+### 2.7 The interrupt plane — host NSI → guest MSI-X
+
+★ **BUILT (`1af20762`, `663e35bc`), because the loopback is on the path (§1.1 row 15):**
+`kf-trap/src/cpuintr.rs` — the tree as atomic words (W1C leaves, SET/CLEAR aliases, TOP derived,
+per-family leaf count 8/16), applied in the BAR0 write trap and published to the read shadow before
+any message; delivery follows the enables. `kf3.c` — Rust owns one eventfd per MSI-X vector
+(`kf3_irq_fd`); the C device wraps each in an `EventNotifier` and registers it as a KVM irqfd on the
+vector's MSI route in the MSI-X vector-use notifier (virtio-pci's pattern), removing it on release; no
+`kvm_msi_via_irqfd_enabled()` refuses realize. `KF3_ABI` 4. ⊘ Still to build: the COMPLETION half
+(a worker latching an engine's authored non-stall vector on a session-fd wake — `Device::
+latch_and_deliver` exists, nothing calls it yet) and the GSP stall vector `0x9b`.
 
 - **Design:** `THE_ARCHITECTURE_v3.md` §5 (registration is per engine; the waiter owns the race;
   once armed, a later release MUST interrupt), `THE_TRANSLATED_PLANE.md` §7 (fd → KVM irqfd →
@@ -291,11 +356,18 @@ lives on the VA thread; a worker calling `cuMemcpyDtoH` would be a CUDA sync on 
 (CE: store window → a pinned sysmem staging page) completed through the session fd — the same
 suspension point as the `MEM_OP` split.
 
-**Q4. The guest's engine choice.** The guest binds COPY2; our host ring runs on COPY0 (`HostRing::
-new`). The work is identical and the host engine is ours to author, but a guest that measures
-per-engine utilisation or relies on engine-specific ordering would see a difference. **Recommend:**
-accept for P5; map the guest's LCE to a host LCE per family in the ring's birth when a workload
-cares.
+**Q4. ✔ ANSWERED `[measured p5f]`.** ~~The guest binds COPY2; our host ring runs on COPY0.~~ COPY0 is a
+GRCE on GA106 and the ring faulted there; the ring now runs on the first host ASYNC copy engine,
+authored from the host's caps (§2.2). Mapping the guest's LCE to a distinct host LCE per channel stays
+open for a workload that measures per-engine behaviour.
+
+**Q6. Family gaps found on the way (no GA106 constant was added; these are missing rows).**
+(a) `kf_abi::versions::alloc_params` maps only `AMPERE_CHANNEL_GPFIFO_A` (`0xc56f`) to
+`AllocParams::Channel`, so the link sees no Turing (`0xc46f`)/Hopper/Blackwell channel alloc — the
+class rows belong to the generated per-family tables. (b) The Hopper+/Blackwell doorbell is a BAR1
+page (`trappolicy::doorbell_for`), and `kf3.c` still only counts BAR1 IO — a Hopper/Blackwell guest's
+doorbell reaches no plane. (c) Per-runlist channel RAM (Q2). **Recommend:** (a) and (b) before any
+non-Ampere boot.
 
 **Q5. `0x20802a0f` / user shared data.** Both assert and the boot continues today. **Recommend:**
 serve each only when a boot names it as the next wall (§3 step 6) — host-derived (`CE_GET_CAPS_V2`,
