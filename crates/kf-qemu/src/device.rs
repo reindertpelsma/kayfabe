@@ -100,6 +100,8 @@ pub struct Device {
     va: Mutex<Option<crate::mem::Manager>>,
     /// The VA manager's counters, copied out by its thread for the boot log.
     va_stats: Mutex<kf_mem::vasmgr::VaStats>,
+    /// Realize time — the boot log's clock for the memory plane's lines.
+    born: std::time::Instant,
     /// The plane (trap → workers / drainer).
     pub plane: &'static Plane<'static>,
     /// The host die's facts the served chain answers from (`kf_rm::hostfacts::PROVENANCE`).
@@ -315,6 +317,7 @@ impl Device {
             mem,
             va: Mutex::new(Some(va)),
             va_stats: Mutex::new(kf_mem::vasmgr::VaStats::default()),
+            born: std::time::Instant::now(),
             plane,
             host_facts: host,
             chain_logs,
@@ -522,6 +525,7 @@ impl Device {
         let mut taken = 0u64;
         let mut logged = 0u32;
         let mut refusals_seen = 0usize;
+        let mut armed_seen: Option<u64> = None;
         while !self.stop.load(Ordering::Acquire) {
             let mut ready = ReadyTokens::new();
             let _ = poller.wait(&mut ready, PollTimeout::Millis(50));
@@ -531,7 +535,7 @@ impl Device {
                 let line = crate::mem::apply_statement(&mut m, &self.mem, self.rm, self.store.handle, st, trigger);
                 if logged < 256 {
                     logged += 1;
-                    eprintln!("kf3: mem {line}");
+                    eprintln!("kf3: mem t={:.3}s {line}", self.born.elapsed().as_secs_f64());
                 }
             }
             if let Some(req) = self.mem.port.armed_request()
@@ -546,14 +550,30 @@ impl Device {
                 let applied: Vec<String> =
                     r.applied.iter().map(|(k, a)| format!("{:#x}:+{}-{}r{}", k.0, a.mapped, a.unmapped, a.refused)).collect();
                 eprintln!(
-                    "kf3: mem walk reconciled [{}] completed={:?} unreconciled={:?}",
+                    "kf3: mem t={:.3}s walk reconciled [{}] completed={:?} unreconciled={:?}",
+                    self.born.elapsed().as_secs_f64(),
                     applied.join(" "),
                     r.completed,
                     r.unreconciled
                 );
             }
             for why in m.stats.refusals.iter().skip(refusals_seen) {
-                eprintln!("kf3: mem REFUSED {why}");
+                eprintln!("kf3: mem t={:.3}s REFUSED {why}", self.born.elapsed().as_secs_f64());
+            }
+            // ★ An armed trigger we are NOT working on (its walk failed, so it stays armed by
+            // design) is the guest spinning to its own timeout: say when it arms and when it goes.
+            let armed = self.mem.port.armed_request().map(|r| r.seq);
+            if armed != armed_seen {
+                if m.stats.unreconciled > 0 {
+                    eprintln!(
+                        "kf3: mem t={:.3}s trigger {} (seq {:?}; unreconciled so far {})",
+                        self.born.elapsed().as_secs_f64(),
+                        if armed.is_some() { "armed" } else { "idle" },
+                        armed.or(armed_seen),
+                        m.stats.unreconciled
+                    );
+                }
+                armed_seen = armed;
             }
             refusals_seen = m.stats.refusals.len();
             self.publish_trigger();
