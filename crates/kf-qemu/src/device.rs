@@ -455,8 +455,16 @@ impl Device {
         let c = &self.counters;
         let o = Ordering::Relaxed;
         let phase = self.gsp.try_lock().map(|g| format!("{:?}", g.fsm.phase())).unwrap_or_else(|_| "busy".into());
+        // The ledger's DISTINCT set names the control ids the RPC code alone hides.
+        let unserviced: Vec<String> = self
+            .chain_logs
+            .unserviced
+            .sample()
+            .iter()
+            .map(|c| c.cmd.map_or_else(|| format!("fn{}", c.function), |cmd| format!("{cmd:#010x}")))
+            .collect();
         format!(
-            "kf3: family={:?} phase={phase} trapped={} applied={} refused={} serviced={} ram_refused={} unshadowed_writes={} last_off={:#x}",
+            "kf3: family={:?} phase={phase} trapped={} applied={} refused={} serviced={} ram_refused={} unshadowed_writes={} last_off={:#x} unserviced=[{}]",
             self.family,
             c.trapped.load(o),
             c.applied.load(o),
@@ -465,6 +473,7 @@ impl Device {
             c.ram_refused.load(o),
             c.unshadowed_writes.load(o),
             c.last_off.load(o),
+            unserviced.join(","),
         )
     }
 
@@ -473,12 +482,7 @@ impl Device {
             eprintln!("kf3: GSP rpc {:?} seq={}", c.function, c.sequence);
         }
         for u in &r.unserviced {
-            // The ledger's record names the control id the RPC code alone hides.
-            let last = self.chain_logs.unserviced.sample().last().copied();
-            match last.and_then(|c| c.cmd) {
-                Some(cmd) => eprintln!("kf3: GSP rpc UNSERVICED {u:?} cmd={cmd:#010x}"),
-                None => eprintln!("kf3: GSP rpc UNSERVICED {u:?}"),
-            }
+            eprintln!("kf3: GSP rpc UNSERVICED {u:?}");
         }
     }
 
