@@ -18442,6 +18442,21 @@ impl SharedDoorbell {
             }
         }
         let mut pdbs: Vec<u64> = roots.iter().map(|(_, p)| p.0 & !0xfff).collect();
+        // ★★★★★ w826 — v3 §6.2: OUR BAR1 root is walked like any other space, and its runs
+        // are placed into the one BAR1 reservation instead of being filled page by page.
+        let bar1 = self
+            .bar_mirror
+            .get()
+            .and_then(std::sync::Weak::upgrade)
+            .filter(|m| m.bar1_walked())
+            .and_then(|m| {
+                self.plane
+                    .upgrade()
+                    .map(|pl| (m, pl.chip().bar1_pde_base & !0xfff))
+            });
+        if let Some((_, r)) = &bar1 {
+            pdbs.push(*r);
+        }
         pdbs.sort_unstable();
         pdbs.dedup();
         // `KF_MAX_PDB` (kayfabe-cuda, not a dependency of this crate) — the kernel refuses more.
@@ -18468,7 +18483,21 @@ impl SharedDoorbell {
         let ram_bytes = GUEST_RAM_BYTES.load(std::sync::atomic::Ordering::Relaxed);
         let (mut mapped, mut unmapped, mut kept, mut refused, mut unresolved) = (0, 0, 0, 0, 0);
         let mut first: Option<String> = None;
+        let mut bar1_line = String::new();
         for (i, entry) in report.pdbs.iter().enumerate() {
+            if let Some((m, _)) = bar1.as_ref().filter(|(_, r)| *r == entry.pdb) {
+                let mut vid = Vec::new();
+                let mut sys = 0u64;
+                for r in report.runs_of(i) {
+                    match r.aperture() {
+                        RunAperture::Vidmem => vid.push((r.va, r.len, r.gpga)),
+                        // ⊘ Named, never silent: a sysmem BAR1 leaf is left unplaced.
+                        _ => sys += 1,
+                    }
+                }
+                bar1_line = format!(" {} bar1_sysmem_unresolved={sys}", m.apply_bar1_runs(&vid));
+                continue;
+            }
             let mut desired: Vec<crate::storemap::Desired> = Vec::new();
             for r in report.runs_of(i) {
                 match r.aperture() {
@@ -18568,7 +18597,7 @@ impl SharedDoorbell {
         format!(
             "WALK-PUBLISH roots={} runs={} walk_us={walk_us} total_us={} mapped={mapped} \
              unmapped={unmapped} kept={kept} refused={refused} unresolved={unresolved} \
-             foreign_ap={}{}",
+             foreign_ap={}{bar1_line}{}",
             pdbs.len(),
             report.runs.len(),
             t0.elapsed().as_micros(),

@@ -1639,6 +1639,78 @@ impl QemuMachine {
         .map(|(r, _)| r)
     }
 
+    /// ★★★★★ **w826 — v3 §6.2: ONE device view, sized to a WALKED RUN, placed at an offset
+    /// INSIDE an installed reservation** (the guest BAR1 window). The per-page window this
+    /// replaces cost one host BAR1 granule and one memslot per 4 KiB page `[measured w826 m1:
+    /// 4 044 live views exhausted the 256 MiB aperture and live-locked --gpga-reserve-probe]`.
+    /// A MAP_FIXED over the reservation — no memslot change, no global lock. Undo with
+    /// [`QemuMachine::unplace`].
+    ///
+    /// # Errors
+    /// [`VmmError::BadGpa`] outside every reservation, [`VmmError::Unsupported`] for an
+    /// overlapping or unaligned placement, or the host's refusal of the mapping.
+    pub fn place_device_view_in(
+        &self,
+        gpa: u64,
+        len: u64,
+        fd: std::os::fd::BorrowedFd<'_>,
+        writable: bool,
+    ) -> Result<SlotId, VmmError> {
+        let p = &self.plane;
+        p.about_to_syscall("place_device_view_in (a MAP_FIXED device view inside a reservation)");
+        p.assert_live()?;
+        if !geometry::is_aligned(gpa, p.page) || !geometry::is_aligned(len, p.page) || len == 0 {
+            return Err(VmmError::Unsupported(
+                "a device-view placement whose base or length is not a whole number of host pages",
+            ));
+        }
+        let (slot_id, region, window, offset) = placement_claim(p, gpa, len)?;
+        let _reservation = PlanReservation {
+            plane: Arc::clone(p),
+            region,
+            slot: slot_id,
+        };
+        assert_leaf_free("place_device_view_in's MAP_FIXED");
+        window
+            .place_device_view(HostOffset::new(offset), len, fd, writable)
+            .map_err(|e| {
+                p.audit.host_refusals.fetch_add(1, Ordering::SeqCst);
+                host_refused("a device view inside a reservation", &e)
+            })?;
+        p.audit.placements_made.fetch_add(1, Ordering::SeqCst);
+        placement_commit(p, slot_id, region, offset, len, gpa)
+    }
+
+    /// Undo [`QemuMachine::place_device_view_in`]: the range returns to anonymous backing
+    /// (reads zero, never an MMIO exit). The caller releases the device view only AFTER this
+    /// returns — the mapping is gone first, so no guest access can reach a released node.
+    ///
+    /// # Errors
+    /// [`VmmError::BadSlot`] for a slot that is not a live placement, or the host's refusal.
+    pub fn unplace(&self, slot: SlotId) -> Result<(), VmmError> {
+        let p = &self.plane;
+        p.about_to_syscall("unplace");
+        let (window, off, len) = {
+            let (mut ins, _h) = p.installer();
+            let region = ins
+                .placement_owner
+                .remove(&slot)
+                .ok_or(VmmError::BadSlot(slot))?;
+            let w = ins
+                .windows
+                .get_mut(&region)
+                .ok_or(VmmError::BadSlot(slot))?;
+            let (off, len) = w.placements.remove(&slot).ok_or(VmmError::BadSlot(slot))?;
+            (Arc::clone(&w.window), off, len)
+        };
+        assert_leaf_free("unplace's restore");
+        window
+            .restore(HostOffset::new(off), len)
+            .map_err(|e| host_refused("restoring anonymous backing", &e))?;
+        Audit::bump(&p.audit.live_placements, &p.audit.peak_placements, -1);
+        Ok(())
+    }
+
     /// ★ w393 — where BAR `bar` was realized, or `None` if this machine has no such BAR.
     #[must_use]
     pub fn bar_placement(&self, bar: BarId) -> Option<BarPlacement> {
@@ -2670,6 +2742,118 @@ impl QemuVmm {
     }
 }
 
+/// Claim `[gpa, gpa+len)` inside ONE installed reservation for a placement: the window, the
+/// offset inside it, and a planned slot no concurrent placement may overlap. Shared by
+/// [`Vmm::map_guest`] and [`QemuMachine::place_device_view_in`].
+fn placement_claim(
+    p: &Arc<Plane>,
+    gpa: u64,
+    len: u64,
+) -> Result<(SlotId, RamRegionId, Arc<GuestWindow>, u64), VmmError> {
+    let (mut ins, _h) = p.installer();
+    let Some((region, off)) = ins
+        .windows
+        .iter()
+        .find(|(_, w)| gpa >= w.gpa && gpa.saturating_add(len) <= w.gpa + w.len)
+        .map(|(r, w)| (*r, gpa - w.gpa))
+    else {
+        return Err(VmmError::BadGpa { gpa });
+    };
+    // ★★★ **CHECK AND CLAIM ARE ONE ACTION** — issue #145, and the same defect
+    // and the same fix as the sibling KVM adapter, re-derived here rather than
+    // ported by reflex (see [`PlanReservation`] for the one clause that differs:
+    // the release must not consult the lifecycle gate).
+    //
+    // What stood here checked `placements` alone — a check against what has
+    // COMMITTED — and the installer guard is released a few lines below so the
+    // `MAP_FIXED` can run lock-free. So two planners could both read an empty
+    // reservation, both find no overlap, both place over the same host range (the
+    // second silently overwriting the first), and both commit.
+    //
+    // ⊘ **Not a generation counter.** A version bumped on every placement refuses
+    // concurrent publications into a *live* reservation at publication frequency,
+    // i.e. converts this hazard into a livelock. A claim refuses on an actual
+    // **range** overlap and on nothing else, so two disjoint publications into one
+    // reservation still proceed together — [`AuditReport::peak_plan_reservations`]
+    // is the number that says so.
+    //
+    // ⊘ And R5's presence token cannot reach it: here the reservation is alive.
+    let slot_id = SlotId(ins.next_slot_id);
+    let w = ins.windows.get_mut(&region).expect("just found");
+    let hits =
+        |m: &BTreeMap<SlotId, (u64, u64)>| m.values().any(|(o, l)| off < o + l && *o < off + len);
+    if hits(&w.placements) {
+        return Err(VmmError::Unsupported(
+            "a placement overlapping one already live in the same reservation",
+        ));
+    }
+    if hits(&w.planned) {
+        // ★ The SAME refusal a committed overlap gets, deliberately: the caller
+        // asked for a range somebody else has, and that the other holder is a
+        // microsecond from committing rather than already committed is a timing
+        // fact about us. `plan_conflicts` is what makes the two distinguishable to
+        // a test without making them distinguishable to the guest.
+        p.audit.plan_conflicts.fetch_add(1, Ordering::SeqCst);
+        return Err(VmmError::Unsupported(
+            "a placement overlapping one already live in the same reservation",
+        ));
+    }
+    w.planned.insert(slot_id, (off, len));
+    let window = Arc::clone(&w.window);
+    ins.next_slot_id += 1;
+    Audit::bump(
+        &p.audit.live_plan_reservations,
+        &p.audit.peak_plan_reservations,
+        1,
+    );
+    Ok((slot_id, region, window, off))
+}
+
+/// Turn a claimed plan into a live placement once its MAP_FIXED has landed.
+fn placement_commit(
+    p: &Arc<Plane>,
+    slot_id: SlotId,
+    region: RamRegionId,
+    offset: u64,
+    len: u64,
+    gpa: u64,
+) -> Result<SlotId, VmmError> {
+    let (mut ins, _h) = p.installer();
+    match ins.windows.get_mut(&region) {
+        Some(w) => {
+            // ★★ The claim BECOMES the placement, in one lock hold. Doing it in two —
+            // release the claim, retake the lock, insert the placement — would open a
+            // gap in which the range is guarded by neither map, i.e. would reintroduce
+            // #145 one instant wide instead of one syscall wide.
+            let claimed = w.planned.remove(&slot_id);
+            debug_assert_eq!(
+                claimed,
+                Some((offset, len)),
+                "the commit must find its own plan's claim, unchanged"
+            );
+            w.placements.insert(slot_id, (offset, len));
+            ins.placement_owner.insert(slot_id, region);
+            if claimed.is_some() {
+                Audit::bump(
+                    &p.audit.live_plan_reservations,
+                    &p.audit.peak_plan_reservations,
+                    -1,
+                );
+            }
+            Audit::bump(&p.audit.live_placements, &p.audit.peak_placements, 1);
+            drop(_h);
+            drop(ins);
+            Ok(slot_id)
+        }
+        _ => {
+            drop(_h);
+            drop(ins);
+            p.audit.r5_failures.fetch_add(1, Ordering::SeqCst);
+            Err(VmmError::BadGpa { gpa })
+        }
+    }
+}
+
 impl Vmm for QemuVmm {
     fn gpa_read(&mut self, gpa: u64, buf: &mut [u8]) -> Result<(), VmmError> {
         let len = buf.len() as u64;
@@ -2739,69 +2923,10 @@ impl Vmm for QemuVmm {
         p.assert_live()?;
 
         // ---- PLAN ------------------------------------------------------------------
-        let (slot_id, region, window, offset) = {
-            let (mut ins, _h) = p.installer();
-            if prot == Prot::ReadOnly {
-                return Err(VmmError::Unsupported(PER_OBJECT_PROTECTION));
-            }
-            let Some((region, off)) = ins
-                .windows
-                .iter()
-                .find(|(_, w)| gpa >= w.gpa && gpa.saturating_add(len) <= w.gpa + w.len)
-                .map(|(r, w)| (*r, gpa - w.gpa))
-            else {
-                return Err(VmmError::BadGpa { gpa });
-            };
-            // ★★★ **CHECK AND CLAIM ARE ONE ACTION** — issue #145, and the same defect
-            // and the same fix as the sibling KVM adapter, re-derived here rather than
-            // ported by reflex (see [`PlanReservation`] for the one clause that differs:
-            // the release must not consult the lifecycle gate).
-            //
-            // What stood here checked `placements` alone — a check against what has
-            // COMMITTED — and the installer guard is released a few lines below so the
-            // `MAP_FIXED` can run lock-free. So two planners could both read an empty
-            // reservation, both find no overlap, both place over the same host range (the
-            // second silently overwriting the first), and both commit.
-            //
-            // ⊘ **Not a generation counter.** A version bumped on every placement refuses
-            // concurrent publications into a *live* reservation at publication frequency,
-            // i.e. converts this hazard into a livelock. A claim refuses on an actual
-            // **range** overlap and on nothing else, so two disjoint publications into one
-            // reservation still proceed together — [`AuditReport::peak_plan_reservations`]
-            // is the number that says so.
-            //
-            // ⊘ And R5's presence token cannot reach it: here the reservation is alive.
-            let slot_id = SlotId(ins.next_slot_id);
-            let w = ins.windows.get_mut(&region).expect("just found");
-            let hits = |m: &BTreeMap<SlotId, (u64, u64)>| {
-                m.values().any(|(o, l)| off < o + l && *o < off + len)
-            };
-            if hits(&w.placements) {
-                return Err(VmmError::Unsupported(
-                    "a placement overlapping one already live in the same reservation",
-                ));
-            }
-            if hits(&w.planned) {
-                // ★ The SAME refusal a committed overlap gets, deliberately: the caller
-                // asked for a range somebody else has, and that the other holder is a
-                // microsecond from committing rather than already committed is a timing
-                // fact about us. `plan_conflicts` is what makes the two distinguishable to
-                // a test without making them distinguishable to the guest.
-                p.audit.plan_conflicts.fetch_add(1, Ordering::SeqCst);
-                return Err(VmmError::Unsupported(
-                    "a placement overlapping one already live in the same reservation",
-                ));
-            }
-            w.planned.insert(slot_id, (off, len));
-            let window = Arc::clone(&w.window);
-            ins.next_slot_id += 1;
-            Audit::bump(
-                &p.audit.live_plan_reservations,
-                &p.audit.peak_plan_reservations,
-                1,
-            );
-            (slot_id, region, window, off)
-        };
+        if prot == Prot::ReadOnly {
+            return Err(VmmError::Unsupported(PER_OBJECT_PROTECTION));
+        }
+        let (slot_id, region, window, offset) = placement_claim(p, gpa, len)?;
         // ★★★ From here the claim is owned by a destructor, so every exit below — an
         // unminted backing id, a failed `dup`, a failed `place`, an unwind — gives the
         // range back.
@@ -2862,40 +2987,7 @@ impl Vmm for QemuVmm {
         // per-window generation written once at install and never mutated is unfalsifiable
         // (a bite-check found exactly that survivor), whereas a concurrent teardown really
         // does remove the whole entry.
-        let (mut ins, _h) = p.installer();
-        match ins.windows.get_mut(&region) {
-            Some(w) => {
-                // ★★ The claim BECOMES the placement, in one lock hold. Doing it in two —
-                // release the claim, retake the lock, insert the placement — would open a
-                // gap in which the range is guarded by neither map, i.e. would reintroduce
-                // #145 one instant wide instead of one syscall wide.
-                let claimed = w.planned.remove(&slot_id);
-                debug_assert_eq!(
-                    claimed,
-                    Some((offset, len)),
-                    "the commit must find its own plan's claim, unchanged"
-                );
-                w.placements.insert(slot_id, (offset, len));
-                ins.placement_owner.insert(slot_id, region);
-                if claimed.is_some() {
-                    Audit::bump(
-                        &p.audit.live_plan_reservations,
-                        &p.audit.peak_plan_reservations,
-                        -1,
-                    );
-                }
-                Audit::bump(&p.audit.live_placements, &p.audit.peak_placements, 1);
-                drop(_h);
-                drop(ins);
-                Ok(slot_id)
-            }
-            _ => {
-                drop(_h);
-                drop(ins);
-                p.audit.r5_failures.fetch_add(1, Ordering::SeqCst);
-                Err(VmmError::BadGpa { gpa })
-            }
-        }
+        placement_commit(p, slot_id, region, offset, len, gpa)
     }
 
     /// Remove a mapping — a fine-tier placement is **restored** to anonymous backing, never

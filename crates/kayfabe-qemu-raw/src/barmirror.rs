@@ -499,8 +499,26 @@ struct Census {
 }
 
 /// ★★★★★ **The mirror.** One per device; see the module docs.
+/// ★★★★★ **w826 — v3 §6.2: BAR1 is an ordinary VA space.** ONE reservation over the whole
+/// guest BAR1 window, and the GPU walker's runs for our BAR1 root placed into it as run-sized
+/// device views. Nothing here traps: an unplaced page reads anonymous zero.
+#[derive(Debug, Default)]
+struct Bar1Walked {
+    /// The reservation [`BarMirror::arm`] installed; `None` ⇒ the walked arm is off.
+    region: Option<kayfabe_vmm::RamRegionId>,
+    /// BAR1 va → (store offset, len, placement slot, device view id).
+    placed: std::collections::BTreeMap<u64, (u64, u64, kayfabe_vmm::SlotId, u64)>,
+    /// Cumulative, for the census.
+    mapped: u64,
+    unmapped: u64,
+    refused: u64,
+    first_refusal: Option<String>,
+}
+
 #[derive(Debug)]
 pub struct BarMirror {
+    /// See [`Bar1Walked`].
+    bar1: Mutex<Bar1Walked>,
     plane: Arc<RegPlane>,
     machine: QemuMachine,
     arena: SharedPageArena,
@@ -916,6 +934,7 @@ impl BarMirror {
             return None;
         }
         let m = Arc::new(BarMirror {
+            bar1: Mutex::new(Bar1Walked::default()),
             last_bar_pde_updates: AtomicU64::new(plane.bar_pde_counts().0),
             reval_req: AtomicU64::new(0),
             reval_done: AtomicU64::new(0),
@@ -979,6 +998,7 @@ impl BarMirror {
             SharedPageArena::LEN >> 20,
             ceiling - floor,
         );
+        m.arm_bar1_walked();
         Some(m)
     }
 
@@ -2210,6 +2230,185 @@ impl BarMirror {
         )
     }
 
+    /// ★★★★★ **w826 — install ONE reservation over the whole guest BAR1 window** (v3 §6.2).
+    /// From here guest BAR1 never takes a VM exit: a page the walk has placed is the store's
+    /// own device view, and one it has not reads anonymous zero. ⊘ Needs the device-view
+    /// port; without it the per-page mirror stays the only path. `KAYFABE_BAR1_WALKED=0` is
+    /// the control.
+    fn arm_bar1_walked(&self) {
+        if std::env::var("KAYFABE_BAR1_WALKED").is_ok_and(|v| v == "0") {
+            eprintln!("kayfabe: BAR1-WALKED ⊘ OFF (KAYFABE_BAR1_WALKED=0, the control)");
+            return;
+        }
+        let (Some(arm), true) = (self.arms[0].as_ref(), self.device_port.is_some()) else {
+            eprintln!(
+                "kayfabe: BAR1-WALKED ⊘ OFF — BAR1 is not mirrored or there is no device-view port"
+            );
+            return;
+        };
+        match self.machine.install_ram_window(arm.base, arm.len) {
+            Ok(region) => {
+                self.bar1
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .region = Some(region);
+                eprintln!(
+                    "kayfabe: BAR1-WALKED ★ ONE reservation over guest BAR1 base=0x{:x} len=0x{:x} — \
+                     the walk's runs are placed into it; BAR1 takes NO fill trap",
+                    arm.base, arm.len
+                );
+            }
+            Err(e) => eprintln!(
+                "kayfabe: BAR1-WALKED ⊘ the reservation was refused: {e:?} — per-page mirror stays"
+            ),
+        }
+    }
+
+    /// Is the walked BAR1 arm live?
+    #[must_use]
+    pub fn bar1_walked(&self) -> bool {
+        self.bar1
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .region
+            .is_some()
+    }
+
+    /// ★★★★★ **w826 — make guest BAR1 say what the walk says** (v3 §6.2): `runs` are the
+    /// walker's VIDMEM runs for our BAR1 root, `(bar1 va, len, store offset)`. A run already
+    /// placed identically is kept; one that is gone or changed is UNPLACED FIRST and its view
+    /// released after; a new one becomes ONE device view sized to the run. Worker thread only:
+    /// every step is an IPC or an mmap, and no lock is held across any of them.
+    pub fn apply_bar1_runs(&self, runs: &[(u64, u64, u64)]) -> String {
+        if kayfabe_util::lockwitness::on_vcpu_thread() {
+            return "BAR1 ⊘ refused on a vCPU".to_string();
+        }
+        let Some(port) = self.device_port.as_ref() else {
+            return "BAR1 ⊘ no device-view port".to_string();
+        };
+        let Some(arm) = self.arms[0].as_ref() else {
+            return "BAR1 ⊘ not mirrored".to_string();
+        };
+        let want: std::collections::BTreeMap<u64, (u64, u64)> = runs
+            .iter()
+            .map(|&(va, len, off)| (va, (off, len)))
+            .collect();
+        let (gone, new) = {
+            let b = self
+                .bar1
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if b.region.is_none() {
+                return "BAR1 ⊘ walked arm off".to_string();
+            }
+            let gone: Vec<(u64, kayfabe_vmm::SlotId, u64)> = b
+                .placed
+                .iter()
+                .filter(|(va, (off, len, _, _))| want.get(*va) != Some(&(*off, *len)))
+                .map(|(va, (_, _, slot, view))| (*va, *slot, *view))
+                .collect();
+            let new: Vec<(u64, u64, u64)> = want
+                .iter()
+                .filter(|(va, (off, len))| {
+                    b.placed.get(*va).map(|(o, l, _, _)| (*o, *l)) != Some((*off, *len))
+                })
+                .map(|(va, (off, len))| (*va, *off, *len))
+                .collect();
+            (gone, new)
+        };
+        let kept = want.len() - new.len();
+        let (mut mapped, mut unmapped, mut refused) = (0u64, 0u64, 0u64);
+        let mut first: Option<String> = None;
+        for (va, slot, view) in gone {
+            // ⊘ The mapping goes FIRST, then the view: no guest access can reach a released node.
+            match self.machine.unplace(slot) {
+                Ok(()) => {
+                    port.release(crate::deviceview::ViewId(view));
+                    unmapped += 1;
+                }
+                Err(e) => {
+                    refused += 1;
+                    first.get_or_insert(format!("unplace va=0x{va:x}: {e:?}"));
+                }
+            }
+            self.bar1
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .placed
+                .remove(&va);
+        }
+        for (va, off, len) in new {
+            if va.checked_add(len).is_none_or(|end| end > arm.len) {
+                refused += 1;
+                first.get_or_insert(format!(
+                    "run va=0x{va:x}+0x{len:x} leaves the 0x{:x}-byte window",
+                    arm.len
+                ));
+                continue;
+            }
+            let gpa = arm.base + va;
+            match port.with_node(off, len, true, |fd, mmap_len| {
+                self.machine.place_device_view_in(gpa, mmap_len, fd, true)
+            }) {
+                Ok(Ok((slot, view))) => {
+                    self.bar1
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .placed
+                        .insert(va, (off, len, slot, view.0));
+                    mapped += 1;
+                }
+                Ok(Err(e)) => {
+                    refused += 1;
+                    first.get_or_insert(format!("place va=0x{va:x}+0x{len:x}: {e:?}"));
+                }
+                Err(v) => {
+                    refused += 1;
+                    first.get_or_insert(format!("view off=0x{off:x}+0x{len:x}: {}", v.name()));
+                }
+            }
+        }
+        let mut b = self
+            .bar1
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        b.mapped += mapped;
+        b.unmapped += unmapped;
+        b.refused += refused;
+        if b.first_refusal.is_none() {
+            b.first_refusal.clone_from(&first);
+        }
+        format!(
+            "BAR1 runs={} kept={kept} mapped={mapped} unmapped={unmapped} refused={refused} live={}{}",
+            runs.len(),
+            b.placed.len(),
+            first
+                .map(|f| format!(" FIRST-REFUSAL[{f}]"))
+                .unwrap_or_default()
+        )
+    }
+
+    /// Unplace every walked BAR1 run and release its view (device reset / teardown).
+    fn retire_bar1(&self) {
+        let all: Vec<(kayfabe_vmm::SlotId, u64)> = std::mem::take(
+            &mut self
+                .bar1
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .placed,
+        )
+        .into_values()
+        .map(|(_, _, slot, view)| (slot, view))
+        .collect();
+        for (slot, view) in all {
+            if self.machine.unplace(slot).is_ok() {
+                if let Some(port) = self.device_port.as_ref() {
+                    port.release(crate::deviceview::ViewId(view));
+                }
+            }
+        }
+    }
+
     /// ★★★★★ **w617 — MAP AT CREATE, for BAR1. The owner's ruling, implemented.**
     ///
     /// > *"if a channel is created inheriting a va base, then you can map at create, of
@@ -2260,6 +2459,10 @@ impl BarMirror {
     }
 
     pub fn premap_bar1(&self) {
+        // ⊘ w826 — under the walked arm BAR1 is published by the walk diff, never premapped.
+        if self.bar1_walked() {
+            return;
+        }
         self.premap_window(FbWindow::FbAperture);
     }
 
@@ -2947,6 +3150,7 @@ impl FbMirrorPort for BarMirror {
     }
 
     fn retire_all(&self, why: &'static str) {
+        self.retire_bar1();
         let gone: Vec<Retired> = {
             let mut t = self.table.lock().unwrap_or_else(|e| e.into_inner());
             let all: Vec<Retired> = t
