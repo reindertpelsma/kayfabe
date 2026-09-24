@@ -417,8 +417,10 @@ static void t_flags_decoded(void)
         {VBASE + 3 * 4096ull, 0x330000ull, 4096ull, F4K | KFWR_RF_PRIVILEGE,      KFWR_OP_MAP},
         {VBASE + 4 * 4096ull, 0x340000ull, 4096ull, F4K | KFWR_AP_SYSCOH,         KFWR_OP_MAP},
         {VBASE + 5 * 4096ull, 0x350000ull, 4096ull, F4K | KFWR_AP_SYSNONCOH,      KFWR_OP_MAP},
-        {VBASE + 6 * 4096ull, 0x360000ull, 4096ull, F4K | KFWR_AP_PEER,           KFWR_OP_MAP},
     });
+    /* w825 A1: a PEER leaf is REFUSED at the emit chokepoint — this device backs no peer
+     * aperture — and the refusal is loud, never a silent drop. */
+    CHECK_M(f.hdr.refuse_mask & KFWR_R_LEAF_OOB, "the peer leaf must be refused, loudly");
 }
 
 static void t_dual_pde_both_halves(void)
@@ -2043,6 +2045,11 @@ static void d_run(const char *corpus_path, const char *leaves_path,
         std::sort(mine.begin(), mine.end());
 
         if (im.benign) {
+            /* w825 A1: the kernel REFUSES peer leaves (no peer aperture is backed); the Rust
+             * decoder still reports them. Compare only what both sides may emit. */
+            im.rust.erase(std::remove_if(im.rust.begin(), im.rust.end(),
+                                         [](const DLeaf &l) { return l.ap == KFWR_AP_PEER; }),
+                          im.rust.end());
             if (mine.size() != im.rust.size()) {
                 char b[192];
                 snprintf(b, sizeof(b), "%s: kernel %zu leaves, rust %zu", im.name.c_str(), mine.size(), im.rust.size());
