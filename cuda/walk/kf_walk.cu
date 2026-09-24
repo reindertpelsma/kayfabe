@@ -624,7 +624,14 @@ __device__ void kf_walk_one(KfCtx &c, uint64_t pdb, const KfScopeSet &sc)
                                 ptb = kf_big_addr(F, lo16, apb);
                                 has_b = (ptb != 0ull) && kf_table_ok(c, ptb, bb, bb);
                             }
-                        } else if (kf_slot_sparse(F, lo16)) c.sparse++;
+                        } else if (kf_slot_sparse(F, lo16)) {
+                            /* ogkm `_gmmuIsInvalidPdeOk`: an INVALID big half with VOL set
+                             * is sparse and aborts the whole 2 MiB — sublevel 1 is never
+                             * read. ⊘ Only when the big half is NOT present: VOL on a
+                             * present big table is a cache attribute, not a veto. */
+                            c.sparse++;
+                            has_s = false;
+                        }
 
                         /* Both sub-tables cover the SAME VA range at different page
                          * sizes, so they are interleaved at the BIG page's
@@ -1608,7 +1615,11 @@ __device__ __forceinline__ bool kf_par_decode_slot(const KfArgs &a, uint32_t lev
                 else if (census) kf_par_refuse(d, (ptb & (bb - 1ull)) ? KFWR_R_UNALIGNED : KFWR_R_OOB);
             }
         }
-    } else if (census && kf_slot_sparse(F, lo16)) atomicAdd(&d->sparse_slots, 1u);
+    } else if (kf_slot_sparse(F, lo16)) {
+        /* An INVALID, sparse big half vetoes the small table (see the serial walk). */
+        if (census) atomicAdd(&d->sparse_slots, 1u);
+        has &= ~1u;
+    }
     if (!has) return false;
     ch.va = e.va | ((uint64_t)i << L.va_lo);
     ch.addr = pts; ch.addr2 = ptb; ch.has = has; ch.kind = KF_ENT_DUAL;
