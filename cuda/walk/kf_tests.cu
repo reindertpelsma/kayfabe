@@ -1179,14 +1179,17 @@ static void t_ogkm_unmapped_big_pte_hides_stale_4k(void)
     Tree t(f.g);
     for (uint32_t i = 0; i < 16u; i++)
         t.map4k(VBASE + (uint64_t)i * 4096ull, 0x300000ull + (uint64_t)i * 4096ull);
-    f.g.u64(t.pd0(VBASE) + (uint64_t)vi0(VBASE) * 16) = 0x20ull;   /* the UNMAPPED big PTE */
+    /* ⊘ w826 — the sentinel is a big PTE, INSIDE the big table, one per 64 KiB slot. This
+     * test used to poke it into the dual PDE's low word, where bit 5 is an ADDRESS bit
+     * (ogkm-580 pascal/gp100/dev_mmu.h:102) — and so encoded the defect that dropped live
+     * 4 KiB leaves. Slot 1 is the control: its 4 KiB leaf must survive. */
+    t.map4k(VBASE + 0x10000ull, 0x310000ull);
+    f.g.u64(t.ptb(VBASE) + (uint64_t)vib(VBASE) * 8) = 0x20ull;   /* the UNMAPPED big PTE */
     f.upload();
     CHECK_EQ(f.refresh({t.root}), 0);
-    validate(f);
-    CHECK_M(f.hdr.run_count == 0,
-            "an UNMAPPED big PTE must stop the walk: the 4 KiB PTEs under it are stale by "
-            "construction and the GPU will never read them");
-    if (g_fails_here) dump(f);
+    expect(f, {
+        {VBASE + 0x10000ull, 0x310000ull, 4096ull, F4K, KFWR_OP_MAP},
+    });
 }
 
 static void t_ogkm_sparse_big_half_hides_small_table(void)
