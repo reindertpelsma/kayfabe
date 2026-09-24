@@ -622,7 +622,11 @@ impl WalkKernel {
         // live guest, 450 ms on the measured working set). The serial kernel stays in the PTX
         // for the scoped path the .cu keeps; this refresh is never scoped.
         let _ = self.f_walk;
+        let t0 = std::time::Instant::now();
         self.run_parallel(&args, u32::try_from(pdbs.len()).unwrap_or(0))?;
+        // w826 — phase census: the walk vs the (single-thread) diff, every 512 refreshes.
+        self.cu.ctx_synchronize()?;
+        let t_walk = t0.elapsed();
         self.cu.launch(
             self.f_diff,
             1,
@@ -631,6 +635,7 @@ impl WalkKernel {
             "cuLaunchKernel(kf_diff_kernel)",
         )?;
         self.cu.ctx_synchronize()?;
+        phase_census(t_walk, t0.elapsed() - t_walk);
 
         let mut hb = vec![0u8; core::mem::size_of::<KfReportHeader>()];
         self.cu
@@ -1006,5 +1011,25 @@ impl DeviceImage {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.len == 0
+    }
+}
+
+/// ★ w826 — where a refresh's time goes: the parallel walk vs the diff kernel (`<<<1,1>>>`).
+fn phase_census(walk: std::time::Duration, diff: std::time::Duration) {
+    use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
+    static N: AtomicU64 = AtomicU64::new(0);
+    static W: AtomicU64 = AtomicU64::new(0);
+    static D: AtomicU64 = AtomicU64::new(0);
+    let n = N.fetch_add(1, Relaxed) + 1;
+    let w = W.fetch_add(walk.as_micros() as u64, Relaxed) + walk.as_micros() as u64;
+    let d = D.fetch_add(diff.as_micros() as u64, Relaxed) + diff.as_micros() as u64;
+    if n % 512 == 0 {
+        eprintln!(
+            "kayfabe-isolate: WALK-PHASES n={n} avg_us[walk={} diff={}] last_us[walk={} diff={}]",
+            w / n,
+            d / n,
+            walk.as_micros(),
+            diff.as_micros()
+        );
     }
 }
