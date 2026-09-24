@@ -322,12 +322,20 @@ __device__ __forceinline__ bool kf_slot_sparse(const KfFormat &F, uint64_t raw)
  * run, so claiming to implement this there would be a lie (see the format seam).
  * ⚠ `lo16` is known VALID-clear here -- a valid low word is a 2 MiB leaf and is
  * handled before this is reached. */
-__device__ __forceinline__ bool kf_big_half_vetoes_small(const KfFormat &F, uint64_t lo16)
+/* ⊘⊘⊘ w826 — CORRECTED: THE VETO IS PER 64 KiB SLOT, AND IT IS A BIG **PTE**, NOT THE PDE.
+ * The citations above describe a big PTE (an entry INSIDE the big-page table): uvm_mmu.h
+ * "unmapped big PTEs indicate that there are no 4k PTEs below the unmapped big ENTRY", and
+ * uvm_va_block.c unmaps ONE 64 KiB by writing it. The old code applied the test to the
+ * DUAL PDE's low word, where bit 5 is not PRIVILEGE but part of ADDRESS_BIG
+ * (ogkm-580 pascal/gp100/dev_mmu.h:102, `(35-3):(8-4)`), and dropped the WHOLE 2 MiB small
+ * table. `[measured w826 ct4]` a guest 4 KiB operand leaf present on one walk was gone on
+ * the next beside a big-page region, reconcile unmapped it, and the copy did nothing.
+ * Now: an UNMAPPED big PTE (VALID=0 VOL=0 PRIV=1) hides only the small PTEs of its slot. */
+__device__ __forceinline__ bool kf_big_pte_unmapped(const KfFormat &F, uint64_t e)
 {
     if (F.table_version != KF_TBL_VER2) return false;
-    if (kf_valid(F, lo16)) return false;
-    if (kf_slot_sparse(F, lo16)) return true;                    /* VOL set   */
-    return ((lo16 >> F.bit_privilege) & 1ull) != 0ull;           /* UNMAPPED  */
+    if (kf_valid(F, e) || kf_slot_sparse(F, e)) return false;
+    return ((e >> F.bit_privilege) & 1ull) != 0ull;
 }
 
 /* ── per-thread walk context ─────────────────────────────────────────────────── */
@@ -617,8 +625,6 @@ __device__ void kf_walk_one(KfCtx &c, uint64_t pdb, const KfScopeSet &sc)
                                 has_b = (ptb != 0ull) && kf_table_ok(c, ptb, bb, bb);
                             }
                         } else if (kf_slot_sparse(F, lo16)) c.sparse++;
-                        /* w760h: the big half says there is nothing below it. */
-                        if (has_s && kf_big_half_vetoes_small(F, lo16)) has_s = false;
 
                         /* Both sub-tables cover the SAME VA range at different page
                          * sizes, so they are interleaved at the BIG page's
@@ -627,6 +633,7 @@ __device__ void kf_walk_one(KfCtx &c, uint64_t pdb, const KfScopeSet &sc)
                          * derived, not hardcoded. */
                         const uint32_t ratio = 1u << (F.big_va_lo - F.small_va_lo);
                         for (uint32_t b = 0; b < KF_MAX_ENT && b < F.big_entries && !c.stop; b++) {
+                            bool slot_unmapped = false;
                             if (has_b) {
                                 uint64_t e;
                                 /* ⊘ KF_BREAK_ORDER walks the big table DOWNWARDS, so the
@@ -647,6 +654,7 @@ __device__ void kf_walk_one(KfCtx &c, uint64_t pdb, const KfScopeSet &sc)
 #endif
                                 if (!kf_charge(c, 1)) break;
                                 if (kf_load64(c, ptb + (uint64_t)bb * F.big_entry_bytes, &e)) {
+                                    slot_unmapped = kf_big_pte_unmapped(F, e);
                                     if (kf_valid(F, e))
                                         kf_emit(c, va4 | ((uint64_t)bb << F.big_va_lo),
                                                 kf_addr(F, e, kf_ap_raw(F, e)),
@@ -655,7 +663,7 @@ __device__ void kf_walk_one(KfCtx &c, uint64_t pdb, const KfScopeSet &sc)
                                     else if (kf_slot_sparse(F, e)) c.sparse++;
                                 }
                             }
-                            if (has_s) {
+                            if (has_s && !slot_unmapped) {
                                 for (uint32_t j = 0; j < 16u && j < ratio && !c.stop; j++) {
                                     uint32_t s = b * ratio + j;
                                     if (s >= F.small_entries) break;
@@ -1601,8 +1609,6 @@ __device__ __forceinline__ bool kf_par_decode_slot(const KfArgs &a, uint32_t lev
             }
         }
     } else if (census && kf_slot_sparse(F, lo16)) atomicAdd(&d->sparse_slots, 1u);
-    /* w760h: the big half says there is nothing below it -- drop the small table. */
-    if ((has & 1u) && kf_big_half_vetoes_small(F, lo16)) has &= ~1u;
     if (!has) return false;
     ch.va = e.va | ((uint64_t)i << L.va_lo);
     ch.addr = pts; ch.addr2 = ptb; ch.has = has; ch.kind = KF_ENT_DUAL;
@@ -1766,14 +1772,16 @@ __device__ __forceinline__ void kf_par_chunks(const KfArgs &a, const KfEnt &t,
 #else
         const uint32_t bb = b;
 #endif
+        bool slot_unmapped = false;
         if (t.has & 2u) {
             const uint64_t e = sbig[bb];
+            slot_unmapped = kf_big_pte_unmapped(F, e);
             if (kf_valid(F, e))
                 kf_acc_emit(c, t.va | ((uint64_t)bb << F.big_va_lo), kf_addr(F, e, kf_ap_raw(F, e)),
                             1ull << F.ps_log2[F.big_ps], kf_leaf_flags(F, e, F.big_ps));
             else if (census && kf_slot_sparse(F, e)) atomicAdd(&a.dev->sparse_slots, 1u);
         }
-        if (t.has & 1u) {
+        if ((t.has & 1u) && !slot_unmapped) {
             for (uint32_t j = 0u; j < 16u && j < ratio; j++) {
                 const uint32_t si = bb * ratio + j;
                 if (si >= ns) break;
