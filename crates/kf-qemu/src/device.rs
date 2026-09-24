@@ -355,13 +355,31 @@ impl Device {
     }
 
     /// Re-publish every GSP register's current answer into the shadow.
+    /// ★★★ Publish the FSM's registers into the shadow — DATA FIRST, then the registers the guest
+    /// POLLS as a completion edge.
+    ///
+    /// ⊘ `[measured f67c9dde]` publishing in `GspReg::FIXED` order stored the falcon's HALTED bit
+    /// before `WPR2_ADDR_HI`: the guest saw FWSEC halt, read WPR2 in the gap, and failed
+    /// *"no initialized WPR2 found"*. When reads trapped, the FSM answered each read in order and
+    /// this could not happen; with shadow reads, **publication order IS the guest-visible order**.
     fn publish(&self, g: &Gsp) {
-        let regs = GspReg::FIXED.into_iter().chain((0..8u8).map(GspReg::GspQueueHead));
-        for reg in regs {
-            let Some((0, off)) = g.model.at(reg) else { continue };
+        const EDGES: [GspReg; 4] =
+            [GspReg::GspFalconCpuctl, GspReg::GspRiscvCpuctl, GspReg::Sec2FalconCpuctl, GspReg::GspFalconIrqstat];
+        let store = |reg: GspReg| {
+            let Some((0, off)) = g.model.at(reg) else { return };
             if let Some(Ok(v)) = g.fsm.mmio_read_with(g.model.as_ref(), 0, off) {
                 self.shadow_store(off, v, 4);
             }
+        };
+        for reg in GspReg::FIXED.into_iter().chain((0..8u8).map(GspReg::GspQueueHead)) {
+            if !EDGES.contains(&reg) {
+                store(reg);
+            }
+        }
+        // The data must be visible before any edge that announces it.
+        std::sync::atomic::fence(Ordering::Release);
+        for reg in EDGES {
+            store(reg);
         }
     }
 
