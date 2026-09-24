@@ -188,6 +188,10 @@ const RING_ENTRIES_FALLBACK: u32 = 4096;
 /// One GPFIFO entry's stride in bytes, from the crate that owns NVIDIA's wire facts.
 /// ⊘ Only the STRIDE — the entry's *meaning* is decoded by the arch's own
 /// [`PushbufferAbi::gpfifo_entries`], never by a second decoder here.
+/// w825 — how many 50 µs re-reads an all-zero GP entry below `GP_PUT` gets before the
+/// doorbell is refused (≈ 10 ms). See `run_submission_body`'s gather loop.
+const GP_ENTRY_VISIBILITY_SPINS: u32 = 200;
+
 const GP_ENTRY_SIZE: usize = kayfabe_abi::submit::GP_ENTRY_SIZE as usize;
 
 /// ★★★ **How far this channel's ring has been consumed** — the per-channel GPFIFO read
@@ -953,7 +957,35 @@ fn run_submission_body(
         // the one that shipped, and nothing gathered still lands on `RingBroughtNoEntry`
         // below — a widening here would be the only way to make this change able to serve
         // something the old code refused.
+        // ★★★★★ w825 — an entry BELOW `GP_PUT` that reads as all-zero is one the guest has
+        // published a cursor for and whose bytes are not visible to this reader YET: the
+        // guest writes the ring through its BAR1 view, we read through another view of the
+        // same vidmem. `[measured w825cup3d]` RM's kernel CE channel rang once for entries
+        // up to PUT=70; gp[63] read as zero here, the doorbell was refused with the cursor
+        // unmoved, the guest never rang again, and `UVM_REGISTER_GPU` hung — while the SAME
+        // entry read `0x12001af1c+0xb8` at teardown. Re-read briefly (worker thread only).
+        let mut spins = 0u32;
+        // ⊘ Never on a vCPU / inside a trap: there a refusal is the only legal answer.
+        let may_wait = !(kayfabe_util::lockwitness::on_vcpu_thread()
+            || kayfabe_util::trapwitness::in_trap());
+        while may_wait && raw == [0u8; GP_ENTRY_SIZE] && spins < GP_ENTRY_VISIBILITY_SPINS {
+            std::thread::sleep(std::time::Duration::from_micros(50));
+            spins += 1;
+            read_va(ce, vmm, &mut last, at, &mut raw).map_err(|f| CeUtilsRefusal {
+                fault: f,
+                detail: last,
+                progress: CeProgress::NONE,
+            })?;
+        }
         let Some(r) = pb.gpfifo_entries(&raw).into_iter().next() else {
+            if raw != [0u8; GP_ENTRY_SIZE] {
+                // ★ A NON-zero entry with length 0 is a CONTROL entry (a NOP): the engine
+                // consumes it and moves on, and so do we. ⊘ Stopping here stranded every
+                // entry behind it.
+                run.cursor.next = run.cursor.next.wrapping_add(1) % entries;
+                run.entries += 1;
+                continue;
+            }
             break;
         };
         ranges.push(r);
