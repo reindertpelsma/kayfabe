@@ -37,6 +37,31 @@ gvaspub/pubqueue/sweep/mmuinval/bar2/setpagedir, `kayfabe-core` gpu/project/gpa/
 `kayfabe-rt` device/ceutils/completion_watch, `kayfabe-fwd` CE half, isolate crates, barmirror,
 deviceview, walkmirror, delta/ack.
 
+## ★★★ Order: the real planes FIRST, graded by a GPU harness — guest boot LAST (owner, w826)
+
+> *"I would not go to guest boot with fake planes. Since you need emulated channels and translated
+> to boot in v3, its better to postpone that until this land. Otherwise you are going to race
+> towards a inline synchronous fake completor which is precisely what we need to avoid. Thats why
+> your test infrastructure is actually important."*
+
+The stock driver cannot pass `RmInitAdapter` without its kernel CeUtils channels completing. Booting
+before the channel and completion planes exist forces a synchronous fake completion on the vCPU —
+the CPU executor under another name. ⇒ **No guest boot until kf-host + kf-mem + kf-chan are real.**
+
+1. `kf-host` — in-process RM session; one reserved object; identity + guest-RAM windows; VAS; batched
+   map/unmap with TLB-defer; channel birth; host events → eventfd.
+2. `kf-mem` — the store; OUR bar1/bar2 roots; the walk diffed against our handle ledger.
+3. `kf-chan` — passthrough birth; Translated execution; VMM-executed emulated channels (§37);
+   completions via host event → eventfd → one wake path, **never inline**.
+4. **`kf-harness` (the gate for 1–3): the harness plays the guest, no QEMU.** Guest RAM = a memfd,
+   guest VRAM = the store. It writes real page tables into the store, places a kernel-style CE
+   pushbuffer (PHYS operands + semaphore release) in guest RAM, rings the token, and asserts: the
+   REAL engine copied and released, the completion arrived via the eventfd, `forwarded=` per token,
+   the `MEM_OP` split published before resuming, hostile rings refused by name.
+5. Only then P2 guest boot (`kf-trap`, `kf-qemu`), P3 `nvidia-smi`, and the 30-arm suite.
+
+P2's non-booting work (`kf-chip` generator, `HostFacts`) proceeds in parallel.
+
 ## Order and gates (THE_V3_PLAN §2)
 
 P2 GSP boot → `GSP_INIT_DONE` + first RPC · P3 objects/controls → `nvidia-smi` correct · P4 memory/VA/BAR
