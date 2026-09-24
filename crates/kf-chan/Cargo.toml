@@ -7,6 +7,8 @@ license.workspace = true
 
 [dependencies]
 kf-abi.workspace = true
+kf-host.workspace = true
+kf-linux-raw.workspace = true
 
 [lints]
 workspace = true

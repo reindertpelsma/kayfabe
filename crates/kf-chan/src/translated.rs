@@ -33,6 +33,11 @@ const LINE_COUNT: u32 = 0x41c;
 /// `NVC7B5_OFFSET_IN_LOWER` / `OUT_LOWER`.
 const OFFSET_IN_LOWER: u32 = 0x404;
 const OFFSET_OUT_LOWER: u32 = 0x40c;
+/// `NVC7B5_PITCH_IN` / `PITCH_OUT` — `clc7b5.h:169-172`.
+const PITCH_IN: u32 = 0x410;
+const PITCH_OUT: u32 = 0x414;
+/// `NVC7B5_SET_REMAP_COMPONENTS_NUM_SRC_COMPONENTS` 21:20, size-minus-one (`clc7b5.h:219-223`).
+const REMAP_NUM_SRC_SHIFT: u32 = 20;
 
 /// `NVC7B5_SET_*_PHYS_MODE_TARGET` — `clc7b5.h:67-71`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -84,6 +89,13 @@ pub struct CeState {
     pub src_mode: u32,
     /// `SET_DST_PHYS_MODE` target bits.
     pub dst_mode: u32,
+    /// `PITCH_IN` — the source line stride in bytes when multi-line.
+    pub pitch_in: u32,
+    /// `PITCH_OUT` — the destination line stride in bytes when multi-line.
+    pub pitch_out: u32,
+    /// `SET_REMAP_COMPONENTS` — with `REMAP_ENABLE`, `LINE_LENGTH_IN` counts ELEMENTS of
+    /// `component_size × num_components` bytes, not bytes.
+    pub remap: u32,
     /// `MEM_OP_C` as last written — the low PDB bits and `PDB_ALL` of a following `MEM_OP_D`.
     pub mem_op_c: u32,
 }
@@ -112,6 +124,11 @@ pub enum Refusal {
     PeerOperand,
     /// A physical operand no window covers contiguously.
     Untranslatable { target: Target, phys: u64, len: u64 },
+    /// A physical operand in BLOCK-LINEAR layout: its footprint is a function of the block
+    /// geometry, which a kernel scrub never uses — refused rather than bounded by a guess.
+    BlockLinearPhysical,
+    /// A launch whose byte extent overflows 64 bits.
+    ExtentOverflow,
 }
 
 /// A CE class id? Supplied by the caller from the chip's class table.
@@ -255,6 +272,9 @@ fn one_write(
         LINE_COUNT => st.line_count = v,
         ce::SET_SRC_PHYS_MODE => st.src_mode = v,
         ce::SET_DST_PHYS_MODE => st.dst_mode = v,
+        PITCH_IN => st.pitch_in = v,
+        PITCH_OUT => st.pitch_out = v,
+        ce::SET_REMAP_COMPONENTS => st.remap = v,
         ce::LAUNCH_DMA => {
             let src_phys = v & ce::LAUNCH_SRC_PHYSICAL != 0;
             let dst_phys = v & ce::LAUNCH_DST_PHYSICAL != 0;
@@ -268,15 +288,32 @@ fn one_write(
     Ok(())
 }
 
-fn span(st: &CeState, v: u32) -> u64 {
-    let lines = if v & ce::LAUNCH_MULTI_LINE_ENABLE != 0 {
-        u64::from(st.line_count.max(1))
-    } else {
-        1
+/// The bytes a launch touches on each side: `(source, destination)`, the source `None` when the
+/// engine does not read it (no data transfer, or a remap whose every written component is a
+/// constant — the scrub's fill). ★ Exact, never an under-estimate: the window check vets THIS
+/// range, and a short one would pass a launch the engine then runs past the window's end.
+fn extents(st: &CeState, v: u32) -> Result<(Option<u64>, u64), Refusal> {
+    let remap = v & ce::LAUNCH_REMAP_ENABLE != 0;
+    let comp = u64::from(ce::remap_component_bytes(st.remap));
+    let n_dst = ce::remap_num_dst_components(st.remap);
+    let n_src = u64::from(((st.remap >> REMAP_NUM_SRC_SHIFT) & 0x3) + 1);
+    let (src_elem, dst_elem) = if remap { (comp * n_src, comp * u64::from(n_dst)) } else { (1, 1) };
+    let reads_src = v & ce::LAUNCH_TRANSFER_MASK != ce::LAUNCH_TRANSFER_NONE
+        && (!remap || (0..n_dst).any(|c| ce::remap_dst_sel(st.remap, c) <= ce::REMAP_DST_SEL_SRC_MAX));
+    let lines = if v & ce::LAUNCH_MULTI_LINE_ENABLE != 0 { u64::from(st.line_count) } else { 1 };
+    let ext = |elem: u64, pitch: u32| -> Result<u64, Refusal> {
+        let line = u64::from(st.line_len).checked_mul(elem).ok_or(Refusal::ExtentOverflow)?;
+        let span = match lines {
+            0 | 1 => line,
+            n => u64::from(pitch)
+                .checked_mul(n - 1)
+                .and_then(|x| x.checked_add(line))
+                .ok_or(Refusal::ExtentOverflow)?,
+        };
+        Ok(span.max(1))
     };
-    // ⊘ Pitch-linear multi-line spans are bounded by len × lines only when pitch == len; a
-    // wider pitch is bounded by the translate call refusing a range no window covers.
-    u64::from(st.line_len).saturating_mul(lines).max(1)
+    let src = if reads_src { Some(ext(src_elem, st.pitch_in)?) } else { None };
+    Ok((src, ext(dst_elem, st.pitch_out)?))
 }
 
 fn xlate(w: &dyn Window, mode: u32, phys: u64, len: u64) -> Result<u64, Refusal> {
@@ -302,14 +339,17 @@ fn launch_translated(
     src_phys: bool,
     dst_phys: bool,
 ) -> Result<(), Refusal> {
-    let len = span(st, v);
-    let transfer = v & ce::LAUNCH_TRANSFER_MASK != 0;
-    if src_phys && transfer {
+    let (src_len, dst_len) = extents(st, v)?;
+    let src_rewritten = src_phys && src_len.is_some();
+    if src_rewritten && v & ce::LAUNCH_SRC_PITCH == 0 || dst_phys && v & ce::LAUNCH_DST_PITCH == 0 {
+        return Err(Refusal::BlockLinearPhysical);
+    }
+    if let (true, Some(len)) = (src_phys, src_len) {
         let va = xlate(w, st.src_mode, st.off_in, len)?;
         put_offset(cur, sub, ce::OFFSET_IN_UPPER, va);
     }
     if dst_phys {
-        let va = xlate(w, st.dst_mode, st.off_out, len)?;
+        let va = xlate(w, st.dst_mode, st.off_out, dst_len)?;
         put_offset(cur, sub, ce::OFFSET_OUT_UPPER, va);
     }
     emit(
@@ -320,7 +360,7 @@ fn launch_translated(
     );
     // Restore the guest's own offsets: a later VIRTUAL launch that does not rewrite them must
     // still read what the guest wrote, not our window address.
-    if src_phys && transfer {
+    if src_rewritten {
         put_offset(cur, sub, ce::OFFSET_IN_UPPER, st.off_in);
     }
     if dst_phys {

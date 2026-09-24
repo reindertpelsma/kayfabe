@@ -594,6 +594,11 @@ pub const NVOS47_FLAGS_DEFER_TLB_INVALIDATION_TRUE: u32 = 1;
 /// same page table and the second cannot be the one that instantiates it.
 pub const NVOS46_FLAGS_PAGE_SIZE_4KB: u32 = 1 << 8;
 
+/// `NVOS46_FLAGS_DMA_OFFSET_GROWS_DOWN` — field `14:14`, value 1 (`ogkm-580: nvos.h:2066-2068`).
+/// With no FIXED address, RM places the mapping from the TOP of the space down — where a guest
+/// kernel's bottom-up allocations are least likely to land (`THE_TRANSLATED_PLANE.md` §24.2).
+pub const NVOS46_FLAGS_DMA_OFFSET_GROWS_DOWN: u32 = 1 << 14;
+
 /// ★★★ **THE BIG-PAGE SIZE THIS ARCHITECTURE FAMILY USES — 64 KiB.**
 ///
 /// ⊘ **Not a per-die constant, and constraint 12 is the reason the distinction is written

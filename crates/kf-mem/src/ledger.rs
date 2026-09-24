@@ -228,6 +228,18 @@ impl Ledger {
         self.placed.iter().map(|(&va, p)| (va, p.len, p.off, p.ram)).collect()
     }
 
+    /// ★ Where `[va, va+len)` lives in OUR mappings: `(ram, offset)` — the store offset (or
+    /// guest-RAM file offset) of `va`, when ONE placed row covers the whole range. This is how a
+    /// Translated channel finds the bytes behind a guest VA (its GPFIFO, a pushbuffer segment):
+    /// through what WE mapped, never a stored copy of the guest's tables (§24.2). `None` for a
+    /// range we did not map, or that crosses rows (the caller reads row by row).
+    #[must_use]
+    pub fn resolve(&self, va: u64, len: u64) -> Option<(bool, u64)> {
+        let (&start, p) = self.placed.range(..=va).next_back()?;
+        let end = va.checked_add(len)?;
+        (end <= start.checked_add(p.len)?).then(|| (p.ram, p.off + (va - start)))
+    }
+
     /// Mappings held.
     #[must_use]
     pub fn len(&self) -> usize {
@@ -252,7 +264,7 @@ impl Ledger {
         plan: &ReconcilePlan,
     ) -> Applied {
         let mut out = Applied::default();
-        let mut refuse = |out: &mut Applied, what: String| {
+        let refuse = |out: &mut Applied, what: String| {
             out.refused += 1;
             out.first_refusal.get_or_insert(what);
         };

@@ -12,7 +12,7 @@
 
 use crate::{ABI_ENCODE_FAILED, HostRm, RmError};
 use kf_abi::bringup::{
-    NV01_MEMORY_VIRTUAL, NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE,
+    NV01_MEMORY_VIRTUAL, NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE, NVOS46_FLAGS_DMA_OFFSET_GROWS_DOWN,
     NVOS47_FLAGS_DEFER_TLB_INVALIDATION_TRUE, NvMemoryVirtualAllocationParams,
     NvVaspaceAllocationParameters,
 };
@@ -135,6 +135,19 @@ impl HostRm {
     ) -> Result<u64, RmError> {
         let extra = if defer { NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE } else { 0 };
         self.raw_map_dma_slice(space.range, memory, offset, len, at, extra, backing == MapBacking::SharedSlice)
+    }
+
+    /// ★ Map ALL of `memory` (`len` bytes) into `space` at an address RM chooses, and return it —
+    /// a **window**: the identity window over the store (guest FB-physical `p` ⇒ `base + p`) or
+    /// the guest-RAM window. ⊘ The base is READ BACK, never assumed (`THE_TRANSLATED_PLANE.md`
+    /// §16.1, §17.1): RM chose `0x120000000` on GA106/580, and a later driver may not.
+    /// `high` maps it GROWS_DOWN, away from a guest kernel's bottom-up allocations (§24.2).
+    ///
+    /// # Errors
+    /// The host's refusal.
+    pub fn map_window(&self, space: VaSpace, memory: u32, len: u64, high: bool) -> Result<u64, RmError> {
+        let extra = if high { NVOS46_FLAGS_DMA_OFFSET_GROWS_DOWN } else { 0 };
+        self.raw_map_dma_slice(space.range, memory, 0, len, None, extra, false)
     }
 
     /// Unmap the mapping at `va` in `space`; `defer` as for [`HostRm::map`].

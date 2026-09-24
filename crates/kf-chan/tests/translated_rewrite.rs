@@ -64,7 +64,7 @@ fn a_physical_fb_scrub_becomes_a_window_va_and_the_guest_offset_is_restored() {
     pb.extend(m(SUB, ce::SET_DST_PHYS_MODE, &[0])); // LOCAL_FB
     pb.extend(m(SUB, ce::OFFSET_OUT_UPPER, &[0x0, 0x40_0000]));
     pb.extend(m(SUB, ce::LINE_LENGTH_IN, &[0x1000]));
-    let launch = ce::LAUNCH_DST_PHYSICAL | 0x2; // non-pipelined transfer, dst physical
+    let launch = ce::LAUNCH_DST_PHYSICAL | ce::LAUNCH_DST_PITCH | 0x2; // non-pipelined, dst physical pitch
     pb.extend(m(SUB, ce::LAUNCH_DMA, &[launch]));
     let mut st = CeState::default();
     let wr = writes(&rewrite(&pb, is_ce, &mut st, &W).unwrap());
@@ -102,12 +102,79 @@ fn pdb_all_names_no_root() {
 fn peer_and_untranslatable_operands_are_refused_by_name() {
     let mut pb = setup();
     pb.extend(m(SUB, ce::SET_DST_PHYS_MODE, &[3]));
-    pb.extend(m(SUB, ce::LAUNCH_DMA, &[ce::LAUNCH_DST_PHYSICAL]));
+    pb.extend(m(SUB, ce::LAUNCH_DMA, &[ce::LAUNCH_DST_PHYSICAL | ce::LAUNCH_DST_PITCH]));
     let mut st = CeState::default();
     assert_eq!(rewrite(&pb, is_ce, &mut st, &W), Err(Refusal::PeerOperand));
     let mut pb = setup();
     pb.extend(m(SUB, ce::SET_DST_PHYS_MODE, &[1])); // sysmem: this window has none
-    pb.extend(m(SUB, ce::LAUNCH_DMA, &[ce::LAUNCH_DST_PHYSICAL]));
+    pb.extend(m(SUB, ce::LAUNCH_DMA, &[ce::LAUNCH_DST_PHYSICAL | ce::LAUNCH_DST_PITCH]));
     let mut st = CeState::default();
     assert!(matches!(rewrite(&pb, is_ce, &mut st, &W), Err(Refusal::Untranslatable { .. })));
+}
+
+/// A window that records every range it was asked to vet.
+struct Rec(std::cell::RefCell<Vec<(Target, u64, u64)>>);
+impl Window for Rec {
+    fn translate(&self, t: Target, phys: u64, len: u64) -> Option<u64> {
+        self.0.borrow_mut().push((t, phys, len));
+        Some(WIN + phys)
+    }
+}
+
+fn vetted(pb: &[u32]) -> Result<Vec<(Target, u64, u64)>, Refusal> {
+    let w = Rec(std::cell::RefCell::new(Vec::new()));
+    let mut st = CeState::default();
+    rewrite(pb, is_ce, &mut st, &w)?;
+    Ok(w.0.into_inner())
+}
+
+/// ★ RM's scrub is a REMAPPED constant fill: `LINE_LENGTH_IN` counts 4-byte elements
+/// (`COMPONENT_SIZE_FOUR`, one component, `DST_X = CONST_A`), so 0x400 elements is 0x1000 bytes —
+/// and the source, never read, must not be vetted at all.
+#[test]
+fn a_remapped_fill_is_vetted_in_bytes_and_its_unread_source_is_not_vetted() {
+    let mut pb = setup();
+    pb.extend(m(SUB, ce::SET_REMAP_CONST_A, &[0]));
+    pb.extend(m(SUB, ce::SET_REMAP_COMPONENTS, &[(3 << 16) | ce::REMAP_DST_SEL_CONST_A]));
+    pb.extend(m(SUB, ce::SET_DST_PHYS_MODE, &[0]));
+    pb.extend(m(SUB, ce::OFFSET_OUT_UPPER, &[0x0, 0x10_0000]));
+    pb.extend(m(SUB, ce::LINE_LENGTH_IN, &[0x400]));
+    let launch = 0x2
+        | ce::LAUNCH_REMAP_ENABLE
+        | ce::LAUNCH_SRC_PHYSICAL
+        | ce::LAUNCH_DST_PHYSICAL
+        | ce::LAUNCH_SRC_PITCH
+        | ce::LAUNCH_DST_PITCH;
+    pb.extend(m(SUB, ce::LAUNCH_DMA, &[launch]));
+    assert_eq!(vetted(&pb).unwrap(), vec![(Target::LocalFb, 0x10_0000, 0x1000)]);
+}
+
+/// Multi-line: the footprint is `pitch × (lines − 1) + line`, not `line × lines`.
+#[test]
+fn a_multi_line_copy_is_vetted_over_its_pitch() {
+    let mut pb = setup();
+    pb.extend(m(SUB, ce::SET_SRC_PHYS_MODE, &[0]));
+    pb.extend(m(SUB, ce::SET_DST_PHYS_MODE, &[0]));
+    pb.extend(m(SUB, ce::OFFSET_IN_UPPER, &[0, 0x1000, 0, 0x9_0000]));
+    pb.extend(m(SUB, 0x410, &[0x2000, 0x100])); // PITCH_IN, PITCH_OUT
+    pb.extend(m(SUB, ce::LINE_LENGTH_IN, &[0x80, 4])); // LINE_LENGTH_IN, LINE_COUNT
+    let launch = 0x2
+        | ce::LAUNCH_MULTI_LINE_ENABLE
+        | ce::LAUNCH_SRC_PHYSICAL
+        | ce::LAUNCH_DST_PHYSICAL
+        | ce::LAUNCH_SRC_PITCH
+        | ce::LAUNCH_DST_PITCH;
+    pb.extend(m(SUB, ce::LAUNCH_DMA, &[launch]));
+    assert_eq!(
+        vetted(&pb).unwrap(),
+        vec![(Target::LocalFb, 0x1000, 0x2000 * 3 + 0x80), (Target::LocalFb, 0x9_0000, 0x100 * 3 + 0x80)]
+    );
+}
+
+#[test]
+fn a_block_linear_physical_operand_is_refused() {
+    let mut pb = setup();
+    pb.extend(m(SUB, ce::LINE_LENGTH_IN, &[0x100]));
+    pb.extend(m(SUB, ce::LAUNCH_DMA, &[0x2 | ce::LAUNCH_DST_PHYSICAL]));
+    assert_eq!(vetted(&pb), Err(Refusal::BlockLinearPhysical));
 }

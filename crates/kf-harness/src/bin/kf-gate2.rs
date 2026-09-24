@@ -8,13 +8,11 @@
 
 use kf_chip::Family;
 use kf_cuda::abi::kf_format_ver2;
-use kf_cuda::synth::{Image, big_pde, pde, pte, vi0, vi1, vi2, vi3, vis};
 use kf_cuda::walk::{WalkCfg, WalkKernel};
-use kf_harness::{CeRig, Ledger as Checks};
+use kf_harness::{CeRig, Ledger as Checks, tables::Tree};
 use kf_host::HostRm;
 use kf_mem::ledger::{Desired, Ledger, plan_reconcile};
 use kf_linux_raw::DevDir;
-use std::collections::HashMap;
 
 const STORE_BYTES: u64 = 256 << 20;
 const PT_BASE: u64 = 0x0100_0000;
@@ -26,42 +24,6 @@ const VA_A: u64 = 0x20_0000_0000;
 const VA_B: u64 = 0x20_4000_0000;
 const PAGES: u64 = 16;
 const BYTES: u32 = (PAGES * 4096) as u32;
-
-/// A lazily-built VER2 tree inside an [`Image`] placed at `PT_BASE` in the store.
-struct Tree {
-    img: Image,
-    root: u64,
-    tables: HashMap<(u8, u64, usize), u64>,
-}
-
-impl Tree {
-    fn new() -> Tree {
-        let mut img = Image::at(PT_BASE, PT_BYTES);
-        let root = img.alloc(4 * 8, 4096);
-        Tree { img, root, tables: HashMap::new() }
-    }
-    fn child(&mut self, level: u8, parent: u64, idx: usize, bytes: u64, entry: u64, dual: bool) -> u64 {
-        if let Some(&c) = self.tables.get(&(level, parent, idx)) {
-            return c;
-        }
-        let c = self.img.alloc(bytes, 4096);
-        if dual {
-            self.img.put64(parent + entry, big_pde(0));
-            self.img.put64(parent + entry + 8, pde(c));
-        } else {
-            self.img.put64(parent + entry, pde(c));
-        }
-        self.tables.insert((level, parent, idx), c);
-        c
-    }
-    fn map4k(&mut self, va: u64, phys: u64) {
-        let pd2 = self.child(3, self.root, vi3(va), 512 * 8, 8 * vi3(va) as u64, false);
-        let pd1 = self.child(2, pd2, vi2(va), 512 * 8, 8 * vi2(va) as u64, false);
-        let pd0 = self.child(1, pd1, vi1(va), 256 * 16, 8 * vi1(va) as u64, false);
-        let small = self.child(0, pd0, vi0(va), 512 * 8, 16 * vi0(va) as u64, true);
-        self.img.put64(small + 8 * vis(va) as u64, pte(phys));
-    }
-}
 
 fn main() {
     let mut l = Checks::default();
@@ -89,7 +51,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
     l.measure("store", format!("store {store:#x} {} MiB contiguous_aligned={} imported at {dptr:#x}", STORE_BYTES >> 20, res.contiguous_aligned));
 
     // The guest kernel's tables: VA_A -> DATA_A, VA_B -> DATA_B, 16 pages each.
-    let mut tree = Tree::new();
+    let mut tree = Tree::new(PT_BASE, PT_BYTES);
     for i in 0..PAGES {
         tree.map4k(VA_A + i * 4096, DATA_A + i * 4096);
         tree.map4k(VA_B + i * 4096, DATA_B + i * 4096);
@@ -102,7 +64,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
     let space = rm.alloc_vaspace().map_err(|e| format!("vaspace: {e:?}"))?;
     let mut ledger = Ledger::default();
     let root = tree.root;
-    let mut publish = |walk: &mut WalkKernel, ledger: &mut Ledger, tag: &str| -> Result<(usize, usize, usize), String> {
+    let publish = |walk: &mut WalkKernel, ledger: &mut Ledger, tag: &str| -> Result<(usize, usize, usize), String> {
         let t0 = std::time::Instant::now();
         let r = walk.refresh(dptr, STORE_BYTES, &[root]).map_err(|e| e.to_string())?;
         r.validate().map_err(|e| format!("{tag}: report {e}"))?;
