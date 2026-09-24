@@ -172,6 +172,34 @@ pub struct Cuda {
         unsafe extern "C" fn(CUdeviceptr, CUdeviceptr, usize, *mut c_void) -> CUresult,
     pub(crate) cuMemsetD8Async:
         unsafe extern "C" fn(CUdeviceptr, u8, usize, *mut c_void) -> CUresult,
+    // ★★★★★ **P4b (w827) — THE WALK AS ONE CUDA GRAPH.** `[measured GA106 cc3caf1f]` the
+    // walk's ~25 stream operations cost `submit_us p50=172` (ver2) / `212` (ver3) on the
+    // submitting thread against a 50 µs budget: the cost is per-launch DRIVER time, not GPU
+    // time. Captured once and replayed with one `cuGraphLaunch`, the per-walk cost is one call.
+    // ⊘ `Option`, like the VMM set below and for the same reason: this binding is loaded on
+    // every boot, and a driver without graphs (pre-11.4) must degrade the walker to per-launch
+    // submission — VISIBLY, via `WalkKernel::submits_as_graph` — not lose it.
+    pub(crate) cuStreamBeginCapture: Option<unsafe extern "C" fn(*mut c_void, c_uint) -> CUresult>,
+    pub(crate) cuStreamEndCapture:
+        Option<unsafe extern "C" fn(*mut c_void, *mut *mut c_void) -> CUresult>,
+    pub(crate) cuStreamGetCaptureInfo: Option<
+        unsafe extern "C" fn(
+            *mut c_void,
+            *mut c_uint,
+            *mut u64,
+            *mut *mut c_void,
+            *mut *const *mut c_void,
+            *mut usize,
+        ) -> CUresult,
+    >,
+    pub(crate) cuGraphInstantiateWithFlags:
+        Option<unsafe extern "C" fn(*mut *mut c_void, *mut c_void, u64) -> CUresult>,
+    pub(crate) cuGraphLaunch: Option<unsafe extern "C" fn(*mut c_void, *mut c_void) -> CUresult>,
+    pub(crate) cuGraphExecKernelNodeSetParams: Option<
+        unsafe extern "C" fn(*mut c_void, *mut c_void, *const KernelNodeParams) -> CUresult,
+    >,
+    pub(crate) cuGraphExecDestroy: Option<unsafe extern "C" fn(*mut c_void) -> CUresult>,
+    pub(crate) cuGraphDestroy: Option<unsafe extern "C" fn(*mut c_void) -> CUresult>,
     /// ★ How many times `cuCtxSynchronize` ran through this binding — the falsifier of
     /// `V3_P4_PORT_MAP.md` §3 row 2 (*"fails if any `cuCtxSynchronize` runs on the worker
     /// (count the calls)"*). A counter, not a promise: gate 8 reads it around its walks.
@@ -356,6 +384,21 @@ impl Cuda {
             cuMemcpyDtoHAsync: sym!("cuMemcpyDtoHAsync_v2"),
             cuMemcpyDtoDAsync: sym!("cuMemcpyDtoDAsync_v2"),
             cuMemsetD8Async: sym!("cuMemsetD8Async"),
+            // ⚠ Versioned names, as everywhere here. `cuStreamBeginCapture` (unsuffixed) is the
+            // CUDA 10.0 entry with no mode argument; `_v2` takes the mode. `_v2` of the capture
+            // query and of the kernel-node setter take the CUDA 12 structs (the setter's is a
+            // strict SUPERSET of the v1 struct, so the unsuffixed fallback reads a valid prefix).
+            cuStreamBeginCapture: opt!("cuStreamBeginCapture_v2"),
+            cuStreamEndCapture: opt!("cuStreamEndCapture"),
+            cuStreamGetCaptureInfo: opt!("cuStreamGetCaptureInfo_v2"),
+            cuGraphInstantiateWithFlags: opt!("cuGraphInstantiateWithFlags"),
+            cuGraphLaunch: opt!("cuGraphLaunch"),
+            cuGraphExecKernelNodeSetParams: match opt!("cuGraphExecKernelNodeSetParams_v2") {
+                Some(f) => Some(f),
+                None => opt!("cuGraphExecKernelNodeSetParams"),
+            },
+            cuGraphExecDestroy: opt!("cuGraphExecDestroy"),
+            cuGraphDestroy: opt!("cuGraphDestroy"),
             ctx_sync_calls: core::sync::atomic::AtomicU64::new(0),
             // ⊘ Resolved with a NULL-tolerant lookup, unlike `sym!`, for the reason the field
             // docs give: absent is an ANSWER here, not a load failure.
@@ -923,6 +966,173 @@ impl Cuda {
         })
     }
 
+    /// ★ Whether every graph entry point the walk's one-call submission needs resolved.
+    #[must_use]
+    pub fn has_graph_api(&self) -> bool {
+        self.cuStreamBeginCapture.is_some()
+            && self.cuStreamEndCapture.is_some()
+            && self.cuStreamGetCaptureInfo.is_some()
+            && self.cuGraphInstantiateWithFlags.is_some()
+            && self.cuGraphLaunch.is_some()
+            && self.cuGraphExecKernelNodeSetParams.is_some()
+            && self.cuGraphExecDestroy.is_some()
+            && self.cuGraphDestroy.is_some()
+    }
+
+    fn graph_fn<T: Copy>(f: Option<T>, name: &'static str) -> Result<T, CudaError> {
+        f.ok_or(CudaError::MissingSymbol(name))
+    }
+
+    /// `cuStreamBeginCapture_v2(s, THREAD_LOCAL)` — every operation queued on `s` from here to
+    /// [`Cuda::stream_end_capture`] is RECORDED into a graph and not executed.
+    ///
+    /// # Errors
+    /// [`CudaError`].
+    pub fn stream_begin_capture(&self, s: StreamHandle) -> Result<(), CudaError> {
+        let f = Self::graph_fn(self.cuStreamBeginCapture, "cuStreamBeginCapture_v2")?;
+        // SAFETY: `s` came from `stream_create`; the mode is a documented enumerator.
+        self.check("cuStreamBeginCapture_v2", unsafe {
+            f(s.0 as *mut c_void, CU_STREAM_CAPTURE_MODE_THREAD_LOCAL)
+        })
+    }
+
+    /// `cuStreamEndCapture` — the graph recorded since [`Cuda::stream_begin_capture`]. ⚠ Must be
+    /// called on every path out of a capture, the failing ones included, or the stream stays in
+    /// capture mode and every later submission on it is recorded instead of run.
+    ///
+    /// # Errors
+    /// [`CudaError`] (the capture was invalidated); the stream has left capture mode either way.
+    pub fn stream_end_capture(&self, s: StreamHandle) -> Result<GraphHandle, CudaError> {
+        let f = Self::graph_fn(self.cuStreamEndCapture, "cuStreamEndCapture")?;
+        let mut g: *mut c_void = core::ptr::null_mut();
+        // SAFETY: `s` is ours; one live out-pointer.
+        let r = unsafe { f(s.0 as *mut c_void, &raw mut g) };
+        if r != CUDA_SUCCESS && !g.is_null() {
+            self.graph_destroy(GraphHandle(g as usize));
+        }
+        self.check("cuStreamEndCapture", r)?;
+        Ok(GraphHandle(g as usize))
+    }
+
+    /// The node the capture on `s` most recently added — i.e. the node for the operation just
+    /// queued, on a linear (single-stream) capture. How a captured launch is named so its
+    /// parameters can be updated in the instantiated graph without re-capturing.
+    ///
+    /// # Errors
+    /// [`CudaError`]; also refused by name when `s` is not capturing or the capture is not a
+    /// single chain (more or fewer than one dependency).
+    pub fn capture_leaf(&self, s: StreamHandle) -> Result<GraphNode, CudaError> {
+        let f = Self::graph_fn(self.cuStreamGetCaptureInfo, "cuStreamGetCaptureInfo_v2")?;
+        let mut status: c_uint = 0;
+        let mut id: u64 = 0;
+        let mut g: *mut c_void = core::ptr::null_mut();
+        let mut deps: *const *mut c_void = core::ptr::null();
+        let mut n: usize = 0;
+        // SAFETY: `s` is ours; five live out-pointers. `deps` points at driver-owned storage
+        // valid until the next capture call on `s`, and is read (once) before any.
+        let r = unsafe {
+            f(s.0 as *mut c_void, &raw mut status, &raw mut id, &raw mut g, &raw mut deps, &raw mut n)
+        };
+        self.check("cuStreamGetCaptureInfo_v2", r)?;
+        if status != CU_STREAM_CAPTURE_STATUS_ACTIVE || n != 1 || deps.is_null() {
+            return Err(CudaError::Refused {
+                what: "cuStreamGetCaptureInfo_v2",
+                code: 0,
+                name: format!(
+                    "expected an ACTIVE linear capture with exactly one leaf; status={status} \
+                     leaves={n}"
+                ),
+            });
+        }
+        // SAFETY: `n == 1` and `deps` is non-NULL, so `deps[0]` is a valid element.
+        let node = unsafe { *deps };
+        Ok(GraphNode(node as usize))
+    }
+
+    /// `cuGraphInstantiateWithFlags(g, 0)`.
+    ///
+    /// # Errors
+    /// [`CudaError`].
+    pub fn graph_instantiate(&self, g: GraphHandle) -> Result<GraphExecHandle, CudaError> {
+        let f = Self::graph_fn(self.cuGraphInstantiateWithFlags, "cuGraphInstantiateWithFlags")?;
+        let mut e: *mut c_void = core::ptr::null_mut();
+        // SAFETY: `g` came from `stream_end_capture`; one live out-pointer.
+        self.check("cuGraphInstantiateWithFlags", unsafe {
+            f(&raw mut e, g.0 as *mut c_void, 0)
+        })?;
+        Ok(GraphExecHandle(e as usize))
+    }
+
+    /// `cuGraphLaunch(e, s)` — the whole walk, queued with ONE driver call.
+    ///
+    /// # Errors
+    /// [`CudaError`].
+    pub fn graph_launch(&self, e: GraphExecHandle, s: StreamHandle) -> Result<(), CudaError> {
+        let f = Self::graph_fn(self.cuGraphLaunch, "cuGraphLaunch")?;
+        // SAFETY: both handles came from this binding.
+        self.check("cuGraphLaunch", unsafe { f(e.0 as *mut c_void, s.0 as *mut c_void) })
+    }
+
+    /// `cuGraphExecKernelNodeSetParams` — replace the launch parameters (grid, block, shared
+    /// memory, every by-value argument) of kernel node `node` in `e`. Takes effect for the
+    /// NEXT `cuGraphLaunch`; the driver copies `params` during the call.
+    ///
+    /// # Errors
+    /// [`CudaError`] (e.g. `f` is not the node's function: the topology may not change).
+    #[allow(clippy::too_many_arguments)]
+    pub fn graph_exec_kernel_set(
+        &self,
+        e: GraphExecHandle,
+        node: GraphNode,
+        f: Func,
+        grid: u32,
+        block: u32,
+        shmem: u32,
+        params: &mut [Vec<u8>],
+        what: &'static str,
+    ) -> Result<(), CudaError> {
+        let set = Self::graph_fn(self.cuGraphExecKernelNodeSetParams, "cuGraphExecKernelNodeSetParams")?;
+        let mut p: Vec<*mut c_void> = params
+            .iter_mut()
+            .map(|b| b.as_mut_ptr().cast::<c_void>())
+            .collect();
+        let kp = KernelNodeParams {
+            func: f.0 as *mut c_void,
+            grid_x: grid,
+            grid_y: 1,
+            grid_z: 1,
+            block_x: block,
+            block_y: 1,
+            block_z: 1,
+            shmem,
+            kernel_params: p.as_mut_ptr(),
+            extra: core::ptr::null_mut(),
+            kern: core::ptr::null_mut(),
+            ctx: core::ptr::null_mut(),
+        };
+        // SAFETY: as `launch_args` — every element of `p` points into a live Vec of `params`,
+        // one per by-value parameter of `f`, and the driver copies them during the call. `kp`
+        // is a live, fully-initialised `CUDA_KERNEL_NODE_PARAMS_v2`; `e`/`node` came from
+        // this binding and `node` belongs to the graph `e` was instantiated from.
+        self.check(what, unsafe { set(e.0 as *mut c_void, node.0 as *mut c_void, &raw const kp) })
+    }
+
+    /// `cuGraphExecDestroy`. ⊘ Infallible: it runs in a `Drop`.
+    pub fn graph_exec_destroy(&self, e: GraphExecHandle) {
+        if let (Some(f), true) = (self.cuGraphExecDestroy, e.0 != 0) {
+            // SAFETY: `e` came from `graph_instantiate` and is destroyed once by its owner.
+            unsafe { f(e.0 as *mut c_void) };
+        }
+    }
+
+    /// `cuGraphDestroy`. ⊘ Infallible: it runs in a `Drop`.
+    pub fn graph_destroy(&self, g: GraphHandle) {
+        if let (Some(f), true) = (self.cuGraphDestroy, g.0 != 0) {
+            // SAFETY: `g` came from `stream_end_capture` and is destroyed once by its owner.
+            unsafe { f(g.0 as *mut c_void) };
+        }
+    }
+
     /// As [`Cuda::launch_raw`], checked.
     ///
     /// # Errors
@@ -1126,6 +1336,43 @@ pub struct ModuleHandle(usize);
 /// An opaque CUDA kernel-function handle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Func(usize);
+
+/// An opaque CUDA graph (the captured, un-instantiated walk).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GraphHandle(usize);
+
+/// An opaque instantiated CUDA graph — what `cuGraphLaunch` submits.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GraphExecHandle(usize);
+
+/// An opaque node of a [`GraphHandle`]; valid while the graph lives.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GraphNode(usize);
+
+/// `CUDA_KERNEL_NODE_PARAMS_v2` (`cuda.h`, CUDA 12). ⊘ The v1 struct is its first seven fields;
+/// `kern`/`ctx` are NULL here, which the driver reads as "use `func`" / "the current context".
+#[repr(C)]
+pub(crate) struct KernelNodeParams {
+    func: *mut c_void,
+    grid_x: c_uint,
+    grid_y: c_uint,
+    grid_z: c_uint,
+    block_x: c_uint,
+    block_y: c_uint,
+    block_z: c_uint,
+    shmem: c_uint,
+    kernel_params: *mut *mut c_void,
+    extra: *mut *mut c_void,
+    kern: *mut c_void,
+    ctx: *mut c_void,
+}
+
+/// `CU_STREAM_CAPTURE_MODE_THREAD_LOCAL`: an unsafe API call on THIS thread during the capture
+/// is an error (so a stray synchronous call cannot be silently left out of the graph), while
+/// other threads of the isolate are not constrained.
+const CU_STREAM_CAPTURE_MODE_THREAD_LOCAL: c_uint = 1;
+/// `CU_STREAM_CAPTURE_STATUS_ACTIVE`.
+const CU_STREAM_CAPTURE_STATUS_ACTIVE: c_uint = 1;
 
 /// ★ **A `&[u8]` over one `Copy`, `#[repr(C)]` value** — the only way the safe half of this
 /// crate turns a struct into the bytes `cuLaunchKernel` and `cuMemcpyHtoD_v2` want.
