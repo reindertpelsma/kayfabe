@@ -16,6 +16,7 @@
 
 pub mod classes;
 pub mod falcon_gsp;
+pub mod fsp_gsp;
 pub mod host_classes;
 
 pub use classes::{ClassSet, Kind, classes_for};
@@ -168,10 +169,8 @@ impl Family {
                 family: self,
                 what: "GSP model: _TU102 boot has no FWSEC-FRTS; the WPR2 derivation must be re-checked",
             }),
-            Family::Hopper | Family::Blackwell => Err(RowUnbuilt {
-                family: self,
-                what: "GSP model: the shared FSP model is being ported (old gh100.rs/gb20x.rs)",
-            }),
+            Family::Hopper => Ok(Box::new(fsp_gsp::FspGspModel::new(fsp_gsp::FspRow::HOPPER, fb_size_mb))),
+            Family::Blackwell => Ok(Box::new(fsp_gsp::FspGspModel::new(fsp_gsp::FspRow::BLACKWELL, fb_size_mb))),
         }
     }
 }

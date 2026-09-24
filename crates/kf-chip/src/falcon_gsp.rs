@@ -222,7 +222,9 @@ pub const fn frts_offset_for(fb_size_mb: u64) -> u64 {
 }
 
 /// Pack a byte address into the `_VAL` field of a WPR2 address register.
-const fn wpr2_reg(addr: u64) -> u64 {
+/// The WPR2 register encoding of address `addr` (`_VAL` = `addr >> 12` at `31:4`).
+#[must_use]
+pub const fn wpr2_reg(addr: u64) -> u64 {
     (addr >> WPR2_ADDR_ALIGNMENT) << WPR2_VAL_SHIFT
 }
 
