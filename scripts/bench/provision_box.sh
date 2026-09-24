@@ -165,8 +165,10 @@ fi
 # log keeps it, next to the artefacts.
 echo "PROVISION_REPO=$HOME/kayfabe branch=$KF_BRANCH rev=$(git -C ~/kayfabe rev-parse --short HEAD)"
 cd ~/kayfabe
-git fetch -q origin && git reset -q --hard origin/master
-echo "HEAD=$(git rev-parse --short HEAD)"
+# ⊘⊘⊘ w826: a `git reset --hard origin/master` sat HERE, AFTER the branch checkout above, and
+# silently rewound the named branch to master — a box provisioned with KAYFABE_BRANCH=v3 built
+# `e24bc063` (master). Only this HEAD line exposed it. The branch is set ONCE, above.
+echo "HEAD=$(git rev-parse --short HEAD) branch=$(git branch --show-current)"
 
 # ⊘ Do NOT pipe cargo into tail: `cargo build | tail` makes $? the status of TAIL, which
 #    always succeeds, so a FAILED build reports success. That exact bug produced a green
