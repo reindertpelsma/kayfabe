@@ -92,6 +92,10 @@ const KF_SCAN_BLOCK: u32 = 1024;
 const KF_WARP: u32 = 32;
 const KF_MAX_ENT: u32 = 512;
 const KF_SHWORDS: u32 = KF_MAX_ENT + 64;
+/// ★ P4b: `used` (the staging cursor) holds one slot PER LEVEL plus one for the leaf pass, all
+/// zeroed by ONE memset at the start of the walk — instead of a reset node after every level.
+/// Slot `KF_DIRS` is the leaf pass's; slots `0..KF_DIRS` the expand levels'.
+const KF_USED_SLOTS: usize = KF_DIRS as usize + 1;
 /// `sizeof(KfEnt)` — 3×u64 + 2×u32 + u16 + 2×u8, padded to 8.
 const KF_ENT_BYTES: usize = 40;
 /// `sizeof(KfSum)` — 6×u64 + 4×u32.
@@ -108,7 +112,6 @@ struct ParBufs {
     off: DevBuf,
     start: DevBuf,
     nfr: DevBuf,
-    ntask: DevBuf,
     pdbbase: DevBuf,
     used: DevBuf,
     sum: DevBuf,
@@ -528,6 +531,8 @@ pub struct WalkKernel {
     cfg: WalkCfg,
     dev: DevBuf,
     tbl: [DevBuf; 2],
+    /// ★ P4b: the DEVICE address of the pinned pdb stage (`pin` at `pin_at.pdbs`). The kernels
+    /// read the list in place over PCIe — 64 × 8 bytes — so no upload node is needed.
     pdbs: DevBuf,
     scopes: DevBuf,
     hdr: DevBuf,
@@ -651,7 +656,6 @@ impl WalkKernel {
                 "cuMemAlloc(tbl1)",
             )?,
         ];
-        let pdbs = a(KF_MAX_PDB * 8, "cuMemAlloc(pdbs)")?;
         let scopes = a(
             crate::abi::KF_MAX_SCOPE * core::mem::size_of::<KfScope>(),
             "cuMemAlloc(scopes)",
@@ -681,9 +685,8 @@ impl WalkKernel {
             off: a(KF_MAX_FRONTIER * 4, "cuMemAlloc(par.off)")?,
             start: a(KF_MAX_FRONTIER * 4, "cuMemAlloc(par.start)")?,
             nfr: a(4 * 4, "cuMemAlloc(par.nfr)")?,
-            ntask: a(4, "cuMemAlloc(par.ntask)")?,
             pdbbase: a(KF_MAX_PDB * 4, "cuMemAlloc(par.pdbbase)")?,
-            used: a(4 * 4, "cuMemAlloc(par.used)")?,
+            used: a(KF_USED_SLOTS * 4, "cuMemAlloc(par.used)")?,
             sum: a(KF_MAX_FRONTIER * KF_SUM_BYTES, "cuMemAlloc(par.sum)")?,
             head: a(KF_MAX_FRONTIER, "cuMemAlloc(par.head)")?,
         };
@@ -704,6 +707,9 @@ impl WalkKernel {
         let ev_copied = cu.event_create()?;
         let ev_done = cu.event_create()?;
         let pin = cu.pinned_alloc(pin_at.total, "cuMemAllocHost(report read-back)")?;
+        let pdbs = DevBuf {
+            ptr: cu.pinned_device_ptr(&pin, pin_at.pdbs)?,
+        };
         let done_fd = CompletionFd::new()?;
 
         let mut k = WalkKernel {
@@ -1107,9 +1113,9 @@ impl WalkKernel {
         let s = self.stream;
         let at = self.pin_at;
         self.record(self.ev_start, rec.is_some())?;
-        // ⊘ ALWAYS all `KF_MAX_PDB` slots, so the copy node is the same for every walk; the
-        // kernels read only the first `npdb` (stale slots past it are never dereferenced).
-        self.cu.memcpy_h2d_async(s, self.pdbs.ptr, &self.pin, at.pdbs, KF_MAX_PDB * 8, "cuMemcpyHtoDAsync(pdbs)")?;
+        // ⊘ No pdb upload: `a.pdbs` IS the pinned stage `submit` wrote (see `pdbs`). Every
+        // level's staging cursor is zeroed here, once (see `KF_USED_SLOTS`).
+        self.cu.memset_d8_async(s, self.par.used.ptr, 0, KF_USED_SLOTS * 4, "cuMemsetD8Async(used)")?;
         self.kl(rec, self.f_begin, 1, 1, 0, vec![param_bytes(&self.dev.ptr)], "cuLaunchKernel(kf_begin_kernel)")?;
         // ★★★★★ w826 — THE PARALLEL WALK (`kf_run_parallel`, ported to the driver API).
         // `[w726]` ~0.6 ms fixed cost vs the serial walk's one-thread-per-space. The serial
@@ -1188,7 +1194,6 @@ impl WalkKernel {
         let u = |v: u32| v.to_le_bytes().to_vec();
         let ab = || param_bytes(a);
         let par = &self.par;
-        let s = self.stream;
         let shm = (KF_PAR_BLOCK / KF_WARP) * KF_SHWORDS * 8;
         let [f_seed, f_expand, f_scan, f_compact, f_leaf, f_heads, f_bases, f_emit, f_join] =
             self.f_par;
@@ -1202,7 +1207,10 @@ impl WalkKernel {
             "cuLaunchKernel(kf_par_seed)",
         )?;
         let mut src = 0usize;
+        // The last level's output count IS the task count; it is read where it lies (no copy).
+        let mut ntask = par.nfr.ptr;
         for k in u32::from(self.fmt.first_dir)..KF_DIRS {
+            let used = par.used.ptr + u64::from(k) * 4;
             let nin = par.nfr.ptr + (src as u64) * 4;
             let nout = par.nfr.ptr + ((src ^ 1) as u64) * 4;
             let dst = if k + 1 < KF_DIRS { par.fr[src ^ 1].ptr } else { par.task.ptr };
@@ -1219,7 +1227,7 @@ impl WalkKernel {
                     p(nin),
                     p(par.stage.ptr),
                     u(KF_MAX_FRONTIER as u32),
-                    p(par.used.ptr),
+                    p(used),
                     p(par.start.ptr),
                     p(par.cnt.ptr),
                 ],
@@ -1255,9 +1263,8 @@ impl WalkKernel {
             if k + 1 < KF_DIRS {
                 src ^= 1;
             } else {
-                self.cu.memcpy_d2d_async(s, par.ntask.ptr, nout, 4, "cuMemcpyDtoDAsync(ntask)")?;
+                ntask = nout;
             }
-            self.cu.memset_d8_async(s, par.used.ptr, 0, 4, "cuMemsetD8Async(used)")?;
         }
         self.kl(
             rec,
@@ -1268,10 +1275,10 @@ impl WalkKernel {
             vec![
                 ab(),
                 p(par.task.ptr),
-                p(par.ntask.ptr),
+                p(ntask),
                 p(par.runstage.ptr),
                 u(KF_MAX_SCRATCH as u32),
-                p(par.used.ptr),
+                p(par.used.ptr + u64::from(KF_DIRS) * 4),
                 p(par.sum.ptr),
             ],
             "cuLaunchKernel(kf_par_leaf)",
@@ -1286,7 +1293,7 @@ impl WalkKernel {
                 ab(),
                 p(par.task.ptr),
                 p(par.sum.ptr),
-                p(par.ntask.ptr),
+                p(ntask),
                 p(par.cnt.ptr),
                 p(par.head.ptr),
             ],
@@ -1298,7 +1305,7 @@ impl WalkKernel {
             1,
             KF_SCAN_BLOCK,
             0,
-            vec![p(par.cnt.ptr), p(par.ntask.ptr), p(par.off.ptr), p(par.nfr.ptr + 12)],
+            vec![p(par.cnt.ptr), p(ntask), p(par.off.ptr), p(par.nfr.ptr + 12)],
             "cuLaunchKernel(kf_par_scan tasks)",
         )?;
         self.kl(
@@ -1320,7 +1327,7 @@ impl WalkKernel {
                 ab(),
                 p(par.task.ptr),
                 p(par.sum.ptr),
-                p(par.ntask.ptr),
+                p(ntask),
                 p(par.off.ptr),
                 p(par.head.ptr),
                 p(par.pdbbase.ptr),
@@ -1338,7 +1345,7 @@ impl WalkKernel {
                 ab(),
                 p(par.task.ptr),
                 p(par.sum.ptr),
-                p(par.ntask.ptr),
+                p(ntask),
                 p(par.off.ptr),
                 p(par.head.ptr),
                 p(par.pdbbase.ptr),

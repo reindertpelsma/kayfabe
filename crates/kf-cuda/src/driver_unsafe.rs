@@ -164,6 +164,8 @@ pub struct Cuda {
     pub(crate) cuLaunchHostFunc:
         unsafe extern "C" fn(*mut c_void, extern "C" fn(*mut c_void), *mut c_void) -> CUresult,
     pub(crate) cuMemAllocHost: unsafe extern "C" fn(*mut *mut c_void, usize) -> CUresult,
+    pub(crate) cuMemHostGetDevicePointer:
+        unsafe extern "C" fn(*mut CUdeviceptr, *mut c_void, c_uint) -> CUresult,
     pub(crate) cuMemcpyHtoDAsync:
         unsafe extern "C" fn(CUdeviceptr, *const c_void, usize, *mut c_void) -> CUresult,
     pub(crate) cuMemcpyDtoHAsync:
@@ -383,6 +385,7 @@ impl Cuda {
             cuEventElapsedTime: sym!("cuEventElapsedTime"),
             cuLaunchHostFunc: sym!("cuLaunchHostFunc"),
             cuMemAllocHost: sym!("cuMemAllocHost_v2"),
+            cuMemHostGetDevicePointer: sym!("cuMemHostGetDevicePointer_v2"),
             cuMemcpyHtoDAsync: sym!("cuMemcpyHtoDAsync_v2"),
             cuMemcpyDtoHAsync: sym!("cuMemcpyDtoHAsync_v2"),
             cuMemcpyDtoDAsync: sym!("cuMemcpyDtoDAsync_v2"),
@@ -916,13 +919,35 @@ impl Cuda {
         Ok(PinnedBuf { ptr: p as usize, len })
     }
 
+    /// `cuMemHostGetDevicePointer_v2` — the DEVICE address of `buf[off]`, so a kernel can read
+    /// the pinned bytes directly (zero-copy) instead of through a copy node.
+    ///
+    /// # Errors
+    /// [`CudaError::Refused`].
+    ///
+    /// # Panics
+    /// If `off` leaves `buf`.
+    pub(crate) fn pinned_device_ptr(&self, buf: &PinnedBuf, off: usize) -> Result<CUdeviceptr, CudaError> {
+        assert!(off < buf.len, "pinned_device_ptr: offset leaves the pinned buffer");
+        let mut d: CUdeviceptr = 0;
+        // SAFETY: one live out-pointer; `buf.ptr` is the base of a live `cuMemAllocHost`
+        // allocation of this context, which is what the call requires.
+        self.check("cuMemHostGetDevicePointer_v2", unsafe {
+            (self.cuMemHostGetDevicePointer)(&raw mut d, buf.ptr as *mut c_void, 0)
+        })?;
+        Ok(d + off as u64)
+    }
+
     /// `cuMemcpyHtoDAsync_v2` from `buf[off..off+n]`, in `stream`.
+    /// ⊘ Unused since P4b (the walk reads its pdb list from pinned memory in place); kept as
+    /// the audited spelling of the call.
     ///
     /// # Errors
     /// [`CudaError::Refused`].
     ///
     /// # Panics
     /// If the range leaves `buf`.
+    #[allow(dead_code)]
     pub(crate) fn memcpy_h2d_async(
         &self,
         s: StreamHandle,
