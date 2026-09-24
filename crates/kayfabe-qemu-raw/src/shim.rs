@@ -19792,11 +19792,18 @@ impl SharedDoorbell {
                             Err(e) => format!(" root⊘{e:?}"),
                         })
                         .unwrap_or_default();
+                    let near: Vec<String> = report
+                        .runs_of(i)
+                        .iter()
+                        .filter(|r| r.va + r.len > pv.saturating_sub(0x20_0000) && r.va < pv + 0x20_0000)
+                        .map(|r| format!("{:#x}+{:#x}->{:#x}/f{:#x}", r.va, r.len, r.gpga, r.flags))
+                        .collect();
                     eprintln!(
-                        "kayfabe: WALK-PROBE pid={} pdb={:#x} va={pv:#x} desired={:?} cpu={cpu}",
+                        "kayfabe: WALK-PROBE pid={} pdb={:#x} va={pv:#x} desired={:?} runs_near=[{}] cpu={cpu}",
                         pid.0,
                         pdb.0,
-                        hit
+                        hit,
+                        near.join(" ")
                     );
                 }
                 let rec = sp.reconcile(vas, &desired, ram_bytes);
