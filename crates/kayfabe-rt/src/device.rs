@@ -5900,7 +5900,9 @@ impl SharedDevice {
                     c.guest_ram += 1;
                 } else if b.aperture() != kayfabe_arch::Aperture::Vidmem {
                     c.not_vidmem += 1;
-                } else if !FbLeafBacking::Joined.places_exactly(va, len) {
+                } else if !FbLeafBacking::Joined.places_exactly(va, len)
+                    && !promote_row_rounds_up(va, len, b.phys())
+                {
                     // ★ THE SAME PREDICATE THE VERB APPLIES, for the chain the drain hands
                     // these rows to (`join_one_fb_leaf` decides `Joined` vs `Aliased`, never
                     // `Vidmem`, and the two share a granule). A census with its own copy of
@@ -9202,4 +9204,18 @@ impl PtSweepDecider for () {
     ) -> Option<Vec<kayfabe_fwd::PtDecodeResult>> {
         None
     }
+}
+
+/// ★★★★★ **w825 — the C's 64 KiB round-up for a sub-granule vidmem row.**
+///
+/// `C: src/qemu/nvkvm_gpu_emul.c:7920` maps every promote-derived row at
+/// `(size + 0xffff) & !0xffff`. `[measured w825cup3k]` libcuda's context left ONE vidmem row
+/// of `0x8600` bytes (`not_granular=1(34304 bytes)`) that this port never published, while
+/// every other row of the space was mapped — the sub-page hole CLAUDE.md names. A row whose
+/// VA and physical address are both on a 64 KiB boundary is offered; the map rounds its
+/// length up (`map_store_slice_for_leaf`), the binding keeps the row's own length.
+#[must_use]
+pub fn promote_row_rounds_up(va: u64, len: u64, phys: u64) -> bool {
+    const G: u64 = 0x1_0000;
+    len > 0 && va.is_multiple_of(G) && phys.is_multiple_of(G)
 }

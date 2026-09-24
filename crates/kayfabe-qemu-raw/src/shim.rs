@@ -15240,10 +15240,13 @@ fn map_store_slice_for_leaf(
     // ⚠ `Map`, never `Remap`: this path does not know whether something was already mapped
     // here, and claiming `Remap` would make `apply_ops` unmap a slice on the strength of a
     // guess. The port's own ledger is what detects a replacement.
+    // ★ w825 — a sub-granule promote row maps a whole 64 KiB (see
+    // `kayfabe_rt::device::promote_row_rounds_up`); the binding below keeps `leaf.len`.
+    let map_len = leaf.len.div_ceil(0x1_0000) * 0x1_0000;
     let op = kayfabe_mmu::walkdiff::MapOp::Map(kayfabe_mmu::walkdiff::Run {
         va: leaf.va,
         gpga: at,
-        len: leaf.len,
+        len: map_len,
         flags: 0,
         class: kayfabe_mmu::walkdiff::PageClass::P4K,
     });
