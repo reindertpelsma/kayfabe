@@ -287,13 +287,13 @@ impl ChanPlane {
         let engine = a.engine_type.unwrap_or(0);
         if !a.kernel_client || !is_copy_engine(engine) {
             eprintln!(
-                "kf3: chan {:#x}:{:#x} class={:#x} engine={engine:#x} kernel={} — not a kernel CE channel: not born (Passthrough is P5 step 5)",
-                a.client, a.handle, a.class, a.kernel_client
+                "kf3: chan {:#x}:{:#x} class={:#x} engine={engine:#x} kernel={} vaspace={:x?} chid={:x?} — not a kernel CE channel: not born (Passthrough is P5 step 5)",
+                a.client, a.handle, a.class, a.kernel_client, a.vaspace, a.chid
             );
             return ChanAnswer::NotOurs;
         }
         let refuse = |status: u32, why: String| {
-            eprintln!("kf3: chan {:#x}:{:#x} birth REFUSED: {why}", a.client, a.handle);
+            eprintln!("kf3: chan {:#x}:{:#x} birth REFUSED: {why} (decl {a:x?})", a.client, a.handle);
             ChanAnswer::Refused { status, why }
         };
         let Some(vas) = a.vaspace else {

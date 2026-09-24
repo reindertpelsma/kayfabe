@@ -184,7 +184,7 @@ impl ChannelPolicy {
             flags: f.flags,
             engine_type: self.abi.decode_channel_engine_type(params).ok().flatten(),
             userd: self.abi.decode_channel_userd_mem(params).ok().flatten(),
-            kernel_client: self.kernel_clients.contains(&h.client),
+            kernel_client: self.kernel_clients.contains(&h.client) || is_rm_internal_client(h.client),
         };
         self.carried += 1;
         match (self.sink)(ChanStatement::Alloc(st)) {
@@ -243,6 +243,22 @@ impl ChannelPolicy {
     }
 }
 
+/// `RS_CLIENT_INTERNAL_HANDLE_BASE` (`ogkm-580: inc/libraries/resserv/resserv.h:138`).
+pub const RS_CLIENT_INTERNAL_HANDLE_BASE: u32 = 0xC1E0_0000;
+
+/// ★ Is `h_client` one of the guest RM's OWN internal clients — the guest's own classification,
+/// `serverIsClientInternal` (`ogkm-580: libraries/resserv/src/rs_server.c:2618-2623`).
+///
+/// `[measured p5a]` the PMA scrubber's client (`0xc1e00006` on that boot) was NOT marked kernel by
+/// the root alloc's pid sentinel, so the pid rule alone under-reports RM's internal channels. The
+/// handle is the guest RM's own statement: a client that asks for a fixed handle is RE-ENCODED
+/// onto the user base `0xC1D00000` (`rs_server.c:3267-3271`), so no guest process can hold one in
+/// this range — only the guest kernel's RM makes them.
+#[must_use]
+pub const fn is_rm_internal_client(h_client: u32) -> bool {
+    h_client & RS_CLIENT_INTERNAL_HANDLE_BASE == RS_CLIENT_INTERNAL_HANDLE_BASE
+}
+
 /// ★ The guest's own channel id, off `NV_CHANNEL_ALLOC_PARAMS.flags` — the guest kernel allocates
 /// its `ChID` before it RPCs and states it as `USERD_INDEX` (`ogkm-580: kernel_channel.c:2786-2800`
 /// writes `USERD_INDEX_PAGE_VALUE = chid / 8`, `USERD_INDEX_VALUE = chid % 8`, and sets
@@ -294,5 +310,12 @@ mod tests {
         assert_eq!(decode_userd_index_chid(0x0020_0000 | (511 << 12) | (7 << 8)), Some(4095));
         assert_eq!(decode_userd_index_chid(0x0000_0120), None, "page not fixed: names no channel");
         assert_eq!(decode_userd_index_chid(0x0020_0920), None, "INDEX_FIXED: RM refuses it");
+    }
+
+    #[test]
+    fn internal_clients_are_the_guest_rms_own() {
+        assert!(is_rm_internal_client(0xc1e0_0006));
+        assert!(!is_rm_internal_client(0xc1d0_0006), "the user base");
+        assert!(!is_rm_internal_client(0xe000_0001), "a VF client");
     }
 }
