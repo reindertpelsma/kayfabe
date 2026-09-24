@@ -504,8 +504,12 @@ struct Census {
 /// device views. Nothing here traps: an unplaced page reads anonymous zero.
 #[derive(Debug, Default)]
 struct Bar1Walked {
-    /// The reservation [`BarMirror::arm`] installed; `None` ⇒ the walked arm is off.
-    region: Option<kayfabe_vmm::RamRegionId>,
+    /// The walked arm is on (set at arm; the reservation itself is installed LAZILY).
+    enabled: bool,
+    /// The reservation and the guest BAR1 base it was installed at. ⊘ Installed on the first
+    /// publish, never at arm: `[measured w826 q1]` installing it at realize latched BAR1 before
+    /// the firmware assigned the BARs, and the guest saw "BAR0 is 0M @ 0x0".
+    region: Option<(kayfabe_vmm::RamRegionId, u64)>,
     /// BAR1 va → (store offset, len, placement slot, device view id).
     placed: std::collections::BTreeMap<u64, (u64, u64, kayfabe_vmm::SlotId, u64)>,
     /// Cumulative, for the census.
@@ -2240,28 +2244,49 @@ impl BarMirror {
             eprintln!("kayfabe: BAR1-WALKED ⊘ OFF (KAYFABE_BAR1_WALKED=0, the control)");
             return;
         }
-        let (Some(arm), true) = (self.arms[0].as_ref(), self.device_port.is_some()) else {
-            eprintln!(
-                "kayfabe: BAR1-WALKED ⊘ OFF — BAR1 is not mirrored or there is no device-view port"
-            );
+        if self.arms[0].is_none() || self.device_port.is_none() {
+            eprintln!("kayfabe: BAR1-WALKED ⊘ OFF — BAR1 is not mirrored or there is no device-view port");
             return;
-        };
-        match self.machine.install_ram_window(arm.base, arm.len) {
-            Ok(region) => {
-                self.bar1
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .region = Some(region);
-                eprintln!(
-                    "kayfabe: BAR1-WALKED ★ ONE reservation over guest BAR1 base=0x{:x} len=0x{:x} — \
-                     the walk's runs are placed into it; BAR1 takes NO fill trap",
-                    arm.base, arm.len
-                );
-            }
-            Err(e) => eprintln!(
-                "kayfabe: BAR1-WALKED ⊘ the reservation was refused: {e:?} — per-page mirror stays"
-            ),
         }
+        self.bar1.lock().unwrap_or_else(std::sync::PoisonError::into_inner).enabled = true;
+        eprintln!(
+            "kayfabe: BAR1-WALKED ★ ON — our BAR1 root is walked and its runs placed into ONE \
+             reservation, installed at the first publish (after the guest has placed the BAR)"
+        );
+    }
+
+    /// ★ Install the one BAR1 reservation at the BAR's CURRENT placement, after retiring every
+    /// per-page slot the fill path left inside it (they would overlap it). Worker only.
+    fn install_bar1_reservation(&self) -> Result<(kayfabe_vmm::RamRegionId, u64), String> {
+        let Some(p) = self.machine.bar_placement(BarId::Bar1) else {
+            return Err("BAR1 has no placement".to_string());
+        };
+        let (base, len) = (p.base, p.len);
+        let inside = |g: u64| g >= base && g < base + len;
+        let gone: Vec<Retired> = {
+            let mut t = self.table.lock().unwrap_or_else(|e| e.into_inner());
+            let keys: Vec<u64> = t.slots.keys().copied().filter(|g| inside(*g)).collect();
+            t.pending.retain(|g, _| !inside(*g));
+            keys.into_iter()
+                .filter_map(|g| {
+                    t.slots.remove(&g).map(|sl| Retired {
+                        gpa: g,
+                        region: sl.region,
+                        view: sl.view,
+                    })
+                })
+                .collect()
+        };
+        let retired = self.retire(gone);
+        let region = self
+            .machine
+            .install_ram_window(base, len)
+            .map_err(|e| format!("reservation refused after retiring {retired} slot(s): {e:?}"))?;
+        eprintln!(
+            "kayfabe: BAR1-WALKED ★ ONE reservation over guest BAR1 base=0x{base:x} len=0x{len:x} \
+             (retired {retired} per-page slot(s)) — BAR1 takes NO fill trap from here"
+        );
+        Ok((region, base))
     }
 
     /// Is the walked BAR1 arm live?
@@ -2270,8 +2295,7 @@ impl BarMirror {
         self.bar1
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .region
-            .is_some()
+            .enabled
     }
 
     /// ★★★★★ **w826 — make guest BAR1 say what the walk says** (v3 §6.2): `runs` are the
@@ -2293,14 +2317,26 @@ impl BarMirror {
             .iter()
             .map(|&(va, len, off)| (va, (off, len)))
             .collect();
+        let (enabled, installed) = {
+            let b = self.bar1.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            (b.enabled, b.region)
+        };
+        if !enabled {
+            return "BAR1 ⊘ walked arm off".to_string();
+        }
+        let base = match installed {
+            Some((_, base)) => base,
+            None => match self.install_bar1_reservation() {
+                Ok((region, base)) => {
+                    self.bar1.lock().unwrap_or_else(std::sync::PoisonError::into_inner).region =
+                        Some((region, base));
+                    base
+                }
+                Err(e) => return format!("BAR1 ⊘ not yet installed: {e}"),
+            },
+        };
         let (gone, new) = {
-            let b = self
-                .bar1
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if b.region.is_none() {
-                return "BAR1 ⊘ walked arm off".to_string();
-            }
+            let b = self.bar1.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
             let gone: Vec<(u64, kayfabe_vmm::SlotId, u64)> = b
                 .placed
                 .iter()
@@ -2346,7 +2382,7 @@ impl BarMirror {
                 ));
                 continue;
             }
-            let gpa = arm.base + va;
+            let gpa = base + va;
             match port.with_node(off, len, true, |fd, mmap_len| {
                 self.machine.place_device_view_in(gpa, mmap_len, fd, true)
             }) {
