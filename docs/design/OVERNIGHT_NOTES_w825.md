@@ -71,6 +71,12 @@ The chain of fixes, each measured: `6edddcfd` `d930d4a8` (cuInit), `7ff4cf12` `6
 (births), `802ea1ea` (sub-page promote row), `73687042` `518726d3` (UVM's MAP_EXTERNAL PTEs,
 written by our CPU-CE executor and invalidated in-band, were never swept).
 
+## ✔✔✔ `cup8` — `N=2048 bad=0 maxerr=0`, 2026-09-24 01:21 (same binary, run `w825cup8`)
+
+**The north star** (`cuCtxCreate → matmul`, numerically exact) on v3: `CUP8 RESULT N=2048 bad=0
+maxerr=0 C[0]=2048(exp 2048) -> PASS`, host Xid 0, 37 s wall. `CUP8_SAME_PROGRAM=yes` — md5
+`593c1ef9…`, the program the C artifact ran to `bad=0 maxerr=0`. Same conditions as cup3.
+
 ## Step 4 (walk-at-invalidate on the GPU) — mapped, NOT built tonight, and why
 
 The seam exists (`PtSweepDecider::decide`, `kayfabe-rt/src/device.rs:9175`), but the in-place
