@@ -9849,6 +9849,7 @@ impl SharedDoorbell {
                             // first, as an ALL_PDB invalidate would.
                             if run.bytes > 0 {
                                 let _ = self.device.note_guest_invalidate(None, None);
+                let _ = self.device.arm_rescan_all_gpus(); // ⊘ the planner reads `sweep.dirty`, not the counter
                                 GUEST_INVALIDATES_DECLARED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                             }
                             let r = self.refresh_page_tables(w, None);
@@ -11851,6 +11852,7 @@ impl SharedDoorbell {
             // libcuda's first GR use of them failed `cuCtxCreate` with 999.
             if now.is_some() {
                 let marked = self.device.note_guest_invalidate(None, None);
+                let _ = self.device.arm_rescan_all_gpus(); // ⊘ the planner reads `sweep.dirty`, not the counter
                 GUEST_INVALIDATES_DECLARED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 return format!(
                     " | EXEC-WITNESS ARMED, frames NOT enumerable — executor wrote ⇒ marked \
