@@ -968,6 +968,7 @@ impl DriverAbiTable {
         let p = classes::NvChannelGroupAllocationParameters::decode(bytes)?;
         Ok(TsgAllocFacts {
             h_vaspace: p.h_va_space,
+            engine_type: p.engine_type,
         })
     }
 

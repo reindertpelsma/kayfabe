@@ -5644,7 +5644,23 @@ pub fn plan_channel_birth(
     // beside the adoption: the ring VA (for the refusal's name) and the raw `engineType`.
     let node = spine.rmgraph.node_of_resource(chan.key);
     let ring_va = node.and_then(|n| n.facts.gp_fifo_ring).map(|r| r.va);
-    let declared_engine_type = node.and_then(|n| n.facts.channel_engine_type);
+    // ★★★★★ w825 — a channel that declares `NV2080_ENGINE_TYPE_NULL` (0) runs on its TSG's
+    // engine. `[measured w825cup3g]` libcuda allocates its async-copy channels with 0 inside
+    // a CE TSG; born as GR (runlist 0), their `AMPERE_DMA_COPY_B` object was refused by host
+    // RM: "Channel has already been assigned a runlist incompatible with this engine
+    // (requested: 0x2 current: 0x0)". The parent group's declaration is the engine.
+    let declared_engine_type = node.and_then(|n| match n.facts.channel_engine_type {
+        Some(t) if t != 0 => Some(t),
+        own => spine
+            .rmgraph
+            .node(kayfabe_core::rmgraph::NodeKey {
+                client: n.key.client,
+                handle: n.parent,
+            })
+            .and_then(|p| p.facts.channel_engine_type)
+            .filter(|&t| t != 0)
+            .or(own),
+    });
     // ★★★★★ THE RULE. `adopted_guest_ring` prints `ADOPT-WHY` naming which conjunct failed.
     let Some(adopt) = adopted_guest_ring(spine, proc, chan, cgpu, ring_slice) else {
         kayfabe_util::lock_safe_eprintln!(

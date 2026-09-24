@@ -1333,10 +1333,16 @@ fn translate_alloc(
             device_instance: Some(abi.decode_device_alloc_facts(params)?.device_id),
             ..Default::default()
         },
-        AllocParams::Tsg => AllocFacts {
-            h_vaspace: declared_handle(abi.decode_tsg_alloc_facts(params)?.h_vaspace),
-            ..Default::default()
-        },
+        AllocParams::Tsg => {
+            let t = abi.decode_tsg_alloc_facts(params)?;
+            AllocFacts {
+                h_vaspace: declared_handle(t.h_vaspace),
+                // ★ w825 — the group's engine, so a member channel that declares
+                // `NV2080_ENGINE_TYPE_NULL` (libcuda's CE channels) can be born on it.
+                channel_engine_type: Some(t.engine_type),
+                ..Default::default()
+            }
+        }
         AllocParams::CtxShare => AllocFacts {
             h_vaspace: declared_handle(abi.decode_ctxshare_alloc_facts(params)?.h_vaspace),
             ..Default::default()

@@ -372,6 +372,9 @@ pub struct TsgAllocFacts {
     /// `hVASpace` — the VASpace every channel in the group inherits.
     /// `NV01_NULL_OBJECT` (0) means the group declares none.
     pub h_vaspace: u32,
+    /// `engineType` — the engine every channel in the group runs on. `0`
+    /// (`NV2080_ENGINE_TYPE_NULL`) means the group declares none.
+    pub engine_type: u32,
 }
 
 /// `NV_CTXSHARE_ALLOCATION_PARAMETERS` — the VASpace a subcontext declares.
