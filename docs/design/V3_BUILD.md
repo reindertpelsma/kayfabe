@@ -86,5 +86,11 @@ P2's non-booting work (`kf-chip` generator, `HostFacts`) proceeds in parallel.
 
 P2 GSP boot → `GSP_INIT_DONE` + first RPC · P3 objects/controls → `nvidia-smi` correct · P4 memory/VA/BAR
 → alias/map/invalidate arms · P5 channels → ring/doorbell/concurrency arms · P6 Translated → kernel scrub
-`forwarded>0`, ce-client* · P7 compute → cup3, cup8 · then the LLM lane at ≥0.8× host tok/s (host
-baseline **never recorded** — record it on the first box).
+`forwarded>0`, ce-client* · P7 compute → cup3, cup8 · then the LLM lane at ≥0.8× host tok/s.
+
+★ **Host baseline, recorded w826** (box 52430332, RTX 3060 GA106, 580.159.04, torch 2.6.0+cu124 —
+the same pinned wheel the guest gets, transformers 5.17.0, `Qwen/Qwen2-0.5B-Instruct`, 16 tokens
+greedy, `scripts/bench/run_llm.py` = the guest's own runner): **`HOST_LLM_TOK_PER_S=10.43`**
+(`generate()` wall, COLD — the basis the guest hook reports). ⊘ The line this replaces said "never
+recorded"; w720 had measured one on another box (0.20× parity). A denominator belongs to ITS box:
+re-record on the box the guest number comes from.
