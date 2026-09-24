@@ -60,6 +60,17 @@ walker), not by reading faster.
 6. `gpga-reserve-probe`: a 256 MiB CPU read sweep through BAR1 device views (~24 MB/s) —
    performance-bound by construction.
 
+## ✔✔✔ CUDA FIRST COMPUTE — `CUP3_VAL=43` on v3, 2026-09-24 01:18 (`518726d3`, run `w825cup3o`)
+
+Stock unpatched 580.159.04 guest, full CUDA driver, `cuCtxCreate → cuModuleLoad → cuLaunchKernel
+→ sync`: **`CUP3_KERNEL_LINE=KERNEL rv=43 want=43 -> PASS`**, every stage ✔. Proof it ran on
+the GPU and not on us: host Xid **0**; the GR channel's token `0x7` `forwarded=118`; 8/8
+`0xc7c0` compute objects FORWARDED. ⊘ Conditions: `KAYFABE_SCRATCHPAD_START_MB=10240` (the
+headroom question below), `NVKVM_RAM_BACKEND=memfd NVKVM_RAM_MB=4096`.
+The chain of fixes, each measured: `6edddcfd` `d930d4a8` (cuInit), `7ff4cf12` `6f6d87e4`
+(births), `802ea1ea` (sub-page promote row), `73687042` `518726d3` (UVM's MAP_EXTERNAL PTEs,
+written by our CPU-CE executor and invalidated in-band, were never swept).
+
 ## Step 4 (walk-at-invalidate on the GPU) — mapped, NOT built tonight, and why
 
 The seam exists (`PtSweepDecider::decide`, `kayfabe-rt/src/device.rs:9175`), but the in-place
