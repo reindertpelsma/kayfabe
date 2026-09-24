@@ -37,6 +37,11 @@ GA106, 580.159.04). Baseline `w825base`: thin guest 17/30 (honest 15/30).
    (`47029f0c`). ⚠ `refresh` (the CPU walk of user page tables through vidmem device views)
    is what remains — that is §9 step 4 (the GPU walker) and is the next build.
 
+★★★ **Full suite at `47029f0c`: 26/30, FAIL=0** (w825i). Remaining four are all TIMEOUTs —
+`concurrency`, `ce-client-guest-ram`, `gpga-reserve-probe`, `concurrent-fuzz` — and all four are
+bound by the invalidate hold's CPU page-table sweep (§ step 4) or, for `gpga-reserve-probe`,
+by CPU reads of vidmem through BAR1 device views (by construction).
+
 ## Diagnosed, in progress
 
 3. **Guest RAM (sysmem) is never mapped into the host VAS on the K arm** — v3's second
