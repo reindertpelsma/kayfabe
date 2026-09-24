@@ -2590,6 +2590,10 @@ pub mod ce {
     pub const LAUNCH_SRC_PHYSICAL: u32 = 1 << 12;
     /// `LAUNCH_DMA_DST_TYPE_PHYSICAL` — field `13:13`, value 1 (`clc7b5.h:126`).
     pub const LAUNCH_DST_PHYSICAL: u32 = 1 << 13;
+    /// `NVC7B5_LAUNCH_DMA_INTERRUPT_TYPE_NON_BLOCKING` — field `6:5`, value 2
+    /// (`ogkm-580: class/clc7b5.h:102-105`): the copy raises a NON-STALL interrupt when done,
+    /// which RM posts to `NV2080_NOTIFIERS_CE(n)` — the host completion edge v3 waits on.
+    pub const LAUNCH_INTERRUPT_NON_BLOCKING: u32 = 2 << 5;
 
     /// ★★★ **The subchannel hardware fixes for the copy engine** — `4`.
     ///

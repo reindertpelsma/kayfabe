@@ -260,6 +260,32 @@ struct Objects {
     companions: BTreeMap<u32, u32>,
 }
 
+/// `NV2080_CTRL_CMD_MC_GET_ARCH_INFO` — NON_PRIVILEGED (`ogkm-580: ctrl2080mc.h:61`).
+const NV2080_CTRL_CMD_MC_GET_ARCH_INFO: u32 = 0x2080_1701;
+
+/// The class profile a session holds only until the host has said what it is. Every method
+/// refuses loudly: nothing may allocate an arch-varying class before the family is chosen.
+#[derive(Debug)]
+struct UnchosenClasses;
+
+impl HostClasses for UnchosenClasses {
+    fn name(&self) -> &'static str {
+        "unchosen (before MC_GET_ARCH_INFO)"
+    }
+    fn gpfifo_channel(&self) -> kf_arch::ChannelClass {
+        unreachable!("an arch-varying class was asked for before the family was chosen")
+    }
+    fn usermode(&self) -> UsermodeClass {
+        unreachable!("an arch-varying class was asked for before the family was chosen")
+    }
+    fn ce_object(&self) -> kf_arch::CeObjectClass {
+        unreachable!("an arch-varying class was asked for before the family was chosen")
+    }
+    fn compute_object(&self) -> Option<kf_arch::ComputeObjectClass> {
+        unreachable!("an arch-varying class was asked for before the family was chosen")
+    }
+}
+
 /// ★ The one host RM session.
 #[derive(Debug)]
 pub struct HostRm {
@@ -286,8 +312,13 @@ impl HostRm {
     pub fn open(
         dev: &DevDir,
         gpu: GpuId,
-        classes: &'static dyn HostClasses,
+        classes_for: &dyn Fn(u32, u32) -> Option<&'static dyn HostClasses>,
     ) -> Result<Self, BringUpError> {
+        // ⊘ v3: no pinned generation. The session opens with a placeholder class profile only
+        // long enough to ask the HOST its architecture (`MC_GET_ARCH_INFO`, NON_PRIVILEGED);
+        // `classes_for` (the family row, `kf-chip::Family`) then chooses. No class id is used
+        // before the choice: device/subdevice classes are generation-invariant.
+        let classes: &'static dyn HostClasses = &UnchosenClasses;
         // R0/R1 — the two nodes, by name, relative to the granted directory. The naming is
         // the C's `dev_id_to_path`: the control node is the literal `nvidiactl`, NOT
         // `nvidia` with an index (`C: src/stub/nvkvm_stub.c:1544-1563`).
@@ -398,6 +429,22 @@ impl HostRm {
             subdevice,
             ..conn
         };
+        // ★ Choose the family from what the host reports.
+        let mut arch = [0u8; 16];
+        rung(
+            "R6b MC_GET_ARCH_INFO",
+            conn.raw_control(conn.subdevice, NV2080_CTRL_CMD_MC_GET_ARCH_INFO, &mut arch),
+        )?;
+        let w = |o: usize| u32::from_le_bytes([arch[o], arch[o + 1], arch[o + 2], arch[o + 3]]);
+        let (architecture, implementation) = (w(0), w(4));
+        let classes = classes_for(architecture, implementation).ok_or_else(|| BringUpError {
+            rung: "R6c family row",
+            detail: format!(
+                "no family row for architecture {architecture:#x} implementation \
+                 {implementation:#x} — refused by name, never a nearest guess"
+            ),
+        })?;
+        let conn = HostRm { classes, ..conn };
         let usermode = conn.open_usermode(conn.classes.usermode());
         Ok(HostRm { usermode, ..conn })
     }

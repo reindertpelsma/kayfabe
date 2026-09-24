@@ -450,6 +450,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "kf-chip"
+version = "0.1.0"
+dependencies = [
+ "kf-abi",
+ "kf-arch",
+ "kf-util",
+]
+
+[[package]]
 name = "kf-gsp"
 version = "0.1.0"
 dependencies = [

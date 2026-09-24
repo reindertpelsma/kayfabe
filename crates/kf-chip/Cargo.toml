@@ -1,0 +1,14 @@
+[package]
+name = "kf-chip"
+description = "v3 chip model on the compatibility AXES: a hand-maintained FAMILY row per generation, register offsets generated from ogkm, per-die facts read from the host GPU (derive_per_die_maintain_per_family). Never a per-die constants file."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+kf-util.workspace = true
+kf-arch.workspace = true
+kf-abi.workspace = true
+
+[lints]
+workspace = true
