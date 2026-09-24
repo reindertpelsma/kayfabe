@@ -29,6 +29,47 @@ the KVM irqfd), the PMA scrubber forwards 18 GP entries for the raw client's fre
 `scrubberDestruct` timeout; `poisoned=0`, `contended=0`, no Xid. ⊘ No completion was forged and no
 byte moved by the CPU (the CPU read method words from guest RAM and two 4-byte USERD cursors).
 
+**STATUS UPDATE, 2026-09-25 (P5b, branch `v3-p5b`, rev `25fbdf1b`): ✔ §2.8 BUILT — guest USER
+channels are Passthrough twins, and the raw client's R13–R17 pass in the guest.** Measured on the
+GA106 bench, fast-guest boots `p5ba`/`p5bb` (default arms, `--probe-launch-dma`); `v3_gates.sh` 8/8
+PASS at `25fbdf1b`:
+
+```
+ok R13.1 channel = 0xcafe000e, engine Ce, token 0x3 · ok R13.2 channel = 0xcafe0013, engine GrCompute, token 0x4
+★ R15 SEM LANDED  = sem 0xbeef5ea1, GP_GET 1 -> caught GP_PUT 1        (the host engine, the guest's ring)
+★ R17 CE COPY     = 4096 bytes: dst[0] 0x3f0011ff -> 0xc0ffee00 — read back through an INDEPENDENT mapping
+★ R16 sandboxed doorbell = … rang channel 0xcafe000d token 0x3
+kf3: DOORBELL-LEDGER tok=0x00000003 route=passthrough rung=1 emulated=0 forwarded=1 host=0x1a
+kf3: act birth passthrough: … BORN Passthrough: token 0x3 -> host 0x1a … engine=0x9 (3076 us, off the GSP lock)
+```
+
+Five changes, each measured or cited:
+1. **Births/objects/schedules/frees run on the plane's ACT thread** (`kf3-chan-act`); the drainer
+   only queues and the FSM HOLDS the reply on a `kf_gsp::Deferred` until the act resolves its status
+   (Q1 is now ANSWERED the owner's way: nothing blocks under the GSP lock; worst act 4.6 ms, measured).
+2. **A refused `GSP_RM_ALLOC` was a SUCCESS in the guest.** `rpcRmApiAlloc_GSP` replaces the
+   transport status with the params `status` (`rpc.c:11236-11241`), which our echoed body carried as
+   0 — `[measured kf3m2]` every refused `NV01_MEMORY_VIRTUAL` "succeeded" and was later freed as
+   `FreeUnknown`. Refusals now stamp it; `0x70` decodes (NoDeclaredFacts).
+3. **User channels:** TSG/ctxshare facts give a member channel its VAS and engine; the twin is born
+   over the guest's GPFIFO VA + USERD (store slice) in the mirror, on the guest's own engine (COPY0
+   is a GRCE on GA106 — the guest's pushbuffer already routes for it, as on bare metal); engine
+   objects follow the guest's allocs (its class, our params), schedule the guest's own
+   `GPFIFO_SCHEDULE`; the token is `Route::Passthrough` (`RingHostInline`). Nothing parses it.
+4. **§2.7 completion half:** one dataless non-stall host event per host engine (GR0 + every CE) in
+   the workers' poller; a wake on an engine with a live guest twin latches the vector the served
+   `intr_table` names (`authored::non_stall_vector_for`) and writes the irqfd. ⊘ `[measured p5ba]`
+   ungated, CE3 woke 212× (= the walker's 212 walks) and CE2 16× (= our Translated rings): the
+   notifier is GPU-wide, so an engine with no guest twin raises nothing.
+   ⚠ Not yet exercised by a guest waiter (no default arm blocks on a non-stall event).
+5. **Q6(a) done:** `kf_rm::chanlink::alloc_shape` maps every family's channel / CE / compute / 3D
+   classes from `kf_chip`'s generated sets. Q6(b) (Hopper+/Blackwell BAR1 doorbell page) is still
+   NOT built: `Device::bar0_write` never matches a doorbell for `DoorbellPlacement::Bar1`.
+   Q2 (chid-unique token index): ogkm enables per-runlist channel RAM in a GSP-client guest only
+   when SR-IOV is enabled or the `RmDebugOverridePerRunlistChannelRam` regkey is set
+   (`kernel_fifo_init.c:141-221`); our device presents no SR-IOV, so chids are device-unique on
+   every family — the one escape is that guest-root regkey (blast radius: the guest itself).
+
 **Five findings the boots made, each folded into the section it corrects:**
 1. `hVASpace = 0` (the PMA scrubber) names the device-default VAS through a TRANSIENT handle: RM
    allocs `FERMI_VASPACE_A` (index `GPU_DEVICE`), publishes its PDEs, and FREES it before the channel
