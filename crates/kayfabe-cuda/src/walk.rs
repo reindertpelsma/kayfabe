@@ -35,6 +35,51 @@ const SYM_BEGIN: &str = "_Z15kf_begin_kernelP5KfDev";
 const SYM_WALK: &str = "_Z14kf_walk_kernel6KfArgs";
 const SYM_DIFF: &str = "_Z14kf_diff_kernel6KfArgs";
 
+// ★ w826 — THE PARALLEL WALK's entry points (mangled; `kf_walk.cu`'s `kf_run_parallel`).
+const SYM_PAR: [&str; 9] = [
+    "_Z11kf_par_seed6KfArgsP5KfEntPjS2_",
+    "_Z13kf_par_expand6KfArgsjPK5KfEntPKjPS0_jPjS6_S6_",
+    "_Z11kf_par_scanPKjS0_PjS1_",
+    "_Z14kf_par_compact6KfArgsPK5KfEntPKjS4_S4_S4_PS0_j",
+    "_Z11kf_par_leaf6KfArgsPK5KfEntPKjP8KfMapRunjPjP5KfSum",
+    "_Z12kf_par_heads6KfArgsPK5KfEntPK5KfSumPKjPjPh",
+    "_Z12kf_par_bases6KfArgsPj",
+    "_Z11kf_par_emit6KfArgsPK5KfEntPK5KfSumPKjS7_PKhS7_PK8KfMapRun",
+    "_Z11kf_par_join6KfArgsPK5KfEntPK5KfSumPKjS7_PKhS7_",
+];
+/// `kf_walk.cu` constants the parallel sequence is sized by. ⊘ Must match the `.cu`.
+const KF_DIRS: u32 = 5;
+const KF_MAX_FRONTIER: usize = 131_072;
+const KF_MAX_SCRATCH: usize = 4 << 20;
+const KF_PAR_BLOCK: u32 = 128;
+const KF_PAR_GRID: u32 = 128;
+const KF_SCAN_BLOCK: u32 = 1024;
+const KF_WARP: u32 = 32;
+const KF_MAX_ENT: u32 = 512;
+const KF_SHWORDS: u32 = KF_MAX_ENT + 64;
+/// `sizeof(KfEnt)` — 3×u64 + 2×u32 + u16 + 2×u8, padded to 8.
+const KF_ENT_BYTES: usize = 40;
+/// `sizeof(KfSum)` — 6×u64 + 4×u32.
+const KF_SUM_BYTES: usize = 64;
+
+/// The parallel walk's device scratch (`struct KfPar`).
+#[derive(Debug)]
+struct ParBufs {
+    fr: [DevBuf; 2],
+    stage: DevBuf,
+    task: DevBuf,
+    runstage: DevBuf,
+    cnt: DevBuf,
+    off: DevBuf,
+    start: DevBuf,
+    nfr: DevBuf,
+    ntask: DevBuf,
+    pdbbase: DevBuf,
+    used: DevBuf,
+    sum: DevBuf,
+    head: DevBuf,
+}
+
 /// How large a report this driver asks the kernel for.
 #[derive(Debug, Clone, Copy)]
 pub struct WalkCfg {
@@ -295,6 +340,8 @@ pub struct WalkKernel {
     f_begin: Func,
     f_walk: Func,
     f_diff: Func,
+    f_par: [Func; 9],
+    par: ParBufs,
     fmt: KfFormat,
     cfg: WalkCfg,
     dev: DevBuf,
@@ -402,6 +449,10 @@ impl WalkKernel {
         let f_begin = cu.module_function(module, SYM_BEGIN)?;
         let f_walk = cu.module_function(module, SYM_WALK)?;
         let f_diff = cu.module_function(module, SYM_DIFF)?;
+        let mut f_par = [f_begin; 9];
+        for (i, sym) in SYM_PAR.iter().enumerate() {
+            f_par[i] = cu.module_function(module, sym)?;
+        }
 
         let tbl_runs = cfg.runs_per_pdb as usize * KF_MAX_PDB;
         let a = |bytes: usize, what: &'static str| -> Result<DevBuf, CudaError> {
@@ -438,6 +489,24 @@ impl WalkKernel {
         // The device-side configuration, written exactly as the `.cu`'s `kf_create` does.
         // ⊘ Same padding hazard as `args_for`: `KfDev` carries 4 uninitialised bytes and is
         // memcpy'd to the device. `..Default::default()` fills FIELDS, never padding.
+        let par = ParBufs {
+            fr: [
+                a(KF_MAX_FRONTIER * KF_ENT_BYTES, "cuMemAlloc(par.fr0)")?,
+                a(KF_MAX_FRONTIER * KF_ENT_BYTES, "cuMemAlloc(par.fr1)")?,
+            ],
+            stage: a(KF_MAX_FRONTIER * KF_ENT_BYTES, "cuMemAlloc(par.stage)")?,
+            task: a(KF_MAX_FRONTIER * KF_ENT_BYTES, "cuMemAlloc(par.task)")?,
+            runstage: a(KF_MAX_SCRATCH * core::mem::size_of::<KfMapRun>(), "cuMemAlloc(par.runstage)")?,
+            cnt: a(KF_MAX_FRONTIER * 4, "cuMemAlloc(par.cnt)")?,
+            off: a(KF_MAX_FRONTIER * 4, "cuMemAlloc(par.off)")?,
+            start: a(KF_MAX_FRONTIER * 4, "cuMemAlloc(par.start)")?,
+            nfr: a(4 * 4, "cuMemAlloc(par.nfr)")?,
+            ntask: a(4, "cuMemAlloc(par.ntask)")?,
+            pdbbase: a(KF_MAX_PDB * 4, "cuMemAlloc(par.pdbbase)")?,
+            used: a(4 * 4, "cuMemAlloc(par.used)")?,
+            sum: a(KF_MAX_FRONTIER * KF_SUM_BYTES, "cuMemAlloc(par.sum)")?,
+            head: a(KF_MAX_FRONTIER, "cuMemAlloc(par.head)")?,
+        };
         let mut h: KfDev = crate::driver_unsafe::zeroed();
         let h = KfDev {
             runs_per_pdb: cfg.runs_per_pdb,
@@ -455,6 +524,8 @@ impl WalkKernel {
             f_begin,
             f_walk,
             f_diff,
+            f_par,
+            par,
             fmt,
             cfg,
             dev,
@@ -546,14 +617,12 @@ impl WalkKernel {
             &mut dev_param,
             "cuLaunchKernel(kf_begin_kernel)",
         )?;
-        let blocks = u32::try_from(pdbs.len().div_ceil(32)).unwrap_or(1).max(1);
-        self.cu.launch(
-            self.f_walk,
-            blocks,
-            32,
-            &mut args_param,
-            "cuLaunchKernel(kf_walk_kernel)",
-        )?;
+        // ★★★★★ w826 — THE PARALLEL WALK (`kf_run_parallel`, ported to the driver API).
+        // `[w726]` ~0.6 ms fixed cost vs the serial walk's one-thread-per-space (2.4 ms on the
+        // live guest, 450 ms on the measured working set). The serial kernel stays in the PTX
+        // for the scoped path the .cu keeps; this refresh is never scoped.
+        let _ = self.f_walk;
+        self.run_parallel(&args, u32::try_from(pdbs.len()).unwrap_or(0))?;
         self.cu.launch(
             self.f_diff,
             1,
@@ -632,6 +701,159 @@ impl WalkKernel {
     ///
     /// # Errors
     /// The CUDA error, if the copy fails.
+    fn run_parallel(&self, a: &KfArgs, npdb: u32) -> Result<(), CudaError> {
+        let p = |v: u64| v.to_le_bytes().to_vec();
+        let u = |v: u32| v.to_le_bytes().to_vec();
+        let ab = || param_bytes(a);
+        let par = &self.par;
+        let shm = (KF_PAR_BLOCK / KF_WARP) * KF_SHWORDS * 8;
+        let [f_seed, f_expand, f_scan, f_compact, f_leaf, f_heads, f_bases, f_emit, f_join] =
+            self.f_par;
+        self.cu.launch_args(
+            f_seed,
+            npdb.div_ceil(128).max(1),
+            128,
+            0,
+            &mut [ab(), p(par.fr[0].ptr), p(par.nfr.ptr), p(par.used.ptr)],
+            "cuLaunchKernel(kf_par_seed)",
+        )?;
+        let mut src = 0usize;
+        for k in u32::from(self.fmt.first_dir)..KF_DIRS {
+            let nin = par.nfr.ptr + (src as u64) * 4;
+            let nout = par.nfr.ptr + ((src ^ 1) as u64) * 4;
+            let dst = if k + 1 < KF_DIRS { par.fr[src ^ 1].ptr } else { par.task.ptr };
+            self.cu.launch_args(
+                f_expand,
+                KF_PAR_GRID,
+                KF_PAR_BLOCK,
+                shm,
+                &mut [
+                    ab(),
+                    u(k),
+                    p(par.fr[src].ptr),
+                    p(nin),
+                    p(par.stage.ptr),
+                    u(KF_MAX_FRONTIER as u32),
+                    p(par.used.ptr),
+                    p(par.start.ptr),
+                    p(par.cnt.ptr),
+                ],
+                "cuLaunchKernel(kf_par_expand)",
+            )?;
+            self.cu.launch_args(
+                f_scan,
+                1,
+                KF_SCAN_BLOCK,
+                0,
+                &mut [p(par.cnt.ptr), p(nin), p(par.off.ptr), p(nout)],
+                "cuLaunchKernel(kf_par_scan)",
+            )?;
+            self.cu.launch_args(
+                f_compact,
+                KF_PAR_GRID,
+                KF_PAR_BLOCK,
+                0,
+                &mut [
+                    ab(),
+                    p(par.stage.ptr),
+                    p(par.start.ptr),
+                    p(par.cnt.ptr),
+                    p(par.off.ptr),
+                    p(nin),
+                    p(dst),
+                    u(KF_MAX_FRONTIER as u32),
+                ],
+                "cuLaunchKernel(kf_par_compact)",
+            )?;
+            if k + 1 < KF_DIRS {
+                src ^= 1;
+            } else {
+                self.cu.memcpy_d2d(par.ntask.ptr, nout, 4, "cuMemcpyDtoD(ntask)")?;
+            }
+            self.cu.memset_d8(par.used.ptr, 0, 4, "cuMemsetD8(used)")?;
+        }
+        self.cu.launch_args(
+            f_leaf,
+            KF_PAR_GRID,
+            KF_PAR_BLOCK,
+            shm,
+            &mut [
+                ab(),
+                p(par.task.ptr),
+                p(par.ntask.ptr),
+                p(par.runstage.ptr),
+                u(KF_MAX_SCRATCH as u32),
+                p(par.used.ptr),
+                p(par.sum.ptr),
+            ],
+            "cuLaunchKernel(kf_par_leaf)",
+        )?;
+        self.cu.launch_args(
+            f_heads,
+            KF_PAR_GRID,
+            128,
+            0,
+            &mut [
+                ab(),
+                p(par.task.ptr),
+                p(par.sum.ptr),
+                p(par.ntask.ptr),
+                p(par.cnt.ptr),
+                p(par.head.ptr),
+            ],
+            "cuLaunchKernel(kf_par_heads)",
+        )?;
+        self.cu.launch_args(
+            f_scan,
+            1,
+            KF_SCAN_BLOCK,
+            0,
+            &mut [p(par.cnt.ptr), p(par.ntask.ptr), p(par.off.ptr), p(par.nfr.ptr + 12)],
+            "cuLaunchKernel(kf_par_scan tasks)",
+        )?;
+        self.cu.launch_args(
+            f_bases,
+            1,
+            1,
+            0,
+            &mut [ab(), p(par.pdbbase.ptr)],
+            "cuLaunchKernel(kf_par_bases)",
+        )?;
+        self.cu.launch_args(
+            f_emit,
+            KF_PAR_GRID,
+            KF_PAR_BLOCK,
+            0,
+            &mut [
+                ab(),
+                p(par.task.ptr),
+                p(par.sum.ptr),
+                p(par.ntask.ptr),
+                p(par.off.ptr),
+                p(par.head.ptr),
+                p(par.pdbbase.ptr),
+                p(par.runstage.ptr),
+            ],
+            "cuLaunchKernel(kf_par_emit)",
+        )?;
+        self.cu.launch_args(
+            f_join,
+            KF_PAR_GRID,
+            128,
+            0,
+            &mut [
+                ab(),
+                p(par.task.ptr),
+                p(par.sum.ptr),
+                p(par.ntask.ptr),
+                p(par.off.ptr),
+                p(par.head.ptr),
+                p(par.pdbbase.ptr),
+            ],
+            "cuLaunchKernel(kf_par_join)",
+        )
+    }
+
     pub fn ack(&mut self, generation: u64) -> Result<(), CudaError> {
         let at = self.dev.ptr + ACKED_BYTE_OFFSET;
         self.cu

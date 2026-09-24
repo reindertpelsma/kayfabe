@@ -115,6 +115,7 @@ pub struct Cuda {
     pub(crate) cuMemsetD8: unsafe extern "C" fn(CUdeviceptr, u8, usize) -> CUresult,
     pub(crate) cuMemcpyHtoD: unsafe extern "C" fn(CUdeviceptr, *const c_void, usize) -> CUresult,
     pub(crate) cuMemcpyDtoH: unsafe extern "C" fn(*mut c_void, CUdeviceptr, usize) -> CUresult,
+    pub(crate) cuMemcpyDtoD: unsafe extern "C" fn(CUdeviceptr, CUdeviceptr, usize) -> CUresult,
     pub(crate) cuLaunchKernel: unsafe extern "C" fn(
         *mut c_void,
         c_uint,
@@ -295,6 +296,7 @@ impl Cuda {
             cuMemsetD8: sym!("cuMemsetD8_v2"),
             cuMemcpyHtoD: sym!("cuMemcpyHtoD_v2"),
             cuMemcpyDtoH: sym!("cuMemcpyDtoH_v2"),
+            cuMemcpyDtoD: sym!("cuMemcpyDtoD_v2"),
             cuLaunchKernel: sym!("cuLaunchKernel"),
             // ⊘ Resolved with a NULL-tolerant lookup, unlike `sym!`, for the reason the field
             // docs give: absent is an ANSWER here, not a load failure.
@@ -596,6 +598,71 @@ impl Cuda {
                 core::ptr::null_mut(),
             )
         }
+    }
+
+    /// ★ w826 — launch with SEVERAL by-value parameters and dynamic shared memory: the parallel
+    /// walk's kernels take pointers and scalars beside `KfArgs`. Each element of `params` is
+    /// one parameter's bytes, in declaration order.
+    ///
+    /// # Errors
+    /// [`CudaError::Refused`].
+    pub fn launch_args(
+        &self,
+        f: Func,
+        grid: u32,
+        block: u32,
+        shmem: u32,
+        params: &mut [Vec<u8>],
+        what: &'static str,
+    ) -> Result<(), CudaError> {
+        let mut p: Vec<*mut c_void> = params
+            .iter_mut()
+            .map(|b| b.as_mut_ptr().cast::<c_void>())
+            .collect();
+        // SAFETY: every element of `p` points into a live, exclusively-borrowed Vec in
+        // `params`, each holding one by-value parameter of the kernel `f`; the driver copies
+        // them during the call. The array has exactly one entry per parameter.
+        let r = unsafe {
+            (self.cuLaunchKernel)(
+                f.0 as *mut c_void,
+                grid,
+                1,
+                1,
+                block,
+                1,
+                1,
+                shmem,
+                core::ptr::null_mut(),
+                p.as_mut_ptr(),
+                core::ptr::null_mut(),
+            )
+        };
+        self.check(what, r)
+    }
+
+    /// `cuMemcpyDtoD_v2` — device to device, stream-ordered with the kernels around it.
+    ///
+    /// # Errors
+    /// [`CudaError::Refused`].
+    pub fn memcpy_d2d(
+        &self,
+        dst: CUdeviceptr,
+        src: CUdeviceptr,
+        n: usize,
+        what: &'static str,
+    ) -> Result<(), CudaError> {
+        // SAFETY: both are live device allocations of at least `n` bytes (callers size them
+        // from the same constants); the driver reads and writes device memory only.
+        self.check(what, unsafe { (self.cuMemcpyDtoD)(dst, src, n) })
+    }
+
+    /// `cuMemsetD8_v2` over `n` bytes.
+    ///
+    /// # Errors
+    /// [`CudaError::Refused`].
+    pub fn memset_d8(&self, dst: CUdeviceptr, v: u8, n: usize, what: &'static str) -> Result<(), CudaError> {
+        // SAFETY: `dst` is a live device allocation of at least `n` bytes.
+        self.check(what, unsafe { (self.cuMemsetD8)(dst, v, n) })
     }
 
     /// As [`Cuda::launch_raw`], checked.
