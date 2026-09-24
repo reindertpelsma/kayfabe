@@ -6880,7 +6880,7 @@ impl SharedDevice {
         pid: ProcId,
         gpu: GpuId,
         pdb: Pdb,
-        leaf: crate::completion_watch::FbLeaf,
+        leaf: Option<crate::completion_watch::FbLeaf>,
     ) -> Result<kayfabe_isolate::BareVaSpace, FwdFault> {
         // ★★★★★ **w779 — REFUSE AN UNDECLARED PDB BEFORE ANYTHING IS MINTED.**
         //
@@ -7045,6 +7045,11 @@ impl SharedDevice {
                 // ★★★ REPLACEMENT ASSERT 2 — does THIS `Vas` describe the leaf the caller
                 // is about to have a slice placed for? ⊘ Absence is permitted and counted
                 // (see the type doc); DISAGREEMENT is refused.
+                // ⊘ w826 — `None` from the v3 walk path: the space is handed over because the
+                // guest's own tables (walked in place) name it, not because the old address
+                // table agrees about one leaf. The table cross-check stays for the old caller
+                // until the cutover deletes it.
+                if let Some(leaf) = leaf {
                 match vas.table.binding_at(kayfabe_arch::ids::GpuVa(leaf.va)) {
                     None => {
                         HANDOVER_LEAF_UNTABLED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -7067,6 +7072,7 @@ impl SharedDevice {
                             return;
                         }
                     }
+                }
                 }
                 let host_vas = vas.host_vas;
                 // ⊘ `checkout_with_pending_release` and not a bare checkout: it is the only

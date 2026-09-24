@@ -5672,7 +5672,7 @@ fn doorbell_publish_loop(
         if born > 0 {
             let mut ctx = port.publish_ctx();
             ctx.vas_publish = VasPublishArm::Drain;
-            if let Some(line) = ctx.publish_vas_rows(0, None, off_vcpu) {
+            if let Some(line) = Some(port.publish_walked(off_vcpu)) {
                 eprintln!(
                     "kayfabe: BIRTH-PUBLISH (off-vCPU) born={born} {}",
                     line.replace("\nkayfabe: ", "  ⏎  ")
@@ -5787,7 +5787,7 @@ fn doorbell_publish_loop(
             // ⚠ It is also this build's CONTENT MARKER: the writer-side trigger is the only
             // thing that can emit `vas_changed=`, so a boot whose log lacks it ran the old
             // promote-only latch whatever its revision stamp claims.
-            if let Some(line) = ctx.publish_vas_rows(token, None, off_vcpu) {
+            if let Some(line) = Some(port.publish_walked(off_vcpu)) {
                 eprintln!(
                     "kayfabe: RPCBIND-PUBLISH (off-vCPU) vas_changed={token} {}",
                     line.replace("\nkayfabe: ", "  ⏎  ")
@@ -6071,7 +6071,8 @@ fn doorbell_publish_loop(
             ctx.vas_publish = VasPublishArm::Drain;
             let t_premap = std::time::Instant::now();
             let t_pub = std::time::Instant::now();
-            let published = ctx.publish_vas_rows(token, None, off_vcpu);
+            // ★ w826 — the v3 publisher: GPU walk in place + reconcile (was `publish_vas_rows`).
+            let published = Some(port.publish_walked(off_vcpu));
             let publish_ms = t_pub.elapsed().as_secs_f64() * 1e3;
             // ★ One line per firing, and it carries the COUNT: the refresh's three fragments
             // are the same ones the doorbell's `PT-DECODE token=` line prints, so a reader can
@@ -9907,7 +9908,7 @@ impl SharedDoorbell {
                             // informative than `None` — it distinguishes "no facts" from "facts
                             // without a pdb", which is the distinction that produced this
                             // finding at all.
-                            (Some(r), ctx.publish_vas_rows(token, Some(&facts), w))
+                            (Some(r), Some(self.publish_walked(w)))
                         }
                         None => (None, None),
                     };
@@ -15078,6 +15079,46 @@ fn publish_guest_ram_slices(
     )
 }
 
+/// ★★★★★ w826 — THE HOST RANGE FOR ONE GUEST VA SPACE, WITHOUT THE ADDRESS TABLE.
+///
+/// The v3 publisher's first step for a root the walk names: the per-proc bare space is handed
+/// to the scratchpad (and, on the K arm, the birth client first), which dups it and builds its
+/// own range. Same verbs as `map_store_slice_for_leaf`, minus the one-leaf cross-check against
+/// the old table — the guest's own tables, walked in place, are the authority now.
+#[cfg(feature = "host-isolates")]
+fn ensure_store_vas(
+    device: &kayfabe_rt::device::SharedDevice,
+    sp: &crate::storemap::StoreMapPort,
+    pid: kayfabe_core::ProcId,
+    pdb: kayfabe_rt::Pdb,
+) -> Result<kayfabe_isolate::HostHandle, String> {
+    if let Some(h) = device.store_vas(DOORBELL_TARGET_GPU, pdb) {
+        return Ok(h);
+    }
+    let bare = device
+        .vaspace_handover(pid, DOORBELL_TARGET_GPU, pdb, None)
+        .map_err(|e| format!("handover refused: {e:?}"))?;
+    let k_arm = crate::scratchpad::selected_vas_owner()
+        .map(crate::scratchpad::VasOwner::birth_client)
+        .unwrap_or(false);
+    if k_arm && !sp.has_birth_client(pid.0) {
+        let minted = device
+            .mint_birth_client(pid, DOORBELL_TARGET_GPU)
+            .map_err(|e| format!("birth client mint refused: {e:?}"))?;
+        if minted.isolate_client != bare.client {
+            return Err(format!(
+                "birth client {:#010x} != hand-over client {:#010x}",
+                minted.isolate_client, bare.client
+            ));
+        }
+        sp.adopt_birth_client(minted, pid.0)
+            .map_err(|e| format!("birth client refused: {e:?}"))?;
+    }
+    let range = sp.adopt(bare).map_err(|e| format!("adopt refused: {e:?}"))?;
+    let _ = device.set_store_vas(DOORBELL_TARGET_GPU, pdb, range);
+    Ok(range)
+}
+
 #[cfg(feature = "host-isolates")]
 fn map_store_slice_for_leaf(
     head: &str,
@@ -15138,7 +15179,7 @@ fn map_store_slice_for_leaf(
     let store_vas = match device.store_vas(DOORBELL_TARGET_GPU, pdb) {
         Some(h) => h,
         None => {
-            let bare = match device.vaspace_handover(pid, DOORBELL_TARGET_GPU, pdb, leaf) {
+            let bare = match device.vaspace_handover(pid, DOORBELL_TARGET_GPU, pdb, Some(leaf)) {
                 Ok(b) => b,
                 Err(e) => {
                     STORE_HANDOVER_REFUSED.fetch_add(1, Ordering::Relaxed);
@@ -24664,5 +24705,141 @@ mod the_doorbell_default_is_the_ruling {
                 "{bad:?} must not name an arm"
             );
         }
+    }
+}
+
+#[cfg(feature = "host-isolates")]
+impl SharedDoorbell {
+    /// ★★★★★ **w826 — THE v3 PUBLISHER.** Walk every live guest root IN PLACE on the GPU and
+    /// make each host VA space say exactly what the guest's tables say, by reconciling against
+    /// our own handle ledger. No CPU read of a page table; no address table consulted.
+    ///
+    /// ⊘ A truncated or run-capped report is NOT reconciled — unmapping on partial knowledge
+    /// would take down live mappings. A table in a foreign aperture skips only its branch.
+    fn publish_walked(&self, _off_vcpu: OffVcpu) -> String {
+        use kayfabe_mmu::walkreport::RunAperture;
+        let Some(sp) = crate::storemap::store_map_port(DOORBELL_TARGET_GPU) else {
+            return "WALK-PUBLISH ⊘ no store-map port".to_string();
+        };
+        let mut roots: Vec<(kayfabe_core::ProcId, kayfabe_rt::Pdb)> = Vec::new();
+        for pid in self.device.live_pids() {
+            if pid == kayfabe_core::gpu::Gpu::SYSTEM_PROC {
+                continue;
+            }
+            for (gpu, pdb) in self.device.vas_keys(pid) {
+                if gpu == DOORBELL_TARGET_GPU && pdb.0 != 0 {
+                    roots.push((pid, pdb));
+                }
+            }
+        }
+        let mut pdbs: Vec<u64> = roots.iter().map(|(_, p)| p.0 & !0xfff).collect();
+        pdbs.sort_unstable();
+        pdbs.dedup();
+        // `KF_MAX_PDB` (kayfabe-cuda, not a dependency of this crate) — the kernel refuses more.
+        pdbs.truncate(64);
+        if pdbs.is_empty() {
+            return "WALK-PUBLISH no roots".to_string();
+        }
+        let t0 = std::time::Instant::now();
+        let report = match sp.walk_in_place(&pdbs) {
+            Ok(r) => r,
+            Err(e) => return format!("WALK-PUBLISH ⊘ walk refused: {e}"),
+        };
+        let walk_us = t0.elapsed().as_micros();
+        let fatal = report.header.refuse_mask
+            & !(kayfabe_mmu::walkreport::R_FOREIGN_AP);
+        if report.header.is_truncated() || fatal != 0 {
+            return format!(
+                "WALK-PUBLISH ⊘ NOT RECONCILED: truncated={} refuse_mask={:#x} — a partial walk \
+                 must never unmap",
+                report.header.is_truncated(),
+                report.header.refuse_mask
+            );
+        }
+        let ram_bytes = GUEST_RAM_BYTES.load(std::sync::atomic::Ordering::Relaxed);
+        let (mut mapped, mut unmapped, mut kept, mut refused, mut unresolved) = (0, 0, 0, 0, 0);
+        let mut first: Option<String> = None;
+        for (i, entry) in report.pdbs.iter().enumerate() {
+            let mut desired: Vec<crate::storemap::Desired> = Vec::new();
+            for r in report.runs_of(i) {
+                match r.aperture() {
+                    RunAperture::Vidmem => desired.push(crate::storemap::Desired {
+                        va: r.va,
+                        len: r.len,
+                        off: r.gpga,
+                        ram: false,
+                    }),
+                    RunAperture::SysmemCoherent | RunAperture::SysmemNonCoherent => {
+                        let held = self.ce.vmm.lock().unwrap_or_else(|e| e.into_inner());
+                        let (Some(vmm), Some(backing)) = (held.as_ref(), self.guest_ram_backing)
+                        else {
+                            unresolved += 1;
+                            continue;
+                        };
+                        // Page by page when the whole run does not resolve as one stated run.
+                        match vmm.resolve_guest_ram(backing, r.gpga, r.len) {
+                            Ok(run) => desired.push(crate::storemap::Desired {
+                                va: r.va,
+                                len: r.len,
+                                off: run.file_offset,
+                                ram: true,
+                            }),
+                            Err(_) => {
+                                let mut at = 0u64;
+                                while at < r.len {
+                                    match vmm.resolve_guest_ram(backing, r.gpga + at, 0x1000) {
+                                        Ok(run) => desired.push(crate::storemap::Desired {
+                                            va: r.va + at,
+                                            len: 0x1000,
+                                            off: run.file_offset,
+                                            ram: true,
+                                        }),
+                                        Err(_) => unresolved += 1,
+                                    }
+                                    at += 0x1000;
+                                }
+                            }
+                        }
+                    }
+                    RunAperture::Peer => unresolved += 1,
+                }
+            }
+            for &(pid, pdb) in roots.iter().filter(|(_, p)| p.0 & !0xfff == entry.pdb) {
+                let vas = match ensure_store_vas(&self.device, &sp, pid, pdb) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        refused += 1;
+                        first.get_or_insert(e);
+                        continue;
+                    }
+                };
+                let rec = sp.reconcile(vas, &desired, ram_bytes);
+                mapped += rec.mapped;
+                unmapped += rec.unmapped;
+                kept += rec.kept;
+                refused += rec.refused;
+                if let Some(f) = rec.first_refusal {
+                    first.get_or_insert(f);
+                }
+            }
+        }
+        format!(
+            "WALK-PUBLISH roots={} runs={} walk_us={walk_us} total_us={} mapped={mapped} \
+             unmapped={unmapped} kept={kept} refused={refused} unresolved={unresolved} \
+             foreign_ap={}{}",
+            pdbs.len(),
+            report.runs.len(),
+            t0.elapsed().as_micros(),
+            report.header.refuse_mask & kayfabe_mmu::walkreport::R_FOREIGN_AP != 0,
+            first.map(|f| format!(" FIRST-REFUSAL[{f}]")).unwrap_or_default()
+        )
+    }
+}
+
+#[cfg(not(feature = "host-isolates"))]
+impl SharedDoorbell {
+    /// Without a host plane there is no GPU to walk on and nothing to publish into.
+    fn publish_walked(&self, _off_vcpu: OffVcpu) -> String {
+        "WALK-PUBLISH ⊘ host_isolates=NO: no scratchpad, no walk".to_string()
     }
 }
