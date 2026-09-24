@@ -1,0 +1,36 @@
+cat: /workspace/bench/w825t_suite.out: input file is output file
+ev=518726d3
+ARM                          VERDICT   secs  why
+--timer                      PASS      26s   26s
+--engines                    PASS      33s   33s
+--doorbell-census            PASS      34s   34s
+--gpu-info-sweep             PASS      26s   26s
+--bus-info-sweep             PASS      30s   30s
+--concurrency                TIMEOUT   45s   budget 45s exceeded — a timeout IS a crash
+--defer-liveness             TIMEOUT   45s   budget 45s exceeded — a timeout IS a crash
+--blockage-coverage          PASS      27s   27s
+--alias-two-vas              PASS      25s   25s
+--alias-unmap-observe        PASS      27s   27s
+--map-propagation            PASS      27s   27s
+--late-map-race              PASS      28s   28s
+--missing-page-fault         PASS      30s   30s
+--uvm-invalidate             PASS      33s   33s
+--uvm-mean                   PASS      43s   43s
+--executor-vas               PASS      26s   26s
+--guest-ring-channel         PASS      27s   27s
+--dictated-ring              PASS      25s   25s
+--dictated-ring-negative     PASS      26s   26s
+--ce-client                  PASS      27s   27s
+--ce-client-guest-ram        TIMEOUT   45s   budget 45s exceeded — a timeout IS a crash
+--guest-ram-pin              PASS      26s   26s
+--bar1-crossing              PASS      27s   27s
+--atomics-probe              PASS      26s   26s
+--pce-mask-probe             PASS      26s   26s
+--gpga-reserve-probe         TIMEOUT   46s   budget 45s exceeded — a timeout IS a crash
+--map-stress                 PASS      39s   39s
+--concurrent-fuzz            TIMEOUT   45s   budget 45s exceeded — a timeout IS a crash
+--cross-client-leak          PASS      27s   27s
+--rpc-mixed-allocs           PASS      30s   30s
+
+FAST_SUITE_PASS=25 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=5 NOTRUN=0 ARMS=30
+FAST_SUITE_RC=1

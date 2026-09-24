@@ -1,0 +1,117 @@
+=== boot_capture tag=w825llm at 2026-09-24T01:46:01+00:00 ===
+=== source revision: 518726d3 ===
+=== qemu binary: -rwxr-xr-x 1 root root 92821296 Sep 24 01:16 /workspace/bench/qemu-build/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: kayfabe-rev:518726d321d519e1c82dab8f2456be40382db5b0 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /root/kayfabe/scripts/bench/boot_nvkvm.sh  sha256=be260f3bcd3b4dd3
+    used: /root/kayfabe/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Thu Sep 24 01:46:11 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  ERR!                           Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /  10240MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Sep 24 01:46 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Sep 24 01:46 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Sep 24 01:46 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Sep 24 01:46 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Sep 24 01:46 .
+drwxr-xr-x 18 root root   4000 Sep 24 01:46 ..
+cr--------  1 root root 240, 1 Sep 24 01:46 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Sep 24 01:46 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /root/kayfabe/scripts/bench/w392_llm.sh at 2026-09-24T01:46:18+00:00 ===
+=== ★★★★★ w392 LLM — graded on TEXT against a same-boot CPU oracle ===
+HOST_XID_BEFORE=0
+0
+--- 4x4 scale discriminator (before any weight transfer) ---
+    MINMM_OK=0
+    MINMM_EXC=RuntimeError: CUDA driver initialization failed, you might not have a CUDA gpu.
+HOST_XID_AFTER_MINMM=0
+0
+--- GPU run ---
+    LLM_DEVICE=cuda
+    TORCH_CUDA_AVAILABLE=True
+    TORCH_DEV_COUNT=1
+    Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+    [transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+    Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:   0%|          | 1/290 [00:15<1:16:13, 15.83s/it]Loading weights:  63%|██████▎   | 184/290 [00:16<00:06, 16.26it/s]Loading weights:  93%|█████████▎| 269/290 [00:20<00:01, 17.23it/s]Loading weights: 100%|██████████| 290/290 [00:21<00:00, 13.67it/s]
+    LLM_PARAM_DEVICE=cuda
+    LLM_RATIO_ELIGIBLE=1
+    LLM_TEXT= ______. A. Paris B. London C. New York D
+    LLM_OK=1
+    LLM_TOKENS=16
+    LLM_MS=9511.5
+    LLM_RC=0
+HOST_XID_AFTER_GPU=0
+0
+--- CPU oracle run (same weights, same prompt, same greedy decode) ---
+    LLM_DEVICE=cpu
+    TORCH_CUDA_AVAILABLE=True
+    TORCH_DEV_COUNT=1
+    Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+    [transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+    Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:   0%|          | 1/290 [00:17<1:23:20, 17.30s/it]Loading weights:  76%|███████▌  | 219/290 [00:17<00:04, 17.11it/s]Loading weights:  87%|████████▋ | 252/290 [00:19<00:02, 17.63it/s]Loading weights:  92%|█████████▏| 267/290 [00:20<00:01, 16.49it/s]Loading weights:  95%|█████████▌| 276/290 [00:21<00:00, 17.63it/s]Loading weights:  98%|█████████▊| 285/290 [00:21<00:00, 16.98it/s]Loading weights: 100%|██████████| 290/290 [00:21<00:00, 13.29it/s]
+    LLM_PARAM_DEVICE=cpu
+    LLM_RATIO_ELIGIBLE=0
+    LLM_TEXT= ______. A. Paris B. London C. New York D
+    LLM_OK=1
+    LLM_TOKENS=16
+    LLM_MS=1211.3
+    LLM_RC=0
+
+W392_GPU_TOKENS=16  W392_GPU_RC=0
+W392_CPU_TOKENS=16  W392_CPU_RC=0
+W392_GPU_TEXT=[ ______. A. Paris B. London C. New York D]
+W392_CPU_TEXT=[ ______. A. Paris B. London C. New York D]
+W392_GPU_MS=9511.5  W392_GPU_TOKS_PER_S=1.682
+W392_CPU_MS=1211.3  W392_CPU_TOKS_PER_S=13.209  ⊘ CPU is a CORRECTNESS oracle, NOT a perf baseline
+W392_TPS_RATIO_GPU_OVER_CPU=0.127
+    ⊘ decode only — EXCLUDES model load and the .to(device) weight upload.
+    ⊘ FOR THIS BOOT'S ARMING (VAS_PUBLISH=drain, PT_SWEEP=on). Quote the arming or don't quote it.
+W392_MINMM_SUM=ABSENT (64 = the small path is CORRECT)
+W392_XIDS=0
+0/0
+0/0
+0 (before/after-4x4/after-gpu)
+=== ★★★★★ THE VERDICT — pre-registered, stated once ===
+    W392_OUTCOME=(P) ★★★★★ PASS — 16 tokens AND the text matches the CPU
+        oracle EXACTLY. The host GPU did the arithmetic, through our emulated device,
+        correctly. ⊘ Un-forgeable by a copy, a fill or a completion we wrote.
+=== w392 llm hook DONE ===
+HOOK_RC=0
+=== GUEST dmesg AFTER the workload (phase 3b captured 36 lines BEFORE it) ===
+GUEST_DMESG_AFTER_LINES=312
+GUEST_DMESG_AFTER_NVRM=246
+GUEST_DMESG_WORKLOAD_DELTA=276
+=== HOST dmesg delta for this boot (watermark 1401 → 3276) ===
+HOST_DMESG_LINES=1875
+HOST_DMESG_NVRM=1875
+HOST_DMESG_XID=0
+0
