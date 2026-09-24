@@ -133,6 +133,15 @@ impl Trigger {
         seq
     }
 
+    /// ★ P4: the sequence the trigger is currently armed at, or `None` when idle — what the VA
+    /// manager's thread reads on its wake to learn WHICH request to complete, so the vCPU never
+    /// has to enqueue anything (the guest serialises invalidates under its own lock; a second arm
+    /// before the first completes makes the first `Superseded` by construction).
+    #[inline]
+    pub fn armed_seq(&self) -> Option<u64> {
+        self.armed_at.load(Ordering::Acquire).checked_sub(1)
+    }
+
     /// The guest's spin-read. Non-zero means "still working".
     #[inline]
     pub fn read(&self) -> u64 {

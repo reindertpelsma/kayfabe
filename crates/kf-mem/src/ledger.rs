@@ -306,6 +306,35 @@ pub trait MapTarget {
     /// # Errors
     /// The host's refusal, by name.
     fn invalidate(&self) -> Result<(), String>;
+
+    /// ★ P4: the VA extent `[0, extent)` this target can express, or `None` for a whole GPU VA
+    /// space. A CPU window (the guest's BAR2 aperture) shows only the VAs its PCI BAR decodes:
+    /// a walked leaf above that is real in the guest's tables but has no CPU address, so the VA
+    /// manager CLIPS it (counted in `VaStats::clipped_bytes`) instead of refusing the space.
+    fn va_extent(&self) -> Option<u64> {
+        None
+    }
+}
+
+/// ★ Cut walked leaves `(va, at, len, ap)` to `[0, extent)`: a leaf wholly above is dropped, a
+/// leaf crossing the end is shortened (its backing offset is unchanged — it starts at the same
+/// VA). Returns the kept leaves and the bytes cut.
+#[must_use]
+pub fn clip_leaves(leaves: &[(u64, u64, u64, u8)], extent: u64) -> (Vec<(u64, u64, u64, u8)>, u64) {
+    let mut cut = 0u64;
+    let mut out = Vec::with_capacity(leaves.len());
+    for &(va, at, len, ap) in leaves {
+        let end = va.saturating_add(len);
+        if va >= extent {
+            cut = cut.saturating_add(len);
+        } else if end > extent {
+            cut = cut.saturating_add(end - extent);
+            out.push((va, at, extent - va, ap));
+        } else {
+            out.push((va, at, len, ap));
+        }
+    }
+    (out, cut)
 }
 
 /// ★ The GPU VA-space target: one host VA space, the store object, and the guest-RAM object.

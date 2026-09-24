@@ -212,6 +212,22 @@ impl InvalidatePort {
         }
     }
 
+    /// ★ P4: the request the trigger is armed for RIGHT NOW, rebuilt from the latched cells —
+    /// `None` when idle. The VA manager's thread calls this on its wake instead of receiving a
+    /// queued request, so the vCPU's whole cost stays `write` + one wake.
+    ///
+    /// ⚠ Sound because the latches are written BEFORE the trigger arms (the guest's own order,
+    /// `kgmmuCommitTlbInvalidate_TU102`) and the guest issues the next invalidate only after this
+    /// one reads idle or times out — in which case this one is `Superseded` and the rebuilt
+    /// request names the LATER sequence, which is the one that must be served.
+    #[must_use]
+    pub fn armed_request(&self) -> Option<InvalidateRequest> {
+        let seq = self.trigger.armed_seq()?;
+        let raw = (self.word.read() as u32) | TRIGGER_BIT;
+        let inval = Invalidate::decode(raw, self.pdb_lo.read() as u32, self.pdb_hi.read() as u32);
+        Some(InvalidateRequest { seq, inval })
+    }
+
     /// vCPU, a read at BAR0 `offset` (served from the shadow page in production). `None` when
     /// the offset is not one of the three.
     #[must_use]
@@ -283,6 +299,25 @@ mod tests {
         assert_eq!(p.write(p.regs().trigger, 0b11), PortWrite::Latched);
         assert_eq!(p.trigger().read(), 0);
         assert_eq!(p.write(0x1234, 0), PortWrite::NotOurs);
+    }
+
+    #[test]
+    fn the_armed_request_is_rebuilt_from_the_latches_and_names_the_latest_arm() {
+        let p = port();
+        let r = p.regs();
+        assert_eq!(p.armed_request(), None, "idle");
+        let (lo, hi) = Invalidate::encode_pdb(0x2_F339_2000, PdbAperture::Vidmem);
+        p.write(r.pdb, lo);
+        p.write(r.upper_pdb, hi);
+        // `[cap3 #159730]` the guest's BAR2 invalidate word.
+        let PortWrite::Publish(a) = p.write(r.trigger, 0x8001_0005) else { panic!() };
+        assert_eq!(p.armed_request(), Some(a));
+        assert_eq!(a.inval.pdb, 0x2_F339_2000);
+        assert!(a.inval.all_va && a.inval.hubtlb_only && !a.inval.all_pdb);
+        let PortWrite::Publish(b) = p.write(r.trigger, 0x8001_0005) else { panic!() };
+        assert_eq!(p.armed_request().map(|x| x.seq), Some(b.seq), "the later arm");
+        assert_eq!(p.trigger().complete(b.seq), ClearOutcome::Cleared);
+        assert_eq!(p.armed_request(), None);
     }
 
     /// §5.5's corruption: A times out in the guest, B is issued, A's work finishes. A's clear

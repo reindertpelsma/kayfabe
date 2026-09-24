@@ -34,7 +34,7 @@
 //! ★ Two exceptions, both because we hold nothing to be stale: a PDB no object carries
 //! ([`VaStats::named_missed`]) and a batch in which no named space has a root.
 
-use crate::ledger::{Applied, Ledger, MapTarget, desired_from_leaves, plan_reconcile};
+use crate::ledger::{Applied, Ledger, MapTarget, clip_leaves, desired_from_leaves, plan_reconcile};
 use kf_trap::{ClearOutcome, InvalidateRequest, PdbAperture, Trigger};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -308,6 +308,9 @@ pub struct VaStats {
     pub refusals: Vec<String>,
     /// Worst wall time of one [`Walker::submit`] call, in ns — the cost on the manager's thread.
     pub submit_ns_max: u64,
+    /// ★ P4: walked bytes above a CPU window's extent ([`MapTarget::va_extent`]) — real in the
+    /// guest's tables, no CPU address to show them at.
+    pub clipped_bytes: u64,
 }
 
 impl VaStats {
@@ -523,7 +526,18 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 self.stats.refuse(format!("{key:?}: root {root:#x} changed during the walk; re-walking"));
                 continue;
             };
-            let desired = match desired_from_leaves(ws.leaves.iter().copied(), store, &*self.ram_offset) {
+            // ★ A CPU window shows only the VAs its BAR decodes (`MapTarget::va_extent`).
+            let clipped;
+            let leaves: &[(u64, u64, u64, u8)] = match space.target.va_extent() {
+                Some(extent) => {
+                    let (kept, cut) = clip_leaves(&ws.leaves, extent);
+                    self.stats.clipped_bytes += cut;
+                    clipped = kept;
+                    &clipped
+                }
+                None => &ws.leaves,
+            };
+            let desired = match desired_from_leaves(leaves.iter().copied(), store, &*self.ram_offset) {
                 Ok(d) => d,
                 Err(e) => {
                     failed.insert(key);
