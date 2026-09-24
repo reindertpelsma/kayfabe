@@ -19748,8 +19748,17 @@ impl SharedDoorbell {
                     u64::from_str_radix(v.trim_start_matches("0x"), 16).ok()
                 }) {
                     let hit = desired.iter().find(|d| d.va <= pv && pv < d.va + d.len);
+                    // DIAGNOSTIC (cutover branch only): the CPU descent beside the GPU answer.
+                    let cpu = self
+                        .plane
+                        .upgrade()
+                        .map(|pl| match pl.root_from_declared_pdb(pdb.0 & !0xfff) {
+                            Ok(root) => pl.walk_trace_from_root(&root, pv),
+                            Err(e) => format!(" root⊘{e:?}"),
+                        })
+                        .unwrap_or_default();
                     eprintln!(
-                        "kayfabe: WALK-PROBE pid={} pdb={:#x} va={pv:#x} desired={:?}",
+                        "kayfabe: WALK-PROBE pid={} pdb={:#x} va={pv:#x} desired={:?} cpu={cpu}",
                         pid.0,
                         pdb.0,
                         hit
