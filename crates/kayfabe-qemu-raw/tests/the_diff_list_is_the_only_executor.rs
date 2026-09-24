@@ -123,10 +123,8 @@ fn the_bind_path_uses_the_address_rm_chose() {
 
     let shim = code_of("src/shim.rs");
     // ★★★ The bind path must consume `placed`, and must NOT re-substitute the request.
-    // ⊘ w826 — the store-slice bind path (`map_store_slice_for_leaf`) is gone with the
-    // table-driven publisher; the remaining consumer of RM's answer is `map_ram_slice`.
     assert!(
-        storemap.contains("done.placed"),
+        shim.contains("done.placed.first()"),
         "★★★★★ the bind path no longer takes RM's answer out of `AppliedOps`. This is the \
          exact regression of w758, and it is invisible to the compiler because the request \
          and the answer are both `u64`."

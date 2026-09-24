@@ -340,7 +340,7 @@ fn the_invalidate_arm_orders_unmaps_before_maps() {
              stale ones are gone — maps before unmaps.",
     );
     let publish = body
-        .find("let published = Some(port.publish_walked(off_vcpu));")
+        .find("let published = ctx.publish_vas_rows(token, None, off_vcpu);")
         .expect("★ NON-VACUITY: the publication call moved; this gate is comparing nothing");
     assert!(
         unmap_first < publish,
@@ -350,7 +350,7 @@ fn the_invalidate_arm_orders_unmaps_before_maps() {
     );
 
     let premap = body
-        .find("m.premap_bars_if_bar_changed();")
+        .find("m.premap_bars();")
         .expect("★ NON-VACUITY: `premap_bars` is gone from the invalidate arm");
     assert!(
         unmap_first < premap,

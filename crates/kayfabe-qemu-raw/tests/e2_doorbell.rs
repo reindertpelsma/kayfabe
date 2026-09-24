@@ -897,15 +897,36 @@ fn the_publication_worker_uses_an_arm_that_also_pins_guest_ram() {
         .filter(|l| !l.trim_start().starts_with("//"))
         .collect::<Vec<_>>()
         .join("\n");
-    // ⊘ w826 — the lanes no longer pick a `VasPublishArm`: every one of them publishes through
-    // `publish_walked` (GPU walk in place + reconcile), which maps store AND guest-RAM slices
-    // alike. The invariant this test guarded — no worker lane may publish vidmem while
-    // leaving guest-RAM rows unmapped — is now structural: there is one publisher.
-    assert_eq!(code.matches("ctx.vas_publish").count(), 0, "no lane selects a publish arm any more");
-    assert!(
-        code.matches(".publish_walked(").count() >= 4,
-        "all four worker lanes — rpc-bind, invalidate, channel birth and the CE-local sync \
-         point — must publish through the walk"
+    assert_eq!(
+        code.matches("ctx.vas_publish = VasPublishArm::Publish;")
+            .count(),
+        0,
+        "the worker must NOT force `Publish`: it publishes framebuffer leaves and nothing else, \
+         and its measures_pin_rate() is false, so it silently disables the only pass that pins \
+         guest-RAM operand rows"
+    );
+    assert_eq!(
+        code.matches("ctx.vas_publish = VasPublishArm::Drain;")
+            .count(),
+        4,
+        "all FOUR worker lanes must use an arm that publishes AND pins: rpc-bind, \
+         invalidate, CHANNEL BIRTH (w559), and — since w656 — THE UVM EMULATED CHANNEL, the \
+         owner's third synchronization point. ⊘ The fourth is argued for HERE, as this test \
+         demands: `[measured w651a]` with the inline passthrough doorbell on, the client took \
+         `Xid 31 ENGINE CE2 faulted @ 0x90_80000000` and the copy NEVER RETIRED, because \
+         `join_operand_fb_leaves` on the doorbell was the ONLY thing carrying a UVM-owned \
+         mapping to the host — nvidia-uvm writes its own PTEs, never touches the BAR0 \
+         invalidate register, and its `MEM_OP` transport is measured unreached \
+         (`MEMOP-CENSUS seen=0`). ⇒ The UVM emulated channel must publish before it writes \
+         the release the guest is polling for, which is the owner's rule of 2026-09-10 \
+         verbatim. ⚠ It runs ONLY with an `OffVcpu` witness in hand, so the vCPU control arm \
+         cannot reach it — the distinction is a parameter now, not a comment. A FIFTH lane \
+         must be argued for here, not appear here. ⊘ The third was added because a \
+         channel that returns to the guest is a channel the guest may ring, and `[measured \
+         w557, LLM boot]` one did: `CE2_PBDMA0` took `Xid 31 … FAULT_PDE` reading its own \
+         GPFIFO ring at an address our table binds and our own ADOPT-WHY line calls ADOPTABLE \
+         sixty-four times. ⚠ This count is the acknowledgement this test's own doc demands — \
+         a fourth lane must be argued for here, not appear here."
     );
 }
 
