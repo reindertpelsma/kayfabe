@@ -4103,6 +4103,40 @@ const CE_SERVED_LOCAL_ODD_LOG_MAX: u32 = 32;
 /// setup run and a report semaphore; the dump says how many it did not show.
 const GR_PUSHBUFFER_METHODS_MAX: usize = 256;
 
+impl CeShellState {
+    /// See [`CeShellState::owners`]. Resets the key's cursor and method state when a
+    /// DIFFERENT channel now holds it; each lock is taken alone and dropped at once.
+    fn claim_channel_key(&self, facts: &kayfabe_rt::device::CeChannelFacts) {
+        let key = (facts.proc.0, facts.chan.0);
+        let who = (facts.chan_key.0, facts.chan_key.1, facts.ring_va.unwrap_or(0));
+        let prev = self
+            .owners
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(key, who);
+        if prev.is_some_and(|p| p != who) {
+            self.cursors
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .remove(&key);
+            self.states
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .remove(&key);
+            let n = CHANNEL_KEY_REUSED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            if n < 16 {
+                eprintln!(
+                    "kayfabe: CE-CURSOR-RESET proc={} chan={} was={prev:x?} now={who:x?} ⇒ a new \
+                     channel reused this key; its GPFIFO cursor and method state start from zero",
+                    key.0, key.1
+                );
+            }
+        }
+    }
+}
+
+static CHANNEL_KEY_REUSED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 #[derive(Debug, Default)]
 struct CeShellState {
     /// The memory plane, once realized. See the type docs.
@@ -4120,6 +4154,15 @@ struct CeShellState {
     /// decode to `Opaque` — UVM binds its CE class once and fires forever after.
     states:
         std::sync::Mutex<std::collections::BTreeMap<(u32, u32), kayfabe_rt::ceutils::MethodState>>,
+    /// ★★★★★ **w825 — WHICH channel owns each `(proc, chan)` key's cursor and state.**
+    ///
+    /// `[measured w825cup3b]` `cuInit`'s UVM registered the GPU, tore its channel manager
+    /// down and registered again; the new kernel CE channel REUSED the `(proc, chan)` key and
+    /// inherited the old channel's read cursor (next=11) against its own `GP_PUT=1`, so every
+    /// doorbell was refused `RingBroughtNoEntry` and `cuInit` hung. Nothing ever removed an
+    /// entry. ⇒ A key's cursor and accumulator belong to ONE channel `(client, handle,
+    /// ring_va)`; a different channel under the same key starts from zero.
+    owners: std::sync::Mutex<std::collections::BTreeMap<(u32, u32), (u32, u32, u64)>>,
     /// ★★★★ **§16.65 — THE PER-ENGINE DOORBELL CENSUS.** See [`DoorbellCensus`].
     census: std::sync::Mutex<DoorbellCensus>,
     /// ★★★★★ **w386 — PER-CHANNEL print budgets for the locally-served doorbell line**,
@@ -8347,6 +8390,7 @@ impl SharedDoorbell {
         };
         // ⊘ The channel's OWN cursor, read and not written — the dump must not move a
         // submission the port is about to refuse.
+        self.ce.claim_channel_key(&facts);
         let cursor = *self
             .ce
             .cursors
@@ -8604,6 +8648,7 @@ impl SharedDoorbell {
         };
         // ⊘ The channel's OWN cursor, read and NOT written — this must not move a submission
         // the port is about to refuse.
+        self.ce.claim_channel_key(&facts);
         let cursor = *self
             .ce
             .cursors
@@ -9434,6 +9479,7 @@ impl SharedDoorbell {
             gp_put: userd_gp_put,
         };
         let key = (facts.proc.0, facts.chan.0);
+        self.ce.claim_channel_key(&facts);
         let cursor = *self
             .ce
             .cursors
@@ -10781,6 +10827,7 @@ impl SharedDoorbell {
         };
         // ⊘ The channel's OWN cursor and OWN accumulator, both read and NEITHER written back —
         // `ce_release_pages`' discipline, for its reasons.
+        self.ce.claim_channel_key(&f);
         let cursor = *self
             .ce
             .cursors
