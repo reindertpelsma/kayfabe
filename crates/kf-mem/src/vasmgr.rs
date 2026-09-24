@@ -138,6 +138,12 @@ impl<T: MapTarget> VasTable<T> {
         self.spaces.get(&key).and_then(|s| s.root)
     }
 
+    /// Where `key`'s mappings land.
+    #[must_use]
+    pub fn target(&self, key: VasKey) -> Option<&T> {
+        self.spaces.get(&key).map(|s| &s.target)
+    }
+
     /// OUR ledger for `key`.
     #[must_use]
     pub fn ledger(&self, key: VasKey) -> Option<&Ledger> {

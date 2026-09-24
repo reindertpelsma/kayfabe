@@ -5,6 +5,17 @@ at `v3` HEAD `2df4dfc3` (plus `v3-hostfacts` `28638efa` where noted), and the ol
 format of `V3_P2_PORT_MAP.md`. Nothing in `/workspace/kf-master` was edited. Line numbers are as of
 `2df4dfc3`. ogkm citations are `research_clones/ogkm-580.159.04` (the target driver).
 
+**STATUS UPDATE, 2026-09-24 (w826, branch `v3-p4a`): build-order steps 2 and 3 are BUILT, UNRUN on
+hardware.** §2.1(d): `WalkKernel::submit`/`try_collect` (own stream, pinned read-back,
+`cuLaunchHostFunc` → eventfd; no `cuCtxSynchronize`; `ack` deleted, every report RESYNC and
+`Report::require_full` refuses a delta). §2.1(a): `kf-trap/src/mmuinval.rs` `InvalidatePort`
+(arm-before-publish via `Trigger::arm_next`). §2.1(b)+(c): `kf-mem/src/vasmgr.rs` (`VasTable`,
+`Walker`, `GpuWalker`, `VaManager`) and `ledger::MapTarget`. Gates 8a/8b/8 are folded into ONE
+binary, `kf-gate8` (rows 2+3, VER2 and VER3). ⊘ Not yet done: §2.2 (`MemObjects`, fn 70), the
+kf-qemu wiring of the three registers (device.rs is owned elsewhere), Q6's faulted-channel walk,
+Q7's pre-walk uncached read, and the device-side snapshot tables in `kf_walk.cu` (host no longer
+uses them; removing them needs a PTX regen and the CUDA suite on hardware).
+
 **Summary.** P4 is **~2.2k lines of product code plus ~0.9k of harness**. Only **~0.4k** of it is
 copied old-tree code; the rest is new, because the old tree walked and mirrored guest tables on
 the CPU and v3 forbids both. The main parts already exist in v3:

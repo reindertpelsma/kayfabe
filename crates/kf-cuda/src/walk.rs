@@ -815,6 +815,19 @@ impl WalkKernel {
         Ok(())
     }
 
+    /// Whether the GPU has finished the walk in flight, by `cuEventQuery` — **non-consuming and
+    /// non-blocking**. `Ok(false)` with a walk in flight right after [`WalkKernel::submit`]
+    /// returned is the measured proof that `submit` did not wait for the GPU (gate 8).
+    ///
+    /// # Errors
+    /// The stream's failure, by name.
+    pub fn gpu_done_now(&self) -> Result<bool, CudaError> {
+        if self.inflight.is_none() {
+            return Ok(true);
+        }
+        self.cu.event_query(self.ev_done)
+    }
+
     /// Whether a walk is queued and not yet collected.
     #[must_use]
     pub fn in_flight(&self) -> bool {
