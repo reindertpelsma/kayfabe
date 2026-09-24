@@ -12,18 +12,24 @@
 //! | [`shadow`] | write semantics for privileged registers |
 //! | [`timer`] | the time registers refused by name, per FAMILY (`kf_chip::Family`) |
 //! | [`trap`] | THE trap: doorbell / userspace-mappable (do nothing) / privileged |
+//! | [`memmap`] | the per-family BAR memory map: backed / trap-write / hole (read exits only for PIO auto-increment ports) |
+//! | [`trappolicy`] | which writes trap, where the doorbell lives (BAR0 / Hopper+ BAR1), `may_trap_read` |
+//! | [`vmm`] | the device↔hypervisor seam (`VmmOps`: memslots, guest RAM, irq, wakes) |
 //! | [`model`] | the exhaustive interleaving check (SC; a falsifier, not a proof of orderings) |
 //!
 //! ⊘ No `unsafe`, no OS call, no lock, no allocation on the vCPU path. The trap SAYS whether a
 //! syscall is owed ([`trap::Action`]); the caller performs it.
 
 pub mod bitmap;
+pub mod memmap;
 pub mod model;
 pub mod ring;
 pub mod shadow;
 pub mod timer;
 pub mod token;
 pub mod trap;
+pub mod trappolicy;
+pub mod vmm;
 pub mod wake;
 
 pub use bitmap::RungBitmap;
