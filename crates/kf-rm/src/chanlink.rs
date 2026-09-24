@@ -130,6 +130,11 @@ pub struct ChannelPolicy {
     kernel_clients: std::collections::BTreeSet<u32>,
     /// `(hClient, parent)` → the first `FERMI_VASPACE_A` allocated under it.
     vas_under: std::collections::BTreeMap<(u32, u32), u32>,
+    /// `hClient` → every VA-space object a page-directory statement named in it. ★ The fallback for
+    /// `hVASpace = 0` when the VAS alloc itself never reached us: the device-default VAS of an RM
+    /// internal client is constructed CPU-side (`vaspaceGetByHandleOrDeviceDefault`), and only its
+    /// `COPY_SERVER_RESERVED_PDES` is RPC'd (`[measured p5b]`: no `FERMI_VASPACE_A` alloc seen).
+    vas_stated: std::collections::BTreeMap<u32, std::collections::BTreeSet<u32>>,
     /// Statements carried.
     pub carried: u64,
     /// Allocs the plane refused.
@@ -140,7 +145,7 @@ impl ChannelPolicy {
     /// A link for one guest driver's wire.
     #[must_use]
     pub fn new(abi: DriverAbiTable, guest_os: kf_abi::GuestOs, sink: ChanSink) -> ChannelPolicy {
-        ChannelPolicy { abi, guest_os, sink, kernel_clients: Default::default(), vas_under: Default::default(), carried: 0, refused: 0 }
+        ChannelPolicy { abi, guest_os, sink, kernel_clients: Default::default(), vas_under: Default::default(), vas_stated: Default::default(), carried: 0, refused: 0 }
     }
 
     fn refusal(status: u32, why: &str, cmd: &RpcCommand) -> Reply {
@@ -163,7 +168,11 @@ impl ChannelPolicy {
         }
         match self.abi.alloc_params(kf_arch::ids::ClassId(h.class)) {
             Some(AllocParams::VaSpace) => {
-                self.vas_under.entry((h.client, h.parent)).or_insert(h.handle);
+                let first = *self.vas_under.entry((h.client, h.parent)).or_insert(h.handle);
+                eprintln!(
+                    "kf-rm: chanlink: FERMI_VASPACE_A {:#x}:{:#x} under {:#x} (device default for it: {first:#x})",
+                    h.client, h.handle, h.parent
+                );
                 return None;
             }
             Some(AllocParams::Channel) => {}
@@ -179,7 +188,17 @@ impl ChannelPolicy {
             gpfifo_va: f.gp_fifo_offset,
             entries: f.gp_fifo_entries,
             h_vaspace: f.h_vaspace,
-            vaspace: if f.h_vaspace != 0 { Some(f.h_vaspace) } else { self.vas_under.get(&(h.client, h.parent)).copied() },
+            vaspace: if f.h_vaspace != 0 {
+                Some(f.h_vaspace)
+            } else {
+                // The device's default VAS: allocated under the parent device, or else the ONE
+                // VA space this client ever stated a page directory for. Two candidates and no
+                // alloc to decide between them is refused by name at birth (`None`).
+                self.vas_under.get(&(h.client, h.parent)).copied().or_else(|| {
+                    let set = self.vas_stated.get(&h.client)?;
+                    (set.len() == 1).then(|| set.iter().next().copied()).flatten()
+                })
+            },
             chid: decode_userd_index_chid(f.flags),
             flags: f.flags,
             engine_type: self.abi.decode_channel_engine_type(params).ok().flatten(),
@@ -199,6 +218,13 @@ impl ChannelPolicy {
 
     fn on_control(&mut self, cmd: &RpcCommand) -> Option<Reply> {
         let h = self.abi.decode_rpc_control(&cmd.payload).ok()?;
+        if self.abi.control_params(kf_arch::ids::ControlCmd(h.cmd)).is_some()
+            && let Ok(crate::rmrpc::Translation::PageDir(st)) = crate::rmrpc::translate(&self.abi, self.guest_os, cmd)
+        {
+            // Observed only: the memory plane's link answers these.
+            self.vas_stated.entry(st.client.0).or_default().insert(st.vaspace.0);
+            return None;
+        }
         let params = cmd.payload.get(h.params_at..h.params_at.checked_add(h.params_size as usize)?)?;
         let st = match h.cmd {
             GPFIFO_SCHEDULE | TSG_GPFIFO_SCHEDULE => {
@@ -235,7 +261,11 @@ impl ChannelPolicy {
         if client == object {
             self.kernel_clients.remove(&client);
             self.vas_under.retain(|k, _| k.0 != client);
+            self.vas_stated.remove(&client);
         } else {
+            if let Some(set) = self.vas_stated.get_mut(&client) {
+                set.remove(&object);
+            }
             self.vas_under.retain(|k, v| !(k.0 == client && (k.1 == object || *v == object)));
         }
         let _ = (self.sink)(ChanStatement::Free { client, object });
