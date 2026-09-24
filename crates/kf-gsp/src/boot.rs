@@ -624,8 +624,13 @@ pub struct GspFsm {
     ///
     /// Owner: *"MMIO writes primarily touch a queue to register that a write happened there
     /// and wake a coordinator"*, and *"a trap may not take longer than a millisecond"*. So
-    /// when [`Self::defer_commands`] is set, [`BootStep::CommandDoorbell`] increments this
-    /// instead of servicing, and a worker calls [`Self::service_deferred_commands`].
+    /// [`BootStep::CommandDoorbell`] ALWAYS increments this instead of servicing, and the register
+    /// drainer calls [`Self::service_one_deferred_command`].
+    ///
+    /// ⊘⊘ **v3 (w826): deferral is the ONLY mode.** The old tree had a `defer_commands` flag,
+    /// default OFF "so every existing test keeps the synchronous behaviour", which the device
+    /// armed at attach — and which a guest power-on reset once silently disarmed (w472b). A flag
+    /// whose default is the 1.79 s vCPU trap is the defect with a switch on it; there is no switch.
     ///
     /// ⊘ A COUNT, not a flag. Two writes before the worker runs are two queue states to
     /// drain, and collapsing them to a bool would service once and leave the second guest
@@ -635,12 +640,6 @@ pub struct GspFsm {
     /// is what real GSP makes it do. What changes is that it polls in its own loop rather
     /// than inside one held store.
     pending_command_doorbells: u32,
-    /// Whether [`BootStep::CommandDoorbell`] defers instead of servicing inline.
-    ///
-    /// ⊘ Defaults to `false`, so every existing test keeps the synchronous behaviour it
-    /// asserts; the device turns it on at construction. A test wanting the deferred shape
-    /// asks for it by name.
-    defer_commands: bool,
     /// Replies withheld until their rows are on the host — [`Reply::hold_for_refresh`].
     /// ⊘ A `Vec` and not a map: it is ordered, it is single-digit in every measured boot,
     /// and the order replies are posted in is the order the guest asked for them.
@@ -759,7 +758,6 @@ impl GspFsm {
     pub fn new(abi: GspAbi) -> GspFsm {
         GspFsm {
             pending_command_doorbells: 0,
-            defer_commands: false,
             held: Vec::new(),
             abi,
             phase: BootPhase::Cold,
@@ -825,24 +823,9 @@ impl GspFsm {
     /// reset is field-by-field at four separate sites (`C:2471-2475`, `C:4257-4258`,
     /// `C:9393-9399`, `C:3484-3485`) and they disagree.
     pub fn device_reset(&mut self) -> Transition {
-        // ★★★★★ **w472b — DEFERRAL IS SHELL WIRING AND SURVIVES A RESET.**
-        //
-        // ⊘ `*self = GspFsm::new(..)` is the right shape for DEVICE state — that is this
-        // method's whole argument, and `a_power_on_reset_puts_the_emulated_gsp_back_to_cold`
-        // asserts it as a whole value so it stays total. But `defer_commands` is not device
-        // state: it records that a publication worker EXISTS to service command doorbells,
-        // which the shim arms once, at `attach_ram`, inside the `Ok(join)` that proves the
-        // thread is up. It belongs with the RAM port, the framebuffer port and the policy,
-        // which `RegPlane::device_reset` already keeps for exactly this reason.
-        //
-        // ⚠ What clearing it COST: a guest power-on reset silently disarmed the deferral, so
-        // every `NV_PGSP_QUEUE_HEAD` write after the driver's own reset went back to
-        // servicing its RPC INLINE ON THE vCPU — the 1.79 s trap w432 was written to remove.
-        // The arm survived only until the guest's first reset, and the boot log's
-        // `GSP-ASYNC ARMED` line kept saying it was on.
-        let defer_commands = self.defer_commands;
+        // ⊘ w472b's fix (carrying a `defer_commands` flag across the reset) is gone with the flag:
+        // deferral is structural in v3, so a reset cannot disarm it.
         *self = GspFsm::new(self.abi);
-        self.defer_commands = defer_commands;
         Transition::E11
     }
 
@@ -1047,17 +1030,8 @@ impl GspFsm {
                 // ⊘ The register state has ALREADY been stored by the time we get here — this
                 // arm is the SERVICING, and only the servicing is deferred. A read-back of the
                 // queue head still answers what the guest wrote.
-                if self.defer_commands {
-                    self.pending_command_doorbells =
-                        self.pending_command_doorbells.saturating_add(1);
-                    return Ok(());
-                }
-                let (t, mut r) = self.doorbell(ram, policy)?;
-                report.transitions.push(t);
-                report.transitions.append(&mut r.transitions);
-                report.commands.extend(r.commands);
-                report.unserviced.extend(r.unserviced);
-                report.raise_status_irq |= r.raise_status_irq;
+                self.pending_command_doorbells = self.pending_command_doorbells.saturating_add(1);
+                return Ok(());
             }
             // E10 — the guest's ISR clears the edge before draining the queue
             // (`C: src/qemu/nvkvm_gpu_emul.c:4193-4200`).
@@ -1937,8 +1911,8 @@ impl GspFsm {
     /// next call will try again.
     /// ★★★★★ **w432 — DRAIN THE DEFERRED COMMAND DOORBELLS. CALL THIS OFF A vCPU.**
     ///
-    /// Services every command doorbell that [`BootStep::CommandDoorbell`] deferred while
-    /// [`Self::defer_commands`] was set, and returns how many it serviced together with the
+    /// Services one command doorbell that [`BootStep::CommandDoorbell`] deferred, and returns
+    /// what it serviced together with the
     /// merged report — the caller still has to act on `raise_status_irq` and the commands,
     /// exactly as the inline path's caller did.
     ///
@@ -1975,7 +1949,7 @@ impl GspFsm {
         Ok(report)
     }
 
-    /// How many command doorbells are waiting for [`Self::service_deferred_commands`].
+    /// How many command doorbells are waiting for [`Self::service_one_deferred_command`].
     #[must_use]
     pub const fn pending_command_doorbells(&self) -> u32 {
         self.pending_command_doorbells
@@ -1998,23 +1972,9 @@ impl GspFsm {
     /// zero, so the only way to reach `u32::MAX` is a worker that never runs — in which case
     /// the guest is already parked and losing an increment changes nothing.
     ///
-    /// ⊘ It does **not** consult [`Self::defer_commands`]. The shell's own arming decides
-    /// whether the early classification happens at all; making this refuse when deferral is
-    /// off would silently DROP a doorbell the shell had already taken off the inline path —
-    /// two arming flags for one decision, which is the second-source-of-truth shape this
-    /// tree keeps paying for.
+    /// ⊘ There is no arming flag to consult (v3: deferral is the only mode).
     pub const fn note_command_doorbells(&mut self, n: u32) {
         self.pending_command_doorbells = self.pending_command_doorbells.saturating_add(n);
-    }
-
-    /// Turn command-doorbell deferral on or off.
-    ///
-    /// ⊘ Off by default so every existing test keeps the synchronous behaviour it asserts.
-    /// ⚠ Turning it ON without a worker that calls [`Self::service_deferred_commands`] parks
-    /// the guest by construction: nothing will ever service its RPCs. The device arms both
-    /// together or neither.
-    pub const fn set_defer_commands(&mut self, on: bool) {
-        self.defer_commands = on;
     }
 
     pub fn release_held(&mut self, ram: &mut dyn GuestRam) -> Result<usize, GspFault> {
