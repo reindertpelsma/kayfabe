@@ -11,6 +11,7 @@
 //! Completions arrive as host events on an fd (`kf-host::event`), never inline.
 
 pub mod host;
+pub mod passthrough;
 pub mod ring;
 pub mod translated;
 pub mod worker;
