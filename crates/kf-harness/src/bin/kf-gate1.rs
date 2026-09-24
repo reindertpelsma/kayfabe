@@ -57,9 +57,16 @@ fn run(l: &mut Ledger) -> Result<(), String> {
     ring_cpu.store_u32(at(SEM_OFF), 0).map_err(|e| format!("{e:?}"))?;
 
     let ev = rm.open_event_fd().map_err(|e| format!("event fd: {e:?}"))?;
-    let _evo = rm.alloc_os_event(rm.subdevice(), notifier_ce(0), &ev).map_err(|e| format!("os event: {e:?}"))?;
-    let armed = rm.set_notification(notifier_ce(0), kf_abi::eventnotify::ACTION_REPEAT);
-    l.measure("event_armed", format!("{armed:?}"));
+    // ★ Which notifier a CE completion posts to is the PHYSICAL CE's publicID
+    // (`kceServiceNotificationInterrupt`, ogkm-580 kernel_ce.c:703), not our logical COPY0 —
+    // so arm all ten and let the drained record say which one fired.
+    let mut armed = Vec::new();
+    for n in 0..10u32 {
+        let o = rm.alloc_os_event(rm.subdevice(), notifier_ce(n), &ev);
+        let a = rm.set_notification(notifier_ce(n), kf_abi::eventnotify::ACTION_REPEAT);
+        armed.push(format!("CE{n}:{}/{}", o.is_ok(), a.is_ok()));
+    }
+    l.measure("events_armed", armed.join(" "));
 
     let chan = rm
         .birth_channel(space, ENGINE_TYPE_COPY0, RingSpec {
@@ -75,8 +82,12 @@ fn run(l: &mut Ledger) -> Result<(), String> {
     l.check("channel", true, format!("tsg={:#x} chan={:#x} token={:#x}", chan.tsg, chan.chan, chan.token));
 
     let ce_class = rm.ce_class_id();
-    let words = ce_copy_push(ce_class, data_va, data_va + 0x8000, COPY_LEN, ring_va + SEM_OFF, PAYLOAD, true)
+    let mut words = ce_copy_push(ce_class, data_va, data_va + 0x8000, COPY_LEN, ring_va + SEM_OFF, PAYLOAD, true)
         .ok_or("push encode")?;
+    // A second trigger: the host class's own NON_STALL_INTERRUPT method (`NVC56F_NON_STALL_INTERRUPT`
+    // 0x20, `ogkm-580: clc56f.h:110`), on subchannel 0.
+    words.push(kf_abi::submit::method_header_inc(0, 0x20, 1).ok_or("nsi header")?);
+    words.push(0);
     for (i, w) in words.iter().enumerate() {
         ring_cpu.store_u32(at(PB_OFF + 4 * i as u64), *w).map_err(|e| format!("{e:?}"))?;
     }
