@@ -281,7 +281,7 @@ impl FalconGspModel {
     /// Where this model puts a register, so a harness can address one without knowing the
     /// encoding. `None` for a register with no offset on this generation.
     #[must_use]
-    pub fn at(reg: GspReg) -> Option<(u8, u64)> {
+    pub fn reg_at(reg: GspReg) -> Option<(u8, u64)> {
         let off = match reg {
             GspReg::GfwBootProgress => GFW_BOOT_PROGRESS,
             GspReg::GfwBootPlm => GFW_BOOT_PLM,
@@ -312,6 +312,10 @@ impl FalconGspModel {
 }
 
 impl GspModel for FalconGspModel {
+    fn at(&self, reg: GspReg) -> Option<(u8, u64)> {
+        FalconGspModel::reg_at(reg)
+    }
+
     fn decode_reg(&self, bar: u8, off: u64) -> Option<GspReg> {
         if bar != 0 {
             return None;

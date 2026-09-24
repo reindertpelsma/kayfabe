@@ -492,7 +492,7 @@ impl FspGspModel {
     /// Where this model puts a register. **`None` is the interesting answer**: it means
     /// this generation has no such register, and five variants return it.
     #[must_use]
-    pub fn at(&self, reg: GspReg) -> Option<(u8, u64)> {
+    pub fn reg_at(&self, reg: GspReg) -> Option<(u8, u64)> {
         let off = match reg {
             GspReg::GspFalconCpuctl => PGSP + FALCON_CPUCTL,
             GspReg::GspFalconHwcfg2 => PGSP + FALCON_HWCFG2,
@@ -524,6 +524,10 @@ impl FspGspModel {
 }
 
 impl GspModel for FspGspModel {
+    fn at(&self, reg: GspReg) -> Option<(u8, u64)> {
+        self.reg_at(reg)
+    }
+
     fn decode_reg(&self, bar: u8, off: u64) -> Option<GspReg> {
         if bar != 0 {
             return None;

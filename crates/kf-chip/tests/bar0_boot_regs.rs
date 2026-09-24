@@ -31,3 +31,11 @@ fn the_fb_size_served_is_the_stores_not_a_die_constant() {
     let r = boot_regs(Family::Ampere, &f);
     assert_eq!(r.iter().find(|r| r.name == "NV_USABLE_FB_SIZE_IN_MB").unwrap().value, 11_857);
 }
+
+#[test]
+fn the_fb_layout_reproduces_the_captured_bar1_pde_base_at_12_gib() {
+    let l = kf_chip::bar0::fb_layout(12288 << 20).unwrap();
+    assert_eq!(l.bar1_pde_base, 0x2_F1CA_C000, "the captured RTX 3060 value (cap1b record 141977)");
+    assert_eq!(l.regions[1].base + l.regions[1].reserved, 12288 << 20);
+    assert!(kf_chip::bar0::fb_layout(0x1000_0000).is_none(), "a 256 MiB store cannot hold the carve-out");
+}

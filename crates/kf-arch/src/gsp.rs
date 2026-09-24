@@ -205,6 +205,31 @@ pub enum GspReg {
     GspQueueHead(u8),
 }
 
+impl GspReg {
+    /// Every register variant with a fixed identity (the queue heads are indexed separately).
+    pub const FIXED: [GspReg; 19] = [
+        GspReg::GfwBootProgress,
+        GspReg::GfwBootPlm,
+        GspReg::GspFalconCpuctl,
+        GspReg::GspFalconHwcfg2,
+        GspReg::GspFalconDmatrfcmd,
+        GspReg::GspFalconMailbox0,
+        GspReg::GspFalconMailbox1,
+        GspReg::GspFalconIrqstat,
+        GspReg::GspFalconIrqmask,
+        GspReg::GspFalconIrqdest,
+        GspReg::GspFalconIrqsclr,
+        GspReg::GspRiscvCpuctl,
+        GspReg::GspRiscvIrqmask,
+        GspReg::GspRiscvIrqdest,
+        GspReg::Sec2FalconCpuctl,
+        GspReg::Sec2FalconMailbox0,
+        GspReg::Sec2FalconDmatrfcmd,
+        GspReg::Wpr2AddrLo,
+        GspReg::Wpr2AddrHi,
+    ];
+}
+
 /// How far the boot has got — **what is true**, never which register made it true.
 ///
 /// ★★ This lives here, not in the FSM crate, because two different planes need it and
@@ -781,6 +806,13 @@ pub trait GspModel: Send + Sync {
     fn encode(&self, reg: GspReg, obs: &GspObservation) -> Option<u64>;
 
     /// The LibOS region-array geometry this driver regime publishes.
+    /// Where `reg` lives for this model, `(bar, offset)` — `None` if this family has no such
+    /// register. ★ What lets a caller PUBLISH the model's answers into a read shadow (v3 BAR0 reads
+    /// take no exit), uniformly across families.
+    fn at(&self, _reg: GspReg) -> Option<(u8, u64)> {
+        None
+    }
+
     fn libos_region_layout(&self) -> LibosRegionLayout;
 
     /// **The boot ordering this generation follows.**

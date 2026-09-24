@@ -135,3 +135,96 @@ pub fn boot_regs(family: Family, f: &Bar0Facts) -> Vec<BootReg> {
     }
     v
 }
+
+/// The host GPU's PCI identity — what the guest's driver binds on (read from the host's own config
+/// space; never a table row).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PciIdentity {
+    /// Vendor id (`0x10DE`).
+    pub vendor: u16,
+    /// Device id.
+    pub device: u16,
+    /// Class code, low byte first.
+    pub class: [u8; 3],
+}
+
+/// ★ The VBIOS profile for THIS host: its PCI identity, plus the FWSEC geometry kf-abi documents as
+/// GENERATED to satisfy the driver's inequalities (not transcribed from any card) — so it is
+/// family-level for every falcon-boot family, never a per-die row keyed by device id.
+///
+/// ⊘ Hopper/Blackwell boot through FSP and do not run FWSEC from the VBIOS; what their ROM image must
+/// carry is not yet established from ogkm, so they are refused by name here rather than handed a
+/// falcon family's image.
+///
+/// # Errors
+/// A family whose ROM content is not yet derived.
+pub fn vbios_profile(family: Family, id: PciIdentity) -> Result<kf_abi::vbios::VbiosProfile, crate::RowUnbuilt> {
+    if matches!(family, Family::Hopper | Family::Blackwell) {
+        return Err(crate::RowUnbuilt {
+            family,
+            what: "VBIOS image: FSP families do not run FWSEC; their ROM contents are not yet derived from ogkm",
+        });
+    }
+    let generated = kf_abi::vbios::VBIOS_PROFILES
+        .first()
+        .ok_or(crate::RowUnbuilt { family, what: "kf-abi carries no generated FWSEC geometry" })?;
+    Ok(kf_abi::vbios::VbiosProfile {
+        name: "derived (host PCI identity + generated FWSEC geometry)",
+        pci_vendor_id: id.vendor,
+        pci_device_id: id.device,
+        pci_class_code: id.class,
+        ..*generated
+    })
+}
+
+/// The framebuffer layout this device's (emulated) GSP declares in `GspStaticConfigInfo`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FbLayout {
+    /// Bytes of framebuffer (the store).
+    pub fb_length: u64,
+    /// The regions: the usable heap, then the firmware carve-out at the top.
+    pub regions: Vec<kf_abi::gspstaticinfo::FbRegion>,
+    /// Where OUR BAR1 page directory lives (v3: our roots are declared, never adopted).
+    pub bar1_pde_base: u64,
+}
+
+/// The contiguous carve-out at the top of FB the GSP keeps for itself — read off a real RTX 3060's
+/// posted `GspStaticConfigInfo` (`traces/mode2_c_reference/cap1b_coldboot_hermetic_d6` record 141977:
+/// regions 2-4, contiguous, `reserved == size`, the top `0x1042_0000` bytes). ★ In v3 WE are the
+/// GSP, so this is our declared layout; it deliberately over-reserves beyond WPR2 + FRTS + the VGA
+/// workspace (over-reserving costs heap; under-reserving hands the guest its firmware's memory).
+pub const FW_CARVE_OUT_BYTES: u64 = 0x1042_0000;
+/// How far above the carve-out base the same GSP placed the BAR1 page directory
+/// (`0x2_F1CA_C000 - (12 GiB - FW_CARVE_OUT_BYTES)`) — a LAYOUT offset, preserved at any size.
+const BAR1_PDE_ABOVE_CARVE_OUT: u64 = 0x20C_C000;
+
+/// ★ The layout for a store of `fb_length` bytes. ⊘ `None` if the store cannot hold the carve-out
+/// (the VM must not start on a framebuffer smaller than its own firmware reservation).
+#[must_use]
+pub fn fb_layout(fb_length: u64) -> Option<FbLayout> {
+    let carve = fb_length.checked_sub(FW_CARVE_OUT_BYTES)?;
+    if carve == 0 {
+        return None;
+    }
+    let regions = vec![
+        kf_abi::gspstaticinfo::FbRegion {
+            base: 0,
+            limit: carve - 1,
+            reserved: 0,
+            performance: 6,
+            support_compressed: true,
+            support_iso: true,
+            protected: false,
+        },
+        kf_abi::gspstaticinfo::FbRegion {
+            base: carve,
+            limit: fb_length - 1,
+            reserved: FW_CARVE_OUT_BYTES,
+            performance: 0,
+            support_compressed: false,
+            support_iso: false,
+            protected: false,
+        },
+    ];
+    Some(FbLayout { fb_length, regions, bar1_pde_base: carve + BAR1_PDE_ABOVE_CARVE_OUT })
+}

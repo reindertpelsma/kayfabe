@@ -306,6 +306,8 @@ pub struct HostRm {
     cpu_maps: std::sync::atomic::AtomicU64,
     usermode: Result<UsermodeWindow, RmError>,
     classes: Box<dyn HostClasses>,
+    /// `MC_GET_ARCH_INFO` as the host answered it: `(architecture, implementation, revision)`.
+    arch_info: (u32, u32, u32),
 }
 
 impl HostRm {
@@ -383,6 +385,7 @@ impl HostRm {
             version,
             classes,
             armed: Mutex::new(std::collections::BTreeSet::new()),
+            arch_info: (0, 0, 0),
             objects: Mutex::new(Objects {
                 next: FIRST_HANDLE,
                 parents: BTreeMap::new(),
@@ -442,6 +445,7 @@ impl HostRm {
         )?;
         let w = |o: usize| u32::from_le_bytes([arch[o], arch[o + 1], arch[o + 2], arch[o + 3]]);
         let (architecture, implementation) = (w(0), w(4));
+        let arch_info = (architecture, implementation, w(8));
         // ★ The host's OWN class list (`NV0080_CTRL_CMD_GPU_GET_CLASSLIST_V2`, NON_PRIVILEGED):
         // the chooser intersects it with the family's generated set, so the classes we allocate
         // are ones THIS die supports (GA100 `_A` vs GA10x `_B`; GB100 vs GB202) — derived, never
@@ -462,7 +466,7 @@ impl HostRm {
                  refused by name, never a nearest guess"
             ),
         })?;
-        let conn = HostRm { classes, ..conn };
+        let conn = HostRm { classes, arch_info, ..conn };
         let usermode = conn.open_usermode(conn.classes.usermode());
         Ok(HostRm { usermode, ..conn })
     }
@@ -1444,6 +1448,13 @@ impl HostRm {
     #[must_use]
     pub fn compute_class_id(&self) -> Option<u32> {
         self.classes.compute_object().map(|c| c.compute_object_id().0)
+    }
+
+    /// `MC_GET_ARCH_INFO` as the host answered it: `(architecture, implementation, revision)` — the
+    /// facts the family and the presented `PMC_BOOT_*` are derived from.
+    #[must_use]
+    pub fn arch_info(&self) -> (u32, u32, u32) {
+        self.arch_info
     }
 
     /// The host driver version string this session gated on (the driver-version axis).
