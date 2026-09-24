@@ -10,6 +10,8 @@ kf-abi.workspace = true
 kf-util.workspace = true
 kf-gsp.workspace = true
 kf-chip.workspace = true
+kf-arch.workspace = true
+kf-trace.workspace = true
 
 [lints]
 workspace = true

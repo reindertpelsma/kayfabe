@@ -542,8 +542,10 @@ name = "kf-rm"
 version = "0.1.0"
 dependencies = [
  "kf-abi",
+ "kf-arch",
  "kf-chip",
  "kf-gsp",
+ "kf-trace",
  "kf-util",
 ]
 

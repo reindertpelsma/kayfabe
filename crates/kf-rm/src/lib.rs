@@ -20,6 +20,8 @@ pub mod hostfacts;
 pub mod inert;
 pub mod inittables;
 pub mod osevent;
+pub mod rmgraph;
+pub mod rmrpc;
 pub mod rpc;
 pub mod staticinfo;
 pub mod sticky;
