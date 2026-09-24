@@ -75,7 +75,7 @@ impl Tree3 {
         Tree3 { img, root, tables: HashMap::new() }
     }
 
-    fn child(&mut self, level: u8, parent: u64, idx: usize, bytes: u64, stride: u64, valid: bool) -> u64 {
+    fn child(&mut self, level: u8, parent: u64, idx: usize, bytes: u64, stride: u64) -> u64 {
         if let Some(&c) = self.tables.get(&(level, parent, idx)) {
             return c;
         }
@@ -86,7 +86,7 @@ impl Tree3 {
             self.img.put64(at, lo);
             self.img.put64(at + 8, hi);
         } else {
-            self.img.put64(at, kf_cuda::synth::ver3::pde(c, valid));
+            self.img.put64(at, kf_cuda::synth::ver3::pde(c));
         }
         self.tables.insert((level, parent, idx), c);
         c
@@ -94,13 +94,12 @@ impl Tree3 {
 
     fn leaf4k(&mut self, va: u64, leaf: u64) {
         let [i4, i3, i2, i1, i0, it] = kf_cuda::synth::ver3::idx(va);
-        // PD4/PD3/PD2 cannot hold a PTE ⇒ their PDEs carry VALID; PD1 (512 MiB) and PD0 (2 MiB)
-        // can ⇒ bit 0 is IS_PTE, clear for a PDE (`gh100/dev_mmu.h:53-56`).
-        let pd3 = self.child(4, self.root, i4, 512 * 8, 8, true);
-        let pd2 = self.child(3, pd3, i3, 512 * 8, 8, true);
-        let pd1 = self.child(2, pd2, i2, 512 * 8, 8, true);
-        let pd0 = self.child(1, pd1, i1, 256 * 16, 8, false);
-        let pt = self.child(0, pd0, i0, 512 * 8, 16, false);
+        // RM's VER3 PDEs carry no valid bit at any level (aperture is the validity).
+        let pd3 = self.child(4, self.root, i4, 512 * 8, 8);
+        let pd2 = self.child(3, pd3, i3, 512 * 8, 8);
+        let pd1 = self.child(2, pd2, i2, 512 * 8, 8);
+        let pd0 = self.child(1, pd1, i1, 256 * 16, 8);
+        let pt = self.child(0, pd0, i0, 512 * 8, 16);
         self.img.put64(pt + 8 * it as u64, leaf);
     }
 

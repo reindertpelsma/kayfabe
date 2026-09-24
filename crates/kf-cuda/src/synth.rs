@@ -84,15 +84,17 @@ pub fn pte_sys(gpa: u64) -> u64 {
 }
 
 /// ★ `NV_MMU_VER3` (Hopper, Blackwell) builders — `ogkm-580 hopper/gh100/dev_mmu.h:53-187`.
-/// ONE address field `51:12` (no vid/sys split); a PDE at a level that cannot hold a PTE carries
-/// `VALID` (bit 0); at a leaf-capable level bit 0 is `IS_PTE` and is CLEAR for a PDE.
+/// ONE address field `51:12` (no vid/sys split). ★ A PDE has NO valid bit at any level — RM's VER3
+/// PDE format is aperture + PCF + address only (`kern_gmmu_fmt_gh10x.c:132-158`); bit 0 is `IS_PTE`
+/// and is CLEAR for a PDE. (A first version set bit 0 on the upper levels, which would have hidden
+/// the kernel's wrong rule from any test built with it.)
 pub mod ver3 {
     /// `_ADDRESS 51:12`, kept in place (`SHIFT 12`).
     const ADDR_MASK: u64 = ((1u64 << 40) - 1) << 12;
-    /// A PDE pointing at `child` (vidmem). `valid` for PD4/PD3/PD2; clear (IS_PTE = 0) for PD1/PD0.
+    /// A PDE pointing at `child` (vidmem): `_APERTURE_VIDEO_MEMORY`, `IS_PTE` clear.
     #[must_use]
-    pub fn pde(child: u64, valid: bool) -> u64 {
-        u64::from(valid) | (1 << 1) | (child & ADDR_MASK)
+    pub fn pde(child: u64) -> u64 {
+        (1 << 1) | (child & ADDR_MASK)
     }
     /// A dual PDE (PD0): big half INVALID (no 64 KiB table), small half → `small` (vidmem):
     /// `_APERTURE_SMALL 66:65`, `_ADDRESS_SMALL 115:76` — the high word's `2:1` and `51:12`.

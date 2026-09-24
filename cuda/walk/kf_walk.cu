@@ -273,10 +273,15 @@ __device__ __forceinline__ bool kf_dir_present(const KfFormat &F, uint64_t raw,
         /* The aperture IS the validity. `kern_gmmu_fmt_gm10x.c:165-182`. */
         return apc != F.pde_ap_invalid;
     default:
-        /* ⚠ UNTESTED. VER3 gives a PDE its own VALID bit (`gh100/dev_mmu.h:417`),
-         * but at a level that can also hold a PTE that same bit is IS_PTE
-         * (`:414`) and is clear by the time we get here. */
-        return (leaf_capable || kf_valid(F, raw)) && apc != F.pde_ap_invalid;
+        /* ★ VER3 — THE APERTURE IS THE VALIDITY HERE TOO. `[measured w826 kf-gate7]` the
+         * sketch this replaced required bit 0 (`leaf_capable || VALID`) and found ZERO runs:
+         * RM's own VER3 PDE format has NO valid field at any level — only aperture, PCF
+         * and address (`ogkm-580 kern_gmmu_fmt_gh10x.c:132-158`; `fldValid` is PTE-only,
+         * `:169`) — and the dual PDE's SMALL half has no bit 0 at all (its fields are
+         * `66:65`, `69:67`, `115:76`). Bit 0 of a PDE is `IS_PTE`, and a leaf-capable
+         * level's PTEs are taken BEFORE this test (`kf_valid` on the leaf branch). */
+        (void)leaf_capable;
+        return apc != F.pde_ap_invalid;
     }
 }
 
