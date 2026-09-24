@@ -733,6 +733,22 @@ impl Report {
             if r.op == RunOp::Unmap.code() {
                 continue;
             }
+            // ★ w825 — the span bounds VIDMEM runs only (GPGA offsets). A system-memory run
+            // names a guest-PHYSICAL address and is bounded by the guest-RAM object and the
+            // VMM's layout at map time; PEER is refused (single-GPU guest). Mirrors
+            // `kf_emit`'s per-aperture check.
+            match r.aperture() {
+                RunAperture::SysmemCoherent | RunAperture::SysmemNonCoherent => continue,
+                RunAperture::Peer => {
+                    return Err(ParseError::RunOutsideGpga {
+                        index: i,
+                        gpga: r.gpga,
+                        len: r.len,
+                        span,
+                    });
+                }
+                RunAperture::Vidmem => {}
+            }
             if r.gpga > span || r.len > span - r.gpga {
                 return Err(ParseError::RunOutsideGpga {
                     index: i,

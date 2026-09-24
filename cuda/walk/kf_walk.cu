@@ -430,7 +430,16 @@ __device__ __forceinline__ void kf_emit(KfCtx &c, uint64_t va, uint64_t gpga, ui
      * format constant -- so the guest cannot change either between this test and
      * the emit below (§39(a)). Overflow-safe, and BEFORE the coalesce branch so
      * an extension inherits a checked base. */
-    if (gpga > c.w.span || len > c.w.span - gpga) { c.refuse |= KFWR_R_LEAF_OOB; c.refusals++; return; }
+    /* ★ w825 — THE BOUND IS PER APERTURE. `span` bounds VIDMEM leaves (GPGA offsets). A
+     * system-memory leaf names a guest-PHYSICAL address in guest RAM, which the host bounds
+     * against the ONE guest-RAM object and the VMM's own layout before anything is mapped;
+     * bounding it by the vidmem span refused every sysmem leaf above ~span. PEER has no
+     * meaning for a single-GPU guest and is refused here. */
+    {
+        uint32_t ap = (flags >> KFWR_RF_AP_SHIFT) & KFWR_RF_AP_MASK;
+        if (ap == KFWR_AP_PEER) { c.refuse |= KFWR_R_LEAF_OOB; c.refusals++; return; }
+        if (ap == KFWR_AP_VIDMEM && (gpga > c.w.span || len > c.w.span - gpga)) { c.refuse |= KFWR_R_LEAF_OOB; c.refusals++; return; }
+    }
 #endif
 #ifndef KF_BREAK_COALESCE
     if (c.have && c.run.flags == flags &&
@@ -1441,8 +1450,12 @@ __device__ __forceinline__ void kf_acc_emit(KfRunAcc &c, uint64_t va, uint64_t g
     }
 #ifndef KF_BREAK_BOUNDS
     /* §39(c), the parallel half of the same chokepoint. */
-    if (gpga > c.span || len > c.span - gpga) {
-        c.refuse |= KFWR_R_LEAF_OOB; c.refusals++; return;
+    {   /* w825 — per aperture; see kf_emit. */
+        uint32_t ap = (flags >> KFWR_RF_AP_SHIFT) & KFWR_RF_AP_MASK;
+        if (ap == KFWR_AP_PEER ||
+            (ap == KFWR_AP_VIDMEM && (gpga > c.span || len > c.span - gpga))) {
+            c.refuse |= KFWR_R_LEAF_OOB; c.refusals++; return;
+        }
     }
 #endif
 #ifndef KF_BREAK_COALESCE
@@ -2320,6 +2333,7 @@ extern "C" int kf_validate_report(const KfReportHeader *h, const KfPdbEntry *p,
          * a SECOND implementation of the kernel's own emit-time check on purpose:
          * if the two ever disagree, the report is the thing that was wrong. */
         if (r[i].op != KFWR_OP_UNMAP &&
+            ((r[i].flags & KFWR_RF_AP_MASK) == KFWR_AP_VIDMEM) &&
             (r[i].gpga > gpga_span || r[i].len > gpga_span - r[i].gpga))
                                                   { msg = "run leaves the GPGA window"; rc = -16; goto out; }
     }
