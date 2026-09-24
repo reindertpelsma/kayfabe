@@ -81,3 +81,26 @@ in the kernel report → per-branch foreign-aperture → same-context import →
 check → parallel launches. **Owner question:** is it acceptable to keep the CPU sweep (reads of
 vidmem PT pages through device views) on the hold until that lands, given v3 declares CPU reads
 of vidmem dead? Tonight's work kept it and cut everything around it instead.
+
+## CUDA ladder (`cup3`, full guest via `boot_capture.sh` + `cup3_hook.sh`) — progress, in order
+
+Run with `NVKVM_RAM_BACKEND=memfd NVKVM_RAM_MB=4096 KAYFABE_CUP3_TIMEOUT=120`. Each step was
+measured on box 52236011 and each fix is its own commit:
+1. `cuInit` hung in `UVM_REGISTER_GPU` (never `CTX OK`). Two defects on the CPU-CE path for
+   kernel/UVM channels: a new channel inherited a dead one's GPFIFO cursor (`6edddcfd`), and an
+   entry below `GP_PUT` not yet VISIBLE refused the doorbell forever (`d930d4a8`). ⇒ **`cuInit`
+   completes.**
+2. `cuCtxCreate`'s GR channels were refused birth: libcuda declares engineType 0 (NULL) and a
+   re-bind of the identical store slice was refused as "taken" (`7ff4cf12`).
+3. Then `NoMemory` on the 3rd GR birth: ⚠⚠ **the GPGA reservation (11760 MiB of 12 GiB)
+   leaves host RM no vidmem for per-channel GR context.** Measured with
+   `KAYFABE_SCRATCHPAD_START_MB=10240`: all 16 births succeed. **OWNER QUESTION — sizing
+   policy**: the reservation must leave headroom proportional to the channels the guest can
+   create; today it takes the maximum. 10 GiB is a measured working value, not a policy.
+4. CE channels declared NULL inside a CE TSG were born as GR — host RM refused their copy
+   object (runlist conflict). Now born on the TSG's engine (`6f6d87e4`).
+5. **Current wall:** `cuCtxCreate → 999`, host `Xid 31 CE2_PBDMA0 FAULT_PTE @ 0x2_0440f000`
+   (virt read — a pushbuffer fetch). That page is the native oracle's completion page
+   (`0x2_0440_fff0`, host RAM). All 12 801 guest-RAM rows of the process's VAS are slices
+   by then, so either the page is not a sysmem row we see or it is used before its row is
+   published. A `KAYFABE_PROBE_VA` run is in flight to say which.
