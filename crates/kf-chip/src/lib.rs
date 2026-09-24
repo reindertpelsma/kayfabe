@@ -12,6 +12,8 @@
 //!
 //! ⊘ There is no pinned generation. The family is what the HOST reports (`MC_GET_ARCH_INFO`).
 
+pub mod ga10x;
+pub mod ga10x_gsp;
 pub mod host_classes;
 
 use kf_arch::HostClasses;
@@ -121,6 +123,42 @@ impl Family {
             Family::Gb20x => &host_classes::Gb20xHostClasses,
         }
     }
+
+    /// ★ This family's row of the EMULATED board the guest drives: object classification, GMMU
+    /// format, USERD model, pushbuffer ABI, doorbell token.
+    ///
+    /// # Errors
+    /// [`RowUnbuilt`] for a family whose row does not exist yet. ⊘ The old tree answered those
+    /// with `MockArch` in every respect but the GSP model — encodings its own comments call
+    /// *invented*. v3 refuses by name instead: an unbuilt row is a fact, a mock row is a guess.
+    pub fn arch(self) -> Result<&'static dyn kf_arch::Arch, RowUnbuilt> {
+        static GA10X: std::sync::OnceLock<ga10x::Ga10xArch> = std::sync::OnceLock::new();
+        match self {
+            Family::Ga10x => Ok(GA10X.get_or_init(ga10x::Ga10xArch::new)),
+            other => Err(RowUnbuilt { family: other, what: "Arch (GMMU/USERD/pushbuffer/doorbell)" }),
+        }
+    }
+
+    /// ★ This family's GSP register model, for a framebuffer of `fb_size_mb` — the size the store
+    /// actually holds (constraint 15), never a per-die constant.
+    ///
+    /// # Errors
+    /// [`RowUnbuilt`] for a family whose GSP model is not in v3 yet.
+    pub fn gsp_model(self, fb_size_mb: u64) -> Result<Box<dyn kf_arch::gsp::GspModel>, RowUnbuilt> {
+        match self {
+            Family::Ga10x => Ok(Box::new(ga10x_gsp::Ga10xGspModel::with_fb_size_mb(fb_size_mb))),
+            other => Err(RowUnbuilt { family: other, what: "GSP model" }),
+        }
+    }
+}
+
+/// A family whose row (or part of it) is not built yet — refused by name, never mocked.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RowUnbuilt {
+    /// The family.
+    pub family: Family,
+    /// Which part of its row.
+    pub what: &'static str,
 }
 
 /// Decode an `MC_GET_ARCH_INFO` reply into `(architecture, implementation)`.

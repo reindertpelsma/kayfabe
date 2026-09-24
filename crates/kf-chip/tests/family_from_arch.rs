@@ -29,3 +29,13 @@ fn every_listed_implementation_is_decided_as_the_header_says() {
     }
     assert_eq!(Family::from_arch(0x160, 4), Err(FamilyRefusal::UnknownArchitecture(0x160)));
 }
+
+#[test]
+fn only_ga10x_has_a_row_and_the_rest_refuse_by_name() {
+    assert!(Family::Ga10x.arch().is_ok());
+    assert!(Family::Ga10x.gsp_model(11_857).is_ok());
+    for f in [Family::Ad10x, Family::Gh100, Family::Gb20x] {
+        assert_eq!(f.arch().err().map(|e| e.family), Some(f));
+        assert!(f.gsp_model(8192).is_err());
+    }
+}

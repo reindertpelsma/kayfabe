@@ -465,6 +465,7 @@ version = "0.1.0"
 dependencies = [
  "kf-abi",
  "kf-arch",
+ "kf-gsp",
  "kf-util",
 ]
 
