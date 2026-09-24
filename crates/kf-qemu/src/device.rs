@@ -15,7 +15,7 @@ use kf_arch::gsp::{GspModel, GspReg};
 use kf_chip::bar0::{Bar0Facts, BootReg, boot_regs, fb_layout, pcie_link_caps, vbios_profile};
 use kf_chip::Family;
 use kf_core::{HostOps, HostSlice, Plane, Step, Translatable, Vmm};
-use kf_gsp::{CommandPolicy, GspFsm, GuestRam, PolicyChain, RamRefused};
+use kf_gsp::{CommandPolicy, GspFsm, GuestRam, RamRefused};
 use kf_linux_raw::{Notifier, PollTimeout, Poller, ReadyTokens};
 use kf_trap::{Action, Class, WriteSemantics};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -69,7 +69,7 @@ struct RamBlock {
 struct Gsp {
     fsm: GspFsm,
     model: Box<dyn GspModel>,
-    policy: PolicyChain,
+    policy: Box<dyn CommandPolicy>,
 }
 
 /// Counters, for the boot log — never a decision input.
@@ -103,6 +103,13 @@ pub struct Device {
     pub store: kf_host::Reservation,
     /// The plane (trap → workers / drainer).
     pub plane: &'static Plane<'static>,
+    /// The host die's facts the served chain answers from (`kf_rm::hostfacts::PROVENANCE`).
+    pub host_facts: std::sync::Arc<kf_rm::HostFacts>,
+    /// The served chain's latches — the unserviced ledger, fault-buffer and os-event records —
+    /// shared with the chain, for the boot log and later planes.
+    pub chain_logs: kf_rm::ChainLogs,
+    /// The served chain's control census (what the guest read back, per control).
+    pub census: kf_rm::census::ControlCensusLog,
     pieces: OnceLock<Vec<Piece>>,
     staged: Mutex<Vec<Piece>>,
     ram: RwLock<Vec<RamBlock>>,
@@ -132,6 +139,14 @@ impl Device {
             .map_err(|e| e.to_string())?;
         let (architecture, implementation, revision) = rm.arch_info();
         let family = Family::from_arch(architecture, implementation).map_err(|e| format!("family: {e:?}"))?;
+        // ★ P3: the host die's facts, each from the source `kf_rm::hostfacts::PROVENANCE` names —
+        // asked before anything is reserved, so a refusal costs nothing. What the host cannot
+        // state is authored as OUR device's (`kf_rm::authored`, cited per value). ⊘ A control the
+        // host refuses, or a family an authored rule has no number for (Hopper's PBDMA fault ids),
+        // refuses REALIZE, listing every such field: never a default, never a GA106 row.
+        let host = std::sync::Arc::new(
+            crate::rmfacts::host_facts(&rm, family).map_err(|e| format!("host facts: {e}"))?,
+        );
         let sysfs = crate::hostfacts::sysfs_dir_for_minor(cfg.gpu_minor)?;
         let pci = crate::hostfacts::read_host_pci(&sysfs)?;
 
@@ -183,17 +198,31 @@ impl Device {
                 kf_abi::pcibars::PciBarRow { name: "io", size_bytes: 0 },
             ],
         });
-        // ⊘ The P2 chain: the answers the GSP boot needs, then the ledger that NAMES every command
-        // nothing answered (never a silent echo). P3 replaces this with kf-rm's served chain.
-        let log = kf_rm::unserviced::UnservicedLog::new();
-        let links: Vec<Box<dyn CommandPolicy>> = vec![
-            Box::new(kf_rm::guestsysinfo::GuestSystemInfoPolicy::new(*table)),
-            Box::new(kf_rm::staticinfo::StaticInfoPolicy::new(board, *table)),
-            Box::new(kf_rm::inert::InertPolicy::new()),
-            Box::new(kf_rm::unserviced::UnservicedLedger::new(*table, log)),
-        ];
+        // ★ The served chain (census → sticky guard → init tables, static info, guest sys info,
+        // inert, the object seat, the unserviced ledger). The object seat is the host-free graph
+        // (`GraphObjects`): it answers ALLOC/FREE/DUP from the object model and refuses every
+        // page-directory statement by name (`NotModelled`) until the memory plane (P4). Host twins
+        // are P5.
+        // ⚠ The guest OS is DECLARED, never sniffed (it is a `#define` in the guest driver's build,
+        // invisible on the wire); this device answers as a Linux guest.
+        let objects = kf_rm::rmrpc::ObjectPolicy::over(
+            table,
+            kf_abi::GuestOs::Linux,
+            Box::new(kf_rm::rmrpc::GraphObjects::new(family)),
+            kf_rm::rmrpc::ReasmLimits::default(),
+        );
+        let chain_logs = kf_rm::ChainLogs::default();
+        let census = kf_rm::census::ControlCensusLog::new();
+        let policy = kf_rm::served_policy(
+            board,
+            host.clone(),
+            *table,
+            chain_logs.clone(),
+            census.clone(),
+            kf_rm::ObjectLinks { objects: Some(Box::new(objects)) },
+        );
         let model = family.gsp_model(cfg.fb_mb).map_err(|e| format!("{e:?}"))?;
-        let gsp = Gsp { fsm: GspFsm::new(abi), model, policy: PolicyChain::new(links) };
+        let gsp = Gsp { fsm: GspFsm::new(abi), model, policy };
 
         // The plane lives for the process (a device is realized once): leaked so the vCPU path
         // holds a plain `&'static`, never a lock or a refcount.
@@ -213,6 +242,9 @@ impl Device {
             identity: Identity { pci, bar0_bytes },
             store,
             plane,
+            host_facts: host,
+            chain_logs,
+            census,
             pieces: OnceLock::new(),
             staged: Mutex::new(Vec::new()),
             ram: RwLock::new(Vec::new()),
@@ -503,13 +535,13 @@ impl HostOps for Device {
         }
         let mut ram = Ram(self);
         let before = g.fsm.phase();
-        match g.fsm.mmio_write_with(&mut ram, g.model.as_ref(), &mut g.policy, bar, u64::from(offset), value) {
+        match g.fsm.mmio_write_with(&mut ram, g.model.as_ref(), g.policy.as_mut(), bar, u64::from(offset), value) {
             Ok(r) => self.log_report(&r),
             Err(e) => eprintln!("kf3: GSP write @{offset:#x}={value:#x} REFUSED: {e:?}"),
         }
         while g.fsm.pending_command_doorbells() > 0 {
             self.counters.serviced.fetch_add(1, Ordering::Relaxed);
-            match g.fsm.service_one_deferred_command(&mut ram, &mut g.policy) {
+            match g.fsm.service_one_deferred_command(&mut ram, g.policy.as_mut()) {
                 Ok(r) => self.log_report(&r),
                 Err(e) => {
                     eprintln!("kf3: GSP command service REFUSED: {e:?}");
