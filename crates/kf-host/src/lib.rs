@@ -1050,16 +1050,42 @@ impl HostRm {
         len: u64,
         access: ViewAccess,
     ) -> Result<(CharDevice, u64), RmError> {
-        let node = match which {
+        let node = self.open_view_node(which, access)?;
+        self.arm_cpu_view_on(node, h_memory, offset, len, access)
+    }
+
+    /// Open the device node a CPU view's `mmap` context will live on — the half of
+    /// [`HostRm::arm_cpu_view`] that can be done AHEAD of time (an `openat`, off any vCPU).
+    ///
+    /// # Errors
+    /// The `openat` refusal.
+    pub fn open_view_node(&self, which: MapNode, access: ViewAccess) -> Result<CharDevice, RmError> {
+        match which {
             MapNode::Gpu => {
                 let name = CString::new(format!("nvidia{}", self.gpu_index))
                     .map_err(|_| RmError::Other(IMPOSSIBLE_CONVERSION))?;
-                CharDevice::openat_mode(&self.dev, &name, access.dev_access())
-                    .map_err(|e| ioctl_error(&e))?
+                CharDevice::openat_mode(&self.dev, &name, access.dev_access()).map_err(|e| ioctl_error(&e))
             }
-            MapNode::Ctl => CharDevice::openat_mode(&self.dev, c"nvidiactl", access.dev_access())
-                .map_err(|e| ioctl_error(&e))?,
-        };
+            MapNode::Ctl => {
+                CharDevice::openat_mode(&self.dev, c"nvidiactl", access.dev_access()).map_err(|e| ioctl_error(&e))
+            }
+        }
+    }
+
+    /// ★ The ONE ioctl of a CPU view — `NV_ESC_RM_MAP_MEMORY` of `h_memory[offset, offset+len)`
+    /// onto a node from [`HostRm::open_view_node`]. The PRAMIN re-point's only RM call on a vCPU
+    /// (owner ruling 2026-09-25: one map + one `mmap` per window move, nothing else).
+    ///
+    /// # Errors
+    /// The ioctl or RM's status (the node is dropped with the error).
+    pub fn arm_cpu_view_on(
+        &self,
+        node: CharDevice,
+        h_memory: u32,
+        offset: u64,
+        len: u64,
+        access: ViewAccess,
+    ) -> Result<(CharDevice, u64), RmError> {
         let mut arg = [0u8; Nvos33ParametersWithFd::SIZE];
         Nvos33ParametersWithFd {
             h_client: self.client.raw(),

@@ -3,7 +3,7 @@
 //!
 //! | piece | disposition | who touches it |
 //! |---|---|---|
-//! | PRAMIN (`BAR0 0x700000`, 1 MiB) | **A**: one RAM range under one memslot, no exit | the vCPU re-points it in the trapped window-base write, from views armed at realize ([`PraminPool`]) |
+//! | PRAMIN (`BAR0 0x700000`, 1 MiB) | **A**: one RAM range under one memslot, no exit | the vCPU re-points it in the trapped window-base write: ONE host map + ONE `mmap` per move (owner ruling 2026-09-25, [`PraminPool`]); old views released by a reaper thread |
 //! | BAR2 (PCI BAR3) | **A**: one RAM range, scratch where nothing is mapped | the VA-manager thread, after the GPU walker walked OUR BAR2 root ([`CpuWindow`] as the reconcile's target) |
 //! | BAR1 | **A**: one RAM range, all scratch | nothing yet — see below |
 //! | the three `MMU_INVALIDATE` registers | **B** | the vCPU arms + wakes ([`InvalidatePort`]); the VA-manager thread walks, reconciles, and only then clears |
@@ -139,6 +139,68 @@ pub struct WindowOps {
     win: &'static GuestWindow,
     scratch: &'static SharedRam,
     ram: &'static RamMap,
+    /// PRAMIN only: nodes opened ahead of time and the reaper that releases retired views.
+    trap: Option<&'static TrapNodes>,
+}
+
+/// ★ The PRAMIN trap's helpers: device nodes opened AHEAD of time (so the trap's map is exactly one
+/// ioctl), and a reaper thread that releases retired views and refills the node pool — both OFF
+/// the vCPU.
+pub struct TrapNodes {
+    nodes: Mutex<std::sync::mpsc::Receiver<CharDevice>>,
+    retire: Mutex<std::sync::mpsc::Sender<StoreView>>,
+    /// Trap-time `openat`s because the pool was empty (should stay 0).
+    pub inline_opens: AtomicU64,
+    /// Views released by the reaper.
+    pub reaped: AtomicU64,
+    /// Releases the host refused (the aperture leaked; counted).
+    pub reap_refused: AtomicU64,
+}
+
+/// Nodes kept ready for the trap. One is taken per store window move and one is returned to the
+/// reaper by the view it replaces, so a small pool never drains.
+const TRAP_NODES: usize = 4;
+
+impl TrapNodes {
+    /// Open the pool and start the reaper thread.
+    ///
+    /// # Errors
+    /// The first `openat` or the thread spawn, by name.
+    pub fn start(rm: &'static HostRm, store: u32) -> Result<&'static TrapNodes, String> {
+        let (node_tx, node_rx) = std::sync::mpsc::sync_channel::<CharDevice>(TRAP_NODES);
+        let (retire_tx, retire_rx) = std::sync::mpsc::channel::<StoreView>();
+        let open = move || rm.open_view_node(MapNode::Gpu, ViewAccess::ReadWrite);
+        for _ in 0..TRAP_NODES {
+            node_tx.try_send(open().map_err(|e| format!("PRAMIN node: {e:?}"))?).map_err(|e| format!("{e}"))?;
+        }
+        let t: &'static TrapNodes = Box::leak(Box::new(TrapNodes {
+            nodes: Mutex::new(node_rx),
+            retire: Mutex::new(retire_tx),
+            inline_opens: AtomicU64::new(0),
+            reaped: AtomicU64::new(0),
+            reap_refused: AtomicU64::new(0),
+        }));
+        std::thread::Builder::new()
+            .name("kf3-pramin-reaper".into())
+            .spawn(move || {
+                while let Ok(v) = retire_rx.recv() {
+                    let r = rm.release_cpu_view(CpuViewRelease { h_memory: store, p_linear_address: v.cookie });
+                    drop(v.node);
+                    if r.is_ok() {
+                        t.reaped.fetch_add(1, Ordering::Relaxed);
+                    } else {
+                        t.reap_refused.fetch_add(1, Ordering::Relaxed);
+                    }
+                    while let Ok(n) = open() {
+                        if node_tx.try_send(n).is_err() {
+                            break;
+                        }
+                    }
+                }
+            })
+            .map_err(|e| format!("PRAMIN reaper thread: {e}"))?;
+        Ok(t)
+    }
 }
 
 impl ViewOps for WindowOps {
@@ -181,6 +243,38 @@ impl ViewOps for WindowOps {
         let r = self.rm.release_cpu_view(CpuViewRelease { h_memory: self.store, p_linear_address: v.cookie });
         drop(v.node);
         r.map_err(|e| format!("NV_ESC_RM_UNMAP_MEMORY: {e:?}"))
+    }
+
+    /// ★ The trap's ONE RM call: `NV_ESC_RM_MAP_MEMORY` on a node opened ahead of time.
+    fn arm_store_in_trap(&self, off: u64, len: u64) -> Result<StoreView, String> {
+        let Some(t) = self.trap else { return self.arm_store(off, len) };
+        let node = t.nodes.lock().ok().and_then(|rx| rx.try_recv().ok());
+        let node = match node {
+            Some(n) => n,
+            None => {
+                t.inline_opens.fetch_add(1, Ordering::Relaxed);
+                self.rm
+                    .open_view_node(MapNode::Gpu, ViewAccess::ReadWrite)
+                    .map_err(|e| format!("PRAMIN node (inline): {e:?}"))?
+            }
+        };
+        let (node, cookie) = self
+            .rm
+            .arm_cpu_view_on(node, self.store, off, len, ViewAccess::ReadWrite)
+            .map_err(|e| format!("NV_ESC_RM_MAP_MEMORY store@{off:#x}+{len:#x}: {e:?}"))?;
+        Ok(StoreView { node, cookie })
+    }
+
+    /// Hand a replaced view to the reaper (off the vCPU); inline only if the reaper is gone.
+    fn retire(&self, v: StoreView) {
+        let Some(t) = self.trap else {
+            let _ = self.release(v);
+            return;
+        };
+        let sent = t.retire.lock().ok().map(|tx| tx.send(v));
+        if let Some(Err(std::sync::mpsc::SendError(v))) = sent {
+            let _ = self.release(v);
+        }
     }
 }
 
@@ -374,6 +468,8 @@ pub struct MemPlane {
     pub port: InvalidatePort,
     /// The PRAMIN window's views.
     pub pramin: PraminPool<WindowOps>,
+    /// The PRAMIN trap's node pool and reaper.
+    pub pramin_trap: &'static TrapNodes,
     /// The PRAMIN window-base register of this family.
     pub pramin_reg: WindowReg,
     pramin_want: AtomicU64,
@@ -402,23 +498,6 @@ pub struct MemPlane {
     pub mirrors: Mirrors,
     /// The store's length (the identity window's).
     pub fb_len: u64,
-}
-
-/// ★ The store ranges whose PRAMIN views are armed at realize (`V3_P4_PORT_MAP.md` Q2, measured).
-///
-/// `[measured cap3, GA106 at 12 GiB]` the whole boot names three window bases, all relative to the
-/// top of FB: `fb - 0x1044_0000` (BAR2 page-table build, 33 972 writes at `+0x2000..+0x16000`;
-/// the fn 70 read-back), `fb - 0x1046_0000` (`kbusVerifyBar2`, `+0xE000`), and `fb - 1 MiB` (the
-/// parked window, no accesses) — i.e. `carve - 0x2_0000`, `carve - 0x4_0000` and the top MiB, with
-/// `carve = fb - FW_CARVE_OUT_BYTES` the base of the carve-out we declare. ⇒ Armed: the 8 MiB below
-/// the carve-out plus the first MiB of it (a 1 MiB window from any 64 KiB base in the 8 MiB below
-/// is then wholly covered), and the top MiB. ~10 MiB of the host's ~254 MiB BAR1 pool, 160 fds.
-/// A window elsewhere shows scratch in the uncovered slots and is COUNTED ([`MemCounters`]).
-#[must_use]
-pub fn pramin_ranges(fb_length: u64, carve: u64) -> Vec<(u64, u64)> {
-    const BELOW: u64 = 8 << 20;
-    const MIB: u64 = 1 << 20;
-    vec![(carve.saturating_sub(BELOW), (carve + MIB).min(fb_length)), (fb_length.saturating_sub(MIB), fb_length)]
 }
 
 impl MemPlane {
@@ -452,21 +531,20 @@ impl MemPlane {
         let (pramin_win, pramin_scratch) = window(pramin_len, "PRAMIN")?;
         let (bar1_win, _bar1_scratch) = window(bar1_bytes, "BAR1")?;
         let (bar2_win, bar2_scratch) = window(bar2_bytes, "BAR2")?;
-        let ops = |win, scratch| WindowOps { rm, store, win, scratch, ram };
-        let carve = layout.regions.last().map_or(layout.fb_length, |r| r.base);
-        let ranges = pramin_ranges(layout.fb_length, carve);
-        let pramin = PraminPool::arm(
-            ops(pramin_win, pramin_scratch),
+        let ops = |win, scratch, trap| WindowOps { rm, store, win, scratch, ram, trap };
+        let trap = TrapNodes::start(rm, store)?;
+        let pramin = PraminPool::new(
+            ops(pramin_win, pramin_scratch, Some(trap)),
             GRANULE,
-            &ranges,
             Box::new(move |gpa, len| ram.file_range(gpa, len).map(|(_, off)| off)),
-        )?;
+        );
         let regs = kf_trap::InvalidateRegs::from_usermode_base(kf_trap::memmap::VF_USERMODE_PAGE)
             .ok_or("MMU_INVALIDATE registers: the usermode base is below the PRIV delta")?;
         Ok((
             MemPlane {
                 port: InvalidatePort::new(regs),
                 pramin,
+                pramin_trap: trap,
                 pramin_reg: WindowReg::for_family(family),
                 pramin_want: AtomicU64::new(0),
                 pramin_win,
@@ -482,7 +560,7 @@ impl MemPlane {
                 mirrors,
                 fb_len: layout.fb_length,
             },
-            ops(bar2_win, bar2_scratch),
+            ops(bar2_win, bar2_scratch, None),
         ))
     }
 
@@ -538,8 +616,8 @@ impl MemPlane {
         out
     }
 
-    /// ★ **vCPU, in the trap**: the guest wrote the window base. Re-point PRAMIN from pre-armed
-    /// views. ⊘ No lock: two racing writers each re-check the latest word after placing, so the
+    /// ★ **vCPU, in the trap**: the guest wrote the window base. Re-point PRAMIN: one host map +
+    /// one `mmap` (owner ruling 2026-09-25 — the ONE sanctioned vCPU syscall). ⊘ No lock: two racing writers each re-check the latest word after placing, so the
     /// last to finish always leaves the latest window in place.
     pub fn pramin_write(&self, raw: u32) {
         let t0 = std::time::Instant::now();
@@ -684,18 +762,6 @@ mod tests {
 
     /// The measured bases, at 12 GiB, are inside what is armed, and a 1 MiB window from each is
     /// wholly covered.
-    #[test]
-    fn the_armed_ranges_cover_every_measured_window() {
-        let fb = 12u64 << 30;
-        let carve = fb - kf_chip::bar0::FW_CARVE_OUT_BYTES;
-        let r = pramin_ranges(fb, carve);
-        let covered = |a: u64| r.iter().any(|&(s, e)| a >= s && a + (1 << 20) <= e);
-        for base in [0x2_EFBC_0000u64, 0x2_EFBA_0000, 0x2_FFF0_0000] {
-            assert!(covered(base), "{base:#x}");
-        }
-        assert!(r.iter().map(|(s, e)| e - s).sum::<u64>() <= 10 << 20, "within the aperture budget");
-    }
-
     #[test]
     fn the_bar2_key_is_no_guest_key() {
         assert_eq!(K_BAR2.0 >> 32, 0xFFFF_FFFF);
