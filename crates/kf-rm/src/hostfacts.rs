@@ -149,7 +149,7 @@ pub const PROVENANCE: &[(&str, Source)] = &[
     // 0x20801112 KERNEL). ⊘ Hopper refused by name: no NV_PFAULT_MMU_ENG_ID_HOST0 in the tree.
     ("engines", Source::HostControl { cmd: 0x2080_0170, name: "GPU_GET_ENGINES_V2 (types, counts); every slot authored per family: authored::engine_table / ENGINE_LAYOUT_WHY" }),
     ("lce_pce_masks", Source::HostControl { cmd: 0x2080_2a02, name: "CE_GET_CE_PCE_MASK" }),
-    ("intr_table", Source::HostControl { cmd: 0x2080_170e, name: "MC_GET_STATIC_INTR_TABLE (static rows) + MC_GET_ENGINE_NOTIFICATION_INTR_VECTORS 0x2080170d (engine non-stall rows), keyed to MC_ENGINE_IDX by rule; + the GSP and DISP stall rows of the device we present (authored::GSP_DISP_VECTORS_WHY)" }),
+    ("intr_table", Source::HostControl { cmd: 0x2080_170e, name: "MC_GET_STATIC_INTR_TABLE (static rows) (static rows, keyed to MC_ENGINE_IDX by rule) + authored::engine_notification_rows (non-stall rows of OUR runlists; 0x2080170d is NOT_SUPPORTED to usermode) + the GSP and DISP stall rows of the device we present (authored::GSP_DISP_VECTORS_WHY)" }),
     ("intr_subtree_map", Source::HostControl { cmd: 0x2080_170f, name: "MC_GET_INTR_CATEGORY_SUBTREE_MAP" }),
     ("chip_info", Source::FamilyRule("USERMODE base = DRF_BASE(NV_VIRTUAL_FUNCTION_FULL_PHYS_OFFSET) + NV_VIRTUAL_FUNCTION (ogkm dev_vm.h); sub-rev from MC_GET_ARCH_INFO; isCmpSku from GPU_GET_INFO_V2[CMP_SKU 0x3c]")),
     ("user_register_access_map", Source::Authored("accessmap.rs")),
@@ -465,25 +465,7 @@ pub fn mc_engine_idx_of_engine_type(engine_type: u32) -> Option<u16> {
 /// [`FactRefusal::ShortReply`]; [`FactRefusal::Unservable`] for a count over its array, a key
 /// with no `MC_ENGINE_IDX`, or a table over `INTR_MAX_TABLE_SIZE`.
 pub fn derive_intr_table(static_reply: &[u8], notification_reply: &[u8]) -> Result<Vec<IntrTableEntry>, FactRefusal> {
-    let cmd = NV2080_CTRL_CMD_MC_GET_STATIC_INTR_TABLE;
-    need(cmd, static_reply, MC_STATIC_INTR_TABLE_PARAMS_SIZE)?;
-    let n = le32(static_reply, 0).unwrap_or(0) as usize;
-    if n > MC_STATIC_INTR_TABLE_MAX {
-        return Err(FactRefusal::Unservable { cmd, why: "numEntries exceeds NV2080_CTRL_MC_GET_STATIC_INTR_TABLE_MAX" });
-    }
-    let mut out = Vec::new();
-    for i in 0..n {
-        let at = 4 + 16 * i;
-        let word = |k: usize| le32(static_reply, at + 4 * k).unwrap_or(0);
-        let engine_idx = mc_engine_idx_of_intr_type(word(0))
-            .ok_or(FactRefusal::Unservable { cmd, why: "an NV2080_INTR_TYPE with no MC_ENGINE_IDX in this port" })?;
-        out.push(IntrTableEntry {
-            engine_idx,
-            pmc_intr_mask: word(1),
-            vector_stall: word(2),
-            vector_non_stall: word(3),
-        });
-    }
+    let mut out = derive_static_intr_table(static_reply)?;
     let cmd = NV2080_CTRL_CMD_MC_GET_ENGINE_NOTIFICATION_INTR_VECTORS;
     need(cmd, notification_reply, MC_ENGINE_NOTIFICATION_PARAMS_SIZE)?;
     let n = le32(notification_reply, 0).unwrap_or(0) as usize;
@@ -504,6 +486,34 @@ pub fn derive_intr_table(static_reply: &[u8], notification_reply: &[u8]) -> Resu
     }
     if out.len() > kf_abi::inittables::INTR_MAX_TABLE_SIZE {
         return Err(FactRefusal::Unservable { cmd, why: "more rows than INTR_MAX_TABLE_SIZE" });
+    }
+    Ok(out)
+}
+
+/// The static rows alone (`0x2080170e`), re-keyed to `MC_ENGINE_IDX` — what a usermode host can
+/// report; the engine non-stall rows are authored ([`crate::authored::engine_notification_rows`]).
+///
+/// # Errors
+/// As [`derive_intr_table`], for the static reply.
+pub fn derive_static_intr_table(static_reply: &[u8]) -> Result<Vec<IntrTableEntry>, FactRefusal> {
+    let cmd = NV2080_CTRL_CMD_MC_GET_STATIC_INTR_TABLE;
+    need(cmd, static_reply, MC_STATIC_INTR_TABLE_PARAMS_SIZE)?;
+    let n = le32(static_reply, 0).unwrap_or(0) as usize;
+    if n > MC_STATIC_INTR_TABLE_MAX {
+        return Err(FactRefusal::Unservable { cmd, why: "numEntries exceeds NV2080_CTRL_MC_GET_STATIC_INTR_TABLE_MAX" });
+    }
+    let mut out = Vec::new();
+    for i in 0..n {
+        let at = 4 + 16 * i;
+        let word = |k: usize| le32(static_reply, at + 4 * k).unwrap_or(0);
+        let engine_idx = mc_engine_idx_of_intr_type(word(0))
+            .ok_or(FactRefusal::Unservable { cmd, why: "an NV2080_INTR_TYPE with no MC_ENGINE_IDX in this port" })?;
+        out.push(IntrTableEntry {
+            engine_idx,
+            pmc_intr_mask: word(1),
+            vector_stall: word(2),
+            vector_non_stall: word(3),
+        });
     }
     Ok(out)
 }

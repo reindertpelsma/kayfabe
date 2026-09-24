@@ -294,14 +294,15 @@ pub fn query_lce_pce_masks(host: &mut dyn HostControls) -> Result<Vec<u32>, Fiel
 ///
 /// # Errors
 /// [`FieldCause`] — including a host row already on the vector our GSP raises.
-pub fn query_intr_table(host: &mut dyn HostControls) -> Result<Vec<kf_abi::inittables::IntrTableEntry>, FieldCause> {
+pub fn query_intr_table(
+    host: &mut dyn HostControls,
+    kinds: Result<&[authored::EngineKind], &FieldCause>,
+) -> Result<Vec<kf_abi::inittables::IntrTableEntry>, FieldCause> {
     let s = ask(host, hostfacts::NV2080_CTRL_CMD_MC_GET_STATIC_INTR_TABLE, zeroed(hostfacts::MC_STATIC_INTR_TABLE_PARAMS_SIZE))?;
-    let n = ask(
-        host,
-        hostfacts::NV2080_CTRL_CMD_MC_GET_ENGINE_NOTIFICATION_INTR_VECTORS,
-        zeroed(hostfacts::MC_ENGINE_NOTIFICATION_PARAMS_SIZE),
-    )?;
-    authored::with_gsp_and_disp_rows(hostfacts::derive_intr_table(&s, &n)?).map_err(|_| {
+    let kinds = kinds.map_err(|_| FieldCause::DependsOn("engines"))?;
+    let mut table = hostfacts::derive_static_intr_table(&s)?;
+    table.extend(authored::engine_notification_rows(kinds));
+    authored::with_gsp_and_disp_rows(table).map_err(|_| {
         FieldCause::Reply(FactRefusal::Unservable {
             cmd: hostfacts::NV2080_CTRL_CMD_MC_GET_STATIC_INTR_TABLE,
             why: "a host interrupt row already uses the GSP or DISP vector this device presents",
@@ -703,7 +704,7 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
         Err(e) => Err(e.clone()),
     };
     let lce_pce_masks = query_lce_pce_masks(host);
-    let intr_table = query_intr_table(host);
+    let intr_table = query_intr_table(host, kinds.as_deref().map_err(|e| e));
     let intr_subtree_map = query_intr_subtree_map(host);
     let chip_info = match &arch {
         Ok((_, sub)) => query_chip_info(host, *sub),

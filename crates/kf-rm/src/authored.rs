@@ -165,6 +165,43 @@ pub fn with_gsp_and_disp_rows(mut table: Vec<IntrTableEntry>) -> Result<Vec<Intr
     Ok(table)
 }
 
+/// ★ The engine NON-STALL rows of the device we present — one per runlist that owns a notifier.
+///
+/// ⊘ Not the host's: `MC_GET_ENGINE_NOTIFICATION_INTR_VECTORS` (`0x2080170d`) answers
+/// `NV_ERR_NOT_SUPPORTED` to a usermode client (measured `f4b78ed9`, GA106, 580.159.04), and its
+/// vectors describe the host die's runlists, which the guest never sees — it sees
+/// [`engine_table`]'s. On Ampere+ a non-stall vector is the engine's interrupt ID in the
+/// runlist/device-info order (the GA106 capture: GR=0, then one per further unit), and every
+/// guest interrupt is injected BY US from a host NSI event, so the vector is ours to choose.
+///
+/// Rule: GR0 → vector 0 (its runlist-0 graphics CEs notify through it and get no row, as in the
+/// capture); each async CE → its runlist number; the SW pseudo-engine → none. Distinct by
+/// construction and below the 12-bit leaf-vector limit.
+#[must_use]
+pub fn engine_notification_rows(engines: &[EngineKind]) -> Vec<IntrTableEntry> {
+    let grce = |i: u32| i < 64 && kf_abi::cecaps::GA10X_GRCE_LCE_MASK & (1u64 << i) != 0;
+    let mut next_runlist = 1u32;
+    let mut out = Vec::new();
+    for &kind in engines {
+        let row = |engine_idx: u32, v: u32| IntrTableEntry {
+            engine_idx: engine_idx as u16,
+            pmc_intr_mask: 0,
+            vector_stall: INTR_VECTOR_INVALID,
+            vector_non_stall: v,
+        };
+        match kind {
+            EngineKind::Graphics(i) => out.push(row(MC_GR0 + i, 0)),
+            EngineKind::Copy(i) if grce(i) => {}
+            EngineKind::Copy(i) => {
+                out.push(row(MC_CE0 + i, next_runlist));
+                next_runlist += 1;
+            }
+            EngineKind::Software => {}
+        }
+    }
+    out
+}
+
 // =====================================================================================
 // The FIFO engine table of the device we present
 // =====================================================================================

@@ -271,13 +271,29 @@ fn a_ga106_host_fills_every_field_and_each_equals_the_captured_row_or_a_stated_d
     assert_eq!(got.gr_static.caps, f.gr_static.caps);
     assert_eq!(got.gr_static.fecs_record_size, f.gr_static.fecs_record_size);
     assert_eq!(got.gr_static.per_subctx_header_supported, f.gr_static.per_subctx_header_supported);
-    // intr_table: the host's static + notification rows (completed from the captured table) and
-    // the AUTHORED GSP/DISP rows — the same SET as the captured kernel table.
-    let mut a = got.intr_table.clone();
-    let mut b = f.intr_table.clone();
+    // intr_table: the host's STATIC rows and the authored GSP/DISP rows equal the captured table's
+    // stall/static rows exactly. ⊘ The engine NON-STALL rows are authored for OUR runlists
+    // (0x2080170d is NOT_SUPPORTED to usermode, measured f4b78ed9), so they are checked against
+    // the rule, not the die: GR0 on 0, each async CE on its runlist, graphics CEs none.
+    let engine_row = |e: &kf_abi::inittables::IntrTableEntry| {
+        e.vector_stall == kf_abi::inittables::INTR_VECTOR_INVALID
+            && e.vector_non_stall != kf_abi::inittables::INTR_VECTOR_INVALID
+    };
+    let captured_engine_row = |e: &kf_abi::inittables::IntrTableEntry| {
+        e.vector_stall == kf_abi::inittables::INTR_VECTOR_INVALID && e.engine_idx < 156
+    };
+    let mut a: Vec<_> = got.intr_table.iter().filter(|e| !engine_row(e)).cloned().collect();
+    let mut b: Vec<_> = f.intr_table.iter().filter(|e| !captured_engine_row(e)).cloned().collect();
     a.sort_by_key(|e| e.engine_idx);
     b.sort_by_key(|e| e.engine_idx);
     assert_eq!(a, b);
+    let mut rows: Vec<(u16, u32)> =
+        got.intr_table.iter().filter(|e| engine_row(e)).map(|e| (e.engine_idx, e.vector_non_stall)).collect();
+    rows.sort_unstable();
+    let mut vectors: Vec<u32> = rows.iter().map(|r| r.1).collect();
+    vectors.dedup();
+    assert_eq!(vectors.len(), rows.len(), "two engines on one non-stall vector: {rows:?}");
+    assert!(rows.contains(&(84, 0)), "GR0 notifies on vector 0: {rows:?}");
     // engines: see the dedicated test.
     assert_engine_rows_match_except_stated(&got.engines, &f.engines);
 }
