@@ -1051,3 +1051,31 @@ hostile_entry_refused_by_name (Rewrite{gp:3, PeerOperand}) · hostile_entry_not_
 
 ⊘ Not yet covered: a guest pushbuffer IN guest RAM (read path `ram=true`), segments crossing ledger
 rows, and more than one Translated channel on one worker. Next: the doorbell → worker wiring.
+
+## §26 — ✔ `[MEASURED w826]` **v3 GATE 4 PASSES: doorbells drive workers across three Translated channels.**
+
+**Box 52430332, GA106, 580.159.04.** Rev `65d9c452`, `kf-gate4`.
+
+```
+plane us=57100 served=227 parks=164 host_rings=180 timeslices=0 vcpu_wakes=61
+per_channel (fetched, submissions, splits) = ch0:(24,24,1) ch1:(24,24,0) ch2:(24,24,0)
+no_channel_died · pump_never_contended (0) · hostile_rings_produce_no_action (0 of 200000) ·
+every_copy_landed (72/72) · channel_retired_and_released ×3 (GP_GET=24, sem=24 in guest RAM) ·
+split_walked_once_on_a_worker                                                   ALL PASS
+```
+
+★ Measured: vCPU threads ring through `kf_trap::TrapPath` (the real trap body); two workers scan,
+claim, pump and park via `try_park(seen)`; a host completion is an **internal ring** of the channel's
+own token, so the pump is serialized by `BUSY` alone — **zero contended serves** proves it. Channels
+live in **guest RAM** behind SYSMEM PTEs: the aperture classifier (`kf_mem::desired_from_leaves`)
+maps them onto the guest-RAM object; gates 2 and 3 had hard-coded `ram:false`.
+
+⚠ **Found on the way, and fixed:** arming a subdevice notifier is per SUBDEVICE and legal only from
+`DISABLE` (`subdevice_ctrl_event_kernel.c:123-130`); the second channel's arm returned `0x40`.
+⇒ `HostRm::arm_repeat`, once per session.
+
+⚠ **The fan-out, visible in the counters:** `host_rings=180` for 72 entries. The NSI notifier is
+GPU-wide and carries no identity, so every completion flags EVERY host ring's event fd and rings
+every channel — including idle ones. ⇒ Next: **one session event fd**, and on its readiness ring
+only the tokens with a fence **in flight** (a set the rings maintain). The wake cannot be narrower
+than "someone finished"; the ring can be narrower than "everyone".
