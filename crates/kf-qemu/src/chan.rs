@@ -87,8 +87,15 @@ pub struct EngineEvent {
     pub ev: kf_host::EventFd,
     /// The guest vector (`None`: the served table has none — counted, never raised).
     pub vector: Option<u32>,
+    /// The host engine (`NV2080_ENGINE_TYPE_*`).
+    pub engine_type: u32,
+    /// Live guest twins on this engine: a wake with none is not the guest's work (our own
+    /// Translated rings, the GPU walker's copies, another host tenant) and raises nothing.
+    pub live: AtomicU64,
     /// Wakes seen.
     pub wakes: AtomicU64,
+    /// Wakes raised to the guest.
+    pub raised: AtomicU64,
 }
 
 /// A CE class id on ANY family — the class tables are generated per family and class ids are
@@ -281,6 +288,10 @@ pub struct ChanPlane {
     pub act_worst_us: AtomicU64,
     /// Passthrough twins born.
     pub pt_births: AtomicU64,
+    /// ★ Per guest token: doorbells the vCPU trap rang INLINE, and how many reached the host's
+    /// doorbell (the `DOORBELL-LEDGER` line at free; atomics only — the vCPU writes them).
+    rung: Box<[AtomicU64]>,
+    rang: Box<[AtomicU64]>,
 }
 
 impl ChanPlane {
@@ -317,20 +328,28 @@ impl ChanPlane {
         // engine the host has (`CE_GET_CAPS_V2` answers for it). Realize-time host ioctls, never a
         // vCPU. A GRCE's completions announce on GR0's vector (it has no row of its own).
         let mut engines = Vec::new();
-        let mut kinds = vec![(kf_rm::authored::EngineKind::Graphics(0), NV2080_NOTIFIERS_GR0)];
+        let mut kinds = vec![(kf_rm::authored::EngineKind::Graphics(0), NV2080_NOTIFIERS_GR0, kf_abi::submit::ENGINE_TYPE_GRAPHICS)];
         for i in 0..20u32 {
             if let Some(et) = kf_chan::passthrough::copy_engine_type(i)
                 && rm.ce_is_grce(et).is_ok()
             {
-                kinds.push((kf_rm::authored::EngineKind::Copy(i), kf_host::event::notifier_ce(i)));
+                kinds.push((kf_rm::authored::EngineKind::Copy(i), kf_host::event::notifier_ce(i), et));
             }
         }
-        for (kind, notify) in kinds {
+        for (kind, notify, engine_type) in kinds {
             let ev = rm.open_event_fd().map_err(|e| format!("{} event fd: {e:?}", kind.name()))?;
             rm.alloc_os_event(rm.subdevice(), notify, true, &ev).map_err(|e| format!("{} os event: {e:?}", kind.name()))?;
             rm.arm_repeat(notify).map_err(|e| format!("{} notify: {e:?}", kind.name()))?;
             let vector = kf_rm::authored::non_stall_vector_for(intr_table, kind);
-            engines.push(EngineEvent { name: kind.name(), ev, vector, wakes: AtomicU64::new(0) });
+            engines.push(EngineEvent {
+                name: kind.name(),
+                ev,
+                vector,
+                engine_type,
+                live: AtomicU64::new(0),
+                wakes: AtomicU64::new(0),
+                raised: AtomicU64::new(0),
+            });
         }
         eprintln!(
             "kf3: interrupt plane: host non-stall events -> guest vectors [{}]",
@@ -363,6 +382,8 @@ impl ChanPlane {
             acts_refused: AtomicU64::new(0),
             act_worst_us: AtomicU64::new(0),
             pt_births: AtomicU64::new(0),
+            rung: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
+            rang: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
         })
     }
 
@@ -402,6 +423,34 @@ impl ChanPlane {
             *a = Some(tx);
         }
         Ok(())
+    }
+
+    /// ★ **vCPU**: a doorbell on guest token `idx` was rung inline; `reached` = the host store
+    /// succeeded. Two relaxed atomics — the only thing this plane does on a vCPU.
+    pub fn note_inline(&self, idx: u32, reached: bool) {
+        if let Some(c) = self.rung.get(idx as usize) {
+            c.fetch_add(1, Ordering::Relaxed);
+        }
+        if reached && let Some(c) = self.rang.get(idx as usize) {
+            c.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    /// `(rung, reached)` for token `idx`, reset (a freed token's successor starts at zero).
+    fn take_ledger(&self, idx: u32) -> (u64, u64) {
+        let r = self.rung.get(idx as usize).map_or(0, |c| c.swap(0, Ordering::Relaxed));
+        let f = self.rang.get(idx as usize).map_or(0, |c| c.swap(0, Ordering::Relaxed));
+        (r, f)
+    }
+
+    fn engine_live(&self, engine_type: u32, up: bool) {
+        if let Some(e) = self.engines.iter().find(|e| e.engine_type == engine_type) {
+            if up {
+                e.live.fetch_add(1, Ordering::Relaxed);
+            } else {
+                let _ = e.live.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1));
+            }
+        }
     }
 
     /// Queue `act` and answer [`ChanAnswer::Deferred`] — the drainer returns at once.
@@ -606,6 +655,17 @@ impl ChanPlane {
                 }
                 for ((c, h), t) in twins {
                     let r = me.rm.free_channel(t.chan);
+                    me.engine_live(t.engine, false);
+                    // ★ The per-token hardware ledger (`run_fast_guest.sh` gates on it): every ring
+                    // of a Passthrough token IS a host doorbell, so `emulated` is only the rings
+                    // that failed to reach the host — never a CPU executor.
+                    let (rung, reached) = me.take_ledger(t.idx);
+                    eprintln!(
+                        "kf3: DOORBELL-LEDGER tok={:#010x} route=passthrough rung={rung} emulated={} forwarded={reached} host={:#x}",
+                        t.idx,
+                        rung - reached.min(rung),
+                        t.chan.token
+                    );
                     line.push(format!("passthrough {c:#x}:{h:#x} token {:#x} host {:#x} objects={} {}", t.idx, t.chan.token, t.objects.len(), if r.is_ok() { "freed" } else { "FREE REFUSED" }));
                 }
                 if let Some(h) = obj {
@@ -690,6 +750,8 @@ impl ChanPlane {
                         m.insert((a.client, a.handle), PtChan { chan, idx, tsg: a.tsg, parent: a.parent, engine, objects: HashMap::new() });
                     }
                     me.pt_births.fetch_add(1, Ordering::Relaxed);
+                    me.engine_live(engine, true);
+                    let _ = me.take_ledger(idx);
                     Ok(format!(
                         "chan {:#x}:{:#x} BORN Passthrough: token {idx:#x} -> host {:#x} in {key:?} gpfifo={:#x}x{} userd={userd:?} engine={engine:#x}",
                         a.client, a.handle, chan.token, a.gpfifo_va, g.entries
@@ -774,6 +836,12 @@ impl ChanPlane {
         if let UserdView::Store { cookie, .. } = &g.userd {
             let _ = self.rm.release_cpu_view(kf_host::CpuViewRelease { h_memory: self.store, p_linear_address: *cookie });
         }
+        eprintln!(
+            "kf3: DOORBELL-LEDGER tok={:#010x} route=translated emulated={} forwarded={} host={ht:#x}",
+            g.guest_idx,
+            u64::from(g.dead.is_some() && g.chan.counts().0 == 0),
+            g.chan.counts().0
+        );
         eprintln!(
             "kf3: chan token {:#x} (host {ht:#x}) RETIRED, forwarded={} serves={} last_put={:?} gp_get={:?}",
             g.guest_idx,

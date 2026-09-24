@@ -531,7 +531,10 @@ impl Device {
         let off32 = u32::try_from(off).unwrap_or(u32::MAX);
         match self.plane.trap_write(class, 0, off32, val, width) {
             Action::RingHostInline { host_token } => {
-                let _ = self.rm.doorbell(host_token);
+                // ★ P5b: a Passthrough token — ONE fenced store into the host's doorbell, and two
+                // relaxed counters for the per-token ledger. Nothing else on the vCPU.
+                let reached = self.rm.doorbell(host_token).is_ok();
+                self.chans.note_inline((val as u32) & self.plane.token_mask, reached);
             }
             Action::WakeWorker => {
                 let _ = self.worker_efd.signal();
@@ -843,7 +846,7 @@ impl Device {
             .engines
             .iter()
             .filter(|e| e.wakes.load(o) > 0)
-            .map(|e| format!("{}:{}", e.name, e.wakes.load(o)))
+            .map(|e| format!("{}:{}/{}raised", e.name, e.wakes.load(o), e.raised.load(o)))
             .collect();
         let chan = format!(
             " chan[births={} pt_births={} acts={}/{}refused worst_act_us={} nsi=[{}] served={} parks={} host_rings={} contended={} poisoned={} tokens=[{}]]",
@@ -944,7 +947,12 @@ impl Device {
                 return;
             };
             e.wakes.fetch_add(1, Ordering::Relaxed);
-            if let Some(v) = e.vector {
+            // ⊘ Only an engine a guest twin runs on: the notifier is GPU-wide, and a wake with no
+            // twin there is our own ring's, the walker's or another tenant's — not guest work.
+            if e.live.load(Ordering::Relaxed) > 0
+                && let Some(v) = e.vector
+            {
+                e.raised.fetch_add(1, Ordering::Relaxed);
                 self.latch_and_deliver(v);
             }
         };
