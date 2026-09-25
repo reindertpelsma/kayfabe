@@ -19,8 +19,9 @@
 //!    it, and dropping it would let the guest's later work (a semaphore release UVM orders behind
 //!    it, `uvm_pascal_host.c:32-45` / `uvm_hal.c:938`) overtake writes it ordered. An invalidate
 //!    that asked for a `SYSMEMBAR` (`MEM_OP_A` 11:11) keeps it the same way: a forwarded MEMBAR
-//!    (`SYS_MEMBAR`) ahead of the split. Other `MEM_OP_D` operations (`L2_*`,
-//!    `ACCESS_COUNTER_CLR`, Hopper's `MMU_OPERATION`) are still consumed here, unforwarded.
+//!    (`SYS_MEMBAR`) ahead of the split. `L2_*` maintenance is unprivileged and forwarded as
+//!    written; `ACCESS_COUNTER_CLR` is served (no access counters exist on our device); anything
+//!    else (Hopper's `MMU_OPERATION`, an unnamed operation) is refused by name — never consumed.
 //!
 //! Everything else — semaphores, virtual operands, host methods — is forwarded unchanged.
 //!
@@ -44,6 +45,15 @@ const MEMBAR_TYPE_SYS: u32 = 0;
 /// `NVC56F_MEM_OP_D_OPERATION` 31:27 — `MMU_TLB_INVALIDATE` / `_TARGETED`.
 const OP_TLB_INVALIDATE: u32 = 9;
 const OP_TLB_INVALIDATE_TARGETED: u32 = 0xa;
+/// `MEM_OP_D_OPERATION` L2 maintenance — `L2_PEERMEM_INVALIDATE` 0xd, `L2_SYSMEM_INVALIDATE` 0xe,
+/// `L2_CLEAN_COMPTAGS` 0xf, `L2_FLUSH_DIRTY` 0x10, `L2_SYSMEM_NCOH_INVALIDATE` 0x11 (Blackwell,
+/// `clc96f.h:73`), `L2_WAIT_FOR_SYS_PENDING_READS` 0x15 (`clc56f.h:187-193`, `clc86f.h:122-128`).
+/// ⊘ Not privileged: `alloc_channel.h:207-214` names ONLY `TLB_INVALIDATE` and
+/// `ACCESS_COUNTER_CLR` as privileged host methods ⇒ forwarded as the guest wrote them.
+const OPS_L2: [u32; 6] = [0xd, 0xe, 0xf, 0x10, 0x11, 0x15];
+/// `MEM_OP_D_OPERATION_ACCESS_COUNTER_CLR` 0x16 — privileged; our device exposes no access
+/// counters (the notify buffer is advertised and never written), so there is nothing to clear.
+const OP_ACCESS_COUNTER_CLR: u32 = 0x16;
 /// `NVC7B5_LINE_COUNT` — `clc7b5.h`.
 const LINE_COUNT: u32 = 0x41c;
 /// `NVC7B5_OFFSET_IN_LOWER` / `OUT_LOWER`.
@@ -166,6 +176,12 @@ pub enum Refusal {
         subch: u32,
         /// The class named.
         class: u32,
+    },
+    /// A `MEM_OP_D` operation this route neither forwards nor serves (Hopper's `MMU_OPERATION`, or
+    /// one no class header names).
+    MemOp {
+        /// `MEM_OP_D_OPERATION` (31:27).
+        op: u32,
     },
     /// ★ P6b: a method at or above `0x100` on a software subchannel (5-7) no `SET_OBJECT` bound —
     /// on bare metal a software-method trap to RM; nothing on our host channel may run it.
@@ -335,8 +351,24 @@ fn one_write(
             out.push(Piece::Invalidate {
                 pdb: (!all).then_some(hi | lo),
             });
+            return Ok(());
         }
-        return Ok(()); // the other MEM_OP_D operations are consumed here (see the module doc)
+        if OPS_L2.contains(&op) {
+            // L2 maintenance: an unprivileged host method — forwarded with its operands, in order.
+            emit(cur, sub, MEM_OP_A, st.mem_op_a);
+            emit(cur, sub, MEM_OP_B, st.mem_op_b);
+            emit(cur, sub, MEM_OP_C, st.mem_op_c);
+            emit(cur, sub, MEM_OP_D, v);
+            return Ok(());
+        }
+        if op == OP_ACCESS_COUNTER_CLR {
+            // Served, not dropped: the device we present has no access counters to clear.
+            return Ok(());
+        }
+        // ⊘ Everything else — Hopper's `MMU_OPERATION` (0xb, `VIDMEM_ACCESS_BIT_DUMP`,
+        // `clc86f.h:121,139-141`; unused by UVM) and any operation no class header names — is
+        // refused BY NAME rather than consumed silently.
+        return Err(Refusal::MemOp { op });
     }
     // Host methods (below 0x100) apply to the channel whatever the subchannel: forwarded.
     if m < 0x100 {

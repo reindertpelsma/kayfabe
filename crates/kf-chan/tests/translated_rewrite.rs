@@ -252,3 +252,27 @@ fn uvm_binds_the_ce_on_subchannel_0_and_launches_on_4_and_is_still_rewritten() {
         Err(Refusal::UnboundSubchannel { subch: 6, method: 0x300 })
     );
 }
+
+/// L2 maintenance is unprivileged (`alloc_channel.h:207-214`) — forwarded with its operands;
+/// ACCESS_COUNTER_CLR is served (no counters exist); Hopper's MMU_OPERATION and unnamed
+/// operations are refused by name, never silently consumed.
+#[test]
+fn mem_op_l2_is_forwarded_access_counter_clr_is_served_and_the_rest_is_refused() {
+    for (op, name) in [(0x10u32, "L2_FLUSH_DIRTY"), (0x11, "L2_SYSMEM_NCOH_INVALIDATE"), (0xe, "L2_SYSMEM_INVALIDATE")] {
+        let mut pb = setup();
+        pb.extend(m(0, 0x28, &[0, 0, 0, op << 27]));
+        let out = rewrite(&pb, is_ce, &mut CeState::default(), &W).unwrap();
+        let d: Vec<u32> = writes(&out).iter().filter(|&&(mm, _)| mm == 0x34).map(|&(_, v)| v).collect();
+        assert_eq!(d, vec![op << 27], "{name} is forwarded");
+    }
+    let mut pb = setup();
+    pb.extend(m(0, 0x28, &[0, 0, 0, 0x16 << 27]));
+    let out = rewrite(&pb, is_ce, &mut CeState::default(), &W).unwrap();
+    assert!(writes(&out).iter().all(|&(mm, _)| mm != 0x34), "ACCESS_COUNTER_CLR never reaches our channel");
+    for op in [0xbu32, 0x1f] {
+        let mut pb = setup();
+        pb.extend(m(0, 0x28, &[0, 0, 0, op << 27]));
+        let e = rewrite(&pb, is_ce, &mut CeState::default(), &W).unwrap_err();
+        assert!(format!("{e:?}").contains(&format!("{op}")), "op {op:#x} refused by name: {e:?}");
+    }
+}
