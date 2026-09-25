@@ -169,7 +169,7 @@ fn with_the_memory_plane_seated_every_statement_is_carried_and_held() {
         MemStatement::PageDir(st) => {
             assert_eq!((st.client.0, st.vaspace.0, st.pdb.0), (0xc1d0_000a, 0x5c00_0007, 0x0123_4000));
         }
-        MemStatement::BarPde(_) => panic!("wrong statement"),
+        ref other => panic!("wrong statement: {other:?}"),
     }
     drop(got);
     // fn 70: carried as a BAR2 root entry and held.
