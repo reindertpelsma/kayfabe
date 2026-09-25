@@ -969,13 +969,15 @@ impl Cuda {
         })
     }
 
-    /// `cuMemcpyDtoHAsync_v2` into `buf[off..off+n]`, in `stream`.
+    /// `cuMemcpyDtoHAsync_v2` into `buf[off..off+n]`, in `stream`. ⊘ Unused since the report is
+    /// written straight into pinned memory (2026-09-25); kept for a harness that stages a copy.
     ///
     /// # Errors
     /// [`CudaError::Refused`].
     ///
     /// # Panics
     /// If the range leaves `buf`.
+    #[allow(dead_code)]
     pub(crate) fn memcpy_d2h_async(
         &self,
         s: StreamHandle,

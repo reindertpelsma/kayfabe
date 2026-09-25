@@ -261,7 +261,7 @@ pub fn commit(com: &Committed, runs: &[KfMapRun], codes: &[AckCode]) -> Committe
 #[must_use]
 pub fn coverage(runs: &[KfMapRun]) -> [Vec<(u64, u64, u8, u64)>; CLASSES] {
     let mut out: [Vec<(u64, u64, u8, u64)>; CLASSES] = Default::default();
-    for c in 0..CLASSES {
+    for (c, slot) in out.iter_mut().enumerate() {
         let mut v: Vec<(u64, u64, u8, u64)> = runs
             .iter()
             .filter(|r| class_of(r.flags) == c)
@@ -280,7 +280,7 @@ pub fn coverage(runs: &[KfMapRun]) -> [Vec<(u64, u64, u8, u64)>; CLASSES] {
             }
             m.push(x);
         }
-        out[c] = m;
+        *slot = m;
     }
     out
 }
@@ -505,15 +505,9 @@ mod tests {
                 let mut failed_unmaps: Vec<(usize, u64, u64)> = Vec::new();
                 for x in &d.runs {
                     let c = class_of(x.flags);
-                    let code = if x.op == KFWR_OP_MAP
-                        && failed_unmaps.iter().any(|&(fc, a, b)| fc == c && x.va < b && a < x.va + x.len)
-                    {
-                        AckCode::Failed
-                    } else if r.below(4) == 0 {
-                        AckCode::Failed
-                    } else {
-                        AckCode::Applied
-                    };
+                    let blocked = x.op == KFWR_OP_MAP
+                        && failed_unmaps.iter().any(|&(fc, a, b)| fc == c && x.va < b && a < x.va + x.len);
+                    let code = if blocked || r.below(4) == 0 { AckCode::Failed } else { AckCode::Applied };
                     if x.op == KFWR_OP_UNMAP && code == AckCode::Failed {
                         failed_unmaps.push((c, x.va, x.va + x.len));
                     }
