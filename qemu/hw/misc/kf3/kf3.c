@@ -80,6 +80,10 @@ struct Kf3State {
     MemoryListener listener;
     Kf3Vec vec[KF3_MAX_VECTORS];
     uint64_t irq_routes, irq_route_fail;
+    /* w827 trap bench (property dummy-bar, default off): two do-nothing MMIO pages in the MSI-X
+     * BAR (every other BAR index is taken: BAR1/BAR3 are 64-bit and consume 2 and 4). */
+    bool dummy_bar;
+    MemoryRegion dummy_pages[2];
 };
 
 /* ── BAR0 ───────────────────────────────────────────────────────────────────────────────── */
@@ -206,6 +210,30 @@ static bool kf3_bar0_build(Kf3State *s, uint64_t size, Error **errp)
     kf3_shadow_seal(s->h);
     return true;
 }
+
+/* ── w827 trap bench: the most dummy trap possible ──────────────────────────────────────────
+ * Page 0 (MSI-X BAR + KF3_DUMMY_OFF) is lockless, page 1 (+ 0x1000) takes the BQL; both reads
+ * return 0 and both writes do nothing — no Rust call, no atomics, nothing. The guest times them
+ * next to our own trapped BAR0 writes: dummy ≈ ours means the cost is the exit (nesting); dummy
+ * << ours means it is our path or a lock. */
+#define KF3_DUMMY_OFF 0x8000
+
+static uint64_t kf3_dummy_read(void *opaque, hwaddr addr, unsigned size)
+{
+    return 0;
+}
+
+static void kf3_dummy_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
+{
+}
+
+static const MemoryRegionOps kf3_dummy_ops = {
+    .read = kf3_dummy_read,
+    .write = kf3_dummy_write,
+    .endianness = DEVICE_LITTLE_ENDIAN,
+    .valid = { .min_access_size = 1, .max_access_size = 8 },
+    .impl = { .min_access_size = 1, .max_access_size = 8 },
+};
 
 /* ── BAR1 / BAR2 ──────────────────────────────────────────────────────────────────────────
  * Plain RAM (Rust's windows). The ops below serve only a TRAPPED page (the Hopper+ BAR1
@@ -410,7 +438,14 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
                      PCI_BASE_ADDRESS_MEM_PREFETCH, &s->bar2);
 
     if (s->msix_vectors > 0) {
-        memory_region_init(&s->msix_bar, OBJECT(s), "kf3-msix", 0x4000);
+        memory_region_init(&s->msix_bar, OBJECT(s), "kf3-msix", s->dummy_bar ? 0x10000 : 0x4000);
+        if (s->dummy_bar) {
+            memory_region_init_io(&s->dummy_pages[0], OBJECT(s), &kf3_dummy_ops, s, "kf3-dummy-lockless", 0x1000);
+            memory_region_enable_lockless_io(&s->dummy_pages[0]);
+            memory_region_add_subregion(&s->msix_bar, KF3_DUMMY_OFF, &s->dummy_pages[0]);
+            memory_region_init_io(&s->dummy_pages[1], OBJECT(s), &kf3_dummy_ops, s, "kf3-dummy-bql", 0x1000);
+            memory_region_add_subregion(&s->msix_bar, KF3_DUMMY_OFF + 0x1000, &s->dummy_pages[1]);
+        }
         if (msix_init(pci, s->msix_vectors, &s->msix_bar, KF3_MSIX_BAR, 0x0, &s->msix_bar,
                       KF3_MSIX_BAR, 0x2000, 0, errp) < 0) {
             return;
@@ -476,6 +511,7 @@ static const Property kf3_properties[] = {
     DEFINE_PROP_UINT64("bar2-size", Kf3State, bar2_size, 32 * MiB),
     DEFINE_PROP_UINT32("msix-vectors", Kf3State, msix_vectors, 32),
     DEFINE_PROP_STRING("guest-driver", Kf3State, guest_driver),
+    DEFINE_PROP_BOOL("dummy-bar", Kf3State, dummy_bar, false),
 };
 
 static void kf3_class_init(ObjectClass *klass, const void *data)

@@ -1376,6 +1376,70 @@ fn guest_ram_pin_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
 /// (`fdcross`), is kind-checked against the KERNEL (`require_kind`, never the sender's word),
 /// `mmap`ed once at file offset zero, written, fenced and dropped. The parent closes its own
 /// copy of that node the moment it is sent, so the child's mapping is the only one.
+/// ★ w827 — **the trap bench.** The most dummy trap possible next to ours, timed from the guest:
+/// kf3 `dummy-bar=on` puts two do-nothing MMIO pages in the MSI-X BAR (BAR5 + 0x8000 lockless,
+/// + 0x9000 BQL); this times N 32-bit writes and reads to each, N writes to OUR doorbell (the
+/// usermode page, token 0xFFF — nobody's), N writes to OUR CPU_INTR_LEAF(7) (write-1-to-clear
+/// of nothing), and N shadowed BAR0 reads (no exit — the floor). Prints `TRAPBENCH …` ns/op.
+fn trap_bench_probe() -> bool {
+    use std::os::fd::AsFd;
+    let n: usize = std::env::var("KF_TRAPBENCH_N").ok().and_then(|v| v.parse().ok()).unwrap_or(100_000);
+    let Some(dir) = std::fs::read_dir("/sys/bus/pci/devices").ok().and_then(|d| {
+        d.flatten().map(|e| e.path()).find(|p| {
+            let rd = |f: &str| std::fs::read_to_string(p.join(f)).unwrap_or_default();
+            rd("vendor").trim() == "0x10de" && rd("class").trim().starts_with("0x03")
+        })
+    }) else {
+        println!("FAIL  TRAPBENCH no NVIDIA display-class function");
+        return false;
+    };
+    let open = |res: &str| std::fs::OpenOptions::new().read(true).write(true).open(dir.join(res));
+    let (Ok(f0), Ok(f5)) = (open("resource0"), open("resource5")) else {
+        println!("FAIL  TRAPBENCH cannot open resource0/resource5 under {}", dir.display());
+        return false;
+    };
+    let map = |f: &std::fs::File, len: u64| {
+        kayfabe_linux_raw::VolatileRegion::map(
+            kayfabe_linux_raw::Backing::DeviceFile { fd: f.as_fd() },
+            len,
+            kayfabe_linux_raw::CachePolicy::Uncached,
+            kayfabe_linux_raw::HostPageSize::query(),
+        )
+    };
+    let (Ok(bar0), Ok(bar5)) = (map(&f0, 0x00C0_0000), map(&f5, 0x1_0000)) else {
+        println!("FAIL  TRAPBENCH mmap (is kf3 dummy-bar=on? BAR5 must be 64 KiB)");
+        return false;
+    };
+    let at = kayfabe_linux_raw::HostOffset::new;
+    let time_w = |r: &kayfabe_linux_raw::VolatileRegion, off: u64, v: u32| {
+        let t = std::time::Instant::now();
+        for _ in 0..n {
+            let _ = r.store_u32(at(off), v);
+        }
+        t.elapsed().as_nanos() as f64 / n as f64
+    };
+    let time_r = |r: &kayfabe_linux_raw::VolatileRegion, off: u64| {
+        let t = std::time::Instant::now();
+        let mut acc = 0u32;
+        for _ in 0..n {
+            acc ^= r.load_u32(at(off)).unwrap_or(0);
+        }
+        std::hint::black_box(acc);
+        t.elapsed().as_nanos() as f64 / n as f64
+    };
+    let dl_w = time_w(&bar5, 0x8000, 0);
+    let dl_r = time_r(&bar5, 0x8000);
+    let db_w = time_w(&bar5, 0x9000, 0);
+    let db_r = time_r(&bar5, 0x9000);
+    let our_db = time_w(&bar0, 0x00BB_0090, 0xFFF);
+    let our_intr = time_w(&bar0, 0x00B8_101C, 0);
+    let shadow = time_r(&bar0, 0x00B8_101C);
+    println!(
+        "TRAPBENCH n={n} dummy_lockless_write_ns={dl_w:.0} dummy_lockless_read_ns={dl_r:.0} dummy_bql_write_ns={db_w:.0} dummy_bql_read_ns={db_r:.0} our_doorbell_write_ns={our_db:.0} our_intr_leaf_write_ns={our_intr:.0} shadow_read_ns={shadow:.0}"
+    );
+    true
+}
+
 /// ★ w827 Q1/Q8 — **what one trapped BAR0 write costs the guest vCPU, and what a shadowed read
 /// costs.** Maps the device's `resource0` (root), then writes `0` to `CPU_INTR_LEAF(7)` — a
 /// write-1-to-clear register, so a zero clears nothing — N times, and reads the same shadowed
@@ -14582,6 +14646,7 @@ fn ladder_main() -> std::process::ExitCode {
     let mut want_bar1_crossing = false;
     let mut want_bar1_bw = false;
     let mut want_exit_cost = false;
+    let mut want_trap_bench = false;
     // ★★★★★ w747 — `--list-object-alias`. Its OWN flag and its own early return, for
     // `--bar1-crossing`'s reason: it frees its own parent object out from under a live
     // slice on purpose, so nothing else may be holding memory in this process's client
@@ -14987,6 +15052,7 @@ fn ladder_main() -> std::process::ExitCode {
             "--bar1-crossing" => want_bar1_crossing = true,
             "--bar1-bw" => want_bar1_bw = true,
             "--exit-cost" => want_exit_cost = true,
+            "--trap-bench" => want_trap_bench = true,
             // ★★★★★ w747 — does `NV01_MEMORY_LIST_OBJECT` ALIAS its parent's pages or COPY
             // them? The single question gating leg B of the USERD design.
             "--list-object-alias" => want_list_object = true,
@@ -15729,6 +15795,11 @@ fn ladder_main() -> std::process::ExitCode {
 
     // ★★★★★ w393 — the BAR1 crossing runs here and RETURNS, for R30's reason: its objects
     // and its child process must be the only things in the census.
+    if want_trap_bench {
+        let ok = trap_bench_probe();
+        println!("done \u{2014} trap-bench probe only");
+        return if ok { std::process::ExitCode::SUCCESS } else { std::process::ExitCode::from(1) };
+    }
     if want_exit_cost {
         let ok = exit_cost_probe();
         println!("done \u{2014} exit-cost probe only");
