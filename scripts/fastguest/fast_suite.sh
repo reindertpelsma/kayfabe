@@ -12,7 +12,12 @@
 # usage: fast_suite.sh [tag] [budget-seconds] [arm ...]
 set -uo pipefail
 TAG=${1:-fastsuite}; shift || true
-BUDGET=${1:-30}; shift || true
+# ★ Budget (owner, 2026-09-25: "maybe increase timeout for now"): 120 s per arm. Measured on the
+# vast benches, which are themselves KVM guests (nested): every MMIO exit costs 70-92 µs instead of
+# ~2-5 µs, boot alone is 15-27 s, passing arms take 33-58 s, and even BARE METAL on that box runs
+# --ce-client-guest-ram in 17-37 s (9 s on a non-nested reference). 60 s was noise-bound there.
+# ⊘ Still a ceiling, not a formality: a hang is a failure. Revisit on a non-nested KVM host.
+BUDGET=${1:-120}; shift || true
 BENCH=${BENCH_DIR:-/workspace/bench}
 ARMS=("$@")
 if [ "${#ARMS[@]}" -eq 0 ]; then
