@@ -260,6 +260,17 @@ DRM-backend Wayland compositor. The options are unchanged from `display_plane_sc
 
 ## 4. Video engines: same passthrough plane, but not reachable today
 
+⊘ **UPDATE 2026-09-26 (owner): derive the video engine inventory from HOST USERSPACE.** Checked against
+ogkm-580.159.04 `g_subdevice_nvoc.c` export flags (`RMCTRL_FLAGS_NON_PRIVILEGED = 0x8`):
+`GPU_GET_ENGINES_V2` `0x20800170` (flags `0x10109`), `GPU_GET_ENGINE_CLASSLIST` (`0x109`) and
+`GPU_GET_CONSTRUCTED_FALCON_INFO` `0x208001b0` (`0x10048`, routed to GSP) are all **unprivileged** ⇒
+the engine list, the per-engine class list and the falcon table (incl. each falcon's register base)
+come from the real host, per die, at VM start — no hand rows. `FIFO_GET_DEVICE_INFO_TABLE`
+`0x20801112` (`0x5c040`) is **kernel-privileged**, so runlist/PBDMA rows stay authored per family.
+nvkvm-pv (Mode 1) already forwards libnvidia-encode/nvcuvid, so the host-side ioctl sequence for a
+video channel + engine object is known. ⇒ What remains genuinely new is the **quiescent falcon register
+model** (values, not locations) and the non-stall vector; estimate drops to ~1–1.5 weeks for NVENC.
+
 **The transport is the same. [I]** An NVENC/NVDEC channel is a GPFIFO channel on its own runlist,
 with an engine object and a falcon context that **host RM/GSP** owns, including its firmware. That
 is the same twin pattern, with no method parsing.
