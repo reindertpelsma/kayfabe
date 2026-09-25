@@ -20,7 +20,7 @@ echo "GFX_DRIVER=$(cat /sys/module/nvidia/version 2>/dev/null || echo none)"
 if [ "$ROLE" = guest ]; then
     $SUDO modprobe nvidia-drm modeset=1 2>&1 | sed 's/^/  modprobe: /'
 fi
-MS=$(cat /sys/module/nvidia_drm/parameters/modeset 2>/dev/null || echo absent)
+MS=$($SUDO cat /sys/module/nvidia_drm/parameters/modeset 2>/dev/null || echo absent)   # 0400: root-only
 CARDS=$(ls /dev/dri 2>/dev/null | tr '\n' ' ')
 echo "GFX_S1_MODESET=$MS"; echo "GFX_S1_DRI=$CARDS"
 $SUDO dmesg 2>/dev/null | grep -i 'nvidia-drm\|nvidia-modeset\|nvkms\|displayless' | tail -8 | sed 's/^/  dmesg: /'
