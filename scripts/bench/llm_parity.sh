@@ -25,7 +25,7 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODE=${1:-}; LANE=${2:-}
 SHORT_PROCS=${LP_SHORT_PROCS:-3}
-LONG=${LP_LONG:-512,2048}
+LONG=${LP_LONG-512,2048}
 LONG_PROCS=${LP_LONG_PROCS:-3}
 WARM=${LP_WARM:-1}
 GRAPH=${LP_GRAPH-512,2048}   # diagnostic arm (run_llm_graph.py): CUDA-graph decode; empty = off
