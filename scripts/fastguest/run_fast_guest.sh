@@ -249,7 +249,8 @@ echo "== device: ${DEVARGS[*]}"
 # the host kernel the fast guest boots), which has no baud pacing. The kernel's own messages go to
 # BOTH consoles: hvc0 replays the whole ring when it registers, so `$SER` is still the complete
 # record, and the UART log (`_ttyS0.log`) keeps what an early death prints before virtio is up.
-# `KF_CONSOLE=serial` restores the old single-UART lane.
+# `KF_CONSOLE=serial` restores the old single-UART lane. `KF_APPEND="nokaslr "` (trailing space) adds
+# kernel arguments (a profiling run).
 case "${KF_CONSOLE:-hvc}" in
     hvc)    CONARGS=(-serial "file:${SER%_serial.log}_ttyS0.log"
                      -device virtio-serial-pci,id=kfvs0 -chardev "file,id=kfcon0,path=$SER"
@@ -264,7 +265,7 @@ start=$(date +%s)
 timeout --kill-after=3 "$BUDGET" "$Q" \
     "${RAMARGS[@]}" -cpu host -smp "${KF_SMP:-3}" \
     -kernel "$FG/vmlinuz" -initrd "$FG/initrd.cpio.gz" \
-    -append "$CONSOLE panic=1 loglevel=6 KF_ARMS=$ARMS_TOK KF_IOCTL_TRACE=${KF_IOCTL_TRACE:-verbose} KF_BUDGET_S=$BUDGET" \
+    -append "$CONSOLE panic=1 loglevel=6 ${KF_APPEND:-}KF_ARMS=$ARMS_TOK KF_IOCTL_TRACE=${KF_IOCTL_TRACE:-verbose} KF_BUDGET_S=$BUDGET" \
     "${DEVARGS[@]}" \
     -msg timestamp=on \
     "${CONARGS[@]}" -display none \
