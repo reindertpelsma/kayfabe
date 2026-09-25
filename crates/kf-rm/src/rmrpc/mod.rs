@@ -872,6 +872,12 @@ pub enum BridgeRefusal {
     /// table (`kayfabe_core::promote`, self-described as "the address-plane join"), which v3
     /// forbids. Context-buffer promotion comes back with the channel plane (P5), served
     /// through host objects rather than a table.
+    ///
+    /// ★ v3-promote (2026-09-25): it HAS come back — `kf_rm::chanlink` (seated first in the
+    /// served chain) carries a promote naming a channel the plane owns as a passthrough GR twin
+    /// to the plane, which answers it **satisfied by the twin** (owner ruling). This refusal is
+    /// now what the object bridge alone says; in the served chain it is reached only by a
+    /// promote for a channel the plane does not own, which the FSM refuses by name.
     PromoteCtxNotModelled {
         /// The control id.
         cmd: u32,

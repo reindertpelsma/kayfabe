@@ -95,7 +95,11 @@ and the per-client host MMU fault above.
     computed · a stub that satisfies ogkm because guest userspace does not care · or defined per
     ARCHITECTURE FAMILY so it stays maintainable.
 13. **No raw VMM pointers in safe code.** They belong in `unsafe` only, and safe code is always
-    bounds-checked rather than trusted to have been written correctly.
+    bounds-checked rather than trusted to have been written correctly. ★ v3 (owner, 2026-09-25):
+    exactly THREE crates may opt out of the workspace's `unsafe_code = "forbid"`, and only in
+    files named `*_unsafe.rs`: `kf-linux-raw` (OS adapter), `kf-qemu` (the QEMU FFI) and `kf-cuda`
+    (the dynamically loaded CUDA driver). Host addresses cross safe code only as the opaque
+    `kf_linux_raw::HostSpan`, backend fds only as `kf_qemu::raw_unsafe::BackendFd` (`e7b7f28d`).
 14. **Isolates can have multiple threads** executing several CUDA operations in parallel, as
     `nvkvm-pv` does.
 15. **The two vidmem worlds are disjoint** — see below.

@@ -147,7 +147,7 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
             out.refuse(
                 i,
                 format!(
-                    "leaf {:#x}+{:#x} overlaps OUR placement [{a:#x}, {b:#x}) — a guest VA may never alias a VMM address",
+                    "leaf {:#x}+{:#x} overlaps OUR placement [{a:#x}, {b:#x}) — a guest VA may never alias a VMM address; this leaf alone is refused (Q11)",
                     d.va, d.len
                 ),
             );

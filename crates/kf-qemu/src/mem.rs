@@ -615,6 +615,8 @@ pub struct MemCounters {
     pub mirrors_kept_live: AtomicU64,
     /// The slowest mirror creation, ns.
     pub mirror_ns_max: AtomicU64,
+    /// ★ Cold-box fix: spare spaces built before the guest ran ([`prewarm`]).
+    pub prewarmed: AtomicU64,
 }
 
 /// ★★★ **The memory plane's shared half** — what the vCPU and the VA thread both reach.
@@ -813,6 +815,8 @@ impl MemPlane {
 /// line on refusal.
 fn create_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, store: u32, key: VasKey) -> Result<(), String> {
     let t_mirror = std::time::Instant::now();
+    let us = |t: std::time::Instant| t.elapsed().as_micros();
+    let t_step = std::time::Instant::now();
     let space = match rm.alloc_vaspace() {
         Ok(space) => space,
         Err(e) => {
@@ -822,6 +826,8 @@ fn create_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, store: 
     };
     // ⊘ A space without the RAM object refuses every sysmem leaf and leaves the trigger armed —
     // measured p4b4: a ~22 s guest stall per boot.
+    let vas_us = us(t_step);
+    let t_step = std::time::Instant::now();
     let ram_obj = match plane.guest_ram_object(rm) {
         Ok(o) => Some(o),
         Err(e) => {
@@ -829,11 +835,16 @@ fn create_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, store: 
             None
         }
     };
+    let ram_obj_us = us(t_step);
     // ★ P5: the two windows, in EVERY mirrored space (§12) — GROWS_DOWN, away from the guest's
     // bottom-up VAs (§24.2). A space whose windows refuse is still a mirror (its virtual rows
     // work); a Translated channel naming it refuses by name at birth.
+    let t_step = std::time::Instant::now();
     let fb_base = rm.map_window(space, store, plane.fb_len, true);
+    let fb_us = us(t_step);
+    let t_step = std::time::Instant::now();
     let ram_base = ram_obj.map(|(o, len)| rm.map_window(space, o, len, true).map(|b| (b, len)));
+    let ram_us = us(t_step);
     let rows = PlacedRows::default();
     let rings = RingSlots::default();
     let line = match (&fb_base, &ram_base) {
@@ -859,9 +870,70 @@ fn create_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, store: 
     plane.counters.mirrors.fetch_add(1, Ordering::Relaxed);
     plane.counters.mirror_ns.fetch_add(ns, Ordering::Relaxed);
     plane.counters.mirror_ns_max.fetch_max(ns, Ordering::Relaxed);
-    eprintln!("kf3: {key:?} mirror space={:#x}: {line} ({} us)", space.space, ns / 1000);
+    eprintln!(
+        "kf3: {key:?} mirror space={:#x}: {line} ({} us: vaspace {vas_us} ram_obj {ram_obj_us} fb_window {fb_us} ram_window {ram_us})",
+        space.space,
+        ns / 1000
+    );
     m.table.insert(key, Target::Gpu(GpuMirror { vas: HostVas { rm, space, store, ram_obj: ram_obj.map(|(o, _)| o) }, rows, reserved }));
     Ok(())
+}
+
+/// ★★★ **Cold-box fix — the first mirror's one-time cost, paid BEFORE the guest runs.**
+///
+/// `[measured pr1]` the first mirror of a boot took 7.6 s on a freshly provisioned box (2-7 s on
+/// every later boot, `mirror space=0xcafe000c` in every `fast_*_qemu.log`; later mirrors ~0.1 s),
+/// and it is built INSIDE the guest's held `COPY_SERVER_RESERVED_PDES` (`0x90f10106`) reply —
+/// whose GSP RPC timeout is 6 s (`[pr1]` Xid 119 *"Timeout after 6s of waiting for RPC response
+/// … 0x90f10106"*, then the PMA scrubber's construction fails `0x40`). The one-time part is the
+/// guest-RAM OS descriptor (host RM pins every page of the guest memfd) plus the first host VA
+/// space and its two window maps. Here, on the VA thread as soon as QEMU has registered an
+/// fd-backed RAM block (realize's listener replay — long before the guest's driver loads), we
+/// build the guest-RAM object and ONE complete spare space (space + store window + RAM window),
+/// so the first page-directory statement takes the spare (`mirrors_reused`) instead of paying.
+///
+/// Returns `None` while guest RAM is not registered yet (the caller retries next tick; the
+/// `OnceLock` in [`MemPlane::guest_ram_object`] must never cache a "no RAM yet" refusal), else
+/// the log line. ⊘ Nothing here is guest-visible or guest-chosen: our space, our windows.
+pub fn prewarm(plane: &MemPlane, rm: &'static HostRm, store: u32) -> Option<String> {
+    plane.ram.backing_fd()?;
+    let t0 = std::time::Instant::now();
+    let ram_obj = plane.guest_ram_object(rm);
+    let ram_obj_us = t0.elapsed().as_micros();
+    let t1 = std::time::Instant::now();
+    let space = match rm.alloc_vaspace() {
+        Ok(s) => s,
+        Err(e) => return Some(format!("prewarm: host VA space refused: {e:?} (ram_obj {ram_obj_us} us)")),
+    };
+    let vas_us = t1.elapsed().as_micros();
+    let t2 = std::time::Instant::now();
+    let fb = rm.map_window(space, store, plane.fb_len, true);
+    let fb_us = t2.elapsed().as_micros();
+    let t3 = std::time::Instant::now();
+    let ram = ram_obj.as_ref().ok().map(|(o, len)| rm.map_window(space, *o, *len, true).map(|b| (b, *len)));
+    let ram_us = t3.elapsed().as_micros();
+    let line = format!(
+        "vaspace {vas_us} us, ram_obj {ram_obj_us} us ({}), fb_window {fb_us} us, ram_window {ram_us} us",
+        match &ram_obj {
+            Ok((o, l)) => format!("{o:#x}+{l:#x}"),
+            Err(e) => e.clone(),
+        }
+    );
+    match (fb, ram) {
+        (Ok(fb_base), Some(Ok(r))) => {
+            let sp = Spare { space, fb_base, ram: Some(r), ram_obj: ram_obj.ok().map(|(o, _)| o), rings: RingSlots::default() };
+            if let Ok(mut v) = plane.spares.lock() {
+                v.push(sp);
+            }
+            plane.counters.prewarmed.fetch_add(1, Ordering::Relaxed);
+            Some(format!("prewarm: spare host space {:#x} ready before the guest runs — {line} (total {} us)", space.space, t0.elapsed().as_micros()))
+        }
+        (fb, ram) => {
+            let _ = rm.free(space.range);
+            let _ = rm.free(space.space);
+            Some(format!("prewarm: windows refused fb={fb:?} ram={ram:?} — no spare; {line}"))
+        }
+    }
 }
 
 /// ★ P5c: the guest freed VA space `key` — unmap OUR rows (deferred, one invalidate) and keep the

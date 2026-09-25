@@ -125,6 +125,137 @@ the GA106 bench (host 580.159.04); `v3_gates.sh` 8/8 PASS at `20cc4888`.
     their physical-mode work — and the guest is now TOLD (`RC_TRIGGERED` ×4), so `UVM_REGISTER_GPU`
     fails `0x60` instead of spinning to the budget. Q7 still decides the route.
 
+**STATUS UPDATE, 2026-09-25 (v3-promote, branch `v3-promote` off `v3` `e7b7f28d`): ✔ `--uvm-mean`
+PASSES — item 21 (P3 `GPU_PROMOTE_CTX`) is closed, satisfied by the twin (owner ruling
+2026-09-25).** Measured on a fresh GA106 bench (host 580.159.04), boot `pr4` at `a4b7437b`; re-measured
+at `74a0cbc5` (boot `pr6`: P3 VERIFIED, `W392D_OUTCOME=(P)`); `v3_gates.sh` 8/8 PASS at `74a0cbc5`;
+suite `prs2` at `74a0cbc5`: `FAST_SUITE_PASS=28 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=2` — `--uvm-mean` and
+`--uvm-invalidate` PASS; TIMEOUT `--ce-client-guest-ram` (Q8, unchanged) and `--concurrency`, which is
+NOT this branch: `[measured base1/base2]` `origin/v3` `e7b7f28d` times out `--concurrency` at 60 s on
+this box too (twice), and the arm issues no promote.
+
+```
+★     W392D P3 arm A      = schedule REFUSED 0x40 BEFORE the promote — the negative control fired
+ok    W392D P3 arm B      = UVM_REGISTER_CHANNEL accepted — … PROMOTED over RPC
+★★★   W392D P3 arm C      = the SAME schedule call now SUCCEEDS
+    P3 rpc-bind       ✔ VERIFIED over 4 round(s)      W392D_OUTCOME=(P)   FAST_VERDICT=PASS (48s)
+kf3: chan 0xc1d0000b:0xcafe001b GPU_PROMOTE_CTX (initialize) SATISFIED BY TWIN host 0x20: entries=6 init_ids=0xe07 host_objects=0
+kf3: act promote ctx: … SATISFIED BY TWIN host 0x20 (host GR object(s) [0xcafe0035]): entries=10 va_ids=0xe7f bound=true — not forwarded
+kf3: DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=4 emulated=0 forwarded=4 host=0x20   (the P3 GR twin)
+```
+22. **The promote is answered by `kf_rm::chanlink` + the channel plane (`kf_qemu::chan::CtxBind`), never
+    forwarded.** The guest's CPU-RM owns its GR context buffers on every GSP client
+    (`gpu_registry.c:153-156`) and promotes them twice: PA-initialize at every GR object's
+    construction (`kgrobjPromoteContext`, `kernel_graphics_object.c:51-159`) and, in a UVM-owned
+    space, VAs at `UVM_REGISTER_CHANNEL` (`nv_gpu_ops.c:10854-10904`). The channel is a passthrough
+    twin whose own context host RM made when we allocated its engine object, so both are recorded
+    (context BOUND on a VA promote) and answered `NV_OK`; `GPU_EVICT_CTX` takes the twin off the host
+    runlist and records UNBOUND. ⊘ `[measured pr3]` the initialize promote arrives BEFORE the object's
+    own alloc RPC (it runs inside the constructor), so it is answered from the twin alone; only the
+    VA promote requires the host GR object (an act ordered behind the engine-object act).
+    **The "stub" content is nothing:** CPU-RM reads no byte back from these buffers (the only GR buffer
+    it reads is the FECS event buffer, which it fills with `0xde` itself, `fecs_event_list.c:1545`);
+    arm A's `0x40` is the guest's OWN `kchannelIsSchedulable` (`kernel_channel.c:2200-2206`, before
+    the RPC), flipped by the `bIsContextBound` our `NV_OK` lets it set. Full citations on `CtxBind`.
+    ⊘ RM's golden-image channel (kernel GR, `0xbaba0045`) is not born (kernel GR is P7), so its
+    promote stays the FSM's named refusal, as before. Non-GSP guests: `V3_NON_GSP_CTX.md`.
+23. ✔ **FIXED by v3-chanctl (`bda5dc39`) — see the v3-chanctl status block below.** ⊘ It was not a
+    once-per-box cost: the first mirror of EVERY boot paid the guest-RAM OS descriptor (host RM
+    pins the whole guest memfd) inside the held `0x90f10106` reply, whose guest RPC timeout is 6 s
+    (`[pr1]` Xid 119 on exactly that control); `pr1`'s 7.6 s crossed it.
+    ⚠ **Cold-box flake `[measured pr1]`:** on the first boot after provisioning, the first mirror
+    space took **7.6 s** to build (`mirror space=… (7612436 us)`, next boot 3.4 s, then ~0.1 s) and the
+    PMA scrubber's construction failed `0x40` ⇒ `RmInitAdapter` failed. Not this change (no promote
+    on that path); a warm-up cost the harness does not absorb.
+
+24. **Channel-group fault scope (owner, 2026-09-25): per-twin RC is consistent with the guest, and
+    group death reaches every twin.** The guest's CPU-RM does nothing on `RC_TRIGGERED` but notify
+    the scope WE post (`_kgspRpcRCTriggered`, `kernel_gsp.c:548-676`; the TSG's channel list only
+    for `RC_NOTIFIER_SCOPE_TSG`, `kernel_rc_notification.c:385-410`), so posting CHANNEL scope (what
+    the host actually wrote: one record) leaves the guest believing exactly what is true — that
+    channel dead, siblings alive and running. Group death the GUEST decides now reaches every twin:
+    ⊘ gap found and closed — a free matched a twin by channel/group/parent/client but NOT the
+    DEVICE (a group member's parent is the group), and a Translated channel only by handle/client,
+    so a group or device free left a host ring pumping after the guest considered it gone.
+    `ChanScope::freed_by` (unit-tested) now covers channel, group, parent, device and client for
+    both routes; a TSG `GPFIFO_SCHEDULE` disable already reached every member. ⊘ Owner call left
+    open: a hardware-exact TSG-wide RC (siblings stopped AND their notifier records written) needs a
+    host-authored way to RC a sibling with a record; none exists unprivileged, and a CPU-written
+    record is forbidden. ~~`STOP_CHANNEL` / `DISABLE_CHANNELS` / TSG `PREEMPT` are still refused by
+    name (the guest sees the failure; nothing dangles).~~ ✔ **Served by v3-chanctl** (status block
+    below).
+
+**STATUS UPDATE, 2026-09-25 (v3-chanctl, branch `v3-chanctl` off `v3` `04f27bfe`, rev `bda5dc39`):
+✔ the guest's channel cancellation controls are SERVED as authored, unprivileged host verbs, and
+the cold-box flake is fixed.** Measured on the dedicated GA106 box `vh2` (RTX 3060, host
+580.159.04): `v3_gates.sh` 8/8 PASS at `bda5dc39`; suite `ccs1` at `bda5dc39`:
+`FAST_SUITE_PASS=29 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=1` (TIMEOUT `--ce-client-guest-ram` only, Q8,
+unchanged; `--concurrency` PASS on this box).
+
+25. **The three controls, each an act on the act thread with the reply held until the host act
+    completes (off the vCPU, off the GSP lock):**
+
+    | guest control | host verb(s) on OUR twin / Translated ring | privilege evidence (ogkm-580 export flags) |
+    |---|---|---|
+    | `NVA06F_CTRL_CMD_STOP_CHANNEL` `0xa06f0112` | `NV2080_CTRL_CMD_FIFO_DISABLE_CHANNELS{bDisable=1, bOnlyDisableScheduling=0}` (RM's own "not running in hardware") + `NVA06C GPFIFO_SCHEDULE(bEnable=0)` (off the runlist); the guest's next `GPFIFO_SCHEDULE(1)` re-enables (`DISABLE_CHANNELS{bDisable=0}`) first | `0x10108` `g_subdevice_nvoc.c:4921` / `0x10008` `g_kernel_channel_group_api_nvoc.c:213` — `NON_PRIVILEGED` (`0x8`, `control.h:208`), neither `PRIVILEGED` nor `INTERNAL`; `pRunlistPreemptEvent` never passed (the one kernel-only check, `kernel_fifo_ctrl.c:720-725`) |
+    | `NV2080_CTRL_CMD_FIFO_DISABLE_CHANNELS` `0x2080110b` | the same verb over the named twins (guest's `bDisable`/`bOnlyDisableScheduling`/`bRewindGpPut`, our client + channels) | as above |
+    | `NVA06C_CTRL_CMD_PREEMPT` `0xa06c0105` | `NVA06C PREEMPT{bWait=1}` on each member's own host group | `0x10248` `g_kernel_channel_group_api_nvoc.c:273` — `NON_PRIVILEGED` |
+
+    ⊘ NOT the host's own `STOP_CHANNEL` (also `NON_PRIVILEGED`, `0x10008`): host CPU-RM follows it
+    with `kchannelNotifyRc_HAL` (`kernel_channel.c:1979`), a host-CPU write of the twin's error
+    record — which IS the guest's notifier — that the guest's CPU-RM makes itself right after our
+    `NV_OK`. That guest write (`PREEMPTIVE_REMOVAL`, 45) is re-baselined by the RC plane, never
+    forwarded as an `RC_TRIGGERED`.
+    Refused by name: a `DISABLE_CHANNELS` entry naming ANOTHER client (`0x1b`; the only in-tree
+    caller lists its own client's channels, `nv_gpu_ops.c:957-981`), a non-NULL
+    `pRunlistPreemptEvent` (a guest-kernel KEVENT pointer), `bRewindGpPut` on a Translated channel,
+    and a list naming a channel with no twin (nothing half-done).
+    Per-twin scope (item 24's ruling): STOP is channel-scoped on hardware too; a group PREEMPT
+    becomes per-member preempts in turn — the postcondition (every member switched out at the
+    reply) is the same, the difference is timing only. Nothing dangles: `stopped`/`disabled` are
+    per twin and cleared by exactly the guest verbs that clear them on hardware.
+    `[measured cc1, ccs1]` `--uvm-mean`: `act stop … STOP_CHANNEL(bImmediate=false): twin host 0x20
+    disabled + preempted + off its runlist (818 us, off the GSP lock)` ×2; `0xa06f0112` left the
+    unserviced list; the two `NV_ASSERT … NVA06F_CTRL_CMD_STOP_CHANNEL @ nv_gpu_ops.c:10957` are gone
+    (no serial log of the 30 arms names `STOP_CHANNEL`/`DISABLE_CHANNELS`). No arm of the suite
+    sends `DISABLE_CHANNELS` or `PREEMPT` (served, exercised only by gate 5 on hardware).
+    Gate 5 (hardware, unprivileged host client): after the stop verbs, work queued AND rung does NOT
+    run (`sem` untouched over 300 ms); after the restart verbs it runs (and the scheduler picked up
+    the pending work without a new doorbell); `PREEMPT(bWait=1)` 255 µs, the group stays
+    schedulable; a preempt of a stopped group is accepted.
+
+26. **Cold-box flake: the first mirror's one-time cost moved before the guest runs.** Breakdown
+    `[measured cc1]`: guest-RAM OS descriptor **1 808 ms** (2 GiB pinned), RAM window 70 ms, space
+    2 ms, store window 1 ms. The VA thread now builds the guest-RAM object and ONE spare mirror as
+    soon as QEMU registers guest RAM (`mem::prewarm`, `t=1.9 s`, ~20 s before the driver loads);
+    the first page-directory statement takes the spare (`reused=… prewarmed=1`), so no mirror inside
+    a held reply pays more than ~0.1 s. Cold vs warm on `vh2` (baseline `04f27bfe`, first mirror):
+    first boot after provisioning **1.60 s**, warm 1.62 s / 1.57 s, after `nvidia-smi -r` 1.61 s —
+    ⊘ **the 7.6 s did NOT reproduce on this box, and a GPU reset does not approximate "cold"**: the
+    cost is per boot (pinning a fresh memfd), scaled by the host (`vh`: 2-7.6 s per boot on every
+    `prs2`/`c2s1` log). With the fix: 30/30 boots of `ccs1` prewarmed (ram_obj 1.73-1.80 s, all
+    before the guest) and every guest-visible mirror ≤ ~0.1 s.
+
+**Q11 (ring placement, answered — needs an owner decision to act).** Is there a range the guest can
+never allocate, so Translated rings need no refusal? **No, on any family.** The guest's VA width is
+the hardware's, computed from per-chip MMU formats in the guest itself (VER2 49-bit
+`kern_gmmu_fmt_gp10x.c:59`, VER3 57-bit `kern_gmmu_fmt_gh10x.c:63`); no GSP static-info field carries
+it, so we cannot shrink it. The only RM-reserved range is the split-VAS server window
+`[4 GiB, 4.5 GiB)` (`g_gpu_vaspace_nvoc.h:99-100`, reserved `gpu_vaspace.c:340-344`) — but it (a) does
+not exist in an externally-owned (UVM) space (`vaspace_api.c:617-620` sets `DISABLE_SPLIT_VAS`),
+(b) is bypassed by UVM external ranges and HMM (CPU VAs mirrored; 2^40 is a valid x86-64 user VA),
+and (c) is ALSO reserved by host RM in our own mirror space (the host is a GSP client too), so a host
+ring cannot be placed there. Rings on VER2 must stay below 2^40 (`GP_ENTRY1_GET_HI 7:0`, every
+`cl*6f.h`; UVM `max_channel_va = 1 << 40`, `uvm_ampere.c:66-68`); VER3 could go above 2^40 only with
+`PB_EXTENDED_BASE` entries (`clc86f.h:175`), which is still inside the guest's 57-bit range. ⇒
+Recommendation: keep `[2^40 − 4 GiB, 2^40)` and the by-name refusal (no placement change); consider
+narrowing the refusal from the whole space's reconcile to the offending leaf. ★ **Owner ruling
+2026-09-25: narrow it — DONE** (`vasmgr.rs`, per-leaf; the guest's invalidate stays unacknowledged,
+named). Translated rings live only in guest-KERNEL spaces (Q7: RM-internal CeUtils and nvidia-uvm's
+channel-manager space, fixed per-family layout `uvm_ampere.c:49-60`, `uvm_hopper.c:61-68`); HMM /
+external-range mirroring is per-process UVM spaces only, which never host a Translated channel ⇒ a
+collision is guest-kernel self-harm at worst.
+
 **STATUS UPDATE, 2026-09-25 (P6b, branch `v3-p6b` off `v3-p6uvm`): `--uvm-invalidate` PASSES;
 `--uvm-mean` reaches P3 (P1, P2, STALE RACE, THREADS ✔); the P6 diagnosis below was WRONG in two of
 its three parts.** Measured on the GA106 bench (host 580.159.04), boots `p6b1`…`p6b9`; `v3_gates.sh`

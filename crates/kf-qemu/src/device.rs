@@ -652,7 +652,14 @@ impl Device {
         let mut logged = 0u32;
         let mut refusals_seen = 0usize;
         let mut armed_seen: Option<u64> = None;
+        // ★ Cold-box fix (`crate::mem::prewarm`): the first mirror's one-time host cost is paid
+        // here, before the guest runs, as soon as QEMU has registered guest RAM.
+        let mut prewarmed = false;
         while !self.stop.load(Ordering::Acquire) {
+            if !prewarmed && let Some(line) = crate::mem::prewarm(&self.mem, self.rm, self.store.handle) {
+                prewarmed = true;
+                eprintln!("kf3: mem t={:.3}s {line}", self.born.elapsed().as_secs_f64());
+            }
             let mut ready = ReadyTokens::new();
             let _ = poller.wait(&mut ready, PollTimeout::Millis(50));
             let _ = self.mem.inbox.wake.drain();
@@ -833,8 +840,10 @@ impl Device {
         let avg = |sum: u64, n: u64| if n == 0 { 0 } else { sum / n / 1000 };
         let nm = self.mem.counters.mirrors.load(Ordering::Relaxed);
         let timing = format!(
-            " mirrors={} mirror_avg_us={} mirror_max_us={} vat[invals={} arrive->clear_avg_us={} max_us={} walks={} walk_avg_us={} gpu_avg_us={} plan_avg_us={} apply_avg_us={} leaves={} host_calls={}]",
+            " mirrors={} reused={} prewarmed={} mirror_avg_us={} mirror_max_us={} vat[invals={} arrive->clear_avg_us={} max_us={} walks={} walk_avg_us={} gpu_avg_us={} plan_avg_us={} apply_avg_us={} leaves={} host_calls={}]",
             nm,
+            self.mem.counters.mirrors_reused.load(Ordering::Relaxed),
+            self.mem.counters.prewarmed.load(Ordering::Relaxed),
             avg(self.mem.counters.mirror_ns.load(Ordering::Relaxed), nm),
             self.mem.counters.mirror_ns_max.load(Ordering::Relaxed) / 1000,
             tm.invals,
@@ -1005,6 +1014,18 @@ impl Device {
                 except_type: e.except_type,
                 // ⊘ CHANNEL, not TSG: our twin is its own host TSG, so only its record was
                 // written (a guest TSG's other members keep running on their own twins).
+                // ★ v3-promote (owner, TSG fault scope): this is CONSISTENT with the guest's view
+                // because the guest's CPU-RM does nothing on RC_TRIGGERED but notify exactly the
+                // scope we post (`_kgspRpcRCTriggered`, `kernel_gsp.c:548-676` →
+                // `krcErrorSendEventNotificationsCtxDma_FWCLIENT`, `kernel_rc_notification.c:385-410`:
+                // the TSG's channel list ONLY for `RC_NOTIFIER_SCOPE_TSG`). With CHANNEL scope the
+                // guest considers that one channel dead and its siblings alive — which they are.
+                // Group death the guest DECIDES (free of the channel/TSG/device/client, or TSG
+                // `GPFIFO_SCHEDULE` disable) reaches every twin of the group (`ChanScope::freed_by`,
+                // the schedule arm's `tsg == Some(object)`). ⊘ Posting TSG scope would require every
+                // sibling's notifier record, which only the host may write, and no unprivileged
+                // host verb RCs a sibling with a record — so a hardware-exact TSG-wide RC is an owner
+                // call (V3_P5_PORT_MAP item 24), not something to forge here.
                 scope: kf_abi::rc::RC_NOTIFIER_SCOPE_CHANNEL,
                 // ⊘ Not read by the receiver (`_kgspRpcRCTriggered` uses engine, chid, gfid, the
                 // exception, its level and scope); we hold no fault address, so none is invented.

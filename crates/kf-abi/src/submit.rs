@@ -5698,6 +5698,165 @@ pub const CANCELLATION_VERBS: &[CancellationVerb] = &[
     },
 ];
 
+// =====================================================================================
+// ★★★ v3-chanctl — the wire shapes of the three cancellation verbs v3 now SERVES
+// =====================================================================================
+
+/// `sizeof(NVA06F_CTRL_STOP_CHANNEL_PARAMS)` = `{ NvBool bImmediate; }` (`ogkm-580:
+/// ctrla06fgpfifo.h:241-243`).
+pub const STOP_CHANNEL_PARAMS_SIZE: usize = 1;
+
+/// `NV2080_CTRL_FIFO_DISABLE_CHANNELS_MAX_ENTRIES` (`ogkm-580: ctrl2080fifo.h:341`).
+pub const DISABLE_CHANNELS_MAX_ENTRIES: usize = 64;
+
+/// `sizeof(NV2080_CTRL_FIFO_DISABLE_CHANNELS_PARAMS)` (`ogkm-580: ctrl2080fifo.h:345-355`):
+/// `bDisable` @0, `numChannels` @4, `bOnlyDisableScheduling` @8, `bRewindGpPut` @9,
+/// `pRunlistPreemptEvent` (`NvP64`, 8-aligned) @16, `hClientList[64]` @24, `hChannelList[64]` @280.
+pub const DISABLE_CHANNELS_PARAMS_SIZE: usize = 24 + 2 * 4 * DISABLE_CHANNELS_MAX_ENTRIES;
+
+/// ★ `NV2080_CTRL_FIFO_DISABLE_CHANNELS_PARAMS`, decoded (and authored — the host verb uses the
+/// same shape). `list` is `(hClient, hChannel)` per entry.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DisableChannels {
+    /// `bDisable`.
+    pub disable: bool,
+    /// `bOnlyDisableScheduling` — `true` degrades the promise to "no new work"
+    /// ([`CancelPromise::NoNewWork`]); `false` is "not running in hardware".
+    pub only_disable_scheduling: bool,
+    /// `bRewindGpPut`.
+    pub rewind_gp_put: bool,
+    /// `pRunlistPreemptEvent` — a KEVENT pointer in the CALLER's address space (kernel callers
+    /// only, `kernel_fifo_ctrl.c:720-725`); never meaningful to us.
+    pub runlist_preempt_event: u64,
+    /// `(hClient, hChannel)` × `numChannels`.
+    pub list: Vec<(u32, u32)>,
+}
+
+/// Why a `DISABLE_CHANNELS` block does not decode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DisableChannelsError {
+    /// The block is not `DISABLE_CHANNELS_PARAMS_SIZE` bytes.
+    Size(usize),
+    /// `numChannels` exceeds [`DISABLE_CHANNELS_MAX_ENTRIES`].
+    TooMany(u32),
+}
+
+impl DisableChannels {
+    /// Decode the guest's block.
+    ///
+    /// # Errors
+    /// [`DisableChannelsError`].
+    pub fn decode(b: &[u8]) -> Result<DisableChannels, DisableChannelsError> {
+        if b.len() != DISABLE_CHANNELS_PARAMS_SIZE {
+            return Err(DisableChannelsError::Size(b.len()));
+        }
+        let u32_at = |o: usize| u32::from_le_bytes([b[o], b[o + 1], b[o + 2], b[o + 3]]);
+        let n = u32_at(4);
+        if n as usize > DISABLE_CHANNELS_MAX_ENTRIES {
+            return Err(DisableChannelsError::TooMany(n));
+        }
+        let mut ev = [0u8; 8];
+        ev.copy_from_slice(&b[16..24]);
+        Ok(DisableChannels {
+            disable: b[0] != 0,
+            only_disable_scheduling: b[8] != 0,
+            rewind_gp_put: b[9] != 0,
+            runlist_preempt_event: u64::from_le_bytes(ev),
+            list: (0..n as usize).map(|i| (u32_at(24 + 4 * i), u32_at(280 + 4 * i))).collect(),
+        })
+    }
+
+    /// Encode (the host verb). ⊘ `pRunlistPreemptEvent` is always written 0 — an unprivileged host
+    /// caller may not pass one (`kernel_fifo_ctrl.c:720-725`), and we never want the async form.
+    ///
+    /// # Errors
+    /// [`DisableChannelsError::TooMany`].
+    pub fn encode(&self) -> Result<[u8; DISABLE_CHANNELS_PARAMS_SIZE], DisableChannelsError> {
+        if self.list.len() > DISABLE_CHANNELS_MAX_ENTRIES {
+            return Err(DisableChannelsError::TooMany(u32::try_from(self.list.len()).unwrap_or(u32::MAX)));
+        }
+        let mut b = [0u8; DISABLE_CHANNELS_PARAMS_SIZE];
+        b[0] = u8::from(self.disable);
+        b[4..8].copy_from_slice(&(self.list.len() as u32).to_le_bytes());
+        b[8] = u8::from(self.only_disable_scheduling);
+        b[9] = u8::from(self.rewind_gp_put);
+        for (i, (c, h)) in self.list.iter().enumerate() {
+            b[24 + 4 * i..28 + 4 * i].copy_from_slice(&c.to_le_bytes());
+            b[280 + 4 * i..284 + 4 * i].copy_from_slice(&h.to_le_bytes());
+        }
+        Ok(b)
+    }
+}
+
+/// ★ `NVA06C_CTRL_PREEMPT_PARAMS`, decoded: `{bWait @0, bManualTimeout @1, timeoutUs @4}`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Preempt {
+    /// `bWait`.
+    pub wait: bool,
+    /// `bManualTimeout`.
+    pub manual_timeout: bool,
+    /// `timeoutUs` (≤ [`PREEMPT_MAX_MANUAL_TIMEOUT_US`] when `manual_timeout`).
+    pub timeout_us: u32,
+}
+
+/// `NVA06C_CTRL_CMD_PREEMPT_MAX_MANUAL_TIMEOUT_US` (`ogkm-580: ctrla06c.h:213`).
+pub const PREEMPT_MAX_MANUAL_TIMEOUT_US: u32 = 1_000_000;
+
+impl Preempt {
+    /// Decode; `None` unless exactly [`PREEMPT_PARAMS_SIZE`] bytes.
+    #[must_use]
+    pub fn decode(b: &[u8]) -> Option<Preempt> {
+        (b.len() == PREEMPT_PARAMS_SIZE)
+            .then(|| Preempt { wait: b[0] != 0, manual_timeout: b[1] != 0, timeout_us: u32::from_le_bytes([b[4], b[5], b[6], b[7]]) })
+    }
+
+    /// Encode.
+    #[must_use]
+    pub fn encode(self) -> [u8; PREEMPT_PARAMS_SIZE] {
+        let mut b = [0u8; PREEMPT_PARAMS_SIZE];
+        b[0] = u8::from(self.wait);
+        b[1] = u8::from(self.manual_timeout);
+        b[4..8].copy_from_slice(&self.timeout_us.to_le_bytes());
+        b
+    }
+}
+
+#[cfg(test)]
+mod chanctl_shape_tests {
+    use super::*;
+
+    #[test]
+    fn disable_channels_round_trips_at_the_header_offsets() {
+        let d = DisableChannels {
+            disable: true,
+            only_disable_scheduling: false,
+            rewind_gp_put: true,
+            runlist_preempt_event: 0,
+            list: vec![(0xc1d0_000b, 0xcafe_0013), (0xc1d0_000b, 0xcafe_0014)],
+        };
+        let b = d.encode().expect("encode");
+        assert_eq!(DISABLE_CHANNELS_PARAMS_SIZE, 536);
+        assert_eq!(b[0], 1);
+        assert_eq!(u32::from_le_bytes([b[4], b[5], b[6], b[7]]), 2);
+        assert_eq!(b[9], 1);
+        assert_eq!(u32::from_le_bytes([b[28], b[29], b[30], b[31]]), 0xc1d0_000b);
+        assert_eq!(u32::from_le_bytes([b[284], b[285], b[286], b[287]]), 0xcafe_0014);
+        assert_eq!(DisableChannels::decode(&b), Ok(d));
+        let mut bad = b;
+        bad[4..8].copy_from_slice(&65u32.to_le_bytes());
+        assert_eq!(DisableChannels::decode(&bad), Err(DisableChannelsError::TooMany(65)));
+        assert_eq!(DisableChannels::decode(&b[..535]), Err(DisableChannelsError::Size(535)));
+    }
+
+    #[test]
+    fn preempt_round_trips() {
+        let p = Preempt { wait: true, manual_timeout: false, timeout_us: 0 };
+        assert_eq!(p.encode(), [1, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(Preempt::decode(&p.encode()), Some(p));
+        assert_eq!(Preempt::decode(&[1, 0, 0]), None);
+    }
+}
+
 /// Look a cmd id up in [`CANCELLATION_VERBS`].
 ///
 /// ⊘ Returning `Some` says **nothing** about whether the id is served — see

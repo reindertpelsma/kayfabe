@@ -52,6 +52,8 @@ use std::sync::{Arc, Mutex, RwLock};
 
 /// `NV_ERR_INVALID_STATE`.
 const NV_ERR_INVALID_STATE: u32 = 0x40;
+/// `NV_ERR_INVALID_ARGUMENT`.
+const NV_ERR_INVALID_ARGUMENT: u32 = 0x1F;
 /// `NV_ERR_INSUFFICIENT_RESOURCES`.
 const NV_ERR_INSUFFICIENT_RESOURCES: u32 = 0x1A;
 /// `NV_ERR_NOT_SUPPORTED`.
@@ -73,15 +75,60 @@ struct PtChan {
     tsg: Option<u32>,
     /// The channel's parent (its TSG, or its device).
     parent: u32,
+    /// ★ v3-promote: the device it hangs off (== `parent` outside a TSG).
+    device: u32,
     /// The host engine (= the guest's `engineType`).
     engine: u32,
-    /// Engine objects on the twin: guest handle → host handle.
-    objects: HashMap<u32, u32>,
+    /// Engine objects on the twin: guest handle → (host handle, its class kind).
+    objects: HashMap<u32, (u32, kf_chip::classes::Kind)>,
+    /// ★ v3-promote: the guest's `GPU_PROMOTE_CTX` / `GPU_EVICT_CTX` statements for this channel,
+    /// satisfied by the twin (never forwarded).
+    ctx: CtxBind,
     /// ★ P5c: the mirror's live-channel count (released at free).
     live: Arc<AtomicU64>,
     /// ★ P5c: the guest's error notifier, as the twin's host error context — `None` when the
     /// guest declared none (or it could not be armed, named at birth).
     notifier: Option<PtNotifier>,
+    /// ★ v3-chanctl: the guest STOPPED the channel (host: disabled + off the runlist) — its next
+    /// `GPFIFO_SCHEDULE(enable)` re-enables the twin first.
+    stopped: bool,
+    /// ★ v3-chanctl: the guest DISABLED it (`DISABLE_CHANNELS`) — only `bDisable=FALSE` undoes it.
+    disabled: bool,
+}
+
+/// ★★★ v3-promote — **the guest's context-buffer statements, satisfied by the twin** (owner
+/// ruling 2026-09-25). The guest's CPU-RM owns and allocates its GR context buffers
+/// (`bClientRmAllocatedCtxBuffer` is TRUE on every GSP client, `ogkm-580: gpu_registry.c:153-156`)
+/// and declares them to physical RM with `GPU_PROMOTE_CTX`: once per GR object for the
+/// PA-initialize half (`kgrobjPromoteContext`, `kernel_graphics_object.c:51-159`) and, in a
+/// UVM-owned space, once more at `UVM_REGISTER_CHANNEL` for the VAs (`nvGpuOpsBindChannelResources`,
+/// `nv_gpu_ops.c:10854-10904`). Physical RM is us, and the channel runs as a host twin whose OWN
+/// context host RM allocated, initialised from its golden image and promoted when we allocated the
+/// twin's engine object — so the statement is answered by recording it, never by forwarding it and
+/// never by touching the guest's buffers.
+///
+/// ⊘ **What the guest's CPU-RM reads back from those buffers: nothing** (searched: every
+/// `memmgrMemDescBeginTransfer`/`memmgrMemRead` in `kernel/gpu/gr/`, `kernel_channel.c` and
+/// `nv_gpu_ops.c`). On `NV_OK` it only flips its own `bKGr*CtxBufferInitialized` flags
+/// (`kernel_graphics_object.c:136-151`, `kgrctxMarkCtxBufferInitialized`,
+/// `kernel_graphics_context.c:1949-2000`) and — for the UVM bind — `bIsContextBound`
+/// (`nv_gpu_ops.c:10901-10904`), which is what its own `kchannelIsSchedulable`
+/// (`kernel_channel.c:2200-2206`, called at `:3105` BEFORE the schedule RPC) tests. The one GR
+/// buffer CPU-RM does read is the FECS event buffer, and only with a ctxsw-log consumer; CPU-RM
+/// itself fills it with `0xde` before enabling (`fecs_event_list.c:1545-1547`) and only reads
+/// `magic_lo` against that fill (`:1046-1099`). ⇒ the "stub" is the buffer exactly as the guest
+/// left it: we write no byte.
+#[derive(Debug, Default, Clone, Copy)]
+struct CtxBind {
+    /// Buffer ids the guest asked to be initialised (bitmask of `bufferId`).
+    initialized: u32,
+    /// Buffer ids whose VA the guest promoted (the UVM bind).
+    va_bound: u32,
+    /// `bIsContextBound`'s mirror: a VA promote succeeded and no evict followed.
+    bound: bool,
+    /// Promotes / evicts answered.
+    promotes: u32,
+    evicts: u32,
 }
 
 /// ★ P5c: a twin's error context: the host `NV01_CONTEXT_DMA` over the guest's notifier record
@@ -96,7 +143,14 @@ struct PtNotifier {
     /// The record's four words when it was armed: only a record the HOST changed is an event (a
     /// guest may initialise its notifier to anything).
     at_arm: [u32; 4],
+    /// ★ v3-chanctl: after an `NV_OK` to `STOP_CHANNEL` the guest's OWN CPU-RM writes this record
+    /// (`ROBUST_CHANNEL_PREEMPTIVE_REMOVAL`, `kchannelNotifyRc_HAL`, `kernel_channel.c:1979`) — that
+    /// write is the guest's, not the host's, and must never come back as an `RC_TRIGGERED`.
+    guest_stop_write: bool,
 }
+
+/// `ROBUST_CHANNEL_PREEMPTIVE_REMOVAL` (`ogkm-580: nverror.h:61`).
+const ROBUST_CHANNEL_PREEMPTIVE_REMOVAL: u32 = 45;
 
 impl PtNotifier {
     fn words(&self) -> Option<[u32; 4]> {
@@ -395,6 +449,28 @@ struct Slot {
     views: StoreViews,
     /// ★ P6: the Q7 privilege stamp it was born under (for the log).
     privilege: Option<kf_abi::notifier::ChannelPrivilege>,
+    /// ★ v3-chanctl: the guest STOPPED it — our host ring is disabled and off its runlist until
+    /// the guest schedules it again.
+    stopped: bool,
+    /// ★ v3-chanctl: the guest DISABLED it (`DISABLE_CHANNELS`); the pump fetches nothing and our
+    /// host ring is disabled until `bDisable=FALSE`.
+    disabled: bool,
+}
+
+/// ★ v3-promote: where a guest channel hangs in the guest's object tree — every handle whose free
+/// takes it (a GSP-client guest frees a subtree with ONE `GSP_RM_FREE` naming its root).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ChanScope {
+    tsg: Option<u32>,
+    parent: u32,
+    device: u32,
+}
+
+impl ChanScope {
+    /// Does freeing `(client, object)` free the channel `key` (`(hClient, hChannel)`)?
+    fn freed_by(self, key: (u32, u32), client: u32, object: u32) -> bool {
+        key.0 == client && (object == client || key.1 == object || self.tsg == Some(object) || self.parent == object || self.device == object)
+    }
 }
 
 /// Per-token counters for the gate (`forwarded=` per token), never a decision input.
@@ -432,6 +508,8 @@ pub struct ChanPlane {
     slots: RwLock<HashMap<u32, Arc<Mutex<Slot>>>>,
     /// `(hClient, hObject)` → host token.
     by_obj: Mutex<HashMap<(u32, u32), u32>>,
+    /// ★ v3-promote: a Translated channel's group / parent / device (what a guest free can name).
+    scopes: Mutex<HashMap<(u32, u32), ChanScope>>,
     /// The worker eventfd (a schedule that finds work pending wakes one).
     wake: &'static kf_linux_raw::Notifier,
     /// Serves that found the slot lock held — must stay 0 (BUSY excludes).
@@ -560,6 +638,7 @@ impl ChanPlane {
             caps: Mutex::new(VmCaps::from_declared(64, 64, 64, 64)),
             slots: RwLock::new(HashMap::new()),
             by_obj: Mutex::new(HashMap::new()),
+            scopes: Mutex::new(HashMap::new()),
             wake,
             contended: AtomicU64::new(0),
             poisoned: AtomicU64::new(0),
@@ -700,13 +779,13 @@ impl ChanPlane {
                     return ChanAnswer::Done;
                 }
                 // ★ P5b: a user channel (or its group) — the twin's own schedule, as an act.
-                let twins: Vec<kf_host::Channel> = self
+                let twins: Vec<((u32, u32), kf_host::Channel)> = self
                     .pt
                     .lock()
                     .map(|m| {
                         m.iter()
                             .filter(|(k, v)| k.0 == client && (k.1 == object || v.tsg == Some(object)))
-                            .map(|(_, v)| v.chan)
+                            .map(|(k, v)| (*k, v.chan))
                             .collect()
                     })
                     .unwrap_or_default();
@@ -716,10 +795,35 @@ impl ChanPlane {
                 self.defer(
                     "schedule",
                     Box::new(move |me: &ChanPlane| {
-                        for c in &twins {
+                        let mut restarted = 0;
+                        for (k, c) in &twins {
+                            // ★ v3-chanctl: a STOPPED twin is re-enabled before it is scheduled
+                            // (STOP disabled it; "it has to be scheduled, bound and enabled again",
+                            // `ctrla06fgpfifo.h:219-221`) — unless the guest ALSO disabled it with
+                            // DISABLE_CHANNELS, which only its own `bDisable=FALSE` undoes.
+                            let (stopped, disabled) =
+                                me.pt.lock().ok().and_then(|m| m.get(k).map(|v| (v.stopped, v.disabled))).unwrap_or((false, false));
+                            if enable && stopped {
+                                if !disabled {
+                                    me.rm
+                                        .disable_channels(&[*c], false, false, false)
+                                        .map_err(|e| (NV_ERR_INVALID_STATE, format!("host {:#x} re-enable after STOP: {e:?}", c.token)))?;
+                                }
+                                restarted += 1;
+                                if let Ok(mut m) = me.pt.lock()
+                                    && let Some(v) = m.get_mut(k)
+                                {
+                                    v.stopped = false;
+                                    if let Some(n) = v.notifier.as_mut() {
+                                        // The record as the guest left it is the new baseline.
+                                        n.guest_stop_write = false;
+                                        n.at_arm = n.words().unwrap_or(n.at_arm);
+                                    }
+                                }
+                            }
                             me.rm.schedule_enable(*c, enable).map_err(|e| (NV_ERR_INVALID_STATE, format!("host {:#x}: {e:?}", c.token)))?;
                         }
-                        Ok(format!("{client:#x}:{object:#x} GPFIFO_SCHEDULE enable={enable} on {} twin(s)", twins.len()))
+                        Ok(format!("{client:#x}:{object:#x} GPFIFO_SCHEDULE enable={enable} on {} twin(s) ({restarted} restarted after STOP)", twins.len()))
                     }),
                 )
             }
@@ -768,11 +872,362 @@ impl ChanPlane {
             }
             ChanStatement::EngineObject { client, parent, handle, class } => self.engine_object(client, parent, handle, class),
             ChanStatement::Free { client, object } => self.free(client, object),
+            ChanStatement::PromoteCtx { chan_client, object, engine_type, initialize, with_va, entries } => {
+                self.promote_ctx(chan_client, object, engine_type, initialize, with_va, entries)
+            }
+            ChanStatement::EvictCtx { chan_client, object, engine_type } => self.evict_ctx(chan_client, object, engine_type),
+            ChanStatement::Stop { client, object, immediate } => self.stop_channel(client, object, immediate),
+            ChanStatement::DisableChannels { client, disable, only_scheduling, rewind_gp_put, list } => {
+                self.disable_channels(client, disable, only_scheduling, rewind_gp_put, list.as_slice())
+            }
+            ChanStatement::Preempt { client, object, wait } => self.preempt_group(client, object, wait),
         }
+    }
+
+    /// The Translated slot of `(client, object)`, if the plane owns one: its host token.
+    fn translated_of(&self, client: u32, object: u32) -> Option<u32> {
+        self.by_obj.lock().ok().and_then(|m| m.get(&(client, object)).copied())
+    }
+
+    /// ★★★ v3-chanctl — **`STOP_CHANNEL`, served as authored host verbs on the twin.**
+    ///
+    /// The guest's promise (`ctrla06fgpfifo.h:216-231`): the channel is disabled, unbound and off
+    /// its runlist, NOT RUNNING (a preempt that fails RCs it). The host act on OUR channel:
+    /// `DISABLE_CHANNELS{bDisable, bOnlyDisableScheduling=FALSE}` — RM's own words for exactly
+    /// "none of the listed channels are running in hardware and will not run until …"
+    /// (`ctrl2080fifo.h:309-316`) — then `GPFIFO_SCHEDULE(bEnable=FALSE)` (off the runlist). Both
+    /// are unprivileged (`NON_PRIVILEGED` in their export flags; see `kf_host`). The reply waits
+    /// for both. ⊘ NOT the host's own `STOP_CHANNEL`: host CPU-RM would then write the twin's error
+    /// notifier (`kchannelNotifyRc_HAL`) — the GUEST's record, since the twin's error context is
+    /// it — a host CPU write into guest memory that the guest's CPU-RM is about to make itself.
+    /// A preempt failure is a host RC, reported through the RC plane like any other.
+    ///
+    /// Per-twin scope (owner ruling 2026-09-25): the twin is its own host group, so this stops
+    /// exactly the channel the guest named — a group sibling keeps running, as on hardware (a
+    /// channel STOP is channel-scoped). A later `GPFIFO_SCHEDULE(enable)` re-enables the twin
+    /// (`stopped` is cleared there); nothing else is left behind.
+    fn stop_channel(&self, client: u32, object: u32, immediate: bool) -> ChanAnswer {
+        if let Some(ht) = self.translated_of(client, object) {
+            return self.defer(
+                "stop translated",
+                Box::new(move |me: &ChanPlane| {
+                    let slot = me.slot(ht).ok_or_else(|| (NV_ERR_INVALID_STATE, format!("host {ht:#x}: slot gone")))?;
+                    let host = {
+                        let mut g = slot.lock().map_err(|_| (NV_ERR_INVALID_STATE, "slot poisoned".to_string()))?;
+                        g.scheduled = false;
+                        g.stopped = true;
+                        g.chan.host().channel()
+                    };
+                    me.rm
+                        .disable_channels(&[host], true, false, false)
+                        .and_then(|()| me.rm.schedule_enable(host, false))
+                        .map_err(|e| (NV_ERR_INVALID_STATE, format!("host ring {ht:#x} stop: {e:?}")))?;
+                    Ok(format!("{client:#x}:{object:#x} STOP_CHANNEL(bImmediate={immediate}): Translated ring host {ht:#x} disabled + preempted + off its runlist"))
+                }),
+            );
+        }
+        let Some(chan) = self.pt.lock().ok().and_then(|m| m.get(&(client, object)).map(|v| v.chan)) else {
+            return ChanAnswer::NotOurs;
+        };
+        self.defer(
+            "stop",
+            Box::new(move |me: &ChanPlane| {
+                me.rm
+                    .disable_channels(&[chan], true, false, false)
+                    .map_err(|e| (NV_ERR_INVALID_STATE, format!("host {:#x} DISABLE_CHANNELS: {e:?}", chan.token)))?;
+                me.rm.schedule_enable(chan, false).map_err(|e| (NV_ERR_INVALID_STATE, format!("host {:#x} GPFIFO_SCHEDULE(false): {e:?}", chan.token)))?;
+                if let Ok(mut m) = me.pt.lock()
+                    && let Some(v) = m.get_mut(&(client, object))
+                {
+                    v.stopped = true;
+                    if let Some(n) = v.notifier.as_mut() {
+                        n.guest_stop_write = true;
+                    }
+                }
+                Ok(format!(
+                    "{client:#x}:{object:#x} STOP_CHANNEL(bImmediate={immediate}): twin host {:#x} disabled + preempted (DISABLE_CHANNELS) + off its runlist (GPFIFO_SCHEDULE false)",
+                    chan.token
+                ))
+            }),
+        )
+    }
+
+    /// ★★★ v3-chanctl — **`DISABLE_CHANNELS`, served as the same host verb over the twins.**
+    ///
+    /// Every entry names the calling client (the link refused any other). Each entry maps to its
+    /// twin (Passthrough) or our host ring (Translated); ONE host `DISABLE_CHANNELS` with the
+    /// guest's `bDisable` / `bOnlyDisableScheduling` / `bRewindGpPut` over OUR channels — the
+    /// flags are the guest's intent about its own channels; the channels and the client are ours.
+    /// ⊘ `bRewindGpPut` on a Translated channel is refused by name: our ring's `GP_PUT` is not the
+    /// guest's (the guest's cursor is in its USERD, which the pump reads).
+    /// ⊘ A list naming a channel the plane does not own is refused whole (nothing is half-done);
+    /// a list naming none of ours is not ours.
+    fn disable_channels(&self, client: u32, disable: bool, only_scheduling: bool, rewind: bool, list: &[(u32, u32)]) -> ChanAnswer {
+        if list.is_empty() {
+            // Vacuously true: RM disables nothing (the only in-tree caller never sends it).
+            return ChanAnswer::Done;
+        }
+        let mut pt = Vec::new();
+        let mut tr = Vec::new();
+        let mut unknown = Vec::new();
+        {
+            let Ok(m) = self.pt.lock() else {
+                return ChanAnswer::Refused { status: NV_ERR_INVALID_STATE, why: "twins poisoned".into() };
+            };
+            for &(c, h) in list {
+                if let Some(v) = m.get(&(c, h)) {
+                    pt.push(((c, h), v.chan));
+                } else if let Some(ht) = self.translated_of(c, h) {
+                    tr.push(((c, h), ht));
+                } else {
+                    unknown.push((c, h));
+                }
+            }
+        }
+        if pt.is_empty() && tr.is_empty() {
+            return ChanAnswer::NotOurs;
+        }
+        if !unknown.is_empty() {
+            return ChanAnswer::Refused {
+                status: NV_ERR_INVALID_STATE,
+                why: format!("DISABLE_CHANNELS names {} channel(s) with no host twin ({unknown:x?}); none disabled", unknown.len()),
+            };
+        }
+        if rewind && !tr.is_empty() {
+            return ChanAnswer::Refused {
+                status: NV_ERR_INVALID_ARGUMENT,
+                why: format!("DISABLE_CHANNELS bRewindGpPut on Translated channel(s) {tr:x?}: our host ring's GP_PUT is not the guest's"),
+            };
+        }
+        self.defer(
+            "disable channels",
+            Box::new(move |me: &ChanPlane| {
+                let mut hosts: Vec<kf_host::Channel> = pt.iter().map(|(_, c)| *c).collect();
+                let mut slots = Vec::new();
+                for (_, ht) in &tr {
+                    let slot = me.slot(*ht).ok_or_else(|| (NV_ERR_INVALID_STATE, format!("host {ht:#x}: slot gone")))?;
+                    let host = {
+                        let mut g = slot.lock().map_err(|_| (NV_ERR_INVALID_STATE, "slot poisoned".to_string()))?;
+                        if disable {
+                            // The pump stops fetching BEFORE the host verb.
+                            g.disabled = true;
+                        }
+                        g.chan.host().channel()
+                    };
+                    hosts.push(host);
+                    slots.push(slot);
+                }
+                me.rm
+                    .disable_channels(&hosts, disable, only_scheduling, rewind)
+                    .map_err(|e| (NV_ERR_INVALID_STATE, format!("host DISABLE_CHANNELS over {} channel(s): {e:?}", hosts.len())))?;
+                if let Ok(mut m) = me.pt.lock() {
+                    for (k, _) in &pt {
+                        if let Some(v) = m.get_mut(k) {
+                            v.disabled = disable;
+                        }
+                    }
+                }
+                if !disable {
+                    for s in &slots {
+                        let idx = s.lock().ok().map(|mut g| {
+                            g.disabled = false;
+                            g.guest_idx
+                        });
+                        // Work the guest queued while disabled is picked up now.
+                        if let Some(i) = idx
+                            && me.plane.ring_internal(i)
+                        {
+                            let _ = me.wake.signal();
+                        }
+                    }
+                }
+                Ok(format!(
+                    "{client:#x} DISABLE_CHANNELS(bDisable={disable}, bOnlyDisableScheduling={only_scheduling}, bRewindGpPut={rewind}) over {} twin(s) + {} Translated ring(s)",
+                    pt.len(),
+                    tr.len()
+                ))
+            }),
+        )
+    }
+
+    /// ★★★ v3-chanctl — **`NVA06C` `PREEMPT` of a guest channel group, served per twin.**
+    ///
+    /// Each guest channel is its own host group (a twin, or our Translated ring), so the group
+    /// preempt is `NVA06C PREEMPT(bWait=1)` on every member's host group, in turn, and the reply
+    /// is held until the last completes (`bWait=0` is served the same way: waiting is the stronger
+    /// promise, and the held reply is off every lock). Per-twin scope (owner ruling 2026-09-25):
+    /// after the reply every member has been context-switched out, which is all a group preempt
+    /// promises (it does not disable — a member with work may run again, on hardware too); the
+    /// difference (members preempted one after another, not atomically) is timing only and not
+    /// observable to guest userspace. A group the plane owns no member of is not ours.
+    fn preempt_group(&self, client: u32, object: u32, wait: bool) -> ChanAnswer {
+        let pt: Vec<kf_host::Channel> = self
+            .pt
+            .lock()
+            .map(|m| m.iter().filter(|(k, v)| k.0 == client && v.tsg == Some(object)).map(|(_, v)| v.chan).collect())
+            .unwrap_or_default();
+        // ⊘ Group membership from the scopes table, never a slot lock on the drainer.
+        let scopes = self.scopes.lock().map(|m| m.clone()).unwrap_or_default();
+        let tr: Vec<u32> = self
+            .by_obj
+            .lock()
+            .map(|m| m.iter().filter(|(k, _)| k.0 == client && scopes.get(k).is_some_and(|sc| sc.tsg == Some(object))).map(|(_, v)| *v).collect())
+            .unwrap_or_default();
+        if pt.is_empty() && tr.is_empty() {
+            return ChanAnswer::NotOurs;
+        }
+        self.defer(
+            "preempt",
+            Box::new(move |me: &ChanPlane| {
+                for c in &pt {
+                    me.rm.preempt(*c).map_err(|e| (NV_ERR_INVALID_STATE, format!("twin host {:#x} PREEMPT: {e:?}", c.token)))?;
+                }
+                for ht in &tr {
+                    let host = me
+                        .slot(*ht)
+                        .and_then(|s| s.lock().ok().map(|g| g.chan.host().channel()))
+                        .ok_or_else(|| (NV_ERR_INVALID_STATE, format!("host {ht:#x}: slot gone")))?;
+                    me.rm.preempt(host).map_err(|e| (NV_ERR_INVALID_STATE, format!("Translated ring host {ht:#x} PREEMPT: {e:?}")))?;
+                }
+                Ok(format!("{client:#x}:{object:#x} PREEMPT(bWait={wait}) — {} twin(s) + {} Translated ring(s) preempted (host bWait=1)", pt.len(), tr.len()))
+            }),
+        )
+    }
+
+    /// ★★★ `GPU_PROMOTE_CTX`, satisfied by the twin ([`CtxBind`]).
+    ///
+    /// ⊘ `[measured pr3]` the PA-initialize promote arrives BEFORE the GR object's own alloc RPC:
+    /// `kgrobjConstruct` promotes inside its constructor (`kernel_graphics_object.c:225`) and the
+    /// resource's alloc reaches us only after it, so at that moment the twin holds no host object
+    /// yet. That promote is answered from the twin alone (a GR twin exists): the host context it
+    /// stands for is created by the SAME guest alloc's engine-object act right after, and if that
+    /// act fails the guest's alloc fails and its object — with its "initialized" flags — is torn
+    /// down (`kernel_graphics_object.c:352-356`). No host work, so no act: answered inline.
+    /// A promote that carries VAs (the UVM bind, after the object exists) is an ACT ordered behind
+    /// any queued engine-object act, and requires the host GR object to exist.
+    /// ⊘ Nothing is sent to the host and no guest byte is read or written.
+    fn promote_ctx(&self, client: u32, object: u32, engine_type: u32, initialize: u32, with_va: u32, entries: u32) -> ChanAnswer {
+        let Some((engine, ht)) = self.pt.lock().ok().and_then(|m| m.get(&(client, object)).map(|v| (v.engine, v.chan.token))) else {
+            // A Translated (kernel CE) channel has no GR context and never promotes; a kernel GR
+            // channel (RM's golden-image channel) is not born (P7) — both stay the FSM's refusal.
+            eprintln!("kf3: chan {client:#x}:{object:#x} GPU_PROMOTE_CTX: no passthrough twin — not ours (entries={entries})");
+            return ChanAnswer::NotOurs;
+        };
+        if engine != kf_abi::submit::ENGINE_TYPE_GRAPHICS || engine_type != engine {
+            return ChanAnswer::Refused {
+                status: NV_ERR_INVALID_ARGUMENT,
+                why: format!("GPU_PROMOTE_CTX engine {engine_type:#x} for a twin born on engine {engine:#x} (host {ht:#x})"),
+            };
+        }
+        if with_va == 0 {
+            let Ok(mut m) = self.pt.lock() else {
+                return ChanAnswer::Refused { status: NV_ERR_INVALID_STATE, why: "twins poisoned".into() };
+            };
+            let Some(v) = m.get_mut(&(client, object)) else { return ChanAnswer::NotOurs };
+            v.ctx.initialized |= initialize;
+            v.ctx.promotes += 1;
+            eprintln!(
+                "kf3: chan {client:#x}:{object:#x} GPU_PROMOTE_CTX (initialize) SATISFIED BY TWIN host {ht:#x}: entries={entries} init_ids={initialize:#x} host_objects={} — not forwarded, no guest byte touched",
+                v.objects.len()
+            );
+            return ChanAnswer::Done;
+        }
+        self.defer(
+            "promote ctx",
+            Box::new(move |me: &ChanPlane| {
+                let mut m = me.pt.lock().map_err(|_| (NV_ERR_INVALID_STATE, "twins poisoned".to_string()))?;
+                let v = m
+                    .get_mut(&(client, object))
+                    .ok_or_else(|| (NV_ERR_INVALID_STATE, format!("{client:#x}:{object:#x}: twin freed before its promote")))?;
+                let host_ctx: Vec<u32> = v
+                    .objects
+                    .values()
+                    .filter(|(_, k)| matches!(k, kf_chip::classes::Kind::Compute | kf_chip::classes::Kind::ThreeD))
+                    .map(|(h, _)| *h)
+                    .collect();
+                if host_ctx.is_empty() {
+                    return Err((
+                        NV_ERR_INVALID_STATE,
+                        format!(
+                            "{client:#x}:{object:#x} GPU_PROMOTE_CTX: twin host {ht:#x} holds no GR engine object, so host RM has no context to stand for the guest's"
+                        ),
+                    ));
+                }
+                v.ctx.initialized |= initialize;
+                v.ctx.va_bound |= with_va;
+                v.ctx.bound |= with_va != 0;
+                v.ctx.promotes += 1;
+                Ok(format!(
+                    "chan {client:#x}:{object:#x} GPU_PROMOTE_CTX SATISFIED BY TWIN host {ht:#x} (host GR object(s) {host_ctx:x?}): entries={entries} init_ids={initialize:#x} va_ids={with_va:#x} bound={} — not forwarded, no guest byte touched",
+                    v.ctx.bound
+                ))
+            }),
+        )
+    }
+
+    /// `GPU_EVICT_CTX` — the unbind half. The guest's `nvGpuOpsStopChannel` sends it after
+    /// `STOP_CHANNEL` and then clears `bIsContextBound` (`nv_gpu_ops.c:10956-10983`); `NV_OK`
+    /// asserts the context is switched out. The twin is taken off the host runlist (its own
+    /// `GPFIFO_SCHEDULE` disable, an authored verb), so that promise is the host's, and the
+    /// binding is recorded UNBOUND.
+    fn evict_ctx(&self, client: u32, object: u32, engine_type: u32) -> ChanAnswer {
+        let Some((engine, chan)) = self.pt.lock().ok().and_then(|m| m.get(&(client, object)).map(|v| (v.engine, v.chan))) else {
+            return ChanAnswer::NotOurs;
+        };
+        if engine != kf_abi::submit::ENGINE_TYPE_GRAPHICS || engine_type != engine {
+            return ChanAnswer::Refused {
+                status: NV_ERR_INVALID_ARGUMENT,
+                why: format!("GPU_EVICT_CTX engine {engine_type:#x} for a twin born on engine {engine:#x} (host {:#x})", chan.token),
+            };
+        }
+        self.defer(
+            "evict ctx",
+            Box::new(move |me: &ChanPlane| {
+                me.rm.schedule_enable(chan, false).map_err(|e| (NV_ERR_INVALID_STATE, format!("host {:#x} disable: {e:?}", chan.token)))?;
+                let ctx = me.pt.lock().ok().and_then(|mut m| {
+                    m.get_mut(&(client, object)).map(|v| {
+                        v.ctx.bound = false;
+                        v.ctx.va_bound = 0;
+                        v.ctx.evicts += 1;
+                        v.ctx
+                    })
+                });
+                Ok(format!("chan {client:#x}:{object:#x} GPU_EVICT_CTX: twin host {:#x} off the runlist, context UNBOUND ({ctx:?})", chan.token))
+            }),
+        )
     }
 
     fn schedule_translated(&self, client: u32, object: u32, ht: u32, enable: bool) -> ChanAnswer {
         let Some(slot) = self.slot(ht) else { return ChanAnswer::NotOurs };
+        // ★ v3-chanctl: a STOPPED Translated channel's host ring was disabled and taken off its
+        // runlist — re-enable it (host verbs: an act) before the pump may fetch again.
+        if enable && slot.try_lock().is_ok_and(|g| g.stopped) {
+            return self.defer(
+                "restart translated",
+                Box::new(move |me: &ChanPlane| {
+                    let slot = me.slot(ht).ok_or_else(|| (NV_ERR_INVALID_STATE, format!("host {ht:#x}: slot gone")))?;
+                    let (host, disabled) = slot
+                        .lock()
+                        .map(|g| (g.chan.host().channel(), g.disabled))
+                        .map_err(|_| (NV_ERR_INVALID_STATE, "slot poisoned".to_string()))?;
+                    if !disabled {
+                        me.rm.disable_channels(&[host], false, false, false).map_err(|e| (NV_ERR_INVALID_STATE, format!("host ring {ht:#x} re-enable: {e:?}")))?;
+                    }
+                    me.rm.schedule_enable(host, true).map_err(|e| (NV_ERR_INVALID_STATE, format!("host ring {ht:#x} schedule: {e:?}")))?;
+                    let idx = slot.lock().map(|mut g| {
+                        g.stopped = false;
+                        g.scheduled = true;
+                        g.guest_idx
+                    });
+                    if let Ok(i) = idx
+                        && me.plane.ring_internal(i)
+                    {
+                        let _ = me.wake.signal();
+                    }
+                    Ok(format!("{client:#x}:{object:#x} GPFIFO_SCHEDULE enable=true: Translated ring host {ht:#x} restarted after STOP"))
+                }),
+            );
+        }
         let idx = match slot.lock() {
             Ok(mut g) => {
                 g.scheduled = enable;
@@ -808,7 +1263,7 @@ impl ChanPlane {
                 if let Ok(mut m) = me.pt.lock()
                     && let Some(v) = m.get_mut(&(client, parent))
                 {
-                    v.objects.insert(handle, h);
+                    v.objects.insert(handle, (h, kind));
                 }
                 if let Ok(mut m) = me.pt_objs.lock() {
                     m.insert((client, handle), (client, parent));
@@ -823,19 +1278,34 @@ impl ChanPlane {
     /// (atomics, no host call); the host frees run as ONE act whose outcome the reply waits for.
     fn free(&self, client: u32, object: u32) -> ChanAnswer {
         // Translated channels: by object, or every one of the client's.
+        // ★ v3-promote: a free of the channel, its group, its parent, its DEVICE or its client
+        // takes the channel with it (the guest frees a subtree with ONE RPC) — for Translated
+        // channels too, which were matched by handle or client only, so a group or device free
+        // left the host ring pumping after the guest considered the channel gone.
+        let scopes = self.scopes.lock().map(|m| m.clone()).unwrap_or_default();
         let translated: Vec<u32> = self
             .by_obj
             .lock()
             .map(|mut m| {
-                let keys: Vec<(u32, u32)> = m.keys().copied().filter(|k| k.0 == client && (object == client || k.1 == object)).collect();
+                let keys: Vec<(u32, u32)> = m
+                    .keys()
+                    .copied()
+                    .filter(|k| {
+                        let sc = scopes.get(k).copied().unwrap_or(ChanScope { tsg: None, parent: k.1, device: k.1 });
+                        sc.freed_by(*k, client, object)
+                    })
+                    .collect();
                 keys.into_iter().filter_map(|k| m.remove(&k)).collect()
             })
             .unwrap_or_default();
-        let twins = self.take_pt(|k, v| k.0 == client && (object == client || k.1 == object || v.tsg == Some(object) || v.parent == object));
+        if let Ok(mut m) = self.scopes.lock() {
+            m.retain(|k, sc| !sc.freed_by(*k, client, object));
+        }
+        let twins = self.take_pt(|k, v| ChanScope { tsg: v.tsg, parent: v.parent, device: v.device }.freed_by(*k, client, object));
         // Engine objects freed on their own (their twin still lives).
         let obj = if twins.is_empty() {
             self.pt_objs.lock().ok().and_then(|mut m| m.remove(&(client, object))).and_then(|key| {
-                self.pt.lock().ok().and_then(|mut m| m.get_mut(&key).and_then(|v| v.objects.remove(&object)))
+                self.pt.lock().ok().and_then(|mut m| m.get_mut(&key).and_then(|v| v.objects.remove(&object).map(|o| o.0)))
             })
         } else {
             None
@@ -890,7 +1360,7 @@ impl ChanPlane {
                         rung - reached.min(rung),
                         t.chan.token
                     );
-                    line.push(format!("passthrough {c:#x}:{h:#x} token {:#x} host {:#x} objects={} {}", t.idx, t.chan.token, t.objects.len(), if r.is_ok() { "freed" } else { "FREE REFUSED" }));
+                    line.push(format!("passthrough {c:#x}:{h:#x} token {:#x} host {:#x} objects={} ctx={:?} {}", t.idx, t.chan.token, t.objects.len(), t.ctx, if r.is_ok() { "freed" } else { "FREE REFUSED" }));
                 }
                 if let Some(h) = obj {
                     let r = me.rm.free(h);
@@ -1012,7 +1482,20 @@ impl ChanPlane {
                     }
                     let rc = if notifier.is_some() { "armed" } else { "none" };
                     if let Ok(mut m) = me.pt.lock() {
-                        m.insert((a.client, a.handle), PtChan { chan, idx, tsg: a.tsg, parent: a.parent, engine, objects: HashMap::new(), live, notifier });
+                        m.insert((a.client, a.handle), PtChan {
+                            chan,
+                            idx,
+                            tsg: a.tsg,
+                            parent: a.parent,
+                            device: a.device,
+                            engine,
+                            objects: HashMap::new(),
+                            ctx: CtxBind::default(),
+                            live,
+                            notifier,
+                            stopped: false,
+                            disabled: false,
+                        });
                     }
                     me.pt_births.fetch_add(1, Ordering::Relaxed);
                     me.engine_live(engine, true);
@@ -1073,12 +1556,17 @@ impl ChanPlane {
                     splits: 0,
                     views: StoreViews::new(),
                     privilege: a.privilege,
+                    stopped: false,
+                    disabled: false,
                 };
                 if let Ok(mut s) = me.slots.write() {
                     s.insert(ht, Arc::new(Mutex::new(slot)));
                 }
                 if let Ok(mut m) = me.by_obj.lock() {
                     m.insert((a.client, a.handle), ht);
+                }
+                if let Ok(mut m) = me.scopes.lock() {
+                    m.insert((a.client, a.handle), ChanScope { tsg: a.tsg, parent: a.parent, device: a.device });
                 }
                 me.births.fetch_add(1, Ordering::Relaxed);
                 Ok(format!(
@@ -1117,7 +1605,7 @@ impl ChanPlane {
         match self.userd_view(Some(at)) {
             Ok(view) => {
                 self.rc_armed.fetch_add(1, Ordering::Relaxed);
-                let mut n = PtNotifier { ctx, view, reported: false, at_arm: [0; 4] };
+                let mut n = PtNotifier { ctx, view, reported: false, at_arm: [0; 4], guest_stop_write: false };
                 n.at_arm = n.words().unwrap_or([0; 4]);
                 Some(n)
             }
@@ -1153,6 +1641,11 @@ impl ChanPlane {
                 // `NvNotification {timeStamp:8, info32:4, info16:2, status:2}`: status is the high
                 // half of word 3 and is written last.
                 let Some(w) = n.words() else { continue };
+                // ★ v3-chanctl: the guest's own post-STOP write is re-baselined, never reported.
+                if n.guest_stop_write && w != n.at_arm && w[2] == ROBUST_CHANNEL_PREEMPTIVE_REMOVAL {
+                    n.at_arm = w;
+                    continue;
+                }
                 if w != n.at_arm && (w[3] >> 16) != 0 {
                     n.reported = true;
                     found.push(RcEvent { chid: t.idx, engine: t.engine, except_type: w[2], host_token: t.chan.token });
@@ -1269,7 +1762,7 @@ impl ChanPlane {
         };
         let g = &mut *g;
         g.serves += 1;
-        if g.dead.is_some() || !g.scheduled || self.stop.load(Ordering::Acquire) {
+        if g.dead.is_some() || !g.scheduled || g.disabled || g.stopped || self.stop.load(Ordering::Acquire) {
             return false;
         }
         g.last_put = g.userd.load(kf_abi::submit::USERD_GP_PUT).ok();
@@ -1338,5 +1831,29 @@ impl ChanPlane {
     /// Stop serving (device teardown).
     pub fn stop(&self) {
         self.stop.store(true, Ordering::Release);
+    }
+}
+
+#[cfg(test)]
+mod scope_tests {
+    use super::ChanScope;
+
+    /// ★ v3-promote: a guest free of ANY handle the channel hangs under takes its twin — the
+    /// channel, its group, its parent, its device or its client — and nothing else does (another
+    /// client's identical handles, a sibling channel, an unrelated object).
+    #[test]
+    fn a_group_device_or_client_free_takes_every_twin_under_it() {
+        let (c, dev, tsg, ch, sib) = (0xc1d0_000b, 0x5c00_0001, 0xcafe_0010, 0xcafe_0013, 0xcafe_0014);
+        let member = ChanScope { tsg: Some(tsg), parent: tsg, device: dev };
+        assert!(member.freed_by((c, ch), c, ch), "the channel itself");
+        assert!(member.freed_by((c, ch), c, tsg), "its group");
+        assert!(member.freed_by((c, ch), c, dev), "its DEVICE (a group member's parent is the group)");
+        assert!(member.freed_by((c, ch), c, c), "its client");
+        assert!(!member.freed_by((c, ch), c, sib), "a sibling's free leaves it");
+        assert!(!member.freed_by((c, ch), 0xc1d0_000c, tsg), "another client's same handle");
+        assert!(!member.freed_by((c, ch), c, 0xdead_0001), "an unrelated object");
+        let bare = ChanScope { tsg: None, parent: dev, device: dev };
+        assert!(bare.freed_by((c, ch), c, dev));
+        assert!(!bare.freed_by((c, ch), c, tsg));
     }
 }

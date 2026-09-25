@@ -1509,18 +1509,32 @@ mod tests {
 
     /// ★ P6b: a walked leaf over one of OUR VMM placements is refused by name before the host is
     /// asked, and the guest's trigger stays armed — never satisfied onto a VMM address.
+    /// ★ v3-promote: per LEAF — the rest of the space still reconciles.
     #[test]
     fn a_leaf_over_a_vmm_placement_is_refused_before_the_host_is_asked() {
         let mut r = rig();
         let h = host(&r, None, vec![(0xFF_0000_0000, 0x100_0000_0000)]);
         r.m.table.insert(K_A, h);
         r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem).unwrap();
-        r.tables.borrow_mut().insert(PDB_A, vec![(0xFF_0010_0000, 0x0300_0000, 0x1000, 0)]);
-        let out = settle(&mut r, PDB_A);
-        assert_eq!(out.unreconciled.len(), 1);
+        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0), (0xFF_0010_0000, 0x0300_0000, 0x1000, 0)]);
+        let q = guest_invalidate(&r.port, PDB_A, false);
+        r.m.on_invalidate(q, r.port.trigger());
+        let out = r.m.on_walk_ready(r.port.trigger());
+        assert_eq!(out.unreconciled, vec![q.seq], "the guest's statement is not acknowledged");
         assert!(busy(&r.port));
-        assert!(r.ops.borrow().is_empty(), "the host was never asked");
-        assert_eq!(r.m.stats.vmm_overlaps, 1);
+        // ★ v3-promote (Q11 ruling): the colliding leaf fails ALONE — the rest of the space
+        // reconciles, and the host is never asked about the colliding VA.
+        let ops: Vec<Op> = r.ops.borrow().iter().map(|(o, _)| o.clone()).collect();
+        assert!(ops.contains(&Op::Map(0x1000_0000, 0x0200_0000, 0x1000)), "the innocent leaf is mapped: {ops:?}");
+        assert!(!ops.iter().any(|o| matches!(o, Op::Map(va, ..) if *va >= 0xFF_0000_0000)), "the host was never asked about OUR range");
+        // ⊘ v3-diff: the colliding MAP is acknowledged FAILED (a difference retried by the next
+        // diff), the innocent one APPLIED — the next walk re-emits only the colliding leaf.
+        r.ops.borrow_mut().clear();
+        let q = guest_invalidate(&r.port, PDB_A, false);
+        r.m.on_invalidate(q, r.port.trigger());
+        r.m.on_walk_ready(r.port.trigger());
+        assert!(r.ops.borrow().is_empty(), "the innocent leaf is not re-mapped; the colliding one never reaches the host");
+        assert_eq!(r.m.stats.vmm_overlaps, 2, "the collision is re-emitted and refused again, by name");
         assert!(r.m.stats.refusals[0].contains("may never alias a VMM address"));
     }
 

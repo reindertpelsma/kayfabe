@@ -357,6 +357,46 @@ impl HostRm {
         self.raw_control(chan.tsg, NVA06C_CTRL_CMD_GPFIFO_SCHEDULE, &mut params)
     }
 
+    /// ★★★ v3-chanctl — `NVA06C_CTRL_CMD_PREEMPT` (`0xa06c0105`) on the channel's own host
+    /// group, `bWait = 1` (AUTHORED: the reply we hold is the preempt's completion, never an
+    /// "issued" — `ctrla06c.h:177-198`), RM's default timeout (no manual one).
+    ///
+    /// ⊘ **Unprivileged**: its export flags are `0x10248` (`ogkm-580:
+    /// g_kernel_channel_group_api_nvoc.c:273`) — `RMCTRL_FLAGS_NON_PRIVILEGED` (`0x8`,
+    /// `control.h:208`) set, neither `PRIVILEGED` (`0x4`) nor `INTERNAL` (`0x80`); issued on OUR
+    /// client's own group.
+    ///
+    /// # Errors
+    /// The host's status.
+    pub fn preempt(&self, chan: Channel) -> Result<(), RmError> {
+        let mut p = kf_abi::submit::Preempt { wait: true, manual_timeout: false, timeout_us: 0 }.encode();
+        self.raw_control(chan.tsg, kf_abi::submit::NVA06C_CTRL_CMD_PREEMPT, &mut p)
+    }
+
+    /// ★★★ v3-chanctl — `NV2080_CTRL_CMD_FIFO_DISABLE_CHANNELS` (`0x2080110b`) over OUR channels
+    /// (every entry names this client). `disable && !only_scheduling` is the documented
+    /// "none of the listed channels are running in hardware and will not run until a call with
+    /// `bDisable=NV_FALSE`" (`ctrl2080fifo.h:309-316`); `only_scheduling` degrades it to "not
+    /// scheduled"; `!disable` undoes it. `pRunlistPreemptEvent` is always NULL.
+    ///
+    /// ⊘ **Unprivileged**: export flags `0x10108` (`ogkm-580: g_subdevice_nvoc.c:4921`) —
+    /// `NON_PRIVILEGED` set; the one privilege check in its CPU-RM body is on
+    /// `pRunlistPreemptEvent` (`kernel_fifo_ctrl.c:720-725`), which we never pass.
+    ///
+    /// # Errors
+    /// The host's status; more than 64 channels.
+    pub fn disable_channels(&self, chans: &[Channel], disable: bool, only_scheduling: bool, rewind_gp_put: bool) -> Result<(), RmError> {
+        let d = kf_abi::submit::DisableChannels {
+            disable,
+            only_disable_scheduling: only_scheduling,
+            rewind_gp_put,
+            runlist_preempt_event: 0,
+            list: chans.iter().map(|c| (self.client.raw(), c.chan)).collect(),
+        };
+        let mut p = d.encode().map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
+        self.raw_control(self.subdevice, kf_abi::submit::NV2080_CTRL_CMD_FIFO_DISABLE_CHANNELS, &mut p)
+    }
+
     /// ★ Is host copy engine `engine_type` a GRAPHICS copy engine (it shares the GR runlist)?
     /// `NV2080_CTRL_CMD_CE_GET_CAPS_V2` (`0x20802a03`, `ogkm-580: ctrl2080ce.h:78-91`):
     /// `capsTbl[0] & NV2080_CTRL_CE_CAPS_CE_GRCE`. ⊘ Asked of the HOST, never assumed from a mask:
