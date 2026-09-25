@@ -9,7 +9,7 @@
 use crate::abi::{KF_ABI_VERSION, kf_format_ver2};
 use crate::driver_unsafe::CudaError;
 use crate::synth;
-use crate::walk::{Report, WalkCfg, WalkKernel};
+use crate::walk::{Report, WalkCfg, WalkEntry, WalkKernel};
 
 /// How many 4 KiB pages the fixture maps. ⊘ Deliberately more than one, so the expectation is
 /// a **coalesced run** and the kernel's coalescer is on the path rather than bypassed.
@@ -153,7 +153,7 @@ pub fn bring_up_and_prove() -> (SelftestOutcome, Option<WalkKernel>) {
 
     // ★ THE WARM-UP LAUNCH — a REAL one, against a real image, whose answer is known. §w724d
     // asks for exactly this: a launch that walks every lazy path while paths still exist.
-    match k.refresh(dev_img.ptr(), dev_img.len(), &[root]) {
+    match k.refresh_image(&dev_img, &[WalkEntry { pdb: root, slot: 0 }]) {
         Err(e) => {
             out.why = e.to_string();
         }
@@ -240,7 +240,7 @@ pub fn probe_after_sandbox(k: &mut WalkKernel, out: &mut SelftestOutcome) {
         synth::contiguous_small_pages(FIXTURE_VA, FIXTURE_PAGES, FIXTURE_GPGA);
     out.probe_relaunch = match k.upload(&img.mem) {
         Err(e) => format!("FAIL upload: {e}"),
-        Ok(d) => match k.refresh(d.ptr(), d.len(), &[root]) {
+        Ok(d) => match k.refresh_image(&d, &[WalkEntry { pdb: root, slot: 0 }]) {
             Err(e) => format!("FAIL launch: {e}"),
             Ok(r) => match r.validate() {
                 Err(e) => format!("FAIL malformed: {e}"),
@@ -249,9 +249,9 @@ pub fn probe_after_sandbox(k: &mut WalkKernel, out: &mut SelftestOutcome) {
                         .runs
                         .iter()
                         .any(|m| m.va == expect.va && m.gpga == expect.gpga && m.len == expect.len);
-                    // ⊘ The SECOND refresh is a DELTA, not a resync, so an empty run list is
-                    // the correct answer when nothing changed — and "empty" must not read as
-                    // "the launch did nothing". Both readings are reported.
+                    // ⊘ Nothing was acknowledged, so slot 0 is still empty and the diff re-reports
+                    // the mapping as a MAP; an empty list would mean a commit happened that no
+                    // verdict asked for. Both readings are still reported, by name.
                     if ok {
                         format!(
                             "PASS runs={} (the mapping was re-reported)",
@@ -284,7 +284,7 @@ pub fn probe_after_sandbox(k: &mut WalkKernel, out: &mut SelftestOutcome) {
                 synth::contiguous_small_pages(FIXTURE_VA, FIXTURE_PAGES, FIXTURE_GPGA);
             match k
                 .upload(&img2.mem)
-                .and_then(|d| k.refresh(d.ptr(), d.len(), &[root2]))
+                .and_then(|d| k.refresh_image(&d, &[WalkEntry { pdb: root2, slot: 0 }]))
             {
                 Ok(r) => format!(
                     "PASS refused as expected ({why}); and the context SURVIVED it — a \

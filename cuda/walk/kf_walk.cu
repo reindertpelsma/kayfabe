@@ -164,20 +164,22 @@ struct KfFormat {
 struct KfWin { const uint8_t *base; uint64_t len; uint64_t span; };
 #define KF_GPGA_DEREF(win, off) (*(const volatile uint64_t *)((win).base + (off)))
 
-/* ── the kernel's cross-refresh state ────────────────────────────────────────── */
+/* ── the kernel's cross-refresh state ──────────────────────────────────────────
+ * ⊘ No snapshot of the guest's tables lives here (V3_BUILD.md). What persists
+ * across walks is the committed placements (`KfArgs::com`, per slot, written only
+ * on the host's ack) and the report counter. */
 struct KfDev {
-    uint64_t generation;
-    uint64_t acked;
-    uint32_t have_prev;
-    uint32_t cur_buf;            /* which of the two tables is the INSTALLED one */
-    uint32_t runs_per_pdb;
+    uint64_t generation;         /* reports emitted */
+    uint64_t committed;          /* the last report generation whose ack was committed */
+    uint32_t runs_per_pdb;       /* walk slice per entry AND one slot's capacity */
     uint32_t entry_budget;
     uint32_t run_capacity;       /* report */
     uint32_t pdb_capacity;       /* report */
-    uint32_t max_pdbs;           /* table slots */
-    uint32_t tbl_pdb_count[2];
-    uint64_t tbl_pdb[2][KF_MAX_PDB];
-    uint32_t tbl_run_count[2][KF_MAX_PDB];
+    uint32_t max_pdbs;           /* walk entries */
+    uint32_t max_slots;          /* committed-placement slots */
+    uint32_t tbl_run_count[KF_MAX_PDB];   /* the walk's runs, per entry */
+    uint32_t diff_count[KF_MAX_PDB];      /* the staged diff's runs, per entry */
+    uint32_t diff_vflags[KF_MAX_PDB];     /* KFWR_V_PARTIAL / KFWR_V_OVERFLOW, per entry */
     /* per-refresh accumulators, zeroed by kf_begin_kernel */
     unsigned long long entries_visited;
     unsigned int refusals;
@@ -188,15 +190,25 @@ struct KfDev {
     unsigned int sparse_slots;
 };
 
+/* ⚠ Scratch: `scratch` holds 4 * runs_per_pdb runs PER ENTRY (the diff: the
+ * class-partitioned walk + up to 3 * runs_per_pdb staged runs; the commit: kept,
+ * added, merged) and `iscratch` 2 * runs_per_pdb words per entry. The host sizes
+ * both (and reuses the parallel walk's run stage for `scratch`: the walk is done
+ * with it before the diff runs, and the commit runs before the walk). */
 struct KfArgs {
     KfWin win;
     KfFormat fmt;                /* SETUP DATA: immutable for the VM's lifetime */
     KfDev *dev;
-    KfMapRun *tbl[2];
-    const uint64_t *pdbs;
+    KfMapRun *walk;              /* the walk's runs: runs_per_pdb per entry */
+    KfMapRun *com;               /* committed placements: runs_per_pdb per slot */
+    KfSlot *slot;                /* per slot: committed counts per class */
+    const uint64_t *pdbs;        /* per entry: the root walked */
+    const uint32_t *slots;       /* per entry: the slot it is diffed against */
     uint32_t npdb;
-    const KfScope *scopes;
-    uint32_t nscope;
+    const KfAck *ack;            /* the host's verdict on the PREVIOUS report */
+    const uint8_t *ack_code;     /* one KFWR_ACK_* per previous report run */
+    KfMapRun *scratch;
+    uint32_t *iscratch;
     KfReportHeader *hdr;
     KfPdbEntry *rpdb;
     KfMapRun *rrun;
@@ -358,9 +370,6 @@ struct KfCtx {
     uint32_t n;
     uint32_t have;
     KfMapRun run;
-    const KfMapRun *prev;
-    uint32_t prev_n;
-    uint32_t pcur;
     uint16_t pdb_index;
 };
 
@@ -468,40 +477,9 @@ __device__ __forceinline__ void kf_emit(KfCtx &c, uint64_t va, uint64_t gpga, ui
     c.have = 1;
 }
 
-/* ── scope ───────────────────────────────────────────────────────────────────── */
-#define KF_SCOPES_PER_PDB 4
-struct KfScopeSet {
-    uint32_t n;
-    uint32_t full;                 /* 1 ⇒ walk everything */
-    uint64_t lo[KF_SCOPES_PER_PDB];
-    uint64_t hi[KF_SCOPES_PER_PDB];
-};
-
-__device__ __forceinline__ bool kf_in_scope(const KfScopeSet &s, uint64_t lo, uint64_t hi)
-{
-    if (s.full) return true;
-    bool hit = false;
-    for (int i = 0; i < KF_SCOPES_PER_PDB; i++)   /* fixed trip count */
-        if ((uint32_t)i < s.n && lo < s.hi[i] && s.lo[i] < hi) hit = true;
-    return hit;
-}
-
-/* Carry the PREVIOUS walk's runs across a VA region the scope told us to skip.
- * Clipped to [lo,hi) and pushed through the same coalescer, so a run cut by a
- * region boundary is re-joined rather than split in the report.
- * ⊘ `prev` is the KERNEL'S OWN table, bounded by runs_per_pdb — not guest data. */
-__device__ void kf_carry(KfCtx &c, uint64_t lo, uint64_t hi)
-{
-    for (uint32_t k = c.pcur; k < c.prev_n && !c.stop; k++) {
-        uint64_t rva = c.prev[k].va, rlen = c.prev[k].len, rend = rva + rlen;
-        if (rend <= lo) { c.pcur = k + 1; continue; }
-        if (rva >= hi) break;
-        uint64_t a = rva > lo ? rva : lo;
-        uint64_t b = rend < hi ? rend : hi;
-        kf_emit(c, a, c.prev[k].gpga + (a - rva), b - a, c.prev[k].flags);
-        if (rend <= hi) c.pcur = k + 1;
-    }
-}
+/* ⊘ Scope hints are gone (2026-09-25): a scoped walk CARRIED the previous walk's
+ * runs across the regions it skipped, and there is no previous walk any more —
+ * the walk is diffed against the committed placements, not against itself. */
 
 /* ═══ THE WALK ════════════════════════════════════════════════════════════════
  * I1: KF_DIRS + 1 literally nested loops, every trip count bounded at COMPILE
@@ -540,7 +518,7 @@ __device__ __forceinline__ uint32_t kf_dir_step(KfCtx &c, uint32_t k, uint64_t t
     return KF_STEP_DESCEND;
 }
 
-__device__ void kf_walk_one(KfCtx &c, uint64_t pdb, const KfScopeSet &sc)
+__device__ void kf_walk_one(KfCtx &c, uint64_t pdb)
 {
     const KfFormat &F = *c.fmt;
     const uint64_t root_bytes = (uint64_t)F.dir[F.first_dir].entries * F.dir[F.first_dir].entry_bytes;
@@ -551,8 +529,6 @@ __device__ void kf_walk_one(KfCtx &c, uint64_t pdb, const KfScopeSet &sc)
         uint64_t t1 = pdb, va0 = 0ull;
         if (F.dir[0].active) {
             va0 = (uint64_t)i0 << F.dir[0].va_lo;
-            uint64_t e0 = va0 + (1ull << F.dir[0].va_lo);
-            if (!kf_in_scope(sc, va0, e0)) { kf_carry(c, va0, e0); continue; }
             uint32_t r = kf_dir_step(c, 0, pdb, i0, va0, &t1);
             if (r == KF_STEP_STOP) break;
             if (r != KF_STEP_DESCEND) continue;
@@ -563,8 +539,6 @@ __device__ void kf_walk_one(KfCtx &c, uint64_t pdb, const KfScopeSet &sc)
             uint64_t t2 = t1, va1 = va0;
             if (F.dir[1].active) {
                 va1 = va0 | ((uint64_t)i1 << F.dir[1].va_lo);
-                uint64_t e1 = va1 + (1ull << F.dir[1].va_lo);
-                if (!kf_in_scope(sc, va1, e1)) { kf_carry(c, va1, e1); continue; }
                 uint32_t r = kf_dir_step(c, 1, t1, i1, va1, &t2);
                 if (r == KF_STEP_STOP) break;
                 if (r != KF_STEP_DESCEND) continue;
@@ -575,8 +549,6 @@ __device__ void kf_walk_one(KfCtx &c, uint64_t pdb, const KfScopeSet &sc)
                 uint64_t t3 = t2, va2 = va1;
                 if (F.dir[2].active) {
                     va2 = va1 | ((uint64_t)i2 << F.dir[2].va_lo);
-                    uint64_t e2 = va2 + (1ull << F.dir[2].va_lo);
-                    if (!kf_in_scope(sc, va2, e2)) { kf_carry(c, va2, e2); continue; }
                     uint32_t r = kf_dir_step(c, 2, t2, i2, va2, &t3);
                     if (r == KF_STEP_STOP) break;
                     if (r != KF_STEP_DESCEND) continue;
@@ -587,8 +559,6 @@ __device__ void kf_walk_one(KfCtx &c, uint64_t pdb, const KfScopeSet &sc)
                     uint64_t t4 = t3, va3 = va2;
                     if (F.dir[3].active) {
                         va3 = va2 | ((uint64_t)i3 << F.dir[3].va_lo);
-                        uint64_t e3 = va3 + (1ull << F.dir[3].va_lo);
-                        if (!kf_in_scope(sc, va3, e3)) { kf_carry(c, va3, e3); continue; }
                         uint32_t r = kf_dir_step(c, 3, t3, i3, va3, &t4);
                         if (r == KF_STEP_STOP) break;
                         if (r != KF_STEP_DESCEND) continue;
@@ -700,8 +670,9 @@ __device__ void kf_walk_one(KfCtx &c, uint64_t pdb, const KfScopeSet &sc)
 }
 
 /* ── kernels ─────────────────────────────────────────────────────────────────── */
-__global__ void kf_begin_kernel(KfDev *d)
+__global__ void kf_begin_kernel(KfArgs a)
 {
+    KfDev *d = a.dev;
     d->entries_visited = 0ull;
     d->refusals = 0u;
     d->refuse_mask = 0u;
@@ -709,15 +680,30 @@ __global__ void kf_begin_kernel(KfDev *d)
     d->walk_trunc = 0u;
     d->walk_abort = 0u;
     d->sparse_slots = 0u;
+    if (a.ack == NULL) return;
+    /* After kf_commit_kernel (a kernel boundary orders them): record what was
+     * committed, then empty the slots the host released. A released slot is never
+     * committed into (kf_commit_kernel skips it), so the order is not a race. */
+    const KfReportHeader *h = a.hdr;
+    if (h->magic == KFWR_MAGIC && a.ack->generation != 0ull && a.ack->generation == h->generation &&
+        !(h->flags & KFWR_HF_TRUNCATED) && a.ack->nrun == h->run_count)
+        d->committed = a.ack->generation;
+    const uint32_t nres = a.ack->nreset < KF_MAX_RESET ? a.ack->nreset : KF_MAX_RESET;
+    for (uint32_t i = 0u; i < nres; i++) {
+        const uint32_t s = a.ack->reset[i];
+        if (s < d->max_slots)
+            for (uint32_t c = 0u; c < 4u; c++) a.slot[s].n[c] = 0u;
+    }
 }
 
+/* The serial walk: one thread per entry. Kept for the harness's A/B and the
+ * deliberately-malformed launch probe; production runs the parallel walk. Both
+ * write the same table (`a.walk`, `tbl_run_count`). */
 __global__ void kf_walk_kernel(KfArgs a)
 {
     const uint32_t t = blockIdx.x * blockDim.x + threadIdx.x;
     if (t >= a.npdb) return;
     KfDev *d = a.dev;
-    const uint32_t cur = d->cur_buf ^ 1u, prv = d->cur_buf;
-    const uint32_t resync = (!d->have_prev) || (d->acked != d->generation);
     const uint64_t pdb = a.pdbs[t];
 
     KfCtx c;
@@ -727,65 +713,15 @@ __global__ void kf_walk_kernel(KfArgs a)
     c.sparse = 0u;
     c.budget = (uint64_t)d->entry_budget;
     c.refusals = 0u; c.refuse = 0u; c.stop = 0u;
-    c.out = a.tbl[cur] + (size_t)t * d->runs_per_pdb;
+    c.out = a.walk + (size_t)t * d->runs_per_pdb;
     c.cap = d->runs_per_pdb;
     c.n = 0u; c.have = 0u;
-    c.prev = NULL; c.prev_n = 0u; c.pcur = 0u;
     c.pdb_index = (uint16_t)t;
     memset(&c.run, 0, sizeof(c.run));
 
-    /* The previous table's slice for THIS address space, if it had one. */
-    if (!resync) {
-        for (uint32_t j = 0; j < d->tbl_pdb_count[prv]; j++) {
-            if (d->tbl_pdb[prv][j] == pdb) {
-                c.prev = a.tbl[prv] + (size_t)j * d->runs_per_pdb;
-                c.prev_n = d->tbl_run_count[prv][j];
-                break;
-            }
-        }
-    }
+    kf_walk_one(c, pdb);
 
-    /* Scope: a HINT. Anything ambiguous, absent or overflowing degrades to a full
-     * walk, which can only cost time. A resync ignores hints entirely — there is
-     * no previous table to carry the unwalked regions from. */
-    KfScopeSet sc;
-    sc.n = 0u; sc.full = 1u;
-    for (int i = 0; i < KF_SCOPES_PER_PDB; i++) { sc.lo[i] = 0ull; sc.hi[i] = 0ull; }
-    unsigned int degraded = 0u;
-    if (a.nscope > 0u && !resync && c.prev != NULL) {
-        sc.full = 0u;
-        uint32_t seen = 0u;
-        for (uint32_t i = 0; i < a.nscope; i++) {
-            if (a.scopes[i].pdb != pdb) continue;
-            seen++;
-            uint64_t len = a.scopes[i].va_len;
-            if (len == 0ull) { sc.full = 1u; }               /* the doc's sentinel */
-            else if (seen <= (uint32_t)KF_SCOPES_PER_PDB) {
-                uint64_t lo = a.scopes[i].va_base;
-                uint64_t hi = lo + len;
-                if (hi < lo) { sc.full = 1u; degraded = 1u; }  /* overflow ⇒ full */
-                else {
-                    /* Widen to the 512 MiB granule the pruning works at, so every
-                     * carry-forward boundary is aligned to a whole PD1 slot and no
-                     * clip can ever cut a page in half. A superset is always safe. */
-                    /* The granule is the LAST directory level's span — the
-                     * deepest level whose subtrees the walk prunes — taken from
-                     * the descriptor, not from a VER2 constant. */
-                    const uint64_t gsh = a.fmt.dir[KF_DIRS - 2u].va_lo;
-                    sc.lo[sc.n] = lo & ~((1ull << gsh) - 1ull);
-                    sc.hi[sc.n] = (hi + ((1ull << gsh) - 1ull)) & ~((1ull << gsh) - 1ull);
-                    sc.n++;
-                }
-            } else { sc.full = 1u; degraded = 1u; }          /* too many ⇒ full */
-        }
-        if (seen == 0u) { sc.full = 0u; sc.n = 0u; }  /* named by nobody ⇒ carry it all */
-    }
-
-    kf_walk_one(c, pdb, sc);
-
-    d->tbl_pdb[cur][t] = pdb;
-    d->tbl_run_count[cur][t] = c.n;
-    if (t == 0u) d->tbl_pdb_count[cur] = a.npdb;
+    d->tbl_run_count[t] = c.n;
 
     atomicAdd(&d->entries_visited, (unsigned long long)c.visited);
     if (c.refusals) atomicAdd(&d->refusals, c.refusals);
@@ -793,409 +729,481 @@ __global__ void kf_walk_kernel(KfArgs a)
     if (c.sparse) atomicAdd(&d->sparse_slots, c.sparse);
     if (c.stop) { atomicOr(&d->hdr_flags, KFWR_HF_TRUNCATED); atomicOr(&d->walk_trunc, 1u); }
     if (c.refuse & KFWR_R_BUDGET) atomicOr(&d->hdr_flags, KFWR_HF_BUDGET);
-    if (a.nscope > 0u) atomicOr(&d->hdr_flags, KFWR_HF_SCOPED);
-    if (degraded) atomicOr(&d->hdr_flags, KFWR_HF_SCOPE_DEGRADED);
 }
 
-/* The diff, and the report. ⊘ Single-threaded on purpose: the merge is a linear
- * scan over two SORTED lists and the report must come out dense and in order.
- * The loops below are bounded by capacities this process allocated, never by
- * anything the guest wrote. */
-struct KfOut {
-    KfMapRun *run;
-    uint32_t cap;
-    uint32_t n;
-    uint32_t trunc;
-};
-
-__device__ __forceinline__ void kf_put(KfOut &o, KfDev *d, const KfMapRun &r, uint32_t op, uint16_t pi)
-{
-    if (o.n >= o.cap) {
-        if (!o.trunc) { o.trunc = 1u; d->refuse_mask |= KFWR_R_RUN_CAP; d->refusals++; }
-        return;
-    }
-    KfMapRun x = r;
-    x.op = (uint16_t)op;
-    x.pdb_index = pi;
-    o.run[o.n++] = x;
-}
-
-/* The page-size class of a run: 0 = 4 KiB … 3 = 512 MiB. */
-__device__ __forceinline__ uint32_t kf_cls(const KfMapRun &r)
-{
-    return (r.flags >> KFWR_RF_PS_SHIFT) & KFWR_RF_PS_MASK;
-}
-
-/* The next index at or after `from` whose run is in class `cls`. */
-__device__ __forceinline__ uint32_t kf_next_cls(const KfMapRun *a, uint32_t n, uint32_t from, uint32_t cls)
-{
-    while (from < n && kf_cls(a[from]) != cls) from++;
-    return from;
-}
-
-/* One output run under construction. Segments are produced in ascending VA
- * within a class, so coalescing them is the same rule the walk uses. */
-struct KfSeg {
-    uint32_t have, op, flags;
-    uint64_t va, gpga, len;
-};
-
-__device__ __forceinline__ void kf_seg_flush(KfOut &o, KfDev *d, KfSeg &s, uint16_t pi)
-{
-    if (!s.have) return;
-    KfMapRun r;
-    r.va = s.va; r.gpga = s.gpga; r.len = s.len; r.flags = s.flags;
-    r.op = (uint16_t)s.op; r.pdb_index = pi;
-    kf_put(o, d, r, s.op, pi);
-    s.have = 0u;
-}
-
-__device__ __forceinline__ void kf_seg_emit(KfOut &o, KfDev *d, KfSeg &s, uint16_t pi,
-                                            uint32_t op, uint64_t va, uint64_t gpga,
-                                            uint64_t len, uint32_t flags)
-{
-#ifndef KF_BREAK_SEG_COALESCE
-    if (s.have && s.op == op && s.flags == flags &&
-        s.va + s.len == va && s.gpga + s.len == gpga) {
-        s.len += len;
-        return;
-    }
-#endif
-    kf_seg_flush(o, d, s, pi);
-    s.have = 1u; s.op = op; s.va = va; s.gpga = gpga; s.len = len; s.flags = flags;
-}
-
-/* ⊘ KF_DROP_UNMAP drops every UNMAP and changes nothing else. The MAP/REMAP set
- * is unaffected, so the report stays order-independent -- and closure breaks,
- * because a mapping the guest removed lingers in the model for ever. Compiled in
- * only by `make check-closure-negative`: it is the known-positive for the
- * `apply(model, delta) != full walk` assertion itself, which the other two break
- * flags never reach (they trip the stronger order assertion first). */
-#ifdef KF_DROP_UNMAP
-#define KF_EMIT_UNMAP(o, d, s, pi, va, gp, len, fl) ((void)0)
-#else
-#define KF_EMIT_UNMAP(o, d, s, pi, va, gp, len, fl) \
-    kf_seg_emit(o, d, s, pi, KFWR_OP_UNMAP, va, gp, len, fl)
-#endif
-
-/* ★★★★★ THE DELTA, PER PAGE-SIZE CLASS, AT SEGMENT GRANULARITY.
+/* ═══ THE DIFF AGAINST THE COMMITTED PLACEMENTS, AND THE COMMIT ON ACK ═════════
  *
- * ⊘ The previous shape — one merge join over the combined list, comparing whole
- * runs on the key (va, page size) — produced deltas that were individually
- * plausible and did NOT reconstruct. A cur run covering several prev runs
- * emitted one REMAP followed by UNMAPs of the runs it had just replaced, so
- * applying the report in order LOST those mappings. It was found by the
- * round-trip closure test, not by any of the nine single-step delta cases,
- * because every one of those changes exactly one run.
+ * ★★★★★ Owner design 2026-09-25: *"The GPU only sends a diff … the copy the PTX
+ * holds, the last snapshot, is in vidmem, maintained by the PTX for compare"*;
+ * ruling COMMIT-ON-ACK: the walk is diffed against what the host CONFIRMED it
+ * placed, the host applies the diff, and only the entries it acknowledges are
+ * committed. The Rust statement of this protocol — the spec these kernels are
+ * held to, report for report, by `kf-gate9` — is `crates/kf-cuda/src/diffmodel.rs`.
  *
- * The shape below cannot express that. Within one class, prev and cur are each
- * sorted, disjoint interval sets, and the walk is compared to them SEGMENT by
- * segment:
+ * ⊘ What is committed is NOT the previous walk. The old snapshot (w826 and
+ * before) was the last walk's output, a copy of guest table content committed
+ * whether or not the host acted on it — the shadow `V3_BUILD.md` ruled out. A
+ * slot here holds ONE ENTRY PER HOST MAP CALL WE MADE, written only when the
+ * host says it landed: a record of our own actions (`THE_ARCHITECTURE_v3.md`
+ * §4.2 w825). It is keyed by VA-space OBJECT (the host's slot index), never by
+ * PDB, so a root move diffs the new root against what we placed under the old.
  *
- *   prev covers, cur does not  ⇒ UNMAP
- *   cur covers, prev does not  ⇒ MAP
- *   both, and they differ      ⇒ REMAP
- *   both, and they agree       ⇒ nothing (and the output run breaks)
+ * The diff, per walked entry t, per page-size class:
+ *   kept(p)  ⇔ the walk backs placement p byte for byte (same host ground truth,
+ *              same linear offset, no hole);
+ *   UNMAP p  for every placement not kept — WHOLE placements, because the host
+ *              unmaps by the VA a map was placed at and nothing else;
+ *   MAP      for every piece of the walk in a GAP between kept placements.
+ * ⇒ Every kept placement is disjoint from every emitted piece, and the work is
+ *   parallel over placements and gaps: O(n / threads + log n) per class plus
+ *   O(pieces) — not the single-thread O(n) emission `[measured e3]` made
+ *   quadratic (~0.53 µs/row at every invalidate).
  *
- * ⇒ **The UNMAP set and the MAP/REMAP set are disjoint in (va, class) by
- * construction**, so the order a host applies the runs in cannot matter. That is
- * a much stronger property than "apply them in the order given", and it is the
- * one the round-trip test actually checks.
- *
- * ⚠ Classes are processed separately because a 4 KiB and a 64 KiB leaf can
- * describe the SAME virtual address (both halves of a dual PDE). They are
- * different mappings at one VA, so they must be diffed against their own kind;
- * a single interleaved pass would treat one as replacing the other.
+ * ⊘ Every loop below runs over OUR tables (the walk's output and the slot),
+ * bounded by counts we wrote and capacities we allocated — I1 is about guest
+ * data, and no guest byte is read here.
  */
-__device__ void kf_diff_class(KfOut &o, KfDev *d, uint16_t pi, uint32_t cls,
-                              const KfMapRun *pr, uint32_t pn,
-                              const KfMapRun *cr, uint32_t cn)
-{
-    KfSeg s; s.have = 0u; s.op = 0u; s.flags = 0u; s.va = 0ull; s.gpga = 0ull; s.len = 0ull;
-    uint32_t p = kf_next_cls(pr, pn, 0u, cls);
-    uint32_t q = kf_next_cls(cr, cn, 0u, cls);
-    uint64_t pv = 0, pg = 0, pl = 0, cv = 0, cg = 0, cl = 0;
-    uint32_t pf = 0, cf = 0, ph = 0, ch = 0;
+#define KF_DIFF_BLOCK 512u
+#define KF_DIFF_WARPS (KF_DIFF_BLOCK / 32u)
+#define KF_CLASSES 4u
 
-    /* A fixed trip count over OUR OWN counts: every iteration either finishes a
-     * run on one side or splits one, and a split's boundary is the other side's
-     * edge, so 3*(pn+cn) bounds it. Tripping the guard is loud. */
-    const uint32_t guard_max = 4u * (pn + cn) + 8u;
-    uint32_t guard = 0u;
-    for (; guard < guard_max; guard++) {
-        if (!ph && p < pn) { pv = pr[p].va; pg = pr[p].gpga; pl = pr[p].len; pf = pr[p].flags; ph = 1u; }
-        if (!ch && q < cn) { cv = cr[q].va; cg = cr[q].gpga; cl = cr[q].len; cf = cr[q].flags; ch = 1u; }
-        if (!ph && !ch) break;
-        if (!ch) {
-            KF_EMIT_UNMAP(o, d, s, pi, pv, pg, pl, pf);
-            ph = 0u; p = kf_next_cls(pr, pn, p + 1u, cls); continue;
-        }
-        if (!ph) {
-            kf_seg_emit(o, d, s, pi, KFWR_OP_MAP, cv, cg, cl, cf);
-            ch = 0u; q = kf_next_cls(cr, cn, q + 1u, cls); continue;
-        }
-        if (pv + pl <= cv) {
-            KF_EMIT_UNMAP(o, d, s, pi, pv, pg, pl, pf);
-            ph = 0u; p = kf_next_cls(pr, pn, p + 1u, cls); continue;
-        }
-        if (cv + cl <= pv) {
-            kf_seg_emit(o, d, s, pi, KFWR_OP_MAP, cv, cg, cl, cf);
-            ch = 0u; q = kf_next_cls(cr, cn, q + 1u, cls); continue;
-        }
-        if (pv < cv) {                       /* prev-only head */
-            uint64_t n = cv - pv;
-            KF_EMIT_UNMAP(o, d, s, pi, pv, pg, n, pf);
-            pv += n; pg += n; pl -= n; continue;
-        }
-        if (cv < pv) {                       /* cur-only head */
-            uint64_t n = pv - cv;
-            kf_seg_emit(o, d, s, pi, KFWR_OP_MAP, cv, cg, n, cf);
-            cv += n; cg += n; cl -= n; continue;
-        }
-        {                                    /* both cover [pv, pv+n) */
-            uint64_t n = pl < cl ? pl : cl;
-            if (pg != cg || pf != cf) kf_seg_emit(o, d, s, pi, KFWR_OP_REMAP, cv, cg, n, cf);
-            else kf_seg_flush(o, d, s, pi);  /* unchanged: nothing, and the run breaks */
-            pv += n; pg += n; pl -= n;
-            cv += n; cg += n; cl -= n;
-            if (!pl) { ph = 0u; p = kf_next_cls(pr, pn, p + 1u, cls); }
-            if (!cl) { ch = 0u; q = kf_next_cls(cr, cn, q + 1u, cls); }
-            continue;
-        }
+__device__ __forceinline__ uint32_t kf_pcls(uint32_t flags) { return (flags >> KFWR_RF_PS_SHIFT) & 3u; }
+/* The ground truth the HOST maps: store, guest RAM, or nothing it will match. */
+__device__ __forceinline__ uint32_t kf_hkey(uint32_t flags)
+{
+    const uint32_t ap = flags & KFWR_RF_AP_MASK;
+    return ap == KFWR_AP_VIDMEM ? 0u : (ap == KFWR_AP_SYSCOH || ap == KFWR_AP_SYSNONCOH) ? 1u : 2u;
+}
+__device__ __forceinline__ uint64_t kf_end(const KfMapRun &r) { return r.va + r.len; }
+
+/* Exclusive block-wide scan. Every thread of the block must call it (it syncs). */
+template <typename T>
+__device__ T kf_bscan(T v, T *total, T *sh)
+{
+    const uint32_t lane = threadIdx.x & 31u, wid = threadIdx.x >> 5;
+    T x = v;
+    for (uint32_t o = 1u; o < 32u; o <<= 1) {
+        T y = __shfl_up_sync(0xffffffffu, x, o);
+        if (lane >= o) x += y;
     }
-    if (guard >= guard_max) { d->refuse_mask |= KFWR_R_DELTA_CAP; d->refusals++; o.trunc = 1u; }
-    kf_seg_flush(o, d, s, pi);
-}
-
-#ifdef KF_OLD_MERGE
-/* ⊘⊘ THE SUPERSEDED DIFF, compiled in ONLY by `make check-negative`.
- *
- * It merge-joins WHOLE RUNS on the key (va, page size). Every one of the nine
- * single-step delta cases passes against it, and it does not satisfy closure: a
- * cur run covering several prev runs emits one REMAP and then UNMAPs of the runs
- * it just replaced. It is kept so that "the round-trip test would have caught
- * the old diff" is a MEASUREMENT rather than a claim. */
-__device__ __forceinline__ int kf_key_cmp(const KfMapRun &x, const KfMapRun &y)
-{
-    if (x.va != y.va) return x.va < y.va ? -1 : 1;
-    uint32_t px = (x.flags >> KFWR_RF_PS_SHIFT) & KFWR_RF_PS_MASK;
-    uint32_t py = (y.flags >> KFWR_RF_PS_SHIFT) & KFWR_RF_PS_MASK;
-    if (px != py) return px > py ? -1 : 1;
-    return 0;
-}
-
-__device__ void kf_diff_old(KfOut &o, KfDev *d, uint16_t pi,
-                            const KfMapRun *pr, uint32_t pn,
-                            const KfMapRun *cr, uint32_t cn)
-{
-    uint32_t p = 0u, q = 0u;
-    while (p < pn || q < cn) {
-        if (q >= cn) { kf_put(o, d, pr[p], KFWR_OP_UNMAP, pi); p++; continue; }
-        if (p >= pn) { kf_put(o, d, cr[q], KFWR_OP_MAP,   pi); q++; continue; }
-        int k = kf_key_cmp(pr[p], cr[q]);
-        if (k < 0)   { kf_put(o, d, pr[p], KFWR_OP_UNMAP, pi); p++; continue; }
-        if (k > 0)   { kf_put(o, d, cr[q], KFWR_OP_MAP,   pi); q++; continue; }
-        KfMapRun P = pr[p], C = cr[q];
-        if (P.gpga == C.gpga && P.len == C.len && P.flags == C.flags) {
-            /* unchanged */
-        } else if (C.len >= P.len) {
-            kf_put(o, d, C, KFWR_OP_REMAP, pi);
-        } else {
-            kf_put(o, d, C, KFWR_OP_REMAP, pi);
-            KfMapRun tail = P;
-            tail.va = C.va + C.len;
-            tail.gpga = P.gpga + C.len;
-            tail.len = P.len - C.len;
-            kf_put(o, d, tail, KFWR_OP_UNMAP, pi);
+    if (lane == 31u) sh[wid] = x;
+    __syncthreads();
+    if (wid == 0u) {
+        const uint32_t nw = blockDim.x >> 5;
+        T s = (lane < nw) ? sh[lane] : (T)0;
+        for (uint32_t o = 1u; o < 32u; o <<= 1) {
+            T y = __shfl_up_sync(0xffffffffu, s, o);
+            if (lane >= o) s += y;
         }
-        p++; q++;
+        if (lane < nw) sh[lane] = s;
     }
+    __syncthreads();
+    const T excl = x - v + (wid ? sh[wid - 1u] : (T)0);
+    *total = sh[(blockDim.x >> 5) - 1u];
+    __syncthreads();
+    return excl;
 }
-#endif
 
-/* ★★★★★ w826 — TRIM THE DIFF TO WHAT CHANGED. `[measured w826 q7]` the diff kernel is one
- * thread and its cost grew linearly with the mapping count (106 → 2 162 µs over one arm) while
- * the parallel walk stayed flat at ~130 µs; with one mapping changing per invalidate the
- * publisher went quadratic. This pass finds, per address space and IN PARALLEL, the longest
- * identical prefix and suffix of the previous and current snapshots; the serial diff then runs
- * on the middle window only.
- *
- * ⊘ EXACT, not a heuristic: an identical pair at an identical index takes kf_diff_class's
- * "both cover, unchanged" branch, which emits nothing and only breaks the coalescing segment —
- * and per class, runs are non-overlapping and VA-ordered, so no window run can overlap a
- * prefix or suffix run of its class. Equality is on {va, gpga, len, flags}: `pdb_index` is the
- * position in the pdb list and shifts when a new space sorts in front — comparing it would
- * make every run differ and silently disable the trim.
- * trim[2*t] = prefix length, trim[2*t+1] = suffix length, for CURRENT pdb index t; both 0 when
- * the pdb had no previous table or the report is a resync. */
-__device__ __forceinline__ bool kf_run_same(const KfMapRun &x, const KfMapRun &y)
+/* How many runs start at or before `va` (the Rust `partition_point(|r| r.va <= va)`). */
+__device__ __forceinline__ uint32_t kf_n_le(const KfMapRun *w, uint32_t n, uint64_t va)
 {
-    return x.va == y.va && x.gpga == y.gpga && x.len == y.len && x.flags == y.flags;
+    uint32_t lo = 0u, hi = n;
+    while (lo < hi) { const uint32_t m = (lo + hi) >> 1; if (w[m].va <= va) lo = m + 1u; else hi = m; }
+    return lo;
+}
+/* How many runs start strictly before `va`. */
+__device__ __forceinline__ uint32_t kf_n_lt(const KfMapRun *w, uint32_t n, uint64_t va)
+{
+    uint32_t lo = 0u, hi = n;
+    while (lo < hi) { const uint32_t m = (lo + hi) >> 1; if (w[m].va < va) lo = m + 1u; else hi = m; }
+    return lo;
+}
+/* How many runs END at or before `x` (sorted, disjoint ⇒ ends ascend). */
+__device__ __forceinline__ uint32_t kf_n_end_le(const KfMapRun *w, uint32_t n, uint64_t x)
+{
+    uint32_t lo = 0u, hi = n;
+    while (lo < hi) { const uint32_t m = (lo + hi) >> 1; if (kf_end(w[m]) <= x) lo = m + 1u; else hi = m; }
+    return lo;
 }
 
-__global__ void kf_diff_trim_kernel(KfArgs a, uint32_t *trim)
+/* Whether the walk runs `w` (one class, sorted, disjoint) back placement `p`
+ * byte for byte. The loop advances one run per step and stops at `n`. */
+__device__ bool kf_covered(const KfMapRun &p, const KfMapRun *w, uint32_t n)
+{
+    const uint64_t end = p.va + p.len;
+    if (end < p.va) return false;
+    uint32_t i = kf_n_le(w, n, p.va);
+    if (i == 0u) return false;
+    i--;
+    uint64_t at = p.va;
+    const uint32_t key = kf_hkey(p.flags);
+    for (; i < n; i++) {
+        const KfMapRun r = w[i];
+        const uint64_t rend = kf_end(r);
+        if (!(r.va <= at && at < rend) || kf_hkey(r.flags) != key) return false;
+        if (r.gpga + (at - r.va) != p.gpga + (at - p.va)) return false;
+        at = rend;
+        if (at >= end) return true;
+    }
+    return false;
+}
+
+/* The bounds of gap g between kept placements K[g-1] and K[g] of class list P. */
+__device__ __forceinline__ void kf_gap(const KfMapRun *P, const uint32_t *K, uint32_t nk, uint32_t g,
+                                       uint64_t *lo, uint64_t *hi)
+{
+    *lo = g ? kf_end(P[K[g - 1u]]) : 0ull;
+    *hi = (g < nk) ? P[K[g]].va : ~0ull;
+}
+
+/* Where each walked entry's scratch lives (see KfArgs::scratch). */
+__device__ __forceinline__ KfMapRun *kf_scr(const KfArgs &a, uint32_t t, uint32_t rpp)
+{
+    return a.scratch + (size_t)t * 4u * rpp;
+}
+__device__ __forceinline__ uint32_t *kf_iscr(const KfArgs &a, uint32_t t, uint32_t rpp)
+{
+    return a.iscratch + (size_t)t * 2u * rpp;
+}
+
+/* ★★★★★ ONE BLOCK PER WALKED ENTRY: the diff of its walk against its slot, staged
+ * in scratch as [UNMAPs of class 0][MAPs of class 0] … [class 3]. */
+__global__ void __launch_bounds__(KF_DIFF_BLOCK) kf_diff_slots(KfArgs a)
 {
     const uint32_t t = blockIdx.x;
     if (t >= a.npdb || t >= KF_MAX_PDB) return;
     KfDev *d = a.dev;
-    const uint32_t cur = d->cur_buf ^ 1u, prv = d->cur_buf;
-    __shared__ uint32_t lo, suf;
-    __shared__ int32_t ip;
-    if (threadIdx.x == 0u) {
-        lo = 0u; suf = 0u; ip = -1;
-        const uint32_t resync = (!d->have_prev) || (d->acked != d->generation);
-        const uint32_t np = resync ? 0u : d->tbl_pdb_count[prv];
-        for (uint32_t j = 0u; j < np && j < KF_MAX_PDB; j++)
-            if (d->tbl_pdb[prv][j] == a.pdbs[t]) { ip = (int32_t)j; break; }
-    }
-    __syncthreads();
-    if (ip < 0) {
-        if (threadIdx.x == 0u) { trim[2u * t] = 0u; trim[2u * t + 1u] = 0u; }
+    const uint32_t rpp = d->runs_per_pdb;
+    __shared__ unsigned long long sh64[KF_DIFF_WARPS];
+    __shared__ uint32_t sh32[KF_DIFF_WARPS];
+    const uint32_t s = a.slots[t];
+    if (s >= d->max_slots) {
+        if (threadIdx.x == 0u) {
+            d->diff_count[t] = 0u;
+            d->diff_vflags[t] = KFWR_V_OVERFLOW;
+            atomicOr(&d->refuse_mask, KFWR_R_BAD_SLOT);
+            atomicAdd(&d->refusals, 1u);
+        }
         return;
     }
-    const KfMapRun *pr = a.tbl[prv] + (size_t)ip * d->runs_per_pdb;
-    const KfMapRun *cr = a.tbl[cur] + (size_t)t * d->runs_per_pdb;
-    const uint32_t pn = d->tbl_run_count[prv][ip], cn = d->tbl_run_count[cur][t];
-    const uint32_t m = pn < cn ? pn : cn;
-    if (threadIdx.x == 0u) { lo = m; suf = m; }
-    __syncthreads();
-    for (uint32_t k = threadIdx.x; k < m; k += blockDim.x) {
-        if (!kf_run_same(pr[k], cr[k])) atomicMin(&lo, k);
-        if (!kf_run_same(pr[pn - 1u - k], cr[cn - 1u - k])) atomicMin(&suf, k);
-    }
-    __syncthreads();
-    if (threadIdx.x == 0u) {
-        const uint32_t s2 = (suf < m - lo) ? suf : (m - lo);   /* never overlap the prefix */
-        trim[2u * t] = lo;
-        trim[2u * t + 1u] = s2;
-    }
-}
-
-__global__ void kf_diff_kernel(KfArgs a, const uint32_t *trim)
-{
-    KfDev *d = a.dev;
-    const uint32_t cur = d->cur_buf ^ 1u, prv = d->cur_buf;
-    uint32_t resync = (!d->have_prev) || (d->acked != d->generation);
-
-    uint32_t unsorted = 0u;
-    for (uint32_t i = 1u; i < a.npdb; i++)
-        if (a.pdbs[i] <= a.pdbs[i - 1u]) unsorted = 1u;
-    if (unsorted) { d->refuse_mask |= KFWR_R_PDB_UNSORTED; d->refusals++; resync = 1u; }
-
-    KfOut o; o.run = a.rrun; o.cap = d->run_capacity; o.n = 0u; o.trunc = 0u;
-    uint32_t np_out = 0u, pdb_trunc = 0u;
-
-    const uint32_t np = resync ? 0u : d->tbl_pdb_count[prv];
-    const uint32_t nc = a.npdb;
-    uint32_t ip = 0u, ic = 0u;
-
-    while (ip < np || ic < nc) {
-        int take;                                  /* -1 prev only, 0 both, 1 cur only */
-        if (ip >= np) take = 1;
-        else if (ic >= nc) take = -1;
-        else if (d->tbl_pdb[prv][ip] < a.pdbs[ic]) take = -1;
-        else if (d->tbl_pdb[prv][ip] > a.pdbs[ic]) take = 1;
-        else take = 0;
-
-        /* ⊘ The PdbEntry capacity is checked BEFORE this address space's runs are
-         * written, never after. Emitting runs whose pdb_index has no PdbEntry
-         * produces a report that fails the format doc's own property 3 — which is
-         * exactly how this was found. */
-        if (np_out >= d->pdb_capacity) {
-            pdb_trunc = 1u;
-            d->refuse_mask |= KFWR_R_PDB_CAP;
-            d->refusals++;
-            break;
+    const uint32_t nw = d->tbl_run_count[t] < rpp ? d->tbl_run_count[t] : rpp;
+    const KfMapRun *W = a.walk + (size_t)t * rpp;
+    KfMapRun *X = kf_scr(a, t, rpp);        /* the walk, partitioned by class */
+    KfMapRun *stg = X + rpp;                /* the staged diff (<= 3 * rpp) */
+    uint32_t *K = kf_iscr(a, t, rpp);       /* kept placement indices, all classes */
+    uint32_t *kf = K + rpp;                 /* kept flag per placement */
+    const KfMapRun *com = a.com + (size_t)s * rpp;
+    uint32_t pn[KF_CLASSES], po[KF_CLASSES];
+    {
+        uint32_t o = 0u;
+        for (uint32_t c = 0u; c < KF_CLASSES; c++) {
+            uint32_t n = a.slot[s].n[c];
+            if (n > rpp - o) n = rpp - o;   /* a corrupt count can only shrink the view */
+            pn[c] = n; po[c] = o; o += n;
         }
-        uint64_t pdb = (take == -1) ? d->tbl_pdb[prv][ip] : a.pdbs[ic];
-        uint32_t first = o.n;
-        uint32_t vflags = 0u;
-        uint16_t pi = (uint16_t)np_out;
+    }
 
-        if (take == 1) {
-            /* an address space we did not have */
-            vflags |= resync ? (KFWR_V_NEW | KFWR_V_RESYNC) : KFWR_V_NEW;
-            const KfMapRun *cr = a.tbl[cur] + (size_t)ic * d->runs_per_pdb;
-            uint32_t cn = d->tbl_run_count[cur][ic];
-            /* Per class, so a RESYNC report carries the SAME ordering rule as a
-             * delta: grouped by page-size class, ascending within a class. */
-            for (uint32_t cls = 0u; cls < 4u; cls++)
-                for (uint32_t k = kf_next_cls(cr, cn, 0u, cls); k < cn;
-                     k = kf_next_cls(cr, cn, k + 1u, cls))
-                    kf_put(o, d, cr[k], KFWR_OP_MAP, pi);
-            ic++;
-        } else if (take == -1) {
-            /* ⊘ GONE carries NO runs. The format doc leaves the choice open; the
-             * whole-VAS teardown is one flag, not N unmaps. */
-            vflags |= KFWR_V_GONE;
-            ip++;
-        } else {
-            const KfMapRun *pr = a.tbl[prv] + (size_t)ip * d->runs_per_pdb;
-            const KfMapRun *cr = a.tbl[cur] + (size_t)ic * d->runs_per_pdb;
-            uint32_t pn = d->tbl_run_count[prv][ip];
-            uint32_t cn = d->tbl_run_count[cur][ic];
-            if (trim && ic < KF_MAX_PDB) {   /* w826: see kf_diff_trim_kernel */
-                const uint32_t lo = trim[2u * ic], sf = trim[2u * ic + 1u];
-                if (lo + sf <= pn && lo + sf <= cn) {
-                    pr += lo; cr += lo;
-                    pn -= lo + sf; cn -= lo + sf;
+    /* ── 1. partition the walk by class (a packed 4 × 16-bit scan) ─────────── */
+    uint32_t wn[KF_CLASSES] = {0u, 0u, 0u, 0u}, wo[KF_CLASSES];
+    for (uint32_t base = 0u; base < nw; base += blockDim.x) {
+        const uint32_t i = base + threadIdx.x;
+        const unsigned long long v = (i < nw) ? (1ull << (16u * kf_pcls(W[i].flags))) : 0ull;
+        unsigned long long tot;
+        (void)kf_bscan<unsigned long long>(v, &tot, sh64);
+        for (uint32_t c = 0u; c < KF_CLASSES; c++) wn[c] += (uint32_t)((tot >> (16u * c)) & 0xFFFFull);
+    }
+    wo[0] = 0u;
+    for (uint32_t c = 1u; c < KF_CLASSES; c++) wo[c] = wo[c - 1u] + wn[c - 1u];
+    {
+        uint32_t run[KF_CLASSES] = {0u, 0u, 0u, 0u};
+        for (uint32_t base = 0u; base < nw; base += blockDim.x) {
+            const uint32_t i = base + threadIdx.x;
+            const uint32_t c = (i < nw) ? kf_pcls(W[i].flags) : 0u;
+            const unsigned long long v = (i < nw) ? (1ull << (16u * c)) : 0ull;
+            unsigned long long tot;
+            const unsigned long long ex = kf_bscan<unsigned long long>(v, &tot, sh64);
+            if (i < nw) X[wo[c] + run[c] + (uint32_t)((ex >> (16u * c)) & 0xFFFFull)] = W[i];
+            for (uint32_t k = 0u; k < KF_CLASSES; k++) run[k] += (uint32_t)((tot >> (16u * k)) & 0xFFFFull);
+        }
+    }
+    __syncthreads();
+
+    /* ── 2. kept placements (parallel over placements) ─────────────────────── */
+    uint32_t nk[KF_CLASSES], ko[KF_CLASSES], nu[KF_CLASSES], nm[KF_CLASSES];
+    {
+        uint32_t kc = 0u;
+        for (uint32_t c = 0u; c < KF_CLASSES; c++) {
+            const KfMapRun *P = com + po[c];
+            const KfMapRun *Wc = X + wo[c];
+            ko[c] = kc; nk[c] = 0u; nu[c] = 0u;
+            for (uint32_t base = 0u; base < pn[c]; base += blockDim.x) {
+                const uint32_t i = base + threadIdx.x;
+                const bool valid = i < pn[c];
+                const bool kept = valid && kf_covered(P[i], Wc, wn[c]);
+                if (valid) kf[po[c] + i] = kept ? 1u : 0u;
+                uint32_t tot;
+                const uint32_t ex = kf_bscan<uint32_t>(kept ? 1u : 0u, &tot, sh32);
+                if (kept) K[kc + ex] = i;
+                kc += tot; nk[c] += tot;
+            }
+            nu[c] = pn[c] - nk[c];
+        }
+    }
+    __syncthreads();
+
+    /* ── 3. count the pieces in the gaps (parallel over gaps) ─────────────── */
+    for (uint32_t c = 0u; c < KF_CLASSES; c++) {
+        const KfMapRun *P = com + po[c];
+        const KfMapRun *Wc = X + wo[c];
+        const uint32_t *Kc = K + ko[c];
+        nm[c] = 0u;
+        const uint32_t ng = nk[c] + 1u;
+        for (uint32_t base = 0u; base < ng; base += blockDim.x) {
+            const uint32_t g = base + threadIdx.x;
+            uint32_t cnt = 0u;
+            if (g < ng && wn[c]) {
+                uint64_t lo, hi;
+                kf_gap(P, Kc, nk[c], g, &lo, &hi);
+                if (lo < hi)
+                    for (uint32_t i = kf_n_end_le(Wc, wn[c], lo); i < wn[c] && Wc[i].va < hi; i++) cnt++;
+            }
+            uint32_t tot;
+            (void)kf_bscan<uint32_t>(cnt, &tot, sh32);
+            nm[c] += tot;
+        }
+    }
+
+    /* ── 4. capacity: a commit may never overflow the slot ─────────────────── */
+    uint32_t np_all = 0u, nu_all = 0u, nm_all = 0u;
+    for (uint32_t c = 0u; c < KF_CLASSES; c++) { np_all += pn[c]; nu_all += nu[c]; nm_all += nm[c]; }
+    uint32_t vflags = 0u;
+    bool emit_maps = true;
+    if ((uint64_t)np_all + nm_all > rpp) {
+        if (nu_all) { vflags |= KFWR_V_PARTIAL; emit_maps = false; }
+        else {
+            if (threadIdx.x == 0u) {
+                d->diff_count[t] = 0u;
+                d->diff_vflags[t] = KFWR_V_OVERFLOW;
+                atomicOr(&d->refuse_mask, KFWR_R_RUN_CAP);
+                atomicAdd(&d->refusals, 1u);
+            }
+            return;
+        }
+    }
+
+    /* ── 5. emit: per class, its UNMAPs then its MAPs ──────────────────────── */
+    uint32_t out = 0u;
+    for (uint32_t c = 0u; c < KF_CLASSES; c++) {
+        const KfMapRun *P = com + po[c];
+        const KfMapRun *Wc = X + wo[c];
+        const uint32_t *Kc = K + ko[c];
+        for (uint32_t base = 0u; base < pn[c]; base += blockDim.x) {
+            const uint32_t i = base + threadIdx.x;
+            const bool un = i < pn[c] && kf[po[c] + i] == 0u;
+            uint32_t tot;
+            const uint32_t ex = kf_bscan<uint32_t>(un ? 1u : 0u, &tot, sh32);
+            if (un) {
+                KfMapRun r = P[i];
+                r.op = KFWR_OP_UNMAP;
+                r.pdb_index = (uint16_t)t;
+                stg[out + ex] = r;
+            }
+            out += tot;
+        }
+        if (!emit_maps) continue;
+        const uint32_t ng = nk[c] + 1u;
+        for (uint32_t base = 0u; base < ng; base += blockDim.x) {
+            const uint32_t g = base + threadIdx.x;
+            uint64_t lo = 0ull, hi = 0ull;
+            uint32_t first = 0u, cnt = 0u;
+            if (g < ng && wn[c]) {
+                kf_gap(P, Kc, nk[c], g, &lo, &hi);
+                if (lo < hi) {
+                    first = kf_n_end_le(Wc, wn[c], lo);
+                    for (uint32_t i = first; i < wn[c] && Wc[i].va < hi; i++) cnt++;
                 }
             }
-#ifdef KF_OLD_MERGE
-            kf_diff_old(o, d, pi, pr, pn, cr, cn);
-#else
-            for (uint32_t cls = 0u; cls < 4u; cls++)
-                kf_diff_class(o, d, pi, cls, pr, pn, cr, cn);
-#endif
-            ip++; ic++;
+            uint32_t tot;
+            const uint32_t ex = kf_bscan<uint32_t>(cnt, &tot, sh32);
+            for (uint32_t k = 0u; k < cnt; k++) {
+                const KfMapRun r = Wc[first + k];
+                const uint64_t s0 = r.va > lo ? r.va : lo;
+                const uint64_t e0 = kf_end(r) < hi ? kf_end(r) : hi;
+                KfMapRun m;
+                m.va = s0;
+                m.gpga = r.gpga + (s0 - r.va);
+                m.len = e0 - s0;
+                m.flags = r.flags & ~KFWR_RF_HELD;
+                m.op = KFWR_OP_MAP;
+                m.pdb_index = (uint16_t)t;
+                stg[out + ex + k] = m;
+            }
+            out += tot;
         }
-
-        KfPdbEntry e;
-        e.pdb = pdb;
-        e.first_run = first;
-        e.run_count = o.n - first;
-        e.vas_flags = vflags;
-        e.reserved = 0u;
-        e.reserved2 = 0ull;
-        a.rpdb[np_out] = e;
-        np_out++;
     }
-
-    d->generation += 1ull;
-
-    /* I3: a walk that truncated must NEVER become the baseline of a later delta. */
-    if (!d->walk_trunc && !unsorted) {
-        d->cur_buf = cur;
-        d->have_prev = 1u;
-    } else {
-        d->have_prev = 0u;
+    if (threadIdx.x == 0u) {
+        d->diff_count[t] = out;
+        d->diff_vflags[t] = vflags;
     }
-
-    uint32_t flags = d->hdr_flags;
-    if (resync)     flags |= KFWR_HF_RESYNC;
-    if (o.trunc)    flags |= KFWR_HF_TRUNCATED;
-    if (pdb_trunc)  flags |= (KFWR_HF_TRUNCATED | KFWR_HF_PDB_TRUNCATED);
-    if (d->refusals) flags |= KFWR_HF_REFUSED;
-
-    KfReportHeader h;
-    h.magic = KFWR_MAGIC;
-    h.version = (uint16_t)KFWR_VERSION;
-    h.flags = (uint16_t)flags;
-    h.generation = d->generation;
-    h.acked_generation = d->acked;
-    h.pdb_count = np_out;
-    h.pdb_capacity = d->pdb_capacity;
-    h.run_count = o.n;
-    h.run_capacity = d->run_capacity;
-    h.entries_visited = d->entries_visited;
-    h.refusals = d->refusals;
-    h.refuse_mask = d->refuse_mask;
-    h.sparse_slots = d->sparse_slots;
-    for (uint32_t i = 0; i < 4u; i++) h.ps_log2[i] = a.fmt.ps_log2[i];
-    *a.hdr = h;
 }
 
-__global__ void kf_ack_kernel(KfDev *d, uint64_t g) { d->acked = g; }
+/* ★ The report: every entry's staged diff, in entry order, dense. One block per
+ * entry copies its own slice; block 0 writes the header. Each block derives its
+ * base from the counts, so no extra launch orders them. */
+__global__ void kf_diff_emit(KfArgs a)
+{
+    const uint32_t t = blockIdx.x;
+    KfDev *d = a.dev;
+    const uint32_t cap_pdb = d->pdb_capacity < KF_MAX_PDB ? d->pdb_capacity : KF_MAX_PDB;
+    const uint32_t np = a.npdb < cap_pdb ? a.npdb : cap_pdb;
+    const uint32_t rpp = d->runs_per_pdb;
+    uint32_t base = 0u, total = 0u;
+    for (uint32_t u = 0u; u < np; u++) {
+        if (u < t) base += d->diff_count[u];
+        total += d->diff_count[u];
+    }
+    const bool trunc = total > d->run_capacity;
+    if (t == 0u && threadIdx.x == 0u) {
+        d->generation += 1ull;
+        uint32_t flags = d->hdr_flags | KFWR_HF_DIFF;
+        if (trunc) flags |= KFWR_HF_TRUNCATED;
+        if (a.npdb > cap_pdb) {
+            flags |= (KFWR_HF_TRUNCATED | KFWR_HF_PDB_TRUNCATED);
+            atomicOr(&d->refuse_mask, KFWR_R_PDB_CAP);
+            atomicAdd(&d->refusals, 1u);
+        }
+        if (trunc) { atomicOr(&d->refuse_mask, KFWR_R_RUN_CAP); atomicAdd(&d->refusals, 1u); }
+        if (d->refusals) flags |= KFWR_HF_REFUSED;
+        KfReportHeader h;
+        h.magic = KFWR_MAGIC;
+        h.version = (uint16_t)KFWR_VERSION;
+        h.flags = (uint16_t)flags;
+        h.generation = d->generation;
+        h.acked_generation = d->committed;
+        h.pdb_count = np;
+        h.pdb_capacity = d->pdb_capacity;
+        h.run_count = trunc ? 0u : total;
+        h.run_capacity = d->run_capacity;
+        h.entries_visited = d->entries_visited;
+        h.refusals = d->refusals;
+        h.refuse_mask = d->refuse_mask;
+        h.sparse_slots = d->sparse_slots;
+        for (uint32_t i = 0; i < 4u; i++) h.ps_log2[i] = a.fmt.ps_log2[i];
+        *a.hdr = h;
+    }
+    if (t >= np) return;
+    const uint32_t n = trunc ? 0u : d->diff_count[t];
+    const KfMapRun *stg = kf_scr(a, t, rpp) + rpp;
+    for (uint32_t k = threadIdx.x; k < n; k += blockDim.x) a.rrun[base + k] = stg[k];
+    if (threadIdx.x == 0u) {
+        KfPdbEntry e;
+        e.pdb = a.pdbs[t];
+        e.first_run = trunc ? 0u : base;
+        e.run_count = n;
+        e.vas_flags = d->diff_vflags[t];
+        e.reserved = a.slots[t];
+        e.reserved2 = 0ull;
+        a.rpdb[t] = e;
+    }
+}
+
+/* ★★★★★ COMMIT ON ACK — the first node of the NEXT walk. `a.hdr`/`a.rpdb`/`a.rrun`
+ * still hold the previous report; `a.ack` is the host's verdict on it, written
+ * into pinned memory before the walk was submitted. Only a verdict naming THAT
+ * report's generation, over all of its runs, is committed; anything else (no
+ * verdict, a stale one, a truncated report) commits nothing — the next diff is
+ * then simply computed against the same placements again. */
+__global__ void __launch_bounds__(KF_DIFF_BLOCK) kf_commit_kernel(KfArgs a)
+{
+    const uint32_t t = blockIdx.x;
+    KfDev *d = a.dev;
+    const KfAck *k = a.ack;
+    const KfReportHeader *h = a.hdr;
+    if (k == NULL) return;
+    if (h->magic != KFWR_MAGIC || k->generation == 0ull || k->generation != h->generation) return;
+    if (h->flags & KFWR_HF_TRUNCATED) return;
+    if (k->nrun != h->run_count) return;
+    if (t >= h->pdb_count || t >= KF_MAX_PDB) return;
+    const KfPdbEntry e = a.rpdb[t];
+    const uint32_t s = e.reserved;
+    if (s >= d->max_slots) return;
+    const uint32_t nres = k->nreset < KF_MAX_RESET ? k->nreset : KF_MAX_RESET;
+    for (uint32_t i = 0u; i < nres; i++) if (k->reset[i] == s) return;
+    const uint32_t rpp = d->runs_per_pdb;
+    if ((uint64_t)e.first_run + e.run_count > h->run_count) return;
+    const KfMapRun *R = a.rrun + e.first_run;
+    const uint8_t *code = a.ack_code + e.first_run;
+    const uint32_t nr = e.run_count;
+    KfMapRun *com = a.com + (size_t)s * rpp;
+    KfMapRun *A = kf_scr(a, t, rpp), *B = A + rpp, *O = A + 2u * rpp;
+    uint32_t *rm = kf_iscr(a, t, rpp);
+    __shared__ uint32_t sh32[KF_DIFF_WARPS];
+    uint32_t pn[KF_CLASSES], po[KF_CLASSES], nn[KF_CLASSES];
+    {
+        uint32_t o = 0u;
+        for (uint32_t c = 0u; c < KF_CLASSES; c++) {
+            uint32_t n = a.slot[s].n[c];
+            if (n > rpp - o) n = rpp - o;
+            pn[c] = n; po[c] = o; o += n;
+        }
+    }
+    uint32_t oc = 0u;
+    for (uint32_t c = 0u; c < KF_CLASSES; c++) {
+        const KfMapRun *P = com + po[c];
+        for (uint32_t i = threadIdx.x; i < pn[c]; i += blockDim.x) rm[i] = 0u;
+        __syncthreads();
+        for (uint32_t i = threadIdx.x; i < nr; i += blockDim.x) {
+            const KfMapRun r = R[i];
+            if (kf_pcls(r.flags) != c || r.op != KFWR_OP_UNMAP || code[i] == 0u) continue;
+            const uint32_t j = kf_n_lt(P, pn[c], r.va);
+            if (j < pn[c] && P[j].va == r.va) rm[j] = 1u;
+        }
+        __syncthreads();
+        uint32_t na = 0u, nb = 0u;
+        for (uint32_t base = 0u; base < pn[c]; base += blockDim.x) {
+            const uint32_t i = base + threadIdx.x;
+            const bool keep = i < pn[c] && rm[i] == 0u;
+            uint32_t tot;
+            const uint32_t ex = kf_bscan<uint32_t>(keep ? 1u : 0u, &tot, sh32);
+            if (keep) A[na + ex] = P[i];
+            na += tot;
+        }
+        for (uint32_t base = 0u; base < nr; base += blockDim.x) {
+            const uint32_t i = base + threadIdx.x;
+            bool take = false;
+            KfMapRun r;
+            if (i < nr) {
+                r = R[i];
+                take = kf_pcls(r.flags) == c && r.op == KFWR_OP_MAP && code[i] != 0u;
+            }
+            uint32_t tot;
+            const uint32_t ex = kf_bscan<uint32_t>(take ? 1u : 0u, &tot, sh32);
+            if (take) {
+                r.op = KFWR_OP_MAP;
+                r.pdb_index = 0u;
+                r.flags = (r.flags & ~KFWR_RF_HELD) | (code[i] == 2u ? KFWR_RF_HELD : 0u);
+                B[nb + ex] = r;
+            }
+            nb += tot;
+        }
+        __syncthreads();
+        if ((uint64_t)oc + na + nb > rpp) {
+            /* ⊘ Unreachable by the diff's capacity rule; refused loudly rather than
+             * written past the slot. The host then sees the next diff unchanged. */
+            if (threadIdx.x == 0u) { atomicOr(&d->refuse_mask, KFWR_R_RUN_CAP); atomicAdd(&d->refusals, 1u); }
+            return;
+        }
+        for (uint32_t i = threadIdx.x; i < na; i += blockDim.x) O[oc + i + kf_n_lt(B, nb, A[i].va)] = A[i];
+        for (uint32_t j = threadIdx.x; j < nb; j += blockDim.x) O[oc + j + kf_n_le(A, na, B[j].va)] = B[j];
+        nn[c] = na + nb;
+        oc += na + nb;
+        __syncthreads();
+    }
+    for (uint32_t i = threadIdx.x; i < oc; i += blockDim.x) com[i] = O[i];
+    if (threadIdx.x == 0u)
+        for (uint32_t c = 0u; c < KF_CLASSES; c++) a.slot[s].n[c] = nn[c];
+}
+
 
 /* ── the format descriptors, built on the HOST ───────────────────────────────
  *
@@ -1582,12 +1590,10 @@ __global__ void kf_par_seed(KfArgs a, KfEnt *fr, uint32_t *nfr, uint32_t *used)
     if (t >= a.npdb) return;
     KfDev *d = a.dev;
     const KfFormat &F = a.fmt;
-    const uint32_t cur = d->cur_buf ^ 1u;
     const uint64_t pdb = a.pdbs[t];
 
-    d->tbl_pdb[cur][t] = pdb;
-    d->tbl_run_count[cur][t] = 0u;
-    if (t == 0u) { d->tbl_pdb_count[cur] = a.npdb; *nfr = a.npdb; used[0] = 0u; used[1] = 0u; }
+    d->tbl_run_count[t] = 0u;
+    if (t == 0u) { *nfr = a.npdb; used[0] = 0u; used[1] = 0u; }
 
     KfEnt e;
     memset(&e, 0, sizeof(e));
@@ -2055,7 +2061,7 @@ __global__ void kf_par_heads(KfArgs a, const KfEnt *task, const KfSum *sum, cons
 #endif
     head[i] = h;
     contrib[i] = (n && !h) ? (n - 1u) : n;
-    if (contrib[i]) atomicAdd(&a.dev->tbl_run_count[a.dev->cur_buf ^ 1u][task[i].pdb], contrib[i]);
+    if (contrib[i]) atomicAdd(&a.dev->tbl_run_count[task[i].pdb], contrib[i]);
     }
 }
 
@@ -2063,14 +2069,13 @@ __global__ void kf_par_bases(KfArgs a, uint32_t *pdbbase)
 {
     if (threadIdx.x || blockIdx.x) return;
     KfDev *d = a.dev;
-    const uint32_t cur = d->cur_buf ^ 1u;
     uint32_t run = 0u;
     for (uint32_t p = 0u; p < KF_MAX_PDB && p < a.npdb; p++) {
         pdbbase[p] = run;
-        uint32_t n = d->tbl_run_count[cur][p];
+        uint32_t n = d->tbl_run_count[p];
         if (n > d->runs_per_pdb) {
             n = d->runs_per_pdb;
-            d->tbl_run_count[cur][p] = n;
+            d->tbl_run_count[p] = n;
             atomicOr(&d->hdr_flags, KFWR_HF_TRUNCATED);
             atomicOr(&d->walk_trunc, 1u);
             kf_par_refuse(d, KFWR_R_RUN_CAP);
@@ -2097,9 +2102,9 @@ __global__ void kf_par_emit(KfArgs a, const KfEnt *task, const KfSum *sum, const
     if (!sm.n) continue;
     const uint16_t p = task[gw].pdb;
     const uint32_t skip = head[gw] ? 0u : 1u;
-    const uint32_t cap = d->tbl_run_count[d->cur_buf ^ 1u][p];
+    const uint32_t cap = d->tbl_run_count[p];
     const uint32_t local = off[gw] - pdbbase[p];
-    KfMapRun *dst = a.tbl[d->cur_buf ^ 1u] + (size_t)p * d->runs_per_pdb;
+    KfMapRun *dst = a.walk + (size_t)p * d->runs_per_pdb;
     for (uint32_t j = lane + skip; j < KF_MAX_ENT * 2u && j < sm.n; j += KF_WARP) {
         const uint32_t o = local + j - skip;
         if (o < cap) dst[o] = runstage[sm.start + j];
@@ -2122,11 +2127,10 @@ __global__ void kf_par_join(KfArgs a, const KfEnt *task, const KfSum *sum, const
     const uint32_t stride0 = gridDim.x * blockDim.x;
     for (uint32_t i = blockIdx.x * blockDim.x + threadIdx.x; i < KF_MAX_FRONTIER && i < nn; i += stride0) {
     if (head[i] || !sum[i].n) continue;
-    const uint32_t cur = d->cur_buf ^ 1u;
     const uint16_t p = task[i].pdb;
     const uint32_t local = off[i] - pdbbase[p];
-    if (local == 0u || local - 1u >= d->tbl_run_count[cur][p]) continue;
-    KfMapRun *dst = a.tbl[cur] + (size_t)p * d->runs_per_pdb;
+    if (local == 0u || local - 1u >= d->tbl_run_count[p]) continue;
+    KfMapRun *dst = a.walk + (size_t)p * d->runs_per_pdb;
     atomicAdd((unsigned long long *)&dst[local - 1u].len, (unsigned long long)sum[i].flen);
     }
 }
@@ -2140,13 +2144,21 @@ struct KfWalk {
     KfDev *dev;
     KfFormat fmt;
     KfPar par;
-    KfMapRun *tbl[2];
+    KfMapRun *walk;
+    KfMapRun *com;
+    KfSlot *slot;
     uint64_t *pdbs;
-    KfScope *scopes;
+    uint32_t *slots;
+    KfAck *ack;
+    uint8_t *ack_code;
+    uint32_t *iscratch;
     KfReportHeader *hdr;
     KfPdbEntry *rpdb;
     KfMapRun *rrun;
     KfWalkCfg cfg;
+    /* the verdict kf_ack stages for the next kf_refresh */
+    KfAck ack_h;
+    uint8_t *ack_code_h;
 };
 
 #define KF_CU(x) do { cudaError_t _e = (x); if (_e != cudaSuccess) { \
@@ -2171,14 +2183,30 @@ extern "C" KfWalk *kf_create(const KfWalkCfg *cfg)
         return NULL;
     }
     if (w->cfg.max_pdbs == 0u || w->cfg.max_pdbs > KF_MAX_PDB) w->cfg.max_pdbs = KF_MAX_PDB;
+    if (w->cfg.max_slots == 0u) w->cfg.max_slots = KF_MAX_PDB;
+    /* The diff's scratch reuses the walk's run stage: 4 * runs_per_pdb per entry. */
+    if ((uint64_t)KF_MAX_PDB * 4u * w->cfg.runs_per_pdb > KF_MAX_SCRATCH || w->cfg.runs_per_pdb > 0xFFFFu) {
+        fprintf(stderr, "kf_create: runs_per_pdb %u does not fit the diff's scratch\n", w->cfg.runs_per_pdb);
+        free(w);
+        return NULL;
+    }
 
-    size_t tbl_bytes = (size_t)w->cfg.max_pdbs * w->cfg.runs_per_pdb * sizeof(KfMapRun);
+    size_t tbl_bytes = (size_t)KF_MAX_PDB * w->cfg.runs_per_pdb * sizeof(KfMapRun);
+    size_t com_bytes = (size_t)w->cfg.max_slots * w->cfg.runs_per_pdb * sizeof(KfMapRun);
     KF_CU(cudaMalloc(&w->dev, sizeof(KfDev)));
-    KF_CU(cudaMalloc(&w->tbl[0], tbl_bytes));
-    KF_CU(cudaMalloc(&w->tbl[1], tbl_bytes));
+    KF_CU(cudaMalloc(&w->walk, tbl_bytes));
+    KF_CU(cudaMalloc(&w->com, com_bytes));
+    KF_CU(cudaMalloc(&w->slot, (size_t)w->cfg.max_slots * sizeof(KfSlot)));
+    KF_CU(cudaMemset(w->slot, 0, (size_t)w->cfg.max_slots * sizeof(KfSlot)));
     KF_CU(cudaMalloc(&w->pdbs, KF_MAX_PDB * sizeof(uint64_t)));
-    KF_CU(cudaMalloc(&w->scopes, KF_MAX_SCOPE * sizeof(KfScope)));
+    KF_CU(cudaMalloc(&w->slots, KF_MAX_PDB * sizeof(uint32_t)));
+    KF_CU(cudaMalloc(&w->ack, sizeof(KfAck)));
+    KF_CU(cudaMemset(w->ack, 0, sizeof(KfAck)));
+    KF_CU(cudaMalloc(&w->ack_code, (size_t)w->cfg.run_capacity));
+    KF_CU(cudaMalloc(&w->iscratch, (size_t)KF_MAX_PDB * 2u * w->cfg.runs_per_pdb * sizeof(uint32_t)));
+    w->ack_code_h = (uint8_t *)calloc(w->cfg.run_capacity ? w->cfg.run_capacity : 1u, 1);
     KF_CU(cudaMalloc(&w->hdr, sizeof(KfReportHeader)));
+    KF_CU(cudaMemset(w->hdr, 0, sizeof(KfReportHeader)));
     KF_CU(cudaMalloc(&w->rpdb, (size_t)w->cfg.pdb_capacity * sizeof(KfPdbEntry)));
     KF_CU(cudaMalloc(&w->rrun, (size_t)w->cfg.run_capacity * sizeof(KfMapRun)));
 
@@ -2189,6 +2217,7 @@ extern "C" KfWalk *kf_create(const KfWalkCfg *cfg)
     h.run_capacity = w->cfg.run_capacity;
     h.pdb_capacity = w->cfg.pdb_capacity;
     h.max_pdbs = w->cfg.max_pdbs;
+    h.max_slots = w->cfg.max_slots;
     KF_CU(cudaMemcpy(w->dev, &h, sizeof(h), cudaMemcpyHostToDevice));
 
     /* ── the parallel walk's working set ──
@@ -2221,16 +2250,24 @@ extern "C" void kf_destroy(KfWalk *w)
     cudaFree(w->par.used);
     cudaFree(w->par.cnt); cudaFree(w->par.off); cudaFree(w->par.sum);
     cudaFree(w->par.head); cudaFree(w->par.nfr); cudaFree(w->par.pdbbase);
-    cudaFree(w->dev); cudaFree(w->tbl[0]); cudaFree(w->tbl[1]);
-    cudaFree(w->pdbs); cudaFree(w->scopes);
+    cudaFree(w->dev); cudaFree(w->walk); cudaFree(w->com); cudaFree(w->slot);
+    cudaFree(w->pdbs); cudaFree(w->slots); cudaFree(w->ack); cudaFree(w->ack_code);
+    cudaFree(w->iscratch); free(w->ack_code_h);
     cudaFree(w->hdr); cudaFree(w->rpdb); cudaFree(w->rrun);
     free(w);
 }
 
-extern "C" void kf_ack(KfWalk *w, uint64_t g)
+extern "C" void kf_ack(KfWalk *w, uint64_t g, const uint8_t *codes, uint32_t nrun,
+                       const uint32_t *resets, uint32_t nreset)
 {
-    kf_ack_kernel<<<1, 1>>>(w->dev, g);
-    cudaDeviceSynchronize();
+    memset(&w->ack_h, 0, sizeof(w->ack_h));
+    w->ack_h.generation = g;
+    w->ack_h.nrun = nrun;
+    if (nrun > w->cfg.run_capacity) nrun = w->cfg.run_capacity;
+    if (nrun && codes) memcpy(w->ack_code_h, codes, nrun);
+    if (nreset > KF_MAX_RESET) nreset = KF_MAX_RESET;
+    w->ack_h.nreset = nreset;
+    for (uint32_t i = 0; i < nreset; i++) w->ack_h.reset[i] = resets[i];
 }
 
 
@@ -2337,39 +2374,42 @@ static void kf_run_parallel(KfWalk *w, const KfArgs &a, uint32_t npdb)
 
 extern "C" int kf_refresh(KfWalk *w,
                           const void *gpga_dev, uint64_t gpga_len,
-                          const uint64_t *pdbs, uint32_t npdb,
-                          const KfScope *scopes, uint32_t nscope,
+                          const uint64_t *pdbs, const uint32_t *slots, uint32_t npdb,
                           KfReportHeader *hdr_out, KfPdbEntry *pdb_out, KfMapRun *run_out)
 {
     if (!w) { fprintf(stderr, "kf_refresh: no walker (the format descriptor was refused)\n"); return -3; }
     if (npdb == 0u) { fprintf(stderr, "kf_refresh: npdb == 0\n"); return -2; }
     if (npdb > w->cfg.max_pdbs) { fprintf(stderr, "kf_refresh: npdb %u > max_pdbs %u\n", npdb, w->cfg.max_pdbs); return -2; }
-    if (nscope > KF_MAX_SCOPE)  { fprintf(stderr, "kf_refresh: nscope too large\n"); return -2; }
 
     KF_CU_I(cudaMemcpy(w->pdbs, pdbs, (size_t)npdb * sizeof(uint64_t), cudaMemcpyHostToDevice));
-    if (nscope) KF_CU_I(cudaMemcpy(w->scopes, scopes, (size_t)nscope * sizeof(KfScope), cudaMemcpyHostToDevice));
+    KF_CU_I(cudaMemcpy(w->slots, slots, (size_t)npdb * sizeof(uint32_t), cudaMemcpyHostToDevice));
+    KF_CU_I(cudaMemcpy(w->ack, &w->ack_h, sizeof(KfAck), cudaMemcpyHostToDevice));
+    if (w->ack_h.nrun)
+        KF_CU_I(cudaMemcpy(w->ack_code, w->ack_code_h,
+                           w->ack_h.nrun < w->cfg.run_capacity ? w->ack_h.nrun : w->cfg.run_capacity,
+                           cudaMemcpyHostToDevice));
+    /* A verdict is consumed by exactly one refresh. */
+    memset(&w->ack_h, 0, sizeof(w->ack_h));
 
     KfArgs a;
+    memset(&a, 0, sizeof(a));
     a.win.base = (const uint8_t *)gpga_dev;
     a.win.len = gpga_len;
     a.win.span = w->cfg.gpga_span;
     a.fmt = w->fmt;
     a.dev = w->dev;
-    a.tbl[0] = w->tbl[0]; a.tbl[1] = w->tbl[1];
-    a.pdbs = w->pdbs; a.npdb = npdb;
-    a.scopes = w->scopes; a.nscope = nscope;
+    a.walk = w->walk; a.com = w->com; a.slot = w->slot;
+    a.pdbs = w->pdbs; a.slots = w->slots; a.npdb = npdb;
+    a.ack = w->ack; a.ack_code = w->ack_code;
+    a.scratch = w->par.runstage; a.iscratch = w->iscratch;
     a.hdr = w->hdr; a.rpdb = w->rpdb; a.rrun = w->rrun;
 
-    kf_begin_kernel<<<1, 1>>>(w->dev);
-    /* ⊘ THE SCOPED WALK KEEPS THE SERIAL PATH. Carry-forward threads the previous
-     * table's runs into the output at every pruned region, which is inherently
-     * sequential against the walk's own emission — and a scoped walk is by
-     * definition the SMALL one. Both paths produce a table with identical layout
-     * and ordering, so prev from either is valid input to the other. */
-    if (nscope == 0u) kf_run_parallel(w, a, npdb);
-    else kf_walk_kernel<<<(npdb + 31u) / 32u, 32>>>(a);
-    kf_diff_trim_kernel<<<npdb, 256>>>(a, w->par.cnt);
-    kf_diff_kernel<<<1, 1>>>(a, w->par.cnt);
+    kf_commit_kernel<<<KF_MAX_PDB, KF_DIFF_BLOCK>>>(a);
+    kf_begin_kernel<<<1, 1>>>(a);
+    if (getenv("KF_WALK_SERIAL")) kf_walk_kernel<<<(npdb + 31u) / 32u, 32>>>(a);
+    else kf_run_parallel(w, a, npdb);
+    kf_diff_slots<<<KF_MAX_PDB, KF_DIFF_BLOCK>>>(a);
+    kf_diff_emit<<<KF_MAX_PDB, 256>>>(a);
     KF_CU_I(cudaGetLastError());
     KF_CU_I(cudaDeviceSynchronize());
 

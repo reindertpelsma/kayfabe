@@ -49,7 +49,7 @@ pub const KF_MAX_SCOPE: usize = 256;
 ///
 /// ⚠ A host/PTX skew must fail **loudly at launch** rather than decode garbage field offsets
 /// and look like a page-table bug (`THE_CONSTRAINTS.md` §21). Mirrors `KF_ABI_VERSION`.
-pub const KF_ABI_VERSION: u32 = 2;
+pub const KF_ABI_VERSION: u32 = 3;
 
 /// `KFWR_OP_UNMAP` — the run names a VA being RETIRED, so it carries no `gpga` and is exempt
 /// from the §39(c) containment check. Mirrors `kf_walk.h:88`.
@@ -73,8 +73,20 @@ pub const KFWR_MAGIC: u32 = 0x5257_464B;
 /// Report header flag: the walk was truncated, so it is **not** a delta and the walker must
 /// not be acked.
 pub const KFWR_HF_TRUNCATED: u16 = 1 << 0;
-/// Report header flag: this report is a full resync rather than a delta.
+/// Report header flag: a full resync. ⊘ Never set since the diff protocol (kept: the header's
+/// bit is still defined).
 pub const KFWR_HF_RESYNC: u16 = 1 << 1;
+/// ★ Report header flag: the runs are each entry's DIFF against its slot's committed placements.
+pub const KFWR_HF_DIFF: u16 = 1 << 7;
+/// `KFWR_OP_MAP`.
+pub const KFWR_OP_MAP: u16 = 1;
+/// ★ A committed placement the host answered "already held" — its UNMAP is retired without asking
+/// the host (P6b ruling (a)). Mirrors `KFWR_RF_HELD`.
+pub const KFWR_RF_HELD: u32 = 1 << 31;
+/// Per-entry flag: the entry's MAPs were withheld (slot capacity); re-walk after its UNMAPs.
+pub const KFWR_V_PARTIAL: u32 = 1 << 3;
+/// Per-entry flag: the slot is full and nothing can be retired; no runs.
+pub const KFWR_V_OVERFLOW: u32 = 1 << 4;
 
 /// `value = ((raw >> lo) & ((1 << bits) - 1)) << shift`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -214,19 +226,16 @@ pub struct KfWin {
 ///
 /// ⊘ Mirrored in full because it is **written by the host at creation** (`cuMemcpyHtoD` of a
 /// zeroed-but-configured image), exactly as the `.cu`'s `kf_create` does. Its tail is written
-/// only by the kernel.
+/// only by the kernel. ⊘ It holds no snapshot of the guest's tables: what persists across walks
+/// is the committed placements ([`KfArgs::com`], per slot, written only on the host's ack).
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
 pub struct KfDev {
-    /// Monotonic refresh counter.
+    /// Reports emitted.
     pub generation: u64,
-    /// The generation the host has acked.
-    pub acked: u64,
-    /// Whether an installed table exists to diff against.
-    pub have_prev: u32,
-    /// Which of the two tables is the installed one.
-    pub cur_buf: u32,
-    /// Slice size of the kernel's own table, per VAS.
+    /// The last report generation whose ack was committed.
+    pub committed: u64,
+    /// The walk's slice per entry, and one slot's capacity.
     pub runs_per_pdb: u32,
     /// Entries one VAS's walk may examine.
     pub entry_budget: u32,
@@ -234,14 +243,16 @@ pub struct KfDev {
     pub run_capacity: u32,
     /// Report `PdbEntry` capacity.
     pub pdb_capacity: u32,
-    /// Address spaces the kernel's own table can hold.
+    /// Walk entries.
     pub max_pdbs: u32,
-    /// Per-buffer PDB counts.
-    pub tbl_pdb_count: [u32; 2],
-    /// Per-buffer PDB identities.
-    pub tbl_pdb: [[u64; KF_MAX_PDB]; 2],
-    /// Per-buffer per-PDB run counts.
-    pub tbl_run_count: [[u32; KF_MAX_PDB]; 2],
+    /// Committed-placement slots.
+    pub max_slots: u32,
+    /// The walk's runs, per entry.
+    pub tbl_run_count: [u32; KF_MAX_PDB],
+    /// The staged diff's runs, per entry.
+    pub diff_count: [u32; KF_MAX_PDB],
+    /// `KFWR_V_PARTIAL` / `KFWR_V_OVERFLOW`, per entry.
+    pub diff_vflags: [u32; KF_MAX_PDB],
     /// Accumulator, zeroed by `kf_begin_kernel`.
     pub entries_visited: u64,
     /// Accumulator, zeroed by `kf_begin_kernel`.
@@ -252,9 +263,7 @@ pub struct KfDev {
     pub hdr_flags: u32,
     /// Accumulator, zeroed by `kf_begin_kernel`.
     pub walk_trunc: u32,
-    /// ★ **The walk itself stopped** — budget or frontier cap. Added to the `.cu` by w726's
-    /// parallel walk; a second field this mirror did not have, caught by the same
-    /// differential that caught `KfFormat::kind`.
+    /// ★ **The walk itself stopped** — budget or frontier cap.
     pub walk_abort: u32,
     /// Accumulator, zeroed by `kf_begin_kernel`.
     pub sparse_slots: u32,
@@ -262,25 +271,21 @@ pub struct KfDev {
 
 impl Default for KfDev {
     fn default() -> Self {
-        // ⊘ Written out rather than `mem::zeroed()`, and the reason is the whole of this
-        // crate's containment rule: `zeroed` is `unsafe`, and `unsafe` in this workspace
-        // lives in `*_unsafe.rs` files in audited crates only. A `#[repr(C)]` aggregate of
-        // integers is exactly the case where the safe spelling costs nothing.
-        // ⚠ Every field's zero IS its correct initial value; the fields the host must
-        // configure are set by `WalkKernel::bring_up` immediately after.
+        // ⊘ Written out rather than `mem::zeroed()`: `zeroed` is `unsafe`, and `unsafe` in this
+        // crate lives in `driver_unsafe.rs`. Every field's zero IS its correct initial value; the
+        // fields the host must configure are set by `WalkKernel::bring_up` immediately after.
         KfDev {
             generation: 0,
-            acked: 0,
-            have_prev: 0,
-            cur_buf: 0,
+            committed: 0,
             runs_per_pdb: 0,
             entry_budget: 0,
             run_capacity: 0,
             pdb_capacity: 0,
             max_pdbs: 0,
-            tbl_pdb_count: [0; 2],
-            tbl_pdb: [[0; KF_MAX_PDB]; 2],
-            tbl_run_count: [[0; KF_MAX_PDB]; 2],
+            max_slots: 0,
+            tbl_run_count: [0; KF_MAX_PDB],
+            diff_count: [0; KF_MAX_PDB],
+            diff_vflags: [0; KF_MAX_PDB],
             entries_visited: 0,
             refusals: 0,
             refuse_mask: 0,
@@ -292,8 +297,47 @@ impl Default for KfDev {
     }
 }
 
-/// ★★★★★ **The kernel's one parameter, passed BY VALUE.** 216 bytes, and the committed PTX
-/// says so in its own `.param` declaration.
+/// ★ One slot of committed placements: its count per page-size class (`KfSlot` in `kf_walk.h`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[repr(C)]
+pub struct KfSlot {
+    /// Placements per class; class 0's come first in the slot's run array.
+    pub n: [u32; 4],
+}
+
+/// Slots one verdict may empty. Mirrors `KF_MAX_RESET`.
+pub const KF_MAX_RESET: usize = 64;
+
+/// ★★★★★ **The host's verdict on one report** (`KfAck` in `kf_walk.h`) — COMMIT-ON-ACK. The codes
+/// (one byte per report run, [`KFWR_ACK_FAILED`] …) are a separate array.
+#[derive(Debug, Clone, Copy)]
+#[repr(C)]
+pub struct KfAck {
+    /// The report this answers; `0` = no verdict.
+    pub generation: u64,
+    /// Must equal that report's `run_count`.
+    pub nrun: u32,
+    /// Slots to empty (their object is gone).
+    pub nreset: u32,
+    /// The slots.
+    pub reset: [u32; KF_MAX_RESET],
+}
+
+impl Default for KfAck {
+    fn default() -> Self {
+        KfAck { generation: 0, nrun: 0, nreset: 0, reset: [0; KF_MAX_RESET] }
+    }
+}
+
+/// Not applied: commit nothing for this run.
+pub const KFWR_ACK_FAILED: u8 = 0;
+/// Applied.
+pub const KFWR_ACK_APPLIED: u8 = 1;
+/// A MAP the host already held — satisfied, not ours.
+pub const KFWR_ACK_HELD: u8 = 2;
+
+/// ★★★★★ **The kernel's one parameter, passed BY VALUE**, and the committed PTX says how many
+/// bytes it is in its own `.param` declaration.
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
 pub struct KfArgs {
@@ -303,17 +347,26 @@ pub struct KfArgs {
     pub fmt: KfFormat,
     /// Device pointer to [`KfDev`].
     pub dev: u64,
-    /// Device pointers to the kernel's two run tables.
-    pub tbl: [u64; 2],
-    /// Device pointer to the ascending PDB array.
+    /// The walk's runs: `runs_per_pdb` per entry.
+    pub walk: u64,
+    /// The committed placements: `runs_per_pdb` per slot.
+    pub com: u64,
+    /// [`KfSlot`] per slot.
+    pub slot: u64,
+    /// Per entry: the root walked.
     pub pdbs: u64,
-    /// How many PDBs.
+    /// Per entry: the slot it is diffed against.
+    pub slots: u64,
+    /// How many entries.
     pub npdb: u32,
-    /// Device pointer to the scope array. Padding to 8 is explicit in the C layout and is
-    /// reproduced by the field order, not by a manual `pad`.
-    pub scopes: u64,
-    /// How many scopes.
-    pub nscope: u32,
+    /// The host's verdict on the PREVIOUS report ([`KfAck`]); `0` = none.
+    pub ack: u64,
+    /// One `KFWR_ACK_*` byte per previous report run.
+    pub ack_code: u64,
+    /// `4 * runs_per_pdb` runs of scratch per entry.
+    pub scratch: u64,
+    /// `2 * runs_per_pdb` words of scratch per entry.
+    pub iscratch: u64,
     /// Device pointer to the report header.
     pub hdr: u64,
     /// Device pointer to the report's `PdbEntry` array.

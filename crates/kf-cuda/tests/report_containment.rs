@@ -96,36 +96,21 @@ fn an_unmap_is_exempt_because_it_names_no_memory() {
     );
 }
 
-/// ★★★★★ **P4 — every report the ledger diff sees must be FULL.**
-///
-/// ⊘ `WalkKernel::ack` is deleted (`V3_BUILD.md`: no delta snapshot), so the kernel's own rule
-/// (`kf_walk.cu:1078`) makes every report a RESYNC. `Report::require_full` is the host's check
-/// that this stays true: a delta handed to `plan_reconcile` would read as the whole state and
-/// unmap every mapping that did not change.
+/// ★★★★★ **Every report the VA manager applies must be a DIFF against the committed
+/// placements** (`KFWR_HF_DIFF`, the commit-on-ack protocol, `kf_cuda::diffmodel`).
 #[test]
-fn a_resync_report_is_full() {
+fn a_diff_report_is_accepted() {
+    let mut r = report(vec![run(0, 4096, 0), run(0, 4096, KFWR_OP_UNMAP)]);
+    r.header.flags = kf_cuda::abi::KFWR_HF_DIFF;
+    assert_eq!(r.require_diff(), Ok(()));
+}
+
+/// The falsifier: a report from a kernel that does not speak the protocol (the old RESYNC/delta
+/// reports) is refused by name — applied as a diff, a full state would re-map everything and a
+/// delta would never retire a placement it did not name.
+#[test]
+fn a_report_without_the_diff_flag_is_refused() {
     let mut r = report(vec![run(0, 4096, 0)]);
     r.header.flags = kf_cuda::abi::KFWR_HF_RESYNC;
-    assert_eq!(r.require_full(), Ok(()));
-}
-
-/// The falsifier: the same report WITHOUT the resync flag is a delta, refused by name.
-#[test]
-fn a_report_without_resync_is_refused_as_not_full() {
-    let r = report(vec![run(0, 4096, 0)]);
-    assert!(matches!(
-        r.require_full(),
-        Err(ReportError::NotFull { flags: 0, unmap_run: None })
-    ));
-}
-
-/// And a resync that nevertheless carries an UNMAP run is not a full state either.
-#[test]
-fn an_unmap_run_makes_a_report_not_full() {
-    let mut r = report(vec![run(0, 4096, 0), run(0, 4096, KFWR_OP_UNMAP)]);
-    r.header.flags = kf_cuda::abi::KFWR_HF_RESYNC;
-    assert!(matches!(
-        r.require_full(),
-        Err(ReportError::NotFull { unmap_run: Some(1), .. })
-    ));
+    assert!(matches!(r.require_diff(), Err(ReportError::NotDiff { flags: 2 })));
 }

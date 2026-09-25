@@ -27,10 +27,11 @@
 //! build**, which is what §w724d prescribes.
 
 pub mod abi;
+pub mod diffmodel;
 pub mod driver_unsafe;
 pub mod selftest;
 pub mod synth;
 pub mod walk;
 
 pub use driver_unsafe::{CompletionFd, Cuda, CudaError};
-pub use walk::{Collected, Report, ReportError, WALK_PTX, WalkCfg, WalkKernel};
+pub use walk::{Collected, Report, ReportError, WALK_PTX, WalkCfg, WalkEntry, WalkKernel};

@@ -38,6 +38,10 @@ extern "C" {
 #define KFWR_HF_SCOPED         (1u << 4)  /* a scope hint restricted the walk      */
 #define KFWR_HF_PDB_TRUNCATED  (1u << 5)  /* more address spaces than pdb_capacity */
 #define KFWR_HF_SCOPE_DEGRADED (1u << 6)  /* a hint was unusable ⇒ full walk       */
+/* ★ 2026-09-25: the runs are the DIFF of each entry's walk against its slot's
+ * committed placements (kf_walk.cu, "THE DIFF AGAINST THE COMMITTED
+ * PLACEMENTS"): UNMAPs name whole placements, MAPs the pieces to place. */
+#define KFWR_HF_DIFF           (1u << 7)
 
 /* ── ReportHeader::refuse_mask — WHICH refusal, so a test can name it ────────── */
 #define KFWR_R_OOB           (1u << 0)  /* a table would leave the GPGA buffer     */
@@ -77,11 +81,19 @@ extern "C" {
  * chokepoints, so the run never reaches the report — the host's `map()` bound is
  * defence in depth BEHIND this, not instead of it. */
 #define KFWR_R_LEAF_OOB        (1u << 13)
+/* An entry named a slot outside the committed-placement table. */
+#define KFWR_R_BAD_SLOT        (1u << 14)
 
 /* ── PdbEntry::vas_flags ─────────────────────────────────────────────────────── */
 #define KFWR_V_NEW    (1u << 0)
 #define KFWR_V_GONE   (1u << 1)
 #define KFWR_V_RESYNC (1u << 2)
+/* The entry's MAPs were WITHHELD — committing them on top of every current
+ * placement could overflow the slot — and only its UNMAPs are in the report.
+ * The host re-walks once they are applied. */
+#define KFWR_V_PARTIAL  (1u << 3)
+/* The slot is full and nothing can be retired: the entry carries no runs. */
+#define KFWR_V_OVERFLOW (1u << 4)
 
 /* ── MapRun::op ──────────────────────────────────────────────────────────────── */
 #define KFWR_OP_MAP   1u
@@ -124,6 +136,10 @@ extern "C" {
  * against the C compiler's own offsetof — does not move. Run identity is
  * `flags` equality, so kind joins it by construction rather than by a rule
  * somebody has to remember at the coalescer. */
+/* ★ A committed placement the host answered "already held": satisfied, but NOT
+ * ours, so its UNMAP carries this bit and the host retires it without asking the
+ * host RM to take down what it never placed for us (P6b ruling (a)). */
+#define KFWR_RF_HELD (1u << 31)
 #define KFWR_RF_KIND_SHIFT 16u
 #define KFWR_RF_KIND_MASK  0xFFu
 #define KFWR_PS_4K    0u
@@ -173,6 +189,27 @@ typedef struct KfMapRun {
     uint16_t pdb_index;
 } KfMapRun;
 
+/* ★ One slot of committed placements: its count per page-size class. The
+ * placements themselves are `runs_per_pdb` KfMapRuns at `com + slot * runs_per_pdb`,
+ * class 0's first, each class VA-sorted and disjoint. */
+typedef struct KfSlot {
+    uint32_t n[4];
+} KfSlot;
+
+/* ★★★★★ THE HOST'S VERDICT on one report (COMMIT-ON-ACK). Written by the host
+ * before the next walk is submitted; the next walk's first node commits it.
+ * `code[i]` (a separate array, one byte per report run) is one of: */
+#define KFWR_ACK_FAILED  0u   /* not applied: commit nothing              */
+#define KFWR_ACK_APPLIED 1u   /* applied                                  */
+#define KFWR_ACK_HELD    2u   /* a MAP the host already held: not ours    */
+#define KF_MAX_RESET 64u
+typedef struct KfAck {
+    uint64_t generation;      /* the report this answers; 0 = no verdict  */
+    uint32_t nrun;            /* must equal that report's run_count       */
+    uint32_t nreset;          /* slots to EMPTY (their object is gone)    */
+    uint32_t reset[KF_MAX_RESET];
+} KfAck;
+
 /* {pdb, va_base, va_len} — va_len == 0 means "walk this whole PDB" (the doc's
  * sentinel). Scope is a HINT: it can only make a walk faster, never wrong. */
 typedef struct KfScope {
@@ -184,7 +221,7 @@ typedef struct KfScope {
 /* Bumped whenever the format descriptor's layout changes. A host/PTX skew must
  * fail LOUDLY at launch rather than decode garbage field offsets and look like a
  * page-table bug (THE_CONSTRAINTS.md §21). */
-#define KF_ABI_VERSION 2u
+#define KF_ABI_VERSION 3u   /* 3: the diff/ack protocol (KfArgs, KfDev, KfSlot, KfAck) */
 
 #define KF_TBL_VER2 2u   /* Pascal…Ada  — GA10x is the tested one               */
 #define KF_TBL_VER3 3u   /* Hopper/Blackwell — SKETCHED, NEVER RUN, and refused
@@ -206,6 +243,8 @@ typedef struct KfWalkCfg {
      * pdb_capacity so that "the report ran out of PdbEntry slots" is testable
      * without also shrinking the table. <= KF_MAX_PDB; 0 means KF_MAX_PDB. */
     uint32_t max_pdbs;
+    /* Committed-placement slots (one per VA-space object). 0 means KF_MAX_PDB. */
+    uint32_t max_slots;
     /* ★★★★★ §39(c) THE GPGA SPAN -- how large the guest's GPGA address space is,
      * which is NOT the same question as `gpga_len` (how many bytes of it are
      * mapped for the kernel to READ). In production they coincide, because the
@@ -228,16 +267,20 @@ typedef struct KfWalk KfWalk;
 KfWalk *kf_create(const KfWalkCfg *cfg);
 void    kf_destroy(KfWalk *w);
 
-/* One refresh. `gpga_dev` is a DEVICE pointer to the buffer standing in for GPGA.
- * `pdbs` must be ascending. Returns 0 on success, <0 on a CUDA error. */
+/* One refresh: commit the pending verdict (kf_ack), walk `pdbs[i]` for slot
+ * `slots[i]`, and report each entry's diff against its slot. `gpga_dev` is a
+ * DEVICE pointer to the buffer standing in for GPGA. Slots must be distinct and
+ * < max_slots. Returns 0 on success, <0 on a CUDA error. */
 int kf_refresh(KfWalk *w,
                const void *gpga_dev, uint64_t gpga_len,
-               const uint64_t *pdbs, uint32_t npdb,
-               const KfScope *scopes, uint32_t nscope,
+               const uint64_t *pdbs, const uint32_t *slots, uint32_t npdb,
                KfReportHeader *hdr_out, KfPdbEntry *pdb_out, KfMapRun *run_out);
 
-/* The host's half of the generation handshake. */
-void kf_ack(KfWalk *w, uint64_t generation);
+/* The host's verdict on the LAST report: one KFWR_ACK_* per run. Held until the
+ * next kf_refresh, whose first kernel commits it. `nrun` must be that report's
+ * run_count. `resets` empties slots (their object is gone). */
+void kf_ack(KfWalk *w, uint64_t generation, const uint8_t *codes, uint32_t nrun,
+            const uint32_t *resets, uint32_t nreset);
 
 /* Property 3 of the format doc, on the host, over a buffer we already have.
  * Returns 0 if the report is well formed, else a negative code; `why` (may be NULL)

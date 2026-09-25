@@ -1,4 +1,5 @@
-//! ★★★★★ **P4 ratchet — the walk path contains no `cuCtxSynchronize` and no ack.**
+//! ★★★★★ **P4 ratchet — the walk path contains no `cuCtxSynchronize`, and the ack is a staged
+//! verdict, never a GPU call.**
 //!
 //! `V3_P4_PORT_MAP.md` §2.1(d): `refresh` called `ctx_synchronize()` twice on the caller's stack
 //! (`walk.rs:640`, `:660` at `2df4dfc3`), and carried the host half of the delta-snapshot
@@ -51,7 +52,7 @@ fn only_the_probe_synchronizes() {
 
 #[test]
 fn the_walk_verbs_do_not_synchronize() {
-    for sig in ["pub fn submit", "pub fn try_collect", "pub fn wait", "pub fn refresh"] {
+    for sig in ["pub fn submit", "fn submit_over", "pub fn ack", "pub fn reset_slot", "pub fn try_collect", "pub fn wait", "pub fn refresh"] {
         let b = body_of(WALK_RS, sig).unwrap_or_else(|| panic!("{sig} exists"));
         let code: String = b
             .lines()
@@ -62,14 +63,17 @@ fn the_walk_verbs_do_not_synchronize() {
     }
 }
 
+/// ★ 2026-09-25 (owner design, COMMIT-ON-ACK): the old whole-generation `ack` — which turned
+/// reports into deltas against the previous WALK, a snapshot of guest tables — stays gone. The new
+/// `ack` carries one verdict PER RUN and only STAGES it: the next walk's first graph node commits
+/// it. ⇒ `ack` itself makes no driver call (no launch, no copy) on the VA thread.
 #[test]
-fn the_ack_is_gone() {
-    assert!(
-        !WALK_RS.contains("pub fn ack"),
-        "the delta-snapshot handshake's host half is forbidden (V3_BUILD.md)"
-    );
-    assert!(
-        !WALK_RS.contains("ACKED_BYTE_OFFSET"),
-        "nothing may write KfDev::acked: an ack turns reports back into deltas"
-    );
+fn the_ack_only_stages_a_per_run_verdict() {
+    let b = body_of(WALK_RS, "pub fn ack").expect("the verdict verb exists");
+    let code: String = b.lines().filter(|l| !l.trim_start().starts_with("//")).collect::<Vec<_>>().join("\n");
+    assert!(code.contains("codes: Vec<u8>"), "one verdict per run, not a generation alone");
+    for call in ["self.cu.", "launch", "memcpy"] {
+        assert!(!code.contains(call), "`ack` must only stage the verdict; found `{call}`");
+    }
+    assert!(!WALK_RS.contains("ACKED_BYTE_OFFSET"), "nothing writes a whole-generation `acked`");
 }

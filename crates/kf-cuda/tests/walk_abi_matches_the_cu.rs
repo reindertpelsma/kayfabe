@@ -108,14 +108,15 @@ fn the_rust_mirror_matches_the_cu_byte_for_byte() {
     // that differ only in an array bound.
     let kf_dirs = extract_define(&cu, "KF_DIRS");
     let kf_max_pdb = extract_define(&h, "KF_MAX_PDB");
+    let kf_max_reset = extract_define(&h, "KF_MAX_RESET");
 
     let mut prog = String::new();
     prog.push_str("#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n");
     prog.push_str(&format!(
-        "#define KF_DIRS {kf_dirs}\n#define KF_MAX_PDB {kf_max_pdb}\n"
+        "#define KF_DIRS {kf_dirs}\n#define KF_MAX_PDB {kf_max_pdb}\n#define KF_MAX_RESET {kf_max_reset}\n"
     ));
     // The report ABI lives in the header; the launch ABI lives in the .cu.
-    for name in ["KfReportHeader", "KfPdbEntry", "KfMapRun", "KfScope"] {
+    for name in ["KfReportHeader", "KfPdbEntry", "KfMapRun", "KfScope", "KfSlot", "KfAck"] {
         prog.push_str(&extract_struct(&h, name));
         prog.push('\n');
     }
@@ -135,6 +136,8 @@ fn the_rust_mirror_matches_the_cu_byte_for_byte() {
         "KfPdbEntry",
         "KfMapRun",
         "KfScope",
+        "KfSlot",
+        "KfAck",
     ] {
         prog.push_str(&format!("printf(\"size {t} %zu\\n\", sizeof({t}));\n"));
     }
@@ -155,11 +158,16 @@ fn the_rust_mirror_matches_the_cu_byte_for_byte() {
         ("KfArgs", "win"),
         ("KfArgs", "fmt"),
         ("KfArgs", "dev"),
-        ("KfArgs", "tbl"),
+        ("KfArgs", "walk"),
+        ("KfArgs", "com"),
+        ("KfArgs", "slot"),
         ("KfArgs", "pdbs"),
+        ("KfArgs", "slots"),
         ("KfArgs", "npdb"),
-        ("KfArgs", "scopes"),
-        ("KfArgs", "nscope"),
+        ("KfArgs", "ack"),
+        ("KfArgs", "ack_code"),
+        ("KfArgs", "scratch"),
+        ("KfArgs", "iscratch"),
         ("KfArgs", "hdr"),
         ("KfArgs", "rpdb"),
         ("KfArgs", "rrun"),
@@ -176,8 +184,13 @@ fn the_rust_mirror_matches_the_cu_byte_for_byte() {
         ("KfMapRun", "pdb_index"),
         ("KfPdbEntry", "first_run"),
         ("KfPdbEntry", "reserved2"),
-        ("KfDev", "acked"),
-        ("KfDev", "tbl_pdb"),
+        ("KfDev", "committed"),
+        ("KfDev", "max_slots"),
+        ("KfDev", "tbl_run_count"),
+        ("KfDev", "diff_count"),
+        ("KfDev", "diff_vflags"),
+        ("KfAck", "nrun"),
+        ("KfAck", "reset"),
         ("KfDev", "entries_visited"),
         ("KfDev", "sparse_slots"),
     ] {
@@ -243,6 +256,8 @@ fn the_rust_mirror_matches_the_cu_byte_for_byte() {
     check("size KfPdbEntry", size_of::<KfPdbEntry>());
     check("size KfMapRun", size_of::<KfMapRun>());
     check("size KfScope", size_of::<KfScope>());
+    check("size KfSlot", size_of::<KfSlot>());
+    check("size KfAck", size_of::<KfAck>());
 
     macro_rules! off {
         ($t:ty, $f:ident, $k:literal) => {
@@ -265,11 +280,16 @@ fn the_rust_mirror_matches_the_cu_byte_for_byte() {
     off!(KfArgs, win, "off KfArgs.win");
     off!(KfArgs, fmt, "off KfArgs.fmt");
     off!(KfArgs, dev, "off KfArgs.dev");
-    off!(KfArgs, tbl, "off KfArgs.tbl");
+    off!(KfArgs, walk, "off KfArgs.walk");
+    off!(KfArgs, com, "off KfArgs.com");
+    off!(KfArgs, slot, "off KfArgs.slot");
     off!(KfArgs, pdbs, "off KfArgs.pdbs");
+    off!(KfArgs, slots, "off KfArgs.slots");
     off!(KfArgs, npdb, "off KfArgs.npdb");
-    off!(KfArgs, scopes, "off KfArgs.scopes");
-    off!(KfArgs, nscope, "off KfArgs.nscope");
+    off!(KfArgs, ack, "off KfArgs.ack");
+    off!(KfArgs, ack_code, "off KfArgs.ack_code");
+    off!(KfArgs, scratch, "off KfArgs.scratch");
+    off!(KfArgs, iscratch, "off KfArgs.iscratch");
     off!(KfArgs, hdr, "off KfArgs.hdr");
     off!(KfArgs, rpdb, "off KfArgs.rpdb");
     off!(KfArgs, rrun, "off KfArgs.rrun");
@@ -298,8 +318,13 @@ fn the_rust_mirror_matches_the_cu_byte_for_byte() {
     off!(KfMapRun, pdb_index, "off KfMapRun.pdb_index");
     off!(KfPdbEntry, first_run, "off KfPdbEntry.first_run");
     off!(KfPdbEntry, reserved2, "off KfPdbEntry.reserved2");
-    off!(KfDev, acked, "off KfDev.acked");
-    off!(KfDev, tbl_pdb, "off KfDev.tbl_pdb");
+    off!(KfDev, committed, "off KfDev.committed");
+    off!(KfDev, max_slots, "off KfDev.max_slots");
+    off!(KfDev, tbl_run_count, "off KfDev.tbl_run_count");
+    off!(KfDev, diff_count, "off KfDev.diff_count");
+    off!(KfDev, diff_vflags, "off KfDev.diff_vflags");
+    off!(KfAck, nrun, "off KfAck.nrun");
+    off!(KfAck, reset, "off KfAck.reset");
     off!(KfDev, entries_visited, "off KfDev.entries_visited");
     off!(KfDev, sparse_slots, "off KfDev.sparse_slots");
 
@@ -510,9 +535,11 @@ fn the_committed_ptx_is_turing_targeted() {
          forward onto any Turing-or-later part. The committed artifact does not say so."
     );
     for sym in [
-        "_Z15kf_begin_kernelP5KfDev",
+        "_Z15kf_begin_kernel6KfArgs",
         "_Z14kf_walk_kernel6KfArgs",
-        "_Z14kf_diff_kernel6KfArgs",
+        "_Z13kf_diff_slots6KfArgs",
+        "_Z12kf_diff_emit6KfArgs",
+        "_Z16kf_commit_kernel6KfArgs",
     ] {
         assert!(
             ptx.contains(sym),
@@ -563,6 +590,13 @@ fn the_report_constants_match_the_header() {
         parse("KFWR_HF_RESYNC"),
         u64::from(kf_cuda::abi::KFWR_HF_RESYNC)
     );
+    assert_eq!(parse("KFWR_HF_DIFF"), u64::from(kf_cuda::abi::KFWR_HF_DIFF));
+    assert_eq!(parse("KFWR_RF_HELD"), u64::from(kf_cuda::abi::KFWR_RF_HELD));
+    assert_eq!(parse("KFWR_V_PARTIAL"), u64::from(kf_cuda::abi::KFWR_V_PARTIAL));
+    assert_eq!(parse("KFWR_V_OVERFLOW"), u64::from(kf_cuda::abi::KFWR_V_OVERFLOW));
+    assert_eq!(parse("KFWR_ACK_APPLIED"), u64::from(kf_cuda::abi::KFWR_ACK_APPLIED));
+    assert_eq!(parse("KFWR_ACK_HELD"), u64::from(kf_cuda::abi::KFWR_ACK_HELD));
+    assert_eq!(parse("KF_MAX_RESET"), kf_cuda::abi::KF_MAX_RESET as u64);
     assert_eq!(
         parse("KF_ABI_VERSION"),
         u64::from(kf_cuda::abi::KF_ABI_VERSION)

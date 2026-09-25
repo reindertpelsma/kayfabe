@@ -23,27 +23,25 @@
 //!   the selftest only**. It runs no `cuCtxSynchronize` either; [`WalkKernel::ctx_sync_calls`]
 //!   is the counter gate 8 reads to prove it.
 //!
-//! # ⊘⊘⊘ AND THE DELTA-SNAPSHOT HANDSHAKE IS GONE FROM THE HOST
+//! # ★★★★★ 2026-09-25 — THE WALK EMITS A DIFF, COMMITTED ON ACK
 //!
-//! `V3_BUILD.md` rules out *"snapshots of the guest's tables (the walk kernel's delta snapshot
-//! … included — v3 §4.2 w825: the snapshot is a shadow; the ledger replaces it)"*. The host half
-//! of that handshake was `ack()`, which wrote `KfDev::acked`; it is deleted, together with the
-//! prefix/suffix trim launch that only a delta uses. With `acked` never written, the kernel's
-//! own rule (`kf_walk.cu:1078`: `resync = !have_prev || acked != generation`) makes **every
-//! report a full RESYNC** — the complete state of every space asked for — and
-//! [`Report::require_full`] refuses by name any report that is not, so a future re-introduction
-//! of an ack cannot silently turn reports back into deltas that `kf_mem::ledger::plan_reconcile`
-//! would misread as the whole truth.
-//! ⚠ **Known residue, stated rather than hidden:** the `.cu` still keeps its two run tables
-//! (`KfDev::tbl_*`, `KfArgs::tbl[2]`) and computes a diff against the previous one — under
-//! RESYNC that diff has no previous side, so it emits the current table whole. Deleting the
-//! device-side snapshot needs a `.cu` edit and a PTX regeneration (`cuda/walk/make_ptx.py`,
-//! NVRTC) and a re-run of the 58-assertion CUDA suite on hardware; the host no longer depends on
-//! it, which is the part v3's rule is about.
+//! Owner design + ruling (COMMIT-ON-ACK), `crate::diffmodel` for the full statement: the GPU
+//! holds, per VA-space object (a **slot**), the placements the host confirmed it made; every walk
+//! reports each entry's DIFF against its slot; the host applies it and answers one verdict per run
+//! ([`WalkKernel::ack`]); the next walk's first node ([`kf_commit_kernel`]) folds exactly the
+//! acknowledged runs into the slot. A refused map stays a difference and is re-emitted.
+//!
+//! ⊘ **Why this is not the snapshot `V3_BUILD.md` ruled out (P4 deleted `ack` for it):** that
+//! snapshot was the previous WALK — guest table content, committed whether or not the host acted
+//! on it (a §18.2 shadow, and the walkmirror CPU copy beside it). A slot is a record of OUR host
+//! actions, written only on confirmation: the ledger v3 §4.2 (w825) sanctions, kept in vidmem.
+//!
+//! [`kf_commit_kernel`]: ../../../cuda/walk/kf_walk.cu
 
 use crate::abi::{
-    KF_ABI_VERSION, KF_MAX_PDB, KF_TBL_VER2, KFWR_HF_RESYNC, KFWR_HF_TRUNCATED, KFWR_MAGIC,
-    KFWR_OP_UNMAP, KfArgs, KfDev, KfFormat, KfMapRun, KfPdbEntry, KfReportHeader, KfScope,
+    KF_ABI_VERSION, KF_MAX_PDB, KF_MAX_RESET, KF_TBL_VER2, KFWR_HF_DIFF, KFWR_HF_TRUNCATED,
+    KFWR_MAGIC, KFWR_OP_UNMAP, KfAck, KfArgs, KfDev, KfFormat, KfMapRun, KfPdbEntry,
+    KfReportHeader, KfSlot,
 };
 use crate::driver_unsafe::{
     CUdeviceptr, CompletionFd, CtxHandle, Cuda, CudaError, EventHandle, Func, GraphExecHandle,
@@ -63,12 +61,13 @@ pub static WALK_PTX: &[u8] = include_bytes!("../../../cuda/walk/kf_walk.ptx");
 /// The mangled entry points of the committed PTX. ⊘ **Mangled**, because `kf_walk.cu` is C++
 /// and its `__global__` functions are not `extern "C"`. Asserted present at module load, so a
 /// rename in the `.cu` is a named refusal here rather than a null function pointer later.
-const SYM_BEGIN: &str = "_Z15kf_begin_kernelP5KfDev";
+const SYM_BEGIN: &str = "_Z15kf_begin_kernel6KfArgs";
 const SYM_WALK: &str = "_Z14kf_walk_kernel6KfArgs";
-const SYM_DIFF: &str = "_Z14kf_diff_kernel6KfArgsPKj";
-// ⊘ P4: `kf_diff_trim_kernel` (`_Z19kf_diff_trim_kernel6KfArgsPj`) is no longer resolved or
-// launched. It bounds a DELTA to what changed; every report is now a full RESYNC, for which the
-// trim writes `0, 0` and the diff kernel never reads it (`kf_walk.cu:1046`, `:1137`).
+const SYM_DIFF_SLOTS: &str = "_Z13kf_diff_slots6KfArgs";
+const SYM_DIFF_EMIT: &str = "_Z12kf_diff_emit6KfArgs";
+const SYM_COMMIT: &str = "_Z16kf_commit_kernel6KfArgs";
+/// `KF_DIFF_BLOCK` in the `.cu`: the diff and commit kernels' block (one block per entry).
+const KF_DIFF_BLOCK: u32 = 512;
 
 // ★ w826 — THE PARALLEL WALK's entry points (mangled; `kf_walk.cu`'s `kf_run_parallel`).
 const SYM_PAR: [&str; 9] = [
@@ -131,6 +130,8 @@ pub struct WalkCfg {
     pub entry_budget: u32,
     /// [`KF_TBL_VER2`] or [`KF_TBL_VER3`].
     pub table_version: u32,
+    /// ★ Committed-placement slots — one per VA-space object that is ever walked.
+    pub max_slots: u32,
 }
 
 impl Default for WalkCfg {
@@ -159,14 +160,33 @@ impl Default for WalkCfg {
         // 64 spaces × 16 384 × 32 B × 2 snapshots = 64 MiB of device memory.
         // ⚠ A space with more than 16 384 non-coalescing runs still truncates: that needs a
         // chunked reply (the wire), not a bigger number here.
+        // ★ 2026-09-25: `runs_per_pdb` is also ONE SLOT's capacity (committed placements), and
+        // the diff's scratch (4 × runs per entry) reuses the walk's run stage — exactly full at
+        // 16 384. Memory: walk 64 × 16 384 × 32 B = 32 MiB, slots 128 × 16 384 × 32 B = 64 MiB
+        // (was two 32 MiB snapshot tables).
         WalkCfg {
             runs_per_pdb: 16384,
             run_capacity: 16384,
             pdb_capacity: 64,
             entry_budget: 1 << 22,
             table_version: KF_TBL_VER2,
+            max_slots: 128,
         }
     }
+}
+
+/// ★ One walk entry: the root to walk, and the slot (VA-space object) whose committed placements
+/// its diff is taken against.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WalkEntry {
+    /// The root.
+    pub pdb: u64,
+    /// The slot.
+    pub slot: u32,
+}
+
+fn refused(what: &'static str, name: String) -> CudaError {
+    CudaError::Refused { what, code: 0, name }
 }
 
 /// What came back from one refresh.
@@ -238,15 +258,11 @@ pub enum ReportError {
         /// The span it had to lie inside.
         span: u64,
     },
-    /// ★ P4: the report is not a FULL report — no `KFWR_HF_RESYNC`, or it carries an UNMAP run.
-    /// v3 diffs every walk against OUR ledger (`kf_mem::ledger::plan_reconcile`), which reads
-    /// a report as the complete state of each space; a delta read that way unmaps everything
-    /// that did not change. Refused by name (`V3_BUILD.md`: no delta snapshot).
-    NotFull {
+    /// ★ The report is not a DIFF against the committed placements (`KFWR_HF_DIFF` clear): it
+    /// came from a kernel speaking another protocol, and applying it as a diff would be wrong.
+    NotDiff {
         /// The header flags seen.
         flags: u16,
-        /// The first UNMAP run, if that is why.
-        unmap_run: Option<usize>,
     },
 }
 
@@ -287,11 +303,10 @@ impl core::fmt::Display for ReportError {
                  not its own",
                 gpga.saturating_add(*len)
             ),
-            ReportError::NotFull { flags, unmap_run } => write!(
+            ReportError::NotDiff { flags } => write!(
                 f,
-                "not a full report (flags={flags:#x}, first unmap run={unmap_run:?}): the ledger \
-                 diff reads a report as the whole state of each space, and a delta would unmap \
-                 everything that did not change"
+                "not a diff report (flags={flags:#x}): the kernel does not speak the \
+                 commit-on-ack protocol this host applies"
             ),
         }
     }
@@ -378,18 +393,13 @@ impl Report {
         (self.header.flags & KFWR_HF_TRUNCATED) != 0
     }
 
-    /// ★ P4: require a FULL report — `KFWR_HF_RESYNC` set and no UNMAP run. See
-    /// [`ReportError::NotFull`] for why a delta must never reach the ledger diff.
+    /// ★ Require a DIFF report (`KFWR_HF_DIFF`). See [`ReportError::NotDiff`].
     ///
     /// # Errors
-    /// [`ReportError::NotFull`].
-    pub fn require_full(&self) -> Result<(), ReportError> {
-        let unmap_run = self.runs.iter().position(|r| r.op == KFWR_OP_UNMAP);
-        if (self.header.flags & KFWR_HF_RESYNC) == 0 || unmap_run.is_some() {
-            return Err(ReportError::NotFull {
-                flags: self.header.flags,
-                unmap_run,
-            });
+    /// [`ReportError::NotDiff`].
+    pub fn require_diff(&self) -> Result<(), ReportError> {
+        if (self.header.flags & KFWR_HF_DIFF) == 0 {
+            return Err(ReportError::NotDiff { flags: self.header.flags });
         }
         Ok(())
     }
@@ -398,7 +408,7 @@ impl Report {
 /// One collected walk: the report and what it cost.
 #[derive(Debug, Clone)]
 pub struct Collected {
-    /// The report (validate it, and [`Report::require_full`], before acting on it).
+    /// The report (validate it, and [`Report::require_diff`], before acting on it).
     pub report: Report,
     /// GPU time from the first queued operation to the last read-back copy, from CUDA events.
     pub gpu_us: u64,
@@ -410,6 +420,9 @@ pub struct Collected {
 #[derive(Debug, Clone, Copy)]
 struct PinLayout {
     pdbs: usize,
+    slots: usize,
+    ack: usize,
+    ack_code: usize,
     hdr: usize,
     rpdb: usize,
     rrun: usize,
@@ -419,12 +432,15 @@ struct PinLayout {
 impl PinLayout {
     fn for_cfg(cfg: &WalkCfg) -> PinLayout {
         let pdbs = 0;
-        let hdr = KF_MAX_PDB * 8;
+        let slots = KF_MAX_PDB * 8;
+        let ack = (slots + KF_MAX_PDB * 4).next_multiple_of(64);
+        let ack_code = (ack + core::mem::size_of::<KfAck>()).next_multiple_of(64);
+        let hdr = (ack_code + cfg.run_capacity as usize).next_multiple_of(64);
         let rpdb = hdr + core::mem::size_of::<KfReportHeader>().next_multiple_of(64);
         let rrun = rpdb
             + (cfg.pdb_capacity as usize * core::mem::size_of::<KfPdbEntry>()).next_multiple_of(64);
         let total = rrun + cfg.run_capacity as usize * core::mem::size_of::<KfMapRun>();
-        PinLayout { pdbs, hdr, rpdb, rrun, total }
+        PinLayout { pdbs, slots, ack, ack_code, hdr, rpdb, rrun, total }
     }
 }
 
@@ -457,7 +473,7 @@ struct GraphKernel {
     shm: u32,
     params: Vec<Vec<u8>>,
     what: &'static str,
-    /// Parameter 0 is the by-value `KfArgs` (every kernel but `kf_begin_kernel`/`kf_par_scan`).
+    /// Parameter 0 is the by-value `KfArgs` (every kernel but `kf_par_scan`).
     takes_args: bool,
     /// `kf_par_seed`, whose grid is sized by `npdb`.
     seed: bool,
@@ -519,7 +535,9 @@ pub struct WalkKernel {
     ctx: CtxHandle,
     f_begin: Func,
     f_walk: Func,
-    f_diff: Func,
+    f_diff_slots: Func,
+    f_diff_emit: Func,
+    f_commit: Func,
     f_par: [Func; 9],
     /// ★ P4: the walk's own stream, its events, the pinned read-back and the completion fd.
     stream: StreamHandle,
@@ -537,11 +555,26 @@ pub struct WalkKernel {
     fmt: KfFormat,
     cfg: WalkCfg,
     dev: DevBuf,
-    tbl: [DevBuf; 2],
+    /// The walk's runs (`runs_per_pdb` per entry).
+    walk: DevBuf,
+    /// ★ The committed placements (`runs_per_pdb` per slot) and their per-class counts.
+    com: DevBuf,
+    slot: DevBuf,
+    iscratch: DevBuf,
     /// ★ P4b: the DEVICE address of the pinned pdb stage (`pin` at `pin_at.pdbs`). The kernels
-    /// read the list in place over PCIe — 64 × 8 bytes — so no upload node is needed.
+    /// read the list in place over PCIe — 64 × 8 bytes — so no upload node is needed. The slot
+    /// list, the verdict and its codes are read the same way.
     pdbs: DevBuf,
-    scopes: DevBuf,
+    slots: DevBuf,
+    ack: DevBuf,
+    ack_code: DevBuf,
+    /// ★ The verdict the next [`WalkKernel::submit`] hands the commit node, and the slots it
+    /// empties ([`WalkKernel::ack`], [`WalkKernel::reset_slot`]).
+    pending_ack: Option<(u64, Vec<u8>)>,
+    pending_resets: Vec<u32>,
+    /// ★ §13: the imported store, `(device pointer, length)` — never handed out;
+    /// [`WalkKernel::write_store`] / [`WalkKernel::read_store`] bound every access by it.
+    store: Option<(CUdeviceptr, u64)>,
     hdr: DevBuf,
     rpdb: DevBuf,
     rrun: DevBuf,
@@ -640,33 +673,39 @@ impl WalkKernel {
 
         let f_begin = cu.module_function(module, SYM_BEGIN)?;
         let f_walk = cu.module_function(module, SYM_WALK)?;
-        let f_diff = cu.module_function(module, SYM_DIFF)?;
+        let f_diff_slots = cu.module_function(module, SYM_DIFF_SLOTS)?;
+        let f_diff_emit = cu.module_function(module, SYM_DIFF_EMIT)?;
+        let f_commit = cu.module_function(module, SYM_COMMIT)?;
         let mut f_par = [f_begin; 9];
         for (i, sym) in SYM_PAR.iter().enumerate() {
             f_par[i] = cu.module_function(module, sym)?;
         }
 
-        let tbl_runs = cfg.runs_per_pdb as usize * KF_MAX_PDB;
+        // ★ The diff's scratch reuses the walk's run stage: 4 × runs_per_pdb runs per entry, and
+        // the class partition packs counts in 16 bits.
+        let rpp = cfg.runs_per_pdb as usize;
+        if KF_MAX_PDB * 4 * rpp > KF_MAX_SCRATCH || rpp > 0xFFFF || rpp == 0 || cfg.max_slots == 0 {
+            return Err(CudaError::Refused {
+                what: "WalkKernel::bring_up (WalkCfg)",
+                code: 0,
+                name: format!(
+                    "runs_per_pdb {rpp} / max_slots {} do not fit the diff's scratch ({KF_MAX_SCRATCH} \
+                     runs for {KF_MAX_PDB} entries × 4) or the 16-bit class partition",
+                    cfg.max_slots
+                ),
+            });
+        }
+        let tbl_runs = rpp * KF_MAX_PDB;
         let a = |bytes: usize, what: &'static str| -> Result<DevBuf, CudaError> {
             Ok(DevBuf {
                 ptr: cu.mem_alloc_zeroed(bytes, what)?,
             })
         };
         let dev = a(core::mem::size_of::<KfDev>(), "cuMemAlloc(KfDev)")?;
-        let tbl = [
-            a(
-                tbl_runs * core::mem::size_of::<KfMapRun>(),
-                "cuMemAlloc(tbl0)",
-            )?,
-            a(
-                tbl_runs * core::mem::size_of::<KfMapRun>(),
-                "cuMemAlloc(tbl1)",
-            )?,
-        ];
-        let scopes = a(
-            crate::abi::KF_MAX_SCOPE * core::mem::size_of::<KfScope>(),
-            "cuMemAlloc(scopes)",
-        )?;
+        let walk = a(tbl_runs * core::mem::size_of::<KfMapRun>(), "cuMemAlloc(walk)")?;
+        let com = a(cfg.max_slots as usize * rpp * core::mem::size_of::<KfMapRun>(), "cuMemAlloc(committed)")?;
+        let slot = a(cfg.max_slots as usize * core::mem::size_of::<KfSlot>(), "cuMemAlloc(slots)")?;
+        let iscratch = a(KF_MAX_PDB * 2 * rpp * 4, "cuMemAlloc(iscratch)")?;
         // ★ P4b: the report (header, pdb entries, runs) is ONE device allocation laid out
         // exactly as its pinned read-back (`PinLayout`, from `hdr` on), so the read-back is ONE
         // copy node rather than three — each node is paid again on every `cuGraphLaunch`.
@@ -704,6 +743,7 @@ impl WalkKernel {
             run_capacity: cfg.run_capacity,
             pdb_capacity: cfg.pdb_capacity,
             max_pdbs: u32::try_from(KF_MAX_PDB).unwrap_or(64),
+            max_slots: cfg.max_slots,
             ..h
         };
         cu.memcpy_h2d(dev.ptr, bytes_of(&h), "cuMemcpyHtoD(KfDev)")?;
@@ -717,6 +757,9 @@ impl WalkKernel {
         let pdbs = DevBuf {
             ptr: cu.pinned_device_ptr(&pin, pin_at.pdbs)?,
         };
+        let slots = DevBuf { ptr: cu.pinned_device_ptr(&pin, pin_at.slots)? };
+        let ack = DevBuf { ptr: cu.pinned_device_ptr(&pin, pin_at.ack)? };
+        let ack_code = DevBuf { ptr: cu.pinned_device_ptr(&pin, pin_at.ack_code)? };
         let done_fd = CompletionFd::new()?;
 
         let mut k = WalkKernel {
@@ -724,7 +767,9 @@ impl WalkKernel {
             ctx,
             f_begin,
             f_walk,
-            f_diff,
+            f_diff_slots,
+            f_diff_emit,
+            f_commit,
             f_par,
             stream,
             ev_start,
@@ -739,9 +784,17 @@ impl WalkKernel {
             fmt,
             cfg,
             dev,
-            tbl,
+            walk,
+            com,
+            slot,
+            iscratch,
             pdbs,
-            scopes,
+            slots,
+            ack,
+            ack_code,
+            pending_ack: None,
+            pending_resets: Vec::new(),
+            store: None,
             hdr,
             rpdb,
             rrun,
@@ -849,70 +902,105 @@ impl WalkKernel {
         };
         a.fmt = self.fmt;
         a.dev = self.dev.ptr;
-        a.tbl = [self.tbl[0].ptr, self.tbl[1].ptr];
+        a.walk = self.walk.ptr;
+        a.com = self.com.ptr;
+        a.slot = self.slot.ptr;
         a.pdbs = self.pdbs.ptr;
+        a.slots = self.slots.ptr;
         a.npdb = npdb;
-        a.scopes = self.scopes.ptr;
-        a.nscope = 0;
+        a.ack = self.ack.ptr;
+        a.ack_code = self.ack_code.ptr;
+        // ⊘ The walk's run stage: done with before the diff runs, free before the commit runs.
+        a.scratch = self.par.runstage.ptr;
+        a.iscratch = self.iscratch.ptr;
         a.hdr = self.hdr.ptr;
         a.rpdb = self.rpdb.ptr;
         a.rrun = self.rrun.ptr;
         a
     }
 
-    /// ★★★★★ **Queue one walk over `gpga` for the ascending `pdbs`, and return.**
+    /// ★★★★★ **Queue one walk of `entries` over the imported store, and return.**
     ///
-    /// Everything — the pdb upload, `kf_begin_kernel`, the parallel walk, the diff (which under
-    /// RESYNC emits each space whole), the header/pdb/run read-back into pinned memory — goes on
-    /// the walker's own stream, followed by a host function that signals
-    /// [`WalkKernel::completion_fd`]. **Nothing here waits on the GPU**; the cost on the calling
-    /// thread is the launch calls themselves (gate 8 measures it).
-    ///
-    /// ⊘ The read-back copies the report buffers at their **capacity**, not at the run count —
-    /// the count is not known until the walk has run, and learning it first would be the
-    /// synchronisation this exists to remove. 16 384 runs × 32 B = 512 KiB of PCIe per walk.
+    /// Each entry walks `pdb` and is diffed against slot `slot`'s committed placements. The
+    /// graph's first node commits the verdict staged by [`WalkKernel::ack`] on the PREVIOUS
+    /// report (and empties the slots [`WalkKernel::reset_slot`] released); then the walk, the
+    /// diff, the report read-back into pinned memory, and a host function that signals
+    /// [`WalkKernel::completion_fd`]. **Nothing here waits on the GPU.**
     ///
     /// # Errors
     /// [`CudaError::Refused`] naming the call; also refused, by name, when a walk is already in
-    /// flight (the pinned read-back is single-buffered, and one walker context walks one thing
-    /// at a time — the VA manager coalesces behind it) or when more than [`KF_MAX_PDB`] spaces
-    /// are asked for.
-    pub fn submit(&mut self, gpga: CUdeviceptr, gpga_len: u64, pdbs: &[u64]) -> Result<(), CudaError> {
+    /// flight, when no store was imported, when more than [`KF_MAX_PDB`] entries are asked for,
+    /// or when a slot is out of range or repeated (two entries may never commit into one slot).
+    pub fn submit(&mut self, entries: &[WalkEntry]) -> Result<(), CudaError> {
+        let Some((gpga, gpga_len)) = self.store else {
+            return Err(refused("WalkKernel::submit", "no store imported (import_store first)".to_string()));
+        };
+        self.submit_over(gpga, gpga_len, entries)
+    }
+
+    /// [`WalkKernel::submit`] over an uploaded image instead of the store (the selftest).
+    ///
+    /// # Errors
+    /// As [`WalkKernel::submit`].
+    pub fn submit_image(&mut self, img: &DeviceImage, entries: &[WalkEntry]) -> Result<(), CudaError> {
+        self.submit_over(img.ptr, img.len, entries)
+    }
+
+    fn submit_over(&mut self, gpga: CUdeviceptr, gpga_len: u64, entries: &[WalkEntry]) -> Result<(), CudaError> {
         if self.inflight.is_some() {
-            return Err(CudaError::Refused {
-                what: "WalkKernel::submit",
-                code: 0,
-                name: "a walk is already in flight; collect it first (one pinned read-back, one \
-                       walk at a time)"
-                    .to_string(),
-            });
+            return Err(refused(
+                "WalkKernel::submit",
+                "a walk is already in flight; collect it first (one pinned read-back, one walk at a time)".to_string(),
+            ));
         }
-        if pdbs.len() > KF_MAX_PDB {
-            return Err(CudaError::Refused {
-                what: "WalkKernel::submit",
-                code: 0,
-                name: format!(
-                    "the kernel's table holds {KF_MAX_PDB} address spaces and was handed {}",
-                    pdbs.len()
-                ),
-            });
+        if entries.len() > KF_MAX_PDB {
+            return Err(refused(
+                "WalkKernel::submit",
+                format!("the kernel walks {KF_MAX_PDB} entries at once and was handed {}", entries.len()),
+            ));
+        }
+        let mut seen = std::collections::BTreeSet::new();
+        for e in entries {
+            if e.slot >= self.cfg.max_slots || !seen.insert(e.slot) {
+                return Err(refused(
+                    "WalkKernel::submit",
+                    format!("slot {} is out of range (max {}) or repeated in one walk", e.slot, self.cfg.max_slots),
+                ));
+            }
         }
         self.make_current()?;
-        let npdb = u32::try_from(pdbs.len()).unwrap_or(0);
-        let mut pdb_bytes = Vec::with_capacity(pdbs.len() * 8);
-        for p in pdbs {
-            pdb_bytes.extend_from_slice(&p.to_le_bytes());
+        let npdb = u32::try_from(entries.len()).unwrap_or(0);
+        let mut pdb_bytes = Vec::with_capacity(entries.len() * 8);
+        let mut slot_bytes = Vec::with_capacity(entries.len() * 4);
+        for e in entries {
+            pdb_bytes.extend_from_slice(&e.pdb.to_le_bytes());
+            slot_bytes.extend_from_slice(&e.slot.to_le_bytes());
         }
         let s = self.stream;
         let at = self.pin_at;
-        // The pdb list goes through the pinned stage the graph's first node copies from; the
-        // previous walk has been collected (checked above), so nothing is still reading it.
+        // The stages the graph reads in place; the previous walk has been collected (checked
+        // above), so nothing is still reading them.
         self.pin.write(at.pdbs, &pdb_bytes);
+        self.pin.write(at.slots, &slot_bytes);
+        // ★ The verdict on the previous report — or "none" (generation 0), so a verdict is
+        // consumed by exactly one walk.
+        let mut ack = KfAck::default();
+        if let Some((generation, codes)) = self.pending_ack.take() {
+            let n = codes.len().min(self.cfg.run_capacity as usize);
+            ack.generation = generation;
+            ack.nrun = u32::try_from(codes.len()).unwrap_or(u32::MAX);
+            self.pin.write(at.ack_code, &codes[..n]);
+        }
+        let nres = self.pending_resets.len().min(KF_MAX_RESET);
+        for (i, r) in self.pending_resets.drain(..nres).enumerate() {
+            ack.reset[i] = r;
+        }
+        ack.nreset = u32::try_from(nres).unwrap_or(0);
+        self.pin.write(at.ack, bytes_of(&ack));
         let args = self.args_for(gpga, gpga_len, npdb);
         if let Some(mut g) = self.graph.take() {
             // ★ P4b: ONE driver call for the whole walk, plus a setter per args-bearing node
-            // only when the store or the space count changed since the last walk.
-            // The graph carries the events and the eventfd host node too (`enqueue_walk`).
+            // only when the store or the entry count changed since the last walk.
             let r = Self::update_graph(&self.cu, &mut g, &args, npdb)
                 .and_then(|()| self.cu.graph_launch(g.exec, s));
             self.graph = Some(g);
@@ -925,6 +1013,43 @@ impl WalkKernel {
             submitted: std::time::Instant::now(),
         });
         Ok(())
+    }
+
+    /// ★★★★★ **The host's verdict on the report just collected** — one [`crate::abi::KFWR_ACK_FAILED`]
+    /// / `APPLIED` / `HELD` byte per run, in report order. Staged; the next
+    /// [`WalkKernel::submit`]'s first node commits it (COMMIT-ON-ACK). A walk submitted without
+    /// one commits nothing, which is always safe: the next diff is then computed against the same
+    /// placements.
+    ///
+    /// # Errors
+    /// Refused while a walk is in flight (the verdict must name the report that walk will read).
+    pub fn ack(&mut self, generation: u64, codes: Vec<u8>) -> Result<(), CudaError> {
+        if self.inflight.is_some() {
+            return Err(refused("WalkKernel::ack", "a walk is in flight; the verdict answers the COLLECTED report".to_string()));
+        }
+        self.pending_ack = Some((generation, codes));
+        Ok(())
+    }
+
+    /// ★ Release `slot` (its VA-space object is gone): the next walk empties it before anything
+    /// is diffed against it, and never commits into it in the same walk.
+    ///
+    /// # Errors
+    /// Refused when the slot is out of range or [`KF_MAX_RESET`] releases are already pending.
+    pub fn reset_slot(&mut self, slot: u32) -> Result<(), CudaError> {
+        if slot >= self.cfg.max_slots || self.pending_resets.len() >= KF_MAX_RESET {
+            return Err(refused("WalkKernel::reset_slot", format!("slot {slot} (max {}) or too many pending", self.cfg.max_slots)));
+        }
+        if !self.pending_resets.contains(&slot) {
+            self.pending_resets.push(slot);
+        }
+        Ok(())
+    }
+
+    /// Committed-placement slots this kernel holds.
+    #[must_use]
+    pub fn max_slots(&self) -> u32 {
+        self.cfg.max_slots
     }
 
     /// Whether the GPU has finished the walk in flight, by `cuEventQuery` — **non-consuming and
@@ -1074,13 +1199,17 @@ impl WalkKernel {
     ///
     /// # Errors
     /// [`CudaError`], naming the call that refused.
-    pub fn refresh(
-        &mut self,
-        gpga: CUdeviceptr,
-        gpga_len: u64,
-        pdbs: &[u64],
-    ) -> Result<Report, CudaError> {
-        self.submit(gpga, gpga_len, pdbs)?;
+    pub fn refresh(&mut self, entries: &[WalkEntry]) -> Result<Report, CudaError> {
+        self.submit(entries)?;
+        Ok(self.wait(10_000)?.report)
+    }
+
+    /// [`WalkKernel::refresh`] over an uploaded image (the selftest). ⚠ Blocks the caller.
+    ///
+    /// # Errors
+    /// [`CudaError`].
+    pub fn refresh_image(&mut self, img: &DeviceImage, entries: &[WalkEntry]) -> Result<Report, CudaError> {
+        self.submit_image(img, entries)?;
         Ok(self.wait(10_000)?.report)
     }
 
@@ -1123,22 +1252,19 @@ impl WalkKernel {
         // ⊘ No pdb upload: `a.pdbs` IS the pinned stage `submit` wrote (see `pdbs`). Every
         // level's staging cursor is zeroed here, once (see `KF_USED_SLOTS`).
         self.cu.memset_d8_async(s, self.par.used.ptr, 0, KF_USED_SLOTS * 4, "cuMemsetD8Async(used)")?;
-        self.kl(rec, self.f_begin, 1, 1, 0, vec![param_bytes(&self.dev.ptr)], "cuLaunchKernel(kf_begin_kernel)")?;
+        // ★ COMMIT-ON-ACK first: the previous report and its verdict, before anything is walked
+        // (the commit uses the run stage as scratch, which the walk then overwrites).
+        let grid = u32::try_from(KF_MAX_PDB).unwrap_or(64);
+        self.kl(rec, self.f_commit, grid, KF_DIFF_BLOCK, 0, vec![param_bytes(args)], "cuLaunchKernel(kf_commit_kernel)")?;
+        self.kl(rec, self.f_begin, 1, 1, 0, vec![param_bytes(args)], "cuLaunchKernel(kf_begin_kernel)")?;
         // ★★★★★ w826 — THE PARALLEL WALK (`kf_run_parallel`, ported to the driver API).
         // `[w726]` ~0.6 ms fixed cost vs the serial walk's one-thread-per-space. The serial
         // kernel stays in the PTX for the scoped path the .cu keeps; this walk is never scoped.
         let _ = self.f_walk;
         self.run_parallel(args, npdb, rec)?;
-        // ⊘ The trim pointer is NULL: every report is a RESYNC, whose diff never reads it.
-        self.kl(
-            rec,
-            self.f_diff,
-            1,
-            1,
-            0,
-            vec![param_bytes(args), 0u64.to_le_bytes().to_vec()],
-            "cuLaunchKernel(kf_diff_kernel)",
-        )?;
+        // ★ The diff against the committed placements (one block per entry), then the dense report.
+        self.kl(rec, self.f_diff_slots, grid, KF_DIFF_BLOCK, 0, vec![param_bytes(args)], "cuLaunchKernel(kf_diff_slots)")?;
+        self.kl(rec, self.f_diff_emit, grid, 256, 0, vec![param_bytes(args)], "cuLaunchKernel(kf_diff_emit)")?;
         // One copy of the whole report block (`hdr`, `rpdb`, `rrun` are one allocation laid
         // out as the pinned buffer from `at.hdr` on; see `bring_up`).
         self.cu.memcpy_d2h_async(s, &self.pin, at.hdr, self.hdr.ptr, at.total - at.hdr, "cuMemcpyDtoHAsync(report)")?;
@@ -1184,7 +1310,7 @@ impl WalkKernel {
                 shm,
                 params,
                 what,
-                takes_args: f != self.f_begin && f != self.f_par[2],
+                takes_args: f != self.f_par[2],
                 seed: f == self.f_par[0],
             });
         }
@@ -1397,9 +1523,16 @@ impl WalkKernel {
     /// `fd` is the `/dev/nvidiactl` fd RM exported the object to (`w755i`: RM imports and
     /// exports only through a control fd, never a dma-buf).
     ///
+    /// ★ §13: the device pointer stays INSIDE the kernel. Every later access to the store is
+    /// [`WalkKernel::write_store`] / [`WalkKernel::read_store`], bounded by its length, and every
+    /// walk [`WalkKernel::submit`]s over it.
+    ///
     /// # Errors
-    /// [`CudaError::Refused`] naming the import step that failed.
-    pub fn import_store(&self, fd: i32, bytes: u64) -> Result<CUdeviceptr, CudaError> {
+    /// [`CudaError::Refused`] naming the import step that failed, or a second import.
+    pub fn import_store(&mut self, fd: i32, bytes: u64) -> Result<(), CudaError> {
+        if self.store.is_some() {
+            return Err(refused("import_store", "a store is already imported".to_string()));
+        }
         self.make_current()?;
         let n = usize::try_from(bytes).map_err(|_| CudaError::Refused {
             what: "import_store: object length does not fit usize",
@@ -1408,32 +1541,74 @@ impl WalkKernel {
         })?;
         // ⊘ `import_and_map` reports which of its four steps refused as a string; carried in
         // `name` verbatim so the step is not lost to a generic code.
-        self.cu.import_and_map(0, fd, n).map_err(|name| CudaError::Refused {
+        let p = self.cu.import_and_map(0, fd, n).map_err(|name| CudaError::Refused {
             what: "cuMemImportFromShareableHandle + cuMemMap",
             code: 0,
             name,
-        })
+        })?;
+        self.store = Some((p, bytes));
+        Ok(())
     }
 
-    /// Read `buf.len()` bytes of device memory at `src` (a harness check, never a data path).
-    /// ⊘ A synchronous legacy-stream copy: the walker's stream is a BLOCKING stream, so this
-    /// is ordered after every walk already queued.
-    ///
-    /// # Errors
-    /// The CUDA error.
-    pub fn read_at(&self, src: CUdeviceptr, buf: &mut [u8]) -> Result<(), CudaError> {
-        self.cu.memcpy_d2h(buf, src, "cuMemcpyDtoH(read_at)")
+    /// The imported store's length, if one was imported.
+    #[must_use]
+    pub fn store_len(&self) -> Option<u64> {
+        self.store.map(|(_, l)| l)
     }
 
-    /// Copy host bytes to an **arbitrary** device address — used to place tables at the
-    /// offsets the guest actually uses, inside an imported object, without relocating them.
-    /// ⊘ Synchronous, on the legacy stream, which the walker's blocking stream is ordered
-    /// behind: a walk submitted after this returns reads these bytes.
+    /// The store address of `[off, off+len)`, refused by name unless wholly inside the store.
+    fn store_at(&self, off: u64, len: usize, what: &'static str) -> Result<CUdeviceptr, CudaError> {
+        let Some((base, bytes)) = self.store else {
+            return Err(refused(what, "no store imported".to_string()));
+        };
+        let end = off.checked_add(len as u64);
+        if end.is_none_or(|e| e > bytes) {
+            return Err(refused(what, format!("[{off:#x}, +{len:#x}) leaves the {bytes:#x}-byte store")));
+        }
+        Ok(base + off)
+    }
+
+    /// ★ §13: write `bytes` at store offset `off` — bounds-checked against the store's length.
+    /// ⊘ Synchronous, on the legacy stream, which the walker's blocking stream is ordered behind:
+    /// a walk submitted after this returns reads these bytes.
     ///
     /// # Errors
-    /// [`CudaError`].
-    pub fn write_at(&self, dst: CUdeviceptr, bytes: &[u8]) -> Result<(), CudaError> {
-        self.cu.memcpy_h2d(dst, bytes, "cuMemcpyHtoD(write_at)")
+    /// Refused by name outside the store; the CUDA error otherwise.
+    pub fn write_store(&self, off: u64, bytes: &[u8]) -> Result<(), CudaError> {
+        let dst = self.store_at(off, bytes.len(), "WalkKernel::write_store")?;
+        self.cu.memcpy_h2d(dst, bytes, "cuMemcpyHtoD(write_store)")
+    }
+
+    /// ★ §13: read `buf.len()` bytes at store offset `off` (a harness check, never a data path) —
+    /// bounds-checked against the store's length.
+    ///
+    /// # Errors
+    /// Refused by name outside the store; the CUDA error otherwise.
+    pub fn read_store(&self, off: u64, buf: &mut [u8]) -> Result<(), CudaError> {
+        let src = self.store_at(off, buf.len(), "WalkKernel::read_store")?;
+        self.cu.memcpy_d2h(buf, src, "cuMemcpyDtoH(read_store)")
+    }
+
+    /// Read `buf.len()` bytes of an uploaded image at `off`, bounds-checked against it.
+    ///
+    /// # Errors
+    /// Refused by name outside the image; the CUDA error otherwise.
+    pub fn read_image(&self, img: &DeviceImage, off: u64, buf: &mut [u8]) -> Result<(), CudaError> {
+        if off.checked_add(buf.len() as u64).is_none_or(|e| e > img.len) {
+            return Err(refused("WalkKernel::read_image", format!("[{off:#x}, +{:#x}) leaves the image", buf.len())));
+        }
+        self.cu.memcpy_d2h(buf, img.ptr + off, "cuMemcpyDtoH(read_image)")
+    }
+
+    /// Write `bytes` into an uploaded image at `off`, bounds-checked against it.
+    ///
+    /// # Errors
+    /// Refused by name outside the image; the CUDA error otherwise.
+    pub fn write_image(&self, img: &DeviceImage, off: u64, bytes: &[u8]) -> Result<(), CudaError> {
+        if off.checked_add(bytes.len() as u64).is_none_or(|e| e > img.len) {
+            return Err(refused("WalkKernel::write_image", format!("[{off:#x}, +{:#x}) leaves the image", bytes.len())));
+        }
+        self.cu.memcpy_h2d(img.ptr + off, bytes, "cuMemcpyHtoD(write_image)")
     }
 
     /// Release an image returned by [`WalkKernel::upload`].
@@ -1480,10 +1655,15 @@ impl Drop for WalkKernel {
         // made in the context, so freeing them individually as well would be the double-free.
         // ⇒ the buffers are NEUTRALISED and the context is destroyed once.
         self.dev.ptr = 0;
-        self.tbl[0].ptr = 0;
-        self.tbl[1].ptr = 0;
+        self.walk.ptr = 0;
+        self.com.ptr = 0;
+        self.slot.ptr = 0;
+        self.iscratch.ptr = 0;
         self.pdbs.ptr = 0;
-        self.scopes.ptr = 0;
+        self.slots.ptr = 0;
+        self.ack.ptr = 0;
+        self.ack_code.ptr = 0;
+        self.store = None;
         self.hdr.ptr = 0;
         self.rpdb.ptr = 0;
         self.rrun.ptr = 0;
@@ -1517,11 +1697,6 @@ pub struct DeviceImage {
 }
 
 impl DeviceImage {
-    /// Its device pointer.
-    #[must_use]
-    pub fn ptr(&self) -> CUdeviceptr {
-        self.ptr
-    }
     /// Its length.
     #[must_use]
     pub fn len(&self) -> u64 {
