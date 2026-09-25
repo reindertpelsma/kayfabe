@@ -46,6 +46,40 @@ pub const PROMOTE_CTX: u32 = 0x2080_012b;
 pub const EVICT_CTX: u32 = 0x2080_012c;
 /// `sizeof(NV2080_CTRL_GPU_EVICT_CTX_PARAMS)`.
 const EVICT_CTX_PARAMS_SIZE: usize = 20;
+/// `NVA06F_CTRL_CMD_STOP_CHANNEL` (`ogkm-580: ctrla06fgpfifo.h:237`) — `{bImmediate}`.
+pub const STOP_CHANNEL: u32 = kf_abi::submit::NVA06F_CTRL_CMD_STOP_CHANNEL;
+/// `NV2080_CTRL_CMD_FIFO_DISABLE_CHANNELS` (`ogkm-580: ctrl2080fifo.h:339`).
+pub const DISABLE_CHANNELS: u32 = kf_abi::submit::NV2080_CTRL_CMD_FIFO_DISABLE_CHANNELS;
+/// `NVA06C_CTRL_CMD_PREEMPT` (`ogkm-580: ctrla06c.h:203`).
+pub const TSG_PREEMPT: u32 = kf_abi::submit::NVA06C_CTRL_CMD_PREEMPT;
+/// `NV_ERR_INSUFFICIENT_PERMISSIONS`.
+const NV_ERR_INSUFFICIENT_PERMISSIONS: u32 = 0x1b;
+
+/// ★ v3-chanctl: a `DISABLE_CHANNELS` list as a `Copy` value (`(hClient, hChannel)` × `n`, ≤ 64).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ChanList {
+    n: u8,
+    items: [(u32, u32); kf_abi::submit::DISABLE_CHANNELS_MAX_ENTRIES],
+}
+
+impl ChanList {
+    /// A list of at most 64 entries (`None` beyond).
+    #[must_use]
+    pub fn new(v: &[(u32, u32)]) -> Option<ChanList> {
+        if v.len() > kf_abi::submit::DISABLE_CHANNELS_MAX_ENTRIES {
+            return None;
+        }
+        let mut items = [(0, 0); kf_abi::submit::DISABLE_CHANNELS_MAX_ENTRIES];
+        items[..v.len()].copy_from_slice(v);
+        Some(ChanList { n: v.len() as u8, items })
+    }
+
+    /// The entries.
+    #[must_use]
+    pub fn as_slice(&self) -> &[(u32, u32)] {
+        &self.items[..usize::from(self.n)]
+    }
+}
 
 /// ★ What the guest declared when it allocated a GPFIFO channel — every field off the wire,
 /// nothing inferred.
@@ -175,6 +209,42 @@ pub enum ChanStatement {
         object: u32,
         /// `engineType`.
         engine_type: u32,
+    },
+    /// ★★★ v3-chanctl: `NVA06F_CTRL_CMD_STOP_CHANNEL` (`0xa06f0112`) — "disabling and unbinding
+    /// the channel and removing it from runlist … If we fail to preempt … we RC the channel"
+    /// (`ctrla06fgpfifo.h:216-231`): a NOT-RUNNING promise. The guest's CPU-RM RPCs it verbatim and,
+    /// only on `NV_OK`, writes the channel's OWN notifier (`kchannelNotifyRc_HAL`,
+    /// `kernel_channel.c:1958-1979`).
+    Stop {
+        /// `hClient`.
+        client: u32,
+        /// The channel.
+        object: u32,
+        /// `bImmediate`.
+        immediate: bool,
+    },
+    /// ★★★ v3-chanctl: `NV2080_CTRL_CMD_FIFO_DISABLE_CHANNELS` (`0x2080110b`) on the subdevice.
+    DisableChannels {
+        /// `hClient` of the CALL (the subdevice's client).
+        client: u32,
+        /// `bDisable`.
+        disable: bool,
+        /// `bOnlyDisableScheduling`.
+        only_scheduling: bool,
+        /// `bRewindGpPut`.
+        rewind_gp_put: bool,
+        /// `(hClient, hChannel)` entries.
+        list: ChanList,
+    },
+    /// ★★★ v3-chanctl: `NVA06C_CTRL_CMD_PREEMPT` (`0xa06c0105`) on a channel group — ROUTE_TO_PHYSICAL
+    /// with no CPU-RM body (`g_kernel_channel_group_api_nvoc.c:273`), so the whole verb is ours.
+    Preempt {
+        /// `hClient`.
+        client: u32,
+        /// The channel group.
+        object: u32,
+        /// `bWait` as the guest asked (the host verb always waits: the held reply IS the preempt).
+        wait: bool,
     },
     /// An object was freed (maybe one of ours).
     Free {
@@ -492,6 +562,62 @@ impl ChannelPolicy {
                 let engine_type = params.get(..4).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))?;
                 ChanStatement::Bind { client: h.client, object: h.object, engine_type }
             }
+            // ★★★ v3-chanctl — the three cancellation verbs, each carried to the plane, which
+            // performs it on the host twin(s) and holds the reply until the host act completes.
+            STOP_CHANNEL => {
+                if params.len() != kf_abi::submit::STOP_CHANNEL_PARAMS_SIZE {
+                    return Some(Self::refusal(
+                        NV_ERR_INVALID_ARGUMENT,
+                        &format!("STOP_CHANNEL params are {} bytes, not {}", params.len(), kf_abi::submit::STOP_CHANNEL_PARAMS_SIZE),
+                        cmd,
+                    ));
+                }
+                ChanStatement::Stop { client: h.client, object: h.object, immediate: params[0] != 0 }
+            }
+            TSG_PREEMPT => {
+                let Some(p) = kf_abi::submit::Preempt::decode(params) else {
+                    return Some(Self::refusal(
+                        NV_ERR_INVALID_ARGUMENT,
+                        &format!("PREEMPT params are {} bytes, not {}", params.len(), kf_abi::submit::PREEMPT_PARAMS_SIZE),
+                        cmd,
+                    ));
+                };
+                // The header's own bound (`ctrla06c.h:213`): a manual timeout past 1 s is invalid.
+                if p.manual_timeout && p.timeout_us > kf_abi::submit::PREEMPT_MAX_MANUAL_TIMEOUT_US {
+                    return Some(Self::refusal(NV_ERR_INVALID_ARGUMENT, &format!("PREEMPT timeoutUs {} > 1 s", p.timeout_us), cmd));
+                }
+                ChanStatement::Preempt { client: h.client, object: h.object, wait: p.wait }
+            }
+            DISABLE_CHANNELS => {
+                let d = match kf_abi::submit::DisableChannels::decode(params) {
+                    Ok(d) => d,
+                    Err(e) => return Some(Self::refusal(NV_ERR_INVALID_ARGUMENT, &format!("DISABLE_CHANNELS: {e:?}"), cmd)),
+                };
+                // ⊘ `pRunlistPreemptEvent` is a KEVENT pointer in the GUEST kernel's address space
+                // (kernel callers only, `kernel_fifo_ctrl.c:720-725`): nothing on the host can
+                // signal it, so the asynchronous form is refused by name, never dropped.
+                if d.runlist_preempt_event != 0 {
+                    return Some(Self::refusal(NV_ERR_INVALID_ARGUMENT, "DISABLE_CHANNELS with a pRunlistPreemptEvent (async preempt) is not served", cmd));
+                }
+                // ⊘ Isolation: a list entry naming ANOTHER client's channel is refused — the only
+                // in-tree caller lists channels of the calling client (`nv_gpu_ops.c:957-981`,
+                // `RES_GET_CLIENT_HANDLE` of channels iterated from that very client), and one
+                // guest process must never stop another's twin.
+                if let Some((c, ch)) = d.list.iter().find(|(c, _)| *c != h.client) {
+                    return Some(Self::refusal(
+                        NV_ERR_INSUFFICIENT_PERMISSIONS,
+                        &format!("DISABLE_CHANNELS from client {:#x} names channel {c:#x}:{ch:#x} of another client", h.client),
+                        cmd,
+                    ));
+                }
+                ChanStatement::DisableChannels {
+                    client: h.client,
+                    disable: d.disable,
+                    only_scheduling: d.only_disable_scheduling,
+                    rewind_gp_put: d.rewind_gp_put,
+                    list: ChanList::new(&d.list)?,
+                }
+            }
             _ => return None,
         };
         self.carried += 1;
@@ -764,6 +890,59 @@ mod tests {
             seen.lock().unwrap().last().copied(),
             Some(ChanStatement::EvictCtx { chan_client: 0xc1d0_000b, object: 0xcafe_0013, engine_type: 1 })
         );
+    }
+
+    /// ★ v3-chanctl: STOP_CHANNEL / PREEMPT / DISABLE_CHANNELS reach the plane decoded; a
+    /// DISABLE_CHANNELS naming another client's channel, or carrying an async preempt event, is
+    /// refused by the link before the plane is asked.
+    #[test]
+    fn the_cancellation_verbs_are_carried_and_the_cross_client_list_is_refused() {
+        use std::sync::{Arc, Mutex};
+        let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).expect("bench");
+        let seen: Arc<Mutex<Vec<ChanStatement>>> = Arc::default();
+        let s2 = seen.clone();
+        let sink: ChanSink = Arc::new(move |st| {
+            s2.lock().unwrap().push(st);
+            ChanAnswer::Done
+        });
+        let mut link = ChannelPolicy::new(abi, kf_abi::GuestOs::Linux, sink);
+        let ctl = |client: u32, object: u32, cmd: u32, p: &[u8]| {
+            let mut b = vec![0u8; 40];
+            b[0..4].copy_from_slice(&client.to_le_bytes());
+            b[4..8].copy_from_slice(&object.to_le_bytes());
+            b[8..12].copy_from_slice(&cmd.to_le_bytes());
+            b[16..20].copy_from_slice(&(p.len() as u32).to_le_bytes());
+            b.extend_from_slice(p);
+            RpcCommand { function: RpcFunction::RmControl, code: 76, sequence: 1, payload: b, elements: 1, delivered: Vec::new() }
+        };
+        let (c, ch) = (0xc1d0_000b, 0xcafe_0013);
+        let r = link.respond(&ctl(c, ch, STOP_CHANNEL, &[0])).expect("answered");
+        assert_eq!(r.rpc_result, NV_OK);
+        assert_eq!(seen.lock().unwrap().last().copied(), Some(ChanStatement::Stop { client: c, object: ch, immediate: false }));
+        assert_eq!(link.respond(&ctl(c, ch, STOP_CHANNEL, &[0, 0])).expect("refused").rpc_result, NV_ERR_INVALID_ARGUMENT);
+        let r = link.respond(&ctl(c, 0xcafe_0010, TSG_PREEMPT, &[1, 0, 0, 0, 0, 0, 0, 0])).expect("answered");
+        assert_eq!(r.rpc_result, NV_OK);
+        assert_eq!(seen.lock().unwrap().last().copied(), Some(ChanStatement::Preempt { client: c, object: 0xcafe_0010, wait: true }));
+        let d = |list: Vec<(u32, u32)>, ev: u64| {
+            let mut b = kf_abi::submit::DisableChannels { disable: true, only_disable_scheduling: false, rewind_gp_put: false, runlist_preempt_event: 0, list }
+                .encode()
+                .expect("encode");
+            b[16..24].copy_from_slice(&ev.to_le_bytes());
+            b
+        };
+        let n = seen.lock().unwrap().len();
+        let r = link.respond(&ctl(c, 0x5c00_0002, DISABLE_CHANNELS, &d(vec![(c, ch)], 0))).expect("answered");
+        assert_eq!(r.rpc_result, NV_OK);
+        assert!(matches!(
+            seen.lock().unwrap().last().copied(),
+            Some(ChanStatement::DisableChannels { client, disable: true, only_scheduling: false, rewind_gp_put: false, list }) if client == c && list.as_slice() == [(c, ch)]
+        ));
+        assert_eq!(seen.lock().unwrap().len(), n + 1);
+        let r = link.respond(&ctl(c, 0x5c00_0002, DISABLE_CHANNELS, &d(vec![(c, ch), (0xc1d0_000c, 0xcafe_0001)], 0))).expect("refused");
+        assert_eq!(r.rpc_result, NV_ERR_INSUFFICIENT_PERMISSIONS, "another client's channel");
+        let r = link.respond(&ctl(c, 0x5c00_0002, DISABLE_CHANNELS, &d(vec![(c, ch)], 0xffff_8000_0000_1000))).expect("refused");
+        assert_eq!(r.rpc_result, NV_ERR_INVALID_ARGUMENT, "an async preempt event");
+        assert_eq!(seen.lock().unwrap().len(), n + 1, "neither refusal reached the plane");
     }
 
     #[test]

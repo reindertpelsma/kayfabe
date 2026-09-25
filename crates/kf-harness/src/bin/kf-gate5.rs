@@ -186,6 +186,69 @@ fn run(l: &mut Checks) -> Result<(), String> {
     let mut scan = Vec::new();
     l.check("no_worker_ever_saw_the_token", bits.scan(&mut scan, 64) == 0 && wake.seen() == 0, format!("bits={scan:?} wake_seq={}", wake.seen()));
     l.measure("ring_to_semaphore_us", format!("p50={} p90={} max={} (includes the harness's DtoH poll)", pct(50), pct(90), pct(100)));
+
+    // ── ★ v3-chanctl: the guest's STOP / DISABLE / PREEMPT, served as UNPRIVILEGED host verbs on
+    // the twin. The harness is an ordinary host client, so every call below is exactly what the
+    // VMM may issue on its own channels. ──────────────────────────────────────────────────────
+    let submit = |walk: &WalkKernel, k: u32| -> Result<(), String> {
+        let c = u64::from(k) % CHUNKS;
+        let mut seg = m(4, ce::OFFSET_IN_UPPER, &[hi(VA_A + c * CHUNK), lo(VA_A + c * CHUNK), hi(VA_B + c * CHUNK), lo(VA_B + c * CHUNK)]);
+        seg.extend(m(4, ce::LINE_LENGTH_IN, &[CHUNK as u32]));
+        seg.extend(m(4, ce::SET_SEMAPHORE_A, &[hi(VA_U + SEM), lo(VA_U + SEM), k + 1]));
+        seg.extend(m(4, ce::LAUNCH_DMA, &[ce::LAUNCH_TRANSFER_NON_PIPELINED
+            | ce::LAUNCH_FLUSH_ENABLE
+            | ce::LAUNCH_SEMAPHORE_RELEASE_ONE_WORD
+            | pitch]));
+        let at = PB + u64::from(k) * PB_STRIDE;
+        w(walk, U_MEM + at, &bytes(&seg))?;
+        let e = gp_entry(VA_U + at, 4 * seg.len() as u64).ok_or("gp entry")?;
+        w(walk, U_MEM + GPFIFO + 8 * u64::from(k % ENTRIES), &e.to_le_bytes())?;
+        w(walk, U_MEM + USERD + USERD_GP_PUT, &((k + 1) % ENTRIES).to_le_bytes())
+    };
+    let ring = |host_token: u32| rm.doorbell(host_token).map_err(|e| format!("doorbell: {e:?}"));
+    let reached = |walk: &WalkKernel, want: u32, within: std::time::Duration| -> Result<bool, String> {
+        let deadline = std::time::Instant::now() + within;
+        loop {
+            if word(walk, U_MEM + SEM)? == want {
+                return Ok(true);
+            }
+            if std::time::Instant::now() > deadline {
+                return Ok(false);
+            }
+        }
+    };
+    let quiet = std::time::Duration::from_millis(300);
+    // STOP_CHANNEL = DISABLE_CHANNELS{disable, preempt} + GPFIFO_SCHEDULE(false).
+    let t = std::time::Instant::now();
+    let stop = rm.disable_channels(&[chan], true, false, false).and_then(|()| rm.schedule_enable(chan, false));
+    l.check("stop_verbs_unprivileged", stop.is_ok(), format!("DISABLE_CHANNELS(disable) + GPFIFO_SCHEDULE(false) on our own twin: {stop:?} ({} us)", t.elapsed().as_micros()));
+    let k = SUBMITS;
+    submit(&walk, k)?;
+    ring(chan.token)?;
+    let ran = reached(&walk, k + 1, quiet)?;
+    l.check("stopped_twin_runs_no_new_work", !ran, format!("work queued + rung after the stop: sem={:#x} (want {k:#x} = untouched)", word(&walk, U_MEM + SEM)?));
+    // Restart: the guest's re-schedule of a stopped channel.
+    let t = std::time::Instant::now();
+    let restart = rm.disable_channels(&[chan], false, false, false).and_then(|()| rm.schedule_enable(chan, true));
+    l.check("restart_verbs_unprivileged", restart.is_ok(), format!("DISABLE_CHANNELS(enable) + GPFIFO_SCHEDULE(true): {restart:?} ({} us)", t.elapsed().as_micros()));
+    let picked_up = reached(&walk, k + 1, quiet)?;
+    l.measure("restart_picks_up_pending_work_without_a_doorbell", format!("{picked_up}"));
+    if !picked_up {
+        ring(chan.token)?;
+    }
+    let ran = reached(&walk, k + 1, std::time::Duration::from_secs(2))?;
+    l.check("restarted_twin_runs_again", ran, format!("sem={:#x} (want {:#x})", word(&walk, U_MEM + SEM)?, k + 1));
+    // PREEMPT (bWait) on the twin's own host group: completes, and the group stays schedulable.
+    let t = std::time::Instant::now();
+    let pre = rm.preempt(chan);
+    l.check("preempt_verb_unprivileged", pre.is_ok(), format!("NVA06C PREEMPT(bWait=1) on our own group: {pre:?} ({} us)", t.elapsed().as_micros()));
+    submit(&walk, k + 1)?;
+    ring(chan.token)?;
+    let ran = reached(&walk, k + 2, std::time::Duration::from_secs(2))?;
+    l.check("preempted_twin_still_schedulable", ran, format!("sem={:#x} (want {:#x})", word(&walk, U_MEM + SEM)?, k + 2));
+    // A preempt of a STOPPED group (the guest may PREEMPT a group it disabled).
+    let pre2 = rm.disable_channels(&[chan], true, false, false).and_then(|()| rm.schedule_enable(chan, false)).and_then(|()| rm.preempt(chan));
+    l.check("preempt_of_a_stopped_group", pre2.is_ok(), format!("{pre2:?}"));
     let _ = &mut walk;
     Ok(())
 }

@@ -653,7 +653,14 @@ impl Device {
         let mut logged = 0u32;
         let mut refusals_seen = 0usize;
         let mut armed_seen: Option<u64> = None;
+        // ★ Cold-box fix (`crate::mem::prewarm`): the first mirror's one-time host cost is paid
+        // here, before the guest runs, as soon as QEMU has registered guest RAM.
+        let mut prewarmed = false;
         while !self.stop.load(Ordering::Acquire) {
+            if !prewarmed && let Some(line) = crate::mem::prewarm(&self.mem, self.rm, self.store.handle) {
+                prewarmed = true;
+                eprintln!("kf3: mem t={:.3}s {line}", self.born.elapsed().as_secs_f64());
+            }
             let mut ready = ReadyTokens::new();
             let _ = poller.wait(&mut ready, PollTimeout::Millis(50));
             let _ = self.mem.inbox.wake.drain();
@@ -834,8 +841,10 @@ impl Device {
         let avg = |sum: u64, n: u64| if n == 0 { 0 } else { sum / n / 1000 };
         let nm = self.mem.counters.mirrors.load(Ordering::Relaxed);
         let timing = format!(
-            " mirrors={} mirror_avg_us={} mirror_max_us={} vat[invals={} arrive->clear_avg_us={} max_us={} walks={} walk_avg_us={} gpu_avg_us={} plan_avg_us={} apply_avg_us={} leaves={} host_calls={}]",
+            " mirrors={} reused={} prewarmed={} mirror_avg_us={} mirror_max_us={} vat[invals={} arrive->clear_avg_us={} max_us={} walks={} walk_avg_us={} gpu_avg_us={} plan_avg_us={} apply_avg_us={} leaves={} host_calls={}]",
             nm,
+            self.mem.counters.mirrors_reused.load(Ordering::Relaxed),
+            self.mem.counters.prewarmed.load(Ordering::Relaxed),
             avg(self.mem.counters.mirror_ns.load(Ordering::Relaxed), nm),
             self.mem.counters.mirror_ns_max.load(Ordering::Relaxed) / 1000,
             tm.invals,
