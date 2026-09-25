@@ -1376,6 +1376,63 @@ fn guest_ram_pin_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
 /// (`fdcross`), is kind-checked against the KERNEL (`require_kind`, never the sender's word),
 /// `mmap`ed once at file offset zero, written, fenced and dropped. The parent closes its own
 /// copy of that node the moment it is sent, so the child's mapping is the only one.
+/// ★ w827 Q1/Q8 — **what one trapped BAR0 write costs the guest vCPU, and what a shadowed read
+/// costs.** Maps the device's `resource0` (root), then writes `0` to `CPU_INTR_LEAF(7)` — a
+/// write-1-to-clear register, so a zero clears nothing — N times, and reads the same shadowed
+/// register N times. Prints `EXITCOST …`.
+fn exit_cost_probe() -> bool {
+    use std::os::fd::AsFd;
+    const OFF: u64 = 0x00B8_101C;
+    const N: usize = 2000;
+    let Some(dir) = std::fs::read_dir("/sys/bus/pci/devices").ok().and_then(|d| {
+        d.flatten().map(|e| e.path()).find(|p| {
+            let rd = |f: &str| std::fs::read_to_string(p.join(f)).unwrap_or_default();
+            rd("vendor").trim() == "0x10de" && rd("class").trim().starts_with("0x03")
+        })
+    }) else {
+        println!("FAIL  EXITCOST no NVIDIA display-class function in /sys/bus/pci/devices");
+        return false;
+    };
+    let f = match std::fs::OpenOptions::new().read(true).write(true).open(dir.join("resource0")) {
+        Ok(f) => f,
+        Err(e) => {
+            println!("FAIL  EXITCOST open {}/resource0: {e}", dir.display());
+            return false;
+        }
+    };
+    let region = match kayfabe_linux_raw::VolatileRegion::map(
+        kayfabe_linux_raw::Backing::DeviceFile { fd: f.as_fd() },
+        0x00C0_0000,
+        kayfabe_linux_raw::CachePolicy::Uncached,
+        kayfabe_linux_raw::HostPageSize::query(),
+    ) {
+        Ok(r) => r,
+        Err(e) => {
+            println!("FAIL  EXITCOST mmap resource0: {e:?}");
+            return false;
+        }
+    };
+    let at = kayfabe_linux_raw::HostOffset::new(OFF);
+    let t = std::time::Instant::now();
+    for _ in 0..N {
+        let _ = region.store_u32(at, 0);
+    }
+    let w = t.elapsed();
+    let t = std::time::Instant::now();
+    let mut acc = 0u32;
+    for _ in 0..N {
+        acc ^= region.load_u32(at).unwrap_or(0);
+    }
+    let r = t.elapsed();
+    println!(
+        "EXITCOST dev={} trapped_write_us={:.2} shadow_read_ns={:.0} n={N} (acc {acc:#x})",
+        dir.display(),
+        w.as_secs_f64() * 1e6 / N as f64,
+        r.as_secs_f64() * 1e9 / N as f64,
+    );
+    true
+}
+
 /// ★ w827 Q6 — **guest CPU bandwidth through a BAR1 view of vidmem vs plain RAM.** Allocates
 /// `LEN` of vidmem, arms a CPU view (`NV_ESC_RM_MAP_MEMORY`, the default caching RM picks for it),
 /// maps it, and times bulk writes, bulk reads and single-word reads against an anonymous RAM
@@ -14482,6 +14539,7 @@ fn ladder_main() -> std::process::ExitCode {
     let mut want_fb_view: Option<FbViewJoin> = None;
     let mut want_bar1_crossing = false;
     let mut want_bar1_bw = false;
+    let mut want_exit_cost = false;
     // ★★★★★ w747 — `--list-object-alias`. Its OWN flag and its own early return, for
     // `--bar1-crossing`'s reason: it frees its own parent object out from under a live
     // slice on purpose, so nothing else may be holding memory in this process's client
@@ -14886,6 +14944,7 @@ fn ladder_main() -> std::process::ExitCode {
             // ★★★★★ w393 — the BAR1 crossing on bare metal; see `bar1_crossing_probe`.
             "--bar1-crossing" => want_bar1_crossing = true,
             "--bar1-bw" => want_bar1_bw = true,
+            "--exit-cost" => want_exit_cost = true,
             // ★★★★★ w747 — does `NV01_MEMORY_LIST_OBJECT` ALIAS its parent's pages or COPY
             // them? The single question gating leg B of the USERD design.
             "--list-object-alias" => want_list_object = true,
@@ -15628,6 +15687,11 @@ fn ladder_main() -> std::process::ExitCode {
 
     // ★★★★★ w393 — the BAR1 crossing runs here and RETURNS, for R30's reason: its objects
     // and its child process must be the only things in the census.
+    if want_exit_cost {
+        let ok = exit_cost_probe();
+        println!("done \u{2014} exit-cost probe only");
+        return if ok { std::process::ExitCode::SUCCESS } else { std::process::ExitCode::from(1) };
+    }
     if want_bar1_bw {
         let ok = bar1_bw_probe(&mut rm);
         println!("done \u{2014} bar1-bw probe only");
