@@ -1376,6 +1376,89 @@ fn guest_ram_pin_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
 /// (`fdcross`), is kind-checked against the KERNEL (`require_kind`, never the sender's word),
 /// `mmap`ed once at file offset zero, written, fenced and dropped. The parent closes its own
 /// copy of that node the moment it is sent, so the child's mapping is the only one.
+/// ★ w827 Q6 — **guest CPU bandwidth through a BAR1 view of vidmem vs plain RAM.** Allocates
+/// `LEN` of vidmem, arms a CPU view (`NV_ESC_RM_MAP_MEMORY`, the default caching RM picks for it),
+/// maps it, and times bulk writes, bulk reads and single-word reads against an anonymous RAM
+/// buffer of the same size. Prints `BAR1BW …` lines; PASS iff the view round-trips a pattern.
+fn bar1_bw_probe(rm: &mut HostRmBackend) -> bool {
+    use std::os::fd::AsFd;
+    const LEN: u64 = 0x20_0000;
+    let mem = match rm.alloc_vidmem(LEN) {
+        Ok(h) => h,
+        Err(e) => {
+            println!("FAIL  BAR1BW vidmem = {e:?}");
+            return false;
+        }
+    };
+    let v = match rm.export_device_view(mem, 0, LEN, kayfabe_isolate_host::rm::ViewAccess::ReadWrite) {
+        Ok(v) => v,
+        Err(e) => {
+            println!("FAIL  BAR1BW view = {e:?}");
+            return false;
+        }
+    };
+    let fd = match rm.exports().lend(v.token) {
+        Ok(fd) => fd,
+        Err(e) => {
+            println!("FAIL  BAR1BW lend = {e:?}");
+            return false;
+        }
+    };
+    let region = match kayfabe_linux_raw::MappedRegion::map(
+        kayfabe_linux_raw::Backing::SharedFile { fd: fd.as_fd(), offset: 0 },
+        v.mmap_len,
+        kayfabe_linux_raw::HostProt::ReadWrite,
+        kayfabe_linux_raw::CachePolicy::WriteBack,
+        kayfabe_linux_raw::HostPageSize::query(),
+    ) {
+        Ok(r) => r,
+        Err(e) => {
+            println!("FAIL  BAR1BW mmap = {e:?}");
+            return false;
+        }
+    };
+    let n = LEN.min(v.mmap_len) as usize;
+    let src: Vec<u8> = (0..n).map(|i| (i as u8) ^ 0x5a).collect();
+    let mut dst = vec![0u8; n];
+    let mut ram = vec![0u8; n];
+    let mbs = |bytes: usize, d: std::time::Duration| bytes as f64 / d.as_secs_f64() / (1 << 20) as f64;
+    // Bulk write, BAR1 view.
+    let t = std::time::Instant::now();
+    let w_ok = region.write_from(kayfabe_linux_raw::HostOffset::ZERO, &src).is_ok();
+    let bar_w = t.elapsed();
+    // Bulk read, BAR1 view.
+    let t = std::time::Instant::now();
+    let r_ok = region.read_into(kayfabe_linux_raw::HostOffset::ZERO, &mut dst).is_ok();
+    let bar_r = t.elapsed();
+    // RAM, the same sizes.
+    let t = std::time::Instant::now();
+    ram.copy_from_slice(&src);
+    let ram_w = t.elapsed();
+    let t = std::time::Instant::now();
+    dst.copy_from_slice(std::hint::black_box(&ram));
+    let ram_r = t.elapsed();
+    // Re-read the view to check the pattern (the RAM copy above overwrote dst).
+    let _ = region.read_into(kayfabe_linux_raw::HostOffset::ZERO, &mut dst);
+    let same = dst == src;
+    // Single 4-byte reads (a ring cursor's shape), 4096 of them, strided by 512 bytes.
+    let mut words = [0u8; 4];
+    let t = std::time::Instant::now();
+    for i in 0..4096usize {
+        let _ = region.read_into(kayfabe_linux_raw::HostOffset::new(((i * 512) % n) as u64), &mut words);
+    }
+    let one = t.elapsed();
+    println!(
+        "BAR1BW len={n} view_policy={:?} bar1_write_mbs={:.1} bar1_read_mbs={:.1} ram_write_mbs={:.1} ram_read_mbs={:.1} bar1_word_read_ns={:.0} pattern_ok={same} (w_ok={w_ok} r_ok={r_ok})",
+        region.cache_policy(),
+        mbs(n, bar_w),
+        mbs(n, bar_r),
+        mbs(n, ram_w),
+        mbs(n, ram_r),
+        one.as_nanos() as f64 / 4096.0,
+    );
+    same && w_ok && r_ok
+}
+
 fn bar1_crossing_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
     use kayfabe_isolate_host::write_frame_with_fds;
     use kayfabe_linux_raw::{
@@ -14398,6 +14481,7 @@ fn ladder_main() -> std::process::ExitCode {
     let mut want_executor_alias = false;
     let mut want_fb_view: Option<FbViewJoin> = None;
     let mut want_bar1_crossing = false;
+    let mut want_bar1_bw = false;
     // ★★★★★ w747 — `--list-object-alias`. Its OWN flag and its own early return, for
     // `--bar1-crossing`'s reason: it frees its own parent object out from under a live
     // slice on purpose, so nothing else may be holding memory in this process's client
@@ -14801,6 +14885,7 @@ fn ladder_main() -> std::process::ExitCode {
             }
             // ★★★★★ w393 — the BAR1 crossing on bare metal; see `bar1_crossing_probe`.
             "--bar1-crossing" => want_bar1_crossing = true,
+            "--bar1-bw" => want_bar1_bw = true,
             // ★★★★★ w747 — does `NV01_MEMORY_LIST_OBJECT` ALIAS its parent's pages or COPY
             // them? The single question gating leg B of the USERD design.
             "--list-object-alias" => want_list_object = true,
@@ -15543,6 +15628,11 @@ fn ladder_main() -> std::process::ExitCode {
 
     // ★★★★★ w393 — the BAR1 crossing runs here and RETURNS, for R30's reason: its objects
     // and its child process must be the only things in the census.
+    if want_bar1_bw {
+        let ok = bar1_bw_probe(&mut rm);
+        println!("done \u{2014} bar1-bw probe only");
+        return if ok { std::process::ExitCode::SUCCESS } else { std::process::ExitCode::from(1) };
+    }
     if want_bar1_crossing {
         println!(
             "REV_UNDER_TEST={}",
