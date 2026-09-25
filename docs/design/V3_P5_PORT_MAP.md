@@ -159,7 +159,11 @@ kf3: DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=4 emulated=0 forwarde
     the RPC), flipped by the `bIsContextBound` our `NV_OK` lets it set. Full citations on `CtxBind`.
     ⊘ RM's golden-image channel (kernel GR, `0xbaba0045`) is not born (kernel GR is P7), so its
     promote stays the FSM's named refusal, as before. Non-GSP guests: `V3_NON_GSP_CTX.md`.
-23. ⚠ **Cold-box flake `[measured pr1]`:** on the first boot after provisioning, the first mirror
+23. ✔ **FIXED by v3-chanctl (`bda5dc39`) — see the v3-chanctl status block below.** ⊘ It was not a
+    once-per-box cost: the first mirror of EVERY boot paid the guest-RAM OS descriptor (host RM
+    pins the whole guest memfd) inside the held `0x90f10106` reply, whose guest RPC timeout is 6 s
+    (`[pr1]` Xid 119 on exactly that control); `pr1`'s 7.6 s crossed it.
+    ⚠ **Cold-box flake `[measured pr1]`:** on the first boot after provisioning, the first mirror
     space took **7.6 s** to build (`mirror space=… (7612436 us)`, next boot 3.4 s, then ~0.1 s) and the
     PMA scrubber's construction failed `0x40` ⇒ `RmInitAdapter` failed. Not this change (no promote
     on that path); a warm-up cost the harness does not absorb.
@@ -177,8 +181,60 @@ kf3: DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=4 emulated=0 forwarde
     both routes; a TSG `GPFIFO_SCHEDULE` disable already reached every member. ⊘ Owner call left
     open: a hardware-exact TSG-wide RC (siblings stopped AND their notifier records written) needs a
     host-authored way to RC a sibling with a record; none exists unprivileged, and a CPU-written
-    record is forbidden. `STOP_CHANNEL` / `DISABLE_CHANNELS` / TSG `PREEMPT` are still refused by
-    name (the guest sees the failure; nothing dangles).
+    record is forbidden. ~~`STOP_CHANNEL` / `DISABLE_CHANNELS` / TSG `PREEMPT` are still refused by
+    name (the guest sees the failure; nothing dangles).~~ ✔ **Served by v3-chanctl** (status block
+    below).
+
+**STATUS UPDATE, 2026-09-25 (v3-chanctl, branch `v3-chanctl` off `v3` `04f27bfe`, rev `bda5dc39`):
+✔ the guest's channel cancellation controls are SERVED as authored, unprivileged host verbs, and
+the cold-box flake is fixed.** Measured on the dedicated GA106 box `vh2` (RTX 3060, host
+580.159.04): `v3_gates.sh` 8/8 PASS at `bda5dc39`; suite `ccs1` at `bda5dc39`:
+`FAST_SUITE_PASS=29 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=1` (TIMEOUT `--ce-client-guest-ram` only, Q8,
+unchanged; `--concurrency` PASS on this box).
+
+25. **The three controls, each an act on the act thread with the reply held until the host act
+    completes (off the vCPU, off the GSP lock):**
+
+    | guest control | host verb(s) on OUR twin / Translated ring | privilege evidence (ogkm-580 export flags) |
+    |---|---|---|
+    | `NVA06F_CTRL_CMD_STOP_CHANNEL` `0xa06f0112` | `NV2080_CTRL_CMD_FIFO_DISABLE_CHANNELS{bDisable=1, bOnlyDisableScheduling=0}` (RM's own "not running in hardware") + `NVA06C GPFIFO_SCHEDULE(bEnable=0)` (off the runlist); the guest's next `GPFIFO_SCHEDULE(1)` re-enables (`DISABLE_CHANNELS{bDisable=0}`) first | `0x10108` `g_subdevice_nvoc.c:4921` / `0x10008` `g_kernel_channel_group_api_nvoc.c:213` — `NON_PRIVILEGED` (`0x8`, `control.h:208`), neither `PRIVILEGED` nor `INTERNAL`; `pRunlistPreemptEvent` never passed (the one kernel-only check, `kernel_fifo_ctrl.c:720-725`) |
+    | `NV2080_CTRL_CMD_FIFO_DISABLE_CHANNELS` `0x2080110b` | the same verb over the named twins (guest's `bDisable`/`bOnlyDisableScheduling`/`bRewindGpPut`, our client + channels) | as above |
+    | `NVA06C_CTRL_CMD_PREEMPT` `0xa06c0105` | `NVA06C PREEMPT{bWait=1}` on each member's own host group | `0x10248` `g_kernel_channel_group_api_nvoc.c:273` — `NON_PRIVILEGED` |
+
+    ⊘ NOT the host's own `STOP_CHANNEL` (also `NON_PRIVILEGED`, `0x10008`): host CPU-RM follows it
+    with `kchannelNotifyRc_HAL` (`kernel_channel.c:1979`), a host-CPU write of the twin's error
+    record — which IS the guest's notifier — that the guest's CPU-RM makes itself right after our
+    `NV_OK`. That guest write (`PREEMPTIVE_REMOVAL`, 45) is re-baselined by the RC plane, never
+    forwarded as an `RC_TRIGGERED`.
+    Refused by name: a `DISABLE_CHANNELS` entry naming ANOTHER client (`0x1b`; the only in-tree
+    caller lists its own client's channels, `nv_gpu_ops.c:957-981`), a non-NULL
+    `pRunlistPreemptEvent` (a guest-kernel KEVENT pointer), `bRewindGpPut` on a Translated channel,
+    and a list naming a channel with no twin (nothing half-done).
+    Per-twin scope (item 24's ruling): STOP is channel-scoped on hardware too; a group PREEMPT
+    becomes per-member preempts in turn — the postcondition (every member switched out at the
+    reply) is the same, the difference is timing only. Nothing dangles: `stopped`/`disabled` are
+    per twin and cleared by exactly the guest verbs that clear them on hardware.
+    `[measured cc1, ccs1]` `--uvm-mean`: `act stop … STOP_CHANNEL(bImmediate=false): twin host 0x20
+    disabled + preempted + off its runlist (818 us, off the GSP lock)` ×2; `0xa06f0112` left the
+    unserviced list; the two `NV_ASSERT … NVA06F_CTRL_CMD_STOP_CHANNEL @ nv_gpu_ops.c:10957` are gone
+    (no serial log of the 30 arms names `STOP_CHANNEL`/`DISABLE_CHANNELS`). No arm of the suite
+    sends `DISABLE_CHANNELS` or `PREEMPT` (served, exercised only by gate 5 on hardware).
+    Gate 5 (hardware, unprivileged host client): after the stop verbs, work queued AND rung does NOT
+    run (`sem` untouched over 300 ms); after the restart verbs it runs (and the scheduler picked up
+    the pending work without a new doorbell); `PREEMPT(bWait=1)` 255 µs, the group stays
+    schedulable; a preempt of a stopped group is accepted.
+
+26. **Cold-box flake: the first mirror's one-time cost moved before the guest runs.** Breakdown
+    `[measured cc1]`: guest-RAM OS descriptor **1 808 ms** (2 GiB pinned), RAM window 70 ms, space
+    2 ms, store window 1 ms. The VA thread now builds the guest-RAM object and ONE spare mirror as
+    soon as QEMU registers guest RAM (`mem::prewarm`, `t=1.9 s`, ~20 s before the driver loads);
+    the first page-directory statement takes the spare (`reused=… prewarmed=1`), so no mirror inside
+    a held reply pays more than ~0.1 s. Cold vs warm on `vh2` (baseline `04f27bfe`, first mirror):
+    first boot after provisioning **1.60 s**, warm 1.62 s / 1.57 s, after `nvidia-smi -r` 1.61 s —
+    ⊘ **the 7.6 s did NOT reproduce on this box, and a GPU reset does not approximate "cold"**: the
+    cost is per boot (pinning a fresh memfd), scaled by the host (`vh`: 2-7.6 s per boot on every
+    `prs2`/`c2s1` log). With the fix: 30/30 boots of `ccs1` prewarmed (ram_obj 1.73-1.80 s, all
+    before the guest) and every guest-visible mirror ≤ ~0.1 s.
 
 **Q11 (ring placement, answered — needs an owner decision to act).** Is there a range the guest can
 never allocate, so Translated rings need no refusal? **No, on any family.** The guest's VA width is
