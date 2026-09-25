@@ -15,7 +15,7 @@ locked() {  # wait for idle, then run "$@" holding the lock
     while :; do
         flock 9
         idle && break
-        flock -u 9; sleep 20
+        flock -u 9; sleep 3
     done
     "$@"; local rc=$?
     flock -u 9; exec 9>&-
