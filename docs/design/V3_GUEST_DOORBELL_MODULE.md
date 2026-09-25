@@ -45,6 +45,18 @@ nothing — if the virtio device does not initialise or kayfabe is not detected,
 that it is inert. ⇒ Harmless on bare metal and under any other VMM. A **Windows** version is an
 end-stage goal (feasibility to be established then).
 
+⊘ **Windows — researched 2026-09-26, answer: NOT possible as a legitimate driver today; possibly not
+needed.** Sourced: under WDDM, CUDA submission goes through the OS to the KMD
+(`DxgkDdiSubmitCommandToHwQueue`) even with HAGS, so the doorbell is rung by nvlddmkm's own kernel
+mapping, not from user mode; there is no supported WDDM miniport filter model, and redirecting
+another driver's mapping needs kernel hooking (PatchGuard/HVCI/signing forbid it). WDDM's user-mode
+work submission (24H2) would reopen the question but is "under development" with no NVIDIA adoption
+found. Inferred: Windows batches submissions, so doorbells/token may be far below Linux's ~1,008.
+⇒ Measure first on a Windows guest (GSP forced on, HAGS on/off): doorbells per token and the guest
+CPL at each trapped doorbell. Meanwhile, the cross-OS lever is a cheaper exit (in-kernel doorbell
+handling + coalescing), not a guest module. Full write-up with sources: kept by the owner's session
+(not committed).
+
 ### Lifecycle and the BAR1 doorbell (owner, 2026-09-26)
 
 **Guest-visible resources** (exposed by kayfabe, discovered over virtio): a BAR holding (a) the host
