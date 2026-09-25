@@ -75,6 +75,8 @@ struct PtChan {
     tsg: Option<u32>,
     /// The channel's parent (its TSG, or its device).
     parent: u32,
+    /// ★ v3-promote: the device it hangs off (== `parent` outside a TSG).
+    device: u32,
     /// The host engine (= the guest's `engineType`).
     engine: u32,
     /// Engine objects on the twin: guest handle → (host handle, its class kind).
@@ -437,6 +439,22 @@ struct Slot {
     privilege: Option<kf_abi::notifier::ChannelPrivilege>,
 }
 
+/// ★ v3-promote: where a guest channel hangs in the guest's object tree — every handle whose free
+/// takes it (a GSP-client guest frees a subtree with ONE `GSP_RM_FREE` naming its root).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ChanScope {
+    tsg: Option<u32>,
+    parent: u32,
+    device: u32,
+}
+
+impl ChanScope {
+    /// Does freeing `(client, object)` free the channel `key` (`(hClient, hChannel)`)?
+    fn freed_by(self, key: (u32, u32), client: u32, object: u32) -> bool {
+        key.0 == client && (object == client || key.1 == object || self.tsg == Some(object) || self.parent == object || self.device == object)
+    }
+}
+
 /// Per-token counters for the gate (`forwarded=` per token), never a decision input.
 #[derive(Debug, Default, Clone)]
 pub struct TokenCount {
@@ -472,6 +490,8 @@ pub struct ChanPlane {
     slots: RwLock<HashMap<u32, Arc<Mutex<Slot>>>>,
     /// `(hClient, hObject)` → host token.
     by_obj: Mutex<HashMap<(u32, u32), u32>>,
+    /// ★ v3-promote: a Translated channel's group / parent / device (what a guest free can name).
+    scopes: Mutex<HashMap<(u32, u32), ChanScope>>,
     /// The worker eventfd (a schedule that finds work pending wakes one).
     wake: &'static kf_linux_raw::Notifier,
     /// Serves that found the slot lock held — must stay 0 (BUSY excludes).
@@ -600,6 +620,7 @@ impl ChanPlane {
             caps: Mutex::new(VmCaps::from_declared(64, 64, 64, 64)),
             slots: RwLock::new(HashMap::new()),
             by_obj: Mutex::new(HashMap::new()),
+            scopes: Mutex::new(HashMap::new()),
             wake,
             contended: AtomicU64::new(0),
             poisoned: AtomicU64::new(0),
@@ -970,15 +991,30 @@ impl ChanPlane {
     /// (atomics, no host call); the host frees run as ONE act whose outcome the reply waits for.
     fn free(&self, client: u32, object: u32) -> ChanAnswer {
         // Translated channels: by object, or every one of the client's.
+        // ★ v3-promote: a free of the channel, its group, its parent, its DEVICE or its client
+        // takes the channel with it (the guest frees a subtree with ONE RPC) — for Translated
+        // channels too, which were matched by handle or client only, so a group or device free
+        // left the host ring pumping after the guest considered the channel gone.
+        let scopes = self.scopes.lock().map(|m| m.clone()).unwrap_or_default();
         let translated: Vec<u32> = self
             .by_obj
             .lock()
             .map(|mut m| {
-                let keys: Vec<(u32, u32)> = m.keys().copied().filter(|k| k.0 == client && (object == client || k.1 == object)).collect();
+                let keys: Vec<(u32, u32)> = m
+                    .keys()
+                    .copied()
+                    .filter(|k| {
+                        let sc = scopes.get(k).copied().unwrap_or(ChanScope { tsg: None, parent: k.1, device: k.1 });
+                        sc.freed_by(*k, client, object)
+                    })
+                    .collect();
                 keys.into_iter().filter_map(|k| m.remove(&k)).collect()
             })
             .unwrap_or_default();
-        let twins = self.take_pt(|k, v| k.0 == client && (object == client || k.1 == object || v.tsg == Some(object) || v.parent == object));
+        if let Ok(mut m) = self.scopes.lock() {
+            m.retain(|k, sc| !sc.freed_by(*k, client, object));
+        }
+        let twins = self.take_pt(|k, v| ChanScope { tsg: v.tsg, parent: v.parent, device: v.device }.freed_by(*k, client, object));
         // Engine objects freed on their own (their twin still lives).
         let obj = if twins.is_empty() {
             self.pt_objs.lock().ok().and_then(|mut m| m.remove(&(client, object))).and_then(|key| {
@@ -1159,7 +1195,7 @@ impl ChanPlane {
                     }
                     let rc = if notifier.is_some() { "armed" } else { "none" };
                     if let Ok(mut m) = me.pt.lock() {
-                        m.insert((a.client, a.handle), PtChan { chan, idx, tsg: a.tsg, parent: a.parent, engine, objects: HashMap::new(), ctx: CtxBind::default(), live, notifier });
+                        m.insert((a.client, a.handle), PtChan { chan, idx, tsg: a.tsg, parent: a.parent, device: a.device, engine, objects: HashMap::new(), ctx: CtxBind::default(), live, notifier });
                     }
                     me.pt_births.fetch_add(1, Ordering::Relaxed);
                     me.engine_live(engine, true);
@@ -1226,6 +1262,9 @@ impl ChanPlane {
                 }
                 if let Ok(mut m) = me.by_obj.lock() {
                     m.insert((a.client, a.handle), ht);
+                }
+                if let Ok(mut m) = me.scopes.lock() {
+                    m.insert((a.client, a.handle), ChanScope { tsg: a.tsg, parent: a.parent, device: a.device });
                 }
                 me.births.fetch_add(1, Ordering::Relaxed);
                 Ok(format!(
@@ -1485,5 +1524,29 @@ impl ChanPlane {
     /// Stop serving (device teardown).
     pub fn stop(&self) {
         self.stop.store(true, Ordering::Release);
+    }
+}
+
+#[cfg(test)]
+mod scope_tests {
+    use super::ChanScope;
+
+    /// ★ v3-promote: a guest free of ANY handle the channel hangs under takes its twin — the
+    /// channel, its group, its parent, its device or its client — and nothing else does (another
+    /// client's identical handles, a sibling channel, an unrelated object).
+    #[test]
+    fn a_group_device_or_client_free_takes_every_twin_under_it() {
+        let (c, dev, tsg, ch, sib) = (0xc1d0_000b, 0x5c00_0001, 0xcafe_0010, 0xcafe_0013, 0xcafe_0014);
+        let member = ChanScope { tsg: Some(tsg), parent: tsg, device: dev };
+        assert!(member.freed_by((c, ch), c, ch), "the channel itself");
+        assert!(member.freed_by((c, ch), c, tsg), "its group");
+        assert!(member.freed_by((c, ch), c, dev), "its DEVICE (a group member's parent is the group)");
+        assert!(member.freed_by((c, ch), c, c), "its client");
+        assert!(!member.freed_by((c, ch), c, sib), "a sibling's free leaves it");
+        assert!(!member.freed_by((c, ch), 0xc1d0_000c, tsg), "another client's same handle");
+        assert!(!member.freed_by((c, ch), c, 0xdead_0001), "an unrelated object");
+        let bare = ChanScope { tsg: None, parent: dev, device: dev };
+        assert!(bare.freed_by((c, ch), c, dev));
+        assert!(!bare.freed_by((c, ch), c, tsg));
     }
 }

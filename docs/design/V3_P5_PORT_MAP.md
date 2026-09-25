@@ -159,6 +159,22 @@ kf3: DOORBELL-LEDGER tok=0x00000009 route=passthrough rung=4 emulated=0 forwarde
     PMA scrubber's construction failed `0x40` ⇒ `RmInitAdapter` failed. Not this change (no promote
     on that path); a warm-up cost the harness does not absorb.
 
+24. **Channel-group fault scope (owner, 2026-09-25): per-twin RC is consistent with the guest, and
+    group death reaches every twin.** The guest's CPU-RM does nothing on `RC_TRIGGERED` but notify
+    the scope WE post (`_kgspRpcRCTriggered`, `kernel_gsp.c:548-676`; the TSG's channel list only
+    for `RC_NOTIFIER_SCOPE_TSG`, `kernel_rc_notification.c:385-410`), so posting CHANNEL scope (what
+    the host actually wrote: one record) leaves the guest believing exactly what is true — that
+    channel dead, siblings alive and running. Group death the GUEST decides now reaches every twin:
+    ⊘ gap found and closed — a free matched a twin by channel/group/parent/client but NOT the
+    DEVICE (a group member's parent is the group), and a Translated channel only by handle/client,
+    so a group or device free left a host ring pumping after the guest considered it gone.
+    `ChanScope::freed_by` (unit-tested) now covers channel, group, parent, device and client for
+    both routes; a TSG `GPFIFO_SCHEDULE` disable already reached every member. ⊘ Owner call left
+    open: a hardware-exact TSG-wide RC (siblings stopped AND their notifier records written) needs a
+    host-authored way to RC a sibling with a record; none exists unprivileged, and a CPU-written
+    record is forbidden. `STOP_CHANNEL` / `DISABLE_CHANNELS` / TSG `PREEMPT` are still refused by
+    name (the guest sees the failure; nothing dangles).
+
 **Q11 (ring placement, answered — needs an owner decision to act).** Is there a range the guest can
 never allocate, so Translated rings need no refusal? **No, on any family.** The guest's VA width is
 the hardware's, computed from per-chip MMU formats in the guest itself (VER2 49-bit
@@ -172,8 +188,12 @@ ring cannot be placed there. Rings on VER2 must stay below 2^40 (`GP_ENTRY1_GET_
 `cl*6f.h`; UVM `max_channel_va = 1 << 40`, `uvm_ampere.c:66-68`); VER3 could go above 2^40 only with
 `PB_EXTENDED_BASE` entries (`clc86f.h:175`), which is still inside the guest's 57-bit range. ⇒
 Recommendation: keep `[2^40 − 4 GiB, 2^40)` and the by-name refusal (no placement change); consider
-narrowing the refusal from the whole space's reconcile (`vasmgr.rs` `failed.insert(key)`) to the
-offending leaf, which is an owner call because it changes what a guest can make fail.
+narrowing the refusal from the whole space's reconcile to the offending leaf. ★ **Owner ruling
+2026-09-25: narrow it — DONE** (`vasmgr.rs`, per-leaf; the guest's invalidate stays unacknowledged,
+named). Translated rings live only in guest-KERNEL spaces (Q7: RM-internal CeUtils and nvidia-uvm's
+channel-manager space, fixed per-family layout `uvm_ampere.c:49-60`, `uvm_hopper.c:61-68`); HMM /
+external-range mirroring is per-process UVM spaces only, which never host a Translated channel ⇒ a
+collision is guest-kernel self-harm at worst.
 
 **STATUS UPDATE, 2026-09-25 (P6b, branch `v3-p6b` off `v3-p6uvm`): `--uvm-invalidate` PASSES;
 `--uvm-mean` reaches P3 (P1, P2, STALE RACE, THREADS ✔); the P6 diagnosis below was WRONG in two of

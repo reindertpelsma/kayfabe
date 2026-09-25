@@ -95,6 +95,9 @@ pub struct ChannelAlloc {
     /// ★ P5b: the channel group it was allocated under (`hParent`), when that is a TSG this link
     /// saw allocated — the group `GPFIFO_SCHEDULE` names.
     pub tsg: Option<u32>,
+    /// ★ v3-promote: the DEVICE the channel hangs off (its parent, or its group's parent) — a
+    /// guest free of the device takes the channel with it, so the plane must match it.
+    pub device: u32,
     /// ★ P5c: the error notifier the guest kernel resolved for it (`errorNotifierMem`) — where a
     /// GSP writes the channel's robust-channel record (`kernel_channel.c:548-590`).
     pub error_notifier: Option<kf_arch::fault::ErrorNotifier>,
@@ -382,6 +385,7 @@ impl ChannelPolicy {
             privilege,
             declared_kernel_pid: self.kernel_clients.contains(&h.client),
             tsg: tsg.map(|_| h.parent),
+            device,
             error_notifier: self.abi.decode_channel_error_notifier(params).ok().flatten(),
         };
         self.carried += 1;
