@@ -14,7 +14,7 @@
 //! ## What this file asserts, in one paragraph
 //!
 //! Through the cold boot, the queue bind, `GSP_INIT_DONE` and four RPC round-trips, the
-//! Rust GSP reproduces the C **exactly** in decoded projection — every one of the 498 GSP
+//! Rust GSP reproduces the C **exactly** in decoded projection — every one of the 499 GSP
 //! register reads in that span, the published tx header, the status write pointers, the
 //! command read-pointer acknowledgements — with **nine** divergences, of which **one** is
 //! a ledger row (GSP-D1) and **eight** are four distinct findings. Past that point the
@@ -102,7 +102,13 @@ fn the_boot_fsm_is_driven_all_the_way_through_by_the_recorded_guest() {
         "the capture ends with the Booter Unload, so the FSM must end torn down"
     );
     // The three planes: ours, and the two this differential does not cover.
-    assert_eq!(r.txns.len(), 1955, "transactions whose register we decode");
+    // ★ w828: +3 against the pre-w827 goldens (1955) — the model now decodes
+    // `NV_PRISCV_RISCV_BCR_CTRL` (`0x111668`, cherry-picked w827 fix): cold boot's
+    // `kflcnSwitchToFalcon_GA102` read and `kflcnRiscvProgramBcr_GA102` write before the bind, and
+    // the teardown's switch read after the closure limit. Every positional golden below moved by
+    // those decoded transactions (+2 before txn 492, +1 register read in reach, +1 beyond), and the
+    // in-reach diff stays green: the C served the unwritten register as 0, and so do we.
+    assert_eq!(r.txns.len(), 1958, "transactions whose register we decode");
     assert_eq!(
         (
             r.unprojected.guest_writes,
@@ -135,9 +141,9 @@ fn every_gsp_register_read_within_the_oracles_reach_is_served_exactly_as_the_c_s
     };
     let c = only_registers(&r.c, true);
     let rust = only_registers(&r.rust, true);
-    assert_eq!(c.len(), 498, "non-vacuity: the register plane was measured");
+    assert_eq!(c.len(), 499, "non-vacuity: the register plane was measured");
     assert_eq!(diff(&c, &rust), None, "a GSP register served differently");
-    assert_eq!(c.len() + only_registers(&r.c, false).len(), 910);
+    assert_eq!(c.len() + only_registers(&r.c, false).len(), 912);
 
     // ★ Beyond the closure limit the registers diverge in exactly ONE place, and it is a
     // *consequence* of the limit rather than an independent finding: `MAILBOX0` must read
@@ -156,14 +162,34 @@ fn every_gsp_register_read_within_the_oracles_reach_is_served_exactly_as_the_c_s
             _ => None,
         })
         .collect();
+    // ★★ w828: and ONE more, which is the w827 fix itself. `NV_PRISCV_RISCV_BCR_CTRL` at the
+    // capture's teardown: `kflcnSwitchToFalcon_GA102` wrote `CORE_SELECT_FALCON` and the C, which
+    // never modelled the register, read the guest's own word back with `VALID` clear — the 4 s
+    // spin every close paid (`ogkm-580: kernel_falcon_ga102.c:140-169`). We answer `VALID`.
+    // ⊘ This is a divergence FROM A DEFECT, pinned so it cannot silently go back.
     assert_eq!(
         differing,
-        vec![0x0011_0040],
-        "only NV_PGSP_FALCON_MAILBOX0, and only once"
+        vec![0x0011_0040, 0x0011_1668],
+        "NV_PGSP_FALCON_MAILBOX0 (the suspend poll), then BCR_CTRL (the C's unmodelled spin), each once"
     );
+    let bcr = |evs: &[TraceEvent]| {
+        evs.iter()
+            .find_map(|e| match e {
+                TraceEvent::MmioRead { off: 0x0011_1668, val, .. } => Some(*val),
+                _ => None,
+            })
+            .expect("the teardown reads BCR_CTRL")
+    };
+    assert_eq!(bcr(&after_c) & 1, 0, "the C: VALID never rose");
+    assert_eq!(bcr(&after_rust) & 1, 1, "ours: the core switch is acknowledged");
+    let mailbox_at = after_c
+        .iter()
+        .zip(&after_rust)
+        .position(|(a, b)| a != b && matches!(a, TraceEvent::MmioRead { off: 0x0011_0040, .. }))
+        .expect("the MAILBOX0 divergence");
     assert!(
         matches!(
-            after_c[differing_index(&after_c, &after_rust)],
+            after_c[mailbox_at],
             TraceEvent::MmioRead {
                 val: 0x8000_0000,
                 ..
@@ -171,13 +197,6 @@ fn every_gsp_register_read_within_the_oracles_reach_is_served_exactly_as_the_c_s
         ),
         "the C reports the suspend sentinel, whole and not OR-ed"
     );
-}
-
-/// Index of the first differing position between two equal-length register streams.
-fn differing_index(a: &[TraceEvent], b: &[TraceEvent]) -> usize {
-    diff(a, b)
-        .expect("the caller has already established there is one")
-        .at
 }
 
 // ═══════════════════ the oracle's reach, measured rather than assumed ═══════════════
@@ -259,9 +278,9 @@ fn the_closure_limit_is_the_first_multi_element_command_and_gsp_d6_is_why() {
     // (GSP-D6). So the capture contains no observation of those elements while they were
     // live, the ring has since been rewritten, and no assumption reconstructs a payload.
     let (t, r) = run(Fill::Reconstructed);
-    assert_eq!(r.closure_limit, Some(978));
+    assert_eq!(r.closure_limit, Some(980));
     let (txn, first) = *r.unobserved.first().expect("the run must reach the wall");
-    assert_eq!(txn, 978);
+    assert_eq!(txn, 980);
     assert_eq!(
         (first.gpa, first.len),
         (0x1_2720_9000, 4096),
@@ -311,11 +330,11 @@ fn the_global_positional_diff_is_not_green_and_a_green_one_would_be_the_bug() {
     let (_t, r) = run(Fill::Reconstructed);
     let d = diff(&r.c.events, &r.rust.events).expect("a green end-to-end diff IS the bug");
     assert_eq!(
-        d.at, 255,
+        d.at, 256,
         "the first position where the two implementations part"
     );
     assert_eq!(
-        r.c.txn[255], 492,
+        r.c.txn[256], 494,
         "and it is inside E6 — the bind, where GSP-D1 lives"
     );
 }
@@ -336,7 +355,7 @@ fn within_the_oracles_reach_the_census_is_one_ledger_row_and_four_findings() {
     );
     assert_eq!(
         c.beyond_closure(),
-        544,
+        545,
         "beyond the closure limit the C keeps going and we cannot; counted, not \
          interpreted"
     );
@@ -352,18 +371,18 @@ fn within_the_oracles_reach_the_census_is_one_ledger_row_and_four_findings() {
         vec![
             // F-2 — B4 drain-on-publish: the 580 command ring is already non-empty at bind
             // time (the guest's own tx header in this capture says writePtr = 2).
-            s(492, 3, "-", "ReadPtrAcked"),
+            s(494, 3, "-", "ReadPtrAcked"),
             // F-3 — we announce the status queue; the C announces nothing, ever.
-            s(492, 4, "-", "Irq"),
-            s(974, 3, "-", "Irq"),
+            s(494, 4, "-", "Irq"),
+            s(976, 3, "-", "Irq"),
             // F-4 — the reply BODY differs where every matched field agrees. fn 65:
             // the C splices a captured GspStaticConfigInfo (`C:3434-3452`).
-            s(975, 0, "ElementPosted", "ElementPosted"),
-            s(975, 3, "-", "Irq"),
-            s(976, 3, "-", "Irq"),
-            // F-4 again, fn 76: a control reply is sized by the control, not echoed.
             s(977, 0, "ElementPosted", "ElementPosted"),
             s(977, 3, "-", "Irq"),
+            s(978, 3, "-", "Irq"),
+            // F-4 again, fn 76: a control reply is sized by the control, not echoed.
+            s(979, 0, "ElementPosted", "ElementPosted"),
+            s(979, 3, "-", "Irq"),
         ]
     );
 
@@ -520,13 +539,13 @@ fn a_replay_with_no_lookahead_and_no_reconstruction_is_strictly_weaker() {
     let strict = Replay::new(&t, abi).run(Fill::Observed);
     let ahead = Replay::new(&t, abi).run(Fill::Lookahead);
     let recon = Replay::new(&t, abi).run(Fill::Reconstructed);
-    assert_eq!(strict.closure_limit, Some(492));
+    assert_eq!(strict.closure_limit, Some(494));
     assert_eq!(
         ahead.closure_limit,
-        Some(492),
+        Some(494),
         "lookahead cannot invent a page table"
     );
-    assert_eq!(recon.closure_limit, Some(978));
+    assert_eq!(recon.closure_limit, Some(980));
     assert!(strict.reconstructions.is_empty() && ahead.reconstructions.is_empty());
 }
 

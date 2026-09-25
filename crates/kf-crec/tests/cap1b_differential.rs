@@ -228,10 +228,13 @@ fn cap1b_closes_the_replay_past_cap1s_wall_and_the_new_wall_is_a_different_findi
     .with_policy(served_policy)
     .run(Fill::Reconstructed);
 
-    assert_eq!(cap1.closure_limit, Some(978), "the first capture's wall");
-    assert_eq!(r.closure_limit, Some(1028), "and this one's");
+    // ★ w828: every txn index here is +2 against the pre-w827 goldens — the model decodes
+    // `NV_PRISCV_RISCV_BCR_CTRL` now, and cold boot touches it twice before the bind (see
+    // `cap1_differential.rs`'s note at its `1958`).
+    assert_eq!(cap1.closure_limit, Some(980), "the first capture's wall");
+    assert_eq!(r.closure_limit, Some(1030), "and this one's");
     assert_eq!(
-        r.txns[1028].refusal,
+        r.txns[1030].refusal,
         Some(GspFault::QueueFull { needed: 9, free: 1 }),
         "GSP-D2: we decline the post the C would have made"
     );
@@ -240,7 +243,7 @@ fn cap1b_closes_the_replay_past_cap1s_wall_and_the_new_wall_is_a_different_findi
     let between = r
         .commands
         .iter()
-        .filter(|(t, _)| (978..1028).contains(t))
+        .filter(|(t, _)| (980..1030).contains(t))
         .count();
     assert_eq!(between, 50, "fifty commands cap1 could never reach");
 
@@ -322,7 +325,7 @@ fn the_multi_element_command_cap1_died_on_is_served_here() {
         .iter()
         .find(|(_, c)| c.elements > 1)
         .expect("cap1b reaches a multi-element command");
-    assert_eq!(*txn, 980);
+    assert_eq!(*txn, 982);
     assert_eq!((cmd.code, cmd.elements), (76, 3));
     assert_eq!(
         control_cmd(cmd),
@@ -1005,7 +1008,7 @@ fn our_interrupt_kernel_table_is_byte_identical_to_a_real_ga106s_own_reply() {
         })
         .map(|(t, _)| *t)
         .expect("the guest asks for the interrupt kernel table");
-    assert_eq!(intr_txn, 986);
+    assert_eq!(intr_txn, 988);
     let element_diverged = c.items.iter().any(|i| {
         i.txn == intr_txn
             && matches!(i.c, Some(Note::Decoded(Observation::ElementPosted { .. })))
@@ -1057,14 +1060,14 @@ fn the_boot_fsm_is_driven_all_the_way_through_and_the_census_is_itemised() {
         );
     }
     assert_eq!(r.final_phase, BootPhase::Halted);
-    assert_eq!(r.txns.len(), 2053);
+    assert_eq!(r.txns.len(), 2056);
     assert_eq!(
         r.rust.census(),
         vec![
             ("ElementPosted", 61),
             ("Irq", 56),
             ("ReadPtrAcked", 273),
-            ("Register", 912),
+            ("Register", 914), // ★ w828: +2, the two boot-time BCR_CTRL accesses
             ("TxHeaderPublished", 1),
             ("WritePtrAdvanced", 53),
         ]
