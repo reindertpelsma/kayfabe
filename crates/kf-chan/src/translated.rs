@@ -98,7 +98,8 @@ pub trait Window {
 /// to see to translate a launch. One per channel, kept by the caller.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct CeState {
-    /// Subchannels bound to a CE class, as a bit mask.
+    /// Subchannels a `SET_OBJECT` bound to a CE class, as a bit mask. ⊘ Recorded, NOT the routing
+    /// rule: every hardware subchannel of a CE channel reaches the CE (see `one_write`).
     pub ce_subch: u8,
     /// Subchannels bound to `GP100_UVM_SW`, as a bit mask — consumed here, never forwarded.
     pub sw_subch: u8,
@@ -165,6 +166,14 @@ pub enum Refusal {
         subch: u32,
         /// The class named.
         class: u32,
+    },
+    /// ★ P6b: a method at or above `0x100` on a software subchannel (5-7) no `SET_OBJECT` bound —
+    /// on bare metal a software-method trap to RM; nothing on our host channel may run it.
+    UnboundSubchannel {
+        /// The subchannel.
+        subch: u32,
+        /// The method.
+        method: u32,
     },
     /// A `GP100_UVM_SW` method with work behind it (`FAULT_CANCEL_*`, `CLEAR_FAULTED_*`): the fault
     /// plane that would serve it does not exist yet — refused rather than silently dropped.
@@ -269,7 +278,6 @@ fn one_write(
     if m == 0 {
         // SET_OBJECT: which subchannels hold a CE, which hold the SW class; nothing else is ours.
         let class = v & 0xFFFF;
-        eprintln!("kf3: DIAG set_object sub={sub} class={class:#x} is_ce={}", is_ce(class)); // DIAG (P6b, temporary)
         st.ce_subch &= !bit;
         st.sw_subch &= !bit;
         if is_ce(class) {
@@ -330,13 +338,23 @@ fn one_write(
         }
         return Ok(()); // the other MEM_OP_D operations are consumed here (see the module doc)
     }
-    let is_ce_sub = st.ce_subch & (1u8 << (sub & 7)) != 0;
-    if !is_ce_sub && m >= 0x100 {
-        eprintln!("kf3: DIAG non-ce method sub={sub} m={m:#x} v={v:#x} ce_subch={:#x} sw_subch={:#x}", st.ce_subch, st.sw_subch); // DIAG (P6b, temporary)
-    }
-    if !is_ce_sub {
+    // Host methods (below 0x100) apply to the channel whatever the subchannel: forwarded.
+    if m < 0x100 {
         emit(cur, sub, m, v);
         return Ok(());
+    }
+    // ★★★★★ P6b: on a COPY-ENGINE channel every HARDWARE subchannel (0-4) reaches the CE — "HW
+    // uses a fixed subchannel for CE" (`NVA06F_SUBCHANNEL_COPY_ENGINE` = 4, `cla06fsubch.h`;
+    // `uvm_push_macros.h:84-85`) — whichever subchannel the SET_OBJECT named. nvidia-uvm binds the
+    // CE on subchannel 0 (`uvm_maxwell_ce.c:31-36`, to verify the engine type) and pushes every CE
+    // method on subchannel 4. `[measured p6b8]` keyed on the SET_OBJECT's subchannel, this
+    // rewriter saw NONE of UVM's launches as CE launches and forwarded them VERBATIM — PHYSICAL
+    // operands (UVM's page-table writes, `OFFSET_OUT` `0x201000`…) straight onto our host ring,
+    // i.e. aimed at HOST physical memory — and the guest's own root stayed all zeros in the store.
+    // ⇒ Every Translated channel is a CE channel (the plane births no other kind), so subchannels
+    // 0-4 are the CE here, always; 5-7 are software subchannels and must be bound to be used.
+    if sub > 4 {
+        return Err(Refusal::UnboundSubchannel { subch: sub, method: m });
     }
     // ── CE methods ─────────────────────────────────────────────────────────────────────────
     match m {
