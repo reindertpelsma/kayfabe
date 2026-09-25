@@ -45,6 +45,45 @@ nothing — if the virtio device does not initialise or kayfabe is not detected,
 that it is inert. ⇒ Harmless on bare metal and under any other VMM. A **Windows** version is an
 end-stage goal (feasibility to be established then).
 
+### Lifecycle and the BAR1 doorbell (owner, 2026-09-26)
+
+**Guest-visible resources** (exposed by kayfabe, discovered over virtio): a BAR holding (a) the host
+doorbell TABLE — mapped **write-back, read-only**, so the module's per-doorbell lookups hit the CPU
+cache — and (b) the **hardware host doorbell page**, read/write.
+
+**BAR1 doorbell mappings are racy, and the two directions are asymmetric:**
+- **Map (may defer the optimisation, never the mapping).** When the guest maps a BAR1 usermode
+  doorbell view, kayfabe immediately places its OWN trapping doorbell page at that BAR1 location — the
+  map succeeds at once and every doorbell through it is handled by kayfabe's trap, correctly. It then
+  queues "BAR1 doorbell mapped at X" to the module over the virtqueue; the module may switch that
+  mapping to the fast path at any later moment. Until it does, nothing is lost: doorbells that did not
+  go through the fast route go through kayfabe's handler anyway.
+- **Unmap, or another page placed at that address (may NOT defer).** kayfabe must not complete it
+  while the module could still route writes for that mapping: it waits until the guest module has
+  removed its interception of that mapping (acknowledged over virtio). Only while the module is
+  loaded (the flag below).
+- All other BAR1 edits are unchanged.
+
+**Load/unload — free, unordered, independent of nvidia.ko** (either may be loaded first, either may
+go away first):
+- **On load:** the module announces itself over virtio. kayfabe, under the lock that orders BAR1
+  doorbell changes, sets the *module-present* flag FIRST — so no doorbell unmap can slip between the
+  check and the set — and then **replays** every interception area that already exists (current
+  doorbell mappings), so the module can take over mappings made before it loaded.
+- **Before unload:** the module restores every interception area to the original mapping, tells
+  kayfabe over virtio (kayfabe clears the flag), and only then unloads.
+- **Inert case** (bare metal, or virtio not initialised, or kayfabe not detected): the module never
+  hooks anything, so unload is trivial.
+
+⚠ **Design risk to close before building — the unmap wait.** kayfabe's unmap is driven by the guest's
+own BAR1 page-table change and invalidate; if the module's acknowledgement needed a vCPU that is busy
+inside that same RM path (a 1-vCPU guest, RM spinning with preemption disabled), the wait would never
+end. Mitigation: the module drops its interception synchronously in the VMA teardown path (the
+userspace mapping is torn down before RM frees the BAR1 mapping and invalidates), so in practice the
+acknowledgement is already recorded when kayfabe looks; kayfabe's wait itself runs on a device
+thread, never a vCPU, and must have a named, logged timeout outcome rather than an unbounded spin.
+To be verified against ogkm's unmap ordering before implementation.
+
 ## 3. Findings from ogkm-580 (the guest driver)
 
 - **The token is guest-computed; a table is required.** For user channels the guest RM builds the
