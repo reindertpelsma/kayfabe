@@ -54,8 +54,7 @@ work submission (24H2) would reopen the question but is "under development" with
 found. Inferred: Windows batches submissions, so doorbells/token may be far below Linux's ~1,008.
 ⇒ Measure first on a Windows guest (GSP forced on, HAGS on/off): doorbells per token and the guest
 CPL at each trapped doorbell. Meanwhile, the cross-OS lever is a cheaper exit (in-kernel doorbell
-handling + coalescing), not a guest module. Full write-up with sources: kept by the owner's session
-(not committed).
+handling + coalescing), not a guest module. Full write-up with sources: `V3_WINDOWS_DOORBELL_RESEARCH.md`.
 
 ### Lifecycle and the BAR1 doorbell (owner, 2026-09-26)
 
