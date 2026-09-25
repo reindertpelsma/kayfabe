@@ -75,13 +75,14 @@ pub fn copy_engine_type(i: u32) -> Option<u32> {
 /// ★ The host engine IS the guest's `engineType`: the device's engine list is the host's
 /// (`kf_rm::hostfacts` `engines`), so the guest's COPY`n` names host COPY`n` — including a GRCE,
 /// whose subchannel routing the guest's own pushbuffer already honours, exactly as on bare metal.
-/// Only a copy engine or GR0 is expressible here; anything else is refused by name.
+/// Only a copy engine, GR0 or a video engine (NVENC/NVDEC: its own runlist, no subchannel sharing,
+/// the same GPFIFO/USERD shape) is expressible here; anything else is refused by name.
 ///
 /// # Errors
 /// The host's refusal, by name.
 pub fn birth_twin(rm: &HostRm, space: VaSpace, g: GuestChannel) -> Result<Channel, String> {
-    if !is_copy_engine(g.engine) && g.engine != ENGINE_TYPE_GRAPHICS {
-        return Err(format!("engine type {:#x}: only a copy engine or GR0 has a passthrough twin", g.engine));
+    if !is_copy_engine(g.engine) && g.engine != ENGINE_TYPE_GRAPHICS && !kf_abi::submit::is_video_engine_type(g.engine) {
+        return Err(format!("engine type {:#x}: only a copy engine, GR0 or a video engine has a passthrough twin", g.engine));
     }
     let (userd_memory, userd_offset) = match g.userd {
         UserdAt::Store { store, off } => (store, off),
@@ -129,6 +130,16 @@ pub fn engine_object(
             _ => return Err(format!("class {class:#x} (DmaCopy) on a GR twin declares no copy engine ({declared_copy:?})")),
         },
         Kind::Compute | Kind::ThreeD if engine == ENGINE_TYPE_GRAPHICS => None,
+        // ★ A video class on a twin of ITS engine: the instance is the twin's (never the guest's
+        // params), so a class that does not match the twin's engine is refused here, by name.
+        Kind::VideoEncoder if kf_abi::submit::nvenc_index_of_engine_type(engine).is_some() => {
+            let i = kf_abi::submit::nvenc_index_of_engine_type(engine).unwrap_or(0);
+            return rm.alloc_video_object(chan, class, i).map_err(|e| format!("video encoder object {class:#x}: {e:?}"));
+        }
+        Kind::VideoDecoder if kf_abi::submit::nvdec_index_of_engine_type(engine).is_some() => {
+            let i = kf_abi::submit::nvdec_index_of_engine_type(engine).unwrap_or(0);
+            return rm.alloc_video_object(chan, class, i).map_err(|e| format!("video decoder object {class:#x}: {e:?}"));
+        }
         k => return Err(format!("class {class:#x} ({k:?}) on a twin of engine {engine:#x}")),
     };
     rm.alloc_engine_object(chan, class, copy).map_err(|e| format!("engine object {class:#x}: {e:?}"))

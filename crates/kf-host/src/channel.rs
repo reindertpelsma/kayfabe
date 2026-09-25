@@ -332,6 +332,25 @@ impl HostRm {
         Ok(h)
     }
 
+    /// ★ A VIDEO engine object (NVENC / NVDEC class) of `class` on `chan`, with params WE author:
+    /// `NV_MSENC_ALLOCATION_PARAMETERS` / `NV_BSP_ALLOCATION_PARAMETERS` — the same 12 bytes
+    /// `{size = 12, prohibitMultipleInstances = 0, engineInstance}` (`ogkm-580: nvos.h:2943-2996`),
+    /// `engineInstance` = the twin's own engine index, so nothing of the guest's alloc but its
+    /// class reaches the host. Host RM (a GSP client itself) allocates and promotes the falcon
+    /// context (`kernel_falcon.c:279-299`) — the guest's own context buffer is never used.
+    ///
+    /// # Errors
+    /// The host's refusal.
+    pub fn alloc_video_object(&self, chan: Channel, class: u32, engine_instance: u32) -> Result<u32, RmError> {
+        let mut p = [0u8; 12];
+        p[0..4].copy_from_slice(&12u32.to_le_bytes());
+        p[8..12].copy_from_slice(&engine_instance.to_le_bytes());
+        let want = self.mint();
+        let h = self.raw_alloc(chan.chan, want, class, &mut p)?;
+        self.remember(h, chan.chan);
+        Ok(h)
+    }
+
     /// ★ w827: a `GT200_DEBUGGER` session on OUR device, bound to `obj3d` — a GR object this
     /// session allocated (a twin's engine object). Params WE author:
     /// `NV83DE_ALLOC_PARAMETERS {hDebuggerClient_Obsolete = 0, hAppClient = our client,

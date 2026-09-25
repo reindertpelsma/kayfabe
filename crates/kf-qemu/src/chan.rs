@@ -621,6 +621,22 @@ impl ChanPlane {
                 kinds.push((kf_rm::authored::EngineKind::Copy(i), kf_host::event::notifier_ce(i), et));
             }
         }
+        // ★ The video engines the served table advertises (it lists only the host's own): one
+        // non-stall event each, announced on the vector the guest was told
+        // (`authored::engine_notification_rows`) — its `gkflcnServiceNotificationInterrupt` wakes
+        // the guest's NVENC/NVDEC OS events from it.
+        for i in 0..kf_abi::submit::NVENC_SIZE {
+            let kind = kf_rm::authored::EngineKind::VideoEncode(i);
+            if let (Some(et), Some(_)) = (kf_abi::submit::engine_type_nvenc(i), kf_rm::authored::non_stall_vector_for(intr_table, kind)) {
+                kinds.push((kind, kf_host::event::notifier_nvenc(i), et));
+            }
+        }
+        for i in 0..kf_abi::submit::NVDEC_SIZE {
+            let kind = kf_rm::authored::EngineKind::VideoDecode(i);
+            if let (Some(et), Some(_)) = (kf_abi::submit::engine_type_nvdec(i), kf_rm::authored::non_stall_vector_for(intr_table, kind)) {
+                kinds.push((kind, kf_host::event::notifier_nvdec(i), et));
+            }
+        }
         for (kind, notify, engine_type) in kinds {
             let ev = rm.open_event_fd().map_err(|e| format!("{} event fd: {e:?}", kind.name()))?;
             rm.alloc_os_event(rm.subdevice(), notify, true, &ev).map_err(|e| format!("{} os event: {e:?}", kind.name()))?;
@@ -1220,6 +1236,22 @@ impl ChanPlane {
             eprintln!("kf3: chan {client:#x}:{object:#x} GPU_PROMOTE_CTX: no passthrough twin — not ours (entries={entries})");
             return ChanAnswer::NotOurs;
         };
+        // ★ A VIDEO twin's promote is the falcon context (`_kflcnPromoteContext`,
+        // `kernel_falcon.c:184-276`: `entryCount = 0`, the guest VA only). Host RM allocated and
+        // promoted the twin's own falcon context with its engine object, so it is satisfied by the
+        // twin — nothing sent, no guest byte touched.
+        if kf_abi::submit::is_video_engine_type(engine) && engine_type == engine {
+            let Ok(mut m) = self.pt.lock() else {
+                return ChanAnswer::Refused { status: NV_ERR_INVALID_STATE, why: "twins poisoned".into() };
+            };
+            let Some(v) = m.get_mut(&(client, object)) else { return ChanAnswer::NotOurs };
+            v.ctx.promotes += 1;
+            eprintln!(
+                "kf3: chan {client:#x}:{object:#x} GPU_PROMOTE_CTX (video falcon ctx, engine {engine:#x}) SATISFIED BY TWIN host {ht:#x}: entries={entries} host_objects={} — not forwarded",
+                v.objects.len()
+            );
+            return ChanAnswer::Done;
+        }
         if engine != kf_abi::submit::ENGINE_TYPE_GRAPHICS || engine_type != engine {
             return ChanAnswer::Refused {
                 status: NV_ERR_INVALID_ARGUMENT,
@@ -1605,8 +1637,15 @@ impl ChanPlane {
             );
             return ChanAnswer::NotOurs;
         }
-        if passthrough && !is_copy_engine(engine) && engine != kf_abi::submit::ENGINE_TYPE_GRAPHICS {
-            return refuse(NV_ERR_NOT_SUPPORTED, format!("user channel on engine type {engine:#x}: only a copy engine or GR0 has a passthrough twin"));
+        if passthrough
+            && !is_copy_engine(engine)
+            && engine != kf_abi::submit::ENGINE_TYPE_GRAPHICS
+            && !kf_abi::submit::is_video_engine_type(engine)
+        {
+            return refuse(
+                NV_ERR_NOT_SUPPORTED,
+                format!("user channel on engine type {engine:#x}: only a copy engine, GR0 or a video engine has a passthrough twin"),
+            );
         }
         let Some(vas) = a.vaspace else {
             return refuse(NV_ERR_INVALID_STATE, format!("no VA space resolved (hVASpace={:#x}, parent {:#x})", a.h_vaspace, a.parent));

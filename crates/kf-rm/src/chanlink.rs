@@ -492,7 +492,13 @@ impl ChannelPolicy {
             Some(AllocParams::NoDeclaredFacts)
                 if matches!(
                     engine_class_kind(h.class),
-                    Some(kf_chip::classes::Kind::Compute | kf_chip::classes::Kind::DmaCopy | kf_chip::classes::Kind::ThreeD)
+                    Some(
+                        kf_chip::classes::Kind::Compute
+                            | kf_chip::classes::Kind::DmaCopy
+                            | kf_chip::classes::Kind::ThreeD
+                            | kf_chip::classes::Kind::VideoEncoder
+                            | kf_chip::classes::Kind::VideoDecoder
+                    )
                 ) =>
             {
                 self.carried += 1;
@@ -853,9 +859,11 @@ pub fn alloc_shape(abi: &DriverAbiTable, class: u32) -> Option<AllocParams> {
     }
     abi.alloc_params(kf_arch::ids::ClassId(class)).or_else(|| match engine_class_kind(class)? {
         kf_chip::classes::Kind::ChannelGpfifo => Some(AllocParams::Channel),
-        kf_chip::classes::Kind::Compute | kf_chip::classes::Kind::DmaCopy | kf_chip::classes::Kind::ThreeD => {
-            Some(AllocParams::NoDeclaredFacts)
-        }
+        kf_chip::classes::Kind::Compute
+        | kf_chip::classes::Kind::DmaCopy
+        | kf_chip::classes::Kind::ThreeD
+        | kf_chip::classes::Kind::VideoEncoder
+        | kf_chip::classes::Kind::VideoDecoder => Some(AllocParams::NoDeclaredFacts),
         kf_chip::classes::Kind::Usermode => None,
     })
 }

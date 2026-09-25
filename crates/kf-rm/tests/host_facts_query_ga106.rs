@@ -353,11 +353,15 @@ fn assert_engine_rows_match_except_stated(got: &[kf_abi::inittables::FifoDeviceE
 #[test]
 fn the_authored_engine_table_over_the_real_engine_list_equals_the_captured_rows_except_stated() {
     let f = ga106::host_facts();
-    let kinds = hostquery::query_engine_list(&mut Ga106Replay::load()).expect("captured");
+    let all = hostquery::query_engine_list(&mut Ga106Replay::load()).expect("captured");
+    println!("host engine list: {:?}", all.iter().map(|k| k.name()).collect::<Vec<_>>());
+    // ★ The captured old row predates the video engines (it advertised none): compare the
+    // non-video subset, and the video rows separately (`the_video_rows_...`).
+    let kinds: Vec<_> = all.iter().copied().filter(|k| hostquery::video_eng_desc(*k).is_none()).collect();
     assert_eq!(kinds.iter().map(|k| k.name()).collect::<Vec<_>>(), ["GR0", "CE0", "CE1", "CE2", "CE3", "SOFTWARE"]);
     let rows = kf_rm::authored::engine_table(Family::Ampere, &kinds).expect("Ampere has every constant");
     assert_engine_rows_match_except_stated(&rows, &f.engines);
-    assert_eq!(hostquery::device_info_rule(&kinds), f.device_info);
+    assert_eq!(hostquery::device_info_rule(&kinds, &[]), f.device_info);
     // ★ And the served CE geometry derived from the authored rows names the LCEs the real GA106
     // reports present (R18 CE_GET_ALL_CAPS: 0x0f).
     assert_eq!(kf_abi::cecaps::CeGeometry::from_engines(&rows).expect("LCE rows").present, 0x0f);
@@ -653,7 +657,11 @@ fn the_family_rules_cover_what_a_ga106_does_not_have() {
     assert_eq!(hostquery::USERMODE_REG_BASE, 0x00BB_0000, "tu102/gb100 dev_vm.h: 0xB80000 + 0x30000");
     assert_eq!(hostquery::classify_engine(0x34), Some((kf_rm::authored::EngineKind::Copy(10), 0x13)), "COPY10: NV2080 0x34, RM 0x13");
     assert_eq!(hostquery::classify_engine(0x3d), Some((kf_rm::authored::EngineKind::Copy(19), 0x1c)));
-    assert_eq!(hostquery::classify_engine(0x13), None, "NV2080 0x13 is NVDEC0, not a copy engine");
+    assert_eq!(
+        hostquery::classify_engine(0x13),
+        Some((kf_rm::authored::EngineKind::VideoDecode(0), 0x1d)),
+        "NV2080 0x13 is NVDEC0 (RM 0x1d), not a copy engine"
+    );
     assert_eq!(hostquery::classify_engine(0x08), Some((kf_rm::authored::EngineKind::Graphics(7), 0x08)), "GR7 (MIG parts)");
     assert_eq!(hostfacts::mc_engine_idx_of_engine_type(0x3d), Some(34), "CE19 = MC_ENGINE_IDX_CE19");
 }

@@ -1116,6 +1116,72 @@ pub const RM_ENGINE_TYPE_COPY0: u32 = 0x0000_0009;
 /// (`ogkm-580: gpu_engine_type.h:131`).
 pub const RM_ENGINE_TYPE_COPY_SIZE: u32 = 20;
 
+// ---- ★ the video engines (NVENC / NVDEC), both spaces ------------------------------------------
+//
+// ⊘ The same two-space hazard as the copy engines, worse: `NV2080_ENGINE_TYPE_NVENC2 = 0x1d` is
+// numerically `RM_ENGINE_TYPE_NVDEC0`, and `NV2080_ENGINE_TYPE_NVDEC0 = 0x13` is
+// `RM_ENGINE_TYPE_COPY10`. Every function below names its space.
+
+/// `NV2080_ENGINE_TYPE_NVDEC0` (= `_BSP`) — `ogkm-580: class/cl2080_notification.h:301-309`;
+/// `NVDEC0..7` are the one contiguous run `0x13..=0x1a`.
+pub const NV2080_ENGINE_TYPE_NVDEC0: u32 = 0x0000_0013;
+/// `NV2080_ENGINE_TYPE_NVENC0` (= `_MSENC`) — `cl2080_notification.h:310-313`; `NVENC1/2` follow
+/// it, and `NVENC3` is out of line at `0x3f` (`:351`, `NV2080_ENGINE_TYPE_NVENC(i)` at `:402`).
+pub const NV2080_ENGINE_TYPE_NVENC0: u32 = 0x0000_001b;
+/// `NV2080_ENGINE_TYPE_NVENC3` (`cl2080_notification.h:351`).
+pub const NV2080_ENGINE_TYPE_NVENC3: u32 = 0x0000_003f;
+/// `RM_ENGINE_TYPE_NVDEC0` — `ogkm-580: gpu_engine_type.h:63` (`NVDEC0..7` = `0x1d..=0x24`).
+pub const RM_ENGINE_TYPE_NVDEC0: u32 = 0x0000_001d;
+/// `RM_ENGINE_TYPE_NVENC0` — `gpu_engine_type.h:71` (`NVENC0..3` = `0x25..=0x28`).
+pub const RM_ENGINE_TYPE_NVENC0: u32 = 0x0000_0025;
+/// `ENG_NVDEC__SIZE_1` (`g_eng_desc_nvoc.h:1806`).
+pub const NVDEC_SIZE: u32 = 8;
+/// `ENG_NVENC__SIZE_1` (`g_eng_desc_nvoc.h:1800`).
+pub const NVENC_SIZE: u32 = 4;
+
+/// `NV2080_ENGINE_TYPE_NVENC(i)` (`cl2080_notification.h:402`), `None` past `NVENC3`.
+#[must_use]
+pub const fn engine_type_nvenc(i: u32) -> Option<u32> {
+    match i {
+        0..=2 => Some(NV2080_ENGINE_TYPE_NVENC0 + i),
+        3 => Some(NV2080_ENGINE_TYPE_NVENC3),
+        _ => None,
+    }
+}
+
+/// `NV2080_ENGINE_TYPE_NVDEC(i)` (`cl2080_notification.h:408`), `None` past `NVDEC7`.
+#[must_use]
+pub const fn engine_type_nvdec(i: u32) -> Option<u32> {
+    if i < NVDEC_SIZE { Some(NV2080_ENGINE_TYPE_NVDEC0 + i) } else { None }
+}
+
+/// ★ *"Which NVENC is this, in **NV2080** space?"* — `NV2080_ENGINE_TYPE_IS_NVENC` then
+/// `_NVENC_IDX` (`cl2080_notification.h:403-406`). `None` = not an encoder.
+#[must_use]
+pub const fn nvenc_index_of_engine_type(nv2080: u32) -> Option<u32> {
+    match nv2080 {
+        NV2080_ENGINE_TYPE_NVENC0..=0x1d => Some(nv2080 - NV2080_ENGINE_TYPE_NVENC0),
+        NV2080_ENGINE_TYPE_NVENC3 => Some(3),
+        _ => None,
+    }
+}
+
+/// ★ *"Which NVDEC is this, in **NV2080** space?"* (`cl2080_notification.h:408-410`).
+#[must_use]
+pub const fn nvdec_index_of_engine_type(nv2080: u32) -> Option<u32> {
+    if nv2080 >= NV2080_ENGINE_TYPE_NVDEC0 && nv2080 < NV2080_ENGINE_TYPE_NVDEC0 + NVDEC_SIZE {
+        Some(nv2080 - NV2080_ENGINE_TYPE_NVDEC0)
+    } else {
+        None
+    }
+}
+
+/// ★ A video engine in NV2080 space: an encoder or a decoder.
+#[must_use]
+pub const fn is_video_engine_type(nv2080: u32) -> bool {
+    nvenc_index_of_engine_type(nv2080).is_some() || nvdec_index_of_engine_type(nv2080).is_some()
+}
+
 /// ★★★ *"Which copy engine is this, in **RM** engine space?"* — `RM_ENGINE_TYPE_IS_COPY`
 /// then `RM_ENGINE_TYPE_COPY_IDX`, transcribed as one function
 /// (`ogkm-580: gpu_engine_type.h:139-141`).
