@@ -125,6 +125,65 @@ the GA106 bench (host 580.159.04); `v3_gates.sh` 8/8 PASS at `20cc4888`.
     their physical-mode work — and the guest is now TOLD (`RC_TRIGGERED` ×4), so `UVM_REGISTER_GPU`
     fails `0x60` instead of spinning to the budget. Q7 still decides the route.
 
+**STATUS UPDATE, 2026-09-25 (P6b, branch `v3-p6b` off `v3-p6uvm`): `--uvm-invalidate` PASSES;
+`--uvm-mean` reaches P3 (P1, P2, STALE RACE, THREADS ✔); the P6 diagnosis below was WRONG in two of
+its three parts.** Measured on the GA106 bench (host 580.159.04), boots `p6b1`…`p6b9`; `v3_gates.sh`
+8/8 PASS at `990ec3b1`; suite `p6bs1` at `990ec3b1`: `FAST_SUITE_PASS=28 FAST_SUITE_FAIL=1 FAST_SUITE_CRASH=1` (FAIL `--uvm-mean` at P3 only, item 21; TIMEOUT `--ce-client-guest-ram`, Q8 — unchanged). Was 27 at `p6s1`.
+14. ⊘⊘ **Every `VA_ALREADY_MAPPED` was the guest mapping onto OUR RING** — not "two allocations in one
+    64 KiB page". `[measured p6b1]` RM placed token 3's host ring (RM-chosen VA, bottom-up) at
+    `0x121040000+1 MiB` — RM's allocator in our host space is the same allocator the guest's RM runs in
+    its own space (both start above the split-VAS server window, `gpu_vaspace.c:421-431`) — and UVM
+    then mapped tokens 4-6's GPFIFOs at `0x121040000`/`…70000`/`…a0000`: nine guest maps "succeeded"
+    onto our ring, and the later unmap of one of them was the `Other(87)`. ⇒ Rings are now FIXED in a
+    per-space region `[2^40 - 4 GiB, 2^40)` (the GP entry is 40 bits on every family,
+    `kf_chan::host::RING_VA_LIMIT`), and a walked leaf over a VMM placement (a ring, a window) is
+    REFUSED by name before the host is asked (`MapTarget::reserved`; a guest VA never aliases a VMM
+    address). `held=0 vmm_overlaps=0` on every boot since.
+15. **Ruling (a) — the ledger records only mappings we made.** `MapTarget::map` → `Mapped::{Placed,
+    HeldByHost}`; `HeldByHost` satisfies the guest's statement and records no row (counted `held=`).
+16. **Ruling (b) — coverage at the family's smallest GMMU page, NOT the C's 64 KiB round-up.** v3's rows
+    are walk leaves — whole guest pages by construction — and the C's `(size+0xffff)&~0xffff` rounded
+    PROMOTE rows (declared lengths like `0x8600`), which v3 does not consume. Rounding a 4 KiB leaf up
+    would extend past what the guest mapped and overlap its neighbours (exactly what made the C need
+    `0x51 == success`). A non-whole-page leaf is refused by name (`vasmgr::whole_pages`, grain from
+    `MmuFormat::small_page_bytes`: 4 KiB on VER2 and VER3).
+17. **Ruling (c) — a MOVED root is walked at the next synchronisation point, not at the statement.**
+    `deviceCtrlCmdDmaSetPageDirectory_IMPL` sends the RPC FIRST and only then migrates the RM-internal
+    root entries into the new root (`dma.c:500-518` → `gvaspaceExternalRootDirCommit`,
+    `gpu_vaspace.c:3234-3238`); our reply is held until our walk lands, so a walk at the statement
+    always sees an EMPTY new root. `[measured p6b1]` UVM's `configure_address_space` moved its space
+    `0x0 → 0x200000` after `uvm_channel_manager_create` (`uvm_gpu.c:1615-1623`); the walk unmapped the
+    GPFIFOs and token 3 died at `gp=2`. `VasTable::set_root` now returns `RootChange::{Unchanged, First,
+    Moved}`; `First` walks now (Q10), `Moved` at the next invalidate / split naming the space, whose
+    reconcile retires the old root's rows. `[measured p6b2]` teardown walks of `0x200000` found the
+    migrated rows (kept, `-1` per guest free). ⊘ The "`SET_PAGE_DIRECTORY` root read as `0x0`" above
+    was not a decode issue: `0x0` is RM's own root for that space (the guest's FB is used from 0).
+18. **Ruling (d) — `MEM_OP` MEMBAR is FORWARDED.** RM names the privileged host methods as exactly
+    `TLB_INVALIDATE` and `ACCESS_COUNTER_CLR` (`alloc_channel.h:207-214`), so a MEMBAR is an ordering
+    method our unprivileged ring may run: A-D forwarded as written; an invalidate's `SYSMEMBAR`
+    (`MEM_OP_A` 11:11) is kept as a forwarded `SYS_MEMBAR` ahead of the split. Other `MEM_OP_D` ops
+    (`L2_*`, `ACCESS_COUNTER_CLR`, Hopper `MMU_OPERATION`) are still consumed, unforwarded.
+19. ⊘⊘⊘ **ISOLATION DEFECT FOUND AND CLOSED — UVM's CE launches reached our host ring VERBATIM.**
+    nvidia-uvm binds its CE on subchannel 0 (`uvm_maxwell_ce.c:31-36`) and pushes every CE method on
+    subchannel 4 (`NVA06F_SUBCHANNEL_COPY_ENGINE`, `uvm_push_macros.h:84-85`). The rewriter keyed CE
+    methods on the SET_OBJECT's subchannel: `[measured p6b8]` it saw none of UVM's launches and
+    forwarded them unrewritten — PHYSICAL `LOCAL_FB` operands (UVM's page-table writes, `OFFSET_OUT
+    0x201000`…) on OUR host channel, i.e. aimed at HOST physical VRAM, with no Xid; the guest's root in
+    the store stayed all zeros. This was live on `v3-p6uvm` from `37d4303e` (every boot that ran UVM on
+    the Translated route, including suite `p6s1`). Now every hardware subchannel (0-4) of a Translated
+    channel is the CE; 5-7 must be SW-bound or the method is refused (`UnboundSubchannel`); and every
+    host channel we birth carries `NVOS04 DENY_PHYSICAL_MODE_CE` (`alloc_channel.h:158-170`, "regardless
+    of whether … the client handle is admin" — the VMM's is), so an operand that ever escapes the
+    rewriter faults our channel instead of writing host memory.
+20. **A root published through a `DUP_OBJECT` is the ORIGINAL's root.** UVM dups a user's VA space into
+    its own client and publishes the root through the dup (`uvm_va_space.c:1394`); `DUP_OBJECT`
+    aliases (`vaspace_api.c:440`). `[measured p6b3]` the user's channel was refused "has no mirror".
+    `PageDirPolicy` now carries such statements for the original; an alias's free drops the name only.
+21. **What `--uvm-mean` still lacks: P3 `GPU_PROMOTE_CTX`.** A GR compute object in a UVM-owned space
+    makes the guest RM promote its own ctx buffers (`kgrobjPromoteContext`, `0x2080012b`), which v3
+    refuses by name (`rmrpc` `PromoteCtxNotModelled`) ⇒ `Other(86)`. A new plane, not a mapping-plane
+    gap — needs a design decision (see the report of this step).
+
 **STATUS UPDATE, 2026-09-25 (P6, branch `v3-p6uvm`, rev `74af47f1`): the Q7 identity rule is
 BUILT and PROPOSED; UVM's channels are Translated and execute; the two UVM arms are not yet PASS.**
 Built (each on the GA106 bench): (1) the Q7 kernel-identity rule from RM's `internalFlags.PRIVILEGE`
@@ -134,7 +193,9 @@ the channel SUSPENDS at the split and resumes on the walk's completion fd — no
 stack); (3) a Translated ring reading a **VIDMEM** GPFIFO/pushbuffer (UVM's default) through CPU
 views WE arm over the store (Q3, previously refused by name); (4) a FIXED reconcile map onto a VA
 host RM already holds treated as success (the C's `:7935-7938` semantic), which unblocked
-`UVM_REGISTER_GPU`.
+`UVM_REGISTER_GPU`. ⊘ **CORRECTED by P6b (items 14-15 above):** the VA was held by OUR OWN ring, which
+RM had placed on guest VAs; success there aliased guest VAs onto a VMM address. Rings moved; the
+host's `HeldByHost` answer now records no row.
 `[measured p6a→p6b]` nvidia-uvm's four CE channels now BORN Translated (Q7 positive), `REGISTER_GPU`
 went from a hang / `0x60` to `rmStatus 0x0`, and channel token 0x3 executed to `gp=2`.
 ⊘ **NOT yet PASS**: `--uvm-invalidate` still TIMES OUT — a Translated ring died reading a GP entry
@@ -142,6 +203,10 @@ whose VA was `not placed by us`, and a reconcile `unmap` refused `Other(87)`: th
 reconcile hole (the C rounds every promote-derived mapping UP TO 64 KiB, `asize = (size+0xffff)&~0xffffull`;
 this port binds at the declared length) and a possible UVM externally-owned-VAS PDB decode issue
 (its `SET_PAGE_DIRECTORY` root read as `0x0`). These are mapping-plane coverage, not identity.
+⊘ **CORRECTED by P6b (items 14, 16, 17 above):** no sub-page hole exists on the walk path (and the
+C's rounding applied to promote rows v3 does not consume); `0x0` decoded correctly; the GPFIFO went
+"not placed by us" because a walk at UVM's root RE-publication unmapped it before the guest had
+migrated its entries into the new root, and the `Other(87)` was the unmap of a row held by our ring.
 
 **Q8 (NEW, needs an owner decision). `--ce-client-guest-ram` cannot fit 60 s under "full walk + full
 diff per invalidate".** It declares 13 000 rows in each of two spaces, one invalidate per map
