@@ -93,6 +93,11 @@ const GSP_RISCV_IRQMASK: u64 = 0x0011_1528;
 /// `NV_PRISCV_RISCV_IRQDEST`: `NV_FALCON2_GSP_BASE` + `0x52c`
 /// (`ogkm-580: dev_riscv_pri.h:27,29`); `C: nvkvm_gpu_emul.c:1573`.
 const GSP_RISCV_IRQDEST: u64 = 0x0011_152c;
+/// ★ w827: `NV_PRISCV_RISCV_BCR_CTRL` = `NV_FALCON2_GSP_BASE` + `0x668`
+/// (`ogkm-580: src/common/inc/swref/published/ampere/ga102/dev_riscv_pri.h:55`).
+const GSP_RISCV_BCR_CTRL: u64 = 0x0011_1668;
+/// `NV_PRISCV_RISCV_BCR_CTRL_VALID_TRUE` (0:0, `dev_riscv_pri.h:56-57`).
+const BCR_CTRL_VALID: u64 = 1;
 /// `NV_PGC6_AON_SECURE_SCRATCH_GROUP_05_PRIV_LEVEL_MASK`.
 const GFW_BOOT_PLM: u64 = 0x0011_8128;
 /// `NV_PGC6_AON_SECURE_SCRATCH_GROUP_05_0_GFW_BOOT`.
@@ -297,6 +302,7 @@ impl FalconGspModel {
             GspReg::GspRiscvCpuctl => GSP_RISCV_CPUCTL,
             GspReg::GspRiscvIrqmask => GSP_RISCV_IRQMASK,
             GspReg::GspRiscvIrqdest => GSP_RISCV_IRQDEST,
+            GspReg::GspRiscvBcrCtrl => GSP_RISCV_BCR_CTRL,
             GspReg::Sec2FalconCpuctl => PSEC + FALCON_CPUCTL,
             GspReg::Sec2FalconMailbox0 => PSEC + FALCON_MAILBOX0,
             GspReg::Sec2FalconDmatrfcmd => PSEC + FALCON_DMATRFCMD,
@@ -331,6 +337,7 @@ impl GspModel for FalconGspModel {
             GSP_RISCV_CPUCTL => GspReg::GspRiscvCpuctl,
             GSP_RISCV_IRQMASK => GspReg::GspRiscvIrqmask,
             GSP_RISCV_IRQDEST => GspReg::GspRiscvIrqdest,
+            GSP_RISCV_BCR_CTRL => GspReg::GspRiscvBcrCtrl,
             WPR2_ADDR_LO => GspReg::Wpr2AddrLo,
             WPR2_ADDR_HI => GspReg::Wpr2AddrHi,
             _ => match (off & !0xFFFF, off & 0xFFFF) {
@@ -398,6 +405,9 @@ impl GspModel for FalconGspModel {
             | GspReg::GspRiscvIrqdest => IRQSTAT_SWGEN0,
             // Write-1-to-clear: reads back zero.
             GspReg::GspFalconIrqsclr => 0,
+            // ★ w827: the core the guest last selected, VALID (`kf_arch::gsp::GspReg::GspRiscvBcrCtrl`);
+            // never written = the reset value (FALCON, not VALID).
+            GspReg::GspRiscvBcrCtrl => obs.riscv_bcr_ctrl.map_or(0, |v| u64::from(v) | BCR_CTRL_VALID),
             GspReg::GspRiscvCpuctl => {
                 if obs.riscv_active {
                     RISCV_CPUCTL_ACTIVE

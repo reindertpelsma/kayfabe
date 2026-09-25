@@ -743,6 +743,8 @@ pub struct GspFsm {
     /// ⊘ A `Vec` and not a map: it is ordered, it is single-digit in every measured boot,
     /// and the order replies are posted in is the order the guest asked for them.
     held: Vec<HeldReply>,
+    /// ★ w827: the guest's last `NV_PRISCV_RISCV_BCR_CTRL` write ([`GspReg::GspRiscvBcrCtrl`]).
+    bcr_ctrl: Option<u32>,
     abi: GspAbi,
     phase: BootPhase,
     queue: QueueState,
@@ -858,6 +860,7 @@ impl GspFsm {
         GspFsm {
             pending_command_doorbells: 0,
             held: Vec::new(),
+            bcr_ctrl: None,
             abi,
             phase: BootPhase::Cold,
             queue: QueueState::Unbound,
@@ -912,6 +915,7 @@ impl GspFsm {
             swgen0_pending: self.swgen0_pending,
             boot_args_lo: self.mailbox_lo,
             boot_args_hi: self.mailbox_hi,
+            riscv_bcr_ctrl: self.bcr_ctrl,
         }
     }
 
@@ -1048,6 +1052,10 @@ impl GspFsm {
             val,
             reg: model.decode_reg(bar, off),
         };
+        // ★ w827: a register the model answers from what was written (`GspRiscvBcrCtrl`).
+        if w.reg == Some(kf_arch::gsp::GspReg::GspRiscvBcrCtrl) {
+            self.bcr_ctrl = Some(val as u32);
+        }
         let ctx = self.boot_context();
         let steps = model
             .boot_sequence()
