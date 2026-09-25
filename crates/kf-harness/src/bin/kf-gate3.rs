@@ -151,13 +151,13 @@ impl GuestUserd for Userd<'_, '_> {
 
 struct Pub<'a, 'b>(&'a RefCell<Guest<'b>>);
 impl Publisher for Pub<'_, '_> {
-    fn invalidated(&mut self, pdb: Option<u64>) -> Result<(), String> {
+    fn invalidated(&mut self, pdb: Option<u64>) -> Result<kf_chan::host::Split, String> {
         let mut g = self.0.borrow_mut();
         g.walks.push(pdb);
         if pdb.is_some_and(|p| p != g.root) {
             return Err(format!("invalidate names {pdb:x?}, not the kernel root {:#x}", g.root));
         }
-        g.publish("at_split").map(|_| ())
+        g.publish("at_split").map(|_| kf_chan::host::Split::Done)
     }
 }
 

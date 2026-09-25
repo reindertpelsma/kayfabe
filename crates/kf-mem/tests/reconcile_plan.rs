@@ -29,12 +29,16 @@ fn a_gone_or_repointed_row_is_unmapped_then_remapped() {
     assert_eq!(p.map, vec![d(0x1000, 0x1000, 0x9000, true)]);
 }
 
+/// ⊘ Was `a_run_that_grows_over_a_kept_slice_takes_it_down_first` — stale since P5c's gap-only
+/// completion (`ledger.rs` `plan_reconcile`): a grown run keeps the agreeing slice and maps ONLY
+/// the gap. The property the old test guarded still holds, stated directly: no map overlaps a
+/// held row (an overlapping FIXED map would be refused `0x51`).
 #[test]
-fn a_run_that_grows_over_a_kept_slice_takes_it_down_first() {
+fn a_run_that_grows_over_a_kept_slice_maps_only_the_gap() {
     let led = [(0x10000, 0x1000, 0x40000, false)];
     let p = plan_reconcile(&led, &[d(0x10000, 0x10000, 0x40000, false)]);
-    assert_eq!(p.unmap, vec![(0x10000, 0x1000)], "an overlapping FIXED map would be refused 0x51");
-    assert_eq!(p.map.len(), 1);
+    assert!(p.unmap.is_empty(), "{p:?}");
+    assert_eq!(p.map, vec![d(0x11000, 0xF000, 0x41000, false)], "an overlapping FIXED map would be refused 0x51");
 }
 
 #[test]

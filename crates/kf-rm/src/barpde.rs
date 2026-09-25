@@ -206,6 +206,15 @@ pub struct PageDirPolicy {
     /// ★ P5c: every VA-space object allocated, `(hClient, hVaSpace)` → `(parent device, a
     /// GPU_DEVICE reference)` — what a later free retires.
     vas: std::collections::BTreeMap<(u32, u32), (u32, bool)>,
+    /// ★ P6b: `DUP_OBJECT` aliases of a VA-space object, `(dst client, dst handle)` → the
+    /// ORIGINAL `(client, handle)`. `DUP_OBJECT` aliases, it does not copy
+    /// (`vaspaceapiCopyConstruct` is `vaspaceIncRefCnt` + the same `pVASpace`, `vaspace_api.c:440`;
+    /// `THE_ARCHITECTURE_v3.md` §4.3): nvidia-uvm dups a user's VA space into its own client
+    /// (`nvUvmInterfaceDupAddressSpace`) and publishes the root through the DUP
+    /// (`uvm_va_space.c:1394`), while the user's channels name the ORIGINAL — `[measured p6b3]`
+    /// the root landed on `0xc1d00001:0xcaf00036` and the user's channel in `0xc1d0000b:0xcafe0010`
+    /// was refused *"has no mirror"*. So a statement through an alias is carried for the original.
+    aliases: std::collections::BTreeMap<(u32, u32), (u32, u32)>,
     /// Statements carried.
     pub carried: u64,
     /// ★ P5c: retirements carried.
@@ -216,7 +225,7 @@ impl PageDirPolicy {
     /// A link for one guest driver's wire.
     #[must_use]
     pub fn new(abi: kf_abi::versions::DriverAbiTable, guest_os: kf_abi::GuestOs, sink: MemSink) -> PageDirPolicy {
-        PageDirPolicy { abi, guest_os, sink, held_last: false, vas: Default::default(), carried: 0, retired: 0 }
+        PageDirPolicy { abi, guest_os, sink, held_last: false, vas: Default::default(), aliases: Default::default(), carried: 0, retired: 0 }
     }
 
     /// ★ P5c: observe a VA-space alloc (its parent device and whether it is only a reference to
@@ -233,10 +242,30 @@ impl PageDirPolicy {
         self.vas.insert((h.client, h.handle), (h.parent, device_ref));
     }
 
+    /// ★ P6b: the VA-space object `(client, handle)` names — itself, or the original a dup aliases.
+    #[must_use]
+    pub fn canonical(&self, client: u32, handle: u32) -> (u32, u32) {
+        self.aliases.get(&(client, handle)).copied().unwrap_or((client, handle))
+    }
+
+    /// ★ P6b: a `DUP_OBJECT` of a VA-space object we know becomes an alias of the original.
+    fn observe_dup(&mut self, cmd: &RpcCommand) {
+        let Ok(d) = self.abi.decode_dup(&cmd.payload) else { return };
+        let src = self.canonical(d.src_client, d.src_handle);
+        if self.vas.contains_key(&src) {
+            self.aliases.insert((d.dst_client, d.dst_handle), src);
+        }
+    }
+
     /// ★ P5c: a free — retire every VA-space object it takes with it.
     fn observe_free(&mut self, cmd: &RpcCommand) {
         let Ok(f) = self.abi.decode_free(&cmd.payload) else { return };
         let (client, object) = (f.client, f.handle);
+        // ★ P6b: an alias's free (or its client's) drops the NAME only — the object lives on
+        // under its original handle, and only the original's free retires it. ⊘ A dup's parent
+        // device is not tracked, so a device free that takes a dup with it leaves a stale name
+        // until the client goes — a name that can only ever resolve to a live original.
+        self.aliases.retain(|&(c, h), _| !(c == client && (object == client || h == object)));
         let dying: Vec<(u32, u32)> = self
             .vas
             .iter()
@@ -247,6 +276,7 @@ impl PageDirPolicy {
             .collect();
         for (c, v) in dying {
             self.vas.remove(&(c, v));
+            self.aliases.retain(|_, orig| *orig != (c, v));
             (self.sink)(MemStatement::Retire { client: c, vaspace: v });
             self.retired += 1;
         }
@@ -275,12 +305,20 @@ impl CommandPolicy for PageDirPolicy {
                 self.observe_free(cmd);
                 return None;
             }
+            RpcFunction::DupObject => {
+                self.observe_dup(cmd);
+                return None;
+            }
             RpcFunction::RmControl => {}
             _ => return None,
         }
-        let Ok(crate::rmrpc::Translation::PageDir(st)) = crate::rmrpc::translate(&self.abi, self.guest_os, cmd) else {
+        let Ok(crate::rmrpc::Translation::PageDir(mut st)) = crate::rmrpc::translate(&self.abi, self.guest_os, cmd) else {
             return None;
         };
+        // ★ P6b: a root published through a dup is the ORIGINAL object's root.
+        let (c, v) = self.canonical(st.client.0, st.vaspace.0);
+        st.client = kf_arch::ids::HClient(c);
+        st.vaspace = kf_arch::ids::HObject(v);
         (self.sink)(MemStatement::PageDir(st));
         self.carried += 1;
         self.held_last = true;

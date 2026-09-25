@@ -86,7 +86,36 @@ fn mem_op_is_dropped_and_becomes_a_split_point() {
     let out = rewrite(&pb, is_ce, &mut st, &W).unwrap();
     assert_eq!(out.len(), 3, "{out:?}");
     assert_eq!(out[1], Piece::Invalidate { pdb: Some(0x2_0020_1000) });
+    // ⊘ The invalidate never reaches our channel; ★ P6b (d): its SYSMEMBAR (MEM_OP_A 11:11)
+    // does, as a MEMBAR ahead of the split — the only MEM_OP_D our channel ever sees.
+    let d: Vec<u32> = writes(&out).iter().filter(|&&(mm, _)| mm == 0x34).map(|&(_, v)| v).collect();
+    assert_eq!(d, vec![5 << 27], "only a SYS MEMBAR is forwarded");
+    let wr = writes(&out[..1]);
+    assert_eq!(&wr[wr.len() - 4..], &[(0x28, 0), (0x2c, 0), (0x30, 0), (0x34, 5 << 27)], "before the split");
+    // Without the SYSMEMBAR bit, nothing of the MEM_OP reaches us.
+    let mut pb = setup();
+    pb.extend(m(0, 0x28, &[0, 0, 0x0020_1000, (9 << 27) | 0x2]));
+    let out = rewrite(&pb, is_ce, &mut CeState::default(), &W).unwrap();
     assert!(writes(&out).iter().all(|&(mm, _)| !(0x28..=0x34).contains(&mm)), "MEM_OP must never reach our channel");
+}
+
+/// ★ P6b ruling (d): a MEMBAR is an ordering host method, not a privileged one
+/// (`alloc_channel.h:207-214` names only TLB_INVALIDATE and ACCESS_COUNTER_CLR) — forwarded with
+/// its A-C operands exactly as written, in stream order, and never a split point.
+#[test]
+fn a_membar_is_forwarded_in_order_and_is_not_a_split() {
+    let mut pb = setup();
+    pb.extend(m(SUB, ce::LAUNCH_DMA, &[0x0]));
+    // uvm_hal_pascal_host_membar_gpu: A=0, B=0, C=MEMBAR_TYPE_MEMBAR(1), D=OPERATION_MEMBAR.
+    pb.extend(m(0, 0x28, &[0, 0, 1, 5 << 27]));
+    pb.extend(m(SUB, ce::LAUNCH_DMA, &[0x4]));
+    let out = rewrite(&pb, is_ce, &mut CeState::default(), &W).unwrap();
+    assert_eq!(out.len(), 1, "no split: {out:?}");
+    let wr = writes(&out);
+    let i = wr.iter().position(|&(mm, _)| mm == 0x28).unwrap();
+    assert_eq!(&wr[i..i + 4], &[(0x28, 0), (0x2c, 0), (0x30, 1), (0x34, 5 << 27)]);
+    assert_eq!(wr[i - 1], (ce::LAUNCH_DMA, 0x0), "after the launch before it");
+    assert_eq!(wr[i + 4], (ce::LAUNCH_DMA, 0x4), "before the launch after it");
 }
 
 #[test]

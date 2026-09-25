@@ -283,6 +283,7 @@ impl Device {
             store.handle,
             ram,
             mirrors.clone(),
+            inbox.clone(),
             worker_efd,
             drainer_efd,
             plane.tokens.len(),
@@ -346,11 +347,13 @@ impl Device {
             mirrors,
         )?;
         let walker = kf_mem::vasmgr::GpuWalker { kernel, store_ptr, store_bytes: fb_length };
+        // ★ P6b (b): coverage at the family's smallest GMMU page.
         let mut va: crate::mem::Manager = kf_mem::vasmgr::VaManager::new(
             walker,
             fb_length,
             Box::new(move |gpa, len| ram.file_range(gpa, len).map(|(_, off)| off)),
-        );
+        )
+        .with_page_grain(family.mmu_format().small_page_bytes());
         va.table.insert(
             crate::mem::K_BAR2,
             crate::mem::Target::Window(kf_mem::cpuwin::CpuWindow::new(bar2_ops, cfg.bar2_bytes)),
@@ -668,7 +671,23 @@ impl Device {
                 last_seq = Some(req.seq);
                 m.on_invalidate(req, trigger);
             }
+            // ★ P6: a Translated channel's `MEM_OP` split — walked with the invalidates, never a
+            // wait on the worker that asked.
+            for (ticket, pdb) in self.mem.inbox.take_split_requests() {
+                m.on_split(pdb, ticket, trigger);
+            }
             let r = m.on_walk_ready(trigger);
+            for (ticket, res) in m.take_splits() {
+                if let Err(e) = &res {
+                    eprintln!("kf3: mem t={:.3}s split ticket {ticket} REFUSED: {e}", self.born.elapsed().as_secs_f64());
+                }
+                // Ring the channel's own token: its next pump resumes after the split.
+                if let Some(tok) = self.mem.inbox.finish_split(ticket, res)
+                    && self.plane.ring_internal(tok)
+                {
+                    let _ = self.worker_efd.signal();
+                }
+            }
             if r.collected && logged < 256 {
                 logged += 1;
                 let applied: Vec<String> =
@@ -831,7 +850,7 @@ impl Device {
             tm.host_calls,
         );
         let mem = format!(
-            " mem[inval={} walks={}/{} cleared={} superseded={} named_missed={} unreconciled={} mapped={} unmapped={} clipped={:#x} fn70={} roots={} stmts={recv}/{settled} refused={} pramin_repoints={} pramin_miss={} last_miss={:#x} pramin_worst_us={} (map {} mmap {}) pramin_maps={} pramin_mmaps={} inline_opens={} reaped={}]",
+            " mem[inval={} walks={}/{} cleared={} superseded={} named_missed={} unreconciled={} mapped={} unmapped={} clipped={:#x} held={} vmm_overlaps={} fn70={} roots={} root_moves={} stmts={recv}/{settled} refused={} pramin_repoints={} pramin_miss={} last_miss={:#x} pramin_worst_us={} (map {} mmap {}) pramin_maps={} pramin_mmaps={} inline_opens={} reaped={}]",
             mc.invalidates.load(o),
             va.walks_reconciled,
             va.walks_submitted,
@@ -842,8 +861,11 @@ impl Device {
             va.mapped,
             va.unmapped,
             va.clipped_bytes,
+            va.held,
+            va.vmm_overlaps,
             mc.bar_pdes.load(o),
             mc.roots.load(o),
+            mc.root_moves.load(o),
             mc.refused.load(o) + va.refusals.len() as u64,
             self.mem.pramin.repoints.load(o),
             self.mem.pramin.missed.load(o),

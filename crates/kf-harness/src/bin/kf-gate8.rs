@@ -35,7 +35,7 @@ use kf_harness::tables::{Tree, Tree3};
 use kf_harness::{CeRig, Ledger as Checks};
 use kf_host::HostRm;
 use kf_linux_raw::{DevDir, Notifier, PollTimeout, Poller, ReadyTokens};
-use kf_mem::ledger::{Desired, HostVas, MapTarget};
+use kf_mem::ledger::{Desired, HostVas, MapTarget, Mapped};
 use kf_mem::vasmgr::{GpuWalker, VaManager, VasKey, WalkDone, Walker};
 use kf_trap::mmuinval::TRIGGER_BIT;
 use kf_trap::{Invalidate, InvalidatePort, InvalidateRegs, InvalidateRequest, PdbAperture, PortWrite};
@@ -127,7 +127,7 @@ impl Observed<'_> {
 }
 
 impl MapTarget for Observed<'_> {
-    fn map(&self, d: &Desired, defer: bool) -> Result<(), String> {
+    fn map(&self, d: &Desired, defer: bool) -> Result<Mapped, String> {
         self.busy_at_op.borrow_mut().push(self.busy());
         self.host.map(d, defer)
     }

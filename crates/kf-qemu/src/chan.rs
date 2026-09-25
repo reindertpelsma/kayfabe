@@ -37,7 +37,7 @@
 use crate::mem::{Mirror, Mirrors, RamMap, resolve_placed_prefix};
 use crate::raw_unsafe::RawRegion;
 use kf_chan::completions::Completions;
-use kf_chan::host::{ChanError, GuestUserd, HostRing, Publisher, TranslatedChannel};
+use kf_chan::host::{ChanError, GuestUserd, HostRing, Publisher, Split, TranslatedChannel};
 use kf_chan::ring::{GuestMemory, TranslatedRing};
 use kf_chan::translated::{Target, Window};
 use kf_core::{Owner, Plane, VmCaps};
@@ -152,6 +152,17 @@ fn is_copy_engine(engine_type: u32) -> bool {
     kf_chan::passthrough::is_copy_engine(engine_type)
 }
 
+/// ★ Q7: which unforgeable fact made a channel the guest kernel's (for the birth log).
+fn kernel_by(a: &ChannelAlloc) -> String {
+    let stamp = match a.privilege {
+        Some(p) if p.is_kernel() => format!("PRIVILEGE=KERNEL{}", if p.uvm_owned { "+UVM_OWNED" } else { "" }),
+        Some(p) => format!("privilege={}{}", p.level, if p.uvm_owned { "+uvm_owned" } else { "" }),
+        None => "privilege=undecoded".into(),
+    };
+    let internal = if kf_rm::chanlink::is_rm_internal_client(a.client) { " rm-internal" } else { "" };
+    format!("{stamp}{internal}")
+}
+
 /// ★ The guest's USERD: two 4-byte cursors, reached through a CPU view WE armed at birth (vidmem)
 /// or through guest RAM (sysmem). ⊘ Four bytes each way — `CPU_MOVE_MAX_BYTES`, never data.
 enum UserdView {
@@ -186,10 +197,88 @@ impl GuestUserd for Userd<'_> {
     }
 }
 
+/// ★ P6 (Q3) — CPU views WE arm over the store slices a Translated channel's GPFIFO or pushbuffer
+/// lives in (UVM puts its GPFIFO in vidmem by default: `ogkm-580 uvm_channel.c:3386-3391`). The
+/// same verb as the USERD view (`NV_ESC_RM_MAP_MEMORY` of the store on the host's BAR1): OUR
+/// mapping of OUR object, located through OUR placement rows. ⊘ Never a copy of a guest table, and
+/// only method words and GP entries are read through it — never data.
+struct StoreViews {
+    views: Vec<StoreSpan>,
+    /// Views armed over the channel's life (the log's proof of how often it paid for one).
+    armed: u64,
+}
+
+struct StoreSpan {
+    off: u64,
+    len: u64,
+    region: VolatileRegion,
+    _node: kf_linux_raw::CharDevice,
+    cookie: u64,
+}
+
+/// One view's span: a 64 KiB-aligned slice (a GPFIFO of 1024 entries is 8 KiB).
+const VIEW_BYTES: u64 = 64 << 10;
+/// Views kept per channel; the oldest is released beyond this (host BAR1 aperture is finite).
+const VIEWS_MAX: usize = 8;
+
+impl StoreViews {
+    const fn new() -> Self {
+        StoreViews { views: Vec::new(), armed: 0 }
+    }
+
+    fn view_for(&mut self, rm: &HostRm, store: u32, fb_len: u64, at: u64) -> Result<usize, String> {
+        if let Some(i) = self.views.iter().position(|v| at >= v.off && at < v.off + v.len) {
+            return Ok(i);
+        }
+        let off = at & !(VIEW_BYTES - 1);
+        let len = VIEW_BYTES.min(fb_len.saturating_sub(off));
+        if len == 0 {
+            return Err(format!("store offset {at:#x} is past the store ({fb_len:#x})"));
+        }
+        if self.views.len() >= VIEWS_MAX {
+            let old = self.views.remove(0);
+            let _ = rm.release_cpu_view(kf_host::CpuViewRelease { h_memory: store, p_linear_address: old.cookie });
+        }
+        let (node, cookie) = rm
+            .arm_cpu_view(MapNode::Gpu, store, off, len, ViewAccess::ReadWrite)
+            .map_err(|e| format!("view of store {off:#x}+{len:#x}: {e:?}"))?;
+        let region = VolatileRegion::map(Backing::DeviceFile { fd: node.as_fd() }, len, CachePolicy::Uncached, HostPageSize::query())
+            .map_err(|e| format!("view mmap: {e:?}"))?;
+        self.armed += 1;
+        self.views.push(StoreSpan { off, len, region, _node: node, cookie });
+        Ok(self.views.len() - 1)
+    }
+
+    fn read(&mut self, rm: &HostRm, store: u32, fb_len: u64, off: u64, out: &mut [u8]) -> Result<(), String> {
+        let len = out.len() as u64;
+        let mut done = 0u64;
+        while done < len {
+            let at = off + done;
+            let i = self.view_for(rm, store, fb_len, at)?;
+            let v = &self.views[i];
+            let n = (v.off + v.len - at).min(len - done);
+            v.region
+                .copy_out(HostOffset::new(at - v.off), &mut out[done as usize..(done + n) as usize])
+                .map_err(|e| format!("store read {at:#x}: {e:?}"))?;
+            done += n;
+        }
+        Ok(())
+    }
+
+    fn release_all(&mut self, rm: &HostRm, store: u32) {
+        for v in self.views.drain(..) {
+            let _ = rm.release_cpu_view(kf_host::CpuViewRelease { h_memory: store, p_linear_address: v.cookie });
+        }
+    }
+}
+
 /// The guest's memory at a guest VA of the channel's space, through OUR placements.
 struct Mem<'a> {
     mirror: &'a Mirror,
     ram: &'a RamMap,
+    rm: &'a HostRm,
+    store: u32,
+    views: &'a mut StoreViews,
 }
 impl GuestMemory for Mem<'_> {
     fn read(&mut self, va: u64, out: &mut [u8]) -> Result<(), String> {
@@ -200,13 +289,15 @@ impl GuestMemory for Mem<'_> {
             let at_va = va + done;
             let (ram, off, avail) = resolve_placed_prefix(&self.mirror.rows, at_va)
                 .ok_or_else(|| format!("{va:#x}+{len:#x}: {at_va:#x} not placed by us"))?;
-            if !ram {
-                // ⊘ Q3: a vidmem pushbuffer would need a GPU read (the walker's context lives on the
-                // VA thread). RM's CeUtils puts GPFIFO + pushbuffer in SYSMEM by default
-                // (`ogkm-580: mem_utils_gm107.c:779-791`), so this is refused by name, not guessed.
-                return Err(format!("{at_va:#x}: pushbuffer/GPFIFO in VIDMEM (store {off:#x}) — GPU read not wired"));
-            }
             let n = avail.min(len - done);
+            if !ram {
+                // ★ P6 (Q3): a vidmem GPFIFO / pushbuffer (UVM's default GPFIFO) is read through a
+                // CPU view WE arm over the store slice our own row placed there.
+                let dst = &mut out[done as usize..(done + n) as usize];
+                self.views.read(self.rm, self.store, self.mirror.fb_len, off, dst).map_err(|e| format!("{at_va:#x}: {e}"))?;
+                done += n;
+                continue;
+            }
             let (mem, at) = self.ram.at_file_offset(off, n).ok_or_else(|| format!("{at_va:#x}: guest-RAM offset {off:#x} unregistered"))?;
             let dst = &mut out[done as usize..(done + n) as usize];
             if !mem.read_into(at, dst) {
@@ -218,12 +309,31 @@ impl GuestMemory for Mem<'_> {
     }
 }
 
-/// ⊘ The `MEM_OP` split is UVM's (P6, `THE_TRANSLATED_PLANE.md` §24.2): RM's CeUtils never
-/// invalidates in its pushbuffer. Refused by name until the split goes through the VA thread.
-struct NoSplit;
-impl Publisher for NoSplit {
-    fn invalidated(&mut self, pdb: Option<u64>) -> Result<(), String> {
-        Err(format!("MEM_OP invalidate (pdb {pdb:x?}) inside a kernel CE pushbuffer: the split is not wired (P6)"))
+/// ★ P6 — the `MEM_OP` split through the VA-manager thread (`THE_TRANSLATED_PLANE.md` §5, §24.2).
+/// The channel's work before the invalidate has COMPLETED (the runner fenced it); the first ask
+/// queues a walk + reconcile of the named root on the VA thread and answers [`Split::Pending`]; the
+/// VA thread's completion rings the channel's token, and the next pump's ask collects the outcome.
+/// ⊘ Never a wait on the worker, never a CPU read of a guest table.
+struct VaSplit<'a> {
+    inbox: &'a crate::mem::Inbox,
+    token: u32,
+    ticket: &'a mut Option<u64>,
+    requested: &'a mut u64,
+}
+impl Publisher for VaSplit<'_> {
+    fn invalidated(&mut self, pdb: Option<u64>) -> Result<Split, String> {
+        let Some(t) = *self.ticket else {
+            *self.ticket = Some(self.inbox.request_split(self.token, pdb));
+            *self.requested += 1;
+            return Ok(Split::Pending);
+        };
+        match self.inbox.split_result(t) {
+            None => Ok(Split::Pending),
+            Some(r) => {
+                *self.ticket = None;
+                r.map(|()| Split::Done).map_err(|e| format!("split walk (pdb {pdb:x?}): {e}"))
+            }
+        }
     }
 }
 
@@ -275,6 +385,16 @@ struct Slot {
     serves: u64,
     /// The last `GP_PUT` the pump read (for the log).
     last_put: Option<u32>,
+    /// ★ P6: the channel's group (a TSG `GPFIFO_SCHEDULE` names it).
+    tsg: Option<u32>,
+    /// ★ P6: the split the channel is suspended on, once asked.
+    split: Option<u64>,
+    /// ★ P6: splits requested over the channel's life.
+    splits: u64,
+    /// ★ P6 (Q3): store views over a vidmem GPFIFO / pushbuffer.
+    views: StoreViews,
+    /// ★ P6: the Q7 privilege stamp it was born under (for the log).
+    privilege: Option<kf_abi::notifier::ChannelPrivilege>,
 }
 
 /// Per-token counters for the gate (`forwarded=` per token), never a decision input.
@@ -303,6 +423,8 @@ pub struct ChanPlane {
     store: u32,
     ram: &'static RamMap,
     mirrors: Mirrors,
+    /// ★ P6: the VA thread's inbox — a Translated channel's `MEM_OP` split goes through it.
+    inbox: std::sync::Arc<crate::mem::Inbox>,
     /// The session's ONE completion fd + in-flight set (`kf_chan::completions`).
     pub completions: Completions,
     caps: Mutex<VmCaps>,
@@ -374,6 +496,7 @@ impl ChanPlane {
         store: u32,
         ram: &'static RamMap,
         mirrors: Mirrors,
+        inbox: std::sync::Arc<crate::mem::Inbox>,
         wake: &'static kf_linux_raw::Notifier,
         release: &'static kf_linux_raw::Notifier,
         tokens: usize,
@@ -431,6 +554,7 @@ impl ChanPlane {
             store,
             ram,
             mirrors,
+            inbox,
             completions,
             // Declared caps: channels are the only twin this plane mints.
             caps: Mutex::new(VmCaps::from_declared(64, 64, 64, 64)),
@@ -556,6 +680,24 @@ impl ChanPlane {
             ChanStatement::Schedule { client, object, enable } => {
                 if let Some(ht) = self.by_obj.lock().ok().and_then(|m| m.get(&(client, object)).copied()) {
                     return self.schedule_translated(client, object, ht, enable);
+                }
+                // ★ P6: a TSG schedule (`0xa06c0101`) over Translated members (nvidia-uvm's
+                // channels live in groups): every member's slot, as its own schedule.
+                let members: Vec<u32> = self
+                    .by_obj
+                    .lock()
+                    .map(|m| m.iter().filter(|(k, _)| k.0 == client).map(|(_, v)| *v).collect::<Vec<u32>>())
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter(|ht| self.slot(*ht).is_some_and(|s| s.lock().is_ok_and(|g| g.tsg == Some(object))))
+                    .collect();
+                if !members.is_empty() {
+                    for ht in members {
+                        if let ChanAnswer::Refused { status, why } = self.schedule_translated(client, object, ht, enable) {
+                            return ChanAnswer::Refused { status, why };
+                        }
+                    }
+                    return ChanAnswer::Done;
                 }
                 // ★ P5b: a user channel (or its group) — the twin's own schedule, as an act.
                 let twins: Vec<kf_host::Channel> = self
@@ -876,8 +1018,14 @@ impl ChanPlane {
                     me.engine_live(engine, true);
                     let _ = me.take_ledger(idx);
                     Ok(format!(
-                        "chan {:#x}:{:#x} BORN Passthrough: token {idx:#x} -> host {:#x} in {key:?} gpfifo={:#x}x{} userd={userd:?} engine={engine:#x} declared_kernel_pid={} rc={rc}",
-                        a.client, a.handle, chan.token, a.gpfifo_va, g.entries, a.declared_kernel_pid
+                        "chan {:#x}:{:#x} BORN Passthrough: token {idx:#x} -> host {:#x} in {key:?} gpfifo={:#x}x{} userd={userd:?} engine={engine:#x} declared_kernel_pid={} {} rc={rc}",
+                        a.client,
+                        a.handle,
+                        chan.token,
+                        a.gpfifo_va,
+                        g.entries,
+                        a.declared_kernel_pid,
+                        kernel_by(&a)
                     ))
                 }),
             );
@@ -892,8 +1040,14 @@ impl ChanPlane {
                     e
                 };
                 let userd = me.userd_view(a.userd).map_err(|e| fail((NV_ERR_NOT_SUPPORTED, e)))?;
-                let host = HostRing::on_engine(me.rm, mirror.space, me.host_ce).map_err(|e| fail((NV_ERR_INSUFFICIENT_RESOURCES, format!("host ring: {e}"))))?;
+                // ★ P6b: OUR ring goes in OUR region of the space, never where RM's allocator (the
+                // guest's own allocator) would put it — `crate::mem::RING_REGION_BASE`.
+                let at = crate::mem::take_ring_slot(&mirror.rings)
+                    .ok_or_else(|| fail((NV_ERR_INSUFFICIENT_RESOURCES, "host ring: the space's ring region is exhausted".to_string())))?;
+                let host = HostRing::on_engine_at(me.rm, mirror.space, me.host_ce, Some(at))
+                    .map_err(|e| fail((NV_ERR_INSUFFICIENT_RESOURCES, format!("host ring: {e}"))))?;
                 let ht = host.channel().token;
+                let ring_va = host.va();
                 let chan = TranslatedChannel::new(TranslatedRing::new(a.gpfifo_va, entries, 0), host, idx);
                 let alloc = me
                     .caps
@@ -904,7 +1058,22 @@ impl ChanPlane {
                     let _ = me.rm.free_channel(chan.host().channel());
                     return Err(fail((NV_ERR_INSUFFICIENT_RESOURCES, format!("token {idx:#x}: {e}"))));
                 }
-                let slot = Slot { chan, key, mirror, userd, guest_idx: idx, scheduled: false, dead: None, serves: 0, last_put: None };
+                let slot = Slot {
+                    chan,
+                    key,
+                    mirror,
+                    userd,
+                    guest_idx: idx,
+                    scheduled: false,
+                    dead: None,
+                    serves: 0,
+                    last_put: None,
+                    tsg: a.tsg,
+                    split: None,
+                    splits: 0,
+                    views: StoreViews::new(),
+                    privilege: a.privilege,
+                };
                 if let Ok(mut s) = me.slots.write() {
                     s.insert(ht, Arc::new(Mutex::new(slot)));
                 }
@@ -913,8 +1082,13 @@ impl ChanPlane {
                 }
                 me.births.fetch_add(1, Ordering::Relaxed);
                 Ok(format!(
-                    "chan {:#x}:{:#x} BORN Translated: token {idx:#x} -> host {ht:#x} in {key:?} gpfifo={:#x}x{entries} userd={:?} engine={engine:#x}",
-                    a.client, a.handle, a.gpfifo_va, a.userd
+                    "chan {:#x}:{:#x} BORN Translated: token {idx:#x} -> host {ht:#x} in {key:?} gpfifo={:#x}x{entries} userd={:?} engine={engine:#x} tsg={:x?} kernel_by={} ring_va={ring_va:#x}",
+                    a.client,
+                    a.handle,
+                    a.gpfifo_va,
+                    a.userd,
+                    a.tsg,
+                    kernel_by(&a)
                 ))
             }),
         )
@@ -1039,7 +1213,7 @@ impl ChanPlane {
 
     fn retire(&self, ht: u32) {
         let Some(slot) = self.slots.write().ok().and_then(|mut s| s.remove(&ht)) else { return };
-        let Ok(g) = slot.lock() else { return };
+        let Ok(mut g) = slot.lock() else { return };
         // §5.2: free waits out BUSY. The slot lock is held, so no worker is inside the pump — but
         // one may still hold the TOKEN for a moment after it: retry on the act thread (never a
         // lock the drainer holds), bounded, and name a token that stays stranded.
@@ -1058,6 +1232,8 @@ impl ChanPlane {
         }
         let _ = self.rm.free_channel(g.chan.host().channel());
         g.mirror.live.fetch_sub(1, Ordering::AcqRel);
+        let armed = g.views.armed;
+        g.views.release_all(self.rm, self.store);
         if let UserdView::Store { cookie, .. } = &g.userd {
             let _ = self.rm.release_cpu_view(kf_host::CpuViewRelease { h_memory: self.store, p_linear_address: *cookie });
         }
@@ -1068,12 +1244,17 @@ impl ChanPlane {
             g.chan.counts().0
         );
         eprintln!(
-            "kf3: chan token {:#x} (host {ht:#x}) RETIRED, forwarded={} serves={} last_put={:?} gp_get={:?}",
+            "kf3: chan token {:#x} (host {ht:#x}) RETIRED, forwarded={} submissions={} splits={}/{} serves={} last_put={:?} gp_get={:?} store_views={armed} privilege={:?} dead={:?}",
             g.guest_idx,
             g.chan.counts().0,
+            g.chan.counts().1,
+            g.chan.counts().2,
+            g.splits,
             g.serves,
             g.last_put,
-            g.chan.last_gp_get()
+            g.chan.last_gp_get(),
+            g.privilege,
+            g.dead
         );
     }
 
@@ -1106,9 +1287,10 @@ impl ChanPlane {
         }
         let before = g.chan.counts().1;
         let mirror = g.mirror.clone();
-        let mut mem = Mem { mirror: &mirror, ram: self.ram };
+        let mut mem = Mem { mirror: &mirror, ram: self.ram, rm: self.rm, store: self.store, views: &mut g.views };
         let win = SlotWindow { mirror: &mirror, ram: self.ram };
-        let r = g.chan.pump(self.rm, &self.completions, &mut mem, &mut Userd(&g.userd), &mut NoSplit, is_any_ce_class, &win);
+        let mut split = VaSplit { inbox: &self.inbox, token: g.guest_idx, ticket: &mut g.split, requested: &mut g.splits };
+        let r = g.chan.pump(self.rm, &self.completions, &mut mem, &mut Userd(&g.userd), &mut split, is_any_ce_class, &win);
         if let Err(e) = r {
             let why = match e {
                 ChanError::Ring(r) => format!("ring: {r:?}"),

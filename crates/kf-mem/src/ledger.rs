@@ -317,6 +317,27 @@ pub struct Applied {
     pub first_refusal: Option<String>,
     /// Whether the batch's single invalidate ran.
     pub invalidated: bool,
+    /// ★ P6b: maps the host answered [`Mapped::HeldByHost`] — satisfied, never recorded.
+    pub held: usize,
+}
+
+/// ★★★ **What one [`MapTarget::map`] did** — P6b ruling (a): *the ledger records ONLY mappings
+/// we made.*
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Mapped {
+    /// The host placed OUR mapping: record it (and later unmap it).
+    Placed,
+    /// ★ A FIXED map onto a VA the host already holds. The guest's statement is satisfied — the
+    /// C's own semantic (`nvkvm_gpu_emul.c:7935-7938`, *"the VA is ALREADY mapped in the host
+    /// VASpace"*) — but the holder is NOT us, so no row is recorded: `[measured p6s1]` recording
+    /// one made its later unmap a host refusal (`unmap 0x121050000: Other(87)`), because the
+    /// mapping at that VA was never ours to take down. ⊘ Nothing resolves THROUGH such a VA
+    /// either ([`Ledger::resolve`] answers `None`): we do not know what backs it.
+    ///
+    /// ⊘ A VA held by one of OUR OWN VMM placements (a Translated ring, a window) never reaches
+    /// here: [`MapTarget::reserved`] makes the VA manager refuse such a row by name BEFORE the
+    /// host is asked (a guest VA may never alias a VMM address).
+    HeldByHost,
 }
 
 /// ★★★ **Where a reconcile's operations land** — `V3_P4_PORT_MAP.md` §2.3(b).
@@ -329,9 +350,12 @@ pub struct Applied {
 pub trait MapTarget {
     /// Map `d` at `d.va`, deferring the TLB invalidate when `defer`.
     ///
+    /// [`Mapped::Placed`] is a mapping WE made (the ledger records it); [`Mapped::HeldByHost`]
+    /// is a VA the host already held, which is NOT ours and is never recorded (ruling (a), P6b).
+    ///
     /// # Errors
     /// The host's refusal, by name.
-    fn map(&self, d: &Desired, defer: bool) -> Result<(), String>;
+    fn map(&self, d: &Desired, defer: bool) -> Result<Mapped, String>;
     /// Unmap the mapping WE placed at `va`, deferring the TLB invalidate when `defer`.
     ///
     /// # Errors
@@ -349,6 +373,17 @@ pub trait MapTarget {
     /// manager CLIPS it (counted in `VaStats::clipped_bytes`) instead of refusing the space.
     fn va_extent(&self) -> Option<u64> {
         None
+    }
+
+    /// ★ P6b: VA ranges `[start, end)` of THIS target that hold OUR OWN VMM placements (a
+    /// Translated ring, the two windows). A walked leaf overlapping one is refused by name by the
+    /// VA manager — the guest's statement is NOT satisfied — because the only alternatives are a
+    /// guest VA that aliases a VMM address (a hard owner rule) or a guest mapping silently not
+    /// made. `[measured p6b1]` before the rings moved, RM placed token 3's ring at
+    /// `0x121040000+1 MiB` — exactly where the guest's UVM put tokens 4-6's GPFIFOs next — and
+    /// nine guest maps "succeeded" onto OUR ring.
+    fn reserved(&self) -> Vec<(u64, u64)> {
+        Vec::new()
     }
 }
 
@@ -387,17 +422,22 @@ pub struct HostVas<'rm> {
 }
 
 impl MapTarget for HostVas<'_> {
-    fn map(&self, d: &Desired, defer: bool) -> Result<(), String> {
+    fn map(&self, d: &Desired, defer: bool) -> Result<Mapped, String> {
         let obj = if d.ram {
             self.ram_obj
                 .ok_or_else(|| format!("map {:#x}: guest-RAM row and no RAM object", d.va))?
         } else {
             self.store
         };
-        self.rm
-            .map(self.space, obj, kf_host::MapBacking::SharedSlice, d.off, d.len, Some(d.va), defer)
-            .map(|_| ())
-            .map_err(|e| format!("map {:#x}+{:#x}: {e:?}", d.va, d.len))
+        match self.rm.map(self.space, obj, kf_host::MapBacking::SharedSlice, d.off, d.len, Some(d.va), defer) {
+            Ok(_) => Ok(Mapped::Placed),
+            // ★ P6: a FIXED map onto a VA host RM already holds satisfies the guest's statement —
+            // the C's semantic (`nvkvm_gpu_emul.c:7935-7938`) — rather than stranding its
+            // invalidate (a hang, `[measured p6a]`). ★ P6b ruling (a): but it is NOT ours, so it
+            // is reported as such and the ledger records no row for it.
+            Err(kf_host::RmError::Other(kf_host::VA_ALREADY_MAPPED)) => Ok(Mapped::HeldByHost),
+            Err(e) => Err(format!("map {:#x}+{:#x}: {e:?}", d.va, d.len)),
+        }
     }
 
     fn unmap(&self, va: u64, defer: bool) -> Result<(), String> {
@@ -484,10 +524,12 @@ impl Ledger {
         }
         for d in &plan.map {
             match target.map(d, true) {
-                Ok(()) => {
+                Ok(Mapped::Placed) => {
                     self.placed.insert(d.va, Placed { len: d.len, off: d.off, ram: d.ram });
                     out.mapped += 1;
                 }
+                // ★ Ruling (a): only mappings WE made are ledger rows.
+                Ok(Mapped::HeldByHost) => out.held += 1,
                 Err(e) => refuse(&mut out, e),
             }
         }

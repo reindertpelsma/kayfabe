@@ -35,7 +35,7 @@
 //!
 //! ⊘ Nothing here reads or writes a byte of guest memory.
 
-use crate::ledger::{Desired, MapTarget};
+use crate::ledger::{Desired, MapTarget, Mapped};
 use core::sync::atomic::{AtomicU64, Ordering};
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -148,14 +148,14 @@ impl<V: ViewOps> CpuWindow<V> {
         &self.ops
     }
 
-    fn refuse(&self, why: String) -> Result<(), String> {
+    fn refuse<T>(&self, why: String) -> Result<T, String> {
         self.stats.borrow_mut().refused += 1;
         Err(why)
     }
 }
 
 impl<V: ViewOps> MapTarget for CpuWindow<V> {
-    fn map(&self, d: &Desired, _defer: bool) -> Result<(), String> {
+    fn map(&self, d: &Desired, _defer: bool) -> Result<Mapped, String> {
         let end = d.va.checked_add(d.len).filter(|&e| e <= self.bytes);
         if end.is_none() || d.len == 0 {
             return self.refuse(format!(
@@ -190,7 +190,7 @@ impl<V: ViewOps> MapTarget for CpuWindow<V> {
             Held { len: d.len, view: Some(view) }
         };
         self.placed.borrow_mut().insert(d.va, held);
-        Ok(())
+        Ok(Mapped::Placed)
     }
 
     fn unmap(&self, va: u64, _defer: bool) -> Result<(), String> {

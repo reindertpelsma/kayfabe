@@ -37,7 +37,7 @@ use crate::raw_unsafe::{RawRegion, borrow_process_fd};
 use kf_host::{CpuViewRelease, HostRm, MapNode, ViewAccess};
 use kf_linux_raw::{Backing, CharDevice, GuestWindow, HostOffset, HostPageSize, Notifier, SharedRam};
 use kf_mem::cpuwin::{CpuWindow, PraminPool, SlotSource, ViewOps};
-use kf_mem::ledger::{Desired, HostVas, MapTarget};
+use kf_mem::ledger::{Desired, HostVas, MapTarget, Mapped};
 use kf_mem::vasmgr::{GpuWalker, VaManager, VasKey};
 use kf_rm::barpde::{BarAperture, MemStatement};
 use kf_trap::pramin::{GRANULE, SLOTS, Target as WinTarget, WindowReg};
@@ -323,21 +323,67 @@ pub fn resolve_placed_prefix(rows: &PlacedRows, va: u64) -> Option<(bool, u64, u
     (va < end).then(|| (ram, off + (va - start), end - va))
 }
 
+/// ★★★ P6b: **where OUR rings live in a mirrored space** — `[RING_REGION_BASE, RING_VA_LIMIT)`,
+/// 4 GiB (4096 one-MiB rings) at the very top of what a GP entry can address.
+///
+/// ⊘ A ring may not go where RM puts it: RM's bottom-up allocator in our host space is the SAME
+/// allocator the guest's RM runs in its own space (both start just above the split-VAS server
+/// window, `0x1_2000_0000`, `gpu_vaspace.c:421-431`), so `[measured p6b1]` token 3's ring landed
+/// at `0x121040000` — where the guest's UVM then mapped tokens 4-6's GPFIFOs, and nine guest maps
+/// "succeeded" onto OUR ring (`VA_ALREADY_MAPPED`): a VMM address inside the guest's VA space.
+/// ⊘ Nor at the top of the space like the windows: a ring must be below 2^40 on every family
+/// (`kf_chan::host::RING_VA_LIMIT`). The top 4 GiB below 2^40 is used by no guest kernel
+/// allocator we know of: RM allocates bottom-up from 4.5 GiB, and UVM's own kernel ranges sit far
+/// above 2^40 (`uvm_ampere.c:55-60`: 160/256/384 TiB; Hopper/Blackwell higher still). ★ And it is
+/// not a guess that must hold: a guest leaf over the region is REFUSED by name
+/// ([`MapTarget::reserved`]) — the guest's statement fails, it never aliases a ring.
+pub const RING_REGION_BASE: u64 = kf_chan::host::RING_VA_LIMIT - RING_REGION_BYTES;
+/// The ring region's size.
+pub const RING_REGION_BYTES: u64 = 4 << 30;
+
+/// ★ P6b: the next free ring slot of one host space — never reused (a freed ring's memory stays
+/// mapped today; a slot is a VA, not a promise it was released).
+pub type RingSlots = std::sync::Arc<AtomicU64>;
+
+/// ★ P6b: the VA of the next ring slot in a space, or `None` when the region is exhausted.
+#[must_use]
+pub fn take_ring_slot(slots: &RingSlots) -> Option<u64> {
+    let per = RING_REGION_BYTES / kf_chan::host::RING_BYTES;
+    let i = slots.fetch_add(1, Ordering::AcqRel);
+    (i < per).then(|| RING_REGION_BASE + i * kf_chan::host::RING_BYTES)
+}
+
 /// ★ A mirrored host VA space: the reconcile's target, and the row record beside it.
 pub struct GpuMirror {
     /// The host VA space and its objects.
     pub vas: HostVas<'static>,
     /// Our placements (see [`PlacedRows`]).
     pub rows: PlacedRows,
+    /// ★ P6b: OUR VMM placements in this space — the two windows and the ring region.
+    pub reserved: Vec<(u64, u64)>,
+}
+
+/// The VMM ranges of a space whose windows are at `fb` and `ram` (`(base, len)`).
+#[must_use]
+pub fn vmm_ranges(fb: Option<(u64, u64)>, ram: Option<(u64, u64)>) -> Vec<(u64, u64)> {
+    let mut v = vec![(RING_REGION_BASE, kf_chan::host::RING_VA_LIMIT)];
+    v.extend(fb.into_iter().chain(ram).map(|(b, l)| (b, b.saturating_add(l))));
+    v
 }
 
 impl MapTarget for GpuMirror {
-    fn map(&self, d: &Desired, defer: bool) -> Result<(), String> {
-        self.vas.map(d, defer)?;
-        if let Ok(mut r) = self.rows.write() {
+    fn map(&self, d: &Desired, defer: bool) -> Result<Mapped, String> {
+        let m = self.vas.map(d, defer)?;
+        // ★ P6b ruling (a): only a mapping WE placed is a row a reader may resolve through.
+        if m == Mapped::Placed
+            && let Ok(mut r) = self.rows.write()
+        {
             r.insert(d.va, (d.len, d.off, d.ram));
         }
-        Ok(())
+        Ok(m)
+    }
+    fn reserved(&self) -> Vec<(u64, u64)> {
+        self.reserved.clone()
     }
     fn unmap(&self, va: u64, defer: bool) -> Result<(), String> {
         // ⊘ Forget the row FIRST: a reader must never resolve through a mapping being torn down.
@@ -375,18 +421,21 @@ pub struct Mirror {
     /// channel plane counts them. A retired space with any is NEVER recycled (a live engine in a
     /// space handed to another guest VA space would be a cross-tenant hazard).
     pub live: std::sync::Arc<AtomicU64>,
+    /// ★ P6b: this host space's ring slots ([`take_ring_slot`]).
+    pub rings: RingSlots,
 }
 
 /// ★ P5c: a retired mirror's host space, its rows unmapped, its two windows still in place —
 /// ready to be the next guest VA space's mirror. `[measured c3, 61fc7ac8]` building one (space +
 /// the 8 GiB store window + the 2 GiB guest-RAM window) costs ~54 ms of host RM time; the raw
 /// client's `--concurrency` allocates and frees 2400 VA spaces (7 s on bare metal).
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct Spare {
     space: kf_host::VaSpace,
     fb_base: u64,
     ram: Option<(u64, u64)>,
     ram_obj: Option<u32>,
+    rings: RingSlots,
 }
 
 /// Spares kept; a retirement beyond this frees the host space instead.
@@ -397,10 +446,16 @@ const SPARES_MAX: usize = 32;
 pub type Mirrors = std::sync::Arc<Mutex<std::collections::HashMap<VasKey, Mirror>>>;
 
 impl MapTarget for Target {
-    fn map(&self, d: &Desired, defer: bool) -> Result<(), String> {
+    fn map(&self, d: &Desired, defer: bool) -> Result<Mapped, String> {
         match self {
             Target::Window(w) => w.map(d, defer),
             Target::Gpu(g) => g.map(d, defer),
+        }
+    }
+    fn reserved(&self) -> Vec<(u64, u64)> {
+        match self {
+            Target::Window(w) => w.reserved(),
+            Target::Gpu(g) => g.reserved(),
         }
     }
     fn unmap(&self, va: u64, defer: bool) -> Result<(), String> {
@@ -437,6 +492,13 @@ pub struct Inbox {
     settled: AtomicU64,
     /// The VA thread's wake.
     pub wake: Notifier,
+    /// ★ P6: `MEM_OP` splits a Translated channel asked for — `(ticket, guest token, pdb)`.
+    splits: Mutex<Vec<(u64, u32, Option<u64>)>>,
+    /// ★ P6: tickets the VA thread took and has not finished — ticket → guest token.
+    split_tokens: Mutex<std::collections::HashMap<u64, u32>>,
+    /// ★ P6: finished splits waiting for their channel's next pump.
+    split_results: Mutex<std::collections::HashMap<u64, Result<(), String>>>,
+    next_ticket: AtomicU64,
 }
 
 impl Inbox {
@@ -450,7 +512,46 @@ impl Inbox {
             received: AtomicU64::new(0),
             settled: AtomicU64::new(0),
             wake: Notifier::create().map_err(|e| format!("eventfd: {e:?}"))?,
+            splits: Mutex::new(Vec::new()),
+            split_tokens: Mutex::new(std::collections::HashMap::new()),
+            split_results: Mutex::new(std::collections::HashMap::new()),
+            next_ticket: AtomicU64::new(1),
         })
+    }
+
+    /// ★ P6, a WORKER: channel `token` reached a `MEM_OP` invalidate of `pdb` and its prior work
+    /// completed — ask the VA thread to walk + reconcile. Returns the ticket to poll. ⊘ Never waits.
+    pub fn request_split(&self, token: u32, pdb: Option<u64>) -> u64 {
+        let t = self.next_ticket.fetch_add(1, Ordering::Relaxed);
+        if let Ok(mut q) = self.splits.lock() {
+            q.push((t, token, pdb));
+        }
+        let _ = self.wake.signal();
+        t
+    }
+
+    /// ★ P6, the VA thread: the splits requested since the last call, `(ticket, pdb)`.
+    pub fn take_split_requests(&self) -> Vec<(u64, Option<u64>)> {
+        let taken = self.splits.lock().map(|mut q| std::mem::take(&mut *q)).unwrap_or_default();
+        if let Ok(mut m) = self.split_tokens.lock() {
+            for (t, tok, _) in &taken {
+                m.insert(*t, *tok);
+            }
+        }
+        taken.into_iter().map(|(t, _, p)| (t, p)).collect()
+    }
+
+    /// ★ P6, the VA thread: `ticket` finished. Returns the guest token to ring.
+    pub fn finish_split(&self, ticket: u64, r: Result<(), String>) -> Option<u32> {
+        if let Ok(mut m) = self.split_results.lock() {
+            m.insert(ticket, r);
+        }
+        self.split_tokens.lock().ok().and_then(|mut m| m.remove(&ticket))
+    }
+
+    /// ★ P6, a WORKER: `ticket`'s outcome, once (`None`: still running).
+    pub fn split_result(&self, ticket: u64) -> Option<Result<(), String>> {
+        self.split_results.lock().ok().and_then(|mut m| m.remove(&ticket))
     }
 
     /// The drainer: enqueue one statement and wake the VA thread.
@@ -498,6 +599,8 @@ pub struct MemCounters {
     pub bar_pdes: AtomicU64,
     /// Page-directory statements applied as roots.
     pub roots: AtomicU64,
+    /// ★ P6b: of those, roots that MOVED (walked at the next sync point, not at the statement).
+    pub root_moves: AtomicU64,
     /// Statements refused by name.
     pub refused: AtomicU64,
     /// ★ P5c: mirrors created, and the ns their host verbs cost (space + two windows), summed/max.
@@ -736,27 +839,32 @@ fn create_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, store: 
     let fb_base = rm.map_window(space, store, plane.fb_len, true);
     let ram_base = ram_obj.map(|(o, len)| rm.map_window(space, o, len, true).map(|b| (b, len)));
     let rows = PlacedRows::default();
+    let rings = RingSlots::default();
     let line = match (&fb_base, &ram_base) {
         (Ok(fb), Some(Ok((rb, rl)))) => {
             if let Ok(mut mm) = plane.mirrors.lock() {
-                mm.insert(key, Mirror { space, fb_base: *fb, fb_len: plane.fb_len, ram: Some((*rb, *rl)), rows: rows.clone(), ram_obj: ram_obj.map(|(o, _)| o), live: Default::default() });
+                mm.insert(key, Mirror { space, fb_base: *fb, fb_len: plane.fb_len, ram: Some((*rb, *rl)), rows: rows.clone(), ram_obj: ram_obj.map(|(o, _)| o), live: Default::default(), rings: rings.clone() });
             }
-            format!("windows fb={fb:#x}+{:#x} ram={rb:#x}+{rl:#x}", plane.fb_len)
+            format!("windows fb={fb:#x}+{:#x} ram={rb:#x}+{rl:#x} rings={RING_REGION_BASE:#x}+{RING_REGION_BYTES:#x}", plane.fb_len)
         }
         (Ok(fb), None) => {
             if let Ok(mut mm) = plane.mirrors.lock() {
-                mm.insert(key, Mirror { space, fb_base: *fb, fb_len: plane.fb_len, ram: None, rows: rows.clone(), ram_obj: None, live: Default::default() });
+                mm.insert(key, Mirror { space, fb_base: *fb, fb_len: plane.fb_len, ram: None, rows: rows.clone(), ram_obj: None, live: Default::default(), rings: rings.clone() });
             }
-            format!("windows fb={fb:#x} ram=NONE")
+            format!("windows fb={fb:#x} ram=NONE rings={RING_REGION_BASE:#x}+{RING_REGION_BYTES:#x}")
         }
         (fb, ram) => format!("windows REFUSED fb={fb:?} ram={ram:?}"),
     };
+    let reserved = vmm_ranges(
+        fb_base.as_ref().ok().map(|b| (*b, plane.fb_len)),
+        ram_base.as_ref().and_then(|r| r.as_ref().ok()).copied(),
+    );
     let ns = u64::try_from(t_mirror.elapsed().as_nanos()).unwrap_or(u64::MAX);
     plane.counters.mirrors.fetch_add(1, Ordering::Relaxed);
     plane.counters.mirror_ns.fetch_add(ns, Ordering::Relaxed);
     plane.counters.mirror_ns_max.fetch_max(ns, Ordering::Relaxed);
     eprintln!("kf3: {key:?} mirror space={:#x}: {line} ({} us)", space.space, ns / 1000);
-    m.table.insert(key, Target::Gpu(GpuMirror { vas: HostVas { rm, space, store, ram_obj: ram_obj.map(|(o, _)| o) }, rows }));
+    m.table.insert(key, Target::Gpu(GpuMirror { vas: HostVas { rm, space, store, ram_obj: ram_obj.map(|(o, _)| o) }, rows, reserved }));
     Ok(())
 }
 
@@ -787,7 +895,7 @@ fn retire_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, key: Va
     if !rows.is_empty() && g.invalidate().is_err() {
         refused += 1;
     }
-    let spare = mirror.map(|mi| Spare { space: mi.space, fb_base: mi.fb_base, ram: mi.ram, ram_obj: mi.ram_obj });
+    let spare = mirror.map(|mi| Spare { space: mi.space, fb_base: mi.fb_base, ram: mi.ram, ram_obj: mi.ram_obj, rings: mi.rings });
     let recycled = match (spare, refused) {
         (Some(sp), 0) => plane.spares.lock().ok().filter(|v| v.len() < SPARES_MAX).map(|mut v| v.push(sp)).is_some(),
         _ => false,
@@ -853,25 +961,32 @@ pub fn apply_statement(
                 if let Some(sp) = reused {
                     // ★ P5c: a retired space — its rows are gone, its windows are where they were.
                     let rows = PlacedRows::default();
+                    let reserved = vmm_ranges(Some((sp.fb_base, plane.fb_len)), sp.ram);
                     if let Ok(mut mm) = plane.mirrors.lock() {
                         mm.insert(
                             key,
-                            Mirror { space: sp.space, fb_base: sp.fb_base, fb_len: plane.fb_len, ram: sp.ram, rows: rows.clone(), ram_obj: sp.ram_obj, live: Default::default() },
+                            Mirror { space: sp.space, fb_base: sp.fb_base, fb_len: plane.fb_len, ram: sp.ram, rows: rows.clone(), ram_obj: sp.ram_obj, live: Default::default(), rings: sp.rings.clone() },
                         );
                     }
                     plane.counters.mirrors_reused.fetch_add(1, Ordering::Relaxed);
-                    m.table.insert(key, Target::Gpu(GpuMirror { vas: HostVas { rm, space: sp.space, store, ram_obj: sp.ram_obj }, rows }));
+                    m.table.insert(key, Target::Gpu(GpuMirror { vas: HostVas { rm, space: sp.space, store, ram_obj: sp.ram_obj }, rows, reserved }));
                 } else if let Err(line) = create_mirror(m, plane, rm, store, key) {
                     return line;
                 }
             }
             match m.table.set_root(key, s.pdb.0, ap) {
-                Ok(changed) => {
+                Ok(change) => {
                     plane.counters.roots.fetch_add(1, Ordering::Relaxed);
-                    if changed {
+                    // ★ P6b ruling (c): a FIRST root is walked now (Q10); a MOVED root at the next
+                    // synchronisation point naming the space — its entries are written by the
+                    // guest only after this statement's reply (`RootChange`'s rustdoc).
+                    if change.walk_now() {
                         m.schedule_walk(key, trigger);
                     }
-                    format!("pagedir {key:?} root={:#x} changed={changed}", s.pdb.0)
+                    if let kf_mem::vasmgr::RootChange::Moved { .. } = change {
+                        plane.counters.root_moves.fetch_add(1, Ordering::Relaxed);
+                    }
+                    format!("pagedir {key:?} root={:#x} {change:x?}", s.pdb.0)
                 }
                 Err(e) => {
                     plane.counters.refused.fetch_add(1, Ordering::Relaxed);

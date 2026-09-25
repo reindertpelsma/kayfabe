@@ -16,7 +16,14 @@ use kf_abi::submit::{ENGINE_TYPE_COPY0, USERD_GP_PUT, fifo, gp_entry, method_hea
 use kf_linux_raw::HostOffset as At;
 use std::collections::VecDeque;
 
-const RING_BYTES: u64 = 1 << 20;
+/// The bytes one ring occupies in its VA space (pushbuffer + GPFIFO + fence + USERD).
+pub const RING_BYTES: u64 = 1 << 20;
+/// ★ P6b: every address a ring hands the host engine — pushbuffer segments in GP entries, the
+/// GPFIFO, the fence — must be below 2^40 on EVERY family: `GP_ENTRY0_GET 31:2` +
+/// `GP_ENTRY1_GET_HI 7:0` in each family's channel class (`ogkm-580 clc46f.h:268-270` Turing,
+/// `clc56f.h:270-272` Ampere/Ada, `clc86f.h:173-176` Hopper, `clc96f.h:95-98` / `clca6f.h:56-59`
+/// Blackwell), and the fence's `SEM_ADDR_HI` is 8 bits.
+pub const RING_VA_LIMIT: u64 = 1 << 40;
 const PB_BYTES: u64 = 0xE_0000;
 const GPFIFO_OFF: u64 = 0xF_0000;
 const GPFIFO_ENTRIES: u32 = 512;
@@ -89,10 +96,31 @@ impl HostRing {
     /// # Errors
     /// Any step's refusal, by name.
     pub fn on_engine(rm: &kf_host::HostRm, space: kf_host::VaSpace, engine: u32) -> Result<HostRing, String> {
+        Self::on_engine_at(rm, space, engine, None)
+    }
+
+    /// ★ P6b: [`HostRing::on_engine`] at a VA the CALLER chose (`at`, FIXED), or RM's choice for
+    /// `None`. ⊘ In a space that mirrors a GUEST's VA space the caller must choose: RM's
+    /// bottom-up choice is the same allocator the guest's own RM uses, so it lands on guest VAs
+    /// (`[measured p6b1]` token 3's ring at `0x121040000`, where the guest's UVM mapped tokens
+    /// 4-6's GPFIFOs next) — a VMM address inside the guest's VA space.
+    ///
+    /// # Errors
+    /// Any step's refusal, by name; `at` not below [`RING_VA_LIMIT`] - [`RING_BYTES`].
+    pub fn on_engine_at(rm: &kf_host::HostRm, space: kf_host::VaSpace, engine: u32, at: Option<u64>) -> Result<HostRing, String> {
+        if let Some(a) = at
+            && a.checked_add(RING_BYTES).is_none_or(|e| e > RING_VA_LIMIT)
+        {
+            return Err(format!("ring VA {a:#x}+{RING_BYTES:#x} is not below 2^40 (GP entry GET_HI 7:0)"));
+        }
         let mem = rm.alloc_device_local(RING_BYTES).map_err(|e| format!("ring obj: {e:?}"))?;
-        let va = rm
-            .map(space, mem, kf_host::MapBacking::Dedicated, 0, RING_BYTES, None, false)
-            .map_err(|e| format!("map ring: {e:?}"))?;
+        let va = match rm.map(space, mem, kf_host::MapBacking::Dedicated, 0, RING_BYTES, at, false) {
+            Ok(va) => va,
+            Err(e) => {
+                let _ = rm.free(mem);
+                return Err(format!("map ring{}: {e:?}", at.map(|a| format!(" at {a:#x}")).unwrap_or_default()));
+            }
+        };
         let (node, cpu) = rm
             .map_cpu(mem, RING_BYTES, kf_linux_raw::CachePolicy::Uncached)
             .map_err(|e| format!("cpu ring: {e:?}"))?;
@@ -115,6 +143,12 @@ impl HostRing {
     #[must_use]
     pub fn idle(&self) -> bool {
         self.live.is_empty()
+    }
+
+    /// The host VA RM placed the ring at (its GPFIFO is at `va + 0xF_0000`).
+    #[must_use]
+    pub fn va(&self) -> u64 {
+        self.va
     }
 
     /// The host channel.
@@ -216,13 +250,26 @@ pub trait GuestUserd {
     fn set_gp_get(&mut self, gp_get: u32) -> Result<(), String>;
 }
 
+/// Where a `MEM_OP` split's walk stands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Split {
+    /// Walked and published: the work after the split may run.
+    Done,
+    /// Requested (or still running) on the thread that owns the walker. The channel stays
+    /// SUSPENDED; the walker's completion rings the channel's token and the next pump asks again.
+    Pending,
+}
+
 /// Walk the named root and publish its mappings (the reconcile) — the `MEM_OP` split's work.
+///
+/// ⊘ Never a wait: a publisher whose walk runs elsewhere (the VA-manager thread) answers
+/// [`Split::Pending`] and is asked again on a later pump, never blocked on.
 pub trait Publisher {
-    /// Walk `pdb` (`None` = every space) and publish.
+    /// Walk `pdb` (`None` = every space) and publish — or report that it is under way.
     ///
     /// # Errors
     /// A failed walk or a refused publish.
-    fn invalidated(&mut self, pdb: Option<u64>) -> Result<(), String>;
+    fn invalidated(&mut self, pdb: Option<u64>) -> Result<Split, String>;
 }
 
 /// Why a Translated channel stopped. It is dead after any of these.
@@ -334,7 +381,10 @@ impl TranslatedChannel {
             if !reached(done, seq) {
                 return Ok(Pumped::Waiting);
             }
-            publisher.invalidated(pdb).map_err(ChanError::Publish)?;
+            if publisher.invalidated(pdb).map_err(ChanError::Publish)? == Split::Pending {
+                // ★ The walk runs on the VA thread; its completion rings this token again.
+                return Ok(Pumped::Waiting);
+            }
             self.walks += 1;
             self.suspended = None;
             if let Some(g) = retires {
