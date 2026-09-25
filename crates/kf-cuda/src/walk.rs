@@ -372,7 +372,21 @@ impl Report {
             // again at map time. This is the MIDDLE layer and it was missing: the validator
             // documented as "what production consults" checked capacities, slice ranges and
             // zero-len while saying NOTHING about where a run points.
+            //
+            // ⊘⊘ w828 — **the span is the STORE's (vidmem), so it bounds VIDMEM leaves only.** A
+            // sysmem leaf's `gpga` is a GUEST-PHYSICAL address, which the walker deliberately
+            // leaves unbounded (w825: it cannot know the VMM's layout) and `kf_mem::ledger::
+            // desired_from_leaves` bounds against the guest-RAM map (`ram_offset`, PCI hole
+            // included) before anything is mapped. Bounding it here by the STORE size refused every
+            // guest page above `fb-mb`: `[measured vh llm vhA_gpm]` an 8 GiB q35 guest (high RAM up
+            // to 0x2_8000_0000) had UVM's CE channel killed by `run[69] leaves the guest's GPGA:
+            // gpga=0x2028f0000 … span is 0x200000000` — valid guest RAM — and every later CUDA
+            // process spun forever. With the default 2 GiB guest no GPA ever reached the span,
+            // which is why it never fired. Peer and unknown apertures stay bounded (and are
+            // refused downstream by aperture anyway).
+            let sysmem = matches!(r.aperture(), crate::abi::KFWR_AP_SYS_COHERENT | crate::abi::KFWR_AP_SYS_NONCOHERENT);
             if r.op != KFWR_OP_UNMAP
+                && !sysmem
                 && (r.gpga > self.gpga_span || r.len > self.gpga_span - r.gpga)
             {
                 return Err(ReportError::RunOutsideGpga {
