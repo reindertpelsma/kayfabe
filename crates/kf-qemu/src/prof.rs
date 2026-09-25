@@ -15,6 +15,16 @@ use std::time::Instant;
 static ON: AtomicBool = AtomicBool::new(false);
 static T0: OnceLock<Instant> = OnceLock::new();
 
+/// ★ Q7: bytes the Translated rings READ through a CPU view of vidmem (a vidmem GPFIFO or
+/// pushbuffer), the calls, and their time — counted always (three relaxed adds per read).
+pub static VIEW_READ_BYTES: AtomicU64 = AtomicU64::new(0);
+/// Reads through a vidmem CPU view.
+pub static VIEW_READS: AtomicU64 = AtomicU64::new(0);
+/// Their time, ns (only when [`on`]).
+pub static VIEW_READ_NS: AtomicU64 = AtomicU64::new(0);
+/// Bytes the Translated rings read from guest RAM (the same pump, for comparison).
+pub static RAM_READ_BYTES: AtomicU64 = AtomicU64::new(0);
+
 /// Read `KF3_PROF` once (realize).
 pub fn init() {
     let on = std::env::var("KF3_PROF").is_ok_and(|v| v == "1" || v == "on");
@@ -307,6 +317,13 @@ impl Prof {
         out.push(format!("kf3: PROF rpc_held {}", self.rpc_held.line()));
         out.push(format!("kf3: PROF other_applies {}", self.other_applies.line()));
         out.push(format!("kf3: PROF publish {}", self.publish.line()));
+        out.push(format!(
+            "kf3: PROF vidmem_view_reads n={} bytes={} ms={:.3} guest_ram_read_bytes={}",
+            VIEW_READS.load(Ordering::Relaxed),
+            VIEW_READ_BYTES.load(Ordering::Relaxed),
+            VIEW_READ_NS.load(Ordering::Relaxed) as f64 / 1e6,
+            RAM_READ_BYTES.load(Ordering::Relaxed),
+        ));
         out
     }
 }
