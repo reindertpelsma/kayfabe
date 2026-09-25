@@ -1,0 +1,52 @@
+LP_JOB_START
+LP_START lane=vc date=2026-09-25T20:10:58+00:00 model=Qwen/Qwen2-0.5B-Instruct snapshot=[c540970f9e29518b1d8f06ab8b24cba66ad77b6d] short=0 long= x3 warm=1
+LP lane=vc kind=graph ntok=512 proc=1 LLM_PARAM_DEVICE=cuda
+LP lane=vc kind=graph ntok=512 proc=1 LLM_GRAPH_CAPTURE_MS=444.2
+LP lane=vc kind=graph ntok=512 proc=1 LLM_GRAPH_RUN 0 cold ntok=512 ms=4011.8 tok_s=127.623 ttft_ms=998.6 decode_tok_s=169.588 same_text=1
+LP lane=vc kind=graph ntok=512 proc=1 LLM_GRAPH_RUN 1 warm ntok=512 ms=3053.5 tok_s=167.677 ttft_ms=43.1 decode_tok_s=169.748 same_text=1
+LP lane=vc kind=graph ntok=512 proc=1 LLM_TEXT= ______. A. Paris B. London C. New York D. Tokyo 答案: A  The capital of the United States is ______. A. Washington B. New York C. Chicago D. Los Angeles 答案: A  The capital of the United Kingdom is ____
+LP lane=vc kind=graph ntok=512 proc=1 LLM_TEXT_SHA256=dc180fb91bf010c184e8cc535d7e050944a0fe2664c3995fad25271d969a76aa
+LP lane=vc kind=graph ntok=512 proc=1 LLM_OK=1
+LP_EXT lane=vc kind=graph ntok=512 proc=1 ext_ms=16795 rc=0
+LP lane=vc kind=graph ntok=512 proc=2 LLM_PARAM_DEVICE=cuda
+LP lane=vc kind=graph ntok=512 proc=2 LLM_GRAPH_CAPTURE_MS=623.5
+LP lane=vc kind=graph ntok=512 proc=2 LLM_GRAPH_RUN 0 cold ntok=512 ms=4326.5 tok_s=118.341 ttft_ms=1308.3 decode_tok_s=169.306 same_text=1
+LP lane=vc kind=graph ntok=512 proc=2 LLM_GRAPH_RUN 1 warm ntok=512 ms=3054.5 tok_s=167.624 ttft_ms=42.2 decode_tok_s=169.639 same_text=1
+LP lane=vc kind=graph ntok=512 proc=2 LLM_TEXT= ______. A. Paris B. London C. New York D. Tokyo 答案: A  The capital of the United States is ______. A. Washington B. New York C. Chicago D. Los Angeles 答案: A  The capital of the United Kingdom is ____
+LP lane=vc kind=graph ntok=512 proc=2 LLM_TEXT_SHA256=dc180fb91bf010c184e8cc535d7e050944a0fe2664c3995fad25271d969a76aa
+LP lane=vc kind=graph ntok=512 proc=2 LLM_OK=1
+LP_EXT lane=vc kind=graph ntok=512 proc=2 ext_ms=17669 rc=0
+LP lane=vc kind=graph ntok=512 proc=3 LLM_PARAM_DEVICE=cuda
+LP lane=vc kind=graph ntok=512 proc=3 LLM_GRAPH_CAPTURE_MS=382.4
+LP lane=vc kind=graph ntok=512 proc=3 LLM_GRAPH_RUN 0 cold ntok=512 ms=3929.9 tok_s=130.284 ttft_ms=919.9 decode_tok_s=169.766 same_text=1
+LP lane=vc kind=graph ntok=512 proc=3 LLM_GRAPH_RUN 1 warm ntok=512 ms=3056.3 tok_s=167.521 ttft_ms=41.0 decode_tok_s=169.467 same_text=1
+LP lane=vc kind=graph ntok=512 proc=3 LLM_TEXT= ______. A. Paris B. London C. New York D. Tokyo 答案: A  The capital of the United States is ______. A. Washington B. New York C. Chicago D. Los Angeles 答案: A  The capital of the United Kingdom is ____
+LP lane=vc kind=graph ntok=512 proc=3 LLM_TEXT_SHA256=dc180fb91bf010c184e8cc535d7e050944a0fe2664c3995fad25271d969a76aa
+LP lane=vc kind=graph ntok=512 proc=3 LLM_OK=1
+LP_EXT lane=vc kind=graph ntok=512 proc=3 ext_ms=15747 rc=0
+LP lane=vc kind=graph ntok=2048 proc=1 LLM_PARAM_DEVICE=cuda
+LP lane=vc kind=graph ntok=2048 proc=1 LLM_GRAPH_CAPTURE_MS=574.2
+LP lane=vc kind=graph ntok=2048 proc=1 LLM_GRAPH_RUN 0 cold ntok=2048 ms=19424.5 tok_s=105.434 ttft_ms=1223.9 decode_tok_s=112.469 same_text=1
+LP lane=vc kind=graph ntok=2048 proc=1 LLM_GRAPH_RUN 1 warm ntok=2048 ms=18248.9 tok_s=112.226 ttft_ms=45.3 decode_tok_s=112.450 same_text=1
+LP lane=vc kind=graph ntok=2048 proc=1 LLM_TEXT= ______. A. Paris B. London C. New York D. Tokyo 答案: A  The capital of the United States is ______. A. Washington B. New York C. Chicago D. Los Angeles 答案: A  The capital of the United Kingdom is ____
+LP lane=vc kind=graph ntok=2048 proc=1 LLM_TEXT_SHA256=5459aaa7adbf53da64fadb4ed1ad40ec4d0bf44ee6b66f9c73f9e957c1b216de
+LP lane=vc kind=graph ntok=2048 proc=1 LLM_OK=1
+LP_EXT lane=vc kind=graph ntok=2048 proc=1 ext_ms=47899 rc=0
+LP lane=vc kind=graph ntok=2048 proc=2 LLM_PARAM_DEVICE=cuda
+LP lane=vc kind=graph ntok=2048 proc=2 LLM_GRAPH_CAPTURE_MS=558.4
+LP lane=vc kind=graph ntok=2048 proc=2 LLM_GRAPH_RUN 0 cold ntok=2048 ms=19426.8 tok_s=105.421 ttft_ms=1215.7 decode_tok_s=112.404 same_text=1
+LP lane=vc kind=graph ntok=2048 proc=2 LLM_GRAPH_RUN 1 warm ntok=2048 ms=18269.4 tok_s=112.100 ttft_ms=45.4 decode_tok_s=112.325 same_text=1
+LP lane=vc kind=graph ntok=2048 proc=2 LLM_TEXT= ______. A. Paris B. London C. New York D. Tokyo 答案: A  The capital of the United States is ______. A. Washington B. New York C. Chicago D. Los Angeles 答案: A  The capital of the United Kingdom is ____
+LP lane=vc kind=graph ntok=2048 proc=2 LLM_TEXT_SHA256=5459aaa7adbf53da64fadb4ed1ad40ec4d0bf44ee6b66f9c73f9e957c1b216de
+LP lane=vc kind=graph ntok=2048 proc=2 LLM_OK=1
+LP_EXT lane=vc kind=graph ntok=2048 proc=2 ext_ms=48769 rc=0
+LP lane=vc kind=graph ntok=2048 proc=3 LLM_PARAM_DEVICE=cuda
+LP lane=vc kind=graph ntok=2048 proc=3 LLM_GRAPH_CAPTURE_MS=544.8
+LP lane=vc kind=graph ntok=2048 proc=3 LLM_GRAPH_RUN 0 cold ntok=2048 ms=19399.6 tok_s=105.569 ttft_ms=1207.4 decode_tok_s=112.521 same_text=1
+LP lane=vc kind=graph ntok=2048 proc=3 LLM_GRAPH_RUN 1 warm ntok=2048 ms=18263.9 tok_s=112.134 ttft_ms=48.7 decode_tok_s=112.379 same_text=1
+LP lane=vc kind=graph ntok=2048 proc=3 LLM_TEXT= ______. A. Paris B. London C. New York D. Tokyo 答案: A  The capital of the United States is ______. A. Washington B. New York C. Chicago D. Los Angeles 答案: A  The capital of the United Kingdom is ____
+LP lane=vc kind=graph ntok=2048 proc=3 LLM_TEXT_SHA256=5459aaa7adbf53da64fadb4ed1ad40ec4d0bf44ee6b66f9c73f9e957c1b216de
+LP lane=vc kind=graph ntok=2048 proc=3 LLM_OK=1
+LP_EXT lane=vc kind=graph ntok=2048 proc=3 ext_ms=47793 rc=0
+LP_DONE lane=vc date=2026-09-25T20:14:13+00:00
+LP_JOB_EXIT=0
