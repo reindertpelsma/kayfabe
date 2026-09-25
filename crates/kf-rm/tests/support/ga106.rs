@@ -464,6 +464,16 @@ pub fn host_facts() -> HostFacts {
         gr_info: kf_abi::grinfo::GA106_GR_INFO,
         gr_context_buffers: kf_abi::grstatic::GA106_CONTEXT_BUFFERS,
         forwarded_gpu_info: kf_abi::gpuinfo::GA106_FORWARDED_GPU_INFO.to_vec(),
+        // The GA106's measured words (`kf_abi::fbinfo` tests: bus 0xc0, FBPs 3, LTS 18), which
+        // the GA10x projections of its row reproduce.
+        forwarded_fb_info: kf_abi::fbinfo::FbGeometry {
+            l2_cache_size: MEMORY_SYSTEM.l2_cache_size,
+            ram_type: MEMORY_SYSTEM.ram_type,
+            ltc_count: MEMORY_SYSTEM.ltc_count,
+        }
+        .forwarded_answers()
+        .expect("the GA106 row projects")
+        .to_vec(),
         smc_mode: kf_abi::smcmode::GA106_SMC_MODE,
         pcie_max_gen: kf_abi::businfo::PcieGen::Gen4,
         ce_fault_method_buffer_size: kf_abi::fmbsize::GA106_CE_FAULT_METHOD_BUFFER_SIZE,

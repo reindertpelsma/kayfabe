@@ -593,6 +593,41 @@ pub fn query_forwarded_gpu_info(host: &mut dyn HostControls) -> Result<Vec<(u32,
     Ok(out)
 }
 
+/// ★ The `FB_GET_INFO_V2` indices a guest's `FB_GET_INFO_V2` RPC may carry
+/// (`kf_abi::fbinfo::answer_fb_get_info_v2`'s set), asked of the host in one call.
+pub const FORWARDED_FB_INFO_INDICES: &[u32] = &[
+    kf_abi::fbinfo::FB_INFO_INDEX_BUS_WIDTH,
+    kf_abi::fbinfo::FB_INFO_INDEX_RAM_TYPE,
+    kf_abi::fbinfo::FB_INFO_INDEX_FBP_COUNT,
+    kf_abi::fbinfo::FB_INFO_INDEX_FBP_MASK,
+    kf_abi::fbinfo::FB_INFO_INDEX_L2CACHE_SIZE,
+    kf_abi::fbinfo::FB_INFO_INDEX_LTC_COUNT,
+    kf_abi::fbinfo::FB_INFO_INDEX_LTS_COUNT,
+];
+
+/// `forwarded_fb_info` — the host's own words for [`FORWARDED_FB_INFO_INDICES`]. ⊘ Every index
+/// must be answered: a missing one is refused by name, never a zero.
+///
+/// # Errors
+/// [`FieldCause`].
+pub fn query_forwarded_fb_info(host: &mut dyn HostControls) -> Result<Vec<(u32, u32)>, FieldCause> {
+    use kf_abi::fbinfo as fb;
+    let req = info_list_request(fb::FB_GET_INFO_V2_PARAMS_SIZE, FORWARDED_FB_INFO_INDICES);
+    let r = ask(host, fb::NV2080_CTRL_CMD_FB_GET_INFO_V2, req)?;
+    let pairs = fb::decode_fb_info_pairs(&r)
+        .map_err(|_| FactRefusal::ShortReply { cmd: fb::NV2080_CTRL_CMD_FB_GET_INFO_V2, len: r.len() })?;
+    let mut out = Vec::new();
+    for &index in FORWARDED_FB_INFO_INDICES {
+        let d = pairs
+            .iter()
+            .find(|(i, _)| *i == index)
+            .map(|(_, d)| *d)
+            .ok_or(FactRefusal::Missing { cmd: fb::NV2080_CTRL_CMD_FB_GET_INFO_V2, index })?;
+        out.push((index, d));
+    }
+    Ok(out)
+}
+
 /// `smc_mode`.
 ///
 /// # Errors
@@ -724,6 +759,7 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
     };
     let gr_context_buffers = query_gr_context_buffers(host);
     let forwarded_gpu_info = query_forwarded_gpu_info(host);
+    let forwarded_fb_info = query_forwarded_fb_info(host);
     let smc_mode = query_smc_mode(host);
     let pcie_max_gen = query_pcie_max_gen(host);
     let ce_fault_method_buffer_size: Result<u32, FieldCause> = Ok(authored::CE_FAULT_METHOD_BUFFER_SIZE);
@@ -758,6 +794,7 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
     let gr_info = take!(gr_info);
     let gr_context_buffers = take!(gr_context_buffers);
     let forwarded_gpu_info = take!(forwarded_gpu_info);
+    let forwarded_fb_info = take!(forwarded_fb_info);
     let smc_mode = take!(smc_mode);
     let pcie_max_gen = take!(pcie_max_gen);
     let ce_fault_method_buffer_size = take!(ce_fault_method_buffer_size);
@@ -780,6 +817,7 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
         gr_info,
         gr_context_buffers,
         forwarded_gpu_info,
+        forwarded_fb_info,
         smc_mode,
         pcie_max_gen,
         ce_fault_method_buffer_size,
@@ -802,6 +840,7 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
             Some(gr_info),
             Some(gr_context_buffers),
             Some(forwarded_gpu_info),
+            Some(forwarded_fb_info),
             Some(smc_mode),
             Some(pcie_max_gen),
             Some(ce_fault_method_buffer_size),
@@ -828,6 +867,7 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
             gr_info,
             gr_context_buffers,
             forwarded_gpu_info,
+            forwarded_fb_info,
             smc_mode,
             pcie_max_gen,
             ce_fault_method_buffer_size,
