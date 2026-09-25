@@ -531,7 +531,7 @@ impl Device {
             return "GSP_QUEUE_HEAD/TAIL(n)";
         }
         if let kf_trap::trappolicy::DoorbellPlacement::Bar0 { offset } = self.plane.doorbell
-            && off == kf_trap::memmap::VF_USERMODE_PAGE + u64::from(offset)
+            && off == kf_trap::memmap::VF_USERMODE_PAGE + offset
         {
             return "USERMODE_DOORBELL";
         }
@@ -1151,7 +1151,7 @@ impl Device {
             ws.served.load(Ordering::Relaxed),
         );
         let va = self.va_stats.lock().map(|v| v.timing.clone()).unwrap_or_default();
-        let avg = |sum: u64, n: u64| if n == 0 { 0 } else { sum / n / 1000 };
+        let avg = |sum: u64, n: u64| sum.checked_div(n).unwrap_or(0) / 1000;
         eprintln!(
             "kf3: PROF va invals={} arrive_to_clear_sum_ms={} arrive_to_clear_avg_us={} max_us={} walks={} walk_sum_ms={} walk_avg_us={} gpu_avg_us={} plan_avg_us={} apply_avg_us={} host_calls={}",
             va.invals,
@@ -1161,7 +1161,7 @@ impl Device {
             va.walks,
             va.walk_ns / 1_000_000,
             avg(va.walk_ns, va.walks),
-            if va.walks == 0 { 0 } else { va.gpu_us / va.walks },
+            va.gpu_us.checked_div(va.walks).unwrap_or(0),
             avg(va.plan_ns, va.walks),
             avg(va.apply_ns, va.walks),
             va.host_calls,

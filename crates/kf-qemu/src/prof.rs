@@ -132,7 +132,7 @@ impl Hist {
         format!(
             "n={n} sum_ms={:.1} avg_us={:.1} p50_us={:.1} p90_us={:.1} p99_us={:.1} max_us={:.1}",
             self.sum() as f64 / 1e6,
-            if n == 0 { 0.0 } else { us(self.sum() / n) },
+            us(self.sum().checked_div(n).unwrap_or(0)),
             us(self.pct(0.50)),
             us(self.pct(0.90)),
             us(self.pct(0.99)),
