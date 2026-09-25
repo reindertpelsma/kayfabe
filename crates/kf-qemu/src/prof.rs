@@ -81,8 +81,9 @@ fn bucket(ns: u64) -> usize {
 }
 
 fn bucket_hi(i: usize) -> u64 {
-    if i < 4 {
-        return i as u64;
+    // 0..=3 are exact; 4..=7 are never produced by `bucket` (4 ns is octave 2 → index 8).
+    if i < 8 {
+        return i.min(3) as u64;
     }
     let lg = i / 4;
     let sub = (i % 4) as u64;
