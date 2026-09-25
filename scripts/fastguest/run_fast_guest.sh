@@ -24,7 +24,17 @@ BUDGET=${2:-20}
 BENCH=${BENCH_DIR:-/workspace/bench}
 FG=$BENCH/fastguest
 if [ "${KF_DEVICE:-nvkvm}" = kf3 ]; then
-    Q=${QEMU_BIN:-$BENCH/qemu-build-kf3/qemu-system-x86_64}
+    # ★ 2026-09-25: the binary built from THIS checkout's revision (`build_kf3.sh` installs one per
+    # revision) — never the shared build dir's, which another build can replace mid-measurement.
+    KF3_REPO="$(cd "$(dirname "$0")/../.." && pwd)"
+    KF3_REV=$(git -C "$KF3_REPO" rev-parse --short=8 HEAD 2>/dev/null || echo unknown)
+    [ -z "$(git -C "$KF3_REPO" status --porcelain --untracked-files=no 2>/dev/null)" ] || KF3_REV="$KF3_REV-dirty"
+    Q=${QEMU_BIN:-$BENCH/kf3-bins/$KF3_REV/qemu-system-x86_64}
+    [ -n "${QEMU_BIN:-}" ] || [ -x "$Q" ] || {
+        echo "run_fast_guest: no kf3 binary for this checkout's revision ($KF3_REV) at $Q — run scripts/bench/build_kf3.sh from this checkout (or set QEMU_BIN)"
+        exit 2
+    }
+    echo "== kf3 binary: $Q (rev $KF3_REV)"
 else
     Q=${QEMU_BIN:-$BENCH/qemu-build/qemu-system-x86_64}
 fi
@@ -109,12 +119,17 @@ case "$ARMS_TOK" in *[[:space:]]*) echo "run_fast_guest: KF_ARMS still holds whi
 DEADLINE_MS=$(( (BUDGET - 4) * 1000 ))
 [ "$DEADLINE_MS" -gt 1000 ] || DEADLINE_MS=1000
 
-echo "== arms: $ARMS_TOK   budget: ${BUDGET}s   self-deadline: ${DEADLINE_MS}ms   trace: ${KF_IOCTL_TRACE:-verbose}"
-# > Owner, 2026-09-18: *"Run in verbose mode so it prints the ioctls. At timeout trace dump the
-# > whole thing."* ⇒ `verbose` is the default HERE and nowhere else: this lane exists to
-# > diagnose hangs, and a line per ioctl over the serial console is the only record a guest that
-# > never reaches poweroff leaves behind. `KF_IOCTL_TRACE=ring` when measuring a round trip,
-# > where the per-call print is itself the cost.
+echo "== arms: $ARMS_TOK   budget: ${BUDGET}s   self-deadline: ${DEADLINE_MS}ms   trace: ${KF_IOCTL_TRACE:-ring}"
+# ⊘ SUPERSEDED 2026-09-25 (coordinator ruling): the timing lane's default is now `ring`, and
+# `verbose` is opt-in (`KF_IOCTL_TRACE=verbose`). `[measured vh, 536fcf85..acf0f907]` every verbose
+# trace line goes to the hvc0 console, whose guest driver spins until QEMU has consumed it — a full
+# nested-KVM round trip per ioctl: `--ce-client-guest-ram` reached 2 514-4 923 invalidates per 60 s
+# verbose against 5 052-8 810 ring on the same binary. The owner's 2026-09-18 requirement still
+# holds in `ring`: the client's self-deadline dumps the WHOLE ring at timeout
+# (`ioctltrace::arm_self_deadline`), so a hang still leaves its record. ⊘ No verdict reads the
+# trace: FAST_VERDICT comes from the DONE marker, the client's rc and the device's ledger lines.
+# > Owner, 2026-09-18 (the text this replaces): *"Run in verbose mode so it prints the ioctls. At
+# > timeout trace dump the whole thing."*
 # ⚠ **THE BINARY'S AGE, PRINTED, BECAUSE A STALE QEMU IS INVISIBLE.** The device is a Rust
 # archive LINKED INTO qemu-system-x86_64, so a source change that was never relinked runs the
 # OLD device while the tree says otherwise. `[measured w763]` a default flip read as "the flip
@@ -265,7 +280,7 @@ start=$(date +%s)
 timeout --kill-after=3 "$BUDGET" "$Q" \
     "${RAMARGS[@]}" -cpu host -smp "${KF_SMP:-3}" \
     -kernel "$FG/vmlinuz" -initrd "$FG/initrd.cpio.gz" \
-    -append "$CONSOLE panic=1 loglevel=6 ${KF_APPEND:-}KF_ARMS=$ARMS_TOK KF_IOCTL_TRACE=${KF_IOCTL_TRACE:-verbose} KF_BUDGET_S=$BUDGET" \
+    -append "$CONSOLE panic=1 loglevel=6 ${KF_APPEND:-}KF_ARMS=$ARMS_TOK KF_IOCTL_TRACE=${KF_IOCTL_TRACE:-ring} KF_BUDGET_S=$BUDGET" \
     "${DEVARGS[@]}" \
     -msg timestamp=on \
     "${CONARGS[@]}" -display none \
