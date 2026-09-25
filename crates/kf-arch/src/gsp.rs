@@ -140,8 +140,10 @@ pub enum GspReg {
     /// `GSP_SEQ_BUF_OPCODE_CORE_RESUME` (`kernel_gsp_ga102.c:161`), and
     /// `kflcnIsRiscvMode` caches the tristate forever after. So a GSP-offload adapter is
     /// in RISC-V mode by the time any interrupt is ever serviced, and `BCR_CTRL` is never
-    /// consulted — which is why modelling `BCR_CTRL` would not have helped and is not done
-    /// here (`C: src/qemu/nvkvm_gpu_emul.c:1562-1573` does not model it either).
+    /// consulted — which is why modelling `BCR_CTRL` would not have helped HERE
+    /// (`C: src/qemu/nvkvm_gpu_emul.c:1562-1573` does not model it either).
+    /// ⊘ **CORRECTED w827:** true of the interrupt path only — the adapter TEARDOWN waits on
+    /// `BCR_CTRL.VALID`, and it is now modelled: [`GspReg::GspRiscvBcrCtrl`].
     ///
     /// ⇒ Leaving this register undecoded made it read as an unclaimed **zero**, so
     /// `intrStatus` was `IRQSTAT & 0 & 0 = 0` no matter what `IRQSTAT` said, and the guest
@@ -162,6 +164,18 @@ pub enum GspReg {
     /// [`GspReg::GspRiscvIrqmask`] for the whole story; the two are only separate because
     /// the register block is.
     GspRiscvIrqdest,
+    /// ★★★★★ **w827 — `NV_PRISCV_RISCV_BCR_CTRL`, and the note above was wrong about the
+    /// TEARDOWN.** `BCR_CTRL` is not consulted to decide the interrupt mode, but it IS the
+    /// completion edge of the core switch the guest makes on every adapter shutdown:
+    /// `kflcnReset_TU102` → `kflcnSwitchToFalcon_GA102` writes `CORE_SELECT_FALCON` and spins
+    /// until `VALID` reads `TRUE` (`ogkm-580: src/nvidia/src/kernel/gpu/falcon/arch/ampere/
+    /// kernel_falcon_ga102.c:126-169`, bound for GA10x, AD10x and GH100 by
+    /// `generated/g_kernel_falcon_nvoc.c:444-447`). Unmodelled, the shadow read back the guest's
+    /// own zero, and **every process's last `close()` spun the full 4 s `GPU_TIMEOUT_DEFAULT`**
+    /// (`Failed to switch core to Falcon mode`, `[measured w827 vh2, rev b753a2df]`: 4.0 s of
+    /// the thin guest's ~6.9 s per-process floor). Hardware sets `VALID` once the selected core
+    /// is live; the model answers the core the guest last selected, `VALID`.
+    GspRiscvBcrCtrl,
     /// SEC2 falcon `CPUCTL` — the Booter's start register.
     Sec2FalconCpuctl,
     /// SEC2 falcon `MAILBOX0` — the Booter's argument, and the only thing that
@@ -207,7 +221,7 @@ pub enum GspReg {
 
 impl GspReg {
     /// Every register variant with a fixed identity (the queue heads are indexed separately).
-    pub const FIXED: [GspReg; 19] = [
+    pub const FIXED: [GspReg; 20] = [
         GspReg::GfwBootProgress,
         GspReg::GfwBootPlm,
         GspReg::GspFalconCpuctl,
@@ -222,6 +236,7 @@ impl GspReg {
         GspReg::GspRiscvCpuctl,
         GspReg::GspRiscvIrqmask,
         GspReg::GspRiscvIrqdest,
+        GspReg::GspRiscvBcrCtrl,
         GspReg::Sec2FalconCpuctl,
         GspReg::Sec2FalconMailbox0,
         GspReg::Sec2FalconDmatrfcmd,
@@ -317,6 +332,9 @@ pub struct GspObservation {
     pub boot_args_lo: u32,
     /// The high half of the boot-args address the guest last wrote, echoed back.
     pub boot_args_hi: u32,
+    /// The value the guest last wrote to [`GspReg::GspRiscvBcrCtrl`] (`None` = never written:
+    /// the register's reset value).
+    pub riscv_bcr_ctrl: Option<u32>,
 }
 
 /// The geometry of the LibOS memory-region init-args array the guest publishes.
