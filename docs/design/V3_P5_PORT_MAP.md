@@ -70,6 +70,34 @@ Five changes, each measured or cited:
    (`kernel_fifo_init.c:141-221`); our device presents no SR-IOV, so chids are device-unique on
    every family — the one escape is that guest-root regkey (blast radius: the guest itself).
 
+**P5b, later the same day (rev `afb294e8`, boots `p5bc`–`p5be`, suite `p5bt`):**
+6. ⊘⊘ **§2.1's kernel test was keyed on the wrong handle.** A root alloc's wire `hObject` is `0`;
+   P5 recorded pid-sentinel clients under it, so no client outside RM's internal range was ever
+   kernel (the real cause of finding 2 below). Keyed on `hClient`, the sentinel marked
+   nvidia-uvm's client — AND the raw client's sandboxed-isolate client `0xc1d0000c`, an
+   unprivileged guest process. ⇒ The ROUTE's kernel test is now the internal-handle range only:
+   a user channel on the Translated route would get its physical CE operands rewritten onto the
+   store window (guest userspace → guest-kernel memory). UVM therefore stays Passthrough — see Q7.
+7. A Translated segment that crosses from one of our 4 KiB rows into the next was refused "not
+   placed by us" (`--concurrency`, PMA scrubber dead after 285 entries); the reader now walks rows.
+8. **Suite `p5bt` (30 arms, 60 s): 24 PASS**, FAIL `--defer-liveness` / `--missing-page-fault`
+   (a guest channel faults on its host twin and nothing reaches the guest's error notifier: the
+   fault/RC plane is not built), TIMEOUT `--uvm-invalidate` / `--uvm-mean` (UVM channels, Q7),
+   `--ce-client-guest-ram` (13 000 guest-RAM rows declared before any channel — the mapping plane),
+   `--concurrency` (all rungs printed, scrubber forwarded 385 entries, no death — the arm's tail
+   outlived 60 s).
+
+**Q7 (NEW, needs an owner decision). An unforgeable "guest kernel" identity for a channel.**
+nvidia-uvm's CE channels are the guest kernel's and produce physical operands (§57), so they
+belong on the Translated route — but the only wire fact naming them kernel (the `KERNEL_PID`
+sentinel) is also declared by a guest user process (`[measured p5bd]`). Measured today with UVM
+on Translated: its GPFIFO/pushbuffer are in VIDMEM (Q3, refused by name) and it would then need
+the `MEM_OP` split (P6). Options: (a) key on RM's internal range + a UVM-specific statement that
+userspace cannot make (e.g. the channel's VAS being the one `UVM_REGISTER_GPU`'s
+`SET_PAGE_DIRECTORY` named); (b) keep UVM Passthrough and accept that its physical work faults
+on the unprivileged host twin (⚠ that the host refuses PHYS-mode CE on an unprivileged channel is
+standard RM behaviour but was NOT measured in this work).
+
 **Five findings the boots made, each folded into the section it corrects:**
 1. `hVASpace = 0` (the PMA scrubber) names the device-default VAS through a TRANSIENT handle: RM
    allocs `FERMI_VASPACE_A` (index `GPU_DEVICE`), publishes its PDEs, and FREES it before the channel
