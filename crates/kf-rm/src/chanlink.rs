@@ -67,6 +67,13 @@ pub const DEBUG_SET_EXCEPTION_MASK: u32 = 0x83de_0309;
 pub const GR_SET_CTXSW_PREEMPTION_MODE: u32 = 0x2080_1210;
 /// `NVA06C_CTRL_CMD_SET_TIMESLICE` (`ctrla06c.h:146-152`): `{NvU64 timesliceUs}`.
 pub const TSG_SET_TIMESLICE: u32 = 0xa06c_0103;
+/// `NV0080_CTRL_CMD_INTERNAL_PERF_CUDA_LIMIT_SET_CONTROL` (`ctrl0080internal.h:76`) — the guest
+/// kernel's per-Device CUDA-limit edge (`kern_cuda_limit.c`: sent only when that Device's setting
+/// CHANGES), `{NvBool bCudaLimit}`.
+pub const PERF_CUDA_LIMIT_SET_CONTROL: u32 = 0x0080_2009;
+/// `NV0080_CTRL_CMD_INTERNAL_PERF_CUDA_LIMIT_DISABLE` (`ctrl0080internal.h:82`) — no params, sent
+/// on the guest's INTERNAL device at a Device's teardown (`kern_cuda_limit.c:47-75`).
+pub const PERF_CUDA_LIMIT_DISABLE: u32 = 0x0080_2004;
 
 /// ★ v3-chanctl: a `DISABLE_CHANNELS` list as a `Copy` value (`(hClient, hChannel)` × `n`, ≤ 64).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -238,6 +245,18 @@ pub enum ChanStatement {
         /// `timesliceUs`.
         us: u64,
     },
+    /// ★ w827: the guest Device `(client, device)` turned its CUDA limit on/off.
+    CudaLimit {
+        /// `hClient`.
+        client: u32,
+        /// The Device.
+        device: u32,
+        /// `bCudaLimit`.
+        enable: bool,
+    },
+    /// ★ w827: `PERF_CUDA_LIMIT_DISABLE` — a Device is being torn down; which one is stated only
+    /// by the free that follows.
+    CudaLimitDisable,
     /// `GET_WORK_SUBMIT_TOKEN` on a channel.
     Token {
         /// `hClient`.
@@ -623,6 +642,21 @@ impl ChannelPolicy {
                     return Some(Self::refusal(NV_ERR_INVALID_ARGUMENT, &format!("SET_TIMESLICE params are {} bytes, not 8", params.len()), cmd));
                 };
                 ChanStatement::Timeslice { client: h.client, object: h.object, us }
+            }
+            PERF_CUDA_LIMIT_SET_CONTROL => {
+                if !self.abi.capabilities().control(kf_arch::ids::ControlCmd(h.cmd)).is_permitted() {
+                    return None;
+                }
+                if params.len() != 1 {
+                    return Some(Self::refusal(NV_ERR_INVALID_ARGUMENT, &format!("PERF_CUDA_LIMIT_SET_CONTROL params are {} bytes, not 1", params.len()), cmd));
+                }
+                ChanStatement::CudaLimit { client: h.client, device: h.object, enable: params[0] != 0 }
+            }
+            PERF_CUDA_LIMIT_DISABLE => {
+                if !self.abi.capabilities().control(kf_arch::ids::ControlCmd(h.cmd)).is_permitted() {
+                    return None;
+                }
+                ChanStatement::CudaLimitDisable
             }
             DEBUG_SET_EXCEPTION_MASK => {
                 if !self.abi.capabilities().control(kf_arch::ids::ControlCmd(h.cmd)).is_permitted() {

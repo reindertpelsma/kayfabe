@@ -531,6 +531,10 @@ pub struct ChanPlane {
     /// ★ w827: guest debugger session `(hClient, hDebugger)` → its host twin: `(guest device, host
     /// session, host GR object it is bound to)`.
     dbg: Mutex<HashMap<(u32, u32), (u32, u32, u32)>>,
+    /// ★ w827: guest Devices `(hClient, hDevice)` whose CUDA limit is on, and whether OUR host
+    /// device's is — the host limit is on iff any guest Device's is (the guest kernel sends only
+    /// per-Device edges, so the union is exactly the guest's own state).
+    cuda_limit: Mutex<(std::collections::BTreeSet<(u32, u32)>, bool)>,
     /// ★ P5b: the act thread's queue (`None` until [`ChanPlane::start`]).
     acts: Mutex<Option<std::sync::mpsc::Sender<(Act, kf_gsp::Deferred, &'static str)>>>,
     /// The register drainer's wake: an act that resolved a held reply signals it.
@@ -652,6 +656,7 @@ impl ChanPlane {
             pt: Mutex::new(HashMap::new()),
             pt_objs: Mutex::new(HashMap::new()),
             dbg: Mutex::new(HashMap::new()),
+            cuda_limit: Mutex::new((std::collections::BTreeSet::new(), false)),
             acts: Mutex::new(None),
             release,
             engines,
@@ -935,6 +940,33 @@ impl ChanPlane {
                     }),
                 )
             }
+            ChanStatement::CudaLimit { client, device, enable } => {
+                let flip = self.cuda_limit.lock().ok().and_then(|mut g| {
+                    if enable {
+                        g.0.insert((client, device));
+                    } else {
+                        g.0.remove(&(client, device));
+                    }
+                    let want = !g.0.is_empty();
+                    (want != g.1).then(|| {
+                        g.1 = want;
+                        want
+                    })
+                });
+                match flip {
+                    None => ChanAnswer::Done,
+                    Some(want) => self.defer(
+                        "cuda limit",
+                        Box::new(move |me: &ChanPlane| {
+                            me.rm.perf_cuda_limit(want).map_err(|e| (NV_ERR_INVALID_STATE, format!("host PERF_CUDA_LIMIT_SET_CONTROL({want}): {e:?}")))?;
+                            Ok(format!("{client:#x}:{device:#x} CUDA limit {enable} -> host device limit {want}"))
+                        }),
+                    ),
+                }
+            }
+            // ⊘ The internal DISABLE names no Device (it is sent on the guest's internal device);
+            // the Device's own free, which follows it, is what removes its row (see `free`).
+            ChanStatement::CudaLimitDisable => ChanAnswer::Done,
             ChanStatement::Free { client, object } => self.free(client, object),
             ChanStatement::PromoteCtx { chan_client, object, engine_type, initialize, with_va, entries } => {
                 self.promote_ctx(chan_client, object, engine_type, initialize, with_va, entries)
@@ -1419,10 +1451,24 @@ impl ChanPlane {
                 keys.into_iter().filter_map(|k| m.remove(&k).map(|v| v.1)).collect()
             })
             .unwrap_or_default();
-        self.free_channels(client, object, debuggers)
+        // ★ w827: a freed Device (or client) takes its CUDA-limit row; the host limit goes off with
+        // the last one.
+        let limit_off = self
+            .cuda_limit
+            .lock()
+            .ok()
+            .and_then(|mut g| {
+                let before = g.0.len();
+                g.0.retain(|(c, d)| !(*c == client && (*d == object || object == client)));
+                (g.0.len() != before && g.0.is_empty() && g.1).then(|| {
+                    g.1 = false;
+                })
+            })
+            .is_some();
+        self.free_channels(client, object, debuggers, limit_off)
     }
 
-    fn free_channels(&self, client: u32, object: u32, debuggers: Vec<u32>) -> ChanAnswer {
+    fn free_channels(&self, client: u32, object: u32, debuggers: Vec<u32>, limit_off: bool) -> ChanAnswer {
         // Translated channels: by object, or every one of the client's.
         // ★ v3-promote: a free of the channel, its group, its parent, its DEVICE or its client
         // takes the channel with it (the guest frees a subtree with ONE RPC) — for Translated
@@ -1456,7 +1502,7 @@ impl ChanPlane {
         } else {
             None
         };
-        if translated.is_empty() && twins.is_empty() && obj.is_none() && debuggers.is_empty() {
+        if translated.is_empty() && twins.is_empty() && obj.is_none() && debuggers.is_empty() && !limit_off {
             return ChanAnswer::NotOurs;
         }
         if !twins.is_empty() {
@@ -1486,6 +1532,10 @@ impl ChanPlane {
                 for h in debuggers {
                     let r = me.rm.free(h);
                     line.push(format!("debugger session host {h:#x} {}", if r.is_ok() { "freed" } else { "FREE REFUSED" }));
+                }
+                if limit_off {
+                    let r = me.rm.perf_cuda_limit(false);
+                    line.push(format!("host CUDA limit off ({})", if r.is_ok() { "ok" } else { "REFUSED" }));
                 }
                 for ht in translated {
                     me.retire(ht);

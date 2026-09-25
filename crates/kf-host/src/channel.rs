@@ -386,6 +386,17 @@ impl HostRm {
         self.raw_control(chan.tsg, 0xa06c_0103, &mut p)
     }
 
+    /// ★ w827: `NV0080_CTRL_CMD_PERF_CUDA_LIMIT_SET_CONTROL` (`0x00801909`) on OUR device —
+    /// the unprivileged userspace verb whose internal consequence is the GSP's CUDA-limit edge
+    /// (`kern_cuda_limit.c:88-128`); host RM refcounts it on our Device.
+    ///
+    /// # Errors
+    /// The host's status.
+    pub fn perf_cuda_limit(&self, enable: bool) -> Result<(), RmError> {
+        let mut p = [u8::from(enable)];
+        self.raw_control(self.device, 0x0080_1909, &mut p)
+    }
+
     /// `GPFIFO_SCHEDULE` (`bEnable = 1`) on the channel's group — the channel starts fetching.
     ///
     /// # Errors
