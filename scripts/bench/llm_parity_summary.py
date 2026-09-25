@@ -14,7 +14,7 @@ for f in sys.argv[1:]:
         m = re.match(r'.*?LP lane=(\S+) kind=(\S+) ntok=(\d+) proc=(\d+) (.*)$', line.rstrip('\n'))
         if m:
             lane, kind, n, _, rest = m.groups(); n = int(n); k = (lane, kind, n)
-            if rest.startswith('LLM_RUN '):
+            if rest.startswith('LLM_RUN ') or rest.startswith('LLM_GRAPH_RUN '):
                 p = rest.split()
                 phase = p[2]
                 kv = dict(x.split('=', 1) for x in p[3:])

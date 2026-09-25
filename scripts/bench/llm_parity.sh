@@ -11,6 +11,8 @@
 # The matrix (every row a SEPARATE process, so each carries its own cold start):
 #   short : LP_SHORT_PROCS (3) x the recorded measurement, unchanged — 16 tokens greedy, default
 #           mode (no timeline), LLM_MS = cold generate() wall, the basis HOST_LLM_TOK_PER_S uses.
+#   graph : (diagnostic, LP_GRAPH=512,2048 x LP_GRAPH_PROCS) run_llm_graph.py — the decode step as
+#           ONE replayed CUDA graph, so per-launch (doorbell) cost is ~removed; separates it from the rest.
 #   long  : for each ntok in LP_LONG (512,2048): LP_LONG_PROCS (3) processes with
 #           LLM_TIMELINE=1 LLM_MIN_NTOK=1 LLM_REPS=LP_WARM (1): per-stage init times, then one cold
 #           and LP_WARM warm generate() runs, each with ttft and steady-state decode tok/s.
@@ -26,6 +28,8 @@ SHORT_PROCS=${LP_SHORT_PROCS:-3}
 LONG=${LP_LONG:-512,2048}
 LONG_PROCS=${LP_LONG_PROCS:-3}
 WARM=${LP_WARM:-1}
+GRAPH=${LP_GRAPH-512,2048}   # diagnostic arm (run_llm_graph.py): CUDA-graph decode; empty = off
+GRAPH_PROCS=${LP_GRAPH_PROCS:-3}
 TMO=${LLM_TIMEOUT:-3600}
 MODEL=${LLM_MODEL:-Qwen/Qwen2-0.5B-Instruct}
 
@@ -33,9 +37,10 @@ case "$MODE" in
 local)
     [ -n "$LANE" ] || { sed -n 2,20p "$0"; exit 2; }
     ROOT=${LLM_ROOT:?LLM_ROOT}; PY=${LLM_PY:?LLM_PY}
-    cp "$HERE/run_llm.py" "$ROOT/run_llm.py" || exit 2
-    run() { ( cd "$ROOT" && env HF_HOME="$ROOT/hf" LLM_DEVICE=cuda LLM_MODEL="$MODEL" "$@" \
-              timeout "$TMO" "$PY" run_llm.py 2>&1 ); }
+    cp "$HERE/run_llm.py" "$HERE/run_llm_graph.py" "$ROOT/" || exit 2
+    run() { local r=${RUNNER:-run_llm.py}
+            ( cd "$ROOT" && env HF_HOME="$ROOT/hf" LLM_DEVICE=cuda LLM_MODEL="$MODEL" "$@" \
+              timeout "$TMO" "$PY" "$r" 2>&1 ); }
     SNAP=$(ls "$ROOT/hf/hub/models--${MODEL//\//--}/snapshots" 2>/dev/null | tr '\n' ' ')
     ;;
 hook)
@@ -43,8 +48,9 @@ hook)
     G="$HERE/gssh_nv"
     $G true >/dev/null 2>&1 || { echo "LP_OUTCOME=(E) UNMEASURED_GUEST_UNREACHABLE"; exit 0; }
     $G 'cat > /opt/llm/run_llm.py' < "$HERE/run_llm.py" || { echo "LP_OUTCOME=runner-install-failed"; exit 0; }
+    $G 'cat > /opt/llm/run_llm_graph.py' < "$HERE/run_llm_graph.py" || { echo "LP_OUTCOME=runner-install-failed"; exit 0; }
     run() { $G "cd /opt/llm && env HF_HOME=/opt/llm/hf LLM_DEVICE=cuda LLM_MODEL=$MODEL $* \
-                timeout $TMO /home/ubuntu/llmvenv/bin/python run_llm.py 2>&1" 2>&1 | tr -d '\r'; }
+                timeout $TMO /home/ubuntu/llmvenv/bin/python ${RUNNER:-run_llm.py} 2>&1" 2>&1 | tr -d '\r'; }
     SNAP=$($G "ls /opt/llm/hf/hub/models--${MODEL//\//--}/snapshots" 2>/dev/null | tr -d '\r' | tr '\n' ' ')
     echo "LP_GUEST_SMI=$($G 'nvidia-smi --query-gpu=name,driver_version --format=csv,noheader' 2>&1 | tr -d '\r' | head -1)"
     echo "LP_GUEST_NPROC=$($G nproc 2>&1 | tr -d '\r') LP_GUEST_MEM=$($G "free -m | awk '/Mem:/{print \$2}'" 2>&1 | tr -d '\r')"
@@ -66,5 +72,8 @@ one() {  # $1 kind, $2 ntok, $3 proc, rest: env
 for i in $(seq 1 "$SHORT_PROCS"); do one short 16 "$i"; done
 for n in $(echo "$LONG" | tr ',' ' '); do
     for i in $(seq 1 "$LONG_PROCS"); do one long "$n" "$i" LLM_TIMELINE=1 LLM_MIN_NTOK=1 LLM_REPS="$WARM"; done
+done
+for n in $(echo "$GRAPH" | tr ',' ' '); do
+    for i in $(seq 1 "$GRAPH_PROCS"); do RUNNER=run_llm_graph.py one graph "$n" "$i" LLM_REPS="$WARM"; done
 done
 echo "LP_DONE lane=$LANE date=$(date -Is)"
