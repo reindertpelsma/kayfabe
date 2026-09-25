@@ -441,6 +441,13 @@ pub struct Spare {
 /// Spares kept; a retirement beyond this frees the host space instead.
 const SPARES_MAX: usize = 32;
 
+/// ★ w827: spares built by [`prewarm`] before the guest runs. `[measured w827 vh2, 58e03230]` a
+/// raw-client process names THREE VA spaces (the floor arm `--timer`: one took the single prewarmed
+/// spare, two paid `create_mirror` at 67-90 ms each — its RAM window map is 65-86 ms — INSIDE a held
+/// page-directory reply: `rpc_held` 191 ms of a 2.4 s process). Built on the VA thread while it is
+/// idle, off every vCPU, from our own objects; nothing guest-visible.
+pub const PREWARM_SPARES: u64 = 3;
+
 /// ★ P5: the mirrors, by VA-space object — written by the VA thread when it creates one, read by
 /// the channel plane when a channel names it.
 pub type Mirrors = std::sync::Arc<Mutex<std::collections::HashMap<VasKey, Mirror>>>;

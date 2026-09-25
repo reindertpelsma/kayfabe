@@ -723,12 +723,21 @@ impl Device {
         let mut armed_seen: Option<u64> = None;
         // ★ Cold-box fix (`crate::mem::prewarm`): the first mirror's one-time host cost is paid
         // here, before the guest runs, as soon as QEMU has registered guest RAM.
-        let mut prewarmed = false;
+        // ★ w827: `PREWARM_SPARES` spares, one per idle tick (the first also pins the guest-RAM
+        // object) — never while a statement, a walk or an armed invalidate is waiting on us.
+        let mut prewarmed = 0u64;
         let mut va_busy_from = crate::prof::now_ns();
         while !self.stop.load(Ordering::Acquire) {
-            if !prewarmed && let Some(line) = crate::mem::prewarm(&self.mem, self.rm, self.store.handle) {
-                prewarmed = true;
-                eprintln!("kf3: mem t={:.3}s {line}", self.born.elapsed().as_secs_f64());
+            if prewarmed < crate::mem::PREWARM_SPARES
+                && (prewarmed == 0
+                    || (!m.in_flight()
+                        && m.pending() == 0
+                        && self.mem.inbox.all_settled()
+                        && self.mem.port.armed_request().is_none()))
+                && let Some(line) = crate::mem::prewarm(&self.mem, self.rm, self.store.handle)
+            {
+                prewarmed += 1;
+                eprintln!("kf3: mem t={:.3}s [{prewarmed}/{}] {line}", self.born.elapsed().as_secs_f64(), crate::mem::PREWARM_SPARES);
             }
             let mut ready = ReadyTokens::new();
             let prof = crate::prof::on();
