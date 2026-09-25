@@ -28,7 +28,7 @@ if [ -n "${VIDEO_SHIM:-}" ] && [ -f "$VIDEO_SHIM" ]; then
     echo "TRACE_$w records=$(wc -l < /workspace/bench/run_${1}_$w.jsonl)"
   done
 fi
-$G "rm -rf /var/tmp/vid/out; nohup setsid bash -c 'timeout -s INT $TO bash /var/tmp/vid/video_lane.sh /var/tmp/vid/ffmpeg /var/tmp/vid/out; echo LANE_EXIT=\$? > /var/tmp/vid/lane.rc' >/dev/null 2>&1 < /dev/null &"
+$G "rm -rf /var/tmp/vid/out /var/tmp/vid/lane.rc; nohup setsid bash -c 'timeout -s INT $TO bash /var/tmp/vid/video_lane.sh /var/tmp/vid/ffmpeg /var/tmp/vid/out; echo LANE_EXIT=\$? > /var/tmp/vid/lane.rc' >/dev/null 2>&1 < /dev/null &"
 t0=$(date +%s)
 while :; do
   sleep 5

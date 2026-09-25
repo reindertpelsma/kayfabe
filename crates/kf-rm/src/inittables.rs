@@ -1581,21 +1581,19 @@ impl CommandPolicy for InitTablePolicy {
             });
         }
 
-        // ★ v3-video: the GSS-legacy clock query libnvidia-encode gates a session on, answered
-        // from the HOST's realize-time answers (`kf_abi::videoclk`); a request naming any domain
-        // the host did not answer is refused exactly as before (it stays unserviced).
-        if req.cmd == kf_abi::videoclk::GSS_PERF_CLOCK_QUERY && !kf_abi::rpc_params_are_serialized(req.rmapi_rpc_flags) {
+        // ★ v3-video: the GSS-legacy requests libnvidia-encode gates a session on, answered with
+        // what the HOST wrote for the identical authored request at realize
+        // (`kf_abi::gssreplay`); anything else falls through to what answered it before.
+        if !kf_abi::rpc_params_are_serialized(req.rmapi_rpc_flags) {
             let ps = req.params_size as usize;
             if cmd.payload.len() >= req.params_at + ps {
                 let mut params = cmd.payload[req.params_at..req.params_at + ps].to_vec();
-                match kf_abi::videoclk::answer(&self.host.video_clocks, &mut params) {
-                    Ok(()) => {
-                        let mut body = cmd.payload.clone();
-                        body[CONTROL_STATUS_OFF..CONTROL_STATUS_OFF + 4].copy_from_slice(&NV_OK.to_le_bytes());
-                        body[req.params_at..req.params_at + ps].copy_from_slice(&params);
-                        return Some(Reply { rpc_result: NV_OK, body });
-                    }
-                    Err(why) => eprintln!("kf3: GSS clock query {:#010x} not answered: {why:?}", req.cmd),
+                if kf_abi::gssreplay::answer(&self.host.gss_replay, req.cmd, &mut params) {
+                    eprintln!("kf3: GSS {:#010x} answered from the host's realize-time reply", req.cmd);
+                    let mut body = cmd.payload.clone();
+                    body[CONTROL_STATUS_OFF..CONTROL_STATUS_OFF + 4].copy_from_slice(&NV_OK.to_le_bytes());
+                    body[req.params_at..req.params_at + ps].copy_from_slice(&params);
+                    return Some(Reply { rpc_result: NV_OK, body });
                 }
             }
         }

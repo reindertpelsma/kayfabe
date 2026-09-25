@@ -317,20 +317,15 @@ pub fn query_video_falcons(host: &mut dyn HostControls, kinds: &[EngineKind]) ->
     Ok(rows.into_iter().filter(|f| wanted.contains(&f.eng_desc)).collect())
 }
 
-/// ★ `video_clocks` — the host's answer to the GSS-legacy clock query (`kf_abi::videoclk`) for
-/// each domain in `CLOCK_DOMAINS`, with a request WE author. A refused or unrecognised answer
-/// leaves that domain out (the guest's query for it is then refused): never fatal to the device.
-pub fn query_video_clocks(host: &mut dyn HostControls) -> Vec<kf_abi::videoclk::ClockAnswer> {
-    use kf_abi::videoclk as vc;
+/// ★ `gss_replay` — ask the host every `kf_abi::gssreplay::ROWS` request (authored: zero but the
+/// named input words) and keep what it wrote. A refused row is left out: never fatal.
+pub fn query_gss_replay(host: &mut dyn HostControls) -> Vec<kf_abi::gssreplay::Answer> {
     let mut out = Vec::new();
-    for &d in vc::CLOCK_DOMAINS {
-        let mut p = vc::host_request(d);
-        match host.control(vc::GSS_PERF_CLOCK_QUERY, &mut p) {
-            Ok(()) => match vc::decode_host_reply(d, &p) {
-                Some(a) => out.push(a),
-                None => eprintln!("kf3: host facts: clock domain {d:#x}: the host's reply is not the measured shape — not served"),
-            },
-            Err(e) => eprintln!("kf3: host facts: clock domain {d:#x} refused by the host ({e:?}) — not served"),
+    for row in kf_abi::gssreplay::ROWS {
+        let mut p = row.request();
+        match host.control(row.cmd, &mut p) {
+            Ok(()) => out.push(kf_abi::gssreplay::Answer::from_host(*row, &p)),
+            Err(e) => eprintln!("kf3: host facts: GSS {:#010x} {:x?} refused by the host ({e:?}) — not served", row.cmd, row.inputs),
         }
     }
     out
@@ -893,7 +888,7 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
     let gsp_features = query_gsp_features(host);
     let gpu_name = query_gpu_name(host);
     let gpu_short_name = query_gpu_short_name(host);
-    let video_clocks = query_video_clocks(host);
+    let gss_replay = query_gss_replay(host);
     let video_caps = kinds.as_deref().map(|k| query_video_caps(host, k)).unwrap_or_default();
 
     let mut refusals = Vec::new();
@@ -1007,7 +1002,7 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
             gsp_features,
             gpu_name: Some(gpu_name),
             gpu_short_name: Some(gpu_short_name),
-            video_clocks,
+            gss_replay,
             video_caps,
         }),
         _ => Err(HostFactsRefused { refusals }),

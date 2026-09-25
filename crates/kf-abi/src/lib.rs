@@ -122,7 +122,7 @@ pub mod grstatic;
 pub mod gspfeatures;
 pub mod gspstaticinfo;
 pub mod gsslegacy;
-pub mod videoclk;
+pub mod gssreplay;
 pub mod videocaps;
 pub mod guest_os;
 pub mod guestsysinfo;

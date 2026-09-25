@@ -117,10 +117,10 @@ pub struct HostFacts {
     pub gpu_name: Option<GpuName>,
     /// The short name (`GPU_GET_SHORT_NAME_STRING` `0x20800111`), e.g. `GA106-A`.
     pub gpu_short_name: Option<GpuName>,
-    /// ★ The host's answers to the GSS-legacy clock query `0x2080a028` for
-    /// `kf_abi::videoclk::CLOCK_DOMAINS` — what `libnvidia-encode` gates a session on. Empty when
-    /// the host answered none (then the guest's query is refused, as before).
-    pub video_clocks: Vec<kf_abi::videoclk::ClockAnswer>,
+    /// ★ The host's answers to the GSS-legacy requests of `kf_abi::gssreplay::ROWS` (the clock
+    /// listing / clock query `libnvidia-encode` gates a session on), asked at realize with requests
+    /// we author. A row the host refused is absent (the guest's is then answered as before).
+    pub gss_replay: Vec<kf_abi::gssreplay::Answer>,
     /// ★ The host's `MSENC_GET_CAPS_V2` / `BSP_GET_CAPS_V2` tables for the advertised video
     /// engines (`kf_abi::videocaps`).
     pub video_caps: Vec<kf_abi::videocaps::CapsAnswer>,
@@ -192,7 +192,7 @@ pub const PROVENANCE: &[(&str, Source)] = &[
     ("gpu_name", Source::HostControl { cmd: 0x2080_0110, name: "GPU_GET_NAME_STRING (ASCII)" }),
     ("gpu_short_name", Source::HostControl { cmd: 0x2080_0111, name: "GPU_GET_SHORT_NAME_STRING" }),
     ("video_caps", Source::HostControl { cmd: 0x0080_1c02, name: "MSENC_GET_CAPS_V2 0x801b02 / BSP_GET_CAPS_V2 0x801c02 on the host DEVICE, per advertised instance (kf_abi::videocaps)" }),
-    ("video_clocks", Source::HostControl { cmd: 0x2080_a028, name: "GSS-legacy clock query (layout measured, kf_abi::videoclk), asked per CLOCK_DOMAINS with a request we author" }),
+    ("gss_replay", Source::HostControl { cmd: 0x2080_a028, name: "GSS-legacy 0x20809064 / 0x2080a028 (layouts measured, kf_abi::gssreplay::ROWS), asked with requests we author; the bytes the host wrote" }),
 ];
 
 /// Why a host reply could not become a fact — by name, never a zero.
