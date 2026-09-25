@@ -117,6 +117,12 @@ impl HostRing {
         self.live.is_empty()
     }
 
+    /// The host VA RM placed the ring at (its GPFIFO is at `va + 0xF_0000`).
+    #[must_use]
+    pub fn va(&self) -> u64 {
+        self.va
+    }
+
     /// The host channel.
     #[must_use]
     pub fn channel(&self) -> kf_host::Channel {

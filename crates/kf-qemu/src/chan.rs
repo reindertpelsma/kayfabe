@@ -1042,6 +1042,7 @@ impl ChanPlane {
                 let userd = me.userd_view(a.userd).map_err(|e| fail((NV_ERR_NOT_SUPPORTED, e)))?;
                 let host = HostRing::on_engine(me.rm, mirror.space, me.host_ce).map_err(|e| fail((NV_ERR_INSUFFICIENT_RESOURCES, format!("host ring: {e}"))))?;
                 let ht = host.channel().token;
+                let ring_va = host.va();
                 let chan = TranslatedChannel::new(TranslatedRing::new(a.gpfifo_va, entries, 0), host, idx);
                 let alloc = me
                     .caps
@@ -1076,7 +1077,7 @@ impl ChanPlane {
                 }
                 me.births.fetch_add(1, Ordering::Relaxed);
                 Ok(format!(
-                    "chan {:#x}:{:#x} BORN Translated: token {idx:#x} -> host {ht:#x} in {key:?} gpfifo={:#x}x{entries} userd={:?} engine={engine:#x} tsg={:x?} kernel_by={}",
+                    "chan {:#x}:{:#x} BORN Translated: token {idx:#x} -> host {ht:#x} in {key:?} gpfifo={:#x}x{entries} userd={:?} engine={engine:#x} tsg={:x?} kernel_by={} ring_va={ring_va:#x}",
                     a.client,
                     a.handle,
                     a.gpfifo_va,

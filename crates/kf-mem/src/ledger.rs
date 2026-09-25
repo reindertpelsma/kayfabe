@@ -401,7 +401,10 @@ impl MapTarget for HostVas<'_> {
             // and a stock guest reaches it when two of its allocations round into one 64 KiB page:
             // the row is already there, so the reconcile is satisfied rather than stranded (which
             // left the guest's TLB-invalidate armed forever — a hang, `[measured p6a]`).
-            Err(kf_host::RmError::Other(kf_host::VA_ALREADY_MAPPED)) => Ok(()),
+            Err(kf_host::RmError::Other(kf_host::VA_ALREADY_MAPPED)) => {
+                eprintln!("kf3: DIAG map {:#x}+{:#x} ram={} off={:#x}: VA_ALREADY_MAPPED", d.va, d.len, d.ram, d.off);
+                Ok(())
+            }
             Err(e) => Err(format!("map {:#x}+{:#x}: {e:?}", d.va, d.len)),
         }
     }
