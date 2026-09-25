@@ -879,7 +879,7 @@ impl ChanPlane {
                 v.ctx.bound |= with_va != 0;
                 v.ctx.promotes += 1;
                 Ok(format!(
-                    "chan {client:#x}:{object:#x} GPU_PROMOTE_CTX SATISFIED BY TWIN host {ht:#x} (host GR object(s) {host_ctx:#x?}): entries={entries} init_ids={initialize:#x} va_ids={with_va:#x} bound={} — not forwarded, no guest byte touched",
+                    "chan {client:#x}:{object:#x} GPU_PROMOTE_CTX SATISFIED BY TWIN host {ht:#x} (host GR object(s) {host_ctx:x?}): entries={entries} init_ids={initialize:#x} va_ids={with_va:#x} bound={} — not forwarded, no guest byte touched",
                     v.ctx.bound
                 ))
             }),
