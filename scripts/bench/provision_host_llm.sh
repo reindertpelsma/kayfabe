@@ -62,7 +62,7 @@ if [ ! -x "$ROOT/venv/bin/python" ]; then
   # installed fails **loudly here** rather than silently producing a different number later.
   "$ROOT/venv/bin/pip" -q install --upgrade pip >/dev/null 2>&1
   "$ROOT/venv/bin/pip" -q install torch==2.6.0 --index-url https://download.pytorch.org/whl/cu124 2>&1 | tail -3
-  "$ROOT/venv/bin/pip" -q install transformers accelerate 2>&1 | tail -3
+  "$ROOT/venv/bin/pip" -q install transformers==${LLM_TRANSFORMERS:-5.17.0} accelerate 2>&1 | tail -3
 fi
 
 # ★ THE SAME RUNNER THE GUEST USES. Installed, never re-written.
