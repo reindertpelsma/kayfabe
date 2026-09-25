@@ -208,7 +208,39 @@ C's rounding applied to promote rows v3 does not consume); `0x0` decoded correct
 "not placed by us" because a walk at UVM's root RE-publication unmapped it before the guest had
 migrated its entries into the new root, and the `Other(87)` was the unmap of a row held by our ring.
 
-**Q8 (NEW, needs an owner decision). `--ce-client-guest-ram` cannot fit 60 s under "full walk + full
+**★★★ Q8 — ANSWERED (owner design + COMMIT-ON-ACK ruling, 2026-09-25; branch `v3-diff`).** The walk
+kernel now emits a DIFF: per VA-space object (a walker SLOT, never a PDB) it keeps the placements the
+host CONFIRMED in vidmem, diffs the guest's live tables against them (UNMAP whole placements, MAP the
+pieces in the gaps between kept ones — parallel over placements and gaps, one block per space), and
+commits exactly the runs the host acknowledges on the next walk's first graph node. The CPU ledger and
+`plan_reconcile` are gone (`V3_BUILD.md`'s amended rule says why this record is not the forbidden
+snapshot). Spec: `kf_cuda::diffmodel`; the GPU is held to it report for report by `kf-gate9` (VER2 +
+VER3, random tables, random refusals, a root move, a slot release, closure). The report is written
+straight into pinned host memory (no 512 KiB read-back per walk).
+`[measured, this box = nested KVM on a Xeon E5-2697A v4, GA106, 580.159.04]` gate 9, 13 000 separate
+pages one added per walk: 13 000/13 000 one-run diffs, GPU walk+diff p50 **141-143 µs @1 000 rows →
+412-447 µs @13 000** (the old serial emission alone was ~0.53 µs/row, ~6.9 ms @13 000). In the guest
+(`--ce-client-guest-ram`, `KF_IOCTL_TRACE=ring`): plan **0** (was 28→900+ µs and growing), GPU
+**206-241 µs** (was 258-675), arrive→clear **0.9-1.8 ms** (was 1.9-4.9 ms), invalidates reached in one 60 s
+budget **5 052-8 810** over 4 runs (vs **625** at `e7b7f28d`, verbose trace; **2 514-4 923** over 5 runs
+at this branch with the verbose trace). ⊘ **Still not a PASS on this box, and the VA thread is no
+longer the reason:** the same arm on BARE METAL here takes **17-37 s** over 6 runs (the reference box:
+9 s) against a guest window of ~40 s after an ~15-20 s nested boot.
+
+**The "~2 ms per guest ioctl outside the VA thread", attributed** (`perf kvm stat`, 15 s mid-arm,
+ring trace): 2 934 invalidates; **43 970 trapped BAR0 writes (15 per invalidate), each an
+EPT-violation-emulated MMIO exit costing 70-92 µs under nested virtualization** — 12 of the 15 are
+the CPU interrupt tree's enable registers (`0xb81208/210/408/410/608/610`: TOP/LEAF_EN_SET/CLEAR),
+which RM writes on EVERY GPU-lock acquire/release (`locks.c:705` `intrSetIntrMask`/`intrSetIntrEnInHw`)
+— ~1.1 ms per invalidate of pure exit cost, and inherent to trapping W1S/W1C registers (their
+read-back and masking semantics need the write); plus ~0.3 ms of external-interrupt exits. With the
+harness's default **verbose** IOCTL trace a second cost dominates: each trace line goes to the hvc0
+virtio console, whose guest driver (`__send_to_port`) spins until QEMU has consumed the buffer — a
+full nested round trip per ioctl; the same binary reached **2 514-4 923** invalidates verbose vs **5 052-8 810** ring
+per budget (median ~1.6×). ⊘ Both are properties of the bench (nested KVM) and the grader's trace mode, not of
+kayfabe's planes; the trace mode is an owner decision (2026-09-18: *"the trace stays VERBOSE"*).
+
+**Q8 (ORIGINAL, now answered above). `--ce-client-guest-ram` cannot fit 60 s under "full walk + full
 diff per invalidate".** It declares 13 000 rows in each of two spaces, one invalidate per map
 (~26 000 invalidates). Every invalidate re-walks and re-diffs the WHOLE space: `[measured e3]` GPU walk
 ~0.53 µs/leaf (the report's emission, `kf_diff_kernel`, is one GPU thread) and host-side decode +
