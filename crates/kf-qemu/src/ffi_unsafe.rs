@@ -220,7 +220,9 @@ pub extern "C" fn kf3_bar0_write(h: *mut c_void, off: u64, val: u64, width: u32)
 pub unsafe extern "C" fn kf3_ram_add(h: *mut c_void, gpa: u64, hva: *mut u8, len: u64, fd: i32, fd_off: u64) -> i32 {
     let (Some(d), false) = (dev(h), hva.is_null()) else { return -1 };
     // SAFETY: the caller keeps the RAM mapped until it unregisters it.
-    d.ram_add(gpa, unsafe { RawRegion::adopt(hva, len as usize) }, fd, fd_off);
+    // SAFETY: the caller keeps the RAM mapped, and its backend fd open, until it unregisters it.
+    let (mem, fd) = unsafe { (RawRegion::adopt(hva, len as usize), crate::raw_unsafe::BackendFd::adopt(fd)) };
+    d.ram_add(gpa, mem, fd, fd_off);
     0
 }
 
@@ -234,9 +236,10 @@ pub unsafe extern "C" fn kf3_ram_add(h: *mut c_void, gpa: u64, hva: *mut u8, len
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn kf3_bar_ram(h: *mut c_void, bar: u32, base: u64, len: u64, ptr: *mut *mut c_void) -> i32 {
     let (Some(d), false) = (dev(h), ptr.is_null()) else { return -1 };
-    let Some(addr) = d.window_address(bar, base, len) else { return -1 };
-    // SAFETY: `ptr` is writable (caller contract).
-    unsafe { *ptr = addr as *mut c_void };
+    let Some(span) = d.window_address(bar, base, len) else { return -1 };
+    // SAFETY: `ptr` is writable (caller contract); the span is handed to QEMU as a memory region's
+    // backing for the device's life, which is the use `HostSpan::as_ptr` requires.
+    unsafe { *ptr = span.as_ptr().cast::<c_void>() };
     0
 }
 
@@ -267,14 +270,15 @@ pub unsafe extern "C" fn kf3_status(h: *mut c_void, buf: *mut c_char, len: usize
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn kf3_usermode_view(h: *mut c_void, ptr: *mut *mut c_void, len: *mut u64) -> i32 {
     let Some(d) = dev(h) else { return -1 };
-    let Ok((addr, n)) = d.rm.usermode_view() else { return -1 };
+    let Ok(span) = d.rm.usermode_view() else { return -1 };
     if ptr.is_null() || len.is_null() {
         return -1;
     }
-    // SAFETY: the caller promised both are writable.
+    // SAFETY: the caller promised both are writable; the span becomes a ROM device's backing for
+    // the device's life (the use `HostSpan::as_ptr` requires).
     unsafe {
-        *ptr = addr as *mut c_void;
-        *len = n;
+        *ptr = span.as_ptr().cast::<c_void>();
+        *len = span.len() as u64;
     }
     0
 }

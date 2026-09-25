@@ -504,14 +504,14 @@ impl HostRm {
     /// `classes.gpfifo_channel()` — is a **type error**, not a silent mis-allocation
     /// that a Hopper host would have served. Before this signature, that exact swap was
     /// bitten and **nothing in the workspace went red**.
-    /// ★ The usermode window's host address and length — the pages §53.1 disposition C aliases
+    /// ★ The usermode window as an opaque [`kf_linux_raw::HostSpan`] — the pages §53.1 disposition C aliases
     /// read-only into the guest's BAR0 (the live microsecond counter; writes still trap).
     ///
     /// # Errors
     /// The session has no usermode window (the error it was opened with).
-    pub fn usermode_view(&self) -> Result<(usize, u64), RmError> {
+    pub fn usermode_view(&self) -> Result<kf_linux_raw::HostSpan, RmError> {
         let w = self.usermode.as_ref().map_err(|e| *e)?;
-        Ok((w.region.host_address(), w.region.len_bytes()))
+        Ok(w.region.host_span())
     }
 
     fn open_usermode(&self, class: UsermodeClass) -> Result<UsermodeWindow, RmError> {

@@ -799,6 +799,65 @@ trait AtomicWord {}
 impl AtomicWord for AtomicU32 {}
 impl AtomicWord for AtomicU64 {}
 
+/// ★★★ **A host address range WE own, as an OPAQUE token** (`THE_CONSTRAINTS.md` §13: *"No raw
+/// VMM pointers in safe code. They belong in `unsafe` only, and safe code is always
+/// bounds-checked"*).
+///
+/// Safe code may hold, copy and pass it — its length is public, its address is not. It is minted
+/// only by the owners of live mappings ([`VolatileRegion::host_span`],
+/// `GuestWindow::host_span`), bounds-checked at the mint, and opened only by
+/// [`HostSpan::as_ptr`], which is `unsafe`: the one place a pointer leaves is an FFI boundary that
+/// hands it to a hypervisor as a memory region's backing.
+#[derive(Debug, Clone, Copy)]
+pub struct HostSpan {
+    base: NonNull<u8>,
+    len: usize,
+}
+
+// SAFETY: a `HostSpan` is an address and a length — no reference, no access. Moving or sharing it
+// between threads does nothing to the memory; only `as_ptr` (unsafe) exposes it.
+unsafe impl Send for HostSpan {}
+// SAFETY: as above.
+unsafe impl Sync for HostSpan {}
+
+impl HostSpan {
+    /// Mint a span of `[base + off, base + off + len)` inside a live mapping of `total` bytes.
+    /// `None` when it would leave the mapping — the bound is checked HERE, once, by the owner.
+    pub(crate) fn within(base: NonNull<u8>, total: usize, off: usize, len: usize) -> Option<HostSpan> {
+        let end = off.checked_add(len)?;
+        if end > total || len == 0 {
+            return None;
+        }
+        // SAFETY: `off < total`, and `base` starts a live mapping of `total` bytes (the minter's
+        // type invariant), so `base + off` is inside it and non-null.
+        let p = unsafe { NonNull::new_unchecked(base.as_ptr().add(off)) };
+        Some(HostSpan { base: p, len })
+    }
+
+    /// Length in bytes.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    /// Never true for a minted span (a zero-length span is refused at the mint).
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    /// The start address.
+    ///
+    /// # Safety
+    /// The caller must only hand it to a consumer that treats `[ptr, ptr + len)` as the backing of
+    /// a memory region (a hypervisor memslot / `memory_region_init_*_ptr`) for no longer than the
+    /// minting mapping lives, and must never form a Rust reference into it.
+    #[must_use]
+    pub unsafe fn as_ptr(&self) -> *mut u8 {
+        self.base.as_ptr()
+    }
+}
+
 /// A page **real hardware** writes — semaphore payloads, USERD, fences.
 ///
 /// Accessed as `Relaxed` atomics, naturally aligned, ≤ 8 bytes, and *nothing else*
@@ -900,12 +959,11 @@ impl VolatileRegion {
         self.map.len_bytes()
     }
 
-    /// The mapping's host virtual address, as a number — for handing the SAME pages to a VMM as a
-    /// memslot (§53.1 disposition C). ⊘ An address, not a pointer: nothing in this crate
-    /// dereferences it, and the caller must keep `self` alive for as long as the slot exists.
+    /// The whole mapping as an opaque [`HostSpan`] — for handing the SAME pages to a VMM as a
+    /// memslot (§53.1 disposition C). Safe code can carry it; only `unsafe` can open it.
     #[must_use]
-    pub fn host_address(&self) -> usize {
-        self.map.base_ptr().as_ptr() as usize
+    pub fn host_span(&self) -> HostSpan {
+        HostSpan { base: self.map.base_ptr(), len: usize::try_from(self.map.len_bytes()).unwrap_or(0) }
     }
 
     /// A naturally-aligned atomic view of the word at `offset`.

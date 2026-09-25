@@ -592,21 +592,21 @@ impl Device {
 
     /// Register guest RAM: guest-physical `[gpa, gpa+len)` at `mem`, backed by `fd` at `fd_off`
     /// (`fd < 0`: the backend has none, and sysmem placements are then refused by name).
-    pub fn ram_add(&self, gpa: u64, mem: RawRegion, fd: i32, fd_off: u64) {
+    pub fn ram_add(&self, gpa: u64, mem: RawRegion, fd: Option<crate::raw_unsafe::BackendFd>, fd_off: u64) {
         self.ram.add(crate::mem::RamBlock { gpa, mem, fd, fd_off });
     }
 
     /// ★ P4: the host address of `[base, base+len)` of a disposition-A region — PRAMIN (BAR0),
     /// BAR1 or BAR2 (`bar` 2 = PCI BAR3). `None` when no window covers it.
     #[must_use]
-    pub fn window_address(&self, bar: u32, base: u64, len: u64) -> Option<usize> {
+    pub fn window_address(&self, bar: u32, base: u64, len: u64) -> Option<kf_linux_raw::HostSpan> {
         let (win, rel) = match bar {
             0 => (self.mem.pramin_win, base.checked_sub(kf_trap::trappolicy::PRAMIN_BASE)?),
             1 => (self.mem.bar1_win, base),
             2 => (self.mem.bar2_win, base),
             _ => return None,
         };
-        (rel.checked_add(len)? <= win.len_bytes()).then(|| win.host_address() + rel as usize)
+        win.host_span(usize::try_from(rel).ok()?, usize::try_from(len).ok()?)
     }
 
     /// Unregister the guest RAM block at `gpa`.

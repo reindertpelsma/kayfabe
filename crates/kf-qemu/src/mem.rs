@@ -33,7 +33,7 @@
 //! BAR1). ⚠ Each placed view costs host BAR1 aperture (`V3_P4_PORT_MAP.md` Q5 — the budget check
 //! is still not built).
 
-use crate::raw_unsafe::{RawRegion, borrow_process_fd};
+use crate::raw_unsafe::{BackendFd, RawRegion};
 use kf_host::{CpuViewRelease, HostRm, MapNode, ViewAccess};
 use kf_linux_raw::{Backing, CharDevice, GuestWindow, HostOffset, HostPageSize, Notifier, SharedRam};
 use kf_mem::cpuwin::{CpuWindow, PraminPool, SlotSource, ViewOps};
@@ -55,15 +55,15 @@ pub const K_BAR2: VasKey = VasKey(0xFFFF_FFFF_0000_0002);
 pub const K_BAR1: VasKey = VasKey(0xFFFF_FFFF_0000_0001);
 
 /// One guest-RAM block QEMU registered: guest-physical `[gpa, gpa+len)` at `mem`, backed by the
-/// memory backend's `fd` at `fd_off` (`-1` when the backend has no fd).
+/// memory backend's `fd` at `fd_off` (`None` when the backend has no fd).
 #[derive(Debug, Clone, Copy)]
 pub struct RamBlock {
     /// Guest-physical base.
     pub gpa: u64,
     /// The host mapping.
     pub mem: RawRegion,
-    /// The backend fd, or -1.
-    pub fd: i32,
+    /// The backend fd, if the backend has one.
+    pub fd: Option<BackendFd>,
     /// File offset of `gpa`.
     pub fd_off: u64,
 }
@@ -94,8 +94,8 @@ impl RamMap {
 
     /// The ONE backend fd every fd-backed block shares, if any.
     #[must_use]
-    pub fn backing_fd(&self) -> Option<i32> {
-        self.blocks.read().ok()?.iter().find(|b| b.fd >= 0).map(|b| b.fd)
+    pub fn backing_fd(&self) -> Option<BackendFd> {
+        self.blocks.read().ok()?.iter().find_map(|b| b.fd)
     }
 
     /// The block wholly covering `[gpa, gpa+len)`.
@@ -113,9 +113,9 @@ impl RamMap {
     #[must_use]
     pub fn at_file_offset(&self, off: u64, len: u64) -> Option<(RawRegion, usize)> {
         let v = self.blocks.read().ok()?;
-        let first = v.iter().find(|x| x.fd >= 0)?.fd;
+        let first = v.iter().find_map(|x| x.fd)?;
         v.iter()
-            .filter(|b| b.fd == first)
+            .filter(|b| b.fd == Some(first))
             .find(|b| off >= b.fd_off && off.checked_add(len).is_some_and(|e| e - b.fd_off <= b.mem.len() as u64))
             .map(|b| (b.mem, (off - b.fd_off) as usize))
     }
@@ -124,10 +124,10 @@ impl RamMap {
     /// fd-backed block covers it. ⊘ Every block must share ONE fd (q35's `memory-backend=ram0`
     /// aliases one memfd above and below the hole); a second fd is refused, never guessed at.
     #[must_use]
-    pub fn file_range(&self, gpa: u64, len: u64) -> Option<(i32, u64)> {
+    pub fn file_range(&self, gpa: u64, len: u64) -> Option<(BackendFd, u64)> {
         let b = self.block_for(gpa, len)?;
-        let first = self.blocks.read().ok()?.iter().find(|x| x.fd >= 0)?.fd;
-        (b.fd >= 0 && b.fd == first).then(|| (b.fd, b.fd_off + (gpa - b.gpa)))
+        let first = self.blocks.read().ok()?.iter().find_map(|x| x.fd)?;
+        (b.fd == Some(first)).then(|| (first, b.fd_off + (gpa - b.gpa)))
     }
 }
 
@@ -233,10 +233,10 @@ impl ViewOps for WindowOps {
             .blocks
             .read()
             .ok()
-            .and_then(|v| v.iter().find(|b| b.fd >= 0).map(|b| b.fd))
+            .and_then(|v| v.iter().find_map(|b| b.fd))
             .ok_or("no fd-backed guest RAM (the VM needs memory-backend-memfd,share=on)")?;
         self.win
-            .place(HostOffset::new(at), len, Backing::SharedFile { fd: borrow_process_fd(fd), offset: file_off })
+            .place(HostOffset::new(at), len, Backing::SharedFile { fd: fd.borrow(), offset: file_off })
             .map_err(|e| format!("mmap guest RAM @{at:#x}+{len:#x} (file {file_off:#x}): {e:?}"))
     }
 
@@ -736,7 +736,7 @@ impl MemPlane {
         self.ram_obj
             .get_or_init(|| {
                 let fd = self.ram.backing_fd().ok_or("no fd-backed guest RAM block (memory-backend-memfd,share=on?)")?;
-                let borrowed = crate::raw_unsafe::borrow_process_fd(fd);
+                let borrowed = fd.borrow();
                 let len = borrowed
                     .try_clone_to_owned()
                     .map(std::fs::File::from)

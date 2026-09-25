@@ -88,15 +88,28 @@ impl RawRegion {
     }
 }
 
-/// ★ P4: borrow a descriptor QEMU owns for the life of the process — a memory backend's fd
-/// (`memory-backend-memfd`), which the device maps guest RAM from into its CPU windows.
-///
-/// ⊘ Never closed here; the borrow is only as long as one `mmap` call needs it.
-#[must_use]
-pub fn borrow_process_fd(fd: i32) -> std::os::fd::BorrowedFd<'static> {
-    // SAFETY: `fd` is a memory backend's descriptor that QEMU registered with this device
-    // (`kf3_ram_add`) and keeps open until the RAM block is torn down, which unregisters it here
-    // first (`kf3_ram_del`); callers only reach this after looking the fd up in the live
-    // `RamMap`, and use the borrow for one `mmap`. `BorrowedFd` never closes it.
-    unsafe { std::os::fd::BorrowedFd::borrow_raw(fd) }
+/// ★ P4: a memory backend's descriptor (`memory-backend-memfd`) that QEMU registered with this
+/// device — a TYPED token, so safe code can only hold fds that crossed the FFI as one
+/// (`THE_CONSTRAINTS.md` §13). Minted only by the `unsafe` [`BackendFd::adopt`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BackendFd(i32);
+
+impl BackendFd {
+    /// Adopt `fd`; `None` for a negative fd (a backend with no descriptor).
+    ///
+    /// # Safety
+    /// `fd` must be a descriptor QEMU keeps open until the RAM block it backs is unregistered
+    /// (`kf3_ram_del`), which removes every `BackendFd` of it from the device first.
+    #[must_use]
+    pub unsafe fn adopt(fd: i32) -> Option<BackendFd> {
+        (fd >= 0).then_some(BackendFd(fd))
+    }
+
+    /// Borrow it for one `mmap`. ⊘ Never closed here.
+    #[must_use]
+    pub fn borrow(&self) -> std::os::fd::BorrowedFd<'_> {
+        // SAFETY: `adopt`'s contract — the descriptor is open while a `BackendFd` of it exists in
+        // the device, and `BorrowedFd` never closes it.
+        unsafe { std::os::fd::BorrowedFd::borrow_raw(self.0) }
+    }
 }

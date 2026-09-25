@@ -169,13 +169,13 @@ impl GuestWindow {
         self.len as u64
     }
 
-    /// ★ P4: the window's host address, as an integer — what a hypervisor registers as the
-    /// guest-physical range's backing (QEMU's `memory_region_init_ram_device_ptr`). The window
-    /// is mapped from construction until `Drop`, so the address stays valid that long; this type
-    /// never hands out a reference into it.
+    /// ★ P4: `[off, off + len)` of the window as an opaque, bounds-checked [`HostSpan`] — what a
+    /// hypervisor registers as the guest-physical range's backing (QEMU's
+    /// `memory_region_init_ram_device_ptr`). `None` if it leaves the window. The window is mapped
+    /// from construction until `Drop`; only `unsafe` code can open the span.
     #[must_use]
-    pub fn host_address(&self) -> usize {
-        self.base.as_ptr() as usize
+    pub fn host_span(&self, off: usize, len: usize) -> Option<crate::HostSpan> {
+        crate::HostSpan::within(self.base, self.len, off, len)
     }
 
     /// The host page size this window's geometry is expressed in.
