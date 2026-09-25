@@ -490,7 +490,11 @@ pub struct Inbox {
     /// ★ w827: guest L2 cache-op requests per [`kf_trap::cacheop::CacheOp`] — bumped by the vCPU
     /// (lock-free) after it stores the busy word; the VA thread performs the host op and publishes
     /// idle. See `ChanDevice::serve_cache_ops`.
-    pub cache_req: [AtomicU64; 3],
+    pub cache_req: [AtomicU64; kf_trap::cacheop::CacheOp::COUNT],
+    /// ★ w828: per op, the request count the host has FINISHED — stored by the VA thread after the
+    /// host verb returned (a completion is a host event), read by the vCPU to answer a Hopper+
+    /// `…_COMPLETED` token register (`kf_trap::cacheop::completed_word`).
+    pub cache_done: [AtomicU64; kf_trap::cacheop::CacheOp::COUNT],
     q: Mutex<Vec<MemStatement>>,
     received: AtomicU64,
     settled: AtomicU64,
@@ -512,7 +516,8 @@ impl Inbox {
     /// No eventfd.
     pub fn new() -> Result<Inbox, String> {
         Ok(Inbox {
-            cache_req: [AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0)],
+            cache_req: std::array::from_fn(|_| AtomicU64::new(0)),
+            cache_done: std::array::from_fn(|_| AtomicU64::new(0)),
             q: Mutex::new(Vec::new()),
             received: AtomicU64::new(0),
             settled: AtomicU64::new(0),

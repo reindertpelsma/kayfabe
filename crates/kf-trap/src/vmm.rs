@@ -157,9 +157,11 @@ pub trait GpuDevice: Send + Sync {
     /// marks [`crate::memmap::Disposition::Hole`] — never as a general read path.
     ///
     /// ★ There is exactly one reason a hole exists, and it is not performance: a register whose
-    /// **read has a side effect the guest verifies**. Today that is the **falcon PIO
-    /// auto-increment data port** (`EMEMD`/`DMEMD`) — armed once with `AINCR`, each read advances
-    /// a hardware cursor, and ogkm then *asserts the cursor moved*, so no shadow can satisfy it.
+    /// **read has a side effect**. Two families: the **falcon PIO auto-increment data port**
+    /// (`EMEMD`/`DMEMD`) — armed once with `AINCR`, each read advances a hardware cursor, and ogkm
+    /// then *asserts the cursor moved*, so no shadow can satisfy it; and ⊘ (w828 — the earlier text
+    /// said the PIO port was the only one) Hopper+'s **memop token registers**, whose read STARTS
+    /// an L2 flush / invalidate / sysmembar (`crate::cacheop::token_registers`).
     ///
     /// ⇒ **On Turing, Ampere and Ada this method is DEAD CODE**, because
     /// [`crate::memmap::holes_for`] is empty for them — asserted by

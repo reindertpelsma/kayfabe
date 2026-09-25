@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#define KF3_ABI 4
+#define KF3_ABI 5
 
 typedef struct Kf3Identity {
     uint16_t vendor, device, subsystem_vendor, subsystem;
@@ -29,6 +29,8 @@ int64_t kf3_memory_map(void *h, uint64_t bar1, uint64_t bar2, Kf3Region *out, si
 int32_t kf3_shadow_attach(void *h, uint64_t base, uint8_t *mem, uint64_t len);
 void kf3_shadow_seal(void *h);
 void kf3_bar0_write(void *h, uint64_t off, uint64_t val, uint32_t width);
+/* ★ w828: a BAR0 read exit (HOLE pages only: a read with a side effect). */
+uint64_t kf3_bar0_read(void *h, uint64_t off, uint32_t width);
 int32_t kf3_ram_add(void *h, uint64_t gpa, uint8_t *hva, uint64_t len, int32_t fd, uint64_t fd_off);
 int32_t kf3_bar_ram(void *h, uint32_t bar, uint64_t base, uint64_t len, void **ptr);
 void kf3_ram_del(void *h, uint64_t gpa);

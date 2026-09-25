@@ -14,7 +14,7 @@
 //! | [`trap`] | THE trap: doorbell / userspace-mappable (do nothing) / privileged |
 //! | [`mmuinval`] | the MMU invalidate registers: PDB latch + the trigger that arms, publishes, and reads busy until the VA manager clears it (P4) |
 //! | [`pramin`] | the PRAMIN window-base register per family (decode + slot plan; P4) |
-//! | [`memmap`] | the per-family BAR memory map: backed / trap-write / hole (read exits only for PIO auto-increment ports) |
+//! | [`memmap`] | the per-family BAR memory map: backed / trap-write / hole (read exits only for read side effects: PIO auto-increment ports, and — w828 — Hopper+'s read-started memop token registers) |
 //! | [`trappolicy`] | which writes trap, where the doorbell lives (BAR0 / Hopper+ BAR1), `may_trap_read` |
 //! | [`vmm`] | the device↔hypervisor seam (`VmmOps`: memslots, guest RAM, irq, wakes) |
 //! | [`model`] | the exhaustive interleaving check (SC; a falsifier, not a proof of orderings) |

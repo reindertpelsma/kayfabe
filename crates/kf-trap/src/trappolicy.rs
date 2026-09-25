@@ -116,13 +116,16 @@ pub fn may_trap_write(bar: Bar, offset: u64, doorbell: DoorbellPlacement) -> boo
 /// subsequent READ of the data port advances a hardware cursor — and ogkm then **asserts the
 /// cursor moved** (`_kfspReadPacket_GH100`), so no shadow can satisfy it.
 ///
+/// ⊘⊘ **And CORRECTED w828: the PIO port is not the only one.** Hopper+'s memop token registers
+/// START an L2 flush / invalidate / sysmembar on a READ (`crate::cacheop::token_registers`).
+///
 /// ★★★ **The honest answer is family-scoped, and for the current product target it is still NO:**
 ///
 /// | family | read exits |
 /// |---|---|
 /// | Turing · Ampere · Ada (the bench, the target) | **none** |
-/// | Hopper | one page — FSP boot handshake |
-/// | Blackwell | two — FSP (discrete) and SEC2 (integrated) |
+/// | Hopper | three pages — FSP boot handshake; the two memop token pages (w828) |
+/// | Blackwell | four — FSP (discrete), SEC2 (integrated), the two memop token pages (w828) |
 ///
 /// ⊘ **The authority is [`crate::memmap::holes_for`], not this function.** A read exit is the
 /// absence of a memslot, so the map is where it is decided; this predicate merely reads the map,

@@ -28,6 +28,32 @@ point at.
 
 ## §1 — Disposition D: the complete hole list
 
+> ### ⊘⊘ CORRECTED 2026-09-25 (w828) — **"EVERY D ROW BELOW IS A BURST" IS FALSE; THERE IS A SECOND KIND.**
+> The list below was derived by looking for **auto-increment data ports**, and it found every one.
+> It could not find a register whose **read STARTS WORK**, because it was not looking for one.
+> Hopper+ has four, on two pages, and they are on the **runtime** path (every CUDA process teardown
+> flushes L2): the **memop token registers**. `kbusSendSysmembarSingle_GH100` says it in its own
+> words — *"To trigger a memop, SW issues a read of the register as opposed to write of the memop.
+> This read would trigger an injection of the memop in HW … The read return value for this memop
+> would be the value of the trigger token"* (`ogkm-580: src/nvidia/src/kernel/gpu/bus/arch/hopper/
+> kern_bus_gh100.c:2898-2903`); `kmemsysDoCacheOp_GH100` (`…/mem_sys/arch/hopper/
+> kern_mem_sys_gh100.c:45-215`, bound for GH100 and every GB1xx/GB20x) does the same for the L2.
+> A `B` page serves that read from the shadow: the op never reaches the host and `…_COMPLETED`
+> reads `IDLE` — **a silent no-op flush, not a hang**, which is why nothing measured it.
+>
+> | page | registers (read-started) | family | served by |
+> |---|---|---|---|
+> | `0x10F000` | `NV_XAL_EP_UFLUSH_FB_FLUSH` `0x10f800` (sysmembar), `…_L2_FLUSH_DIRTY` `0x10f810`, and their `_COMPLETED` (`+4`) | Hopper, Blackwell | the read exit issues a token; the VA thread runs the host `FB_FLUSH_GPU_CACHE` (L2) or its `FB_FLUSH`-only form (sysmembar), then `_COMPLETED` reads `IDLE` |
+> | `0xB80000` | `NV_VIRTUAL_FUNCTION_PRIV_FUNC_L2_{SYSMEM,PEERMEM}_INVALIDATE` `0xB80F10`/`F18` and `_COMPLETED` `F14`/`F1C` | Hopper, Blackwell | same |
+>
+> ⚠ Both pages also hold ordinary registers (`NV_XAL_EP_BAR0_WINDOW` `0x10fd40`, `XAL_EP_INTR_*`,
+> `…_L2_CLEAN_COMPTAGS` `0x10f808`, the `BAR1/BAR2_BLOCK` binds at `0xB80F60…F74`) — §10's
+> "implement the page": the read exit serves them from a per-page shadow with `B` semantics.
+> ⊘ `CLEAN_COMPTAGS` is read-started too but has no unprivileged host verb; it keeps the shadow's
+> `IDLE` (as before) — an owner decision. Code: `kf_trap::cacheop::token_registers`,
+> `kf_trap::memmap::holes_for`, `kf_qemu::device::Device::bar0_read`. ⊘ **Untestable on the GA106
+> bench**; unit-tested against the driver's own wait loop.
+
 | page | register | what it is | reachable on | cost of the hole |
 |---|---|---|---|---|
 | `0x8F2000` | `NV_PFSP_EMEMD` `0x8F2ac4` | FSP mailbox data port | **Hopper + discrete Blackwell, GSP** (`kfspReadPacket_GH100`); nouveau Hopper too | page also holds `QUEUE_HEAD/TAIL`, `MSGQ_HEAD/TAIL` — **boot + init only. Cheap.** |
@@ -35,6 +61,9 @@ point at.
 | `0x840000` | falcon `DMEMD` `0x8401c4` | SEC2 private-DMEM port | **nouveau non-GSP Turing/Ampere** (SEC2 msgq for ACR) | SEC2 ISR reads only during ACR bootstrap. **Cheap, boot-only.** |
 | `0x087000` ⚠ inferred | falcon `DMEMD` | SEC2 private-DMEM port | **nouveau non-GSP Pascal GP102+, Volta** | boot-only. ⚠ **The base is inferred** — fable did not trace `gp102_sec2_new`'s default. **Verify before relying on it.** |
 | `0x10a000` | `0x10a1c4` | PMU DMEM port | **nouveau non-GSP Maxwell-1 (GM107/GM108) and Kepler**. ⊘ GM200+ has no `.recv` ⇒ **B** — a family-internal split inside Maxwell | PMU init + memx reclock only. **Moderate, not runtime-hot.** |
+
+| `0x10F000` | `NV_XAL_EP_UFLUSH_{FB_FLUSH,L2_FLUSH_DIRTY}` (w828) | a READ starts the memop (token) | **Hopper, Blackwell** | runtime (every L2 flush / sysmembar) — see the correction above |
+| `0xB80000` | `…_PRIV_FUNC_L2_{SYSMEM,PEERMEM}_INVALIDATE` (w828) | a READ starts the memop (token) | **Hopper, Blackwell** | runtime — see the correction above |
 
 ★★★ **GSP Turing / Ampere / Ada: ZERO disposition-D pages.** That is the current product target and
 the bench, and it derives from source what `THE_CONSTRAINTS.md:28` measured at w708–w710.

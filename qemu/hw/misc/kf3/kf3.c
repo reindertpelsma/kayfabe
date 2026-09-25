@@ -87,8 +87,10 @@ struct Kf3State {
 static uint64_t kf3_piece_read(void *opaque, hwaddr addr, unsigned size)
 {
     /* A ROM device in romd mode serves reads from its RAM; this is reached only for a HOLE piece
-     * (a PIO data port whose read must exit — none on Turing..Ada). */
-    return 0;
+     * (a register whose READ has a side effect — none on Turing..Ada). ★ w828: Rust serves it —
+     * the Hopper+ memop token registers, and every other register on the page from its shadow. */
+    Kf3Piece *p = opaque;
+    return kf3_bar0_read(p->s->h, p->base + addr, size);
 }
 
 static void kf3_piece_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)

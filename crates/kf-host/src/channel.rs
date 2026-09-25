@@ -414,6 +414,21 @@ impl HostRm {
         self.raw_control(self.subdevice, 0x2080_130e, &mut p)
     }
 
+    /// ★ w828: the same verb with ONLY `FB_FLUSH_YES` (flags bit 5) — the host's sysmembar
+    /// (`kmemsysFlushGpuCache_IMPL` → `kbusSendSysmembar`, `ogkm-580: src/nvidia/src/kernel/gpu/
+    /// mem_sys/kern_mem_sys_ctrl.c:1470-1476`; *"If only the FB flush is needed, only the _APERTURE
+    /// and _FB_FLUSH_YES are needed"*, `:1500-1502`). Serves a Hopper+ guest's
+    /// `NV_XAL_EP_UFLUSH_FB_FLUSH` token read.
+    ///
+    /// # Errors
+    /// The host's status.
+    pub fn fb_flush(&self) -> Result<(), RmError> {
+        const SIZE: usize = 4024;
+        let mut p = vec![0u8; SIZE];
+        p[4016..4020].copy_from_slice(&(1u32 << 5).to_le_bytes());
+        self.raw_control(self.subdevice, 0x2080_130e, &mut p)
+    }
+
     /// `GPFIFO_SCHEDULE` (`bEnable = 1`) on the channel's group — the channel starts fetching.
     ///
     /// # Errors
