@@ -111,3 +111,30 @@ greedy, `scripts/bench/run_llm.py` = the guest's own runner): **`HOST_LLM_TOK_PE
 (`generate()` wall, COLD — the basis the guest hook reports). ⊘ The line this replaces said "never
 recorded"; w720 had measured one on another box (0.20× parity). A denominator belongs to ITS box:
 re-record on the box the guest number comes from.
+
+★★★ **LLM lane measured on kf3, w828 (branch `v3-llm`, device built at `53c2bc20` = master `f8cfe8d7`
++ the cache-op fix `8dd2bbdf`).** Fat guest (`boot_capture.sh`, `KF_DEVICE=kf3`, 8 GiB, 4 vCPU) on
+`vh3` (itself a KVM guest — nested), the same box's host, and `vc` (non-KVM container, bare metal).
+Matrix `scripts/bench/llm_parity.sh`, tables `llm_parity_summary.py`, raw output `traces/llm_parity/`.
+Each cell mean of 3 processes.
+
+| tok/s | guest (kf3) | vh3 host | vc bare | guest/vh3 | guest/vc |
+|---|---|---|---|---|---|
+| short 16-tok cold (recorded basis) | 3.10 | 8.94 | 13.40 | 0.35 | 0.23 |
+| 512 steady decode (warm) | 5.89 | 19.33 | 28.28 | 0.30 | 0.21 |
+| 2048 steady decode (warm) | 6.02 | 19.50 | 28.26 | 0.31 | 0.21 |
+
+- ⊘ **Long runs do NOT amortize the gap: it is per TOKEN, not per process.** Guest text == host text
+  for 16/512/2048 tokens (sha256). Ledger: every token `emulated=0`; every passthrough token
+  `forwarded>0`. **~1080 doorbells per decoded token** (eager HF decode = ~1000 kernel launches), and
+  doorbells are 99.7% of all trapped exits (16.79M of 16.84M in llm_g1): ≈106 µs of guest time per
+  doorbell on this nested box. 0.8× would need ≤~8 µs per doorbell — no trapped exit reaches that
+  here. ⇒ parity for eager decode needs an EXIT-FREE doorbell (owner decision), not setup work.
+- Per-process fixed cost: guest persistence mode (`nvidia-smi -pm 1`) removes the per-process
+  emulated-GSP unload/reboot (11 → 1 `UnloadingGuestDriver`) and ~3-4 s per process.
+- ⊘ **WALL: any kernel on a non-default CUDA stream faults** — host `Xid 13 SKEDCHECK05_LOCAL_MEMORY_
+  TOTAL_SIZE failed` on the second GR twin (bisect `llm_graph_probe.py`: default stream incl.
+  StaticCache passes; `x*2+1` on a side stream fails). Every twin is born in its OWN host TSG
+  (`kf-host/src/channel.rs` `birth_channel`), so TSG-scoped GR state the guest programmed through its
+  first channel is absent from the second's context (`CtxBind initialized: 0` vs `3591`). Blocks the
+  CUDA-graph arm (`run_llm_graph.py`: bare 169.6 tok/s, host 165.6, 6x eager) and any multi-stream app.
