@@ -155,6 +155,12 @@ pub struct Device {
     pub counters: Counters,
     /// ★ P5c: the VA timing at the previous heartbeat (the heartbeat prints the window).
     vat_prev: Mutex<kf_mem::vasmgr::VaTiming>,
+    /// ★ w827: the attribution instruments (`KF3_PROF=1`; off = one relaxed load per hook).
+    pub prof: Box<crate::prof::Prof>,
+    /// The GSP command-queue head (the RPC doorbell) as a BAR0 offset — for [`crate::prof`].
+    qhead_off: u64,
+    /// Held replies' queue-head stamps, oldest first (drainer only) — for [`crate::prof`].
+    held_stamps: Mutex<std::collections::VecDeque<u64>>,
 }
 
 fn parse_version(s: &str) -> Option<kf_abi::DriverVersion> {
@@ -329,6 +335,11 @@ impl Device {
             },
         );
         let model = family.gsp_model(cfg.fb_mb).map_err(|e| format!("{e:?}"))?;
+        crate::prof::init();
+        let qhead_off = match model.at(GspReg::GspQueueHead(0)) {
+            Some((0, off)) => off,
+            _ => u64::MAX,
+        };
         let gsp = Gsp { fsm: GspFsm::new(abi), model, policy, published: std::collections::HashMap::new() };
 
 
@@ -409,6 +420,9 @@ impl Device {
             stop: AtomicBool::new(false),
             counters: Counters::default(),
             vat_prev: Mutex::new(kf_mem::vasmgr::VaTiming::default()),
+            prof: Box::default(),
+            qhead_off,
+            held_stamps: Mutex::new(std::collections::VecDeque::new()),
         })
     }
 
@@ -488,6 +502,58 @@ impl Device {
     /// back what was written, as hardware does), the plane's trap, and at most one eventfd write
     /// when a waiter is parked. ⊘ Never blocks, never services.
     pub fn bar0_write(&self, off: u64, val: u64, width: u8) {
+        if !crate::prof::on() {
+            return self.bar0_write_inner(off, val, width);
+        }
+        let t0 = crate::prof::now_ns();
+        if off == self.qhead_off {
+            self.prof.qhead_ns.store(t0, Ordering::Relaxed);
+        }
+        if off == crate::prof::MARK_OFF && val == crate::prof::MARK_VALUE {
+            // The drainer prints the snapshot (never I/O on a vCPU): one eventfd write.
+            self.prof.marks.fetch_add(1, Ordering::Relaxed);
+            let _ = self.drainer_efd.signal();
+        }
+        self.bar0_write_inner(off, val, width);
+        let ns = crate::prof::now_ns().saturating_sub(t0);
+        self.prof.bar0.add(off, ns);
+        self.prof.bar0_handler.add(ns);
+    }
+
+    /// A human name for a BAR0 offset, for the `PROF` census.
+    #[must_use]
+    pub fn reg_name(&self, off: u64) -> &'static str {
+        use kf_trap::cpuintr::Reg;
+        if off == self.qhead_off {
+            return "GSP_QUEUE_HEAD0(rpc-doorbell)";
+        }
+        if (0x0011_0c00..0x0011_0c40).contains(&off) {
+            return "GSP_QUEUE_HEAD/TAIL(n)";
+        }
+        if let kf_trap::trappolicy::DoorbellPlacement::Bar0 { offset } = self.plane.doorbell
+            && off == kf_trap::memmap::VF_USERMODE_PAGE + offset
+        {
+            return "USERMODE_DOORBELL";
+        }
+        if off == self.mem.pramin_reg.offset {
+            return "PRAMIN_WINDOW(BAR0_WINDOW)";
+        }
+        if self.mem.port.read(off).is_some() {
+            return "MMU_INVALIDATE(pdb/upper/trigger)";
+        }
+        match self.intr.decode(off) {
+            Some(Reg::Leaf(_)) => "CPU_INTR_LEAF(w1c)",
+            Some(Reg::LeafEnSet(_)) => "CPU_INTR_LEAF_EN_SET",
+            Some(Reg::LeafEnClear(_)) => "CPU_INTR_LEAF_EN_CLEAR",
+            Some(Reg::Top) => "CPU_INTR_TOP",
+            Some(Reg::TopEnSet) => "CPU_INTR_TOP_EN_SET",
+            Some(Reg::TopEnClear) => "CPU_INTR_TOP_EN_CLEAR",
+            Some(Reg::Trigger) => "CPU_INTR_LEAF_TRIGGER",
+            None => "other",
+        }
+    }
+
+    fn bar0_write_inner(&self, off: u64, val: u64, width: u8) {
         self.counters.trapped.fetch_add(1, Ordering::Relaxed);
         self.counters.last_off.store(off, Ordering::Relaxed);
         let doorbell = match self.plane.doorbell {
@@ -560,6 +626,9 @@ impl Device {
                 let _ = self.worker_efd.signal();
             }
             Action::WakeDrainer => {
+                if crate::prof::on() {
+                    self.prof.drainer_signal_ns.store(crate::prof::now_ns(), Ordering::Relaxed);
+                }
                 let _ = self.drainer_efd.signal();
             }
             Action::RefusedByName | Action::PoisonDevice => {
@@ -705,15 +774,34 @@ impl Device {
         let mut armed_seen: Option<u64> = None;
         // ★ Cold-box fix (`crate::mem::prewarm`): the first mirror's one-time host cost is paid
         // here, before the guest runs, as soon as QEMU has registered guest RAM.
-        let mut prewarmed = false;
+        // ★ w827: `PREWARM_SPARES` spares, one per idle tick (the first also pins the guest-RAM
+        // object) — never while a statement, a walk or an armed invalidate is waiting on us.
+        let mut prewarmed = 0u64;
+        let mut va_busy_from = crate::prof::now_ns();
         let mut cache_done = [0u64; 3];
         while !self.stop.load(Ordering::Acquire) {
-            if !prewarmed && let Some(line) = crate::mem::prewarm(&self.mem, self.rm, self.store.handle) {
-                prewarmed = true;
-                eprintln!("kf3: mem t={:.3}s {line}", self.born.elapsed().as_secs_f64());
+            if prewarmed < crate::mem::PREWARM_SPARES
+                && (prewarmed == 0
+                    || (!m.in_flight()
+                        && m.pending() == 0
+                        && self.mem.inbox.all_settled()
+                        && self.mem.port.armed_request().is_none()))
+                && let Some(line) = crate::mem::prewarm(&self.mem, self.rm, self.store.handle)
+            {
+                prewarmed += 1;
+                eprintln!("kf3: mem t={:.3}s [{prewarmed}/{}] {line}", self.born.elapsed().as_secs_f64(), crate::mem::PREWARM_SPARES);
             }
             let mut ready = ReadyTokens::new();
-            let _ = poller.wait(&mut ready, PollTimeout::Millis(50));
+            let prof = crate::prof::on();
+            let tw = if prof { crate::prof::now_ns() } else { 0 };
+            if prof {
+                self.prof.vamgr.busy(tw.saturating_sub(va_busy_from));
+            }
+            let got = poller.wait(&mut ready, PollTimeout::Millis(50));
+            if prof {
+                va_busy_from = crate::prof::now_ns();
+                self.prof.vamgr.waited(va_busy_from.saturating_sub(tw), matches!(got, Ok(0)));
+            }
             let _ = self.mem.inbox.wake.drain();
             self.serve_cache_ops(&mut cache_done);
             for st in self.mem.inbox.take() {
@@ -839,6 +927,11 @@ impl Device {
             return;
         }
         let mut beat = (std::time::Instant::now(), String::new());
+        let mut prof_beat = std::time::Instant::now();
+        let mut marks_seen = 0u64;
+        let mut busy_from = crate::prof::now_ns();
+        // ★ w827: the last wait ended by TIMEOUT — did the pass after it find work?
+        let mut after_timeout = false;
         while !self.stop.load(Ordering::Acquire) {
             // A heartbeat for the boot log, on the drainer (never a vCPU): printed only on change.
             if beat.0.elapsed() >= std::time::Duration::from_secs(2) {
@@ -848,17 +941,52 @@ impl Device {
                 }
                 beat = (std::time::Instant::now(), now);
             }
+            if crate::prof::on() {
+                let m = self.prof.marks.load(Ordering::Relaxed);
+                if m != marks_seen {
+                    marks_seen = m;
+                    eprintln!("kf3: PROF MARK {m} t={:.3}s", crate::prof::now_ns() as f64 / 1e9);
+                    self.prof_print();
+                    eprintln!("kf3: PROF MARK-END {m}");
+                } else if prof_beat.elapsed() >= std::time::Duration::from_secs(5) {
+                    prof_beat = std::time::Instant::now();
+                    self.prof_print();
+                }
+            }
             let seen = self.plane.drainer_wake.seen();
             if self.plane.drainer_pass(self, 256) > 0 {
+                if after_timeout {
+                    self.prof.drainer.timeouts_with_work.fetch_add(1, Ordering::Relaxed);
+                    after_timeout = false;
+                }
                 continue;
             }
-            self.release_settled();
+            let released = self.release_settled();
+            if released && after_timeout {
+                self.prof.drainer.timeouts_with_work.fetch_add(1, Ordering::Relaxed);
+            }
+            after_timeout = false;
             self.deliver_rc();
             if !self.plane.drainer_wake.try_park(seen) {
                 continue;
             }
             let mut ready = ReadyTokens::new();
-            let _ = poller.wait(&mut ready, PollTimeout::Millis(50));
+            let prof = crate::prof::on();
+            let tw = if prof { crate::prof::now_ns() } else { 0 };
+            if prof {
+                self.prof.drainer.busy(tw.saturating_sub(busy_from));
+            }
+            let got = poller.wait(&mut ready, PollTimeout::Millis(50));
+            if prof {
+                busy_from = crate::prof::now_ns();
+                let timed_out = matches!(got, Ok(0));
+                self.prof.drainer.waited(busy_from.saturating_sub(tw), timed_out);
+                after_timeout = timed_out;
+                let sig = self.prof.drainer_signal_ns.swap(0, Ordering::Relaxed);
+                if !timed_out && sig != 0 && sig >= tw {
+                    self.prof.drainer_wake.add(busy_from.saturating_sub(sig));
+                }
+            }
             self.plane.drainer_wake.unpark();
             let _ = self.drainer_efd.drain();
         }
@@ -1020,21 +1148,86 @@ impl Device {
     }
 
     /// ★ P4, on the drainer: deliver held replies whose statements the VA thread has settled.
-    fn release_settled(&self) {
+    fn release_settled(&self) -> bool {
         if !self.mem.inbox.all_settled() {
-            return;
+            return false;
         }
-        let Ok(mut g) = self.gsp.lock() else { return };
+        let Ok(mut g) = self.gsp.lock() else { return false };
         if g.fsm.held_len() == 0 {
-            return;
+            return false;
         }
         let g = &mut *g;
         let mut ram = Ram(self);
         match g.fsm.release_held(&mut ram) {
-            Ok(n) if n > 0 => self.publish(g),
-            Ok(_) => {}
-            Err(e) => eprintln!("kf3: held reply post REFUSED: {e:?}"),
+            Ok(n) if n > 0 => {
+                self.publish(g);
+                if crate::prof::on() {
+                    self.prof.held_released_late.fetch_add(n as u64, Ordering::Relaxed);
+                    self.prof_held_released(n);
+                }
+                true
+            }
+            Ok(_) => false,
+            Err(e) => {
+                eprintln!("kf3: held reply post REFUSED: {e:?}");
+                false
+            }
         }
+    }
+
+    /// ★ w827: `n` held replies were just posted — close their stamps (oldest first).
+    fn prof_held_released(&self, n: usize) {
+        let now = crate::prof::now_ns();
+        if let Ok(mut q) = self.held_stamps.lock() {
+            for _ in 0..n {
+                match q.pop_front() {
+                    Some(t) if t != 0 => self.prof.rpc_held.add(now.saturating_sub(t)),
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    /// ★ w827: print the `PROF` lines (drainer heartbeat, `KF3_PROF=1` only).
+    fn prof_print(&self) {
+        for l in self.prof.lines(&|o| self.reg_name(o)) {
+            eprintln!("{l}");
+        }
+        let ws = &self.worker_stats;
+        eprintln!(
+            "kf3: PROF workers busy_ms={:.1} wait_ms={:.1} max_busy_us={:.1} waits={} timeouts={} timeouts_with_work={} served={}",
+            ws.busy_ns.load(Ordering::Relaxed) as f64 / 1e6,
+            ws.wait_ns.load(Ordering::Relaxed) as f64 / 1e6,
+            ws.max_busy_ns.load(Ordering::Relaxed) as f64 / 1000.0,
+            ws.waits.load(Ordering::Relaxed),
+            ws.timeouts.load(Ordering::Relaxed),
+            ws.timeouts_with_work.load(Ordering::Relaxed),
+            ws.served.load(Ordering::Relaxed),
+        );
+        let va = self.va_stats.lock().map(|v| v.timing.clone()).unwrap_or_default();
+        let avg = |sum: u64, n: u64| sum.checked_div(n).unwrap_or(0) / 1000;
+        eprintln!(
+            "kf3: PROF va invals={} arrive_to_clear_sum_ms={} arrive_to_clear_avg_us={} max_us={} walks={} walk_sum_ms={} walk_avg_us={} gpu_avg_us={} plan_avg_us={} apply_avg_us={} host_calls={}",
+            va.invals,
+            va.inval_ns / 1_000_000,
+            avg(va.inval_ns, va.invals),
+            va.inval_ns_max / 1000,
+            va.walks,
+            va.walk_ns / 1_000_000,
+            avg(va.walk_ns, va.walks),
+            va.gpu_us.checked_div(va.walks).unwrap_or(0),
+            avg(va.plan_ns, va.walks),
+            avg(va.apply_ns, va.walks),
+            va.host_calls,
+        );
+        eprintln!(
+            "kf3: PROF acts run={} worst_us={} total_us={} irq_raised={} irq_writes={}",
+            self.chans.acts_run.load(Ordering::Relaxed),
+            self.chans.act_worst_us.load(Ordering::Relaxed),
+            self.chans.act_total_us.load(Ordering::Relaxed),
+            self.irq_counts.raised.load(Ordering::Relaxed),
+            self.irq_counts.writes.load(Ordering::Relaxed),
+        );
     }
 
     /// ★ P5c, on the drainer (the GSP queue's owner): post each host RC event to the guest as
@@ -1123,6 +1316,7 @@ impl Device {
     /// plane: a doorbell or a host completion wakes it; it claims a token and pumps the channel.
     /// ⊘ Never a vCPU; never waits on the GPU (a completion is an fd in its epoll set).
     pub fn worker_loop(&self) {
+        self.worker_stats.prof.store(crate::prof::on(), Ordering::Relaxed);
         let Ok(poller) = Poller::create() else {
             eprintln!("kf3: worker: epoll refused — the channel plane is DOWN");
             return;
@@ -1205,8 +1399,14 @@ impl HostOps for Device {
     }
     fn run_emulated(&self, _host_token: u32, _up_to_seq: u64) {}
     fn apply_register(&self, bar: u8, offset: u32, value: u64, _width: u8) {
+        let prof = crate::prof::on();
+        let t_apply = if prof { crate::prof::now_ns() } else { 0 };
+        let is_qhead = prof && bar == 0 && u64::from(offset) == self.qhead_off;
+        let t_trap = if is_qhead { self.prof.qhead_ns.load(Ordering::Relaxed) } else { 0 };
         let Ok(mut g) = self.gsp.lock() else { return };
         let g = &mut *g;
+        let held_before = g.fsm.held_len();
+        let mut n_cmds = 0usize;
         let n = self.counters.applied.fetch_add(1, Ordering::Relaxed);
         // The first writes ARE the boot sequence; logged on the drainer (never a vCPU).
         if n < 512 {
@@ -1221,13 +1421,19 @@ impl HostOps for Device {
         let mut ram = Ram(self);
         let before = g.fsm.phase();
         match g.fsm.mmio_write_with(&mut ram, g.model.as_ref(), g.policy.as_mut(), bar, u64::from(offset), value) {
-            Ok(r) => self.log_report(&r),
+            Ok(r) => {
+                n_cmds += r.commands.len();
+                self.log_report(&r);
+            }
             Err(e) => eprintln!("kf3: GSP write @{offset:#x}={value:#x} REFUSED: {e:?}"),
         }
         while g.fsm.pending_command_doorbells() > 0 {
             self.counters.serviced.fetch_add(1, Ordering::Relaxed);
             match g.fsm.service_one_deferred_command(&mut ram, g.policy.as_mut()) {
-                Ok(r) => self.log_report(&r),
+                Ok(r) => {
+                    n_cmds += r.commands.len();
+                    self.log_report(&r);
+                }
                 Err(e) => {
                     eprintln!("kf3: GSP command service REFUSED: {e:?}");
                     break;
@@ -1242,10 +1448,38 @@ impl HostOps for Device {
         // ★ P4: a held reply (fn 70, a page-directory statement) goes only once the VA thread has
         // settled every statement received — its root written and walked (§49.1 for the RPC
         // path). Otherwise `release_settled` delivers it when the VA thread wakes this thread.
-        if self.mem.inbox.all_settled() {
-            let _ = g.fsm.release_held(&mut ram);
-        }
+        let held_mid = g.fsm.held_len();
+        let released = if self.mem.inbox.all_settled() { g.fsm.release_held(&mut ram).unwrap_or(0) } else { 0 };
+        let t_pub = if prof { crate::prof::now_ns() } else { 0 };
         self.publish(g);
+        if prof {
+            let done = crate::prof::now_ns();
+            self.prof.publish.add(done.saturating_sub(t_pub));
+            // Newly held replies take this doorbell's trap stamp; released ones close theirs.
+            if held_mid > held_before
+                && let Ok(mut q) = self.held_stamps.lock()
+            {
+                for _ in held_before..held_mid {
+                    q.push_back(t_trap);
+                }
+            }
+            if released > 0 {
+                self.prof_held_released(released);
+            }
+            if is_qhead {
+                self.prof.rpc_doorbells.fetch_add(1, Ordering::Relaxed);
+                self.prof.rpc_commands.fetch_add(n_cmds as u64, Ordering::Relaxed);
+                self.prof.rpc_service.add(done.saturating_sub(t_apply));
+                if t_trap != 0 {
+                    self.prof.rpc_trap_to_apply.add(t_apply.saturating_sub(t_trap));
+                    if held_mid <= held_before {
+                        self.prof.rpc_immediate.add(done.saturating_sub(t_trap));
+                    }
+                }
+            } else {
+                self.prof.other_applies.add(done.saturating_sub(t_apply));
+            }
+        }
     }
     fn operands_translatable(&self, host_token: u32, _up_to_seq: u64) -> Translatable {
         // A channel whose pump REFUSED is dead: the plane then poisons (kernel), never faults.

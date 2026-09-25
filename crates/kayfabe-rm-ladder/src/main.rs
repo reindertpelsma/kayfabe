@@ -1376,6 +1376,223 @@ fn guest_ram_pin_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
 /// (`fdcross`), is kind-checked against the KERNEL (`require_kind`, never the sender's word),
 /// `mmap`ed once at file offset zero, written, fenced and dropped. The parent closes its own
 /// copy of that node the moment it is sent, so the child's mapping is the only one.
+/// ★ w827 — **the trap bench.** The most dummy trap possible next to ours, timed from the guest:
+/// kf3 `dummy-bar=on` puts two do-nothing MMIO pages in the MSI-X BAR (BAR5 + 0x8000 lockless,
+/// + 0x9000 BQL, + 0xA000 a KVM ioeventfd — in-kernel, no exit to QEMU); this times N 32-bit writes and reads to each, N writes to OUR doorbell (the
+/// usermode page, token 0xFFF — nobody's), N writes to OUR CPU_INTR_LEAF(7) (write-1-to-clear
+/// of nothing), and N shadowed BAR0 reads (no exit — the floor). Prints `TRAPBENCH …` ns/op.
+fn trap_bench_probe() -> bool {
+    use std::os::fd::AsFd;
+    let n: usize = std::env::var("KF_TRAPBENCH_N").ok().and_then(|v| v.parse().ok()).unwrap_or(100_000);
+    let Some(dir) = std::fs::read_dir("/sys/bus/pci/devices").ok().and_then(|d| {
+        d.flatten().map(|e| e.path()).find(|p| {
+            let rd = |f: &str| std::fs::read_to_string(p.join(f)).unwrap_or_default();
+            rd("vendor").trim() == "0x10de" && rd("class").trim().starts_with("0x03")
+        })
+    }) else {
+        println!("FAIL  TRAPBENCH no NVIDIA display-class function");
+        return false;
+    };
+    let open = |res: &str| std::fs::OpenOptions::new().read(true).write(true).open(dir.join(res));
+    let (Ok(f0), Ok(f5)) = (open("resource0"), open("resource5")) else {
+        println!("FAIL  TRAPBENCH cannot open resource0/resource5 under {}", dir.display());
+        return false;
+    };
+    let map = |f: &std::fs::File, len: u64| {
+        kayfabe_linux_raw::VolatileRegion::map(
+            kayfabe_linux_raw::Backing::DeviceFile { fd: f.as_fd() },
+            len,
+            kayfabe_linux_raw::CachePolicy::Uncached,
+            kayfabe_linux_raw::HostPageSize::query(),
+        )
+    };
+    let (Ok(bar0), Ok(bar5)) = (map(&f0, 0x00C0_0000), map(&f5, 0x1_0000)) else {
+        println!("FAIL  TRAPBENCH mmap (is kf3 dummy-bar=on? BAR5 must be 64 KiB)");
+        return false;
+    };
+    let at = kayfabe_linux_raw::HostOffset::new;
+    let time_w = |r: &kayfabe_linux_raw::VolatileRegion, off: u64, v: u32| {
+        let t = std::time::Instant::now();
+        for _ in 0..n {
+            let _ = r.store_u32(at(off), v);
+        }
+        t.elapsed().as_nanos() as f64 / n as f64
+    };
+    let time_r = |r: &kayfabe_linux_raw::VolatileRegion, off: u64| {
+        let t = std::time::Instant::now();
+        let mut acc = 0u32;
+        for _ in 0..n {
+            acc ^= r.load_u32(at(off)).unwrap_or(0);
+        }
+        std::hint::black_box(acc);
+        t.elapsed().as_nanos() as f64 / n as f64
+    };
+    let dl_w = time_w(&bar5, 0x8000, 0);
+    let dl_r = time_r(&bar5, 0x8000);
+    let db_w = time_w(&bar5, 0x9000, 0);
+    let db_r = time_r(&bar5, 0x9000);
+    let ioev_w = time_w(&bar5, 0xA000, 0);
+    let our_db = time_w(&bar0, 0x00BB_0090, 0xFFF);
+    let our_intr = time_w(&bar0, 0x00B8_101C, 0);
+    let shadow = time_r(&bar0, 0x00B8_101C);
+    println!(
+        "TRAPBENCH n={n} dummy_lockless_write_ns={dl_w:.0} dummy_lockless_read_ns={dl_r:.0} dummy_bql_write_ns={db_w:.0} dummy_bql_read_ns={db_r:.0} dummy_ioeventfd_write_ns={ioev_w:.0} our_doorbell_write_ns={our_db:.0} our_intr_leaf_write_ns={our_intr:.0} shadow_read_ns={shadow:.0}"
+    );
+    true
+}
+
+/// ★ w827 Q1/Q8 — **what one trapped BAR0 write costs the guest vCPU, and what a shadowed read
+/// costs.** Maps the device's `resource0` (root), then writes `0` to `CPU_INTR_LEAF(7)` — a
+/// write-1-to-clear register, so a zero clears nothing — N times, and reads the same shadowed
+/// register N times. Prints `EXITCOST …`.
+fn exit_cost_probe() -> bool {
+    use std::os::fd::AsFd;
+    const OFF: u64 = 0x00B8_101C;
+    const N: usize = 2000;
+    let Some(dir) = std::fs::read_dir("/sys/bus/pci/devices").ok().and_then(|d| {
+        d.flatten().map(|e| e.path()).find(|p| {
+            let rd = |f: &str| std::fs::read_to_string(p.join(f)).unwrap_or_default();
+            rd("vendor").trim() == "0x10de" && rd("class").trim().starts_with("0x03")
+        })
+    }) else {
+        println!("FAIL  EXITCOST no NVIDIA display-class function in /sys/bus/pci/devices");
+        return false;
+    };
+    let f = match std::fs::OpenOptions::new().read(true).write(true).open(dir.join("resource0")) {
+        Ok(f) => f,
+        Err(e) => {
+            println!("FAIL  EXITCOST open {}/resource0: {e}", dir.display());
+            return false;
+        }
+    };
+    let region = match kayfabe_linux_raw::VolatileRegion::map(
+        kayfabe_linux_raw::Backing::DeviceFile { fd: f.as_fd() },
+        0x00C0_0000,
+        kayfabe_linux_raw::CachePolicy::Uncached,
+        kayfabe_linux_raw::HostPageSize::query(),
+    ) {
+        Ok(r) => r,
+        Err(e) => {
+            println!("FAIL  EXITCOST mmap resource0: {e:?}");
+            return false;
+        }
+    };
+    let at = kayfabe_linux_raw::HostOffset::new(OFF);
+    let t = std::time::Instant::now();
+    for _ in 0..N {
+        let _ = region.store_u32(at, 0);
+    }
+    let w = t.elapsed();
+    let t = std::time::Instant::now();
+    let mut acc = 0u32;
+    for _ in 0..N {
+        acc ^= region.load_u32(at).unwrap_or(0);
+    }
+    let r = t.elapsed();
+    println!(
+        "EXITCOST dev={} trapped_write_us={:.2} shadow_read_ns={:.0} n={N} (acc {acc:#x})",
+        dir.display(),
+        w.as_secs_f64() * 1e6 / N as f64,
+        r.as_secs_f64() * 1e9 / N as f64,
+    );
+    true
+}
+
+/// ★ w827 Q6 — **guest CPU bandwidth through a BAR1 view of vidmem vs plain RAM.** Allocates
+/// `LEN` of vidmem, arms a CPU view (`NV_ESC_RM_MAP_MEMORY`, the default caching RM picks for it),
+/// maps it, and times bulk writes, bulk reads and single-word reads against an anonymous RAM
+/// buffer of the same size. Prints `BAR1BW …` lines; PASS iff the view round-trips a pattern.
+fn bar1_bw_probe(rm: &mut HostRmBackend) -> bool {
+    use std::os::fd::AsFd;
+    const LEN: u64 = 0x20_0000;
+    let mem = match rm.alloc_vidmem(LEN) {
+        Ok(h) => h,
+        Err(e) => {
+            println!("FAIL  BAR1BW vidmem = {e:?}");
+            return false;
+        }
+    };
+    let v = match rm.export_device_view(mem, 0, LEN, kayfabe_isolate_host::rm::ViewAccess::ReadWrite) {
+        Ok(v) => v,
+        Err(e) => {
+            println!("FAIL  BAR1BW view = {e:?}");
+            return false;
+        }
+    };
+    let fd = match rm.exports().lend(v.token) {
+        Ok(fd) => fd,
+        Err(e) => {
+            println!("FAIL  BAR1BW lend = {e:?}");
+            return false;
+        }
+    };
+    let region = match kayfabe_linux_raw::MappedRegion::map(
+        kayfabe_linux_raw::Backing::SharedFile { fd: fd.as_fd(), offset: 0 },
+        v.mmap_len,
+        kayfabe_linux_raw::HostProt::ReadWrite,
+        kayfabe_linux_raw::CachePolicy::WriteBack,
+        kayfabe_linux_raw::HostPageSize::query(),
+    ) {
+        Ok(r) => r,
+        Err(e) => {
+            println!("FAIL  BAR1BW mmap = {e:?}");
+            return false;
+        }
+    };
+    let n = LEN.min(v.mmap_len) as usize;
+    let src: Vec<u8> = (0..n).map(|i| (i as u8) ^ 0x5a).collect();
+    let mut dst = vec![0u8; n];
+    let mut ram = vec![0u8; n];
+    let mbs = |bytes: usize, d: std::time::Duration| bytes as f64 / d.as_secs_f64() / (1 << 20) as f64;
+    // Bulk write, BAR1 view.
+    let t = std::time::Instant::now();
+    let w_ok = region.write_from(kayfabe_linux_raw::HostOffset::ZERO, &src).is_ok();
+    let bar_w = t.elapsed();
+    // Bulk read, BAR1 view.
+    let t = std::time::Instant::now();
+    let r_ok = region.read_into(kayfabe_linux_raw::HostOffset::ZERO, &mut dst).is_ok();
+    let bar_r = t.elapsed();
+    // RAM, the same sizes.
+    let t = std::time::Instant::now();
+    ram.copy_from_slice(&src);
+    let ram_w = t.elapsed();
+    let t = std::time::Instant::now();
+    dst.copy_from_slice(std::hint::black_box(&ram));
+    let ram_r = t.elapsed();
+    // Re-read the view to check the pattern (the RAM copy above overwrote dst).
+    let _ = region.read_into(kayfabe_linux_raw::HostOffset::ZERO, &mut dst);
+    let same = dst == src;
+    // Single 4-byte reads (a ring cursor's shape), 4096 of them, strided by 512 bytes.
+    let mut words = [0u8; 4];
+    let t = std::time::Instant::now();
+    for i in 0..4096usize {
+        let _ = region.read_into(kayfabe_linux_raw::HostOffset::new(((i * 512) % n) as u64), &mut words);
+    }
+    let one = t.elapsed();
+    println!(
+        "BAR1BW len={n} view_policy={:?} bar1_write_mbs={:.1} bar1_read_mbs={:.1} ram_write_mbs={:.1} ram_read_mbs={:.1} bar1_word_read_ns={:.0} pattern_ok={same} (w_ok={w_ok} r_ok={r_ok})",
+        region.cache_policy(),
+        mbs(n, bar_w),
+        mbs(n, bar_r),
+        mbs(n, ram_w),
+        mbs(n, ram_r),
+        one.as_nanos() as f64 / 4096.0,
+    );
+    // ★ While the view is still mapped: the kernel's own record of the caching it granted
+    // (guest PAT, decider 3 only — the timing above is what resolves all deciders).
+    if let Ok(pat) = std::fs::read_to_string("/sys/kernel/debug/x86/pat_memtype_list") {
+        for l in pat.lines().filter(|l| !l.contains("write-back")) {
+            println!("BAR1BW PAT {l}");
+        }
+    }
+    if let Ok(maps) = std::fs::read_to_string("/proc/self/maps") {
+        for l in maps.lines().filter(|l| l.contains("/dev/nvidia")) {
+            println!("BAR1BW MAP {l}");
+        }
+    }
+    same && w_ok && r_ok
+}
+
 fn bar1_crossing_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
     use kayfabe_isolate_host::write_frame_with_fds;
     use kayfabe_linux_raw::{
@@ -14187,7 +14404,44 @@ fn unmap_retires_arm(
     }
 }
 
+/// ★ w827: mark the client's window for the device's `KF3_PROF` snapshot — one write of `"KF3P"`
+/// to `CPU_INTR_LEAF(7)` (write-1-to-clear; no vector lives there) through `resource0`. Only when
+/// `KF_PROF_MARK=1` (the harness passes it to a kf3 guest only — ⊘ never set it on a host: this
+/// writes the GPU's BAR0); silent if the BAR cannot be mapped.
+fn prof_mark() {
+    use std::os::fd::AsFd;
+    if std::env::var("KF_PROF_MARK").as_deref() != Ok("1") {
+        return;
+    }
+    let Some(dir) = std::fs::read_dir("/sys/bus/pci/devices").ok().and_then(|d| {
+        d.flatten().map(|e| e.path()).find(|p| {
+            let rd = |f: &str| std::fs::read_to_string(p.join(f)).unwrap_or_default();
+            rd("vendor").trim() == "0x10de" && rd("class").trim().starts_with("0x03")
+        })
+    }) else {
+        return;
+    };
+    let Ok(f) = std::fs::OpenOptions::new().read(true).write(true).open(dir.join("resource0")) else { return };
+    if let Ok(r) = kayfabe_linux_raw::VolatileRegion::map(
+        kayfabe_linux_raw::Backing::DeviceFile { fd: f.as_fd() },
+        0x00C0_0000,
+        kayfabe_linux_raw::CachePolicy::Uncached,
+        kayfabe_linux_raw::HostPageSize::query(),
+    ) {
+        let _ = r.store_u32(kayfabe_linux_raw::HostOffset::new(0x00B8_101C), 0x4B46_3350);
+    }
+}
+
 fn main() -> std::process::ExitCode {
+    prof_mark();
+    let rc = ladder_main();
+    prof_mark();
+    // ★ w827 attribution: the per-ioctl latency aggregate (`KF_IOCTL_TRACE=prof` only).
+    kayfabe_linux_raw::ioctltrace::dump_prof("process end");
+    rc
+}
+
+fn ladder_main() -> std::process::ExitCode {
     // ★★★★★ **w762a — ARM THE SELF-DEADLINE BEFORE ANYTHING ELSE CAN HANG.**
     //
     // > Owner, 2026-09-18: *"At timeout trace dump the whole thing."*
@@ -14391,6 +14645,9 @@ fn main() -> std::process::ExitCode {
     let mut want_executor_alias = false;
     let mut want_fb_view: Option<FbViewJoin> = None;
     let mut want_bar1_crossing = false;
+    let mut want_bar1_bw = false;
+    let mut want_exit_cost = false;
+    let mut want_trap_bench = false;
     // ★★★★★ w747 — `--list-object-alias`. Its OWN flag and its own early return, for
     // `--bar1-crossing`'s reason: it frees its own parent object out from under a live
     // slice on purpose, so nothing else may be holding memory in this process's client
@@ -14794,6 +15051,9 @@ fn main() -> std::process::ExitCode {
             }
             // ★★★★★ w393 — the BAR1 crossing on bare metal; see `bar1_crossing_probe`.
             "--bar1-crossing" => want_bar1_crossing = true,
+            "--bar1-bw" => want_bar1_bw = true,
+            "--exit-cost" => want_exit_cost = true,
+            "--trap-bench" => want_trap_bench = true,
             // ★★★★★ w747 — does `NV01_MEMORY_LIST_OBJECT` ALIAS its parent's pages or COPY
             // them? The single question gating leg B of the USERD design.
             "--list-object-alias" => want_list_object = true,
@@ -15536,6 +15796,21 @@ fn main() -> std::process::ExitCode {
 
     // ★★★★★ w393 — the BAR1 crossing runs here and RETURNS, for R30's reason: its objects
     // and its child process must be the only things in the census.
+    if want_trap_bench {
+        let ok = trap_bench_probe();
+        println!("done \u{2014} trap-bench probe only");
+        return if ok { std::process::ExitCode::SUCCESS } else { std::process::ExitCode::from(1) };
+    }
+    if want_exit_cost {
+        let ok = exit_cost_probe();
+        println!("done \u{2014} exit-cost probe only");
+        return if ok { std::process::ExitCode::SUCCESS } else { std::process::ExitCode::from(1) };
+    }
+    if want_bar1_bw {
+        let ok = bar1_bw_probe(&mut rm);
+        println!("done \u{2014} bar1-bw probe only");
+        return if ok { std::process::ExitCode::SUCCESS } else { std::process::ExitCode::from(1) };
+    }
     if want_bar1_crossing {
         println!(
             "REV_UNDER_TEST={}",

@@ -348,7 +348,13 @@ impl GuestMemory for Mem<'_> {
                 // ★ P6 (Q3): a vidmem GPFIFO / pushbuffer (UVM's default GPFIFO) is read through a
                 // CPU view WE arm over the store slice our own row placed there.
                 let dst = &mut out[done as usize..(done + n) as usize];
+                let t0 = crate::prof::on().then(crate::prof::now_ns);
                 self.views.read(self.rm, self.store, self.mirror.fb_len, off, dst).map_err(|e| format!("{at_va:#x}: {e}"))?;
+                crate::prof::VIEW_READS.fetch_add(1, Ordering::Relaxed);
+                crate::prof::VIEW_READ_BYTES.fetch_add(n, Ordering::Relaxed);
+                if let Some(t0) = t0 {
+                    crate::prof::VIEW_READ_NS.fetch_add(crate::prof::now_ns().saturating_sub(t0), Ordering::Relaxed);
+                }
                 done += n;
                 continue;
             }
@@ -357,6 +363,7 @@ impl GuestMemory for Mem<'_> {
             if !mem.read_into(at, dst) {
                 return Err(format!("{at_va:#x}: guest-RAM read"));
             }
+            crate::prof::RAM_READ_BYTES.fetch_add(n, Ordering::Relaxed);
             done += n;
         }
         Ok(())
@@ -547,6 +554,8 @@ pub struct ChanPlane {
     pub acts_refused: AtomicU64,
     /// Slowest act, µs.
     pub act_worst_us: AtomicU64,
+    /// ★ w827: every act's time, summed (the act thread's busy time).
+    pub act_total_us: AtomicU64,
     /// Passthrough twins born.
     pub pt_births: AtomicU64,
     /// ★ Per guest token: doorbells the vCPU trap rang INLINE, and how many reached the host's
@@ -663,6 +672,7 @@ impl ChanPlane {
             acts_run: AtomicU64::new(0),
             acts_refused: AtomicU64::new(0),
             act_worst_us: AtomicU64::new(0),
+            act_total_us: AtomicU64::new(0),
             pt_births: AtomicU64::new(0),
             rung: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
             rang: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
@@ -690,6 +700,7 @@ impl ChanPlane {
                     let r = act(self);
                     let us = u64::try_from(t0.elapsed().as_micros()).unwrap_or(u64::MAX);
                     self.act_worst_us.fetch_max(us, Ordering::Relaxed);
+                    self.act_total_us.fetch_add(us, Ordering::Relaxed);
                     self.acts_run.fetch_add(1, Ordering::Relaxed);
                     match r {
                         Ok(line) => {

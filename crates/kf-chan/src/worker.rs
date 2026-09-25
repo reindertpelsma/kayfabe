@@ -30,6 +30,20 @@ pub struct WorkerStats {
     pub parks: AtomicU64,
     /// Completion wakes turned into internal rings.
     pub host_rings: AtomicU64,
+    /// ★ w827 attribution (only when [`WorkerStats::prof`] is set): ns outside the park wait.
+    pub busy_ns: AtomicU64,
+    /// ns inside the park wait.
+    pub wait_ns: AtomicU64,
+    /// The longest single stretch outside a wait.
+    pub max_busy_ns: AtomicU64,
+    /// Waits entered.
+    pub waits: AtomicU64,
+    /// Waits that ended by TIMEOUT.
+    pub timeouts: AtomicU64,
+    /// Timeouts after which the next pass served a token — a lost or late wake.
+    pub timeouts_with_work: AtomicU64,
+    /// Turns the accounting on (two clock reads per park).
+    pub prof: AtomicBool,
 }
 
 /// ★ P5b: the first tag a caller may give an EXTRA fd in the same poller (a per-engine host
@@ -52,20 +66,44 @@ pub fn run(
     on_other: &dyn Fn(u64),
 ) {
     let mut scratch = Vec::with_capacity(SCAN_LIMIT);
+    let prof = stats.prof.load(Ordering::Relaxed);
+    let mut busy_from = std::time::Instant::now();
+    let mut after_timeout = false;
     while !stop.load(Ordering::Acquire) {
         // §5.3: every `seen` load happens-before the scan.
         let seen = plane.worker_wake().seen();
         let n = plane.worker_pass(host, &mut scratch, SCAN_LIMIT);
         if n > 0 {
             stats.served.fetch_add(n as u64, Ordering::Relaxed);
+            if after_timeout {
+                stats.timeouts_with_work.fetch_add(1, Ordering::Relaxed);
+            }
+            after_timeout = false;
             continue;
         }
+        after_timeout = false;
         if !plane.worker_wake().try_park(seen) {
             continue;
         }
         stats.parks.fetch_add(1, Ordering::Relaxed);
         let mut ready = ReadyTokens::new();
+        let tw = prof.then(std::time::Instant::now);
+        if let Some(tw) = tw {
+            let b = u64::try_from(tw.duration_since(busy_from).as_nanos()).unwrap_or(u64::MAX);
+            stats.busy_ns.fetch_add(b, Ordering::Relaxed);
+            stats.max_busy_ns.fetch_max(b, Ordering::Relaxed);
+        }
         let got = poller.wait(&mut ready, PollTimeout::Millis(PARK_MS));
+        if let Some(tw) = tw {
+            busy_from = std::time::Instant::now();
+            let w = u64::try_from(busy_from.duration_since(tw).as_nanos()).unwrap_or(u64::MAX);
+            stats.wait_ns.fetch_add(w, Ordering::Relaxed);
+            stats.waits.fetch_add(1, Ordering::Relaxed);
+            after_timeout = matches!(got, Ok(0));
+            if after_timeout {
+                stats.timeouts.fetch_add(1, Ordering::Relaxed);
+            }
+        }
         plane.worker_wake().unpark();
         if got.is_ok() {
             for tag in ready.iter() {
