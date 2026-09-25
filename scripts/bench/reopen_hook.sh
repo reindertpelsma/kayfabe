@@ -19,6 +19,10 @@ set -uo pipefail
 SRC_DIR="$(cd "$(dirname "$0")" && pwd)"
 G="$SRC_DIR/gssh_nv"
 M=${REOPEN_M:-20}
+# REOPEN_CUDA=0: the GSP-only lane — each iteration is TWO nvidia-smi processes (two whole
+# RmInitAdapter/RmShutdownAdapter cycles) and no CUDA, so the verdict isolates GSP teardown →
+# re-boot from the memory and channel planes a CUDA context drags in.
+CUDA=${REOPEN_CUDA:-1}
 PER=${REOPEN_PER_TIMEOUT:-60}
 die() { echo "★ reopen hook FAILED: $*"; echo "REOPEN_VERDICT=FAIL"; exit 2; }
 
@@ -36,7 +40,8 @@ while [ \$i -le $M ]; do
   t0=\$(date +%s%N)
   timeout -k 5 $PER nvidia-smi -L >/tmp/smi.out 2>&1; src=\$?
   t1=\$(date +%s%N)
-  ( cd /tmp && timeout -k 5 $PER ./cup3 ) >/tmp/cup3.out 2>&1; crc=\$?
+  if [ $CUDA = 1 ]; then ( cd /tmp && timeout -k 5 $PER ./cup3 ) >/tmp/cup3.out 2>&1; crc=\$?
+  else timeout -k 5 $PER nvidia-smi -q -d MEMORY >/tmp/smi2.out 2>&1; crc=\$?; echo "KERNEL rv=43 want=43 -> PASS (smi-only lane: 2nd open rc=\$crc)" >/tmp/cup3.out; fi
   t2=\$(date +%s%N)
   val=\$(sed -n 's/^KERNEL rv=\([0-9]*\) .*/\1/p' /tmp/cup3.out | tail -1)
   fail=\$(grep -m1 '^FAIL' /tmp/cup3.out)

@@ -13,7 +13,7 @@ OUT=$BENCH/ro_${TAG}.out
 REV=$(git -C "$REPO" rev-parse --short=8 HEAD); DIRTY=$(git -C "$REPO" status --porcelain --untracked-files=no | wc -l)
 # ★ QEMU_BIN (optional) names the kf3 binary when this checkout's HEAD is a scripts-only revision
 # on top of the one that was built — the row then says which binary was measured.
-echo "RO_START $(date -Is) rev=$REV dirty=$DIRTY n=$N m=$M qemu=${QEMU_BIN:-kf3-bins/$REV}" > "$OUT"
+echo "RO_START $(date -Is) rev=$REV dirty=$DIRTY n=$N m=$M cuda=${REOPEN_CUDA:-1} qemu=${QEMU_BIN:-kf3-bins/$REV}" > "$OUT"
 pass=0; fail=0
 for b in $(seq 1 "$N"); do
   t=ro_${TAG}_$b
