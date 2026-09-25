@@ -49,6 +49,20 @@ pub enum MmuFormat {
     Ver3,
 }
 
+impl MmuFormat {
+    /// ★ P6b: the smallest page a PTE of this format maps — the grain the mapping plane covers
+    /// guest VA at (a walk leaf is whole pages of it or of a larger page size). 4 KiB on both:
+    /// `NV_MMU_VER2_PTE` / `NV_MMU_VER3_PTE` at the last level map `1 << 12`
+    /// (`ogkm-580 kern_gmmu_fmt_gp10x.c:101` VER2 and `kern_gmmu_fmt_gh10x.c:114` VER3: the
+    /// last level's `virtAddrBitLo = 12`).
+    #[must_use]
+    pub const fn small_page_bytes(self) -> u64 {
+        match self {
+            MmuFormat::Ver2 | MmuFormat::Ver3 => 0x1000,
+        }
+    }
+}
+
 /// How the family's GSP comes up — which boot sequence the emulated GSP plays.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BootStyle {

@@ -1040,7 +1040,12 @@ impl ChanPlane {
                     e
                 };
                 let userd = me.userd_view(a.userd).map_err(|e| fail((NV_ERR_NOT_SUPPORTED, e)))?;
-                let host = HostRing::on_engine(me.rm, mirror.space, me.host_ce).map_err(|e| fail((NV_ERR_INSUFFICIENT_RESOURCES, format!("host ring: {e}"))))?;
+                // ★ P6b: OUR ring goes in OUR region of the space, never where RM's allocator (the
+                // guest's own allocator) would put it — `crate::mem::RING_REGION_BASE`.
+                let at = crate::mem::take_ring_slot(&mirror.rings)
+                    .ok_or_else(|| fail((NV_ERR_INSUFFICIENT_RESOURCES, "host ring: the space's ring region is exhausted".to_string())))?;
+                let host = HostRing::on_engine_at(me.rm, mirror.space, me.host_ce, Some(at))
+                    .map_err(|e| fail((NV_ERR_INSUFFICIENT_RESOURCES, format!("host ring: {e}"))))?;
                 let ht = host.channel().token;
                 let ring_va = host.va();
                 let chan = TranslatedChannel::new(TranslatedRing::new(a.gpfifo_va, entries, 0), host, idx);

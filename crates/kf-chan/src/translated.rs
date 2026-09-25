@@ -9,9 +9,18 @@
 //!    VIRTUAL, and the guest's own offsets are restored right after the launch so a later
 //!    launch that reuses them still reads the guest's values. This is RM's own `fbAliasVA`
 //!    rewrite (`ogkm-610 channel_utils.c:1055-1056`).
-//! 2. **`MEM_OP_A..D`** — privileged host methods naming guest PDB addresses. They are DROPPED
-//!    from the forwarded stream; a `MEM_OP_D` TLB invalidate becomes a [`Piece::Invalidate`]
+//! 2. **`MEM_OP_A..D`** — a `MEM_OP_D` TLB invalidate is a privileged host method naming a guest
+//!    PDB address: it is DROPPED from the forwarded stream and becomes a [`Piece::Invalidate`]
 //!    split point, where the worker walks the named root and reconciles before the rest runs.
+//!    ★ P6b ruling (d): a `MEM_OP_D` **MEMBAR** is FORWARDED (A, B, C, D as the guest wrote them):
+//!    it is an ordering method, not a privileged one — RM names the privileged host methods as
+//!    exactly `TLB_INVALIDATE` and `ACCESS_COUNTER_CLR` (`ogkm-580 alloc_channel.h:207-214`,
+//!    `NVOS04_FLAGS_CHANNEL_DENY_AUTH_LEVEL_PRIV`), so our unprivileged host channel may execute
+//!    it, and dropping it would let the guest's later work (a semaphore release UVM orders behind
+//!    it, `uvm_pascal_host.c:32-45` / `uvm_hal.c:938`) overtake writes it ordered. An invalidate
+//!    that asked for a `SYSMEMBAR` (`MEM_OP_A` 11:11) keeps it the same way: a forwarded MEMBAR
+//!    (`SYS_MEMBAR`) ahead of the split. Other `MEM_OP_D` operations (`L2_*`,
+//!    `ACCESS_COUNTER_CLR`, Hopper's `MMU_OPERATION`) are still consumed here, unforwarded.
 //!
 //! Everything else — semaphores, virtual operands, host methods — is forwarded unchanged.
 //!
@@ -25,6 +34,13 @@ const MEM_OP_A: u32 = 0x28;
 const MEM_OP_B: u32 = 0x2c;
 const MEM_OP_C: u32 = 0x30;
 const MEM_OP_D: u32 = 0x34;
+/// `NVC56F_MEM_OP_D_OPERATION` 31:27 — `MEMBAR` (`clc56f.h:184`; the same value in every
+/// family's channel class: `clc46f.h:179`, `clc86f.h:118`).
+const OP_MEMBAR: u32 = 5;
+/// `NVC56F_MEM_OP_A_TLB_INVALIDATE_SYSMEMBAR` 11:11 (`clc56f.h`).
+const MEM_OP_A_SYSMEMBAR_EN: u32 = 1 << 11;
+/// `NVC56F_MEM_OP_C_MEMBAR_TYPE_SYS_MEMBAR` (2:0 = 0).
+const MEMBAR_TYPE_SYS: u32 = 0;
 /// `NVC56F_MEM_OP_D_OPERATION` 31:27 — `MMU_TLB_INVALIDATE` / `_TARGETED`.
 const OP_TLB_INVALIDATE: u32 = 9;
 const OP_TLB_INVALIDATE_TARGETED: u32 = 0xa;
@@ -107,6 +123,10 @@ pub struct CeState {
     pub remap: u32,
     /// `MEM_OP_C` as last written — the low PDB bits and `PDB_ALL` of a following `MEM_OP_D`.
     pub mem_op_c: u32,
+    /// ★ P6b: `MEM_OP_A` as last written (a forwarded MEMBAR re-emits it; a SYSMEMBAR request).
+    pub mem_op_a: u32,
+    /// ★ P6b: `MEM_OP_B` as last written.
+    pub mem_op_b: u32,
 }
 
 /// One piece of rewritten work, in order.
@@ -265,8 +285,15 @@ fn one_write(
         // A SW subchannel's own methods (host methods below 0x100 still apply to the channel).
         return if m == SW_NO_OPERATION { Ok(()) } else { Err(Refusal::SwMethod { method: m }) };
     }
-    if m == MEM_OP_A || m == MEM_OP_B {
-        return Ok(()); // dropped: privileged, and consumed by the split point below
+    // `MEM_OP_A..C` are operands of the `MEM_OP_D` that follows ("MEM_OP_D MUST be preceded by
+    // MEM_OPs A-C", `clc56f.h`): held here, emitted with the D when its operation is forwarded.
+    if m == MEM_OP_A {
+        st.mem_op_a = v;
+        return Ok(());
+    }
+    if m == MEM_OP_B {
+        st.mem_op_b = v;
+        return Ok(());
     }
     if m == MEM_OP_C {
         st.mem_op_c = v;
@@ -274,7 +301,22 @@ fn one_write(
     }
     if m == MEM_OP_D {
         let op = v >> 27;
+        if op == OP_MEMBAR {
+            // ★ P6b (d): an ordering method, not a privileged one — forwarded as written.
+            emit(cur, sub, MEM_OP_A, st.mem_op_a);
+            emit(cur, sub, MEM_OP_B, st.mem_op_b);
+            emit(cur, sub, MEM_OP_C, st.mem_op_c);
+            emit(cur, sub, MEM_OP_D, v);
+            return Ok(());
+        }
         if op == OP_TLB_INVALIDATE || op == OP_TLB_INVALIDATE_TARGETED {
+            if st.mem_op_a & MEM_OP_A_SYSMEMBAR_EN != 0 {
+                // ★ P6b (d): the invalidate's SYSMEMBAR is kept as a forwarded MEMBAR ahead of it.
+                emit(cur, sub, MEM_OP_A, 0);
+                emit(cur, sub, MEM_OP_B, 0);
+                emit(cur, sub, MEM_OP_C, MEMBAR_TYPE_SYS);
+                emit(cur, sub, MEM_OP_D, OP_MEMBAR << 27);
+            }
             if !cur.is_empty() {
                 out.push(Piece::Words(std::mem::take(cur)));
             }
@@ -285,7 +327,7 @@ fn one_write(
                 pdb: (!all).then_some(hi | lo),
             });
         }
-        return Ok(()); // every MEM_OP_D is privileged; only the invalidate means anything to us
+        return Ok(()); // the other MEM_OP_D operations are consumed here (see the module doc)
     }
     let is_ce_sub = st.ce_subch & (1u8 << (sub & 7)) != 0;
     if !is_ce_sub {

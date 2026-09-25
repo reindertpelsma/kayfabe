@@ -69,6 +69,53 @@ pub enum RootRefusal {
     },
 }
 
+/// ★★★ **What a root statement did to a VA-space object** (P6b ruling (c)).
+///
+/// `THE_ARCHITECTURE_v3.md` §4.3: a VA space can CHANGE its root (`SET_PAGE_DIRECTORY` is
+/// repeatable, `nvos.h:3084`). The two kinds of change are NOT the same event, and ogkm fixes the
+/// order that distinguishes them:
+///
+/// - [`RootChange::First`] — the object had no root. Its tables were written BEFORE the statement
+///   (RM's own root at construct time; an externally-owned space UVM populated first), so a walk
+///   NOW sees them: `V3_P4_PORT_MAP.md` Q10, the RPC-map sync point, the reply held until it lands.
+/// - [`RootChange::Moved`] — a RE-publication: the root moves while the space already has one
+///   (and we already hold rows under it). ⊘ **The new root is EMPTY when the statement reaches
+///   us.** On a GSP client `deviceCtrlCmdDmaSetPageDirectory_IMPL` sends the RPC FIRST and only
+///   then runs `gvaspaceExternalRootDirCommit` (`ogkm-580 dma.c:500-518`), which copies the
+///   RM-internal root entries into the new root (`mmuWalkMigrateLevelInstance`,
+///   `gpu_vaspace.c:3234-3238`, through `_gmmuWalkCBCopyEntries_SkipExternal`) — and it runs
+///   after our reply, which we HOLD until our walk lands. So a walk at the statement always walks
+///   the unmigrated root. `[measured p6b1]` nvidia-uvm's `configure_address_space`
+///   (`uvm_gpu.c:1262-1325`, after `uvm_channel_manager_create` at `:1615`) moved its space from
+///   `0x0` to `0x200000`; the walk found nothing, the reconcile unmapped UVM's channel GPFIFOs,
+///   and token 3 died at GP entry 2 (`0x121010010 not placed by us`).
+///   ⇒ A moved root is walked at the NEXT synchronisation point that names the space (the
+///   guest's invalidate of the new root, `PDB_ALL`, or a Translated `MEM_OP` split) — the
+///   guest's own contract for making a table change visible — and THAT reconcile retires every
+///   row of the old root the new one does not carry (`plan_reconcile` unmaps what the walk no
+///   longer states). Until then our rows are the old root's, which is exactly what the guest's
+///   migration copies into the new one; nothing of the guest's is copied or cached by us.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RootChange {
+    /// Same root as before.
+    Unchanged,
+    /// The object had no root: walk now (Q10).
+    First,
+    /// The root moved from `old`: walk at the next synchronisation point naming the space.
+    Moved {
+        /// The previous root.
+        old: u64,
+    },
+}
+
+impl RootChange {
+    /// Whether the statement itself needs a walk (only a first root: see the type's rustdoc).
+    #[must_use]
+    pub const fn walk_now(self) -> bool {
+        matches!(self, RootChange::First)
+    }
+}
+
 /// One VA-space object: its (optional) guest root, where its mappings land, and OUR ledger.
 #[derive(Debug)]
 struct Space<T> {
@@ -105,12 +152,12 @@ impl<T: MapTarget> VasTable<T> {
         self.spaces.remove(&key).map(|s| (s.target, s.ledger))
     }
 
-    /// ★ The guest stated a root for `key`. Returns whether it CHANGED — a changed root with no
-    /// invalidate behind it needs a walk ([`VaManager::schedule_walk`], `V3_P4_PORT_MAP.md` Q10).
+    /// ★ The guest stated a root for `key`. Returns what the statement did to it — see
+    /// [`RootChange`] for which kind needs a walk now.
     ///
     /// # Errors
     /// [`RootRefusal`], by name.
-    pub fn set_root(&mut self, key: VasKey, pdb: u64, aperture: PdbAperture) -> Result<bool, RootRefusal> {
+    pub fn set_root(&mut self, key: VasKey, pdb: u64, aperture: PdbAperture) -> Result<RootChange, RootRefusal> {
         let store = self.store_bytes;
         let s = self.spaces.get_mut(&key).ok_or(RootRefusal::UnknownObject(key))?;
         if aperture == PdbAperture::Sysmem {
@@ -119,9 +166,13 @@ impl<T: MapTarget> VasTable<T> {
         if pdb >= store {
             return Err(RootRefusal::OutsideStore { key, pdb });
         }
-        let changed = s.root != Some(pdb);
+        let change = match s.root {
+            Some(old) if old == pdb => RootChange::Unchanged,
+            Some(old) => RootChange::Moved { old },
+            None => RootChange::First,
+        };
         s.root = Some(pdb);
-        Ok(changed)
+        Ok(change)
     }
 
     /// The guest withdrew the root (`UNSET_PAGE_DIRECTORY`). Our mappings stay until a walk says
@@ -258,6 +309,27 @@ impl Walker for GpuWalker {
     }
 }
 
+/// The default coverage grain: 4 KiB, the smallest GMMU page on every family this tree models.
+pub const SMALL_PAGE: u64 = 0x1000;
+
+/// ★ P6b (b): whether a row is whole `grain` pages on both sides (VA and backing) — the unit the
+/// guest's own PTEs map. `grain` is a power of two.
+///
+/// ⊘ **Why NOT the C's 64 KiB round-up** (`(size + 0xffff) & ~0xffff`, `nvkvm_gpu_emul.c:7920`):
+/// the C rounded `GPU_PROMOTE_CTX` rows, whose DECLARED lengths are not page multiples
+/// (`0x8600`); v3 consumes no promote rows (cut, `kf-rm/src/rmrpc/mod.rs:870`) — its rows are
+/// walk leaves, and a leaf is already a whole guest page (4 KiB small, 64 KiB big, 2 MiB huge, a
+/// run of them). Rounding a 4 KiB leaf up to 64 KiB would EXTEND past what the guest's tables
+/// cover, onto a neighbour the guest may map elsewhere or not at all — and two such rows then
+/// overlap on the host: that overlap is exactly what made the C need `0x51 == success`
+/// (`:7935-7938`). Our host placements are 4 KiB-pinned store slices
+/// (`nvos46_page_size_flag_for_store_slice`), so there is no host big page for a hole to be in.
+#[must_use]
+pub fn whole_pages(d: &crate::ledger::Desired, grain: u64) -> bool {
+    let m = grain.wrapping_sub(1);
+    d.len > 0 && (d.va | d.len | d.off) & m == 0
+}
+
 fn ns_since(t: std::time::Instant) -> u64 {
     u64::try_from(t.elapsed().as_nanos()).unwrap_or(u64::MAX)
 }
@@ -332,6 +404,10 @@ pub struct VaStats {
     pub splits: u64,
     /// ★ P6: splits naming a root no object carries (done at once — nothing of ours is stale).
     pub split_missed: u64,
+    /// ★ P6b (a): maps the host answered `HeldByHost` — satisfied, never ledger rows.
+    pub held: u64,
+    /// ★ P6b: walked leaves refused because they overlap one of OUR VMM placements.
+    pub vmm_overlaps: u64,
 }
 
 /// ★ P5c: where an invalidate's wall time goes, summed over every one completed — never a decision
@@ -420,6 +496,8 @@ pub struct VaManager<W: Walker, T: MapTarget> {
     inflight: Option<Batch>,
     /// ★ P6: finished splits, `(ticket, outcome)`, until [`VaManager::take_splits`].
     splits_done: Vec<(u64, Result<(), String>)>,
+    /// ★ P6b (b): the coverage grain — the family's smallest GMMU page ([`VaManager::with_page_grain`]).
+    page_grain: u64,
     /// Counters and named refusals.
     pub stats: VaStats,
 }
@@ -436,8 +514,19 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             pending: Vec::new(),
             inflight: None,
             splits_done: Vec::new(),
+            page_grain: SMALL_PAGE,
             stats: VaStats::default(),
         }
+    }
+
+    /// ★ P6b (b): the coverage grain — the smallest page the family's GMMU format maps (the
+    /// caller derives it per family; 4 KiB on `NV_MMU_VER2` and `VER3`). A power of two.
+    #[must_use]
+    pub fn with_page_grain(mut self, grain: u64) -> Self {
+        if grain.is_power_of_two() {
+            self.page_grain = grain;
+        }
+        self
     }
 
     /// The walker (for its completion fd and counters).
@@ -658,6 +747,32 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                     continue;
                 }
             };
+            // ★ P6b (b): every row is whole pages of the family's smallest GMMU page — a walk
+            // leaf IS a guest PTE's page (or a run of them), so coverage at that grain has no
+            // sub-page hole inside a page the guest mapped, and never extends past it.
+            if let Some(d) = desired.iter().find(|d| !whole_pages(d, self.page_grain)) {
+                failed.insert(key);
+                self.stats.refuse(format!(
+                    "{key:?} root {root:#x}: leaf {:#x}+{:#x} (backing {:#x}) is not whole {:#x}-byte pages: a sub-page row would leave a hole",
+                    d.va, d.len, d.off, self.page_grain
+                ));
+                continue;
+            }
+            // ★ P6b: a guest VA may never alias a VMM address (owner rule). Refused BEFORE the
+            // host is asked — the host's `VA_ALREADY_MAPPED` would otherwise read as satisfied.
+            let reserved = space.target.reserved();
+            if let Some((d, r)) = desired.iter().find_map(|d| {
+                let e = d.va.saturating_add(d.len);
+                reserved.iter().find(|&&(a, b)| d.va < b && a < e).map(|r| (d, *r))
+            }) {
+                failed.insert(key);
+                self.stats.vmm_overlaps += 1;
+                self.stats.refuse(format!(
+                    "{key:?} root {root:#x}: leaf {:#x}+{:#x} overlaps OUR placement [{:#x}, {:#x}) — a guest VA may never alias a VMM address",
+                    d.va, d.len, r.0, r.1
+                ));
+                continue;
+            }
             let plan = plan_reconcile(&space.ledger.rows(), &desired);
             let t_apply = std::time::Instant::now();
             self.stats.timing.plan_ns += u64::try_from((t_apply - t_plan).as_nanos()).unwrap_or(u64::MAX);
@@ -667,6 +782,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             self.stats.mapped += a.mapped as u64;
             self.stats.unmapped += a.unmapped as u64;
             self.stats.host_invalidates += u64::from(a.invalidated);
+            self.stats.held += a.held as u64;
             if a.refused > 0 {
                 failed.insert(key);
                 self.stats.refuse(format!(
@@ -712,7 +828,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ledger::Desired;
+    use crate::ledger::{Desired, Mapped};
     use kf_trap::{Invalidate, InvalidatePort, InvalidateRegs, PortWrite};
     use std::cell::RefCell;
     use std::rc::Rc;
@@ -777,15 +893,20 @@ mod tests {
         ops: Rc<RefCell<Vec<(Op, bool)>>>,
         port: Arc<InvalidatePort>,
         refuse_map_at: Option<u64>,
+        held_at: Option<u64>,
+        reserved: Vec<(u64, u64)>,
     }
 
     impl MapTarget for FakeHost {
-        fn map(&self, d: &Desired, _defer: bool) -> Result<(), String> {
+        fn map(&self, d: &Desired, _defer: bool) -> Result<Mapped, String> {
             if self.refuse_map_at == Some(d.va) {
                 return Err(format!("map {:#x}: refused (fake)", d.va));
             }
             self.ops.borrow_mut().push((Op::Map(d.va, d.off, d.len), self.port.trigger().read() != 0));
-            Ok(())
+            Ok(if self.held_at == Some(d.va) { Mapped::HeldByHost } else { Mapped::Placed })
+        }
+        fn reserved(&self) -> Vec<(u64, u64)> {
+            self.reserved.clone()
         }
         fn unmap(&self, va: u64, _defer: bool) -> Result<(), String> {
             self.ops.borrow_mut().push((Op::Unmap(va), self.port.trigger().read() != 0));
@@ -811,7 +932,7 @@ mod tests {
         let w = FakeWalker { tables: tables.clone(), queued: None, not_ready: 0, submits: vec![], fail_poll: None };
         let mut m = VaManager::new(w, STORE, Box::new(|_, _| None));
         for k in [K_A, K_B] {
-            m.table.insert(k, FakeHost { ops: ops.clone(), port: port.clone(), refuse_map_at: None });
+            m.table.insert(k, FakeHost { ops: ops.clone(), port: port.clone(), refuse_map_at: None, held_at: None, reserved: Vec::new() });
         }
         m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem).unwrap();
         m.table.set_root(K_B, PDB_B, PdbAperture::Vidmem).unwrap();
@@ -983,7 +1104,7 @@ mod tests {
         let mut r = rig();
         r.m.table.insert(
             K_A,
-            FakeHost { ops: r.ops.clone(), port: r.port.clone(), refuse_map_at: Some(0x1000_0000) },
+            FakeHost { ops: r.ops.clone(), port: r.port.clone(), refuse_map_at: Some(0x1000_0000), held_at: None, reserved: Vec::new() },
         );
         r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem).unwrap();
         r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0)]);
@@ -1022,8 +1143,8 @@ mod tests {
             r.m.table.set_root(VasKey(99), 0x1000, PdbAperture::Vidmem),
             Err(RootRefusal::UnknownObject(_))
         ));
-        assert_eq!(r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem), Ok(false), "unchanged");
-        assert_eq!(r.m.table.set_root(K_A, 0x0110_0000, PdbAperture::Vidmem), Ok(true), "changed");
+        assert_eq!(r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem), Ok(RootChange::Unchanged), "unchanged");
+        assert_eq!(r.m.table.set_root(K_A, 0x0110_0000, PdbAperture::Vidmem), Ok(RootChange::Moved { old: PDB_A }), "moved");
     }
 
     /// Q10: a root change with no invalidate schedules a walk; nothing is cleared (nothing armed).
@@ -1067,5 +1188,125 @@ mod tests {
         let s = r.m.take_splits();
         assert_eq!(s.len(), 1);
         assert!(matches!(&s[0], (9, Err(e)) if e.contains("boom")));
+    }
+
+    fn host(r: &Rig, held_at: Option<u64>, reserved: Vec<(u64, u64)>) -> FakeHost {
+        FakeHost { ops: r.ops.clone(), port: r.port.clone(), refuse_map_at: None, held_at, reserved }
+    }
+
+    /// ★ P6b ruling (a): a VA the host already holds satisfies the guest's statement (its trigger
+    /// clears) but is NOT ours — no ledger row, so nothing resolves through it and no later
+    /// reconcile tries to unmap it (the `Other(87)` of `[measured p6s1]`).
+    #[test]
+    fn a_va_the_host_already_holds_is_satisfied_and_never_recorded() {
+        let mut r = rig();
+        let h = host(&r, Some(0x1000_0000), Vec::new());
+        r.m.table.insert(K_A, h);
+        r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem).unwrap();
+        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0), (0x1000_1000, 0x0300_0000, 0x1000, 0)]);
+        let q = guest_invalidate(&r.port, PDB_A, false);
+        r.m.on_invalidate(q, r.port.trigger());
+        let out = r.m.on_walk_ready(r.port.trigger());
+        assert_eq!(out.completed, vec![(q.seq, ClearOutcome::Cleared)], "the guest's statement succeeds");
+        let a = &out.applied[0].1;
+        assert_eq!((a.mapped, a.held, a.refused), (1, 1, 0));
+        let l = r.m.table.ledger(K_A).unwrap();
+        assert_eq!(l.len(), 1, "only the mapping WE made is a row");
+        assert_eq!(l.resolve(0x1000_0000, 8), None, "nothing resolves through a VA that is not ours");
+        assert_eq!(l.resolve(0x1000_1000, 8), Some((false, 0x0300_0000)));
+        // The guest drops both: only OUR row is unmapped.
+        r.ops.borrow_mut().clear();
+        r.tables.borrow_mut().insert(PDB_A, vec![]);
+        let q = guest_invalidate(&r.port, PDB_A, false);
+        r.m.on_invalidate(q, r.port.trigger());
+        let out = r.m.on_walk_ready(r.port.trigger());
+        assert_eq!(out.applied[0].1.refused, 0);
+        assert_eq!(
+            r.ops.borrow().iter().map(|(o, _)| o.clone()).collect::<Vec<_>>(),
+            vec![Op::Unmap(0x1000_1000), Op::Invalidate]
+        );
+        assert_eq!(r.m.stats.held, 1);
+    }
+
+    /// ★ P6b: a walked leaf over one of OUR VMM placements is refused by name before the host is
+    /// asked, and the guest's trigger stays armed — never satisfied onto a VMM address.
+    #[test]
+    fn a_leaf_over_a_vmm_placement_is_refused_before_the_host_is_asked() {
+        let mut r = rig();
+        let h = host(&r, None, vec![(0xFF_0000_0000, 0x100_0000_0000)]);
+        r.m.table.insert(K_A, h);
+        r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem).unwrap();
+        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0), (0xFF_0010_0000, 0x0300_0000, 0x1000, 0)]);
+        let q = guest_invalidate(&r.port, PDB_A, false);
+        r.m.on_invalidate(q, r.port.trigger());
+        let out = r.m.on_walk_ready(r.port.trigger());
+        assert_eq!(out.unreconciled, vec![q.seq]);
+        assert!(busy(&r.port));
+        assert!(r.ops.borrow().is_empty(), "the host was never asked");
+        assert_eq!(r.m.stats.vmm_overlaps, 1);
+        assert!(r.m.stats.refusals[0].contains("may never alias a VMM address"));
+    }
+
+    /// ★ P6b (b): coverage is whole pages of the family grain — a sub-page leaf is refused by
+    /// name, a big (64 KiB) leaf is taken whole, and nothing is rounded past what the guest mapped.
+    #[test]
+    fn coverage_is_whole_guest_pages_never_rounded_past_them() {
+        use crate::ledger::Desired;
+        let d = |va, len, off| Desired { va, len, off, ram: false };
+        assert!(whole_pages(&d(0x1000, 0x1000, 0x2000), SMALL_PAGE));
+        assert!(whole_pages(&d(0x1_0000, 0x1_0000, 0x3_0000), SMALL_PAGE), "a 64 KiB big page, whole");
+        assert!(!whole_pages(&d(0x1000, 0x8600, 0x2000), SMALL_PAGE), "the C's promote length");
+        assert!(!whole_pages(&d(0x1010, 0x1000, 0x2000), SMALL_PAGE));
+        assert!(!whole_pages(&d(0x1000, 0x1000, 0x2010), SMALL_PAGE));
+        let mut r = rig();
+        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0), (0x1000_1000, 0x0300_0000, 0x10, 0)]);
+        let q = guest_invalidate(&r.port, PDB_A, false);
+        r.m.on_invalidate(q, r.port.trigger());
+        let out = r.m.on_walk_ready(r.port.trigger());
+        assert_eq!(out.unreconciled, vec![q.seq]);
+        assert!(r.ops.borrow().is_empty());
+        // Exactly what the guest mapped, at the grain: a 4 KiB leaf is ONE 4 KiB map, not 64 KiB.
+        let mut r = rig();
+        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_1000, 0x0200_1000, 0x1000, 0)]);
+        let q = guest_invalidate(&r.port, PDB_A, false);
+        r.m.on_invalidate(q, r.port.trigger());
+        r.m.on_walk_ready(r.port.trigger());
+        assert_eq!(r.ops.borrow()[0].0, Op::Map(0x1000_1000, 0x0200_1000, 0x1000));
+    }
+
+    /// ★★ P6b ruling (c): a RE-published root is NOT walked at the statement (the guest migrates
+    /// its entries into it only after our reply, `dma.c:500-518`); our rows stay; the next
+    /// invalidate naming the NEW root walks it and retires what it no longer carries.
+    #[test]
+    fn a_moved_root_is_walked_at_the_next_sync_point_and_retires_the_old_rows() {
+        let mut r = rig();
+        r.tables.borrow_mut().insert(PDB_A, vec![(0x1210_1000, 0x0200_0000, 0x1000, 0), (0x1210_2000, 0x0201_0000, 0x1000, 0)]);
+        let q = guest_invalidate(&r.port, PDB_A, false);
+        r.m.on_invalidate(q, r.port.trigger());
+        r.m.on_walk_ready(r.port.trigger());
+        assert_eq!(r.m.table.ledger(K_A).unwrap().len(), 2);
+        // UVM's SET_PAGE_DIRECTORY: the new root is still empty when the statement arrives.
+        const NEW: u64 = 0x0020_0000;
+        let ch = r.m.table.set_root(K_A, NEW, PdbAperture::Vidmem).unwrap();
+        assert_eq!(ch, RootChange::Moved { old: PDB_A });
+        assert!(!ch.walk_now(), "a moved root is not walked at the statement");
+        assert_eq!(r.m.table.ledger(K_A).unwrap().resolve(0x1210_1000, 8), Some((false, 0x0200_0000)), "rows kept meanwhile");
+        // The guest migrates the RM-internal entry (one of the two) and adds its own mapping.
+        r.ops.borrow_mut().clear();
+        r.tables.borrow_mut().insert(NEW, vec![(0x1210_1000, 0x0200_0000, 0x1000, 0), (0x5000_0000, 0x0400_0000, 0x1000, 0)]);
+        // An invalidate naming the OLD root names nothing of ours now.
+        let old_q = guest_invalidate(&r.port, PDB_A, false);
+        r.m.on_invalidate(old_q, r.port.trigger());
+        assert_eq!(r.m.stats.named_missed, 1);
+        let q = guest_invalidate(&r.port, NEW, false);
+        r.m.on_invalidate(q, r.port.trigger());
+        let out = r.m.on_walk_ready(r.port.trigger());
+        assert_eq!(out.completed, vec![(q.seq, ClearOutcome::Cleared)]);
+        assert_eq!(
+            r.ops.borrow().iter().map(|(o, _)| o.clone()).collect::<Vec<_>>(),
+            vec![Op::Unmap(0x1210_2000), Op::Map(0x5000_0000, 0x0400_0000, 0x1000), Op::Invalidate],
+            "the migrated row is kept, the old root's other row retired, the new one mapped"
+        );
+        assert_eq!(r.m.table.set_root(K_B, PDB_B, PdbAperture::Vidmem), Ok(RootChange::Unchanged));
     }
 }

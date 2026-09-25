@@ -347,11 +347,13 @@ impl Device {
             mirrors,
         )?;
         let walker = kf_mem::vasmgr::GpuWalker { kernel, store_ptr, store_bytes: fb_length };
+        // ★ P6b (b): coverage at the family's smallest GMMU page.
         let mut va: crate::mem::Manager = kf_mem::vasmgr::VaManager::new(
             walker,
             fb_length,
             Box::new(move |gpa, len| ram.file_range(gpa, len).map(|(_, off)| off)),
-        );
+        )
+        .with_page_grain(family.mmu_format().small_page_bytes());
         va.table.insert(
             crate::mem::K_BAR2,
             crate::mem::Target::Window(kf_mem::cpuwin::CpuWindow::new(bar2_ops, cfg.bar2_bytes)),
@@ -848,7 +850,7 @@ impl Device {
             tm.host_calls,
         );
         let mem = format!(
-            " mem[inval={} walks={}/{} cleared={} superseded={} named_missed={} unreconciled={} mapped={} unmapped={} clipped={:#x} fn70={} roots={} stmts={recv}/{settled} refused={} pramin_repoints={} pramin_miss={} last_miss={:#x} pramin_worst_us={} (map {} mmap {}) pramin_maps={} pramin_mmaps={} inline_opens={} reaped={}]",
+            " mem[inval={} walks={}/{} cleared={} superseded={} named_missed={} unreconciled={} mapped={} unmapped={} clipped={:#x} held={} vmm_overlaps={} fn70={} roots={} root_moves={} stmts={recv}/{settled} refused={} pramin_repoints={} pramin_miss={} last_miss={:#x} pramin_worst_us={} (map {} mmap {}) pramin_maps={} pramin_mmaps={} inline_opens={} reaped={}]",
             mc.invalidates.load(o),
             va.walks_reconciled,
             va.walks_submitted,
@@ -859,8 +861,11 @@ impl Device {
             va.mapped,
             va.unmapped,
             va.clipped_bytes,
+            va.held,
+            va.vmm_overlaps,
             mc.bar_pdes.load(o),
             mc.roots.load(o),
+            mc.root_moves.load(o),
             mc.refused.load(o) + va.refusals.len() as u64,
             self.mem.pramin.repoints.load(o),
             self.mem.pramin.missed.load(o),
