@@ -1070,6 +1070,22 @@ impl DriverAbiTable {
         }
     }
 
+    /// ★★★★★ Decode the privilege level the guest's CPU-RM stamped on a channel alloc
+    /// (`internalFlags`, [`crate::notifier::ChannelPrivilege`]) — the `V3_P5_PORT_MAP.md` Q7
+    /// identity fact. `Ok(None)`: no pinned layout for this boundary, or the params stop short.
+    ///
+    /// # Errors
+    /// [`AbiError`] from the primitive reader (unreachable past the length check).
+    pub fn decode_channel_privilege(
+        &self,
+        bytes: &[u8],
+    ) -> Result<Option<crate::notifier::ChannelPrivilege>, AbiError> {
+        match self.channel_notifier {
+            Some(wire) => wire.decode_privilege(bytes),
+            None => Ok(None),
+        }
+    }
+
     /// ★★★★ §16.16 — decode the channel's declared **USERD** handle and offset.
     ///
     /// Separate from [`Self::decode_channel_alloc_facts`] for

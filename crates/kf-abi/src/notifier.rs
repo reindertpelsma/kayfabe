@@ -274,6 +274,63 @@ impl ChannelNotifierWire {
     }
 }
 
+/// ★★★★★ **The privilege level the guest's CPU-RM stamped on a channel** —
+/// `NV_CHANNEL_ALLOC_PARAMS.internalFlags` `PRIVILEGE` (1:0) and `UVM_OWNED` (7:7)
+/// (`ogkm-580: src/nvidia/generated/g_kernel_channel_nvoc.h:181-184, 202-204`).
+///
+/// ★ **A fact guest userspace cannot produce** (`V3_P5_PORT_MAP.md` Q7): `kchannelConstruct_IMPL`
+/// ZEROES the caller's `internalFlags` before anything reads it (`kernel_channel.c:215-220`, the
+/// UVM bit saved first), recomputes the level from the CALL's security context —
+/// `RS_PRIV_LEVEL_KERNEL` ⇒ `KERNEL`, admin ⇒ `ADMIN`, else `USER` (`:274-291`) — and a GSP client
+/// writes that level into the RPC's `internalFlags` (`:2803-2813`). A userspace ioctl's context is
+/// `USER` or `USER_ROOT`, never `KERNEL` (`escape.c:304`, `entry_points.c:185-193`); only an
+/// in-kernel caller (RM's internal clients, nvidia-uvm through `RMAPI_EXTERNAL_KERNEL`) reaches it.
+/// `UVM_OWNED` survives only on a `KERNEL` channel (`:296-302`).
+/// ⊘ Not `flags` bit 5 (`PRIVILEGED_CHANNEL`): a `USER` channel's request for it is NOT cleared on
+/// that path, so it reaches the wire as the caller wrote it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ChannelPrivilege {
+    /// `PRIVILEGE` 1:0 — 0 `USER`, 1 `ADMIN`, 2 `KERNEL` (3 is undefined).
+    pub level: u32,
+    /// `UVM_OWNED` 7:7.
+    pub uvm_owned: bool,
+}
+
+impl ChannelPrivilege {
+    /// `NV_KERNELCHANNEL_ALLOC_INTERNALFLAGS_PRIVILEGE_KERNEL`.
+    pub const KERNEL: u32 = 2;
+    /// `NV_KERNELCHANNEL_ALLOC_INTERNALFLAGS_PRIVILEGE_ADMIN`.
+    pub const ADMIN: u32 = 1;
+    /// `NV_KERNELCHANNEL_ALLOC_INTERNALFLAGS_PRIVILEGE_USER`.
+    pub const USER: u32 = 0;
+
+    /// Decode from `internalFlags`.
+    #[must_use]
+    pub const fn from_internal_flags(v: u32) -> Self {
+        ChannelPrivilege { level: v & 0b11, uvm_owned: (v >> 7) & 1 == 1 }
+    }
+
+    /// The guest kernel's own statement that the CALLER was kernel-privileged.
+    #[must_use]
+    pub const fn is_kernel(&self) -> bool {
+        self.level == Self::KERNEL
+    }
+}
+
+impl ChannelNotifierWire {
+    /// ★ The privilege the guest's CPU-RM stamped (see [`ChannelPrivilege`]). `Ok(None)` when the
+    /// params stop before `internalFlags` — never read as `USER` or as `KERNEL`.
+    ///
+    /// # Errors
+    /// [`AbiError`] only from the primitive reader, which the length check makes unreachable.
+    pub fn decode_privilege(&self, bytes: &[u8]) -> Result<Option<ChannelPrivilege>, AbiError> {
+        if bytes.len() < self.internal_flags + 4 {
+            return Ok(None);
+        }
+        Ok(Some(ChannelPrivilege::from_internal_flags(u32_at(bytes, self.internal_flags)?)))
+    }
+}
+
 /// ★★★★ **What a channel declared about its USERD** — §16.16, the canary object.
 ///
 /// # ⊘ Why USERD and not the ring, when the ring is what hangs

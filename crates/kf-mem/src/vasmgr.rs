@@ -269,6 +269,15 @@ enum Want {
     Invalidate(InvalidateRequest, std::time::Instant),
     /// A root changed with no invalidate behind it (Q10); nothing to clear.
     Root(VasKey),
+    /// ★ P6: a Translated channel's `MEM_OP` TLB invalidate (the split, `THE_TRANSLATED_PLANE.md`
+    /// §5/§24.2): `pdb` (`None` = `PDB_ALL`) walked and reconciled, then `ticket` reported done
+    /// through [`VaManager::take_splits`] — no trigger is involved.
+    Split {
+        /// The named root (a guest FB address), or `None` for every space.
+        pdb: Option<u64>,
+        /// The caller's ticket.
+        ticket: u64,
+    },
 }
 
 /// The walk in flight and what it answers.
@@ -319,6 +328,10 @@ pub struct VaStats {
     pub clipped_bytes: u64,
     /// ★ P5c timing (the instrument behind the mapping-plane throughput fix): per phase, summed ns.
     pub timing: VaTiming,
+    /// ★ P6: `MEM_OP` splits requested by Translated channels.
+    pub splits: u64,
+    /// ★ P6: splits naming a root no object carries (done at once — nothing of ours is stale).
+    pub split_missed: u64,
 }
 
 /// ★ P5c: where an invalidate's wall time goes, summed over every one completed — never a decision
@@ -405,6 +418,8 @@ pub struct VaManager<W: Walker, T: MapTarget> {
     ram_offset: Box<dyn Fn(u64, u64) -> Option<u64> + Send>,
     pending: Vec<Want>,
     inflight: Option<Batch>,
+    /// ★ P6: finished splits, `(ticket, outcome)`, until [`VaManager::take_splits`].
+    splits_done: Vec<(u64, Result<(), String>)>,
     /// Counters and named refusals.
     pub stats: VaStats,
 }
@@ -420,6 +435,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             ram_offset,
             pending: Vec::new(),
             inflight: None,
+            splits_done: Vec::new(),
             stats: VaStats::default(),
         }
     }
@@ -449,6 +465,20 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         self.pump(trigger);
     }
 
+    /// ★ P6: a Translated channel reached a `MEM_OP` TLB invalidate naming `pdb` (`None` =
+    /// `PDB_ALL`). **Never blocks**: queued like an invalidate; the outcome is reported under
+    /// `ticket` by [`Self::take_splits`] once every named space reconciled (or failed, by name).
+    pub fn on_split(&mut self, pdb: Option<u64>, ticket: u64, trigger: &Trigger) {
+        self.stats.splits += 1;
+        self.pending.push(Want::Split { pdb, ticket });
+        self.pump(trigger);
+    }
+
+    /// ★ P6: the splits finished since the last call, `(ticket, outcome)`.
+    pub fn take_splits(&mut self) -> Vec<(u64, Result<(), String>)> {
+        core::mem::take(&mut self.splits_done)
+    }
+
     /// A root changed with no invalidate behind it (Q10): walk `key` at the next opportunity.
     pub fn schedule_walk(&mut self, key: VasKey, trigger: &Trigger) {
         self.pending.push(Want::Root(key));
@@ -472,7 +502,19 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 Want::Invalidate(r, _) if r.inval.pdb_aperture == PdbAperture::Sysmem => Vec::new(),
                 Want::Invalidate(r, _) => self.table.keys_for_pdb(r.inval.pdb),
                 Want::Root(k) => self.table.root(k).map(|_| vec![k]).unwrap_or_default(),
+                Want::Split { pdb: None, .. } => self.table.rooted(),
+                Want::Split { pdb: Some(p), .. } => self.table.keys_for_pdb(p),
             };
+            if let Want::Split { ticket, pdb } = w {
+                if keys.is_empty() {
+                    // Nothing of ours is under that root: nothing can be stale.
+                    if pdb.is_some() {
+                        self.stats.split_missed += 1;
+                    }
+                    self.splits_done.push((ticket, Ok(())));
+                    continue;
+                }
+            }
             if let Want::Invalidate(r, _) = w {
                 if keys.is_empty() {
                     if !r.inval.all_pdb {
@@ -485,7 +527,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             batch.keys.extend(keys.iter().copied());
             let at = match w {
                 Want::Invalidate(_, at) => at,
-                Want::Root(_) => std::time::Instant::now(),
+                Want::Root(_) | Want::Split { .. } => std::time::Instant::now(),
             };
             batch.wants.push((w, keys, at));
         }
@@ -530,8 +572,10 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
     /// Every invalidate in `batch` stays armed; counted and named.
     fn refuse_batch(&mut self, batch: &Batch, why: String) {
         for (w, _, _) in &batch.wants {
-            if matches!(w, Want::Invalidate(..)) {
-                self.stats.unreconciled += 1;
+            match w {
+                Want::Invalidate(..) => self.stats.unreconciled += 1,
+                Want::Split { ticket, .. } => self.splits_done.push((*ticket, Err(why.clone()))),
+                Want::Root(_) => {}
             }
         }
         self.stats.refuse(why);
@@ -555,6 +599,9 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                         if let Want::Invalidate(r, _) = w {
                             self.stats.unreconciled += 1;
                             out.unreconciled.push(r.seq);
+                        }
+                        if let Want::Split { ticket, .. } = w {
+                            self.splits_done.push((*ticket, Err(format!("walk: {e}"))));
                         }
                     }
                 }
@@ -634,6 +681,14 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         }
         // ★ THE CLEAR IS LAST: every map above has landed and its space's ONE invalidate ran.
         for (w, keys, at) in &batch.wants {
+            if let Want::Split { ticket, pdb } = w {
+                let r = match keys.iter().find(|k| failed.contains(k)) {
+                    Some(k) => Err(format!("split {pdb:x?}: {k:?} did not reconcile")),
+                    None => Ok(()),
+                };
+                self.splits_done.push((*ticket, r));
+                continue;
+            }
             let Want::Invalidate(r, _) = w else { continue };
             if keys.iter().any(|k| failed.contains(k)) {
                 self.stats.unreconciled += 1;
@@ -982,5 +1037,35 @@ mod tests {
         assert!(out.completed.is_empty());
         assert_eq!(out.applied[0].1.mapped, 1);
         assert_eq!(r.port.trigger().issued(), 0);
+    }
+
+    /// ★ P6: a split is reported done only AFTER its space's walk reconciled — and never touches
+    /// the guest's trigger; a root we do not hold is done at once, counted.
+    #[test]
+    fn a_split_is_done_only_after_its_space_reconciles_and_leaves_the_trigger_alone() {
+        let mut r = rig();
+        r.tables.borrow_mut().insert(PDB_A, vec![(0x4000_0000, 0x0300_0000, 0x1000, 0)]);
+        r.m.on_split(Some(PDB_A), 7, r.port.trigger());
+        assert!(r.m.take_splits().is_empty(), "not before the walk");
+        assert!(r.ops.borrow().is_empty());
+        let out = r.m.on_walk_ready(r.port.trigger());
+        assert_eq!(out.applied[0].1.mapped, 1);
+        assert_eq!(r.m.take_splits(), vec![(7, Ok(()))]);
+        assert_eq!(r.port.trigger().issued(), 0, "a split is not the BAR0 trigger");
+        r.m.on_split(Some(0xdead_0000), 8, r.port.trigger());
+        assert_eq!(r.m.take_splits(), vec![(8, Ok(()))]);
+        assert_eq!(r.m.stats.split_missed, 1);
+    }
+
+    /// ★ P6: a failed walk fails the split by name (the channel then dies, never runs ahead).
+    #[test]
+    fn a_failed_walk_fails_the_split() {
+        let mut r = rig();
+        r.m.walker.fail_poll = Some("boom".into());
+        r.m.on_split(None, 9, r.port.trigger());
+        let _ = r.m.on_walk_ready(r.port.trigger());
+        let s = r.m.take_splits();
+        assert_eq!(s.len(), 1);
+        assert!(matches!(&s[0], (9, Err(e)) if e.contains("boom")));
     }
 }

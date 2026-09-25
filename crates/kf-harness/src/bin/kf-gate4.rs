@@ -164,12 +164,12 @@ impl GuestUserd for Io<'_, '_> {
     }
 }
 impl Publisher for Io<'_, '_> {
-    fn invalidated(&mut self, pdb: Option<u64>) -> Result<(), String> {
+    fn invalidated(&mut self, pdb: Option<u64>) -> Result<kf_chan::host::Split, String> {
         self.s.mm.lock().map_err(|_| "mm poisoned")?.walks.push(pdb);
         if pdb.is_some_and(|p| p != self.s.root) {
             return Err(format!("invalidate names {pdb:x?}, not the kernel root"));
         }
-        self.s.publish("at_split").map(|_| ())
+        self.s.publish("at_split").map(|_| kf_chan::host::Split::Done)
     }
 }
 

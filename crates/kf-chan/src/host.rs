@@ -216,13 +216,26 @@ pub trait GuestUserd {
     fn set_gp_get(&mut self, gp_get: u32) -> Result<(), String>;
 }
 
+/// Where a `MEM_OP` split's walk stands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Split {
+    /// Walked and published: the work after the split may run.
+    Done,
+    /// Requested (or still running) on the thread that owns the walker. The channel stays
+    /// SUSPENDED; the walker's completion rings the channel's token and the next pump asks again.
+    Pending,
+}
+
 /// Walk the named root and publish its mappings (the reconcile) — the `MEM_OP` split's work.
+///
+/// ⊘ Never a wait: a publisher whose walk runs elsewhere (the VA-manager thread) answers
+/// [`Split::Pending`] and is asked again on a later pump, never blocked on.
 pub trait Publisher {
-    /// Walk `pdb` (`None` = every space) and publish.
+    /// Walk `pdb` (`None` = every space) and publish — or report that it is under way.
     ///
     /// # Errors
     /// A failed walk or a refused publish.
-    fn invalidated(&mut self, pdb: Option<u64>) -> Result<(), String>;
+    fn invalidated(&mut self, pdb: Option<u64>) -> Result<Split, String>;
 }
 
 /// Why a Translated channel stopped. It is dead after any of these.
@@ -334,7 +347,10 @@ impl TranslatedChannel {
             if !reached(done, seq) {
                 return Ok(Pumped::Waiting);
             }
-            publisher.invalidated(pdb).map_err(ChanError::Publish)?;
+            if publisher.invalidated(pdb).map_err(ChanError::Publish)? == Split::Pending {
+                // ★ The walk runs on the VA thread; its completion rings this token again.
+                return Ok(Pumped::Waiting);
+            }
             self.walks += 1;
             self.suspended = None;
             if let Some(g) = retires {

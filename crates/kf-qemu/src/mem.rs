@@ -437,6 +437,13 @@ pub struct Inbox {
     settled: AtomicU64,
     /// The VA thread's wake.
     pub wake: Notifier,
+    /// ★ P6: `MEM_OP` splits a Translated channel asked for — `(ticket, guest token, pdb)`.
+    splits: Mutex<Vec<(u64, u32, Option<u64>)>>,
+    /// ★ P6: tickets the VA thread took and has not finished — ticket → guest token.
+    split_tokens: Mutex<std::collections::HashMap<u64, u32>>,
+    /// ★ P6: finished splits waiting for their channel's next pump.
+    split_results: Mutex<std::collections::HashMap<u64, Result<(), String>>>,
+    next_ticket: AtomicU64,
 }
 
 impl Inbox {
@@ -450,7 +457,46 @@ impl Inbox {
             received: AtomicU64::new(0),
             settled: AtomicU64::new(0),
             wake: Notifier::create().map_err(|e| format!("eventfd: {e:?}"))?,
+            splits: Mutex::new(Vec::new()),
+            split_tokens: Mutex::new(std::collections::HashMap::new()),
+            split_results: Mutex::new(std::collections::HashMap::new()),
+            next_ticket: AtomicU64::new(1),
         })
+    }
+
+    /// ★ P6, a WORKER: channel `token` reached a `MEM_OP` invalidate of `pdb` and its prior work
+    /// completed — ask the VA thread to walk + reconcile. Returns the ticket to poll. ⊘ Never waits.
+    pub fn request_split(&self, token: u32, pdb: Option<u64>) -> u64 {
+        let t = self.next_ticket.fetch_add(1, Ordering::Relaxed);
+        if let Ok(mut q) = self.splits.lock() {
+            q.push((t, token, pdb));
+        }
+        let _ = self.wake.signal();
+        t
+    }
+
+    /// ★ P6, the VA thread: the splits requested since the last call, `(ticket, pdb)`.
+    pub fn take_split_requests(&self) -> Vec<(u64, Option<u64>)> {
+        let taken = self.splits.lock().map(|mut q| std::mem::take(&mut *q)).unwrap_or_default();
+        if let Ok(mut m) = self.split_tokens.lock() {
+            for (t, tok, _) in &taken {
+                m.insert(*t, *tok);
+            }
+        }
+        taken.into_iter().map(|(t, _, p)| (t, p)).collect()
+    }
+
+    /// ★ P6, the VA thread: `ticket` finished. Returns the guest token to ring.
+    pub fn finish_split(&self, ticket: u64, r: Result<(), String>) -> Option<u32> {
+        if let Ok(mut m) = self.split_results.lock() {
+            m.insert(ticket, r);
+        }
+        self.split_tokens.lock().ok().and_then(|mut m| m.remove(&ticket))
+    }
+
+    /// ★ P6, a WORKER: `ticket`'s outcome, once (`None`: still running).
+    pub fn split_result(&self, ticket: u64) -> Option<Result<(), String>> {
+        self.split_results.lock().ok().and_then(|mut m| m.remove(&ticket))
     }
 
     /// The drainer: enqueue one statement and wake the VA thread.

@@ -283,6 +283,7 @@ impl Device {
             store.handle,
             ram,
             mirrors.clone(),
+            inbox.clone(),
             worker_efd,
             drainer_efd,
             plane.tokens.len(),
@@ -668,7 +669,23 @@ impl Device {
                 last_seq = Some(req.seq);
                 m.on_invalidate(req, trigger);
             }
+            // ★ P6: a Translated channel's `MEM_OP` split — walked with the invalidates, never a
+            // wait on the worker that asked.
+            for (ticket, pdb) in self.mem.inbox.take_split_requests() {
+                m.on_split(pdb, ticket, trigger);
+            }
             let r = m.on_walk_ready(trigger);
+            for (ticket, res) in m.take_splits() {
+                if let Err(e) = &res {
+                    eprintln!("kf3: mem t={:.3}s split ticket {ticket} REFUSED: {e}", self.born.elapsed().as_secs_f64());
+                }
+                // Ring the channel's own token: its next pump resumes after the split.
+                if let Some(tok) = self.mem.inbox.finish_split(ticket, res)
+                    && self.plane.ring_internal(tok)
+                {
+                    let _ = self.worker_efd.signal();
+                }
+            }
             if r.collected && logged < 256 {
                 logged += 1;
                 let applied: Vec<String> =
