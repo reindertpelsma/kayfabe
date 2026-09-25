@@ -258,11 +258,15 @@ impl Walker for GpuWalker {
     }
 }
 
+fn ns_since(t: std::time::Instant) -> u64 {
+    u64::try_from(t.elapsed().as_nanos()).unwrap_or(u64::MAX)
+}
+
 /// Why a walk is wanted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Want {
     /// The guest invalidated; clear its trigger once reconciled.
-    Invalidate(InvalidateRequest),
+    Invalidate(InvalidateRequest, std::time::Instant),
     /// A root changed with no invalidate behind it (Q10); nothing to clear.
     Root(VasKey),
 }
@@ -270,10 +274,12 @@ enum Want {
 /// The walk in flight and what it answers.
 #[derive(Debug)]
 struct Batch {
-    /// Each want, with the objects it named.
-    wants: Vec<(Want, Vec<VasKey>)>,
+    /// Each want, with the objects it named and when it arrived.
+    wants: Vec<(Want, Vec<VasKey>, std::time::Instant)>,
     /// Every object to reconcile.
     keys: BTreeSet<VasKey>,
+    /// When the walk was submitted.
+    submitted: std::time::Instant,
 }
 
 /// What the VA manager has done, cumulatively. Every refusal is counted AND named.
@@ -311,6 +317,34 @@ pub struct VaStats {
     /// ★ P4: walked bytes above a CPU window's extent ([`MapTarget::va_extent`]) — real in the
     /// guest's tables, no CPU address to show them at.
     pub clipped_bytes: u64,
+    /// ★ P5c timing (the instrument behind the mapping-plane throughput fix): per phase, summed ns.
+    pub timing: VaTiming,
+}
+
+/// ★ P5c: where an invalidate's wall time goes, summed over every one completed — never a decision
+/// input. `arrive→clear = wait (queued behind a walk) + walk (submit→collected) + reconcile + apply`.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct VaTiming {
+    /// Invalidates cleared (the denominator of `inval_ns`).
+    pub invals: u64,
+    /// Sum over cleared invalidates of arrival → clear.
+    pub inval_ns: u64,
+    /// The slowest arrival → clear.
+    pub inval_ns_max: u64,
+    /// Walks collected (the denominator of the next four).
+    pub walks: u64,
+    /// Sum of submit → collected (wall, on this thread's clock).
+    pub walk_ns: u64,
+    /// Sum of the walker's own GPU time.
+    pub gpu_us: u64,
+    /// Sum of leaf classification + diff against the ledger.
+    pub plan_ns: u64,
+    /// Sum of the host verbs (maps, unmaps, the invalidate).
+    pub apply_ns: u64,
+    /// Leaves in the last walk (all spaces).
+    pub leaves_last: u64,
+    /// Host verbs issued (maps + unmaps + invalidates).
+    pub host_calls: u64,
 }
 
 impl VaStats {
@@ -391,7 +425,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
     /// ★ A published invalidate. **Never blocks**: it queues, and submits a walk if none is in
     /// flight. `trigger` is the port's, for a request that can be cleared without a walk.
     pub fn on_invalidate(&mut self, req: InvalidateRequest, trigger: &Trigger) {
-        self.pending.push(Want::Invalidate(req));
+        self.pending.push(Want::Invalidate(req, std::time::Instant::now()));
         self.pump(trigger);
     }
 
@@ -407,18 +441,19 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             return;
         }
         let wants = core::mem::take(&mut self.pending);
-        let mut batch = Batch { wants: Vec::with_capacity(wants.len()), keys: BTreeSet::new() };
+        let mut batch =
+            Batch { wants: Vec::with_capacity(wants.len()), keys: BTreeSet::new(), submitted: std::time::Instant::now() };
         let mut vacuous: Vec<u64> = Vec::new();
         for w in wants {
             let keys = match w {
-                Want::Invalidate(r) if r.inval.all_pdb => self.table.rooted(),
+                Want::Invalidate(r, _) if r.inval.all_pdb => self.table.rooted(),
                 // ⊘ We hold no sysmem-rooted space (`set_root` refuses them), so a sysmem PDB
                 // names nothing of ours — a miss, like an unknown vidmem PDB.
-                Want::Invalidate(r) if r.inval.pdb_aperture == PdbAperture::Sysmem => Vec::new(),
-                Want::Invalidate(r) => self.table.keys_for_pdb(r.inval.pdb),
+                Want::Invalidate(r, _) if r.inval.pdb_aperture == PdbAperture::Sysmem => Vec::new(),
+                Want::Invalidate(r, _) => self.table.keys_for_pdb(r.inval.pdb),
                 Want::Root(k) => self.table.root(k).map(|_| vec![k]).unwrap_or_default(),
             };
-            if let Want::Invalidate(r) = w {
+            if let Want::Invalidate(r, _) = w {
                 if keys.is_empty() {
                     if !r.inval.all_pdb {
                         self.stats.named_missed += 1;
@@ -428,7 +463,11 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 }
             }
             batch.keys.extend(keys.iter().copied());
-            batch.wants.push((w, keys));
+            let at = match w {
+                Want::Invalidate(_, at) => at,
+                Want::Root(_) => std::time::Instant::now(),
+            };
+            batch.wants.push((w, keys, at));
         }
         // Nothing of ours is named: nothing can be stale, so the clear is honest now.
         for seq in vacuous {
@@ -458,6 +497,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         match r {
             Ok(()) => {
                 self.stats.walks_submitted += 1;
+                batch.submitted = std::time::Instant::now();
                 self.inflight = Some(batch);
             }
             Err(e) => {
@@ -469,8 +509,8 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
 
     /// Every invalidate in `batch` stays armed; counted and named.
     fn refuse_batch(&mut self, batch: &Batch, why: String) {
-        for (w, _) in &batch.wants {
-            if matches!(w, Want::Invalidate(_)) {
+        for (w, _, _) in &batch.wants {
+            if matches!(w, Want::Invalidate(..)) {
                 self.stats.unreconciled += 1;
             }
         }
@@ -491,8 +531,8 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             Err(e) => {
                 self.stats.walks_refused += 1;
                 if let Some(b) = self.inflight.take() {
-                    for (w, _) in &b.wants {
-                        if let Want::Invalidate(r) = w {
+                    for (w, _, _) in &b.wants {
+                        if let Want::Invalidate(r, _) = w {
                             self.stats.unreconciled += 1;
                             out.unreconciled.push(r.seq);
                         }
@@ -509,6 +549,11 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             return out;
         };
         self.stats.walks_reconciled += 1;
+        let tm = &mut self.stats.timing;
+        tm.walks += 1;
+        tm.walk_ns += ns_since(batch.submitted);
+        tm.gpu_us += done.gpu_us;
+        tm.leaves_last = done.spaces.iter().map(|s| s.leaves.len() as u64).sum();
         let walked: BTreeMap<u64, &WalkedSpace> = done.spaces.iter().map(|s| (s.pdb, s)).collect();
         let mut failed: BTreeSet<VasKey> = BTreeSet::new();
         for &key in &batch.keys {
@@ -537,6 +582,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 }
                 None => &ws.leaves,
             };
+            let t_plan = std::time::Instant::now();
             let desired = match desired_from_leaves(leaves.iter().copied(), store, &*self.ram_offset) {
                 Ok(d) => d,
                 Err(e) => {
@@ -546,7 +592,11 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 }
             };
             let plan = plan_reconcile(&space.ledger.rows(), &desired);
+            let t_apply = std::time::Instant::now();
+            self.stats.timing.plan_ns += u64::try_from((t_apply - t_plan).as_nanos()).unwrap_or(u64::MAX);
             let a = space.ledger.apply_to(&space.target, &plan);
+            self.stats.timing.apply_ns += ns_since(t_apply);
+            self.stats.timing.host_calls += (a.mapped + a.unmapped + a.refused) as u64 + u64::from(a.invalidated);
             self.stats.mapped += a.mapped as u64;
             self.stats.unmapped += a.unmapped as u64;
             self.stats.host_invalidates += u64::from(a.invalidated);
@@ -563,14 +613,19 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             out.applied.push((key, a));
         }
         // ★ THE CLEAR IS LAST: every map above has landed and its space's ONE invalidate ran.
-        for (w, keys) in &batch.wants {
-            let Want::Invalidate(r) = w else { continue };
+        for (w, keys, at) in &batch.wants {
+            let Want::Invalidate(r, _) = w else { continue };
             if keys.iter().any(|k| failed.contains(k)) {
                 self.stats.unreconciled += 1;
                 out.unreconciled.push(r.seq);
             } else {
                 let o = trigger.complete(r.seq);
                 self.stats.outcome(o);
+                let ns = ns_since(*at);
+                let tm = &mut self.stats.timing;
+                tm.invals += 1;
+                tm.inval_ns += ns;
+                tm.inval_ns_max = tm.inval_ns_max.max(ns);
                 out.completed.push((r.seq, o));
             }
         }

@@ -797,6 +797,21 @@ impl Device {
         let mc = &self.mem.counters;
         let va = self.va_stats.lock().map(|v| v.clone()).unwrap_or_default();
         let (recv, settled) = self.mem.inbox.counts();
+        let tm = &va.timing;
+        let avg = |sum: u64, n: u64| if n == 0 { 0 } else { sum / n / 1000 };
+        let timing = format!(
+            " vat[invals={} arrive->clear_avg_us={} max_us={} walks={} walk_avg_us={} gpu_avg_us={} plan_avg_us={} apply_avg_us={} leaves={} host_calls={}]",
+            tm.invals,
+            avg(tm.inval_ns, tm.invals),
+            tm.inval_ns_max / 1000,
+            tm.walks,
+            avg(tm.walk_ns, tm.walks),
+            if tm.walks == 0 { 0 } else { tm.gpu_us / tm.walks },
+            avg(tm.plan_ns, tm.walks),
+            avg(tm.apply_ns, tm.walks),
+            tm.leaves_last,
+            tm.host_calls,
+        );
         let mem = format!(
             " mem[inval={} walks={}/{} cleared={} superseded={} named_missed={} unreconciled={} mapped={} unmapped={} clipped={:#x} fn70={} roots={} stmts={recv}/{settled} refused={} pramin_repoints={} pramin_miss={} last_miss={:#x} pramin_worst_us={} (map {} mmap {}) pramin_maps={} pramin_mmaps={} inline_opens={} reaped={}]",
             mc.invalidates.load(o),
@@ -822,7 +837,7 @@ impl Device {
             self.mem.pramin.mmaps.load(o),
             self.mem.pramin_trap.inline_opens.load(o),
             self.mem.pramin_trap.reaped.load(o),
-        );
+        ) + &timing;
         let ws = &self.worker_stats;
         let toks: Vec<String> = self
             .chans
