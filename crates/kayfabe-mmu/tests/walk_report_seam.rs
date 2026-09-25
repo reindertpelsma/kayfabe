@@ -45,7 +45,7 @@ use kayfabe_mmu::walkreport::{
 
 /// Where `cuda/walk` lives, relative to this crate.
 fn walk_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../cuda/walk")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../cuda/walk-v2-frozen")
 }
 
 /// The C compiler to use. ⊘ Not optional: `cargo test` already needed a linker to get here, so

@@ -166,7 +166,7 @@ fn main() {
     // on them. It changed only when an unrelated edit to `cudawalk.rs` re-ran this script.
     println!(
         "cargo::rerun-if-changed={}",
-        root.join("cuda").join("walk").join("kf_walk.ptx").display()
+        root.join("cuda").join("walk-v2-frozen").join("kf_walk.ptx").display()
     );
     println!(
         "cargo::rerun-if-changed={}",

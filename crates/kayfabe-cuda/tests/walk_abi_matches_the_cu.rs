@@ -98,9 +98,9 @@ fn extract_define(src: &str, name: &str) -> String {
 #[test]
 fn the_rust_mirror_matches_the_cu_byte_for_byte() {
     let root = repo_root();
-    let cu = std::fs::read_to_string(root.join("cuda/walk/kf_walk.cu"))
+    let cu = std::fs::read_to_string(root.join("cuda/walk-v2-frozen/kf_walk.cu"))
         .expect("cuda/walk/kf_walk.cu is part of this repository");
-    let h = std::fs::read_to_string(root.join("cuda/walk/kf_walk.h"))
+    let h = std::fs::read_to_string(root.join("cuda/walk-v2-frozen/kf_walk.h"))
         .expect("cuda/walk/kf_walk.h is part of this repository");
 
     // ⊘ `KF_DIRS` and `KF_MAX_PDB` are read from the source rather than restated here, so a
@@ -351,8 +351,8 @@ fn extract_fn(src: &str, sig: &str) -> String {
 #[test]
 fn the_rust_ver2_descriptor_matches_the_cu_byte_for_byte() {
     let root = repo_root();
-    let cu = std::fs::read_to_string(root.join("cuda/walk/kf_walk.cu")).expect("the .cu");
-    let h = std::fs::read_to_string(root.join("cuda/walk/kf_walk.h")).expect("the .h");
+    let cu = std::fs::read_to_string(root.join("cuda/walk-v2-frozen/kf_walk.cu")).expect("the .cu");
+    let h = std::fs::read_to_string(root.join("cuda/walk-v2-frozen/kf_walk.h")).expect("the .h");
     let kf_dirs = extract_define(&cu, "KF_DIRS");
 
     let mut prog = String::new();
@@ -525,7 +525,7 @@ fn the_committed_ptx_is_turing_targeted() {
 #[test]
 fn the_report_constants_match_the_header() {
     let root = repo_root();
-    let h = std::fs::read_to_string(root.join("cuda/walk/kf_walk.h")).expect("the .h");
+    let h = std::fs::read_to_string(root.join("cuda/walk-v2-frozen/kf_walk.h")).expect("the .h");
     let parse = |name: &str| -> u64 {
         let v = extract_define(&h, name);
         // `0x5257464Bu`, `(1u << 0)`, `0u` — the three spellings the header actually uses.

@@ -26,7 +26,7 @@ const ACKED_BYTE_OFFSET: u64 = core::mem::offset_of!(KfDev, acked) as u64;
 /// time"*. Embedding it makes that literally true of the shipped artifact — there is no path
 /// at run time from which a different program could be read, which also means the sandbox has
 /// nothing to grant for it.
-pub static WALK_PTX: &[u8] = include_bytes!("../../../cuda/walk/kf_walk.ptx");
+pub static WALK_PTX: &[u8] = include_bytes!("../../../cuda/walk-v2-frozen/kf_walk.ptx");
 
 /// The mangled entry points of the committed PTX. ⊘ **Mangled**, because `kf_walk.cu` is C++
 /// and its `__global__` functions are not `extern "C"`. Asserted present at module load, so a
