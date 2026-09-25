@@ -125,6 +125,24 @@ the GA106 bench (host 580.159.04); `v3_gates.sh` 8/8 PASS at `20cc4888`.
     their physical-mode work — and the guest is now TOLD (`RC_TRIGGERED` ×4), so `UVM_REGISTER_GPU`
     fails `0x60` instead of spinning to the budget. Q7 still decides the route.
 
+**STATUS UPDATE, 2026-09-25 (P6, branch `v3-p6uvm`, rev `74af47f1`): the Q7 identity rule is
+BUILT and PROPOSED; UVM's channels are Translated and execute; the two UVM arms are not yet PASS.**
+Built (each on the GA106 bench): (1) the Q7 kernel-identity rule from RM's `internalFlags.PRIVILEGE`
+stamp (see Q7 below, PROPOSED — needs owner approval before merge to `v3`); (2) the `MEM_OP`
+TLB-invalidate split routed through the P4 VA-manager thread (`VaManager::on_split`/`take_splits`;
+the channel SUSPENDS at the split and resumes on the walk's completion fd — no wait on a worker
+stack); (3) a Translated ring reading a **VIDMEM** GPFIFO/pushbuffer (UVM's default) through CPU
+views WE arm over the store (Q3, previously refused by name); (4) a FIXED reconcile map onto a VA
+host RM already holds treated as success (the C's `:7935-7938` semantic), which unblocked
+`UVM_REGISTER_GPU`.
+`[measured p6a→p6b]` nvidia-uvm's four CE channels now BORN Translated (Q7 positive), `REGISTER_GPU`
+went from a hang / `0x60` to `rmStatus 0x0`, and channel token 0x3 executed to `gp=2`.
+⊘ **NOT yet PASS**: `--uvm-invalidate` still TIMES OUT — a Translated ring died reading a GP entry
+whose VA was `not placed by us`, and a reconcile `unmap` refused `Other(87)`: the sub-page / overlap
+reconcile hole (the C rounds every promote-derived mapping UP TO 64 KiB, `asize = (size+0xffff)&~0xffffull`;
+this port binds at the declared length) and a possible UVM externally-owned-VAS PDB decode issue
+(its `SET_PAGE_DIRECTORY` root read as `0x0`). These are mapping-plane coverage, not identity.
+
 **Q8 (NEW, needs an owner decision). `--ce-client-guest-ram` cannot fit 60 s under "full walk + full
 diff per invalidate".** It declares 13 000 rows in each of two spaces, one invalidate per map
 (~26 000 invalidates). Every invalidate re-walks and re-diffs the WHOLE space: `[measured e3]` GPU walk
@@ -137,7 +155,64 @@ diffs against a GPU-resident copy of OUR ledger (our placements, not the guest's
 "shadow" v3 §4.2 forbids?), or dirty-tracking of the guest's page-table pages; (b) a parallel
 emission kernel (PTX regeneration + the CUDA suite) — halves the constant, does not change the order.
 
-**Q7 (NEW, needs an owner decision). An unforgeable "guest kernel" identity for a channel.**
+**★★★ Q7 — ANSWERED (PROPOSED, pending owner approval), 2026-09-25 (w827, branch `v3-p6uvm`).**
+
+**The rule.** A channel is a GUEST-KERNEL channel — Translated route (option (a)) — iff a fact
+guest userspace cannot produce says so:
+
+1. the guest's CPU-RM stamped **`internalFlags.PRIVILEGE = KERNEL`** on its `GSP_RM_ALLOC` of the
+   channel, or
+2. its `hClient` is in the guest RM's internal-handle range (`serverIsClientInternal`,
+   `0xC1E00000`, the pre-existing test).
+
+Everything else is a user channel and stays Passthrough. Code: `kf_rm::chanlink::kernel_channel`;
+the stamp is decoded by `kf_abi::notifier::ChannelPrivilege` (`internalFlags` PRIVILEGE 1:0,
+UVM_OWNED 7:7) per pinned ABI boundary.
+
+**Why the stamp is unforgeable (ogkm proof).** `kchannelConstruct_IMPL`
+(`kernel_channel.c:215-220`) **zeroes the caller's `internalFlags`** before reading anything, then
+recomputes the level from the CALL's security context — `RS_PRIV_LEVEL_KERNEL ⇒ KERNEL`, admin ⇒
+`ADMIN`, else `USER` (`:274-291`) — and a GSP client re-encodes that level into the RPC's
+`internalFlags` (`:2803-2813`). A userspace ioctl's security context is `USER` or `USER_ROOT`,
+never `KERNEL` (`escape.c:304`, `entry_points.c:185-193`; `XlateUserModeArgsToSecInfo`); only an
+in-kernel RM caller — RM's internal clients, and **nvidia-uvm** through the kernel RMAPI — reaches
+`RS_PRIV_LEVEL_KERNEL`. `UVM_OWNED` survives only on a `KERNEL` channel (`:296-302`).
+⊘ NOT `flags` bit 5 (`NVOS04_FLAGS_PRIVILEGED_CHANNEL`): on the GSP-client path that request is
+NOT cleared for a `USER` caller, so it reaches the wire as guest userspace wrote it — the raw
+client's route-K probe reads it back to measure exactly that (`K_BIT5`). And NOT the `KERNEL_PID`
+sentinel, which `[measured p5bd]` a sandboxed guest process also declares.
+
+**Positive test (measured, GA106, `74af47f1`, arm `--uvm-invalidate`/`--uvm-mean`).** nvidia-uvm's
+four CE channels are born **Translated**, each stamped `PRIVILEGE=KERNEL+UVM_OWNED`; RM's two
+CeUtils channels are Translated by `PRIVILEGE=KERNEL rm-internal`:
+```
+chan 0xc1d00001:0xcaf00012 BORN Translated ... kernel_by=PRIVILEGE=KERNEL+UVM_OWNED   (nvidia-uvm)
+chan 0xc1e00006:0x2        BORN Translated ... kernel_by=PRIVILEGE=KERNEL rm-internal  (CeUtils)
+```
+⊘ Verified against ogkm that guest userspace cannot issue/target the privileged path: the level is
+computed from the kernel security context, not read from the caller's buffer (above).
+
+**Negative test (measured).** The raw client's own channels (`hClient=0xc1d0000b`, `PRIVILEGE=USER`)
+and route-K's sandboxed-isolate client (`0xc1d0000c`, an unprivileged guest process that DOES
+declare the forgeable `KERNEL_PID` sentinel) are born **Passthrough** — a physical operand there
+faults on the unprivileged host twin (a failure, never an escalation), which is the correct bar.
+Unit-pinned in `chanlink::only_a_kernel_stamp_or_the_internal_range_is_kernel` (ADMIN, USER, a bare
+`UVM_OWNED` bit and an undecodable alloc are all NOT kernel).
+
+**Why misclassing is safe in exactly one direction.** A user channel wrongly classed kernel would
+be Translated, whose `fbAliasVA` rewrite turns a physical operand into a store / guest-RAM window
+address — guest userspace reaching guest-kernel memory. The stamp forecloses that: no userspace
+caller can reach `KERNEL`. The converse (a kernel channel wrongly classed user) only faults the
+host twin.
+
+**Status of the route itself.** With the rule in place, UVM's channels take the Translated route;
+`UVM_REGISTER_GPU` completes (`rmStatus 0x0`, was the `0x60` wall) and the channels execute (GP
+entries fetched on the real engine). The remaining work to drive `--uvm-invalidate`/`--uvm-mean`
+to PASS is Translated data-plane coverage, not identity — see the P6 status block above.
+
+---
+
+**Q7 (ORIGINAL — the open statement this answers).**
 nvidia-uvm's CE channels are the guest kernel's and produce physical operands (§57), so they
 belong on the Translated route — but the only wire fact naming them kernel (the `KERNEL_PID`
 sentinel) is also declared by a guest user process (`[measured p5bd]`). Measured today with UVM
