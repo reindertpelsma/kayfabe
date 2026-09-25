@@ -79,7 +79,9 @@ git -C "$S/llama.cpp" log --oneline -1 | sed 's/^/LLAMA_REV=/'
 
 # ---- clpeak (OpenCL peak) -----------------------------------------------------------------------
 apt-get install -y -qq ocl-icd-opencl-dev opencl-headers >/dev/null 2>&1
-[ -d "$S/clpeak" ] || git clone -q --depth 1 --recurse-submodules https://github.com/krrishnarraj/clpeak.git "$S/clpeak"
+# 1.1.2 = the OpenCL-only release; HEAD grew CUDA fp8 backends whose ptxas needs sm_89
+git -C "$S/clpeak" describe --tags 2>/dev/null | grep -q '^1\.1\.2' || rm -rf "$S/clpeak"
+[ -d "$S/clpeak" ] || git clone -q --depth 1 --branch 1.1.2 --recurse-submodules https://github.com/krrishnarraj/clpeak.git "$S/clpeak"
 ( cd "$S/clpeak" && rm -rf build && cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ >/tmp/build_clpeak.log 2>&1 && cmake --build build -j"$(nproc)" >>/tmp/build_clpeak.log 2>&1 ) \
   && cp -u "$S/clpeak/build/clpeak" "$B/bin/"
 [ -x "$B/bin/clpeak" ]; ok clpeak $?
