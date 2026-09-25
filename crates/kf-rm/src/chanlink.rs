@@ -63,6 +63,10 @@ const NV83DE_ALLOC_PARAMS_SIZE: usize = 12;
 /// `NV83DE_CTRL_CMD_DEBUG_SET_EXCEPTION_MASK` — a 4-byte `exceptionMask`, an RM-internal event
 /// filter that programs no hardware (`ctrl83dedebug.h:158-231`).
 pub const DEBUG_SET_EXCEPTION_MASK: u32 = 0x83de_0309;
+/// `NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE` (`ctrl2080gr.h:818-826`), 32 bytes, all `[IN]`.
+pub const GR_SET_CTXSW_PREEMPTION_MODE: u32 = 0x2080_1210;
+/// `NVA06C_CTRL_CMD_SET_TIMESLICE` (`ctrla06c.h:146-152`): `{NvU64 timesliceUs}`.
+pub const TSG_SET_TIMESLICE: u32 = 0xa06c_0103;
 
 /// ★ v3-chanctl: a `DISABLE_CHANNELS` list as a `Copy` value (`(hClient, hChannel)` × `n`, ≤ 64).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -209,6 +213,30 @@ pub enum ChanStatement {
         object: u32,
         /// `exceptionMask` (`NV83DE_CTRL_DEBUG_SET_EXCEPTION_MASK_*`).
         mask: u32,
+    },
+    /// ★ w827: `GR_SET_CTXSW_PREEMPTION_MODE` for the guest's channel or TSG `channel` — what
+    /// `cuCtxCreate` asks right after its debugger (`[measured host_reference_ga106 ctx_r1 i=426]`:
+    /// `flags=CILP, cilpPreemptMode=CILP` on the context's TSG).
+    CtxswPreemption {
+        /// `hClient`.
+        client: u32,
+        /// `hChannel` — a channel or (on the `cuCtxCreate` path) a TSG handle.
+        channel: u32,
+        /// `flags` (`_FLAGS_CILP` bit 0, `_FLAGS_GFXP` bit 1).
+        flags: u32,
+        /// `gfxpPreemptMode`.
+        gfxp: u32,
+        /// `cilpPreemptMode`.
+        cilp: u32,
+    },
+    /// ★ w827: `SET_TIMESLICE` on a TSG (`[measured ctx_r1 i=427]`: 2048 µs).
+    Timeslice {
+        /// `hClient`.
+        client: u32,
+        /// The TSG.
+        object: u32,
+        /// `timesliceUs`.
+        us: u64,
     },
     /// `GET_WORK_SUBMIT_TOKEN` on a channel.
     Token {
@@ -572,6 +600,30 @@ impl ChannelPolicy {
                 ChanStatement::Schedule { client: h.client, object: h.object, enable: params.first().is_some_and(|&b| b != 0) }
             }
             GET_WORK_SUBMIT_TOKEN => ChanStatement::Token { client: h.client, object: h.object },
+            GR_SET_CTXSW_PREEMPTION_MODE => {
+                if !self.abi.capabilities().control(kf_arch::ids::ControlCmd(h.cmd)).is_permitted() {
+                    return None;
+                }
+                let w = |i: usize| params.get(4 * i..4 * i + 4).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]));
+                if params.len() != 32 {
+                    return Some(Self::refusal(NV_ERR_INVALID_ARGUMENT, &format!("SET_CTXSW_PREEMPTION_MODE params are {} bytes, not 32", params.len()), cmd));
+                }
+                // ⊘ grRouteInfo (+16 flags, +24 route) selects a GR engine under MIG; this device has
+                // one GR and no MIG, so a route is refused by name rather than ignored.
+                if w(4)? != 0 || w(6)? != 0 || w(7)? != 0 {
+                    return Some(Self::refusal(NV_ERR_INVALID_ARGUMENT, "SET_CTXSW_PREEMPTION_MODE with a grRouteInfo (MIG routing) is not served", cmd));
+                }
+                ChanStatement::CtxswPreemption { client: h.client, channel: w(1)?, flags: w(0)?, gfxp: w(2)?, cilp: w(3)? }
+            }
+            TSG_SET_TIMESLICE => {
+                if !self.abi.capabilities().control(kf_arch::ids::ControlCmd(h.cmd)).is_permitted() {
+                    return None;
+                }
+                let Some(us) = params.get(..8).filter(|_| params.len() == 8).map(|b| u64::from_le_bytes([b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]])) else {
+                    return Some(Self::refusal(NV_ERR_INVALID_ARGUMENT, &format!("SET_TIMESLICE params are {} bytes, not 8", params.len()), cmd));
+                };
+                ChanStatement::Timeslice { client: h.client, object: h.object, us }
+            }
             DEBUG_SET_EXCEPTION_MASK => {
                 if !self.abi.capabilities().control(kf_arch::ids::ControlCmd(h.cmd)).is_permitted() {
                     return None;

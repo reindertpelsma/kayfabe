@@ -361,6 +361,31 @@ impl HostRm {
         self.raw_control(debugger, 0x83de_0309, &mut params)
     }
 
+    /// ★ w827: `NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE` for `chan`'s GROUP, on our
+    /// subdevice, with the guest's requested `flags`/modes and no route (`ctrl2080gr.h:818-842`).
+    /// Unprivileged (`NON_PRIVILEGED`, `g_subdevice_nvoc.c`); host RM validates the modes.
+    ///
+    /// # Errors
+    /// The host's status.
+    pub fn set_ctxsw_preemption_mode(&self, chan: Channel, flags: u32, gfxp: u32, cilp: u32) -> Result<(), RmError> {
+        let mut p = [0u8; 32];
+        p[0..4].copy_from_slice(&flags.to_le_bytes());
+        p[4..8].copy_from_slice(&chan.tsg.to_le_bytes());
+        p[8..12].copy_from_slice(&gfxp.to_le_bytes());
+        p[12..16].copy_from_slice(&cilp.to_le_bytes());
+        self.raw_control(self.subdevice, 0x2080_1210, &mut p)
+    }
+
+    /// ★ w827: `NVA06C_CTRL_CMD_SET_TIMESLICE` on `chan`'s group (`ctrla06c.h:146-152`) — host RM
+    /// rounds to what the hardware supports and refuses what it does not.
+    ///
+    /// # Errors
+    /// The host's status.
+    pub fn set_timeslice(&self, chan: Channel, us: u64) -> Result<(), RmError> {
+        let mut p = us.to_le_bytes();
+        self.raw_control(chan.tsg, 0xa06c_0103, &mut p)
+    }
+
     /// `GPFIFO_SCHEDULE` (`bEnable = 1`) on the channel's group — the channel starts fetching.
     ///
     /// # Errors

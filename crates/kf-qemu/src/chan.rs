@@ -888,6 +888,53 @@ impl ChanPlane {
                     }),
                 )
             }
+            ChanStatement::CtxswPreemption { client, channel, flags, gfxp, cilp } => {
+                // The guest's channel, or every twin of the guest's TSG — GR twins only: the mode
+                // is a GR context property (a CE twin in the group has none).
+                let twins: Vec<kf_host::Channel> = self
+                    .pt
+                    .lock()
+                    .map(|m| {
+                        m.iter()
+                            .filter(|(k, v)| k.0 == client && (k.1 == channel || v.tsg == Some(channel)) && v.engine == kf_abi::submit::ENGINE_TYPE_GRAPHICS)
+                            .map(|(_, v)| v.chan)
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                if twins.is_empty() {
+                    return ChanAnswer::NotOurs;
+                }
+                self.defer(
+                    "ctxsw preemption",
+                    Box::new(move |me: &ChanPlane| {
+                        for c in &twins {
+                            me.rm
+                                .set_ctxsw_preemption_mode(*c, flags, gfxp, cilp)
+                                .map_err(|e| (NV_ERR_NOT_SUPPORTED, format!("twin host {:#x} SET_CTXSW_PREEMPTION_MODE: {e:?}", c.token)))?;
+                        }
+                        Ok(format!("{client:#x}:{channel:#x} SET_CTXSW_PREEMPTION_MODE flags={flags:#x} gfxp={gfxp} cilp={cilp} on {} GR twin(s)", twins.len()))
+                    }),
+                )
+            }
+            ChanStatement::Timeslice { client, object, us } => {
+                let twins: Vec<kf_host::Channel> = self
+                    .pt
+                    .lock()
+                    .map(|m| m.iter().filter(|(k, v)| k.0 == client && v.tsg == Some(object)).map(|(_, v)| v.chan).collect())
+                    .unwrap_or_default();
+                if twins.is_empty() {
+                    return ChanAnswer::NotOurs;
+                }
+                self.defer(
+                    "timeslice",
+                    Box::new(move |me: &ChanPlane| {
+                        for c in &twins {
+                            me.rm.set_timeslice(*c, us).map_err(|e| (NV_ERR_INVALID_ARGUMENT, format!("twin host {:#x} SET_TIMESLICE {us}: {e:?}", c.token)))?;
+                        }
+                        Ok(format!("{client:#x}:{object:#x} SET_TIMESLICE {us} us on {} twin group(s)", twins.len()))
+                    }),
+                )
+            }
             ChanStatement::Free { client, object } => self.free(client, object),
             ChanStatement::PromoteCtx { chan_client, object, engine_type, initialize, with_va, entries } => {
                 self.promote_ctx(chan_client, object, engine_type, initialize, with_va, entries)
