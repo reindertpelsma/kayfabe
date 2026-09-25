@@ -347,6 +347,26 @@ pub struct VaTiming {
     pub host_calls: u64,
 }
 
+impl VaTiming {
+    /// The counters accumulated since `prev` (a later snapshot minus an earlier one; the two
+    /// "last"/"max" fields are taken from `self`).
+    #[must_use]
+    pub fn since(&self, prev: &VaTiming) -> VaTiming {
+        VaTiming {
+            invals: self.invals.saturating_sub(prev.invals),
+            inval_ns: self.inval_ns.saturating_sub(prev.inval_ns),
+            inval_ns_max: self.inval_ns_max,
+            walks: self.walks.saturating_sub(prev.walks),
+            walk_ns: self.walk_ns.saturating_sub(prev.walk_ns),
+            gpu_us: self.gpu_us.saturating_sub(prev.gpu_us),
+            plan_ns: self.plan_ns.saturating_sub(prev.plan_ns),
+            apply_ns: self.apply_ns.saturating_sub(prev.apply_ns),
+            leaves_last: self.leaves_last,
+            host_calls: self.host_calls.saturating_sub(prev.host_calls),
+        }
+    }
+}
+
 impl VaStats {
     fn refuse(&mut self, why: String) {
         if self.refusals.len() < 16 {

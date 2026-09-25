@@ -151,6 +151,8 @@ pub struct Device {
     stop: AtomicBool,
     /// Boot-log counters.
     pub counters: Counters,
+    /// ★ P5c: the VA timing at the previous heartbeat (the heartbeat prints the window).
+    vat_prev: Mutex<kf_mem::vasmgr::VaTiming>,
 }
 
 fn parse_version(s: &str) -> Option<kf_abi::DriverVersion> {
@@ -402,6 +404,7 @@ impl Device {
             drainer_efd,
             stop: AtomicBool::new(false),
             counters: Counters::default(),
+            vat_prev: Mutex::new(kf_mem::vasmgr::VaTiming::default()),
         })
     }
 
@@ -797,7 +800,15 @@ impl Device {
         let mc = &self.mem.counters;
         let va = self.va_stats.lock().map(|v| v.clone()).unwrap_or_default();
         let (recv, settled) = self.mem.inbox.counts();
-        let tm = &va.timing;
+        // ★ P5c: the window since the last heartbeat (the cumulative mean hides growth).
+        let tm = &match self.vat_prev.lock() {
+            Ok(mut p) => {
+                let d = va.timing.since(&p);
+                *p = va.timing.clone();
+                d
+            }
+            Err(_) => va.timing.clone(),
+        };
         let avg = |sum: u64, n: u64| if n == 0 { 0 } else { sum / n / 1000 };
         let nm = self.mem.counters.mirrors.load(Ordering::Relaxed);
         let timing = format!(

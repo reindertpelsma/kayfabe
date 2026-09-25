@@ -199,52 +199,43 @@ pub fn plan_reconcile(ledger: &[(u64, u64, u64, bool)], desired: &[Desired]) -> 
         }
     }
     kept.sort_unstable();
-    // Kept rows, as `(va, end)` for the overlap search (ledger rows are disjoint: ends ascend).
-    let kept_spans: Vec<(u64, u64)> = kept.iter().map(|&(va, len, _, _)| (va, va.saturating_add(len))).collect();
-    let spans_sorted = kept_spans.windows(2).all(|w| w[0].1 <= w[1].1);
-    let mut dropped: std::collections::BTreeSet<u64> = std::collections::BTreeSet::new();
-    let mut mapped = vec![false; desired.len()];
-    // ⊘ P5c: iterate to a fixed point. The old single pass checked every desired run against ALL
-    // kept rows, then dropped kept rows overlapping an unbacked run — so a run that only a
-    // since-dropped row backed was skipped AND left unmapped. A second pass checks the survivors.
-    loop {
-        let alive = |ram: bool| -> Vec<(u64, u64, u64)> {
-            kept.iter()
-                .filter(|k| k.3 == ram && !dropped.contains(&k.0))
-                .map(|&(va, len, off, _)| (va, off, len))
-                .collect()
-        };
-        let (have_store, have_ram) = (alive(false), alive(true));
-        let (hs_sorted, hr_sorted) = (ends_sorted(&have_store), ends_sorted(&have_ram));
-        let mut changed = false;
-        for (i, d) in desired.iter().enumerate() {
-            if mapped[i] {
-                continue;
+    // ★★ P5c: a desired run is completed by mapping ONLY its uncovered gaps — never by dropping
+    // the kept rows under it and re-mapping it whole. Sound because a kept row is backed, byte for
+    // byte at the same offset, by desired runs of its ground truth, and desired runs are disjoint
+    // (one leaf per VA): so a kept row overlapping `d` agrees with `d` over the overlap, and no
+    // kept row of the OTHER ground truth can overlap `d` at all.
+    // ⊘ `[measured e2, 1a93c1df]` the old rule re-mapped a run every time the walk coalesced one
+    // more adjacent page into it: `unmapped=5579` for `mapped=8611` while the guest only ADDED
+    // rows, `apply_avg_us` 397 — the host map of an ever-longer run, per invalidate.
+    let spans: Vec<(u64, u64)> = kept.iter().map(|&(va, len, _, _)| (va, va.saturating_add(len))).collect();
+    let spans_sorted = spans.windows(2).all(|w| w[0].1 <= w[1].1 && w[0].0 <= w[1].0);
+    for d in desired {
+        let d_end = d.va.saturating_add(d.len);
+        let from = if spans_sorted { spans.partition_point(|&(_, e)| e <= d.va) } else { 0 };
+        let mut at = d.va;
+        let mut cover: Vec<(u64, u64)> = Vec::new();
+        for &(kva, kend) in &spans[from.min(spans.len())..] {
+            if spans_sorted && kva >= d_end {
+                break;
             }
-            let (have, sorted) = if d.ram { (&have_ram, hr_sorted) } else { (&have_store, hs_sorted) };
-            if backed_from(d.va, d.off, d.len, have, first_reaching(have, d.va, sorted)) {
-                continue;
-            }
-            mapped[i] = true;
-            changed = true;
-            let d_end = d.va.saturating_add(d.len);
-            let from = if spans_sorted { kept_spans.partition_point(|&(_, e)| e <= d.va) } else { 0 };
-            for (j, &(kva, kend)) in kept_spans.iter().enumerate().skip(from) {
-                if spans_sorted && kva >= d_end {
-                    break;
-                }
-                let overlaps = kva < d_end && d.va < kend;
-                if overlaps && dropped.insert(kva) {
-                    plan.unmap.push((kva, kept[j].1));
-                }
+            if kva < d_end && d.va < kend {
+                cover.push((kva.max(d.va), kend.min(d_end)));
             }
         }
-        if !changed {
-            break;
+        if !spans_sorted {
+            cover.sort_unstable();
+        }
+        for (cs, ce) in cover {
+            if cs > at {
+                plan.map.push(Desired { va: at, len: cs - at, off: d.off + (at - d.va), ram: d.ram });
+            }
+            at = at.max(ce);
+        }
+        if at < d_end {
+            plan.map.push(Desired { va: at, len: d_end - at, off: d.off + (at - d.va), ram: d.ram });
         }
     }
-    plan.map = desired.iter().zip(&mapped).filter(|(_, m)| **m).map(|(d, _)| *d).collect();
-    plan.kept = kept.len() - dropped.len();
+    plan.kept = kept.len();
     plan
 }
 
@@ -556,7 +547,7 @@ mod plan_tests {
         ];
         let plan = plan_reconcile(&ledger, &desired);
         check(&ledger, &desired, &plan);
-        assert_eq!(plan.map.len(), 2);
+        assert_eq!(plan.map, vec![Desired { va: 0x2000, len: 0x1000, off: 0x10_2000, ram: false }], "only the gap");
     }
 
     /// A small deterministic generator (no dependency): random disjoint layouts, random edits.
@@ -611,6 +602,11 @@ mod plan_tests {
         let plan = plan_reconcile(&ledger, &desired);
         let el = t.elapsed();
         assert_eq!((plan.map.len(), plan.unmap.len(), plan.kept), (1, 0, 12_999));
+        // ★ A run that GROWS by one page (the walk coalesced it) maps one page, not the run.
+        let grown = [Desired { va: 0x1_0000_0000, len: 0x3000, off: 0, ram: true }];
+        let plan = plan_reconcile(&[(0x1_0000_0000, 0x2000, 0, true)], &grown);
+        assert_eq!(plan.map, vec![Desired { va: 0x1_0000_2000, len: 0x1000, off: 0x2000, ram: true }]);
+        assert!(plan.unmap.is_empty());
         assert!(el < std::time::Duration::from_millis(200), "{el:?}");
     }
 }
