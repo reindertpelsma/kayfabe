@@ -213,13 +213,17 @@ impl ChannelPolicy {
                 crate::rmrpc::translate(&self.abi, self.guest_os, cmd)
                 && matches!(facts.client_kind, Some(kf_arch::ClientKind::Kernel))
             {
-                self.kernel_clients.insert(h.handle);
+                // ⊘ `hClient`, not `hObject`: a root alloc's wire `hObject` is 0
+                // (`[measured p5bc]` every root logged `client 0x0`), so P5's set held only `0` and
+                // no guest-kernel client outside RM's internal handle range was ever kernel — the
+                // real cause of p5a's "internal clients are not marked by the pid sentinel".
+                self.kernel_clients.insert(h.client);
             }
             eprintln!(
                 "kf-rm: chanlink: client {:#x} root: kernel={} internal={}",
-                h.handle,
-                self.kernel_clients.contains(&h.handle),
-                is_rm_internal_client(h.handle)
+                h.client,
+                self.kernel_clients.contains(&h.client),
+                is_rm_internal_client(h.client)
             );
             return None;
         }
