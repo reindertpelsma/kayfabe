@@ -307,6 +307,16 @@ impl Walker for GpuWalker {
                 r.runs.len()
             );
         }
+        // DIAG (P6b, temporary): a root that walked to NOTHING — show its first 64 bytes.
+        for (i, p) in r.pdbs.iter().enumerate() {
+            if !r.runs.iter().any(|m| usize::from(m.pdb_index) == i) && p.pdb + 64 <= self.store_bytes {
+                let mut b = [0u8; 64];
+                if self.kernel.read_at(self.store_ptr + p.pdb, &mut b).is_ok() {
+                    let w: Vec<u64> = b.chunks(8).map(|c| u64::from_le_bytes(c.try_into().unwrap_or([0; 8]))).collect();
+                    eprintln!("kf3: DIAG empty walk pdb={:#x} root words={w:x?}", p.pdb);
+                }
+            }
+        }
         let mut spaces: Vec<WalkedSpace> =
             r.pdbs.iter().map(|p| WalkedSpace { pdb: p.pdb, leaves: Vec::new() }).collect();
         for m in &r.runs {
