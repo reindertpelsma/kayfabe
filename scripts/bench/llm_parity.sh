@@ -51,6 +51,12 @@ hook)
     $G 'cat > /opt/llm/run_llm_graph.py' < "$HERE/run_llm_graph.py" || { echo "LP_OUTCOME=runner-install-failed"; exit 0; }
     run() { $G "cd /opt/llm && env HF_HOME=/opt/llm/hf LLM_DEVICE=cuda LLM_MODEL=$MODEL $* \
                 timeout $TMO /home/ubuntu/llmvenv/bin/python ${RUNNER:-run_llm.py} 2>&1" 2>&1 | tr -d '\r'; }
+    # LP_GUEST_PM=1: persistence mode ON in the guest first (the guest otherwise tears the adapter
+    # down — a full emulated-GSP unload/reboot — whenever its last client closes, i.e. per process).
+    if [ "${LP_GUEST_PM:-0}" = 1 ]; then
+        LANE=guest_pm
+        echo "LP_GUEST_PM=$($G 'sudo nvidia-smi -pm 1 2>&1; nvidia-smi --query-gpu=persistence_mode --format=csv,noheader' 2>&1 | tr -d '\r' | tr '\n' ' ')"
+    fi
     SNAP=$($G "ls /opt/llm/hf/hub/models--${MODEL//\//--}/snapshots" 2>/dev/null | tr -d '\r' | tr '\n' ' ')
     echo "LP_GUEST_SMI=$($G 'nvidia-smi --query-gpu=name,driver_version --format=csv,noheader' 2>&1 | tr -d '\r' | head -1)"
     echo "LP_GUEST_NPROC=$($G nproc 2>&1 | tr -d '\r') LP_GUEST_MEM=$($G "free -m | awk '/Mem:/{print \$2}'" 2>&1 | tr -d '\r')"

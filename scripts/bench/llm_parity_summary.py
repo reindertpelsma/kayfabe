@@ -44,24 +44,24 @@ for (lane, kind, n, key), v in list(M.items()):
         toks = M[(lane, kind, n, 'LLM_TOKENS')]
         M[(lane, kind, n, 'short_tok_s')] = [t * 1000.0 / ms for t, ms in zip(toks, v) if ms > 0]
 
-lanes = sorted({k[0] for k in M}, key=lambda l: (l != 'guest', l))
+lanes = sorted({k[0] for k in M}, key=lambda l: (not l.startswith('guest'), l))
+guests = [l for l in lanes if l.startswith('guest')]
+others = [l for l in lanes if not l.startswith('guest')]
+pairs = [(g, o) for g in guests for o in others]
 rows = sorted({(k[1], k[2], k[3]) for k in M})
 def fmt(v):
     if not v: return '-'
     mu = st.mean(v)
     return '%.2f [%.2f..%.2f] n=%d' % (mu, min(v), max(v), len(v))
-print('| kind | ntok | metric | ' + ' | '.join(lanes) + ' | ' +
-      ' | '.join('guest/' + l for l in lanes if l != 'guest') + ' |')
-print('|' + '---|' * (3 + len(lanes) + len([l for l in lanes if l != 'guest'])))
+print('| kind | ntok | metric | ' + ' | '.join(lanes) + ' | ' + ' | '.join('%s/%s' % p for p in pairs) + ' |')
+print('|' + '---|' * (3 + len(lanes) + len(pairs)))
 for kind, n, key in rows:
     if key in ('LLM_TOKENS', 'LLM_OK'): continue
     vals = [M.get((l, kind, n, key), []) for l in lanes]
     rat = []
-    g = M.get(('guest', kind, n, key), [])
-    for l in lanes:
-        if l == 'guest': continue
-        o = M.get((l, kind, n, key), [])
-        rat.append('%.3f' % (st.mean(g) / st.mean(o)) if g and o and st.mean(o) else '-')
+    for g, o in pairs:
+        a, b = M.get((g, kind, n, key), []), M.get((o, kind, n, key), [])
+        rat.append('%.3f' % (st.mean(a) / st.mean(b)) if a and b and st.mean(b) else '-')
     print('| %s | %d | %s | %s | %s |' % (kind, n, key, ' | '.join(fmt(v) for v in vals), ' | '.join(rat)))
 print()
 for (kind, n), s in sorted(SHA.items()):
