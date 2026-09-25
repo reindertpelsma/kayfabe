@@ -1,0 +1,166 @@
+LP_JOB_START
+LP_START lane=vc date=2026-09-25T19:30:54+00:00 model=Qwen/Qwen2-0.5B-Instruct snapshot=[c540970f9e29518b1d8f06ab8b24cba66ad77b6d] short=3 long=512,2048 x3 warm=1
+LP lane=vc kind=short ntok=16 proc=1 LLM_DEVICE=cuda
+LP lane=vc kind=short ntok=16 proc=1 TORCH_CUDA_AVAILABLE=True
+LP lane=vc kind=short ntok=16 proc=1 TORCH_DEV_COUNT=1
+LP lane=vc kind=short ntok=16 proc=1 LLM_PARAM_DEVICE=cuda
+LP lane=vc kind=short ntok=16 proc=1 LLM_RATIO_ELIGIBLE=1
+LP lane=vc kind=short ntok=16 proc=1 LLM_TEXT= ______. A. Paris B. London C. New York D
+LP lane=vc kind=short ntok=16 proc=1 LLM_TEXT_SHA256=51e95abb645c421494a10e6e218bfc494ec69ae995947126fa9c0c08f18d20fa
+LP lane=vc kind=short ntok=16 proc=1 LLM_OK=1
+LP lane=vc kind=short ntok=16 proc=1 LLM_TOKENS=16
+LP lane=vc kind=short ntok=16 proc=1 LLM_MS=1295.6
+LP lane=vc kind=short ntok=16 proc=1 LLM_RC=0
+LP_EXT lane=vc kind=short ntok=16 proc=1 ext_ms=11562 rc=0
+LP lane=vc kind=short ntok=16 proc=2 LLM_DEVICE=cuda
+LP lane=vc kind=short ntok=16 proc=2 TORCH_CUDA_AVAILABLE=True
+LP lane=vc kind=short ntok=16 proc=2 TORCH_DEV_COUNT=1
+LP lane=vc kind=short ntok=16 proc=2 LLM_PARAM_DEVICE=cuda
+LP lane=vc kind=short ntok=16 proc=2 LLM_RATIO_ELIGIBLE=1
+LP lane=vc kind=short ntok=16 proc=2 LLM_TEXT= ______. A. Paris B. London C. New York D
+LP lane=vc kind=short ntok=16 proc=2 LLM_TEXT_SHA256=51e95abb645c421494a10e6e218bfc494ec69ae995947126fa9c0c08f18d20fa
+LP lane=vc kind=short ntok=16 proc=2 LLM_OK=1
+LP lane=vc kind=short ntok=16 proc=2 LLM_TOKENS=16
+LP lane=vc kind=short ntok=16 proc=2 LLM_MS=1123.2
+LP lane=vc kind=short ntok=16 proc=2 LLM_RC=0
+LP_EXT lane=vc kind=short ntok=16 proc=2 ext_ms=10220 rc=0
+LP lane=vc kind=short ntok=16 proc=3 LLM_DEVICE=cuda
+LP lane=vc kind=short ntok=16 proc=3 TORCH_CUDA_AVAILABLE=True
+LP lane=vc kind=short ntok=16 proc=3 TORCH_DEV_COUNT=1
+LP lane=vc kind=short ntok=16 proc=3 LLM_PARAM_DEVICE=cuda
+LP lane=vc kind=short ntok=16 proc=3 LLM_RATIO_ELIGIBLE=1
+LP lane=vc kind=short ntok=16 proc=3 LLM_TEXT= ______. A. Paris B. London C. New York D
+LP lane=vc kind=short ntok=16 proc=3 LLM_TEXT_SHA256=51e95abb645c421494a10e6e218bfc494ec69ae995947126fa9c0c08f18d20fa
+LP lane=vc kind=short ntok=16 proc=3 LLM_OK=1
+LP lane=vc kind=short ntok=16 proc=3 LLM_TOKENS=16
+LP lane=vc kind=short ntok=16 proc=3 LLM_MS=1175.1
+LP lane=vc kind=short ntok=16 proc=3 LLM_RC=0
+LP_EXT lane=vc kind=short ntok=16 proc=3 ext_ms=10183 rc=0
+LP lane=vc kind=long ntok=512 proc=1 LLM_DEVICE=cuda
+LP lane=vc kind=long ntok=512 proc=1 TORCH_CUDA_AVAILABLE=True
+LP lane=vc kind=long ntok=512 proc=1 TORCH_DEV_COUNT=1
+LP lane=vc kind=long ntok=512 proc=1 LLM_T_IMPORT_MS=4332.9
+LP lane=vc kind=long ntok=512 proc=1 LLM_TORCH=2.6.0+cu124 LLM_TRANSFORMERS=5.17.0
+LP lane=vc kind=long ntok=512 proc=1 LLM_T_CUINIT_MS=204.4
+LP lane=vc kind=long ntok=512 proc=1 LLM_GPU=NVIDIA GeForce RTX 3060
+LP lane=vc kind=long ntok=512 proc=1 LLM_T_LOAD_MS=3073.6
+LP lane=vc kind=long ntok=512 proc=1 LLM_T_TODEV_MS=365.3
+LP lane=vc kind=long ntok=512 proc=1 LLM_PARAM_DEVICE=cuda
+LP lane=vc kind=long ntok=512 proc=1 LLM_RATIO_ELIGIBLE=1
+LP lane=vc kind=long ntok=512 proc=1 LLM_RUN 0 cold ntok=512 ms=18700.9 tok_s=27.378 ttft_ms=606.9 decode_tok_s=28.242 same_text=1
+LP lane=vc kind=long ntok=512 proc=1 LLM_RUN 1 warm ntok=512 ms=17760.5 tok_s=28.828 ttft_ms=39.1 decode_tok_s=28.836 same_text=1
+LP lane=vc kind=long ntok=512 proc=1 LLM_TEXT= ______. A. Paris B. London C. New York D. Tokyo 答案: A  在Windows中，当一个应用程序窗口被最小化后，该应用程序将____。 A. 继续在前台运行 B. 被暂停执行 C. 被转入后台执行 D. 被终止执行 答案: C  下列关于计算机病毒的叙述中，正确的是______。 A. 计算机病毒是一种有逻辑错误的程序 B. 计算机病毒是通过磁盘引导扇区传染的 C. 计算机病毒可以通过读写磁盘或网络等方式进行传播 D. 计算机病毒发作时会破坏硬盘上的数据 答案: C  以下关于Windows 7操作系统说法不正确的是______。 A. Windows 7操作系统可以安装在多个型号的CPU上 B. Windows 7操作系统可以安装在多种类型的主板上 C. Windows 7操作系统可以安装在多种类型的内存上 D. Windows 7操作系统可以安装在多种类型的硬盘上 答案: C  在Windows中，如果要查找文件名的第2个字符为“a”的所有文件，其正确的搜索路径是______。 A. C:\Documents and Settings\用户名\My Documents\aa B. C:\Documents and Settings\用户名\My Documents\aa C. C:\Documents and Settings\用户名\My Documents\aa D. C:\Documents and Settings\用户名\My Documents\aa 答案: A  在Windows中，若要同时改变窗口的高度和宽度，应该采用的操作是______。 A. 改变鼠标操作中的缩放比例 B. 改变水平滚动条的显示位置 C. 使用组合键Alt+Tab D. 使用菜单栏中的“属性”命令 答案: A  在Windows中，为了防止他人修改注册表，应采取的措施是______。 A. 在注册表编辑器中禁用对注册表项的修改 B. 在注册表编辑器中禁用对注册表项的删除 C. 在注册表编辑器中禁用对注册表项的添加 D. 在注册表编辑器中禁用对注册表项的查询 答案: A  在Windows中，用户可以使用键盘上的______键来移动窗口的位置。 A. Ctrl+Up B. Ctrl
+LP lane=vc kind=long ntok=512 proc=1 LLM_TEXT_SHA256=3f2387f2ff8e28f57f05a78ffd35dcc9c5c4c74e192eaecfb1bb558bdcae1512
+LP lane=vc kind=long ntok=512 proc=1 LLM_T_PROC_MS=44442.1
+LP lane=vc kind=long ntok=512 proc=1 LLM_OK=1
+LP lane=vc kind=long ntok=512 proc=1 LLM_TOKENS=512
+LP lane=vc kind=long ntok=512 proc=1 LLM_MS=18700.9
+LP lane=vc kind=long ntok=512 proc=1 LLM_RC=0
+LP_EXT lane=vc kind=long ntok=512 proc=1 ext_ms=45444 rc=0
+LP lane=vc kind=long ntok=512 proc=2 LLM_DEVICE=cuda
+LP lane=vc kind=long ntok=512 proc=2 TORCH_CUDA_AVAILABLE=True
+LP lane=vc kind=long ntok=512 proc=2 TORCH_DEV_COUNT=1
+LP lane=vc kind=long ntok=512 proc=2 LLM_T_IMPORT_MS=4238.4
+LP lane=vc kind=long ntok=512 proc=2 LLM_TORCH=2.6.0+cu124 LLM_TRANSFORMERS=5.17.0
+LP lane=vc kind=long ntok=512 proc=2 LLM_T_CUINIT_MS=199.0
+LP lane=vc kind=long ntok=512 proc=2 LLM_GPU=NVIDIA GeForce RTX 3060
+LP lane=vc kind=long ntok=512 proc=2 LLM_T_LOAD_MS=3024.7
+LP lane=vc kind=long ntok=512 proc=2 LLM_T_TODEV_MS=398.0
+LP lane=vc kind=long ntok=512 proc=2 LLM_PARAM_DEVICE=cuda
+LP lane=vc kind=long ntok=512 proc=2 LLM_RATIO_ELIGIBLE=1
+LP lane=vc kind=long ntok=512 proc=2 LLM_RUN 0 cold ntok=512 ms=18904.3 tok_s=27.084 ttft_ms=620.4 decode_tok_s=27.948 same_text=1
+LP lane=vc kind=long ntok=512 proc=2 LLM_RUN 1 warm ntok=512 ms=18320.2 tok_s=27.947 ttft_ms=40.9 decode_tok_s=27.956 same_text=1
+LP lane=vc kind=long ntok=512 proc=2 LLM_TEXT= ______. A. Paris B. London C. New York D. Tokyo 答案: A  在Windows中，当一个应用程序窗口被最小化后，该应用程序将____。 A. 继续在前台运行 B. 被暂停执行 C. 被转入后台执行 D. 被终止执行 答案: C  下列关于计算机病毒的叙述中，正确的是______。 A. 计算机病毒是一种有逻辑错误的程序 B. 计算机病毒是通过磁盘引导扇区传染的 C. 计算机病毒可以通过读写磁盘或网络等方式进行传播 D. 计算机病毒发作时会破坏硬盘上的数据 答案: C  以下关于Windows 7操作系统说法不正确的是______。 A. Windows 7操作系统可以安装在多个型号的CPU上 B. Windows 7操作系统可以安装在多种类型的主板上 C. Windows 7操作系统可以安装在多种类型的内存上 D. Windows 7操作系统可以安装在多种类型的硬盘上 答案: C  在Windows中，如果要查找文件名的第2个字符为“a”的所有文件，其正确的搜索路径是______。 A. C:\Documents and Settings\用户名\My Documents\aa B. C:\Documents and Settings\用户名\My Documents\aa C. C:\Documents and Settings\用户名\My Documents\aa D. C:\Documents and Settings\用户名\My Documents\aa 答案: A  在Windows中，若要同时改变窗口的高度和宽度，应该采用的操作是______。 A. 改变鼠标操作中的缩放比例 B. 改变水平滚动条的显示位置 C. 使用组合键Alt+Tab D. 使用菜单栏中的“属性”命令 答案: A  在Windows中，为了防止他人修改注册表，应采取的措施是______。 A. 在注册表编辑器中禁用对注册表项的修改 B. 在注册表编辑器中禁用对注册表项的删除 C. 在注册表编辑器中禁用对注册表项的添加 D. 在注册表编辑器中禁用对注册表项的查询 答案: A  在Windows中，用户可以使用键盘上的______键来移动窗口的位置。 A. Ctrl+Up B. Ctrl
+LP lane=vc kind=long ntok=512 proc=2 LLM_TEXT_SHA256=3f2387f2ff8e28f57f05a78ffd35dcc9c5c4c74e192eaecfb1bb558bdcae1512
+LP lane=vc kind=long ntok=512 proc=2 LLM_T_PROC_MS=45089.4
+LP lane=vc kind=long ntok=512 proc=2 LLM_OK=1
+LP lane=vc kind=long ntok=512 proc=2 LLM_TOKENS=512
+LP lane=vc kind=long ntok=512 proc=2 LLM_MS=18904.3
+LP lane=vc kind=long ntok=512 proc=2 LLM_RC=0
+LP_EXT lane=vc kind=long ntok=512 proc=2 ext_ms=46114 rc=0
+LP lane=vc kind=long ntok=512 proc=3 LLM_DEVICE=cuda
+LP lane=vc kind=long ntok=512 proc=3 TORCH_CUDA_AVAILABLE=True
+LP lane=vc kind=long ntok=512 proc=3 TORCH_DEV_COUNT=1
+LP lane=vc kind=long ntok=512 proc=3 LLM_T_IMPORT_MS=4720.3
+LP lane=vc kind=long ntok=512 proc=3 LLM_TORCH=2.6.0+cu124 LLM_TRANSFORMERS=5.17.0
+LP lane=vc kind=long ntok=512 proc=3 LLM_T_CUINIT_MS=202.0
+LP lane=vc kind=long ntok=512 proc=3 LLM_GPU=NVIDIA GeForce RTX 3060
+LP lane=vc kind=long ntok=512 proc=3 LLM_T_LOAD_MS=2836.2
+LP lane=vc kind=long ntok=512 proc=3 LLM_T_TODEV_MS=390.3
+LP lane=vc kind=long ntok=512 proc=3 LLM_PARAM_DEVICE=cuda
+LP lane=vc kind=long ntok=512 proc=3 LLM_RATIO_ELIGIBLE=1
+LP lane=vc kind=long ntok=512 proc=3 LLM_RUN 0 cold ntok=512 ms=19272.6 tok_s=26.566 ttft_ms=607.5 decode_tok_s=27.378 same_text=1
+LP lane=vc kind=long ntok=512 proc=3 LLM_RUN 1 warm ntok=512 ms=18261.2 tok_s=28.038 ttft_ms=42.0 decode_tok_s=28.048 same_text=1
+LP lane=vc kind=long ntok=512 proc=3 LLM_TEXT= ______. A. Paris B. London C. New York D. Tokyo 答案: A  在Windows中，当一个应用程序窗口被最小化后，该应用程序将____。 A. 继续在前台运行 B. 被暂停执行 C. 被转入后台执行 D. 被终止执行 答案: C  下列关于计算机病毒的叙述中，正确的是______。 A. 计算机病毒是一种有逻辑错误的程序 B. 计算机病毒是通过磁盘引导扇区传染的 C. 计算机病毒可以通过读写磁盘或网络等方式进行传播 D. 计算机病毒发作时会破坏硬盘上的数据 答案: C  以下关于Windows 7操作系统说法不正确的是______。 A. Windows 7操作系统可以安装在多个型号的CPU上 B. Windows 7操作系统可以安装在多种类型的主板上 C. Windows 7操作系统可以安装在多种类型的内存上 D. Windows 7操作系统可以安装在多种类型的硬盘上 答案: C  在Windows中，如果要查找文件名的第2个字符为“a”的所有文件，其正确的搜索路径是______。 A. C:\Documents and Settings\用户名\My Documents\aa B. C:\Documents and Settings\用户名\My Documents\aa C. C:\Documents and Settings\用户名\My Documents\aa D. C:\Documents and Settings\用户名\My Documents\aa 答案: A  在Windows中，若要同时改变窗口的高度和宽度，应该采用的操作是______。 A. 改变鼠标操作中的缩放比例 B. 改变水平滚动条的显示位置 C. 使用组合键Alt+Tab D. 使用菜单栏中的“属性”命令 答案: A  在Windows中，为了防止他人修改注册表，应采取的措施是______。 A. 在注册表编辑器中禁用对注册表项的修改 B. 在注册表编辑器中禁用对注册表项的删除 C. 在注册表编辑器中禁用对注册表项的添加 D. 在注册表编辑器中禁用对注册表项的查询 答案: A  在Windows中，用户可以使用键盘上的______键来移动窗口的位置。 A. Ctrl+Up B. Ctrl
+LP lane=vc kind=long ntok=512 proc=3 LLM_TEXT_SHA256=3f2387f2ff8e28f57f05a78ffd35dcc9c5c4c74e192eaecfb1bb558bdcae1512
+LP lane=vc kind=long ntok=512 proc=3 LLM_T_PROC_MS=45687.1
+LP lane=vc kind=long ntok=512 proc=3 LLM_OK=1
+LP lane=vc kind=long ntok=512 proc=3 LLM_TOKENS=512
+LP lane=vc kind=long ntok=512 proc=3 LLM_MS=19272.6
+LP lane=vc kind=long ntok=512 proc=3 LLM_RC=0
+LP_EXT lane=vc kind=long ntok=512 proc=3 ext_ms=46643 rc=0
+LP lane=vc kind=long ntok=2048 proc=1 LLM_DEVICE=cuda
+LP lane=vc kind=long ntok=2048 proc=1 TORCH_CUDA_AVAILABLE=True
+LP lane=vc kind=long ntok=2048 proc=1 TORCH_DEV_COUNT=1
+LP lane=vc kind=long ntok=2048 proc=1 LLM_T_IMPORT_MS=4381.0
+LP lane=vc kind=long ntok=2048 proc=1 LLM_TORCH=2.6.0+cu124 LLM_TRANSFORMERS=5.17.0
+LP lane=vc kind=long ntok=2048 proc=1 LLM_T_CUINIT_MS=208.2
+LP lane=vc kind=long ntok=2048 proc=1 LLM_GPU=NVIDIA GeForce RTX 3060
+LP lane=vc kind=long ntok=2048 proc=1 LLM_T_LOAD_MS=3011.9
+LP lane=vc kind=long ntok=2048 proc=1 LLM_T_TODEV_MS=271.2
+LP lane=vc kind=long ntok=2048 proc=1 LLM_PARAM_DEVICE=cuda
+LP lane=vc kind=long ntok=2048 proc=1 LLM_RATIO_ELIGIBLE=1
+LP lane=vc kind=long ntok=2048 proc=1 LLM_RUN 0 cold ntok=2048 ms=71802.6 tok_s=28.523 ttft_ms=655.9 decode_tok_s=28.772 same_text=1
+LP lane=vc kind=long ntok=2048 proc=1 LLM_RUN 1 warm ntok=2048 ms=72818.1 tok_s=28.125 ttft_ms=39.0 decode_tok_s=28.126 same_text=1
+LP lane=vc kind=long ntok=2048 proc=1 LLM_TEXT= ______. A. Paris B. London C. New York D. Tokyo 答案: A  在Windows中，当一个应用程序窗口被最小化后，该应用程序将____。 A. 继续在前台运行 B. 被暂停执行 C. 被转入后台执行 D. 被终止执行 答案: C  下列关于计算机病毒的叙述中，正确的是______。 A. 计算机病毒是一种有逻辑错误的程序 B. 计算机病毒是通过磁盘引导扇区传染的 C. 计算机病毒可以通过读写磁盘或网络等方式进行传播 D. 计算机病毒发作时会破坏硬盘上的数据 答案: C  以下关于Windows 7操作系统说法不正确的是______。 A. Windows 7操作系统可以安装在多个型号的CPU上 B. Windows 7操作系统可以安装在多种类型的主板上 C. Windows 7操作系统可以安装在多种类型的内存上 D. Windows 7操作系统可以安装在多种类型的硬盘上 答案: C  在Windows中，如果要查找文件名的第2个字符为“a”的所有文件，其正确的搜索路径是______。 A. C:\Documents and Settings\用户名\My Documents\aa B. C:\Documents and Settings\用户名\My Documents\aa C. C:\Documents and Settings\用户名\My Documents\aa D. C:\Documents and Settings\用户名\My Documents\aa 答案: A  在Windows中，若要同时改变窗口的高度和宽度，应该采用的操作是______。 A. 改变鼠标操作中的缩放比例 B. 改变水平滚动条的显示位置 C. 使用组合键Alt+Tab D. 使用菜单栏中的“属性”命令 答案: A  在Windows中，为了防止他人修改注册表，应采取的措施是______。 A. 在注册表编辑器中禁用对注册表项的修改 B. 在注册表编辑器中禁用对注册表项的删除 C. 在注册表编辑器中禁用对注册表项的添加 D. 在注册表编辑器中禁用对注册表项的查询 答案: A  在Windows中，用户可以使用键盘上的______键来移动窗口的位置。 A. Ctrl+Up B. Ctrl+Down C. Ctrl+End D. Ctrl+Home 答案: D  在Windows中，如果要查看当前正在运行的应用程序，可以单击桌面空白处，然后选择“任务栏”中的图标，再从弹出的下拉列表中选择需要的应用程序。______ A. 正确 B. 错误 答案: A  在Windows中，如果要打开“我的电脑”窗口，可以按快捷键______。 A. Ctrl+Esc B. Ctrl+Tab C. Ctrl+空格 D. Ctrl+Shift 答案: A   在Windows中，如果要打开“我的电脑”窗口，可以按快捷键______。 A. Ctrl+Esc B. Ctrl+Tab C. Ctrl+空格 D. Ctrl+Shift 答案: A.  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：
+LP lane=vc kind=long ntok=2048 proc=1 LLM_TEXT_SHA256=0ec987059539a8b9dff67642631a9bf1b67f2ff5c5f66ca250ce16de2e32dbad
+LP lane=vc kind=long ntok=2048 proc=1 LLM_T_PROC_MS=152498.8
+LP lane=vc kind=long ntok=2048 proc=1 LLM_OK=1
+LP lane=vc kind=long ntok=2048 proc=1 LLM_TOKENS=2048
+LP lane=vc kind=long ntok=2048 proc=1 LLM_MS=71802.6
+LP lane=vc kind=long ntok=2048 proc=1 LLM_RC=0
+LP_EXT lane=vc kind=long ntok=2048 proc=1 ext_ms=153529 rc=0
+LP lane=vc kind=long ntok=2048 proc=2 LLM_DEVICE=cuda
+LP lane=vc kind=long ntok=2048 proc=2 TORCH_CUDA_AVAILABLE=True
+LP lane=vc kind=long ntok=2048 proc=2 TORCH_DEV_COUNT=1
+LP lane=vc kind=long ntok=2048 proc=2 LLM_T_IMPORT_MS=4755.4
+LP lane=vc kind=long ntok=2048 proc=2 LLM_TORCH=2.6.0+cu124 LLM_TRANSFORMERS=5.17.0
+LP lane=vc kind=long ntok=2048 proc=2 LLM_T_CUINIT_MS=215.3
+LP lane=vc kind=long ntok=2048 proc=2 LLM_GPU=NVIDIA GeForce RTX 3060
+LP lane=vc kind=long ntok=2048 proc=2 LLM_T_LOAD_MS=2980.8
+LP lane=vc kind=long ntok=2048 proc=2 LLM_T_TODEV_MS=276.1
+LP lane=vc kind=long ntok=2048 proc=2 LLM_PARAM_DEVICE=cuda
+LP lane=vc kind=long ntok=2048 proc=2 LLM_RATIO_ELIGIBLE=1
+LP lane=vc kind=long ntok=2048 proc=2 LLM_RUN 0 cold ntok=2048 ms=73124.6 tok_s=28.007 ttft_ms=660.2 decode_tok_s=28.248 same_text=1
+LP lane=vc kind=long ntok=2048 proc=2 LLM_RUN 1 warm ntok=2048 ms=70992.7 tok_s=28.848 ttft_ms=38.5 decode_tok_s=28.850 same_text=1
+LP lane=vc kind=long ntok=2048 proc=2 LLM_TEXT= ______. A. Paris B. London C. New York D. Tokyo 答案: A  在Windows中，当一个应用程序窗口被最小化后，该应用程序将____。 A. 继续在前台运行 B. 被暂停执行 C. 被转入后台执行 D. 被终止执行 答案: C  下列关于计算机病毒的叙述中，正确的是______。 A. 计算机病毒是一种有逻辑错误的程序 B. 计算机病毒是通过磁盘引导扇区传染的 C. 计算机病毒可以通过读写磁盘或网络等方式进行传播 D. 计算机病毒发作时会破坏硬盘上的数据 答案: C  以下关于Windows 7操作系统说法不正确的是______。 A. Windows 7操作系统可以安装在多个型号的CPU上 B. Windows 7操作系统可以安装在多种类型的主板上 C. Windows 7操作系统可以安装在多种类型的内存上 D. Windows 7操作系统可以安装在多种类型的硬盘上 答案: C  在Windows中，如果要查找文件名的第2个字符为“a”的所有文件，其正确的搜索路径是______。 A. C:\Documents and Settings\用户名\My Documents\aa B. C:\Documents and Settings\用户名\My Documents\aa C. C:\Documents and Settings\用户名\My Documents\aa D. C:\Documents and Settings\用户名\My Documents\aa 答案: A  在Windows中，若要同时改变窗口的高度和宽度，应该采用的操作是______。 A. 改变鼠标操作中的缩放比例 B. 改变水平滚动条的显示位置 C. 使用组合键Alt+Tab D. 使用菜单栏中的“属性”命令 答案: A  在Windows中，为了防止他人修改注册表，应采取的措施是______。 A. 在注册表编辑器中禁用对注册表项的修改 B. 在注册表编辑器中禁用对注册表项的删除 C. 在注册表编辑器中禁用对注册表项的添加 D. 在注册表编辑器中禁用对注册表项的查询 答案: A  在Windows中，用户可以使用键盘上的______键来移动窗口的位置。 A. Ctrl+Up B. Ctrl+Down C. Ctrl+End D. Ctrl+Home 答案: D  在Windows中，如果要查看当前正在运行的应用程序，可以单击桌面空白处，然后选择“任务栏”中的图标，再从弹出的下拉列表中选择需要的应用程序。______ A. 正确 B. 错误 答案: A  在Windows中，如果要打开“我的电脑”窗口，可以按快捷键______。 A. Ctrl+Esc B. Ctrl+Tab C. Ctrl+空格 D. Ctrl+Shift 答案: A   在Windows中，如果要打开“我的电脑”窗口，可以按快捷键______。 A. Ctrl+Esc B. Ctrl+Tab C. Ctrl+空格 D. Ctrl+Shift 答案: A.  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：
+LP lane=vc kind=long ntok=2048 proc=2 LLM_TEXT_SHA256=0ec987059539a8b9dff67642631a9bf1b67f2ff5c5f66ca250ce16de2e32dbad
+LP lane=vc kind=long ntok=2048 proc=2 LLM_T_PROC_MS=152350.8
+LP lane=vc kind=long ntok=2048 proc=2 LLM_OK=1
+LP lane=vc kind=long ntok=2048 proc=2 LLM_TOKENS=2048
+LP lane=vc kind=long ntok=2048 proc=2 LLM_MS=73124.6
+LP lane=vc kind=long ntok=2048 proc=2 LLM_RC=0
+LP_EXT lane=vc kind=long ntok=2048 proc=2 ext_ms=153356 rc=0
+LP lane=vc kind=long ntok=2048 proc=3 LLM_DEVICE=cuda
+LP lane=vc kind=long ntok=2048 proc=3 TORCH_CUDA_AVAILABLE=True
+LP lane=vc kind=long ntok=2048 proc=3 TORCH_DEV_COUNT=1
+LP lane=vc kind=long ntok=2048 proc=3 LLM_T_IMPORT_MS=4395.0
+LP lane=vc kind=long ntok=2048 proc=3 LLM_TORCH=2.6.0+cu124 LLM_TRANSFORMERS=5.17.0
+LP lane=vc kind=long ntok=2048 proc=3 LLM_T_CUINIT_MS=205.0
+LP lane=vc kind=long ntok=2048 proc=3 LLM_GPU=NVIDIA GeForce RTX 3060
+LP lane=vc kind=long ntok=2048 proc=3 LLM_T_LOAD_MS=3095.4
+LP lane=vc kind=long ntok=2048 proc=3 LLM_T_TODEV_MS=396.9
+LP lane=vc kind=long ntok=2048 proc=3 LLM_PARAM_DEVICE=cuda
+LP lane=vc kind=long ntok=2048 proc=3 LLM_RATIO_ELIGIBLE=1
+LP lane=vc kind=long ntok=2048 proc=3 LLM_RUN 0 cold ntok=2048 ms=73834.5 tok_s=27.738 ttft_ms=611.2 decode_tok_s=27.956 same_text=1
+LP lane=vc kind=long ntok=2048 proc=3 LLM_RUN 1 warm ntok=2048 ms=73694.2 tok_s=27.791 ttft_ms=39.2 decode_tok_s=27.792 same_text=1
+LP lane=vc kind=long ntok=2048 proc=3 LLM_TEXT= ______. A. Paris B. London C. New York D. Tokyo 答案: A  在Windows中，当一个应用程序窗口被最小化后，该应用程序将____。 A. 继续在前台运行 B. 被暂停执行 C. 被转入后台执行 D. 被终止执行 答案: C  下列关于计算机病毒的叙述中，正确的是______。 A. 计算机病毒是一种有逻辑错误的程序 B. 计算机病毒是通过磁盘引导扇区传染的 C. 计算机病毒可以通过读写磁盘或网络等方式进行传播 D. 计算机病毒发作时会破坏硬盘上的数据 答案: C  以下关于Windows 7操作系统说法不正确的是______。 A. Windows 7操作系统可以安装在多个型号的CPU上 B. Windows 7操作系统可以安装在多种类型的主板上 C. Windows 7操作系统可以安装在多种类型的内存上 D. Windows 7操作系统可以安装在多种类型的硬盘上 答案: C  在Windows中，如果要查找文件名的第2个字符为“a”的所有文件，其正确的搜索路径是______。 A. C:\Documents and Settings\用户名\My Documents\aa B. C:\Documents and Settings\用户名\My Documents\aa C. C:\Documents and Settings\用户名\My Documents\aa D. C:\Documents and Settings\用户名\My Documents\aa 答案: A  在Windows中，若要同时改变窗口的高度和宽度，应该采用的操作是______。 A. 改变鼠标操作中的缩放比例 B. 改变水平滚动条的显示位置 C. 使用组合键Alt+Tab D. 使用菜单栏中的“属性”命令 答案: A  在Windows中，为了防止他人修改注册表，应采取的措施是______。 A. 在注册表编辑器中禁用对注册表项的修改 B. 在注册表编辑器中禁用对注册表项的删除 C. 在注册表编辑器中禁用对注册表项的添加 D. 在注册表编辑器中禁用对注册表项的查询 答案: A  在Windows中，用户可以使用键盘上的______键来移动窗口的位置。 A. Ctrl+Up B. Ctrl+Down C. Ctrl+End D. Ctrl+Home 答案: D  在Windows中，如果要查看当前正在运行的应用程序，可以单击桌面空白处，然后选择“任务栏”中的图标，再从弹出的下拉列表中选择需要的应用程序。______ A. 正确 B. 错误 答案: A  在Windows中，如果要打开“我的电脑”窗口，可以按快捷键______。 A. Ctrl+Esc B. Ctrl+Tab C. Ctrl+空格 D. Ctrl+Shift 答案: A   在Windows中，如果要打开“我的电脑”窗口，可以按快捷键______。 A. Ctrl+Esc B. Ctrl+Tab C. Ctrl+空格 D. Ctrl+Shift 答案: A.  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：切换到另一个应用程序；Ctrl+空格：返回上一级；Ctrl+Shift：返回上一级。故本题选A。  Ctrl+Esc：打开任务管理器；Ctrl+Tab：
+LP lane=vc kind=long ntok=2048 proc=3 LLM_TEXT_SHA256=0ec987059539a8b9dff67642631a9bf1b67f2ff5c5f66ca250ce16de2e32dbad
+LP lane=vc kind=long ntok=2048 proc=3 LLM_T_PROC_MS=155626.9
+LP lane=vc kind=long ntok=2048 proc=3 LLM_OK=1
+LP lane=vc kind=long ntok=2048 proc=3 LLM_TOKENS=2048
+LP lane=vc kind=long ntok=2048 proc=3 LLM_MS=73834.5
+LP lane=vc kind=long ntok=2048 proc=3 LLM_RC=0
+LP_EXT lane=vc kind=long ntok=2048 proc=3 ext_ms=156564 rc=0
+LP_DONE lane=vc date=2026-09-25T19:41:27+00:00
+LP_JOB_EXIT=0
