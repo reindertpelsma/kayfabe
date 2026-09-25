@@ -21,7 +21,9 @@ kayfabe exposes to the guest, both at setup (memslots are setup-only):
    usermode page, which stays write-trapped).
 2. **The doorbell table**, read-only shared memory: `guest token → (host token, route)`, where route
    is `Passthrough` or `Emulated` (Translated/kernel channels, or anything kayfabe must see). Guest
-   visible and not secret.
+   visible and not secret. ★ Owner (2026-09-26): each entry is ONE u64 word read with a single atomic
+   load — the same atomic-integer word discipline as kayfabe's existing token words — so no seqlock is
+   needed: indexed by guest token, the word packs `host_token | route | valid`.
 
 The module, loaded optionally in the guest:
 - When the stock driver maps the usermode/doorbell page into a userspace process (libcuda), it
@@ -29,10 +31,19 @@ The module, loaded optionally in the guest:
   microsecond timer); writes are made to fault in the guest.
 - On a write fault it decodes the stored token, looks it up in the table and:
   - `Passthrough` → writes the **host** token into the real host doorbell page (no exit);
-  - `Emulated` or unknown → writes the guest token into kayfabe's classic trapped page, so kayfabe
-    handles it exactly as today.
+  - `Emulated`, unknown, not found, or the table unavailable → writes the guest token into kayfabe's
+    classic trapped page, so kayfabe handles it exactly as today. ★ The module is ALWAYS
+    OPPORTUNISTIC (owner, 2026-09-26): any doubt rings the original kayfabe page.
 - Coalescing is free: a doorbell only makes the GPU re-read the channel's `GP_PUT` from USERD (the
   twin is born over the guest's USERD), so the module may skip rings while one is outstanding.
+
+### Discovery and inertness (owner, 2026-09-26)
+
+The module talks to kayfabe over a small **virtio command set** (discovery, the table's location and
+version, the host doorbell page's location, counters). It is **inert** — installs no hook, touches
+nothing — if the virtio device does not initialise or kayfabe is not detected, and it **reports**
+that it is inert. ⇒ Harmless on bare metal and under any other VMM. A **Windows** version is an
+end-stage goal (feasibility to be established then).
 
 ## 3. Findings from ogkm-580 (the guest driver)
 
@@ -56,7 +67,10 @@ The module, loaded optionally in the guest:
   same flag enables a GPU-VA ("internal MMIO") mapping of the doorbell page, i.e. GPU-originated
   doorbell rings that neither kayfabe's trap nor the module would see. ⚠ This also makes kf-trap's
   fixed `DoorbellPlacement::Bar1 { page_base: 0x9_0000 }` suspect — **to verify on a Hopper host**
-  (whether libcuda sets `bBar1Mapping`).
+  (whether libcuda sets `bBar1Mapping`). ★ Owner (2026-09-26): **the BAR1 doorbell mapping must be
+  handled properly** — kayfabe must follow where RM actually places the BAR1 usermode view (and the
+  GPU-VA "internal MMIO" mapping), for the trapped path and for the module alike. Tracked as its own
+  work item, independent of the module.
 - kayfabe already maps the host usermode page read-only into the guest (`HostPassthrough`,
   `crates/kf-trap/src/memmap.rs`), so reads are already direct; only writes exit.
 
@@ -65,9 +79,10 @@ The module, loaded optionally in the guest:
 1. A setup-time memslot exposing the host doorbell page read/write, placed at a guest-physical
    address announced to the module (e.g. a vendor-specific PCI capability or a small extra BAR);
    the existing usermode page is unchanged.
-2. The doorbell table: fixed-size, versioned header + entries `{guest_token, host_token, route,
-   generation}`, written only by kayfabe's channel plane on birth/free; the module reads with a
-   generation check (seqlock-style) so a half-written entry is never used.
+2. The doorbell table: a versioned header + one atomic u64 word per guest token
+   (`host_token | route | valid`), written only by kayfabe's channel plane on birth/free with a single
+   atomic store; the module reads each word with one atomic load (never a torn entry, no seqlock).
+   Served to the module over the virtio command set.
 3. Grading: per-token `forwarded>0` can no longer come from kayfabe's doorbell counter for
    module-routed tokens. Use host-side `GP_GET` progress on the twin (authoritative: the GPU consumed
    work) and, secondarily, module counters exported read-only.
