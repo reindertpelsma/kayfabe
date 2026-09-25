@@ -9,7 +9,10 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 TAG=${1:?tag}; QB=${2:?kf3 binary}; STEPS=${3:-gprov,hprov,guest,guest_pm,host}
 OUT=/workspace/bench/llm; mkdir -p "$OUT"
 say() { echo "[$(date -Is)] $*"; }
-idle() { ! pgrep -x qemu-system-x86 >/dev/null && ! pgrep -f '[f]ast_suite|[r]un_fast_guest|[b]oot_capture' >/dev/null; }
+# ⊘ Match RUNNING scripts, not another agent's WAITER: a `bash -c 'until ! pgrep -f "[f]ast_suite|…";
+# …; run_fast_guest.sh …'` names the script in its own cmdline and matched `[r]un_fast_guest` for
+# as long as it waited [measured vh, w828] — two waiters, each blocking the other's condition forever.
+idle() { ! pgrep -x qemu-system-x86 >/dev/null && ! pgrep -f '^(/usr/bin/)?bash [^-]\S*(fast_suite|run_fast_guest|boot_capture)\.sh' >/dev/null; }
 locked() {  # wait for idle, then run "$@" holding the lock
     exec 9>/tmp/kayfabe-fastguest.lock
     while :; do
