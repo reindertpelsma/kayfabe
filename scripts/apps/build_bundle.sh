@@ -64,22 +64,23 @@ done
 # ---- gpu-burn --------------------------------------------------------------------------------
 [ -d "$S/gpu-burn" ] || git clone -q --depth 1 https://github.com/wilicc/gpu-burn.git "$S/gpu-burn"
 ( cd "$S/gpu-burn" && make -s CUDAPATH=/usr/local/cuda-12.6 COMPUTE=86 >/tmp/build_gpuburn.log 2>&1 ) \
-  && cp -u "$S/gpu-burn/gpu_burn" "$S/gpu-burn/compare.ptx" "$B/gpu-burn/"
+  && cp -u "$S/gpu-burn/gpu_burn" "$S"/gpu-burn/compare.* "$B/gpu-burn/"
 [ -x "$B/gpu-burn/gpu_burn" ]; ok gpu_burn $?
 
 # ---- llama.cpp (CUDA backend, sm_86) --------------------------------------------------------
 [ -d "$S/llama.cpp" ] || git clone -q --depth 1 https://github.com/ggml-org/llama.cpp.git "$S/llama.cpp"
 ( cd "$S/llama.cpp" && cmake -B build -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=86 -DLLAMA_CURL=OFF \
     -DCMAKE_BUILD_TYPE=Release >/tmp/build_llama.log 2>&1 && cmake --build build -j"$(nproc)" --target llama-cli llama-bench llama-simple >>/tmp/build_llama.log 2>&1 )
+rm -f "$B"/llama/lib*.so*
 cp -u "$S/llama.cpp/build/bin/"llama-* "$B/llama/" 2>/dev/null
-find "$S/llama.cpp/build" -name '*.so*' -exec cp -u {} "$B/llama/" \; 2>/dev/null
+find "$S/llama.cpp/build" -name '*.so*' -exec cp -P -u {} "$B/llama/" \; 2>/dev/null
 [ -x "$B/llama/llama-cli" ]; ok llama_cpp $?
 git -C "$S/llama.cpp" log --oneline -1 | sed 's/^/LLAMA_REV=/'
 
 # ---- clpeak (OpenCL peak) -----------------------------------------------------------------------
 apt-get install -y -qq ocl-icd-opencl-dev opencl-headers >/dev/null 2>&1
 [ -d "$S/clpeak" ] || git clone -q --depth 1 --recurse-submodules https://github.com/krrishnarraj/clpeak.git "$S/clpeak"
-( cd "$S/clpeak" && cmake -B build -DCMAKE_BUILD_TYPE=Release >/tmp/build_clpeak.log 2>&1 && cmake --build build -j"$(nproc)" >>/tmp/build_clpeak.log 2>&1 ) \
+( cd "$S/clpeak" && rm -rf build && cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ >/tmp/build_clpeak.log 2>&1 && cmake --build build -j"$(nproc)" >>/tmp/build_clpeak.log 2>&1 ) \
   && cp -u "$S/clpeak/build/clpeak" "$B/bin/"
 [ -x "$B/bin/clpeak" ]; ok clpeak $?
 
