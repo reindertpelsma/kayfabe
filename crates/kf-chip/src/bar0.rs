@@ -84,6 +84,12 @@ const NV_VF_ACCESS_COUNTER_NOTIFY_BUFFER_SIZE: u64 = 0x00B8_3110;
 /// `NV_USABLE_FB_SIZE_IN_MB` = `NV_PGC6_AON_SECURE_SCRATCH_GROUP_42` (`ampere/ga102/
 /// dev_gc6_island_addendum.h:33`) — published for the falcon-boot families only.
 const NV_USABLE_FB_SIZE_IN_MB: u64 = 0x0011_83A4;
+/// `NV_PGC6_BSI_VPR_SECURE_SCRATCH_15` = `NV_PGC6_BSI_SECURE_SCRATCH_15` (`ogkm-580:
+/// published/ada/ad102/dev_gc6_island.h:27`, addendum `:27-29`): `SCRUBBER_HANDOFF` is `31:29`,
+/// `_DONE` = 3.
+const NV_PGC6_BSI_VPR_SECURE_SCRATCH_15: u64 = 0x0011_80FC;
+/// `SCRUBBER_HANDOFF_DONE << 29`.
+const SCRUBBER_HANDOFF_DONE: u32 = 3 << 29;
 /// Access-counter notify buffer: two pages of 32-byte entries — advertised, never written (the old
 /// tree's `resume_from_fault.md` §S2 ruling: migration heuristics simply never fire).
 const ACCESS_COUNTER_ENTRIES_ADVERTISED: u32 = 2 * (4096 / 32);
@@ -131,6 +137,19 @@ pub fn boot_regs(family: Family, f: &Bar0Facts) -> Vec<BootReg> {
             value: u32::try_from(f.fb_mb).unwrap_or(u32::MAX),
             name: "NV_USABLE_FB_SIZE_IN_MB",
             from: Provenance::Host("the store's reserved size (constraint 15)"),
+        });
+    }
+    // ★ Ada only (`kgspExecuteScrubberIfNeeded_AD102`, `ogkm-580: kernel_gsp_ad102.c`; the image is
+    // ALWAYS allocated on Ada — `kernel_gsp.c:3734` "WAR for Bug 5016200"). Before the booter runs,
+    // RM reads SCRUBBER_HANDOFF and, below DONE, resets SEC2 and runs a scrubber HS ucode on it —
+    // a falcon run our GSP FSM would read as the booter. ⇒ We are the GSP and the store is ours,
+    // so the top of FB is "already scrubbed": advertise DONE, and RM skips it by its own branch.
+    if matches!(family, Family::Ada) {
+        v.push(BootReg {
+            off: NV_PGC6_BSI_VPR_SECURE_SCRATCH_15,
+            value: SCRUBBER_HANDOFF_DONE,
+            name: "NV_PGC6_BSI_VPR_SECURE_SCRATCH_15",
+            from: Provenance::Advertised("kgspExecuteScrubberIfNeeded_AD102 skips the SEC2 scrubber when HANDOFF >= DONE"),
         });
     }
     v

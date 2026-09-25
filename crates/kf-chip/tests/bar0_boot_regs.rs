@@ -47,3 +47,17 @@ fn the_fb_layout_reproduces_the_captured_bar1_pde_base_at_12_gib() {
     assert_eq!(l.regions[1].base + l.regions[1].reserved, 12288 << 20);
     assert!(kf_chip::bar0::fb_layout(0x1000_0000).is_none(), "a 256 MiB store cannot hold the carve-out");
 }
+
+#[test]
+fn ada_advertises_the_sec2_scrubber_as_already_run() {
+    // `kgspExecuteScrubberIfNeeded_AD102` skips when SECURE_SCRATCH_15[31:29] >= 3.
+    for fam in Family::ALL {
+        let f = Bar0Facts { architecture: 0x190, implementation: 6, revision: 0xA1, fb_mb: 8192, pcie_link_caps: 0 };
+        let r = boot_regs(fam, &f);
+        let s = r.iter().find(|r| r.off == 0x0011_80FC);
+        assert_eq!(s.is_some(), fam == Family::Ada, "{fam:?}");
+        if let Some(s) = s {
+            assert!((s.value >> 29) & 7 >= 3);
+        }
+    }
+}
