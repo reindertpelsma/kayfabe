@@ -706,15 +706,7 @@ impl WalkKernel {
         let com = a(cfg.max_slots as usize * rpp * core::mem::size_of::<KfMapRun>(), "cuMemAlloc(committed)")?;
         let slot = a(cfg.max_slots as usize * core::mem::size_of::<KfSlot>(), "cuMemAlloc(slots)")?;
         let iscratch = a(KF_MAX_PDB * 3 * rpp * 4, "cuMemAlloc(iscratch)")?;
-        // ★ P4b: the report (header, pdb entries, runs) is ONE device allocation laid out
-        // exactly as its pinned read-back (`PinLayout`, from `hdr` on), so the read-back is ONE
-        // copy node rather than three — each node is paid again on every `cuGraphLaunch`.
         let pin_at = PinLayout::for_cfg(&cfg);
-        let report = a(pin_at.total - pin_at.hdr, "cuMemAlloc(report)")?;
-        let at_rep = |off: usize| DevBuf {
-            ptr: report.ptr + (off - pin_at.hdr) as u64,
-        };
-        let (hdr, rpdb, rrun) = (at_rep(pin_at.hdr), at_rep(pin_at.rpdb), at_rep(pin_at.rrun));
 
         // The device-side configuration, written exactly as the `.cu`'s `kf_create` does.
         // ⊘ Same padding hazard as `args_for`: `KfDev` carries 4 uninitialised bytes and is
@@ -753,13 +745,25 @@ impl WalkKernel {
         let ev_start = cu.event_create()?;
         let ev_copied = cu.event_create()?;
         let ev_done = cu.event_create()?;
-        let pin = cu.pinned_alloc(pin_at.total, "cuMemAllocHost(report read-back)")?;
+        let mut pin = cu.pinned_alloc(pin_at.total, "cuMemAllocHost(report + stages)")?;
+        // Zeroed: the commit node's first read of "the previous report" must find no magic.
+        pin.write(0, &vec![0u8; pin_at.total]);
         let pdbs = DevBuf {
             ptr: cu.pinned_device_ptr(&pin, pin_at.pdbs)?,
         };
         let slots = DevBuf { ptr: cu.pinned_device_ptr(&pin, pin_at.slots)? };
         let ack = DevBuf { ptr: cu.pinned_device_ptr(&pin, pin_at.ack)? };
         let ack_code = DevBuf { ptr: cu.pinned_device_ptr(&pin, pin_at.ack_code)? };
+        // ★ 2026-09-25: the REPORT lives in the pinned buffer too — the diff kernels write it
+        // straight into host memory, so a walk moves only the bytes its diff has (a one-run diff
+        // is a few hundred bytes) and needs no read-back node. `[measured gate9, 50a6c9a9]` the
+        // capacity-sized copy it replaces was 512 KiB of PCIe on every walk. The commit node reads
+        // the previous report back from here (its entries' runs only).
+        let (hdr, rpdb, rrun) = (
+            DevBuf { ptr: cu.pinned_device_ptr(&pin, pin_at.hdr)? },
+            DevBuf { ptr: cu.pinned_device_ptr(&pin, pin_at.rpdb)? },
+            DevBuf { ptr: cu.pinned_device_ptr(&pin, pin_at.rrun)? },
+        );
         let done_fd = CompletionFd::new()?;
 
         let mut k = WalkKernel {
@@ -1265,9 +1269,8 @@ impl WalkKernel {
         // ★ The diff against the committed placements (one block per entry), then the dense report.
         self.kl(rec, self.f_diff_slots, grid, KF_DIFF_BLOCK, 0, vec![param_bytes(args)], "cuLaunchKernel(kf_diff_slots)")?;
         self.kl(rec, self.f_diff_emit, grid, 256, 0, vec![param_bytes(args)], "cuLaunchKernel(kf_diff_emit)")?;
-        // One copy of the whole report block (`hdr`, `rpdb`, `rrun` are one allocation laid
-        // out as the pinned buffer from `at.hdr` on; see `bring_up`).
-        self.cu.memcpy_d2h_async(s, &self.pin, at.hdr, self.hdr.ptr, at.total - at.hdr, "cuMemcpyDtoHAsync(report)")?;
+        // ⊘ No read-back: the report was written into pinned host memory by the kernels.
+        let _ = (s, at);
         let capturing = rec.is_some();
         self.record(self.ev_copied, capturing)?;
         // ⊘ ORDER: the host signal BEFORE `ev_done`. Then `ev_done` complete ⇒ the fd was
