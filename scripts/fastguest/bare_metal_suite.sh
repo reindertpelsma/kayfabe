@@ -87,10 +87,10 @@ pass=0; fail=0; crash=0
 for arm in "${ARMS[@]}"; do
     name=${arm#--}
     log=$BENCH/${TAG}_${name}.log
-    s=$(date +%s)
+    s=$(date +%s); s_ns=$(date +%s%N)
     timeout --kill-after=5 "$BUDGET" "$BIN" "$arm" ${KF_LADDER_ARGS:-} > "$log" 2>&1
     rc=$?
-    secs=$(( $(date +%s) - s ))
+    secs=$(( $(date +%s) - s )); ms=$(( ($(date +%s%N) - s_ns) / 1000000 ))
     # ⊘ The CLIENT'S own rc is the verdict, exactly as in the guest lane — a run that printed
     # something reassuring and exited non-zero is a failure, and the tail is not the verdict.
     if [ "$rc" = 124 ] || [ "$rc" = 137 ]; then
@@ -103,7 +103,7 @@ for arm in "${ARMS[@]}"; do
     printf '%-28s %-9s %5s  %s\n' "$arm" "$v" "${secs}s" "$why"
     # ⊘ One machine-readable row PER ARM, carrying the cell. Collecting only the totals loses
     # exactly what the matrix is for: WHICH arm differs on WHICH die.
-    echo "BARE_CELL_ARM arm=$name verdict=$v secs=$secs rc=$rc pci_dev=$GPU_DEV drv=$GPU_DRV kmod=$KMOD cc=$GPU_CC rev=$REV"
+    echo "BARE_CELL_ARM arm=$name verdict=$v secs=$secs ms=$ms rc=$rc pci_dev=$GPU_DEV drv=$GPU_DRV kmod=$KMOD cc=$GPU_CC rev=$REV"
 done
 echo "BARE_SUITE_PASS=$pass BARE_SUITE_FAIL=$fail BARE_SUITE_CRASH=$crash ARMS=${#ARMS[@]}"
 echo "BARE_CELL pci_dev=$GPU_DEV gpu=\"$GPU_NAME\" drv=$GPU_DRV kmod=$KMOD cc=$GPU_CC rev=$REV pass=$pass fail=$fail crash=$crash arms=${#ARMS[@]} uuid=$GPU_UUID"

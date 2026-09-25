@@ -55,7 +55,7 @@ CLIENT=${CLIENT:-$KF_ROOT/target/release/kayfabe-rm-ladder}
 
 die() { echo "build_fast_guest: $*" >&2; exit 1; }
 
-[ -f "$IMG" ]    || die "no guest image at $IMG"
+[ "${KF_FROM_HOST:-0}" = 1 ] || [ -f "$IMG" ] || die "no guest image at $IMG"
 [ -x "$CLIENT" ] || die "no raw client at $CLIENT (cargo build --release -p kayfabe-rm-ladder --bin kayfabe-rm-ladder)"
 command -v busybox >/dev/null || die "busybox is not installed"
 command -v cpio    >/dev/null || die "cpio is not installed"
@@ -282,6 +282,62 @@ if ldd "$CLIENT" >/dev/null 2>&1 && ! ldd "$CLIENT" | grep -q 'not a dynamic'; t
     done
 fi
 
+# ⊘ busybox `date` has no `%N` and /proc/uptime is 10 ms — too coarse for a ms-scale client.
+# coreutils `date` as /bin/gdate gives `/init` ns stamps (client-only wall, boot excluded).
+if GDATE=$(command -v date) && ldd "$GDATE" >/dev/null 2>&1; then
+    cp -L "$GDATE" "$ROOT/ird/bin/gdate"
+    ldd "$GDATE" | awk '/=>/ {print $3} /ld-linux/ {print $1}' | grep '^/' | sort -u | while read -r so; do
+        [ -f "$ROOT/ird$so" ] && continue
+        mkdir -p "$ROOT/ird$(dirname "$so")"; cp -L "$so" "$ROOT/ird$so"
+    done
+fi
+
+# ★★★★★ **THE CUDA LADDER PAYLOAD (w827, owner: "Test the CUDA ladder").** Opt-in: with
+# `KF_CUDA_BINS=<dir>` the initrd also carries the executables in that dir (the host-built cup
+# ladder — `scripts/fastguest/cuda_ladder.sh build`) plus the driver's own CUDA userspace:
+# `libcuda.so.1` and the `libnvidia-ptxjitcompiler.so.1` it dlopens to JIT the rungs' PTX, each
+# with its ldd closure. `/init` then runs `KF_CUDA=<name>` instead of the raw client.
+#
+# ⊘ Taken from the HOST, by the same rule as the modules in HOST MODE: the userspace must match
+# the kernel module's version exactly (libcuda refuses a mismatched RM with
+# `CUDA_ERROR_SYSTEM_DRIVER_MISMATCH`), and the host already runs that exact pairing. A
+# mismatch is REFUSED here by name rather than discovered as a cuInit failure in the guest.
+# ⚠ The binaries are the SAME files the host arm runs — one build, two platforms — so the
+# guest/host ratio compares platforms, not compilers.
+if [ -n "${KF_CUDA_BINS:-}" ]; then
+    [ -d "$KF_CUDA_BINS" ] || die "KF_CUDA_BINS=$KF_CUDA_BINS is not a directory"
+    LIBDIR=/usr/lib/x86_64-linux-gnu
+    CUDA_LIB=$(readlink -f "$LIBDIR/libcuda.so.1" 2>/dev/null)
+    [ -f "$CUDA_LIB" ] || die "no $LIBDIR/libcuda.so.1 on the host — the CUDA userspace is not installed"
+    CUDA_VER=${CUDA_LIB##*libcuda.so.}
+    KO_VER=$(modinfo -F version "$ROOT/ird/lib/modules/nvidia.ko" 2>/dev/null)
+    [ -n "$KO_VER" ] || KO_VER=$(cat /sys/module/nvidia/version 2>/dev/null)
+    if [ -n "$KO_VER" ] && [ "$KO_VER" != "$CUDA_VER" ]; then
+        die "libcuda is $CUDA_VER but the guest's nvidia.ko is $KO_VER — libcuda would refuse the RM (DRIVER_MISMATCH)"
+    fi
+    echo "== CUDA userspace: libcuda $CUDA_VER (guest nvidia.ko ${KO_VER:-?})"
+    mkdir -p "$ROOT/ird$LIBDIR" "$ROOT/ird/bin/cuda"
+    _carry() {  # a file and its ldd closure, symlinks resolved, at the host's own path
+        local f=$1
+        mkdir -p "$ROOT/ird$(dirname "$f")"; cp -L "$f" "$ROOT/ird$f" || die "cannot carry $f"
+        ldd "$f" 2>/dev/null | awk '/=>/ {print $3} /ld-linux/ {print $1}' | grep '^/' | sort -u \
+          | while read -r so; do
+                [ -f "$ROOT/ird$so" ] && continue
+                mkdir -p "$ROOT/ird$(dirname "$so")"; cp -L "$so" "$ROOT/ird$so"
+            done
+    }
+    for so in libcuda.so.1 libnvidia-ptxjitcompiler.so.1 "libnvidia-gpucomp.so.$CUDA_VER"; do
+        [ -e "$LIBDIR/$so" ] || { echo "== CUDA: ⊘ $so absent on the host (skipped)"; continue; }
+        _carry "$LIBDIR/$so"
+    done
+    for b in "$KF_CUDA_BINS"/*; do
+        [ -f "$b" ] && [ -x "$b" ] || continue
+        cp "$b" "$ROOT/ird/bin/cuda/"; _carry "$b"; rm -f "$ROOT/ird$b"
+        rmdir -p "$ROOT/ird$(dirname "$b")" 2>/dev/null
+    done
+    echo "== CUDA ladder carried: $(ls "$ROOT/ird/bin/cuda" | tr '\n' ' ')($(du -sh "$ROOT/ird$LIBDIR" | cut -f1) of libs)"
+fi
+
 cat > "$ROOT/ird/init" <<'INIT'
 #!/bin/busybox sh
 # ★ /init — the whole guest. Mount, load, run, report, die.
@@ -407,8 +463,44 @@ LEFT=$(( BUDGET_S - UP - 3 ))
 [ "$LEFT" -lt 2 ] && LEFT=2
 export KF_SELF_DEADLINE_MS=$(( LEFT * 1000 ))
 echo "FASTGUEST: arms $ARMS  deadline ${LEFT}s (budget ${BUDGET_S}s, ${UP}s already spent booting)"
+# ★ ns stamps when the image carries coreutils `date` (the CUDA payload does); the raw client's
+# own client-only wall is then `client wall_ms`, boot excluded.
+_ns() { if [ -x /bin/gdate ]; then /bin/gdate +%s%N; else echo 0; fi; }
+if [ -n "${KF_CUDA:-}" ]; then
+    # ★★★ THE CUDA LADDER — one rung per boot, so the device's per-token DOORBELL-LEDGER
+    # (printed as each channel is freed) belongs to exactly this program. The graded lines are
+    # the workload's OWN values, lifted to anchored `^CUPn_*=` keys here.
+    export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu
+    rc=0
+    for prog in $(echo "$KF_CUDA" | tr ',' ' '); do
+        [ -x "/bin/cuda/$prog" ] || { echo "FASTGUEST: CUDA $prog ABSENT from the image"; rc=127; continue; }
+        echo "FASTGUEST: CUDA $prog start $(cut -d' ' -f1 /proc/uptime)s"
+        t0=$(_ns)
+        ( cd /tmp && "/bin/cuda/$prog" ) > /tmp/$prog.out 2>&1
+        prc=$?
+        t1=$(_ns)
+        cat /tmp/$prog.out
+        echo "FASTGUEST: CUDA $prog rc=$prc wall_ms=$(( (t1 - t0) / 1000000 ))"
+        case "$prog" in
+            cup2) v=$(sed -n 's/^CE rv=\(0x[0-9a-f]*\) .*/\1/p' /tmp/$prog.out | tail -1)
+                  echo "CUP2_VAL=${v:-NO_RESULT_LINE}" ;;
+            cup3) v=$(sed -n 's/^KERNEL rv=\([0-9]*\) .*/\1/p' /tmp/$prog.out | tail -1)
+                  echo "CUP3_VAL=${v:-NO_RESULT_LINE}" ;;
+            cup8) l=$(grep '^CUP8 RESULT ' /tmp/$prog.out | tail -1)
+                  echo "CUP8_BAD=$(echo "$l" | sed -n 's/.* bad=\([0-9]*\) .*/\1/p')"
+                  echo "CUP8_MAXERR=$(echo "$l" | sed -n 's/.* maxerr=\([^ ]*\) .*/\1/p')" ;;
+        esac
+        [ "$prc" = 0 ] || rc=$prc
+    done
+    echo "FASTGUEST: client rc=$rc at $(cut -d' ' -f1 /proc/uptime)s"
+else
+t0=$(_ns)
 /bin/rmladder --gpu 0 $ARMS 2>&1
-echo "FASTGUEST: client rc=$? at $(cut -d' ' -f1 /proc/uptime)s"
+crc=$?
+t1=$(_ns)
+[ "$t0" != 0 ] && echo "FASTGUEST: client wall_ms=$(( (t1 - t0) / 1000000 ))"
+echo "FASTGUEST: client rc=$crc at $(cut -d' ' -f1 /proc/uptime)s"
+fi
 echo "FASTGUEST: DONE"
 poweroff -f
 INIT

@@ -78,7 +78,11 @@ for arm in "${ARMS[@]}"; do
         *)        crash=$((crash+1)) ;;
     esac
     [ "$notrun_this" = 1 ] && [ -z "$secs" ] && secs="-"
+    # ★ w827: the raw client's OWN wall inside the guest (ns stamps around it in /init), boot
+    # excluded — the number comparable to bare_metal_suite.sh's per-arm `ms=`.
+    cms=$(grep -ao 'FASTGUEST: client wall_ms=[0-9]*' "$BENCH/fast_${TAG}_${name}_serial.log" 2>/dev/null | tail -1 | grep -o '[0-9]*$')
     printf '%-28s %-9s %-5s %s\n' "$arm" "$v" "${secs:-?}s" "$why" >> "$OUT"
+    echo "FAST_CELL_ARM arm=$name verdict=$v secs=${secs:-?} client_ms=${cms:-?}" >> "$OUT"
 done
 # ⊘⊘⊘ **AND THE SUITE USED TO HARDCODE `FAST_SUITE_RC=0`** — it reported a scoreboard and
 # gated on nothing, so a caller chaining on it proceeded over any result at all. `[w824]` five
