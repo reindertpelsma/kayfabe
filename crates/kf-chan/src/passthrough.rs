@@ -103,12 +103,31 @@ pub fn birth_twin(rm: &HostRm, space: VaSpace, g: GuestChannel) -> Result<Channe
 /// twin's engine is refused here. ⊘ GR's context is built by host RM, in the host VA space, at
 /// RM-chosen VAs — which is where a collision with the guest's own VAs would surface.
 ///
+/// ★ w827 — **a COPY class on a GR twin** is what CUDA's `cuCtxCreate` allocates: its GR channel
+/// carries the copy class too, declared (`declared_copy`) on a GRCE, which shares GR's runlist
+/// and takes the channel's copy subchannel exactly as on bare metal. The declared engine is passed
+/// to host RM as the engine WE name in params WE author; host RM refuses by name
+/// (`chandesConstruct`: *"incompatible runlist"*) any copy engine that is not on this twin's
+/// runlist, so nothing beyond a copy-engine ordinal is taken from the guest. `[measured vh w827,
+/// b45f202a]` refusing it failed `cuCtxCreate` with 999 in every CUDA rung.
+///
 /// # Errors
 /// A kind/engine mismatch or the host's refusal, by name.
-pub fn engine_object(rm: &HostRm, chan: Channel, engine: u32, class: u32, class_kind: kf_chip::classes::Kind) -> Result<u32, String> {
+pub fn engine_object(
+    rm: &HostRm,
+    chan: Channel,
+    engine: u32,
+    class: u32,
+    class_kind: kf_chip::classes::Kind,
+    declared_copy: Option<u32>,
+) -> Result<u32, String> {
     use kf_chip::classes::Kind;
     let copy = match class_kind {
         Kind::DmaCopy if is_copy_engine(engine) => Some(engine),
+        Kind::DmaCopy if engine == ENGINE_TYPE_GRAPHICS => match declared_copy {
+            Some(ce) if is_copy_engine(ce) => Some(ce),
+            _ => return Err(format!("class {class:#x} (DmaCopy) on a GR twin declares no copy engine ({declared_copy:?})")),
+        },
         Kind::Compute | Kind::ThreeD if engine == ENGINE_TYPE_GRAPHICS => None,
         k => return Err(format!("class {class:#x} ({k:?}) on a twin of engine {engine:#x}")),
     };

@@ -870,7 +870,7 @@ impl ChanPlane {
                     None => ChanAnswer::NotOurs,
                 }
             }
-            ChanStatement::EngineObject { client, parent, handle, class } => self.engine_object(client, parent, handle, class),
+            ChanStatement::EngineObject { client, parent, handle, class, copy_engine } => self.engine_object(client, parent, handle, class, copy_engine),
             ChanStatement::Free { client, object } => self.free(client, object),
             ChanStatement::PromoteCtx { chan_client, object, engine_type, initialize, with_va, entries } => {
                 self.promote_ctx(chan_client, object, engine_type, initialize, with_va, entries)
@@ -1246,7 +1246,7 @@ impl ChanPlane {
     /// ★ P5b: an engine object under a PASSTHROUGH twin — allocated on the twin with the guest's
     /// class (checked against the HOST family's generated set for the twin's engine) and params
     /// we author. Under a Translated channel it is a graph node only (our ring owns its object).
-    fn engine_object(&self, client: u32, parent: u32, handle: u32, class: u32) -> ChanAnswer {
+    fn engine_object(&self, client: u32, parent: u32, handle: u32, class: u32, copy_engine: Option<u32>) -> ChanAnswer {
         let Some((chan, engine)) = self.pt.lock().ok().and_then(|m| m.get(&(client, parent)).map(|v| (v.chan, v.engine))) else {
             return ChanAnswer::NotOurs;
         };
@@ -1259,7 +1259,7 @@ impl ChanPlane {
         self.defer(
             "engine object",
             Box::new(move |me: &ChanPlane| {
-                let h = kf_chan::passthrough::engine_object(me.rm, chan, engine, class, kind).map_err(|e| (NV_ERR_INVALID_CLASS, e))?;
+                let h = kf_chan::passthrough::engine_object(me.rm, chan, engine, class, kind, copy_engine).map_err(|e| (NV_ERR_INVALID_CLASS, e))?;
                 if let Ok(mut m) = me.pt.lock()
                     && let Some(v) = m.get_mut(&(client, parent))
                 {

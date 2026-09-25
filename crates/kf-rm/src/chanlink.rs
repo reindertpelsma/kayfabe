@@ -171,6 +171,11 @@ pub enum ChanStatement {
         handle: u32,
         /// Its class.
         class: u32,
+        /// ★ w827: a COPY class's declared `NVB0B5_ALLOCATION_PARAMETERS` engine, as an
+        /// `NV2080_ENGINE_TYPE_COPY(i)` ordinal (`CeAllocParams::declared_copy_engine_type`);
+        /// `None` for compute/3D or an undeclarable one. CUDA allocates its copy class ON ITS GR
+        /// CHANNEL naming a GRCE, and that GRCE is the only thing that says which engine runs it.
+        copy_engine: Option<u32>,
     },
     /// `GET_WORK_SUBMIT_TOKEN` on a channel.
     Token {
@@ -392,7 +397,14 @@ impl ChannelPolicy {
                 ) =>
             {
                 self.carried += 1;
-                let st = ChanStatement::EngineObject { client: h.client, parent: h.parent, handle: h.handle, class: h.class };
+                let copy_engine = if engine_class_kind(h.class) == Some(kf_chip::classes::Kind::DmaCopy) {
+                    crate::rmrpc::alloc_params_window(&self.abi, body)
+                        .and_then(|p| kf_abi::submit::CeAllocParams::decode(p).ok())
+                        .and_then(|c| c.declared_copy_engine_type())
+                } else {
+                    None
+                };
+                let st = ChanStatement::EngineObject { client: h.client, parent: h.parent, handle: h.handle, class: h.class, copy_engine };
                 return self.carry_alloc(st, cmd, h.client, h.handle);
             }
             _ => return None,
