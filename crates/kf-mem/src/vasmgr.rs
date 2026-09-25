@@ -297,6 +297,16 @@ impl Walker for GpuWalker {
                 r.header.flags, r.runs.len(), r.header.run_count
             ));
         }
+        if r.header.refusals > 0 {
+            // DIAG (P6b): a refusal inside a walk that still reports "full".
+            eprintln!(
+                "kf3: DIAG walk refusals={} refuse_mask={:#x} pdbs={:x?} runs={}",
+                r.header.refusals,
+                r.header.refuse_mask,
+                r.pdbs.iter().map(|p| p.pdb).collect::<Vec<_>>(),
+                r.runs.len()
+            );
+        }
         let mut spaces: Vec<WalkedSpace> =
             r.pdbs.iter().map(|p| WalkedSpace { pdb: p.pdb, leaves: Vec::new() }).collect();
         for m in &r.runs {
