@@ -67,8 +67,13 @@ pub struct ChannelAlloc {
     pub engine_type: Option<u32>,
     /// The guest kernel's resolved USERD descriptor (`userdMem`).
     pub userd: Option<kf_arch::UserdMem>,
-    /// The client declared the kernel sentinel pid (a guest-KERNEL channel, §7's policy).
+    /// A guest-KERNEL channel (§7's policy, and the Translated route): the client is one of the
+    /// guest RM's OWN internal clients (`serverIsClientInternal`). ⊘ Not the pid sentinel — see
+    /// [`ChannelAlloc::declared_kernel_pid`].
     pub kernel_client: bool,
+    /// ★ P5b: the client's root alloc declared `KERNEL_PID` — logged, NOT trusted for the route
+    /// (guest userspace reached it, see [`ChannelPolicy`]'s alloc decode).
+    pub declared_kernel_pid: bool,
     /// ★ P5b: the channel group it was allocated under (`hParent`), when that is a TSG this link
     /// saw allocated — the group `GPFIFO_SCHEDULE` names.
     pub tsg: Option<u32>,
@@ -313,7 +318,17 @@ impl ChannelPolicy {
             flags: f.flags,
             engine_type,
             userd: self.abi.decode_channel_userd_mem(params).ok().flatten(),
-            kernel_client: self.kernel_clients.contains(&h.client) || is_rm_internal_client(h.client),
+            // ⊘⊘ P5b: the ROUTE-selecting kernel test is the guest RM's own internal-handle range
+            // ONLY. `[measured p5bd]` with the sentinel keyed right (hClient), the raw client's
+            // sandboxed-isolate client (`0xc1d0000c` — an unprivileged guest PROCESS, R16) declared
+            // `KERNEL_PID` too, so the pid sentinel is reachable from guest userspace. A user channel
+            // classed kernel would be Translated, and the Translated route REWRITES physical CE
+            // operands onto the store window (`fbAliasVA`): guest userspace reading the guest
+            // kernel's memory. Misclassing the other way (nvidia-uvm's client, which is kernel) puts
+            // it on an unprivileged host twin, where a physical operand faults on the host — a
+            // failure, never an escalation. Recorded (`declared_kernel_pid`), not trusted.
+            kernel_client: is_rm_internal_client(h.client),
+            declared_kernel_pid: self.kernel_clients.contains(&h.client),
             tsg: tsg.map(|_| h.parent),
         };
         self.carried += 1;

@@ -765,8 +765,8 @@ impl ChanPlane {
                     me.engine_live(engine, true);
                     let _ = me.take_ledger(idx);
                     Ok(format!(
-                        "chan {:#x}:{:#x} BORN Passthrough: token {idx:#x} -> host {:#x} in {key:?} gpfifo={:#x}x{} userd={userd:?} engine={engine:#x}",
-                        a.client, a.handle, chan.token, a.gpfifo_va, g.entries
+                        "chan {:#x}:{:#x} BORN Passthrough: token {idx:#x} -> host {:#x} in {key:?} gpfifo={:#x}x{} userd={userd:?} engine={engine:#x} declared_kernel_pid={}",
+                        a.client, a.handle, chan.token, a.gpfifo_va, g.entries, a.declared_kernel_pid
                     ))
                 }),
             );
