@@ -13105,9 +13105,17 @@ mod route_k {
             }
         };
         let mut esc = Esc::new(&ctl_own, root, 0xCAFE_2001);
+        // ⊘ `gpu` is the MINOR; the RM device instance is resolved (V3_MULTI_GPU_AUDIT §2).
+        let (_card, id) = match kayfabe_isolate_host::rm::resolve_device_instance(&ctl_own, root, gpu) {
+            Ok(r) => r,
+            Err((rung, detail)) => {
+                println!("K_BIT5_KP=UNMEASURED:{rung}:{detail}");
+                return 1;
+            }
+        };
         let mut dev_params = [0u8; Nv0080AllocParameters::SIZE];
         let dev_encode = Nv0080AllocParameters {
-            device_id: gpu,
+            device_id: id.device_instance,
             ..Default::default()
         }
         .encode_into(&mut dev_params);
@@ -13123,7 +13131,7 @@ mod route_k {
             }
         };
         let mut sub_params = [0u8; Nv2080AllocParameters::SIZE];
-        let _ = Nv2080AllocParameters { sub_device_id: 0 }.encode_into(&mut sub_params);
+        let _ = Nv2080AllocParameters { sub_device_id: id.sub_device_instance }.encode_into(&mut sub_params);
         if let Err(e) = esc.alloc(
             device,
             NV20_SUBDEVICE_0,
@@ -13711,9 +13719,17 @@ mod route_k {
         let mut esc = Esc::new(&ctl2, b_client, 0xCAFE_1001);
 
         // ---- B's own device tree, built by S on I's descriptor --------------------------
+        // ⊘ `gpu` is the MINOR; the RM device instance is resolved (V3_MULTI_GPU_AUDIT §2).
+        let (_card, id) = match kayfabe_isolate_host::rm::resolve_device_instance(&ctl2, b_client, gpu) {
+            Ok(r) => r,
+            Err((rung, detail)) => {
+                println!("K_EXIT=1 (device instance in B: {rung}: {detail})");
+                return 1;
+            }
+        };
         let mut dev_params = [0u8; Nv0080AllocParameters::SIZE];
         let _ = Nv0080AllocParameters {
-            device_id: gpu,
+            device_id: id.device_instance,
             ..Default::default()
         }
         .encode_into(&mut dev_params);
@@ -13726,7 +13742,7 @@ mod route_k {
             }
         };
         let mut sub_params = [0u8; Nv2080AllocParameters::SIZE];
-        let _ = Nv2080AllocParameters { sub_device_id: 0 }.encode_into(&mut sub_params);
+        let _ = Nv2080AllocParameters { sub_device_id: id.sub_device_instance }.encode_into(&mut sub_params);
         if let Err(e) = esc.alloc(
             device_b,
             NV20_SUBDEVICE_0,
@@ -16495,11 +16511,18 @@ mod uvm_raw {
     /// registering the wrong device — which is why parsing the text form is safe here even
     /// though the byte order is a convention rather than something we control.
     fn gpu_uuid(gpu_index: u32) -> Option<([u8; 16], String)> {
+        // ⊘ Matched on the entry's own `Device Minor:` line, never on its POSITION in the
+        //   sorted directory: `gpu_index` is the minor, and BDF order is not minor order on
+        //   every box (V3_MULTI_GPU_AUDIT — select a GPU by identity, never by ordinal).
         let dir = std::fs::read_dir("/proc/driver/nvidia/gpus").ok()?;
-        let mut entries: Vec<_> = dir.filter_map(Result::ok).map(|e| e.path()).collect();
-        entries.sort();
-        let path = entries.get(gpu_index as usize)?.join("information");
-        let text = std::fs::read_to_string(&path).ok()?;
+        let text = dir.filter_map(Result::ok).find_map(|e| {
+            let t = std::fs::read_to_string(e.path().join("information")).ok()?;
+            let minor = t
+                .lines()
+                .find_map(|l| l.strip_prefix("Device Minor:"))
+                .and_then(|v| v.trim().parse::<u32>().ok())?;
+            (minor == gpu_index).then_some(t)
+        })?;
         let line = text.lines().find(|l| l.contains("GPU UUID"))?;
         let tag = line.split(':').nth(1)?.trim().to_owned();
         let hex: String = tag

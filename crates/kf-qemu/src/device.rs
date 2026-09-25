@@ -189,8 +189,29 @@ impl Device {
         let host = std::sync::Arc::new(
             crate::rmfacts::host_facts(rm, family).map_err(|e| format!("host facts: {e}"))?,
         );
+        // ★ ONE identity for the host GPU: the PCI address the frontend's `CARD_INFO` states
+        // for our minor (`HostRm::card`). The RM device instance was resolved from it; the
+        // sysfs facts and the CUDA device below are selected by it too — never by ordinal.
+        let card = rm.card();
+        let bdf = card.bdf();
         let sysfs = crate::hostfacts::sysfs_dir_for_minor(cfg.gpu_minor)?;
+        if sysfs.file_name().and_then(|n| n.to_str()) != Some(bdf.as_str()) {
+            return Err(format!(
+                "host GPU identity disagrees: CARD_INFO puts minor {} at {bdf}, procfs at {} — \
+                 refused by name, never a guess",
+                cfg.gpu_minor,
+                sysfs.display()
+            ));
+        }
         let pci = crate::hostfacts::read_host_pci(&sysfs)?;
+        // ★ The per-host-card budget, summed over this process's kf3 devices on the same card —
+        // before anything is reserved, so the refusal costs nothing (`crate::cardbudget`).
+        let (store_neighbours, n_neighbours) = crate::cardbudget::store_held(&bdf);
+        crate::cardbudget::admit(
+            &bdf,
+            pci.bar1_bytes,
+            crate::cardbudget::Demand::of(cfg.bar1_bytes, cfg.bar2_bytes, cfg.fb_mb << 20),
+        )?;
 
         let fb_length = cfg.fb_mb << 20;
         let layout = fb_layout(fb_length).ok_or(format!("a {} MiB store cannot hold the firmware carve-out", cfg.fb_mb))?;
@@ -201,15 +222,35 @@ impl Device {
             kf_chip::MmuFormat::Ver2 => kf_cuda::abi::kf_format_ver2(),
             kf_chip::MmuFormat::Ver3 => kf_cuda::abi::kf_format_ver3(),
         };
-        let mut kernel = kf_cuda::walk::WalkKernel::bring_up(kf_cuda::walk::WalkCfg::default(), fmt)
-            .map_err(|e| format!("GPU walker bring-up: {e}"))?;
-        let store = rm.reserve_gpga(fb_length).map_err(|e| format!("store of {} MiB refused: {e:?}", cfg.fb_mb))?;
+        let mut kernel = kf_cuda::walk::WalkKernel::bring_up_on(
+            kf_cuda::walk::WalkCfg::default(),
+            fmt,
+            kf_cuda::walk::WalkDevice::PciBusId(&bdf),
+        )
+        .map_err(|e| format!("GPU walker bring-up on {bdf}: {e}"))?;
+        let store = rm.reserve_gpga(fb_length).map_err(|e| {
+            format!(
+                "store of {} MiB refused: {e:?} (host card {bdf}: {n_neighbours} other kf3 device(s) \
+                 of this process already hold {} MiB of store on it)",
+                cfg.fb_mb,
+                store_neighbours >> 20
+            )
+        })?;
         let export = rm.export_to_new_fd(store.handle).map_err(|e| format!("store export: {e:?}"))?;
         kernel
             .import_store(export.fd_number(), fb_length)
             .map_err(|e| format!("store import into the walker: {e}"))?;
         // The export node stays open for the process (CUDA holds the import).
         std::mem::forget(export);
+        // ★ The identity line a multi-GPU run is graded on: minor → PCI → RM instance → CUDA.
+        eprintln!(
+            "kf3: host GPU minor={} bdf={bdf} gpuId={:#x} rm_device_instance={} cuda_device={:?} store={} MiB",
+            cfg.gpu_minor,
+            card.gpu_id,
+            rm.device_instance(),
+            kernel.device_name,
+            cfg.fb_mb
+        );
         // ★ Our two roots, zeroed on the GPU (the pages are ours: no CPU read, no guest table).
         let zero = vec![0u8; kf_chip::bar0::ROOT_PAGE_BYTES as usize];
         for root in [layout.bar1_pde_base, layout.bar2_pde_base] {

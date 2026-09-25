@@ -142,7 +142,7 @@ fn entry_runs(r: &kf_cuda::Report, i: usize) -> Vec<KfMapRun> {
 fn differential(l: &mut Checks, tag: &str, v3: bool) -> Result<(), String> {
     let fmt = if v3 { kf_format_ver3() } else { kf_format_ver2() };
     let cfg = WalkCfg { table_version: fmt.table_version, ..WalkCfg::default() };
-    let mut k = WalkKernel::bring_up(cfg, fmt).map_err(|e| format!("{tag}: {e}"))?;
+    let mut k = WalkKernel::bring_up_on(cfg, fmt, kf_cuda::walk::WalkDevice::PciBusId(&kf_harness::gate_bdf()?)).map_err(|e| format!("{tag}: {e}"))?;
     let img = k.upload(&vec![0u8; IMG_BYTES]).map_err(|e| e.to_string())?;
     // Slot 3 walks tree A, slot 5 walks tree B — and at step 40 slot 5's object MOVES its root
     // to tree A2 (the slot is the object's: the new root is diffed against what it placed).
@@ -291,7 +291,7 @@ fn differential(l: &mut Checks, tag: &str, v3: bool) -> Result<(), String> {
 /// ★ Q8's shape: 13 000 separate guest-RAM pages, one added per walk.
 fn throughput(l: &mut Checks) -> Result<(), String> {
     const ROWS: u64 = 13_000;
-    let mut k = WalkKernel::bring_up(WalkCfg::default(), kf_format_ver2()).map_err(|e| e.to_string())?;
+    let mut k = WalkKernel::bring_up_on(WalkCfg::default(), kf_format_ver2(), kf_cuda::walk::WalkDevice::PciBusId(&kf_harness::gate_bdf()?)).map_err(|e| e.to_string())?;
     let img = k.upload(&vec![0u8; IMG_BYTES]).map_err(|e| e.to_string())?;
     let mut tree = Tree::new(PT_A, PT_BYTES);
     let mut one_run = 0u64;

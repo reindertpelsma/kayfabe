@@ -33,7 +33,7 @@ fn main() {
 
 fn run(l: &mut Ledger) -> Result<(), String> {
     let dev = DevDir::open(c"/dev").map_err(|e| format!("open /dev: {e:?}"))?;
-    let rm = HostRm::open(&dev, kf_arch::ids::GpuId(0), &kf_chip::choose_host_classes).map_err(|e| e.to_string())?;
+    let rm = HostRm::open(&dev, kf_harness::gate_gpu(), &kf_chip::choose_host_classes).map_err(|e| e.to_string())?;
     l.measure("session", format!("driver {}", rm.driver_version()));
 
     let space = rm.alloc_vaspace().map_err(|e| format!("vaspace: {e:?}"))?;

@@ -51,6 +51,148 @@ pub const NV_IOCTL_MAGIC: u8 = b'F';
 /// not need it at all.
 pub const NV_ESC_REGISTER_FD: u8 = 201;
 
+/// `NV_ESC_CARD_INFO` (`NV_IOCTL_BASE + 0`) —
+/// `ogkm-580: kernel-open/common/inc/nv-ioctl-numbers.h:31`.
+///
+/// ★ Issued on the **control** node (`NV_CTL_DEVICE_ONLY`, `kernel-open/nvidia/nv.c:2527`).
+/// It is the frontend's own table of `{minor, PCI address, RM gpuId}` for every probed GPU —
+/// the only place the kernel states which **minor** is which **RM GPU**. ⊘ The minor is a
+/// Linux character-device number; the RM *device instance* (`NV0080_ALLOC_PARAMETERS
+/// .deviceId`) is assigned at attach time, lowest free first. They coincide only by accident
+/// (V3_MULTI_GPU_AUDIT §2 blocker 2 — measured: minor 1 was instance 0).
+pub const NV_ESC_CARD_INFO: u8 = 200;
+
+/// `nv_ioctl_card_info_t` — `ogkm-580: kernel-open/common/inc/nv-ioctl.h:54-66`, with
+/// `nv_pci_info_t` at `:31-38`. Decoded, never encoded: the kernel `memset`s the whole array
+/// before filling it (`nv.c:2333`).
+///
+/// Layout (x86-64 and aarch64 alike; `NV_ALIGN_BYTES(8)` on the 64-bit fields):
+/// `valid` +0 (NvBool), `pci_info.domain` +4, `.bus` +8, `.slot` +9, `.function` +10,
+/// `.vendor_id` +12, `.device_id` +14, `gpu_id` +16, `interrupt_line` +20, `reg_address` +24,
+/// `reg_size` +32, `fb_address` +40, `fb_size` +48, `minor_number` +56, `dev_name[10]` +60,
+/// `sizeof` = 72.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct CardInfo {
+    /// `valid` — the kernel fills entries front to back and leaves the rest zero.
+    pub valid: bool,
+    /// PCI domain.
+    pub domain: u32,
+    /// PCI bus.
+    pub bus: u8,
+    /// PCI slot (device).
+    pub slot: u8,
+    /// PCI function.
+    pub function: u8,
+    /// PCI device id.
+    pub device_id: u16,
+    /// RM's `gpuId` — the key every `NV0000_CTRL_CMD_GPU_*` control takes.
+    pub gpu_id: u32,
+    /// BAR0 size.
+    pub reg_size: u64,
+    /// The `/dev/nvidia<minor>` number.
+    pub minor: u32,
+}
+
+impl CardInfo {
+    /// The C typedef name.
+    pub const C_NAME: &'static str = "nv_ioctl_card_info_t";
+    /// `sizeof`.
+    pub const SIZE: usize = 72;
+    /// Entries asked for in one call. `nvidia_read_card_info` refuses with `EINVAL` when the
+    /// array is shorter than the number of probed GPUs (`nv.c:2337`), so ask for the RM
+    /// ceiling (`NV_MAX_DEVICES` = 32) — 2304 bytes, well inside the direct-ioctl size.
+    pub const MAX_ENTRIES: usize = 32;
+
+    /// Decode one entry.
+    ///
+    /// # Errors
+    /// [`AbiError::OutOfRange`] on a short buffer.
+    pub fn decode(b: &[u8]) -> Result<CardInfo, AbiError> {
+        Ok(CardInfo {
+            valid: crate::wire::u8_at(b, 0)? != 0,
+            domain: u32_at(b, 4)?,
+            bus: crate::wire::u8_at(b, 8)?,
+            slot: crate::wire::u8_at(b, 9)?,
+            function: crate::wire::u8_at(b, 10)?,
+            device_id: crate::wire::u16_at(b, 14)?,
+            gpu_id: u32_at(b, 16)?,
+            reg_size: u64_at(b, 32)?,
+            minor: u32_at(b, 56)?,
+        })
+    }
+
+    /// The PCI address as Linux and CUDA spell it: `dddd:bb:ss.f` (lower-case hex), the
+    /// `/sys/bus/pci/devices/<bdf>` name and the form `cuDeviceGetByPCIBusId` accepts.
+    #[must_use]
+    pub fn bdf(&self) -> String {
+        format!("{:04x}:{:02x}:{:02x}.{:x}", self.domain, self.bus, self.slot, self.function)
+    }
+
+    /// Decode a whole `CARD_INFO` reply, keeping only valid entries.
+    ///
+    /// # Errors
+    /// As [`CardInfo::decode`].
+    pub fn decode_all(b: &[u8]) -> Result<Vec<CardInfo>, AbiError> {
+        let mut out = Vec::new();
+        for chunk in b.chunks_exact(Self::SIZE) {
+            let c = Self::decode(chunk)?;
+            if c.valid {
+                out.push(c);
+            }
+        }
+        Ok(out)
+    }
+}
+
+/// `NV0000_CTRL_CMD_GPU_GET_ID_INFO_V2` —
+/// `ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl0000/ctrl0000gpu.h:172`. On the root client,
+/// `NON_PRIVILEGED` (flags `0x109`, `g_client_resource_nvoc.c:813`).
+pub const NV0000_CTRL_CMD_GPU_GET_ID_INFO_V2: u32 = 0x205;
+
+/// `NV0000_CTRL_GPU_GET_ID_INFO_V2_PARAMS` — `ctrl0000gpu.h:176-185`. Eight `NvU32`s.
+///
+/// ★ `deviceInstance` is the value `NV0080_ALLOC_PARAMETERS.deviceId` must carry, and
+/// `subDeviceInstance` the value `NV2080_ALLOC_PARAMETERS.subDeviceId` must carry. RM answers
+/// only for an **attached** GPU (`gpumgrGetGpuIdInfoV2`), so this is asked after the per-GPU
+/// node's open + `REGISTER_FD`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct GpuIdInfoV2 {
+    /// `gpuId` @ +0 — in.
+    pub gpu_id: u32,
+    /// `deviceInstance` @ +8 — out.
+    pub device_instance: u32,
+    /// `subDeviceInstance` @ +12 — out.
+    pub sub_device_instance: u32,
+}
+
+impl GpuIdInfoV2 {
+    /// The C typedef name.
+    pub const C_NAME: &'static str = "NV0000_CTRL_GPU_GET_ID_INFO_V2_PARAMS";
+    /// `sizeof`.
+    pub const SIZE: usize = 32;
+
+    /// Encode the request (`gpuId` only; every out field zero).
+    ///
+    /// # Errors
+    /// [`AbiError::Truncated`].
+    pub fn encode_request(gpu_id: u32, bytes: &mut [u8]) -> Result<(), AbiError> {
+        put(bytes, Self::C_NAME, Self::SIZE, 0, &[0u8; Self::SIZE])?;
+        put(bytes, Self::C_NAME, Self::SIZE, 0, &gpu_id.to_le_bytes())
+    }
+
+    /// Decode RM's reply.
+    ///
+    /// # Errors
+    /// [`AbiError::OutOfRange`].
+    pub fn decode(b: &[u8]) -> Result<GpuIdInfoV2, AbiError> {
+        Ok(GpuIdInfoV2 {
+            gpu_id: u32_at(b, 0)?,
+            device_instance: u32_at(b, 8)?,
+            sub_device_instance: u32_at(b, 12)?,
+        })
+    }
+}
+
 /// `NV_ESC_CHECK_VERSION_STR` (`NV_IOCTL_BASE + 10`) —
 /// `ogkm-580: kernel-open/common/inc/nv-ioctl-numbers.h:14`.
 ///
@@ -1071,5 +1213,69 @@ mod tests {
         }
         assert_eq!(NV_ESC_REGISTER_FD, 200 + 1);
         assert_eq!(NV_ESC_CHECK_VERSION_STR, 200 + 10);
+    }
+
+    /// ★ `nv_ioctl_card_info_t`'s offsets, pinned by a `#[repr(C)]` mirror of the C header
+    /// (`nv-ioctl.h:31-38,54-66`) rather than by the hand-written numbers in `decode` — two
+    /// statements of one layout that must agree.
+    #[test]
+    fn card_info_layout_matches_the_c_header() {
+        #[repr(C)]
+        struct PciInfo {
+            domain: u32,
+            bus: u8,
+            slot: u8,
+            function: u8,
+            vendor_id: u16,
+            device_id: u16,
+        }
+        #[repr(C)]
+        struct Ci {
+            valid: u8,
+            pci_info: PciInfo,
+            gpu_id: u32,
+            interrupt_line: u16,
+            reg_address: u64,
+            reg_size: u64,
+            fb_address: u64,
+            fb_size: u64,
+            minor_number: u32,
+            dev_name: [u8; 10],
+        }
+        assert_eq!(core::mem::size_of::<Ci>(), CardInfo::SIZE);
+        assert_eq!(core::mem::offset_of!(Ci, pci_info), 4);
+        assert_eq!(core::mem::offset_of!(Ci, pci_info) + core::mem::offset_of!(PciInfo, bus), 8);
+        assert_eq!(core::mem::offset_of!(Ci, pci_info) + core::mem::offset_of!(PciInfo, slot), 9);
+        assert_eq!(core::mem::offset_of!(Ci, pci_info) + core::mem::offset_of!(PciInfo, device_id), 14);
+        assert_eq!(core::mem::offset_of!(Ci, gpu_id), 16);
+        assert_eq!(core::mem::offset_of!(Ci, reg_size), 32);
+        assert_eq!(core::mem::offset_of!(Ci, minor_number), 56);
+
+        let mut b = vec![0u8; CardInfo::SIZE * 3];
+        // entry 0: minor 1 on bus 0x41; entry 1: minor 0 on bus 0x01; entry 2 invalid.
+        for (i, (bus, minor, gpu)) in [(0x41u8, 1u32, 0x4100u32), (0x01, 0, 0x100)].iter().enumerate() {
+            let o = i * CardInfo::SIZE;
+            b[o] = 1;
+            b[o + 8] = *bus;
+            b[o + 16..o + 20].copy_from_slice(&gpu.to_le_bytes());
+            b[o + 56..o + 60].copy_from_slice(&minor.to_le_bytes());
+        }
+        let all = CardInfo::decode_all(&b).expect("decode");
+        assert_eq!(all.len(), 2, "the zeroed tail entry is not a GPU");
+        assert_eq!((all[0].minor, all[0].bus, all[0].gpu_id), (1, 0x41, 0x4100));
+        assert_eq!((all[1].minor, all[1].bus, all[1].gpu_id), (0, 0x01, 0x100));
+        assert_eq!(NV_ESC_CARD_INFO, 200);
+    }
+
+    #[test]
+    fn gpu_id_info_v2_request_and_reply() {
+        let mut b = [0xAAu8; GpuIdInfoV2::SIZE];
+        GpuIdInfoV2::encode_request(0x4100, &mut b).expect("encode");
+        assert_eq!(&b[0..4], &0x4100u32.to_le_bytes());
+        assert!(b[4..].iter().all(|&x| x == 0), "every out field starts zero");
+        b[8..12].copy_from_slice(&0u32.to_le_bytes());
+        b[12..16].copy_from_slice(&0u32.to_le_bytes());
+        let r = GpuIdInfoV2::decode(&b).expect("decode");
+        assert_eq!((r.gpu_id, r.device_instance, r.sub_device_instance), (0x4100, 0, 0));
     }
 }

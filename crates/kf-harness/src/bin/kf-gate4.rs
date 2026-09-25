@@ -260,12 +260,12 @@ impl Channels<'_, '_> {
 #[allow(clippy::too_many_lines)]
 fn run(l: &mut Checks) -> Result<(), String> {
     let dev = DevDir::open(c"/dev").map_err(|e| format!("open /dev: {e:?}"))?;
-    let rm = HostRm::open(&dev, kf_arch::ids::GpuId(0), &kf_chip::choose_host_classes).map_err(|e| e.to_string())?;
+    let rm = HostRm::open(&dev, kf_harness::gate_gpu(), &kf_chip::choose_host_classes).map_err(|e| e.to_string())?;
     let ce_class = rm.ce_class_id();
     let res = rm.reserve_gpga(STORE_BYTES).map_err(|e| format!("reserve: {e:?}"))?;
     let store = res.handle;
     let fd = rm.export_to_new_fd(store).map_err(|e| format!("export: {e:?}"))?;
-    let mut walk = WalkKernel::bring_up(WalkCfg::default(), kf_format_ver2()).map_err(|e| e.to_string())?;
+    let mut walk = WalkKernel::bring_up_on(WalkCfg::default(), kf_format_ver2(), kf_cuda::walk::WalkDevice::PciBusId(&rm.card().bdf())).map_err(|e| e.to_string())?;
     walk.import_store(fd.fd_number(), STORE_BYTES).map_err(|e| e.to_string())?;
     let space = rm.alloc_vaspace().map_err(|e| format!("vaspace: {e:?}"))?;
     let fb_base = rm.map_window(space, store, STORE_BYTES, true).map_err(|e| format!("identity window: {e:?}"))?;

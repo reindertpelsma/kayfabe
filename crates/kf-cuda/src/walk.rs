@@ -580,10 +580,22 @@ pub struct WalkKernel {
     rrun: DevBuf,
     /// Device name, for the census.
     pub device_name: String,
+    /// ★ The `CUdevice` the context was created on — the import's access grant names it too.
+    device: i32,
     /// How long the whole bring-up took, in microseconds.
     pub bring_up_us: u64,
     /// How long `cuModuleLoadData` alone took — the PTX JIT.
     pub jit_us: u64,
+}
+
+/// ★ Which CUDA device a [`WalkKernel`] is brought up on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WalkDevice<'a> {
+    /// CUDA ordinal 0 — for single-GPU harnesses (the gates, the self-test) only. ⊘ Never for
+    /// a kf3 device: ordinal 0 is the *fastest* GPU, not the one the store was exported from.
+    FirstOrdinal,
+    /// The GPU at this PCI address (`dddd:bb:ss.f`) — what `kf_host::HostRm::card` states.
+    PciBusId(&'a str),
 }
 
 /// The bytes of a `#[repr(C)]` value, for `cuLaunchKernel`'s by-value parameter.
@@ -617,6 +629,18 @@ impl WalkKernel {
     /// opened**, which is the whole of §21's *"a Rust/PTX skew must fail loudly at launch, not
     /// decode garbage field offsets and look like a page-table bug"*.
     pub fn bring_up(cfg: WalkCfg, fmt: KfFormat) -> Result<WalkKernel, CudaError> {
+        Self::bring_up_on(cfg, fmt, WalkDevice::FirstOrdinal)
+    }
+
+    /// ★★ As [`WalkKernel::bring_up`], on the CUDA device `on` names. A kf3 device passes
+    /// [`WalkDevice::PciBusId`] with its host GPU's PCI address, so its walker context, its
+    /// store import and its access grant are all on the GPU whose RM exported the store
+    /// (§w724f: *"the CUDA context — bound to a device"*; V3_MULTI_GPU_AUDIT §2 blocker 1).
+    ///
+    /// # Errors
+    /// As [`WalkKernel::bring_up`]; a PCI address this process's CUDA cannot see is refused by
+    /// name, never replaced by ordinal 0.
+    pub fn bring_up_on(cfg: WalkCfg, fmt: KfFormat, on: WalkDevice<'_>) -> Result<WalkKernel, CudaError> {
         let t0 = std::time::Instant::now();
         // ★★★★★ THE ABI GATE, and it is FIRST — before `dlopen`, so a skew can never be
         // mistaken for a CUDA problem or masked by one.
@@ -654,7 +678,10 @@ impl WalkKernel {
                     .to_string(),
             });
         }
-        let dev_ord = cu.device_get(0)?;
+        let dev_ord = match on {
+            WalkDevice::FirstOrdinal => cu.device_get(0)?,
+            WalkDevice::PciBusId(bdf) => cu.device_by_pci_bus_id(bdf)?,
+        };
         let device_name = cu.device_name(dev_ord);
         let ctx = cu.ctx_create(dev_ord)?;
 
@@ -803,6 +830,7 @@ impl WalkKernel {
             rpdb,
             rrun,
             device_name,
+            device: dev_ord,
             bring_up_us: 0,
             jit_us,
         };
@@ -1544,7 +1572,7 @@ impl WalkKernel {
         })?;
         // ⊘ `import_and_map` reports which of its four steps refused as a string; carried in
         // `name` verbatim so the step is not lost to a generic code.
-        let p = self.cu.import_and_map(0, fd, n).map_err(|name| CudaError::Refused {
+        let p = self.cu.import_and_map(self.device, fd, n).map_err(|name| CudaError::Refused {
             what: "cuMemImportFromShareableHandle + cuMemMap",
             code: 0,
             name,
