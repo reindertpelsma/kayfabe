@@ -127,7 +127,12 @@ the GA106 bench (host 580.159.04); `v3_gates.sh` 8/8 PASS at `20cc4888`.
 
 **STATUS UPDATE, 2026-09-25 (v3-promote, branch `v3-promote` off `v3` `e7b7f28d`): ✔ `--uvm-mean`
 PASSES — item 21 (P3 `GPU_PROMOTE_CTX`) is closed, satisfied by the twin (owner ruling
-2026-09-25).** Measured on a fresh GA106 bench (host 580.159.04), boot `pr4` at `a4b7437b`:
+2026-09-25).** Measured on a fresh GA106 bench (host 580.159.04), boot `pr4` at `a4b7437b`; re-measured
+at `74a0cbc5` (boot `pr6`: P3 VERIFIED, `W392D_OUTCOME=(P)`); `v3_gates.sh` 8/8 PASS at `74a0cbc5`;
+suite `prs2` at `74a0cbc5`: `FAST_SUITE_PASS=28 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=2` — `--uvm-mean` and
+`--uvm-invalidate` PASS; TIMEOUT `--ce-client-guest-ram` (Q8, unchanged) and `--concurrency`, which is
+NOT this branch: `[measured base1/base2]` `origin/v3` `e7b7f28d` times out `--concurrency` at 60 s on
+this box too (twice), and the arm issues no promote.
 
 ```
 ★     W392D P3 arm A      = schedule REFUSED 0x40 BEFORE the promote — the negative control fired
