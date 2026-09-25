@@ -88,7 +88,15 @@ BOOT_TIMEOUT=${BOOT_TIMEOUT:-150}
 # ⊘ `MISSING` is printed rather than an empty string, and it is not fatal: a boot that cannot
 # name its binary should still run, and should be UNCITABLE rather than silently unattributed.
 QBIN=${QEMU_BIN:-$BENCH/qemu-build/qemu-system-x86_64}
+# ★ w827: KF_DEVICE=kf3 — the per-revision kf3 binary (boot_nvkvm.sh selects the same one).
+if [ "${KF_DEVICE:-nvkvm}" = kf3 ] && [ -z "${QEMU_BIN:-}" ]; then
+  _kr=$(git -C "$(cd "$(dirname "$0")/../.." && pwd)" rev-parse --short=8 HEAD 2>/dev/null || echo unknown)
+  [ -z "$(git -C "$(cd "$(dirname "$0")/../.." && pwd)" status --porcelain --untracked-files=no 2>/dev/null)" ] || _kr="$_kr-dirty"
+  QBIN=$BENCH/kf3-bins/$_kr/qemu-system-x86_64
+fi
 REV=$(strings "$QBIN" 2>/dev/null | grep -o 'kayfabe-rev:[0-9a-f]\{8,40\}' | sort -u | head -1)
+# ⊘ kf3 carries no stamp; its binary is keyed BY revision in its own path (build_kf3.sh).
+[ -z "$REV" ] && [ "${KF_DEVICE:-nvkvm}" = kf3 ] && REV="kf3-bin-rev:$(basename "$(dirname "$QBIN")")"
 REV=${REV:-kayfabe-rev:MISSING}
 printf '%s\n' "$REV" > "${LOG}_rev.txt"
 
@@ -222,11 +230,11 @@ gq() {
 {
   echo "=== boot_capture tag=$TAG at $(date -Is) ==="
   echo "=== source revision: $(git -C "${REPO:-$(dirname "$0")/../..}" rev-parse --short HEAD 2>/dev/null || echo UNKNOWN) ==="
-  echo "=== qemu binary: $(ls -l "$BENCH/qemu-build/qemu-system-x86_64" 2>/dev/null) ==="
+  echo "=== qemu binary: $(ls -l "$QBIN" 2>/dev/null) ==="
   # ★★ The archive revision comes from INSIDE the binary, never from BUILD_REV.txt.
   # `[measured]` 2026-08-03, vast 46494693: that file named a third revision while the
   # binary's own stamp named a fourth. A file that claims to record a fact is not the fact.
-  echo "=== archive rev STAMPED IN THE BINARY: $(strings "$BENCH/qemu-build/qemu-system-x86_64" 2>/dev/null | grep -o 'kayfabe-rev:[0-9a-f]*' | sort -u | tr '\n' ' ')"
+  echo "=== archive rev STAMPED IN THE BINARY: $(strings "$QBIN" 2>/dev/null | grep -o 'kayfabe-rev:[0-9a-f]*' | sort -u | tr '\n' ' ')"
   echo "=== BUILD_REV.txt says (informational, NOT authoritative): $(cat "$BENCH/BUILD_REV.txt" 2>/dev/null | head -1)"
   # ★★★ WHICH helper files actually ran, with hashes — see the note at the top of phase 0.
   echo "=== helpers (KAYFABE_BENCH_HELPERS=$HELPERS) ==="
@@ -461,7 +469,13 @@ wait $QPID 2>/dev/null
 # ⊘ A boot whose census is missing must not read as a boot with nothing to report. The
 # counters line is emitted unconditionally by the exit notifier, so its ABSENCE means the
 # notifier never ran — never that the numbers were zero.
-if grep -q 'nvkvm: doorbells:' "${LOG}_qemu.log" 2>/dev/null; then
+# ★ w827: kf3's end-of-run report is its `kf3: family=… trapped=…` status line (plus the per-token
+# DOORBELL-LEDGER lines printed as each channel is freed), not the old device's `nvkvm: doorbells:`.
+if [ "${KF_DEVICE:-nvkvm}" = kf3 ] && grep -q 'kf3: family=' "${LOG}_qemu.log" 2>/dev/null; then
+  say "census present (kf3):"
+  grep -a 'kf3: family=' "${LOG}_qemu.log" | tail -1 | cut -c1-300 | sed 's/^/    /'
+  grep -a 'DOORBELL-LEDGER' "${LOG}_qemu.log" | sed 's/^.*DOORBELL-LEDGER/    DOORBELL-LEDGER/'
+elif grep -q 'nvkvm: doorbells:' "${LOG}_qemu.log" 2>/dev/null; then
   say "census present:"
   grep -E 'nvkvm: (doorbells:|  first doorbell|  last local)' "${LOG}_qemu.log" | sed 's/^/    /'
 else

@@ -119,10 +119,6 @@ case "$ARMS_TOK" in *[[:space:]]*) echo "run_fast_guest: KF_ARMS still holds whi
 DEADLINE_MS=$(( (BUDGET - 4) * 1000 ))
 [ "$DEADLINE_MS" -gt 1000 ] || DEADLINE_MS=1000
 
-# ★ w827 — `KF_CUDA=cup3` runs a CUDA ladder rung (carried by `build_fast_guest.sh` with
-# KF_CUDA_BINS) INSTEAD of the raw client; one whitespace-free token, like KF_ARMS.
-case "${KF_CUDA:-}" in *[[:space:]]*) echo "run_fast_guest: KF_CUDA holds whitespace: [$KF_CUDA]" >&2; exit 2 ;; esac
-[ -n "${KF_CUDA:-}" ] && echo "== CUDA ladder rung(s): $KF_CUDA (the raw client does NOT run)"
 echo "== arms: $ARMS_TOK   budget: ${BUDGET}s   self-deadline: ${DEADLINE_MS}ms   trace: ${KF_IOCTL_TRACE:-ring}"
 # ⊘ SUPERSEDED 2026-09-25 (coordinator ruling): the timing lane's default is now `ring`, and
 # `verbose` is opt-in (`KF_IOCTL_TRACE=verbose`). `[measured vh, 536fcf85..acf0f907]` every verbose
@@ -284,7 +280,7 @@ start=$(date +%s)
 timeout --kill-after=3 "$BUDGET" "$Q" \
     "${RAMARGS[@]}" -cpu host -smp "${KF_SMP:-3}" \
     -kernel "$FG/vmlinuz" -initrd "$FG/initrd.cpio.gz" \
-    -append "$CONSOLE panic=1 loglevel=6 ${KF_APPEND:-}${KF_CUDA:+KF_CUDA=$KF_CUDA }KF_ARMS=$ARMS_TOK KF_IOCTL_TRACE=${KF_IOCTL_TRACE:-ring} KF_BUDGET_S=$BUDGET" \
+    -append "$CONSOLE panic=1 loglevel=6 ${KF_APPEND:-}KF_ARMS=$ARMS_TOK KF_IOCTL_TRACE=${KF_IOCTL_TRACE:-ring} KF_BUDGET_S=$BUDGET" \
     "${DEVARGS[@]}" \
     -msg timestamp=on \
     "${CONARGS[@]}" -display none \

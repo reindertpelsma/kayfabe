@@ -78,9 +78,13 @@ for arm in "${ARMS[@]}"; do
         *)        crash=$((crash+1)) ;;
     esac
     [ "$notrun_this" = 1 ] && [ -z "$secs" ] && secs="-"
-    # ★ w827: the raw client's OWN wall inside the guest (ns stamps around it in /init), boot
-    # excluded — the number comparable to bare_metal_suite.sh's per-arm `ms=`.
-    cms=$(grep -ao 'FASTGUEST: client wall_ms=[0-9]*' "$BENCH/fast_${TAG}_${name}_serial.log" 2>/dev/null | tail -1 | grep -o '[0-9]*$')
+    # ★ w827: the raw client's OWN wall inside the guest, boot excluded — `/init`'s guest-uptime
+    # stamps `ready <t0>s` (just before the client starts) and `client rc=N at <t1>s` (10 ms
+    # resolution). The number comparable to bare_metal_suite.sh's per-arm `ms=`.
+    ser="$BENCH/fast_${TAG}_${name}_serial.log"
+    t0=$(grep -ao 'FASTGUEST: ready [0-9.]*s' "$ser" 2>/dev/null | tail -1 | grep -o '[0-9.]*s$' | tr -d s)
+    t1=$(grep -ao 'FASTGUEST: client rc=[0-9]* at [0-9.]*s' "$ser" 2>/dev/null | tail -1 | grep -o '[0-9.]*s$' | tr -d s)
+    cms=$( [ -n "$t0" ] && [ -n "$t1" ] && awk -v a="$t0" -v b="$t1" 'BEGIN{printf "%d", (b-a)*1000}' )
     printf '%-28s %-9s %-5s %s\n' "$arm" "$v" "${secs:-?}s" "$why" >> "$OUT"
     echo "FAST_CELL_ARM arm=$name verdict=$v secs=${secs:-?} client_ms=${cms:-?}" >> "$OUT"
 done
