@@ -466,7 +466,11 @@ fn every_variant_of_the_served_universe_round_trips_through_its_own_control_id()
     // `0x20802a07` it needs no derivation either, because EVERY field is `[input]`. The
     // reply is the guest's own facts re-encoded from what the decoder accepted; this port
     // states no number of its own anywhere in it. See `kf_abi::fmbpromote`.
-    assert_eq!(WantedTable::ALL.len(), 47, "the served universe\'s size");
+    // ★ 47 -> 48 at v3-gfx: `0x20800a2c` INTERNAL_STATIC_KGR_GET_ZCULL_INFO, from the host's
+    // unprivileged GR_GET_ZCULL_INFO. Boot never needed it (its status is clobbered,
+    // `kernel_graphics.c:1360`); graphics does — the guest serves the client zcull query from
+    // this cache alone (`V3_HEADLESS_GRAPHICS.md` §1.2).
+    assert_eq!(WantedTable::ALL.len(), 48, "the served universe\'s size");
     let mut ids = std::collections::BTreeSet::new();
     for w in WantedTable::ALL {
         let id = w.cmd_id();

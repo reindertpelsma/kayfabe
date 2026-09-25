@@ -607,14 +607,17 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
     SweepControl {
         cmd: 0x2080_0a2c,
         engine: "KernelGraphics",
-        // ★★ The correction this rung is proudest of, because the `else if` reads the
-        // other way. See kf_abi::grstatic's header.
-        disposition: SweepDisposition::AmputationIntended,
-        why: "GET_ZCULL_INFO. ⚠ Its else-if forgives NV_ERR_NOT_SUPPORTED only under MIG \
-              (ogkm-580: kernel_graphics.c:1345-1356), which is OFF here — so read alone it \
-              looks mandatory. It is not: the arm does not branch, and the next paragraph's \
-              first act is `status = pRmApi->Control(...)` for ROP at :1360, an ASSIGNMENT \
-              that discards it. The 0x56 is dead before anything tests it",
+        // ★★ v3-gfx 2026-09-26: re-triaged from AmputationIntended. The BOOT argument below still
+        // holds; what it missed is the state the refusal leaves for GRAPHICS.
+        disposition: SweepDisposition::RefusalFailsOpen,
+        why: "GET_ZCULL_INFO. Boot survives a refusal: its else-if forgives NV_ERR_NOT_SUPPORTED \
+              only under MIG (ogkm-580: kernel_graphics.c:1345-1356), but the next paragraph's \
+              first act is `status = pRmApi->Control(...)` for ROP at :1360, an ASSIGNMENT that \
+              discards it. ⊘ But the refusal leaves pZcullInfo NULL, and the client control \
+              GR_GET_ZCULL_INFO 0x20801206 is served by the guest's CPU-RM from that cache \
+              ALONE (kernel_graphics.c:3862-3863) — so every GL/Vulkan zcull query answers \
+              NV_ERR_NOT_SUPPORTED where a real GSP states the geometry. Served, engine 0 from \
+              the host's own unprivileged GR_GET_ZCULL_INFO (V3_HEADLESS_GRAPHICS.md §1.2)",
     },
     SweepControl {
         cmd: 0x2080_0a2e,

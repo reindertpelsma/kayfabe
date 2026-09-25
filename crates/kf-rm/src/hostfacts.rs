@@ -94,6 +94,8 @@ pub struct HostFacts {
     pub gr_info: GrInfoProfile,
     /// GR context buffer sizes (`GR_GET_ENGINE_CONTEXT_PROPERTIES`).
     pub gr_context_buffers: [ContextBuffer; CONTEXT_BUFFER_ID_COUNT],
+    /// ★ v3-gfx: GR zcull geometry (`GR_GET_ZCULL_INFO`); `None` = the host die has none.
+    pub gr_zcull_info: Option<[u32; kf_abi::grstatic::ZCULL_INFO_ROW_WORDS]>,
     /// `GPU_GET_INFO_V2` indices answered from the host's own reply.
     pub forwarded_gpu_info: Vec<(u32, u32)>,
     /// SMC (MIG) mode (`GPU_GET_INFO_V2[GPU_SMC_MODE]`; ⚠ the INTERNAL `GET_SMC_MODE` is
@@ -165,6 +167,7 @@ pub const PROVENANCE: &[(&str, Source)] = &[
     ("gr_static", Source::HostControl { cmd: 0x2080_1228, name: "GR_GET_INFO_V2 (SMs per TPC) + GR_GET_GPC_MASK 0x2080122a / GR_GET_TPC_MASK 0x2080122b / GR_GET_GLOBAL_SM_ORDER 0x2080121b / GR_GET_CAPS_V2 0x20801227; + GR_GET_ZCULL_MASK 0x20801237; mmu-per-GPC / PES per GPC from GR info litters; TPC-to-PES map, FECS record size, per-subctx header authored (authored.rs)" }),
     ("gr_info", Source::HostControl { cmd: 0x2080_1228, name: "GR_GET_INFO_V2" }),
     ("gr_context_buffers", Source::HostControl { cmd: 0x2080_122d, name: "GR_GET_ENGINE_CONTEXT_PROPERTIES" }),
+    ("gr_zcull_info", Source::HostControl { cmd: 0x2080_1206, name: "GR_GET_ZCULL_INFO (host NOT_SUPPORTED = no zcull on the die)" }),
     ("forwarded_gpu_info", Source::HostControl { cmd: 0x2080_0102, name: "GPU_GET_INFO_V2" }),
     // ⊘ w827 CORRECTED from `GPU_GET_PARTITIONS 0x20800175` "(no partitions => SMC
     // unsupported)": an inference, and wrong for a MIG-capable part with MIG off (A100 is

@@ -491,6 +491,11 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
         WantedTable::GrGlobalSmOrder,
         WantedTable::GrFecsRecordSize,
         WantedTable::GrPdbProperties,
+        // ⚠ v3-gfx: `0x20800a2c` ZCULL_INFO — gpuStateLoad's GR static run, past `cap1b`'s
+        // closure limit like its siblings above. ★ Covered by
+        // `kf-rm/tests/host_facts_query_ga106.rs::gr_zcull_info_is_the_hosts_reply_and_only_not_supported_means_none`
+        // (the row is the host's own reply word for word; engine 0 only).
+        WantedTable::GrZcullInfo,
         WantedTable::GrContextBuffersInfo,
         WantedTable::GvaspaceServerReservedPdesClient,
         WantedTable::GpuInfoV2,
@@ -683,10 +688,12 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
     // controls (59.6 %) are outside this differential's reach**, up from 22 of 41 (53.7 %).
     // The note below still says the exception set is SMALL; it is no longer small, and the
     // sentence is left standing with this correction above it rather than quietly softened.
-    assert_eq!(universe.len(), 47, "non-vacuity: the universe is not empty");
+    // ⊘ 47 -> 48 and 28 -> 29 at v3-gfx (`0x20800a2c` ZCULL_INFO): past the closure limit, as
+    // its GR static-info siblings are — 29 of 48 (60.4 %).
+    assert_eq!(universe.len(), 48, "non-vacuity: the universe is not empty");
     assert_eq!(
         outside_the_closure_limit.len(),
-        28,
+        29,
         "non-vacuity in the other direction: the exception set is SMALL, and every entry \
          costs reply-plane coverage"
     );

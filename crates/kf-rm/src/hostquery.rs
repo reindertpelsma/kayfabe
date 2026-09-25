@@ -491,6 +491,34 @@ pub fn query_gr_geometry(host: &mut dyn HostControls, gr_info: Option<&GrInfoPro
     Ok(GrGeometry { gpc_mask, tpc_masks, zcull_masks, tpcs, sms_per_tpc, caps })
 }
 
+/// `NV2080_CTRL_CMD_GR_GET_ZCULL_INFO` — the unprivileged client control (flags `0x10109`,
+/// `g_subdevice_nvoc.c`), 40 bytes, all `[OUT]`.
+pub const NV2080_CTRL_CMD_GR_GET_ZCULL_INFO: u32 = 0x2080_1206;
+
+/// ★ v3-gfx: `gr_zcull_info` — the host's own zcull geometry (`GR_GET_ZCULL_INFO`). The host's
+/// `NV_ERR_NOT_SUPPORTED` — RM's answer when its cache is empty (`kernel_graphics.c:3862-3863`),
+/// i.e. a die with no zcull — is carried as `None`, and the guest's internal control is then
+/// refused exactly as that die's own GSP would.
+///
+/// # Errors
+/// [`FieldCause`] — any other refusal.
+pub fn query_gr_zcull_info(
+    host: &mut dyn HostControls,
+) -> Result<Option<[u32; kf_abi::grstatic::ZCULL_INFO_ROW_WORDS]>, FieldCause> {
+    let mut z = zeroed(4 * kf_abi::grstatic::ZCULL_INFO_ROW_WORDS);
+    match host.control(NV2080_CTRL_CMD_GR_GET_ZCULL_INFO, &mut z) {
+        Ok(()) => {
+            let mut row = [0u32; kf_abi::grstatic::ZCULL_INFO_ROW_WORDS];
+            for (i, w) in row.iter_mut().enumerate() {
+                *w = u32::from_le_bytes([z[4 * i], z[4 * i + 1], z[4 * i + 2], z[4 * i + 3]]);
+            }
+            Ok(Some(row))
+        }
+        Err(HostRefusal { status: Some(NV_ERR_NOT_SUPPORTED), .. }) => Ok(None),
+        Err(refused) => Err(FieldCause::Host { cmd: NV2080_CTRL_CMD_GR_GET_ZCULL_INFO, refused }),
+    }
+}
+
 /// ★★ `gr_static` from the host geometry, the host's GR litters, and the authored members:
 ///
 /// | member | source |
@@ -723,6 +751,7 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
         (Ok(_), Err(_)) => Err(FieldCause::DependsOn("gr_info")),
     };
     let gr_context_buffers = query_gr_context_buffers(host);
+    let gr_zcull_info = query_gr_zcull_info(host);
     let forwarded_gpu_info = query_forwarded_gpu_info(host);
     let smc_mode = query_smc_mode(host);
     let pcie_max_gen = query_pcie_max_gen(host);
@@ -757,6 +786,7 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
     let gr_static = take!(gr_static);
     let gr_info = take!(gr_info);
     let gr_context_buffers = take!(gr_context_buffers);
+    let gr_zcull_info = take!(gr_zcull_info);
     let forwarded_gpu_info = take!(forwarded_gpu_info);
     let smc_mode = take!(smc_mode);
     let pcie_max_gen = take!(pcie_max_gen);
@@ -779,6 +809,7 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
         gr_static,
         gr_info,
         gr_context_buffers,
+        gr_zcull_info,
         forwarded_gpu_info,
         smc_mode,
         pcie_max_gen,
@@ -801,6 +832,7 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
             Some(gr_static),
             Some(gr_info),
             Some(gr_context_buffers),
+            Some(gr_zcull_info),
             Some(forwarded_gpu_info),
             Some(smc_mode),
             Some(pcie_max_gen),
@@ -827,6 +859,7 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
             gr_static,
             gr_info,
             gr_context_buffers,
+            gr_zcull_info,
             forwarded_gpu_info,
             smc_mode,
             pcie_max_gen,

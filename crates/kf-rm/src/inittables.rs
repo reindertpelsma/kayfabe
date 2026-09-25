@@ -663,6 +663,12 @@ pub enum WantedTable {
     /// (`kernel_graphics.c:1521`). It is the last mandatory one, so it is the one that
     /// decides whether GR has static info at all.
     GrPdbProperties,
+    /// ★ v3-gfx: `NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_ZCULL_INFO` — 320 bytes, engine 0 from
+    /// the host's unprivileged `GR_GET_ZCULL_INFO` (`kf_abi::grstatic::encode_zcull_info`). Boot
+    /// survives its refusal (the status is clobbered, `kernel_graphics.c:1360`), but the guest's
+    /// client `GR_GET_ZCULL_INFO` is served ONLY from this cache — refused, every GL/Vulkan zcull
+    /// query answers `NV_ERR_NOT_SUPPORTED` (`V3_HEADLESS_GRAPHICS.md` §1.2).
+    GrZcullInfo,
     /// `NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER` — ★★★
     /// the only control this port serves in which the guest is **telling us** something
     /// rather than asking: the physical addresses of the page-directory levels it reserved
@@ -1087,7 +1093,7 @@ impl WantedTable {
     ///
     /// [`WantedTable::cmd_id`] remains the mechanism on the other side — exhaustive over
     /// `Self`, so a new variant does not compile until it has an id.
-    pub const ALL: [WantedTable; 47] = [
+    pub const ALL: [WantedTable; 48] = [
         Self::DeviceInfo,
         Self::IntrKernelTable,
         Self::PciBarInfo,
@@ -1112,6 +1118,7 @@ impl WantedTable {
         Self::GrGlobalSmOrder,
         Self::GrFecsRecordSize,
         Self::GrPdbProperties,
+        Self::GrZcullInfo,
         Self::GvaspaceServerReservedPdes,
         Self::GvaspaceServerReservedPdesClient,
         Self::GrContextBuffersInfo,
@@ -1192,6 +1199,7 @@ impl WantedTable {
             Self::GrPdbProperties => {
                 grstatic::NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_PDB_PROPERTIES
             }
+            Self::GrZcullInfo => grstatic::NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_ZCULL_INFO,
             Self::GvaspaceServerReservedPdes => {
                 gvaspacepdes::NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER
             }
@@ -1270,6 +1278,7 @@ impl WantedTable {
             Self::GrGlobalSmOrder => grstatic::SM_ORDER_PARAMS_SIZE,
             Self::GrFecsRecordSize => grstatic::FECS_RECORD_SIZE_PARAMS_SIZE,
             Self::GrPdbProperties => grstatic::PDB_PROPERTIES_PARAMS_SIZE,
+            Self::GrZcullInfo => grstatic::ZCULL_INFO_PARAMS_SIZE,
             Self::GvaspaceServerReservedPdes | Self::GvaspaceServerReservedPdesClient => {
                 gvaspacepdes::COPY_SERVER_RESERVED_PDES_PARAMS_SIZE
             }
@@ -2113,6 +2122,11 @@ impl CommandPolicy for InitTablePolicy {
                     Err(_) => return refuse(),
                 }
             }
+            // ⊘ A host die with no zcull (`None`) is refused exactly as its own GSP would.
+            WantedTable::GrZcullInfo => match &self.host.gr_zcull_info {
+                Some(row) => grstatic::encode_zcull_info(row),
+                None => return refuse(),
+            },
             // ★★★ The publication arm — the one control here whose reply is a function of
             // the REQUEST rather than of the chip. It is decoded, validated against
             // `ctrl90f1.h`'s own stated rules, and re-encoded from the decoded fields; an

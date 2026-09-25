@@ -463,6 +463,8 @@ pub fn host_facts() -> HostFacts {
         gr_static: kf_abi::grstatic::GA106_GR_STATIC,
         gr_info: kf_abi::grinfo::GA106_GR_INFO,
         gr_context_buffers: kf_abi::grstatic::GA106_CONTEXT_BUFFERS,
+        // ⊘ unmeasured on GA106 so far: None (refused, as before v3-gfx) until a host reply is captured.
+        gr_zcull_info: None,
         forwarded_gpu_info: kf_abi::gpuinfo::GA106_FORWARDED_GPU_INFO.to_vec(),
         smc_mode: kf_abi::smcmode::GA106_SMC_MODE,
         pcie_max_gen: kf_abi::businfo::PcieGen::Gen4,
