@@ -11,7 +11,9 @@ BENCH=${BENCH_DIR:-/workspace/bench}
 TAG=${1:?usage: reopen_stress.sh <tag> [N] [M]}; N=${2:-20}; M=${3:-20}
 OUT=$BENCH/ro_${TAG}.out
 REV=$(git -C "$REPO" rev-parse --short=8 HEAD); DIRTY=$(git -C "$REPO" status --porcelain --untracked-files=no | wc -l)
-echo "RO_START $(date -Is) rev=$REV dirty=$DIRTY n=$N m=$M" > "$OUT"
+# ★ QEMU_BIN (optional) names the kf3 binary when this checkout's HEAD is a scripts-only revision
+# on top of the one that was built — the row then says which binary was measured.
+echo "RO_START $(date -Is) rev=$REV dirty=$DIRTY n=$N m=$M qemu=${QEMU_BIN:-kf3-bins/$REV}" > "$OUT"
 pass=0; fail=0
 for b in $(seq 1 "$N"); do
   t=ro_${TAG}_$b
@@ -19,9 +21,17 @@ for b in $(seq 1 "$N"); do
     u=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits 2>/dev/null | head -1 | tr -dc 0-9)
     [ -n "$u" ] && [ "$u" -le 512 ] && break; sleep 0.5
   done
+  # ★ GPU runs are strictly serial across agents: hold the shared run lock for the whole boot
+  # (boot_capture.sh itself takes none).
+  exec 9>"${KF_LOCK:-/tmp/kayfabe-fastguest.lock}"; flock 9
+  for _w in $(seq 1 60); do   # re-check after the lock: another agent's VM may just have exited
+    u=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits 2>/dev/null | head -1 | tr -dc 0-9)
+    [ -n "$u" ] && [ "$u" -le 512 ] && break; sleep 0.5
+  done
   KF_DEVICE=kf3 POST_CAPTURE_HOOK=$HERE/reopen_hook.sh REOPEN_M=$M GQ_TIMEOUT=${GQ_TIMEOUT:-1800} \
     bash "$HERE/boot_capture.sh" "$t" > "$BENCH/${t}_driver.log" 2>&1
   brc=$?
+  exec 9>&-
   p=$BENCH/run_${t}_probe.log; q=$BENCH/run_${t}_qemu.log
   v=$(grep -a '^REOPEN_VERDICT=' "$p" 2>/dev/null | tail -1 | cut -d= -f2)
   kv=$(grep -a '^REOPEN_ROWS=\|^REOPEN_DMESG_' "$p" 2>/dev/null | sed 's/^REOPEN_//' | tr '\n' ' ')

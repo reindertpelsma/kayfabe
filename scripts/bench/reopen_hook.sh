@@ -45,11 +45,23 @@ while [ \$i -le $M ]; do
 done
 echo "REOPEN_DONE \$(date -Is)"
 GUESTEOF
-$G "sh /tmp/reopen_loop.sh" 2>&1 | tee /tmp/reopen_rows.$$ || true
-rows=$(grep -c '^REOPEN_ROW' /tmp/reopen_rows.$$ || true)
-good=$(grep -c '^REOPEN_ROW .* smi_rc=0 cup3_rc=0 cup3=43 ' /tmp/reopen_rows.$$ || true)
-done_=$(grep -c '^REOPEN_DONE' /tmp/reopen_rows.$$ || true)
-rm -f /tmp/reopen_rows.$$
+# ⊘ DETACHED in the guest, polled from here. `[measured ed492871, ro_R boot 1]` running the loop
+# inside the ssh session lost rows 11..20: the session ended silently (host CPU saturated by a
+# concurrent cargo; ServerAlive 60 s) and SIGHUP took the guest loop with it — a HARNESS death
+# that read as a device FAIL. The loop now survives its launcher; only the poll depends on ssh.
+$G 'rm -f /tmp/reopen.out; setsid sh /tmp/reopen_loop.sh </dev/null >/tmp/reopen.out 2>&1 &'
+LIMIT=$(( M * 2 * PER + 120 )); waited=0
+while [ "$waited" -lt "$LIMIT" ]; do
+  $G 'grep -q "^REOPEN_DONE" /tmp/reopen.out' 2>/dev/null && break
+  sleep 10; waited=$((waited + 10))
+done
+OUTF=/tmp/reopen_rows.$$
+$G 'cat /tmp/reopen.out' > "$OUTF" 2>/dev/null || true
+cat "$OUTF"
+rows=$(grep -c '^REOPEN_ROW' "$OUTF" || true)
+good=$(grep -c '^REOPEN_ROW .* smi_rc=0 cup3_rc=0 cup3=43 ' "$OUTF" || true)
+done_=$(grep -c '^REOPEN_DONE' "$OUTF" || true)
+rm -f "$OUTF"
 
 echo "=== the guest driver's own teardown evidence (counts; 0 is printed) ==="
 D=$($G 'sudo -n dmesg' 2>/dev/null)
