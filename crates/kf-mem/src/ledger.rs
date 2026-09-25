@@ -607,6 +607,7 @@ mod plan_tests {
         let plan = plan_reconcile(&[(0x1_0000_0000, 0x2000, 0, true)], &grown);
         assert_eq!(plan.map, vec![Desired { va: 0x1_0000_2000, len: 0x1000, off: 0x2000, ram: true }]);
         assert!(plan.unmap.is_empty());
+        eprintln!("PLAN 13000 rows: {el:?}");
         assert!(el < std::time::Duration::from_millis(200), "{el:?}");
     }
 }
