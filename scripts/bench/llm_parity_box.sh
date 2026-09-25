@@ -3,7 +3,7 @@
 # without and with guest persistence mode, then the host lane — each GPU/qcow2 step under
 # /tmp/kayfabe-fastguest.lock, and only when no other agent's QEMU / suite is running.
 # /root/prov/LLM_TIMING exists for the timed part (other agents do not build while it does).
-#   usage: llm_parity_box.sh <tag> <kf3-binary> [steps=gprov,hprov,guest,guest_pm,host]
+#   usage: llm_parity_box.sh <tag> <kf3-binary> [steps=gprov,hprov,guest,guest_pm,host]  (also: build)
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TAG=${1:?tag}; QB=${2:?kf3 binary}; STEPS=${3:-gprov,hprov,guest,guest_pm,host}
@@ -26,6 +26,14 @@ locked() {  # wait for idle, then run "$@" holding the lock
 }
 has() { case ",$STEPS," in *",$1,"*) return 0 ;; esac; return 1; }
 say "LPB_START tag=$TAG qb=$QB steps=$STEPS rev=$(git -C "$HERE" rev-parse --short=8 HEAD)"
+# build: this checkout's kf3 (per-revision binary), only when the box is idle and under the lock —
+# the other agents do not build while LLM_TIMING exists, and we do not build while they run.
+if has build; then
+    locked env PATH="$HOME/.cargo/bin:$PATH" bash "$HERE/build_kf3.sh" /workspace/bench/qemu-10.2.4 > "$OUT/${TAG}_build.log" 2>&1
+    say "BUILD_RC=$? $(grep -a KF3_BUILT "$OUT/${TAG}_build.log")"
+    ( cd "$HERE/../.." && env PATH="$HOME/.cargo/bin:$PATH" CARGO_BUILD_JOBS=8 timeout 1800 cargo test -q -p kf-cuda --test report_containment ) > "$OUT/${TAG}_test.log" 2>&1
+    say "TEST_RC=$? $(grep -a 'test result' "$OUT/${TAG}_test.log" | tail -1)"
+fi
 has gprov && { locked bash "$HERE/provision_guest_llm.sh" > "$OUT/${TAG}_gprov.log" 2>&1; say "GPROV_RC=$? $(tail -1 "$OUT/${TAG}_gprov.log")"; }
 has hprov && { locked bash "$HERE/provision_host_llm.sh" > "$OUT/${TAG}_hprov.log" 2>&1; say "HPROV_RC=$? $(grep -a HOST_LLM_TOK_PER_S "$OUT/${TAG}_hprov.log")"; }
 touch /root/prov/LLM_TIMING
