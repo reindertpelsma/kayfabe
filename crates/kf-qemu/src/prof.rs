@@ -25,6 +25,11 @@ pub static VIEW_READ_NS: AtomicU64 = AtomicU64::new(0);
 /// Bytes the Translated rings read from guest RAM (the same pump, for comparison).
 pub static RAM_READ_BYTES: AtomicU64 = AtomicU64::new(0);
 
+/// The window-mark register (`CPU_INTR_LEAF(7)`, W1C) and value (`"KF3P"`).
+pub const MARK_OFF: u64 = 0x00B8_101C;
+/// See [`MARK_OFF`].
+pub const MARK_VALUE: u64 = 0x4B46_3350;
+
 /// Read `KF3_PROF` once (realize).
 pub fn init() {
     let on = std::env::var("KF3_PROF").is_ok_and(|v| v == "1" || v == "on");
@@ -279,6 +284,10 @@ pub struct Prof {
     pub inval_trap_ns: AtomicU64,
     /// Heartbeat prints since realize.
     pub beats: AtomicU64,
+    /// ★ Client window marks: a guest write of [`MARK_VALUE`] to [`MARK_OFF`] (a write-1-to-clear
+    /// leaf of the CPU interrupt tree no vector of ours lives in) bumps this; the drainer prints a
+    /// full snapshot tagged with it, so a run can be diffed over exactly the client's window.
+    pub marks: AtomicU64,
 }
 
 impl Prof {

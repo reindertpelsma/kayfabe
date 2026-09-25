@@ -14327,8 +14327,38 @@ fn unmap_retires_arm(
     }
 }
 
+/// ★ w827: mark the client's window for the device's `KF3_PROF` snapshot — one write of `"KF3P"`
+/// to `CPU_INTR_LEAF(7)` (write-1-to-clear; no vector lives there) through `resource0`. Only when
+/// `KF_PROF_MARK=1` (the harness passes it to a kf3 guest only — ⊘ never set it on a host: this
+/// writes the GPU's BAR0); silent if the BAR cannot be mapped.
+fn prof_mark() {
+    use std::os::fd::AsFd;
+    if std::env::var("KF_PROF_MARK").as_deref() != Ok("1") {
+        return;
+    }
+    let Some(dir) = std::fs::read_dir("/sys/bus/pci/devices").ok().and_then(|d| {
+        d.flatten().map(|e| e.path()).find(|p| {
+            let rd = |f: &str| std::fs::read_to_string(p.join(f)).unwrap_or_default();
+            rd("vendor").trim() == "0x10de" && rd("class").trim().starts_with("0x03")
+        })
+    }) else {
+        return;
+    };
+    let Ok(f) = std::fs::OpenOptions::new().read(true).write(true).open(dir.join("resource0")) else { return };
+    if let Ok(r) = kayfabe_linux_raw::VolatileRegion::map(
+        kayfabe_linux_raw::Backing::DeviceFile { fd: f.as_fd() },
+        0x00C0_0000,
+        kayfabe_linux_raw::CachePolicy::Uncached,
+        kayfabe_linux_raw::HostPageSize::query(),
+    ) {
+        let _ = r.store_u32(kayfabe_linux_raw::HostOffset::new(0x00B8_101C), 0x4B46_3350);
+    }
+}
+
 fn main() -> std::process::ExitCode {
+    prof_mark();
     let rc = ladder_main();
+    prof_mark();
     // ★ w827 attribution: the per-ioctl latency aggregate (`KF_IOCTL_TRACE=prof` only).
     kayfabe_linux_raw::ioctltrace::dump_prof("process end");
     rc

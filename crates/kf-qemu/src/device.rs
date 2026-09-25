@@ -509,6 +509,11 @@ impl Device {
         if off == self.qhead_off {
             self.prof.qhead_ns.store(t0, Ordering::Relaxed);
         }
+        if off == crate::prof::MARK_OFF && val == crate::prof::MARK_VALUE {
+            // The drainer prints the snapshot (never I/O on a vCPU): one eventfd write.
+            self.prof.marks.fetch_add(1, Ordering::Relaxed);
+            let _ = self.drainer_efd.signal();
+        }
         self.bar0_write_inner(off, val, width);
         let ns = crate::prof::now_ns().saturating_sub(t0);
         self.prof.bar0.add(off, ns);
@@ -861,6 +866,7 @@ impl Device {
         }
         let mut beat = (std::time::Instant::now(), String::new());
         let mut prof_beat = std::time::Instant::now();
+        let mut marks_seen = 0u64;
         let mut busy_from = crate::prof::now_ns();
         // ★ w827: the last wait ended by TIMEOUT — did the pass after it find work?
         let mut after_timeout = false;
@@ -873,9 +879,17 @@ impl Device {
                 }
                 beat = (std::time::Instant::now(), now);
             }
-            if crate::prof::on() && prof_beat.elapsed() >= std::time::Duration::from_secs(1) {
-                prof_beat = std::time::Instant::now();
-                self.prof_print();
+            if crate::prof::on() {
+                let m = self.prof.marks.load(Ordering::Relaxed);
+                if m != marks_seen {
+                    marks_seen = m;
+                    eprintln!("kf3: PROF MARK {m} t={:.3}s", crate::prof::now_ns() as f64 / 1e9);
+                    self.prof_print();
+                    eprintln!("kf3: PROF MARK-END {m}");
+                } else if prof_beat.elapsed() >= std::time::Duration::from_secs(5) {
+                    prof_beat = std::time::Instant::now();
+                    self.prof_print();
+                }
             }
             let seen = self.plane.drainer_wake.seen();
             if self.plane.drainer_pass(self, 256) > 0 {
