@@ -82,8 +82,15 @@ const NV_XVE_LINK_CAPABILITIES: u64 = 0x0008_8084;
 /// (`0x3110`) — identical in `turing/tu102/dev_vm.h:209` and `blackwell/gb100/dev_vm.h:503`.
 const NV_VF_ACCESS_COUNTER_NOTIFY_BUFFER_SIZE: u64 = 0x00B8_3110;
 /// `NV_USABLE_FB_SIZE_IN_MB` = `NV_PGC6_AON_SECURE_SCRATCH_GROUP_42` (`ampere/ga102/
-/// dev_gc6_island_addendum.h:33`) — published for the falcon-boot families only.
+/// dev_gc6_island_addendum.h:33`). ⊘ CORRECTED 2026-09-26 (family port): read by
+/// `kmemsysReadUsableFbSize_GA102`, which ogkm binds for GA102–GA107, AD102–AD107, GH100 and every
+/// GB die (`g_kern_mem_sys_nvoc.c:353-357`) — compiled against the GA102 header, so the SAME offset
+/// on Hopper/Blackwell. It is NOT read on Turing or GA100 (they bind `_GP102`, below).
 const NV_USABLE_FB_SIZE_IN_MB: u64 = 0x0011_83A4;
+/// `NV_PFB_PRI_MMU_LOCAL_MEMORY_RANGE` (`published/pascal/gp102/dev_fb.h:26-29`): `LOWER_SCALE`
+/// `3:0`, `LOWER_MAG` `9:4`, size = `mag << (scale + 20)`. Read by `kmemsysReadUsableFbSize_GP102`,
+/// bound for TU10x and GA100 (`g_kern_mem_sys_nvoc.c:349-352`).
+const NV_PFB_PRI_MMU_LOCAL_MEMORY_RANGE_GP102: u64 = 0x0010_0CE0;
 /// `NV_PGC6_BSI_VPR_SECURE_SCRATCH_15` = `NV_PGC6_BSI_SECURE_SCRATCH_15` (`ogkm-580:
 /// published/ada/ad102/dev_gc6_island.h:27`, addendum `:27-29`): `SCRUBBER_HANDOFF` is `31:29`,
 /// `_DONE` = 3.
@@ -94,9 +101,27 @@ const SCRUBBER_HANDOFF_DONE: u32 = 3 << 29;
 /// tree's `resume_from_fault.md` §S2 ruling: migration heuristics simply never fire).
 const ACCESS_COUNTER_ENTRIES_ADVERTISED: u32 = 2 * (4096 / 32);
 
-/// ★ The boot registers for `family`, from `facts`. ⊘ `USABLE_FB_SIZE_IN_MB` is served only where
-/// ogkm publishes it (Turing … Ada); on Hopper/Blackwell the framebuffer size reaches RM by another
-/// path, and inventing the register there would be a guess.
+/// `NV_PFB_PRI_MMU_LOCAL_MEMORY_RANGE` for `fb_mb` MiB: the largest scale that states it EXACTLY
+/// with a 6-bit magnitude, or `None` (never a rounded size).
+#[must_use]
+pub const fn local_memory_range_gp102(fb_mb: u64) -> Option<u32> {
+    let mut scale = 15u32;
+    loop {
+        let unit = 1u64 << scale;
+        if fb_mb % unit == 0 && fb_mb / unit >= 1 && fb_mb / unit <= 0x3F {
+            return Some((((fb_mb / unit) as u32) << 4) | scale);
+        }
+        if scale == 0 {
+            return None;
+        }
+        scale -= 1;
+    }
+}
+
+/// ★ The boot registers for `family`, from `facts`. The framebuffer size is served through BOTH
+/// usable-size HALs' registers wherever a die of the family reads one: `USABLE_FB_SIZE_IN_MB` on
+/// Ampere (GA10x) … Blackwell, `LOCAL_MEMORY_RANGE` on Turing and Ampere (GA100) — a register a die
+/// does not read is an unread shadow word.
 #[must_use]
 pub fn boot_regs(family: Family, f: &Bar0Facts) -> Vec<BootReg> {
     let mut v = vec![
@@ -131,13 +156,23 @@ pub fn boot_regs(family: Family, f: &Bar0Facts) -> Vec<BootReg> {
             from: Provenance::Advertised("uvmInitializeAccessCntrBuffer refuses a zero size; nothing is ever written"),
         },
     ];
-    if matches!(family, Family::Turing | Family::Ampere | Family::Ada) {
+    if !matches!(family, Family::Turing) {
         v.push(BootReg {
             off: NV_USABLE_FB_SIZE_IN_MB,
             value: u32::try_from(f.fb_mb).unwrap_or(u32::MAX),
             name: "NV_USABLE_FB_SIZE_IN_MB",
             from: Provenance::Host("the store's reserved size (constraint 15)"),
         });
+    }
+    if matches!(family, Family::Turing | Family::Ampere) {
+        if let Some(value) = local_memory_range_gp102(f.fb_mb) {
+            v.push(BootReg {
+                off: NV_PFB_PRI_MMU_LOCAL_MEMORY_RANGE_GP102,
+                value,
+                name: "NV_PFB_PRI_MMU_LOCAL_MEMORY_RANGE",
+                from: Provenance::Host("the store's reserved size (constraint 15), kmemsysReadUsableFbSize_GP102 encoding"),
+            });
+        }
     }
     // ★ Ada only (`kgspExecuteScrubberIfNeeded_AD102`, `ogkm-580: kernel_gsp_ad102.c`; the image is
     // ALWAYS allocated on Ada — `kernel_gsp.c:3734` "WAR for Bug 5016200"). Before the booter runs,

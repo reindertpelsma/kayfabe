@@ -21,7 +21,11 @@ fn every_family_gets_its_own_architecture_in_boot_42() {
         let b42 = regs.iter().find(|r| r.name == "NV_PMC_BOOT_42").unwrap().value;
         assert_eq!((b42 >> 24) & 0x3F, arch >> 4, "{fam:?}");
         let has_fb = regs.iter().any(|r| r.name == "NV_USABLE_FB_SIZE_IN_MB");
-        assert_eq!(has_fb, matches!(fam, Family::Turing | Family::Ada), "{fam:?}: USABLE_FB_SIZE_IN_MB is ogkm-published only through Ada");
+        // ⊘ CORRECTED 2026-09-26: kmemsysReadUsableFbSize_GA102 is bound for GA10x, AD10x, GH100 and
+        // every GB die (g_kern_mem_sys_nvoc.c:353-357); Turing binds _GP102 (LOCAL_MEMORY_RANGE).
+        assert_eq!(has_fb, fam != Family::Turing, "{fam:?}: USABLE_FB_SIZE_IN_MB");
+        let has_range = regs.iter().any(|r| r.name == "NV_PFB_PRI_MMU_LOCAL_MEMORY_RANGE");
+        assert_eq!(has_range, fam == Family::Turing, "{fam:?}: LOCAL_MEMORY_RANGE (TU10x/GA100 only)");
     }
 }
 
@@ -58,6 +62,18 @@ fn ada_advertises_the_sec2_scrubber_as_already_run() {
         assert_eq!(s.is_some(), fam == Family::Ada, "{fam:?}");
         if let Some(s) = s {
             assert!((s.value >> 29) & 7 >= 3);
+        }
+    }
+}
+
+#[test]
+fn local_memory_range_states_the_store_size_exactly_or_not_at_all() {
+    use kf_chip::bar0::local_memory_range_gp102 as enc;
+    let size = |v: u32| u64::from((v >> 4) & 0x3F) << (v & 0xF);
+    for mb in [8192u64, 11_857, 6144, 12_288, 24_576, 1, 63, 64] {
+        match enc(mb) {
+            Some(v) => assert_eq!(size(v), mb, "{mb} MiB"),
+            None => assert!(mb == 11_857, "{mb} MiB is representable"),
         }
     }
 }
