@@ -185,3 +185,45 @@ fn with_the_memory_plane_seated_every_statement_is_carried_and_held() {
     let _ = chain.respond(&other);
     assert!(!chain.holds_for_refresh(&other));
 }
+
+#[path = "support/rpcwire.rs"]
+#[allow(dead_code)]
+mod rpcwire;
+
+/// ★ P6b: nvidia-uvm dups a user's VA space into its own client and publishes the root through
+/// the DUP (`uvm_va_space.c:1394`); the user's channels name the ORIGINAL. `DUP_OBJECT` aliases
+/// (`vaspace_api.c:440`), so the statement is carried for the original — and the alias's free
+/// retires nothing, while the original's free still does.
+#[test]
+fn a_root_published_through_a_dup_is_the_originals_root() {
+    use kf_rm::barpde::{MemStatement, PageDirPolicy};
+    let got: std::sync::Arc<std::sync::Mutex<Vec<MemStatement>>> = std::sync::Arc::default();
+    let g = got.clone();
+    let mut p = PageDirPolicy::new(driver(), kf_abi::GuestOs::Linux, std::sync::Arc::new(move |s| g.lock().unwrap().push(s)));
+    let cmd = |function, payload: Vec<u8>| RpcCommand { function, code: 0, sequence: 1, payload, elements: 1, delivered: Vec::new() };
+    let (user, uvm) = (0xc1d0_000b_u32, 0xc1d0_0001_u32);
+    // The user's VA space, then UVM's dup of it.
+    let alloc = rpcwire::alloc_body(user, 0xcafe_0001, 0xcafe_0010, rpcwire::FERMI_VASPACE_A, 56, 0, &[0u8; 56]);
+    assert!(p.respond(&cmd(RpcFunction::RmAlloc, alloc)).is_none());
+    let dup = rpcwire::dup_body(uvm, 0xcaf0_0000, 0xcaf0_0036, user, 0xcafe_0010, 0);
+    assert!(p.respond(&cmd(RpcFunction::DupObject, dup)).is_none(), "observed, never answered");
+    assert_eq!(p.canonical(uvm, 0xcaf0_0036), (user, 0xcafe_0010));
+    // SET_PAGE_DIRECTORY through the dup.
+    let mut sp = vec![0u8; kf_abi::generated::ctrl::Nv0080CtrlDmaSetPageDirectoryParams::SIZE];
+    sp[0..8].copy_from_slice(&0x0020_1000u64.to_le_bytes());
+    sp[16..20].copy_from_slice(&0xcaf0_0036u32.to_le_bytes());
+    let set = control_command(uvm, 0xcaf0_0000, kf_abi::generated::ctrl::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY, &sp);
+    let r = p.respond(&set).expect("answered");
+    assert_eq!(r.body, set.payload, "the guest's own params echoed, not the canonical handles");
+    match got.lock().unwrap().last() {
+        Some(MemStatement::PageDir(st)) => assert_eq!((st.client.0, st.vaspace.0, st.pdb.0), (user, 0xcafe_0010, 0x0020_1000)),
+        other => panic!("wrong statement {other:?}"),
+    }
+    // The dup's free drops the name only; the original's free retires the object.
+    let n = got.lock().unwrap().len();
+    p.respond(&cmd(RpcFunction::Free, rpcwire::free_body(uvm, 0, 0xcaf0_0036)));
+    assert_eq!(got.lock().unwrap().len(), n, "an alias's free retires nothing");
+    assert_eq!(p.canonical(uvm, 0xcaf0_0036), (uvm, 0xcaf0_0036));
+    p.respond(&cmd(RpcFunction::Free, rpcwire::free_body(user, 0, 0xcafe_0010)));
+    assert!(matches!(got.lock().unwrap().last(), Some(MemStatement::Retire { client, vaspace }) if (*client, *vaspace) == (user, 0xcafe_0010)));
+}
