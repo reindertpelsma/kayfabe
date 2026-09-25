@@ -192,7 +192,7 @@ struct KfDev {
 
 /* ⚠ Scratch: `scratch` holds 4 * runs_per_pdb runs PER ENTRY (the diff: the
  * class-partitioned walk + up to 3 * runs_per_pdb staged runs; the commit: kept,
- * added, merged) and `iscratch` 2 * runs_per_pdb words per entry. The host sizes
+ * added, merged) and `iscratch` 3 * runs_per_pdb words per entry. The host sizes
  * both (and reuses the parallel walk's run stage for `scratch`: the walk is done
  * with it before the diff runs, and the commit runs before the walk). */
 struct KfArgs {
@@ -826,15 +826,29 @@ __device__ __forceinline__ uint32_t kf_n_end_le(const KfMapRun *w, uint32_t n, u
     return lo;
 }
 
+/* Whether run `r` holds VA `va`. */
+__device__ __forceinline__ bool kf_holds(const KfMapRun &r, uint64_t va) { return r.va <= va && va < kf_end(r); }
+
 /* Whether the walk runs `w` (one class, sorted, disjoint) back placement `p`
- * byte for byte. The loop advances one run per step and stops at `n`. */
-__device__ bool kf_covered(const KfMapRun &p, const KfMapRun *w, uint32_t n)
+ * byte for byte; on success `*last` is the index of the run holding p's last
+ * byte. `hint` is where the run holding p.va probably is — the SAME index as
+ * p's in the slot when the slot and the walk agree up to it (the common case:
+ * a few pages added or dropped) — tried with its two neighbours before the
+ * binary search, so an unchanged space costs one coalesced load per placement.
+ * The loop advances one run per step and stops at `n`. */
+__device__ bool kf_covered(const KfMapRun &p, const KfMapRun *w, uint32_t n, uint32_t hint, uint32_t *last)
 {
     const uint64_t end = p.va + p.len;
-    if (end < p.va) return false;
-    uint32_t i = kf_n_le(w, n, p.va);
-    if (i == 0u) return false;
-    i--;
+    if (end < p.va || n == 0u) return false;
+    uint32_t i = n;
+    if (hint < n && kf_holds(w[hint], p.va)) i = hint;
+    else if (hint + 1u < n && kf_holds(w[hint + 1u], p.va)) i = hint + 1u;
+    else if (hint >= 1u && hint - 1u < n && kf_holds(w[hint - 1u], p.va)) i = hint - 1u;
+    else {
+        const uint32_t j = kf_n_le(w, n, p.va);
+        if (j == 0u) return false;
+        i = j - 1u;
+    }
     uint64_t at = p.va;
     const uint32_t key = kf_hkey(p.flags);
     for (; i < n; i++) {
@@ -843,9 +857,20 @@ __device__ bool kf_covered(const KfMapRun &p, const KfMapRun *w, uint32_t n)
         if (!(r.va <= at && at < rend) || kf_hkey(r.flags) != key) return false;
         if (r.gpga + (at - r.va) != p.gpga + (at - p.va)) return false;
         at = rend;
-        if (at >= end) return true;
+        if (at >= end) { *last = i; return true; }
     }
     return false;
+}
+
+/* The first walk run ending after `lo`, the start of gap g. After a kept
+ * placement it is the run that held that placement's last byte, or the next one
+ * (`KW`, recorded by the kept pass) — no search; gap 0 searches. */
+__device__ __forceinline__ uint32_t kf_gap_first(const KfMapRun *w, uint32_t n, const uint32_t *KW, uint32_t g, uint64_t lo)
+{
+    if (g == 0u) return kf_n_end_le(w, n, lo);
+    uint32_t i = KW[g - 1u];
+    if (i < n && kf_end(w[i]) <= lo) i++;
+    return i;
 }
 
 /* The bounds of gap g between kept placements K[g-1] and K[g] of class list P. */
@@ -863,7 +888,7 @@ __device__ __forceinline__ KfMapRun *kf_scr(const KfArgs &a, uint32_t t, uint32_
 }
 __device__ __forceinline__ uint32_t *kf_iscr(const KfArgs &a, uint32_t t, uint32_t rpp)
 {
-    return a.iscratch + (size_t)t * 2u * rpp;
+    return a.iscratch + (size_t)t * 3u * rpp;
 }
 
 /* ★★★★★ ONE BLOCK PER WALKED ENTRY: the diff of its walk against its slot, staged
@@ -892,6 +917,7 @@ __global__ void __launch_bounds__(KF_DIFF_BLOCK) kf_diff_slots(KfArgs a)
     KfMapRun *stg = X + rpp;                /* the staged diff (<= 3 * rpp) */
     uint32_t *K = kf_iscr(a, t, rpp);       /* kept placement indices, all classes */
     uint32_t *kf = K + rpp;                 /* kept flag per placement */
+    uint32_t *KW = kf + rpp;                /* per kept placement: the walk run holding its last byte */
     const KfMapRun *com = a.com + (size_t)s * rpp;
     uint32_t pn[KF_CLASSES], po[KF_CLASSES];
     {
@@ -939,11 +965,12 @@ __global__ void __launch_bounds__(KF_DIFF_BLOCK) kf_diff_slots(KfArgs a)
             for (uint32_t base = 0u; base < pn[c]; base += blockDim.x) {
                 const uint32_t i = base + threadIdx.x;
                 const bool valid = i < pn[c];
-                const bool kept = valid && kf_covered(P[i], Wc, wn[c]);
+                uint32_t lastw = 0u;
+                const bool kept = valid && kf_covered(P[i], Wc, wn[c], i, &lastw);
                 if (valid) kf[po[c] + i] = kept ? 1u : 0u;
                 uint32_t tot;
                 const uint32_t ex = kf_bscan<uint32_t>(kept ? 1u : 0u, &tot, sh32);
-                if (kept) K[kc + ex] = i;
+                if (kept) { K[kc + ex] = i; KW[kc + ex] = lastw; }
                 kc += tot; nk[c] += tot;
             }
             nu[c] = pn[c] - nk[c];
@@ -956,6 +983,7 @@ __global__ void __launch_bounds__(KF_DIFF_BLOCK) kf_diff_slots(KfArgs a)
         const KfMapRun *P = com + po[c];
         const KfMapRun *Wc = X + wo[c];
         const uint32_t *Kc = K + ko[c];
+        const uint32_t *KWc = KW + ko[c];
         nm[c] = 0u;
         const uint32_t ng = nk[c] + 1u;
         for (uint32_t base = 0u; base < ng; base += blockDim.x) {
@@ -965,7 +993,7 @@ __global__ void __launch_bounds__(KF_DIFF_BLOCK) kf_diff_slots(KfArgs a)
                 uint64_t lo, hi;
                 kf_gap(P, Kc, nk[c], g, &lo, &hi);
                 if (lo < hi)
-                    for (uint32_t i = kf_n_end_le(Wc, wn[c], lo); i < wn[c] && Wc[i].va < hi; i++) cnt++;
+                    for (uint32_t i = kf_gap_first(Wc, wn[c], KWc, g, lo); i < wn[c] && Wc[i].va < hi; i++) cnt++;
             }
             uint32_t tot;
             (void)kf_bscan<uint32_t>(cnt, &tot, sh32);
@@ -997,6 +1025,7 @@ __global__ void __launch_bounds__(KF_DIFF_BLOCK) kf_diff_slots(KfArgs a)
         const KfMapRun *P = com + po[c];
         const KfMapRun *Wc = X + wo[c];
         const uint32_t *Kc = K + ko[c];
+        const uint32_t *KWc = KW + ko[c];
         for (uint32_t base = 0u; base < pn[c]; base += blockDim.x) {
             const uint32_t i = base + threadIdx.x;
             const bool un = i < pn[c] && kf[po[c] + i] == 0u;
@@ -1019,7 +1048,7 @@ __global__ void __launch_bounds__(KF_DIFF_BLOCK) kf_diff_slots(KfArgs a)
             if (g < ng && wn[c]) {
                 kf_gap(P, Kc, nk[c], g, &lo, &hi);
                 if (lo < hi) {
-                    first = kf_n_end_le(Wc, wn[c], lo);
+                    first = kf_gap_first(Wc, wn[c], KWc, g, lo);
                     for (uint32_t i = first; i < wn[c] && Wc[i].va < hi; i++) cnt++;
                 }
             }
@@ -2203,7 +2232,7 @@ extern "C" KfWalk *kf_create(const KfWalkCfg *cfg)
     KF_CU(cudaMalloc(&w->ack, sizeof(KfAck)));
     KF_CU(cudaMemset(w->ack, 0, sizeof(KfAck)));
     KF_CU(cudaMalloc(&w->ack_code, (size_t)w->cfg.run_capacity));
-    KF_CU(cudaMalloc(&w->iscratch, (size_t)KF_MAX_PDB * 2u * w->cfg.runs_per_pdb * sizeof(uint32_t)));
+    KF_CU(cudaMalloc(&w->iscratch, (size_t)KF_MAX_PDB * 3u * w->cfg.runs_per_pdb * sizeof(uint32_t)));
     w->ack_code_h = (uint8_t *)calloc(w->cfg.run_capacity ? w->cfg.run_capacity : 1u, 1);
     KF_CU(cudaMalloc(&w->hdr, sizeof(KfReportHeader)));
     KF_CU(cudaMemset(w->hdr, 0, sizeof(KfReportHeader)));

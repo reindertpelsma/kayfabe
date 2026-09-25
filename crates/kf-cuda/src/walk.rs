@@ -705,7 +705,7 @@ impl WalkKernel {
         let walk = a(tbl_runs * core::mem::size_of::<KfMapRun>(), "cuMemAlloc(walk)")?;
         let com = a(cfg.max_slots as usize * rpp * core::mem::size_of::<KfMapRun>(), "cuMemAlloc(committed)")?;
         let slot = a(cfg.max_slots as usize * core::mem::size_of::<KfSlot>(), "cuMemAlloc(slots)")?;
-        let iscratch = a(KF_MAX_PDB * 2 * rpp * 4, "cuMemAlloc(iscratch)")?;
+        let iscratch = a(KF_MAX_PDB * 3 * rpp * 4, "cuMemAlloc(iscratch)")?;
         // ★ P4b: the report (header, pdb entries, runs) is ONE device allocation laid out
         // exactly as its pinned read-back (`PinLayout`, from `hdr` on), so the read-back is ONE
         // copy node rather than three — each node is paid again on every `cuGraphLaunch`.

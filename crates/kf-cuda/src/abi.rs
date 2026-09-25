@@ -365,7 +365,7 @@ pub struct KfArgs {
     pub ack_code: u64,
     /// `4 * runs_per_pdb` runs of scratch per entry.
     pub scratch: u64,
-    /// `2 * runs_per_pdb` words of scratch per entry.
+    /// `3 * runs_per_pdb` words of scratch per entry.
     pub iscratch: u64,
     /// Device pointer to the report header.
     pub hdr: u64,
