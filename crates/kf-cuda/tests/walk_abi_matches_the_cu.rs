@@ -189,6 +189,7 @@ fn the_rust_mirror_matches_the_cu_byte_for_byte() {
         ("KfDev", "tbl_run_count"),
         ("KfDev", "diff_count"),
         ("KfDev", "diff_vflags"),
+        ("KfDev", "entry_refuse"),
         ("KfAck", "nrun"),
         ("KfAck", "reset"),
         ("KfDev", "entries_visited"),
@@ -323,6 +324,7 @@ fn the_rust_mirror_matches_the_cu_byte_for_byte() {
     off!(KfDev, tbl_run_count, "off KfDev.tbl_run_count");
     off!(KfDev, diff_count, "off KfDev.diff_count");
     off!(KfDev, diff_vflags, "off KfDev.diff_vflags");
+    off!(KfDev, entry_refuse, "off KfDev.entry_refuse");
     off!(KfAck, nrun, "off KfAck.nrun");
     off!(KfAck, reset, "off KfAck.reset");
     off!(KfDev, entries_visited, "off KfDev.entries_visited");
@@ -594,6 +596,7 @@ fn the_report_constants_match_the_header() {
     assert_eq!(parse("KFWR_RF_HELD"), u64::from(kf_cuda::abi::KFWR_RF_HELD));
     assert_eq!(parse("KFWR_V_PARTIAL"), u64::from(kf_cuda::abi::KFWR_V_PARTIAL));
     assert_eq!(parse("KFWR_V_OVERFLOW"), u64::from(kf_cuda::abi::KFWR_V_OVERFLOW));
+    assert_eq!(parse("KFWR_V_REFUSED"), u64::from(kf_cuda::abi::KFWR_V_REFUSED));
     assert_eq!(parse("KFWR_ACK_APPLIED"), u64::from(kf_cuda::abi::KFWR_ACK_APPLIED));
     assert_eq!(parse("KFWR_ACK_HELD"), u64::from(kf_cuda::abi::KFWR_ACK_HELD));
     assert_eq!(parse("KF_MAX_RESET"), kf_cuda::abi::KF_MAX_RESET as u64);

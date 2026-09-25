@@ -180,6 +180,9 @@ struct KfDev {
     uint32_t tbl_run_count[KF_MAX_PDB];   /* the walk's runs, per entry */
     uint32_t diff_count[KF_MAX_PDB];      /* the staged diff's runs, per entry */
     uint32_t diff_vflags[KF_MAX_PDB];     /* KFWR_V_PARTIAL / KFWR_V_OVERFLOW, per entry */
+    /* ★ owner ruling 2026-09-25: which refusals fired IN EACH ENTRY'S walk — the host fails
+     * that space by name (its refused leaves are absent from the walk, not "unmapped"). */
+    uint32_t entry_refuse[KF_MAX_PDB];
     /* per-refresh accumulators, zeroed by kf_begin_kernel */
     unsigned long long entries_visited;
     unsigned int refusals;
@@ -680,6 +683,7 @@ __global__ void kf_begin_kernel(KfArgs a)
     d->walk_trunc = 0u;
     d->walk_abort = 0u;
     d->sparse_slots = 0u;
+    for (uint32_t i = 0u; i < KF_MAX_PDB; i++) d->entry_refuse[i] = 0u;
     if (a.ack == NULL) return;
     /* After kf_commit_kernel (a kernel boundary orders them): record what was
      * committed, then empty the slots the host released. A released slot is never
@@ -725,7 +729,7 @@ __global__ void kf_walk_kernel(KfArgs a)
 
     atomicAdd(&d->entries_visited, (unsigned long long)c.visited);
     if (c.refusals) atomicAdd(&d->refusals, c.refusals);
-    if (c.refuse) atomicOr(&d->refuse_mask, c.refuse);
+    if (c.refuse) { atomicOr(&d->refuse_mask, c.refuse); if (t < KF_MAX_PDB) atomicOr(&d->entry_refuse[t], c.refuse); }
     if (c.sparse) atomicAdd(&d->sparse_slots, c.sparse);
     if (c.stop) { atomicOr(&d->hdr_flags, KFWR_HF_TRUNCATED); atomicOr(&d->walk_trunc, 1u); }
     if (c.refuse & KFWR_R_BUDGET) atomicOr(&d->hdr_flags, KFWR_HF_BUDGET);
@@ -1129,9 +1133,9 @@ __global__ void kf_diff_emit(KfArgs a)
         e.pdb = a.pdbs[t];
         e.first_run = trunc ? 0u : base;
         e.run_count = n;
-        e.vas_flags = d->diff_vflags[t];
+        e.vas_flags = d->diff_vflags[t] | (d->entry_refuse[t] ? KFWR_V_REFUSED : 0u);
         e.reserved = a.slots[t];
-        e.reserved2 = 0ull;
+        e.reserved2 = (uint64_t)d->entry_refuse[t];   /* which refusals, for the host to name */
         a.rpdb[t] = e;
     }
 }
@@ -1597,6 +1601,12 @@ __device__ __forceinline__ void kf_par_refuse(KfDev *d, unsigned int bit)
     atomicOr(&d->refuse_mask, bit);
     atomicAdd(&d->refusals, 1u);
 }
+/* The same, charged to walk entry `entry` as well (the per-space refusal the host names). */
+__device__ __forceinline__ void kf_par_refuse_in(KfDev *d, unsigned int bit, uint32_t entry)
+{
+    kf_par_refuse(d, bit);
+    if (entry < KF_MAX_PDB) atomicOr(&d->entry_refuse[entry], bit);
+}
 
 /* ⊘ ABORT, not TRUNCATED. Running out of RUN slots truncates the report but the
  * walk must still write what fits; running out of BUDGET or FRONTIER stops the
@@ -1629,8 +1639,8 @@ __global__ void kf_par_seed(KfArgs a, KfEnt *fr, uint32_t *nfr, uint32_t *used)
     e.pdb = (uint16_t)t;
     e.kind = KF_ENT_DEAD;
     const uint64_t rb = (uint64_t)F.dir[F.first_dir].entries * F.dir[F.first_dir].entry_bytes;
-    if (pdb & (F.root_align - 1ull))                    kf_par_refuse(d, KFWR_R_UNALIGNED);
-    else if (pdb > a.win.len || rb > a.win.len - pdb)   kf_par_refuse(d, KFWR_R_OOB);
+    if (pdb & (F.root_align - 1ull))                    kf_par_refuse_in(d, KFWR_R_UNALIGNED, t);
+    else if (pdb > a.win.len || rb > a.win.len - pdb)   kf_par_refuse_in(d, KFWR_R_OOB, t);
     else { e.kind = KF_ENT_TABLE; e.addr = pdb; }
     fr[t] = e;
 }
@@ -1679,14 +1689,14 @@ __device__ __forceinline__ bool kf_par_decode_slot(const KfArgs &a, uint32_t lev
             return false;
         }
         if (F.pde_ap_map[apc] != KFWR_AP_VIDMEM) {
-            if (census) kf_par_refuse(d, KFWR_R_FOREIGN_AP);
+            if (census) kf_par_refuse_in(d, KFWR_R_FOREIGN_AP, e.pdb);
             return false;
         }
         const uint64_t cb = (uint64_t)F.dir[level + 1u].entries * F.dir[level + 1u].entry_bytes;
         const uint64_t nx = kf_addr(F, lo16, apc);
         if (nx == 0ull) return false;          /* a null sub-table pointer is not a sub-table */
         if (!kf_win_table_ok(a.win, nx, cb, cb)) {
-            if (census) kf_par_refuse(d, (nx & (cb - 1ull)) ? KFWR_R_UNALIGNED : KFWR_R_OOB);
+            if (census) kf_par_refuse_in(d, (nx & (cb - 1ull)) ? KFWR_R_UNALIGNED : KFWR_R_OOB, e.pdb);
             return false;
         }
         ch.va = e.va | ((uint64_t)i << L.va_lo);
@@ -1702,22 +1712,22 @@ __device__ __forceinline__ bool kf_par_decode_slot(const KfArgs &a, uint32_t lev
     uint8_t has = 0u;
     uint64_t pts = 0ull, ptb = 0ull;
     if (kf_dir_present(F, hi16, aps, false)) {
-        if (F.pde_ap_map[aps] != KFWR_AP_VIDMEM) { if (census) kf_par_refuse(d, KFWR_R_FOREIGN_AP); }
+        if (F.pde_ap_map[aps] != KFWR_AP_VIDMEM) { if (census) kf_par_refuse_in(d, KFWR_R_FOREIGN_AP, e.pdb); }
         else {
             pts = kf_addr(F, hi16, aps);
             if (pts != 0ull) {
                 if (kf_win_table_ok(a.win, pts, sb, sb)) has |= 1u;
-                else if (census) kf_par_refuse(d, (pts & (sb - 1ull)) ? KFWR_R_UNALIGNED : KFWR_R_OOB);
+                else if (census) kf_par_refuse_in(d, (pts & (sb - 1ull)) ? KFWR_R_UNALIGNED : KFWR_R_OOB, e.pdb);
             }
         }
     } else if (census && kf_slot_sparse(F, hi16)) atomicAdd(&d->sparse_slots, 1u);
     if (kf_dir_present(F, lo16, apb, L.leaf_ps != KF_PS_NONE)) {
-        if (F.pde_ap_map[apb] != KFWR_AP_VIDMEM) { if (census) kf_par_refuse(d, KFWR_R_FOREIGN_AP); }
+        if (F.pde_ap_map[apb] != KFWR_AP_VIDMEM) { if (census) kf_par_refuse_in(d, KFWR_R_FOREIGN_AP, e.pdb); }
         else {
             ptb = kf_big_addr(F, lo16, apb);
             if (ptb != 0ull) {
                 if (kf_win_table_ok(a.win, ptb, bb, bb)) has |= 2u;
-                else if (census) kf_par_refuse(d, (ptb & (bb - 1ull)) ? KFWR_R_UNALIGNED : KFWR_R_OOB);
+                else if (census) kf_par_refuse_in(d, (ptb & (bb - 1ull)) ? KFWR_R_UNALIGNED : KFWR_R_OOB, e.pdb);
             }
         }
     } else if (kf_slot_sparse(F, lo16)) {
@@ -1957,7 +1967,7 @@ __device__ __forceinline__ void kf_par_leaf_one(const KfArgs &a, const KfEnt *ta
             kf_acc_flush(c);
             /* §39(e): above the stagecap return below. That return would drop this
              * leaf's refusal on the floor and report only FRONTIER_CAP. */
-            if (c.refuse) { atomicOr(&d->refuse_mask, c.refuse); atomicAdd(&d->refusals, c.refusals); }
+            if (c.refuse) { atomicOr(&d->refuse_mask, c.refuse); atomicAdd(&d->refusals, c.refusals); if (c.pdb_index < KF_MAX_PDB) atomicOr(&d->entry_refuse[c.pdb_index], c.refuse); }
             if (c.n) {
                 const uint32_t st = atomicAdd(used, c.n);
                 if (st + c.n > stagecap) { kf_par_abort(d, KFWR_R_FRONTIER_CAP); sum[gw] = sm; return; }
@@ -2026,7 +2036,7 @@ __device__ __forceinline__ void kf_par_leaf_one(const KfArgs &a, const KfEnt *ta
      * LEAF_OOB -- MISALIGNED_LEAF was lost the same way, and a warp that is
      * entirely misaligned is not exotic. Same class as
      * `a_refusal_counter_read_as_absent_demand`. */
-    if (c.refuse) { atomicOr(&d->refuse_mask, c.refuse); atomicAdd(&d->refusals, c.refusals); }
+    if (c.refuse) { atomicOr(&d->refuse_mask, c.refuse); atomicAdd(&d->refusals, c.refusals); if (c.pdb_index < KF_MAX_PDB) atomicOr(&d->entry_refuse[c.pdb_index], c.refuse); }
 
     uint32_t st = 0u;
     if (lane == 0u && total) st = atomicAdd(used, total);

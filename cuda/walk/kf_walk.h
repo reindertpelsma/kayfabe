@@ -94,6 +94,10 @@ extern "C" {
 #define KFWR_V_PARTIAL  (1u << 3)
 /* The slot is full and nothing can be retired: the entry carries no runs. */
 #define KFWR_V_OVERFLOW (1u << 4)
+/* ★ The entry's WALK refused something (`reserved2` = which KFWR_R_* bits): its
+ * refused leaves are ABSENT from the walk, so the host fails that space by name
+ * rather than treating the diff as the whole truth (owner ruling 2026-09-25). */
+#define KFWR_V_REFUSED  (1u << 5)
 
 /* ── MapRun::op ──────────────────────────────────────────────────────────────── */
 #define KFWR_OP_MAP   1u

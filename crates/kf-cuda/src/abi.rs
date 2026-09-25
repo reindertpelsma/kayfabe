@@ -87,6 +87,9 @@ pub const KFWR_RF_HELD: u32 = 1 << 31;
 pub const KFWR_V_PARTIAL: u32 = 1 << 3;
 /// Per-entry flag: the slot is full and nothing can be retired; no runs.
 pub const KFWR_V_OVERFLOW: u32 = 1 << 4;
+/// ★ Per-entry flag: the entry's walk refused something (`KfPdbEntry::reserved2` = the
+/// `KFWR_R_*` bits); its refused leaves are absent from the walk (owner ruling 2026-09-25).
+pub const KFWR_V_REFUSED: u32 = 1 << 5;
 
 /// `value = ((raw >> lo) & ((1 << bits) - 1)) << shift`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -253,6 +256,8 @@ pub struct KfDev {
     pub diff_count: [u32; KF_MAX_PDB],
     /// `KFWR_V_PARTIAL` / `KFWR_V_OVERFLOW`, per entry.
     pub diff_vflags: [u32; KF_MAX_PDB],
+    /// ★ Which refusals fired in each entry's walk (the host fails that space by name).
+    pub entry_refuse: [u32; KF_MAX_PDB],
     /// Accumulator, zeroed by `kf_begin_kernel`.
     pub entries_visited: u64,
     /// Accumulator, zeroed by `kf_begin_kernel`.
@@ -286,6 +291,7 @@ impl Default for KfDev {
             tbl_run_count: [0; KF_MAX_PDB],
             diff_count: [0; KF_MAX_PDB],
             diff_vflags: [0; KF_MAX_PDB],
+            entry_refuse: [0; KF_MAX_PDB],
             entries_visited: 0,
             refusals: 0,
             refuse_mask: 0,

@@ -270,6 +270,10 @@ pub struct EntryDiff {
     pub partial: bool,
     /// Its slot is full and nothing can be retired: no progress is possible.
     pub overflow: bool,
+    /// ★ Owner ruling 2026-09-25: the `KFWR_R_*` bits its WALK refused (0 = none). Its refused
+    /// leaves are absent from the walk; the rest of its diff is applied, and the space fails by
+    /// name (its invalidate stays armed).
+    pub refused: u32,
 }
 
 /// A finished walk.
@@ -383,6 +387,11 @@ impl Walker for GpuWalker {
                     runs,
                     partial: p.vas_flags & kf_cuda::abi::KFWR_V_PARTIAL != 0,
                     overflow: p.vas_flags & kf_cuda::abi::KFWR_V_OVERFLOW != 0,
+                    refused: if p.vas_flags & kf_cuda::abi::KFWR_V_REFUSED != 0 {
+                        u32::try_from(p.reserved2).unwrap_or(u32::MAX).max(1)
+                    } else {
+                        0
+                    },
                 }
             })
             .collect();
@@ -488,6 +497,8 @@ pub struct VaStats {
     pub partial: u64,
     /// ★ Objects walked with no slot left (refused by name).
     pub no_slot: u64,
+    /// ★ Spaces failed because their walk refused leaves (owner ruling 2026-09-25).
+    pub walk_refused_spaces: u64,
 }
 
 /// ★ P5c: where an invalidate's wall time goes, summed over every one completed — never a decision
@@ -887,6 +898,16 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                     a.refused,
                     a.first_refusal.clone().unwrap_or_default()
                 ));
+            } else if e.refused != 0 {
+                // ★ Owner ruling 2026-09-25: a walk that refused leaves in this space is NOT the
+                // whole truth of it — what it did describe was applied above; the space fails by
+                // name so its invalidate is not cleared over leaves nobody mapped.
+                failed.insert(key);
+                self.stats.walk_refused_spaces += 1;
+                self.stats.refuse(format!(
+                    "{key:?} root {walked_root:#x}: the walk REFUSED leaves (refuse_mask={:#x}) — absent, not mapped",
+                    e.refused
+                ));
             } else if e.partial {
                 self.stats.partial += 1;
                 partial.insert(key);
@@ -991,6 +1012,8 @@ mod tests {
         fail_poll: Option<String>,
         /// Diff sizes, per report.
         diff_runs: Vec<usize>,
+        /// A root whose walk "refuses" a leaf (`KFWR_R_LEAF_OOB`) — the refusal the ruling names.
+        refuse_in: Option<u64>,
     }
 
     impl ModelWalker {
@@ -1009,6 +1032,7 @@ mod tests {
                 submits: vec![],
                 fail_poll: None,
                 diff_runs: vec![],
+                refuse_in: None,
             }
         }
     }
@@ -1091,7 +1115,8 @@ mod tests {
                         held: m.flags & kf_cuda::abi::KFWR_RF_HELD != 0,
                     })
                     .collect();
-                entries.push(EntryDiff { pdb: e.pdb, slot: e.slot, first, runs, partial: d.partial, overflow: d.overflow });
+                let refused = if self.refuse_in == Some(e.pdb) { 0x2000 } else { 0 };
+                entries.push(EntryDiff { pdb: e.pdb, slot: e.slot, first, runs, partial: d.partial, overflow: d.overflow, refused });
                 first += d.runs.len();
                 last.push((e.slot, d.runs));
             }
@@ -1588,6 +1613,28 @@ mod tests {
         r.ops.borrow_mut().clear();
         settle(&mut r, PDB_A);
         assert_eq!(ops(&r), vec![Op::Map(0x1000, 0x10_0000, 0x1000), Op::Invalidate], "diffed against an EMPTY slot");
+    }
+
+    /// ★ Owner ruling 2026-09-25: a walk that REFUSED leaves in a space fails that space by name
+    /// (its invalidate stays armed) — while what the walk did describe is still applied (the
+    /// failure is scoped to the refused leaves, which are absent, never "unmapped").
+    #[test]
+    fn a_walk_refusal_fails_the_space_by_name_and_applies_the_rest() {
+        let mut r = rig();
+        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000, 0x10_0000, 0x1000, 0)]);
+        r.m.walker_mut().refuse_in = Some(PDB_A);
+        let out = settle(&mut r, PDB_A);
+        assert_eq!(out.unreconciled.len(), 1);
+        assert!(busy(&r.port), "not cleared over refused leaves");
+        assert_eq!(ops(&r), vec![Op::Map(0x1000, 0x10_0000, 0x1000), Op::Invalidate], "the described leaf is applied");
+        assert_eq!(r.m.stats.walk_refused_spaces, 1);
+        assert!(r.m.stats.refusals.iter().any(|x| x.contains("REFUSED leaves")));
+        // The refusal goes away: the space settles, and nothing is re-applied (it was acknowledged).
+        r.m.walker_mut().refuse_in = None;
+        r.ops.borrow_mut().clear();
+        let out = settle(&mut r, PDB_A);
+        assert_eq!(out.completed.len(), 1);
+        assert!(ops(&r).is_empty());
     }
 
     /// Past the walker's slots, an object is refused by name — never walked against a guess.
