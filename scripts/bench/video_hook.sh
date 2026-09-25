@@ -23,7 +23,7 @@ if [ -n "${VIDEO_SHIM:-}" ] && [ -f "$VIDEO_SHIM" ]; then
     if [ $w = enc ]; then args='-f lavfi -i testsrc2=size=320x240:rate=30 -frames:v 10 -c:v h264_nvenc -preset p4 -rc constqp -qp 23 -bf 0 -f h264 /var/tmp/vid/t.h264'
     else args='-hwaccel cuda -hwaccel_output_format cuda -i /var/tmp/vid/x.h264 -vf hwdownload,format=nv12 -f null -'
          $G "/var/tmp/vid/ffmpeg -hide_banner -y -f lavfi -i testsrc2=size=320x240:rate=30 -frames:v 10 -c:v libx264 -threads 1 -f h264 /var/tmp/vid/x.h264 >/dev/null 2>&1"; fi
-    $G "rm -f /var/tmp/vid/$w.jsonl; NVDIFF_OUT=/var/tmp/vid/$w.jsonl LD_PRELOAD=/var/tmp/vid/nvdiff_shim.so timeout -s INT 120 /var/tmp/vid/ffmpeg -hide_banner -y $args > /var/tmp/vid/trace_$w.log 2>&1; echo TRACE_${w}_RC=\$?; tail -4 /var/tmp/vid/trace_$w.log"
+    $G "rm -f /var/tmp/vid/$w.jsonl; NVDIFF_OUT=/var/tmp/vid/$w.jsonl LD_PRELOAD=/var/tmp/vid/nvdiff_shim.so timeout -s INT 120 /var/tmp/vid/ffmpeg -hide_banner -loglevel verbose -y $args > /var/tmp/vid/trace_$w.log 2>&1; echo TRACE_${w}_RC=\$?; grep -v frame= /var/tmp/vid/trace_$w.log | tail -25"
     $G "cat /var/tmp/vid/$w.jsonl" > "/workspace/bench/run_${1}_$w.jsonl"
     echo "TRACE_$w records=$(wc -l < /workspace/bench/run_${1}_$w.jsonl)"
   done
@@ -42,4 +42,10 @@ echo "=== failing step logs (tail) ==="
 $G 'cd /var/tmp/vid/out 2>/dev/null && for f in $(grep -l "rc=[1-9]" results.txt >/dev/null 2>&1; grep -o "^[a-z0-9_]* rc=[1-9][0-9]*" results.txt | cut -d" " -f1); do echo "--- $f.log"; tail -15 $f.log; done'
 echo "=== guest dmesg tail ==="
 $G 'sudo dmesg | tail -40'
+# ★ VIDEO_HOLD=1: keep the guest up for interactive diagnosis until /workspace/bench/video_release
+# exists (bounded by VIDEO_HOLD_S, default 2400 s) — the operator runs gssh_nv against it.
+if [ "${VIDEO_HOLD:-0}" = 1 ]; then
+  rm -f /workspace/bench/video_release; echo "VIDEO_HOLD: guest held (touch /workspace/bench/video_release)"
+  t1=$(date +%s); while [ ! -e /workspace/bench/video_release ] && [ $(( $(date +%s) - t1 )) -lt ${VIDEO_HOLD_S:-2400} ]; do sleep 5; done
+fi
 echo HOOK_RC=0
