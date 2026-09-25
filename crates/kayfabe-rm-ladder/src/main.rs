@@ -1378,7 +1378,7 @@ fn guest_ram_pin_probe(rm: &mut HostRmBackend, gpu: u32) -> bool {
 /// copy of that node the moment it is sent, so the child's mapping is the only one.
 /// ★ w827 — **the trap bench.** The most dummy trap possible next to ours, timed from the guest:
 /// kf3 `dummy-bar=on` puts two do-nothing MMIO pages in the MSI-X BAR (BAR5 + 0x8000 lockless,
-/// + 0x9000 BQL); this times N 32-bit writes and reads to each, N writes to OUR doorbell (the
+/// + 0x9000 BQL, + 0xA000 a KVM ioeventfd — in-kernel, no exit to QEMU); this times N 32-bit writes and reads to each, N writes to OUR doorbell (the
 /// usermode page, token 0xFFF — nobody's), N writes to OUR CPU_INTR_LEAF(7) (write-1-to-clear
 /// of nothing), and N shadowed BAR0 reads (no exit — the floor). Prints `TRAPBENCH …` ns/op.
 fn trap_bench_probe() -> bool {
@@ -1431,11 +1431,12 @@ fn trap_bench_probe() -> bool {
     let dl_r = time_r(&bar5, 0x8000);
     let db_w = time_w(&bar5, 0x9000, 0);
     let db_r = time_r(&bar5, 0x9000);
+    let ioev_w = time_w(&bar5, 0xA000, 0);
     let our_db = time_w(&bar0, 0x00BB_0090, 0xFFF);
     let our_intr = time_w(&bar0, 0x00B8_101C, 0);
     let shadow = time_r(&bar0, 0x00B8_101C);
     println!(
-        "TRAPBENCH n={n} dummy_lockless_write_ns={dl_w:.0} dummy_lockless_read_ns={dl_r:.0} dummy_bql_write_ns={db_w:.0} dummy_bql_read_ns={db_r:.0} our_doorbell_write_ns={our_db:.0} our_intr_leaf_write_ns={our_intr:.0} shadow_read_ns={shadow:.0}"
+        "TRAPBENCH n={n} dummy_lockless_write_ns={dl_w:.0} dummy_lockless_read_ns={dl_r:.0} dummy_bql_write_ns={db_w:.0} dummy_bql_read_ns={db_r:.0} dummy_ioeventfd_write_ns={ioev_w:.0} our_doorbell_write_ns={our_db:.0} our_intr_leaf_write_ns={our_intr:.0} shadow_read_ns={shadow:.0}"
     );
     true
 }

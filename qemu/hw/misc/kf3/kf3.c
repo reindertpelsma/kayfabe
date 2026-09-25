@@ -83,7 +83,8 @@ struct Kf3State {
     /* w827 trap bench (property dummy-bar, default off): two do-nothing MMIO pages in the MSI-X
      * BAR (every other BAR index is taken: BAR1/BAR3 are 64-bit and consume 2 and 4). */
     bool dummy_bar;
-    MemoryRegion dummy_pages[2];
+    MemoryRegion dummy_pages[3];
+    EventNotifier dummy_efd;   /* page 2's KVM ioeventfd — nobody reads it */
 };
 
 /* ── BAR0 ───────────────────────────────────────────────────────────────────────────────── */
@@ -445,6 +446,14 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
             memory_region_add_subregion(&s->msix_bar, KF3_DUMMY_OFF, &s->dummy_pages[0]);
             memory_region_init_io(&s->dummy_pages[1], OBJECT(s), &kf3_dummy_ops, s, "kf3-dummy-bql", 0x1000);
             memory_region_add_subregion(&s->msix_bar, KF3_DUMMY_OFF + 0x1000, &s->dummy_pages[1]);
+            /* Page 2: a write at +0 is a KVM ioeventfd (handled in the host kernel, no exit to
+             * QEMU) — the floor an in-kernel doorbell could reach on this host. */
+            memory_region_init_io(&s->dummy_pages[2], OBJECT(s), &kf3_dummy_ops, s, "kf3-dummy-ioeventfd", 0x1000);
+            memory_region_enable_lockless_io(&s->dummy_pages[2]);
+            if (event_notifier_init(&s->dummy_efd, 0) == 0) {
+                memory_region_add_eventfd(&s->dummy_pages[2], 0, 4, false, 0, &s->dummy_efd);
+            }
+            memory_region_add_subregion(&s->msix_bar, KF3_DUMMY_OFF + 0x2000, &s->dummy_pages[2]);
         }
         if (msix_init(pci, s->msix_vectors, &s->msix_bar, KF3_MSIX_BAR, 0x0, &s->msix_bar,
                       KF3_MSIX_BAR, 0x2000, 0, errp) < 0) {
