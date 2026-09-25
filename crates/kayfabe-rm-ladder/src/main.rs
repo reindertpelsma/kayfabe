@@ -15042,7 +15042,7 @@ fn main() -> std::process::ExitCode {
         for pass in 1..=3 {
             match rm.bench_vidmem_mmio(len) {
                 Ok((w, r, b, acc)) => println!(
-                    "MMIO_BENCH pass={pass} vidmem-WC {len_mib} MiB: write_u64 {:.1} MiB/s ({:.1} ns/op)  read_u64 {:.1} MiB/s ({:.1} ns/op)  copy_out64K {:.1} MiB/s  acc={acc:#x}",
+                    "MMIO_BENCH pass={pass} vidmem-WC {len_mib} MiB: WARM write_u64 {:.1} MiB/s ({:.1} ns/op)  read_u64 {:.1} MiB/s ({:.1} ns/op)  copy_out64K {:.1} MiB/s  acc={acc:#x}",
                     rate(w),
                     w.as_nanos() as f64 / (len / 8) as f64,
                     rate(r),
@@ -15060,7 +15060,14 @@ fn main() -> std::process::ExitCode {
             *w = std::hint::black_box((i as u64) ^ 0x5A5A_5A5A_5A5A_5A5A);
         }
         std::hint::black_box(&host);
+        let hw_cold = t.elapsed();
+        let t = std::time::Instant::now();
+        for (i, w) in host.iter_mut().enumerate() {
+            *w = std::hint::black_box((i as u64) ^ 0xA5A5);
+        }
+        std::hint::black_box(&host);
         let hw = t.elapsed();
+        println!("MMIO_BENCH control host-RAM cold-first-touch write_u64 {:.1} MiB/s", rate(hw_cold));
         let mut acc = 0u64;
         let t = std::time::Instant::now();
         for w in std::hint::black_box(&host) {
@@ -15068,7 +15075,7 @@ fn main() -> std::process::ExitCode {
         }
         let hr = t.elapsed();
         println!(
-            "MMIO_BENCH control host-RAM {} MiB: write_u64 {:.1} MiB/s  read_u64 {:.1} MiB/s  acc={acc:#x}",
+            "MMIO_BENCH control host-RAM {} MiB: WARM write_u64 {:.1} MiB/s  read_u64 {:.1} MiB/s  acc={acc:#x}",
             len >> 20,
             rate(hw),
             rate(hr)

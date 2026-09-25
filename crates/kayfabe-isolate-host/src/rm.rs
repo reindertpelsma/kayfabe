@@ -7371,6 +7371,17 @@ impl HostRmBackend {
     ) -> Result<(std::time::Duration, std::time::Duration, std::time::Duration, u64), RmError> {
         let raw = self.conn.reserve_gpga(len)?;
         let (node, map) = self.conn.map_cpu(raw, len, CachePolicy::WriteCombining)?;
+        // ⊘ Pass 0 is COLD: every page's first touch faults the mapping in (and in a guest, a
+        // nested EPT fault). It is timed but not returned; the returned write is the WARM pass
+        // over the same pages — the memory-type (WC vs UC) answer on its own.
+        let cold = std::time::Instant::now();
+        let mut off = 0u64;
+        while off + 8 <= len {
+            map.store_u64(HostOffset::new(off), off).map_err(|e| region_error(&e))?;
+            off += 8;
+        }
+        release_fence();
+        println!("MMIO_BENCH cold-first-touch write_u64 {:.1} ns/op", cold.elapsed().as_nanos() as f64 / (len / 8) as f64);
         let start = std::time::Instant::now();
         let mut off = 0u64;
         while off + 8 <= len {
