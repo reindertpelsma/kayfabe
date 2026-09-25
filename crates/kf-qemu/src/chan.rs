@@ -52,6 +52,8 @@ use std::sync::{Arc, Mutex, RwLock};
 
 /// `NV_ERR_INVALID_STATE`.
 const NV_ERR_INVALID_STATE: u32 = 0x40;
+/// `NV_ERR_INVALID_ARGUMENT`.
+const NV_ERR_INVALID_ARGUMENT: u32 = 0x1F;
 /// `NV_ERR_INSUFFICIENT_RESOURCES`.
 const NV_ERR_INSUFFICIENT_RESOURCES: u32 = 0x1A;
 /// `NV_ERR_NOT_SUPPORTED`.
@@ -73,15 +75,55 @@ struct PtChan {
     tsg: Option<u32>,
     /// The channel's parent (its TSG, or its device).
     parent: u32,
+    /// ★ v3-promote: the device it hangs off (== `parent` outside a TSG).
+    device: u32,
     /// The host engine (= the guest's `engineType`).
     engine: u32,
-    /// Engine objects on the twin: guest handle → host handle.
-    objects: HashMap<u32, u32>,
+    /// Engine objects on the twin: guest handle → (host handle, its class kind).
+    objects: HashMap<u32, (u32, kf_chip::classes::Kind)>,
+    /// ★ v3-promote: the guest's `GPU_PROMOTE_CTX` / `GPU_EVICT_CTX` statements for this channel,
+    /// satisfied by the twin (never forwarded).
+    ctx: CtxBind,
     /// ★ P5c: the mirror's live-channel count (released at free).
     live: Arc<AtomicU64>,
     /// ★ P5c: the guest's error notifier, as the twin's host error context — `None` when the
     /// guest declared none (or it could not be armed, named at birth).
     notifier: Option<PtNotifier>,
+}
+
+/// ★★★ v3-promote — **the guest's context-buffer statements, satisfied by the twin** (owner
+/// ruling 2026-09-25). The guest's CPU-RM owns and allocates its GR context buffers
+/// (`bClientRmAllocatedCtxBuffer` is TRUE on every GSP client, `ogkm-580: gpu_registry.c:153-156`)
+/// and declares them to physical RM with `GPU_PROMOTE_CTX`: once per GR object for the
+/// PA-initialize half (`kgrobjPromoteContext`, `kernel_graphics_object.c:51-159`) and, in a
+/// UVM-owned space, once more at `UVM_REGISTER_CHANNEL` for the VAs (`nvGpuOpsBindChannelResources`,
+/// `nv_gpu_ops.c:10854-10904`). Physical RM is us, and the channel runs as a host twin whose OWN
+/// context host RM allocated, initialised from its golden image and promoted when we allocated the
+/// twin's engine object — so the statement is answered by recording it, never by forwarding it and
+/// never by touching the guest's buffers.
+///
+/// ⊘ **What the guest's CPU-RM reads back from those buffers: nothing** (searched: every
+/// `memmgrMemDescBeginTransfer`/`memmgrMemRead` in `kernel/gpu/gr/`, `kernel_channel.c` and
+/// `nv_gpu_ops.c`). On `NV_OK` it only flips its own `bKGr*CtxBufferInitialized` flags
+/// (`kernel_graphics_object.c:136-151`, `kgrctxMarkCtxBufferInitialized`,
+/// `kernel_graphics_context.c:1949-2000`) and — for the UVM bind — `bIsContextBound`
+/// (`nv_gpu_ops.c:10901-10904`), which is what its own `kchannelIsSchedulable`
+/// (`kernel_channel.c:2200-2206`, called at `:3105` BEFORE the schedule RPC) tests. The one GR
+/// buffer CPU-RM does read is the FECS event buffer, and only with a ctxsw-log consumer; CPU-RM
+/// itself fills it with `0xde` before enabling (`fecs_event_list.c:1545-1547`) and only reads
+/// `magic_lo` against that fill (`:1046-1099`). ⇒ the "stub" is the buffer exactly as the guest
+/// left it: we write no byte.
+#[derive(Debug, Default, Clone, Copy)]
+struct CtxBind {
+    /// Buffer ids the guest asked to be initialised (bitmask of `bufferId`).
+    initialized: u32,
+    /// Buffer ids whose VA the guest promoted (the UVM bind).
+    va_bound: u32,
+    /// `bIsContextBound`'s mirror: a VA promote succeeded and no evict followed.
+    bound: bool,
+    /// Promotes / evicts answered.
+    promotes: u32,
+    evicts: u32,
 }
 
 /// ★ P5c: a twin's error context: the host `NV01_CONTEXT_DMA` over the guest's notifier record
@@ -397,6 +439,22 @@ struct Slot {
     privilege: Option<kf_abi::notifier::ChannelPrivilege>,
 }
 
+/// ★ v3-promote: where a guest channel hangs in the guest's object tree — every handle whose free
+/// takes it (a GSP-client guest frees a subtree with ONE `GSP_RM_FREE` naming its root).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ChanScope {
+    tsg: Option<u32>,
+    parent: u32,
+    device: u32,
+}
+
+impl ChanScope {
+    /// Does freeing `(client, object)` free the channel `key` (`(hClient, hChannel)`)?
+    fn freed_by(self, key: (u32, u32), client: u32, object: u32) -> bool {
+        key.0 == client && (object == client || key.1 == object || self.tsg == Some(object) || self.parent == object || self.device == object)
+    }
+}
+
 /// Per-token counters for the gate (`forwarded=` per token), never a decision input.
 #[derive(Debug, Default, Clone)]
 pub struct TokenCount {
@@ -432,6 +490,8 @@ pub struct ChanPlane {
     slots: RwLock<HashMap<u32, Arc<Mutex<Slot>>>>,
     /// `(hClient, hObject)` → host token.
     by_obj: Mutex<HashMap<(u32, u32), u32>>,
+    /// ★ v3-promote: a Translated channel's group / parent / device (what a guest free can name).
+    scopes: Mutex<HashMap<(u32, u32), ChanScope>>,
     /// The worker eventfd (a schedule that finds work pending wakes one).
     wake: &'static kf_linux_raw::Notifier,
     /// Serves that found the slot lock held — must stay 0 (BUSY excludes).
@@ -560,6 +620,7 @@ impl ChanPlane {
             caps: Mutex::new(VmCaps::from_declared(64, 64, 64, 64)),
             slots: RwLock::new(HashMap::new()),
             by_obj: Mutex::new(HashMap::new()),
+            scopes: Mutex::new(HashMap::new()),
             wake,
             contended: AtomicU64::new(0),
             poisoned: AtomicU64::new(0),
@@ -768,7 +829,114 @@ impl ChanPlane {
             }
             ChanStatement::EngineObject { client, parent, handle, class } => self.engine_object(client, parent, handle, class),
             ChanStatement::Free { client, object } => self.free(client, object),
+            ChanStatement::PromoteCtx { chan_client, object, engine_type, initialize, with_va, entries } => {
+                self.promote_ctx(chan_client, object, engine_type, initialize, with_va, entries)
+            }
+            ChanStatement::EvictCtx { chan_client, object, engine_type } => self.evict_ctx(chan_client, object, engine_type),
         }
+    }
+
+    /// ★★★ `GPU_PROMOTE_CTX`, satisfied by the twin ([`CtxBind`]).
+    ///
+    /// ⊘ `[measured pr3]` the PA-initialize promote arrives BEFORE the GR object's own alloc RPC:
+    /// `kgrobjConstruct` promotes inside its constructor (`kernel_graphics_object.c:225`) and the
+    /// resource's alloc reaches us only after it, so at that moment the twin holds no host object
+    /// yet. That promote is answered from the twin alone (a GR twin exists): the host context it
+    /// stands for is created by the SAME guest alloc's engine-object act right after, and if that
+    /// act fails the guest's alloc fails and its object — with its "initialized" flags — is torn
+    /// down (`kernel_graphics_object.c:352-356`). No host work, so no act: answered inline.
+    /// A promote that carries VAs (the UVM bind, after the object exists) is an ACT ordered behind
+    /// any queued engine-object act, and requires the host GR object to exist.
+    /// ⊘ Nothing is sent to the host and no guest byte is read or written.
+    fn promote_ctx(&self, client: u32, object: u32, engine_type: u32, initialize: u32, with_va: u32, entries: u32) -> ChanAnswer {
+        let Some((engine, ht)) = self.pt.lock().ok().and_then(|m| m.get(&(client, object)).map(|v| (v.engine, v.chan.token))) else {
+            // A Translated (kernel CE) channel has no GR context and never promotes; a kernel GR
+            // channel (RM's golden-image channel) is not born (P7) — both stay the FSM's refusal.
+            eprintln!("kf3: chan {client:#x}:{object:#x} GPU_PROMOTE_CTX: no passthrough twin — not ours (entries={entries})");
+            return ChanAnswer::NotOurs;
+        };
+        if engine != kf_abi::submit::ENGINE_TYPE_GRAPHICS || engine_type != engine {
+            return ChanAnswer::Refused {
+                status: NV_ERR_INVALID_ARGUMENT,
+                why: format!("GPU_PROMOTE_CTX engine {engine_type:#x} for a twin born on engine {engine:#x} (host {ht:#x})"),
+            };
+        }
+        if with_va == 0 {
+            let Ok(mut m) = self.pt.lock() else {
+                return ChanAnswer::Refused { status: NV_ERR_INVALID_STATE, why: "twins poisoned".into() };
+            };
+            let Some(v) = m.get_mut(&(client, object)) else { return ChanAnswer::NotOurs };
+            v.ctx.initialized |= initialize;
+            v.ctx.promotes += 1;
+            eprintln!(
+                "kf3: chan {client:#x}:{object:#x} GPU_PROMOTE_CTX (initialize) SATISFIED BY TWIN host {ht:#x}: entries={entries} init_ids={initialize:#x} host_objects={} — not forwarded, no guest byte touched",
+                v.objects.len()
+            );
+            return ChanAnswer::Done;
+        }
+        self.defer(
+            "promote ctx",
+            Box::new(move |me: &ChanPlane| {
+                let mut m = me.pt.lock().map_err(|_| (NV_ERR_INVALID_STATE, "twins poisoned".to_string()))?;
+                let v = m
+                    .get_mut(&(client, object))
+                    .ok_or_else(|| (NV_ERR_INVALID_STATE, format!("{client:#x}:{object:#x}: twin freed before its promote")))?;
+                let host_ctx: Vec<u32> = v
+                    .objects
+                    .values()
+                    .filter(|(_, k)| matches!(k, kf_chip::classes::Kind::Compute | kf_chip::classes::Kind::ThreeD))
+                    .map(|(h, _)| *h)
+                    .collect();
+                if host_ctx.is_empty() {
+                    return Err((
+                        NV_ERR_INVALID_STATE,
+                        format!(
+                            "{client:#x}:{object:#x} GPU_PROMOTE_CTX: twin host {ht:#x} holds no GR engine object, so host RM has no context to stand for the guest's"
+                        ),
+                    ));
+                }
+                v.ctx.initialized |= initialize;
+                v.ctx.va_bound |= with_va;
+                v.ctx.bound |= with_va != 0;
+                v.ctx.promotes += 1;
+                Ok(format!(
+                    "chan {client:#x}:{object:#x} GPU_PROMOTE_CTX SATISFIED BY TWIN host {ht:#x} (host GR object(s) {host_ctx:x?}): entries={entries} init_ids={initialize:#x} va_ids={with_va:#x} bound={} — not forwarded, no guest byte touched",
+                    v.ctx.bound
+                ))
+            }),
+        )
+    }
+
+    /// `GPU_EVICT_CTX` — the unbind half. The guest's `nvGpuOpsStopChannel` sends it after
+    /// `STOP_CHANNEL` and then clears `bIsContextBound` (`nv_gpu_ops.c:10956-10983`); `NV_OK`
+    /// asserts the context is switched out. The twin is taken off the host runlist (its own
+    /// `GPFIFO_SCHEDULE` disable, an authored verb), so that promise is the host's, and the
+    /// binding is recorded UNBOUND.
+    fn evict_ctx(&self, client: u32, object: u32, engine_type: u32) -> ChanAnswer {
+        let Some((engine, chan)) = self.pt.lock().ok().and_then(|m| m.get(&(client, object)).map(|v| (v.engine, v.chan))) else {
+            return ChanAnswer::NotOurs;
+        };
+        if engine != kf_abi::submit::ENGINE_TYPE_GRAPHICS || engine_type != engine {
+            return ChanAnswer::Refused {
+                status: NV_ERR_INVALID_ARGUMENT,
+                why: format!("GPU_EVICT_CTX engine {engine_type:#x} for a twin born on engine {engine:#x} (host {:#x})", chan.token),
+            };
+        }
+        self.defer(
+            "evict ctx",
+            Box::new(move |me: &ChanPlane| {
+                me.rm.schedule_enable(chan, false).map_err(|e| (NV_ERR_INVALID_STATE, format!("host {:#x} disable: {e:?}", chan.token)))?;
+                let ctx = me.pt.lock().ok().and_then(|mut m| {
+                    m.get_mut(&(client, object)).map(|v| {
+                        v.ctx.bound = false;
+                        v.ctx.va_bound = 0;
+                        v.ctx.evicts += 1;
+                        v.ctx
+                    })
+                });
+                Ok(format!("chan {client:#x}:{object:#x} GPU_EVICT_CTX: twin host {:#x} off the runlist, context UNBOUND ({ctx:?})", chan.token))
+            }),
+        )
     }
 
     fn schedule_translated(&self, client: u32, object: u32, ht: u32, enable: bool) -> ChanAnswer {
@@ -808,7 +976,7 @@ impl ChanPlane {
                 if let Ok(mut m) = me.pt.lock()
                     && let Some(v) = m.get_mut(&(client, parent))
                 {
-                    v.objects.insert(handle, h);
+                    v.objects.insert(handle, (h, kind));
                 }
                 if let Ok(mut m) = me.pt_objs.lock() {
                     m.insert((client, handle), (client, parent));
@@ -823,19 +991,34 @@ impl ChanPlane {
     /// (atomics, no host call); the host frees run as ONE act whose outcome the reply waits for.
     fn free(&self, client: u32, object: u32) -> ChanAnswer {
         // Translated channels: by object, or every one of the client's.
+        // ★ v3-promote: a free of the channel, its group, its parent, its DEVICE or its client
+        // takes the channel with it (the guest frees a subtree with ONE RPC) — for Translated
+        // channels too, which were matched by handle or client only, so a group or device free
+        // left the host ring pumping after the guest considered the channel gone.
+        let scopes = self.scopes.lock().map(|m| m.clone()).unwrap_or_default();
         let translated: Vec<u32> = self
             .by_obj
             .lock()
             .map(|mut m| {
-                let keys: Vec<(u32, u32)> = m.keys().copied().filter(|k| k.0 == client && (object == client || k.1 == object)).collect();
+                let keys: Vec<(u32, u32)> = m
+                    .keys()
+                    .copied()
+                    .filter(|k| {
+                        let sc = scopes.get(k).copied().unwrap_or(ChanScope { tsg: None, parent: k.1, device: k.1 });
+                        sc.freed_by(*k, client, object)
+                    })
+                    .collect();
                 keys.into_iter().filter_map(|k| m.remove(&k)).collect()
             })
             .unwrap_or_default();
-        let twins = self.take_pt(|k, v| k.0 == client && (object == client || k.1 == object || v.tsg == Some(object) || v.parent == object));
+        if let Ok(mut m) = self.scopes.lock() {
+            m.retain(|k, sc| !sc.freed_by(*k, client, object));
+        }
+        let twins = self.take_pt(|k, v| ChanScope { tsg: v.tsg, parent: v.parent, device: v.device }.freed_by(*k, client, object));
         // Engine objects freed on their own (their twin still lives).
         let obj = if twins.is_empty() {
             self.pt_objs.lock().ok().and_then(|mut m| m.remove(&(client, object))).and_then(|key| {
-                self.pt.lock().ok().and_then(|mut m| m.get_mut(&key).and_then(|v| v.objects.remove(&object)))
+                self.pt.lock().ok().and_then(|mut m| m.get_mut(&key).and_then(|v| v.objects.remove(&object).map(|o| o.0)))
             })
         } else {
             None
@@ -890,7 +1073,7 @@ impl ChanPlane {
                         rung - reached.min(rung),
                         t.chan.token
                     );
-                    line.push(format!("passthrough {c:#x}:{h:#x} token {:#x} host {:#x} objects={} {}", t.idx, t.chan.token, t.objects.len(), if r.is_ok() { "freed" } else { "FREE REFUSED" }));
+                    line.push(format!("passthrough {c:#x}:{h:#x} token {:#x} host {:#x} objects={} ctx={:?} {}", t.idx, t.chan.token, t.objects.len(), t.ctx, if r.is_ok() { "freed" } else { "FREE REFUSED" }));
                 }
                 if let Some(h) = obj {
                     let r = me.rm.free(h);
@@ -1012,7 +1195,7 @@ impl ChanPlane {
                     }
                     let rc = if notifier.is_some() { "armed" } else { "none" };
                     if let Ok(mut m) = me.pt.lock() {
-                        m.insert((a.client, a.handle), PtChan { chan, idx, tsg: a.tsg, parent: a.parent, engine, objects: HashMap::new(), live, notifier });
+                        m.insert((a.client, a.handle), PtChan { chan, idx, tsg: a.tsg, parent: a.parent, device: a.device, engine, objects: HashMap::new(), ctx: CtxBind::default(), live, notifier });
                     }
                     me.pt_births.fetch_add(1, Ordering::Relaxed);
                     me.engine_live(engine, true);
@@ -1079,6 +1262,9 @@ impl ChanPlane {
                 }
                 if let Ok(mut m) = me.by_obj.lock() {
                     m.insert((a.client, a.handle), ht);
+                }
+                if let Ok(mut m) = me.scopes.lock() {
+                    m.insert((a.client, a.handle), ChanScope { tsg: a.tsg, parent: a.parent, device: a.device });
                 }
                 me.births.fetch_add(1, Ordering::Relaxed);
                 Ok(format!(
@@ -1338,5 +1524,29 @@ impl ChanPlane {
     /// Stop serving (device teardown).
     pub fn stop(&self) {
         self.stop.store(true, Ordering::Release);
+    }
+}
+
+#[cfg(test)]
+mod scope_tests {
+    use super::ChanScope;
+
+    /// ★ v3-promote: a guest free of ANY handle the channel hangs under takes its twin — the
+    /// channel, its group, its parent, its device or its client — and nothing else does (another
+    /// client's identical handles, a sibling channel, an unrelated object).
+    #[test]
+    fn a_group_device_or_client_free_takes_every_twin_under_it() {
+        let (c, dev, tsg, ch, sib) = (0xc1d0_000b, 0x5c00_0001, 0xcafe_0010, 0xcafe_0013, 0xcafe_0014);
+        let member = ChanScope { tsg: Some(tsg), parent: tsg, device: dev };
+        assert!(member.freed_by((c, ch), c, ch), "the channel itself");
+        assert!(member.freed_by((c, ch), c, tsg), "its group");
+        assert!(member.freed_by((c, ch), c, dev), "its DEVICE (a group member's parent is the group)");
+        assert!(member.freed_by((c, ch), c, c), "its client");
+        assert!(!member.freed_by((c, ch), c, sib), "a sibling's free leaves it");
+        assert!(!member.freed_by((c, ch), 0xc1d0_000c, tsg), "another client's same handle");
+        assert!(!member.freed_by((c, ch), c, 0xdead_0001), "an unrelated object");
+        let bare = ChanScope { tsg: None, parent: dev, device: dev };
+        assert!(bare.freed_by((c, ch), c, dev));
+        assert!(!bare.freed_by((c, ch), c, tsg));
     }
 }

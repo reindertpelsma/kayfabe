@@ -1006,6 +1006,18 @@ impl Device {
                 except_type: e.except_type,
                 // ⊘ CHANNEL, not TSG: our twin is its own host TSG, so only its record was
                 // written (a guest TSG's other members keep running on their own twins).
+                // ★ v3-promote (owner, TSG fault scope): this is CONSISTENT with the guest's view
+                // because the guest's CPU-RM does nothing on RC_TRIGGERED but notify exactly the
+                // scope we post (`_kgspRpcRCTriggered`, `kernel_gsp.c:548-676` →
+                // `krcErrorSendEventNotificationsCtxDma_FWCLIENT`, `kernel_rc_notification.c:385-410`:
+                // the TSG's channel list ONLY for `RC_NOTIFIER_SCOPE_TSG`). With CHANNEL scope the
+                // guest considers that one channel dead and its siblings alive — which they are.
+                // Group death the guest DECIDES (free of the channel/TSG/device/client, or TSG
+                // `GPFIFO_SCHEDULE` disable) reaches every twin of the group (`ChanScope::freed_by`,
+                // the schedule arm's `tsg == Some(object)`). ⊘ Posting TSG scope would require every
+                // sibling's notifier record, which only the host may write, and no unprivileged
+                // host verb RCs a sibling with a record — so a hardware-exact TSG-wide RC is an owner
+                // call (V3_P5_PORT_MAP item 24), not something to forge here.
                 scope: kf_abi::rc::RC_NOTIFIER_SCOPE_CHANNEL,
                 // ⊘ Not read by the receiver (`_kgspRpcRCTriggered` uses engine, chid, gfid, the
                 // exception, its level and scope); we hold no fault address, so none is invented.

@@ -756,6 +756,11 @@ pub(crate) static CONTROLS_SHARED: &[ControlEntry] = &[
     ControlEntry { cmd: 0x20800119, name: "NV2080_CTRL_CMD_GPU_GET_SIMULATION_INFO", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x20800123, name: "NV2080_CTRL_CMD_GPU_GET_ENGINES", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x2080012b, name: "NV2080_CTRL_CMD_GPU_PROMOTE_CTX", origin: Origin::Mode2Rpc },
+    // ★ 2026-09-25 (v3-promote): the UNBIND counterpart of `GPU_PROMOTE_CTX`, issued by the guest
+    // KERNEL only (`nvGpuOpsStopChannel`, `ogkm-580: nv_gpu_ops.c:10966-10983`, flags 0x1c240 =
+    // ROUTE_TO_PHYSICAL) — so it reaches us solely as a GSP RPC. Its consumer is the channel plane
+    // (`kf_rm::chanlink`, `EVICT_CTX`), which records the twin's context UNBOUND.
+    ControlEntry { cmd: 0x2080012c, name: "NV2080_CTRL_CMD_GPU_EVICT_CTX", origin: Origin::Mode2Rpc },
     ControlEntry { cmd: 0x2080012f, name: "NV2080_CTRL_CMD_GPU_QUERY_ECC_STATUS", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x20800131, name: "NV2080_CTRL_CMD_GPU_QUERY_COMPUTE_MODE_RULES", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x20800133, name: "NV2080_CTRL_CMD_GPU_QUERY_ECC_CONFIGURATION", origin: Origin::Nvproxy },
@@ -2150,14 +2155,14 @@ mod tests {
             (
                 "550.54.04",
                 (550, 54, 4),
-                161,
+                162,
                 78,
                 &["NVC36F_CTRL_GET_CLASS_ENGINEID"],
             ),
             (
                 "550.90.07",
                 (550, 90, 7),
-                162,
+                163,
                 78,
                 &[
                     "NVC36F_CTRL_GET_CLASS_ENGINEID",
@@ -2167,14 +2172,14 @@ mod tests {
             (
                 "555.42.02",
                 (555, 42, 2),
-                161,
+                162,
                 78,
                 &["NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE"],
             ),
             (
                 "560.28.03",
                 (560, 28, 3),
-                162,
+                163,
                 86,
                 &[
                     "NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE",
@@ -2184,7 +2189,7 @@ mod tests {
             (
                 "570.86.15",
                 (570, 86, 15),
-                164,
+                165,
                 92,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT",
@@ -2196,7 +2201,7 @@ mod tests {
             (
                 "575.51.02",
                 (575, 51, 2),
-                165,
+                166,
                 92,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
@@ -2209,7 +2214,7 @@ mod tests {
             (
                 "580.65.06",
                 (580, 65, 6),
-                165,
+                166,
                 94,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
@@ -2222,7 +2227,7 @@ mod tests {
             (
                 "610.43.02",
                 (610, 43, 2),
-                165,
+                166,
                 94,
                 &[
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
@@ -2810,7 +2815,7 @@ mod tests {
         // ⚠ The number the reader will expect to see move is `0x00801909`'s, and it does
         // not: that id was already admitted and **cannot be served** (not
         // `ROUTE_TO_PHYSICAL`). See `submit::PERF_CUDA_LIMIT_THE_ID_THAT_ARRIVES`.
-        assert_eq!(bench().all_controls().count(), 165, "controls");
+        assert_eq!(bench().all_controls().count(), 166, "controls"); // +1 v3-promote: GPU_EVICT_CTX
         assert_eq!(at(550, 54, 4).all_classes().count(), 78, "classes at 550");
         assert_eq!(at(560, 28, 3).all_classes().count(), 86, "classes at 560");
         assert_eq!(at(570, 86, 15).all_classes().count(), 92, "classes at 570");
@@ -2837,7 +2842,9 @@ mod tests {
         // `ROUTE_TO_PHYSICAL` on a GSP client means the guest RPCs them to the GSP.
         // ⊘ `Nvproxy` stays at 149: the id nvproxy DOES name here — `0x00801909` — was
         // already on the list and is unchanged by this rung.
-        assert_eq!(n(Origin::Mode2Rpc), 9);
+        // ★ 9 → 10 on 2026-09-25 (v3-promote): `NV2080_CTRL_CMD_GPU_EVICT_CTX`, the kernel-only
+        // unbind counterpart of `GPU_PROMOTE_CTX` (see its row).
+        assert_eq!(n(Origin::Mode2Rpc), 10);
         assert_eq!(n(Origin::Empirical), 5);
         // ★ 148 → 149 on 2026-08-14 (w292): `0x83de0309` came back to the allowlist with
         // its ORIGINAL provenance. It really is an nvproxy row — gVisor permits it because
