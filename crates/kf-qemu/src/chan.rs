@@ -815,11 +815,18 @@ impl ChanPlane {
         }
     }
 
-    /// ★★★ `GPU_PROMOTE_CTX`, satisfied by the twin ([`CtxBind`]). An ACT, so it runs after the
-    /// engine-object act the same GR object queued (the guest RPCs the object's alloc before its
-    /// constructor promotes, `kernel_graphics_object.c:225`): the answer is `NV_OK` iff the twin
-    /// holds a host GR engine object — host RM's context for this channel exists — and a refusal
-    /// by name otherwise. ⊘ Nothing is sent to the host and no guest byte is read or written.
+    /// ★★★ `GPU_PROMOTE_CTX`, satisfied by the twin ([`CtxBind`]).
+    ///
+    /// ⊘ `[measured pr3]` the PA-initialize promote arrives BEFORE the GR object's own alloc RPC:
+    /// `kgrobjConstruct` promotes inside its constructor (`kernel_graphics_object.c:225`) and the
+    /// resource's alloc reaches us only after it, so at that moment the twin holds no host object
+    /// yet. That promote is answered from the twin alone (a GR twin exists): the host context it
+    /// stands for is created by the SAME guest alloc's engine-object act right after, and if that
+    /// act fails the guest's alloc fails and its object — with its "initialized" flags — is torn
+    /// down (`kernel_graphics_object.c:352-356`). No host work, so no act: answered inline.
+    /// A promote that carries VAs (the UVM bind, after the object exists) is an ACT ordered behind
+    /// any queued engine-object act, and requires the host GR object to exist.
+    /// ⊘ Nothing is sent to the host and no guest byte is read or written.
     fn promote_ctx(&self, client: u32, object: u32, engine_type: u32, initialize: u32, with_va: u32, entries: u32) -> ChanAnswer {
         let Some((engine, ht)) = self.pt.lock().ok().and_then(|m| m.get(&(client, object)).map(|v| (v.engine, v.chan.token))) else {
             // A Translated (kernel CE) channel has no GR context and never promotes; a kernel GR
@@ -832,6 +839,19 @@ impl ChanPlane {
                 status: NV_ERR_INVALID_ARGUMENT,
                 why: format!("GPU_PROMOTE_CTX engine {engine_type:#x} for a twin born on engine {engine:#x} (host {ht:#x})"),
             };
+        }
+        if with_va == 0 {
+            let Ok(mut m) = self.pt.lock() else {
+                return ChanAnswer::Refused { status: NV_ERR_INVALID_STATE, why: "twins poisoned".into() };
+            };
+            let Some(v) = m.get_mut(&(client, object)) else { return ChanAnswer::NotOurs };
+            v.ctx.initialized |= initialize;
+            v.ctx.promotes += 1;
+            eprintln!(
+                "kf3: chan {client:#x}:{object:#x} GPU_PROMOTE_CTX (initialize) SATISFIED BY TWIN host {ht:#x}: entries={entries} init_ids={initialize:#x} host_objects={} — not forwarded, no guest byte touched",
+                v.objects.len()
+            );
+            return ChanAnswer::Done;
         }
         self.defer(
             "promote ctx",
