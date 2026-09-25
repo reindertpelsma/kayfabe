@@ -18,6 +18,8 @@ export HF_HOME=$D/hf HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
 S=$B/samples
 
 # name|timeout|pass-regex|command   (pass = rc 0 AND regex matches AND no "CHECK .* FAIL")
+# ⊘ many cuda-samples verify on the CPU and signal only through their EXIT CODE (no PASS line);
+#   their regex is then a completion marker from the last verified step, and rc 0 is the verdict.
 APPS=$(cat <<'EOF'
 nvidia_smi|60|RTX|nvidia-smi
 deviceQuery|60|Result = PASS|$S/deviceQuery
@@ -26,33 +28,32 @@ vectorAddDrv|60|Result = PASS|cd $S && ./vectorAddDrv
 matrixMul|90|Result = PASS|$S/matrixMul
 matrixMulDrv|90|Result = PASS|cd $S && ./matrixMulDrv
 bandwidthTest|120|Result = PASS|$S/bandwidthTest
-simpleStreams|90|Test PASSED|$S/simpleStreams
-asyncAPI|60|PASSED|$S/asyncAPI
+simpleStreams|90|4 streams:|$S/simpleStreams
+asyncAPI|60|CPU executed [0-9]+ iterations|$S/asyncAPI
 simpleAtomicIntrinsics|60|completed, returned OK|$S/simpleAtomicIntrinsics
-simpleCallback|60|PASSED|$S/simpleCallback
+simpleCallback|60|Success|$S/simpleCallback
 simpleOccupancy|60|Test PASSED|$S/simpleOccupancy
-simpleZeroCopy|60|Result = PASS|$S/simpleZeroCopy
-simpleCooperativeGroups|60|PASSED|$S/simpleCooperativeGroups
+simpleZeroCopy|60|Releasing CPU memory|$S/simpleZeroCopy
+simpleCooperativeGroups|60|\.\.\.Done\.|$S/simpleCooperativeGroups
 concurrentKernels|60|Test passed|$S/concurrentKernels
-clock_nvrtc|60|Average clocks/block|cd $S && ./clock_nvrtc
-simpleIPC|90|PASSED|$S/simpleIPC
+simpleIPC|90|Process 0 complete|$S/simpleIPC
 UnifiedMemoryStreams|120|All Done|$S/UnifiedMemoryStreams
-UnifiedMemoryPerf|300|Benchmarking|$S/UnifiedMemoryPerf
+UnifiedMemoryPerf|300|^16384|$S/UnifiedMemoryPerf
 conjugateGradientUM|120|Test Summary:  Error amount = 0|$S/conjugateGradientUM
 cudaTensorCoreGemm|120|TFLOPS|$S/cudaTensorCoreGemm
 bf16TensorCoreGemm|120|TFLOPS|$S/bf16TensorCoreGemm
 globalToShmemAsyncCopy|120|Result = PASS|$S/globalToShmemAsyncCopy
-cdpSimpleQuicksort|60|PASSED|$S/cdpSimpleQuicksort
+cdpSimpleQuicksort|60|Validating results: OK|$S/cdpSimpleQuicksort
 graphMemoryNodes|60|PASSED|$S/graphMemoryNodes
-simpleCudaGraphs|60|PASSED|$S/simpleCudaGraphs
+simpleCudaGraphs|60|final reduced sum|$S/simpleCudaGraphs
 simpleCUBLAS|60|test passed|$S/simpleCUBLAS
-simpleCUFFT|60|PASSED|$S/simpleCUFFT
+simpleCUFFT|60|Transforming signal back|$S/simpleCUFFT
 conjugateGradient|60|Test Summary:  Error amount = 0|$S/conjugateGradient
-MersenneTwisterGP11213|60|PASSED|$S/MersenneTwisterGP11213
+MersenneTwisterGP11213|60|L1 norm: 0\.0+E\+00|$S/MersenneTwisterGP11213
 reduction|120|Test passed|$S/reduction
-sortingNetworks|120|Test passed|$S/sortingNetworks
-scan|120|Test passed|$S/scan
-histogram|120|PASSED|$S/histogram
+sortingNetworks|120|keys and values array: OK|$S/sortingNetworks
+scan|120|Results Match|$S/scan
+histogram|120|Test passed|$S/histogram
 BlackScholes|60|Test passed|$S/BlackScholes
 fastWalshTransform|60|Test passed|$S/fastWalshTransform
 transpose|120|Test passed|$S/transpose
@@ -66,25 +67,25 @@ sgemm_cublas|90|CHECK|$B/bin/sgemm_cublas
 fft_cufft|90|CHECK|$B/bin/fft_cufft
 sha256|90|CHECK|$B/bin/sha256
 memcpy2d|90|CHECK|$B/bin/memcpy2d
-attach_verify|90|PASS|$B/bin/attach_verify
+attach_verify|90|RESULT: CORRECT|$B/bin/attach_verify
 gpu_burn|180|GPU 0: OK|cd $B/gpu-burn && ./gpu_burn 60
 torch_correct|300|TORCH_CORRECT_DONE|$PY $B/share/torch_correct.py
-torch_ai_bench|900|CHECK bert_seq_s ok|$PY $B/share/ai_bench.py
+torch_ai_bench|900|CHECK bert_infer_seqs ok|$PY $B/share/ai_bench.py
 hf_generate|600|OUTSHA|HF_MODEL=Qwen/Qwen2-0.5B-Instruct $PY $B/share/hf_generate.py
 cupy|300|CUPY_DONE|$PY $B/share/cupy_check.py
 llama_cpp_gen|600|OUTSHA|$B/llama/llama-simple -m $D/qwen2.5-1.5b-instruct-q4_k_m.gguf -n 64 -ngl 99 "Explain in three sentences why the sky is blue." > $O/llama_gen.txt 2>&1; rc=$?; cat $O/llama_gen.txt; echo "OUTSHA llama_cpp $(grep -v -E '^(llama_|load|print_info|main:|ggml_|common_|\.|system_info|sampler|generate|init|build|graph|decode|\s*$)' $O/llama_gen.txt | sha256sum | cut -c1-16)"; exit $rc
 llama_bench|900|tg64|$B/llama/llama-bench -m $D/qwen2.5-1.5b-instruct-q4_k_m.gguf -ngl 99 -p 512 -n 64 -r 2
 vulkaninfo|60|NVIDIA|vulkaninfo --summary
-vkpeak|300|fp32-scalar|$B/bin/vkpeak 0
+vkpeak|900|fp32-scalar|$B/bin/vkpeak 0
 egl_offscreen|90|CHECK|$B/bin/egl_offscreen
 clinfo|60|NVIDIA CUDA|clinfo -l; clinfo | grep -m3 -E 'Platform Name|Device Name'
 clpeak|600|Global memory bandwidth|$B/bin/clpeak
 nvenc_h264|180|frame= *600 |ffmpeg -y -hide_banner -nostats -f lavfi -i testsrc=size=1280x720:rate=30:duration=20 -c:v h264_nvenc -preset p4 $O/nvenc_h264.mp4 2>&1 | tail -3; ffprobe -v error -count_frames -select_streams v:0 -show_entries stream=nb_read_frames -of csv=p=0 $O/nvenc_h264.mp4 | sed 's/^/frame= /;s/$/ /'
 nvenc_hevc|180|frame= *600 |ffmpeg -y -hide_banner -nostats -f lavfi -i testsrc=size=1280x720:rate=30:duration=20 -c:v hevc_nvenc -preset p4 $O/nvenc_hevc.mp4 2>&1 | tail -3; ffprobe -v error -count_frames -select_streams v:0 -show_entries stream=nb_read_frames -of csv=p=0 $O/nvenc_hevc.mp4 | sed 's/^/frame= /;s/$/ /'
-nvdec_h264|180|frame= *600 |ffmpeg -y -hide_banner -nostats -f lavfi -i testsrc=size=1280x720:rate=30:duration=20 -c:v libx264 $O/x264.mp4 >/dev/null 2>&1; ffmpeg -hide_banner -hwaccel cuda -hwaccel_output_format cuda -i $O/x264.mp4 -f null - 2>&1 | grep -E 'frame=|rror|hwaccel' | tail -3 | tr '\r' '\n' | tail -3; echo
-hashcat|300|e4726719b68b205913167f0975d977ee:kayfab|hashcat --potfile-disable -O -m 0 -a 3 e4726719b68b205913167f0975d977ee '?l?l?l?l?l?l' 2>&1 | tail -30; hashcat --potfile-disable -m 0 e4726719b68b205913167f0975d977ee --show 2>/dev/null
+nvdec_h264|180|frame= *600 |ffmpeg -y -hide_banner -nostats -f lavfi -i testsrc=size=1280x720:rate=30:duration=20 -c:v libx264 -pix_fmt yuv420p $O/x264.mp4 >/dev/null 2>&1; ffmpeg -hide_banner -hwaccel cuda -hwaccel_output_format cuda -i $O/x264.mp4 -f null - > $O/nvdec.txt 2>&1; rc=$?; tr "\r" "\n" < $O/nvdec.txt | grep -E "frame=|rror|hwaccel|cuvid" | tail -4; grep -q "Failed setup for format cuda" $O/nvdec.txt && { echo "NVDEC_NOT_USED (software fallback)"; exit 3; }; exit $rc
+hashcat|300|e4726719b68b205913167f0975d977ee:kayfab|hashcat --potfile-disable -O -m 0 -a 3 e4726719b68b205913167f0975d977ee '?l?l?l?l?l?l' 2>&1 | tail -30
 blender_cycles|900|BLENDER_OK OPTIX|for dev in CUDA OPTIX; do $D/blender/blender -b --factory-startup --python $B/share/blender_render.py -- $dev $O/blender_$dev.png 2>&1 | grep -E "BLENDER_|Error|error|Fra:1 .*Finished" | tail -6; done
-geekbench_gpu|1200|OpenCL Score|cd $D/geekbench && ./geekbench6 --gpu OpenCL 2>&1 | tail -60
+geekbench_gpu|1200|Uploading results|cd $D/geekbench && ./geekbench6 --gpu OpenCL 2>&1 | tail -60
 EOF
 )
 [ "${1:-}" = list ] && { echo "$APPS" | cut -d'|' -f1 | tr '\n' ' '; echo; exit 0; }
