@@ -640,8 +640,6 @@ pub struct MemPlane {
     pub bar1_root: u64,
     /// OUR BAR2 root (store offset).
     pub bar2_root: u64,
-    /// The store's device pointer in the walker's context (for fn 70's write).
-    pub store_ptr: u64,
     /// Counters.
     pub counters: MemCounters,
     /// Guest RAM as QEMU registered it.
@@ -667,7 +665,6 @@ impl MemPlane {
         rm: &'static HostRm,
         family: kf_chip::Family,
         store: u32,
-        store_ptr: u64,
         layout: &kf_chip::bar0::FbLayout,
         bar1_bytes: u64,
         bar2_bytes: u64,
@@ -710,7 +707,6 @@ impl MemPlane {
                 inbox,
                 bar1_root: layout.bar1_pde_base,
                 bar2_root: layout.bar2_pde_base,
-                store_ptr,
                 counters: MemCounters::default(),
                 ram,
                 ram_obj: std::sync::OnceLock::new(),
@@ -873,7 +869,7 @@ fn create_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, store: 
 /// recycled (nor freed): it is kept, named.
 fn retire_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, key: VasKey) -> String {
     let mirror = plane.mirrors.lock().ok().and_then(|mut mm| mm.remove(&key));
-    let Some((target, ledger)) = m.table.remove(key) else {
+    let Some(target) = m.remove(key) else {
         return format!("retire {key:?}: no mirror (no page-directory statement named it)");
     };
     plane.counters.mirrors_retired.fetch_add(1, Ordering::Relaxed);
@@ -885,9 +881,11 @@ fn retire_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, key: Va
         plane.counters.mirrors_kept_live.fetch_add(1, Ordering::Relaxed);
         return format!("retire {key:?}: {live} live channel(s) still run in host space {:#x} — KEPT, never recycled", g.vas.space.space);
     }
-    let rows = ledger.rows();
+    // ★ Our placements in this space, from the space's own row record (what we PLACED, never a
+    // copy of the guest's tables); the walker's slot for it is released by `m.remove`.
+    let rows: Vec<u64> = g.rows.read().map(|r| r.keys().copied().collect()).unwrap_or_default();
     let mut refused = 0usize;
-    for (va, ..) in &rows {
+    for va in &rows {
         if g.unmap(*va, true).is_err() {
             refused += 1;
         }
@@ -934,7 +932,8 @@ pub fn apply_statement(
                 BarAperture::Bar1 => plane.bar1_root,
                 BarAperture::Bar2 => plane.bar2_root,
             };
-            let w = m.walker().kernel.write_at(plane.store_ptr + root, &p.entry.to_le_bytes());
+            // ★ §13: a store-bounded write — no device pointer leaves the walker.
+            let w = m.walker().kernel.write_store(root, &p.entry.to_le_bytes());
             if let Err(e) = w {
                 plane.counters.refused.fetch_add(1, Ordering::Relaxed);
                 return format!("fn70 {:?} entry={:#x}: GPU write into our root @{root:#x} REFUSED: {e}", p.bar, p.entry);

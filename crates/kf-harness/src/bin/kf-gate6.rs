@@ -24,7 +24,8 @@ use kf_harness::Ledger as Checks;
 use kf_harness::tables::Tree;
 use kf_host::HostRm;
 use kf_linux_raw::DevDir;
-use kf_mem::ledger::{Ledger, desired_from_leaves, plan_reconcile};
+use kf_harness::publish::publish;
+use kf_mem::ledger::HostVas;
 use kf_trap::{Action, Class, PrivRing, Route, RungBitmap, TokenWord, TrapPath, WakeWord};
 
 const STORE_BYTES: u64 = 256 << 20;
@@ -84,11 +85,11 @@ fn run(l: &mut Checks) -> Result<(), String> {
     let store = res.handle;
     let fd = rm.export_to_new_fd(store).map_err(|e| format!("export: {e:?}"))?;
     let mut walk = WalkKernel::bring_up(WalkCfg::default(), kf_format_ver2()).map_err(|e| e.to_string())?;
-    let dptr = walk.import_store(fd.fd_number(), STORE_BYTES).map_err(|e| e.to_string())?;
-    let w = |walk: &WalkKernel, off: u64, b: &[u8]| walk.write_at(dptr + off, b).map_err(|e| e.to_string());
+    walk.import_store(fd.fd_number(), STORE_BYTES).map_err(|e| e.to_string())?;
+    let w = |walk: &WalkKernel, off: u64, b: &[u8]| walk.write_store(off, b).map_err(|e| e.to_string());
     let rd = |walk: &WalkKernel, off: u64, n: usize| -> Result<Vec<u8>, String> {
         let mut b = vec![0u8; n];
-        walk.read_at(dptr + off, &mut b).map_err(|e| e.to_string())?;
+        walk.read_store(off, &mut b).map_err(|e| e.to_string())?;
         Ok(b)
     };
     let word = |walk: &WalkKernel, off: u64| -> Result<u32, String> {
@@ -115,14 +116,10 @@ fn run(l: &mut Checks) -> Result<(), String> {
 
     // ── v3: mirror the process's VA space, then birth its twin over ITS ring and USERD ────────
     let space = rm.alloc_vaspace().map_err(|e| format!("vaspace: {e:?}"))?;
-    let mut ledger = Ledger::default();
-    let r = walk.refresh(dptr, STORE_BYTES, &[tree.root]).map_err(|e| e.to_string())?;
-    r.validate().map_err(|e| format!("report {e}"))?;
-    let desired = desired_from_leaves(r.runs.iter().map(|m| (m.va, m.gpga, m.len, m.aperture())), STORE_BYTES, &|_, _| None)
-        .map_err(|e| format!("{e:?}"))?;
-    let plan = plan_reconcile(&ledger.rows(), &desired);
-    let ap = ledger.apply(&rm, space, store, None, &plan);
-    l.check("process_vas_mirrored", ap.refused == 0 && ap.mapped >= 1, format!("runs={} mapped={} refused={}", r.runs.len(), ap.mapped, ap.refused));
+    let target = HostVas { rm: &rm, space, store, ram_obj: None };
+    let pubd = publish(&mut walk, 0, tree.root, &target, STORE_BYTES, &|_, _| None)?;
+    let ap = &pubd.applied;
+    l.check("process_vas_mirrored", ap.refused == 0 && ap.mapped >= 1, format!("diff_runs={} mapped={} refused={}", pubd.runs, ap.mapped, ap.refused));
 
     let t0 = std::time::Instant::now();
     let chan = birth(&rm, space, GuestChannel {

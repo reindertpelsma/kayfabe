@@ -7,7 +7,7 @@
 //! - **host completions are internal rings** of the channel's own token, so a channel's pump is
 //!   serialized by its token state — the gate asserts it never contends;
 //! - the guest's channels live in **guest RAM** (GPFIFO, pushbuffer, USERD, semaphore behind
-//!   SYSMEM PTEs), so the ledger's sysmem rows and the RAM read path are exercised;
+//!   SYSMEM PTEs), so the sysmem rows we place and the RAM read path are exercised;
 //! - one channel splits at a `MEM_OP` (a walk on a worker thread, CUDA context bound there);
 //! - a hostile thread rings an UNKNOWN token and the userspace-mappable arm in a tight loop: it must
 //!   produce no action at all.
@@ -23,9 +23,10 @@ use kf_cuda::abi::kf_format_ver2;
 use kf_cuda::walk::{WalkCfg, WalkKernel};
 use kf_harness::Ledger as Checks;
 use kf_harness::tables::Tree;
-use kf_host::{HostRm, VaSpace};
+use kf_host::HostRm;
 use kf_linux_raw::{Backing, CachePolicy, DevDir, HostOffset as At, HostPageSize, Notifier, Poller, VolatileRegion};
-use kf_mem::ledger::{Ledger, desired_from_leaves, plan_reconcile};
+use kf_harness::publish::{Recorded, publish};
+use kf_mem::ledger::HostVas;
 use kf_trap::{Action, Class, Route};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -92,22 +93,19 @@ fn pattern(seed: u32) -> Vec<u8> {
     (0..(COPY / 4) as u32).flat_map(|i| (seed ^ i).to_le_bytes()).collect()
 }
 
-/// The walk kernel + our ledger: what a split touches, behind one lock (a worker-side lock, never a
+/// The walk kernel + our placements: what a split touches, behind one lock (a worker-side lock, never a
 /// vCPU's; in the product it is the VA manager thread's).
-struct Mm {
+struct Mm<'a> {
     walk: WalkKernel,
-    dptr: u64,
-    ledger: Ledger,
+    /// The host space, recording the rows WE placed (the reader resolves through them).
+    target: Recorded<HostVas<'a>>,
     walks: Vec<Option<u64>>,
 }
 
 struct Shared<'a> {
     rm: &'a HostRm,
     ram: &'a VolatileRegion,
-    mm: &'a Mutex<Mm>,
-    space: VaSpace,
-    store: u32,
-    ram_desc: u32,
+    mm: &'a Mutex<Mm<'a>>,
     root: u64,
 }
 
@@ -115,14 +113,10 @@ impl Shared<'_> {
     fn publish(&self, tag: &str) -> Result<(usize, usize), String> {
         let mut g = self.mm.lock().map_err(|_| "mm poisoned")?;
         g.walk.make_current().map_err(|e| e.to_string())?;
-        let dptr = g.dptr;
-        let r = g.walk.refresh(dptr, STORE_BYTES, &[self.root]).map_err(|e| e.to_string())?;
-        r.validate().map_err(|e| format!("{tag}: report {e}"))?;
         let layout = |gpa: u64, len: u64| gpa.checked_add(len).filter(|&e| e <= RAM_BYTES).map(|_| gpa);
-        let desired = desired_from_leaves(r.runs.iter().map(|m| (m.va, m.gpga, m.len, m.aperture())), STORE_BYTES, &layout)
-            .map_err(|e| format!("{tag}: {e:?}"))?;
-        let plan = plan_reconcile(&g.ledger.rows(), &desired);
-        let a = g.ledger.apply(self.rm, self.space, self.store, Some(self.ram_desc), &plan);
+        let Mm { walk, target, .. } = &mut *g;
+        let p = publish(walk, 0, self.root, target, STORE_BYTES, &layout).map_err(|e| format!("{tag}: {e}"))?;
+        let a = p.applied;
         if a.refused > 0 {
             return Err(format!("{tag}: {} refused, first {:?}", a.refused, a.first_refusal));
         }
@@ -138,12 +132,12 @@ impl GuestMemory for Io<'_, '_> {
     fn read(&mut self, at: u64, out: &mut [u8]) -> Result<(), String> {
         let (ram, off) = {
             let g = self.s.mm.lock().map_err(|_| "mm poisoned")?;
-            g.ledger.resolve(at, out.len() as u64).ok_or(format!("{at:#x} not mapped by us"))?
+            g.target.resolve(at, out.len() as u64).ok_or(format!("{at:#x} not mapped by us"))?
         };
         if !ram {
             let g = self.s.mm.lock().map_err(|_| "mm poisoned")?;
             g.walk.make_current().map_err(|e| e.to_string())?;
-            return g.walk.read_at(g.dptr + off, out).map_err(|e| e.to_string());
+            return g.walk.read_store(off, out).map_err(|e| e.to_string());
         }
         if off % 4 != 0 || out.len() % 4 != 0 {
             return Err(format!("unaligned guest-RAM read {off:#x}+{}", out.len()));
@@ -271,8 +265,8 @@ fn run(l: &mut Checks) -> Result<(), String> {
     let res = rm.reserve_gpga(STORE_BYTES).map_err(|e| format!("reserve: {e:?}"))?;
     let store = res.handle;
     let fd = rm.export_to_new_fd(store).map_err(|e| format!("export: {e:?}"))?;
-    let walk = WalkKernel::bring_up(WalkCfg::default(), kf_format_ver2()).map_err(|e| e.to_string())?;
-    let dptr = walk.import_store(fd.fd_number(), STORE_BYTES).map_err(|e| e.to_string())?;
+    let mut walk = WalkKernel::bring_up(WalkCfg::default(), kf_format_ver2()).map_err(|e| e.to_string())?;
+    walk.import_store(fd.fd_number(), STORE_BYTES).map_err(|e| e.to_string())?;
     let space = rm.alloc_vaspace().map_err(|e| format!("vaspace: {e:?}"))?;
     let fb_base = rm.map_window(space, store, STORE_BYTES, true).map_err(|e| format!("identity window: {e:?}"))?;
 
@@ -295,7 +289,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
             tree.map4k_sys(va(c) + p * 4096, ch(c) + p * 4096);
         }
     }
-    let w = |off: u64, b: &[u8]| walk.write_at(dptr + off, b).map_err(|e| e.to_string());
+    let w = |off: u64, b: &[u8]| walk.write_store(off, b).map_err(|e| e.to_string());
     w(PT_BASE, &tree.img.mem)?;
     let root = tree.root;
     let put = |off: u64, words: &[u32]| -> Result<(), String> {
@@ -331,8 +325,9 @@ fn run(l: &mut Checks) -> Result<(), String> {
         }
     }
 
-    let mm = Mutex::new(Mm { walk, dptr, ledger: Ledger::default(), walks: Vec::new() });
-    let shared = Shared { rm: &rm, ram: &ram, mm: &mm, space, store, ram_desc, root };
+    let target = Recorded::new(HostVas { rm: &rm, space, store, ram_obj: Some(ram_desc) });
+    let mm = Mutex::new(Mm { walk, target, walks: Vec::new() });
+    let shared = Shared { rm: &rm, ram: &ram, mm: &mm, root };
     let (mapped, _) = shared.publish("boot")?;
     l.check("kernel_vas_published_as_sysmem", mapped >= 1, format!("{mapped} runs (sysmem rows)"));
     mm.lock().map_err(|_| "poisoned")?.walks.clear();
@@ -462,7 +457,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
         let want = pattern(0xC000_0000 | (c << 20));
         for k in 0..PER_CHANNEL {
             let mut got = vec![0u8; COPY as usize];
-            g.walk.read_at(g.dptr + dst(c, k), &mut got).map_err(|e| e.to_string())?;
+            g.walk.read_store(dst(c, k), &mut got).map_err(|e| e.to_string())?;
             if got != want {
                 bad.push(format!("ch{c}#{k}"));
             }

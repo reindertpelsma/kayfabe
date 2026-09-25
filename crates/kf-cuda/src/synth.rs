@@ -183,6 +183,12 @@ impl Image {
         Image { mem: vec![0u8; bytes], bump: origin.max(4096), origin }
     }
 
+    /// Bytes of the image in use so far (everything past this is still zero).
+    #[must_use]
+    pub fn used(&self) -> usize {
+        usize::try_from(self.bump.saturating_sub(self.origin)).unwrap_or(self.mem.len()).min(self.mem.len())
+    }
+
     /// Carve `bytes` at `align`. Panics if the image is too small — a fixture that silently
     /// truncated would produce a walk whose answer is a property of the fixture.
     ///

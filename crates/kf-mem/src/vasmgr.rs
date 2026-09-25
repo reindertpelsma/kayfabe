@@ -1,6 +1,7 @@
-//! ★★★★★ **THE VA MANAGER STEP — invalidate → walk → reconcile → map → clear.**
+//! ★★★★★ **THE VA MANAGER STEP — invalidate → walk (a DIFF) → apply → ack → clear.**
 //! (`V3_P4_PORT_MAP.md` §2.1(b)+(c), §3 row 3; `THE_TRANSLATED_PLANE.md` §5 and its `[w824b]`
-//! table; `THE_CONSTRAINTS.md` §49.1; `THE_ARCHITECTURE_v3.md` §4.2-§4.3.)
+//! table; `THE_CONSTRAINTS.md` §49.1; `THE_ARCHITECTURE_v3.md` §4.2-§4.3; owner design +
+//! COMMIT-ON-ACK ruling 2026-09-25, `kf_cuda::diffmodel`.)
 //!
 //! The guest's `MMU_INVALIDATE` is the synchronisation point between its page tables and our
 //! host VA spaces. The vCPU only arms the trigger and publishes a request
@@ -8,37 +9,46 @@
 //!
 //! 1. **[`VaManager::on_invalidate`]** — look the named PDB up in the [`VasTable`] (identity is the
 //!    VA-space OBJECT; the PDB is a mutable, possibly-absent attribute of it, §4.3), and submit ONE
-//!    walk of every root that needs it. ⊘ **Never blocks**: [`Walker::submit`] only queues GPU work.
-//!    A request that arrives while a walk is in flight waits for the NEXT walk — the one in flight
-//!    may have read the tables before the guest's writes that preceded this invalidate.
-//! 2. **[`VaManager::on_walk_ready`]** — on the walker's completion fd: take the FULL report,
-//!    classify its leaves ([`desired_from_leaves`]), diff them against OUR ledger
-//!    ([`plan_reconcile`]), and apply through the space's [`MapTarget`] — deferred unmaps, deferred
-//!    maps, ONE invalidate ([`Ledger::apply_to`]).
+//!    walk of every object that needs it, each against its own **slot** of committed placements.
+//!    ⊘ **Never blocks**: [`Walker::submit`] only queues GPU work. A request that arrives while a
+//!    walk is in flight waits for the NEXT walk — the one in flight may have read the tables
+//!    before the guest's writes that preceded this invalidate.
+//! 2. **[`VaManager::on_walk_ready`]** — on the walker's completion fd: take the report — per
+//!    object, the DIFF of the guest's live tables against what the host confirmed it placed — and
+//!    apply it through the object's [`MapTarget`] ([`crate::apply::apply_entry`]: deferred unmaps,
+//!    deferred maps, ONE invalidate), then hand the walker one verdict per run
+//!    ([`Walker::ack`]); the next walk commits exactly the acknowledged runs.
 //! 3. **Only then** `Trigger::complete(seq)` — a compare-and-set, so a request the guest already
 //!    abandoned (it timed out and re-issued) is `Superseded` and never clears the later one (§5.5).
 //!
 //! ## What is never done here
 //!
-//! ⊘ No CPU read of a guest page table and no mirror of one: the walk is the GPU's
-//! (`kf_cuda::WalkKernel`), the only previous state is OUR ledger (`V3_BUILD.md`). ⊘ No blocking:
-//! both entry points return as soon as their work is queued or applied. ⊘ No host flag is
-//! forwarded: [`MapTarget`] verbs are authored.
+//! ⊘ No CPU read of a guest page table and no mirror of one: the walk and the diff are the GPU's
+//! (`kf_cuda::WalkKernel`); the previous state is the GPU's record of OUR confirmed placements.
+//! ⊘ No O(placements) CPU work per invalidate: everything here is proportional to the DIFF
+//! (`V3_P5_PORT_MAP.md` Q8: the full reconcile per invalidate made `--ce-client-guest-ram`
+//! quadratic). ⊘ No blocking: both entry points return as soon as their work is queued or
+//! applied. ⊘ No host flag is forwarded: [`MapTarget`] verbs are authored.
 //!
 //! ## What an invalidate that cannot be honoured does
 //!
 //! It is **not cleared**, and it is counted and named ([`VaStats::unreconciled`],
 //! [`VaStats::refusals`]). The guest then times out (§5.5's tripwire: an overdue trigger is a
 //! fault, not a slow path). Clearing it would tell the guest a mapping is live that is not —
-//! §49.1's early completion, which is silent corruption rather than a visible failure.
-//! ★ Two exceptions, both because we hold nothing to be stale: a PDB no object carries
-//! ([`VaStats::named_missed`]) and a batch in which no named space has a root.
+//! §49.1's early completion, which is silent corruption rather than a visible failure. The runs
+//! that DID land are acknowledged, so its retry (the guest's next invalidate) re-emits only what
+//! failed. ★ Two exceptions, both because we hold nothing to be stale: a PDB no object carries
+//! ([`VaStats::named_missed`]) and a batch in which no named space has a root. ★ And one retry
+//! that is ours: a diff whose maps were WITHHELD for slot capacity (`KFWR_V_PARTIAL`) is walked
+//! again at once, after its unmaps landed — its invalidate clears on that walk.
 
-use crate::ledger::{Applied, Ledger, MapTarget, clip_leaves, desired_from_leaves, plan_reconcile};
+use crate::apply::{ApplyCfg, Applied, DiffRun, apply_entry};
+use crate::ledger::MapTarget;
+use kf_cuda::WalkEntry;
 use kf_trap::{ClearOutcome, InvalidateRequest, PdbAperture, Trigger};
 use std::collections::{BTreeMap, BTreeSet};
 
-/// The most address spaces one walk may carry — the walk kernel's table (`KF_MAX_PDB`).
+/// The most objects one walk may carry — the walk kernel's entries (`KF_MAX_PDB`).
 pub const MAX_SPACES_PER_WALK: usize = 64;
 
 /// ★ A VA-space OBJECT's identity (`THE_ARCHITECTURE_v3.md` §4.3: *"identity is the object, not
@@ -92,7 +102,7 @@ pub enum RootRefusal {
 ///   ⇒ A moved root is walked at the NEXT synchronisation point that names the space (the
 ///   guest's invalidate of the new root, `PDB_ALL`, or a Translated `MEM_OP` split) — the
 ///   guest's own contract for making a table change visible — and THAT reconcile retires every
-///   row of the old root the new one does not carry (`plan_reconcile` unmaps what the walk no
+///   row of the old root the new one does not carry (the slot's diff unmaps what the walk no
 ///   longer states). Until then our rows are the old root's, which is exactly what the guest's
 ///   migration copies into the new one; nothing of the guest's is copied or cached by us.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -116,40 +126,58 @@ impl RootChange {
     }
 }
 
-/// One VA-space object: its (optional) guest root, where its mappings land, and OUR ledger.
+/// One VA-space object: its (optional) guest root, where its mappings land, and the walker SLOT
+/// holding the placements the host confirmed for it (`None` when every slot is taken — refused by
+/// name when it is walked).
 #[derive(Debug)]
 struct Space<T> {
     root: Option<u64>,
     target: T,
-    ledger: Ledger,
+    slot: Option<u32>,
 }
 
-/// ★ **VA-space object → `Option<root>` + map target + ledger** (`V3_P4_PORT_MAP.md` §2.1(b)).
+/// ★ **VA-space object → `Option<root>` + map target + slot** (`V3_P4_PORT_MAP.md` §2.1(b)).
 ///
 /// ⊘ Not a copy of the guest's tables: a root is ONE number the guest stated
 /// (`SET_PAGE_DIRECTORY`, `COPY_SERVER_RESERVED_PDES`, fn 70, or the PDB of an invalidate we
-/// were told about), and the ledger records OUR actions.
+/// were told about), and a slot is an index into the walker's record of OUR placements.
 #[derive(Debug)]
 pub struct VasTable<T> {
     spaces: BTreeMap<VasKey, Space<T>>,
     store_bytes: u64,
+    free_slots: Vec<u32>,
+    /// Slots whose object went away: emptied by the walker before anything is diffed against them.
+    released: Vec<u32>,
 }
 
 impl<T: MapTarget> VasTable<T> {
-    /// An empty table over a store of `store_bytes`.
+    /// An empty table over a store of `store_bytes`, with `slots` walker slots.
     #[must_use]
-    pub fn new(store_bytes: u64) -> VasTable<T> {
-        VasTable { spaces: BTreeMap::new(), store_bytes }
+    pub fn new(store_bytes: u64, slots: u32) -> VasTable<T> {
+        VasTable { spaces: BTreeMap::new(), store_bytes, free_slots: (0..slots).rev().collect(), released: Vec::new() }
     }
 
-    /// Register an object and where its mappings land. It has no root yet.
+    /// Register an object and where its mappings land. It has no root yet. Re-registering a key
+    /// replaces its target and gives it a FRESH slot (what the old slot recorded was the old
+    /// target's).
     pub fn insert(&mut self, key: VasKey, target: T) {
-        self.spaces.insert(key, Space { root: None, target, ledger: Ledger::default() });
+        if let Some(old) = self.spaces.remove(&key)
+            && let Some(s) = old.slot
+        {
+            self.released.push(s);
+        }
+        let slot = self.free_slots.pop();
+        self.spaces.insert(key, Space { root: None, target, slot });
     }
 
-    /// Forget an object, returning its target and ledger (the caller tears the mappings down).
-    pub fn remove(&mut self, key: VasKey) -> Option<(T, Ledger)> {
-        self.spaces.remove(&key).map(|s| (s.target, s.ledger))
+    /// Forget an object, returning its target (the caller tears its mappings down through the
+    /// target's own record). Its slot is released: the next walk empties it.
+    pub fn remove(&mut self, key: VasKey) -> Option<T> {
+        let s = self.spaces.remove(&key)?;
+        if let Some(slot) = s.slot {
+            self.released.push(slot);
+        }
+        Some(s.target)
     }
 
     /// ★ The guest stated a root for `key`. Returns what the statement did to it — see
@@ -189,16 +217,16 @@ impl<T: MapTarget> VasTable<T> {
         self.spaces.get(&key).and_then(|s| s.root)
     }
 
+    /// The walker slot of `key`, if it has one.
+    #[must_use]
+    pub fn slot(&self, key: VasKey) -> Option<u32> {
+        self.spaces.get(&key).and_then(|s| s.slot)
+    }
+
     /// Where `key`'s mappings land.
     #[must_use]
     pub fn target(&self, key: VasKey) -> Option<&T> {
         self.spaces.get(&key).map(|s| &s.target)
-    }
-
-    /// OUR ledger for `key`.
-    #[must_use]
-    pub fn ledger(&self, key: VasKey) -> Option<&Ledger> {
-        self.spaces.get(&key).map(|s| &s.ledger)
     }
 
     /// Every object whose root is `pdb` (two objects may share one: RM's server VAS and a
@@ -227,60 +255,83 @@ impl<T: MapTarget> VasTable<T> {
     }
 }
 
-/// One space as a walk reported it: its root and the COMPLETE list of its leaves,
-/// `(va, at, len, aperture)` in the shape [`desired_from_leaves`] takes.
+/// One walked object's diff, as the report carries it.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct WalkedSpace {
+pub struct EntryDiff {
     /// The root walked.
     pub pdb: u64,
-    /// Every leaf — a full state, never a delta.
-    pub leaves: Vec<(u64, u64, u64, u8)>,
+    /// The slot diffed against.
+    pub slot: u32,
+    /// Index of its first run in the report (verdicts are per report run).
+    pub first: usize,
+    /// Its runs: per page-size class, UNMAPs then MAPs.
+    pub runs: Vec<DiffRun>,
+    /// ★ Its maps were withheld (slot capacity): walk again once its unmaps land.
+    pub partial: bool,
+    /// Its slot is full and nothing can be retired: no progress is possible.
+    pub overflow: bool,
 }
 
 /// A finished walk.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct WalkDone {
-    /// One entry per root walked.
-    pub spaces: Vec<WalkedSpace>,
+    /// The report's generation — what [`Walker::ack`] answers.
+    pub generation: u64,
+    /// Runs in the report (the verdict carries one per run).
+    pub nrun: usize,
+    /// One entry per object walked.
+    pub entries: Vec<EntryDiff>,
     /// GPU time, when the walker measures it.
     pub gpu_us: u64,
 }
 
-/// ★ **The GPU walker, as the VA manager needs it** — two verbs, neither of which may block.
-/// Production is [`GpuWalker`] (the PTX walk kernel on its own stream, completing through an
-/// eventfd); tests use an in-memory fake.
+/// ★ **The GPU walker, as the VA manager needs it** — none of its verbs may block. Production is
+/// [`GpuWalker`] (the PTX walk kernel on its own stream, completing through an eventfd); tests use
+/// the protocol's Rust model (`kf_cuda::diffmodel`).
 pub trait Walker {
-    /// Queue a walk of `pdbs` (ascending, unique, at most [`MAX_SPACES_PER_WALK`]). Must return as
-    /// soon as the work is queued.
+    /// Queue a walk of `entries` (distinct slots, at most [`MAX_SPACES_PER_WALK`]). Must return
+    /// as soon as the work is queued.
     ///
     /// # Errors
     /// The walker's refusal, by name.
-    fn submit(&mut self, pdbs: &[u64]) -> Result<(), String>;
+    fn submit(&mut self, entries: &[WalkEntry]) -> Result<(), String>;
 
     /// The walk's result if it has finished; `Ok(None)` if not yet. Must not block.
     ///
     /// # Errors
-    /// The walk failed or its report was refused (malformed, truncated, not full), by name.
+    /// The walk failed or its report was refused (malformed, truncated, not a diff), by name.
     fn poll(&mut self) -> Result<Option<WalkDone>, String>;
+
+    /// ★ The verdict on the report just polled: one `KFWR_ACK_*` per run. Committed by the next
+    /// walk. Must not block.
+    ///
+    /// # Errors
+    /// The walker's refusal (e.g. a walk in flight), by name.
+    fn ack(&mut self, generation: u64, codes: Vec<u8>) -> Result<(), String>;
+
+    /// ★ Release `slot`: the next walk empties it before anything is diffed against it.
+    ///
+    /// # Errors
+    /// The walker's refusal, by name.
+    fn reset(&mut self, slot: u32) -> Result<(), String>;
+
+    /// How many slots the walker holds.
+    fn slots(&self) -> u32;
 }
 
-/// ★★★ **The production walker**: [`kf_cuda::WalkKernel`] over the imported store.
+/// ★★★ **The production walker**: [`kf_cuda::WalkKernel`] over its imported store.
 ///
 /// `submit` queues the walk on the kernel's stream (no `cuCtxSynchronize`); `poll` is
 /// `try_collect`, then the report must pass `validate` (§39(c) containment included),
-/// `require_full` (no delta) and must not be truncated — any failure is a named refusal.
+/// `require_diff`, and must not be truncated — any failure is a named refusal.
 pub struct GpuWalker {
-    /// The walk kernel (owns its CUDA context and completion fd).
+    /// The walk kernel (owns its CUDA context, its completion fd and the store).
     pub kernel: kf_cuda::WalkKernel,
-    /// The store's device pointer in the walker's context.
-    pub store_ptr: u64,
-    /// The store's length.
-    pub store_bytes: u64,
 }
 
 impl Walker for GpuWalker {
-    fn submit(&mut self, pdbs: &[u64]) -> Result<(), String> {
-        self.kernel.submit(self.store_ptr, self.store_bytes, pdbs).map_err(|e| e.to_string())
+    fn submit(&mut self, entries: &[WalkEntry]) -> Result<(), String> {
+        self.kernel.submit(entries).map_err(|e| e.to_string())
     }
 
     fn poll(&mut self) -> Result<Option<WalkDone>, String> {
@@ -289,17 +340,17 @@ impl Walker for GpuWalker {
         };
         let r = &c.report;
         r.validate().map_err(|e| format!("walk report refused: {e}"))?;
-        r.require_full().map_err(|e| format!("walk report refused: {e}"))?;
+        r.require_diff().map_err(|e| format!("walk report refused: {e}"))?;
         if r.truncated() {
             return Err(format!(
-                "walk report TRUNCATED (flags={:#x}, runs {} of {}): not the whole state of any \
-                 space, never reconciled against",
-                r.header.flags, r.runs.len(), r.header.run_count
+                "walk report TRUNCATED (flags={:#x}, refuse_mask={:#x}, runs {} of {}): nothing \
+                 of it is applied, nothing committed",
+                r.header.flags, r.header.refuse_mask, r.runs.len(), r.header.run_count
             ));
         }
         if r.header.refusals > 0 {
-            // ★ P6b: a refusal inside a report that still passes `require_full` is named — a
-            // walk that refused a table reports fewer leaves than the guest's tables hold.
+            // ★ P6b: a refusal inside a report is named — a walk that refused a table reports
+            // fewer leaves than the guest's tables hold.
             eprintln!(
                 "kf3: walk report carried refusals={} refuse_mask={:#x} pdbs={:x?} runs={}",
                 r.header.refusals,
@@ -308,38 +359,51 @@ impl Walker for GpuWalker {
                 r.runs.len()
             );
         }
-        let mut spaces: Vec<WalkedSpace> =
-            r.pdbs.iter().map(|p| WalkedSpace { pdb: p.pdb, leaves: Vec::new() }).collect();
-        for m in &r.runs {
-            // `validate` proved every `pdb_index` names an entry.
-            if let Some(s) = spaces.get_mut(usize::from(m.pdb_index)) {
-                s.leaves.push((m.va, m.gpga, m.len, m.aperture()));
-            }
-        }
-        Ok(Some(WalkDone { spaces, gpu_us: c.gpu_us }))
+        let entries = r
+            .pdbs
+            .iter()
+            .map(|p| {
+                // `validate` proved every slice lies inside the run array.
+                let first = p.first_run as usize;
+                let runs = r.runs[first..first + p.run_count as usize]
+                    .iter()
+                    .map(|m| DiffRun {
+                        unmap: m.op == kf_cuda::abi::KFWR_OP_UNMAP,
+                        va: m.va,
+                        len: m.len,
+                        at: m.gpga,
+                        ap: m.aperture(),
+                        held: m.flags & kf_cuda::abi::KFWR_RF_HELD != 0,
+                    })
+                    .collect();
+                EntryDiff {
+                    pdb: p.pdb,
+                    slot: p.reserved,
+                    first,
+                    runs,
+                    partial: p.vas_flags & kf_cuda::abi::KFWR_V_PARTIAL != 0,
+                    overflow: p.vas_flags & kf_cuda::abi::KFWR_V_OVERFLOW != 0,
+                }
+            })
+            .collect();
+        Ok(Some(WalkDone { generation: r.header.generation, nrun: r.runs.len(), entries, gpu_us: c.gpu_us }))
+    }
+
+    fn ack(&mut self, generation: u64, codes: Vec<u8>) -> Result<(), String> {
+        self.kernel.ack(generation, codes).map_err(|e| e.to_string())
+    }
+
+    fn reset(&mut self, slot: u32) -> Result<(), String> {
+        self.kernel.reset_slot(slot).map_err(|e| e.to_string())
+    }
+
+    fn slots(&self) -> u32 {
+        self.kernel.max_slots()
     }
 }
 
 /// The default coverage grain: 4 KiB, the smallest GMMU page on every family this tree models.
 pub const SMALL_PAGE: u64 = 0x1000;
-
-/// ★ P6b (b): whether a row is whole `grain` pages on both sides (VA and backing) — the unit the
-/// guest's own PTEs map. `grain` is a power of two.
-///
-/// ⊘ **Why NOT the C's 64 KiB round-up** (`(size + 0xffff) & ~0xffff`, `nvkvm_gpu_emul.c:7920`):
-/// the C rounded `GPU_PROMOTE_CTX` rows, whose DECLARED lengths are not page multiples
-/// (`0x8600`); v3 consumes no promote rows (cut, `kf-rm/src/rmrpc/mod.rs:870`) — its rows are
-/// walk leaves, and a leaf is already a whole guest page (4 KiB small, 64 KiB big, 2 MiB huge, a
-/// run of them). Rounding a 4 KiB leaf up to 64 KiB would EXTEND past what the guest's tables
-/// cover, onto a neighbour the guest may map elsewhere or not at all — and two such rows then
-/// overlap on the host: that overlap is exactly what made the C need `0x51 == success`
-/// (`:7935-7938`). Our host placements are 4 KiB-pinned store slices
-/// (`nvos46_page_size_flag_for_store_slice`), so there is no host big page for a hole to be in.
-#[must_use]
-pub fn whole_pages(d: &crate::ledger::Desired, grain: u64) -> bool {
-    let m = grain.wrapping_sub(1);
-    d.len > 0 && (d.va | d.len | d.off) & m == 0
-}
 
 fn ns_since(t: std::time::Instant) -> u64 {
     u64::try_from(t.elapsed().as_nanos()).unwrap_or(u64::MAX)
@@ -348,12 +412,13 @@ fn ns_since(t: std::time::Instant) -> u64 {
 /// Why a walk is wanted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Want {
-    /// The guest invalidated; clear its trigger once reconciled.
+    /// The guest invalidated; clear its trigger once applied.
     Invalidate(InvalidateRequest, std::time::Instant),
-    /// A root changed with no invalidate behind it (Q10); nothing to clear.
+    /// A root changed with no invalidate behind it (Q10), or a partial diff's follow-up;
+    /// nothing to clear.
     Root(VasKey),
     /// ★ P6: a Translated channel's `MEM_OP` TLB invalidate (the split, `THE_TRANSLATED_PLANE.md`
-    /// §5/§24.2): `pdb` (`None` = `PDB_ALL`) walked and reconciled, then `ticket` reported done
+    /// §5/§24.2): `pdb` (`None` = `PDB_ALL`) walked and applied, then `ticket` reported done
     /// through [`VaManager::take_splits`] — no trigger is involved.
     Split {
         /// The named root (a guest FB address), or `None` for every space.
@@ -368,8 +433,8 @@ enum Want {
 struct Batch {
     /// Each want, with the objects it named and when it arrived.
     wants: Vec<(Want, Vec<VasKey>, std::time::Instant)>,
-    /// Every object to reconcile.
-    keys: BTreeSet<VasKey>,
+    /// Every object walked, with the slot and root it was walked with.
+    walked: BTreeMap<VasKey, (u32, u64)>,
     /// When the walk was submitted.
     submitted: std::time::Instant,
 }
@@ -379,17 +444,17 @@ struct Batch {
 pub struct VaStats {
     /// Walks queued.
     pub walks_submitted: u64,
-    /// Walks whose report was reconciled.
+    /// Walks whose report was applied.
     pub walks_reconciled: u64,
     /// Walks the walker refused (at submit or at completion).
     pub walks_refused: u64,
-    /// Spaces reconciled cleanly.
+    /// Spaces whose diff applied cleanly.
     pub spaces_reconciled: u64,
     /// Host maps placed.
     pub mapped: u64,
     /// Host maps removed.
     pub unmapped: u64,
-    /// Host TLB invalidates issued (ONE per space per reconcile that changed anything).
+    /// Host TLB invalidates issued (ONE per space per applied diff that changed anything).
     pub host_invalidates: u64,
     /// Triggers cleared by us.
     pub cleared: u64,
@@ -415,14 +480,19 @@ pub struct VaStats {
     pub splits: u64,
     /// ★ P6: splits naming a root no object carries (done at once — nothing of ours is stale).
     pub split_missed: u64,
-    /// ★ P6b (a): maps the host answered `HeldByHost` — satisfied, never ledger rows.
+    /// ★ P6b (a): maps the host answered `HeldByHost` — satisfied, never ours.
     pub held: u64,
     /// ★ P6b: walked leaves refused because they overlap one of OUR VMM placements.
     pub vmm_overlaps: u64,
+    /// ★ Diffs whose maps were withheld for slot capacity (walked again at once).
+    pub partial: u64,
+    /// ★ Objects walked with no slot left (refused by name).
+    pub no_slot: u64,
 }
 
 /// ★ P5c: where an invalidate's wall time goes, summed over every one completed — never a decision
-/// input. `arrive→clear = wait (queued behind a walk) + walk (submit→collected) + reconcile + apply`.
+/// input. `arrive→clear = wait (queued behind a walk) + walk (submit→collected, the GPU's diff
+/// included) + decode + apply`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct VaTiming {
     /// Invalidates cleared (the denominator of `inval_ns`).
@@ -437,11 +507,11 @@ pub struct VaTiming {
     pub walk_ns: u64,
     /// Sum of the walker's own GPU time.
     pub gpu_us: u64,
-    /// Sum of leaf classification + diff against the ledger.
+    /// Sum of the report decode (the diff itself is the GPU's).
     pub plan_ns: u64,
     /// Sum of the host verbs (maps, unmaps, the invalidate).
     pub apply_ns: u64,
-    /// Leaves in the last walk (all spaces).
+    /// ★ DIFF runs in the last report (all spaces) — no longer the walk's leaf count.
     pub leaves_last: u64,
     /// Host verbs issued (maps + unmaps + invalidates).
     pub host_calls: u64,
@@ -517,8 +587,9 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
     /// A manager over a store of `store_bytes`. `ram_offset(gpa, len)` is the VMM's guest-RAM
     /// layout (the memfd offset of a sysmem leaf), `None` where it backs nothing contiguously.
     pub fn new(walker: W, store_bytes: u64, ram_offset: Box<dyn Fn(u64, u64) -> Option<u64> + Send>) -> Self {
+        let slots = walker.slots();
         VaManager {
-            table: VasTable::new(store_bytes),
+            table: VasTable::new(store_bytes, slots),
             walker,
             store_bytes,
             ram_offset,
@@ -546,6 +617,11 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         &self.walker
     }
 
+    /// The walker, mutably (harnesses: e.g. writing the tables the next walk reads).
+    pub fn walker_mut(&mut self) -> &mut W {
+        &mut self.walker
+    }
+
     /// Whether a walk is in flight.
     #[must_use]
     pub fn in_flight(&self) -> bool {
@@ -558,6 +634,26 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         self.pending.len()
     }
 
+    /// ★ Forget an object (its VA space is gone), returning its target so the caller can tear
+    /// its mappings down through the target's own record. Its slot is released to the walker.
+    pub fn remove(&mut self, key: VasKey) -> Option<T> {
+        let t = self.table.remove(key);
+        self.flush_released();
+        t
+    }
+
+    fn flush_released(&mut self) {
+        for s in core::mem::take(&mut self.table.released) {
+            if let Err(e) = self.walker.reset(s) {
+                // ⊘ The slot is NOT returned to the free list: reused unemptied, its next
+                // object's first diff would be taken against another object's placements.
+                self.stats.refuse(format!("slot {s} release refused: {e} — the slot is retired"));
+                continue;
+            }
+            self.table.free_slots.insert(0, s);
+        }
+    }
+
     /// ★ A published invalidate. **Never blocks**: it queues, and submits a walk if none is in
     /// flight. `trigger` is the port's, for a request that can be cleared without a walk.
     pub fn on_invalidate(&mut self, req: InvalidateRequest, trigger: &Trigger) {
@@ -567,7 +663,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
 
     /// ★ P6: a Translated channel reached a `MEM_OP` TLB invalidate naming `pdb` (`None` =
     /// `PDB_ALL`). **Never blocks**: queued like an invalidate; the outcome is reported under
-    /// `ticket` by [`Self::take_splits`] once every named space reconciled (or failed, by name).
+    /// `ticket` by [`Self::take_splits`] once every named space applied (or failed, by name).
     pub fn on_split(&mut self, pdb: Option<u64>, ticket: u64, trigger: &Trigger) {
         self.stats.splits += 1;
         self.pending.push(Want::Split { pdb, ticket });
@@ -587,13 +683,16 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
 
     /// Start the next walk if none is in flight.
     fn pump(&mut self, trigger: &Trigger) {
+        // A slot released since the last walk must reach the walker BEFORE it walks again.
+        self.flush_released();
         if self.inflight.is_some() || self.pending.is_empty() {
             return;
         }
         let wants = core::mem::take(&mut self.pending);
         let mut batch =
-            Batch { wants: Vec::with_capacity(wants.len()), keys: BTreeSet::new(), submitted: std::time::Instant::now() };
+            Batch { wants: Vec::with_capacity(wants.len()), walked: BTreeMap::new(), submitted: std::time::Instant::now() };
         let mut vacuous: Vec<u64> = Vec::new();
+        let mut no_slot: Vec<VasKey> = Vec::new();
         for w in wants {
             let keys = match w {
                 Want::Invalidate(r, _) if r.inval.all_pdb => self.table.rooted(),
@@ -605,26 +704,34 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 Want::Split { pdb: None, .. } => self.table.rooted(),
                 Want::Split { pdb: Some(p), .. } => self.table.keys_for_pdb(p),
             };
-            if let Want::Split { ticket, pdb } = w {
-                if keys.is_empty() {
-                    // Nothing of ours is under that root: nothing can be stale.
-                    if pdb.is_some() {
-                        self.stats.split_missed += 1;
+            if let Want::Split { ticket, pdb } = w
+                && keys.is_empty()
+            {
+                // Nothing of ours is under that root: nothing can be stale.
+                if pdb.is_some() {
+                    self.stats.split_missed += 1;
+                }
+                self.splits_done.push((ticket, Ok(())));
+                continue;
+            }
+            if let Want::Invalidate(r, _) = w
+                && keys.is_empty()
+            {
+                if !r.inval.all_pdb {
+                    self.stats.named_missed += 1;
+                }
+                vacuous.push(r.seq);
+                continue;
+            }
+            for &k in &keys {
+                match (self.table.slot(k), self.table.root(k)) {
+                    (Some(s), Some(root)) => {
+                        batch.walked.insert(k, (s, root));
                     }
-                    self.splits_done.push((ticket, Ok(())));
-                    continue;
+                    (None, Some(_)) => no_slot.push(k),
+                    _ => {}
                 }
             }
-            if let Want::Invalidate(r, _) = w {
-                if keys.is_empty() {
-                    if !r.inval.all_pdb {
-                        self.stats.named_missed += 1;
-                    }
-                    vacuous.push(r.seq);
-                    continue;
-                }
-            }
-            batch.keys.extend(keys.iter().copied());
             let at = match w {
                 Want::Invalidate(_, at) => at,
                 Want::Root(_) | Want::Split { .. } => std::time::Instant::now(),
@@ -635,25 +742,29 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         for seq in vacuous {
             self.stats.outcome(trigger.complete(seq));
         }
-        if batch.keys.is_empty() {
+        for k in no_slot {
+            self.stats.no_slot += 1;
+            self.stats.refuse(format!("{k:?}: no walker slot left — its mappings cannot be diffed"));
+        }
+        if batch.wants.is_empty() {
             return;
         }
-        let pdbs: Vec<u64> = batch
-            .keys
-            .iter()
-            .filter_map(|&k| self.table.root(k))
-            .collect::<BTreeSet<u64>>()
-            .into_iter()
-            .collect();
-        if pdbs.len() > MAX_SPACES_PER_WALK {
+        if batch.walked.len() > MAX_SPACES_PER_WALK {
             self.refuse_batch(
                 &batch,
-                format!("{} roots in one walk; the walk kernel's table holds {MAX_SPACES_PER_WALK}", pdbs.len()),
+                format!("{} objects in one walk; the walk kernel carries {MAX_SPACES_PER_WALK}", batch.walked.len()),
             );
             return;
         }
+        let entries: Vec<WalkEntry> =
+            batch.walked.values().map(|&(slot, pdb)| WalkEntry { pdb, slot }).collect();
+        if entries.is_empty() {
+            // Every named object lacks a slot: each want fails by name (no walk to wait for).
+            self.refuse_batch(&batch, "no named object has a walker slot".to_string());
+            return;
+        }
         let t0 = std::time::Instant::now();
-        let r = self.walker.submit(&pdbs);
+        let r = self.walker.submit(&entries);
         let ns = u64::try_from(t0.elapsed().as_nanos()).unwrap_or(u64::MAX);
         self.stats.submit_ns_max = self.stats.submit_ns_max.max(ns);
         match r {
@@ -681,9 +792,9 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         self.stats.refuse(why);
     }
 
-    /// ★★★ **The walker's completion fd became readable.** Collect, reconcile every named
-    /// space, and only then clear the triggers whose spaces all reconciled. Never blocks; a wake
-    /// with nothing finished changes nothing.
+    /// ★★★ **The walker's completion fd became readable.** Collect; apply every walked object's
+    /// diff; hand the walker its verdict; and only then clear the triggers whose objects all
+    /// applied cleanly. Never blocks; a wake with nothing finished changes nothing.
     pub fn on_walk_ready(&mut self, trigger: &Trigger) -> Reconciled {
         let mut out = Reconciled::default();
         if self.inflight.is_none() {
@@ -720,106 +831,102 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         tm.walks += 1;
         tm.walk_ns += ns_since(batch.submitted);
         tm.gpu_us += done.gpu_us;
-        tm.leaves_last = done.spaces.iter().map(|s| s.leaves.len() as u64).sum();
-        let walked: BTreeMap<u64, &WalkedSpace> = done.spaces.iter().map(|s| (s.pdb, s)).collect();
+        tm.leaves_last = done.nrun as u64;
+        let by_slot: BTreeMap<u32, &EntryDiff> = done.entries.iter().map(|e| (e.slot, e)).collect();
+        // ★ One verdict per report run; anything not applied below stays FAILED (0): the next
+        // diff re-emits it.
+        let mut codes = vec![kf_cuda::abi::KFWR_ACK_FAILED; done.nrun];
         let mut failed: BTreeSet<VasKey> = BTreeSet::new();
-        for &key in &batch.keys {
-            let store = self.store_bytes;
-            let Some(space) = self.table.spaces.get_mut(&key) else {
-                continue; // removed while the walk ran: nothing of ours left to be stale
+        let mut partial: BTreeSet<VasKey> = BTreeSet::new();
+        let cfg = ApplyCfg { store_bytes: self.store_bytes, grain: self.page_grain, ram_offset: &*self.ram_offset };
+        for (&key, &(slot, walked_root)) in &batch.walked {
+            let Some(space) = self.table.spaces.get(&key) else {
+                continue; // removed while the walk ran: its slot is released, nothing to apply
             };
-            let Some(root) = space.root else {
-                continue; // root withdrawn meanwhile; mappings stay until a walk says otherwise
+            if space.slot != Some(slot) {
+                continue; // re-registered while the walk ran: that diff was the old target's
+            }
+            let Some(e) = by_slot.get(&slot) else {
+                failed.insert(key);
+                self.stats.refuse(format!("{key:?}: slot {slot} missing from the report"));
+                continue;
             };
-            let Some(ws) = walked.get(&root) else {
-                // The root changed after the walk was submitted: this walk does not describe it.
+            if space.root != Some(walked_root) {
+                // The root changed after the walk was submitted: this diff does not describe it.
                 failed.insert(key);
                 self.pending.push(Want::Root(key));
-                self.stats.refuse(format!("{key:?}: root {root:#x} changed during the walk; re-walking"));
+                self.stats.refuse(format!("{key:?}: root {walked_root:#x} changed during the walk; re-walking"));
                 continue;
-            };
-            // ★ A CPU window shows only the VAs its BAR decodes (`MapTarget::va_extent`).
-            let clipped;
-            let leaves: &[(u64, u64, u64, u8)] = match space.target.va_extent() {
-                Some(extent) => {
-                    let (kept, cut) = clip_leaves(&ws.leaves, extent);
-                    self.stats.clipped_bytes += cut;
-                    clipped = kept;
-                    &clipped
-                }
-                None => &ws.leaves,
-            };
-            let t_plan = std::time::Instant::now();
-            let desired = match desired_from_leaves(leaves.iter().copied(), store, &*self.ram_offset) {
-                Ok(d) => d,
-                Err(e) => {
-                    failed.insert(key);
-                    self.stats.refuse(format!("{key:?} root {root:#x}: leaf refused: {e:?}"));
-                    continue;
-                }
-            };
-            // ★ P6b (b): every row is whole pages of the family's smallest GMMU page — a walk
-            // leaf IS a guest PTE's page (or a run of them), so coverage at that grain has no
-            // sub-page hole inside a page the guest mapped, and never extends past it.
-            if let Some(d) = desired.iter().find(|d| !whole_pages(d, self.page_grain)) {
+            }
+            if e.overflow {
                 failed.insert(key);
                 self.stats.refuse(format!(
-                    "{key:?} root {root:#x}: leaf {:#x}+{:#x} (backing {:#x}) is not whole {:#x}-byte pages: a sub-page row would leave a hole",
-                    d.va, d.len, d.off, self.page_grain
+                    "{key:?} root {walked_root:#x}: slot {slot} is full and nothing can be retired — raise WalkCfg::runs_per_pdb"
                 ));
                 continue;
             }
-            // ★ P6b: a guest VA may never alias a VMM address (owner rule). Refused BEFORE the
-            // host is asked — the host's `VA_ALREADY_MAPPED` would otherwise read as satisfied.
-            let reserved = space.target.reserved();
-            if let Some((d, r)) = desired.iter().find_map(|d| {
-                let e = d.va.saturating_add(d.len);
-                reserved.iter().find(|&&(a, b)| d.va < b && a < e).map(|r| (d, *r))
-            }) {
-                failed.insert(key);
-                self.stats.vmm_overlaps += 1;
-                self.stats.refuse(format!(
-                    "{key:?} root {root:#x}: leaf {:#x}+{:#x} overlaps OUR placement [{:#x}, {:#x}) — a guest VA may never alias a VMM address",
-                    d.va, d.len, r.0, r.1
-                ));
-                continue;
-            }
-            let plan = plan_reconcile(&space.ledger.rows(), &desired);
             let t_apply = std::time::Instant::now();
-            self.stats.timing.plan_ns += u64::try_from((t_apply - t_plan).as_nanos()).unwrap_or(u64::MAX);
-            let a = space.ledger.apply_to(&space.target, &plan);
+            let a = apply_entry(&space.target, &e.runs, &cfg);
             self.stats.timing.apply_ns += ns_since(t_apply);
-            self.stats.timing.host_calls += (a.mapped + a.unmapped + a.refused) as u64 + u64::from(a.invalidated);
+            for (i, &c) in a.codes.iter().enumerate() {
+                if let Some(slot) = codes.get_mut(e.first + i) {
+                    *slot = c;
+                }
+            }
+            self.stats.timing.host_calls += (a.mapped + a.unmapped) as u64 + u64::from(a.invalidated);
             self.stats.mapped += a.mapped as u64;
             self.stats.unmapped += a.unmapped as u64;
             self.stats.host_invalidates += u64::from(a.invalidated);
             self.stats.held += a.held as u64;
+            self.stats.vmm_overlaps += a.vmm_overlaps as u64;
+            self.stats.clipped_bytes += a.clipped_bytes;
             if a.refused > 0 {
                 failed.insert(key);
                 self.stats.refuse(format!(
-                    "{key:?} root {root:#x}: host refused {}: {}",
+                    "{key:?} root {walked_root:#x}: {} run(s) not applied: {}",
                     a.refused,
                     a.first_refusal.clone().unwrap_or_default()
                 ));
+            } else if e.partial {
+                self.stats.partial += 1;
+                partial.insert(key);
             } else {
                 self.stats.spaces_reconciled += 1;
             }
             out.applied.push((key, a));
         }
+        // ★ THE VERDICT, before any clear: the next walk (below, or the next invalidate's)
+        // commits exactly what landed.
+        if let Err(e) = self.walker.ack(done.generation, codes) {
+            // Nothing is committed: the next diff is taken against the same placements and
+            // re-emits what landed — whose maps the host then answers as held. Named.
+            self.stats.refuse(format!("verdict for report {} refused: {e}", done.generation));
+        }
         // ★ THE CLEAR IS LAST: every map above has landed and its space's ONE invalidate ran.
+        let mut requeue: Vec<(Want, std::time::Instant)> = Vec::new();
         for (w, keys, at) in &batch.wants {
+            let bad = keys.iter().find(|k| failed.contains(k));
+            let again = keys.iter().any(|k| partial.contains(k));
             if let Want::Split { ticket, pdb } = w {
-                let r = match keys.iter().find(|k| failed.contains(k)) {
-                    Some(k) => Err(format!("split {pdb:x?}: {k:?} did not reconcile")),
-                    None => Ok(()),
-                };
-                self.splits_done.push((*ticket, r));
+                match bad {
+                    Some(k) => self.splits_done.push((*ticket, Err(format!("split {pdb:x?}: {k:?} did not apply")))),
+                    None if again => requeue.push((*w, *at)),
+                    None => self.splits_done.push((*ticket, Ok(()))),
+                }
                 continue;
             }
-            let Want::Invalidate(r, _) = w else { continue };
-            if keys.iter().any(|k| failed.contains(k)) {
+            let Want::Invalidate(r, _) = w else {
+                if again {
+                    requeue.push((*w, *at));
+                }
+                continue;
+            };
+            if bad.is_some() {
                 self.stats.unreconciled += 1;
                 out.unreconciled.push(r.seq);
+            } else if again {
+                // ★ Its maps were withheld (slot capacity): the unmaps landed, walk again now.
+                requeue.push((*w, *at));
             } else {
                 let o = trigger.complete(r.seq);
                 self.stats.outcome(o);
@@ -831,6 +938,13 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 out.completed.push((r.seq, o));
             }
         }
+        for (w, at) in requeue.into_iter().rev() {
+            let w = match w {
+                Want::Invalidate(r, _) => Want::Invalidate(r, at),
+                other => other,
+            };
+            self.pending.insert(0, w);
+        }
         self.pump(trigger);
         out
     }
@@ -840,8 +954,11 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
 mod tests {
     use super::*;
     use crate::ledger::{Desired, Mapped};
+    use kf_cuda::abi::{KFWR_OP_UNMAP, KfMapRun};
+    use kf_cuda::diffmodel::{self, AckCode, Committed};
     use kf_trap::{Invalidate, InvalidatePort, InvalidateRegs, PortWrite};
     use std::cell::RefCell;
+    use std::collections::HashMap;
     use std::rc::Rc;
     use std::sync::Arc;
 
@@ -851,29 +968,96 @@ mod tests {
     const K_A: VasKey = VasKey(0xA);
     const K_B: VasKey = VasKey(0xB);
 
-    /// The guest's tables, as the fake walker "walks" them: root → leaves. Shared so a test can
-    /// change them between invalidates, as the guest would.
+    /// The guest's tables, as the model walker "walks" them: root → leaves `(va, at, len, ap)`.
+    /// Shared so a test can change them between invalidates, as the guest would.
     type Tables = Rc<RefCell<BTreeMap<u64, Vec<(u64, u64, u64, u8)>>>>;
 
-    struct FakeWalker {
+    /// ★ The walker, as the PROTOCOL'S RUST MODEL (`kf_cuda::diffmodel`) — the same spec
+    /// `kf-gate9` holds the GPU kernel to. Commit on ack happens at the next submit, as on the GPU.
+    struct ModelWalker {
         tables: Tables,
+        slots: HashMap<u32, Committed>,
         /// Snapshot taken AT SUBMIT — what a real walk would have read.
-        queued: Option<Vec<WalkedSpace>>,
+        queued: Option<Vec<(WalkEntry, Vec<KfMapRun>)>>,
+        last: Option<(u64, Vec<(u32, Vec<KfMapRun>)>)>,
+        verdict: Option<(u64, Vec<u8>)>,
+        resets: Vec<u32>,
+        generation: u64,
+        cap: usize,
+        nslots: u32,
         /// Polls that answer "not yet" before the result.
         not_ready: u32,
         submits: Vec<Vec<u64>>,
         fail_poll: Option<String>,
+        /// Diff sizes, per report.
+        diff_runs: Vec<usize>,
     }
 
-    impl Walker for FakeWalker {
-        fn submit(&mut self, pdbs: &[u64]) -> Result<(), String> {
+    impl ModelWalker {
+        fn new(tables: Tables) -> ModelWalker {
+            ModelWalker {
+                tables,
+                slots: HashMap::new(),
+                queued: None,
+                last: None,
+                verdict: None,
+                resets: Vec::new(),
+                generation: 0,
+                cap: 1 << 14,
+                nslots: 8,
+                not_ready: 0,
+                submits: vec![],
+                fail_poll: None,
+                diff_runs: vec![],
+            }
+        }
+    }
+
+    impl Walker for ModelWalker {
+        fn submit(&mut self, entries: &[WalkEntry]) -> Result<(), String> {
             assert!(self.queued.is_none(), "one walk at a time");
-            assert!(pdbs.windows(2).all(|w| w[0] < w[1]), "ascending and unique");
-            self.submits.push(pdbs.to_vec());
+            // The GPU's first node: commit the verdict on the last report, then the resets.
+            if let (Some((g, codes)), Some((lg, runs))) = (self.verdict.take(), self.last.as_ref())
+                && g == *lg
+            {
+                let mut at = 0usize;
+                for (slot, rs) in runs {
+                    if self.resets.contains(slot) {
+                        at += rs.len();
+                        continue;
+                    }
+                    let cs: Vec<AckCode> = codes[at..at + rs.len()]
+                        .iter()
+                        .map(|&c| match c {
+                            1 => AckCode::Applied,
+                            2 => AckCode::Held,
+                            _ => AckCode::Failed,
+                        })
+                        .collect();
+                    let com = self.slots.remove(slot).unwrap_or_default();
+                    self.slots.insert(*slot, diffmodel::commit(&com, rs, &cs));
+                    at += rs.len();
+                }
+            }
+            for s in self.resets.drain(..) {
+                self.slots.remove(&s);
+            }
+            self.submits.push(entries.iter().map(|e| e.pdb).collect());
             let t = self.tables.borrow();
             self.queued = Some(
-                pdbs.iter()
-                    .map(|&p| WalkedSpace { pdb: p, leaves: t.get(&p).cloned().unwrap_or_default() })
+                entries
+                    .iter()
+                    .map(|e| {
+                        let mut w: Vec<KfMapRun> = t
+                            .get(&e.pdb)
+                            .cloned()
+                            .unwrap_or_default()
+                            .into_iter()
+                            .map(|(va, at, len, ap)| KfMapRun { va, gpga: at, len, flags: u32::from(ap), op: 1, pdb_index: 0 })
+                            .collect();
+                        w.sort_by_key(|r| r.va);
+                        (*e, w)
+                    })
                     .collect(),
             );
             Ok(())
@@ -887,7 +1071,45 @@ mod tests {
                 self.queued = None;
                 return Err(e);
             }
-            Ok(self.queued.take().map(|spaces| WalkDone { spaces, gpu_us: 1 }))
+            let Some(q) = self.queued.take() else { return Ok(None) };
+            self.generation += 1;
+            let mut entries = Vec::new();
+            let mut last = Vec::new();
+            let mut first = 0usize;
+            for (e, w) in q {
+                let com = self.slots.get(&e.slot).cloned().unwrap_or_default();
+                let d = diffmodel::diff(&com, &w, self.cap);
+                let runs: Vec<DiffRun> = d
+                    .runs
+                    .iter()
+                    .map(|m| DiffRun {
+                        unmap: m.op == KFWR_OP_UNMAP,
+                        va: m.va,
+                        len: m.len,
+                        at: m.gpga,
+                        ap: m.aperture(),
+                        held: m.flags & kf_cuda::abi::KFWR_RF_HELD != 0,
+                    })
+                    .collect();
+                entries.push(EntryDiff { pdb: e.pdb, slot: e.slot, first, runs, partial: d.partial, overflow: d.overflow });
+                first += d.runs.len();
+                last.push((e.slot, d.runs));
+            }
+            self.diff_runs.push(first);
+            self.last = Some((self.generation, last));
+            Ok(Some(WalkDone { generation: self.generation, nrun: first, entries, gpu_us: 1 }))
+        }
+        fn ack(&mut self, generation: u64, codes: Vec<u8>) -> Result<(), String> {
+            assert!(self.queued.is_none(), "a verdict answers a COLLECTED report");
+            self.verdict = Some((generation, codes));
+            Ok(())
+        }
+        fn reset(&mut self, slot: u32) -> Result<(), String> {
+            self.resets.push(slot);
+            Ok(())
+        }
+        fn slots(&self) -> u32 {
+            self.nslots
         }
     }
 
@@ -903,14 +1125,14 @@ mod tests {
     struct FakeHost {
         ops: Rc<RefCell<Vec<(Op, bool)>>>,
         port: Arc<InvalidatePort>,
-        refuse_map_at: Option<u64>,
+        refuse_map_at: RefCell<Option<u64>>,
         held_at: Option<u64>,
         reserved: Vec<(u64, u64)>,
     }
 
     impl MapTarget for FakeHost {
         fn map(&self, d: &Desired, _defer: bool) -> Result<Mapped, String> {
-            if self.refuse_map_at == Some(d.va) {
+            if *self.refuse_map_at.borrow() == Some(d.va) {
                 return Err(format!("map {:#x}: refused (fake)", d.va));
             }
             self.ops.borrow_mut().push((Op::Map(d.va, d.off, d.len), self.port.trigger().read() != 0));
@@ -930,24 +1152,29 @@ mod tests {
     }
 
     struct Rig {
-        m: VaManager<FakeWalker, FakeHost>,
+        m: VaManager<ModelWalker, FakeHost>,
         port: Arc<InvalidatePort>,
         tables: Tables,
         ops: Rc<RefCell<Vec<(Op, bool)>>>,
+    }
+
+    fn host(r: &Rig, held_at: Option<u64>, reserved: Vec<(u64, u64)>) -> FakeHost {
+        FakeHost { ops: r.ops.clone(), port: r.port.clone(), refuse_map_at: RefCell::new(None), held_at, reserved }
     }
 
     fn rig() -> Rig {
         let port = Arc::new(InvalidatePort::new(InvalidateRegs::from_usermode_base(0xBB_0000).unwrap()));
         let tables: Tables = Rc::default();
         let ops: Rc<RefCell<Vec<(Op, bool)>>> = Rc::default();
-        let w = FakeWalker { tables: tables.clone(), queued: None, not_ready: 0, submits: vec![], fail_poll: None };
-        let mut m = VaManager::new(w, STORE, Box::new(|_, _| None));
+        let m = VaManager::new(ModelWalker::new(tables.clone()), STORE, Box::new(|gpa, _| Some(gpa)));
+        let mut r = Rig { m, port, tables, ops };
         for k in [K_A, K_B] {
-            m.table.insert(k, FakeHost { ops: ops.clone(), port: port.clone(), refuse_map_at: None, held_at: None, reserved: Vec::new() });
+            let h = host(&r, None, Vec::new());
+            r.m.table.insert(k, h);
         }
-        m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem).unwrap();
-        m.table.set_root(K_B, PDB_B, PdbAperture::Vidmem).unwrap();
-        Rig { m, port, tables, ops }
+        r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem).unwrap();
+        r.m.table.set_root(K_B, PDB_B, PdbAperture::Vidmem).unwrap();
+        r
     }
 
     /// The guest's sequence through the PORT (PDB lo, PDB hi, TRIGGER) — what a vCPU does.
@@ -967,8 +1194,19 @@ mod tests {
         port.read(port.regs().trigger).unwrap() & kf_trap::mmuinval::TRIGGER_BIT != 0
     }
 
+    fn ops(r: &Rig) -> Vec<Op> {
+        r.ops.borrow().iter().map(|(o, _)| o.clone()).collect()
+    }
+
+    /// One invalidate of `pdb`, walked and applied.
+    fn settle(r: &mut Rig, pdb: u64) -> Reconciled {
+        let q = guest_invalidate(&r.port, pdb, false);
+        r.m.on_invalidate(q, r.port.trigger());
+        r.m.on_walk_ready(r.port.trigger())
+    }
+
     /// ★★★ THE P4 PROPERTY: the trigger reads busy until the host mapping is committed, and every
-    /// host op of the reconcile ran while it was still busy.
+    /// host op of the apply ran while it was still busy.
     #[test]
     fn the_trigger_clears_only_after_the_host_mapping_is_committed() {
         let mut r = rig();
@@ -981,21 +1219,37 @@ mod tests {
 
         let out = r.m.on_walk_ready(r.port.trigger());
         assert_eq!(out.completed, vec![(req.seq, ClearOutcome::Cleared)]);
-        assert!(!busy(&r.port), "cleared after the reconcile");
-        let ops = r.ops.borrow();
-        assert_eq!(
-            ops.iter().map(|(o, _)| o.clone()).collect::<Vec<_>>(),
-            vec![Op::Map(0x20_0000_0000, 0x0200_0000, 0x1_0000), Op::Invalidate],
-            "one deferred map, then ONE invalidate"
-        );
-        assert!(ops.iter().all(|(_, b)| *b), "every host op ran while the guest still saw busy");
+        assert!(!busy(&r.port), "cleared after the apply");
+        assert_eq!(ops(&r), vec![Op::Map(0x20_0000_0000, 0x0200_0000, 0x1_0000), Op::Invalidate], "one deferred map, then ONE invalidate");
+        assert!(r.ops.borrow().iter().all(|(_, b)| *b), "every host op ran while the guest still saw busy");
+    }
+
+    /// ★★★★★ The point of the protocol: a second invalidate over UNCHANGED tables does nothing
+    /// on the host, and one more page is ONE map — the host's work is the diff, not the space.
+    #[test]
+    fn host_work_is_the_diff_not_the_space() {
+        let mut r = rig();
+        let mut leaves: Vec<(u64, u64, u64, u8)> = Vec::new();
+        for i in 0..2000u64 {
+            leaves.push((0x1_0000_0000 + i * 0x1000, 0x10_0000 + i * 0x3000, 0x1000, 2));
+            r.tables.borrow_mut().insert(PDB_A, leaves.clone());
+            r.ops.borrow_mut().clear();
+            let out = settle(&mut r, PDB_A);
+            assert_eq!(out.completed.len(), 1);
+            assert_eq!(ops(&r), vec![Op::Map(0x1_0000_0000 + i * 0x1000, 0x10_0000 + i * 0x3000, 0x1000), Op::Invalidate]);
+        }
+        assert!(r.m.walker().diff_runs.iter().all(|&n| n == 1), "every report is ONE run");
+        r.ops.borrow_mut().clear();
+        let out = settle(&mut r, PDB_A);
+        assert_eq!(out.completed.len(), 1);
+        assert!(ops(&r).is_empty(), "unchanged tables: nothing to do");
     }
 
     #[test]
     fn a_wake_before_the_walk_finishes_changes_nothing() {
         let mut r = rig();
         r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0)]);
-        r.m.walker.not_ready = 2;
+        r.m.walker_mut().not_ready = 2;
         let req = guest_invalidate(&r.port, PDB_A, false);
         r.m.on_invalidate(req, r.port.trigger());
         for _ in 0..2 {
@@ -1040,8 +1294,17 @@ mod tests {
         assert_eq!(out.completed, vec![(b.seq, ClearOutcome::Cleared)]);
         assert!(!busy(&r.port));
         assert_eq!(r.m.walker().submits.len(), 2);
-        let ledger = r.m.table.ledger(K_A).unwrap();
-        assert_eq!(ledger.resolve(0x1000_0000, 0x1000), Some((false, 0x0300_0000)), "B's tables won");
+        assert_eq!(
+            ops(&r),
+            vec![
+                Op::Map(0x1000_0000, 0x0200_0000, 0x1000),
+                Op::Invalidate,
+                Op::Unmap(0x1000_0000),
+                Op::Map(0x1000_0000, 0x0300_0000, 0x1000),
+                Op::Invalidate
+            ],
+            "B's tables won: A's placement (committed on A's ack) retired, B's placed"
+        );
     }
 
     #[test]
@@ -1062,13 +1325,16 @@ mod tests {
     }
 
     #[test]
-    fn all_pdb_walks_and_reconciles_every_rooted_space() {
+    fn all_pdb_walks_and_applies_every_rooted_space() {
         let mut r = rig();
         r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0)]);
         r.tables.borrow_mut().insert(PDB_B, vec![(0x2000_0000, 0x0210_0000, 0x2000, 0)]);
         let req = guest_invalidate(&r.port, 0, true);
         r.m.on_invalidate(req, r.port.trigger());
-        assert_eq!(r.m.walker().submits, vec![vec![PDB_A, PDB_B]]);
+        assert_eq!(r.m.walker().submits.len(), 1);
+        let mut s = r.m.walker().submits[0].clone();
+        s.sort_unstable();
+        assert_eq!(s, vec![PDB_A, PDB_B]);
         let out = r.m.on_walk_ready(r.port.trigger());
         assert_eq!(out.applied.len(), 2);
         assert_eq!(r.m.stats.named_missed, 0);
@@ -1080,27 +1346,20 @@ mod tests {
     fn a_remap_unmaps_the_old_run_and_maps_the_new_one() {
         let mut r = rig();
         r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0), (0x1100_0000, 0x0210_0000, 0x1000, 0)]);
-        let q = guest_invalidate(&r.port, PDB_A, false);
-        r.m.on_invalidate(q, r.port.trigger());
-        r.m.on_walk_ready(r.port.trigger());
+        settle(&mut r, PDB_A);
         r.ops.borrow_mut().clear();
         r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0), (0x1100_0000, 0x0220_0000, 0x1000, 0)]);
-        let q = guest_invalidate(&r.port, PDB_A, false);
-        r.m.on_invalidate(q, r.port.trigger());
-        let out = r.m.on_walk_ready(r.port.trigger());
+        let out = settle(&mut r, PDB_A);
         let a = &out.applied[0].1;
         assert_eq!((a.mapped, a.unmapped), (1, 1));
-        assert_eq!(
-            r.ops.borrow().iter().map(|(o, _)| o.clone()).collect::<Vec<_>>(),
-            vec![Op::Unmap(0x1100_0000), Op::Map(0x1100_0000, 0x0220_0000, 0x1000), Op::Invalidate]
-        );
+        assert_eq!(ops(&r), vec![Op::Unmap(0x1100_0000), Op::Map(0x1100_0000, 0x0220_0000, 0x1000), Op::Invalidate]);
         assert!(!busy(&r.port));
     }
 
     #[test]
     fn a_failed_walk_leaves_the_trigger_armed_and_names_why() {
         let mut r = rig();
-        r.m.walker.fail_poll = Some("device fault (fake)".into());
+        r.m.walker_mut().fail_poll = Some("device fault (fake)".into());
         let q = guest_invalidate(&r.port, PDB_A, false);
         r.m.on_invalidate(q, r.port.trigger());
         let out = r.m.on_walk_ready(r.port.trigger());
@@ -1110,31 +1369,38 @@ mod tests {
         assert!(r.m.stats.refusals[0].contains("device fault"));
     }
 
+    /// ★★★★★ COMMIT-ON-ACK, end to end: a refused map leaves the trigger armed and IS the diff
+    /// of the guest's retry; the map that landed beside it is never re-issued.
     #[test]
-    fn a_host_refusal_leaves_the_trigger_armed() {
+    fn a_refused_map_is_retried_by_the_next_invalidate_and_nothing_else_is() {
         let mut r = rig();
-        r.m.table.insert(
-            K_A,
-            FakeHost { ops: r.ops.clone(), port: r.port.clone(), refuse_map_at: Some(0x1000_0000), held_at: None, reserved: Vec::new() },
-        );
+        let h = host(&r, None, Vec::new());
+        *h.refuse_map_at.borrow_mut() = Some(0x1000_0000);
+        r.m.table.insert(K_A, h);
         r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem).unwrap();
-        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0)]);
-        let q = guest_invalidate(&r.port, PDB_A, false);
-        r.m.on_invalidate(q, r.port.trigger());
-        let out = r.m.on_walk_ready(r.port.trigger());
-        assert_eq!(out.unreconciled, vec![q.seq]);
+        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0), (0x2000_0000, 0x0300_0000, 0x1000, 0)]);
+        let out = settle(&mut r, PDB_A);
+        assert_eq!(out.unreconciled.len(), 1);
         assert!(busy(&r.port));
         assert!(r.m.stats.refusals[0].contains("refused (fake)"));
+        assert_eq!(ops(&r), vec![Op::Map(0x2000_0000, 0x0300_0000, 0x1000), Op::Invalidate]);
+        // The host recovers; the guest re-issues its invalidate.
+        if let Some(t) = r.m.table.target(K_A) {
+            *t.refuse_map_at.borrow_mut() = None;
+        }
+        r.ops.borrow_mut().clear();
+        let out = settle(&mut r, PDB_A);
+        assert_eq!(out.completed.len(), 1);
+        assert!(!busy(&r.port));
+        assert_eq!(ops(&r), vec![Op::Map(0x1000_0000, 0x0200_0000, 0x1000), Op::Invalidate], "only the refused map, again");
     }
 
     #[test]
     fn a_leaf_outside_the_store_is_refused_and_the_trigger_stays_armed() {
         let mut r = rig();
         r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, STORE - 0x1000, 0x2000, 0)]);
-        let q = guest_invalidate(&r.port, PDB_A, false);
-        r.m.on_invalidate(q, r.port.trigger());
-        let out = r.m.on_walk_ready(r.port.trigger());
-        assert_eq!(out.unreconciled, vec![q.seq]);
+        let out = settle(&mut r, PDB_A);
+        assert_eq!(out.unreconciled.len(), 1);
         assert!(r.ops.borrow().is_empty(), "nothing mapped");
         assert!(r.m.stats.refusals[0].contains("OutsideStore"));
     }
@@ -1142,18 +1408,9 @@ mod tests {
     #[test]
     fn roots_are_refused_by_name() {
         let mut r = rig();
-        assert!(matches!(
-            r.m.table.set_root(K_A, 0x1000, PdbAperture::Sysmem),
-            Err(RootRefusal::SysmemRoot { .. })
-        ));
-        assert!(matches!(
-            r.m.table.set_root(K_A, STORE, PdbAperture::Vidmem),
-            Err(RootRefusal::OutsideStore { .. })
-        ));
-        assert!(matches!(
-            r.m.table.set_root(VasKey(99), 0x1000, PdbAperture::Vidmem),
-            Err(RootRefusal::UnknownObject(_))
-        ));
+        assert!(matches!(r.m.table.set_root(K_A, 0x1000, PdbAperture::Sysmem), Err(RootRefusal::SysmemRoot { .. })));
+        assert!(matches!(r.m.table.set_root(K_A, STORE, PdbAperture::Vidmem), Err(RootRefusal::OutsideStore { .. })));
+        assert!(matches!(r.m.table.set_root(VasKey(99), 0x1000, PdbAperture::Vidmem), Err(RootRefusal::UnknownObject(_))));
         assert_eq!(r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem), Ok(RootChange::Unchanged), "unchanged");
         assert_eq!(r.m.table.set_root(K_A, 0x0110_0000, PdbAperture::Vidmem), Ok(RootChange::Moved { old: PDB_A }), "moved");
     }
@@ -1171,10 +1428,10 @@ mod tests {
         assert_eq!(r.port.trigger().issued(), 0);
     }
 
-    /// ★ P6: a split is reported done only AFTER its space's walk reconciled — and never touches
+    /// ★ P6: a split is reported done only AFTER its space's walk applied — and never touches
     /// the guest's trigger; a root we do not hold is done at once, counted.
     #[test]
-    fn a_split_is_done_only_after_its_space_reconciles_and_leaves_the_trigger_alone() {
+    fn a_split_is_done_only_after_its_space_applies_and_leaves_the_trigger_alone() {
         let mut r = rig();
         r.tables.borrow_mut().insert(PDB_A, vec![(0x4000_0000, 0x0300_0000, 0x1000, 0)]);
         r.m.on_split(Some(PDB_A), 7, r.port.trigger());
@@ -1193,7 +1450,7 @@ mod tests {
     #[test]
     fn a_failed_walk_fails_the_split() {
         let mut r = rig();
-        r.m.walker.fail_poll = Some("boom".into());
+        r.m.walker_mut().fail_poll = Some("boom".into());
         r.m.on_split(None, 9, r.port.trigger());
         let _ = r.m.on_walk_ready(r.port.trigger());
         let s = r.m.take_splits();
@@ -1201,41 +1458,27 @@ mod tests {
         assert!(matches!(&s[0], (9, Err(e)) if e.contains("boom")));
     }
 
-    fn host(r: &Rig, held_at: Option<u64>, reserved: Vec<(u64, u64)>) -> FakeHost {
-        FakeHost { ops: r.ops.clone(), port: r.port.clone(), refuse_map_at: None, held_at, reserved }
-    }
-
     /// ★ P6b ruling (a): a VA the host already holds satisfies the guest's statement (its trigger
-    /// clears) but is NOT ours — no ledger row, so nothing resolves through it and no later
-    /// reconcile tries to unmap it (the `Other(87)` of `[measured p6s1]`).
+    /// clears) but is NOT ours: acknowledged HELD, so when the guest drops it the host is never
+    /// asked to unmap it (the `Other(87)` of `[measured p6s1]`).
     #[test]
-    fn a_va_the_host_already_holds_is_satisfied_and_never_recorded() {
+    fn a_va_the_host_already_holds_is_satisfied_and_never_unmapped_by_us() {
         let mut r = rig();
         let h = host(&r, Some(0x1000_0000), Vec::new());
         r.m.table.insert(K_A, h);
         r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem).unwrap();
         r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0), (0x1000_1000, 0x0300_0000, 0x1000, 0)]);
-        let q = guest_invalidate(&r.port, PDB_A, false);
-        r.m.on_invalidate(q, r.port.trigger());
-        let out = r.m.on_walk_ready(r.port.trigger());
-        assert_eq!(out.completed, vec![(q.seq, ClearOutcome::Cleared)], "the guest's statement succeeds");
+        let out = settle(&mut r, PDB_A);
+        assert_eq!(out.completed.len(), 1, "the guest's statement succeeds");
         let a = &out.applied[0].1;
         assert_eq!((a.mapped, a.held, a.refused), (1, 1, 0));
-        let l = r.m.table.ledger(K_A).unwrap();
-        assert_eq!(l.len(), 1, "only the mapping WE made is a row");
-        assert_eq!(l.resolve(0x1000_0000, 8), None, "nothing resolves through a VA that is not ours");
-        assert_eq!(l.resolve(0x1000_1000, 8), Some((false, 0x0300_0000)));
-        // The guest drops both: only OUR row is unmapped.
+        // The guest drops both: only OUR mapping is unmapped.
         r.ops.borrow_mut().clear();
         r.tables.borrow_mut().insert(PDB_A, vec![]);
-        let q = guest_invalidate(&r.port, PDB_A, false);
-        r.m.on_invalidate(q, r.port.trigger());
-        let out = r.m.on_walk_ready(r.port.trigger());
+        let out = settle(&mut r, PDB_A);
         assert_eq!(out.applied[0].1.refused, 0);
-        assert_eq!(
-            r.ops.borrow().iter().map(|(o, _)| o.clone()).collect::<Vec<_>>(),
-            vec![Op::Unmap(0x1000_1000), Op::Invalidate]
-        );
+        assert_eq!(out.applied[0].1.held_retired, 1);
+        assert_eq!(ops(&r), vec![Op::Unmap(0x1000_1000), Op::Invalidate]);
         assert_eq!(r.m.stats.held, 1);
     }
 
@@ -1247,11 +1490,9 @@ mod tests {
         let h = host(&r, None, vec![(0xFF_0000_0000, 0x100_0000_0000)]);
         r.m.table.insert(K_A, h);
         r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem).unwrap();
-        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0), (0xFF_0010_0000, 0x0300_0000, 0x1000, 0)]);
-        let q = guest_invalidate(&r.port, PDB_A, false);
-        r.m.on_invalidate(q, r.port.trigger());
-        let out = r.m.on_walk_ready(r.port.trigger());
-        assert_eq!(out.unreconciled, vec![q.seq]);
+        r.tables.borrow_mut().insert(PDB_A, vec![(0xFF_0010_0000, 0x0300_0000, 0x1000, 0)]);
+        let out = settle(&mut r, PDB_A);
+        assert_eq!(out.unreconciled.len(), 1);
         assert!(busy(&r.port));
         assert!(r.ops.borrow().is_empty(), "the host was never asked");
         assert_eq!(r.m.stats.vmm_overlaps, 1);
@@ -1259,65 +1500,112 @@ mod tests {
     }
 
     /// ★ P6b (b): coverage is whole pages of the family grain — a sub-page leaf is refused by
-    /// name, a big (64 KiB) leaf is taken whole, and nothing is rounded past what the guest mapped.
+    /// name (the trigger stays armed), and nothing is rounded past what the guest mapped.
     #[test]
     fn coverage_is_whole_guest_pages_never_rounded_past_them() {
-        use crate::ledger::Desired;
-        let d = |va, len, off| Desired { va, len, off, ram: false };
-        assert!(whole_pages(&d(0x1000, 0x1000, 0x2000), SMALL_PAGE));
-        assert!(whole_pages(&d(0x1_0000, 0x1_0000, 0x3_0000), SMALL_PAGE), "a 64 KiB big page, whole");
-        assert!(!whole_pages(&d(0x1000, 0x8600, 0x2000), SMALL_PAGE), "the C's promote length");
-        assert!(!whole_pages(&d(0x1010, 0x1000, 0x2000), SMALL_PAGE));
-        assert!(!whole_pages(&d(0x1000, 0x1000, 0x2010), SMALL_PAGE));
         let mut r = rig();
-        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0), (0x1000_1000, 0x0300_0000, 0x10, 0)]);
-        let q = guest_invalidate(&r.port, PDB_A, false);
-        r.m.on_invalidate(q, r.port.trigger());
-        let out = r.m.on_walk_ready(r.port.trigger());
-        assert_eq!(out.unreconciled, vec![q.seq]);
+        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_1000, 0x0300_0000, 0x10, 0)]);
+        let out = settle(&mut r, PDB_A);
+        assert_eq!(out.unreconciled.len(), 1);
         assert!(r.ops.borrow().is_empty());
-        // Exactly what the guest mapped, at the grain: a 4 KiB leaf is ONE 4 KiB map, not 64 KiB.
         let mut r = rig();
         r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_1000, 0x0200_1000, 0x1000, 0)]);
-        let q = guest_invalidate(&r.port, PDB_A, false);
-        r.m.on_invalidate(q, r.port.trigger());
-        r.m.on_walk_ready(r.port.trigger());
-        assert_eq!(r.ops.borrow()[0].0, Op::Map(0x1000_1000, 0x0200_1000, 0x1000));
+        settle(&mut r, PDB_A);
+        assert_eq!(r.ops.borrow()[0].0, Op::Map(0x1000_1000, 0x0200_1000, 0x1000), "a 4 KiB leaf is ONE 4 KiB map");
     }
 
-    /// ★★ P6b ruling (c): a RE-published root is NOT walked at the statement (the guest migrates
-    /// its entries into it only after our reply, `dma.c:500-518`); our rows stay; the next
-    /// invalidate naming the NEW root walks it and retires what it no longer carries.
+    /// ★★ P6b ruling (c) — and the ROOT MOVE property of the diff: the slot is the OBJECT's, so
+    /// the new root's walk is diffed against what we placed under the old one. The migrated
+    /// entry is kept (no host op), the old root's other placement retired, the new one mapped.
     #[test]
     fn a_moved_root_is_walked_at_the_next_sync_point_and_retires_the_old_rows() {
         let mut r = rig();
         r.tables.borrow_mut().insert(PDB_A, vec![(0x1210_1000, 0x0200_0000, 0x1000, 0), (0x1210_2000, 0x0201_0000, 0x1000, 0)]);
-        let q = guest_invalidate(&r.port, PDB_A, false);
-        r.m.on_invalidate(q, r.port.trigger());
-        r.m.on_walk_ready(r.port.trigger());
-        assert_eq!(r.m.table.ledger(K_A).unwrap().len(), 2);
-        // UVM's SET_PAGE_DIRECTORY: the new root is still empty when the statement arrives.
+        settle(&mut r, PDB_A);
         const NEW: u64 = 0x0020_0000;
         let ch = r.m.table.set_root(K_A, NEW, PdbAperture::Vidmem).unwrap();
         assert_eq!(ch, RootChange::Moved { old: PDB_A });
         assert!(!ch.walk_now(), "a moved root is not walked at the statement");
-        assert_eq!(r.m.table.ledger(K_A).unwrap().resolve(0x1210_1000, 8), Some((false, 0x0200_0000)), "rows kept meanwhile");
-        // The guest migrates the RM-internal entry (one of the two) and adds its own mapping.
         r.ops.borrow_mut().clear();
         r.tables.borrow_mut().insert(NEW, vec![(0x1210_1000, 0x0200_0000, 0x1000, 0), (0x5000_0000, 0x0400_0000, 0x1000, 0)]);
         // An invalidate naming the OLD root names nothing of ours now.
         let old_q = guest_invalidate(&r.port, PDB_A, false);
         r.m.on_invalidate(old_q, r.port.trigger());
         assert_eq!(r.m.stats.named_missed, 1);
-        let q = guest_invalidate(&r.port, NEW, false);
-        r.m.on_invalidate(q, r.port.trigger());
-        let out = r.m.on_walk_ready(r.port.trigger());
-        assert_eq!(out.completed, vec![(q.seq, ClearOutcome::Cleared)]);
+        let out = settle(&mut r, NEW);
+        assert_eq!(out.completed.len(), 1);
         assert_eq!(
-            r.ops.borrow().iter().map(|(o, _)| o.clone()).collect::<Vec<_>>(),
+            ops(&r),
             vec![Op::Unmap(0x1210_2000), Op::Map(0x5000_0000, 0x0400_0000, 0x1000), Op::Invalidate],
             "the migrated row is kept, the old root's other row retired, the new one mapped"
         );
-        assert_eq!(r.m.table.set_root(K_B, PDB_B, PdbAperture::Vidmem), Ok(RootChange::Unchanged));
+    }
+
+    /// ★ A diff whose maps would overflow the slot withholds them, applies its unmaps, and is
+    /// walked again AT ONCE; the invalidate clears on that second walk, never before.
+    #[test]
+    fn a_partial_diff_walks_again_and_clears_only_when_complete() {
+        let mut r = rig();
+        r.m.walker_mut().cap = 2;
+        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000, 0x10_0000, 0x1000, 0), (0x3000, 0x20_0000, 0x1000, 0)]);
+        settle(&mut r, PDB_A);
+        r.tables.borrow_mut().insert(PDB_A, vec![(0x3000, 0x30_0000, 0x1000, 0), (0x5000, 0x40_0000, 0x1000, 0)]);
+        r.ops.borrow_mut().clear();
+        let q = guest_invalidate(&r.port, PDB_A, false);
+        r.m.on_invalidate(q, r.port.trigger());
+        let out = r.m.on_walk_ready(r.port.trigger());
+        assert!(out.completed.is_empty() && out.unreconciled.is_empty());
+        assert!(busy(&r.port), "not complete: the maps were withheld");
+        assert!(r.m.in_flight(), "walked again at once");
+        let out = r.m.on_walk_ready(r.port.trigger());
+        assert_eq!(out.completed, vec![(q.seq, ClearOutcome::Cleared)]);
+        assert_eq!(r.m.stats.partial, 1);
+        assert_eq!(
+            ops(&r),
+            vec![Op::Unmap(0x1000), Op::Unmap(0x3000), Op::Invalidate, Op::Map(0x3000, 0x30_0000, 0x1000), Op::Map(0x5000, 0x40_0000, 0x1000), Op::Invalidate]
+        );
+    }
+
+    /// ★ A removed object's slot is emptied before the next walk diffs anything against it — a
+    /// new object given that slot starts from nothing, never from another object's placements.
+    #[test]
+    fn a_released_slot_is_empty_for_its_next_object() {
+        let mut r = rig();
+        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000, 0x10_0000, 0x1000, 0)]);
+        settle(&mut r, PDB_A);
+        let slot = r.m.table.slot(K_A).unwrap();
+        assert!(r.m.remove(K_A).is_some());
+        let k = VasKey(0xC);
+        // Every other slot taken, so the new object reuses A's.
+        for i in 0..6 {
+            let h = host(&r, None, Vec::new());
+            r.m.table.insert(VasKey(0x100 + i), h);
+        }
+        let h = host(&r, None, Vec::new());
+        r.m.table.insert(k, h);
+        assert_eq!(r.m.table.slot(k), Some(slot), "the released slot is reused");
+        r.m.table.set_root(k, PDB_A, PdbAperture::Vidmem).unwrap();
+        r.ops.borrow_mut().clear();
+        settle(&mut r, PDB_A);
+        assert_eq!(ops(&r), vec![Op::Map(0x1000, 0x10_0000, 0x1000), Op::Invalidate], "diffed against an EMPTY slot");
+    }
+
+    /// Past the walker's slots, an object is refused by name — never walked against a guess.
+    #[test]
+    fn an_object_without_a_slot_is_refused_by_name() {
+        let mut r = rig();
+        for i in 0..6 {
+            let h = host(&r, None, Vec::new());
+            r.m.table.insert(VasKey(0x100 + i), h);
+        }
+        let k = VasKey(0xD);
+        let h = host(&r, None, Vec::new());
+        r.m.table.insert(k, h);
+        assert_eq!(r.m.table.slot(k), None);
+        r.m.table.set_root(k, 0x0300_0000, PdbAperture::Vidmem).unwrap();
+        let q = guest_invalidate(&r.port, 0x0300_0000, false);
+        r.m.on_invalidate(q, r.port.trigger());
+        assert_eq!(r.m.stats.no_slot, 1);
+        assert!(busy(&r.port), "never cleared: nothing was applied");
     }
 }

@@ -45,6 +45,11 @@ impl Tree {
         self.leaf4k(va, pte_sys(gpa));
     }
 
+    /// Unmap the 4 KiB page at `va` (its PTE becomes 0; the tables stay).
+    pub fn unmap4k(&mut self, va: u64) {
+        self.leaf4k(va, 0);
+    }
+
     fn leaf4k(&mut self, va: u64, leaf: u64) {
         let pd2 = self.child(3, self.root, vi3(va), 512 * 8, 8 * vi3(va) as u64, false);
         let pd1 = self.child(2, pd2, vi2(va), 512 * 8, 8 * vi2(va) as u64, false);
@@ -106,5 +111,15 @@ impl Tree3 {
     /// Map the 4 KiB page at `va` to FB-physical `phys`.
     pub fn map4k(&mut self, va: u64, phys: u64) {
         self.leaf4k(va, kf_cuda::synth::ver3::pte(phys));
+    }
+
+    /// Map the 4 KiB page at `va` to guest-physical `gpa` in coherent system memory.
+    pub fn map4k_sys(&mut self, va: u64, gpa: u64) {
+        self.leaf4k(va, kf_cuda::synth::ver3::pte_sys(gpa));
+    }
+
+    /// Unmap the 4 KiB page at `va` (its PTE becomes 0; the tables stay).
+    pub fn unmap4k(&mut self, va: u64) {
+        self.leaf4k(va, 0);
     }
 }

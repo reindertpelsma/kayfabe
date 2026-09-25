@@ -10,6 +10,7 @@ pub mod store;
 
 pub use addr::{Fb, Gpa, Gva, HostToken, StoreOffset, PAGE};
 pub use store::{Store, StoreRefusal};
+pub mod apply;
 pub mod cpuwin;
 pub mod ledger;
 pub mod vasmgr;

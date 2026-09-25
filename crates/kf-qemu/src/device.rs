@@ -195,11 +195,11 @@ impl Device {
             kf_chip::MmuFormat::Ver2 => kf_cuda::abi::kf_format_ver2(),
             kf_chip::MmuFormat::Ver3 => kf_cuda::abi::kf_format_ver3(),
         };
-        let kernel = kf_cuda::walk::WalkKernel::bring_up(kf_cuda::walk::WalkCfg::default(), fmt)
+        let mut kernel = kf_cuda::walk::WalkKernel::bring_up(kf_cuda::walk::WalkCfg::default(), fmt)
             .map_err(|e| format!("GPU walker bring-up: {e}"))?;
         let store = rm.reserve_gpga(fb_length).map_err(|e| format!("store of {} MiB refused: {e:?}", cfg.fb_mb))?;
         let export = rm.export_to_new_fd(store.handle).map_err(|e| format!("store export: {e:?}"))?;
-        let store_ptr = kernel
+        kernel
             .import_store(export.fd_number(), fb_length)
             .map_err(|e| format!("store import into the walker: {e}"))?;
         // The export node stays open for the process (CUDA holds the import).
@@ -207,7 +207,7 @@ impl Device {
         // ★ Our two roots, zeroed on the GPU (the pages are ours: no CPU read, no guest table).
         let zero = vec![0u8; kf_chip::bar0::ROOT_PAGE_BYTES as usize];
         for root in [layout.bar1_pde_base, layout.bar2_pde_base] {
-            kernel.write_at(store_ptr + root, &zero).map_err(|e| format!("zeroing our root @{root:#x}: {e}"))?;
+            kernel.write_store(root, &zero).map_err(|e| format!("zeroing our root @{root:#x}: {e}"))?;
         }
         let ram: &'static crate::mem::RamMap = Box::leak(Box::default());
         let inbox = std::sync::Arc::new(crate::mem::Inbox::new()?);
@@ -338,7 +338,6 @@ impl Device {
             rm,
             family,
             store.handle,
-            store_ptr,
             &layout,
             cfg.bar1_bytes,
             cfg.bar2_bytes,
@@ -346,7 +345,7 @@ impl Device {
             inbox,
             mirrors,
         )?;
-        let walker = kf_mem::vasmgr::GpuWalker { kernel, store_ptr, store_bytes: fb_length };
+        let walker = kf_mem::vasmgr::GpuWalker { kernel };
         // ★ P6b (b): coverage at the family's smallest GMMU page.
         let mut va: crate::mem::Manager = kf_mem::vasmgr::VaManager::new(
             walker,
@@ -371,7 +370,7 @@ impl Device {
             .set_root(crate::mem::K_BAR1, layout.bar1_pde_base, kf_trap::PdbAperture::Vidmem)
             .map_err(|e| format!("our BAR1 root: {e:?}"))?;
         eprintln!(
-            "kf3: P4 memory plane: store {} MiB @dev {store_ptr:#x}, roots bar1={:#x} bar2={:#x}, PRAMIN one map+mmap per move, trigger @{:#x}",
+            "kf3: P4 memory plane: store {} MiB (imported into the walker), roots bar1={:#x} bar2={:#x}, PRAMIN one map+mmap per move, trigger @{:#x}",
             cfg.fb_mb,
             layout.bar1_pde_base,
             layout.bar2_pde_base,

@@ -1,11 +1,11 @@
-//! ★★★ **The ledger of OUR OWN host mappings, and the planner that diffs the walk against it.**
+//! ★★★ **Where our host mappings land, and how a walked leaf becomes one.**
 //!
-//! v3 §4.2 (w825 box): *"Diff the guest's live tables against our ledger. Nothing of the guest's is
-//! copied; the only previous state is a record of our own actions."* The walk says what the guest's
-//! tables say NOW; [`Ledger`] is what WE have mapped; [`plan_reconcile`] is the difference; the apply
-//! is deferred maps/unmaps and ONE TLB invalidate.
-//!
-//! The planners are copied from the old tree's `storemap.rs` (pure, tested there); the ledger is v3's.
+//! ⊘ 2026-09-25: this file used to hold the CPU ledger of our placements and `plan_reconcile`,
+//! which diffed every FULL walk against it on the CPU — O(rows) per invalidate, quadratic over
+//! `--ce-client-guest-ram` (`V3_P5_PORT_MAP.md` Q8). Both are gone: the walk kernel now diffs the
+//! guest's tables against the placements the host CONFIRMED (held by the GPU, committed on ack —
+//! `kf_cuda::diffmodel`), and [`crate::apply`] applies that diff. What stays here is what every
+//! target needs: the [`Desired`] row, the leaf → row classification, and the [`MapTarget`] verbs.
 
 /// One mapping a walk says the guest's tables currently express, as a slice of one of the two
 /// ground truths: the reserved store (`ram == false`, `off` = GPGA offset) or the guest-RAM
@@ -90,249 +90,17 @@ pub fn desired_from_leaves(
         .collect()
 }
 
-/// Sort and merge half-open `[a, b)` ranges; touching ranges merge; empty ones are dropped.
-#[must_use]
-pub fn merge_ranges(mut r: Vec<(u64, u64)>) -> Vec<(u64, u64)> {
-    r.retain(|(a, b)| b > a);
-    r.sort_unstable();
-    let mut out: Vec<(u64, u64)> = Vec::with_capacity(r.len());
-    for (a, b) in r {
-        match out.last_mut() {
-            Some(last) if a <= last.1 => last.1 = last.1.max(b),
-            _ => out.push((a, b)),
-        }
-    }
-    out
-}
-
-/// What [`plan_reconcile`] asks for. Unmaps are applied FIRST.
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct ReconcilePlan {
-    /// `(va, len)` of ledger slices to take down.
-    pub unmap: Vec<(u64, u64)>,
-    /// Desired runs to map.
-    pub map: Vec<Desired>,
-    /// Ledger slices left exactly as they are.
-    pub kept: usize,
-}
-
-/// Whether `[start, start+len)` mapped to `[off, off+len)` is fully covered by `rows`
-/// (sorted `(va, file_offset, len)`), each row agreeing on the offset. See
-/// [`StoreMapPort::ram_stale`].
-#[must_use]
-pub fn ram_slice_backed(start: u64, off: u64, len: u64, rows: &[(u64, u64, u64)]) -> bool {
-    backed_from(start, off, len, rows, first_reaching(rows, start, ends_sorted(rows)))
-}
-
-/// ★ P5c: whether the rows' ENDS ascend with their starts — true of every disjoint sorted set (a
-/// walk's leaves, our ledger's rows). Only then may a search skip the rows that end at or before a
-/// point; otherwise the scan starts at 0, exactly as before.
-fn ends_sorted(rows: &[(u64, u64, u64)]) -> bool {
-    rows.windows(2).all(|w| w[0].0.saturating_add(w[0].2) <= w[1].0.saturating_add(w[1].2))
-}
-
-/// ★ P5c: the first row that ends AFTER `start` (every row before it would be skipped by the scan
-/// anyway) — `O(log n)` where the linear scan was `O(n)`, which made the reconcile `O(n²)` in the
-/// space's rows: `[measured c2, 9a3e499d]` `plan_avg_us` 3 108 at ~2 400 rows, and the raw client's
-/// `--ce-client-guest-ram` declares 13 000.
-fn first_reaching(rows: &[(u64, u64, u64)], start: u64, sorted_ends: bool) -> usize {
-    if sorted_ends { rows.partition_point(|&(va, _, rlen)| va.saturating_add(rlen) <= start) } else { 0 }
-}
-
-/// [`ram_slice_backed`]'s scan, from row `from` on.
-fn backed_from(start: u64, off: u64, len: u64, rows: &[(u64, u64, u64)], from: usize) -> bool {
-    let Some(end) = start.checked_add(len) else {
-        return false;
-    };
-    let mut at = start;
-    for &(va, foff, rlen) in &rows[from.min(rows.len())..] {
-        if at >= end {
-            break;
-        }
-        let Some(rend) = va.checked_add(rlen) else {
-            return false;
-        };
-        if rend <= at {
-            continue;
-        }
-        if va > at {
-            return false;
-        }
-        let delta = at - va;
-        if foff.checked_add(delta) != off.checked_add(at - start) {
-            return false;
-        }
-        at = rend.min(end);
-    }
-    at >= end
-}
-
-/// ★★★★★ **The pure half of the reconcile — no GPU, fully testable.**
-///
-/// `ledger` is every slice this port holds in one VA space, `(va, len, off, ram)`; `desired`
-/// is the COMPLETE state a walk reported for that space. A ledger slice is kept iff desired
-/// runs of the SAME ground truth back every byte of it at the same offsets; every other slice
-/// is unmapped. A desired run already backed by kept slices is left alone; otherwise every kept
-/// slice that overlaps it is unmapped too and the run is mapped whole — a FIXED map over a live
-/// slice is refused by RM, so overlap is resolved here, not discovered there.
-#[must_use]
-pub fn plan_reconcile(ledger: &[(u64, u64, u64, bool)], desired: &[Desired]) -> ReconcilePlan {
-    let rows = |ram: bool| -> Vec<(u64, u64, u64)> {
-        let mut v: Vec<(u64, u64, u64)> = desired
-            .iter()
-            .filter(|d| d.ram == ram)
-            .map(|d| (d.va, d.off, d.len))
-            .collect();
-        v.sort_unstable();
-        v
-    };
-    let (want_store, want_ram) = (rows(false), rows(true));
-    let (ws_sorted, wr_sorted) = (ends_sorted(&want_store), ends_sorted(&want_ram));
-    let mut plan = ReconcilePlan::default();
-    let mut kept: Vec<(u64, u64, u64, bool)> = Vec::new();
-    for &(va, len, off, ram) in ledger {
-        let (want, sorted) = if ram { (&want_ram, wr_sorted) } else { (&want_store, ws_sorted) };
-        if backed_from(va, off, len, want, first_reaching(want, va, sorted)) {
-            kept.push((va, len, off, ram));
-        } else {
-            plan.unmap.push((va, len));
-        }
-    }
-    kept.sort_unstable();
-    // ★★ P5c: a desired run is completed by mapping ONLY its uncovered gaps — never by dropping
-    // the kept rows under it and re-mapping it whole. Sound because a kept row is backed, byte for
-    // byte at the same offset, by desired runs of its ground truth, and desired runs are disjoint
-    // (one leaf per VA): so a kept row overlapping `d` agrees with `d` over the overlap, and no
-    // kept row of the OTHER ground truth can overlap `d` at all.
-    // ⊘ `[measured e2, 1a93c1df]` the old rule re-mapped a run every time the walk coalesced one
-    // more adjacent page into it: `unmapped=5579` for `mapped=8611` while the guest only ADDED
-    // rows, `apply_avg_us` 397 — the host map of an ever-longer run, per invalidate.
-    let spans: Vec<(u64, u64)> = kept.iter().map(|&(va, len, _, _)| (va, va.saturating_add(len))).collect();
-    let spans_sorted = spans.windows(2).all(|w| w[0].1 <= w[1].1 && w[0].0 <= w[1].0);
-    for d in desired {
-        let d_end = d.va.saturating_add(d.len);
-        let from = if spans_sorted { spans.partition_point(|&(_, e)| e <= d.va) } else { 0 };
-        let mut at = d.va;
-        let mut cover: Vec<(u64, u64)> = Vec::new();
-        for &(kva, kend) in &spans[from.min(spans.len())..] {
-            if spans_sorted && kva >= d_end {
-                break;
-            }
-            if kva < d_end && d.va < kend {
-                cover.push((kva.max(d.va), kend.min(d_end)));
-            }
-        }
-        if !spans_sorted {
-            cover.sort_unstable();
-        }
-        for (cs, ce) in cover {
-            if cs > at {
-                plan.map.push(Desired { va: at, len: cs - at, off: d.off + (at - d.va), ram: d.ram });
-            }
-            at = at.max(ce);
-        }
-        if at < d_end {
-            plan.map.push(Desired { va: at, len: d_end - at, off: d.off + (at - d.va), ram: d.ram });
-        }
-    }
-    plan.kept = kept.len();
-    plan
-}
-
-/// ★★★★★ **w826 — a server row, made mappable and made SUBORDINATE to the walk.**
-///
-/// A `GPU_PROMOTE_CTX` row is what RM asked US to map; the walk is what the guest's own
-/// tables say. Two rules, both measured `[w826 m2 cup3: cuCtxCreate 719]`:
-/// 1. **Whole pages.** RM refuses a mapping that is not a page multiple (`0x20409d000+0x8600`
-///    → `Other(19305)`); the C rounds every promote mapping (`nvkvm_gpu_emul.c:7920`). A row
-///    that is 64 KiB-aligned on both sides takes the C's 64 KiB round-up; any other row rounds
-///    to 4 KiB. A row whose VA and backing disagree inside a page cannot be expressed → none.
-/// 2. **The walk wins where both speak.** A row overlapping walked runs contributes only the
-///    pieces the walk left empty — otherwise the two fight over one slice and every pass
-///    unmaps and remaps it (`mapped=1 unmapped=1`, measured).
-///
-/// Returns `(va, len, backing offset)` pieces, page-aligned, ascending.
-#[must_use]
-pub fn server_row_pieces(
-    va: u64,
-    len: u64,
-    phys: u64,
-    walked: &[(u64, u64)],
-) -> Vec<(u64, u64, u64)> {
-    const PAGE: u64 = 0x1000;
-    const BIG: u64 = 0x1_0000;
-    if len == 0 || (va % PAGE) != (phys % PAGE) {
-        return Vec::new();
-    }
-    let lead = va % PAGE;
-    let (va, phys, len) = (va - lead, phys - lead, len + lead);
-    let grain = if va % BIG == 0 && phys % BIG == 0 { BIG } else { PAGE };
-    let Some(end) = len.checked_next_multiple_of(grain).and_then(|l| va.checked_add(l)) else {
-        return Vec::new();
-    };
-    let mut cover: Vec<(u64, u64)> = walked
-        .iter()
-        .filter(|(w, l)| *l > 0 && *w < end && w.saturating_add(*l) > va)
-        .map(|&(w, l)| (w, w.saturating_add(l)))
-        .collect();
-    cover.sort_unstable();
-    let mut out = Vec::new();
-    let mut at = va;
-    for (s, e) in cover {
-        if s > at {
-            out.push((at, s.min(end) - at, phys + (at - va)));
-        }
-        at = at.max(e);
-        if at >= end {
-            break;
-        }
-    }
-    if at < end {
-        out.push((at, end - at, phys + (at - va)));
-    }
-    out
-}
-
-/// One mapping WE placed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Placed {
-    /// Length in bytes.
-    pub len: u64,
-    /// Offset in the backing object (store offset, or guest-RAM file offset).
-    pub off: u64,
-    /// Backed by guest RAM rather than the store.
-    pub ram: bool,
-}
-
-/// What one [`Ledger::apply`] did.
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct Applied {
-    /// Maps placed.
-    pub mapped: usize,
-    /// Maps removed.
-    pub unmapped: usize,
-    /// Operations the host refused (the ledger reflects only what landed).
-    pub refused: usize,
-    /// The first refusal, by name.
-    pub first_refusal: Option<String>,
-    /// Whether the batch's single invalidate ran.
-    pub invalidated: bool,
-    /// ★ P6b: maps the host answered [`Mapped::HeldByHost`] — satisfied, never recorded.
-    pub held: usize,
-}
-
-/// ★★★ **What one [`MapTarget::map`] did** — P6b ruling (a): *the ledger records ONLY mappings
-/// we made.*
+/// ★★★ **What one [`MapTarget::map`] did** — P6b ruling (a): *only mappings we made are ours.*
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mapped {
-    /// The host placed OUR mapping: record it (and later unmap it).
+    /// The host placed OUR mapping (its diff entry is acknowledged APPLIED; a later diff unmaps it).
     Placed,
     /// ★ A FIXED map onto a VA the host already holds. The guest's statement is satisfied — the
     /// C's own semantic (`nvkvm_gpu_emul.c:7935-7938`, *"the VA is ALREADY mapped in the host
     /// VASpace"*) — but the holder is NOT us, so no row is recorded: `[measured p6s1]` recording
     /// one made its later unmap a host refusal (`unmap 0x121050000: Other(87)`), because the
     /// mapping at that VA was never ours to take down. ⊘ Nothing resolves THROUGH such a VA
-    /// either ([`Ledger::resolve`] answers `None`): we do not know what backs it.
+    /// either (a target's own row record never holds it): we do not know what backs it.
     ///
     /// ⊘ A VA held by one of OUR OWN VMM placements (a Translated ring, a window) never reaches
     /// here: [`MapTarget::reserved`] makes the VA manager refuse such a row by name BEFORE the
@@ -340,18 +108,19 @@ pub enum Mapped {
     HeldByHost,
 }
 
-/// ★★★ **Where a reconcile's operations land** — `V3_P4_PORT_MAP.md` §2.3(b).
+/// ★★★ **Where a diff's operations land** — `V3_P4_PORT_MAP.md` §2.3(b).
 ///
-/// [`Ledger::apply`] was hard-wired to [`kf_host::HostRm`]. The P4 composition (the invalidate →
-/// walk → reconcile → clear step, [`crate::vasmgr`]) must be testable with no GPU, and §2.3's
-/// BAR windows are a second target of the same plan (`CpuWindow`), so the verbs are a trait.
+/// The P4 composition (the invalidate → walk → apply → clear step, [`crate::vasmgr`]) must be
+/// testable with no GPU, and §2.3's BAR windows are a second target of the same diff
+/// (`CpuWindow`), so the verbs are a trait.
 /// ⊘ Every verb is one WE author (§9): a guest value never reaches a host flag word here —
 /// `defer` is ours, the backing is decided by `Desired::ram`.
 pub trait MapTarget {
     /// Map `d` at `d.va`, deferring the TLB invalidate when `defer`.
     ///
-    /// [`Mapped::Placed`] is a mapping WE made (the ledger records it); [`Mapped::HeldByHost`]
-    /// is a VA the host already held, which is NOT ours and is never recorded (ruling (a), P6b).
+    /// [`Mapped::Placed`] is a mapping WE made (acknowledged APPLIED); [`Mapped::HeldByHost`]
+    /// is a VA the host already held, which is NOT ours (ruling (a), P6b): acknowledged HELD, so
+    /// its later UNMAP never reaches the host.
     ///
     /// # Errors
     /// The host's refusal, by name.
@@ -434,7 +203,7 @@ impl MapTarget for HostVas<'_> {
             // ★ P6: a FIXED map onto a VA host RM already holds satisfies the guest's statement —
             // the C's semantic (`nvkvm_gpu_emul.c:7935-7938`) — rather than stranding its
             // invalidate (a hang, `[measured p6a]`). ★ P6b ruling (a): but it is NOT ours, so it
-            // is reported as such and the ledger records no row for it.
+            // is reported as such and acknowledged HELD.
             Err(kf_host::RmError::Other(kf_host::VA_ALREADY_MAPPED)) => Ok(Mapped::HeldByHost),
             Err(e) => Err(format!("map {:#x}+{:#x}: {e:?}", d.va, d.len)),
         }
@@ -450,206 +219,5 @@ impl MapTarget for HostVas<'_> {
         self.rm
             .invalidate_tlb(self.space)
             .map_err(|e| format!("invalidate: {e:?}"))
-    }
-}
-
-/// ★ The ledger of OUR OWN mappings in one host VA space — never a copy of the guest's tables.
-#[derive(Debug, Default)]
-pub struct Ledger {
-    placed: std::collections::BTreeMap<u64, Placed>,
-}
-
-impl Ledger {
-    /// `(va, len, off, ram)` rows, for [`plan_reconcile`].
-    #[must_use]
-    pub fn rows(&self) -> Vec<(u64, u64, u64, bool)> {
-        self.placed.iter().map(|(&va, p)| (va, p.len, p.off, p.ram)).collect()
-    }
-
-    /// ★ Where `[va, va+len)` lives in OUR mappings: `(ram, offset)` — the store offset (or
-    /// guest-RAM file offset) of `va`, when ONE placed row covers the whole range. This is how a
-    /// Translated channel finds the bytes behind a guest VA (its GPFIFO, a pushbuffer segment):
-    /// through what WE mapped, never a stored copy of the guest's tables (§24.2). `None` for a
-    /// range we did not map, or that crosses rows (the caller reads row by row).
-    #[must_use]
-    pub fn resolve(&self, va: u64, len: u64) -> Option<(bool, u64)> {
-        let (&start, p) = self.placed.range(..=va).next_back()?;
-        let end = va.checked_add(len)?;
-        (end <= start.checked_add(p.len)?).then(|| (p.ram, p.off + (va - start)))
-    }
-
-    /// Mappings held.
-    #[must_use]
-    pub fn len(&self) -> usize {
-        self.placed.len()
-    }
-
-    /// Nothing held.
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.placed.is_empty()
-    }
-
-    /// ★ Execute `plan` in `space`: every unmap and map DEFERS its TLB invalidate, and the batch
-    /// ends with ONE [`kf_host::HostRm::invalidate_tlb`] (v3 §4.2). Unmaps run first. The ledger
-    /// records only what the host actually did; a refusal is counted and named, never assumed.
-    /// ⊘ Now a thin wrapper over [`Ledger::apply_to`] with a [`HostVas`] target.
-    pub fn apply(
-        &mut self,
-        rm: &kf_host::HostRm,
-        space: kf_host::VaSpace,
-        store: u32,
-        ram_obj: Option<u32>,
-        plan: &ReconcilePlan,
-    ) -> Applied {
-        self.apply_to(&HostVas { rm, space, store, ram_obj }, plan)
-    }
-
-    /// ★ Execute `plan` against any [`MapTarget`]: deferred unmaps, then deferred maps, then ONE
-    /// invalidate when anything changed. The ledger records only what the target accepted.
-    pub fn apply_to(&mut self, target: &dyn MapTarget, plan: &ReconcilePlan) -> Applied {
-        let mut out = Applied::default();
-        let refuse = |out: &mut Applied, what: String| {
-            out.refused += 1;
-            out.first_refusal.get_or_insert(what);
-        };
-        for &(va, len) in &plan.unmap {
-            match target.unmap(va, true) {
-                Ok(()) => {
-                    self.placed.remove(&va);
-                    out.unmapped += 1;
-                }
-                Err(e) => refuse(&mut out, format!("{e} (len {len:#x})")),
-            }
-        }
-        for d in &plan.map {
-            match target.map(d, true) {
-                Ok(Mapped::Placed) => {
-                    self.placed.insert(d.va, Placed { len: d.len, off: d.off, ram: d.ram });
-                    out.mapped += 1;
-                }
-                // ★ Ruling (a): only mappings WE made are ledger rows.
-                Ok(Mapped::HeldByHost) => out.held += 1,
-                Err(e) => refuse(&mut out, e),
-            }
-        }
-        if out.mapped + out.unmapped > 0 {
-            match target.invalidate() {
-                Ok(()) => out.invalidated = true,
-                Err(e) => refuse(&mut out, e),
-            }
-        }
-        out
-    }
-}
-
-
-#[cfg(test)]
-mod plan_tests {
-    use super::*;
-
-    /// Apply `plan` to `ledger` and check the result expresses `desired` exactly: rows disjoint,
-    /// every row agrees with the desired run under it (same ground truth, same offset), and every
-    /// desired byte is covered.
-    fn check(ledger: &[(u64, u64, u64, bool)], desired: &[Desired], plan: &ReconcilePlan) {
-        let mut rows: std::collections::BTreeMap<u64, (u64, u64, bool)> =
-            ledger.iter().map(|&(va, len, off, ram)| (va, (len, off, ram))).collect();
-        for &(va, _) in &plan.unmap {
-            assert!(rows.remove(&va).is_some(), "unmap of {va:#x}, which is not held");
-        }
-        for d in &plan.map {
-            assert!(rows.insert(d.va, (d.len, d.off, d.ram)).is_none(), "map over a held row at {:#x}", d.va);
-        }
-        let v: Vec<(u64, u64, u64, bool)> = rows.iter().map(|(&va, &(len, off, ram))| (va, len, off, ram)).collect();
-        for w in v.windows(2) {
-            assert!(w[0].0 + w[0].1 <= w[1].0, "overlapping rows {w:x?}");
-        }
-        for &(va, len, off, ram) in &v {
-            let want: Vec<(u64, u64, u64)> =
-                desired.iter().filter(|d| d.ram == ram).map(|d| (d.va, d.off, d.len)).collect();
-            let mut want = want;
-            want.sort_unstable();
-            assert!(ram_slice_backed(va, off, len, &want), "row {va:#x}+{len:#x} is not what the walk says");
-        }
-        for d in desired {
-            let have: Vec<(u64, u64, u64)> =
-                v.iter().filter(|r| r.3 == d.ram).map(|&(va, len, off, _)| (va, off, len)).collect();
-            assert!(ram_slice_backed(d.va, d.off, d.len, &have), "desired {d:x?} left unmapped");
-        }
-    }
-
-    /// ⊘ The single-pass planner's hole: a kept row backing TWO runs is dropped for the second,
-    /// and the first — skipped as backed — was left unmapped.
-    #[test]
-    fn a_run_backed_only_by_a_dropped_row_is_remapped() {
-        let ledger = [(0x0, 0x2000, 0x10_0000, false)];
-        let desired = [
-            Desired { va: 0x0, len: 0x1000, off: 0x10_0000, ram: false },
-            Desired { va: 0x1000, len: 0x2000, off: 0x10_1000, ram: false },
-        ];
-        let plan = plan_reconcile(&ledger, &desired);
-        check(&ledger, &desired, &plan);
-        assert_eq!(plan.map, vec![Desired { va: 0x2000, len: 0x1000, off: 0x10_2000, ram: false }], "only the gap");
-    }
-
-    /// A small deterministic generator (no dependency): random disjoint layouts, random edits.
-    #[test]
-    fn random_layouts_reconcile_exactly() {
-        let mut x: u64 = 0x9E37_79B9_7F4A_7C15;
-        let mut next = move || {
-            x ^= x << 13;
-            x ^= x >> 7;
-            x ^= x << 17;
-            x
-        };
-        for _ in 0..400 {
-            let n = (next() % 40) as usize;
-            let mut desired = Vec::new();
-            let mut va = 0u64;
-            for _ in 0..n {
-                va += (next() % 4) * 0x1000;
-                let len = (1 + next() % 4) * 0x1000;
-                desired.push(Desired { va, len, off: (next() % 64) * 0x1000, ram: next() % 3 == 0 });
-                va += len;
-            }
-            // A ledger from an EARLIER layout: some rows equal, some split/merged/shifted.
-            let mut ledger = Vec::new();
-            let mut va = 0u64;
-            for d in &desired {
-                match next() % 5 {
-                    0 => {}
-                    1 if d.len > 0x1000 => {
-                        ledger.push((d.va, 0x1000, d.off, d.ram));
-                    }
-                    2 => ledger.push((d.va, d.len, d.off + 0x1000, d.ram)),
-                    _ => ledger.push((d.va, d.len, d.off, d.ram)),
-                }
-                va = va.max(d.va + d.len);
-            }
-            ledger.push((va + 0x10_0000, 0x1000, 0, false));
-            ledger.sort_unstable();
-            ledger.dedup_by_key(|r| r.0);
-            let plan = plan_reconcile(&ledger, &desired);
-            check(&ledger, &desired, &plan);
-        }
-    }
-
-    /// ★ The throughput this exists for: 13 000 rows reconcile in far under a millisecond each.
-    #[test]
-    fn thirteen_thousand_rows_plan_in_near_linear_time() {
-        let desired: Vec<Desired> =
-            (0..13_000u64).map(|i| Desired { va: 0x1_0000_0000 + i * 0x1000, len: 0x1000, off: i * 0x3000, ram: true }).collect();
-        let ledger: Vec<(u64, u64, u64, bool)> = desired[..12_999].iter().map(|d| (d.va, d.len, d.off, d.ram)).collect();
-        let t = std::time::Instant::now();
-        let plan = plan_reconcile(&ledger, &desired);
-        let el = t.elapsed();
-        assert_eq!((plan.map.len(), plan.unmap.len(), plan.kept), (1, 0, 12_999));
-        // ★ A run that GROWS by one page (the walk coalesced it) maps one page, not the run.
-        let grown = [Desired { va: 0x1_0000_0000, len: 0x3000, off: 0, ram: true }];
-        let plan = plan_reconcile(&[(0x1_0000_0000, 0x2000, 0, true)], &grown);
-        assert_eq!(plan.map, vec![Desired { va: 0x1_0000_2000, len: 0x1000, off: 0x2000, ram: true }]);
-        assert!(plan.unmap.is_empty());
-        eprintln!("PLAN 13000 rows: {el:?}");
-        assert!(el < std::time::Duration::from_millis(200), "{el:?}");
     }
 }

@@ -13,12 +13,14 @@
 //! ## BAR2 / BAR1: [`CpuWindow`], a [`MapTarget`]
 //!
 //! The walk of the BAR's page tables (the GPU walker's, never a CPU read) says what the guest's
-//! tables express; [`crate::ledger::plan_reconcile`] diffs that against OUR placements; the apply
-//! lands here. A map arms a view of exactly the walked run and places it; an unmap re-points the
+//! tables express, diffed ON THE GPU against the placements this window confirmed (commit on ack,
+//! `kf_cuda::diffmodel`); [`crate::apply`] lands the diff here. A map arms a view of exactly the walked run and places it; an unmap re-points the
 //! run to scratch FIRST and only then releases the view's host BAR1 aperture (`0x4F`,
 //! `bar1_simultaneous_view_ceiling.md` Q3 — closing the node is not a release). A refusal is
-//! returned by name, never clamped: the ledger then records only what landed, and the VA manager
-//! leaves the guest's invalidate armed.
+//! returned by name, never clamped: only what landed is acknowledged (so committed), and the VA
+//! manager leaves the guest's invalidate armed. ★ This window's `placed` map is the one CPU record
+//! that must stay: it holds the armed VIEW HANDLES, and releasing a view's host aperture needs the
+//! handle — no diff can carry it.
 //!
 //! ## PRAMIN: [`PraminPool`]
 //!
@@ -210,8 +212,14 @@ impl<V: ViewOps> MapTarget for CpuWindow<V> {
             drop(s);
             match self.ops.release(v) {
                 Ok(()) => self.stats.borrow_mut().released += 1,
-                // The guest can no longer see it; the aperture is leaked, and that is counted.
-                Err(e) => return self.refuse(format!("window unmap {va:#x}: release: {e}")),
+                // ★ The guest can no longer see it (scratch is in place), so the UNMAP happened
+                // and is acknowledged APPLIED; only the aperture is leaked, and that is counted.
+                // ⊘ Answering FAILED would keep a placement the window no longer holds, and every
+                // later diff would re-emit an unmap nothing can satisfy.
+                Err(e) => {
+                    self.stats.borrow_mut().refused += 1;
+                    eprintln!("kf3: window unmap {va:#x}: view release refused ({e}) — aperture leaked, counted");
+                }
             }
         }
         Ok(())

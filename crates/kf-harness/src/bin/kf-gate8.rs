@@ -1,7 +1,7 @@
 //! ★★★★★ **v3 gate 8 — the guest's invalidate completes only after the host mapping is committed.**
 //! (`V3_P4_PORT_MAP.md` §3 rows 2+3; `THE_CONSTRAINTS.md` §49.1; `THE_TRANSLATED_PLANE.md` §5.)
 //!
-//! Gates 2 and 7 proved walk → ledger → reconcile with the harness calling each step by hand.
+//! Gates 2 and 7 proved walk → diff → apply → verdict with the harness calling each step by hand.
 //! This gate drives the same planes the way the guest will: a **vCPU thread** writes the three
 //! `MMU_INVALIDATE` registers into a [`kf_trap::InvalidatePort`] (PDB lo, PDB hi, TRIGGER) and
 //! then spin-reads the trigger exactly as `kgmmuCheckPendingInvalidates` does; the **VA-manager
@@ -30,8 +30,9 @@
 //! on the box is its first evidence.
 
 use kf_cuda::abi::{KfFormat, kf_format_ver2, kf_format_ver3};
-use kf_cuda::walk::{WalkCfg, WalkKernel};
+use kf_cuda::walk::{WalkCfg, WalkEntry, WalkKernel};
 use kf_harness::tables::{Tree, Tree3};
+use kf_harness::publish::Recorded;
 use kf_harness::{CeRig, Ledger as Checks};
 use kf_host::HostRm;
 use kf_linux_raw::{DevDir, Notifier, PollTimeout, Poller, ReadyTokens};
@@ -115,7 +116,7 @@ impl GuestTree {
 /// ★ A real host target that also records whether the guest's trigger still read BUSY at every
 /// host op — the §49.1 ordering, observed from the host side of the reconcile.
 struct Observed<'a> {
-    host: HostVas<'a>,
+    host: Recorded<HostVas<'a>>,
     port: &'a InvalidatePort,
     busy_at_op: RefCell<Vec<bool>>,
 }
@@ -152,9 +153,9 @@ struct Timed {
 }
 
 impl Walker for Timed {
-    fn submit(&mut self, pdbs: &[u64]) -> Result<(), String> {
+    fn submit(&mut self, entries: &[WalkEntry]) -> Result<(), String> {
         let t0 = std::time::Instant::now();
-        let r = self.inner.submit(pdbs);
+        let r = self.inner.submit(entries);
         self.submit_ns.push(u64::try_from(t0.elapsed().as_nanos()).unwrap_or(u64::MAX));
         if r.is_ok() {
             self.in_flight_at_return.push(!self.inner.kernel.gpu_done_now().map_err(|e| e.to_string())?);
@@ -167,6 +168,15 @@ impl Walker for Timed {
             self.gpu_us.push(d.gpu_us);
         }
         Ok(r)
+    }
+    fn ack(&mut self, generation: u64, codes: Vec<u8>) -> Result<(), String> {
+        self.inner.ack(generation, codes)
+    }
+    fn reset(&mut self, slot: u32) -> Result<(), String> {
+        self.inner.reset(slot)
+    }
+    fn slots(&self) -> u32 {
+        self.inner.slots()
     }
 }
 
@@ -302,8 +312,8 @@ fn run(l: &mut Checks) -> Result<(), String> {
 #[allow(clippy::too_many_lines)]
 fn phase(l: &mut Checks, rm: &HostRm, store: u32, tag: &str, fmt: KfFormat, v3: bool) -> Result<(), String> {
     let fd = rm.export_to_new_fd(store).map_err(|e| format!("{tag} export: {e:?}"))?;
-    let kernel = WalkKernel::bring_up(WalkCfg::default(), fmt).map_err(|e| format!("{tag}: {e}"))?;
-    let dptr = kernel.import_store(fd.fd_number(), STORE_BYTES).map_err(|e| format!("{tag}: {e}"))?;
+    let mut kernel = WalkKernel::bring_up(WalkCfg::default(), fmt).map_err(|e| format!("{tag}: {e}"))?;
+    kernel.import_store(fd.fd_number(), STORE_BYTES).map_err(|e| format!("{tag}: {e}"))?;
     let sync0 = kernel.ctx_sync_calls();
 
     // The guest kernel's tables: VA_A -> DATA_A, VA_B -> DATA_B; a SECOND space VA_C -> DATA_A.
@@ -314,7 +324,7 @@ fn phase(l: &mut Checks, rm: &HostRm, store: u32, tag: &str, fmt: KfFormat, v3: 
         tree.map4k(VA_B + i * 4096, DATA_B + i * 4096);
         tree2.map4k(VA_C + i * 4096, DATA_A + i * 4096);
     }
-    let w = |at: u64, b: &[u8]| kernel.write_at(dptr + at, b).map_err(|e| format!("{tag}: {e}"));
+    let w = |at: u64, b: &[u8]| kernel.write_store(at, b).map_err(|e| format!("{tag}: {e}"));
     w(PT_BASE, tree.bytes())?;
     w(PT2_BASE, tree2.bytes())?;
     w(DATA_A, &pattern(0xA5A5_0000))?;
@@ -324,9 +334,9 @@ fn phase(l: &mut Checks, rm: &HostRm, store: u32, tag: &str, fmt: KfFormat, v3: 
     let port = InvalidatePort::new(InvalidateRegs::from_usermode_base(USERMODE_BASE).ok_or("regs")?);
     let space = rm.alloc_vaspace().map_err(|e| format!("{tag} vaspace: {e:?}"))?;
     let space2 = rm.alloc_vaspace().map_err(|e| format!("{tag} vaspace2: {e:?}"))?;
-    let walker = Timed { inner: GpuWalker { kernel, store_ptr: dptr, store_bytes: STORE_BYTES }, submit_ns: vec![], gpu_us: vec![], in_flight_at_return: vec![] };
+    let walker = Timed { inner: GpuWalker { kernel }, submit_ns: vec![], gpu_us: vec![], in_flight_at_return: vec![] };
     let mut m: Mgr<'_> = VaManager::new(walker, STORE_BYTES, Box::new(|_, _| None));
-    let obs = |sp| Observed { host: HostVas { rm, space: sp, store, ram_obj: None }, port: &port, busy_at_op: RefCell::new(vec![]) };
+    let obs = |sp| Observed { host: Recorded::new(HostVas { rm, space: sp, store, ram_obj: None }), port: &port, busy_at_op: RefCell::new(vec![]) };
     m.table.insert(K_MAIN, obs(space));
     m.table.insert(K_SECOND, obs(space2));
     m.table.set_root(K_MAIN, tree.root(), PdbAperture::Vidmem).map_err(|e| format!("{e:?}"))?;
@@ -366,7 +376,7 @@ fn phase(l: &mut Checks, rm: &HostRm, store: u32, tag: &str, fmt: KfFormat, v3: 
     l.check(if v3 { "ver3_copy1_completes_by_event" } else { "ver2_copy1_completes_by_event" }, s.seen_at_wake && s.ce_released, format!("{s:?}"));
     let rd = |m: &Mgr<'_>, at: u64| -> Result<Vec<u8>, String> {
         let mut got = vec![0u8; BYTES as usize];
-        m.walker().inner.kernel.read_at(dptr + at, &mut got).map_err(|e| e.to_string())?;
+        m.walker().inner.kernel.read_store(at, &mut got).map_err(|e| e.to_string())?;
         Ok(got)
     };
     l.check(
@@ -379,8 +389,8 @@ fn phase(l: &mut Checks, rm: &HostRm, store: u32, tag: &str, fmt: KfFormat, v3: 
     for i in 0..PAGES {
         tree.map4k(VA_B + i * 4096, DATA_C + i * 4096);
     }
-    m.walker().inner.kernel.write_at(dptr + PT_BASE, tree.bytes()).map_err(|e| e.to_string())?;
-    m.walker().inner.kernel.write_at(dptr + DATA_B, &vec![0u8; BYTES as usize]).map_err(|e| e.to_string())?;
+    m.walker().inner.kernel.write_store(PT_BASE, tree.bytes()).map_err(|e| e.to_string())?;
+    m.walker().inner.kernel.write_store(DATA_B, &vec![0u8; BYTES as usize]).map_err(|e| e.to_string())?;
     let r2 = round(&mut m, &port, &poller, &req_wake, &main_fire)?;
     println!("MEASURE {tag}_round2 {r2:?}");
     let (mp, um): (usize, usize) = r2.applied.iter().filter(|a| a.0 == K_MAIN).fold((0, 0), |(x, y), a| (x + a.1, y + a.2));
@@ -422,7 +432,7 @@ fn phase(l: &mut Checks, rm: &HostRm, store: u32, tag: &str, fmt: KfFormat, v3: 
     // ── Round 5 (v): ALL_PDB reconciles every rooted space — the second one's first map. ─────
     let r5 = round(&mut m, &port, &poller, &req_wake, &[Fire { pdb: 0, all_pdb: true }])?;
     println!("MEASURE {tag}_round5 {r5:?}");
-    let second = m.table.ledger(K_SECOND).and_then(|g| g.resolve(VA_C, u64::from(BYTES)));
+    let second = m.table.target(K_SECOND).and_then(|g| g.host.resolve(VA_C, u64::from(BYTES)));
     l.check(
         if v3 { "ver3_all_pdb_reconciles_every_rooted_space" } else { "ver2_all_pdb_reconciles_every_rooted_space" },
         r5.cleared == 1 && second == Some((false, DATA_A)) && r5.applied.len() == 2,

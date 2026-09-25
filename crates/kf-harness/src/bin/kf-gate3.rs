@@ -3,7 +3,7 @@
 //! The harness plays the guest kernel's RM CeUtils channel (`THE_TRANSLATED_PLANE.md` §19, §24.2):
 //! its page tables, GPFIFO, pushbuffer, semaphore and USERD all live in the one store object at the
 //! guest's own kernel VAs; its data operands are FB-PHYSICAL. v3's Translated plane must:
-//! - read the guest's GP entries and segments through OUR mappings (ledger VA → store offset);
+//! - read the guest's GP entries and segments through OUR mappings (our placed rows: VA → store offset);
 //! - rewrite PHYSICAL operands onto the identity window and run them on OUR host ring;
 //! - rewrite PHYSICAL SYSMEM operands onto the guest-RAM window (one `OS_DESCRIPTOR` over the
 //!   guest's memfd, §6), both directions;
@@ -22,9 +22,10 @@ use kf_cuda::abi::kf_format_ver2;
 use kf_cuda::walk::{WalkCfg, WalkKernel};
 use kf_harness::Ledger as Checks;
 use kf_harness::tables::Tree;
-use kf_host::{HostRm, VaSpace};
+use kf_host::HostRm;
 use kf_linux_raw::{DevDir, PollTimeout, Poller, ReadyTokens};
-use kf_mem::ledger::{Ledger, desired_from_leaves, plan_reconcile};
+use kf_harness::publish::{Recorded, publish};
+use kf_mem::ledger::HostVas;
 use std::cell::RefCell;
 
 const STORE_BYTES: u64 = 256 << 20;
@@ -84,16 +85,12 @@ fn lo(a: u64) -> u32 {
     (a & 0xFFFF_FFFF) as u32
 }
 
-/// The shared state every adapter needs: the walk kernel's store window and our ledger.
+/// The shared state every adapter needs: the walk kernel (and its store) and our placements.
 struct Guest<'a> {
-    rm: &'a HostRm,
     ram_view: &'a kf_linux_raw::MappedRegion,
     walk: WalkKernel,
-    dptr: u64,
-    ledger: Ledger,
-    space: VaSpace,
-    store: u32,
-    ram_desc: u32,
+    /// The host space, recording the rows WE placed (a Translated reader resolves through them).
+    target: Recorded<HostVas<'a>>,
     root: u64,
     walks: Vec<Option<u64>>,
 }
@@ -101,18 +98,14 @@ struct Guest<'a> {
 impl Guest<'_> {
     fn publish(&mut self, tag: &str) -> Result<(usize, usize), String> {
         let t0 = std::time::Instant::now();
-        let r = self.walk.refresh(self.dptr, STORE_BYTES, &[self.root]).map_err(|e| e.to_string())?;
-        r.validate().map_err(|e| format!("{tag}: report {e}"))?;
         // Guest RAM is one memfd from GPA 0 (no hole in this harness's layout).
         let ram_offset = |gpa: u64, len: u64| gpa.checked_add(len).filter(|&e| e <= RAM_BYTES).map(|_| gpa);
-        let desired = desired_from_leaves(r.runs.iter().map(|m| (m.va, m.gpga, m.len, m.aperture())), STORE_BYTES, &ram_offset)
-            .map_err(|e| format!("{tag}: {e:?}"))?;
-        let plan = plan_reconcile(&self.ledger.rows(), &desired);
-        let a = self.ledger.apply(self.rm, self.space, self.store, Some(self.ram_desc), &plan);
+        let p = publish(&mut self.walk, 0, self.root, &self.target, STORE_BYTES, &ram_offset).map_err(|e| format!("{tag}: {e}"))?;
+        let a = &p.applied;
         println!(
-            "MEASURE publish_{tag} runs={} kept={} mapped={} unmapped={} refused={} us={}{}",
-            r.runs.len(), plan.kept, a.mapped, a.unmapped, a.refused, t0.elapsed().as_micros(),
-            a.first_refusal.map(|f| format!(" FIRST-REFUSAL[{f}]")).unwrap_or_default()
+            "MEASURE publish_{tag} diff_runs={} mapped={} unmapped={} refused={} us={}{}",
+            p.runs, a.mapped, a.unmapped, a.refused, t0.elapsed().as_micros(),
+            a.first_refusal.clone().map(|f| format!(" FIRST-REFUSAL[{f}]")).unwrap_or_default()
         );
         if a.refused > 0 {
             return Err(format!("{tag}: {} refused", a.refused));
@@ -125,11 +118,11 @@ struct Mem<'a, 'b>(&'a RefCell<Guest<'b>>);
 impl GuestMemory for Mem<'_, '_> {
     fn read(&mut self, va: u64, out: &mut [u8]) -> Result<(), String> {
         let g = self.0.borrow();
-        let (ram, off) = g.ledger.resolve(va, out.len() as u64).ok_or(format!("{va:#x} not mapped by us"))?;
+        let (ram, off) = g.target.resolve(va, out.len() as u64).ok_or(format!("{va:#x} not mapped by us"))?;
         if ram {
             return g.ram_view.read_into(kf_linux_raw::HostOffset::new(off), out).map_err(|e| format!("{e:?}"));
         }
-        g.walk.read_at(g.dptr + off, out).map_err(|e| e.to_string())
+        g.walk.read_store(off, out).map_err(|e| e.to_string())
     }
 }
 
@@ -138,13 +131,13 @@ impl GuestUserd for Userd<'_, '_> {
     fn gp_put(&mut self) -> Result<u32, String> {
         let g = self.0.borrow();
         let mut b = [0u8; 4];
-        g.walk.read_at(g.dptr + CHAN + USERD + kf_abi::submit::USERD_GP_PUT, &mut b).map_err(|e| e.to_string())?;
+        g.walk.read_store(CHAN + USERD + kf_abi::submit::USERD_GP_PUT, &mut b).map_err(|e| e.to_string())?;
         Ok(u32::from_le_bytes(b))
     }
     fn set_gp_get(&mut self, v: u32) -> Result<(), String> {
         let g = self.0.borrow();
         g.walk
-            .write_at(g.dptr + CHAN + USERD + kf_abi::submit::USERD_GP_GET, &v.to_le_bytes())
+            .write_store(CHAN + USERD + kf_abi::submit::USERD_GP_GET, &v.to_le_bytes())
             .map_err(|e| e.to_string())
     }
 }
@@ -189,8 +182,8 @@ fn run(l: &mut Checks) -> Result<(), String> {
     let res = rm.reserve_gpga(STORE_BYTES).map_err(|e| format!("reserve: {e:?}"))?;
     let store = res.handle;
     let fd = rm.export_to_new_fd(store).map_err(|e| format!("export: {e:?}"))?;
-    let walk = WalkKernel::bring_up(WalkCfg::default(), kf_format_ver2()).map_err(|e| e.to_string())?;
-    let dptr = walk.import_store(fd.fd_number(), STORE_BYTES).map_err(|e| e.to_string())?;
+    let mut walk = WalkKernel::bring_up(WalkCfg::default(), kf_format_ver2()).map_err(|e| e.to_string())?;
+    walk.import_store(fd.fd_number(), STORE_BYTES).map_err(|e| e.to_string())?;
     let space = rm.alloc_vaspace().map_err(|e| format!("vaspace: {e:?}"))?;
     let t0 = std::time::Instant::now();
     let base = rm.map_window(space, store, STORE_BYTES, true).map_err(|e| format!("identity window: {e:?}"))?;
@@ -220,7 +213,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
     for i in 0..CHAN_PAGES {
         tree.map4k(VA_CHAN + i * 4096, CHAN + i * 4096);
     }
-    let w = |off: u64, b: &[u8]| walk.write_at(dptr + off, b).map_err(|e| e.to_string());
+    let w = |off: u64, b: &[u8]| walk.write_store(off, b).map_err(|e| e.to_string());
     w(PT_BASE, &tree.img.mem)?;
     w(SRC, &pattern(0xC0DE_0000))?;
     w(NEW, &pattern(0x0E1E_0000))?;
@@ -286,7 +279,8 @@ fn run(l: &mut Checks) -> Result<(), String> {
     }
 
     // ── v3: the kernel VAS is mirrored by walking the guest's own tables ─────────────────────
-    let guest = RefCell::new(Guest { rm: &rm, ram_view: &ram_view, walk, dptr, ledger: Ledger::default(), space, store, ram_desc: desc, root, walks: Vec::new() });
+    let target = Recorded::new(HostVas { rm: &rm, space, store, ram_obj: Some(desc) });
+    let guest = RefCell::new(Guest { ram_view: &ram_view, walk, target, root, walks: Vec::new() });
     let (mapped, _) = guest.borrow_mut().publish("boot")?;
     l.check("kernel_vas_published", mapped >= 1, format!("{mapped} runs"));
     let done = kf_chan::completions::Completions::open(&rm, 64)?;
@@ -300,11 +294,11 @@ fn run(l: &mut Checks) -> Result<(), String> {
     for i in 0..BYTES / 4096 {
         t.map4k(VA_NEW + i * 4096, NEW + i * 4096);
     }
-    guest.borrow().walk.write_at(dptr + PT_BASE, &t.img.mem).map_err(|e| e.to_string())?;
+    guest.borrow().walk.write_store(PT_BASE, &t.img.mem).map_err(|e| e.to_string())?;
     let put = |g: &RefCell<Guest>, v: u32| -> Result<(), String> {
         let g = g.borrow();
         g.walk
-            .write_at(g.dptr + CHAN + USERD + kf_abi::submit::USERD_GP_PUT, &v.to_le_bytes())
+            .write_store(CHAN + USERD + kf_abi::submit::USERD_GP_PUT, &v.to_le_bytes())
             .map_err(|e| e.to_string())
     };
     put(&guest, 3)?;
@@ -334,7 +328,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
     let g = guest.borrow();
     let rd = |off: u64, n: usize| -> Result<Vec<u8>, String> {
         let mut b = vec![0u8; n];
-        g.walk.read_at(g.dptr + off, &mut b).map_err(|e| e.to_string())?;
+        g.walk.read_store(off, &mut b).map_err(|e| e.to_string())?;
         Ok(b)
     };
     let word = |off: u64| -> Result<u32, String> {
@@ -368,7 +362,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
     let gp_get = {
         let g = guest.borrow();
         let mut b = [0u8; 4];
-        g.walk.read_at(g.dptr + CHAN + USERD + kf_abi::submit::USERD_GP_GET, &mut b).map_err(|e| e.to_string())?;
+        g.walk.read_store(CHAN + USERD + kf_abi::submit::USERD_GP_GET, &mut b).map_err(|e| e.to_string())?;
         u32::from_le_bytes(b)
     };
     l.check("hostile_entry_not_retired", gp_get == 3, format!("guest GP_GET={gp_get}"));
