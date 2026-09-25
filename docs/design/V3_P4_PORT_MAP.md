@@ -324,6 +324,11 @@ The order is forced:
 - BAR2 stays 32 MiB, but its views count against the same host pool: the budget is `bar1_views + bar2_views + pramin_views ≤ host_bar1 − headroom`.
 
 **Q6. Where does the walk block, and does the delta snapshot go?**
+> ⊘ **SUPERSEDED IN PART 2026-09-25 (`v3-diff`, owner design + COMMIT-ON-ACK):** the walk stays
+> asynchronous as recommended, but "every report is a full report, diffed against the ledger" is
+> replaced — the kernel diffs against the placements the host confirmed (committed per run from
+> the host's verdict) and reports only the diff; the CPU ledger is gone. See `V3_BUILD.md`'s
+> amended rule and `V3_P5_PORT_MAP.md` Q8.
 - `walk.rs:640/660` calls `cuCtxSynchronize` on the caller's stack. The walk kernel also still carries the delta-snapshot handshake (`walk.rs:699-720`, `KFWR_HF_RESYNC`), which `V3_BUILD.md` rules out.
 - **Recommend:**
   - One VA-manager thread owns the walker context.

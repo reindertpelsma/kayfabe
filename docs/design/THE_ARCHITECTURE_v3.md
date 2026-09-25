@@ -962,7 +962,22 @@ addresses. The review gives three independent defeaters, any one of which is fat
 
 ### 4.2 The diff
 
+> ### ★★★★★ CURRENT `[owner design + COMMIT-ON-ACK ruling, 2026-09-25]` — THE GPU SENDS ONLY A DIFF
+>
+> *"The GPU only sends a diff. … the copy the PTX holds, the last snapshot, is in vidmem,
+> maintained by the PTX for compare."* The w825 box below was right that the old snapshot (the
+> previous WALK) was a shadow, and right that the only legitimate previous state is a record of
+> OUR actions — it was wrong only about WHERE that record must live. It now lives in vidmem, per
+> VA-space object (a slot, never a PDB), committed from the host's per-run verdict: the walk
+> diffs the guest's live tables against what the host CONFIRMED it placed; the host applies the
+> diff (deferred maps/unmaps, one invalidate) and acknowledges run by run; a refused map stays a
+> difference and is retried. `kf_cuda::diffmodel` states it; `kf-gate9` holds the GPU to it;
+> `V3_BUILD.md` records the amended rule. ⊘ The CPU `(pdb, va) → handle` ledger of the box below
+> is gone — RM's unmap takes the VA, which the diff carries — except where a diff cannot serve:
+> BAR view handles (`CpuWindow`) and the rows a Translated reader resolves through (`PlacedRows`).
+
 > ### ⊘⊘⊘ SUPERSEDED IN PART `[w825]` — THE SNAPSHOT IS A SHADOW; THE LEDGER REPLACES IT
+> ⊘ **Itself superseded in part by the 2026-09-25 box above:** the ledger is the GPU's.
 >
 > `[fable w825]` flagged the paragraph below as contradicting `THE_TRANSLATED_PLANE.md` §18
 > (owner, w825: *"only gpa and gpga ground truths, the rest is maps"*). It keeps *"a snapshot of

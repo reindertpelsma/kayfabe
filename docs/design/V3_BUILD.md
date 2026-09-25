@@ -12,6 +12,18 @@
   tables/VA mirrors/joins, isolates/IPC plane, publication epochs/dirty gates/sweeps, per-page BAR
   fill traps, **and snapshots of the guest's tables** (the walk kernel's delta snapshot and
   `walkmirror` included — v3 §4.2 w825: *the snapshot is a shadow; the ledger replaces it*).
+  > ⊘ **AMENDED 2026-09-25 (owner design + COMMIT-ON-ACK ruling; branch `v3-diff`).** The rule
+  > above forbade the old walk kernel's snapshot for a reason that still stands: it was the
+  > PREVIOUS WALK — guest table content, installed whether or not the host acted on it (a §18.2
+  > shadow; `walkmirror` was its CPU copy), and the ack was one generation for the whole report.
+  > What the walk kernel now keeps in vidmem is different in kind: per VA-space object, the
+  > placements the host **confirmed it made**, committed run by run from the host's verdict — the
+  > "ledger of our own map handles" §4.2 (w825) itself sanctions, moved beside the walker. The walk
+  > still reads the guest's live tables every time; nothing is served from the record; a stale
+  > entry costs one extra diff line, never a wrong translation. ⇒ The walk emits a **DIFF**
+  > (`kf_cuda::diffmodel` is the spec; `kf-gate9` holds the GPU to it) and the CPU ledger +
+  > `plan_reconcile` are gone (`V3_P5_PORT_MAP.md` Q8). ⊘ Still never copied: `walkmirror`, a
+  > whole-generation ack, anything that installs the walk itself as "previous state".
 - The target is the v3 architecture; **LLM parity is what v3 must deliver**, never a shortcut.
   Temporary breakage is accepted.
 
@@ -47,7 +59,7 @@ host-userspace question only.
 | `kf-trap` | `kayfabe-doorbell` {token, bitmap, wake, ring, trap, trappolicy, shadow, memmap}; the inline passthrough store | thin register adapter (~200 lines) replacing `RegPlane` |
 | `kf-rm` | `kayfabe-device` {inittables, staticinfo, guestsysinfo, inert, unserviced, census, sticky}; `kayfabe-rmrpc` {translate, reasm, fault}; doorbell {rmgraph, accessmap, rpc} | object graph keyed `(hClient,hObject)`; `GPU_GET_NAME_STRING` from the host |
 | `kf-host` | `RmConnection` from `isolate-host/rm.rs` (raw verbs public; no `HostRmBackend`, birth clients, exec VAS); `map_local_at_with_flags` + `invalidate_tlb`; `birth_channel`, `alloc_engine_object`, schedule; `kayfabe-linux-raw` chardev/ioctl/mapping/window/eventfd | deferred **unmap** flag; OS-event / NONSTALL registration |
-| `kf-mem` | existing `kf-mem`; `kayfabe-cuda` + `cuda/walk` kernel (walk only, **no delta snapshot**); storemap pure planners + our-handle ledger + `reconcile_scoped` | our BAR1/BAR2 roots declared in static info; batched map with TLB-defer + one invalidate; scoped walks by named PDB |
+| `kf-mem` | existing `kf-mem`; `kayfabe-cuda` + `cuda/walk` kernel (walk + the commit-on-ack DIFF against confirmed placements — ⊘ 2026-09-25, replaces "no delta snapshot" + the CPU ledger/planners); `reconcile_scoped` | our BAR1/BAR2 roots declared in static info; batched map with TLB-defer + one invalidate; scoped walks by named PDB |
 | `kf-chan` | doorbell {channel, completion, plane, hostverb}; `kayfabe-rt/translated.rs`; birth rules from `kayfabe-fwd` (adoptability by GPGA arithmetic, not bindings); `kayfabe-completion` policy | **Translated execution** (windows, own ring, GP copy, split at MEM_OP); **host event → irqfd → MSI** |
 | `kf-core` | doorbell `vmm.rs` seam | — |
 | `kf-qemu` + `qemu/hw/misc/kf3/` | QOM glue + `KayfabeHostOps` from `nvkvm.c` / `shim_unsafe.rs`; `vmm-qemu` window verbs | device `kf3-gpu`, `kf3_` symbols, `KF_DEVICE` in the 3 harness sites |
@@ -60,7 +72,7 @@ the list below. The full P2/P3 copy order is `V3_P2_PORT_MAP.md`.
 **Dropped outright:** `kayfabe-device/plane.rs` (except GSP dispatch ideas), fbwin/gpgaview/ceresolve/
 gvaspub/pubqueue/mmuinval/bar2/setpagedir, `kayfabe-core` gpu/project/gpa/reactor/promote-join,
 `kayfabe-rt` device/ceutils/completion_watch, `kayfabe-fwd` CE half, isolate crates, barmirror,
-deviceview, walkmirror, delta/ack.
+deviceview, walkmirror, the whole-generation delta/ack (⊘ 2026-09-25: the per-run commit-on-ack diff is a different thing — see the amended rule above).
 
 ## ★★★ Order: the real planes FIRST, graded by a GPU harness — guest boot LAST (owner, w826)
 
