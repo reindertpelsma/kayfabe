@@ -525,8 +525,8 @@ if [ -d "$BOOTS" ]; then
   # for why zero host lines is a result rather than a failure. It is deliberately NOT part of
   # the 3/3 count below: making it one would resurrect the emptiness assertion by the back door.
   [ -f "$HOSTD" ] && cp -f "$HOSTD" "$BOOTS/$(basename "$HOSTD")"
-  if [ "$copied" -ne 3 ]; then
-    DIE_RC=5 die persist "only $copied/3 evidence files reached $BOOTS. ⊘ A BOOTED claim
+  if [ "$copied" -lt 3 ]; then
+    DIE_RC=5 die persist "only $copied (need 3: qemu, dmesg, probe) evidence files reached $BOOTS. ⊘ A BOOTED claim
    whose evidence is not in the tree is prose, not a measurement."
   fi
   say "evidence carried into the repo: $BOOTS/run_${TAG}_{qemu,dmesg,probe,hostdmesg}.log"
