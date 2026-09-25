@@ -771,18 +771,41 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             }
             // ★ P6b: a guest VA may never alias a VMM address (owner rule). Refused BEFORE the
             // host is asked — the host's `VA_ALREADY_MAPPED` would otherwise read as satisfied.
+            //
+            // ★ v3-promote (owner ruling 2026-09-25, Q11): refused PER LEAF — the colliding leaf
+            // fails alone and the rest of the space reconciles. Why a collision is guest-kernel
+            // self-harm at worst, never another process's or the host's: our reserved ranges are
+            // the windows (above anything the guest's MMU format lets it address) and the
+            // Translated ring region, and Translated channels exist only for guest-KERNEL
+            // channels (the Q7 rule) — RM-internal CeUtils spaces and nvidia-uvm's per-GPU
+            // channel-manager space, whose layout UVM fixes per family (`uvm_ampere.c:49-68`:
+            // RM-allocated VAs bottom-up in [0, 128 TiB), flat vidmem 160 TiB, flat sysmem
+            // 256 TiB, uvm_mem 384 TiB; Hopper/Blackwell `uvm_hopper.c:61-81`). HMM and
+            // external-range CPU-VA mirroring happen only in PER-PROCESS UVM spaces, which never
+            // host a Translated channel, so no unprivileged process can place a leaf in a space
+            // holding our rings. ⊘ The space still counts as FAILED for the guest's invalidate
+            // (it stays unacknowledged, named): we never acknowledge a statement we did not carry
+            // out in full.
             let reserved = space.target.reserved();
-            if let Some((d, r)) = desired.iter().find_map(|d| {
+            let collides = |d: &crate::ledger::Desired| {
                 let e = d.va.saturating_add(d.len);
-                reserved.iter().find(|&&(a, b)| d.va < b && a < e).map(|r| (d, *r))
-            }) {
+                reserved.iter().find(|&&(a, b)| d.va < b && a < e).copied()
+            };
+            let before = desired.len();
+            let mut desired = desired;
+            desired.retain(|d| match collides(d) {
+                Some(r) => {
+                    self.stats.vmm_overlaps += 1;
+                    self.stats.refuse(format!(
+                        "{key:?} root {root:#x}: leaf {:#x}+{:#x} overlaps OUR placement [{:#x}, {:#x}) — a guest VA may never alias a VMM address; this leaf alone is refused",
+                        d.va, d.len, r.0, r.1
+                    ));
+                    false
+                }
+                None => true,
+            });
+            if desired.len() != before {
                 failed.insert(key);
-                self.stats.vmm_overlaps += 1;
-                self.stats.refuse(format!(
-                    "{key:?} root {root:#x}: leaf {:#x}+{:#x} overlaps OUR placement [{:#x}, {:#x}) — a guest VA may never alias a VMM address",
-                    d.va, d.len, r.0, r.1
-                ));
-                continue;
             }
             let plan = plan_reconcile(&space.ledger.rows(), &desired);
             let t_apply = std::time::Instant::now();
@@ -1241,6 +1264,7 @@ mod tests {
 
     /// ★ P6b: a walked leaf over one of OUR VMM placements is refused by name before the host is
     /// asked, and the guest's trigger stays armed — never satisfied onto a VMM address.
+    /// ★ v3-promote: per LEAF — the rest of the space still reconciles.
     #[test]
     fn a_leaf_over_a_vmm_placement_is_refused_before_the_host_is_asked() {
         let mut r = rig();
@@ -1251,9 +1275,15 @@ mod tests {
         let q = guest_invalidate(&r.port, PDB_A, false);
         r.m.on_invalidate(q, r.port.trigger());
         let out = r.m.on_walk_ready(r.port.trigger());
-        assert_eq!(out.unreconciled, vec![q.seq]);
+        assert_eq!(out.unreconciled, vec![q.seq], "the guest's statement is not acknowledged");
         assert!(busy(&r.port));
-        assert!(r.ops.borrow().is_empty(), "the host was never asked");
+        // ★ v3-promote (Q11 ruling): the colliding leaf fails ALONE — the rest of the space
+        // reconciles, and the host is never asked about the colliding VA.
+        let ops: Vec<Op> = r.ops.borrow().iter().map(|(o, _)| o.clone()).collect();
+        assert!(ops.contains(&Op::Map(0x1000_0000, 0x0200_0000, 0x1000)), "the innocent leaf is mapped: {ops:?}");
+        assert!(!ops.iter().any(|o| matches!(o, Op::Map(va, ..) if *va >= 0xFF_0000_0000)), "the host was never asked about OUR range");
+        assert_eq!(r.m.table.ledger(K_A).unwrap().resolve(0x1000_0000, 8), Some((false, 0x0200_0000)));
+        assert_eq!(r.m.table.ledger(K_A).unwrap().resolve(0xFF_0010_0000, 8), None);
         assert_eq!(r.m.stats.vmm_overlaps, 1);
         assert!(r.m.stats.refusals[0].contains("may never alias a VMM address"));
     }
