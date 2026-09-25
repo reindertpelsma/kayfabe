@@ -128,7 +128,9 @@ pub fn engine_object(
             Some(ce) if is_copy_engine(ce) => Some(ce),
             _ => return Err(format!("class {class:#x} (DmaCopy) on a GR twin declares no copy engine ({declared_copy:?})")),
         },
-        Kind::Compute | Kind::ThreeD if engine == ENGINE_TYPE_GRAPHICS => None,
+        // ★ v3-gfx: 2D and inline-to-memory are GR-engine objects too (graphics UMDs put them on
+        // their 3D channel); same authored `NV_GR_ALLOCATION_PARAMETERS` (`resource_list.h:2125-2140`).
+        Kind::Compute | Kind::ThreeD | Kind::TwoD | Kind::InlineToMemory if engine == ENGINE_TYPE_GRAPHICS => None,
         k => return Err(format!("class {class:#x} ({k:?}) on a twin of engine {engine:#x}")),
     };
     rm.alloc_engine_object(chan, class, copy).map_err(|e| format!("engine object {class:#x}: {e:?}"))

@@ -376,6 +376,23 @@ impl HostRm {
         self.raw_control(self.subdevice, 0x2080_1210, &mut p)
     }
 
+    /// ★ v3-gfx: `NV2080_CTRL_CMD_GR_CTXSW_ZCULL_BIND` for `chan` on our subdevice — params WE
+    /// author: our client, the twin's channel, the guest's zcull buffer VA (the twin's VA space is
+    /// the guest channel's, VA-identical) and a mode the caller validated (`0..=2`). Host RM binds
+    /// it into the twin's GR context; it programs nothing outside that context
+    /// (`ctrl2080gr.h:589-608`).
+    ///
+    /// # Errors
+    /// The host's status.
+    pub fn zcull_bind(&self, chan: Channel, va: u64, mode: u32) -> Result<(), RmError> {
+        let mut p = [0u8; 24];
+        p[0..4].copy_from_slice(&self.client.raw().to_le_bytes());
+        p[4..8].copy_from_slice(&chan.chan.to_le_bytes());
+        p[8..16].copy_from_slice(&va.to_le_bytes());
+        p[16..20].copy_from_slice(&mode.to_le_bytes());
+        self.raw_control(self.subdevice, 0x2080_1208, &mut p)
+    }
+
     /// ★ w827: `NVA06C_CTRL_CMD_SET_TIMESLICE` on `chan`'s group (`ctrla06c.h:146-152`) — host RM
     /// rounds to what the hardware supports and refuses what it does not.
     ///

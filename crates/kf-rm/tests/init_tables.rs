@@ -470,7 +470,8 @@ fn every_variant_of_the_served_universe_round_trips_through_its_own_control_id()
     // unprivileged GR_GET_ZCULL_INFO. Boot never needed it (its status is clobbered,
     // `kernel_graphics.c:1360`); graphics does — the guest serves the client zcull query from
     // this cache alone (`V3_HEADLESS_GRAPHICS.md` §1.2).
-    assert_eq!(WantedTable::ALL.len(), 48, "the served universe\'s size");
+    // ★ 48 -> 49 at v3-gfx: `0x20801315` FB_GET_GPU_CACHE_INFO, the host's L2 state verbatim.
+    assert_eq!(WantedTable::ALL.len(), 49, "the served universe\'s size");
     let mut ids = std::collections::BTreeSet::new();
     for w in WantedTable::ALL {
         let id = w.cmd_id();

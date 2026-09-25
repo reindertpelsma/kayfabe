@@ -669,6 +669,10 @@ pub enum WantedTable {
     /// client `GR_GET_ZCULL_INFO` is served ONLY from this cache — refused, every GL/Vulkan zcull
     /// query answers `NV_ERR_NOT_SUPPORTED` (`V3_HEADLESS_GRAPHICS.md` §1.2).
     GrZcullInfo,
+    /// ★ v3-gfx: `NV2080_CTRL_CMD_FB_GET_GPU_CACHE_INFO` — 16 bytes, the host's L2 state words
+    /// verbatim (`HostFacts::gpu_cache_info`). `[measured vgfx 2026-09-26]` the GL/Vulkan UMD
+    /// aborts device init when it is refused.
+    FbGetGpuCacheInfo,
     /// `NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER` — ★★★
     /// the only control this port serves in which the guest is **telling us** something
     /// rather than asking: the physical addresses of the page-directory levels it reserved
@@ -1093,7 +1097,7 @@ impl WantedTable {
     ///
     /// [`WantedTable::cmd_id`] remains the mechanism on the other side — exhaustive over
     /// `Self`, so a new variant does not compile until it has an id.
-    pub const ALL: [WantedTable; 48] = [
+    pub const ALL: [WantedTable; 49] = [
         Self::DeviceInfo,
         Self::IntrKernelTable,
         Self::PciBarInfo,
@@ -1119,6 +1123,7 @@ impl WantedTable {
         Self::GrFecsRecordSize,
         Self::GrPdbProperties,
         Self::GrZcullInfo,
+        Self::FbGetGpuCacheInfo,
         Self::GvaspaceServerReservedPdes,
         Self::GvaspaceServerReservedPdesClient,
         Self::GrContextBuffersInfo,
@@ -1200,6 +1205,7 @@ impl WantedTable {
                 grstatic::NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_PDB_PROPERTIES
             }
             Self::GrZcullInfo => grstatic::NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_ZCULL_INFO,
+            Self::FbGetGpuCacheInfo => crate::hostquery::NV2080_CTRL_CMD_FB_GET_GPU_CACHE_INFO,
             Self::GvaspaceServerReservedPdes => {
                 gvaspacepdes::NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER
             }
@@ -1279,6 +1285,7 @@ impl WantedTable {
             Self::GrFecsRecordSize => grstatic::FECS_RECORD_SIZE_PARAMS_SIZE,
             Self::GrPdbProperties => grstatic::PDB_PROPERTIES_PARAMS_SIZE,
             Self::GrZcullInfo => grstatic::ZCULL_INFO_PARAMS_SIZE,
+            Self::FbGetGpuCacheInfo => 16,
             Self::GvaspaceServerReservedPdes | Self::GvaspaceServerReservedPdesClient => {
                 gvaspacepdes::COPY_SERVER_RESERVED_PDES_PARAMS_SIZE
             }
@@ -2127,6 +2134,10 @@ impl CommandPolicy for InitTablePolicy {
                 Some(row) => grstatic::encode_zcull_info(row),
                 None => return refuse(),
             },
+            WantedTable::FbGetGpuCacheInfo => match self.host.gpu_cache_info {
+                Some(w) => w.iter().flat_map(|v| v.to_le_bytes()).collect(),
+                None => return refuse(),
+            },
             // ★★★ The publication arm — the one control here whose reply is a function of
             // the REQUEST rather than of the chip. It is decoded, validated against
             // `ctrl90f1.h`'s own stated rules, and re-encoded from the decoded fields; an
@@ -2275,9 +2286,14 @@ impl CommandPolicy for InitTablePolicy {
                     ram_type: self.host.memory_system.ram_type,
                     ltc_count: self.host.memory_system.ltc_count,
                 };
-                let Ok(answers) = geometry.forwarded_answers() else {
+                let Ok(derived) = geometry.forwarded_answers() else {
                     return refuse();
                 };
+                // ★ v3-gfx: plus the host's own answers for the geometry indices the derivation
+                // does not cover (`HostFacts::forwarded_fb_info` — PARTITION_COUNT is what the
+                // GL/Vulkan UMD asks, `[measured vgfx 2026-09-26]`).
+                let mut answers = derived.to_vec();
+                answers.extend(self.host.forwarded_fb_info.iter().filter(|(i, _)| !derived.iter().any(|(d, _)| d == i)));
                 match kf_abi::fbinfo::answer_fb_get_info_v2(
                     &cmd.payload[at..at + kf_abi::fbinfo::FB_GET_INFO_V2_PARAMS_SIZE],
                     &answers,

@@ -145,6 +145,7 @@ pub mod vbios;
 pub mod versions;
 pub mod view;
 pub mod wire;
+pub mod zbc;
 
 pub use guest_os::{
     ClientKindRule, ClientKindRuleUnknown, GUEST_OS_CONFIG_NAMES, GuestOs, UnknownGuestOsName,

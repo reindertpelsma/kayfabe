@@ -932,6 +932,33 @@ impl ChanPlane {
                     }),
                 )
             }
+            ChanStatement::ZcullBind { client, channel, va, mode } => {
+                // GR twins only (zcull is GR context state), the channel or its whole group.
+                let twins: Vec<kf_host::Channel> = self
+                    .pt
+                    .lock()
+                    .map(|m| {
+                        m.iter()
+                            .filter(|(k, v)| k.0 == client && (k.1 == channel || v.tsg == Some(channel)) && v.engine == kf_abi::submit::ENGINE_TYPE_GRAPHICS)
+                            .map(|(_, v)| v.chan)
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                if twins.is_empty() {
+                    return ChanAnswer::NotOurs;
+                }
+                self.defer(
+                    "zcull bind",
+                    Box::new(move |me: &ChanPlane| {
+                        for c in &twins {
+                            me.rm
+                                .zcull_bind(*c, va, mode)
+                                .map_err(|e| (NV_ERR_NOT_SUPPORTED, format!("twin host {:#x} ZCULL_BIND va={va:#x} mode={mode}: {e:?}", c.token)))?;
+                        }
+                        Ok(format!("{client:#x}:{channel:#x} ZCULL_BIND va={va:#x} mode={mode} on {} GR twin(s)", twins.len()))
+                    }),
+                )
+            }
             ChanStatement::Timeslice { client, object, us } => {
                 let twins: Vec<kf_host::Channel> = self
                     .pt

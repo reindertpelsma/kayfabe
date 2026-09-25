@@ -15,8 +15,19 @@ use kf_chip::Family;
 use kf_rm::HostFacts;
 use kf_rm::hostquery::{HostControls, HostRefusal, query_host_facts};
 
-/// The host session as the [`HostControls`] seam: every control on OUR subdevice.
-struct Session<'a>(&'a kf_host::HostRm);
+/// The host session as the [`HostControls`] seam: every control on OUR subdevice — except
+/// `GF100_ZBC_CLEAR` (`0x9096xxxx`) controls, which go to a ZBC object this session allocates on
+/// first use and frees on drop (★ v3-gfx: only `GET_ZBC_CLEAR_TABLE_SIZE` is ever asked — the
+/// ranges; the host's table itself is never read or written).
+struct Session<'a>(&'a kf_host::HostRm, Option<u32>);
+
+impl Drop for Session<'_> {
+    fn drop(&mut self) {
+        if let Some(h) = self.1.take() {
+            let _ = self.0.free(h);
+        }
+    }
+}
 
 /// The `NV_STATUS` an [`kf_host::RmError`] carries, when it carries one.
 ///
@@ -33,8 +44,25 @@ fn nv_status(e: &kf_host::RmError) -> Option<u32> {
 
 impl HostControls for Session<'_> {
     fn control(&mut self, cmd: u32, params: &mut [u8]) -> Result<(), HostRefusal> {
+        let object = if cmd >> 16 == 0x9096 {
+            match self.1 {
+                Some(h) => h,
+                None => {
+                    let want = self.0.mint();
+                    let h = self
+                        .0
+                        .raw_alloc(self.0.subdevice(), want, 0x9096, &mut [])
+                        .map_err(|e| HostRefusal { status: nv_status(&e), detail: format!("GF100_ZBC_CLEAR alloc: {e:?}") })?;
+                    self.0.remember(h, self.0.subdevice());
+                    self.1 = Some(h);
+                    h
+                }
+            }
+        } else {
+            self.0.subdevice()
+        };
         self.0
-            .raw_control(self.0.subdevice(), cmd, params)
+            .raw_control(object, cmd, params)
             .map_err(|e| HostRefusal { status: nv_status(&e), detail: format!("{e:?}") })
     }
 }
@@ -46,7 +74,7 @@ impl HostControls for Session<'_> {
 /// a reply that did not decode, or a family an authored rule has no number for. ⊘ Never a
 /// default, never a GA106 row: the VM must not start on a guessed device.
 pub fn host_facts(rm: &kf_host::HostRm, family: Family) -> Result<HostFacts, String> {
-    query_host_facts(&mut Session(rm), family).map_err(|e| e.to_string())
+    query_host_facts(&mut Session(rm, None), family).map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
