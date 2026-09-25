@@ -394,10 +394,16 @@ impl MapTarget for HostVas<'_> {
         } else {
             self.store
         };
-        self.rm
-            .map(self.space, obj, kf_host::MapBacking::SharedSlice, d.off, d.len, Some(d.va), defer)
-            .map(|_| ())
-            .map_err(|e| format!("map {:#x}+{:#x}: {e:?}", d.va, d.len))
+        match self.rm.map(self.space, obj, kf_host::MapBacking::SharedSlice, d.off, d.len, Some(d.va), defer) {
+            Ok(_) => Ok(()),
+            // ★ P6: a FIXED map onto a VA host RM already holds is SUCCESS — the C does exactly
+            // this (`nvkvm_gpu_emul.c:7935-7938`, "the VA is ALREADY mapped in the host VASpace"),
+            // and a stock guest reaches it when two of its allocations round into one 64 KiB page:
+            // the row is already there, so the reconcile is satisfied rather than stranded (which
+            // left the guest's TLB-invalidate armed forever — a hang, `[measured p6a]`).
+            Err(kf_host::RmError::Other(kf_host::VA_ALREADY_MAPPED)) => Ok(()),
+            Err(e) => Err(format!("map {:#x}+{:#x}: {e:?}", d.va, d.len)),
+        }
     }
 
     fn unmap(&self, va: u64, defer: bool) -> Result<(), String> {
