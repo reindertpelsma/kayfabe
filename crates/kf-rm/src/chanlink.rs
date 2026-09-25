@@ -215,6 +215,12 @@ impl ChannelPolicy {
             {
                 self.kernel_clients.insert(h.handle);
             }
+            eprintln!(
+                "kf-rm: chanlink: client {:#x} root: kernel={} internal={}",
+                h.handle,
+                self.kernel_clients.contains(&h.handle),
+                is_rm_internal_client(h.handle)
+            );
             return None;
         }
         // ⊘ P5b: a class the boundary refuses is never carried — the object seat refuses it next,

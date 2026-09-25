@@ -34,7 +34,7 @@
 //! irqfd — `Device::latch_and_deliver`. ⊘ Never forged, never inline: a host NSI is the only
 //! trigger, and it carries no channel identity (RM's waiters re-check their semaphores).
 
-use crate::mem::{Mirror, Mirrors, RamMap, resolve_placed};
+use crate::mem::{Mirror, Mirrors, RamMap, resolve_placed_prefix};
 use crate::raw_unsafe::RawRegion;
 use kf_chan::completions::Completions;
 use kf_chan::host::{ChanError, GuestUserd, HostRing, Publisher, TranslatedChannel};
@@ -152,15 +152,27 @@ struct Mem<'a> {
 impl GuestMemory for Mem<'_> {
     fn read(&mut self, va: u64, out: &mut [u8]) -> Result<(), String> {
         let len = out.len() as u64;
-        let (ram, off) = resolve_placed(&self.mirror.rows, va, len).ok_or_else(|| format!("{va:#x}+{len:#x} not placed by us"))?;
-        if !ram {
-            // ⊘ Q3: a vidmem pushbuffer would need a GPU read (the walker's context lives on the VA
-            // thread). RM's CeUtils puts GPFIFO + pushbuffer in SYSMEM by default
-            // (`ogkm-580: mem_utils_gm107.c:779-791`), so this is refused by name, not guessed at.
-            return Err(format!("{va:#x}: pushbuffer/GPFIFO in VIDMEM (store {off:#x}) — GPU read not wired"));
+        // ★ P5b: piece by piece across OUR rows — a segment may span two adjacent placements.
+        let mut done = 0u64;
+        while done < len {
+            let at_va = va + done;
+            let (ram, off, avail) = resolve_placed_prefix(&self.mirror.rows, at_va)
+                .ok_or_else(|| format!("{va:#x}+{len:#x}: {at_va:#x} not placed by us"))?;
+            if !ram {
+                // ⊘ Q3: a vidmem pushbuffer would need a GPU read (the walker's context lives on the
+                // VA thread). RM's CeUtils puts GPFIFO + pushbuffer in SYSMEM by default
+                // (`ogkm-580: mem_utils_gm107.c:779-791`), so this is refused by name, not guessed.
+                return Err(format!("{at_va:#x}: pushbuffer/GPFIFO in VIDMEM (store {off:#x}) — GPU read not wired"));
+            }
+            let n = avail.min(len - done);
+            let (mem, at) = self.ram.at_file_offset(off, n).ok_or_else(|| format!("{at_va:#x}: guest-RAM offset {off:#x} unregistered"))?;
+            let dst = &mut out[done as usize..(done + n) as usize];
+            if !mem.read_into(at, dst) {
+                return Err(format!("{at_va:#x}: guest-RAM read"));
+            }
+            done += n;
         }
-        let (mem, at) = self.ram.at_file_offset(off, len).ok_or_else(|| format!("{va:#x}: guest-RAM offset {off:#x} unregistered"))?;
-        mem.read_into(at, out).then_some(()).ok_or_else(|| format!("{va:#x}: guest-RAM read"))
+        Ok(())
     }
 }
 

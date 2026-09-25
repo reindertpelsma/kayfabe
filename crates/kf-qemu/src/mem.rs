@@ -311,6 +311,18 @@ pub fn resolve_placed(rows: &PlacedRows, va: u64, len: u64) -> Option<(bool, u64
     (end <= start.checked_add(rlen)?).then(|| (ram, off + (va - start)))
 }
 
+/// ★ P5b: the placement covering `va` — `(ram, offset of va, bytes of the row left from va)`.
+/// A read that crosses from one of OUR rows into the next (two 4 KiB placements adjacent in VA)
+/// walks them piece by piece. `[measured p5bs --concurrency]` a 0x60-byte scrubber segment at
+/// `…6fb8` crossed a page into the next row and killed the channel as "not placed by us".
+#[must_use]
+pub fn resolve_placed_prefix(rows: &PlacedRows, va: u64) -> Option<(bool, u64, u64)> {
+    let r = rows.read().ok()?;
+    let (&start, &(rlen, off, ram)) = r.range(..=va).next_back()?;
+    let end = start.checked_add(rlen)?;
+    (va < end).then(|| (ram, off + (va - start), end - va))
+}
+
 /// ★ A mirrored host VA space: the reconcile's target, and the row record beside it.
 pub struct GpuMirror {
     /// The host VA space and its objects.
