@@ -25,6 +25,9 @@ use kf_abi::submit::{
 };
 
 /// `NV01_CONTEXT_DMA` (`ogkm-580: class/cl0002.h:40`).
+/// `NVOS04_FLAGS_CHANNEL_DENY_PHYSICAL_MODE_CE_TRUE` at `7:7` (`ogkm-580 alloc_channel.h:168-170`).
+pub const NVOS04_FLAGS_CHANNEL_DENY_PHYSICAL_MODE_CE_TRUE: u32 = 1 << 7;
+
 const NV01_CONTEXT_DMA: u32 = 0x0000_0002;
 /// `NV2080_CTRL_CMD_DMA_INVALIDATE_TLB` (`ogkm-580: ctrl2080dma.h`).
 const NV2080_CTRL_CMD_DMA_INVALIDATE_TLB: u32 = 0x2080_2502;
@@ -205,7 +208,14 @@ impl HostRm {
             h_object_error: ring.err_notifier,
             gp_fifo_offset: ring.gp_fifo_va,
             gp_fifo_entries: ring.gp_fifo_entries,
-            flags: 0,
+            // ★ P6b: DENY physical-mode CE on EVERY channel we birth (Translated rings and
+            // Passthrough twins alike) — `NVOS04_FLAGS_CHANNEL_DENY_PHYSICAL_MODE_CE` 7:7
+            // (`ogkm-580 alloc_channel.h:158-170`: "regardless of whether or not the client handle
+            // is admin" — the VMM's is). No operand we author is physical (the rewriter turns
+            // them into window VAs), so this only ever stops one that ESCAPED the rewriter from
+            // reaching host physical memory: `[measured p6b8]` UVM's CE launches on subchannel 4
+            // escaped a subchannel-keyed rewriter, verbatim and physical, with no Xid.
+            flags: NVOS04_FLAGS_CHANNEL_DENY_PHYSICAL_MODE_CE_TRUE,
             h_context_share: 0,
             h_va_space: 0,
             h_userd_memory_0: ring.userd_memory,

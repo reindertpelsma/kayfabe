@@ -200,3 +200,26 @@ fn the_uvm_sw_class_is_consumed_and_foreign_classes_are_refused() {
     let mut st = CeState::default();
     assert_eq!(rewrite(&pb, is_ce, &mut st, &W), Err(Refusal::ForeignClass { subch: 2, class: 0xc7c0 }));
 }
+
+/// ★★★★★ P6b: nvidia-uvm binds its CE on subchannel 0 and pushes every CE method on subchannel
+/// 4 (`uvm_maxwell_ce.c:31-36`, `uvm_push_macros.h:84-85`). A physical launch there MUST be
+/// rewritten onto the window — `[measured p6b8]` it was forwarded verbatim, aimed at host
+/// physical memory.
+#[test]
+fn uvm_binds_the_ce_on_subchannel_0_and_launches_on_4_and_is_still_rewritten() {
+    let mut pb = m(0, 0, &[CE_CLASS]); // SET_OBJECT on subchannel 0
+    pb.extend(m(4, ce::SET_DST_PHYS_MODE, &[0])); // LOCAL_FB
+    pb.extend(m(4, ce::OFFSET_OUT_UPPER, &[0x0, 0x20_1000]));
+    pb.extend(m(4, ce::LINE_LENGTH_IN, &[0x8]));
+    pb.extend(m(4, ce::LAUNCH_DMA, &[ce::LAUNCH_DST_PHYSICAL | ce::LAUNCH_DST_PITCH | 0x2]));
+    let wr = writes(&rewrite(&pb, is_ce, &mut CeState::default(), &W).unwrap());
+    let li = wr.iter().position(|&(mm, _)| mm == ce::LAUNCH_DMA).unwrap();
+    assert_eq!(wr[li].1 & ce::LAUNCH_DST_PHYSICAL, 0, "rewritten to VIRTUAL");
+    assert_eq!(wr[li - 1], (0x40c, ((WIN + 0x20_1000) & 0xFFFF_FFFF) as u32), "onto the window");
+    // A software subchannel no SET_OBJECT bound is refused, never forwarded.
+    let pb = m(6, 0x300, &[0x2]);
+    assert_eq!(
+        rewrite(&pb, is_ce, &mut CeState::default(), &W),
+        Err(Refusal::UnboundSubchannel { subch: 6, method: 0x300 })
+    );
+}
