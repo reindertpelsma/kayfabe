@@ -29,7 +29,8 @@ for f in sys.argv[1:]:
             if key == 'LLM_TEXT_SHA256': SHA[(kind, n)].add((lane, val))
             elif key == 'LLM_TEXT': TEXT[(lane, kind, n)] = val
             elif key in ('LLM_MS', 'LLM_TOKENS', 'LLM_T_IMPORT_MS', 'LLM_T_CUINIT_MS',
-                         'LLM_T_LOAD_MS', 'LLM_T_TODEV_MS', 'LLM_T_PROC_MS', 'LLM_OK'):
+                         'LLM_T_LOAD_MS', 'LLM_T_TODEV_MS', 'LLM_T_PROC_MS', 'LLM_OK',
+                         'LLM_KVM_EXITS', 'LLM_DOORBELLS'):
                 try: M[k + (key,)].append(float(val))
                 except ValueError: pass
             continue

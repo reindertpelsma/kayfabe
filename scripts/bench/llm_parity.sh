@@ -65,12 +65,28 @@ hook)
 esac
 
 echo "LP_START lane=$LANE date=$(date -Is) model=$MODEL snapshot=[${SNAP% }] short=$SHORT_PROCS long=$LONG x$LONG_PROCS warm=$WARM"
+QLOG=${BENCH_DIR:-/workspace/bench}/run_${2:-none}_qemu.log   # hook mode: $2 is boot_capture's tag
+ledger_sum() { grep -a 'DOORBELL-LEDGER' "$QLOG" 2>/dev/null | sed -n 's/.* forwarded=\([0-9]*\).*/\1/p' | awk '{s+=$1} END{print s+0}'; }
 one() {  # $1 kind, $2 ntok, $3 proc, rest: env
     local k=$1 n=$2 i=$3; shift 3
     local t0 t1 out rc
+    local cp="" pc="" d0=0
+    if [ "$MODE" = hook ] && [ "${LP_COUNT:-1}" = 1 ]; then
+        # per-process KVM exit count (a counting tracepoint, not a record) and the device's own
+        # doorbell ledger (lines are printed as each channel is freed, i.e. at process exit)
+        d0=$(ledger_sum); cp=$(mktemp)
+        perf stat -e kvm:kvm_exit -x, -o "$cp" -p "$(pgrep -x qemu-system-x86 | head -1)" 2>/dev/null &
+        pc=$!
+    fi
     t0=$(date +%s%N)
     out=$(run LLM_NTOK="$n" "$@"); rc=$?
     t1=$(date +%s%N)
+    if [ -n "$pc" ]; then
+        kill -INT "$pc" 2>/dev/null; wait "$pc" 2>/dev/null; sleep 2
+        echo "LP lane=$LANE kind=$k ntok=$n proc=$i LLM_KVM_EXITS=$(grep -a 'kvm_exit' "$cp" | cut -d, -f1)"
+        echo "LP lane=$LANE kind=$k ntok=$n proc=$i LLM_DOORBELLS=$(( $(ledger_sum) - d0 ))"
+        rm -f "$cp"
+    fi
     echo "$out" | grep -a '^LLM_\|^TORCH_' | sed "s/^/LP lane=$LANE kind=$k ntok=$n proc=$i /"
     echo "LP_EXT lane=$LANE kind=$k ntok=$n proc=$i ext_ms=$(( (t1 - t0) / 1000000 )) rc=$rc"
     grep -q '^LLM_OK=1' <<<"$out" || echo "$out" | tail -20 | sed "s/^/LP_FAILTAIL lane=$LANE kind=$k ntok=$n proc=$i /"
@@ -82,4 +98,19 @@ done
 for n in $(echo "$GRAPH" | tr ',' ' '); do
     for i in $(seq 1 "$GRAPH_PROCS"); do RUNNER=run_llm_graph.py one graph "$n" "$i" LLM_REPS="$WARM"; done
 done
+# LP_PERF_NTOK=N (hook mode): one EXTRA, untimed-for-the-table process of N tokens (cold + 1 warm)
+# with `perf kvm stat record` on the QEMU process — the exit-reason breakdown — and the
+# DOORBELL-LEDGER forwarded total before/after, so exits and doorbells per token are measured
+# on the same process. ⊘ Recording every exit perturbs timing: this row is kind=perf, never a
+# parity row.
+if [ "$MODE" = hook ] && [ -n "${LP_PERF_NTOK:-}" ]; then
+    QPID=$(pgrep -x qemu-system-x86 | head -1)
+    PD=${LP_PERF_DIR:-/tmp}/lp_perf_$$; mkdir -p "$PD"
+    perf kvm stat record -p "$QPID" -o "$PD/perf.data" >/dev/null 2>"$PD/rec.err" &
+    PP=$!; sleep 2
+    one perf "$LP_PERF_NTOK" 1 LLM_TIMELINE=1 LLM_MIN_NTOK=1 LLM_REPS=1
+    kill -INT "$PP"; wait "$PP" 2>/dev/null
+    perf kvm stat report -i "$PD/perf.data" --event=vmexit 2>&1 | sed "s/^/LP_PERFKVM /" | head -40
+    echo "LP_PERF_ERR $(tail -2 "$PD/rec.err" | tr '\n' ' ')"
+fi
 echo "LP_DONE lane=$LANE date=$(date -Is)"
