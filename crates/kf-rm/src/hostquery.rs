@@ -59,6 +59,15 @@ pub trait HostControls {
     /// # Errors
     /// [`HostRefusal`] — the host's own refusal.
     fn control(&mut self, cmd: u32, params: &mut [u8]) -> Result<(), HostRefusal>;
+
+    /// Issue an `NV0080` control on the host DEVICE object. Default: refused (a test double that
+    /// answers only subdevice controls).
+    ///
+    /// # Errors
+    /// [`HostRefusal`].
+    fn device_control(&mut self, cmd: u32, _params: &mut [u8]) -> Result<(), HostRefusal> {
+        Err(HostRefusal { status: None, detail: format!("{cmd:#x}: no device-level controls on this session") })
+    }
 }
 
 /// Why one field could not be filled.
@@ -306,6 +315,53 @@ pub fn query_video_falcons(host: &mut dyn HostControls, kinds: &[EngineKind]) ->
         .map_err(|_| FieldCause::Reply(FactRefusal::Unservable { cmd, why: "falcon count overruns constructedFalconsTable[]" }))?;
     let wanted: Vec<u32> = kinds.iter().filter_map(|&k| video_eng_desc(k)).collect();
     Ok(rows.into_iter().filter(|f| wanted.contains(&f.eng_desc)).collect())
+}
+
+/// ★ `video_clocks` — the host's answer to the GSS-legacy clock query (`kf_abi::videoclk`) for
+/// each domain in `CLOCK_DOMAINS`, with a request WE author. A refused or unrecognised answer
+/// leaves that domain out (the guest's query for it is then refused): never fatal to the device.
+pub fn query_video_clocks(host: &mut dyn HostControls) -> Vec<kf_abi::videoclk::ClockAnswer> {
+    use kf_abi::videoclk as vc;
+    let mut out = Vec::new();
+    for &d in vc::CLOCK_DOMAINS {
+        let mut p = vc::host_request(d);
+        match host.control(vc::GSS_PERF_CLOCK_QUERY, &mut p) {
+            Ok(()) => match vc::decode_host_reply(d, &p) {
+                Some(a) => out.push(a),
+                None => eprintln!("kf3: host facts: clock domain {d:#x}: the host's reply is not the measured shape — not served"),
+            },
+            Err(e) => eprintln!("kf3: host facts: clock domain {d:#x} refused by the host ({e:?}) — not served"),
+        }
+    }
+    out
+}
+
+/// ★ `video_caps` — the host's `MSENC_GET_CAPS_V2` (instance 0; the id is documented ignored) and
+/// `BSP_GET_CAPS_V2` for every advertised decoder instance, asked on the host DEVICE with requests
+/// we author (`kf_abi::videocaps`). A refused one is left out (the guest's is then refused).
+pub fn query_video_caps(host: &mut dyn HostControls, kinds: &[EngineKind]) -> Vec<kf_abi::videocaps::CapsAnswer> {
+    use kf_abi::videocaps as vc;
+    let mut asks: Vec<(u32, u32)> = Vec::new();
+    if kinds.iter().any(|k| matches!(k, EngineKind::VideoEncode(_))) {
+        asks.push((vc::MSENC_GET_CAPS_V2, 0));
+    }
+    for k in kinds {
+        if let EngineKind::VideoDecode(i) = k {
+            asks.push((vc::BSP_GET_CAPS_V2, *i));
+        }
+    }
+    let mut out = Vec::new();
+    for (cmd, instance) in asks {
+        let mut p = vc::host_request(instance);
+        match host.device_control(cmd, &mut p) {
+            Ok(()) => {
+                let n = vc::caps_len(cmd).unwrap_or(0);
+                out.push(vc::CapsAnswer { cmd, instance, caps: p[..n].to_vec() });
+            }
+            Err(e) => eprintln!("kf3: host facts: {cmd:#x} instance {instance} refused by the host ({e:?}) — not served"),
+        }
+    }
+    out
 }
 
 /// `lce_pce_masks` — `CE_GET_CE_PCE_MASK` for LCE 0, 1, … until the host refuses one (an absent
@@ -837,6 +893,8 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
     let gsp_features = query_gsp_features(host);
     let gpu_name = query_gpu_name(host);
     let gpu_short_name = query_gpu_short_name(host);
+    let video_clocks = query_video_clocks(host);
+    let video_caps = kinds.as_deref().map(|k| query_video_caps(host, k)).unwrap_or_default();
 
     let mut refusals = Vec::new();
     macro_rules! take {
@@ -949,6 +1007,8 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
             gsp_features,
             gpu_name: Some(gpu_name),
             gpu_short_name: Some(gpu_short_name),
+            video_clocks,
+            video_caps,
         }),
         _ => Err(HostFactsRefused { refusals }),
     }

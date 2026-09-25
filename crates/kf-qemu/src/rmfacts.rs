@@ -37,6 +37,12 @@ impl HostControls for Session<'_> {
             .raw_control(self.0.subdevice(), cmd, params)
             .map_err(|e| HostRefusal { status: nv_status(&e), detail: format!("{e:?}") })
     }
+
+    fn device_control(&mut self, cmd: u32, params: &mut [u8]) -> Result<(), HostRefusal> {
+        self.0
+            .raw_control(self.0.device(), cmd, params)
+            .map_err(|e| HostRefusal { status: nv_status(&e), detail: format!("{e:?}") })
+    }
 }
 
 /// ★ Fill [`HostFacts`] from `rm`'s host GPU, whose family realize already chose.

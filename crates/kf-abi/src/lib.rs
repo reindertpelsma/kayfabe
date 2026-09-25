@@ -122,6 +122,8 @@ pub mod grstatic;
 pub mod gspfeatures;
 pub mod gspstaticinfo;
 pub mod gsslegacy;
+pub mod videoclk;
+pub mod videocaps;
 pub mod guest_os;
 pub mod guestsysinfo;
 pub mod gvaspacepdes;

@@ -191,6 +191,12 @@ impl HostRm {
         Ok(())
     }
 
+    /// The session's device handle (`NV01_DEVICE_0` — the object `NV0080` controls address).
+    #[must_use]
+    pub fn device(&self) -> u32 {
+        self.device
+    }
+
     /// The session's subdevice handle (the parent of engine notifiers).
     #[must_use]
     pub fn subdevice(&self) -> u32 {

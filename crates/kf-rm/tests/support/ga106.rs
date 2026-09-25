@@ -482,6 +482,8 @@ pub fn host_facts() -> HostFacts {
         // faithful to what the old device answered. `derive_gpu_name` is checked separately.
         gpu_name: None,
         gpu_short_name: None,
+        video_clocks: Vec::new(),
+        video_caps: Vec::new(),
     }
 }
 

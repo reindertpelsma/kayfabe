@@ -1581,6 +1581,39 @@ impl CommandPolicy for InitTablePolicy {
             });
         }
 
+        // ★ v3-video: the GSS-legacy clock query libnvidia-encode gates a session on, answered
+        // from the HOST's realize-time answers (`kf_abi::videoclk`); a request naming any domain
+        // the host did not answer is refused exactly as before (it stays unserviced).
+        if req.cmd == kf_abi::videoclk::GSS_PERF_CLOCK_QUERY && !kf_abi::rpc_params_are_serialized(req.rmapi_rpc_flags) {
+            let ps = req.params_size as usize;
+            if cmd.payload.len() >= req.params_at + ps {
+                let mut params = cmd.payload[req.params_at..req.params_at + ps].to_vec();
+                match kf_abi::videoclk::answer(&self.host.video_clocks, &mut params) {
+                    Ok(()) => {
+                        let mut body = cmd.payload.clone();
+                        body[CONTROL_STATUS_OFF..CONTROL_STATUS_OFF + 4].copy_from_slice(&NV_OK.to_le_bytes());
+                        body[req.params_at..req.params_at + ps].copy_from_slice(&params);
+                        return Some(Reply { rpc_result: NV_OK, body });
+                    }
+                    Err(why) => eprintln!("kf3: GSS clock query {:#010x} not answered: {why:?}", req.cmd),
+                }
+            }
+        }
+        if kf_abi::videocaps::caps_len(req.cmd).is_some() && !kf_abi::rpc_params_are_serialized(req.rmapi_rpc_flags) {
+            let ps = req.params_size as usize;
+            if cmd.payload.len() >= req.params_at + ps {
+                let mut params = cmd.payload[req.params_at..req.params_at + ps].to_vec();
+                match kf_abi::videocaps::answer(&self.host.video_caps, req.cmd, &mut params) {
+                    Ok(()) => {
+                        let mut body = cmd.payload.clone();
+                        body[CONTROL_STATUS_OFF..CONTROL_STATUS_OFF + 4].copy_from_slice(&NV_OK.to_le_bytes());
+                        body[req.params_at..req.params_at + ps].copy_from_slice(&params);
+                        return Some(Reply { rpc_result: NV_OK, body });
+                    }
+                    Err(why) => eprintln!("kf3: video caps {:#010x} not answered: {why:?}", req.cmd),
+                }
+            }
+        }
         let want = WantedTable::from_cmd(req.cmd)?;
 
         // A FINN-serialized payload is not the flat struct these encoders produce. Neither

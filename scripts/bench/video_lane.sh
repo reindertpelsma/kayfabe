@@ -42,12 +42,17 @@ for c in h264 hevc; do
 done
 
 # ---- NVDEC: hwaccel cuda and the cuvid decoders, on the NVENC stream AND on a libx264 stream -------
-run enc_x264 $T "$FF" -hide_banner -y $YUV -i src.yuv -c:v libx264 -qp 23 -g 30 -bf 2 -f h264 enc_x264.bit
+# ⊘ -threads 1: libx264's output depends on its thread count (= the CPU count), which differs
+#   between the host and the guest; single-threaded it is a deterministic function of the input.
+run enc_x264 $T "$FF" -hide_banner -y $YUV -i src.yuv -c:v libx264 -threads 1 -qp 23 -g 30 -bf 2 -f h264 enc_x264.bit
 say "enc_x264.bit md5=$(md5 enc_x264.bit)"
 run swdec_x264 $T "$FF" -hide_banner -y -i enc_x264.bit -f rawvideo -pix_fmt yuv420p swdec_x264.yuv
 say "swdec_x264.yuv md5=$(md5 swdec_x264.yuv)"
 for s in h264 hevc x264; do
-  run hwdec_$s $T "$FF" -hide_banner -y -hwaccel cuda -i enc_$s.bit -f rawvideo -pix_fmt yuv420p hwdec_$s.yuv
+  # ⊘ -hwaccel_output_format cuda + hwdownload: a plain `-hwaccel cuda` FALLS BACK to software
+  #   decode when NVDEC is unusable and still exits 0 — measured, guest vid1. Frames that must be
+  #   downloaded from device memory cannot come from the software decoder.
+  run hwdec_$s $T "$FF" -hide_banner -y -hwaccel cuda -hwaccel_output_format cuda -i enc_$s.bit -vf hwdownload,format=nv12 -f rawvideo -pix_fmt yuv420p hwdec_$s.yuv
   say "hwdec_$s.yuv md5=$(md5 hwdec_$s.yuv) bitexact_vs_sw=$([ "$(md5 hwdec_$s.yuv)" = "$(md5 swdec_$s.yuv)" ] && echo YES || echo NO)"
   dec=h264_cuvid; [ $s = hevc ] && dec=hevc_cuvid
   run cuvid_$s $T "$FF" -hide_banner -y -c:v $dec -i enc_$s.bit -f rawvideo -pix_fmt yuv420p cuvid_$s.yuv

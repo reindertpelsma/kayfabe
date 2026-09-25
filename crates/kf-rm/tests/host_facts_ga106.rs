@@ -165,13 +165,15 @@ fn every_host_fact_states_where_it_comes_from() {
         gsp_features: _,
         gpu_name: _,
         gpu_short_name: _,
+        video_clocks: _,
+        video_caps: _,
     } = ga106::host_facts();
     let fields = [
         "family", "has_c2c", "engines", "lce_pce_masks", "intr_table", "intr_subtree_map",
         "chip_info", "user_register_access_map", "constructed_falcons", "memory_system",
         "device_info", "conf_compute", "bif_static", "fifo_channels", "gmmu_static", "gr_static",
         "gr_info", "gr_context_buffers", "forwarded_gpu_info", "forwarded_fb_info", "smc_mode", "pcie_max_gen",
-        "ce_fault_method_buffer_size", "gsp_features", "gpu_name", "gpu_short_name",
+        "ce_fault_method_buffer_size", "gsp_features", "gpu_name", "gpu_short_name", "video_clocks", "video_caps",
     ];
     for f in fields {
         let n = hostfacts::PROVENANCE.iter().filter(|(name, _)| *name == f).count();
