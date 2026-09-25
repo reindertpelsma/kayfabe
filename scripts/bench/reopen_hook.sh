@@ -34,9 +34,9 @@ echo "REOPEN_START \$(date -Is) m=$M"
 i=1
 while [ \$i -le $M ]; do
   t0=\$(date +%s%N)
-  timeout $PER nvidia-smi -L >/tmp/smi.out 2>&1; src=\$?
+  timeout -k 5 $PER nvidia-smi -L >/tmp/smi.out 2>&1; src=\$?
   t1=\$(date +%s%N)
-  ( cd /tmp && timeout $PER ./cup3 ) >/tmp/cup3.out 2>&1; crc=\$?
+  ( cd /tmp && timeout -k 5 $PER ./cup3 ) >/tmp/cup3.out 2>&1; crc=\$?
   t2=\$(date +%s%N)
   val=\$(sed -n 's/^KERNEL rv=\([0-9]*\) .*/\1/p' /tmp/cup3.out | tail -1)
   fail=\$(grep -m1 '^FAIL' /tmp/cup3.out)
@@ -50,9 +50,18 @@ GUESTEOF
 # concurrent cargo; ServerAlive 60 s) and SIGHUP took the guest loop with it — a HARNESS death
 # that read as a device FAIL. The loop now survives its launcher; only the poll depends on ssh.
 $G 'rm -f /tmp/reopen.out; setsid sh /tmp/reopen_loop.sh </dev/null >/tmp/reopen.out 2>&1 &'
-LIMIT=$(( M * 2 * PER + 120 )); waited=0
+# ⊘ A STALL is its own state: `[measured ed492871, ro_R2 boot 1]` a cup3 stuck IN THE KERNEL
+# (state R, immune to SIGKILL) never lets the loop advance. No new row for 3*PER+60 s ⇒ STALLED.
+LIMIT=$(( M * 2 * PER + 120 )); waited=0; last=-1; still=0
 while [ "$waited" -lt "$LIMIT" ]; do
   $G 'grep -q "^REOPEN_DONE" /tmp/reopen.out' 2>/dev/null && break
+  n=$($G 'grep -c "^REOPEN_ROW" /tmp/reopen.out' 2>/dev/null || echo "$last")
+  if [ "$n" = "$last" ]; then still=$((still + 10)); else still=0; last=$n; fi
+  if [ "$still" -ge $(( 3 * PER + 60 )) ]; then
+    echo "REOPEN_STALLED after_row=$n — no progress for ${still}s"
+    $G 'ps -eo pid,stat,etime,wchan:25,args | grep -E "cup3|nvidia-smi" | grep -v grep' 2>/dev/null | sed 's/^/REOPEN_STUCK /'
+    break
+  fi
   sleep 10; waited=$((waited + 10))
 done
 OUTF=/tmp/reopen_rows.$$
