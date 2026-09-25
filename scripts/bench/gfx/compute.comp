@@ -1,0 +1,8 @@
+#version 450
+layout(local_size_x = 256) in;
+layout(std430, set = 0, binding = 0) readonly buffer In { uint a[]; };
+layout(std430, set = 0, binding = 1) writeonly buffer Out { uint b[]; };
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    b[i] = a[i] * 3u + 1u + (i ^ (i >> 7));
+}
