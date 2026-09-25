@@ -1513,6 +1513,18 @@ fn bar1_bw_probe(rm: &mut HostRmBackend) -> bool {
         mbs(n, ram_r),
         one.as_nanos() as f64 / 4096.0,
     );
+    // ★ While the view is still mapped: the kernel's own record of the caching it granted
+    // (guest PAT, decider 3 only — the timing above is what resolves all deciders).
+    if let Ok(pat) = std::fs::read_to_string("/sys/kernel/debug/x86/pat_memtype_list") {
+        for l in pat.lines().filter(|l| !l.contains("write-back")) {
+            println!("BAR1BW PAT {l}");
+        }
+    }
+    if let Ok(maps) = std::fs::read_to_string("/proc/self/maps") {
+        for l in maps.lines().filter(|l| l.contains("/dev/nvidia")) {
+            println!("BAR1BW MAP {l}");
+        }
+    }
     same && w_ok && r_ok
 }
 
