@@ -123,6 +123,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
         entries: ENTRIES,
         userd: UserdAt::Store { store, off: U_MEM + USERD },
         engine: ENGINE_TYPE_COPY0,
+        err_ctx: 0,
     })?;
     l.measure("birth", format!("token={:#x} us={}", chan.token, t0.elapsed().as_micros()));
     let userd_after = rd(&walk, U_MEM + USERD, 512)?;

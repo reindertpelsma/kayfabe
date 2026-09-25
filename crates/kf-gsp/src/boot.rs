@@ -2135,6 +2135,24 @@ impl GspFsm {
         self.held.len()
     }
 
+    /// ★ P5c: post one `RC_TRIGGERED` event (`NV_VGPU_MSG_EVENT_RC_TRIGGERED`) whose body is
+    /// `payload` (`rpc_rc_triggered_v17_02`, encoded by `kf_abi::rc::RcTriggered`). Unsolicited, so
+    /// `sequence` is 0, as for every event ([`GspFsm::deliver_events`]). The caller raises the GSP
+    /// interrupt after publishing the registers.
+    ///
+    /// # Errors
+    /// As [`GspFsm::post_event`].
+    pub fn post_rc_triggered(&mut self, ram: &mut dyn GuestRam, payload: Vec<u8>) -> Result<(), GspFault> {
+        let rpc = OutgoingRpc {
+            function: self.abi.rpc.codes.rc_triggered,
+            sequence: 0,
+            rpc_result: 0,
+            rpc_result_private: 0,
+            payload,
+        };
+        self.post_event(ram, &rpc)
+    }
+
     pub fn post_event(
         &mut self,
         ram: &mut dyn GuestRam,

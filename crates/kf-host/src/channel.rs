@@ -24,6 +24,8 @@ use kf_abi::submit::{
     NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN, WORK_SUBMIT_TOKEN_PARAMS_SIZE,
 };
 
+/// `NV01_CONTEXT_DMA` (`ogkm-580: class/cl0002.h:40`).
+const NV01_CONTEXT_DMA: u32 = 0x0000_0002;
 /// `NV2080_CTRL_CMD_DMA_INVALIDATE_TLB` (`ogkm-580: ctrl2080dma.h`).
 const NV2080_CTRL_CMD_DMA_INVALIDATE_TLB: u32 = 0x2080_2502;
 /// `hVASpace` offset inside `NV2080_CTRL_DMA_INVALIDATE_TLB_PARAMS`.
@@ -358,6 +360,32 @@ impl HostRm {
         p[0..4].copy_from_slice(&engine_type.to_le_bytes());
         self.raw_control(self.subdevice, 0x2080_2a03, &mut p)?;
         Ok(p[4] & 0x01 != 0)
+    }
+
+    /// ★ P5c: an `NV01_CONTEXT_DMA` over `[offset, offset+len)` of `memory` (a device-parented
+    /// object: the store, or the guest-RAM descriptor) — the error context a host twin names so
+    /// that the host's RC path writes the GUEST's own notifier record natively.
+    ///
+    /// `NV_CONTEXT_DMA_ALLOCATION_PARAMS {hSubDevice, flags, hMemory, offset, limit}`
+    /// (`ogkm-580: nvos.h:1595-1602`); `flags` is authored: read/write, snoop, and
+    /// `HASH_TABLE_DISABLE` (`context_dma.c:224-229` refuses ENABLE). ⊘ No `TYPE_NOTIFIER`: that
+    /// asks the host CPU-RM for a kernel mapping of the range, and the writer here is the host's
+    /// GSP (`kernel_gsp.c:541-545`, `kernel_rc_notification.c:85-89`), never its CPU.
+    ///
+    /// # Errors
+    /// The host's refusal (`NV_ERR_INVALID_LIMIT` past the object).
+    pub fn alloc_context_dma(&self, memory: u32, offset: u64, len: u64) -> Result<u32, RmError> {
+        const NVOS03_FLAGS_HASH_TABLE_DISABLE: u32 = 1 << 29;
+        let limit = len.checked_sub(1).ok_or(RmError::Other(ABI_ENCODE_FAILED))?;
+        let mut p = [0u8; 32];
+        p[4..8].copy_from_slice(&NVOS03_FLAGS_HASH_TABLE_DISABLE.to_le_bytes());
+        p[8..12].copy_from_slice(&memory.to_le_bytes());
+        p[16..24].copy_from_slice(&offset.to_le_bytes());
+        p[24..32].copy_from_slice(&limit.to_le_bytes());
+        let want = self.mint();
+        let h = self.raw_alloc(self.device, want, NV01_CONTEXT_DMA, &mut p)?;
+        self.remember(h, self.device);
+        Ok(h)
     }
 
     /// Free a channel and its group.

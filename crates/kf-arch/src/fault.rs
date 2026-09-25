@@ -101,6 +101,13 @@ pub enum ErrorNotifier {
         /// Guest-physical address of the 16-byte notification record.
         gpa: u64,
     },
+    /// ★ P5c: the notifier lives in the guest's **framebuffer** (`ADDR_FBMEM`) at this offset —
+    /// in v3 an offset into the single store, which the host twin's error context can name
+    /// directly (a context DMA over the store at this offset), so the host writes it natively.
+    Framebuffer {
+        /// Framebuffer offset of the 16-byte notification record.
+        off: u64,
+    },
     /// The channel declared one, and it is somewhere this port has **no write port
     /// for** — device memory, or an aperture the ABI seam does not model.
     ///

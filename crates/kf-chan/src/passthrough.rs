@@ -45,6 +45,9 @@ pub struct GuestChannel {
     pub userd: UserdAt,
     /// The engine it was allocated on (an `NV2080_ENGINE_TYPE`; COPY0 for a user CE).
     pub engine: u32,
+    /// ★ P5c: the host error context (an `NV01_CONTEXT_DMA` over the GUEST's own notifier record,
+    /// `HostRm::alloc_context_dma`), or 0 — the twin's RC record then lands where the guest reads.
+    pub err_ctx: u32,
 }
 
 /// A copy engine: `NV2080_ENGINE_TYPE_COPY0..9` (`0x09..=0x12`) or `COPY10..19` (`0x34..=0x3d`)
@@ -89,7 +92,7 @@ pub fn birth_twin(rm: &HostRm, space: VaSpace, g: GuestChannel) -> Result<Channe
         gp_fifo_entries: g.entries,
         userd_memory,
         userd_offset,
-        err_notifier: 0,
+        err_notifier: g.err_ctx,
     })
     .map_err(|e| format!("birth: {e:?}"))
 }

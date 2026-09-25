@@ -155,6 +155,8 @@ const NOTIFIER_TYPE_MEMORY: u32 = 3;
 /// `NV_ADDR_SYSMEM` — `errorNotifierMem.addressSpace`
 /// (`ogkm-580: src/nvidia/inc/kernel/vgpu/rm_plugin_shared_code.h:65-70`).
 const ADDR_SYSMEM: u32 = 1;
+/// `NV_ADDR_FBMEM` (`rm_plugin_shared_code.h:65-70`) — P5c: the single store.
+const ADDR_FBMEM: u32 = 2;
 
 /// Where the two fields sit in `NV_CHANNEL_ALLOC_PARAMS` at one driver boundary.
 ///
@@ -261,10 +263,14 @@ impl ChannelNotifierWire {
         // A notifier smaller than one record is not one. RM sizes it as
         // `pErrContextMemDesc->Size - errorContextOffset` (`kernel_channel.c:561-563`),
         // so a short value means the guest's own resolution disagrees with itself.
-        if aperture != ADDR_SYSMEM || size < NOTIFICATION_SIZE as u64 {
+        if size < NOTIFICATION_SIZE as u64 {
             return Ok(Some(ErrorNotifier::Unreachable));
         }
-        Ok(Some(ErrorNotifier::Sysmem { gpa: base }))
+        match aperture {
+            ADDR_SYSMEM => Ok(Some(ErrorNotifier::Sysmem { gpa: base })),
+            ADDR_FBMEM => Ok(Some(ErrorNotifier::Framebuffer { off: base })),
+            _ => Ok(Some(ErrorNotifier::Unreachable)),
+        }
     }
 }
 
@@ -687,13 +693,15 @@ mod tests {
         }
     }
 
-    /// A notifier we have no write port for is DECLARED unreachable, never dropped.
+    /// A notifier in an aperture we have no vocabulary for is DECLARED unreachable, never
+    /// dropped; a framebuffer one (P5c) names a store offset.
     #[test]
     fn a_non_sysmem_or_short_notifier_is_unreachable_not_absent() {
         let w = ChannelNotifierWire::V580;
-        // NV_ADDR_FBMEM
-        let fb = params(w, NOTIFIER_TYPE_MEMORY, 0x4000, 64, 2);
-        assert_eq!(w.decode(&fb), Ok(Some(ErrorNotifier::Unreachable)));
+        let fb = params(w, NOTIFIER_TYPE_MEMORY, 0x4000, 64, ADDR_FBMEM);
+        assert_eq!(w.decode(&fb), Ok(Some(ErrorNotifier::Framebuffer { off: 0x4000 })));
+        let peer = params(w, NOTIFIER_TYPE_MEMORY, 0x4000, 64, 3);
+        assert_eq!(w.decode(&peer), Ok(Some(ErrorNotifier::Unreachable)));
         // sysmem, but smaller than one record
         let short = params(w, NOTIFIER_TYPE_MEMORY, 0x4000, 8, ADDR_SYSMEM);
         assert_eq!(w.decode(&short), Ok(Some(ErrorNotifier::Unreachable)));

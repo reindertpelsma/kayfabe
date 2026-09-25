@@ -84,6 +84,8 @@ pub struct Counters {
     pub refused: AtomicU64,
     /// The BAR0 offset of the most recent write.
     pub last_off: AtomicU64,
+    /// ★ P5c: `RC_TRIGGERED` events posted to the guest.
+    pub rc_posted: AtomicU64,
 }
 
 /// Interrupt counters — boot log only.
@@ -773,6 +775,7 @@ impl Device {
                 continue;
             }
             self.release_settled();
+            self.deliver_rc();
             if !self.plane.drainer_wake.try_park(seen) {
                 continue;
             }
@@ -878,6 +881,14 @@ impl Device {
             .filter(|e| e.wakes.load(o) > 0)
             .map(|e| format!("{}:{}/{}raised", e.name, e.wakes.load(o), e.raised.load(o)))
             .collect();
+        let rc = format!(
+            " rc[armed={} unarmed={} wakes={} seen={} posted={}]",
+            self.chans.rc_armed.load(o),
+            self.chans.rc_unarmed.load(o),
+            self.chans.rc_wakes.load(o),
+            self.chans.rc_seen.load(o),
+            self.counters.rc_posted.load(o)
+        );
         let chan = format!(
             " chan[births={} pt_births={} acts={}/{}refused worst_act_us={} nsi=[{}] served={} parks={} host_rings={} contended={} poisoned={} tokens=[{}]]",
             self.chans.births.load(o),
@@ -902,7 +913,7 @@ impl Device {
             ic.out_of_range.load(o)
         );
         format!(
-            "kf3: family={:?} phase={phase} trapped={} applied={} refused={} serviced={} ram_refused={} unshadowed_writes={} last_off={:#x}{mem}{chan}{irq} unserviced=[{}]",
+            "kf3: family={:?} phase={phase} trapped={} applied={} refused={} serviced={} ram_refused={} unshadowed_writes={} last_off={:#x}{mem}{chan}{rc}{irq} unserviced=[{}]",
             self.family,
             c.trapped.load(o),
             c.applied.load(o),
@@ -942,6 +953,67 @@ impl Device {
         }
     }
 
+    /// ★ P5c, on the drainer (the GSP queue's owner): post each host RC event to the guest as
+    /// `RC_TRIGGERED` — what a real GSP sends when its RC path has run (`kernel_gsp.c:541-545`:
+    /// *"RC error handling … is executed in GSP-RM. Client notifications … happen in CPU-RM"*) —
+    /// then publish the registers and raise the GSP's stall vector. The notifier RECORD is already
+    /// in the guest's memory: the host wrote it there (the twin's error context is the guest's
+    /// record), as a GSP does before it sends this. ⊘ Nothing here writes guest memory but the
+    /// message queue; nothing is forged: every event is a record the HOST wrote.
+    fn deliver_rc(&self) {
+        let evs = self.chans.take_rc();
+        if evs.is_empty() {
+            return;
+        }
+        let Ok(mut guard) = self.gsp.lock() else {
+            self.chans.requeue_rc(evs);
+            return;
+        };
+        let g = &mut *guard;
+        let mut ram = Ram(self);
+        let mut back = Vec::new();
+        let mut posted = 0usize;
+        for e in evs {
+            let Some(engine) = kf_abi::rc::EngineRoute::declared(e.engine) else {
+                eprintln!("kf3: RC chid {:#x}: engine type 0 — no route; NOT posted", e.chid);
+                continue;
+            };
+            let ev = kf_abi::rc::RcTriggered {
+                engine,
+                chid: e.chid,
+                except_type: e.except_type,
+                // ⊘ CHANNEL, not TSG: our twin is its own host TSG, so only its record was
+                // written (a guest TSG's other members keep running on their own twins).
+                scope: kf_abi::rc::RC_NOTIFIER_SCOPE_CHANNEL,
+                // ⊘ Not read by the receiver (`_kgspRpcRCTriggered` uses engine, chid, gfid, the
+                // exception, its level and scope); we hold no fault address, so none is invented.
+                mmu_fault_addr: 0,
+                mmu_fault_type: 0,
+            };
+            match g.fsm.post_rc_triggered(&mut ram, ev.encode()) {
+                Ok(()) => {
+                    posted += 1;
+                    self.counters.rc_posted.fetch_add(1, Ordering::Relaxed);
+                    eprintln!("kf3: RC_TRIGGERED posted: guest chid {:#x} engine {:#x} except_type {:#x} (host {:#x})", e.chid, e.engine, e.except_type, e.host_token);
+                }
+                Err(kf_gsp::GspFault::QueueFull { .. }) => back.push(e),
+                Err(f) => eprintln!("kf3: RC_TRIGGERED for chid {:#x} REFUSED by the queue: {f:?}", e.chid),
+            }
+        }
+        if posted > 0 {
+            self.publish(g);
+        }
+        drop(guard);
+        // ★ The interrupt goes AFTER the message and its registers are visible, and outside the
+        // GSP lock (one eventfd write).
+        if posted > 0 {
+            self.latch_and_deliver(kf_rm::authored::GSP_STALL_VECTOR);
+        }
+        if !back.is_empty() {
+            self.chans.requeue_rc(back);
+        }
+    }
+
     /// Stop the device's threads.
     pub fn stop(&self) {
         self.stop.store(true, Ordering::Release);
@@ -972,7 +1044,16 @@ impl Device {
                 eprintln!("kf3: worker: epoll watch of {} refused — its completions are not announced", e.name);
             }
         }
+        // ★ P5c: the RC fd — a host twin's error context was written (its host RC path ran).
+        let rc_tag = kf_chan::worker::OTHER_TAG_BASE + RC_TAG_OFFSET;
+        if poller.watch(self.chans.rc_ev.as_fd(), rc_tag).is_err() {
+            eprintln!("kf3: worker: epoll watch of the RC fd refused — guest channel faults will be SILENT");
+        }
         let on_other = |tag: u64| {
+            if tag == rc_tag {
+                self.chans.rc_scan();
+                return;
+            }
             let Some(e) = tag.checked_sub(kf_chan::worker::OTHER_TAG_BASE).and_then(|i| self.chans.engines.get(i as usize)) else {
                 return;
             };
@@ -989,6 +1070,9 @@ impl Device {
         kf_chan::worker::run(self.plane, self, &poller, self.worker_efd, &self.chans.completions, &self.worker_stats, &self.stop, &on_other);
     }
 }
+
+/// ★ P5c: the RC fd's poller tag, past every engine's (`OTHER_TAG_BASE + engine index`).
+const RC_TAG_OFFSET: u64 = 1 << 16;
 
 /// Guest RAM as the GSP FSM reads it — through the blocks QEMU registered.
 struct Ram<'a>(&'a Device);

@@ -108,6 +108,16 @@ impl EngineRoute {
         self.0
     }
 
+    /// ★ P5c: the route for a channel whose `nv2080EngineType` the guest ITSELF declared at
+    /// allocation (`NV_CHANNEL_ALLOC_PARAMS.engineType`, resolved through its group for
+    /// `ENGINE_TYPE_NULL`) — the exact engine and instance the receiver's `gpuGetRmEngineType`
+    /// maps back. This is the instance [`EngineRoute::for_engine`] lacks for a copy engine: it
+    /// is the guest's own statement, not a guess. `None` for `NV2080_ENGINE_TYPE_NULL` (0).
+    #[must_use]
+    pub fn declared(nv2080_engine_type: u32) -> Option<Self> {
+        (nv2080_engine_type != 0).then_some(EngineRoute(nv2080_engine_type))
+    }
+
     /// The route for `kind`, or `None` when no honest code exists (see the type docs).
     #[must_use]
     pub fn for_engine(kind: EngineKind) -> Option<Self> {

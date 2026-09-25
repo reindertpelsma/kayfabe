@@ -77,6 +77,9 @@ pub struct ChannelAlloc {
     /// ★ P5b: the channel group it was allocated under (`hParent`), when that is a TSG this link
     /// saw allocated — the group `GPFIFO_SCHEDULE` names.
     pub tsg: Option<u32>,
+    /// ★ P5c: the error notifier the guest kernel resolved for it (`errorNotifierMem`) — where a
+    /// GSP writes the channel's robust-channel record (`kernel_channel.c:548-590`).
+    pub error_notifier: Option<kf_arch::fault::ErrorNotifier>,
 }
 
 /// A statement for the channel plane.
@@ -330,6 +333,7 @@ impl ChannelPolicy {
             kernel_client: is_rm_internal_client(h.client),
             declared_kernel_pid: self.kernel_clients.contains(&h.client),
             tsg: tsg.map(|_| h.parent),
+            error_notifier: self.abi.decode_channel_error_notifier(params).ok().flatten(),
         };
         self.carried += 1;
         self.carry_alloc(ChanStatement::Alloc(st), cmd, h.client, h.handle)

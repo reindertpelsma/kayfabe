@@ -79,6 +79,46 @@ struct PtChan {
     objects: HashMap<u32, u32>,
     /// ★ P5c: the mirror's live-channel count (released at free).
     live: Arc<AtomicU64>,
+    /// ★ P5c: the guest's error notifier, as the twin's host error context — `None` when the
+    /// guest declared none (or it could not be armed, named at birth).
+    notifier: Option<PtNotifier>,
+}
+
+/// ★ P5c: a twin's error context: the host `NV01_CONTEXT_DMA` over the guest's notifier record
+/// (the host's RC path writes the record there natively) and a read view of that record's 16 bytes
+/// (the RC plane reads `info32`/`status` to name the event it forwards). ⊘ Read only — the CPU never
+/// writes the record.
+struct PtNotifier {
+    ctx: u32,
+    view: UserdView,
+    /// Already forwarded to the guest (one RC per channel life).
+    reported: bool,
+    /// The record's four words when it was armed: only a record the HOST changed is an event (a
+    /// guest may initialise its notifier to anything).
+    at_arm: [u32; 4],
+}
+
+impl PtNotifier {
+    fn words(&self) -> Option<[u32; 4]> {
+        let mut w = [0u32; 4];
+        for (i, x) in w.iter_mut().enumerate() {
+            *x = self.view.load(4 * i as u64).ok()?;
+        }
+        Some(w)
+    }
+}
+
+/// ★ P5c: one host robust-channel event, bound for the guest as `RC_TRIGGERED`.
+#[derive(Debug, Clone, Copy)]
+pub struct RcEvent {
+    /// The guest's chid (the token-table index).
+    pub chid: u32,
+    /// The guest's declared `nv2080EngineType` for the channel.
+    pub engine: u32,
+    /// `info32` of the record the host wrote — the `ROBUST_CHANNEL_*` code.
+    pub except_type: u32,
+    /// The twin's host token (for the log).
+    pub host_token: u32,
 }
 
 /// ★ P5b §2.7: one host engine's non-stall event, and the guest vector it is announced on.
@@ -306,6 +346,20 @@ pub struct ChanPlane {
     /// doorbell (the `DOORBELL-LEDGER` line at free; atomics only — the vCPU writes them).
     rung: Box<[AtomicU64]>,
     rang: Box<[AtomicU64]>,
+    /// ★ P5c: the host robust-channel event fd — one dataless `NV01_EVENT_OS_EVENT` per twin's
+    /// context DMA (notify index 0: `krcErrorSendEventNotificationsCtxDma_FWCLIENT` walks exactly
+    /// those, `kernel_rc_notification.c:380-400`), all on this fd. A worker's poller watches it.
+    pub rc_ev: kf_host::EventFd,
+    /// ★ P5c: RC events waiting for the register drainer (which owns the GSP queue).
+    rc_queue: Mutex<Vec<RcEvent>>,
+    /// Twins born with the guest's notifier armed as their host error context.
+    pub rc_armed: AtomicU64,
+    /// Twins whose declared notifier could NOT be armed (named at birth) — their faults are silent.
+    pub rc_unarmed: AtomicU64,
+    /// RC records seen on a twin's notifier (host-written).
+    pub rc_seen: AtomicU64,
+    /// Wakes of the RC fd.
+    pub rc_wakes: AtomicU64,
 }
 
 impl ChanPlane {
@@ -369,6 +423,8 @@ impl ChanPlane {
             "kf3: interrupt plane: host non-stall events -> guest vectors [{}]",
             engines.iter().map(|e| format!("{}->{:x?}", e.name, e.vector)).collect::<Vec<_>>().join(" ")
         );
+        // ★ P5c: the RC fd (realize-time host ioctls, never a vCPU).
+        let rc_ev = rm.open_event_fd().map_err(|e| format!("RC event fd: {e:?}"))?;
         Ok(ChanPlane {
             rm,
             plane,
@@ -398,6 +454,12 @@ impl ChanPlane {
             pt_births: AtomicU64::new(0),
             rung: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
             rang: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
+            rc_ev,
+            rc_queue: Mutex::new(Vec::new()),
+            rc_armed: AtomicU64::new(0),
+            rc_unarmed: AtomicU64::new(0),
+            rc_seen: AtomicU64::new(0),
+            rc_wakes: AtomicU64::new(0),
         })
     }
 
@@ -670,6 +732,11 @@ impl ChanPlane {
                 for ((c, h), t) in twins {
                     let r = me.rm.free_channel(t.chan);
                     t.live.fetch_sub(1, Ordering::AcqRel);
+                    // The error context goes AFTER its channel (host RM refuses freeing a context
+                    // DMA a live channel names as its error context).
+                    if let Some(n) = t.notifier {
+                        me.release_notifier(n);
+                    }
                     me.engine_live(t.engine, false);
                     // ★ The per-token hardware ledger (`run_fast_guest.sh` gates on it): every ring
                     // of a Passthrough token IS a host doorbell, so `emulated` is only the rings
@@ -745,7 +812,28 @@ impl ChanPlane {
                 }
                 other => return refuse(NV_ERR_NOT_SUPPORTED, format!("USERD not declared as a physical descriptor ({other:?})")),
             };
-            let g = kf_chan::passthrough::GuestChannel { gpfifo_va: a.gpfifo_va, entries: a.entries.max(1), userd, engine };
+            // ★ P5c: where the guest's error notifier record is, as an object + offset the host
+            // can name — so the twin's RC record is written there by the HOST (its GSP), natively.
+            let err_at: Option<(u32, u64, kf_arch::UserdMem)> = match a.error_notifier {
+                Some(kf_arch::fault::ErrorNotifier::Sysmem { gpa }) => match (mirror.ram_obj, self.ram.file_range(gpa, 16)) {
+                    (Some(ram), Some((_, off))) => Some((ram, off, kf_arch::UserdMem::Sysmem { base: gpa, size: 16 })),
+                    _ => {
+                        self.rc_unarmed.fetch_add(1, Ordering::Relaxed);
+                        eprintln!("kf3: chan {:#x}:{:#x} RC-UNARMED: sysmem notifier @{gpa:#x} has no guest-RAM object/offset", a.client, a.handle);
+                        None
+                    }
+                },
+                Some(kf_arch::fault::ErrorNotifier::Framebuffer { off }) => {
+                    Some((self.store, off, kf_arch::UserdMem::Framebuffer { base: off, size: 16 }))
+                }
+                Some(kf_arch::fault::ErrorNotifier::Unreachable) => {
+                    self.rc_unarmed.fetch_add(1, Ordering::Relaxed);
+                    eprintln!("kf3: chan {:#x}:{:#x} RC-UNARMED: the declared notifier is in an aperture we cannot name", a.client, a.handle);
+                    None
+                }
+                None => None,
+            };
+            let g0 = kf_chan::passthrough::GuestChannel { gpfifo_va: a.gpfifo_va, entries: a.entries.max(1), userd, engine, err_ctx: 0 };
             let space = mirror.space;
             // ★ P5c: counted NOW (on the drainer, in statement order), so a VA-space free that
             // follows can never recycle the space under a birth still queued.
@@ -754,10 +842,15 @@ impl ChanPlane {
             return self.defer(
                 "birth passthrough",
                 Box::new(move |me: &ChanPlane| {
+                    let notifier = err_at.and_then(|(obj, off, at)| me.arm_notifier(a.client, a.handle, obj, off, at));
+                    let g = kf_chan::passthrough::GuestChannel { err_ctx: notifier.as_ref().map_or(0, |n| n.ctx), ..g0 };
                     let chan = match kf_chan::passthrough::birth_twin(me.rm, space, g) {
                         Ok(c) => c,
                         Err(e) => {
                             live.fetch_sub(1, Ordering::AcqRel);
+                            if let Some(n) = notifier {
+                                me.release_notifier(n);
+                            }
                             return Err((NV_ERR_INSUFFICIENT_RESOURCES, e));
                         }
                     };
@@ -770,16 +863,20 @@ impl ChanPlane {
                     if let Err(e) = alloc {
                         let _ = me.rm.free_channel(chan);
                         live.fetch_sub(1, Ordering::AcqRel);
+                        if let Some(n) = notifier {
+                            me.release_notifier(n);
+                        }
                         return Err((NV_ERR_INSUFFICIENT_RESOURCES, format!("token {idx:#x}: {e}")));
                     }
+                    let rc = if notifier.is_some() { "armed" } else { "none" };
                     if let Ok(mut m) = me.pt.lock() {
-                        m.insert((a.client, a.handle), PtChan { chan, idx, tsg: a.tsg, parent: a.parent, engine, objects: HashMap::new(), live });
+                        m.insert((a.client, a.handle), PtChan { chan, idx, tsg: a.tsg, parent: a.parent, engine, objects: HashMap::new(), live, notifier });
                     }
                     me.pt_births.fetch_add(1, Ordering::Relaxed);
                     me.engine_live(engine, true);
                     let _ = me.take_ledger(idx);
                     Ok(format!(
-                        "chan {:#x}:{:#x} BORN Passthrough: token {idx:#x} -> host {:#x} in {key:?} gpfifo={:#x}x{} userd={userd:?} engine={engine:#x} declared_kernel_pid={}",
+                        "chan {:#x}:{:#x} BORN Passthrough: token {idx:#x} -> host {:#x} in {key:?} gpfifo={:#x}x{} userd={userd:?} engine={engine:#x} declared_kernel_pid={} rc={rc}",
                         a.client, a.handle, chan.token, a.gpfifo_va, g.entries, a.declared_kernel_pid
                     ))
                 }),
@@ -821,6 +918,102 @@ impl ChanPlane {
                 ))
             }),
         )
+    }
+
+    /// ★ P5c (act thread): the twin's host error context over the guest's notifier record, its
+    /// RC event on the plane's RC fd, and a read view of the record. `None` (named, counted) when any
+    /// step refuses — the twin is then born without one, and its faults stay silent.
+    fn arm_notifier(&self, client: u32, handle: u32, obj: u32, off: u64, at: kf_arch::UserdMem) -> Option<PtNotifier> {
+        let refuse = |why: String| {
+            self.rc_unarmed.fetch_add(1, Ordering::Relaxed);
+            eprintln!("kf3: chan {client:#x}:{handle:#x} RC-UNARMED: {why}");
+        };
+        let ctx = match self.rm.alloc_context_dma(obj, off, 16) {
+            Ok(c) => c,
+            Err(e) => {
+                refuse(format!("context DMA over object {obj:#x}+{off:#x}: {e:?}"));
+                return None;
+            }
+        };
+        if let Err(e) = self.rm.alloc_os_event(ctx, 0, false, &self.rc_ev) {
+            let _ = self.rm.free(ctx);
+            refuse(format!("RC event on context DMA {ctx:#x}: {e:?}"));
+            return None;
+        }
+        match self.userd_view(Some(at)) {
+            Ok(view) => {
+                self.rc_armed.fetch_add(1, Ordering::Relaxed);
+                let mut n = PtNotifier { ctx, view, reported: false, at_arm: [0; 4] };
+                n.at_arm = n.words().unwrap_or([0; 4]);
+                Some(n)
+            }
+            Err(e) => {
+                let _ = self.rm.free(ctx);
+                refuse(format!("notifier read view: {e}"));
+                None
+            }
+        }
+    }
+
+    /// Free a twin's error context (its event goes with it) and release its view.
+    fn release_notifier(&self, n: PtNotifier) {
+        let _ = self.rm.free(n.ctx);
+        if let UserdView::Store { cookie, .. } = &n.view {
+            let _ = self.rm.release_cpu_view(kf_host::CpuViewRelease { h_memory: self.store, p_linear_address: *cookie });
+        }
+    }
+
+    /// ★ P5c — a WORKER, on the RC fd's readiness: which twins' notifier records did the host just
+    /// write? Each newly-written record (non-zero `status`, `kernel_rc_notification.c:326-338`
+    /// writes `0xffff` last) becomes ONE queued [`RcEvent`] for the drainer. ⊘ Reads 16 bytes per
+    /// armed twin; writes nothing. Returns how many were queued.
+    pub fn rc_scan(&self) -> usize {
+        self.rc_wakes.fetch_add(1, Ordering::Relaxed);
+        let mut found = Vec::new();
+        if let Ok(mut m) = self.pt.lock() {
+            for t in m.values_mut() {
+                let Some(n) = t.notifier.as_mut() else { continue };
+                if n.reported {
+                    continue;
+                }
+                // `NvNotification {timeStamp:8, info32:4, info16:2, status:2}`: status is the high
+                // half of word 3 and is written last.
+                let Some(w) = n.words() else { continue };
+                if w != n.at_arm && (w[3] >> 16) != 0 {
+                    n.reported = true;
+                    found.push(RcEvent { chid: t.idx, engine: t.engine, except_type: w[2], host_token: t.chan.token });
+                }
+            }
+        }
+        let k = found.len();
+        if k > 0 {
+            self.rc_seen.fetch_add(k as u64, Ordering::Relaxed);
+            for e in &found {
+                eprintln!(
+                    "kf3: RC host twin {:#x} (guest chid {:#x}, engine {:#x}) wrote its notifier: except_type={:#x} (Xid {}) — forwarding RC_TRIGGERED",
+                    e.host_token, e.chid, e.engine, e.except_type, e.except_type
+                );
+            }
+            if let Ok(mut q) = self.rc_queue.lock() {
+                q.extend(found);
+            }
+            let _ = self.release.signal();
+        }
+        k
+    }
+
+    /// ★ P5c (drainer): the RC events waiting to be posted.
+    pub fn take_rc(&self) -> Vec<RcEvent> {
+        self.rc_queue.lock().map(|mut q| std::mem::take(&mut *q)).unwrap_or_default()
+    }
+
+    /// ★ P5c (drainer): put back events the GSP queue could not take now (retried next pass).
+    pub fn requeue_rc(&self, back: Vec<RcEvent>) {
+        if let Ok(mut q) = self.rc_queue.lock() {
+            let mut back = back;
+            back.append(&mut q);
+            *q = back;
+        }
     }
 
     /// The guest's USERD, reached through a CPU view WE arm now (off the vCPU).
