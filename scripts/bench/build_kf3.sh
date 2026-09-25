@@ -24,7 +24,12 @@ echo "== kf3 build: QEMU $(cat "$QEMU/VERSION") rev $(git -C "$REPO" rev-parse -
 ( cd "$REPO" && cargo build --release -p kf-qemu )
 ARCHIVE="$REPO/target/release/libkf_qemu.a"
 [ -f "$ARCHIVE" ] || { echo "⊘ no archive at $ARCHIVE"; exit 1; }
-[ -z "$(find "$ARCHIVE" -mmin +30)" ] || { echo "⊘ $ARCHIVE is >30 min old — cargo did not rebuild it"; exit 1; }
+# ⊘ 2026-09-25: the ">30 min old ⇒ refuse" rule is gone. It refused every revision that changed no
+# Rust (a docs or scripts commit), and per-revision binaries need exactly those builds. What it
+# guarded — a FAILED cargo build silently serving the previous archive — is closed by `set -e`
+# on the cargo step above: this line is reached only when cargo succeeded, i.e. when its own
+# fingerprints say the archive IS this revision's.
+echo "== archive $(stat -c '%y' "$ARCHIVE") (cargo succeeded: current for this revision by cargo's fingerprints)"
 mkdir -p "$QEMU/hw/misc/kf3"
 cp "$REPO"/qemu/hw/misc/kf3/kf3.c "$REPO"/qemu/hw/misc/kf3/kf3.h "$REPO"/qemu/hw/misc/kf3/meson.build "$QEMU/hw/misc/kf3/"
 cp "$ARCHIVE" "$QEMU/hw/misc/kf3/libkf_qemu.a"
