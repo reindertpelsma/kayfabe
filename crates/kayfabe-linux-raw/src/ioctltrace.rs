@@ -54,6 +54,9 @@ pub struct Entry {
 const OFF: u8 = 0;
 const RING: u8 = 1;
 const VERBOSE: u8 = 2;
+/// ★ w827 attribution: the ring PLUS a per-(request, control-cmd / alloc-class) latency
+/// aggregate, printed by [`dump_prof`] at process end. Two clock reads per ioctl.
+const PROF: u8 = 3;
 
 static MODE: AtomicU8 = AtomicU8::new(u8::MAX);
 static DROPPED: AtomicU64 = AtomicU64::new(0);
@@ -71,6 +74,7 @@ fn mode() -> u8 {
     }
     let m = match std::env::var("KF_IOCTL_TRACE").as_deref() {
         Ok("verbose") => VERBOSE,
+        Ok("prof") => PROF,
         Ok("ring" | "on" | "1") => RING,
         _ => OFF,
     };
@@ -97,11 +101,80 @@ fn now_us() -> u64 {
     t.saturating_sub(base)
 }
 
+/// The clock read taken BEFORE an ioctl — `None` unless `KF_IOCTL_TRACE=prof` (so the shipping
+/// and `ring` configurations pay nothing new).
+#[inline]
+pub fn start() -> Option<std::time::Instant> {
+    (mode() == PROF).then(std::time::Instant::now)
+}
+
+/// One aggregate row: `(count, total ns, max ns)`.
+type ProfRow = (u64, u64, u64);
+static PROF_ROWS: Mutex<Vec<((u64, u32), ProfRow)>> = Mutex::new(Vec::new());
+static PROF_T0: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+
+/// The sub-key: the control `cmd` for `NV_ESC_RM_CONTROL` (`NVOS54`, +8), the class for
+/// `NV_ESC_RM_ALLOC` (`NVOS21`/`NVOS64`, +12); 0 otherwise.
+fn sub_key(request: u64, arg: &[u8]) -> u32 {
+    let at = |o: usize| arg.get(o..o + 4).map_or(0, |b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]));
+    if (request >> 8) & 0xff != u64::from(b'F') {
+        return 0;
+    }
+    match request & 0xff {
+        0x2A => at(8),
+        0x2B => at(12),
+        _ => 0,
+    }
+}
+
+fn prof_add(request: u64, arg: &[u8], ns: u64) {
+    let _ = PROF_T0.get_or_init(std::time::Instant::now);
+    let key = (request, sub_key(request, arg));
+    let mut g = PROF_ROWS.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some((_, r)) = g.iter_mut().find(|(k, _)| *k == key) {
+        r.0 += 1;
+        r.1 += ns;
+        r.2 = r.2.max(ns);
+    } else {
+        g.push((key, (1, ns, ns)));
+    }
+}
+
+/// ★ Print the per-ioctl latency aggregate (`KF_IOCTL_TRACE=prof` only): one line per
+/// `(request, sub-key)`, sorted by total time, then the total.
+pub fn dump_prof(why: &str) {
+    if mode() != PROF {
+        return;
+    }
+    let mut g: Vec<_> = PROF_ROWS.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
+    g.sort_by_key(|(_, r)| std::cmp::Reverse(r.1));
+    let (n, tot) = g.iter().fold((0u64, 0u64), |a, (_, r)| (a.0 + r.0, a.1 + r.1));
+    let wall = PROF_T0.get().map_or(0, |t| t.elapsed().as_micros() as u64);
+    eprintln!("IOCTL-PROF ★ {why}: ioctls={n} in_ioctl_us={} wall_since_first_us={wall} rows={}", tot / 1000, g.len());
+    for ((req, sub), (c, ns, mx)) in &g {
+        eprintln!(
+            "IOCTL-PROF req={req:#010x} sub={sub:#010x} n={c} total_us={} avg_us={} max_us={}",
+            ns / 1000,
+            ns / 1000 / (*c).max(1),
+            mx / 1000
+        );
+    }
+    eprintln!("IOCTL-PROF ★ end");
+}
+
 /// Record one issued ioctl. Called from [`crate::CharDev::ioctl`] and nowhere else.
 pub fn record(request: u64, arg: &[u8], rc: i32) {
+    record_timed(request, arg, rc, None);
+}
+
+/// [`record`], with the clock read [`start`] took before the call.
+pub fn record_timed(request: u64, arg: &[u8], rc: i32, t0: Option<std::time::Instant>) {
     let m = mode();
     if m == OFF {
         return;
+    }
+    if let Some(t0) = t0 {
+        prof_add(request, arg, u64::try_from(t0.elapsed().as_nanos()).unwrap_or(u64::MAX));
     }
     let head_after = u32::from_le_bytes([
         arg.first().copied().unwrap_or(0),

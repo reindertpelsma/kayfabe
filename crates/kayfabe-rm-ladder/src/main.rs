@@ -14188,6 +14188,13 @@ fn unmap_retires_arm(
 }
 
 fn main() -> std::process::ExitCode {
+    let rc = ladder_main();
+    // ★ w827 attribution: the per-ioctl latency aggregate (`KF_IOCTL_TRACE=prof` only).
+    kayfabe_linux_raw::ioctltrace::dump_prof("process end");
+    rc
+}
+
+fn ladder_main() -> std::process::ExitCode {
     // ★★★★★ **w762a — ARM THE SELF-DEADLINE BEFORE ANYTHING ELSE CAN HANG.**
     //
     // > Owner, 2026-09-18: *"At timeout trace dump the whole thing."*

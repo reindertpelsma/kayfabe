@@ -725,6 +725,8 @@ impl CharDevice {
             arg[p.at..p.at + POINTER_FIELD_WIDTH].copy_from_slice(&addr.to_le_bytes());
         }
 
+        // ★ w827: the attribution clock (`KF_IOCTL_TRACE=prof` only; `None` otherwise).
+        let prof_t0 = crate::ioctltrace::start();
         // SAFETY: `arg` is a live exclusive borrow of at least one byte (checked above). The
         // driver reads and writes exactly `_IOC_SIZE(request)` bytes at that address, and
         // that number was **re-derived from `request` and compared against `arg.len()`
@@ -762,7 +764,7 @@ impl CharDevice {
         // scrub below, so `head_after` shows what the DRIVER wrote rather than what we then
         // zeroed. ⚠ Costs one relaxed atomic load when `KF_IOCTL_TRACE` is unset, which is the
         // shipping configuration — see `crate::ioctltrace`.
-        crate::ioctltrace::record(request, arg, i32::try_from(rc).unwrap_or(-1));
+        crate::ioctltrace::record_timed(request, arg, i32::try_from(rc).unwrap_or(-1), prof_t0);
 
         // ★ The scrub (module docs). Unconditional, and after BOTH arms: a failed ioctl
         // leaves the caller holding the same buffer, and an address that survives an error
