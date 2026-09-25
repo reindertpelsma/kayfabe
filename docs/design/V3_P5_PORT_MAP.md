@@ -87,6 +87,56 @@ Five changes, each measured or cited:
    `--concurrency` (all rungs printed, scrubber forwarded 385 entries, no death — the arm's tail
    outlived 60 s).
 
+**STATUS UPDATE, 2026-09-25 (P5c, branch `v3-p5c`).** Three fixes, each behind a measurement on
+the GA106 bench (host 580.159.04); `v3_gates.sh` 8/8 PASS at `20cc4888`.
+9. ★ **The fault/RC plane is built.** A passthrough twin is born with a host `NV01_CONTEXT_DMA` over
+   the GUEST's own notifier record (`errorNotifierMem`, sysmem ⇒ the guest-RAM descriptor at its memfd
+   offset, FB ⇒ the store) as its error context, so when the host RCs the twin the host's GSP writes
+   the record into guest memory itself (`kernel_gsp.c:541-545`: GSP-RM writes notifiers, CPU-RM only
+   sends events; the CPU writes nothing). One dataless `NV01_EVENT_OS_EVENT` per context DMA (notify
+   index 0, the list `krcErrorSendEventNotificationsCtxDma_FWCLIENT` walks) on one RC fd a worker
+   polls; a wake reads each armed 16-byte record and queues an event per record the HOST changed; the
+   drainer posts `RC_TRIGGERED` (the guest's declared engine + chid, the host's `exceptType`, scope
+   CHANNEL — our twin is its own host TSG) and raises the GSP stall vector outside the lock.
+   `[measured f1/f2]` `--missing-page-fault` PASS (`fired=true status=0xffff except_type=0x1f`,
+   bystander contained, `rc[armed=1 seen=1 posted=1]`); `--defer-liveness` PASS, `DEFER_LIVENESS=B`
+   (bare metal: B too), `rc[armed=9 seen=4 posted=4]`.
+10. **VA spaces are retired and recycled.** No guest VA-space free was ever carried: `--concurrency`
+    (2400 alloc/free) built and LEAKED 2400 mirrors at ~54 ms each (space + 8 GiB store window +
+    2 GiB RAM window, `[measured c3]`). `PageDirPolicy` now carries `MemStatement::Retire` for every VA
+    space a free takes (its own, its device's, its client's; never a `GPU_DEVICE` reference's
+    transient handle); the VA thread unmaps our rows and keeps the host space + windows as a spare
+    (≤ 32). A space a live channel runs in is never recycled. `[measured d2/e2]` 6 mirrors built.
+11. **The reconcile is O(n log n) and maps only gaps.** `plan_reconcile` scanned linearly per row
+    (O(n²): `plan_avg_us` 3 108 at ~2 400 rows) and re-mapped a whole run whenever the walk coalesced one
+    more page into it (`unmapped=5579` for `mapped=8611` on an add-only workload). It now searches, and
+    completes a run by mapping its uncovered gaps only (kept rows already agree with it); the property
+    test found and the rewrite closes a hole where a run backed only by a since-dropped kept row was
+    left unmapped.
+12. ⊘ **Harness: the verbose ioctl trace was running into a 115 200-baud UART** (~11.5 KB/s):
+    `--concurrency` printed 422 KB (≈ 37 s of its 60 s), `--concurrent-fuzz` PASSED ring-buffered and
+    TIMED OUT printed. The trace stays verbose, on a virtio console (`hvc0`); `KF_CONSOLE=serial`
+    restores the old lane; early boot lands in `fast_<tag>_ttyS0.log`.
+
+13. **Suite `p5cs1` at `c59732a7` (30 arms, 60 s): 27 PASS**, FAIL `--uvm-invalidate` /
+    `--uvm-mean`, TIMEOUT `--ce-client-guest-ram`. ⊘ The two UVM arms moved TIMEOUT → FAIL *because
+    of* the RC plane, and it answers Q7(b)'s unmeasured premise: nvidia-uvm's four CE channels on
+    unprivileged twins are RC'd by the host with **Xid 32** (`except_type=0x20`) — the host refuses
+    their physical-mode work — and the guest is now TOLD (`RC_TRIGGERED` ×4), so `UVM_REGISTER_GPU`
+    fails `0x60` instead of spinning to the budget. Q7 still decides the route.
+
+**Q8 (NEW, needs an owner decision). `--ce-client-guest-ram` cannot fit 60 s under "full walk + full
+diff per invalidate".** It declares 13 000 rows in each of two spaces, one invalidate per map
+(~26 000 invalidates). Every invalidate re-walks and re-diffs the WHOLE space: `[measured e3]` GPU walk
+~0.53 µs/leaf (the report's emission, `kf_diff_kernel`, is one GPU thread) and host-side decode +
+plan ~0.56 µs/leaf ⇒ ~14 ms per invalidate at 13 000 rows, O(rows²) over the arm. Separately, ~2 ms
+per guest ioctl (alloc ~1.9 ms, map ~3 ms vs our arrive→clear ~1 ms early) is spent outside the VA
+thread and is NOT yet attributed (guest-mode CPU samples are few; ~30 trapped BAR0 writes per row at
+31-41 µs each explain ~1 ms). Bare metal: 9 s. Options: (a) an incremental reconcile — the walker
+diffs against a GPU-resident copy of OUR ledger (our placements, not the guest's tables; is that the
+"shadow" v3 §4.2 forbids?), or dirty-tracking of the guest's page-table pages; (b) a parallel
+emission kernel (PTX regeneration + the CUDA suite) — halves the constant, does not change the order.
+
 **Q7 (NEW, needs an owner decision). An unforgeable "guest kernel" identity for a channel.**
 nvidia-uvm's CE channels are the guest kernel's and produce physical operands (§57), so they
 belong on the Translated route — but the only wire fact naming them kernel (the `KERNEL_PID`
