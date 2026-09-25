@@ -23,6 +23,7 @@
 //! syscall is owed ([`trap::Action`]); the caller performs it.
 
 pub mod bitmap;
+pub mod cacheop;
 pub mod cpuintr;
 pub mod memmap;
 pub mod mmuinval;

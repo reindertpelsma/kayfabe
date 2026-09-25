@@ -487,6 +487,10 @@ pub type Manager = VaManager<GpuWalker, Target>;
 /// flight or pending). A held reply is delivered when they are equal.
 #[derive(Debug)]
 pub struct Inbox {
+    /// ★ w827: guest L2 cache-op requests per [`kf_trap::cacheop::CacheOp`] — bumped by the vCPU
+    /// (lock-free) after it stores the busy word; the VA thread performs the host op and publishes
+    /// idle. See `ChanDevice::serve_cache_ops`.
+    pub cache_req: [AtomicU64; 3],
     q: Mutex<Vec<MemStatement>>,
     received: AtomicU64,
     settled: AtomicU64,
@@ -508,6 +512,7 @@ impl Inbox {
     /// No eventfd.
     pub fn new() -> Result<Inbox, String> {
         Ok(Inbox {
+            cache_req: [AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0)],
             q: Mutex::new(Vec::new()),
             received: AtomicU64::new(0),
             settled: AtomicU64::new(0),
@@ -591,6 +596,8 @@ impl Inbox {
 pub struct MemCounters {
     /// Trigger writes that armed.
     pub invalidates: AtomicU64,
+    /// ★ w827: guest L2 cache ops served as host `FB_FLUSH_GPU_CACHE`.
+    pub cache_ops: AtomicU64,
     /// PRAMIN re-points whose window showed any scratch slot.
     pub pramin_miss_writes: AtomicU64,
     /// The last window base that missed (for the log).

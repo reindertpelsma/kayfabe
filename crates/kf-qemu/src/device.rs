@@ -522,6 +522,15 @@ impl Device {
             self.deliver(raise);
             return;
         }
+        // ★ w827: an L2 cache op (`kf_trap::cacheop`). The shadow takes the busy word the guest
+        // will poll, the request counter moves AFTER it, and one wake — the VA thread performs the
+        // host op and publishes idle. ⊘ Nothing blocks here. The write also goes on to the plane
+        // below (a plain privileged register), exactly as before.
+        let cache_op = if !doorbell && !in_usermode && width == 4 {
+            kf_trap::cacheop::decode(self.family, off, val as u32)
+        } else {
+            None
+        };
         let class = if doorbell {
             Class::Doorbell
         } else if in_usermode {
@@ -535,6 +544,10 @@ impl Device {
             }
             Class::Privileged { readable: true, semantics: WriteSemantics::Plain }
         };
+        if let Some(op) = cache_op {
+            self.mem.inbox.cache_req[op.index()].fetch_add(1, Ordering::Release);
+            let _ = self.mem.inbox.wake.signal();
+        }
         let off32 = u32::try_from(off).unwrap_or(u32::MAX);
         match self.plane.trap_write(class, 0, off32, val, width) {
             Action::RingHostInline { host_token } => {
@@ -627,6 +640,44 @@ impl Device {
         }
     }
 
+    /// ★ w827 — **serve the guest's L2 cache ops** (`kf_trap::cacheop`) on the VA thread: for each
+    /// op whose request counter moved, perform the host op (the authored, unprivileged
+    /// `FB_FLUSH_GPU_CACHE` on OUR subdevice), then publish idle (`0`) into the shadow.
+    ///
+    /// ⊘ Correct against a fresh request: the counter is read BEFORE the host op, so the op covers
+    /// every request up to it; the guest RM issues its next write to the same register only after
+    /// it has read idle (it polls under its GPU lock, `kmemsysDoCacheOp_GM107`), so a request that
+    /// arrives after our idle store re-stores busy and bumps the counter, and is served next pass.
+    /// A refused host op is NAMED and the register still goes idle — the guest's alternative is a
+    /// 4 s spin to `NV_ERR_TIMEOUT` with the same (unflushed) outcome.
+    fn serve_cache_ops(&self, done: &mut [u64; 3]) {
+        use kf_trap::cacheop::{CacheOp, registers};
+        for op in CacheOp::ALL {
+            let i = op.index();
+            let want = self.mem.inbox.cache_req[i].load(Ordering::Acquire);
+            if want == done[i] {
+                continue;
+            }
+            let (aperture, wb, inv) = match op {
+                CacheOp::FlushDirty => (1, true, false),
+                CacheOp::SysmemInvalidate => (1, false, true),
+                CacheOp::PeermemInvalidate => (2, false, true),
+            };
+            let t = std::time::Instant::now();
+            let r = self.rm.flush_gpu_cache(aperture, wb, inv);
+            self.mem.counters.cache_ops.fetch_add(1, Ordering::Relaxed);
+            if let Err(e) = &r {
+                eprintln!("kf3: L2 cache op {op:?} REFUSED by the host: {e:?} — the register is released anyway");
+            } else if done[i] == 0 {
+                eprintln!("kf3: L2 cache op {op:?} served by host FB_FLUSH_GPU_CACHE in {} us (first of this op)", t.elapsed().as_micros());
+            }
+            done[i] = want;
+            for (o, _) in registers(self.family).iter().filter(|(_, x)| *x == op) {
+                self.shadow_store(u64::from(*o), 0, 4);
+            }
+        }
+    }
+
     /// ★★★ **The VA-manager thread** (`V3_P4_PORT_MAP.md` §2.1(c), Q6): the ONE thread that
     /// owns the GPU walker. It waits in `epoll` on two fds only — the inbox wake (statements from
     /// the drainer, invalidates from a vCPU) and the walker's completion eventfd — and never
@@ -655,6 +706,7 @@ impl Device {
         // ★ Cold-box fix (`crate::mem::prewarm`): the first mirror's one-time host cost is paid
         // here, before the guest runs, as soon as QEMU has registered guest RAM.
         let mut prewarmed = false;
+        let mut cache_done = [0u64; 3];
         while !self.stop.load(Ordering::Acquire) {
             if !prewarmed && let Some(line) = crate::mem::prewarm(&self.mem, self.rm, self.store.handle) {
                 prewarmed = true;
@@ -663,6 +715,7 @@ impl Device {
             let mut ready = ReadyTokens::new();
             let _ = poller.wait(&mut ready, PollTimeout::Millis(50));
             let _ = self.mem.inbox.wake.drain();
+            self.serve_cache_ops(&mut cache_done);
             for st in self.mem.inbox.take() {
                 taken += 1;
                 let line = crate::mem::apply_statement(&mut m, &self.mem, self.rm, self.store.handle, st, trigger);
@@ -858,7 +911,7 @@ impl Device {
             tm.host_calls,
         );
         let mem = format!(
-            " mem[inval={} walks={}/{} cleared={} superseded={} named_missed={} unreconciled={} mapped={} unmapped={} clipped={:#x} held={} vmm_overlaps={} fn70={} roots={} root_moves={} stmts={recv}/{settled} refused={} pramin_repoints={} pramin_miss={} last_miss={:#x} pramin_worst_us={} (map {} mmap {}) pramin_maps={} pramin_mmaps={} inline_opens={} reaped={}]",
+            " mem[inval={} walks={}/{} cleared={} superseded={} named_missed={} unreconciled={} mapped={} unmapped={} clipped={:#x} held={} vmm_overlaps={} fn70={} roots={} root_moves={} stmts={recv}/{settled} refused={} pramin_repoints={} pramin_miss={} last_miss={:#x} pramin_worst_us={} (map {} mmap {}) pramin_maps={} pramin_mmaps={} inline_opens={} reaped={} cache_ops={}]",
             mc.invalidates.load(o),
             va.walks_reconciled,
             va.walks_submitted,
@@ -885,6 +938,7 @@ impl Device {
             self.mem.pramin.mmaps.load(o),
             self.mem.pramin_trap.inline_opens.load(o),
             self.mem.pramin_trap.reaped.load(o),
+            mc.cache_ops.load(o),
         ) + &timing;
         let ws = &self.worker_stats;
         let toks: Vec<String> = self

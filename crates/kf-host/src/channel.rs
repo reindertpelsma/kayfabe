@@ -397,6 +397,23 @@ impl HostRm {
         self.raw_control(self.device, 0x0080_1909, &mut p)
     }
 
+    /// ★ w827: `NV2080_CTRL_CMD_FB_FLUSH_GPU_CACHE` (`0x2080130e`, `NON_PRIVILEGED`) on OUR
+    /// subdevice, `FLUSH_MODE_FULL_CACHE`, with the aperture and write-back/invalidate named —
+    /// `kmemsysFlushGpuCache` maps these onto the L2 registers (`kern_mem_sys_ctrl.c`,
+    /// `kmemsysCacheOp_GM200`). Params (`ctrl2080fb.h:640-646`): `NvU64 addressArray[500]` @0,
+    /// `addressArraySize` @4000, `addressAlign` @4004, `NvU64 memBlockSizeBytes` @4008, `flags`
+    /// @4016 — 4024 bytes with the struct's 8-byte tail padding.
+    ///
+    /// # Errors
+    /// The host's status.
+    pub fn flush_gpu_cache(&self, aperture: u32, write_back: bool, invalidate: bool) -> Result<(), RmError> {
+        const SIZE: usize = 4024;
+        let flags = (aperture & 0x3) | (u32::from(write_back) << 2) | (u32::from(invalidate) << 3) | (1 << 4);
+        let mut p = vec![0u8; SIZE];
+        p[4016..4020].copy_from_slice(&flags.to_le_bytes());
+        self.raw_control(self.subdevice, 0x2080_130e, &mut p)
+    }
+
     /// `GPFIFO_SCHEDULE` (`bEnable = 1`) on the channel's group — the channel starts fetching.
     ///
     /// # Errors
