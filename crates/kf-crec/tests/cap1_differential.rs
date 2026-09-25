@@ -102,7 +102,9 @@ fn the_boot_fsm_is_driven_all_the_way_through_by_the_recorded_guest() {
         "the capture ends with the Booter Unload, so the FSM must end torn down"
     );
     // The three planes: ours, and the two this differential does not cover.
-    assert_eq!(r.txns.len(), 1955, "transactions whose register we decode");
+    // ★ 4e9aae9b: +BCR_CTRL (NV_PRISCV_RISCV_BCR_CTRL, 58e03230) is now a decoded GSP register — the
+    // counts below grew by the recorded guest's reads of it; every one is served as the C served it.
+    assert_eq!(r.txns.len(), 1958, "transactions whose register we decode");
     assert_eq!(
         (
             r.unprojected.guest_writes,
@@ -135,9 +137,9 @@ fn every_gsp_register_read_within_the_oracles_reach_is_served_exactly_as_the_c_s
     };
     let c = only_registers(&r.c, true);
     let rust = only_registers(&r.rust, true);
-    assert_eq!(c.len(), 498, "non-vacuity: the register plane was measured");
+    assert_eq!(c.len(), 499, "non-vacuity: the register plane was measured");
     assert_eq!(diff(&c, &rust), None, "a GSP register served differently");
-    assert_eq!(c.len() + only_registers(&r.c, false).len(), 910);
+    assert_eq!(c.len() + only_registers(&r.c, false).len(), 912);
 
     // ★ Beyond the closure limit the registers diverge in exactly ONE place, and it is a
     // *consequence* of the limit rather than an independent finding: `MAILBOX0` must read
@@ -156,10 +158,15 @@ fn every_gsp_register_read_within_the_oracles_reach_is_served_exactly_as_the_c_s
             _ => None,
         })
         .collect();
+    // ★ 4e9aae9b: `0x0011_1668` = NV_PRISCV_RISCV_BCR_CTRL is a DELIBERATE divergence from the C.
+    // The C answered 0x0 (cap1 #139917); RM's teardown (`kflcnSwitchToFalcon`,
+    // `kernel_falcon_ga102.c:169`) polls this register for the selected core with VALID, so the
+    // C's zero made every adapter teardown spin GPU_TIMEOUT_DEFAULT (4 s; measured, 58e03230).
+    // We serve the selected core + VALID, as the hardware does. The C was wrong here.
     assert_eq!(
         differing,
-        vec![0x0011_0040],
-        "only NV_PGSP_FALCON_MAILBOX0, and only once"
+        vec![0x0011_0040, 0x0011_1668],
+        "only NV_PGSP_FALCON_MAILBOX0 once, plus the deliberate BCR_CTRL correction"
     );
     assert!(
         matches!(
@@ -259,9 +266,9 @@ fn the_closure_limit_is_the_first_multi_element_command_and_gsp_d6_is_why() {
     // (GSP-D6). So the capture contains no observation of those elements while they were
     // live, the ring has since been rewritten, and no assumption reconstructs a payload.
     let (t, r) = run(Fill::Reconstructed);
-    assert_eq!(r.closure_limit, Some(978));
+    assert_eq!(r.closure_limit, Some(980));
     let (txn, first) = *r.unobserved.first().expect("the run must reach the wall");
-    assert_eq!(txn, 978);
+    assert_eq!(txn, 980);
     assert_eq!(
         (first.gpa, first.len),
         (0x1_2720_9000, 4096),
@@ -311,11 +318,11 @@ fn the_global_positional_diff_is_not_green_and_a_green_one_would_be_the_bug() {
     let (_t, r) = run(Fill::Reconstructed);
     let d = diff(&r.c.events, &r.rust.events).expect("a green end-to-end diff IS the bug");
     assert_eq!(
-        d.at, 255,
+        d.at, 256,
         "the first position where the two implementations part"
     );
     assert_eq!(
-        r.c.txn[255], 492,
+        r.c.txn[256], 494,
         "and it is inside E6 — the bind, where GSP-D1 lives"
     );
 }
@@ -336,7 +343,7 @@ fn within_the_oracles_reach_the_census_is_one_ledger_row_and_four_findings() {
     );
     assert_eq!(
         c.beyond_closure(),
-        544,
+        545,
         "beyond the closure limit the C keeps going and we cannot; counted, not \
          interpreted"
     );
@@ -352,18 +359,18 @@ fn within_the_oracles_reach_the_census_is_one_ledger_row_and_four_findings() {
         vec![
             // F-2 — B4 drain-on-publish: the 580 command ring is already non-empty at bind
             // time (the guest's own tx header in this capture says writePtr = 2).
-            s(492, 3, "-", "ReadPtrAcked"),
+            s(494, 3, "-", "ReadPtrAcked"),
             // F-3 — we announce the status queue; the C announces nothing, ever.
-            s(492, 4, "-", "Irq"),
-            s(974, 3, "-", "Irq"),
+            s(494, 4, "-", "Irq"),
+            s(976, 3, "-", "Irq"),
             // F-4 — the reply BODY differs where every matched field agrees. fn 65:
             // the C splices a captured GspStaticConfigInfo (`C:3434-3452`).
-            s(975, 0, "ElementPosted", "ElementPosted"),
-            s(975, 3, "-", "Irq"),
-            s(976, 3, "-", "Irq"),
-            // F-4 again, fn 76: a control reply is sized by the control, not echoed.
             s(977, 0, "ElementPosted", "ElementPosted"),
             s(977, 3, "-", "Irq"),
+            s(978, 3, "-", "Irq"),
+            // F-4 again, fn 76: a control reply is sized by the control, not echoed.
+            s(979, 0, "ElementPosted", "ElementPosted"),
+            s(979, 3, "-", "Irq"),
         ]
     );
 
@@ -520,13 +527,13 @@ fn a_replay_with_no_lookahead_and_no_reconstruction_is_strictly_weaker() {
     let strict = Replay::new(&t, abi).run(Fill::Observed);
     let ahead = Replay::new(&t, abi).run(Fill::Lookahead);
     let recon = Replay::new(&t, abi).run(Fill::Reconstructed);
-    assert_eq!(strict.closure_limit, Some(492));
+    assert_eq!(strict.closure_limit, Some(494));
     assert_eq!(
         ahead.closure_limit,
-        Some(492),
+        Some(494),
         "lookahead cannot invent a page table"
     );
-    assert_eq!(recon.closure_limit, Some(978));
+    assert_eq!(recon.closure_limit, Some(980));
     assert!(strict.reconstructions.is_empty() && ahead.reconstructions.is_empty());
 }
 
