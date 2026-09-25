@@ -45,7 +45,7 @@ pub mod gsp;
 pub mod ids;
 
 pub use gsp::{
-    ArchBootState, BootContext, BootPhase, BootSequence, BootStageDesc, BootStep, BootStepKind,
+    AfterSuspend, ArchBootState, BootContext, BootPhase, BootSequence, BootStageDesc, BootStep, BootStepKind,
     BootSteps, GspModel, GspObservation, GspReg, LibosRegionLayout, NoBootSequence, RegWrite,
 };
 use ids::{ClassId, ControlCmd, EngineKind, GpuVa, Pdb, RunlistId, VChid};

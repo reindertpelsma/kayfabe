@@ -65,7 +65,7 @@ use kf_abi::NV_ERR_NOT_SUPPORTED;
 use kf_abi::versions::DriverAbiTable;
 use kf_abi::view::RpcEnvelope;
 use kf_arch::{
-    Arch, ArchBootState, BootContext, BootPhase, BootStep, GspObservation, RegWrite,
+    AfterSuspend, Arch, ArchBootState, BootContext, BootPhase, BootStep, GspObservation, RegWrite,
 };
 
 /// Where the fields of `MESSAGE_QUEUE_INIT_ARGUMENTS` are, for one driver version.
@@ -254,6 +254,10 @@ pub enum Transition {
     E12,
     /// fn-47 serviced → reply first, then `Suspending`.
     E9,
+    /// ★ w828: right after [`Transition::E9`], on a regime whose firmware stops itself
+    /// ([`AfterSuspend::FirmwareHalts`]) → `Halted`: WPR2 down, binding dropped, the suspend
+    /// sentinel still readable. The FSP generations' counterpart of E2/E4.
+    E13,
     /// `IRQSCLR` write → the status-queue interrupt edge is cleared.
     E10,
     /// `device_reset` → `Cold`, unbound, every counter zero.
@@ -745,6 +749,14 @@ pub struct GspFsm {
     held: Vec<HeldReply>,
     /// ★ w827: the guest's last `NV_PRISCV_RISCV_BCR_CTRL` write ([`GspReg::GspRiscvBcrCtrl`]).
     bcr_ctrl: Option<u32>,
+    /// ★ w828: how the life that is running now STOPS after fn-47 — latched from the regime that
+    /// STARTED the processor ([`BootStep::StartProcessor`]), because the FSM holds no model
+    /// between writes and the doorbell that carries fn-47 is serviced without one.
+    after_suspend: AfterSuspend,
+    /// ★ w828: the firmware halted itself after suspending ([`Transition::E13`]) — the suspend
+    /// sentinel stays readable in `Halted`, as a register keeps its value until the next reset.
+    /// Cleared by the next STARTCPU.
+    fw_halted_after_suspend: bool,
     abi: GspAbi,
     phase: BootPhase,
     queue: QueueState,
@@ -861,6 +873,8 @@ impl GspFsm {
             pending_command_doorbells: 0,
             held: Vec::new(),
             bcr_ctrl: None,
+            after_suspend: AfterSuspend::AwaitsTeardownUcode,
+            fw_halted_after_suspend: false,
             abi,
             phase: BootPhase::Cold,
             queue: QueueState::Unbound,
@@ -911,7 +925,7 @@ impl GspFsm {
             stage: self.phase,
             wpr2_up: self.phase.wpr2_up(),
             riscv_active: self.phase.wpr2_up(),
-            suspended: self.phase == BootPhase::Suspending,
+            suspended: self.phase == BootPhase::Suspending || self.fw_halted_after_suspend,
             swgen0_pending: self.swgen0_pending,
             boot_args_lo: self.mailbox_lo,
             boot_args_hi: self.mailbox_hi,
@@ -1086,6 +1100,8 @@ impl GspFsm {
     ) -> Result<(), GspFault> {
         match step {
             BootStep::StartProcessor => {
+                // ★ w828: the regime that starts the processor decides how it stops.
+                self.after_suspend = model.boot_sequence().after_suspend();
                 report.transitions.push(self.gsp_startcpu());
             }
             BootStep::Teardown => {
@@ -1171,6 +1187,7 @@ impl GspFsm {
         match self.phase {
             BootPhase::Cold | BootPhase::Halted => {
                 self.phase = BootPhase::ProtectedRegionUp;
+                self.fw_halted_after_suspend = false;
                 Transition::E1
             }
             BootPhase::Suspending => {
@@ -1539,6 +1556,18 @@ impl GspFsm {
         // *healthy* 580 pre-bootstrap doorbell (see [`Transition::E12`]), and reporting
         // that as the stale-binding attack signature would put a false positive in the
         // ledger on every boot. Both arms read zero guest RAM; only the name differs.
+        // ★★★★★ w828 — **A SUSPENDED PROCESSOR SERVICES NOTHING, and the queue it was bound to
+        // may already be someone else's memory.** After fn-47 the GSP-RM processor has
+        // suspended (E9); nothing it would read is live. `[measured 8dd2bbdf, vh,
+        // run_cl_U_cup2_3]` a teardown that never reached its STARTCPU left the FSM
+        // `Suspending` with the dead life's binding, and the NEXT life's pre-bootstrap
+        // doorbells (the healthy 580 order, [`Transition::E12`]) made us read the freed region:
+        // `PeerWritePtrOutOfRange { value: 2237667778, count: 63 }` — refused only because the
+        // garbage happened to be out of range. An in-range garbage pointer is the C's `cap2b`
+        // defect (arbitrary guest RAM parsed as RPCs and answered). ⇒ Refused BEFORE any read.
+        if self.phase == BootPhase::Suspending {
+            return Err(GspFault::ProcessorSuspended);
+        }
         if matches!(self.queue, QueueState::Unbound) {
             return if self.phase == BootPhase::Halted {
                 Err(GspFault::QueueNotBound)
@@ -1905,10 +1934,32 @@ impl GspFsm {
             // 580. Sequence numbers are preserved: the
             // guest sent this fn-47 at the current sequence and polls for its ack there
             // (`C:2465-2472` records what zeroing them cost).
-            self.phase = BootPhase::Suspending;
-            report.transitions.push(Transition::E9);
+            self.suspend(report);
         }
         Ok(())
+    }
+
+    /// ★ E9 (and, on a regime whose firmware stops itself, E13) — fn-47 has been answered.
+    fn suspend(&mut self, report: &mut ServiceReport) {
+        self.phase = BootPhase::Suspending;
+        report.transitions.push(Transition::E9);
+        // ★★★★★ w828 — **on the FSP regime nothing else will ever end this life.** The driver
+        // runs no teardown ucode there; `kgspTeardown_GH100` only waits for the RISC-V core to
+        // halt (`ogkm-580: src/nvidia/src/kernel/gpu/gsp/arch/hopper/kernel_gsp_gh100.c:995-1004`)
+        // while the GSP-FMC and ACR take WPR2 down. So the firmware halts itself here — WPR2
+        // down, binding dropped — and the suspend sentinel stays readable
+        // (`fw_halted_after_suspend`). Left `Suspending`, WPR2 stayed up and every
+        // Hopper/Blackwell re-open died at `_kgspBootGspRm`'s WPR2 gate
+        // (`ogkm-580: kernel_gsp.c:3872-3880`).
+        if self.after_suspend == AfterSuspend::FirmwareHalts {
+            // ⊘ The status interrupt the fn-47 reply raised survives the halt — IRQSTAT keeps its
+            // value until the guest clears it, as it would on silicon.
+            let irq = self.swgen0_pending;
+            self.enter_halted();
+            self.swgen0_pending = irq;
+            self.fw_halted_after_suspend = true;
+            report.transitions.push(Transition::E13);
+        }
     }
 
     /// Post one message to the status queue, flow-controlled.
@@ -2485,5 +2536,137 @@ mod a_reply_whose_status_is_a_host_act {
         let mut ok = OutgoingRpc { payload: vec![0u8; 40], ..rpc };
         stamp_alloc_status(&mut ok, 0);
         assert!(ok.payload.iter().all(|&b| b == 0), "a success stamps nothing");
+    }
+}
+
+#[cfg(test)]
+mod a_life_ends_and_the_next_one_boots {
+    //! ★★★★★ **w828 — GSP re-init after the guest's last close.** The unit half; the register
+    //! answers per family are `kf-chip/tests/gsp_teardown.rs`, and the bench half is the
+    //! reopen stress lane (`scripts/bench/reopen_stress.sh`).
+    use super::*;
+    use crate::element::{ElementLayout, TransportHdr};
+    use crate::ring::MsgqAbi;
+    use crate::rpc::{FunctionCodes, RpcAbi};
+
+    /// A GSP Axis-A bundle for the bench driver. Only its shape matters here: these tests never
+    /// decode an element.
+    fn abi() -> GspAbi {
+        let table = kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).expect("bench driver");
+        let wire = table.gsp_element_wire();
+        let transport = match wire.transport() {
+            None => TransportHdr::None,
+            Some(t) => TransportHdr::Mctp {
+                header_off: t.header_off,
+                header_word: t.header_word,
+                nvdm_off: t.nvdm_off,
+                nvdm_word: t.nvdm_word,
+            },
+        };
+        let element =
+            ElementLayout::new(wire.hdr_size(), wire.checksum_off(), wire.seqnum_off(), wire.elem_count_off(), transport)
+                .expect("element layout");
+        let init = table.gsp_init_args_wire();
+        let codes = FunctionCodes {
+            set_guest_system_info: 1,
+            set_guest_system_info_ext: 64,
+            free: 10,
+            dup_object: 21,
+            unloading_guest_driver: 47,
+            get_gsp_static_info: 65,
+            init_gsp_trace_crash_buffer: 228,
+            continuation_record: 71,
+            gsp_set_system_info: 72,
+            set_registry: 73,
+            ecc_notifier_write_ack: 202,
+            update_bar_pde: 70,
+            gsp_rm_control: 76,
+            gsp_rm_alloc: 103,
+            gsp_init_done: 0x1001,
+            post_event: 0x1002,
+            rc_triggered: 0x1003,
+        };
+        GspAbi {
+            msgq: MsgqAbi { version: 0, msg_size_min: 4096, swap_rx_flag: 1, region_page_size: 4096 },
+            element,
+            rpc: RpcAbi { header_version: 0x0300_0000, codes },
+            element_size_max: table.gsp_element_size_max(),
+            init_args: InitArgsLayout {
+                shared_mem_pa_off: 0,
+                pte_count_off: 8,
+                cmd_queue_off_off: 16,
+                stat_queue_off_off: 24,
+                min_size: init.min_size(),
+                element_hdr_size_off: init.element_hdr_size_off(),
+            },
+            driver: *table,
+        }
+    }
+
+    /// A guest RAM the test proves is never touched.
+    struct Untouchable;
+    impl GuestRam for Untouchable {
+        fn read(&mut self, gpa: u64, _buf: &mut [u8]) -> Result<(), crate::fault::RamRefused> {
+            panic!("a suspended GSP read guest RAM at {gpa:#x}");
+        }
+        fn write(&mut self, gpa: u64, _bytes: &[u8]) -> Result<(), crate::fault::RamRefused> {
+            panic!("a suspended GSP wrote guest RAM at {gpa:#x}");
+        }
+    }
+
+    fn running(after: AfterSuspend) -> GspFsm {
+        let mut f = GspFsm::new(abi());
+        f.phase = BootPhase::Running;
+        f.after_suspend = after;
+        f.swgen0_pending = true; // the fn-47 reply was just posted
+        f
+    }
+
+    /// ★ Falcon regime: fn-47 leaves the processor SUSPENDED with WPR2 up; the life ends only at
+    /// the teardown ucode's STARTCPU (E2), which is what the guest then does.
+    #[test]
+    fn a_falcon_life_waits_for_its_teardown_ucode() {
+        let mut f = running(AfterSuspend::AwaitsTeardownUcode);
+        let mut r = ServiceReport::default();
+        f.suspend(&mut r);
+        assert_eq!(r.transitions, vec![Transition::E9]);
+        assert_eq!(f.phase(), BootPhase::Suspending);
+        assert!(f.observe().wpr2_up && f.observe().suspended, "WPR2 stays up until FWSEC-SB / Booter Unload");
+        assert_eq!(f.gsp_startcpu(), Transition::E2, "FWSEC-SB's STARTCPU ends the life");
+        assert!(!f.observe().wpr2_up && !f.observe().suspended);
+        assert_eq!(f.gsp_startcpu(), Transition::E1, "and the next open boots");
+        assert!(f.observe().wpr2_up);
+    }
+
+    /// ★★★ FSP regime: nothing the driver writes ends the life, so the firmware halts itself —
+    /// WPR2 down, binding dropped, the suspend sentinel still readable, the status IRQ kept.
+    #[test]
+    fn an_fsp_life_halts_itself_and_the_next_open_boots() {
+        let mut f = running(AfterSuspend::FirmwareHalts);
+        let mut r = ServiceReport::default();
+        f.suspend(&mut r);
+        assert_eq!(r.transitions, vec![Transition::E9, Transition::E13]);
+        assert_eq!(f.phase(), BootPhase::Halted);
+        let o = f.observe();
+        assert!(!o.wpr2_up, "the next _kgspBootGspRm must read WPR2 down");
+        assert!(o.suspended, "kgspWaitForProcessorSuspend still reads the sentinel");
+        assert!(o.swgen0_pending, "the reply's interrupt survives the halt");
+        assert!(matches!(f.queue(), QueueState::Unbound), "the dead life's binding is dropped by value");
+        assert_eq!(f.gsp_startcpu(), Transition::E1, "the next open's FSP boot starts the processor");
+        assert!(!f.observe().suspended, "a boot clears the sentinel, freeing MAILBOX0 for FMC errors");
+        assert!(f.observe().wpr2_up);
+    }
+
+    /// ★★★★★ `[measured 8dd2bbdf, run_cl_U_cup2_3]` a doorbell while SUSPENDED must read nothing:
+    /// the dead life's queue may already be the guest's next allocation.
+    #[test]
+    fn a_suspended_processor_services_no_doorbell_and_reads_no_ram() {
+        let mut f = running(AfterSuspend::AwaitsTeardownUcode);
+        f.suspend(&mut ServiceReport::default());
+        f.note_command_doorbells(2);
+        let mut ram = Untouchable;
+        let mut policy = EchoOk;
+        assert_eq!(f.service_one_deferred_command(&mut ram, &mut policy).unwrap_err(), GspFault::ProcessorSuspended);
+        assert_eq!(f.pending_command_doorbells(), 1, "the refused doorbell is consumed, not retried forever");
     }
 }

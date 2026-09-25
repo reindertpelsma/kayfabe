@@ -61,7 +61,7 @@ struct Piece {
 /// The GSP side the drainer owns.
 struct Gsp {
     fsm: GspFsm,
-    model: Box<dyn GspModel>,
+    model: std::sync::Arc<dyn GspModel>,
     policy: Box<dyn CommandPolicy>,
     /// The value last PUBLISHED per BAR0 offset — [`Device::publish`] stores only what changed.
     published: std::collections::HashMap<u64, u64>,
@@ -135,6 +135,10 @@ pub struct Device {
     staged: Mutex<Vec<Piece>>,
     ram: &'static crate::mem::RamMap,
     gsp: Mutex<Gsp>,
+    /// ★ w828: the SAME register model the drainer's FSM answers from, shared lock-free with the
+    /// vCPU for ONE question — [`GspModel::answer_on_store`] (what a register reads back the
+    /// instant the guest's write lands, when the write alone decides it).
+    store_model: std::sync::Arc<dyn GspModel>,
     boot: Vec<BootReg>,
     vbios: Vec<u8>,
     worker_efd: &'static Notifier,
@@ -328,7 +332,9 @@ impl Device {
                 channels: Some(std::sync::Arc::new(move |st| chans.statement(st))),
             },
         );
-        let model = family.gsp_model(cfg.fb_mb).map_err(|e| format!("{e:?}"))?;
+        let model: std::sync::Arc<dyn GspModel> =
+            std::sync::Arc::from(family.gsp_model(cfg.fb_mb).map_err(|e| format!("{e:?}"))?);
+        let store_model = model.clone();
         let gsp = Gsp { fsm: GspFsm::new(abi), model, policy, published: std::collections::HashMap::new() };
 
 
@@ -394,6 +400,7 @@ impl Device {
             staged: Mutex::new(Vec::new()),
             ram,
             gsp: Mutex::new(gsp),
+            store_model,
             boot,
             vbios,
             worker_efd,
@@ -536,7 +543,17 @@ impl Device {
         } else if in_usermode {
             Class::UserspaceMappable
         } else {
-            self.shadow_store(off, val, width);
+            // ★★★ w828: a register whose read-back the write alone decides answers NOW, not
+            // after the drainer — `[measured 8dd2bbdf]` a guest that had spent its poll budget
+            // read its own `DMATRFCMD` word twice, FWSEC-SB and Booter Unload never started, and
+            // WPR2 outlived the adapter (`kf_arch::gsp::GspModel::answer_on_store`). Pure, no
+            // lock: a decode and a match on the shared model.
+            let shown = self
+                .store_model
+                .decode_reg(0, off)
+                .and_then(|r| self.store_model.answer_on_store(r, val))
+                .unwrap_or(val);
+            self.shadow_store(off, shown, width);
             // ★ P4: the PRAMIN window base — re-pointed HERE, synchronously, from pre-armed views
             // (§53.1: the register is B, the window A). The word also goes on to the plane.
             if off == self.mem.pramin_reg.offset && width == 4 {

@@ -30,7 +30,7 @@
 //! ranking.
 
 use kf_arch::gsp::{
-    ArchBootState, BootContext, BootPhase, BootSequence, BootStageDesc, BootStep, BootStepKind,
+    AfterSuspend, ArchBootState, BootContext, BootPhase, BootSequence, BootStageDesc, BootStep, BootStepKind,
     BootSteps, GspModel, GspReg, RegWrite,
 };
 
@@ -106,6 +106,13 @@ const FALCON_BOOTER_STAGES: &[BootStageDesc] = &[
 impl BootSequence for FalconSecureBooterBoot {
     fn stages(&self) -> &'static [BootStageDesc] {
         FALCON_BOOTER_STAGES
+    }
+
+    /// ★ w828: the driver ends the life with FWSEC-SB then Booter Unload
+    /// (`kgspTeardown_TU102`, `ogkm-580: src/nvidia/src/kernel/gpu/gsp/arch/turing/
+    /// kernel_gsp_tu102.c:619-661`); their STARTCPUs are E2/E4. Nothing happens on its own.
+    fn after_suspend(&self) -> AfterSuspend {
+        AfterSuspend::AwaitsTeardownUcode
     }
 
     fn on_write(

@@ -581,6 +581,7 @@ impl GspFaultTag<'_> {
             GspFault::BootStepOverflow => FaultTag("GspFault::BootStepOverflow"),
             GspFault::GuestRam(_) => FaultTag("GspFault::GuestRam"),
             GspFault::QueueNotBound => FaultTag("GspFault::QueueNotBound"),
+            GspFault::ProcessorSuspended => FaultTag("GspFault::ProcessorSuspended"),
             GspFault::GeometryRejected(_) => FaultTag("GspFault::GeometryRejected"),
             GspFault::MsgCountZero => FaultTag("GspFault::MsgCountZero"),
             GspFault::SwapRxNotAgreed { .. } => FaultTag("GspFault::SwapRxNotAgreed"),

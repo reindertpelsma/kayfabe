@@ -166,6 +166,10 @@ pub enum GspFault {
     /// [`crate::QueueState::Bound`], so the "parse arbitrary guest RAM as RPC" defect is
     /// unrepresentable rather than merely avoided.
     QueueNotBound,
+    /// ★ w828: a doorbell after fn-47 suspended the processor ([`crate::BootPhase::Suspending`]).
+    /// A suspended GSP services nothing, and the region its binding names may already have been
+    /// freed and reused by the guest — so this is refused before any guest-RAM read.
+    ProcessorSuspended,
     /// The guest's published geometry failed its own acceptance predicate, so publishing
     /// a matching status header could not have linked.
     GeometryRejected(RxLinkCode),
