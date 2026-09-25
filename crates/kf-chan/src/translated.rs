@@ -269,6 +269,7 @@ fn one_write(
     if m == 0 {
         // SET_OBJECT: which subchannels hold a CE, which hold the SW class; nothing else is ours.
         let class = v & 0xFFFF;
+        eprintln!("kf3: DIAG set_object sub={sub} class={class:#x} is_ce={}", is_ce(class)); // DIAG (P6b, temporary)
         st.ce_subch &= !bit;
         st.sw_subch &= !bit;
         if is_ce(class) {
@@ -330,6 +331,9 @@ fn one_write(
         return Ok(()); // the other MEM_OP_D operations are consumed here (see the module doc)
     }
     let is_ce_sub = st.ce_subch & (1u8 << (sub & 7)) != 0;
+    if !is_ce_sub && m >= 0x100 {
+        eprintln!("kf3: DIAG non-ce method sub={sub} m={m:#x} v={v:#x} ce_subch={:#x} sw_subch={:#x}", st.ce_subch, st.sw_subch); // DIAG (P6b, temporary)
+    }
     if !is_ce_sub {
         emit(cur, sub, m, v);
         return Ok(());
