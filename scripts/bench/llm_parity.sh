@@ -66,6 +66,7 @@ esac
 
 echo "LP_START lane=$LANE date=$(date -Is) model=$MODEL snapshot=[${SNAP% }] short=$SHORT_PROCS long=$LONG x$LONG_PROCS warm=$WARM"
 QLOG=${BENCH_DIR:-/workspace/bench}/run_${2:-none}_qemu.log   # hook mode: $2 is boot_capture's tag
+DEADF=$(mktemp -u /tmp/lp_dead_XXXXXX)
 ledger_sum() { grep -a 'DOORBELL-LEDGER' "$QLOG" 2>/dev/null | sed -n 's/.* forwarded=\([0-9]*\).*/\1/p' | awk '{s+=$1} END{print s+0}'; }
 one() {  # $1 kind, $2 ntok, $3 proc, rest: env
     local k=$1 n=$2 i=$3; shift 3
@@ -78,9 +79,29 @@ one() {  # $1 kind, $2 ntok, $3 proc, rest: env
         perf stat -e kvm:kvm_exit -x, -o "$cp" -p "$(pgrep -x qemu-system-x86 | head -1)" 2>/dev/null &
         pc=$!
     fi
+    # ⊘ w828 DEAD-CHANNEL GUARD (hook mode): when the device kills a guest channel (`chan token … DEAD`)
+    # the guest's CUDA call spins forever on a completion that never comes; without this the matrix
+    # sat out `timeout $TMO` (an hour) per remaining process. The watcher ends the process, names it,
+    # and every later process of this boot is skipped as UNMEASURED.
+    if [ "$MODE" = hook ] && [ -e "$DEADF" ]; then
+        echo "LP_SKIP lane=$LANE kind=$k ntok=$n proc=$i reason=channel-dead-earlier-in-this-boot"; return
+    fi
+    local wd=""
+    if [ "$MODE" = hook ]; then
+        local dead0; dead0=$(grep -a -c 'DEAD: ' "$QLOG" 2>/dev/null || true)
+        ( while sleep 5; do
+              if [ "$(grep -a -c 'DEAD: ' "$QLOG" 2>/dev/null || true)" != "$dead0" ]; then
+                  grep -a 'DEAD: ' "$QLOG" | tail -1 | cut -c1-300 > "$DEADF"
+                  $G 'sudo pkill -f "[r]un_llm"' >/dev/null 2>&1; exit 0
+              fi
+          done ) &
+        wd=$!
+    fi
     t0=$(date +%s%N)
     out=$(run LLM_NTOK="$n" "$@"); rc=$?
     t1=$(date +%s%N)
+    [ -n "$wd" ] && { kill "$wd" 2>/dev/null; wait "$wd" 2>/dev/null; }
+    [ "$MODE" = hook ] && [ -e "$DEADF" ] && echo "LP_DEAD lane=$LANE kind=$k ntok=$n proc=$i $(cat "$DEADF")"
     if [ -n "$pc" ]; then
         kill -INT "$pc" 2>/dev/null; wait "$pc" 2>/dev/null; sleep 2
         echo "LP lane=$LANE kind=$k ntok=$n proc=$i LLM_KVM_EXITS=$(grep -a 'kvm_exit' "$cp" | cut -d, -f1)"
