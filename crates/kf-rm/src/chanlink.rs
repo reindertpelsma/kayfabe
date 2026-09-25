@@ -416,7 +416,18 @@ impl ChannelPolicy {
             self.vas_stated.entry(st.client.0).or_default().insert(st.vaspace.0);
             return None;
         }
-        let params = cmd.payload.get(h.params_at..h.params_at.checked_add(h.params_size as usize)?)?;
+        let Some(params) = h.params_at.checked_add(h.params_size as usize).and_then(|e| cmd.payload.get(h.params_at..e)) else {
+            if matches!(h.cmd, PROMOTE_CTX | EVICT_CTX) {
+                eprintln!(
+                    "kf-rm: chanlink: control {:#010x} declares {} params bytes, {} arrived (rpc flags {:#x}) — not carried",
+                    h.cmd,
+                    h.params_size,
+                    cmd.payload.len().saturating_sub(h.params_at),
+                    h.rmapi_rpc_flags
+                );
+            }
+            return None;
+        };
         let st = match h.cmd {
             GPFIFO_SCHEDULE | TSG_GPFIFO_SCHEDULE => {
                 // `{NvBool bEnable; NvBool bSkipSubmit; NvBool bSkipEnable}` — all [IN].
@@ -424,8 +435,13 @@ impl ChannelPolicy {
             }
             GET_WORK_SUBMIT_TOKEN => ChanStatement::Token { client: h.client, object: h.object },
             PROMOTE_CTX => {
+                eprintln!(
+                    "kf-rm: chanlink: GPU_PROMOTE_CTX on {:#x}:{:#x} params={} rpc_flags={:#x}",
+                    h.client, h.object, h.params_size, h.rmapi_rpc_flags
+                );
                 // ★ The capability gate this control's decoder would have applied (it is admitted).
                 if !self.abi.capabilities().control(kf_arch::ids::ControlCmd(h.cmd)).is_permitted() {
+                    eprintln!("kf-rm: chanlink: GPU_PROMOTE_CTX not permitted by this boundary's allowlist");
                     return None;
                 }
                 let p = match self.abi.decode_promote_ctx(params) {
