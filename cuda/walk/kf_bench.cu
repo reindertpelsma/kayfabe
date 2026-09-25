@@ -137,8 +137,11 @@ static void run_case(const char *name, Gpga &g, const std::vector<uint64_t> &pdb
 
     KfWalkCfg c;
     memset(&c, 0, sizeof c);
-    c.runs_per_pdb = 1u << 20;
-    c.run_capacity = 1u << 21;
+    /* ⊘ 2026-09-25: the diff's scratch bounds a slot to 16 384 runs (4 × runs_per_pdb per
+     * entry in the 4 Mi-run stage); a case with more runs per space truncates and is SKIPPED. */
+    c.runs_per_pdb = 16384u;
+    c.run_capacity = 1u << 20;
+    c.max_slots = 64;
     c.pdb_capacity = 64;
     c.entry_budget = 64u * 1024u * 1024u;   /* generous: a budget stop would not be a walk */
     c.table_version = KF_TBL_VER2;
@@ -147,6 +150,8 @@ static void run_case(const char *name, Gpga &g, const std::vector<uint64_t> &pdb
 
     KfWalk *w = kf_create(&c);
     if (!w) { fprintf(stderr, "%s: kf_create failed\n", name); printf("EXIT=3\n"); exit(3); }
+    std::vector<uint32_t> slots(pdbs.size());
+    for (size_t i = 0; i < slots.size(); i++) slots[i] = (uint32_t)i;
 
     KfReportHeader h;
     std::vector<KfPdbEntry> pe(c.pdb_capacity + 4);
@@ -156,10 +161,9 @@ static void run_case(const char *name, Gpga &g, const std::vector<uint64_t> &pdb
      * pays a JIT compile. Reporting that as the walk time would be wrong by orders of
      * magnitude, in the flattering direction for nobody. */
     for (int i = 0; i < WARMUP; i++) {
-        int rc = kf_refresh(w, dev, g.size(), pdbs.data(), (uint32_t)pdbs.size(), NULL, 0,
+        int rc = kf_refresh(w, dev, g.size(), pdbs.data(), slots.data(), (uint32_t)pdbs.size(),
                             &h, pe.data(), rn.data());
         if (rc != 0) { fprintf(stderr, "%s: kf_refresh rc=%d\n", name, rc); printf("EXIT=4\n"); exit(4); }
-        kf_ack(w, h.generation);
     }
     /* ⚠ A truncated walk is NOT a measurement of a full walk, so it is reported by name and
      * skipped rather than timed. ⊘ It must not abort the sweep either: one oversized case
@@ -178,11 +182,11 @@ static void run_case(const char *name, Gpga &g, const std::vector<uint64_t> &pdb
     CU(cudaEventCreate(&e0));
     CU(cudaEventCreate(&e1));
     for (int i = 0; i < REPS; i++) {
-        /* ★ Each rep is a RESYNC: the ack is withheld, so the kernel emits the full mapping
-         * set rather than an empty delta. Timing an empty delta would time nothing. */
+        /* ★ No verdict is ever given, so every slot stays empty and each rep diffs the full
+         * mapping set against nothing: the report IS the whole walk. */
         CU(cudaDeviceSynchronize());
         double t0 = now_us();
-        int rc = kf_refresh(w, dev, g.size(), pdbs.data(), (uint32_t)pdbs.size(), NULL, 0,
+        int rc = kf_refresh(w, dev, g.size(), pdbs.data(), slots.data(), (uint32_t)pdbs.size(),
                             &h, pe.data(), rn.data());
         CU(cudaDeviceSynchronize());
         double t1 = now_us();
@@ -195,7 +199,7 @@ static void run_case(const char *name, Gpga &g, const std::vector<uint64_t> &pdb
          * the part a bigger table does not grow. */
         CU(cudaDeviceSynchronize());
         CU(cudaEventRecord(e0));
-        kf_refresh(w, dev, g.size(), pdbs.data(), (uint32_t)pdbs.size(), NULL, 0,
+        kf_refresh(w, dev, g.size(), pdbs.data(), slots.data(), (uint32_t)pdbs.size(),
                    &h, pe.data(), rn.data());
         CU(cudaEventRecord(e1));
         CU(cudaEventSynchronize(e1));
@@ -226,9 +230,14 @@ static void run_case(const char *name, Gpga &g, const std::vector<uint64_t> &pdb
     CU(cudaFree(dev));
 }
 
-/* Like run_case, but ACKS each generation, so every timed refresh computes a DELTA against
- * the previous walk instead of emitting a full resync. ⊘ Implemented by re-running the same
- * measurement with the ack in the loop; the two differ in exactly one statement. */
+/* Like run_case, but ACKNOWLEDGES every run, so each timed refresh diffs an UNCHANGED space
+ * against its committed placements (commit-on-ack): the steady state of a guest whose
+ * invalidate changed nothing. */
+static void ack_all(KfWalk *w, const KfReportHeader &h)
+{
+    std::vector<uint8_t> c(h.run_count ? h.run_count : 1, KFWR_ACK_APPLIED);
+    kf_ack(w, h.generation, c.data(), h.run_count, NULL, 0);
+}
 static void run_case_acked(const char *name, Gpga &g, const std::vector<uint64_t> &pdbs,
                            size_t live_bytes, const char *note)
 {
@@ -238,8 +247,11 @@ static void run_case_acked(const char *name, Gpga &g, const std::vector<uint64_t
     CU(cudaMemcpy(dev, g.mem.data(), g.size(), cudaMemcpyHostToDevice));
     KfWalkCfg c;
     memset(&c, 0, sizeof c);
-    c.runs_per_pdb = 1u << 20;
-    c.run_capacity = 1u << 21;
+    /* ⊘ 2026-09-25: the diff's scratch bounds a slot to 16 384 runs (4 × runs_per_pdb per
+     * entry in the 4 Mi-run stage); a case with more runs per space truncates and is SKIPPED. */
+    c.runs_per_pdb = 16384u;
+    c.run_capacity = 1u << 20;
+    c.max_slots = 64;
     c.pdb_capacity = 64;
     c.entry_budget = 64u * 1024u * 1024u;
     c.table_version = KF_TBL_VER2;
@@ -247,21 +259,23 @@ static void run_case_acked(const char *name, Gpga &g, const std::vector<uint64_t
     c.max_pdbs = 64;
     KfWalk *w = kf_create(&c);
     if (!w) { fprintf(stderr, "%s: kf_create failed\n", name); printf("EXIT=3\n"); exit(3); }
+    std::vector<uint32_t> slots(pdbs.size());
+    for (size_t i = 0; i < slots.size(); i++) slots[i] = (uint32_t)i;
     KfReportHeader h;
     std::vector<KfPdbEntry> pe(c.pdb_capacity + 4);
     std::vector<KfMapRun> rn(c.run_capacity + 4);
     for (int i = 0; i < WARMUP; i++) {
-        kf_refresh(w, dev, g.size(), pdbs.data(), (uint32_t)pdbs.size(), NULL, 0, &h, pe.data(), rn.data());
-        kf_ack(w, h.generation);
+        kf_refresh(w, dev, g.size(), pdbs.data(), slots.data(), (uint32_t)pdbs.size(), &h, pe.data(), rn.data());
+        ack_all(w, h);
     }
     std::vector<double> whole;
     for (int i = 0; i < REPS; i++) {
         CU(cudaDeviceSynchronize());
         double t0 = now_us();
-        kf_refresh(w, dev, g.size(), pdbs.data(), (uint32_t)pdbs.size(), NULL, 0, &h, pe.data(), rn.data());
+        kf_refresh(w, dev, g.size(), pdbs.data(), slots.data(), (uint32_t)pdbs.size(), &h, pe.data(), rn.data());
         CU(cudaDeviceSynchronize());
         whole.push_back(now_us() - t0);
-        kf_ack(w, h.generation);
+        ack_all(w, h);
     }
     double med = median(whole);
     printf("  %-34s %10llu entries %8u runs %3u vas  %9.1f us refresh  %9s  %6.1f ns/entry  %s\n",

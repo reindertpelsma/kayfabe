@@ -1,5 +1,19 @@
 # `cuda/walk` — the walk kernel, and the suite that attacks it
 
+> ### ⊘⊘⊘ SUPERSEDED IN PART 2026-09-25 (branch `v3-diff`) — THE DIFF IS AGAINST CONFIRMED PLACEMENTS, COMMITTED ON ACK
+> The walk-vs-previous-walk delta this file describes (the `acked` generation handshake,
+> `RESYNC`, `REMAP`, scope hints, the `delta/*`, `roundtrip/*`, `scope/*` cases and the
+> `check-closure-negative` / `KF_BREAK_SEG_COALESCE` known-positives) is **gone**. Owner design +
+> COMMIT-ON-ACK ruling: per VA-space object (a **slot**, never a PDB) the kernel keeps the
+> placements the host confirmed; `kf_refresh(w, …, pdbs, slots, n, …)` reports each entry's diff
+> against its slot — UNMAPs of whole placements, then MAPs of the pieces between kept ones, per
+> page-size class (`KFWR_HF_DIFF`, `KFWR_V_PARTIAL` / `KFWR_V_OVERFLOW`); `kf_ack(w, gen, codes,
+> nrun, resets, nreset)` stages one verdict per run, committed by the next refresh. The spec is
+> `crates/kf-cuda/src/diffmodel.rs`; the suite's `diff/*` and `roundtrip/diff_*` cases (the latter
+> against a C++ port of that model) replace the old ones, and `kf-gate9` holds the shipped PTX to
+> the Rust model. Everything below about the WALK (I1–I3, the seam, hostile/race/differential) stands;
+> read every "delta"/"resync"/"ack" passage as history.
+
 **STATUS: LIVE (2026-09-14).** A standalone CUDA proving ground for the kernel of
 `docs/design/dirty_tracking_without_uffd.md` §w720e, emitting the report of
 `docs/design/the_walk_kernel_report_format.md`. Bare metal, no VM, no guest,
@@ -10,7 +24,7 @@ nothing from the kayfabe runtime — a GPU, a buffer, a kernel and assertions.
 | `kf_walk.h` | the report ABI (the format doc's 64/32/32 structs) + the host API |
 | `kf_walk.cu` | the **format descriptor**, the walk, the coalescer, the per-class diff, the report |
 | `kf_tables.h` | a **host-side** GA10x VER2 table builder — test scaffolding |
-| `kf_tests.cu` | 59 cases: **format seam**, correctness, change detection, round-trip closure, hostile, racing, scope, differential (synthetic **and real-driver**) |
+| `kf_tests.cu` | **format seam**, correctness, the commit-on-ack **diff** (`diff/*`), round-trip against a port of the Rust model, hostile, racing, differential (synthetic **and real-driver**) |
 | `kf_corpus.cpp` | builds the differential corpus (host-only, `g++`, no GPU) |
 | `kf_real_tables.py` | ★ extracts page tables a **real NVIDIA driver** wrote, out of a `.rec` capture |
 | `kf_report_emit.c` | ★ the C half of the C↔Rust report seam: `offsetof` manifest + a report |
@@ -67,7 +81,8 @@ and alignment are checked once more at each descent, so a table that merely
 per address space, entry budget per walk, runs in the report), each setting
 `KFWR_HF_TRUNCATED` and its own `refuse_mask` bit. **A truncated walk does not
 install its table**, so it can never become the baseline a later delta is
-computed against; the next refresh is a full resync.
+computed against; the next refresh is a full resync. ⊘ 2026-09-25: a TRUNCATED report is
+never COMMITTED — even an ack of it is ignored (`diff/truncated_is_never_committed`).
 
 
 ## ★★★★★ The format seam — one program, the layout as data
@@ -381,6 +396,8 @@ the writer would then overrun its neighbour or leave a hole. It was the racing
 cases that forced the design, not the benchmark.
 
 ## ★★★★★ Delta round-trip closure
+> ⊘ **HISTORY (superseded 2026-09-25):** see the block at the top; the closure now checked is
+> `roundtrip/diff_*` — report == model diff, then settled slot == walk.
 
     apply(model, deltas_from_walk_N) == full_walk_N        for all N
 

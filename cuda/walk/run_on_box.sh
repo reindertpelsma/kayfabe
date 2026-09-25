@@ -33,7 +33,7 @@ ssh "$HOST" "cd $REMOTE/cuda/walk && nohup sh -c '
   if [ \$rc_build -ne 0 ]; then echo BUILD_FAILED; echo \"EXIT=\$rc_build\"; exit 0; fi
   timeout 900 ./kf_tests; rc=\$?
   make check-negative; rc_neg=\$?
-  make check-closure-negative; rc_cneg=\$?
+  rc_cneg=0  # check-closure-negative retired 2026-09-25 (superseded delta)
   make check-coalesce-negative; rc_coal=\$?
   make check-seam-negative; rc_sneg=\$?
   make check-ver3-sketch; rc_v3=\$?
