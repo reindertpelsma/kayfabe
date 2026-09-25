@@ -371,7 +371,26 @@ pub struct Mirror {
     pub rows: PlacedRows,
     /// ★ P5b: the guest-RAM host object mapped at `ram` (a sysmem USERD's twin names it).
     pub ram_obj: Option<u32>,
+    /// ★ P5c: host channels (twins, Translated rings) born in this space and not yet freed — the
+    /// channel plane counts them. A retired space with any is NEVER recycled (a live engine in a
+    /// space handed to another guest VA space would be a cross-tenant hazard).
+    pub live: std::sync::Arc<AtomicU64>,
 }
+
+/// ★ P5c: a retired mirror's host space, its rows unmapped, its two windows still in place —
+/// ready to be the next guest VA space's mirror. `[measured c3, 61fc7ac8]` building one (space +
+/// the 8 GiB store window + the 2 GiB guest-RAM window) costs ~54 ms of host RM time; the raw
+/// client's `--concurrency` allocates and frees 2400 VA spaces (7 s on bare metal).
+#[derive(Debug, Clone, Copy)]
+pub struct Spare {
+    space: kf_host::VaSpace,
+    fb_base: u64,
+    ram: Option<(u64, u64)>,
+    ram_obj: Option<u32>,
+}
+
+/// Spares kept; a retirement beyond this frees the host space instead.
+const SPARES_MAX: usize = 32;
 
 /// ★ P5: the mirrors, by VA-space object — written by the VA thread when it creates one, read by
 /// the channel plane when a channel names it.
@@ -485,6 +504,12 @@ pub struct MemCounters {
     pub mirrors: AtomicU64,
     /// Sum of mirror-creation ns.
     pub mirror_ns: AtomicU64,
+    /// ★ P5c: mirrors that reused a retired host space (no host verb).
+    pub mirrors_reused: AtomicU64,
+    /// ★ P5c: mirrors retired (the guest freed the VA space), recycled or freed.
+    pub mirrors_retired: AtomicU64,
+    /// ★ P5c: retired with live channels — kept, never recycled.
+    pub mirrors_kept_live: AtomicU64,
     /// The slowest mirror creation, ns.
     pub mirror_ns_max: AtomicU64,
 }
@@ -525,6 +550,8 @@ pub struct MemPlane {
     pub mirrors: Mirrors,
     /// The store's length (the identity window's).
     pub fb_len: u64,
+    /// ★ P5c: retired host spaces ready for reuse (VA thread only).
+    spares: Mutex<Vec<Spare>>,
 }
 
 impl MemPlane {
@@ -586,6 +613,7 @@ impl MemPlane {
                 ram_obj: std::sync::OnceLock::new(),
                 mirrors,
                 fb_len: layout.fb_length,
+                spares: Mutex::new(Vec::new()),
             },
             ops(bar1_win, bar1_scratch, None),
             ops(bar2_win, bar2_scratch, None),
@@ -682,6 +710,101 @@ impl MemPlane {
     }
 }
 
+/// ★ Build a fresh mirror for `key`: a host space and its two windows (P5, §12). Returns the log
+/// line on refusal.
+fn create_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, store: u32, key: VasKey) -> Result<(), String> {
+    let t_mirror = std::time::Instant::now();
+    let space = match rm.alloc_vaspace() {
+        Ok(space) => space,
+        Err(e) => {
+            plane.counters.refused.fetch_add(1, Ordering::Relaxed);
+            return Err(format!("pagedir {key:?}: host VA space refused: {e:?}"));
+        }
+    };
+    // ⊘ A space without the RAM object refuses every sysmem leaf and leaves the trigger armed —
+    // measured p4b4: a ~22 s guest stall per boot.
+    let ram_obj = match plane.guest_ram_object(rm) {
+        Ok(o) => Some(o),
+        Err(e) => {
+            eprintln!("kf3: {key:?}: {e} — its sysmem leaves will be refused");
+            None
+        }
+    };
+    // ★ P5: the two windows, in EVERY mirrored space (§12) — GROWS_DOWN, away from the guest's
+    // bottom-up VAs (§24.2). A space whose windows refuse is still a mirror (its virtual rows
+    // work); a Translated channel naming it refuses by name at birth.
+    let fb_base = rm.map_window(space, store, plane.fb_len, true);
+    let ram_base = ram_obj.map(|(o, len)| rm.map_window(space, o, len, true).map(|b| (b, len)));
+    let rows = PlacedRows::default();
+    let line = match (&fb_base, &ram_base) {
+        (Ok(fb), Some(Ok((rb, rl)))) => {
+            if let Ok(mut mm) = plane.mirrors.lock() {
+                mm.insert(key, Mirror { space, fb_base: *fb, fb_len: plane.fb_len, ram: Some((*rb, *rl)), rows: rows.clone(), ram_obj: ram_obj.map(|(o, _)| o), live: Default::default() });
+            }
+            format!("windows fb={fb:#x}+{:#x} ram={rb:#x}+{rl:#x}", plane.fb_len)
+        }
+        (Ok(fb), None) => {
+            if let Ok(mut mm) = plane.mirrors.lock() {
+                mm.insert(key, Mirror { space, fb_base: *fb, fb_len: plane.fb_len, ram: None, rows: rows.clone(), ram_obj: None, live: Default::default() });
+            }
+            format!("windows fb={fb:#x} ram=NONE")
+        }
+        (fb, ram) => format!("windows REFUSED fb={fb:?} ram={ram:?}"),
+    };
+    let ns = u64::try_from(t_mirror.elapsed().as_nanos()).unwrap_or(u64::MAX);
+    plane.counters.mirrors.fetch_add(1, Ordering::Relaxed);
+    plane.counters.mirror_ns.fetch_add(ns, Ordering::Relaxed);
+    plane.counters.mirror_ns_max.fetch_max(ns, Ordering::Relaxed);
+    eprintln!("kf3: {key:?} mirror space={:#x}: {line} ({} us)", space.space, ns / 1000);
+    m.table.insert(key, Target::Gpu(GpuMirror { vas: HostVas { rm, space, store, ram_obj: ram_obj.map(|(o, _)| o) }, rows }));
+    Ok(())
+}
+
+/// ★ P5c: the guest freed VA space `key` — unmap OUR rows (deferred, one invalidate) and keep the
+/// host space and its windows as a spare. ⊘ A space a live channel still runs in is never
+/// recycled (nor freed): it is kept, named.
+fn retire_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, key: VasKey) -> String {
+    let mirror = plane.mirrors.lock().ok().and_then(|mut mm| mm.remove(&key));
+    let Some((target, ledger)) = m.table.remove(key) else {
+        return format!("retire {key:?}: no mirror (no page-directory statement named it)");
+    };
+    plane.counters.mirrors_retired.fetch_add(1, Ordering::Relaxed);
+    let Target::Gpu(g) = target else {
+        return format!("retire {key:?}: not a GPU mirror — kept");
+    };
+    let live = mirror.as_ref().map_or(0, |mi| mi.live.load(Ordering::Acquire));
+    if live > 0 {
+        plane.counters.mirrors_kept_live.fetch_add(1, Ordering::Relaxed);
+        return format!("retire {key:?}: {live} live channel(s) still run in host space {:#x} — KEPT, never recycled", g.vas.space.space);
+    }
+    let rows = ledger.rows();
+    let mut refused = 0usize;
+    for (va, ..) in &rows {
+        if g.unmap(*va, true).is_err() {
+            refused += 1;
+        }
+    }
+    if !rows.is_empty() && g.invalidate().is_err() {
+        refused += 1;
+    }
+    let spare = mirror.map(|mi| Spare { space: mi.space, fb_base: mi.fb_base, ram: mi.ram, ram_obj: mi.ram_obj });
+    let recycled = match (spare, refused) {
+        (Some(sp), 0) => plane.spares.lock().ok().filter(|v| v.len() < SPARES_MAX).map(|mut v| v.push(sp)).is_some(),
+        _ => false,
+    };
+    if !recycled {
+        // The windows go with the space; a refused unmap means the space is not clean — freed.
+        let _ = rm.free(g.vas.space.range);
+        let _ = rm.free(g.vas.space.space);
+    }
+    format!(
+        "retire {key:?}: {} row(s) unmapped ({refused} refused), host space {:#x} {}",
+        rows.len(),
+        g.vas.space.space,
+        if recycled { "kept as a spare" } else { "freed" }
+    )
+}
+
 /// ★ Apply one statement on the VA thread. Returns a line for the boot log.
 ///
 /// - **fn 70**: write the 8-byte entry into entry 0 of OUR root on the GPU (the root is ours, so
@@ -712,6 +835,9 @@ pub fn apply_statement(
             m.schedule_walk(if p.bar == BarAperture::Bar2 { K_BAR2 } else { K_BAR1 }, trigger);
             format!("fn70 {:?} entry={:#x} shift={} -> our root @{root:#x}, walk scheduled", p.bar, p.entry, p.level_shift)
         }
+        MemStatement::Retire { client, vaspace } => {
+            retire_mirror(m, plane, rm, VasKey((u64::from(client) << 32) | u64::from(vaspace)))
+        }
         MemStatement::PageDir(s) => {
             let key = VasKey((u64::from(s.client.0) << 32) | u64::from(s.vaspace.0));
             let ap = match s.pdb_aperture {
@@ -723,51 +849,20 @@ pub fn apply_statement(
                 }
             };
             if m.table.target(key).is_none() {
-                let t_mirror = std::time::Instant::now();
-                match rm.alloc_vaspace() {
-                    Ok(space) => {
-                        // ⊘ A space without the RAM object refuses every sysmem leaf and leaves the
-                        // trigger armed — measured p4b4: a ~22 s guest stall per boot.
-                        let ram_obj = match plane.guest_ram_object(rm) {
-                            Ok(o) => Some(o),
-                            Err(e) => {
-                                eprintln!("kf3: {key:?}: {e} — its sysmem leaves will be refused");
-                                None
-                            }
-                        };
-                        // ★ P5: the two windows, in EVERY mirrored space (§12) — GROWS_DOWN, away
-                        // from the guest's bottom-up VAs (§24.2). A space whose windows refuse is
-                        // still a mirror (its virtual rows work); a Translated channel naming it
-                        // refuses by name at birth.
-                        let fb_base = rm.map_window(space, store, plane.fb_len, true);
-                        let ram_base = ram_obj.map(|(o, len)| rm.map_window(space, o, len, true).map(|b| (b, len)));
-                        let rows = PlacedRows::default();
-                        let line = match (&fb_base, &ram_base) {
-                            (Ok(fb), Some(Ok((rb, rl)))) => {
-                                if let Ok(mut mm) = plane.mirrors.lock() {
-                                    mm.insert(key, Mirror { space, fb_base: *fb, fb_len: plane.fb_len, ram: Some((*rb, *rl)), rows: rows.clone(), ram_obj: ram_obj.map(|(o, _)| o) });
-                                }
-                                format!("windows fb={fb:#x}+{:#x} ram={rb:#x}+{rl:#x}", plane.fb_len)
-                            }
-                            (Ok(fb), None) => {
-                                if let Ok(mut mm) = plane.mirrors.lock() {
-                                    mm.insert(key, Mirror { space, fb_base: *fb, fb_len: plane.fb_len, ram: None, rows: rows.clone(), ram_obj: None });
-                                }
-                                format!("windows fb={fb:#x} ram=NONE")
-                            }
-                            (fb, ram) => format!("windows REFUSED fb={fb:?} ram={ram:?}"),
-                        };
-                        let ns = u64::try_from(t_mirror.elapsed().as_nanos()).unwrap_or(u64::MAX);
-                        plane.counters.mirrors.fetch_add(1, Ordering::Relaxed);
-                        plane.counters.mirror_ns.fetch_add(ns, Ordering::Relaxed);
-                        plane.counters.mirror_ns_max.fetch_max(ns, Ordering::Relaxed);
-                        eprintln!("kf3: {key:?} mirror space={:#x}: {line} ({} us)", space.space, ns / 1000);
-                        m.table.insert(key, Target::Gpu(GpuMirror { vas: HostVas { rm, space, store, ram_obj: ram_obj.map(|(o, _)| o) }, rows }))
+                let reused = plane.spares.lock().ok().and_then(|mut v| v.pop());
+                if let Some(sp) = reused {
+                    // ★ P5c: a retired space — its rows are gone, its windows are where they were.
+                    let rows = PlacedRows::default();
+                    if let Ok(mut mm) = plane.mirrors.lock() {
+                        mm.insert(
+                            key,
+                            Mirror { space: sp.space, fb_base: sp.fb_base, fb_len: plane.fb_len, ram: sp.ram, rows: rows.clone(), ram_obj: sp.ram_obj, live: Default::default() },
+                        );
                     }
-                    Err(e) => {
-                        plane.counters.refused.fetch_add(1, Ordering::Relaxed);
-                        return format!("pagedir {key:?}: host VA space refused: {e:?}");
-                    }
+                    plane.counters.mirrors_reused.fetch_add(1, Ordering::Relaxed);
+                    m.table.insert(key, Target::Gpu(GpuMirror { vas: HostVas { rm, space: sp.space, store, ram_obj: sp.ram_obj }, rows }));
+                } else if let Err(line) = create_mirror(m, plane, rm, store, key) {
+                    return line;
                 }
             }
             match m.table.set_root(key, s.pdb.0, ap) {

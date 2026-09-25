@@ -107,6 +107,17 @@ pub enum MemStatement {
     /// `SET_PAGE_DIRECTORY` / `COPY_SERVER_RESERVED_PDES` — see
     /// [`crate::rmrpc::PageDirStatement`].
     PageDir(crate::rmrpc::PageDirStatement),
+    /// ★ P5c: the guest's VA-space OBJECT is gone — its own free, its device's, or its client's.
+    /// The plane retires the mirror (our rows unmapped, the host space recycled). ⊘ Never for a
+    /// `GPU_DEVICE` reference's own handle: that name is transient (RM frees it right after
+    /// publishing the PDEs, `[measured p5c]`), the device-default space outlives it until the
+    /// DEVICE goes.
+    Retire {
+        /// `hClient`.
+        client: u32,
+        /// The VA-space object.
+        vaspace: u32,
+    },
 }
 
 /// ★ Where statements go: the device's memory plane. Called on the register drainer, so it must
@@ -192,15 +203,53 @@ pub struct PageDirPolicy {
     guest_os: kf_abi::GuestOs,
     sink: MemSink,
     held_last: bool,
+    /// ★ P5c: every VA-space object allocated, `(hClient, hVaSpace)` → `(parent device, a
+    /// GPU_DEVICE reference)` — what a later free retires.
+    vas: std::collections::BTreeMap<(u32, u32), (u32, bool)>,
     /// Statements carried.
     pub carried: u64,
+    /// ★ P5c: retirements carried.
+    pub retired: u64,
 }
 
 impl PageDirPolicy {
     /// A link for one guest driver's wire.
     #[must_use]
     pub fn new(abi: kf_abi::versions::DriverAbiTable, guest_os: kf_abi::GuestOs, sink: MemSink) -> PageDirPolicy {
-        PageDirPolicy { abi, guest_os, sink, held_last: false, carried: 0 }
+        PageDirPolicy { abi, guest_os, sink, held_last: false, vas: Default::default(), carried: 0, retired: 0 }
+    }
+
+    /// ★ P5c: observe a VA-space alloc (its parent device and whether it is only a reference to
+    /// the device's default space).
+    fn observe_alloc(&mut self, cmd: &RpcCommand) {
+        let body = cmd.wire_body();
+        let Ok(h) = self.abi.decode_rpc_alloc(body) else { return };
+        if crate::chanlink::alloc_shape(&self.abi, h.class) != Some(kf_abi::versions::AllocParams::VaSpace) {
+            return;
+        }
+        let device_ref = crate::rmrpc::alloc_params_window(&self.abi, body)
+            .and_then(|p| self.abi.decode_vaspace_index(p))
+            .is_some_and(|i| i == kf_abi::bringup::NV_VASPACE_ALLOCATION_INDEX_GPU_DEVICE);
+        self.vas.insert((h.client, h.handle), (h.parent, device_ref));
+    }
+
+    /// ★ P5c: a free — retire every VA-space object it takes with it.
+    fn observe_free(&mut self, cmd: &RpcCommand) {
+        let Ok(f) = self.abi.decode_free(&cmd.payload) else { return };
+        let (client, object) = (f.client, f.handle);
+        let dying: Vec<(u32, u32)> = self
+            .vas
+            .iter()
+            .filter(|((c, v), (dev, device_ref))| {
+                *c == client && (object == client || *dev == object || (*v == object && !*device_ref))
+            })
+            .map(|(k, _)| *k)
+            .collect();
+        for (c, v) in dying {
+            self.vas.remove(&(c, v));
+            (self.sink)(MemStatement::Retire { client: c, vaspace: v });
+            self.retired += 1;
+        }
     }
 }
 
@@ -216,8 +265,18 @@ const SET_PAGE_DIRECTORY: u32 = 0x0080_1813;
 impl CommandPolicy for PageDirPolicy {
     fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
         self.held_last = false;
-        if cmd.function != RpcFunction::RmControl {
-            return None;
+        match cmd.function {
+            // ★ P5c: observed, never answered — the object seat answers both.
+            RpcFunction::RmAlloc => {
+                self.observe_alloc(cmd);
+                return None;
+            }
+            RpcFunction::Free => {
+                self.observe_free(cmd);
+                return None;
+            }
+            RpcFunction::RmControl => {}
+            _ => return None,
         }
         let Ok(crate::rmrpc::Translation::PageDir(st)) = crate::rmrpc::translate(&self.abi, self.guest_os, cmd) else {
             return None;

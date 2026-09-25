@@ -121,11 +121,31 @@ pub struct ReconcilePlan {
 /// [`StoreMapPort::ram_stale`].
 #[must_use]
 pub fn ram_slice_backed(start: u64, off: u64, len: u64, rows: &[(u64, u64, u64)]) -> bool {
+    backed_from(start, off, len, rows, first_reaching(rows, start, ends_sorted(rows)))
+}
+
+/// ★ P5c: whether the rows' ENDS ascend with their starts — true of every disjoint sorted set (a
+/// walk's leaves, our ledger's rows). Only then may a search skip the rows that end at or before a
+/// point; otherwise the scan starts at 0, exactly as before.
+fn ends_sorted(rows: &[(u64, u64, u64)]) -> bool {
+    rows.windows(2).all(|w| w[0].0.saturating_add(w[0].2) <= w[1].0.saturating_add(w[1].2))
+}
+
+/// ★ P5c: the first row that ends AFTER `start` (every row before it would be skipped by the scan
+/// anyway) — `O(log n)` where the linear scan was `O(n)`, which made the reconcile `O(n²)` in the
+/// space's rows: `[measured c2, 9a3e499d]` `plan_avg_us` 3 108 at ~2 400 rows, and the raw client's
+/// `--ce-client-guest-ram` declares 13 000.
+fn first_reaching(rows: &[(u64, u64, u64)], start: u64, sorted_ends: bool) -> usize {
+    if sorted_ends { rows.partition_point(|&(va, _, rlen)| va.saturating_add(rlen) <= start) } else { 0 }
+}
+
+/// [`ram_slice_backed`]'s scan, from row `from` on.
+fn backed_from(start: u64, off: u64, len: u64, rows: &[(u64, u64, u64)], from: usize) -> bool {
     let Some(end) = start.checked_add(len) else {
         return false;
     };
     let mut at = start;
-    for &(va, foff, rlen) in rows {
+    for &(va, foff, rlen) in &rows[from.min(rows.len())..] {
         if at >= end {
             break;
         }
@@ -167,38 +187,63 @@ pub fn plan_reconcile(ledger: &[(u64, u64, u64, bool)], desired: &[Desired]) -> 
         v
     };
     let (want_store, want_ram) = (rows(false), rows(true));
+    let (ws_sorted, wr_sorted) = (ends_sorted(&want_store), ends_sorted(&want_ram));
     let mut plan = ReconcilePlan::default();
     let mut kept: Vec<(u64, u64, u64, bool)> = Vec::new();
     for &(va, len, off, ram) in ledger {
-        let want = if ram { &want_ram } else { &want_store };
-        if ram_slice_backed(va, off, len, want) {
+        let (want, sorted) = if ram { (&want_ram, wr_sorted) } else { (&want_store, ws_sorted) };
+        if backed_from(va, off, len, want, first_reaching(want, va, sorted)) {
             kept.push((va, len, off, ram));
         } else {
             plan.unmap.push((va, len));
         }
     }
     kept.sort_unstable();
-    let kept_rows = |ram: bool| -> Vec<(u64, u64, u64)> {
-        kept.iter()
-            .filter(|k| k.3 == ram)
-            .map(|&(va, len, off, _)| (va, off, len))
-            .collect()
-    };
-    let (have_store, have_ram) = (kept_rows(false), kept_rows(true));
+    // Kept rows, as `(va, end)` for the overlap search (ledger rows are disjoint: ends ascend).
+    let kept_spans: Vec<(u64, u64)> = kept.iter().map(|&(va, len, _, _)| (va, va.saturating_add(len))).collect();
+    let spans_sorted = kept_spans.windows(2).all(|w| w[0].1 <= w[1].1);
     let mut dropped: std::collections::BTreeSet<u64> = std::collections::BTreeSet::new();
-    for d in desired {
-        let have = if d.ram { &have_ram } else { &have_store };
-        if ram_slice_backed(d.va, d.off, d.len, have) {
-            continue;
-        }
-        for &(kva, klen, _, _) in &kept {
-            let overlaps = kva < d.va.saturating_add(d.len) && d.va < kva.saturating_add(klen);
-            if overlaps && dropped.insert(kva) {
-                plan.unmap.push((kva, klen));
+    let mut mapped = vec![false; desired.len()];
+    // ⊘ P5c: iterate to a fixed point. The old single pass checked every desired run against ALL
+    // kept rows, then dropped kept rows overlapping an unbacked run — so a run that only a
+    // since-dropped row backed was skipped AND left unmapped. A second pass checks the survivors.
+    loop {
+        let alive = |ram: bool| -> Vec<(u64, u64, u64)> {
+            kept.iter()
+                .filter(|k| k.3 == ram && !dropped.contains(&k.0))
+                .map(|&(va, len, off, _)| (va, off, len))
+                .collect()
+        };
+        let (have_store, have_ram) = (alive(false), alive(true));
+        let (hs_sorted, hr_sorted) = (ends_sorted(&have_store), ends_sorted(&have_ram));
+        let mut changed = false;
+        for (i, d) in desired.iter().enumerate() {
+            if mapped[i] {
+                continue;
+            }
+            let (have, sorted) = if d.ram { (&have_ram, hr_sorted) } else { (&have_store, hs_sorted) };
+            if backed_from(d.va, d.off, d.len, have, first_reaching(have, d.va, sorted)) {
+                continue;
+            }
+            mapped[i] = true;
+            changed = true;
+            let d_end = d.va.saturating_add(d.len);
+            let from = if spans_sorted { kept_spans.partition_point(|&(_, e)| e <= d.va) } else { 0 };
+            for (j, &(kva, kend)) in kept_spans.iter().enumerate().skip(from) {
+                if spans_sorted && kva >= d_end {
+                    break;
+                }
+                let overlaps = kva < d_end && d.va < kend;
+                if overlaps && dropped.insert(kva) {
+                    plan.unmap.push((kva, kept[j].1));
+                }
             }
         }
-        plan.map.push(*d);
+        if !changed {
+            break;
+        }
     }
+    plan.map = desired.iter().zip(&mapped).filter(|(_, m)| **m).map(|(d, _)| *d).collect();
     plan.kept = kept.len() - dropped.len();
     plan
 }
@@ -465,3 +510,107 @@ impl Ledger {
     }
 }
 
+
+#[cfg(test)]
+mod plan_tests {
+    use super::*;
+
+    /// Apply `plan` to `ledger` and check the result expresses `desired` exactly: rows disjoint,
+    /// every row agrees with the desired run under it (same ground truth, same offset), and every
+    /// desired byte is covered.
+    fn check(ledger: &[(u64, u64, u64, bool)], desired: &[Desired], plan: &ReconcilePlan) {
+        let mut rows: std::collections::BTreeMap<u64, (u64, u64, bool)> =
+            ledger.iter().map(|&(va, len, off, ram)| (va, (len, off, ram))).collect();
+        for &(va, _) in &plan.unmap {
+            assert!(rows.remove(&va).is_some(), "unmap of {va:#x}, which is not held");
+        }
+        for d in &plan.map {
+            assert!(rows.insert(d.va, (d.len, d.off, d.ram)).is_none(), "map over a held row at {:#x}", d.va);
+        }
+        let v: Vec<(u64, u64, u64, bool)> = rows.iter().map(|(&va, &(len, off, ram))| (va, len, off, ram)).collect();
+        for w in v.windows(2) {
+            assert!(w[0].0 + w[0].1 <= w[1].0, "overlapping rows {w:x?}");
+        }
+        for &(va, len, off, ram) in &v {
+            let want: Vec<(u64, u64, u64)> =
+                desired.iter().filter(|d| d.ram == ram).map(|d| (d.va, d.off, d.len)).collect();
+            let mut want = want;
+            want.sort_unstable();
+            assert!(ram_slice_backed(va, off, len, &want), "row {va:#x}+{len:#x} is not what the walk says");
+        }
+        for d in desired {
+            let have: Vec<(u64, u64, u64)> =
+                v.iter().filter(|r| r.3 == d.ram).map(|&(va, len, off, _)| (va, off, len)).collect();
+            assert!(ram_slice_backed(d.va, d.off, d.len, &have), "desired {d:x?} left unmapped");
+        }
+    }
+
+    /// ⊘ The single-pass planner's hole: a kept row backing TWO runs is dropped for the second,
+    /// and the first — skipped as backed — was left unmapped.
+    #[test]
+    fn a_run_backed_only_by_a_dropped_row_is_remapped() {
+        let ledger = [(0x0, 0x2000, 0x10_0000, false)];
+        let desired = [
+            Desired { va: 0x0, len: 0x1000, off: 0x10_0000, ram: false },
+            Desired { va: 0x1000, len: 0x2000, off: 0x10_1000, ram: false },
+        ];
+        let plan = plan_reconcile(&ledger, &desired);
+        check(&ledger, &desired, &plan);
+        assert_eq!(plan.map.len(), 2);
+    }
+
+    /// A small deterministic generator (no dependency): random disjoint layouts, random edits.
+    #[test]
+    fn random_layouts_reconcile_exactly() {
+        let mut x: u64 = 0x9E37_79B9_7F4A_7C15;
+        let mut next = move || {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            x
+        };
+        for _ in 0..400 {
+            let n = (next() % 40) as usize;
+            let mut desired = Vec::new();
+            let mut va = 0u64;
+            for _ in 0..n {
+                va += (next() % 4) * 0x1000;
+                let len = (1 + next() % 4) * 0x1000;
+                desired.push(Desired { va, len, off: (next() % 64) * 0x1000, ram: next() % 3 == 0 });
+                va += len;
+            }
+            // A ledger from an EARLIER layout: some rows equal, some split/merged/shifted.
+            let mut ledger = Vec::new();
+            let mut va = 0u64;
+            for d in &desired {
+                match next() % 5 {
+                    0 => {}
+                    1 if d.len > 0x1000 => {
+                        ledger.push((d.va, 0x1000, d.off, d.ram));
+                    }
+                    2 => ledger.push((d.va, d.len, d.off + 0x1000, d.ram)),
+                    _ => ledger.push((d.va, d.len, d.off, d.ram)),
+                }
+                va = va.max(d.va + d.len);
+            }
+            ledger.push((va + 0x10_0000, 0x1000, 0, false));
+            ledger.sort_unstable();
+            ledger.dedup_by_key(|r| r.0);
+            let plan = plan_reconcile(&ledger, &desired);
+            check(&ledger, &desired, &plan);
+        }
+    }
+
+    /// ★ The throughput this exists for: 13 000 rows reconcile in far under a millisecond each.
+    #[test]
+    fn thirteen_thousand_rows_plan_in_near_linear_time() {
+        let desired: Vec<Desired> =
+            (0..13_000u64).map(|i| Desired { va: 0x1_0000_0000 + i * 0x1000, len: 0x1000, off: i * 0x3000, ram: true }).collect();
+        let ledger: Vec<(u64, u64, u64, bool)> = desired[..12_999].iter().map(|d| (d.va, d.len, d.off, d.ram)).collect();
+        let t = std::time::Instant::now();
+        let plan = plan_reconcile(&ledger, &desired);
+        let el = t.elapsed();
+        assert_eq!((plan.map.len(), plan.unmap.len(), plan.kept), (1, 0, 12_999));
+        assert!(el < std::time::Duration::from_millis(200), "{el:?}");
+    }
+}

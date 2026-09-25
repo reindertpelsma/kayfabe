@@ -77,6 +77,8 @@ struct PtChan {
     engine: u32,
     /// Engine objects on the twin: guest handle → host handle.
     objects: HashMap<u32, u32>,
+    /// ★ P5c: the mirror's live-channel count (released at free).
+    live: Arc<AtomicU64>,
 }
 
 /// ★ P5b §2.7: one host engine's non-stall event, and the guest vector it is announced on.
@@ -667,6 +669,7 @@ impl ChanPlane {
                 }
                 for ((c, h), t) in twins {
                     let r = me.rm.free_channel(t.chan);
+                    t.live.fetch_sub(1, Ordering::AcqRel);
                     me.engine_live(t.engine, false);
                     // ★ The per-token hardware ledger (`run_fast_guest.sh` gates on it): every ring
                     // of a Passthrough token IS a host doorbell, so `emulated` is only the rings
@@ -744,10 +747,20 @@ impl ChanPlane {
             };
             let g = kf_chan::passthrough::GuestChannel { gpfifo_va: a.gpfifo_va, entries: a.entries.max(1), userd, engine };
             let space = mirror.space;
+            // ★ P5c: counted NOW (on the drainer, in statement order), so a VA-space free that
+            // follows can never recycle the space under a birth still queued.
+            let live = mirror.live.clone();
+            live.fetch_add(1, Ordering::AcqRel);
             return self.defer(
                 "birth passthrough",
                 Box::new(move |me: &ChanPlane| {
-                    let chan = kf_chan::passthrough::birth_twin(me.rm, space, g).map_err(|e| (NV_ERR_INSUFFICIENT_RESOURCES, e))?;
+                    let chan = match kf_chan::passthrough::birth_twin(me.rm, space, g) {
+                        Ok(c) => c,
+                        Err(e) => {
+                            live.fetch_sub(1, Ordering::AcqRel);
+                            return Err((NV_ERR_INSUFFICIENT_RESOURCES, e));
+                        }
+                    };
                     let owner = if a.kernel_client { Owner::Kernel } else { Owner::User };
                     let alloc = me
                         .caps
@@ -756,10 +769,11 @@ impl ChanPlane {
                         .and_then(|mut c| me.plane.allocate_channel(&mut c, idx, Route::Passthrough, chan.token, owner).map_err(|e| format!("{e:?}")));
                     if let Err(e) = alloc {
                         let _ = me.rm.free_channel(chan);
+                        live.fetch_sub(1, Ordering::AcqRel);
                         return Err((NV_ERR_INSUFFICIENT_RESOURCES, format!("token {idx:#x}: {e}")));
                     }
                     if let Ok(mut m) = me.pt.lock() {
-                        m.insert((a.client, a.handle), PtChan { chan, idx, tsg: a.tsg, parent: a.parent, engine, objects: HashMap::new() });
+                        m.insert((a.client, a.handle), PtChan { chan, idx, tsg: a.tsg, parent: a.parent, engine, objects: HashMap::new(), live });
                     }
                     me.pt_births.fetch_add(1, Ordering::Relaxed);
                     me.engine_live(engine, true);
@@ -772,11 +786,16 @@ impl ChanPlane {
             );
         }
         let entries = a.entries.max(1);
+        mirror.live.fetch_add(1, Ordering::AcqRel);
         self.defer(
             "birth translated",
             Box::new(move |me: &ChanPlane| {
-                let userd = me.userd_view(a.userd).map_err(|e| (NV_ERR_NOT_SUPPORTED, e))?;
-                let host = HostRing::on_engine(me.rm, mirror.space, me.host_ce).map_err(|e| (NV_ERR_INSUFFICIENT_RESOURCES, format!("host ring: {e}")))?;
+                let fail = |e: (u32, String)| {
+                    mirror.live.fetch_sub(1, Ordering::AcqRel);
+                    e
+                };
+                let userd = me.userd_view(a.userd).map_err(|e| fail((NV_ERR_NOT_SUPPORTED, e)))?;
+                let host = HostRing::on_engine(me.rm, mirror.space, me.host_ce).map_err(|e| fail((NV_ERR_INSUFFICIENT_RESOURCES, format!("host ring: {e}"))))?;
                 let ht = host.channel().token;
                 let chan = TranslatedChannel::new(TranslatedRing::new(a.gpfifo_va, entries, 0), host, idx);
                 let alloc = me
@@ -786,7 +805,7 @@ impl ChanPlane {
                     .and_then(|mut c| me.plane.allocate_channel(&mut c, idx, Route::Translated, ht, Owner::Kernel).map_err(|e| format!("{e:?}")));
                 if let Err(e) = alloc {
                     let _ = me.rm.free_channel(chan.host().channel());
-                    return Err((NV_ERR_INSUFFICIENT_RESOURCES, format!("token {idx:#x}: {e}")));
+                    return Err(fail((NV_ERR_INSUFFICIENT_RESOURCES, format!("token {idx:#x}: {e}"))));
                 }
                 let slot = Slot { chan, key, mirror, userd, guest_idx: idx, scheduled: false, dead: None, serves: 0, last_put: None };
                 if let Ok(mut s) = me.slots.write() {
@@ -845,6 +864,7 @@ impl ChanPlane {
             eprintln!("kf3: chan token {:#x} (host {ht:#x}) STRANDED: still BUSY after 200 ms", g.guest_idx);
         }
         let _ = self.rm.free_channel(g.chan.host().channel());
+        g.mirror.live.fetch_sub(1, Ordering::AcqRel);
         if let UserdView::Store { cookie, .. } = &g.userd {
             let _ = self.rm.release_cpu_view(kf_host::CpuViewRelease { h_memory: self.store, p_linear_address: *cookie });
         }
