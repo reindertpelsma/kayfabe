@@ -332,6 +332,35 @@ impl HostRm {
         Ok(h)
     }
 
+    /// ★ w827: a `GT200_DEBUGGER` session on OUR device, bound to `obj3d` — a GR object this
+    /// session allocated (a twin's engine object). Params WE author:
+    /// `NV83DE_ALLOC_PARAMETERS {hDebuggerClient_Obsolete = 0, hAppClient = our client,
+    /// hClass3dObject = obj3d}` (`ogkm-580: class/cl83de.h:51-55`); nothing of the guest's alloc
+    /// reaches the host but the fact that it asked for one. Unprivileged
+    /// (`RS_FLAGS_ALLOC_NON_PRIVILEGED`, `resource_list.h:192`).
+    ///
+    /// # Errors
+    /// The host's refusal.
+    pub fn alloc_debugger(&self, obj3d: u32) -> Result<u32, RmError> {
+        let mut params = [0u8; 12];
+        params[4..8].copy_from_slice(&self.client.raw().to_le_bytes());
+        params[8..12].copy_from_slice(&obj3d.to_le_bytes());
+        let want = self.mint();
+        let h = self.raw_alloc(self.device, want, 0x83de, &mut params)?;
+        self.remember(h, self.device);
+        Ok(h)
+    }
+
+    /// ★ w827: `NV83DE_CTRL_CMD_DEBUG_SET_EXCEPTION_MASK` on one of our debugger sessions — a
+    /// 4-byte event filter inside RM, no hardware write (`ctrl83dedebug.h:158-231`).
+    ///
+    /// # Errors
+    /// The host's status.
+    pub fn debugger_set_exception_mask(&self, debugger: u32, mask: u32) -> Result<(), RmError> {
+        let mut params = mask.to_le_bytes();
+        self.raw_control(debugger, 0x83de_0309, &mut params)
+    }
+
     /// `GPFIFO_SCHEDULE` (`bEnable = 1`) on the channel's group — the channel starts fetching.
     ///
     /// # Errors

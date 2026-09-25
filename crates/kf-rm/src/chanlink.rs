@@ -54,6 +54,15 @@ pub const DISABLE_CHANNELS: u32 = kf_abi::submit::NV2080_CTRL_CMD_FIFO_DISABLE_C
 pub const TSG_PREEMPT: u32 = kf_abi::submit::NVA06C_CTRL_CMD_PREEMPT;
 /// `NV_ERR_INSUFFICIENT_PERMISSIONS`.
 const NV_ERR_INSUFFICIENT_PERMISSIONS: u32 = 0x1b;
+/// `GT200_DEBUGGER` (`ogkm-580: resource_list.h:186-196`, parent `Device`,
+/// `NV83DE_ALLOC_PARAMETERS` required).
+pub const GT200_DEBUGGER: u32 = 0x83de;
+/// `NV83DE_ALLOCATION_PARAMETERS` size: `{hDebuggerClient_Obsolete, hAppClient, hClass3dObject}`
+/// (`ogkm-580: class/cl83de.h:51-55`).
+const NV83DE_ALLOC_PARAMS_SIZE: usize = 12;
+/// `NV83DE_CTRL_CMD_DEBUG_SET_EXCEPTION_MASK` — a 4-byte `exceptionMask`, an RM-internal event
+/// filter that programs no hardware (`ctrl83dedebug.h:158-231`).
+pub const DEBUG_SET_EXCEPTION_MASK: u32 = 0x83de_0309;
 
 /// ★ v3-chanctl: a `DISABLE_CHANNELS` list as a `Copy` value (`(hClient, hChannel)` × `n`, ≤ 64).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -176,6 +185,30 @@ pub enum ChanStatement {
         /// `None` for compute/3D or an undeclarable one. CUDA allocates its copy class ON ITS GR
         /// CHANNEL naming a GRCE, and that GRCE is the only thing that says which engine runs it.
         copy_engine: Option<u32>,
+    },
+    /// ★ w827: a `GT200_DEBUGGER` session under a device, bound to the guest's GR object
+    /// `obj3d` of client `app_client` — what `cuCtxCreate` allocates on every context
+    /// (`[measured traces/host_reference_ga106 ctx_r1 i=401]`, then `SET_EXCEPTION_MASK` at i=425).
+    Debugger {
+        /// `hClient`.
+        client: u32,
+        /// The device (`hParent`).
+        parent: u32,
+        /// The session's handle.
+        handle: u32,
+        /// `hAppClient`.
+        app_client: u32,
+        /// `hClass3dObject` — a compute/3D object in `app_client`.
+        obj3d: u32,
+    },
+    /// ★ w827: `DEBUG_SET_EXCEPTION_MASK` on a debugger session.
+    DebuggerExceptionMask {
+        /// `hClient`.
+        client: u32,
+        /// The session.
+        object: u32,
+        /// `exceptionMask` (`NV83DE_CTRL_DEBUG_SET_EXCEPTION_MASK_*`).
+        mask: u32,
     },
     /// `GET_WORK_SUBMIT_TOKEN` on a channel.
     Token {
@@ -368,6 +401,25 @@ impl ChannelPolicy {
         if !self.abi.capabilities().alloc_class(kf_arch::ids::ClassId(h.class)).is_permitted() {
             return None;
         }
+        if h.class == GT200_DEBUGGER {
+            let w = |p: &[u8], i: usize| p.get(4 * i..4 * i + 4).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]));
+            let Some(params) = crate::rmrpc::alloc_params_window(&self.abi, body).filter(|p| p.len() == NV83DE_ALLOC_PARAMS_SIZE) else {
+                return Some(Self::refusal(NV_ERR_INVALID_ARGUMENT, "GT200_DEBUGGER params are not NV83DE_ALLOC_PARAMETERS (12 bytes)", cmd));
+            };
+            // `hDebuggerClient_Obsolete` "must be zero" (cl83de.h:52) — RM refuses it otherwise.
+            if w(params, 0) != Some(0) {
+                return Some(Self::refusal(NV_ERR_INVALID_ARGUMENT, "GT200_DEBUGGER hDebuggerClient_Obsolete is not zero", cmd));
+            }
+            let st = ChanStatement::Debugger {
+                client: h.client,
+                parent: h.parent,
+                handle: h.handle,
+                app_client: w(params, 1)?,
+                obj3d: w(params, 2)?,
+            };
+            self.carried += 1;
+            return self.carry_alloc(st, cmd, h.client, h.handle);
+        }
         match alloc_shape(&self.abi, h.class) {
             Some(AllocParams::VaSpace) => {
                 let first = *self.vas_under.entry((h.client, h.parent)).or_insert(h.handle);
@@ -520,6 +572,15 @@ impl ChannelPolicy {
                 ChanStatement::Schedule { client: h.client, object: h.object, enable: params.first().is_some_and(|&b| b != 0) }
             }
             GET_WORK_SUBMIT_TOKEN => ChanStatement::Token { client: h.client, object: h.object },
+            DEBUG_SET_EXCEPTION_MASK => {
+                if !self.abi.capabilities().control(kf_arch::ids::ControlCmd(h.cmd)).is_permitted() {
+                    return None;
+                }
+                let Some(mask) = params.get(..4).filter(|_| params.len() == 4).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]])) else {
+                    return Some(Self::refusal(NV_ERR_INVALID_ARGUMENT, &format!("SET_EXCEPTION_MASK params are {} bytes, not 4", params.len()), cmd));
+                };
+                ChanStatement::DebuggerExceptionMask { client: h.client, object: h.object, mask }
+            }
             PROMOTE_CTX => {
                 eprintln!(
                     "kf-rm: chanlink: GPU_PROMOTE_CTX on {:#x}:{:#x} params={} rpc_flags={:#x}",
@@ -699,6 +760,11 @@ impl ChannelPolicy {
 /// family is still refused earlier, by the capability allowlist).
 #[must_use]
 pub fn alloc_shape(abi: &DriverAbiTable, class: u32) -> Option<AllocParams> {
+    // ★ w827: a debugger session is a graph node whose params the object model does not read —
+    // the channel plane decodes them (`ChanStatement::Debugger`) and twins the session on the host.
+    if class == GT200_DEBUGGER {
+        return Some(AllocParams::NoDeclaredFacts);
+    }
     abi.alloc_params(kf_arch::ids::ClassId(class)).or_else(|| match engine_class_kind(class)? {
         kf_chip::classes::Kind::ChannelGpfifo => Some(AllocParams::Channel),
         kf_chip::classes::Kind::Compute | kf_chip::classes::Kind::DmaCopy | kf_chip::classes::Kind::ThreeD => {

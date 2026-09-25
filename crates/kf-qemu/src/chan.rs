@@ -528,6 +528,9 @@ pub struct ChanPlane {
     pt: Mutex<HashMap<(u32, u32), PtChan>>,
     /// ★ P5b: guest engine object `(hClient, hObject)` → its channel's key.
     pt_objs: Mutex<HashMap<(u32, u32), (u32, u32)>>,
+    /// ★ w827: guest debugger session `(hClient, hDebugger)` → its host twin: `(guest device, host
+    /// session, host GR object it is bound to)`.
+    dbg: Mutex<HashMap<(u32, u32), (u32, u32, u32)>>,
     /// ★ P5b: the act thread's queue (`None` until [`ChanPlane::start`]).
     acts: Mutex<Option<std::sync::mpsc::Sender<(Act, kf_gsp::Deferred, &'static str)>>>,
     /// The register drainer's wake: an act that resolved a held reply signals it.
@@ -648,6 +651,7 @@ impl ChanPlane {
             family,
             pt: Mutex::new(HashMap::new()),
             pt_objs: Mutex::new(HashMap::new()),
+            dbg: Mutex::new(HashMap::new()),
             acts: Mutex::new(None),
             release,
             engines,
@@ -871,6 +875,19 @@ impl ChanPlane {
                 }
             }
             ChanStatement::EngineObject { client, parent, handle, class, copy_engine } => self.engine_object(client, parent, handle, class, copy_engine),
+            ChanStatement::Debugger { client, parent, handle, app_client, obj3d } => self.debugger(client, parent, handle, app_client, obj3d),
+            ChanStatement::DebuggerExceptionMask { client, object, mask } => {
+                let Some(h) = self.dbg.lock().ok().and_then(|m| m.get(&(client, object)).map(|v| v.1)) else {
+                    return ChanAnswer::NotOurs;
+                };
+                self.defer(
+                    "debugger exception mask",
+                    Box::new(move |me: &ChanPlane| {
+                        me.rm.debugger_set_exception_mask(h, mask).map_err(|e| (NV_ERR_INVALID_STATE, format!("SET_EXCEPTION_MASK {mask:#x} on host session {h:#x}: {e:?}")))?;
+                        Ok(format!("{client:#x}:{object:#x} SET_EXCEPTION_MASK {mask:#x} on host session {h:#x}"))
+                    }),
+                )
+            }
             ChanStatement::Free { client, object } => self.free(client, object),
             ChanStatement::PromoteCtx { chan_client, object, engine_type, initialize, with_va, entries } => {
                 self.promote_ctx(chan_client, object, engine_type, initialize, with_va, entries)
@@ -1276,7 +1293,89 @@ impl ChanPlane {
     /// ★ A free the plane may own: a Translated channel, a passthrough twin (by channel, its group,
     /// its device, or its client), or an engine object on one. Tokens stop routing to a twin NOW
     /// (atomics, no host call); the host frees run as ONE act whose outcome the reply waits for.
+    /// ★ w827 — **a `GT200_DEBUGGER` session, twinned on the host.** `cuCtxCreate` allocates one
+    /// per context, bound to its own GR object, then sets its exception mask; refusing the alloc
+    /// failed `cuCtxCreate` with `CUDA_ERROR_INVALID_VALUE` on every CUDA rung (`[measured vh
+    /// w827, 238a88f6]`, guest `GspRmAlloc failed … hClass=0x000083de … status=0x56`).
+    ///
+    /// The guest's `hClass3dObject` must name a compute/3D object on one of ITS OWN client's
+    /// passthrough twins (`hAppClient` is the allocating client — a session over another client's
+    /// context is refused by name, as `DISABLE_CHANNELS` refuses another client's channel); the
+    /// host session is allocated with params WE author, bound to that twin's host GR object. So the
+    /// host session watches exactly the host context the guest's own context runs as.
+    fn debugger(&self, client: u32, parent: u32, handle: u32, app_client: u32, obj3d: u32) -> ChanAnswer {
+        if app_client != client {
+            return ChanAnswer::Refused {
+                status: NV_ERR_INVALID_ARGUMENT,
+                why: format!("GT200_DEBUGGER in client {client:#x} over another client's ({app_client:#x}) object"),
+            };
+        }
+        let host_obj = self.pt_objs.lock().ok().and_then(|m| m.get(&(client, obj3d)).copied()).and_then(|key| {
+            self.pt.lock().ok().and_then(|m| m.get(&key).and_then(|v| v.objects.get(&obj3d).copied()))
+        });
+        let host_obj = match host_obj {
+            Some((h, kf_chip::classes::Kind::Compute | kf_chip::classes::Kind::ThreeD)) => h,
+            Some((_, k)) => {
+                return ChanAnswer::Refused { status: NV_ERR_INVALID_ARGUMENT, why: format!("GT200_DEBUGGER over {client:#x}:{obj3d:#x}, a {k:?} object — not GR") };
+            }
+            None => {
+                return ChanAnswer::Refused {
+                    status: NV_ERR_INVALID_ARGUMENT,
+                    why: format!("GT200_DEBUGGER over {client:#x}:{obj3d:#x}: no passthrough twin holds that object"),
+                };
+            }
+        };
+        self.defer(
+            "debugger",
+            Box::new(move |me: &ChanPlane| {
+                let h = me.rm.alloc_debugger(host_obj).map_err(|e| (NV_ERR_INVALID_STATE, format!("GT200_DEBUGGER over host object {host_obj:#x}: {e:?}")))?;
+                if let Ok(mut m) = me.dbg.lock() {
+                    m.insert((client, handle), (parent, h, host_obj));
+                }
+                Ok(format!("{client:#x}:{handle:#x} GT200_DEBUGGER over {obj3d:#x} -> host session {h:#x} (host GR object {host_obj:#x})"))
+            }),
+        )
+    }
+
     fn free(&self, client: u32, object: u32) -> ChanAnswer {
+        // ★ w827: debugger sessions go FIRST — freed by name, by their device, or by their client,
+        // or because the GR object they are bound to is about to go with its twin.
+        let doomed_twin_objs: Vec<u32> = self
+            .pt
+            .lock()
+            .map(|m| {
+                m.iter()
+                    .filter(|(k, v)| ChanScope { tsg: v.tsg, parent: v.parent, device: v.device }.freed_by(**k, client, object))
+                    .flat_map(|(_, v)| v.objects.values().map(|o| o.0).collect::<Vec<_>>())
+                    .collect()
+            })
+            .unwrap_or_default();
+        let freed_obj = self
+            .pt_objs
+            .lock()
+            .ok()
+            .and_then(|m| m.get(&(client, object)).copied())
+            .and_then(|key| self.pt.lock().ok().and_then(|m| m.get(&key).and_then(|v| v.objects.get(&object).map(|o| o.0))));
+        let debuggers: Vec<u32> = self
+            .dbg
+            .lock()
+            .map(|mut m| {
+                let keys: Vec<(u32, u32)> = m
+                    .iter()
+                    .filter(|((c, h), (dev, _, gr))| {
+                        (*c == client && (*h == object || object == client || *dev == object))
+                            || doomed_twin_objs.contains(gr)
+                            || freed_obj == Some(*gr)
+                    })
+                    .map(|(k, _)| *k)
+                    .collect();
+                keys.into_iter().filter_map(|k| m.remove(&k).map(|v| v.1)).collect()
+            })
+            .unwrap_or_default();
+        self.free_channels(client, object, debuggers)
+    }
+
+    fn free_channels(&self, client: u32, object: u32, debuggers: Vec<u32>) -> ChanAnswer {
         // Translated channels: by object, or every one of the client's.
         // ★ v3-promote: a free of the channel, its group, its parent, its DEVICE or its client
         // takes the channel with it (the guest frees a subtree with ONE RPC) — for Translated
@@ -1310,7 +1409,7 @@ impl ChanPlane {
         } else {
             None
         };
-        if translated.is_empty() && twins.is_empty() && obj.is_none() {
+        if translated.is_empty() && twins.is_empty() && obj.is_none() && debuggers.is_empty() {
             return ChanAnswer::NotOurs;
         }
         if !twins.is_empty() {
@@ -1337,6 +1436,10 @@ impl ChanPlane {
             "free",
             Box::new(move |me: &ChanPlane| {
                 let mut line = Vec::new();
+                for h in debuggers {
+                    let r = me.rm.free(h);
+                    line.push(format!("debugger session host {h:#x} {}", if r.is_ok() { "freed" } else { "FREE REFUSED" }));
+                }
                 for ht in translated {
                     me.retire(ht);
                     line.push(format!("translated host {ht:#x}"));
