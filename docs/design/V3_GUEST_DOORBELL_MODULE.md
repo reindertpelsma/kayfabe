@@ -84,6 +84,24 @@ acknowledgement is already recorded when kayfabe looks; kayfabe's wait itself ru
 thread, never a vCPU, and must have a named, logged timeout outcome rather than an unbounded spin.
 To be verified against ogkm's unmap ordering before implementation.
 
+### BAR0 doorbell page, and multiple GPUs (owner, 2026-09-26)
+
+- **BAR0 doorbell page — static, the easy case.** It never moves, so it has none of BAR1's map/unmap
+  race: only userspace mappings of it come and go (per process), handled by the same VMA hook; no
+  unmap wait is needed for BAR0. **kayfabe tells the module where it is** rather than the module
+  hard-coding it: the offset/size is per architecture (GA10x `NV_VIRTUAL_FUNCTION` usermode page at
+  `0xBB0000`; Hopper/Blackwell differ), and kayfabe already derives it per family
+  (`kf-trap` memmap/trappolicy). The virtio discovery reply carries, per GPU: BAR0 doorbell
+  offset+size, current BAR1 doorbell mappings, the table BAR, and the host doorbell page.
+- **Multiple GPUs — required on both sides.** kayfabe: one kf3 device per host GPU, each with its own
+  host RM session, host doorbell page, doorbell table and table BAR. Module: per-device state keyed
+  by the guest PCI function (BDF); it attributes a doorbell mapping to its GPU by the BAR physical
+  address the VMA maps; tokens are per GPU, so tables are per GPU. Virtio: one virtio function per
+  kf3 device (preferred — each GPU independent) or one control device with a device id in every
+  message.
+- ⚠ Multi-GPU kf3 itself is **untested**: every measured run used one `-device kf3-gpu`. Two devices
+  in one VM (distinct host GPUs, and later the same GPU twice) is its own test before the module.
+
 ## 3. Findings from ogkm-580 (the guest driver)
 
 - **The token is guest-computed; a table is required.** For user channels the guest RM builds the
