@@ -41,9 +41,9 @@ while [ \$i -le $M ]; do
   timeout -k 5 $PER nvidia-smi -L >/tmp/smi.out 2>&1; src=\$?
   t1=\$(date +%s%N)
   if [ $CUDA = 1 ]; then ( cd /tmp && timeout -k 5 $PER ./cup3 ) >/tmp/cup3.out 2>&1; crc=\$?
-  else timeout -k 5 $PER nvidia-smi -q -d MEMORY >/tmp/smi2.out 2>&1; crc=\$?; echo "KERNEL rv=43 want=43 -> PASS (smi-only lane: 2nd open rc=\$crc)" >/tmp/cup3.out; fi
+  else timeout -k 5 $PER nvidia-smi -q -d MEMORY >/tmp/cup3.out 2>&1; crc=\$?; fi
   t2=\$(date +%s%N)
-  val=\$(sed -n 's/^KERNEL rv=\([0-9]*\) .*/\1/p' /tmp/cup3.out | tail -1)
+  if [ $CUDA = 1 ]; then val=\$(sed -n 's/^KERNEL rv=\([0-9]*\) .*/\1/p' /tmp/cup3.out | tail -1); else val=smi2; fi
   fail=\$(grep -m1 '^FAIL' /tmp/cup3.out)
   echo "REOPEN_ROW i=\$i smi_rc=\$src cup3_rc=\$crc cup3=\${val:-none} smi_ms=\$(( (t1-t0)/1000000 )) cup3_ms=\$(( (t2-t1)/1000000 )) \${fail:+first_fail=[\$fail]}"
   i=\$((i+1))
@@ -73,7 +73,9 @@ OUTF=/tmp/reopen_rows.$$
 $G 'cat /tmp/reopen.out' > "$OUTF" 2>/dev/null || true
 cat "$OUTF"
 rows=$(grep -c '^REOPEN_ROW' "$OUTF" || true)
-good=$(grep -c '^REOPEN_ROW .* smi_rc=0 cup3_rc=0 cup3=43 ' "$OUTF" || true)
+# In the GSP-only lane the second process is nvidia-smi, graded by its rc (never a faked 43).
+want=43; [ "$CUDA" = 1 ] || want=smi2
+good=$(grep -c "^REOPEN_ROW .* smi_rc=0 cup3_rc=0 cup3=$want " "$OUTF" || true)
 done_=$(grep -c '^REOPEN_DONE' "$OUTF" || true)
 rm -f "$OUTF"
 
