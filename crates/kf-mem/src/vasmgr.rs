@@ -298,24 +298,15 @@ impl Walker for GpuWalker {
             ));
         }
         if r.header.refusals > 0 {
-            // DIAG (P6b): a refusal inside a walk that still reports "full".
+            // ★ P6b: a refusal inside a report that still passes `require_full` is named — a
+            // walk that refused a table reports fewer leaves than the guest's tables hold.
             eprintln!(
-                "kf3: DIAG walk refusals={} refuse_mask={:#x} pdbs={:x?} runs={}",
+                "kf3: walk report carried refusals={} refuse_mask={:#x} pdbs={:x?} runs={}",
                 r.header.refusals,
                 r.header.refuse_mask,
                 r.pdbs.iter().map(|p| p.pdb).collect::<Vec<_>>(),
                 r.runs.len()
             );
-        }
-        // DIAG (P6b, temporary): a root that walked to NOTHING — show its first 64 bytes.
-        for (i, p) in r.pdbs.iter().enumerate() {
-            if !r.runs.iter().any(|m| usize::from(m.pdb_index) == i) && p.pdb + 64 <= self.store_bytes {
-                let mut b = [0u8; 64];
-                if self.kernel.read_at(self.store_ptr + p.pdb, &mut b).is_ok() {
-                    let w: Vec<u64> = b.chunks(8).map(|c| u64::from_le_bytes(c.try_into().unwrap_or([0; 8]))).collect();
-                    eprintln!("kf3: DIAG empty walk pdb={:#x} root words={w:x?}", p.pdb);
-                }
-            }
         }
         let mut spaces: Vec<WalkedSpace> =
             r.pdbs.iter().map(|p| WalkedSpace { pdb: p.pdb, leaves: Vec::new() }).collect();

@@ -372,11 +372,6 @@ fn one_write(
         PITCH_OUT => st.pitch_out = v,
         ce::SET_REMAP_COMPONENTS => st.remap = v,
         ce::LAUNCH_DMA => {
-            // DIAG (P6b, temporary)
-            eprintln!(
-                "kf3: DIAG launch v={v:#x} in={:#x} out={:#x} len={:#x} lines={} src_mode={:#x} dst_mode={:#x} remap={:#x}",
-                st.off_in, st.off_out, st.line_len, st.line_count, st.src_mode, st.dst_mode, st.remap
-            );
             let src_phys = v & ce::LAUNCH_SRC_PHYSICAL != 0;
             let dst_phys = v & ce::LAUNCH_DST_PHYSICAL != 0;
             if src_phys || dst_phys {
