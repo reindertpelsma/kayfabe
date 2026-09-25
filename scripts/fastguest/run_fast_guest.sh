@@ -237,14 +237,37 @@ case "$KF_DEVICE" in
 esac
 echo "== device: ${DEVARGS[*]}"
 
+# ⊘⊘⊘ **P5c — THE 16550 IS A 115 200-BAUD LINK, AND THE VERBOSE TRACE WAS RUNNING INTO IT.**
+# QEMU's UART paces transmission at the programmed baud rate, and 115 200 is the 16550's ceiling
+# (baud base / divisor 1): ~11.5 KB/s. `[measured d1, 1a93c1df]` `--concurrency` printed 6 122
+# IOCTL lines = 422 KB of serial ≈ 37 s of the 60 s budget before any work of the device's;
+# `[measured c1/c2]` `--ce-client-guest-ram` spent ~20 ms per declared row printing (≈ 260 s for
+# its 13 000) and `--concurrent-fuzz` PASSED in 40 s with the trace ring-buffered and TIMED OUT
+# with it printed. The bare-metal lane prints nothing, so the guest was being graded against a
+# UART, not against kayfabe (`a_harness_that_accuses_is_worse_than_one_that_is_silent`).
+# ★ The trace stays VERBOSE (owner, 2026-09-18) — it moves to a virtio console (`hvc0`, built into
+# the host kernel the fast guest boots), which has no baud pacing. The kernel's own messages go to
+# BOTH consoles: hvc0 replays the whole ring when it registers, so `$SER` is still the complete
+# record, and the UART log (`_ttyS0.log`) keeps what an early death prints before virtio is up.
+# `KF_CONSOLE=serial` restores the old single-UART lane.
+case "${KF_CONSOLE:-hvc}" in
+    hvc)    CONARGS=(-serial "file:${SER%_serial.log}_ttyS0.log"
+                     -device virtio-serial-pci,id=kfvs0 -chardev "file,id=kfcon0,path=$SER"
+                     -device virtconsole,chardev=kfcon0,bus=kfvs0.0)
+            CONSOLE="console=ttyS0 console=hvc0" ;;
+    serial) CONARGS=(-serial "file:$SER"); CONSOLE="console=ttyS0" ;;
+    *) echo "run_fast_guest: KF_CONSOLE must be hvc or serial, got [${KF_CONSOLE}]" >&2; exit 2 ;;
+esac
+echo "== console: ${KF_CONSOLE:-hvc} ($CONSOLE)"
+
 start=$(date +%s)
 timeout --kill-after=3 "$BUDGET" "$Q" \
     "${RAMARGS[@]}" -cpu host -smp "${KF_SMP:-3}" \
     -kernel "$FG/vmlinuz" -initrd "$FG/initrd.cpio.gz" \
-    -append "console=ttyS0 panic=1 loglevel=6 KF_ARMS=$ARMS_TOK KF_IOCTL_TRACE=${KF_IOCTL_TRACE:-verbose} KF_BUDGET_S=$BUDGET" \
+    -append "$CONSOLE panic=1 loglevel=6 KF_ARMS=$ARMS_TOK KF_IOCTL_TRACE=${KF_IOCTL_TRACE:-verbose} KF_BUDGET_S=$BUDGET" \
     "${DEVARGS[@]}" \
     -msg timestamp=on \
-    -serial "file:$SER" -display none \
+    "${CONARGS[@]}" -display none \
     > "$BENCH/fast_${TAG}_qemu.log" 2>&1
 rc=$?
 elapsed=$(( $(date +%s) - start ))
