@@ -22,6 +22,7 @@ while busy; do say "waiting: a QEMU/cargo is running (serial bench)"; sleep 20; 
 
 if [ "$SIDE" = host ]; then
   mkdir -p /opt/apps
+  cp -f "$HERE"/src/*.py /opt/apps/bundle/share/
   bash "$HERE/run_apps.sh" host "$@" | tee -a "$R/host.res"
   for f in /opt/apps/out/host/*.log; do cp -f "$f" "$R/$(basename "$f" .log).host.log"; done
   dmesg | grep -E 'Xid|NVRM' | tail -50 > "$R/host_dmesg_tail.log"

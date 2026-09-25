@@ -14,6 +14,8 @@ OUT=${APPS_OUT:?APPS_OUT}; mkdir -p "$OUT"
 QLOG=${BENCH_DIR:-/workspace/bench}/run_${TAG}_qemu.log
 $G true >/dev/null 2>&1 || { echo "APPS_HOOK guest unreachable at start"; exit 0; }
 $G 'sudo tee /opt/apps/bundle/run_apps.sh >/dev/null' < "$HERE/run_apps.sh"
+# the tree's python drivers, so a harness fix does not need a re-provisioned image
+for f in "$HERE"/src/*.py; do $G "sudo tee /opt/apps/bundle/share/$(basename "$f") >/dev/null" < "$f"; done
 $G 'sudo rm -rf /opt/apps/out/guest'
 echo "APPS_HOOK tag=$TAG apps=[$APPS] guest=$($G 'nvidia-smi --query-gpu=name,driver_version,persistence_mode --format=csv,noheader' 2>&1 | head -1)"
 [ "${APPS_GUEST_PM:-0}" = 1 ] && echo "APPS_GUEST_PM=$($G 'sudo nvidia-smi -pm 1 2>&1 | tail -1')"

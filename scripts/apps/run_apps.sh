@@ -83,7 +83,7 @@ nvenc_h264|180|frame= *600 |ffmpeg -y -hide_banner -nostats -f lavfi -i testsrc=
 nvenc_hevc|180|frame= *600 |ffmpeg -y -hide_banner -nostats -f lavfi -i testsrc=size=1280x720:rate=30:duration=20 -c:v hevc_nvenc -preset p4 $O/nvenc_hevc.mp4 2>&1 | tail -3; ffprobe -v error -count_frames -select_streams v:0 -show_entries stream=nb_read_frames -of csv=p=0 $O/nvenc_hevc.mp4 | sed 's/^/frame= /;s/$/ /'
 nvdec_h264|180|frame= *600 |ffmpeg -y -hide_banner -nostats -f lavfi -i testsrc=size=1280x720:rate=30:duration=20 -c:v libx264 $O/x264.mp4 >/dev/null 2>&1; ffmpeg -hide_banner -hwaccel cuda -hwaccel_output_format cuda -i $O/x264.mp4 -f null - 2>&1 | grep -E 'frame=|rror|hwaccel' | tail -3 | tr '\r' '\n' | tail -3; echo
 hashcat|300|e4726719b68b205913167f0975d977ee:kayfab|hashcat --potfile-disable -O -m 0 -a 3 e4726719b68b205913167f0975d977ee '?l?l?l?l?l?l' 2>&1 | tail -30; hashcat --potfile-disable -m 0 e4726719b68b205913167f0975d977ee --show 2>/dev/null
-blender_cycles|1800|OPTIX|cd $D/blender-bench && ./benchmark-launcher-cli benchmark --blender-version 4.5.0 --device-type CUDA --json monster 2>&1 | tail -40; ./benchmark-launcher-cli benchmark --blender-version 4.5.0 --device-type OPTIX --json monster 2>&1 | tail -40
+blender_cycles|900|BLENDER_OK OPTIX|for dev in CUDA OPTIX; do $D/blender/blender -b --factory-startup --python $B/share/blender_render.py -- $dev $O/blender_$dev.png 2>&1 | grep -E "BLENDER_|Error|error|Fra:1 .*Finished" | tail -6; done
 geekbench_gpu|1200|OpenCL Score|cd $D/geekbench && ./geekbench6 --gpu OpenCL 2>&1 | tail -60
 EOF
 )

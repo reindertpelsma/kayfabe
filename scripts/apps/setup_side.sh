@@ -28,12 +28,14 @@ G=$D/qwen2.5-1.5b-instruct-q4_k_m.gguf
 [ -s "$G" ] || curl -fsSL -o "$G.tmp" https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf && mv -f "$G.tmp" "$G" 2>/dev/null
 [ -s "$G" ]; ok gguf $?
 
-# Blender Open Data benchmark launcher + Blender 4.5.0 + the monster scene
-BB=$D/blender-bench; mkdir -p "$BB"
-if [ ! -x "$BB/benchmark-launcher-cli" ]; then
-  curl -fsSL https://download.blender.org/release/BlenderBenchmark2.0/launcher/benchmark-launcher-cli-3.3.0-linux.tar.gz | tar xz -C "$BB"
+# Blender 4.5.0 LTS (Cycles). ⊘ The Open Data launcher's mirror (ftp.nluug.nl) TLS-timed-out on
+# the first box, so the tarball comes straight from download.blender.org and the render is a
+# scripted scene (src/blender_render.py), not the launcher's.
+BL=$D/blender
+if [ ! -x "$BL/blender" ]; then
+  mkdir -p "$BL" && curl -fsSL --retry 3 https://download.blender.org/release/Blender4.5/blender-4.5.0-linux-x64.tar.xz | tar xJ -C "$BL" --strip-components=1
 fi
-( cd "$BB" && ./benchmark-launcher-cli blender download 4.5.0 >/tmp/setup_blender.log 2>&1 && ./benchmark-launcher-cli scenes download --blender-version 4.5.0 monster >>/tmp/setup_blender.log 2>&1 ); ok blender $?
+"$BL/blender" --version 2>/dev/null | head -1; [ -x "$BL/blender" ]; ok blender $?
 
 # Geekbench 6 (GPU OpenCL); runs in its free mode and uploads the result
 GB=$D/geekbench; mkdir -p "$GB"
