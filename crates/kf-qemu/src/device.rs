@@ -799,8 +799,12 @@ impl Device {
         let (recv, settled) = self.mem.inbox.counts();
         let tm = &va.timing;
         let avg = |sum: u64, n: u64| if n == 0 { 0 } else { sum / n / 1000 };
+        let nm = self.mem.counters.mirrors.load(Ordering::Relaxed);
         let timing = format!(
-            " vat[invals={} arrive->clear_avg_us={} max_us={} walks={} walk_avg_us={} gpu_avg_us={} plan_avg_us={} apply_avg_us={} leaves={} host_calls={}]",
+            " mirrors={} mirror_avg_us={} mirror_max_us={} vat[invals={} arrive->clear_avg_us={} max_us={} walks={} walk_avg_us={} gpu_avg_us={} plan_avg_us={} apply_avg_us={} leaves={} host_calls={}]",
+            nm,
+            avg(self.mem.counters.mirror_ns.load(Ordering::Relaxed), nm),
+            self.mem.counters.mirror_ns_max.load(Ordering::Relaxed) / 1000,
             tm.invals,
             avg(tm.inval_ns, tm.invals),
             tm.inval_ns_max / 1000,

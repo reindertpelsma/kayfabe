@@ -481,6 +481,12 @@ pub struct MemCounters {
     pub roots: AtomicU64,
     /// Statements refused by name.
     pub refused: AtomicU64,
+    /// ★ P5c: mirrors created, and the ns their host verbs cost (space + two windows), summed/max.
+    pub mirrors: AtomicU64,
+    /// Sum of mirror-creation ns.
+    pub mirror_ns: AtomicU64,
+    /// The slowest mirror creation, ns.
+    pub mirror_ns_max: AtomicU64,
 }
 
 /// ★★★ **The memory plane's shared half** — what the vCPU and the VA thread both reach.
@@ -717,6 +723,7 @@ pub fn apply_statement(
                 }
             };
             if m.table.target(key).is_none() {
+                let t_mirror = std::time::Instant::now();
                 match rm.alloc_vaspace() {
                     Ok(space) => {
                         // ⊘ A space without the RAM object refuses every sysmem leaf and leaves the
@@ -750,7 +757,11 @@ pub fn apply_statement(
                             }
                             (fb, ram) => format!("windows REFUSED fb={fb:?} ram={ram:?}"),
                         };
-                        eprintln!("kf3: {key:?} mirror space={:#x}: {line}", space.space);
+                        let ns = u64::try_from(t_mirror.elapsed().as_nanos()).unwrap_or(u64::MAX);
+                        plane.counters.mirrors.fetch_add(1, Ordering::Relaxed);
+                        plane.counters.mirror_ns.fetch_add(ns, Ordering::Relaxed);
+                        plane.counters.mirror_ns_max.fetch_max(ns, Ordering::Relaxed);
+                        eprintln!("kf3: {key:?} mirror space={:#x}: {line} ({} us)", space.space, ns / 1000);
                         m.table.insert(key, Target::Gpu(GpuMirror { vas: HostVas { rm, space, store, ram_obj: ram_obj.map(|(o, _)| o) }, rows }))
                     }
                     Err(e) => {
