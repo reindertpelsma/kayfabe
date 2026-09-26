@@ -454,3 +454,16 @@ kinds carried to the GR twin like 3D; `GF100_DISP_SW`/`GF100_ZBC_CLEAR` graph no
   UMD skip one `VID_HEAP` allocation it makes on bare metal (nvdiff) — no measured consequence yet.
 - Not attempted (out of scope today): NVENC/NVDEC (§4), NVIDIA-Xorg DDX / KMS head (§3.3),
   `PREEMPTION_BIND`/`CTXSW_SETUP_BIND` (the UMD never issued them — nvdiff), compression.
+
+### 6.4 Merge-readiness on the same box (2026-09-26, `v3-gfx` at `ac5288fa`/`8a697e4c`; master had not moved)
+
+| check | result |
+|---|---|
+| v3 crate tests (`cargo test` over the 17 `kf-*` crates) | **1384 passed, 0 failed** |
+| `cargo clippy --all-targets` (same crates) | clean (0 errors; the warnings are pre-existing, none in changed code) |
+| v3 gates (`scripts/bench/v3_gates.sh`) | **9/9 PASS** |
+| thin-guest 30-arm suite (`KF_DEVICE=kf3 fast_suite.sh`, 120 s budget) | **29/30 PASS**; `--ce-client-guest-ram` TIMEOUT at 122 s |
+| ↳ that arm alone, 240 s budget | PASS in 134 s / 140 s (as built), 143 s / 140 s (`KF3_NO_GUEST_VA_RESERVE=1`), **138 s / 138 s on `origin/master` `79848341` built on the same box** ⇒ box-bound (nested KVM on this 3080 Ti host), not a regression |
+| graphics arms (`scripts/bench/gfx_suite.sh`) | **GFX_SUITE_VERDICT=PASS** (5/5 steps, every hash MATCH) |
+| legacy `cargo test --workspace` | does not compile: `tests/tests/vaspace_handover_asserts.rs` (`kayfabe-*` API drift, pre-existing, unrelated to v3) |
+
