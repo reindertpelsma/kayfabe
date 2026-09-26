@@ -1,0 +1,122 @@
+BM_START 2026-09-26T10:15:58+00:00 hmm=0
+NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+NVIDIA GeForce RTX 3060 Ti, 580.159.04
+uvm_disable_hmm=Y debug_procfs=1
+NO_FAULT_STATS (need uvm_enable_debug_procfs=1)
+=== um_probe malloc
+BEFORE 
+ATTR managed=1 concurrentManagedAccess=1 pageableMemoryAccess=0
+CHECK malloc ok bad=0
+RC=0
+AFTER  
+=== um_probe cpuinit
+BEFORE 
+ATTR managed=1 concurrentManagedAccess=1 pageableMemoryAccess=0
+CHECK cpuinit ok bad=0
+RC=0
+AFTER  
+=== um_probe prefetch
+BEFORE 
+ATTR managed=1 concurrentManagedAccess=1 pageableMemoryAccess=0
+CHECK prefetch ok bad=0
+RC=0
+AFTER  
+=== um_probe gpufirst
+BEFORE 
+ATTR managed=1 concurrentManagedAccess=1 pageableMemoryAccess=0
+CHECK gpufirst ok bad=0
+RC=0
+AFTER  
+=== um_probe advise
+BEFORE 
+ATTR managed=1 concurrentManagedAccess=1 pageableMemoryAccess=0
+CHECK advise ok bad=0
+RC=0
+AFTER  
+=== um_probe pageable
+BEFORE 
+ATTR managed=1 concurrentManagedAccess=1 pageableMemoryAccess=0
+CHECK pageable FAIL cudaDeviceSynchronize() -> 700 (an illegal memory access was encountered)
+RC=2
+AFTER  
+=== um_probe hostalloc
+BEFORE 
+ATTR managed=1 concurrentManagedAccess=1 pageableMemoryAccess=0
+CHECK hostalloc ok bad=0
+RC=0
+AFTER  
+=== um_probe d2h
+BEFORE 
+ATTR managed=1 concurrentManagedAccess=1 pageableMemoryAccess=0
+CHECK d2h ok bad=0
+RC=0
+AFTER  
+=== readmostly_probe reprefetch
+BEFORE 
+CHECK reprefetch ok bad=0
+RC=0
+AFTER  
+=== readmostly_probe fault
+BEFORE 
+CHECK fault ok bad=0
+RC=0
+AFTER  
+=== readmostly_probe gpuwrite
+BEFORE 
+CHECK gpuwrite ok bad=0
+RC=0
+AFTER  
+=== readmostly_probe downgrade
+BEFORE 
+CHECK downgrade ok bad=0
+RC=0
+AFTER  
+=== clpeak
+BEFORE 
+    Global memory bandwidth (GBPS)
+      float   : 393.06
+      float2  : 405.17
+      float4  : 411.96
+      float8  : 355.33
+      float16 : 408.44
+
+    Single-precision compute (GFLOPS)
+      float   : 17877.56
+      float2  : 17880.24
+      float4  : 17680.95
+      float8  : 17565.76
+      float16 : 17446.71
+
+    No half precision support! Skipped
+
+    Double-precision compute (GFLOPS)
+      double   : 291.68
+      double2  : 291.33
+      double4  : 290.63
+      double8  : 289.27
+      double16 : 286.49
+
+    Integer compute (GIOPS)
+      int   : 9205.98
+      int2  : 9080.81
+      int4  : 9101.28
+      int8  : 9053.99
+      int16 : 9058.87
+
+    Transfer bandwidth (GBPS)
+      enqueueWriteBuffer         : 7.58
+      enqueueReadBuffer          : 7.28
+      enqueueMapBuffer(for read) : 8.07
+        memcpy from mapped ptr   : 10.64
+      enqueueUnmap(after write)  : 8.77
+        memcpy to mapped ptr     : 10.47
+
+    Kernel launch latency : 3.70 us
+
+RC=0
+AFTER  
+BM_EXIT rc=0 2026-09-26T10:18:30+00:00
+=== dmesg (xid|nvrm|uvm) after run hmm=0
+[  743.315251] NVRM: GPU at PCI:0000:00:07: GPU-7ce8028d-13fc-88fe-09c5-7704190763c3
+[  743.315264] NVRM: Xid (PCI:0000:00:07): 31, pid=58106, name=um_probe, channel 0x00000008, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC1 GPCCLIENT_T1_0 faulted @ 0x72a5_35f4a000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+=== DMESG_END

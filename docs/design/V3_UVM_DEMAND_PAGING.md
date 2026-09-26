@@ -106,12 +106,35 @@ before a `FAULT_PTE`) is a **separate** defect and not this note's.
 The matrix records clpeak (OpenCL) hitting `FAULT_PDE VIRT_WRITE @0x772b_de422000` after its
 float/half/double groups passed. The first failing group is *integer*, and everything after it
 fails too (a sticky context error). `[meas]` The VA is a UVA-range user address, and that alone
-cannot separate managed, HMM and device memory. The bare-metal baseline in §1.2 answers the one
-question that separates them: **does clpeak take replayable faults on bare metal at all?**
+cannot separate managed, HMM and device memory. §1.2 rules out HMM: clpeak passes on bare metal
+with host HMM off. Whether it takes demand faults at all is still unmeasured.
 
-### 1.2 Bare-metal baseline — which workloads need demand paging
+### 1.2 Bare-metal baseline — measured 2026-09-26
 
-*(filled from `traces/v3_uvm_research/bm_*.out`; see §1.2 below the table for the reading)*
+`[meas]` rented RTX 3060 Ti, **open** kernel module 580.159.04, no guest and no kayfabe; raw output
+in `traces/v3_uvm_research/bm_rtx3060ti_580.159.04_hmm{1,0}.out` (driver `bm_run.sh`).
+
+| workload | host HMM on (stock) | host `uvm_disable_hmm=1` |
+|---|---|---|
+| `um_probe` malloc / cpuinit / prefetch / gpufirst / advise / hostalloc / d2h | ok | ok |
+| `um_probe pageable` (kernel writes `malloc` memory) | ok | **700**, host **`Xid 31 … GPC1 … FAULT_PDE ACCESS_TYPE_VIRT_WRITE @0x72a5_35f4a000`** |
+| `readmostly_probe` reprefetch / fault / gpuwrite / downgrade | ok ×4 | ok ×4 |
+| clpeak (every group incl. integer, transfer, launch latency; no half support on this card) | pass | **pass** |
+
+Readings:
+- ★ **The kf3 signature is exactly what a host with no fault servicer looks like.** A GPU write to
+  an address nobody backs gives, on bare metal, the very line the app matrix records for the
+  guest (`Xid 31 … FAULT_PDE VIRT_WRITE` at a `0x7xxx` user VA). That is §2 made concrete: the
+  failure is the absence of a servicer, not a publication bug.
+- ✔ All four `readmostly_probe` modes pass on bare metal, so they are valid correctness oracles
+  for §6 / E3 (a kf3 FAIL there indicts kayfabe).
+- **clpeak does not depend on HMM** — it passes with host HMM off. So guest `uvm_disable_hmm=1`
+  (§7.2) is **not** a predicted fix for clpeak; its fault in the guest is either a managed/UVM
+  allocation inside NVIDIA's OpenCL runtime or not a demand-paging fault at all.
+- ⊘ **The fault counters were NOT captured.** `fault_stats` did not appear even with
+  `uvm_enable_debug_procfs=1` (every `BEFORE/AFTER` is empty; the script's `NO_FAULT_STATS` line
+  says so). So this run shows *which workloads work without HMM*, not *which take replayable
+  faults*. Whether clpeak demand-faults on bare metal is still **unmeasured** (§10 item 5).
 
 ---
 
@@ -542,7 +565,8 @@ most of the kf3-side risk lives.
   value and no error** (the silent case). After the §6 fix: `gpuwrite` and `downgrade` → 719.
   After b3: all four ok.
 - **E4: guest `uvm_disable_hmm=1`** against the five C-class apps and `um_probe pageable`. It
-  separates the HMM-keyed failures from the managed ones (clpeak in particular, §1.1).
+  separates the HMM-keyed failures from the managed ones. ⊘ Not a predicted fix for clpeak:
+  clpeak passes on bare metal with host HMM off (§1.2).
 
 ---
 
@@ -557,5 +581,8 @@ most of the kf3-side risk lives.
 3. Whether every guest PTE kind is expressible through UVM external-mapping attributes (§4.4). E2.
 4. Whether the guest ever routes `GP100_UVM_SW` (`C076`) methods through a channel kf3 forwards,
    and how kf3 handles that subchannel today.
-5. What clpeak's faulting buffer is. §1.2 gives the bare-metal fault counts, which say whether it
-   needs demand paging at all. The allocation type itself is inside closed OpenCL.
+5. What clpeak's faulting buffer is. §1.2 rules out HMM (it passes with host HMM off); the fault
+   counters that would say whether it takes replayable faults at all were not captured (the
+   `fault_stats` procfs file did not appear). Next: count faults with the UVM tools event API
+   (`UVM_TOOLS_INIT_EVENT_TRACKER`, `UvmEventTypeGpuFault`) or a `uvm_gpu_replayable_faults`
+   tracepoint/kprobe hit count on bare metal. The allocation type itself is inside closed OpenCL.

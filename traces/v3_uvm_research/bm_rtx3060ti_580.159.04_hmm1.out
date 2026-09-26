@@ -1,0 +1,120 @@
+BM_START 2026-09-26T10:13:26+00:00 hmm=1
+NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+NVIDIA GeForce RTX 3060 Ti, 580.159.04
+uvm_disable_hmm=N debug_procfs=1
+NO_FAULT_STATS (need uvm_enable_debug_procfs=1)
+=== um_probe malloc
+BEFORE 
+ATTR managed=1 concurrentManagedAccess=1 pageableMemoryAccess=1
+CHECK malloc ok bad=0
+RC=0
+AFTER  
+=== um_probe cpuinit
+BEFORE 
+ATTR managed=1 concurrentManagedAccess=1 pageableMemoryAccess=1
+CHECK cpuinit ok bad=0
+RC=0
+AFTER  
+=== um_probe prefetch
+BEFORE 
+ATTR managed=1 concurrentManagedAccess=1 pageableMemoryAccess=1
+CHECK prefetch ok bad=0
+RC=0
+AFTER  
+=== um_probe gpufirst
+BEFORE 
+ATTR managed=1 concurrentManagedAccess=1 pageableMemoryAccess=1
+CHECK gpufirst ok bad=0
+RC=0
+AFTER  
+=== um_probe advise
+BEFORE 
+ATTR managed=1 concurrentManagedAccess=1 pageableMemoryAccess=1
+CHECK advise ok bad=0
+RC=0
+AFTER  
+=== um_probe pageable
+BEFORE 
+ATTR managed=1 concurrentManagedAccess=1 pageableMemoryAccess=1
+CHECK pageable ok bad=0
+RC=0
+AFTER  
+=== um_probe hostalloc
+BEFORE 
+ATTR managed=1 concurrentManagedAccess=1 pageableMemoryAccess=1
+CHECK hostalloc ok bad=0
+RC=0
+AFTER  
+=== um_probe d2h
+BEFORE 
+ATTR managed=1 concurrentManagedAccess=1 pageableMemoryAccess=1
+CHECK d2h ok bad=0
+RC=0
+AFTER  
+=== readmostly_probe reprefetch
+BEFORE 
+CHECK reprefetch ok bad=0
+RC=0
+AFTER  
+=== readmostly_probe fault
+BEFORE 
+CHECK fault ok bad=0
+RC=0
+AFTER  
+=== readmostly_probe gpuwrite
+BEFORE 
+CHECK gpuwrite ok bad=0
+RC=0
+AFTER  
+=== readmostly_probe downgrade
+BEFORE 
+CHECK downgrade ok bad=0
+RC=0
+AFTER  
+=== clpeak
+BEFORE 
+    Global memory bandwidth (GBPS)
+      float   : 393.05
+      float2  : 405.17
+      float4  : 411.99
+      float8  : 355.30
+      float16 : 408.40
+
+    Single-precision compute (GFLOPS)
+      float   : 17909.84
+      float2  : 17878.41
+      float4  : 17773.12
+      float8  : 17671.45
+      float16 : 17445.50
+
+    No half precision support! Skipped
+
+    Double-precision compute (GFLOPS)
+      double   : 291.68
+      double2  : 291.33
+      double4  : 290.63
+      double8  : 289.27
+      double16 : 286.49
+
+    Integer compute (GIOPS)
+      int   : 9187.82
+      int2  : 9076.92
+      int4  : 9070.65
+      int8  : 9044.06
+      int16 : 9054.26
+
+    Transfer bandwidth (GBPS)
+      enqueueWriteBuffer         : 7.65
+      enqueueReadBuffer          : 7.27
+      enqueueMapBuffer(for read) : 8.27
+        memcpy from mapped ptr   : 10.37
+      enqueueUnmap(after write)  : 9.04
+        memcpy to mapped ptr     : 10.70
+
+    Kernel launch latency : 3.71 us
+
+RC=0
+AFTER  
+BM_EXIT rc=0 2026-09-26T10:15:58+00:00
+=== dmesg (xid|nvrm|uvm) after run hmm=1
+=== DMESG_END
