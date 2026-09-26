@@ -113,6 +113,8 @@ class clc7b5.h
 class clc8b5.h
 class clc9b5.h
 class clcab5.h
+# ── the UVM software class the Translated rewriter consumes on a subchannel ─────────────────────────
+class clc076.h
 # ── usermode (doorbell page) ─────────────────────────────────────────────────────────────────────
 class clc361.h
 class clc461.h

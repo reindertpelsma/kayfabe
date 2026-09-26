@@ -557,3 +557,73 @@ fn launch_translated(
     }
     Ok(())
 }
+
+/// ★ The rewriter's own method offsets and per-class rules, held to the class headers
+/// (`kf_chip::hwref`, `docs/design/V3_HW_BOUNDARY_INVENTORY.md`): the MEM_OP operation codes it
+/// forwards or splits on, the CE offsets it re-emits, the software class it consumes, and — the one
+/// width that moved — `OFFSET_*_UPPER` per bound CE class.
+#[cfg(test)]
+mod hwref_check {
+    use super::*;
+    use kf_chip::hwref::expect::{class_range, class_val};
+
+    #[test]
+    fn the_rewriters_methods_are_the_class_headers() {
+        for (ours, name) in [
+            (MEM_OP_A, "NVC56F_MEM_OP_A"),
+            (MEM_OP_B, "NVC56F_MEM_OP_B"),
+            (MEM_OP_C, "NVC56F_MEM_OP_C"),
+            (MEM_OP_D, "NVC56F_MEM_OP_D"),
+            (OP_MEMBAR, "NVC56F_MEM_OP_D_OPERATION_MEMBAR"),
+            (OP_TLB_INVALIDATE, "NVC56F_MEM_OP_D_OPERATION_MMU_TLB_INVALIDATE"),
+            (OP_TLB_INVALIDATE_TARGETED, "NVC56F_MEM_OP_D_OPERATION_MMU_TLB_INVALIDATE_TARGETED"),
+            (OP_ACCESS_COUNTER_CLR, "NVC56F_MEM_OP_D_OPERATION_ACCESS_COUNTER_CLR"),
+            (MEMBAR_TYPE_SYS, "NVC56F_MEM_OP_C_MEMBAR_TYPE_SYS_MEMBAR"),
+            (LINE_COUNT, "NVC7B5_LINE_COUNT"),
+            (OFFSET_IN_LOWER, "NVC7B5_OFFSET_IN_LOWER"),
+            (OFFSET_OUT_LOWER, "NVC7B5_OFFSET_OUT_LOWER"),
+            (PITCH_IN, "NVC7B5_PITCH_IN"),
+            (PITCH_OUT, "NVC7B5_PITCH_OUT"),
+            (GP100_UVM_SW, "GP100_UVM_SW"),
+            (SW_NO_OPERATION, "NVC076_NO_OPERATION"),
+            (HOPPER_DMA_COPY_A, "HOPPER_DMA_COPY_A"),
+        ] {
+            assert_eq!(u64::from(ours), class_val(name), "{name}");
+        }
+        assert_eq!(u64::from(MEM_OP_A_SYSMEMBAR_EN), 1 << class_range("NVC56F_MEM_OP_A_TLB_INVALIDATE_SYSMEMBAR").1);
+        assert_eq!(u64::from(REMAP_NUM_SRC_SHIFT), class_range("NVC7B5_SET_REMAP_COMPONENTS_NUM_SRC_COMPONENTS").1);
+        // The L2 operations forwarded verbatim: 0xd/0xe/0xf/0x10/0x15 from C56F, 0x11 (the
+        // non-coherent sysmem invalidate) only C96F states.
+        let l2 = [
+            "NVC56F_MEM_OP_D_OPERATION_L2_PEERMEM_INVALIDATE",
+            "NVC56F_MEM_OP_D_OPERATION_L2_SYSMEM_INVALIDATE",
+            "NVC56F_MEM_OP_D_OPERATION_L2_CLEAN_COMPTAGS",
+            "NVC56F_MEM_OP_D_OPERATION_L2_FLUSH_DIRTY",
+            "NVC96F_MEM_OP_D_OPERATION_L2_SYSMEM_NCOH_INVALIDATE",
+            "NVC56F_MEM_OP_D_OPERATION_L2_WAIT_FOR_SYS_PENDING_READS",
+        ];
+        assert_eq!(OPS_L2.map(u64::from).to_vec(), l2.map(class_val).to_vec());
+        // The fast-scrub bit exists only from HOPPER_DMA_COPY_A; below it bit 23 is VPRMODE's.
+        assert_eq!(u64::from(LAUNCH_MEMORY_SCRUB_ENABLE), 1 << class_range("NVC8B5_LAUNCH_DMA_MEMORY_SCRUB_ENABLE").1);
+        assert_eq!(class_range("NVC7B5_LAUNCH_DMA_VPRMODE"), (23, 22));
+    }
+
+    #[test]
+    fn the_offset_upper_mask_is_the_bound_classes_field() {
+        for (class, header) in [
+            (0xC3B5u32, "NVC3B5"),
+            (0xC5B5, "NVC5B5"),
+            (0xC6B5, "NVC6B5"),
+            (0xC7B5, "NVC7B5"),
+            (0xC8B5, "NVC8B5"),
+            // C9B5/CAB5 state no OFFSET methods of their own: C8B5's layout (`uvm_hal.c:154-180`).
+            (0xC9B5, "NVC8B5"),
+            (0xCAB5, "NVC8B5"),
+        ] {
+            let st = CeState { ce_class: class, ..CeState::default() };
+            let (hi, lo) = class_range(&format!("{header}_OFFSET_IN_UPPER_UPPER"));
+            assert_eq!(u64::from(upper_mask(&st)), ((1u64 << (hi - lo + 1)) - 1) << lo, "{class:#x}");
+            assert_eq!(class_range(&format!("{header}_OFFSET_OUT_UPPER_UPPER")), (hi, lo), "{class:#x}");
+        }
+    }
+}
