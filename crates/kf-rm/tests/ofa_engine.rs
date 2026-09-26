@@ -77,6 +77,7 @@ fn the_ofa_fault_id_follows_each_familys_dev_fault_h() {
     assert_eq!(fault(Family::Ampere), Some(10), "ampere/ga100/dev_fault.h:57");
     assert_eq!(fault(Family::Ada), Some(10), "ada/ad102/dev_fault.h:56");
     assert_eq!(fault(Family::Blackwell), Some(48), "blackwell/gb202/dev_fault.h:100");
+    assert_eq!(fault(Family::Hopper), Some(53), "kernel-open/nvidia-uvm/hwref/hopper/gh100/dev_fault.h:81");
     // ⊘ Turing states no OFA fault id: the whole table is refused by name if one is forced in —
     // hostquery never forces it (`an_unstatable_ofa_is_dropped_not_the_device`, below).
     let e = authored::engine_table(Family::Turing, &kinds, GRCE).expect_err("Turing names no OFA");

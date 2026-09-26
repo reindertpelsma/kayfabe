@@ -302,7 +302,7 @@ pub fn software_last(mut kinds: Vec<EngineKind>) -> Vec<EngineKind> {
 }
 
 /// ★ v3-gfxset: the engine list with every OFA instance this family's `dev_fault.h` cannot state
-/// (GB100's `OFA1`; an OFA a Turing or Hopper host might list) REMOVED — named on stderr — rather than
+/// (GB100's `OFA1`; an OFA a Turing host might list) REMOVED — named on stderr — rather than
 /// left for [`authored::engine_table`] to refuse the whole table over: the device must not lose GR and
 /// the copy engines over an optional engine. NVENC/NVDEC keep their stricter rule (no host lists an
 /// instance their headers do not name).

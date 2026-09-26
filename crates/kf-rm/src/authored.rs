@@ -386,15 +386,21 @@ fn video_fault_id(family: Family, encoder: bool, i: u32) -> Option<u32> {
 
 /// ★ v3-gfxset: the MMU fault-engine id of OFA instance `i` — `NV_PFAULT_MMU_ENG_ID_OFA0` in the
 /// family's `dev_fault.h`: Ampere `10` (`ampere/ga100/dev_fault.h:57`), Ada `10`
-/// (`ada/ad102/dev_fault.h:56`), Blackwell `48` (`blackwell/gb100/dev_fault.h:93`, `gb202:100`).
+/// (`ada/ad102/dev_fault.h:56`), Hopper `53` (UVM's copy of the chip's header,
+/// `kernel-open/nvidia-uvm/hwref/hopper/gh100/dev_fault.h:81` — the same source [`fault_ids`] takes
+/// Hopper's `HOST0` from), Blackwell `48` (`blackwell/gb100/dev_fault.h:93`, `gb202:100`).
 /// `[measured]` the captured GA106 OFA row: `0xa`. ⊘ Turing has no OFA (no `NV*FA_VIDEO_OFA` in any
-/// TU10x class list, no fault id), Hopper is refused with the whole table ([`fault_ids`]), and no
-/// header names an `OFA1` fault id — so `OFA1` (GB100's second instance) is refused by the caller,
-/// by name, rather than guessed.
+/// TU10x class list, no fault id), and no header names an `OFA1` fault id — so `OFA1` (GB100's second
+/// instance) is refused by the caller, by name, rather than guessed. Held to every die group's header,
+/// both ways, by `hwref_check` below.
+/// ⊘ CORRECTED 2026-09-26 (merge of master `5d2b0a33`): Hopper was `None` here while [`fault_ids`]
+/// refused the whole Hopper table; with Hopper's table stated from the UVM hwref copy, its OFA0 is
+/// stated from the same header rather than dropped.
 #[must_use]
 pub fn ofa_fault_id(family: Family, i: u32) -> Option<u32> {
     match (family, i) {
         (Family::Ampere | Family::Ada, 0) => Some(10),
+        (Family::Hopper, 0) => Some(53),
         (Family::Blackwell, 0) => Some(48),
         _ => None,
     }
@@ -676,6 +682,13 @@ mod hwref_check {
                         assert_eq!(Some(o), want, "{g:?} {name}{i}");
                     }
                 }
+            }
+            // ★ v3-gfxset: OFA, held BOTH ways — an OFA the header states and we do not would be an
+            // engine silently not advertised (keep_statable_ofa drops it), so it fails here too.
+            for i in 0..4u32 {
+                let want = table().resolve(g, &format!("NV_PFAULT_MMU_ENG_ID_OFA{i}")).value();
+                let ours = ofa_fault_id(g.family(), i).map(|v| kf_chip::hwref::HwValue::Val(u64::from(v)));
+                assert_eq!(ours, want, "{g:?} OFA{i}");
             }
         }
     }
