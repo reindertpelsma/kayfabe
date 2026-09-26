@@ -292,6 +292,34 @@ them — before 575 those bytes were `params[0..8]` and were being zeroed in eve
 
 ## 6. The matrix (host × guest), measured
 
+### 6.0 At a glance (latest result per cell; the rows below carry every measurement and revision)
+
+Guest axis, host **580.159.04** (GA102). *thin* = the 30-arm suite (580.x guests only — the grader
+is a 580 RM client, ruling 1); *init* = the guest's RM initialised (`failure_point.sh`); *ladder* =
+the fat-guest CUDA ladder (cup2 / cup3 / cup8 / cup8bench).
+
+| guest | result | rev |
+|---|---|---|
+| 580.159.04 | thin **30/30**, ladder **4/4** | `47348e3b`, `6de22590` |
+| 580.105.08 | thin **30/30**, ladder **4/4** | `47348e3b` |
+| 580.65.06 | thin 28/30 (2 × adapter-init flake) | `47348e3b` |
+| 580.95.05 | thin 29/30 (`rpc-mixed-allocs`: a SYSMEM object read `0xffffffff`, dead mapping — rerun queued) | `47348e3b` |
+| 580.126.09 / 580.173.02 / 580.178.04 | *running* | `47348e3b` |
+| **590.48.01** | init ✔, **ladder 4/4** | `6de22590` |
+| 595.84 | init ✔, ladder *running* | `6de22590` |
+| 575.57.08 | init ✔ (after the element-size fix), ladder *running* | `6de22590` |
+| 575.51.03 | INTR wall at `47348e3b`; re-run queued | — |
+| 570.148.08 | init ✔, ladder queued | `6de22590` |
+| 570.124.06 | INTR wall at `47348e3b`; re-run queued | — |
+| 565.57.01 | init ✔ (BIF refused, carried since), ladder queued | `6de22590` |
+| 550.54.14 | device-info wall at `6de22590` → carried; re-run queued | — |
+| 610.57.04 | register-map wall at `47348e3b` → carried + large RPCs; re-run queued | — |
+| 545.23.08 | needs a ≤ 6.6 guest kernel (harness built) + capability row (owner review) | — |
+| 535.309.01 | capability row (owner review, `567942c1`) | — |
+
+Host axis, guest **580.159.04**: 580.95.05 / 580.65.06 / 575.57.08 / 570.148.08 / 565.57.01 /
+550.54.14 queued on box 2 (§8.3), each with mixed pairs (guest 590.48.01 and 575.57.08 ladders).
+
 ★ Every row carries its source revision. Box: vast `52746206`, RTX 3090 (GA102 `0x2204`), Xeon
 E5-2673 v4 (nested KVM), host driver **580.159.04 open**. Thin suite = `KF_DEVICE=kf3
 fast_suite.sh <tag> 180` (30 arms); gates = `scripts/bench/v3_gates.sh`; ladder = the fat-guest
