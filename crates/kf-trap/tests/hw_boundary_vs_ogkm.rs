@@ -424,11 +424,11 @@ fn usermode_window_is_the_whole_mappable_window_and_holds_no_register_past_page_
         if !name.starts_with("NV_VIRTUAL_FUNCTION_") || name.starts_with("NV_VIRTUAL_FUNCTION_PRIV") {
             continue;
         }
-        if let Some(HwValue::Val(v)) = table().in_dir(dir, name) {
-            if (lo..hi).contains(&v) {
-                seen += 1;
-                assert!(v < lo + memmap::PAGE, "{dir} {name} = {v:#x} lies past the window's first page");
-            }
+        if let Some(HwValue::Val(v)) = table().in_dir(dir, name)
+            && (lo..hi).contains(&v)
+        {
+            seen += 1;
+            assert!(v < lo + memmap::PAGE, "{dir} {name} = {v:#x} lies past the window's first page");
         }
     }
     assert!(seen >= 4, "the scan must see the window's own registers (TIME_0/1, DOORBELL, …): saw {seen}");
