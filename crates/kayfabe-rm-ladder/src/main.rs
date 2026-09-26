@@ -17902,10 +17902,18 @@ mod mean {
     ) -> PathState {
         let ctl_fd = rm.host_ctl_fd();
         let client = rm.host_client();
-        let Some(engine_type) = kayfabe_abi::submit::engine_type_copy(P2_COPY_ENGINE) else {
+        // ★ 2026-09-26: the host's own first async CE (`P2_COPY_ENGINE` on GA106; `COPY(1)` or
+        // later elsewhere — a GB203 has no `COPY(2)`), never a pinned index.
+        let ce = match rm.first_async_copy_engine() {
+            Ok(i) => i,
+            Err(e) => {
+                return PathState::Refused { step: "CE_GET_ALL_CAPS (first async CE)", status: format!("{e:?}") };
+            }
+        };
+        let Some(engine_type) = kayfabe_abi::submit::engine_type_copy(ce) else {
             return PathState::Refused {
                 step: "engine type",
-                status: format!("COPY({P2_COPY_ENGINE}) is not expressible"),
+                status: format!("COPY({ce}) is not expressible"),
             };
         };
 
@@ -18018,18 +18026,20 @@ mod mean {
         //     means this channel landed on the GRAPHICS runlist after all, and every refusal
         //     below would then be the GR rule firing on a copy channel — a red that is the
         //     harness's choice of engine and not a driver result.
-        let runlist = (token >> 16) as u32;
+        // ⊘ 2026-09-26: `RUNLIST_ID` is `22:16` (`dev_vm.h`); GB20x sets `RUNLIST_DOORBELL` (bit 30)
+        // in EVERY token, so the whole upper half is never zero there.
+        let runlist = ((token >> 16) & 0x7F) as u32;
         if runlist == 0 {
             let _ = rm.free(chan);
             return PathState::Refused {
                 step: "engine runlist",
                 status: format!(
-                    "COPY({P2_COPY_ENGINE}) landed on runlist 0 (token {token:#010x}) — the                      GRAPHICS runlist. ⊘ HARNESS FAULT: pick an async copy engine, or this                      row measures the GR context rule"
+                    "COPY({ce}) landed on runlist 0 (token {token:#010x}) — the                      GRAPHICS runlist. ⊘ HARNESS FAULT: pick an async copy engine, or this                      row measures the GR context rule"
                 ),
             };
         }
         println!(
-            "ok    W392D P2 channel    = COPY({P2_COPY_ENGINE}) bound to the UVM-owned space,              runlist {runlist} (token {token:#010x}) — NOT the graphics runlist"
+            "ok    W392D P2 channel    = COPY({ce}) bound to the UVM-owned space,              runlist {runlist} (token {token:#010x}) — NOT the graphics runlist"
         );
 
         // 5 ── the scratch. GPU-written through UVM, CPU-read by handle.

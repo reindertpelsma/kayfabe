@@ -7315,6 +7315,29 @@ impl HostRmBackend {
         self.conn.ctl_fd()
     }
 
+    /// ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §3) — **the host's lowest-numbered present copy
+    /// engine that is NOT synchronous with GR**, from the die's own `NV2080_CTRL_CMD_CE_GET_ALL_CAPS`
+    /// (`0x20802a0a`, NON_PRIVILEGED, on the subdevice; `ogkm-580: ctrl2080ce.h:325-334`:
+    /// `NvU8 capsTbl[64][2]` then `NvU64 present` at 128; `NV2080_CTRL_CE_CAPS_GRCE` is byte 0 bit 0,
+    /// `:105-106`). ⊘ Replaces a pinned `COPY(2)`: that is GA106's first async CE, and on a GB203
+    /// `COPY(2)` does not exist (`NV_ERR_OBJECT_NOT_FOUND`) — present there is `{0,1,4,5}`.
+    ///
+    /// # Errors
+    /// Whatever RM refused the control with; `Other(NV_ERR_OBJECT_NOT_FOUND)` if every present
+    /// copy engine is a GRCE.
+    pub fn first_async_copy_engine(&self) -> Result<u32, RmError> {
+        const CE_GET_ALL_CAPS: u32 = 0x2080_2a0a;
+        const PRESENT_OFF: usize = 64 * 2;
+        let mut p = [0u8; PRESENT_OFF + 8];
+        self.conn.control_for_probe(self.conn.subdevice(), CE_GET_ALL_CAPS, &mut p)?;
+        let mut present = [0u8; 8];
+        present.copy_from_slice(&p[PRESENT_OFF..]);
+        let present = u64::from_le_bytes(present);
+        (0..64u32)
+            .find(|&i| present & (1 << i) != 0 && p[i as usize * 2] & 0x01 == 0)
+            .ok_or(RmError::Other(0x57))
+    }
+
     /// ★★★ w392c — a real `FERMI_VASPACE_A` handle for `UVM_REGISTER_GPU_VASPACE.hVaSpace`.
     ///
     /// ⊘⊘ **CAUGHT ON BARE METAL, WHICH IS THE ENTIRE POINT OF RUNNING IT THERE FIRST.**
