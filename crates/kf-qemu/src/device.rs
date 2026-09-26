@@ -387,6 +387,7 @@ impl Device {
             plane.tokens.len(),
             family,
             &host.intr_table,
+            &host.engines,
         )?));
         chans.start()?;
         // ★ The served chain (census → sticky guard → init tables, static info, guest sys info,
@@ -849,7 +850,9 @@ impl Device {
                 // ★ P5b: a Passthrough token — ONE fenced store into the host's doorbell, and two
                 // relaxed counters for the per-token ledger. Nothing else on the vCPU.
                 let reached = self.rm.doorbell(host_token).is_ok();
-                self.chans.note_inline((val as u32) & self.plane.token_mask, reached);
+                if let Some(tok) = self.plane.token_index.of_doorbell(val as u32) {
+                    self.chans.note_inline(tok, reached);
+                }
             }
             Action::WakeWorker => {
                 let _ = self.worker_efd.signal();

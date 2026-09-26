@@ -138,7 +138,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
         worker_wake: &wake,
         drainer_wake: &dwake,
         ring: &ring,
-        token_mask: 63,
+        index: kf_trap::tokenindex::TokenIndex::Vector { mask: 63 },
         timer: kf_trap::timer::TIMER_GV100,
     };
 

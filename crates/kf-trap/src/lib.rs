@@ -36,6 +36,7 @@ pub mod ring;
 pub mod shadow;
 pub mod timer;
 pub mod token;
+pub mod tokenindex;
 pub mod trap;
 pub mod trappolicy;
 pub mod vmm;

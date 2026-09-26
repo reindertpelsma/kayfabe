@@ -171,6 +171,16 @@ impl Family {
         !matches!(self, Family::Blackwell)
     }
 
+    /// ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §4) — **are channel ids allocated per runlist?**
+    /// `KernelFifo.bUsePerRunlistChram` is a HAL field defaulting `NV_TRUE` for GB100/GB102/GB10B/
+    /// GB110/GB112 and every GB20x (`ogkm-580: generated/g_kernel_fifo_nvoc.c:226-236`); Turing …
+    /// Hopper default `FALSE` (only an SR-IOV host turns it on, `kernel_fifo_init.c:197-222`). With it
+    /// the doorbell token's `VECTOR` is NOT device-unique and the index must carry `RUNLIST_ID`.
+    #[must_use]
+    pub const fn chids_per_runlist(self) -> bool {
+        matches!(self, Family::Blackwell)
+    }
+
     /// How the GSP boots (`kgspBootstrap_*` HAL per family: falcon/booter through Ada, FSP after).
     #[must_use]
     pub const fn boot_style(self) -> BootStyle {
