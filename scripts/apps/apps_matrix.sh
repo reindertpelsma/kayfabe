@@ -43,11 +43,17 @@ boot(){  # $1 tag, $2 apps, $3 outdir
   say "boot $1 rc=$rc apps=[$2] :: $(grep -a 'APPS_HOOK\|FAILED' "$3/boot_$1.driver.log" "/workspace/bench/run_$1_probe.log" 2>/dev/null | tail -2 | tr '\n' ' ' | cut -c1-200)"
   while busy; do sleep 3; done
 }
+# APPS_PER_BOOT (default 1): apps per fresh boot. ⊘ Measured r1 on va1 (2026-09-26): in ONE boot,
+# the 3rd CUDA process wedged and every later app timed out silently (kf3: "slot 27 is full and
+# nothing can be retired — raise WalkCfg::runs_per_pdb") — so a batched verdict is contaminated by
+# the apps before it. One app per boot is the clean measurement; batching is a separate experiment.
+PER=${APPS_PER_BOOT:-1}
 # ---- phase 1: batched --------------------------------------------------------------------------
 todo="$*"; n=0
 while [ -n "$(echo $todo)" ]; do
   n=$((n+1)); tag="ap_${RUN}_b$n"
-  boot "$tag" "$todo" "$R"
+  batch=$(echo $todo | cut -d' ' -f1-"$PER")
+  boot "$tag" "$batch" "$R"
   done_apps=$(grep -a "boot=$tag " "$R/guest.res" 2>/dev/null | sed -n 's/.* app=\([^ ]*\) .*/\1/p')
   if [ -z "$done_apps" ]; then
     first=$(echo $todo | cut -d' ' -f1)
@@ -55,10 +61,10 @@ while [ -n "$(echo $todo)" ]; do
     done_apps=$first
   fi
   new=""; for a in $todo; do grep -qx "$a" <<<"$done_apps" || new="$new $a"; done; todo=$new
-  [ $n -ge 40 ] && { say "⊘ 40 boots — stopping"; break; }
+  [ $n -ge 200 ] && { say "⊘ 200 boots — stopping"; break; }
 done
 # ---- phase 2: every non-PASS app alone, in a fresh boot ---------------------------------------
-if [ "${APPS_NO_ISOLATE:-0}" != 1 ]; then
+if [ "$PER" -gt 1 ] && [ "${APPS_NO_ISOLATE:-0}" != 1 ]; then
   for a in $(grep -a -v 'verdict=PASS' "$R/guest.res" | sed -n 's/.* app=\([^ ]*\) .*/\1/p' | sort -u); do
     mkdir -p "$R/iso"
     boot "ap_${RUN}_i_$a" "$a" "$R/iso"
