@@ -673,6 +673,13 @@ pub enum WantedTable {
     /// verbatim (`HostFacts::gpu_cache_info`). `[measured vgfx 2026-09-26]` the GL/Vulkan UMD
     /// aborts device init when it is refused.
     FbGetGpuCacheInfo,
+    /// ★ v3-gfx: `NV0080_CTRL_CMD_FIFO_GET_ENGINE_CONTEXT_PROPERTIES` (`0x00801707`, flags
+    /// `0x50148`: ROUTE_TO_PHYSICAL) — `{engineId [IN], alignment, size}`. Answered from the
+    /// host-sourced context-buffer table (`HostFacts::gr_context_buffers`) with RM's own rule
+    /// (`kernel_fifo_ctrl.c:1036-1053`: the eight GR ids, `size`/`alignment` floored at 0 / 4 KiB,
+    /// anything else NOT_SUPPORTED). `[measured vgfx 2026-09-26]` the Vulkan UMD asks id 8
+    /// (GRAPHICS_ZCULL) right after its 3D object and tears the device down on a refusal.
+    FifoGetEngineContextProperties,
     /// `NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER` — ★★★
     /// the only control this port serves in which the guest is **telling us** something
     /// rather than asking: the physical addresses of the page-directory levels it reserved
@@ -1097,7 +1104,7 @@ impl WantedTable {
     ///
     /// [`WantedTable::cmd_id`] remains the mechanism on the other side — exhaustive over
     /// `Self`, so a new variant does not compile until it has an id.
-    pub const ALL: [WantedTable; 49] = [
+    pub const ALL: [WantedTable; 50] = [
         Self::DeviceInfo,
         Self::IntrKernelTable,
         Self::PciBarInfo,
@@ -1124,6 +1131,7 @@ impl WantedTable {
         Self::GrPdbProperties,
         Self::GrZcullInfo,
         Self::FbGetGpuCacheInfo,
+        Self::FifoGetEngineContextProperties,
         Self::GvaspaceServerReservedPdes,
         Self::GvaspaceServerReservedPdesClient,
         Self::GrContextBuffersInfo,
@@ -1206,6 +1214,7 @@ impl WantedTable {
             }
             Self::GrZcullInfo => grstatic::NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_ZCULL_INFO,
             Self::FbGetGpuCacheInfo => crate::hostquery::NV2080_CTRL_CMD_FB_GET_GPU_CACHE_INFO,
+            Self::FifoGetEngineContextProperties => 0x0080_1707,
             Self::GvaspaceServerReservedPdes => {
                 gvaspacepdes::NV2080_CTRL_CMD_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVASPACE_PDES_TO_SERVER
             }
@@ -1286,6 +1295,7 @@ impl WantedTable {
             Self::GrPdbProperties => grstatic::PDB_PROPERTIES_PARAMS_SIZE,
             Self::GrZcullInfo => grstatic::ZCULL_INFO_PARAMS_SIZE,
             Self::FbGetGpuCacheInfo => 16,
+            Self::FifoGetEngineContextProperties => 12,
             Self::GvaspaceServerReservedPdes | Self::GvaspaceServerReservedPdesClient => {
                 gvaspacepdes::COPY_SERVER_RESERVED_PDES_PARAMS_SIZE
             }
@@ -2134,6 +2144,23 @@ impl CommandPolicy for InitTablePolicy {
                 Some(row) => grstatic::encode_zcull_info(row),
                 None => return refuse(),
             },
+            WantedTable::FifoGetEngineContextProperties => {
+                let at = req.params_at;
+                let id = u32::from_le_bytes([cmd.payload[at], cmd.payload[at + 1], cmd.payload[at + 2], cmd.payload[at + 3]]) & 0x1f;
+                // `NV0080_CTRL_FIFO_GET_ENGINE_CONTEXT_PROPERTIES_ENGINE_ID_*` GRAPHICS, _ZCULL,
+                // _PREEMPT, _SPILL, _PAGEPOOL, _BETACB, _RTV, _SETUP — RM's own list.
+                if ![0x00, 0x08, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x19].contains(&id) {
+                    return refuse();
+                }
+                let b = self.host.gr_context_buffers[id as usize];
+                if b.size == grstatic::CONTEXT_BUFFER_ABSENT {
+                    return refuse();
+                }
+                let mut p = cmd.payload[at..at + 12].to_vec();
+                p[4..8].copy_from_slice(&b.alignment.max(0x1000).to_le_bytes());
+                p[8..12].copy_from_slice(&b.size.to_le_bytes());
+                p
+            }
             WantedTable::FbGetGpuCacheInfo => match self.host.gpu_cache_info {
                 Some(w) => w.iter().flat_map(|v| v.to_le_bytes()).collect(),
                 None => return refuse(),

@@ -83,7 +83,14 @@ pub struct ZbcPolicy {
     driver: kf_abi::versions::DriverAbiTable,
     /// `None` = the host die reported no ZBC table ⇒ every ZBC control is refused, as there.
     tables: Option<[Table; 3]>,
+    /// The guest kernel's last `SET_ZBC_REFERENCED` (diagnostic only).
+    pub referenced: bool,
 }
+
+/// `NV0080_CTRL_CMD_INTERNAL_MEMSYS_SET_ZBC_REFERENCED` — `{subdevInstance, bZbcSurfacesExist}`.
+pub const SET_ZBC_REFERENCED_0080: u32 = 0x0080_200a;
+/// `NV2080_CTRL_CMD_INTERNAL_MEMSYS_SET_ZBC_REFERENCED` — `{bZbcSurfacesExist}`.
+pub const SET_ZBC_REFERENCED_2080: u32 = 0x2080_0a69;
 
 impl ZbcPolicy {
     /// A fresh per-VM table over the host's index ranges (`[(start, end); 3]` in
@@ -96,7 +103,7 @@ impl ZbcPolicy {
                 Table::new(start, end, &defaults(t))
             })
         });
-        ZbcPolicy { driver, tables }
+        ZbcPolicy { driver, tables, referenced: false }
     }
 
     /// ★ The answer to one ZBC control's params (a pure function of the table, testable without
@@ -164,6 +171,18 @@ impl CommandPolicy for ZbcPolicy {
             return None;
         }
         let req = self.driver.decode_rpc_control(&cmd.payload).ok()?;
+        // ★ v3-gfx: the guest kernel's "are any ZBC-kind surfaces allocated" statement
+        // (`NV0080/NV2080_CTRL_CMD_INTERNAL_MEMSYS_SET_ZBC_REFERENCED`, `mem_mgr_gm107.c:274-292`,
+        // `[IN]` only) — its only physical consequence is that RM MAY flush the ZBC table when
+        // nothing references it. Our table is per-VM and hardware never reads it (module docs),
+        // so the statement is recorded and answered; nothing is flushed or forwarded.
+        if req.cmd == SET_ZBC_REFERENCED_0080 || req.cmd == SET_ZBC_REFERENCED_2080 {
+            let at = if req.cmd == SET_ZBC_REFERENCED_0080 { 4 } else { 0 };
+            self.referenced = cmd.payload.get(req.params_at + at).is_some_and(|b| *b != 0);
+            let mut body = cmd.payload.clone();
+            body[CONTROL_STATUS_OFF..CONTROL_STATUS_OFF + 4].copy_from_slice(&NV_OK.to_le_bytes());
+            return Some(Reply { rpc_result: NV_OK, body });
+        }
         if req.cmd >> 16 != 0x9096 {
             return None;
         }

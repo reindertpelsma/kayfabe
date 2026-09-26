@@ -500,6 +500,9 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
         // `cap1b` (nvidia-smi) never ran. ★ Covered by the host's own reply at realize
         // (`HostFacts::gpu_cache_info`), served verbatim.
         WantedTable::FbGetGpuCacheInfo,
+        // ⚠ v3-gfx: `0x00801707` — a graphics UMD's question, past `cap1b`. ★ Covered by the
+        // host-sourced `gr_context_buffers` (the table `GrContextBuffersInfo` also serves).
+        WantedTable::FifoGetEngineContextProperties,
         WantedTable::GrContextBuffersInfo,
         WantedTable::GvaspaceServerReservedPdesClient,
         WantedTable::GpuInfoV2,
@@ -694,10 +697,10 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
     // sentence is left standing with this correction above it rather than quietly softened.
     // ⊘ 47 -> 48 and 28 -> 29 at v3-gfx (`0x20800a2c` ZCULL_INFO): past the closure limit, as
     // its GR static-info siblings are — 29 of 48 (60.4 %).
-    assert_eq!(universe.len(), 49, "non-vacuity: the universe is not empty");
+    assert_eq!(universe.len(), 50, "non-vacuity: the universe is not empty");
     assert_eq!(
         outside_the_closure_limit.len(),
-        30,
+        31,
         "non-vacuity in the other direction: the exception set is SMALL, and every entry \
          costs reply-plane coverage"
     );
