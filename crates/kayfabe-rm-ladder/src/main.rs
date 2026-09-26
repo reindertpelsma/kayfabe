@@ -14495,6 +14495,7 @@ fn ladder_main() -> std::process::ExitCode {
     let mut want_bus_info = false;
     // ⊘ w735: this was declared TWICE in a row; the first was dead and warned. One only.
     let mut want_gpga_probe = false;
+    let mut want_mmio_bench = false;
     let mut want_identity_window = false;
     let mut want_cuda_window = false;
     let mut want_fixed_placement = false;
@@ -14722,6 +14723,7 @@ fn ladder_main() -> std::process::ExitCode {
             // guest framebuffer be reserved as ONE object, and how fast is it to READ over
             // PCIe? Both answers decide the design before a five-minute boot can.
             "--gpga-reserve-probe" => want_gpga_probe = true,
+            "--mmio-bench" => want_mmio_bench = true,
             "--identity-window" => want_identity_window = true,
             "--cuda-window" => want_cuda_window = true,
             "--fixed-placement" => want_fixed_placement = true,
@@ -15305,6 +15307,57 @@ fn ladder_main() -> std::process::ExitCode {
     // `docs/design/gpga_is_one_reserved_object.md` step 1. Answers, without a VM, the two
     // questions the design turns on: is the whole framebuffer reservable as ONE object, and
     // what does it cost to READ over PCIe.
+    // ★ `--mmio-bench` (owner, 2026-09-25): CPU write/read of CPU-visible, vidmem-resident
+    // memory through its BAR1 mapping, and the same loops over host RAM as the control. The SAME
+    // binary runs on bare metal and in the guest; the ratio answers "is the guest's BAR1 view
+    // uncached where hardware is write-combining?".
+    if want_mmio_bench {
+        let len: u64 = 16 << 20;
+        let mib = (len >> 20) as f64;
+        let rate = |d: std::time::Duration| mib / d.as_secs_f64().max(1e-9);
+        for pass in 1..=3 {
+            match rm.bench_vidmem_mmio(len) {
+                Ok((w, r, b, acc)) => println!(
+                    "MMIO_BENCH pass={pass} vidmem-WC {len_mib} MiB: WARM write_u64 {:.1} MiB/s ({:.1} ns/op)  read_u64 {:.1} MiB/s ({:.1} ns/op)  copy_out64K {:.1} MiB/s  acc={acc:#x}",
+                    rate(w),
+                    w.as_nanos() as f64 / (len / 8) as f64,
+                    rate(r),
+                    r.as_nanos() as f64 / (len / 8) as f64,
+                    rate(b),
+                    len_mib = len >> 20
+                ),
+                Err(e) => println!("MMIO_BENCH pass={pass} ⊘ REFUSED {e:?}"),
+            }
+        }
+        // Control: the identical loop shapes over ordinary host RAM.
+        let mut host = vec![0u64; (len / 8) as usize];
+        let t = std::time::Instant::now();
+        for (i, w) in host.iter_mut().enumerate() {
+            *w = std::hint::black_box((i as u64) ^ 0x5A5A_5A5A_5A5A_5A5A);
+        }
+        std::hint::black_box(&host);
+        let hw_cold = t.elapsed();
+        let t = std::time::Instant::now();
+        for (i, w) in host.iter_mut().enumerate() {
+            *w = std::hint::black_box((i as u64) ^ 0xA5A5);
+        }
+        std::hint::black_box(&host);
+        let hw = t.elapsed();
+        println!("MMIO_BENCH control host-RAM cold-first-touch write_u64 {:.1} MiB/s", rate(hw_cold));
+        let mut acc = 0u64;
+        let t = std::time::Instant::now();
+        for w in std::hint::black_box(&host) {
+            acc = acc.wrapping_add(std::hint::black_box(*w));
+        }
+        let hr = t.elapsed();
+        println!(
+            "MMIO_BENCH control host-RAM {} MiB: WARM write_u64 {:.1} MiB/s  read_u64 {:.1} MiB/s  acc={acc:#x}",
+            len >> 20,
+            rate(hw),
+            rate(hr)
+        );
+    }
+
     if want_gpga_probe {
         println!(
             "REV_UNDER_TEST={}",

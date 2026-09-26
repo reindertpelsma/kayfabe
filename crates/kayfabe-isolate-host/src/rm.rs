@@ -7537,6 +7537,65 @@ impl HostRmBackend {
         Ok(out)
     }
 
+    /// ★ `--mmio-bench` (owner, 2026-09-25): CPU access to CPU-VISIBLE, VIDMEM-RESIDENT memory
+    /// through its BAR mapping — the question "is our BAR1 window uncached where hardware is
+    /// write-combining?" answered by one number per direction, the SAME code on bare metal and in
+    /// the guest. One object, one write-combining mapping (`reserve_gpga` + `map_cpu`), then:
+    /// `(write u64 stores, read u64 loads, bulk copy_out in 64 KiB chunks)` — elapsed per pass
+    /// over `len` bytes, plus a checksum so the reads cannot be optimised away.
+    ///
+    /// # Errors
+    /// Whatever the allocation, mapping or an access refused with.
+    pub fn bench_vidmem_mmio(
+        &self,
+        len: u64,
+    ) -> Result<(std::time::Duration, std::time::Duration, std::time::Duration, u64), RmError> {
+        let raw = self.conn.reserve_gpga(len)?;
+        let (node, map) = self.conn.map_cpu(raw, len, CachePolicy::WriteCombining)?;
+        // ⊘ Pass 0 is COLD: every page's first touch faults the mapping in (and in a guest, a
+        // nested EPT fault). It is timed but not returned; the returned write is the WARM pass
+        // over the same pages — the memory-type (WC vs UC) answer on its own.
+        let cold = std::time::Instant::now();
+        let mut off = 0u64;
+        while off + 8 <= len {
+            map.store_u64(HostOffset::new(off), off).map_err(|e| region_error(&e))?;
+            off += 8;
+        }
+        release_fence();
+        println!("MMIO_BENCH cold-first-touch write_u64 {:.1} ns/op", cold.elapsed().as_nanos() as f64 / (len / 8) as f64);
+        let start = std::time::Instant::now();
+        let mut off = 0u64;
+        while off + 8 <= len {
+            map.store_u64(HostOffset::new(off), off ^ 0x5A5A_5A5A_5A5A_5A5A)
+                .map_err(|e| region_error(&e))?;
+            off += 8;
+        }
+        release_fence();
+        let write = start.elapsed();
+        let mut acc = 0u64;
+        let start = std::time::Instant::now();
+        let mut off = 0u64;
+        while off + 8 <= len {
+            acc = acc.wrapping_add(map.load_u64(HostOffset::new(off)).map_err(|e| region_error(&e))?);
+            off += 8;
+        }
+        let read = start.elapsed();
+        let chunk: u64 = 64 << 10;
+        let mut buf = vec![0u8; chunk as usize];
+        let start = std::time::Instant::now();
+        let mut at = 0u64;
+        while at + chunk <= len {
+            map.copy_out(HostOffset::new(at), &mut buf).map_err(|e| region_error(&e))?;
+            acc = acc.wrapping_add(u64::from(buf[0])).wrapping_add(u64::from(buf[buf.len() - 1]));
+            at += chunk;
+        }
+        let bulk = start.elapsed();
+        drop(map);
+        drop(node);
+        let _ = raw;
+        Ok((write, read, bulk, acc))
+    }
+
     /// ★★★ **THE NEGATIVE CONTROL for [`Self::time_vidmem_read`]** — the identical loop shape
     /// over ordinary host memory.
     ///
