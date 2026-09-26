@@ -326,17 +326,19 @@ item_geekbench_vulkan(){
     nv_icd_only || return 0
     local gbx; gbx=$(ls "$GSET_HOME"/geekbench/geekbench[0-9]* 2>/dev/null | grep -v '\.' | head -1)
     gset_need "${gbx:-/nonexistent/geekbench}" || return 0
-    # ⊘ Geekbench 7.0.0 free has no --no-upload: it uploads the result (as the V3 app matrix's GB6 row did).
+    # ⊘ Geekbench 7.0.0 FREE: no --no-upload, and NO scores on the console — they exist only on the uploaded
+    #   result page, which sits behind a Cloudflare challenge (measured shake2). So nvkvm-pv's criterion
+    #   (composite vs bare metal, no workload at 0) is NOT reproducible without a Pro licence; graded here:
+    #   every workload ran, the upload succeeded, no error line, and (by the suite) no host Xid. The result
+    #   URL is recorded for a human to read the scores; the claim key is stripped.
     ( cd "$(dirname "$gbx")" && "$gbx" --gpu Vulkan ) > gb.txt 2>&1; rc=$?
-    cat gb.txt | tail -60
-    # nvkvm-pv's criterion: the composite, and NO workload scoring 0 (its Path Tracer read 0 before a fix)
-    python3 "$GSET_BIN/gbparse.py" gb.txt | tee gbp.txt
-    grep '^GB_WORKLOAD ' gbp.txt | while read -r _ n v; do gset_val "$n" "$v"; done
-    gset_val score "$(sed -n 's/^GB_SCORE //p' gbp.txt)"
-    gset_dig workloads "$(grep '^GB_WORKLOAD ' gbp.txt | awk '{print $2, ($3+0>0)?"nz":"zero"}' | md5sum | cut -c1-16)"
-    nw=$(grep -c '^GB_WORKLOAD ' gbp.txt); nz=$(grep -cE '^GB_WORKLOAD \S+ 0$' gbp.txt)
-    [ $rc -eq 0 ] && grep -q '^GB_SCORE [1-9]' gbp.txt && [ "$nw" -ge 5 ] && [ "$nz" -eq 0 ] && echo GSET_OK \
-        || echo "GSET_FAIL geekbench rc=$rc score=$(sed -n 's/^GB_SCORE //p' gbp.txt) workloads=$nw zero=$nz"
+    sed -E 's/(claim\?key=)[0-9a-zA-Z]+/\1<stripped>/' gb.txt | grep -vE '^\s*$' | tail -40
+    grep -oE '^  Running .*' gb.txt | sed 's/^  Running //' > wl.txt
+    gset_dig workloads "$(md5sum < wl.txt | cut -c1-16)"; gset_val workload_count "$(wc -l < wl.txt)"
+    gset_val result_url "$(grep -m1 -oE 'https://browser.geekbench.com/v7/gpu/[0-9]+' gb.txt)"
+    nerr=$(grep -ciE 'error|fail|abort|exception' gb.txt)
+    [ $rc -eq 0 ] && [ "$(wc -l < wl.txt)" -ge 11 ] && grep -q 'Upload succeeded' gb.txt && [ "$nerr" -eq 0 ] && echo GSET_OK \
+        || echo "GSET_FAIL geekbench rc=$rc workloads=$(wc -l < wl.txt) upload=$(grep -c 'Upload succeeded' gb.txt) error_lines=$nerr"
 }
 # ══ nvkvm-pv H25: Blender Open Data 4.5.0 (benchmark-launcher-cli 3.3.0), Cycles on CUDA ═════════════
 # criterion: the launcher's render_time_no_sync / total per scene (recorded). Here: all scenes complete.
