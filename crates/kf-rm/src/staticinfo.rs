@@ -224,6 +224,16 @@ impl CommandPolicy for StaticInfoPolicy {
         // envelope, where the guest's own `NV_RM_RPC_GET_GSP_STATIC_INFO` fails loudly with
         // a line that names itself, rather than into a body that cannot carry one.
         if cmd.payload.len() != GSP_STATIC_CONFIG_INFO_SIZE {
+            // ★ Named: at a non-bench guest version this is the per-version gap
+            // (`V3_DRIVER_MATRIX.md` §7 — `GspStaticConfigInfo` has six layouts 535→580).
+            eprintln!(
+                "kf-rm: GET_GSP_STATIC_INFO refused: the guest's GspStaticConfigInfo is {} bytes, \
+                 this encoder writes {} (guest driver {}, static-info wire {:?})",
+                cmd.payload.len(),
+                GSP_STATIC_CONFIG_INFO_SIZE,
+                self.driver.driver_version(),
+                self.driver.gsp_static_info_wire()
+            );
             return Some(Reply {
                 rpc_result: NV_ERR_NOT_SUPPORTED,
                 body: Vec::new(),
@@ -234,10 +244,16 @@ impl CommandPolicy for StaticInfoPolicy {
                 rpc_result: NV_OK,
                 body,
             }),
-            Err(_) => Some(Reply {
-                rpc_result: NV_ERR_NOT_SUPPORTED,
-                body: Vec::new(),
-            }),
+            Err(e) => {
+                eprintln!(
+                    "kf-rm: GET_GSP_STATIC_INFO refused: {e:?} (guest driver {})",
+                    self.driver.driver_version()
+                );
+                Some(Reply {
+                    rpc_result: NV_ERR_NOT_SUPPORTED,
+                    body: Vec::new(),
+                })
+            }
         }
     }
 }

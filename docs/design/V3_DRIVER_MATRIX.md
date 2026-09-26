@@ -191,8 +191,16 @@ is "580.105.08" but this device's layouts were selected for 580.159.04 — set t
 guest-driver=580.105.08`). ★ The VGX pair alone could not catch that: every 580.x speaks 0x2B/0x13.
 ⚠ Limitation: fn 1 is not the first message — `GSP_SET_SYSTEM_INFO` and `SET_REGISTRY` (both
 ignored today) and the queue geometry come first, so a declared version on the wrong side of the
-610 element break fails before fn 1. Detecting the version from the guest's GSP firmware image
-(`.fwimage`) at boot is the follow-on (§8).
+610 element break fails before fn 1.
+
+⊘ **Detecting the version from the guest's firmware is not structurally available.** `[measured
+2026-09-26, gsp_ga10x.bin of 580.105.08]` the version string lives in the firmware container's
+`.fwversion` section (11 bytes, `580.105.08\0`), which the guest's CPU-RM checks and never hands to
+the GSP; the `.fwimage` that reaches guest memory is not an ELF (magic `0x0006c297`) and carries the
+string only inside GSP-RM's own rodata (two hits ~16 MB in, at no fixed offset). Finding it would be
+a pattern scan of a 74 MB guest-supplied image — sniffing, not reading. ⇒ Declared + checked stays
+the design; the cheaper follow-on is to **re-select at fn 1** when the guest's reported version shares
+the provisional one's pre-fn-1 surface (element, init args), which the matrix can state per pair.
 
 ### 4.3 The RM-control header
 

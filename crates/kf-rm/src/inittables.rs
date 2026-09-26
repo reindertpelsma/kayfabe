@@ -1708,13 +1708,17 @@ impl CommandPolicy for InitTablePolicy {
         if req.params_size as usize != want.params_size()
             || cmd.payload.len() < req.params_at + want.params_size()
         {
+            // ★ The guest's driver version is part of the statement: a size disagreement at a
+            // non-bench version is a per-version GAP (an encoder written for 580.159.04's
+            // layout), `V3_DRIVER_MATRIX.md` §7 — not a malformed guest.
             eprintln!(
-                "W349REFUSE cmd={:#010x} why=size asked={} wanted={} payload_len={} params_at={}",
+                "W349REFUSE cmd={:#010x} why=size asked={} wanted={} payload_len={} params_at={} guest_driver={}",
                 req.cmd,
                 req.params_size,
                 want.params_size(),
                 cmd.payload.len(),
-                req.params_at
+                req.params_at,
+                self.driver.driver_version()
             );
             return refuse();
         }
