@@ -48,6 +48,8 @@ say "guest up, kernel $KB"
 $GS "sudo apt-get update -qq; ok=''; miss=''; for p in $PKGS; do if apt-cache show \$p >/dev/null 2>&1; then ok=\"\$ok \$p\"; else miss=\"\$miss \$p\"; fi; done; \
      echo MISSING_PKGS=\$miss; sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \$ok 2>&1 | tail -3"
 $GS "sudo usermod -aG video,render ubuntu; sudo mkdir -p /opt/gfxset && sudo chown ubuntu:ubuntu /opt/gfxset"
+# ⊘ the NVIDIA OpenCL ICD file comes from the driver .run — assert it rather than assume it (V3 app harness)
+$GS "[ -f /etc/OpenCL/vendors/nvidia.icd ] || { sudo mkdir -p /etc/OpenCL/vendors && echo libnvidia-opencl.so.1 | sudo tee /etc/OpenCL/vendors/nvidia.icd >/dev/null; echo OPENCL_ICD_WRITTEN; }"
 # the same static ffmpeg the video lane and the host use
 $GS 'mkdir -p /opt/gfxset/ff/bin && cat > /opt/gfxset/ff/bin/ffmpeg && chmod +x /opt/gfxset/ff/bin/ffmpeg' < "$FF"
 # upstream artefacts, fetched INSIDE the image (both sides run these exact files)
