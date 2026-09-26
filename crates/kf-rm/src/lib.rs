@@ -30,6 +30,7 @@ pub mod rpc;
 pub mod staticinfo;
 pub mod sticky;
 pub mod sweep;
+pub mod sysmembar;
 pub mod zbc;
 pub mod unserviced;
 
@@ -229,6 +230,8 @@ pub fn served_chain(
     // the chain for the publication ids — and answers nothing; fn 70's link answers only fn 70.
     if let Some(MemoryLink { sink, guest_os }) = memory {
         chain.push(Box::new(barpde::PageDirPolicy::new(driver, guest_os, sink.clone())));
+        // ★ v3-refusals: the guest's sysmembar, performed as the host's (`sysmembar.rs`).
+        chain.push(Box::new(sysmembar::SysmembarPolicy::new(driver, sink.clone())));
         chain.push(Box::new(barpde::BarPdePolicy::new(sink)));
     }
     chain.extend::<[Box<dyn kf_gsp::CommandPolicy>; 7]>([

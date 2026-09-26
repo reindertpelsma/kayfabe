@@ -118,6 +118,10 @@ pub enum MemStatement {
         /// The VA-space object.
         vaspace: u32,
     },
+    /// ★★★ v3-refusals: the guest's sysmembar (`INTERNAL_BUS_FLUSH_WITH_SYSMEMBAR`,
+    /// [`crate::sysmembar`]). The plane performs it as the host sysmembar verb and only then
+    /// settles, so the held `NV_OK` is posted after the host GPU has flushed.
+    Sysmembar,
 }
 
 /// ★ Where statements go: the device's memory plane. Called on the register drainer, so it must
