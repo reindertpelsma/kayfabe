@@ -271,6 +271,25 @@ blocks on the BQL holder is the deadlock class the blocking invariants forbid. N
   shims for the 10.2→11 moves): the new code is warning-free; the only errors are the pre-existing
   11.x API drift in untouched lines. The bench build against QEMU 10.2 is recorded in §5.1.
 
+### 5.1 Bench evidence (vh, GA106 RTX 3060, 2026-09-26) — GA10x unchanged
+
+- **kf3.c against the bench QEMU 10.2.4**: compile-only with the kf3 build's own
+  `compile_commands.json` flags plus `-Werror`, base (`a7a07394`) and new side by side, in a private
+  dir under the fast-guest lock: **both rc=0**. Then the real build (`scripts/bench/build_kf3.sh`,
+  under the lock): `KF3_BUILT /workspace/bench/kf3-bins/427be031/qemu-system-x86_64`; `nm` shows
+  `kf3_bar0_read` (v3-reinit's ABI 5) and `kf3_bar1_overlay_done`/`kf3_set_bar1_overlay`/`kf3_ov_bh`
+  (this branch) in one binary — ABI 6 carries both.
+- **30-arm fast suite at `427be031`** (`KF_DEVICE=kf3 fast_suite.sh bar1db_427be031 180`, clean
+  checkout ⇒ the runner can only execute `kf3-bins/427be031`):
+  **`FAST_SUITE_PASS=30 FAIL=0 CRASH=0 NOTRUN=0`, `FAST_SUITE_RC=0`** (`02:16:49`–`02:34:28`).
+  Baseline `a7a07394` (`mc7`, same box, same budget): 30/30. Per-arm times match within a few
+  seconds (e.g. `ce-client-guest-ram` 86 s vs 87 s, `gpga-reserve-probe` 42 s vs 46 s). Every
+  status line says `family=Ampere` and none carries a `bar1db[...]` segment, as §6 predicts.
+- ⚠ A first launch without `KF_DEVICE=kf3` scored 30× NOTRUN (the runner defaults to the nvkvm
+  device and refused before its lock); it was stopped, kept as
+  `bar1db_427be031_NOTRUN_nokf3_suite.out`, and is not a measurement.
+- Nothing here exercises Hopper: §7 remains the proof plan.
+
 ## 6. Why Turing … Ada cannot change
 
 `Family::usermode_mmio()` is `None` for them ⇒ `VaManager::usermode = None` ⇒ `apply_entry` never
