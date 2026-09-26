@@ -392,6 +392,13 @@ pub enum IntrAtError {
         /// The value in the bench numbering.
         bench: u16,
     },
+    /// The matrix has no `mc_engine_idx` values at one of the two versions. ⊘ Without this arm an
+    /// empty name table on BOTH sides compares equal and the numbering is carried unchanged —
+    /// silently wrong at 535/545, where the numbering is lower.
+    EngineIdxUnmeasured {
+        /// The version with no measured `MC_ENGINE_IDX_*` values.
+        version: crate::DriverVersion,
+    },
 }
 
 impl core::fmt::Display for IntrAtError {
@@ -407,6 +414,10 @@ impl core::fmt::Display for IntrAtError {
             Self::EngineIdx { bench } => write!(
                 f,
                 "MC_ENGINE_IDX {bench:#x} (bench numbering) has no single equivalent at the guest's version"
+            ),
+            Self::EngineIdxUnmeasured { version } => write!(
+                f,
+                "no MC_ENGINE_IDX values are measured at driver {version}; the engine numbering cannot be carried by name"
             ),
         }
     }
@@ -450,6 +461,11 @@ pub fn intr_kernel_table_at(bench_body: &[u8], version: crate::DriverVersion) ->
             .collect()
     };
     let (bn, gn) = (names(crate::versions::BENCH_DRIVER), names(version));
+    for (v, n) in [(crate::versions::BENCH_DRIVER, &bn), (version, &gn)] {
+        if n.is_empty() {
+            return Err(IntrAtError::EngineIdxUnmeasured { version: v });
+        }
+    }
     let need = |p: &'static str| guest.need(p).map_err(IntrAtError::Layout);
     let len_f = need("tableLen")?;
     let len = u32::from_le_bytes(out[len_f.off()..len_f.off() + 4].try_into().unwrap_or([0; 4])) as usize;
