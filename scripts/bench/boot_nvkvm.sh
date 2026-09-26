@@ -67,7 +67,7 @@ esac
 
 exec "$Q" \
   "${RAMARGS[@]}" -cpu host -smp "${KF_SMP:-3}" \
-  -drive if=virtio,file=/workspace/bench/guest.qcow2,format=qcow2 \
+  -drive if=virtio,file="${KF_GUEST_IMG:-/workspace/bench/guest.qcow2}",format=qcow2 \
   -netdev tap,id=n0,ifname=nvktap0,script=no,downscript=no \
   -device virtio-net-pci,netdev=n0,mac=52:54:00:12:34:56 \
   `# NVKVM_DEV_EXTRA appends properties to the device line (e.g.

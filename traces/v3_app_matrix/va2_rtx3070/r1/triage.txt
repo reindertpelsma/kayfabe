@@ -1,0 +1,65 @@
+nvidia_smi|PASS|noXid|slotfull=0||
+deviceQuery|PASS|noXid|slotfull=0||
+vectorAdd|PASS|noXid|slotfull=0||
+vectorAddDrv|PASS|noXid|slotfull=0||
+matrixMul|FAIL|Xid 13, Graphics Exception: SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed;|slotfull=0|RC host twin 0x1f (guest chid 0x8, engine 0x1) wrote its notifier: except_type=0|CUDA error at matrixMul.cu:206 code=719(cudaErrorLaunchFailure) "cudaStreamSynchronize(stream)" 
+matrixMulDrv|PASS|noXid|slotfull=0||
+bandwidthTest|FAIL|Xid 13, Graphics Exception: SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed;|slotfull=0|RC host twin 0x1f (guest chid 0x8, engine 0x1) wrote its notifier: except_type=0|CUDA error at bandwidthTest.cu:834 code=719(cudaErrorLaunchFailure) "cudaDeviceSynchronize()" 
+simpleStreams|FAIL|Xid 13, Graphics Exception: SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed;|slotfull=0|RC host twin 0x1f (guest chid 0x8, engine 0x1) wrote its notifier: except_type=0|CUDA error at simpleStreams.cu:371 code=719(cudaErrorLaunchFailure) "cudaEventSynchronize(stop_event)" 
+asyncAPI|PASS|noXid|slotfull=0||
+simpleAtomicIntrinsics|TIMEOUT|noXid|slotfull=1||
+simpleCallback|FAIL|Xid 13, Graphics Exception: SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed;|slotfull=0|RC host twin 0x1f (guest chid 0x8, engine 0x1) wrote its notifier: except_type=0|CUDA error at simpleCallback.cu:146 code=719(cudaErrorLaunchFailure) "status" 
+simpleOccupancy|PASS|noXid|slotfull=0||
+simpleZeroCopy|TIMEOUT|noXid|slotfull=1||
+simpleCooperativeGroups|PASS|noXid|slotfull=0||
+concurrentKernels|FAIL|Xid 13, Graphics Exception: SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed;|slotfull=0|RC host twin 0x20 (guest chid 0x9, engine 0x1) wrote its notifier: except_type=0|CUDA error at concurrentKernels.cu:196 code=719(cudaErrorLaunchFailure) "cudaEventSynchronize(stop_event)" 
+simpleIPC|FAIL|Xid 13, Graphics Exception: SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed;|slotfull=0|RC host twin 0x2f (guest chid 0x18, engine 0x1) wrote its notifier: except_type=|CUDA error at simpleIPC.cu:161 code=719(cudaErrorLaunchFailure) "cudaMemcpyAsync(&verification_buffer[0], ptrs
+UnifiedMemoryStreams|FAIL|Xid 13, Graphics Exception: SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed;|slotfull=0|RC host twin 0x1f (guest chid 0x8, engine 0x1) wrote its notifier: except_type=0|CUDA error at UnifiedMemoryStreams.cu:216 code=719(cudaErrorLaunchFailure) "cudaStreamAttachMemAsync(stream[ti
+UnifiedMemoryPerf|FAIL|Xid 13, Graphics Exception: SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed;|slotfull=0|RC host twin 0x20 (guest chid 0x9, engine 0x1) wrote its notifier: except_type=0|Running .CUDA error at matrixMultiplyPerf.cu:435 code=719(cudaErrorLaunchFailure) "cudaStreamSynchronize(strea
+conjugateGradientUM|FAIL|Xid 31, MMU Fault: ENGINE GRAPHICS GPC3 faulted @VA. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ;|slotfull=0|RC host twin 0x1e (guest chid 0x7, engine 0x1) wrote its notifier: except_type=0|Test Summary: Error amount = 1.000000, result = SUCCESS
+cudaTensorCoreGemm|PASS|noXid|slotfull=0||
+bf16TensorCoreGemm|PASS|noXid|slotfull=0||
+globalToShmemAsyncCopy|FAIL|Xid 13, Graphics Exception: SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed;|slotfull=0|RC host twin 0x1f (guest chid 0x8, engine 0x1) wrote its notifier: except_type=0|CUDA error at globalToShmemAsyncCopy.cu:863 code=719(cudaErrorLaunchFailure) "cudaStreamSynchronize(stream)" 
+cdpSimpleQuicksort|PASS|noXid|slotfull=0||
+graphMemoryNodes|FAIL|Xid 13, Graphics Exception: SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed;|slotfull=0|RC host twin 0x1f (guest chid 0x8, engine 0x1) wrote its notifier: except_type=0|CUDA error at graphMemoryNodes.cu:322 code=719(cudaErrorLaunchFailure) "cudaMemcpyAsync(hostArrays->square, d_
+simpleCudaGraphs|TIMEOUT|noXid|slotfull=1||
+simpleCUBLAS|PASS|noXid|slotfull=0||
+simpleCUFFT|PASS|noXid|slotfull=0||
+conjugateGradient|PASS|noXid|slotfull=0||Test Summary: Error amount = 0.000000
+MersenneTwisterGP11213|FAIL|Xid 13, Graphics Exception: SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed;|slotfull=0|RC host twin 0x1f (guest chid 0x8, engine 0x1) wrote its notifier: except_type=0|CUDA error at MersenneTwister.cpp:115 code=719(cudaErrorLaunchFailure) "cudaStreamSynchronize(stream)" 
+reduction|PASS|noXid|slotfull=0||
+sortingNetworks|PASS|noXid|slotfull=0||
+scan|PASS|noXid|slotfull=0||
+histogram|PASS|noXid|slotfull=0||
+BlackScholes|PASS|noXid|slotfull=0||Max absolute error: 1.192093E-05
+fastWalshTransform|PASS|noXid|slotfull=0||
+transpose|PASS|noXid|slotfull=0||
+stream_triad|PASS|noXid|slotfull=0||
+reduce|PASS|noXid|slotfull=0||
+nbody|PASS|noXid|slotfull=0||
+blackscholes|PASS|noXid|slotfull=0||
+mandelbrot|PASS|noXid|slotfull=0||
+conv2d|PASS|noXid|slotfull=0||
+sgemm_cublas|PASS|noXid|slotfull=0||
+fft_cufft|PASS|noXid|slotfull=0||
+sha256|PASS|noXid|slotfull=0||
+memcpy2d|PASS|noXid|slotfull=0||
+attach_verify|FAIL|Xid 13, Graphics Exception: SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed;|slotfull=0|RC host twin 0x1f (guest chid 0x8, engine 0x1) wrote its notifier: except_type=0|FAIL cudaStreamSynchronize(s[b]) -> 719 (unspecified launch failure)
+gpu_burn|FAIL|noXid|slotfull=0||cuInit returned 0 (no error)
+torch_correct|FAIL|Xid 13, Graphics Exception: SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed;|slotfull=0|RC host twin 0x1f (guest chid 0x8, engine 0x1) wrote its notifier: except_type=0|RuntimeError: GET was unable to find an engine to execute this computation
+torch_ai_bench|FAIL|Xid 13, Graphics Exception: SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed;|slotfull=0|RC host twin 0x1f (guest chid 0x8, engine 0x1) wrote its notifier: except_type=0|RuntimeError: CUDA error: unspecified launch failure
+hf_generate|TIMEOUT|noXid|slotfull=0||
+cupy|PASS|noXid|slotfull=0||
+llama_cpp_gen|FAIL|Xid 13, Graphics Exception: SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed;|slotfull=0|RC host twin 0x1f (guest chid 0x8, engine 0x1) wrote its notifier: except_type=0|bash: line 1: 2071 Aborted (core dumped) /opt/apps/bundle/llama/llama-simple -m /opt/apps/data/qwen2.5-1.5b-in
+llama_bench|FAIL|Xid 13, Graphics Exception: SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed;|slotfull=0|RC host twin 0x1f (guest chid 0x8, engine 0x1) wrote its notifier: except_type=0|/workspace/apps/srcs/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:109: CUDA error
+vulkaninfo|TIMEOUT|noXid|slotfull=0||
+vkpeak|FAIL|noXid|slotfull=0||No vulkan device
+egl_offscreen|FAIL|noXid|slotfull=0||CHECK egl_gl_Mtri_s FAIL
+clinfo|PASS|noXid|slotfull=0||
+clpeak|PASS|Xid 13, Graphics Exception: SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed;|slotfull=0|RC host twin 0x1f (guest chid 0x8, engine 0x1) wrote its notifier: except_type=0|
+nvenc_h264|FAIL|noXid|slotfull=0||[h264_nvenc @ 0x64c4d89779c0] OpenEncodeSessionEx failed: unsupported device (2): (no details)
+nvenc_hevc|FAIL|noXid|slotfull=0||[hevc_nvenc @ 0x5e0ef46b49c0] OpenEncodeSessionEx failed: unsupported device (2): (no details)
+nvdec_h264|FAIL|noXid|slotfull=0||[h264 @ 0x61cdd0f57ec0] Failed setup for format cuda: hwaccel initialisation returned error.
+hashcat|FAIL|Xid 13, Graphics Exception: SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed;|slotfull=0|RC host twin 0x1f (guest chid 0x8, engine 0x1) wrote its notifier: except_type=0|Watchdog: Temperature abort trigger set to 90c
+blender_cycles|FAIL|Xid 13, Graphics Exception: SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed;|slotfull=0|RC host twin 0x1f (guest chid 0x8, engine 0x1) wrote its notifier: except_type=0|RuntimeError: Error: Launch failed in CUDA queue synchronize (integrator_shade_surface)
+geekbench_gpu|FAIL|Xid 13, Graphics Exception: SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed;|slotfull=0|RC host twin 0x1f (guest chid 0x8, engine 0x1) wrote its notifier: except_type=0|[0926/022831:ERROR:optimizer.cpp(122)] build_patches_padding: optimization failed for size { 32, 1, 1, }: Wait
