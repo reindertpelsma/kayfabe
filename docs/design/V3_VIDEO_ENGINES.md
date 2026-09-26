@@ -85,6 +85,9 @@ A guest video channel becomes a host twin exactly like a GR/CE twin. The guest's
 > `falcon ctx G=… is inside the reserved guest VA … not steered`. The no-unmap-of-unplaced rule in
 > `GpuMirror::unmap` is unchanged and still covers the unreserved case.
 > ⚠ The residual at the end of this section is dissolved by the same argument when reserved.
+> ★ `[measured vint, d536595d, GA106 580.159.04, vast 52684829]` every falcon promote of the video
+> lane logged `not steered` (G = `0x12002a000` / `0x12002d000`), **0** `HELD BY HOST` leaves, and the
+> lane is md5/PSNR/bit-exact identical to bare metal (15/15 lines) — `traces/v3_int_ga106/`.
 
 [M vid10] In a video channel's VA space, guest RM and host RM place buffers with **the same lowest-free allocator**, for RM-internal and user buffers alike.
 
