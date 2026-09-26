@@ -211,6 +211,11 @@ int main(int argc, char **argv) {
         st = ctrl_x(0x20801303, b, 1028, 1); /* 60 x 4 KiB of hex would dwarf the rest: values only */
         printf("FB_INFO[%#04x] st=%#x data=%#x (%u)\n", idx, st, rd32(b, 8), rd32(b, 8));
     }
+    /* GPU_GET_ENGINES_V2 — libcuda's cuInit asks it once; the engine TYPES the guest is shown. */
+    memset(b, 0, sizeof b); st = ctrl(0x20800170, b, 340);
+    printf("GPU_GET_ENGINES_V2 st=%#x n=%u:", st, rd32(b, 0));
+    for (uint32_t i = 0; i < rd32(b, 0) && i < 84; i++) printf(" %#x", rd32(b, 4 + 4 * i));
+    printf("\n");
     printf("GRFS_PROBE_DONE\n");
     return 0;
 }
