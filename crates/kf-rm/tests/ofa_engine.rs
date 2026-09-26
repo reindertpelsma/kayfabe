@@ -162,3 +162,29 @@ fn an_unstatable_ofa_is_dropped_not_the_device() {
     assert!(authored::engine_table(Family::Turing, &t, GRCE).is_ok());
     assert_eq!(with(Family::Ampere, 1).len(), 3, "Ampere states OFA0");
 }
+
+#[test]
+fn software_is_the_last_row_whatever_the_hosts_order() {
+    // ★ The host's GET_ENGINES_V2 order on a GA10x (measured diag2): SW (0x22) BEFORE OFA0 (0x33).
+    let host_order = vec![
+        EngineKind::Graphics(0),
+        EngineKind::Copy(0),
+        EngineKind::Copy(1),
+        EngineKind::Copy(2),
+        EngineKind::Copy(3),
+        EngineKind::VideoDecode(0),
+        EngineKind::VideoEncode(0),
+        EngineKind::Software,
+        EngineKind::OpticalFlow(0),
+    ];
+    let k = hostquery::software_last(host_order);
+    assert_eq!(k.last(), Some(&EngineKind::Software), "RM counts engineInfoListSize-1 engines: SW must be last");
+    assert_eq!(k.iter().filter(|x| **x == EngineKind::Software).count(), 1);
+    let rows = authored::engine_table(Family::Ampere, &k, GRCE).expect("Ampere");
+    assert_eq!(rows.last().map(|r| r.name), Some("SOFTWARE"));
+    // every row RM counts (all but the last) is host-driven — nothing it walks is a non-host engine
+    assert!(rows[..rows.len() - 1].iter().all(|r| r.engine_data[slot::IS_HOST_DRIVEN_ENGINE] == 1));
+    // the served order is otherwise the host's: OFA keeps its place after NVENC0
+    let names: Vec<&str> = rows.iter().map(|r| r.name).collect();
+    assert_eq!(names, ["GR0", "CE0", "CE1", "CE2", "CE3", "NVDEC0", "NVENC0", "OFA", "SOFTWARE"]);
+}

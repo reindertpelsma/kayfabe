@@ -283,6 +283,24 @@ pub fn device_info_rule(engines: &[EngineKind], falcons: &[ConstructedFalcon]) -
     DeviceInfoRow { pri_bases: Box::leak(rows.into_boxed_slice()) }
 }
 
+/// ★★ v3-gfxset: the engine list with RM's `SW` pseudo-engine moved to the END — the one ordering
+/// fact the guest's RM depends on: `kfifoGetNumEngines_GM107` returns `engineInfoListSize - 1`, *"we
+/// don't count the SW engine entry at the end of the list"* (`ogkm-580:
+/// kernel_fifo_gm107.c:838-840`), and every `i < numEngines` walk (the CHID-manager valid mask,
+/// `kernel_fifo.c:149`; `GET_ENGINE_PARTNERLIST`, `kernel_fifo_gm107.c:1005`) skips the LAST row.
+/// `[measured diag1/diag2, RTX 3070]` the host's `GET_ENGINES_V2` lists `SW` (`0x22`) before `OFA0`
+/// (`0x33`): served in host order, OFA became the uncounted last row and SW an engine RM walked —
+/// `kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf)`
+/// 313× per boot. The real GA106 table (`ctl_20801112`) ends with `SOFTWARE`. Pre-OFA, SW was last
+/// only because no advertised engine type sorted after `0x22`.
+#[must_use]
+pub fn software_last(mut kinds: Vec<EngineKind>) -> Vec<EngineKind> {
+    let sw: Vec<EngineKind> = kinds.iter().copied().filter(|k| *k == EngineKind::Software).collect();
+    kinds.retain(|k| *k != EngineKind::Software);
+    kinds.extend(sw);
+    kinds
+}
+
 /// ★ v3-gfxset: the engine list with every OFA instance this family's `dev_fault.h` cannot state
 /// (GB100's `OFA1`; an OFA a Turing or Hopper host might list) REMOVED — named on stderr — rather than
 /// left for [`authored::engine_table`] to refuse the whole table over: the device must not lose GR and
@@ -1070,7 +1088,7 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
             .filter(|&k| video_eng_desc(k).is_none_or(|d| video_falcons.iter().any(|f| f.eng_desc == d)))
             .collect::<Vec<_>>()
     });
-    let kinds = kinds.map(|k| keep_statable_ofa(asked, k));
+    let kinds = kinds.map(|k| software_last(keep_statable_ofa(asked, k)));
     let engines = match (&kinds, &grce) {
         (Ok(k), Ok(g)) => authored::engine_table(asked, k, *g).map_err(FieldCause::FamilyLayout),
         (Err(e), _) => Err(e.clone()),
