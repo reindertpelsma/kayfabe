@@ -304,10 +304,13 @@ fn the_census_carries_the_probe_set_and_defaults_to_empty() {
 fn a_plane_reports_the_probe_set_it_was_built_with() {
     use kf_abi::eventnotify::ProbeArmSet;
 
-    // Index 37: neither silent nor delivered, so only a probe set can admit it.
-    const PROBED: u32 = 37;
+    // Index 36: on none of the admitting lists, so only a probe set can admit it.
+    // ⊘ v3-appfix: it was 37 (RC_ERROR), which is now GUEST_RAISED — the guest's own CPU-RM
+    // raises it, so the shipping policy serves its arming.
+    const PROBED: u32 = 36;
     assert!(!kf_abi::eventnotify::is_silent_notifier(PROBED));
     assert!(!kf_abi::eventnotify::is_delivered_notifier(PROBED));
+    assert!(!kf_abi::eventnotify::is_guest_raised_notifier(PROBED));
     let arming = arming_params(PROBED, ACTION_REPEAT);
     let cmd = control_command(0xc1e0_0004, 0xabcd_2080, NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION, &arming);
 
@@ -321,7 +324,7 @@ fn a_plane_reports_the_probe_set_it_was_built_with() {
     assert_eq!(r.rpc_result, NV_ERR_NOT_SUPPORTED, "unprobed index refused");
 
     let census = ControlCensusLog::new();
-    census.set_probe_arm(ProbeArmSet::parse("37").expect("parses"));
+    census.set_probe_arm(ProbeArmSet::parse("36").expect("parses"));
     let mut probed = kf_rm::served_policy(
         ga106::board(),
         ga106::host(),
