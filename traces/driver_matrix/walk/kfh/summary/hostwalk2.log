@@ -20,3 +20,40 @@ MATRIX_ROW host=575.57.08 guest=580.159.04 rev=ee35ca4a FAST_SUITE_PASS=30 FAST_
      62 kf-host: HOST-ABI REFUSED control 0x2080a028: host control 0x2080a028 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 575.57.08 was never measured
      31 kf-host: HOST-ABI REFUSED control 0x2080a084: host control 0x2080a084 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 575.57.08 was never measured
 LADDER host=575.57.08 guest=580.159.04 rev=ee35ca4a 4/4
+LADDER host=575.57.08 guest=590.48.01 rev=ee35ca4a 4/4
+CE rv=0xabcd1234 want=0xabcd1234 -> PASS
+CUP2_RC=0
+LADDER host=575.57.08 guest=575.57.08 rev=ee35ca4a 4/4
+CE rv=0xabcd1234 want=0xabcd1234 -> PASS
+CUP2_RC=0
+SWAP host=570.148.08 rc=3 got=575.57.08 
+HOSTROW host=570.148.08 SWAP_FAILED
+SWAP host=565.57.01 rc=4 got=NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running. OPEN_MODULE=no  ⊘ THE SWAP DID NOT TAKE -- do not run anything downstream
+HOSTROW host=565.57.01 SWAP_FAILED
+SWAP host=550.54.14 rc=4 got=NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running. OPEN_MODULE=no  ⊘ THE SWAP DID NOT TAKE -- do not run anything downstream
+HOSTROW host=550.54.14 SWAP_FAILED
+SWAP host=580.95.05 rc=0 got=580.95.05 OPEN_MODULE=yes
+BARE host=580.95.05 cup2 rc=0 CE rv=0xabcd1234 want=0xabcd1234 -> PASS records=403
+GATES host=580.95.05 V3_GATES_SUMMARY pass=9 fail=0
+CANARY host=580.95.05 verdict=PASS
+MATRIX_ROW host=580.95.05 guest=580.159.04 rev=ee35ca4a FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+LADDER host=580.95.05 guest=580.159.04 rev=ee35ca4a 4/4
+LADDER host=580.95.05 guest=590.48.01 rev=ee35ca4a 4/4
+CE rv=0xabcd1234 want=0xabcd1234 -> PASS
+CUP2_RC=0
+LADDER host=580.95.05 guest=575.57.08 rev=ee35ca4a 4/4
+CE rv=0xabcd1234 want=0xabcd1234 -> PASS
+CUP2_RC=0
+SWAP host=580.65.06 rc=0 got=580.65.06 OPEN_MODULE=yes
+BARE host=580.65.06 cup2 rc=0 CE rv=0xabcd1234 want=0xabcd1234 -> PASS records=402
+GATES host=580.65.06 V3_GATES_SUMMARY pass=9 fail=0
+CANARY host=580.65.06 verdict=PASS
+MATRIX_ROW host=580.65.06 guest=580.159.04 rev=ee35ca4a FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+LADDER host=580.65.06 guest=580.159.04 rev=ee35ca4a 4/4
+LADDER host=580.65.06 guest=590.48.01 rev=ee35ca4a 4/4
+CE rv=0xabcd1234 want=0xabcd1234 -> PASS
+CUP2_RC=0
+LADDER host=580.65.06 guest=575.57.08 rev=ee35ca4a 4/4
+CE rv=0xabcd1234 want=0xabcd1234 -> PASS
+CUP2_RC=0
+HOSTWALK2_EXIT 2026-09-26T23:17:54+00:00

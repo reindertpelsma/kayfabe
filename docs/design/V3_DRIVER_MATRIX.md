@@ -324,7 +324,7 @@ the fat-guest CUDA ladder (cup2 / cup3 / cup8 / cup8bench).
 | 570.124.06 | INTR wall at `47348e3b`; re-run queued | — |
 | 565.57.01 | init ✔ (BIF refused, carried since); **ladder 0/4** at `ee35ca4a` — the same adapter RE-init wall as 570 (first init passes; the reborn CeUtils channel retires `forwarded=1 submissions=0`; `v3-initrace`) | `ee35ca4a` |
 | 550.54.14 | device-info wall at `6de22590` → carried; failure point re-run queued. Fat guest **unstaged**: the 550.54.14 `.run` does not install on the fat image's kernel (6.8.0-139; the thin guest's 6.8.0-59 builds it) — `stage_fat_guest.sh` now prints the installer's errors | — |
-| 610.57.04 | init ✔; the **large RPC on hardware**: `GET_GLOBAL_SM_ORDER` (73 800 B) joined from 2 fragments and answered in 2 replies (`rpc_result 0`, ruling 2). **Ladder 0/4** at `ee35ca4a`: `cuInit` → 3 — the user channel's alloc refused `0x1a` (`OverDeclaredCap`): a 610 guest allocates chids PER RUNLIST on Ampere (`bUsePerRunlistChram`, GA10x from 610.43.02) and its chid 1 collided with CeUtils' on the chid-indexed token table. Fixed at `84967e3a` (the device indexes by `(runlist, chid)` on every family); ladder re-run queued. Also seen: the 610 guest logs `GSP RM heartbeat timed out` (our GSP publishes no heartbeat) — not fatal so far | `ee35ca4a` |
+| **610.57.04** | init ✔, **ladder 4/4** at `1837166d` (cup2 `0xabcd1234`, cup3 `43`, cup8 `bad=0 maxerr=0`, cup8bench verified). Two 610-only facts made it: the **large RPC on hardware** — `GET_GLOBAL_SM_ORDER` (73 800 B) joined from 2 fragments and answered in 2 replies (ruling 2) — and **per-runlist chids on Ampere** (`bUsePerRunlistChram`, GA10x from 610.43.02): at `ee35ca4a` the user channel's chid 1 collided with CeUtils' on the chid-indexed token table (`OverDeclaredCap` → `0x1a`, `cuInit` → 3); the device now indexes by `(runlist, chid)` on every family (`84967e3a`). The GSP heartbeat a 610 guest reads is published since `46d9bf37` (hardware check queued) | `1837166d` |
 | 545.23.08 | boots the staged **6.5.0-45** guest kernel (`stage_guest_kernel.sh`; the 6.8 build gap closed) with the capability row (owner review); RmInitAdapter stops at `_gpuInitChipInfo`: `INTERNAL_GPU_GET_CHIP_INFO` is 92 bytes there (`bar1Size` at +12) — carried by name since `ee35ca4a`+1 (see 535) | `ee35ca4a` |
 | 535.309.01 | with the capability row (owner review — the LAST commit on the branch): RmInitAdapter stops at `_gpuInitChipInfo` (`0x23:0x56:907`) — `INTERNAL_GPU_GET_CHIP_INFO` is 92 bytes at ≤545 (`bar1Size` at +12; it has no reader in the 535/545 RM). Carried by name at the next commit (a unit test pins the carry at both versions); re-run queued | `ee35ca4a` |
 
@@ -333,7 +333,33 @@ Host axis, guest **580.159.04** (box 2, RTX 3080 Ti):
 | host | result | rev |
 |---|---|---|
 | **575.57.08** | at `ee35ca4a`: gates **9/9**, thin **30/30**, ladder **4/4** (guest 580.159.04); mixed pairs: guest **590.48.01 ladder 4/4**, guest **575.57.08 ladder 4/4**. Refused by name, as designed: `MC_GET_INTR_CATEGORY_SUBTREE_MAP` (absent at 575 — the Ampere family rule answers, ruling 3) and the four GSS-legacy clock rows (no public header, unmeasured below 580 — §7). Before the per-map-kind fix (`9339ee6b`): gates 9/9 but thin **0/30**, ladder 0/4 — every kinded map refused (§2.2 H3 correction) | `ee35ca4a` (`9339ee6b`) |
-| 570.148.08 / 565.57.01 / 550.54.14 / 580.95.05 / 580.65.06 | queued behind the fix (the walk was stopped: each sub-580 host would have timed out 30 arms the same way) | — |
+| **580.95.05** | at `ee35ca4a`: gates **9/9**, thin **30/30**, ladder **4/4**; mixed: guest 590.48.01 **4/4**, guest 575.57.08 **4/4** | `ee35ca4a` |
+| **580.65.06** | at `ee35ca4a`: gates **9/9**, thin **30/30**, ladder **4/4**; mixed: guest 590.48.01 **4/4**, guest 575.57.08 **4/4** | `ee35ca4a` |
+| 570.148.08 | not swapped: its `.run` is 404 under `XFree86/` (it is on the datacenter path `tesla/`) — the third walk tries both | — |
+| 565.57.01 / 550.54.14 | not swapped: the `.run` failed "Building kernel modules" on the host's Linux 6.8.0-59, and the next swap overwrote the one log that said why — `provision_host_driver.sh` now keeps each version's installer log and prints its errors; retried in the third walk | — |
+
+**The host × guest grid** — DERIVED, not typed: `scripts/drivermatrix/matrix_table.py` reads every
+queue log committed under `traces/driver_matrix/walk/` and keeps each cell's latest measurement
+(thin = the 30-arm suite, 580.x guests only; ladder = the fat-guest CUDA ladder; revision in
+backticks). Regenerate after every refresh of the walk evidence.
+
+| guest \ host | 575.57.08 | 580.65.06 | 580.95.05 | 580.159.04 |
+|---|---|---|---|---|
+| *gates* | 9/9 | 9/9 | 9/9 | 9/9 |
+| 550.54.14 |  |  |  | ladder unstaged |
+| 565.57.01 |  |  |  | ladder 0/4 `ee35ca4a` |
+| 570.148.08 |  |  |  | ladder 0/4 `ee35ca4a` |
+| 575.57.08 | ladder 4/4 `ee35ca4a` | ladder 4/4 `ee35ca4a` | ladder 4/4 `ee35ca4a` | ladder 4/4 `ee35ca4a` |
+| 580.65.06 |  |  |  | thin 28/30 `47348e3b` |
+| 580.95.05 |  |  |  | thin 29/30 `47348e3b` |
+| 580.105.08 |  |  |  | thin 30/30, ladder 4/4 `47348e3b` |
+| 580.126.09 |  |  |  | thin 29/30 `47348e3b` |
+| 580.159.04 | thin 30/30, ladder 4/4 `ee35ca4a` | thin 30/30, ladder 4/4 `ee35ca4a` | thin 30/30, ladder 4/4 `ee35ca4a` | thin 30/30, ladder 4/4 `1837166d` |
+| 580.173.02 |  |  |  | thin 30/30 `47348e3b` |
+| 580.178.04 |  |  |  | thin 27/30 `47348e3b` |
+| 590.48.01 | ladder 4/4 `ee35ca4a` | ladder 4/4 `ee35ca4a` | ladder 4/4 `ee35ca4a` | ladder 4/4 `6de22590` |
+| 595.84 |  |  |  | ladder 4/4 `6de22590` |
+| 610.57.04 |  |  |  | ladder 4/4 `1837166d` |
 
 ★ Every row carries its source revision. Box: vast `52746206`, RTX 3090 (GA102 `0x2204`), Xeon
 E5-2673 v4 (nested KVM), host driver **580.159.04 open**. Thin suite = `KF_DEVICE=kf3
