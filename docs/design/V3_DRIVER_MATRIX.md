@@ -278,7 +278,17 @@ them — before 575 those bytes were `params[0..8]` and were being zeroed in eve
 - **Guest driver, fat guest:** `scripts/drivermatrix/stage_fat_guest.sh <v>` — a qcow2 overlay on
   the bench image with `<v>`'s `.run` installed (open modules), verified on content (`modinfo`,
   libcuda); `boot_nvkvm.sh` takes it via `KF_GUEST_IMG`.
-- **Host driver:** `scripts/bench/provision_host_driver.sh` with `RUN_URL=` for the version.
+- **Guest kernel (545 only):** `scripts/drivermatrix/stage_guest_kernel.sh 6.5.0-45-generic`
+  EXTRACTS (never installs) a jammy HWE kernel — image, depmod'ed modules, build headers — for a
+  guest driver that does not build on the host's 6.8 (545.x: `libspdm_shash.c`,
+  `crypto_tfm_ctx_aligned`); `stage_guest_driver.sh` builds against it (`KREL=`, `KBUILD=`) and
+  `build_fast_guest.sh` boots it (`KF_GUEST_KROOT=`).
+- **Host driver:** `scripts/bench/provision_host_driver.sh` with `RUN_URL=` for the version; the
+  guest stays at 580.159.04 (the bench image, and a thin guest staged from 580.159.04 with
+  `guest-driver=580.159.04` declared so a defaulted device cannot take the host's version).
+- **Non-580 guests are graded by the fat ladder** (ruling 1): the thin guest's raw client is a
+  580-only RM client and refuses them at R2, so their thin row is `failure_point.sh` — did the
+  guest's RM initialise, and if not, where it stopped — and the fat-guest CUDA ladder is the verdict.
 
 ## 6. The matrix (host × guest), measured
 
