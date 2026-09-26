@@ -144,6 +144,10 @@ pub struct WalkCfg {
     pub table_version: u32,
     /// ★ Committed-placement slots — one per VA-space object that is ever walked.
     pub max_slots: u32,
+    /// ★★★ v3-roperm: the permission bits that join the diff key ([`crate::abi::KfArgs::key_perm`])
+    /// — a subset of [`crate::abi::KFWR_RF_KEY_PERM_ALL`], the host's policy
+    /// (`kf_mem::apply::PermPolicy::key_perm`), refused by name otherwise.
+    pub key_perm: u32,
 }
 
 impl Default for WalkCfg {
@@ -192,6 +196,7 @@ impl Default for WalkCfg {
             entry_budget: 1 << 22,
             table_version: KF_TBL_VER2,
             max_slots: 128,
+            key_perm: crate::abi::KFWR_RF_KEY_PERM_DEFAULT,
         }
     }
 }
@@ -707,6 +712,17 @@ impl WalkKernel {
                 ),
             });
         }
+        // ★ v3-roperm: the key is the host's POLICY and may name only the bits the kernel keys on.
+        if cfg.key_perm & !crate::abi::KFWR_RF_KEY_PERM_ALL != 0 {
+            return Err(refused(
+                "the walk kernel's diff key (WalkCfg::key_perm)",
+                format!(
+                    "key_perm {:#x} names bits outside KFWR_RF_KEY_PERM_ALL {:#x}; REFUSED at launch, by name",
+                    cfg.key_perm,
+                    crate::abi::KFWR_RF_KEY_PERM_ALL
+                ),
+            ));
+        }
         // ★ VER3 (Hopper, Blackwell) is ACCEPTED (w826, owner: every family first-class). Its
         // descriptor is pinned byte for byte against the `.cu` (`kf_format_ver3`), every field
         // re-checked against ogkm-580's `hopper/gh100/dev_mmu.h`, and `kf-gate7` walks REAL VER3
@@ -995,6 +1011,7 @@ impl WalkKernel {
         a.pdbs = self.pdbs.ptr;
         a.slots = self.slots.ptr;
         a.npdb = npdb;
+        a.key_perm = self.cfg.key_perm;
         a.ack = self.ack.ptr;
         a.ack_code = self.ack_code.ptr;
         // ⊘ The walk's run stage: done with before the diff runs, free before the commit runs.

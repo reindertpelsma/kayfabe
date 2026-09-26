@@ -89,6 +89,10 @@ impl<T: MapTarget> MapTarget for Recorded<T> {
     fn reserved(&self) -> Vec<(u64, u64)> {
         self.inner.reserved()
     }
+    // ★ v3-roperm: forwarded EXPLICITLY — the trait default would mirror privileged leaves.
+    fn withholds_privileged(&self) -> bool {
+        self.inner.withholds_privileged()
+    }
 }
 
 /// ★ `V3_BATCHED_MAP.md`: a host space that places VA-contiguous guest-RAM runs as batches
@@ -180,15 +184,7 @@ pub fn publish(
     let first = e.first_run as usize;
     let runs: Vec<DiffRun> = r.runs[first..first + e.run_count as usize]
         .iter()
-        .map(|m| DiffRun {
-            unmap: m.op == kf_cuda::abi::KFWR_OP_UNMAP,
-            va: m.va,
-            len: m.len,
-            at: m.gpga,
-            ap: m.aperture(),
-            held: m.flags & kf_cuda::abi::KFWR_RF_HELD != 0,
-            kind: ((m.flags >> 16) & 0xff) as u8,
-        })
+        .map(|m| kf_mem::apply::PermPolicy::default().diff_run(m))
         .collect();
     let applied = apply_entry(target, &runs, &ApplyCfg { store_bytes, grain: 0x1000, ram_offset, usermode: None });
     let mut codes = vec![kf_cuda::abi::KFWR_ACK_FAILED; r.runs.len()];

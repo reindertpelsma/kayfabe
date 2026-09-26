@@ -334,7 +334,7 @@ fn phase(l: &mut Checks, rm: &HostRm, store: u32, tag: &str, fmt: KfFormat, v3: 
     let port = InvalidatePort::new(InvalidateRegs::from_usermode_base(USERMODE_BASE).ok_or("regs")?);
     let space = rm.alloc_vaspace().map_err(|e| format!("{tag} vaspace: {e:?}"))?;
     let space2 = rm.alloc_vaspace().map_err(|e| format!("{tag} vaspace2: {e:?}"))?;
-    let walker = Timed { inner: GpuWalker { kernel }, submit_ns: vec![], gpu_us: vec![], in_flight_at_return: vec![] };
+    let walker = Timed { inner: GpuWalker { kernel, perm: kf_mem::apply::PermPolicy::default() }, submit_ns: vec![], gpu_us: vec![], in_flight_at_return: vec![] };
     let mut m: Mgr<'_> = VaManager::new(walker, STORE_BYTES, Box::new(|_, _| None));
     let obs = |sp| Observed { host: Recorded::new(HostVas { rm, space: sp, store, ram_obj: None }), port: &port, busy_at_op: RefCell::new(vec![]) };
     m.table.insert(K_MAIN, obs(space));

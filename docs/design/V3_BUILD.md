@@ -228,6 +228,28 @@ fat guest, kf3 binaries `kf3-bins/<rev>`).** The three guest-only failures of `V
   EXTERNALLY_OWNED (`ogkm-580 vaspace_api.c:678-690`, i.e. UVM-owned page tables), and the fault
   buffer class is `RS_FLAGS_ALLOC_KERNEL_PRIVILEGED` (`resource_list.h`, `MMU_FAULT_BUFFER`). An owner
   decision (a host fault channel, or a sanctioned eager-mapping policy) — `THE_OPEN_QUESTIONS.md` §4.
+- **R — guest read-only PTEs were read-write on the host (FIXED on `v3-roperm`, `a1a82903`;
+  box vast 52732498, GA106).** Found by source review in `V3_UVM_DEMAND_PAGING.md` §6 (branch
+  `v3-uvm-research`): the walker decoded READ_ONLY / ATOMIC_DISABLE / VOLATILE per leaf, then
+  keyed a placement on aperture + kind only (`kf_hkey`, `diffmodel::host_key`) and mapped every
+  twin read-write. Measured on master `283a5304`: `readmostly_probe gpuwrite` and `downgrade`
+  (`cudaMemAdviseSetReadMostly`, then a GPU write) returned **`bad=1048576` with no CUDA error
+  and no Xid**. Fix: ONE host permission policy (`kf_mem::apply::PermPolicy`) feeds both the diff
+  key (`KfArgs::key_perm`, a per-launch parameter; `KF_ABI_VERSION` 4 → 5) and the host map
+  (`kf_host::MapPerm` → `NVOS46`): **READ_ONLY** (`ACCESS_READ_ONLY`) and **VOLATILE**
+  (`GPU_CACHEABLE_NO`) are carried, and a keyed change on a kept placement is UNMAP + MAP; batches
+  group only same-permission rows. After: both modes fail **loudly** (719 + host Xid 31
+  `FAULT_RO_VIOLATION ACCESS_TYPE_VIRT_WRITE`); `reprefetch` passes. Correct values need
+  replayable-fault delivery (C).
+  ⊘ **ATOMIC_DISABLE is carried only with `KF3_CARRY_ATOMIC_DISABLE=1`** (enable once fault
+  delivery exists): guest UVM sets it so a GPU atomic on a sysmem-resident managed page faults and
+  migrates; without delivery, carrying it turned `atomicAdd_system` on such a page into a 719 (host
+  Xid 31 atomic fault) where the uncarried mapping gives the bare-metal values
+  (`traces/v3_roperm/atomics_probe.cu`).
+  ⊘ **PRIVILEGE** has no unprivileged map verb (RM takes it from the memory descriptor): a USER twin
+  (every mirror but an RM-internal client's or one a Translated channel was born in) WITHHOLDS a
+  privileged leaf — counted (`priv_withheld` / `priv_mirrored` in the status line), named, never
+  committed. Evidence: `traces/v3_roperm/`.
 - **Matrix re-run, single-stream + UVM rows (`fix1`, one app per boot, kf3 `f372f63f`):** host
   **43/43**, guest **38/43** (the same 43 rows were 36/43 at `79848341`: `gpu_burn` G and `cupy` B now
   PASS). Remaining: `conjugateGradientUM` and `torch_ai_bench` (C, above); `UnifiedMemoryPerf`,

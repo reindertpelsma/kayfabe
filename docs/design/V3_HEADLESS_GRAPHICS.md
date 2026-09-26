@@ -130,6 +130,12 @@ What differs from compute, in order of risk:
   `[E] cuda/walk/kf_walk.cu:155-157, 254-256`. The host side then **drops** it:
   - `host_key()` places runs by aperture only; *"kind, read-only, volatile, page size is not
     part of what the host places"* `[E] crates/kf-cuda/src/diffmodel.rs:48-58`.
+    ⊘ **SUPERSEDED twice**: kind joined the key in v3-gfx (below), and **permissions joined it
+    in v3-roperm (2026-09-26)** under one host policy (`kf_mem::apply::PermPolicy`): read-only
+    and volatile are carried to the host map (`NVOS46` `ACCESS_READ_ONLY` / `GPU_CACHEABLE_NO`);
+    privilege is keyed and a user twin withholds the leaf (no unprivileged verb places the bit);
+    atomic-disable is carried (`TLB_LOCK_ENABLE`) only with `KF3_CARRY_ATOMIC_DISABLE=1`. Only
+    page size remains outside.
   - The one NVOS46 builder sends `kind_override: 0`, with no `PAGE_KIND_OVERRIDE` flag
     `[E] crates/kf-host/src/lib.rs:771-816`.
   - The store is allocated `kind: 0` (PITCH) `[E] kf-host/src/lib.rs:1324-1349`.

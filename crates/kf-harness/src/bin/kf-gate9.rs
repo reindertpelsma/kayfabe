@@ -16,6 +16,8 @@
 //! No RM, no QEMU: the tables live in an uploaded image; only the walk kernel runs.
 
 use kf_cuda::abi::{KFWR_ACK_APPLIED, KFWR_ACK_FAILED, KFWR_ACK_HELD, KFWR_OP_MAP, KFWR_OP_UNMAP, KFWR_RF_HELD, KfMapRun};
+use kf_cuda::abi::{KFWR_RF_ATOMIC_DISABLE, KFWR_RF_PRIVILEGE, KFWR_RF_READ_ONLY, KFWR_RF_VOLATILE};
+use kf_cuda::abi::{KFWR_RF_KEY_PERM_ALL, KFWR_RF_KEY_PERM_DEFAULT};
 use kf_cuda::abi::{kf_format_ver2, kf_format_ver3};
 use kf_cuda::diffmodel::{self, AckCode, Committed};
 use kf_cuda::walk::{DeviceImage, WalkCfg, WalkEntry, WalkKernel};
@@ -34,16 +36,21 @@ const PAGE: u64 = 0x1000;
 fn main() {
     let mut l = Checks::default();
     for (tag, v3) in [("ver2", false), ("ver3", true)] {
-        if let Err(e) = differential(&mut l, tag, v3, None) {
+        if let Err(e) = differential(&mut l, tag, v3, None, KFWR_RF_KEY_PERM_DEFAULT) {
             l.check(if v3 { "ver3_run" } else { "ver2_run" }, false, e);
         }
+    }
+    // ★ v3-roperm: the key is the host's policy (`KfArgs::key_perm`); the other policy the host
+    // ships (`KF3_CARRY_ATOMIC_DISABLE=1`: every permission bit keyed) is held to the model too.
+    if let Err(e) = differential(&mut l, "ver2-keyall", false, None, KFWR_RF_KEY_PERM_ALL) {
+        l.check("ver2_keyall_run", false, e);
     }
     // ★★★ w829: the same differential with slots born TINY (64 runs), so they grow — a device
     // copy and a transparent re-walk — again and again MID-HISTORY, under random refusals. The
     // model's capacity is unbounded: every report must still be the model's diff, and the
     // settled slots must close — a re-submitted walk may neither double-commit nor drop a
     // host-confirmed placement.
-    if let Err(e) = differential(&mut l, "ver2-growth", false, Some(64)) {
+    if let Err(e) = differential(&mut l, "ver2-growth", false, Some(64), KFWR_RF_KEY_PERM_DEFAULT) {
         l.check("ver2_growth_run", false, e);
     }
     if let Err(e) = throughput(&mut l) {
@@ -65,12 +72,13 @@ impl GuestTree {
     fn new(v3: bool, base: u64) -> GuestTree {
         if v3 { GuestTree::V3(Tree3::new(base, PT_BYTES)) } else { GuestTree::V2(Tree::new(base, PT_BYTES)) }
     }
-    fn map(&mut self, va: u64, at: u64, sys: bool) {
-        match (self, sys) {
-            (GuestTree::V2(t), false) => t.map4k(va, at),
-            (GuestTree::V2(t), true) => t.map4k_sys(va, at),
-            (GuestTree::V3(t), false) => t.map4k(va, at),
-            (GuestTree::V3(t), true) => t.map4k_sys(va, at),
+    /// ★ v3-roperm: `perm` is the run-flag permission set (`KFWR_RF_*`) the leaf carries, written
+    /// as raw PTE bits at the FORMAT DESCRIPTOR's positions (VER2 bits; VER3 PCF bits).
+    fn map(&mut self, va: u64, at: u64, sys: bool, perm: u32, fmt: &kf_cuda::abi::KfFormat) {
+        let bits = raw_perm_bits(perm, fmt);
+        match self {
+            GuestTree::V2(t) => t.map4k_bits(va, at, sys, bits),
+            GuestTree::V3(t) => t.map4k_bits(va, at, sys, bits),
         }
     }
     fn unmap(&mut self, va: u64) {
@@ -99,12 +107,41 @@ impl GuestTree {
     }
 }
 
+/// ★ v3-roperm: the permission bits a leaf may carry, as run flags (`KFWR_RF_KEY_PERM_ALL`). Which
+/// of them re-map on a flip is the policy under test (`key_perm`).
+const PERM_BITS: [u32; 4] = [KFWR_RF_READ_ONLY, KFWR_RF_ATOMIC_DISABLE, KFWR_RF_VOLATILE, KFWR_RF_PRIVILEGE];
+
+/// Run-flag permissions → the raw PTE bits of `fmt` (never a hard-coded position).
+fn raw_perm_bits(perm: u32, fmt: &kf_cuda::abi::KfFormat) -> u64 {
+    let mut b = 0u64;
+    for (flag, pos) in [
+        (KFWR_RF_READ_ONLY, fmt.bit_read_only),
+        (KFWR_RF_ATOMIC_DISABLE, fmt.bit_atomic_disable),
+        (KFWR_RF_VOLATILE, fmt.bit_volatile),
+        (KFWR_RF_PRIVILEGE, fmt.bit_privilege),
+    ] {
+        if perm & flag != 0 {
+            b |= 1u64 << pos;
+        }
+    }
+    b
+}
+
+/// A random permission set: mostly none, often read-only (the read-duplicate), sometimes more.
+fn random_perm(r: &mut Rng) -> u32 {
+    match r.below(8) {
+        0..=3 => 0,
+        4 | 5 => KFWR_RF_READ_ONLY,
+        _ => PERM_BITS[r.below(4) as usize] | if r.below(2) == 0 { KFWR_RF_READ_ONLY } else { 0 },
+    }
+}
+
 /// What the walker reports for `pages` — runs coalesced exactly as the kernel coalesces (VA and
 /// backing contiguous, identical flags): the model's input.
-fn walk_of(pages: &BTreeMap<u64, (u64, bool)>) -> Vec<KfMapRun> {
+fn walk_of(pages: &BTreeMap<u64, (u64, bool, u32)>) -> Vec<KfMapRun> {
     let mut out: Vec<KfMapRun> = Vec::new();
-    for (&va, &(at, sys)) in pages {
-        let flags = if sys { 2 } else { 0 };
+    for (&va, &(at, sys, perm)) in pages {
+        let flags = if sys { 2 } else { 0 } | perm;
         if let Some(l) = out.last_mut()
             && l.va + l.len == va
             && l.gpga + l.len == at
@@ -118,9 +155,10 @@ fn walk_of(pages: &BTreeMap<u64, (u64, bool)>) -> Vec<KfMapRun> {
     out
 }
 
-/// The comparable part of a run: op, va, len, backing, aperture, held.
+/// The comparable part of a run: op, va, len, backing, aperture + permissions (v3-roperm), held.
 fn key(r: &KfMapRun) -> (u16, u64, u64, u64, u32, bool) {
-    (r.op, r.va, r.len, r.gpga, r.flags & 7, r.flags & KFWR_RF_HELD != 0)
+    let perm = PERM_BITS.iter().fold(0, |a, b| a | b);
+    (r.op, r.va, r.len, r.gpga, r.flags & (7 | perm), r.flags & KFWR_RF_HELD != 0)
 }
 
 struct Rng(u64);
@@ -147,12 +185,14 @@ fn entry_runs(r: &kf_cuda::Report, i: usize) -> Vec<KfMapRun> {
 }
 
 #[allow(clippy::too_many_lines)]
-fn differential(l: &mut Checks, tag: &str, v3: bool, slot_default: Option<u32>) -> Result<(), String> {
+fn differential(l: &mut Checks, tag: &str, v3: bool, slot_default: Option<u32>, key_perm: u32) -> Result<(), String> {
     let fmt = if v3 { kf_format_ver3() } else { kf_format_ver2() };
     let growth = slot_default.is_some();
+    let keyall = key_perm == KFWR_RF_KEY_PERM_ALL;
     let cfg = WalkCfg {
         table_version: fmt.table_version,
         slot_default: slot_default.unwrap_or(WalkCfg::default().slot_default),
+        key_perm,
         ..WalkCfg::default()
     };
     let mut k = WalkKernel::bring_up_on(cfg, fmt, kf_cuda::walk::WalkDevice::PciBusId(&kf_harness::gate_bdf()?)).map_err(|e| format!("{tag}: {e}"))?;
@@ -160,7 +200,8 @@ fn differential(l: &mut Checks, tag: &str, v3: bool, slot_default: Option<u32>) 
     // Slot 3 walks tree A, slot 5 walks tree B — and at step 40 slot 5's object MOVES its root
     // to tree A2 (the slot is the object's: the new root is diffed against what it placed).
     let mut trees = [GuestTree::new(v3, PT_A), GuestTree::new(v3, PT_B), GuestTree::new(v3, PT_B + (PT_BYTES as u64))];
-    let mut pages: [BTreeMap<u64, (u64, bool)>; 3] = Default::default();
+    let mut pages: [BTreeMap<u64, (u64, bool, u32)>; 3] = Default::default();
+    let mut perm_edits = 0usize;
     let mut model: BTreeMap<u32, Committed> = BTreeMap::new();
     let mut r = Rng(0x2545_F491_4F6C_DD1D ^ u64::from(v3));
     let cap = cfg.runs_per_pdb as usize;
@@ -174,26 +215,37 @@ fn differential(l: &mut Checks, tag: &str, v3: bool, slot_default: Option<u32>) 
             let base = 0x40_0000_0000u64 * (t as u64 + 1);
             for _ in 0..(1 + r.below(12)) {
                 let va = base + r.below(512) * PAGE;
-                match r.below(6) {
+                match r.below(7) {
                     0 | 1 => {
                         trees[t].unmap(va);
                         pages[t].remove(&va);
                     }
                     2 if !pages[t].is_empty() => {
                         // Grow a neighbour contiguously (the walker coalesces it).
-                        if let Some((&pv, &(pa, s))) = pages[t].range(..va).next_back() {
+                        if let Some((&pv, &(pa, s, pp))) = pages[t].range(..va).next_back() {
                             let (nv, na) = (pv + PAGE, pa + PAGE);
                             if na < IMG_BYTES as u64 {
-                                trees[t].map(nv, na, s);
-                                pages[t].insert(nv, (na, s));
+                                trees[t].map(nv, na, s, pp, &fmt);
+                                pages[t].insert(nv, (na, s, pp));
                             }
+                        }
+                    }
+                    // ★ v3-roperm: flip ONE permission of a mapped page IN PLACE — same VA, same
+                    // backing (UVM read duplication's RW→RO revoke, and its collapse back).
+                    3 if !pages[t].is_empty() => {
+                        if let Some((&pv, &(pa, s, pp))) = pages[t].range(..va).next_back() {
+                            let np = pp ^ PERM_BITS[r.below(4) as usize];
+                            trees[t].map(pv, pa, s, np, &fmt);
+                            pages[t].insert(pv, (pa, s, np));
+                            perm_edits += 1;
                         }
                     }
                     _ => {
                         let sys = r.below(4) == 0;
                         let at = DATA + r.below(((IMG_BYTES as u64) - DATA) / PAGE) * PAGE;
-                        trees[t].map(va, at, sys);
-                        pages[t].insert(va, (at, sys));
+                        let perm = random_perm(&mut r);
+                        trees[t].map(va, at, sys, perm, &fmt);
+                        pages[t].insert(va, (at, sys, perm));
                     }
                 }
             }
@@ -220,7 +272,7 @@ fn differential(l: &mut Checks, tag: &str, v3: bool, slot_default: Option<u32>) 
         for (i, (slot, which)) in [(3u32, 0usize), (5u32, b_tree)].into_iter().enumerate() {
             let walk = walk_of(&pages[which]);
             let com = model.get(&slot).cloned().unwrap_or_default();
-            let want = diffmodel::diff(&com, &walk, cap);
+            let want = diffmodel::diff_with(&com, &walk, cap, key_perm);
             let got = entry_runs(&rep, i);
             runs_seen += got.len();
             let (a, b): (Vec<_>, Vec<_>) = (got.iter().map(key).collect(), want.runs.iter().map(key).collect());
@@ -265,14 +317,16 @@ fn differential(l: &mut Checks, tag: &str, v3: bool, slot_default: Option<u32>) 
     l.check(
         if growth {
             "ver2_growth_gpu_diff_is_the_model_diff"
+        } else if keyall {
+            "ver2_keyall_gpu_diff_is_the_model_diff"
         } else if v3 {
             "ver3_gpu_diff_is_the_model_diff"
         } else {
             "ver2_gpu_diff_is_the_model_diff"
         },
-        mismatches == 0 && runs_seen > 100 && failed_codes > 10 && held_codes > 0 && resets == 1,
+        mismatches == 0 && runs_seen > 100 && failed_codes > 10 && held_codes > 0 && resets == 1 && perm_edits > 20,
         format!(
-            "{steps} walks, {runs_seen} runs compared, {mismatches} mismatching entries, verdicts failed={failed_codes} held={held_codes}{}",
+            "{steps} walks, {runs_seen} runs compared, {mismatches} mismatching entries, verdicts failed={failed_codes} held={held_codes} permission edits={perm_edits}{}",
             first_mismatch.map(|m| format!(" FIRST: {m}")).unwrap_or_default()
         ),
     );
@@ -289,18 +343,21 @@ fn differential(l: &mut Checks, tag: &str, v3: bool, slot_default: Option<u32>) 
         // Apply in the model too, so the final comparison is of the same history.
         for (i, (slot, which)) in [(3u32, 0usize), (5u32, b_tree)].into_iter().enumerate() {
             let com = model.get(&slot).cloned().unwrap_or_default();
-            let want = diffmodel::diff(&com, &walk_of(&pages[which]), cap);
+            let want = diffmodel::diff_with(&com, &walk_of(&pages[which]), cap, key_perm);
             let _ = i;
             model.insert(slot, diffmodel::commit(&com, &want.runs, &vec![AckCode::Applied; want.runs.len()]));
         }
         k.ack(rep.header.generation, vec![KFWR_ACK_APPLIED; n]).map_err(|e| e.to_string())?;
     }
     let closed = [(3u32, 0usize), (5u32, b_tree)].iter().all(|&(s, w)| {
-        diffmodel::coverage(&model.get(&s).cloned().unwrap_or_default().flat()) == diffmodel::coverage(&walk_of(&pages[w]))
+        diffmodel::coverage_with(&model.get(&s).cloned().unwrap_or_default().flat(), key_perm)
+            == diffmodel::coverage_with(&walk_of(&pages[w]), key_perm)
     });
     l.check(
         if growth {
             "ver2_growth_settled_slots_are_quiet_and_closed"
+        } else if keyall {
+            "ver2_keyall_settled_slots_are_quiet_and_closed"
         } else if v3 {
             "ver3_settled_slots_are_quiet_and_closed"
         } else {

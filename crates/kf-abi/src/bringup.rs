@@ -745,6 +745,24 @@ pub const NVOS46_FLAGS_DMA_OFFSET_GROWS_DOWN: u32 = 1 << 14;
 /// (`ogkm-580: nvos.h:2113-2115`): the map's PTEs take `kindOverride` instead of the memory's kind.
 pub const NVOS46_FLAGS_PAGE_KIND_OVERRIDE_YES: u32 = 1 << 19;
 
+/// ★★★ v3-roperm: `NVOS46_FLAGS_ACCESS_READ_ONLY` — field `1:0`, value 1
+/// (`ogkm-580: nvos.h:1974-1977`). RM turns it into `DMA_UPDATE_VASPACE_FLAGS_READ_ONLY`
+/// (`virt_mem_allocator_gm107.c:424-425`) and so into the PTE's `READ_ONLY` bit (VER2) or a PCF
+/// `_RO_` value (VER3, `:2458`): a GPU write through the mapping faults.
+pub const NVOS46_FLAGS_ACCESS_READ_ONLY: u32 = 1;
+
+/// ★★★ v3-roperm: `NVOS46_FLAGS_TLB_LOCK_ENABLE` — field `28:28`, value 1 (`ogkm-580: nvos.h:2129-2131`).
+/// ⊘ The name is historical: Pascal+ has no TLB lock, and RM writes this flag into the PTE's
+/// `ATOMIC_DISABLE` bit (`virt_mem_allocator_gm107.c:2534-2538`, *"tlbLock is overridden by
+/// atomic_disable"*) and, on VER3, into PCF `NO_ATOMIC` (`:2459`). It is the one unprivileged way
+/// to place an atomics-disabled mapping.
+pub const NVOS46_FLAGS_TLB_LOCK_ENABLE: u32 = 1 << 28;
+
+/// ★★★ v3-roperm: `NVOS46_FLAGS_GPU_CACHEABLE_NO` — field `18:17`, value 2 (`ogkm-580:
+/// nvos.h:2107-2111`). RM sets the mapping VOLATILE (`virt_mem_allocator_gm107.c:1457-1459`): the
+/// PTE's `VOL` bit (VER2) or PCF `UNCACHED` (VER3). `_DEFAULT` (0) keeps the memory's own attribute.
+pub const NVOS46_FLAGS_GPU_CACHEABLE_NO: u32 = 2 << 17;
+
 /// ★★★ **THE BIG-PAGE SIZE THIS ARCHITECTURE FAMILY USES — 64 KiB.**
 ///
 /// ⊘ **Not a per-die constant, and constraint 12 is the reason the distinction is written

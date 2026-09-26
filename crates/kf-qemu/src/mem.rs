@@ -395,6 +395,11 @@ pub struct GpuMirror {
     pub bv: kf_mem::batch::BatchedVas<'static>,
     /// ★ Host RM calls this space has cost, for the retire line (per CUDA process).
     pub calls: SpaceCalls,
+    /// ★★★ v3-roperm: this space is the guest KERNEL's (a Translated channel was born in it, or
+    /// its client is one of the guest RM's internal clients) — it mirrors privileged leaves. Until
+    /// then it is a USER twin and WITHHOLDS them (`MapTarget::withholds_privileged`). Shared with
+    /// the channel plane's [`Mirror::kernel_vas`].
+    pub kernel_vas: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 /// ★ `V3_BATCHED_MAP.md`: what one mirrored space cost in host RM calls over its life — the
@@ -452,8 +457,14 @@ fn ns_since(t: std::time::Instant) -> u64 {
 impl GpuMirror {
     /// A mirror over `vas`, batching through `ram`'s memfd when it has one.
     #[must_use]
-    pub fn new(vas: HostVas<'static>, rows: PlacedRows, reserved: Vec<(u64, u64)>, ram: Option<&'static RamMap>) -> Self {
-        GpuMirror { vas, rows, reserved, ram, bv: kf_mem::batch::BatchedVas::new(vas), calls: SpaceCalls::default() }
+    pub fn new(
+        vas: HostVas<'static>,
+        rows: PlacedRows,
+        reserved: Vec<(u64, u64)>,
+        ram: Option<&'static RamMap>,
+        kernel_vas: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    ) -> Self {
+        GpuMirror { vas, rows, reserved, ram, bv: kf_mem::batch::BatchedVas::new(vas), calls: SpaceCalls::default(), kernel_vas }
     }
 
     /// Batch objects freed so far.
@@ -505,6 +516,9 @@ pub fn vmm_ranges(fb: Option<(u64, u64)>, ram: Option<(u64, u64)>) -> Vec<(u64, 
 }
 
 impl MapTarget for GpuMirror {
+    fn withholds_privileged(&self) -> bool {
+        !self.kernel_vas.load(Ordering::Acquire)
+    }
     fn map(&self, d: &Desired, defer: bool) -> Result<Mapped, String> {
         let t = std::time::Instant::now();
         let m = self.vas.map(d, defer);
@@ -628,6 +642,19 @@ pub struct Mirror {
     pub live: std::sync::Arc<AtomicU64>,
     /// ★ P6b: this host space's ring slots ([`take_ring_slot`]).
     pub rings: RingSlots,
+    /// ★★★ v3-roperm: the space is the guest KERNEL's — set by the channel plane when it births a
+    /// Translated channel here; the memory plane's [`GpuMirror`] reads it to decide whether a
+    /// privileged guest leaf may be mirrored.
+    pub kernel_vas: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
+
+/// ★★★ v3-roperm: a mirror's starting classification — KERNEL for one of the guest RM's own
+/// internal clients (a handle range no guest process can hold, `kf_rm::chanlink::is_rm_internal_client`),
+/// USER (withholding privileged leaves) for everything else until a Translated channel is born in it.
+#[must_use]
+pub fn kernel_vas_for(key: VasKey) -> std::sync::Arc<std::sync::atomic::AtomicBool> {
+    let client = u32::try_from(key.0 >> 32).unwrap_or(0);
+    std::sync::Arc::new(std::sync::atomic::AtomicBool::new(kf_rm::chanlink::is_rm_internal_client(client)))
 }
 
 /// ★ P5c: a retired mirror's host space, its rows unmapped, its two windows still in place —
@@ -723,6 +750,14 @@ impl MapTarget for Target {
             Target::Bar1(b) => b.map_usermode(u),
             // ★ A GPU VA view of the doorbell: NOT MIRRORED (the trait default, `V3_BAR1_DOORBELL.md` §5).
             Target::Gpu(g) => g.map_usermode(u),
+        }
+    }
+    // ★ v3-roperm: forwarded EXPLICITLY (a trait default here would mirror privileged leaves into
+    // every user twin). The CPU windows are the guest kernel's apertures: they mirror them.
+    fn withholds_privileged(&self) -> bool {
+        match self {
+            Target::Window(_) | Target::Bar1(_) => false,
+            Target::Gpu(g) => g.withholds_privileged(),
         }
     }
 }
@@ -1352,16 +1387,17 @@ fn create_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, store: 
     let ram_us = us(t_step);
     let rows = PlacedRows::default();
     let rings = RingSlots::default();
+    let kernel_vas = kernel_vas_for(key);
     let line = match (&fb_base, &ram_base) {
         (Ok(fb), Some(Ok((rb, rl)))) => {
             if let Ok(mut mm) = plane.mirrors.lock() {
-                mm.insert(key, Mirror { space, fb_base: *fb, fb_len: plane.fb_len, ram: Some((*rb, *rl)), rows: rows.clone(), ram_obj: ram_obj.map(|(o, _)| o), live: Default::default(), rings: rings.clone() });
+                mm.insert(key, Mirror { space, fb_base: *fb, fb_len: plane.fb_len, ram: Some((*rb, *rl)), rows: rows.clone(), ram_obj: ram_obj.map(|(o, _)| o), live: Default::default(), rings: rings.clone(), kernel_vas: kernel_vas.clone() });
             }
             format!("windows fb={fb:#x}+{:#x} ram={rb:#x}+{rl:#x} rings={RING_REGION_BASE:#x}+{RING_REGION_BYTES:#x}", plane.fb_len)
         }
         (Ok(fb), None) => {
             if let Ok(mut mm) = plane.mirrors.lock() {
-                mm.insert(key, Mirror { space, fb_base: *fb, fb_len: plane.fb_len, ram: None, rows: rows.clone(), ram_obj: None, live: Default::default(), rings: rings.clone() });
+                mm.insert(key, Mirror { space, fb_base: *fb, fb_len: plane.fb_len, ram: None, rows: rows.clone(), ram_obj: None, live: Default::default(), rings: rings.clone(), kernel_vas: kernel_vas.clone() });
             }
             format!("windows fb={fb:#x} ram=NONE rings={RING_REGION_BASE:#x}+{RING_REGION_BYTES:#x}")
         }
@@ -1380,7 +1416,7 @@ fn create_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, store: 
         space.space,
         ns / 1000
     );
-    m.table.insert(key, Target::Gpu(GpuMirror::new(HostVas { rm, space, store, ram_obj: ram_obj.map(|(o, _)| o) }, rows, reserved, Some(plane.ram))));
+    m.table.insert(key, Target::Gpu(GpuMirror::new(HostVas { rm, space, store, ram_obj: ram_obj.map(|(o, _)| o) }, rows, reserved, Some(plane.ram), kernel_vas)));
     Ok(())
 }
 
@@ -1580,14 +1616,16 @@ pub fn apply_statement(
                     // ★ P5c: a retired space — its rows are gone, its windows are where they were.
                     let rows = PlacedRows::default();
                     let reserved = vmm_ranges(Some((sp.fb_base, plane.fb_len)), sp.ram);
+                    // ★ v3-roperm: a recycled host space is classified afresh for its new object.
+                    let kernel_vas = kernel_vas_for(key);
                     if let Ok(mut mm) = plane.mirrors.lock() {
                         mm.insert(
                             key,
-                            Mirror { space: sp.space, fb_base: sp.fb_base, fb_len: plane.fb_len, ram: sp.ram, rows: rows.clone(), ram_obj: sp.ram_obj, live: Default::default(), rings: sp.rings.clone() },
+                            Mirror { space: sp.space, fb_base: sp.fb_base, fb_len: plane.fb_len, ram: sp.ram, rows: rows.clone(), ram_obj: sp.ram_obj, live: Default::default(), rings: sp.rings.clone(), kernel_vas: kernel_vas.clone() },
                         );
                     }
                     plane.counters.mirrors_reused.fetch_add(1, Ordering::Relaxed);
-                    m.table.insert(key, Target::Gpu(GpuMirror::new(HostVas { rm, space: sp.space, store, ram_obj: sp.ram_obj }, rows, reserved, Some(plane.ram))));
+                    m.table.insert(key, Target::Gpu(GpuMirror::new(HostVas { rm, space: sp.space, store, ram_obj: sp.ram_obj }, rows, reserved, Some(plane.ram), kernel_vas)));
                 } else if let Err(line) = create_mirror(m, plane, rm, store, key) {
                     return line;
                 }
