@@ -570,6 +570,39 @@ mod tests {
         assert_eq!((a.mapped, a.batches, a.batched_runs, a.map_calls), (7, 2, 5, 4));
     }
 
+    /// ★★★ v3-roperm — **THE PERMISSION BIT POSITIONS, PER FAMILY, AGAINST ogkm's MMU FORMATS.**
+    /// The walker decodes READ_ONLY / ATOMIC_DISABLE / VOLATILE / PRIVILEGE off the format
+    /// descriptor each family selects (`kf_chip::Family::mmu_format` → `kf_format_ver2`/`_ver3`, as
+    /// `kf-qemu` does at realize), so a wrong position here would carry the WRONG bit to the host.
+    /// - VER2 (Turing, Ampere, Ada; `ogkm-580 turing/tu102/dev_mmu.h` `NV_MMU_VER2_PTE_*`, the
+    ///   same in `pascal/gp100` and `hopper/gh100`'s VER2 block): `VOL 3:3`, `PRIVILEGE 5:5`,
+    ///   `READ_ONLY 6:6`, `ATOMIC_DISABLE 7:7`.
+    /// - VER3 (Hopper, Blackwell — Blackwell's UVM HAL is Hopper's, `uvm_blackwell_mmu.c:71-82`):
+    ///   `PCF 7:3` (`hopper/gh100/dev_mmu.h:498`), whose enumerants are a bit field in their low four
+    ///   bits — `REGULAR_RW_ATOMIC_UNCACHED_ACE = 0x1`, `PRIVILEGE_RW_ATOMIC_CACHED_ACE = 0x2`,
+    ///   `REGULAR_RO_ATOMIC_CACHED_ACE = 0x4`, `REGULAR_RW_NO_ATOMIC_CACHED_ACE = 0x8` (`:503-511`)
+    ///   — so UNCACHED / PRIVILEGE / RO / NO_ATOMIC sit at PTE bits 3 / 4 / 5 / 6.
+    #[test]
+    fn every_family_decodes_its_permissions_at_ogkms_bit_positions() {
+        use kf_chip::{Family, MmuFormat};
+        const PCF_LO: u8 = 3;
+        for f in Family::ALL {
+            let fmt = match f.mmu_format() {
+                MmuFormat::Ver2 => kf_cuda::abi::kf_format_ver2(),
+                MmuFormat::Ver3 => kf_cuda::abi::kf_format_ver3(),
+            };
+            let got = (fmt.bit_read_only, fmt.bit_atomic_disable, fmt.bit_volatile, fmt.bit_privilege);
+            let want = match f.mmu_format() {
+                MmuFormat::Ver2 => (6, 7, 3, 5),
+                MmuFormat::Ver3 => {
+                    let at = |enumerant: u32| PCF_LO + enumerant.trailing_zeros() as u8;
+                    (at(0x4), at(0x8), at(0x1), at(0x2))
+                }
+            };
+            assert_eq!(got, want, "{f:?}: (RO, ATOMIC_DISABLE, VOLATILE, PRIVILEGE) PTE bit positions");
+        }
+    }
+
     /// ★★★★★ v3-roperm: the guest leaf's permissions reach the host map, and a batch groups only
     /// SAME-permission rows — one host map carries one permission set, so batching a RO row with
     /// a RW neighbour would widen the RO row (the silent read-duplication corruption,
