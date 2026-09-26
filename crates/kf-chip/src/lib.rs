@@ -8,7 +8,9 @@
 //!    [`Family::boot_style`], its GSP model). Class sets are GENERATED from ogkm ([`classes`]);
 //!    the host classes are DERIVED from the host's own class list ([`host_classes`]).
 //!    ★ Every family is first-class (owner, w826): no family is the reference the others hang off.
-//! 2. **Register offsets** — generated from ogkm `dev_*.h` per family (to come).
+//! 2. **Register offsets** — generated from ogkm `dev_*.h` per die group ([`hwref`], by
+//!    `tools/derive_hwref.sh`); today the table CHECKS the hand-written offsets rather than
+//!    supplying them (`docs/design/V3_HW_BOUNDARY_INVENTORY.md`).
 //! 3. **Per-die facts** — read from the host GPU through unprivileged RM queries, each carrying
 //!    its provenance (to come).
 //!
@@ -19,6 +21,7 @@ pub mod classes;
 pub mod falcon_gsp;
 pub mod fsp_gsp;
 pub mod host_classes;
+pub mod hwref;
 pub mod ptekind;
 pub mod usermode;
 

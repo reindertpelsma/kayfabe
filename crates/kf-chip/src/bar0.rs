@@ -407,3 +407,105 @@ pub fn fb_layout(fb_length: u64) -> Option<FbLayout> {
         bar2_pde_base: carve + BAR2_PDE_ABOVE_CARVE_OUT,
     })
 }
+
+/// ★ Every BAR0 boot register and config word above, at the offset the ogkm-580 header of each
+/// die group gives it (`kf_chip::hwref`, `docs/design/V3_HW_BOUNDARY_INVENTORY.md`).
+#[cfg(test)]
+mod hwref_check {
+    use super::*;
+    use crate::hwref::expect::{base, range, val};
+    use crate::hwref::{DieGroup, table};
+
+    fn facts(g: DieGroup) -> Bar0Facts {
+        let (architecture, implementation) = match g {
+            DieGroup::Tu10x => (crate::arch::TU100, 2),
+            DieGroup::Ga100 => (crate::arch::GA100, crate::arch::IMPL_GA100),
+            DieGroup::Ga10x => (crate::arch::GA100, 6),
+            DieGroup::Ad10x => (crate::arch::AD100, 6),
+            DieGroup::Gh100 => (crate::arch::GH100, 0),
+            DieGroup::Gb10x => (crate::arch::GB100, 0),
+            DieGroup::Gb20x => (crate::arch::GB200, 3),
+        };
+        Bar0Facts { architecture, implementation, revision: 0xA1, fb_mb: 8192, pcie_link_caps: 0x0040_4103 }
+    }
+
+    /// Rows served to a die group whose own code never reads them — an unread shadow word, named.
+    const UNREAD: &[(DieGroup, &str, &str)] = &[
+        (DieGroup::Ga100, "NV_USABLE_FB_SIZE_IN_MB", "GA100 binds kmemsysReadUsableFbSize_GP102 (g_kern_mem_sys_nvoc.c:349-352)"),
+    ];
+
+    #[test]
+    fn every_boot_register_sits_at_its_die_groups_header_offset() {
+        for g in DieGroup::ALL {
+            for r in boot_regs(g.family(), &facts(g)) {
+                let want = match r.name {
+                    "NV_XVE_LINK_CAPABILITIES" => {
+                        Some(base(g, "NV_PCFG") + val(g, "NV_XVE_LINK_CAPABILITIES"))
+                    }
+                    "NV_VIRTUAL_FUNCTION_PRIV_ACCESS_COUNTER_NOTIFY_BUFFER_SIZE" => Some(
+                        base(g, "NV_VIRTUAL_FUNCTION_FULL_PHYS_OFFSET")
+                            + val(g, "NV_VIRTUAL_FUNCTION_PRIV_ACCESS_COUNTER_NOTIFY_BUFFER_SIZE"),
+                    ),
+                    "NV_THERM_I2CS_SCRATCH_FSP_BOOT_COMPLETE" => Some(val(g, "NV_THERM_I2CS_SCRATCH")),
+                    "NV_EP_PCFGM + NV_EP_PCFG_GPU_LINK_CAPABILITIES" => {
+                        Some(base(g, "NV_EP_PCFGM") + val(g, "NV_EP_PCFG_GPU_LINK_CAPABILITIES"))
+                    }
+                    name => table().value(g, name).ok(),
+                };
+                match want {
+                    Some(off) => assert_eq!(r.off, off, "{g:?} {}", r.name),
+                    None => assert!(
+                        UNREAD.iter().any(|(ug, n, _)| *ug == g && *n == r.name),
+                        "{g:?} {}: served at {:#x}, and no header of the die group's lineage defines it",
+                        r.name,
+                        r.off
+                    ),
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn every_boot_register_encoding_is_the_header_field() {
+        // PMC_BOOT_0 / _42 field positions (`nv_ref.h`, every lineage's root).
+        for g in DieGroup::ALL {
+            assert_eq!(range(g, "NV_PMC_BOOT_0_ARCHITECTURE_0"), (28, 24));
+            assert_eq!(range(g, "NV_PMC_BOOT_0_IMPLEMENTATION"), (23, 20));
+            assert_eq!((range(g, "NV_PMC_BOOT_0_MAJOR_REVISION"), range(g, "NV_PMC_BOOT_0_MINOR_REVISION")), ((7, 4), (3, 0)));
+            assert_eq!(range(g, "NV_PMC_BOOT_42_ARCHITECTURE"), (29, 24));
+            assert_eq!(range(g, "NV_PMC_BOOT_42_IMPLEMENTATION"), (23, 20));
+            assert_eq!(range(g, "NV_PMC_BOOT_42_MAJOR_REVISION"), (19, 16));
+            assert_eq!(range(g, "NV_PMC_BOOT_42_MINOR_REVISION"), (15, 12));
+            assert_eq!(val(g, "NV_PMC_BOOT_1_VGPU_REAL"), 0, "BOOT_1 = 0 advertises VGPU = REAL");
+        }
+        // ⚠ `pmc_boot_0` writes the architecture's low five bits at 28:24 only; `NV_PMC_BOOT_0_
+        // ARCHITECTURE_1` (8:8) holds a sixth. Every architecture ogkm-580 names fits in five.
+        assert_eq!(range(DieGroup::Gb20x, "NV_PMC_BOOT_0_ARCHITECTURE_1"), (8, 8));
+        assert!(val(DieGroup::Gb20x, "NV_PMC_BOOT_0_ARCHITECTURE_GB200") <= 0x1F);
+        // LOCAL_MEMORY_RANGE (TU10x, GA100: `_GP102`): scale 3:0, mag 9:4.
+        for g in [DieGroup::Tu10x, DieGroup::Ga100] {
+            assert_eq!(range(g, "NV_PFB_PRI_MMU_LOCAL_MEMORY_RANGE_LOWER_SCALE"), (3, 0));
+            assert_eq!(range(g, "NV_PFB_PRI_MMU_LOCAL_MEMORY_RANGE_LOWER_MAG"), (9, 4));
+        }
+        // Ada's scrubber handoff: 31:29, DONE = 3.
+        let g = DieGroup::Ad10x;
+        assert_eq!(range(g, "NV_PGC6_BSI_VPR_SECURE_SCRATCH_15_SCRUBBER_HANDOFF"), (31, 29));
+        assert_eq!(u64::from(SCRUBBER_HANDOFF_DONE), val(g, "NV_PGC6_BSI_VPR_SECURE_SCRATCH_15_SCRUBBER_HANDOFF_DONE") << 29);
+        for g in [DieGroup::Gh100, DieGroup::Gb10x, DieGroup::Gb20x] {
+            assert_eq!(u64::from(FSP_BOOT_COMPLETE_SUCCESS), val(g, "NV_THERM_I2CS_SCRATCH_FSP_BOOT_COMPLETE_STATUS_SUCCESS"));
+        }
+    }
+
+    #[test]
+    fn every_config_word_sits_at_its_die_groups_config_offset() {
+        for g in DieGroup::ALL {
+            let words = config_words(g.family(), &facts(g));
+            let want = match g {
+                DieGroup::Tu10x | DieGroup::Ga100 | DieGroup::Ga10x | DieGroup::Ad10x => None,
+                DieGroup::Gb10x => Some(val(g, "NV_PF0_LINK_CAPABILITIES")),
+                DieGroup::Gh100 | DieGroup::Gb20x => Some(val(g, "NV_EP_PCFG_GPU_LINK_CAPABILITIES")),
+            };
+            assert_eq!(words.first().map(|w| u64::from(w.off)), want, "{g:?}");
+        }
+    }
+}

@@ -1,0 +1,132 @@
+# ★ The HARDWARE-BOUNDARY VOCABULARY: which ogkm macro NAMES `tools/derive_hwref.sh` evaluates.
+#
+# ⊘ Names only — never C. A line is a macro-name PREFIX (every macro whose NAME starts with it) or,
+# with a trailing `$`, one exact name. The compiler evaluates the bodies; nothing here parses them.
+# `docs/design/V3_HW_BOUNDARY_INVENTORY.md` is the inventory these names come from: every register,
+# field and in-memory format kayfabe reads, writes, emulates or decodes, plus the complete field
+# group it belongs to (so a family whose layout moved shows up as a differing row, not a missing one).
+#
+# sections: `swref` = src/common/inc/swref/published/<arch>/<chip>/ + kernel-open/nvidia-uvm/hwref/
+#           `class <file>` = src/common/sdk/nvidia/inc/class/<file> (every macro in it, filtered by
+#                             the prefixes that follow until the next section; none = all)
+#           `struct <file> <type> <member>...` = offsetof/sizeof of a class-header struct
+
+swref
+# ── identity (PMC) ────────────────────────────────────────────────────────────────────────────
+NV_PMC_BOOT_0
+NV_PMC_BOOT_1
+NV_PMC_BOOT_42
+# ── PCIe config: the BAR0 XVE mirror (TU…AD), the XTL EP mirror + config space (GH100, GB20x),
+#    and GB10x's PF0 config space ──────────────────────────────────────────────────────────────
+NV_PCFG$
+NV_XVE_LINK_CAPABILITIES
+NV_EP_PCFGM$
+NV_EP_PCFG_GPU_LINK_CAPABILITIES
+NV_PF0_LINK_CAPABILITIES
+# ── BAR0 window (PRAMIN) and BAR blocks ─────────────────────────────────────────────────────────
+NV_PRAMIN
+NV_PBUS_BAR0_WINDOW
+NV_PBUS_BAR1_BLOCK
+NV_PBUS_BAR2_BLOCK
+NV_PBUS_SW_SCRATCH
+NV_XAL_EP_BAR0_WINDOW
+# ── cache ops / memops (pre-Hopper UFLUSH; Hopper+ XAL_EP read-triggered memops) ─────────────────
+NV_UFLUSH_
+NV_XAL_EP_UFLUSH_
+# ── the VF register file: usermode page, interrupt tree, fault buffers, MMU invalidate, L2 ops,
+#    BAR1/BAR2 blocks (dev_vm.h) ──────────────────────────────────────────────────────────────────
+NV_VIRTUAL_FUNCTION
+# ── interrupt vectors / doorbell token fields (dev_ctrl.h) ──────────────────────────────────────
+NV_CTRL_
+# ── the privileged MMU register block (dev_fb.h): invalidate, WPR2, FB size, fault buffers ──────
+NV_PFB_PRI_MMU_
+NV_PFB_NISO_FLUSH_SYSMEM_ADDR
+# ── GC6 island scratch: FB size, GFW boot, scrubber handoff, SCI timer ──────────────────────────
+NV_PGC6_
+NV_USABLE_FB_SIZE_IN_MB
+# ── FSP boot gate ────────────────────────────────────────────────────────────────────────────────
+NV_THERM_I2CS_SCRATCH
+# ── timer ────────────────────────────────────────────────────────────────────────────────────────
+NV_PTIMER_
+# ── falcons: GSP, SEC2, FSP; the RISC-V block ────────────────────────────────────────────────────
+NV_PGSP$
+NV_PGSP_
+NV_PSEC$
+NV_PSEC_
+NV_PFSP$
+NV_PFSP_
+NV_FALCON2_
+NV_FALCON_GSP_BASE
+NV_FALCON_SEC_BASE
+NV_PFALCON_FALCON_IRQ
+NV_PFALCON_FALCON_MAILBOX
+NV_PFALCON_FALCON_HWCFG
+NV_PFALCON_FALCON_CPUCTL
+NV_PFALCON_FALCON_BOOTVEC
+NV_PFALCON_FALCON_DMACTL
+NV_PFALCON_FALCON_DMATRF
+NV_PFALCON_FALCON_ENGINE
+NV_PFALCON_FALCON_DEBUGINFO
+NV_PFALCON_FALCON_IMEM
+NV_PFALCON_FALCON_DMEM
+NV_PFALCON_FALCON_EMEM
+NV_PFALCON_FALCON_OS
+NV_PFALCON_FALCON_RM
+NV_PRISCV_RISCV_CPUCTL
+NV_PRISCV_RISCV_IRQ
+NV_PRISCV_RISCV_BCR_CTRL
+NV_PRISCV_RISCV_CORE_SWITCH
+NV_PRISCV_RISCV_BR_RETCODE
+# ── in-memory formats: USERD, instance block (PDB), GPFIFO entry, method header ────────────────
+NV_RAMUSERD_
+NV_RAMIN_
+NV_RAMFC_
+NV_FIFO_DMA_
+NV_PPBDMA_GP_ENTRY
+# ── page tables (VER2 = TU…AD, VER3 = GH100+) and PTE kinds ──────────────────────────────────────
+NV_MMU_VER2_
+NV_MMU_VER3_
+NV_MMU_PTE_KIND_
+# ── MMU fault ids, fault types, access types ─────────────────────────────────────────────────────
+NV_PFAULT_MMU_ENG_ID_
+NV_PFAULT_FAULT_TYPE_
+NV_PFAULT_ACCESS_TYPE_
+NV_PFAULT_MMU_CLIENT_TYPE_
+# ── channel RAM (the per-runlist chid space) and the device-info table format ─────────────────────
+NV_CHRAM_CHANNEL$
+NV_CHRAM_CHANNEL__SIZE_1$
+NV_PTOP_DEVICE_INFO
+
+# ── class headers: channels (USERD control + host methods) ───────────────────────────────────────
+class clc36f.h
+class clc46f.h
+class clc56f.h
+class clc86f.h
+class clc96f.h
+class clca6f.h
+# ── copy engines ─────────────────────────────────────────────────────────────────────────────────
+class clc3b5.h
+class clc5b5.h
+class clc6b5.h
+class clc7b5.h
+class clc8b5.h
+class clc9b5.h
+class clcab5.h
+# ── usermode (doorbell page) ─────────────────────────────────────────────────────────────────────
+class clc361.h
+class clc461.h
+class clc561.h
+class clc661.h
+class clc761.h
+# ── MMU fault buffer / access counter entries ────────────────────────────────────────────────────
+class clc369.h
+class clc365.h
+
+# ── USERD control structs (the GP_GET/GP_PUT the doorbell plane reads) and the notifier ─────────
+struct clc36f.h Nvc36fControl GPGet GPPut Get Put TopLevelGet
+struct clc46f.h Nvc46fControl GPGet GPPut Get Put TopLevelGet
+struct clc56f.h Nvc56fControl GPGet GPPut Get Put TopLevelGet
+struct clc86f.h Nvc86fControl GPGet GPPut Get Put TopLevelGet
+struct clc96f.h Nvc96fControl GPGet GPPut Get Put TopLevelGet
+struct clca6f.h Nvca6fControl GPGet GPPut Get Put TopLevelGet
+struct nvgputypes.h NvNotification timeStamp info32 info16 status
