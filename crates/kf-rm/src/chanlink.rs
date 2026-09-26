@@ -331,6 +331,15 @@ pub enum ChanStatement {
         /// `bWait` as the guest asked (the host verb always waits: the held reply IS the preempt).
         wait: bool,
     },
+    /// ★ v3-video: acquire (`0x20808163`) / release (`0x20808164`) one GPU-wide NVENC session slot
+    /// (`kf_abi::gssreplay::GSS_ENC_SESSION_ACQUIRE`) — carried to OUR host client, never answered
+    /// from a table: the slot is host state.
+    EncoderSession {
+        /// `hClient` of the call (the guest process's client).
+        client: u32,
+        /// Acquire (`true`) or release.
+        acquire: bool,
+    },
     /// An object was freed (maybe one of ours).
     Free {
         /// `hClient`.
@@ -625,6 +634,13 @@ impl ChannelPolicy {
                 ChanStatement::Schedule { client: h.client, object: h.object, enable: params.first().is_some_and(|&b| b != 0) }
             }
             GET_WORK_SUBMIT_TOKEN => ChanStatement::Token { client: h.client, object: h.object },
+            // ★ v3-video: exactly the measured shape (4 zero bytes) is carried; anything else stays
+            // unserviced, refused as before.
+            kf_abi::gssreplay::GSS_ENC_SESSION_ACQUIRE | kf_abi::gssreplay::GSS_ENC_SESSION_RELEASE
+                if params.len() == kf_abi::gssreplay::ENC_SESSION_PARAMS_SIZE && params.iter().all(|b| *b == 0) =>
+            {
+                ChanStatement::EncoderSession { client: h.client, acquire: h.cmd == kf_abi::gssreplay::GSS_ENC_SESSION_ACQUIRE }
+            }
             GR_SET_CTXSW_PREEMPTION_MODE => {
                 if !self.abi.capabilities().control(kf_arch::ids::ControlCmd(h.cmd)).is_permitted() {
                     return None;

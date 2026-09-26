@@ -558,6 +558,9 @@ pub struct ChanPlane {
     pub act_total_us: AtomicU64,
     /// Passthrough twins born.
     pub pt_births: AtomicU64,
+    /// ★ v3-video: host NVENC session slots held per guest client (acquired on OUR host client;
+    /// released with the guest's release or its client's free).
+    enc_sessions: Mutex<HashMap<u32, u32>>,
     /// ★ v3-video: guest TSG `(hClient, hTsg)` → `(host group, live members)` — the guest's TSG
     /// membership mirrored, so its channels share ONE host GR context as on hardware. Touched by
     /// acts only (serialised on the act thread).
@@ -695,6 +698,7 @@ impl ChanPlane {
             act_total_us: AtomicU64::new(0),
             pt_births: AtomicU64::new(0),
             groups: Mutex::new(HashMap::new()),
+            enc_sessions: Mutex::new(HashMap::new()),
             rung: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
             rang: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
             rc_ev,
@@ -1013,6 +1017,7 @@ impl ChanPlane {
                 self.disable_channels(client, disable, only_scheduling, rewind_gp_put, list.as_slice())
             }
             ChanStatement::Preempt { client, object, wait } => self.preempt_group(client, object, wait),
+            ChanStatement::EncoderSession { client, acquire } => self.encoder_session(client, acquire),
         }
     }
 
@@ -1554,7 +1559,8 @@ impl ChanPlane {
         } else {
             None
         };
-        if translated.is_empty() && twins.is_empty() && obj.is_none() && debuggers.is_empty() && !limit_off {
+        let sessions = client == object && self.enc_sessions.lock().is_ok_and(|m| m.get(&client).is_some_and(|n| *n > 0));
+        if translated.is_empty() && twins.is_empty() && obj.is_none() && debuggers.is_empty() && !limit_off && !sessions {
             return ChanAnswer::NotOurs;
         }
         if !twins.is_empty() {
@@ -1581,6 +1587,9 @@ impl ChanPlane {
             "free",
             Box::new(move |me: &ChanPlane| {
                 let mut line = Vec::new();
+                if client == object {
+                    line.extend(me.release_encoder_sessions(client));
+                }
                 for h in debuggers {
                     let r = me.rm.free(h);
                     line.push(format!("debugger session host {h:#x} {}", if r.is_ok() { "freed" } else { "FREE REFUSED" }));
@@ -1623,6 +1632,48 @@ impl ChanPlane {
                 Ok(format!("{client:#x}:{object:#x}: {}", line.join("; ")))
             }),
         )
+    }
+
+    /// ★ v3-video: a guest NVENC session acquire/release, carried to the HOST's GPU-wide slot
+    /// accounting (`kf_abi::gssreplay::GSS_ENC_SESSION_ACQUIRE`): an act (a host ioctl), the reply
+    /// held until it lands. A release with nothing held is answered without a host call.
+    fn encoder_session(&self, client: u32, acquire: bool) -> ChanAnswer {
+        self.defer(
+            "encoder session",
+            Box::new(move |me: &ChanPlane| {
+                let held = me.enc_sessions.lock().map(|m| m.get(&client).copied().unwrap_or(0)).unwrap_or(0);
+                if !acquire && held == 0 {
+                    return Ok(format!("{client:#x} NVENC session release with none held — no host call"));
+                }
+                let cmd = if acquire { kf_abi::gssreplay::GSS_ENC_SESSION_ACQUIRE } else { kf_abi::gssreplay::GSS_ENC_SESSION_RELEASE };
+                let mut p = [0u8; kf_abi::gssreplay::ENC_SESSION_PARAMS_SIZE];
+                me.rm.raw_control(me.rm.subdevice(), cmd, &mut p).map_err(|e| {
+                    let st = match e {
+                        kf_host::RmError::Other(s) if s < 0x4B00 => s,
+                        _ => NV_ERR_INVALID_STATE,
+                    };
+                    (st, format!("{client:#x} host NVENC session {}: {e:?}", if acquire { "acquire" } else { "release" }))
+                })?;
+                let now = me.enc_sessions.lock().map(|mut m| {
+                    let c = m.entry(client).or_insert(0);
+                    if acquire { *c += 1 } else { *c = c.saturating_sub(1) }
+                    *c
+                });
+                Ok(format!("{client:#x} NVENC session {} on the host (held now {now:?})", if acquire { "ACQUIRED" } else { "released" }))
+            }),
+        )
+    }
+
+    /// ★ v3-video: release every host NVENC slot a freed guest client still held.
+    fn release_encoder_sessions(&self, client: u32) -> Vec<String> {
+        let n = self.enc_sessions.lock().ok().and_then(|mut m| m.remove(&client)).unwrap_or(0);
+        (0..n)
+            .map(|_| {
+                let mut p = [0u8; kf_abi::gssreplay::ENC_SESSION_PARAMS_SIZE];
+                let r = self.rm.raw_control(self.rm.subdevice(), kf_abi::gssreplay::GSS_ENC_SESSION_RELEASE, &mut p);
+                format!("NVENC session of freed client {client:#x} released on the host ({})", if r.is_ok() { "ok" } else { "REFUSED" })
+            })
+            .collect()
     }
 
     /// ★ v3-video: free a Passthrough twin — a member of a shared host group frees its channel,

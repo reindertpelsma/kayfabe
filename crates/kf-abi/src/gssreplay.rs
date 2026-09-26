@@ -43,6 +43,21 @@ pub const DOMAIN_NVD: u32 = 0x0010_0000;
 /// The GPC clock domain.
 pub const DOMAIN_GPC: u32 = 0x0000_0001;
 
+/// ★ `0x20808163` — acquire one NVENC session slot (4 bytes, `0` in and out).
+///
+/// `[measured vvid 2026-09-26, host probe]` the 9th acquire on one GA106 returns `0x69`
+/// (insufficient resources): it is the GPU-WIDE GeForce encoder-session cap, and `0x20808164`
+/// releases a slot. In a guest it was refused `0x56` and `libnvidia-encode` failed
+/// `OpenEncodeSessionEx` with *"incompatible client key (21)"*. ⊘ So it is NOT answerable from a
+/// realize-time reply (it is state, not a fact): a guest acquire is an acquire of the HOST's slot
+/// on our client (authored request, the channel plane's act), released with the guest's release
+/// or its client's free — the host's cap then bounds guests and host processes alike.
+pub const GSS_ENC_SESSION_ACQUIRE: u32 = 0x2080_8163;
+/// `0x20808164` — release one NVENC session slot.
+pub const GSS_ENC_SESSION_RELEASE: u32 = 0x2080_8164;
+/// Both carry exactly 4 bytes, measured `0` in and out.
+pub const ENC_SESSION_PARAMS_SIZE: usize = 4;
+
 /// One authored request: `(cmd, paramsSize, [(byte offset, u32 value)])`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Row {
