@@ -1279,20 +1279,21 @@ impl ChanPlane {
                     .filter(|(_, k)| matches!(k, kf_chip::classes::Kind::Compute | kf_chip::classes::Kind::ThreeD))
                     .map(|(h, _)| *h)
                     .collect();
-                if host_ctx.is_empty() {
-                    return Err((
-                        NV_ERR_INVALID_STATE,
-                        format!(
-                            "{client:#x}:{object:#x} GPU_PROMOTE_CTX: twin host {ht:#x} holds no GR engine object, so host RM has no context to stand for the guest's"
-                        ),
-                    ));
-                }
+                // ★ v3-gfx: a graphics object's promote ARRIVES BEFORE its alloc — the guest's CPU-RM
+                // maps the context buffers into the channel's VA space and promotes them inside
+                // `_kgrAlloc` (`kernel_graphics_object.c:224`), and only then RPCs the object.
+                // `[measured vgfx 2026-09-26, gfx3]` every 3D channel's promote hit an empty twin.
+                // The stub stands (owner ruling #3): host RM builds the twin's OWN context when that
+                // engine object is allocated on it, a moment later; the guest's buffers are never
+                // read or written either way. So an empty twin is "pending", not a refusal.
+                let pending = host_ctx.is_empty();
                 v.ctx.initialized |= initialize;
                 v.ctx.va_bound |= with_va;
                 v.ctx.bound |= with_va != 0;
                 v.ctx.promotes += 1;
                 Ok(format!(
-                    "chan {client:#x}:{object:#x} GPU_PROMOTE_CTX SATISFIED BY TWIN host {ht:#x} (host GR object(s) {host_ctx:x?}): entries={entries} init_ids={initialize:#x} va_ids={with_va:#x} bound={} — not forwarded, no guest byte touched",
+                    "chan {client:#x}:{object:#x} GPU_PROMOTE_CTX SATISFIED BY TWIN host {ht:#x} (host GR object(s) {host_ctx:x?}{}): entries={entries} init_ids={initialize:#x} va_ids={with_va:#x} bound={} — not forwarded, no guest byte touched",
+                    if pending { " — none yet: the engine object this promote precedes births the host context" } else { "" },
                     v.ctx.bound
                 ))
             }),
