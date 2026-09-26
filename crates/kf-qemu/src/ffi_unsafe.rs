@@ -108,6 +108,13 @@ pub unsafe extern "C" fn kf3_realize(
                     return -1;
                 }
             }
+            // ★ v3-initrace: the completion probe (`KF3_COMPLETION_PROBE`, default off).
+            if crate::chan::completion_probe_ms().is_some()
+                && std::thread::Builder::new().name("kf3-probe".into()).spawn(move || d.probe_loop()).is_err()
+            {
+                write_err(err, err_len, "could not start the completion-probe thread");
+                return -1;
+            }
             // ★ P4: the VA-manager thread — the one owner of the GPU walker.
             if std::thread::Builder::new().name("kf3-vamgr".into()).spawn(move || d.va_loop()).is_err() {
                 write_err(err, err_len, "could not start the VA-manager thread");

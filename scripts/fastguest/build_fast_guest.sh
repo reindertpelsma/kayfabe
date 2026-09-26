@@ -435,6 +435,44 @@ LEFT=$(( BUDGET_S - UP - 3 ))
 [ "$LEFT" -lt 2 ] && LEFT=2
 export KF_SELF_DEADLINE_MS=$(( LEFT * 1000 ))
 echo "FASTGUEST: arms $ARMS  deadline ${LEFT}s (budget ${BUDGET_S}s, ${UP}s already spent booting)"
+# ★★★ v3-initrace — **THE CYCLE MODE: `KF_CYCLES=<n>` (default off).** n open/close cycles of
+# /dev/nvidia0 in ONE boot, nothing else: each open is a full RmInitAdapter (GSP boot, CeUtils
+# init — `memmgrInitCeUtils`'s 4-byte scrub is the completion that flaked, V3_DRIVER_MATRIX §6),
+# each close its RmShutdownAdapter. A cycle FAILS when the guest's own ring (cleared before each
+# cycle) holds an `RmInitAdapter failed`; its NVRM chain is printed. `KF_CYCLE_ARM=--timer` runs that raw-client arm per
+# cycle instead of a bare open (slower, closer to the suite). `KF_CYCLE_STOP=1` stops at the
+# first failure (the device may be wedged after it — see V3_HW_BOUNDARY_INVENTORY §5.2 L1).
+# ⊘ The verdict line is `FASTGUEST: CYCLES_DONE n=… fails=…`; `client rc` is 0 only if fails=0.
+if [ -n "${KF_CYCLES:-}" ]; then
+    echo "FASTGUEST: CYCLES start n=$KF_CYCLES arm=${KF_CYCLE_ARM:-bare-open} at $(cut -d' ' -f1 /proc/uptime)s"
+    ci=0; cfails=0; cfirst=0
+    while [ "$ci" -lt "$KF_CYCLES" ]; do
+        ci=$((ci+1))
+        # ⊘ Clear the ring first: counting across a ring that wraps can hide a new failure.
+        dmesg -c > /dev/null 2>&1
+        ct0=$(cut -d' ' -f1 /proc/uptime)
+        if [ -n "${KF_CYCLE_ARM:-}" ]; then
+            /bin/rmladder --gpu 0 $(echo "$KF_CYCLE_ARM" | tr ',' ' ') > /tmp/cycle.out 2>&1; crc=$?
+        else
+            ( exec 3</dev/nvidia0 ) 2>/dev/null; crc=$?
+        fi
+        ca=$(dmesg | grep -c "RmInitAdapter failed")
+        ct1=$(cut -d' ' -f1 /proc/uptime)
+        cdt=$(echo "$ct1 $ct0" | awk '{printf "%.2f", $1-$2}')
+        if [ "$ca" -gt 0 ]; then
+            cfails=$((cfails+1)); [ "$cfirst" = 0 ] && cfirst=$ci
+            echo "FASTGUEST: CYCLE $ci FAIL rc=$crc dt=${cdt}s at ${ct1}s"
+            dmesg | grep -a NVRM | tail -60 | sed 's/^/FASTGUEST:   /'
+            [ "${KF_CYCLE_STOP:-0}" = 1 ] && break
+        else
+            echo "FASTGUEST: CYCLE $ci ok rc=$crc dt=${cdt}s"
+        fi
+    done
+    echo "FASTGUEST: CYCLES_DONE n=$ci fails=$cfails first_fail=$cfirst at $(cut -d' ' -f1 /proc/uptime)s"
+    echo "FASTGUEST: client rc=$([ "$cfails" = 0 ] && echo 0 || echo 1) at $(cut -d' ' -f1 /proc/uptime)s"
+    echo "FASTGUEST: DONE"
+    poweroff -f
+fi
 if [ "$NGPU" -le 1 ]; then
     /bin/rmladder --gpu 0 $ARMS 2>&1
     echo "FASTGUEST: client rc=$? at $(cut -d' ' -f1 /proc/uptime)s"

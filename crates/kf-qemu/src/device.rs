@@ -952,6 +952,61 @@ impl Device {
         }
     }
 
+    /// ★ v3-initrace: the completion probe's own thread (`KF3_COMPLETION_PROBE`, default off) —
+    /// every 100 ms ask the channel plane for overdue Translated channels, and print the device's
+    /// interrupt state beside any dump: the guest's CPU interrupt tree (pending/enabled per leaf,
+    /// top enable), MSI-X messages sent/held, the host non-stall events seen/raised per engine,
+    /// the tokens with a fence in flight, and the workers' counters. ⊘ Never a vCPU, never the
+    /// drainer, never a lock a vCPU takes; a sleep here delays nothing but this probe.
+    pub fn probe_loop(&self) {
+        let Some(ms) = crate::chan::completion_probe_ms() else { return };
+        eprintln!("kf3: PROBE on — completion probe, overdue after {ms} ms (KF3_COMPLETION_PROBE)");
+        let overdue = std::time::Duration::from_millis(ms);
+        while !self.stop.load(Ordering::Acquire) {
+            let lines = self.chans.probe_tick(overdue);
+            if !lines.is_empty() {
+                for l in &lines {
+                    eprintln!("{l}");
+                }
+                eprintln!("{}", self.probe_device_state());
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+    }
+
+    /// ★ v3-initrace: the device-wide half of a probe dump (see [`Device::probe_loop`]).
+    #[must_use]
+    pub fn probe_device_state(&self) -> String {
+        let o = Ordering::Relaxed;
+        let ic = &self.irq_counts;
+        let ws = &self.worker_stats;
+        let nsi: Vec<String> = self
+            .chans
+            .engines
+            .iter()
+            .map(|e| format!("{}:wakes={},raised={},live={},vec={:?}", e.name, e.wakes.load(o), e.raised.load(o), e.live.load(o), e.vector))
+            .collect();
+        let mut infl = Vec::new();
+        self.chans.completions.for_each_inflight(|t| infl.push(format!("{t:#x}")));
+        format!(
+            "kf3: PROBE-DUMP   device t={:.6}: intr {} irq[writes={} raised={} held={} oor={}] nsi[{}] inflight_tokens=[{}] workers[served={} parks={} host_rings={} timeouts_with_work={}] chan[contended={} poisoned={}]",
+            kf_mem::maplog::t(),
+            self.intr.snapshot(),
+            ic.writes.load(o),
+            ic.raised.load(o),
+            ic.held.load(o),
+            ic.out_of_range.load(o),
+            nsi.join(" "),
+            infl.join(" "),
+            ws.served.load(o),
+            ws.parks.load(o),
+            ws.host_rings.load(o),
+            ws.timeouts_with_work.load(o),
+            self.chans.contended.load(o),
+            self.chans.poisoned.load(o)
+        )
+    }
+
     /// ★ Latch `vector` (a completion this device announces) and deliver — any thread.
     pub fn latch_and_deliver(&self, vector: u32) {
         let raise = self.intr.latch(vector);

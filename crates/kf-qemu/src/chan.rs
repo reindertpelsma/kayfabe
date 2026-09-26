@@ -470,6 +470,87 @@ struct Slot {
     /// ★ v3-chanctl: the guest DISABLED it (`DISABLE_CHANNELS`); the pump fetches nothing and our
     /// host ring is disabled until `bDisable=FALSE`.
     disabled: bool,
+    /// ★ v3-initrace: the completion probe's record (empty unless `KF3_COMPLETION_PROBE`).
+    probe: ProbeRec,
+}
+
+/// ★★★ v3-initrace — **`KF3_COMPLETION_PROBE=<ms>`** (default OFF; read once; any non-number
+/// means 1000). Records every Translated fence's guest semaphore RELEASES (the rewriter already
+/// decodes each method; the words stay forwarded unchanged) and, the moment a pump sees the fence
+/// complete, reads each released word back through OUR placements — so a completion the guest
+/// never observed can be split into *"the release landed where our rows say"* vs *"it did not"*.
+/// A channel whose newest completion is older than `<ms>` while the guest has not moved its
+/// `GP_PUT` since, or whose fence is still in flight after `<ms>`, is dumped once with the host
+/// ring's cursors, the guest's USERD and the device's interrupt state
+/// (`Device::probe_tick`). ⊘ Diagnostic only — never a decision input, never a write.
+#[must_use]
+pub fn completion_probe_ms() -> Option<u64> {
+    static MS: std::sync::OnceLock<Option<u64>> = std::sync::OnceLock::new();
+    *MS.get_or_init(|| std::env::var("KF3_COMPLETION_PROBE").ok().map(|v| v.trim().parse().unwrap_or(1000)))
+}
+
+/// One release, read back.
+#[derive(Debug, Clone)]
+struct ReleaseRead {
+    r: kf_chan::translated::Release,
+    /// Where OUR rows place the word (`ram+off`, `store+off`, `UNPLACED`).
+    at: String,
+    /// The word there when read (`None`: unplaced or unreadable).
+    got: Option<u32>,
+}
+
+impl std::fmt::Display for ReleaseRead {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let verdict = match self.got {
+            Some(v) if v == self.r.payload => "LANDED",
+            Some(_) => "NOT-LANDED",
+            None => "UNREAD",
+        };
+        write!(
+            f,
+            "{:?} va={:#x} want={:#x} got={} at {} {verdict}",
+            self.r.kind,
+            self.r.va,
+            self.r.payload,
+            self.got.map_or("-".to_string(), |v| format!("{v:#x}")),
+            self.at
+        )
+    }
+}
+
+/// ★ v3-initrace: the per-channel probe record.
+#[derive(Debug, Default)]
+struct ProbeRec {
+    /// The newest completed fences, each with its releases as read at completion.
+    done: std::collections::VecDeque<(kf_chan::host::ProbeFence, Vec<ReleaseRead>)>,
+    /// Fence lines printed (the first few always; every one that did not land).
+    logged: u32,
+    /// The guest `GP_PUT` the pump had read when the newest fence completed, and when.
+    put_at_done: Option<(Option<u32>, std::time::Instant)>,
+    /// The overdue dumps already printed for the newest completion / the oldest in-flight fence.
+    dumped_guest: bool,
+    dumped_host: bool,
+    /// The last time a serve found the guest's `GP_PUT` moved, and to what.
+    put_moved: Option<(u32, std::time::Instant)>,
+}
+
+/// Read the 32-bit word at `va` of `mirror` through OUR placements. `views`: read vidmem
+/// through a store view (a worker only — it may arm one); `None` names it unread instead.
+fn probe_read(ram: &RamMap, mirror: &Mirror, views: Option<(&mut StoreViews, &HostRm, u32)>, r: kf_chan::translated::Release) -> ReleaseRead {
+    match resolve_placed(&mirror.rows, r.va, 4) {
+        None => ReleaseRead { r, at: "UNPLACED".into(), got: None },
+        Some((true, off)) => {
+            let got = ram.at_file_offset(off, 4).and_then(|(m, at)| m.load_u32(at));
+            ReleaseRead { r, at: format!("ram+{off:#x}"), got }
+        }
+        Some((false, off)) => {
+            let got = views.and_then(|(v, rm, store)| {
+                let mut b = [0u8; 4];
+                v.read(rm, store, mirror.fb_len, off, &mut b).ok().map(|()| u32::from_le_bytes(b))
+            });
+            ReleaseRead { r, at: format!("store+{off:#x}"), got }
+        }
+    }
 }
 
 /// ★ v3-promote: where a guest channel hangs in the guest's object tree — every handle whose free
@@ -1997,7 +2078,8 @@ impl ChanPlane {
                     .map_err(|e| fail((NV_ERR_INSUFFICIENT_RESOURCES, format!("host ring: {e}"))))?;
                 let ht = host.channel().token;
                 let ring_va = host.va();
-                let chan = TranslatedChannel::new(TranslatedRing::new(a.gpfifo_va, entries, 0), host, idx);
+                let mut chan = TranslatedChannel::new(TranslatedRing::new(a.gpfifo_va, entries, 0), host, idx);
+                chan.set_probe(completion_probe_ms().is_some());
                 let alloc = me
                     .caps
                     .lock()
@@ -2029,6 +2111,7 @@ impl ChanPlane {
                     privilege: a.privilege,
                     stopped: false,
                     disabled: false,
+                    probe: ProbeRec::default(),
                 };
                 if let Ok(mut s) = me.slots.write() {
                     s.insert(ht, Arc::new(Mutex::new(slot)));
@@ -2241,6 +2324,30 @@ impl ChanPlane {
             u64::from(g.dead.is_some() && g.chan.counts().0 == 0),
             g.chan.counts().0
         );
+        if completion_probe_ms().is_some() {
+            for (f, reads) in &g.probe.done {
+                let now: Vec<String> = f.releases.iter().map(|r| probe_read(self.ram, &g.mirror, None, *r).to_string()).collect();
+                eprintln!(
+                    "kf3: PROBE-RETIRE tok={:#x} fence seq={} gp_get={:?} submit->seen={}us seen {}ms before retire; at completion [{}]; at retire [{}]",
+                    g.guest_idx,
+                    f.seq,
+                    f.gp_get,
+                    f.completed.map_or(0, |c| c.duration_since(f.submitted).as_micros()),
+                    f.completed.map_or(0, |c| c.elapsed().as_millis()),
+                    reads.iter().map(ToString::to_string).collect::<Vec<_>>().join("; "),
+                    now.join("; ")
+                );
+            }
+            for f in g.chan.probe_inflight() {
+                eprintln!(
+                    "kf3: PROBE-RETIRE tok={:#x} fence seq={} STILL IN FLIGHT at retire ({}ms) releases={:?}",
+                    g.guest_idx,
+                    f.seq,
+                    f.submitted.elapsed().as_millis(),
+                    f.releases
+                );
+            }
+        }
         eprintln!(
             "kf3: chan token {:#x} (host {ht:#x}) RETIRED, forwarded={} submissions={} splits={}/{} serves={} last_put={:?} gp_get={:?} store_views={armed} privilege={:?} dead={:?}",
             g.guest_idx,
@@ -2285,10 +2392,44 @@ impl ChanPlane {
         }
         let before = g.chan.counts().1;
         let mirror = g.mirror.clone();
+        let probe = completion_probe_ms().is_some();
+        if probe
+            && let Some(p) = g.last_put
+            && g.probe.put_moved.is_none_or(|(q, _)| q != p)
+        {
+            g.probe.put_moved = Some((p, std::time::Instant::now()));
+        }
         let mut mem = Mem { mirror: &mirror, ram: self.ram, rm: self.rm, store: self.store, views: &mut g.views };
         let win = SlotWindow { mirror: &mirror, ram: self.ram };
         let mut split = VaSplit { inbox: &self.inbox, token: g.guest_idx, ticket: &mut g.split, requested: &mut g.splits };
         let r = g.chan.pump(self.rm, &self.completions, &mut mem, &mut Userd(&g.userd), &mut split, is_any_ce_class, &win);
+        if probe {
+            for f in g.chan.take_completed() {
+                let reads: Vec<ReleaseRead> =
+                    f.releases.iter().map(|r| probe_read(self.ram, &mirror, Some((&mut g.views, self.rm, self.store)), *r)).collect();
+                let bad = reads.iter().any(|x| x.got != Some(x.r.payload));
+                let dt = f.completed.map_or(0, |c| c.duration_since(f.submitted).as_micros());
+                if g.probe.logged < 8 || bad {
+                    g.probe.logged += 1;
+                    eprintln!(
+                        "kf3: PROBE t={:.6} tok={:#x} fence seq={} gp_get={:?} submit->seen-complete={dt}us put={:?} releases=[{}]{}",
+                        kf_mem::maplog::t(),
+                        g.guest_idx,
+                        f.seq,
+                        f.gp_get,
+                        g.last_put,
+                        reads.iter().map(ToString::to_string).collect::<Vec<_>>().join("; "),
+                        if bad { " ⊘ A RELEASE DID NOT LAND WHERE OUR ROWS PLACE IT" } else { "" }
+                    );
+                }
+                g.probe.put_at_done = Some((g.last_put, f.completed.unwrap_or_else(std::time::Instant::now)));
+                g.probe.dumped_guest = false;
+                if g.probe.done.len() >= 4 {
+                    g.probe.done.pop_front();
+                }
+                g.probe.done.push_back((f, reads));
+            }
+        }
         if let Err(e) = r {
             let why = match e {
                 ChanError::Ring(r) => format!("ring: {r:?}"),
@@ -2330,6 +2471,74 @@ impl ChanPlane {
             0 => "-".into(),
             us => format!("{:.6}", us as f64 / 1e6),
         }
+    }
+
+    /// ★ v3-initrace (`KF3_COMPLETION_PROBE`, the probe thread — never a vCPU, never the drainer):
+    /// every Translated channel whose oldest in-flight fence is older than `overdue` (the HOST has
+    /// not completed it), or whose newest completion is older than `overdue` while the guest's
+    /// `GP_PUT` has not moved since (the guest never came back for more), is dumped ONCE per
+    /// condition. Guest-RAM words are re-read now; a vidmem word is named, not read (no view is
+    /// armed off a worker). ⊘ `try_lock` only: a slot a worker holds is skipped this tick.
+    pub fn probe_tick(&self, overdue: std::time::Duration) -> Vec<String> {
+        let Ok(s) = self.slots.read() else { return Vec::new() };
+        let mut out = Vec::new();
+        for (&ht, slot) in s.iter() {
+            let Ok(mut g) = slot.try_lock() else { continue };
+            let g = &mut *g;
+            let infl = g.chan.probe_inflight();
+            let host_late = infl.first().is_some_and(|f| f.submitted.elapsed() > overdue);
+            let put_now = g.userd.load(kf_abi::submit::USERD_GP_PUT).ok();
+            let get_now = g.userd.load(kf_abi::submit::USERD_GP_GET).ok();
+            let guest_silent = g.probe.put_at_done.is_some_and(|(p, at)| at.elapsed() > overdue && put_now == p);
+            let why = if host_late && !g.probe.dumped_host {
+                g.probe.dumped_host = true;
+                "HOST-FENCE-OVERDUE (submitted, never seen complete)"
+            } else if guest_silent && !g.probe.dumped_guest {
+                g.probe.dumped_guest = true;
+                "GUEST-SILENT-AFTER-COMPLETION (its GP_PUT has not moved since our fence completed)"
+            } else {
+                continue;
+            };
+            let mirror = g.mirror.clone();
+            let cursors = g.chan.host_cursors();
+            let (fwd, subs, walks) = g.chan.counts();
+            let mut lines = vec![format!(
+                "kf3: PROBE-DUMP t={:.6} tok={:#x} host={ht:#x} {why}: key={:?} forwarded={fwd} submissions={subs} walks={walks} serves={} guest USERD GP_PUT={put_now:?} GP_GET={get_now:?} (authored {:?}) put_moved={} our ring GP_GET/GP_PUT/fence={cursors:?} dead={:?} scheduled={} stopped={} disabled={}",
+                kf_mem::maplog::t(),
+                g.guest_idx,
+                g.key,
+                g.serves,
+                g.chan.last_gp_get(),
+                g.probe.put_moved.map_or("never".to_string(), |(p, at)| format!("{p} {}ms ago", at.elapsed().as_millis())),
+                g.dead,
+                g.scheduled,
+                g.stopped,
+                g.disabled
+            )];
+            for f in &infl {
+                lines.push(format!(
+                    "kf3: PROBE-DUMP   in-flight fence seq={} gp_get={:?} submitted {}ms ago releases={:?}",
+                    f.seq,
+                    f.gp_get,
+                    f.submitted.elapsed().as_millis(),
+                    f.releases
+                ));
+            }
+            for (f, reads) in &g.probe.done {
+                let now: Vec<String> = f.releases.iter().map(|r| probe_read(self.ram, &mirror, None, *r).to_string()).collect();
+                lines.push(format!(
+                    "kf3: PROBE-DUMP   completed fence seq={} gp_get={:?} submit->seen={}us seen {}ms ago; at completion [{}]; NOW [{}]",
+                    f.seq,
+                    f.gp_get,
+                    f.completed.map_or(0, |c| c.duration_since(f.submitted).as_micros()),
+                    f.completed.map_or(0, |c| c.elapsed().as_millis()),
+                    reads.iter().map(ToString::to_string).collect::<Vec<_>>().join("; "),
+                    now.join("; ")
+                ));
+            }
+            out.extend(lines);
+        }
+        out
     }
 
     /// Whether the channel behind `ht` can take work (a dead one cannot: §7 then poisons).

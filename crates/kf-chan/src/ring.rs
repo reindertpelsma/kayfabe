@@ -11,7 +11,7 @@
 //! ⊘ `GP_GET` is NOT owned here. It is the runner's to author, and only on COMPLETION: a guest
 //! that sees `GP_GET` advance may reuse the GPFIFO slot and the pushbuffer behind it.
 
-use crate::translated::{CeState, IsCeClass, Piece, Refusal, Window, rewrite};
+use crate::translated::{CeState, IsCeClass, Piece, Refusal, Release, Window, rewrite};
 use kf_abi::submit::{GP_ENTRY_SIZE, gp_entry_decode};
 use std::collections::VecDeque;
 
@@ -127,6 +127,12 @@ impl TranslatedRing {
     #[must_use]
     pub fn entries_fetched(&self) -> u64 {
         self.entries_fetched
+    }
+
+    /// ★ v3-initrace (diagnostic): the semaphore releases the segments rewritten since the last
+    /// call asked for, oldest first (see [`crate::translated::Releases`]).
+    pub fn take_releases(&mut self) -> Vec<Release> {
+        self.st.releases.take()
     }
 
     /// The next step, given the guest's current `GP_PUT`.
