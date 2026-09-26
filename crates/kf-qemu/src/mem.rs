@@ -628,6 +628,22 @@ impl MapTarget for Target {
             Target::Gpu(g) => g.map(d, defer),
         }
     }
+    // ★ `V3_BATCHED_MAP.md`: forwarded EXPLICITLY — a trait default here would silently answer
+    // `NOT_BATCHED` for every space (`[measured bm1]`: 3 groups formed, 0 batched, 12 291 verbs).
+    fn map_batch(&self, rows: &[Desired], defer: bool) -> Result<(), String> {
+        match self {
+            Target::Window(w) => w.map_batch(rows, defer),
+            Target::Bar1(b) => b.win.map_batch(rows, defer),
+            Target::Gpu(g) => g.map_batch(rows, defer),
+        }
+    }
+    fn unmap_range(&self, va: u64, len: u64, defer: bool) -> Result<(), String> {
+        match self {
+            Target::Window(w) => w.unmap_range(va, len, defer),
+            Target::Bar1(b) => b.win.unmap_range(va, len, defer),
+            Target::Gpu(g) => g.unmap_range(va, len, defer),
+        }
+    }
     fn reserved(&self) -> Vec<(u64, u64)> {
         match self {
             Target::Window(w) => w.reserved(),
