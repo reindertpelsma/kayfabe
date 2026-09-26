@@ -489,6 +489,17 @@ pub fn completion_probe_ms() -> Option<u64> {
     *MS.get_or_init(|| std::env::var("KF3_COMPLETION_PROBE").ok().map(|v| v.trim().parse().unwrap_or(1000)))
 }
 
+/// ⊘ **FAULT INJECTION, default off: `KF3_INJECT_STALE_USERD=<n>`** — at every Translated birth,
+/// write `GP_PUT = GP_GET = n` into the guest's USERD before the reply, i.e. exactly what an earlier
+/// channel on the same chid leaves in that slot (`[measured v3-initrace]` every open after the first
+/// finds the previous CeUtils channel's `2`). The reproducer for the adapter-init flake of
+/// `V3_DRIVER_MATRIX.md` §6 (`n = 1`). Never set outside a reproduction.
+#[must_use]
+pub fn inject_stale_userd() -> Option<u32> {
+    static V: std::sync::OnceLock<Option<u32>> = std::sync::OnceLock::new();
+    *V.get_or_init(|| std::env::var("KF3_INJECT_STALE_USERD").ok().and_then(|v| v.trim().parse().ok()))
+}
+
 /// One release, read back.
 #[derive(Debug, Clone)]
 struct ReleaseRead {
@@ -2070,6 +2081,16 @@ impl ChanPlane {
                     e
                 };
                 let userd = me.userd_view(a.userd).map_err(|e| fail((NV_ERR_NOT_SUPPORTED, e)))?;
+                // ★ v3-initrace: what the guest's USERD held when we took the channel — a slot
+                // an earlier channel on the same chid used still holds that channel's cursors.
+                let userd_at_birth = (userd.load(kf_abi::submit::USERD_GP_PUT).ok(), userd.load(kf_abi::submit::USERD_GP_GET).ok());
+                if let Some(v) = inject_stale_userd() {
+                    // ⊘ FAULT INJECTION (`KF3_INJECT_STALE_USERD`, default off): leave the cursors a
+                    // previous channel on this chid would have left.
+                    let _ = userd.store(kf_abi::submit::USERD_GP_PUT, v);
+                    let _ = userd.store(kf_abi::submit::USERD_GP_GET, v);
+                    eprintln!("kf3: chan {:#x}:{:#x} INJECTED stale USERD GP_PUT=GP_GET={v} (KF3_INJECT_STALE_USERD)", a.client, a.handle);
+                }
                 // ★ P6b: OUR ring goes in OUR region of the space, never where RM's allocator (the
                 // guest's own allocator) would put it — `crate::mem::RING_REGION_BASE`.
                 let at = crate::mem::take_ring_slot(&mirror.rings)
@@ -2124,7 +2145,7 @@ impl ChanPlane {
                 }
                 me.births.fetch_add(1, Ordering::Relaxed);
                 Ok(format!(
-                    "chan {:#x}:{:#x} BORN Translated: token {idx:#x} -> host {ht:#x} in {key:?} gpfifo={:#x}x{entries} userd={:?} engine={engine:#x} tsg={:x?} kernel_by={} ring_va={ring_va:#x}",
+                    "chan {:#x}:{:#x} BORN Translated: token {idx:#x} -> host {ht:#x} in {key:?} gpfifo={:#x}x{entries} userd={:?} engine={engine:#x} tsg={:x?} kernel_by={} ring_va={ring_va:#x} userd_at_birth(GP_PUT,GP_GET)={userd_at_birth:?}",
                     a.client,
                     a.handle,
                     a.gpfifo_va,
