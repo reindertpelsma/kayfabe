@@ -691,9 +691,6 @@ pub(crate) static CONTROLS_SHARED: &[ControlEntry] = &[
     ControlEntry { cmd: 0x00000275, name: "NV0000_CTRL_CMD_GPU_GET_UUID_FROM_GPU_ID", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x00000279, name: "NV0000_CTRL_CMD_GPU_QUERY_DRAIN_STATE", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x0000027b, name: "NV0000_CTRL_CMD_GPU_GET_MEMOP_ENABLE", origin: Origin::Nvproxy },
-    ControlEntry { cmd: 0x00000288, name: "NV0000_CTRL_CMD_GPU_GET_ACTIVE_DEVICE_IDS", origin: Origin::Nvproxy },
-    ControlEntry { cmd: 0x00000289, name: "NV0000_CTRL_CMD_GPU_ASYNC_ATTACH_ID", origin: Origin::Nvproxy },
-    ControlEntry { cmd: 0x00000290, name: "NV0000_CTRL_CMD_GPU_WAIT_ATTACH_ID", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x00000301, name: "NV0000_CTRL_CMD_GSYNC_GET_ATTACHED_IDS", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x00000a04, name: "NV0000_CTRL_CMD_SYNC_GPU_BOOST_GROUP_INFO", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x00000d01, name: "NV0000_CTRL_CMD_CLIENT_GET_ADDR_SPACE_TYPE", origin: Origin::Nvproxy },
@@ -731,7 +728,6 @@ pub(crate) static CONTROLS_SHARED: &[ControlEntry] = &[
     // GSP. Admitting it at the ioctl boundary is right (the guest may name it); serving it
     // would be impossible, not merely unnecessary. The id that actually arrives is
     // `0x00802009`, three rows below. See `submit::PERF_CUDA_LIMIT_THE_ID_THAT_ARRIVES`.
-    ControlEntry { cmd: 0x00801909, name: "NV0080_CTRL_CMD_PERF_CUDA_LIMIT_SET_CONTROL", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x00801b01, name: "NV0080_CTRL_CMD_MSENC_GET_CAPS", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x00801c02, name: "NV0080_CTRL_CMD_BSP_GET_CAPS_V2", origin: Origin::Nvproxy },
     // ★★★★★ **w294 — THE PAIR THAT ACTUALLY ARRIVES.** `Origin::Mode2Rpc`, not `Nvproxy`:
@@ -744,7 +740,6 @@ pub(crate) static CONTROLS_SHARED: &[ControlEntry] = &[
     ControlEntry { cmd: 0x00802004, name: "NV0080_CTRL_CMD_INTERNAL_PERF_CUDA_LIMIT_DISABLE", origin: Origin::Mode2Rpc },
     ControlEntry { cmd: 0x00802009, name: "NV0080_CTRL_CMD_INTERNAL_PERF_CUDA_LIMIT_SET_CONTROL", origin: Origin::Mode2Rpc },
     ControlEntry { cmd: 0x00da0002, name: "NV_SEMAPHORE_SURFACE_CTRL_CMD_BIND_CHANNEL", origin: Origin::Nvproxy },
-    ControlEntry { cmd: 0x00de0001, name: "NV00DE_CTRL_CMD_REQUEST_DATA_POLL", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x00f80103, name: "NV00F8_CTRL_CMD_ATTACH_MEM", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x00fd0101, name: "NV00FD_CTRL_CMD_GET_INFO", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x00fd0102, name: "NV00FD_CTRL_CMD_ATTACH_MEM", origin: Origin::Nvproxy },
@@ -812,7 +807,6 @@ pub(crate) static CONTROLS_SHARED: &[ControlEntry] = &[
     ControlEntry { cmd: 0x2080182a, name: "NV2080_CTRL_CMD_BUS_GET_PCIE_SUPPORTED_GPU_ATOMICS", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x2080182b, name: "NV2080_CTRL_CMD_BUS_GET_C2C_INFO", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x2080200a, name: "NV2080_CTRL_CMD_PERF_BOOST", origin: Origin::Nvproxy },
-    ControlEntry { cmd: 0x20802068, name: "NV2080_CTRL_CMD_PERF_GET_CURRENT_PSTATE", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x20802209, name: "NV2080_CTRL_CMD_RC_GET_WATCHDOG_INFO", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x2080220c, name: "NV2080_CTRL_CMD_RC_RELEASE_WATCHDOG_REQUESTS", origin: Origin::Nvproxy },
     ControlEntry { cmd: 0x20802210, name: "NV2080_CTRL_CMD_RC_SOFT_DISABLE_WATCHDOG", origin: Origin::Nvproxy },
@@ -984,23 +978,8 @@ pub(crate) static CLASSES_SHARED: &[ClassEntry] = &[
         origin: Origin::Nvproxy,
     },
     ClassEntry {
-        class: 0x000000e0,
-        name: "NV_MEMORY_EXPORT",
-        origin: Origin::Nvproxy,
-    },
-    ClassEntry {
-        class: 0x000000f1,
-        name: "NV_IMEX_SESSION",
-        origin: Origin::Nvproxy,
-    },
-    ClassEntry {
         class: 0x000000f8,
         name: "NV_MEMORY_FABRIC",
-        origin: Origin::Nvproxy,
-    },
-    ClassEntry {
-        class: 0x000000fb,
-        name: "NV_MEMORY_FABRIC_IMPORTED_REF",
         origin: Origin::Nvproxy,
     },
     ClassEntry {
@@ -1124,11 +1103,6 @@ pub(crate) static CLASSES_SHARED: &[ClassEntry] = &[
     ClassEntry {
         class: 0x0000a06c,
         name: "KEPLER_CHANNEL_GROUP_A",
-        origin: Origin::Nvproxy,
-    },
-    ClassEntry {
-        class: 0x0000a0bc,
-        name: "NVENC_SW_SESSION",
         origin: Origin::Nvproxy,
     },
     ClassEntry {
@@ -1635,6 +1609,39 @@ pub(crate) static CONTROLS_UNTIL_555_42_02: &[ControlEntry] = &[ControlEntry {
     origin: Origin::Nvproxy,
 }];
 
+/// ★★★ [OWNER REVIEW REQUIRED — ruling 5, 2026-09-26] The 535/545 boundary blocks.
+///
+/// Controls in the shared floor that NEITHER 535 has — added at 545.23.06
+/// (`gvisor nvproxy: version.go:837-846`) and, `[measured, tools/drivermatrix]`, absent from
+/// every SDK header of 535.309.01 while present from 545.23.08 on. Moved here out of
+/// [`CONTROLS_SHARED`] so the 535 table can leave them out; every boundary from 545.23.06 up
+/// names this block, so no existing table's surface changes.
+pub(crate) static CONTROLS_FROM_545_23_06: &[ControlEntry] = &[
+    ControlEntry { cmd: 0x00000288, name: "NV0000_CTRL_CMD_GPU_GET_ACTIVE_DEVICE_IDS", origin: Origin::Nvproxy },
+    ControlEntry { cmd: 0x00de0001, name: "NV00DE_CTRL_CMD_REQUEST_DATA_POLL", origin: Origin::Nvproxy },
+];
+
+/// ★★★ [OWNER REVIEW REQUIRED — ruling 5] Controls added at 550.40.07
+/// (`gvisor nvproxy: version.go:878-895`), `[measured]` absent from 535.309.01's and
+/// 545.23.08's SDK headers and present from 550.40.07 — moved out of [`CONTROLS_SHARED`];
+/// every boundary from 550.54.04 up names this block.
+pub(crate) static CONTROLS_FROM_550_40_07: &[ControlEntry] = &[
+    ControlEntry { cmd: 0x00000289, name: "NV0000_CTRL_CMD_GPU_ASYNC_ATTACH_ID", origin: Origin::Nvproxy },
+    ControlEntry { cmd: 0x00000290, name: "NV0000_CTRL_CMD_GPU_WAIT_ATTACH_ID", origin: Origin::Nvproxy },
+    ControlEntry { cmd: 0x00801909, name: "NV0080_CTRL_CMD_PERF_CUDA_LIMIT_SET_CONTROL", origin: Origin::Nvproxy },
+    ControlEntry { cmd: 0x20802068, name: "NV2080_CTRL_CMD_PERF_GET_CURRENT_PSTATE", origin: Origin::Nvproxy },
+];
+
+/// ★★★ [OWNER REVIEW REQUIRED — ruling 5] Allocation classes added at 550.40.07
+/// (`gvisor nvproxy: version.go:895-899`; `NV_MEMORY_EXPORT`, which nvproxy registers at 545,
+/// is `[measured]` absent from 545.23.08's class list too), moved out of [`CLASSES_SHARED`].
+pub(crate) static CLASSES_FROM_550_40_07: &[ClassEntry] = &[
+    ClassEntry { class: 0x000000e0, name: "NV_MEMORY_EXPORT", origin: Origin::Nvproxy },
+    ClassEntry { class: 0x000000f1, name: "NV_IMEX_SESSION", origin: Origin::Nvproxy },
+    ClassEntry { class: 0x000000fb, name: "NV_MEMORY_FABRIC_IMPORTED_REF", origin: Origin::Nvproxy },
+    ClassEntry { class: 0x0000a0bc, name: "NVENC_SW_SESSION", origin: Origin::Nvproxy },
+];
+
 /// Added at 550.90.07 (`gvisor nvproxy: version.go:906`) and never removed, so every
 /// boundary from there up names it.
 pub(crate) static CONTROLS_FROM_550_90_07: &[ControlEntry] = &[ControlEntry {
@@ -1708,12 +1715,34 @@ pub static SHARED_CAPS: SharedCapabilities = SharedCapabilities {
     denied_classes: DENIED_CLASSES,
 };
 
+/// ★★★ [OWNER REVIEW REQUIRED — ruling 5, 2026-09-26] 535.104.05 — nvproxy's oldest ABI
+/// (`gvisor nvproxy: version.go:159`), carried for a 535 guest: the 550.54.04 surface WITHOUT
+/// the controls/classes added at 545.23.06 and 550.40.07 (each `[measured]` absent from
+/// 535.309.01's SDK headers). No row is added that a newer boundary lacks.
+pub static CAPS_535_104_05: CapabilityTable = CapabilityTable {
+    shared: &SHARED_CAPS,
+    own_controls: &[CONTROLS_UNTIL_555_42_02],
+    own_classes: &[],
+    note: "[OWNER REVIEW] nvproxy v535_104_05: the 550.54.04 surface minus \
+           CONTROLS_FROM_545_23_06, CONTROLS_FROM_550_40_07 and CLASSES_FROM_550_40_07",
+};
+
+/// ★★★ [OWNER REVIEW REQUIRED — ruling 5] 545.23.06 (`gvisor nvproxy: version.go:837`): the
+/// 535 surface plus the two controls added there.
+pub static CAPS_545_23_06: CapabilityTable = CapabilityTable {
+    shared: &SHARED_CAPS,
+    own_controls: &[CONTROLS_FROM_545_23_06, CONTROLS_UNTIL_555_42_02],
+    own_classes: &[],
+    note: "[OWNER REVIEW] nvproxy v545_23_06: the 535 surface plus \
+           NV0000_CTRL_CMD_GPU_GET_ACTIVE_DEVICE_IDS and NV00DE_CTRL_CMD_REQUEST_DATA_POLL",
+};
+
 /// 550.54.04 — the oldest supported boundary: the shared floor plus the one control
 /// nvproxy still has here and deletes at 555.42.02.
 pub static CAPS_550_54_04: CapabilityTable = CapabilityTable {
     shared: &SHARED_CAPS,
-    own_controls: &[CONTROLS_UNTIL_555_42_02],
-    own_classes: &[],
+    own_controls: &[CONTROLS_FROM_545_23_06, CONTROLS_FROM_550_40_07, CONTROLS_UNTIL_555_42_02],
+    own_classes: &[CLASSES_FROM_550_40_07, ],
     note: "the C's ported set: nvproxy 575-ABI control map (compute-filtered) + its \
            575 class set MINUS the classes nvproxy adds after 550.54.04, + the six \
            Mode-2 GSP-RPC controls the ioctl boundary never saw, + \
@@ -1724,8 +1753,8 @@ pub static CAPS_550_54_04: CapabilityTable = CapabilityTable {
 /// 550.90.07 — `gvisor nvproxy: version.go:906`. Additive only.
 pub static CAPS_550_90_07: CapabilityTable = CapabilityTable {
     shared: &SHARED_CAPS,
-    own_controls: &[CONTROLS_UNTIL_555_42_02, CONTROLS_FROM_550_90_07],
-    own_classes: &[],
+    own_controls: &[CONTROLS_FROM_545_23_06, CONTROLS_FROM_550_40_07, CONTROLS_UNTIL_555_42_02, CONTROLS_FROM_550_90_07],
+    own_classes: &[CLASSES_FROM_550_40_07, ],
     note: "v550_90_07 adds NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE \
            (version.go:906) and changes nothing else this port carries",
 };
@@ -1737,8 +1766,8 @@ pub static CAPS_550_90_07: CapabilityTable = CapabilityTable {
 /// removal *operation* anywhere in this file: the block is simply not in the list.
 pub static CAPS_555_42_02: CapabilityTable = CapabilityTable {
     shared: &SHARED_CAPS,
-    own_controls: &[CONTROLS_FROM_550_90_07],
-    own_classes: &[],
+    own_controls: &[CONTROLS_FROM_545_23_06, CONTROLS_FROM_550_40_07, CONTROLS_FROM_550_90_07],
+    own_classes: &[CLASSES_FROM_550_40_07, ],
     note: "★ SUBTRACTIVE: v555_42_02 deletes NVC36F_CTRL_GET_CLASS_ENGINEID \
            (version.go:933) and adds nothing this port carries",
 };
@@ -1746,8 +1775,8 @@ pub static CAPS_555_42_02: CapabilityTable = CapabilityTable {
 /// 560.28.03 — `gvisor nvproxy: version.go:945-977`.
 pub static CAPS_560_28_03: CapabilityTable = CapabilityTable {
     shared: &SHARED_CAPS,
-    own_controls: &[CONTROLS_FROM_550_90_07, CONTROLS_FROM_560_28_03],
-    own_classes: &[CLASSES_FROM_560_28_03],
+    own_controls: &[CONTROLS_FROM_545_23_06, CONTROLS_FROM_550_40_07, CONTROLS_FROM_550_90_07, CONTROLS_FROM_560_28_03],
+    own_classes: &[CLASSES_FROM_550_40_07, CLASSES_FROM_560_28_03],
     note: "v560_28_03 adds NVCDB0/NVCDD1/NVCDFA and the first Blackwell channel, \
            copy, graphics, compute and inline-to-memory classes, plus \
            NV_SEMAPHORE_SURFACE_CTRL_CMD_UNBIND_CHANNEL",
@@ -1756,12 +1785,12 @@ pub static CAPS_560_28_03: CapabilityTable = CapabilityTable {
 /// 570.86.15 — `gvisor nvproxy: version.go:990-1027`.
 pub static CAPS_570_86_15: CapabilityTable = CapabilityTable {
     shared: &SHARED_CAPS,
-    own_controls: &[
+    own_controls: &[CONTROLS_FROM_545_23_06, CONTROLS_FROM_550_40_07, 
         CONTROLS_FROM_550_90_07,
         CONTROLS_FROM_560_28_03,
         CONTROLS_DRAM_ENCRYPTION_570,
     ],
-    own_classes: &[CLASSES_FROM_560_28_03, CLASSES_FROM_570_86_15],
+    own_classes: &[CLASSES_FROM_550_40_07, CLASSES_FROM_560_28_03, CLASSES_FROM_570_86_15],
     note: "v570_86_15 adds the Blackwell B channel/copy/graphics/compute pair, \
            BLACKWELL_USERMODE_A, NVCFB7_VIDEO_ENCODER and the two DRAM-encryption \
            controls at their PRE-575 numbers",
@@ -1776,12 +1805,12 @@ pub static CAPS_570_86_15: CapabilityTable = CapabilityTable {
 /// resolving anything.
 pub static CAPS_575_51_02: CapabilityTable = CapabilityTable {
     shared: &SHARED_CAPS,
-    own_controls: &[
+    own_controls: &[CONTROLS_FROM_545_23_06, CONTROLS_FROM_550_40_07, 
         CONTROLS_FROM_550_90_07,
         CONTROLS_FROM_560_28_03,
         CONTROLS_FROM_575_51_02,
     ],
-    own_classes: &[CLASSES_FROM_560_28_03, CLASSES_FROM_570_86_15],
+    own_classes: &[CLASSES_FROM_550_40_07, CLASSES_FROM_560_28_03, CLASSES_FROM_570_86_15],
     note: "★ REPLACES: v575_51_02 deletes the two DRAM-encryption controls and re-adds \
            them one number lower, and adds NV2080_CTRL_CMD_THERMAL_SYSTEM_EXECUTE_V2 \
            (version.go:1036-1053). No allocation class changes",
@@ -1797,12 +1826,12 @@ pub static CAPS_575_51_02: CapabilityTable = CapabilityTable {
 /// graphics-only row.
 pub static CAPS_580_65_06: CapabilityTable = CapabilityTable {
     shared: &SHARED_CAPS,
-    own_controls: &[
+    own_controls: &[CONTROLS_FROM_545_23_06, CONTROLS_FROM_550_40_07, 
         CONTROLS_FROM_550_90_07,
         CONTROLS_FROM_560_28_03,
         CONTROLS_FROM_575_51_02,
     ],
-    own_classes: &[
+    own_classes: &[CLASSES_FROM_550_40_07, 
         CLASSES_FROM_560_28_03,
         CLASSES_FROM_570_86_15,
         CLASSES_FROM_580_65_06,
@@ -1819,12 +1848,12 @@ pub static CAPS_580_65_06: CapabilityTable = CapabilityTable {
 /// [`crate::versions::GspElementWire`]'s business, not this module's.
 pub static CAPS_610_43_02: CapabilityTable = CapabilityTable {
     shared: &SHARED_CAPS,
-    own_controls: &[
+    own_controls: &[CONTROLS_FROM_545_23_06, CONTROLS_FROM_550_40_07, 
         CONTROLS_FROM_550_90_07,
         CONTROLS_FROM_560_28_03,
         CONTROLS_FROM_575_51_02,
     ],
-    own_classes: &[
+    own_classes: &[CLASSES_FROM_550_40_07, 
         CLASSES_FROM_560_28_03,
         CLASSES_FROM_570_86_15,
         CLASSES_FROM_580_65_06,
@@ -1843,6 +1872,8 @@ pub static CAPS_610_43_02: CapabilityTable = CapabilityTable {
 /// (`gates_quantified_over_a_list`: shortening a list weakens a gate with zero red
 /// tests.)
 pub static ALL_BOUNDARIES: &[&CapabilityTable] = &[
+    &CAPS_535_104_05,
+    &CAPS_545_23_06,
     &CAPS_550_54_04,
     &CAPS_550_90_07,
     &CAPS_555_42_02,
@@ -1975,8 +2006,9 @@ mod tests {
         // Eight boundaries, eight driver rows, and the rows outnumber nothing: a
         // `TABLES` that grew a row without a boundary would already have failed above,
         // but the literal is what says how big the universe is meant to be.
-        assert_eq!(ALL_BOUNDARIES.len(), 8);
-        assert_eq!(crate::versions::capability_tables().count(), 8);
+        // ★★★ 10 from 2026-09-26: the 535.104.05 / 545.23.06 rows (ruling 5, OWNER REVIEW).
+        assert_eq!(ALL_BOUNDARIES.len(), 10);
+        assert_eq!(crate::versions::capability_tables().count(), 10);
     }
 
     /// ★★★ **The strip is real in both directions**, which is the property that makes a
@@ -2154,11 +2186,39 @@ mod tests {
         // this list would say which.
         let want: &[ResolvedExpectation] = &[
             (
+                "535.104.05",
+                (535, 104, 5),
+                156,
+                74,
+                &[
+                    "NVC36F_CTRL_GET_CLASS_ENGINEID",
+                ],
+            ),
+            (
+                "545.23.06",
+                (545, 23, 6),
+                158,
+                74,
+                &[
+                    "NV0000_CTRL_CMD_GPU_GET_ACTIVE_DEVICE_IDS",
+                    "NV00DE_CTRL_CMD_REQUEST_DATA_POLL",
+                    "NVC36F_CTRL_GET_CLASS_ENGINEID",
+                ],
+            ),
+            (
                 "550.54.04",
                 (550, 54, 4),
                 162,
                 78,
-                &["NVC36F_CTRL_GET_CLASS_ENGINEID"],
+                &[
+                    "NV0000_CTRL_CMD_GPU_ASYNC_ATTACH_ID",
+                    "NV0000_CTRL_CMD_GPU_GET_ACTIVE_DEVICE_IDS",
+                    "NV0000_CTRL_CMD_GPU_WAIT_ATTACH_ID",
+                    "NV0080_CTRL_CMD_PERF_CUDA_LIMIT_SET_CONTROL",
+                    "NV00DE_CTRL_CMD_REQUEST_DATA_POLL",
+                    "NV2080_CTRL_CMD_PERF_GET_CURRENT_PSTATE",
+                    "NVC36F_CTRL_GET_CLASS_ENGINEID",
+                ],
             ),
             (
                 "550.90.07",
@@ -2166,6 +2226,12 @@ mod tests {
                 163,
                 78,
                 &[
+                    "NV0000_CTRL_CMD_GPU_ASYNC_ATTACH_ID",
+                    "NV0000_CTRL_CMD_GPU_GET_ACTIVE_DEVICE_IDS",
+                    "NV0000_CTRL_CMD_GPU_WAIT_ATTACH_ID",
+                    "NV0080_CTRL_CMD_PERF_CUDA_LIMIT_SET_CONTROL",
+                    "NV00DE_CTRL_CMD_REQUEST_DATA_POLL",
+                    "NV2080_CTRL_CMD_PERF_GET_CURRENT_PSTATE",
                     "NVC36F_CTRL_GET_CLASS_ENGINEID",
                     "NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE",
                 ],
@@ -2175,7 +2241,15 @@ mod tests {
                 (555, 42, 2),
                 162,
                 78,
-                &["NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE"],
+                &[
+                    "NV0000_CTRL_CMD_GPU_ASYNC_ATTACH_ID",
+                    "NV0000_CTRL_CMD_GPU_GET_ACTIVE_DEVICE_IDS",
+                    "NV0000_CTRL_CMD_GPU_WAIT_ATTACH_ID",
+                    "NV0080_CTRL_CMD_PERF_CUDA_LIMIT_SET_CONTROL",
+                    "NV00DE_CTRL_CMD_REQUEST_DATA_POLL",
+                    "NV2080_CTRL_CMD_PERF_GET_CURRENT_PSTATE",
+                    "NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE",
+                ],
             ),
             (
                 "560.28.03",
@@ -2183,6 +2257,12 @@ mod tests {
                 163,
                 86,
                 &[
+                    "NV0000_CTRL_CMD_GPU_ASYNC_ATTACH_ID",
+                    "NV0000_CTRL_CMD_GPU_GET_ACTIVE_DEVICE_IDS",
+                    "NV0000_CTRL_CMD_GPU_WAIT_ATTACH_ID",
+                    "NV0080_CTRL_CMD_PERF_CUDA_LIMIT_SET_CONTROL",
+                    "NV00DE_CTRL_CMD_REQUEST_DATA_POLL",
+                    "NV2080_CTRL_CMD_PERF_GET_CURRENT_PSTATE",
                     "NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE",
                     "NV_SEMAPHORE_SURFACE_CTRL_CMD_UNBIND_CHANNEL",
                 ],
@@ -2193,8 +2273,14 @@ mod tests {
                 165,
                 92,
                 &[
+                    "NV0000_CTRL_CMD_GPU_ASYNC_ATTACH_ID",
+                    "NV0000_CTRL_CMD_GPU_GET_ACTIVE_DEVICE_IDS",
+                    "NV0000_CTRL_CMD_GPU_WAIT_ATTACH_ID",
+                    "NV0080_CTRL_CMD_PERF_CUDA_LIMIT_SET_CONTROL",
+                    "NV00DE_CTRL_CMD_REQUEST_DATA_POLL",
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT",
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS",
+                    "NV2080_CTRL_CMD_PERF_GET_CURRENT_PSTATE",
                     "NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE",
                     "NV_SEMAPHORE_SURFACE_CTRL_CMD_UNBIND_CHANNEL",
                 ],
@@ -2205,8 +2291,14 @@ mod tests {
                 166,
                 92,
                 &[
+                    "NV0000_CTRL_CMD_GPU_ASYNC_ATTACH_ID",
+                    "NV0000_CTRL_CMD_GPU_GET_ACTIVE_DEVICE_IDS",
+                    "NV0000_CTRL_CMD_GPU_WAIT_ATTACH_ID",
+                    "NV0080_CTRL_CMD_PERF_CUDA_LIMIT_SET_CONTROL",
+                    "NV00DE_CTRL_CMD_REQUEST_DATA_POLL",
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS_V575",
+                    "NV2080_CTRL_CMD_PERF_GET_CURRENT_PSTATE",
                     "NV2080_CTRL_CMD_THERMAL_SYSTEM_EXECUTE_V2",
                     "NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE",
                     "NV_SEMAPHORE_SURFACE_CTRL_CMD_UNBIND_CHANNEL",
@@ -2218,8 +2310,14 @@ mod tests {
                 166,
                 94,
                 &[
+                    "NV0000_CTRL_CMD_GPU_ASYNC_ATTACH_ID",
+                    "NV0000_CTRL_CMD_GPU_GET_ACTIVE_DEVICE_IDS",
+                    "NV0000_CTRL_CMD_GPU_WAIT_ATTACH_ID",
+                    "NV0080_CTRL_CMD_PERF_CUDA_LIMIT_SET_CONTROL",
+                    "NV00DE_CTRL_CMD_REQUEST_DATA_POLL",
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS_V575",
+                    "NV2080_CTRL_CMD_PERF_GET_CURRENT_PSTATE",
                     "NV2080_CTRL_CMD_THERMAL_SYSTEM_EXECUTE_V2",
                     "NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE",
                     "NV_SEMAPHORE_SURFACE_CTRL_CMD_UNBIND_CHANNEL",
@@ -2231,8 +2329,14 @@ mod tests {
                 166,
                 94,
                 &[
+                    "NV0000_CTRL_CMD_GPU_ASYNC_ATTACH_ID",
+                    "NV0000_CTRL_CMD_GPU_GET_ACTIVE_DEVICE_IDS",
+                    "NV0000_CTRL_CMD_GPU_WAIT_ATTACH_ID",
+                    "NV0080_CTRL_CMD_PERF_CUDA_LIMIT_SET_CONTROL",
+                    "NV00DE_CTRL_CMD_REQUEST_DATA_POLL",
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT_V575",
                     "NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS_V575",
+                    "NV2080_CTRL_CMD_PERF_GET_CURRENT_PSTATE",
                     "NV2080_CTRL_CMD_THERMAL_SYSTEM_EXECUTE_V2",
                     "NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE",
                     "NV_SEMAPHORE_SURFACE_CTRL_CMD_UNBIND_CHANNEL",
