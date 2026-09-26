@@ -705,7 +705,8 @@ impl ChannelPolicy {
                     // no entries, the buffer's VA only. Satisfied by the twin (host RM promoted its
                     // own falcon context with the engine object); carried with no entries.
                     Err(kf_abi::wire::AbiError::PromoteLegacyShape { .. }) if self.abi.decode_falcon_promote(params).is_ok() => {
-                        let (engine_type, chan_client, object, _va, _size) = self.abi.decode_falcon_promote(params).ok()?;
+                        let (engine_type, chan_client, object, va, size) = self.abi.decode_falcon_promote(params).ok()?;
+                        eprintln!("kf-rm: chanlink: falcon ctx promote {chan_client:#x}:{object:#x} engine {engine_type:#x} guest ctx buffer VA {va:#x}+{size:#x}");
                         let st = ChanStatement::PromoteCtx { chan_client, object, engine_type, initialize: 0, with_va: 0, entries: 0 };
                         return self.carry_control_statement(st, cmd, &h);
                     }
