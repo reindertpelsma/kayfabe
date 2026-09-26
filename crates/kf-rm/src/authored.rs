@@ -345,15 +345,18 @@ const RESET_VIDEO_FIRST: u32 = 23;
 /// - Ampere / Ada (`ampere/ga100`, `ada/ad102`): NVDEC `25..=29`, NVENC `11..=13`.
 ///   `[measured]` the captured GA106 table: NVENC0 `0xb`, NVDEC0 `0x19`.
 /// - Blackwell (`blackwell/gb100`, `gb202`): NVDEC `28..=35`, NVENC `44..=47`.
-/// - Hopper: refused with the whole table ([`fault_ids`]).
+/// - Hopper (`kernel-open/nvidia-uvm/hwref/hopper/gh100/dev_fault.h:49-56,78-80`): NVDEC `19..=26`,
+///   NVENC `35..=37` (GH100 lists no NVENC class; the ids are the header's all the same).
+///   ⊘ CORRECTED 2026-09-26 (`V3_HW_BOUNDARY_INVENTORY.md`): was empty, refused with the table.
 ///
 /// `None` = the family's header names no such instance — refused by the caller, by name.
+/// Every row is held to the die group's header by `hwref_check` below.
 fn video_fault_id(family: Family, encoder: bool, i: u32) -> Option<u32> {
     let (enc, dec): (&[u32], &[u32]) = match family {
         Family::Turing => (&[11, 12, 13], &[10, 25, 26]),
         Family::Ampere | Family::Ada => (&[11, 12, 13], &[25, 26, 27, 28, 29]),
         Family::Blackwell => (&[44, 45, 46, 47], &[28, 29, 30, 31, 32, 33, 34, 35]),
-        Family::Hopper => (&[], &[]),
+        Family::Hopper => (&[35, 36, 37], &[19, 20, 21, 22, 23, 24, 25, 26]),
     };
     (if encoder { enc } else { dec }).get(i as usize).copied()
 }
@@ -365,18 +368,20 @@ fn video_fault_id(family: Family, encoder: bool, i: u32) -> Option<u32> {
 ///   `dev_fault.h`), `HOST0 = 0x20` (nouveau `engine/fifo/tu102.c:106`, `gv100.c:413`; ga100/
 ///   ga102 use the tu102 table).
 /// - Blackwell: `384 / 65 / 85` (`blackwell/gb100` and `gb202` `dev_fault.h:28,67/74,95/102`).
-/// - Hopper: `GRAPHICS 384`, `CE0 43` (`hopper/gh100/dev_fault.h:27,39`) — ⊘ and NO `HOST0`
-///   anywhere in the tree (`gh100/dev_fault.h` lists none; nouveau has no Hopper FIFO), so the
-///   PBDMA fault ids cannot be stated: refused for Hopper, by name.
+/// - Hopper: `384 / 43 / 64` — `GRAPHICS` and `CE0` from `published/hopper/gh100/dev_fault.h:27,39`,
+///   `HOST0` from UVM's own copy of the same chip's header,
+///   `kernel-open/nvidia-uvm/hwref/hopper/gh100/dev_fault.h:83` (`HOST0..HOST44` = `64..108`, the
+///   range `uvm_hopper_fault_buffer.c:77` asserts against).
+///   ⊘ CORRECTED 2026-09-26 (`V3_HW_BOUNDARY_INVENTORY.md`): this arm refused Hopper by name on the
+///   premise that *"no `HOST0` [exists] anywhere in the tree"*. The published header lacks it; the
+///   UVM hwref copy states it. The refusal blocked GH100 realize outright.
+///
+/// Every row is held to the die group's header by `hwref_check` below.
 fn fault_ids(family: Family) -> Result<(u32, u32, u32), LayoutRefusal> {
     match family {
         Family::Turing | Family::Ampere | Family::Ada => Ok((64, 15, 0x20)),
+        Family::Hopper => Ok((384, 43, 64)),
         Family::Blackwell => Ok((384, 65, 85)),
-        Family::Hopper => Err(LayoutRefusal {
-            family,
-            missing: "NV_PFAULT_MMU_ENG_ID_HOST0 (PBDMA fault ids): hopper/gh100/dev_fault.h states GRAPHICS 384 and \
-                      CE0 43 but no HOST0, and nouveau has no Hopper FIFO",
-        }),
     }
 }
 
@@ -463,8 +468,8 @@ pub const ENGINE_LAYOUT_WHY: Why = Why::Advertised(
 /// `grce_mask` is the host die's GRCE set ([`kf_abi::cecaps::HostCeCaps::grce_mask`]).
 ///
 /// # Errors
-/// [`LayoutRefusal`] for Hopper (no `HOST0`), or a list with a second GR (MIG, whose GR
-/// runlists this layout does not state).
+/// [`LayoutRefusal`] for a list with a second GR (MIG, whose GR runlists this layout does not
+/// state). ⊘ Hopper was refused here too until 2026-09-26 (see [`fault_ids`]).
 pub fn engine_table(family: Family, engines: &[EngineKind], grce_mask: u64) -> Result<Vec<FifoDeviceEntry>, LayoutRefusal> {
     let (gr_fault, ce0_fault, host0) = fault_ids(family)?;
     if engines.iter().any(|k| matches!(k, EngineKind::Graphics(i) if *i > 0)) {
@@ -577,4 +582,41 @@ pub fn engine_table(family: Family, engines: &[EngineKind], grce_mask: u64) -> R
         });
     }
     Ok(out)
+}
+
+/// ★ The fault-engine ids above, held to each die group's `dev_fault.h` — the published header and
+/// UVM's hwref copy, as resolved by `kf_chip::hwref` (`docs/design/V3_HW_BOUNDARY_INVENTORY.md`).
+#[cfg(test)]
+mod hwref_check {
+    use super::*;
+    use kf_chip::hwref::expect::val;
+    use kf_chip::hwref::{DieGroup, table};
+
+    #[test]
+    fn every_familys_fault_ids_are_its_die_groups_dev_fault_h() {
+        for g in DieGroup::ALL {
+            let (gr, ce0, host0) = fault_ids(g.family()).unwrap_or_else(|e| panic!("{g:?}: {e:?}"));
+            assert_eq!(u64::from(gr), val(g, "NV_PFAULT_MMU_ENG_ID_GRAPHICS"), "{g:?} GRAPHICS");
+            assert_eq!(u64::from(ce0), val(g, "NV_PFAULT_MMU_ENG_ID_CE0"), "{g:?} CE0");
+            assert_eq!(u64::from(host0), val(g, "NV_PFAULT_MMU_ENG_ID_HOST0"), "{g:?} HOST0");
+            // The `CE0 + i` rule, for every CE the header names (Ada's stops at CE5: its CE6 slot is
+            // NVJPG0; the rule is not asked past a die's own LCE count).
+            for i in 1..20u64 {
+                if let Some(v) = table().resolve(g, &format!("NV_PFAULT_MMU_ENG_ID_CE{i}")).value() {
+                    assert_eq!(v, kf_chip::hwref::HwValue::Val(u64::from(ce0) + i), "{g:?} CE{i}");
+                }
+            }
+            for (encoder, name) in [(true, "NVENC"), (false, "NVDEC")] {
+                for i in 0..8u32 {
+                    let want = table().resolve(g, &format!("NV_PFAULT_MMU_ENG_ID_{name}{i}")).value();
+                    let ours = video_fault_id(g.family(), encoder, i).map(|v| kf_chip::hwref::HwValue::Val(u64::from(v)));
+                    // Every id we state is the header's; an id the header states and we do not is a
+                    // named refusal at the caller (a die with more instances than the row).
+                    if let Some(o) = ours {
+                        assert_eq!(Some(o), want, "{g:?} {name}{i}");
+                    }
+                }
+            }
+        }
+    }
 }

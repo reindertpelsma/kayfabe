@@ -576,3 +576,105 @@ impl GspModel for FalconGspModel {
         }
     }
 }
+
+/// ★ Every hand-written offset and encoding above, held to the ogkm-580 header of EVERY die group
+/// that runs this model (`kf_chip::hwref`, `docs/design/V3_HW_BOUNDARY_INVENTORY.md`). The literals
+/// stay (GA10x behaviour is frozen); a die group whose header disagrees fails here by name.
+#[cfg(test)]
+mod hwref_check {
+    use super::*;
+    use crate::hwref::DieGroup;
+    use crate::hwref::expect::{base, bit, len, range, val};
+
+    /// The die groups this model serves, with the RISC-V block each carries (`Family::gsp_model`;
+    /// GA100 is refused there, but its registers are the TU102 layout's and are checked anyway).
+    const SERVED: [(DieGroup, RiscvLayout); 4] = [
+        (DieGroup::Tu10x, RiscvLayout::Tu102),
+        (DieGroup::Ga100, RiscvLayout::Tu102),
+        (DieGroup::Ga10x, RiscvLayout::Ga102),
+        (DieGroup::Ad10x, RiscvLayout::Ga102),
+    ];
+
+    #[test]
+    fn every_falcon_regime_offset_is_its_die_groups_header() {
+        for (g, layout) in SERVED {
+            assert_eq!(PGSP, base(g, "NV_PGSP"), "{g:?}");
+            assert_eq!(PSEC, base(g, "NV_PSEC"), "{g:?}");
+            for (ours, name) in [
+                (FALCON_IRQSCLR, "NV_PFALCON_FALCON_IRQSCLR"),
+                (FALCON_IRQSTAT, "NV_PFALCON_FALCON_IRQSTAT"),
+                (FALCON_IRQMASK, "NV_PFALCON_FALCON_IRQMASK"),
+                (FALCON_IRQDEST, "NV_PFALCON_FALCON_IRQDEST"),
+                (FALCON_MAILBOX0, "NV_PFALCON_FALCON_MAILBOX0"),
+                (FALCON_MAILBOX1, "NV_PFALCON_FALCON_MAILBOX1"),
+                (FALCON_HWCFG2, "NV_PFALCON_FALCON_HWCFG2"),
+                (FALCON_CPUCTL, "NV_PFALCON_FALCON_CPUCTL"),
+                (FALCON_DMATRFCMD, "NV_PFALCON_FALCON_DMATRFCMD"),
+                (QUEUE_HEAD0, "NV_PGSP_QUEUE_HEAD(0)"),
+                (QUEUE_HEAD_COUNT, "NV_PGSP_QUEUE_HEAD__SIZE_1"),
+                (GFW_BOOT_PLM, "NV_PGC6_AON_SECURE_SCRATCH_GROUP_05_PRIV_LEVEL_MASK"),
+                (GFW_BOOT_PROGRESS, "NV_PGC6_AON_SECURE_SCRATCH_GROUP_05_0_GFW_BOOT"),
+                (WPR2_ADDR_LO, "NV_PFB_PRI_MMU_WPR2_ADDR_LO"),
+                (WPR2_ADDR_HI, "NV_PFB_PRI_MMU_WPR2_ADDR_HI"),
+                (BAR0_WINDOW_REG, "NV_PBUS_BAR0_WINDOW"),
+            ] {
+                assert_eq!(ours, val(g, name), "{g:?} {name}");
+            }
+            assert_eq!(val(g, "NV_PGSP_QUEUE_HEAD(1)") - val(g, "NV_PGSP_QUEUE_HEAD(0)"), 8, "{g:?}: stride");
+            assert_eq!((PRAMIN_BASE, PRAMIN_SIZE), (base(g, "NV_PRAMIN"), len(g, "NV_PRAMIN")), "{g:?}");
+            let riscv = val(g, "NV_FALCON2_GSP_BASE");
+            match layout {
+                RiscvLayout::Ga102 => {
+                    assert_eq!(GSP_RISCV_CPUCTL, riscv + val(g, "NV_PRISCV_RISCV_CPUCTL"), "{g:?}");
+                    assert_eq!(GSP_RISCV_IRQMASK, riscv + val(g, "NV_PRISCV_RISCV_IRQMASK"), "{g:?}");
+                    assert_eq!(GSP_RISCV_IRQDEST, riscv + val(g, "NV_PRISCV_RISCV_IRQDEST"), "{g:?}");
+                    assert_eq!(GSP_RISCV_BCR_CTRL, riscv + val(g, "NV_PRISCV_RISCV_BCR_CTRL"), "{g:?}");
+                }
+                RiscvLayout::Tu102 => {
+                    assert_eq!(TU102_RISCV_CORE_SWITCH_STATUS, riscv + val(g, "NV_PRISCV_RISCV_CORE_SWITCH_RISCV_STATUS"));
+                    assert_eq!(TU102_RISCV_IRQMASK, riscv + val(g, "NV_PRISCV_RISCV_IRQMASK"), "{g:?}");
+                    assert_eq!(TU102_RISCV_IRQDEST, riscv + val(g, "NV_PRISCV_RISCV_IRQDEST"), "{g:?}");
+                    // ⊘ No BCR_CTRL in the TU102 block — the model declines to decode it.
+                    assert!(crate::hwref::table().resolve(g, "NV_PRISCV_RISCV_BCR_CTRL").value().is_none(), "{g:?}");
+                }
+            }
+        }
+        // ★ Only GA102+ reads `NV_USABLE_FB_SIZE_IN_MB` (Turing and GA100 bind `_GP102`): the
+        // headers of GA10x/AD10x publish it; Turing's and GA100's lineage does not.
+        for g in [DieGroup::Ga10x, DieGroup::Ad10x] {
+            assert_eq!(USABLE_FB_SIZE_IN_MB_ADDR, val(g, "NV_USABLE_FB_SIZE_IN_MB"), "{g:?}");
+        }
+        for g in [DieGroup::Tu10x, DieGroup::Ga100] {
+            assert!(crate::hwref::table().resolve(g, "NV_USABLE_FB_SIZE_IN_MB").value().is_none(), "{g:?}");
+        }
+    }
+
+    #[test]
+    fn every_falcon_regime_encoding_is_its_die_groups_header_field() {
+        for (g, layout) in SERVED {
+            assert_eq!(CPUCTL_STARTCPU, bit(g, "NV_PFALCON_FALCON_CPUCTL_STARTCPU"), "{g:?}");
+            assert_eq!(CPUCTL_HALTED, bit(g, "NV_PFALCON_FALCON_CPUCTL_HALTED"), "{g:?}");
+            assert_eq!(HWCFG2_RISCV_ENABLE, bit(g, "NV_PFALCON_FALCON_HWCFG2_RISCV"), "{g:?}");
+            assert_eq!(DMATRFCMD_IDLE, bit(g, "NV_PFALCON_FALCON_DMATRFCMD_IDLE"), "{g:?}");
+            assert_eq!(IRQSTAT_SWGEN0, bit(g, "NV_PFALCON_FALCON_IRQSTAT_SWGEN0"), "{g:?}");
+            assert_eq!(
+                GFW_BOOT_COMPLETED,
+                val(g, "NV_PGC6_AON_SECURE_SCRATCH_GROUP_05_0_GFW_BOOT_PROGRESS_COMPLETED"),
+                "{g:?}"
+            );
+            // WPR2: `_VAL` is 31:4 and holds `addr >> _ALIGNMENT`.
+            assert_eq!(range(g, "NV_PFB_PRI_MMU_WPR2_ADDR_LO_VAL"), (31, u64::from(WPR2_VAL_SHIFT)), "{g:?}");
+            assert_eq!(range(g, "NV_PFB_PRI_MMU_WPR2_ADDR_HI_VAL"), (31, u64::from(WPR2_VAL_SHIFT)), "{g:?}");
+            assert_eq!(u64::from(WPR2_ADDR_ALIGNMENT), val(g, "NV_PFB_PRI_MMU_WPR2_ADDR_LO_ALIGNMENT"), "{g:?}");
+            match layout {
+                RiscvLayout::Ga102 => {
+                    assert_eq!(RISCV_CPUCTL_ACTIVE, bit(g, "NV_PRISCV_RISCV_CPUCTL_ACTIVE_STAT"), "{g:?}");
+                    assert_eq!(BCR_CTRL_VALID, bit(g, "NV_PRISCV_RISCV_BCR_CTRL_VALID"), "{g:?}");
+                }
+                RiscvLayout::Tu102 => {
+                    assert_eq!(TU102_RISCV_ACTIVE, bit(g, "NV_PRISCV_RISCV_CORE_SWITCH_RISCV_STATUS_ACTIVE_STAT"));
+                }
+            }
+        }
+    }
+}

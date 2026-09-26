@@ -74,3 +74,46 @@ mod tests {
         }
     }
 }
+
+/// ★ Every kind in the table, by its ogkm NAME, for every die group (`kf_chip::hwref`) — the module
+/// docs' claim that one table serves all five families, checked rather than stated.
+#[cfg(test)]
+mod hwref_check {
+    use super::*;
+    use crate::hwref::DieGroup;
+    use crate::hwref::expect::val;
+
+    /// `(kind, uncompressed)` by the header's names, in [`UNCOMPRESSED_TU102`]'s order.
+    const NAMED: &[(&str, &str)] = &[
+        ("PITCH", "PITCH"),
+        ("Z16", "Z16"),
+        ("S8", "S8"),
+        ("S8Z24", "S8Z24"),
+        ("ZF32_X24S8", "ZF32_X24S8"),
+        ("Z24S8", "Z24S8"),
+        ("GENERIC_MEMORY", "GENERIC_MEMORY"),
+        ("GENERIC_MEMORY_COMPRESSIBLE", "GENERIC_MEMORY"),
+        ("GENERIC_MEMORY_COMPRESSIBLE_DISABLE_PLC", "GENERIC_MEMORY"),
+        ("S8_COMPRESSIBLE_DISABLE_PLC", "S8"),
+        ("Z16_COMPRESSIBLE_DISABLE_PLC", "Z16"),
+        ("S8Z24_COMPRESSIBLE_DISABLE_PLC", "S8Z24"),
+        ("ZF32_X24S8_COMPRESSIBLE_DISABLE_PLC", "ZF32_X24S8"),
+        ("Z24S8_COMPRESSIBLE_DISABLE_PLC", "Z24S8"),
+    ];
+
+    #[test]
+    fn every_kind_is_its_die_groups_header_value() {
+        assert_eq!(NAMED.len(), UNCOMPRESSED_TU102.len());
+        for g in DieGroup::ALL {
+            let k = |n: &str| u8::try_from(val(g, &format!("NV_MMU_PTE_KIND_{n}"))).expect("a kind is 8 bits");
+            for ((kind, unc), (kn, un)) in g.family().pte_kinds().iter().zip(NAMED) {
+                assert_eq!((*kind, *unc), (k(kn), k(un)), "{g:?} {kn}");
+            }
+            assert_eq!(PTE_KIND_PITCH, k("PITCH"));
+            assert_eq!(PTE_KIND_GENERIC, k("GENERIC_MEMORY"));
+            // The two kinds deliberately absent from the table.
+            assert_eq!(uncompressed_pte_kind(k("INVALID")), None, "{g:?}");
+            assert_eq!(uncompressed_pte_kind(k("SMSKED_MESSAGE")), None, "{g:?}");
+        }
+    }
+}

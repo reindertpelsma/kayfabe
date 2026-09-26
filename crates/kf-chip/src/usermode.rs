@@ -161,3 +161,31 @@ mod tests {
         assert_eq!(u.classify(0, 0x0F, 0x30000, 0x1000), None);
     }
 }
+
+/// ★ The usermode-MMIO row, held to the ogkm-580 headers of every die group that has one
+/// (`kf_chip::hwref`, `docs/design/V3_HW_BOUNDARY_INVENTORY.md`).
+#[cfg(test)]
+mod hwref_check {
+    use crate::hwref::DieGroup;
+    use crate::hwref::expect::{base, class_val, len, val};
+
+    #[test]
+    fn the_usermode_row_is_its_die_groups_header() {
+        for g in DieGroup::ALL {
+            let Some(u) = g.family().usermode_mmio() else {
+                assert!(matches!(g, DieGroup::Tu10x | DieGroup::Ga100 | DieGroup::Ga10x | DieGroup::Ad10x));
+                continue;
+            };
+            assert_eq!((u.vf_base, u.vf_len), (base(g, "NV_VIRTUAL_FUNCTION"), len(g, "NV_VIRTUAL_FUNCTION")), "{g:?}");
+            assert_eq!(u.vf_len, class_val("NVC361_NV_USERMODE__SIZE"));
+            assert_eq!(
+                (u.priv_base, u.priv_len),
+                (base(g, "NV_VIRTUAL_FUNCTION_PRIV"), len(g, "NV_VIRTUAL_FUNCTION_PRIV")),
+                "{g:?}"
+            );
+            assert_eq!(u.doorbell, class_val("NVC361_NOTIFY_CHANNEL_PENDING"));
+            assert_eq!(u64::from(u.aperture), val(g, "NV_MMU_VER3_PTE_APERTURE_SYSTEM_COHERENT_MEMORY"), "{g:?}");
+            assert_eq!(u64::from(u.kind), val(g, "NV_MMU_PTE_KIND_SMSKED_MESSAGE"), "{g:?}");
+        }
+    }
+}

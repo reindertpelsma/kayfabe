@@ -768,13 +768,14 @@ fn the_tpc_to_pes_rule_reproduces_the_ga106_map() {
 }
 
 /// ★ The engine layout for every family: Blackwell's fault ids are its own header's (GR 384,
-/// CE0 65, HOST0 85); Turing has no Esched PRI bases; Hopper is refused BY NAME (no HOST0 in the
-/// tree) and so is a MIG list with a second GR.
+/// CE0 65, HOST0 85); Turing has no Esched PRI bases; a MIG list with a second GR is refused BY
+/// NAME. ⊘ CORRECTED 2026-09-26: Hopper was refused here ("no HOST0 in the tree"); UVM's
+/// `hwref/hopper/gh100/dev_fault.h:83` states HOST0 = 64 (`V3_HW_BOUNDARY_INVENTORY.md`).
 #[test]
 fn the_engine_layout_answers_every_family_or_refuses_one_by_name() {
     use kf_rm::authored::{EngineKind as K, engine_table, slot};
     let list = [K::Graphics(0), K::Copy(0), K::Copy(1), K::Copy(2), K::Copy(12), K::Software];
-    for fam in [Family::Turing, Family::Ampere, Family::Ada, Family::Blackwell] {
+    for fam in [Family::Turing, Family::Ampere, Family::Ada, Family::Hopper, Family::Blackwell] {
         let rows = engine_table(fam, &list, 0x3).unwrap_or_else(|e| panic!("{fam:?}: {e:?}"));
         let resets: Vec<u32> = rows[..5].iter().map(|r| r.engine_data[slot::RESET]).collect();
         let mut uniq = resets.clone();
@@ -790,8 +791,10 @@ fn the_engine_layout_answers_every_family_or_refuses_one_by_name() {
     let tu = engine_table(Family::Turing, &list, 0x3).expect("Turing");
     assert_eq!(tu[3].engine_data[slot::RUNLIST_PRI_BASE], 0, "RUNLIST_PRI_BASE is valid only on Ampere+");
     assert_eq!(tu[3].engine_data[slot::RUNLIST], 1);
-    let hopper = engine_table(Family::Hopper, &list, 0x3).expect_err("no HOST0");
-    assert!(hopper.missing.contains("HOST0"));
+    let hopper = engine_table(Family::Hopper, &list, 0x3).expect("Hopper: GR 384, CE0 43, HOST0 64");
+    assert_eq!(hopper[0].engine_data[slot::MMU_FAULT_ID], 384);
+    assert_eq!(hopper[4].engine_data[slot::MMU_FAULT_ID], 43 + 12);
+    assert_eq!(hopper[0].pbdma_fault_ids, [64, 65]);
     assert!(engine_table(Family::Ampere, &[K::Graphics(0), K::Graphics(1), K::Copy(0)], 0x3).is_err(), "MIG");
 }
 

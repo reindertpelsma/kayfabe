@@ -223,8 +223,9 @@ impl Device {
         // ★ P3: the host die's facts, each from the source `kf_rm::hostfacts::PROVENANCE` names —
         // asked before anything is reserved, so a refusal costs nothing. What the host cannot
         // state is authored as OUR device's (`kf_rm::authored`, cited per value). ⊘ A control the
-        // host refuses, or a family an authored rule has no number for (Hopper's PBDMA fault ids),
-        // refuses REALIZE, listing every such field: never a default, never a GA106 row.
+        // host refuses, or a family an authored rule has no number for, refuses REALIZE, listing
+        // every such field: never a default, never a GA106 row. (Hopper's PBDMA fault ids were such
+        // a field until 2026-09-26; UVM's hwref states HOST0 = 64 — `V3_HW_BOUNDARY_INVENTORY.md`.)
         let host = std::sync::Arc::new(
             crate::rmfacts::host_facts(rm, family).map_err(|e| format!("host facts: {e}"))?,
         );
@@ -773,8 +774,9 @@ impl Device {
         // `GPU_VREG_WR32`), and a client without `bBar1Mapping` gets the BAR0 view
         // (`V3_BAR1_DOORBELL.md` §1). ⊘ Before 2026-09-26 Hopper+ never recognised it here.
         let doorbell = off == kf_trap::memmap::VF_USERMODE_PAGE + self.plane.doorbell.offset();
-        let in_usermode = (kf_trap::memmap::VF_USERMODE_PAGE..kf_trap::memmap::VF_USERMODE_PAGE + kf_trap::memmap::PAGE)
-            .contains(&off);
+        // ⊘ The WHOLE 64 KiB window guest userspace maps, not its first page (2026-09-26,
+        // `kf_trap::memmap::VF_USERMODE_LEN`): pages 1..15 reached the privileged ring before.
+        let in_usermode = kf_trap::memmap::in_usermode_window(off);
         // ★ P4: the three MMU_INVALIDATE registers. The port arms FIRST, then the shadow takes the
         // word the guest's spin will read (busy), then one wake — never the privileged ring: the
         // VA thread, not the drainer, completes it (§49.1).

@@ -125,7 +125,8 @@ class pin and all four GA106 words are fixed (§2, §3).
    takes the host's `MC_GET_ARCH_INFO` implementation to draw this line.
 3. **Hopper / Blackwell**: FSP boot + the falcon PIO auto-increment read side effect (THE_CONSTRAINTS
    §52) and the read-triggered L2 cache op (`v3-reinit`); Hopper's PBDMA fault ids (`HOST0`) unstated
-   in the tree (engine table refuses Hopper by name).
+   in the tree (engine table refuses Hopper by name). ⊘ Corrected 2026-09-26: UVM's
+   `hwref/hopper/gh100/dev_fault.h:83` states `HOST0` = 64, now served (`V3_HW_BOUNDARY_INVENTORY.md`).
    ⊘ **Blackwell (GB20x) ANSWERED 2026-09-26** — `V3_FAMILY_PORT_BLACKWELL.md`: FSP boot (EMEM
    auto-increment served on the vCPU), bare 30/30, thin guest 30/30, CUDA ladder green on a GB203.
    Hopper and GB10x remain hardware-unverified.

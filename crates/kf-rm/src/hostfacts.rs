@@ -191,7 +191,8 @@ pub const PROVENANCE: &[(&str, Source)] = &[
     // slot of each row describes OUR device (guest channels are re-born on host twins), authored
     // per family in `crate::authored::engine_table` (ogkm constants + a stated layout). The
     // host's own runlist/PBDMA/reset slots are unreachable anyway (0x20800179 PRIVILEGED,
-    // 0x20801112 KERNEL). ⊘ Hopper refused by name: no NV_PFAULT_MMU_ENG_ID_HOST0 in the tree.
+    // 0x20801112 KERNEL). ⊘ Hopper was refused here by name ("no NV_PFAULT_MMU_ENG_ID_HOST0 in the
+    // tree") until 2026-09-26: UVM's hwref/hopper/gh100/dev_fault.h:83 states HOST0 = 64.
     ("engines", Source::HostControl { cmd: 0x2080_0170, name: "GPU_GET_ENGINES_V2 (types, counts); every slot authored per family: authored::engine_table / ENGINE_LAYOUT_WHY" }),
     ("lce_pce_masks", Source::HostControl { cmd: 0x2080_2a02, name: "CE_GET_CE_PCE_MASK" }),
     ("intr_table", Source::HostControl { cmd: 0x2080_170e, name: "MC_GET_STATIC_INTR_TABLE (static rows) (static rows, keyed to MC_ENGINE_IDX by rule) + authored::engine_notification_rows (non-stall rows of OUR runlists; 0x2080170d is NOT_SUPPORTED to usermode) + the GSP and DISP stall rows of the device we present (authored::GSP_DISP_VECTORS_WHY)" }),

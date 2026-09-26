@@ -55,8 +55,14 @@ pub const NV01_EVENT_WITHOUT_EVENT_DATA: u32 = 0x1000_0000;
 
 /// `NV2080_NOTIFIERS_CE0` (`ogkm-580: class/cl2080_notification.h:60`).
 pub const NV2080_NOTIFIERS_CE0: u32 = 23;
-/// `NV2080_NOTIFIERS_CE10` (`cl2080_notification.h`).
-pub const NV2080_NOTIFIERS_CE10: u32 = 184;
+/// `NV2080_NOTIFIERS_CE10` (`ogkm-580: class/cl2080_notification.h:207`).
+///
+/// ⊘ CORRECTED 2026-09-26 (`V3_HW_BOUNDARY_INVENTORY.md`): was `184`, which is
+/// `NV2080_NOTIFIERS_GSP_PERF_TRACE` (`:225`). Only a host with more than ten copy engines reaches
+/// it — GB100/GB110 list COPY0..19 — where the non-stall events of COPY10..19 were armed on
+/// GSP_PERF_TRACE and its neighbours instead of CE10..19. Every die with ten or fewer CEs (all
+/// measured ones) is unaffected: `notifier_ce(n < 10)` never read this constant.
+pub const NV2080_NOTIFIERS_CE10: u32 = 166;
 
 /// The subdevice notifier index for copy engine `n` (`NV2080_NOTIFIERS_CE(x)`,
 /// `cl2080_notification.h:247`).
