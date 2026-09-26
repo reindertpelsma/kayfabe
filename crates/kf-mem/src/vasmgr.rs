@@ -1166,6 +1166,15 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 ));
                 continue;
             }
+            // ⊘⊘ DIAGNOSTIC ONLY (`KF3_DIAG_UNMAP_DELAY_MS`, default off, never a fix): hold a
+            // diff that UNMAPS for N ms before applying it — an A/B for "was host work still
+            // using the range when the guest's own invalidate said it was gone?". It blocks the VA
+            // thread (never a vCPU) and so delays every want queued behind it.
+            if let Some(ms) = crate::maplog::unmap_delay_ms()
+                && e.runs.iter().any(|r| r.unmap)
+            {
+                std::thread::sleep(std::time::Duration::from_millis(ms));
+            }
             let t_apply = std::time::Instant::now();
             let a = apply_entry(&space.target, &e.runs, &cfg);
             let apply_ns = ns_since(t_apply);

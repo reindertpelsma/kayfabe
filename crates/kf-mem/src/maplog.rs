@@ -35,3 +35,12 @@ pub fn t() -> f64 {
     });
     up + at.elapsed().as_secs_f64()
 }
+
+/// ⊘⊘ `KF3_DIAG_UNMAP_DELAY_MS=N` — a DIAGNOSTIC A/B only (default off): hold every diff that
+/// unmaps for N ms before applying it (see its one use in `vasmgr`). Never a fix: it blocks the VA
+/// thread and only moves a race.
+#[must_use]
+pub fn unmap_delay_ms() -> Option<u64> {
+    static MS: OnceLock<Option<u64>> = OnceLock::new();
+    *MS.get_or_init(|| std::env::var("KF3_DIAG_UNMAP_DELAY_MS").ok().and_then(|v| v.parse().ok()).filter(|&n| n > 0))
+}
