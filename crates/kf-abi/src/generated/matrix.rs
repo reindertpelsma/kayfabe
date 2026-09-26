@@ -3911,6 +3911,70 @@ pub const NV0000_ALLOC_PARAMETERS: StructRuns = StructRuns {
     ],
 };
 
+const NV0000_CTRL_GPU_GET_ID_INFO_V2_PARAMS_L0: Layout = Layout {
+    size: 32,
+    fields: &[
+        f("boardId", 20, 4, 0),
+        f("deviceInstance", 8, 4, 0),
+        f("gpuFlags", 4, 4, 0),
+        f("gpuId", 0, 4, 0),
+        f("gpuInstance", 24, 4, 0),
+        f("numaId", 28, 4, 0),
+        f("sliStatus", 16, 4, 0),
+        f("subDeviceInstance", 12, 4, 0),
+    ],
+};
+/// `NV0000_CTRL_GPU_GET_ID_INFO_V2_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NV0000_CTRL_GPU_GET_ID_INFO_V2_PARAMS: StructRuns = StructRuns {
+    name: "NV0000_CTRL_GPU_GET_ID_INFO_V2_PARAMS",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(&NV0000_CTRL_GPU_GET_ID_INFO_V2_PARAMS_L0)), // 535.309.01 … 615.71.09
+    ],
+};
+
+const NV0000_CTRL_OS_UNIX_EXPORT_OBJECT_TO_FD_PARAMS_L0: Layout = Layout {
+    size: 24,
+    fields: &[
+        f("fd", 16, 4, 0),
+        f("flags", 20, 4, 0),
+        f("object", 0, 16, 0),
+        f("object.data", 4, 12, 0),
+        f("object.data.rmObject", 4, 12, 0),
+        f("object.data.rmObject.hDevice", 4, 4, 0),
+        f("object.data.rmObject.hObject", 12, 4, 0),
+        f("object.data.rmObject.hParent", 8, 4, 0),
+        f("object.type", 0, 4, 0),
+    ],
+};
+/// `NV0000_CTRL_OS_UNIX_EXPORT_OBJECT_TO_FD_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NV0000_CTRL_OS_UNIX_EXPORT_OBJECT_TO_FD_PARAMS: StructRuns = StructRuns {
+    name: "NV0000_CTRL_OS_UNIX_EXPORT_OBJECT_TO_FD_PARAMS",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(&NV0000_CTRL_OS_UNIX_EXPORT_OBJECT_TO_FD_PARAMS_L0)), // 535.309.01 … 615.71.09
+    ],
+};
+
+const NV0000_CTRL_OS_UNIX_IMPORT_OBJECT_FROM_FD_PARAMS_L0: Layout = Layout {
+    size: 20,
+    fields: &[
+        f("fd", 0, 4, 0),
+        f("object", 4, 16, 0),
+        f("object.data", 8, 12, 0),
+        f("object.data.rmObject", 8, 12, 0),
+        f("object.data.rmObject.hDevice", 8, 4, 0),
+        f("object.data.rmObject.hObject", 16, 4, 0),
+        f("object.data.rmObject.hParent", 12, 4, 0),
+        f("object.type", 4, 4, 0),
+    ],
+};
+/// `NV0000_CTRL_OS_UNIX_IMPORT_OBJECT_FROM_FD_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NV0000_CTRL_OS_UNIX_IMPORT_OBJECT_FROM_FD_PARAMS: StructRuns = StructRuns {
+    name: "NV0000_CTRL_OS_UNIX_IMPORT_OBJECT_FROM_FD_PARAMS",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(&NV0000_CTRL_OS_UNIX_IMPORT_OBJECT_FROM_FD_PARAMS_L0)), // 535.309.01 … 615.71.09
+    ],
+};
+
 const NV0000_CTRL_SYSTEM_GET_CLASSLIST_PARAMS_L0: Layout = Layout {
     size: 132,
     fields: &[
@@ -4105,6 +4169,20 @@ pub const NV0080_CTRL_MSENC_GET_CAPS_V2_PARAMS: StructRuns = StructRuns {
     ],
 };
 
+const NV0080_CTRL_PERF_CUDA_LIMIT_CONTROL_PARAMS_L0: Layout = Layout {
+    size: 1,
+    fields: &[
+        f("bCudaLimit", 0, 1, 0),
+    ],
+};
+/// `NV0080_CTRL_PERF_CUDA_LIMIT_CONTROL_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NV0080_CTRL_PERF_CUDA_LIMIT_CONTROL_PARAMS: StructRuns = StructRuns {
+    name: "NV0080_CTRL_PERF_CUDA_LIMIT_CONTROL_PARAMS",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(&NV0080_CTRL_PERF_CUDA_LIMIT_CONTROL_PARAMS_L0)), // 535.309.01 … 615.71.09
+    ],
+};
+
 const NV00DE_ALLOC_PARAMETERS_L0: Layout = Layout {
     size: 4,
     fields: &[
@@ -4193,6 +4271,29 @@ pub const NV2080_CTRL_BUS_GET_PCI_BAR_INFO_PARAMS: StructRuns = StructRuns {
     name: "NV2080_CTRL_BUS_GET_PCI_BAR_INFO_PARAMS",
     runs: &[
         r(v(535, 309, 1), v(615, 71, 9), Some(&NV2080_CTRL_BUS_GET_PCI_BAR_INFO_PARAMS_L0)), // 535.309.01 … 615.71.09
+    ],
+};
+
+const NV2080_CTRL_CE_GET_ALL_CAPS_PARAMS_L0: Layout = Layout {
+    size: 68,
+    fields: &[
+        f("capsTbl", 0, 64, -1),
+        f("present", 64, 4, 0),
+    ],
+};
+const NV2080_CTRL_CE_GET_ALL_CAPS_PARAMS_L1: Layout = Layout {
+    size: 136,
+    fields: &[
+        f("capsTbl", 0, 128, -1),
+        f("present", 128, 8, 0),
+    ],
+};
+/// `NV2080_CTRL_CE_GET_ALL_CAPS_PARAMS` — 2 distinct consumed layout(s) over 2 run(s).
+pub const NV2080_CTRL_CE_GET_ALL_CAPS_PARAMS: StructRuns = StructRuns {
+    name: "NV2080_CTRL_CE_GET_ALL_CAPS_PARAMS",
+    runs: &[
+        r(v(535, 309, 1), v(535, 309, 1), Some(&NV2080_CTRL_CE_GET_ALL_CAPS_PARAMS_L0)), // 535.309.01 … 535.309.01
+        r(v(545, 23, 8), v(615, 71, 9), Some(&NV2080_CTRL_CE_GET_ALL_CAPS_PARAMS_L1)), // 545.23.08 … 615.71.09
     ],
 };
 
@@ -4372,6 +4473,23 @@ pub const NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_FECS_RECORD_SIZE_PARAMS: Struc
     ],
 };
 
+const NV2080_CTRL_DMA_INVALIDATE_TLB_PARAMS_L0: Layout = Layout {
+    size: 16,
+    fields: &[
+        f("engine", 8, 4, 0),
+        f("hClient", 0, 4, 0),
+        f("hDevice", 4, 4, 0),
+        f("hVASpace", 12, 4, 0),
+    ],
+};
+/// `NV2080_CTRL_DMA_INVALIDATE_TLB_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NV2080_CTRL_DMA_INVALIDATE_TLB_PARAMS: StructRuns = StructRuns {
+    name: "NV2080_CTRL_DMA_INVALIDATE_TLB_PARAMS",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(&NV2080_CTRL_DMA_INVALIDATE_TLB_PARAMS_L0)), // 535.309.01 … 615.71.09
+    ],
+};
+
 const NV2080_CTRL_EVENT_SET_NOTIFICATION_PARAMS_L0: Layout = Layout {
     size: 20,
     fields: &[
@@ -4387,6 +4505,24 @@ pub const NV2080_CTRL_EVENT_SET_NOTIFICATION_PARAMS: StructRuns = StructRuns {
     name: "NV2080_CTRL_EVENT_SET_NOTIFICATION_PARAMS",
     runs: &[
         r(v(535, 309, 1), v(615, 71, 9), Some(&NV2080_CTRL_EVENT_SET_NOTIFICATION_PARAMS_L0)), // 535.309.01 … 615.71.09
+    ],
+};
+
+const NV2080_CTRL_FB_FLUSH_GPU_CACHE_PARAMS_L0: Layout = Layout {
+    size: 4024,
+    fields: &[
+        f("addressAlign", 4004, 4, 0),
+        f("addressArray", 0, 4000, 8),
+        f("addressArraySize", 4000, 4, 0),
+        f("flags", 4016, 4, 0),
+        f("memBlockSizeBytes", 4008, 8, 0),
+    ],
+};
+/// `NV2080_CTRL_FB_FLUSH_GPU_CACHE_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NV2080_CTRL_FB_FLUSH_GPU_CACHE_PARAMS: StructRuns = StructRuns {
+    name: "NV2080_CTRL_FB_FLUSH_GPU_CACHE_PARAMS",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(&NV2080_CTRL_FB_FLUSH_GPU_CACHE_PARAMS_L0)), // 535.309.01 … 615.71.09
     ],
 };
 
@@ -4572,6 +4708,45 @@ pub const NV2080_CTRL_GPU_GET_CONSTRUCTED_FALCON_INFO_PARAMS: StructRuns = Struc
     ],
 };
 
+const NV2080_CTRL_GPU_GET_ENGINES_V2_PARAMS_L0: Layout = Layout {
+    size: 252,
+    fields: &[
+        f("engineCount", 0, 4, 0),
+        f("engineList", 4, 248, 4),
+    ],
+};
+const NV2080_CTRL_GPU_GET_ENGINES_V2_PARAMS_L1: Layout = Layout {
+    size: 256,
+    fields: &[
+        f("engineCount", 0, 4, 0),
+        f("engineList", 4, 252, 4),
+    ],
+};
+const NV2080_CTRL_GPU_GET_ENGINES_V2_PARAMS_L2: Layout = Layout {
+    size: 260,
+    fields: &[
+        f("engineCount", 0, 4, 0),
+        f("engineList", 4, 256, 4),
+    ],
+};
+const NV2080_CTRL_GPU_GET_ENGINES_V2_PARAMS_L3: Layout = Layout {
+    size: 340,
+    fields: &[
+        f("engineCount", 0, 4, 0),
+        f("engineList", 4, 336, 4),
+    ],
+};
+/// `NV2080_CTRL_GPU_GET_ENGINES_V2_PARAMS` — 4 distinct consumed layout(s) over 4 run(s).
+pub const NV2080_CTRL_GPU_GET_ENGINES_V2_PARAMS: StructRuns = StructRuns {
+    name: "NV2080_CTRL_GPU_GET_ENGINES_V2_PARAMS",
+    runs: &[
+        r(v(535, 309, 1), v(535, 309, 1), Some(&NV2080_CTRL_GPU_GET_ENGINES_V2_PARAMS_L0)), // 535.309.01 … 535.309.01
+        r(v(545, 23, 8), v(545, 23, 8), Some(&NV2080_CTRL_GPU_GET_ENGINES_V2_PARAMS_L1)), // 545.23.08 … 545.23.08
+        r(v(550, 40, 7), v(555, 42, 2), Some(&NV2080_CTRL_GPU_GET_ENGINES_V2_PARAMS_L2)), // 550.40.07 … 555.42.02
+        r(v(560, 28, 3), v(615, 71, 9), Some(&NV2080_CTRL_GPU_GET_ENGINES_V2_PARAMS_L3)), // 560.28.03 … 615.71.09
+    ],
+};
+
 const NV2080_CTRL_GPU_GET_INFO_V2_PARAMS_L0: Layout = Layout {
     size: 516,
     fields: &[
@@ -4657,6 +4832,49 @@ pub const NV2080_CTRL_GPU_GET_NAME_STRING_PARAMS: StructRuns = StructRuns {
     runs: &[
         r(v(535, 309, 1), v(590, 48, 1), Some(&NV2080_CTRL_GPU_GET_NAME_STRING_PARAMS_L0)), // 535.309.01 … 590.48.01
         r(v(595, 84, 0), v(615, 71, 9), Some(&NV2080_CTRL_GPU_GET_NAME_STRING_PARAMS_L1)), // 595.84 … 615.71.09
+    ],
+};
+
+const NV2080_CTRL_GPU_GET_PES_INFO_PARAMS_L0: Layout = Layout {
+    size: 56,
+    fields: &[
+        f("activePesMask", 8, 4, 0),
+        f("gpcId", 0, 4, 0),
+        f("maxTpcPerGpcCount", 12, 4, 0),
+        f("numPesInGpc", 4, 4, 0),
+        f("tpcToPesMap", 16, 40, 4),
+    ],
+};
+const NV2080_CTRL_GPU_GET_PES_INFO_PARAMS_L1: Layout = Layout {
+    size: 76,
+    fields: &[
+        f("activePesMask", 8, 4, 0),
+        f("gpcId", 0, 4, 0),
+        f("maxTpcPerGpcCount", 12, 4, 0),
+        f("numPesInGpc", 4, 4, 0),
+        f("tpcToPesMap", 16, 60, 4),
+    ],
+};
+/// `NV2080_CTRL_GPU_GET_PES_INFO_PARAMS` — 2 distinct consumed layout(s) over 2 run(s).
+pub const NV2080_CTRL_GPU_GET_PES_INFO_PARAMS: StructRuns = StructRuns {
+    name: "NV2080_CTRL_GPU_GET_PES_INFO_PARAMS",
+    runs: &[
+        r(v(535, 309, 1), v(610, 57, 4), Some(&NV2080_CTRL_GPU_GET_PES_INFO_PARAMS_L0)), // 535.309.01 … 610.57.04
+        r(v(615, 71, 9), v(615, 71, 9), Some(&NV2080_CTRL_GPU_GET_PES_INFO_PARAMS_L1)), // 615.71.09 … 615.71.09
+    ],
+};
+
+const NV2080_CTRL_GPU_GET_SHORT_NAME_STRING_PARAMS_L0: Layout = Layout {
+    size: 64,
+    fields: &[
+        f("gpuShortNameString", 0, 64, 1),
+    ],
+};
+/// `NV2080_CTRL_GPU_GET_SHORT_NAME_STRING_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NV2080_CTRL_GPU_GET_SHORT_NAME_STRING_PARAMS: StructRuns = StructRuns {
+    name: "NV2080_CTRL_GPU_GET_SHORT_NAME_STRING_PARAMS",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(&NV2080_CTRL_GPU_GET_SHORT_NAME_STRING_PARAMS_L0)), // 535.309.01 … 615.71.09
     ],
 };
 
@@ -4792,6 +5010,23 @@ pub const NV2080_CTRL_GRMGR_GET_GR_FS_INFO_PARAMS: StructRuns = StructRuns {
     ],
 };
 
+const NV2080_CTRL_GR_CTXSW_ZCULL_BIND_PARAMS_L0: Layout = Layout {
+    size: 24,
+    fields: &[
+        f("hChannel", 4, 4, 0),
+        f("hClient", 0, 4, 0),
+        f("vMemPtr", 8, 8, 0),
+        f("zcullMode", 16, 4, 0),
+    ],
+};
+/// `NV2080_CTRL_GR_CTXSW_ZCULL_BIND_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NV2080_CTRL_GR_CTXSW_ZCULL_BIND_PARAMS: StructRuns = StructRuns {
+    name: "NV2080_CTRL_GR_CTXSW_ZCULL_BIND_PARAMS",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(&NV2080_CTRL_GR_CTXSW_ZCULL_BIND_PARAMS_L0)), // 535.309.01 … 615.71.09
+    ],
+};
+
 const NV2080_CTRL_GR_GET_CAPS_V2_PARAMS_L0: Layout = Layout {
     size: 48,
     fields: &[
@@ -4827,6 +5062,325 @@ pub const NV2080_CTRL_GR_GET_ENGINE_CONTEXT_PROPERTIES_PARAMS: StructRuns = Stru
     name: "NV2080_CTRL_GR_GET_ENGINE_CONTEXT_PROPERTIES_PARAMS",
     runs: &[
         r(v(535, 309, 1), v(615, 71, 9), Some(&NV2080_CTRL_GR_GET_ENGINE_CONTEXT_PROPERTIES_PARAMS_L0)), // 535.309.01 … 615.71.09
+    ],
+};
+
+const NV2080_CTRL_GR_GET_GFX_GPC_AND_TPC_INFO_PARAMS_L0: Layout = Layout {
+    size: 24,
+    fields: &[
+        f("grRouteInfo", 0, 16, 0),
+        f("grRouteInfo.flags", 0, 4, 0),
+        f("grRouteInfo.route", 8, 8, 0),
+        f("numGfxTpc", 20, 4, 0),
+        f("physGfxGpcMask", 16, 4, 0),
+    ],
+};
+/// `NV2080_CTRL_GR_GET_GFX_GPC_AND_TPC_INFO_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NV2080_CTRL_GR_GET_GFX_GPC_AND_TPC_INFO_PARAMS: StructRuns = StructRuns {
+    name: "NV2080_CTRL_GR_GET_GFX_GPC_AND_TPC_INFO_PARAMS",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(&NV2080_CTRL_GR_GET_GFX_GPC_AND_TPC_INFO_PARAMS_L0)), // 535.309.01 … 615.71.09
+    ],
+};
+
+const NV2080_CTRL_GR_GET_GLOBAL_SM_ORDER_PARAMS_L0: Layout = Layout {
+    size: 6168,
+    fields: &[
+        f("globalSmId", 0, 6144, 12),
+        f("globalSmId[]", 0, 12, 0),
+        f("globalSmId[].globalTpcId", 6, 2, 0),
+        f("globalSmId[].gpcId", 0, 2, 0),
+        f("globalSmId[].localSmId", 4, 2, 0),
+        f("globalSmId[].localTpcId", 2, 2, 0),
+        f("globalSmId[].migratableTpcId", 10, 2, 0),
+        f("globalSmId[].virtualGpcId", 8, 2, 0),
+        f("grRouteInfo", 6152, 16, 0),
+        f("grRouteInfo.flags", 6152, 4, 0),
+        f("grRouteInfo.route", 6160, 8, 0),
+        f("numSm", 6144, 2, 0),
+        f("numTpc", 6146, 2, 0),
+    ],
+};
+const NV2080_CTRL_GR_GET_GLOBAL_SM_ORDER_PARAMS_L1: Layout = Layout {
+    size: 7192,
+    fields: &[
+        f("globalSmId", 0, 7168, 14),
+        f("globalSmId[]", 0, 14, 0),
+        f("globalSmId[].globalTpcId", 6, 2, 0),
+        f("globalSmId[].gpcId", 0, 2, 0),
+        f("globalSmId[].localSmId", 4, 2, 0),
+        f("globalSmId[].localTpcId", 2, 2, 0),
+        f("globalSmId[].migratableTpcId", 10, 2, 0),
+        f("globalSmId[].ugpuId", 12, 2, 0),
+        f("globalSmId[].virtualGpcId", 8, 2, 0),
+        f("grRouteInfo", 7176, 16, 0),
+        f("grRouteInfo.flags", 7176, 4, 0),
+        f("grRouteInfo.route", 7184, 8, 0),
+        f("numSm", 7168, 2, 0),
+        f("numTpc", 7170, 2, 0),
+    ],
+};
+const NV2080_CTRL_GR_GET_GLOBAL_SM_ORDER_PARAMS_L2: Layout = Layout {
+    size: 9240,
+    fields: &[
+        f("globalSmId", 0, 9216, 18),
+        f("globalSmId[]", 0, 18, 0),
+        f("globalSmId[].globalTpcId", 6, 2, 0),
+        f("globalSmId[].gpcId", 0, 2, 0),
+        f("globalSmId[].localSmId", 4, 2, 0),
+        f("globalSmId[].localTpcId", 2, 2, 0),
+        f("globalSmId[].migratableTpcId", 10, 2, 0),
+        f("globalSmId[].physicalCpcId", 14, 2, 0),
+        f("globalSmId[].ugpuId", 12, 2, 0),
+        f("globalSmId[].virtualGpcId", 8, 2, 0),
+        f("globalSmId[].virtualTpcId", 16, 2, 0),
+        f("grRouteInfo", 9224, 16, 0),
+        f("grRouteInfo.flags", 9224, 4, 0),
+        f("grRouteInfo.route", 9232, 8, 0),
+        f("numSm", 9216, 2, 0),
+        f("numTpc", 9218, 2, 0),
+    ],
+};
+const NV2080_CTRL_GR_GET_GLOBAL_SM_ORDER_PARAMS_L3: Layout = Layout {
+    size: 10264,
+    fields: &[
+        f("globalSmId", 0, 10240, 20),
+        f("globalSmId[]", 0, 20, 0),
+        f("globalSmId[].globalTpcId", 6, 2, 0),
+        f("globalSmId[].gpcId", 0, 2, 0),
+        f("globalSmId[].localSmId", 4, 2, 0),
+        f("globalSmId[].localTpcId", 2, 2, 0),
+        f("globalSmId[].migratableTpcId", 12, 2, 0),
+        f("globalSmId[].physicalCpcId", 16, 2, 0),
+        f("globalSmId[].ugpuId", 14, 2, 0),
+        f("globalSmId[].virtualDpcId", 10, 2, 0),
+        f("globalSmId[].virtualGpcId", 8, 2, 0),
+        f("globalSmId[].virtualTpcId", 18, 2, 0),
+        f("grRouteInfo", 10248, 16, 0),
+        f("grRouteInfo.flags", 10248, 4, 0),
+        f("grRouteInfo.route", 10256, 8, 0),
+        f("numSm", 10240, 2, 0),
+        f("numTpc", 10242, 2, 0),
+    ],
+};
+/// `NV2080_CTRL_GR_GET_GLOBAL_SM_ORDER_PARAMS` — 4 distinct consumed layout(s) over 4 run(s).
+pub const NV2080_CTRL_GR_GET_GLOBAL_SM_ORDER_PARAMS: StructRuns = StructRuns {
+    name: "NV2080_CTRL_GR_GET_GLOBAL_SM_ORDER_PARAMS",
+    runs: &[
+        r(v(535, 309, 1), v(570, 148, 8), Some(&NV2080_CTRL_GR_GET_GLOBAL_SM_ORDER_PARAMS_L0)), // 535.309.01 … 570.148.08
+        r(v(575, 51, 2), v(575, 64, 5), Some(&NV2080_CTRL_GR_GET_GLOBAL_SM_ORDER_PARAMS_L1)), // 575.51.02 … 575.64.05
+        r(v(580, 65, 6), v(610, 57, 4), Some(&NV2080_CTRL_GR_GET_GLOBAL_SM_ORDER_PARAMS_L2)), // 580.65.06 … 610.57.04
+        r(v(615, 71, 9), v(615, 71, 9), Some(&NV2080_CTRL_GR_GET_GLOBAL_SM_ORDER_PARAMS_L3)), // 615.71.09 … 615.71.09
+    ],
+};
+
+const NV2080_CTRL_GR_GET_GPC_MASK_PARAMS_L0: Layout = Layout {
+    size: 24,
+    fields: &[
+        f("gpcMask", 16, 4, 0),
+        f("grRouteInfo", 0, 16, 0),
+        f("grRouteInfo.flags", 0, 4, 0),
+        f("grRouteInfo.route", 8, 8, 0),
+    ],
+};
+/// `NV2080_CTRL_GR_GET_GPC_MASK_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NV2080_CTRL_GR_GET_GPC_MASK_PARAMS: StructRuns = StructRuns {
+    name: "NV2080_CTRL_GR_GET_GPC_MASK_PARAMS",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(&NV2080_CTRL_GR_GET_GPC_MASK_PARAMS_L0)), // 535.309.01 … 615.71.09
+    ],
+};
+
+const NV2080_CTRL_GR_GET_INFO_V2_PARAMS_L0: Layout = Layout {
+    size: 448,
+    fields: &[
+        f("grInfoList", 4, 424, 8),
+        f("grInfoListSize", 0, 4, 0),
+        f("grInfoList[]", 4, 8, 0),
+        f("grInfoList[].data", 8, 4, 0),
+        f("grInfoList[].index", 4, 4, 0),
+        f("grRouteInfo", 432, 16, 0),
+        f("grRouteInfo.flags", 432, 4, 0),
+        f("grRouteInfo.route", 440, 8, 0),
+    ],
+};
+const NV2080_CTRL_GR_GET_INFO_V2_PARAMS_L1: Layout = Layout {
+    size: 472,
+    fields: &[
+        f("grInfoList", 4, 448, 8),
+        f("grInfoListSize", 0, 4, 0),
+        f("grInfoList[]", 4, 8, 0),
+        f("grInfoList[].data", 8, 4, 0),
+        f("grInfoList[].index", 4, 4, 0),
+        f("grRouteInfo", 456, 16, 0),
+        f("grRouteInfo.flags", 456, 4, 0),
+        f("grRouteInfo.route", 464, 8, 0),
+    ],
+};
+const NV2080_CTRL_GR_GET_INFO_V2_PARAMS_L2: Layout = Layout {
+    size: 488,
+    fields: &[
+        f("grInfoList", 4, 464, 8),
+        f("grInfoListSize", 0, 4, 0),
+        f("grInfoList[]", 4, 8, 0),
+        f("grInfoList[].data", 8, 4, 0),
+        f("grInfoList[].index", 4, 4, 0),
+        f("grRouteInfo", 472, 16, 0),
+        f("grRouteInfo.flags", 472, 4, 0),
+        f("grRouteInfo.route", 480, 8, 0),
+    ],
+};
+const NV2080_CTRL_GR_GET_INFO_V2_PARAMS_L3: Layout = Layout {
+    size: 496,
+    fields: &[
+        f("grInfoList", 4, 472, 8),
+        f("grInfoListSize", 0, 4, 0),
+        f("grInfoList[]", 4, 8, 0),
+        f("grInfoList[].data", 8, 4, 0),
+        f("grInfoList[].index", 4, 4, 0),
+        f("grRouteInfo", 480, 16, 0),
+        f("grRouteInfo.flags", 480, 4, 0),
+        f("grRouteInfo.route", 488, 8, 0),
+    ],
+};
+const NV2080_CTRL_GR_GET_INFO_V2_PARAMS_L4: Layout = Layout {
+    size: 528,
+    fields: &[
+        f("grInfoList", 4, 504, 8),
+        f("grInfoListSize", 0, 4, 0),
+        f("grInfoList[]", 4, 8, 0),
+        f("grInfoList[].data", 8, 4, 0),
+        f("grInfoList[].index", 4, 4, 0),
+        f("grRouteInfo", 512, 16, 0),
+        f("grRouteInfo.flags", 512, 4, 0),
+        f("grRouteInfo.route", 520, 8, 0),
+    ],
+};
+/// `NV2080_CTRL_GR_GET_INFO_V2_PARAMS` — 5 distinct consumed layout(s) over 5 run(s).
+pub const NV2080_CTRL_GR_GET_INFO_V2_PARAMS: StructRuns = StructRuns {
+    name: "NV2080_CTRL_GR_GET_INFO_V2_PARAMS",
+    runs: &[
+        r(v(535, 309, 1), v(535, 309, 1), Some(&NV2080_CTRL_GR_GET_INFO_V2_PARAMS_L0)), // 535.309.01 … 535.309.01
+        r(v(545, 23, 8), v(565, 57, 1), Some(&NV2080_CTRL_GR_GET_INFO_V2_PARAMS_L1)), // 545.23.08 … 565.57.01
+        r(v(570, 86, 15), v(580, 178, 4), Some(&NV2080_CTRL_GR_GET_INFO_V2_PARAMS_L2)), // 570.86.15 … 580.178.04
+        r(v(590, 48, 1), v(595, 84, 0), Some(&NV2080_CTRL_GR_GET_INFO_V2_PARAMS_L3)), // 590.48.01 … 595.84
+        r(v(610, 43, 2), v(615, 71, 9), Some(&NV2080_CTRL_GR_GET_INFO_V2_PARAMS_L4)), // 610.43.02 … 615.71.09
+    ],
+};
+
+const NV2080_CTRL_GR_GET_NUM_TPCS_FOR_GPC_PARAMS_L0: Layout = Layout {
+    size: 8,
+    fields: &[
+        f("gpcId", 0, 4, 0),
+        f("numTpcs", 4, 4, 0),
+    ],
+};
+/// `NV2080_CTRL_GR_GET_NUM_TPCS_FOR_GPC_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NV2080_CTRL_GR_GET_NUM_TPCS_FOR_GPC_PARAMS: StructRuns = StructRuns {
+    name: "NV2080_CTRL_GR_GET_NUM_TPCS_FOR_GPC_PARAMS",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(&NV2080_CTRL_GR_GET_NUM_TPCS_FOR_GPC_PARAMS_L0)), // 535.309.01 … 615.71.09
+    ],
+};
+
+const NV2080_CTRL_GR_GET_SM_ISSUE_RATE_MODIFIER_PARAMS_L0: Layout = Layout {
+    size: 32,
+    fields: &[
+        f("dp", 18, 1, 0),
+        f("ffma", 20, 1, 0),
+        f("fmla16", 17, 1, 0),
+        f("fmla32", 19, 1, 0),
+        f("grRouteInfo", 0, 16, 0),
+        f("grRouteInfo.flags", 0, 4, 0),
+        f("grRouteInfo.route", 8, 8, 0),
+        f("imla0", 16, 1, 0),
+        f("imla1", 21, 1, 0),
+        f("imla2", 22, 1, 0),
+        f("imla3", 23, 1, 0),
+        f("imla4", 24, 1, 0),
+    ],
+};
+/// `NV2080_CTRL_GR_GET_SM_ISSUE_RATE_MODIFIER_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NV2080_CTRL_GR_GET_SM_ISSUE_RATE_MODIFIER_PARAMS: StructRuns = StructRuns {
+    name: "NV2080_CTRL_GR_GET_SM_ISSUE_RATE_MODIFIER_PARAMS",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(&NV2080_CTRL_GR_GET_SM_ISSUE_RATE_MODIFIER_PARAMS_L0)), // 535.309.01 … 615.71.09
+    ],
+};
+
+const NV2080_CTRL_GR_GET_TPC_MASK_PARAMS_L0: Layout = Layout {
+    size: 24,
+    fields: &[
+        f("gpcId", 16, 4, 0),
+        f("grRouteInfo", 0, 16, 0),
+        f("grRouteInfo.flags", 0, 4, 0),
+        f("grRouteInfo.route", 8, 8, 0),
+        f("tpcMask", 20, 4, 0),
+    ],
+};
+/// `NV2080_CTRL_GR_GET_TPC_MASK_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NV2080_CTRL_GR_GET_TPC_MASK_PARAMS: StructRuns = StructRuns {
+    name: "NV2080_CTRL_GR_GET_TPC_MASK_PARAMS",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(&NV2080_CTRL_GR_GET_TPC_MASK_PARAMS_L0)), // 535.309.01 … 615.71.09
+    ],
+};
+
+const NV2080_CTRL_GR_GET_ZCULL_INFO_PARAMS_L0: Layout = Layout {
+    size: 40,
+    fields: &[
+        f("aliquotTotal", 12, 4, 0),
+        f("heightAlignPixels", 4, 4, 0),
+        f("pixelSquaresByAliquots", 8, 4, 0),
+        f("subregionCount", 28, 4, 0),
+        f("subregionHeightAlignPixels", 36, 4, 0),
+        f("subregionWidthAlignPixels", 32, 4, 0),
+        f("widthAlignPixels", 0, 4, 0),
+        f("zcullRegionByteMultiplier", 16, 4, 0),
+        f("zcullRegionHeaderSize", 20, 4, 0),
+        f("zcullSubregionHeaderSize", 24, 4, 0),
+    ],
+};
+/// `NV2080_CTRL_GR_GET_ZCULL_INFO_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NV2080_CTRL_GR_GET_ZCULL_INFO_PARAMS: StructRuns = StructRuns {
+    name: "NV2080_CTRL_GR_GET_ZCULL_INFO_PARAMS",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(&NV2080_CTRL_GR_GET_ZCULL_INFO_PARAMS_L0)), // 535.309.01 … 615.71.09
+    ],
+};
+
+const NV2080_CTRL_GR_GET_ZCULL_MASK_PARAMS_L0: Layout = Layout {
+    size: 8,
+    fields: &[
+        f("gpcId", 0, 4, 0),
+        f("zcullMask", 4, 4, 0),
+    ],
+};
+/// `NV2080_CTRL_GR_GET_ZCULL_MASK_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NV2080_CTRL_GR_GET_ZCULL_MASK_PARAMS: StructRuns = StructRuns {
+    name: "NV2080_CTRL_GR_GET_ZCULL_MASK_PARAMS",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(&NV2080_CTRL_GR_GET_ZCULL_MASK_PARAMS_L0)), // 535.309.01 … 615.71.09
+    ],
+};
+
+const NV2080_CTRL_GR_SET_CTXSW_PREEMPTION_MODE_PARAMS_L0: Layout = Layout {
+    size: 32,
+    fields: &[
+        f("cilpPreemptMode", 12, 4, 0),
+        f("flags", 0, 4, 0),
+        f("gfxpPreemptMode", 8, 4, 0),
+        f("grRouteInfo", 16, 16, 0),
+        f("grRouteInfo.flags", 16, 4, 0),
+        f("grRouteInfo.route", 24, 8, 0),
+        f("hChannel", 4, 4, 0),
+    ],
+};
+/// `NV2080_CTRL_GR_SET_CTXSW_PREEMPTION_MODE_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NV2080_CTRL_GR_SET_CTXSW_PREEMPTION_MODE_PARAMS: StructRuns = StructRuns {
+    name: "NV2080_CTRL_GR_SET_CTXSW_PREEMPTION_MODE_PARAMS",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(&NV2080_CTRL_GR_SET_CTXSW_PREEMPTION_MODE_PARAMS_L0)), // 535.309.01 … 615.71.09
     ],
 };
 
@@ -5801,6 +6355,43 @@ pub const NV2080_CTRL_MC_GET_ARCH_INFO_PARAMS: StructRuns = StructRuns {
     ],
 };
 
+const NV2080_CTRL_MC_GET_INTR_CATEGORY_SUBTREE_MAP_PARAMS_L0: Layout = Layout {
+    size: 56,
+    fields: &[
+        f("subtreeMap", 0, 56, 8),
+        f("subtreeMap[]", 0, 8, 0),
+        f("subtreeMap[].subtreeMask", 0, 8, 0),
+    ],
+};
+/// `NV2080_CTRL_MC_GET_INTR_CATEGORY_SUBTREE_MAP_PARAMS` — 1 distinct consumed layout(s) over 2 run(s).
+pub const NV2080_CTRL_MC_GET_INTR_CATEGORY_SUBTREE_MAP_PARAMS: StructRuns = StructRuns {
+    name: "NV2080_CTRL_MC_GET_INTR_CATEGORY_SUBTREE_MAP_PARAMS",
+    runs: &[
+        r(v(535, 309, 1), v(575, 64, 5), None), // 535.309.01 … 575.64.05
+        r(v(580, 65, 6), v(615, 71, 9), Some(&NV2080_CTRL_MC_GET_INTR_CATEGORY_SUBTREE_MAP_PARAMS_L0)), // 580.65.06 … 615.71.09
+    ],
+};
+
+const NV2080_CTRL_MC_GET_STATIC_INTR_TABLE_PARAMS_L0: Layout = Layout {
+    size: 516,
+    fields: &[
+        f("entries", 4, 512, 16),
+        f("entries[]", 4, 16, 0),
+        f("entries[].intrVectorNonStall", 16, 4, 0),
+        f("entries[].intrVectorStall", 12, 4, 0),
+        f("entries[].nv2080IntrType", 4, 4, 0),
+        f("entries[].pmcIntrMask", 8, 4, 0),
+        f("numEntries", 0, 4, 0),
+    ],
+};
+/// `NV2080_CTRL_MC_GET_STATIC_INTR_TABLE_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NV2080_CTRL_MC_GET_STATIC_INTR_TABLE_PARAMS: StructRuns = StructRuns {
+    name: "NV2080_CTRL_MC_GET_STATIC_INTR_TABLE_PARAMS",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(&NV2080_CTRL_MC_GET_STATIC_INTR_TABLE_PARAMS_L0)), // 535.309.01 … 615.71.09
+    ],
+};
+
 const NV2080_CTRL_MC_SERVICE_INTERRUPTS_PARAMS_L0: Layout = Layout {
     size: 4,
     fields: &[
@@ -5870,6 +6461,36 @@ pub const NV83DE_ALLOC_PARAMETERS: StructRuns = StructRuns {
     ],
 };
 
+const NV83DE_CTRL_DEBUG_SET_EXCEPTION_MASK_PARAMS_L0: Layout = Layout {
+    size: 4,
+    fields: &[
+        f("exceptionMask", 0, 4, 0),
+    ],
+};
+/// `NV83DE_CTRL_DEBUG_SET_EXCEPTION_MASK_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NV83DE_CTRL_DEBUG_SET_EXCEPTION_MASK_PARAMS: StructRuns = StructRuns {
+    name: "NV83DE_CTRL_DEBUG_SET_EXCEPTION_MASK_PARAMS",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(&NV83DE_CTRL_DEBUG_SET_EXCEPTION_MASK_PARAMS_L0)), // 535.309.01 … 615.71.09
+    ],
+};
+
+const NV9096_CTRL_GET_ZBC_CLEAR_TABLE_SIZE_PARAMS_L0: Layout = Layout {
+    size: 12,
+    fields: &[
+        f("indexEnd", 4, 4, 0),
+        f("indexStart", 0, 4, 0),
+        f("tableType", 8, 4, 0),
+    ],
+};
+/// `NV9096_CTRL_GET_ZBC_CLEAR_TABLE_SIZE_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NV9096_CTRL_GET_ZBC_CLEAR_TABLE_SIZE_PARAMS: StructRuns = StructRuns {
+    name: "NV9096_CTRL_GET_ZBC_CLEAR_TABLE_SIZE_PARAMS",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(&NV9096_CTRL_GET_ZBC_CLEAR_TABLE_SIZE_PARAMS_L0)), // 535.309.01 … 615.71.09
+    ],
+};
+
 const NV90F1_CTRL_VASPACE_COPY_SERVER_RESERVED_PDES_PARAMS_L0: Layout = Layout {
     size: 184,
     fields: &[
@@ -5892,6 +6513,20 @@ pub const NV90F1_CTRL_VASPACE_COPY_SERVER_RESERVED_PDES_PARAMS: StructRuns = Str
     name: "NV90F1_CTRL_VASPACE_COPY_SERVER_RESERVED_PDES_PARAMS",
     runs: &[
         r(v(535, 309, 1), v(615, 71, 9), Some(&NV90F1_CTRL_VASPACE_COPY_SERVER_RESERVED_PDES_PARAMS_L0)), // 535.309.01 … 615.71.09
+    ],
+};
+
+const NVA06C_CTRL_BIND_PARAMS_L0: Layout = Layout {
+    size: 4,
+    fields: &[
+        f("engineType", 0, 4, 0),
+    ],
+};
+/// `NVA06C_CTRL_BIND_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NVA06C_CTRL_BIND_PARAMS: StructRuns = StructRuns {
+    name: "NVA06C_CTRL_BIND_PARAMS",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(&NVA06C_CTRL_BIND_PARAMS_L0)), // 535.309.01 … 615.71.09
     ],
 };
 
@@ -5957,6 +6592,20 @@ pub const NVA06C_CTRL_PREEMPT_PARAMS: StructRuns = StructRuns {
     ],
 };
 
+const NVA06C_CTRL_TIMESLICE_PARAMS_L0: Layout = Layout {
+    size: 8,
+    fields: &[
+        f("timesliceUs", 0, 8, 0),
+    ],
+};
+/// `NVA06C_CTRL_TIMESLICE_PARAMS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NVA06C_CTRL_TIMESLICE_PARAMS: StructRuns = StructRuns {
+    name: "NVA06C_CTRL_TIMESLICE_PARAMS",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(&NVA06C_CTRL_TIMESLICE_PARAMS_L0)), // 535.309.01 … 615.71.09
+    ],
+};
+
 const NVA06F_CTRL_BIND_PARAMS_L0: Layout = Layout {
     size: 4,
     fields: &[
@@ -6006,6 +6655,21 @@ pub const NVA06F_CTRL_STOP_CHANNEL_PARAMS: StructRuns = StructRuns {
     name: "NVA06F_CTRL_STOP_CHANNEL_PARAMS",
     runs: &[
         r(v(535, 309, 1), v(615, 71, 9), Some(&NVA06F_CTRL_STOP_CHANNEL_PARAMS_L0)), // 535.309.01 … 615.71.09
+    ],
+};
+
+const NVB0B5_ALLOCATION_PARAMETERS_L0: Layout = Layout {
+    size: 8,
+    fields: &[
+        f("engineType", 4, 4, 0),
+        f("version", 0, 4, 0),
+    ],
+};
+/// `NVB0B5_ALLOCATION_PARAMETERS` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NVB0B5_ALLOCATION_PARAMETERS: StructRuns = StructRuns {
+    name: "NVB0B5_ALLOCATION_PARAMETERS",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(&NVB0B5_ALLOCATION_PARAMETERS_L0)), // 535.309.01 … 615.71.09
     ],
 };
 
@@ -6795,6 +7459,23 @@ pub const NVOS64_PARAMETERS: StructRuns = StructRuns {
     ],
 };
 
+const NV_BSP_ALLOCATION_PARAMETERS_L0: Layout = Layout {
+    size: 12,
+    fields: &[
+        f("engineInstance", 8, 4, 0),
+        f("prohibitMultipleInstances", 4, 4, 0),
+        f("size", 0, 4, 0),
+    ],
+};
+/// `NV_BSP_ALLOCATION_PARAMETERS` — 1 distinct consumed layout(s) over 2 run(s).
+pub const NV_BSP_ALLOCATION_PARAMETERS: StructRuns = StructRuns {
+    name: "NV_BSP_ALLOCATION_PARAMETERS",
+    runs: &[
+        r(v(535, 309, 1), v(595, 84, 0), Some(&NV_BSP_ALLOCATION_PARAMETERS_L0)), // 535.309.01 … 595.84
+        r(v(610, 43, 2), v(615, 71, 9), None), // 610.43.02 … 615.71.09
+    ],
+};
+
 const NV_CHANNEL_ALLOC_PARAMS_L0: Layout = Layout {
     size: 360,
     fields: &[
@@ -7135,6 +7816,23 @@ pub const NV_MEMORY_VIRTUAL_ALLOCATION_PARAMS: StructRuns = StructRuns {
     ],
 };
 
+const NV_MSENC_ALLOCATION_PARAMETERS_L0: Layout = Layout {
+    size: 12,
+    fields: &[
+        f("engineInstance", 8, 4, 0),
+        f("prohibitMultipleInstances", 4, 4, 0),
+        f("size", 0, 4, 0),
+    ],
+};
+/// `NV_MSENC_ALLOCATION_PARAMETERS` — 1 distinct consumed layout(s) over 2 run(s).
+pub const NV_MSENC_ALLOCATION_PARAMETERS: StructRuns = StructRuns {
+    name: "NV_MSENC_ALLOCATION_PARAMETERS",
+    runs: &[
+        r(v(535, 309, 1), v(595, 84, 0), Some(&NV_MSENC_ALLOCATION_PARAMETERS_L0)), // 535.309.01 … 595.84
+        r(v(610, 43, 2), v(615, 71, 9), None), // 610.43.02 … 615.71.09
+    ],
+};
+
 const NV_OS_DESC_MEMORY_ALLOCATION_PARAMS_L0: Layout = Layout {
     size: 40,
     fields: &[
@@ -7329,6 +8027,23 @@ pub const MSGQTXHEADER: StructRuns = StructRuns {
     ],
 };
 
+const NV_IOCTL_ALLOC_OS_EVENT_T_L0: Layout = Layout {
+    size: 16,
+    fields: &[
+        f("Status", 12, 4, 0),
+        f("fd", 8, 4, 0),
+        f("hClient", 0, 4, 0),
+        f("hDevice", 4, 4, 0),
+    ],
+};
+/// `nv_ioctl_alloc_os_event_t` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NV_IOCTL_ALLOC_OS_EVENT_T: StructRuns = StructRuns {
+    name: "nv_ioctl_alloc_os_event_t",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(&NV_IOCTL_ALLOC_OS_EVENT_T_L0)), // 535.309.01 … 615.71.09
+    ],
+};
+
 const NV_IOCTL_CARD_INFO_T_L0: Layout = Layout {
     size: 72,
     fields: &[
@@ -7436,6 +8151,52 @@ pub const NV_IOCTL_NUMA_INFO_T: StructRuns = StructRuns {
     runs: &[
         r(v(535, 309, 1), v(580, 178, 4), None), // 535.309.01 … 580.178.04
         r(v(590, 48, 1), v(615, 71, 9), Some(&NV_IOCTL_NUMA_INFO_T_L0)), // 590.48.01 … 615.71.09
+    ],
+};
+
+const NV_IOCTL_NVOS02_PARAMETERS_WITH_FD_L0: Layout = Layout {
+    size: 56,
+    fields: &[
+        f("fd", 48, 4, 0),
+        f("params", 0, 48, 0),
+        f("params.flags", 16, 4, 0),
+        f("params.hClass", 12, 4, 0),
+        f("params.hObjectNew", 8, 4, 0),
+        f("params.hObjectParent", 4, 4, 0),
+        f("params.hRoot", 0, 4, 0),
+        f("params.limit", 32, 8, 0),
+        f("params.pMemory", 24, 8, 0),
+        f("params.status", 40, 4, 0),
+    ],
+};
+/// `nv_ioctl_nvos02_parameters_with_fd` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NV_IOCTL_NVOS02_PARAMETERS_WITH_FD: StructRuns = StructRuns {
+    name: "nv_ioctl_nvos02_parameters_with_fd",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(&NV_IOCTL_NVOS02_PARAMETERS_WITH_FD_L0)), // 535.309.01 … 615.71.09
+    ],
+};
+
+const NV_IOCTL_NVOS33_PARAMETERS_WITH_FD_L0: Layout = Layout {
+    size: 56,
+    fields: &[
+        f("fd", 48, 4, 0),
+        f("params", 0, 48, 0),
+        f("params.flags", 44, 4, 0),
+        f("params.hClient", 0, 4, 0),
+        f("params.hDevice", 4, 4, 0),
+        f("params.hMemory", 8, 4, 0),
+        f("params.length", 24, 8, 0),
+        f("params.offset", 16, 8, 0),
+        f("params.pLinearAddress", 32, 8, 0),
+        f("params.status", 40, 4, 0),
+    ],
+};
+/// `nv_ioctl_nvos33_parameters_with_fd` — 1 distinct consumed layout(s) over 1 run(s).
+pub const NV_IOCTL_NVOS33_PARAMETERS_WITH_FD: StructRuns = StructRuns {
+    name: "nv_ioctl_nvos33_parameters_with_fd",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(&NV_IOCTL_NVOS33_PARAMETERS_WITH_FD_L0)), // 535.309.01 … 615.71.09
     ],
 };
 
@@ -20173,6 +20934,262 @@ pub const GSP_MSGQ_CONSTS_MSGQ_VERSION_MINOR: ValueRuns = ValueRuns {
     ],
 };
 
+/// `host_zbc_cmds:NV9096_CTRL_CMD_GET_ZBC_CLEAR_TABLE`
+pub const HOST_ZBC_CMDS_NV9096_CTRL_CMD_GET_ZBC_CLEAR_TABLE: ValueRuns = ValueRuns {
+    name: "host_zbc_cmds:NV9096_CTRL_CMD_GET_ZBC_CLEAR_TABLE",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x90960103)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `host_zbc_cmds:NV9096_CTRL_CMD_GET_ZBC_CLEAR_TABLE_ENTRY`
+pub const HOST_ZBC_CMDS_NV9096_CTRL_CMD_GET_ZBC_CLEAR_TABLE_ENTRY: ValueRuns = ValueRuns {
+    name: "host_zbc_cmds:NV9096_CTRL_CMD_GET_ZBC_CLEAR_TABLE_ENTRY",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x90960107)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `host_zbc_cmds:NV9096_CTRL_CMD_GET_ZBC_CLEAR_TABLE_SIZE`
+pub const HOST_ZBC_CMDS_NV9096_CTRL_CMD_GET_ZBC_CLEAR_TABLE_SIZE: ValueRuns = ValueRuns {
+    name: "host_zbc_cmds:NV9096_CTRL_CMD_GET_ZBC_CLEAR_TABLE_SIZE",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x90960106)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `host_zbc_cmds:NV9096_CTRL_CMD_NULL`
+pub const HOST_ZBC_CMDS_NV9096_CTRL_CMD_NULL: ValueRuns = ValueRuns {
+    name: "host_zbc_cmds:NV9096_CTRL_CMD_NULL",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x90960000)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_CLEAR_TABLE`
+pub const HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_CLEAR_TABLE: ValueRuns = ValueRuns {
+    name: "host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_CLEAR_TABLE",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x90960104)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR`
+pub const HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR: ValueRuns = ValueRuns {
+    name: "host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x90960101)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_A2B10G10R10`
+pub const HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_A2B10G10R10: ValueRuns = ValueRuns {
+    name: "host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_A2B10G10R10",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x20)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_A2R10G10B10`
+pub const HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_A2R10G10B10: ValueRuns = ValueRuns {
+    name: "host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_A2R10G10B10",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x3c)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_A8B8G8R8`
+pub const HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_A8B8G8R8: ValueRuns = ValueRuns {
+    name: "host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_A8B8G8R8",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x28)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_A8BL8GL8RL8`
+pub const HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_A8BL8GL8RL8: ValueRuns = ValueRuns {
+    name: "host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_A8BL8GL8RL8",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x2c)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_A8R8G8B8`
+pub const HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_A8R8G8B8: ValueRuns = ValueRuns {
+    name: "host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_A8R8G8B8",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x18)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_A8RL8GL8BL8`
+pub const HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_A8RL8GL8BL8: ValueRuns = ValueRuns {
+    name: "host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_A8RL8GL8BL8",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x1c)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_AN8BN8GN8RN8`
+pub const HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_AN8BN8GN8RN8: ValueRuns = ValueRuns {
+    name: "host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_AN8BN8GN8RN8",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x30)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_AS8BS8GS8RS8`
+pub const HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_AS8BS8GS8RS8: ValueRuns = ValueRuns {
+    name: "host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_AS8BS8GS8RS8",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x34)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_AU2BU10GU10RU10`
+pub const HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_AU2BU10GU10RU10: ValueRuns = ValueRuns {
+    name: "host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_AU2BU10GU10RU10",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x24)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_AU8BU8GU8RU8`
+pub const HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_AU8BU8GU8RU8: ValueRuns = ValueRuns {
+    name: "host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_AU8BU8GU8RU8",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x38)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_BF10GF11RF11`
+pub const HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_BF10GF11RF11: ValueRuns = ValueRuns {
+    name: "host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_BF10GF11RF11",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x40)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_INVALID`
+pub const HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_INVALID: ValueRuns = ValueRuns {
+    name: "host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_INVALID",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x0)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_R16_G16_B16_A16`
+pub const HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_R16_G16_B16_A16: ValueRuns = ValueRuns {
+    name: "host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_R16_G16_B16_A16",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x8)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_RF16_GF16_BF16_AF16`
+pub const HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_RF16_GF16_BF16_AF16: ValueRuns = ValueRuns {
+    name: "host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_RF16_GF16_BF16_AF16",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x16)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_RF32_GF32_BF32_AF32`
+pub const HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_RF32_GF32_BF32_AF32: ValueRuns = ValueRuns {
+    name: "host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_RF32_GF32_BF32_AF32",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x4)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_RN16_GN16_BN16_AN16`
+pub const HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_RN16_GN16_BN16_AN16: ValueRuns = ValueRuns {
+    name: "host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_RN16_GN16_BN16_AN16",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0xc)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_RS16_GS16_BS16_AS16`
+pub const HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_RS16_GS16_BS16_AS16: ValueRuns = ValueRuns {
+    name: "host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_RS16_GS16_BS16_AS16",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x10)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_RU16_GU16_BU16_AU16`
+pub const HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_RU16_GU16_BU16_AU16: ValueRuns = ValueRuns {
+    name: "host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_RU16_GU16_BU16_AU16",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x14)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_UNORM_ONE`
+pub const HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_UNORM_ONE: ValueRuns = ValueRuns {
+    name: "host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_UNORM_ONE",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x2)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_ZERO`
+pub const HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_ZERO: ValueRuns = ValueRuns {
+    name: "host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_ZERO",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x1)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_DEPTH_CLEAR`
+pub const HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_DEPTH_CLEAR: ValueRuns = ValueRuns {
+    name: "host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_DEPTH_CLEAR",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x90960102)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_DEPTH_CLEAR_FMT_FP32`
+pub const HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_DEPTH_CLEAR_FMT_FP32: ValueRuns = ValueRuns {
+    name: "host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_DEPTH_CLEAR_FMT_FP32",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x1)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_DEPTH_CLEAR_FMT_VAL_INVALID`
+pub const HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_DEPTH_CLEAR_FMT_VAL_INVALID: ValueRuns = ValueRuns {
+    name: "host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_DEPTH_CLEAR_FMT_VAL_INVALID",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x0)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_STENCIL_CLEAR`
+pub const HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_STENCIL_CLEAR: ValueRuns = ValueRuns {
+    name: "host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_STENCIL_CLEAR",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x90960105)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_STENCIL_CLEAR_FMT_U8`
+pub const HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_STENCIL_CLEAR_FMT_U8: ValueRuns = ValueRuns {
+    name: "host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_STENCIL_CLEAR_FMT_U8",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x1)), // 535.309.01 … 615.71.09
+    ],
+};
+
+/// `host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_STENCIL_CLEAR_FMT_VAL_INVALID`
+pub const HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_STENCIL_CLEAR_FMT_VAL_INVALID: ValueRuns = ValueRuns {
+    name: "host_zbc_cmds:NV9096_CTRL_CMD_SET_ZBC_STENCIL_CLEAR_FMT_VAL_INVALID",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(0x0)), // 535.309.01 … 615.71.09
+    ],
+};
+
 /// `libos_consts:LIBOS_MEMORY_REGION_INIT_ARGUMENTS_MAX`
 pub const LIBOS_CONSTS_LIBOS_MEMORY_REGION_INIT_ARGUMENTS_MAX: ValueRuns = ValueRuns {
     name: "libos_consts:LIBOS_MEMORY_REGION_INIT_ARGUMENTS_MAX",
@@ -28548,6 +29565,9 @@ pub const ALL_STRUCTS: &[&StructRuns] = &[
     &LIBOSMEMORYREGIONINITARGUMENT,
     &MESSAGE_QUEUE_INIT_ARGUMENTS,
     &NV0000_ALLOC_PARAMETERS,
+    &NV0000_CTRL_GPU_GET_ID_INFO_V2_PARAMS,
+    &NV0000_CTRL_OS_UNIX_EXPORT_OBJECT_TO_FD_PARAMS,
+    &NV0000_CTRL_OS_UNIX_IMPORT_OBJECT_FROM_FD_PARAMS,
     &NV0000_CTRL_SYSTEM_GET_CLASSLIST_PARAMS,
     &NV0005_ALLOC_PARAMETERS,
     &NV0080_ALLOC_PARAMETERS,
@@ -28557,11 +29577,13 @@ pub const ALL_STRUCTS: &[&StructRuns] = &[
     &NV0080_CTRL_FIFO_GET_ENGINE_CONTEXT_PROPERTIES_PARAMS,
     &NV0080_CTRL_GPU_GET_CLASSLIST_V2_PARAMS,
     &NV0080_CTRL_MSENC_GET_CAPS_V2_PARAMS,
+    &NV0080_CTRL_PERF_CUDA_LIMIT_CONTROL_PARAMS,
     &NV00DE_ALLOC_PARAMETERS,
     &NV2080_ALLOC_PARAMETERS,
     &NV2080_CTRL_BIOS_GET_INFO_V2_PARAMS,
     &NV2080_CTRL_BUS_GET_INFO_V2_PARAMS,
     &NV2080_CTRL_BUS_GET_PCI_BAR_INFO_PARAMS,
+    &NV2080_CTRL_CE_GET_ALL_CAPS_PARAMS,
     &NV2080_CTRL_CE_GET_ALL_PHYSICAL_CAPS_PARAMS,
     &NV2080_CTRL_CE_GET_CAPS_V2_PARAMS,
     &NV2080_CTRL_CE_GET_CE_PCE_MASK_PARAMS,
@@ -28570,7 +29592,9 @@ pub const ALL_STRUCTS: &[&StructRuns] = &[
     &NV2080_CTRL_CMD_BUS_GET_C2C_INFO_PARAMS,
     &NV2080_CTRL_CMD_BUS_GET_PCIE_SUPPORTED_GPU_ATOMICS_PARAMS,
     &NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_FECS_RECORD_SIZE_PARAMS,
+    &NV2080_CTRL_DMA_INVALIDATE_TLB_PARAMS,
     &NV2080_CTRL_EVENT_SET_NOTIFICATION_PARAMS,
+    &NV2080_CTRL_FB_FLUSH_GPU_CACHE_PARAMS,
     &NV2080_CTRL_FB_GET_GPU_CACHE_INFO_PARAMS,
     &NV2080_CTRL_FB_GET_INFO_V2_PARAMS,
     &NV2080_CTRL_FIFO_CHANNEL_PREEMPTIVE_REMOVAL_PARAMS,
@@ -28578,12 +29602,26 @@ pub const ALL_STRUCTS: &[&StructRuns] = &[
     &NV2080_CTRL_FIFO_GET_DEVICE_INFO_TABLE_PARAMS,
     &NV2080_CTRL_GPU_EVICT_CTX_PARAMS,
     &NV2080_CTRL_GPU_GET_CONSTRUCTED_FALCON_INFO_PARAMS,
+    &NV2080_CTRL_GPU_GET_ENGINES_V2_PARAMS,
     &NV2080_CTRL_GPU_GET_INFO_V2_PARAMS,
     &NV2080_CTRL_GPU_GET_NAME_STRING_PARAMS,
+    &NV2080_CTRL_GPU_GET_PES_INFO_PARAMS,
+    &NV2080_CTRL_GPU_GET_SHORT_NAME_STRING_PARAMS,
     &NV2080_CTRL_GPU_PROMOTE_CTX_PARAMS,
     &NV2080_CTRL_GRMGR_GET_GR_FS_INFO_PARAMS,
+    &NV2080_CTRL_GR_CTXSW_ZCULL_BIND_PARAMS,
     &NV2080_CTRL_GR_GET_CAPS_V2_PARAMS,
     &NV2080_CTRL_GR_GET_ENGINE_CONTEXT_PROPERTIES_PARAMS,
+    &NV2080_CTRL_GR_GET_GFX_GPC_AND_TPC_INFO_PARAMS,
+    &NV2080_CTRL_GR_GET_GLOBAL_SM_ORDER_PARAMS,
+    &NV2080_CTRL_GR_GET_GPC_MASK_PARAMS,
+    &NV2080_CTRL_GR_GET_INFO_V2_PARAMS,
+    &NV2080_CTRL_GR_GET_NUM_TPCS_FOR_GPC_PARAMS,
+    &NV2080_CTRL_GR_GET_SM_ISSUE_RATE_MODIFIER_PARAMS,
+    &NV2080_CTRL_GR_GET_TPC_MASK_PARAMS,
+    &NV2080_CTRL_GR_GET_ZCULL_INFO_PARAMS,
+    &NV2080_CTRL_GR_GET_ZCULL_MASK_PARAMS,
+    &NV2080_CTRL_GR_SET_CTXSW_PREEMPTION_MODE_PARAMS,
     &NV2080_CTRL_GSP_GET_FEATURES_PARAMS,
     &NV2080_CTRL_INTERNAL_BIF_GET_STATIC_INFO_PARAMS,
     &NV2080_CTRL_INTERNAL_CONF_COMPUTE_GET_STATIC_INFO_PARAMS,
@@ -28615,17 +29653,24 @@ pub const ALL_STRUCTS: &[&StructRuns] = &[
     &NV2080_CTRL_INTERNAL_UVM_UNREGISTER_ACCESS_CNTR_BUFFER_PARAMS,
     &NV2080_CTRL_KGR_GET_CTX_BUFFER_PTES_PARAMS,
     &NV2080_CTRL_MC_GET_ARCH_INFO_PARAMS,
+    &NV2080_CTRL_MC_GET_INTR_CATEGORY_SUBTREE_MAP_PARAMS,
+    &NV2080_CTRL_MC_GET_STATIC_INTR_TABLE_PARAMS,
     &NV2080_CTRL_MC_SERVICE_INTERRUPTS_PARAMS,
     &NV2080_CTRL_PERF_GET_LEVEL_INFO_V2_PARAMS,
     &NV2080_CTRL_RC_GET_WATCHDOG_INFO_PARAMS,
     &NV83DE_ALLOC_PARAMETERS,
+    &NV83DE_CTRL_DEBUG_SET_EXCEPTION_MASK_PARAMS,
+    &NV9096_CTRL_GET_ZBC_CLEAR_TABLE_SIZE_PARAMS,
     &NV90F1_CTRL_VASPACE_COPY_SERVER_RESERVED_PDES_PARAMS,
+    &NVA06C_CTRL_BIND_PARAMS,
     &NVA06C_CTRL_GPFIFO_SCHEDULE_PARAMS,
     &NVA06C_CTRL_INTERNAL_PROMOTE_FAULT_METHOD_BUFFERS_PARAMS,
     &NVA06C_CTRL_PREEMPT_PARAMS,
+    &NVA06C_CTRL_TIMESLICE_PARAMS,
     &NVA06F_CTRL_BIND_PARAMS,
     &NVA06F_CTRL_GPFIFO_SCHEDULE_PARAMS,
     &NVA06F_CTRL_STOP_CHANNEL_PARAMS,
+    &NVB0B5_ALLOCATION_PARAMETERS,
     &NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN_PARAMS,
     &NVOS00_PARAMETERS,
     &NVOS02_PARAMETERS,
@@ -28641,6 +29686,7 @@ pub const ALL_STRUCTS: &[&StructRuns] = &[
     &NVOS56_PARAMETERS,
     &NVOS57_PARAMETERS,
     &NVOS64_PARAMETERS,
+    &NV_BSP_ALLOCATION_PARAMETERS,
     &NV_CHANNEL_ALLOC_PARAMS,
     &NV_CHANNEL_GROUP_ALLOCATION_PARAMETERS,
     &NV_CONTEXT_DMA_ALLOCATION_PARAMS,
@@ -28648,6 +29694,7 @@ pub const ALL_STRUCTS: &[&StructRuns] = &[
     &NV_GR_ALLOCATION_PARAMETERS,
     &NV_MEMORY_ALLOCATION_PARAMS,
     &NV_MEMORY_VIRTUAL_ALLOCATION_PARAMS,
+    &NV_MSENC_ALLOCATION_PARAMETERS,
     &NV_OS_DESC_MEMORY_ALLOCATION_PARAMS,
     &NV_SEMAPHORE_SURFACE_ALLOC_PARAMETERS,
     &NV_VASPACE_ALLOCATION_PARAMETERS,
@@ -28655,9 +29702,12 @@ pub const ALL_STRUCTS: &[&StructRuns] = &[
     &UVM_REGISTER_GPU_PARAMS,
     &MSGQRXHEADER,
     &MSGQTXHEADER,
+    &NV_IOCTL_ALLOC_OS_EVENT_T,
     &NV_IOCTL_CARD_INFO_T,
     &NV_IOCTL_EXPORT_TO_DMA_BUF_FD_T,
     &NV_IOCTL_NUMA_INFO_T,
+    &NV_IOCTL_NVOS02_PARAMETERS_WITH_FD,
+    &NV_IOCTL_NVOS33_PARAMETERS_WITH_FD,
     &NV_IOCTL_REGISTER_FD_T,
     &NV_IOCTL_RM_API_VERSION_T,
     &RPC_DUP_OBJECT_V,
@@ -30142,6 +31192,38 @@ pub const ALL_VALUES: &[&ValueRuns] = &[
     &GSP_MSGQ_CONSTS_MSGQ_VERSION,
     &GSP_MSGQ_CONSTS_MSGQ_VERSION_MAJOR,
     &GSP_MSGQ_CONSTS_MSGQ_VERSION_MINOR,
+    &HOST_ZBC_CMDS_NV9096_CTRL_CMD_GET_ZBC_CLEAR_TABLE,
+    &HOST_ZBC_CMDS_NV9096_CTRL_CMD_GET_ZBC_CLEAR_TABLE_ENTRY,
+    &HOST_ZBC_CMDS_NV9096_CTRL_CMD_GET_ZBC_CLEAR_TABLE_SIZE,
+    &HOST_ZBC_CMDS_NV9096_CTRL_CMD_NULL,
+    &HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_CLEAR_TABLE,
+    &HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR,
+    &HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_A2B10G10R10,
+    &HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_A2R10G10B10,
+    &HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_A8B8G8R8,
+    &HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_A8BL8GL8RL8,
+    &HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_A8R8G8B8,
+    &HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_A8RL8GL8BL8,
+    &HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_AN8BN8GN8RN8,
+    &HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_AS8BS8GS8RS8,
+    &HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_AU2BU10GU10RU10,
+    &HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_AU8BU8GU8RU8,
+    &HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_BF10GF11RF11,
+    &HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_INVALID,
+    &HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_R16_G16_B16_A16,
+    &HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_RF16_GF16_BF16_AF16,
+    &HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_RF32_GF32_BF32_AF32,
+    &HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_RN16_GN16_BN16_AN16,
+    &HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_RS16_GS16_BS16_AS16,
+    &HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_RU16_GU16_BU16_AU16,
+    &HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_UNORM_ONE,
+    &HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_COLOR_CLEAR_FMT_VAL_ZERO,
+    &HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_DEPTH_CLEAR,
+    &HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_DEPTH_CLEAR_FMT_FP32,
+    &HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_DEPTH_CLEAR_FMT_VAL_INVALID,
+    &HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_STENCIL_CLEAR,
+    &HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_STENCIL_CLEAR_FMT_U8,
+    &HOST_ZBC_CMDS_NV9096_CTRL_CMD_SET_ZBC_STENCIL_CLEAR_FMT_VAL_INVALID,
     &LIBOS_CONSTS_LIBOS_MEMORY_REGION_INIT_ARGUMENTS_MAX,
     &LIBOS_CONSTS_LIBOS_MEMORY_REGION_RADIX_PAGE_LOG2,
     &LIBOS_CONSTS_LIBOS_MEMORY_REGION_RADIX_PAGE_SIZE,
