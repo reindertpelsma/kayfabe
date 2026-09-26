@@ -1624,6 +1624,13 @@ fn transcode_reviewed_paths(want: WantedTable) -> Option<&'static [&'static str]
         // not state and the guest's kbifStaticInfoInit copies into KernelBif — 0, what a GA10x
         // (no DMA window) reports. `[failure point 6de22590]` a 565.57.01 guest was refused here.
         WantedTable::BifStaticInfo => Some(&[]),
+        // `[matrix]` 92 bytes through 545.23.08, 88 from 550.40.07: ≤545 carries `bar1Size` at +12,
+        // so every later field sits 4 bytes further on (`pciDeviceId` 16 vs 12, `regBases[]` 28
+        // vs 24); the others keep their meaning. `bar1Size` has no reader in a 535/545 guest RM
+        // (`gpuReadBAR1Size_FWCLIENT`, `535.309.01`/`545.23.08: gpu_gspclient.c`, is never called —
+        // the BAR1 size comes from the PCI BAR), so the carry leaves it 0. `[failure point
+        // ee35ca4a]` both guests' RmInitAdapter stopped here (`_gpuInitChipInfo`, 0x23:0x56).
+        WantedTable::ChipInfo => Some(&[]),
         _ => None,
     }
 }

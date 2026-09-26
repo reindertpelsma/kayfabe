@@ -89,6 +89,7 @@ fn every_carried_control_is_the_bench_answer_carried_by_name() {
         WantedTable::InternalDeviceInfo,
         WantedTable::UserRegisterAccessMap,
         WantedTable::BifStaticInfo,
+        WantedTable::ChipInfo,
     ];
     let bench_policy_reply = |w: WantedTable, ct: &str, blay: &Resolved| -> Vec<u8> {
         let mut p = policy(BENCH_DRIVER);
