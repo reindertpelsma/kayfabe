@@ -409,6 +409,21 @@ impl CommandPolicy for PageDirPolicy {
         };
         // ★ P6b: a root published through a dup is the ORIGINAL object's root.
         let (c, v) = self.canonical(st.client.0, st.vaspace.0);
+        if std::env::var_os("KF_VAS_CENSUS").is_some() {
+            // Which carrier stated this root (a control id, or the ≤575 fn 54) — the plane's
+            // `pagedir` line cannot say, and two carriers can name one VA space.
+            let carrier = match cmd.function {
+                RpcFunction::RmControl => self
+                    .abi
+                    .decode_rpc_control(&cmd.payload)
+                    .map_or_else(|_| "an undecodable control".to_string(), |h| format!("control {:#010x}", h.cmd)),
+                _ => format!("fn {}", cmd.code),
+            };
+            eprintln!(
+                "kf-rm: census pagedir statement {:#x}:{:#x} (as {c:#x}:{v:#x}) root={:#x} {:?} via {carrier}",
+                st.client.0, st.vaspace.0, st.pdb.0, st.pdb_aperture
+            );
+        }
         st.client = kf_arch::ids::HClient(c);
         st.vaspace = kf_arch::ids::HObject(v);
         (self.sink)(MemStatement::PageDir(st));
