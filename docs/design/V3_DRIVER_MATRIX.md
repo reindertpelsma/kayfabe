@@ -87,7 +87,7 @@ Stable 535 → 610, verified: the 48-byte GSP element (until 610's 16-byte MCTP 
 | H3 | `NVOS46` map-memory-DMA | `kf-host/src/lib.rs:831-919` (every GPU map) | 64; **56 below 580.65.06** |
 | H4 | `NVOS47` unmap | `lib.rs:922-976` | 48; 40 at 535/545 (no range unmap before 550.40.07) |
 | H5 | `GPFIFO_SCHEDULE` | `kf-host/src/channel.rs:741-751` | 3; **2 bytes ≤ 570.x** |
-| H6 | walk kernel PTX | `cuda/walk/kf_walk.ptx` (`.version 8.8`, NVRTC 12.9) | JIT fails on every host driver < 575 (CUDA 12.9) — "no walker, no device" |
+| H6 | walk kernel PTX | `cuda/walk/kf_walk.ptx` (was `.version 8.8`, NVRTC 12.9) | JIT failed on every host driver < 575 (CUDA 12.9) — "no walker, no device". **Regenerated with NVRTC 12.2 → ISA 8.2** (ruling 4): same 14 entries, same `.param` lists, `.target sm_75`; `make_ptx.py` now refuses an ISA above 8.2 |
 | H7 | `NV_CHANNEL_ALLOC_PARAMS` | `kf-abi/src/submit.rs:407-541` | 368; 376 at 610 with `hHandleVASpace`@32 — **silent** (RM copies its own sizeof) |
 | H8 | HostFacts controls | `kf-rm/src/hostquery.rs` | `GPU_GET_ENGINES_V2` 340 (252/256/260 ≤555), `GPU_GET_INFO_V2` 564 (516/524/532 ≤575, 580 at 610), `GR_GET_INFO_V2` 488 (448/472 ≤565, 496 at 590/595, 528 at 610), `FB_GET_INFO_V2` 1028 (436/444/460 ≤575), `GR_GET_GLOBAL_SM_ORDER` 9240 (6168 ≤570, 7192 at 575) |
 | H9 | controls absent on old hosts | `hostquery.rs:402-432` | `MC_GET_INTR_CATEGORY_SUBTREE_MAP` absent < 580.65.06; `MC_GET_STATIC_INTR_TABLE` absent at 535/545 — **needs another source**, not a size fix |
@@ -340,6 +340,10 @@ numbering is itself per version (lower at 535/545) — translated by NAME throug
    forward (Blackwell JITs to sm_120 — verify on at least one Ada or Blackwell box as well as
    GA10x), re-run gates 7–9 and the 30-arm suite on 580.159.04. If a feature the kernel uses
    needs ISA > 8.2: stop and report which.
+   ⇒ **DONE (2026-09-26):** NVRTC 12.2 compiles `kf_walk.cu` unchanged — no feature needs ISA > 8.2.
+   The generator pins the floor (`PTX_ISA_REFUSED` on a newer NVRTC; checked against 12.9's 8.8).
+   Hardware verification: gates 7–9 + the 30-arm suite on GA102/580.159.04 (§6); Ada/Blackwell
+   JIT-forward check pending a box.
 5. **535/545 capability allowlist.** **RULED: port nvproxy's 535.104.05 / 545.23.06 blocks as a
    separate, clearly marked commit**, list every entry that differs from the 580 allowlist here —
    ⊘ **a security-policy change: explicit owner review before it merges.**
