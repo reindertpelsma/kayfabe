@@ -1,0 +1,23 @@
+# KVM-template VM box 52821737 (vast machine 36682, host CPU AMD EPYC 7K62), captured 2026-09-26T21:38:46+00:00
+## cmdline
+BOOT_IMAGE=/boot/vmlinuz-6.8.0-59-generic root=PARTUUID=85c80741-2a2a-4df8-94fc-8525e0031367 ro console=tty1 console=ttyS0 panic=-1
+6.8.0-59-generic
+## iommu groups in the VM
+0
+## GPU
+NVIDIA GeForce RTX 4060 Ti, 580.159.04, 00000000:00:07.0
+00:00.0 Host bridge [0600]: Intel Corporation 440FX - 82441FX PMC [Natoma] [8086:1237] (rev 02)
+00:07.0 VGA compatible controller [0300]: NVIDIA Corporation Device [10de:2803] (rev a1)
+00:08.0 Audio device [0403]: NVIDIA Corporation Device [10de:22bd] (rev a1)
+## DevCtl of the passthrough GPU (RM clears Enable-No-Snoop for passthrough, chipset_pcie.c:965-970)
+		DevCtl:	CorrErr+ NonFatalErr+ FatalErr+ UnsupReq-
+			RlxdOrd+ ExtTag+ PhantFunc- AuxPwr- NoSnoop- FLReset-
+			MaxPayload 256 bytes, MaxReadReq 512 bytes
+## dmesg: iommu / dmar / amd-vi / Xid / NVRM (whole boot)
+[    1.203469] iommu: Default domain type: Translated
+[    1.205418] iommu: DMA domain TLB invalidation policy: lazy mode
+[    5.440141] NVRM: loading NVIDIA UNIX x86_64 Kernel Module  575.51.03  Wed Apr 16 14:22:51 UTC 2025
+[  600.018460] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+[  652.797494] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+## dmesg line count
+747
