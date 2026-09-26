@@ -461,6 +461,21 @@ fn run_census(runs: &[kf_cuda::abi::KfMapRun]) -> String {
         g.1 = g.1.min(m.gpga);
         g.2 = g.2.max(m.gpga);
     }
+    // ★ Why neighbours did NOT coalesce: VA-contiguous pairs, split by address or only by flags.
+    let (mut va_contig, mut flag_split, mut xor) = (0usize, 0usize, 0u32);
+    for w in runs.windows(2) {
+        if w[0].va + w[0].len == w[1].va {
+            va_contig += 1;
+            if w[0].gpga + w[0].len == w[1].gpga && w[0].aperture() == w[1].aperture() {
+                flag_split += 1;
+                xor |= w[0].flags ^ w[1].flags;
+            }
+        }
+    }
+    let mut flags: BTreeMap<u32, usize> = BTreeMap::new();
+    for m in runs {
+        *flags.entry(m.flags).or_default() += 1;
+    }
     let mut top_lens: Vec<(u64, usize)> = lens.into_iter().collect();
     top_lens.sort_by(|a, b| b.1.cmp(&a.1));
     top_lens.truncate(6);
@@ -472,7 +487,7 @@ fn run_census(runs: &[kf_cuda::abi::KfMapRun]) -> String {
         .map(|m| format!("{:#x}->{:#x}+{:#x}/f{:#x}", m.va, m.gpga, m.len, m.flags))
         .collect();
     format!(
-        "{} runs; ap {ap:?}; lens {top_lens:x?}; by-GiB [{}]; sample [{}]",
+        "{} runs; ap {ap:?}; flags {flags:x?}; va-contiguous pairs {va_contig}, of which gpga-contiguous (split by flags only) {flag_split} xor {xor:#x}; lens {top_lens:x?}; by-GiB [{}]; sample [{}]",
         runs.len(),
         gib.join(" "),
         sample.join(" ")
