@@ -109,7 +109,7 @@ fn the_handover_mints_a_bare_space_when_the_vas_holds_none() {
     );
 
     let bare = dev
-        .vaspace_handover(pid, GPU, PDB, leaf())
+        .vaspace_handover(pid, GPU, PDB, Some(leaf()))
         .expect("★★★★★ w746 — the hand-over MINTS the space when the `Vas` holds none");
 
     assert_eq!(
@@ -123,7 +123,7 @@ fn the_handover_mints_a_bare_space_when_the_vas_holds_none() {
     // ★★★ IDEMPOTENCE, and it is the property that fails first if the commit is removed:
     // a second ask must reach the SAME space, not a second one.
     let again = dev
-        .vaspace_handover(pid, GPU, PDB, leaf())
+        .vaspace_handover(pid, GPU, PDB, Some(leaf()))
         .expect("a second hand-over answers");
     assert_eq!(
         again.space, bare.space,
@@ -142,7 +142,7 @@ fn the_space_handed_over_is_the_asking_procs_own_isolates() {
     // would stamp every channel born in it with the scratchpad's privilege.
     let (dev, pid) = one_process_device();
     let bare = dev
-        .vaspace_handover(pid, GPU, PDB, leaf())
+        .vaspace_handover(pid, GPU, PDB, Some(leaf()))
         .expect("the hand-over answers");
     assert!(
         bare.space
@@ -167,7 +167,7 @@ fn a_route_the_spine_disagrees_with_is_refused_by_name() {
     // disagree. ⊘ It is its own known-positive — the input below is the disagreement.
     let (dev, pid) = one_process_device();
     let impostor = ProcId(pid.0.wrapping_add(7));
-    let err = dev.vaspace_handover(impostor, GPU, PDB, leaf()).expect_err(
+    let err = dev.vaspace_handover(impostor, GPU, PDB, Some(leaf())).expect_err(
         "★★★★★ CONSTRAINT 29 — a hand-over was performed for a proc the spine does not \
              say owns this PDB. That is a cross-address-space hand-over: the scratchpad \
              would place another guest process's slices in this one's page tables.",
@@ -204,7 +204,7 @@ fn a_leaf_this_vas_describes_at_another_frame_is_refused() {
     let (dev, pid) = one_process_device();
     // The `Vas` says this VA is a DIFFERENT framebuffer frame.
     bind_row(&dev, pid, LEAF_VA, LEAF_LEN, LEAF_PHYS + 0x1000);
-    let err = dev.vaspace_handover(pid, GPU, PDB, leaf()).expect_err(
+    let err = dev.vaspace_handover(pid, GPU, PDB, Some(leaf())).expect_err(
         "★★★★★ CONSTRAINT 29 — the caller's route reached a `Vas` that describes this VA \
              as another frame, and the hand-over proceeded anyway. The scratchpad would then \
              place a slice of the one reserved object over a frame the guest is using for \
@@ -222,7 +222,7 @@ fn a_leaf_this_vas_describes_at_another_extent_is_refused() {
     let (dev, pid) = one_process_device();
     bind_row(&dev, pid, LEAF_VA, LEAF_LEN * 2, LEAF_PHYS);
     let err = dev
-        .vaspace_handover(pid, GPU, PDB, leaf())
+        .vaspace_handover(pid, GPU, PDB, Some(leaf()))
         .expect_err("★★★★★ CONSTRAINT 29 — the extents disagree and the hand-over proceeded");
     assert!(
         matches!(err, FwdFault::FbLeafExtent { .. }),
@@ -237,7 +237,7 @@ fn a_leaf_this_vas_agrees_with_is_admitted() {
     // legitimate case is a gate that makes the boot green by refusing to run.
     let (dev, pid) = one_process_device();
     bind_row(&dev, pid, LEAF_VA, LEAF_LEN, LEAF_PHYS);
-    dev.vaspace_handover(pid, GPU, PDB, leaf())
+    dev.vaspace_handover(pid, GPU, PDB, Some(leaf()))
         .expect("★ a leaf the `Vas` describes exactly must be admitted");
 }
 
@@ -249,7 +249,7 @@ fn a_leaf_with_no_row_at_all_is_admitted_and_counted() {
     // *"not found is not not-written"* and a silent pass is what assert 2 exists to close.
     let (dev, pid) = one_process_device();
     let before = SharedDevice::handover_leaf_untabled();
-    dev.vaspace_handover(pid, GPU, PDB, leaf())
+    dev.vaspace_handover(pid, GPU, PDB, Some(leaf()))
         .expect("an untabled leaf is admitted");
     assert!(
         SharedDevice::handover_leaf_untabled() > before,
@@ -268,7 +268,7 @@ fn the_space_not_held_counter_is_a_defect_counter_and_starts_at_zero() {
     // vacuous kind.
     let (dev, pid) = one_process_device();
     let before = SharedDevice::handover_space_not_held();
-    dev.vaspace_handover(pid, GPU, PDB, leaf())
+    dev.vaspace_handover(pid, GPU, PDB, Some(leaf()))
         .expect("the hand-over answers");
     assert_eq!(
         SharedDevice::handover_space_not_held(),
@@ -352,7 +352,7 @@ fn undeclared_space_device(extra_undeclared: u32) -> (SharedDevice, ProcId) {
 fn the_one_undeclared_space_of_a_proc_is_handed_over_rather_than_refused() {
     let (dev, pid) = undeclared_space_device(0);
     let bare = dev
-        .vaspace_handover(pid, GPU, Pdb(0), leaf())
+        .vaspace_handover(pid, GPU, Pdb(0), Some(leaf()))
         .expect(
             "★★★★★ w811: a proc with exactly ONE undeclared space is not ambiguous, and \
              `Vas::pdb`'s own doc says such a space is `nameable, routable and populatable`",
@@ -360,7 +360,7 @@ fn the_one_undeclared_space_of_a_proc_is_handed_over_rather_than_refused() {
     // ⊘ Same idempotence property the declared path is held to: a second ask must reach the
     // SAME space, or the scratchpad places slices in one while channels are born in another.
     let again = dev
-        .vaspace_handover(pid, GPU, Pdb(0), leaf())
+        .vaspace_handover(pid, GPU, Pdb(0), Some(leaf()))
         .expect("a second hand-over answers");
     assert_eq!(
         again.space, bare.space,
@@ -374,7 +374,7 @@ fn the_one_undeclared_space_of_a_proc_is_handed_over_rather_than_refused() {
 #[test]
 fn two_undeclared_spaces_refuse_by_name_instead_of_picking_one() {
     let (dev, pid) = undeclared_space_device(1);
-    match dev.vaspace_handover(pid, GPU, Pdb(0), leaf()) {
+    match dev.vaspace_handover(pid, GPU, Pdb(0), Some(leaf())) {
         Err(FwdFault::UndeclaredPdb { pid: who, found, .. }) => {
             assert_eq!(who, pid);
             // ⊘ The COUNT is asserted, not just the variant: `0` and `>= 2` are opposite
@@ -395,7 +395,7 @@ fn two_undeclared_spaces_refuse_by_name_instead_of_picking_one() {
 #[test]
 fn a_proc_with_no_undeclared_space_still_refuses_pdb_zero() {
     let (dev, pid) = one_process_device();
-    match dev.vaspace_handover(pid, GPU, Pdb(0), leaf()) {
+    match dev.vaspace_handover(pid, GPU, Pdb(0), Some(leaf())) {
         Err(FwdFault::UndeclaredPdb { pid: who, found, .. }) => {
             assert_eq!(who, pid);
             assert_eq!(found, 0, "★ nothing to name is `0`, never the ambiguity case");
@@ -456,12 +456,12 @@ fn a_space_declared_at_root_zero_is_found_rather_than_read_as_undeclared() {
         "★ the fixture must produce a space whose `pdb` is `Some(Pdb(0))`, not `None`"
     );
 
-    let bare = dev.vaspace_handover(pid, GPU, Pdb(0), leaf()).expect(
+    let bare = dev.vaspace_handover(pid, GPU, Pdb(0), Some(leaf())).expect(
         "★★★★★ w812b: a space DECLARED at framebuffer offset 0 must resolve — reading it as \
          `UndeclaredPdb` is what kept every CE operand unbacked and off the GPU",
     );
     let again = dev
-        .vaspace_handover(pid, GPU, Pdb(0), leaf())
+        .vaspace_handover(pid, GPU, Pdb(0), Some(leaf()))
         .expect("a second hand-over answers");
     assert_eq!(
         again.space, bare.space,

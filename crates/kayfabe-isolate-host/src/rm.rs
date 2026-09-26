@@ -15666,7 +15666,15 @@ mod tests {
             .filter(|(_, names)| {
                 // A mock mirroring the real constant is the one legitimate duplicate: same
                 // integer, deliberately, so the mock's refusal reads identically.
-                let real: Vec<_> = names.iter().filter(|n| !n.contains("MOCK_")).collect();
+                // ★ 2026-09-26: and the SAME name in two crates is one refusal, not two — the v3
+                // port (`kf-host`) re-declares the isolate's refusals under their own names while
+                // the isolate awaits deletion, and a boot log reads identically. The defect this
+                // gate guards is one integer under two DIFFERENT names.
+                let real: std::collections::BTreeSet<&str> = names
+                    .iter()
+                    .filter(|n| !n.contains("MOCK_"))
+                    .map(|n| n.rsplit("::").next().unwrap_or(n))
+                    .collect();
                 real.len() > 1
             })
             .collect();
