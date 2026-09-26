@@ -155,7 +155,7 @@ unavailable"* path).
 1. **Hopper (GH100) and datacenter Blackwell (GB10x) on hardware.** Everything in §2 is the shared
    FSP path; the die-group rows (`0x200BC` boot gate, `0x4C` config-cycle link caps through
    `_gpuFindPcieRegAddr_GB100`'s capability-list walk — which our bare preset may not satisfy) are
-   derived from ogkm and unmeasured. Hopper's PBDMA fault ids are still refused by name (`authored.rs`).
+   derived from ogkm and unmeasured. Hopper's PBDMA fault ids are still refused by name (`authored.rs`) — ⊘ corrected 2026-09-26: no longer; UVM's `hwref/hopper/gh100/dev_fault.h:83` states `HOST0` = 64 and `authored::fault_ids` serves it (`V3_HW_BOUNDARY_INVENTORY.md`).
 2. **T3 and T4** of the BAR1 doorbell plan (§5).
 3. Unserved Blackwell internal controls nothing has needed yet: `SM_ISSUE_RATE_MODIFIER_V2`
    (`0x20800b03`), `SM_ISSUE_THROTTLE_CTRL`, `PPC_MASKS`, `ROP_INFO`, `FECS_TRACE_DEFINES`, CCU sample

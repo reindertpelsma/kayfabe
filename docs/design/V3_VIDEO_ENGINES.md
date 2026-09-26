@@ -268,7 +268,8 @@ it sooner, because it runs more processes. Results files are in `traces/video_ga
 
 ## 6. Gaps and what is not claimed
 
-- **Hopper**: `authored::fault_ids` refuses Hopper's whole engine table (no `HOST0` in `gh100/dev_fault.h`). This predates the branch. The GH100 NVDEC rows exist but cannot be served until that is solved.
+- ⊘ **CORRECTED 2026-09-26 (`V3_HW_BOUNDARY_INVENTORY.md`, branch `v3-hwinv`):** the refusal below rested on a false premise. `published/hopper/gh100/dev_fault.h` lacks `HOST0`, but UVM's copy of the same chip's header states it (`kernel-open/nvidia-uvm/hwref/hopper/gh100/dev_fault.h:83`, `HOST0` = 64; NVDEC0..7 = 19..26, NVENC0..2 = 35..37 at `:49-56,78-80`). `authored::fault_ids` now answers Hopper `384 / 43 / 64` and `video_fault_id` carries the Hopper rows, each held to the header by `authored::hwref_check`. Hardware-unverified.
+- **Hopper** (superseded, above): `authored::fault_ids` refuses Hopper's whole engine table (no `HOST0` in `gh100/dev_fault.h`). This predates the branch. The GH100 NVDEC rows exist but cannot be served until that is solved.
 - **Turing / Ada / Blackwell** video rows are derived and unit-tested, but no hardware measurement exists. Watch for:
   - Ada's AV1 encode (the guest-local `GPU_GET_ENCODER_CAPACITY` AV1 flag);
   - Ada's multiple NVENC instances.

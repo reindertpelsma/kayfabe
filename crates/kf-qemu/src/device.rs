@@ -223,8 +223,9 @@ impl Device {
         // ★ P3: the host die's facts, each from the source `kf_rm::hostfacts::PROVENANCE` names —
         // asked before anything is reserved, so a refusal costs nothing. What the host cannot
         // state is authored as OUR device's (`kf_rm::authored`, cited per value). ⊘ A control the
-        // host refuses, or a family an authored rule has no number for (Hopper's PBDMA fault ids),
-        // refuses REALIZE, listing every such field: never a default, never a GA106 row.
+        // host refuses, or a family an authored rule has no number for, refuses REALIZE, listing
+        // every such field: never a default, never a GA106 row. (Hopper's PBDMA fault ids were such
+        // a field until 2026-09-26; UVM's hwref states HOST0 = 64 — `V3_HW_BOUNDARY_INVENTORY.md`.)
         let host = std::sync::Arc::new(
             crate::rmfacts::host_facts(rm, family).map_err(|e| format!("host facts: {e}"))?,
         );
