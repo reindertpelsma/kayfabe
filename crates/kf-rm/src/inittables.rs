@@ -656,7 +656,8 @@ pub enum WantedTable {
     /// `NV_OK` immediately when it is `0x0` (`kernel_graphics.c:486`), so a zero here would
     /// carry the boot past `gpuStatePostLoad` by *skipping* the golden-image channel. ⊘ That
     /// shortcut is named and rejected in [`kf_abi::grstatic`]'s header; this device
-    /// publishes `0x7`, which is what a GA106 has.
+    /// publishes the HOST's own mask — `0x7` on a GA106, `0x3e` on a 3060 Ti (non-contiguous
+    /// and served as such since 2026-09-26: `kf_abi::grstatic`'s floorswept-parts section).
     GrFloorsweepingMasks,
     /// `NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_GLOBAL_SM_ORDER` — 34 592 bytes, ★ the
     /// largest reply this port encodes, and nine of 580's 4 096-byte message-queue elements.
@@ -2509,10 +2510,12 @@ impl CommandPolicy for InitTablePolicy {
             // (`ogkm-580: ctrl2080grmgr.h:42-50`) and refusing the batch is what a real
             // GA106 does NOT do.
             //
-            // ⊘ And it states no new number: `gpc_mask` is the row already served to
-            // `INTERNAL_STATIC_KGR_GET_FLOORSWEEPING_MASKS`. The one query `cuInit` asks —
-            // `CHIPLET_GPC_MAP` — is the logical→physical GPC map, which is that mask's set
-            // bits in order.
+            // ⊘ And it states no new number: it is a projection of the GR rows already served
+            // to `INTERNAL_STATIC_KGR_GET_FLOORSWEEPING_MASKS`. The one query `cuInit` asks —
+            // `CHIPLET_GPC_MAP` — is the logical→physical GPC map, which is each LOGICAL row's
+            // `physical_id`, i.e. the host's own answer to this control at realize.
+            // ⊘ Until 2026-09-26 it was "that mask's set bits in order", which a real RTX 3060
+            // whose four-TPC GPC is physical 1 contradicts (`kf_abi::grfsinfo`'s header).
             //
             // ⚠ The error arm is the loud one BY DESIGN. A query type this port does not
             // model could have been answered with a per-query `NV_ERR_NOT_SUPPORTED`, which
@@ -2522,28 +2525,13 @@ impl CommandPolicy for InitTablePolicy {
             // costs one boot and cannot be missed.
             WantedTable::GrmgrGetGrFsInfo => {
                 let at = req.params_at;
-                // ⊘ `gpc_mask()` off the chip's OWN GR rows, never `GA106_GPC_MASK`: the
-                // constant is the same value today and would be a second statement of it.
-                // `GrStaticProfile::gpc_mask` derives from `gpcs.len()`, which is the slice
-                // `WantedTable::GrFloorsweepingMasks` encodes — one description of one
-                // silicon, the `deviceinfo` rule applied to the GR plane.
-                let Ok(gpc_mask) = self.host.gr_static.gpc_mask() else {
+                // ⊘ The chip's OWN GR rows, never `GA106_GPC_MASK`: one description of one
+                // silicon, the `deviceinfo` rule applied to the GR plane. A profile that does
+                // not validate (no GPC, a physical id past the arrays) is refused.
+                if self.host.gr_static.validate().is_err() {
                     return refuse();
-                };
-                let tpc_masks: Vec<u32> = self
-                    .host
-                    .gr_static
-                    .gpcs
-                    .iter()
-                    .map(|g| g.tpc_mask)
-                    .collect();
-                let geometry = kf_abi::grfsinfo::GrFsGeometry {
-                    gpc_mask,
-                    // `physGfxGpcMask` — the same word `encode_floorsweeping_masks` writes
-                    // for all three GPC masks, and for the same reason: they cannot drift.
-                    gfx_gpc_mask: gpc_mask,
-                    tpc_masks: &tpc_masks,
-                };
+                }
+                let geometry = kf_abi::grfsinfo::GrFsGeometry::from_profile(&self.host.gr_static);
                 match kf_abi::grfsinfo::answer_gr_fs_info(
                     &cmd.payload[at..at + kf_abi::grfsinfo::GR_FS_INFO_PARAMS_SIZE],
                     &geometry,

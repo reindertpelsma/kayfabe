@@ -207,7 +207,10 @@ pub const PROVENANCE: &[(&str, Source)] = &[
     // ★ w827 ruling: ours to author. The physical computation IS in the open tree and is a
     // silicon reset-default read-back, not a formula (kern_gmmu_tu102.c:548-566).
     ("gmmu_static", Source::Advertised("authored::GMMU_STATIC / GMMU_STATIC_WHY")),
-    ("gr_static", Source::HostControl { cmd: 0x2080_1228, name: "GR_GET_INFO_V2 (SMs per TPC) + GR_GET_GPC_MASK 0x2080122a / GR_GET_TPC_MASK 0x2080122b / GR_GET_GLOBAL_SM_ORDER 0x2080121b / GR_GET_CAPS_V2 0x20801227; + GR_GET_ZCULL_MASK 0x20801237; mmu-per-GPC / PES per GPC from GR info litters; TPC-to-PES map, FECS record size, per-subctx header authored (authored.rs)" }),
+    // ★ v3-gpcmask (2026-09-26): one row per LOGICAL GPC naming its PHYSICAL GPC — no contiguity
+    // assumed. Physical-indexed facts per set bit of the GPC mask, logical-indexed per logical id,
+    // the map from the host's own GRMGR answer (kf_abi::grstatic's floorswept-parts section).
+    ("gr_static", Source::HostControl { cmd: 0x2080_122a, name: "GR_GET_GPC_MASK 0x2080122a (physical, any shape) + per physical GPC GR_GET_TPC_MASK 0x2080122b / GR_GET_ZCULL_MASK 0x20801237 (physGpcMask = gpcMask: GR_GET_PHYS_GPC_MASK is PRIVILEGED, never asked); logical->physical map = GRMGR_GET_GR_FS_INFO CHIPLET_GPC_MAP 0x20803801 (refused => the lowest unused enabled physical GPC of the logical GPC's TPC count); per logical GPC GR_GET_NUM_TPCS_FOR_GPC 0x20801234 + GPU_GET_PES_INFO 0x20800168 (numPes, tpcToPesMap; host NOT_SUPPORTED => GR info litter + authored::tpc_to_pes_map); GR_GET_GFX_GPC_AND_TPC_INFO 0x20801239; GR_GET_GLOBAL_SM_ORDER 0x2080121b (every per-TPC field); GR_GET_CAPS_V2 0x20801227; GRMGR PPC_MASK/ROP_MASK + syspipe words (optional); mmuPerGpc = GR_GET_INFO_V2 LITTER_NUM_GPCMMU_PER_GPC per logical GPC (no release-build control reads it); FECS record size, per-subctx header authored (authored.rs)" }),
     ("gr_info", Source::HostControl { cmd: 0x2080_1228, name: "GR_GET_INFO_V2" }),
     ("gr_context_buffers", Source::HostControl { cmd: 0x2080_122d, name: "GR_GET_ENGINE_CONTEXT_PROPERTIES" }),
     ("gr_zcull_info", Source::HostControl { cmd: 0x2080_1206, name: "GR_GET_ZCULL_INFO (host NOT_SUPPORTED = no zcull on the die)" }),
@@ -674,6 +677,107 @@ pub const GR_CAPS_V2_PARAMS_SIZE: usize = 48;
 /// `alignment`, `size`, `bInfoPopulated`.
 pub const GR_CONTEXT_PROPERTIES_PARAMS_SIZE: usize = 32;
 
+// ★ 2026-09-26 (v3-gpcmask): the per-index GR floorsweeping controls. The host's kernel RM
+// serves each from ITS copy of the GSP's `FLOORSWEEPING_MASKS` reply, index for index, so
+// asking them is reading that struct back — the physical/logical index space of each field is
+// the host's, not a reading this port has to get right (`kf_abi::grstatic`'s floorswept-parts
+// section). All NON_PRIVILEGED (export flags carry 0x8); `[measured]` answered to a client
+// without CAP_SYS_ADMIN on an RTX 4070 (`traces/real_ad104/`).
+
+/// `NV2080_CTRL_CMD_GR_GET_PHYS_GPC_MASK` (`ogkm-580: ctrl2080gr.h:1807`). ⊘ **PRIVILEGED** (export
+/// flags `0x14`): never asked at realize — `[measured]` refused `0x1b` to a client without
+/// CAP_SYS_ADMIN (RTX 4070, `traces/real_ad104/`). Named so that stays a decision.
+pub const NV2080_CTRL_CMD_GR_GET_PHYS_GPC_MASK: u32 = 0x2080_1232;
+/// `NV2080_CTRL_CMD_GR_GET_NUM_TPCS_FOR_GPC` (`ogkm-580: ctrl2080gr.h:1845`) — `tpcCount[gpcId]`,
+/// `gpcId` LOGICAL (`kernel_graphics.c:3555-3562`).
+pub const NV2080_CTRL_CMD_GR_GET_NUM_TPCS_FOR_GPC: u32 = 0x2080_1234;
+/// `sizeof(NV2080_CTRL_GR_GET_NUM_TPCS_FOR_GPC_PARAMS)` — `gpcId`, `numTpcs`.
+pub const GR_NUM_TPCS_PARAMS_SIZE: usize = 8;
+/// `NV2080_CTRL_CMD_GR_GET_GFX_GPC_AND_TPC_INFO` (`ogkm-580: ctrl2080gr.h:2000`).
+pub const NV2080_CTRL_CMD_GR_GET_GFX_GPC_AND_TPC_INFO: u32 = 0x2080_1239;
+/// `sizeof(NV2080_CTRL_GR_GET_GFX_GPC_AND_TPC_INFO_PARAMS)` — route, `physGfxGpcMask`, `numGfxTpc`.
+pub const GR_GFX_GPC_AND_TPC_INFO_PARAMS_SIZE: usize = GR_ROUTE_INFO_SIZE + 8;
+/// `NV2080_CTRL_CMD_GPU_GET_PES_INFO` (`ogkm-580: ctrl2080gpu.h:2231`) — `numPesPerGpc[gpcId]`
+/// and the whole `tpcToPesMap` (`subdevice_ctrl_gpu_kernel.c:1965-1972`).
+pub const NV2080_CTRL_CMD_GPU_GET_PES_INFO: u32 = 0x2080_0168;
+/// `sizeof(NV2080_CTRL_GPU_GET_PES_INFO_PARAMS)` — four words and `tpcToPesMap[10]`.
+pub const GPU_PES_INFO_PARAMS_SIZE: usize = 16 + 4 * kf_abi::grstatic::MAX_TPC_PER_GPC;
+
+/// `numTpcs` for LOGICAL GPC `gpc` from `GR_GET_NUM_TPCS_FOR_GPC`, checking the echo.
+///
+/// # Errors
+/// [`FactRefusal::ShortReply`]; [`FactRefusal::Unservable`] when the echoed `gpcId` differs.
+pub fn derive_num_tpcs(reply: &[u8], gpc: u32) -> Result<u32, FactRefusal> {
+    let cmd = NV2080_CTRL_CMD_GR_GET_NUM_TPCS_FOR_GPC;
+    need(cmd, reply, GR_NUM_TPCS_PARAMS_SIZE)?;
+    if le32(reply, 0) != Some(gpc) {
+        return Err(FactRefusal::Unservable { cmd, why: "the reply names a different gpcId" });
+    }
+    Ok(le32(reply, 4).unwrap_or(0))
+}
+
+/// `(physGfxGpcMask, numGfxTpc)` from `GR_GET_GFX_GPC_AND_TPC_INFO`.
+///
+/// # Errors
+/// [`FactRefusal::ShortReply`].
+pub fn derive_gfx_gpc_and_tpc_info(reply: &[u8]) -> Result<(u32, u32), FactRefusal> {
+    let cmd = NV2080_CTRL_CMD_GR_GET_GFX_GPC_AND_TPC_INFO;
+    need(cmd, reply, GR_GFX_GPC_AND_TPC_INFO_PARAMS_SIZE)?;
+    Ok((le32(reply, GR_ROUTE_INFO_SIZE).unwrap_or(0), le32(reply, GR_ROUTE_INFO_SIZE + 4).unwrap_or(0)))
+}
+
+/// `(numPesInGpc, tpcToPesMap)` for `gpc` from `GPU_GET_PES_INFO`, checking the echo.
+///
+/// # Errors
+/// [`FactRefusal::ShortReply`]; [`FactRefusal::Unservable`] when the echoed `gpcId` differs.
+pub fn derive_pes_info(reply: &[u8], gpc: u32) -> Result<(u32, [u32; kf_abi::grstatic::MAX_TPC_PER_GPC]), FactRefusal> {
+    let cmd = NV2080_CTRL_CMD_GPU_GET_PES_INFO;
+    need(cmd, reply, GPU_PES_INFO_PARAMS_SIZE)?;
+    if le32(reply, 0) != Some(gpc) {
+        return Err(FactRefusal::Unservable { cmd, why: "the reply names a different gpcId" });
+    }
+    let mut map = [0u32; kf_abi::grstatic::MAX_TPC_PER_GPC];
+    for (i, m) in map.iter_mut().enumerate() {
+        *m = le32(reply, 16 + 4 * i).unwrap_or(0);
+    }
+    Ok((le32(reply, 4).unwrap_or(0), map))
+}
+
+/// ★ One `GRMGR_GET_GR_FS_INFO` batch's answers, checked query by query against the request
+/// that produced them: `(status, [OUT] word)` per query, in order.
+///
+/// ⊘ The per-query `status` rides inside an `NV_OK` reply, so it is returned, never assumed
+/// zero — the reader decides whether a refused query is a gap or a fact.
+///
+/// # Errors
+/// [`FactRefusal::ShortReply`] on a malformed reply; [`FactRefusal::Unservable`] when the reply
+/// does not echo the batch it was asked (count, types or `[IN]` words).
+pub fn derive_gr_fs_answers(reply: &[u8], asked: &[kf_abi::grfsinfo::GrFsQuery]) -> Result<Vec<(u32, u32)>, FactRefusal> {
+    use kf_abi::grfsinfo as fs;
+    let cmd = fs::NV2080_CTRL_CMD_GRMGR_GET_GR_FS_INFO;
+    let a = fs::decode_answers(reply).map_err(|_| FactRefusal::ShortReply { cmd, len: reply.len() })?;
+    if a.len() != asked.len() {
+        return Err(FactRefusal::Unservable { cmd, why: "numQueries is not the batch asked" });
+    }
+    let mut out = Vec::with_capacity(a.len());
+    for (&(ty, status, d0, d1), q) in a.iter().zip(asked) {
+        if ty != q.query_type {
+            return Err(FactRefusal::Unservable { cmd, why: "a queryType is not the one asked" });
+        }
+        // The per-GPC types carry `[IN] gpcId` at `queryData + 0` and answer at `+ 4`; the
+        // syspipe / count types answer at `+ 0`.
+        let per_gpc = matches!(
+            ty,
+            fs::query_type::CHIPLET_GPC_MAP | fs::query_type::TPC_MASK | fs::query_type::PPC_MASK | fs::query_type::ROP_MASK
+        );
+        if per_gpc && d0 != q.input {
+            return Err(FactRefusal::Unservable { cmd, why: "a query's gpcId is not the one asked" });
+        }
+        out.push((status, if per_gpc { d1 } else { d0 }));
+    }
+    Ok(out)
+}
+
 /// The whole `GR_GET_INFO_V2` table, one row per index in index order (`data[i]` for
 /// `index == i`).
 ///
@@ -743,13 +847,16 @@ pub fn derive_gr_caps(reply: &[u8]) -> Result<[u8; kf_abi::grstatic::GR_CAPS_TBL
 
 /// ★ The TPC rows in `globalTpcId` order, and the SMs per TPC, from `GR_GET_GLOBAL_SM_ORDER`.
 ///
-/// Each TPC's row is its `localSmId == 0` entry's `{gpcId, localTpcId, virtualTpcId}`; every TPC
-/// must own exactly `numSm / numTpc` entries — the pairing `kf_abi::grstatic::TpcRow` states,
-/// checked here rather than assumed.
+/// Each TPC's row is its `localSmId == 0` entry's `{gpcId, localTpcId, virtualTpcId,
+/// virtualGpcId, migratableTpcId, ugpuId, physicalCpcId}`; every TPC must own exactly
+/// `numSm / numTpc` entries — the pairing `kf_abi::grstatic::TpcRow` states, checked here
+/// rather than assumed — and ★ its SMs must agree on every one of those fields, since the row
+/// re-expands them identically (a host whose SMs differed would otherwise be served a zero or
+/// the first SM's word in the others' place).
 ///
 /// # Errors
 /// [`FactRefusal::ShortReply`]; [`FactRefusal::Unservable`] for zero or over-range counts, an
-/// uneven SM split, or a TPC with no `localSmId == 0` entry.
+/// uneven SM split, a TPC with no `localSmId == 0` entry, or a TPC whose SMs disagree.
 pub fn derive_sm_order(reply: &[u8]) -> Result<(Vec<kf_abi::grstatic::TpcRow>, u16), FactRefusal> {
     let cmd = NV2080_CTRL_CMD_GR_GET_GLOBAL_SM_ORDER;
     need(cmd, reply, GR_GLOBAL_SM_ORDER_PARAMS_SIZE)?;
@@ -769,10 +876,19 @@ pub fn derive_sm_order(reply: &[u8]) -> Result<(Vec<kf_abi::grstatic::TpcRow>, u
             return Err(bad("a TPC does not own numSm/numTpc SMs"));
         }
         let first = owned.iter().copied().find(|&sm| field(sm, 2) == 0).ok_or(bad("a TPC has no localSmId 0"))?;
+        // Every field but localSmId (2) and globalTpcId (3, the key) is per TPC.
+        const PER_TPC: [usize; 7] = [0, 1, 4, 5, 6, 7, 8];
+        if owned.iter().any(|&sm| PER_TPC.iter().any(|&k| field(sm, k) != field(first, k))) {
+            return Err(bad("a TPC's SMs disagree on a per-TPC field (gpcId, localTpcId, virtual/migratable/uGPU/CPC ids)"));
+        }
         tpcs.push(kf_abi::grstatic::TpcRow {
             gpc_id: field(first, 0),
             local_tpc_id: field(first, 1),
             virtual_tpc_id: field(first, 8),
+            virtual_gpc_id: field(first, 4),
+            migratable_tpc_id: field(first, 5),
+            ugpu_id: field(first, 6),
+            physical_cpc_id: field(first, 7),
         });
     }
     Ok((tpcs, sms_per_tpc))

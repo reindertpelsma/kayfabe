@@ -581,7 +581,8 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
               same silent-then-fatal consequence as 0x20800a1f. ⚠ Its gpcMask is read \
               DIRECTLY by _kgraphicsPostSchedulingEnableHandler, which returns NV_OK early \
               when it is 0 (:486) — so a zero here would skip the golden-image channel and \
-              buy a longer green log with a lie about the die. This device publishes 0x7. \
+              buy a longer green log with a lie about the die. This device publishes the \
+              host's own mask (0x7 on GA106, 0x3e on a 3060 Ti). \
               Served",
     },
     SweepControl {

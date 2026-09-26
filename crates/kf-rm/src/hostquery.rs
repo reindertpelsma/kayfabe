@@ -541,23 +541,53 @@ pub fn query_memory_system(host: &mut dyn HostControls, gr_info: Option<&GrInfoP
 
 /// What the host says about GR's geometry — every host-sourced input of
 /// `kf_abi::grstatic::GrStaticProfile`.
+///
+/// ★★ Two index spaces (`kf_abi::grstatic`'s floorswept-parts section): the PHYSICAL facts are
+/// asked per set bit of `gpc_mask`, the LOGICAL ones per logical id `0..popcount(gpc_mask)`,
+/// and `chiplet_gpc_map` joins them. ⊘ Nothing here assumes the mask is `0..n` or that logical
+/// `i` is physical `i` — the two things a 3060 Ti and a second RTX 3060 each break.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GrGeometry {
-    /// `GR_GET_GPC_MASK`.
+    /// `GR_GET_GPC_MASK` — physical, any shape (`0x3e` on a 3060 Ti, `0xffe` on a 4090).
     pub gpc_mask: u32,
-    /// `(gpcId, tpcMask)` for every set bit of `gpc_mask`, in id order (`GR_GET_TPC_MASK`).
+    /// `(physical gpcId, tpcMask)` for every set bit of `gpc_mask`, ascending
+    /// (`GR_GET_TPC_MASK`, whose `gpcId` is physical outside MIG, `kernel_graphics_manager.c:612-628`).
     pub tpc_masks: Vec<(u32, u32)>,
-    /// `zcullMask` per GPC, in the same order (`GR_GET_ZCULL_MASK 0x20801237`, NON_PRIVILEGED; it
-    /// reads the same `floorsweepingMasks.zcullMask[]` the internal control carries,
-    /// `kernel_graphics.c:3808-3822`). The host's `NV_ERR_NOT_SUPPORTED` — RM's answer for a
-    /// `NV_U32_MAX` mask (`:3817-3819`) — is carried as `u32::MAX`.
+    /// `zcullMask` per physical GPC, in the same order (`GR_GET_ZCULL_MASK 0x20801237`,
+    /// NON_PRIVILEGED; it reads the same `floorsweepingMasks.zcullMask[]` the internal control
+    /// carries, `kernel_graphics.c:3808-3822`). The host's `NV_ERR_NOT_SUPPORTED` — RM's answer
+    /// for a `NV_U32_MAX` mask (`:3817-3819`) — is carried as `u32::MAX`.
     pub zcull_masks: Vec<u32>,
+    /// ★ Logical → physical, one per logical GPC: the host's `GRMGR_GET_GR_FS_INFO`
+    /// `CHIPLET_GPC_MAP` (the very words libcuda's `cuInit` asks for), or — when the host
+    /// refuses that batch — [`derive_chiplet_gpc_map`]'s rule over the two count tables.
+    pub chiplet_gpc_map: Vec<u32>,
+    /// `tpcCount[logical]` (`GR_GET_NUM_TPCS_FOR_GPC`).
+    pub tpc_counts: Vec<u32>,
+    /// `numPesPerGpc[logical]` and `tpcToPesMap` (`GPU_GET_PES_INFO`); `None` = the host answered
+    /// `NV_ERR_NOT_SUPPORTED` (no PPC masks on the die, `subdevice_ctrl_gpu_kernel.c:1967`), and
+    /// the GR litters serve instead.
+    pub pes: Option<(Vec<u32>, [u32; kf_abi::grstatic::MAX_TPC_PER_GPC])>,
+    /// `(physGfxGpcMask, numGfxTpc)` (`GR_GET_GFX_GPC_AND_TPC_INFO`).
+    pub gfx: (u32, u32),
+    /// The optional second `GRMGR_GET_GR_FS_INFO` batch; `None` when the host refused it
+    /// (those query types are then refused to the guest, whole, as before).
+    pub fs_extra: Option<GrFsExtra>,
     /// The TPC rows in `globalTpcId` order (`GR_GET_GLOBAL_SM_ORDER`).
     pub tpcs: Vec<TpcRow>,
     /// SMs per TPC (`GR_GET_GLOBAL_SM_ORDER`, cross-checked against `gr_info`).
     pub sms_per_tpc: u16,
     /// The caps table (`GR_GET_CAPS_V2`).
     pub caps: [u8; kf_abi::grstatic::GR_CAPS_TBL_SIZE],
+}
+
+/// The host's answers to the optional `GRMGR_GET_GR_FS_INFO` batch.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GrFsExtra {
+    /// `(ppcMask, ropMask)` per LOGICAL GPC; `None` where the host's per-query status refused.
+    pub per_gpc: Vec<(Option<u32>, Option<u32>)>,
+    /// `CHIPLET_SYSPIPE_MASK` and `CHIPLET_GRAPHICS_SYSPIPE_MASK`.
+    pub syspipe: kf_abi::grstatic::GrSyspipeMasks,
 }
 
 /// `NV2080_CTRL_CMD_GR_GET_ZCULL_MASK`.
@@ -571,16 +601,55 @@ pub const GR_INFO_IDX_LITTER_NUM_TPCS_PER_PES: usize = 0x1e;
 /// `NV2080_CTRL_GR_INFO_INDEX_LITTER_NUM_GPCMMU_PER_GPC`.
 pub const GR_INFO_IDX_LITTER_NUM_GPCMMU_PER_GPC: usize = 0x27;
 
+/// ★ The logical → physical GPC map when the host will not state it: each logical GPC, in
+/// order, is the lowest-numbered physical GPC not yet taken whose TPC population equals its
+/// `tpcCount`.
+///
+/// ⚠ A RULE, used only when `GRMGR_GET_GR_FS_INFO` is refused. It reproduces both maps
+/// measured through that control (the 3060 Ti host's `1,2,3,4,5`; the real GA106's identity
+/// in `traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt`) and is consistent with the two
+/// GSP replies whose map was not asked (a 4090's `tpcCount` `5,5,6…` over physical `0,5,5,6…`;
+/// an RTX 3060's `4,5,5` over `5,4,5`) — but ties between equal-population GPCs are resolved
+/// by physical order, which no header states. `None` when some logical GPC has no physical GPC
+/// of its count left: the two tables then describe no silicon.
+#[must_use]
+pub fn derive_chiplet_gpc_map(tpc_masks: &[(u32, u32)], tpc_counts: &[u32]) -> Option<Vec<u32>> {
+    let mut taken = vec![false; tpc_masks.len()];
+    let mut map = Vec::with_capacity(tpc_counts.len());
+    for &count in tpc_counts {
+        let i = (0..tpc_masks.len()).find(|&i| !taken[i] && tpc_masks[i].1.count_ones() == count)?;
+        taken[i] = true;
+        map.push(tpc_masks[i].0);
+    }
+    Some(map)
+}
+
 /// ★ The host-sourced inputs of `gr_static`.
 ///
+/// Asked in this order, and the order is part of the contract with the GA106 replay test
+/// (`tests/host_facts_query_ga106.rs`): the physical loop first (TPC then ZCULL mask per GPC),
+/// then the logical facts, then the SM order and caps — so a host that cannot answer
+/// `GR_GET_ZCULL_MASK` is refused on THAT control, by name.
+///
+/// ★ Every control asked is NON_PRIVILEGED (the host side's rule: a rootless VMM must be able to
+/// ask it) — see the `physGpcMask` note in the body for the one that is not, and is not asked.
+///
 /// # Errors
-/// [`FieldCause`]; the SMs-per-TPC cross-check against `gr_info` is a refusal, not a pick.
+/// [`FieldCause`]; every cross-check between two host statements of one fact is a refusal,
+/// never a pick: the map against both count tables, SMs per TPC against `gr_info`, the TPC
+/// total against the SM order and against `tpcCount`.
 pub fn query_gr_geometry(host: &mut dyn HostControls, gr_info: Option<&GrInfoProfile>) -> Result<GrGeometry, FieldCause> {
+    use kf_abi::grfsinfo::{self as fs, GrFsQuery, query_type};
     let gpc_mask = hostfacts::derive_gpc_mask(&ask(
         host,
         hostfacts::NV2080_CTRL_CMD_GR_GET_GPC_MASK,
         zeroed(hostfacts::GR_MASK_PARAMS_SIZE),
     )?)?;
+    let unservable = |cmd, why| FieldCause::Reply(FactRefusal::Unservable { cmd, why });
+    if gpc_mask as usize >= 1usize << kf_abi::grstatic::GR_MAX_GPC {
+        return Err(unservable(hostfacts::NV2080_CTRL_CMD_GR_GET_GPC_MASK, "gpcMask names a GPC past NV2080_CTRL_INTERNAL_GR_MAX_GPC"));
+    }
+    // ── the PHYSICAL facts, one per set bit ──
     let mut tpc_masks = Vec::new();
     let mut zcull_masks = Vec::new();
     for gpc in (0..32).filter(|b| gpc_mask & (1 << b) != 0) {
@@ -596,6 +665,72 @@ pub fn query_gr_geometry(host: &mut dyn HostControls, gr_info: Option<&GrInfoPro
             Err(refused) => return Err(FieldCause::Host { cmd: NV2080_CTRL_CMD_GR_GET_ZCULL_MASK, refused }),
         });
     }
+    // ⊘ `physGpcMask` is NOT asked: `GR_GET_PHYS_GPC_MASK` (0x20801232) is PRIVILEGED (export
+    // flags 0x14, `g_subdevice_nvoc.c`) — `[measured 2026-09-26]` refused `0x1b` to a client
+    // without CAP_SYS_ADMIN on an RTX 4070 while a root client on the 3060 Ti box got 0x3e.
+    // It is written from `gpcMask` (`GrStaticProfile::gpc_mask`), which it equals outside MIG on
+    // every die measured (GA106 ×2, GA102, AD102 replies; GA104 host).
+    let n = gpc_mask.count_ones();
+    // ── the LOGICAL facts, one per logical id ──
+    let mut tpc_counts = Vec::new();
+    for gpc in 0..n {
+        let mut req = zeroed(hostfacts::GR_NUM_TPCS_PARAMS_SIZE);
+        put32(&mut req, 0, gpc);
+        let r = ask(host, hostfacts::NV2080_CTRL_CMD_GR_GET_NUM_TPCS_FOR_GPC, req)?;
+        tpc_counts.push(hostfacts::derive_num_tpcs(&r, gpc)?);
+    }
+    // ★ The map, asked EXACTLY as libcuda asks it in `cuInit` (one CHIPLET_GPC_MAP per logical
+    // GPC, nothing else in the batch): the host answers its own logical order.
+    let map_cmd = fs::NV2080_CTRL_CMD_GRMGR_GET_GR_FS_INFO;
+    let map_queries: Vec<GrFsQuery> = (0..n).map(|gpc| GrFsQuery { query_type: query_type::CHIPLET_GPC_MAP, input: gpc }).collect();
+    let mut req = fs::build_request(&map_queries);
+    let asked_map = match host.control(map_cmd, &mut req) {
+        Ok(()) => {
+            let a = hostfacts::derive_gr_fs_answers(&req, &map_queries)?;
+            a.iter().all(|&(st, _)| st == 0).then(|| a.iter().map(|&(_, phys)| phys).collect::<Vec<u32>>())
+        }
+        Err(_) => None,
+    };
+    let chiplet_gpc_map = match asked_map {
+        Some(m) => m,
+        None => derive_chiplet_gpc_map(&tpc_masks, &tpc_counts)
+            .ok_or(unservable(map_cmd, "no CHIPLET_GPC_MAP from the host, and the TPC counts match no physical GPC"))?,
+    };
+    // Each logical GPC names a distinct enabled physical GPC whose TPC population is its count.
+    let mut seen = 0u32;
+    for (l, &p) in chiplet_gpc_map.iter().enumerate() {
+        let bit = 1u32.checked_shl(p).unwrap_or(0);
+        let mask = tpc_masks.iter().find(|(g, _)| *g == p).map(|(_, m)| *m);
+        if bit == 0 || gpc_mask & bit == 0 || seen & bit != 0 || mask.map(u32::count_ones) != Some(tpc_counts[l]) {
+            return Err(unservable(map_cmd, "CHIPLET_GPC_MAP names a GPC outside gpcMask, twice, or of another TPC count"));
+        }
+        seen |= bit;
+    }
+    // PES: per logical id. The host's NOT_SUPPORTED is RM's own "no PPC masks on this die".
+    let mut pes_counts = Vec::new();
+    let mut tpc_to_pes = None;
+    for gpc in 0..n {
+        let mut req = zeroed(hostfacts::GPU_PES_INFO_PARAMS_SIZE);
+        put32(&mut req, 0, gpc);
+        match host.control(hostfacts::NV2080_CTRL_CMD_GPU_GET_PES_INFO, &mut req) {
+            Ok(()) => {
+                let (count, map) = hostfacts::derive_pes_info(&req, gpc)?;
+                if tpc_to_pes.is_some_and(|m| m != map) {
+                    return Err(unservable(hostfacts::NV2080_CTRL_CMD_GPU_GET_PES_INFO, "tpcToPesMap differs between two GPCs of one reply table"));
+                }
+                tpc_to_pes = Some(map);
+                pes_counts.push(count);
+            }
+            Err(HostRefusal { status: Some(NV_ERR_NOT_SUPPORTED), .. }) if gpc == 0 => break,
+            Err(refused) => return Err(FieldCause::Host { cmd: hostfacts::NV2080_CTRL_CMD_GPU_GET_PES_INFO, refused }),
+        }
+    }
+    let pes = tpc_to_pes.map(|m| (pes_counts, m));
+    let gfx = hostfacts::derive_gfx_gpc_and_tpc_info(&ask(
+        host,
+        hostfacts::NV2080_CTRL_CMD_GR_GET_GFX_GPC_AND_TPC_INFO,
+        zeroed(hostfacts::GR_GFX_GPC_AND_TPC_INFO_PARAMS_SIZE),
+    )?)?;
     let (tpcs, sms_per_tpc) = hostfacts::derive_sm_order(&ask(
         host,
         hostfacts::NV2080_CTRL_CMD_GR_GET_GLOBAL_SM_ORDER,
@@ -606,6 +741,30 @@ pub fn query_gr_geometry(host: &mut dyn HostControls, gr_info: Option<&GrInfoPro
         hostfacts::NV2080_CTRL_CMD_GR_GET_CAPS_V2,
         zeroed(hostfacts::GR_CAPS_V2_PARAMS_SIZE),
     )?)?;
+    // ★ The optional batch: PPC and ROP masks per logical GPC, and the two syspipe words. A
+    // refusal here is not a refused device — only those query types stay refused to the guest.
+    let mut extra_queries = vec![
+        GrFsQuery { query_type: query_type::CHIPLET_SYSPIPE_MASK, input: 0 },
+        GrFsQuery { query_type: query_type::CHIPLET_GRAPHICS_SYSPIPE_MASK, input: 0 },
+    ];
+    for t in [query_type::PPC_MASK, query_type::ROP_MASK] {
+        extra_queries.extend((0..n).map(|gpc| GrFsQuery { query_type: t, input: gpc }));
+    }
+    let mut req = fs::build_request(&extra_queries);
+    let fs_extra = match host.control(map_cmd, &mut req) {
+        Ok(()) => {
+            let a = hostfacts::derive_gr_fs_answers(&req, &extra_queries)?;
+            let word = |i: usize| (a[i].0 == 0).then_some(a[i].1);
+            match (word(0), word(1)) {
+                (Some(syspipe), Some(graphics_syspipe)) => Some(GrFsExtra {
+                    per_gpc: (0..n as usize).map(|g| (word(2 + g), word(2 + n as usize + g))).collect(),
+                    syspipe: kf_abi::grstatic::GrSyspipeMasks { syspipe, graphics_syspipe },
+                }),
+                _ => None,
+            }
+        }
+        Err(_) => None,
+    };
     let info = gr_info.ok_or(FieldCause::DependsOn("gr_info"))?;
     if info.data[kf_abi::grinfo::IDX_LITTER_NUM_SM_PER_TPC] != u32::from(sms_per_tpc) {
         return Err(FieldCause::Reply(FactRefusal::Unservable {
@@ -614,13 +773,13 @@ pub fn query_gr_geometry(host: &mut dyn HostControls, gr_info: Option<&GrInfoPro
         }));
     }
     let tpc_total: u32 = tpc_masks.iter().map(|(_, m)| m.count_ones()).sum();
-    if tpc_total as usize != tpcs.len() {
+    if tpc_total as usize != tpcs.len() || tpc_counts.iter().sum::<u32>() != tpc_total {
         return Err(FieldCause::Reply(FactRefusal::Unservable {
             cmd: hostfacts::NV2080_CTRL_CMD_GR_GET_TPC_MASK,
-            why: "the TPC masks' population disagrees with the SM order's TPC count",
+            why: "the TPC masks' population disagrees with the SM order's TPC count or with tpcCount",
         }));
     }
-    Ok(GrGeometry { gpc_mask, tpc_masks, zcull_masks, tpcs, sms_per_tpc, caps })
+    Ok(GrGeometry { gpc_mask, tpc_masks, zcull_masks, chiplet_gpc_map, tpc_counts, pes, gfx, fs_extra, tpcs, sms_per_tpc, caps })
 }
 
 /// ★ v3-gfx: `zbc_table_sizes` — `GET_ZBC_CLEAR_TABLE_SIZE` for each table type. The composition
@@ -734,51 +893,67 @@ pub fn query_gr_zcull_info(
     }
 }
 
-/// ★★ `gr_static` from the host geometry, the host's GR litters, and the authored members:
+/// ★★ `gr_static` from the host geometry, the host's GR litters, and the authored members —
+/// ONE ROW PER LOGICAL GPC, in logical order, each naming its physical GPC:
 ///
 /// | member | source |
 /// |---|---|
-/// | GPC rows' `tpc_mask` / `tpc_count` | host TPC masks (count = population) |
-/// | `mmu_per_gpc` | host `LITTER_NUM_GPCMMU_PER_GPC` |
-/// | `num_pes_per_gpc` | host `LITTER_NUM_PES_PER_GPC` |
-/// | `zcull_mask` | host `GR_GET_ZCULL_MASK` |
+/// | row `l`'s `physical_id` | host `CHIPLET_GPC_MAP[l]` |
+/// | `tpc_mask` / `zcull_mask` | host TPC / ZCULL mask of that PHYSICAL GPC |
+/// | `tpc_count` | host `NUM_TPCS_FOR_GPC[l]` (= the mask's population, checked) |
+/// | `num_pes_per_gpc`, `tpc_to_pes_map` | host `GPU_GET_PES_INFO[l]`; host NOT_SUPPORTED → litter `NUM_PES_PER_GPC` + [`authored::tpc_to_pes_map`] |
+/// | `mmu_per_gpc` | host `LITTER_NUM_GPCMMU_PER_GPC` (no release-build control reports the array; logical, as the real replies fill it) |
+/// | `ppc_mask`, `rop_mask`, `syspipe_masks` | host GRMGR words, or `None` |
+/// | `gfx_gpc_mask`, `num_gfx_tpc` | host `GR_GET_GFX_GPC_AND_TPC_INFO` |
 /// | `tpcs`, `sms_per_tpc` | host SM order |
-/// | `tpc_to_pes_map` | [`authored::tpc_to_pes_map`] over host litters |
 /// | `caps` | host caps |
 /// | `fecs_record_size` | [`authored::FECS_RECORD_SIZE`] |
 /// | `per_subctx_header_supported` | [`authored::PER_SUBCTX_HEADER_SUPPORTED`] |
 ///
+/// ⊘ Until 2026-09-26 this refused any mask but `0..n` (*"a non-contiguous GPC mask:
+/// GrStaticProfile states GPCs 0..n"*) and built rows in PHYSICAL order with `tpc_count =
+/// popcount`, which served a wrong `tpcCount[]` wherever logical ≠ physical.
+///
 /// Leaks the GPC and TPC rows once (`&'static`) — realize, once per device.
 ///
 /// # Errors
-/// [`FieldCause`] — a non-contiguous GPC mask (the profile states GPCs by count), a litter
-/// the TPC-to-PES rule cannot use, or a profile `kf_abi` refuses to encode.
+/// [`FieldCause`] — a litter the TPC-to-PES rule cannot use, or a profile `kf_abi` refuses to
+/// encode (a per-GPC TPC-row count that disagrees with `tpcCount`, a gfx mask outside the GPC
+/// mask, …).
 pub fn gr_static_from(g: &GrGeometry, info: &GrInfoProfile) -> Result<kf_abi::grstatic::GrStaticProfile, FieldCause> {
     use kf_abi::grstatic::{GpcRow, GrStaticProfile};
     let cmd = hostfacts::NV2080_CTRL_CMD_GR_GET_GPC_MASK;
-    if g.gpc_mask & g.gpc_mask.wrapping_add(1) != 0 {
-        return Err(FieldCause::Reply(FactRefusal::Unservable { cmd, why: "a non-contiguous GPC mask: GrStaticProfile states GPCs 0..n" }));
-    }
-    let gpcs: Vec<GpcRow> = g
-        .tpc_masks
-        .iter()
-        .zip(&g.zcull_masks)
-        .map(|(&(_, tpc_mask), &zcull_mask)| GpcRow {
-            tpc_mask,
-            tpc_count: tpc_mask.count_ones(),
+    let unservable = |why| FieldCause::Reply(FactRefusal::Unservable { cmd, why });
+    let litter_t2p = || {
+        authored::tpc_to_pes_map(info.data[GR_INFO_IDX_LITTER_NUM_TPC_PER_GPC], info.data[GR_INFO_IDX_LITTER_NUM_TPCS_PER_PES]).ok_or(
+            FieldCause::Reply(FactRefusal::Unservable {
+                cmd: hostfacts::NV2080_CTRL_CMD_GR_GET_INFO_V2,
+                why: "LITTER_NUM_TPCS_PER_PES is zero or LITTER_NUM_TPC_PER_GPC exceeds MAX_TPC_PER_GPC",
+            }),
+        )
+    };
+    let tpc_to_pes_map = match &g.pes {
+        Some((_, map)) => *map,
+        None => litter_t2p()?,
+    };
+    let mut gpcs = Vec::with_capacity(g.chiplet_gpc_map.len());
+    for (l, &phys) in g.chiplet_gpc_map.iter().enumerate() {
+        let at = g.tpc_masks.iter().position(|(p, _)| *p == phys).ok_or(unservable("a logical GPC maps to a physical GPC outside gpcMask"))?;
+        let (ppc_mask, rop_mask) = g.fs_extra.as_ref().and_then(|x| x.per_gpc.get(l).copied()).unwrap_or((None, None));
+        gpcs.push(GpcRow {
+            physical_id: phys,
+            tpc_mask: g.tpc_masks[at].1,
+            tpc_count: *g.tpc_counts.get(l).ok_or(unservable("fewer tpcCount words than logical GPCs"))?,
             mmu_per_gpc: info.data[GR_INFO_IDX_LITTER_NUM_GPCMMU_PER_GPC],
-            num_pes_per_gpc: info.data[GR_INFO_IDX_LITTER_NUM_PES_PER_GPC],
-            zcull_mask,
-        })
-        .collect();
-    let tpc_to_pes_map = authored::tpc_to_pes_map(
-        info.data[GR_INFO_IDX_LITTER_NUM_TPC_PER_GPC],
-        info.data[GR_INFO_IDX_LITTER_NUM_TPCS_PER_PES],
-    )
-    .ok_or(FieldCause::Reply(FactRefusal::Unservable {
-        cmd: hostfacts::NV2080_CTRL_CMD_GR_GET_INFO_V2,
-        why: "LITTER_NUM_TPCS_PER_PES is zero or LITTER_NUM_TPC_PER_GPC exceeds MAX_TPC_PER_GPC",
-    }))?;
+            num_pes_per_gpc: match &g.pes {
+                Some((counts, _)) => *counts.get(l).ok_or(unservable("fewer numPesInGpc words than logical GPCs"))?,
+                None => info.data[GR_INFO_IDX_LITTER_NUM_PES_PER_GPC],
+            },
+            zcull_mask: g.zcull_masks[at],
+            ppc_mask,
+            rop_mask,
+        });
+    }
     let p = GrStaticProfile {
         gpcs: Box::leak(gpcs.into_boxed_slice()),
         tpcs: Box::leak(g.tpcs.clone().into_boxed_slice()),
@@ -787,9 +962,15 @@ pub fn gr_static_from(g: &GrGeometry, info: &GrInfoProfile) -> Result<kf_abi::gr
         caps: g.caps,
         fecs_record_size: authored::FECS_RECORD_SIZE,
         per_subctx_header_supported: authored::PER_SUBCTX_HEADER_SUPPORTED,
+        gfx_gpc_mask: g.gfx.0,
+        num_gfx_tpc: g.gfx.1,
+        syspipe_masks: g.fs_extra.as_ref().map(|x| x.syspipe),
     };
     p.validate()
-        .map_err(|_| FieldCause::Reply(FactRefusal::Unservable { cmd, why: "the GR profile fails kf_abi's own validation" }))?;
+        .map_err(|_| unservable("the GR profile fails kf_abi's own validation"))?;
+    if p.gpc_mask() != Ok(g.gpc_mask) {
+        return Err(unservable("the rows' physical ids do not rebuild the host's gpcMask"));
+    }
     Ok(p)
 }
 

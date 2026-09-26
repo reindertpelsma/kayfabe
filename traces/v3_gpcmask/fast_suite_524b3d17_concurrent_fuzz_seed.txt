@@ -1,0 +1,118 @@
+# bare metal (no kayfabe), RTX 3060 Ti, kayfabe-rm-ladder built at 283a5304 (frozen tree, unchanged on the branch): --gpu 0 --concurrent-fuzz --seed 1790429157394970003 --fuzz-threads 3 --fuzz-iters 64 --fuzz-clients 2 — the seed the 524b3d17 suite drew; rc=1
+FUZZ_SEED=0x18d8e1d522077593
+info  W385 replay         = --concurrent-fuzz --seed 1790429157394970003 --fuzz-threads 3 --fuzz-iters 64 --fuzz-clients 2
+info  W385 CONTROL        = the SAME verbs at T=1 with NO jitter. ⊘ If this reds, the RUNG is broken, not the system, and everything below is UNINTERPRETABLE
+info  W385 control  census = 64 ops over 1 workers in 4 ms, 0 refused, 1/1 workers finished
+info  W385 control  verbs  = alloc=3 map_a=0 map_b=0 write=0 alias_prop=0 unmap_b=0 probe=0 free=2 recycle=0 idle=59
+info  W385 control  op us   = n=5 min=36 p50=253 p90=269 p99=269 max=307  ⊘ a distribution, because one number is not a measurement
+info  W385 control  overlap = 0 pairs of RM-verb intervals from DIFFERENT threads intersected, over 5/5 spans
+info  W385 control  handles = 4 minted across 1 worker(s), each checked for collision against every other worker OF THE SAME CLIENT
+info  W385 control  pinning = mode unpinned — 0/1 workers accepted a mask; observed core sets {"0-4"}
+⊘     W385 CONTROL FAILED = 0 violation(s) with ONE thread and no jitter, 0 engine ops, 1/1 workers finished
+FUZZ_ARM=unpinned verdict=PASS why=CLEAN threads=3 pin=unpinned cores=3 ops=192 engine_ops=33 alias_ops=10 overlap=93 viol=0 refused=0 pinned=0/3 finished=3/3
+FUZZ_ARM=percore verdict=PASS why=CLEAN threads=3 pin=percore cores=3 ops=192 engine_ops=33 alias_ops=10 overlap=93 viol=0 refused=0 pinned=3/3 finished=3/3
+FUZZ_ARM=crowd-free verdict=PASS why=CLEAN threads=9 pin=unpinned cores=3 ops=576 engine_ops=102 alias_ops=32 overlap=1697 viol=0 refused=0 pinned=0/9 finished=9/9
+FUZZ_ARM=crowd verdict=PASS why=CLEAN threads=9 pin=crowd cores=3 ops=576 engine_ops=102 alias_ops=32 overlap=1623 viol=0 refused=0 pinned=9/9 finished=9/9
+FUZZ_THREADS=3
+FUZZ_CORES=3
+FUZZ_ITERS=64
+FUZZ_CLIENTS=2
+FUZZ_ARMS=4
+FUZZ_OPS=1536
+FUZZ_OVERLAP_PAIRS=3506
+FUZZ_VIOLATIONS=0
+FUZZ_REFUSED=0
+FUZZ_REASON=CONTROL_FAILED
+
+# the same arm in the guest, suite gpcm3 at 524b3d17:
+FUZZ_SEED=0x18d8e1d522077593
+info  W385 replay         = --concurrent-fuzz --seed 1790429157394970003 --fuzz-threads 3 --fuzz-iters 64 --fuzz-clients 2
+info  W385 CONTROL        = the SAME verbs at T=1 with NO jitter. ⊘ If this reds, the RUNG is broken, not the system, and everything below is UNINTERPRETABLE
+info  W385 control  census = 64 ops over 1 workers in 43 ms, 0 refused, 1/1 workers finished
+info  W385 control  verbs  = alloc=3 map_a=0 map_b=0 write=0 alias_prop=0 unmap_b=0 probe=0 free=2 recycle=0 idle=59
+info  W385 control  op us   = n=5 min=1365 p50=3307 p90=4109 p99=4109 max=4540  ⊘ a distribution, because one number is not a measurement
+info  W385 control  overlap = 0 pairs of RM-verb intervals from DIFFERENT threads intersected, over 5/5 spans
+info  W385 control  handles = 4 minted across 1 worker(s), each checked for collision against every other worker OF THE SAME CLIENT
+info  W385 control  pinning = mode unpinned — 0/1 workers accepted a mask; observed core sets {"0-2"}
+⊘     W385 CONTROL FAILED = 0 violation(s) with ONE thread and no jitter, 0 engine ops, 1/1 workers finished
+FUZZ_ARM=unpinned verdict=PASS why=CLEAN threads=3 pin=unpinned cores=3 ops=192 engine_ops=33 alias_ops=10 overlap=187 viol=0 refused=0 pinned=0/3 finished=3/3
+FUZZ_ARM=percore verdict=PASS why=CLEAN threads=3 pin=percore cores=3 ops=192 engine_ops=33 alias_ops=10 overlap=168 viol=0 refused=0 pinned=3/3 finished=3/3
+FUZZ_ARM=crowd-free verdict=PASS why=CLEAN threads=9 pin=unpinned cores=3 ops=576 engine_ops=102 alias_ops=32 overlap=2166 viol=0 refused=0 pinned=0/9 finished=9/9
+FUZZ_ARM=crowd verdict=PASS why=CLEAN threads=9 pin=crowd cores=3 ops=576 engine_ops=102 alias_ops=32 overlap=2125 viol=0 refused=0 pinned=9/9 finished=9/9
+FUZZ_THREADS=3
+FUZZ_CORES=3
+FUZZ_ITERS=64
+FUZZ_CLIENTS=2
+FUZZ_ARMS=4
+FUZZ_OPS=1536
+FUZZ_OVERLAP_PAIRS=4646
+FUZZ_VIOLATIONS=0
+FUZZ_REFUSED=0
+FUZZ_REASON=CONTROL_FAILED
+
+FAST_SUITE_STARTED=2026-09-26T13:15:36+00:00 arms=30 budget=180s
+rev=524b3d17
+ARM                          VERDICT   secs  why
+--timer                      PASS      12s   12s
+FAST_CELL_ARM arm=timer verdict=PASS secs=12 client_ms=1259
+--engines                    PASS      14s   14s
+FAST_CELL_ARM arm=engines verdict=PASS secs=14 client_ms=2609
+--doorbell-census            PASS      16s   16s
+FAST_CELL_ARM arm=doorbell-census verdict=PASS secs=16 client_ms=4720
+--gpu-info-sweep             PASS      12s   12s
+FAST_CELL_ARM arm=gpu-info-sweep verdict=PASS secs=12 client_ms=1190
+--bus-info-sweep             PASS      16s   16s
+FAST_CELL_ARM arm=bus-info-sweep verdict=PASS secs=16 client_ms=4800
+--concurrency                PASS      28s   28s
+FAST_CELL_ARM arm=concurrency verdict=PASS secs=28 client_ms=16970
+--defer-liveness             PASS      25s   25s
+FAST_CELL_ARM arm=defer-liveness verdict=PASS secs=25 client_ms=13970
+--blockage-coverage          PASS      13s   13s
+FAST_CELL_ARM arm=blockage-coverage verdict=PASS secs=13 client_ms=1780
+--alias-two-vas              PASS      12s   12s
+FAST_CELL_ARM arm=alias-two-vas verdict=PASS secs=12 client_ms=1559
+--alias-unmap-observe        PASS      12s   12s
+FAST_CELL_ARM arm=alias-unmap-observe verdict=PASS secs=12 client_ms=1259
+--map-propagation            PASS      12s   12s
+FAST_CELL_ARM arm=map-propagation verdict=PASS secs=12 client_ms=1189
+--late-map-race              PASS      13s   13s
+FAST_CELL_ARM arm=late-map-race verdict=PASS secs=13 client_ms=1730
+--missing-page-fault         PASS      15s   15s
+FAST_CELL_ARM arm=missing-page-fault verdict=PASS secs=15 client_ms=4330
+--uvm-invalidate             PASS      13s   13s
+FAST_CELL_ARM arm=uvm-invalidate verdict=PASS secs=13 client_ms=1949
+--uvm-mean                   PASS      13s   13s
+FAST_CELL_ARM arm=uvm-mean verdict=PASS secs=13 client_ms=2429
+--executor-vas               PASS      13s   13s
+FAST_CELL_ARM arm=executor-vas verdict=PASS secs=13 client_ms=1339
+--guest-ring-channel         PASS      12s   12s
+FAST_CELL_ARM arm=guest-ring-channel verdict=PASS secs=12 client_ms=1290
+--dictated-ring              PASS      13s   13s
+FAST_CELL_ARM arm=dictated-ring verdict=PASS secs=13 client_ms=1450
+--dictated-ring-negative     PASS      12s   12s
+FAST_CELL_ARM arm=dictated-ring-negative verdict=PASS secs=12 client_ms=1350
+--ce-client                  PASS      13s   13s
+FAST_CELL_ARM arm=ce-client verdict=PASS secs=13 client_ms=1639
+--ce-client-guest-ram        PASS      95s   95s
+FAST_CELL_ARM arm=ce-client-guest-ram verdict=PASS secs=95 client_ms=84100
+--guest-ram-pin              PASS      13s   13s
+FAST_CELL_ARM arm=guest-ram-pin verdict=PASS secs=13 client_ms=1520
+--bar1-crossing              PASS      13s   13s
+FAST_CELL_ARM arm=bar1-crossing verdict=PASS secs=13 client_ms=1530
+--atomics-probe              PASS      12s   12s
+FAST_CELL_ARM arm=atomics-probe verdict=PASS secs=12 client_ms=1150
+--pce-mask-probe             PASS      12s   12s
+FAST_CELL_ARM arm=pce-mask-probe verdict=PASS secs=12 client_ms=1549
+--gpga-reserve-probe         PASS      25s   25s
+FAST_CELL_ARM arm=gpga-reserve-probe verdict=PASS secs=25 client_ms=14200
+--map-stress                 PASS      14s   14s
+FAST_CELL_ARM arm=map-stress verdict=PASS secs=14 client_ms=2649
+--concurrent-fuzz            FAIL      17s   raw client rc=1
+FAST_CELL_ARM arm=concurrent-fuzz verdict=FAIL secs=17 client_ms=5959
+--cross-client-leak          PASS      13s   13s
+FAST_CELL_ARM arm=cross-client-leak verdict=PASS secs=13 client_ms=1640
+--rpc-mixed-allocs           PASS      12s   12s
+FAST_CELL_ARM arm=rpc-mixed-allocs verdict=PASS secs=12 client_ms=2410
+
+FAST_SUITE_PASS=29 FAST_SUITE_FAIL=1 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+FAST_SUITE_RC=1

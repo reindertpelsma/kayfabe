@@ -158,9 +158,10 @@ fn the_gpc_count_agrees_with_the_floorsweeping_masks_control() {
 /// and reach no ledger.
 #[test]
 fn an_unmodelled_query_type_refuses_the_whole_control() {
+    // ⊘ `TPC_MASK` left this list on 2026-09-26: it is the logical row's own mask (next test).
+    // `PPC_MASK` / `ROP_MASK` stay for a device whose host words were not measured.
     for qt in [
         query_type::INVALID,
-        query_type::TPC_MASK,
         query_type::PPC_MASK,
         query_type::ROP_MASK,
         0xffff,
@@ -173,6 +174,26 @@ fn an_unmodelled_query_type_refuses_the_whole_control() {
         assert_ne!(status, 0, "query type {qt} must refuse the whole control");
         assert!(params.is_empty(), "a refusal carries no params");
     }
+}
+
+/// ★ `TPC_MASK` takes a LOGICAL `gpcId` and answers that GPC's PHYSICAL TPC mask — the same
+/// word the floorsweeping control places at `tpcMask[physical_id]` — and a `gpcId` past the GPC
+/// count is a per-query `NV_ERR_INVALID_ARGUMENT`, as a real RTX 3060 Ti answers
+/// (`kf_abi::grfsinfo`'s header).
+#[test]
+fn tpc_mask_is_the_logical_rows_own_mask() {
+    let req = grfsinfo::build_request(&[
+        GrFsQuery { query_type: query_type::TPC_MASK, input: 0 },
+        GrFsQuery { query_type: query_type::TPC_MASK, input: 2 },
+        GrFsQuery { query_type: query_type::TPC_MASK, input: 3 },
+    ]);
+    let (status, params) = reply_params(&command(&req)).expect("served");
+    assert_eq!(status, 0);
+    let a = grfsinfo::decode_answers(&params).expect("decode");
+    let rows = chip().gr_static.gpcs;
+    assert_eq!((a[0].1, a[0].3), (0, rows[0].tpc_mask));
+    assert_eq!((a[1].1, a[1].3), (0, rows[2].tpc_mask));
+    assert_eq!(a[2].1, grfsinfo::NV_ERR_INVALID_ARGUMENT, "gpcId 3 is past a three-GPC part");
 }
 
 /// ★ A MIG-only type is the other way round: served, with the refusal in the query's own

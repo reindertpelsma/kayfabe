@@ -286,9 +286,14 @@ fn a_ga106_host_fills_every_field_and_each_equals_the_captured_row_or_a_stated_d
     assert_eq!(got.zbc_table_sizes, f.zbc_table_sizes);
     assert_eq!(got.intr_subtree_map, f.intr_subtree_map);
     assert_eq!(got.memory_system, f.memory_system);
-    // gr_static: GPC mask, TPC masks, SM order and caps from real replies; zcull and the GR
-    // litters from the completion; tpc_to_pes / FECS / per-subctx AUTHORED — all equal.
+    // gr_static: GPC mask, TPC masks, the logical→physical map (libcuda's own GRMGR batch), SM
+    // order and caps from real replies; zcull, tpcCount, PES, the gfx mask and the GR litters
+    // from the completion; FECS / per-subctx AUTHORED — all equal. The optional GRMGR
+    // batch (PPC/ROP/syspipe) has no capture: `None`, as the fixture states.
     assert_eq!(got.gr_static.gpcs, f.gr_static.gpcs);
+    assert_eq!(got.gr_static.gfx_gpc_mask, f.gr_static.gfx_gpc_mask);
+    assert_eq!(got.gr_static.num_gfx_tpc, f.gr_static.num_gfx_tpc);
+    assert_eq!(got.gr_static.syspipe_masks, None);
     assert_eq!(got.gr_static.tpcs, f.gr_static.tpcs);
     assert_eq!(got.gr_static.sms_per_tpc, f.gr_static.sms_per_tpc);
     assert_eq!(got.gr_static.tpc_to_pes_map, f.gr_static.tpc_to_pes_map);
@@ -428,9 +433,33 @@ impl HostControls for CompletedGa106 {
                 }
                 Ok(())
             }
+            // GR_GET_ZCULL_MASK — asked by PHYSICAL gpcId: the row naming that physical GPC.
             0x2080_1237 => {
+                let gpc = u32::from_le_bytes(p[0..4].try_into().expect("4"));
+                let row = f.gr_static.gpcs.iter().find(|g| g.physical_id == gpc).expect("an enabled GPC");
+                put(p, 4, row.zcull_mask);
+                Ok(())
+            }
+            // ★ v3-gpcmask: the per-index floorsweeping controls the fixture's rows answer.
+            // GR_GET_NUM_TPCS_FOR_GPC — LOGICAL gpcId.
+            0x2080_1234 => {
                 let gpc = u32::from_le_bytes(p[0..4].try_into().expect("4")) as usize;
-                put(p, 4, f.gr_static.gpcs[gpc].zcull_mask);
+                put(p, 4, f.gr_static.gpcs[gpc].tpc_count);
+                Ok(())
+            }
+            // GPU_GET_PES_INFO — LOGICAL gpcId; numPesInGpc and the whole tpcToPesMap.
+            0x2080_0168 => {
+                let gpc = u32::from_le_bytes(p[0..4].try_into().expect("4")) as usize;
+                put(p, 4, f.gr_static.gpcs[gpc].num_pes_per_gpc);
+                for (i, m) in f.gr_static.tpc_to_pes_map.iter().enumerate() {
+                    put(p, 16 + 4 * i, *m);
+                }
+                Ok(())
+            }
+            // GR_GET_GFX_GPC_AND_TPC_INFO.
+            0x2080_1239 => {
+                put(p, 16, f.gr_static.gfx_gpc_mask);
+                put(p, 20, f.gr_static.num_gfx_tpc);
                 Ok(())
             }
             0x2080_121b => {
@@ -610,10 +639,11 @@ fn gpc_mask_tpc_masks_and_caps_equal_the_captured_row() {
     };
     let gpc_mask = hostfacts::derive_gpc_mask(&ask(0x2080_122a, vec![0; hostfacts::GR_MASK_PARAMS_SIZE])).expect("nonzero");
     assert_eq!(gpc_mask, f.gr_static.gpc_mask().expect("fixture"));
-    for (gpc, row) in f.gr_static.gpcs.iter().enumerate() {
+    // `GR_GET_TPC_MASK` takes the PHYSICAL gpcId: each row is asked by its own physical id.
+    for row in f.gr_static.gpcs {
         let mut req = vec![0u8; hostfacts::GR_MASK_PARAMS_SIZE];
-        req[16..20].copy_from_slice(&(gpc as u32).to_le_bytes());
-        assert_eq!(hostfacts::derive_tpc_mask(&ask(0x2080_122b, req), gpc as u32), Ok(row.tpc_mask));
+        req[16..20].copy_from_slice(&row.physical_id.to_le_bytes());
+        assert_eq!(hostfacts::derive_tpc_mask(&ask(0x2080_122b, req), row.physical_id), Ok(row.tpc_mask));
     }
     let caps = hostfacts::derive_gr_caps(&ask(0x2080_1227, vec![0; hostfacts::GR_CAPS_V2_PARAMS_SIZE])).expect("populated");
     assert_eq!(caps, f.gr_static.caps);
@@ -849,4 +879,19 @@ fn a_host_refusing_bios_info_still_fills_every_field_with_no_vbios_version() {
     let got = hostquery::query_host_facts(&mut NoBios(CompletedGa106(Ga106Replay::load())), Family::Ampere)
         .unwrap_or_else(|e| panic!("{e}"));
     assert_eq!(got.vbios_version, None);
+}
+
+/// ★ v3-gpcmask: the logical → physical GPC map is the real GA106's OWN answer — the query asks
+/// `GRMGR_GET_GR_FS_INFO` byte-identically to libcuda's `cuInit` batch (so the committed capture
+/// answers it), and the answer is the identity on this board — the fixture's `physical_id`s.
+#[test]
+fn the_gpc_map_is_the_real_ga106s_own_grmgr_answer() {
+    let f = ga106::host_facts();
+    let mut host = CompletedGa106(Ga106Replay::load());
+    let g = hostquery::query_gr_geometry(&mut host, Some(&f.gr_info)).unwrap_or_else(|e| panic!("{e:?}"));
+    assert_eq!(g.chiplet_gpc_map, [0, 1, 2]);
+    assert_eq!(g.chiplet_gpc_map, f.gr_static.gpcs.iter().map(|r| r.physical_id).collect::<Vec<_>>());
+    assert_eq!(g.tpc_counts, [4, 5, 5]);
+    assert_eq!(g.fs_extra, None, "the optional batch has no capture");
+    assert!(host.0.asked.contains(&kf_abi::grfsinfo::NV2080_CTRL_CMD_GRMGR_GET_GR_FS_INFO));
 }

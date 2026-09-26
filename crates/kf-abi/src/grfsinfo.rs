@@ -77,6 +77,24 @@
 //! libcuda hands RM a zeroed buffer. The identity is supported by q1 and q2 and merely
 //! consistent with q0.
 //!
+//! ⊘⊘ **CORRECTED 2026-09-26 (v3-gpcmask) — the paragraph below was WRONG in its second
+//! half, and a real GA106 says so.** `CHIPLET_GPC_MAP` is not *"the `n`-th set bit of
+//! `gpcMask`"*: the logical order is the firmware's, and `[measured]` it is not the physical
+//! order even on a contiguous mask — `traces/rpctrace_ga106_boot1.bin` (an RTX 3060, 580.159.04)
+//! has physical GPC 1 as its four-TPC GPC and `tpcCount[0] = 4`, so logical GPC 0 is physical
+//! GPC 1 there. ⇒ The map is now the HOST's own answer to this very control
+//! ([`crate::grstatic::GpcRow::physical_id`], asked at realize by `kf_rm::hostquery`), and this
+//! module no longer derives it at all. `[measured 2026-09-26, RTX 3060 Ti, 580.159.04, host]`
+//! the answers the per-GPC types give, which this module now serves:
+//!
+//! | type | `[IN] gpcId` | measured |
+//! |---|---|---|
+//! | `CHIPLET_GPC_MAP` | **logical** | `1,2,3,4,5` for `gpcMask = 0x3e`; `gpcId >= 5` → per-query `0x1f` `NV_ERR_INVALID_ARGUMENT`. (An RTX 4070, `0x1d`: `0,2,3,4`, the same `0x1f` and syspipe words — `traces/real_ad104/`.) |
+//! | `TPC_MASK` | **logical** | the PHYSICAL TPC mask of that GPC: `e,f,f,f,f` (`tpcMask[]` is `0,e,f,f,f,f`); `>= 5` → `0x1f` |
+//! | `PPC_MASK` / `ROP_MASK` | **logical** | `3` each; `>= 5` → `0x1f` |
+//! | `GPC_COUNT` / `CHIPLET_SYSPIPE_MASK` / `CHIPLET_GRAPHICS_SYSPIPE_MASK` | — | `5` / `1` / **`0`** |
+//!
+//! ⊘ SUPERSEDED 2026-09-26 by the correction above — kept as the reasoning it records:
 //! ⚠ ★★ **And "identity" is not what this module implements**, because on GA106 the identity
 //! and the correct derivation agree and cannot be told apart. `CHIPLET_GPC_MAP` maps a
 //! **logical** GPC index to a **physical** (chiplet) GPC id, which is *"the `n`-th set bit of
@@ -85,6 +103,12 @@
 //! separate, and there the derivation is the right one.
 
 use crate::NV_ERR_NOT_SUPPORTED;
+use crate::grstatic::{GpcRow, GrStaticProfile, GrSyspipeMasks};
+
+/// `NV_ERR_INVALID_ARGUMENT` — what a real GPU writes into a per-GPC query's `status` for a
+/// `gpcId` at or past the GPC count (`[measured 2026-09-26, RTX 3060 Ti, 580.159.04]`: `0x1f`
+/// for `CHIPLET_GPC_MAP`, `TPC_MASK`, `PPC_MASK` and `ROP_MASK` alike).
+pub const NV_ERR_INVALID_ARGUMENT: u32 = 0x0000_001f;
 
 /// `NV2080_CTRL_CMD_GRMGR_GET_GR_FS_INFO` — `ogkm-580: ctrl2080grmgr.h:56`.
 pub const NV2080_CTRL_CMD_GRMGR_GET_GR_FS_INFO: u32 = 0x2080_3801;
@@ -123,9 +147,9 @@ pub mod query_type {
     /// `_CHIPLET_GPC_MAP` — `[IN] gpcId` at `+0`, `[OUT] chipletGpcMap` at `+4`.
     /// ★ The only type libcuda's `cuInit` is measured to ask.
     pub const CHIPLET_GPC_MAP: u16 = 2;
-    /// `_TPC_MASK` — `[IN] gpcId` at `+0`, `[OUT] tpcMask` at `+4`.
+    /// `_TPC_MASK` — `[IN] gpcId` (LOGICAL) at `+0`, `[OUT] tpcMask` (physical TPC bits) at `+4`.
     pub const TPC_MASK: u16 = 3;
-    /// `_PPC_MASK` — `[IN] gpcId` at `+0`, `[OUT] ppcMask` at `+4`.
+    /// `_PPC_MASK` — `[IN] gpcId` (LOGICAL) at `+0`, `[OUT] ppcMask` at `+4`.
     pub const PPC_MASK: u16 = 4;
     /// `_PARTITION_CHIPLET_GPC_MAP` — ⊘ **deprecated and unconditionally refused by RM
     /// itself**: *"This query will return `NV_ERR_NOT_SUPPORTED` since deleting it would
@@ -139,7 +163,7 @@ pub mod query_type {
     pub const PROFILER_MON_GPC_MASK: u16 = 8;
     /// `_PARTITION_SYSPIPE_ID` — MIG only (`:198`).
     pub const PARTITION_SYSPIPE_ID: u16 = 9;
-    /// `_ROP_MASK` — `[IN] gpcId` at `+0`, `[OUT] ropMask` at `+4`.
+    /// `_ROP_MASK` — `[IN] gpcId` (LOGICAL) at `+0`, `[OUT] ropMask` at `+4`.
     pub const ROP_MASK: u16 = 10;
     /// `_CHIPLET_GRAPHICS_SYSPIPE_MASK` — `[OUT]`. *"Legacy case returns GR0 if GFX capable,
     /// else 0"* (`:208`).
@@ -152,38 +176,34 @@ pub mod query_type {
 /// rows this port already serves to `INTERNAL_STATIC_KGR_GET_FLOORSWEEPING_MASKS`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GrFsGeometry<'a> {
-    /// `gpcMask` — which physical GPCs exist. [`crate::grstatic::GA106_GPC_MASK`].
-    pub gpc_mask: u32,
-    /// `physGfxGpcMask` — which of them are graphics capable. Equal to `gpc_mask` on GA106,
-    /// and carried separately because they are separate fields in RM's own struct.
+    /// `physGfxGpcMask` — which physical GPCs are graphics capable.
     pub gfx_gpc_mask: u32,
-    /// One entry per **logical** GPC, in logical order. Only its length is read today; it is
-    /// here so a `TPC_MASK` arm has somewhere to come from the day the logical/physical
-    /// question below is settled by measurement.
-    pub tpc_masks: &'a [u32],
+    /// ★ One row per **logical** GPC, in logical order — [`GrStaticProfile::gpcs`], the same
+    /// rows the floorsweeping control encodes. `CHIPLET_GPC_MAP[i]` is `gpcs[i].physical_id`.
+    pub gpcs: &'a [GpcRow],
+    /// The host's syspipe words; `None` serves the header's legacy rule.
+    pub syspipe_masks: Option<GrSyspipeMasks>,
 }
 
-impl GrFsGeometry<'_> {
-    /// Map a **logical** GPC index to its **physical** (chiplet) GPC id: the `logical`-th set
-    /// bit of `gpc_mask`.
+impl<'a> GrFsGeometry<'a> {
+    /// The projection of one GR profile — one description of one silicon.
+    #[must_use]
+    pub fn from_profile(p: &GrStaticProfile) -> GrFsGeometry<'static> {
+        GrFsGeometry {
+            gfx_gpc_mask: p.gfx_gpc_mask,
+            gpcs: p.gpcs,
+            syspipe_masks: p.syspipe_masks,
+        }
+    }
+
+    /// Map a **logical** GPC index to its **physical** (chiplet) GPC id — the row's own
+    /// `physical_id`, i.e. the host's answer to this control.
     ///
-    /// ⚠ On GA106 (`gpc_mask = 0b111`) this is the identity, and so is a naive
-    /// `physical = logical`. ⊘ They are **not** distinguishable on this part; the derivation
-    /// is chosen because it is the one that stays right on a floorswept mask, not because
-    /// anything measured here rules the other out.
+    /// ⊘ Not "the `logical`-th set bit of `gpcMask`" (the rule until 2026-09-26): a real GA106
+    /// whose four-TPC GPC is physical 1 has logical 0 → physical 1 on a contiguous `0b111`.
     #[must_use]
     pub fn physical_gpc(&self, logical: u32) -> Option<u32> {
-        let mut seen = 0u32;
-        for bit in 0..32u32 {
-            if self.gpc_mask & (1 << bit) == 0 {
-                continue;
-            }
-            if seen == logical {
-                return Some(bit);
-            }
-            seen += 1;
-        }
-        None
+        self.gpcs.get(logical as usize).map(|g| g.physical_id)
     }
 }
 
@@ -207,9 +227,13 @@ pub enum QueryAnswer {
         /// The value.
         value: u32,
     },
-    /// `status = NV_ERR_NOT_SUPPORTED`, no data — ★ and this is the **right answer**, not a
-    /// gap: RM itself refuses these on a non-MIG part.
-    RefusedByHardware,
+    /// `status` written into the query, no data — ★ and this is the **right answer**, not a
+    /// gap: RM itself refuses these (`NV_ERR_NOT_SUPPORTED` for a MIG-only type on a non-MIG
+    /// part, [`NV_ERR_INVALID_ARGUMENT`] for a `gpcId` past the GPC count).
+    RefusedByHardware {
+        /// The per-query status.
+        status: u32,
+    },
     /// ⊘ This port does not model the query. The **whole call** must be refused.
     Unmodelled,
 }
@@ -227,29 +251,52 @@ impl GrFsQuery {
     /// become a **silent wrong answer** to a guest that a real GA106 answers correctly.
     ///
     /// ⇒ [`QueryAnswer::RefusedByHardware`] is used **only** where the header states RM
-    /// refuses on a legacy/non-MIG part. Everything else this port cannot answer returns
+    /// refuses on a legacy/non-MIG part, or where a real GPU was measured to refuse (a `gpcId`
+    /// past the GPC count). Everything else this port cannot answer returns
     /// [`QueryAnswer::Unmodelled`] and takes the whole control down, which is loud, appears
     /// in the ledger, and costs exactly one boot to find.
     #[must_use]
     pub fn answer(self, geom: &GrFsGeometry<'_>) -> QueryAnswer {
+        // ★ The per-GPC types take a LOGICAL `gpcId`; past the GPC count a real GPU writes
+        // `NV_ERR_INVALID_ARGUMENT` into the query and marches on (measured, module header).
+        let row = geom.gpcs.get(self.input as usize);
+        let per_gpc = |value: fn(&GpcRow) -> Option<u32>| match row {
+            None => QueryAnswer::RefusedByHardware {
+                status: NV_ERR_INVALID_ARGUMENT,
+            },
+            Some(g) => match value(g) {
+                Some(v) => QueryAnswer::Data { at: 4, value: v },
+                // ⊘ In range, but the host's word was never measured: whole-call refusal.
+                None => QueryAnswer::Unmodelled,
+            },
+        };
         match self.query_type {
             // `nvPopCount32(gpcMask)` — the same idiom RM uses
-            // (`ogkm-580: kernel_graphics_manager.c:1041`).
+            // (`ogkm-580: kernel_graphics_manager.c:1041`); one row per enabled GPC.
             query_type::GPC_COUNT => QueryAnswer::Data {
                 at: 0,
-                value: geom.gpc_mask.count_ones(),
+                value: u32::try_from(geom.gpcs.len()).unwrap_or(u32::MAX),
             },
-            // ★ The one libcuda asks. Out of range is a per-query fault, not a call fault:
-            // the caller chose the index and RM logs and marches on.
-            query_type::CHIPLET_GPC_MAP => match geom.physical_gpc(self.input) {
-                Some(phys) => QueryAnswer::Data { at: 4, value: phys },
-                None => QueryAnswer::RefusedByHardware,
+            // ★ The one libcuda asks: the host's own logical → physical map.
+            query_type::CHIPLET_GPC_MAP => per_gpc(|g| Some(g.physical_id)),
+            // ★ Modelled since 2026-09-26: a LOGICAL `gpcId` answered with that GPC's PHYSICAL
+            // TPC mask — the row's `tpc_mask`, the word `tpcMask[physical_id]` carries.
+            query_type::TPC_MASK => per_gpc(|g| Some(g.tpc_mask)),
+            // The host's own words, when realize measured them.
+            query_type::PPC_MASK => per_gpc(|g| g.ppc_mask),
+            query_type::ROP_MASK => per_gpc(|g| g.rop_mask),
+            // *"Legacy case returns 1 GR"* / *"GR0 if GFX capable, else 0"* — the header's
+            // rule when the host's words were not measured; the host's words when they were
+            // (⚠ a GeForce answers 0 for the second: `GrSyspipeMasks`).
+            query_type::CHIPLET_SYSPIPE_MASK => QueryAnswer::Data {
+                at: 0,
+                value: geom.syspipe_masks.map_or(1, |m| m.syspipe),
             },
-            // *"Legacy case returns 1 GR"* / *"GR0 if GFX capable, else 0"*.
-            query_type::CHIPLET_SYSPIPE_MASK => QueryAnswer::Data { at: 0, value: 1 },
             query_type::CHIPLET_GRAPHICS_SYSPIPE_MASK => QueryAnswer::Data {
                 at: 0,
-                value: u32::from(geom.gfx_gpc_mask != 0),
+                value: geom
+                    .syspipe_masks
+                    .map_or(u32::from(geom.gfx_gpc_mask != 0), |m| m.graphics_syspipe),
             },
             // ⊘ RM's own answer on this part. Type 5 is refused on EVERY part, deprecated;
             // 7, 8, 9 and 12 each carry an explicit "Does not support … legacy case".
@@ -257,19 +304,11 @@ impl GrFsQuery {
             | query_type::PARTITION_CHIPLET_SYSPIPE_IDS
             | query_type::PROFILER_MON_GPC_MASK
             | query_type::PARTITION_SYSPIPE_ID
-            | query_type::GFX_CAPABLE_GPC_MASK => QueryAnswer::RefusedByHardware,
-            // ⊘ TPC_MASK, PPC_MASK and ROP_MASK are answered by real hardware and NOT by
-            // this port — deliberately, and each for its own reason:
-            //   * `TPC_MASK`: `tpcMask[]` is documented *"indexed by physical GPC ID for
-            //     non-MIG"* (`ctrl2080internal.h:298-306`) while the query's `[IN]` is a bare
-            //     `gpcId`. On GA106's contiguous `0b111` mask the logical and physical
-            //     readings coincide, so nothing here can tell them apart, and guessing gives
-            //     a wrong TPC mask on the first floorswept part with no symptom.
-            //   * `PPC_MASK` needs `NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_PPC_MASKS`
-            //     (`0x20800a30`) and `ROP_MASK` needs `..._GET_ROP_INFO` (`0x20800a2e`);
-            //     `[measured 2026-08-08, boot gt1432]` both are in the unserviced ledger, so
-            //     this port holds neither row.
-            // ⇒ Whole-call refusal, not a per-query one. See this method's doc comment.
+            | query_type::GFX_CAPABLE_GPC_MASK => QueryAnswer::RefusedByHardware {
+                status: NV_ERR_NOT_SUPPORTED,
+            },
+            // ⊘ Anything else is a type this port does not model ⇒ whole-call refusal, not a
+            // per-query one. See this method's doc comment.
             _ => QueryAnswer::Unmodelled,
         }
     }
@@ -377,7 +416,7 @@ pub fn answer_gr_fs_info(
         };
         let (status, data) = match q.answer(geom) {
             QueryAnswer::Data { at: off, value } => (0u32, Some((off, value))),
-            QueryAnswer::RefusedByHardware => (NV_ERR_NOT_SUPPORTED, None),
+            QueryAnswer::RefusedByHardware { status } => (status, None),
             QueryAnswer::Unmodelled => {
                 return Err(GrFsInfoError::UnmodelledQuery {
                     query_type: q.query_type,
@@ -450,10 +489,40 @@ mod tests {
     use super::*;
 
     fn ga106() -> GrFsGeometry<'static> {
+        GrFsGeometry::from_profile(&crate::grstatic::GA106_GR_STATIC)
+    }
+
+    const fn row(physical_id: u32, tpc_mask: u32) -> GpcRow {
+        GpcRow {
+            physical_id,
+            tpc_mask,
+            tpc_count: tpc_mask.count_ones(),
+            mmu_per_gpc: 1,
+            num_pes_per_gpc: 2,
+            zcull_mask: 0xf,
+            ppc_mask: Some(0x3),
+            rop_mask: Some(0x3),
+        }
+    }
+
+    /// ★ The RTX 3060 Ti's GR as its host answered it (`[measured 2026-09-26]`, module header):
+    /// `gpcMask = 0x3e`, logical GPC `i` is physical `i + 1`, physical GPC 1 has three TPCs.
+    static GA104_3060TI: [GpcRow; 5] = [
+        row(1, 0xe),
+        row(2, 0xf),
+        row(3, 0xf),
+        row(4, 0xf),
+        row(5, 0xf),
+    ];
+
+    fn ga104() -> GrFsGeometry<'static> {
         GrFsGeometry {
-            gpc_mask: crate::grstatic::GA106_GPC_MASK,
-            gfx_gpc_mask: crate::grstatic::GA106_GPC_MASK,
-            tpc_masks: &[0x1e, 0x1f, 0x1f],
+            gfx_gpc_mask: 0x3e,
+            gpcs: &GA104_3060TI,
+            syspipe_masks: Some(GrSyspipeMasks {
+                syspipe: 1,
+                graphics_syspipe: 0,
+            }),
         }
     }
 
@@ -530,9 +599,10 @@ mod tests {
                 "type {qt}"
             );
         }
+        // ⊘ `TPC_MASK` left this list on 2026-09-26 (modelled: the row's own mask). `PPC_MASK`
+        // and `ROP_MASK` stay here for a profile that did not measure them — the fixture.
         for qt in [
             query_type::INVALID,
-            query_type::TPC_MASK,
             query_type::PPC_MASK,
             query_type::ROP_MASK,
             13,
@@ -553,6 +623,8 @@ mod tests {
     }
 
     /// An out-of-range `gpcId` is the caller's fault and is logged per query — RM marches on.
+    /// ⊘ The status was `NV_ERR_NOT_SUPPORTED` until 2026-09-26, chosen without a measurement;
+    /// a real GPU writes `NV_ERR_INVALID_ARGUMENT` (module header).
     #[test]
     fn an_out_of_range_gpc_is_a_per_query_fault_not_a_call_fault() {
         let req = build_request(&[
@@ -567,7 +639,7 @@ mod tests {
         ]);
         let out = answer_gr_fs_info(&req, &ga106()).expect("served");
         let a = decode_answers(&out).expect("decode");
-        assert_eq!(a[0].1, NV_ERR_NOT_SUPPORTED);
+        assert_eq!(a[0].1, NV_ERR_INVALID_ARGUMENT);
         assert_eq!(a[1], (1, 0, 3, 0), "the batch marched on");
     }
 
@@ -597,22 +669,102 @@ mod tests {
         ));
     }
 
-    /// ★ The logical→physical map follows the mask, not the index — checked on a floorswept
-    /// mask GA106 does not have, because GA106 cannot tell the two apart.
+    /// ★ The logical→physical map is the ROW's, not "the n-th set bit" — checked on a part
+    /// where the two differ even though the mask is contiguous (`traces/rpctrace_ga106_boot1.bin`:
+    /// an RTX 3060 whose four-TPC GPC is physical 1, so logical 0 → physical 1).
     #[test]
-    fn the_gpc_map_follows_a_floorswept_mask() {
-        let swept = GrFsGeometry {
-            gpc_mask: 0b1101,
-            gfx_gpc_mask: 0b1101,
-            tpc_masks: &[0x1f, 0x1f, 0x1f],
+    fn the_gpc_map_is_the_rows_not_the_nth_set_bit() {
+        static RPCTRACE_GA106: [GpcRow; 3] = [row(1, 0x1b), row(0, 0x1f), row(2, 0x1f)];
+        let g = GrFsGeometry {
+            gfx_gpc_mask: 0b111,
+            gpcs: &RPCTRACE_GA106,
+            syspipe_masks: None,
         };
-        assert_eq!(swept.physical_gpc(0), Some(0));
-        assert_eq!(swept.physical_gpc(1), Some(2));
-        assert_eq!(swept.physical_gpc(2), Some(3));
-        assert_eq!(swept.physical_gpc(3), None);
-        // ⊘ And on GA106 the naive identity agrees — which is why the above is the test.
+        assert_eq!(
+            g.physical_gpc(0),
+            Some(1),
+            "the n-th-set-bit rule would say 0"
+        );
+        assert_eq!(g.physical_gpc(1), Some(0));
+        assert_eq!(g.physical_gpc(2), Some(2));
+        assert_eq!(g.physical_gpc(3), None);
+        // ⊘ And on the fixture board the identity holds — which is why it could not tell.
         for i in 0..3 {
             assert_eq!(ga106().physical_gpc(i), Some(i));
+        }
+    }
+
+    /// ★★★ The RTX 3060 Ti's host, reproduced: every per-GPC type it answers, with its
+    /// logical `gpcId`, its values, and its `0x1f` past the fifth GPC — and the syspipe words.
+    #[test]
+    fn a_floorswept_hosts_own_answers_are_served() {
+        let mut qs = vec![
+            GrFsQuery {
+                query_type: query_type::GPC_COUNT,
+                input: 0,
+            },
+            GrFsQuery {
+                query_type: query_type::CHIPLET_SYSPIPE_MASK,
+                input: 0,
+            },
+            GrFsQuery {
+                query_type: query_type::CHIPLET_GRAPHICS_SYSPIPE_MASK,
+                input: 0,
+            },
+        ];
+        for t in [
+            query_type::CHIPLET_GPC_MAP,
+            query_type::TPC_MASK,
+            query_type::PPC_MASK,
+            query_type::ROP_MASK,
+        ] {
+            for gpc in 0..6 {
+                qs.push(GrFsQuery {
+                    query_type: t,
+                    input: gpc,
+                });
+            }
+        }
+        let out = answer_gr_fs_info(&build_request(&qs), &ga104()).expect("served");
+        let a = decode_answers(&out).expect("decode");
+        assert_eq!(a[0], (query_type::GPC_COUNT, 0, 5, 0));
+        assert_eq!(a[1], (query_type::CHIPLET_SYSPIPE_MASK, 0, 1, 0));
+        assert_eq!(
+            a[2],
+            (query_type::CHIPLET_GRAPHICS_SYSPIPE_MASK, 0, 0, 0),
+            "the host's 0"
+        );
+        let per = |t: usize| &a[3 + 6 * t..3 + 6 * t + 6];
+        assert_eq!(
+            per(0).iter().map(|q| q.3).collect::<Vec<_>>(),
+            [1, 2, 3, 4, 5, 0],
+            "CHIPLET_GPC_MAP"
+        );
+        assert_eq!(
+            per(1).iter().map(|q| q.3).collect::<Vec<_>>(),
+            [0xe, 0xf, 0xf, 0xf, 0xf, 0],
+            "TPC_MASK"
+        );
+        assert_eq!(
+            per(2).iter().map(|q| q.3).collect::<Vec<_>>(),
+            [3, 3, 3, 3, 3, 0],
+            "PPC_MASK"
+        );
+        assert_eq!(
+            per(3).iter().map(|q| q.3).collect::<Vec<_>>(),
+            [3, 3, 3, 3, 3, 0],
+            "ROP_MASK"
+        );
+        for t in 0..4 {
+            assert!(
+                per(t)[..5].iter().all(|q| q.1 == 0),
+                "type {t}: in range is NV_OK"
+            );
+            assert_eq!(
+                per(t)[5].1,
+                NV_ERR_INVALID_ARGUMENT,
+                "type {t}: gpcId 5 is past the count"
+            );
         }
     }
 
