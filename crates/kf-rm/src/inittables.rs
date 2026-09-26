@@ -1417,6 +1417,12 @@ impl WantedTable {
             Self::BiosGetInfoV2 => "NV2080_CTRL_BIOS_GET_INFO_V2_PARAMS",
             Self::C2cInfo => "NV2080_CTRL_CMD_BUS_GET_C2C_INFO_PARAMS",
             Self::PromoteFaultMethodBuffers => "NVA06C_CTRL_INTERNAL_PROMOTE_FAULT_METHOD_BUFFERS_PARAMS",
+            // ⚠ A WAIT-PATH control: a refusal here is a forged completion
+            // (`a_refusal_the_guest_reads_as_wait_over_forges_a_completion`). It is gated like the
+            // rest only because its layout is ONE `NvU32` at every measured tag — pinned by
+            // `wanted_table_versions.rs`, so the gate structurally cannot fire on it.
+            Self::McServiceInterrupts => "NV2080_CTRL_MC_SERVICE_INTERRUPTS_PARAMS",
+            Self::GrSmIssueRateModifier => "NV2080_CTRL_INTERNAL_STATIC_KGR_GET_SM_ISSUE_RATE_MODIFIER_PARAMS",
             Self::GssLegacy8159
             | Self::GssLegacy8162
             | Self::CudartWatchdogInfo

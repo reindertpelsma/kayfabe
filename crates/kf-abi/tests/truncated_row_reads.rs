@@ -97,6 +97,11 @@ fn is_self_referential(path: &str) -> bool {
         // same self-references, not new consumers.
         || path.ends_with("crates/kf-abi/src/oracle.rs")
         || path.ends_with("crates/kf-abi/tests/truncated_row_reads.rs")
+        // The driver matrix (2026-09-26, `V3_DRIVER_MATRIX.md`) lists every consumed control's
+        // command id per measured ogkm tag, compiled out of the headers. A control id appearing
+        // there is a MEASUREMENT of that id, not a consumer of the captured row's body — the
+        // capture-reliance question this gate asks does not apply to it.
+        || path.ends_with("crates/kf-abi/src/generated/matrix.rs")
 }
 
 /// The forms a control id is written in here: `0x2080_0a40`, `0x20800a40`, `ctl_20800a40`,

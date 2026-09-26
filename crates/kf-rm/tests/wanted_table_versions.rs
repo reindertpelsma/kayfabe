@@ -20,7 +20,10 @@ fn every_served_controls_params_type_is_measured() {
              tools/drivermatrix/consumed.txt and regenerate"
         );
     }
-    assert!(named >= 40, "only {named} served controls declare a params type");
+    assert!(
+        named >= 40,
+        "only {named} served controls declare a params type"
+    );
 }
 
 /// ★ Every served control passes the gate at every measured 580.x tag (the layouts the
@@ -30,16 +33,30 @@ fn the_gate_passes_the_580_branch_and_fires_where_the_layout_moved() {
     for v in MEASURED.iter().filter(|v| v.major == 580) {
         for w in WantedTable::ALL {
             if let Some(ct) = w.c_type() {
-                assert_eq!(layout_differs_from_bench(ct, *v), None, "{w:?} ({ct}) at {v}");
+                assert_eq!(
+                    layout_differs_from_bench(ct, *v),
+                    None,
+                    "{w:?} ({ct}) at {v}"
+                );
             }
         }
     }
     // Known-positives, measured: FB_GET_INFO_V2 is 460 bytes at 575.x, KGR_GET_GLOBAL_SM_ORDER
     // 26912 at 575.x, INTR_GET_KERNEL_TABLE 2068 at every tag <= 575.64.05.
-    let v575 = DriverVersion { major: 575, minor: 57, patch: 8 };
-    assert_eq!(layout_differs_from_bench("NV2080_CTRL_FB_GET_INFO_V2_PARAMS", v575), Some(460));
+    let v575 = DriverVersion {
+        major: 575,
+        minor: 57,
+        patch: 8,
+    };
     assert_eq!(
-        layout_differs_from_bench("NV2080_CTRL_INTERNAL_STATIC_KGR_GET_GLOBAL_SM_ORDER_PARAMS", v575),
+        layout_differs_from_bench("NV2080_CTRL_FB_GET_INFO_V2_PARAMS", v575),
+        Some(460)
+    );
+    assert_eq!(
+        layout_differs_from_bench(
+            "NV2080_CTRL_INTERNAL_STATIC_KGR_GET_GLOBAL_SM_ORDER_PARAMS",
+            v575
+        ),
         Some(26912)
     );
     assert_eq!(
@@ -48,8 +65,31 @@ fn the_gate_passes_the_580_branch_and_fires_where_the_layout_moved() {
     );
     // An unmeasured version and an unknown type both mean "no statement" — the size check stays.
     assert_eq!(
-        layout_differs_from_bench("NV2080_CTRL_FB_GET_INFO_V2_PARAMS", DriverVersion { major: 580, minor: 159, patch: 3 }),
+        layout_differs_from_bench(
+            "NV2080_CTRL_FB_GET_INFO_V2_PARAMS",
+            DriverVersion {
+                major: 580,
+                minor: 159,
+                patch: 3
+            }
+        ),
         None
     );
     assert_eq!(layout_differs_from_bench("NO_SUCH_TYPE", v575), None);
+}
+
+/// ★★ `MC_SERVICE_INTERRUPTS` is on a WAIT path: a refusal is read by a blocked waiter as
+/// end-of-wait, i.e. a forged completion (measured 2026-09-26 with clpeak). The per-control
+/// version gate may therefore never fire on it — which holds exactly because its params are one
+/// `NvU32 engines` at EVERY measured tag. If a future tag changes that, this test turns red
+/// before any guest sees a refusal.
+#[test]
+fn the_wait_path_control_has_one_layout_at_every_measured_tag() {
+    for v in MEASURED {
+        assert_eq!(
+            layout_differs_from_bench("NV2080_CTRL_MC_SERVICE_INTERRUPTS_PARAMS", *v),
+            None,
+            "{v}"
+        );
+    }
 }
