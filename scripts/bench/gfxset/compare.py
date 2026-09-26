@@ -52,6 +52,11 @@ def main(R):
             if m: img[m.group(1)] = (m.group(2), m.group(3), m.group(4))
     gd = digs(f"{R}/guest.dig"); gd.update(digs(f"{R}/iso/guest.dig"))
     items = [i for i in list(h1) + [x for x in gb if x not in h1] if i and not i.startswith("_")]
+    # a run of a SUBSET (suite.sh <run> <item>...) against a reused baseline grades the subset only —
+    # every requested item still gets a guest row (suite.sh records BOOT_FAIL for one that never ran)
+    want = os.environ.get("GSET_COMPARE_ITEMS", "").split()
+    if want:
+        items = [i for i in items if i in want] + [i for i in want if i not in items]
     rows, cnt = [], collections.Counter()
     for it in items:
         h = h1.get(it, {}); g = gi.get(it) or gb.get(it, {})

@@ -101,7 +101,7 @@ if [ "${GSET_NO_ISOLATE:-0}" != 1 ]; then
     done
 fi
 bash "$HERE/imgcmp.sh" "$R" > "$R/imgcmp.txt" 2>&1
-python3 "$HERE/compare.py" "$R" | tee "$R/verdict.md"
+GSET_COMPARE_ITEMS="$ITEMS" python3 "$HERE/compare.py" "$R" | tee "$R/verdict.md"
 S=$(grep -o 'pass=[0-9]*/[0-9]*' "$R/verdict.md" | tail -1)
 if [ "${S#pass=}" != "" ] && [ "$(echo "${S#pass=}" | cut -d/ -f1)" = "$(echo "${S#pass=}" | cut -d/ -f2)" ]; then v=PASS; else v=FAIL; fi
 say "GSET_SUITE_VERDICT=$v ($S) rev=$REV"
