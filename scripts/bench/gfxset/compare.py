@@ -57,8 +57,12 @@ def main(R):
         diff = [k for k in graded if (it, k) in gd and gd[(it, k)] != hd1[(it, k)]]
         absent = [k for k in graded if (it, k) not in gd]
         hx = int(h.get("host_xid", "0") or 0); gx = g.get("host_xid", "-")
+        h2v = h2.get(it, {}).get("verdict", "PASS" if not h2 else "-")
+        hx2 = int(h2.get(it, {}).get("host_xid", "0") or 0)
         if hv != "PASS" or hx > 0:
             final = "NOTRUN(host)"
+        elif h2v != "PASS" or hx2 > 0:
+            final = "NOTRUN(host-flaky)"    # bare metal passed once and not twice: no baseline to grade against
         elif gv == "PASS" and gx not in ("-", "0"):
             final = "FAIL(XID)"
         elif gv == "PASS" and diff:
@@ -88,8 +92,9 @@ def main(R):
     for w in gb.get("_wedges", []) + gi.get("_wedges", []):
         print(f"\n⊘ boot {w.get('boot')} WEDGED after {w.get('after')}")
     print("\n" + ", ".join(f"{k}: {v}" for k, v in sorted(cnt.items())))
-    npass = cnt["PASS"]; nrun = len(items) - cnt["NOTRUN(host)"]
-    print(f"GSET_SUITE_SUMMARY pass={npass}/{nrun} notrun_host={cnt['NOTRUN(host)']}")
+    nh = cnt["NOTRUN(host)"] + cnt["NOTRUN(host-flaky)"]
+    npass = cnt["PASS"]; nrun = len(items) - nh
+    print(f"GSET_SUITE_SUMMARY pass={npass}/{nrun} notrun_host={nh}")
 
 if __name__ == "__main__":
     for R in sys.argv[1:]:
