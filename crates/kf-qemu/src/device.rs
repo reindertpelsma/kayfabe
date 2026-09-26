@@ -892,6 +892,9 @@ impl Device {
         if !self.plane.doorbell.follows_guest_bar1() || vf_rel >= kf_trap::memmap::PAGE {
             return;
         }
+        if vf_rel == self.plane.doorbell.offset() {
+            self.bar1_overlay.rings.fetch_add(1, Ordering::Relaxed);
+        }
         self.bar0_write(kf_trap::memmap::VF_USERMODE_PAGE + vf_rel, val, width);
     }
 
@@ -1349,13 +1352,14 @@ impl Device {
             + &if self.plane.doorbell.follows_guest_bar1() {
                 let b = &self.bar1_overlay;
                 format!(
-                    " bar1db[trapped={} unmirrored={} deferred_clears={} installed={} removed={} refused={}]",
+                    " bar1db[trapped={} unmirrored={} deferred_clears={} installed={} removed={} refused={} rings={}]",
                     va.usermode_trapped,
                     va.usermode_unmirrored,
                     va.deferred_clears,
                     b.installed.load(o),
                     b.removed.load(o),
-                    b.refused.load(o)
+                    b.refused.load(o),
+                    b.rings.load(o)
                 )
             } else {
                 String::new()
