@@ -296,7 +296,8 @@ impl Device {
             implementation,
             revision,
             fb_mb: cfg.fb_mb,
-            pcie_link_caps: pcie_link_caps(pci.max_gen),
+            pcie_link_caps: pcie_link_caps(pci.max_gen, pci.max_width)
+                .ok_or(format!("host link width x{} is not a PCIe width", pci.max_width))?,
         };
         let boot = boot_regs(family, &facts);
 
@@ -313,7 +314,7 @@ impl Device {
             device: pci.device,
             class: [(pci.class & 0xFF) as u8, ((pci.class >> 8) & 0xFF) as u8, ((pci.class >> 16) & 0xFF) as u8],
         };
-        let vbios = vbios_profile(family, id)
+        let vbios = vbios_profile(family, id, host.vbios_version)
             .map_err(|e| format!("{e:?}"))
             .and_then(|p| kf_abi::vbios::build(&p, table.vbios_wire()).map_err(|e| format!("VBIOS: {e:?}")))?;
 

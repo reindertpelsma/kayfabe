@@ -177,9 +177,12 @@ pub fn with_gsp_and_disp_rows(mut table: Vec<IntrTableEntry>) -> Result<Vec<Intr
 /// Rule: GR0 → vector 0 (its runlist-0 graphics CEs notify through it and get no row, as in the
 /// capture); each async CE → its runlist number; the SW pseudo-engine → none. Distinct by
 /// construction and below the 12-bit leaf-vector limit.
+///
+/// `grce_mask` is the host die's own GRCE set ([`kf_abi::cecaps::HostCeCaps::grce_mask`]) —
+/// ⊘ never GA10x's `0x03` (GB20x has four GRCEs, `kernel_ce_gb202.c:36`).
 #[must_use]
-pub fn engine_notification_rows(engines: &[EngineKind]) -> Vec<IntrTableEntry> {
-    let grce = |i: u32| i < 64 && kf_abi::cecaps::GA10X_GRCE_LCE_MASK & (1u64 << i) != 0;
+pub fn engine_notification_rows(engines: &[EngineKind], grce_mask: u64) -> Vec<IntrTableEntry> {
+    let grce = |i: u32| i < 64 && grce_mask & (1u64 << i) != 0;
     let mut next_runlist = 1u32;
     let mut out = Vec::new();
     for &kind in engines {
@@ -322,8 +325,9 @@ fn fault_ids(family: Family) -> Result<(u32, u32, u32), LayoutRefusal> {
 /// Why the engine table's layout is what it is.
 pub const ENGINE_LAYOUT_WHY: Why = Why::Advertised(
     "runlist, PBDMA, reset, RC and CHRAM slots describe OUR device's topology, not the host's: guest channels \
-     are re-born on host twins and guest tokens are translated. Layout: GR0 and the GRCEs (kf_abi::cecaps::\
-     GA10X_GRCE_LCE_MASK, the set the served CE caps advertise) share runlist 0 with PBDMAs 0 and 1; every other \
+     are re-born on host twins and guest tokens are translated. Layout: GR0 and the GRCEs (the HOST die's GRCE \
+     bits from CE_GET_ALL_CAPS 0x20802a0a, the set the served CE caps advertise: 2 on GA10x/Ada/GH100, up to 4 on \
+     GB20x) share runlist 0 with GR's PBDMAs 0 and 1 (GRCE k on PBDMA k mod 2 — ENGINE_MAX_PBDMA is 2); every other \
      LCE owns runlist 1, 2, ... with PBDMA runlist+1; RUNLIST_PRI_BASE = 0xC00000 + 0x400*runlist and \
      CHRAM_PRI_BASE = 0xC20000 + 0x2000*runlist on Ampere+ (engine_info.h:66-90: 'valid only on Ampere+', so 0 \
      on Turing; no kernel-RM reader outside kfifoEngineInfoXlate); RESET bits 12 (GR) and 2+i / 3+i (CEi, i<10 / \
@@ -337,17 +341,18 @@ pub const ENGINE_LAYOUT_WHY: Why = Why::Advertised(
 ///
 /// `engines` is the advertised list in host order (GR, CEs, SW). Leaks each name once
 /// (`FifoDeviceEntry::name` is `&'static str`) — call at realize, once per device.
+/// `grce_mask` is the host die's GRCE set ([`kf_abi::cecaps::HostCeCaps::grce_mask`]).
 ///
 /// # Errors
 /// [`LayoutRefusal`] for Hopper (no `HOST0`), or a list with a second GR (MIG, whose GR
 /// runlists this layout does not state).
-pub fn engine_table(family: Family, engines: &[EngineKind]) -> Result<Vec<FifoDeviceEntry>, LayoutRefusal> {
+pub fn engine_table(family: Family, engines: &[EngineKind], grce_mask: u64) -> Result<Vec<FifoDeviceEntry>, LayoutRefusal> {
     let (gr_fault, ce0_fault, host0) = fault_ids(family)?;
     if engines.iter().any(|k| matches!(k, EngineKind::Graphics(i) if *i > 0)) {
         return Err(LayoutRefusal { family, missing: "runlists for GR1..GR7 (MIG): this layout states GR0 only" });
     }
     let esched = !matches!(family, Family::Turing);
-    let grce = |i: u32| i < 64 && kf_abi::cecaps::GA10X_GRCE_LCE_MASK & (1u64 << i) != 0;
+    let grce = |i: u32| i < 64 && grce_mask & (1u64 << i) != 0;
     let mut next_runlist = 1u32;
     let mut next_tag = 0u32;
     let mut grce_seen = 0u32;
@@ -388,7 +393,13 @@ pub fn engine_table(family: Family, engines: &[EngineKind]) -> Result<Vec<FifoDe
                 d[slot::MC] = MC_CE0 + i;
                 d[slot::DEV_TYPE_ENUM] = DEV_TYPE_LCE;
                 d[slot::INSTANCE_ID] = i;
-                pbdma_ids[0] = if runlist == Some(0) { rl_engine - 1 } else { runlist.unwrap_or(0) + 1 };
+                // A GRCE rides one of GR's two PBDMAs (k mod 2: GA10x's GRCE0/1 → 0/1 exactly as
+                // before; GB20x's GRCE2/3 → 0/1 again, never an async runlist's PBDMA).
+                pbdma_ids[0] = if runlist == Some(0) {
+                    (rl_engine - 1) % ENGINE_MAX_PBDMA as u32
+                } else {
+                    runlist.unwrap_or(0) + 1
+                };
                 num_pbdmas = 1;
             }
             EngineKind::Software => {

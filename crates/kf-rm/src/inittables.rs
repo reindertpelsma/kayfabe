@@ -2337,8 +2337,9 @@ impl CommandPolicy for InitTablePolicy {
             //
             // ⊘ And it states no new number either: `present` is the `DEV_TYPE_ENUM_LCE`
             // rows of `chip.engines` — the same slice `WantedTable::DeviceInfo` and
-            // `WantedTable::InternalDeviceInfo` serve — and the one per-CE caps bit is
-            // `NV_CE_GRCE_ALLOWED_LCE_MASK` intersected with them. A device that advertises
+            // `WantedTable::InternalDeviceInfo` serve — and each LCE's caps (GRCE included)
+            // are the HOST die's own `CE_GET_ALL_CAPS` answer (`HostFacts::ce_caps`,
+            // 2026-09-26; was GA10x's `NV_CE_GRCE_ALLOWED_LCE_MASK` + a GA106 measurement). A device that advertises
             // four copy engines to the guest's FIFO and five to its CE layer would be two
             // descriptions of one silicon.
             //
@@ -2350,7 +2351,7 @@ impl CommandPolicy for InitTablePolicy {
             // (`kgmmuInitCeMmuFaultIdRange_GA100` needs an LCE row to boot at all), and a
             // `present` of zero is a declared value meaning "this GPU has no copy engines".
             WantedTable::CeGetAllPhysicalCaps => {
-                let Ok(geometry) = kf_abi::cecaps::CeGeometry::from_engines(&self.host.engines)
+                let Ok(geometry) = kf_abi::cecaps::CeGeometry::from_engines(&self.host.engines, &self.host.ce_caps)
                 else {
                     return refuse();
                 };
@@ -2375,7 +2376,7 @@ impl CommandPolicy for InitTablePolicy {
             // `0x20802a02` refusing LCE4 on a real GA106. ⊘ A zero caps row would NOT be the
             // safe fallback: `{0,0}` positively claims a copy engine that can do nothing.
             WantedTable::CeGetPhysicalCaps => {
-                let Ok(geometry) = kf_abi::cecaps::CeGeometry::from_engines(&self.host.engines)
+                let Ok(geometry) = kf_abi::cecaps::CeGeometry::from_engines(&self.host.engines, &self.host.ce_caps)
                 else {
                     return refuse();
                 };
@@ -2401,7 +2402,7 @@ impl CommandPolicy for InitTablePolicy {
             // `queryCopyEngines` issues both per engine, six lines apart, each with a hard
             // `goto done`. Serving one alone moves the wall and buys nothing.
             WantedTable::CeGetCePceMask => {
-                let Ok(geometry) = kf_abi::cecaps::CeGeometry::from_engines(&self.host.engines)
+                let Ok(geometry) = kf_abi::cecaps::CeGeometry::from_engines(&self.host.engines, &self.host.ce_caps)
                 else {
                     return refuse();
                 };
@@ -2531,10 +2532,17 @@ impl CommandPolicy for InitTablePolicy {
             // ★★★ The SPLICE arm: keep the guest's own request and overwrite only the words
             // a real GA106 overwrites. A constant body here would clobber content the guest
             // sent — the `#203` zero-fill defect pointing the other way.
+            // ★ 2026-09-26: the words are the HOST's reply to the same question, asked once at
+            // realize (`HostFacts::perf_level_info_v2`) — never the GA106 clock table
+            // (`kf_abi::cudartinit::SPLICED`, now the test oracle). A host that refused it, or a
+            // guest asking a different question, is refused.
             WantedTable::CudartPerfLevelInfoV2 => {
                 let at = req.params_at;
                 let mut p = cmd.payload[at..at + want.params_size()].to_vec();
-                if !kf_abi::cudartinit::splice_cudart_init(req.cmd, &mut p) {
+                let Some(host) = self.host.perf_level_info_v2.as_deref() else {
+                    return refuse();
+                };
+                if !kf_abi::cudartinit::splice_perf_level_info_v2(&mut p, host) {
                     return refuse();
                 }
                 p

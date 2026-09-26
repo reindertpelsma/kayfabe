@@ -65,12 +65,18 @@ pub const fn pmc_boot_42(architecture: u32, implementation: u32, revision: u32) 
         | ((revision & 0xF) << 12)
 }
 
-/// `NV_XVE_LINK_CAPABILITIES` for a link trained at `max_gen` ×16 — delegated to the ABI's own
-/// encoder (`kf_abi::businfo::PcieLinkCaps::fully_trained`), which documents why the real part's
-/// measured word is the wrong thing to copy.
+/// `NV_XVE_LINK_CAPABILITIES` for the HOST function's link: its maximum generation at its own
+/// maximum width (sysfs `max_link_speed` / `max_link_width`, read at realize) — delegated to the
+/// ABI's encoder (`kf_abi::businfo::PcieLinkCaps::host_link`). ⊘ Was `fully_trained` = ×16 on
+/// every die; an AD106 is ×8 (2026-09-26, `V3_FAMILY_PORT_ADA.md` §2).
+///
+/// `None` for a width PCIe does not define.
 #[must_use]
-pub const fn pcie_link_caps(max_gen: kf_abi::businfo::PcieGen) -> u32 {
-    kf_abi::businfo::PcieLinkCaps::fully_trained(max_gen).encode()
+pub const fn pcie_link_caps(max_gen: kf_abi::businfo::PcieGen, max_width: u32) -> Option<u32> {
+    match kf_abi::businfo::PcieLinkCaps::host_link(max_gen, max_width) {
+        Some(l) => Some(l.encode()),
+        None => None,
+    }
 }
 
 const NV_PMC_BOOT_0: u64 = 0x0000_0000;
@@ -202,9 +208,14 @@ pub struct PciIdentity {
     pub class: [u8; 3],
 }
 
-/// ★ The VBIOS profile for THIS host: its PCI identity, plus the FWSEC geometry kf-abi documents as
-/// GENERATED to satisfy the driver's inequalities (not transcribed from any card) — so it is
-/// family-level for every falcon-boot family, never a per-die row keyed by device id.
+/// ★ The VBIOS profile for THIS host: its PCI identity and its own VBIOS version
+/// (`BIOS_GET_INFO_V2` `REVISION`/`OEM_REVISION`, `0x20800810`, NON_PRIVILEGED — asked at realize,
+/// `kf_rm::HostFacts::vbios_version`), plus the FWSEC geometry kf-abi documents as GENERATED to
+/// satisfy the driver's inequalities ([`kf_abi::vbios::GENERATED_FWSEC`]) — so it is family-level
+/// for every falcon-boot family, never a per-die row keyed by device id.
+///
+/// ⊘ Was `VBIOS_PROFILES.first()`: the GA106 row's version `0x9418_0000` on every die
+/// (2026-09-26, `V3_FAMILY_PORT_ADA.md` §2).
 ///
 /// ⊘ Hopper/Blackwell boot through FSP and do not run FWSEC from the VBIOS; what their ROM image must
 /// carry is not yet established from ogkm, so they are refused by name here rather than handed a
@@ -212,22 +223,25 @@ pub struct PciIdentity {
 ///
 /// # Errors
 /// A family whose ROM content is not yet derived.
-pub fn vbios_profile(family: Family, id: PciIdentity) -> Result<kf_abi::vbios::VbiosProfile, crate::RowUnbuilt> {
+pub fn vbios_profile(
+    family: Family,
+    id: PciIdentity,
+    version: (u32, u8),
+) -> Result<kf_abi::vbios::VbiosProfile, crate::RowUnbuilt> {
     if matches!(family, Family::Hopper | Family::Blackwell) {
         return Err(crate::RowUnbuilt {
             family,
             what: "VBIOS image: FSP families do not run FWSEC; their ROM contents are not yet derived from ogkm",
         });
     }
-    let generated = kf_abi::vbios::VBIOS_PROFILES
-        .first()
-        .ok_or(crate::RowUnbuilt { family, what: "kf-abi carries no generated FWSEC geometry" })?;
     Ok(kf_abi::vbios::VbiosProfile {
-        name: "derived (host PCI identity + generated FWSEC geometry)",
+        name: "derived (host PCI identity + host VBIOS version + generated FWSEC geometry)",
         pci_vendor_id: id.vendor,
         pci_device_id: id.device,
         pci_class_code: id.class,
-        ..*generated
+        vbios_version: version.0,
+        vbios_oem_version: version.1,
+        fwsec: kf_abi::vbios::GENERATED_FWSEC,
     })
 }
 

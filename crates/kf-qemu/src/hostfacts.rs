@@ -29,6 +29,9 @@ pub struct HostPci {
     pub bar1_bytes: u64,
     /// The PCIe generation of the link's maximum speed.
     pub max_gen: kf_abi::businfo::PcieGen,
+    /// ★ The link's maximum width in lanes (sysfs `max_link_width`) — ⊘ not a presented ×16
+    /// (an AD106 is ×8; RM derives the guest's UVM link bandwidth from it).
+    pub max_width: u32,
 }
 
 fn read_hex(p: &Path) -> Result<u64, String> {
@@ -87,6 +90,11 @@ pub fn read_host_pci(dir: &Path) -> Result<HostPci, String> {
         "32.0" => kf_abi::businfo::PcieGen::Gen5,
         other => return Err(format!("max_link_speed {other:?} is not a PCIe generation this tree encodes")),
     };
+    // "8" → ×8. Decimal in sysfs (`max_link_width`); a width PCIe does not define is refused
+    // where the link word is built (`kf_chip::bar0::pcie_link_caps`).
+    let width = std::fs::read_to_string(dir.join("max_link_width")).map_err(|e| format!("max_link_width: {e}"))?;
+    let max_width =
+        width.trim().parse::<u32>().map_err(|e| format!("max_link_width {:?}: {e}", width.trim()))?;
     Ok(HostPci {
         vendor: h("vendor")? as u16,
         device: h("device")? as u16,
@@ -97,5 +105,6 @@ pub fn read_host_pci(dir: &Path) -> Result<HostPci, String> {
         bar0_bytes: span(Some(bar0)),
         bar1_bytes,
         max_gen,
+        max_width,
     })
 }

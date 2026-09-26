@@ -60,6 +60,10 @@ pub struct HostFacts {
     pub family: Family,
     /// Whether a chip-to-chip link exists (`BUS_GET_C2C_INFO`).
     pub has_c2c: bool,
+    /// ★ The host die's own copy-engine caps (`CE_GET_ALL_CAPS` `0x20802a0a`, NON_PRIVILEGED):
+    /// the per-LCE caps the three CE-caps controls serve and the GRCE set the engine table lays
+    /// out. ⊘ Replaces `GA10X_LCE_BASE_CAPS` / `GA10X_GRCE_LCE_MASK` (GB20x has four GRCEs).
+    pub ce_caps: kf_abi::cecaps::HostCeCaps,
     /// The FIFO engine list (`GET_ENGINES_V2` + `GET_HW_ENGINE_ID` + family device-info rules).
     /// Served by `DeviceInfo`, `InternalDeviceInfo` and the three CE-caps controls.
     pub engines: Vec<FifoDeviceEntry>,
@@ -129,6 +133,15 @@ pub struct HostFacts {
     pub gpu_name: Option<GpuName>,
     /// The short name (`GPU_GET_SHORT_NAME_STRING` `0x20800111`), e.g. `GA106-A`.
     pub gpu_short_name: Option<GpuName>,
+    /// ★ The host's VBIOS version `(REVISION, OEM_REVISION)` (`BIOS_GET_INFO_V2` `0x20800810`,
+    /// NON_PRIVILEGED) — what the synthetic ROM declares (`kf_chip::bar0::vbios_profile`).
+    /// ⊘ Replaces the GA106 row's `0x9418_0000` on every die.
+    pub vbios_version: (u32, u8),
+    /// ★ The host's reply to libcudart's `PERF_GET_LEVEL_INFO_V2` question
+    /// (`kf_abi::cudartinit::perf_level_info_v2_request`, `0x2080200b`, NON_PRIVILEGED), asked
+    /// once at realize. `None` = the host refused it, and the guest's identical ask is refused
+    /// likewise (the guest sees what host userspace sees). ⊘ Replaces the GA106 clock words.
+    pub perf_level_info_v2: Option<Vec<u8>>,
 }
 
 /// Where a fact comes from.
@@ -159,6 +172,7 @@ pub enum Source {
 pub const PROVENANCE: &[(&str, Source)] = &[
     ("family", Source::HostControl { cmd: 0x2080_1701, name: "MC_GET_ARCH_INFO" }),
     ("has_c2c", Source::HostControl { cmd: 0x2080_182b, name: "BUS_GET_C2C_INFO" }),
+    ("ce_caps", Source::HostControl { cmd: 0x2080_2a0a, name: "CE_GET_ALL_CAPS (per-LCE caps + GRCE bits; the three kernel-OR-able bits stripped, kf_abi::cecaps::KERNEL_OR_CAPS)" }),
     // ★ w827 ruling: "WE ARE THE GSP". The host supplies the engine TYPES and COUNTS; every
     // slot of each row describes OUR device (guest channels are re-born on host twins), authored
     // per family in `crate::authored::engine_table` (ogkm constants + a stated layout). The
@@ -200,6 +214,8 @@ pub const PROVENANCE: &[(&str, Source)] = &[
     ("gsp_features", Source::HostControl { cmd: 0x2080_3601, name: "GSP_GET_FEATURES" }),
     ("gpu_name", Source::HostControl { cmd: 0x2080_0110, name: "GPU_GET_NAME_STRING (ASCII)" }),
     ("gpu_short_name", Source::HostControl { cmd: 0x2080_0111, name: "GPU_GET_SHORT_NAME_STRING" }),
+    ("vbios_version", Source::HostControl { cmd: 0x2080_0810, name: "BIOS_GET_INFO_V2 [REVISION 0x0, OEM_REVISION 0x1]" }),
+    ("perf_level_info_v2", Source::HostControl { cmd: 0x2080_200b, name: "PERF_GET_LEVEL_INFO_V2 (libcudart's question, asked once; a host refusal is kept and relayed)" }),
 ];
 
 /// Why a host reply could not become a fact — by name, never a zero.
@@ -278,6 +294,49 @@ pub fn derive_ce_present_mask(reply: &[u8]) -> Result<u64, FactRefusal> {
     let mut b = [0u8; 8];
     b.copy_from_slice(w);
     Ok(u64::from_le_bytes(b))
+}
+
+/// ★ `ce_caps` from the host's `CE_GET_ALL_CAPS` (`0x20802a0a`) reply.
+///
+/// # Errors
+/// [`FactRefusal::ShortReply`]; [`FactRefusal::NoCopyEngine`] when the host marks none present.
+pub fn derive_ce_caps(reply: &[u8]) -> Result<kf_abi::cecaps::HostCeCaps, FactRefusal> {
+    let c = kf_abi::cecaps::HostCeCaps::decode(reply).map_err(|_| FactRefusal::ShortReply {
+        cmd: kf_abi::cecaps::NV2080_CTRL_CMD_CE_GET_ALL_CAPS,
+        len: reply.len(),
+    })?;
+    if c.present == 0 {
+        return Err(FactRefusal::NoCopyEngine);
+    }
+    Ok(c)
+}
+
+/// `NV2080_CTRL_CMD_BIOS_GET_INFO_V2` (`ogkm-580: ctrl2080bios.h:97`).
+pub const NV2080_CTRL_CMD_BIOS_GET_INFO_V2: u32 = 0x2080_0810;
+/// `sizeof(NV2080_CTRL_BIOS_GET_INFO_V2_PARAMS)` — `{count, {index, data}[15]}` (`:101-104`).
+pub const BIOS_GET_INFO_V2_PARAMS_SIZE: usize = 4 + 8 * 15;
+/// `NV2080_CTRL_BIOS_INFO_INDEX_REVISION` / `_OEM_REVISION` (`:44-45`).
+pub const BIOS_INFO_INDEX_REVISION: u32 = 0;
+/// See [`BIOS_INFO_INDEX_REVISION`].
+pub const BIOS_INFO_INDEX_OEM_REVISION: u32 = 1;
+
+/// ★ `vbios_version` from a `BIOS_GET_INFO_V2` reply asked `[REVISION, OEM_REVISION]`.
+///
+/// # Errors
+/// [`FactRefusal::ShortReply`], [`FactRefusal::Missing`] naming an absent index, or
+/// [`FactRefusal::Unservable`] for an OEM revision wider than the ROM's byte.
+pub fn derive_vbios_version(reply: &[u8]) -> Result<(u32, u8), FactRefusal> {
+    let cmd = NV2080_CTRL_CMD_BIOS_GET_INFO_V2;
+    if reply.len() < BIOS_GET_INFO_V2_PARAMS_SIZE {
+        return Err(FactRefusal::ShortReply { cmd, len: reply.len() });
+    }
+    let w = |o: usize| u32::from_le_bytes([reply[o], reply[o + 1], reply[o + 2], reply[o + 3]]);
+    let n = (w(0) as usize).min(15);
+    let find = |index: u32| (0..n).find(|&i| w(4 + 8 * i) == index).map(|i| w(8 + 8 * i));
+    let rev = find(BIOS_INFO_INDEX_REVISION).ok_or(FactRefusal::Missing { cmd, index: BIOS_INFO_INDEX_REVISION })?;
+    let oem = find(BIOS_INFO_INDEX_OEM_REVISION).ok_or(FactRefusal::Missing { cmd, index: BIOS_INFO_INDEX_OEM_REVISION })?;
+    let oem = u8::try_from(oem).map_err(|_| FactRefusal::Unservable { cmd, why: "OEM revision wider than the ROM's byte" })?;
+    Ok((rev, oem))
 }
 
 /// ★ The GSP feature mask from the host's `GSP_GET_FEATURES` reply (word 0).

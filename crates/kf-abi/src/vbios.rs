@@ -445,7 +445,49 @@ impl core::fmt::Display for VbiosError {
 
 impl core::error::Error for VbiosError {}
 
+/// ★ The FWSEC descriptor geometry every synthetic ROM declares — **generated**, not
+/// transcribed: the loosest layout that satisfies the driver's inequalities (see the DMEM floor
+/// plan below and [`VbiosError`]). It is the same for every falcon-boot family because the path
+/// that reads it is the shared `_TU102` one (`kgspExtractVbiosFromRom_TU102`,
+/// `kernel_gsp_frts_tu102.c`), so a device is built from THIS plus the host's own PCI identity
+/// and VBIOS version — never from a die's row (`kf_chip::bar0::vbios_profile`, 2026-09-26).
+pub const GENERATED_FWSEC: FwsecProfile = FwsecProfile {
+    imem_load_size: 0x1000,
+    imem_phys_base: 0,
+    imem_virt_base: 0,
+    dmem_load_size: 0x1000,
+    dmem_phys_base: 0,
+    // ── The DMEM section's floor plan ────────────────────────────────
+    // 0x1000 bytes, five structures, all disjoint, all in bounds. Every
+    // offset here is CHOSEN, not read off any card: the driver dictates
+    // the inequalities (see `VbiosError::DmemRegionOutOfBounds`) and
+    // nothing else, so these are the loosest layout that satisfies them
+    // with room either side.
+    //   0x0100  interface header + 2 entries        (20 bytes)
+    //   0x0140  DMEM mapper                         (64 bytes)
+    //   0x0200  command input buffer               (256 bytes)
+    //   0x0300  command output buffer              (256 bytes)
+    //   0x0800  HS signature (`hsSigDmemAddr`)     (384 bytes)
+    pkc_data_offset: 0x0800,
+    interface_offset: 0x0100,
+    dmem_mapper_offset: 0x0140,
+    cmd_in_buffer_offset: 0x0200,
+    cmd_in_buffer_size: 0x0100,
+    cmd_out_buffer_offset: 0x0300,
+    cmd_out_buffer_size: 0x0100,
+    ucode_id: 0x01,
+    engine_id_mask: 0x0001,
+    signature_count: 1,
+    signature_versions: 0x0001,
+};
+
 /// The known device profiles.
+///
+/// ⊘ **Superseded as a production source, 2026-09-26 (`v3-families`).** The v3 device builds
+/// its ROM from [`GENERATED_FWSEC`] + the HOST's PCI identity + the HOST's VBIOS version
+/// (`kf_chip::bar0::vbios_profile`), so it reads no row here — the old `VBIOS_PROFILES.first()`
+/// silently served GA106's version to every die. These rows remain for the old tree, the
+/// `synth_vbios` example and the round-trip tests; do not add a die here for v3.
 ///
 /// ★ **Adding an architecture is appending a row here.** Nothing else.
 pub static VBIOS_PROFILES: &[VbiosProfile] = &[
@@ -461,35 +503,7 @@ pub static VBIOS_PROFILES: &[VbiosProfile] = &[
         pci_class_code: [0x00, 0x00, 0x03],
         vbios_version: 0x9418_0000,
         vbios_oem_version: 0x00,
-        fwsec: FwsecProfile {
-            imem_load_size: 0x1000,
-            imem_phys_base: 0,
-            imem_virt_base: 0,
-            dmem_load_size: 0x1000,
-            dmem_phys_base: 0,
-            // ── The DMEM section's floor plan ────────────────────────────────
-            // 0x1000 bytes, five structures, all disjoint, all in bounds. Every
-            // offset here is CHOSEN, not read off any card: the driver dictates
-            // the inequalities (see `VbiosError::DmemRegionOutOfBounds`) and
-            // nothing else, so these are the loosest layout that satisfies them
-            // with room either side.
-            //   0x0100  interface header + 2 entries        (20 bytes)
-            //   0x0140  DMEM mapper                         (64 bytes)
-            //   0x0200  command input buffer               (256 bytes)
-            //   0x0300  command output buffer              (256 bytes)
-            //   0x0800  HS signature (`hsSigDmemAddr`)     (384 bytes)
-            pkc_data_offset: 0x0800,
-            interface_offset: 0x0100,
-            dmem_mapper_offset: 0x0140,
-            cmd_in_buffer_offset: 0x0200,
-            cmd_in_buffer_size: 0x0100,
-            cmd_out_buffer_offset: 0x0300,
-            cmd_out_buffer_size: 0x0100,
-            ucode_id: 0x01,
-            engine_id_mask: 0x0001,
-            signature_count: 1,
-            signature_versions: 0x0001,
-        },
+        fwsec: GENERATED_FWSEC,
     },
     // ★★ AD106 (Ada) — the SECOND generation, added 2026-07-30 to MEASURE what a second
     // generation costs rather than to assert it. It cost this row and nothing else in
@@ -510,24 +524,7 @@ pub static VBIOS_PROFILES: &[VbiosProfile] = &[
         pci_class_code: [0x00, 0x00, 0x03],
         vbios_version: 0x9518_0000,
         vbios_oem_version: 0x00,
-        fwsec: FwsecProfile {
-            imem_load_size: 0x1000,
-            imem_phys_base: 0,
-            imem_virt_base: 0,
-            dmem_load_size: 0x1000,
-            dmem_phys_base: 0,
-            pkc_data_offset: 0x0800,
-            interface_offset: 0x0100,
-            dmem_mapper_offset: 0x0140,
-            cmd_in_buffer_offset: 0x0200,
-            cmd_in_buffer_size: 0x0100,
-            cmd_out_buffer_offset: 0x0300,
-            cmd_out_buffer_size: 0x0100,
-            ucode_id: 0x01,
-            engine_id_mask: 0x0001,
-            signature_count: 1,
-            signature_versions: 0x0001,
-        },
+        fwsec: GENERATED_FWSEC,
     },
 ];
 

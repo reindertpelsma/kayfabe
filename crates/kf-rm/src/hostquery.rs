@@ -297,11 +297,12 @@ pub fn query_lce_pce_masks(host: &mut dyn HostControls) -> Result<Vec<u32>, Fiel
 pub fn query_intr_table(
     host: &mut dyn HostControls,
     kinds: Result<&[authored::EngineKind], &FieldCause>,
+    grce_mask: u64,
 ) -> Result<Vec<kf_abi::inittables::IntrTableEntry>, FieldCause> {
     let s = ask(host, hostfacts::NV2080_CTRL_CMD_MC_GET_STATIC_INTR_TABLE, zeroed(hostfacts::MC_STATIC_INTR_TABLE_PARAMS_SIZE))?;
     let kinds = kinds.map_err(|_| FieldCause::DependsOn("engines"))?;
     let mut table = hostfacts::derive_static_intr_table(&s)?;
-    table.extend(authored::engine_notification_rows(kinds));
+    table.extend(authored::engine_notification_rows(kinds, grce_mask));
     authored::with_gsp_and_disp_rows(table).map_err(|_| {
         FieldCause::Reply(FactRefusal::Unservable {
             cmd: hostfacts::NV2080_CTRL_CMD_MC_GET_STATIC_INTR_TABLE,
@@ -791,6 +792,46 @@ pub fn query_has_c2c(host: &mut dyn HostControls) -> Result<bool, FieldCause> {
     Ok(hostfacts::derive_has_c2c(&r)?)
 }
 
+/// ★ `ce_caps` — the host die's own `CE_GET_ALL_CAPS` (`0x20802a0a`, NON_PRIVILEGED; `[OUT]`
+/// only, so a zeroed request).
+///
+/// # Errors
+/// [`FieldCause`].
+pub fn query_ce_caps(host: &mut dyn HostControls) -> Result<kf_abi::cecaps::HostCeCaps, FieldCause> {
+    use kf_abi::cecaps as c;
+    let r = ask(host, c::NV2080_CTRL_CMD_CE_GET_ALL_CAPS, zeroed(c::CE_GET_ALL_CAPS_PARAMS_SIZE))?;
+    Ok(hostfacts::derive_ce_caps(&r)?)
+}
+
+/// ★ `vbios_version` — `BIOS_GET_INFO_V2 [REVISION, OEM_REVISION]` (`0x20800810`, NON_PRIVILEGED).
+///
+/// # Errors
+/// [`FieldCause`].
+pub fn query_vbios_version(host: &mut dyn HostControls) -> Result<(u32, u8), FieldCause> {
+    let req = info_list_request(
+        hostfacts::BIOS_GET_INFO_V2_PARAMS_SIZE,
+        &[hostfacts::BIOS_INFO_INDEX_REVISION, hostfacts::BIOS_INFO_INDEX_OEM_REVISION],
+    );
+    Ok(hostfacts::derive_vbios_version(&ask(host, hostfacts::NV2080_CTRL_CMD_BIOS_GET_INFO_V2, req)?)?)
+}
+
+/// ★ `perf_level_info_v2` — libcudart's `PERF_GET_LEVEL_INFO_V2` question, asked of the host
+/// once (`0x2080200b`, NON_PRIVILEGED). ⊘ A host REFUSAL is a value here (`None`), not a realize
+/// failure: it is exactly what host userspace would be told, and the guest's identical ask is
+/// then refused the same way. Only a reply that does not decode is a refusal of the field.
+///
+/// # Errors
+/// [`FieldCause::Reply`] for a reply of the wrong length.
+pub fn query_perf_level_info_v2(host: &mut dyn HostControls) -> Result<Option<Vec<u8>>, FieldCause> {
+    use kf_abi::cudartinit as c;
+    match ask(host, c::PERF_GET_LEVEL_INFO_V2, c::perf_level_info_v2_request()) {
+        Ok(r) if r.len() == c::PERF_GET_LEVEL_INFO_V2_PARAMS_SIZE => Ok(Some(r)),
+        Ok(r) => Err(FieldCause::Reply(FactRefusal::ShortReply { cmd: c::PERF_GET_LEVEL_INFO_V2, len: r.len() })),
+        Err(FieldCause::Host { .. }) => Ok(None),
+        Err(e) => Err(e),
+    }
+}
+
 // =====================================================================================
 // Authored
 // =====================================================================================
@@ -829,13 +870,19 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
         Err(e) => Err(e.clone()),
     };
     let has_c2c = query_has_c2c(host);
+    let ce_caps = query_ce_caps(host);
+    let grce = ce_caps.as_ref().map(kf_abi::cecaps::HostCeCaps::grce_mask);
     let kinds = query_engine_list(host);
-    let engines = match &kinds {
-        Ok(k) => authored::engine_table(asked, k).map_err(FieldCause::FamilyLayout),
-        Err(e) => Err(e.clone()),
+    let engines = match (&kinds, &grce) {
+        (Ok(k), Ok(g)) => authored::engine_table(asked, k, *g).map_err(FieldCause::FamilyLayout),
+        (Err(e), _) => Err(e.clone()),
+        (Ok(_), Err(_)) => Err(FieldCause::DependsOn("ce_caps")),
     };
     let lce_pce_masks = query_lce_pce_masks(host);
-    let intr_table = query_intr_table(host, kinds.as_deref().map_err(|e| e));
+    let intr_table = match &grce {
+        Ok(g) => query_intr_table(host, kinds.as_deref().map_err(|e| e), *g),
+        Err(_) => Err(FieldCause::DependsOn("ce_caps")),
+    };
     let intr_subtree_map = query_intr_subtree_map(host);
     let chip_info = match &arch {
         Ok((_, sub)) => query_chip_info(host, *sub),
@@ -866,6 +913,8 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
     let gsp_features = query_gsp_features(host);
     let gpu_name = query_gpu_name(host);
     let gpu_short_name = query_gpu_short_name(host);
+    let vbios_version = query_vbios_version(host);
+    let perf_level_info_v2 = query_perf_level_info_v2(host);
 
     let mut refusals = Vec::new();
     macro_rules! take {
@@ -882,6 +931,7 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
     // ★ PROVENANCE order, so the refusal list reads like the table.
     let family = take!(family);
     let has_c2c = take!(has_c2c);
+    let ce_caps = take!(ce_caps);
     let engines = take!(engines);
     let lce_pce_masks = take!(lce_pce_masks);
     let intr_table = take!(intr_table);
@@ -905,10 +955,13 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
     let gsp_features = take!(gsp_features);
     let gpu_name = take!(gpu_name);
     let gpu_short_name = take!(gpu_short_name);
+    let vbios_version = take!(vbios_version);
+    let perf_level_info_v2 = take!(perf_level_info_v2);
 
     match (
         family,
         has_c2c,
+        ce_caps,
         engines,
         lce_pce_masks,
         intr_table,
@@ -932,10 +985,13 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
         gsp_features,
         gpu_name,
         gpu_short_name,
+        vbios_version,
+        perf_level_info_v2,
     ) {
         (
             Some(family),
             Some(has_c2c),
+            Some(ce_caps),
             Some(engines),
             Some(lce_pce_masks),
             Some(intr_table),
@@ -959,9 +1015,12 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
             Some(gsp_features),
             Some(gpu_name),
             Some(gpu_short_name),
+            Some(vbios_version),
+            Some(perf_level_info_v2),
         ) if refusals.is_empty() => Ok(HostFacts {
             family,
             has_c2c,
+            ce_caps,
             engines,
             lce_pce_masks,
             intr_table,
@@ -990,6 +1049,8 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
             gsp_features,
             gpu_name: Some(gpu_name),
             gpu_short_name: Some(gpu_short_name),
+            vbios_version,
+            perf_level_info_v2,
         }),
         _ => Err(HostFactsRefused { refusals }),
     }

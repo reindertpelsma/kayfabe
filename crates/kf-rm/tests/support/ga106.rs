@@ -428,6 +428,7 @@ pub fn host_facts() -> HostFacts {
     HostFacts {
         family: kf_chip::Family::Ampere,
         has_c2c: false,
+        ce_caps: ce_caps(),
         engines: ENGINES.to_vec(),
         lce_pce_masks: kf_abi::cepce::GA106_LCE_PCE_MASKS.to_vec(),
         intr_table: INTR_TABLE.to_vec(),
@@ -488,7 +489,33 @@ pub fn host_facts() -> HostFacts {
         // faithful to what the old device answered. `derive_gpu_name` is checked separately.
         gpu_name: None,
         gpu_short_name: None,
+        // The old row's ROM version (`kf_abi::vbios::VBIOS_PROFILES[0]`) — ⊘ not a measured
+        // board version; the v3 device asks the host (`BIOS_GET_INFO_V2`).
+        vbios_version: (0x9418_0000, 0x00),
+        perf_level_info_v2: Some(perf_level_info_v2()),
     }
+}
+
+/// `[measured 2026-08-09, real GA106]` `CE_GET_ALL_CAPS` (`0x20802a0a`), R18 and `cuInit` line 62:
+/// `e303e303e203e203`, 120 zero bytes, `present = 0x0f`.
+pub fn ce_caps_reply() -> Vec<u8> {
+    let mut v = vec![0xe3, 0x03, 0xe3, 0x03, 0xe2, 0x03, 0xe2, 0x03];
+    v.resize(kf_abi::cecaps::PRESENT_OFF, 0);
+    v.extend_from_slice(&0x0f_u64.to_le_bytes());
+    v
+}
+
+/// [`ce_caps_reply`], decoded.
+pub fn ce_caps() -> kf_abi::cecaps::HostCeCaps {
+    kf_abi::cecaps::HostCeCaps::decode(&ce_caps_reply()).expect("136 bytes")
+}
+
+/// `[measured 2026-08-20, real GA106]` the host's `PERF_GET_LEVEL_INFO_V2` reply to libcudart's
+/// question: the request with the nine `kf_abi::cudartinit::SPLICED` words written.
+pub fn perf_level_info_v2() -> Vec<u8> {
+    let mut r = kf_abi::cudartinit::perf_level_info_v2_request();
+    assert!(kf_abi::cudartinit::splice_cudart_init(kf_abi::cudartinit::PERF_GET_LEVEL_INFO_V2, &mut r));
+    r
 }
 
 /// [`host_facts`], shared.

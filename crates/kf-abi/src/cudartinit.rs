@@ -211,6 +211,9 @@ pub type SplicedRow = (u32, usize, &'static [SplicePatch]);
 /// ⚠ The nine values decode as clock frequencies in kHz (≈465/930 MHz core, ≈7.5/7.3/9.0 GHz
 /// memory). They are a property of the GA106 SKU, not of this machine — but they are still
 /// **capture-derived and therefore expiring**, exactly like [`SERVED`].
+///
+/// ⊘ **Test oracle only since 2026-09-26**: production serves the HOST's own answer
+/// ([`splice_perf_level_info_v2`]); on a GA106 host that answer must reproduce these words.
 pub const SPLICED: &[SplicedRow] = &[(
     PERF_GET_LEVEL_INFO_V2,
     780,
@@ -235,6 +238,90 @@ pub const SPLICED: &[SplicedRow] = &[(
 /// individually-harmless controls, one fatal PAIR — invisible to any one-at-a-time
 /// experiment, and the lattice also proves serving EITHER member is sufficient.
 pub const PERF_GET_LEVEL_INFO_V2: u32 = 0x2080_200b;
+
+/// ★★★ **`PERF_GET_LEVEL_INFO_V2` from the HOST, not a GA106 capture** (2026-09-26,
+/// `v3-families`). ⊘ The nine words [`SPLICED`] carries are one GA106 SKU's clock table, and
+/// were served to every family. `0x2080200b` carries `NON_PRIVILEGED` (export flags `0x50048`,
+/// `ogkm-580: g_subdevice_nvoc.c:6955-6963`), so the host can simply be asked — §50 level 1.
+///
+/// Realize asks the host ONCE, with [`perf_level_info_v2_request`] (the request libcudart sends,
+/// `[measured]` byte-identical guest vs host), and keeps the reply. At serve time
+/// [`splice_perf_level_info_v2`] copies the host's `[OUT]` words into the guest's buffer iff the
+/// guest's `[IN]` projection equals the one realize asked; any other question is refused rather
+/// than answered from a reply to a different one. ⊘ No request is issued from the serve path
+/// (§48: no blocking host verb behind a trap or under the policy lock).
+///
+/// Layout: `NV2080_CTRL_PERF_GET_LEVEL_INFO_V2_PARAMS` (`ogkm-580: ctrl2080perf.h:680-685`) —
+/// `level`, `flags`, `perfGetClkInfoList[32]` of `{flags, domain, currentFreq, defaultFreq,
+/// minFreq, maxFreq}`, `perfGetClkInfoListSize`: 195 words.
+pub const PERF_GET_LEVEL_INFO_V2_PARAMS_SIZE: usize = 780;
+/// `NV2080_CTRL_PERF_CLK_MAX_DOMAINS`.
+const PERF_CLK_MAX_DOMAINS: usize = 32;
+/// Words per `NV2080_CTRL_PERF_GET_CLK_INFO`.
+const CLK_INFO_WORDS: usize = 6;
+/// Word index of `perfGetClkInfoList[0]`.
+const CLK_LIST_WORD: usize = 2;
+/// Word index of `perfGetClkInfoListSize`.
+const CLK_LIST_SIZE_WORD: usize = CLK_LIST_WORD + PERF_CLK_MAX_DOMAINS * CLK_INFO_WORDS;
+
+fn word(b: &[u8], w: usize) -> Option<u32> {
+    b.get(w * 4..w * 4 + 4).map(|x| u32::from_le_bytes([x[0], x[1], x[2], x[3]]))
+}
+
+/// The question realize asks the host: `level = 4`, domains `{0x1, 0x10}`, list size 2 —
+/// libcudart's own request (`[measured 2026-08-20, real GA106]`: `[0]=0x4 [3]=0x1 [9]=0x10
+/// [194]=0x2`, byte-identical in guest and host). A request, not a reply: nothing here is a
+/// value of any die.
+#[must_use]
+pub fn perf_level_info_v2_request() -> Vec<u8> {
+    let mut b = vec![0u8; PERF_GET_LEVEL_INFO_V2_PARAMS_SIZE];
+    let mut put = |w: usize, v: u32| b[w * 4..w * 4 + 4].copy_from_slice(&v.to_le_bytes());
+    put(0, 0x4);
+    put(CLK_LIST_WORD + 1, 0x1);
+    put(CLK_LIST_WORD + CLK_INFO_WORDS + 1, 0x10);
+    put(CLK_LIST_SIZE_WORD, 2);
+    b
+}
+
+/// The `[IN]` projection: `level`, the list size, and each asked entry's `domain`. `None` on a
+/// short buffer or a list size past the array.
+fn perf_in(b: &[u8]) -> Option<(u32, Vec<u32>)> {
+    if b.len() != PERF_GET_LEVEL_INFO_V2_PARAMS_SIZE {
+        return None;
+    }
+    let n = word(b, CLK_LIST_SIZE_WORD)? as usize;
+    if n > PERF_CLK_MAX_DOMAINS {
+        return None;
+    }
+    let domains = (0..n).map(|i| word(b, CLK_LIST_WORD + i * CLK_INFO_WORDS + 1)).collect::<Option<Vec<_>>>()?;
+    Some((word(b, 0)?, domains))
+}
+
+/// ★ Answer the guest's `PERF_GET_LEVEL_INFO_V2` from the host's reply to the same question:
+/// `flags` and, for each asked entry, `flags`/`currentFreq`/`defaultFreq`/`minFreq`/`maxFreq`
+/// are copied from `host_reply` into `guest`; `level`, each `domain` and the list size stay the
+/// guest's. Returns `false` (the caller refuses) when either buffer is malformed or the guest
+/// asked a different question than `host_reply` answers.
+pub fn splice_perf_level_info_v2(guest: &mut [u8], host_reply: &[u8]) -> bool {
+    let (Some(gi), Some(hi)) = (perf_in(guest), perf_in(host_reply)) else {
+        return false;
+    };
+    if gi != hi {
+        return false;
+    }
+    let mut copy = |w: usize| {
+        let at = w * 4;
+        guest[at..at + 4].copy_from_slice(&host_reply[at..at + 4]);
+    };
+    copy(1);
+    for i in 0..gi.1.len() {
+        let e = CLK_LIST_WORD + i * CLK_INFO_WORDS;
+        for w in [e, e + 2, e + 3, e + 4, e + 5] {
+            copy(w);
+        }
+    }
+    true
+}
 
 /// Apply a [`SPLICED`] row onto the guest's own request buffer, in place.
 ///
@@ -286,6 +373,24 @@ mod tests {
         // ★ The tail is measured zero, not defaulted zero — assert it so a future edit that
         // changes the padding rule has to say so.
         assert!(b[40..].iter().all(|&x| x == 0), "measured tail is all zero");
+    }
+
+    /// ★ The host path reproduces the GA106 oracle when the host answers what a GA106 did, and
+    /// refuses a different question rather than answering it from this reply.
+    #[test]
+    fn the_host_splice_reproduces_the_ga106_oracle_and_refuses_another_question() {
+        let req = perf_level_info_v2_request();
+        let mut host = req.clone();
+        assert!(splice_cudart_init(PERF_GET_LEVEL_INFO_V2, &mut host), "oracle applies");
+        let mut via_host = req.clone();
+        assert!(splice_perf_level_info_v2(&mut via_host, &host));
+        let mut via_oracle = req.clone();
+        assert!(splice_cudart_init(PERF_GET_LEVEL_INFO_V2, &mut via_oracle));
+        assert_eq!(via_host, via_oracle);
+        let mut other = req.clone();
+        other[0] = 3; // another perf level
+        assert!(!splice_perf_level_info_v2(&mut other, &host));
+        assert!(!splice_perf_level_info_v2(&mut [0u8; 16], &host));
     }
 
     #[test]
