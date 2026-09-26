@@ -236,11 +236,13 @@ item_weston_client_diff(){
 # ══ nvkvm-pv H24: headless sway + wlr-screencopy into a client dma-buf (run_screencap.sh + wlr_screencap.c)
 # criterion: `RESULT captured=N/N`. EXTRA, same item: grim (SHM) + wlr_screencap's PPM of a DETERMINISTIC
 # client (wl_scene on a solid background), digested vs bare metal.
+# ⊘ sway refuses the proprietary NVIDIA kernel module unless --unsupported-gpu (measured smoke1: "Proprietary
+#   Nvidia drivers are NOT supported"). nvkvm-pv's Mode-1 guests had no nvidia.ko, so sway never saw one.
 sway_up(){ # config-extra (lines appended)
     xdg_up
     printf 'output HEADLESS-1 mode 1280x720@60Hz position 0 0 bg #203040 solid_color\ndefault_border none\nfocus_follows_mouse no\nxwayland disable\n%s\n' "${1:-}" > "$W/sway.conf"
     WLR_BACKENDS=headless WLR_RENDERER=gles2 WLR_NO_HARDWARE_CURSORS=1 WLR_LIBINPUT_NO_DEVICES=1 \
-        WLR_RENDER_DRM_DEVICE=/dev/dri/renderD128 sway -c "$W/sway.conf" > "$W/sway.log" 2>&1 & SWPID=$!
+        WLR_RENDER_DRM_DEVICE=/dev/dri/renderD128 sway --unsupported-gpu -c "$W/sway.conf" > "$W/sway.log" 2>&1 & SWPID=$!
     local i; for i in $(seq 1 100); do ls "$XDG_RUNTIME_DIR"/wayland-? >/dev/null 2>&1 && break; sleep 0.2; done
     sleep 3; kill -0 $SWPID 2>/dev/null || { echo "GSET_FAIL sway died: $(tail -5 "$W/sway.log" | tr '\n' ' ')"; return 1; }
     export WAYLAND_DISPLAY=$(basename "$(ls "$XDG_RUNTIME_DIR"/wayland-? | head -1)")
@@ -403,14 +405,13 @@ ff_run(){ # name, pix_fmt of src, init, vf → the output frames' md5 is the dig
 item_ff_cuda(){
     gset_need "$FF" || return 0; ff_src || { echo "GSET_FAIL source"; return 0; }
     local I="-init_hw_device cuda=cu:0 -filter_hw_device cu"
+    # ⊘ bilateral_cuda, pad_cuda and thumbnail_cuda are NOT here: all three SEGV (rc=139, after writing most
+    #   of their output) on BARE METAL with this ffmpeg build (smoke1, 2026-09-26) — a workload fact, not ours.
     ff_run scale_cuda      nv12 "$I" "hwupload_cuda,scale_cuda=640:360:interp_algo=bicubic,hwdownload,format=nv12"
     ff_run yadif_cuda      nv12 "$I" "hwupload_cuda,yadif_cuda=mode=send_field,hwdownload,format=nv12"
     ff_run bwdif_cuda      nv12 "$I" "hwupload_cuda,bwdif_cuda,hwdownload,format=nv12"
-    ff_run bilateral_cuda  yuv420p "$I" "hwupload_cuda,bilateral_cuda=sigmaS=3:sigmaR=0.2:window_size=5,hwdownload,format=yuv420p"
     ff_run colorspace_cuda nv12 "$I" "hwupload_cuda,colorspace_cuda=range=pc,hwdownload,format=nv12"
-    ff_run pad_cuda        nv12 "$I" "hwupload_cuda,pad_cuda=1344:784:32:32,hwdownload,format=nv12"
     ff_run chromakey_cuda  yuv420p "$I" "format=yuva420p,hwupload_cuda,chromakey_cuda=color=0x00ff00:similarity=0.2,hwdownload,format=yuva420p"
-    ff_run thumbnail_cuda  nv12 "$I" "hwupload_cuda,thumbnail_cuda=n=10,hwdownload,format=nv12"
     ff_run overlay_cuda    nv12 "$I" "split[a][b];[a]hwupload_cuda[m];[b]scale=320:180,hwupload_cuda[o];[m][o]overlay_cuda=x=64:y=48,hwdownload,format=nv12"
     echo GSET_OK
 }
@@ -418,7 +419,7 @@ item_ff_vulkan(){
     nv_icd_only || return 0
     gset_need "$FF" || return 0; ff_src || { echo "GSET_FAIL source"; return 0; }
     local I="-init_hw_device vulkan=vk:0 -filter_hw_device vk"
-    ff_run scale_vulkan     nv12 "$I" "hwupload,scale_vulkan=w=640:h=360:scaler=bicubic,hwdownload,format=nv12"
+    ff_run scale_vulkan     nv12 "$I" "hwupload,scale_vulkan=w=640:h=360:scaler=bilinear,hwdownload,format=nv12"
     ff_run avgblur_vulkan   yuv420p "$I" "hwupload,avgblur_vulkan=sizeX=5:sizeY=5,hwdownload,format=yuv420p"
     ff_run gblur_vulkan     yuv420p "$I" "hwupload,gblur_vulkan=sigma=2,hwdownload,format=yuv420p"
     ff_run chromaber_vulkan yuv420p "$I" "hwupload,chromaber_vulkan=dist_x=4:dist_y=2,hwdownload,format=yuv420p"

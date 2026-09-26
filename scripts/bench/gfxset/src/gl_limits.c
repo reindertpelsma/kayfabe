@@ -12,6 +12,8 @@
 #include <string.h>
 
 typedef const GLubyte *(*PFNGLGETSTRINGI)(GLenum, GLuint);
+typedef void (*PFNGETI64)(GLenum, GLint64 *);
+typedef void (*PFNGETII)(GLenum, GLuint, GLint *);
 #define L(x) { #x, x }
 static const struct { const char *n; GLenum e; } LIMS[] = {
     L(GL_MAX_TEXTURE_SIZE), L(GL_MAX_3D_TEXTURE_SIZE), L(GL_MAX_CUBE_MAP_TEXTURE_SIZE), L(GL_MAX_ARRAY_TEXTURE_LAYERS),
@@ -42,15 +44,16 @@ static const struct { const char *n; GLenum e; } LIMS[] = {
 
 int main(void) {
     PFNEGLQUERYDEVICESEXTPROC qd = (void *)eglGetProcAddress("eglQueryDevicesEXT");
+    PFNEGLGETPLATFORMDISPLAYEXTPROC gpd = (void *)eglGetProcAddress("eglGetPlatformDisplayEXT");
     PFNEGLQUERYDEVICESTRINGEXTPROC qs = (void *)eglGetProcAddress("eglQueryDeviceStringEXT");
     EGLDeviceEXT devs[8]; EGLint nd = 0;
-    if (!qd || !qd(8, devs, &nd) || nd < 1) { printf("GL_LIMITS_FAIL no EGL device\n"); return 3; }
+    if (!qd || !gpd || !qd(8, devs, &nd) || nd < 1) { printf("GL_LIMITS_FAIL no EGL device\n"); return 3; }
     EGLDisplay d = EGL_NO_DISPLAY;
     for (int i = 0; i < nd && d == EGL_NO_DISPLAY; i++) {   // the NVIDIA device (not a software one)
         const char *ext = qs ? qs(devs[i], EGL_EXTENSIONS) : "";
-        if (ext && strstr(ext, "EGL_NV_device_cuda")) d = eglGetPlatformDisplayEXT(EGL_PLATFORM_DEVICE_EXT, devs[i], NULL);
+        if (ext && strstr(ext, "EGL_NV_device_cuda")) d = gpd(EGL_PLATFORM_DEVICE_EXT, devs[i], NULL);
     }
-    if (d == EGL_NO_DISPLAY) d = eglGetPlatformDisplayEXT(EGL_PLATFORM_DEVICE_EXT, devs[0], NULL);
+    if (d == EGL_NO_DISPLAY) d = gpd(EGL_PLATFORM_DEVICE_EXT, devs[0], NULL);
     if (!eglInitialize(d, NULL, NULL)) { printf("GL_LIMITS_FAIL eglInitialize 0x%x\n", eglGetError()); return 3; }
     eglBindAPI(EGL_OPENGL_API);
     EGLint ca[] = { EGL_SURFACE_TYPE, EGL_PBUFFER_BIT, EGL_RENDERABLE_TYPE, EGL_OPENGL_BIT, EGL_NONE };
@@ -65,14 +68,17 @@ int main(void) {
     printf("GL_RENDERER=%s\nGL_VERSION=%s\nGL_SLV=%s\n", glGetString(GL_RENDERER), glGetString(GL_VERSION),
            glGetString(GL_SHADING_LANGUAGE_VERSION));
     PFNGLGETSTRINGI gsi = (PFNGLGETSTRINGI)eglGetProcAddress("glGetStringi");
+    PFNGETI64 gi64 = (PFNGETI64)eglGetProcAddress("glGetInteger64v");
+    PFNGETII gii = (PFNGETII)eglGetProcAddress("glGetIntegeri_v");
+    if (!gsi || !gi64 || !gii) { printf("GL_LIMITS_FAIL no GL 3.x/4.x entry points\n"); return 3; }
     GLint ne = 0; glGetIntegerv(GL_NUM_EXTENSIONS, &ne);
-    for (GLint i = 0; gsi && i < ne; i++) printf("EXT %s\n", gsi(GL_EXTENSIONS, i));
+    for (GLint i = 0; i < ne; i++) printf("EXT %s\n", gsi(GL_EXTENSIONS, i));
     for (size_t i = 0; i < sizeof LIMS / sizeof LIMS[0]; i++) {
         GLint64 v[2] = { -1, -1 };
-        glGetInteger64v(LIMS[i].e, v);
+        gi64(LIMS[i].e, v);
         printf("LIM %s %lld\n", LIMS[i].n, (long long)v[0]);
     }
-    GLint wg[3]; for (int i = 0; i < 3; i++) glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT, i, &wg[i]);
+    GLint wg[3]; for (int i = 0; i < 3; i++) gii(GL_MAX_COMPUTE_WORK_GROUP_COUNT, i, &wg[i]);
     printf("LIM GL_MAX_COMPUTE_WORK_GROUP_COUNT %d,%d,%d\n", wg[0], wg[1], wg[2]);
     GLenum e = glGetError();
     printf("GL_LIMITS_DONE glerr=0x%x\n", e);
