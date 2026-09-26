@@ -13,6 +13,9 @@ boundary is a MEASURED change between two adjacent tags; nothing is interpolated
       per struct: every boundary, with the fields added / removed / moved there.
   collapse.py boundaries --sweep DIR
       per tag transition: how many measured items change — the one-screen gap picture.
+  collapse.py gaps --sweep DIR --ref TAG [--only consumed.txt]
+      per tag: which CONSUMED structs and values differ from the reference tag (the version
+      kayfabe's hand encoders were written against) — the per-version work list.
 
 Tags are ordered numerically (535.309.01 < 545.23.08 < … < 610.57.04), never lexically.
 """
@@ -183,17 +186,34 @@ def cmd_boundaries(a):
               + " ".join(ch[:6]) + (" …" if len(ch) > 6 else ""))
 
 
+def cmd_gaps(a):
+    tags, lay, val, _mis = load(a.sweep)
+    keep = read_only(a.only)
+    ref = a.ref
+    if ref not in lay:
+        raise SystemExit(f"reference tag {ref} was not measured in {a.sweep}")
+    structs = sorted(s for s in {s for t in tags for s in lay[t]} if wanted(keep, s))
+    names = sorted(n for n in {n for t in tags for n in val[t]} if wanted(keep, n))
+    for t in tags:
+        diff_s = [s for s in structs if struct_fp(lay[t].get(s, [])) != struct_fp(lay[ref].get(s, []))]
+        diff_v = [n for n in names if val[t].get(n) != val[ref].get(n)]
+        print(f"{t}\tstructs {len(diff_s)}\tvalues {len(diff_v)}\t" + " ".join(diff_s))
+
+
 def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for n in ("ranges", "report", "boundaries"):
+    for n in ("ranges", "report", "boundaries", "gaps"):
         p = sub.add_parser(n)
         p.add_argument("--sweep", required=True)
         p.add_argument("--only")
-        if n != "boundaries":
+        if n in ("ranges", "report"):
             p.add_argument("--out", required=True)
+        if n == "gaps":
+            p.add_argument("--ref", required=True)
     a = ap.parse_args()
-    {"ranges": cmd_ranges, "report": cmd_report, "boundaries": cmd_boundaries}[a.cmd](a)
+    {"ranges": cmd_ranges, "report": cmd_report, "boundaries": cmd_boundaries,
+     "gaps": cmd_gaps}[a.cmd](a)
 
 
 if __name__ == "__main__":

@@ -77,6 +77,10 @@ case "${NVKVM_RAM_BACKEND:-}" in
   *) echo "★ NVKVM_RAM_BACKEND=${NVKVM_RAM_BACKEND} is not a backend I know" >&2; exit 2 ;;
 esac
 
+# ★ `KF_GUEST_IMG` also carries the driver matrix's per-version fat guests (V3_DRIVER_MATRIX.md
+# §5): a qcow2 overlay on guest.qcow2 with that version installed (`scripts/drivermatrix/
+# stage_fat_guest.sh`). Unset = the bench image, i.e. the host's version.
+[ -f "${KF_GUEST_IMG:-/workspace/bench/guest.qcow2}" ] || { echo "★ no guest image at ${KF_GUEST_IMG}" >&2; exit 2; }
 exec "$Q" \
   "${RAMARGS[@]}" -cpu host -smp "${KF_SMP:-3}" \
   -drive if=virtio,file="${KF_GUEST_IMG:-/workspace/bench/guest.qcow2}",format=qcow2 \

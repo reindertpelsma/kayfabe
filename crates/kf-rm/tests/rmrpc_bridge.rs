@@ -2743,18 +2743,20 @@ fn the_notifier_is_the_only_field_past_the_prefix_and_only_where_a_tree_was_read
         "580.159.04's tree was read, so the field is readable"
     );
 
-    // 550.54.04 has no pinned layout. The IDENTICAL bytes yield nothing — not a guess, and
-    // not a zero.
+    // ⊘⊘ CORRECTED 2026-09-26 (V3_DRIVER_MATRIX.md §4): the 550.54.04 hand row had no pinned
+    // layout, so these bytes yielded nothing there. Every measured tag now carries its own
+    // MEASURED offsets, and 550.54.14's `errorNotifierMem` sits where 580's does — so the
+    // identical bytes decode to the identical notifier, read rather than recognised.
     let old = table_for(kf_abi::DriverVersion {
         major: 550,
         minor: 54,
-        patch: 4,
+        patch: 14,
     })
-    .expect("550 is supported");
+    .expect("550.54.14 is measured");
     assert_eq!(
         old.decode_channel_error_notifier(&params),
-        Ok(None),
-        "★★ no tree was opened at 550.54.04, so nothing past the prefix is read there"
+        Ok(Some(ErrorNotifier::Sysmem { gpa: 0x7fee_0000 })),
+        "550.54.14's measured NV_CHANNEL_ALLOC_PARAMS puts errorNotifierMem at +248 too"
     );
 
     // ★★★ And the same bytes, through the WHOLE bridge, land on the event the graph

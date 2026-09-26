@@ -35,12 +35,21 @@ fn policy_for(v: DriverVersion) -> GuestSystemInfoPolicy {
     GuestSystemInfoPolicy::new(*table_for(v).expect("a table row"))
 }
 
-/// A fn-1 request declaring `major`/`minor`, with the three `[IN]` strings filled with a
-/// byte that is not zero — so a reply that reflected any of them is visible.
+/// A fn-1 request declaring `major`/`minor` from a guest whose own `NV_VERSION_STRING` is the
+/// bench's, with every other `[IN]` byte filled with a byte that is not zero — so a reply that
+/// reflected any of them is visible.
 fn request(major: u32, minor: u32) -> RpcCommand {
+    request_as(major, minor, "580.159.04")
+}
+
+/// The same, from a guest that says it is driver `version` (`guestDriverVersion` @24,
+/// NUL-terminated; the rest of that array stays 0xCD).
+fn request_as(major: u32, minor: u32, version: &str) -> RpcCommand {
     let mut payload = vec![0xCDu8; SET_GUEST_SYSTEM_INFO_SIZE];
     payload[0..4].copy_from_slice(&major.to_le_bytes());
     payload[4..8].copy_from_slice(&minor.to_le_bytes());
+    payload[24..24 + version.len()].copy_from_slice(version.as_bytes());
+    payload[24 + version.len()] = 0;
     RpcCommand {
         function: RpcFunction::SetGuestSystemInfo,
         code: 1,
@@ -93,22 +102,35 @@ fn the_version_is_a_row_and_it_really_does_move() {
     );
 }
 
+/// ⊘⊘ REPLACED 2026-09-26 (`docs/design/V3_DRIVER_MATRIX.md` §4): this was
+/// `a_driver_with_no_citation_gets_no_version_and_the_handshake_refuses`, pinned on the 550.54.04
+/// hand row whose `vgx` was `None`. The pair is now MEASURED at every tag, and it moves inside a
+/// branch — which a one-row-per-branch table could never have said.
 #[test]
-fn a_driver_with_no_citation_gets_no_version_and_the_handshake_refuses() {
-    // 550.54.04 is a real row in the table, and this port has no `vgpu_version.h` for it.
-    let old = DriverVersion {
-        major: 550,
-        minor: 54,
-        patch: 4,
-    };
-    assert_eq!(table_for(old).expect("550 row").vgx_version(), None);
+fn the_pair_is_measured_per_tag_and_moves_inside_a_branch() {
+    let v = |major, minor, patch| table_for(DriverVersion { major, minor, patch }).expect("measured").vgx_version();
+    assert_eq!(v(570, 124, 6), Some(VgxVersion { major: 0x29, minor: 0x0B }));
+    assert_eq!(v(570, 148, 8), Some(VgxVersion { major: 0x29, minor: 0x0C }));
+    assert_eq!(v(550, 54, 14), Some(VgxVersion { major: 0x25, minor: 0x1B }));
+}
 
-    let p = policy_for(old);
-    assert_eq!(
-        p.agreed_version(&request(V580_MAJOR, V580_MINOR).payload)
-            .expect_err("no citation, no answer"),
-        GuestSystemInfoError::NoVersionForDriver,
-    );
+/// ★★★ The driver-version cross-check: the guest's own `NV_VERSION_STRING` must be the version
+/// every layout on the device was selected for. A 580.105.08 guest on a device declared for
+/// 580.159.04 speaks the same VGX pair — so the handshake alone would AGREE — and is refused.
+#[test]
+fn a_guest_whose_own_version_is_not_the_declared_one_is_refused_by_name() {
+    let mut p = policy_for(BENCH_DRIVER);
+    let reply = p
+        .respond(&request_as(V580_MAJOR, V580_MINOR, "580.105.08"))
+        .expect("a refusal is still a reply");
+    assert_eq!(reply.rpc_result, kf_abi::NV_ERR_NOT_SUPPORTED, "same VGX pair, different release: refused");
+    let why = p.check_driver_version(&request_as(V580_MAJOR, V580_MINOR, "580.105.08").payload).expect_err("mismatch");
+    let msg = why.to_string();
+    assert!(msg.contains("580.105.08") && msg.contains("580.159.04") && msg.contains("guest-driver="), "{msg}");
+    // The declared version itself passes, two-field spellings included.
+    assert!(p.check_driver_version(&request(V580_MAJOR, V580_MINOR).payload).is_ok());
+    let p595 = policy_for(DriverVersion { major: 595, minor: 84, patch: 0 });
+    assert!(p595.check_driver_version(&request_as(0x2D, 0x03, "595.84").payload).is_ok());
 }
 
 #[test]
