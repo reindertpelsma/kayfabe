@@ -66,6 +66,59 @@ pub enum CapsRefusal {
     Instance(u32),
 }
 
+/// ★ Where one version's caps-control params put their fields — MEASURED
+/// (`crate::versions::DriverAbiTable::video_caps_layout`). `[measured 2026-09-26]`
+/// `NV0080_CTRL_MSENC_GET_CAPS_V2_PARAMS` is `{capsTbl[4]; instanceId@4}` = 8 bytes through
+/// 580.65.06 and `{capsTbl[5]; instanceId@8}` = 12 from 580.95.05 — a size the 12-byte
+/// constants above refuse at 580.65.06 and every earlier version with the control.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CapsLayout {
+    /// `sizeof` the params struct at the version.
+    pub params_size: usize,
+    /// Length of `capsTbl[]` at the version.
+    pub caps_len: usize,
+    /// Offset of `instanceId` at the version.
+    pub instance_off: usize,
+}
+
+impl CapsLayout {
+    /// The layouts the constants above describe (580.95.05 and later).
+    #[must_use]
+    pub fn bench(cmd: u32) -> Option<Self> {
+        caps_len(cmd).map(|caps_len| Self {
+            params_size: PARAMS_SIZE,
+            caps_len,
+            instance_off: INSTANCE_OFF,
+        })
+    }
+}
+
+/// ★ Answer a guest's caps request in place, at the GUEST's measured layout: the first
+/// `min(guest caps_len, host table length)` bytes of the host's table (each byte is an
+/// independent capability word the older table simply lacks; a byte the host did not report
+/// stays zero, i.e. absent), and the guest's own `instanceId`.
+///
+/// # Errors
+/// [`CapsRefusal`].
+pub fn answer_at(
+    layout: CapsLayout,
+    answers: &[CapsAnswer],
+    cmd: u32,
+    params: &mut [u8],
+) -> Result<(), CapsRefusal> {
+    caps_len(cmd).ok_or(CapsRefusal::NotACapsControl(cmd))?;
+    if params.len() != layout.params_size || layout.instance_off + 4 > params.len() {
+        return Err(CapsRefusal::Size(params.len()));
+    }
+    let o = layout.instance_off;
+    let inst = u32::from_le_bytes([params[o], params[o + 1], params[o + 2], params[o + 3]]);
+    let want = if cmd == MSENC_GET_CAPS_V2 { 0 } else { inst };
+    let a = answers.iter().find(|a| a.cmd == cmd && a.instance == want).ok_or(CapsRefusal::Instance(inst))?;
+    let n = layout.caps_len.min(a.caps.len()).min(o);
+    params[..n].copy_from_slice(&a.caps[..n]);
+    Ok(())
+}
+
 /// ★ Answer a guest's caps request in place: the host's table, the guest's own `instanceId`.
 /// ⊘ `MSENC`'s `instanceId` is documented *ignored*, so any instance takes the instance-0 answer.
 ///

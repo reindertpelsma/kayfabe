@@ -178,7 +178,9 @@ pub const RMCTRL_FLAGS_CACHEABLE_ANY: u32 =
 /// `RMCTRL_FLAGS_INTERNAL` (`ogkm-580: control.h:239`, `ogkm-610: :236`).
 pub const RMCTRL_FLAGS_INTERNAL: u32 = 0x0000_0080;
 
-/// Byte offset of `rmctrlFlags` in `rpc_gsp_rm_control_v03_00`.
+/// Byte offset of `rmctrlFlags` in `rpc_gsp_rm_control_v03_00` **at 575.51.02 and later**
+/// (the reply path reads the measured offset from `DriverAbiTable::rm_control_wire`; this
+/// constant is the bench's value, kept for the tests that pin it).
 ///
 /// ★ Not `RpcControlReq`'s business: that view decodes what a guest **sent** and
 /// deliberately omits both fields because a stock sender writes zero into them
@@ -189,8 +191,6 @@ pub const CONTROL_RMCTRL_FLAGS_OFF: usize = 24;
 /// Byte offset of `rmctrlAccessRight` in the same header.
 pub const CONTROL_RMCTRL_ACCESS_RIGHT_OFF: usize = 28;
 
-/// The header this port must be able to see before it can neutralise a reply.
-const CONTROL_HEADER: usize = 40;
 
 /// `NV_OK`.
 const NV_OK: u32 = 0;
@@ -397,7 +397,18 @@ impl CommandPolicy for StickyAnswerGuard {
         // reads `rpc_params->status` from inside that header, so a short body under `NV_OK`
         // is a body the guest will read past. A refusal is this port's house answer to
         // "we cannot state this correctly".
-        if reply.body.len() < CONTROL_HEADER {
+        // ⊘⊘ CORRECTED 2026-09-26 (`docs/design/V3_DRIVER_MATRIX.md` §4.3): the header is
+        // 40 bytes only from 575.51.02. Through 570.x it is 24 and has NO `rmctrlFlags` /
+        // `rmctrlAccessRight` — bytes 24..32 are `params[0..8]`, which the fixed offsets below
+        // zeroed in every accepted reply. The offsets now come from the MEASURED wire, and a
+        // version without the fields has nothing to neutralise: its guest caches from its own
+        // export flags, not from our reply (`ogkm-570.86.15: rpc.c:9713-9716`).
+        let wire = self.driver.rm_control_wire();
+        let (Some(flags_off), Some(right_off)) = (wire.rmctrl_flags_off, wire.access_right_off)
+        else {
+            return Some(reply);
+        };
+        if reply.body.len() < wire.params_off {
             self.malformed = self.malformed.saturating_add(1);
             return Some(Reply {
                 rpc_result: kf_abi::NV_ERR_NOT_SUPPORTED,
@@ -406,18 +417,9 @@ impl CommandPolicy for StickyAnswerGuard {
         }
 
         let control = self.driver.decode_rpc_control(&cmd.payload).ok();
-        let flags = u32::from_le_bytes([
-            reply.body[CONTROL_RMCTRL_FLAGS_OFF],
-            reply.body[CONTROL_RMCTRL_FLAGS_OFF + 1],
-            reply.body[CONTROL_RMCTRL_FLAGS_OFF + 2],
-            reply.body[CONTROL_RMCTRL_FLAGS_OFF + 3],
-        ]);
-        let access_right = u32::from_le_bytes([
-            reply.body[CONTROL_RMCTRL_ACCESS_RIGHT_OFF],
-            reply.body[CONTROL_RMCTRL_ACCESS_RIGHT_OFF + 1],
-            reply.body[CONTROL_RMCTRL_ACCESS_RIGHT_OFF + 2],
-            reply.body[CONTROL_RMCTRL_ACCESS_RIGHT_OFF + 3],
-        ]);
+        let word = |b: &[u8], o: usize| u32::from_le_bytes([b[o], b[o + 1], b[o + 2], b[o + 3]]);
+        let flags = word(&reply.body, flags_off);
+        let access_right = word(&reply.body, right_off);
         // ★★ The rewrite is UNCONDITIONAL on the flag words and does not consult
         // `is_gss_legacy` to decide whether to act. Deliberate: `0` is the value a real
         // sender puts there and the value this GSP can honestly stand behind, so writing it
@@ -425,10 +427,8 @@ impl CommandPolicy for StickyAnswerGuard {
         // that classified first would be one `cmd`-decode away from being wrong. The
         // classification is used only for the COUNTER, which is a question about what the
         // guest tried, not about what we owe it.
-        reply.body[CONTROL_RMCTRL_FLAGS_OFF..CONTROL_RMCTRL_FLAGS_OFF + 4]
-            .copy_from_slice(&0u32.to_le_bytes());
-        reply.body[CONTROL_RMCTRL_ACCESS_RIGHT_OFF..CONTROL_RMCTRL_ACCESS_RIGHT_OFF + 4]
-            .copy_from_slice(&0u32.to_le_bytes());
+        reply.body[flags_off..flags_off + 4].copy_from_slice(&0u32.to_le_bytes());
+        reply.body[right_off..right_off + 4].copy_from_slice(&0u32.to_le_bytes());
         if flags != 0 || access_right != 0 {
             self.rewritten = self.rewritten.saturating_add(1);
             if let Some(c) = control

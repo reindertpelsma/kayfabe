@@ -15,6 +15,8 @@ pub mod nvos;
 pub mod rpc;
 /// The VBIOS ROM / BIT-table / FWSEC-descriptor vocabulary — the synthetic-ROM seam.
 pub mod vbios;
+/// The driver matrix: consumed ABI facts per measured ogkm tag (`tools/drivermatrix/`).
+pub mod matrix;
 
 /// The ogkm checkout these modules were generated from.
 pub const OGKM_VERSION: &str = "580.159.04";

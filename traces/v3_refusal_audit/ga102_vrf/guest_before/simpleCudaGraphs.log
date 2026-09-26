@@ -1,0 +1,25 @@
+=== simpleCudaGraphs side=guest start=2026-09-26T13:18:31+00:00 cmd: /opt/apps/bundle/samples/simpleCudaGraphs
+GPU Device 0: "Ampere" with compute capability 8.6
+
+16777216 elements
+threads per block  = 512
+Graph Launch iterations = 3
+
+Num of nodes in the graph created manually = 7
+[cudaGraphsManual] Host callback final reduced sum = 0.996214
+[cudaGraphsManual] Host callback final reduced sum = 0.996214
+[cudaGraphsManual] Host callback final reduced sum = 0.996214
+Cloned Graph Output.. 
+[cudaGraphsManual] Host callback final reduced sum = 0.996214
+[cudaGraphsManual] Host callback final reduced sum = 0.996214
+[cudaGraphsManual] Host callback final reduced sum = 0.996214
+
+Num of nodes in the graph created using stream capture API = 7
+[cudaGraphsUsingStreamCapture] Host callback final reduced sum = 0.996214
+[cudaGraphsUsingStreamCapture] Host callback final reduced sum = 0.996214
+[cudaGraphsUsingStreamCapture] Host callback final reduced sum = 0.996214
+Cloned Graph Output.. 
+[cudaGraphsUsingStreamCapture] Host callback final reduced sum = 0.996214
+[cudaGraphsUsingStreamCapture] Host callback final reduced sum = 0.996214
+[cudaGraphsUsingStreamCapture] Host callback final reduced sum = 0.996214
+=== end rc=0 secs=3 2026-09-26T13:18:34+00:00

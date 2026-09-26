@@ -1,0 +1,25 @@
+VERIFY_START 2026-09-26T13:32:53+00:00
+REV=f8e6a513
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/f8e6a513/qemu-system-x86_64 rev=f8e6a513 mtime=2026-09-26 13:33:25.752617876 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+CRATES_START 2026-09-26T13:33:25+00:00
+CRATES_RC=101
+CRATES passed=596 failed=1
+every_control_this_port_serves_is_exercised_by_the_replay --- FAILED
+thread 'every_control_this_port_serves_is_exercised_by_the_replay' (140442) panicked at crates/kf-crec/tests/cap1b_differential.rs:621:5:
+test result: FAILED. 8 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.06s
+GATES_START 2026-09-26T13:34:08+00:00
+V3_GATES_SUMMARY pass=9 fail=0
+LADDER_START 2026-09-26T13:34:43+00:00
+LADDER_HOST_RC=0
+LADDER_BASE_RC=0
+LADDER_GUEST_RC=0
+FAST_START 2026-09-26T13:57:42+00:00
+FAST_RC=0
+
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+FAST_SUITE_RC=0
+RERECORD_START 2026-09-26T14:11:07+00:00
+RERECORD_RC=0
+[rf_run 2026-09-26T14:32:56+00:00] GUEST_DONE 23 pass / 23 rows
+VERIFY_EXIT 2026-09-26T14:32:56+00:00

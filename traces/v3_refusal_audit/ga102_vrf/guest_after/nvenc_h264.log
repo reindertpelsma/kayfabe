@@ -1,0 +1,8 @@
+=== nvenc_h264 side=guest start=2026-09-26T14:27:42+00:00 cmd: ffmpeg -y -hide_banner -nostats -f lavfi -i testsrc=size=1280x720:rate=30:duration=10 -c:v h264_nvenc -preset p4 /var/tmp/rf/out/_video/nvenc_h264.mp4 2>&1 | tail -5; ffprobe -v error -count_frames -select_streams v:0 -show_entries stream=nb_read_frames -of csv=p=0 /var/tmp/rf/out/_video/nvenc_h264.mp4 | sed 's/^/frame= /'
+      encoder         : Lavc60.31.102 h264_nvenc
+    Side data:
+      cpb: bitrate max/min/avg: 0/0/2000000 buffer size: 4000000 vbv_delay: N/A
+[out#0/mp4 @ 0x64057cd06300] video:1886kB audio:0kB subtitle:0kB other streams:0kB global headers:0kB muxing overhead: 0.233000%
+frame=  300 fps=9.0 q=12.0 Lsize=    1890kB time=00:00:09.86 bitrate=1569.6kbits/s speed=0.295x    
+frame= 300
+=== end rc=0 secs=45 2026-09-26T14:28:27+00:00

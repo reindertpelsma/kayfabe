@@ -245,6 +245,9 @@ pub struct InitTablePolicy {
     /// shell). A boot that goes further because of this set measures REACHABILITY, never
     /// correctness — see `ProbeArmSet`'s docs.
     probe_arm: eventnotify::ProbeArmSet,
+    /// ★ Set while [`InitTablePolicy::respond_transcoded`] re-enters `respond` with a
+    /// bench-layout copy of the guest's params, so the version gate does not fire twice.
+    in_transcode: bool,
     /// ★★★ **The guest's own `NV_VERSION_STRING`**, latched off `SET_GUEST_SYSTEM_INFO`
     /// (fn 1) and served back as [`WantedTable::GspGetFeatures`]'s `firmwareVersion`.
     ///
@@ -656,7 +659,8 @@ pub enum WantedTable {
     /// `NV_OK` immediately when it is `0x0` (`kernel_graphics.c:486`), so a zero here would
     /// carry the boot past `gpuStatePostLoad` by *skipping* the golden-image channel. ⊘ That
     /// shortcut is named and rejected in [`kf_abi::grstatic`]'s header; this device
-    /// publishes `0x7`, which is what a GA106 has.
+    /// publishes the HOST's own mask — `0x7` on a GA106, `0x3e` on a 3060 Ti (non-contiguous
+    /// and served as such since 2026-09-26: `kf_abi::grstatic`'s floorswept-parts section).
     GrFloorsweepingMasks,
     /// `NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_GLOBAL_SM_ORDER` — 34 592 bytes, ★ the
     /// largest reply this port encodes, and nine of 580's 4 096-byte message-queue elements.
@@ -1075,6 +1079,10 @@ pub enum WantedTable {
     ///
     /// ⊘ Two further runtime-only ids (`0x2080a026`, `0x2080a084`) were measured **innocent**
     /// and are deliberately NOT here: the served set is the measured set, not the observed one.
+    /// ⊘⊘ CORRECTED 2026-09-26 (v3-refusals): innocent for `cudaGetDeviceCount` only — refused,
+    /// they sent cudart to the `0x2080a001` fallback and `cudaDevAttrClockRate` read 420 MHz for a
+    /// 1695 MHz die. They are served now, ahead of this table, by `kf_abi::gssreplay` (the host's
+    /// realize-time answer), not here.
     CudartWatchdogInfo,
     /// `0x20809009` — GSS-legacy, unnamed in every open header. Hardware: `{0, 0xd}`.
     CudartInit9009,
@@ -1357,6 +1365,77 @@ impl WantedTable {
         }
     }
 
+    /// ★★★ The NVIDIA params type this variant's encoder was written against — at
+    /// 580.159.04, the bench — so the driver matrix can say whether the GUEST's version lays
+    /// it out the same way (`docs/design/V3_DRIVER_MATRIX.md` §4.4). `None` = a body with no
+    /// header anywhere (the GSS-legacy and libcudart controls: firmware-defined, measured on
+    /// 580 only), which keeps the plain size check.
+    #[must_use]
+    pub fn c_type(self) -> Option<&'static str> {
+        Some(match self {
+            Self::DeviceInfo => "NV2080_CTRL_FIFO_GET_DEVICE_INFO_TABLE_PARAMS",
+            Self::IntrKernelTable => "NV2080_CTRL_INTERNAL_INTR_GET_KERNEL_TABLE_PARAMS",
+            Self::PciBarInfo => "NV2080_CTRL_BUS_GET_PCI_BAR_INFO_PARAMS",
+            Self::ChipInfo => "NV2080_CTRL_INTERNAL_GPU_GET_CHIP_INFO_PARAMS",
+            Self::UserRegisterAccessMap => "NV2080_CTRL_INTERNAL_GPU_GET_USER_REGISTER_ACCESS_MAP_PARAMS",
+            Self::ConstructedFalconInfo => "NV2080_CTRL_GPU_GET_CONSTRUCTED_FALCON_INFO_PARAMS",
+            Self::MemorySystemStaticConfig => "NV2080_CTRL_INTERNAL_MEMSYS_GET_STATIC_CONFIG_PARAMS",
+            Self::InternalDeviceInfo => "NV2080_CTRL_INTERNAL_GET_DEVICE_INFO_TABLE_PARAMS",
+            Self::ConfComputeStaticInfo => "NV2080_CTRL_INTERNAL_CONF_COMPUTE_GET_STATIC_INFO_PARAMS",
+            Self::BifStaticInfo => "NV2080_CTRL_INTERNAL_BIF_GET_STATIC_INFO_PARAMS",
+            Self::FifoNumChannels => "NV2080_CTRL_INTERNAL_FIFO_GET_NUM_CHANNELS_PARAMS",
+            Self::GmmuStaticInfo => "NV2080_CTRL_INTERNAL_GMMU_GET_STATIC_INFO_PARAMS",
+            Self::RegisterFaultBuffer => "NV2080_CTRL_INTERNAL_GMMU_REGISTER_FAULT_BUFFER_PARAMS",
+            Self::RegisterClientShadowFaultBuffer => {
+                "NV2080_CTRL_INTERNAL_GMMU_REGISTER_CLIENT_SHADOW_FAULT_BUFFER_PARAMS"
+            }
+            Self::RegisterAccessCntrBuffer => "NV2080_CTRL_INTERNAL_UVM_REGISTER_ACCESS_CNTR_BUFFER_PARAMS",
+            Self::EventSetNotification => "NV2080_CTRL_EVENT_SET_NOTIFICATION_PARAMS",
+            Self::MemsysL2InvalidateEvict => "NV2080_CTRL_INTERNAL_MEMSYS_L2_INVALIDATE_EVICT_PARAMS",
+            Self::CeFaultMethodBufferSize => "NV2080_CTRL_CE_GET_FAULT_METHOD_BUFFER_SIZE_PARAMS",
+            Self::GrCaps => "NV2080_CTRL_INTERNAL_STATIC_KGR_GET_CAPS_PARAMS",
+            Self::GrInfo => "NV2080_CTRL_INTERNAL_STATIC_KGR_GET_INFO_PARAMS",
+            Self::GrFloorsweepingMasks => "NV2080_CTRL_INTERNAL_STATIC_KGR_GET_FLOORSWEEPING_MASKS_PARAMS",
+            Self::GrGlobalSmOrder => "NV2080_CTRL_INTERNAL_STATIC_KGR_GET_GLOBAL_SM_ORDER_PARAMS",
+            Self::GrFecsRecordSize => "NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_FECS_RECORD_SIZE_PARAMS",
+            Self::GrPdbProperties => "NV2080_CTRL_INTERNAL_STATIC_KGR_GET_PDB_PROPERTIES_PARAMS",
+            Self::GrZcullInfo => "NV2080_CTRL_INTERNAL_STATIC_KGR_GET_ZCULL_INFO_PARAMS",
+            Self::FbGetGpuCacheInfo => "NV2080_CTRL_FB_GET_GPU_CACHE_INFO_PARAMS",
+            Self::FifoGetEngineContextProperties => "NV0080_CTRL_FIFO_GET_ENGINE_CONTEXT_PROPERTIES_PARAMS",
+            Self::GvaspaceServerReservedPdes | Self::GvaspaceServerReservedPdesClient => {
+                "NV90F1_CTRL_VASPACE_COPY_SERVER_RESERVED_PDES_PARAMS"
+            }
+            Self::GrContextBuffersInfo => "NV2080_CTRL_INTERNAL_STATIC_KGR_GET_CONTEXT_BUFFERS_INFO_PARAMS",
+            Self::GpuInfoV2 => "NV2080_CTRL_GPU_GET_INFO_V2_PARAMS",
+            Self::InternalGpuGetSmcMode => "NV2080_CTRL_INTERNAL_GPU_GET_SMC_MODE_PARAMS",
+            Self::BusGetInfoV2 => "NV2080_CTRL_BUS_GET_INFO_V2_PARAMS",
+            Self::BusGetPcieSupportedGpuAtomics => "NV2080_CTRL_CMD_BUS_GET_PCIE_SUPPORTED_GPU_ATOMICS_PARAMS",
+            Self::FbGetInfoV2 => "NV2080_CTRL_FB_GET_INFO_V2_PARAMS",
+            Self::CeGetAllPhysicalCaps => "NV2080_CTRL_CE_GET_ALL_PHYSICAL_CAPS_PARAMS",
+            Self::CeGetPhysicalCaps => "NV2080_CTRL_CE_GET_PHYSICAL_CAPS_PARAMS",
+            Self::CeGetCePceMask => "NV2080_CTRL_CE_GET_CE_PCE_MASK_PARAMS",
+            Self::GrmgrGetGrFsInfo => "NV2080_CTRL_GRMGR_GET_GR_FS_INFO_PARAMS",
+            Self::GspGetFeatures => "NV2080_CTRL_GSP_GET_FEATURES_PARAMS",
+            Self::CudartPerfLevelInfoV2 => "NV2080_CTRL_PERF_GET_LEVEL_INFO_V2_PARAMS",
+            Self::BiosGetInfoV2 => "NV2080_CTRL_BIOS_GET_INFO_V2_PARAMS",
+            Self::C2cInfo => "NV2080_CTRL_CMD_BUS_GET_C2C_INFO_PARAMS",
+            Self::PromoteFaultMethodBuffers => "NVA06C_CTRL_INTERNAL_PROMOTE_FAULT_METHOD_BUFFERS_PARAMS",
+            // ⚠ A WAIT-PATH control: a refusal here is a forged completion
+            // (`a_refusal_the_guest_reads_as_wait_over_forges_a_completion`). It is gated like the
+            // rest only because its layout is ONE `NvU32` at every measured tag — pinned by
+            // `wanted_table_versions.rs`, so the gate structurally cannot fire on it.
+            Self::McServiceInterrupts => "NV2080_CTRL_MC_SERVICE_INTERRUPTS_PARAMS",
+            Self::GrSmIssueRateModifier => "NV2080_CTRL_INTERNAL_STATIC_KGR_GET_SM_ISSUE_RATE_MODIFIER_PARAMS",
+            Self::GssLegacy8159
+            | Self::GssLegacy8162
+            | Self::CudartWatchdogInfo
+            | Self::CudartInit9009
+            | Self::CudartInit9001
+            | Self::CudartInit9064
+            | Self::CudartInit9A001 => return None,
+        })
+    }
+
     /// Classify a control command, or `None` if this policy does not model it.
     ///
     /// ★★★ **Derived from [`WantedTable::ALL`], and that is the whole point.** This was a
@@ -1405,6 +1484,7 @@ impl InitTablePolicy {
             // agrees with the guest — represented here as no slot at all.
             notify_actions: [None; NOTIFY_SUBDEVICE_SLOTS],
             probe_arm,
+            in_transcode: false,
             // ⊘ Not a default value: nothing is known about the guest until it speaks, and
             // `GspGetFeatures` refuses while this is `None` rather than inventing one.
             guest_firmware: None,
@@ -1470,6 +1550,136 @@ impl InitTablePolicy {
 fn refuse_named(cmd: u32, why: &dyn std::fmt::Debug) -> Option<Reply> {
     eprintln!("W349REFUSE cmd={cmd:#010x} why=encoder {why:?}");
     refuse()
+}
+
+/// ★★★ The served controls whose encoder output may be CARRIED to another version's layout by
+/// the measured transcoder (`kf_abi::matrix::transcode`, `V3_DRIVER_MATRIX.md` §4.5), and the
+/// array paths that may drop data at a shrinking version (index-keyed lists the guest cannot
+/// name beyond its own capacity).
+///
+/// ⊘ Being here is a REVIEW statement, not a layout one: every field these encoders write means
+/// the same thing at every measured version where the field exists — only array capacities and
+/// the set of fields differ. Each entry names what was checked. A control whose layout differs
+/// at the guest's version and is NOT here stays refused as `unported-at-version`.
+/// How a reviewed control is carried to another version's layout.
+#[derive(Debug, Clone, Copy)]
+enum Carry {
+    /// The generic by-name transcoder, with these array paths declared truncatable.
+    Generic(&'static [&'static str]),
+    /// `INTR_GET_KERNEL_TABLE`: a change of MEANING (subtree mask → start/end, engine indices by
+    /// name) — `kf_abi::inittables::intr_kernel_table_at`.
+    Intr,
+}
+
+fn transcode_reviewed(want: WantedTable) -> Option<Carry> {
+    transcode_reviewed_paths(want).map(Carry::Generic).or(match want {
+        // subtreeMap is {subtreeMask} from 580.65.06 and {subtreeStart, subtreeEnd} before;
+        // engineIdx is an MC_ENGINE_IDX value whose numbering is per version.
+        WantedTable::IntrKernelTable => Some(Carry::Intr),
+        _ => None,
+    })
+}
+
+fn transcode_reviewed_paths(want: WantedTable) -> Option<&'static [&'static str]> {
+    match want {
+        // Per-GPC arrays (tpcMask/zcullMask/tpcCount/numPesPerGpc/mmuPerGpc/tpcToPesMap) sized by
+        // NV2080_CTRL_GR_MAX_GPC (12 through 575.x, 16 from 580.65.06); same meaning per GPC.
+        // Not truncatable: a GPC the guest's struct cannot describe is a refusal.
+        WantedTable::GrFloorsweepingMasks => Some(&[]),
+        // globalSmId[] entries keyed by global SM id; 575 added ugpuId, 580 physicalCpcId and
+        // virtualTpcId — carried by name, absent fields dropped/zeroed.
+        WantedTable::GrGlobalSmOrder => Some(&[]),
+        // engineInfo[].infoList[] is index-keyed (NV2080_CTRL_GR_INFO_INDEX_*, append-only):
+        // a guest built with a shorter list cannot ask for the newer indices.
+        WantedTable::GrInfo => Some(&["engineInfo[].infoList"]),
+        // Request-bearing index lists (gpuInfoList / fbInfoList, append-only indices): the
+        // guest's request is carried up, the reply carried back; entries past the guest's
+        // capacity are the ones it did not ask for.
+        WantedTable::GpuInfoV2 | WantedTable::FbGetInfoV2 => Some(&[]),
+        _ => None,
+    }
+}
+
+impl InitTablePolicy {
+    /// ★★★ Serve a control whose params layout at the guest's version differs from the one its
+    /// encoder was written against: carry the guest's params UP to the bench layout, answer
+    /// through the unchanged encoder, carry the reply DOWN to the guest's layout — both by field
+    /// name through the measured layouts. Every refusal is named.
+    fn respond_transcoded(
+        &mut self,
+        cmd: &RpcCommand,
+        req: &kf_abi::view::RpcControlReq,
+        ct: &'static str,
+        carry: Carry,
+    ) -> Option<Reply> {
+        let v = self.driver.driver_version();
+        let runs = kf_abi::generated::matrix::ALL_STRUCTS.iter().find(|r| r.name == ct)?;
+        let (Ok(guest), Ok(bench)) = (
+            kf_abi::matrix::Resolved::of(runs, v),
+            kf_abi::matrix::Resolved::of(runs, kf_abi::versions::BENCH_DRIVER),
+        ) else {
+            return refuse();
+        };
+        let at = req.params_at;
+        let gsz = guest.size();
+        if req.params_size as usize != gsz || cmd.payload.len() < at + gsz {
+            eprintln!(
+                "W349REFUSE cmd={:#010x} why=size-at-version asked={} measured={gsz} guest_driver={v}",
+                req.cmd, req.params_size
+            );
+            return refuse();
+        }
+        let up = match kf_abi::matrix::transcode(&guest, &bench, &cmd.payload[at..at + gsz], &[]) {
+            Ok((b, _)) => b,
+            Err(e) => {
+                eprintln!("W349REFUSE cmd={:#010x} why=transcode-up struct={ct} guest_driver={v}: {e}", req.cmd);
+                return refuse();
+            }
+        };
+        let size_off = self.driver.rm_control_wire().params_size_off;
+        let mut payload = cmd.payload[..at].to_vec();
+        payload[size_off..size_off + 4].copy_from_slice(&u32::try_from(bench.size()).unwrap_or(u32::MAX).to_le_bytes());
+        payload.extend_from_slice(&up);
+        let inner = RpcCommand {
+            function: cmd.function,
+            code: cmd.code,
+            sequence: cmd.sequence,
+            payload,
+            elements: cmd.elements,
+            delivered: Vec::new(),
+        };
+        self.in_transcode = true;
+        let reply = self.respond(&inner);
+        self.in_transcode = false;
+        let reply = reply?;
+        if reply.rpc_result != NV_OK || reply.body.len() < at + bench.size() {
+            return Some(reply);
+        }
+        let bench_reply = &reply.body[at..at + bench.size()];
+        let carried = match carry {
+            Carry::Generic(truncatable) => kf_abi::matrix::transcode(&bench, &guest, bench_reply, truncatable)
+                .map_err(|e| e.to_string()),
+            Carry::Intr => kf_abi::inittables::intr_kernel_table_at(bench_reply, v)
+                .map(|b| (b, Vec::new()))
+                .map_err(|e| e.to_string()),
+        };
+        let (down, dropped) = match carried {
+            Ok(x) => x,
+            Err(e) => {
+                eprintln!("W349REFUSE cmd={:#010x} why=transcode-down struct={ct} guest_driver={v}: {e}", req.cmd);
+                return refuse();
+            }
+        };
+        if !dropped.is_empty() {
+            eprintln!(
+                "kf-rm: {ct} carried to driver {v}: fields the guest's version does not have were dropped: {dropped:?}"
+            );
+        }
+        let mut body = reply.body[..at].to_vec();
+        body[size_off..size_off + 4].copy_from_slice(&u32::try_from(gsz).unwrap_or(u32::MAX).to_le_bytes());
+        body.extend_from_slice(&down);
+        Some(Reply { rpc_result: reply.rpc_result, body })
+    }
 }
 
 fn refuse() -> Option<Reply> {
@@ -1663,7 +1873,12 @@ impl CommandPolicy for InitTablePolicy {
             let ps = req.params_size as usize;
             if cmd.payload.len() >= req.params_at + ps {
                 let mut params = cmd.payload[req.params_at..req.params_at + ps].to_vec();
-                match kf_abi::videocaps::answer(&self.host.video_caps, req.cmd, &mut params) {
+                // ★ At the GUEST's measured layout (8 bytes at 580.65.06, 12 from 580.95.05).
+                let answered = match self.driver.video_caps_layout(req.cmd) {
+                    Some(layout) => kf_abi::videocaps::answer_at(layout, &self.host.video_caps, req.cmd, &mut params),
+                    None => Err(kf_abi::videocaps::CapsRefusal::NotACapsControl(req.cmd)),
+                };
+                match answered {
                     Ok(()) => {
                         let mut body = cmd.payload.clone();
                         body[CONTROL_STATUS_OFF..CONTROL_STATUS_OFF + 4].copy_from_slice(&NV_OK.to_le_bytes());
@@ -1693,18 +1908,44 @@ impl CommandPolicy for InitTablePolicy {
             );
             return refuse();
         }
+        // ★★★ The version gate (`V3_DRIVER_MATRIX.md` §4.4): every encoder here was written
+        // against 580.159.04's params layout. Where the guest version's MEASURED layout of the
+        // same type differs — even at the same size — the encoder is not proven for it, and the
+        // control is refused by name as UNPORTED at that version rather than encoded at another
+        // release's offsets. Identical layouts (every 580.x tag, and most controls at most
+        // versions) pass through unchanged.
+        if let Some(ct) = want.c_type()
+            && !self.in_transcode
+            && let Some(guest_size) = layout_differs_from_bench(ct, self.driver.driver_version())
+        {
+            if let Some(carry) = transcode_reviewed(want) {
+                return self.respond_transcoded(cmd, &req, ct, carry);
+            }
+            eprintln!(
+                "W349REFUSE cmd={:#010x} why=unported-at-version struct={ct} guest_driver={} \
+                 measured_size={guest_size} encoder_size={}",
+                req.cmd,
+                self.driver.driver_version(),
+                want.params_size()
+            );
+            return refuse();
+        }
         // The guest's own declared size must be the size we encode, and its payload must
         // actually hold it. Both are the guest's assertions, so both are checked.
         if req.params_size as usize != want.params_size()
             || cmd.payload.len() < req.params_at + want.params_size()
         {
+            // ★ The guest's driver version is part of the statement: a size disagreement at a
+            // non-bench version is a per-version GAP (an encoder written for 580.159.04's
+            // layout), `V3_DRIVER_MATRIX.md` §7 — not a malformed guest.
             eprintln!(
-                "W349REFUSE cmd={:#010x} why=size asked={} wanted={} payload_len={} params_at={}",
+                "W349REFUSE cmd={:#010x} why=size asked={} wanted={} payload_len={} params_at={} guest_driver={}",
                 req.cmd,
                 req.params_size,
                 want.params_size(),
                 cmd.payload.len(),
-                req.params_at
+                req.params_at,
+                self.driver.driver_version()
             );
             return refuse();
         }
@@ -2509,10 +2750,12 @@ impl CommandPolicy for InitTablePolicy {
             // (`ogkm-580: ctrl2080grmgr.h:42-50`) and refusing the batch is what a real
             // GA106 does NOT do.
             //
-            // ⊘ And it states no new number: `gpc_mask` is the row already served to
-            // `INTERNAL_STATIC_KGR_GET_FLOORSWEEPING_MASKS`. The one query `cuInit` asks —
-            // `CHIPLET_GPC_MAP` — is the logical→physical GPC map, which is that mask's set
-            // bits in order.
+            // ⊘ And it states no new number: it is a projection of the GR rows already served
+            // to `INTERNAL_STATIC_KGR_GET_FLOORSWEEPING_MASKS`. The one query `cuInit` asks —
+            // `CHIPLET_GPC_MAP` — is the logical→physical GPC map, which is each LOGICAL row's
+            // `physical_id`, i.e. the host's own answer to this control at realize.
+            // ⊘ Until 2026-09-26 it was "that mask's set bits in order", which a real RTX 3060
+            // whose four-TPC GPC is physical 1 contradicts (`kf_abi::grfsinfo`'s header).
             //
             // ⚠ The error arm is the loud one BY DESIGN. A query type this port does not
             // model could have been answered with a per-query `NV_ERR_NOT_SUPPORTED`, which
@@ -2522,28 +2765,13 @@ impl CommandPolicy for InitTablePolicy {
             // costs one boot and cannot be missed.
             WantedTable::GrmgrGetGrFsInfo => {
                 let at = req.params_at;
-                // ⊘ `gpc_mask()` off the chip's OWN GR rows, never `GA106_GPC_MASK`: the
-                // constant is the same value today and would be a second statement of it.
-                // `GrStaticProfile::gpc_mask` derives from `gpcs.len()`, which is the slice
-                // `WantedTable::GrFloorsweepingMasks` encodes — one description of one
-                // silicon, the `deviceinfo` rule applied to the GR plane.
-                let Ok(gpc_mask) = self.host.gr_static.gpc_mask() else {
+                // ⊘ The chip's OWN GR rows, never `GA106_GPC_MASK`: one description of one
+                // silicon, the `deviceinfo` rule applied to the GR plane. A profile that does
+                // not validate (no GPC, a physical id past the arrays) is refused.
+                if self.host.gr_static.validate().is_err() {
                     return refuse();
-                };
-                let tpc_masks: Vec<u32> = self
-                    .host
-                    .gr_static
-                    .gpcs
-                    .iter()
-                    .map(|g| g.tpc_mask)
-                    .collect();
-                let geometry = kf_abi::grfsinfo::GrFsGeometry {
-                    gpc_mask,
-                    // `physGfxGpcMask` — the same word `encode_floorsweeping_masks` writes
-                    // for all three GPC masks, and for the same reason: they cannot drift.
-                    gfx_gpc_mask: gpc_mask,
-                    tpc_masks: &tpc_masks,
-                };
+                }
+                let geometry = kf_abi::grfsinfo::GrFsGeometry::from_profile(&self.host.gr_static);
                 match kf_abi::grfsinfo::answer_gr_fs_info(
                     &cmd.payload[at..at + kf_abi::grfsinfo::GR_FS_INFO_PARAMS_SIZE],
                     &geometry,
@@ -2778,3 +3006,20 @@ impl CommandPolicy for InitTablePolicy {
 }
 
 kf_util::assert_send_sync!(InitTablePolicy, WantedTable);
+
+/// `Some(measured sizeof)` when the driver matrix measures `c_type` at `version` with a layout
+/// DIFFERENT from its layout at 580.159.04 (the version every encoder in this module was
+/// written against); `None` when they are the same — or when the matrix does not carry the type
+/// or the version (then the caller's size check is the only gate, exactly as before).
+#[must_use]
+pub fn layout_differs_from_bench(c_type: &str, version: kf_abi::DriverVersion) -> Option<usize> {
+    let runs = kf_abi::generated::matrix::ALL_STRUCTS.iter().find(|r| r.name == c_type)?;
+    let at_guest = runs.at(version).ok()?;
+    let at_bench = runs.at(kf_abi::versions::BENCH_DRIVER).ok()?;
+    match (at_guest, at_bench) {
+        (Some(g), Some(b)) if g == b => None,
+        (Some(g), _) => Some(g.size()),
+        (None, _) => Some(0),
+    }
+}
+

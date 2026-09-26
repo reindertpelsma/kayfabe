@@ -173,19 +173,13 @@ fn the_firmware_version_follows_the_guest_and_not_any_constant() {
         assert!(back.valid);
         assert!(back.default_gsp_rm_gpu);
     }
-    // ⊘ And the specific wrong constant, named: this policy's own ABI-table row.
+    // ⊘⊘ CORRECTED 2026-09-26 (`V3_DRIVER_MATRIX.md` §4): the ABI table is now assembled for
+    // the EXACT measured tag, so its version is no longer the "wrong constant" this block named
+    // (it was the 580.65.06 boundary row). The loop above is what still proves the claim — the
+    // served string follows the GUEST for four different guests against ONE bench table — and
+    // the table's own version is pinned here so the day it drifts from the bench this changes.
     use kf_abi::DriverAbi;
-    let row = table_for(BENCH_DRIVER).expect("bench").version();
-    let row_string = format!("{}.{}.{:02}", row.major, row.minor, row.patch);
-    let (_, params) =
-        served(Some("580.159.04"), &[0u8; GSP_GET_FEATURES_PARAMS_SIZE]).expect("served");
-    let back = gspfeatures::decode_gsp_get_features(&params).expect("decodes");
-    assert_ne!(
-        back.firmware.as_str(),
-        row_string,
-        "serving DriverAbiTable::version() would answer {row_string} where hardware says \
-         580.159.04"
-    );
+    assert_eq!(table_for(BENCH_DRIVER).expect("bench").version(), BENCH_DRIVER);
 }
 
 /// ⚠ No fn 1 yet ⇒ a refusal, never a default.

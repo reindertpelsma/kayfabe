@@ -594,6 +594,12 @@ pub enum GspStaticInfoError {
         /// The shape asked for.
         wire: GspStaticInfoWire,
     },
+    /// ★ A field the encoder writes does not exist in the guest version's MEASURED layout
+    /// ([`encode_gsp_static_info_at`]) — a per-version gap, named by path.
+    MissingField {
+        /// The field path (`crate::matrix` spelling).
+        path: &'static str,
+    },
 }
 
 impl core::fmt::Display for GspStaticInfoError {
@@ -629,6 +635,10 @@ impl core::fmt::Display for GspStaticInfoError {
             Self::UnsupportedWire { wire } => write!(
                 f,
                 "this port does not encode the {wire:?} shape of GspStaticConfigInfo"
+            ),
+            Self::MissingField { path } => write!(
+                f,
+                "GspStaticConfigInfo.{path} does not exist in this driver version's measured layout"
             ),
         }
     }
@@ -742,6 +752,140 @@ pub fn encode_gsp_static_info(
         .copy_from_slice(&info.bar2_pde_base.to_le_bytes());
     for (i, w) in info.engine_caps.iter().enumerate() {
         body[ENGINE_CAPS_OFF + 4 * i..ENGINE_CAPS_OFF + 4 * i + 4].copy_from_slice(&w.to_le_bytes());
+    }
+    Ok(body)
+}
+
+/// ★★★ Encode a `GspStaticConfigInfo` at the GUEST's MEASURED layout
+/// (`docs/design/V3_DRIVER_MATRIX.md` §4, `crate::generated::matrix::GSPSTATICCONFIGINFO`).
+///
+/// The same fields [`encode_gsp_static_info`] writes — the UUID, the FB region table, the
+/// framebuffer length, the three name arrays, both BAR roots and `engineCaps` — each placed at
+/// the offset the version's own header puts it, found by NAME in the measured layout; every
+/// other byte stays zero, which is the same "advertise only what we state" policy as the bench
+/// encoder. For the bench version the result is byte-identical to [`encode_gsp_static_info`]
+/// (asserted in the tests), so this encoder replaces a 580-pinned layout rather than adding a
+/// second one.
+///
+/// ★ The layouts it spans, measured: 2168 bytes (535/545), 2184 (550), 1640 (565), 1656
+/// (570/575, 48-byte FB-region entries), 1792 (580.x), 1808 (590), 1592 (595, no `grCapsBits`),
+/// 1600 (610). ⊘ Zero stays zero: a version's field this encoder has no source for (e.g. 550's
+/// `SM_info`, 610's `fbRegion[].regionTag`) is written as zero, as today's encoder writes every
+/// 580 field it has no source for — the guest's next refusal names the field it wanted.
+///
+/// `gpuShortNameString` and `gpuNameString_Unicode` are optional (610 drops the Unicode array);
+/// the other fields are required and a layout without one is [`GspStaticInfoError::MissingField`].
+///
+/// # Errors
+/// [`GspStaticInfoError`] — the region-table checks of [`encode_gsp_static_info`] (with the array
+/// bound taken from the measured `fbRegion[]`), or a required field missing at this version.
+pub fn encode_gsp_static_info_at(
+    info: &GspStaticInfo<'_>,
+    layout: &crate::matrix::Resolved,
+) -> Result<Vec<u8>, GspStaticInfoError> {
+    let need = |path: &'static str| {
+        layout
+            .maybe(path)
+            .ok_or(GspStaticInfoError::MissingField { path })
+    };
+    let region_arr = need("fbRegionInfoParams.fbRegion")?;
+    let region_el = need("fbRegionInfoParams.fbRegion[]")?;
+    let stride = region_el.bytes().filter(|b| *b > 0).ok_or(GspStaticInfoError::MissingField {
+        path: "fbRegionInfoParams.fbRegion[]",
+    })?;
+    let max_entries = region_arr.bytes().unwrap_or(0) / stride;
+    let regions = info.fb_regions;
+    if regions.is_empty() {
+        return Err(GspStaticInfoError::NoRegions);
+    }
+    if regions.len() > max_entries {
+        return Err(GspStaticInfoError::TooManyRegions {
+            len: regions.len(),
+            max: max_entries,
+        });
+    }
+    for (i, r) in regions.iter().enumerate() {
+        if r.limit < r.base {
+            return Err(GspStaticInfoError::RegionInverted {
+                index: i,
+                base: r.base,
+                limit: r.limit,
+            });
+        }
+        if i > 0 {
+            let prev_limit = regions[i - 1].limit;
+            if r.base <= prev_limit {
+                return Err(GspStaticInfoError::RegionsOutOfOrder {
+                    index: i,
+                    base: r.base,
+                    prev_limit,
+                });
+            }
+        }
+    }
+    let top = regions[regions.len() - 1].limit.wrapping_add(1);
+    if top != info.fb_length {
+        return Err(GspStaticInfoError::RegionsDoNotSpanFb {
+            top,
+            fb_length: info.fb_length,
+        });
+    }
+
+    let mut body = vec![0u8; layout.size()];
+    let put = |body: &mut Vec<u8>, off: usize, bytes: &[u8]| {
+        body[off..off + bytes.len()].copy_from_slice(bytes);
+    };
+    // gidInfo — see `encode_gsp_static_info` for why flags and length are written.
+    put(&mut body, need("gidInfo.flags")?.off(), &GID_FLAGS_SHA1_BINARY.to_le_bytes());
+    put(&mut body, need("gidInfo.length")?.off(), &(RM_SHA1_GID_SIZE as u32).to_le_bytes());
+    put(&mut body, need("gidInfo.data")?.off(), info.gid.as_bytes());
+    // The FB region table, entry by entry at the measured stride and member offsets.
+    let n = u32::try_from(regions.len()).unwrap_or(u32::MAX);
+    put(&mut body, need("fbRegionInfoParams.numFBRegions")?.off(), &n.to_le_bytes());
+    let e0 = region_el.off();
+    let rel = |path: &'static str| need(path).map(|f| f.off() - e0);
+    let (o_base, o_limit, o_rsvd, o_perf) = (
+        rel("fbRegionInfoParams.fbRegion[].base")?,
+        rel("fbRegionInfoParams.fbRegion[].limit")?,
+        rel("fbRegionInfoParams.fbRegion[].reserved")?,
+        rel("fbRegionInfoParams.fbRegion[].performance")?,
+    );
+    let (o_cmp, o_iso, o_prot) = (
+        rel("fbRegionInfoParams.fbRegion[].supportCompressed")?,
+        rel("fbRegionInfoParams.fbRegion[].supportISO")?,
+        rel("fbRegionInfoParams.fbRegion[].bProtected")?,
+    );
+    for (i, r) in regions.iter().enumerate() {
+        let o = e0 + i * stride;
+        put(&mut body, o + o_base, &r.base.to_le_bytes());
+        put(&mut body, o + o_limit, &r.limit.to_le_bytes());
+        put(&mut body, o + o_rsvd, &r.reserved.to_le_bytes());
+        put(&mut body, o + o_perf, &r.performance.to_le_bytes());
+        body[o + o_cmp] = u8::from(r.support_compressed);
+        body[o + o_iso] = u8::from(r.support_iso);
+        body[o + o_prot] = u8::from(r.protected);
+    }
+    put(&mut body, need("fb_length")?.off(), &info.fb_length.to_le_bytes());
+    if let Some(name) = info.name {
+        put_name(&mut body, need("gpuNameString")?.off(), name);
+        if let Some(u) = layout.maybe("gpuNameString_Unicode") {
+            put_name_unicode(&mut body, u.off(), name);
+        }
+    }
+    if let Some(short) = info.short_name
+        && let Some(f) = layout.maybe("gpuShortNameString")
+    {
+        put_name(&mut body, f.off(), short);
+    }
+    put(&mut body, need("bar1PdeBase")?.off(), &info.bar1_pde_base.to_le_bytes());
+    put(&mut body, need("bar2PdeBase")?.off(), &info.bar2_pde_base.to_le_bytes());
+    // `engineCaps[]` is indexed by NV2080 engine type, which is append-only; a version with
+    // fewer words (2 at ≤ 550) cannot name the engine types the dropped word would carry,
+    // because those types do not exist at that version.
+    let caps = need("engineCaps")?;
+    let words = caps.bytes().unwrap_or(0) / 4;
+    for (i, w) in info.engine_caps.iter().take(words).enumerate() {
+        put(&mut body, caps.off() + 4 * i, &w.to_le_bytes());
     }
     Ok(body)
 }
@@ -1144,5 +1288,87 @@ mod tests {
                 wire: GspStaticInfoWire::From610_43_02
             }
         );
+    }
+
+    /// A realistic info block: two regions (one reserved), all names, both roots, caps.
+    fn full_info(regions: &[FbRegion], fb: u64) -> GspStaticInfo<'_> {
+        GspStaticInfo {
+            fb_regions: regions,
+            fb_length: fb,
+            gid: a_gid(),
+            name: a_name(),
+            short_name: a_short_name(),
+            bar1_pde_base: 0x20C_C000,
+            bar2_pde_base: 0x37B_2000,
+            engine_caps: [0x8000_0402, 0x0000_1003, 0x0000_0010],
+        }
+    }
+
+    fn two_regions(fb: u64) -> [FbRegion; 2] {
+        [
+            FbRegion { base: 0, limit: 0xFFFFF, reserved: 0x10_0000, performance: 0, support_compressed: false, support_iso: false, protected: false },
+            FbRegion { base: 0x10_0000, limit: fb - 1, reserved: 0, performance: 6, support_compressed: true, support_iso: true, protected: false },
+        ]
+    }
+
+    fn v(major: u16, minor: u16, patch: u16) -> crate::DriverVersion {
+        crate::DriverVersion { major, minor, patch }
+    }
+
+    /// ★★★ The measured encoder IS the bench encoder at every 580.x tag — byte for byte — so it
+    /// replaces the pinned layout instead of standing beside it.
+    #[test]
+    fn the_measured_encoder_is_the_bench_encoder_at_every_580_tag() {
+        use crate::generated::matrix::{GSPSTATICCONFIGINFO, MEASURED};
+        let fb = 8u64 << 30;
+        let regions = two_regions(fb);
+        let info = full_info(&regions, fb);
+        let bench = encode_gsp_static_info(&info, GspStaticInfoWire::Pre610).expect("bench encodes");
+        let mut n = 0;
+        for tag in MEASURED.iter().filter(|t| t.major == 580) {
+            let lay = crate::matrix::Resolved::of(&GSPSTATICCONFIGINFO, *tag).expect("measured");
+            assert_eq!(encode_gsp_static_info_at(&info, &lay).expect("encodes"), bench, "{tag}");
+            n += 1;
+        }
+        assert!(n >= 7, "the 580 branch is measured at {n} tags");
+    }
+
+    /// ★★ At 570/575 the SAME facts land at the 570 offsets: 1656 bytes, 48-byte region entries,
+    /// `fb_length`@1224, `bar1PdeBase`@1536 — measured, not transcribed.
+    #[test]
+    fn the_570_layout_puts_the_same_facts_at_its_own_offsets() {
+        use crate::generated::matrix::GSPSTATICCONFIGINFO;
+        let fb = 8u64 << 30;
+        let regions = two_regions(fb);
+        let info = full_info(&regions, fb);
+        for tag in [v(570, 124, 6), v(575, 57, 8)] {
+            let lay = crate::matrix::Resolved::of(&GSPSTATICCONFIGINFO, tag).expect("measured");
+            let b = encode_gsp_static_info_at(&info, &lay).expect("encodes");
+            assert_eq!(b.len(), 1656, "{tag}");
+            let u64_at = |o: usize| u64::from_le_bytes(b[o..o + 8].try_into().expect("8"));
+            assert_eq!(u64_at(1224), fb, "fb_length at {tag}");
+            assert_eq!(u64_at(1536), 0x20C_C000, "bar1PdeBase at {tag}");
+            assert_eq!(u64_at(1544), 0x37B_2000, "bar2PdeBase at {tag}");
+            assert_eq!(u32::from_le_bytes(b[344..348].try_into().expect("4")), 2, "numFBRegions");
+            // entry 1 at 352 + 48: base, limit
+            assert_eq!(u64_at(352 + 48), 0x10_0000, "region 1 base at the 48-byte stride");
+            assert_eq!(u64_at(352 + 48 + 8), fb - 1, "region 1 limit");
+            assert_eq!(&b[36..52], a_gid().as_bytes(), "gidInfo.data@36");
+        }
+    }
+
+    /// 610 drops the Unicode name and moves `gidInfo` to the front; the measured encoder follows,
+    /// and a required field absent at a version is a named refusal.
+    #[test]
+    fn the_610_layout_encodes_without_the_unicode_array() {
+        use crate::generated::matrix::GSPSTATICCONFIGINFO;
+        let fb = 8u64 << 30;
+        let regions = two_regions(fb);
+        let info = full_info(&regions, fb);
+        let lay = crate::matrix::Resolved::of(&GSPSTATICCONFIGINFO, v(610, 43, 2)).expect("measured");
+        assert!(lay.maybe("gpuNameString_Unicode").is_none());
+        let b = encode_gsp_static_info_at(&info, &lay).expect("encodes");
+        assert_eq!(b.len(), 1600);
+        assert_eq!(&b[12..28], a_gid().as_bytes(), "gidInfo.data@12 at 610");
     }
 }

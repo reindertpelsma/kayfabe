@@ -185,6 +185,8 @@ check-ptx: kf_tests
 # `make_ptx.py` drives `libnvrtc.so.12` through ctypes and supplies the two libc headers NVRTC
 # does not ship. `KF_DEVICE_ONLY` selects the half it can compile — see kf_walk.cu's own note.
 #
+# ★ With NVRTC 12.2 (ISA 8.2 — the JIT floor of the oldest supported HOST driver, 535):
+# `make_ptx.py` refuses a newer ISA (V3_DRIVER_MATRIX.md §8.2 ruling 4).
 # ⚠ REGENERATE AFTER ANY EDIT TO kf_walk.cu OR kf_walk.h. The Rust side has three independent
 # checks that catch a stale PTX — the `.param` size, the entry names and the `.target` — but
 # only if somebody runs them; regenerating is cheaper than diagnosing.

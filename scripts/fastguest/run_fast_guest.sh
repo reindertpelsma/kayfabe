@@ -22,7 +22,9 @@ set -uo pipefail
 TAG=${1:-fast}
 BUDGET=${2:-20}
 BENCH=${BENCH_DIR:-/workspace/bench}
-FG=$BENCH/fastguest
+# ★ `KF_FASTGUEST_DIR`: one fast-guest build per GUEST driver version (V3_DRIVER_MATRIX.md §5);
+# the default is the host-mode build of the host's own driver.
+FG=${KF_FASTGUEST_DIR:-$BENCH/fastguest}
 if [ "${KF_DEVICE:-kf3}" = kf3 ]; then
     # ★ 2026-09-25: the binary built from THIS checkout's revision (`build_kf3.sh` installs one per
     # revision) — never the shared build dir's, which another build can replace mid-measurement.
@@ -221,6 +223,18 @@ export KAYFABE_GUEST_BAR1_MB=${KAYFABE_GUEST_BAR1_MB:-128}
 # single-device lane exactly as before (one device, the property's default minor 0).
 # `KF3_DEV_EXTRA` applies to every device. A host minor listed twice is the same card twice —
 # `cardbudget` then refuses by name unless the summed BAR1 demand fits.
+# ★ v3-gpcmask (2026-09-26): the store must FIT the host card. `fb-mb=8192` was the default
+# because every box this ran on was a 12 GiB GA106 or larger; on an 8 GiB RTX 3060 Ti realize
+# refuses by name — "store of 8192 MiB refused: NoMemory". A lane that passes NOTHING must default
+# to something that boots (the BAR1 rule): the smallest card's memory.total less 2 GiB of
+# headroom (walker pools, the host RM's own reservations), capped at 8192 — so every card of
+# 10 GiB or more keeps 8192. `[measured]` 6144 realizes and boots on the 8 GiB card.
+# `KF3_FB_MB` still wins when set.
+if [ -z "${KF3_FB_MB:-}" ]; then
+    _vram=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | sort -n | head -1)
+    KF3_FB_MB=8192
+    case "$_vram" in ''|*[!0-9]*) ;; *) [ "$_vram" -lt 10240 ] && KF3_FB_MB=$(( (_vram - 2048) / 1024 * 1024 )) ;; esac
+fi
 MGPU_TOK=""
 case "$KF_DEVICE" in
     kf3)

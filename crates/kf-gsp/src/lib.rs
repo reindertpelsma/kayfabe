@@ -119,6 +119,7 @@ pub mod boot;
 pub mod element;
 pub mod fault;
 pub mod ram;
+pub mod refusal;
 pub mod ring;
 pub mod rpc;
 pub mod seq;
@@ -138,6 +139,7 @@ pub use element::{
 pub use fault::{GspFault, LayoutError, RamRefused, RegionError, RxLinkCode};
 pub use kf_arch::gsp::BootPhase;
 pub use ram::{GuestRam, RegionMap};
+pub use refusal::{RefusalLedger, RefusalRow};
 pub use ring::{
     MsgCount, MsgqAbi, MsgqGeometry, RX_HEADER_BYTES, RxCursor, Slot, TxCursor, TxHeader,
     available_elements, free_elements, rx_link_check,

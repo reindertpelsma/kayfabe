@@ -141,3 +141,37 @@ mod tests {
         assert!((r.of_doorbell(0xFFFF_F7FF).unwrap() as usize) < r.table_len());
     }
 }
+
+/// ★ The token fields, held to each die group's header (`kf_chip::hwref`,
+/// `docs/design/V3_HW_BOUNDARY_INVENTORY.md`): Turing … Hopper tokens are `NV_CTRL_VF_DOORBELL`
+/// (`kfifoGenerateWorkSubmitTokenHal_TU102/_GA100`), Blackwell's `NV_VIRTUAL_FUNCTION_DOORBELL`
+/// (`_GB100`, `_GB202`); both carry `RUNLIST_ID` 22:16 and `VECTOR` 11:0.
+#[cfg(test)]
+mod hwref_check {
+    use super::*;
+    use kf_chip::hwref::DieGroup;
+    use kf_chip::hwref::expect::{mask, range, val};
+
+    #[test]
+    fn the_token_fields_are_each_die_groups_header() {
+        for g in [DieGroup::Tu10x, DieGroup::Ga100, DieGroup::Ga10x, DieGroup::Ad10x, DieGroup::Gh100] {
+            assert_eq!(mask(g, "NV_CTRL_VF_DOORBELL_VECTOR"), u64::from(TokenIndex::VECTOR_MASK), "{g:?}");
+            assert_eq!(range(g, "NV_CTRL_VF_DOORBELL_RUNLIST_ID"), (22, 16), "{g:?}");
+        }
+        for g in [DieGroup::Gb10x, DieGroup::Gb20x] {
+            let (hi, lo) = range(g, "NV_VIRTUAL_FUNCTION_DOORBELL_RUNLIST_ID");
+            assert_eq!(lo, u64::from(TokenIndex::RUNLIST_SHIFT), "{g:?}");
+            assert_eq!((1u64 << (hi - lo + 1)) - 1, u64::from(TokenIndex::RUNLIST_MASK), "{g:?}");
+            assert_eq!(mask(g, "NV_VIRTUAL_FUNCTION_DOORBELL_VECTOR"), u64::from(TokenIndex::VECTOR_MASK), "{g:?}");
+            // `CHID_BITS` is the per-runlist channel RAM: `NV_CHRAM_CHANNEL__SIZE_1` = 2048.
+            assert_eq!(1u64 << TokenIndex::CHID_BITS, val(g, "NV_CHRAM_CHANNEL__SIZE_1"), "{g:?}");
+        }
+        // ★ The RUNLIST_DOORBELL bit is where the two Blackwell die groups differ: 30:30 = 1 on GB20x;
+        // on GB10x it is 22:22 with `_ENABLE` = 0 — INSIDE RUNLIST_ID and never set. Neither reaches
+        // the index (`RUNLIST_MASK` stops at bit 22 and a GB10x runlist id < 64 leaves bit 22 clear).
+        assert_eq!(range(DieGroup::Gb20x, "NV_VIRTUAL_FUNCTION_DOORBELL_RUNLIST_DOORBELL"), (30, 30));
+        assert_eq!(val(DieGroup::Gb20x, "NV_VIRTUAL_FUNCTION_DOORBELL_RUNLIST_DOORBELL_ENABLE"), 1);
+        assert_eq!(range(DieGroup::Gb10x, "NV_VIRTUAL_FUNCTION_DOORBELL_RUNLIST_DOORBELL"), (22, 22));
+        assert_eq!(val(DieGroup::Gb10x, "NV_VIRTUAL_FUNCTION_DOORBELL_RUNLIST_DOORBELL_ENABLE"), 0);
+    }
+}

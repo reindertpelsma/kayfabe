@@ -1,0 +1,25 @@
+=== vkpeak side=guest start=2026-09-26T16:26:35+00:00 cmd: /opt/apps/bundle/bin/vkpeak 0
+device       = NVIDIA GeForce RTX 3090
+
+fp32-scalar  = 27045.74 GFLOPS
+fp32-vec4    = 26287.04 GFLOPS
+
+fp16-scalar  = 40253.09 GFLOPS
+fp16-vec4    = 28973.11 GFLOPS
+fp16-matrix  = 160664.18 GFLOPS
+
+fp64-scalar  = 633.96 GFLOPS
+fp64-vec4    = 631.83 GFLOPS
+
+int32-scalar = 19860.66 GIOPS
+int32-vec4   = 19054.01 GIOPS
+
+int16-scalar = 14882.59 GIOPS
+int16-vec4   = 13755.47 GIOPS
+
+int8-dotprod = 18072.26 GIOPS
+int8-matrix  = 315918.48 GIOPS
+
+bf16-dotprod = 0.00 GFLOPS
+bf16-matrix  = 80478.68 GFLOPS
+=== end rc=0 secs=354 2026-09-26T16:32:29+00:00

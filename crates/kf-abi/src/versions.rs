@@ -90,6 +90,11 @@ pub enum GspStaticInfoWire {
     Pre610,
     /// The 610 reshuffle. **Not encoded** — see the enum's doc.
     From610_43_02,
+    /// ★ A measured layout that is neither of the above (565: 1640 bytes, 570/575: 1656,
+    /// 590: 1808, 595: 1592 — `traces/driver_matrix/report.md`). **Not encoded**: fn 65 is
+    /// refused by name at that version until the encoder is driven by the measured layout
+    /// (`docs/design/V3_DRIVER_MATRIX.md` §6).
+    Unencoded,
 }
 
 /// Which `GSP_MSG_QUEUE_ELEMENT` shape a driver version speaks.
@@ -259,6 +264,8 @@ impl GspInitArgsWire {
 /// which is the ~14-51-line delta `mode2_abi_agnostic_layer.md` §2.1 measured.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DriverAbiTable {
+    /// ★ The EXACT measured driver version this table was assembled for (since 2026-09-26 —
+    /// before, the boundary row a version inherited from).
     version: DriverVersion,
     map_dma: MapDmaWire,
     gsp_element: GspElementWire,
@@ -343,265 +350,417 @@ pub struct DriverAbiTable {
     /// core falls back to the engine-object refinement it used before this field existed,
     /// which is exactly the pre-2026-08-11 behaviour and not a new failure.
     channel_engine: Option<ChannelEngineWire>,
-    /// Why this entry exists — kept in the data so a reader of the table sees
-    /// the boundary's justification without leaving the file.
+    /// ★★★ Where this version's `rpc_gsp_rm_control_v` puts its fields — MEASURED
+    /// ([`RmControlWire`]). The header is 24 bytes through 570.x and 40 from 575.51.02, so a
+    /// fixed offset mis-slices every control of every guest on one side of that boundary.
+    rm_control: RmControlWire,
+    /// The capability row's justification (nvproxy boundary) — kept in the data so a reader
+    /// sees why this version gets that allowlist without leaving the file.
     pub note: &'static str,
 }
 
-/// The registry, in **ascending** version order.
+/// ★★★ `rpc_gsp_rm_control_v` — the body of every `GSP_RM_CONTROL` (fn 76), as MEASURED at
+/// one driver tag (`crate::generated::matrix::RPC_GSP_RM_CONTROL_V`).
 ///
-/// `table_for` picks the newest entry `<= requested`, which is inherit-then-
-/// mutate expressed as data: an entry only exists where something changed.
-pub const TABLES: &[DriverAbiTable] = &[
-    DriverAbiTable {
-        version: DriverVersion {
-            major: 550,
-            minor: 54,
-            patch: 4,
-        },
-        map_dma: MapDmaWire::Pre580_65_06,
-        gsp_element: GspElementWire::Pre610,
-        gsp_init_args: GspInitArgsWire::FourField,
-        gsp_static_info: GspStaticInfoWire::Pre610,
+/// `[measured, tools/drivermatrix, 2026-09-26]` 535.309.01 … 570.148.08: 24 bytes,
+/// `flags`@20, `params`@24. 575.51.03 … 615.71.09: 40 bytes, `rmapiRpcFlags`@20,
+/// `rmctrlFlags`@24, `rmctrlAccessRight`@28, `reserved0`@32, `params`@40. `hClient`@0,
+/// `hObject`@4, `cmd`@8, `status`@12 and `paramsSize`@16 hold at every tag.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RmControlWire {
+    /// Offset of `params[]` — the fixed header's size.
+    pub params_off: usize,
+    /// Offset of the RPC-flags word (`rmapiRpcFlags`, spelled `flags` before 575) — the word
+    /// [`crate::rpc_params_are_serialized`] tests.
+    pub rpc_flags_off: usize,
+    /// Offset of `rmctrlFlags`, where the version has it.
+    pub rmctrl_flags_off: Option<usize>,
+    /// Offset of `rmctrlAccessRight`, where the version has it.
+    pub access_right_off: Option<usize>,
+    /// Offset of `paramsSize`.
+    pub params_size_off: usize,
+    /// Offset of `status`.
+    pub status_off: usize,
+}
+
+/// ★★★ The **capability allowlist's** version boundaries — the one hand-maintained row set
+/// left in this module, and why it is legitimately hand-maintained.
+///
+/// Until 2026-09-26 this was `TABLES`, one hand row per boundary carrying EVERY versioned
+/// fact (wire shapes, the VGX pair, the channel-alloc offsets) — eight rows, 550.54.04 up,
+/// with `vgx`/`channel_*` `None` on six of them and every guest below the floor refused.
+/// `docs/design/V3_DRIVER_MATRIX.md` §3 replaced the layout half with MEASURED data
+/// ([`crate::matrix`]): those facts are now read per exact driver tag out of
+/// [`crate::generated::matrix`], and [`table_for`] assembles a table for any measured tag.
+///
+/// ⊘ What stays here is **policy, not layout**: which controls and classes a guest at a
+/// given version may name at all. Its source is gVisor nvproxy's per-version registry
+/// (`gvisor/pkg/sentry/devices/nvproxy/version.go`), a security allowlist a human reviews,
+/// and it is keyed on nvproxy's own boundaries ("newest row ≤ version" — an allowlist row
+/// is valid until the next one changes it, which is what nvproxy's inherit-then-mutate
+/// means). ⚠ Below the oldest row (535.x, 545.x) there is no reviewed allowlist in this
+/// port; [`table_for`] refuses those versions by name ([`AbiError::NoCapabilityRow`]) rather
+/// than handing them the 550 surface. nvproxy has 535.104.05 and 545.23.06 blocks
+/// (`version.go:159`, `:837`) — porting them is the named follow-on (§6).
+#[derive(Debug, Clone, Copy)]
+struct CapsRow {
+    from: DriverVersion,
+    caps: &'static CapabilityTable,
+    note: &'static str,
+}
+
+const fn dv(major: u16, minor: u16, patch: u16) -> DriverVersion {
+    DriverVersion {
+        major,
+        minor,
+        patch,
+    }
+}
+
+/// Ascending. See [`CapsRow`].
+const CAPS_ROWS: &[CapsRow] = &[
+    CapsRow {
+        from: dv(550, 54, 4),
         caps: &CAPS_550_54_04,
-        vbios: VbiosWire::Tu102Bit,
-        vgx: None,
-        // ⊘ Not pinned: no tree at this boundary was read. See the field's docs.
-        channel_notifier: None,
-        channel_userd: None,
-        channel_userd_mem: None,
-        channel_engine: None,
-        note: "oldest supported: NVOS47 gained `size` here \
-               (gvisor/pkg/abi/nvgpu/frontend.go:707-710, NVOS47_PARAMETERS_V550)",
+        note: "oldest reviewed allowlist (NVOS47 gained `size` here — \
+               gvisor/pkg/abi/nvgpu/frontend.go:707-710)",
     },
-    // ★★ The next four rows exist ONLY for the capability surface: every wire layout in
-    // them is its predecessor's. They are here because the alternative is giving a 550
-    // guest the class set of a 570 one — a quietly WIDER gate at the oldest supported
-    // version, the direction a security table must never drift in — and, since task
-    // #122, because two of them are where the vendor REMOVES something.
-    //
-    // ★★★ 550.90.07 and 555.42.02 were added by #122. nvproxy's control map changes at
-    // both (`gvisor/pkg/sentry/devices/nvproxy/version.go:906` and `:933`), and 555.42.02
-    // is a pure DELETE — so without a row here a 550 guest is refused a command nvproxy
-    // permits it, and a 560 guest is permitted one nvproxy deleted. Neither could be
-    // said before, because `CapabilityTable` had no way to stop inheriting a row.
-    DriverAbiTable {
-        version: DriverVersion {
-            major: 550,
-            minor: 90,
-            patch: 7,
-        },
-        map_dma: MapDmaWire::Pre580_65_06,
-        gsp_element: GspElementWire::Pre610,
-        gsp_init_args: GspInitArgsWire::FourField,
-        gsp_static_info: GspStaticInfoWire::Pre610,
+    CapsRow {
+        from: dv(550, 90, 7),
         caps: &CAPS_550_90_07,
-        vbios: VbiosWire::Tu102Bit,
-        vgx: None,
-        // ⊘ Not pinned: no tree at this boundary was read. See the field's docs.
-        channel_notifier: None,
-        channel_userd: None,
-        channel_userd_mem: None,
-        channel_engine: None,
-        note: "capability-only boundary: +NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION\
-               _STATE, no layout change \
-               (gvisor/pkg/sentry/devices/nvproxy/version.go:906)",
+        note: "+NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE (version.go:906)",
     },
-    DriverAbiTable {
-        version: DriverVersion {
-            major: 555,
-            minor: 42,
-            patch: 2,
-        },
-        map_dma: MapDmaWire::Pre580_65_06,
-        gsp_element: GspElementWire::Pre610,
-        gsp_init_args: GspInitArgsWire::FourField,
-        gsp_static_info: GspStaticInfoWire::Pre610,
+    CapsRow {
+        from: dv(555, 42, 2),
         caps: &CAPS_555_42_02,
-        vbios: VbiosWire::Tu102Bit,
-        vgx: None,
-        // ⊘ Not pinned: no tree at this boundary was read. See the field's docs.
-        channel_notifier: None,
-        channel_userd: None,
-        channel_userd_mem: None,
-        channel_engine: None,
-        note: "★ capability-only and purely SUBTRACTIVE: nvproxy deletes \
-               NVC36F_CTRL_GET_CLASS_ENGINEID here and adds nothing this port carries \
-               (gvisor/pkg/sentry/devices/nvproxy/version.go:933)",
+        note: "purely SUBTRACTIVE: nvproxy deletes NVC36F_CTRL_GET_CLASS_ENGINEID (version.go:933)",
     },
-    DriverAbiTable {
-        version: DriverVersion {
-            major: 560,
-            minor: 28,
-            patch: 3,
-        },
-        map_dma: MapDmaWire::Pre580_65_06,
-        gsp_element: GspElementWire::Pre610,
-        gsp_init_args: GspInitArgsWire::FourField,
-        gsp_static_info: GspStaticInfoWire::Pre610,
+    CapsRow {
+        from: dv(560, 28, 3),
         caps: &CAPS_560_28_03,
-        vbios: VbiosWire::Tu102Bit,
-        vgx: None,
-        // ⊘ Not pinned: no tree at this boundary was read. See the field's docs.
-        channel_notifier: None,
-        channel_userd: None,
-        channel_userd_mem: None,
-        channel_engine: None,
-        note: "capability-only boundary: +8 allocation classes and \
-               +NV_SEMAPHORE_SURFACE_CTRL_CMD_UNBIND_CHANNEL, no layout change \
-               (gvisor/pkg/sentry/devices/nvproxy/version.go:945-977)",
+        note: "+8 allocation classes, +NV_SEMAPHORE_SURFACE_CTRL_CMD_UNBIND_CHANNEL \
+               (version.go:945-977)",
     },
-    DriverAbiTable {
-        version: DriverVersion {
-            major: 570,
-            minor: 86,
-            patch: 15,
-        },
-        map_dma: MapDmaWire::Pre580_65_06,
-        gsp_element: GspElementWire::Pre610,
-        gsp_init_args: GspInitArgsWire::FourField,
-        gsp_static_info: GspStaticInfoWire::Pre610,
+    CapsRow {
+        from: dv(570, 86, 15),
         caps: &CAPS_570_86_15,
-        vbios: VbiosWire::Tu102Bit,
-        vgx: None,
-        // ⊘ Not pinned: no tree at this boundary was read. See the field's docs.
-        channel_notifier: None,
-        channel_userd: None,
-        channel_userd_mem: None,
-        channel_engine: None,
-        note: "capability-only boundary: +6 allocation classes and the two \
-               DRAM-encryption controls at their PRE-575 numbers, no layout change \
-               (gvisor/pkg/sentry/devices/nvproxy/version.go:990-1027)",
+        note: "+6 allocation classes, the DRAM-encryption controls at their PRE-575 numbers \
+               (version.go:990-1027)",
     },
-    // ★★★ 575.51.02 — added 2026-07-30 as the second driver version, and REBUILT by task
-    // #122, which is the task this boundary is the reason for.
-    //
-    // The additive half really is one row: no wire layout moves here, so every field
-    // below is its predecessor's and this entry costs exactly these lines.
-    //
-    // ★ The subtractive half is now carried, in the CAPABILITY table rather than here.
-    // nvproxy's `v575_51_02` is two deletes-and-replaces plus one addition on the control
-    // map (`gvisor/pkg/sentry/devices/nvproxy/version.go:1036-1053`):
-    //   - `NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_INFOROM_SUPPORT` 0x20801358 -> 0x20801357
-    //   - `NV2080_CTRL_CMD_FB_QUERY_DRAM_ENCRYPTION_STATUS`          0x20801359 -> 0x20801358
-    //   - `NV2080_CTRL_CMD_THERMAL_SYSTEM_EXECUTE_V2` 0x20800513 added
-    // `CAPS_575_51_02` says all three by naming `CONTROLS_FROM_575_51_02` and NOT naming
-    // `CONTROLS_DRAM_ENCRYPTION_570`. What that changes for a guest is asserted by
-    // `the_575_boundary_replaces_two_dram_encryption_commands` in `crate::capability`'s
-    // tests: 0x20801359 is now permitted at 570.86.15 (it was refused at every version),
-    // and 0x20801358 answers `..._INFOROM_SUPPORT` at 570 and `..._STATUS_V575` at 575+
-    // instead of the 575-era name at every version.
-    DriverAbiTable {
-        version: DriverVersion {
-            major: 575,
-            minor: 51,
-            patch: 2,
-        },
-        map_dma: MapDmaWire::Pre580_65_06,
-        gsp_element: GspElementWire::Pre610,
-        gsp_init_args: GspInitArgsWire::FourField,
-        gsp_static_info: GspStaticInfoWire::Pre610,
+    CapsRow {
+        from: dv(575, 51, 2),
         caps: &CAPS_575_51_02,
-        vbios: VbiosWire::Tu102Bit,
-        vgx: None,
-        // ⊘ Not pinned: no tree at this boundary was read. See the field's docs.
-        channel_notifier: None,
-        channel_userd: None,
-        channel_userd_mem: None,
-        channel_engine: None,
-        note: "★ the REPLACING boundary: nvproxy deletes two DRAM-encryption controls \
-               here and re-adds them one number lower, and adds \
-               THERMAL_SYSTEM_EXECUTE_V2 (version.go:1036-1053). CAPS_575_51_02 says all \
-               three by naming CONTROLS_FROM_575_51_02 and NOT naming \
-               CONTROLS_DRAM_ENCRYPTION_570",
+        note: "the REPLACING boundary: two DRAM-encryption controls renumbered, \
+               THERMAL_SYSTEM_EXECUTE_V2 added (version.go:1036-1053)",
     },
-    DriverAbiTable {
-        version: DriverVersion {
-            major: 580,
-            minor: 65,
-            patch: 6,
-        },
-        map_dma: MapDmaWire::From580_65_06,
-        gsp_element: GspElementWire::Pre610,
-        gsp_init_args: GspInitArgsWire::FourField,
-        gsp_static_info: GspStaticInfoWire::Pre610,
+    CapsRow {
+        from: dv(580, 65, 6),
         caps: &CAPS_580_65_06,
-        vbios: VbiosWire::Tu102Bit,
-        // `ogkm-580: src/nvidia/inc/kernel/vgpu/vgpu_version.h:33-34`. Cross-checked
-        // against the OTHER tree: `ogkm-610: vgpu_version.h:41-42` names the identical
-        // pair as `VGX_*_VERSION_NUMBER_VGPU_19_0`, so two trees state it independently.
-        vgx: Some(VgxVersion {
-            major: 0x2B,
-            minor: 0x13,
-        }),
-        channel_notifier: Some(ChannelNotifierWire::V580),
-        channel_userd: Some(ChannelUserdWire::V580),
-        channel_userd_mem: Some(ChannelUserdMemWire::V580),
-        channel_engine: Some(ChannelEngineWire::V580),
-        note: "NVOS46 gained flags2+kindOverride, and +2 allocation classes \
-               (gvisor/pkg/sentry/devices/nvproxy/version.go:1057-1078)",
+        note: "+2 allocation classes (version.go:1057-1078)",
     },
-    DriverAbiTable {
-        version: DriverVersion {
-            major: 610,
-            minor: 43,
-            patch: 2,
-        },
-        map_dma: MapDmaWire::From580_65_06,
-        gsp_element: GspElementWire::From610_43_02,
-        gsp_init_args: GspInitArgsWire::NineField,
-        gsp_static_info: GspStaticInfoWire::From610_43_02,
+    CapsRow {
+        from: dv(610, 43, 2),
         caps: &CAPS_610_43_02,
-        vbios: VbiosWire::Tu102Bit,
-        // `ogkm-610: src/nvidia/inc/kernel/vgpu/vgpu_version.h:33-34` — and it MOVED,
-        // which is why this is a row and not a constant.
-        vgx: Some(VgxVersion {
-            major: 0x2E,
-            minor: 0x0D,
-        }),
-        channel_notifier: Some(ChannelNotifierWire::V610),
-        channel_userd: Some(ChannelUserdWire::V610),
-        channel_userd_mem: Some(ChannelUserdMemWire::V610),
-        channel_engine: Some(ChannelEngineWire::V610),
-        note: "★ the GSP element header changes shape here: 48 bytes with an \
-               elemCount become 16 with MCTP/NVDM transport words, and \
-               MESSAGE_QUEUE_INIT_ARGUMENTS grows from 4 fields to 9 \
-               (ogkm-610: message_queue_priv.h:52-67, gsp_init_args.h:32-45 vs \
-               ogkm-580: message_queue_priv.h:43-51, gsp_init_args.h:29-34). Also \
-               the ogkm tag every generated layout in this crate came from",
+        note: "the 610 control set (version.go:1182-1243)",
     },
 ];
 
-/// The driver version this project's bench actually runs
-/// (`docs/reference/rm_semantics_measured.md` §0).
+/// The capability allowlist for `version` — the newest nvproxy row at or below it, or `None`
+/// below the oldest row. Policy lookup only; [`table_for`] adds the measured-tag rule.
+#[must_use]
+pub fn capabilities_for(version: DriverVersion) -> Option<&'static CapabilityTable> {
+    CAPS_ROWS.iter().rev().find(|r| r.from <= version).map(|r| r.caps)
+}
+
+/// Every capability allowlist a version can be admitted against, in boundary order — the
+/// universe `crate::capability`'s structural tests quantify over.
+pub fn capability_tables() -> impl Iterator<Item = &'static CapabilityTable> {
+    CAPS_ROWS.iter().map(|r| r.caps)
+}
+
+/// ★★ The facts a guest has CONSUMED by the time it sends fn 1 (`SET_GUEST_SYSTEM_INFO`), as
+/// two driver versions state them — the precondition for re-selecting a device's table at fn 1
+/// (`docs/design/V3_DRIVER_MATRIX.md` §4.2, owner ruling 6, 2026-09-26).
 ///
-/// It sits **above** 580.65.06, so the bench is on the 64-byte `NVOS46` — which
-/// is what the C artifact's *runtime* profile also selects
-/// (`nvkvm_abi.h:79-87`), and what its *parity test* does not
-/// (`abi_parity_test.go:68` asserts 56 unconditionally). The two disagree; the
-/// runtime is right.
+/// Before fn 1 is answered the guest has: booted the GSP through the queue framing
+/// (`GSP_MSG_QUEUE_ELEMENT`, `MESSAGE_QUEUE_INIT_ARGUMENTS`, the element size maximum), read
+/// the synthetic VBIOS, and sent `GSP_SET_SYSTEM_INFO` / `SET_REGISTRY` and fn 1 itself by
+/// NUMBER, fn 1's body in the `rpc_set_guest_system_info_v` layout, and it waits for
+/// `GSP_INIT_DONE` by number. Nothing else in the table has been used yet. Two versions that
+/// agree on all of it can swap tables at fn 1 without the guest having seen the difference.
+///
+/// Returns `None` when they agree, or the first fact that differs, by name.
+#[must_use]
+pub fn pre_fn1_surface_differs(a: &DriverAbiTable, b: &DriverAbiTable) -> Option<&'static str> {
+    if a.gsp_element_wire() != b.gsp_element_wire() {
+        return Some("GSP_MSG_QUEUE_ELEMENT");
+    }
+    if a.gsp_init_args_wire() != b.gsp_init_args_wire() {
+        return Some("MESSAGE_QUEUE_INIT_ARGUMENTS");
+    }
+    if a.gsp_element_size_max() != b.gsp_element_size_max() {
+        return Some("GSP_MSG_QUEUE_ELEMENT_SIZE_MAX");
+    }
+    if a.vbios_wire() != b.vbios_wire() {
+        return Some("the synthetic VBIOS parse path");
+    }
+    use crate::generated::matrix::{ALL_STRUCTS, ALL_VALUES};
+    for name in [
+        "rpc_functions:NV_VGPU_MSG_FUNCTION_SET_GUEST_SYSTEM_INFO",
+        "rpc_functions:NV_VGPU_MSG_FUNCTION_SET_GUEST_SYSTEM_INFO_EXT",
+        "rpc_functions:NV_VGPU_MSG_FUNCTION_GSP_SET_SYSTEM_INFO",
+        "rpc_functions:NV_VGPU_MSG_FUNCTION_SET_REGISTRY",
+        "rpc_events:NV_VGPU_MSG_EVENT_GSP_INIT_DONE",
+    ] {
+        let Some(runs) = ALL_VALUES.iter().find(|r| r.name == name) else {
+            return Some(name);
+        };
+        match (runs.at(a.version), runs.at(b.version)) {
+            (Ok(x), Ok(y)) if x == y && x.is_some() => {}
+            _ => return Some(runs.name),
+        }
+    }
+    for name in ["rpc_set_guest_system_info_v", "rpc_message_header_v"] {
+        let Some(runs) = ALL_STRUCTS.iter().find(|r| r.name == name) else {
+            return Some(name);
+        };
+        match (runs.at(a.version), runs.at(b.version)) {
+            (Ok(Some(x)), Ok(Some(y))) if x == y => {}
+            _ => return Some(runs.name),
+        }
+    }
+    None
+}
+
+/// The driver version this project's bench actually runs
+/// (`docs/reference/rm_semantics_measured.md` §0), on both axes by default.
 pub const BENCH_DRIVER: DriverVersion = DriverVersion {
     major: 580,
     minor: 159,
     patch: 4,
 };
 
-/// Select the ABI table for a driver version: the newest entry `<= version`.
+/// ★★★ The ABI table for a **measured** driver version, assembled from the measured matrix.
+///
+/// Exact membership, never "newest ≤": a version that is not one of
+/// [`crate::generated::matrix::MEASURED`] is [`AbiError::Unmeasured`] (see [`crate::matrix`]
+/// for why a release between two measured tags must not borrow either neighbour's layouts),
+/// and a measured version whose layouts no decoder here speaks is refused by name with the
+/// fact that differs ([`AbiError::NoEncoding`]). The tables are built once per process.
 ///
 /// # Errors
 ///
-/// [`AbiError::NoTableForVersion`] if `version` predates every entry. There is no
-/// fallback entry by design — see the module doc.
+/// [`AbiError::Unmeasured`], [`AbiError::NoCapabilityRow`], [`AbiError::NoEncoding`].
 pub fn table_for(version: DriverVersion) -> Result<&'static DriverAbiTable, AbiError> {
-    TABLES
-        .iter()
-        .rev()
-        .find(|t| t.version <= version)
-        .ok_or(AbiError::NoTableForVersion {
+    use crate::generated::matrix::MEASURED;
+    static CACHE: std::sync::OnceLock<Vec<Result<DriverAbiTable, AbiError>>> =
+        std::sync::OnceLock::new();
+    let all = CACHE.get_or_init(|| MEASURED.iter().map(|v| derive_table(*v)).collect());
+    let i = MEASURED
+        .binary_search(&version)
+        .map_err(|_| AbiError::Unmeasured {
             major: version.major,
             minor: version.minor,
             patch: version.patch,
-        })
+        })?;
+    all[i].as_ref().map_err(|e| *e)
+}
+
+fn no_encoding(what: &'static str, v: DriverVersion) -> AbiError {
+    AbiError::NoEncoding {
+        what,
+        major: v.major,
+        minor: v.minor,
+        patch: v.patch,
+    }
+}
+
+/// The measured layout of `runs` at `v`, which a measured `v` always has unless the struct
+/// is absent at that tag (then `NoEncoding` naming it).
+fn measured(
+    runs: &'static crate::matrix::StructRuns,
+    v: DriverVersion,
+) -> Result<crate::matrix::Resolved, AbiError> {
+    crate::matrix::Resolved::of(runs, v).map_err(|_| no_encoding(runs.name, v))
+}
+
+fn off(
+    r: &crate::matrix::Resolved,
+    path: &'static str,
+    what: &'static str,
+) -> Result<usize, AbiError> {
+    r.maybe(path)
+        .map(|f| f.off())
+        .ok_or(no_encoding(what, r.version))
+}
+
+/// Assemble one measured version's table. Every field below is either READ from the
+/// matrix or DERIVED from what was read by a rule stated at the field; nothing is typed.
+fn derive_table(v: DriverVersion) -> Result<DriverAbiTable, AbiError> {
+    use crate::generated::matrix as m;
+
+    let caps_row =
+        CAPS_ROWS
+            .iter()
+            .rev()
+            .find(|r| r.from <= v)
+            .ok_or(AbiError::NoCapabilityRow {
+                major: v.major,
+                minor: v.minor,
+                patch: v.patch,
+            })?;
+
+    // NVOS46: the two shapes this crate decodes, told apart by the measured `status` offset
+    // (the field whose misplacement was the C artifact's bug #81).
+    let nvos46 = measured(&m::NVOS46_PARAMETERS, v)?;
+    let map_dma = match (
+        nvos46.size(),
+        off(&nvos46, "status", "NVOS46_PARAMETERS.status")?,
+    ) {
+        (56, 48) => MapDmaWire::Pre580_65_06,
+        (64, 56) => MapDmaWire::From580_65_06,
+        _ => return Err(no_encoding("NVOS46_PARAMETERS", v)),
+    };
+
+    // The GSP queue element: 48-byte (elemCount) or 16-byte MCTP/NVDM, each checked field by
+    // field against the measured layout; a third shape (615.71.09's encryption union) is
+    // refused by name.
+    let el = measured(&m::GSP_MSG_QUEUE_ELEMENT, v)?;
+    let gsp_element = if el.maybe("elemCount").is_some() {
+        let pre = GspElementWire::Pre610;
+        let ok = off(&el, "checkSum", "GSP_MSG_QUEUE_ELEMENT.checkSum")? == pre.checksum_off()
+            && off(&el, "seqNum", "GSP_MSG_QUEUE_ELEMENT.seqNum")? == pre.seqnum_off()
+            && Some(off(&el, "elemCount", "GSP_MSG_QUEUE_ELEMENT.elemCount")?)
+                == pre.elem_count_off()
+            && off(&el, "rpc", "GSP_MSG_QUEUE_ELEMENT.rpc")? == pre.hdr_size();
+        if !ok {
+            return Err(no_encoding("GSP_MSG_QUEUE_ELEMENT", v));
+        }
+        pre
+    } else {
+        let new = GspElementWire::From610_43_02;
+        let t = new
+            .transport()
+            .ok_or(no_encoding("GSP_MSG_QUEUE_ELEMENT", v))?;
+        let ok = el.maybe("mctpHeader").map(|f| f.off()) == Some(t.header_off)
+            && el.maybe("nvdmHeader").map(|f| f.off()) == Some(t.nvdm_off)
+            && el.maybe("checkSum").map(|f| f.off()) == Some(new.checksum_off())
+            && el.maybe("seqNum").map(|f| f.off()) == Some(new.seqnum_off())
+            && el.maybe("payload").map(|f| f.off()) == Some(new.hdr_size());
+        if !ok {
+            return Err(no_encoding("GSP_MSG_QUEUE_ELEMENT", v));
+        }
+        new
+    };
+
+    // MESSAGE_QUEUE_INIT_ARGUMENTS: the four fields every version shares sit at 0/8/16/24
+    // (checked); the geometry fields exist only where the struct declares them.
+    let qa = measured(&m::MESSAGE_QUEUE_INIT_ARGUMENTS, v)?;
+    for (path, want) in [
+        ("sharedMemPhysAddr", 0usize),
+        ("pageTableEntryCount", 8),
+        ("cmdQueueOffset", 16),
+        ("statQueueOffset", 24),
+    ] {
+        if off(&qa, path, "MESSAGE_QUEUE_INIT_ARGUMENTS")? != want {
+            return Err(no_encoding("MESSAGE_QUEUE_INIT_ARGUMENTS", v));
+        }
+    }
+    let gsp_init_args = match qa.maybe("queueElementHdrSize") {
+        None => GspInitArgsWire::FourField,
+        Some(f) if f.off() == 32 => GspInitArgsWire::NineField,
+        Some(_) => {
+            return Err(no_encoding(
+                "MESSAGE_QUEUE_INIT_ARGUMENTS.queueElementHdrSize",
+                v,
+            ));
+        }
+    };
+
+    // GspStaticConfigInfo: the hand encoder (`crate::gspstaticinfo`) was pinned against
+    // 580.159.04's reply, so it is right exactly where the measured layout equals that one.
+    let sci = measured(&m::GSPSTATICCONFIGINFO, v)?;
+    let sci_bench = measured(&m::GSPSTATICCONFIGINFO, BENCH_DRIVER)?;
+    let gsp_static_info = if sci.layout == sci_bench.layout {
+        GspStaticInfoWire::Pre610
+    } else if v.major >= 610 {
+        GspStaticInfoWire::From610_43_02
+    } else {
+        GspStaticInfoWire::Unencoded
+    };
+
+    // The vGPU handshake pair — measured per tag (it moves INSIDE a branch: 570.124.06 says
+    // 0x29/0x0B, 570.148.08 says 0x29/0x0C).
+    let vgx = match (
+        m::VGX_VERSION_VGX_MAJOR_VERSION_NUMBER
+            .at_u32(v)
+            .ok()
+            .flatten(),
+        m::VGX_VERSION_VGX_MINOR_VERSION_NUMBER
+            .at_u32(v)
+            .ok()
+            .flatten(),
+    ) {
+        (Some(major), Some(minor)) => Some(VgxVersion { major, minor }),
+        _ => None,
+    };
+
+    // NV_CHANNEL_ALLOC_PARAMS tail offsets — read, not recognised: whatever the tag measures
+    // IS the wire (V580's constants hold at every tag 535.309.01 … 595.84, V610's at 610.x).
+    let ch = measured(&m::NV_CHANNEL_ALLOC_PARAMS, v)?;
+    let channel_notifier = match (ch.maybe("internalFlags"), ch.maybe("errorNotifierMem")) {
+        (Some(a), Some(b)) => Some(ChannelNotifierWire {
+            internal_flags: a.off(),
+            error_notifier_mem: b.off(),
+        }),
+        _ => None,
+    };
+    let channel_userd = match (ch.maybe("hUserdMemory"), ch.maybe("userdOffset")) {
+        (Some(a), Some(b)) => Some(ChannelUserdWire {
+            h_userd_memory: a.off(),
+            userd_offset: b.off(),
+        }),
+        _ => None,
+    };
+    let channel_userd_mem = ch
+        .maybe("userdMem")
+        .map(|f| ChannelUserdMemWire { userd_mem: f.off() });
+    let channel_engine = ch.maybe("engineType").map(|f| ChannelEngineWire {
+        engine_type: f.off(),
+    });
+
+    // `rpc_gsp_rm_control_v`: 24-byte header with `flags`@20 through 570.x, 40-byte with
+    // `rmapiRpcFlags`@20 / `rmctrlFlags`@24 / `rmctrlAccessRight`@28 from 575.51.02.
+    let rc = measured(&m::RPC_GSP_RM_CONTROL_V, v)?;
+    let rm_control = RmControlWire {
+        params_off: off(&rc, "params", "rpc_gsp_rm_control_v.params")?,
+        rpc_flags_off: rc
+            .maybe("rmapiRpcFlags")
+            .or_else(|| rc.maybe("flags"))
+            .map(|f| f.off())
+            .ok_or(no_encoding("rpc_gsp_rm_control_v.flags", v))?,
+        rmctrl_flags_off: rc.maybe("rmctrlFlags").map(|f| f.off()),
+        access_right_off: rc.maybe("rmctrlAccessRight").map(|f| f.off()),
+        params_size_off: off(&rc, "paramsSize", "rpc_gsp_rm_control_v.paramsSize")?,
+        status_off: off(&rc, "status", "rpc_gsp_rm_control_v.status")?,
+    };
+
+    Ok(DriverAbiTable {
+        version: v,
+        map_dma,
+        gsp_element,
+        gsp_init_args,
+        gsp_static_info,
+        caps: caps_row.caps,
+        vbios: VbiosWire::Tu102Bit,
+        vgx,
+        channel_notifier,
+        channel_userd,
+        channel_userd_mem,
+        channel_engine,
+        rm_control,
+        note: caps_row.note,
+    })
 }
 
 impl DriverAbiTable {
@@ -1452,10 +1611,11 @@ impl DriverAbiTable {
     /// [`AbiError::Truncated`] if fewer than [`RpcControlReq::HEADER`] bytes are
     /// available — never a zero-extended partial decode.
     pub fn decode_rpc_control(&self, payload: &[u8]) -> Result<RpcControlReq, AbiError> {
-        if payload.len() < RpcControlReq::HEADER {
+        let w = self.rm_control;
+        if payload.len() < w.params_off {
             return Err(AbiError::Truncated {
                 c_name: RpcControlReq::C_NAME,
-                need: RpcControlReq::HEADER,
+                need: w.params_off,
                 got: payload.len(),
             });
         }
@@ -1463,18 +1623,49 @@ impl DriverAbiTable {
             client: u32_at(payload, 0)?,
             object: u32_at(payload, 4)?,
             cmd: u32_at(payload, 8)?,
-            // +12 is `status`, an [OUT] field the guest sends as zero —
+            // `status` is an [OUT] field the guest sends as zero —
             // `rpcWriteCommonHeader` zeroes the whole message buffer before the
             // sender fills it (`ogkm-580: src/nvidia/src/kernel/rmapi/rpc_common.c:149-152`
             // / `ogkm-610: src/nvidia/src/kernel/rmapi/rpc_common.c:149-152` — same lines
             // at both).
-            params_size: u32_at(payload, 16)?,
-            rmapi_rpc_flags: u32_at(payload, 20)?,
-            // +24 `rmctrlFlags`, +28 `rmctrlAccessRight` (both sent as 0 by
-            // `rpcRmApiControl_GSP`, `ogkm-580: rpc.c:10994-10995` /
-            // `ogkm-610: rpc.c:10799-10800`), +32 `reserved0`.
-            params_at: RpcControlReq::HEADER,
+            params_size: u32_at(payload, w.params_size_off)?,
+            rmapi_rpc_flags: u32_at(payload, w.rpc_flags_off)?,
+            // From 575: +24 `rmctrlFlags`, +28 `rmctrlAccessRight` (both sent as 0 by
+            // `rpcRmApiControl_GSP`, `ogkm-580: rpc.c:10994-10995`), +32 `reserved0`.
+            // Before 575 the header ends at +24 and those bytes are `params[0..16]`.
+            params_at: w.params_off,
         })
+    }
+
+    /// ★ The caps-control params layout of `cmd` (`NV0080_CTRL_CMD_MSENC_GET_CAPS_V2` /
+    /// `_BSP_GET_CAPS_V2`) at THIS version — measured, or `None` where the version has no
+    /// such struct (MSENC V2 does not exist at 535/545).
+    #[must_use]
+    pub fn video_caps_layout(&self, cmd: u32) -> Option<crate::videocaps::CapsLayout> {
+        use crate::generated::matrix as m;
+        let runs = match cmd {
+            crate::videocaps::MSENC_GET_CAPS_V2 => &m::NV0080_CTRL_MSENC_GET_CAPS_V2_PARAMS,
+            crate::videocaps::BSP_GET_CAPS_V2 => &m::NV0080_CTRL_BSP_GET_CAPS_PARAMS_V2,
+            _ => return None,
+        };
+        let l = crate::matrix::Resolved::of(runs, self.version).ok()?;
+        Some(crate::videocaps::CapsLayout {
+            params_size: l.size(),
+            caps_len: l.maybe("capsTbl")?.bytes()?,
+            instance_off: l.maybe("instanceId")?.off(),
+        })
+    }
+
+    /// Where this version's `rpc_gsp_rm_control_v` fields sit (MEASURED).
+    #[must_use]
+    pub fn rm_control_wire(&self) -> RmControlWire {
+        self.rm_control
+    }
+
+    /// The exact measured driver version this table describes.
+    #[must_use]
+    pub fn driver_version(&self) -> DriverVersion {
+        self.version
     }
 
     /// Decode a `NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY` payload.
@@ -1543,10 +1734,17 @@ impl DriverAbiTable {
     ///
     /// # Errors
     /// [`AbiError::Truncated`], or [`AbiError::PromoteLegacyShape`] for anything else.
-    pub fn decode_falcon_promote(&self, bytes: &[u8]) -> Result<(u32, u32, u32, u64, u64), AbiError> {
+    pub fn decode_falcon_promote(
+        &self,
+        bytes: &[u8],
+    ) -> Result<(u32, u32, u32, u64, u64), AbiError> {
         let need = Nv2080CtrlGpuPromoteCtxParamsHeader::PARAMS_SIZE;
         if bytes.len() < need {
-            return Err(AbiError::Truncated { c_name: Nv2080CtrlGpuPromoteCtxParamsHeader::C_NAME, need, got: bytes.len() });
+            return Err(AbiError::Truncated {
+                c_name: Nv2080CtrlGpuPromoteCtxParamsHeader::C_NAME,
+                need,
+                got: bytes.len(),
+            });
         }
         let h = Nv2080CtrlGpuPromoteCtxParamsHeader::decode(bytes)?;
         if h.h_virt_memory == 0
@@ -1555,9 +1753,19 @@ impl DriverAbiTable {
             && h.entry_count == 0
             && crate::submit::is_video_engine_type(h.engine_type)
         {
-            return Ok((h.engine_type, h.h_chan_client, h.h_object, h.virt_address, h.size));
+            return Ok((
+                h.engine_type,
+                h.h_chan_client,
+                h.h_object,
+                h.virt_address,
+                h.size,
+            ));
         }
-        Err(AbiError::PromoteLegacyShape { h_virt_memory: h.h_virt_memory, virt_address: h.virt_address, size: h.size })
+        Err(AbiError::PromoteLegacyShape {
+            h_virt_memory: h.h_virt_memory,
+            virt_address: h.virt_address,
+            size: h.size,
+        })
     }
 
     fn decode_promote_ctx_inner(&self, bytes: &[u8]) -> Result<PromoteCtx, AbiError> {
@@ -1939,68 +2147,31 @@ impl DriverAbi for DriverAbiTable {
 mod tests {
     use super::*;
 
-    /// The table is ascending and has no duplicate versions — `table_for`'s
-    /// reverse scan is only correct if it is.
+    fn at(major: u16, minor: u16, patch: u16) -> Result<&'static DriverAbiTable, AbiError> {
+        table_for(DriverVersion {
+            major,
+            minor,
+            patch,
+        })
+    }
+
+    /// The capability rows are ascending — "newest row ≤ version" is only right if they are.
     #[test]
-    fn the_table_is_strictly_ascending() {
-        for w in TABLES.windows(2) {
-            assert!(
-                w[0].version < w[1].version,
-                "{:?} !< {:?}",
-                w[0].version,
-                w[1].version
-            );
+    fn the_caps_rows_are_strictly_ascending() {
+        for w in CAPS_ROWS.windows(2) {
+            assert!(w[0].from < w[1].from, "{:?} !< {:?}", w[0].from, w[1].from);
         }
     }
 
-    /// Selection is "newest entry <= version", asserted at every boundary
-    /// including one patch below each one. This is the assertion the C's
-    /// major-only key cannot make.
+    /// ★★★ Exact membership: a version that was never measured is refused by name — one
+    /// patch below a real boundary, a made-up boundary the old hand table used (550.54.04 is
+    /// not an ogkm tag), and a far-future version alike. No nearest neighbour.
     #[test]
-    fn selection_lands_on_the_exact_boundary_not_the_major() {
-        let at = |maj, min, pat| {
-            table_for(DriverVersion {
-                major: maj,
-                minor: min,
-                patch: pat,
-            })
-            .expect("in range")
-            .map_dma_wire()
-        };
-        // Exactly the floor.
-        assert_eq!(at(550, 54, 4), MapDmaWire::Pre580_65_06);
-        // Well inside the pre-580 range.
-        assert_eq!(at(575, 51, 2), MapDmaWire::Pre580_65_06);
-        // ★ 580.65.05 is a 580 but PRE-boundary. A major-only key gets this
-        // wrong; this is the whole reason the table is keyed on all three.
-        assert_eq!(at(580, 65, 5), MapDmaWire::Pre580_65_06);
-        assert_eq!(at(580, 64, 255), MapDmaWire::Pre580_65_06);
-        // Exactly the boundary.
-        assert_eq!(at(580, 65, 6), MapDmaWire::From580_65_06);
-        // The bench.
-        assert_eq!(at(580, 159, 4), MapDmaWire::From580_65_06);
-        // Newer than every entry inherits the newest.
-        assert_eq!(at(999, 0, 0), MapDmaWire::From580_65_06);
-    }
-
-    /// Below the floor is a refusal naming the version — never the nearest
-    /// table. (`nvkvm_abi.h:105-110` returns the 570 profile here.)
-    #[test]
-    fn below_the_floor_is_a_loud_refusal_not_the_nearest_table() {
-        for (maj, min, pat) in [
-            (550u16, 54u16, 3u16),
-            (550, 53, 255),
-            (535, 104, 5),
-            (0, 0, 0),
-        ] {
+    fn an_unmeasured_version_is_refused_by_name_never_the_nearest_table() {
+        for (maj, min, pat) in [(580u16, 65u16, 5u16), (550, 54, 4), (999, 0, 0), (0, 0, 0)] {
             assert_eq!(
-                table_for(DriverVersion {
-                    major: maj,
-                    minor: min,
-                    patch: pat
-                })
-                .map(|t| t.version),
-                Err(AbiError::NoTableForVersion {
+                at(maj, min, pat).map(|t| t.version),
+                Err(AbiError::Unmeasured {
                     major: maj,
                     minor: min,
                     patch: pat
@@ -2008,47 +2179,182 @@ mod tests {
                 "{maj}.{min}.{pat} must not resolve to a table",
             );
         }
+        let msg = at(580, 159, 3).unwrap_err().to_string();
+        assert!(
+            msg.contains("580.159.03") && msg.contains("regen.sh"),
+            "{msg}"
+        );
     }
 
-    /// The bench driver constant resolves, and resolves to the 64-byte NVOS46.
-    /// Non-vacuity for the whole version story: if this ever flips, the crate is
-    /// decoding the bench's own traffic wrong.
+    /// Below the oldest reviewed allowlist is its own named refusal — a measured version with
+    /// no capability surface, never admitted against the 550 one.
     #[test]
-    fn the_bench_driver_resolves_to_the_64_byte_nvos46() {
-        let t = table_for(BENCH_DRIVER).expect("the bench driver is supported");
-        assert_eq!(t.map_dma_wire(), MapDmaWire::From580_65_06);
-        assert_eq!(t.map_dma_size(), 64);
-        assert_eq!(t.map_dma_status_offset(), 56);
+    fn below_the_oldest_capability_row_is_refused_by_name() {
+        assert_eq!(
+            at(535, 309, 1).map(|t| t.version),
+            Err(AbiError::NoCapabilityRow {
+                major: 535,
+                minor: 309,
+                patch: 1
+            })
+        );
+        assert!(
+            at(550, 54, 14).is_ok(),
+            "the oldest row's first measured tag resolves"
+        );
     }
 
-    /// The two sizes and the two status offsets, pinned against the C artifact's
-    /// own hand-maintained table (`nvkvm_abi.h:66,76,86`).
+    /// The NVOS46 shape follows the MEASURED layout, on both sides of 580.65.06.
     #[test]
-    fn sizes_and_status_offsets_match_the_c_artifacts_profile_table() {
-        let old = table_for(DriverVersion {
-            major: 575,
-            minor: 51,
-            patch: 2,
-        })
-        .expect("in range");
+    fn the_nvos46_shape_is_read_from_the_measured_layout() {
+        let old = at(575, 57, 8).expect("measured");
+        assert_eq!(old.map_dma_wire(), MapDmaWire::Pre580_65_06);
         assert_eq!(old.map_dma_size(), 56, "nvkvm_abi.h:76 .nvos46_size = 56");
         assert_eq!(
             old.map_dma_status_offset(),
             48,
             "nvkvm_abi.h:76 .nvos46_status_off = 48"
         );
-        let new = table_for(DriverVersion {
-            major: 580,
-            minor: 65,
-            patch: 6,
-        })
-        .expect("in range");
+        let new = at(580, 65, 6).expect("measured");
+        assert_eq!(new.map_dma_wire(), MapDmaWire::From580_65_06);
         assert_eq!(new.map_dma_size(), 64, "nvkvm_abi.h:86 .nvos46_size = 64");
         assert_eq!(
             new.map_dma_status_offset(),
             56,
             "nvkvm_abi.h:86 .nvos46_status_off = 56"
         );
+    }
+
+    /// The bench driver constant resolves, and resolves to the 64-byte NVOS46.
+    #[test]
+    fn the_bench_driver_resolves_to_the_64_byte_nvos46() {
+        let t = table_for(BENCH_DRIVER).expect("the bench driver is measured");
+        assert_eq!(t.map_dma_wire(), MapDmaWire::From580_65_06);
+        assert_eq!(
+            t.driver_version(),
+            BENCH_DRIVER,
+            "the table is the EXACT version's"
+        );
+    }
+
+    /// ★★★ The `GSP_RM_CONTROL` header is 24 bytes through 570.x and 40 from 575 — measured,
+    /// and the decoder slices `params[]` where the version puts it.
+    #[test]
+    fn the_rm_control_header_follows_the_measured_boundary_at_575() {
+        let w570 = at(570, 148, 8).expect("measured").rm_control_wire();
+        assert_eq!((w570.params_off, w570.rpc_flags_off), (24, 20));
+        assert_eq!((w570.rmctrl_flags_off, w570.access_right_off), (None, None));
+        let w575 = at(575, 51, 3).expect("measured").rm_control_wire();
+        assert_eq!((w575.params_off, w575.rpc_flags_off), (40, 20));
+        assert_eq!(
+            (w575.rmctrl_flags_off, w575.access_right_off),
+            (Some(24), Some(28))
+        );
+        // The decoder follows the wire: a 570 control's params start at +24.
+        let mut body = vec![0u8; 24 + 4];
+        body[8..12].copy_from_slice(&0x2080_0102u32.to_le_bytes());
+        body[16..20].copy_from_slice(&4u32.to_le_bytes());
+        let r = at(570, 148, 8)
+            .expect("measured")
+            .decode_rpc_control(&body)
+            .expect("decodes");
+        assert_eq!((r.cmd, r.params_size, r.params_at), (0x2080_0102, 4, 24));
+        assert!(
+            at(575, 51, 3)
+                .expect("measured")
+                .decode_rpc_control(&body)
+                .is_err(),
+            "a 28-byte body is short of the 575 header"
+        );
+    }
+
+    /// ★★ The vGPU handshake pair is measured per tag, and it moves INSIDE a branch.
+    #[test]
+    fn the_vgx_pair_is_measured_per_tag() {
+        let pair = |t: &DriverAbiTable| t.vgx_version().map(|v| (v.major, v.minor));
+        assert_eq!(pair(at(570, 124, 6).expect("measured")), Some((0x29, 0x0B)));
+        assert_eq!(pair(at(570, 148, 8).expect("measured")), Some((0x29, 0x0C)));
+        assert_eq!(pair(at(580, 159, 4).expect("measured")), Some((0x2B, 0x13)));
+        assert_eq!(pair(at(610, 43, 2).expect("measured")), Some((0x2E, 0x0D)));
+    }
+
+    /// The channel-alloc tail offsets are READ: V580's constants at every measured tag up to
+    /// 595.84, V610's at 610 — the old table had `None` on every 550–575 row.
+    #[test]
+    fn the_channel_alloc_wires_are_measured_not_boundary_rows() {
+        for (maj, min, pat) in [
+            (550u16, 54u16, 14u16),
+            (570, 124, 6),
+            (580, 159, 4),
+            (595, 84, 0),
+        ] {
+            let t = at(maj, min, pat).expect("measured");
+            assert_eq!(
+                t.channel_notifier,
+                Some(ChannelNotifierWire::V580),
+                "{maj}.{min}.{pat}"
+            );
+            assert_eq!(
+                t.channel_userd,
+                Some(ChannelUserdWire::V580),
+                "{maj}.{min}.{pat}"
+            );
+            assert_eq!(
+                t.channel_userd_mem,
+                Some(ChannelUserdMemWire::V580),
+                "{maj}.{min}.{pat}"
+            );
+            assert_eq!(
+                t.channel_engine,
+                Some(ChannelEngineWire::V580),
+                "{maj}.{min}.{pat}"
+            );
+        }
+        let t = at(610, 43, 2).expect("measured");
+        assert_eq!(t.channel_engine, Some(ChannelEngineWire::V610));
+        assert_eq!(t.channel_userd, Some(ChannelUserdWire::V610));
+    }
+
+    /// The static-info encoder is claimed only where the measured layout IS the bench's.
+    #[test]
+    fn static_info_is_encoded_only_where_the_layout_equals_the_benchs() {
+        for (maj, min, pat) in [(580u16, 65u16, 6u16), (580, 159, 4), (580, 178, 4)] {
+            assert_eq!(
+                at(maj, min, pat).expect("measured").gsp_static_info_wire(),
+                GspStaticInfoWire::Pre610
+            );
+        }
+        for (maj, min, pat) in [
+            (570u16, 124u16, 6u16),
+            (575, 57, 8),
+            (590, 48, 1),
+            (595, 84, 0),
+        ] {
+            assert_eq!(
+                at(maj, min, pat).expect("measured").gsp_static_info_wire(),
+                GspStaticInfoWire::Unencoded,
+                "{maj}.{min}.{pat}"
+            );
+        }
+        assert_eq!(
+            at(610, 43, 2).expect("measured").gsp_static_info_wire(),
+            GspStaticInfoWire::From610_43_02
+        );
+    }
+
+    /// A measured layout nobody encodes is refused by name: 615.71.09's GSP queue element
+    /// (an encryption union after `mctpMagic`/`mctpPayloadSize`) is neither shape.
+    #[test]
+    fn a_measured_layout_with_no_encoding_is_refused_by_name() {
+        match at(615, 71, 9) {
+            Err(AbiError::NoEncoding { what, .. }) => {
+                assert!(what.starts_with("GSP_MSG_QUEUE_ELEMENT"), "{what}")
+            }
+            other => panic!(
+                "615.71.09 must be refused by its element shape, got {:?}",
+                other.map(|t| t.version)
+            ),
+        }
     }
 
     /// `alloc_param_size` states what it knows and refuses what it does not, and

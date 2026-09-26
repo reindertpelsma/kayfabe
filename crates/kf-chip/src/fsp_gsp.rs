@@ -750,3 +750,89 @@ impl GspModel for FspGspModel {
         }
     }
 }
+
+/// ★ Every hand-written offset and encoding above, held to the ogkm-580 header of every die group
+/// that runs this model — GH100, GB10x and GB20x (`kf_chip::hwref`,
+/// `docs/design/V3_HW_BOUNDARY_INVENTORY.md`). ⊘ The 610-era WPR2 pair (`0x88A824/8`,
+/// `dev_hubmmu_base.h`) is not in the 580 table and is not checked here.
+#[cfg(test)]
+mod hwref_check {
+    use super::*;
+    use crate::hwref::DieGroup;
+    use crate::hwref::expect::{base, bit, range, val};
+
+    const SERVED: [DieGroup; 3] = [DieGroup::Gh100, DieGroup::Gb10x, DieGroup::Gb20x];
+
+    #[test]
+    fn every_fsp_regime_offset_is_its_die_groups_header() {
+        for g in SERVED {
+            assert_eq!(PGSP, base(g, "NV_PGSP"), "{g:?}");
+            for (ours, name) in [
+                (FALCON_IRQSCLR, "NV_PFALCON_FALCON_IRQSCLR"),
+                (FALCON_IRQSTAT, "NV_PFALCON_FALCON_IRQSTAT"),
+                (FALCON_IRQMASK, "NV_PFALCON_FALCON_IRQMASK"),
+                (FALCON_IRQDEST, "NV_PFALCON_FALCON_IRQDEST"),
+                (FALCON_MAILBOX0, "NV_PFALCON_FALCON_MAILBOX0"),
+                (FALCON_MAILBOX1, "NV_PFALCON_FALCON_MAILBOX1"),
+                (FALCON_HWCFG2, "NV_PFALCON_FALCON_HWCFG2"),
+                (FALCON_CPUCTL, "NV_PFALCON_FALCON_CPUCTL"),
+                (FALCON_DMATRFCMD, "NV_PFALCON_FALCON_DMATRFCMD"),
+                (QUEUE_HEAD0, "NV_PGSP_QUEUE_HEAD(0)"),
+                (QUEUE_HEAD_COUNT, "NV_PGSP_QUEUE_HEAD__SIZE_1"),
+                (WPR2_ADDR_LO_580, "NV_PFB_PRI_MMU_WPR2_ADDR_LO"),
+                (WPR2_ADDR_HI_580, "NV_PFB_PRI_MMU_WPR2_ADDR_HI"),
+                (PFSP_EMEMC, "NV_PFSP_EMEMC(0)"),
+                (PFSP_EMEMD, "NV_PFSP_EMEMD(0)"),
+                (PFSP_QUEUE_HEAD, "NV_PFSP_QUEUE_HEAD(0)"),
+                (PFSP_QUEUE_TAIL, "NV_PFSP_QUEUE_TAIL(0)"),
+                (PFSP_MSGQ_HEAD, "NV_PFSP_MSGQ_HEAD(0)"),
+                (PFSP_MSGQ_TAIL, "NV_PFSP_MSGQ_TAIL(0)"),
+            ] {
+                assert_eq!(ours, val(g, name), "{g:?} {name}");
+            }
+            let riscv = val(g, "NV_FALCON2_GSP_BASE");
+            assert_eq!(GSP_RISCV_CPUCTL, riscv + val(g, "NV_PRISCV_RISCV_CPUCTL"), "{g:?}");
+            // GH100/GB10x resolve these through a PIN (`hwref::PINS`: `kflcnRiscvReadIntrStatus_GA102`).
+            assert_eq!(GSP_RISCV_IRQMASK, riscv + val(g, "NV_PRISCV_RISCV_IRQMASK"), "{g:?}");
+            assert_eq!(GSP_RISCV_IRQDEST, riscv + val(g, "NV_PRISCV_RISCV_IRQDEST"), "{g:?}");
+            assert_eq!(GSP_RISCV_BCR_CTRL, riscv + val(g, "NV_PRISCV_RISCV_BCR_CTRL"), "{g:?}");
+        }
+        // The Hopper row has no gate of its own (`bar0::boot_regs` serves the static 0x200BC word).
+        assert_eq!(FspRow::HOPPER.therm_boot_scratch, None);
+        assert_eq!(FspRow::BLACKWELL.therm_boot_scratch, Some(val(DieGroup::Gb20x, "NV_THERM_I2CS_SCRATCH")));
+    }
+
+    /// ★ RATCHET — a known die-group gap, asserted so it cannot rot silently: `FspRow::BLACKWELL` is
+    /// one row for GB10x AND GB20x, and its boot gate is GB20x's `0xAD00BC`; a GB10x RM polls
+    /// `kfspWaitForSecureBoot_GB100` → `0x200BC` (`g_kern_fsp_nvoc.c:428-431`, `blackwell/gb100/
+    /// dev_therm.h`). Harmless today — `bar0::boot_regs` serves `0x200BC` statically for GB10x and the
+    /// model's `on_read` is never published — but the model claims a register GB10x never reads.
+    /// When the row is split per die group, this test fails: delete it and the inventory's gap row.
+    #[test]
+    fn ratchet_the_blackwell_fsp_row_carries_gb20x_boot_gate_for_gb10x_too() {
+        let gb10x = val(DieGroup::Gb10x, "NV_THERM_I2CS_SCRATCH");
+        assert_ne!(FspRow::BLACKWELL.therm_boot_scratch, Some(gb10x), "fixed? delete this ratchet (inventory §gaps)");
+        assert_eq!(gb10x, crate::bar0::therm_i2cs_scratch(crate::arch::GB100), "the static row covers GB10x");
+    }
+
+    #[test]
+    fn every_fsp_regime_encoding_is_its_die_groups_header_field() {
+        for g in SERVED {
+            assert_eq!(CPUCTL_STARTCPU, bit(g, "NV_PFALCON_FALCON_CPUCTL_STARTCPU"), "{g:?}");
+            assert_eq!(CPUCTL_HALTED, bit(g, "NV_PFALCON_FALCON_CPUCTL_HALTED"), "{g:?}");
+            assert_eq!(HWCFG2_RISCV_ENABLE, bit(g, "NV_PFALCON_FALCON_HWCFG2_RISCV"), "{g:?}");
+            assert_eq!(HWCFG2_BR_PRIV_LOCKDOWN, bit(g, "NV_PFALCON_FALCON_HWCFG2_RISCV_BR_PRIV_LOCKDOWN"), "{g:?}");
+            assert_eq!(DMATRFCMD_IDLE, bit(g, "NV_PFALCON_FALCON_DMATRFCMD_IDLE"), "{g:?}");
+            assert_eq!(RISCV_CPUCTL_ACTIVE, bit(g, "NV_PRISCV_RISCV_CPUCTL_ACTIVE_STAT"), "{g:?}");
+            assert_eq!(RISCV_CPUCTL_HALTED, bit(g, "NV_PRISCV_RISCV_CPUCTL_HALTED"), "{g:?}");
+            assert_eq!(BCR_CTRL_VALID, bit(g, "NV_PRISCV_RISCV_BCR_CTRL_VALID"), "{g:?}");
+            assert_eq!(IRQSTAT_SWGEN0, bit(g, "NV_PFALCON_FALCON_IRQSTAT_SWGEN0"), "{g:?}");
+            assert_eq!(FSP_BOOT_COMPLETE_SUCCESS, val(g, "NV_THERM_I2CS_SCRATCH_FSP_BOOT_COMPLETE_STATUS_SUCCESS"));
+            assert_eq!(range(g, "NV_PFSP_EMEMC_OFFS"), (u64::from(EMEMC_OFFS_SHIFT) + 5, u64::from(EMEMC_OFFS_SHIFT)));
+            assert_eq!(EMEMC_OFFS_MASK, 0x3F);
+            assert_eq!(range(g, "NV_PFSP_EMEMC_BLK"), (u64::from(EMEMC_BLK_SHIFT) + 7, u64::from(EMEMC_BLK_SHIFT)));
+            assert_eq!(EMEMC_BLK_MASK, 0xFF);
+            assert_eq!(EMEMC_AINCW, bit(g, "NV_PFSP_EMEMC_AINCW"), "{g:?}");
+        }
+    }
+}

@@ -154,8 +154,15 @@ pub const IDX_LITTER_MIN_SUBCTX_PER_SMC_ENG: usize = 0x37;
 /// `3584` a *checkable* number rather than a transcribed one. `[measured]` 2026-08-01 on
 /// an RTX 3060, `traces/real_ga106/rpc_bodies_real_ga106.txt`, and the check is
 /// `tests::the_ga106_row_agrees_with_the_ga106_gr_static_geometry`: 28 SM x 128.
+///
+/// ⊘ **No longer a served check (2026-09-26, v3-gpcmask)** — [`GrInfoProfile::validate_against`]
+/// used it, which refused `GR_GET_INFO_V2` on every family whose SM is not Ampere's (Turing
+/// and GA100 have 64 CUDA cores per SM, Hopper and GB100 no RT cores). The served relation is
+/// now family-free: each per-SM count is a whole multiple of the SM count. Kept as the GA106
+/// fixture's arithmetic.
 pub const AMPERE_CORES_PER_SM: u32 = 128;
-/// Tensor cores per SM on Ampere — the multiplier for [`IDX_TENSOR_CORE_COUNT`].
+/// Tensor cores per SM on Ampere — the multiplier for [`IDX_TENSOR_CORE_COUNT`] (fixture
+/// arithmetic only; see [`AMPERE_CORES_PER_SM`]).
 pub const AMPERE_TENSOR_CORES_PER_SM: u32 = 4;
 
 /// Why a GR info list could not be encoded.
@@ -220,8 +227,10 @@ impl GrInfoProfile {
         Ok(())
     }
 
-    /// ★★ The cross-check: nine entries restate geometry [`crate::grstatic`] publishes
-    /// through three other controls, and RM reads both descriptions.
+    /// ★★ The cross-check: six entries restate geometry [`crate::grstatic`] publishes
+    /// through three other controls, and RM reads both descriptions — three exactly (GPC,
+    /// TPC and SMs-per-TPC counts), three as whole multiples of the SM count (CUDA, RT and
+    /// tensor cores, whose per-SM multiplier is the family's).
     ///
     /// ⊘ It deliberately does **not** check the litter constants. `LITTER_NUM_GPCS = 7` on
     /// a three-GPC part is not a contradiction — it is the *family* maximum — and a check
@@ -250,9 +259,6 @@ impl GrInfoProfile {
             (IDX_SHADER_PIPE_COUNT, gpc_count),
             (IDX_SHADER_PIPE_SUB_COUNT, tpc_count),
             (IDX_LITTER_NUM_SM_PER_TPC, u32::from(gr.sms_per_tpc)),
-            (IDX_GPU_CORE_COUNT, sm_count * AMPERE_CORES_PER_SM),
-            (IDX_RT_CORE_COUNT, sm_count),
-            (IDX_TENSOR_CORE_COUNT, sm_count * AMPERE_TENSOR_CORES_PER_SM),
         ];
         for (index, derived) in pairs {
             if self.data[index] != derived {
@@ -260,6 +266,20 @@ impl GrInfoProfile {
                     index,
                     info: self.data[index],
                     derived,
+                });
+            }
+        }
+        // ★ The per-SM unit counts are a whole multiple of the SM count on every family — the
+        // multiplier is the family's (Ampere 128/1/4, Turing 64/1/8, Hopper 128/0/4), so the
+        // family-free statement is divisibility, and a count that is not a multiple names the
+        // SM count it failed against as `derived`. ⊘ Until 2026-09-26 this was `sm × 128`,
+        // `sm`, `sm × 4`: Ampere's numbers, refusing GR info on Turing, GA100 and Hopper.
+        for index in [IDX_GPU_CORE_COUNT, IDX_RT_CORE_COUNT, IDX_TENSOR_CORE_COUNT] {
+            if !self.data[index].is_multiple_of(sm_count) {
+                return Err(GrInfoError::DisagreesWithGrStatic {
+                    index,
+                    info: self.data[index],
+                    derived: sm_count,
                 });
             }
         }

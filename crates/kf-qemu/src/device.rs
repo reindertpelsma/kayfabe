@@ -202,11 +202,6 @@ pub struct Device {
     held_stamps: Mutex<std::collections::VecDeque<u64>>,
 }
 
-fn parse_version(s: &str) -> Option<kf_abi::DriverVersion> {
-    let mut it = s.trim().split('.').map(|x| x.parse::<u16>().ok());
-    Some(kf_abi::DriverVersion { major: it.next()??, minor: it.next()??, patch: it.next().flatten().unwrap_or(0) })
-}
-
 impl Device {
     /// ★ Realize: host session → family → store → derived BAR0 → GSP FSM + answers → plane.
     ///
@@ -223,8 +218,9 @@ impl Device {
         // ★ P3: the host die's facts, each from the source `kf_rm::hostfacts::PROVENANCE` names —
         // asked before anything is reserved, so a refusal costs nothing. What the host cannot
         // state is authored as OUR device's (`kf_rm::authored`, cited per value). ⊘ A control the
-        // host refuses, or a family an authored rule has no number for (Hopper's PBDMA fault ids),
-        // refuses REALIZE, listing every such field: never a default, never a GA106 row.
+        // host refuses, or a family an authored rule has no number for, refuses REALIZE, listing
+        // every such field: never a default, never a GA106 row. (Hopper's PBDMA fault ids were such
+        // a field until 2026-09-26; UVM's hwref states HOST0 = 64 — `V3_HW_BOUNDARY_INVENTORY.md`.)
         let host = std::sync::Arc::new(
             crate::rmfacts::host_facts(rm, family).map_err(|e| format!("host facts: {e}"))?,
         );
@@ -309,13 +305,28 @@ impl Device {
         let boot = boot_regs(family, &facts);
         let config_words = config_words(family, &facts);
 
-        let guest = match &cfg.guest_driver {
-            Some(v) => v.clone(),
-            None => rm.driver_version().to_string(),
+        // ★ The GUEST driver axis (`docs/design/V3_DRIVER_MATRIX.md` §4): the version every guest-facing
+        // layout is selected for. DECLARED by `guest-driver=`; unset, it defaults to the host's own
+        // version (the thin guest's host mode boots the host's modules) — and either way the guest's
+        // own fn-1 string is checked against it (`kf_rm::guestsysinfo`), so a wrong declaration is a
+        // named refusal, never a guest answered with another release's layouts.
+        let (guest, source) = match &cfg.guest_driver {
+            Some(v) => (v.clone(), "guest-driver="),
+            None => (rm.driver_version().to_string(), "defaulted to the host's"),
         };
-        let version = parse_version(&guest).ok_or(format!("guest driver version {guest:?} does not parse"))?;
-        let table = kf_abi::versions::table_for(version).map_err(|e| format!("guest driver {guest}: {e:?}"))?;
-        let abi = kf_rm::abi::gsp_abi_for(version).map_err(|e| format!("GSP ABI for {guest}: {e:?}"))?;
+        let version = kf_abi::DriverVersion::parse(&guest)
+            .ok_or(format!("guest driver version {guest:?} does not parse (want major.minor[.patch])"))?;
+        let table = kf_abi::versions::table_for(version).map_err(|e| format!("guest driver {version}: {e}"))?;
+        let abi = kf_rm::abi::gsp_abi_for(version).map_err(|e| format!("GSP ABI for {version}: {e:?}"))?;
+        eprintln!(
+            "kf3: guest driver {version} ({source}); measured ABI: static-info {:?}, element {:?}, \
+             init-args {:?}, rm-control params@{}, vgx {:?}",
+            table.gsp_static_info_wire(),
+            table.gsp_element_wire(),
+            table.gsp_init_args_wire(),
+            table.rm_control_wire().params_off,
+            table.vgx_version().map(|v| (v.major, v.minor)),
+        );
 
         let id = kf_chip::bar0::PciIdentity {
             vendor: pci.vendor,
@@ -397,36 +408,53 @@ impl Device {
         // are P5.
         // ⚠ The guest OS is DECLARED, never sniffed (it is a `#define` in the guest driver's build,
         // invisible on the wire); this device answers as a Linux guest.
-        let objects = kf_rm::rmrpc::ObjectPolicy::over(
-            table,
-            kf_abi::GuestOs::Linux,
-            Box::new(kf_rm::rmrpc::GraphObjects::new(family)),
-            kf_rm::rmrpc::ReasmLimits::default(),
-        );
         let chain_logs = kf_rm::ChainLogs::default();
         let census = kf_rm::census::ControlCensusLog::new();
-        let policy = kf_rm::served_policy(
-            board,
-            host.clone(),
-            *table,
-            chain_logs.clone(),
-            census.clone(),
-            kf_rm::ObjectLinks {
-                objects: Some(Box::new(objects)),
-                // ★ P4: fn 70 and the page-directory statements go to the VA thread's inbox;
-                // their replies are held until it has settled them.
-                memory: Some(kf_rm::MemoryLink {
-                    sink: {
-                        let inbox = inbox.clone();
-                        std::sync::Arc::new(move |st| inbox.push(st))
+        // ★ The chain is built through a RECIPE (`V3_DRIVER_MATRIX.md` §4.2): every table-dependent
+        // link is constructed from the table handed in, so `ReselectAtFn1` can rebuild it for the
+        // guest's own version at fn 1 when the version was defaulted. The shared state (logs,
+        // census, the memory inbox, the channel plane) is the SAME across a rebuild — only the
+        // links that read layouts are new.
+        let build = {
+            let (board, host, chain_logs, census, inbox) =
+                (board.clone(), host.clone(), chain_logs.clone(), census.clone(), inbox.clone());
+            Box::new(move |t: kf_abi::versions::DriverAbiTable| {
+                let objects = kf_rm::rmrpc::ObjectPolicy::over(
+                    &t,
+                    kf_abi::GuestOs::Linux,
+                    Box::new(kf_rm::rmrpc::GraphObjects::new(family)),
+                    kf_rm::rmrpc::ReasmLimits::default(),
+                );
+                kf_rm::served_policy(
+                    board.clone(),
+                    host.clone(),
+                    t,
+                    chain_logs.clone(),
+                    census.clone(),
+                    kf_rm::ObjectLinks {
+                        objects: Some(Box::new(objects)),
+                        // ★ P4: fn 70 and the page-directory statements go to the VA thread's inbox;
+                        // their replies are held until it has settled them.
+                        memory: Some(kf_rm::MemoryLink {
+                            sink: {
+                                let inbox = inbox.clone();
+                                std::sync::Arc::new(move |st| inbox.push(st))
+                            },
+                            guest_os: kf_abi::GuestOs::Linux,
+                        }),
+                        // ★ P5: channel allocs, GPFIFO_SCHEDULE, the token and frees reach the plane,
+                        // on the drainer; each answer IS the plane's act.
+                        channels: Some(std::sync::Arc::new(move |st| chans.statement(st))),
                     },
-                    guest_os: kf_abi::GuestOs::Linux,
-                }),
-                // ★ P5: channel allocs, GPFIFO_SCHEDULE, the token and frees reach the plane,
-                // on the drainer; each answer IS the plane's act.
-                channels: Some(std::sync::Arc::new(move |st| chans.statement(st))),
-            },
-        );
+                )
+            })
+        };
+        let source = if cfg.guest_driver.is_some() {
+            kf_rm::GuestDriverSource::Declared
+        } else {
+            kf_rm::GuestDriverSource::Defaulted
+        };
+        let policy: Box<dyn kf_gsp::CommandPolicy> = Box::new(kf_rm::ReselectAtFn1::new(*table, source, build));
         let model: std::sync::Arc<dyn GspModel> =
             std::sync::Arc::from(family.gsp_model(implementation, cfg.fb_mb).map_err(|e| format!("{e:?}"))?);
         let store_model = model.clone();
@@ -773,8 +801,9 @@ impl Device {
         // `GPU_VREG_WR32`), and a client without `bBar1Mapping` gets the BAR0 view
         // (`V3_BAR1_DOORBELL.md` §1). ⊘ Before 2026-09-26 Hopper+ never recognised it here.
         let doorbell = off == kf_trap::memmap::VF_USERMODE_PAGE + self.plane.doorbell.offset();
-        let in_usermode = (kf_trap::memmap::VF_USERMODE_PAGE..kf_trap::memmap::VF_USERMODE_PAGE + kf_trap::memmap::PAGE)
-            .contains(&off);
+        // ⊘ The WHOLE 64 KiB window guest userspace maps, not its first page (2026-09-26,
+        // `kf_trap::memmap::VF_USERMODE_LEN`): pages 1..15 reached the privileged ring before.
+        let in_usermode = kf_trap::memmap::in_usermode_window(off);
         // ★ P4: the three MMU_INVALIDATE registers. The port arms FIRST, then the shadow takes the
         // word the guest's spin will read (busy), then one wake — never the privileged ring: the
         // VA thread, not the drainer, completes it (§49.1).
@@ -1303,7 +1332,11 @@ impl Device {
     pub fn status_line(&self) -> String {
         let c = &self.counters;
         let o = Ordering::Relaxed;
-        let phase = self.gsp.try_lock().map(|g| format!("{:?}", g.fsm.phase())).unwrap_or_else(|_| "busy".into());
+        let (phase, refusals) = self
+            .gsp
+            .try_lock()
+            .map(|g| (format!("{:?}", g.fsm.phase()), g.fsm.refusals().summary()))
+            .unwrap_or_else(|_| ("busy".into(), "busy".into()));
         // The ledger's DISTINCT set names the control ids the RPC code alone hides.
         let unserviced: Vec<String> = self
             .chain_logs
@@ -1345,7 +1378,7 @@ impl Device {
             tm.host_calls,
         );
         let mem = format!(
-            " mem[inval={} walks={}/{} cleared={} superseded={} named_missed={} unreconciled={} mapped={} unmapped={} clipped={:#x} held={} vmm_overlaps={} fn70={} roots={} root_moves={} stmts={recv}/{settled} refused={} pramin_repoints={} pramin_miss={} last_miss={:#x} pramin_worst_us={} (map {} mmap {}) pramin_maps={} pramin_mmaps={} inline_opens={} reaped={} cache_ops={}]",
+            " mem[inval={} walks={}/{} cleared={} superseded={} named_missed={} unreconciled={} mapped={} unmapped={} clipped={:#x} held={} vmm_overlaps={} fn70={} roots={} root_moves={} stmts={recv}/{settled} refused={} pramin_repoints={} pramin_miss={} last_miss={:#x} pramin_worst_us={} (map {} mmap {}) pramin_maps={} pramin_mmaps={} inline_opens={} reaped={} cache_ops={} sysmembars={} root_unsets={}]",
             mc.invalidates.load(o),
             va.walks_reconciled,
             va.walks_submitted,
@@ -1373,6 +1406,8 @@ impl Device {
             self.mem.pramin_trap.inline_opens.load(o),
             self.mem.pramin_trap.reaped.load(o),
             mc.cache_ops.load(o),
+            mc.sysmembars.load(o),
+            mc.root_unsets.load(o),
         ) + &timing
             // ★ Hopper+ only (Turing … Ada's line is unchanged): the BAR1 doorbell views.
             + &if self.plane.doorbell.follows_guest_bar1() {
@@ -1453,7 +1488,7 @@ impl Device {
             ic.out_of_range.load(o)
         );
         format!(
-            "kf3: family={:?} phase={phase} trapped={} applied={} refused={} serviced={} ram_refused={} unshadowed_writes={} read_exits={} last_off={:#x}{mem}{chan}{rc}{irq} unserviced=[{}]",
+            "kf3: family={:?} phase={phase} trapped={} applied={} refused={} serviced={} ram_refused={} unshadowed_writes={} read_exits={} last_off={:#x}{mem}{chan}{rc}{irq} unserviced=[{}] gsp_refusals[{refusals}]",
             self.family,
             c.trapped.load(o),
             c.applied.load(o),
@@ -1487,7 +1522,9 @@ impl Device {
         }
         let g = &mut *g;
         let mut ram = Ram(self);
-        match g.fsm.release_held(&mut ram) {
+        let released = g.fsm.release_held(&mut ram);
+        log_fresh_refusals(&mut g.fsm);
+        match released {
             Ok(n) if n > 0 => {
                 self.publish(g);
                 if crate::prof::on() {
@@ -1783,6 +1820,7 @@ impl HostOps for Device {
         // path). Otherwise `release_settled` delivers it when the VA thread wakes this thread.
         let held_mid = g.fsm.held_len();
         let released = if self.mem.inbox.all_settled() { g.fsm.release_held(&mut ram).unwrap_or(0) } else { 0 };
+        log_fresh_refusals(&mut g.fsm);
         let t_pub = if prof { crate::prof::now_ns() } else { 0 };
         self.publish(g);
         if prof {
@@ -1833,4 +1871,20 @@ impl HostOps for Device {
     fn fault_channel(&self, _host_token: u32) {}
     fn map_guest_slice(&self, _slice: HostSlice) {}
     fn teardown_step(&self, _step: Step) {}
+}
+
+/// ★★★ v3-refusals: one line per refusal row the FSM posted for the FIRST time — a non-OK status
+/// the guest read (`kf_gsp::refusal`). The heartbeat's `gsp_refusals[...]` carries the counts.
+/// ⊘ Printed on the drainer (never a vCPU), once per distinct `(function, detail, status)`, so a
+/// hot refusal cannot flood the log; bare metal returns non-OK once in 613 RM records, so every
+/// line here is a divergence until proven harmless.
+fn log_fresh_refusals(fsm: &mut kf_gsp::GspFsm) {
+    for r in fsm.take_fresh_refusals() {
+        eprintln!(
+            "kf3: GSP REFUSED {} ({}) first_seq={} — the guest read a non-OK status",
+            r.key(),
+            kf_rm::rpc::name_of(r.function).unwrap_or("?"),
+            r.first_sequence
+        );
+    }
 }

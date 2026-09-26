@@ -303,9 +303,12 @@ pub struct UnmapMemoryDma {
 ///   oracle outside ogkm at all**: gVisor's `nvproxy` does not model
 ///   `NV0000_ALLOC_PARAMETERS`, and neither does the C artifact
 ///   (`grep NV0000_ALLOC_PARAMETERS` finds nothing in either). Both vendored
-///   tags are ≥ 580 while [`crate::versions::TABLES`] admits versions down to
-///   550.54.04, and `pOsPidInfo` has the shape of a recent addition — so
-///   `sizeof` at 550/575 is still **unverified**.
+///   tags are ≥ 580 while [`crate::versions::table_for`] admits versions down to
+///   550.54.14, and `pOsPidInfo` has the shape of a recent addition — so
+///   `sizeof` at 550/575 was **unverified** when this was written. ★ [measured
+///   2026-09-26, `traces/driver_matrix/ranges.tsv`] it is 108 bytes at ≤ 565 and 120 from
+///   570 (the inventory in `V3_DRIVER_MATRIX.md` §2); the 8-byte prefix below holds at
+///   every measured tag, which is why requiring only it is still right.
 ///
 /// Requiring 120 bytes here would therefore refuse a legitimate older client
 /// alloc on a guess. Requiring 8 asserts only what every available reading

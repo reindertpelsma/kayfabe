@@ -304,3 +304,56 @@ fn a_malformed_request_is_refused_at_the_policy_boundary() {
         "a short params body must never be answered NV_OK"
     );
 }
+
+/// ★ v3-gpcmask (2026-09-26): the FB side of a floor-swept die. The served FBP / LTC / partition
+/// words are the HOST's (`HostFacts::forwarded_fb_info` / `forwarded_fb_extra`, since the Ada
+/// port), so a board whose partitions are NOT `0..n` — an x7-of-8 or x10-of-12 bus with a hole —
+/// is served its own masks verbatim: nothing between the host reply and the guest rebuilds a mask
+/// from a count. ⊘ `kf_abi::fbinfo::FbGeometry::fbp_mask`'s `(1 << n) - 1` is fixture arithmetic
+/// only (`support/ga106.rs`), never on this path. No floor-swept FB has been measured yet (the
+/// 3060 Ti and 4070 report `0xf` / `0x7`), so the words below are a shape, not a board.
+#[test]
+fn a_floorswept_hosts_fb_masks_are_served_verbatim_never_rebuilt_from_a_count() {
+    const PARTITION_MASK: u32 = 0x14;
+    const LTC_MASK: u32 = 0x2b;
+    let mut host = ga106::host_facts();
+    // An x10 bus with the FBP at bit 3 fused: ten FBPs of eleven, twenty LTCs of twenty-two.
+    let (fbp_mask, ltc_mask) = (0x7f7u32, 0x3f_ff3fu32);
+    for (idx, v) in host.forwarded_fb_info.iter_mut() {
+        match *idx {
+            FB_INFO_INDEX_FBP_MASK => *v = fbp_mask,
+            FB_INFO_INDEX_FBP_COUNT => *v = fbp_mask.count_ones(),
+            FB_INFO_INDEX_LTC_COUNT => *v = ltc_mask.count_ones(),
+            _ => {}
+        }
+    }
+    host.forwarded_fb_extra
+        .retain(|(i, _)| *i != PARTITION_MASK && *i != LTC_MASK);
+    host.forwarded_fb_extra
+        .extend([(PARTITION_MASK, fbp_mask), (LTC_MASK, ltc_mask)]);
+    let mut policy = InitTablePolicy::new(
+        ga106::board(),
+        std::sync::Arc::new(host),
+        *table_for(BENCH_DRIVER).expect("bench ABI"),
+    );
+    let cmd = fb_command(&[
+        FB_INFO_INDEX_FBP_MASK,
+        FB_INFO_INDEX_FBP_COUNT,
+        PARTITION_MASK,
+        LTC_MASK,
+        FB_INFO_INDEX_LTC_COUNT,
+    ]);
+    let reply = policy.respond(&cmd).expect("claimed");
+    assert!(!reply.body.is_empty(), "served, not refused");
+    let params = &reply.body[PARAMS_AT..PARAMS_AT + FB_GET_INFO_V2_PARAMS_SIZE];
+    assert_eq!(
+        fbinfo::decode_fb_info_pairs(params).unwrap(),
+        [
+            (FB_INFO_INDEX_FBP_MASK, 0x7f7),
+            (FB_INFO_INDEX_FBP_COUNT, 10),
+            (PARTITION_MASK, 0x7f7),
+            (LTC_MASK, 0x3f_ff3f),
+            (FB_INFO_INDEX_LTC_COUNT, 20),
+        ]
+    );
+}

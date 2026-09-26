@@ -118,6 +118,19 @@ pub enum MemStatement {
         /// The VA-space object.
         vaspace: u32,
     },
+    /// ★★ v3-refusals: the guest WITHDREW this VA-space object's page directory
+    /// (`NV0080_CTRL_CMD_DMA_UNSET_PAGE_DIRECTORY`). The plane stops reading the old root — UVM
+    /// frees that memory right after the reply (`uvm_va_space.c:1479-1483`, `uvm_gpu.c:1332`).
+    UnsetPageDir {
+        /// `hClient` (the ORIGINAL object's, when the unset came through a dup).
+        client: u32,
+        /// The VA-space object.
+        vaspace: u32,
+    },
+    /// ★★★ v3-refusals: the guest's sysmembar (`INTERNAL_BUS_FLUSH_WITH_SYSMEMBAR`,
+    /// [`crate::sysmembar`]). The plane performs it as the host sysmembar verb and only then
+    /// settles, so the held `NV_OK` is posted after the host GPU has flushed.
+    Sysmembar,
 }
 
 /// ★ Where statements go: the device's memory plane. Called on the register drainer, so it must
@@ -298,6 +311,39 @@ impl PageDirPolicy {
     }
 }
 
+impl PageDirPolicy {
+    /// ★★ v3-refusals: `DMA_UNSET_PAGE_DIRECTORY` — answered `NV_OK` and carried to the plane as
+    /// [`MemStatement::UnsetPageDir`], the reply HELD until the plane has withdrawn the root.
+    ///
+    /// `[measured vrf 131f4841]` refused `0x56` twice per CUDA process before (UVM's
+    /// `uvm_gpu_va_space_unset_page_dir` and `deconfigure_address_space`). The guest never saw
+    /// it — `deviceCtrlCmdDmaUnsetPageDirectory_IMPL` overwrites the RPC status with its local
+    /// revoke's (`ogkm-580: dma.c:606-641`) — so the refusal's only effect was ON US: the plane
+    /// kept the withdrawn root, and every later all-PDB invalidate walked page-directory memory
+    /// UVM frees right after the reply. The `NV_OK` is truthful because the plane stops
+    /// reading that root before the reply leaves (the hold); the mirror's rows stay until the
+    /// object retires (`kf_mem::vasmgr::VasTable::clear_root`: nothing unmaps on a guess).
+    ///
+    /// ⊘ Declined (→ the ledger, `0x56`, as before) when the params are not the 8-byte struct
+    /// or name no VA space (`hVASpace = 0`, the device default, which no statement keys).
+    fn unset(&mut self, cmd: &RpcCommand) -> Option<Reply> {
+        let h = self.abi.decode_rpc_control(&cmd.payload).ok()?;
+        if h.cmd != UNSET_PAGE_DIRECTORY || h.params_size as usize != UNSET_PAGE_DIRECTORY_PARAMS_SIZE {
+            return None;
+        }
+        let p = cmd.payload.get(h.params_at..h.params_at + UNSET_PAGE_DIRECTORY_PARAMS_SIZE)?;
+        let vaspace = u32::from_le_bytes([p[0], p[1], p[2], p[3]]);
+        if vaspace == 0 {
+            return None;
+        }
+        let (client, vaspace) = self.canonical(h.client, vaspace);
+        (self.sink)(MemStatement::UnsetPageDir { client, vaspace });
+        self.carried += 1;
+        self.held_last = true;
+        Some(Reply { rpc_result: NV_OK, body: cmd.payload.clone() })
+    }
+}
+
 impl core::fmt::Debug for PageDirPolicy {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("PageDirPolicy").field("carried", &self.carried).finish()
@@ -306,6 +352,11 @@ impl core::fmt::Debug for PageDirPolicy {
 
 /// `NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY`.
 const SET_PAGE_DIRECTORY: u32 = 0x0080_1813;
+/// `NV0080_CTRL_CMD_DMA_UNSET_PAGE_DIRECTORY` (`ogkm-580: ctrl0080dma.h`), params
+/// `{ NvHandle hVASpace; NvU32 subDeviceId; }` — 8 bytes, pure `[IN]`.
+pub const UNSET_PAGE_DIRECTORY: u32 = 0x0080_1814;
+/// `sizeof(NV0080_CTRL_DMA_UNSET_PAGE_DIRECTORY_PARAMS)`.
+const UNSET_PAGE_DIRECTORY_PARAMS_SIZE: usize = 8;
 
 impl CommandPolicy for PageDirPolicy {
     fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
@@ -326,6 +377,9 @@ impl CommandPolicy for PageDirPolicy {
             }
             RpcFunction::RmControl => {}
             _ => return None,
+        }
+        if let Some(r) = self.unset(cmd) {
+            return Some(r);
         }
         let Ok(crate::rmrpc::Translation::PageDir(mut st)) = crate::rmrpc::translate(&self.abi, self.guest_os, cmd) else {
             return None;
@@ -389,6 +443,42 @@ mod tests {
         assert!(!p.holds_for_refresh(&bad), "a refusal holds nothing — a held reply nobody releases is a hang");
         assert_eq!(got.lock().unwrap().len(), 1);
         assert!(p.respond(&cmd(RpcFunction::RmAlloc, vec![])).is_none(), "declines everything else");
+    }
+
+    /// ★★ v3-refusals: `DMA_UNSET_PAGE_DIRECTORY` through a DUP is answered `NV_OK`, HELD, and
+    /// withdraws the ORIGINAL object's root (UVM unsets through its dup of the user's space, as it
+    /// set it); a short params image or `hVASpace = 0` is declined to the ledger as before.
+    #[test]
+    fn an_unset_through_a_dup_withdraws_the_originals_root_and_is_held() {
+        let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).expect("bench");
+        let seen: Arc<Mutex<Vec<MemStatement>>> = Arc::default();
+        let s2 = seen.clone();
+        let mut p = PageDirPolicy::new(abi, kf_abi::GuestOs::Linux, Arc::new(move |st| s2.lock().unwrap().push(st)));
+        let words = |w: &[u32]| w.iter().flat_map(|v| v.to_le_bytes()).collect::<Vec<u8>>();
+        let (orig, alias) = ((0xc1d0_0016u32, 0xcaf0_0003u32), (0xc1d0_001au32, 0xbeef_0300u32));
+        p.vas.insert(orig, (0xcaf0_0001, false));
+        p.respond(&cmd(RpcFunction::DupObject, words(&[alias.0, 0xbeef_0003, alias.1, orig.0, orig.1, 0, 0])));
+        let unset = |client: u32, device: u32, params: &[u8]| {
+            let mut payload = vec![0u8; 40 + params.len()];
+            payload[0..4].copy_from_slice(&client.to_le_bytes());
+            payload[4..8].copy_from_slice(&device.to_le_bytes());
+            payload[8..12].copy_from_slice(&UNSET_PAGE_DIRECTORY.to_le_bytes());
+            payload[16..20].copy_from_slice(&(params.len() as u32).to_le_bytes());
+            payload[40..].copy_from_slice(params);
+            cmd(RpcFunction::RmControl, payload)
+        };
+        // `nvGpuOpsUnsetPageDirectory`: hVASpace = UVM's dup, subDeviceId = instance + 1.
+        let c = unset(alias.0, 0xbeef_0003, &words(&[alias.1, 1]));
+        let r = p.respond(&c).expect("answered");
+        assert_eq!(r.rpc_result, NV_OK);
+        assert_eq!(r.body, c.payload, "params echoed: the control has no [OUT] field");
+        assert!(p.holds_for_refresh(&c), "held until the plane has withdrawn the root");
+        assert_eq!(seen.lock().unwrap().as_slice(), &[MemStatement::UnsetPageDir { client: orig.0, vaspace: orig.1 }]);
+        for bad in [unset(alias.0, 0xbeef_0003, &words(&[0, 1])), unset(alias.0, 0xbeef_0003, &words(&[alias.1]))] {
+            assert!(p.respond(&bad).is_none(), "declined: no VA space named, or not the 8-byte struct");
+            assert!(!p.holds_for_refresh(&bad), "a declined control holds nothing");
+        }
+        assert_eq!(seen.lock().unwrap().len(), 1);
     }
 
     /// ★ v3-gfx: the original VA space's free does NOT retire its mirror while a dup still names

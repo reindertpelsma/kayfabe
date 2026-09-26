@@ -125,37 +125,34 @@ pub struct HostDriverVersion {
 
 impl fmt::Display for HostDriverVersion {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}.{}.{:02}", self.major, self.minor, self.patch)
+        if self.patch == 0 {
+            write!(f, "{}.{}", self.major, self.minor)
+        } else {
+            write!(f, "{}.{}.{:02}", self.major, self.minor, self.patch)
+        }
     }
 }
 
 impl HostDriverVersion {
     /// Parse the frontend's `versionString`.
     ///
-    /// Strict: exactly three decimal components, nothing else. A looser parser is the
-    /// wrong trade here — a string we half-understand is the input to a decision about
-    /// **struct offsets**, and the honest answer to "this does not look like a version" is
+    /// Strict: two or three decimal components, nothing else — the same rule as
+    /// [`crate::DriverVersion::parse`], which it delegates to. A looser parser is the wrong
+    /// trade here — a string we half-understand is the input to a decision about **struct
+    /// offsets**, and the honest answer to "this does not look like a version" is
     /// [`HostDriverRefusal::Unparsable`], never a best guess at the major.
+    ///
+    /// ⊘⊘ CORRECTED 2026-09-26: this accepted exactly three fields, so a real two-field
+    /// release (`NV_VERSION_STRING` is "595.84" at `ogkm-595.84: src/common/inc/nvUnixVersion.h:8`;
+    /// also 580.142, 570.144, 550.67, 535.98) was refused as `Unparsable` — the wrong
+    /// refusal for a perfectly readable version. A missing patch is patch 0, never "unknown".
     #[must_use]
     pub fn parse(reported: &str) -> Option<Self> {
-        let mut parts = reported.trim().split('.');
-        let mut next = || -> Option<u16> {
-            let p = parts.next()?;
-            if p.is_empty() || !p.bytes().all(|b| b.is_ascii_digit()) {
-                return None;
-            }
-            p.parse::<u16>().ok()
-        };
-        let major = next()?;
-        let minor = next()?;
-        let patch = next()?;
-        if parts.next().is_some() {
-            return None;
-        }
+        let v = crate::DriverVersion::parse(reported)?;
         Some(Self {
-            major,
-            minor,
-            patch,
+            major: v.major,
+            minor: v.minor,
+            patch: v.patch,
         })
     }
 
@@ -366,7 +363,7 @@ mod tests {
     /// neither is vendored here, so the message must claim no knowledge of their layout.
     #[test]
     fn a_major_with_no_transcribed_delta_refuses_without_inventing_one() {
-        for tag in ["575.64.05", "590.44.01", "595.84.00"] {
+        for tag in ["575.64.05", "590.44.01", "595.84"] {
             let msg = check(Some(tag)).expect_err("not encoded for").to_string();
             assert!(msg.contains(tag), "names the host driver: {msg}");
             assert!(
@@ -402,7 +399,7 @@ mod tests {
         );
         for bad in [
             "580",
-            "580.159",
+            "580.",
             "580.159.04.1",
             "580.x.04",
             "v580.159.04",

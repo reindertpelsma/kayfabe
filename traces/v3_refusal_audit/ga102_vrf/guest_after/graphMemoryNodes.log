@@ -1,0 +1,36 @@
+=== graphMemoryNodes side=guest start=2026-09-26T14:32:02+00:00 cmd: /opt/apps/bundle/samples/graphMemoryNodes
+GPU Device 0: "Ampere" with compute capability 8.6
+
+Driver version is: 13.0
+Setting up sample.
+Setup complete.
+
+Running negateSquares in a stream.
+Validating negateSquares in a stream...
+Validation PASSED!
+
+Running negateSquares in a stream-captured graph.
+Validating negateSquares in a stream-captured graph...
+Validation PASSED!
+
+Running negateSquares in an explicitly constructed graph.
+Check verified that d_negSquare and d_input share a virtual address.
+Validating negateSquares in an explicitly constructed graph...
+Validation PASSED!
+
+Running negateSquares with d_negSquare freed outside the stream.
+Check verified that d_negSquare and d_input share a virtual address.
+Validating negateSquares with d_negSquare freed outside the stream...
+Validation PASSED!
+
+Running negateSquares with d_negSquare freed outside the graph.
+Validating negateSquares with d_negSquare freed outside the graph...
+Validation PASSED!
+
+Running negateSquares with d_negSquare freed in a different graph.
+Validating negateSquares with d_negSquare freed in a different graph...
+Validation PASSED!
+
+Cleaning up sample.
+Cleanup complete. Exiting sample.
+=== end rc=0 secs=7 2026-09-26T14:32:09+00:00

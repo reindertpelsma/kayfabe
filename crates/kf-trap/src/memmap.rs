@@ -142,6 +142,28 @@ pub fn holes_for(family: Family) -> &'static [(u64, &'static str)] {
 /// `0xbb0000`.
 pub const VF_USERMODE_PAGE: u64 = 0x00BB_0000;
 
+/// ★★★ The whole usermode window guest USERSPACE can map: `DRF_SIZE(NV_VIRTUAL_FUNCTION)` =
+/// `NVC361_NV_USERMODE__SIZE` = 64 KiB (`ogkm-580: hopper/gh100/dev_vm.h:26`, `turing/tu102/
+/// dev_vm.h`, `class/clc361.h:29-30`) — what `kfifoGetUsermodeMapInfo_GV100` hands a user client
+/// (`kernel_fifo_gv100.c:170-171`: `*pSize = DRF_SIZE(NVC361)`), on every family.
+///
+/// ⊘⊘ 2026-09-26 (`V3_HW_BOUNDARY_INVENTORY.md`, security): the trap classified only the FIRST
+/// 4 KiB page ([`PAGE`]) as userspace-mappable, so an unprivileged guest process writing
+/// `0xBB1000..0xBBFFFF` through its own usermode mapping reached the PRIVILEGED arm — a shadow
+/// store plus a privileged-ring push per write, i.e. guest userspace could fill the ring reserved
+/// for guest root and poison the device. No register of the window lies past `+0x94` on any family
+/// (the test `usermode_window_*` checks every `NV_VIRTUAL_FUNCTION_*` offset), so the wider
+/// do-nothing arm cannot swallow a write a stock driver makes. Only the classification widens; the
+/// C passthrough stays page 0.
+pub const VF_USERMODE_LEN: u64 = 0x1_0000;
+
+/// ★ Is BAR0 offset `off` inside the usermode window guest userspace can map (the trap's
+/// `Class::UserspaceMappable` arm, or the doorbell)?
+#[must_use]
+pub const fn in_usermode_window(off: u64) -> bool {
+    off >= VF_USERMODE_PAGE && off < VF_USERMODE_PAGE + VF_USERMODE_LEN
+}
+
 /// ★★★ Build the complete map. Every byte of every BAR gets exactly one row.
 pub fn memory_map(
     family: Family,

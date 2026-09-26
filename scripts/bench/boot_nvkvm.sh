@@ -26,6 +26,18 @@ if [ "$KF_DEVICE" = kf3 ]; then
     NVKVM_RAM_BACKEND=memfd
     KAYFABE_GUEST_BAR1_MB=${KAYFABE_GUEST_BAR1_MB:-128}
     export KAYFABE_GUEST_BAR1_MB
+    # ★ v3-gpcmask (2026-09-26): the store must FIT the host card. `fb-mb=8192` was the default
+    # because every box this ran on was a 12 GiB GA106 or larger; on an 8 GiB RTX 3060 Ti realize
+    # refuses by name — "store of 8192 MiB refused: NoMemory". A lane that passes NOTHING must default
+    # to something that boots (the BAR1 rule): the smallest card's memory.total less 2 GiB of
+    # headroom (walker pools, the host RM's own reservations), capped at 8192 — so every card of
+    # 10 GiB or more keeps 8192. `[measured]` 6144 realizes and boots on the 8 GiB card.
+    # `KF3_FB_MB` still wins when set.
+    if [ -z "${KF3_FB_MB:-}" ]; then
+        _vram=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | sort -n | head -1)
+        KF3_FB_MB=8192
+        case "$_vram" in ''|*[!0-9]*) ;; *) [ "$_vram" -lt 10240 ] && KF3_FB_MB=$(( (_vram - 2048) / 1024 * 1024 )) ;; esac
+    fi
     DEVICE_ARG="kf3-gpu,fb-mb=${KF3_FB_MB:-8192},bar1-size=$(( KAYFABE_GUEST_BAR1_MB * 1024 * 1024 )),bar2-size=33554432,id=kf0${KF3_DEV_EXTRA:+,$KF3_DEV_EXTRA}"
     echo "== kf3 binary: $Q (rev $KF3_REV)  device: $DEVICE_ARG" >&2
 elif [ "$KF_DEVICE" = nvkvm ]; then
@@ -65,6 +77,10 @@ case "${NVKVM_RAM_BACKEND:-}" in
   *) echo "★ NVKVM_RAM_BACKEND=${NVKVM_RAM_BACKEND} is not a backend I know" >&2; exit 2 ;;
 esac
 
+# ★ `KF_GUEST_IMG` also carries the driver matrix's per-version fat guests (V3_DRIVER_MATRIX.md
+# §5): a qcow2 overlay on guest.qcow2 with that version installed (`scripts/drivermatrix/
+# stage_fat_guest.sh`). Unset = the bench image, i.e. the host's version.
+[ -f "${KF_GUEST_IMG:-/workspace/bench/guest.qcow2}" ] || { echo "★ no guest image at ${KF_GUEST_IMG}" >&2; exit 2; }
 exec "$Q" \
   "${RAMARGS[@]}" -cpu host -smp "${KF_SMP:-3}" \
   -drive if=virtio,file="${KF_GUEST_IMG:-/workspace/bench/guest.qcow2}",format=qcow2 \

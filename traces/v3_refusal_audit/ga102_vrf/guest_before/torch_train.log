@@ -1,0 +1,6 @@
+=== torch_train side=guest start=2026-09-26T13:02:49+00:00 cmd: /opt/apps/venv/bin/python /opt/rf/torch_train.py
+CHECK train_fp32 ok first=2.373 last=0.757 secs=2.2
+CHECK train_amp ok first=0.619 last=0.045 secs=1.9
+CHECK long_sync ok secs=3.6
+TORCH_TRAIN_DONE
+=== end rc=0 secs=15 2026-09-26T13:03:04+00:00

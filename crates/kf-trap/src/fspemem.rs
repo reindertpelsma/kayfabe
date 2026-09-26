@@ -297,3 +297,25 @@ mod tests {
         assert_eq!(encode_cursor(65), (1 << BLK_SHIFT) | (1 << OFFS_SHIFT));
     }
 }
+
+/// ★ The EMEMC field encodings, held to the FSP die groups' header (`kf_chip::hwref`,
+/// `docs/design/V3_HW_BOUNDARY_INVENTORY.md`). ⊘ `DWORDS_PER_BLOCK`, the MCTP/NVDM framing and
+/// `CHANNEL_DWORDS` are firmware-protocol / RM-source constants, not in any published header.
+#[cfg(test)]
+mod hwref_check {
+    use super::*;
+    use kf_chip::hwref::DieGroup;
+    use kf_chip::hwref::expect::{bit, mask, range};
+
+    #[test]
+    fn the_ememc_fields_are_each_fsp_die_groups_header() {
+        for g in [DieGroup::Gh100, DieGroup::Gb10x, DieGroup::Gb20x] {
+            assert_eq!(range(g, "NV_PFSP_EMEMC_OFFS").1, u64::from(OFFS_SHIFT), "{g:?}");
+            assert_eq!(mask(g, "NV_PFSP_EMEMC_OFFS"), u64::from(OFFS_MASK), "{g:?}");
+            assert_eq!(range(g, "NV_PFSP_EMEMC_BLK").1, u64::from(BLK_SHIFT), "{g:?}");
+            assert_eq!(mask(g, "NV_PFSP_EMEMC_BLK"), u64::from(BLK_MASK), "{g:?}");
+            assert_eq!(bit(g, "NV_PFSP_EMEMC_AINCW"), u64::from(AINCW), "{g:?}");
+            assert_eq!(bit(g, "NV_PFSP_EMEMC_AINCR"), u64::from(AINCR), "{g:?}");
+        }
+    }
+}

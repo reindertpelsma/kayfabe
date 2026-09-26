@@ -1373,6 +1373,13 @@ fn run(ogkm_root: &Path, out: &Path) -> Result<Vec<PathBuf>, String> {
     for (m, doc) in &mod_entries {
         modrs.push_str(&format!("/// {doc}\npub mod {m};\n"));
     }
+    // ★ Not this generator's output: `matrix.rs` is written by `tools/drivermatrix/emit_rust.py`
+    // (every consumed ABI fact per MEASURED ogkm tag — V3_DRIVER_MATRIX.md). Registered here so a
+    // regeneration of the single-tag modules keeps it.
+    modrs.push_str(
+        "/// The driver matrix: consumed ABI facts per measured ogkm tag (`tools/drivermatrix/`).\n\
+         pub mod matrix;\n",
+    );
     modrs.push_str(&format!(
         "\n/// The ogkm checkout these modules were generated from.\npub const OGKM_VERSION: &str = {version:?};\n"
     ));
