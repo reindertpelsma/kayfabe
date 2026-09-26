@@ -1,0 +1,3 @@
+Q10_START 2026-09-26T23:35:38+00:00 rev=bb9b67a9 host=580.159.04
+CLIENT_RC=0
+KF3_BUILD_RC=0 KF3_BUILT /workspace/bench/kf3-bins/bb9b67a9/qemu-system-x86_64 rev=bb9b67a9 mtime=2026-09-26 23:36:08.243420431 +0000 (shared build dir /workspace/bench/qemu-build-kf3)

@@ -1,0 +1,50 @@
+V3_GATES_START 2026-09-26T23:36:10+00:00
+HEAD=bb9b67a9 dirty=0
+GPU=NVIDIA GeForce RTX 3090, 580.159.04
+warning: variable does not need to be mutable
+   --> crates/kf-harness/src/bin/kf-gate9.rs:386:9
+    |
+386 |     let mut gpu_at = |n: u64, v: &mut Vec<u64>, us: u64| {
+    |         ----^^^^^^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/kf-harness/src/bin/kf-gate4.rs:352:9
+    |
+352 |     let mut plane = Plane::for_family(&vmm, TOKEN_TABLE, (TOKEN_TABLE - 1) as u32, kf_chip::Family::Ampere, 16 << 20);
+    |         ----^^^^^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+=== kf-gate1
+MEASURE session driver 580.159.04
+MEASURE channel tsg=0xcafe000a chan=0xcafe000b token=0x4
+MEASURE ce_notifiers_armed CE0:true CE1:true CE2:true CE3:true CE4:true CE5:true CE6:true CE7:true CE8:true CE9:true
+MEASURE quiet wakes=0 in 300 ms with nothing submitted
+CHECK none_arm_work_completes PASS Submitted { wakes: 0, early_wakes: 0, seen_at_wake: false, event_us: 300435, ce_released: true, fence_landed: true }
+MEASURE none_arm_wakes wakes=0 (an edge with no trigger of ours = someone else's)
+CHECK ce_intr_arm_work_completes PASS Submitted { wakes: 1, early_wakes: 0, seen_at_wake: true, event_us: 106, ce_released: true, fence_landed: true }
+MEASURE ce_intr_arm_edge seen_at_wake=true wakes=1 after_us=106
+CHECK bytes_copied_by_engine PASS 20 copies x 1024 words, 0 wrong
+CHECK nsi_completion_seen_at_wake PASS 20/20 fences read AT a wake; early_wakes=0; us p50=43 p90=47 max=85
+GATE1_VERDICT=PASS
+=== kf-gate2
+MEASURE store store 0xcafe0004 256 MiB contiguous_aligned=true imported into the walker
+MEASURE publish_first diff_runs=2 mapped=2 unmapped=0 refused=0 invalidated=true gpu_us=123 us=496
+CHECK first_publish_maps_the_guest_ranges PASS 2 runs mapped (want 2 coalesced)
+CHECK copy1_completes_by_event PASS Submitted { wakes: 1, early_wakes: 0, seen_at_wake: true, event_us: 84, ce_released: true, fence_landed: true }
+CHECK copy1_lands_where_the_guest_mapped_it PASS DATA_B == DATA_A pattern
+MEASURE publish_unchanged diff_runs=0 mapped=0 unmapped=0 refused=0 invalidated=false gpu_us=119 us=292
+CHECK unchanged_tables_change_nothing PASS diff_runs=0 mapped=0 unmapped=0
+MEASURE publish_remap diff_runs=2 mapped=1 unmapped=1 refused=0 invalidated=true gpu_us=122 us=406
+CHECK remap_reconciles PASS mapped=1 unmapped=1
+CHECK copy2_completes_by_event PASS Submitted { wakes: 2, early_wakes: 1, seen_at_wake: true, event_us: 68, ce_released: true, fence_landed: true }
+CHECK copy2_follows_the_remap PASS DATA_C == DATA_A pattern
+CHECK old_target_untouched PASS DATA_B still zero
+GATE2_VERDICT=PASS
+=== kf-gate3
