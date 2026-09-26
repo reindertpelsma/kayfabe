@@ -233,10 +233,19 @@ nothing is owed, because the GPU did it.
    master `02b27c2a`): 0/600 natural open cycles failed, but 299/300 were born over the stale slot
    (`forwarded=4098`), and **20/20 failed** with the stale `1` injected; after (`7f271349`, on
    master `59cc98a9`): **0/300 natural, 0/300 injected, 300/300 `forwarded=2 submissions=2`** (and
-   0/150 cycles + 0/18 multi-open arms on a 580.65.06 guest). ⊘ `[inferred]` Without the fix one
-   natural occurrence is self-perpetuating: the failed channel leaves `GP_PUT = 1` in the slot, and
-   the next open's CeUtils (same chid, same slot) reads it again — a dead device until QEMU
-   restarts, the same shape as `V3_HW_BOUNDARY_INVENTORY.md` §5.2 L1. The completion probe
+   0/150 cycles + 0/18 boots of the `--timer`, `--concurrency` and `--uvm-mean` arms on a 580.65.06 guest).
+   ★★ `[MEASURED, the coordinator's 100% reproducer]` **A 570.148.08 guest fails EVERY re-init**,
+   and it is this mechanism: 570's CeUtils self-test is a lone memcopy (575+ memset first), so the
+   first init's channel leaves `GP_PUT = GP_GET = 1`; every later incarnation (same token, same
+   host id, same GPFIFO VA, new VA space) is born over `(Some(1), Some(1))` and retires
+   `forwarded=1 submissions=0` — three incarnations in one fat-guest boot, all failed
+   (`v3-drivers 607f290f` + the probe commits, `cl_l570dr_88438930_cup2`). With the fix the
+   re-init's CeUtils retires `forwarded=1 submissions=1` with both releases `LANDED`
+   (`cl_l570dr_f5843151_*`), and the 570 ladder moves on to a DIFFERENT wall (570's UVM channel
+   GPFIFO VA not yet placed by the mirror — refused loudly, `DEAD` + `REFUSED-AND-POISONED`, see
+   `V3_DRIVER_MATRIX.md` §6). ⇒ One occurrence is **self-perpetuating** without the fix (the failed
+   channel leaves `GP_PUT = 1` for the next): a dead device until QEMU restarts, the same shape as
+   `V3_HW_BOUNDARY_INVENTORY.md` §5.2 L1. The completion probe
    (`KF3_COMPLETION_PROBE`) showed every guest release LANDED where our rows place it: the
    completion plane was never the defect; the one CE non-stall of a failing boot is our own fence
    of the NOP retire (`releases=[]`), correctly not raised — no guest work reached the engine.

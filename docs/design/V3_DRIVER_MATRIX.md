@@ -282,6 +282,18 @@ cup8bench, every timed iteration verified).
 > bytes as the host holds them (a virtual side resolved through our rows) and through every guest
 > CPU window (BAR1/BAR2/PRAMIN) showing that store page — the first occurrence under the probe will
 > say whether the guest's write and the engine's read met the same memory.
+> ★★ **The 570.148.08 guest's deterministic re-init wall (§6.0) IS this mechanism**
+> `[measured, vast 52792102, v3-drivers 607f290f ± the fix]`: without it, every re-init's CeUtils
+> is born over the first life's `(GP_PUT, GP_GET) = (1, 1)` and retires `forwarded=1 submissions=0`
+> (three incarnations per boot, all failed); with it the re-init passes `memmgrInitCeUtils`
+> (`forwarded=1 submissions=1`, both releases landed). ⊘ **The 570 fat ladder is still 0/4, at a
+> different, later wall:** nvidia-uvm 570's first channel (`KERNEL+UVM_OWNED`, GPFIFO VA
+> `0x121010000`, 1024 entries) is read before the mirror has placed that VA — `DEAD: ring: Read …
+> not placed by us` → `REFUSED-AND-POISONED`, and `cup2` hangs in `uvm_channel_manager_create`
+> (`uvm_push_end_and_wait`). Refused by name, never retired — a version-gap item for this matrix.
+> ⊘ Also measured: on master `59cc98a9` (and the thin guest on either binary) a 570.148.08 guest
+> oopses in its FIRST init (`memmgrMemCopyWithTransferType`, NULL dereference) — the v3-drivers
+> head does not.
 
 | host | guest | rev | gates | tests | thin guest | fat guest ladder | notes |
 |---|---|---|---|---|---|---|---|

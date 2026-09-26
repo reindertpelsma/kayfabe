@@ -48,6 +48,23 @@ driver-matrix box `52746206`), host driver 580.159.04 open. Every file is text, 
 `tests_7f271349.log` (1598 passed / 0 failed), `v3_gates_7f271349.log` (9/9),
 `f_suite_suite.out` (30/30, `KF_DEVICE=kf3 fast_suite.sh f_suite 180`).
 
+## The coordinator's 100% reproducer — a 570.148.08 guest re-initialising (`570/`)
+
+`summaries/initrace_570dr.summary`: base `origin/v3-drivers` `607f290f` (the driver-matrix head),
+**before** = + the probe/log commits (`88438930`), **after** = + the USERD fix (`f5843151`); the fat
+guest `guest-570.148.08.qcow2`, `cuda_ladder.sh guest`.
+- before, `570/run_cl_l570dr_88438930_cup2_1_qemu.log`: token `0x802` (CeUtils) born over `(0,0)`
+  then TWICE over `(Some(1), Some(1))`; the first life retires `forwarded=1 submissions=1`, both
+  later ones `forwarded=1 submissions=0` — cup2 FAIL.
+- after, `570/run_cl_l570dr_f5843151_cup{2,3,8}_1_*`: the re-init's CeUtils retires
+  `forwarded=1 submissions=1` (releases LANDED in the probe dump); the ladder then stops at a
+  DIFFERENT wall — nvidia-uvm 570's first channel (token `0x803`) `DEAD: ring: Read … 0x121010000
+  not placed by us` → `REFUSED-AND-POISONED` (refused by name, never retired); cup2/cup3/cup8 FAIL
+  there, cup8bench not run.
+- `summaries/initrace_570.summary`, `570/run_cl_l570_59cc98a9_cup2_1_*`, `570/fast_t570_*`: on
+  master `59cc98a9` (fat guest) and in the thin guest on either binary, a 570.148.08 guest oopses in
+  its FIRST init (`memmgrMemCopyWithTransferType`, NULL dereference) — not this defect.
+
 ## The second variant (self-test data mismatch) — open
 
 `summaries/initrace_hunt.summary` — the 580.65.06 guest's `--uvm-mean` / `--concurrency` /
