@@ -217,13 +217,17 @@ pub struct SemaRegs {
     pub ce_b: u32,
     /// CE `SET_SEMAPHORE_PAYLOAD`.
     pub ce_payload: u32,
-    /// Host `SEMAPHOREA` (address 39:32), `SEMAPHOREB` (31:2), `SEMAPHOREC` (payload).
+    /// Host `SEMAPHOREA` — address 39:32.
     pub host_a: u32,
+    /// Host `SEMAPHOREB` — address 31:2.
     pub host_b: u32,
+    /// Host `SEMAPHOREC` — the payload.
     pub host_c: u32,
-    /// Host `SEM_ADDR_LO` / `SEM_ADDR_HI` / `SEM_PAYLOAD_LO`.
+    /// Host `SEM_ADDR_LO` — address 31:2.
     pub sem_lo: u32,
+    /// Host `SEM_ADDR_HI` — address 39:32.
     pub sem_hi: u32,
+    /// Host `SEM_PAYLOAD_LO`.
     pub sem_payload: u32,
 }
 

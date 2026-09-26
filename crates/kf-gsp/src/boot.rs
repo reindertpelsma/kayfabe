@@ -2868,7 +2868,7 @@ mod a_retry_after_a_failed_boot_reads_its_own_frts_command {
 
     #[test]
     fn the_frts_offset_is_read_from_the_command_and_only_from_an_acceptable_one() {
-        let at = 0x1f6e0_000u64; // a margin-shifted FRTS offset (4 KiB units: 0x1f6e0)
+        let at = 0x1f6e_0000u64; // a margin-shifted FRTS offset (4 KiB units: 0x1f6e0)
         assert_eq!(read_frts_command(&mut image(0x15, 0x1f6e0, 0x100, 2), IMAGE), Some(at));
         assert_eq!(read_frts_command(&mut image(0x19, 0x1f6e0, 0x100, 2), IMAGE), None, "FWSEC-SB carries no region");
         assert_eq!(read_frts_command(&mut image(0x15, 0x1f6e0, 0x200, 2), IMAGE), None, "only the 1 MiB region FWSEC builds");
@@ -2889,11 +2889,11 @@ mod a_retry_after_a_failed_boot_reads_its_own_frts_command {
         f.fwsec_image = Some(IMAGE); // `BootStep::FwsecCommand`
         assert_eq!(f.gsp_startcpu(), Transition::E1);
         assert_eq!(f.observe().frts_offset, None, "until the device resolves it");
-        assert_eq!(f.resolve_frts_command(&mut ram), Some(Some(0x1f6e0_000)));
-        assert_eq!(f.observe().frts_offset, Some(0x1f6e0_000), "the retry's FWSEC-FRTS placed it there");
+        assert_eq!(f.resolve_frts_command(&mut ram), Some(Some(0x1f6e_0000)));
+        assert_eq!(f.observe().frts_offset, Some(0x1f6e_0000), "the retry's FWSEC-FRTS placed it there");
         assert_eq!(f.resolve_frts_command(&mut ram), None, "read once");
         assert_eq!(f.gsp_startcpu(), Transition::E3, "a start while up changes nothing");
-        assert_eq!(f.observe().frts_offset, Some(0x1f6e0_000));
+        assert_eq!(f.observe().frts_offset, Some(0x1f6e_0000));
         f.enter_halted();
         assert_eq!(f.observe().frts_offset, None, "WPR2 down: nothing is served");
         assert_eq!(f.gsp_startcpu(), Transition::E1, "a start with no DMEM load of its own");

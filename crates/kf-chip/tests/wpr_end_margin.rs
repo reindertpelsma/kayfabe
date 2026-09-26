@@ -71,7 +71,7 @@ fn every_retry_margin_is_served_where_rm_checks_it() {
 fn a_command_fwsec_would_not_honour_derives() {
     let fb = 8192;
     let d = frts_offset_for(fb);
-    for bad in [d + 0x1000, d + MIB, d - 0x800, 0, 0x800, u64::MAX & !0xFFF] {
+    for bad in [d + 0x1000, d + MIB, d - 0x800, 0, 0x800, !0xFFF_u64] {
         assert_eq!(frts_offset_served(fb, Some(bad)), d, "{bad:#x}");
     }
     assert_eq!(frts_offset_served(fb, Some(MIB)), MIB, "the lowest acceptable");
