@@ -323,10 +323,17 @@ item_geekbench_vulkan(){
     nv_icd_only || return 0
     local gbx; gbx=$(ls "$GSET_HOME"/geekbench/geekbench[0-9]* 2>/dev/null | grep -v '\.' | head -1)
     gset_need "${gbx:-/nonexistent/geekbench}" || return 0
-    ( cd "$(dirname "$gbx")" && "$gbx" --gpu Vulkan --no-upload ) > gb.txt 2>&1; rc=$?
-    grep -iE 'score|Vulkan|device|error|fail' gb.txt | tail -30
-    gset_val score "$(grep -iE 'Vulkan Score|GPU Score' gb.txt | grep -oE '[0-9]+' | tail -1)"
-    [ $rc -eq 0 ] && grep -qiE 'Vulkan Score|GPU Score' gb.txt && echo GSET_OK || echo "GSET_FAIL geekbench rc=$rc"
+    # ⊘ Geekbench 7.0.0 free has no --no-upload: it uploads the result (as the V3 app matrix's GB6 row did).
+    ( cd "$(dirname "$gbx")" && "$gbx" --gpu Vulkan ) > gb.txt 2>&1; rc=$?
+    cat gb.txt | tail -60
+    # nvkvm-pv's criterion: the composite, and NO workload scoring 0 (its Path Tracer read 0 before a fix)
+    python3 "$GSET_BIN/gbparse.py" gb.txt | tee gbp.txt
+    grep '^GB_WORKLOAD ' gbp.txt | while read -r _ n v; do gset_val "$n" "$v"; done
+    gset_val score "$(sed -n 's/^GB_SCORE //p' gbp.txt)"
+    gset_dig workloads "$(grep '^GB_WORKLOAD ' gbp.txt | awk '{print $2, ($3+0>0)?"nz":"zero"}' | md5sum | cut -c1-16)"
+    nw=$(grep -c '^GB_WORKLOAD ' gbp.txt); nz=$(grep -cE '^GB_WORKLOAD \S+ 0$' gbp.txt)
+    [ $rc -eq 0 ] && grep -q '^GB_SCORE [1-9]' gbp.txt && [ "$nw" -ge 5 ] && [ "$nz" -eq 0 ] && echo GSET_OK \
+        || echo "GSET_FAIL geekbench rc=$rc score=$(sed -n 's/^GB_SCORE //p' gbp.txt) workloads=$nw zero=$nz"
 }
 # ══ nvkvm-pv H25: Blender Open Data 4.5.0 (benchmark-launcher-cli 3.3.0), Cycles on CUDA ═════════════
 # criterion: the launcher's render_time_no_sync / total per scene (recorded). Here: all scenes complete.

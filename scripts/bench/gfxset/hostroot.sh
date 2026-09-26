@@ -38,7 +38,10 @@ up(){
     mkdir -p "$R/root/tmp" && chmod 1777 "$R/root/tmp"
     chmod 0666 /dev/dri/card* /dev/dri/renderD* 2>/dev/null   # bench box only: see `run`
     mkdir -p "$R/root/var/tmp/gfxset" && chown -R 1000:1000 "$R/root/var/tmp/gfxset"
-    cp -f /etc/resolv.conf "$R/root/etc/resolv.conf" 2>/dev/null
+    # ⊘ the image's /etc/resolv.conf is a symlink into /run/systemd (not bound here) — measured: every lookup
+    #   in the chroot went to [::1]:53 and failed. Replace it (in the overlay only) with the host's file; the
+    #   chroot shares the host's network namespace, so the host's stub resolver is reachable as-is.
+    rm -f "$R/root/etc/resolv.conf" && cp -L /etc/resolv.conf "$R/root/etc/resolv.conf"
     echo "hostroot: UP image=$IMG root=$R/root os=$(. "$R/root/etc/os-release"; echo "$PRETTY_NAME") nvlibs=$(ls "$R/root/usr/lib/x86_64-linux-gnu/" | grep -oE 'libnvidia-glcore\.so\.[0-9.]+' | head -1) hostdrv=$(cat /sys/module/nvidia/version 2>/dev/null)"
 }
 down(){
