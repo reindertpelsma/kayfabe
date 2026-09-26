@@ -242,3 +242,33 @@ fn the_class_sets_are_derived_hopper_has_no_encoder() {
     assert!(classes_for(Family::Hopper).video_encoder.is_empty());
     assert_eq!(classes_for(Family::Hopper).kind_of(0xb8b0), Some(Kind::VideoDecoder));
 }
+
+/// ★ The falcon promote (`_kflcnPromoteContext`, `kernel_falcon.c:184-276`): `entryCount = 0`, the
+/// context buffer's VA + size. `[measured vvid vid7]` refused as "legacy shape" before, which
+/// failed the guest's NVC7B0 alloc with 0x1f. Accepted ONLY in exactly that form for a video engine.
+#[test]
+fn the_falcon_promote_is_accepted_only_for_a_video_engine_in_its_exact_shape() {
+    use kf_abi::transcribed::Nv2080CtrlGpuPromoteCtxParamsHeader as H;
+    let abi = kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).expect("bench driver");
+    let mk = |engine: u32, va: u64, size: u64, count: u32| {
+        let mut p = vec![0u8; H::PARAMS_SIZE];
+        p[0..4].copy_from_slice(&engine.to_le_bytes());
+        p[12..16].copy_from_slice(&0xc1d0_0025u32.to_le_bytes());
+        p[16..20].copy_from_slice(&0x8000_0013u32.to_le_bytes());
+        p[24..32].copy_from_slice(&va.to_le_bytes());
+        p[32..40].copy_from_slice(&size.to_le_bytes());
+        p[40..44].copy_from_slice(&count.to_le_bytes());
+        p
+    };
+    // The measured vid7 request: NVDEC0 (NV2080 0x13), VA 0x1_2000_2000-ish, 4 KiB.
+    let ok = abi.decode_falcon_promote(&mk(0x13, 4_832_010_240, 4096, 0)).expect("the falcon shape");
+    assert_eq!(ok, (0x13, 0xc1d0_0025, 0x8000_0013, 4_832_010_240, 4096));
+    assert!(abi.decode_falcon_promote(&mk(0x1b, 0x1000, 4096, 0)).is_ok(), "NVENC0");
+    // ⊘ GR, a nonzero entry count, or a missing VA/size stay refused.
+    assert!(abi.decode_falcon_promote(&mk(0x01, 0x1000, 4096, 0)).is_err());
+    assert!(abi.decode_falcon_promote(&mk(0x13, 0x1000, 4096, 1)).is_err());
+    assert!(abi.decode_falcon_promote(&mk(0x13, 0, 4096, 0)).is_err());
+    assert!(abi.decode_falcon_promote(&mk(0x13, 0x1000, 0, 0)).is_err());
+    // And the general decoder still refuses the shape.
+    assert!(abi.decode_promote_ctx(&mk(0x13, 0x1000, 4096, 0)).is_err());
+}

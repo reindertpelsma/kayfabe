@@ -701,6 +701,14 @@ impl ChannelPolicy {
                 }
                 let p = match self.abi.decode_promote_ctx(params) {
                     Ok(p) => p,
+                    // ★ v3-video: a video falcon's context promote (`kernel_falcon.c:184-276`) —
+                    // no entries, the buffer's VA only. Satisfied by the twin (host RM promoted its
+                    // own falcon context with the engine object); carried with no entries.
+                    Err(kf_abi::wire::AbiError::PromoteLegacyShape { .. }) if self.abi.decode_falcon_promote(params).is_ok() => {
+                        let (engine_type, chan_client, object, _va, _size) = self.abi.decode_falcon_promote(params).ok()?;
+                        let st = ChanStatement::PromoteCtx { chan_client, object, engine_type, initialize: 0, with_va: 0, entries: 0 };
+                        return self.carry_control_statement(st, cmd, &h);
+                    }
                     Err(e) => return Some(Self::refusal(NV_ERR_INVALID_ARGUMENT, &format!("GPU_PROMOTE_CTX undecodable: {e:?}"), cmd)),
                 };
                 let (mut initialize, mut with_va, mut entries) = (0u32, 0u32, 0u32);
@@ -801,6 +809,11 @@ impl ChannelPolicy {
             }
             _ => return None,
         };
+        self.carry_control_statement(st, cmd, &h)
+    }
+
+    /// Carry a control statement to the sink and build the guest's reply from its answer.
+    fn carry_control_statement(&mut self, st: ChanStatement, cmd: &RpcCommand, h: &kf_abi::view::RpcControlReq) -> Option<Reply> {
         self.carried += 1;
         match (self.sink)(st) {
             ChanAnswer::NotOurs => None,

@@ -1531,6 +1531,36 @@ impl DriverAbiTable {
     ///
     /// The four above.
     pub fn decode_promote_ctx(&self, bytes: &[u8]) -> Result<PromoteCtx, AbiError> {
+        self.decode_promote_ctx_inner(bytes)
+    }
+
+    /// ★ v3-video — the FALCON promote: `_kflcnPromoteContext` (`ogkm-580: kernel_falcon.c:
+    /// 184-276`) sends `{engineType, ChID, hObject = the channel, size = ctxBufferSize,
+    /// virtAddress = the context buffer's VA, entryCount = 0}` for a non-externally-owned VAS —
+    /// the one real producer of the `(virtAddress, size)` shape [`Self::decode_promote_ctx`]
+    /// refuses. Accepted ONLY in exactly that form and ONLY for a video engine (NVENC / NVDEC,
+    /// NV2080 space); returns `(engine_type, hChanClient, hObject, virtAddress, size)`.
+    ///
+    /// # Errors
+    /// [`AbiError::Truncated`], or [`AbiError::PromoteLegacyShape`] for anything else.
+    pub fn decode_falcon_promote(&self, bytes: &[u8]) -> Result<(u32, u32, u32, u64, u64), AbiError> {
+        let need = Nv2080CtrlGpuPromoteCtxParamsHeader::PARAMS_SIZE;
+        if bytes.len() < need {
+            return Err(AbiError::Truncated { c_name: Nv2080CtrlGpuPromoteCtxParamsHeader::C_NAME, need, got: bytes.len() });
+        }
+        let h = Nv2080CtrlGpuPromoteCtxParamsHeader::decode(bytes)?;
+        if h.h_virt_memory == 0
+            && h.virt_address != 0
+            && h.size != 0
+            && h.entry_count == 0
+            && crate::submit::is_video_engine_type(h.engine_type)
+        {
+            return Ok((h.engine_type, h.h_chan_client, h.h_object, h.virt_address, h.size));
+        }
+        Err(AbiError::PromoteLegacyShape { h_virt_memory: h.h_virt_memory, virt_address: h.virt_address, size: h.size })
+    }
+
+    fn decode_promote_ctx_inner(&self, bytes: &[u8]) -> Result<PromoteCtx, AbiError> {
         let need = Nv2080CtrlGpuPromoteCtxParamsHeader::PARAMS_SIZE;
         if bytes.len() < need {
             return Err(AbiError::Truncated {
