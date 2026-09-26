@@ -5043,6 +5043,9 @@ hopper/gh100	dev_vm.h	NV_VIRTUAL_FUNCTION_PRIV_TIMER__SIZE_1	0x2
 hopper/gh100	pri_nv_xal_ep.h	NV_XAL_EP_BAR0_WINDOW	0x10fd40
 hopper/gh100	pri_nv_xal_ep.h	NV_XAL_EP_BAR0_WINDOW_BASE	21:0
 hopper/gh100	pri_nv_xal_ep.h	NV_XAL_EP_BAR0_WINDOW_BASE_SHIFT	0x10
+hopper/gh100	dev_nv_xal_addendum.h	NV_XAL_EP_MEMOP_MAX_OUTSTANDING	0x8c
+hopper/gh100	dev_nv_xal_addendum.h	NV_XAL_EP_MEMOP_TOKEN_MAX_ISSUED	0x4
+hopper/gh100	dev_nv_xal_addendum.h	NV_XAL_EP_MEMOP_TOKEN_SIZE	0x1f
 hopper/gh100	pri_nv_xal_ep.h	NV_XAL_EP_UFLUSH_FB_FLUSH	0x10f800
 hopper/gh100	pri_nv_xal_ep.h	NV_XAL_EP_UFLUSH_FB_FLUSH_COMPLETED	0x10f804
 hopper/gh100	pri_nv_xal_ep.h	NV_XAL_EP_UFLUSH_FB_FLUSH_COMPLETED_STATUS	31:31

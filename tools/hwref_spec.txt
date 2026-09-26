@@ -33,6 +33,7 @@ NV_XAL_EP_BAR0_WINDOW
 # ── cache ops / memops (pre-Hopper UFLUSH; Hopper+ XAL_EP read-triggered memops) ─────────────────
 NV_UFLUSH_
 NV_XAL_EP_UFLUSH_
+NV_XAL_EP_MEMOP_
 # ── the VF register file: usermode page, interrupt tree, fault buffers, MMU invalidate, L2 ops,
 #    BAR1/BAR2 blocks (dev_vm.h) ──────────────────────────────────────────────────────────────────
 NV_VIRTUAL_FUNCTION
