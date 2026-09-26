@@ -49,3 +49,18 @@ FAST_CELL_ARM arm=guest-ram-pin verdict=PASS secs=17 client_ms=2299
 FAST_CELL_ARM arm=bar1-crossing verdict=PASS secs=18 client_ms=1969
 --atomics-probe              PASS      17s   17s
 FAST_CELL_ARM arm=atomics-probe verdict=PASS secs=17 client_ms=2050
+--pce-mask-probe             PASS      18s   18s
+FAST_CELL_ARM arm=pce-mask-probe verdict=PASS secs=18 client_ms=1699
+--gpga-reserve-probe         PASS      44s   44s
+FAST_CELL_ARM arm=gpga-reserve-probe verdict=PASS secs=44 client_ms=28950
+--map-stress                 PASS      19s   19s
+FAST_CELL_ARM arm=map-stress verdict=PASS secs=19 client_ms=3470
+--concurrent-fuzz            PASS      26s   26s
+FAST_CELL_ARM arm=concurrent-fuzz verdict=PASS secs=26 client_ms=9890
+--cross-client-leak          PASS      18s   18s
+FAST_CELL_ARM arm=cross-client-leak verdict=PASS secs=18 client_ms=2639
+--rpc-mixed-allocs           PASS      18s   18s
+FAST_CELL_ARM arm=rpc-mixed-allocs verdict=PASS secs=18 client_ms=2780
+
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+FAST_SUITE_RC=0

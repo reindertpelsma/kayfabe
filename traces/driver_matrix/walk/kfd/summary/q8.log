@@ -13,3 +13,13 @@ CL_ROW mode=guest rung=cup8bench rep=1 verdict=PASS boot_rc=0 graded=[GUEST_BENC
 CE rv=0xabcd1234 want=0xabcd1234 -> PASS
 CUP2_RC=0
      76 kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+FAT 570.148.08 [2026-09-26T21:42:35+00:00] fat 570.148.08: STAGED ✔ /workspace/bench/guest-570.148.08.qcow2
+LADDER host=580.159.04 guest=570.148.08 rev=ee35ca4a 0/4
+CL_ROW mode=guest rung=cup2 rep=1 verdict=FAIL boot_rc=0 graded=[]  trapped=4638
+CL_ROW mode=guest rung=cup3 rep=1 verdict=FAIL boot_rc=0 graded=[CUP3_VAL=NO_KERNEL_LINE]  trapped=4638
+CL_ROW mode=guest rung=cup8 rep=1 verdict=FAIL boot_rc=0 graded=[CUP8_BAD=NO_RESULT_LINE CUP8_MAXERR=NO_RESULT_LINE] CUP8_WALL_S=9 trapped=4638
+CL_ROW mode=guest rung=cup8bench rep=1 verdict=FAIL boot_rc=0 graded=[GUEST_BENCH_TOTAL_BAD=NO_LINE GUEST_BENCH_VERDICT=] BENCH_measure_WALL_S=9 trapped=4638
+FAIL cuInit(0) -> unknown error (999)
+CUP2_RC=1
+     62 kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+FAT 565.57.01 [2026-09-26T21:52:23+00:00] fat 565.57.01: STAGED ✔ /workspace/bench/guest-565.57.01.qcow2
