@@ -193,6 +193,24 @@ guest-driver=580.105.08`). ★ The VGX pair alone could not catch that: every 58
 ignored today) and the queue geometry come first, so a declared version on the wrong side of the
 610 element break fails before fn 1.
 
+★ **RULED and BUILT (2026-09-26): re-selection at fn 1.** `kf_rm::ReselectAtFn1` wraps the served
+chain; kf3 builds the chain through a recipe (`device.rs`) so it can be rebuilt for another table.
+When the device's version was **defaulted** (no `guest-driver=`), fn 1 carries the guest's own
+version, and the pair's pre-fn-1 surface is identical (`kf_abi::versions::pre_fn1_surface_differs`:
+element and init-args shapes, element size maximum, VBIOS path, the numbers of fns 1/64/72/73 and
+`GSP_INIT_DONE`, and the fn-1 / message-header layouts — all read from the matrix), the chain is
+rebuilt for the guest's version before fn 1 is answered. A **declared** version is never
+overridden; a pair whose surface differs (e.g. 580.x → 595.84: nine-field init args; → 610: MCTP
+elements) or an unmeasured reported version is refused by name. Measured pairs, from the matrix:
+every 580.x ↔ 580.159.04, 575.57.08 and 570.148.08 share the surface; 595.84 and 610.x do not.
+
+⚠ 535–550 publish a SIX-field `MESSAGE_QUEUE_INIT_ARGUMENTS` (two lockless-queue offsets at +32/+40).
+The four fields kf-gsp reads sit at the same offsets, and the Linux client writes the two extra
+ones as 0 — `bIsTaskIsrQueueRequired` defaults to `NV_FALSE` (`ogkm-550.54.14:
+src/nvidia/generated/g_kernel_gsp_nvoc.c:271`, consumed at `kernel_gsp.c:1979, 3394-3403`), i.e.
+no second (ISR) RPC queue pair exists — so the table's four-field reading is right there. A guest
+that ever wrote non-zero lockless offsets would need that queue pair served (not built).
+
 ⊘ **Detecting the version from the guest's firmware is not structurally available.** `[measured
 2026-09-26, gsp_ga10x.bin of 580.105.08]` the version string lives in the firmware container's
 `.fwversion` section (11 bytes, `580.105.08\0`), which the guest's CPU-RM checks and never hands to
@@ -273,37 +291,37 @@ numbering is itself per version (lower at 535/545) — translated by NAME throug
 | 590.48.01 | `KGR_GET_INFO` (3776), MSENC caps table grows to 6 | 0.5 day |
 | 595.84 | + nine-field init args (the element header size cross-check becomes live), `GPU_GET_NAME_STRING` 68 | 0.5 day |
 
-### 8.2 Decisions I need
+### 8.2 Decisions — RULED 2026-09-26 (coordinator, under the owner's standing rule: best-bet experiments on sub-branches; anything security-policy is flagged for the owner before merge)
 
-1. **The grader is a 580-only RM client.** `kayfabe-rm-ladder` (frozen tree) refuses any guest
-   driver outside [580.65.06, 581) at rung R2 and carries 580 layouts for `GET_CLASSLIST_V2`,
-   `NVOS46`, `NVOS47`, `GPFIFO_SCHEDULE`, UVM. So the **thin guest cannot grade a 570/575/590/595/610
-   guest**, whatever kayfabe does. The grader and kf-host are the same kind of program (an RM
-   client that must speak one driver's ABI); the matrix answers both. Proposal: do the grader's
-   planned "step 2" (lift `rm.rs` onto kf-host) together with making kf-host version-aware for
-   the host axis — one mechanism for both clients. Until then non-580 guests are graded by the
-   fat-guest CUDA ladder only.
-2. **610: an RPC reply larger than one queue element.** `KGR_GET_GLOBAL_SM_ORDER` is 73 760 bytes
-   at 610 — above the 64 KiB element maximum — so the GSP must answer with continuation records.
-   kf-gsp reassembles guest→GSP continuations but has never *sent* one: a new (moderate) emulation
-   piece in the queue writer.
-3. **Host drivers below 580.65.06 do not expose `MC_GET_INTR_CATEGORY_SUBTREE_MAP`** (and 535/545
-   not `MC_GET_STATIC_INTR_TABLE`), which kf3 copies into the guest's interrupt table. No layout
-   fix exists; the fact needs another source (authored per family from ogkm, or derived from the
-   host's interrupt table) — which way is a design call.
-4. **The walk kernel's PTX ISA is 8.8 (NVRTC 12.9)** — every host driver below 575 refuses to JIT
-   it, and realize refuses without the walker. Rebuilding it with NVRTC 12.2 (ISA 8.2, drivers
-   ≥ 535) changes the shipped kernel for every host; it needs gates 7–9 re-run. OK to do?
-5. **535/545 have no reviewed capability allowlist in this port.** nvproxy has 535.104.05 and
-   545.23.06 blocks; porting them is a security-policy review, not a layout job.
-6. **Default when `guest-driver=` is unset.** Today: the host's version, and the fn-1 check refuses
-   a guest that differs. A friendlier default is to re-select at fn 1 for pairs whose pre-fn-1
-   surface is identical (the matrix can state it per pair) — more code in the table plumbing,
-   fewer refused VMs after a guest-side driver update.
-7. **615.71.09 (beyond the asked range)** changes the GSP element again (an encryption union after
-   `mctpMagic`/`mctpPayloadSize`) — refused by name today (`NoEncoding`).
+1. **The grader is a 580-only RM client** — `kayfabe-rm-ladder` refuses any guest driver outside
+   [580.65.06, 581) at rung R2 and carries 580 layouts (`GET_CLASSLIST_V2`, `NVOS46`, `NVOS47`,
+   `GPFIFO_SCHEDULE`, UVM), so the thin guest cannot grade a 570/575/590/595/610 guest.
+   **RULED: don't block on it.** Non-580 guests are graded by the fat-guest CUDA ladder
+   (cup2/cup3/cup8) plus a few app samples. The grader lift (`rm.rs` onto a version-aware
+   kf-host — one mechanism for both RM clients) is **its own task after the first guest versions
+   land; not started here.**
+2. **610: an RPC reply larger than one queue element** (`KGR_GET_GLOBAL_SM_ORDER` is 73 760 bytes
+   at 610, above the 64 KiB element maximum). **RULED: implement when the walk reaches 610** — the
+   queue writer mirrors the continuation reassembly kf-gsp already has; the split/reassembly
+   round trip gets a unit test.
+3. **Hosts below 580.65.06 lack `MC_GET_INTR_CATEGORY_SUBTREE_MAP`** (535/545 also
+   `MC_GET_STATIC_INTR_TABLE`). **RULED: derive from the host's own interrupt table where the host
+   exposes it; where it does not, author per family from ogkm source** (owner principle: per-arch
+   values from source). Each cell of the matrix records which source it used.
+4. **The walk kernel's PTX ISA 8.8** (host drivers < 575 cannot JIT it). **RULED: rebuild with
+   NVRTC 12.2 (ISA 8.2) on this branch**, keep `.target` low enough that newer drivers JIT it
+   forward (Blackwell JITs to sm_120 — verify on at least one Ada or Blackwell box as well as
+   GA10x), re-run gates 7–9 and the 30-arm suite on 580.159.04. If a feature the kernel uses
+   needs ISA > 8.2: stop and report which.
+5. **535/545 capability allowlist.** **RULED: port nvproxy's 535.104.05 / 545.23.06 blocks as a
+   separate, clearly marked commit**, list every entry that differs from the 580 allowlist here —
+   ⊘ **a security-policy change: explicit owner review before it merges.**
+6. **Default `guest-driver=`.** **RULED: re-select at fn 1** for (declared, reported) pairs whose
+   pre-fn-1 surface is identical — the matrix states it per pair — and refuse by name otherwise.
+7. **615.71.09** (a third GSP element shape): **RULED: out of the asked range; stays refused by
+   name** (`NoEncoding`).
 
 ### 8.3 The host walk
 
-Not started. kf-host still carries the pinned interval; §2.2 is its work list (H1–H9), with the
-decision items 3 and 4 above as its blockers below 575 / 580.65.06.
+Not started. kf-host still carries the pinned interval; §2.2 is its work list (H1–H9); rulings 3
+and 4 above unblock it below 580.65.06 / 575.

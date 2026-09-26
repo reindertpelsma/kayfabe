@@ -408,36 +408,53 @@ impl Device {
         // are P5.
         // ⚠ The guest OS is DECLARED, never sniffed (it is a `#define` in the guest driver's build,
         // invisible on the wire); this device answers as a Linux guest.
-        let objects = kf_rm::rmrpc::ObjectPolicy::over(
-            table,
-            kf_abi::GuestOs::Linux,
-            Box::new(kf_rm::rmrpc::GraphObjects::new(family)),
-            kf_rm::rmrpc::ReasmLimits::default(),
-        );
         let chain_logs = kf_rm::ChainLogs::default();
         let census = kf_rm::census::ControlCensusLog::new();
-        let policy = kf_rm::served_policy(
-            board,
-            host.clone(),
-            *table,
-            chain_logs.clone(),
-            census.clone(),
-            kf_rm::ObjectLinks {
-                objects: Some(Box::new(objects)),
-                // ★ P4: fn 70 and the page-directory statements go to the VA thread's inbox;
-                // their replies are held until it has settled them.
-                memory: Some(kf_rm::MemoryLink {
-                    sink: {
-                        let inbox = inbox.clone();
-                        std::sync::Arc::new(move |st| inbox.push(st))
+        // ★ The chain is built through a RECIPE (`V3_DRIVER_MATRIX.md` §4.2): every table-dependent
+        // link is constructed from the table handed in, so `ReselectAtFn1` can rebuild it for the
+        // guest's own version at fn 1 when the version was defaulted. The shared state (logs,
+        // census, the memory inbox, the channel plane) is the SAME across a rebuild — only the
+        // links that read layouts are new.
+        let build = {
+            let (board, host, chain_logs, census, inbox) =
+                (board.clone(), host.clone(), chain_logs.clone(), census.clone(), inbox.clone());
+            Box::new(move |t: kf_abi::versions::DriverAbiTable| {
+                let objects = kf_rm::rmrpc::ObjectPolicy::over(
+                    &t,
+                    kf_abi::GuestOs::Linux,
+                    Box::new(kf_rm::rmrpc::GraphObjects::new(family)),
+                    kf_rm::rmrpc::ReasmLimits::default(),
+                );
+                kf_rm::served_policy(
+                    board.clone(),
+                    host.clone(),
+                    t,
+                    chain_logs.clone(),
+                    census.clone(),
+                    kf_rm::ObjectLinks {
+                        objects: Some(Box::new(objects)),
+                        // ★ P4: fn 70 and the page-directory statements go to the VA thread's inbox;
+                        // their replies are held until it has settled them.
+                        memory: Some(kf_rm::MemoryLink {
+                            sink: {
+                                let inbox = inbox.clone();
+                                std::sync::Arc::new(move |st| inbox.push(st))
+                            },
+                            guest_os: kf_abi::GuestOs::Linux,
+                        }),
+                        // ★ P5: channel allocs, GPFIFO_SCHEDULE, the token and frees reach the plane,
+                        // on the drainer; each answer IS the plane's act.
+                        channels: Some(std::sync::Arc::new(move |st| chans.statement(st))),
                     },
-                    guest_os: kf_abi::GuestOs::Linux,
-                }),
-                // ★ P5: channel allocs, GPFIFO_SCHEDULE, the token and frees reach the plane,
-                // on the drainer; each answer IS the plane's act.
-                channels: Some(std::sync::Arc::new(move |st| chans.statement(st))),
-            },
-        );
+                )
+            })
+        };
+        let source = if cfg.guest_driver.is_some() {
+            kf_rm::GuestDriverSource::Declared
+        } else {
+            kf_rm::GuestDriverSource::Defaulted
+        };
+        let policy: Box<dyn kf_gsp::CommandPolicy> = Box::new(kf_rm::ReselectAtFn1::new(*table, source, build));
         let model: std::sync::Arc<dyn GspModel> =
             std::sync::Arc::from(family.gsp_model(implementation, cfg.fb_mb).map_err(|e| format!("{e:?}"))?);
         let store_model = model.clone();

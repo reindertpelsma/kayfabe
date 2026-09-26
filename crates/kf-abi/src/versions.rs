@@ -478,6 +478,60 @@ pub fn capability_tables() -> impl Iterator<Item = &'static CapabilityTable> {
     CAPS_ROWS.iter().map(|r| r.caps)
 }
 
+/// ★★ The facts a guest has CONSUMED by the time it sends fn 1 (`SET_GUEST_SYSTEM_INFO`), as
+/// two driver versions state them — the precondition for re-selecting a device's table at fn 1
+/// (`docs/design/V3_DRIVER_MATRIX.md` §4.2, owner ruling 6, 2026-09-26).
+///
+/// Before fn 1 is answered the guest has: booted the GSP through the queue framing
+/// (`GSP_MSG_QUEUE_ELEMENT`, `MESSAGE_QUEUE_INIT_ARGUMENTS`, the element size maximum), read
+/// the synthetic VBIOS, and sent `GSP_SET_SYSTEM_INFO` / `SET_REGISTRY` and fn 1 itself by
+/// NUMBER, fn 1's body in the `rpc_set_guest_system_info_v` layout, and it waits for
+/// `GSP_INIT_DONE` by number. Nothing else in the table has been used yet. Two versions that
+/// agree on all of it can swap tables at fn 1 without the guest having seen the difference.
+///
+/// Returns `None` when they agree, or the first fact that differs, by name.
+#[must_use]
+pub fn pre_fn1_surface_differs(a: &DriverAbiTable, b: &DriverAbiTable) -> Option<&'static str> {
+    if a.gsp_element_wire() != b.gsp_element_wire() {
+        return Some("GSP_MSG_QUEUE_ELEMENT");
+    }
+    if a.gsp_init_args_wire() != b.gsp_init_args_wire() {
+        return Some("MESSAGE_QUEUE_INIT_ARGUMENTS");
+    }
+    if a.gsp_element_size_max() != b.gsp_element_size_max() {
+        return Some("GSP_MSG_QUEUE_ELEMENT_SIZE_MAX");
+    }
+    if a.vbios_wire() != b.vbios_wire() {
+        return Some("the synthetic VBIOS parse path");
+    }
+    use crate::generated::matrix::{ALL_STRUCTS, ALL_VALUES};
+    for name in [
+        "rpc_functions:NV_VGPU_MSG_FUNCTION_SET_GUEST_SYSTEM_INFO",
+        "rpc_functions:NV_VGPU_MSG_FUNCTION_SET_GUEST_SYSTEM_INFO_EXT",
+        "rpc_functions:NV_VGPU_MSG_FUNCTION_GSP_SET_SYSTEM_INFO",
+        "rpc_functions:NV_VGPU_MSG_FUNCTION_SET_REGISTRY",
+        "rpc_events:NV_VGPU_MSG_EVENT_GSP_INIT_DONE",
+    ] {
+        let Some(runs) = ALL_VALUES.iter().find(|r| r.name == name) else {
+            return Some(name);
+        };
+        match (runs.at(a.version), runs.at(b.version)) {
+            (Ok(x), Ok(y)) if x == y && x.is_some() => {}
+            _ => return Some(runs.name),
+        }
+    }
+    for name in ["rpc_set_guest_system_info_v", "rpc_message_header_v"] {
+        let Some(runs) = ALL_STRUCTS.iter().find(|r| r.name == name) else {
+            return Some(name);
+        };
+        match (runs.at(a.version), runs.at(b.version)) {
+            (Ok(Some(x)), Ok(Some(y))) if x == y => {}
+            _ => return Some(runs.name),
+        }
+    }
+    None
+}
+
 /// The driver version this project's bench actually runs
 /// (`docs/reference/rm_semantics_measured.md` §0), on both axes by default.
 pub const BENCH_DRIVER: DriverVersion = DriverVersion {

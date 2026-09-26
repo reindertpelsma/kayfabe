@@ -180,6 +180,154 @@ pub fn served_policy(
     ))
 }
 
+/// Where the device's guest driver version came from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GuestDriverSource {
+    /// The operator declared it (`guest-driver=`): a guest reporting another version is refused
+    /// by name at fn 1 — the declaration is checked, never silently overridden.
+    Declared,
+    /// Defaulted to the host's version: at fn 1 the device RE-SELECTS to the guest's own
+    /// version when the pre-fn-1 surface of the pair is identical
+    /// (`kf_abi::versions::pre_fn1_surface_differs`), and refuses by name otherwise.
+    Defaulted,
+}
+
+/// ★★ The served chain, re-selectable at fn 1 (`docs/design/V3_DRIVER_MATRIX.md` §4.2, owner
+/// ruling 6, 2026-09-26).
+///
+/// A device must pick a table at realize, before the guest has said anything; the guest first
+/// states its own driver version in `SET_GUEST_SYSTEM_INFO`. For a device whose version was
+/// DEFAULTED, this wrapper rebuilds the whole chain for the guest's own version at that point —
+/// provided everything the guest consumed before fn 1 is identical between the two (framing,
+/// init args, VBIOS path, the pre-fn-1 RPC numbers and fn 1's body). Anything else is refused by
+/// name by the chain's own fn-1 check, exactly as for a declared version.
+///
+/// ⊘ The rebuild discards only chain state, and there is none yet at fn 1: RM allocates its
+/// first object after `GET_GSP_STATIC_INFO`, which follows fn 1. A later fn 1 (a GSP re-init)
+/// with the same version is a no-op; with a different version it is a new driver load.
+pub struct ReselectAtFn1 {
+    provisional: kf_abi::versions::DriverAbiTable,
+    current: kf_abi::DriverVersion,
+    source: GuestDriverSource,
+    build: Box<dyn Fn(kf_abi::versions::DriverAbiTable) -> Box<dyn kf_gsp::CommandPolicy> + Send>,
+    inner: Box<dyn kf_gsp::CommandPolicy>,
+}
+
+impl ReselectAtFn1 {
+    /// Build the provisional chain now; keep the recipe for a re-selection.
+    pub fn new(
+        provisional: kf_abi::versions::DriverAbiTable,
+        source: GuestDriverSource,
+        build: Box<dyn Fn(kf_abi::versions::DriverAbiTable) -> Box<dyn kf_gsp::CommandPolicy> + Send>,
+    ) -> ReselectAtFn1 {
+        let inner = build(provisional);
+        ReselectAtFn1 { provisional, current: provisional.driver_version(), source, build, inner }
+    }
+
+    /// The version the chain currently answers as.
+    #[must_use]
+    pub fn current(&self) -> kf_abi::DriverVersion {
+        self.current
+    }
+
+    /// Decide at fn 1. Returns what happened, for the log and for tests.
+    pub fn on_fn1(&mut self, payload: &[u8]) -> Reselection {
+        let Ok(said) = kf_abi::guestsysinfo::decode_guest_driver_version(payload) else {
+            return Reselection::Kept;
+        };
+        let Some(reported) = kf_abi::DriverVersion::parse(said) else {
+            return Reselection::Kept;
+        };
+        if reported == self.current {
+            return Reselection::Kept;
+        }
+        if self.source == GuestDriverSource::Declared {
+            return Reselection::RefusedDeclared { reported };
+        }
+        let table = match kf_abi::versions::table_for(reported) {
+            Ok(t) => *t,
+            Err(e) => return Reselection::RefusedUnserved { reported, why: e.to_string() },
+        };
+        if let Some(what) = kf_abi::versions::pre_fn1_surface_differs(&self.provisional, &table) {
+            return Reselection::RefusedSurface { reported, what };
+        }
+        let from = self.current;
+        self.inner = (self.build)(table);
+        self.current = reported;
+        Reselection::Reselected { from, to: reported }
+    }
+}
+
+/// The outcome of [`ReselectAtFn1::on_fn1`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Reselection {
+    /// The guest is the version the chain already answers as (or said nothing parseable — the
+    /// chain's own fn-1 check then refuses by name).
+    Kept,
+    /// Re-selected: the pre-fn-1 surface of the pair is identical.
+    Reselected {
+        /// The provisional (defaulted) version.
+        from: kf_abi::DriverVersion,
+        /// The guest's own version, now served.
+        to: kf_abi::DriverVersion,
+    },
+    /// The version was declared; the declaration stands and the chain refuses the guest.
+    RefusedDeclared {
+        /// What the guest said it is.
+        reported: kf_abi::DriverVersion,
+    },
+    /// The guest's version has no table (unmeasured, or no capability row).
+    RefusedUnserved {
+        /// What the guest said it is.
+        reported: kf_abi::DriverVersion,
+        /// Why there is no table.
+        why: String,
+    },
+    /// The guest's version differs from the provisional one in a fact it already consumed.
+    RefusedSurface {
+        /// What the guest said it is.
+        reported: kf_abi::DriverVersion,
+        /// The first differing pre-fn-1 fact.
+        what: &'static str,
+    },
+}
+
+impl kf_gsp::CommandPolicy for ReselectAtFn1 {
+    fn respond(&mut self, cmd: &kf_gsp::RpcCommand) -> Option<kf_gsp::Reply> {
+        if cmd.function == kf_gsp::RpcFunction::SetGuestSystemInfo {
+            match self.on_fn1(&cmd.payload) {
+                Reselection::Kept => {}
+                Reselection::Reselected { from, to } => eprintln!(
+                    "kf-rm: guest driver RE-SELECTED at fn 1: {from} (defaulted) -> {to} (the guest's \
+                     own; pre-fn-1 surface identical)"
+                ),
+                Reselection::RefusedDeclared { reported } => eprintln!(
+                    "kf-rm: the guest says it is driver {reported}, the device was DECLARED {}; \
+                     not re-selecting a declared version",
+                    self.current
+                ),
+                Reselection::RefusedUnserved { reported, why } => eprintln!(
+                    "kf-rm: the guest says it is driver {reported}; no table to re-select: {why}"
+                ),
+                Reselection::RefusedSurface { reported, what } => eprintln!(
+                    "kf-rm: the guest says it is driver {reported}; cannot re-select from {}: \
+                     {what} differs and the guest already consumed it",
+                    self.current
+                ),
+            }
+        }
+        self.inner.respond(cmd)
+    }
+
+    fn holds_for_refresh(&self, cmd: &kf_gsp::RpcCommand) -> bool {
+        self.inner.holds_for_refresh(cmd)
+    }
+
+    fn defers(&mut self, cmd: &kf_gsp::RpcCommand) -> Option<kf_gsp::Deferred> {
+        self.inner.defers(cmd)
+    }
+}
+
 /// The chain [`served_policy`] wraps — exposed so a test can drive the links **without** the
 /// guard and see the difference the guard makes. Nothing in the port calls this.
 ///
