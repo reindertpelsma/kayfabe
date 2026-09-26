@@ -1,0 +1,126 @@
+=== boot_capture tag=pr_adcarry at 2026-09-26T12:52:47+00:00 ===
+=== source revision: 6a985dbb ===
+=== qemu binary: -rwxr-xr-x 1 root root 96551184 Sep 26 12:20 /workspace/bench/kf3-bins/303d0929/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: kayfabe-rev:6a985dbb6f708214b266bc5e117cd36770781dc0 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /root/kayfabe/scripts/bench/boot_nvkvm.sh  sha256=7454bf433c1d9212
+    used: /root/kayfabe/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Sat Sep 26 12:52:53 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3090        Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /   8192MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Sep 26 12:52 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Sep 26 12:52 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Sep 26 12:52 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Sep 26 12:52 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Sep 26 12:52 .
+drwxr-xr-x 18 root root   4000 Sep 26 12:52 ..
+cr--------  1 root root 240, 1 Sep 26 12:52 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Sep 26 12:52 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /root/kayfabe/scripts/bench/probe_hook.sh at 2026-09-26T12:52:54+00:00 ===
+PROBE_HOOK_START 2026-09-26T12:52:54+00:00 tag=pr_adcarry rev=6a985dbb
+=== probe atomics_probe md5=8f61bcda03e8497b7d46c4514a25de78
+=== run atomics_probe devmem 2026-09-26T12:52:54+00:00
+CHECK devmem ok bad=0 counter=4194304 want=4194304 first_bad=-1(0 vs 0)
+PROBE_RC=0
+--- guest NVRM Xid lines new in this run:
+--- HOST Xid lines new in this run:
+=== run atomics_probe write 2026-09-26T12:52:59+00:00
+CHECK write ok bad=0 counter=4194304 want=4194304 first_bad=-1(0 vs 0)
+PROBE_RC=0
+--- guest NVRM Xid lines new in this run:
+--- HOST Xid lines new in this run:
+=== run atomics_probe accessedby 2026-09-26T12:53:02+00:00
+CHECK accessedby ok bad=0 counter=4194304 want=4194304 first_bad=-1(0 vs 0)
+PROBE_RC=0
+--- guest NVRM Xid lines new in this run:
+--- HOST Xid lines new in this run:
+=== run atomics_probe accessedby_sys 2026-09-26T12:53:05+00:00
+CHECK accessedby_sys FAIL cudaDeviceSynchronize() -> 719 (unspecified launch failure)
+PROBE_RC=2
+--- guest NVRM Xid lines new in this run:
+--- HOST Xid lines new in this run:
+[ 2844.358856] NVRM: Xid (PCI:0000:00:07): 31, pid=227130, name=qemu-system-x86, channel 0x0000001e, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC2 GPCCLIENT_T1_3 faulted @ 0x799e_7e400000. Fault is of type FAULT_INFO_TYPE_ATOMIC_VIOLATION ACCESS_TYPE_VIRT_ATOMIC
+=== run atomics_probe prefcpu 2026-09-26T12:53:09+00:00
+CHECK prefcpu ok bad=0 counter=4194304 want=4194304 first_bad=-1(0 vs 0)
+PROBE_RC=0
+--- guest NVRM Xid lines new in this run:
+--- HOST Xid lines new in this run:
+=== run atomics_probe prefetchcpu 2026-09-26T12:53:12+00:00
+CHECK prefetchcpu ok bad=0 counter=4194304 want=4194304 first_bad=-1(0 vs 0)
+PROBE_RC=0
+--- guest NVRM Xid lines new in this run:
+--- HOST Xid lines new in this run:
+=== probe readmostly_probe md5=02db734d6d9facece6b152b46961538f
+=== run readmostly_probe reprefetch 2026-09-26T12:53:15+00:00
+CHECK reprefetch ok bad=0
+PROBE_RC=0
+--- guest NVRM Xid lines new in this run:
+--- HOST Xid lines new in this run:
+=== run readmostly_probe gpuwrite 2026-09-26T12:53:19+00:00
+CHECK gpuwrite FAIL cudaDeviceSynchronize() -> 719 (unspecified launch failure)
+PROBE_RC=2
+--- guest NVRM Xid lines new in this run:
+--- HOST Xid lines new in this run:
+[ 2857.693989] NVRM: Xid (PCI:0000:00:07): 31, pid=227130, name=qemu-system-x86, channel 0x0000001e, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC2 GPCCLIENT_T1_11 faulted @ 0x76dc_ea026000. Fault is of type FAULT_RO_VIOLATION ACCESS_TYPE_VIRT_WRITE
+=== run readmostly_probe downgrade 2026-09-26T12:53:22+00:00
+CHECK downgrade FAIL cudaDeviceSynchronize() -> 719 (unspecified launch failure)
+PROBE_RC=2
+--- guest NVRM Xid lines new in this run:
+--- HOST Xid lines new in this run:
+[ 2860.681593] NVRM: Xid (PCI:0000:00:07): 31, pid=227130, name=qemu-system-x86, channel 0x0000001e, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC2 GPCCLIENT_T1_1 faulted @ 0x7c0c_de015000. Fault is of type FAULT_RO_VIOLATION ACCESS_TYPE_VIRT_WRITE
+=== run readmostly_probe fault 2026-09-26T12:53:25+00:00
+CHECK fault FAIL gpu_sum(&h) -> 719 (unspecified launch failure)
+PROBE_RC=2
+--- guest NVRM Xid lines new in this run:
+--- HOST Xid lines new in this run:
+[ 2864.343078] NVRM: Xid (PCI:0000:00:07): 31, pid=227130, name=qemu-system-x86, channel 0x0000001e, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC2 GPCCLIENT_T1_1 faulted @ 0x7fcd_c2015000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+=== probe systemWideAtomics md5=4ffc087bddebf41a877e593d1272a922
+=== run systemWideAtomics (no args) 2026-09-26T12:53:29+00:00
+CUDA error at systemWideAtomics.cu:328 code=719(cudaErrorLaunchFailure) "cudaDeviceSynchronize()" 
+GPU Device 0: "Ampere" with compute capability 8.6
+
+CAN access pageable memory
+PROBE_RC=1
+--- guest NVRM Xid lines new in this run:
+--- HOST Xid lines new in this run:
+[ 2868.072729] NVRM: Xid (PCI:0000:00:07): 31, pid=227130, name=qemu-system-x86, channel 0x0000001e, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC2 GPCCLIENT_T1_0 faulted @ 0x56e0_862e1000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_ATOMIC
+PROBE_HOOK_DONE 2026-09-26T12:53:32+00:00
+HOOK_RC=0
+=== GUEST dmesg AFTER the workload (phase 3b captured 28 lines BEFORE it) ===
+GUEST_DMESG_AFTER_LINES=293
+GUEST_DMESG_AFTER_NVRM=289
+GUEST_DMESG_WORKLOAD_DELTA=265
+=== HOST dmesg delta for this boot (watermark 859 → 865) ===
+HOST_DMESG_LINES=6
+HOST_DMESG_NVRM=6
+HOST_DMESG_XID=5

@@ -1,0 +1,91 @@
+PRE_START 2026-09-26T12:07:47+00:00
+head=6a985dbb
+=== kf3_bins 2026-09-26T12:19:47+00:00
+KF3_283a5304=0
+KF3_BUILT /workspace/bench/kf3-bins/283a5304/qemu-system-x86_64 rev=283a5304 mtime=2026-09-26 12:20:20.054182930 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+KF3_303d0929=0
+KF3_BUILT /workspace/bench/kf3-bins/303d0929/qemu-system-x86_64 rev=303d0929 mtime=2026-09-26 12:20:52.169977492 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+back at 6a985dbb
+KF3_HEAD=0
+KF3_BUILT /workspace/bench/kf3-bins/6a985dbb/qemu-system-x86_64 rev=6a985dbb mtime=2026-09-26 12:21:16.646819465 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+283a5304
+303d0929
+6a985dbb
+=== cargo_test_head 2026-09-26T12:21:16+00:00
+CARGO_TEST_RC=101
+CARGO_TESTS passed=5141 failed=84 ignored=3
+=== cargo_test_base 2026-09-26T12:26:27+00:00
+BASE_RC=101
+BASE_TESTS passed=5130 failed=84 ignored=3
+fail_base=84 fail_head=84 head_only=1 base_only=1
+test spawn_unsafe::tests::a_child_runs_from_an_image_with_no_path_at_all ... FAILED
+=== wait_nvcc 2026-09-26T12:32:26+00:00
+=== walk_suite 2026-09-26T12:32:57+00:00
+WALK_CHECK_RC=0
+KF_TESTS_RC=0
+      seed 0xb0b0: 150 steps, 1331 runs compared, verdicts failed=294 held=30
+==== 72 passed, 0 failed ====
+pass correctness/owning_big_pte_carries_its_permissions
+pass diff/permission_edit_remaps
+pass diff/bad_key_perm_is_refused
+=== gates 2026-09-26T12:35:52+00:00
+V3_GATES_SUMMARY pass=9 fail=0
+CHECK ver2_gpu_diff_is_the_model_diff PASS 160 walks, 3377 runs compared, 0 mismatching entries, verdicts failed=829 held=73 permission edits=430
+CHECK ver2_settled_slots_are_quiet_and_closed PASS quiet=true closed=true
+CHECK ver3_gpu_diff_is_the_model_diff PASS 160 walks, 3395 runs compared, 0 mismatching entries, verdicts failed=817 held=91 permission edits=444
+CHECK ver3_settled_slots_are_quiet_and_closed PASS quiet=true closed=true
+CHECK ver2_keyall_gpu_diff_is_the_model_diff PASS 160 walks, 3558 runs compared, 0 mismatching entries, verdicts failed=843 held=76 permission edits=448
+CHECK ver2_keyall_settled_slots_are_quiet_and_closed PASS quiet=true closed=true
+CHECK ver2_growth_gpu_diff_is_the_model_diff PASS 160 walks, 3377 runs compared, 0 mismatching entries, verdicts failed=829 held=73 permission edits=430
+CHECK ver2_growth_settled_slots_are_quiet_and_closed PASS quiet=true closed=true
+=== probes_build 2026-09-26T12:36:26+00:00
+NVCC_atomics_probe=0
+NVCC_readmostly_probe=0
+SWA_DIR=/workspace/apps/srcs/cuda-samples/Samples/0_Introduction/systemWideAtomics
+SWA_BUILD=0
+total 2988
+drwxr-xr-x 2 root root    4096 Sep 26 12:36 .
+drwxr-xr-x 8 root root    4096 Sep 26 12:36 ..
+-rwxr-xr-x 1 root root 1011680 Sep 26 12:36 atomics_probe
+-rw-r--r-- 1 root root    4345 Sep 26 12:36 atomics_probe.cu
+-rwxr-xr-x 1 root root 1007520 Sep 26 12:36 readmostly_probe
+-rw-r--r-- 1 root root    4760 Sep 26 12:36 readmostly_probe.cu
+-rwxr-xr-x 1 root root 1013864 Sep 26 12:36 systemWideAtomics
+=== host_probes 2026-09-26T12:36:31+00:00
+--- host atomics_probe devmem
+CHECK devmem ok bad=0 counter=4194304 want=4194304 first_bad=-1(0 vs 0)
+RC=0
+--- host atomics_probe write
+CHECK write ok bad=0 counter=4194304 want=4194304 first_bad=-1(0 vs 0)
+RC=0
+--- host atomics_probe accessedby
+CHECK accessedby ok bad=0 counter=4194304 want=4194304 first_bad=-1(0 vs 0)
+RC=0
+--- host atomics_probe accessedby_sys
+CHECK accessedby_sys ok bad=0 counter=4194304 want=4194304 first_bad=-1(0 vs 0)
+RC=0
+--- host atomics_probe prefcpu
+CHECK prefcpu ok bad=0 counter=4194304 want=4194304 first_bad=-1(0 vs 0)
+RC=0
+--- host atomics_probe prefetchcpu
+CHECK prefetchcpu ok bad=0 counter=4194304 want=4194304 first_bad=-1(0 vs 0)
+RC=0
+--- host readmostly_probe reprefetch
+CHECK reprefetch ok bad=0
+RC=0
+--- host readmostly_probe gpuwrite
+CHECK gpuwrite ok bad=0
+RC=0
+--- host readmostly_probe downgrade
+CHECK downgrade ok bad=0
+RC=0
+--- host readmostly_probe fault
+CHECK fault ok bad=0
+RC=0
+--- host systemWideAtomics
+GPU Device 0: "Ampere" with compute capability 8.6
+
+CAN access pageable memory
+systemWideAtomics completed, returned OK 
+RC=0
+PRE_EXIT 2026-09-26T12:37:03+00:00

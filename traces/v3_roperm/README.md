@@ -1,9 +1,11 @@
 # v3-roperm evidence (2026-09-26)
 
-**STATUS: LIVE (2026-09-26).** Evidence for branch `v3-roperm`: guest PTE permissions
-(READ_ONLY, ATOMIC_DISABLE, VOLATILE) are carried into the walker's diff key and into the host
-map. The defect and the probe come from `docs/design/V3_UVM_DEMAND_PAGING.md` §6 / E3 on branch
-`v3-uvm-research`.
+**STATUS: LIVE (2026-09-26).** Evidence for branch `v3-roperm`: guest PTE permissions join the
+walker's diff key and the host map under ONE host policy (`kf_mem::apply::PermPolicy`) —
+READ_ONLY and VOLATILE carried, ATOMIC_DISABLE only with `KF3_CARRY_ATOMIC_DISABLE=1`, PRIVILEGE
+withheld from user twins. ⊘ The first round (below, `a1a82903`) carried ATOMIC_DISABLE too; the
+follow-up section at the end supersedes that part. The defect and the read-duplication probe come
+from `docs/design/V3_UVM_DEMAND_PAGING.md` §6 / E3.
 
 ## The defect
 
@@ -89,3 +91,57 @@ lines in the kf3 build log, and the strings check above.
 | `KF_DEVICE=kf3 fast_suite.sh … 180` | **30/30 PASS** | `fast_suite_kf3_a1a82903.out` |
 | CUDA ladder, fat guest (`cuda_ladder.sh guest … 2 cup3,cup8`) | `cup3` **`CUP3_VAL=43`** ×2; `cup8` **`BAD=0 MAXERR=0`** ×2 | `cuda_ladder_a1a82903_guest.out` |
 | read-duplication probe | see "After the fix" above | `after_a1a82903_probe.log` |
+
+## Follow-up (coordinator review, 2026-09-26) — ATOMIC_DISABLE off by default, PRIVILEGE withheld
+
+Box vast 52742061, RTX 3090 (GA102), host driver 580.159.04, kf3 fat guest (stock 580.159.04)
+(destroyed mid-run by the idle reaper, which could not reach it: no ssh alias was registered for
+it; the final-head suite, ladder and apps ran on vast 52755785, same model, below).
+Revisions: master `283a5304` (before any of this branch), `303d0929` (first round: ATOMIC_DISABLE
+carried), `6a985dbb` (follow-up, before the rebase), and — after master moved — base `dd3aed08` and
+the rebased head `5fead67d`. Bare metal is the same box's host, no QEMU (`phase1_6a985dbb.log`).
+
+### ATOMIC_DISABLE — `atomics_probe.cu` (GPU atomics on CPU-resident managed memory)
+
+Every mode checks all 2^20 elements and one fully contended counter against exact expected values.
+
+| mode | bare metal | guest `283a5304` / `dd3aed08` (not carried) | guest `303d0929` (carried) | guest `6a985dbb` / `5fead67d` (default) | guest `5fead67d` + `KF3_CARRY_ATOMIC_DISABLE=1` |
+|---|---|---|---|---|---|
+| `devmem` (control, vidmem) | ok | ok | ok | ok | ok |
+| `write` (control, plain stores) | ok | ok | ok | ok | ok |
+| `accessedby` (device-scope atomics) | ok | ok | ok | ok | ok |
+| `accessedby_sys` (`atomicAdd_system`) | ok | ok | ⊘ **719**, host Xid 31 `FAULT_INFO_TYPE_ATOMIC_VIOLATION ACCESS_TYPE_VIRT_ATOMIC` | ✔ **ok** | ⊘ 719, same Xid |
+| `prefcpu` (preferred location CPU) | ok | ok | ok | ok | ok |
+| `prefetchcpu` (GPU → CPU prefetch) | ok | ok | ok | ok | ok |
+
+⇒ Carrying ATOMIC_DISABLE regressed exactly one shape: **system-scope** atomics on a sysmem-resident
+managed page (device-scope atomics through the same mapping did not fault). Off by default, every
+mode matches bare metal again; the knob reproduces the regression, so the plumbing is intact for
+the day fault delivery exists.
+
+`systemWideAtomics` (cuda-samples v12.5): bare metal `returned OK`; guest **719 at every revision**,
+host Xid 31 `FAULT_PDE`. It takes the pageable path (`pageableMemoryAccess=1`, HMM): a demand fault
+kf3 cannot deliver (class C), not ATOMIC_DISABLE. It cannot pass in the guest before fault delivery.
+
+The read-duplication probe is unchanged by the follow-up: `gpuwrite` / `downgrade` fail loudly
+(719, `FAULT_RO_VIOLATION`) at `6a985dbb` and `5fead67d`, silently (`bad=1048576`) at
+`283a5304` and `dd3aed08`; `reprefetch` ok everywhere.
+
+Captures: `probes_guest_<rev>[_knob|_adcarried].log`, `phase1_6a985dbb.log` (bare metal).
+
+### PRIVILEGE — withheld from user twins, counted
+
+A mirror is a guest-KERNEL space when its client is an RM-internal client (`0xC1E0xxxx`, a handle
+range no guest process can hold) or a Translated channel is born in it; every other mirror is a
+user twin and withholds privileged leaves. `[measured 5fead67d, pf_head]` 11 CUDA processes:
+
+- `priv_withheld=0` — **no user twin was ever handed a privileged leaf**;
+- `priv_mirrored=72` — every privileged leaf the walker reported lives in an RM-internal client's
+  VA space (`0xc1e0xxxx:0xbaba0042`, 11 of them), mirrored as before (`privilege_census_5fead67d.txt`);
+- 11 spaces turned kernel at a Translated birth (UVM's), 11 user spaces had Passthrough births, and
+  no space was both.
+
+⇒ Nothing legitimate reached a user twin through a privileged leaf in these workloads, so the
+withholding has nothing to take away from them today. It is the guard for a guest kernel that
+does place one there. The RM-internal range being kernel from creation is what keeps the 72
+leaves mirrored.
