@@ -120,6 +120,36 @@ fn the_fwsec_start_carries_its_dmem_image_and_consumes_it() {
     assert_eq!(write(&m, &mut st, 0x11_0100, 0x2), vec![BootStep::StartProcessor], "a start with no DMEM load of its own carries no image");
 }
 
+/// ★ Turing's `BOOT_WITH_LOADER` (`s_prepareHsFalconWithLoader`, `ogkm-580:
+/// kernel_gsp_falcon_tu102.c:204-285`): the generic bootloader's `RM_FLCN_BL_DMEM_DESC` is written to
+/// DMEM offset 0 through the PIO port (`DMEMC(0)` with `AINCW`, then `DMEMD(0)` words), and its
+/// `dataDmaBase` (+0x40) is the FWSEC data image — carried by the start that runs it, once.
+#[test]
+fn a_turing_start_carries_the_bootloader_descriptors_data_image() {
+    use kf_chip::falcon_gsp::RiscvLayout;
+    let m = FalconGspModel::with_layout(RiscvLayout::Tu102, 8192);
+    let mut st = ArchBootState::default();
+    let data: u64 = 0x1_2345_6700;
+    // RM_FLCN_BL_DMEM_DESC: reserved[4], signature[4], ctxDma=4, codeDmaBase{lo,hi},
+    // nonSecureCodeOff/Size, secureCodeOff/Size, codeEntryPoint, dataDmaBase{lo,hi}, dataSize, argc, argv.
+    let mut desc = vec![0u32; 21];
+    desc[8] = 4;
+    desc[9] = 0x8900_0000;
+    desc[16] = (data & 0xFFFF_FFFF) as u32;
+    desc[17] = (data >> 32) as u32;
+    desc[18] = 0x1000;
+    assert!(write(&m, &mut st, 0x11_01c0, 1 << 24).is_empty(), "DMEMC(0): offset 0, AINCW");
+    for w in desc {
+        assert!(write(&m, &mut st, 0x11_01c4, u64::from(w)).is_empty());
+    }
+    assert_eq!(write(&m, &mut st, 0x11_0100, 0x2), vec![BootStep::FwsecCommand(data), BootStep::StartProcessor]);
+    assert_eq!(write(&m, &mut st, 0x11_0100, 0x2), vec![BootStep::StartProcessor], "consumed by its start");
+    // Only one half written (a DMEM write that is not the descriptor): no image.
+    assert!(write(&m, &mut st, 0x11_01c0, 0x40).is_empty(), "DMEMC(0) at +0x40, no AINCW");
+    assert!(write(&m, &mut st, 0x11_01c4, 0xdead_0000).is_empty());
+    assert_eq!(write(&m, &mut st, 0x11_0100, 0x2), vec![BootStep::StartProcessor]);
+}
+
 #[test]
 fn only_the_gsp_falcons_dma_is_decoded() {
     let m = FalconGspModel::with_fb_size_mb(8192);
@@ -128,6 +158,8 @@ fn only_the_gsp_falcons_dma_is_decoded() {
     assert_eq!(m.falcon_dma(0, 0x11_0118, 0x10), Some(FalconDma::Transfer { dmem_load: false }), "IMEM");
     assert_eq!(m.falcon_dma(0, 0x11_0118, 0x20), Some(FalconDma::Transfer { dmem_load: false }), "a write-back");
     assert_eq!(m.falcon_dma(0, 0x11_0118, 0x600), Some(FalconDma::Transfer { dmem_load: true }));
+    assert_eq!(m.falcon_dma(0, 0x11_01c0, (1 << 24) | 0x1234), Some(FalconDma::DmemPort { addr: 0x1234, inc: true }));
+    assert_eq!(m.falcon_dma(0, 0x11_01c4, 7), Some(FalconDma::DmemWord(7)));
     assert_eq!(m.falcon_dma(0, 0x84_0110, 0x1), None, "SEC2's Booter load is not FWSEC");
     assert_eq!(m.falcon_dma(1, 0x11_0110, 0x1), None, "BAR0 only");
     for f in [kf_chip::Family::Hopper, kf_chip::Family::Blackwell] {

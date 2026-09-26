@@ -43,6 +43,18 @@ const LATCH_BOOTER_ARG: usize = 0;
 const LATCH_DMA_BASE: usize = 1;
 const LATCH_DMA_OFFS: usize = 2;
 const LATCH_DMEM_IMAGE: usize = 3;
+/// ★ v3-initrace: the PIO DMEM port — `addr | inc << 32`.
+const LATCH_PIO_PORT: usize = 4;
+/// … and the bootloader descriptor's `dataDmaBase` as written through it, `lo | hi << 32`, with
+/// which halves arrived since the last start in [`LATCH_BL_SEEN`] (bit 0 lo, bit 1 hi).
+const LATCH_BL_DATA: usize = 5;
+const LATCH_BL_SEEN: usize = 6;
+/// `RM_FLCN_BL_DMEM_DESC.dataDmaBase` — `{reserved[4], signature[4], ctxDma, codeDmaBase{lo,hi},
+/// nonSecureCodeOff, nonSecureCodeSize, secureCodeOff, secureCodeSize, codeEntryPoint,
+/// dataDmaBase{lo,hi}, …}` (`ogkm-580: src/nvidia/arch/nvalloc/common/inc/rmflcnbl.h:40-102`),
+/// copied to DMEM offset 0 (`kernel_gsp_falcon_tu102.c:260-266`).
+const BL_DATA_DMA_BASE_LO: u64 = 0x40;
+const BL_DATA_DMA_BASE_HI: u64 = 0x44;
 
 /// The **falcon + secure-booter** boot regime.
 ///
@@ -172,6 +184,24 @@ impl BootSequence for FalconSecureBooterBoot {
                     state.set_latch(LATCH_DMEM_IMAGE, image.map_or(0, |a| a.saturating_add(1)));
                 }
                 FalconDma::Transfer { dmem_load: false } => {}
+                FalconDma::DmemPort { addr, inc } => {
+                    state.set_latch(LATCH_PIO_PORT, u64::from(addr) | (u64::from(inc) << 32));
+                }
+                FalconDma::DmemWord(word) => {
+                    let port = state.latch(LATCH_PIO_PORT);
+                    let addr = port & 0xFFFF_FFFF;
+                    let (data, seen) = (state.latch(LATCH_BL_DATA), state.latch(LATCH_BL_SEEN));
+                    if addr == BL_DATA_DMA_BASE_LO {
+                        state.set_latch(LATCH_BL_DATA, (data & !0xFFFF_FFFF) | u64::from(word));
+                        state.set_latch(LATCH_BL_SEEN, seen | 1);
+                    } else if addr == BL_DATA_DMA_BASE_HI {
+                        state.set_latch(LATCH_BL_DATA, (data & 0xFFFF_FFFF) | (u64::from(word) << 32));
+                        state.set_latch(LATCH_BL_SEEN, seen | 2);
+                    }
+                    if port >> 32 != 0 {
+                        state.set_latch(LATCH_PIO_PORT, (port & !0xFFFF_FFFF) | ((addr + 4) & 0xFFFF));
+                    }
+                }
             }
         }
         // An offset the shared vocabulary cannot name means nothing else in this regime: every
@@ -182,11 +212,18 @@ impl BootSequence for FalconSecureBooterBoot {
         };
         match reg {
             GspReg::GspFalconCpuctl if model.is_startcpu(val) => {
+                // The image this start runs: the DMA-loaded DMEM (`BOOT_FROM_HS`), else the
+                // bootloader descriptor's `dataDmaBase` (`BOOT_WITH_LOADER`) — each only if it was
+                // written since the last start (both latches are consumed here).
                 let image = state.latch(LATCH_DMEM_IMAGE);
+                let bl = (state.latch(LATCH_BL_SEEN) == 3).then(|| state.latch(LATCH_BL_DATA));
                 state.set_latch(LATCH_DMEM_IMAGE, 0);
+                state.set_latch(LATCH_BL_SEEN, 0);
                 let mut steps = BootSteps::none();
                 if image != 0 {
                     steps.push(BootStep::FwsecCommand(image - 1));
+                } else if let Some(base) = bl {
+                    steps.push(BootStep::FwsecCommand(base));
                 }
                 steps.push(BootStep::StartProcessor);
                 steps

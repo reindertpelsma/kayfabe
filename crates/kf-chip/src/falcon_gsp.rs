@@ -86,6 +86,12 @@ const DMATRFCMD_IMEM: u64 = 1 << 4;
 const DMATRFCMD_WRITE: u64 = 1 << 5;
 /// `NV_PFALCON_FALCON_DMATRFBASE1_BASE` 8:0.
 const DMATRFBASE1_MASK: u64 = 0x1FF;
+/// ★ v3-initrace — the PIO DMEM port 0: `DMEMC(0)` `0x1c0` (`OFFS` 7:2, `BLK` 15:8, `AINCW` 24:24)
+/// and `DMEMD(0)` `0x1c4` (`ogkm-580: src/common/inc/swref/published/turing/tu102/dev_falcon_v4.h:108-117`).
+const FALCON_DMEMC0: u64 = 0x1c0;
+const FALCON_DMEMD0: u64 = 0x1c4;
+const DMEMC_ADDR_MASK: u64 = 0xFFFC;
+const DMEMC_AINCW: u64 = 1 << 24;
 
 /// `NV_PGSP_QUEUE_HEAD(0)`; stride 8, `__SIZE_1 = 8`
 /// (`ogkm-580: dev_gsp.h:38-39`). The C hard-codes queue 0
@@ -590,10 +596,11 @@ impl GspModel for FalconGspModel {
         &self.boot
     }
 
-    /// ★ v3-initrace: the GSP falcon's ucode-load DMA registers — the ones FWSEC is loaded
-    /// through on `BOOT_FROM_HS` (`kgspExecuteHsFalcon_GA102`, bound for GA102…AD107,
-    /// `ogkm-580: gen/g_kernel_gsp_nvoc.c:1427-1445`). ⊘ Only the GSP falcon's: SEC2's Booter
-    /// load is a different ucode with no command we read.
+    /// ★ v3-initrace: the GSP falcon's ucode-load registers — the DMA ones FWSEC is loaded through
+    /// on `BOOT_FROM_HS` (`kgspExecuteHsFalcon_GA102`, bound for GA102…AD107,
+    /// `ogkm-580: gen/g_kernel_gsp_nvoc.c:1427-1445`), and the PIO DMEM port Turing's
+    /// `BOOT_WITH_LOADER` writes the bootloader descriptor through (`kgspExecuteHsFalcon_TU102`).
+    /// ⊘ Only the GSP falcon's: SEC2's Booter load is a different ucode with no command we read.
     fn falcon_dma(&self, bar: u8, off: u64, value: u64) -> Option<kf_arch::gsp::FalconDma> {
         use kf_arch::gsp::FalconDma;
         if bar != 0 {
@@ -607,6 +614,8 @@ impl GspModel for FalconGspModel {
             FALCON_DMATRFMOFFS => FalconDma::MemOffset(v32),
             FALCON_DMATRFFBOFFS => FalconDma::SourceOffset(v32),
             FALCON_DMATRFCMD => FalconDma::Transfer { dmem_load: value & (DMATRFCMD_IMEM | DMATRFCMD_WRITE) == 0 },
+            FALCON_DMEMC0 => FalconDma::DmemPort { addr: (value & DMEMC_ADDR_MASK) as u32, inc: value & DMEMC_AINCW != 0 },
+            FALCON_DMEMD0 => FalconDma::DmemWord(v32),
             _ => return None,
         })
     }

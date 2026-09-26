@@ -425,7 +425,9 @@ pub enum BootStep {
     /// the registers are published (`kf_gsp::GspFsm::resolve_frts_command`) — FWSEC-FRTS carries
     /// the FB offset WPR2 must come up at, and RM checks it exactly.
     ///
-    /// *Turing regime (GA10x, AD10x `BOOT_FROM_HS`):* the GSP falcon's `DMATRF*` DMEM load.
+    /// *Turing regime:* the GSP falcon's `DMATRF*` DMEM load (GA10x, AD10x `BOOT_FROM_HS`), or the
+    /// generic bootloader descriptor's `dataDmaBase` written through the PIO port (TU10x
+    /// `BOOT_WITH_LOADER`).
     FwsecCommand(u64),
 }
 
@@ -610,7 +612,11 @@ pub struct ArchBootState {
 
 impl ArchBootState {
     /// How many scalar latches a generation may hold.
-    pub const LATCHES: usize = 4;
+    ///
+    /// ★ v3-initrace: 8 (was 4) — the falcon regime latches the FWSEC DMEM image's location
+    /// through both of RM's load paths (`GspModel::falcon_dma`: the DMA registers and the PIO
+    /// port), beside the secure-booter argument.
+    pub const LATCHES: usize = 8;
 
     /// The hard cap on the window, in bytes.
     ///
@@ -977,6 +983,18 @@ pub enum FalconDma {
         /// A load of DMEM from memory — the only transfer that carries a ucode's data.
         dmem_load: bool,
     },
+    /// `DMEMC(0)` — the PIO DMEM port: its byte address (`BLK` 15:8, `OFFS` 7:2) and whether it
+    /// auto-increments on write (`AINCW` 24:24). ★ Turing's `BOOT_WITH_LOADER` path writes the
+    /// generic bootloader's `RM_FLCN_BL_DMEM_DESC` through it (`s_prepareHsFalconWithLoader`,
+    /// `ogkm-580: kernel_gsp_falcon_tu102.c:260-266`), whose `dataDmaBase` locates the image.
+    DmemPort {
+        /// The byte address the next `DMEMD` word lands at.
+        addr: u32,
+        /// `AINCW`.
+        inc: bool,
+    },
+    /// `DMEMD(0)` — one PIO word at the port's address.
+    DmemWord(u32),
 }
 
 kf_util::assert_send_sync!(
