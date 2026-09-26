@@ -1,0 +1,15 @@
+Q7TO8 waiting on q7 pid=1190627 2026-09-26T21:26:31+00:00
+Q7TO8 q7 stopped 2026-09-26T21:27:46+00:00: Q7_BAR_DONE 2026-09-26T21:27:44+00:00
+Q8_START 2026-09-26T21:27:56+00:00 rev=ee35ca4a host=580.159.04
+CLIENT_RC=0
+KF3_BUILD_RC=0 KF3_BUILT /workspace/bench/kf3-bins/ee35ca4a/qemu-system-x86_64 rev=ee35ca4a mtime=2026-09-26 21:28:30.688271476 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+V3_GATES_SUMMARY pass=9 fail=0
+FAT 575.57.08 [2026-09-26T21:33:11+00:00] fat 575.57.08: STAGED ✔ /workspace/bench/guest-575.57.08.qcow2
+LADDER host=580.159.04 guest=575.57.08 rev=ee35ca4a 4/4
+CL_ROW mode=guest rung=cup2 rep=1 verdict=PASS boot_rc=0 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]  trapped=10366
+CL_ROW mode=guest rung=cup3 rep=1 verdict=PASS boot_rc=0 graded=[CUP3_VAL=43]  trapped=10363
+CL_ROW mode=guest rung=cup8 rep=1 verdict=PASS boot_rc=0 graded=[CUP8_BAD=0 CUP8_MAXERR=0] CUP8_WALL_S=5 trapped=10489
+CL_ROW mode=guest rung=cup8bench rep=1 verdict=PASS boot_rc=0 graded=[GUEST_BENCH_TOTAL_BAD=0 GUEST_BENCH_VERDICT=PASS (every timed iteration verified)] BENCH_measure_WALL_S=5 trapped=11033
+CE rv=0xabcd1234 want=0xabcd1234 -> PASS
+CUP2_RC=0
+     76 kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
