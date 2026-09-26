@@ -325,8 +325,8 @@ the fat-guest CUDA ladder (cup2 / cup3 / cup8 / cup8bench).
 | 565.57.01 | init ✔ (BIF refused, carried since); **ladder 0/4** at `ee35ca4a` — the same adapter RE-init wall as 570 (first init passes; the reborn CeUtils channel retires `forwarded=1 submissions=0`; `v3-initrace`) | `ee35ca4a` |
 | 550.54.14 | device-info wall at `6de22590` → carried; failure point re-run queued. Fat guest **unstaged**: the 550.54.14 `.run` does not install on the fat image's kernel (6.8.0-139; the thin guest's 6.8.0-59 builds it) — `stage_fat_guest.sh` now prints the installer's errors | — |
 | 610.57.04 | init ✔; the **large RPC on hardware**: `GET_GLOBAL_SM_ORDER` (73 800 B) joined from 2 fragments and answered in 2 replies (`rpc_result 0`, ruling 2). **Ladder 0/4** at `ee35ca4a`: `cuInit` → 3 — the user channel's alloc refused `0x1a` (`OverDeclaredCap`): a 610 guest allocates chids PER RUNLIST on Ampere (`bUsePerRunlistChram`, GA10x from 610.43.02) and its chid 1 collided with CeUtils' on the chid-indexed token table. Fixed at `84967e3a` (the device indexes by `(runlist, chid)` on every family); ladder re-run queued. Also seen: the 610 guest logs `GSP RM heartbeat timed out` (our GSP publishes no heartbeat) — not fatal so far | `ee35ca4a` |
-| 545.23.08 | needs a ≤ 6.6 guest kernel (harness built) + capability row (owner review) | — |
-| 535.309.01 | capability row (owner review, `567942c1`) | — |
+| 545.23.08 | boots the staged **6.5.0-45** guest kernel (`stage_guest_kernel.sh`; the 6.8 build gap closed) with the capability row (owner review); RmInitAdapter stops at `_gpuInitChipInfo`: `INTERNAL_GPU_GET_CHIP_INFO` is 92 bytes there (`bar1Size` at +12) — carried by name since `ee35ca4a`+1 (see 535) | `ee35ca4a` |
+| 535.309.01 | with the capability row (owner review — the LAST commit on the branch): RmInitAdapter stops at `_gpuInitChipInfo` (`0x23:0x56:907`) — `INTERNAL_GPU_GET_CHIP_INFO` is 92 bytes at ≤545 (`bar1Size` at +12; it has no reader in the 535/545 RM). Carried by name at the next commit (a unit test pins the carry at both versions); re-run queued | `ee35ca4a` |
 
 Host axis, guest **580.159.04** (box 2, RTX 3080 Ti):
 
@@ -443,6 +443,17 @@ from "the view was stale".
 | 590.48.01 | 6 | 28 | static info 1808, KGR_GET_INFO 3776, MSENC caps, VGX 0x2C/0x07 |
 | 595.84 | 11 | 46 | static info 1592, nine-field init args, KGR info/floorsweeping, GPU name 68, `rpc_run_cpu_sequencer_v` |
 | 610.x | 18 | 72 | 16-byte MCTP element (encoded), static info 1600, `USER_REGISTER_ACCESS_MAP` 20492, SM order 73760 (> 64 KiB element max), GPU info 580, … |
+
+**Guest axis — a GSP behaviour the newest guests expect and we do not provide (measured
+2026-09-26):** from **595.84** the guest RM reads two GSP heartbeats after every RPC poll —
+`NV_PGSP_MAILBOX(0)` (GSP-RM) and `(1)` (LibOS), GPU time in ms (`595.84` / `610.57.04:
+kernel_gsp.c` `_kgspHeartbeatIsGspRmHeartbeatTimedOut`, supported on GA102 and later per
+`kgspIsHeartbeatSupported`). Ours stay 0, so a 595/610 guest logs *"GSP RM heartbeat timed out"* /
+*"LibOS heartbeat timed out"* after every RPC. Not fatal (the 595.84 ladder is 4/4 with it), but an
+RPC that DOES time out is then classified as a hung GSP (`_kgspIsTimeoutFatal`). Up to 590 the
+registers are read only by `kgspDumpMailbox` (a failure dump), so publishing a heartbeat is
+version-independent: the drainer can store the host GPU's time (the timer page the guest already
+reads) into the two words every ~0.5 s. Not built.
 
 **Host axis — what a sub-580 host cannot be asked, measured on host 575.57.08 (all refused by
 name, none silent):**
