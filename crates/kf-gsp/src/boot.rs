@@ -765,6 +765,9 @@ pub struct GspFsm {
     abi: GspAbi,
     phase: BootPhase,
     queue: QueueState,
+    /// ★ Ruling 2: a `GSP_RM_CONTROL` larger than one message, joined here before any policy
+    /// sees it and answered in as many replies as it arrived in ([`crate::large`]).
+    large: crate::large::Assembler,
     swgen0_pending: bool,
     /// ★★★★★ §16.76 — **the os-event flow-control gate**, and it is a SECOND flag beside
     /// [`GspFsm::swgen0_pending`] rather than a reuse of it.
@@ -884,6 +887,7 @@ impl GspFsm {
             abi,
             phase: BootPhase::Cold,
             queue: QueueState::Unbound,
+            large: crate::large::Assembler::default(),
             swgen0_pending: false,
             events_outstanding: false,
             mailbox_lo: 0,
@@ -1221,6 +1225,7 @@ impl GspFsm {
     fn enter_halted(&mut self) {
         self.phase = BootPhase::Halted;
         self.queue = QueueState::Unbound;
+        self.large.reset();
         self.init_done_posted = false;
         self.swgen0_pending = false;
         // ★ The batch died with the binding: the queue it was posted into is gone, so the
@@ -1751,13 +1756,41 @@ impl GspFsm {
             // first and answering second loses the command on any refusal `post` can raise
             // — `QueueFull` above all, which is the one this method's caller is expected to
             // retry.
-            self.answer(ram, policy, &cmd, report)?;
+            // ★ Ruling 2: a large control is joined first ([`crate::large`]); the assembler's
+            // step is committed only once the command is consumed, so a retried pass rebuilds it.
+            let declared = self.large_head_declared(&cmd);
+            let consumed = match self.large.step(&cmd, declared) {
+                crate::large::Step::NotLarge => {
+                    self.answer(ram, policy, &cmd, report)?;
+                    Some(cmd)
+                }
+                crate::large::Step::Held => None,
+                crate::large::Step::Complete { whole, fragments } => {
+                    self.answer_large(ram, policy, &whole, &fragments, report)?;
+                    Some(whole)
+                }
+                crate::large::Step::Refused(why) => {
+                    eprintln!("kf-gsp: LARGE-RPC REFUSED fn {} seq {}: {why}", cmd.code, cmd.sequence);
+                    if matches!(why, crate::large::LargeRefusal::Interrupted { .. }) {
+                        self.answer(ram, policy, &cmd, report)?;
+                    } else {
+                        let out = cmd.reply(NV_ERR_NOT_SUPPORTED, &[]);
+                        self.post(ram, &out)?;
+                        let detail = self.refusal_detail(&cmd);
+                        self.refusals.note(out.function, detail, out.rpc_result, out.sequence);
+                    }
+                    Some(cmd)
+                }
+            };
+            self.large.commit();
 
             read_ptr = count.slot(read_ptr + run_elements).index();
             expect_seq = expect_seq.wrapping_add(1);
             avail -= run_elements;
             self.commit_command_cursor(read_ptr, expect_seq);
-            report.commands.push(cmd);
+            if let Some(c) = consumed {
+                report.commands.push(c);
+            }
         }
         Ok(())
     }
@@ -1841,6 +1874,79 @@ impl GspFsm {
     /// ⊘ A [`Disposition::NoReply`] command is still not replied to, refusal included:
     /// posting anything for fn-72/73/202 surfaces in the driver as an unexpected event and
     /// desyncs the sequence.
+    /// The whole message's payload length when `cmd` is the HEAD of a large `GSP_RM_CONTROL`
+    /// (`_issueRpcAndWaitLarge`): its control header declares `params_off + paramsSize` bytes
+    /// and the message is exactly `maxRpcSize` long (the head is always `min(bufSize,
+    /// maxRpcSize)`, `rpc.c:2061`). ⊘ Both conditions: a short message that under-carries its
+    /// params is NOT a head — holding it would wait for continuations that never come.
+    fn large_head_declared(&self, cmd: &RpcCommand) -> Option<usize> {
+        if cmd.function != RpcFunction::RmControl {
+            return None;
+        }
+        let w = self.abi.driver.rm_control_wire();
+        let size = cmd.payload.get(w.params_size_off..w.params_size_off + 4)?;
+        let declared = w.params_off + u32::from_le_bytes(size.try_into().ok()?) as usize;
+        let max_rpc = (self.abi.element_size_max as usize).saturating_sub(self.abi.element.hdr_size());
+        (declared > cmd.payload.len() && cmd.payload.len() + crate::large::RPC_HEADER == max_rpc).then_some(declared)
+    }
+
+    /// ★ Ruling 2: answer a joined large command, split at the request's own boundaries
+    /// ([`crate::large::split_reply`]) — all replies or none: the room for every one is checked
+    /// before the first is written, so a `QueueFull` retry never posts a fragment twice.
+    fn answer_large(
+        &mut self,
+        ram: &mut dyn GuestRam,
+        policy: &mut dyn CommandPolicy,
+        whole: &RpcCommand,
+        fragments: &[crate::large::Fragment],
+        report: &mut ServiceReport,
+    ) -> Result<(), GspFault> {
+        let full = match policy.respond(whole) {
+            Some(r) => whole.reply(r.rpc_result, &r.body),
+            None => {
+                report.unserviced.push(Unserviced { code: whole.code, sequence: whole.sequence });
+                whole.reply(NV_ERR_NOT_SUPPORTED, &[])
+            }
+        };
+        let replies = crate::large::split_reply(&full, fragments, self.abi.rpc.codes.continuation_record);
+        let QueueState::Bound(binding) = &self.queue else {
+            return Err(GspFault::QueueNotBound);
+        };
+        let geom = binding.geom.clone();
+        let element_size = geom.element_size();
+        let mut needed = 0u32;
+        for r in &replies {
+            let run = encode_message(&self.abi.element, self.abi.rpc.header_version, element_size, self.abi.element_size_max, self.stat_seq, r)?;
+            needed += (run.len() / element_size as usize) as u32;
+        }
+        let cursor = binding.stat;
+        if needed > cursor.free_cache {
+            let peer_read = geom.region().read_u32(ram, geom.peer_stat_read_ptr_off())?;
+            let free = free_elements(peer_read, cursor.write_ptr, geom.msg_count())?;
+            if needed > free {
+                return Err(GspFault::QueueFull { needed, free });
+            }
+        }
+        for r in &replies {
+            self.post(ram, r)?;
+        }
+        // ★ v3-refusals: the guest reads the status from the last reply — one ledger row for the command.
+        if full.rpc_result != 0 {
+            let detail = self.refusal_detail(whole);
+            self.refusals.note(full.function, detail, full.rpc_result, full.sequence);
+        }
+        eprintln!(
+            "kf-gsp: large RPC fn {} seq {} joined from {} fragment(s), {} bytes, answered in {} replies (rpc_result {:#x})",
+            whole.code,
+            whole.sequence,
+            fragments.len(),
+            whole.payload.len(),
+            replies.len(),
+            full.rpc_result
+        );
+        Ok(())
+    }
+
     fn answer(
         &mut self,
         ram: &mut dyn GuestRam,
