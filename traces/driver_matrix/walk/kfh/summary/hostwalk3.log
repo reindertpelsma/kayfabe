@@ -3,3 +3,13 @@ CLIENT_RC=0
 KF3_BUILD_RC=0 KF3_BUILT /workspace/bench/kf3-bins/1f3e4fc4/qemu-system-x86_64 rev=1f3e4fc4 mtime=2026-09-26 23:19:19.753118419 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
 TESTS_RC=0 passed=1618 failed=0
 FG_580159_RC=0
+SWAP host=570.148.08 rc=0 got=570.148.08 OPEN_MODULE=yes
+BARE host=570.148.08 cup2 rc=0 CE rv=0xabcd1234 want=0xabcd1234 -> PASS records=399
+GATES host=570.148.08 V3_GATES_SUMMARY pass=9 fail=0
+CANARY host=570.148.08 verdict=PASS
+      1 kf-host: HOST-ABI REFUSED control 0x2080170f: NV2080_CTRL_MC_GET_INTR_CATEGORY_SUBTREE_MAP_PARAMS does not exist at driver 570.148.08 (measured)
+      1 kf-host: HOST-ABI REFUSED control 0x20809064: host control 0x20809064 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 570.148.08 was never measured
+      1 kf-host: HOST-ABI REFUSED control 0x2080a026: host control 0x2080a026 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 570.148.08 was never measured
+      2 kf-host: HOST-ABI REFUSED control 0x2080a028: host control 0x2080a028 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 570.148.08 was never measured
+      1 kf-host: HOST-ABI REFUSED control 0x2080a084: host control 0x2080a084 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 570.148.08 was never measured
+      1 kf3: host driver 570.148.08 has no per-map PTE kind (NVOS46 kindOverride is 580.65.06+): PITCH/GENERIC leaves map with the memory's own kind; a depth/stencil kind is refused by name
