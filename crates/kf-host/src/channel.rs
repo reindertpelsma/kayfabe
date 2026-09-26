@@ -313,6 +313,93 @@ impl HostRm {
         self.raw_unmap_dma_flags(space.dma_for(va, 1)?, va, flags)
     }
 
+    /// ★★★ Unmap EVERY mapping of ours in `space` that intersects `[va, va+len)` — one host call
+    /// for any number of placements (`V3_BATCHED_MAP.md` §4; [`HostRm::raw_unmap_dma_range`]). A
+    /// placement straddling an edge is split and keeps its outside part. `defer` as for
+    /// [`HostRm::map`].
+    ///
+    /// ⊘ The range must be one the caller OWNS whole: RM removes whatever of this client's
+    /// mappings lie in it, so a range reaching into a window or a ring would take it down too.
+    ///
+    /// # Errors
+    /// [`VA_STRADDLES_RESERVATION`] before any host call; else the host's status.
+    pub fn unmap_range(&self, space: VaSpace, va: u64, len: u64, defer: bool) -> Result<(), RmError> {
+        if len == 0 {
+            return Err(RmError::NoMemory);
+        }
+        let flags = if defer { NVOS47_FLAGS_DEFER_TLB_INVALIDATION_TRUE } else { 0 };
+        self.raw_unmap_dma_range(space.dma_for(va, len)?, va, len, flags)
+    }
+
+    /// ★★★ **Map N scattered pieces of a file at ONE VA-contiguous range, in O(1) host RM calls**
+    /// (`V3_BATCHED_MAP.md` §3): stitch the pieces into one host view
+    /// ([`kf_linux_raw::MappedRegion::stitch`]), describe it with ONE
+    /// `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` (RM pins the pages and keeps no address — the view is
+    /// dropped before this returns), then ONE fixed `NV_ESC_RM_MAP_MEMORY_DMA` of the whole object
+    /// at `at`. Returns the object's handle: the caller owns it and frees it (with [`HostRm::free`])
+    /// once no mapping of it is left — freeing it earlier would unmap every piece
+    /// (`rs_client.c:1342-1395`, `_clientUnmapInterBackRefMappings`).
+    ///
+    /// ★ All or nothing: `Ok` ⇔ the host placed every piece at its VA; on any refusal nothing of
+    /// ours is left (a failed map is rolled back by RM, `virt_mem_allocator_gm107.c:1540-1557`, a
+    /// misplaced one torn down by [`HostRm::map`]'s placement assertion, and the object is freed).
+    /// Mapped as a [`MapBacking::SharedSlice`] (4 KiB pinned): a stitched object is not physically
+    /// contiguous at any bigger page.
+    ///
+    /// # Errors
+    /// The stitch (by name), the descriptor or the map — whichever refused.
+    #[allow(clippy::too_many_arguments)]
+    pub fn map_scattered(
+        &self,
+        space: VaSpace,
+        fd: std::os::fd::BorrowedFd<'_>,
+        pieces: &[(u64, u64)],
+        at: u64,
+        defer: bool,
+        kind: u8,
+    ) -> Result<u32, ScatterError> {
+        let t0 = std::time::Instant::now();
+        let view = kf_linux_raw::MappedRegion::stitch(
+            fd,
+            pieces,
+            kf_linux_raw::HostProt::ReadWrite,
+            kf_linux_raw::CachePolicy::WriteBack,
+            kf_linux_raw::HostPageSize::query(),
+        )
+        .map_err(ScatterError::Stitch)?;
+        let t_stitch = t0.elapsed();
+        let len = view.len_bytes();
+        let obj = self
+            .alloc_os_descriptor(&view, kf_linux_raw::HostOffset::new(0), len)
+            .map_err(ScatterError::Descriptor)?;
+        let t_desc = t0.elapsed();
+        // RM holds the pages now (and never the address): the view goes before any map exists —
+        // to the reaper, because its `munmap` is the costliest step (`[measured bm3]` 80-97 ms for
+        // 4 096 populated VMAs on the nested bench, vs 0.5 ms for the map itself).
+        reap_view(view);
+        let t_drop = t0.elapsed();
+        let r = self.map_kind(space, obj, MapBacking::SharedSlice, 0, len, Some(at), defer, kind);
+        // ★ Bounded phase breakdown (the first 32 batches of the process): stitch vs pin vs map.
+        static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        if LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 32 {
+            eprintln!(
+                "kf-host: map_scattered {} pieces {len:#x} bytes: stitch {} us, descriptor {} us, hand view to reaper {} us, map {} us",
+                pieces.len(),
+                t_stitch.as_micros(),
+                (t_desc - t_stitch).as_micros(),
+                (t_drop - t_desc).as_micros(),
+                (t0.elapsed() - t_drop).as_micros()
+            );
+        }
+        match r {
+            Ok(_) => Ok(obj),
+            Err(e) => {
+                let _ = self.free(obj);
+                Err(ScatterError::Map(e))
+            }
+        }
+    }
+
     /// ONE TLB invalidate for `space` — the end of a deferred batch.
     ///
     /// # Errors
@@ -763,3 +850,48 @@ impl HostRm {
         self.free(chan.chan)
     }
 }
+
+/// Why a [`HostRm::map_scattered`] placed nothing — each step named, so a refusal says whether the
+/// host kernel, the descriptor or the GPU map refused.
+#[derive(Debug)]
+pub enum ScatterError {
+    /// The stitched host view could not be built (e.g. a hugetlb backing, `max_map_count`).
+    Stitch(kf_linux_raw::RawError),
+    /// `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` refused.
+    Descriptor(RmError),
+    /// The fixed map refused (incl. `VA_ALREADY_MAPPED`, [`RmError::PlacementRefused`]).
+    Map(RmError),
+}
+
+/// ★ `V3_BATCHED_MAP.md` §3: release a stitched view OFF the caller's thread.
+///
+/// The view is dead the moment its descriptor exists — RM pinned its pages and keeps no address
+/// (`os-mlock.c:216-254`, `nv.c:3357-3400`); nothing reads it — so WHEN it is unmapped changes
+/// nothing but who waits. One long-lived reaper thread `munmap`s views in order. The queue holds at
+/// most [`REAP_QUEUE`] views: beyond that the caller waits for the reaper (backpressure keeps the
+/// process's VMA count bounded — each queued view is up to `BATCH_MAX_RUNS` VMAs — never an
+/// unbounded pile against `vm.max_map_count`). If the thread cannot be started, the view is dropped
+/// here, as before.
+fn reap_view(view: kf_linux_raw::MappedRegion) {
+    type Tx = std::sync::mpsc::SyncSender<kf_linux_raw::MappedRegion>;
+    static REAPER: std::sync::OnceLock<Option<std::sync::Mutex<Tx>>> = std::sync::OnceLock::new();
+    let tx = REAPER.get_or_init(|| {
+        let (tx, rx) = std::sync::mpsc::sync_channel::<kf_linux_raw::MappedRegion>(REAP_QUEUE);
+        std::thread::Builder::new()
+            .name("kf-view-reaper".into())
+            .spawn(move || {
+                for v in rx {
+                    drop(v);
+                }
+            })
+            .ok()
+            .map(|_| std::sync::Mutex::new(tx))
+    });
+    let sent = tx.as_ref().and_then(|m| m.lock().ok().map(|tx| tx.send(view)));
+    if let Some(Err(std::sync::mpsc::SendError(v))) = sent {
+        drop(v);
+    }
+}
+
+/// Stitched views that may wait for the reaper at once.
+const REAP_QUEUE: usize = 2;

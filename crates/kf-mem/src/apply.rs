@@ -76,6 +76,23 @@ pub struct Applied {
     /// ★ Usermode-page views satisfied WITHOUT a host mapping (a GPU VA view — see
     /// [`MapTarget::map_usermode`]'s default).
     pub usermode_unmirrored: usize,
+    /// ★ `V3_BATCHED_MAP.md`: map verbs issued to the target (a batch counts ONE).
+    pub map_calls: usize,
+    /// Unmap verbs issued to the target (a range counts ONE).
+    pub unmap_calls: usize,
+    /// Batched maps the target placed, and the runs they carried.
+    pub batches: usize,
+    /// Runs placed by a batch (included in `mapped`).
+    pub batched_runs: usize,
+    /// Range unmaps the target performed, and the runs they removed (included in `unmapped`).
+    pub range_unmaps: usize,
+    /// Runs removed by a range unmap.
+    pub range_unmapped_runs: usize,
+    /// Batches / ranges the target refused whose runs then went one by one (not refusals: every
+    /// run still got its own verdict).
+    pub batch_fallbacks: usize,
+    /// The first such fallback's reason.
+    pub first_batch_fallback: Option<String>,
 }
 
 impl Applied {
@@ -84,6 +101,43 @@ impl Applied {
         self.refused += 1;
         self.first_refusal.get_or_insert(why);
     }
+
+    fn fallback(&mut self, why: String) {
+        // A target that does not batch at all is not a fallback — it is the per-run path.
+        if why != crate::ledger::NOT_BATCHED {
+            self.batch_fallbacks += 1;
+            self.first_batch_fallback.get_or_insert(why);
+        }
+    }
+}
+
+/// ★ The most runs one batched map carries (`V3_BATCHED_MAP.md` §3.3): the stitched host view
+/// holds one VMA per file-discontiguous piece while the descriptor is built, and Linux caps a
+/// process at `vm.max_map_count` (65 530 by default) VMAs — QEMU's own included.
+pub const BATCH_MAX_RUNS: usize = 4096;
+
+/// Split `items` (already sorted by VA) into maximal groups whose members are VA-adjacent
+/// (`va + len` of one is the next one's `va`), pairwise `compatible` with the group's first, and at
+/// most `cap` long.
+fn contiguous_groups(
+    items: &[usize],
+    span: impl Fn(usize) -> (u64, u64),
+    compatible: impl Fn(usize, usize) -> bool,
+    cap: usize,
+) -> Vec<&[usize]> {
+    let mut out = Vec::new();
+    let mut start = 0;
+    for k in 1..=items.len() {
+        let breaks = k == items.len() || k - start >= cap || {
+            let (va, len) = span(items[k - 1]);
+            va.checked_add(len) != Some(span(items[k]).0) || !compatible(items[start], items[k])
+        };
+        if breaks {
+            out.push(&items[start..k]);
+            start = k;
+        }
+    }
+    out
 }
 
 /// Whether `d` is whole `grain` pages on both sides (`grain` a power of two).
@@ -119,21 +173,47 @@ pub fn host_pte_kind(guest: u8, ram: bool) -> u8 {
 pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>) -> Applied {
     let mut out = Applied { codes: vec![KFWR_ACK_APPLIED; runs.len()], ..Applied::default() };
     let mut failed_unmaps: Vec<(u64, u64)> = Vec::new();
+    // ★ `V3_BATCHED_MAP.md` §4: VA-adjacent unmaps go as ONE range (the union of exactly the
+    // placements being removed, nothing else); a refused range falls back to one call per run,
+    // so every run still gets its own verdict.
+    let mut unmaps: Vec<usize> = Vec::new();
     for (i, r) in runs.iter().enumerate().filter(|(_, r)| r.unmap) {
         if r.held {
             out.held_retired += 1;
-            continue;
+        } else {
+            unmaps.push(i);
         }
-        match target.unmap(r.va, true) {
-            Ok(()) => out.unmapped += 1,
-            Err(e) => {
-                failed_unmaps.push((r.va, r.va.saturating_add(r.len)));
-                out.refuse(i, format!("{e} (len {:#x})", r.len));
+    }
+    unmaps.sort_by_key(|&i| runs[i].va);
+    for group in contiguous_groups(&unmaps, |i| (runs[i].va, runs[i].len), |_, _| true, usize::MAX) {
+        if group.len() >= 2 {
+            let (va, end) = (runs[group[0]].va, runs[group[group.len() - 1]].va + runs[group[group.len() - 1]].len);
+            out.unmap_calls += 1;
+            match target.unmap_range(va, end - va, true) {
+                Ok(()) => {
+                    out.unmapped += group.len();
+                    out.range_unmaps += 1;
+                    out.range_unmapped_runs += group.len();
+                    continue;
+                }
+                Err(e) => out.fallback(e),
+            }
+        }
+        for &i in group {
+            let r = &runs[i];
+            out.unmap_calls += 1;
+            match target.unmap(r.va, true) {
+                Ok(()) => out.unmapped += 1,
+                Err(e) => {
+                    failed_unmaps.push((r.va, r.va.saturating_add(r.len)));
+                    out.refuse(i, format!("{e} (len {:#x})", r.len));
+                }
             }
         }
     }
     let extent = target.va_extent();
     let reserved = target.reserved();
+    let mut pending: Vec<(usize, Desired)> = Vec::new();
     for (i, r) in runs.iter().enumerate().filter(|(_, r)| !r.unmap) {
         // ★★★ Hopper+ internal MMIO FIRST: a usermode-page view is never a memory row.
         if let Some(leaf) = cfg.usermode.and_then(|u| u.classify(r.ap, r.kind, r.at, r.len)) {
@@ -190,20 +270,46 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
             out.refuse(i, format!("map {:#x}+{:#x}: over a placement whose unmap was refused", d.va, d.len));
             continue;
         }
-        match target.map(&d, true) {
-            Ok(Mapped::Placed) => out.mapped += 1,
-            Ok(Mapped::HeldByHost) => {
-                // Rare (a host-RM placement in the twin's VAS at the guest's VA): named per leaf.
-                eprintln!("kf3: mem leaf {:#x}+{:#x} HELD BY HOST (host RM placed its own buffer there)", d.va, d.len);
-                out.held += 1;
-                out.codes[i] = KFWR_ACK_HELD;
-                // ★ v3-gfx: name WHERE (bounded) — a held row is a guest VA host RM already owns.
-                static HELD_LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-                if HELD_LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 64 {
-                    eprintln!("kf-mem: HELD-BY-HOST guest row {:#x}+{:#x} (ram={}) — host RM already maps that VA", d.va, d.len, d.ram);
+        pending.push((i, d));
+    }
+    // ★ `V3_BATCHED_MAP.md` §3: VA-contiguous guest-RAM rows of one kind go as ONE batched
+    // placement; a refused batch placed nothing, so its rows go one by one and each gets its own
+    // verdict (HELD included).
+    pending.sort_by_key(|&(_, d)| d.va);
+    let idx: Vec<usize> = (0..pending.len()).collect();
+    let same = |a: usize, b: usize| pending[a].1.ram && pending[b].1.ram && pending[a].1.kind == pending[b].1.kind;
+    for group in contiguous_groups(&idx, |k| (pending[k].1.va, pending[k].1.len), same, BATCH_MAX_RUNS) {
+        if group.len() >= 2 && pending[group[0]].1.ram {
+            let rows: Vec<Desired> = group.iter().map(|&k| pending[k].1).collect();
+            out.map_calls += 1;
+            match target.map_batch(&rows, true) {
+                Ok(()) => {
+                    out.mapped += rows.len();
+                    out.batches += 1;
+                    out.batched_runs += rows.len();
+                    continue;
                 }
+                Err(e) => out.fallback(e),
             }
-            Err(e) => out.refuse(i, e),
+        }
+        for &k in group {
+            let (i, d) = pending[k];
+            out.map_calls += 1;
+            match target.map(&d, true) {
+                Ok(Mapped::Placed) => out.mapped += 1,
+                Ok(Mapped::HeldByHost) => {
+                    // Rare (a host-RM placement in the twin's VAS at the guest's VA): named per leaf.
+                    eprintln!("kf3: mem leaf {:#x}+{:#x} HELD BY HOST (host RM placed its own buffer there)", d.va, d.len);
+                    out.held += 1;
+                    out.codes[i] = KFWR_ACK_HELD;
+                    // ★ v3-gfx: name WHERE (bounded) — a held row is a guest VA host RM already owns.
+                    static HELD_LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+                    if HELD_LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 64 {
+                        eprintln!("kf-mem: HELD-BY-HOST guest row {:#x}+{:#x} (ram={}) — host RM already maps that VA", d.va, d.len, d.ram);
+                    }
+                }
+                Err(e) => out.refuse(i, e),
+            }
         }
     }
     if out.mapped + out.unmapped + out.usermode_trapped > 0 {
@@ -315,8 +421,28 @@ mod tests {
         extent: Option<u64>,
         /// Behave like the BAR1 window: place a trap for a usermode view.
         traps_usermode: bool,
+        /// ★ Batch: `Some(refuse_at)` = batches and range unmaps supported; a batch containing
+        /// `refuse_at` (or a range containing it) is refused (nothing placed / removed).
+        batching: Option<Option<u64>>,
     }
     impl MapTarget for Rec {
+        fn map_batch(&self, rows: &[Desired], _: bool) -> Result<(), String> {
+            let Some(refuse) = self.batching else { return Err(crate::ledger::NOT_BATCHED.into()) };
+            if rows.iter().any(|d| Some(d.va) == refuse) {
+                return Err("batch refused (fake)".into());
+            }
+            let len: u64 = rows.iter().map(|d| d.len).sum();
+            self.ops.borrow_mut().push(format!("batch {:#x}+{len:#x} x{}", rows[0].va, rows.len()));
+            Ok(())
+        }
+        fn unmap_range(&self, va: u64, len: u64, _: bool) -> Result<(), String> {
+            let Some(refuse) = self.batching else { return Err(crate::ledger::NOT_BATCHED.into()) };
+            if refuse.is_some_and(|r| r >= va && r < va + len) {
+                return Err("range refused (fake)".into());
+            }
+            self.ops.borrow_mut().push(format!("unmap-range {va:#x}+{len:#x}"));
+            Ok(())
+        }
         fn map(&self, d: &Desired, _: bool) -> Result<Mapped, String> {
             if self.refuse_map == Some(d.va) {
                 return Err("no (fake)".into());
@@ -354,6 +480,84 @@ mod tests {
     }
     fn u(va: u64, len: u64) -> DiffRun {
         DiffRun { unmap: true, va, len, at: 0, ap: 0, held: false, kind: 0 }
+    }
+
+    fn ram(va: u64, gpa: u64, len: u64) -> DiffRun {
+        DiffRun { ap: crate::ledger::AP_SYS_COHERENT, ..m(va, gpa, len) }
+    }
+
+    /// ★★★ `V3_BATCHED_MAP.md`: VA-contiguous guest-RAM runs (scattered in guest-physical memory)
+    /// are ONE batched placement; a VA gap, a vidmem row or a kind change starts a new group, and
+    /// a lone run keeps the per-run verb. Every run is acknowledged APPLIED.
+    #[test]
+    fn va_contiguous_guest_ram_runs_map_as_one_batch() {
+        let t = Rec { batching: Some(None), ..Rec::default() };
+        let runs = [
+            ram(0x2_0000_2000, 0x7000, 0x1000), // out of VA order on purpose
+            ram(0x2_0000_0000, 0x9000, 0x1000),
+            ram(0x2_0000_1000, 0x3000, 0x1000),
+            ram(0x2_0000_4000, 0x5000, 0x1000), // VA gap at 0x3000
+            m(0x2_0000_5000, 0x10_0000, 0x1000), // vidmem: never batched
+            DiffRun { kind: 0x06, ..ram(0x2_0000_6000, 0xB000, 0x1000) },
+            DiffRun { kind: 0x06, ..ram(0x2_0000_7000, 0x1000, 0x1000) },
+        ];
+        let a = apply_entry(&t, &runs, &cfg());
+        assert_eq!(a.codes, vec![KFWR_ACK_APPLIED; runs.len()]);
+        assert_eq!(
+            *t.ops.borrow(),
+            vec![
+                "batch 0x200000000+0x3000 x3",
+                "map 0x200004000+0x1000",
+                "map 0x200005000+0x1000",
+                "batch 0x200006000+0x2000 x2",
+                "inval"
+            ]
+        );
+        assert_eq!((a.mapped, a.batches, a.batched_runs, a.map_calls), (7, 2, 5, 4));
+    }
+
+    /// ★★★ A refused batch placed NOTHING, so its runs go one by one — and each gets its own
+    /// verdict: the one the host already holds is HELD, the one it refuses is FAILED, the rest
+    /// APPLIED. Commit-on-ack is unchanged by batching.
+    #[test]
+    fn a_refused_batch_falls_back_to_exact_per_run_verdicts() {
+        let t = Rec { batching: Some(Some(0x1000_1000)), held_at: Some(0x1000_2000), refuse_map: Some(0x1000_1000), ..Rec::default() };
+        let runs = [ram(0x1000_0000, 0x4000, 0x1000), ram(0x1000_1000, 0x9000, 0x1000), ram(0x1000_2000, 0x2000, 0x1000)];
+        let a = apply_entry(&t, &runs, &cfg());
+        assert_eq!(a.codes, vec![KFWR_ACK_APPLIED, KFWR_ACK_FAILED, KFWR_ACK_HELD]);
+        assert_eq!(*t.ops.borrow(), vec!["map 0x10000000+0x1000", "map 0x10002000+0x1000", "inval"]);
+        assert_eq!((a.mapped, a.held, a.refused, a.batch_fallbacks), (1, 1, 1, 1));
+        assert!(a.first_batch_fallback.unwrap().contains("batch refused"));
+    }
+
+    /// ★★★ VA-adjacent unmaps are ONE range; a held run is never part of one (it never reaches
+    /// the host); a refused range is retried run by run so every run is named.
+    #[test]
+    fn adjacent_unmaps_are_one_range_and_a_refused_range_goes_run_by_run() {
+        let t = Rec { batching: Some(None), ..Rec::default() };
+        let runs = [u(0x3000, 0x1000), u(0x1000, 0x2000), DiffRun { held: true, ..u(0x4000, 0x1000) }, u(0x9000, 0x1000)];
+        let a = apply_entry(&t, &runs, &cfg());
+        assert_eq!(a.codes, vec![KFWR_ACK_APPLIED; 4]);
+        assert_eq!(*t.ops.borrow(), vec!["unmap-range 0x1000+0x3000", "unmap 0x9000", "inval"]);
+        assert_eq!((a.unmapped, a.range_unmaps, a.range_unmapped_runs, a.unmap_calls, a.held_retired), (3, 1, 2, 2, 1));
+
+        let t = Rec { batching: Some(Some(0x2000)), refuse_unmap: Some(0x2000), ..Rec::default() };
+        let a = apply_entry(&t, &[u(0x1000, 0x1000), u(0x2000, 0x1000), u(0x3000, 0x1000), m(0x2000, 0x5000, 0x1000)], &cfg());
+        assert_eq!(a.codes, vec![KFWR_ACK_APPLIED, KFWR_ACK_FAILED, KFWR_ACK_APPLIED, KFWR_ACK_FAILED]);
+        assert_eq!(*t.ops.borrow(), vec!["unmap 0x1000", "unmap 0x3000", "inval"], "the map over the refused unmap is still blocked");
+        assert_eq!(a.batch_fallbacks, 1);
+    }
+
+    /// A batch never exceeds [`BATCH_MAX_RUNS`] runs.
+    #[test]
+    fn a_batch_is_capped() {
+        let t = Rec { batching: Some(None), ..Rec::default() };
+        let n = BATCH_MAX_RUNS + 3;
+        let runs: Vec<DiffRun> = (0..n as u64).map(|k| ram(0x4_0000_0000 + k * 0x1000, (n as u64 - k) * 0x2000, 0x1000)).collect();
+        let a = apply_entry(&t, &runs, &cfg());
+        assert_eq!(a.batches, 2);
+        assert_eq!(t.ops.borrow()[0], format!("batch 0x400000000+{:#x} x{BATCH_MAX_RUNS}", BATCH_MAX_RUNS * 0x1000));
+        assert_eq!(t.ops.borrow()[1], format!("batch {:#x}+0x3000 x3", 0x4_0000_0000u64 + BATCH_MAX_RUNS as u64 * 0x1000));
     }
 
     #[test]

@@ -189,6 +189,37 @@ pub trait MapTarget {
         Ok(Mapped::HeldByHost)
     }
 
+    /// ★★★ **Place VA-contiguous guest-RAM rows with ONE host placement** (`V3_BATCHED_MAP.md`).
+    ///
+    /// `rows` are whole pages, `ram`, one `kind`, each starting where the previous ends. ⇒ `Ok`
+    /// ONLY when the host placed EVERY row (each is then OUR mapping, acknowledged APPLIED);
+    /// `Err` ONLY when it placed NONE of them — the caller then maps them one by one, so each gets
+    /// its own verdict (a `HeldByHost` VA inside a batch is found that way, never guessed).
+    ///
+    /// The default is `Err`: a target that cannot batch (a CPU window, the harness) keeps the
+    /// per-run path, byte for byte.
+    ///
+    /// # Errors
+    /// Why the batch was not placed, by name.
+    fn map_batch(&self, rows: &[Desired], defer: bool) -> Result<(), String> {
+        let _ = (rows, defer);
+        Err(NOT_BATCHED.into())
+    }
+
+    /// ★★★ **Unmap every placement of OURS inside `[va, va+len)` in one host call**
+    /// (`V3_BATCHED_MAP.md` §4). `Ok` ⇔ nothing of ours is mapped there any more. The caller
+    /// passes only a range that is exactly the union of committed placements it is unmapping.
+    ///
+    /// The default is `Err`: the caller then unmaps run by run ([`MapTarget::unmap`]).
+    ///
+    /// # Errors
+    /// The host's refusal, by name (some placements in the range may be gone — the per-run
+    /// fallback states exactly which).
+    fn unmap_range(&self, va: u64, len: u64, defer: bool) -> Result<(), String> {
+        let _ = (va, len, defer);
+        Err(NOT_BATCHED.into())
+    }
+
     /// ★ Drain this target's asynchronous completions and say whether its accepted work is live
     /// ([`Settle`]). Every synchronous target is always [`Settle::Live`].
     fn settle(&self) -> Settle {
@@ -214,6 +245,9 @@ pub trait MapTarget {
         Vec::new()
     }
 }
+
+/// What a target that cannot batch answers [`MapTarget::map_batch`] / [`MapTarget::unmap_range`].
+pub const NOT_BATCHED: &str = "this target does not batch";
 
 /// ★ Cut walked leaves `(va, at, len, ap)` to `[0, extent)`: a leaf wholly above is dropped, a
 /// leaf crossing the end is shortened (its backing offset is unchanged — it starts at the same
@@ -249,6 +283,35 @@ pub struct HostVas<'rm> {
     pub ram_obj: Option<u32>,
 }
 
+impl HostVas<'_> {
+    /// ★★★ Place VA-contiguous guest-RAM `rows` through ONE host object stitched from `ram_fd`
+    /// (the guest memfd; `Desired::off` is a memfd offset) — [`kf_host::HostRm::map_scattered`].
+    /// Returns the object's handle, which the caller must track and free (`crate::batch`).
+    ///
+    /// # Errors
+    /// Rows that are not one VA-contiguous, same-kind guest-RAM range (refused before any call),
+    /// or the host's refusal. Either way nothing of ours is placed.
+    pub fn map_scattered(&self, ram_fd: std::os::fd::BorrowedFd<'_>, rows: &[Desired], defer: bool) -> Result<u32, String> {
+        let first = rows.first().ok_or("empty batch")?;
+        let mut next = first.va;
+        let mut pieces: Vec<(u64, u64)> = Vec::with_capacity(rows.len());
+        for d in rows {
+            if !d.ram || d.kind != first.kind || d.va != next {
+                return Err(format!("batch row {:#x}+{:#x} is not a VA-contiguous same-kind guest-RAM row", d.va, d.len));
+            }
+            next = d.va.checked_add(d.len).ok_or("batch VA overflows")?;
+            // Coalesce pieces that are also file-contiguous: fewer mappings to stitch.
+            match pieces.last_mut() {
+                Some((o, l)) if o.checked_add(*l) == Some(d.off) => *l += d.len,
+                _ => pieces.push((d.off, d.len)),
+            }
+        }
+        self.rm
+            .map_scattered(self.space, ram_fd, &pieces, first.va, defer, first.kind)
+            .map_err(|e| format!("batch {:#x}+{:#x} ({} rows, {} pieces): {e:?}", first.va, next - first.va, rows.len(), pieces.len()))
+    }
+}
+
 impl MapTarget for HostVas<'_> {
     fn map(&self, d: &Desired, defer: bool) -> Result<Mapped, String> {
         let obj = if d.ram {
@@ -278,5 +341,11 @@ impl MapTarget for HostVas<'_> {
         self.rm
             .invalidate_tlb(self.space)
             .map_err(|e| format!("invalidate: {e:?}"))
+    }
+
+    fn unmap_range(&self, va: u64, len: u64, defer: bool) -> Result<(), String> {
+        self.rm
+            .unmap_range(self.space, va, len, defer)
+            .map_err(|e| format!("unmap range {va:#x}+{len:#x}: {e:?}"))
     }
 }

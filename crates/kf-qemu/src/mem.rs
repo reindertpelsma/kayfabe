@@ -364,6 +364,112 @@ pub struct GpuMirror {
     pub rows: PlacedRows,
     /// ★ P6b: OUR VMM placements in this space — the two windows and the ring region.
     pub reserved: Vec<(u64, u64)>,
+    /// ★ `V3_BATCHED_MAP.md`: guest RAM as QEMU registered it — the memfd a batch is stitched from
+    /// (`None`: this mirror never batches).
+    pub ram: Option<&'static RamMap>,
+    /// ★ `V3_BATCHED_MAP.md` §5: the same space, placing batches and booking their objects.
+    pub bv: kf_mem::batch::BatchedVas<'static>,
+    /// ★ Host RM calls this space has cost, for the retire line (per CUDA process).
+    pub calls: SpaceCalls,
+}
+
+/// ★ `V3_BATCHED_MAP.md`: what one mirrored space cost in host RM calls over its life — the
+/// per-process instrument the retire line prints.
+#[derive(Debug, Default)]
+pub struct SpaceCalls {
+    /// Per-run `NV_ESC_RM_MAP_MEMORY_DMA`.
+    pub maps: AtomicU64,
+    /// Batches placed (each = ONE `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` + ONE map).
+    pub batches: AtomicU64,
+    /// Runs those batches carried.
+    pub batched_runs: AtomicU64,
+    /// Batches refused (their runs then went one by one).
+    pub batch_refused: AtomicU64,
+    /// `NV_ESC_RM_UNMAP_MEMORY_DMA` calls — per-run or range.
+    pub unmaps: AtomicU64,
+    /// Of which ranges.
+    pub ranges: AtomicU64,
+    /// ns inside map verbs (per-run + batch).
+    pub map_ns: AtomicU64,
+    /// ns inside unmap verbs (incl. the frees they trigger).
+    pub unmap_ns: AtomicU64,
+}
+
+impl SpaceCalls {
+    fn line(&self, frees: u64) -> String {
+        let g = |a: &AtomicU64| a.load(Ordering::Relaxed);
+        format!(
+            "host RM over its life: {} map call(s) ({} per-run, {} batch(es) x2 carrying {} runs, {} batch(es) refused) in {} ms; {} unmap call(s) ({} range(s)) + {} free(s) in {} ms",
+            g(&self.maps) + 2 * g(&self.batches),
+            g(&self.maps),
+            g(&self.batches),
+            g(&self.batched_runs),
+            g(&self.batch_refused),
+            g(&self.map_ns) / 1_000_000,
+            g(&self.unmaps),
+            g(&self.ranges),
+            frees,
+            g(&self.unmap_ns) / 1_000_000
+        )
+    }
+}
+
+/// ★ `KF3_NO_BATCHED_MAP=1` turns batched maps and range unmaps off (the per-run path, as before
+/// `V3_BATCHED_MAP.md`) — for A/B measurement. Read once.
+fn batching_enabled() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("KF3_NO_BATCHED_MAP").is_none())
+}
+
+fn ns_since(t: std::time::Instant) -> u64 {
+    u64::try_from(t.elapsed().as_nanos()).unwrap_or(u64::MAX)
+}
+
+impl GpuMirror {
+    /// A mirror over `vas`, batching through `ram`'s memfd when it has one.
+    #[must_use]
+    pub fn new(vas: HostVas<'static>, rows: PlacedRows, reserved: Vec<(u64, u64)>, ram: Option<&'static RamMap>) -> Self {
+        GpuMirror { vas, rows, reserved, ram, bv: kf_mem::batch::BatchedVas::new(vas), calls: SpaceCalls::default() }
+    }
+
+    /// Batch objects freed so far.
+    fn frees(&self) -> u64 {
+        self.bv.frees.load(Ordering::Relaxed)
+    }
+
+    /// The retire line's cost summary.
+    pub fn calls_line(&self) -> String {
+        self.calls.line(self.frees())
+    }
+
+    /// ★ Retire-time teardown: every row, as few ranges as are VA-contiguous; then every batch
+    /// object. Returns `(rows, refused, host calls)`.
+    fn unmap_all_rows(&self) -> (usize, usize, u64) {
+        let rows: Vec<(u64, u64)> = self.rows.read().map(|r| r.iter().map(|(&va, &(len, _, _))| (va, len)).collect()).unwrap_or_default();
+        let before = self.calls.unmaps.load(Ordering::Relaxed) + self.frees();
+        let mut refused = 0usize;
+        let mut k = 0;
+        while k < rows.len() {
+            let mut j = k + 1;
+            while j < rows.len() && rows[j - 1].0.checked_add(rows[j - 1].1) == Some(rows[j].0) {
+                j += 1;
+            }
+            let (va, end) = (rows[k].0, rows[j - 1].0 + rows[j - 1].1);
+            if j - k < 2 || self.unmap_range(va, end - va, true).is_err() {
+                for &(va, _) in &rows[k..j] {
+                    if self.unmap(va, true).is_err() {
+                        refused += 1;
+                    }
+                }
+            }
+            k = j;
+        }
+        // Whatever batch objects remain (a refused unmap left a piece): freeing one unmaps its
+        // pieces (`rs_client.c:1342-1395`) — the space is being retired, nothing may keep them.
+        let _ = self.bv.drain();
+        let after = self.calls.unmaps.load(Ordering::Relaxed) + self.frees();
+        (rows.len(), refused, after - before)
+    }
 }
 
 /// The VMM ranges of a space whose windows are at `fb` and `ram` (`(base, len)`).
@@ -376,7 +482,11 @@ pub fn vmm_ranges(fb: Option<(u64, u64)>, ram: Option<(u64, u64)>) -> Vec<(u64, 
 
 impl MapTarget for GpuMirror {
     fn map(&self, d: &Desired, defer: bool) -> Result<Mapped, String> {
-        let m = self.vas.map(d, defer)?;
+        let t = std::time::Instant::now();
+        let m = self.vas.map(d, defer);
+        self.calls.maps.fetch_add(1, Ordering::Relaxed);
+        self.calls.map_ns.fetch_add(ns_since(t), Ordering::Relaxed);
+        let m = m?;
         // ★ P6b ruling (a): only a mapping WE placed is a row a reader may resolve through.
         if m == Mapped::Placed
             && let Ok(mut r) = self.rows.write()
@@ -384,6 +494,27 @@ impl MapTarget for GpuMirror {
             r.insert(d.va, (d.len, d.off, d.ram));
         }
         Ok(m)
+    }
+    fn map_batch(&self, rows: &[Desired], defer: bool) -> Result<(), String> {
+        let (Some(ram), true) = (self.ram, batching_enabled()) else {
+            return Err(kf_mem::ledger::NOT_BATCHED.into());
+        };
+        let fd = ram.backing_fd().ok_or("no fd-backed guest RAM to stitch a batch from")?;
+        let t = std::time::Instant::now();
+        let placed = self.bv.place(fd.borrow(), rows, defer);
+        self.calls.map_ns.fetch_add(ns_since(t), Ordering::Relaxed);
+        if let Err(e) = placed {
+            self.calls.batch_refused.fetch_add(1, Ordering::Relaxed);
+            return Err(e);
+        }
+        self.calls.batches.fetch_add(1, Ordering::Relaxed);
+        self.calls.batched_runs.fetch_add(rows.len() as u64, Ordering::Relaxed);
+        if let Ok(mut r) = self.rows.write() {
+            for d in rows {
+                r.insert(d.va, (d.len, d.off, d.ram));
+            }
+        }
+        Ok(())
     }
     fn reserved(&self) -> Vec<(u64, u64)> {
         self.reserved.clone()
@@ -394,16 +525,53 @@ impl MapTarget for GpuMirror {
         // own buffer) or one the channel plane handed to host RM (a steered falcon context). A
         // host unmap there would name host RM's mapping, which is not ours to remove (`[measured
         // vvid vid11]` refused `Other(87)`, leaving the space unsettled): answered with no host call.
-        match self.rows.write() {
-            Ok(mut r) => {
-                if r.remove(&va).is_none() {
+        let row = match self.rows.write() {
+            Ok(mut r) => match r.remove(&va) {
+                Some(row) => row,
+                None => {
                     eprintln!("kf3: mem unmap {va:#x}: no placement of ours there (host-held or handed to host RM) — no host call");
                     return Ok(());
                 }
-            }
+            },
             Err(_) => return Err(format!("unmap {va:#x}: placement rows poisoned")),
+        };
+        let t = std::time::Instant::now();
+        let r = self.bv.unmap_run(va, Some(row.0), defer);
+        self.calls.unmaps.fetch_add(1, Ordering::Relaxed);
+        self.calls.unmap_ns.fetch_add(ns_since(t), Ordering::Relaxed);
+        r
+    }
+    fn unmap_range(&self, va: u64, len: u64, defer: bool) -> Result<(), String> {
+        if !batching_enabled() {
+            return Err(kf_mem::ledger::NOT_BATCHED.into());
         }
-        self.vas.unmap(va, defer)
+        let end = va.checked_add(len).ok_or("unmap range overflows")?;
+        // ⊘ Belt and braces: RM removes EVERY mapping of ours in the range, so it must never reach
+        // one of our VMM placements (a guest row over one is refused at map time — this re-checks).
+        if let Some(&(a, b)) = self.reserved.iter().find(|&&(a, b)| va < b && a < end) {
+            return Err(format!("unmap range {va:#x}+{len:#x} reaches OUR placement [{a:#x}, {b:#x}) — refused"));
+        }
+        // ⊘ Forget the rows FIRST (as `unmap`); put them back if the host refuses, so the per-run
+        // fallback still knows each run's length.
+        let removed: Vec<(u64, (u64, u64, bool))> = self
+            .rows
+            .write()
+            .map(|mut r| {
+                let keys: Vec<u64> = r.range(va..end).map(|(&k, _)| k).collect();
+                keys.into_iter().filter_map(|k| r.remove(&k).map(|v| (k, v))).collect()
+            })
+            .unwrap_or_default();
+        let t = std::time::Instant::now();
+        let r = self.bv.unmap_range(va, len, defer);
+        self.calls.unmaps.fetch_add(1, Ordering::Relaxed);
+        self.calls.ranges.fetch_add(1, Ordering::Relaxed);
+        if r.is_err()
+            && let Ok(mut rows) = self.rows.write()
+        {
+            rows.extend(removed);
+        }
+        self.calls.unmap_ns.fetch_add(ns_since(t), Ordering::Relaxed);
+        r
     }
     fn invalidate(&self) -> Result<(), String> {
         self.vas.invalidate()
@@ -471,6 +639,22 @@ impl MapTarget for Target {
             Target::Window(w) => w.map(d, defer),
             Target::Bar1(b) => b.map(d, defer),
             Target::Gpu(g) => g.map(d, defer),
+        }
+    }
+    // ★ `V3_BATCHED_MAP.md`: forwarded EXPLICITLY — a trait default here would silently answer
+    // `NOT_BATCHED` for every space (`[measured bm1]`: 3 groups formed, 0 batched, 12 291 verbs).
+    fn map_batch(&self, rows: &[Desired], defer: bool) -> Result<(), String> {
+        match self {
+            Target::Window(w) => w.map_batch(rows, defer),
+            Target::Bar1(b) => b.win.map_batch(rows, defer),
+            Target::Gpu(g) => g.map_batch(rows, defer),
+        }
+    }
+    fn unmap_range(&self, va: u64, len: u64, defer: bool) -> Result<(), String> {
+        match self {
+            Target::Window(w) => w.unmap_range(va, len, defer),
+            Target::Bar1(b) => b.win.unmap_range(va, len, defer),
+            Target::Gpu(g) => g.unmap_range(va, len, defer),
         }
     }
     fn reserved(&self) -> Vec<(u64, u64)> {
@@ -1146,7 +1330,7 @@ fn create_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, store: 
         space.space,
         ns / 1000
     );
-    m.table.insert(key, Target::Gpu(GpuMirror { vas: HostVas { rm, space, store, ram_obj: ram_obj.map(|(o, _)| o) }, rows, reserved }));
+    m.table.insert(key, Target::Gpu(GpuMirror::new(HostVas { rm, space, store, ram_obj: ram_obj.map(|(o, _)| o) }, rows, reserved, Some(plane.ram))));
     Ok(())
 }
 
@@ -1225,16 +1409,14 @@ fn retire_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, key: Va
     }
     // ★ Our placements in this space, from the space's own row record (what we PLACED, never a
     // copy of the guest's tables); the walker's slot for it is released by `m.remove`.
-    let rows: Vec<u64> = g.rows.read().map(|r| r.keys().copied().collect()).unwrap_or_default();
-    let mut refused = 0usize;
-    for va in &rows {
-        if g.unmap(*va, true).is_err() {
-            refused += 1;
-        }
-    }
-    if !rows.is_empty() && g.invalidate().is_err() {
+    // ★ V3_BATCHED_MAP: VA-contiguous rows go as one range each; every batch object is freed.
+    let t_unmap = std::time::Instant::now();
+    let (nrows, mut refused, calls) = g.unmap_all_rows();
+    let host_calls = calls + u64::from(nrows > 0);
+    if nrows > 0 && g.invalidate().is_err() {
         refused += 1;
     }
+    let unmap_us = t_unmap.elapsed().as_micros();
     let spare = mirror.map(|mi| Spare { space: mi.space, fb_base: mi.fb_base, ram: mi.ram, ram_obj: mi.ram_obj, rings: mi.rings });
     let recycled = match (spare, refused) {
         (Some(sp), 0) => plane.spares.lock().ok().filter(|v| v.len() < SPARES_MAX).map(|mut v| v.push(sp)).is_some(),
@@ -1245,10 +1427,10 @@ fn retire_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, key: Va
         rm.free_vaspace(g.vas.space);
     }
     format!(
-        "retire {key:?}: {} row(s) unmapped ({refused} refused), host space {:#x} {}",
-        rows.len(),
+        "retire {key:?}: {nrows} row(s) unmapped ({refused} refused) in {unmap_us} us, {host_calls} host call(s), host space {:#x} {} — {}",
         g.vas.space.space,
-        if recycled { "kept as a spare" } else { "freed" }
+        if recycled { "kept as a spare" } else { "freed" },
+        g.calls_line()
     )
 }
 
@@ -1327,7 +1509,7 @@ pub fn apply_statement(
                         );
                     }
                     plane.counters.mirrors_reused.fetch_add(1, Ordering::Relaxed);
-                    m.table.insert(key, Target::Gpu(GpuMirror { vas: HostVas { rm, space: sp.space, store, ram_obj: sp.ram_obj }, rows, reserved }));
+                    m.table.insert(key, Target::Gpu(GpuMirror::new(HostVas { rm, space: sp.space, store, ram_obj: sp.ram_obj }, rows, reserved, Some(plane.ram))));
                 } else if let Err(line) = create_mirror(m, plane, rm, store, key) {
                     return line;
                 }

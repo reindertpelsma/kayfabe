@@ -182,3 +182,8 @@ Each cell mean of 3 processes.
   1 Mi runs. Verified: 24/24 no-PM and 24/24 PM torch processes per boot (`vf1`), gate9's growth arm.
   ⚠ Follow-up: each scattered 4 KiB run is ONE host map call on the guest-RAM object (~12.6 k per
   fragmented process) — a batched verb (e.g. a page-list object mapped once) is the next budget.
+  ✔ **ANSWERED 2026-09-26 (`v3-batchmap`, `V3_BATCHED_MAP.md`):** VA-contiguous guest-RAM runs are
+  ONE `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` over a stitched view, mapped once; VA-adjacent unmaps are
+  ONE `NVOS47` range. A 12 288-run space: 3 map + 1 unmap verbs (was 24 576); exit unmap 1 256 →
+  7 ms (the per-run unmap was O(mappings): RM walks the whole inter-mapping list per call); no-PM
+  process 4.7 → 4.3 s mean on `vh`. The map half is slower (265 → 352 ms: stitch `mmap`s).

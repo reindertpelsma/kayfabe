@@ -12,7 +12,7 @@
 pub mod channel;
 pub mod event;
 pub use event::EventFd;
-pub use channel::{Channel, MapBacking, RingSpec, VaSpace};
+pub use channel::{Channel, MapBacking, RingSpec, ScatterError, VaSpace};
 
 use kf_abi::bringup::{
     NV_ESC_CHECK_VERSION_STR, NV_ESC_REGISTER_FD, NV_ESC_RM_ALLOC_MEMORY, NV_IOCTL_MAGIC,
@@ -928,6 +928,25 @@ impl HostRm {
         gpu_va: u64,
         flags: u32,
     ) -> Result<(), RmError> {
+        self.raw_unmap_dma_range(h_dma, gpu_va, 0, flags)
+    }
+
+    /// ★★★ `NV_ESC_RM_UNMAP_MEMORY_DMA` over a VA RANGE (`V3_BATCHED_MAP.md` §4): `size != 0`
+    /// unmaps **every** mapping in `h_dma` that intersects `[gpu_va, gpu_va+size)`, splitting one
+    /// that straddles an edge (`ogkm-580 rs_server.c:2365-2427` `serverInterUnmapInternal`;
+    /// `virtual_mem.c:1681-1790`, `virtmemIsPartialUnmapSupported` = `NV_TRUE`). A range that
+    /// intersects nothing is `NV_OK` — the post-condition "nothing of ours is mapped there" holds.
+    /// `size == 0` is the legacy whole-mapping unmap keyed by the EXACT start.
+    ///
+    /// # Errors
+    /// The host's status.
+    pub fn raw_unmap_dma_range(
+        &self,
+        h_dma: u32,
+        gpu_va: u64,
+        size: u64,
+        flags: u32,
+    ) -> Result<(), RmError> {
         let mut arg = [0u8; Nvos47Parameters::SIZE];
         Nvos47Parameters {
             h_client: self.client.raw(),
@@ -936,7 +955,7 @@ impl HostRm {
             h_memory: 0,
             flags,
             dma_offset: gpu_va,
-            size: 0,
+            size,
             status: 0,
         }
         .encode_into(&mut arg)

@@ -59,6 +59,27 @@ impl<T: MapTarget> MapTarget for Recorded<T> {
         self.rows.borrow_mut().remove(&va);
         self.inner.unmap(va, defer)
     }
+    fn map_batch(&self, rows: &[Desired], defer: bool) -> Result<(), String> {
+        self.inner.map_batch(rows, defer)?;
+        let mut r = self.rows.borrow_mut();
+        for d in rows {
+            r.insert(d.va, (d.len, d.off, d.ram));
+        }
+        Ok(())
+    }
+    fn unmap_range(&self, va: u64, len: u64, defer: bool) -> Result<(), String> {
+        let end = va.saturating_add(len);
+        let removed: Vec<(u64, (u64, u64, bool))> = {
+            let mut r = self.rows.borrow_mut();
+            let keys: Vec<u64> = r.range(va..end).map(|(&k, _)| k).collect();
+            keys.into_iter().filter_map(|k| r.remove(&k).map(|v| (k, v))).collect()
+        };
+        let res = self.inner.unmap_range(va, len, defer);
+        if res.is_err() {
+            self.rows.borrow_mut().extend(removed);
+        }
+        res
+    }
     fn invalidate(&self) -> Result<(), String> {
         self.inner.invalidate()
     }
@@ -67,6 +88,59 @@ impl<T: MapTarget> MapTarget for Recorded<T> {
     }
     fn reserved(&self) -> Vec<(u64, u64)> {
         self.inner.reserved()
+    }
+}
+
+/// ★ `V3_BATCHED_MAP.md`: a host space that places VA-contiguous guest-RAM runs as batches
+/// stitched from `ram_fd` — the production verbs ([`kf_mem::batch::BatchedVas`]) under a gate.
+pub struct Batching<'a> {
+    /// The space and its batch book.
+    pub bv: kf_mem::batch::BatchedVas<'a>,
+    /// The guest-RAM memfd.
+    pub ram_fd: std::os::fd::BorrowedFd<'a>,
+    lens: RefCell<BTreeMap<u64, u64>>,
+}
+
+impl<'a> Batching<'a> {
+    /// Batch over `vas`, stitching from `ram_fd`.
+    #[must_use]
+    pub fn new(vas: kf_mem::ledger::HostVas<'a>, ram_fd: std::os::fd::BorrowedFd<'a>) -> Self {
+        Batching { bv: kf_mem::batch::BatchedVas::new(vas), ram_fd, lens: RefCell::new(BTreeMap::new()) }
+    }
+}
+
+impl MapTarget for Batching<'_> {
+    fn map(&self, d: &Desired, defer: bool) -> Result<Mapped, String> {
+        let m = self.bv.vas.map(d, defer)?;
+        if m == Mapped::Placed {
+            self.lens.borrow_mut().insert(d.va, d.len);
+        }
+        Ok(m)
+    }
+    fn map_batch(&self, rows: &[Desired], defer: bool) -> Result<(), String> {
+        self.bv.place(self.ram_fd, rows, defer)?;
+        let mut l = self.lens.borrow_mut();
+        for d in rows {
+            l.insert(d.va, d.len);
+        }
+        Ok(())
+    }
+    fn unmap(&self, va: u64, defer: bool) -> Result<(), String> {
+        let len = self.lens.borrow_mut().remove(&va);
+        self.bv.unmap_run(va, len, defer)
+    }
+    fn unmap_range(&self, va: u64, len: u64, defer: bool) -> Result<(), String> {
+        self.bv.unmap_range(va, len, defer)?;
+        let end = va.saturating_add(len);
+        let mut l = self.lens.borrow_mut();
+        let keys: Vec<u64> = l.range(va..end).map(|(&k, _)| k).collect();
+        for k in keys {
+            l.remove(&k);
+        }
+        Ok(())
+    }
+    fn invalidate(&self) -> Result<(), String> {
+        self.bv.vas.invalidate()
     }
 }
 

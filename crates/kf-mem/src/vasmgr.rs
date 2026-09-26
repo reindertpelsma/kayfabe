@@ -551,6 +551,14 @@ pub struct VaStats {
     pub mapped: u64,
     /// Host maps removed.
     pub unmapped: u64,
+    /// ★ `V3_BATCHED_MAP.md`: batched maps placed, and the runs they carried (in `mapped`).
+    pub batches: u64,
+    /// Runs placed by batches.
+    pub batched_runs: u64,
+    /// Range unmaps performed.
+    pub range_unmaps: u64,
+    /// Batches / ranges the target refused (their runs then went one by one).
+    pub batch_fallbacks: u64,
     /// Host TLB invalidates issued (ONE per space per applied diff that changed anything).
     pub host_invalidates: u64,
     /// Triggers cleared by us.
@@ -1083,21 +1091,35 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             self.stats.timing.apply_ns += apply_ns;
             // ★ w829: the host-map cost of a large diff (a fragmented CUDA space is ~10^4 runs,
             // each ONE host map call on the guest-RAM object) — named, it is the next budget.
+            // ★ V3_BATCHED_MAP: runs vs the verbs they cost (a batch / a range is ONE verb).
             if a.mapped + a.unmapped >= 1000 {
                 eprintln!(
-                    "kf3: mem large apply {key:?}: {} maps + {} unmaps in {} ms ({} us per host call)",
+                    "kf3: mem large apply {key:?}: {} maps + {} unmaps in {} ms — {} map verb(s) ({} batch(es) carrying {} runs), {} unmap verb(s) ({} range(s) carrying {} runs), {} fallback(s){}",
                     a.mapped,
                     a.unmapped,
                     apply_ns / 1_000_000,
-                    apply_ns / 1000 / (a.mapped + a.unmapped).max(1) as u64
+                    a.map_calls,
+                    a.batches,
+                    a.batched_runs,
+                    a.unmap_calls,
+                    a.range_unmaps,
+                    a.range_unmapped_runs,
+                    a.batch_fallbacks,
+                    a.first_batch_fallback.as_deref().map(|w| format!(" (first: {w})")).unwrap_or_default()
                 );
+            } else if let Some(w) = &a.first_batch_fallback {
+                eprintln!("kf3: mem batch fallback {key:?}: {w}");
             }
             for (i, &c) in a.codes.iter().enumerate() {
                 if let Some(slot) = codes.get_mut(e.first + i) {
                     *slot = c;
                 }
             }
-            self.stats.timing.host_calls += (a.mapped + a.unmapped) as u64 + u64::from(a.invalidated);
+            self.stats.timing.host_calls += (a.map_calls + a.unmap_calls) as u64 + u64::from(a.invalidated);
+            self.stats.batches += a.batches as u64;
+            self.stats.batched_runs += a.batched_runs as u64;
+            self.stats.range_unmaps += a.range_unmaps as u64;
+            self.stats.batch_fallbacks += a.batch_fallbacks as u64;
             self.stats.mapped += a.mapped as u64;
             self.stats.unmapped += a.unmapped as u64;
             self.stats.host_invalidates += u64::from(a.invalidated);
