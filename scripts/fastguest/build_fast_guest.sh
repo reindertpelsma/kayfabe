@@ -377,7 +377,12 @@ fi
 # names; they came from the image's own `modules.dep`.
 while read -r ko; do
     [ -f "/lib/modules/$ko" ] || continue
-    if insmod "/lib/modules/$ko" 2>&1; then
+    # ★ v3-initrace: `KF_NVREG=<key=value[;…]>` on the kernel command line reaches nvidia.ko as
+    # `NVreg_RegistryDwords` (busybox insmod reads no /proc/cmdline options). Default: nothing.
+    NVARG=""
+    [ "$ko" = nvidia.ko ] && [ -n "${KF_NVREG:-}" ] && NVARG="NVreg_RegistryDwords=$KF_NVREG"
+    [ -n "$NVARG" ] && echo "FASTGUEST: nvidia.ko $NVARG"
+    if insmod "/lib/modules/$ko" $NVARG 2>&1; then
         echo "FASTGUEST: insmod $ko ok"
     else
         echo "FASTGUEST: insmod $ko FAILED"
