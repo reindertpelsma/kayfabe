@@ -359,6 +359,15 @@ impl Walker for GpuWalker {
                 .filter(|p| p.reserved2 != 0)
                 .map(|p| format!("pdb {:#x} slot {} refuse {:#x}", p.pdb, p.reserved, p.reserved2))
                 .collect();
+            if std::env::var_os("KF_VAS_CENSUS").is_some() {
+                for (i, p) in r.pdbs.iter().enumerate() {
+                    if p.reserved2 != 0
+                        && let Ok(runs) = self.kernel.debug_walk_runs(i as u32)
+                    {
+                        eprintln!("kf3: census walk entry {i} pdb {:#x}: {}", p.pdb, run_census(&runs));
+                    }
+                }
+            }
             return Err(format!(
                 "walk report TRUNCATED (flags={:#x}, refuse_mask={:#x}, runs {} of {}; refusing entries: [{}]): \
                  nothing of it is applied, nothing committed",
@@ -427,6 +436,38 @@ impl Walker for GpuWalker {
     fn slots(&self) -> u32 {
         self.kernel.max_slots()
     }
+}
+
+/// Diagnostics: a walk table slice summarised — per aperture, per page size, per 1 GiB of VA,
+/// and a sample of runs.
+fn run_census(runs: &[kf_cuda::abi::KfMapRun]) -> String {
+    let mut ap: BTreeMap<u8, usize> = BTreeMap::new();
+    let mut lens: BTreeMap<u64, usize> = BTreeMap::new();
+    let mut gib: BTreeMap<u64, (usize, u64, u64)> = BTreeMap::new();
+    for m in runs {
+        *ap.entry(m.aperture()).or_default() += 1;
+        *lens.entry(m.len).or_default() += 1;
+        let g = gib.entry(m.va >> 30).or_insert((0, u64::MAX, 0));
+        g.0 += 1;
+        g.1 = g.1.min(m.gpga);
+        g.2 = g.2.max(m.gpga);
+    }
+    let mut top_lens: Vec<(u64, usize)> = lens.into_iter().collect();
+    top_lens.sort_by(|a, b| b.1.cmp(&a.1));
+    top_lens.truncate(6);
+    let gib: Vec<String> =
+        gib.iter().map(|(g, (n, lo, hi))| format!("va{:#x}G:{n}(gpga {lo:#x}..{hi:#x})", g)).collect();
+    let sample: Vec<String> = runs
+        .iter()
+        .step_by((runs.len() / 12).max(1))
+        .map(|m| format!("{:#x}->{:#x}+{:#x}/f{:#x}", m.va, m.gpga, m.len, m.flags))
+        .collect();
+    format!(
+        "{} runs; ap {ap:?}; lens {top_lens:x?}; by-GiB [{}]; sample [{}]",
+        runs.len(),
+        gib.join(" "),
+        sample.join(" ")
+    )
 }
 
 /// The default coverage grain: 4 KiB, the smallest GMMU page on every family this tree models.

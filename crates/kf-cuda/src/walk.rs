@@ -1634,6 +1634,34 @@ impl WalkKernel {
         self.cu.memcpy_d2h(buf, src, "cuMemcpyDtoH(read_store)")
     }
 
+    /// Diagnostics: the LAST walk's runs for walk entry `entry` (up to `runs_per_pdb`, the table
+    /// slice — a truncated walk's slice holds the first `runs_per_pdb` it found). ⊘ A read-back
+    /// of OUR table, never of a guest one; only a refusal's census calls it.
+    ///
+    /// # Errors
+    /// Refused past [`KF_MAX_PDB`]; the CUDA error otherwise.
+    pub fn debug_walk_runs(&self, entry: u32) -> Result<Vec<KfMapRun>, CudaError> {
+        if entry as usize >= KF_MAX_PDB {
+            return Err(refused("WalkKernel::debug_walk_runs", format!("entry {entry}")));
+        }
+        let rpp = self.cfg.runs_per_pdb as usize;
+        let mut buf = vec![0u8; rpp * 32];
+        let at = self.walk.ptr + (entry as u64) * (rpp as u64) * 32;
+        self.cu.memcpy_d2h(&mut buf, at, "cuMemcpyDtoH(debug_walk_runs)")?;
+        let u64at = |b: &[u8], o: usize| u64::from_le_bytes(b[o..o + 8].try_into().unwrap_or([0; 8]));
+        Ok(buf
+            .chunks_exact(32)
+            .map(|c| KfMapRun {
+                va: u64at(c, 0),
+                gpga: u64at(c, 8),
+                len: u64at(c, 16),
+                flags: u32::from_le_bytes(c[24..28].try_into().unwrap_or([0; 4])),
+                op: u16::from_le_bytes(c[28..30].try_into().unwrap_or([0; 2])),
+                pdb_index: u16::from_le_bytes(c[30..32].try_into().unwrap_or([0; 2])),
+            })
+            .collect())
+    }
+
     /// Read `buf.len()` bytes of an uploaded image at `off`, bounds-checked against it.
     ///
     /// # Errors
