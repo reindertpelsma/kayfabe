@@ -267,3 +267,53 @@ pub fn choose_host_classes(
     let chosen = family.host_classes(host_classlist).map_err(|e| format!("{e:?}"))?;
     Ok(Box::new(chosen))
 }
+
+/// ★★ `NV2080_INTR_CATEGORY_*` subtree masks, AUTHORED per family from the ogkm source (owner
+/// ruling 3, `docs/design/V3_DRIVER_MATRIX.md` §8.2): the map a host reports through
+/// `MC_GET_INTR_CATEGORY_SUBTREE_MAP` — a control that does not exist below 580.65.06 `[matrix]`.
+/// Index = category (`DEFAULT, ESCHED_DRIVEN_ENGINE, ESCHED_DRIVEN_ENGINE_NOTIFICATION, RUNLIST,
+/// RUNLIST_NOTIFICATION, UVM_OWNED, UVM_SHARED`, `ogkm-580: ctrl2080mc.h:329-338`).
+///
+/// - Turing / Ampere / Ada: `intrInitSubtreeMap_TU102` (`ogkm-580:
+///   src/nvidia/src/kernel/gpu/intr/arch/turing/intr_tu102.c:1284-1317`) — engine stall on
+///   `NV_CPU_INTR_STALL_SUBTREE_START..LAST` = 3, engine notification on `TOP_SUBTREE(0)`, UVM
+///   owned on 1, UVM shared on 2 (`published/{turing/tu102,ampere/ga100}/dev_vm_addendum.h:33-44`);
+///   no runlist categories. `[measured]` identical to a GA106 host's own answer on 580.159.04.
+/// - Hopper: `intrInitSubtreeMap_GH100` (`intr/arch/hopper/intr_gh100.c:39-86`) — the same plus
+///   RUNLIST on `STALL_SUBTREE_LAST_SWRL` = 4 and RUNLIST_NOTIFICATION on `STALL_SUBTREE_LAST` = 5
+///   (`published/hopper/gh100/dev_vm_addendum.h:33-45`).
+/// - Blackwell: `None` — the open tree binds no physical-RM implementation to it, so there is no
+///   source to author from; a Blackwell host that cannot report the map is refused by name.
+#[must_use]
+pub const fn authored_intr_subtree_map(f: Family) -> Option<[u64; 7]> {
+    match f {
+        Family::Turing | Family::Ampere | Family::Ada => Some([0, 1 << 3, 1 << 0, 0, 0, 1 << 1, 1 << 2]),
+        Family::Hopper => Some([0, 1 << 3, 1 << 0, 1 << 4, 1 << 5, 1 << 1, 1 << 2]),
+        Family::Blackwell => None,
+    }
+}
+
+#[cfg(test)]
+mod authored_intr_tests {
+    use super::*;
+
+    /// ★ The authored Ampere map is the one a real GA106 host reported (`kf-rm`'s captured row,
+    /// `tests/support/ga106.rs` `INTR_SUBTREE_MAP` = `[0x0, 0x8, 0x1, 0x0, 0x0, 0x2, 0x4]`).
+    #[test]
+    fn the_ampere_map_is_what_a_ga106_host_reports() {
+        assert_eq!(authored_intr_subtree_map(Family::Ampere), Some([0x0, 0x8, 0x1, 0x0, 0x0, 0x2, 0x4]));
+    }
+
+    /// Every authored mask is one contiguous run (a ≤575 guest's `{start, end}` form can say it).
+    #[test]
+    fn every_authored_mask_is_one_run() {
+        for f in [Family::Turing, Family::Ampere, Family::Ada, Family::Hopper] {
+            for m in authored_intr_subtree_map(f).expect("authored") {
+                if m != 0 {
+                    let lo = m.trailing_zeros();
+                    assert_eq!(m >> lo & (m >> lo).wrapping_add(1), 0, "{f:?}: {m:#x}");
+                }
+            }
+        }
+    }
+}

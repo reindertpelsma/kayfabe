@@ -898,3 +898,27 @@ fn the_gpc_map_is_the_real_ga106s_own_grmgr_answer() {
     assert_eq!(g.fs_extra, None, "the optional batch has no capture");
     assert!(host.0.asked.contains(&kf_abi::grfsinfo::NV2080_CTRL_CMD_GRMGR_GET_GR_FS_INFO));
 }
+
+/// ★ Ruling 3: a host whose driver HAS NO `MC_GET_INTR_CATEGORY_SUBTREE_MAP` (below 580.65.06,
+/// measured) gets the family's map authored from ogkm — the one a real GA106 reports — and the
+/// field is no longer refused. A host that merely refuses the control keeps it refused (the test
+/// above): the fallback is for a measured absence, never for a refusal.
+#[test]
+fn a_host_without_the_subtree_map_control_gets_the_family_map() {
+    struct Pre58065(Ga106Replay);
+    impl HostControls for Pre58065 {
+        fn control(&mut self, cmd: u32, params: &mut [u8]) -> Result<(), HostRefusal> {
+            self.0.control(cmd, params)
+        }
+        fn device_control(&mut self, cmd: u32, params: &mut [u8]) -> Result<(), HostRefusal> {
+            self.0.device_control(cmd, params)
+        }
+        fn lacks_control(&self, cmd: u32) -> bool {
+            cmd == 0x2080_170f
+        }
+    }
+    let mut host = Pre58065(Ga106Replay::load());
+    let refused = hostquery::query_host_facts(&mut host, Family::Ampere).expect_err("other controls have no capture");
+    assert!(!refused.fields().contains(&"intr_subtree_map"), "{refused}");
+    assert_eq!(kf_chip::authored_intr_subtree_map(Family::Ampere), Some([0x0, 0x8, 0x1, 0x0, 0x0, 0x2, 0x4]));
+}

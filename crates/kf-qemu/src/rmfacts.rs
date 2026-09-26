@@ -43,6 +43,13 @@ fn nv_status(e: &kf_host::RmError) -> Option<u32> {
 }
 
 impl HostControls for Session<'_> {
+    fn lacks_control(&self, cmd: u32) -> bool {
+        matches!(
+            self.0.host_abi().control_carry(cmd),
+            Err(kf_abi::hostabi::HostAbiError::Layout(kf_abi::matrix::LayoutError::NoStruct { .. }))
+        )
+    }
+
     fn control(&mut self, cmd: u32, params: &mut [u8]) -> Result<(), HostRefusal> {
         let object = if cmd >> 16 == 0x9096 {
             match self.1 {
