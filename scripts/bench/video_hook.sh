@@ -15,6 +15,8 @@ echo "=== video hook: ffmpeg sha256 $(sha256sum "$FF" | cut -c1-16)  lane md5 $(
 $G 'mkdir -p /var/tmp/vid && cat > /var/tmp/vid/ffmpeg && chmod +x /var/tmp/vid/ffmpeg' < "$FF" || { echo "push ffmpeg failed"; echo HOOK_RC=2; exit 2; }
 $G 'cat > /var/tmp/vid/video_lane.sh' < "$SRC_DIR/video_lane.sh"
 $G 'ls /usr/lib/x86_64-linux-gnu/ | grep -E "libnvidia-encode.so.1|libnvcuvid.so.1|libcuda.so.1" | tr "\n" " "; echo'
+# ★ VIDEO_SKIP=1: push the tools, run nothing (interactive diagnosis with VIDEO_HOLD=1).
+if [ "${VIDEO_SKIP:-0}" = 1 ]; then VIDEO_SHIM=; fi
 # ★ Optional ioctl differential (VIDEO_SHIM = the nvdiff LD_PRELOAD recorder built on the host):
 # the same small encode and decode the host trace was taken with, recorded in the guest.
 if [ -n "${VIDEO_SHIM:-}" ] && [ -f "$VIDEO_SHIM" ]; then
@@ -28,9 +30,9 @@ if [ -n "${VIDEO_SHIM:-}" ] && [ -f "$VIDEO_SHIM" ]; then
     echo "TRACE_$w records=$(wc -l < /workspace/bench/run_${1}_$w.jsonl)"
   done
 fi
-$G "rm -rf /var/tmp/vid/out /var/tmp/vid/lane.rc; nohup setsid bash -c 'timeout -s INT $TO bash /var/tmp/vid/video_lane.sh /var/tmp/vid/ffmpeg /var/tmp/vid/out; echo LANE_EXIT=\$? > /var/tmp/vid/lane.rc' >/dev/null 2>&1 < /dev/null &"
+[ "${VIDEO_SKIP:-0}" = 1 ] || $G "rm -rf /var/tmp/vid/out /var/tmp/vid/lane.rc; nohup setsid bash -c 'timeout -s INT $TO bash /var/tmp/vid/video_lane.sh /var/tmp/vid/ffmpeg /var/tmp/vid/out; echo LANE_EXIT=\$? > /var/tmp/vid/lane.rc' >/dev/null 2>&1 < /dev/null &"
 t0=$(date +%s)
-while :; do
+while [ "${VIDEO_SKIP:-0}" != 1 ]; do
   sleep 5
   if $G 'test -s /var/tmp/vid/lane.rc'; then break; fi
   if [ $(( $(date +%s) - t0 )) -gt $(( TO + 60 )) ]; then echo "★ video hook: no lane.rc after $((TO+60))s — the guest lane did not terminate"; break; fi
