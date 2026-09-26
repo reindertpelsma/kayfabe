@@ -65,6 +65,12 @@ pub struct Applied {
     pub refused: usize,
     /// The first refusal, by name.
     pub first_refusal: Option<String>,
+    /// ★ v3-mapfix: of `refused`, the UNMAPs the host refused — a placement that may still be
+    /// live on the host after the guest dropped it (the one refusal that is not mere absence).
+    pub unmap_refused: usize,
+    /// ★ v3-mapfix: the entry's invalidate was refused (its rows landed; the host TLB may not
+    /// have seen them) — counted in `refused` too.
+    pub invalidate_refused: bool,
     /// Whether the entry's single invalidate ran.
     pub invalidated: bool,
     /// Walked bytes above a CPU window's extent (satisfied: nothing to show them at).
@@ -96,6 +102,15 @@ pub struct Applied {
 }
 
 impl Applied {
+    /// ★ v3-mapfix — **every refusal here is ABSENCE**: only MAP runs (or usermode views) were
+    /// refused; every unmap landed and the invalidate ran. The refused leaves are simply not on
+    /// the host — a GPU access to one faults on OUR twin, contained to the space that named it —
+    /// and nothing the guest dropped is still reachable.
+    #[must_use]
+    pub fn refusals_are_absence(&self) -> bool {
+        self.unmap_refused == 0 && !self.invalidate_refused
+    }
+
     fn refuse(&mut self, i: usize, why: String) {
         self.codes[i] = KFWR_ACK_FAILED;
         self.refused += 1;
@@ -206,6 +221,7 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
                 Ok(()) => out.unmapped += 1,
                 Err(e) => {
                     failed_unmaps.push((r.va, r.va.saturating_add(r.len)));
+                    out.unmap_refused += 1;
                     out.refuse(i, format!("{e} (len {:#x})", r.len));
                 }
             }
@@ -319,6 +335,7 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
                 // ⊘ The rows landed (their verdicts stand — the host holds them); the space is
                 // not settled until an invalidate succeeds, so the caller must not clear.
                 out.refused += 1;
+                out.invalidate_refused = true;
                 out.first_refusal.get_or_insert(e);
             }
         }

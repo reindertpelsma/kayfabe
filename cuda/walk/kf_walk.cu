@@ -363,6 +363,27 @@ __device__ __forceinline__ bool kf_big_pte_unmapped(const KfFormat &F, uint64_t 
     return ((e >> F.bit_privilege) & 1ull) != 0ull;
 }
 
+/* ★★★★★ v3-mapfix — A VALID BIG PTE OWNS ITS 64 KiB SLOT: the small PTEs under it are
+ * NOT translations. The MMU consults the big half first and stops at a valid entry: ogkm's
+ * own software walker tries sublevel 0 (THE BIG HALF) first and is done on the first valid
+ * translation (mmu_trace.c:538-613, "1 OK translation => success"); uvm_mmu.h:203-212 names
+ * the only big-PTE state that sends the MMU to the 4 KiB table -- INVALID, all zeros; and
+ * nouveau hands a slot back to its SPTEs by writing the LPTE INVALID (vmm.c:338-346).
+ * ⊘ An honest stock guest leaves them there: uvm_va_block.c:6444-6512 merges 4 KiB pages
+ * into a big page as UNMAPPED big PTE -> invalidate -> VALID big PTE, and never rewrites
+ * the 4 KiB PTEs ("we only need to invalidate the 4k PTEs without actually writing them").
+ * So after the merge the slot holds a valid 64 KiB leaf AND sixteen stale valid 4 KiB
+ * leaves. `[measured v3 app matrix 670bd310, UnifiedMemoryStreams]` we reported BOTH: the
+ * host then held two mappings over one VA and refused the second -- host dmesg
+ * `_gvaspaceMappingInsert ... NV_ERR_INVALID_ARGUMENT` (gpu_vaspace.c:4761, an existing map
+ * node at vaLo), kf3 `map 0x7111f8600000+0x10000: Other(31)`. The stale leaves also name
+ * pages UVM has since migrated away: mapping them is a wrong translation, not a spare one.
+ * Format-generic (kf_valid is descriptor-driven): VER2 and VER3 alike. */
+__device__ __forceinline__ bool kf_big_pte_owns_slot(const KfFormat &F, uint64_t e)
+{
+    return kf_valid(F, e) || kf_big_pte_unmapped(F, e);
+}
+
 /* ── per-thread walk context ─────────────────────────────────────────────────── */
 struct KfCtx {
     KfWin w;
@@ -623,7 +644,7 @@ __device__ void kf_walk_one(KfCtx &c, uint64_t pdb)
                          * derived, not hardcoded. */
                         const uint32_t ratio = 1u << (F.big_va_lo - F.small_va_lo);
                         for (uint32_t b = 0; b < KF_MAX_ENT && b < F.big_entries && !c.stop; b++) {
-                            bool slot_unmapped = false;
+                            bool slot_owned = false;
                             if (has_b) {
                                 uint64_t e;
                                 /* ⊘ KF_BREAK_ORDER walks the big table DOWNWARDS, so the
@@ -644,7 +665,8 @@ __device__ void kf_walk_one(KfCtx &c, uint64_t pdb)
 #endif
                                 if (!kf_charge(c, 1)) break;
                                 if (kf_load64(c, ptb + (uint64_t)bb * F.big_entry_bytes, &e)) {
-                                    slot_unmapped = kf_big_pte_unmapped(F, e);
+                                    /* ★ A VALID big PTE owns its slot too (kf_big_pte_owns_slot). */
+                                    slot_owned = kf_big_pte_owns_slot(F, e);
                                     if (kf_valid(F, e))
                                         kf_emit(c, va4 | ((uint64_t)bb << F.big_va_lo),
                                                 kf_addr(F, e, kf_ap_raw(F, e)),
@@ -653,7 +675,7 @@ __device__ void kf_walk_one(KfCtx &c, uint64_t pdb)
                                     else if (kf_slot_sparse(F, e)) c.sparse++;
                                 }
                             }
-                            if (has_s && !slot_unmapped) {
+                            if (has_s && !slot_owned) {
                                 for (uint32_t j = 0; j < 16u && j < ratio && !c.stop; j++) {
                                     uint32_t s = b * ratio + j;
                                     if (s >= F.small_entries) break;
@@ -1933,16 +1955,17 @@ __device__ __forceinline__ void kf_par_chunks(const KfArgs &a, const KfEnt &t,
 #else
         const uint32_t bb = b;
 #endif
-        bool slot_unmapped = false;
+        bool slot_owned = false;
         if (t.has & 2u) {
             const uint64_t e = sbig[bb];
-            slot_unmapped = kf_big_pte_unmapped(F, e);
+            /* ★ A VALID big PTE owns its slot too (kf_big_pte_owns_slot). */
+            slot_owned = kf_big_pte_owns_slot(F, e);
             if (kf_valid(F, e))
                 kf_acc_emit(c, t.va | ((uint64_t)bb << F.big_va_lo), kf_addr(F, e, kf_ap_raw(F, e)),
                             1ull << F.ps_log2[F.big_ps], kf_leaf_flags(F, e, F.big_ps));
             else if (census && kf_slot_sparse(F, e)) atomicAdd(&a.dev->sparse_slots, 1u);
         }
-        if ((t.has & 1u) && !slot_unmapped) {
+        if ((t.has & 1u) && !slot_owned) {
             for (uint32_t j = 0u; j < 16u && j < ratio; j++) {
                 const uint32_t si = bb * ratio + j;
                 if (si >= ns) break;

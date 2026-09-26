@@ -601,6 +601,10 @@ pub struct VaStats {
     pub no_slot: u64,
     /// ★ Spaces failed because their walk refused leaves (owner ruling 2026-09-25).
     pub walk_refused_spaces: u64,
+    /// ★ v3-mapfix: `MEM_OP` splits completed over a space left UNSETTLED — its walk ran and its
+    /// diff applied except for refused MAPs / walk-refused leaves, which stay absent (and stay a
+    /// difference the next diff retries). The channel proceeds; see [`VaManager::on_walk_ready`].
+    pub splits_unsettled: u64,
 }
 
 /// ★ P5c: where an invalidate's wall time goes, summed over every one completed — never a decision
@@ -1052,6 +1056,11 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         // diff re-emits it.
         let mut codes = vec![kf_cuda::abi::KFWR_ACK_FAILED; done.nrun];
         let mut failed: BTreeSet<VasKey> = BTreeSet::new();
+        // ★ v3-mapfix: of `failed`, the spaces whose only failure is ABSENCE (refused MAPs or
+        // walk-refused leaves; every unmap and the invalidate landed) — see the split verdict.
+        let mut absent_only: BTreeSet<VasKey> = BTreeSet::new();
+        // ★ v3-mapfix: of `failed`, spaces whose root moved during the walk (re-walked at once).
+        let mut rewalk: BTreeSet<VasKey> = BTreeSet::new();
         let mut partial: BTreeSet<VasKey> = BTreeSet::new();
         let cfg = ApplyCfg {
             store_bytes: self.store_bytes,
@@ -1074,6 +1083,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             if space.root != Some(walked_root) {
                 // The root changed after the walk was submitted: this diff does not describe it.
                 failed.insert(key);
+                rewalk.insert(key);
                 self.pending.push(Want::Root(key));
                 self.stats.refuse(format!("{key:?}: root {walked_root:#x} changed during the walk; re-walking"));
                 continue;
@@ -1130,6 +1140,9 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             self.stats.clipped_bytes += a.clipped_bytes;
             if a.refused > 0 {
                 failed.insert(key);
+                if a.refusals_are_absence() {
+                    absent_only.insert(key);
+                }
                 self.stats.refuse(format!(
                     "{key:?} root {walked_root:#x}: {} run(s) not applied: {}",
                     a.refused,
@@ -1140,6 +1153,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 // whole truth of it — what it did describe was applied above; the space fails by
                 // name so its invalidate is not cleared over leaves nobody mapped.
                 failed.insert(key);
+                absent_only.insert(key);
                 self.stats.walk_refused_spaces += 1;
                 self.stats.refuse(format!(
                     "{key:?} root {walked_root:#x}: the walk REFUSED leaves (refuse_mask={:#x}) — absent, not mapped",
@@ -1167,10 +1181,36 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             let bad = keys.iter().find(|k| failed.contains(k));
             let again = keys.iter().any(|k| partial.contains(k));
             if let Want::Split { ticket, pdb } = w {
-                match bad {
-                    Some(k) => self.splits_done.push((*ticket, Err(format!("split {pdb:x?}: {k:?} did not apply")))),
-                    None if again => requeue.push((*w, *at)),
-                    None => self.splits_done.push((*ticket, Ok(()))),
+                // ★★★ v3-mapfix — A SPLIT FAILS ONLY ON A REFUSAL THAT IS NOT MERE ABSENCE.
+                // `[measured 670bd310 nb1, UnifiedMemoryStreams]` ONE refused 64 KiB map in ONE
+                // process's space failed the split of the guest's UVM kernel channel (token 3,
+                // shared by every CUDA process), the channel went DEAD, the guest kernel channel
+                // was REFUSED-AND-POISONED, and every later CUDA process of the boot hung.
+                // A refused MAP (or walk-refused leaf) is absence: the leaf is not on the host,
+                // a GPU access to it faults on that space's twin — contained to the process that
+                // named it — and it stays a difference the next diff retries (commit-on-ack). So
+                // the split COMPLETES over an UNSETTLED space, counted and named (the refusal is
+                // already in `refusals`). ⊘ Still fatal to the split: a refused UNMAP (a
+                // placement the guest dropped may still be live on the host), a refused
+                // invalidate, a missing/overflowed slot, a walk that never ran — running the
+                // channel past those would let it reach memory the guest no longer maps there.
+                // A root that moved during the walk is not a refusal: the split waits for the
+                // re-walk already queued (as a capacity-withheld diff does), never fails on it.
+                let hard = keys.iter().find(|k| failed.contains(k) && !absent_only.contains(k) && !rewalk.contains(k));
+                let again = again || keys.iter().any(|k| rewalk.contains(k));
+                match (hard, bad) {
+                    (Some(k), _) => self.splits_done.push((*ticket, Err(format!("split {pdb:x?}: {k:?} did not apply")))),
+                    (None, _) if again => requeue.push((*w, *at)),
+                    (None, Some(k)) => {
+                        self.stats.splits_unsettled += 1;
+                        if self.stats.splits_unsettled <= 64 {
+                            eprintln!(
+                                "kf-mem: split {pdb:x?} (ticket {ticket}) completed over UNSETTLED {k:?} — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them"
+                            );
+                        }
+                        self.splits_done.push((*ticket, Ok(())));
+                    }
+                    (None, None) => self.splits_done.push((*ticket, Ok(()))),
                 }
                 continue;
             }
@@ -1397,6 +1437,7 @@ mod tests {
         ops: Rc<RefCell<Vec<(Op, bool)>>>,
         port: Arc<InvalidatePort>,
         refuse_map_at: RefCell<Option<u64>>,
+        refuse_unmap_at: RefCell<Option<u64>>,
         held_at: Option<u64>,
         reserved: Vec<(u64, u64)>,
         /// ★ What `settle` answers — an async target (the BAR1 doorbell overlay) in miniature.
@@ -1418,6 +1459,9 @@ mod tests {
             self.reserved.clone()
         }
         fn unmap(&self, va: u64, _defer: bool) -> Result<(), String> {
+            if *self.refuse_unmap_at.borrow() == Some(va) {
+                return Err(format!("unmap {va:#x}: refused (fake)"));
+            }
             self.ops.borrow_mut().push((Op::Unmap(va), self.port.trigger().read() != 0));
             Ok(())
         }
@@ -1439,6 +1483,7 @@ mod tests {
             ops: r.ops.clone(),
             port: r.port.clone(),
             refuse_map_at: RefCell::new(None),
+            refuse_unmap_at: RefCell::new(None),
             held_at,
             reserved,
             settle: Rc::new(RefCell::new(Settle::Live)),
@@ -1789,6 +1834,56 @@ mod tests {
         let s = r.m.take_splits();
         assert_eq!(s.len(), 1);
         assert!(matches!(&s[0], (9, Err(e)) if e.contains("boom")));
+    }
+
+    /// ★★★ v3-mapfix — `[measured 670bd310 nb1]` one refused MAP in one process's space killed
+    /// the guest's shared UVM kernel channel and wedged the boot. A refused MAP is ABSENCE: the
+    /// split completes (the channel proceeds), the space is counted UNSETTLED, the map that landed
+    /// beside it stays, and the refused one is still a difference the next diff retries.
+    #[test]
+    fn a_refused_map_completes_the_split_unsettled_and_is_retried() {
+        let mut r = rig();
+        let h = host(&r, None, Vec::new());
+        *h.refuse_map_at.borrow_mut() = Some(0x1000_0000);
+        r.m.table.insert(K_A, h);
+        r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem).unwrap();
+        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0), (0x2000_0000, 0x0300_0000, 0x1000, 0)]);
+        r.m.on_split(Some(PDB_A), 11, r.port.trigger());
+        let _ = r.m.on_walk_ready(r.port.trigger());
+        assert_eq!(r.m.take_splits(), vec![(11, Ok(()))], "absence never kills the channel");
+        assert_eq!(r.m.stats.splits_unsettled, 1);
+        assert!(r.m.stats.refusals.iter().any(|x| x.contains("refused (fake)")), "still refused BY NAME");
+        assert_eq!(ops(&r), vec![Op::Map(0x2000_0000, 0x0300_0000, 0x1000), Op::Invalidate]);
+        // The host recovers: the next split re-emits ONLY the refused map, and settles.
+        if let Some(t) = r.m.table.target(K_A) {
+            *t.refuse_map_at.borrow_mut() = None;
+        }
+        r.ops.borrow_mut().clear();
+        r.m.on_split(Some(PDB_A), 12, r.port.trigger());
+        let _ = r.m.on_walk_ready(r.port.trigger());
+        assert_eq!(r.m.take_splits(), vec![(12, Ok(()))]);
+        assert_eq!(r.m.stats.splits_unsettled, 1, "settled now");
+        assert_eq!(ops(&r), vec![Op::Map(0x1000_0000, 0x0200_0000, 0x1000), Op::Invalidate]);
+    }
+
+    /// ⊘ v3-mapfix, the other side of the line: a refused UNMAP is NOT absence — a placement the
+    /// guest dropped may still be live on the host — so the split still fails by name.
+    #[test]
+    fn a_refused_unmap_still_fails_the_split() {
+        let mut r = rig();
+        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0)]);
+        r.m.on_split(Some(PDB_A), 21, r.port.trigger());
+        let _ = r.m.on_walk_ready(r.port.trigger());
+        assert_eq!(r.m.take_splits(), vec![(21, Ok(()))]);
+        if let Some(t) = r.m.table.target(K_A) {
+            *t.refuse_unmap_at.borrow_mut() = Some(0x1000_0000);
+        }
+        r.tables.borrow_mut().insert(PDB_A, vec![]);
+        r.m.on_split(Some(PDB_A), 22, r.port.trigger());
+        let _ = r.m.on_walk_ready(r.port.trigger());
+        let s = r.m.take_splits();
+        assert!(matches!(&s[..], [(22, Err(e))] if e.contains("did not apply")), "{s:?}");
+        assert_eq!(r.m.stats.splits_unsettled, 0);
     }
 
     /// ★ P6b ruling (a): a VA the host already holds satisfies the guest's statement (its trigger
