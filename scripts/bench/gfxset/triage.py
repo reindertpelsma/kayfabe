@@ -21,7 +21,7 @@ for line in read(os.path.join(R, RES)):
     kf = read(b + ".kf3.log")
     rc = [l for l in kf if re.search(r"RC host twin|RC_TRIGGERED|Xid", l)]
     ref = [l for l in kf if re.search(r"refus", l, re.I) and not NOISE.search(l)]
-    uns = sorted(set(re.sub(r"seq=\d+", "", l.split("UNSERVICED", 1)[1]).strip()[:90] for l in kf if "GSP rpc UNSERVICED" in l))
+    uns = sorted(set(re.sub(r"seq(uence)?[=:] ?\d+", "", l.split("UNSERVICED", 1)[1]).strip()[:90] for l in kf if "GSP rpc UNSERVICED" in l))
     print(f"{it}|{v}|hXid:{clip(hx[0],150) if hx else '-'}|g:{clip(gx[0],120) if gx else '-'}|"
           f"kf3rc:{clip(rc[0],150) if rc else '-'}|kf3ref:({len(ref)}) {clip(ref[0],200) if ref else '-'}|"
           f"unserviced:{clip(';'.join(uns),200) if uns else '-'}|{clip(kv.get('note',''),120)}")

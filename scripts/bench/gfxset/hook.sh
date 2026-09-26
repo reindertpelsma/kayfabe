@@ -41,7 +41,7 @@ for item in $GSET_ITEMS; do
         $G "cat /var/tmp/gfxset/out/guest/$item.log" > "$OUT/$item.guest.log" 2>&1
         $G "sudo dmesg | tail -n +$((d0+1))" > "$OUT/$item.guest_dmesg.log" 2>&1
         # the item's artefacts (images, streams) for eyes and for a byte compare
-        $G "cd /var/tmp/gfxset/out/guest/$item.d 2>/dev/null && tar -cf - --exclude='*.yuv' --exclude='*.raw' --exclude='*.jsonl' . 2>/dev/null" > "$OUT/$item.guest_art.tar" 2>/dev/null
+        $G "cd /var/tmp/gfxset/out/guest/$item.d 2>/dev/null && tar -cf - --exclude='*.yuv' --exclude='*.raw' --exclude='*.nv12' --exclude='*.jsonl' . 2>/dev/null" > "$OUT/$item.guest_art.tar" 2>/dev/null
         $G "cat /var/tmp/gfxset/out/guest/$item.d/nvdiff.jsonl 2>/dev/null" > "$OUT/$item.guest_nvdiff.jsonl" 2>/dev/null
         [ -s "$OUT/$item.guest_nvdiff.jsonl" ] || rm -f "$OUT/$item.guest_nvdiff.jsonl"
     fi
