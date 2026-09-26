@@ -106,7 +106,7 @@ measured teardown. Tests: `barpde` unit test and `kf-rm/tests/sysmembar.rs`.
 
 `0x2080a026` / `0x2080a084` are GSS-legacy (bit 15; no open header names them). They are now
 `gssreplay` rows: at realize kf3 asks its host subdevice exactly the request cudart sends (the
-words constant across 136 bare-metal calls) and keeps what the host wrote; a guest request is
+words constant across all 270 recorded `a026` calls, 135 bare metal and 135 guest) and keeps what the host wrote; a guest request is
 answered only if every named input matches. The host answers the **max** clocks (1 695 000 and
 9 751 000 kHz, identical in 135 calls), so a realize-time answer is the die's answer, not a
 snapshot. ⊘ The earlier verdict *"measured innocent"* (`kf_abi::cudartinit`) measured

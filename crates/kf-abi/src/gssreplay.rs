@@ -107,9 +107,10 @@ pub const ROWS: &[Row] = &[
     // One-domain clock queries for the two domains the library has been seen to ask.
     Row { cmd: GSS_CLOCK_QUERY, size: 0x890, inputs: &[(0, 1), (8, 1), (0x0c, DOMAIN_NVD), (0x20c, DOMAIN_NVD)] },
     Row { cmd: GSS_CLOCK_QUERY, size: 0x890, inputs: &[(0, 1), (8, 1), (0x0c, DOMAIN_GPC), (0x20c, DOMAIN_GPC)] },
-    // ★ v3-refusals: cudart's pair, the request words exactly as 136 bare-metal calls carried them
-    // (every word CONSTANT across them is named; the varying ones — 0x04 above its low byte,
-    // 0x0c, 0x34.. — are the caller's uninitialised stack).
+    // ★ v3-refusals: cudart's pair, the request words exactly as recorded calls carried them — `a084`
+    // 136 bare-metal calls; `a026` 270 (135 bare metal + 135 guest, one cudart binary). Every word
+    // CONSTANT across them is named; the varying ones (0x04, 0x0c, 0x34..) are the caller's
+    // uninitialised stack.
     Row { cmd: GSS_CUDART_A084, size: 4, inputs: &[(0, 0)] },
     Row {
         cmd: GSS_CUDART_CLOCKS,
