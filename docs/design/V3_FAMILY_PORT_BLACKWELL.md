@@ -4,7 +4,8 @@
 stock 580.159.04 guest over a **GB203** host through the emulated **FSP → GSP-FMC → GSP-RM** chain;
 the raw client passes **30/30 on bare metal** and **30/30 in the thin guest**, and the CUDA ladder
 (`cup2` → `cup3` → `cup8` 2048² → `cup8bench`) passes in the fat guest with every ledger row
-`emulated=0`. GA106 is unchanged (bare 30/30, thin guest 30/30, 1474 crate tests, gates 9/9). §6
+`emulated=0`. GA106 is unchanged at the final revision (bare 30/30, thin guest 30/30, 1475 crate
+tests / 0 fail, gates 9/9 — and gates 9/9 on GB203 too). §6
 has every number with its revision. Hardware-unverified: Hopper and datacenter Blackwell (GB10x) —
 the shared FSP path is the same code, the die-group rows differ (§4, §7).
 
@@ -12,11 +13,11 @@ the shared FSP path is the same code, the die-group rows differ (§4, §7).
 
 | lane | result | rev |
 |---|---|---|
-| bare metal raw client, GB203 | **30/30** (25/30 before the four client fixes of §3) | `92b9f912` |
-| thin guest, GB203 | **30/30** (24/30 → 28/30 → 30/30 over §4's fixes) | `bbd2a083` (`bws6`); final rev in §6 |
+| bare metal raw client, GB203 | **30/30** (25/30 before the four client fixes of §3); re-run at the final rev: **30/30** | `92b9f912`; **`54158daa`** (code = `256ec854`) |
+| thin guest, GB203 | **30/30** (24/30 → 28/30 → 30/30 over §4's fixes); final rev: **30/30 + gates 9/9** | `bbd2a083` (`bws6`); **`256ec854`** (`bws_final`) |
 | fat guest CUDA ladder, GB203 | cup2 PASS, cup3 = 43, **cup8 2048² bad=0 maxerr=0**, cup8bench PASS (every timed iteration verified); 2048² matmul 3499 GFLOP/s guest vs 3391 host | `256ec854` |
 | BAR1 doorbell (`V3_BAR1_DOORBELL.md` §7) | **T0**: libcuda sets `bBar1Mapping`. **T1**: UVM's view trapped, 10 doorbells through it, **negative control hangs**. **T2**: every CUDA rung rings through the BAR1 view (463–967 doorbells per boot) | §5 |
-| GA106 regression (cheap GA10x box) | bare 30/30, thin guest 30/30 (`ab5ccced`), 1474 tests + gates 9/9 (`c2ac8480`); final rev in §6 | — |
+| GA106 regression (cheap GA10x box) | at the final rev: bare **30/30**, thin guest **30/30**, **1475** crate tests / 0 fail, gates **9/9** (earlier: `ab5ccced`, `c2ac8480`, §6) | **`256ec854`** (suites); `54158daa` (tests, gates; code = `256ec854`) |
 
 ## 1. Boxes
 
@@ -126,9 +127,22 @@ rules over what the host's own lists say, #5/#10 are host facts asked unprivileg
 | suite `bws4` | `bdd80a2d` | 28/30 (uvm ×2: §4 #8, #9) |
 | suite `bws6` | `bbd2a083` | **30/30**, 180 s budget, most arms 4–9 s, `ce-client-guest-ram` 30 s, `gpga-reserve-probe` 81 s (`traces/v3_blackwell/thin_guest_suite_bws6_bbd2a083.out`) |
 | T1 / negative control | `c2ac8480` | PASS / CRASH (§5) |
+| bare `bw_bare_final` | `54158daa` (code = `256ec854`) | **30/30**, 120 s budget, every arm ≤ 5 s except `gpga-reserve-probe` 11 s and `defer-liveness` 14 s (`traces/v3_blackwell/bare_suite_final_gb203_54158daa.out`) |
+| gates + suite `bws_final` | `256ec854` | gates **9/9** (`traces/v3_blackwell/gates_gb203_256ec854.log`; GB203's first birth token `0x40000002` = bit 30, runlist 0, chid 2); suite **30/30**, 180 s budget, most arms 4–9 s, `defer-liveness` 18 s, `gpga-reserve-probe` 17 s, `ce-client-guest-ram` 31 s (`traces/v3_blackwell/thin_guest_suite_final_gb203_256ec854.out`) |
 | CUDA ladder host + fat guest | `256ec854` | all four PASS both sides (`traces/v3_blackwell/cuda_ladder_gb203_256ec854.out`): guest `cuInit` 572 ms vs host 1158 ms, `cuCtxCreate` 440 vs 74 ms, 2048² matmul 4.91 vs 5.07 ms |
 | GA106 bare + thin guest | `ab5ccced` | 30/30 + **30/30** (`traces/v3_blackwell/ga106_thin_guest_suite_ab5ccced.out`) |
 | GA106 crate tests + gates | `c2ac8480` | **1474 pass / 0 fail**, gates **9/9** |
+| GA106 final: bare + thin guest | `256ec854` | bare **30/30**; thin guest **30/30**, 200 s budget, most arms 16–21 s on the slower Xeon, `ce-client-guest-ram` 120 s (`traces/v3_blackwell/ga106_thin_guest_suite_256ec854.out`) |
+| GA106 final: crate tests + gates | `54158daa` (code = `256ec854`) | **1475 pass / 0 fail** (the +1 is `256ec854`'s `sm_issue_rate` test), gates **9/9**; none of the run's 183 compiler warnings is on a line this branch added (each blamed to a master commit; a positive control on `tokenindex.rs` does blame to the branch) |
+
+⚠ `92b9f912` and `5036450b` are **pre-rebase** revisions (measured before the branch moved onto
+`283a5304`); the same patches are `52266e2f` and `9a4a6158` on the pushed branch. Every other
+revision above is an ancestor of the pushed head, and `54158daa` onward is docs/traces only (code =
+`256ec854`).
+
+⚠ The gates' `MEASURE walk_submit … budget=50 (MISSED)` row is a **measurement, not a verdict**, and it
+reads MISSED on **both** dies at the final revision: GA106 p50 59/62 µs (ver2/ver3), GB203 p50 12/23 µs
+with a 149 µs max. It is not a Blackwell regression; GB203 is the faster of the two.
 
 The guest's `NVRM` log carries the same pre-existing refusals as GA106 (golden-image channel / kernel
 GR = P7 scope, `INTERNAL_INIT_USER_SHARED_DATA`, DECOMP PCE config) plus Blackwell-only, tolerated
