@@ -1,0 +1,2 @@
+APPDIG side=guest app=hf_generate OUTSHA hf_generate 0d973108a6251e14
+APPDIG side=guest app=llama_cpp_gen OUTSHA llama_cpp 09a3ba573ae971a4

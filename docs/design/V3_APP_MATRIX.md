@@ -1,6 +1,6 @@
 # V3 app matrix — which real CUDA apps work in a kayfabe v3 fat guest
 
-**STATUS: ANSWERED, 2026-09-26.** kayfabe **`79848341`** (origin/master; the kf3 binary was built
+**STATUS: ANSWERED, 2026-09-26** (measured 00:10–04:00 UTC). kayfabe **`79848341`** (origin/master; the kf3 binary was built
 from it, `kf3-bins/79848341`); harness commits on branch `v3-apps` touch only `scripts/apps/`,
 `traces/v3_app_matrix/` and this file. Two rented vast KVM boxes, host driver **580.159.04**
 (kernel-open), guest Ubuntu 24.04 with the stock **580.159.04** guest driver, kf3 device, 16 GiB
@@ -25,8 +25,10 @@ hang, no crash, no Xid. Not parity, not timing. Every app ran on the **host of t
 - **One defect blocks most of the rest: any kernel launched on a non-default CUDA stream** faults the
   host GPU with **`Xid 13 SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE`** (§3 A) — 21 of the 65 apps, including
   PyTorch, llama.cpp, Blender, hashcat, Geekbench and every CUDA-graph / multi-stream sample.
-- **A guest can run only ~5–6 CUDA processes per boot**; the next one hangs forever and so does every
-  one after it (§3 B). Some single processes (a 1 GB model load) hit the same wall alone.
+- **Without guest persistence mode a guest can run only ~5–6 CUDA processes per boot**; the next one
+  hangs forever and so does every one after it (§3 B). **With persistence mode that wall is gone**
+  (59 processes in one boot, identical verdicts on both boxes, B-class apps such as CuPy pass) — until a
+  host-side `NV_ESC_RM_MAP_MEMORY … NoMemory` wedges the boot at the ~60th process (§3 J).
 - **One silent wrong answer**: `conjugateGradientUM` prints `result = SUCCESS` with
   `Error amount = 1.000000` after a host `Xid 31` MMU fault (§3 C).
 - Not exposed at all: **NVENC/NVDEC** ("unsupported device"), **EGL** (`eglInitialize failed`),
@@ -74,81 +76,84 @@ One app per **fresh boot** (`APPS_PER_BOOT=1`), because a boot degrades after ~6
 B) — a batched verdict would be contaminated by the apps before it. Guest cells carry the root-cause
 letter of §3. `cupy`, EGL, Vulkan, NVENC/NVDEC and the stream probes are from the harness-corrected
 re-run `r2` (r1 lacked the CUDA headers CuPy's NVRTC path needs, and did not load `nvidia_drm` in the
-guest as the host has it — neither changed a verdict except CuPy).
+guest as the host has it — neither changed a verdict except CuPy). The **PM column** is a second
+experiment: guest persistence mode on (`nvidia-smi -pm 1`) and ALL rows in ONE boot, in table order;
+its verdicts were **identical on both boxes** for every row it reached, and the boot wedged at
+`llama_bench` (the 60th process, cause J) — every later row in that boot hung.
 
-| app | host 3060 | guest 3060 | host 3070 | guest 3070 | failure point (first failing box) |
-|---|---|---|---|---|---|
-| nvidia_smi | PASS | PASS | PASS | PASS |  |
-| deviceQuery | PASS | PASS | PASS | PASS |  |
-| vectorAdd | PASS | PASS | PASS | PASS |  |
-| vectorAddDrv | PASS | PASS | PASS | PASS |  |
-| matrixMul | PASS | FAIL (A) | PASS | FAIL (A) | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — CUDA error at matrixMul.cu:206 code=719(cudaErrorLaunchFailure) "cudaStreamSynchronize(stream)" |
-| matrixMulDrv | PASS | PASS | PASS | PASS |  |
-| bandwidthTest | PASS | FAIL (A) | PASS | FAIL (A) | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — CUDA error at bandwidthTest.cu:834 code=719(cudaErrorLaunchFailure) "cudaDeviceSynchronize()" |
-| simpleStreams | PASS | FAIL (A) | PASS | FAIL (A) | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — CUDA error at simpleStreams.cu:371 code=719(cudaErrorLaunchFailure) "cudaEventSynchronize(stop_event)" |
-| asyncAPI | PASS | PASS | PASS | PASS |  |
-| simpleAtomicIntrinsics | PASS | FAIL (A) | PASS | TIMEOUT (B) | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — CUDA error at simpleAtomicIntrinsics.cu:122 code=719(cudaErrorLaunchFailure) "cudaStreamSynchronize(stream)" |
-| simpleCallback | PASS | FAIL (A) | PASS | FAIL (A) | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — CUDA error at simpleCallback.cu:146 code=719(cudaErrorLaunchFailure) "status" |
-| simpleOccupancy | PASS | PASS | PASS | PASS |  |
-| simpleZeroCopy | PASS | PASS | PASS | TIMEOUT (B) | silent hang (no output until the kill); kf3: slot N is full and nothing can be retired |
-| simpleCooperativeGroups | PASS | PASS | PASS | PASS |  |
-| concurrentKernels | PASS | FAIL (A) | PASS | FAIL (A) | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — CUDA error at concurrentKernels.cu:196 code=719(cudaErrorLaunchFailure) "cudaEventSynchronize(stop_event)" |
-| simpleIPC | PASS | FAIL (A) | PASS | FAIL (A) | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — CUDA error at simpleIPC.cu:161 code=719(cudaErrorLaunchFailure) "cudaMemcpyAsync(&verification_buffer[0], ptrs |
-| UnifiedMemoryStreams | PASS | FAIL (A) | PASS | FAIL (A) | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — CUDA error at UnifiedMemoryStreams.cu:221 code=13(CUBLAS_STATUS_EXECUTION_FAILED) "cublasDgemv(handle[tid + 1] |
-| UnifiedMemoryPerf | PASS | FAIL (A) | PASS | FAIL (A) | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — Running .CUDA error at matrixMultiplyPerf.cu:435 code=719(cudaErrorLaunchFailure) "cudaStreamSynchronize(strea |
-| conjugateGradientUM | PASS | FAIL (C) | PASS | FAIL (C) | Xid 31, MMU Fault: ENGINE GRAPHICS GPC1 faulted @VA. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ — Test Summary: Error amount = 1.000000, result = SUCCESS |
-| cudaTensorCoreGemm | PASS | PASS | PASS | PASS |  |
-| bf16TensorCoreGemm | PASS | PASS | PASS | PASS |  |
-| globalToShmemAsyncCopy | PASS | FAIL (A) | PASS | FAIL (A) | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — CUDA error at globalToShmemAsyncCopy.cu:863 code=719(cudaErrorLaunchFailure) "cudaStreamSynchronize(stream)" |
-| cdpSimpleQuicksort | PASS | PASS | PASS | PASS |  |
-| graphMemoryNodes | PASS | FAIL (A) | PASS | FAIL (A) | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — CUDA error at graphMemoryNodes.cu:322 code=719(cudaErrorLaunchFailure) "cudaMemcpyAsync(hostArrays->square, d_ |
-| simpleCudaGraphs | PASS | FAIL (A) | PASS | TIMEOUT (B) | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — CUDA error at simpleCudaGraphs.cu:273 code=719(cudaErrorLaunchFailure) "cudaGraphLaunch(graphExec, streamForGr |
-| simpleCUBLAS | PASS | PASS | PASS | PASS |  |
-| simpleCUFFT | PASS | PASS | PASS | PASS |  |
-| conjugateGradient | PASS | PASS | PASS | PASS |  |
-| MersenneTwisterGP11213 | PASS | FAIL (A) | PASS | FAIL (A) | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — CUDA error at MersenneTwister.cpp:115 code=719(cudaErrorLaunchFailure) "cudaStreamSynchronize(stream)" |
-| reduction | PASS | PASS | PASS | PASS |  |
-| sortingNetworks | PASS | PASS | PASS | PASS |  |
-| scan | PASS | PASS | PASS | PASS |  |
-| histogram | PASS | PASS | PASS | PASS |  |
-| BlackScholes | PASS | PASS | PASS | PASS |  |
-| fastWalshTransform | PASS | PASS | PASS | PASS |  |
-| transpose | PASS | PASS | PASS | PASS |  |
-| stream_triad | PASS | PASS | PASS | PASS |  |
-| reduce | PASS | PASS | PASS | PASS |  |
-| nbody | PASS | PASS | PASS | PASS |  |
-| blackscholes | PASS | PASS | PASS | PASS |  |
-| mandelbrot | PASS | PASS | PASS | PASS |  |
-| conv2d | PASS | PASS | PASS | PASS |  |
-| sgemm_cublas | PASS | PASS | PASS | PASS |  |
-| fft_cufft | PASS | PASS | PASS | PASS |  |
-| sha256 | PASS | PASS | PASS | PASS |  |
-| memcpy2d | PASS | PASS | PASS | PASS |  |
-| attach_verify | PASS | FAIL (A) | PASS | FAIL (A) | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — FAIL cudaStreamSynchronize(s[b]) -> 719 (unspecified launch failure) |
-| gpu_burn | PASS | FAIL (G) | PASS | FAIL (G) | SIGSEGV in gpu_burn right after cuInit (guest dmesg: segfault at the stack top); no Xid, no kf3 refusal |
-| torch_correct | PASS | FAIL (A) | PASS | FAIL (A) | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — RuntimeError: GET was unable to find an engine to execute this computation |
-| torch_ai_bench | PASS | FAIL (C) | PASS | FAIL (A) | Xid 31, MMU Fault: ENGINE GRAPHICS GPC2 faulted @VA. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE — RuntimeError: CUDA error: unspecified launch failure |
-| hf_generate | PASS | PASS | PASS | TIMEOUT (I) | silent hang; kf3 `REFUSED walk: run[0] leaves the guest's GPGA: gpga=0x1d5ed0000 … span is 0x180000000` (3070 box ran `fb-mb=6144`) |
-| cupy | PASS | TIMEOUT (B) | PASS | PASS | silent hang (no output until the kill); kf3: slot N is full and nothing can be retired |
-| llama_cpp_gen | PASS | TIMEOUT (B) | PASS | FAIL (A) | 3060: silent hang, kf3 `slot 16 is full and nothing can be retired`; 3070: Xid 13 SKEDCHECK05 |
-| llama_bench | PASS | FAIL (A) | PASS | FAIL (A) | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — /workspace/apps/srcs/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:109: CUDA error |
-| vulkaninfo | PASS | TIMEOUT (F) | PASS | TIMEOUT (F) | blocks inside an RM ioctl (strace: last call `NV_ESC_RM_CONTROL`, then nothing); guest dmesg: `scrubberDestruct: Timed out`, `ce_utils.c:349` assert |
-| vkpeak | PASS | FAIL (F) | PASS | FAIL (F) | No vulkan device |
-| egl_offscreen | PASS | FAIL (E) | PASS | FAIL (E) | CHECK egl_gl_Mtri_s FAIL |
-| clinfo | PASS | PASS | PASS | PASS |  |
-| clpeak | PASS | PASS | PASS | PASS |  |
-| nvenc_h264 | PASS | FAIL (D) | PASS | FAIL (D) | [h264_nvenc @ 0x5aeb9435b9c0] OpenEncodeSessionEx failed: unsupported device (2): (no details) |
-| nvenc_hevc | PASS | FAIL (D) | PASS | FAIL (D) | [hevc_nvenc @ 0x5b9be2c6a9c0] OpenEncodeSessionEx failed: unsupported device (2): (no details) |
-| nvdec_h264 | PASS | FAIL (D) | PASS | FAIL (D) | [h264 @ 0x6003c48bbf80] decoder->cvdl->cuvidGetDecoderCaps(&caps) failed -> CUDA_ERROR_NO_DEVICE: no CUDA-capa |
-| hashcat | PASS | FAIL (A) | PASS | FAIL (A) | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — Watchdog: Temperature abort trigger set to 90c |
-| blender_cycles | PASS | TIMEOUT (A) | PASS | FAIL (A) | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — RuntimeError: Error: Launch failed in CUDA queue synchronize (integrator_shade_surface) |
-| geekbench_gpu | PASS | FAIL (A) | PASS | FAIL (A) | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — [0926/022702:ERROR:optimizer.cpp(122)] build_patches_padding: optimization failed for size { 32, 1, 1, }: Wait |
-| stream_default | PASS | PASS | PASS | PASS |  |
-| stream_created | PASS | FAIL (A) | PASS | FAIL (A) | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — CHECK created FAIL sync=719(unspecified launch failure) |
-| stream_nonblocking | PASS | FAIL (A) | PASS | FAIL (A) | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — CHECK nonblocking FAIL sync=719(unspecified launch failure) |
-| stream_perthread | PASS | FAIL (A) | PASS | FAIL (A) | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — CHECK perthread FAIL sync=719(unspecified launch failure) |
-| stream_two | PASS | FAIL (A) | PASS | FAIL (A) | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — CHECK two_a FAIL sync=719(unspecified launch failure) |
-| stream_created2nd | PASS | FAIL (A) | PASS | FAIL (A) | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — CHECK c2_created FAIL sync=719(unspecified launch failure) |
+| app | host 3060 | guest 3060 | host 3070 | guest 3070 | guest + PM, ONE boot (both boxes) | failure point (first failing box) |
+|---|---|---|---|---|---|---|
+| nvidia_smi | PASS | PASS | PASS | PASS | PASS |  |
+| deviceQuery | PASS | PASS | PASS | PASS | PASS |  |
+| vectorAdd | PASS | PASS | PASS | PASS | PASS |  |
+| vectorAddDrv | PASS | PASS | PASS | PASS | PASS |  |
+| matrixMul | PASS | FAIL (A) | PASS | FAIL (A) | FAIL | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — CUDA error at matrixMul.cu:206 code=719(cudaErrorLaunchFailure) "cudaStreamSynchronize(stream)" |
+| matrixMulDrv | PASS | PASS | PASS | PASS | PASS |  |
+| bandwidthTest | PASS | FAIL (A) | PASS | FAIL (A) | FAIL | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — CUDA error at bandwidthTest.cu:834 code=719(cudaErrorLaunchFailure) "cudaDeviceSynchronize()" |
+| simpleStreams | PASS | FAIL (A) | PASS | FAIL (A) | FAIL | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — CUDA error at simpleStreams.cu:371 code=719(cudaErrorLaunchFailure) "cudaEventSynchronize(stop_event)" |
+| asyncAPI | PASS | PASS | PASS | PASS | PASS |  |
+| simpleAtomicIntrinsics | PASS | FAIL (A) | PASS | TIMEOUT (B) | FAIL | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — CUDA error at simpleAtomicIntrinsics.cu:122 code=719(cudaErrorLaunchFailure) "cudaStreamSynchronize(stream)" |
+| simpleCallback | PASS | FAIL (A) | PASS | FAIL (A) | FAIL | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — CUDA error at simpleCallback.cu:146 code=719(cudaErrorLaunchFailure) "status" |
+| simpleOccupancy | PASS | PASS | PASS | PASS | PASS |  |
+| simpleZeroCopy | PASS | PASS | PASS | TIMEOUT (B) | PASS | silent hang (no output until the kill); kf3: slot N is full and nothing can be retired |
+| simpleCooperativeGroups | PASS | PASS | PASS | PASS | PASS |  |
+| concurrentKernels | PASS | FAIL (A) | PASS | FAIL (A) | FAIL | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — CUDA error at concurrentKernels.cu:196 code=719(cudaErrorLaunchFailure) "cudaEventSynchronize(stop_event)" |
+| simpleIPC | PASS | FAIL (A) | PASS | FAIL (A) | FAIL | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — CUDA error at simpleIPC.cu:161 code=719(cudaErrorLaunchFailure) "cudaMemcpyAsync(&verification_buffer[0], ptrs |
+| UnifiedMemoryStreams | PASS | FAIL (A) | PASS | FAIL (A) | FAIL | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — CUDA error at UnifiedMemoryStreams.cu:221 code=13(CUBLAS_STATUS_EXECUTION_FAILED) "cublasDgemv(handle[tid + 1] |
+| UnifiedMemoryPerf | PASS | FAIL (A) | PASS | FAIL (A) | FAIL | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — Running .CUDA error at matrixMultiplyPerf.cu:435 code=719(cudaErrorLaunchFailure) "cudaStreamSynchronize(strea |
+| conjugateGradientUM | PASS | FAIL (C) | PASS | FAIL (C) | FAIL | Xid 31, MMU Fault: ENGINE GRAPHICS GPC1 faulted @VA. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ — Test Summary: Error amount = 1.000000, result = SUCCESS |
+| cudaTensorCoreGemm | PASS | PASS | PASS | PASS | PASS |  |
+| bf16TensorCoreGemm | PASS | PASS | PASS | PASS | PASS |  |
+| globalToShmemAsyncCopy | PASS | FAIL (A) | PASS | FAIL (A) | FAIL | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — CUDA error at globalToShmemAsyncCopy.cu:863 code=719(cudaErrorLaunchFailure) "cudaStreamSynchronize(stream)" |
+| cdpSimpleQuicksort | PASS | PASS | PASS | PASS | PASS |  |
+| graphMemoryNodes | PASS | FAIL (A) | PASS | FAIL (A) | FAIL | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — CUDA error at graphMemoryNodes.cu:322 code=719(cudaErrorLaunchFailure) "cudaMemcpyAsync(hostArrays->square, d_ |
+| simpleCudaGraphs | PASS | FAIL (A) | PASS | TIMEOUT (B) | FAIL | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — CUDA error at simpleCudaGraphs.cu:273 code=719(cudaErrorLaunchFailure) "cudaGraphLaunch(graphExec, streamForGr |
+| simpleCUBLAS | PASS | PASS | PASS | PASS | PASS |  |
+| simpleCUFFT | PASS | PASS | PASS | PASS | PASS |  |
+| conjugateGradient | PASS | PASS | PASS | PASS | PASS |  |
+| MersenneTwisterGP11213 | PASS | FAIL (A) | PASS | FAIL (A) | FAIL | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — CUDA error at MersenneTwister.cpp:115 code=719(cudaErrorLaunchFailure) "cudaStreamSynchronize(stream)" |
+| reduction | PASS | PASS | PASS | PASS | PASS |  |
+| sortingNetworks | PASS | PASS | PASS | PASS | PASS |  |
+| scan | PASS | PASS | PASS | PASS | PASS |  |
+| histogram | PASS | PASS | PASS | PASS | PASS |  |
+| BlackScholes | PASS | PASS | PASS | PASS | PASS |  |
+| fastWalshTransform | PASS | PASS | PASS | PASS | PASS |  |
+| transpose | PASS | PASS | PASS | PASS | PASS |  |
+| stream_triad | PASS | PASS | PASS | PASS | PASS |  |
+| reduce | PASS | PASS | PASS | PASS | PASS |  |
+| nbody | PASS | PASS | PASS | PASS | PASS |  |
+| blackscholes | PASS | PASS | PASS | PASS | PASS |  |
+| mandelbrot | PASS | PASS | PASS | PASS | PASS |  |
+| conv2d | PASS | PASS | PASS | PASS | PASS |  |
+| sgemm_cublas | PASS | PASS | PASS | PASS | PASS |  |
+| fft_cufft | PASS | PASS | PASS | PASS | PASS |  |
+| sha256 | PASS | PASS | PASS | PASS | PASS |  |
+| memcpy2d | PASS | PASS | PASS | PASS | PASS |  |
+| attach_verify | PASS | FAIL (A) | PASS | FAIL (A) | FAIL | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — FAIL cudaStreamSynchronize(s[b]) -> 719 (unspecified launch failure) |
+| gpu_burn | PASS | FAIL (G) | PASS | FAIL (G) | FAIL | SIGSEGV in gpu_burn right after cuInit (guest dmesg: segfault at the stack top); no Xid, no kf3 refusal |
+| torch_correct | PASS | FAIL (A) | PASS | FAIL (A) | FAIL | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — RuntimeError: GET was unable to find an engine to execute this computation |
+| torch_ai_bench | PASS | FAIL (C) | PASS | FAIL (A) | FAIL | Xid 31, MMU Fault: ENGINE GRAPHICS GPC2 faulted @VA. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE — RuntimeError: CUDA error: unspecified launch failure |
+| hf_generate | PASS | PASS | PASS | TIMEOUT (I) | PASS | silent hang; kf3 `REFUSED walk: run[0] leaves the guest's GPGA: gpga=0x1d5ed0000 … span is 0x180000000` (3070 box ran `fb-mb=6144`) |
+| cupy | PASS | TIMEOUT (B) | PASS | PASS | PASS | silent hang (no output until the kill); kf3: slot N is full and nothing can be retired |
+| llama_cpp_gen | PASS | TIMEOUT (B) | PASS | FAIL (A) | FAIL | 3060: silent hang, kf3 `slot 16 is full and nothing can be retired`; 3070: Xid 13 SKEDCHECK05 |
+| llama_bench | PASS | FAIL (A) | PASS | FAIL (A) | TIMEOUT (J) | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — /workspace/apps/srcs/llama.cpp/ggml/src/ggml-cuda/ggml-cuda.cu:109: CUDA error |
+| vulkaninfo | PASS | TIMEOUT (F) | PASS | TIMEOUT (F) | hung (after J) | blocks inside an RM ioctl (strace: last call `NV_ESC_RM_CONTROL`, then nothing); guest dmesg: `scrubberDestruct: Timed out`, `ce_utils.c:349` assert |
+| vkpeak | PASS | FAIL (F) | PASS | FAIL (F) | hung (after J) | No vulkan device |
+| egl_offscreen | PASS | FAIL (E) | PASS | FAIL (E) | hung (after J) | CHECK egl_gl_Mtri_s FAIL |
+| clinfo | PASS | PASS | PASS | PASS | hung (after J) |  |
+| clpeak | PASS | PASS | PASS | PASS | not reached |  |
+| nvenc_h264 | PASS | FAIL (D) | PASS | FAIL (D) | not reached | [h264_nvenc @ 0x5aeb9435b9c0] OpenEncodeSessionEx failed: unsupported device (2): (no details) |
+| nvenc_hevc | PASS | FAIL (D) | PASS | FAIL (D) | not reached | [hevc_nvenc @ 0x5b9be2c6a9c0] OpenEncodeSessionEx failed: unsupported device (2): (no details) |
+| nvdec_h264 | PASS | FAIL (D) | PASS | FAIL (D) | not reached | [h264 @ 0x6003c48bbf80] decoder->cvdl->cuvidGetDecoderCaps(&caps) failed -> CUDA_ERROR_NO_DEVICE: no CUDA-capa |
+| hashcat | PASS | FAIL (A) | PASS | FAIL (A) | not reached | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — Watchdog: Temperature abort trigger set to 90c |
+| blender_cycles | PASS | TIMEOUT (A) | PASS | FAIL (A) | not reached | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — RuntimeError: Error: Launch failed in CUDA queue synchronize (integrator_shade_surface) |
+| geekbench_gpu | PASS | FAIL (A) | PASS | FAIL (A) | not reached | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — [0926/022702:ERROR:optimizer.cpp(122)] build_patches_padding: optimization failed for size { 32, 1, 1, }: Wait |
+| stream_default | PASS | PASS | PASS | PASS | PASS |  |
+| stream_created | PASS | FAIL (A) | PASS | FAIL (A) | FAIL | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — CHECK created FAIL sync=719(unspecified launch failure) |
+| stream_nonblocking | PASS | FAIL (A) | PASS | FAIL (A) | FAIL | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — CHECK nonblocking FAIL sync=719(unspecified launch failure) |
+| stream_perthread | PASS | FAIL (A) | PASS | FAIL (A) | FAIL | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — CHECK perthread FAIL sync=719(unspecified launch failure) |
+| stream_two | PASS | FAIL (A) | PASS | FAIL (A) | FAIL | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — CHECK two_a FAIL sync=719(unspecified launch failure) |
+| stream_created2nd | PASS | FAIL (A) | PASS | FAIL (A) | FAIL | Xid 13, SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed — CHECK c2_created FAIL sync=719(unspecified launch failure) |
 
 A 26 ['MersenneTwisterGP11213', 'UnifiedMemoryPerf', 'UnifiedMemoryStreams', 'attach_verify', 'bandwidthTest', 'blender_cycles', 'concurrentKernels', 'geekbench_gpu', 'globalToShmemAsyncCopy', 'graphMemoryNodes', 'hashcat', 'llama_bench', 'llama_cpp_gen', 'matrixMul', 'simpleAtomicIntrinsics', 'simpleCallback', 'simpleCudaGraphs', 'simpleIPC', 'simpleStreams', 'stream_created', 'stream_created2nd', 'stream_nonblocking', 'stream_perthread', 'stream_two', 'torch_ai_bench', 'torch_correct']
 
@@ -168,6 +173,7 @@ in `traces/v3_app_matrix/va1_rtx3060/evidence_excerpts.txt`.
 | 5 | **F — Vulkan** | 2 (vulkaninfo, vkpeak) | vulkaninfo blocks in an RM ioctl; vkpeak `No vulkan device`; guest RM `scrubberDestruct: Timed out`, `ce_utils.c:349` |
 | 6 | E — EGL | 1 (egl_offscreen) | `eglInitialize failed`, no Xid, no kf3 refusal |
 | 6 | G — gpu_burn | 1 | SIGSEGV in gpu_burn right after `cuInit` (reads past its stack); no Xid |
+| 6 | J — host map `NoMemory` late in a long PM boot | 1 (llama_bench as the ~60th process; the boot then hangs for every later app) | kf3 `REFUSED VasKey(..) root 0x1f1cac000: 1 run(s) not applied: window map 0x110000+0x200000 (store @0x1000000): arm: NV_ESC_RM_MAP_MEMORY store@0x1000000+0x200000: NoMemory` |
 | 6 | I — walk refused beyond the FB span | 1 (hf_generate, 3070 only) | `REFUSED walk: run[0] leaves the guest's GPGA: gpga=0x1d5ed0000 … span is 0x180000000` with `fb-mb=6144` |
 
 ### A — non-default streams (rank 1)
@@ -205,7 +211,7 @@ is ranked 2 only because the per-boot matrix isolates it. With guest persistence
   hang), and `stream_created` still FAILs with 719 (A is independent of PM). ⇒ B is tied to the guest
   RM tearing the adapter down and re-initialising it per process (what happens without PM), not to the
   processes themselves. `traces/v3_app_matrix/va1_rtx3060/seqpm/`. A full one-boot PM run of all 71
-  rows (`pm1`) follows in §4b.
+  rows (`pm1`) is the PM column of §2: B vanishes, A/C/G are unchanged, J appears at the 60th process.
 - EGL / Vulkan / gpu_burn root causes are not localised beyond the signatures above (no kf3 refusal is
   logged for any of them).
 
