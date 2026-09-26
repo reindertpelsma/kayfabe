@@ -73,8 +73,25 @@ def matrix(paths, nbare):
                   f"min={min(others)} max={max(others)} maxdiff={max(D[i][j][2] for j in range(nbare) if j != i)}")
 
 
+def sparse(ref, paths):
+    """--sparse REF.png A.png ...: each image as the R, G, B values where it differs from REF — lossless for
+    those channels and a few bytes per image (Cycles runs differ in a handful of values), so a noise
+    measurement's images can live in the repository beside the reference PNG instead of only on a box."""
+    R = rgb(ref)
+    print(f"# ref={os.path.basename(ref)} size={R[0][0]}x{R[0][1]} rgb_values={len(R[1])} format: <name> n=<count> <index>:<value>...")
+    for p in paths:
+        I = rgb(p)
+        if I[0] != R[0]:
+            print(f"{os.path.basename(p)} SIZE_MISMATCH {I[0]}")
+            continue
+        d = [f"{i}:{y}" for i, (x, y) in enumerate(zip(R[1], I[1])) if x != y]
+        print(f"{os.path.basename(p)} n={len(d)} {' '.join(d)}")
+
+
 def main():
     a = sys.argv[1:]
+    if a[:1] == ["--sparse"]:
+        return sparse(a[1], a[2:])
     if a[:1] == ["--matrix"]:
         a = a[1:]
         nbare = 0

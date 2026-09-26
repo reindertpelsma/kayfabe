@@ -5,6 +5,7 @@
 # the full pairwise table of differing values, then each image's spread (its mean number of differing
 # values to the bare-metal images). A guest image whose spread exceeds every bare image's is an outlier;
 # guest images that are outliers AND agree with each other would be a systematic difference.
+# env CYCLES_SPARSE=<prefix>: also write each image as its sparse difference from the first bare image.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 BARE=${1:?bare dirs}; GUEST=${2:?guest dirs}; shift 2
@@ -23,5 +24,9 @@ for it in $ITEMS; do
     done
     echo "== $it: ${#b[@]} bare-metal image(s), ${#g[@]} guest image(s)"
     python3 "$HERE/imgnoise.py" --matrix --nbare "${#b[@]}" "${b[@]}" "${g[@]}"
+    # CYCLES_SPARSE=<prefix>: every image also written as its differences from the first bare-metal image
+    # (<prefix>_<item>.txt, lossless for R, G, B) — the measurement's data, small enough for the repository
+    [ -n "${CYCLES_SPARSE:-}" ] && [ "${#b[@]}" -ge 1 ] && \
+        python3 "$HERE/imgnoise.py" --sparse "${b[0]}" "${b[@]}" "${g[@]}" > "${CYCLES_SPARSE}_$it.txt"
     rm -f "$T"/*.png
 done
