@@ -777,8 +777,11 @@ impl ChanPlane {
         if kf_mem::maplog::on()
             && let Some(c) = self.rung_at_us.get(idx as usize)
         {
-            // ⊘ Diagnostic only: one relaxed store of a clock read.
-            c.store((kf_mem::maplog::t() * 1e6) as u64, Ordering::Relaxed);
+            // ⊘ Diagnostic only (and it writes a line from the vCPU — never on in production).
+            let t = kf_mem::maplog::t();
+            c.store((t * 1e6) as u64, Ordering::Relaxed);
+            let n = self.rung.get(idx as usize).map_or(0, |r| r.load(Ordering::Relaxed));
+            eprintln!("kf3: maplog t={t:.6} DOORBELL chid {idx:#x} #{n} reached={reached}");
         }
         if reached && let Some(c) = self.rang.get(idx as usize) {
             c.fetch_add(1, Ordering::Relaxed);

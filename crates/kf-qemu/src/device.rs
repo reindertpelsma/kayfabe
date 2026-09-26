@@ -1630,7 +1630,11 @@ impl Device {
             e.wakes.fetch_add(1, Ordering::Relaxed);
             // ⊘ Only an engine a guest twin runs on: the notifier is GPU-wide, and a wake with no
             // twin there is our own ring's, the walker's or another tenant's — not guest work.
-            if e.live.load(Ordering::Relaxed) > 0
+            let raise = e.live.load(Ordering::Relaxed) > 0 && e.vector.is_some();
+            if kf_mem::maplog::on() {
+                eprintln!("kf3: maplog t={:.6} NSI host {} wake #{} raised={raise}", kf_mem::maplog::t(), e.name, e.wakes.load(Ordering::Relaxed));
+            }
+            if raise
                 && let Some(v) = e.vector
             {
                 e.raised.fetch_add(1, Ordering::Relaxed);
