@@ -1,0 +1,2 @@
+2026-09-26T12:08:58.645740Z qemu-system-x86_64: -device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0: kf3: realize refused: host facts: 1 host fact(s) refused by name:
+  gr_static: reply not servable: Unservable { cmd: 545264170, why: "a non-contiguous GPC mask: GrStaticProfile states GPCs 0..n" }

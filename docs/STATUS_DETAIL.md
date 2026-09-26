@@ -2,6 +2,9 @@
 
 > ### STATUS — 2026-09-26 / **LIVE**, written at `master` `74dc3113`
 >
+> ★ Updated 2026-09-26 on branch `v3-gpcmask` (§1, §5): floor-swept GR — the first boot on a die
+> whose GPC mask is not `0..n` ([`design/V3_FLOORSWEPT_GR.md`](design/V3_FLOORSWEPT_GR.md)).
+>
 > The long form of the README's status. Each line names the revision, the box and the document
 > that holds the evidence. ⚠ Where a dated measurement and a summary disagree, believe the
 > measurement. ⊘ The pre-v3 version of this file (the `kayfabe-*` tree, the old test-suite
@@ -21,6 +24,7 @@ same `.run`. "Bare metal" means the same program on the same box's host, with no
 | thin guest **30/30** (`KF_DEVICE=kf3 fast_suite.sh`, one boot per arm, 180 s each) | `d536595d`; `f703cdaf` | GA106 | `traces/v3_int_ga106/fast_suite_d536595d.txt`, `traces/v3_appfix/fast_suite_f703cdaf.out` |
 | thin guest **30/30** on **Ada**; bare metal 30/30 after one client fix | `1d6bb323`, `6ccb4585` | vast 52660152, RTX 4060 Ti AD106 | [`design/V3_FAMILY_PORT_ADA.md`](design/V3_FAMILY_PORT_ADA.md) |
 | the only Ada boot blocker (a SEC2 scrubber handoff register), fixed as a per-family row and A/B-checked on hardware | `09a3944b` | AD106 | same, §2 |
+| ★ **floor-swept GA104** (`GR_GET_GPC_MASK = 0x3e`): realize refused at `283a5304` (*"a non-contiguous GPC mask"*); thin guest **30/30** after the fix, v3 gates **9/9**; bare metal 30/30; fat-guest CUDA `cup3`/`cup8` pass; the guest's GR floorsweeping controls answer byte-identically to the host's | `25edb757` (30/30, `fb-mb=6144`); `948b38e2` (gates, suite at the lanes' new card-aware default); `2e32b7b1` (CUDA); `0d8426a3` (probe diff) | vast 52739422, RTX 3060 Ti 8 GB | [`design/V3_FLOORSWEPT_GR.md`](design/V3_FLOORSWEPT_GR.md), `traces/v3_gpcmask/` |
 
 Every arm reports `forwarded>0` and `emulated=0` for its passthrough tokens. The suite is graded
 by `kayfabe-rm-ladder`, the raw client, which is still built from the frozen pre-v3 crates.
@@ -134,8 +138,8 @@ LLM decode, `Qwen/Qwen2-0.5B-Instruct`, Hugging Face eager, from `V3_BUILD.md`
 
 | family | state | source |
 |---|---|---|
-| Ampere GA10x (GA106, GA102) | **measured** | above |
-| Ada (AD106) | **measured**, thin guest 30/30 | `V3_FAMILY_PORT_ADA.md` |
+| Ampere GA10x (GA106, GA102; ★ floor-swept GA104) | **measured**; GA104 thin guest 30/30 | above; `V3_FLOORSWEPT_GR.md` |
+| Ada (AD106; ★ floor-swept AD104 GR facts) | **measured**, thin guest 30/30 on AD106; AD104 (`gpcMask 0x1d`) GR realize path replayed from its own unprivileged answers, **no guest boot** | `V3_FAMILY_PORT_ADA.md`, `V3_FLOORSWEPT_GR.md` |
 | Turing | GSP model built, **never booted** | `V3_FAMILY_PORT_ADA.md` (update, branch `v3-families`, merged) |
 | Hopper, Blackwell | derived from ogkm-580.159.04 source, including the Hopper+ BAR1 doorbell; unit-tested against source-shaped fixtures; **never run on hardware** | [`design/V3_BAR1_DOORBELL.md`](design/V3_BAR1_DOORBELL.md) (DESIGN+CODE, hardware-unverified); gate 7 covers VER3 page tables |
 | GA100 | **refused by name** | `V3_FAMILY_PORT_ADA.md` |
