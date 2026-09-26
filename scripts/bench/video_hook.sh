@@ -15,6 +15,11 @@ echo "=== video hook: ffmpeg sha256 $(sha256sum "$FF" | cut -c1-16)  lane md5 $(
 $G 'mkdir -p /var/tmp/vid && cat > /var/tmp/vid/ffmpeg && chmod +x /var/tmp/vid/ffmpeg' < "$FF" || { echo "push ffmpeg failed"; echo HOOK_RC=2; exit 2; }
 $G 'cat > /var/tmp/vid/video_lane.sh' < "$SRC_DIR/video_lane.sh"
 $G 'ls /usr/lib/x86_64-linux-gnu/ | grep -E "libnvidia-encode.so.1|libnvcuvid.so.1|libcuda.so.1" | tr "\n" " "; echo'
+# ★ VIDEO_PM=1: guest persistence mode (`nvidia-smi -pm 1`, one adapter init for the whole lane).
+#   ⊘ Without it, each GPU process re-initialises the adapter, and the kf3 walk's per-space run cap
+#   is hit by UVM's re-created VA space after a few processes (V3_BUILD.md, the LLM lane's
+#   "5th-process RUN_CAP wall"; measured here too). The default stays OFF, so both are measurable.
+if [ "${VIDEO_PM:-0}" = 1 ]; then $G 'sudo nvidia-smi -pm 1 2>&1 | tail -1'; fi
 # ★ VIDEO_SKIP=1: push the tools, run nothing (interactive diagnosis with VIDEO_HOLD=1).
 if [ "${VIDEO_SKIP:-0}" = 1 ]; then VIDEO_SHIM=; fi
 # ★ Optional ioctl differential (VIDEO_SHIM = the nvdiff LD_PRELOAD recorder built on the host):
