@@ -1619,6 +1619,11 @@ fn transcode_reviewed_paths(want: WantedTable) -> Option<&'static [&'static str]
         // meaning. The compressed map this encoder emits fits 4096 (it does at the bench), so a 610
         // guest decompresses exactly the bytes a 580 guest does.
         WantedTable::UserRegisterAccessMap => Some(&[]),
+        // `[matrix]` 16 bytes up to 565.57.01, 4 from 570.86.15: the four NvBools keep their
+        // offsets; ≤565 also carries `dmaWindowStartAddress` (+8), which the bench encoder does
+        // not state and the guest's kbifStaticInfoInit copies into KernelBif — 0, what a GA10x
+        // (no DMA window) reports. `[failure point 6de22590]` a 565.57.01 guest was refused here.
+        WantedTable::BifStaticInfo => Some(&[]),
         _ => None,
     }
 }
