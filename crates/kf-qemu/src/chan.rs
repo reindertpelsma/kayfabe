@@ -524,10 +524,29 @@ struct ReleaseRead {
     got: Option<u32>,
 }
 
+impl ReleaseRead {
+    /// ★ The word read back says the release did NOT happen: neither the payload nor a LATER
+    /// value of the same monotonic word (a newer release of the same semaphore — RM's CeUtils and
+    /// UVM's trackers only ever count up — may already have overwritten it by the time we read), and
+    /// the release was a plain one (a reduction writes `op(old, payload)`, never the payload).
+    fn not_landed(&self) -> bool {
+        match self.got {
+            Some(v) => {
+                self.r.kind != kf_chan::translated::ReleaseKind::CeReduction
+                    && v != self.r.payload
+                    && (v.wrapping_sub(self.r.payload) as i32) <= 0
+            }
+            None => false,
+        }
+    }
+}
+
 impl std::fmt::Display for ReleaseRead {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let verdict = match self.got {
+            Some(_) if self.r.kind == kf_chan::translated::ReleaseKind::CeReduction => "REDUCTION(value is op(old,payload))",
             Some(v) if v == self.r.payload => "LANDED",
+            Some(_) if !self.not_landed() => "OVERTAKEN(a later release of this word landed)",
             Some(_) => "NOT-LANDED",
             None => "UNREAD",
         };
@@ -584,6 +603,38 @@ fn hex16(b: &[u8]) -> String {
         .map(|c| if c.len() == 4 { format!("{:08x}", u32::from_le_bytes([c[0], c[1], c[2], c[3]])) } else { format!("{c:02x?}") })
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+/// ★★ v3-initrace — one operand of a completed launch, read back. A VIRTUAL operand is resolved
+/// through OUR placements (the host space's rows — exactly what the engine's MMU used) to the
+/// store or guest RAM; a PHYSICAL one is read where the rewriter pointed the engine.
+fn probe_side(
+    ram: &RamMap,
+    mirror: &Mirror,
+    views: Option<(&mut StoreViews, &HostRm, u32)>,
+    o: kf_chan::translated::Operand,
+) -> (String, Option<Vec<u8>>) {
+    match o {
+        kf_chan::translated::Operand::Physical(t, p, n) => probe_operand(ram, mirror, views, t, p, n),
+        kf_chan::translated::Operand::Virtual(va, n) => {
+            let len = n.min(16);
+            match resolve_placed(&mirror.rows, va, len) {
+                None => (format!("VA {va:#x}+{n:#x} UNPLACED by us"), None),
+                Some((true, off)) => {
+                    let n16 = usize::try_from(len).unwrap_or(16);
+                    let host = ram.at_file_offset(off, len).and_then(|(m, at)| {
+                        let mut b = vec![0u8; n16];
+                        m.read_into(at, &mut b).then_some(b)
+                    });
+                    (format!("VA {va:#x}+{n:#x} -> ram+{off:#x} host[{}]", host.as_deref().map_or("unread".to_string(), hex16)), host)
+                }
+                Some((false, off)) => {
+                    let (s, b) = probe_operand(ram, mirror, views, Target::LocalFb, off, n);
+                    (format!("VA {va:#x} -> {s}"), b)
+                }
+            }
+        }
+    }
 }
 
 /// ★★ v3-initrace — one PHYSICAL operand of a completed launch, read back: its first ≤ 16 bytes as
@@ -2503,21 +2554,18 @@ impl ChanPlane {
             for f in g.chan.take_completed() {
                 let reads: Vec<ReleaseRead> =
                     f.releases.iter().map(|r| probe_read(self.ram, &mirror, Some((&mut g.views, self.rm, self.store)), *r)).collect();
-                let bad = reads.iter().any(|x| x.got != Some(x.r.payload));
+                let bad = reads.iter().any(ReleaseRead::not_landed);
                 let dt = f.completed.map_or(0, |c| c.duration_since(f.submitted).as_micros());
                 // ★ v3-initrace: the data the launches moved, host side vs the guest's CPU views.
                 let mut data = Vec::new();
                 let mut copy_bad = false;
                 for l in &f.launches {
                     let (src, sb) = match l.src {
-                        Some((t, p, n)) => {
-                            let (s, b) = probe_operand(self.ram, &mirror, Some((&mut g.views, self.rm, self.store)), t, p, n);
-                            (s, b)
-                        }
+                        Some(o) => probe_side(self.ram, &mirror, Some((&mut g.views, self.rm, self.store)), o),
                         None => ("-".to_string(), None),
                     };
                     let (dst, db) = match l.dst {
-                        Some((t, p, n)) => probe_operand(self.ram, &mirror, Some((&mut g.views, self.rm, self.store)), t, p, n),
+                        Some(o) => probe_side(self.ram, &mirror, Some((&mut g.views, self.rm, self.store)), o),
                         None => ("-".to_string(), None),
                     };
                     let remap = l.launch & kf_abi::submit::ce::LAUNCH_REMAP_ENABLE != 0;
@@ -2647,7 +2695,7 @@ impl ChanPlane {
                     .launches
                     .iter()
                     .map(|l| {
-                        let side = |x: Option<(Target, u64, u64)>| x.map_or("-".to_string(), |(t, p, n)| probe_operand(self.ram, &mirror, None, t, p, n).0);
+                        let side = |x: Option<kf_chan::translated::Operand>| x.map_or("-".to_string(), |o| probe_side(self.ram, &mirror, None, o).0);
                         format!("launch={:#x} src {} dst {}", l.launch, side(l.src), side(l.dst))
                     })
                     .collect();

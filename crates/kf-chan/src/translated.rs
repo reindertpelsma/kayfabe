@@ -149,22 +149,31 @@ pub struct CeState {
     pub sema: SemaRegs,
     /// The releases recorded since the ring last took them ([`crate::ring::TranslatedRing`]).
     pub releases: Releases,
-    /// ★ v3-initrace: the launches with a PHYSICAL operand since the last take, as the guest wrote
-    /// them (before our rewrite) — the completion probe reads their bytes back.
+    /// ★ v3-initrace: the data-moving launches since the last take, as the guest wrote them
+    /// (before our rewrite) — the completion probe reads their bytes back.
     pub launches: PhysLaunches,
 }
 
-/// ★ v3-initrace (diagnostic record only): one `LAUNCH_DMA` that named a PHYSICAL operand, as the
-/// guest wrote it — `(target, physical address, bytes)` per side (`None`: that side is virtual or
-/// not read).
+/// ★ v3-initrace (diagnostic record only): one side of a launch, as the guest named it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Operand {
+    /// A PHYSICAL operand: `(target, address, bytes)`.
+    Physical(Target, u64, u64),
+    /// A VIRTUAL operand in the channel's own VA space: `(va, bytes)` — reached by the engine
+    /// through the host space's placements (e.g. CeUtils' FB alias, `memmgrMemUtilsMapFbAlias`).
+    Virtual(u64, u64),
+}
+
+/// ★ v3-initrace (diagnostic record only): one `LAUNCH_DMA` that moved data, as the guest wrote it
+/// — each side's operand (`None`: that side is not read, e.g. a memset's source).
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct PhysLaunch {
     /// The `LAUNCH_DMA` word.
     pub launch: u32,
-    /// The source, if physical and read.
-    pub src: Option<(Target, u64, u64)>,
-    /// The destination, if physical.
-    pub dst: Option<(Target, u64, u64)>,
+    /// The source, if read.
+    pub src: Option<Operand>,
+    /// The destination.
+    pub dst: Option<Operand>,
 }
 
 /// The last [`PhysLaunches::CAP`] physical launches since the last take.
@@ -237,6 +246,10 @@ pub enum ReleaseKind {
     /// A copy-engine `LAUNCH_DMA` with `SEMAPHORE_TYPE` one-word (`clc7b5.h:99`).
     #[default]
     CeOneWord,
+    /// A copy-engine release with `SEMAPHORE_REDUCTION_ENABLE` (`clc7b5.h:147`, bit 19): the word
+    /// becomes `op(old, payload)` (UVM's tracking semaphores INC with the payload as the wrap
+    /// value), so the payload is NOT the value written — never judged against it.
+    CeReduction,
     /// … four-word (with timestamp; the payload is the first word).
     CeFourWord,
     /// … conditional-interrupt semaphore.
@@ -293,6 +306,9 @@ impl Releases {
     }
 }
 
+/// `NVC7B5_LAUNCH_DMA_SEMAPHORE_REDUCTION_ENABLE` 19:19 (`ogkm-580: clc7b5.h:147`).
+const LAUNCH_SEMAPHORE_REDUCTION_ENABLE: u32 = 1 << 19;
+
 /// Record the semaphore methods `(sub, m, v)` sets — host methods below `0x100` on any
 /// subchannel, CE methods on a hardware subchannel. Pure bookkeeping.
 fn note_semaphore(st: &mut CeState, sub: u32, m: u32, v: u32) {
@@ -324,6 +340,7 @@ fn note_semaphore(st: &mut CeState, sub: u32, m: u32, v: u32) {
         ce::LAUNCH_DMA => {
             let kind = match (v & ce::LAUNCH_SEMAPHORE_TYPE_MASK) >> 3 {
                 0 => return,
+                _ if v & LAUNCH_SEMAPHORE_REDUCTION_ENABLE != 0 => ReleaseKind::CeReduction,
                 1 => ReleaseKind::CeOneWord,
                 2 => ReleaseKind::CeFourWord,
                 _ => ReleaseKind::CeConditionalIntr,
@@ -610,11 +627,14 @@ fn one_write(
             let src_phys = v & ce::LAUNCH_SRC_PHYSICAL != 0;
             let dst_phys = v & ce::LAUNCH_DST_PHYSICAL != 0;
             // ★ v3-initrace: bookkeeping for the completion probe (the words are unchanged).
-            if (src_phys || dst_phys)
+            if v & ce::LAUNCH_TRANSFER_MASK != ce::LAUNCH_TRANSFER_NONE
                 && let Ok((src_len, dst_len)) = extents(st, v)
             {
-                let src = src_len.filter(|_| src_phys).map(|n| (Target::from_bits(st.src_mode), st.off_in, n));
-                let dst = dst_phys.then_some((Target::from_bits(st.dst_mode), st.off_out, dst_len));
+                let side = |phys: bool, mode: u32, at: u64, n: u64| {
+                    if phys { Operand::Physical(Target::from_bits(mode), at, n) } else { Operand::Virtual(at, n) }
+                };
+                let src = src_len.map(|n| side(src_phys, st.src_mode, st.off_in, n));
+                let dst = Some(side(dst_phys, st.dst_mode, st.off_out, dst_len));
                 st.launches.push(PhysLaunch { launch: v, src, dst });
             }
             if dst_phys && st.ce_class >= HOPPER_DMA_COPY_A && v & LAUNCH_MEMORY_SCRUB_ENABLE != 0 {
