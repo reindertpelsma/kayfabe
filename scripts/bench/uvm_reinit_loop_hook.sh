@@ -19,6 +19,8 @@ PY=${URL_PY:-/home/ubuntu/llmvenv/bin/python}
 PROG=${URL_PROG:-"import torch; x=torch.ones(1<<20, device='cuda'); print('URL_SUM', int((x*2).sum().item()))"}
 QLOG=${BENCH_DIR:-/workspace/bench}/run_${1:-none}_qemu.log
 $G true >/dev/null 2>&1 || { echo "URL_OUTCOME=UNMEASURED_GUEST_UNREACHABLE"; exit 0; }
+# URL_GUEST_PM=1: persistence mode ON first (one adapter init for the whole loop) — the control arm.
+[ "${URL_GUEST_PM:-0}" = 1 ] && $G 'sudo nvidia-smi -pm 1' >/dev/null 2>&1
 echo "URL_PM=$($G 'nvidia-smi --query-gpu=persistence_mode --format=csv,noheader' 2>&1 | tr -d '\r' | head -1)"
 pass=0; fail=0
 for i in $(seq 1 "$N"); do
