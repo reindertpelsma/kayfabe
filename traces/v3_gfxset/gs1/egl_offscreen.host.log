@@ -1,0 +1,9 @@
+=== egl_offscreen side=host start=2026-09-26T17:07:10+00:00 host=ubuntu kernel=6.8.0-59-generic drv=580.159.04
+[egl] renderer: NVIDIA GeForce RTX 3070/PCIe/SSE2
+METRIC egl_gl_Mtri_s 2.6
+CHECK egl_gl_Mtri_s ok
+EGLOFF_FB_MD5 f748eed8b69d0383
+GSET_DIG side=host item=egl_offscreen key=fb val=f748eed8b69d0383
+GSET_VAL side=host item=egl_offscreen key=Mtri_s val=2.6
+GSET_OK
+=== end rc=0 secs=15 2026-09-26T17:07:25+00:00

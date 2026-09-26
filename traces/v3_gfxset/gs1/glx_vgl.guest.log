@@ -1,0 +1,19 @@
+=== glx_vgl side=guest start=2026-09-26T18:10:23+00:00 host=ubuntu kernel=6.8.0-139-generic drv=580.159.04
+OpenGL renderer string: NVIDIA GeForce RTX 3070/PCIe/SSE2
+OpenGL core profile version string: 4.6.0 NVIDIA 580.159.04
+OpenGL core profile shading language version string: 4.60 NVIDIA
+OpenGL version string: 4.6.0 NVIDIA 580.159.04
+GLX_START
+GLX_RENDERER=NVIDIA GeForce RTX 3070/PCIe/SSE2
+GLX_GL_VERSION=4.6.0 NVIDIA 580.159.04
+GLXR_REF checked=6079 colour_bad=0 depth_bad=0 blit_checked=1296 blit_bad=0
+GLXR_HASH_A=2a4db0673ee94aaf
+GLXR_HASH_Z=d26f0e8bbed2b9bf
+GLXR_HASH_B=238bd6f6f74e5280
+GLXR_REF_FAILS=0
+GLX_DONE rc=0
+GSET_DIG side=guest item=glx_vgl key=GLXR_HASH_A val=2a4db0673ee94aaf
+GSET_DIG side=guest item=glx_vgl key=GLXR_HASH_Z val=d26f0e8bbed2b9bf
+GSET_DIG side=guest item=glx_vgl key=GLXR_HASH_B val=238bd6f6f74e5280
+GSET_OK
+=== end rc=0 secs=5 2026-09-26T18:10:28+00:00

@@ -1,0 +1,17 @@
+=== pv_egl_dmabuf_export side=host start=2026-09-26T17:26:54+00:00 host=ubuntu kernel=6.8.0-59-generic drv=580.159.04
+== 1. open EGL display (surfaceless) ==
+    EGL 1.5  vendor=NVIDIA
+    EGL_MESA_image_dma_buf_export advertised: yes
+== 2. create context ==
+    GL_RENDERER: NVIDIA GeForce RTX 3070/PCIe/SSE2
+== 3. GPU texture 256x256 ==
+    glGetError=0x0000
+== 4. eglCreateImageKHR from the texture ==
+    image created OK
+== 5. eglExportDMABUFImageQueryMESA  <-- the primitive under test ==
+    fourcc=0x34324241 ('AB24') planes=1 modifier=0x300000000e08014
+== 6. eglExportDMABUFImageMESA (actually get the fd) ==
+    fd=25 stride=1024 offset=0
+RESULT: PASS dma-buf export works (fd=25)
+GSET_OK
+=== end rc=0 secs=0 2026-09-26T17:26:54+00:00

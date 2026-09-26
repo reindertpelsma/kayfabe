@@ -1,0 +1,12 @@
+GSET_DIG side=guest item=ff_placebo key=libplacebo_scale val=EMPTY
+GSET_DIG side=guest item=ff_placebo key=libplacebo_deband val=EMPTY
+GSET_DIG side=guest item=ff_vulkan key=scale_vulkan val=EMPTY
+GSET_DIG side=guest item=ff_vulkan key=avgblur_vulkan val=EMPTY
+GSET_DIG side=guest item=ff_vulkan key=gblur_vulkan val=EMPTY
+GSET_DIG side=guest item=ff_vulkan key=chromaber_vulkan val=EMPTY
+GSET_DIG side=guest item=ff_vulkan key=flip_vulkan val=EMPTY
+GSET_DIG side=guest item=ff_vulkan key=transpose_vulkan val=EMPTY
+GSET_DIG side=guest item=ff_vulkan key=nlmeans_vulkan val=EMPTY
+GSET_DIG side=guest item=ff_vulkan key=bwdif_vulkan val=EMPTY
+GSET_DIG side=guest item=ff_vulkan key=overlay_vulkan val=EMPTY
+GSET_DIG side=guest item=pv_vk_rt_ext key=result val=

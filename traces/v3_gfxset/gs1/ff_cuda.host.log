@@ -1,0 +1,15 @@
+=== ff_cuda side=host start=2026-09-26T17:25:15+00:00 host=ubuntu kernel=6.8.0-59-generic drv=580.159.04
+ff scale_cuda rc=0 md5=089d90abe6068dd4 bytes=10368000
+GSET_DIG side=host item=ff_cuda key=scale_cuda val=089d90abe6068dd4
+ff yadif_cuda rc=0 md5=a1a30d47944e22bd bytes=82944000
+GSET_DIG side=host item=ff_cuda key=yadif_cuda val=a1a30d47944e22bd
+ff bwdif_cuda rc=0 md5=cf28a0faddab3562 bytes=41472000
+GSET_DIG side=host item=ff_cuda key=bwdif_cuda val=cf28a0faddab3562
+ff colorspace_cuda rc=0 md5=6acc154cccab8916 bytes=41472000
+GSET_DIG side=host item=ff_cuda key=colorspace_cuda val=6acc154cccab8916
+ff chromakey_cuda rc=0 md5=1cab63f687a2eb4a bytes=69120000
+GSET_DIG side=host item=ff_cuda key=chromakey_cuda val=1cab63f687a2eb4a
+ff overlay_cuda rc=0 md5=ed11c83c403d404d bytes=41472000
+GSET_DIG side=host item=ff_cuda key=overlay_cuda val=ed11c83c403d404d
+GSET_OK
+=== end rc=0 secs=10 2026-09-26T17:25:25+00:00

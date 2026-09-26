@@ -1,0 +1,7 @@
+=== blender_cycles_optix side=guest start=2026-09-26T18:11:51+00:00 host=ubuntu kernel=6.8.0-139-generic drv=580.159.04
+Fra:1 Mem:21.98M (Peak 37.42M) | Time:00:02.64 | Mem:370.82M, Peak:370.82M | Scene, ViewLayer | Finished
+BLENDER_OK CYCLES OPTIX gpu=NVIDIA_GeForce_RTX_3070 backend=none(SystemError) w=640 h=360 mean=0.741335
+GSET_DIG side=guest item=blender_cycles_optix key=png val=15e6800ca3bb0167
+GSET_VAL side=guest item=blender_cycles_optix key=mean val=0.741335
+GSET_OK
+=== end rc=0 secs=4 2026-09-26T18:11:55+00:00

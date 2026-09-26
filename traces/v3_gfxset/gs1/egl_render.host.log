@@ -1,0 +1,20 @@
+=== egl_render side=host start=2026-09-26T17:25:11+00:00 host=ubuntu kernel=6.8.0-59-generic drv=580.159.04
+EGL_START
+EGL_DEVICE[0] drm=/dev/dri/card0 ext=EGL_NV_device_cuda EGL_EXT_device_drm EGL_EXT_device_drm_render_node EGL_EXT_device_query_name EGL_EXT_device_persistent_id
+EGL_DISPLAY[0] vendor=NVIDIA version=1.5
+EGL_DEVICE[1] drm=/dev/dri/card0 ext=EGL_EXT_device_drm EGL_EXT_device_drm_render_node EGL_EXT_device_query_name EGL_EXT_device_persistent_id
+EGL_DEVICE[2] drm=- ext=EGL_MESA_device_software EGL_EXT_device_drm_render_node
+EGL_RENDERER=NVIDIA GeForce RTX 3070/PCIe/SSE2
+EGL_GL_VERSION=4.6.0 NVIDIA 580.159.04
+EGL_STAGE=context_current
+EGLR_REF checked=6079 colour_bad=0 depth_bad=0 blit_checked=1296 blit_bad=0
+EGLR_HASH_A=2a4db0673ee94aaf
+EGLR_HASH_Z=d26f0e8bbed2b9bf
+EGLR_HASH_B=238bd6f6f74e5280
+EGLR_REF_FAILS=0
+EGL_DONE rc=0
+GSET_DIG side=host item=egl_render key=EGLR_HASH_A val=2a4db0673ee94aaf
+GSET_DIG side=host item=egl_render key=EGLR_HASH_Z val=d26f0e8bbed2b9bf
+GSET_DIG side=host item=egl_render key=EGLR_HASH_B val=238bd6f6f74e5280
+GSET_OK
+=== end rc=0 secs=0 2026-09-26T17:25:11+00:00

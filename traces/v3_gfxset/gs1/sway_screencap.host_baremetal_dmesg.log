@@ -1,0 +1,2 @@
+[ 3475.334475] es2gears_waylan[101138]: segfault at 18 ip 0000780533612c8b sp 00007ffc2485a960 error 4 in libwayland-client.so.0.22.0[780533610000+6000] likely on CPU 4 (core 0, socket 4)
+[ 3475.334491] Code: 90 00 00 00 85 f6 75 d5 e9 1b ff ff ff 48 c7 45 a8 00 00 00 00 e9 c9 fe ff ff e8 30 d7 ff ff f3 0f 1e fa 55 48 89 e5 41 54 53 <48> 8b 47 18 48 89 fb 4c 8d a0 18 01 00 00 4c 89 e7 e8 bf d8 ff ff

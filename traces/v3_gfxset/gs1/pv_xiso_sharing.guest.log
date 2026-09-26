@@ -1,0 +1,25 @@
+=== pv_xiso_sharing side=guest start=2026-09-26T17:49:49+00:00 host=ubuntu kernel=6.8.0-139-generic drv=580.159.04
+exporter: bo stride=1024 mod=0x0 dmabuf=4
+exporter: sent dmabuf fd, idling
+importer: got dmabuf=4 stride=1024 mod=0x0
+importer: EGL 1.5 vendor=NVIDIA
+>>> eglCreateImageKHR(LINUX_DMA_BUF) BEGIN
+<<< eglCreateImageKHR END img=0x5855c44c8c21 err=0x3000
+RESULT import=OK
+exporter: gbm backend=nvidia
+exporter: EGL 1.5 vendor=NVIDIA
+exporter: GL_RENDERER=NVIDIA GeForce RTX 3070/PCIe/SSE2
+exporter: bo stride=1024 mod=0x300000000e08014 dmabuf=20
+exporter: self-readback q0=0xff604020 (expect r=20 g=40 b=60)
+exporter: painted 4 quadrants
+exporter: sent dmabuf fd, holding bo alive
+importer: got dmabuf=4 stride=1024 mod=0x300000000e08014
+importer: gbm backend=nvidia
+importer: EGL 1.5 vendor=NVIDIA
+importer: GL_RENDERER=NVIDIA GeForce RTX 3070/PCIe/SSE2
+importer: EGLImage=0x5a8409364d21
+importer: checked=65536 mismatch=0 nonzero=65536
+RESULT xiso_bytes=PASS checked=65536 quadrants=4
+GSET_DIG side=guest item=pv_xiso_sharing key=bytes val=RESULT_xiso_bytes=PASS_checked=65536_quadrants=4
+GSET_OK
+=== end rc=0 secs=2 2026-09-26T17:49:51+00:00

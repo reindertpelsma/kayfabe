@@ -1,0 +1,17 @@
+=== sway_screencap side=guest start=2026-09-26T17:50:43+00:00 host=ubuntu kernel=6.8.0-139-generic drv=580.159.04
+capture bo: 1280x720 fmt=0x34325258 stride=5120 mod=0x300000000606014
+RESULT captured=300/300  61.2 fps (4905 ms)
+GSET_VAL side=guest item=sway_screencap key=capture_fps val=61.2
+WL_SCENE_SIZE 512x384
+WL_SCENE_EGL_VENDOR NVIDIA
+WL_SCENE_RENDERER NVIDIA GeForce RTX 3070/PCIe/SSE2
+WL_SCENE_HASH ad584bcbbd263ea5
+WL_SCENE_DISTINCT 8
+WL_SCENE_GLERR 0x0
+WL_SCENE_READY
+capture bo: 1280x720 fmt=0x34325258 stride=5120 mod=0x300000000606014
+RESULT captured=10/10  66.9 fps (149 ms)
+GSET_DIG side=guest item=sway_screencap key=client_readback val=ad584bcbbd263ea5
+GSET_DIG side=guest item=sway_screencap key=composite_shm val=4d1ae05ee871114b
+GSET_OK
+=== end rc=0 secs=17 2026-09-26T17:51:00+00:00

@@ -1,0 +1,58 @@
+=== ff_vulkan side=guest start=2026-09-26T18:15:29+00:00 host=ubuntu kernel=6.8.0-139-generic drv=580.159.04
+vulkan ICD: /etc/vulkan/icd.d/nvidia_icd.json only
+ff scale_vulkan rc=187 md5=EMPTY bytes=
+Device creation failed: -542398533.
+Failed to set value 'vulkan=vk:0' for option 'init_hw_device': Generic error in an external library
+Error parsing global options: Generic error in an external library
+GSET_FAIL scale_vulkan rc=187
+GSET_DIG side=guest item=ff_vulkan key=scale_vulkan val=EMPTY
+ff avgblur_vulkan rc=187 md5=EMPTY bytes=
+Device creation failed: -542398533.
+Failed to set value 'vulkan=vk:0' for option 'init_hw_device': Generic error in an external library
+Error parsing global options: Generic error in an external library
+GSET_FAIL avgblur_vulkan rc=187
+GSET_DIG side=guest item=ff_vulkan key=avgblur_vulkan val=EMPTY
+ff gblur_vulkan rc=187 md5=EMPTY bytes=
+Device creation failed: -542398533.
+Failed to set value 'vulkan=vk:0' for option 'init_hw_device': Generic error in an external library
+Error parsing global options: Generic error in an external library
+GSET_FAIL gblur_vulkan rc=187
+GSET_DIG side=guest item=ff_vulkan key=gblur_vulkan val=EMPTY
+ff chromaber_vulkan rc=187 md5=EMPTY bytes=
+Device creation failed: -542398533.
+Failed to set value 'vulkan=vk:0' for option 'init_hw_device': Generic error in an external library
+Error parsing global options: Generic error in an external library
+GSET_FAIL chromaber_vulkan rc=187
+GSET_DIG side=guest item=ff_vulkan key=chromaber_vulkan val=EMPTY
+ff flip_vulkan rc=187 md5=EMPTY bytes=
+Device creation failed: -542398533.
+Failed to set value 'vulkan=vk:0' for option 'init_hw_device': Generic error in an external library
+Error parsing global options: Generic error in an external library
+GSET_FAIL flip_vulkan rc=187
+GSET_DIG side=guest item=ff_vulkan key=flip_vulkan val=EMPTY
+ff transpose_vulkan rc=187 md5=EMPTY bytes=
+Device creation failed: -542398533.
+Failed to set value 'vulkan=vk:0' for option 'init_hw_device': Generic error in an external library
+Error parsing global options: Generic error in an external library
+GSET_FAIL transpose_vulkan rc=187
+GSET_DIG side=guest item=ff_vulkan key=transpose_vulkan val=EMPTY
+ff nlmeans_vulkan rc=187 md5=EMPTY bytes=
+Device creation failed: -542398533.
+Failed to set value 'vulkan=vk:0' for option 'init_hw_device': Generic error in an external library
+Error parsing global options: Generic error in an external library
+GSET_FAIL nlmeans_vulkan rc=187
+GSET_DIG side=guest item=ff_vulkan key=nlmeans_vulkan val=EMPTY
+ff bwdif_vulkan rc=187 md5=EMPTY bytes=
+Device creation failed: -542398533.
+Failed to set value 'vulkan=vk:0' for option 'init_hw_device': Generic error in an external library
+Error parsing global options: Generic error in an external library
+GSET_FAIL bwdif_vulkan rc=187
+GSET_DIG side=guest item=ff_vulkan key=bwdif_vulkan val=EMPTY
+ff overlay_vulkan rc=187 md5=EMPTY bytes=
+Device creation failed: -542398533.
+Failed to set value 'vulkan=vk:0' for option 'init_hw_device': Generic error in an external library
+Error parsing global options: Generic error in an external library
+GSET_FAIL overlay_vulkan rc=187
+GSET_DIG side=guest item=ff_vulkan key=overlay_vulkan val=EMPTY
+GSET_OK
+=== end rc=0 secs=27 2026-09-26T18:15:56+00:00

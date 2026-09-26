@@ -1,0 +1,7 @@
+=== pv_nvenc_nvdec_fps side=host start=2026-09-26T17:38:53+00:00 host=ubuntu kernel=6.8.0-59-generic drv=580.159.04
+nvenc_h264_fps=199 nvdec_h264_speed=17.5 frames=300
+GSET_VAL side=host item=pv_nvenc_nvdec_fps key=nvenc_h264_fps val=199
+GSET_VAL side=host item=pv_nvenc_nvdec_fps key=nvdec_h264_speed val=17.5
+GSET_DIG side=host item=pv_nvenc_nvdec_fps key=nvdec_frames val=300
+GSET_OK
+=== end rc=0 secs=6 2026-09-26T17:39:00+00:00
