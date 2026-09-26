@@ -158,6 +158,10 @@ every userspace census; `0x20800a70`, `0x00801814`, `0x2080a026`, `0x2080a084` (
 record counts equal to bare metal for `cup2` 403, `deviceQuery` 422, `torch_correct` 839,
 `llama_gen` 748, `blocksync` 415; the boot's heartbeat `sysmembars=158 root_unsets=12`.
 
+⊘ Master moved on to `e05ff74d` (v3-gpcmask) while this ran. The branch merges onto it with no
+conflict, and the merge commit's `kf-*` crate tests pass **1 507 / 0** (measured on `vrf`); the
+hardware lanes above were not re-run on that merge.
+
 Evidence (every capture, compressed, with the verification logs):
 `traces/v3_refusal_audit/ga102_vrf/`. The userspace matrix re-derives from it offline (its
 README; reproduces the 39 rows of §6.1).
