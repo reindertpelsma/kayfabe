@@ -132,13 +132,14 @@ def cmd_ranges(a):
                 if not wanted(keep, item) and not wanted(keep, s):
                     continue
 
-                def val(t, p=p):
+                # ⊘ not `val`: that name is the measured-values table the loop below reads.
+                def field_at(t, p=p):
                     if not per[t] or p not in per[t]:
                         return None
                     e = el[t].get(p, 0)
                     return per[t][p] + ((e,) if e else ())
 
-                for (f0, f1, v) in runs(tags, val):
+                for (f0, f1, v) in runs(tags, field_at):
                     if v is None:
                         vv = "ABSENT"
                     elif len(v) == 3:
