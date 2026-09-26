@@ -1362,6 +1362,71 @@ impl WantedTable {
         }
     }
 
+    /// ★★★ The NVIDIA params type this variant's encoder was written against — at
+    /// 580.159.04, the bench — so the driver matrix can say whether the GUEST's version lays
+    /// it out the same way (`docs/design/V3_DRIVER_MATRIX.md` §4.4). `None` = a body with no
+    /// header anywhere (the GSS-legacy and libcudart controls: firmware-defined, measured on
+    /// 580 only), which keeps the plain size check.
+    #[must_use]
+    pub fn c_type(self) -> Option<&'static str> {
+        Some(match self {
+            Self::DeviceInfo => "NV2080_CTRL_FIFO_GET_DEVICE_INFO_TABLE_PARAMS",
+            Self::IntrKernelTable => "NV2080_CTRL_INTERNAL_INTR_GET_KERNEL_TABLE_PARAMS",
+            Self::PciBarInfo => "NV2080_CTRL_BUS_GET_PCI_BAR_INFO_PARAMS",
+            Self::ChipInfo => "NV2080_CTRL_INTERNAL_GPU_GET_CHIP_INFO_PARAMS",
+            Self::UserRegisterAccessMap => "NV2080_CTRL_INTERNAL_GPU_GET_USER_REGISTER_ACCESS_MAP_PARAMS",
+            Self::ConstructedFalconInfo => "NV2080_CTRL_GPU_GET_CONSTRUCTED_FALCON_INFO_PARAMS",
+            Self::MemorySystemStaticConfig => "NV2080_CTRL_INTERNAL_MEMSYS_GET_STATIC_CONFIG_PARAMS",
+            Self::InternalDeviceInfo => "NV2080_CTRL_INTERNAL_GET_DEVICE_INFO_TABLE_PARAMS",
+            Self::ConfComputeStaticInfo => "NV2080_CTRL_INTERNAL_CONF_COMPUTE_GET_STATIC_INFO_PARAMS",
+            Self::BifStaticInfo => "NV2080_CTRL_INTERNAL_BIF_GET_STATIC_INFO_PARAMS",
+            Self::FifoNumChannels => "NV2080_CTRL_INTERNAL_FIFO_GET_NUM_CHANNELS_PARAMS",
+            Self::GmmuStaticInfo => "NV2080_CTRL_INTERNAL_GMMU_GET_STATIC_INFO_PARAMS",
+            Self::RegisterFaultBuffer => "NV2080_CTRL_INTERNAL_GMMU_REGISTER_FAULT_BUFFER_PARAMS",
+            Self::RegisterClientShadowFaultBuffer => {
+                "NV2080_CTRL_INTERNAL_GMMU_REGISTER_CLIENT_SHADOW_FAULT_BUFFER_PARAMS"
+            }
+            Self::RegisterAccessCntrBuffer => "NV2080_CTRL_INTERNAL_UVM_REGISTER_ACCESS_CNTR_BUFFER_PARAMS",
+            Self::EventSetNotification => "NV2080_CTRL_EVENT_SET_NOTIFICATION_PARAMS",
+            Self::MemsysL2InvalidateEvict => "NV2080_CTRL_INTERNAL_MEMSYS_L2_INVALIDATE_EVICT_PARAMS",
+            Self::CeFaultMethodBufferSize => "NV2080_CTRL_CE_GET_FAULT_METHOD_BUFFER_SIZE_PARAMS",
+            Self::GrCaps => "NV2080_CTRL_INTERNAL_STATIC_KGR_GET_CAPS_PARAMS",
+            Self::GrInfo => "NV2080_CTRL_INTERNAL_STATIC_KGR_GET_INFO_PARAMS",
+            Self::GrFloorsweepingMasks => "NV2080_CTRL_INTERNAL_STATIC_KGR_GET_FLOORSWEEPING_MASKS_PARAMS",
+            Self::GrGlobalSmOrder => "NV2080_CTRL_INTERNAL_STATIC_KGR_GET_GLOBAL_SM_ORDER_PARAMS",
+            Self::GrFecsRecordSize => "NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_FECS_RECORD_SIZE_PARAMS",
+            Self::GrPdbProperties => "NV2080_CTRL_INTERNAL_STATIC_KGR_GET_PDB_PROPERTIES_PARAMS",
+            Self::GrZcullInfo => "NV2080_CTRL_INTERNAL_STATIC_KGR_GET_ZCULL_INFO_PARAMS",
+            Self::FbGetGpuCacheInfo => "NV2080_CTRL_FB_GET_GPU_CACHE_INFO_PARAMS",
+            Self::FifoGetEngineContextProperties => "NV0080_CTRL_FIFO_GET_ENGINE_CONTEXT_PROPERTIES_PARAMS",
+            Self::GvaspaceServerReservedPdes | Self::GvaspaceServerReservedPdesClient => {
+                "NV90F1_CTRL_VASPACE_COPY_SERVER_RESERVED_PDES_PARAMS"
+            }
+            Self::GrContextBuffersInfo => "NV2080_CTRL_INTERNAL_STATIC_KGR_GET_CONTEXT_BUFFERS_INFO_PARAMS",
+            Self::GpuInfoV2 => "NV2080_CTRL_GPU_GET_INFO_V2_PARAMS",
+            Self::InternalGpuGetSmcMode => "NV2080_CTRL_INTERNAL_GPU_GET_SMC_MODE_PARAMS",
+            Self::BusGetInfoV2 => "NV2080_CTRL_BUS_GET_INFO_V2_PARAMS",
+            Self::BusGetPcieSupportedGpuAtomics => "NV2080_CTRL_CMD_BUS_GET_PCIE_SUPPORTED_GPU_ATOMICS_PARAMS",
+            Self::FbGetInfoV2 => "NV2080_CTRL_FB_GET_INFO_V2_PARAMS",
+            Self::CeGetAllPhysicalCaps => "NV2080_CTRL_CE_GET_ALL_PHYSICAL_CAPS_PARAMS",
+            Self::CeGetPhysicalCaps => "NV2080_CTRL_CE_GET_PHYSICAL_CAPS_PARAMS",
+            Self::CeGetCePceMask => "NV2080_CTRL_CE_GET_CE_PCE_MASK_PARAMS",
+            Self::GrmgrGetGrFsInfo => "NV2080_CTRL_GRMGR_GET_GR_FS_INFO_PARAMS",
+            Self::GspGetFeatures => "NV2080_CTRL_GSP_GET_FEATURES_PARAMS",
+            Self::CudartPerfLevelInfoV2 => "NV2080_CTRL_PERF_GET_LEVEL_INFO_V2_PARAMS",
+            Self::BiosGetInfoV2 => "NV2080_CTRL_BIOS_GET_INFO_V2_PARAMS",
+            Self::C2cInfo => "NV2080_CTRL_CMD_BUS_GET_C2C_INFO_PARAMS",
+            Self::PromoteFaultMethodBuffers => "NVA06C_CTRL_INTERNAL_PROMOTE_FAULT_METHOD_BUFFERS_PARAMS",
+            Self::GssLegacy8159
+            | Self::GssLegacy8162
+            | Self::CudartWatchdogInfo
+            | Self::CudartInit9009
+            | Self::CudartInit9001
+            | Self::CudartInit9064
+            | Self::CudartInit9A001 => return None,
+        })
+    }
+
     /// Classify a control command, or `None` if this policy does not model it.
     ///
     /// ★★★ **Derived from [`WantedTable::ALL`], and that is the whole point.** This was a
@@ -1700,6 +1765,24 @@ impl CommandPolicy for InitTablePolicy {
             eprintln!(
                 "W349REFUSE cmd={:#010x} why=finn-serialized rmapi_rpc_flags={:#x}",
                 req.cmd, req.rmapi_rpc_flags
+            );
+            return refuse();
+        }
+        // ★★★ The version gate (`V3_DRIVER_MATRIX.md` §4.4): every encoder here was written
+        // against 580.159.04's params layout. Where the guest version's MEASURED layout of the
+        // same type differs — even at the same size — the encoder is not proven for it, and the
+        // control is refused by name as UNPORTED at that version rather than encoded at another
+        // release's offsets. Identical layouts (every 580.x tag, and most controls at most
+        // versions) pass through unchanged.
+        if let Some(ct) = want.c_type()
+            && let Some(guest_size) = layout_differs_from_bench(ct, self.driver.driver_version())
+        {
+            eprintln!(
+                "W349REFUSE cmd={:#010x} why=unported-at-version struct={ct} guest_driver={} \
+                 measured_size={guest_size} encoder_size={}",
+                req.cmd,
+                self.driver.driver_version(),
+                want.params_size()
             );
             return refuse();
         }
@@ -2779,3 +2862,20 @@ impl CommandPolicy for InitTablePolicy {
 }
 
 kf_util::assert_send_sync!(InitTablePolicy, WantedTable);
+
+/// `Some(measured sizeof)` when the driver matrix measures `c_type` at `version` with a layout
+/// DIFFERENT from its layout at 580.159.04 (the version every encoder in this module was
+/// written against); `None` when they are the same — or when the matrix does not carry the type
+/// or the version (then the caller's size check is the only gate, exactly as before).
+#[must_use]
+pub fn layout_differs_from_bench(c_type: &str, version: kf_abi::DriverVersion) -> Option<usize> {
+    let runs = kf_abi::generated::matrix::ALL_STRUCTS.iter().find(|r| r.name == c_type)?;
+    let at_guest = runs.at(version).ok()?;
+    let at_bench = runs.at(kf_abi::versions::BENCH_DRIVER).ok()?;
+    match (at_guest, at_bench) {
+        (Some(g), Some(b)) if g == b => None,
+        (Some(g), _) => Some(g.size()),
+        (None, _) => Some(0),
+    }
+}
+

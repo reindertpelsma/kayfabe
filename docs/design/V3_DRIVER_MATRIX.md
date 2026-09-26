@@ -255,7 +255,15 @@ them — before 575 those bytes were `params[0..8]` and were being zeroed in eve
 ### 8.1 Mechanical (no decision needed — the matrix already states the answer)
 
 Every item below is "an encoder written for 580.159.04's layout, fed the measured layout instead",
-the same move `GspStaticConfigInfo` already made (§4, byte-identical at every 580.x tag):
+the same move `GspStaticConfigInfo` already made (§4, byte-identical at every 580.x tag).
+
+⚠ **Not always only offsets.** The matrix also shows where a field changed MEANING, which needs a
+conversion rule, not a layout: `INTR_GET_KERNEL_TABLE.subtreeMap[]` is `{subtreeStart, subtreeEnd}`
+(two `NvU8`, 14 bytes) at every tag ≤ 575.64.05 and `{subtreeMask}` (`NvU64`, 56 bytes) from
+580.65.06 — kf3 has the host's masks, so a ≤575 guest needs mask → (start, end), refused by name
+when a mask is not one contiguous run; and `table[].engineIdx` is an `MC_ENGINE_IDX` value, whose
+numbering is itself per version (lower at 535/545) — translated by NAME through the matrix's
+`mc_engine_idx` values, never by number.
 
 | guest version | encoders to move onto the matrix (beyond what §4 did) | est. |
 |---|---|---|

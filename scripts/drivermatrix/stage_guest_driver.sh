@@ -53,8 +53,15 @@ if [ ! -f "$OUT/modules/nvidia.ko" ] || [ "$(modinfo -F version "$OUT/modules/nv
         git clone -q --depth 1 --branch "$V" https://github.com/NVIDIA/open-gpu-kernel-modules.git "$SRC" \
             || die "clone of tag $V failed"
     fi
-    say "make modules against $KREL (-j$JOBS)"
-    ( cd "$SRC" && make -s modules -j"$JOBS" SYSSRC="$KBUILD" > "$OUT/build.log" 2>&1 ) \
+    # ⊘ THE KERNEL'S OWN COMPILER, not the default `cc`. `[measured 2026-09-26]` Ubuntu 22.04's
+    # HWE 6.8 kernel is built with gcc-12 while `cc` is gcc-11, and the kernel's flags include
+    # `-ftrivial-auto-var-init=zero`, which gcc-11 rejects — ogkm 550.54.14 and 565.57.01 failed
+    # every object on it, while 570+ (which pick the kernel's compiler themselves) built. The
+    # compiler is read from the kernel's own `CONFIG_CC_VERSION_TEXT`, never guessed.
+    KCC=$(sed -n 's/^CONFIG_CC_VERSION_TEXT="\([^ ]*\) .*/\1/p' "$KBUILD/.config" 2>/dev/null)
+    command -v "$KCC" >/dev/null 2>&1 || KCC=cc
+    say "make modules against $KREL (-j$JOBS, CC=$KCC)"
+    ( cd "$SRC" && make -s modules -j"$JOBS" SYSSRC="$KBUILD" CC="$KCC" > "$OUT/build.log" 2>&1 ) \
         || { tail -25 "$OUT/build.log"; die "ogkm $V did not build against $KREL (log: $OUT/build.log)"; }
     for m in nvidia nvidia-uvm nvidia-modeset; do
         cp "$SRC/kernel-open/$m.ko" "$OUT/modules/$m.ko" || die "no $m.ko after the build"
