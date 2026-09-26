@@ -534,11 +534,21 @@ numbering is itself per version (lower at 535/545) — translated by NAME throug
    | RTX 5080 (GB203, sm_120) | 580.173.02 | `3855338c` | PASS | **9/9** | — |
    | RTX 4070 (AD104, sm_89) | 580.159.04 | `3855338c` | PASS | 7/9 | **7/9, the same two** |
 
+   ⊘⊘ **ANSWERED 2026-09-26 (coordinator, `v3-adasys`, `traces/v3_adasys/FINDING.txt`): a kayfabe
+   bug — neither the box nor Ada.** kf-host mapped system memory WITHOUT
+   `NVOS46_FLAGS_CACHE_SNOOP_ENABLE`, so RM built non-coherent (PCIe No-Snoop) PTEs; on a
+   bare-metal host with no GPU pass-through a copy engine reads zeros under the CPU's dirty lines
+   (a nested-VM box can never show it). Fixed on `v3-adasys` (v3-mc18, which also sets the bit in
+   the frozen grader). What stood here, kept because it is what the correction corrects:
    ⚠ The Ada box's gates 3 and 4 fail **identically with the 8.8 PTX**, so they are not the ISA:
    every check that has a copy engine read or write GUEST-RAM (sysmem) pages fails
    (`sysmem_to_fb_by_engine`, `fb_to_sysmem_by_engine`, a release semaphore in guest RAM reads 0)
    while every vidmem check passes. It was a container box (no `dmesg`, so an IOMMU fault could
    not be seen) — recorded as an open environment-or-Ada question, not a PTX result.
+   ⇒ The PTX result stands either way: the two failing gates were the snoop bit, the walker gates
+   7–9 passed at ISA 8.2 on Ada. The snoop flag's position (`CACHE_SNOOP` field of `NVOS46`
+   `flags`) is the same at every host tag this branch walks (535 → 610), so the host carry passes
+   it unchanged.
 5. **535/545 capability allowlist.** **RULED: port nvproxy's 535.104.05 / 545.23.06 blocks as a
    separate, clearly marked commit**, list every entry that differs from the 580 allowlist here —
    ⊘ **a security-policy change: explicit owner review before it merges.**
