@@ -1,5 +1,15 @@
 # THE CONSTRAINTS — what kayfabe must do, not just do
 
+> ### ★ STATUS NOTE — 2026-09-26 (v3)
+> The constraints below still govern, and v3 (`THE_ARCHITECTURE_v3.md`) is built to them. For
+> example: only BAR0 writes are trapped, BAR1/BAR2 never are, there is no blocking work on a vCPU,
+> and host verbs are authored. ⚠ The **measurements** in this file (w708–w760: the scratchpad
+> isolate, `TRAP_FILLS`, the single-store increments) were taken on the **pre-v3 tree**. Several of
+> the mechanisms they measure (isolates, the scratchpad process, the CPU ledger) are deleted in v3
+> (`THE_ARCHITECTURE_v3.md` §8). Cite them as the history of a constraint, not as the current
+> tree's numbers. Current results: `docs/STATUS_DETAIL.md`.
+
+
 **STATUS: LIVE, 2026-09-13.** Owner's list, given in conversation this date and consolidated here
 so it survives a context compaction. ⊘ This supersedes nothing; it COLLECTS what is scattered
 across `THE_OVERNIGHT_DIRECTIVE.md`, the design docs and agent memory.

@@ -1,205 +1,172 @@
 # kayfabe
 
-Kayfabe emulates an NVIDIA GPU inside QEMU. The guest sees what looks like real hardware —
-an emulated device plus a faked GSP — and loads the **real, unmodified NVIDIA driver**
-against it. Nothing in the guest is patched or shimmed. Kayfabe recovers what the guest is
-actually trying to compute from its own protocol (RM allocations, page-directory binds,
-doorbells, pushbuffer methods) and forwards that work to a real GPU on the host, from an
-**unprivileged** host process. Two properties fall out: the guest OS stops being a
-constraint (Windows guests are the end goal, because you can't ask Windows to load your
-kernel module but you can let it load NVIDIA's), and the guest's driver version is
-decoupled from the host's.
+Kayfabe emulates an NVIDIA GPU inside QEMU. The guest sees an emulated PCI device plus a faked
+GSP, and loads the **real, unmodified NVIDIA driver** against it (stock 580.159.04, open kernel
+modules). Nothing in the guest is patched or shimmed. Kayfabe recovers what the guest driver is
+asking for from its own protocol (GSP RPCs, page tables, doorbells) and has a real host GPU do the
+work, from an **unprivileged** host process that talks to the host driver as an ordinary RM
+client.
 
-It is written in Rust, and it is a clean-slate rewrite of a C research prototype kept here
-at [`archive/nvkvm/`](archive/README.md).
+What that buys, and why the project exists:
 
-## Status
+- **Hostile-guest isolation.** The guest owns guest root, its driver and its userspace; none of
+  them is trusted. Every host action is *authored* by kayfabe from a small set of unprivileged
+  RM verbs, never forwarded from the guest. This is the value proposition
+  ([`docs/PRODUCT_POSITIONING.md`](docs/PRODUCT_POSITIONING.md) §2).
+- **The guest OS stops being a constraint.** You cannot ask Windows to load your kernel module,
+  but you can let it load NVIDIA's. Windows guests are the end goal.
+- **Guest and host driver versions are decoupled** by design.
 
-**Research stage. Published early so the approach can be read and argued with, not because
-it is usable.** There is no supported build, no install path, and no stable entry point.
-Interfaces, crate layout and on-disk formats change without notice.
+It is written in Rust. The architecture is **v3** ([`ARCHITECTURE.md`](ARCHITECTURE.md),
+[`docs/design/THE_ARCHITECTURE_v3.md`](docs/design/THE_ARCHITECTURE_v3.md)). The C research
+prototype that first proved the idea is frozen under [`archive/nvkvm/`](archive/README.md).
 
-Works today, measured on real hardware (GA106, host driver 580.159.04):
+## Status — 2026-09-26, `master` at `74dc3113`
 
-- A stock, unpatched guest NVIDIA driver boots against the emulated GPU + faked GSP.
-- First compute: `cup3` (context create → kernel launch) returns the un-forgeable value.
-- Matmul at scale: `cup8`, N=2048, `bad=0 maxerr=0`; also N=3072 (36 MiB operands) × 12
-  iterations.
-- The host isolate runs unprivileged — empty capability sets, `NoNewPrivs`, non-root uid,
-  witnessed by `scripts/bench/e0_isolate_witness.sh`.
-- The same QEMU overlay compiles into and boots on QEMU 9.2.0 and 10.2.4.
+**Research stage, published so the approach can be read and argued with.** There is no install
+path and no stable interface. Every result below was measured on rented vast.ai boxes that are
+themselves KVM guests (so the guest under test is *nested*), host driver 580.159.04 (open).
+Sources are in [`docs/STATUS_DETAIL.md`](docs/STATUS_DETAIL.md).
 
-Does not work today:
+Works, measured:
 
-- **LLM and PyTorch workloads do not produce correct output.** The CUDA runtime initialises
-  and `torch.cuda.is_available()` is True. One Qwen2 run has since emitted 16 tokens, but the
-  text was garbage and the harness grades the token *count*, not the text — so treat this as
-  not working until the grade checks the output.
-- **Performance is far off native** — 22–81× for large kernels; small kernels are dominated
-  by kayfabe's own doorbell handler.
-- Multi-process results (two concurrent guest CUDA processes; three sequential ones) exist
-  **only on a branch**, not on `master`, and the 4th sequential process fails.
-- **Multi-tenancy is the thesis, not a result.** There is no tenant axis in the code and no
-  two-VM run has ever been attempted.
-- `cargo test --workspace --no-fail-fast` does not pass clean: 2949 pass, 9 fail across 258
-  test binaries (measured 2026-09-06). The failures are adjudicated and deliberate — they
-  are red because a design ruling is outstanding, and they must not be edited to pass.
+- **Stock driver boots and passes the 30-arm thin-guest suite, 30/30,** on **GA106** (RTX 3060)
+  and **AD106** (RTX 4060 Ti). Bare metal on the same boxes is also 30/30, so a guest failure
+  indicts kayfabe, not the test client. The nine GPU harness gates (`kf-gate1`…`9`, no QEMU)
+  pass 9/9.
+- **CUDA is correct:** `cup3` returns 43; `cup8` (2048² matmul) returns `BAD=0 MAXERR=0`.
+- **Real applications: 58 of 65 pass** in the guest (host: 65/65) at `670bd310`. These include
+  PyTorch (a CNN training step with the same digest as the host), Hugging Face generate,
+  llama.cpp (tokens identical to the host), CuPy, hashcat, Blender CUDA+OptiX, Geekbench, and
+  the CUDA samples, with non-default streams and CUDA graphs. The matrix is in
+  `docs/design/V3_APP_MATRIX.md`, on branch `v3-apps2`. Two problems it names are fixed on
+  `master`: `gpu_burn` crashing, and a host BAR1 leak that stopped a boot at about 60 CUDA
+  processes. The full matrix has not been re-run since.
+- **Headless graphics renders the same as bare metal, bit for bit:** Vulkan, EGL, and GLX
+  through Xvfb + VirtualGL. `nvidia-drm modeset=1` registers its render node in displayless
+  mode.
+- **NVENC and NVDEC output is byte-identical** to bare metal.
+- **Several CUDA processes run in one guest.** 100 sequential processes ran in one boot with
+  guest persistence mode.
+- **Multi-GPU:** one kf3 device per host GPU. Two *distinct* host GPUs were measured in one
+  guest, run one at a time and concurrently. Asking for the same card twice is refused by name
+  when its BAR1 budget does not fit.
 
-The detail behind every line above, with dates and revisions, is in
-[`docs/STATUS_DETAIL.md`](docs/STATUS_DETAIL.md), and
-[`docs/PROJECT_HISTORY.md`](docs/PROJECT_HISTORY.md) covers how the three projects relate.
+Not working or not done:
+
+- **Six apps still fail.** Five of them need **UVM demand paging**: managed memory touched
+  first by the CPU or GPU, and kernels that access pageable host memory. The guest's UVM expects
+  a replayable fault; kayfabe delivers none, and the host RM kills the channel group with Xid 31.
+  The guest *is* told: CUDA returns 719. One sample still prints `SUCCESS` because it checks
+  neither the error nor its result. The fix appears to need a privileged host piece; the
+  research is on branch `v3-uvm-research`. The sixth failure is a host map that kayfabe refuses
+  (`UnifiedMemoryStreams`), being worked on in branch `v3-mapfix`.
+- **Performance.** LLM decode runs at **0.29–0.31×** the same box's host tok/s, with guest text
+  identical to host text. The whole gap is doorbells: about 1,080 per token, each a trapped VM
+  exit, which costs about 51 µs on a nested box. An optional guest doorbell module that removes
+  the exit is **designed, not built** (`docs/design/V3_GUEST_DOORBELL_MODULE.md`).
+- **Other GPU families have not been run on hardware.** Turing has a GSP model; Hopper and
+  Blackwell are derived from the open driver's source. None of the three has booted. GA100 is
+  refused by name.
+- **Display is not started.** There is no scanout and no Xorg with NVIDIA's own display driver.
+  Headless rendering (above) works.
+- **Windows guests** are the last roadmap step. Only research exists.
+- **Not yet measured:** two VMs sharing one GPU, and a fully rootless end-to-end boot. The host
+  side uses only RM controls that the host driver allows unprivileged clients to call.
+- GitHub CI is red on `master`. The verdict of record is the hardware run: `v3_gates.sh`, then
+  the fast suite (see *Build and test*).
+
+**Roadmap, in order (owner, 2026-09-26):** apps → the headless-graphics test set from nvkvm-pv →
+display and a desktop (Linux Mint) → doorbell-module parity *(in parallel)* → Blackwell *(in
+parallel)* → the guest-driver version matrix → Windows.
 
 ## How it compares
 
-Three related things exist. They are not competitors — the first is what to use, the second is
-where the idea was proven, the third is this repo.
-
-| | [nvkvm-pv](https://github.com/reindertpelsma/nvkvm-pv) | nvkvm Mode 2 (archive) | kayfabe (this repo) |
+| | [nvkvm-pv](https://github.com/reindertpelsma/nvkvm-pv) | nvkvm Mode 2 (archive) | kayfabe v3 (this repo) |
 |---|---|---|---|
-| What it is | Shipped Mode-1 stack: a guest module forwards the driver's own API to the host | C research prototype that proved the emulated-GPU idea | Clean-slate Rust rewrite of that prototype |
+| What it is | Shipped Mode-1 stack: a guest module forwards the driver's own API to the host | C research prototype that proved the emulated-GPU idea | Rust rewrite around a hostile-guest boundary |
 | Guest kernel driver | Custom module you build and load | **Stock NVIDIA, unmodified** | **Stock NVIDIA, unmodified** |
-| Guest OS | Linux only | Linux | Linux tested; Windows is the point of the design |
-| Guest/host driver versions | Must match | Decoupled | Decoupled by design |
-| GPUs covered | Turing → Blackwell, six architectures, drivers 535–610 | One (GA106) | One (GA106) |
-| CUDA compute | Yes | Yes — matmul N=1024, bit-exact | Yes — matmul N=2048, bit-exact |
-| LLM inference | Yes — 32B via vLLM at 0.99–1.00× host, token-identical at temperature 0 | Yes — llama.cpp at 49.9 tok/s vs 47.5 host-native | Not correct yet (see above) |
-| Graphics / Vulkan / display | Yes | No | No |
-| Several CUDA processes in one guest | Yes | One per VM lifetime | Branch only; the 4th sequential one fails |
-| Performance vs host | 98–100% on most workloads; three shapes cost more | Comparable on its one workload | 22–81× off |
-| Multi-tenant isolation | Explicitly not a security boundary yet | No isolation vocabulary at all | The reason the rewrite exists — designed for, not yet demonstrated |
-| Status | Works today, maintained | Archived, superseded by this | Research |
+| Guest OS | Linux only | Linux | Linux measured; Windows is the goal |
+| GPUs run on hardware | Turing → Blackwell | GA106 | GA106, GA102, AD106; Turing/Hopper/Blackwell source-derived only |
+| CUDA / real apps | Yes | matmul, llama.cpp | `cup8` bit-exact; 58/65 apps |
+| Graphics | Yes, incl. display | No | Headless Vulkan/EGL/GLX, bit-identical; no display yet |
+| Video engines | NVENC | No | NVENC/NVDEC, byte-identical |
+| LLM decode vs host | 0.99–1.00× | ~parity, but the CPU copied the data | 0.29–0.31× (doorbell exits) |
+| Multi-tenant isolation | Not a security boundary | None | The design goal; two-VM sharing not yet measured |
 
-Two caveats worth stating plainly, because the numbers above are easy to misread:
-
-- The archive's tok/s looks like parity, and in a sense it was — but its data plane copied
-  through the CPU rather than the GPU's copy engines. It is a fair measure of that prototype
-  and not a forwarding baseline.
-- The archive had no notion of refusing anything, and no distinction between channels it may
-  inspect and channels it may not. That is precisely the boundary this rewrite is built
-  around, and it is why "rewrite" rather than "port".
-
-If you want NVIDIA GPU forwarding that works today, use nvkvm-pv. Kayfabe is the bet that you
-can do it without asking the guest to load your module at all.
+The nvkvm-pv and archive columns are carried from earlier measurements and were not re-measured
+for this page. If you want NVIDIA GPU forwarding that works today, use nvkvm-pv. Kayfabe is the bet
+that you can do it without asking the guest to load your module at all.
 
 ## Requirements
 
-For the logic-only build and test suite: a stable Rust toolchain and the
-`x86_64-unknown-linux-musl` target (`kayfabe-isolate-host`'s `build.rs` links the isolate
-binary statically against musl; without the target the *whole workspace* fails to build with
-a confusing `can't find crate for std` on an unrelated crate).
-
-For a run against a real GPU, as the bench provisioning scripts establish them
-(`scripts/bench/host_preflight.sh`, `provision_box.sh`, `provision_host_driver.sh`,
-`provision_bench_tree.sh`):
-
 | | |
 |---|---|
-| host | Linux x86_64 with `/dev/kvm` and `vmx`/`svm`; ≥8 cores, ≥16 GB RAM, ≥100 GB free disk |
-| GPU | NVIDIA **GA10x / Ampere** (RTX 30-series, A4000/A5000/A10). The bench is a GA106. Other generations are not oracle-checked in `kayfabe-arch` |
-| host driver | NVIDIA **open** kernel module, pinned at **580.159.04**. The closed module is not what the oracles were built against |
-| hypervisor | QEMU **10.2.4** with this repo's QOM overlay compiled in (9.2.0 also verified). There is no out-of-tree device mechanism, so the hypervisor is built once |
-| guest | Ubuntu Noble cloud image with the stock NVIDIA driver installed from the same `.run`. `-cpu host` is required |
+| host | Linux x86_64 with `/dev/kvm`; ≥8 cores, ≥16 GB RAM, ≥100 GB free disk |
+| GPU | Measured: GA10x (GA106, GA102) and Ada (AD106). Turing, Hopper and Blackwell are derived from source and untested. GA100 is refused |
+| host driver | NVIDIA **open** kernel module **580.159.04** |
+| hypervisor | QEMU **10.2.4** with the `kf3` overlay (`qemu/hw/misc/kf3`) compiled in, built by `scripts/bench/build_kf3.sh` |
+| guest | Linux with the stock NVIDIA driver from the same `.run`. Guest RAM must be a shared memfd (`memory-backend-memfd,share=on`) |
+| toolchain | stable Rust plus the `x86_64-unknown-linux-musl` target. `kayfabe-isolate-host` links a static helper, and without the target the whole workspace fails to build |
 
-## Build
+## Build and test
 
 ```sh
 rustup target add x86_64-unknown-linux-musl
-
 cargo build --workspace
-cargo test  --workspace --no-fail-fast   # see Status: 9 known failures
-cargo clippy --all-targets
-
-KAYFABE_SLOW=1 cargo test --workspace    # + the measured-slow tests
-scripts/run_full_suite.sh --list         # everything, on a real box, and what it skipped
+cargo test -p kf-abi -p kf-chip -p kf-rm -p kf-mem ...   # the kf-* crates; GPU-free
 ```
 
-`cargo test --workspace` **without** `--no-fail-fast` stops at the first failing target and
-reports a stopping point that looks like a result. GitHub CI is opportunistic convenience;
-`scripts/run_full_suite.sh` on real hardware is the authoritative run.
-
-## Running against a real GPU
-
-Two gates are **off by default**, and missing either produces a refusal that does not
-obviously name the cause:
-
-1. **Build feature `host-isolates`** on `kayfabe-qemu-raw`. Without it the archive cannot
-   even name the real host isolate factory, so the forwarding plane is absent by linkage.
-   `scripts/build_qom_shim.sh` takes it via `KAYFABE_SHIM_FEATURES`.
-2. **Runtime `KAYFABE_ISOLATES=real`**. The feature is not the selector. Valid values are
-   `stillborn` (the default — every isolate is retired at birth), `loopback` and `real`;
-   there is no default-to-real, because a typo that silently selected the refusing plane
-   would make an evidence run and its own negative control indistinguishable.
+On a box with a GPU, in this order:
 
 ```sh
-# 1. build the Rust archive and lay the QOM overlay into a QEMU source tree
-KAYFABE_SHIM_FEATURES=host-isolates scripts/build_qom_shim.sh /path/to/qemu-10.2.4
-
-# 2. boot the guest against the emulated device
-KAYFABE_ISOLATES=real qemu-system-x86_64 \
-  -machine q35,accel=kvm -cpu host -m 2048 \
-  -device nvkvm-gpu,bar1-size=268435456,bar2-size=33554432,id=kf0 \
-  ...
+bash scripts/bench/v3_gates.sh                     # kf-gate1..9 on the real GPU, no QEMU: expect 9/9
+bash scripts/bench/build_kf3.sh <qemu-10.2.4-src>  # installs <bench>/kf3-bins/<rev>/qemu-system-x86_64
+cargo build --release -p kayfabe-rm-ladder --bin kayfabe-rm-ladder
+bash scripts/fastguest/build_fast_guest.sh <guest.qcow2> <bench>/fastguest
+KF_DEVICE=kf3 bash scripts/fastguest/fast_suite.sh <tag> 180   # 30 arms, one boot each: expect 30/30
 ```
 
-`scripts/bench/boot_nvkvm.sh` is the boot line actually used, and
-[`docs/reference/bench_rebuild_notes.md`](docs/reference/bench_rebuild_notes.md) is the
-first-person log of standing a bench up from a blank box — read it before rebuilding one.
+A blank vast.ai box is provisioned by `scripts/bench/provision_box.sh`,
+`provision_host_driver.sh` and `provision_bench_tree.sh`. The fat guest (CUDA ladder, apps, LLM,
+graphics, video) boots through `scripts/bench/boot_capture.sh` with `KF_DEVICE=kf3`. Each lane has
+its own script next to it: `cuda_ladder.sh`, `llm_parity.sh`, `gfx_suite.sh`, `video_lane.sh`.
 
 ## Repository layout
 
-23 crates plus the conformance suite. Descriptions are the crates' own; per-layer state is
-in [`docs/STATUS_DETAIL.md`](docs/STATUS_DETAIL.md).
+| path | what |
+|---|---|
+| `crates/kf-*` | **v3**, the product. `kf-trap` (vCPU trap path and doorbell plane), `kf-gsp` (faked GSP), `kf-rm` (emulated RM: RPC answers, object graph), `kf-chip` (family rows plus generated registers plus per-die facts from the host), `kf-abi` (generated NVIDIA ABI), `kf-host` (authored host RM verbs), `kf-mem` (the store and the walk diff), `kf-cuda` (the CUDA walk kernel), `kf-chan` (channels and completions), `kf-core`, `kf-qemu` (the `kf3-gpu` device's Rust half), `kf-harness` (the GPU gates), `kf-crec`/`kf-trace` (C-trace differential, oracle only), `kf-arch`, `kf-linux-raw`, `kf-util` |
+| `crates/kayfabe-*` | The pre-v3 tree, **frozen**. It is kept for `kayfabe-rm-ladder`, the 30-arm raw-client grader, and the crates that grader depends on (`docs/design/V3_BUILD.md`, *Rules*) |
+| `qemu/hw/misc/kf3/` | the C QOM device that `build_kf3.sh` lays into a QEMU tree |
+| `cuda/walk/` | the page-table walk kernel (`.cu` plus committed PTX) |
+| `scripts/bench/`, `scripts/fastguest/` | provisioning, gates, the fast and fat guest lanes |
+| `traces/` | recorded reference captures and bench evidence |
+| `third_party/` | pinned reference sources (submodules, not built): open-gpu-kernel-modules 580/610, Linux, gVisor |
+| `archive/` | frozen: the C prototype, and the retired pre-v3 code |
 
-| crate | layer | |
-|---|---|---|
-| `kayfabe-core` | L0 | composition root: the `RmGraph` source of truth and the ownership spine |
-| `kayfabe-mmu` | L0 | address plane: per-VAS address table (the guest's TLB) and the GMMU walk |
-| `kayfabe-completion` | L0 | per-process completion engine: pending sets, drain-gated batching |
-| `kayfabe-fwd` | L0 | intent recovery to host ops: doorbell demux, VAS materialization |
-| `kayfabe-gsp` | L0 | the faked GSP: falcon boot FSM, message queues, RPC codec |
-| `kayfabe-rmrpc` | L0 | GSP→core bridge: one decoded RPC becomes one `RmEvent`, stateless and pure |
-| `kayfabe-device` | L0 | emulated device: chip table, register plane, PCI routing |
-| `kayfabe-abi` | L0 | codegen'd NVIDIA ABI structs — the only crate holding `#[repr(C)]` wire types |
-| `kayfabe-arch` | L0 | abstract GPU vocabulary and the `Arch` trait set (cross-generation) |
-| `kayfabe-chips` | L0 | per-generation `Arch` impls: GA10x, Ada, and Hopper as a refutation fixture |
-| `kayfabe-vmm` | port | hypervisor-adapter port: `Vmm`, `Device`, `Present` |
-| `kayfabe-isolate` | port | per-process sandbox port: `Isolate`, `IsolateFactory`, `RmBackend` |
-| `kayfabe-rt` | L1 | threaded shell: ranked-lock discipline, executor inbox |
-| `kayfabe-shell` | L1 | OS shell: reactor loop, descriptor registrar, executor thread |
-| `kayfabe-linux-raw` | L1 | audited raw-OS adapter — one of the two crates permitted `unsafe` |
-| `kayfabe-isolate-host` | L1 | the sandboxed child process that issues the real NVIDIA RM ioctls |
-| `kayfabe-vmm-qemu` | L2 | QEMU adapter logic: `Vmm` impl, guest-physical map, region classification |
-| `kayfabe-qemu-raw` | L2 | QEMU FFI surface: `extern "C"` entry points — the second audited `unsafe` crate |
-| `kayfabe-vmm-kvm` | L2 | KVM-direct adapter: real VM descriptors, memslots, mmap'd backings |
-| `kayfabe-trace` | — | structured trace events, budgets, replay format |
-| `kayfabe-crec` | — | C↔Rust trace decoder and divergence classifier |
-| `kayfabe-mocks` | — | deterministic in-process mock adapters for GPU-free testing |
-| `kayfabe-util` | — | generic utilities, no GPU concepts |
-| `tests/` | — | the conformance suite and the `Scenario` DSL |
-
-Also: `qemu/hw/misc/nvkvm/` (the C QOM shim overlay), `scripts/` (build, bench and gate
-scripts), `traces/` (recorded reference captures), `archive/nvkvm/` (the frozen C
-prototype), `fuzz/` (its own workspace — the only place unsafe dependencies are allowed).
+Unsafe code is forbidden workspace-wide except in `kf-linux-raw`, `kf-qemu` and `kf-cuda` (and the
+frozen `kayfabe-linux-raw`). In each of them, unsafe code lives only in files named `*_unsafe.rs`.
 
 ## Where to read more
 
-- [`docs/whitepaper/kayfabe_architecture.pdf`](docs/whitepaper/kayfabe_architecture.pdf) —
-  **the architecture paper. Start here.** Written to be attacked; roughly half of it is about
-  what does not work, is not built, or is not known.
-- [`ARCHITECTURE.md`](ARCHITECTURE.md) — the hexagonal core, its ports, and the crate map.
-- [`docs/STATUS_DETAIL.md`](docs/STATUS_DETAIL.md) — long-form status with dates, revisions
-  and the corrections behind each claim.
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) — v3 on one page: the planes, the crates, the rules.
+- [`docs/STATUS_DETAIL.md`](docs/STATUS_DETAIL.md) — every status line above, with its
+  revision, box and source doc.
+- [`docs/design/THE_ARCHITECTURE_v3.md`](docs/design/THE_ARCHITECTURE_v3.md) (also
+  [`docs/pdf/kayfabe_architecture_v3.pdf`](docs/pdf/kayfabe_architecture_v3.pdf)),
+  [`THE_V3_PLAN.md`](docs/design/THE_V3_PLAN.md), and
+  [`THE_CONSTRAINTS.md`](docs/design/THE_CONSTRAINTS.md) — the design, the build plan, and the
+  owner's constraints.
+- `docs/design/V3_*.md` — one document per v3 subsystem or result, each opening with a dated
+  STATUS line.
+- [`docs/PRODUCT_POSITIONING.md`](docs/PRODUCT_POSITIONING.md) — what kayfabe is for and who
+  it is for.
 - [`docs/PROJECT_HISTORY.md`](docs/PROJECT_HISTORY.md) — Mode 1 vs Mode 2, the C prototype,
-  the relationship to nvkvm-pv.
-- [`docs/design/`](docs/design/) — the settled designs. `core_state_and_consolidation.md`
-  for L0; `l1_concurrency.md` and `l1_os_shell.md` for L1 (read their contact logs);
-  `l2_qemu_adapter.md` for the QEMU overlay; `execution_plane.md`,
-  `core_security_threat_model.md`, `testing_doctrine.md`, `claim_ledger.md`.
-- [`docs/reference/`](docs/reference/) — what has been measured on real hardware, kept
-  separate from design so a wrong fact is corrected once.
-- [`CLAUDE.md`](CLAUDE.md) — repository conventions.
+  nvkvm-pv, and the corrections log.
+- `docs/whitepaper/` describes the **pre-v3** architecture. It is kept as a record.
 
 ## Licence
 
-Apache License 2.0. See [`LICENSE`](LICENSE) at the repository root; it applies to the whole
-repository, including the frozen C prototype under `archive/nvkvm/`.
+Apache License 2.0. See [`LICENSE`](LICENSE); it applies to the whole repository, including
+`archive/`.

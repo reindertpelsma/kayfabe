@@ -1,5 +1,25 @@
 # The v3 plan — what gets built, in what order, and what proves each step
 
+> ### ★ STATUS UPDATE — 2026-09-26: EXECUTED THROUGH P7; the LLM bar is NOT met
+> This plan was a proposal on 2026-09-20. It has since been built in the `kf-*` crates (execution
+> rules: `V3_BUILD.md`), and the phase gates below are passed on hardware at `master` `74dc3113`
+> or earlier:
+> - The P2–P6 arms are covered by the 30-arm thin guest: **30/30** on GA106 and on AD106.
+> - The harness gates pass **9/9**.
+> - P7: `cup3` = 43 and `cup8` `BAD=0 MAXERR=0`.
+>
+> ⊘ **Not met:** "the LLM lane at ≥0.8× host tok/s". It is measured at **0.29–0.31×**, and the gap
+> is doorbell VM exits (`V3_BUILD.md` w828; the proposed fix is `V3_GUEST_DOORBELL_MODULE.md`,
+> DESIGN-ONLY). Beyond this plan's scope, apps, headless graphics, NVENC/NVDEC and multi-GPU
+> have landed; see `docs/STATUS_DETAIL.md`.
+>
+> Read what follows as the rationale and the gate definitions, not as a to-do list. ⚠ Two
+> things in it have been superseded:
+> - Its `kf-mem` "ledger of our own handles" became the GPU-side **commit-on-ack diff**
+>   (2026-09-25, `THE_ARCHITECTURE_v3.md` §4.2).
+> - "No multi-GPU" became *"one kf3 device per host GPU"*, now measured (`V3_MULTI_GPU_AUDIT.md`).
+
+
 > ⊘ **`[w824]` The Translated plane is now specified end to end in
 > `THE_TRANSLATED_PLANE.md`** — the model, the build order with a measurement per gate, and the
 > 30/30 feasibility per arm. Read it before P4 or P7.

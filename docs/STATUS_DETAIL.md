@@ -1,328 +1,166 @@
-# Status in detail — what runs, what does not, and how it was measured
+# Status in detail — what runs, what does not, and where it was measured
 
-> ### STATUS — 2026-09-06 / **LIVE**
+> ### STATUS — 2026-09-26 / **LIVE**, written at `master` `74dc3113`
 >
-> This file is the long-form status that used to live in `README.md`. It was moved here on
-> 2026-09-06 so the front page could be read by a human in a minute; **nothing was deleted**,
-> and the text below is preserved verbatim from the README at `04860c81` except where a
-> heading was added to separate a section.
->
-> ⚠ Every measurement here carries its own date and revision. Where a dated measurement and a
-> prose summary disagree, believe the measurement — that is the house rule, and this file
-> exists to keep both visible rather than to quietly resolve them.
+> The long form of the README's status. Each line names the revision, the box and the document
+> that holds the evidence. ⚠ Where a dated measurement and a summary disagree, believe the
+> measurement. ⊘ The pre-v3 version of this file (the `kayfabe-*` tree, the old test-suite
+> counts, and the corrections behind them) is archived verbatim at
+> [`archive/STATUS_DETAIL_pre_v3.md`](archive/STATUS_DETAIL_pre_v3.md).
 
----
+All hardware results come from rented vast.ai boxes. Those boxes are **themselves KVM guests**,
+so every kayfabe guest is nested; that inflates the cost of a VM exit by roughly 10–40× (see §4).
+The host driver is NVIDIA **580.159.04 (open)**, and the guest runs the stock driver from the
+same `.run`. "Bare metal" means the same program on the same box's host, with no kayfabe.
 
-## 1. Work in progress — do not run any of this yet
+## 1. Boot and the thin-guest suite
 
-Kayfabe is under **active development** and is published early, deliberately: so the
-approach can be read and argued with, not because it is finished or usable.
+| result | revision | box / GPU | evidence |
+|---|---|---|---|
+| v3 harness gates **9/9** (`kf-gate1`…`9`, real GPU, no QEMU) | `d536595d`; `f703cdaf` | vast, RTX 3060 GA106 | `traces/v3_int_ga106/v3_gates_d536595d.txt`, `traces/v3_appfix/v3_gates_f703cdaf.txt` |
+| thin guest **30/30** (`KF_DEVICE=kf3 fast_suite.sh`, one boot per arm, 180 s each) | `d536595d`; `f703cdaf` | GA106 | `traces/v3_int_ga106/fast_suite_d536595d.txt`, `traces/v3_appfix/fast_suite_f703cdaf.out` |
+| thin guest **30/30** on **Ada**; bare metal 30/30 after one client fix | `1d6bb323`, `6ccb4585` | vast 52660152, RTX 4060 Ti AD106 | [`design/V3_FAMILY_PORT_ADA.md`](design/V3_FAMILY_PORT_ADA.md) |
+| the only Ada boot blocker (a SEC2 scrubber handoff register), fixed as a per-family row and A/B-checked on hardware | `09a3944b` | AD106 | same, §2 |
 
-**Nothing in this repository is ready to run.** There is no supported build, no
-install path and no stable entry point. Interfaces, crate layout, on-disk formats and
-the design docs all change without notice, and the code is expected to be broken at
-any given commit. Do not point it at hardware you care about.
+Every arm reports `forwarded>0` and `emulated=0` for its passthrough tokens. The suite is graded
+by `kayfabe-rm-ladder`, the raw client, which is still built from the frozen pre-v3 crates.
 
-## 2. The test suite does not pass clean
+## 2. CUDA and real applications (fat guest)
 
-**`cargo test --workspace` does not pass clean.** Measured at `ee50148d`, 2026-09-06:
-**2949 pass, 9 fail, across 258 test binaries.**
+- **CUDA ladder:** `cup3` returns `CUP3_VAL=43` and `cup8` (2048² matmul) returns
+  `BAD=0 MAXERR=0`. Re-checked after the one-host-TSG-per-guest-TSG change, at `486ab7c6` and
+  `353ff44a` ([`design/V3_VIDEO_ENGINES.md`](design/V3_VIDEO_ENGINES.md) §5).
+- **App matrix, R2 at `670bd310`:** **58/65 apps pass in the guest; the host passes 65/65.**
+  Six stream-shape probes pass 6/6. The result is the same with and without guest persistence
+  mode. The run used vast 52624429, an RTX 3060 GA106 on an AMD EPYC 7452.
+  `docs/design/V3_APP_MATRIX.md` §R2 has this, and is **on branch `v3-apps2`, not on `master`**;
+  its evidence is under `traces/v3_app_matrix/` on that branch. Passing apps include PyTorch
+  (`torch_correct`: CNN training-step digest equal to the host's), Hugging Face `generate`
+  (digest equal to the host's), llama.cpp (generated text equal to the host's) and
+  `llama-bench`, CuPy, hashcat, Blender Cycles CUDA+OptiX (mean equal to the host's),
+  Geekbench 6 (OpenCL), clinfo, and the CUDA samples, including every CUDA-graph and
+  multi-stream sample.
+- **Fixed on `master` since R2** (branch `v3-appfix`, merged at `74dc3113`; box vast 52689820,
+  GA106), per [`design/V3_BUILD.md`](design/V3_BUILD.md), *App-matrix fixes*:
+  - `gpu_burn` crashed because the guest refused `nvidia-smi -l` event arming. Fixed at
+    `b0ceaf09`.
+  - Host BAR1 leaked about 4.5 MiB per process through Translated rings that were never
+    released, so a boot stopped at about 60 processes (cause J). Fixed at `f372f63f`. After
+    the fix, **100/100 processes ran in one persistence-mode boot**, with host BAR1 flat.
+  - A re-run of the single-stream and UVM rows scored guest 38/43, host 43/43. The **full
+    65-app matrix has not been re-run since.**
+- **Still failing — six apps:**
+  - **C, UVM demand paging (5 apps):** `conjugateGradientUM`, `attach_verify`,
+    `UnifiedMemoryPerf`, `torch_ai_bench`, `clpeak`. They fail on managed memory touched first by
+    the CPU or GPU, and on kernels that access pageable host memory (HMM). What the guest UVM
+    *maps* is published correctly. What fails is demand paging: the guest expects a replayable
+    fault, kf3 delivers none, and the host RM tears down the channel group (Xid 31 `FAULT_PDE`).
+    The guest is told — CUDA returns 719 — but `conjugateGradientUM` prints `SUCCESS` because it
+    checks neither its sync status nor its result.
+    - This cannot be closed from host userspace. A replayable host fault needs a VA space that
+      UVM owns, and the fault-buffer class is kernel-privileged.
+    - The research is `docs/design/V3_UVM_DEMAND_PAGING.md`, on branch `v3-uvm-research`
+      (RESEARCH, no code). Its recommendation is a patch to the host's open nvidia-uvm that
+      diverts a VA space's faults to kayfabe, which then replays or cancels them.
+    - ⚠ The same document reports, from source reading, that the walker **drops the guest PTE's
+      READ_ONLY bit**, so a read-only duplicate is mapped read-write on the host. Its predicted
+      consequence, a silent stale read under `cudaMemAdviseSetReadMostly`, is **inferred, not
+      measured**.
+  - **C′, a refused host map (1 app):** `UnifiedMemoryStreams`. kf3 logs `1 run(s) not applied:
+    map … Other(31)`, and the host then reports Xid 31 `FAULT_PTE` inside that range. Without
+    persistence mode the boot stays wedged afterwards. Branch `v3-mapfix` is working on it; it
+    is not on `master`.
 
-⚠ **Reproduce it with `--no-fail-fast`, or you will not get that number.** Plain
-`cargo test --workspace` **stops at the first failing target**: measured the same day, it
-ran **18** of the 258 binaries and reported **2** failures — a stopping point wearing the
-costume of a result. Check `grep -c '^test result:'` on the output; if it is not ~258, the
-run is void whatever it printed.
+## 3. Graphics, video, multi-process, multi-GPU
 
-⊘ **This block previously read "1554 pass, 1 fails" at `06bbfd9e`.** That pass count is far
-below a complete run's and pairs with exactly one failure, which is the signature of the
-truncation above — so it was most likely never a whole-suite measurement. Corrected rather
-than quietly updated, because the number's *shape* is the more useful warning.
+- **Headless graphics** ([`design/V3_HEADLESS_GRAPHICS.md`](design/V3_HEADLESS_GRAPHICS.md)
+  §6; kf3 `68fb3768`; vast 52661950, RTX 3080 Ti GA102). Five steps pass, and every render
+  **matches bare metal bit for bit** on the same box:
+  1. `nvidia-drm modeset=1` registers `card0` and `renderD128` in displayless mode.
+  2. `vulkaninfo`, plus a Vulkan compute job with every element checked.
+  3. A Vulkan two-pass render with a depth test.
+  4. An EGL desktop-GL 4.6 render (FBO, depth, textured pass).
+  5. Xvfb + VirtualGL running a GLX window.
 
-### ⊘⊘⊘ AND THE EXPLANATION THAT USED TO STAND HERE WAS WRONG — corrected 2026-09-06.
+  Evidence is in `traces/v3_gfx/`. It was re-run on the merged tree at `d536595d`
+  (`traces/v3_int_ga106/gfx_guest_d536595d.txt`).
+- **NVENC/NVDEC** ([`design/V3_VIDEO_ENGINES.md`](design/V3_VIDEO_ENGINES.md); vast 52661900,
+  RTX 3060 GA106). Every NVENC and NVDEC output of the graded lane is **byte-identical to bare
+  metal**. The engine inventory comes from host queries and ogkm, not from a per-die row. Turing,
+  Ada and Blackwell video are derived from source and **not measured**. Hopper video is refused
+  by name.
+- **Several CUDA processes per guest:** 100 sequential processes in one persistence-mode boot
+  (above). Without persistence mode, R2 measured 39 before cause J was fixed. The no-PM budget
+  has not been re-measured after the fix.
+- **Multi-GPU** ([`design/V3_MULTI_GPU_AUDIT.md`](design/V3_MULTI_GPU_AUDIT.md) §7; `74fced87`;
+  vast 52664396, 8× RTX 3060, with 2 of the GPUs used). There is one kf3 device per host GPU,
+  keyed by host identity rather than minor number.
+  - Gates pass 9/9 on GPU 0 and on GPU 1.
+  - The thin guest with two distinct host GPUs passes, run one at a time and concurrently. That
+    includes host minors that differ from their RM instance numbers.
+  - Asking for the same card twice is **refused at realize, by name**, when the BAR1 budget does
+    not fit.
+  - The single-device suite still passes 30/30.
+  - **Not measured:** CUDA inside a two-GPU guest, UVM across two GPUs, and peer access.
 
-This block said the failures were *"a bookkeeping gap, not a functional defect."* **They are
-not.** That sentence was inherited across several rewrites and never re-checked against what
-the tests actually assert. Read in full, **at least 6 of the 9 are functional, safety or
-structural defects**, including two the project explicitly forbids:
+## 4. Performance
 
-- `a_guest_doorbell_reaches_the_host_completion_observer` — *"**THE SEVERANCE.** … `Served`
-  here means: we rang a doorbell on a host channel **into which the guest's methods were
-  never copied**."*
-- `the_observers_negative_verdict_refuses_the_guest_doorbell` — *"The engine never released
-  the semaphore and the guest was told `Served` … a caller that discards the verdict
-  **forges the completion**."* ⚠ **Completion forgery is the one thing this project rules
-  out by name.**
-- `a_wired_device_refuses_a_framebuffer_page_nothing_ever_wrote` — *"reads 4 KiB of zeros
-  and reports SERVED."*
-- `a_device_with_no_fb_source_refuses_the_vidmem_ring` — an unregistered device must refuse
-  and does not.
-- `the_logic_crates_carry_no_unnamed_guest_os_assumption` — a live guest-OS **axis**
-  violation (`kayfabe-abi/src/submit.rs:5095`).
-- `every_unranked_lock_a_vcpu_thread_can_hold_is_classified` — a **new unranked lock on the
-  vCPU path**; *"a wait beneath this will pass every assertion and stall the register
-  plane."*
-- `the_audited_crate_list_matches_the_tree_and_is_used_by_all_three_sub_gates` — the
-  **meta-gate**, reporting that another gate has gone slack: 91 declared relaxations against
-  93 in the tree, *"a ratchet that has quietly become a comment."*
+LLM decode, `Qwen/Qwen2-0.5B-Instruct`, Hugging Face eager, from `V3_BUILD.md`
+(*LLM lane measured on kf3*, w828/w828b; raw data in `traces/llm_parity/`). The guest's text is
+**identical** to the host's for 16, 512 and 2048 tokens (sha256).
 
-The remaining 1–2 genuinely are ledger bookkeeping, including control `0x83de030c`
-(`NV83DE_CTRL_CMD_DEBUG_READ_ALL_SM_ERROR_STATES`), documented in
-`design/w329_wiring_the_release.md`.
-
-★★★ **CONFIRMED, and it was already adjudicated.** The four doorbell/ring failures are
-**one cause, not four**, and `da86fc26` (w296, 2026-08-14) named it three weeks before this
-block was written: *"NOT FIXED, DELIBERATELY. Per the rung's own rule: a red that turns out
-to be a real product decision gets NAMED and STOPPED at… These five need an owner ruling."*
-
-The cause is `8cca3502` (w287), which scoped ring-content forwarding **off** passthrough
-channels — a change w296 judged *right on its own terms*. The resulting severance is proven
-by construction rather than observed:
-
-> `Emulated` ⟺ anchor is `SYSTEM_ANCHOR` ⟺ routes to `SYSTEM_PROC` ⟹ §12.26 refuses all
-> three `Binding::host` sites ⟹ no operand can be host-backed ⟹ `HostCe` unreachable ⟹
-> `await_semaphore` unreachable.
-
-⇒ **On the kind whose ring we read, no operand may be host-backed; on the kind whose
-operands may be host-backed, we do not read the ring.**
-
-⊘ So these are **not defects that slipped through** — they are a blocker that was found,
-adjudicated and deliberately stopped at, and they are red *because the tests are doing
-their job*. They must not be edited to pass. What they await is a design ruling, not a
-repair.
-
-⚠ **Why this correction is kept rather than quietly replaced:** explaining a failure away
-is how a project loses an instrument. The question is never *"is my explanation
-plausible"* — it is *"if I am wrong, what now goes unnoticed?"* Here the answer was: the
-completion-forgery guard, the residency guard, and two axis gates.
-
-## 3. What actually works today
-
-`archive/nvkvm/` is the **C research prototype**. This repo is the **Rust rewrite**.
-Both have run real CUDA workloads on real hardware; they are at different stages.
-
-All C figures below are **Mode-2** results (emulated GPU + faked GSP — the same thing
-kayfabe rebuilds). The C repo also holds **Mode-1** work, a different design whose
-maintained descendant is [nvkvm-pv](https://github.com/reindertpelsma/nvkvm-pv); no
-Mode-1 number appears here.
-
-| | C prototype — **Mode 2** | kayfabe (this repo) |
-|---|:---:|:---:|
-| Stock unmodified guest driver vs emulated GPU + faked GSP | ✅ | ✅ |
-| Real RM ioctl to `/dev/nvidiactl` on hardware | ✅ | ✅ 2026-07-29 |
-| `cup3` — context create / launch | ✅ | ✅ `CUP3_VAL=43`, all 8 perf arms |
-| `cup8` — matmul, PTX JIT, closed-form check | ✅ N=1024 `bad=0 maxerr=0` | ✅ `N=2048 bad=0 maxerr=0 → PASS`, and N=3072 (36 MiB operands) × 12 iterations |
-| llama.cpp inference (Qwen2 GGUF) | ✅ 49.9 tok/s vs 47.5 host-native | ❌ not run |
-| PyTorch 2.5.1, 50-step training loop | ✅ byte-correct, `rc=0` | ◐ CUDA runtime initialises and `torch.cuda.is_available()` is True, but the model does not run — `_cuda_init()` raises "CUDA unknown error", 0 tokens |
-| **Performance vs native** | ✅ ~zero forwarding overhead on bare metal | ❌ **22–81× off native** for large kernels; small ones dominated by our own doorbell handler |
-| `nvidia-smi` enumerates (`SMI_RC=0`) | ✅ | ✅ |
-| `nvidia-smi` process table lists running processes | ❌ | ❌ `No running processes found` |
-| Host isolate runs **unprivileged** | — | ✅ `CapEff/CapPrm/CapBnd = 0`, `NoNewPrivs: 1`, uid 65534 |
-| Portable across hypervisor versions | — | ✅ same overlay built into QEMU **9.2.0 and 10.2.4**, both booted |
-| **Concurrent multi-process** — bug #14's own shape | ❌ one CUDA process per QEMU lifetime | ✅ **branch only** — two guest CUDA processes both `=43`, incl. a staggered arm starting the 2nd *inside* the 1st's `cuCtxCreate` |
-| Sequential CUDA processes in one boot | — | ◐ **branch only** — 3 pass, the 4th fails |
-
-**The full account is the architecture paper** — [`whitepaper/kayfabe_architecture.pdf`](whitepaper/kayfabe_architecture.pdf), written to be attacked, with roughly half of it about what does not work, is not built, or is not known. It is the best thing to read next.
-
-**Hardware.** C: bare metal, RTX 3050 (GA106), host open driver 595.71.05, 2026-06-16
-([`MILESTONES.md`](../archive/nvkvm/docs/MILESTONES.md)). Kayfabe: GA106, driver 580.159.04,
-bench rebuilt 2026-08-19 ([`w330_the_bench_rebuild_and_three_flags.md`](design/w330_the_bench_rebuild_and_three_flags.md),
-[`RESUME_HERE_2026_08_15.md`](design/RESUME_HERE_2026_08_15.md)).
-
-**⚠ The multi-process rows are on a branch, not on `master`.** Both were measured on
-`origin/w337-gpu-name-seam`: the concurrent result is **w299**, 2026-08-14, rev `f459cffa`
-(`whitepaper/kayfabe_architecture.tex:2021`); the sequential one is 2026-08-20, rev
-`cca2eb4b`. Both on GA106. `master` carries neither, and **`master`'s own whitepaper still
-states the opposite** — that the multi-process property is unmeasured on hardware
-(`:2417`, `:2911`). Those lines predate w299 and were never updated. Believe the dated
-measurement, not the stale paragraph.
-
-The staggered arm is what makes the concurrent result bug #14's scenario rather than a
-lookalike: #14 was *two concurrent apps hang at `cuCtxCreate`*, and that arm deliberately
-starts the second process inside that exact window, gated on the first's own print rather
-than a timer.
-
-**None of this is a multi-tenancy claim.** There is **no tenant axis at all** — no
-`VmId`, `TenantId` or `GuestId` exists anywhere in `crates/`. Cross-VM separation is the
-incidental consequence of two host processes being separated by the host NVIDIA driver,
-whose own cross-client check is defeated by a shared euid. **No two-VM run has ever been
-attempted.** Multi-tenancy is the thesis; it is not yet a result.
-
-Two qualifiers that stand: the **4th** sequential process fails, and follow-up work found
-the ceiling is **device opens, not processes** — `nvidia-smi` ×8 with no CUDA anywhere
-fails from the 5th onward. "Two guests" and "two isolates" are **not recorded anywhere**
-and are not claimed here.
-
-## 4. The one defining constraint
-
-**The logic core is a pure state machine over guest-supplied bytes** — no OS, no
-syscalls, no hypervisor types, no wall clock, no NVIDIA struct layouts, no
-driver-version or GPU-generation constants. Everything effectful crosses a trait seam:
-
-- `Vmm` / `Device` / `Present` (hypervisor + display adapter) — `crates/kayfabe-vmm`
-- `Arch` / `GmmuFmt` / `UserdModel` / `PushbufferAbi` (GPU-generation behavior, "Axis B")
-  — `crates/kayfabe-arch`
-- `RmBackend` / `Isolate` / `IsolateFactory` (unprivileged host RM + sandbox) —
-  `crates/kayfabe-isolate`
-- `DriverAbi` (driver-version wire layouts, "Axis A") — `crates/kayfabe-abi`
-
-The logic crates (`kayfabe-core`, `-mmu`, `-fwd`, `-completion`) are written **only**
-against those traits. Every seam's *only* implementations today are the deterministic
-mocks in `kayfabe-mocks` — **no real adapter (Linux, QEMU, or NVIDIA arch) exists yet**,
-by design: the layers below descend next (L1 Linux OS → L2 QEMU → L3 per-arch codegen).
-Bringing up a real GPU generation will be `impl Arch for <Gen>` in an adapter crate with
-zero edits to any logic crate; `MockArch` (deliberately non-NVIDIA encodings) is the
-standing proof of that seam.
-
-> ⊘ **CORRECTED 2026-09-06 during the README rewrite — the paragraph above is stale in two
-> places, and it is kept rather than edited because the drift is the useful part.**
-> `crates/kayfabe-vmm-kvm`, `crates/kayfabe-vmm-qemu`/`kayfabe-qemu-raw` and
-> `crates/kayfabe-isolate-host` are real adapters in the tree today, so *"no real adapter
-> (Linux, QEMU, or NVIDIA arch) exists yet"* is false of the first two axes and true only of
-> the NVIDIA-arch axis — and §5's own layer table, three sections down, already contradicted
-> it. `ARCHITECTURE.md`'s port table carries the same staleness for the `Isolate` row
-> (*"trait-only (mock-implemented)"*) while `kayfabe-isolate-host` implements it.
-
-`#![forbid(unsafe_code)]` is a workspace lint (zero unsafe blocks anywhere); every core
-type is compile-time-asserted `Send + Sync`.
-
-> ⊘ **CORRECTED 2026-09-06 — "zero unsafe blocks anywhere" is false, and the exception is
-> deliberate and gated.** `unsafe_code = "forbid"` is the workspace lint, and exactly **two**
-> crates relax it in their own manifests: `kayfabe-linux-raw` (86 `unsafe {` blocks) and
-> `kayfabe-qemu-raw` (29). Both are audited crates by design — every file using the keyword
-> must be named `*_unsafe.rs`, every block carries a `// SAFETY:` comment
-> (`undocumented_unsafe_blocks = "deny"`), and CI ratchets the relaxation count. See
-> `crates/kayfabe-linux-raw/src/lib.rs`'s module docs and `crates/kayfabe-qemu-raw/Cargo.toml`
-> decision Q2. The true statement is *"no unsafe outside the two audited raw crates"*.
-
-## 5. Layers: L0–L2 built and running on hardware; L3 deliberately absent
-
-The stack is layered L0 (pure logic core) → L1 (Linux OS layer / threaded shell) →
-L2 (QEMU / VMM adapter) → L3 (graphics pipeline).
-
-| layer | state |
+| box | guest / same box's host, steady decode |
 |---|---|
-| **L0** — pure logic core | complete |
-| **L1** — Linux OS layer / threaded shell | built |
-| **L2** — QEMU / VMM adapter | **built and run** — the same overlay compiled into QEMU **9.2.0 and 10.2.4** and booted on both (`design/l2_qemu_adapter.md:1240`) |
-| **L3** — real Vulkan/GL pipeline | **deliberately absent**; the seams are done and typed (`design/core_state_and_consolidation.md:204`) |
+| `vh3`: nested Intel | 0.30–0.31× |
+| `vh`: nested AMD EPYC 7452, guest persistence mode | 0.29× |
 
-It is **past mock-only**: a real RM ioctl landed 2026-07-29, and `cup3`/`cup8` are green on
-GA106 — see the table above for exactly what ran and where.
+- **The gap is doorbells.** There are about 1,080 doorbells per decoded token (eager decode is
+  about 1,000 kernel launches), and each one is a trapped MMIO write, which means one VM exit.
+  Doorbells are 99.7 % of trapped exits.
+- On the nested AMD box each doorbell costs about **51 µs** of guest time; on the nested Intel
+  box about **106 µs**. Reaching 0.8× would need ≤ ~5–8 µs per doorbell, and no trapped exit
+  reaches that on these boxes.
+- **The planned fix is designed, not built:** an optional guest doorbell module
+  ([`design/V3_GUEST_DOORBELL_MODULE.md`](design/V3_GUEST_DOORBELL_MODULE.md), DESIGN-ONLY). It
+  would let the guest write the real host doorbell page for passthrough channels through a
+  read-only routing table. A doorbell would then cost a guest page fault instead of a VM exit.
+  Stock guests keep the trapped path.
+- Host maps: VA-contiguous guest-RAM runs are one host OS descriptor, mapped once
+  ([`design/V3_BATCHED_MAP.md`](design/V3_BATCHED_MAP.md)). A 12,288-run space takes 3 map
+  verbs and 1 unmap verb (it was 24,576).
 
-⚠ Some in-repo material has not caught up with this. `design/l1_architecture_diagram.py`
-still renders "L2 — QEMU / VMM adapter … NOT BUILT", and `master`'s whitepaper still calls
-the multi-process property unmeasured. Prefer dated measurements over prose; where they
-disagree, the measurement is newer.
+## 5. GPU families and driver versions
 
-L0/L1 in detail — the core that the hardware work sits on, mock-tested and mutation-gated:
+| family | state | source |
+|---|---|---|
+| Ampere GA10x (GA106, GA102) | **measured** | above |
+| Ada (AD106) | **measured**, thin guest 30/30 | `V3_FAMILY_PORT_ADA.md` |
+| Turing | GSP model built, **never booted** | `V3_FAMILY_PORT_ADA.md` (update, branch `v3-families`, merged) |
+| Hopper, Blackwell | derived from ogkm-580.159.04 source, including the Hopper+ BAR1 doorbell; unit-tested against source-shaped fixtures; **never run on hardware** | [`design/V3_BAR1_DOORBELL.md`](design/V3_BAR1_DOORBELL.md) (DESIGN+CODE, hardware-unverified); gate 7 covers VER3 page tables |
+| GA100 | **refused by name** | `V3_FAMILY_PORT_ADA.md` |
 
-- the `RmGraph` source of truth (refcounted RESOURCE/HANDLE split, DUP aliasing,
-  order-tolerant parked facts, capacity-bounded) + pure projections (`Proc` grouping,
-  `(GpuId, Pdb)` / `(GpuId, VChid)` routing);
-- the `Gpu`/`Proc`/`Vas`/`Channel` runtime spine — per-process ownership of all four
-  planes (address / execution / completion / isolate + GPA arena), transactional
-  `apply` with rollback, retire-eager/reap-deferred lifecycle, full multi-GPU axis
-  (per-`(Proc, GpuId)` isolates + arenas, per-target GPA windows + delivery);
-- the per-`Vas` address table (forward-populate only, MISS=FAULT) and the ONE
-  structurally-gated doorbell ring path (the #14 fix, unbypassable by construction);
-- the per-proc completion plane (poll-driven re-delivery — the starvation fix) + the
-  mapped-fence arm with the #12 jump guard;
-- the ONE pushbuffer parser (CE-PT-write capture, sem-release, TLB-invalidate,
-  everything else opaque), the Case-1 forward / Case-2 ack-only control split, the
-  engine-aware channel alloc (GR-1) and the typed `Present`/`SurfaceHandle` seam (GR-2).
+Only guest driver **580.159.04** has been run. The driver-version matrix is a later roadmap step.
 
-## 6. What is not built
+## 6. Not started, or not measured
 
-What is **not** built (stubs / skeletons, documented in their `lib.rs`): ~~`kayfabe-abi`
-(Axis-A codegen — trait shape only)~~ — **★ corrected 2026-07-27: `kayfabe-abi` is
-built, not a stub.** It carries a working offline generator, generated `#[repr(C)]`
-structs, a version-dispatch decode surface and its own oracle tests
-(`crates/kayfabe-abi/{gen,src/generated,tests}`) — the "shape only" line was true when
-written and has been false since the codegen landed; found by the whitepaper's
-verification pass. Still genuinely unbuilt: the GMMU walker (`kayfabe-mmu::walker` —
-`FbRead` trait + `WalkResult` enum, no walk loop). ~~And `kayfabe-gsp` (GSP boot FSM)
-— [unverified 2026-07-27: that crate is under active construction; read its own
-`lib.rs`, not this line].~~ **★ corrected 2026-07-28: `kayfabe-gsp` is BUILT** (S0–S5,
-8 modules, ~3,550 L). What is genuinely unbuilt there is **reboot/resume** (S6–S8,
-hardware-blocked) and — more importantly — **its bridge to the core**: `RpcCommand` has
-zero references outside the crate, so nothing yet turns a decoded RPC into an `RmEvent`. ~~`kayfabe-trace` (a one-method trait)~~ — **built**: the typed `TraceEvent`
-vocabulary (`mode2_gsp_port_plan.md` §6), the `TraceSink` port, one-counter total ordering,
-perf-budget counters and the projection differential. Its plane call sites are *not* yet
-threaded; it is driven from the conformance suite's seam observer
-(`tests/tests/trace_replay.rs`).
+- **Display / scanout:** not started. Xorg with NVIDIA's own display driver needs a display
+  object (`V3_HEADLESS_GRAPHICS.md` §5). Headless rendering works (§3).
+- **Windows guests:** research only (`design/THE_WINDOWS_AXIS.md`,
+  `design/V3_WINDOWS_DOORBELL_RESEARCH.md`). It is the last roadmap step.
+- **Two VMs sharing one GPU:** not measured. The multi-GPU audit records this case as
+  *assumed, not specified*.
+- **Rootless end-to-end boot:** not recorded. By design, the host side uses only RM controls
+  that the host driver marks `NON_PRIVILEGED`, and it needs no host kernel module
+  ([`PRODUCT_POSITIONING.md`](PRODUCT_POSITIONING.md) §2.1).
+- **GitHub CI** is red on `master`. It still carries the pre-v3 tree's jobs. The verdict of
+  record is the hardware sequence in §1.
 
-On top of it, the **L1 threaded shell** (`kayfabe-rt`) is built and hardened: ranked locks
-with always-on R1/R3 asserts, plan/execute/commit at every verb site, the bounded N-worker
-isolate pool, the completion-source reactor as a pure core port, condemned components, and
-the conservation ledger. **L1-M2 (the real OS shell — reactor, `kayfabe-linux-raw`, the
-`Vmm` seam, the reclamation lifecycle) is designed and part-built**:
-`design/l1_concurrency.md` and `design/l1_os_shell.md` are the live documents, and
-their §12 / §14 contact logs are where the design has been *wrong* — read those before
-trusting any summary, including this one.
+## 7. Roadmap (owner, 2026-09-26)
 
-## 7. Verification, CI and mutation score
-
-**Verification:** the suite is in the **500s** as of 2026-07-27 and green (unit +
-integration + proptest fuzz + concurrency stress + soak; nothing `#[ignore]`d, the
-measured-slow tests gated on `KAYFABE_SLOW=1` and skipped loudly otherwise), clippy `-D
-warnings` clean, fmt clean. `cargo test --workspace` is the count of record — a literal
-number here rots within the week, which is exactly the drift this paragraph kept
-producing (★ corrected 2026-07-27: said "283 tests"; found by the whitepaper's
-verification pass).
-
-> ⚠ The paragraph above is a 2026-07-27 snapshot and §2's 2026-09-06 measurement supersedes
-> its "green": the workspace is **258 test binaries, 2949 pass / 9 fail**, and the failures
-> are adjudicated rather than unknown.
-
-CI is **six jobs**, not the four gates this line used to name (★ corrected 2026-07-27:
-`.github/workflows/ci.yml` is the list of record) — `stable` (build, test, clippy, fmt,
-and the boundary/vocabulary/unsafe-surface/GPA-accessor/unsafe-containment/KVM-floor
-greps: eleven steps in that job alone), `aarch64`, `nightly-fuzz`, `slow`, `tsan`
-(ThreadSanitizer over `concurrency_stress`, `rt_shell`, `l1_verb_seam`, `l1_mean` — **65**
-`#[test]` functions in those four targets as of 2026-07-27; the "0 races" result is from
-the first campaign, which counted 28 tests, and has not been re-run since), and `mutants`.
-
-**Mutation score: not quotable right now** (★ corrected 2026-07-27: this paragraph used to
-quote **99.2%** L0 and **92.44%** L1 with a 91% CI floor as settled). The gate's scope
-changed on 2026-07-27 from four hand-picked paths to every production crate, and the
-workflow marks the 91% threshold *pending re-derivation* in its own words. The prior
-numbers are not wrong; they describe a different population. Read
-`design/core_mutation_gate.md` — including what must be re-run before any score is
-quoted again — rather than a number here.
-
-Fifteen real core bugs were found and fixed **pre-hardware** by the adversarial suites
-(fuzz, security invariants I1–I4, determinism differential, mutation gate); the L1 suites
-have since found more, including a refcount bug in the source of truth and a
-use-after-free introduced by a leak *fix*.
-
-**What is measured on real hardware lives in `docs/reference/`** — not in the design docs, so
-a wrong fact is corrected once: `rm_semantics_measured.md` (RM/UVM semantics, with the driver
-version caveat) and `mode2_bench_lifecycle.md` (the C artifact's teardown behaviour). The C is
-a **single-process** Mode-2 oracle — measured, §1 of that file.
-
-Which claims in this tree are *measured*, which are *read out of the driver's source*, and
-which are neither is not left to the reader: `design/claim_ledger.md` is the census, and
-CI enforces it. Reading the open kernel modules tells you what the driver **does**; only a
-live boot with real work tells you what **happens**, and a comment that says "measured" when
-it means "read" converts an inference into a fact with no experiment behind it. Run
-`scripts/claim_ledger.py`.
-
-## 8. The authoritative test run is not GitHub CI
-
-★★★ **GitHub CI is opportunistic convenience, not the definition of green** (owner ruling,
-2026-07-30). The authoritative run is `scripts/run_full_suite.sh` on real hardware: it runs
-the whole `stable` job plus the five other CI jobs plus the phases CI structurally cannot do
-(real KVM, real namespaces, the vendored ogkm trees, a real GPU), and it ends in a
-`RAN / FAILED / SKIPPED / ACKNOWLEDGED` ledger where every skip is named with its unmet
-requirement. Exit 0 means *everything this box can run, ran*.
-**`reference/full_suite_on_real_hardware.md`** is the census — which gated families
-exist, what each requires, what it does when the requirement is absent, and (★) what had
-never run anywhere at all.
-
-`KAYFABE_SLOW` is the ONE slow-test switch (doc: `tests/src/lib.rs`). It is env-only
-because Rust's libtest takes no custom CLI flags; with it unset every gated test
-prints a `SKIPPED (slow): … set KAYFABE_SLOW=1` line rather than silently vanishing —
-nothing in the suite is `#[ignore]`d. (★ corrected 2026-07-27: this said "the two gated
-tests"; membership has grown since it was measured — the `skip_slow!` call sites are the
-list of record. Found by the whitepaper's verification pass.)
+1. Apps: close the matrix (UVM demand paging, the refused map).
+2. The headless-graphics test set from nvkvm-pv.
+3. Display, and a desktop (Linux Mint).
+4. *In parallel:* doorbell-module parity (§4).
+5. *In parallel:* Blackwell on hardware.
+6. The guest-driver version matrix.
+7. Windows.

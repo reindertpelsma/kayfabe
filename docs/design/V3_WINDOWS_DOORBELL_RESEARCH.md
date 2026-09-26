@@ -1,6 +1,6 @@
 # Windows analogue of the V3 guest doorbell module — feasibility research
 
-Date: 2026-09-26. Research only (web + the spec). Spec read:
+**STATUS: RESEARCH, 2026-09-26.** Research only (web + the spec). Spec read:
 `/workspace/kf-dbmod/docs/design/V3_GUEST_DOORBELL_MODULE.md` (identical copy in `kf-mgpu`; the path
 `/workspace/kf-master/docs/design/...` given in the task does not exist). The spec itself says: *"A
 Windows version is an end-stage goal (feasibility to be established then)."*

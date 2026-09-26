@@ -1,5 +1,20 @@
 # Product positioning — what kayfabe sells, and to whom
 
+> ### ★ STATUS UPDATE — 2026-09-26
+> The rulings below stand. The evidence around them has moved:
+> - **§1:** multi-process is **no longer open**. 100 sequential CUDA processes ran in one guest
+>   boot, with the stock driver.
+> - Much of the Mode-1 feature set now runs on the Mode-2 architecture: 58/65 real apps
+>   including PyTorch and llama.cpp, headless Vulkan/EGL/GLX bit-identical to bare metal, and
+>   NVENC/NVDEC byte-identical.
+> - Performance is not at parity: LLM decode runs at 0.29–0.31× host because of doorbell VM
+>   exits.
+> - Turing+ breadth is measured only on Ampere and Ada.
+> - **§2.1:** the rootless end-to-end boot it asks for has **still not been recorded**.
+>
+> Current status: `docs/STATUS_DETAIL.md`.
+
+
 **Owner decisions, 2026-08-08.** A *decisions* doc: each section states a ruling and the evidence
 behind it. Every external claim carries a source URL or says plainly that it **has not been
 verified**. ⚠ An earlier draft of this file asserted several of these without sources and one of
