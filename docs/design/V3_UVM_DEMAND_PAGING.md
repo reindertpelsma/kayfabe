@@ -923,6 +923,22 @@ with §12.4's estimate that the launcher is N4's single biggest cost.
 
 ### 12.4 Moving the walker off libcuda to raw RM — estimate (N4 removes host CUDA)
 
+> ⊘ **VERIFIED 2026-09-26 — there is no host-side raw compute launcher in the tree to reuse.** A
+> pointer said *"the raw client's cup8 rung launches a real compute kernel through raw RM"*. It does
+> not: `cup3`/`cup8` are **guest** libcuda programs — the **guest's** libcuda builds the QMD and kf3
+> forwards it (`scripts/bench/cup8_hook.sh`: *"the host GR engine runs the **guest's** shader"*). The
+> raw client (`kayfabe-rm-ladder`) issues CE `LAUNCH_DMA` + semaphores only; the sole QMD/`SEND_PCAS`
+> code, `kayfabe-rt/src/completion_watch.rs`, is a method-name table that **decodes** a pushbuffer,
+> and `git log --all -S SEND_SIGNALING_PCAS -- '*.rs'` finds no builder on any branch (nor in the C
+> artifact). ⇒ The estimate below stands: the launcher must be built. ★ **A cheaper route than
+> hand-building the QMD exists, and E6″ tests it:** *capture* a real libcuda compute launch with
+> `nvdp` (public `nvkvm` repo, `tests/mode2/nvdp/nvdp.c`), which reads a native process's own ring,
+> pushbuffer and USERD through UVA identity and already decodes the context-init segment (commit
+> `61f8e8a`), then *replay* the captured V02_04 QMD + method stream at the same VAs. If E6″ M0/M1
+> pass, the launcher cost drops from "build a cubin loader + per-arch QMD builder" to "capture once
+> per architecture family and replay".
+
+
 `[src]` + `[inf]`. Today the walker `dlopen`s `libcuda` and uses a broad surface
 (`crates/kf-cuda/src/driver_unsafe.rs`, `walk.rs`): `cuInit`/`cuDeviceGet`/`cuCtxCreate`;
 `cuModuleLoadData` over the committed PTX (`walk.rs:59`, `WALK_PTX = include_bytes!(kf_walk.ptx)`);
