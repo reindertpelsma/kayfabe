@@ -502,6 +502,12 @@ fn run_census(runs: &[kf_cuda::abi::KfMapRun]) -> String {
 /// The default coverage grain: 4 KiB, the smallest GMMU page on every family this tree models.
 pub const SMALL_PAGE: u64 = 0x1000;
 
+/// `KF3_MAPLOG=1`: log every applied diff run (diagnostic; read once).
+fn maplog_enabled() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("KF3_MAPLOG").is_some())
+}
+
 fn ns_since(t: std::time::Instant) -> u64 {
     u64::try_from(t.elapsed().as_nanos()).unwrap_or(u64::MAX)
 }
@@ -1098,6 +1104,22 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             let t_apply = std::time::Instant::now();
             let a = apply_entry(&space.target, &e.runs, &cfg);
             let apply_ns = ns_since(t_apply);
+            if maplog_enabled() {
+                // ⊘ Diagnostic only (`KF3_MAPLOG=1`, default off): every diff run and its verdict,
+                // so a host fault VA can be matched against what the guest's tables said, and when.
+                for (i, r) in e.runs.iter().enumerate() {
+                    eprintln!(
+                        "kf3: maplog {key:?} root {walked_root:#x} {} va={:#x} len={:#x} at={:#x} ap={} kind={:#x} ack={}",
+                        if r.unmap { "UNMAP" } else { "MAP" },
+                        r.va,
+                        r.len,
+                        r.at,
+                        r.ap,
+                        r.kind,
+                        a.codes.get(i).copied().unwrap_or(0xff)
+                    );
+                }
+            }
             self.stats.timing.apply_ns += apply_ns;
             // ★ w829: the host-map cost of a large diff (a fragmented CUDA space is ~10^4 runs,
             // each ONE host map call on the guest-RAM object) — named, it is the next budget.
