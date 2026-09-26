@@ -29,6 +29,9 @@ pub struct DiffRun {
     pub ap: u8,
     /// An UNMAP of a placement the host answered "already held": retired without a host call.
     pub held: bool,
+    /// ★ v3-gfx: the guest PTE's KIND (run flags bits 16..23, `KFWR_RF_KIND_SHIFT`) — part of run
+    /// identity in the walker, carried to the host map as its UNCOMPRESSED equivalent.
+    pub kind: u8,
 }
 
 /// How one entry's runs are turned into host rows.
@@ -80,6 +83,21 @@ fn whole_pages(d: &Desired, grain: u64) -> bool {
     d.len > 0 && (d.va | d.len | d.off) & m == 0
 }
 
+/// ★ v3-gfx — **the PTE kind a host row carries**: the guest's kind with compression stripped
+/// (`kf_chip::uncompressed_pte_kind`; this device never backs comptags, so a compressible kind would
+/// point the engine at compression state that does not exist). Guest RAM takes only PITCH or
+/// GENERIC (sysmem holds no depth/stencil surface kinds); anything unknown stays PITCH, the
+/// pre-v3-gfx mapping. `[measured vgfx 2026-09-26, gfx9]` a GL depth buffer mapped PITCH raised
+/// host Xid 13 "3D-Z KIND Violation" on every draw.
+#[must_use]
+pub fn host_pte_kind(guest: u8, ram: bool) -> u8 {
+    match kf_chip::uncompressed_pte_kind(guest) {
+        Some(k) if !ram => k,
+        Some(k @ (kf_chip::PTE_KIND_PITCH | kf_chip::PTE_KIND_GENERIC)) => k,
+        _ => kf_chip::PTE_KIND_PITCH,
+    }
+}
+
 /// ★★★★★ **Apply `runs` (one entry's diff) through `target`.** Unmaps first (a held placement
 /// is retired without a host call), then maps, then ONE invalidate if anything changed.
 ///
@@ -109,7 +127,8 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
     let reserved = target.reserved();
     for (i, r) in runs.iter().enumerate().filter(|(_, r)| !r.unmap) {
         let mut d = match desired_from_leaves([(r.va, r.at, r.len, r.ap)], cfg.store_bytes, cfg.ram_offset) {
-            Ok(v) if v.len() == 1 => v[0],
+            // ★ v3-gfx: the host maps it with the guest's kind, uncompressed (`Desired::kind`).
+            Ok(v) if v.len() == 1 => Desired { kind: host_pte_kind(r.kind, v[0].ram), ..v[0] },
             Ok(_) => {
                 out.refuse(i, format!("map {:#x}: no row", r.va));
                 continue;
@@ -225,10 +244,10 @@ mod tests {
         ApplyCfg { store_bytes: 1 << 30, grain: 0x1000, ram_offset: &|gpa, _| Some(gpa) }
     }
     fn m(va: u64, at: u64, len: u64) -> DiffRun {
-        DiffRun { unmap: false, va, len, at, ap: 0, held: false }
+        DiffRun { unmap: false, va, len, at, ap: 0, held: false, kind: 0 }
     }
     fn u(va: u64, len: u64) -> DiffRun {
-        DiffRun { unmap: true, va, len, at: 0, ap: 0, held: false }
+        DiffRun { unmap: true, va, len, at: 0, ap: 0, held: false, kind: 0 }
     }
 
     #[test]

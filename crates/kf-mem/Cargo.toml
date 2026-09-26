@@ -9,6 +9,7 @@ license.workspace = true
 kf-host.workspace = true
 kf-trap.workspace = true
 kf-cuda.workspace = true
+kf-chip.workspace = true
 
 [lints]
 workspace = true

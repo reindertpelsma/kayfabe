@@ -772,11 +772,14 @@ __global__ void kf_walk_kernel(KfArgs a)
 #define KF_CLASSES 4u
 
 __device__ __forceinline__ uint32_t kf_pcls(uint32_t flags) { return (flags >> KFWR_RF_PS_SHIFT) & 3u; }
-/* The ground truth the HOST maps: store, guest RAM, or nothing it will match. */
+/* The ground truth the HOST maps: store, guest RAM, or nothing it will match — and, v3-gfx, the
+ * PTE KIND the host mapping carries (a re-kinded page must be re-mapped: the host PTE's kind is
+ * part of what we place). Mirrored by kf_cuda::diffmodel::host_key. */
 __device__ __forceinline__ uint32_t kf_hkey(uint32_t flags)
 {
     const uint32_t ap = flags & KFWR_RF_AP_MASK;
-    return ap == KFWR_AP_VIDMEM ? 0u : (ap == KFWR_AP_SYSCOH || ap == KFWR_AP_SYSNONCOH) ? 1u : 2u;
+    const uint32_t k = ap == KFWR_AP_VIDMEM ? 0u : (ap == KFWR_AP_SYSCOH || ap == KFWR_AP_SYSNONCOH) ? 1u : 2u;
+    return k | (((flags >> KFWR_RF_KIND_SHIFT) & KFWR_RF_KIND_MASK) << 2);
 }
 __device__ __forceinline__ uint64_t kf_end(const KfMapRun &r) { return r.va + r.len; }
 

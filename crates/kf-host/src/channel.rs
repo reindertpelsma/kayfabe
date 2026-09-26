@@ -13,6 +13,7 @@
 use crate::{ABI_ENCODE_FAILED, HostRm, RmError};
 use kf_abi::bringup::{
     NV01_MEMORY_VIRTUAL, NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE, NVOS46_FLAGS_DMA_OFFSET_GROWS_DOWN,
+    NVOS46_FLAGS_PAGE_KIND_OVERRIDE_YES,
     NVOS47_FLAGS_DEFER_TLB_INVALIDATION_TRUE, NvMemoryVirtualAllocationParams,
     NvVaspaceAllocationParameters,
 };
@@ -251,12 +252,35 @@ impl HostRm {
         at: Option<u64>,
         defer: bool,
     ) -> Result<u64, RmError> {
+        self.map_kind(space, memory, backing, offset, len, at, defer, 0)
+    }
+
+    /// ★ v3-gfx: [`HostRm::map`] with a PTE `kind` (0 = PITCH, no override). A non-zero kind is
+    /// set with `NVOS46_FLAGS_PAGE_KIND_OVERRIDE_YES` + `kindOverride` (`nvos.h:2113-2115, 2177`),
+    /// which host RM validates with `FB_IS_KIND_SUPPORTED` (`virtual_mem.c:1348-1357`). The caller
+    /// passes an UNCOMPRESSED kind; this device backs no comptags.
+    ///
+    /// # Errors
+    /// As [`HostRm::map`].
+    #[allow(clippy::too_many_arguments)]
+    pub fn map_kind(
+        &self,
+        space: VaSpace,
+        memory: u32,
+        backing: MapBacking,
+        offset: u64,
+        len: u64,
+        at: Option<u64>,
+        defer: bool,
+        kind: u8,
+    ) -> Result<u64, RmError> {
         let extra = if defer { NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE } else { 0 };
+        let extra = extra | if kind != 0 { NVOS46_FLAGS_PAGE_KIND_OVERRIDE_YES } else { 0 };
         let dma = match at {
             Some(a) => space.dma_for(a, len)?,
             None => space.range,
         };
-        self.raw_map_dma_slice(dma, memory, offset, len, at, extra, backing == MapBacking::SharedSlice)
+        self.raw_map_dma_slice(dma, memory, offset, len, at, extra, backing == MapBacking::SharedSlice, u32::from(kind))
     }
 
     /// ★ Map ALL of `memory` (`len` bytes) into `space` at an address RM chooses, and return it —
@@ -269,7 +293,7 @@ impl HostRm {
     /// The host's refusal.
     pub fn map_window(&self, space: VaSpace, memory: u32, len: u64, high: bool) -> Result<u64, RmError> {
         let extra = if high { NVOS46_FLAGS_DMA_OFFSET_GROWS_DOWN } else { 0 };
-        self.raw_map_dma_slice(space.range, memory, 0, len, None, extra, false)
+        self.raw_map_dma_slice(space.range, memory, 0, len, None, extra, false, 0)
     }
 
     /// Unmap the mapping at `va` in `space`; `defer` as for [`HostRm::map`].

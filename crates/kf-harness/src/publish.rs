@@ -113,6 +113,7 @@ pub fn publish(
             at: m.gpga,
             ap: m.aperture(),
             held: m.flags & kf_cuda::abi::KFWR_RF_HELD != 0,
+            kind: ((m.flags >> 16) & 0xff) as u8,
         })
         .collect();
     let applied = apply_entry(target, &runs, &ApplyCfg { store_bytes, grain: 0x1000, ram_offset });

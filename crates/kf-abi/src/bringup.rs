@@ -599,6 +599,10 @@ pub const NVOS46_FLAGS_PAGE_SIZE_4KB: u32 = 1 << 8;
 /// kernel's bottom-up allocations are least likely to land (`THE_TRANSLATED_PLANE.md` §24.2).
 pub const NVOS46_FLAGS_DMA_OFFSET_GROWS_DOWN: u32 = 1 << 14;
 
+/// ★ v3-gfx: `NVOS46_FLAGS_PAGE_KIND_OVERRIDE_YES` — field `19:19`, value 1
+/// (`ogkm-580: nvos.h:2113-2115`): the map's PTEs take `kindOverride` instead of the memory's kind.
+pub const NVOS46_FLAGS_PAGE_KIND_OVERRIDE_YES: u32 = 1 << 19;
+
 /// ★★★ **THE BIG-PAGE SIZE THIS ARCHITECTURE FAMILY USES — 64 KiB.**
 ///
 /// ⊘ **Not a per-die constant, and constraint 12 is the reason the distinction is written
