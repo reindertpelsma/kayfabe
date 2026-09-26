@@ -135,6 +135,11 @@ impl TranslatedRing {
         self.st.releases.take()
     }
 
+    /// ★ v3-initrace (diagnostic): the launches with a physical operand since the last call.
+    pub fn take_launches(&mut self) -> Vec<crate::translated::PhysLaunch> {
+        self.st.launches.take()
+    }
+
     /// The next step, given the guest's current `GP_PUT`.
     ///
     /// # Errors

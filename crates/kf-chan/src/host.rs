@@ -440,6 +440,8 @@ pub struct ProbeFence {
     pub gp_get: Option<u32>,
     /// The releases the rewritten segments asked for (the words were forwarded unchanged).
     pub releases: Vec<crate::translated::Release>,
+    /// The launches with a physical operand, as the guest wrote them.
+    pub launches: Vec<crate::translated::PhysLaunch>,
     /// When the host doorbell for it was rung.
     pub submitted: std::time::Instant,
     /// When a pump first read the fence as reached.
@@ -472,8 +474,14 @@ struct Probe {
 }
 
 impl Probe {
-    fn submitted(&mut self, seq: u32, gp_get: Option<u32>, releases: Vec<crate::translated::Release>) {
-        self.inflight.push_back(ProbeFence { seq, gp_get, releases, submitted: std::time::Instant::now(), completed: None });
+    fn submitted(
+        &mut self,
+        seq: u32,
+        gp_get: Option<u32>,
+        releases: Vec<crate::translated::Release>,
+        launches: Vec<crate::translated::PhysLaunch>,
+    ) {
+        self.inflight.push_back(ProbeFence { seq, gp_get, releases, launches, submitted: std::time::Instant::now(), completed: None });
     }
     fn reached(&mut self, done: u32) {
         while self.inflight.front().is_some_and(|f| reached(done, f.seq)) {
@@ -640,7 +648,7 @@ impl TranslatedChannel {
                                 self.retire.push_back((seq, g));
                             }
                             if let Some(p) = self.probe.as_mut() {
-                                p.submitted(seq, g0, self.ring.take_releases());
+                                p.submitted(seq, g0, self.ring.take_releases(), self.ring.take_launches());
                             }
                             self.suspended = Some((seq, pdb, retires));
                             return Ok(Pumped::Waiting);
@@ -661,7 +669,7 @@ impl TranslatedChannel {
                         self.retire.push_back((seq, g));
                     }
                     if let Some(p) = self.probe.as_mut() {
-                        p.submitted(seq, last_retire, self.ring.take_releases());
+                        p.submitted(seq, last_retire, self.ring.take_releases(), self.ring.take_launches());
                     }
                 }
                 // No room for the tail: the regions already live carry fences of their own

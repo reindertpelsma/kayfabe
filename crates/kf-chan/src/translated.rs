@@ -149,6 +149,51 @@ pub struct CeState {
     pub sema: SemaRegs,
     /// The releases recorded since the ring last took them ([`crate::ring::TranslatedRing`]).
     pub releases: Releases,
+    /// ★ v3-initrace: the launches with a PHYSICAL operand since the last take, as the guest wrote
+    /// them (before our rewrite) — the completion probe reads their bytes back.
+    pub launches: PhysLaunches,
+}
+
+/// ★ v3-initrace (diagnostic record only): one `LAUNCH_DMA` that named a PHYSICAL operand, as the
+/// guest wrote it — `(target, physical address, bytes)` per side (`None`: that side is virtual or
+/// not read).
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct PhysLaunch {
+    /// The `LAUNCH_DMA` word.
+    pub launch: u32,
+    /// The source, if physical and read.
+    pub src: Option<(Target, u64, u64)>,
+    /// The destination, if physical.
+    pub dst: Option<(Target, u64, u64)>,
+}
+
+/// The last [`PhysLaunches::CAP`] physical launches since the last take.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct PhysLaunches {
+    kept: [PhysLaunch; PhysLaunches::CAP],
+    n: u8,
+}
+
+impl PhysLaunches {
+    /// Launches kept between takes (older ones are dropped).
+    pub const CAP: usize = 4;
+
+    fn push(&mut self, l: PhysLaunch) {
+        if usize::from(self.n) < Self::CAP {
+            self.kept[usize::from(self.n)] = l;
+            self.n += 1;
+        } else {
+            self.kept.copy_within(1.., 0);
+            self.kept[Self::CAP - 1] = l;
+        }
+    }
+
+    /// The launches recorded so far, oldest first; the record is emptied.
+    pub fn take(&mut self) -> Vec<PhysLaunch> {
+        let v = self.kept[..usize::from(self.n)].to_vec();
+        self.n = 0;
+        v
+    }
 }
 
 /// `NV906F_SEMAPHOREA..D` / `NVC56F_SEMAPHOREA..D` — the legacy host semaphore
@@ -560,6 +605,14 @@ fn one_write(
         ce::LAUNCH_DMA => {
             let src_phys = v & ce::LAUNCH_SRC_PHYSICAL != 0;
             let dst_phys = v & ce::LAUNCH_DST_PHYSICAL != 0;
+            // ★ v3-initrace: bookkeeping for the completion probe (the words are unchanged).
+            if (src_phys || dst_phys)
+                && let Ok((src_len, dst_len)) = extents(st, v)
+            {
+                let src = src_len.filter(|_| src_phys).map(|n| (Target::from_bits(st.src_mode), st.off_in, n));
+                let dst = dst_phys.then_some((Target::from_bits(st.dst_mode), st.off_out, dst_len));
+                st.launches.push(PhysLaunch { launch: v, src, dst });
+            }
             if dst_phys && st.ce_class >= HOPPER_DMA_COPY_A && v & LAUNCH_MEMORY_SCRUB_ENABLE != 0 {
                 return launch_scrub_translated(cur, st, w, sub, v);
             }

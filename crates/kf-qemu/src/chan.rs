@@ -578,6 +578,57 @@ fn probe_read(ram: &RamMap, mirror: &Mirror, views: Option<(&mut StoreViews, &Ho
     }
 }
 
+/// Hex of up to 16 bytes, as little-endian words where whole.
+fn hex16(b: &[u8]) -> String {
+    b.chunks(4)
+        .map(|c| if c.len() == 4 { format!("{:08x}", u32::from_le_bytes([c[0], c[1], c[2], c[3]])) } else { format!("{c:02x?}") })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// ★★ v3-initrace — one PHYSICAL operand of a completed launch, read back: its first ≤ 16 bytes as
+/// the HOST holds them (the store for `LOCAL_FB`, guest RAM for sysmem — what the engine read or
+/// wrote) and, for a framebuffer operand, every guest CPU window position (BAR1 / BAR2 / PRAMIN)
+/// showing that page with what the guest reads THERE (`mem::view_index`). A guest write that
+/// landed in a window's scratch, or in a view of another store page, shows as a disagreement.
+fn probe_operand(
+    ram: &RamMap,
+    mirror: &Mirror,
+    views: Option<(&mut StoreViews, &HostRm, u32)>,
+    t: Target,
+    phys: u64,
+    len: u64,
+) -> (String, Option<Vec<u8>>) {
+    let n = usize::try_from(len.min(16)).unwrap_or(16);
+    match t {
+        Target::LocalFb => {
+            let host = views.and_then(|(v, rm, store)| {
+                let mut b = vec![0u8; n];
+                v.read(rm, store, mirror.fb_len, phys, &mut b).ok().map(|()| b)
+            });
+            let guest: Vec<String> = crate::mem::view_index()
+                .map(|ix| ix.guest_views(phys, n))
+                .unwrap_or_default()
+                .into_iter()
+                .map(|(w, at, b)| format!("{w}@{at:#x}={}", b.as_deref().map_or("unreadable".to_string(), hex16)))
+                .collect();
+            let guest = if guest.is_empty() { "no guest CPU view of this page now".to_string() } else { guest.join(", ") };
+            (
+                format!("FB+{phys:#x}+{len:#x} host[{}] guest-views[{guest}]", host.as_deref().map_or("unread".to_string(), hex16)),
+                host,
+            )
+        }
+        Target::CoherentSysmem | Target::NonCoherentSysmem => {
+            let host = ram.file_range(phys, n as u64).and_then(|(_, off)| ram.at_file_offset(off, n as u64)).and_then(|(m, at)| {
+                let mut b = vec![0u8; n];
+                m.read_into(at, &mut b).then_some(b)
+            });
+            (format!("{t:?}+{phys:#x}+{len:#x} host[{}]", host.as_deref().map_or("unread".to_string(), hex16)), host)
+        }
+        Target::Peer => (format!("Peer+{phys:#x}"), None),
+    }
+}
+
 /// ★ v3-promote: where a guest channel hangs in the guest's object tree — every handle whose free
 /// takes it (a GSP-client guest frees a subtree with ONE `GSP_RM_FREE` naming its root).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2454,17 +2505,38 @@ impl ChanPlane {
                     f.releases.iter().map(|r| probe_read(self.ram, &mirror, Some((&mut g.views, self.rm, self.store)), *r)).collect();
                 let bad = reads.iter().any(|x| x.got != Some(x.r.payload));
                 let dt = f.completed.map_or(0, |c| c.duration_since(f.submitted).as_micros());
-                if g.probe.logged < 8 || bad {
+                // ★ v3-initrace: the data the launches moved, host side vs the guest's CPU views.
+                let mut data = Vec::new();
+                let mut copy_bad = false;
+                for l in &f.launches {
+                    let (src, sb) = match l.src {
+                        Some((t, p, n)) => {
+                            let (s, b) = probe_operand(self.ram, &mirror, Some((&mut g.views, self.rm, self.store)), t, p, n);
+                            (s, b)
+                        }
+                        None => ("-".to_string(), None),
+                    };
+                    let (dst, db) = match l.dst {
+                        Some((t, p, n)) => probe_operand(self.ram, &mirror, Some((&mut g.views, self.rm, self.store)), t, p, n),
+                        None => ("-".to_string(), None),
+                    };
+                    let remap = l.launch & kf_abi::submit::ce::LAUNCH_REMAP_ENABLE != 0;
+                    let differ = !remap && matches!((&sb, &db), (Some(a), Some(b)) if a != b);
+                    copy_bad |= differ;
+                    data.push(format!("launch={:#x} src {src} dst {dst}{}", l.launch, if differ { " ⊘ DST != SRC" } else { "" }));
+                }
+                if g.probe.logged < 8 || bad || copy_bad {
                     g.probe.logged += 1;
                     eprintln!(
-                        "kf3: PROBE t={:.6} tok={:#x} fence seq={} gp_get={:?} submit->seen-complete={dt}us put={:?} releases=[{}]{}",
+                        "kf3: PROBE t={:.6} tok={:#x} fence seq={} gp_get={:?} submit->seen-complete={dt}us put={:?} releases=[{}]{} data=[{}]",
                         kf_mem::maplog::t(),
                         g.guest_idx,
                         f.seq,
                         f.gp_get,
                         g.last_put,
                         reads.iter().map(ToString::to_string).collect::<Vec<_>>().join("; "),
-                        if bad { " ⊘ A RELEASE DID NOT LAND WHERE OUR ROWS PLACE IT" } else { "" }
+                        if bad { " ⊘ A RELEASE DID NOT LAND WHERE OUR ROWS PLACE IT" } else { "" },
+                        data.join("; ")
                     );
                 }
                 g.probe.put_at_done = Some((g.last_put, f.completed.unwrap_or_else(std::time::Instant::now)));
@@ -2571,14 +2643,23 @@ impl ChanPlane {
             }
             for (f, reads) in &g.probe.done {
                 let now: Vec<String> = f.releases.iter().map(|r| probe_read(self.ram, &mirror, None, *r).to_string()).collect();
+                let data: Vec<String> = f
+                    .launches
+                    .iter()
+                    .map(|l| {
+                        let side = |x: Option<(Target, u64, u64)>| x.map_or("-".to_string(), |(t, p, n)| probe_operand(self.ram, &mirror, None, t, p, n).0);
+                        format!("launch={:#x} src {} dst {}", l.launch, side(l.src), side(l.dst))
+                    })
+                    .collect();
                 lines.push(format!(
-                    "kf3: PROBE-DUMP   completed fence seq={} gp_get={:?} submit->seen={}us seen {}ms ago; at completion [{}]; NOW [{}]",
+                    "kf3: PROBE-DUMP   completed fence seq={} gp_get={:?} submit->seen={}us seen {}ms ago; at completion [{}]; NOW [{}] data NOW [{}]",
                     f.seq,
                     f.gp_get,
                     f.completed.map_or(0, |c| c.duration_since(f.submitted).as_micros()),
                     f.completed.map_or(0, |c| c.elapsed().as_millis()),
                     reads.iter().map(ToString::to_string).collect::<Vec<_>>().join("; "),
-                    now.join("; ")
+                    now.join("; "),
+                    data.join("; ")
                 ));
             }
             out.extend(lines);
