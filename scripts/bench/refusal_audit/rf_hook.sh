@@ -43,9 +43,13 @@ for w in $RF_WORKLOADS; do
     $G "sudo dmesg | tail -n +$((d0+1))" > "$OUT/$w/guest_dmesg.log" 2>&1
     $G "sudo rm -f /var/tmp/rf/out/$w/guest_r1.jsonl"
   fi
-  tail -n +"$((q0+1))" "$QLOG" 2>/dev/null > "$OUT/$w/kf3.log"
+  sleep 3   # one heartbeat period (2 s) so the slice ends on a ledger line that includes this workload
+  q1=$(wc -l < "$QLOG" 2>/dev/null || echo 0)
+  tail -n +"$((q0+1))" "$QLOG" 2>/dev/null | head -n "$((q1-q0))" > "$OUT/$w/kf3.log"
+  # the ledger line in force when the workload STARTED — rf_ledger.py diffs it against the slice's last
+  head -n "$q0" "$QLOG" 2>/dev/null | grep -a 'gsp_refusals\[' | tail -1 > "$OUT/$w/kf3_ledger_before.log"
   nref=$(grep -c 'kf3: GSP REFUSED' "$OUT/$w/kf3.log"); nx=$(grep -c 'Xid' "$OUT/$w/guest_dmesg.log" 2>/dev/null)
-  echo "$line boot=$TAG pulled=$(wc -l < "$OUT/$w/guest_r1.jsonl" 2>/dev/null || echo 0) new_refusal_rows=$nref guest_xid=${nx:-0}" | tee -a "$OUT/guest.res"
+  echo "$line boot=$TAG qlines=$q0-$q1 pulled=$(wc -l < "$OUT/$w/guest_r1.jsonl" 2>/dev/null || echo 0) new_refusal_rows=$nref guest_xid=${nx:-0}" | tee -a "$OUT/guest.res"
   [ $alive = 0 ] && { echo "RF_HOOK guest dead after $w — stopping this boot"; break; }
 done
 echo "RF_HOOK_DONE"
