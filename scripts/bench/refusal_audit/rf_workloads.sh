@@ -18,8 +18,8 @@ export HF_HOME=$D/hf HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
 # name|timeout|command   (the pass regex is advisory here: the audit reads statuses, not verdicts)
 W=$(cat <<'EOT'
 cup2|120|CE rv=0xabcd1234|$L/cup2
-cup3|120|^CUP3_VAL=43|$L/cup3
-cup8|300|^CUP8_BAD=0|$L/cup8
+cup3|120|KERNEL rv=43 want=43 -> PASS|$L/cup3
+cup8|300|CUP8 VERDICT: PASS|$L/cup8
 blocksync|120|BLOCKSYNC_DONE ok|$L/blocksync
 torch_correct|300|TORCH_CORRECT_DONE|$PY $B/share/torch_correct.py
 torch_train|300|TORCH_TRAIN_DONE|$PY $L/torch_train.py
