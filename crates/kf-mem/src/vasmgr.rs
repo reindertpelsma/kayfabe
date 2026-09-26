@@ -1240,6 +1240,16 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             self.stats.clipped_bytes += a.clipped_bytes;
             self.stats.priv_withheld += a.priv_withheld as u64;
             self.stats.priv_withheld_bytes += a.priv_withheld_bytes;
+            if a.priv_withheld > 0 {
+                // ★ v3-roperm: WHICH space withheld (the per-leaf line cannot name it), bounded.
+                static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+                if LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 64 {
+                    eprintln!(
+                        "kf3: {key:?} root {walked_root:#x}: {} privileged run(s) ({:#x} bytes) withheld — a user twin",
+                        a.priv_withheld, a.priv_withheld_bytes
+                    );
+                }
+            }
             if a.refused > 0 {
                 failed.insert(key);
                 if a.refusals_are_absence() {
