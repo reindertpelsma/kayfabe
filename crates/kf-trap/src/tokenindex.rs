@@ -140,6 +140,32 @@ mod tests {
         assert_eq!(r.of_channel(0, 0x800), None);
         assert!((r.of_doorbell(0xFFFF_F7FF).unwrap() as usize) < r.table_len());
     }
+
+    /// ★ The same index on Turing … Hopper (the device's, `kf_core::Plane::for_device`): the GA100 /
+    /// TU102 HAL token is `RUNLIST_ID` 22:16 | `VECTOR` 11:0 with no bit 30. `[measured 610.57.04 on
+    /// GA102]` the guest allocated chid 1 on two runlists (per-runlist CHRAM from 610.43.02): two
+    /// slots, each found by its own token. And a ≤ 595 guest's device-unique chids stay distinct.
+    #[test]
+    fn a_610_ampere_guests_per_runlist_chids_do_not_collide() {
+        let r = TokenIndex::RunlistVector;
+        let token = |rl: u32, chid: u32| (rl << 16) | chid;
+        let (ceutils, user) = (r.of_channel(13, 1).unwrap(), r.of_channel(0, 1).unwrap());
+        assert_ne!(ceutils, user);
+        assert_eq!(
+            (r.of_doorbell(token(13, 1)), r.of_doorbell(token(0, 1))),
+            (Some(ceutils), Some(user))
+        );
+        let (a, b) = (r.of_channel(13, 1).unwrap(), r.of_channel(0, 2).unwrap());
+        assert_ne!(
+            a, b,
+            "a 580 guest's global chids 1 and 2 on different runlists"
+        );
+        assert_eq!(
+            (r.chid_of(ceutils), r.chid_of(user)),
+            (1, 1),
+            "RC_TRIGGERED names the guest's chid"
+        );
+    }
 }
 
 /// ★ The token fields, held to each die group's header (`kf_chip::hwref`,

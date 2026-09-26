@@ -183,6 +183,11 @@ impl Family {
     /// GB110/GB112 and every GB20x (`ogkm-580: generated/g_kernel_fifo_nvoc.c:226-236`); Turing …
     /// Hopper default `FALSE` (only an SR-IOV host turns it on, `kernel_fifo_init.c:197-222`). With it
     /// the doorbell token's `VECTOR` is NOT device-unique and the index must carry `RUNLIST_ID`.
+    ///
+    /// ⊘ **A family default of the 580 … 595 guests, not a family fact:** from 610.43.02 the HAL
+    /// list also names GA10x / AD10x / GH100 (`610.57.04: g_kernel_fifo_nvoc.c:233-243`). The device
+    /// therefore indexes by `(runlist, chid)` on every family (`kf_core::Plane::for_device`); this
+    /// predicate now only shapes the harness planes.
     #[must_use]
     pub const fn chids_per_runlist(self) -> bool {
         matches!(self, Family::Blackwell)
