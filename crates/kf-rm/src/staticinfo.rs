@@ -195,6 +195,47 @@ impl StaticInfoPolicy {
             self.driver.gsp_static_info_wire(),
         )
     }
+
+    /// ★★★ The reply body at the GUEST's MEASURED `GspStaticConfigInfo` layout
+    /// (`kf_abi::gspstaticinfo::encode_gsp_static_info_at`, `V3_DRIVER_MATRIX.md` §4) — the
+    /// same facts as [`Self::body`], byte-identical to it at every 580.x tag, and placed at
+    /// the version's own offsets everywhere else (1656 bytes at 570/575, 1600 at 610, …).
+    ///
+    /// # Errors
+    /// The encoder's refusals; an unmeasured version or a version without the struct refuses
+    /// as `UnsupportedWire` of the table's wire.
+    pub fn body_measured(&self) -> Result<Vec<u8>, kf_abi::gspstaticinfo::GspStaticInfoError> {
+        let lay = kf_abi::matrix::Resolved::of(
+            &kf_abi::generated::matrix::GSPSTATICCONFIGINFO,
+            self.driver.driver_version(),
+        )
+        .map_err(|_| kf_abi::gspstaticinfo::GspStaticInfoError::UnsupportedWire {
+            wire: self.driver.gsp_static_info_wire(),
+        })?;
+        kf_abi::gspstaticinfo::encode_gsp_static_info_at(
+            &GspStaticInfo {
+                fb_regions: &self.board.fb_regions,
+                fb_length: self.board.fb_length,
+                gid: self.gid,
+                name: self.name,
+                short_name: self.short_name,
+                bar1_pde_base: self.board.bar1_pde_base,
+                bar2_pde_base: self.board.bar2_pde_base,
+                engine_caps: self.engine_caps,
+            },
+            &lay,
+        )
+    }
+
+    /// `sizeof(GspStaticConfigInfo)` at the guest's version (measured), or the bench size where
+    /// the version was never measured (then `body_measured` refuses anyway).
+    fn guest_struct_size(&self) -> usize {
+        kf_abi::matrix::Resolved::of(
+            &kf_abi::generated::matrix::GSPSTATICCONFIGINFO,
+            self.driver.driver_version(),
+        )
+        .map_or(GSP_STATIC_CONFIG_INFO_SIZE, |l| l.size())
+    }
 }
 
 impl CommandPolicy for StaticInfoPolicy {
@@ -223,23 +264,26 @@ impl CommandPolicy for StaticInfoPolicy {
         // exactly what a differently-built guest brings. So the refusal goes in the
         // envelope, where the guest's own `NV_RM_RPC_GET_GSP_STATIC_INFO` fails loudly with
         // a line that names itself, rather than into a body that cannot carry one.
-        if cmd.payload.len() != GSP_STATIC_CONFIG_INFO_SIZE {
-            // ★ Named: at a non-bench guest version this is the per-version gap
-            // (`V3_DRIVER_MATRIX.md` §7 — `GspStaticConfigInfo` has six layouts 535→580).
+        // ⊘⊘ CORRECTED 2026-09-26 (`V3_DRIVER_MATRIX.md` §4): the size compared against is the
+        // guest version's MEASURED `sizeof(GspStaticConfigInfo)`, and the body is encoded at
+        // that version's layout — no longer the 1792 bytes of 580.x for every guest.
+        let want = self.guest_struct_size();
+        if cmd.payload.len() != want {
+            // ★ Named: the guest's own struct and the measured one for its declared version
+            // disagree, i.e. the declared `guest-driver=` is not what the guest is.
             eprintln!(
                 "kf-rm: GET_GSP_STATIC_INFO refused: the guest's GspStaticConfigInfo is {} bytes, \
-                 this encoder writes {} (guest driver {}, static-info wire {:?})",
+                 the measured layout for driver {} is {}",
                 cmd.payload.len(),
-                GSP_STATIC_CONFIG_INFO_SIZE,
                 self.driver.driver_version(),
-                self.driver.gsp_static_info_wire()
+                want
             );
             return Some(Reply {
                 rpc_result: NV_ERR_NOT_SUPPORTED,
                 body: Vec::new(),
             });
         }
-        match self.body() {
+        match self.body_measured() {
             Ok(body) => Some(Reply {
                 rpc_result: NV_OK,
                 body,
