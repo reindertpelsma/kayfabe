@@ -132,6 +132,12 @@ Each cell mean of 3 processes.
   here. ⇒ parity for eager decode needs an EXIT-FREE doorbell (owner decision), not setup work.
 - Per-process fixed cost: guest persistence mode (`nvidia-smi -pm 1`) removes the per-process
   emulated-GSP unload/reboot (11 → 1 `UnloadingGuestDriver`) and ~3-4 s per process.
+- ★ **CORRECTED 2026-09-26 (branch `v3-video`, `614fbc7e`): the root cause named below is FIXED.** One host
+  channel group per guest TSG (`HostRm::birth_group`/`birth_member`; members share the legacy
+  subcontext, and the group is scheduled once and freed with its last member). `[measured vvid]` a
+  local-memory kernel on a second CUDA stream now passes in the guest (it failed with `sync 719`), and
+  ffmpeg's CUDA contexts no longer raise the Xid. `cup3`/`cup8` and the fast suite still pass. ⊘ The
+  CUDA-graph LLM arm has NOT been re-measured. See `V3_VIDEO_ENGINES.md` §2.2.
 - ⊘ **WALL: any kernel on a non-default CUDA stream faults** — host `Xid 13 SKEDCHECK05_LOCAL_MEMORY_
   TOTAL_SIZE failed` on the second GR twin (bisect `llm_graph_probe.py`: default stream incl.
   StaticCache passes; `x*2+1` on a side stream fails). Every twin is born in its OWN host TSG

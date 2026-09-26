@@ -104,6 +104,10 @@ The fix mirrors the guest's TSG as one host group:
 - All members use the legacy shared subcontext.
 - The group is scheduled once per act and freed with its last member.
 
+The LLM lane on master independently found the same wall and cause (`V3_BUILD.md`, w828: *"any kernel
+on a non-default CUDA stream faults"*, blocking the CUDA-graph arm). That entry now points here. The
+graph arm has not been re-measured.
+
 ## 3. The userspace gates, answered from the host
 
 These were found by diffing the same static ffmpeg on bare metal and in the guest (the nvdiff `LD_PRELOAD` recorder, `scripts/bench/video_hook.sh VIDEO_SHIM`). In order of discovery:
@@ -195,6 +199,7 @@ The lane is `scripts/bench/video_lane.sh` (md5 `e58fe71f`). It uses one static f
 - **Not advertised**: NVJPG, OFA and SEC2. Their `classify_engine` arms return `None` by design.
 - **`0x2080a028`**: only the NVD and GPC clock domains are asked of the host. A library asking another domain is refused, as before.
 - **The steer (§2.1) is falcon-specific.** Any other host-RM internal allocation in a mirrored VA space has the same two-allocator hazard. A GR collision would show as a `HELD BY HOST` leaf, and none has been seen.
-- **Unconfirmed walk overflow.** Earlier, pre-fix boots (vid5, vid8) hit `slot N is full … raise WalkCfg::runs_per_pdb` (the 16 384-run slot cap) in a later ffmpeg process. It has not recurred since §2.1/§2.2. It is recorded because guest sysmem fragmentation could reach the cap in a long-lived guest.
+- **Unconfirmed walk overflow.** Earlier, pre-fix boots (vid5, vid8) hit `slot N is full … raise WalkCfg::runs_per_pdb` (the 16 384-run slot cap) in a later ffmpeg process. It has not recurred since §2.1/§2.2. It is recorded because guest sysmem fragmentation could reach the cap in a long-lived guest. Master's LLM lane
+  independently reports a "no-PM 5th-process UVM RUN_CAP wall" (`2b80c1c7`), which is likely the same limit.
 - **`0x20808165`** is still refused in the guest (it answers OK on the host). No library behaviour depends on it in the lane.
 - **NVENC session-cap accounting** assumes one encoder-session slot per acquire, as measured. Concurrent guest and host encoders beyond the cap are refused with the host's own `0x69`.
