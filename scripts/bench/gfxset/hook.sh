@@ -48,7 +48,8 @@ for item in $GSET_ITEMS; do
     hx=$(grep -c 'Xid' "$OUT/$item.host_dmesg.log"); gx=$(grep -c 'Xid' "$OUT/$item.guest_dmesg.log" 2>/dev/null); gx=${gx:-0}
     nrc=$(grep -cE 'RC host twin|RC_TRIGGERED' "$OUT/$item.kf3.log")
     nr=$(grep -v 'kf3: family=' "$OUT/$item.kf3.log" | grep -ciE 'refus')
-    echo "$line boot=$TAG host_xid=$hx guest_xid=$gx kf3_rc=$nrc kf3_refusals=$nr kf3_lines=$(wc -l < "$OUT/$item.kf3.log")" | tee -a "$OUT/guest.res"
+    nu=$(grep -c 'GSP rpc UNSERVICED' "$OUT/$item.kf3.log")   # a guest RM call nobody answers (unserviced.rs)
+    echo "$line boot=$TAG host_xid=$hx guest_xid=$gx kf3_rc=$nrc kf3_refusals=$nr kf3_unserviced=$nu kf3_lines=$(wc -l < "$OUT/$item.kf3.log")" | tee -a "$OUT/guest.res"
     grep -a -E '^GSET_(DIG|VAL) ' <<<"$res" | tee -a "$OUT/guest.dig" >/dev/null
     [ $alive = 0 ] && { echo "GSET_HOOK guest dead after $item — stopping this boot"; break; }
     case "$line" in *verdict=PASS*) ;; *)
