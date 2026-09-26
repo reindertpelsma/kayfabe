@@ -99,7 +99,7 @@ sentence that stopped being true and did not say so.
 | 2026-09-06 | *"no real adapter (Linux, QEMU, or NVIDIA arch) exists yet"* | false of the first two axes — `kayfabe-vmm-kvm`, `kayfabe-vmm-qemu`/`-qemu-raw` and `kayfabe-isolate-host` are real adapters; true only of the NVIDIA-arch axis |
 | 2026-09-06 | *"zero unsafe blocks anywhere"* | two audited crates relax the workspace `forbid`: `kayfabe-linux-raw` (86 blocks) and `kayfabe-qemu-raw` (29), both gated by naming, `// SAFETY:` and a CI ratchet |
 | 2026-09-26 | *"LLM and PyTorch workloads do not produce correct output"* | v3: guest LLM text equals host text for 16/512/2048 tokens; PyTorch, HF generate and llama.cpp digests equal the host's ([`STATUS_DETAIL.md`](STATUS_DETAIL.md) §2, §4) |
-| 2026-09-26 | *"Performance is far off native — 22–81× for large kernels"* | a pre-v3 measurement; v3's LLM decode is 0.29–0.31× host, and the gap is doorbell exits |
+| 2026-09-26 | *"Performance is far off native — 22–81× for large kernels"* | a pre-v3 measurement; v3's LLM decode is 0.29–0.31× host, mostly doorbell exits |
 | 2026-09-26 | *"Multi-process results exist only on a branch; the 4th sequential process fails"* | v3 on `master`: 100 sequential CUDA processes in one persistence-mode boot |
 | 2026-09-26 | *"GPUs covered: one (GA106)"* | measured GA106, GA102, AD106; Turing/Hopper/Blackwell derived from source, not run |
 | 2026-09-26 | *"2949 pass, 9 fail"* and *"`scripts/run_full_suite.sh` is the authoritative run"* | the pre-v3 suite; v3's verdict of record is `v3_gates.sh` + the 30-arm fast suite on hardware |

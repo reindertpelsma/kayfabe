@@ -8,8 +8,8 @@
 > - The harness gates pass **9/9**.
 > - P7: `cup3` = 43 and `cup8` `BAD=0 MAXERR=0`.
 >
-> ⊘ **Not met:** "the LLM lane at ≥0.8× host tok/s". It is measured at **0.29–0.31×**, and the gap
-> is doorbell VM exits (`V3_BUILD.md` w828; the proposed fix is `V3_GUEST_DOORBELL_MODULE.md`,
+> ⊘ **Not met:** "the LLM lane at ≥0.8× host tok/s". It is measured at **0.29–0.31×**, mostly because
+> of doorbell VM exits (`V3_BUILD.md` w828; the proposed fix is `V3_GUEST_DOORBELL_MODULE.md`,
 > DESIGN-ONLY). Beyond this plan's scope, apps, headless graphics, NVENC/NVDEC and multi-GPU
 > have landed; see `docs/STATUS_DETAIL.md`.
 >

@@ -31,7 +31,7 @@ Sources are in [`docs/STATUS_DETAIL.md`](docs/STATUS_DETAIL.md).
 Works, measured:
 
 - **Stock driver boots and passes the 30-arm thin-guest suite, 30/30,** on **GA106** (RTX 3060)
-  and **AD106** (RTX 4060 Ti). Bare metal on the same boxes is also 30/30, so a guest failure
+  and **AD106** (RTX 4060 Ti). The same client passes 30/30 on bare metal, so a guest failure
   indicts kayfabe, not the test client. The nine GPU harness gates (`kf-gate1`…`9`, no QEMU)
   pass 9/9.
 - **CUDA is correct:** `cup3` returns 43; `cup8` (2048² matmul) returns `BAD=0 MAXERR=0`.
@@ -62,8 +62,8 @@ Not working or not done:
   research is on branch `v3-uvm-research`. The sixth failure is a host map that kayfabe refuses
   (`UnifiedMemoryStreams`), being worked on in branch `v3-mapfix`.
 - **Performance.** LLM decode runs at **0.29–0.31×** the same box's host tok/s, with guest text
-  identical to host text. The whole gap is doorbells: about 1,080 per token, each a trapped VM
-  exit, which costs about 51 µs on a nested box. An optional guest doorbell module that removes
+  identical to host text. Doorbells are the main cost: about 1,080 per token, each a trapped VM
+  exit of about 51 µs on a nested box, estimated at 55–80 % of the gap. An optional guest doorbell module that removes
   the exit is **designed, not built** (`docs/design/V3_GUEST_DOORBELL_MODULE.md`).
 - **Other GPU families have not been run on hardware.** Turing has a GSP model; Hopper and
   Blackwell are derived from the open driver's source. None of the three has booted. GA100 is
@@ -71,8 +71,8 @@ Not working or not done:
 - **Display is not started.** There is no scanout and no Xorg with NVIDIA's own display driver.
   Headless rendering (above) works.
 - **Windows guests** are the last roadmap step. Only research exists.
-- **Not yet measured:** two VMs sharing one GPU, and a fully rootless end-to-end boot. The host
-  side uses only RM controls that the host driver allows unprivileged clients to call.
+- **Not yet measured:** two VMs sharing one GPU, and a fully rootless end-to-end boot. The
+  design targets a host side that needs no root and no host kernel module.
 - GitHub CI is red on `master`. The verdict of record is the hardware run: `v3_gates.sh`, then
   the fast suite (see *Build and test*).
 
@@ -91,7 +91,7 @@ parallel)* → the guest-driver version matrix → Windows.
 | CUDA / real apps | Yes | matmul, llama.cpp | `cup8` bit-exact; 58/65 apps |
 | Graphics | Yes, incl. display | No | Headless Vulkan/EGL/GLX, bit-identical; no display yet |
 | Video engines | NVENC | No | NVENC/NVDEC, byte-identical |
-| LLM decode vs host | 0.99–1.00× | ~parity, but the CPU copied the data | 0.29–0.31× (doorbell exits) |
+| LLM decode vs host | 0.99–1.00× | ~parity, but the CPU copied the data | 0.29–0.31× (mostly doorbell exits) |
 | Multi-tenant isolation | Not a security boundary | None | The design goal; two-VM sharing not yet measured |
 
 The nvkvm-pv and archive columns are carried from earlier measurements and were not re-measured

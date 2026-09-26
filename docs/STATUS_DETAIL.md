@@ -114,9 +114,10 @@ LLM decode, `Qwen/Qwen2-0.5B-Instruct`, Hugging Face eager, from `V3_BUILD.md`
 | `vh3`: nested Intel | 0.30–0.31× |
 | `vh`: nested AMD EPYC 7452, guest persistence mode | 0.29× |
 
-- **The gap is doorbells.** There are about 1,080 doorbells per decoded token (eager decode is
-  about 1,000 kernel launches), and each one is a trapped MMIO write, which means one VM exit.
-  Doorbells are 99.7 % of trapped exits.
+- **Doorbells are the main cost.** There are about 1,080 doorbells per decoded token (eager
+  decode is about 1,000 kernel launches), and each one is a trapped MMIO write, which means one
+  VM exit. Doorbells are 99.7 % of trapped exits and, by the doorbell-module design's estimate,
+  55–80 % of the guest-vs-host gap.
 - On the nested AMD box each doorbell costs about **51 µs** of guest time; on the nested Intel
   box about **106 µs**. Reaching 0.8× would need ≤ ~5–8 µs per doorbell, and no trapped exit
   reaches that on these boxes.
