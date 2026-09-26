@@ -252,13 +252,19 @@ them — before 575 those bytes were `params[0..8]` and were being zeroed in eve
 
 ## 6. The matrix (host × guest), measured
 
-★ Every row carries its source revision. Thin suite = `KF_DEVICE=kf3 fast_suite.sh <tag> 180`
-(30 arms); gates = `scripts/bench/v3_gates.sh`.
+★ Every row carries its source revision. Box: vast `52746206`, RTX 3090 (GA102 `0x2204`), Xeon
+E5-2673 v4 (nested KVM), host driver **580.159.04 open**. Thin suite = `KF_DEVICE=kf3
+fast_suite.sh <tag> 180` (30 arms); gates = `scripts/bench/v3_gates.sh`; ladder = the fat-guest
+`cuda_ladder.sh guest` (cup2 CE round trip, cup3 `=43`, cup8 2048² matmul `bad=0 maxerr=0`,
+cup8bench, every timed iteration verified).
 
-| host | guest | rev | gates | thin guest | fat guest (CUDA ladder) | notes |
-|---|---|---|---|---|---|---|
-| 580.159.04 | 580.159.04 | `283a5304` (master) | 9/9 | **30/30** | — | baseline on this box (GA102) |
-| 580.159.04 | 580.105.08 | `283a5304` (master) | — | *running* | — | first non-host guest |
+| host | guest | rev | gates | tests | thin guest | fat guest ladder | notes |
+|---|---|---|---|---|---|---|---|
+| 580.159.04 | 580.159.04 | `283a5304` (master) | 9/9 | — | **30/30** | — | baseline on this box |
+| 580.159.04 | 580.105.08 | `283a5304` (master) | — | — | 29/30 → **30/30** | — | the one red was the harness (a half-written initrd from a killed build booted `Failed to execute /init`; fixed: `guest_walk.sh` builds atomically); the arm re-run PASS |
+| 580.159.04 | 580.159.04 | `67e7eadb` | 9/9 | 801 (+1 stale test, fixed in `0d3ce125`) | **30/30** | **4/4** | cup2 `0xabcd1234`, cup3 `43`, cup8 `bad=0 maxerr=0`, cup8bench verified |
+| 580.159.04 | 580.105.08 | `67e7eadb` | — | — | **30/30** | 0/4 → *staging fault* | the overlay was staged without the seed ISO; fixed in `f72f9a58` |
+| 580.159.04 | (all) | `f72f9a58` (rebased on master `e05ff74d`) | **9/9** | **1512 / 0** | *running* | *running* | first arm of the 580.105.08 suite red: guest `RmInitAdapter 0x25:0x65` — the PMA scrubber's CE token never forwarded (`fwd=0 put=0`); the next 6 arms PASS — flake under investigation, not a version effect (the 580.x layouts are identical; `pre_fn1_surface_differs` = none) |
 
 ## 7. Gaps per version (consumed items that differ from 580.159.04)
 
@@ -278,6 +284,16 @@ them — before 575 those bytes were `params[0..8]` and were being zeroed in eve
 | 590.48.01 | 6 | 28 | static info 1808, KGR_GET_INFO 3776, MSENC caps, VGX 0x2C/0x07 |
 | 595.84 | 11 | 46 | static info 1592, nine-field init args, KGR info/floorsweeping, GPU name 68, `rpc_run_cpu_sequencer_v` |
 | 610.x | 18 | 72 | 16-byte MCTP element (encoded), static info 1600, `USER_REGISTER_ACCESS_MAP` 20492, SM order 73760 (> 64 KiB element max), GPU info 580, … |
+
+### 7.1 Index-keyed lists: append-only, with one exception (measured)
+
+The info-list controls (`GPU_GET_INFO_V2`, `FB_GET_INFO_V2`, `KGR_GET_INFO`) carry
+`(index, value)` pairs, and a guest built with a shorter list can only name older indices. Across
+all 171 measured tags, every `NV2080_CTRL_GPU_INFO_INDEX_*` and `NV2080_CTRL_GR_INFO_INDEX_*` name
+keeps its value (only `*_INDEX_MAX` grows). ⊘ **`FB_INFO` is the exception:** index **60** is
+`HEAP_RECLAIMABLE` at 595.x and `PARTITION_MASK_2` at 610.x (`HEAP_RECLAIMABLE` moved to **68**).
+So an FB-info answer keyed on the host's numbering is right for guests ≤ 590 (max index 59) and
+needs the index translated BY NAME for a 595 guest on a 610 host or vice versa.
 
 ## 8. What is next, and what needs an owner decision
 

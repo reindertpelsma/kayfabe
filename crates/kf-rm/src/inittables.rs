@@ -245,6 +245,9 @@ pub struct InitTablePolicy {
     /// shell). A boot that goes further because of this set measures REACHABILITY, never
     /// correctness — see `ProbeArmSet`'s docs.
     probe_arm: eventnotify::ProbeArmSet,
+    /// ★ Set while [`InitTablePolicy::respond_transcoded`] re-enters `respond` with a
+    /// bench-layout copy of the guest's params, so the version gate does not fire twice.
+    in_transcode: bool,
     /// ★★★ **The guest's own `NV_VERSION_STRING`**, latched off `SET_GUEST_SYSTEM_INFO`
     /// (fn 1) and served back as [`WantedTable::GspGetFeatures`]'s `firmwareVersion`.
     ///
@@ -1481,6 +1484,7 @@ impl InitTablePolicy {
             // agrees with the guest — represented here as no slot at all.
             notify_actions: [None; NOTIFY_SUBDEVICE_SLOTS],
             probe_arm,
+            in_transcode: false,
             // ⊘ Not a default value: nothing is known about the guest until it speaks, and
             // `GspGetFeatures` refuses while this is `None` rather than inventing one.
             guest_firmware: None,
@@ -1546,6 +1550,110 @@ impl InitTablePolicy {
 fn refuse_named(cmd: u32, why: &dyn std::fmt::Debug) -> Option<Reply> {
     eprintln!("W349REFUSE cmd={cmd:#010x} why=encoder {why:?}");
     refuse()
+}
+
+/// ★★★ The served controls whose encoder output may be CARRIED to another version's layout by
+/// the measured transcoder (`kf_abi::matrix::transcode`, `V3_DRIVER_MATRIX.md` §4.5), and the
+/// array paths that may drop data at a shrinking version (index-keyed lists the guest cannot
+/// name beyond its own capacity).
+///
+/// ⊘ Being here is a REVIEW statement, not a layout one: every field these encoders write means
+/// the same thing at every measured version where the field exists — only array capacities and
+/// the set of fields differ. Each entry names what was checked. A control whose layout differs
+/// at the guest's version and is NOT here stays refused as `unported-at-version`.
+fn transcode_reviewed(want: WantedTable) -> Option<&'static [&'static str]> {
+    match want {
+        // Per-GPC arrays (tpcMask/zcullMask/tpcCount/numPesPerGpc/mmuPerGpc/tpcToPesMap) sized by
+        // NV2080_CTRL_GR_MAX_GPC (12 through 575.x, 16 from 580.65.06); same meaning per GPC.
+        // Not truncatable: a GPC the guest's struct cannot describe is a refusal.
+        WantedTable::GrFloorsweepingMasks => Some(&[]),
+        // globalSmId[] entries keyed by global SM id; 575 added ugpuId, 580 physicalCpcId and
+        // virtualTpcId — carried by name, absent fields dropped/zeroed.
+        WantedTable::GrGlobalSmOrder => Some(&[]),
+        // engineInfo[].infoList[] is index-keyed (NV2080_CTRL_GR_INFO_INDEX_*, append-only):
+        // a guest built with a shorter list cannot ask for the newer indices.
+        WantedTable::GrInfo => Some(&["engineInfo[].infoList"]),
+        // Request-bearing index lists (gpuInfoList / fbInfoList, append-only indices): the
+        // guest's request is carried up, the reply carried back; entries past the guest's
+        // capacity are the ones it did not ask for.
+        WantedTable::GpuInfoV2 | WantedTable::FbGetInfoV2 => Some(&[]),
+        _ => None,
+    }
+}
+
+impl InitTablePolicy {
+    /// ★★★ Serve a control whose params layout at the guest's version differs from the one its
+    /// encoder was written against: carry the guest's params UP to the bench layout, answer
+    /// through the unchanged encoder, carry the reply DOWN to the guest's layout — both by field
+    /// name through the measured layouts. Every refusal is named.
+    fn respond_transcoded(
+        &mut self,
+        cmd: &RpcCommand,
+        req: &kf_abi::view::RpcControlReq,
+        ct: &'static str,
+        truncatable: &[&str],
+    ) -> Option<Reply> {
+        let v = self.driver.driver_version();
+        let runs = kf_abi::generated::matrix::ALL_STRUCTS.iter().find(|r| r.name == ct)?;
+        let (Ok(guest), Ok(bench)) = (
+            kf_abi::matrix::Resolved::of(runs, v),
+            kf_abi::matrix::Resolved::of(runs, kf_abi::versions::BENCH_DRIVER),
+        ) else {
+            return refuse();
+        };
+        let at = req.params_at;
+        let gsz = guest.size();
+        if req.params_size as usize != gsz || cmd.payload.len() < at + gsz {
+            eprintln!(
+                "W349REFUSE cmd={:#010x} why=size-at-version asked={} measured={gsz} guest_driver={v}",
+                req.cmd, req.params_size
+            );
+            return refuse();
+        }
+        let up = match kf_abi::matrix::transcode(&guest, &bench, &cmd.payload[at..at + gsz], &[]) {
+            Ok((b, _)) => b,
+            Err(e) => {
+                eprintln!("W349REFUSE cmd={:#010x} why=transcode-up struct={ct} guest_driver={v}: {e}", req.cmd);
+                return refuse();
+            }
+        };
+        let size_off = self.driver.rm_control_wire().params_size_off;
+        let mut payload = cmd.payload[..at].to_vec();
+        payload[size_off..size_off + 4].copy_from_slice(&u32::try_from(bench.size()).unwrap_or(u32::MAX).to_le_bytes());
+        payload.extend_from_slice(&up);
+        let inner = RpcCommand {
+            function: cmd.function,
+            code: cmd.code,
+            sequence: cmd.sequence,
+            payload,
+            elements: cmd.elements,
+            delivered: Vec::new(),
+        };
+        self.in_transcode = true;
+        let reply = self.respond(&inner);
+        self.in_transcode = false;
+        let reply = reply?;
+        if reply.rpc_result != NV_OK || reply.body.len() < at + bench.size() {
+            return Some(reply);
+        }
+        let (down, dropped) =
+            match kf_abi::matrix::transcode(&bench, &guest, &reply.body[at..at + bench.size()], truncatable) {
+                Ok(x) => x,
+                Err(e) => {
+                    eprintln!("W349REFUSE cmd={:#010x} why=transcode-down struct={ct} guest_driver={v}: {e}", req.cmd);
+                    return refuse();
+                }
+            };
+        if !dropped.is_empty() {
+            eprintln!(
+                "kf-rm: {ct} carried to driver {v}: fields the guest's version does not have were dropped: {dropped:?}"
+            );
+        }
+        let mut body = reply.body[..at].to_vec();
+        body[size_off..size_off + 4].copy_from_slice(&u32::try_from(gsz).unwrap_or(u32::MAX).to_le_bytes());
+        body.extend_from_slice(&down);
+        Some(Reply { rpc_result: reply.rpc_result, body })
+    }
 }
 
 fn refuse() -> Option<Reply> {
@@ -1781,8 +1889,12 @@ impl CommandPolicy for InitTablePolicy {
         // release's offsets. Identical layouts (every 580.x tag, and most controls at most
         // versions) pass through unchanged.
         if let Some(ct) = want.c_type()
+            && !self.in_transcode
             && let Some(guest_size) = layout_differs_from_bench(ct, self.driver.driver_version())
         {
+            if let Some(truncatable) = transcode_reviewed(want) {
+                return self.respond_transcoded(cmd, &req, ct, truncatable);
+            }
             eprintln!(
                 "W349REFUSE cmd={:#010x} why=unported-at-version struct={ct} guest_driver={} \
                  measured_size={guest_size} encoder_size={}",
