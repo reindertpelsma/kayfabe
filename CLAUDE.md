@@ -8,6 +8,10 @@ is frozen (see *Layout*).
 
 ## Read first
 
+0. ★ **Resuming work? `docs/STATUS_AND_HANDOFF.md`** — master's verified state, branches in flight,
+   decisions waiting on the owner, the investigation queue, and how work is run. **`docs/OWNER_RULINGS.md`**
+   — every owner decision with its date (binding). **`scripts/bench/box/README.md`** — renting, using and
+   retiring vast boxes (untrusted, no secrets, evidence in git, teardown by own ids only).
 1. `README.md` — what kayfabe is, and the status in one screen.
 2. `ARCHITECTURE.md` — v3 on one page: planes, channel kinds, crates, rules.
 3. `docs/STATUS_DETAIL.md` — every status claim, with its revision, box and evidence.
