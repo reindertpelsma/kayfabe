@@ -1596,6 +1596,17 @@ fn transcode_reviewed_paths(want: WantedTable) -> Option<&'static [&'static str]
         // guest's request is carried up, the reply carried back; entries past the guest's
         // capacity are the ones it did not ask for.
         WantedTable::GpuInfoV2 | WantedTable::FbGetInfoV2 => Some(&[]),
+        // `[matrix]` same size (1928) at every tag; 580.65.06 ADDS two union arms
+        // (`queryData.gfxGpcMaskData`, `gfxSyspipeMaskData`) for two new query types. Every arm
+        // that exists at both versions sits at the same offset, the union is carried as raw
+        // bytes, and a pre-580 guest cannot send the new query types (their numbers did not
+        // exist), so its answers never use the new arms.
+        WantedTable::GrmgrGetGrFsInfo => Some(&[]),
+        // `[matrix]` 28 bytes at every tag; `bLinkInHS` (a bool in what was padding at +1)
+        // appears at 575.51.02 and `bEncryptionEnabled` (+2) at 610. The GA10x answer states
+        // neither (no C2C fabric: `kf_abi::c2cinfo`), so nothing is dropped; a non-zero one
+        // would be named by the transcoder.
+        WantedTable::C2cInfo => Some(&[]),
         _ => None,
     }
 }

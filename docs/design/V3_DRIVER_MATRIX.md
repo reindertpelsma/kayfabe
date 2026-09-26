@@ -279,6 +279,27 @@ between the two 580.x versions, so nothing version-specific is on that path: it 
 **channel/completion-plane race**, handed off, and every later boot of the walk is counted for it
 (`q3`: `INITFLAKE boots=… adapter_failures=…`).
 
+**Triage note (for the hunt; coordinator 2026-09-26: a real completion-plane race even if rare).**
+Per occurrence, `scripts/drivermatrix/initflake_evidence.sh --all <run prefix>` prints the guest's
+assertion chain, every translated token's `RETIRED` line and the device counters before the first
+retire. The first occurrence (`rf72f9a58_g58010508_timer`):
+
+| | failing boot | passing boots (same version, same revision) |
+|---|---|---|
+| token `0x2` (CeUtils `memmgrInitCeUtils`) | `forwarded=1 serves=3 last_put=1 GP_GET=1` | `forwarded=2 serves=5 last_put=2 GP_GET=2` |
+| host non-stall events observed / raised to the guest | `CE2:1/0raised` | `CE2:2/0raised` |
+| guest IRQs `raised` | 0 | 0–18 (CeUtils polls memory; no interrupt is expected for it) |
+| guest | `memmgrMemSet` TIMEOUT, then `lastCompletedPayload != lastSubmittedPayload` | — |
+
+So the host fetched the entry and the copy engine raised its non-stall at the release; the
+guest's poll of the completion payload never saw the value. ⊘ What no current log line can say,
+and is the first thing to capture: **where the release was written** (kayfabe does not parse
+pushbuffers, so the semaphore GPU VA is not logged), **what the host backing held at that address
+after the release**, and **which backing the guest's CPU view of that page pointed at while it
+polled** (`views[armed/held]` is only a count). A boot that re-reads the completion page through
+both the host store and the guest's view at the timeout would split "the release landed elsewhere"
+from "the view was stale".
+
 ## 7. Gaps per version (consumed items that differ from 580.159.04)
 
 `collapse.py gaps --ref 580.159.04 --only consumed.txt` (both axes' consumed structs):
