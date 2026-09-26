@@ -12,7 +12,7 @@
 
 use crate::raw_unsafe::RawRegion;
 use kf_arch::gsp::{GspModel, GspReg};
-use kf_chip::bar0::{Bar0Facts, BootReg, boot_regs, fb_layout, pcie_link_caps, vbios_profile};
+use kf_chip::bar0::{Bar0Facts, BootReg, ConfigWord, boot_regs, config_words, fb_layout, pcie_link_caps, vbios_profile};
 use kf_chip::Family;
 use kf_core::{HostOps, HostSlice, Plane, Step, Translatable, Vmm};
 use kf_gsp::{CommandPolicy, GspFsm, GuestRam, RamRefused};
@@ -171,6 +171,8 @@ pub struct Device {
     /// instant the guest's write lands, when the write alone decides it).
     store_model: std::sync::Arc<dyn GspModel>,
     boot: Vec<BootReg>,
+    /// ★ 2026-09-26: config-space words read by config cycle (Hopper+; `kf_chip::bar0::config_words`).
+    pub config_words: Vec<ConfigWord>,
     vbios: Vec<u8>,
     worker_efd: &'static Notifier,
     drainer_efd: &'static Notifier,
@@ -305,6 +307,7 @@ impl Device {
                 .ok_or(format!("host link width x{} is not a PCIe width", pci.max_width))?,
         };
         let boot = boot_regs(family, &facts);
+        let config_words = config_words(family, &facts);
 
         let guest = match &cfg.guest_driver {
             Some(v) => v.clone(),
@@ -448,6 +451,17 @@ impl Device {
             mirrors,
         )?;
         let walker = kf_mem::vasmgr::GpuWalker { kernel };
+        // ★ 2026-09-26 (`V3_BAR1_DOORBELL.md` §7 T1's NEGATIVE CONTROL, `V3_FAMILY_PORT_BLACKWELL.md`):
+        // `KF3_NEGCTL_NO_BAR1_DOORBELL=1` runs a Hopper+ family WITHOUT the BAR1 usermode-view
+        // classification — the pre-`v3-bar1db` behaviour, where the view's leaf maps guest RAM at
+        // `0x30000` and every BAR1 doorbell is a silent store. A detector that cannot fail under
+        // this switch measures nothing. ⚠ Never for a real run; it is announced on every realize.
+        let usermode_mmio = if std::env::var_os("KF3_NEGCTL_NO_BAR1_DOORBELL").is_some() {
+            eprintln!("kf3: ⚠ NEGATIVE CONTROL KF3_NEGCTL_NO_BAR1_DOORBELL: BAR1 usermode views are NOT classified (family {family:?})");
+            None
+        } else {
+            family.usermode_mmio()
+        };
         // ★ P6b (b): coverage at the family's smallest GMMU page.
         let mut va: crate::mem::Manager = kf_mem::vasmgr::VaManager::new(
             walker,
@@ -457,7 +471,7 @@ impl Device {
         .with_page_grain(family.mmu_format().small_page_bytes())
         // ★ Hopper+: internal-MMIO usermode views are classified, never mapped as guest RAM
         // (`V3_BAR1_DOORBELL.md`). `None` on Turing … Ada: unchanged.
-        .with_usermode_mmio(family.usermode_mmio());
+        .with_usermode_mmio(usermode_mmio);
         va.table.insert(
             crate::mem::K_BAR2,
             crate::mem::Target::Window(kf_mem::cpuwin::CpuWindow::new(bar2_ops, cfg.bar2_bytes)),
@@ -473,7 +487,7 @@ impl Device {
             crate::mem::K_BAR1,
             // ★ Hopper+: the guest places BAR1 usermode views where ITS allocator chooses; they
             // become write-trapped overlays there (`V3_BAR1_DOORBELL.md` §4).
-            match family.usermode_mmio() {
+            match usermode_mmio {
                 Some(u) => crate::mem::Target::Bar1(crate::mem::Bar1Target::new(
                     bar1_win,
                     cfg.bar1_bytes,
@@ -518,6 +532,7 @@ impl Device {
             fsp: (family.boot_style() == kf_chip::BootStyle::Fsp).then(kf_trap::fspemem::FspEmem::new),
             fsp_replies_type: std::sync::atomic::AtomicU32::new(0),
             boot,
+            config_words,
             vbios,
             worker_efd,
             chans,

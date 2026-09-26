@@ -225,6 +225,50 @@ pub fn boot_regs(family: Family, f: &Bar0Facts) -> Vec<BootReg> {
     v
 }
 
+/// ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §4) — one dword of the device's **PCI configuration
+/// space** the guest driver reads with a real config cycle.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ConfigWord {
+    /// Config-space offset (dword-aligned).
+    pub off: u16,
+    /// The value, read-only to the guest.
+    pub value: u32,
+    /// The register's name.
+    pub name: &'static str,
+    /// Where the value comes from.
+    pub from: Provenance,
+}
+
+/// ★ The config-space words the guest reads by **config cycle** on this family — the same PCIe
+/// facts [`boot_regs`] serves through the BAR0 `NV_XVE` mirror on Turing … Ada.
+///
+/// `[measured GB203 bws1]` UVM_REGISTER_GPU failed `0x40` after *"calculatePCIELinkRateMBps:
+/// Unknown PCIe speed"*: from Hopper on, `gpuReadBusConfigReg` binds `_GH100` →
+/// `gpuReadBusConfigCycle_HAL`, an OS config-space read (`ogkm-580: kern_gpu_gh100.c:79-87`,
+/// `g_gpu_nvoc.c:1143-1155`), NOT the BAR0 mirror — and our conventional-PCI device had nothing
+/// there. `kbifGetGpuLinkCapabilities_IMPL` (`kernel_bif.c:879-902`) reads the address
+/// `kbifGetBusOptionsAddr_HAL` names, which is per die group:
+/// - GH100 + GB20x: `_GH100` → `NV_EP_PCFG_GPU_LINK_CAPABILITIES` = `0x6C`
+///   (`hopper/gh100/dev_xtl_ep_pcfg_gpu.h:73`; GB20x binds it, `g_kernel_bif_nvoc.c:965-982`);
+/// - GB10x: `_GB100` → `NV_PF0_LINK_CAPABILITIES` = `0x4C` (`blackwell/gb100/dev_pcfg_pf0.h:126`).
+///
+/// The value is the host's own link word, in the PCIe Link Capabilities layout the XVE mirror
+/// already uses (`pcie_link_caps`). Empty for Turing … Ada: their reads go through BAR0.
+#[must_use]
+pub fn config_words(family: Family, f: &Bar0Facts) -> Vec<ConfigWord> {
+    let off = match family {
+        Family::Turing | Family::Ampere | Family::Ada => return Vec::new(),
+        Family::Blackwell if f.architecture == crate::arch::GB100 => 0x4C,
+        Family::Hopper | Family::Blackwell => 0x6C,
+    };
+    vec![ConfigWord {
+        off,
+        value: f.pcie_link_caps,
+        name: "PCIe LINK_CAPABILITIES (config cycle)",
+        from: Provenance::Host("the host's PCIe link capability"),
+    }]
+}
+
 /// The host GPU's PCI identity — what the guest's driver binds on (read from the host's own config
 /// space; never a table row).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

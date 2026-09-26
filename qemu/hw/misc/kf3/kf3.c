@@ -684,6 +684,23 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
         }
     }
 
+    /* ★ ABI 7: config-space words the guest's RM reads by CONFIG CYCLE (Hopper+ read the PCIe
+     * link capabilities there, not through the BAR0 XVE mirror). Read-only (no wmask), and refused
+     * by name if a capability already owns the bytes. */
+    for (uint32_t i = 0;; i++) {
+        uint16_t off;
+        uint32_t val;
+        if (kf3_config_word(s->h, i, &off, &val) != 0) {
+            break;
+        }
+        if (off < PCI_CONFIG_HEADER_SIZE || off + 4 > PCI_CONFIG_SPACE_SIZE || (off & 3) != 0 ||
+            pci->used[off] || pci->used[off + 1] || pci->used[off + 2] || pci->used[off + 3]) {
+            error_setg(errp, "kf3: config word %u at 0x%x collides with the header or a capability", i, off);
+            return;
+        }
+        pci_set_long(c + off, val);
+    }
+
     s->listener = (MemoryListener){
         .name = "kf3-guest-ram",
         .region_add = kf3_region_add,

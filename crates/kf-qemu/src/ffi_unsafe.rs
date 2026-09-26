@@ -7,7 +7,7 @@ use core::ffi::{c_char, c_void};
 use std::ffi::CStr;
 
 /// Wire ABI of this surface; the C device refuses a mismatched archive.
-pub const KF3_ABI: u32 = 6;
+pub const KF3_ABI: u32 = 7;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -146,6 +146,27 @@ pub unsafe extern "C" fn kf3_identity(h: *mut c_void, out: *mut Kf3Identity) -> 
     };
     // SAFETY: `out` is writable (caller contract).
     unsafe { *out = id };
+    0
+}
+
+/// ★ ABI 7 (2026-09-26): config-space word `idx` the C device must preset read-only
+/// (`kf_chip::bar0::config_words` — Hopper+ read PCIe facts by config cycle). Returns 0 and fills
+/// `off`/`val`, or -1 past the end / on a bad handle.
+///
+/// # Safety
+/// `off` and `val` are writable.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kf3_config_word(h: *mut c_void, idx: u32, off: *mut u16, val: *mut u32) -> i32 {
+    let Some(d) = dev(h) else { return -1 };
+    let Some(w) = d.config_words.get(idx as usize) else { return -1 };
+    if off.is_null() || val.is_null() {
+        return -1;
+    }
+    // SAFETY: both writable (caller contract).
+    unsafe {
+        *off = w.off;
+        *val = w.value;
+    }
     0
 }
 
