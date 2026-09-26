@@ -159,11 +159,20 @@ pub struct FunctionCodes {
     /// ★★ **Not** on either tag's bootup allowlist, exactly like `POST_EVENT` — see
     /// [`RpcFunction::allowed_in_bootup_window`].
     pub rc_triggered: u32,
+    /// ★★ `SET_PAGE_DIRECTORY` (54) — the page-directory statement's DEDICATED carrier, sent by
+    /// a guest RM up to 575.64.05 where a 580.65.06+ guest sends `GSP_RM_CONTROL` `0x00801813`
+    /// (`kf_abi::versions::DriverAbiTable::decode_set_page_directory_rpc` has the boundary).
+    /// Named because UVM's `nvUvmInterfaceSetPageDirectory` rides it inside `cuInit`: refused
+    /// as an unknown function, a 575 guest's CUDA never initialises.
+    pub set_page_directory: u32,
+    /// ★★ `UNSET_PAGE_DIRECTORY` (79) — the revocation, same carrier split as
+    /// [`FunctionCodes::set_page_directory`].
+    pub unset_page_directory: u32,
 }
 
 impl FunctionCodes {
     /// Every id, for the distinctness check.
-    fn all(&self) -> [u32; 17] {
+    fn all(&self) -> [u32; 19] {
         [
             self.set_guest_system_info,
             self.set_guest_system_info_ext,
@@ -182,6 +191,8 @@ impl FunctionCodes {
             self.gsp_init_done,
             self.post_event,
             self.rc_triggered,
+            self.set_page_directory,
+            self.unset_page_directory,
         ]
     }
 
@@ -227,6 +238,8 @@ impl FunctionCodes {
             c if c == self.gsp_init_done => RpcFunction::InitDone,
             c if c == self.post_event => RpcFunction::PostEvent,
             c if c == self.rc_triggered => RpcFunction::RcTriggered,
+            c if c == self.set_page_directory => RpcFunction::SetPageDirectory,
+            c if c == self.unset_page_directory => RpcFunction::UnsetPageDirectory,
             other => RpcFunction::Other(other),
         }
     }
@@ -291,6 +304,10 @@ pub enum RpcFunction {
     /// The `RC_TRIGGERED` event (we send it; the guest never does). The simulated GPU
     /// fault's carrier — `docs/design/simulated_gpu_fault.md`.
     RcTriggered,
+    /// `SET_PAGE_DIRECTORY` — the ≤575.64.05 carrier of `NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY`.
+    SetPageDirectory,
+    /// `UNSET_PAGE_DIRECTORY` — the ≤575.64.05 carrier of `…_DMA_UNSET_PAGE_DIRECTORY`.
+    UnsetPageDirectory,
     /// An id this table does not name. The guest logs and ignores unknown *events*
     /// (`ogkm-610: kernel_gsp.c:1587-1599`, `ogkm-580: :1610-1622` — byte-identical
     /// `default:` arm at both tags); an unknown *command* still gets a reply, because

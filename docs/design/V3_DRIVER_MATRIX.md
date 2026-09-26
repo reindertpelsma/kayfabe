@@ -73,6 +73,7 @@ the full tables (file:line for every item) are in this doc's history note §2.9.
 | G8 | RM engine numbering | `kf-abi/src/submit.rs:1106-1140`, `kf-rm/src/authored.rs` | 580 values | `RM_ENGINE_TYPE_SW` 0x2c at 535/545, 0x2d from 550; MC indices lower at 535/545 |
 | G9 | `rpc_rc_triggered_v17_02` | `kf-abi/src/generated/rpc.rs:710-744` | 48 bytes | five layouts 535–565 (20 bytes, `exceptType`@8 at 535) |
 | G10 | MSENC caps params | `kf-abi/src/videocaps.rs` | 12 bytes | 8 bytes through 580.65.06 (580.82.07 host side) |
+| G11 | the page-directory statements' CARRIER | `kf-gsp/src/rpc.rs` `FunctionCodes`, `kf-rm/src/barpde.rs` | only `GSP_RM_CONTROL` `0x00801813`/`0x00801814`; fn 54/79 refused as unknown functions | through **575.64.05** `deviceCtrlCmdDma(Un)SetPageDirectory_IMPL` sends the dedicated RPCs **fn 54 / fn 79** (`rpc_set_page_directory_v` 48 B, `rpc_unset_page_directory_v` 16 B, embedding the control structs field for field at all 29 tags); from 580.65.06 the control. The two tags' `NV_RM_RPC_*` sets differ in exactly this pair (+ Tegra's `DCE_RM_INIT`). **Found by the 575 fat ladder** (§6): UVM's `nvUvmInterfaceSetPageDirectory` rides it inside `cuInit`. Fixed: both carriers share one statement function (§6 triage) |
 
 Stable 535 → 610, verified: the 48-byte GSP element (until 610's 16-byte MCTP one), `msgq` headers,
 `rpc_message_header_v`, every RPC function/event number kayfabe uses (only
@@ -307,7 +308,7 @@ the fat-guest CUDA ladder (cup2 / cup3 / cup8 / cup8bench).
 | 580.126.09 / 580.173.02 / 580.178.04 | *running* | `47348e3b` |
 | **590.48.01** | init ✔, **ladder 4/4** | `6de22590` |
 | **595.84** | init ✔, **ladder 4/4** | `6de22590` |
-| 575.57.08 | init ✔; ladder **0/4**: `cuInit` → `CUDA_ERROR_NOT_INITIALIZED`. The one control only this guest asks is the GSS-legacy **`0x2080a637`**, a **96 024-byte** params block — i.e. a LARGE RPC (head `payload_len=65456`), refused (no header, no policy). Large RPCs are joined since `5b577f5d`; what a real 575 GSP answers is captured on bare metal in the host walk (nvdiff) | `6de22590` |
+| 575.57.08 | init ✔; ladder **0/4** at `6de22590`: `cuInit` → `CUDA_ERROR_NOT_INITIALIZED`. ⊘ **CORRECTED (same day): not the GSS-legacy `0x2080a637`** this row first blamed — that 96 KB control is asked during the boot-time adapter init, before the module is reloaded cold, and a bare-metal 575.57.08 host's `cup2` never asks it (nvdiff: 798 records, `a637=0`). ★ **The wall is the page-directory carrier (G11):** inside `cuInit` UVM registers the GPU, brings up its six channels, then calls `nvUvmInterfaceSetPageDirectory` — which a ≤575.64.05 RM sends as the dedicated RPC **fn 54**, refused as an unknown function (`GSP rpc UNSERVICED { code: 54 }`); UVM tears the registration down. The guest RM's own failure set is otherwise identical to a passing 590.48.01 guest's. Fixed on the branch (fn 54/79 carried as the same statements as `0x00801813`/`0x00801814`); ladder re-run queued | `6de22590` |
 | 575.51.03 | INTR wall at `47348e3b`; re-run queued | — |
 | 570.148.08 | init ✔, ladder queued | `6de22590` |
 | 570.124.06 | INTR wall at `47348e3b`; re-run queued | — |
@@ -359,6 +360,22 @@ no guest error means the guest's RM initialised):
 | 550.54.14 | `gpuConstructDeviceInfoTable` | `INTERNAL_GET_DEVICE_INFO_TABLE` (9 220 bytes there) unported | carry added `b6574262` |
 | 610.57.04 | `RmInitAdapter 0x23:0x56` | `USER_REGISTER_ACCESS_MAP` (20 492 bytes) unported; next: SM order 73 760 > one message | carry `b6574262`; large RPCs `5b577f5d` (ruling 2) |
 | 535.309.01 | realize | no capability row below 550.54.04 | ruling 5: owner review |
+
+★ **Past RmInitAdapter, the next wall of every ≤575 guest is `cuInit` — and it is one fact, G11.**
+`[measured 2026-09-26, 575.57.08 fat guest at 6de22590, box 2]` the QEMU log shows UVM's six
+channels born and scheduled, then `GSP rpc Other(54)` → `UNSERVICED { code: 54 }` → `0x56`, then
+UVM's frees: `nvUvmInterfaceSetPageDirectory` arrived as the dedicated `SET_PAGE_DIRECTORY` RPC,
+because through 575.64.05 `deviceCtrlCmdDmaSetPageDirectory_IMPL` issues `NV_RM_RPC_SET_PAGE_DIRECTORY`
+(`575.57.08: mem_mgr/dma.c:441`, `vgpu/rpc.c:9238`) where 580.65.06+ issues `NV_RM_RPC_CONTROL`
+(`580.65.06: dma.c:443-453`). Every ≤575 tag in the range (535 … 575.64.05) has it; nothing else in
+the two tags' `NV_RM_RPC_*` sets differs. ⇒ The fix is a carrier, not a new behaviour: fn 54's
+48-byte wrapper and fn 79's 16-byte one are consumed from the matrix (`rpc_(un)set_page_directory_v`,
+identical at all 29 tags and embedding the control structs field for field —
+`kf-abi/tests/driver_matrix.rs`), and `barpde::PageDirPolicy` answers them with the SAME statement
+function, capability gate, echo and reply hold as `0x00801813`/`0x00801814`
+(`kf-rm/src/barpde.rs` test: fn 54 at 575.57.08 states exactly what the control states at
+580.159.04). The ids are read from the matrix at compile time (`ValueRuns::everywhere_u32`): a sweep
+in which they move is a build failure.
 
 ★ **The 580.105.08 red at `f72f9a58`, measured.** Arm 1 (`--timer`): guest `RmInitAdapter failed!
 (0x25:0x65:1236)` after `memmgrMemSet … NV_ERR_TIMEOUT` (`mem_mgr.c:463`) and

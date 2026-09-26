@@ -2740,6 +2740,12 @@ mod a_life_ends_and_the_next_one_boots {
             gsp_init_done: 0x1001,
             post_event: 0x1002,
             rc_triggered: 0x1003,
+            set_page_directory:
+                kf_abi::generated::matrix::RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_SET_PAGE_DIRECTORY
+                    .everywhere_u32(),
+            unset_page_directory:
+                kf_abi::generated::matrix::RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_UNSET_PAGE_DIRECTORY
+                    .everywhere_u32(),
         };
         GspAbi {
             msgq: MsgqAbi { version: 0, msg_size_min: 4096, swap_rx_flag: 1, region_page_size: 4096 },

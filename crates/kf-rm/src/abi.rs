@@ -20,6 +20,7 @@
 //! nearest-neighbouring.
 
 use kf_abi::DriverVersion;
+use kf_abi::generated::matrix;
 use kf_abi::generated::rpc as rpcids;
 use kf_gsp::{
     ElementLayout, FunctionCodes, GspAbi, GspFault, InitArgsLayout, MsgqAbi, RpcAbi, TransportHdr,
@@ -49,6 +50,14 @@ pub const FUNCTIONS: FunctionCodes = FunctionCodes {
     gsp_init_done: rpcids::NV_VGPU_MSG_EVENT_GSP_INIT_DONE,
     post_event: rpcids::NV_VGPU_MSG_EVENT_POST_EVENT,
     rc_triggered: rpcids::NV_VGPU_MSG_EVENT_RC_TRIGGERED,
+    // ★ The ≤575.64.05 page-directory carriers (`V3_DRIVER_MATRIX.md` §6, the 575 `cuInit`
+    // wall). The 580 generator never emitted them (no 580 guest sends them), so they are read
+    // from the DRIVER MATRIX — measured 54 / 79 at all 29 tags, a build failure if a sweep
+    // ever disagrees.
+    set_page_directory: matrix::RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_SET_PAGE_DIRECTORY
+        .everywhere_u32(),
+    unset_page_directory: matrix::RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_UNSET_PAGE_DIRECTORY
+        .everywhere_u32(),
 };
 
 /// `MSGQ_VERSION` — byte-identical and on the same line at both vendored tags, only the

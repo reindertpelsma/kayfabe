@@ -195,6 +195,23 @@ impl ValueRuns {
     pub fn at_u32(&'static self, version: DriverVersion) -> Result<Option<u32>, Unmeasured> {
         Ok(self.at(version)?.and_then(|v| u32::try_from(v).ok()))
     }
+
+    /// ★ The value of a constant the sweep measured IDENTICAL and PRESENT at every tag (exactly
+    /// one run, which is contiguous over all of `MEASURED`), usable in a `const` — so a future
+    /// sweep in which it varies or vanishes is a BUILD failure at the use site, never a stale id
+    /// answered to the version that moved it. A constant that does vary is read per version
+    /// with [`ValueRuns::at_u32`].
+    #[must_use]
+    pub const fn everywhere_u32(&self) -> u32 {
+        assert!(
+            self.runs.len() == 1,
+            "the measured value varies across tags: read it per version (at_u32)"
+        );
+        match self.runs[0].value {
+            Some(x) if x <= u32::MAX as u64 => x as u32,
+            _ => panic!("the constant is absent (or wider than 32 bits) at the measured tags"),
+        }
+    }
 }
 
 /// A consumed field that a measured layout does not have — the unit of the per-version gap

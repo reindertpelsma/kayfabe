@@ -116,6 +116,13 @@ pub const FUNCTIONS: kf_gsp::FunctionCodes = kf_gsp::FunctionCodes {
     // `ogkm-580: :256`. The simulated-fault carrier (task #111); it appears in no
     // recorded capture, because the C artifact never emitted one.
     rc_triggered: 0x1004,
+    // The ≤575.64.05 page-directory carriers — never in a 580 capture; the matrix's measured ids.
+    set_page_directory:
+        kf_abi::generated::matrix::RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_SET_PAGE_DIRECTORY
+            .everywhere_u32(),
+    unset_page_directory:
+        kf_abi::generated::matrix::RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_UNSET_PAGE_DIRECTORY
+            .everywhere_u32(),
 };
 
 /// Axis A for the driver the capture was recorded against — **580.159.04**, keyed on the

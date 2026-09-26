@@ -33,7 +33,7 @@ pub enum Disposition {
 
 /// Every id §1.3 enumerates. ⊘ The list is the contract: a gate asserts it is complete, so
 /// "all RPCs are implemented" is a checkable fact rather than a claim.
-pub const SURFACE: [(u32, &str, Disposition); 18] = [
+pub const SURFACE: [(u32, &str, Disposition); 20] = [
     (1, "SET_GUEST_SYSTEM_INFO", Disposition::Serve),
     (64, "SET_GUEST_SYSTEM_INFO_EXT", Disposition::Serve),
     (65, "GET_GSP_STATIC_INFO", Disposition::Serve),
@@ -51,6 +51,20 @@ pub const SURFACE: [(u32, &str, Disposition); 18] = [
     (0x1001, "GSP_INIT_DONE", Disposition::OutboundOnly),
     (0x1003, "POST_EVENT", Disposition::OutboundOnly),
     (0x1004, "RC_TRIGGERED", Disposition::OutboundOnly),
+    // ★★ The ≤575.64.05 carriers of `0x00801813` / `0x00801814` (`barpde::PageDirPolicy`), ids
+    // from the driver matrix (identical at all 29 measured tags; a build failure if not).
+    (
+        kf_abi::generated::matrix::RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_SET_PAGE_DIRECTORY
+            .everywhere_u32(),
+        "SET_PAGE_DIRECTORY",
+        Disposition::Serve,
+    ),
+    (
+        kf_abi::generated::matrix::RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_UNSET_PAGE_DIRECTORY
+            .everywhere_u32(),
+        "UNSET_PAGE_DIRECTORY",
+        Disposition::Serve,
+    ),
     // ⊘ A sentinel so the table's own shape is asserted rather than assumed.
     (u32::MAX, "__END", Disposition::Refuse),
 ];

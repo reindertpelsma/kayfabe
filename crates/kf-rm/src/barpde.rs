@@ -332,11 +332,28 @@ impl PageDirPolicy {
             return None;
         }
         let p = cmd.payload.get(h.params_at..h.params_at + UNSET_PAGE_DIRECTORY_PARAMS_SIZE)?;
-        let vaspace = u32::from_le_bytes([p[0], p[1], p[2], p[3]]);
+        self.unset_statement(h.client, p, cmd)
+    }
+
+    /// ★★ fn 79 — `UNSET_PAGE_DIRECTORY` as its dedicated RPC (the ≤575.64.05 carrier,
+    /// `kf_abi::versions::DriverAbiTable::decode_unset_page_directory_rpc`): the measured wrapper's
+    /// `hClient` and embedded 8-byte params, then exactly the control carrier's statement.
+    /// ⊘ Declined like it (→ the ledger) for a wrapper that does not decode or names no VA space.
+    fn unset_rpc(&mut self, cmd: &RpcCommand) -> Option<Reply> {
+        let r = self
+            .abi
+            .decode_unset_page_directory_rpc(&cmd.payload)
+            .ok()?;
+        self.unset_statement(r.client, r.params, cmd)
+    }
+
+    /// The revocation both carriers state, from the control params' bytes.
+    fn unset_statement(&mut self, client: u32, p: &[u8], cmd: &RpcCommand) -> Option<Reply> {
+        let vaspace = u32::from_le_bytes([*p.first()?, *p.get(1)?, *p.get(2)?, *p.get(3)?]);
         if vaspace == 0 {
             return None;
         }
-        let (client, vaspace) = self.canonical(h.client, vaspace);
+        let (client, vaspace) = self.canonical(client, vaspace);
         (self.sink)(MemStatement::UnsetPageDir { client, vaspace });
         self.carried += 1;
         self.held_last = true;
@@ -375,11 +392,17 @@ impl CommandPolicy for PageDirPolicy {
                 self.observe_dup(cmd);
                 return None;
             }
-            RpcFunction::RmControl => {}
+            RpcFunction::RmControl => {
+                if let Some(r) = self.unset(cmd) {
+                    return Some(r);
+                }
+            }
+            // ★★ The ≤575.64.05 carriers (fn 54 / fn 79): the same two statements, the same
+            // answers, the same holds — `crate::rmrpc::translate_set_page_directory_rpc` shares the
+            // SET statement's one function with the control carrier.
+            RpcFunction::SetPageDirectory => {}
+            RpcFunction::UnsetPageDirectory => return self.unset_rpc(cmd),
             _ => return None,
-        }
-        if let Some(r) = self.unset(cmd) {
-            return Some(r);
         }
         let Ok(crate::rmrpc::Translation::PageDir(mut st)) = crate::rmrpc::translate(&self.abi, self.guest_os, cmd) else {
             return None;
@@ -391,12 +414,28 @@ impl CommandPolicy for PageDirPolicy {
         (self.sink)(MemStatement::PageDir(st));
         self.carried += 1;
         self.held_last = true;
-        let is_set = self.abi.decode_rpc_control(&cmd.payload).is_ok_and(|h| h.cmd == SET_PAGE_DIRECTORY);
-        is_set.then(|| Reply { rpc_result: NV_OK, body: cmd.payload.clone() })
+        // ★ fn 54 IS the set; a control carrier is answered only for `0x00801813` (the
+        // publications are observed here and answered by `InitTablePolicy`). The fn-54 echo is
+        // the guest's own 48 bytes: `rpcSetPageDirectory_v1E_05` reads only the status back
+        // (`575.57.08: rpc.c:9238-9270`).
+        let is_set = cmd.function == RpcFunction::SetPageDirectory
+            || self
+                .abi
+                .decode_rpc_control(&cmd.payload)
+                .is_ok_and(|h| h.cmd == SET_PAGE_DIRECTORY);
+        is_set.then(|| Reply {
+            rpc_result: NV_OK,
+            body: cmd.payload.clone(),
+        })
     }
 
     fn holds_for_refresh(&self, cmd: &RpcCommand) -> bool {
-        cmd.function == RpcFunction::RmControl && self.held_last
+        matches!(
+            cmd.function,
+            RpcFunction::RmControl
+                | RpcFunction::SetPageDirectory
+                | RpcFunction::UnsetPageDirectory
+        ) && self.held_last
     }
 }
 
@@ -479,6 +518,98 @@ mod tests {
             assert!(!p.holds_for_refresh(&bad), "a declined control holds nothing");
         }
         assert_eq!(seen.lock().unwrap().len(), 1);
+    }
+
+    /// ★★ The ≤575.64.05 carriers (`V3_DRIVER_MATRIX.md` §6, the 575 `cuInit` wall): fn 54 from a
+    /// 575.57.08 guest states EXACTLY what `0x00801813` states from a bench-driver guest — the
+    /// same statement, `NV_OK`, the guest's own bytes echoed, the reply held — and fn 79 withdraws
+    /// it. A wrapper naming no VA space is declined (→ the ledger) and holds nothing.
+    #[test]
+    fn the_575_page_directory_rpcs_state_what_the_580_control_states() {
+        let v575 = kf_abi::DriverVersion {
+            major: 575,
+            minor: 57,
+            patch: 8,
+        };
+        let (client, device, vas) = (0xc1d0_0001u32, 0xcaf0_0002u32, 0xcaf0_0036u32);
+        let params = |vas: u32| {
+            let mut p = vec![0u8; 32];
+            p[0..8].copy_from_slice(&0x2_0440_0000u64.to_le_bytes()); // physAddress
+            p[8..12].copy_from_slice(&512u32.to_le_bytes()); // numEntries
+            p[12..16].copy_from_slice(&0x8u32.to_le_bytes()); // flags: aperture VIDMEM (bits 1:0 = 0)
+            p[16..20].copy_from_slice(&vas.to_le_bytes()); // hVASpace
+            p[24..28].copy_from_slice(&1u32.to_le_bytes()); // subDeviceId
+            p
+        };
+        let run = |abi: kf_abi::versions::DriverAbiTable, c: &RpcCommand| {
+            let seen: Arc<Mutex<Vec<MemStatement>>> = Arc::default();
+            let s2 = seen.clone();
+            let mut p = PageDirPolicy::new(
+                abi,
+                kf_abi::GuestOs::Linux,
+                Arc::new(move |st| s2.lock().unwrap().push(st)),
+            );
+            let r = p.respond(c);
+            let held = p.holds_for_refresh(c);
+            let got = seen.lock().unwrap().clone();
+            (r, held, got)
+        };
+        // The 580 control carrier, in the bench driver's measured RM-control wire.
+        let bench = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).expect("bench");
+        let w = bench.rm_control_wire();
+        let mut ctl = vec![0u8; w.params_off + 32];
+        ctl[0..4].copy_from_slice(&client.to_le_bytes());
+        ctl[4..8].copy_from_slice(&device.to_le_bytes());
+        ctl[8..12].copy_from_slice(&SET_PAGE_DIRECTORY.to_le_bytes());
+        ctl[w.params_size_off..w.params_size_off + 4].copy_from_slice(&32u32.to_le_bytes());
+        ctl[w.params_off..].copy_from_slice(&params(vas));
+        let (r580, held580, st580) = run(bench, &cmd(RpcFunction::RmControl, ctl));
+        assert_eq!(r580.expect("the control is answered").rpc_result, NV_OK);
+        assert!(held580 && st580.len() == 1, "{st580:?}");
+
+        // The 575 dedicated carrier: `rpc_set_page_directory_v` {hClient, hDevice, pasid, pad, params}.
+        let t575 = *kf_abi::versions::table_for(v575).expect("575 table");
+        let fn54 = |vas: u32| {
+            let mut b = vec![0u8; 48];
+            b[0..4].copy_from_slice(&client.to_le_bytes());
+            b[4..8].copy_from_slice(&device.to_le_bytes());
+            b[16..48].copy_from_slice(&params(vas));
+            cmd(RpcFunction::SetPageDirectory, b)
+        };
+        let c = fn54(vas);
+        let (r575, held575, st575) = run(t575, &c);
+        let r575 = r575.expect("fn 54 is answered");
+        assert_eq!(
+            (r575.rpc_result, &r575.body),
+            (NV_OK, &c.payload),
+            "NV_OK, the guest's bytes echoed"
+        );
+        assert!(held575, "held until the plane has reconciled the root");
+        assert_eq!(st575, st580, "fn 54 states exactly what the control states");
+
+        let (none, held0, st0) = run(t575, &fn54(0));
+        assert!(
+            none.is_none() && !held0 && st0.is_empty(),
+            "no VA space named ⇒ declined, nothing held"
+        );
+
+        // fn 79: `rpc_unset_page_directory_v` {hClient, hDevice, params {hVASpace, subDeviceId}}.
+        let mut b = vec![0u8; 16];
+        b[0..4].copy_from_slice(&client.to_le_bytes());
+        b[4..8].copy_from_slice(&device.to_le_bytes());
+        b[8..12].copy_from_slice(&vas.to_le_bytes());
+        b[12..16].copy_from_slice(&1u32.to_le_bytes());
+        let c = cmd(RpcFunction::UnsetPageDirectory, b);
+        let (r, held, st) = run(t575, &c);
+        assert_eq!(r.expect("fn 79 is answered").rpc_result, NV_OK);
+        assert!(held);
+        assert_eq!(
+            st.as_slice(),
+            &[MemStatement::UnsetPageDir {
+                client,
+                vaspace: vas
+            }]
+        );
     }
 
     /// ★ v3-gfx: the original VA space's free does NOT retire its mirror while a dup still names

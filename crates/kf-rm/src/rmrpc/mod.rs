@@ -1130,6 +1130,13 @@ pub fn translate(
         RpcFunction::Free => translate_free(abi, &cmd.payload),
         RpcFunction::RmControl => translate_control(abi, &cmd.payload),
         RpcFunction::DupObject => translate_dup(abi, &cmd.payload),
+        // ★★ The ≤575.64.05 carriers of the page-directory controls: fn 54 is the SAME statement
+        // as `0x00801813` (one shared function), and fn 79 is `0x00801814` — not modelled as a
+        // translation, exactly like its control carrier (`barpde::PageDirPolicy` answers both).
+        RpcFunction::SetPageDirectory => translate_set_page_directory_rpc(abi, &cmd.payload),
+        RpcFunction::UnsetPageDirectory => Err(BridgeRefusal::PageDirControlNotModelled {
+            cmd: crate::barpde::UNSET_PAGE_DIRECTORY,
+        }),
         // Known and inert — three different reasons, collapsed here only because the
         // *answer* is the same. See `Translation::Inert`.
         RpcFunction::SetGuestSystemInfo
@@ -1643,6 +1650,18 @@ fn translate_control(abi: &DriverAbiTable, payload: &[u8]) -> Result<Translation
         return translate_published_pdes(client, HObject(h.object), h.cmd, params);
     }
 
+    page_dir_statement(abi, client, params)
+}
+
+/// ★★ The page-directory statement both carriers state — `GSP_RM_CONTROL` `0x00801813`
+/// ([`translate_control`]) and the ≤575.64.05 dedicated RPC fn 54
+/// ([`translate_set_page_directory_rpc`]) — from the control params' bytes. One function, so the
+/// implicit-VA-space refusal and the aperture fork cannot differ by carrier.
+fn page_dir_statement(
+    abi: &DriverAbiTable,
+    client: HClient,
+    params: &[u8],
+) -> Result<Translation, BridgeRefusal> {
     let p = abi.decode_set_page_dir(params)?;
     // ★ Zero is not "unspecified" here — it names the client/device pair's *implicit*
     // VASpace, an object this RPC does not identify. See `BridgeRefusal::ImplicitVaspace`.
@@ -1676,6 +1695,31 @@ fn translate_control(abi: &DriverAbiTable, payload: &[u8]) -> Result<Translation
         // into a default is how a walk reads the wrong memory and reports success.
         pdb_aperture: p.aperture.to_domain(),
     }))
+}
+
+/// ★★ fn 54 — `SET_PAGE_DIRECTORY` as its DEDICATED RPC, the carrier a guest RM up to 575.64.05
+/// uses for what a 580.65.06+ guest sends as `GSP_RM_CONTROL` `0x00801813`
+/// ([`kf_abi::versions::DriverAbiTable::decode_set_page_directory_rpc`] has the source and the
+/// boundary). `[measured 2026-09-26]` refused as an unknown function it killed the 575.57.08
+/// guest's `cuInit`: UVM's `nvUvmInterfaceSetPageDirectory` rides it while registering the GPU.
+///
+/// The namespace is the RPC's own `hClient`; the statement passes the SAME capability gate as the
+/// control carrier (it is permitted by what it says, not by which carrier brought it) and is then
+/// exactly [`page_dir_statement`] — the one function both carriers share.
+fn translate_set_page_directory_rpc(
+    abi: &DriverAbiTable,
+    payload: &[u8],
+) -> Result<Translation, BridgeRefusal> {
+    let r = abi.decode_set_page_directory_rpc(payload)?;
+    let client = HClient(r.client);
+    if client == RESERVED_CLIENT {
+        return Err(BridgeRefusal::ReservedClient);
+    }
+    let cmd = kf_abi::generated::ctrl::NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY;
+    if let ControlPermit::Denied(denial) = abi.capabilities().control(ControlCmd(cmd)) {
+        return Err(BridgeRefusal::ControlNotPermitted { cmd, denial });
+    }
+    page_dir_statement(abi, client, r.params)
 }
 
 /// ★★★ `NV90F1_CTRL_CMD_VASPACE_COPY_SERVER_RESERVED_PDES` (`0x90f10106`) and its

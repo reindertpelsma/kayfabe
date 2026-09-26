@@ -421,3 +421,85 @@ fn the_video_caps_layout_resolves_across_the_610_rename() {
         }
     }
 }
+
+/// ★★ The ≤575.64.05 page-directory carrier (fn 54 / fn 79): at EVERY measured tag the dedicated
+/// RPC embeds exactly the control struct — each field at the same offset relative to `params`
+/// and the same width — so the control decoder reads the embedded bytes unchanged. And the
+/// decode itself returns the namespace and the params window from the measured wrapper.
+#[test]
+fn the_page_directory_rpcs_embed_the_control_struct_at_every_tag() {
+    use kf_abi::generated::matrix as m;
+    use kf_abi::matrix::Resolved;
+    let pairs = [
+        (
+            &m::RPC_SET_PAGE_DIRECTORY_V,
+            &m::NV0080_CTRL_DMA_SET_PAGE_DIRECTORY_PARAMS,
+        ),
+        (
+            &m::RPC_UNSET_PAGE_DIRECTORY_V,
+            &m::NV0080_CTRL_DMA_UNSET_PAGE_DIRECTORY_PARAMS,
+        ),
+    ];
+    let mut checked = 0;
+    for &v in MEASURED {
+        for (wrapper, ctrl) in pairs {
+            let w = Resolved::of(wrapper, v)
+                .unwrap_or_else(|e| panic!("{} at {v}: {e:?}", wrapper.name));
+            let c = Resolved::of(ctrl, v).unwrap_or_else(|e| panic!("{} at {v}: {e:?}", ctrl.name));
+            let p = w.maybe("params").expect("params");
+            assert_eq!(
+                p.bytes(),
+                Some(c.size()),
+                "{} at {v}: params is not the control struct",
+                wrapper.name
+            );
+            for (path, f) in c.layout.fields {
+                let g = w
+                    .maybe(&format!("params.{path}"))
+                    .unwrap_or_else(|| panic!("{}.params.{path} at {v}", wrapper.name));
+                assert_eq!(
+                    (g.off() - p.off(), g.size),
+                    (f.off(), f.size),
+                    "{}.params.{path} at {v}",
+                    wrapper.name
+                );
+            }
+            checked += 1;
+        }
+    }
+    assert_eq!(checked, 2 * MEASURED.len());
+
+    // The decode, on the measured wrapper of a 575 guest.
+    let t = kf_abi::versions::table_for(DriverVersion {
+        major: 575,
+        minor: 57,
+        patch: 8,
+    })
+    .expect("575 table");
+    let mut set = vec![0u8; 48];
+    set[0..4].copy_from_slice(&0xc1d0_0001u32.to_le_bytes());
+    set[4..8].copy_from_slice(&0xcaf0_0002u32.to_le_bytes());
+    set[16..24].copy_from_slice(&0x1_2345_6000u64.to_le_bytes()); // params.physAddress
+    set[32..36].copy_from_slice(&0xcaf0_0036u32.to_le_bytes()); // params.hVASpace
+    let r = t
+        .decode_set_page_directory_rpc(&set)
+        .expect("fn 54 decodes");
+    assert_eq!(
+        (r.client, r.device, r.params.len()),
+        (0xc1d0_0001, 0xcaf0_0002, 32)
+    );
+    let d = t
+        .decode_set_page_dir(r.params)
+        .expect("the control decoder reads the embedded params");
+    assert_eq!((d.phys_address, d.h_vaspace), (0x1_2345_6000, 0xcaf0_0036));
+    assert!(
+        t.decode_set_page_directory_rpc(&set[..47]).is_err(),
+        "a short wrapper is refused"
+    );
+    let mut unset = vec![0u8; 16];
+    unset[8..12].copy_from_slice(&0xcaf0_0036u32.to_le_bytes());
+    let u = t
+        .decode_unset_page_directory_rpc(&unset)
+        .expect("fn 79 decodes");
+    assert_eq!(u.params, &unset[8..16]);
+}

@@ -1701,6 +1701,58 @@ impl DriverAbiTable {
         })
     }
 
+    /// ★★ `SET_PAGE_DIRECTORY` as its DEDICATED RPC (fn 54, `rpc_set_page_directory_v`, MEASURED)
+    /// — the carrier a guest RM up to 575.64.05 uses for the same statement a 580.65.06+ guest
+    /// sends as `GSP_RM_CONTROL` `0x00801813`.
+    ///
+    /// `[ogkm]` through 575.64.05 `deviceCtrlCmdDmaSetPageDirectory_IMPL` issues
+    /// `NV_RM_RPC_SET_PAGE_DIRECTORY` (`575.57.08: mem_mgr/dma.c:441`, encoder
+    /// `vgpu/rpc.c:9238` `rpcSetPageDirectory_v1E_05`); from 580.65.06 it issues
+    /// `NV_RM_RPC_CONTROL` with the control id (`580.65.06: dma.c:443-453`, `:506-514`). The two
+    /// tags' `NV_RM_RPC_*` sets differ in exactly this pair (and Tegra's `DCE_RM_INIT`).
+    /// `[measured 2026-09-26]` the 575.57.08 fat guest's `cuInit` died on it: UVM's
+    /// `nvUvmInterfaceSetPageDirectory` arrived as fn 54, was refused as an unknown function, and
+    /// UVM tore the GPU's registration down.
+    ///
+    /// The embedded `params` is returned as the CONTROL params' bytes: the wire struct
+    /// (`NV0080_CTRL_DMA_SET_PAGE_DIRECTORY_PARAMS_v1E_05`) is the control struct field for field
+    /// at every measured tag (`kf-abi/tests/driver_matrix.rs`), so
+    /// [`DriverAbiTable::decode_set_page_dir`] reads it unchanged.
+    ///
+    /// # Errors
+    /// [`AbiError::NoEncoding`] where the measured wrapper is absent or its `params` is not the
+    /// control struct's size; [`AbiError::Truncated`] below the wrapper's measured size.
+    pub fn decode_set_page_directory_rpc<'a>(
+        &self,
+        payload: &'a [u8],
+    ) -> Result<PageDirRpc<'a>, AbiError> {
+        page_dir_rpc(
+            &crate::generated::matrix::RPC_SET_PAGE_DIRECTORY_V,
+            ctrl::Nv0080CtrlDmaSetPageDirectoryParams::SIZE,
+            self.version,
+            payload,
+        )
+    }
+
+    /// ★★ `UNSET_PAGE_DIRECTORY` as its DEDICATED RPC (fn 79, `rpc_unset_page_directory_v`,
+    /// MEASURED) — the ≤575.64.05 carrier of `0x00801814`
+    /// ([`DriverAbiTable::decode_set_page_directory_rpc`] has the version boundary). `params` is
+    /// the 8-byte `{hVASpace, subDeviceId}` control struct.
+    ///
+    /// # Errors
+    /// As [`DriverAbiTable::decode_set_page_directory_rpc`].
+    pub fn decode_unset_page_directory_rpc<'a>(
+        &self,
+        payload: &'a [u8],
+    ) -> Result<PageDirRpc<'a>, AbiError> {
+        page_dir_rpc(
+            &crate::generated::matrix::RPC_UNSET_PAGE_DIRECTORY_V,
+            UNSET_PAGE_DIRECTORY_PARAMS_SIZE,
+            self.version,
+            payload,
+        )
+    }
+
     /// ★★ Decode `NV2080_CTRL_GPU_PROMOTE_CTX_PARAMS` — the 48-byte transcribed prefix
     /// plus `entryCount` entries of the generated 32-byte record, classified into
     /// [`PromoteEntry`]'s three protocol states.
@@ -1931,6 +1983,52 @@ impl DriverAbiTable {
                 available: bytes.len(),
             })
     }
+}
+
+/// ★★ A page-directory statement as its dedicated RPC carried it (fn 54 / fn 79, the ≤575.64.05
+/// carrier) — [`DriverAbiTable::decode_set_page_directory_rpc`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PageDirRpc<'a> {
+    /// `hClient` — the namespace, as the RPC's own field states it.
+    pub client: u32,
+    /// `hDevice` — the device the statement is issued against (the control carrier's `hObject`).
+    pub device: u32,
+    /// The embedded control params — exactly the control struct's bytes.
+    pub params: &'a [u8],
+}
+
+/// `sizeof(NV0080_CTRL_DMA_UNSET_PAGE_DIRECTORY_PARAMS)` — `{hVASpace, subDeviceId}`, `[matrix]`
+/// 8 bytes at every measured tag.
+pub const UNSET_PAGE_DIRECTORY_PARAMS_SIZE: usize = 8;
+
+/// Slice a dedicated page-directory RPC by its MEASURED wrapper layout at `v`.
+fn page_dir_rpc<'a>(
+    runs: &'static crate::matrix::StructRuns,
+    params_size: usize,
+    v: DriverVersion,
+    payload: &'a [u8],
+) -> Result<PageDirRpc<'a>, AbiError> {
+    let l = measured(runs, v)?;
+    let client = off(&l, "hClient", runs.name)?;
+    let device = off(&l, "hDevice", runs.name)?;
+    // ⊘ The embedded struct must be the CONTROL struct's size, or the control decoder does not
+    // speak these bytes — a version where they part is refused by name, never re-read.
+    let p = l
+        .maybe("params")
+        .filter(|p| p.bytes() == Some(params_size))
+        .ok_or(no_encoding(runs.name, v))?;
+    if payload.len() < l.size() {
+        return Err(AbiError::Truncated {
+            c_name: runs.name,
+            need: l.size(),
+            got: payload.len(),
+        });
+    }
+    Ok(PageDirRpc {
+        client: u32_at(payload, client)?,
+        device: u32_at(payload, device)?,
+        params: &payload[p.off()..p.off() + params_size],
+    })
 }
 
 /// The bytes [`ClientAllocFacts`] is decoded from — `hClient` and `processID`.

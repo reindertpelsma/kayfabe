@@ -29,6 +29,11 @@ rpc_os_error_log_v.*
 rpc_run_cpu_sequencer_v.*
 rpc_gsp_set_system_info_v.*
 rpc_set_registry_v.*
+# ★ the page-directory statements' dedicated carrier: a <=575.64.05 guest RM sends
+# NV0080_CTRL_CMD_DMA_(UN)SET_PAGE_DIRECTORY as fn 54 / fn 79 (NV_RM_RPC_SET_PAGE_DIRECTORY in
+# dma.c), a 580.65.06+ guest as GSP_RM_CONTROL — V3_DRIVER_MATRIX.md §6 (575 cuInit)
+rpc_set_page_directory_v.*
+rpc_unset_page_directory_v.*
 rpc_functions:*
 rpc_events:*
 vgx_version:*

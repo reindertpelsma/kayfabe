@@ -8673,6 +8673,30 @@ pub const RPC_SET_GUEST_SYSTEM_INFO_V: StructRuns = StructRuns {
     ],
 };
 
+const RPC_SET_PAGE_DIRECTORY_V_L0: Layout = Layout {
+    size: 48,
+    fields: &[
+        f("hClient", 0, 4, 0),
+        f("hDevice", 4, 4, 0),
+        f("params", 16, 32, 0),
+        f("params.chId", 36, 4, 0),
+        f("params.flags", 28, 4, 0),
+        f("params.hVASpace", 32, 4, 0),
+        f("params.numEntries", 24, 4, 0),
+        f("params.pasid", 44, 4, 0),
+        f("params.physAddress", 16, 8, 0),
+        f("params.subDeviceId", 40, 4, 0),
+        f("pasid", 8, 4, 0),
+    ],
+};
+/// `rpc_set_page_directory_v` — 1 distinct consumed layout(s) over 1 run(s).
+pub const RPC_SET_PAGE_DIRECTORY_V: StructRuns = StructRuns {
+    name: "rpc_set_page_directory_v",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(&RPC_SET_PAGE_DIRECTORY_V_L0)), // 535.309.01 … 615.71.09
+    ],
+};
+
 const RPC_UNLOADING_GUEST_DRIVER_V_L0: Layout = Layout {
     size: 8,
     fields: &[
@@ -8686,6 +8710,24 @@ pub const RPC_UNLOADING_GUEST_DRIVER_V: StructRuns = StructRuns {
     name: "rpc_unloading_guest_driver_v",
     runs: &[
         r(v(535, 309, 1), v(615, 71, 9), Some(&RPC_UNLOADING_GUEST_DRIVER_V_L0)), // 535.309.01 … 615.71.09
+    ],
+};
+
+const RPC_UNSET_PAGE_DIRECTORY_V_L0: Layout = Layout {
+    size: 16,
+    fields: &[
+        f("hClient", 0, 4, 0),
+        f("hDevice", 4, 4, 0),
+        f("params", 8, 8, 0),
+        f("params.hVASpace", 8, 4, 0),
+        f("params.subDeviceId", 12, 4, 0),
+    ],
+};
+/// `rpc_unset_page_directory_v` — 1 distinct consumed layout(s) over 1 run(s).
+pub const RPC_UNSET_PAGE_DIRECTORY_V: StructRuns = StructRuns {
+    name: "rpc_unset_page_directory_v",
+    runs: &[
+        r(v(535, 309, 1), v(615, 71, 9), Some(&RPC_UNSET_PAGE_DIRECTORY_V_L0)), // 535.309.01 … 615.71.09
     ],
 };
 
@@ -30020,7 +30062,9 @@ pub const ALL_STRUCTS: &[&StructRuns] = &[
     &RPC_RC_TRIGGERED_V,
     &RPC_RUN_CPU_SEQUENCER_V,
     &RPC_SET_GUEST_SYSTEM_INFO_V,
+    &RPC_SET_PAGE_DIRECTORY_V,
     &RPC_UNLOADING_GUEST_DRIVER_V,
+    &RPC_UNSET_PAGE_DIRECTORY_V,
     &RPC_UPDATE_BAR_PDE_V,
 ];
 
