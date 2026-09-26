@@ -112,3 +112,27 @@ fn the_neutral_vbios_version_is_named_and_not_a_die_row() {
     assert_eq!((p.vbios_version, p.vbios_oem_version), (0, 0));
     assert!(kf_abi::vbios::VBIOS_PROFILES.iter().all(|r| r.vbios_version != p.vbios_version));
 }
+
+/// ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §4): the FSP families' boot-complete gate and the
+/// config-cycle link capabilities — per die group, from the host's architecture; nothing on
+/// Turing … Ada (GA106 unchanged).
+#[test]
+fn fsp_families_get_the_boot_gate_and_config_cycle_link_caps_at_their_die_groups_offsets() {
+    let caps = pcie_link_caps(PcieGen::Gen5, 16).unwrap();
+    let f = |arch| Bar0Facts { architecture: arch, implementation: 3, revision: 0xA1, fb_mb: 8192, pcie_link_caps: caps };
+    for (arch, fam, therm, cfg) in [
+        (0x1B0, Family::Blackwell, 0x00AD_00BC, 0x6C), // GB20x: gb202/dev_therm.h, _GH100 bus options
+        (0x1A0, Family::Blackwell, 0x0002_00BC, 0x4C), // GB10x: gb100/dev_therm.h, _GB100 (PF0)
+        (0x180, Family::Hopper, 0x0002_00BC, 0x6C),
+    ] {
+        let regs = boot_regs(fam, &f(arch));
+        let t = regs.iter().find(|r| r.name == "NV_THERM_I2CS_SCRATCH_FSP_BOOT_COMPLETE").unwrap();
+        assert_eq!((t.off, t.value), (therm, 0xFF), "{arch:#x}");
+        let w = kf_chip::bar0::config_words(fam, &f(arch));
+        assert_eq!(w.iter().map(|w| (w.off, w.value)).collect::<Vec<_>>(), vec![(cfg, caps)], "{arch:#x}");
+    }
+    for (arch, fam) in [(0x160, Family::Turing), (0x170, Family::Ampere), (0x190, Family::Ada)] {
+        assert!(kf_chip::bar0::config_words(fam, &f(arch)).is_empty(), "{fam:?}");
+        assert!(!boot_regs(fam, &f(arch)).iter().any(|r| r.name.starts_with("NV_THERM_I2CS")), "{fam:?}");
+    }
+}
