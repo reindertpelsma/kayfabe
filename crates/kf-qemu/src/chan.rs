@@ -94,8 +94,9 @@ struct PtChan {
     stopped: bool,
     /// ★ v3-chanctl: the guest DISABLED it (`DISABLE_CHANNELS`) — only `bDisable=FALSE` undoes it.
     disabled: bool,
-    /// ★ v3-video: the twin's host VA space (the mirror of the guest's).
+    /// ★ v3-video: the twin's host VA space (the mirror of the guest's) and its placement rows.
     space: kf_host::VaSpace,
+    rows: crate::mem::PlacedRows,
     /// ★ v3-video: the guest's falcon context buffer `(VA, size)` from its falcon promote — the VA
     /// the host's own falcon context is steered onto (see `ChanPlane::engine_object`).
     falcon_ctx: Option<(u64, u64)>,
@@ -1410,7 +1411,9 @@ impl ChanPlane {
     /// class (checked against the HOST family's generated set for the twin's engine) and params
     /// we author. Under a Translated channel it is a graph node only (our ring owns its object).
     fn engine_object(&self, client: u32, parent: u32, handle: u32, class: u32, copy_engine: Option<u32>) -> ChanAnswer {
-        let Some((chan, engine, space)) = self.pt.lock().ok().and_then(|m| m.get(&(client, parent)).map(|v| (v.chan, v.engine, v.space))) else {
+        let Some((chan, engine, space, rows)) =
+            self.pt.lock().ok().and_then(|m| m.get(&(client, parent)).map(|v| (v.chan, v.engine, v.space, v.rows.clone())))
+        else {
             return ChanAnswer::NotOurs;
         };
         let Some(kind) = kf_chip::classes_for(self.family).kind_of(class) else {
@@ -1436,9 +1439,15 @@ impl ChanPlane {
                 } else {
                     None
                 };
-                let steer = fc.map(|(va, len)| match me.rm.unmap(space, va, false) {
+                // The row goes first (and for good): from here G is host RM's, and the walker's
+                // eventual unmap of the guest's page there is answered without a host call.
+                let steer = fc.map(|(va, len)| match rows.write().map(|mut r| r.remove(&va)) {
+                    Ok(None) => format!(" [guest ctx VA {va:#x} not mirrored yet — host RM takes it free; the walker will find it held]"),
+                    Err(_) => format!(" [placement rows poisoned — host ctx placement unsteered]"),
+                    Ok(Some(_)) => match me.rm.unmap(space, va, false) {
                     Ok(()) => format!(" [host ctx steered onto the guest's ctx VA {va:#x}+{len:#x}]"),
                     Err(e) => format!(" [guest ctx VA {va:#x} not unmapped ({e:?}) — host ctx placement unsteered]"),
+                    },
                 });
                 let h = kf_chan::passthrough::engine_object(me.rm, chan, engine, class, kind, copy_engine).map_err(|e| (NV_ERR_INVALID_CLASS, e))?;
                 if let Ok(mut m) = me.pt.lock()
@@ -1803,6 +1812,7 @@ impl ChanPlane {
             };
             let g0 = kf_chan::passthrough::GuestChannel { gpfifo_va: a.gpfifo_va, entries: a.entries.max(1), userd, engine, err_ctx: 0 };
             let space = mirror.space;
+            let rows = mirror.rows.clone();
             // ★ P5c: counted NOW (on the drainer, in statement order), so a VA-space free that
             // follows can never recycle the space under a birth still queued.
             let live = mirror.live.clone();
@@ -1860,6 +1870,7 @@ impl ChanPlane {
                             stopped: false,
                             disabled: false,
                             space,
+                            rows,
                             falcon_ctx: None,
                         });
                     }
