@@ -580,9 +580,140 @@ most of the kf3-side risk lives.
   Prediction today: `reprefetch` ok; `fault` 719; `gpuwrite` and `downgrade` **FAIL with a wrong
   value and no error** (the silent case). After the §6 fix: `gpuwrite` and `downgrade` → 719.
   After b3: all four ok.
+- **E5 (done, §12.2): managed-memory attributes guest vs bare metal** — identical, both `1`.
+- **E6 (§12.3): N4 skeleton** with nvidia-uvm unloaded, staged A/B/C.
 - **E4: guest `uvm_disable_hmm=1`** against the five C-class apps and `um_probe pageable`. It
   separates the HMM-keyed failures from the managed ones. ⊘ Not a fix for clpeak: clpeak takes
   zero demand faults on bare metal (§1.2); its guest fault is a separate kf3 mapping defect.
+
+---
+
+## 12. N4 in depth, and the two experiments the owner defined (2026-09-26)
+
+Companion to §11 (the no-patch survey, branch `v3-uvm-nopatch`, `d681c55f`). §11 established N4 —
+a kayfabe kernel module in nvidia-uvm's place on nvidia.ko's exported `nvUvmInterface*` contract —
+as the only route with every NVIDIA component stock. This section adds a source finding that
+strengthens N4, the two experiments (E5, E6), and a side-by-side for the owner's b3-vs-N4 decision.
+
+### 12.1 ★ N4's fault plane is stronger than §11 stated — the module reads the HW buffer directly
+
+`[src]` `nvUvmInterfaceInitFaultInfo` (`kernel-open/common/inc/nv_uvm_interface.h`; struct
+`UvmGpuFaultInfo`, `nv_uvm_types.h:911-1004`) hands its caller, with Confidential Computing
+**off** (our target):
+- `bufferAddress` + `bufferSize` — *"the mapping points to the actual HW fault buffer"*
+  (`:951-960`). ⇒ The module reads fault packets **directly**, no shadow copy, no CSL decrypt.
+- `pFaultBufferGet` / `pFaultBufferPut` — the GET/PUT registers (`:921-929`).
+- `pPmcIntr` / `pPmcIntrEnSet` / `pPmcIntrEnClear` / `replayableFaultMask` — the interrupt
+  clear/enable path (`:935-949`).
+- `pPrefetchCtrl` — fault-on-prefetch toggle (`:945-946`).
+- a `nonReplayable` shadow buffer + context for CE/host faults (`:971-999`).
+
+⇒ N4 is not "reimplement UVM's fault decode from scratch". It is: take the same exported
+interface nvidia-uvm takes, get the same pointers, and parse the same `clc369` packets kf3
+already decodes. That is the whole of Wall 1 (§11.1), solved by being the registrant.
+
+### 12.2 E5 — managed-memory attributes, guest vs bare metal — ALREADY MEASURED
+
+⊘ **F30 ("guest value unrecorded") is corrected.** The value is in committed traces on branch
+`v3-appfix`, from the `um_probe attrs` mode, both sides on the **same box** (vast 52689820,
+RTX 3060, 580.159.04):
+
+| attribute | kf3 guest (`traces/v3_appfix/c_um_shapes_guest.out`) | bare metal (`c_um_shapes_host.out`) |
+|---|---|---|
+| `cudaDevAttrManagedMemory` | **1** | 1 |
+| `cudaDevAttrConcurrentManagedAccess` | **1** | 1 |
+| `cudaDevAttrPageableMemoryAccess` | **1** | 1 |
+
+`[meas]` The guest identity is confirmed by the guest's own `NVRM: uvmTerminateAccessCntrBuffer`
+teardown line interleaved in the file.
+
+⇒ **Identical.** This is load-bearing for the whole note: the kf3 guest advertises **full**
+managed, concurrent-managed and pageable support, so CUDA and OpenCL runtimes take their
+demand-paging code paths — the ones that then fault (§1). It also closes N1 (§11.2) from the
+guest's own report: `concurrentManagedAccess=1` is the modern (fault-driven) model, not the basic
+one, and nothing kayfabe reports moved it. ⚠ These attributes are answered by the **guest's own
+CPU-RM/UVM** from hard-coded HAL fields (`replayable_faults_supported`, `uvm_ampere.c:81`), not by
+any RPC kayfabe answers — so kf3 cannot lower them without patching the guest driver, which is out
+of scope. The lever, if one is wanted cheaply, is guest-side (`uvm_disable_hmm=1`, §7.2), and it
+only moves `pageableMemoryAccess`, not the managed attributes (`uvm_gpu.c:3861`, `[meas]` §1.2).
+
+### 12.3 E6 — an N4 skeleton with nvidia-uvm unloaded
+
+Goal: on a rented GA10x with **nvidia.ko stock and nvidia-uvm unloaded**, a minimal out-of-tree
+module using **only** exported `nvUvmInterface*` symbols proves each wall is passable, in stages
+so a partial result is still decisive:
+
+- **A. Sole-owner takeover.** `nvUvmInterfaceRegisterGpu`, `SessionCreate`, `DeviceCreate`,
+  `AddressSpaceCreate` succeed with no nvidia-uvm present. Proves a third-party module can be the
+  UVM client of stock nvidia.ko (F12, F13).
+- **B. Fault-plane ownership.** `nvUvmInterfaceInitFaultInfo` + `OwnPageFaultIntr(TRUE)` return the
+  `UvmGpuFaultInfo` pointers of §12.1. Proves Wall 1 is passed: the module holds the buffer and the
+  interrupt.
+- **C. Externally-owned faulting VAS + bound channel + a real fault.** Create the VAS
+  (`ENABLE_FAULTING | IS_EXTERNALLY_OWNED`), `SetPageDirectory` to module-owned tables,
+  allocate a channel, `BindChannelResources` (the F8/F9 wall), push one access to a **deliberately
+  unmapped** VA (a minimal pushbuffer, not full cup8 — a single CE or GR access is enough to raise
+  a replayable fault), observe the packet in `bufferAddress`, **measure fault-to-module latency**,
+  map the page, replay, confirm the access completes; then cancel scoped to that VAS and show a
+  second channel is untouched.
+
+Every object is one the module created; nothing hooks another module. Full cup8 byte-exact is
+**not** required for the decision — the owner's question is whether the record arrives, the replay
+completes and the cancel is scoped, which Stage C answers with a one-access kernel.
+
+RESULT (filled from the run): __E6_RESULT__
+
+### 12.4 Moving the walker off libcuda to raw RM — estimate (N4 removes host CUDA)
+
+`[src]` + `[inf]`. Today the walker `dlopen`s `libcuda` and uses a broad surface
+(`crates/kf-cuda/src/driver_unsafe.rs`, `walk.rs`): `cuInit`/`cuDeviceGet`/`cuCtxCreate`;
+`cuModuleLoadData` over the committed PTX (`walk.rs:59`, `WALK_PTX = include_bytes!(kf_walk.ptx)`);
+~30 `cuMemAlloc` + `cuMemcpyHtoD`; `cuLaunchKernel`; and CUDA-graph capture/replay
+(`cuGraphInstantiateWithFlags`/`cuGraphLaunch`) for the refresh loop.
+
+| piece | raw-RM replacement | size `[inf]` |
+|---|---|---|
+| client/device/subdevice/VAS/ctx | RM alloc calls kayfabe already issues elsewhere (kf-rm/kf-host) | small; reuse |
+| device memory for the walk tables | `MemoryAllocFB` + map (or the N4 module's own path) | small |
+| **`cuModuleLoadData` — PTX JIT** | ★ **the crux.** Raw RM has **no compiler.** `kf_walk.cu` must be compiled **offline to per-arch SASS/cubin** (`ptxas`, one per format family), the cubin parsed for the entry's SASS, registers, shared/const sizes and param layout, and a **QMD** built by hand | **the bulk of the work**; a cubin loader + per-arch QMD builder |
+| `cuLaunchKernel` | build the QMD, write it to memory, push `SEND_SIGNALING_PCAS`/inline-QMD on a compute channel, ring the doorbell | moderate; kf3 has channel + doorbell plumbing |
+| completion | a report semaphore kf3 already understands | small |
+| CUDA graphs (refresh) | drop, or re-express as a re-pushed pushbuffer | moderate; optional at first |
+
+`driver_unsafe.rs:26` already notes the PTX is JITted *"rather than shipped as a cubin"* — moving
+to raw RM reverses exactly that decision and inherits its cost: a per-arch cubin, regenerated when
+`kf_walk.cu` changes, and a QMD builder per format family (the same axis `THE_ARCHITECTURE_v3.md`
+§0 tracks). ⇒ **Estimate: the launch/QMD/cubin path is the real cost, ~1–2 kLoC plus a build step;
+the RM object setup is largely reuse.** It is a bounded, well-understood piece (the C artifact and
+`nvproxy` both do raw QMD launch), but it is **not free**, and it is N4-only work — b3 keeps host
+CUDA and never touches the walker.
+
+### 12.5 b3 vs N4 — side by side for the decision
+
+| axis | b3 (patch open nvidia-uvm) | N4 (kf-uvm.ko in its place) |
+|---|---|---|
+| NVIDIA source changed | ⊘ yes — a fork of the **open** nvidia-uvm (EFS mode) | ✔ **none** — stock nvidia.ko, stock GSP-RM |
+| host CUDA on the box | ✔ kept | ⊘ **gone** (single fault-buffer owner / callback registrant) |
+| kayfabe walker | ✔ unchanged (libcuda) | ⊘ must move to raw RM (§12.4) |
+| twin page tables | RM-owned; publish via UVM external-map ioctls (RM map executor, kind-override Q, per-map TLB) | ✔ **module writes them directly** — no RM map executor, no kind-override Q, no per-map TLB |
+| fault buffer / interrupt | UVM owns; EFS diverts per va_space | module owns (InitFaultInfo, §12.1) |
+| replay / cancel scope | UVM's existing scoped funcs, keyed by kernel-stored ids | module issues from its own kernel-privileged channels (F11) or via the exported replay |
+| guest fault plane (§5) | shared | shared |
+| READ_ONLY hygiene (§6) | shared (done, `v3-roperm`) | shared |
+| maintenance per `Dh` | rebase a patch over the churny fault path (nvkvm-pv's warning) | recompile the module against the release's exported header — a **stabler surface** (76 exported symbols, versioned) than nvidia-uvm's private structs |
+| code size | ~0.5–1 kLoC patch + kf3 publish swap | ~2–4 kLoC module + raw-RM walker (~1–2 kLoC) |
+| deploy | patched nvidia-uvm (DKMS, secure-boot) | swap nvidia-uvm for kf-uvm.ko (DKMS) — comparable |
+| blast radius | host-kernel code; small new surface in a huge module | host-kernel code; a **smaller** module (no residency/va_block/HMM/PMM) but it is the sole UVM client |
+| trust of the VMM | must not (kernel-stored ids, timeout) | must not (same discipline; module validates every request against objects the VM's own process created) |
+
+**Recommendation for the owner's choice** (the ranking is unchanged; this sharpens the axis that
+decides it): if a **maintained patch to the open nvidia-uvm is acceptable**, b3 is less total work
+(host CUDA and the walker are untouched). If **"no NVIDIA fork" is a hard requirement** and the box
+**can give up host CUDA**, N4 is the clean answer, its module is smaller than a fork and built
+against a stabler (exported) surface, and it *removes* three kf3-side questions (RM map executor,
+kind-override, per-map TLB) at the price of one (raw-RM walker). The deciding question is therefore
+**not** technical feasibility — both are feasible — but the policy one: *is a forked NVIDIA module
+tolerable, and is host CUDA expendable on the kayfabe host?*
 
 ---
 
