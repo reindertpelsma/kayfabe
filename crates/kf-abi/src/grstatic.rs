@@ -138,11 +138,51 @@
 //! wrong endianness, and those are precisely the mistakes that would otherwise produce a
 //! plausible reply the guest silently believes.
 //!
+//! ⊘ **SUPERSEDED 2026-09-26 (v3)** — the paragraph below predates host facts. In v3 the
+//! profile is filled at realize from the HOST GPU's own unprivileged controls
+//! (`kf_rm::hostquery::gr_static_from`); the `GA106_*` constants here are the fixture the
+//! byte-level tests compare against, not the served device.
+//!
 //! ⊘ And it is not a claim that these numbers describe **the host GPU of whoever runs this**.
 //! They describe a GA106 — the part this device *presents* (`crate::chipinfo`,
 //! `kayfabe_device::ga10x`). The day this port forwards to a real host GPU whose GR differs,
 //! this table is a lie of a different kind, and `docs/design/mode2_forwarding_model.md` is
 //! where that has to be re-decided rather than inherited.
+//!
+//! # ★★★★★ Floorswept parts: LOGICAL rows, PHYSICAL placement (2026-09-26, v3-gpcmask)
+//!
+//! ⊘ **CORRECTS the profile this module first stated**, which had one row per GPC *and no
+//! GPC id*: `gpcMask` was `(1 << rows) - 1` and every array was written at the row's
+//! position. That is right only when the enabled GPCs are `0..n` **and** logical GPC `i` is
+//! physical GPC `i`. `[measured]` neither holds on retail parts, and realize on an RTX 3060 Ti
+//! refused (`GR_GET_GPC_MASK = 0x3e`, physical GPC 0 fused).
+//!
+//! `NV2080_CTRL_INTERNAL_STATIC_GR_FLOORSWEEPING_MASKS` mixes two index spaces, and the header
+//! says which for two of them (`ctrl2080internal.h:299-316`): `tpcMask[]` is *"indexed by
+//! physical GPC ID for non-MIG"* and `zcullMask[]` *"always indexed by physical GPC ID"*, while
+//! `tpcCount[]` is *"always indexed by logical GPC ID"*. For `mmuPerGpc[]` and
+//! `numPesPerGpc[]` the header says nothing; ★ **the two floorswept parts below settle them
+//! as LOGICAL** — each is filled at `0..n` whatever the physical mask (AD102: index 0 is
+//! filled though physical GPC 0 is fused, index 11 is empty though physical GPC 11 is
+//! enabled; GA104: `numPesPerGpc[5]` is empty though physical GPC 5 is enabled):
+//!
+//! | die (trace) | `gpcMask` | `tpcMask[]` (physical) | `tpcCount[]` (logical) | `mmuPerGpc[]`, `numPesPerGpc[]` | `zcullMask[]` (physical) |
+//! |---|---|---|---|---|---|
+//! | AD102, RTX 4090 (`traces/ad102_boot1.bin`, 575.51.03) | `0xffe` | `0, 3e, 3e, 3f×9` | `5, 5, 6×9, 0` | `1×11, 0` / `3×11, 0` | `0, f×11` |
+//! | GA106, RTX 3060 (`traces/rpctrace_ga106_boot1.bin`, 580.159.04) | `0x7` | `1f, 1b, 1f` | **`4, 5, 5`** | `1, 1, 1` / `3, 3, 3` | `f, f, f` |
+//! | GA104, RTX 3060 Ti (host controls, `v3-gpcmask` probe, 580.159.04) | `0x3e` | `0, e, f, f, f, f, 0` | `3, 4, 4, 4, 4` | — / `2, 2, 2, 2, 2` | `0, f, f, f, f, f, 0` |
+//!
+//! ★★ The GA106 row is the one that matters most and it is **not** floorswept at the GPC
+//! level: physical GPC 1 has four TPCs, and logical GPC 0 is the four-TPC GPC — so
+//! `tpcCount[0] = 4` while `popcount(tpcMask[0]) = 5`. ⇒ **the logical order is not the
+//! physical order even on a contiguous mask**, and the logical → physical map
+//! (`GRMGR_GET_GR_FS_INFO`'s `CHIPLET_GPC_MAP`) is a host fact, never "the `i`-th set bit".
+//!
+//! ⇒ [`GrStaticProfile::gpcs`] is one row **per logical GPC, in logical order**, and each row
+//! names its physical GPC ([`GpcRow::physical_id`]). The encoder writes the logical fields at
+//! the row's position and the physical ones at `physical_id`; a fused GPC's `tpcMask` and
+//! `zcullMask` are zero, which is what all three dies above report. `gpcMask` is the OR of
+//! the rows' physical bits — derived, never stated twice.
 
 // ---------------------------------------------------------------------------------------
 // Control ids
@@ -209,7 +249,8 @@ pub const PDB_PROPERTIES_PARAMS_SIZE: usize = GR_MAX_ENGINES;
 // The GA106 rows
 // ---------------------------------------------------------------------------------------
 
-/// One GPC's floorsweeping row.
+/// One **logical** GPC's floorsweeping row. Its position in [`GrStaticProfile::gpcs`] is its
+/// logical id; [`GpcRow::physical_id`] is the physical (chiplet) GPC it is.
 ///
 /// ⚠ `tpc_mask` is a **physical** bitmap and `tpc_count` is a *count*, and on GA106 they
 /// disagree in a way that is not an error: GPC 0 reports `0x1e` (physical TPCs 1-4) with
@@ -217,18 +258,46 @@ pub const PDB_PROPERTIES_PARAMS_SIZE: usize = GR_MAX_ENGINES;
 /// local TPC index from `tpc_mask` by counting from bit 0 is wrong; the header says so
 /// itself (`ctrl2080internal.h:298-306`: `tpcMask` is *"indexed by physical GPC ID for
 /// non-MIG"*, `tpcCount` *"always indexed by logical GPC ID"*).
+///
+/// ★ Because the row is keyed LOGICALLY and carries its physical GPC's own mask,
+/// `tpc_count == popcount(tpc_mask)` holds per row on every part — it is the index spaces
+/// that differ, not the counts (see this module's floorswept-parts section).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GpcRow {
-    /// Physical TPC bitmap for this GPC.
+    /// The physical (chiplet) GPC id of this logical GPC — the host's
+    /// `GRMGR_GET_GR_FS_INFO` `CHIPLET_GPC_MAP[logical]`. Its bit is set in `gpcMask`, and the
+    /// physically indexed fields below are written at this index.
+    pub physical_id: u32,
+    /// Physical TPC bitmap of that physical GPC — `tpcMask[physical_id]`.
     pub tpc_mask: u32,
-    /// Number of TPCs enabled in this GPC.
+    /// Number of TPCs enabled in this logical GPC — `tpcCount[logical]`.
     pub tpc_count: u32,
-    /// `mmuPerGpc[]` — GMMU instances behind this GPC.
+    /// `mmuPerGpc[logical]` — GMMU instances behind this GPC.
     pub mmu_per_gpc: u32,
-    /// `numPesPerGpc[]`.
+    /// `numPesPerGpc[logical]`.
     pub num_pes_per_gpc: u32,
-    /// `zcullMask[]`, indexed by **physical** GPC id.
+    /// `zcullMask[physical_id]`.
     pub zcull_mask: u32,
+    /// `GRMGR_GET_GR_FS_INFO` `PPC_MASK[logical]` — the physical PPC mask of this GPC, as the
+    /// host answered it. `None`: not measured (the query type is then refused whole, loudly).
+    pub ppc_mask: Option<u32>,
+    /// `GRMGR_GET_GR_FS_INFO` `ROP_MASK[logical]` — the physical ROP mask of this GPC, as the
+    /// host answered it. `None`: not measured.
+    pub rop_mask: Option<u32>,
+}
+
+/// `GRMGR_GET_GR_FS_INFO`'s two syspipe words, as the host answered them — `CHIPLET_SYSPIPE_MASK`
+/// and `CHIPLET_GRAPHICS_SYSPIPE_MASK`.
+///
+/// ⚠ `[measured 2026-09-26, RTX 3060 Ti, 580.159.04]` the second is **0** on a GeForce that
+/// renders — the header's *"Legacy case returns GR0 if GFX capable, else 0"* read as "1 on a
+/// graphics part" is not what the firmware answers, which is why the host's word is carried.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GrSyspipeMasks {
+    /// `CHIPLET_SYSPIPE_MASK`.
+    pub syspipe: u32,
+    /// `CHIPLET_GRAPHICS_SYSPIPE_MASK`.
+    pub graphics_syspipe: u32,
 }
 
 /// One TPC of the global SM order, in `globalTpcId` order.
@@ -238,15 +307,48 @@ pub struct GpcRow {
 /// `tests/gr_static_info.rs` re-derives all 28 entries from these 14 rows and compares them
 /// to the oracle's bytes, so a chip whose SMs were not paired this way could not be
 /// described here without the test going red.
+///
+/// ★ Every field of the entry but `localSmId` and `globalTpcId` (the row's own index) is
+/// carried, so a host whose SM order states a `virtualGpcId`, `migratableTpcId`, `ugpuId` or
+/// `physicalCpcId` is served that, not a zero this port chose (`kf_rm::hostfacts::derive_sm_order`
+/// refuses a TPC whose SMs disagree on any of them, since one row cannot say two things).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TpcRow {
-    /// `gpcId` — the physical GPC this TPC belongs to.
+    /// `gpcId` — the **logical** GPC this TPC belongs to (`ogkm-580: ctrl2080gr.h:1139-1142`:
+    /// *"Logical GPC Id … numbered from 0 to N-1"*), i.e. an index into
+    /// [`GrStaticProfile::gpcs`]. ⊘ Until 2026-09-26 this doc said "physical"; on a part whose
+    /// logical order is not its physical order that reading places TPCs in the wrong GPC.
     pub gpc_id: u16,
     /// `localTpcId` — this TPC's index **within its GPC**, compacted (not the `tpc_mask`
     /// bit position; see [`GpcRow`]).
     pub local_tpc_id: u16,
     /// `virtualTpcId`.
     pub virtual_tpc_id: u16,
+    /// `virtualGpcId` — zero on every part measured so far (GA106, GA104).
+    pub virtual_gpc_id: u16,
+    /// `migratableTpcId`.
+    pub migratable_tpc_id: u16,
+    /// `ugpuId`.
+    pub ugpu_id: u16,
+    /// `physicalCpcId`.
+    pub physical_cpc_id: u16,
+}
+
+impl TpcRow {
+    /// A row whose `virtualGpcId`, `migratableTpcId`, `ugpuId` and `physicalCpcId` are zero —
+    /// what GA106 and GA104 report for every TPC.
+    #[must_use]
+    pub const fn plain(gpc_id: u16, local_tpc_id: u16, virtual_tpc_id: u16) -> Self {
+        Self {
+            gpc_id,
+            local_tpc_id,
+            virtual_tpc_id,
+            virtual_gpc_id: 0,
+            migratable_tpc_id: 0,
+            ugpu_id: 0,
+            physical_cpc_id: 0,
+        }
+    }
 }
 
 /// SMs per TPC on Ampere consumer parts. Two, and the capture's 28 SMs over 14 TPCs is what
@@ -255,32 +357,48 @@ pub struct TpcRow {
 pub const SMS_PER_TPC: u16 = 2;
 
 /// GA106's three GPCs. `[measured]` from `C: mode2_initctrl_ga106.h`'s `ctl_20800a26`.
+///
+/// ★ Logical GPC `i` is physical GPC `i` on this board (its four-TPC GPC is physical 0), so
+/// the map is the identity — `[measured]` by the same capture: `tpcCount[0] = 4 =
+/// popcount(tpcMask[0])`. ⊘ Not every GA106 is this board (see the module's floorswept-parts
+/// section: another RTX 3060's four-TPC GPC is physical 1).
 pub const GA106_GPCS: [GpcRow; 3] = [
     GpcRow {
+        physical_id: 0,
         tpc_mask: 0x1e,
         tpc_count: 4,
         mmu_per_gpc: 1,
         num_pes_per_gpc: 3,
         zcull_mask: 0xf,
+        ppc_mask: None,
+        rop_mask: None,
     },
     GpcRow {
+        physical_id: 1,
         tpc_mask: 0x1f,
         tpc_count: 5,
         mmu_per_gpc: 1,
         num_pes_per_gpc: 3,
         zcull_mask: 0xf,
+        ppc_mask: None,
+        rop_mask: None,
     },
     GpcRow {
+        physical_id: 2,
         tpc_mask: 0x1f,
         tpc_count: 5,
         mmu_per_gpc: 1,
         num_pes_per_gpc: 3,
         zcull_mask: 0xf,
+        ppc_mask: None,
+        rop_mask: None,
     },
 ];
 
-/// `gpcMask` / `physGpcMask` / `physGfxGpcMask` — all three are `0x7` on this part, and all
-/// three are written from this one constant so they cannot drift apart.
+/// `gpcMask` / `physGpcMask` / `physGfxGpcMask` — all three are `0x7` on this part.
+/// ⊘ Not an input: [`GrStaticProfile::gpc_mask`] derives the first two from the rows'
+/// physical ids, and [`GA106_GR_STATIC`]'s `gfx_gpc_mask` states the third; this constant is
+/// what the tests compare them against.
 pub const GA106_GPC_MASK: u32 = 0b111;
 
 /// `tpcToPesMap[10]` — which PES each local TPC hangs off. `[measured]` on a real GA106
@@ -294,76 +412,20 @@ pub const GA106_TPC_TO_PES_MAP: [u32; MAX_TPC_PER_GPC] = [0, 0, 1, 1, 2, 2, 0, 0
 /// interleave, and it is data rather than a rule this port derives. `[measured]` from
 /// `ctl_20800a22`'s first 4 324 bytes.
 pub const GA106_TPCS: [TpcRow; 14] = [
-    TpcRow {
-        gpc_id: 1,
-        local_tpc_id: 0,
-        virtual_tpc_id: 0,
-    },
-    TpcRow {
-        gpc_id: 2,
-        local_tpc_id: 0,
-        virtual_tpc_id: 0,
-    },
-    TpcRow {
-        gpc_id: 0,
-        local_tpc_id: 1,
-        virtual_tpc_id: 1,
-    },
-    TpcRow {
-        gpc_id: 1,
-        local_tpc_id: 2,
-        virtual_tpc_id: 1,
-    },
-    TpcRow {
-        gpc_id: 2,
-        local_tpc_id: 2,
-        virtual_tpc_id: 1,
-    },
-    TpcRow {
-        gpc_id: 0,
-        local_tpc_id: 0,
-        virtual_tpc_id: 0,
-    },
-    TpcRow {
-        gpc_id: 1,
-        local_tpc_id: 4,
-        virtual_tpc_id: 2,
-    },
-    TpcRow {
-        gpc_id: 2,
-        local_tpc_id: 4,
-        virtual_tpc_id: 2,
-    },
-    TpcRow {
-        gpc_id: 0,
-        local_tpc_id: 3,
-        virtual_tpc_id: 2,
-    },
-    TpcRow {
-        gpc_id: 1,
-        local_tpc_id: 1,
-        virtual_tpc_id: 3,
-    },
-    TpcRow {
-        gpc_id: 2,
-        local_tpc_id: 1,
-        virtual_tpc_id: 3,
-    },
-    TpcRow {
-        gpc_id: 0,
-        local_tpc_id: 2,
-        virtual_tpc_id: 3,
-    },
-    TpcRow {
-        gpc_id: 1,
-        local_tpc_id: 3,
-        virtual_tpc_id: 4,
-    },
-    TpcRow {
-        gpc_id: 2,
-        local_tpc_id: 3,
-        virtual_tpc_id: 4,
-    },
+    TpcRow::plain(1, 0, 0),
+    TpcRow::plain(2, 0, 0),
+    TpcRow::plain(0, 1, 1),
+    TpcRow::plain(1, 2, 1),
+    TpcRow::plain(2, 2, 1),
+    TpcRow::plain(0, 0, 0),
+    TpcRow::plain(1, 4, 2),
+    TpcRow::plain(2, 4, 2),
+    TpcRow::plain(0, 3, 2),
+    TpcRow::plain(1, 1, 3),
+    TpcRow::plain(2, 1, 3),
+    TpcRow::plain(0, 2, 3),
+    TpcRow::plain(1, 3, 4),
+    TpcRow::plain(2, 3, 4),
 ];
 
 /// `engineCaps[0].capsTbl` — 23 opaque bytes.
@@ -456,6 +518,49 @@ pub enum GrStaticError {
     /// The FECS record size is zero — `fecsBufferMap` divides by it
     /// (`ogkm-580: fecs_event_list.c`), so zero is a divide, not a small buffer.
     FecsRecordSizeZero,
+    /// A row's physical GPC id does not fit `NV2080_CTRL_INTERNAL_GR_MAX_GPC` — the physically
+    /// indexed arrays (`tpcMask[]`, `zcullMask[]`) have sixteen slots.
+    PhysicalGpcIdOutOfRange {
+        /// The logical GPC (row index).
+        gpc: usize,
+        /// The physical id it names.
+        physical_id: u32,
+    },
+    /// Two logical GPCs name one physical GPC: its `gpcMask` bit would count once while the
+    /// physically indexed arrays were written twice.
+    DuplicatePhysicalGpc {
+        /// The second logical GPC naming it.
+        gpc: usize,
+        /// The physical id.
+        physical_id: u32,
+    },
+    /// A logical GPC's TPC rows in the SM order do not number its `tpc_count`. `tpcCount[]`
+    /// and `GLOBAL_SM_ORDER` state one fact twice and RM reads both.
+    GpcTpcRowsMismatch {
+        /// The logical GPC.
+        gpc: usize,
+        /// Its `tpcCount`.
+        tpc_count: u32,
+        /// TPC rows naming it.
+        rows: usize,
+    },
+    /// A TPC row's `localTpcId` is not below its GPC's TPC count, or repeats within the GPC:
+    /// `localTpcId` is the logical index `0..tpcCount` (`ogkm-580: ctrl2080gr.h:1144-1148`).
+    LocalTpcIdOutOfRange {
+        /// Index of the offending TPC row.
+        row: usize,
+        /// The logical GPC it names.
+        gpc_id: u16,
+        /// Its `localTpcId`.
+        local_tpc_id: u16,
+    },
+    /// `physGfxGpcMask` names a GPC outside `gpcMask`, or `numGfxTpc` exceeds the TPC total.
+    GfxGeometryOutOfRange {
+        /// `physGfxGpcMask`.
+        gfx_gpc_mask: u32,
+        /// `numGfxTpc`.
+        num_gfx_tpc: u32,
+    },
 }
 
 /// Everything this port says about one chip's GR, in one value.
@@ -466,7 +571,8 @@ pub enum GrStaticError {
 /// separate inputs would make disagreement expressible.
 #[derive(Debug, Clone, Copy)]
 pub struct GrStaticProfile {
-    /// The GPC rows; `gpcMask` is derived from the length.
+    /// One row per **logical** GPC, in logical order; `gpcMask` is the OR of their physical
+    /// ids ([`GrStaticProfile::gpc_mask`]).
     pub gpcs: &'static [GpcRow],
     /// The TPC rows in `globalTpcId` order.
     pub tpcs: &'static [TpcRow],
@@ -480,7 +586,21 @@ pub struct GrStaticProfile {
     pub fecs_record_size: u32,
     /// `bPerSubCtxheaderSupported`.
     pub per_subctx_header_supported: bool,
+    /// `physGfxGpcMask` — the physical GPCs that are graphics capable (host
+    /// `GR_GET_GFX_GPC_AND_TPC_INFO`). `[measured]` equal to `gpcMask` on GA106, GA104, GA102
+    /// and AD102; ⊘ carried, not assumed, because a compute die need not carry graphics in
+    /// every GPC.
+    pub gfx_gpc_mask: u32,
+    /// `numGfxTpc` — graphics-capable TPCs (equal to the TPC total on the dies above).
+    pub num_gfx_tpc: u32,
+    /// `GRMGR_GET_GR_FS_INFO`'s syspipe words as the host answered them; `None` (the
+    /// fixtures) serves the header's legacy rule ([`crate::grfsinfo`]).
+    pub syspipe_masks: Option<GrSyspipeMasks>,
 }
+
+/// GA106's `numGfxTpc` — `[measured]` the capture's `ctl_20800a26` (every TPC is graphics
+/// capable: the sum of the three GPC rows).
+pub const GA106_NUM_GFX_TPC: u32 = 14;
 
 /// GA106 — the part this device presents.
 pub const GA106_GR_STATIC: GrStaticProfile = GrStaticProfile {
@@ -491,21 +611,48 @@ pub const GA106_GR_STATIC: GrStaticProfile = GrStaticProfile {
     caps: GA106_GR_CAPS,
     fecs_record_size: GA106_FECS_RECORD_SIZE,
     per_subctx_header_supported: GA106_PER_SUBCTX_HEADER_SUPPORTED,
+    gfx_gpc_mask: GA106_GPC_MASK,
+    num_gfx_tpc: GA106_NUM_GFX_TPC,
+    syspipe_masks: None,
 };
 
 impl GrStaticProfile {
-    /// The `gpcMask` this profile publishes — and the same value for `physGpcMask` and
-    /// `physGfxGpcMask`, which is why there is one accessor and not three fields.
+    /// The `gpcMask` this profile publishes — the OR of the rows' physical GPC bits — and the
+    /// same value for `physGpcMask` (equal outside MIG: `[measured]` on GA106, GA104, GA102 and
+    /// AD102, and the host's own `GR_GET_PHYS_GPC_MASK` is checked against it at realize).
+    ///
+    /// ⊘ **Not** `(1 << rows) - 1`: that was this accessor until 2026-09-26, and it states a
+    /// contiguous mask from GPC 0 for every part. A 3060 Ti is `0x3e`, a 4090 `0xffe`.
     ///
     /// # Errors
-    /// [`GrStaticError::GpcCountOutOfRange`] for zero GPCs or more than [`GR_MAX_GPC`].
+    /// [`GrStaticError::GpcCountOutOfRange`] for zero GPCs or more than [`GR_MAX_GPC`];
+    /// [`GrStaticError::PhysicalGpcIdOutOfRange`] / [`GrStaticError::DuplicatePhysicalGpc`]
+    /// for a row whose physical id cannot be a distinct bit of a sixteen-slot mask.
     pub fn gpc_mask(&self) -> Result<u32, GrStaticError> {
         let n = self.gpcs.len();
         if n == 0 || n > GR_MAX_GPC {
             return Err(GrStaticError::GpcCountOutOfRange { count: n });
         }
-        // `n <= 16`, so the shift cannot overflow and the mask cannot be zero.
-        Ok((1u32 << n) - 1)
+        let mut mask = 0u32;
+        for (gpc, g) in self.gpcs.iter().enumerate() {
+            if g.physical_id as usize >= GR_MAX_GPC {
+                return Err(GrStaticError::PhysicalGpcIdOutOfRange {
+                    gpc,
+                    physical_id: g.physical_id,
+                });
+            }
+            // `physical_id < 16`, so the shift cannot overflow.
+            let bit = 1u32 << g.physical_id;
+            if mask & bit != 0 {
+                return Err(GrStaticError::DuplicatePhysicalGpc {
+                    gpc,
+                    physical_id: g.physical_id,
+                });
+            }
+            mask |= bit;
+        }
+        // `n >= 1` distinct bits, so the mask cannot be zero — the shortcut stays unreachable.
+        Ok(mask)
     }
 
     /// Total SMs — `tpcs.len() * sms_per_tpc`.
@@ -526,7 +673,7 @@ impl GrStaticProfile {
     /// # Errors
     /// The geometry variants of [`GrStaticError`].
     pub fn validate(&self) -> Result<(), GrStaticError> {
-        self.gpc_mask()?;
+        let mask = self.gpc_mask()?;
         self.num_sm()?;
         if self.tpcs.is_empty() || self.tpcs.len() > GR_MAX_SM {
             return Err(GrStaticError::TpcCountOutOfRange {
@@ -560,6 +707,40 @@ impl GrStaticProfile {
                     gpc_id: t.gpc_id,
                 });
             }
+        }
+        // ★ Per logical GPC, not only in total: the SM order's `gpcId` is LOGICAL
+        // (`ogkm-580: ctrl2080gr.h:1139-1142`), so each GPC's TPC rows must number its
+        // `tpcCount` and carry the local ids `0..tpcCount` once each.
+        let mut rows = [0usize; GR_MAX_GPC];
+        let mut seen = [0u32; GR_MAX_GPC];
+        for (i, t) in self.tpcs.iter().enumerate() {
+            let g = t.gpc_id as usize;
+            let bit = 1u32.checked_shl(u32::from(t.local_tpc_id)).unwrap_or(0);
+            if u32::from(t.local_tpc_id) >= self.gpcs[g].tpc_count || bit == 0 || seen[g] & bit != 0
+            {
+                return Err(GrStaticError::LocalTpcIdOutOfRange {
+                    row: i,
+                    gpc_id: t.gpc_id,
+                    local_tpc_id: t.local_tpc_id,
+                });
+            }
+            seen[g] |= bit;
+            rows[g] += 1;
+        }
+        for (gpc, g) in self.gpcs.iter().enumerate() {
+            if rows[gpc] != g.tpc_count as usize {
+                return Err(GrStaticError::GpcTpcRowsMismatch {
+                    gpc,
+                    tpc_count: g.tpc_count,
+                    rows: rows[gpc],
+                });
+            }
+        }
+        if self.gfx_gpc_mask & !mask != 0 || self.num_gfx_tpc > from_gpcs {
+            return Err(GrStaticError::GfxGeometryOutOfRange {
+                gfx_gpc_mask: self.gfx_gpc_mask,
+                num_gfx_tpc: self.num_gfx_tpc,
+            });
         }
         Ok(())
     }
@@ -614,23 +795,26 @@ pub fn encode_floorsweeping_masks(p: &GrStaticProfile) -> Result<Vec<u8>, GrStat
     let row = &mut out[..FLOORSWEEPING_ROW_SIZE];
     put32(row, O_GPC_MASK, mask);
     put32(row, O_PHYS_GPC_MASK, mask);
-    put32(row, O_PHYS_GFX_GPC_MASK, mask);
-    let mut gfx_tpc: u32 = 0;
+    put32(row, O_PHYS_GFX_GPC_MASK, p.gfx_gpc_mask);
+    // ★★ Two index spaces in one struct (this module's floorswept-parts section): the row's
+    // POSITION is its logical id (`tpcCount`, `mmuPerGpc`, `numPesPerGpc`), its
+    // `physical_id` places the physical fields (`tpcMask`, `zcullMask`). A fused GPC's slots
+    // stay zero. `physical_id < GR_MAX_GPC` is `validate()`'s, so the index is in the row.
     for (i, g) in p.gpcs.iter().enumerate() {
-        put32(row, O_TPC_MASK + 4 * i, g.tpc_mask);
+        let phys = g.physical_id as usize;
+        put32(row, O_TPC_MASK + 4 * phys, g.tpc_mask);
         put32(row, O_TPC_COUNT + 4 * i, g.tpc_count);
         put32(row, O_MMU_PER_GPC + 4 * i, g.mmu_per_gpc);
         put32(row, O_NUM_PES + 4 * i, g.num_pes_per_gpc);
-        put32(row, O_ZCULL_MASK + 4 * i, g.zcull_mask);
-        gfx_tpc = gfx_tpc.saturating_add(g.tpc_count);
+        put32(row, O_ZCULL_MASK + 4 * phys, g.zcull_mask);
     }
     for (i, v) in p.tpc_to_pes_map.iter().enumerate() {
         put32(row, O_TPC_TO_PES + 4 * i, *v);
     }
-    // ⊘ `numGfxTpc` is the SUM, not `tpcs.len()`. They are equal here and `validate()` is
-    // what makes them equal; deriving it from the same place twice would hide a disagreement
-    // rather than refuse it.
-    put32(row, O_NUM_GFX_TPC, gfx_tpc);
+    // ⊘ `numGfxTpc` is the host's word (bounded by the TPC total in `validate()`), no longer
+    // the sum of the rows: the two are equal on every part measured, and a compute die is
+    // exactly where they would not be.
+    put32(row, O_NUM_GFX_TPC, p.num_gfx_tpc);
     Ok(out)
 }
 
@@ -638,7 +822,8 @@ pub fn encode_floorsweeping_masks(p: &GrStaticProfile) -> Result<Vec<u8>, GrStat
 ///
 /// Expands each [`TpcRow`] into [`GrStaticProfile::sms_per_tpc`] consecutive entries whose
 /// only differing field is `localSmId`. `globalTpcId` is the row index; `virtualGpcId`,
-/// `migratableTpcId`, `ugpuId` and `physicalCpcId` are zero on this part.
+/// `migratableTpcId`, `ugpuId` and `physicalCpcId` are the row's own (zero on GA106 and
+/// GA104 — written from the row, not assumed).
 ///
 /// # Errors
 /// [`GrStaticError`] if the profile is not self-consistent.
@@ -676,10 +861,10 @@ pub fn encode_global_sm_order(p: &GrStaticProfile) -> Result<Vec<u8>, GrStaticEr
                 O_GLOBAL_TPC,
                 u16::try_from(global_tpc).unwrap_or(u16::MAX),
             );
-            put16(e, O_VIRTUAL_GPC, 0);
-            put16(e, O_MIGRATABLE_TPC, 0);
-            put16(e, O_UGPU, 0);
-            put16(e, O_PHYS_CPC, 0);
+            put16(e, O_VIRTUAL_GPC, t.virtual_gpc_id);
+            put16(e, O_MIGRATABLE_TPC, t.migratable_tpc_id);
+            put16(e, O_UGPU, t.ugpu_id);
+            put16(e, O_PHYS_CPC, t.physical_cpc_id);
             put16(e, O_VIRTUAL_TPC, t.virtual_tpc_id);
             sm += 1;
         }
