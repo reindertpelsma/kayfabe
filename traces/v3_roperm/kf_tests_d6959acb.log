@@ -1,0 +1,89 @@
+kf_create: format descriptor REFUSED: table_version
+device: NVIDIA GeForce RTX 3090  sm_86  driver-jit-from-PTX
+sizeof: header=64 pdb=32 run=32
+pass format/refuses_unknown_table_version
+kf_create: format descriptor REFUSED: VER3 is a sketch that has never run; define KF_ALLOW_UNTESTED_VER3 to reach it
+pass format/refuses_untested_ver3
+pass format/report_is_self_describing
+pass format/sparse_is_counted
+pass correctness/kind_joins_run_identity
+pass correctness/kind_uniform_is_one_run
+pass correctness/single_4k
+pass correctness/large_pages_64k_2m_512m
+pass isolation/invalidate_only_disturbs_named_vas
+pass correctness/coalesce_one_run
+pass correctness/coalesce_split_gpga
+pass correctness/coalesce_split_flags
+pass correctness/no_coalesce_across_pagesize
+pass correctness/sparse_and_invalid_skipped
+pass correctness/flags_decoded
+pass correctness/dual_pde_both_halves
+pass correctness/valid_big_pte_hides_stale_4k
+pass correctness/owning_big_pte_carries_its_permissions
+pass correctness/dual_pde_mixed_slots_live_w826
+pass correctness/multiple_pdbs
+pass diff/first_walk_is_all_maps
+pass diff/acked_is_quiet
+pass diff/add
+pass diff/delete
+pass diff/edit_gpga
+pass diff/permission_edit_remaps
+kf_create: key_perm 0x80000078 names bits outside KFWR_RF_KEY_PERM_ALL
+pass diff/bad_key_perm_is_refused
+pass diff/grow_then_shrink
+pass diff/failed_map_is_retried
+pass diff/failed_unmap_is_retried
+pass diff/held_is_committed_held
+pass diff/stale_or_absent_verdict_commits_nothing
+pass diff/truncated_is_never_committed
+pass diff/root_move_keeps_the_slot
+pass diff/reset_empties_the_slot
+pass diff/partial_and_overflow
+pass diff/move_page_table_is_quiet
+pass correctness/one_run_across_page_tables
+pass hostile/self_cycle
+pass hostile/two_cycle
+pass hostile/deep_cycle
+pass hostile/pointer_past_end
+pass hostile/table_straddles_end
+pass hostile/leaf_past_end
+pass hostile/leaf_straddles_end
+pass hostile/leaf_at_exact_end
+pass hostile/leaf_oob_no_neighbour_extend
+pass ogkm/unmapped_big_pte_hides_4k
+pass ogkm/sparse_big_half_hides_small
+pass hostile/unaligned_root
+pass hostile/root_out_of_range
+pass hostile/all_ones_entries
+pass hostile/all_ones_vidmem_pointer
+pass hostile/type_confusion
+pass hostile/foreign_aperture
+pass hostile/enormous_but_legal
+pass hostile/report_run_cap
+pass hostile/entry_budget
+pass hostile/pdb_capacity
+pass hostile/unsorted_pdb_list
+pass hostile/bounds_window_respected
+pass hostile/unaligned_inexpressible
+pass legal/shared_page_table
+pass legal/pte_maps_own_page_table
+      [differential] 15 images, 1211 benign leaves agreed exactly, 2 hostile leaves within the rust walker's set
+pass differential/rust_walker
+      [real-driver] 5 images, 7005 benign leaves agreed exactly, 0 hostile leaves within the rust walker's set
+pass differential/real_driver_tables
+      seed 0x1: 150 steps, 1457 runs compared, verdicts failed=381 held=17
+      seed 0xc0ffee: 150 steps, 1334 runs compared, verdicts failed=379 held=26
+      seed 0x5eed5eed: 150 steps, 1204 runs compared, verdicts failed=276 held=16
+pass roundtrip/diff_stream
+      seed 0xb0b0: 150 steps, 1331 runs compared, verdicts failed=294 held=30
+pass roundtrip/diff_root_move
+      [cpu live] 200 walks in 36 ms, 2988032 edits interleaved, deepest 1828 entries, 2653 runs total
+pass race/cpu_live_edits
+      [gpu live] 200 walks in 984 ms, deepest 1828 entries, 2719 runs total
+pass race/gpu_live_edits
+      [cpu racer] 200 walks in 25 ms, 2146304 host writes interleaved, deepest walk 1028 entries, 0 runs total
+pass race/cpu_garbage
+      [gpu racer] 120 walks in 564 ms, deepest walk 1028 entries
+pass race/gpu_garbage
+
+==== 72 passed, 0 failed ====

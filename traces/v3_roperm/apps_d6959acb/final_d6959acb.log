@@ -1,0 +1,128 @@
+FINAL_START 2026-09-26T15:57:45+00:00
+head=d6959acb base=dd3aed08 dirty=0
+=== cargo_test_head 2026-09-26T16:09:45+00:00
+CARGO_TEST_RC=101
+CARGO_TESTS passed=3387 failed=4 ignored=1
+=== cargo_test_base 2026-09-26T16:12:26+00:00
+BASE_RC=101
+BASE_TESTS passed=3376 failed=4 ignored=1
+fail_base=4 fail_head=4 head_only=0 base_only=0
+--- head_only:
+--- base_only:
+KF_CRATES passed=797 failed=0
+=== wait_nvcc 2026-09-26T16:15:16+00:00
+=== walk_suite 2026-09-26T16:15:46+00:00
+WALK_CHECK_RC=0
+KF_TESTS_RC=0
+==== 72 passed, 0 failed ====
+pass correctness/owning_big_pte_carries_its_permissions
+pass diff/permission_edit_remaps
+pass diff/bad_key_perm_is_refused
+=== gates 2026-09-26T16:18:01+00:00
+HEAD=d6959acb dirty=0
+V3_GATES_SUMMARY pass=9 fail=0
+CHECK ver2_gpu_diff_is_the_model_diff PASS 160 walks, 3377 runs compared, 0 mismatching entries, verdicts failed=829 held=73 permission edits=430
+CHECK ver3_gpu_diff_is_the_model_diff PASS 160 walks, 3395 runs compared, 0 mismatching entries, verdicts failed=817 held=91 permission edits=444
+CHECK ver2_keyall_gpu_diff_is_the_model_diff PASS 160 walks, 3558 runs compared, 0 mismatching entries, verdicts failed=843 held=76 permission edits=448
+CHECK ver2_growth_gpu_diff_is_the_model_diff PASS 160 walks, 3377 runs compared, 0 mismatching entries, verdicts failed=829 held=73 permission edits=430
+=== wait_apps 2026-09-26T16:18:35+00:00
+BUNDLE_RC=0
+GAPPS_RC=0
+=== probes_build 2026-09-26T16:40:05+00:00
+NVCC_atomics_probe=0
+NVCC_readmostly_probe=0
+SWA_BUILD=0
+=== probes_head 2026-09-26T16:40:10+00:00
+BOOT pf3_head rc=0
+MODPROBE_RC=0
+=== run atomics_probe devmem 2026-09-26T16:40:52+00:00
+CHECK devmem ok bad=0 counter=4194304 want=4194304 first_bad=-1(0 vs 0)
+PROBE_RC=0
+=== run atomics_probe write 2026-09-26T16:40:56+00:00
+CHECK write ok bad=0 counter=4194304 want=4194304 first_bad=-1(0 vs 0)
+PROBE_RC=0
+=== run atomics_probe accessedby 2026-09-26T16:40:59+00:00
+CHECK accessedby ok bad=0 counter=4194304 want=4194304 first_bad=-1(0 vs 0)
+PROBE_RC=0
+=== run atomics_probe accessedby_sys 2026-09-26T16:41:02+00:00
+CHECK accessedby_sys ok bad=0 counter=4194304 want=4194304 first_bad=-1(0 vs 0)
+PROBE_RC=0
+=== run atomics_probe prefcpu 2026-09-26T16:41:05+00:00
+CHECK prefcpu ok bad=0 counter=4194304 want=4194304 first_bad=-1(0 vs 0)
+PROBE_RC=0
+=== run atomics_probe prefetchcpu 2026-09-26T16:41:08+00:00
+CHECK prefetchcpu ok bad=0 counter=4194304 want=4194304 first_bad=-1(0 vs 0)
+PROBE_RC=0
+=== run readmostly_probe reprefetch 2026-09-26T16:41:11+00:00
+CHECK reprefetch ok bad=0
+PROBE_RC=0
+=== run readmostly_probe gpuwrite 2026-09-26T16:41:15+00:00
+CHECK gpuwrite FAIL cudaDeviceSynchronize() -> 719 (unspecified launch failure)
+PROBE_RC=2
+=== run readmostly_probe downgrade 2026-09-26T16:41:18+00:00
+CHECK downgrade FAIL cudaDeviceSynchronize() -> 719 (unspecified launch failure)
+PROBE_RC=2
+=== run readmostly_probe fault 2026-09-26T16:41:21+00:00
+CHECK fault FAIL gpu_sum(&h) -> 719 (unspecified launch failure)
+PROBE_RC=2
+=== run systemWideAtomics (no args) 2026-09-26T16:41:25+00:00
+CUDA error at systemWideAtomics.cu:328 code=719(cudaErrorLaunchFailure) "cudaDeviceSynchronize()" 
+PROBE_RC=1
+COUNTERS pf3_head kf3: family=Ampere phase=Halted trapped=103831 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=72 kernel_spaces=11 passthrough_births=176 withheld_spaces=0 mirrored_spaces=64
+=== fast_suite 2026-09-26T16:41:33+00:00
+FAST_SUITE_EXIT=0
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+FAST_SUITE_RC=0
+FAST_SUITE_PRIV withheld=0 mirrored=78 (summed over the 30 boots' last status lines)
+=== cuda_ladder 2026-09-26T16:55:04+00:00
+LADDER_EXIT=0
+CL_ROW mode=guest rung=cup3 rep=1 verdict=PASS boot_rc=0 graded=[CUP3_VAL=43]  trapped=10557
+CL_ROW mode=guest rung=cup3 rep=2 verdict=PASS boot_rc=0 graded=[CUP3_VAL=43]  trapped=10604
+CL_ROW mode=guest rung=cup8 rep=1 verdict=PASS boot_rc=0 graded=[CUP8_BAD=0 CUP8_MAXERR=0] CUP8_WALL_S=4 trapped=10684
+CL_ROW mode=guest rung=cup8 rep=2 verdict=PASS boot_rc=0 graded=[CUP8_BAD=0 CUP8_MAXERR=0] CUP8_WALL_S=3 trapped=10672
+CL_ROW mode=guest rung=cup3 rep=1 verdict=PASS boot_rc=0 graded=[CUP3_VAL=43]  trapped=10557
+CL_ROW mode=guest rung=cup3 rep=2 verdict=PASS boot_rc=0 graded=[CUP3_VAL=43]  trapped=10604
+CL_ROW mode=guest rung=cup8 rep=1 verdict=PASS boot_rc=0 graded=[CUP8_BAD=0 CUP8_MAXERR=0] CUP8_WALL_S=4 trapped=10684
+CL_ROW mode=guest rung=cup8 rep=2 verdict=PASS boot_rc=0 graded=[CUP8_BAD=0 CUP8_MAXERR=0] CUP8_WALL_S=3 trapped=10672
+COUNTERS cl_cup3_1 kf3: family=Ampere phase=Halted trapped=10557 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=12 kernel_spaces=1 passthrough_births=16 withheld_spaces=0 mirrored_spaces=12
+COUNTERS cl_cup3_2 kf3: family=Ampere phase=Halted trapped=10604 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=12 kernel_spaces=1 passthrough_births=16 withheld_spaces=0 mirrored_spaces=12
+COUNTERS cl_cup8_1 kf3: family=Ampere phase=Halted trapped=10684 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=12 kernel_spaces=1 passthrough_births=16 withheld_spaces=0 mirrored_spaces=12
+COUNTERS cl_cup8_2 kf3: family=Ampere phase=Halted trapped=10672 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=12 kernel_spaces=1 passthrough_births=16 withheld_spaces=0 mirrored_spaces=12
+=== host_apps_setup 2026-09-26T17:00:47+00:00
+SETUP_apt=ok
+SETUP_torch=ok
+SETUP_pylibs=ok
+IMPORT_OK 2.6.0+cu124 0.21.0+cu124 4.46.3 13.3.0
+HF_MODEL_CACHED
+SETUP_gguf=ok
+SETUP_blender=ok
+SETUP_geekbench=ok
+SETUP_SIDE_DONE
+=== apps_host 2026-09-26T17:05:06+00:00
+APPS_HOST_EXIT=0
+APPRES side=host app=torch_correct verdict=PASS rc=0 secs=10 quiet=1 note=-
+APPDIG side=host app=torch_correct DIGEST cnn_train_step 763c693a5a53f948
+APPRES side=host app=llama_cpp_gen verdict=PASS rc=0 secs=3 quiet=0 note=warn:done_getting_tensors: tensor 'token_embd.weight' (q4_K) (and 0 others) cannot be used with preferred buffer type CUDA_Host, using CPU instead
+APPDIG side=host app=llama_cpp_gen OUTSHA llama_cpp 30451301af8e011d
+APPRES side=host app=llama_bench verdict=PASS rc=0 secs=4 quiet=0 note=-
+APPRES side=host app=vkpeak verdict=PASS rc=0 secs=360 quiet=0 note=-
+APPRES side=host app=nvenc_h264 verdict=PASS rc=0 secs=6 quiet=0 note=-
+APPRES side=host app=nvenc_hevc verdict=PASS rc=0 secs=7 quiet=0 note=-
+APPRES side=host app=nvdec_h264 verdict=PASS rc=0 secs=8 quiet=0 note=-
+APPRES side=host app=vectorAdd verdict=PASS rc=0 secs=2 quiet=0 note=-
+APPRES side=host app=simpleAtomicIntrinsics verdict=PASS rc=0 secs=3 quiet=1 note=-
+=== apps_guest 2026-09-26T17:11:50+00:00
+APPS_GUEST_EXIT=0
+APPRES side=guest app=torch_correct verdict=BOOT_FAIL rc=- secs=- quiet=- note=boot_capture-produced-no-app-result boot=ap_ro3_b1
+APPRES side=guest app=llama_cpp_gen verdict=BOOT_FAIL rc=- secs=- quiet=- note=boot_capture-produced-no-app-result boot=ap_ro3_b2
+APPRES side=guest app=llama_bench verdict=BOOT_FAIL rc=- secs=- quiet=- note=boot_capture-produced-no-app-result boot=ap_ro3_b3
+APPRES side=guest app=vkpeak verdict=BOOT_FAIL rc=- secs=- quiet=- note=boot_capture-produced-no-app-result boot=ap_ro3_b4
+APPRES side=guest app=nvenc_h264 verdict=BOOT_FAIL rc=- secs=- quiet=- note=boot_capture-produced-no-app-result boot=ap_ro3_b5
+APPRES side=guest app=nvenc_hevc verdict=BOOT_FAIL rc=- secs=- quiet=- note=boot_capture-produced-no-app-result boot=ap_ro3_b6
+APPRES side=guest app=nvdec_h264 verdict=BOOT_FAIL rc=- secs=- quiet=- note=boot_capture-produced-no-app-result boot=ap_ro3_b7
+APPRES side=guest app=vectorAdd verdict=BOOT_FAIL rc=- secs=- quiet=- note=boot_capture-produced-no-app-result boot=ap_ro3_b8
+APPRES side=guest app=simpleAtomicIntrinsics verdict=BOOT_FAIL rc=- secs=- quiet=- note=boot_capture-produced-no-app-result boot=ap_ro3_b9
+--- isolated:
+--- digests:
+COUNTERS boot_*   kernel_spaces=0 passthrough_births=0 withheld_spaces=0 mirrored_spaces=0
+FINAL_EXIT 2026-09-26T17:11:51+00:00

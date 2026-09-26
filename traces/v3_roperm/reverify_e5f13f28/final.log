@@ -1,0 +1,120 @@
+FINAL_START 2026-09-26T17:41:23+00:00
+head=e5f13f28 base=02b27c2a dirty=0
+=== cargo_test_head 2026-09-26T17:53:43+00:00
+CARGO_TEST_RC=101
+CARGO_TESTS passed=3414 failed=4 ignored=1
+=== cargo_test_base 2026-09-26T17:56:25+00:00
+BASE_RC=101
+BASE_TESTS passed=3402 failed=5 ignored=1
+fail_base=5 fail_head=4 head_only=0 base_only=1
+--- head_only:
+--- base_only:
+test spawn_unsafe::tests::an_image_that_is_not_an_executable_fails_the_exec ... FAILED
+KF_CRATES passed=805 failed=0
+=== walk_suite 2026-09-26T17:59:16+00:00
+WALK_CHECK_RC=0
+KF_TESTS_RC=0
+==== 72 passed, 0 failed ====
+=== gates 2026-09-26T18:01:32+00:00
+HEAD=e5f13f28 dirty=0
+V3_GATES_SUMMARY pass=9 fail=0
+CHECK ver2_gpu_diff_is_the_model_diff PASS 160 walks, 3377 runs compared, 0 mismatching entries, verdicts failed=829 held=73 permission edits=430
+CHECK ver3_gpu_diff_is_the_model_diff PASS 160 walks, 3395 runs compared, 0 mismatching entries, verdicts failed=817 held=91 permission edits=444
+CHECK ver2_keyall_gpu_diff_is_the_model_diff PASS 160 walks, 3558 runs compared, 0 mismatching entries, verdicts failed=843 held=76 permission edits=448
+CHECK ver2_growth_gpu_diff_is_the_model_diff PASS 160 walks, 3377 runs compared, 0 mismatching entries, verdicts failed=829 held=73 permission edits=430
+=== probes 2026-09-26T18:02:07+00:00
+NVCC_atomics_probe=0
+NVCC_readmostly_probe=0
+--- host atomics_probe devmem: CHECK devmem ok bad=0 counter=4194304 want=4194304 first_bad=-1(0 vs 0)
+--- host atomics_probe write: CHECK write ok bad=0 counter=4194304 want=4194304 first_bad=-1(0 vs 0)
+--- host atomics_probe accessedby: CHECK accessedby ok bad=0 counter=4194304 want=4194304 first_bad=-1(0 vs 0)
+--- host atomics_probe accessedby_sys: CHECK accessedby_sys ok bad=0 counter=4194304 want=4194304 first_bad=-1(0 vs 0)
+--- host atomics_probe prefcpu: CHECK prefcpu ok bad=0 counter=4194304 want=4194304 first_bad=-1(0 vs 0)
+--- host atomics_probe prefetchcpu: CHECK prefetchcpu ok bad=0 counter=4194304 want=4194304 first_bad=-1(0 vs 0)
+BOOT pf4_head env=[] rc=0
+MODPROBE_RC=0
+=== run atomics_probe devmem 2026-09-26T18:03:08+00:00
+CHECK devmem ok bad=0 counter=4194304 want=4194304 first_bad=-1(0 vs 0)
+PROBE_RC=0
+=== run atomics_probe write 2026-09-26T18:03:13+00:00
+CHECK write ok bad=0 counter=4194304 want=4194304 first_bad=-1(0 vs 0)
+PROBE_RC=0
+=== run atomics_probe accessedby 2026-09-26T18:03:16+00:00
+CHECK accessedby ok bad=0 counter=4194304 want=4194304 first_bad=-1(0 vs 0)
+PROBE_RC=0
+=== run atomics_probe accessedby_sys 2026-09-26T18:03:19+00:00
+CHECK accessedby_sys ok bad=0 counter=4194304 want=4194304 first_bad=-1(0 vs 0)
+PROBE_RC=0
+=== run atomics_probe prefcpu 2026-09-26T18:03:22+00:00
+CHECK prefcpu ok bad=0 counter=4194304 want=4194304 first_bad=-1(0 vs 0)
+PROBE_RC=0
+=== run atomics_probe prefetchcpu 2026-09-26T18:03:25+00:00
+CHECK prefetchcpu ok bad=0 counter=4194304 want=4194304 first_bad=-1(0 vs 0)
+PROBE_RC=0
+=== run readmostly_probe reprefetch 2026-09-26T18:03:28+00:00
+CHECK reprefetch ok bad=0
+PROBE_RC=0
+=== run readmostly_probe gpuwrite 2026-09-26T18:03:32+00:00
+CHECK gpuwrite FAIL cudaDeviceSynchronize() -> 719 (unspecified launch failure)
+PROBE_RC=2
+=== run readmostly_probe downgrade 2026-09-26T18:03:35+00:00
+CHECK downgrade FAIL cudaDeviceSynchronize() -> 719 (unspecified launch failure)
+PROBE_RC=2
+=== run readmostly_probe fault 2026-09-26T18:03:38+00:00
+CHECK fault FAIL gpu_sum(&h) -> 719 (unspecified launch failure)
+PROBE_RC=2
+      1 Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+      2 Fault is of type FAULT_RO_VIOLATION ACCESS_TYPE_VIRT_WRITE
+COUNTERS pf4_head kf3: family=Ampere phase=Halted trapped=93633 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=66 kernel_spaces=10 passthrough_births=160
+BOOT pf4_head_knob env=[KF3_CARRY_ATOMIC_DISABLE=1] rc=0
+MODPROBE_RC=0
+=== run atomics_probe devmem 2026-09-26T18:04:32+00:00
+CHECK devmem ok bad=0 counter=4194304 want=4194304 first_bad=-1(0 vs 0)
+PROBE_RC=0
+=== run atomics_probe write 2026-09-26T18:04:36+00:00
+CHECK write ok bad=0 counter=4194304 want=4194304 first_bad=-1(0 vs 0)
+PROBE_RC=0
+=== run atomics_probe accessedby 2026-09-26T18:04:39+00:00
+CHECK accessedby ok bad=0 counter=4194304 want=4194304 first_bad=-1(0 vs 0)
+PROBE_RC=0
+=== run atomics_probe accessedby_sys 2026-09-26T18:04:42+00:00
+CHECK accessedby_sys FAIL cudaDeviceSynchronize() -> 719 (unspecified launch failure)
+PROBE_RC=2
+=== run atomics_probe prefcpu 2026-09-26T18:04:45+00:00
+CHECK prefcpu ok bad=0 counter=4194304 want=4194304 first_bad=-1(0 vs 0)
+PROBE_RC=0
+=== run atomics_probe prefetchcpu 2026-09-26T18:04:49+00:00
+CHECK prefetchcpu ok bad=0 counter=4194304 want=4194304 first_bad=-1(0 vs 0)
+PROBE_RC=0
+=== run readmostly_probe reprefetch 2026-09-26T18:04:52+00:00
+CHECK reprefetch ok bad=0
+PROBE_RC=0
+=== run readmostly_probe gpuwrite 2026-09-26T18:04:56+00:00
+CHECK gpuwrite FAIL cudaDeviceSynchronize() -> 719 (unspecified launch failure)
+PROBE_RC=2
+=== run readmostly_probe downgrade 2026-09-26T18:04:59+00:00
+CHECK downgrade FAIL cudaDeviceSynchronize() -> 719 (unspecified launch failure)
+PROBE_RC=2
+=== run readmostly_probe fault 2026-09-26T18:05:02+00:00
+CHECK fault FAIL gpu_sum(&h) -> 719 (unspecified launch failure)
+PROBE_RC=2
+      1 Fault is of type FAULT_INFO_TYPE_ATOMIC_VIOLATION ACCESS_TYPE_VIRT_ATOMIC
+      1 Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+      2 Fault is of type FAULT_RO_VIOLATION ACCESS_TYPE_VIRT_WRITE
+COUNTERS pf4_head_knob kf3: family=Ampere phase=Halted trapped=93147 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=66 kernel_spaces=10 passthrough_births=160
+=== fast_suite 2026-09-26T18:05:11+00:00
+FAST_SUITE_EXIT=0
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+FAST_SUITE_RC=0
+FAST_SUITE_PRIV withheld=0 mirrored=84
+=== cuda_ladder 2026-09-26T18:19:28+00:00
+LADDER_EXIT=0
+CL_ROW mode=guest rung=cup3 rep=1 verdict=PASS boot_rc=0 graded=[CUP3_VAL=43]  trapped=10475
+CL_ROW mode=guest rung=cup3 rep=2 verdict=PASS boot_rc=0 graded=[CUP3_VAL=43]  trapped=10463
+CL_ROW mode=guest rung=cup8 rep=1 verdict=PASS boot_rc=0 graded=[CUP8_BAD=0 CUP8_MAXERR=0] CUP8_WALL_S=5 trapped=10612
+CL_ROW mode=guest rung=cup8 rep=2 verdict=PASS boot_rc=0 graded=[CUP8_BAD=0 CUP8_MAXERR=0] CUP8_WALL_S=4 trapped=10630
+COUNTERS cl_cup3_1 kf3: family=Ampere phase=Halted trapped=10475 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=12 kernel_spaces=1 passthrough_births=16
+COUNTERS cl_cup3_2 kf3: family=Ampere phase=Halted trapped=10463 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=12 kernel_spaces=1 passthrough_births=16
+COUNTERS cl_cup8_1 kf3: family=Ampere phase=Halted trapped=10612 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=12 kernel_spaces=1 passthrough_births=16
+COUNTERS cl_cup8_2 kf3: family=Ampere phase=Halted trapped=10630 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=12 kernel_spaces=1 passthrough_births=16
+FINAL_EXIT 2026-09-26T18:25:20+00:00

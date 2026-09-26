@@ -133,6 +133,7 @@ static KfWalkCfg cfg_default(void)
      * them on the real-GA106 corpus before this field existed. The four
      * hostile/leaf_* cases set a TIGHT span and are where containment is pinned. */
     c.gpga_span = KF_GPGA_SPAN_UNBOUNDED;
+    c.key_perm = KFWR_RF_KEY_PERM_DEFAULT;   /* the host's default policy (v3-roperm) */
     return c;
 }
 
@@ -470,6 +471,38 @@ static void t_valid_big_pte_hides_stale_4k(void)
     if (g_fails_here) dump(f);
 }
 
+/* ★★★ v3-roperm × v3-mapfix — A BIG PTE THAT OWNS ITS SLOT CARRIES *ITS* PERMISSIONS.
+ * UVM's read duplication maps the GPU duplicate read-only at whatever page size the block
+ * uses, and the merge leaves stale RW 4 KiB PTEs under a VALID big PTE. The run the host
+ * places is the big leaf's, with the big leaf's READ_ONLY — never the stale smalls' RW —
+ * and revoking write on the big PTE in place (same backing) re-maps it read-only. */
+static void t_owning_big_pte_carries_its_permissions(void)
+{
+    Fix f(8u << 20, cfg_default());
+    Tree t(f.g);
+    for (uint32_t i = 0; i < 16u; i++)                          /* stale RW smalls */
+        t.map4k(VBASE + (uint64_t)i * 4096ull, 0x300000ull + (uint64_t)i * 4096ull);
+    t.map64k(VBASE, 0x600000ull, AP_PTE_VID, PTE_READ_ONLY);    /* the owning big PTE, RO */
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    expect(f, {{VBASE, 0x600000ull, 64ull << 10, F64K | KFWR_RF_READ_ONLY, KFWR_OP_MAP}});
+    f.ack();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    validate(f);
+    CHECK_EQ(f.hdr.run_count, 0);
+    t.map64k(VBASE, 0x600000ull);                               /* collapse: write re-granted */
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    expect(f, {{VBASE, 0x600000ull, 64ull << 10, F64K | KFWR_RF_READ_ONLY, KFWR_OP_UNMAP},
+               {VBASE, 0x600000ull, 64ull << 10, F64K, KFWR_OP_MAP}});
+    f.ack();
+    t.map64k(VBASE, 0x600000ull, AP_PTE_VID, PTE_READ_ONLY);    /* in-place revoke again */
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    expect(f, {{VBASE, 0x600000ull, 64ull << 10, F64K, KFWR_OP_UNMAP},
+               {VBASE, 0x600000ull, 64ull << 10, F64K | KFWR_RF_READ_ONLY, KFWR_OP_MAP}});
+}
+
 static void t_dual_pde_mixed_slots_live_w826(void)
 {
     /* `[measured w826 ct10]` the live GA106 shape that lost two 4 KiB leaves: the small
@@ -626,25 +659,74 @@ static void t_diff_edit_gpga(void)
     expect(f, {{VBASE, GB0, PG, F4K, KFWR_OP_UNMAP}, {VBASE, 0xA00000ull, PG, F4K, KFWR_OP_MAP}});
 }
 
-/* ★ The host maps a slice of one ground truth; READ_ONLY/KIND are not part of
- * what it places, so a flags-only edit over the same backing owes the host
- * nothing (the v3 host semantics; stated so a change is deliberate). */
-static void t_diff_flags_only_edit_is_quiet(void)
+/* ★★★★★ v3-roperm — A KEYED PERMISSION EDIT OVER THE SAME BACKING IS A CHANGE.
+ * ⊘ This case was "flags_only_edit_is_quiet": READ_ONLY was not part of the diff key, so a
+ * guest RW→RO downgrade (UVM read duplication's in-place revoke, uvm_va_block.c:9010-9060)
+ * owed the host nothing, the host twin stayed READ-WRITE, and a GPU write to the duplicate
+ * landed silently in a stale copy (V3_UVM_DEMAND_PAGING.md §6). Which permission bits are keyed
+ * is the host's policy (KfArgs::key_perm). The default keys READ_ONLY, VOLATILE and PRIVILEGE,
+ * so each of those is UNMAP + MAP; ATOMIC_DISABLE is keyed only when the host carries it
+ * (KF3_CARRY_ATOMIC_DISABLE), so by default it is quiet. */
+static void t_diff_permission_edit_remaps(void)
 {
     Fix f(16u << 20, cfg_default());
     Tree t(f.g);
     t.map4k(VBASE, GB0);
     settle(f, t, 1);
-    t.map4k(VBASE, GB0, AP_PTE_VID, PTE_READ_ONLY);
+    t.map4k(VBASE, GB0, AP_PTE_VID, PTE_READ_ONLY);            /* RW -> RO, same page */
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    expect(f, {{VBASE, GB0, PG, F4K, KFWR_OP_UNMAP},
+               {VBASE, GB0, PG, F4K | KFWR_RF_READ_ONLY, KFWR_OP_MAP}});
+    f.ack();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    validate(f);
+    CHECK_EQ(f.hdr.run_count, 0);                              /* landed: quiet */
+    t.map4k(VBASE, GB0, AP_PTE_VID, PTE_READ_ONLY | PTE_ATOMIC_DISABLE);
     f.upload();
     CHECK_EQ(f.refresh({t.root}), 0);
     validate(f);
-    CHECK_EQ(f.hdr.run_count, 0);
+    CHECK_EQ(f.hdr.run_count, 0);                              /* ATOMIC_DISABLE: not keyed by default */
+    t.map4k(VBASE, GB0, AP_PTE_VID, PTE_READ_ONLY | PTE_PRIVILEGE);
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    expect(f, {{VBASE, GB0, PG, F4K | KFWR_RF_READ_ONLY, KFWR_OP_UNMAP},     /* PRIVILEGE: keyed */
+               {VBASE, GB0, PG, F4K | KFWR_RF_READ_ONLY | KFWR_RF_PRIVILEGE, KFWR_OP_MAP}});
+    f.ack();
+    t.map4k(VBASE, GB0);                                       /* back to plain RW */
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    expect(f, {{VBASE, GB0, PG, F4K | KFWR_RF_READ_ONLY | KFWR_RF_PRIVILEGE, KFWR_OP_UNMAP},
+               {VBASE, GB0, PG, F4K, KFWR_OP_MAP}});
+    f.ack();
     /* The ground truth IS part of it: the same offset in guest RAM is a new map. */
     t.map4k(VBASE, GB0, AP_PTE_SCOH);
     f.upload();
     CHECK_EQ(f.refresh({t.root}), 0);
     expect(f, {{VBASE, GB0, PG, F4K, KFWR_OP_UNMAP}, {VBASE, GB0, PG, F4K | KFWR_AP_SYSCOH, KFWR_OP_MAP}});
+
+    /* The key is the host's policy: with ATOMIC_DISABLE keyed, its flip is UNMAP + MAP too. */
+    KfWalkCfg c = cfg_default();
+    c.key_perm = KFWR_RF_KEY_PERM_ALL;
+    Fix g(16u << 20, c);
+    Tree u(g.g);
+    u.map4k(VBASE, GB0);
+    settle(g, u, 1);
+    u.map4k(VBASE, GB0, AP_PTE_VID, PTE_ATOMIC_DISABLE);
+    g.upload();
+    CHECK_EQ(g.refresh({u.root}), 0);
+    expect(g, {{VBASE, GB0, PG, F4K, KFWR_OP_UNMAP},
+               {VBASE, GB0, PG, F4K | KFWR_RF_ATOMIC_DISABLE, KFWR_OP_MAP}});
+}
+
+/* ⊘ A key_perm naming a bit outside KFWR_RF_KEY_PERM_ALL is refused at create, loudly. */
+static void t_diff_bad_key_perm_is_refused(void)
+{
+    KfWalkCfg c = cfg_default();
+    c.key_perm = KFWR_RF_KEY_PERM_ALL | KFWR_RF_HELD;
+    KfWalk *w = kf_create(&c);
+    CHECK_M(w == NULL, "a key_perm outside KFWR_RF_KEY_PERM_ALL must be refused");
+    if (w) kf_destroy(w);
 }
 
 /* Grow: ONE map of the new page, the old placement kept. Shrink: the placements
@@ -899,7 +981,15 @@ typedef std::vector<KfMapRun> Runs;
 struct MSlot { Runs cls[4]; };
 
 static uint32_t m_cls(uint32_t f) { return (f >> KFWR_RF_PS_SHIFT) & 3u; }
-static uint32_t m_key(uint32_t f) { uint32_t a = f & 7u; return a == 0u ? 0u : (a == 2u || a == 3u) ? 1u : 2u; }
+/* Mirrors kf_hkey / diffmodel::host_key_with: ground truth, KIND, and the keyed permissions
+ * (the round trip runs with cfg_default()'s key_perm). */
+static uint32_t m_key(uint32_t f, uint32_t kp = KFWR_RF_KEY_PERM_DEFAULT)
+{
+    const uint32_t a = f & 7u;
+    return (a == 0u ? 0u : (a == 2u || a == 3u) ? 1u : 2u)
+         | (((f >> KFWR_RF_KIND_SHIFT) & KFWR_RF_KIND_MASK) << 2)
+         | (((f & kp & KFWR_RF_KEY_PERM_ALL) >> 3) << 10);
+}
 
 static bool m_covered(const KfMapRun &p, const Runs &w)
 {
@@ -2326,6 +2416,7 @@ static const Case CASES[] = {
     { "correctness/flags_decoded",              t_flags_decoded },
     { "correctness/dual_pde_both_halves",       t_dual_pde_both_halves },
     { "correctness/valid_big_pte_hides_stale_4k", t_valid_big_pte_hides_stale_4k },
+    { "correctness/owning_big_pte_carries_its_permissions", t_owning_big_pte_carries_its_permissions },
     { "correctness/dual_pde_mixed_slots_live_w826", t_dual_pde_mixed_slots_live_w826 },
     { "correctness/multiple_pdbs",              t_multiple_pdbs },
 
@@ -2334,7 +2425,8 @@ static const Case CASES[] = {
     { "diff/add",                               t_diff_add },
     { "diff/delete",                            t_diff_delete },
     { "diff/edit_gpga",                         t_diff_edit_gpga },
-    { "diff/flags_only_edit_is_quiet",          t_diff_flags_only_edit_is_quiet },
+    { "diff/permission_edit_remaps",            t_diff_permission_edit_remaps },
+    { "diff/bad_key_perm_is_refused",           t_diff_bad_key_perm_is_refused },
     { "diff/grow_then_shrink",                  t_diff_grow_then_shrink },
     { "diff/failed_map_is_retried",             t_diff_failed_map_is_retried },
     { "diff/failed_unmap_is_retried",           t_diff_failed_unmap_is_retried },

@@ -13,7 +13,8 @@
 use crate::{ABI_ENCODE_FAILED, HostRm, RmError};
 use kf_abi::bringup::{
     NV01_MEMORY_VIRTUAL, NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE, NVOS46_FLAGS_DMA_OFFSET_GROWS_DOWN,
-    NVOS46_FLAGS_PAGE_KIND_OVERRIDE_YES,
+    NVOS46_FLAGS_ACCESS_READ_ONLY, NVOS46_FLAGS_GPU_CACHEABLE_NO, NVOS46_FLAGS_PAGE_KIND_OVERRIDE_YES,
+    NVOS46_FLAGS_TLB_LOCK_ENABLE,
     NVOS47_FLAGS_DEFER_TLB_INVALIDATION_TRUE, NvMemoryVirtualAllocationParams,
     NvVaspaceAllocationParameters,
 };
@@ -260,13 +261,17 @@ impl HostRm {
         at: Option<u64>,
         defer: bool,
     ) -> Result<u64, RmError> {
-        self.map_kind(space, memory, backing, offset, len, at, defer, 0)
+        self.map_kind(space, memory, backing, offset, len, at, defer, 0, MapPerm::READ_WRITE)
     }
 
     /// ★ v3-gfx: [`HostRm::map`] with a PTE `kind` (0 = PITCH, no override). A non-zero kind is
     /// set with `NVOS46_FLAGS_PAGE_KIND_OVERRIDE_YES` + `kindOverride` (`nvos.h:2113-2115, 2177`),
     /// which host RM validates with `FB_IS_KIND_SUPPORTED` (`virtual_mem.c:1348-1357`). The caller
     /// passes an UNCOMPRESSED kind; this device backs no comptags.
+    ///
+    /// ★★★ v3-roperm: `perm` is the guest leaf's permissions, carried to the host PTE
+    /// ([`MapPerm::nvos46_flags`]). A read-only guest mapping is read-only on the host, so a GPU
+    /// write through it FAULTS on the twin instead of landing.
     ///
     /// # Errors
     /// As [`HostRm::map`].
@@ -281,9 +286,11 @@ impl HostRm {
         at: Option<u64>,
         defer: bool,
         kind: u8,
+        perm: MapPerm,
     ) -> Result<u64, RmError> {
         let extra = if defer { NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE } else { 0 };
         let extra = extra | if kind != 0 { NVOS46_FLAGS_PAGE_KIND_OVERRIDE_YES } else { 0 };
+        let extra = extra | perm.nvos46_flags();
         let dma = match at {
             Some(a) => space.dma_for(a, len)?,
             None => space.range,
@@ -357,6 +364,7 @@ impl HostRm {
         at: u64,
         defer: bool,
         kind: u8,
+        perm: MapPerm,
     ) -> Result<u32, ScatterError> {
         let t0 = std::time::Instant::now();
         let view = kf_linux_raw::MappedRegion::stitch(
@@ -378,7 +386,7 @@ impl HostRm {
         // 4 096 populated VMAs on the nested bench, vs 0.5 ms for the map itself).
         reap_view(view);
         let t_drop = t0.elapsed();
-        let r = self.map_kind(space, obj, MapBacking::SharedSlice, 0, len, Some(at), defer, kind);
+        let r = self.map_kind(space, obj, MapBacking::SharedSlice, 0, len, Some(at), defer, kind, perm);
         // ★ Bounded phase breakdown (the first 32 batches of the process): stitch vs pin vs map.
         static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
         if LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 32 {
@@ -851,6 +859,43 @@ impl HostRm {
     }
 }
 
+/// ★★★ **v3-roperm — THE PERMISSIONS A HOST GPU MAPPING CARRIES**, as the guest's leaf stated
+/// them (`V3_UVM_DEMAND_PAGING.md` §6). Each field is one the host's UNPRIVILEGED map verb can
+/// express (`NVOS46`), so a guest permission is never widened on the twin:
+///
+/// | field | NVOS46 | host PTE (VER2 / VER3 PCF) |
+/// |---|---|---|
+/// | `read_only` | `ACCESS_READ_ONLY` | `READ_ONLY` / `_RO_` |
+/// | `atomic_disable` | `TLB_LOCK_ENABLE` | `ATOMIC_DISABLE` / `NO_ATOMIC` |
+/// | `volatile` | `GPU_CACHEABLE_NO` | `VOL` / `UNCACHED` |
+///
+/// ⊘ `volatile: false` maps `GPU_CACHEABLE_DEFAULT`, never `_YES`: the host memory keeps its own
+/// attribute, so the twin is never CACHED where the host object is not (the pre-roperm mapping).
+/// ⊘ `PRIVILEGE` has no field: RM takes it from the memory descriptor
+/// (`virt_mem_allocator_gm107.c:2849-2850`), not from a client's flags.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Hash)]
+pub struct MapPerm {
+    /// GPU writes fault.
+    pub read_only: bool,
+    /// GPU atomics fault.
+    pub atomic_disable: bool,
+    /// The GPU does not cache the mapping.
+    pub volatile: bool,
+}
+
+impl MapPerm {
+    /// The pre-roperm mapping: read-write, atomics allowed, the memory's own cache attribute.
+    pub const READ_WRITE: MapPerm = MapPerm { read_only: false, atomic_disable: false, volatile: false };
+
+    /// The `NVOS46_PARAMETERS::flags` bits that place these permissions.
+    #[must_use]
+    pub const fn nvos46_flags(self) -> u32 {
+        (if self.read_only { NVOS46_FLAGS_ACCESS_READ_ONLY } else { 0 })
+            | (if self.atomic_disable { NVOS46_FLAGS_TLB_LOCK_ENABLE } else { 0 })
+            | (if self.volatile { NVOS46_FLAGS_GPU_CACHEABLE_NO } else { 0 })
+    }
+}
+
 /// Why a [`HostRm::map_scattered`] placed nothing — each step named, so a refusal says whether the
 /// host kernel, the descriptor or the GPU map refused.
 #[derive(Debug)]
@@ -895,3 +940,25 @@ fn reap_view(view: kf_linux_raw::MappedRegion) {
 
 /// Stitched views that may wait for the reaper at once.
 const REAP_QUEUE: usize = 2;
+
+#[cfg(test)]
+mod perm_tests {
+    use super::MapPerm;
+
+    /// ★ v3-roperm: each permission sets exactly its own `NVOS46` field (`nvos.h:1974-1977`,
+    /// `2107-2111`, `2129-2131`), and the default is the pre-roperm read-write map (no bits) —
+    /// never `GPU_CACHEABLE_YES`, which would cache what the host object does not.
+    #[test]
+    fn each_permission_sets_exactly_its_nvos46_field() {
+        assert_eq!(MapPerm::READ_WRITE.nvos46_flags(), 0);
+        assert_eq!(MapPerm::default(), MapPerm::READ_WRITE);
+        assert_eq!(MapPerm { read_only: true, ..MapPerm::READ_WRITE }.nvos46_flags(), 0x1);
+        assert_eq!(MapPerm { atomic_disable: true, ..MapPerm::READ_WRITE }.nvos46_flags(), 1 << 28);
+        assert_eq!(MapPerm { volatile: true, ..MapPerm::READ_WRITE }.nvos46_flags(), 2 << 17);
+        let all = MapPerm { read_only: true, atomic_disable: true, volatile: true }.nvos46_flags();
+        assert_eq!(all, 0x1 | (1 << 28) | (2 << 17));
+        // None of them touches the fields the map path owns: FIXED 15, PAGE_SIZE 11:8, KIND_OVERRIDE
+        // 19, DEFER 31.
+        assert_eq!(all & ((1 << 15) | (0xF << 8) | (1 << 19) | (1 << 31)), 0);
+    }
+}

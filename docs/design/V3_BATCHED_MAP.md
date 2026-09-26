@@ -38,7 +38,7 @@ fixes the unmap side twice over: fewer calls, and each call walks a short list.
 
 ## 3. Map: stitch → one descriptor → one fixed map
 
-`kf_host::HostRm::map_scattered(space, fd, pieces, at, defer, kind)`:
+`kf_host::HostRm::map_scattered(space, fd, pieces, at, defer, kind, perm)`:
 
 1. `kf_linux_raw::MappedRegion::stitch(fd, pieces)` — a `PROT_NONE` reservation at a
    **kernel-chosen** address, tiled by one `MAP_FIXED | MAP_SHARED` per file-discontiguous piece at
@@ -49,8 +49,8 @@ fixes the unmap side twice over: fewer calls, and each call walks a short list.
    before any map exists** (RM holds the pages, not the VA).
 3. ONE fixed `NV_ESC_RM_MAP_MEMORY_DMA` of the whole object at the first row's VA, 4 KiB-pinned
    (`MapBacking::SharedSlice`: a stitched object is contiguous at no bigger page), with the rows'
-   (uncompressed) kind and `DEFER_TLB_INVALIDATION` — the entry's single invalidate follows as
-   before.
+   (uncompressed) kind, their permissions (`MapPerm`, v3-roperm) and `DEFER_TLB_INVALIDATION` —
+   the entry's single invalidate follows as before.
 
 **All or nothing.** `Ok` ⇔ every piece is placed at its VA. A refused map is rolled back by RM
 (`virt_mem_allocator_gm107.c:1540-1557`), a relocated one is torn down by the existing placement
@@ -60,8 +60,11 @@ assertion, and the object is freed before the error returns. ⇒ the caller's co
 
 After every per-run check (store/RAM bound, whole pages, extent, `reserved()` overlap, a refused
 unmap underneath), the surviving map rows are sorted by VA and cut into maximal groups that are
-VA-adjacent, all guest RAM, one kind, ≤ `BATCH_MAX_RUNS` (4 096). A group of ≥ 2 goes to
-`MapTarget::map_batch`. Vidmem rows are never batched (they are slices of the store, already one
+VA-adjacent, all guest RAM, one kind, **one permission set**, ≤ `BATCH_MAX_RUNS` (4 096). A group
+of ≥ 2 goes to `MapTarget::map_batch`. ★ v3-roperm (2026-09-26): one host map carries ONE
+permission set, so a batch across a guest read-only/read-write boundary would widen the RO rows —
+the silent read-duplication corruption `V3_UVM_DEMAND_PAGING.md` §6 (branch `v3-uvm-research`)
+found — or narrow the RW ones. `HostVas::map_scattered` refuses a mixed batch by name as well. Vidmem rows are never batched (they are slices of the store, already one
 object). A lone run keeps the per-run verb.
 
 ### 3.2 Commit-on-ack is unchanged

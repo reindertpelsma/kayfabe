@@ -45,6 +45,12 @@ impl Tree {
         self.leaf4k(va, pte_sys(gpa));
     }
 
+    /// ★ v3-roperm: [`Tree::map4k`] / [`Tree::map4k_sys`] with raw PTE permission `bits` OR-ed into
+    /// the leaf (the caller derives them from the format descriptor's bit positions).
+    pub fn map4k_bits(&mut self, va: u64, at: u64, sys: bool, bits: u64) {
+        self.leaf4k(va, if sys { pte_sys(at) } else { pte(at) } | bits);
+    }
+
     /// Unmap the 4 KiB page at `va` (its PTE becomes 0; the tables stay).
     pub fn unmap4k(&mut self, va: u64) {
         self.leaf4k(va, 0);
@@ -116,6 +122,13 @@ impl Tree3 {
     /// Map the 4 KiB page at `va` to guest-physical `gpa` in coherent system memory.
     pub fn map4k_sys(&mut self, va: u64, gpa: u64) {
         self.leaf4k(va, kf_cuda::synth::ver3::pte_sys(gpa));
+    }
+
+    /// ★ v3-roperm: [`Tree3::map4k`] / [`Tree3::map4k_sys`] with raw PCF permission `bits` OR-ed
+    /// into the leaf (the caller derives them from the format descriptor's bit positions).
+    pub fn map4k_bits(&mut self, va: u64, at: u64, sys: bool, bits: u64) {
+        let leaf = if sys { kf_cuda::synth::ver3::pte_sys(at) } else { kf_cuda::synth::ver3::pte(at) };
+        self.leaf4k(va, leaf | bits);
     }
 
     /// Unmap the 4 KiB page at `va` (its PTE becomes 0; the tables stay).

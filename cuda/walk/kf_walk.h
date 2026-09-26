@@ -115,6 +115,22 @@ extern "C" {
 #define KFWR_RF_ATOMIC_DISABLE (1u << 4)
 #define KFWR_RF_VOLATILE       (1u << 5)
 #define KFWR_RF_PRIVILEGE      (1u << 6)
+/* ★★★ v3-roperm: THE PERMISSION BITS THAT MAY JOIN THE DIFF KEY (kf_hkey), i.e. be part of what a
+ * committed placement IS, so that changing one on a kept placement is UNMAP + MAP. Which of them
+ * do join is the host's POLICY, passed per launch in KfArgs::key_perm (never baked into the PTX):
+ *   READ_ONLY      carried to the host map: NVOS46_FLAGS_ACCESS_READ_ONLY
+ *   VOLATILE       carried to the host map: NVOS46_FLAGS_GPU_CACHEABLE_NO
+ *   PRIVILEGE      NOT expressible on the host (RM takes it from MEMDESC_FLAGS_GPU_PRIVILEGED,
+ *                  virt_mem_allocator_gm107.c:2849-2850) — the host WITHHOLDS a privileged leaf
+ *                  from a user twin instead, so a PRIV flip must re-decide the placement
+ *   ATOMIC_DISABLE expressible (NVOS46_FLAGS_TLB_LOCK_ENABLE), but carried only under
+ *                  KF3_CARRY_ATOMIC_DISABLE=1: without replayable-fault delivery, carrying it
+ *                  turns UVM's "fault and migrate" into a 719, where executing the atomic on the
+ *                  authoritative sysmem copy (the pre-roperm behaviour) is correct. */
+#define KFWR_RF_KEY_PERM_ALL \
+    (KFWR_RF_READ_ONLY | KFWR_RF_ATOMIC_DISABLE | KFWR_RF_VOLATILE | KFWR_RF_PRIVILEGE)
+/* The default key: what the host carries by default, plus PRIVILEGE. */
+#define KFWR_RF_KEY_PERM_DEFAULT (KFWR_RF_READ_ONLY | KFWR_RF_VOLATILE | KFWR_RF_PRIVILEGE)
 #define KFWR_RF_PS_SHIFT   8u
 #define KFWR_RF_PS_MASK    0xFu
 /* ★★★★★ KIND IS PART OF RUN IDENTITY (the_walk_kernel_report_format.md §w725b).
@@ -253,7 +269,9 @@ typedef struct KfScope {
 /* Bumped whenever the format descriptor's layout changes. A host/PTX skew must
  * fail LOUDLY at launch rather than decode garbage field offsets and look like a
  * page-table bug (THE_CONSTRAINTS.md §21). */
-#define KF_ABI_VERSION 4u   /* 3: the diff/ack protocol; 4: the host-managed capacity layout (KfLayout, KfDev::need) */
+#define KF_ABI_VERSION 5u   /* 3: the diff/ack protocol; 4: the host-managed capacity layout (KfLayout, KfDev::need);
+                              * 5: permission bits join the diff key (kf_hkey), selected per launch by
+                              *    KfArgs::key_perm (a subset of KFWR_RF_KEY_PERM_ALL) */
 
 #define KF_TBL_VER2 2u   /* Pascal…Ada  — GA10x is the tested one               */
 #define KF_TBL_VER3 3u   /* Hopper/Blackwell — SKETCHED, NEVER RUN, and refused
@@ -292,6 +310,10 @@ typedef struct KfWalkCfg {
      * 0 refuses every leaf -- loudly, which is the right failure for a field
      * someone forgot. Use KF_GPGA_SPAN_UNBOUNDED to opt out on purpose. */
     uint64_t gpga_span;
+    /* ★ v3-roperm: which permission bits join the diff key (KfArgs::key_perm). A subset of
+     * KFWR_RF_KEY_PERM_ALL, else kf_create refuses; KFWR_RF_KEY_PERM_DEFAULT is the host's
+     * default policy. */
+    uint32_t key_perm;
 } KfWalkCfg;
 
 /* "This caller has no framebuffer, only tables" -- corpora and differentials. */

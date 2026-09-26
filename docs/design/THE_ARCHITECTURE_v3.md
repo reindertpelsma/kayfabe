@@ -976,6 +976,20 @@ addresses. The review gives three independent defeaters, any one of which is fat
 > is gone — RM's unmap takes the VA, which the diff carries — except where a diff cannot serve:
 > BAR view handles (`CpuWindow`) and the rows a Translated reader resolves through (`PlacedRows`).
 
+> ### ★★★ `[v3-roperm, 2026-09-26]` — WHAT A PLACEMENT IS: ground truth, kind, and the KEYED PERMISSIONS
+>
+> A committed placement is kept iff the walk backs it byte for byte with the same **key**: the
+> aperture class, the PTE kind, and the permission bits the host's policy keys on
+> (`KfArgs::key_perm`, a per-launch parameter — the PTX holds no policy). The policy is ONE value,
+> `kf_mem::apply::PermPolicy`, feeding both the key and the host map, so they cannot disagree:
+> READ_ONLY and VOLATILE are carried to the host map (`NVOS46` `ACCESS_READ_ONLY`,
+> `GPU_CACHEABLE_NO`); PRIVILEGE is keyed but cannot be placed, so a USER twin withholds a
+> privileged leaf (counted, named, never committed); ATOMIC_DISABLE is carried and keyed only with
+> `KF3_CARRY_ATOMIC_DISABLE=1`, because without replayable-fault delivery it turns UVM's
+> fault-and-migrate into a 719 where executing the atomic on the sysmem copy is correct. A keyed
+> change on a kept placement is UNMAP + MAP. ⊘ Before this, a guest RW→RO downgrade was "kept"
+> and a GPU write to a read-duplicate landed silently in a stale copy (`traces/v3_roperm/`).
+
 > ### ⊘⊘⊘ SUPERSEDED IN PART `[w825]` — THE SNAPSHOT IS A SHADOW; THE LEDGER REPLACES IT
 > ⊘ **Itself superseded in part by the 2026-09-25 box above:** the ledger is the GPU's.
 >
