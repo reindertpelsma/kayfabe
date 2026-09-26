@@ -23,7 +23,9 @@ echo "URL_PM=$($G 'nvidia-smi --query-gpu=persistence_mode --format=csv,noheader
 pass=0; fail=0
 for i in $(seq 1 "$N"); do
     t0=$(date +%s%N)
-    out=$($G "timeout $TMO $PY -c \"$PROG\" 2>&1 | tail -3" 2>&1 | tr -d '\r')
+    # ⊘ The guest-side `timeout` cannot kill a process stuck in the driver (D state), so the ssh
+    # itself is bounded too [measured uw1: proc 6 hung the hook for 20 min].
+    out=$(timeout $((TMO + 30)) $G "timeout $TMO $PY -c \"$PROG\" 2>&1 | tail -3" 2>&1 | tr -d '\r')
     rc=$?
     ms=$(( ($(date +%s%N) - t0) / 1000000 ))
     sum=$(echo "$out" | sed -n 's/.*URL_SUM \([0-9]*\).*/\1/p' | tail -1)
