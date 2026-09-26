@@ -15597,7 +15597,8 @@ mod tests {
             .expect("crates/ is this crate's parent")
             .to_path_buf();
         assert!(
-            crates.join("kayfabe-fwd").is_dir(),
+            // A KEPT sibling: `kayfabe-fwd`, the crate first named here, is archived (archive/README.md).
+            crates.join("kayfabe-device").is_dir(),
             "cannot see sibling crates at {crates:?} — this gate would otherwise pass by \
              scanning nothing"
         );
