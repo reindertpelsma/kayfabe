@@ -5000,11 +5000,18 @@ impl DmaGetPdeInfoParams {
     /// ⊘ `None` is *"RM's descent found no page table for this VA"*, i.e. structurally a
     /// `FAULT_PDE`. It is **not** *"the call failed"* — that is an `Err` at the caller.
     #[must_use]
+    ///
+    /// ⊘ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §3, measured bare metal on a GB203): a block
+    /// whose `pageSize` is above 2 MiB (the 512 MiB level) is NOT a page table for the small/big/
+    /// 2 MiB leaves this question is about. On `NV_MMU_VER3` (Hopper+) that level is `PDE1` — a
+    /// directory whose memdesc exists for every VA within 256 GiB of anything mapped, so it
+    /// answered "PRESENT" for a VA RM had just handed out as free. On `VER2` the level does not
+    /// exist (`mmuFmtFindLevelWithPageShift` skips it), so GA10x/Ada answers are unchanged.
     pub fn page_table(&self) -> Option<DmaPdeInfoBlock> {
         self.pte_blocks
             .iter()
             .copied()
-            .find(|b| b.describes_a_page_table())
+            .find(|b| b.describes_a_page_table() && b.page_size <= 0x20_0000)
     }
 }
 

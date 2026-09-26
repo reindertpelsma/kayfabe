@@ -6396,6 +6396,10 @@ pub struct SubmitOutcome {
     /// USERD `GP_PUT`: our produce cursor, read back so the pair is a comparison and not
     /// an assumption.
     pub gp_put: u32,
+    /// ★ 2026-09-26: whether this channel's class has a hardware `GP_GET` at all
+    /// ([`kayfabe_arch::ChannelClass::userd_has_gp_get`]) — `false` on Blackwell, where the
+    /// fourth fact does not exist and the semaphore is the whole completion.
+    pub gp_get_by_hw: bool,
 }
 
 thread_local! {
@@ -7184,7 +7188,7 @@ impl CeEvidence {
     /// on its own so a report can say **which** of the four failed.
     #[must_use]
     pub fn cursor_caught_up(&self) -> bool {
-        self.submit.gp_get == self.submit.gp_put
+        !self.submit.gp_get_by_hw || self.submit.gp_get == self.submit.gp_put
     }
 }
 
@@ -7196,7 +7200,7 @@ impl SubmitOutcome {
     /// the submission this call made.
     #[must_use]
     pub fn landed(&self, payload: u32) -> bool {
-        self.semaphore == payload && self.gp_get == self.gp_put
+        self.semaphore == payload && (!self.gp_get_by_hw || self.gp_get == self.gp_put)
     }
 }
 
@@ -12286,8 +12290,9 @@ impl HostRmBackend {
         // lands saw `GP_GET 0 GP_PUT 1` with the payload already there — and five bare-metal arms
         // read that as "hardware never fetched". GP_GET is still hardware's word (it is never
         // ours to write), so the bar is unchanged: it must reach GP_PUT — within the same budget.
+        let gp_get_by_hw = self.conn.host_classes().gpfifo_channel().userd_has_gp_get();
         let (mut gp_get, mut gp_put) = self.userd_cursors(chan)?;
-        while semaphore == payload && gp_get != gp_put && Instant::now() < deadline {
+        while gp_get_by_hw && semaphore == payload && gp_get != gp_put && Instant::now() < deadline {
             std::thread::sleep(Duration::from_millis(1));
             (gp_get, gp_put) = self.userd_cursors(chan)?;
         }
@@ -12295,6 +12300,7 @@ impl HostRmBackend {
             semaphore,
             gp_get,
             gp_put,
+            gp_get_by_hw,
         })
     }
 
@@ -16255,6 +16261,7 @@ mod tests {
             semaphore: 0xBEEF,
             gp_get: 1,
             gp_put: 1,
+            gp_get_by_hw: true,
         };
         assert!(ok.landed(0xBEEF));
         assert!(
@@ -16267,6 +16274,7 @@ mod tests {
             semaphore: 0,
             gp_get: 0,
             gp_put: 1,
+            gp_get_by_hw: true,
         };
         assert!(!userd_bug.landed(0xBEEF));
         // Fetched, but the methods evaporated — the wrong-subchannel shape.
@@ -16274,6 +16282,7 @@ mod tests {
             semaphore: 0,
             gp_get: 1,
             gp_put: 1,
+            gp_get_by_hw: true,
         };
         assert!(!fetched_only.landed(0xBEEF));
     }
@@ -16287,6 +16296,7 @@ mod tests {
             semaphore: 3,
             gp_get: 1,
             gp_put: 1,
+            gp_get_by_hw: true,
         };
         let good = CeEvidence {
             before: 0xFFFF_FFFF,
