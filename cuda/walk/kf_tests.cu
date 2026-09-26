@@ -470,6 +470,38 @@ static void t_valid_big_pte_hides_stale_4k(void)
     if (g_fails_here) dump(f);
 }
 
+/* ★★★ v3-roperm × v3-mapfix — A BIG PTE THAT OWNS ITS SLOT CARRIES *ITS* PERMISSIONS.
+ * UVM's read duplication maps the GPU duplicate read-only at whatever page size the block
+ * uses, and the merge leaves stale RW 4 KiB PTEs under a VALID big PTE. The run the host
+ * places is the big leaf's, with the big leaf's READ_ONLY — never the stale smalls' RW —
+ * and revoking write on the big PTE in place (same backing) re-maps it read-only. */
+static void t_owning_big_pte_carries_its_permissions(void)
+{
+    Fix f(8u << 20, cfg_default());
+    Tree t(f.g);
+    for (uint32_t i = 0; i < 16u; i++)                          /* stale RW smalls */
+        t.map4k(VBASE + (uint64_t)i * 4096ull, 0x300000ull + (uint64_t)i * 4096ull);
+    t.map64k(VBASE, 0x600000ull, AP_PTE_VID, PTE_READ_ONLY);    /* the owning big PTE, RO */
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    expect(f, {{VBASE, 0x600000ull, 64ull << 10, F64K | KFWR_RF_READ_ONLY, KFWR_OP_MAP}});
+    f.ack();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    validate(f);
+    CHECK_EQ(f.hdr.run_count, 0);
+    t.map64k(VBASE, 0x600000ull);                               /* collapse: write re-granted */
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    expect(f, {{VBASE, 0x600000ull, 64ull << 10, F64K | KFWR_RF_READ_ONLY, KFWR_OP_UNMAP},
+               {VBASE, 0x600000ull, 64ull << 10, F64K, KFWR_OP_MAP}});
+    f.ack();
+    t.map64k(VBASE, 0x600000ull, AP_PTE_VID, PTE_READ_ONLY);    /* in-place revoke again */
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    expect(f, {{VBASE, 0x600000ull, 64ull << 10, F64K, KFWR_OP_UNMAP},
+               {VBASE, 0x600000ull, 64ull << 10, F64K | KFWR_RF_READ_ONLY, KFWR_OP_MAP}});
+}
+
 static void t_dual_pde_mixed_slots_live_w826(void)
 {
     /* `[measured w826 ct10]` the live GA106 shape that lost two 4 KiB leaves: the small
@@ -2359,6 +2391,7 @@ static const Case CASES[] = {
     { "correctness/flags_decoded",              t_flags_decoded },
     { "correctness/dual_pde_both_halves",       t_dual_pde_both_halves },
     { "correctness/valid_big_pte_hides_stale_4k", t_valid_big_pte_hides_stale_4k },
+    { "correctness/owning_big_pte_carries_its_permissions", t_owning_big_pte_carries_its_permissions },
     { "correctness/dual_pde_mixed_slots_live_w826", t_dual_pde_mixed_slots_live_w826 },
     { "correctness/multiple_pdbs",              t_multiple_pdbs },
 
