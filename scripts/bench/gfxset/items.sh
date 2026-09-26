@@ -28,9 +28,19 @@ for ITEM in "$@"; do
     fi
     log=$O/$ITEM.log; W=$O/$ITEM.d; rm -rf "$W"; mkdir -p "$W"
     echo "=== $ITEM side=$SIDE start=$(date -Is) host=$(hostname) kernel=$(uname -r) drv=$(cat /sys/module/nvidia/version 2>/dev/null)" > "$log"
+    # ★ opt-in ioctl differential (GSET_NVDIFF=1): the nvdiff recorder (nvidia-gpu-passthrough
+    #   tests/mode2/nvdiff, 875c50c, copied verbatim to src/nvdiff/) LD_PRELOADed into the item's whole process
+    #   tree; the shim is built from source into $GSET_OUT on first use (gcc is in the image, so the SAME .so
+    #   runs on both sides). Records carry the thread id; single-process items align directly with nvdiff.py.
+    unset NVD_ENV; if [ "${GSET_NVDIFF:-0}" = 1 ]; then
+        SO=$GSET_OUT/nvdiff_shim.so
+        [ -s "$SO" ] || gcc -shared -fPIC -O2 -I"$HERE/src/nvdiff" -o "$SO" "$HERE/src/nvdiff/nvdiff_shim.c" -ldl -lpthread \
+            || echo "GSET_NVDIFF shim build FAILED" >> "$log"
+        NVD_ENV="LD_PRELOAD=$SO NVDIFF_OUT=$W/nvdiff.jsonl"
+    fi
     t0=$(date +%s)
     # the item runs in its own session; its stdout is the log (GSET_DIG/VAL lines included)
-    SIDE=$SIDE ITEM=$ITEM W=$W timeout -k 20 "$tmo" setsid bash -c ". '$HERE/lib.sh'; . '$HERE/itemdefs.sh'; cd '$W' && $fn" >> "$log" 2>&1 < /dev/null
+    env ${NVD_ENV:-} SIDE=$SIDE ITEM=$ITEM W=$W timeout -k 20 "$tmo" setsid bash -c ". '$HERE/lib.sh'; . '$HERE/itemdefs.sh'; cd '$W' && $fn" >> "$log" 2>&1 < /dev/null
     rc=$?; t1=$(date +%s)
     echo "=== end rc=$rc secs=$((t1-t0)) $(date -Is)" >> "$log"
     # the first GSET_FAIL wins; else the first error-looking line (the log's own header excluded)

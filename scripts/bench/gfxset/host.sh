@@ -26,10 +26,11 @@ ITEMS=${*:-$(bash "$HR" run bash /var/tmp/gfxset/bin/items.sh host list)}
 say "items: $ITEMS"
 for item in $ITEMS; do
     h0=$(dmesg | wc -l)
-    res=$(timeout "${GSET_ITEM_TMO:-1800}" bash "$HR" run bash /var/tmp/gfxset/bin/items.sh host "$item" 2>&1)
+    res=$(timeout "${GSET_ITEM_TMO:-1800}" bash "$HR" run env GSET_NVDIFF="${GSET_NVDIFF:-0}" bash /var/tmp/gfxset/bin/items.sh host "$item" 2>&1)
     dmesg | tail -n +"$((h0+1))" > "$R/$item.host_baremetal_dmesg.log"
     cp -f "$ROOT/var/tmp/gfxset/out/host/$item.log" "$R/$item.host.log" 2>/dev/null
-    ( cd "$ROOT/var/tmp/gfxset/out/host/$item.d" 2>/dev/null && tar -cf - --exclude='*.yuv' --exclude='*.raw' . ) > "$R/$item.host_art.tar" 2>/dev/null
+    ( cd "$ROOT/var/tmp/gfxset/out/host/$item.d" 2>/dev/null && tar -cf - --exclude='*.yuv' --exclude='*.raw' --exclude='*.jsonl' . ) > "$R/$item.host_art.tar" 2>/dev/null
+    [ -s "$ROOT/var/tmp/gfxset/out/host/$item.d/nvdiff.jsonl" ] && cp -f "$ROOT/var/tmp/gfxset/out/host/$item.d/nvdiff.jsonl" "$R/$item.host_nvdiff.jsonl"
     line=$(grep -a '^GSET_RES ' <<<"$res" | tail -1)
     [ -n "$line" ] || line="GSET_RES side=host item=$item verdict=HANG rc=- secs=- note=no-result-line"
     hx=$(grep -c 'Xid' "$R/$item.host_baremetal_dmesg.log")

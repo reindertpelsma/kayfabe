@@ -29,7 +29,7 @@ for item in $GSET_ITEMS; do
     q0=$(wc -l < "$QLOG" 2>/dev/null || echo 0)
     h0=$(dmesg 2>/dev/null | wc -l)
     d0=$($G 'sudo dmesg | wc -l' 2>/dev/null | tr -d '\r'); d0=${d0:-0}
-    res=$(timeout "${GSET_ITEM_TMO:-1800}" "$G" "bash /var/tmp/gfxset/bin/items.sh guest $item" 2>&1 | tr -d '\r')
+    res=$(timeout "${GSET_ITEM_TMO:-1800}" "$G" "GSET_NVDIFF=${GSET_NVDIFF:-0} bash /var/tmp/gfxset/bin/items.sh guest $item" 2>&1 | tr -d '\r')
     src=$?
     alive=1; $G true >/dev/null 2>&1 || { sleep 20; $G true >/dev/null 2>&1 || alive=0; }
     line=$(grep -a '^GSET_RES ' <<<"$res" | tail -1)
@@ -41,7 +41,9 @@ for item in $GSET_ITEMS; do
         $G "cat /var/tmp/gfxset/out/guest/$item.log" > "$OUT/$item.guest.log" 2>&1
         $G "sudo dmesg | tail -n +$((d0+1))" > "$OUT/$item.guest_dmesg.log" 2>&1
         # the item's artefacts (images, streams) for eyes and for a byte compare
-        $G "cd /var/tmp/gfxset/out/guest/$item.d 2>/dev/null && tar -cf - --exclude='*.yuv' --exclude='*.raw' . 2>/dev/null" > "$OUT/$item.guest_art.tar" 2>/dev/null
+        $G "cd /var/tmp/gfxset/out/guest/$item.d 2>/dev/null && tar -cf - --exclude='*.yuv' --exclude='*.raw' --exclude='*.jsonl' . 2>/dev/null" > "$OUT/$item.guest_art.tar" 2>/dev/null
+        $G "cat /var/tmp/gfxset/out/guest/$item.d/nvdiff.jsonl 2>/dev/null" > "$OUT/$item.guest_nvdiff.jsonl" 2>/dev/null
+        [ -s "$OUT/$item.guest_nvdiff.jsonl" ] || rm -f "$OUT/$item.guest_nvdiff.jsonl"
     fi
     dmesg 2>/dev/null | tail -n +"$((h0+1))" > "$OUT/$item.host_dmesg.log"
     tail -n +"$((q0+1))" "$QLOG" 2>/dev/null | tail -5000 > "$OUT/$item.kf3.log"
