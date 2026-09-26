@@ -34,7 +34,7 @@
 //! from it in place of the guest's tables, and a stale entry can only cost an extra diff line,
 //! never a wrong translation.
 
-use crate::abi::{KfMapRun, KFWR_OP_MAP, KFWR_OP_UNMAP, KFWR_RF_HELD};
+use crate::abi::{KfMapRun, KFWR_OP_MAP, KFWR_OP_UNMAP, KFWR_RF_HELD, KFWR_RF_HOST_PERM};
 
 /// Page-size classes.
 pub const CLASSES: usize = 4;
@@ -49,8 +49,13 @@ pub fn class_of(flags: u32) -> usize {
 /// guest RAM (both system apertures — the host maps one guest-RAM object either way), `2` any
 /// other aperture (peer; the walker refuses it, so it never matches anything) — ★ v3-gfx: plus the
 /// PTE KIND in bits `2..10`, because the host mapping now carries it (`kf_mem::apply::host_pte_kind`)
-/// and a page re-kinded at the same backing must be re-mapped. Read-only, volatile and page size
-/// are still not part of what the host places. Mirrors `kf_hkey` (`cuda/walk/kf_walk.cu`).
+/// and a page re-kinded at the same backing must be re-mapped — ★★★ v3-roperm: plus the host
+/// PERMISSIONS ([`KFWR_RF_HOST_PERM`]: read-only, atomic-disable, volatile) in bits `10..13`,
+/// because the host mapping carries them too (`kf_host::MapPerm`). ⊘ Without them a guest RW→RO
+/// downgrade over the same backing was KEPT: the host twin stayed read-write and a GPU write to a
+/// UVM read-duplicate landed silently in a stale copy (`V3_UVM_DEMAND_PAGING.md` §6). Page size
+/// and `PRIVILEGE` (no unprivileged host verb can place it) are not part of what the host places.
+/// Mirrors `kf_hkey` (`cuda/walk/kf_walk.cu`).
 #[must_use]
 pub fn host_key(flags: u32) -> u32 {
     let ap = match flags & 0x7 {
@@ -58,7 +63,7 @@ pub fn host_key(flags: u32) -> u32 {
         2 | 3 => 1,
         _ => 2,
     };
-    ap | (((flags >> 16) & 0xff) << 2)
+    ap | (((flags >> 16) & 0xff) << 2) | (((flags & KFWR_RF_HOST_PERM) >> 3) << 10)
 }
 
 /// One host verdict on one report run.
@@ -291,6 +296,7 @@ pub fn coverage(runs: &[KfMapRun]) -> [Vec<(u64, u64, u32, u64)>; CLASSES] {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::abi::{KFWR_RF_ATOMIC_DISABLE, KFWR_RF_PRIVILEGE, KFWR_RF_READ_ONLY, KFWR_RF_VOLATILE};
 
     const PAGE: u64 = 0x1000;
 
@@ -390,6 +396,68 @@ mod tests {
         assert_ne!(d.runs[0].flags & KFWR_RF_HELD, 0, "its unmap says it was never ours");
     }
 
+    /// ★★★★★ v3-roperm — **A GUEST RW→RO DOWNGRADE OVER THE SAME BACKING IS A CHANGE.** Stock UVM
+    /// read duplication revokes GPU write IN PLACE (`block_revoke_prot`, `uvm_va_block.c:9010-9060`):
+    /// same VA, same physical page, only READ_ONLY flips. ⊘ The key used to omit it, so this diff
+    /// was EMPTY, the host twin stayed read-write, and a GPU write to the duplicate landed silently
+    /// in a stale copy (`V3_UVM_DEMAND_PAGING.md` §6). It must UNMAP the RW placement and MAP the
+    /// same bytes again read-only — and the upgrade back must do the same the other way.
+    #[test]
+    fn a_rw_to_ro_downgrade_over_the_same_backing_unmaps_and_remaps() {
+        let rw = run(0x10_0000, 0x20_0000, 4 * PAGE, SYS);
+        let c = settle(&Committed::default(), &[rw]);
+        assert!(diff(&c, &[rw], 64).runs.is_empty(), "control: an unchanged walk is quiet");
+        let ro = run(0x10_0000, 0x20_0000, 4 * PAGE, SYS | KFWR_RF_READ_ONLY);
+        let d = diff(&c, &[ro], 64);
+        assert_eq!(
+            d.runs,
+            vec![KfMapRun { op: KFWR_OP_UNMAP, ..rw }, ro],
+            "a permission downgrade must retire the RW placement and place the RO one"
+        );
+        let c = commit(&c, &d.runs, &ok(d.runs.len()));
+        assert_eq!(c.cls[0], vec![ro], "the slot now records the placement as read-only");
+        assert!(diff(&c, &[ro], 64).runs.is_empty(), "and is quiet once it landed");
+        // The upgrade back (a collapse re-grants write) is a change too.
+        let d = diff(&c, &[rw], 64);
+        assert_eq!(d.runs, vec![KfMapRun { op: KFWR_OP_UNMAP, ..ro }, rw]);
+        // ⊘ A refused remap stays a difference: the RW placement is still what the host holds.
+        let c2 = settle(&Committed::default(), &[rw]);
+        let d = diff(&c2, &[ro], 64);
+        let c2 = commit(&c2, &d.runs, &[AckCode::Applied, AckCode::Failed]);
+        assert!(c2.is_empty(), "the unmap landed, the RO map did not: nothing is placed");
+        assert_eq!(diff(&c2, &[ro], 64).runs, vec![ro], "and the RO map is retried");
+    }
+
+    /// Every carried permission is part of the key — and `PRIVILEGE`, which no unprivileged host
+    /// verb can place, is not (keying on it would only churn the host).
+    #[test]
+    fn each_carried_permission_is_part_of_the_key_and_privilege_is_not() {
+        let base = run(0, 0x40_0000, 2 * PAGE, 0);
+        let c = settle(&Committed::default(), &[base]);
+        for bit in [KFWR_RF_READ_ONLY, KFWR_RF_ATOMIC_DISABLE, KFWR_RF_VOLATILE] {
+            let w = KfMapRun { flags: base.flags | bit, ..base };
+            assert_eq!(diff(&c, &[w], 64).runs.len(), 2, "flag {bit:#x} must re-map");
+            assert_ne!(host_key(w.flags), host_key(base.flags));
+        }
+        let w = KfMapRun { flags: base.flags | KFWR_RF_PRIVILEGE, ..base };
+        assert!(diff(&c, &[w], 64).runs.is_empty(), "PRIVILEGE is not placed by the host");
+    }
+
+    /// A downgrade of PART of a placement retires the whole placement (the host unmaps by the VA
+    /// a map was placed at) and maps both halves with their own permissions.
+    #[test]
+    fn a_partial_downgrade_splits_the_placement_by_permission() {
+        let c = settle(&Committed::default(), &[run(0, 0x10_0000, 4 * PAGE, 0)]);
+        let walk = vec![run(0, 0x10_0000, 2 * PAGE, 0), run(2 * PAGE, 0x10_2000, 2 * PAGE, KFWR_RF_READ_ONLY)];
+        let d = diff(&c, &walk, 64);
+        assert_eq!(d.runs.len(), 3);
+        assert_eq!(d.runs[0].op, KFWR_OP_UNMAP);
+        assert_eq!(d.runs[0].len, 4 * PAGE);
+        assert_eq!(&d.runs[1..], &walk[..]);
+        let c = commit(&c, &d.runs, &ok(3));
+        assert!(diff(&c, &walk, 64).runs.is_empty());
+    }
+
     #[test]
     fn classes_are_diffed_separately() {
         let c = settle(&Committed::default(), &[run(0, 0x10_0000, 16 * PAGE, 0)]);
@@ -469,6 +537,9 @@ mod tests {
             match r.below(10) {
                 0 => {}
                 1 => v.push(KfMapRun { gpga: r.below(64) * PAGE, ..*x }),
+                // ★ v3-roperm: a permission flip at the same backing (RW↔RO, atomics, cache,
+                // privilege) — the in-place downgrade UVM's read duplication performs.
+                3 => v.push(KfMapRun { flags: x.flags ^ [1u32 << 3, 1 << 4, 1 << 5, 1 << 6][r.below(4) as usize], ..*x }),
                 2 if x.len > PAGE => {
                     v.push(KfMapRun { len: PAGE, ..*x });
                     v.push(KfMapRun { va: x.va + PAGE, gpga: r.below(64) * PAGE, len: x.len - PAGE, ..*x });

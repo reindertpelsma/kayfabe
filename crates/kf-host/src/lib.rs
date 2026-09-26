@@ -12,7 +12,7 @@
 pub mod channel;
 pub mod event;
 pub use event::EventFd;
-pub use channel::{Channel, MapBacking, RingSpec, ScatterError, VaSpace};
+pub use channel::{Channel, MapBacking, MapPerm, RingSpec, ScatterError, VaSpace};
 
 use kf_abi::bringup::{
     NV_ESC_CHECK_VERSION_STR, NV_ESC_REGISTER_FD, NV_ESC_RM_ALLOC_MEMORY, NV_IOCTL_MAGIC,

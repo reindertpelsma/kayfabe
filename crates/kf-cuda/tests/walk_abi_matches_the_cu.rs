@@ -613,6 +613,20 @@ fn the_report_constants_match_the_header() {
     );
     assert_eq!(parse("KFWR_HF_DIFF"), u64::from(kf_cuda::abi::KFWR_HF_DIFF));
     assert_eq!(parse("KFWR_RF_HELD"), u64::from(kf_cuda::abi::KFWR_RF_HELD));
+    assert_eq!(parse("KFWR_RF_READ_ONLY"), u64::from(kf_cuda::abi::KFWR_RF_READ_ONLY));
+    assert_eq!(parse("KFWR_RF_ATOMIC_DISABLE"), u64::from(kf_cuda::abi::KFWR_RF_ATOMIC_DISABLE));
+    assert_eq!(parse("KFWR_RF_VOLATILE"), u64::from(kf_cuda::abi::KFWR_RF_VOLATILE));
+    assert_eq!(parse("KFWR_RF_PRIVILEGE"), u64::from(kf_cuda::abi::KFWR_RF_PRIVILEGE));
+    // ★ v3-roperm: the header spells the carried set as an OR of the three names.
+    assert_eq!(
+        extract_define(&h, "KFWR_RF_HOST_PERM").trim(),
+        "(KFWR_RF_READ_ONLY | KFWR_RF_ATOMIC_DISABLE | KFWR_RF_VOLATILE)",
+        "the permission set the diff key and the host map carry differs between the .h and abi.rs"
+    );
+    assert_eq!(
+        kf_cuda::abi::KFWR_RF_HOST_PERM,
+        kf_cuda::abi::KFWR_RF_READ_ONLY | kf_cuda::abi::KFWR_RF_ATOMIC_DISABLE | kf_cuda::abi::KFWR_RF_VOLATILE
+    );
     assert_eq!(parse("KFWR_V_PARTIAL"), u64::from(kf_cuda::abi::KFWR_V_PARTIAL));
     assert_eq!(parse("KFWR_V_OVERFLOW"), u64::from(kf_cuda::abi::KFWR_V_OVERFLOW));
     assert_eq!(parse("KFWR_V_REFUSED"), u64::from(kf_cuda::abi::KFWR_V_REFUSED));

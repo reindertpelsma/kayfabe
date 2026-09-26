@@ -419,6 +419,7 @@ impl Walker for GpuWalker {
                         ap: m.aperture(),
                         held: m.flags & kf_cuda::abi::KFWR_RF_HELD != 0,
                         kind: ((m.flags >> 16) & 0xff) as u8,
+                        perm: crate::apply::host_perm(m.flags),
                     })
                     .collect();
                 EntryDiff {
@@ -1498,6 +1499,7 @@ mod tests {
                         ap: m.aperture(),
                         held: m.flags & kf_cuda::abi::KFWR_RF_HELD != 0,
                         kind: ((m.flags >> 16) & 0xff) as u8,
+                        perm: crate::apply::host_perm(m.flags),
                     })
                     .collect();
                 let refused = if self.refuse_in == Some(e.pdb) { 0x2000 } else { 0 };
@@ -1534,6 +1536,8 @@ mod tests {
     /// the §49.1 ordering, observed from the host side.
     struct FakeHost {
         ops: Rc<RefCell<Vec<(Op, bool)>>>,
+        /// ★ v3-roperm: the permissions each map carried, by VA, in order.
+        perms: Rc<RefCell<Vec<(u64, kf_host::MapPerm)>>>,
         port: Arc<InvalidatePort>,
         refuse_map_at: RefCell<Option<u64>>,
         refuse_unmap_at: RefCell<Option<u64>>,
@@ -1552,6 +1556,7 @@ mod tests {
                 return Err(format!("map {:#x}: refused (fake)", d.va));
             }
             self.ops.borrow_mut().push((Op::Map(d.va, d.off, d.len), self.port.trigger().read() != 0));
+            self.perms.borrow_mut().push((d.va, d.perm));
             Ok(if self.held_at == Some(d.va) { Mapped::HeldByHost } else { Mapped::Placed })
         }
         fn reserved(&self) -> Vec<(u64, u64)> {
@@ -1575,11 +1580,13 @@ mod tests {
         port: Arc<InvalidatePort>,
         tables: Tables,
         ops: Rc<RefCell<Vec<(Op, bool)>>>,
+        perms: Rc<RefCell<Vec<(u64, kf_host::MapPerm)>>>,
     }
 
     fn host(r: &Rig, held_at: Option<u64>, reserved: Vec<(u64, u64)>) -> FakeHost {
         FakeHost {
             ops: r.ops.clone(),
+            perms: r.perms.clone(),
             port: r.port.clone(),
             refuse_map_at: RefCell::new(None),
             refuse_unmap_at: RefCell::new(None),
@@ -1594,7 +1601,7 @@ mod tests {
         let tables: Tables = Rc::default();
         let ops: Rc<RefCell<Vec<(Op, bool)>>> = Rc::default();
         let m = VaManager::new(ModelWalker::new(tables.clone()), STORE, Box::new(|gpa, _| Some(gpa)));
-        let mut r = Rig { m, port, tables, ops };
+        let mut r = Rig { m, port, tables, ops, perms: Rc::default() };
         for k in [K_A, K_B] {
             let h = host(&r, None, Vec::new());
             r.m.table.insert(k, h);
@@ -1831,6 +1838,42 @@ mod tests {
         assert_eq!((a.mapped, a.unmapped), (1, 1));
         assert_eq!(ops(&r), vec![Op::Unmap(0x1100_0000), Op::Map(0x1100_0000, 0x0220_0000, 0x1000), Op::Invalidate]);
         assert!(!busy(&r.port));
+    }
+
+    /// ★★★★★ v3-roperm, end to end through the VA manager: a guest RW→RO downgrade of a page it
+    /// already has mapped (same VA, same backing — UVM read duplication's in-place revoke) reaches
+    /// the host as UNMAP + MAP **read-only**, before the guest's invalidate clears. ⊘ Before, the
+    /// diff was empty, nothing reached the host, and the twin stayed READ-WRITE.
+    /// (The fake walker's fourth tuple element is the run's low flags byte: aperture + permissions.)
+    #[test]
+    fn a_rw_to_ro_downgrade_reaches_the_host_as_a_read_only_remap() {
+        use kf_cuda::abi::{KFWR_RF_ATOMIC_DISABLE, KFWR_RF_PRIVILEGE, KFWR_RF_READ_ONLY};
+        const RO: u8 = KFWR_RF_READ_ONLY as u8;
+        let mut r = rig();
+        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x2000, 2)]);
+        settle(&mut r, PDB_A);
+        assert_eq!(*r.perms.borrow(), vec![(0x1000_0000, kf_host::MapPerm::READ_WRITE)]);
+        r.ops.borrow_mut().clear();
+        r.perms.borrow_mut().clear();
+        // The downgrade: same VA, same guest page, READ_ONLY set.
+        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x2000, 2 | RO)]);
+        let out = settle(&mut r, PDB_A);
+        assert_eq!(out.completed.len(), 1);
+        assert_eq!(ops(&r), vec![Op::Unmap(0x1000_0000), Op::Map(0x1000_0000, 0x0200_0000, 0x2000), Op::Invalidate]);
+        assert!(r.ops.borrow().iter().all(|(_, b)| *b), "the remap landed before the guest's invalidate cleared");
+        let ro = kf_host::MapPerm { read_only: true, ..kf_host::MapPerm::READ_WRITE };
+        assert_eq!(*r.perms.borrow(), vec![(0x1000_0000, ro)], "the host map is READ-ONLY");
+        assert!(!busy(&r.port));
+        // Quiet once landed; PRIVILEGE (not placeable by the host) stays quiet too.
+        r.ops.borrow_mut().clear();
+        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x2000, 2 | RO | KFWR_RF_PRIVILEGE as u8)]);
+        settle(&mut r, PDB_A);
+        assert!(ops(&r).is_empty(), "no host work for a change the host cannot express");
+        // Atomics disabled on top: remapped again, carrying both.
+        r.perms.borrow_mut().clear();
+        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x2000, 2 | RO | KFWR_RF_ATOMIC_DISABLE as u8)]);
+        settle(&mut r, PDB_A);
+        assert_eq!(*r.perms.borrow(), vec![(0x1000_0000, kf_host::MapPerm { atomic_disable: true, ..ro })]);
     }
 
     #[test]

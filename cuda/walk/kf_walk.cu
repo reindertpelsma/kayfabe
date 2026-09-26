@@ -802,12 +802,18 @@ __global__ void kf_walk_kernel(KfArgs a)
 __device__ __forceinline__ uint32_t kf_pcls(uint32_t flags) { return (flags >> KFWR_RF_PS_SHIFT) & 3u; }
 /* The ground truth the HOST maps: store, guest RAM, or nothing it will match — and, v3-gfx, the
  * PTE KIND the host mapping carries (a re-kinded page must be re-mapped: the host PTE's kind is
- * part of what we place). Mirrored by kf_cuda::diffmodel::host_key. */
+ * part of what we place) — and, v3-roperm, the PERMISSIONS the host mapping carries
+ * (KFWR_RF_HOST_PERM: read-only, atomic-disable, volatile). ⊘ Without them a guest RW→RO
+ * downgrade over the same backing was "kept", so the host twin stayed READ-WRITE and a GPU write
+ * to a UVM read-duplicate landed silently in a stale copy (V3_UVM_DEMAND_PAGING.md §6). A
+ * permission change is a change: the placement is UNMAPPED and the piece MAPPED again with the
+ * new permissions. Mirrored by kf_cuda::diffmodel::host_key. */
 __device__ __forceinline__ uint32_t kf_hkey(uint32_t flags)
 {
     const uint32_t ap = flags & KFWR_RF_AP_MASK;
     const uint32_t k = ap == KFWR_AP_VIDMEM ? 0u : (ap == KFWR_AP_SYSCOH || ap == KFWR_AP_SYSNONCOH) ? 1u : 2u;
-    return k | (((flags >> KFWR_RF_KIND_SHIFT) & KFWR_RF_KIND_MASK) << 2);
+    return k | (((flags >> KFWR_RF_KIND_SHIFT) & KFWR_RF_KIND_MASK) << 2)
+             | (((flags & KFWR_RF_HOST_PERM) >> 3) << 10);
 }
 __device__ __forceinline__ uint64_t kf_end(const KfMapRun &r) { return r.va + r.len; }
 

@@ -33,6 +33,9 @@ pub struct DiffRun {
     /// ★ v3-gfx: the guest PTE's KIND (run flags bits 16..23, `KFWR_RF_KIND_SHIFT`) — part of run
     /// identity in the walker, carried to the host map as its UNCOMPRESSED equivalent.
     pub kind: u8,
+    /// ★★★ v3-roperm: the guest leaf's permissions ([`host_perm`] of the run flags) — part of the
+    /// diff key in the walker (`kf_hkey`), carried to the host map.
+    pub perm: kf_host::MapPerm,
 }
 
 /// How one entry's runs are turned into host rows.
@@ -176,6 +179,21 @@ pub fn host_pte_kind(guest: u8, ram: bool) -> u8 {
     }
 }
 
+/// ★★★ v3-roperm — **the permissions a host row carries**, decoded from a walk run's flags
+/// (`KFWR_RF_HOST_PERM`, `cuda/walk/kf_walk.h`). The walker decodes them per family off the format
+/// descriptor (VER2 PTE bits 6/7/3; VER3 PCF bits 5/6/3 — `kf_cuda::abi::kf_format_ver2`/`_ver3`),
+/// so this is family-free. ⊘ `KFWR_RF_PRIVILEGE` is not carried: no unprivileged host verb can
+/// place it (`kf_host::MapPerm`).
+#[must_use]
+pub fn host_perm(flags: u32) -> kf_host::MapPerm {
+    use kf_cuda::abi::{KFWR_RF_ATOMIC_DISABLE, KFWR_RF_READ_ONLY, KFWR_RF_VOLATILE};
+    kf_host::MapPerm {
+        read_only: flags & KFWR_RF_READ_ONLY != 0,
+        atomic_disable: flags & KFWR_RF_ATOMIC_DISABLE != 0,
+        volatile: flags & KFWR_RF_VOLATILE != 0,
+    }
+}
+
 /// ★★★★★ **Apply `runs` (one entry's diff) through `target`.** Unmaps first (a held placement
 /// is retired without a host call), then maps, then ONE invalidate if anything changed.
 ///
@@ -238,7 +256,8 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
         }
         let mut d = match desired_from_leaves([(r.va, r.at, r.len, r.ap)], cfg.store_bytes, cfg.ram_offset) {
             // ★ v3-gfx: the host maps it with the guest's kind, uncompressed (`Desired::kind`).
-            Ok(v) if v.len() == 1 => Desired { kind: host_pte_kind(r.kind, v[0].ram), ..v[0] },
+            // ★★★ v3-roperm: and with the guest leaf's permissions (`Desired::perm`).
+            Ok(v) if v.len() == 1 => Desired { kind: host_pte_kind(r.kind, v[0].ram), perm: r.perm, ..v[0] },
             Ok(_) => {
                 out.refuse(i, format!("map {:#x}: no row", r.va));
                 continue;
@@ -290,10 +309,13 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
     }
     // ★ `V3_BATCHED_MAP.md` §3: VA-contiguous guest-RAM rows of one kind go as ONE batched
     // placement; a refused batch placed nothing, so its rows go one by one and each gets its own
-    // verdict (HELD included).
+    // verdict (HELD included). ★★★ v3-roperm: and of ONE permission set — one host map carries
+    // one, so a batch across a RO/RW boundary would widen the RO rows (or narrow the RW ones).
     pending.sort_by_key(|&(_, d)| d.va);
     let idx: Vec<usize> = (0..pending.len()).collect();
-    let same = |a: usize, b: usize| pending[a].1.ram && pending[b].1.ram && pending[a].1.kind == pending[b].1.kind;
+    let same = |a: usize, b: usize| {
+        pending[a].1.ram && pending[b].1.ram && pending[a].1.kind == pending[b].1.kind && pending[a].1.perm == pending[b].1.perm
+    };
     for group in contiguous_groups(&idx, |k| (pending[k].1.va, pending[k].1.len), same, BATCH_MAX_RUNS) {
         if group.len() >= 2 && pending[group[0]].1.ram {
             let rows: Vec<Desired> = group.iter().map(|&k| pending[k].1).collect();
@@ -449,7 +471,8 @@ mod tests {
                 return Err("batch refused (fake)".into());
             }
             let len: u64 = rows.iter().map(|d| d.len).sum();
-            self.ops.borrow_mut().push(format!("batch {:#x}+{len:#x} x{}", rows[0].va, rows.len()));
+            assert!(rows.iter().all(|d| d.perm == rows[0].perm), "a batch mixed permissions: {rows:x?}");
+            self.ops.borrow_mut().push(format!("batch {:#x}+{len:#x} x{}{}", rows[0].va, rows.len(), perm_tag(rows[0].perm)));
             Ok(())
         }
         fn unmap_range(&self, va: u64, len: u64, _: bool) -> Result<(), String> {
@@ -464,7 +487,7 @@ mod tests {
             if self.refuse_map == Some(d.va) {
                 return Err("no (fake)".into());
             }
-            self.ops.borrow_mut().push(format!("map {:#x}+{:#x}", d.va, d.len));
+            self.ops.borrow_mut().push(format!("map {:#x}+{:#x}{}", d.va, d.len, perm_tag(d.perm)));
             Ok(if self.held_at == Some(d.va) { Mapped::HeldByHost } else { Mapped::Placed })
         }
         fn unmap(&self, va: u64, _: bool) -> Result<(), String> {
@@ -489,14 +512,28 @@ mod tests {
             Ok(Mapped::Placed)
         }
     }
+    /// ★ v3-roperm: a recorded op names its permissions unless it is the plain RW map.
+    fn perm_tag(p: kf_host::MapPerm) -> String {
+        let mut t = String::new();
+        if p.read_only {
+            t.push_str(" ro");
+        }
+        if p.atomic_disable {
+            t.push_str(" noatomic");
+        }
+        if p.volatile {
+            t.push_str(" vol");
+        }
+        t
+    }
     fn cfg() -> ApplyCfg<'static> {
         ApplyCfg { store_bytes: 1 << 30, grain: 0x1000, ram_offset: &|gpa, _| Some(gpa), usermode: None }
     }
     fn m(va: u64, at: u64, len: u64) -> DiffRun {
-        DiffRun { unmap: false, va, len, at, ap: 0, held: false, kind: 0 }
+        DiffRun { unmap: false, va, len, at, ap: 0, held: false, kind: 0, perm: kf_host::MapPerm::READ_WRITE }
     }
     fn u(va: u64, len: u64) -> DiffRun {
-        DiffRun { unmap: true, va, len, at: 0, ap: 0, held: false, kind: 0 }
+        DiffRun { unmap: true, va, len, at: 0, ap: 0, held: false, kind: 0, perm: kf_host::MapPerm::READ_WRITE }
     }
 
     fn ram(va: u64, gpa: u64, len: u64) -> DiffRun {
@@ -531,6 +568,46 @@ mod tests {
             ]
         );
         assert_eq!((a.mapped, a.batches, a.batched_runs, a.map_calls), (7, 2, 5, 4));
+    }
+
+    /// ★★★★★ v3-roperm: the guest leaf's permissions reach the host map, and a batch groups only
+    /// SAME-permission rows — one host map carries one permission set, so batching a RO row with
+    /// a RW neighbour would widen the RO row (the silent read-duplication corruption,
+    /// `V3_UVM_DEMAND_PAGING.md` §6) or narrow the RW one.
+    #[test]
+    fn permissions_reach_the_host_and_split_batches() {
+        use kf_host::MapPerm;
+        let ro = MapPerm { read_only: true, ..MapPerm::READ_WRITE };
+        let t = Rec { batching: Some(None), ..Rec::default() };
+        let runs = [
+            ram(0x2_0000_0000, 0x9000, 0x1000),
+            ram(0x2_0000_1000, 0x3000, 0x1000),
+            DiffRun { perm: ro, ..ram(0x2_0000_2000, 0x7000, 0x1000) }, // VA-adjacent, but RO
+            DiffRun { perm: ro, ..ram(0x2_0000_3000, 0x5000, 0x1000) },
+            DiffRun { perm: MapPerm { atomic_disable: true, ..ro }, ..ram(0x2_0000_4000, 0x6000, 0x1000) },
+            DiffRun { perm: MapPerm { volatile: true, ..MapPerm::READ_WRITE }, ..m(0x2_0000_5000, 0x10_0000, 0x1000) },
+        ];
+        let a = apply_entry(&t, &runs, &cfg());
+        assert_eq!(a.codes, vec![KFWR_ACK_APPLIED; runs.len()]);
+        assert_eq!(
+            *t.ops.borrow(),
+            vec![
+                "batch 0x200000000+0x2000 x2",
+                "batch 0x200002000+0x2000 x2 ro",
+                "map 0x200004000+0x1000 ro noatomic",
+                "map 0x200005000+0x1000 vol",
+                "inval"
+            ]
+        );
+        // The same bits, decoded off a walk run's flags (KFWR_RF_*), family-free.
+        use kf_cuda::abi::{KFWR_RF_ATOMIC_DISABLE, KFWR_RF_PRIVILEGE, KFWR_RF_READ_ONLY, KFWR_RF_VOLATILE};
+        assert_eq!(host_perm(2 | (0x06 << 16) | (1 << 8)), MapPerm::READ_WRITE);
+        assert_eq!(host_perm(KFWR_RF_READ_ONLY), ro);
+        assert_eq!(host_perm(KFWR_RF_PRIVILEGE), MapPerm::READ_WRITE, "PRIVILEGE is not carried");
+        assert_eq!(
+            host_perm(KFWR_RF_READ_ONLY | KFWR_RF_ATOMIC_DISABLE | KFWR_RF_VOLATILE),
+            MapPerm { read_only: true, atomic_disable: true, volatile: true }
+        );
     }
 
     /// ★★★ A refused batch placed NOTHING, so its runs go one by one — and each gets its own
@@ -624,7 +701,7 @@ mod tests {
     // SYS_COHERENT (2), kind SMSKED_MESSAGE (0xF), address = NV_VIRTUAL_FUNCTION base 0x30000.
     const GH100_DB_VA: u64 = 0x0123_0000;
     fn gh100_db_leaf() -> DiffRun {
-        DiffRun { unmap: false, va: GH100_DB_VA, len: 0x1_0000, at: 0x3_0000, ap: 2, held: false, kind: 0x0F }
+        DiffRun { unmap: false, va: GH100_DB_VA, len: 0x1_0000, at: 0x3_0000, ap: 2, held: false, kind: 0x0F, perm: kf_host::MapPerm::READ_WRITE }
     }
     fn hopper() -> ApplyCfg<'static> {
         ApplyCfg { usermode: kf_chip::Family::Hopper.usermode_mmio(), ..cfg() }

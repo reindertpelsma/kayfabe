@@ -626,20 +626,46 @@ static void t_diff_edit_gpga(void)
     expect(f, {{VBASE, GB0, PG, F4K, KFWR_OP_UNMAP}, {VBASE, 0xA00000ull, PG, F4K, KFWR_OP_MAP}});
 }
 
-/* ★ The host maps a slice of one ground truth; READ_ONLY/KIND are not part of
- * what it places, so a flags-only edit over the same backing owes the host
- * nothing (the v3 host semantics; stated so a change is deliberate). */
-static void t_diff_flags_only_edit_is_quiet(void)
+/* ★★★★★ v3-roperm — A PERMISSION EDIT OVER THE SAME BACKING IS A CHANGE.
+ * ⊘ This case was "flags_only_edit_is_quiet": READ_ONLY was not part of the diff key, so a
+ * guest RW→RO downgrade (UVM read duplication's in-place revoke, uvm_va_block.c:9010-9060)
+ * owed the host nothing, the host twin stayed READ-WRITE, and a GPU write to the duplicate
+ * landed silently in a stale copy (V3_UVM_DEMAND_PAGING.md §6). The host map now carries
+ * READ_ONLY / ATOMIC_DISABLE / VOLATILE (KFWR_RF_HOST_PERM), so each is part of a placement:
+ * the RW placement is UNMAPPED and the same bytes MAPPED read-only. PRIVILEGE is not carried
+ * (no unprivileged host verb places it) and stays quiet. */
+static void t_diff_permission_edit_remaps(void)
 {
     Fix f(16u << 20, cfg_default());
     Tree t(f.g);
     t.map4k(VBASE, GB0);
     settle(f, t, 1);
-    t.map4k(VBASE, GB0, AP_PTE_VID, PTE_READ_ONLY);
+    t.map4k(VBASE, GB0, AP_PTE_VID, PTE_READ_ONLY);            /* RW -> RO, same page */
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    expect(f, {{VBASE, GB0, PG, F4K, KFWR_OP_UNMAP},
+               {VBASE, GB0, PG, F4K | KFWR_RF_READ_ONLY, KFWR_OP_MAP}});
+    f.ack();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    validate(f);
+    CHECK_EQ(f.hdr.run_count, 0);                              /* landed: quiet */
+    t.map4k(VBASE, GB0, AP_PTE_VID, PTE_READ_ONLY | PTE_ATOMIC_DISABLE);
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    expect(f, {{VBASE, GB0, PG, F4K | KFWR_RF_READ_ONLY, KFWR_OP_UNMAP},
+               {VBASE, GB0, PG, F4K | KFWR_RF_READ_ONLY | KFWR_RF_ATOMIC_DISABLE, KFWR_OP_MAP}});
+    f.ack();
+    t.map4k(VBASE, GB0, AP_PTE_VID, PTE_READ_ONLY | PTE_ATOMIC_DISABLE | PTE_PRIVILEGE);
     f.upload();
     CHECK_EQ(f.refresh({t.root}), 0);
     validate(f);
-    CHECK_EQ(f.hdr.run_count, 0);
+    CHECK_EQ(f.hdr.run_count, 0);                              /* PRIVILEGE: not placed */
+    t.map4k(VBASE, GB0);                                       /* RO -> RW: the upgrade */
+    f.upload();
+    CHECK_EQ(f.refresh({t.root}), 0);
+    expect(f, {{VBASE, GB0, PG, F4K | KFWR_RF_READ_ONLY | KFWR_RF_ATOMIC_DISABLE, KFWR_OP_UNMAP},
+               {VBASE, GB0, PG, F4K, KFWR_OP_MAP}});
+    f.ack();
     /* The ground truth IS part of it: the same offset in guest RAM is a new map. */
     t.map4k(VBASE, GB0, AP_PTE_SCOH);
     f.upload();
@@ -899,7 +925,14 @@ typedef std::vector<KfMapRun> Runs;
 struct MSlot { Runs cls[4]; };
 
 static uint32_t m_cls(uint32_t f) { return (f >> KFWR_RF_PS_SHIFT) & 3u; }
-static uint32_t m_key(uint32_t f) { uint32_t a = f & 7u; return a == 0u ? 0u : (a == 2u || a == 3u) ? 1u : 2u; }
+/* Mirrors kf_hkey / diffmodel::host_key: ground truth, KIND, and the carried permissions. */
+static uint32_t m_key(uint32_t f)
+{
+    const uint32_t a = f & 7u;
+    return (a == 0u ? 0u : (a == 2u || a == 3u) ? 1u : 2u)
+         | (((f >> KFWR_RF_KIND_SHIFT) & KFWR_RF_KIND_MASK) << 2)
+         | (((f & KFWR_RF_HOST_PERM) >> 3) << 10);
+}
 
 static bool m_covered(const KfMapRun &p, const Runs &w)
 {
@@ -2334,7 +2367,7 @@ static const Case CASES[] = {
     { "diff/add",                               t_diff_add },
     { "diff/delete",                            t_diff_delete },
     { "diff/edit_gpga",                         t_diff_edit_gpga },
-    { "diff/flags_only_edit_is_quiet",          t_diff_flags_only_edit_is_quiet },
+    { "diff/permission_edit_remaps",            t_diff_permission_edit_remaps },
     { "diff/grow_then_shrink",                  t_diff_grow_then_shrink },
     { "diff/failed_map_is_retried",             t_diff_failed_map_is_retried },
     { "diff/failed_unmap_is_retried",           t_diff_failed_unmap_is_retried },

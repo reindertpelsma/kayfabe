@@ -115,6 +115,17 @@ extern "C" {
 #define KFWR_RF_ATOMIC_DISABLE (1u << 4)
 #define KFWR_RF_VOLATILE       (1u << 5)
 #define KFWR_RF_PRIVILEGE      (1u << 6)
+/* ★★★ v3-roperm: THE PERMISSIONS THE HOST MAP CARRIES, and so part of what a committed placement
+ * IS (kf_hkey). Each is a bit the host's unprivileged map verb can express (NVOS46, ogkm-580
+ * virt_mem_allocator_gm107.c:423-427, 1449-1462, 2455-2459, 2509-2538):
+ *   READ_ONLY      → NVOS46_FLAGS_ACCESS_READ_ONLY
+ *   ATOMIC_DISABLE → NVOS46_FLAGS_TLB_LOCK_ENABLE (RM writes it to fldAtomicDisable / PCF NOATOMIC)
+ *   VOLATILE       → NVOS46_FLAGS_GPU_CACHEABLE_NO
+ * ⊘ PRIVILEGE is NOT here: RM derives it from MEMDESC_FLAGS_GPU_PRIVILEGED on the memory
+ * (virt_mem_allocator_gm107.c:2849-2850), never from a client's map flags, so no unprivileged
+ * host verb can place it and keying on it would only churn. It stays decoded, and dropped by
+ * name (V3_UVM_DEMAND_PAGING.md §6 names the residual). */
+#define KFWR_RF_HOST_PERM (KFWR_RF_READ_ONLY | KFWR_RF_ATOMIC_DISABLE | KFWR_RF_VOLATILE)
 #define KFWR_RF_PS_SHIFT   8u
 #define KFWR_RF_PS_MASK    0xFu
 /* ★★★★★ KIND IS PART OF RUN IDENTITY (the_walk_kernel_report_format.md §w725b).
@@ -253,7 +264,8 @@ typedef struct KfScope {
 /* Bumped whenever the format descriptor's layout changes. A host/PTX skew must
  * fail LOUDLY at launch rather than decode garbage field offsets and look like a
  * page-table bug (THE_CONSTRAINTS.md §21). */
-#define KF_ABI_VERSION 4u   /* 3: the diff/ack protocol; 4: the host-managed capacity layout (KfLayout, KfDev::need) */
+#define KF_ABI_VERSION 5u   /* 3: the diff/ack protocol; 4: the host-managed capacity layout (KfLayout, KfDev::need);
+                              * 5: the host permissions (KFWR_RF_HOST_PERM) join the diff key (kf_hkey) */
 
 #define KF_TBL_VER2 2u   /* Pascal…Ada  — GA10x is the tested one               */
 #define KF_TBL_VER3 3u   /* Hopper/Blackwell — SKETCHED, NEVER RUN, and refused

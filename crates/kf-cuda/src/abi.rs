@@ -49,7 +49,9 @@ pub const KF_MAX_SCOPE: usize = 256;
 ///
 /// ⚠ A host/PTX skew must fail **loudly at launch** rather than decode garbage field offsets
 /// and look like a page-table bug (`THE_CONSTRAINTS.md` §21). Mirrors `KF_ABI_VERSION`.
-pub const KF_ABI_VERSION: u32 = 4;
+/// ★ 5 (v3-roperm): the host permissions ([`KFWR_RF_HOST_PERM`]) joined the diff key, so a PTX
+/// built before it would keep a guest RW→RO downgrade as "same" while this crate's model re-maps.
+pub const KF_ABI_VERSION: u32 = 5;
 
 /// `KFWR_OP_UNMAP` — the run names a VA being RETIRED, so it carries no `gpga` and is exempt
 /// from the §39(c) containment check. Mirrors `kf_walk.h:88`.
@@ -83,6 +85,20 @@ pub const KFWR_OP_MAP: u16 = 1;
 /// ★ A committed placement the host answered "already held" — its UNMAP is retired without asking
 /// the host (P6b ruling (a)). Mirrors `KFWR_RF_HELD`.
 pub const KFWR_RF_HELD: u32 = 1 << 31;
+/// A leaf's `READ_ONLY` bit, decoded (never the raw PTE). Mirrors `KFWR_RF_READ_ONLY`.
+pub const KFWR_RF_READ_ONLY: u32 = 1 << 3;
+/// A leaf's `ATOMIC_DISABLE` bit (VER3: PCF `NO_ATOMIC`). Mirrors `KFWR_RF_ATOMIC_DISABLE`.
+pub const KFWR_RF_ATOMIC_DISABLE: u32 = 1 << 4;
+/// A leaf's `VOLATILE` bit (VER3: PCF `UNCACHED`). Mirrors `KFWR_RF_VOLATILE`.
+pub const KFWR_RF_VOLATILE: u32 = 1 << 5;
+/// A leaf's `PRIVILEGE` bit. ⊘ Decoded but NOT carried: no unprivileged host map verb can place it
+/// (RM takes it from the memory descriptor, `ogkm-580 virt_mem_allocator_gm107.c:2849-2850`).
+/// Mirrors `KFWR_RF_PRIVILEGE`.
+pub const KFWR_RF_PRIVILEGE: u32 = 1 << 6;
+/// ★★★ v3-roperm: the permissions the HOST map carries — part of a placement's identity in the
+/// diff (`kf_hkey` / [`crate::diffmodel::host_key`]) and turned into `NVOS46` flags by the host
+/// (`kf_host::MapPerm`). Mirrors `KFWR_RF_HOST_PERM`.
+pub const KFWR_RF_HOST_PERM: u32 = KFWR_RF_READ_ONLY | KFWR_RF_ATOMIC_DISABLE | KFWR_RF_VOLATILE;
 /// `KFWR_R_RUN_CAP`: out of run capacity (a walk region, a slot, or the report).
 pub const KFWR_R_RUN_CAP: u32 = 1 << 4;
 /// `KFWR_R_BUDGET`: the walk's entry budget stopped it.
