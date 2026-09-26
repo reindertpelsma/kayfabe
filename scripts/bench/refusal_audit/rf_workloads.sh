@@ -21,6 +21,7 @@ cup2|120|CE rv=0xabcd1234|$L/cup2
 cup3|120|KERNEL rv=43 want=43 -> PASS|$L/cup3
 cup8|300|CUP8 VERDICT: PASS|$L/cup8
 blocksync|120|BLOCKSYNC_DONE ok|$L/blocksync
+deviceQuery|60|Result = PASS|$S/deviceQuery
 torch_correct|300|TORCH_CORRECT_DONE|$PY $B/share/torch_correct.py
 torch_train|300|TORCH_TRAIN_DONE|$PY $L/torch_train.py
 llama_gen|300|main: decoded|$B/llama/llama-simple -m $D/qwen2.5-1.5b-instruct-q4_k_m.gguf -n 64 -ngl 99 "Explain in three sentences why the sky is blue."
