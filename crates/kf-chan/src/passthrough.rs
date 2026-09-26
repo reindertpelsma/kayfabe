@@ -81,6 +81,18 @@ pub fn copy_engine_type(i: u32) -> Option<u32> {
 /// # Errors
 /// The host's refusal, by name.
 pub fn birth_twin(rm: &HostRm, space: VaSpace, g: GuestChannel) -> Result<Channel, String> {
+    birth_twin_in(rm, space, g, None)
+}
+
+/// ★ [`birth_twin`] INTO a host group: `join = Some(tsg)` makes the twin a member of the host group
+/// already standing for the guest channel's own TSG; `None` births a new group with this twin as
+/// its first member (its handle is `Channel::tsg`, which the caller may then share). The guest's
+/// TSG membership is mirrored because members share ONE GR context on hardware — state one channel
+/// sets (CUDA's local-memory window) is what the others launch against.
+///
+/// # Errors
+/// The host's refusal, by name.
+pub fn birth_twin_in(rm: &HostRm, space: VaSpace, g: GuestChannel, join: Option<u32>) -> Result<Channel, String> {
     if !is_copy_engine(g.engine) && g.engine != ENGINE_TYPE_GRAPHICS && !kf_abi::submit::is_video_engine_type(g.engine) {
         return Err(format!("engine type {:#x}: only a copy engine, GR0 or a video engine has a passthrough twin", g.engine));
     }
@@ -88,14 +100,11 @@ pub fn birth_twin(rm: &HostRm, space: VaSpace, g: GuestChannel) -> Result<Channe
         UserdAt::Store { store, off } => (store, off),
         UserdAt::Ram { ram, off } => (ram, off),
     };
-    rm.birth_channel(space, g.engine, RingSpec {
-        gp_fifo_va: g.gpfifo_va,
-        gp_fifo_entries: g.entries,
-        userd_memory,
-        userd_offset,
-        err_notifier: g.err_ctx,
-    })
-    .map_err(|e| format!("birth: {e:?}"))
+    let ring = RingSpec { gp_fifo_va: g.gpfifo_va, gp_fifo_entries: g.entries, userd_memory, userd_offset, err_notifier: g.err_ctx };
+    match join {
+        Some(tsg) => rm.birth_member(tsg, g.engine, ring, false).map_err(|e| format!("birth into group {tsg:#x}: {e:?}")),
+        None => rm.birth_channel(space, g.engine, ring).map_err(|e| format!("birth: {e:?}")),
+    }
 }
 
 /// ★ The engine object the guest allocated on its channel, allocated on the twin with the guest's
