@@ -258,14 +258,17 @@ item_sway_screencap(){
     # EXTRA — deterministic client, captured over SHM (grim) and into a dma-buf (wlr_screencap --ppm)
     sway_up "exec $GB/wl_scene 60 > $W/scene.txt 2>&1" || return 0
     for i in $(seq 1 150); do grep -q 'WL_SCENE_READY\|WL_SCENE_FAIL' scene.txt 2>/dev/null && break; sleep 0.2; done
-    sleep 1; grim -t png "$W/grim.png" > grim.out 2>&1; "$GB/wlr_screencap" 10 --ppm "$W/cap.ppm" > cap2.out 2>&1
+    # ⊘ the dma-buf capture's CONTENT cannot be read back by wlr_screencap on NVIDIA: its --ppm path is
+    #   gbm_bo_map, which NVIDIA refuses for the block-linear capture bo ON BARE METAL ("content is GPU-only",
+    #   shake2). So: the zero-copy path is graded by nvkvm-pv's own `captured=N/N`, the pixels by grim (the
+    #   same wlr-screencopy protocol into an SHM buffer).
+    sleep 1; grim -t png "$W/grim.png" > grim.out 2>&1; "$GB/wlr_screencap" 10 > cap2.out 2>&1
     cat scene.txt cap2.out grim.out 2>/dev/null
     kill $SWPID 2>/dev/null; wait $SWPID 2>/dev/null
     gset_dig client_readback "$(sed -n 's/^WL_SCENE_HASH //p' scene.txt)"
     gset_dig composite_shm "$( [ -s grim.png ] && png_dig grim.png || echo NOSHOT)"
-    gset_dig composite_dmabuf "$(gset_md5 cap.ppm)"
-    [ $ok_pv = 1 ] && grep -q '^WL_SCENE_READY' scene.txt && [ -s grim.png ] && [ -s cap.ppm ] && echo GSET_OK \
-        || echo "GSET_FAIL pv_criterion=$ok_pv($(grep -m1 RESULT cap1.out)) scene_ready=$(grep -c WL_SCENE_READY scene.txt 2>/dev/null) grim=$(stat -c %s grim.png 2>/dev/null) ppm=$(stat -c %s cap.ppm 2>/dev/null)"
+    [ $ok_pv = 1 ] && grep -q '^WL_SCENE_READY' scene.txt && [ -s grim.png ] && grep -q 'RESULT captured=10/10' cap2.out && echo GSET_OK \
+        || echo "GSET_FAIL pv_criterion=$ok_pv($(grep -m1 RESULT cap1.out)) scene_ready=$(grep -c WL_SCENE_READY scene.txt 2>/dev/null) grim=$(stat -c %s grim.png 2>/dev/null) cap2=$(grep -m1 RESULT cap2.out)"
 }
 # ══ nvkvm-pv H12: glmark2 2023.01 (built from source, same binary both sides) on headless weston ══════
 # nvkvm-pv graded nothing here (metrics only). Here: both configurations complete with a Score and the
