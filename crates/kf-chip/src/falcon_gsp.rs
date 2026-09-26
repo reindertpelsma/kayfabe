@@ -437,6 +437,27 @@ impl GspModel for FalconGspModel {
         })
     }
 
+    /// ★★★ w828 — the two registers whose read-back the WRITE decides and which order no FSM
+    /// effect (see [`GspModel::answer_on_store`] for the rule and the boot it cost):
+    ///
+    /// - `DMATRFCMD` (GSP and SEC2): `IDLE=TRUE|FULL=FALSE` whatever was written — there is no
+    ///   ucode, so the "DMA" the command asks for has always already finished. The guest polls
+    ///   `IDLE` right after writing the command (`s_dmaTransfer_GA102`, `ogkm-580: src/nvidia/src/
+    ///   kernel/gpu/gsp/arch/ampere/kernel_gsp_falcon_ga102.c:140-144`).
+    /// - `BCR_CTRL`: the core just selected, `VALID` — `kflcnSwitchToFalcon_GA102` writes
+    ///   `CORE_SELECT_FALCON` and spins on `VALID` (`ogkm-580: .../falcon/arch/ampere/
+    ///   kernel_falcon_ga102.c:140-161`).
+    ///
+    /// ⊘ NOT `CPUCTL`: its `HALTED` is the completion edge that orders WPR2 behind it.
+    fn answer_on_store(&self, reg: GspReg, written: u64) -> Option<u64> {
+        match reg {
+            GspReg::GspFalconDmatrfcmd | GspReg::Sec2FalconDmatrfcmd => Some(DMATRFCMD_IDLE),
+            #[allow(clippy::cast_possible_truncation)]
+            GspReg::GspRiscvBcrCtrl => Some(u64::from(written as u32) | BCR_CTRL_VALID),
+            _ => None,
+        }
+    }
+
     /// ★ This generation is inside the falcon/secure-booter regime: NVIDIA's own
     /// generated HAL binds those implementations for every function the shared `GspReg`
     /// vocabulary models across `TU102…AD107`

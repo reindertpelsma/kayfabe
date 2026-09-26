@@ -7,7 +7,7 @@ use core::ffi::{c_char, c_void};
 use std::ffi::CStr;
 
 /// Wire ABI of this surface; the C device refuses a mismatched archive.
-pub const KF3_ABI: u32 = 4;
+pub const KF3_ABI: u32 = 5;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -208,6 +208,13 @@ pub extern "C" fn kf3_bar0_write(h: *mut c_void, off: u64, val: u64, width: u32)
     if let Some(d) = dev(h) {
         d.bar0_write(off, val, u8::try_from(width).unwrap_or(4));
     }
+}
+
+/// ★ w828: a BAR0 READ exit — reached only for a `Disposition::Hole` page (a register whose read
+/// has a side effect). Lock-free; never blocks.
+#[unsafe(no_mangle)]
+pub extern "C" fn kf3_bar0_read(h: *mut c_void, off: u64, width: u32) -> u64 {
+    dev(h).map_or(0, |d| d.bar0_read(off, u8::try_from(width).unwrap_or(4)))
 }
 
 /// Register guest RAM `[gpa, gpa+len)` at `hva`, backed by the memory backend's `fd` at file

@@ -58,10 +58,30 @@ struct Piece {
     mem: RawRegion,
 }
 
+/// ★ w828: one `Disposition::Hole` page's register shadow (4 KiB of 32-bit words).
+struct HoleShadow {
+    base: u64,
+    words: Box<[std::sync::atomic::AtomicU32]>,
+}
+
+impl HoleShadow {
+    fn new(base: u64, boot: &[BootReg]) -> HoleShadow {
+        let words: Box<[std::sync::atomic::AtomicU32]> =
+            (0..kf_trap::memmap::PAGE / 4).map(|_| std::sync::atomic::AtomicU32::new(0)).collect();
+        for r in boot.iter().filter(|r| (base..base + kf_trap::memmap::PAGE).contains(&r.off)) {
+            words[((r.off - base) / 4) as usize].store(r.value, Ordering::Relaxed);
+        }
+        HoleShadow { base, words }
+    }
+    fn word(&self, off: u64) -> Option<&std::sync::atomic::AtomicU32> {
+        off.checked_sub(self.base).and_then(|r| self.words.get((r / 4) as usize))
+    }
+}
+
 /// The GSP side the drainer owns.
 struct Gsp {
     fsm: GspFsm,
-    model: Box<dyn GspModel>,
+    model: std::sync::Arc<dyn GspModel>,
     policy: Box<dyn CommandPolicy>,
     /// The value last PUBLISHED per BAR0 offset — [`Device::publish`] stores only what changed.
     published: std::collections::HashMap<u64, u64>,
@@ -78,6 +98,8 @@ pub struct Counters {
     pub ram_refused: AtomicU64,
     /// Writes to a BAR0 offset with no shadow piece (P4 regions, or outside the aperture).
     pub unshadowed_writes: AtomicU64,
+    /// ★ w828: BAR0 read exits served (`Hole` pages only).
+    pub read_exits: AtomicU64,
     /// Every BAR0 write the vCPU delivered (before classification).
     pub trapped: AtomicU64,
     /// Writes the plane refused by name or answered with poison.
@@ -133,8 +155,16 @@ pub struct Device {
     pub census: kf_rm::census::ControlCensusLog,
     pieces: OnceLock<Vec<Piece>>,
     staged: Mutex<Vec<Piece>>,
+    /// ★ w828: the BAR0 `Hole` pages' own shadows — a hole has no memory behind it, so every
+    /// register on the page that is NOT a read side effect is served from here by the read exit,
+    /// with the read-back-what-was-written semantics a `B` page has.
+    holes: Vec<HoleShadow>,
     ram: &'static crate::mem::RamMap,
     gsp: Mutex<Gsp>,
+    /// ★ w828: the SAME register model the drainer's FSM answers from, shared lock-free with the
+    /// vCPU for ONE question — [`GspModel::answer_on_store`] (what a register reads back the
+    /// instant the guest's write lands, when the write alone decides it).
+    store_model: std::sync::Arc<dyn GspModel>,
     boot: Vec<BootReg>,
     vbios: Vec<u8>,
     worker_efd: &'static Notifier,
@@ -375,7 +405,9 @@ impl Device {
                 channels: Some(std::sync::Arc::new(move |st| chans.statement(st))),
             },
         );
-        let model = family.gsp_model(cfg.fb_mb).map_err(|e| format!("{e:?}"))?;
+        let model: std::sync::Arc<dyn GspModel> =
+            std::sync::Arc::from(family.gsp_model(cfg.fb_mb).map_err(|e| format!("{e:?}"))?);
+        let store_model = model.clone();
         crate::prof::init();
         let qhead_off = match model.at(GspReg::GspQueueHead(0)) {
             Some((0, off)) => off,
@@ -446,6 +478,8 @@ impl Device {
             staged: Mutex::new(Vec::new()),
             ram,
             gsp: Mutex::new(gsp),
+            store_model,
+            holes: kf_trap::memmap::holes_for(family).iter().map(|(p, _)| HoleShadow::new(*p, &boot)).collect(),
             boot,
             vbios,
             worker_efd,
@@ -534,8 +568,86 @@ impl Device {
                 p.mem.store(rel, val, width);
             }
             None => {
-                self.counters.unshadowed_writes.fetch_add(1, Ordering::Relaxed);
+                if !self.hole_store(off, val, width) {
+                    self.counters.unshadowed_writes.fetch_add(1, Ordering::Relaxed);
+                }
             }
+        }
+    }
+
+    /// ★ w828: a store into a `Hole` page's shadow (sub-word widths merge into the word).
+    fn hole_store(&self, off: u64, val: u64, width: u8) -> bool {
+        let Some(h) = self.holes.iter().find(|h| (h.base..h.base + kf_trap::memmap::PAGE).contains(&off)) else {
+            return false;
+        };
+        let aligned = off & !3;
+        let shift = ((off & 3) * 8) as u32;
+        #[allow(clippy::cast_possible_truncation)]
+        let (mask, v) = match width {
+            1 => (0xffu32 << shift, ((val as u32) & 0xff) << shift),
+            2 => (0xffffu32 << shift, ((val as u32) & 0xffff) << shift),
+            _ => (u32::MAX, val as u32),
+        };
+        if let Some(w) = h.word(aligned) {
+            let _ = w.fetch_update(Ordering::AcqRel, Ordering::Acquire, |old| Some((old & !mask) | v));
+        }
+        if width == 8
+            && let Some(w) = h.word(aligned + 4)
+        {
+            #[allow(clippy::cast_possible_truncation)]
+            w.store((val >> 32) as u32, Ordering::Release);
+        }
+        true
+    }
+
+    /// ★★★ w828 — **THE vCPU PATH for a BAR0 READ EXIT.** Reached only for a `Hole` page
+    /// (`kf_trap::memmap::holes_for`): a register whose read has a side effect, and the other
+    /// registers that share its page. Lock-free: atomics and at most one eventfd write.
+    ///
+    /// - a Hopper+ memop START register (`kf_trap::cacheop::TokenRead::Start`): the op is issued —
+    ///   its request counter moves and the VA thread is woken to run the host verb — and the read
+    ///   returns the op's token;
+    /// - its `…_COMPLETED` register: `BUSY` until the VA thread has stored the host verb's return
+    ///   (`cache_done`), then `IDLE` — ⊘ never on the read itself: a completion is a host event;
+    /// - anything else on the page: the page shadow (what was last written, or the boot value).
+    ///
+    /// ⊘ The FSP/SEC2 EMEM ports that are the other holes are NOT served here beyond the shadow —
+    /// their auto-increment needs the boot sequence's state, which lives under the GSP lock a vCPU
+    /// may not take (named open item, unchanged by w828).
+    pub fn bar0_read(&self, off: u64, width: u8) -> u64 {
+        use kf_trap::cacheop::{TokenRead, completed_word, start_token, token_read};
+        self.counters.read_exits.fetch_add(1, Ordering::Relaxed);
+        if width == 4 {
+            match token_read(self.family, off) {
+                Some(TokenRead::Start(op)) => {
+                    let n = self.mem.inbox.cache_req[op.index()].fetch_add(1, Ordering::AcqRel) + 1;
+                    let _ = self.mem.inbox.wake.signal();
+                    return u64::from(start_token(n));
+                }
+                Some(TokenRead::Completed(op)) => {
+                    // `done` first: it only ever trails `req`, so a later `req` can only say BUSY.
+                    let done = self.mem.inbox.cache_done[op.index()].load(Ordering::Acquire);
+                    let req = self.mem.inbox.cache_req[op.index()].load(Ordering::Acquire);
+                    return u64::from(completed_word(req, done));
+                }
+                None => {}
+            }
+        }
+        let Some(h) = self.holes.iter().find(|h| (h.base..h.base + kf_trap::memmap::PAGE).contains(&off)) else {
+            return 0;
+        };
+        let aligned = off & !3;
+        let lo = h.word(aligned).map_or(0, |w| w.load(Ordering::Acquire));
+        let v = if width == 8 {
+            u64::from(lo) | (u64::from(h.word(aligned + 4).map_or(0, |w| w.load(Ordering::Acquire))) << 32)
+        } else {
+            u64::from(lo >> ((off & 3) * 8))
+        };
+        match width {
+            1 => v & 0xff,
+            2 => v & 0xffff,
+            4 => v & 0xffff_ffff,
+            _ => v,
         }
     }
 
@@ -643,7 +755,17 @@ impl Device {
         } else if in_usermode {
             Class::UserspaceMappable
         } else {
-            self.shadow_store(off, val, width);
+            // ★★★ w828: a register whose read-back the write alone decides answers NOW, not
+            // after the drainer — `[measured 8dd2bbdf]` a guest that had spent its poll budget
+            // read its own `DMATRFCMD` word twice, FWSEC-SB and Booter Unload never started, and
+            // WPR2 outlived the adapter (`kf_arch::gsp::GspModel::answer_on_store`). Pure, no
+            // lock: a decode and a match on the shared model.
+            let shown = self
+                .store_model
+                .decode_reg(0, off)
+                .and_then(|r| self.store_model.answer_on_store(r, val))
+                .unwrap_or(val);
+            self.shadow_store(off, shown, width);
             // ★ P4: the PRAMIN window base — re-pointed HERE, synchronously, from pre-armed views
             // (§53.1: the register is B, the window A). The word also goes on to the plane.
             if off == self.mem.pramin_reg.offset && width == 4 {
@@ -760,7 +882,12 @@ impl Device {
     /// arrives after our idle store re-stores busy and bumps the counter, and is served next pass.
     /// A refused host op is NAMED and the register still goes idle — the guest's alternative is a
     /// 4 s spin to `NV_ERR_TIMEOUT` with the same (unflushed) outcome.
-    fn serve_cache_ops(&self, done: &mut [u64; 3]) {
+    ///
+    /// ★ w828: the same pass serves the Hopper+ READ-started ops (`kf_trap::cacheop::token_registers`):
+    /// `cache_req` is then the tokens a vCPU's read exit issued, and `cache_done` — stored here, after
+    /// the host verb returned — is what their `…_COMPLETED` register reports. The sysmembar
+    /// (`FbFlush`) exists only there.
+    fn serve_cache_ops(&self, done: &mut [u64; kf_trap::cacheop::CacheOp::COUNT]) {
         use kf_trap::cacheop::{CacheOp, registers};
         for op in CacheOp::ALL {
             let i = op.index();
@@ -768,13 +895,13 @@ impl Device {
             if want == done[i] {
                 continue;
             }
-            let (aperture, wb, inv) = match op {
-                CacheOp::FlushDirty => (1, true, false),
-                CacheOp::SysmemInvalidate => (1, false, true),
-                CacheOp::PeermemInvalidate => (2, false, true),
-            };
             let t = std::time::Instant::now();
-            let r = self.rm.flush_gpu_cache(aperture, wb, inv);
+            let r = match op {
+                CacheOp::FlushDirty => self.rm.flush_gpu_cache(1, true, false),
+                CacheOp::SysmemInvalidate => self.rm.flush_gpu_cache(1, false, true),
+                CacheOp::PeermemInvalidate => self.rm.flush_gpu_cache(2, false, true),
+                CacheOp::FbFlush => self.rm.fb_flush(),
+            };
             self.mem.counters.cache_ops.fetch_add(1, Ordering::Relaxed);
             if let Err(e) = &r {
                 eprintln!("kf3: L2 cache op {op:?} REFUSED by the host: {e:?} — the register is released anyway");
@@ -782,6 +909,8 @@ impl Device {
                 eprintln!("kf3: L2 cache op {op:?} served by host FB_FLUSH_GPU_CACHE in {} us (first of this op)", t.elapsed().as_micros());
             }
             done[i] = want;
+            // ★ w828: the completion edge of a read-started op — AFTER the host verb returned.
+            self.mem.inbox.cache_done[i].store(want, Ordering::Release);
             for (o, _) in registers(self.family).iter().filter(|(_, x)| *x == op) {
                 self.shadow_store(u64::from(*o), 0, 4);
             }
@@ -819,7 +948,7 @@ impl Device {
         // object) — never while a statement, a walk or an armed invalidate is waiting on us.
         let mut prewarmed = 0u64;
         let mut va_busy_from = crate::prof::now_ns();
-        let mut cache_done = [0u64; 3];
+        let mut cache_done = [0u64; kf_trap::cacheop::CacheOp::COUNT];
         while !self.stop.load(Ordering::Acquire) {
             if prewarmed < crate::mem::PREWARM_SPARES
                 && (prewarmed == 0
@@ -1166,7 +1295,7 @@ impl Device {
             ic.out_of_range.load(o)
         );
         format!(
-            "kf3: family={:?} phase={phase} trapped={} applied={} refused={} serviced={} ram_refused={} unshadowed_writes={} last_off={:#x}{mem}{chan}{rc}{irq} unserviced=[{}]",
+            "kf3: family={:?} phase={phase} trapped={} applied={} refused={} serviced={} ram_refused={} unshadowed_writes={} read_exits={} last_off={:#x}{mem}{chan}{rc}{irq} unserviced=[{}]",
             self.family,
             c.trapped.load(o),
             c.applied.load(o),
@@ -1174,6 +1303,7 @@ impl Device {
             c.serviced.load(o),
             c.ram_refused.load(o),
             c.unshadowed_writes.load(o),
+            c.read_exits.load(o),
             c.last_off.load(o),
             unserviced.join(","),
         )

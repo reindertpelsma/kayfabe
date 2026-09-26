@@ -675,6 +675,18 @@ pub struct RegWrite {
     pub reg: Option<GspReg>,
 }
 
+/// ★ w828 — what ends a GSP life after RM has suspended the processor. See
+/// [`BootSequence::after_suspend`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AfterSuspend {
+    /// The driver runs teardown ucode (FWSEC-SB, Booter Unload); its STARTCPU writes end the
+    /// life. Nothing happens on its own.
+    AwaitsTeardownUcode,
+    /// The firmware tears down its protected region and halts the RISC-V core by itself; the
+    /// driver only waits for the halt.
+    FirmwareHalts,
+}
+
 /// Axis-B: **the boot ordering** for one GPU generation — which register writes drive
 /// which transitions, and in what order.
 ///
@@ -709,6 +721,29 @@ pub trait BootSequence: Send + Sync {
         ctx: &BootContext,
         state: &mut ArchBootState,
     ) -> BootSteps;
+
+    /// ★★★★★ **w828 — how this generation's GSP STOPS once RM has suspended it (fn-47).**
+    ///
+    /// ⊘ **Deliberately not defaulted**, for [`GspModel::boot_sequence`]'s reason: the two
+    /// regimes tear down in genuinely different ways, and inheriting one by omission is how a
+    /// generation silently never comes back from its first `close()`.
+    ///
+    /// - **Falcon + secure-booter (TU102…AD107):** the GSP does NOT stop on its own. The
+    ///   driver resets the falcon, runs FWSEC-SB and then Booter Unload on SEC2
+    ///   (`kgspTeardown_TU102`, `ogkm-580: src/nvidia/src/kernel/gpu/gsp/arch/turing/
+    ///   kernel_gsp_tu102.c:619-661`), and it is those register writes that end the life —
+    ///   [`AfterSuspend::AwaitsTeardownUcode`].
+    /// - **FSP (GH100 and later):** the driver writes NOTHING. `kgspTeardown_GH100` only waits
+    ///   for the RISC-V core to halt *"to allow ACR and GSP FMC to finish shutdown"*
+    ///   (`ogkm-580: .../gsp/arch/hopper/kernel_gsp_gh100.c:995-1004`, bound for every chip
+    ///   outside `TU102…AD107` and the Tegra displayless parts by
+    ///   `generated/g_kernel_gsp_nvoc.c:723-742`). The firmware takes its own protected region
+    ///   down and halts — [`AfterSuspend::FirmwareHalts`]. `[measured by derivation only; no
+    ///   Hopper/Blackwell bench exists]` Without this, WPR2 stayed up after every close, and the
+    ///   next open hit `_kgspBootGspRm`'s *"unexpected WPR2 already up"*
+    ///   (`ogkm-580: kernel_gsp.c:3872-3880`) deterministically — GH100 does not set
+    ///   `PDB_PROP_GPU_PREINITIALIZED_WPR_REGION`.
+    fn after_suspend(&self) -> AfterSuspend;
 
     /// Serve a **generation-local** register read — one whose value is a function of boot
     /// state but which the shared [`GspReg`] vocabulary cannot name.
@@ -769,6 +804,11 @@ impl BootSequence for NoBootSequence {
         &[]
     }
 
+    /// Nothing happens on its own: a sequence that never boots has nothing to stop.
+    fn after_suspend(&self) -> AfterSuspend {
+        AfterSuspend::AwaitsTeardownUcode
+    }
+
     fn on_write(
         &self,
         _model: &dyn GspModel,
@@ -822,6 +862,38 @@ pub trait GspModel: Send + Sync {
     /// sentinel live. A register this model decodes but cannot serve returns `None`,
     /// which the caller reports as a fault rather than as zero.
     fn encode(&self, reg: GspReg, obs: &GspObservation) -> Option<u64>;
+
+    /// ★★★★★ **w828 — what `reg` reads back THE INSTANT a guest write lands, when the write
+    /// alone decides it.** `None` (the default) = the read shadow keeps the guest's own value
+    /// until the drainer applies the write and publishes [`Self::encode`]'s answer.
+    ///
+    /// # Why this exists: a read-back the drainer publishes is a RACE the guest can lose
+    ///
+    /// v3 BAR0 reads never exit — they read a shadow the vCPU stores the guest's write into, and
+    /// the drainer replaces it with the FSM's answer *later* (`kf_qemu::device::Device::publish`).
+    /// A guest that writes a register and then POLLS it sees its own value until then. With a
+    /// 4 s poll budget that gap is invisible. With the budget already spent it is fatal:
+    /// `[measured 8dd2bbdf, vh, run_cl_U_cup2_3]` `kflcnSwitchToFalcon_GA102` spun the whole
+    /// `threadState` timeout on an unmodelled `BCR_CTRL`, so FWSEC-SB's `s_dmaPoll_GA102`
+    /// (`ogkm-580: src/nvidia/src/kernel/gpu/gsp/arch/ampere/kernel_gsp_falcon_ga102.c:66-97`)
+    /// got exactly TWO samples of `DMATRFCMD` — `timeoutCondWait` checks, times out, checks once
+    /// more (`ogkm-580: src/nvidia/src/kernel/gpu/gpu_timeout.c:540-576`) — and both read the
+    /// guest's own command word (`IDLE=0`). No STARTCPU, no Booter Unload, WPR2 left up, and the
+    /// next open died on *"unexpected WPR2 already up"*.
+    ///
+    /// # ⊘⊘ The rule, and the register it must NEVER cover
+    ///
+    /// `Some` only where the answer is (a) a pure function of the written value and (b)
+    /// **orders no FSM effect** — the guest learns nothing from it about what the FSM has done.
+    /// A **completion edge** is the opposite: `CPUCTL.HALTED` after a STARTCPU announces that
+    /// the transition the STARTCPU caused (WPR2 up, WPR2 down) is visible, and the drainer
+    /// publishes it LAST for exactly that reason (`[measured f67c9dde]` HALTED before
+    /// `WPR2_ADDR_HI` ⇒ *"no initialized WPR2 found"*). Answering it on the store would
+    /// re-open that hole. ⇒ An implementation must agree with [`Self::encode`] for every
+    /// observation that write can produce; `kf-chip/tests/answer_on_store.rs` checks it.
+    fn answer_on_store(&self, _reg: GspReg, _written: u64) -> Option<u64> {
+        None
+    }
 
     /// The LibOS region-array geometry this driver regime publishes.
     /// Where `reg` lives for this model, `(bar, offset)` — `None` if this family has no such

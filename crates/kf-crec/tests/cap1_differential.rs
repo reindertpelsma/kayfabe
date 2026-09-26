@@ -14,7 +14,7 @@
 //! ## What this file asserts, in one paragraph
 //!
 //! Through the cold boot, the queue bind, `GSP_INIT_DONE` and four RPC round-trips, the
-//! Rust GSP reproduces the C **exactly** in decoded projection — every one of the 498 GSP
+//! Rust GSP reproduces the C **exactly** in decoded projection — every one of the 499 GSP
 //! register reads in that span, the published tx header, the status write pointers, the
 //! command read-pointer acknowledgements — with **nine** divergences, of which **one** is
 //! a ledger row (GSP-D1) and **eight** are four distinct findings. Past that point the
@@ -168,9 +168,24 @@ fn every_gsp_register_read_within_the_oracles_reach_is_served_exactly_as_the_c_s
         vec![0x0011_0040, 0x0011_1668],
         "only NV_PGSP_FALCON_MAILBOX0 once, plus the deliberate BCR_CTRL correction"
     );
+    let bcr = |evs: &[TraceEvent]| {
+        evs.iter()
+            .find_map(|e| match e {
+                TraceEvent::MmioRead { off: 0x0011_1668, val, .. } => Some(*val),
+                _ => None,
+            })
+            .expect("the teardown reads BCR_CTRL")
+    };
+    assert_eq!(bcr(&after_c) & 1, 0, "the C: VALID never rose");
+    assert_eq!(bcr(&after_rust) & 1, 1, "ours: the core switch is acknowledged");
+    let mailbox_at = after_c
+        .iter()
+        .zip(&after_rust)
+        .position(|(a, b)| a != b && matches!(a, TraceEvent::MmioRead { off: 0x0011_0040, .. }))
+        .expect("the MAILBOX0 divergence");
     assert!(
         matches!(
-            after_c[differing_index(&after_c, &after_rust)],
+            after_c[mailbox_at],
             TraceEvent::MmioRead {
                 val: 0x8000_0000,
                 ..
@@ -178,13 +193,6 @@ fn every_gsp_register_read_within_the_oracles_reach_is_served_exactly_as_the_c_s
         ),
         "the C reports the suspend sentinel, whole and not OR-ed"
     );
-}
-
-/// Index of the first differing position between two equal-length register streams.
-fn differing_index(a: &[TraceEvent], b: &[TraceEvent]) -> usize {
-    diff(a, b)
-        .expect("the caller has already established there is one")
-        .at
 }
 
 // ═══════════════════ the oracle's reach, measured rather than assumed ═══════════════

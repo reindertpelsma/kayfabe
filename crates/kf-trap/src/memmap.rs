@@ -93,9 +93,21 @@ pub struct MemoryMap {
 /// ★★★ The disposition-**D** pages, per family. **This list is the entire read-trap surface.**
 ///
 /// ⊘ Derived in `THE_BAR0_DISPOSITION_MAP.md` §1 from ogkm (§50 level 2) and nouveau (level 5),
-/// and cross-checked against nova, which declares no read auto-increment at all. Each entry is a
-/// register whose **read advances a hardware cursor** — a falcon PIO data port — where the driver
-/// then **asserts the cursor moved**, so no shadow can satisfy it.
+/// and cross-checked against nova, which declares no read auto-increment at all. There are TWO
+/// kinds of read side effect, and both force a hole:
+/// - a register whose **read advances a hardware cursor** — a falcon PIO data port — where the
+///   driver then **asserts the cursor moved**, so no shadow can satisfy it;
+/// - ⊘⊘ **w828, and the earlier sentence here claiming the first was the ONLY kind was wrong:** a
+///   register whose **read STARTS WORK** — Hopper+'s memop token registers
+///   ([`crate::cacheop::token_registers`]): reading `NV_XAL_EP_UFLUSH_L2_FLUSH_DIRTY` injects an L2
+///   flush and returns its token (`kbusSendSysmembarSingle_GH100`'s own comment: *"To trigger a
+///   memop, SW issues a read of the register as opposed to write"*, `ogkm-580: src/nvidia/src/
+///   kernel/gpu/bus/arch/hopper/kern_bus_gh100.c:2898-2903`). A shadow serves that read without
+///   the op ever reaching the host — a silent no-op flush.
+///
+/// ⚠ A hole costs its whole page: every other register on it is served by the read exit from a
+/// per-page shadow with the same read-back-what-was-written semantics a `B` page has
+/// (`kf_qemu::device::Device::bar0_read`).
 ///
 /// ★ **Empty for Turing, Ampere and Ada** — the current product target has no read exits anywhere.
 pub fn holes_for(family: Family) -> &'static [(u64, &'static str)] {
@@ -107,13 +119,20 @@ pub fn holes_for(family: Family) -> &'static [(u64, &'static str)] {
         // FSP comes up first out of chip reset and RM asks IT to boot GSP, over MCTP/NVDM packets
         // carried in FSP's EMEM. `_kfspReadPacket_GH100` reads NV_PFSP_EMEMD in a burst and then
         // asserts EMEMC advanced by exactly packetSize/4.
-        Family::Hopper => &[(0x008F_2000, "NV_PFSP_EMEMD 0x8F2ac4 — FSP boot handshake, AINCR burst")],
+        // ★ w828: + the two memop token pages (`crate::cacheop::token_registers`).
+        Family::Hopper => &[
+            (0x0010_F000, "NV_XAL_EP_UFLUSH_{FB_FLUSH,L2_FLUSH_DIRTY} 0x10f800/0x10f810 — a READ starts the memop"),
+            (0x008F_2000, "NV_PFSP_EMEMD 0x8F2ac4 — FSP boot handshake, AINCR burst"),
+            (0x00B8_0000, "NV_VIRTUAL_FUNCTION_PRIV_FUNC_L2_{SYSMEM,PEERMEM}_INVALIDATE 0xB80F10/F18 — a READ starts the memop"),
+        ],
 
         // ⚠ Blackwell is split by die group: discrete parts use FSP like Hopper; the integrated
         // GB10B/GB20B parts have no FSP and put the identical protocol behind SEC2.
         Family::Blackwell => &[
-            (0x008F_2000, "NV_PFSP_EMEMD 0x8F2ac4 — FSP boot handshake (discrete)"),
+            (0x0010_F000, "NV_XAL_EP_UFLUSH_{FB_FLUSH,L2_FLUSH_DIRTY} 0x10f800/0x10f810 — a READ starts the memop"),
             (0x0084_0000, "NV_PSEC_EMEMD 0x840ac4 — SEC2 boot handshake (integrated GB10B/GB20B)"),
+            (0x008F_2000, "NV_PFSP_EMEMD 0x8F2ac4 — FSP boot handshake (discrete)"),
+            (0x00B8_0000, "NV_VIRTUAL_FUNCTION_PRIV_FUNC_L2_{SYSMEM,PEERMEM}_INVALIDATE 0xB80F10/F18 — a READ starts the memop"),
         ],
     }
 }

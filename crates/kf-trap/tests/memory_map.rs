@@ -47,17 +47,24 @@ fn the_current_product_target_has_no_read_exits_at_all() {
 #[test]
 fn hopper_and_blackwell_have_a_read_exit_and_each_one_is_NAMED() {
     // ⊘ The exception §52 was forced to concede. It is bounded, and the bound is what matters:
-    // one page per family (two for Blackwell, which is split by die group), each boot-only.
+    // the boot handshake page (two for Blackwell, which is split by die group), plus — w828 — the
+    // two memop token pages, whose READ starts an L2 flush / invalidate / sysmembar
+    // (`kf_trap::cacheop::token_registers`; the "PIO auto-increment is the only read side effect"
+    // claim this test used to rest on was wrong).
     // ⚠ Contradicted by: an unnamed hole, or a hole count that grows without a source citation.
-    assert_eq!(map_for(Family::Hopper).read_exit_pages(), 1);
-    assert_eq!(map_for(Family::Blackwell).read_exit_pages(), 2);
+    assert_eq!(map_for(Family::Hopper).read_exit_pages(), 3);
+    assert_eq!(map_for(Family::Blackwell).read_exit_pages(), 4);
 
     for f in [Family::Hopper, Family::Blackwell] {
         for r in map_for(f).read_exit_regions() {
             let Disposition::Hole { why } = r.how else { unreachable!() };
             // A hole must say WHICH register dragged the page in — the page costs 4 KiB of
             // implementation, so a reader must never have to guess what bought it.
-            assert!(why.contains("EMEMD"), "{f:?}: hole at {:#x} is not named: {why:?}", r.base);
+            assert!(
+                why.contains("EMEMD") || why.contains("a READ starts the memop"),
+                "{f:?}: hole at {:#x} is not named: {why:?}",
+                r.base
+            );
             assert_eq!(r.len, PAGE, "a hole is exactly one page");
             assert_eq!(r.base % PAGE, 0, "a hole must be page-aligned or KVM cannot express it");
         }
