@@ -403,3 +403,21 @@ fn a_non_contiguous_subtree_mask_is_refused_only_where_the_guest_has_start_end()
         }
     }
 }
+
+/// ★ 610 renamed the MSENC/BSP caps structs (NVENC/NVDEC; the old names are `#define` aliases
+/// DWARF cannot see): the guest's video caps layout still resolves there — never "absent" for a
+/// control the guest still sends under its old id.
+#[test]
+fn the_video_caps_layout_resolves_across_the_610_rename() {
+    for &v in MEASURED {
+        let Ok(t) = kf_abi::versions::table_for(v) else { continue };
+        for cmd in [kf_abi::videocaps::MSENC_GET_CAPS_V2, kf_abi::videocaps::BSP_GET_CAPS_V2] {
+            let has_cmd_struct = v >= DriverVersion { major: 550, minor: 40, patch: 7 } || cmd == kf_abi::videocaps::BSP_GET_CAPS_V2;
+            let l = t.video_caps_layout(cmd);
+            if has_cmd_struct {
+                let l = l.unwrap_or_else(|| panic!("{cmd:#x} has no layout at {v}"));
+                assert!(l.params_size >= 8 && l.instance_off + 4 <= l.params_size, "{cmd:#x} at {v}: {l:?}");
+            }
+        }
+    }
+}
