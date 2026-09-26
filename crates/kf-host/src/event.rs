@@ -79,6 +79,13 @@ pub const fn notifier_nvdec(n: u32) -> u32 {
     14 + n
 }
 
+/// ★ v3-gfxset: `NV2080_NOTIFIERS_OFAn(x)` — `OFA0` (= `_OFA`) = 153, `OFA1` = 180, out of line
+/// (`ogkm-580: class/cl2080_notification.h:193-194,221,267`).
+#[must_use]
+pub const fn notifier_ofa(n: u32) -> u32 {
+    if n == 0 { 153 } else { 180 + n - 1 }
+}
+
 /// ★ A pollable host event source: register [`EventFd::as_fd`] with the worker's `epoll`.
 /// Readiness is a coalesced WAKE; the caller must read its semaphore to learn what completed.
 #[derive(Debug)]

@@ -666,6 +666,14 @@ impl ChanPlane {
                 kinds.push((kind, kf_host::event::notifier_nvdec(i), et));
             }
         }
+        // ★ v3-gfxset: the optical-flow engine, the same way (its `gkflcnServiceNotificationInterrupt`
+        // wakes the guest's OFA OS events — VK_NV_optical_flow's completion).
+        for i in 0..kf_abi::submit::OFA_SIZE {
+            let kind = kf_rm::authored::EngineKind::OpticalFlow(i);
+            if let (Some(et), Some(_)) = (kf_abi::submit::engine_type_ofa(i), kf_rm::authored::non_stall_vector_for(intr_table, kind)) {
+                kinds.push((kind, kf_host::event::notifier_ofa(i), et));
+            }
+        }
         for (kind, notify, engine_type) in kinds {
             let ev = rm.open_event_fd().map_err(|e| format!("{} event fd: {e:?}", kind.name()))?;
             rm.alloc_os_event(rm.subdevice(), notify, true, &ev).map_err(|e| format!("{} os event: {e:?}", kind.name()))?;
@@ -1489,7 +1497,10 @@ impl ChanPlane {
                 // used the wrong page and NVDEC produced untouched frames. So G (the guest's ctx,
                 // which no engine ever reads — the twin runs on the host's) is unmapped from the
                 // twin first, and host RM takes G itself. Best effort: a failed unmap is logged.
-                let fc = if matches!(kind, kf_chip::classes::Kind::VideoEncoder | kf_chip::classes::Kind::VideoDecoder) {
+                let fc = if matches!(
+                    kind,
+                    kf_chip::classes::Kind::VideoEncoder | kf_chip::classes::Kind::VideoDecoder | kf_chip::classes::Kind::OpticalFlow
+                ) {
                     me.pt.lock().ok().and_then(|m| m.get(&(client, parent)).and_then(|v| v.falcon_ctx))
                 } else {
                     None

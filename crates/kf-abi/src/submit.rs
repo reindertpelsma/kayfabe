@@ -1176,10 +1176,54 @@ pub const fn nvdec_index_of_engine_type(nv2080: u32) -> Option<u32> {
     }
 }
 
-/// ★ A video engine in NV2080 space: an encoder or a decoder.
+// ---- ★ the optical-flow engine (OFA), both spaces — v3-gfxset ----------------------------------
+//
+// ⊘ The two-space hazard again, and it collides head-on: `NV2080_ENGINE_TYPE_OFA1 = 0x3e` is
+// numerically `RM_ENGINE_TYPE_OFA0`, and `NV2080_ENGINE_TYPE_OFA0 = 0x33` is `RM_ENGINE_TYPE_DPU`
+// (`gpu_engine_type.h:85`) — only a named function may convert.
+
+/// `NV2080_ENGINE_TYPE_OFA0` (= `_OFA`) — `ogkm-580: class/cl2080_notification.h:337-338`.
+pub const NV2080_ENGINE_TYPE_OFA0: u32 = 0x0000_0033;
+/// `NV2080_ENGINE_TYPE_OFA1` — out of line (`cl2080_notification.h:350`, `NV2080_ENGINE_TYPE_OFAn(i)`
+/// at `:420`).
+pub const NV2080_ENGINE_TYPE_OFA1: u32 = 0x0000_003e;
+/// `RM_ENGINE_TYPE_OFA0` — `ogkm-580: gpu_engine_type.h:96` (`OFA0..1` = `0x3e..=0x3f`, `:155`).
+pub const RM_ENGINE_TYPE_OFA0: u32 = 0x0000_003e;
+/// `ENG_OFA__SIZE_1` (`g_eng_desc_nvoc.h:1854`) = `NV2080_ENGINE_TYPE_OFA_SIZE` (`cl2080_notification.h:389`).
+pub const OFA_SIZE: u32 = 2;
+
+/// `NV2080_ENGINE_TYPE_OFAn(i)` (`cl2080_notification.h:420`), `None` past `OFA1`.
+#[must_use]
+pub const fn engine_type_ofa(i: u32) -> Option<u32> {
+    match i {
+        0 => Some(NV2080_ENGINE_TYPE_OFA0),
+        1 => Some(NV2080_ENGINE_TYPE_OFA1),
+        _ => None,
+    }
+}
+
+/// ★ *"Which OFA is this, in **NV2080** space?"* — `NV2080_ENGINE_TYPE_IS_OFA` then `_OFA_IDX`
+/// (`cl2080_notification.h:421-422`). `None` = not an optical-flow engine.
+#[must_use]
+pub const fn ofa_index_of_engine_type(nv2080: u32) -> Option<u32> {
+    match nv2080 {
+        NV2080_ENGINE_TYPE_OFA0 => Some(0),
+        NV2080_ENGINE_TYPE_OFA1 => Some(1),
+        _ => None,
+    }
+}
+
+/// ★ A video-class engine in NV2080 space: an encoder, a decoder, or (v3-gfxset) the optical-flow
+/// engine — every engine whose class NVIDIA names `NV*_VIDEO_*` (`NVC7FA_VIDEO_OFA`). All three are
+/// generic kernel falcons in a GSP client (`kernel_falcon.c:362-397`: a non-stall service only), run
+/// their own runlist, and take the same 12-byte `{size, prohibitMultipleInstances, engineInstance}`
+/// allocation parameters (`nvos.h:2943-3016`) — so a passthrough twin and a promote satisfied by the
+/// twin mean the same thing for each.
 #[must_use]
 pub const fn is_video_engine_type(nv2080: u32) -> bool {
-    nvenc_index_of_engine_type(nv2080).is_some() || nvdec_index_of_engine_type(nv2080).is_some()
+    nvenc_index_of_engine_type(nv2080).is_some()
+        || nvdec_index_of_engine_type(nv2080).is_some()
+        || ofa_index_of_engine_type(nv2080).is_some()
 }
 
 /// ★★★ *"Which copy engine is this, in **RM** engine space?"* — `RM_ENGINE_TYPE_IS_COPY`

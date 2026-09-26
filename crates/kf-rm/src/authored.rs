@@ -211,6 +211,12 @@ pub fn engine_notification_rows(engines: &[EngineKind], grce_mask: u64) -> Vec<I
                 out.push(row(MC_NVDEC0 + i, next_runlist));
                 next_runlist += 1;
             }
+            // ★ v3-gfxset: the optical-flow engine is the same shape (a generic falcon, non-stall
+            // only, its own runlist).
+            EngineKind::OpticalFlow(i) => {
+                out.push(row(MC_OFA0 + i, next_runlist));
+                next_runlist += 1;
+            }
             EngineKind::Software => {}
         }
     }
@@ -235,6 +241,7 @@ pub fn non_stall_vector_for(table: &[IntrTableEntry], engine: EngineKind) -> Opt
         EngineKind::Copy(i) => row(MC_CE0 + i).or_else(|| row(MC_GR0)),
         EngineKind::VideoEncode(i) => row(MC_NVENC0 + i),
         EngineKind::VideoDecode(i) => row(MC_NVDEC0 + i),
+        EngineKind::OpticalFlow(i) => row(MC_OFA0 + i),
         EngineKind::Software => None,
     }
 }
@@ -254,6 +261,9 @@ pub enum EngineKind {
     VideoEncode(u32),
     /// ★ `NVDECn` — a video decoder, likewise.
     VideoDecode(u32),
+    /// ★ v3-gfxset: `OFAn` — the optical-flow accelerator (`VK_NV_optical_flow`, the NVOFA SDK),
+    /// advertised because the HOST lists it, exactly as NVENC/NVDEC are.
+    OpticalFlow(u32),
     /// RM's software pseudo-engine.
     Software,
 }
@@ -267,6 +277,10 @@ impl EngineKind {
             EngineKind::Copy(i) => format!("CE{i}"),
             EngineKind::VideoEncode(i) => format!("NVENC{i}"),
             EngineKind::VideoDecode(i) => format!("NVDEC{i}"),
+            // ★ `[measured]` the captured GA106 table names instance 0 `OFA` (not `OFA0`), unlike
+            // `NVENC0`/`NVDEC0` (`C: mode2_initctrl_ga106.h:5054`, row 9).
+            EngineKind::OpticalFlow(0) => "OFA".to_string(),
+            EngineKind::OpticalFlow(i) => format!("OFA{i}"),
             EngineKind::Software => "SOFTWARE".to_string(),
         }
     }
@@ -317,6 +331,9 @@ const CLASS_OBJSWENG: u32 = 0x0095_a6f5;
 /// (`C: src/qemu/mode2_initctrl_ga106.h:5054`, `ctl_20801112`) carries `0xe97b6c00` / `0x8f99e100`.
 const CLASS_OBJMSENC: u32 = 0x00e9_7b6c;
 const CLASS_OBJBSP: u32 = 0x008f_99e1;
+/// ★ v3-gfxset: `OBJOFA 0xdd7bab` (`ogkm-580: g_eng_desc_nvoc.h:1351`) — `ENG_OFA(i)`
+/// (`:1853`). `[measured]` the captured GA106 table (`ctl_20801112`, row 9) carries `0xdd7bab00`.
+const CLASS_OBJOFA: u32 = 0x00dd_7bab;
 /// `NV_PTOP_DEVICE_INFO2_DEV_TYPE_ENUM_GRAPHICS` / `_LCE` (`ampere/ga100/dev_top.h:34`,
 /// `blackwell/gb100/dev_top.h:42`).
 const DEV_TYPE_GRAPHICS: u32 = 0;
@@ -327,6 +344,9 @@ const DEV_TYPE_LCE: u32 = 0x13;
 /// only DEV_TYPE reader is the LCE fault-id range (`kern_gmmu_ga100.c:276`), which skips both.
 const DEV_TYPE_NVENC: u32 = 0x0e;
 const DEV_TYPE_NVDEC: u32 = 0x10;
+/// ★ v3-gfxset: `DEV_TYPE_ENUM` OFA `0x16` — nouveau `nvkm/subdev/top/ga100.c:82`, and `[measured]`
+/// the captured GA106 table (OFA row, `0x16`). Not an LCE, so the guest's one reader skips it.
+const DEV_TYPE_OFA: u32 = 0x16;
 /// `MC_ENGINE_IDX_GR0` / `_CE0` (`engine_idx.h:54,128`).
 const MC_GR0: u32 = 84;
 const MC_CE0: u32 = 15;
@@ -334,6 +354,9 @@ const MC_CE0: u32 = 15;
 /// (`ogkm-580: intr/engine_idx.h:78-81,107-117`).
 const MC_NVENC0: u32 = 38;
 const MC_NVDEC0: u32 = 65;
+/// ★ v3-gfxset: `MC_ENGINE_IDX_OFA0` 81 (`OFA1` = 82) — `ogkm-580: intr/engine_idx.h:125-126`;
+/// `[measured]` the captured GA106 OFA row carries MC `0x51`.
+const MC_OFA0: u32 = 81;
 /// The first `NV_PMC_DEVICE_ENABLE` bit authored for a video engine — above every bit GR (12)
 /// and the CEs (2..=11, 13..=22) can take; the register is ONE 32-bit word
 /// (`kernel_bif_ga100.c:584`, `NV_PMC_DEVICE_ENABLE__SIZE_1 <= 1`).
@@ -356,6 +379,22 @@ fn video_fault_id(family: Family, encoder: bool, i: u32) -> Option<u32> {
         Family::Hopper => (&[], &[]),
     };
     (if encoder { enc } else { dec }).get(i as usize).copied()
+}
+
+/// ★ v3-gfxset: the MMU fault-engine id of OFA instance `i` — `NV_PFAULT_MMU_ENG_ID_OFA0` in the
+/// family's `dev_fault.h`: Ampere `10` (`ampere/ga100/dev_fault.h:57`), Ada `10`
+/// (`ada/ad102/dev_fault.h:56`), Blackwell `48` (`blackwell/gb100/dev_fault.h:93`, `gb202:100`).
+/// `[measured]` the captured GA106 OFA row: `0xa`. ⊘ Turing has no OFA (no `NV*FA_VIDEO_OFA` in any
+/// TU10x class list, no fault id), Hopper is refused with the whole table ([`fault_ids`]), and no
+/// header names an `OFA1` fault id — so `OFA1` (GB100's second instance) is refused by the caller,
+/// by name, rather than guessed.
+#[must_use]
+pub fn ofa_fault_id(family: Family, i: u32) -> Option<u32> {
+    match (family, i) {
+        (Family::Ampere | Family::Ada, 0) => Some(10),
+        (Family::Blackwell, 0) => Some(48),
+        _ => None,
+    }
 }
 
 /// The MMU fault-engine ids of a family: `(GRAPHICS, CE0, HOST0)`.
@@ -401,8 +440,8 @@ pub fn engine_caps(engines: &[FifoDeviceEntry]) -> [u32; kf_abi::gspstaticinfo::
     caps
 }
 
-/// The `NV2080_ENGINE_TYPE_*` of an `RM_ENGINE_TYPE_*` (the two spaces diverge for CE10+, NVENC and
-/// NVDEC), or `None` for a type with no NV2080 counterpart here.
+/// The `NV2080_ENGINE_TYPE_*` of an `RM_ENGINE_TYPE_*` (the two spaces diverge for CE10+, NVENC,
+/// NVDEC and OFA), or `None` for a type with no NV2080 counterpart here.
 fn nv2080_of_rm(rm: u32) -> Option<u32> {
     use kf_abi::submit as s;
     match rm {
@@ -414,6 +453,8 @@ fn nv2080_of_rm(rm: u32) -> Option<u32> {
         _ if (s::RM_ENGINE_TYPE_NVENC0..s::RM_ENGINE_TYPE_NVENC0 + s::NVENC_SIZE).contains(&rm) => {
             s::engine_type_nvenc(rm - s::RM_ENGINE_TYPE_NVENC0)
         }
+        // ★ v3-gfxset: RM `OFA0 = 0x3e` is NV2080 `OFA1` numerically — converted, never passed through.
+        _ if (s::RM_ENGINE_TYPE_OFA0..s::RM_ENGINE_TYPE_OFA0 + s::OFA_SIZE).contains(&rm) => s::engine_type_ofa(rm - s::RM_ENGINE_TYPE_OFA0),
         _ => None,
     }
 }
@@ -448,8 +489,8 @@ pub const ENGINE_LAYOUT_WHY: Why = Why::Advertised(
      LCE owns runlist 1, 2, ... with PBDMA runlist+1; RUNLIST_PRI_BASE = 0xC00000 + 0x400*runlist and \
      CHRAM_PRI_BASE = 0xC20000 + 0x2000*runlist on Ampere+ (engine_info.h:66-90: 'valid only on Ampere+', so 0 \
      on Turing; no kernel-RM reader outside kfifoEngineInfoXlate); a video engine (NVENCi / NVDECi, advertised \
-     because the host lists it) owns the next runlist exactly as an async LCE does, with PBDMA runlist+1 and RESET \
-     bits from 23 up; RESET bits 12 (GR) and 2+i / 3+i (CEi, i<10 / \
+     because the host lists it) and the optical-flow engine (OFAi, v3-gfxset, likewise) own the next runlist exactly as \
+     an async LCE does, with PBDMA runlist+1 and RESET bits from 23 up; RESET bits 12 (GR) and 2+i / 3+i (CEi, i<10 / \
      i>=10) in our NV_PMC_DEVICE_ENABLE (sole reader kbifGetValidDeviceEnginesToReset_GA100, \
      kernel_bif_ga100.c:572-605); INTR 0 (kernel_fifo_ga100.c:52 'no longer stored on Ampere+', no reader on \
      Turing either); RC_MASK 0 (no kernel-RM reader at all). ENG_DESC, DEV_TYPE_ENUM, MC and the MMU fault ids \
@@ -488,7 +529,7 @@ pub fn engine_table(family: Family, engines: &[EngineKind], grce_mask: u64) -> R
                 grce_seen += 1;
                 (Some(0), grce_seen)
             }
-            EngineKind::Copy(_) | EngineKind::VideoEncode(_) | EngineKind::VideoDecode(_) => {
+            EngineKind::Copy(_) | EngineKind::VideoEncode(_) | EngineKind::VideoDecode(_) | EngineKind::OpticalFlow(_) => {
                 let r = next_runlist;
                 next_runlist += 1;
                 (Some(r), 0)
@@ -540,6 +581,24 @@ pub fn engine_table(family: Family, engines: &[EngineKind], grce_mask: u64) -> R
                 pbdma_ids[0] = runlist.unwrap_or(0) + 1;
                 num_pbdmas = 1;
             }
+            // ★ v3-gfxset: the optical-flow engine — the video engines' shape, its own constants.
+            EngineKind::OpticalFlow(i) => {
+                d[slot::ENG_DESC] = CLASS_OBJOFA << 8 | i;
+                d[slot::MMU_FAULT_ID] = ofa_fault_id(family, i).ok_or(LayoutRefusal {
+                    family,
+                    missing: "NV_PFAULT_MMU_ENG_ID_OFA<i> for this instance: the family's dev_fault.h names none",
+                })?;
+                if next_reset > 31 {
+                    return Err(LayoutRefusal { family, missing: "a free NV_PMC_DEVICE_ENABLE bit for the OFA engine (one 32-bit word)" });
+                }
+                d[slot::RESET] = next_reset;
+                next_reset += 1;
+                d[slot::MC] = MC_OFA0 + i;
+                d[slot::DEV_TYPE_ENUM] = DEV_TYPE_OFA;
+                d[slot::INSTANCE_ID] = i;
+                pbdma_ids[0] = runlist.unwrap_or(0) + 1;
+                num_pbdmas = 1;
+            }
             EngineKind::Software => {
                 d[slot::ENG_DESC] = CLASS_OBJSWENG << 8;
                 d[slot::FIFO_TAG] = u32::MAX;
@@ -566,6 +625,7 @@ pub fn engine_table(family: Family, engines: &[EngineKind], grce_mask: u64) -> R
             EngineKind::Copy(i) => kf_abi::submit::RM_ENGINE_TYPE_COPY0 + i,
             EngineKind::VideoEncode(i) => kf_abi::submit::RM_ENGINE_TYPE_NVENC0 + i,
             EngineKind::VideoDecode(i) => kf_abi::submit::RM_ENGINE_TYPE_NVDEC0 + i,
+            EngineKind::OpticalFlow(i) => kf_abi::submit::RM_ENGINE_TYPE_OFA0 + i,
             EngineKind::Software => kf_abi::submit::RM_ENGINE_TYPE_SW,
         };
         out.push(FifoDeviceEntry {

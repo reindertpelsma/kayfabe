@@ -202,11 +202,13 @@ pub fn query_arch(host: &mut dyn HostControls) -> Result<(Family, u8), FieldCaus
 /// Classify an `NV2080_ENGINE_TYPE`, and give its `RM_ENGINE_TYPE`. `None` = not advertised.
 ///
 /// ★ **Authored**: the served engine list is GR, the copy engines, the VIDEO engines (NVENC /
-/// NVDEC, w-video 2026-09-26 — the passthrough plane now drives them on host twins) and RM's `SW`
-/// pseudo-engine. *"An engine we advertise is an engine RM goes on to USE"* (`kf_abi::deviceinfo`)
-/// still holds for the rest: NVJPG, OFA and SEC2 are read and deliberately not advertised. ⊘ The
-/// video set is the HOST's — an H100 lists no NVENC, so its guest gets none. A video engine is
-/// advertised only when the host's falcon table also names it ([`query_video_falcons`]). The RM space is contiguous where the NV2080 space is
+/// NVDEC, w-video 2026-09-26 — the passthrough plane now drives them on host twins), the
+/// optical-flow engine (OFA, v3-gfxset 2026-09-26 — same plane; without it the guest's Vulkan driver
+/// withholds `VK_NV_optical_flow` and its queue family) and RM's `SW` pseudo-engine. *"An engine we
+/// advertise is an engine RM goes on to USE"* (`kf_abi::deviceinfo`) still holds for the rest: NVJPG
+/// and SEC2 are read and deliberately not advertised. ⊘ The video set is the HOST's — an H100 lists
+/// no NVENC, so its guest gets none. A video engine (OFA included) is advertised only when the host's
+/// falcon table also names it ([`query_video_falcons`]). The RM space is contiguous where the NV2080 space is
 /// not (`kf_abi::submit`'s two inverses): `RM_ENGINE_TYPE_COPY(i) = 0x09 + i` for all twenty,
 /// `GR(i) = 0x01 + i`, `SW = 0x2d` (`ogkm-580: gpu_engine_type.h:34-139`).
 #[must_use]
@@ -219,6 +221,9 @@ pub fn classify_engine(nv2080_engine_type: u32) -> Option<(EngineKind, u32)> {
     }
     if let Some(i) = kf_abi::submit::nvdec_index_of_engine_type(nv2080_engine_type) {
         return Some((EngineKind::VideoDecode(i), kf_abi::submit::RM_ENGINE_TYPE_NVDEC0 + i));
+    }
+    if let Some(i) = kf_abi::submit::ofa_index_of_engine_type(nv2080_engine_type) {
+        return Some((EngineKind::OpticalFlow(i), kf_abi::submit::RM_ENGINE_TYPE_OFA0 + i));
     }
     match nv2080_engine_type {
         0x01..=0x08 => Some((EngineKind::Graphics(nv2080_engine_type - 1), nv2080_engine_type)),
@@ -267,7 +272,7 @@ pub fn device_info_rule(engines: &[EngineKind], falcons: &[ConstructedFalcon]) -
                 // ★ A video engine's PRI block is its falcon's: the host's own `registerBase` for
                 // the same `engDesc` ([`query_video_falcons`]; `[measured]` GA106 NVENC0 `0x1c8000`,
                 // NVDEC0 `0x848000`). A kind with no falcon never reaches here — filtered at query.
-                EngineKind::VideoEncode(_) | EngineKind::VideoDecode(_) => falcons
+                EngineKind::VideoEncode(_) | EngineKind::VideoDecode(_) | EngineKind::OpticalFlow(_) => falcons
                     .iter()
                     .find(|f| Some(f.eng_desc) == video_eng_desc(k))
                     .map_or(DevicePriBase::NotADevice, |f| DevicePriBase::At(f.register_base)),
@@ -278,13 +283,34 @@ pub fn device_info_rule(engines: &[EngineKind], falcons: &[ConstructedFalcon]) -
     DeviceInfoRow { pri_bases: Box::leak(rows.into_boxed_slice()) }
 }
 
-/// `ENG_NVENC(i)` / `ENG_NVDEC(i)` — `(NVOC classId << 8) | i` (`OBJMSENC 0xe97b6c`, `OBJBSP
-/// 0x8f99e1`, `ogkm-580: g_eng_desc_nvoc.h:1273,833`); `None` for a non-video kind.
+/// ★ v3-gfxset: the engine list with every OFA instance this family's `dev_fault.h` cannot state
+/// (GB100's `OFA1`; an OFA a Turing or Hopper host might list) REMOVED — named on stderr — rather than
+/// left for [`authored::engine_table`] to refuse the whole table over: the device must not lose GR and
+/// the copy engines over an optional engine. NVENC/NVDEC keep their stricter rule (no host lists an
+/// instance their headers do not name).
+#[must_use]
+pub fn keep_statable_ofa(family: Family, kinds: Vec<EngineKind>) -> Vec<EngineKind> {
+    kinds
+        .into_iter()
+        .filter(|&k| match k {
+            EngineKind::OpticalFlow(i) if authored::ofa_fault_id(family, i).is_none() => {
+                eprintln!("kf3: host facts: OFA{i} NOT advertised — {family:?}'s dev_fault.h states no NV_PFAULT_MMU_ENG_ID_OFA{i}");
+                false
+            }
+            _ => true,
+        })
+        .collect()
+}
+
+/// `ENG_NVENC(i)` / `ENG_NVDEC(i)` / `ENG_OFA(i)` — `(NVOC classId << 8) | i` (`OBJMSENC 0xe97b6c`,
+/// `OBJBSP 0x8f99e1`, `OBJOFA 0xdd7bab`, `ogkm-580: g_eng_desc_nvoc.h:1273,833,1351`); `None` for a
+/// non-video kind.
 #[must_use]
 pub fn video_eng_desc(k: EngineKind) -> Option<u32> {
     match k {
         EngineKind::VideoEncode(i) => Some(0x00e9_7b6c << 8 | i),
         EngineKind::VideoDecode(i) => Some(0x008f_99e1 << 8 | i),
+        EngineKind::OpticalFlow(i) => Some(0x00dd_7bab << 8 | i),
         _ => None,
     }
 }
@@ -299,8 +325,10 @@ pub fn video_eng_desc(k: EngineKind) -> Option<u32> {
 /// falcon is ever read by a GSP-client guest: `gkflcnResetHw` refuses (`:356-360`), the register
 /// HALs are reached only from KernelGsp (`kernel_gsp.c:2280`), and a generic falcon has no
 /// engstate hooks. So `registerBase` is served as the host states it (and becomes the device-info
-/// PRI base), and no register model is needed. FECS/GPCCS/PMU/SEC2/OFA rows are dropped: SEC2
-/// would register an interrupt service keyed by an engine this device does not list.
+/// PRI base), and no register model is needed. FECS/GPCCS/PMU/SEC2 rows are dropped: SEC2
+/// would register an interrupt service keyed by an engine this device does not list. ★ v3-gfxset: the
+/// OFA row is KEPT when OFA is advertised — `OBJOFA` is a generic kernel falcon exactly like
+/// MSENC/BSP (the guest's `chandesConstruct` needs it for an `NV*FA_VIDEO_OFA` object).
 ///
 /// `ctxBufferSize`/`ctxAttr`/`addrSpaceList` are the host's: the guest sizes the (never-executed)
 /// context buffer it promotes with them — the twin's real one is host RM's.
@@ -1042,6 +1070,7 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
             .filter(|&k| video_eng_desc(k).is_none_or(|d| video_falcons.iter().any(|f| f.eng_desc == d)))
             .collect::<Vec<_>>()
     });
+    let kinds = kinds.map(|k| keep_statable_ofa(asked, k));
     let engines = match (&kinds, &grce) {
         (Ok(k), Ok(g)) => authored::engine_table(asked, k, *g).map_err(FieldCause::FamilyLayout),
         (Err(e), _) => Err(e.clone()),

@@ -554,6 +554,7 @@ impl ChannelPolicy {
                             | kf_chip::classes::Kind::InlineToMemory
                             | kf_chip::classes::Kind::VideoEncoder
                             | kf_chip::classes::Kind::VideoDecoder
+                            | kf_chip::classes::Kind::OpticalFlow
                     )
                 ) =>
             {
@@ -1008,7 +1009,8 @@ pub fn alloc_shape(abi: &DriverAbiTable, class: u32) -> Option<AllocParams> {
         | kf_chip::classes::Kind::TwoD
         | kf_chip::classes::Kind::InlineToMemory
         | kf_chip::classes::Kind::VideoEncoder
-        | kf_chip::classes::Kind::VideoDecoder => Some(AllocParams::NoDeclaredFacts),
+        | kf_chip::classes::Kind::VideoDecoder
+        | kf_chip::classes::Kind::OpticalFlow => Some(AllocParams::NoDeclaredFacts),
         kf_chip::classes::Kind::Usermode => None,
     })
 }

@@ -164,8 +164,9 @@ fn classify_engine_names_both_spaces_of_every_video_engine() {
     assert_eq!(classify_engine(0x1b), Some((EngineKind::VideoEncode(0), 0x25)));
     assert_eq!(classify_engine(0x1d), Some((EngineKind::VideoEncode(2), 0x27)), "NV2080 0x1d is NVENC2");
     assert_eq!(classify_engine(0x3f), Some((EngineKind::VideoEncode(3), 0x28)), "NVENC3 is out of line");
-    // ⊘ Still NOT advertised: NVJPG (0x2b), OFA (0x33), SEC2 (0x1e).
-    for t in [0x2b, 0x33, 0x1e] {
+    // ⊘ Still NOT advertised: NVJPG (0x2b), SEC2 (0x1e). (OFA 0x33 IS, since v3-gfxset —
+    // `tests/ofa_engine.rs`.)
+    for t in [0x2b, 0x1e] {
         assert_eq!(classify_engine(t), None, "{t:#x}");
     }
 }
