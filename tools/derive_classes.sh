@@ -111,7 +111,7 @@ CHIPS=$(nm "$tmp/list.o" | awk '{print $NF}' | sed -n 's/^gpuGetEngClassDescript
 # ⊘ `-dM` prints the macro table the preprocessor ENDED with — the only names that survive
 # conditionals. The pattern is applied to macro NAMES, not to C.
 gcc $CFLAGS -E -dM "$tmp/all.h" | awk '{print $2}' \
-  | grep -E '^[A-Z0-9]+_(CHANNEL_GPFIFO|COMPUTE|DMA_COPY|USERMODE)_[A-Z]$|^(TURING|AMPERE|ADA|HOPPER|BLACKWELL)_[A-Z]$' \
+  | grep -E '^[A-Z0-9]+_(CHANNEL_GPFIFO|COMPUTE|DMA_COPY|USERMODE|TWOD|INLINE_TO_MEMORY)_[A-Z]$|^(TURING|AMPERE|ADA|HOPPER|BLACKWELL)_[A-Z]$' \
   | sort -u > "$tmp/names"
 {
   echo '#include <stdio.h>'
@@ -150,6 +150,7 @@ kind_of() {
   case "$1" in
     *_CHANNEL_GPFIFO_?) echo channel_gpfifo ;; *_COMPUTE_?) echo compute ;;
     *_DMA_COPY_?) echo dma_copy ;; *_USERMODE_?) echo usermode ;;
+    *_TWOD_?) echo twod ;; *_INLINE_TO_MEMORY_?) echo inline_to_memory ;;   # ★ v3-gfx: GR-engine graphics classes
     *) echo threed ;;   # the pattern in step 3 admits only <FAMILY>_<LETTER> here
   esac
 }
@@ -177,7 +178,7 @@ else
     echo "    ClassSet {"
     echo "        family: Family::$f,"
     echo "        chips: &[${chips%, }],"
-    for k in channel_gpfifo compute dma_copy usermode threed; do
+    for k in channel_gpfifo compute dma_copy usermode threed twod inline_to_memory; do
       ids=$(awk -v f="$f" -v k="$k" '$1==f && $2==k {printf "%s /* %s */, ", $3, $4}' "$tmp/rows.u")
       echo "        $k: &[${ids%, }],"
     done

@@ -378,6 +378,7 @@ impl Walker for GpuWalker {
                         at: m.gpga,
                         ap: m.aperture(),
                         held: m.flags & kf_cuda::abi::KFWR_RF_HELD != 0,
+                        kind: ((m.flags >> 16) & 0xff) as u8,
                     })
                     .collect();
                 EntryDiff {
@@ -1113,6 +1114,7 @@ mod tests {
                         at: m.gpga,
                         ap: m.aperture(),
                         held: m.flags & kf_cuda::abi::KFWR_RF_HELD != 0,
+                        kind: ((m.flags >> 16) & 0xff) as u8,
                     })
                     .collect();
                 let refused = if self.refuse_in == Some(e.pdb) { 0x2000 } else { 0 };

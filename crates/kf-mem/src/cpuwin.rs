@@ -480,7 +480,7 @@ mod tests {
     }
 
     fn d(va: u64, off: u64, len: u64, ram: bool) -> Desired {
-        Desired { va, len, off, ram }
+        Desired { va, len, off, ram, kind: 0 }
     }
 
     #[test]

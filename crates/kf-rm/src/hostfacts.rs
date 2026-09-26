@@ -94,6 +94,18 @@ pub struct HostFacts {
     pub gr_info: GrInfoProfile,
     /// GR context buffer sizes (`GR_GET_ENGINE_CONTEXT_PROPERTIES`).
     pub gr_context_buffers: [ContextBuffer; CONTEXT_BUFFER_ID_COUNT],
+    /// ★ v3-gfx: GR zcull geometry (`GR_GET_ZCULL_INFO`); `None` = the host die has none.
+    pub gr_zcull_info: Option<[u32; kf_abi::grstatic::ZCULL_INFO_ROW_WORDS]>,
+    /// ★ v3-gfx: the ZBC table index ranges `(start, end)` for color / depth / stencil
+    /// (`GET_ZBC_CLEAR_TABLE_SIZE` on a host ZBC object); `None` = the die has no ZBC table.
+    pub zbc_table_sizes: Option<[(u32, u32); 3]>,
+    /// ★ v3-gfx: `FB_GET_INFO_V2` geometry indices the guest kernel forwards and `kf_abi::fbinfo`
+    /// does not derive (`PARTITION_COUNT`/`_MASK`, `LTC_MASK`), each the host's own answer;
+    /// an index the host refuses is absent (and the guest's request for it refused, as before).
+    pub forwarded_fb_extra: Vec<(u32, u32)>,
+    /// ★ v3-gfx: `FB_GET_GPU_CACHE_INFO` (`0x20801315`) — the host's L2 state words
+    /// `{powerState, writeMode, bypassMode, rcmState}`; `None` = refused on the host.
+    pub gpu_cache_info: Option<[u32; 4]>,
     /// `GPU_GET_INFO_V2` indices answered from the host's own reply.
     pub forwarded_gpu_info: Vec<(u32, u32)>,
     /// ★ `FB_GET_INFO_V2` indices answered from the host's own reply (bus width, RAM type, FBP
@@ -170,6 +182,10 @@ pub const PROVENANCE: &[(&str, Source)] = &[
     ("gr_static", Source::HostControl { cmd: 0x2080_1228, name: "GR_GET_INFO_V2 (SMs per TPC) + GR_GET_GPC_MASK 0x2080122a / GR_GET_TPC_MASK 0x2080122b / GR_GET_GLOBAL_SM_ORDER 0x2080121b / GR_GET_CAPS_V2 0x20801227; + GR_GET_ZCULL_MASK 0x20801237; mmu-per-GPC / PES per GPC from GR info litters; TPC-to-PES map, FECS record size, per-subctx header authored (authored.rs)" }),
     ("gr_info", Source::HostControl { cmd: 0x2080_1228, name: "GR_GET_INFO_V2" }),
     ("gr_context_buffers", Source::HostControl { cmd: 0x2080_122d, name: "GR_GET_ENGINE_CONTEXT_PROPERTIES" }),
+    ("gr_zcull_info", Source::HostControl { cmd: 0x2080_1206, name: "GR_GET_ZCULL_INFO (host NOT_SUPPORTED = no zcull on the die)" }),
+    ("zbc_table_sizes", Source::HostControl { cmd: 0x9096_0106, name: "GET_ZBC_CLEAR_TABLE_SIZE on a host GF100_ZBC_CLEAR object (ranges only; the table itself is per-VM, kf_rm::zbc)" }),
+    ("forwarded_fb_extra", Source::HostControl { cmd: 0x2080_1303, name: "FB_GET_INFO_V2 [PARTITION_COUNT 0x04, PARTITION_MASK 0x14/0x37, LTC_MASK 0x2b/0x38], each index asked alone" }),
+    ("gpu_cache_info", Source::HostControl { cmd: 0x2080_1315, name: "FB_GET_GPU_CACHE_INFO" }),
     ("forwarded_gpu_info", Source::HostControl { cmd: 0x2080_0102, name: "GPU_GET_INFO_V2" }),
     ("forwarded_fb_info", Source::HostControl { cmd: 0x2080_1303, name: "FB_GET_INFO_V2 (the seven indices libcuda forwards; host words verbatim)" }),
     // ⊘ w827 CORRECTED from `GPU_GET_PARTITIONS 0x20800175` "(no partitions => SMC

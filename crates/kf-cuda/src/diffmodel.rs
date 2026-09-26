@@ -47,15 +47,18 @@ pub fn class_of(flags: u32) -> usize {
 
 /// ★ The ground truth a run's backing names, as the HOST maps it: `0` the store (vidmem), `1`
 /// guest RAM (both system apertures — the host maps one guest-RAM object either way), `2` any
-/// other aperture (peer; the walker refuses it, so it never matches anything). Everything else in
-/// `flags` (kind, read-only, volatile, page size) is not part of what the host places.
+/// other aperture (peer; the walker refuses it, so it never matches anything) — ★ v3-gfx: plus the
+/// PTE KIND in bits `2..10`, because the host mapping now carries it (`kf_mem::apply::host_pte_kind`)
+/// and a page re-kinded at the same backing must be re-mapped. Read-only, volatile and page size
+/// are still not part of what the host places. Mirrors `kf_hkey` (`cuda/walk/kf_walk.cu`).
 #[must_use]
-pub fn host_key(flags: u32) -> u8 {
-    match flags & 0x7 {
+pub fn host_key(flags: u32) -> u32 {
+    let ap = match flags & 0x7 {
         0 => 0,
         2 | 3 => 1,
         _ => 2,
-    }
+    };
+    ap | (((flags >> 16) & 0xff) << 2)
 }
 
 /// One host verdict on one report run.
@@ -259,16 +262,16 @@ pub fn commit(com: &Committed, runs: &[KfMapRun], codes: &[AckCode]) -> Committe
 /// `(va, len, key, gpga)` pieces with adjacent linear pieces merged — for comparing a slot with a
 /// walk (closure).
 #[must_use]
-pub fn coverage(runs: &[KfMapRun]) -> [Vec<(u64, u64, u8, u64)>; CLASSES] {
-    let mut out: [Vec<(u64, u64, u8, u64)>; CLASSES] = Default::default();
+pub fn coverage(runs: &[KfMapRun]) -> [Vec<(u64, u64, u32, u64)>; CLASSES] {
+    let mut out: [Vec<(u64, u64, u32, u64)>; CLASSES] = Default::default();
     for (c, slot) in out.iter_mut().enumerate() {
-        let mut v: Vec<(u64, u64, u8, u64)> = runs
+        let mut v: Vec<(u64, u64, u32, u64)> = runs
             .iter()
             .filter(|r| class_of(r.flags) == c)
             .map(|r| (r.va, r.len, host_key(r.flags), r.gpga))
             .collect();
         v.sort_unstable();
-        let mut m: Vec<(u64, u64, u8, u64)> = Vec::new();
+        let mut m: Vec<(u64, u64, u32, u64)> = Vec::new();
         for x in v {
             if let Some(l) = m.last_mut()
                 && l.0 + l.1 == x.0

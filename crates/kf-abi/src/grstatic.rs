@@ -712,6 +712,30 @@ pub fn encode_pdb_properties(p: &GrStaticProfile) -> Result<Vec<u8>, GrStaticErr
     Ok(out)
 }
 
+/// `NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_ZCULL_INFO` (`ctrl2080internal.h:453`).
+pub const NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_ZCULL_INFO: u32 = 0x2080_0a2c;
+/// `NV2080_CTRL_INTERNAL_STATIC_GR_ZCULL_INFO` — ten `NvU32` (`ctrl2080internal.h:434-445`), the
+/// SAME ten fields, in the same order, as the unprivileged client control
+/// `NV2080_CTRL_GR_GET_ZCULL_INFO_PARAMS` (`ctrl2080gr.h:513-524`) — which is why the row can be
+/// served verbatim from the host's own answer to that control.
+pub const ZCULL_INFO_ROW_WORDS: usize = 10;
+/// `sizeof(NV2080_CTRL_INTERNAL_STATIC_GR_GET_ZCULL_INFO_PARAMS)` — one row per GR engine.
+pub const ZCULL_INFO_PARAMS_SIZE: usize = GR_MAX_ENGINES * ZCULL_INFO_ROW_WORDS * 4;
+
+/// ★ v3-gfx: `NV2080_CTRL_INTERNAL_STATIC_GR_GET_ZCULL_INFO_PARAMS` — engine 0's row is `row`,
+/// every other engine zero (this device has one GR and no MIG). The guest's CPU-RM caches it in
+/// `kgraphicsLoadStaticInfo` (`kernel_graphics.c:1345-1356`) and serves the client control
+/// `GR_GET_ZCULL_INFO 0x20801206` from that cache alone (`:3862-3863`) — so refusing this row is
+/// what makes every GL/Vulkan zcull query in the guest answer `NV_ERR_NOT_SUPPORTED`.
+#[must_use]
+pub fn encode_zcull_info(row: &[u32; ZCULL_INFO_ROW_WORDS]) -> Vec<u8> {
+    let mut out = vec![0u8; ZCULL_INFO_PARAMS_SIZE];
+    for (i, w) in row.iter().enumerate() {
+        put32(&mut out, 4 * i, *w);
+    }
+    out
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════════════
 // The DEFERRED half — `0x20800a32`, and why it needed a boot to be sure of
 // ═══════════════════════════════════════════════════════════════════════════════════════

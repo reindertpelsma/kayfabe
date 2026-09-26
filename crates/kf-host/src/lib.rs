@@ -831,6 +831,7 @@ impl HostRm {
         at: Option<u64>,
         extra: u32,
         is_shared_slice: bool,
+        kind: u32,
     ) -> Result<u64, RmError> {
         let mut arg = [0u8; Nvos46Parameters::SIZE];
         // ★★★★★ **CONSTRAINT 28, HALF ONE — THE PAGE-SIZE FLAG MATCHES THE REQUEST.**
@@ -868,7 +869,8 @@ impl HostRm {
                     0
                 },
             flags2: 0,
-            kind_override: 0,
+            // ★ v3-gfx: applied only with `NVOS46_FLAGS_PAGE_KIND_OVERRIDE_YES` in `extra`.
+            kind_override: kind,
             dma_offset: at.unwrap_or(0),
             status: 0,
         }

@@ -30,6 +30,7 @@ pub mod rpc;
 pub mod staticinfo;
 pub mod sticky;
 pub mod sweep;
+pub mod zbc;
 pub mod unserviced;
 
 pub use hostfacts::HostFacts;
@@ -229,7 +230,10 @@ pub fn served_chain(
         chain.push(Box::new(barpde::PageDirPolicy::new(driver, guest_os, sink.clone())));
         chain.push(Box::new(barpde::BarPdePolicy::new(sink)));
     }
-    chain.extend::<[Box<dyn kf_gsp::CommandPolicy>; 6]>([
+    chain.extend::<[Box<dyn kf_gsp::CommandPolicy>; 7]>([
+        // ★ v3-gfx: the per-VM ZBC table — claims only `0x9096xxxx` controls, answers them from
+        // its own state and never forwards (`zbc.rs`).
+        Box::new(zbc::ZbcPolicy::new(driver, host.zbc_table_sizes)),
         Box::new(kf_gsp::Observing(Box::new(faultbuffer::FaultBufferRecorder::new(
             driver,
             fault_buffer,

@@ -1,0 +1,66 @@
+GFX_STEPS_START role=guest at 2026-09-25T23:25:55+00:00 kernel=6.8.0-139-generic
+GFX_DRIVER=580.159.04
+GFX_S1_MODESET=absent
+GFX_S1_DRI=by-path card0 renderD128 
+  dmesg: [   32.912247] nvidia-modeset: Loading NVIDIA UNIX Open Kernel Mode Setting Driver for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:04:37 UTC 2026
+  dmesg: [   32.924373] [drm] [nvidia-drm] [GPU ID 0x00000003] Loading driver
+  dmesg: [   34.178513] [drm] Initialized nvidia-drm 0.0.0 20160202 for 0000:00:03.0 on minor 0
+GFX_S1=FAIL
+  dri: total 0
+  dri: drwxr-xr-x  3 root root        100 Sep 25 23:25 .
+  dri: drwxr-xr-x 19 root root       4020 Sep 25 23:25 ..
+  dri: drwxr-xr-x  2 root root         80 Sep 25 23:25 by-path
+  dri: crw-rw----  1 root video  226,   0 Sep 25 23:25 card0
+  dri: crw-rw----  1 root render 226, 128 Sep 25 23:25 renderD128
+BUILD_GFX_OK baf2672dc4c6
+GFX_BUILD=OK
+  vulkaninfo: ERROR: [Loader Message] Code 0 : loader_scanned_icd_add: Could not get 'vkCreateInstance' via 'vk_icdGetInstanceProcAddr' for ICD libGLX_nvidia.so.0
+  vulkaninfo: 	apiVersion         = 1.4.318
+  vulkaninfo: 	driverVersion      = 25.2.8
+  vulkaninfo: 	deviceType         = PHYSICAL_DEVICE_TYPE_CPU
+  vulkaninfo: 	deviceName         = llvmpipe (LLVM 20.1.2, 256 bits)
+  vulkaninfo: 	driverID           = DRIVER_ID_MESA_LLVMPIPE
+GFX_VULKANINFO_RC=0
+  VK_START mode=compute
+  VK_DEVICE[0]=llvmpipe (LLVM 20.1.2, 256 bits) vendor=0x10005 type=4 api=1.4.318 driver=0x6402008
+  VK_FAIL no NVIDIA physical device (llvmpipe only?)
+GFX_VKC_RC=3
+GFX_S2=FAIL
+  VK_START mode=render
+  VK_DEVICE[0]=llvmpipe (LLVM 20.1.2, 256 bits) vendor=0x10005 type=4 api=1.4.318 driver=0x6402008
+  VK_FAIL no NVIDIA physical device (llvmpipe only?)
+GFX_VKR_RC=3
+GFX_S3=FAIL
+GFX_EGLINFO_RC=139
+  EGL_START
+  EGL_DEVICE[0] drm=/dev/dri/card0 ext=EGL_NV_device_cuda EGL_EXT_device_drm EGL_EXT_device_drm_render_node EGL_EXT_device_query_name EGL_EXT_device_persistent_id
+  EGL_DEVICE[1] drm=/dev/dri/card0 ext=EGL_EXT_device_drm EGL_EXT_device_drm_render_node EGL_EXT_device_query_name EGL_EXT_device_persistent_id
+  libEGL warning: pci id for fd 11: 10de:2208, driver (null)
+  
+  pci id for fd 12: 10de:2208, driver (null)
+  pci id for fd 13: 10de:2208, driver (null)
+  libEGL warning: egl: failed to create dri2 screen
+  libEGL warning: pci id for fd 11: 10de:2208, driver (null)
+  
+  pci id for fd 12: 10de:2208, driver (null)
+  pci id for fd 13: 10de:2208, driver (null)
+  libEGL warning: egl: failed to create dri2 screen
+  libEGL warning: pci id for fd 11: 10de:2208, driver (null)
+  
+  EGL_DEVICE[2] drm=- ext=EGL_MESA_device_software EGL_EXT_device_drm_render_node
+  EGL_DISPLAY[2] vendor=Mesa Project version=1.5
+  EGL_FAIL no NVIDIA EGL device display (eglGetError=0x3000)
+GFX_EGLR_RC=3
+GFX_S4=FAIL
+  glxinfo: OpenGL vendor string: Mesa
+  glxinfo: OpenGL renderer string: llvmpipe (LLVM 20.1.2, 256 bits)
+  glxinfo: OpenGL core profile version string: 4.5 (Core Profile) Mesa 25.2.8-0ubuntu0.24.04.2
+  glxinfo: OpenGL core profile shading language version string: 4.50
+  glxinfo: OpenGL version string: 4.5 (Compatibility Profile) Mesa 25.2.8-0ubuntu0.24.04.2
+  glxinfo: OpenGL shading language version string: 4.50
+  glxgears: 2929 frames in 5.0 seconds = 585.796 FPS
+  glxgears: 3304 frames in 5.0 seconds = 660.684 FPS
+GFX_S5_RENDERER=llvmpipe (LLVM 20.1.2, 256 bits)
+GFX_S5_FRAMES=2929
+GFX_S5=FAIL
+GFX_STEPS_END role=guest at 2026-09-25T23:26:25+00:00

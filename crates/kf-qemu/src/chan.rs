@@ -932,6 +932,33 @@ impl ChanPlane {
                     }),
                 )
             }
+            ChanStatement::ZcullBind { client, channel, va, mode } => {
+                // GR twins only (zcull is GR context state), the channel or its whole group.
+                let twins: Vec<kf_host::Channel> = self
+                    .pt
+                    .lock()
+                    .map(|m| {
+                        m.iter()
+                            .filter(|(k, v)| k.0 == client && (k.1 == channel || v.tsg == Some(channel)) && v.engine == kf_abi::submit::ENGINE_TYPE_GRAPHICS)
+                            .map(|(_, v)| v.chan)
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                if twins.is_empty() {
+                    return ChanAnswer::NotOurs;
+                }
+                self.defer(
+                    "zcull bind",
+                    Box::new(move |me: &ChanPlane| {
+                        for c in &twins {
+                            me.rm
+                                .zcull_bind(*c, va, mode)
+                                .map_err(|e| (NV_ERR_NOT_SUPPORTED, format!("twin host {:#x} ZCULL_BIND va={va:#x} mode={mode}: {e:?}", c.token)))?;
+                        }
+                        Ok(format!("{client:#x}:{channel:#x} ZCULL_BIND va={va:#x} mode={mode} on {} GR twin(s)", twins.len()))
+                    }),
+                )
+            }
             ChanStatement::Timeslice { client, object, us } => {
                 let twins: Vec<kf_host::Channel> = self
                     .pt
@@ -1252,20 +1279,21 @@ impl ChanPlane {
                     .filter(|(_, k)| matches!(k, kf_chip::classes::Kind::Compute | kf_chip::classes::Kind::ThreeD))
                     .map(|(h, _)| *h)
                     .collect();
-                if host_ctx.is_empty() {
-                    return Err((
-                        NV_ERR_INVALID_STATE,
-                        format!(
-                            "{client:#x}:{object:#x} GPU_PROMOTE_CTX: twin host {ht:#x} holds no GR engine object, so host RM has no context to stand for the guest's"
-                        ),
-                    ));
-                }
+                // ★ v3-gfx: a graphics object's promote ARRIVES BEFORE its alloc — the guest's CPU-RM
+                // maps the context buffers into the channel's VA space and promotes them inside
+                // `_kgrAlloc` (`kernel_graphics_object.c:224`), and only then RPCs the object.
+                // `[measured vgfx 2026-09-26, gfx3]` every 3D channel's promote hit an empty twin.
+                // The stub stands (owner ruling #3): host RM builds the twin's OWN context when that
+                // engine object is allocated on it, a moment later; the guest's buffers are never
+                // read or written either way. So an empty twin is "pending", not a refusal.
+                let pending = host_ctx.is_empty();
                 v.ctx.initialized |= initialize;
                 v.ctx.va_bound |= with_va;
                 v.ctx.bound |= with_va != 0;
                 v.ctx.promotes += 1;
                 Ok(format!(
-                    "chan {client:#x}:{object:#x} GPU_PROMOTE_CTX SATISFIED BY TWIN host {ht:#x} (host GR object(s) {host_ctx:x?}): entries={entries} init_ids={initialize:#x} va_ids={with_va:#x} bound={} — not forwarded, no guest byte touched",
+                    "chan {client:#x}:{object:#x} GPU_PROMOTE_CTX SATISFIED BY TWIN host {ht:#x} (host GR object(s) {host_ctx:x?}{}): entries={entries} init_ids={initialize:#x} va_ids={with_va:#x} bound={} — not forwarded, no guest byte touched",
+                    if pending { " — none yet: the engine object this promote precedes births the host context" } else { "" },
                     v.ctx.bound
                 ))
             }),
@@ -1611,7 +1639,8 @@ impl ChanPlane {
         let Some(vas) = a.vaspace else {
             return refuse(NV_ERR_INVALID_STATE, format!("no VA space resolved (hVASpace={:#x}, parent {:#x})", a.h_vaspace, a.parent));
         };
-        let key = VasKey((u64::from(a.client) << 32) | u64::from(vas));
+        // ★ v3-gfx: the VA space's OWN client (a dup'd space is keyed by its original).
+        let key = VasKey((u64::from(a.vaspace_client) << 32) | u64::from(vas));
         let Some(mirror) = self.mirrors.lock().ok().and_then(|m| m.get(&key).cloned()) else {
             return refuse(NV_ERR_INVALID_STATE, format!("VA space {key:?} has no mirror (no page-directory statement named it)"));
         };

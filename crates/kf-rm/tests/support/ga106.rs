@@ -463,6 +463,12 @@ pub fn host_facts() -> HostFacts {
         gr_static: kf_abi::grstatic::GA106_GR_STATIC,
         gr_info: kf_abi::grinfo::GA106_GR_INFO,
         gr_context_buffers: kf_abi::grstatic::GA106_CONTEXT_BUFFERS,
+        // ⊘ unmeasured on GA106 so far: None (refused, as before v3-gfx) until a host reply is captured.
+        gr_zcull_info: None,
+        // ⊘ v3-gfx fields: unmeasured on GA106 — the refusing values (as before v3-gfx).
+        zbc_table_sizes: None,
+        forwarded_fb_extra: vec![],
+        gpu_cache_info: None,
         forwarded_gpu_info: kf_abi::gpuinfo::GA106_FORWARDED_GPU_INFO.to_vec(),
         // The GA106's measured words (`kf_abi::fbinfo` tests: bus 0xc0, FBPs 3, LTS 18), which
         // the GA10x projections of its row reproduce.

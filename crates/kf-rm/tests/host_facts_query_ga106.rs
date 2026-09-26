@@ -213,10 +213,12 @@ fn over_the_real_ga106_the_query_refuses_only_the_uncaptured() {
     assert!(no_capture("gr_info", 0x2080_1228), "{refused}");
     assert!(no_capture("gr_context_buffers", 0x2080_122d), "{refused}");
     assert!(no_capture("gr_static", 0x2080_1237), "GR_GET_ZCULL_MASK was never captured: {refused}");
+    assert!(no_capture("gr_zcull_info", 0x2080_1206), "GR_GET_ZCULL_INFO was never captured: {refused}");
+    assert!(no_capture("zbc_table_sizes", 0x9096_0106), "GET_ZBC_CLEAR_TABLE_SIZE was never captured: {refused}");
     assert_eq!(by_field.get("memory_system"), Some(&&FieldCause::DependsOn("gr_info")));
     assert_eq!(
         refused.fields(),
-        ["intr_table", "intr_subtree_map", "memory_system", "gr_static", "gr_info", "gr_context_buffers"],
+        ["intr_table", "intr_subtree_map", "memory_system", "gr_static", "gr_info", "gr_context_buffers", "gr_zcull_info", "zbc_table_sizes"],
         "{refused}"
     );
     assert!(!refused.refusals.iter().any(|r| matches!(r.cause, FieldCause::Unsourced(_))));
@@ -260,6 +262,8 @@ fn a_ga106_host_fills_every_field_and_each_equals_the_captured_row_or_a_stated_d
     // Layout round-trips through the completed controls (GR info / context props / subtree map):
     assert_eq!(got.gr_info.data, f.gr_info.data);
     assert_eq!(got.gr_context_buffers, f.gr_context_buffers);
+    assert_eq!(got.gr_zcull_info, f.gr_zcull_info);
+    assert_eq!(got.zbc_table_sizes, f.zbc_table_sizes);
     assert_eq!(got.intr_subtree_map, f.intr_subtree_map);
     assert_eq!(got.memory_system, f.memory_system);
     // gr_static: GPC mask, TPC masks, SM order and caps from real replies; zcull and the GR
@@ -415,6 +419,26 @@ impl HostControls for CompletedGa106 {
                 p[at + 2..at + 4].copy_from_slice(&tpcs.to_le_bytes());
                 Ok(())
             }
+            // ★ v3-gfx: GR_GET_ZCULL_INFO — the fixture's row, or RM's "no zcull" (0x56).
+            0x2080_1206 => match f.gr_zcull_info {
+                Some(row) => {
+                    for (i, w) in row.iter().enumerate() {
+                        put(p, 4 * i, *w);
+                    }
+                    Ok(())
+                }
+                None => Err(HostRefusal { status: Some(0x56), detail: "no zcull".into() }),
+            },
+            // ★ v3-gfx: the fixture states no ZBC ranges ⇒ RM's own "no table" (0x56).
+            0x9096_0106 => match f.zbc_table_sizes {
+                Some(s) => {
+                    let t = u32::from_le_bytes(p[8..12].try_into().expect("4")) as usize;
+                    put(p, 0, s[t - 1].0);
+                    put(p, 4, s[t - 1].1);
+                    Ok(())
+                }
+                None => Err(HostRefusal { status: Some(0x56), detail: "no zbc".into() }),
+            },
             0x2080_122d => {
                 let id = u32::from_le_bytes(p[16..20].try_into().expect("4")) as usize;
                 let b = f.gr_context_buffers[id];
@@ -708,4 +732,38 @@ fn the_gsp_and_disp_rows_refuse_a_host_vector_collision() {
     assert_eq!(kf_rm::authored::with_gsp_and_disp_rows(clash), Err(0x9b));
     let rows = kf_rm::authored::with_gsp_and_disp_rows(Vec::new()).expect("no clash");
     assert_eq!(rows.iter().map(|e| (e.engine_idx, e.vector_stall)).collect::<Vec<_>>(), [(50, 0x9b), (2, 0x9a)]);
+}
+
+/// ★ v3-gfx: `gr_zcull_info` is the host's `GR_GET_ZCULL_INFO` reply word for word; the host's
+/// `NV_ERR_NOT_SUPPORTED` is `None` (no zcull on the die), and any OTHER refusal is a field
+/// refusal by name — never a default row.
+#[test]
+fn gr_zcull_info_is_the_hosts_reply_and_only_not_supported_means_none() {
+    struct H(Result<[u32; 10], u32>);
+    impl HostControls for H {
+        fn control(&mut self, cmd: u32, p: &mut [u8]) -> Result<(), HostRefusal> {
+            assert_eq!(cmd, 0x2080_1206);
+            assert_eq!(p.len(), 40, "NV2080_CTRL_GR_GET_ZCULL_INFO_PARAMS is ten NvU32");
+            match self.0 {
+                Ok(row) => {
+                    for (i, w) in row.iter().enumerate() {
+                        p[4 * i..4 * i + 4].copy_from_slice(&w.to_le_bytes());
+                    }
+                    Ok(())
+                }
+                Err(st) => Err(HostRefusal { status: Some(st), detail: "refused".into() }),
+            }
+        }
+    }
+    let row = [32, 16, 1024, 2048, 64, 16, 32, 16, 256, 128];
+    assert_eq!(hostquery::query_gr_zcull_info(&mut H(Ok(row))).expect("served"), Some(row));
+    assert_eq!(hostquery::query_gr_zcull_info(&mut H(Err(0x56))).expect("no zcull"), None);
+    assert!(matches!(hostquery::query_gr_zcull_info(&mut H(Err(0x1b))), Err(FieldCause::Host { cmd: 0x2080_1206, .. })));
+    // …and the internal control's reply carries it as engine 0, every other engine zero.
+    let enc = kf_abi::grstatic::encode_zcull_info(&row);
+    assert_eq!(enc.len(), 320);
+    for (i, w) in row.iter().enumerate() {
+        assert_eq!(u32::from_le_bytes(enc[4 * i..4 * i + 4].try_into().expect("4")), *w);
+    }
+    assert!(enc[40..].iter().all(|&b| b == 0));
 }

@@ -20,6 +20,8 @@ pub struct Desired {
     pub off: u64,
     /// Which ground truth.
     pub ram: bool,
+    /// ★ v3-gfx: the host PTE kind (uncompressed; `crate::apply::host_pte_kind`). 0 = PITCH.
+    pub kind: u8,
 }
 
 /// A walked leaf's aperture, as the walk kernel reports it (`KFWR_RF_AP_*`, `cuda/walk/kf_walk.h:92-97`).
@@ -80,10 +82,10 @@ pub fn desired_from_leaves(
             AP_VIDMEM => at
                 .checked_add(len)
                 .filter(|&e| e <= store_bytes)
-                .map(|_| Desired { va, len, off: at, ram: false })
+                .map(|_| Desired { va, len, off: at, ram: false, kind: 0 })
                 .ok_or(LeafRefusal::OutsideStore { va, gpga: at, len }),
             AP_SYS_COHERENT | AP_SYS_NONCOHERENT => ram_offset(at, len)
-                .map(|off| Desired { va, len, off, ram: true })
+                .map(|off| Desired { va, len, off, ram: true, kind: 0 })
                 .ok_or(LeafRefusal::NotGuestRam { va, gpa: at, len }),
             _ => Err(LeafRefusal::Aperture { va, ap }),
         })
@@ -198,7 +200,7 @@ impl MapTarget for HostVas<'_> {
         } else {
             self.store
         };
-        match self.rm.map(self.space, obj, kf_host::MapBacking::SharedSlice, d.off, d.len, Some(d.va), defer) {
+        match self.rm.map_kind(self.space, obj, kf_host::MapBacking::SharedSlice, d.off, d.len, Some(d.va), defer, d.kind) {
             Ok(_) => Ok(Mapped::Placed),
             // ★ P6: a FIXED map onto a VA host RM already holds satisfies the guest's statement —
             // the C's semantic (`nvkvm_gpu_emul.c:7935-7938`) — rather than stranding its

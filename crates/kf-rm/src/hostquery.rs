@@ -491,6 +491,102 @@ pub fn query_gr_geometry(host: &mut dyn HostControls, gr_info: Option<&GrInfoPro
     Ok(GrGeometry { gpc_mask, tpc_masks, zcull_masks, tpcs, sms_per_tpc, caps })
 }
 
+/// ★ v3-gfx: `zbc_table_sizes` — `GET_ZBC_CLEAR_TABLE_SIZE` for each table type. The composition
+/// root routes `0x9096xxxx` to a host `GF100_ZBC_CLEAR` object (`kf-qemu` `rmfacts.rs`); the host's
+/// `NV_ERR_NOT_SUPPORTED` means the die has none (`None`).
+///
+/// # Errors
+/// [`FieldCause`] — any other refusal, or an empty/inverted range.
+pub fn query_zbc_table_sizes(host: &mut dyn HostControls) -> Result<Option<[(u32, u32); 3]>, FieldCause> {
+    use kf_abi::zbc as z;
+    let mut out = [(0, 0); 3];
+    for t in z::TableType::ALL {
+        let mut p = zeroed(z::GET_SIZE_PARAMS_SIZE);
+        z::put(&mut p, 2, t.wire());
+        match host.control(z::GET_ZBC_CLEAR_TABLE_SIZE, &mut p) {
+            Ok(()) => {}
+            Err(HostRefusal { status: Some(NV_ERR_NOT_SUPPORTED), .. }) => return Ok(None),
+            Err(refused) => return Err(FieldCause::Host { cmd: z::GET_ZBC_CLEAR_TABLE_SIZE, refused }),
+        }
+        let (start, end) = (z::word(&p, 0).unwrap_or(0), z::word(&p, 1).unwrap_or(0));
+        if start == 0 || end < start {
+            return Err(FieldCause::Reply(FactRefusal::Unservable {
+                cmd: z::GET_ZBC_CLEAR_TABLE_SIZE,
+                why: "an empty or inverted ZBC index range (index 0 is reserved by RM)",
+            }));
+        }
+        out[t.wire() as usize - 1] = (start, end);
+    }
+    Ok(Some(out))
+}
+
+/// ★ v3-gfx: the extra `FB_GET_INFO_V2` indices [`HostFacts::forwarded_fb_extra`] carries.
+pub const FORWARDED_FB_EXTRA_INDICES: [u32; 5] = [0x04, 0x14, 0x37, 0x2b, 0x38];
+
+/// ★ v3-gfx: `forwarded_fb_extra` — each of [`FORWARDED_FB_EXTRA_INDICES`] asked ALONE (one refused index
+/// must not take the others with it); a refused index is simply absent.
+///
+/// # Errors
+/// Never today — kept fallible so a decode failure can become a named refusal.
+pub fn query_forwarded_fb_extra(host: &mut dyn HostControls) -> Result<Vec<(u32, u32)>, FieldCause> {
+    use kf_abi::fbinfo as fb;
+    let mut out = Vec::new();
+    for idx in FORWARDED_FB_EXTRA_INDICES {
+        let mut req = info_list_request(fb::FB_GET_INFO_V2_PARAMS_SIZE, &[idx]);
+        if host.control(fb::NV2080_CTRL_CMD_FB_GET_INFO_V2, &mut req).is_ok()
+            && let Ok(pairs) = fb::decode_fb_info_pairs(&req)
+            && let Some(&(i, d)) = pairs.first()
+            && i == idx
+        {
+            out.push((i, d));
+        }
+    }
+    Ok(out)
+}
+
+/// `NV2080_CTRL_CMD_FB_GET_GPU_CACHE_INFO` (flags `0x40148`: NON_PRIVILEGED, ROUTE_TO_PHYSICAL).
+pub const NV2080_CTRL_CMD_FB_GET_GPU_CACHE_INFO: u32 = 0x2080_1315;
+
+/// ★ v3-gfx: `gpu_cache_info` — the host's four L2 state words; any refusal is `None`.
+///
+/// # Errors
+/// Never today.
+pub fn query_gpu_cache_info(host: &mut dyn HostControls) -> Result<Option<[u32; 4]>, FieldCause> {
+    let mut p = zeroed(16);
+    Ok(host.control(NV2080_CTRL_CMD_FB_GET_GPU_CACHE_INFO, &mut p).ok().map(|()| {
+        let w = |i: usize| u32::from_le_bytes([p[4 * i], p[4 * i + 1], p[4 * i + 2], p[4 * i + 3]]);
+        [w(0), w(1), w(2), w(3)]
+    }))
+}
+
+/// `NV2080_CTRL_CMD_GR_GET_ZCULL_INFO` — the unprivileged client control (flags `0x10109`,
+/// `g_subdevice_nvoc.c`), 40 bytes, all `[OUT]`.
+pub const NV2080_CTRL_CMD_GR_GET_ZCULL_INFO: u32 = 0x2080_1206;
+
+/// ★ v3-gfx: `gr_zcull_info` — the host's own zcull geometry (`GR_GET_ZCULL_INFO`). The host's
+/// `NV_ERR_NOT_SUPPORTED` — RM's answer when its cache is empty (`kernel_graphics.c:3862-3863`),
+/// i.e. a die with no zcull — is carried as `None`, and the guest's internal control is then
+/// refused exactly as that die's own GSP would.
+///
+/// # Errors
+/// [`FieldCause`] — any other refusal.
+pub fn query_gr_zcull_info(
+    host: &mut dyn HostControls,
+) -> Result<Option<[u32; kf_abi::grstatic::ZCULL_INFO_ROW_WORDS]>, FieldCause> {
+    let mut z = zeroed(4 * kf_abi::grstatic::ZCULL_INFO_ROW_WORDS);
+    match host.control(NV2080_CTRL_CMD_GR_GET_ZCULL_INFO, &mut z) {
+        Ok(()) => {
+            let mut row = [0u32; kf_abi::grstatic::ZCULL_INFO_ROW_WORDS];
+            for (i, w) in row.iter_mut().enumerate() {
+                *w = u32::from_le_bytes([z[4 * i], z[4 * i + 1], z[4 * i + 2], z[4 * i + 3]]);
+            }
+            Ok(Some(row))
+        }
+        Err(HostRefusal { status: Some(NV_ERR_NOT_SUPPORTED), .. }) => Ok(None),
+        Err(refused) => Err(FieldCause::Host { cmd: NV2080_CTRL_CMD_GR_GET_ZCULL_INFO, refused }),
+    }
+}
+
 /// ★★ `gr_static` from the host geometry, the host's GR litters, and the authored members:
 ///
 /// | member | source |
@@ -758,6 +854,10 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
         (Ok(_), Err(_)) => Err(FieldCause::DependsOn("gr_info")),
     };
     let gr_context_buffers = query_gr_context_buffers(host);
+    let gr_zcull_info = query_gr_zcull_info(host);
+    let zbc_table_sizes = query_zbc_table_sizes(host);
+    let forwarded_fb_extra = query_forwarded_fb_extra(host);
+    let gpu_cache_info = query_gpu_cache_info(host);
     let forwarded_gpu_info = query_forwarded_gpu_info(host);
     let forwarded_fb_info = query_forwarded_fb_info(host);
     let smc_mode = query_smc_mode(host);
@@ -793,6 +893,10 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
     let gr_static = take!(gr_static);
     let gr_info = take!(gr_info);
     let gr_context_buffers = take!(gr_context_buffers);
+    let gr_zcull_info = take!(gr_zcull_info);
+    let zbc_table_sizes = take!(zbc_table_sizes);
+    let forwarded_fb_extra = take!(forwarded_fb_extra);
+    let gpu_cache_info = take!(gpu_cache_info);
     let forwarded_gpu_info = take!(forwarded_gpu_info);
     let forwarded_fb_info = take!(forwarded_fb_info);
     let smc_mode = take!(smc_mode);
@@ -816,6 +920,10 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
         gr_static,
         gr_info,
         gr_context_buffers,
+        gr_zcull_info,
+        zbc_table_sizes,
+        forwarded_fb_extra,
+        gpu_cache_info,
         forwarded_gpu_info,
         forwarded_fb_info,
         smc_mode,
@@ -839,6 +947,10 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
             Some(gr_static),
             Some(gr_info),
             Some(gr_context_buffers),
+            Some(gr_zcull_info),
+            Some(zbc_table_sizes),
+            Some(forwarded_fb_extra),
+            Some(gpu_cache_info),
             Some(forwarded_gpu_info),
             Some(forwarded_fb_info),
             Some(smc_mode),
@@ -866,6 +978,10 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
             gr_static,
             gr_info,
             gr_context_buffers,
+            gr_zcull_info,
+            zbc_table_sizes,
+            forwarded_fb_extra,
+            gpu_cache_info,
             forwarded_gpu_info,
             forwarded_fb_info,
             smc_mode,

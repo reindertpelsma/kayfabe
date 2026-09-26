@@ -19,9 +19,11 @@ pub mod classes;
 pub mod falcon_gsp;
 pub mod fsp_gsp;
 pub mod host_classes;
+pub mod ptekind;
 
 pub use classes::{ClassSet, Kind, classes_for};
 pub use host_classes::{DerivedHostClasses, HostLacksKind};
+pub use ptekind::{PTE_KIND_GENERIC, PTE_KIND_PITCH, uncompressed_pte_kind};
 
 /// ★ A GPU family — ogkm's own axis (`MC_GET_ARCH_INFO`'s architecture). ⊘ NOT a die group: GA100
 /// and GA10x are both Ampere, GB100 and GB202 both Blackwell; their differences are per-die FACTS
