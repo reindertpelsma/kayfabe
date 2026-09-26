@@ -496,6 +496,11 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
         // `kf-rm/tests/host_facts_query_ga106.rs::gr_zcull_info_is_the_hosts_reply_and_only_not_supported_means_none`
         // (the row is the host's own reply word for word; engine 0 only).
         WantedTable::GrZcullInfo,
+        // ⚠ 2026-09-26: `0x20800a34` SM_ISSUE_RATE_MODIFIER — the same GR static run, past `cap1b`'s
+        // closure limit. ★ Covered by the host's own client reply at realize
+        // (`HostFacts::gr_sm_issue_rate_modifier`), engine 0 only; `[measured GB203]` libcuda's
+        // `cuInit` needs the guest's client control served from it.
+        WantedTable::GrSmIssueRateModifier,
         // ⚠ v3-gfx: `0x20801315` FB_GET_GPU_CACHE_INFO — asked by the GL/Vulkan UMD, a process
         // `cap1b` (nvidia-smi) never ran. ★ Covered by the host's own reply at realize
         // (`HostFacts::gpu_cache_info`), served verbatim.
@@ -704,10 +709,12 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
     // ⊘ 47 -> 48 and 28 -> 29 at v3-gfx (`0x20800a2c` ZCULL_INFO): past the closure limit, as
     // its GR static-info siblings are — 29 of 48 (60.4 %).
     // ⊘ 50 -> 51 and 31 -> 32 at v3-families (`0x20800810` BIOS_GET_INFO_V2): 32 of 51 (62.7 %).
-    assert_eq!(universe.len(), 51, "non-vacuity: the universe is not empty");
+    // ⊘ 51 -> 52 and 32 -> 33 at v3-blackwell (`0x20800a34` SM_ISSUE_RATE_MODIFIER, a GR
+    // static-info sibling past the closure limit): 33 of 52 (63.5 %).
+    assert_eq!(universe.len(), 52, "non-vacuity: the universe is not empty");
     assert_eq!(
         outside_the_closure_limit.len(),
-        32,
+        33,
         "non-vacuity in the other direction: the exception set is SMALL, and every entry \
          costs reply-plane coverage"
     );

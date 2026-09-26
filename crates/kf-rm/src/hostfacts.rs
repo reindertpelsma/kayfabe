@@ -110,6 +110,10 @@ pub struct HostFacts {
     /// ★ v3-gfx: `FB_GET_GPU_CACHE_INFO` (`0x20801315`) — the host's L2 state words
     /// `{powerState, writeMode, bypassMode, rcmState}`; `None` = refused on the host.
     pub gpu_cache_info: Option<[u32; 4]>,
+    /// ★ 2026-09-26: the host's SM issue-rate modifier (`GR_GET_SM_ISSUE_RATE_MODIFIER`, the nine
+    /// speed selects) — `None` when the host refused it (the guest's internal control is then
+    /// refused as before). Served as `INTERNAL_STATIC_KGR_GET_SM_ISSUE_RATE_MODIFIER`.
+    pub gr_sm_issue_rate_modifier: Option<[u8; kf_abi::grstatic::SM_ISSUE_RATE_MODIFIER_BYTES]>,
     /// `GPU_GET_INFO_V2` indices answered from the host's own reply.
     pub forwarded_gpu_info: Vec<(u32, u32)>,
     /// ★ `FB_GET_INFO_V2` indices answered from the host's own reply (bus width, RAM type, FBP
@@ -210,6 +214,7 @@ pub const PROVENANCE: &[(&str, Source)] = &[
     ("zbc_table_sizes", Source::HostControl { cmd: 0x9096_0106, name: "GET_ZBC_CLEAR_TABLE_SIZE on a host GF100_ZBC_CLEAR object (ranges only; the table itself is per-VM, kf_rm::zbc)" }),
     ("forwarded_fb_extra", Source::HostControl { cmd: 0x2080_1303, name: "FB_GET_INFO_V2 [PARTITION_COUNT 0x04, PARTITION_MASK 0x14/0x37, LTC_MASK 0x2b/0x38], each index asked alone" }),
     ("gpu_cache_info", Source::HostControl { cmd: 0x2080_1315, name: "FB_GET_GPU_CACHE_INFO" }),
+    ("gr_sm_issue_rate_modifier", Source::HostControl { cmd: 0x2080_1230, name: "GR_GET_SM_ISSUE_RATE_MODIFIER (host refusal = None, never a realize failure)" }),
     ("forwarded_gpu_info", Source::HostControl { cmd: 0x2080_0102, name: "GPU_GET_INFO_V2" }),
     ("forwarded_fb_info", Source::HostControl { cmd: 0x2080_1303, name: "FB_GET_INFO_V2 (the seven indices libcuda forwards; host words verbatim)" }),
     // ⊘ w827 CORRECTED from `GPU_GET_PARTITIONS 0x20800175` "(no partitions => SMC

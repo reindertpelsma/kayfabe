@@ -864,3 +864,49 @@ pub fn encode_context_buffers_info(
     }
     Ok(out)
 }
+
+
+// ── ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §4): the SM issue-rate modifier ──────────────────
+
+/// `NV2080_CTRL_CMD_GR_GET_SM_ISSUE_RATE_MODIFIER` — the unprivileged client control (flags
+/// `0x10008`, NON_PRIVILEGED, `ogkm-580: generated/g_subdevice_nvoc.c:5654-5662`).
+/// `[measured GB203 bare metal, T0 capture]` libcuda asks it inside `cuInit`; the guest RM answers
+/// only from its static cache, so an unserved internal control made `cuInit` return
+/// `CUDA_ERROR_NO_DEVICE` in the guest.
+pub const NV2080_CTRL_CMD_GR_GET_SM_ISSUE_RATE_MODIFIER: u32 = 0x2080_1230;
+/// `sizeof(NV2080_CTRL_GR_GET_SM_ISSUE_RATE_MODIFIER_PARAMS)`: an 8-aligned 16-byte `grRouteInfo`,
+/// nine `NvU8`, padded to 8 (`ctrl2080gr.h:1664-1675`).
+pub const GR_SM_ISSUE_RATE_MODIFIER_PARAMS_SIZE: usize = 32;
+/// Offset of `imla0` (the first of the nine) in the client control.
+pub const GR_SM_ISSUE_RATE_MODIFIER_OFF: usize = 16;
+/// The nine speed selects: `imla0, fmla16, dp, fmla32, ffma, imla1, imla2, imla3, imla4`.
+pub const SM_ISSUE_RATE_MODIFIER_BYTES: usize = 9;
+/// `NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_SM_ISSUE_RATE_MODIFIER` (`ctrl2080internal.h:559`).
+pub const NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_SM_ISSUE_RATE_MODIFIER: u32 = 0x2080_0a34;
+/// `sizeof(NV2080_CTRL_INTERNAL_STATIC_GR_GET_SM_ISSUE_RATE_MODIFIER_PARAMS)` — one 9-byte row per
+/// GR engine (`ctrl2080internal.h:540-557`, `NvU8`s only: no padding).
+pub const SM_ISSUE_RATE_MODIFIER_PARAMS_SIZE: usize = GR_MAX_ENGINES * SM_ISSUE_RATE_MODIFIER_BYTES;
+
+/// The internal control's reply: engine 0 = the host's own nine selects; engines 1.. zero (no MIG).
+#[must_use]
+pub fn encode_sm_issue_rate_modifier(row: &[u8; SM_ISSUE_RATE_MODIFIER_BYTES]) -> Vec<u8> {
+    let mut out = vec![0u8; SM_ISSUE_RATE_MODIFIER_PARAMS_SIZE];
+    out[..SM_ISSUE_RATE_MODIFIER_BYTES].copy_from_slice(row);
+    out
+}
+
+#[cfg(test)]
+mod sm_issue_rate_tests {
+    use super::*;
+
+    /// `[measured GB203 bare metal, T0]` the host's client reply bytes 16..25
+    /// (`00 03 00 03 03 00 03 00 00`) become engine 0's row; engines 1..7 stay zero.
+    #[test]
+    fn the_hosts_nine_selects_are_engine_zero_and_nothing_else() {
+        let row = [0, 3, 0, 3, 3, 0, 3, 0, 0];
+        let p = encode_sm_issue_rate_modifier(&row);
+        assert_eq!(p.len(), 72);
+        assert_eq!(&p[..9], &row);
+        assert!(p[9..].iter().all(|b| *b == 0));
+    }
+}

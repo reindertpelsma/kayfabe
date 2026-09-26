@@ -691,6 +691,21 @@ pub fn query_gpu_cache_info(host: &mut dyn HostControls) -> Result<Option<[u32; 
     }))
 }
 
+/// ★ 2026-09-26: `gr_sm_issue_rate_modifier` — the host's nine speed selects from its unprivileged
+/// `GR_GET_SM_ISSUE_RATE_MODIFIER` (GR0, default route); any refusal is `None`, never a realize
+/// failure.
+#[must_use]
+pub fn query_gr_sm_issue_rate_modifier(
+    host: &mut dyn HostControls,
+) -> Option<[u8; kf_abi::grstatic::SM_ISSUE_RATE_MODIFIER_BYTES]> {
+    use kf_abi::grstatic as g;
+    let mut p = zeroed(g::GR_SM_ISSUE_RATE_MODIFIER_PARAMS_SIZE);
+    host.control(g::NV2080_CTRL_CMD_GR_GET_SM_ISSUE_RATE_MODIFIER, &mut p).ok()?;
+    let mut row = [0u8; g::SM_ISSUE_RATE_MODIFIER_BYTES];
+    row.copy_from_slice(&p[g::GR_SM_ISSUE_RATE_MODIFIER_OFF..g::GR_SM_ISSUE_RATE_MODIFIER_OFF + g::SM_ISSUE_RATE_MODIFIER_BYTES]);
+    Some(row)
+}
+
 /// `NV2080_CTRL_CMD_GR_GET_ZCULL_INFO` — the unprivileged client control (flags `0x10109`,
 /// `g_subdevice_nvoc.c`), 40 bytes, all `[OUT]`.
 pub const NV2080_CTRL_CMD_GR_GET_ZCULL_INFO: u32 = 0x2080_1206;
@@ -1070,6 +1085,7 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
     let vbios_version = query_vbios_version(host);
     let perf_level_info_v2 = query_perf_level_info_v2(host);
     let gss_replay = query_gss_replay(host);
+    let gr_sm_issue_rate_modifier = query_gr_sm_issue_rate_modifier(host);
     let video_caps = kinds.as_deref().map(|k| query_video_caps(host, k)).unwrap_or_default();
 
     let mut refusals = Vec::new();
@@ -1201,6 +1217,7 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
             zbc_table_sizes,
             forwarded_fb_extra,
             gpu_cache_info,
+            gr_sm_issue_rate_modifier,
             forwarded_gpu_info,
             forwarded_fb_info,
             smc_mode,

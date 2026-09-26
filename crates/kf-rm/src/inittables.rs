@@ -669,6 +669,12 @@ pub enum WantedTable {
     /// client `GR_GET_ZCULL_INFO` is served ONLY from this cache — refused, every GL/Vulkan zcull
     /// query answers `NV_ERR_NOT_SUPPORTED` (`V3_HEADLESS_GRAPHICS.md` §1.2).
     GrZcullInfo,
+    /// ★ 2026-09-26: `NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_SM_ISSUE_RATE_MODIFIER` — 72 bytes,
+    /// engine 0 from the host's unprivileged `GR_GET_SM_ISSUE_RATE_MODIFIER`
+    /// (`HostFacts::gr_sm_issue_rate_modifier`). Boot survives its refusal (`kernel_graphics.c:
+    /// 1405-1408`), but the guest's client control is served ONLY from this cache, and
+    /// `[measured GB203]` libcuda's `cuInit` asks it and answers `CUDA_ERROR_NO_DEVICE` without it.
+    GrSmIssueRateModifier,
     /// ★ v3-gfx: `NV2080_CTRL_CMD_FB_GET_GPU_CACHE_INFO` — 16 bytes, the host's L2 state words
     /// verbatim (`HostFacts::gpu_cache_info`). `[measured vgfx 2026-09-26]` the GL/Vulkan UMD
     /// aborts device init when it is refused.
@@ -1108,7 +1114,7 @@ impl WantedTable {
     ///
     /// [`WantedTable::cmd_id`] remains the mechanism on the other side — exhaustive over
     /// `Self`, so a new variant does not compile until it has an id.
-    pub const ALL: [WantedTable; 51] = [
+    pub const ALL: [WantedTable; 52] = [
         Self::DeviceInfo,
         Self::IntrKernelTable,
         Self::PciBarInfo,
@@ -1134,6 +1140,7 @@ impl WantedTable {
         Self::GrFecsRecordSize,
         Self::GrPdbProperties,
         Self::GrZcullInfo,
+        Self::GrSmIssueRateModifier,
         Self::FbGetGpuCacheInfo,
         Self::FifoGetEngineContextProperties,
         Self::GvaspaceServerReservedPdes,
@@ -1218,6 +1225,7 @@ impl WantedTable {
                 grstatic::NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_PDB_PROPERTIES
             }
             Self::GrZcullInfo => grstatic::NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_ZCULL_INFO,
+            Self::GrSmIssueRateModifier => grstatic::NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_SM_ISSUE_RATE_MODIFIER,
             Self::FbGetGpuCacheInfo => crate::hostquery::NV2080_CTRL_CMD_FB_GET_GPU_CACHE_INFO,
             Self::FifoGetEngineContextProperties => 0x0080_1707,
             Self::GvaspaceServerReservedPdes => {
@@ -1300,6 +1308,7 @@ impl WantedTable {
             Self::GrFecsRecordSize => grstatic::FECS_RECORD_SIZE_PARAMS_SIZE,
             Self::GrPdbProperties => grstatic::PDB_PROPERTIES_PARAMS_SIZE,
             Self::GrZcullInfo => grstatic::ZCULL_INFO_PARAMS_SIZE,
+            Self::GrSmIssueRateModifier => grstatic::SM_ISSUE_RATE_MODIFIER_PARAMS_SIZE,
             Self::FbGetGpuCacheInfo => 16,
             Self::FifoGetEngineContextProperties => 12,
             Self::GvaspaceServerReservedPdes | Self::GvaspaceServerReservedPdesClient => {
@@ -2191,6 +2200,11 @@ impl CommandPolicy for InitTablePolicy {
             // ⊘ A host die with no zcull (`None`) is refused exactly as its own GSP would.
             WantedTable::GrZcullInfo => match &self.host.gr_zcull_info {
                 Some(row) => grstatic::encode_zcull_info(row),
+                None => return refuse(),
+            },
+            // ⊘ A host that refused its client control is refused here exactly as before.
+            WantedTable::GrSmIssueRateModifier => match &self.host.gr_sm_issue_rate_modifier {
+                Some(row) => grstatic::encode_sm_issue_rate_modifier(row),
                 None => return refuse(),
             },
             WantedTable::FifoGetEngineContextProperties => {

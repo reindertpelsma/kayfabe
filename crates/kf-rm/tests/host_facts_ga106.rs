@@ -186,6 +186,7 @@ fn every_host_fact_states_where_it_comes_from() {
         zbc_table_sizes: _,
         forwarded_fb_extra: _,
         gpu_cache_info: _,
+        gr_sm_issue_rate_modifier: _,
         forwarded_gpu_info: _,
         forwarded_fb_info: _,
         smc_mode: _,
@@ -203,7 +204,7 @@ fn every_host_fact_states_where_it_comes_from() {
         "family", "has_c2c", "ce_caps", "engines", "lce_pce_masks", "intr_table", "intr_subtree_map",
         "chip_info", "user_register_access_map", "constructed_falcons", "memory_system",
         "device_info", "conf_compute", "bif_static", "fifo_channels", "gmmu_static", "gr_static",
-        "gr_info", "gr_context_buffers", "gr_zcull_info", "zbc_table_sizes", "forwarded_fb_extra", "gpu_cache_info", "forwarded_gpu_info", "forwarded_fb_info", "smc_mode", "pcie_max_gen",
+        "gr_info", "gr_context_buffers", "gr_zcull_info", "zbc_table_sizes", "forwarded_fb_extra", "gpu_cache_info", "gr_sm_issue_rate_modifier", "forwarded_gpu_info", "forwarded_fb_info", "smc_mode", "pcie_max_gen",
         "ce_fault_method_buffer_size", "gsp_features", "gpu_name", "gpu_short_name",
         "vbios_version", "perf_level_info_v2", "gss_replay", "video_caps",
     ];
