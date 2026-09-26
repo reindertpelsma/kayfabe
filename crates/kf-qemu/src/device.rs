@@ -1303,7 +1303,11 @@ impl Device {
     pub fn status_line(&self) -> String {
         let c = &self.counters;
         let o = Ordering::Relaxed;
-        let phase = self.gsp.try_lock().map(|g| format!("{:?}", g.fsm.phase())).unwrap_or_else(|_| "busy".into());
+        let (phase, refusals) = self
+            .gsp
+            .try_lock()
+            .map(|g| (format!("{:?}", g.fsm.phase()), g.fsm.refusals().summary()))
+            .unwrap_or_else(|_| ("busy".into(), "busy".into()));
         // The ledger's DISTINCT set names the control ids the RPC code alone hides.
         let unserviced: Vec<String> = self
             .chain_logs
@@ -1453,7 +1457,7 @@ impl Device {
             ic.out_of_range.load(o)
         );
         format!(
-            "kf3: family={:?} phase={phase} trapped={} applied={} refused={} serviced={} ram_refused={} unshadowed_writes={} read_exits={} last_off={:#x}{mem}{chan}{rc}{irq} unserviced=[{}]",
+            "kf3: family={:?} phase={phase} trapped={} applied={} refused={} serviced={} ram_refused={} unshadowed_writes={} read_exits={} last_off={:#x}{mem}{chan}{rc}{irq} unserviced=[{}] gsp_refusals[{refusals}]",
             self.family,
             c.trapped.load(o),
             c.applied.load(o),
@@ -1487,7 +1491,9 @@ impl Device {
         }
         let g = &mut *g;
         let mut ram = Ram(self);
-        match g.fsm.release_held(&mut ram) {
+        let released = g.fsm.release_held(&mut ram);
+        log_fresh_refusals(&mut g.fsm);
+        match released {
             Ok(n) if n > 0 => {
                 self.publish(g);
                 if crate::prof::on() {
@@ -1783,6 +1789,7 @@ impl HostOps for Device {
         // path). Otherwise `release_settled` delivers it when the VA thread wakes this thread.
         let held_mid = g.fsm.held_len();
         let released = if self.mem.inbox.all_settled() { g.fsm.release_held(&mut ram).unwrap_or(0) } else { 0 };
+        log_fresh_refusals(&mut g.fsm);
         let t_pub = if prof { crate::prof::now_ns() } else { 0 };
         self.publish(g);
         if prof {
@@ -1833,4 +1840,20 @@ impl HostOps for Device {
     fn fault_channel(&self, _host_token: u32) {}
     fn map_guest_slice(&self, _slice: HostSlice) {}
     fn teardown_step(&self, _step: Step) {}
+}
+
+/// ★★★ v3-refusals: one line per refusal row the FSM posted for the FIRST time — a non-OK status
+/// the guest read (`kf_gsp::refusal`). The heartbeat's `gsp_refusals[...]` carries the counts.
+/// ⊘ Printed on the drainer (never a vCPU), once per distinct `(function, detail, status)`, so a
+/// hot refusal cannot flood the log; bare metal returns non-OK once in 613 RM records, so every
+/// line here is a divergence until proven harmless.
+fn log_fresh_refusals(fsm: &mut kf_gsp::GspFsm) {
+    for r in fsm.take_fresh_refusals() {
+        eprintln!(
+            "kf3: GSP REFUSED {} ({}) first_seq={} — the guest read a non-OK status",
+            r.key(),
+            kf_rm::rpc::name_of(r.function).unwrap_or("?"),
+            r.first_sequence
+        );
+    }
 }
