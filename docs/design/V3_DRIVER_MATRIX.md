@@ -1,9 +1,11 @@
 # V3 DRIVER MATRIX — both driver axes, measured per ogkm tag
 
 **STATUS: LIVE (in progress), 2026-09-26, branch `v3-drivers`.** The two-axis model, the
-inventory, the derivation pipeline and the generated-table design are built; the guest axis is
-being walked on hardware (§6 is the running matrix). Box: vast `52746206`, RTX 3090 (GA102,
-`0x2204`), Xeon E5-2673 v4, host driver swapped 575.51.03 → **580.159.04 open**.
+inventory, the derivation pipeline and the generated-table design are built on BOTH axes; the guest
+axis is being walked on hardware (§6 is the running matrix) and the host axis is wired (kf-host
+carries every host struct to the host's measured layout, §2.2). Boxes: vast `52746206` (RTX 3090
+GA102, Xeon E5-2673 v4) and `52788835` (RTX 3080 Ti GA102, 38 cores), host driver **580.159.04
+open** on both.
 
 > Owner roadmap item (2026-09-26): kayfabe v3 must support the NVIDIA driver range nvkvm-pv
 > supports — 535 → 610 — on BOTH axes, with per-version values **derived from source into
@@ -20,7 +22,7 @@ being walked on hardware (§6 is the running matrix). Box: vast `52746206`, RTX 
 | who chooses it | the operator, inside the VM | the operator, on the host |
 | what varies | the GSP firmware interface our fake GSP must speak: queue element, init args, RPC numbers and payloads, static info, every RM control the guest's CPU-RM forwards | the RM ioctl ABI kf-host authors: NVOS escape bodies, control params, alloc params, plus the PTX ISA the host's libcuda JITs |
 | selected by | `guest-driver=` (defaults to the host's), **cross-checked** against the guest's own `NV_VERSION_STRING` at fn 1 | the host RM's own `NV_ESC_CHECK_VERSION_STR` |
-| state 2026-09-26 | table assembled from **measured** per-tag layouts; 580.x walked; 570–575 / 550–565 / 535–545 / 590–610 gaps sized (§7) | gate still `[580.65.06, 581)`; gaps sized (§7) |
+| state 2026-09-26 | table assembled from **measured** per-tag layouts; 580.x walked (thin 30/30 + ladder 4/4); **590.48.01 and 595.84 initialize** (grader is 580-only); 575/570/565 past the INTR wall at head; 550 → device-info carry; 610 → register-map carry; 535/545 need the capability rows (§6, §7) | R2 gates on **measurement**; every host struct carried by name (`kf_abi::hostabi`, 53 controls pinned to the matrix); subtree map authored per family below 580.65.06 (ruling 3); walker PTX at ISA 8.2 (ruling 4) |
 
 ★ **The finding that shapes everything:** NVIDIA moves ABI **inside** a branch. Measured:
 `GspSystemInfo` gains a field at 580.95.05 and another at 580.105.08, `NV0080_CTRL_MSENC_GET_CAPS_V2_PARAMS`
@@ -40,9 +42,10 @@ grows 8 → 12 bytes at 580.95.05, `g_rpc-structures.h` changes at 580.126.09, 5
   function of **its** version. Carried by `kf_abi::versions::DriverAbiTable`, assembled per
   measured tag (§4).
 - **Host (`Dh`)** — kf-host authors every host call from unprivileged RM verbs; the layouts of
-  those verbs are a function of the **host** version. Carried today by one pinned interval
-  (`kf_abi::host_driver`, `[580.65.06, 581)`), refused by name outside it. The same measured
-  matrix holds the host structs (`os.spec`, `sdk.spec`); making kf-host consume it is §7.2.
+  those verbs are a function of the **host** version. ⊘ Until 2026-09-26 one pinned interval
+  (`[580.65.06, 581)`); now **measured**: `kf_abi::hostabi::HostAbi` resolves the host's tag,
+  kf-host keeps writing the bench layout and every struct is carried to the host's own layout by
+  field name at the ioctl boundary (§2.2) — the same transcoder the guest axis uses.
 - **Independence.** The two versions are read from two different places and never assumed equal:
   the guest's version is declared (property) and verified against what the guest says; the host's
   is read from the host RM. `author_host_flags_never_forward_them` keeps guest flag words off host
@@ -92,6 +95,33 @@ Stable 535 → 610, verified: the 48-byte GSP element (until 610's 16-byte MCTP 
 | H8 | HostFacts controls | `kf-rm/src/hostquery.rs` | `GPU_GET_ENGINES_V2` 340 (252/256/260 ≤555), `GPU_GET_INFO_V2` 564 (516/524/532 ≤575, 580 at 610), `GR_GET_INFO_V2` 488 (448/472 ≤565, 496 at 590/595, 528 at 610), `FB_GET_INFO_V2` 1028 (436/444/460 ≤575), `GR_GET_GLOBAL_SM_ORDER` 9240 (6168 ≤570, 7192 at 575) |
 | H9 | controls absent on old hosts | `hostquery.rs:402-432` | `MC_GET_INTR_CATEGORY_SUBTREE_MAP` absent < 580.65.06; `MC_GET_STATIC_INTR_TABLE` absent at 535/545 — **needs another source**, not a size fix |
 | H10 | `NV2080_NOTIFIERS_CE10` | `kf-host/src/event.rs:59` | was **184** (= `GSP_PERF_TRACE`); 166 at every tag that has it — **fixed** (a bug on every host) |
+
+★★ **BUILT 2026-09-26 — the host axis, measured (`kf_abi::hostabi`, `kf-host`).** A read-only
+inventory of every host-side struct (12 escape wrappers, 18 allocations, 53 controls, every literal
+size) drove it; 31 of those structs were not in the matrix and are now consumed (+ `host.spec` for
+the four no spec reached). The rule is one encoder, carried at the boundary:
+
+- **R2 gates on measurement**, not on a pinned interval: the host's tag must be measured, and every
+  wrapper kf-host sends without a carry (`NVOS00/02/21/33/34/54`, the fd wrappers, `REGISTER_FD`,
+  `CARD_INFO`, `ALLOC_OS_EVENT`, the version query — identical at all 29 tags) must have the
+  bench's layout there (H1).
+- **Controls** — `raw_control` looks the command up in `HOST_CONTROLS` (53 rows; a test pins every
+  id to the SDK's measured value at every tag and requires the struct wherever the id exists) and
+  carries the payload out and the reply back (H2, H5, H8). GSS-legacy ids (no header) pass only on
+  the old interval; an unlisted control is refused by name outside it.
+- **Allocations** — every `raw_alloc` names its params struct (H7: the 610 channel params, the 535
+  memory params, the ≤575 VA-space params…); MSENC/BSP params and caps are carried under their 610
+  names (NVENC/NVDEC — the old names survive only as `#define` aliases DWARF cannot see).
+- **NVOS46/47** carried (H3, H4); a field the host lacks that the request sets — a kind override
+  on a 575 host, a range unmap on a 545 host — is `HOST_ABI_REFUSED`, printed by name.
+- **H9** — the subtree map is authored per family from ogkm where the host's driver measurably
+  lacks the control (ruling 3; `kf_chip::authored_intr_subtree_map` = the GA106 host's own answer);
+  `MC_GET_STATIC_INTR_TABLE` exists at every measured tag (the earlier "absent at 535/545" was a
+  misreading).
+- ⊘ **Found on the way:** `MSENC_GET_CAPS_V2` is 8 bytes with `instanceId` at +4 on 580.65.06 and
+  580.82.07 — hosts the old gate ACCEPTED — while kf-host sent 12 bytes with it at +8. Carried now.
+
+At the bench host every carry is the identity; not yet run on a non-580 host (§8.3).
 
 ★ **Cross-checked against nvkvm-pv (coordinator, 2026-09-26: nvkvm-pv is the source of truth for
 these user↔kernel ioctl structs).** nvkvm-pv measured its nine profile fields plus the five
@@ -266,6 +296,7 @@ cup8bench, every timed iteration verified).
 | 580.159.04 | 580.105.08 | `67e7eadb` | — | — | **30/30** | 0/4 → *staging fault* | the overlay was staged without the seed ISO; fixed in `f72f9a58` |
 | 580.159.04 | 580.159.04 | `f72f9a58` (rebased on master `e05ff74d`) | **9/9** | **1512 / 0** | *not run* (harness: the default initrd was built without the musl client ⇒ NOTRUN=30; re-run at `47348e3b`) | **4/4** | cup2 `0xabcd1234`, cup3 `43`, cup8 `bad=0 maxerr=0`, cup8bench verified |
 | 580.159.04 | 580.105.08 | `f72f9a58` | — | — | **29/30** | **4/4** | the fat guest re-staged with the seed ISO (`f72f9a58`); ladder identical to the default guest's. The one thin red is an **adapter-init flake**, see below |
+| 580.159.04 | 580.159.04 | `47348e3b` (rebased on master `02b27c2a`; walker PTX ISA 8.2) | **9/9** | **1533 / 0** | **30/30** | *running* | the early-merge candidate |
 
 ★ **The 580.105.08 red at `f72f9a58`, measured.** Arm 1 (`--timer`): guest `RmInitAdapter failed!
 (0x25:0x65:1236)` after `memmgrMemSet … NV_ERR_TIMEOUT` (`mem_mgr.c:463`) and
@@ -400,5 +431,11 @@ numbering is itself per version (lower at 535/545) — translated by NAME throug
 
 ### 8.3 The host walk
 
-Not started. kf-host still carries the pinned interval; §2.2 is its work list (H1–H9); rulings 3
-and 4 above unblock it below 580.65.06 / 575.
+**Code built (§2.2, 2026-09-26); hardware next.** Box `52788835` arrived with host driver 575.51.03
+(the vast VM image's), was swapped to 580.159.04 so its bench guest image is the fixed guest
+(580.159.04), and walks the host axis after its guest-axis queue: 580.x hosts first (inside the old
+interval — every carry the identity except MSENC caps at 580.65.06/580.82.07), then 575.51.03
+(back to the box's own driver: the first host below 580.65.06 — NVOS46 56 bytes, no subtree-map
+control, 100-class classlist), then 570/565/550. Guest pinned by `guest-driver=580.159.04` (a
+defaulted device would take the HOST's version as the guest's and re-select only on an identical
+pre-fn-1 surface).
