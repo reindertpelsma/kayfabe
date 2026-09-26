@@ -22,7 +22,9 @@ set -uo pipefail
 TAG=${1:-fast}
 BUDGET=${2:-20}
 BENCH=${BENCH_DIR:-/workspace/bench}
-FG=$BENCH/fastguest
+# ★ `KF_FASTGUEST_DIR`: one fast-guest build per GUEST driver version (V3_DRIVER_MATRIX.md §5);
+# the default is the host-mode build of the host's own driver.
+FG=${KF_FASTGUEST_DIR:-$BENCH/fastguest}
 if [ "${KF_DEVICE:-kf3}" = kf3 ]; then
     # ★ 2026-09-25: the binary built from THIS checkout's revision (`build_kf3.sh` installs one per
     # revision) — never the shared build dir's, which another build can replace mid-measurement.

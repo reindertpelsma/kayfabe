@@ -87,6 +87,20 @@ trap 'qemu-nbd --disconnect /dev/nbd0 >/dev/null 2>&1; umount "$ROOT/mnt" 2>/dev
 # ⚠ The kernel must still be one the guest can boot. A vast container shares the host
 # kernel, so `/boot/vmlinuz-$(uname -r)` is what the host is RUNNING, and the modules under
 # `/lib/modules/$(uname -r)` were built against exactly it.
+# ★★★ **`KF_GUEST_DRIVER_DIR` — THE GUEST DRIVER AXIS, DECOUPLED FROM THE HOST'S** (2026-09-26,
+# `docs/design/V3_DRIVER_MATRIX.md` §5). HOST MODE as written boots the host's own nvidia modules,
+# so the guest driver IS the host driver and the guest axis cannot be walked. With this set to a
+# directory staged by `scripts/drivermatrix/stage_guest_driver.sh <version>`, the three nvidia
+# modules and the GSP firmware come from THAT version, built for this kernel; the kernel and the
+# non-NVIDIA dependency closure (`ecc.ko`, `video.ko`, `wmi.ko`) still come from the host.
+# ⊘ Refused unless the stage finished (`STAGED`): a half-staged version would boot the host's
+# firmware beside another version's modules, which the guest driver rejects as a mismatch.
+GDRV=${KF_GUEST_DRIVER_DIR:-}
+if [ -n "$GDRV" ]; then
+    [ -f "$GDRV/STAGED" ] || die "KF_GUEST_DRIVER_DIR=$GDRV has no STAGED marker — run stage_guest_driver.sh"
+    GDRV_VER=$(sed -n 's/^version=//p' "$GDRV/STAGED")
+    echo "== GUEST DRIVER $GDRV_VER from $GDRV (the host keeps its own)"
+fi
 if [ "${KF_FROM_HOST:-0}" = "1" ]; then
     KREL=$(uname -r)
     echo "== HOST MODE: kernel $KREL, modules from /lib/modules/$KREL"
@@ -107,6 +121,12 @@ if [ "${KF_FROM_HOST:-0}" = "1" ]; then
             src="$MODROOT/$rel"; [ -f "$src" ] || continue
             base=$(basename "$rel"); base=${base%.zst}; base=${base%.xz}; base=${base%.ko}.ko
             dst="$ROOT/ird/lib/modules/$base"; [ -f "$dst" ] && continue
+            # ★ the staged guest driver replaces the NVIDIA modules themselves, never their deps
+            if [ -n "$GDRV" ] && [ -f "$GDRV/modules/$base" ]; then
+                cp "$GDRV/modules/$base" "$dst"
+                echo "$base" >> "$ROOT/ird/lib/modules/loadorder"; found=$((found+1))
+                continue
+            fi
             case "$src" in *.zst) zstd -dq -o "$dst" "$src" ;;
                            *.xz)  xz -dc "$src" > "$dst" ;;
                            *)     cp "$src" "$dst" ;; esac
@@ -117,6 +137,7 @@ if [ "${KF_FROM_HOST:-0}" = "1" ]; then
     echo "== modules taken from the host (with closure): $found"
     sed 's/^/==   /' "$ROOT/ird/lib/modules/loadorder"
     FW="/lib/firmware/nvidia"
+    [ -n "$GDRV" ] && FW="$GDRV/firmware/nvidia"
     if [ -d "$FW" ]; then
         mkdir -p "$ROOT/ird/lib/firmware"; cp -a "$FW" "$ROOT/ird/lib/firmware/" 2>/dev/null
         find "$ROOT/ird/lib/firmware/nvidia" -name '*.zst' 2>/dev/null | while read -r z; do
