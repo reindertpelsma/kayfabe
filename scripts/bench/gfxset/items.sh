@@ -33,8 +33,10 @@ for ITEM in "$@"; do
     SIDE=$SIDE ITEM=$ITEM W=$W timeout -k 20 "$tmo" setsid bash -c ". '$HERE/lib.sh'; . '$HERE/itemdefs.sh'; cd '$W' && $fn" >> "$log" 2>&1 < /dev/null
     rc=$?; t1=$(date +%s)
     echo "=== end rc=$rc secs=$((t1-t0)) $(date -Is)" >> "$log"
-    note=$(grep -a -m1 -iE 'GSET_FAIL|GSET_NEED_MISSING|error|fail|illegal|cannot|unable|Xid|abort|segmentation|core dumped|not found' "$log" \
-           | grep -v -E '^=== |GSET_(DIG|VAL)|errors: 0|Validation: Success' | head -1 | tr -s ' \t' ' ' | cut -c1-160 | tr '|' '/')
+    # the first GSET_FAIL wins; else the first error-looking line (the log's own header excluded)
+    note=$(grep -a -m1 -E '^GSET_(FAIL|NEED_MISSING)' "$log" || grep -a -v -E '^=== |^GSET_(DIG|VAL)|errors: 0|Validation: Success' "$log" \
+           | grep -a -m1 -iE 'error|fail|illegal|cannot|unable|Xid|abort|segmentation|core dumped|not found')
+    note=$(echo "$note" | head -1 | tr -s ' \t' ' ' | cut -c1-160 | tr '|' '/')
     if [ $rc -eq 124 ] || [ $rc -eq 137 ]; then v=TIMEOUT
     elif grep -qa '^GSET_NEED_MISSING' "$log"; then v=NOTRUN
     elif [ $rc -eq 0 ] && grep -qa '^GSET_OK' "$log" && ! grep -qa '^GSET_FAIL' "$log"; then v=PASS; note=${note:+warn:$note}
@@ -42,3 +44,4 @@ for ITEM in "$@"; do
     echo "GSET_RES side=$SIDE item=$ITEM verdict=$v rc=$rc secs=$((t1-t0)) note=${note:--}"
     grep -a -E '^GSET_(DIG|VAL) ' "$log"
 done
+exit 0
