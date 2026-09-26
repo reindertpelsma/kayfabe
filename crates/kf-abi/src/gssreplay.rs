@@ -150,7 +150,7 @@ mod tests {
         }
         g[4..8].fill(0);
         g[0x14..0x18].fill(0);
-        assert!(answer(&[a.clone()], GSS_CLOCK_QUERY, &mut g));
+        assert!(answer(std::slice::from_ref(&a), GSS_CLOCK_QUERY, &mut g));
         assert_eq!(&g[4..8], &4u32.to_le_bytes());
         assert_eq!(&g[0x14..0x18], &0x000f_55c8u32.to_le_bytes());
         assert_eq!(g[0x210], 2);
@@ -158,8 +158,8 @@ mod tests {
         // ⊘ Another domain, another size, another control: not ours.
         let mut other = row.request();
         other[0x0c] = 7;
-        assert!(!answer(&[a.clone()], GSS_CLOCK_QUERY, &mut other));
-        assert!(!answer(&[a.clone()], GSS_CLOCK_QUERY, &mut vec![0; 16]));
+        assert!(!answer(std::slice::from_ref(&a), GSS_CLOCK_QUERY, &mut other));
+        assert!(!answer(std::slice::from_ref(&a), GSS_CLOCK_QUERY, &mut [0; 16]));
         assert!(!answer(&[a], GSS_CLOCK_DOMAINS, &mut row.request()));
     }
 
