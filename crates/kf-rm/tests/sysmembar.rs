@@ -110,3 +110,26 @@ fn the_link_claims_only_its_control_and_holds_nothing_else() {
     assert_eq!(p.respond(&cmd).map(|r| r.rpc_result), Some(0));
     assert_eq!(p.carried, 1);
 }
+
+/// ★★ v3-refusals: `DMA_UNSET_PAGE_DIRECTORY` (`0x00801814`) rides the same memory link — through
+/// the whole served chain it is answered `NV_OK`, carried as `UnsetPageDir`, held, and no longer
+/// reaches the ledger; without the plane it is refused as before.
+#[test]
+fn unset_page_directory_is_carried_held_and_answered_only_with_the_plane() {
+    let unset = control(kf_rm::barpde::UNSET_PAGE_DIRECTORY, &[0x07, 0x00, 0x00, 0x5c, 1, 0, 0, 0]);
+    let log = kf_rm::unserviced::UnservicedLog::new();
+    let (mut c, seen) = chain(true, &log);
+    let r = c.respond(&unset).expect("answered");
+    assert_eq!(r.rpc_result, 0);
+    assert!(c.holds_for_refresh(&unset));
+    assert_eq!(
+        seen.lock().unwrap().as_slice(),
+        &[MemStatement::UnsetPageDir { client: 0xc1e0_0002, vaspace: 0x5c00_0007 }]
+    );
+    assert_eq!(log.total(), 0, "nothing reached the ledger");
+    let log = kf_rm::unserviced::UnservicedLog::new();
+    let (mut c, seen) = chain(false, &log);
+    assert!(c.respond(&unset).is_none_or(|r| r.rpc_result != 0));
+    assert!(seen.lock().unwrap().is_empty());
+    assert_eq!(log.total(), 1);
+}
