@@ -1252,6 +1252,20 @@ fn retire_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, key: Va
     )
 }
 
+/// Diagnostics: every VA-space object the plane holds, `key=slot@root:rows`.
+fn vas_census(m: &Manager) -> String {
+    let objs = m.table.objects();
+    let mut out = format!("{} objects:", objs.len());
+    for (k, root, slot) in objs {
+        let rows = match m.table.target(k) {
+            Some(Target::Gpu(g)) => g.rows.read().map_or(usize::MAX, |r| r.len()),
+            _ => 0,
+        };
+        out.push_str(&format!(" {:#x}=s{}@{}:{rows}", k.0, slot.map_or(-1, i64::from), root.map_or("-".to_string(), |r| format!("{r:#x}"))));
+    }
+    out
+}
+
 /// ★ Apply one statement on the VA thread. Returns a line for the boot log.
 ///
 /// - **fn 70**: write the 8-byte entry into entry 0 of OUR root on the GPU (the root is ours, so
@@ -1284,7 +1298,11 @@ pub fn apply_statement(
             format!("fn70 {:?} entry={:#x} shift={} -> our root @{root:#x}, walk scheduled", p.bar, p.entry, p.level_shift)
         }
         MemStatement::Retire { client, vaspace } => {
-            retire_mirror(m, plane, rm, VasKey((u64::from(client) << 32) | u64::from(vaspace)))
+            let line = retire_mirror(m, plane, rm, VasKey((u64::from(client) << 32) | u64::from(vaspace)));
+            if std::env::var_os("KF_VAS_CENSUS").is_some() {
+                eprintln!("kf3: census {line}");
+            }
+            line
         }
         MemStatement::PageDir(s) => {
             let key = VasKey((u64::from(s.client.0) << 32) | u64::from(s.vaspace.0));
@@ -1325,6 +1343,9 @@ pub fn apply_statement(
                     }
                     if let kf_mem::vasmgr::RootChange::Moved { .. } = change {
                         plane.counters.root_moves.fetch_add(1, Ordering::Relaxed);
+                    }
+                    if change.walk_now() && std::env::var_os("KF_VAS_CENSUS").is_some() {
+                        eprintln!("kf3: census at {key:?} First: {}", vas_census(m));
                     }
                     format!("pagedir {key:?} root={:#x} {change:x?}", s.pdb.0)
                 }

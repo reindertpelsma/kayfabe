@@ -242,6 +242,12 @@ impl<T: MapTarget> VasTable<T> {
         self.spaces.iter().filter(|(_, s)| s.root.is_some()).map(|(&k, _)| k).collect()
     }
 
+    /// Every object held: `(key, root, slot)`, in key order (diagnostics).
+    #[must_use]
+    pub fn objects(&self) -> Vec<(VasKey, Option<u64>, Option<u32>)> {
+        self.spaces.iter().map(|(&k, s)| (k, s.root, s.slot)).collect()
+    }
+
     /// Objects held.
     #[must_use]
     pub fn len(&self) -> usize {
@@ -339,18 +345,52 @@ impl Walker for GpuWalker {
     }
 
     fn poll(&mut self) -> Result<Option<WalkDone>, String> {
-        let Some(c) = self.kernel.try_collect().map_err(|e| e.to_string())? else {
+        let got = self.kernel.try_collect().map_err(|e| e.to_string());
+        // ★ w829: capacity growth / re-walks / ceilings are named in the log as they happen.
+        for ev in self.kernel.take_capacity_events() {
+            eprintln!("kf3: walk {ev}");
+        }
+        let Some(c) = got? else {
             return Ok(None);
         };
         let r = &c.report;
         r.validate().map_err(|e| format!("walk report refused: {e}"))?;
         r.require_diff().map_err(|e| format!("walk report refused: {e}"))?;
         if r.truncated() {
+            // ★ Which entries refused: `reserved2` carries each entry's own `KFWR_R_*` bits.
+            let refusing: Vec<String> = r
+                .pdbs
+                .iter()
+                .filter(|p| p.refused_bits() != 0)
+                .map(|p| format!("pdb {:#x} slot {} refuse {:#x} need {}", p.pdb, p.reserved, p.refused_bits(), p.need()))
+                .collect();
+            if std::env::var_os("KF_VAS_CENSUS").is_some() {
+                for (i, p) in r.pdbs.iter().enumerate() {
+                    if p.refused_bits() != 0
+                        && let Ok(runs) = self.kernel.debug_walk_runs(i as u32)
+                    {
+                        eprintln!("kf3: census walk entry {i} pdb {:#x}: {}", p.pdb, run_census(&runs));
+                    }
+                }
+            }
             return Err(format!(
-                "walk report TRUNCATED (flags={:#x}, refuse_mask={:#x}, runs {} of {}): nothing \
-                 of it is applied, nothing committed",
-                r.header.flags, r.header.refuse_mask, r.runs.len(), r.header.run_count
+                "walk report TRUNCATED (flags={:#x}, refuse_mask={:#x}, runs {} of {}; refusing entries: [{}]): \
+                 nothing of it is applied, nothing committed",
+                r.header.flags,
+                r.header.refuse_mask,
+                r.runs.len(),
+                r.header.run_count,
+                refusing.join(", ")
             ));
+        }
+        if std::env::var_os("KF_VAS_CENSUS").is_some() {
+            for (i, p) in r.pdbs.iter().enumerate() {
+                if p.vas_flags & kf_cuda::abi::KFWR_V_OVERFLOW != 0
+                    && let Ok(runs) = self.kernel.debug_walk_runs(i as u32)
+                {
+                    eprintln!("kf3: census overflow entry {i} pdb {:#x} slot {}: {}", p.pdb, p.reserved, run_census(&runs));
+                }
+            }
         }
         if r.header.refusals > 0 {
             // ★ P6b: a refusal inside a report is named — a walk that refused a table reports
@@ -389,7 +429,7 @@ impl Walker for GpuWalker {
                     partial: p.vas_flags & kf_cuda::abi::KFWR_V_PARTIAL != 0,
                     overflow: p.vas_flags & kf_cuda::abi::KFWR_V_OVERFLOW != 0,
                     refused: if p.vas_flags & kf_cuda::abi::KFWR_V_REFUSED != 0 {
-                        u32::try_from(p.reserved2).unwrap_or(u32::MAX).max(1)
+                        p.refused_bits().max(1)
                     } else {
                         0
                     },
@@ -410,6 +450,53 @@ impl Walker for GpuWalker {
     fn slots(&self) -> u32 {
         self.kernel.max_slots()
     }
+}
+
+/// Diagnostics: a walk table slice summarised — per aperture, per page size, per 1 GiB of VA,
+/// and a sample of runs.
+fn run_census(runs: &[kf_cuda::abi::KfMapRun]) -> String {
+    let mut ap: BTreeMap<u8, usize> = BTreeMap::new();
+    let mut lens: BTreeMap<u64, usize> = BTreeMap::new();
+    let mut gib: BTreeMap<u64, (usize, u64, u64)> = BTreeMap::new();
+    for m in runs {
+        *ap.entry(m.aperture()).or_default() += 1;
+        *lens.entry(m.len).or_default() += 1;
+        let g = gib.entry(m.va >> 30).or_insert((0, u64::MAX, 0));
+        g.0 += 1;
+        g.1 = g.1.min(m.gpga);
+        g.2 = g.2.max(m.gpga);
+    }
+    // ★ Why neighbours did NOT coalesce: VA-contiguous pairs, split by address or only by flags.
+    let (mut va_contig, mut flag_split, mut xor) = (0usize, 0usize, 0u32);
+    for w in runs.windows(2) {
+        if w[0].va + w[0].len == w[1].va {
+            va_contig += 1;
+            if w[0].gpga + w[0].len == w[1].gpga && w[0].aperture() == w[1].aperture() {
+                flag_split += 1;
+                xor |= w[0].flags ^ w[1].flags;
+            }
+        }
+    }
+    let mut flags: BTreeMap<u32, usize> = BTreeMap::new();
+    for m in runs {
+        *flags.entry(m.flags).or_default() += 1;
+    }
+    let mut top_lens: Vec<(u64, usize)> = lens.into_iter().collect();
+    top_lens.sort_by(|a, b| b.1.cmp(&a.1));
+    top_lens.truncate(6);
+    let gib: Vec<String> =
+        gib.iter().map(|(g, (n, lo, hi))| format!("va{:#x}G:{n}(gpga {lo:#x}..{hi:#x})", g)).collect();
+    let sample: Vec<String> = runs
+        .iter()
+        .step_by((runs.len() / 12).max(1))
+        .map(|m| format!("{:#x}->{:#x}+{:#x}/f{:#x}", m.va, m.gpga, m.len, m.flags))
+        .collect();
+    format!(
+        "{} runs; ap {ap:?}; flags {flags:x?}; va-contiguous pairs {va_contig}, of which gpga-contiguous (split by flags only) {flag_split} xor {xor:#x}; lens {top_lens:x?}; by-GiB [{}]; sample [{}]",
+        runs.len(),
+        gib.join(" "),
+        sample.join(" ")
+    )
 }
 
 /// The default coverage grain: 4 KiB, the smallest GMMU page on every family this tree models.
@@ -879,6 +966,20 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         }
     }
 
+    /// The batch's objects (`key=slot@root`) and the table's size — for a refusal's name.
+    fn batch_census(&self, b: &Batch) -> String {
+        let walked: Vec<String> =
+            b.walked.iter().map(|(k, (s, r))| format!("{:#x}=s{s}@{r:#x}", k.0)).collect();
+        format!(
+            "walked {}: {}; table {} objects, {} rooted, {} free slots",
+            walked.len(),
+            walked.join(" "),
+            self.table.len(),
+            self.table.rooted().len(),
+            self.table.free_slots.len()
+        )
+    }
+
     /// Every invalidate in `batch` stays armed; counted and named.
     fn refuse_batch(&mut self, batch: &Batch, why: String) {
         for (w, _, _) in &batch.wants {
@@ -904,6 +1005,13 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             Ok(Some(d)) => d,
             Err(e) => {
                 self.stats.walks_refused += 1;
+                // ★ Name WHAT was walked: a refused report is about the batch, and a batch can
+                // carry objects the refusing want never named (ALL_PDB, or several objects under
+                // one root). Without this the refusal names only the root that asked.
+                let e = match &self.inflight {
+                    Some(b) => format!("{e} [{}]", self.batch_census(b)),
+                    None => e,
+                };
                 if let Some(b) = self.inflight.take() {
                     for (w, _, _) in &b.wants {
                         if let Want::Invalidate(r, _) = w {
@@ -971,7 +1079,19 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             }
             let t_apply = std::time::Instant::now();
             let a = apply_entry(&space.target, &e.runs, &cfg);
-            self.stats.timing.apply_ns += ns_since(t_apply);
+            let apply_ns = ns_since(t_apply);
+            self.stats.timing.apply_ns += apply_ns;
+            // ★ w829: the host-map cost of a large diff (a fragmented CUDA space is ~10^4 runs,
+            // each ONE host map call on the guest-RAM object) — named, it is the next budget.
+            if a.mapped + a.unmapped >= 1000 {
+                eprintln!(
+                    "kf3: mem large apply {key:?}: {} maps + {} unmaps in {} ms ({} us per host call)",
+                    a.mapped,
+                    a.unmapped,
+                    apply_ns / 1_000_000,
+                    apply_ns / 1000 / (a.mapped + a.unmapped).max(1) as u64
+                );
+            }
             for (i, &c) in a.codes.iter().enumerate() {
                 if let Some(slot) = codes.get_mut(e.first + i) {
                     *slot = c;

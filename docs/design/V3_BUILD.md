@@ -166,3 +166,19 @@ Each cell mean of 3 processes.
   `split walk (pdb 0x201000): walk report TRUNCATED (flags=0x85, refuse_mask=0x10 RUN_CAP)` — each
   process re-inits the adapter; with PM (one init) 9 processes ran clean. Looks like placements for
   UVM's re-created VAS accumulating across adapter cycles; not fixed.
+  ⊘⊘ **CORRECTED + FIXED w829 (`v3-uvmwall`) — the reading above was WRONG: not an accumulation,
+  not a leak.** The refusing entry is the CUDA process's OWN space (root `0x201000`, a fresh slot;
+  table 7 objects, 121 free slots). Census (`KF_VAS_CENSUS=1`, `uw4`): 16 366 of its 16 384 runs
+  are 4 KiB sys-coherent pages, a VA-contiguous ~56 MiB at `0x2_0000_0000` + ~2 k at the CPU-mirrored
+  VA; of 16 378 VA-contiguous neighbours **0** are GPA-contiguous (kind/flags split nothing). The run
+  count follows guest-RAM fragmentation, which grows every process (faster with a re-init per
+  process): died at proc 6/4 on `ce623b3f`, 1/2/3 on `v3-mc3` — variance, not a regression. The
+  uniform `runs_per_pdb = 16 384` (walk slice AND slot) was the wall; the re-init agent's `ro_R2`
+  "slot N is full" is the same space through the diff's slot bound. **Fix:** the walker's capacity
+  is pooled and host-managed (`kf-cuda::capacity`, `KfLayout`, `KF_ABI_VERSION 4`): per-entry walk
+  regions and per-slot committed regions carved from a 1 Mi-run walk pool and a 2 Mi-run slot pool
+  (same device memory as before), the kernel reports each space's need, and `WalkKernel` grows a
+  slot (stream-ordered DtoD copy) and re-walks on the collecting (VA) thread. One space may now hold
+  1 Mi runs. Verified: 24/24 no-PM and 24/24 PM torch processes per boot (`vf1`), gate9's growth arm.
+  ⚠ Follow-up: each scattered 4 KiB run is ONE host map call on the guest-RAM object (~12.6 k per
+  fragmented process) — a batched verb (e.g. a page-list object mapped once) is the next budget.

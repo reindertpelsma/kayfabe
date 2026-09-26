@@ -109,14 +109,17 @@ fn the_rust_mirror_matches_the_cu_byte_for_byte() {
     let kf_dirs = extract_define(&cu, "KF_DIRS");
     let kf_max_pdb = extract_define(&h, "KF_MAX_PDB");
     let kf_max_reset = extract_define(&h, "KF_MAX_RESET");
+    let kf_max_pdb_l = extract_define(&h, "KF_MAX_PDB_L");
+    let kf_max_slots = extract_define(&h, "KF_MAX_SLOTS");
 
     let mut prog = String::new();
     prog.push_str("#include <stdint.h>\n#include <stddef.h>\n#include <stdio.h>\n");
     prog.push_str(&format!(
-        "#define KF_DIRS {kf_dirs}\n#define KF_MAX_PDB {kf_max_pdb}\n#define KF_MAX_RESET {kf_max_reset}\n"
+        "#define KF_DIRS {kf_dirs}\n#define KF_MAX_PDB {kf_max_pdb}\n#define KF_MAX_RESET {kf_max_reset}\n\
+         #define KF_MAX_PDB_L {kf_max_pdb_l}\n#define KF_MAX_SLOTS {kf_max_slots}\n"
     ));
     // The report ABI lives in the header; the launch ABI lives in the .cu.
-    for name in ["KfReportHeader", "KfPdbEntry", "KfMapRun", "KfScope", "KfSlot", "KfAck"] {
+    for name in ["KfReportHeader", "KfPdbEntry", "KfMapRun", "KfScope", "KfSlot", "KfAck", "KfLayout"] {
         prog.push_str(&extract_struct(&h, name));
         prog.push('\n');
     }
@@ -138,6 +141,7 @@ fn the_rust_mirror_matches_the_cu_byte_for_byte() {
         "KfScope",
         "KfSlot",
         "KfAck",
+        "KfLayout",
     ] {
         prog.push_str(&format!("printf(\"size {t} %zu\\n\", sizeof({t}));\n"));
     }
@@ -171,6 +175,13 @@ fn the_rust_mirror_matches_the_cu_byte_for_byte() {
         ("KfArgs", "hdr"),
         ("KfArgs", "rpdb"),
         ("KfArgs", "rrun"),
+        ("KfArgs", "lay"),
+        ("KfDev", "need"),
+        ("KfLayout", "walk_cap"),
+        ("KfLayout", "prev_off"),
+        ("KfLayout", "prev_cap"),
+        ("KfLayout", "slot_off"),
+        ("KfLayout", "slot_cap"),
         ("KfReportHeader", "generation"),
         ("KfReportHeader", "run_count"),
         ("KfReportHeader", "entries_visited"),
@@ -259,6 +270,7 @@ fn the_rust_mirror_matches_the_cu_byte_for_byte() {
     check("size KfScope", size_of::<KfScope>());
     check("size KfSlot", size_of::<KfSlot>());
     check("size KfAck", size_of::<KfAck>());
+    check("size KfLayout", size_of::<KfLayout>());
 
     macro_rules! off {
         ($t:ty, $f:ident, $k:literal) => {
@@ -294,6 +306,13 @@ fn the_rust_mirror_matches_the_cu_byte_for_byte() {
     off!(KfArgs, hdr, "off KfArgs.hdr");
     off!(KfArgs, rpdb, "off KfArgs.rpdb");
     off!(KfArgs, rrun, "off KfArgs.rrun");
+    off!(KfArgs, lay, "off KfArgs.lay");
+    off!(KfDev, need, "off KfDev.need");
+    off!(KfLayout, walk_cap, "off KfLayout.walk_cap");
+    off!(KfLayout, prev_off, "off KfLayout.prev_off");
+    off!(KfLayout, prev_cap, "off KfLayout.prev_cap");
+    off!(KfLayout, slot_off, "off KfLayout.slot_off");
+    off!(KfLayout, slot_cap, "off KfLayout.slot_cap");
     off!(KfReportHeader, generation, "off KfReportHeader.generation");
     off!(KfReportHeader, run_count, "off KfReportHeader.run_count");
     off!(

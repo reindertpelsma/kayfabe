@@ -34,9 +34,17 @@ const PAGE: u64 = 0x1000;
 fn main() {
     let mut l = Checks::default();
     for (tag, v3) in [("ver2", false), ("ver3", true)] {
-        if let Err(e) = differential(&mut l, tag, v3) {
+        if let Err(e) = differential(&mut l, tag, v3, None) {
             l.check(if v3 { "ver3_run" } else { "ver2_run" }, false, e);
         }
+    }
+    // ★★★ w829: the same differential with slots born TINY (64 runs), so they grow — a device
+    // copy and a transparent re-walk — again and again MID-HISTORY, under random refusals. The
+    // model's capacity is unbounded: every report must still be the model's diff, and the
+    // settled slots must close — a re-submitted walk may neither double-commit nor drop a
+    // host-confirmed placement.
+    if let Err(e) = differential(&mut l, "ver2-growth", false, Some(64)) {
+        l.check("ver2_growth_run", false, e);
     }
     if let Err(e) = throughput(&mut l) {
         l.check("throughput_run", false, e);
@@ -139,9 +147,14 @@ fn entry_runs(r: &kf_cuda::Report, i: usize) -> Vec<KfMapRun> {
 }
 
 #[allow(clippy::too_many_lines)]
-fn differential(l: &mut Checks, tag: &str, v3: bool) -> Result<(), String> {
+fn differential(l: &mut Checks, tag: &str, v3: bool, slot_default: Option<u32>) -> Result<(), String> {
     let fmt = if v3 { kf_format_ver3() } else { kf_format_ver2() };
-    let cfg = WalkCfg { table_version: fmt.table_version, ..WalkCfg::default() };
+    let growth = slot_default.is_some();
+    let cfg = WalkCfg {
+        table_version: fmt.table_version,
+        slot_default: slot_default.unwrap_or(WalkCfg::default().slot_default),
+        ..WalkCfg::default()
+    };
     let mut k = WalkKernel::bring_up_on(cfg, fmt, kf_cuda::walk::WalkDevice::PciBusId(&kf_harness::gate_bdf()?)).map_err(|e| format!("{tag}: {e}"))?;
     let img = k.upload(&vec![0u8; IMG_BYTES]).map_err(|e| e.to_string())?;
     // Slot 3 walks tree A, slot 5 walks tree B — and at step 40 slot 5's object MOVES its root
@@ -250,7 +263,13 @@ fn differential(l: &mut Checks, tag: &str, v3: bool) -> Result<(), String> {
         steps += 1;
     }
     l.check(
-        if v3 { "ver3_gpu_diff_is_the_model_diff" } else { "ver2_gpu_diff_is_the_model_diff" },
+        if growth {
+            "ver2_growth_gpu_diff_is_the_model_diff"
+        } else if v3 {
+            "ver3_gpu_diff_is_the_model_diff"
+        } else {
+            "ver2_gpu_diff_is_the_model_diff"
+        },
         mismatches == 0 && runs_seen > 100 && failed_codes > 10 && held_codes > 0 && resets == 1,
         format!(
             "{steps} walks, {runs_seen} runs compared, {mismatches} mismatching entries, verdicts failed={failed_codes} held={held_codes}{}",
@@ -280,10 +299,22 @@ fn differential(l: &mut Checks, tag: &str, v3: bool) -> Result<(), String> {
         diffmodel::coverage(&model.get(&s).cloned().unwrap_or_default().flat()) == diffmodel::coverage(&walk_of(&pages[w]))
     });
     l.check(
-        if v3 { "ver3_settled_slots_are_quiet_and_closed" } else { "ver2_settled_slots_are_quiet_and_closed" },
+        if growth {
+            "ver2_growth_settled_slots_are_quiet_and_closed"
+        } else if v3 {
+            "ver3_settled_slots_are_quiet_and_closed"
+        } else {
+            "ver2_settled_slots_are_quiet_and_closed"
+        },
         quiet && closed,
         format!("quiet={quiet} closed={closed}"),
     );
+    if growth {
+        // ⊘ Non-vacuity: the arm is about growth; it must have happened, more than once.
+        let census = k.capacity_census();
+        let grows = k.capacity_stats().grows;
+        l.check("ver2_growth_slots_actually_grew", grows >= 2, format!("{census}"));
+    }
     k.release(img);
     Ok(())
 }

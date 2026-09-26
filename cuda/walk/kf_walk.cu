@@ -171,7 +171,7 @@ struct KfWin { const uint8_t *base; uint64_t len; uint64_t span; };
 struct KfDev {
     uint64_t generation;         /* reports emitted */
     uint64_t committed;          /* the last report generation whose ack was committed */
-    uint32_t runs_per_pdb;       /* walk slice per entry AND one slot's capacity */
+    uint32_t runs_per_pdb;       /* the LARGEST walk_cap/slot_cap a layout may name (KfLayout) */
     uint32_t entry_budget;
     uint32_t run_capacity;       /* report */
     uint32_t pdb_capacity;       /* report */
@@ -191,6 +191,10 @@ struct KfDev {
     unsigned int walk_trunc;
     unsigned int walk_abort;   /* the walk itself stopped: budget or frontier cap */
     unsigned int sparse_slots;
+    /* ★ w829: per entry, the capacity it NEEDED — the walk's UNCAPPED run count, or, for a
+     * diff that could not fit its slot (PARTIAL/OVERFLOW), placements + maps. The host sizes
+     * the next walk / grows the slot from it (KfLayout). */
+    uint32_t need[KF_MAX_PDB];
 };
 
 /* ⚠ Scratch: `scratch` holds 4 * runs_per_pdb runs PER ENTRY (the diff: the
@@ -215,6 +219,7 @@ struct KfArgs {
     KfReportHeader *hdr;
     KfPdbEntry *rpdb;
     KfMapRun *rrun;
+    const KfLayout *lay;         /* ★ w829: per-entry and per-slot capacity (host-managed) */
 };
 
 /* ── decode, entirely off the descriptor ─────────────────────────────────────── */
@@ -717,8 +722,8 @@ __global__ void kf_walk_kernel(KfArgs a)
     c.sparse = 0u;
     c.budget = (uint64_t)d->entry_budget;
     c.refusals = 0u; c.refuse = 0u; c.stop = 0u;
-    c.out = a.walk + (size_t)t * d->runs_per_pdb;
-    c.cap = d->runs_per_pdb;
+    c.out = a.walk + a.lay->walk_off[t];
+    c.cap = a.lay->walk_cap[t];
     c.n = 0u; c.have = 0u;
     c.pdb_index = (uint16_t)t;
     memset(&c.run, 0, sizeof(c.run));
@@ -726,6 +731,7 @@ __global__ void kf_walk_kernel(KfArgs a)
     kf_walk_one(c, pdb);
 
     d->tbl_run_count[t] = c.n;
+    d->need[t] = c.stop ? c.n + 1u : c.n;   /* serial: "more than it holds" */
 
     atomicAdd(&d->entries_visited, (unsigned long long)c.visited);
     if (c.refusals) atomicAdd(&d->refusals, c.refusals);
@@ -889,13 +895,14 @@ __device__ __forceinline__ void kf_gap(const KfMapRun *P, const uint32_t *K, uin
 }
 
 /* Where each walked entry's scratch lives (see KfArgs::scratch). */
-__device__ __forceinline__ KfMapRun *kf_scr(const KfArgs &a, uint32_t t, uint32_t rpp)
+/* ★ w829: carved from the entry's walk region (KfLayout): 4 runs and 3 words per walk-run slot. */
+__device__ __forceinline__ KfMapRun *kf_scr(const KfArgs &a, uint32_t off)
 {
-    return a.scratch + (size_t)t * 4u * rpp;
+    return a.scratch + (size_t)off * 4u;
 }
-__device__ __forceinline__ uint32_t *kf_iscr(const KfArgs &a, uint32_t t, uint32_t rpp)
+__device__ __forceinline__ uint32_t *kf_iscr(const KfArgs &a, uint32_t off)
 {
-    return a.iscratch + (size_t)t * 3u * rpp;
+    return a.iscratch + (size_t)off * 3u;
 }
 
 /* ★★★★★ ONE BLOCK PER WALKED ENTRY: the diff of its walk against its slot, staged
@@ -905,7 +912,7 @@ __global__ void __launch_bounds__(KF_DIFF_BLOCK) kf_diff_slots(KfArgs a)
     const uint32_t t = blockIdx.x;
     if (t >= a.npdb || t >= KF_MAX_PDB) return;
     KfDev *d = a.dev;
-    const uint32_t rpp = d->runs_per_pdb;
+    const uint32_t rpp = a.lay->walk_cap[t];   /* this entry's walk region (and staging bound) */
     __shared__ unsigned long long sh64[KF_DIFF_WARPS];
     __shared__ uint32_t sh32[KF_DIFF_WARPS];
     const uint32_t s = a.slots[t];
@@ -918,20 +925,33 @@ __global__ void __launch_bounds__(KF_DIFF_BLOCK) kf_diff_slots(KfArgs a)
         }
         return;
     }
+    const uint32_t scap = a.lay->slot_cap[s];
+    /* ⊘ The staging bound (3 * walk_cap) holds only while the slot fits the walk region:
+     * refused by name with the need, never written past. The host re-sizes and re-walks. */
+    if (scap > rpp) {
+        if (threadIdx.x == 0u) {
+            d->diff_count[t] = 0u;
+            d->diff_vflags[t] = KFWR_V_OVERFLOW;
+            d->need[t] = scap;
+            atomicOr(&d->refuse_mask, KFWR_R_RUN_CAP);
+            atomicAdd(&d->refusals, 1u);
+        }
+        return;
+    }
     const uint32_t nw = d->tbl_run_count[t] < rpp ? d->tbl_run_count[t] : rpp;
-    const KfMapRun *W = a.walk + (size_t)t * rpp;
-    KfMapRun *X = kf_scr(a, t, rpp);        /* the walk, partitioned by class */
+    const KfMapRun *W = a.walk + a.lay->walk_off[t];
+    KfMapRun *X = kf_scr(a, a.lay->walk_off[t]);   /* the walk, partitioned by class */
     KfMapRun *stg = X + rpp;                /* the staged diff (<= 3 * rpp) */
-    uint32_t *K = kf_iscr(a, t, rpp);       /* kept placement indices, all classes */
+    uint32_t *K = kf_iscr(a, a.lay->walk_off[t]);  /* kept placement indices, all classes */
     uint32_t *kf = K + rpp;                 /* kept flag per placement */
     uint32_t *KW = kf + rpp;                /* per kept placement: the walk run holding its last byte */
-    const KfMapRun *com = a.com + (size_t)s * rpp;
+    const KfMapRun *com = a.com + a.lay->slot_off[s];
     uint32_t pn[KF_CLASSES], po[KF_CLASSES];
     {
         uint32_t o = 0u;
         for (uint32_t c = 0u; c < KF_CLASSES; c++) {
             uint32_t n = a.slot[s].n[c];
-            if (n > rpp - o) n = rpp - o;   /* a corrupt count can only shrink the view */
+            if (n > scap - o) n = scap - o;   /* a corrupt count can only shrink the view */
             pn[c] = n; po[c] = o; o += n;
         }
     }
@@ -1013,7 +1033,9 @@ __global__ void __launch_bounds__(KF_DIFF_BLOCK) kf_diff_slots(KfArgs a)
     for (uint32_t c = 0u; c < KF_CLASSES; c++) { np_all += pn[c]; nu_all += nu[c]; nm_all += nm[c]; }
     uint32_t vflags = 0u;
     bool emit_maps = true;
-    if ((uint64_t)np_all + nm_all > rpp) {
+    if ((uint64_t)np_all + nm_all > scap) {
+        /* ★ w829: say how much it needed, unless the walk itself was cut (its need wins). */
+        if (threadIdx.x == 0u && !(d->entry_refuse[t] & KFWR_R_RUN_CAP)) d->need[t] = np_all + nm_all;
         if (nu_all) { vflags |= KFWR_V_PARTIAL; emit_maps = false; }
         else {
             if (threadIdx.x == 0u) {
@@ -1092,7 +1114,6 @@ __global__ void kf_diff_emit(KfArgs a)
     KfDev *d = a.dev;
     const uint32_t cap_pdb = d->pdb_capacity < KF_MAX_PDB ? d->pdb_capacity : KF_MAX_PDB;
     const uint32_t np = a.npdb < cap_pdb ? a.npdb : cap_pdb;
-    const uint32_t rpp = d->runs_per_pdb;
     uint32_t base = 0u, total = 0u;
     for (uint32_t u = 0u; u < np; u++) {
         if (u < t) base += d->diff_count[u];
@@ -1129,7 +1150,7 @@ __global__ void kf_diff_emit(KfArgs a)
     }
     if (t >= np) return;
     const uint32_t n = trunc ? 0u : d->diff_count[t];
-    const KfMapRun *stg = kf_scr(a, t, rpp) + rpp;
+    const KfMapRun *stg = kf_scr(a, a.lay->walk_off[t]) + a.lay->walk_cap[t];
     for (uint32_t k = threadIdx.x; k < n; k += blockDim.x) a.rrun[base + k] = stg[k];
     if (threadIdx.x == 0u) {
         KfPdbEntry e;
@@ -1138,7 +1159,8 @@ __global__ void kf_diff_emit(KfArgs a)
         e.run_count = n;
         e.vas_flags = d->diff_vflags[t] | (d->entry_refuse[t] ? KFWR_V_REFUSED : 0u);
         e.reserved = a.slots[t];
-        e.reserved2 = (uint64_t)d->entry_refuse[t];   /* which refusals, for the host to name */
+        /* low 32: which refusals, for the host to name; high 32: the capacity it needed (w829) */
+        e.reserved2 = (uint64_t)d->entry_refuse[t] | ((uint64_t)d->need[t] << 32);
         a.rpdb[t] = e;
     }
 }
@@ -1165,14 +1187,17 @@ __global__ void __launch_bounds__(KF_DIFF_BLOCK) kf_commit_kernel(KfArgs a)
     if (s >= d->max_slots) return;
     const uint32_t nres = k->nreset < KF_MAX_RESET ? k->nreset : KF_MAX_RESET;
     for (uint32_t i = 0u; i < nres; i++) if (k->reset[i] == s) return;
-    const uint32_t rpp = d->runs_per_pdb;
+    /* ★ w829: the slot's region, and the PREVIOUS walk's region for this entry as scratch
+     * (the report being committed was that walk's). */
+    const uint32_t rpp = a.lay->slot_cap[s];
+    const uint32_t pcap = a.lay->prev_cap[t];
     if ((uint64_t)e.first_run + e.run_count > h->run_count) return;
     const KfMapRun *R = a.rrun + e.first_run;
     const uint8_t *code = a.ack_code + e.first_run;
     const uint32_t nr = e.run_count;
-    KfMapRun *com = a.com + (size_t)s * rpp;
-    KfMapRun *A = kf_scr(a, t, rpp), *B = A + rpp, *O = A + 2u * rpp;
-    uint32_t *rm = kf_iscr(a, t, rpp);
+    KfMapRun *com = a.com + a.lay->slot_off[s];
+    KfMapRun *A = kf_scr(a, a.lay->prev_off[t]), *B = A + pcap, *O = A + 2u * pcap;
+    uint32_t *rm = kf_iscr(a, a.lay->prev_off[t]);
     __shared__ uint32_t sh32[KF_DIFF_WARPS];
     uint32_t pn[KF_CLASSES], po[KF_CLASSES], nn[KF_CLASSES];
     {
@@ -1181,6 +1206,13 @@ __global__ void __launch_bounds__(KF_DIFF_BLOCK) kf_commit_kernel(KfArgs a)
             uint32_t n = a.slot[s].n[c];
             if (n > rpp - o) n = rpp - o;
             pn[c] = n; po[c] = o; o += n;
+        }
+        /* ⊘ The scratch is the previous walk's region: a slot that no longer fits it (the host
+         * grew it since) is refused loudly BEFORE any write — the next diff is taken against the
+         * same placements again, which is always safe. */
+        if (o > pcap) {
+            if (threadIdx.x == 0u) { atomicOr(&d->refuse_mask, KFWR_R_RUN_CAP); atomicAdd(&d->refusals, 1u); }
+            return;
         }
     }
     uint32_t oc = 0u;
@@ -1223,7 +1255,7 @@ __global__ void __launch_bounds__(KF_DIFF_BLOCK) kf_commit_kernel(KfArgs a)
             nb += tot;
         }
         __syncthreads();
-        if ((uint64_t)oc + na + nb > rpp) {
+        if ((uint64_t)oc + na + nb > rpp || (uint64_t)oc + na + nb > pcap) {
             /* ⊘ Unreachable by the diff's capacity rule; refused loudly rather than
              * written past the slot. The host then sees the next diff unchanged. */
             if (threadIdx.x == 0u) { atomicOr(&d->refuse_mask, KFWR_R_RUN_CAP); atomicAdd(&d->refusals, 1u); }
@@ -2115,12 +2147,13 @@ __global__ void kf_par_bases(KfArgs a, uint32_t *pdbbase)
     for (uint32_t p = 0u; p < KF_MAX_PDB && p < a.npdb; p++) {
         pdbbase[p] = run;
         uint32_t n = d->tbl_run_count[p];
-        if (n > d->runs_per_pdb) {
-            n = d->runs_per_pdb;
+        d->need[p] = n;   /* ★ w829: UNCAPPED — what the host sizes the next walk by */
+        if (n > a.lay->walk_cap[p]) {
+            n = a.lay->walk_cap[p];
             d->tbl_run_count[p] = n;
             atomicOr(&d->hdr_flags, KFWR_HF_TRUNCATED);
             atomicOr(&d->walk_trunc, 1u);
-            kf_par_refuse(d, KFWR_R_RUN_CAP);
+            kf_par_refuse_in(d, KFWR_R_RUN_CAP, p);   /* the host names WHICH space overflowed */
         }
         run += n;
     }
@@ -2146,7 +2179,7 @@ __global__ void kf_par_emit(KfArgs a, const KfEnt *task, const KfSum *sum, const
     const uint32_t skip = head[gw] ? 0u : 1u;
     const uint32_t cap = d->tbl_run_count[p];
     const uint32_t local = off[gw] - pdbbase[p];
-    KfMapRun *dst = a.walk + (size_t)p * d->runs_per_pdb;
+    KfMapRun *dst = a.walk + a.lay->walk_off[p];
     for (uint32_t j = lane + skip; j < KF_MAX_ENT * 2u && j < sm.n; j += KF_WARP) {
         const uint32_t o = local + j - skip;
         if (o < cap) dst[o] = runstage[sm.start + j];
@@ -2172,7 +2205,7 @@ __global__ void kf_par_join(KfArgs a, const KfEnt *task, const KfSum *sum, const
     const uint16_t p = task[i].pdb;
     const uint32_t local = off[i] - pdbbase[p];
     if (local == 0u || local - 1u >= d->tbl_run_count[p]) continue;
-    KfMapRun *dst = a.walk + (size_t)p * d->runs_per_pdb;
+    KfMapRun *dst = a.walk + a.lay->walk_off[p];
     atomicAdd((unsigned long long *)&dst[local - 1u].len, (unsigned long long)sum[i].flen);
     }
 }
@@ -2197,6 +2230,7 @@ struct KfWalk {
     KfReportHeader *hdr;
     KfPdbEntry *rpdb;
     KfMapRun *rrun;
+    KfLayout *lay;     /* w829: this runtime half keeps the UNIFORM layout (runs_per_pdb each) */
     KfWalkCfg cfg;
     /* the verdict kf_ack stages for the next kf_refresh */
     KfAck ack_h;
@@ -2226,6 +2260,11 @@ extern "C" KfWalk *kf_create(const KfWalkCfg *cfg)
     }
     if (w->cfg.max_pdbs == 0u || w->cfg.max_pdbs > KF_MAX_PDB) w->cfg.max_pdbs = KF_MAX_PDB;
     if (w->cfg.max_slots == 0u) w->cfg.max_slots = KF_MAX_PDB;
+    if (w->cfg.max_slots > KF_MAX_SLOTS) {
+        fprintf(stderr, "kf_create: max_slots %u > KF_MAX_SLOTS %u\n", w->cfg.max_slots, KF_MAX_SLOTS);
+        free(w);
+        return NULL;
+    }
     /* The diff's scratch reuses the walk's run stage: 4 * runs_per_pdb per entry. */
     if ((uint64_t)KF_MAX_PDB * 4u * w->cfg.runs_per_pdb > KF_MAX_SCRATCH || w->cfg.runs_per_pdb > 0xFFFFu) {
         fprintf(stderr, "kf_create: runs_per_pdb %u does not fit the diff's scratch\n", w->cfg.runs_per_pdb);
@@ -2261,6 +2300,20 @@ extern "C" KfWalk *kf_create(const KfWalkCfg *cfg)
     h.max_pdbs = w->cfg.max_pdbs;
     h.max_slots = w->cfg.max_slots;
     KF_CU(cudaMemcpy(w->dev, &h, sizeof(h), cudaMemcpyHostToDevice));
+    {
+        KfLayout L;
+        memset(&L, 0, sizeof(L));
+        for (uint32_t i = 0u; i < KF_MAX_PDB; i++) {
+            L.walk_off[i] = L.prev_off[i] = i * w->cfg.runs_per_pdb;
+            L.walk_cap[i] = L.prev_cap[i] = w->cfg.runs_per_pdb;
+        }
+        for (uint32_t i = 0u; i < KF_MAX_SLOTS; i++) {
+            L.slot_off[i] = i < w->cfg.max_slots ? i * w->cfg.runs_per_pdb : 0u;
+            L.slot_cap[i] = i < w->cfg.max_slots ? w->cfg.runs_per_pdb : 0u;
+        }
+        KF_CU(cudaMalloc(&w->lay, sizeof(KfLayout)));
+        KF_CU(cudaMemcpy(w->lay, &L, sizeof(L), cudaMemcpyHostToDevice));
+    }
 
     /* ── the parallel walk's working set ──
      * ⊘ Sized by the FORMAT's worst legitimate case, not by hope: 12 GiB mapped
@@ -2294,7 +2347,7 @@ extern "C" void kf_destroy(KfWalk *w)
     cudaFree(w->par.head); cudaFree(w->par.nfr); cudaFree(w->par.pdbbase);
     cudaFree(w->dev); cudaFree(w->walk); cudaFree(w->com); cudaFree(w->slot);
     cudaFree(w->pdbs); cudaFree(w->slots); cudaFree(w->ack); cudaFree(w->ack_code);
-    cudaFree(w->iscratch); free(w->ack_code_h);
+    cudaFree(w->iscratch); cudaFree(w->lay); free(w->ack_code_h);
     cudaFree(w->hdr); cudaFree(w->rpdb); cudaFree(w->rrun);
     free(w);
 }
@@ -2444,7 +2497,7 @@ extern "C" int kf_refresh(KfWalk *w,
     a.pdbs = w->pdbs; a.slots = w->slots; a.npdb = npdb;
     a.ack = w->ack; a.ack_code = w->ack_code;
     a.scratch = w->par.runstage; a.iscratch = w->iscratch;
-    a.hdr = w->hdr; a.rpdb = w->rpdb; a.rrun = w->rrun;
+    a.hdr = w->hdr; a.rpdb = w->rpdb; a.rrun = w->rrun; a.lay = w->lay;
 
     kf_commit_kernel<<<KF_MAX_PDB, KF_DIFF_BLOCK>>>(a);
     kf_begin_kernel<<<1, 1>>>(a);
