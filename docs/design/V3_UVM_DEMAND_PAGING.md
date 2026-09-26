@@ -4,7 +4,9 @@
 managed memory / UVM demand paging (and HMM pageable access) in the guest?"*, ranks the options,
 and names the first experiment. Owner direction recorded the same day (§0.1): **option (b), fault
 delivery to the guest, everything else stock**; implementation preference root helper > kernel
-module > nvidia-uvm patch. Branch `v3-uvm-research`; evidence in `traces/v3_uvm_research/`.
+module > nvidia-uvm patch. Branch `v3-uvm-research`; evidence in `traces/v3_uvm_research/`. **Addendum 2026-09-26, branch
+`v3-uvm-nopatch`:** §11 answers *"is there a route with no NVIDIA patch at all?"* — evidence in
+`traces/v3_uvm_nopatch/` (`NO_PATCH_SURVEY.md`, `facts.tsv`).
 
 Epistemic tags, used on every claim that carries weight:
 `[src]` read in ogkm-580.159.04 (`research_clones/ogkm-580.159.04` in the nvkvm tree; paths below
@@ -63,6 +65,18 @@ hypothesis for an experiment, never a premise for code.
    tests the entire privileged half (divert, park, map, replay, cancel, timeout) before a line of
    kf3 changes. Cheap stock checks run alongside it: `readmostly_probe` in a kf3 guest, and a
    guest with `uvm_disable_hmm=1` against the five C-class apps.
+7. **Without patching NVIDIA there is exactly one buildable route** (§11): **(N4) a kayfabe
+   kernel module that takes nvidia-uvm's place** on nvidia.ko's exported `nvUvmInterface*`
+   contract. nvidia.ko stays stock; nvidia-uvm is simply not loaded. It costs **host CUDA** (one
+   fault-buffer owner, one callback registrant) and a **raw-RM walker** (libcuda needs
+   `/dev/nvidia-uvm`), and it gains direct PTE writes for the twin (no RM map executor). Every
+   other no-patch idea is closed by a line of stock source: root userspace *can* set a
+   fault-capable VAS's page directory (`SET_PAGE_DIRECTORY` is admin-callable) but *cannot*
+   schedule a GR channel in it (`bIsContextBound` is set only by the kernel interface); a fault
+   from a channel nvidia-uvm does not know is flushed and replayed in a loop, never reported;
+   UVM refuses userfaultfd VMAs and makes atomics on shared VMAs fatal; no test ioctl or module
+   parameter parks a fault; the guest's fault model is decided inside libcuda by OS and
+   architecture, not by anything kayfabe answers. `[src]`
 
 ### 0.1 Owner direction on this question (2026-09-26, recorded in place)
 
@@ -545,6 +559,7 @@ virtual address can ever back a GPU access**.
 | rank | option | feasibility | effort `[inf]` | security | verdict |
 |---|---|---|---|---|---|
 | **1** | **(b3) nvidia-uvm EFS patch + UVM-owned passthrough twins + guest fault plane** | ✔ every mechanism exists in UVM | host patch ~0.5–1 kLoC; kf3 publish-executor swap; guest fault plane (5b–5d) | good: scoped by UVM's own attribution; small new kernel surface | **recommended**; the only feasible (b) |
+| 1′ | **(N4) kf-uvm.ko replacing host nvidia-uvm** on the exported interface (§11) | ✔ no NVIDIA patch; contract is what nvidia-uvm itself consumes | module 2–4 kLoC; walker off libcuda; kayfabe writes twin PTEs | b3's model, plus no host tenants at all | **the only no-patch route**; take it if "no NVIDIA fork" outranks host CUDA |
 | 2 | stock hygiene, independent of the decision: propagate READ_ONLY/ATOMIC_DISABLE (§6); refuse by name when EFS is absent; run the twin UVM-owned (the b3 prerequisite) | ✔ | days each | strictly better | **do regardless** |
 | 3 | guest stopgaps (§7.2): `uvm_disable_hmm=1`; guest managed→pinned shim | ✔ | small | neutral | stopgap only; not stock guest |
 | 4 | (b2) standalone module / kprobe / livepatch | ✗ single owner; hooks are a patch in disguise | — | worse than b3 | rejected |
@@ -588,9 +603,86 @@ most of the kf3-side risk lives.
 
 ---
 
+## 10. What I could not determine
+
+1. Whether RM's non-replayable handling for a UVM-registered channel defers to UVM or RCs first
+   on GSP hosts. That decision is inside GSP-RM firmware, and only the `MMU_FAULT_QUEUED`
+   plumbing is in ogkm. E1 with a CE-faulting variant settles it.
+2. Whether a context with parked replayable faults can still be time-sliced off the GPU, or holds
+   it until the fault is answered. This bounds how long a slow guest may keep a fault parked
+   before other tenants notice. E1 with a second tenant measures it.
+3. Whether every guest PTE kind is expressible through UVM external-mapping attributes (§4.4). E2.
+4. Whether the guest ever routes `GP100_UVM_SW` (`C076`) methods through a channel kf3 forwards,
+   and how kf3 handles that subchannel today.
+5. ⊘ **Answered, and reclassified**: clpeak takes zero replayable faults on bare metal (§1.2), so its
+   guest `FAULT_PDE` is a kf3 mapping-plane defect, not demand paging. Which buffer it is remains
+   open. The next step is a kf3-side capture of the refused or missing run at that VA, not this
+   note.
+
+---
+
+## 11. Without patching NVIDIA — survey of every stock mechanism (addendum 2026-09-26)
+
+Full write-up: `traces/v3_uvm_nopatch/NO_PATCH_SURVEY.md`; evidence rows `traces/v3_uvm_nopatch/facts.tsv`
+(F1–F30, cited below). The question was put as *"search ways to get UVM working without patching
+nvidia"*. Everything the host and guest stacks expose was enumerated and checked in source.
+
+### 11.1 Two walls, both in stock code
+
+**Wall 1 — the fault record leaves the kernel only through the buffer owner.** A replayable
+fault whose instance pointer nvidia-uvm does not know is neither serviced nor cancelled: UVM
+flushes the buffer, issues a GPU-wide `REPLAY_START` and restarts the batch
+(`uvm_gpu_replayable_faults.c:1088-1107`, F1). The access stalls and re-faults until someone maps
+the page — RM's own comment calls this *"what looks like a hang"* (`vaspace_api.c:681-685`, F2).
+No record is emitted (tools events are per-va_space), RM's notify goes to the owner's client
+(F24), interrupt ownership is a mask bit (F25), and callback registration is single-owner (F12).
+⇒ Only nvidia-uvm (patched: b3) or a module *in its place* (N4) can see a fault.
+
+**Wall 2 — a GR channel in a fault-capable VAS runs only if a kernel-interface caller bound
+it.** Root userspace *can* allocate an externally owned faulting VAS and set its page directory:
+`NV0080_CTRL_CMD_DMA_SET_PAGE_DIRECTORY` is `RMCTRL_FLAGS_PRIVILEGED` (admin or kernel), with no
+kernel-client check in the implementation (F3–F5), and an admin client's channels are privileged
+automatically, so kayfabe could push replay/cancel itself (F11). But RM refuses to schedule a GR
+channel in an externally owned VAS until `bIsContextBound` (F8, F10), and the only setter is
+`nvGpuOpsBindChannelResources` on the kernel interface (F9); `PROMOTE_CTX` from userspace promotes
+but does not set it (F7); `RESERVE_ENTRIES`/`GET_PAGE_LEVEL_INFO` are kernel-privileged (F6).
+⇒ A kernel module is required in every design. ⊘ This corrects nothing in §4 but sharpens it: the
+reason (b1) fails is not only the buffer class; even page-table ownership from root userspace
+ends at channel scheduling.
+
+### 11.2 Verdicts
+
+| option | closed / opened by | verdict |
+|---|---|---|
+| **N1** switch the guest to the basic (pre-Pascal) managed model, no demand faults | guest faultable ⇔ ISR up (F14); support hard-coded per arch (F16); init failure fatal (F15); no ioctl reports capability (F17); libcuda picks the model by OS + arch (F18, `[ext]`) | no lever from kayfabe. ⚠ guest `concurrentManagedAccess` never recorded (F30) — add to E4 |
+| **N2** root userspace owns the twin's page tables | opened by F3–F5, F11; closed by F8–F10 | dead for GR channels |
+| **N3** read the record without owning the buffer | F1, F24, F25 | dead |
+| **N4 kf-uvm.ko in nvidia-uvm's place** | 76 exported `nvUvmInterface*` symbols (F13) cover VAS/PDB, `GetExternalAllocPtes`, `BindChannelResources`, fault buffer + interrupt, channels, FB/sysmem alloc | **feasible, no NVIDIA patch**. Costs: host CUDA gone (F12); walker off libcuda (F28–F29 — raw compute launch exists: `rmladder`, `cup8`); rebuilt per driver release. Gains: kayfabe writes twin PTEs directly, no RM map executor, no kind-override or per-map TLB question |
+| **N5** stub process under host HMM with a blocking pager (userfaultfd / FUSE / custom vma) | UVM refuses userfaultfd and `VM_IO`/`VM_PFNMAP` VMAs (F19); atomics on `VM_SHARED` fatal (F20); file-backed pinned to sysmem, so no vidmem answer (F21) | dead |
+| **N6** `UVM_TEST_*` ioctls, tools, module parameters | full lists F26–F27: flush, drain, inject, tune; none parks or exports a fault | dead |
+| **N7** ATS / IOMMU SVA | host-mm resolution = option (a)'s problem; HMM off under ATS (F22); needs `CONFIG_IOMMU_SVA` + RM ATS capability (F23) | dead for a stock guest |
+| **N8** upstream the b3 EFS patch to open-gpu-kernel-modules | licence permits; NVIDIA merges few external PRs | long shot, not a plan `[inf]` |
+| **N9** guest-side shims (§7.2) | — | stopgap, not stock guest |
+
+### 11.3 What this changes in the recommendation
+
+- **b3 stays rank 1** when a maintained patch to the *open* nvidia-uvm is acceptable.
+- **N4 is rank 1′**: the only route with every NVIDIA component stock. Choose it if "no NVIDIA
+  fork" is a hard requirement *and* the host can give up CUDA. Its module is smaller than a fork
+  (no residency, va_blocks, HMM, migration or PMM policy — the guest UVM does those) and is
+  compiled against the exported header rather than nvidia-uvm's private structs. Estimate
+  2–4 kLoC `[inf]`.
+- Both share the guest-side fault plane (§5) and the READ_ONLY hygiene (§6). Rank 2 is unchanged.
+- **Experiments added**: E5 — `um_probe` attributes inside a kf3 guest (fold into E4).
+  E6 — N4 skeleton on a rented box with nvidia-uvm unloaded: register callbacks, externally owned
+  faulting VAS, own PDB, `BindChannelResources`, `cup8` byte-exact, then an unmapped touch yields a
+  record and no Xid. Run E1 first unless host-CUDA loss is already accepted.
+
+---
+
 ## 12. N4 in depth, and the two experiments the owner defined (2026-09-26)
 
-Companion to §11 (the no-patch survey, branch `v3-uvm-nopatch`, `d681c55f`). §11 established N4 —
+Follows §11 above (the no-patch survey, merged from `v3-uvm-nopatch` `d681c55f`). §11 established N4 —
 a kayfabe kernel module in nvidia-uvm's place on nvidia.ko's exported `nvUvmInterface*` contract —
 as the only route with every NVIDIA component stock. This section adds a source finding that
 strengthens N4, the two experiments (E5, E6), and a side-by-side for the owner's b3-vs-N4 decision.
@@ -688,47 +780,37 @@ the RM object setup is largely reuse.** It is a bounded, well-understood piece (
 `nvproxy` both do raw QMD launch), but it is **not free**, and it is N4-only work — b3 keeps host
 CUDA and never touches the walker.
 
-### 12.5 b3 vs N4 — side by side for the decision
+### 12.5 b3 vs N4 — what each costs to maintain, and what it isolates
 
-| axis | b3 (patch open nvidia-uvm) | N4 (kf-uvm.ko in its place) |
+**Owner framing (2026-09-26), and it governs this comparison:** the preference for "not a UVM
+patch" is a **maintainability** preference, not a way around anything — the host admin has full
+root and kernel access to their own machine in every design. The real question is which
+**ongoing cost** kayfabe carries: a fork of NVIDIA's nvidia-uvm source (b3), or a separate kayfabe
+module built against nvidia.ko's exported, documented interface, with nvidia.ko left stock (N4).
+
+| axis | b3 — patch the open nvidia-uvm | N4 — kf-uvm.ko against the exported interface |
 |---|---|---|
-| NVIDIA source changed | ⊘ yes — a fork of the **open** nvidia-uvm (EFS mode) | ✔ **none** — stock nvidia.ko, stock GSP-RM |
-| host CUDA on the box | ✔ kept | ⊘ **gone** (single fault-buffer owner / callback registrant) |
-| kayfabe walker | ✔ unchanged (libcuda) | ⊘ must move to raw RM (§12.4) |
-| twin page tables | RM-owned; publish via UVM external-map ioctls (RM map executor, kind-override Q, per-map TLB) | ✔ **module writes them directly** — no RM map executor, no kind-override Q, no per-map TLB |
-| fault buffer / interrupt | UVM owns; EFS diverts per va_space | module owns (InitFaultInfo, §12.1) |
-| replay / cancel scope | UVM's existing scoped funcs, keyed by kernel-stored ids | module issues from its own kernel-privileged channels (F11) or via the exported replay |
-| guest fault plane (§5) | shared | shared |
-| READ_ONLY hygiene (§6) | shared (done, `v3-roperm`) | shared |
-| maintenance per `Dh` | rebase a patch over the churny fault path (nvkvm-pv's warning) | recompile the module against the release's exported header — a **stabler surface** (76 exported symbols, versioned) than nvidia-uvm's private structs |
-| code size | ~0.5–1 kLoC patch + kf3 publish swap | ~2–4 kLoC module + raw-RM walker (~1–2 kLoC) |
-| deploy | patched nvidia-uvm (DKMS, secure-boot) | swap nvidia-uvm for kf-uvm.ko (DKMS) — comparable |
-| blast radius | host-kernel code; small new surface in a huge module | host-kernel code; a **smaller** module (no residency/va_block/HMM/PMM) but it is the sole UVM client |
-| trust of the VMM | must not (kernel-stored ids, timeout) | must not (same discipline; module validates every request against objects the VM's own process created) |
+| **what kayfabe carries per driver release** | a patch **inside** nvidia-uvm's fault-batch path, against private structs (`uvm_fault_buffer_entry_t`, the batch context, its locking) that churn between releases. A release can need semantic re-reasoning, not just re-application (nvkvm-pv, `uvm-roadmap.md:143-171`) | a module **recompiled** against the release's exported headers (`nv_uvm_interface.h`, `nv_uvm_types.h`) — a versioned, documented surface. ⚠ Not frozen: exported struct layouts do change (e.g. `UvmGpuFaultInfo` grew CC fields), so a release can still mean adapting a struct — but it is a smaller, more mechanical job than rebasing into churning private code |
+| **per-arch hardware knowledge** | nvidia-uvm's per-arch HAL keeps tracking fault-packet decode and replay/cancel method encodings (`uvm_*_fault_buffer.c`, `uvm_*_host.c`) — **NVIDIA maintains it** | kayfabe carries its **own** per-arch fault-packet decode and replay/cancel pushes — the `all_families_are_first_class` axis. Partly shared: kf3 already decodes `clc369` for the guest (§5) |
+| **what the host gives up** | nothing functional — host CUDA and every other UVM user keep working | **host CUDA on that GPU** (sole fault-buffer owner / callback registrant, F12); kayfabe's own walker moves off libcuda (§12.4) |
+| **blast radius of a bug** | the patched module also serves **every non-kayfabe host CUDA process** and shares one fault buffer and batch loop with them — an EFS bug can reach unrelated host CUDA | the module is the **only** UVM client on that GPU — a bug reaches the kayfabe VMs on it, but there is no non-kayfabe CUDA workload to harm; in exchange it owns the whole plane |
+| **isolation between VMs** | ★ fault **attribution** (packet → instance pointer → channel → va_space) is nvidia-uvm's existing, battle-tested code (`uvm_gpu.c:3534-3570`); kayfabe's new code only copies records out of an **already-attributed** va_space. VM-to-VM separation rests on mature NVIDIA code | ⚠ the module does the attribution **itself** — one buffer holds every VM's faults — so VM-to-VM separation rests on **new kayfabe code**. The isolation-critical step moves from NVIDIA's code to ours. Mis-attribute one fault and VM A's fault reaches VM B |
+| **isolation from a compromised VMM** | must not trust it: every request names only kernel-issued ids for objects that VM's own process created; cancels use kernel-stored instance pointer / PDB; a kernel timeout bounds parked faults | same discipline, **plus** N4 owns replay and must rate-limit it itself (in b3, UVM's replay policy already exists) |
+| twin page tables | RM-owned; published through UVM external-map ioctls ⇒ RM map executor, kind-override question, per-map TLB cost | the module writes them **directly** — those three kf3 questions vanish |
+| code | ~0.5–1 kLoC patch + kf3 publish-executor swap | ~2–4 kLoC module + ~1–2 kLoC raw-RM walker |
+| shared by both | guest fault plane (§5); READ_ONLY hygiene (§6, done on `v3-roperm`) | same |
 
-**Recommendation for the owner's choice** (the ranking is unchanged; this sharpens the axis that
-decides it): if a **maintained patch to the open nvidia-uvm is acceptable**, b3 is less total work
-(host CUDA and the walker are untouched). If **"no NVIDIA fork" is a hard requirement** and the box
-**can give up host CUDA**, N4 is the clean answer, its module is smaller than a fork and built
-against a stabler (exported) surface, and it *removes* three kf3-side questions (RM map executor,
-kind-override, per-map TLB) at the price of one (raw-RM walker). The deciding question is therefore
-**not** technical feasibility — both are feasible — but the policy one: *is a forked NVIDIA module
-tolerable, and is host CUDA expendable on the kayfabe host?*
-
----
-
-## 10. What I could not determine
-
-1. Whether RM's non-replayable handling for a UVM-registered channel defers to UVM or RCs first
-   on GSP hosts. That decision is inside GSP-RM firmware, and only the `MMU_FAULT_QUEUED`
-   plumbing is in ogkm. E1 with a CE-faulting variant settles it.
-2. Whether a context with parked replayable faults can still be time-sliced off the GPU, or holds
-   it until the fault is answered. This bounds how long a slow guest may keep a fault parked
-   before other tenants notice. E1 with a second tenant measures it.
-3. Whether every guest PTE kind is expressible through UVM external-mapping attributes (§4.4). E2.
-4. Whether the guest ever routes `GP100_UVM_SW` (`C076`) methods through a channel kf3 forwards,
-   and how kf3 handles that subchannel today.
-5. ⊘ **Answered, and reclassified**: clpeak takes zero replayable faults on bare metal (§1.2), so its
-   guest `FAULT_PDE` is a kf3 mapping-plane defect, not demand paging. Which buffer it is remains
-   open. The next step is a kf3-side capture of the refused or missing run at that VA, not this
-   note.
+**Recommendation, in those terms.** Both are feasible; the choice is which maintenance cost to
+carry, and the table above is the ledger for it.
+- **Prefer b3** if carrying a fork of the open nvidia-uvm is acceptable: the least total work, host
+  CUDA is kept, and — the point that is easy to miss — **VM-to-VM isolation stays on NVIDIA's
+  battle-tested fault attribution**, with kayfabe's new code limited to copying records out.
+- **Prefer N4** when the maintainability goal — no NVIDIA fork, build against the exported
+  interface, nvidia.ko stock — outweighs giving up host CUDA on the kayfabe GPU and taking on the
+  per-arch fault decode and the VM-attribution code ourselves. N4 removes three kf3 questions (RM
+  map executor, kind-override, per-map TLB) at the price of one (the raw-RM walker) plus that
+  attribution code.
+- ⚠ **If N4 is chosen, its fault-attribution path is the single most security-critical piece of
+  kayfabe** (it is the only thing standing between two VMs' faults) and must be the first thing
+  fuzzed: a corpus of fault packets across instance pointers, VEIDs and subcontexts, asserting each
+  record reaches exactly the VM whose channel raised it and no other.
