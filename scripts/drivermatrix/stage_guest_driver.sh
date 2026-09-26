@@ -67,21 +67,46 @@ vm=$(modinfo -F vermagic "$OUT/modules/nvidia.ko" 2>/dev/null | awk '{print $1}'
 say "modules ✔ version=$got vermagic=$vm"
 
 # ── 2. the firmware, from the same version's .run ────────────────────────────────────────
+# ⚠ Not every version has a .run on the public download paths (measured 2026-09-26: 545.23.08
+# and 575.51.03 are 404 on both XFree86/ and tesla/). NVIDIA's CUDA apt repository carries them
+# as debs, so that is the fallback — the firmware package is `nvidia-firmware-<branch>-<v>` or
+# `nvidia-firmware-<branch>_<v>` on newer branches and `nvidia-kernel-common-<branch>_<v>` on
+# older ones. Same bytes the driver's own packaging installs; the version is checked below.
+CUDA_REPO=https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64
+fetch_deb_firmware() {
+    local br=${V%%.*} idx deb x
+    idx=$(curl -fsSL "$CUDA_REPO/") || return 1
+    for pat in "nvidia-firmware-$br-${V}_${V}-0ubuntu1_amd64.deb" "nvidia-firmware-${br}_${V}-0ubuntu1_amd64.deb" \
+               "nvidia-kernel-common-${br}_${V}-0ubuntu1_amd64.deb"; do
+        grep -q "$pat" <<<"$idx" || continue
+        say "firmware from the CUDA repo deb $pat"
+        deb=$ROOT/src/$pat
+        curl -fsSL -o "$deb" "$CUDA_REPO/$pat" || continue
+        x=$(mktemp -d "$ROOT/src/d-$V.XXXX")
+        dpkg-deb -x "$deb" "$x" && cp "$x/lib/firmware/nvidia/$V/"gsp_*.bin "$OUT/firmware/nvidia/$V/" 2>/dev/null
+        rm -rf "$x" "$deb"
+        ls "$OUT/firmware/nvidia/$V/"gsp_ga10x.bin >/dev/null 2>&1 && return 0
+    done
+    return 1
+}
 if ! ls "$OUT/firmware/nvidia/$V/"gsp_ga10x.bin >/dev/null 2>&1; then
     if [ ! -s "$RUN" ]; then
-        url=https://us.download.nvidia.com/XFree86/Linux-x86_64/$V/NVIDIA-Linux-x86_64-$V.run
-        say "download $url"
-        curl -fsSL -o "$RUN.part" "$url" \
-            || { url=https://us.download.nvidia.com/tesla/$V/NVIDIA-Linux-x86_64-$V.run
-                 say "not on XFree86; trying $url"
-                 curl -fsSL -o "$RUN.part" "$url"; } \
-            || die "no .run for $V on us.download.nvidia.com (XFree86 or tesla)"
-        mv "$RUN.part" "$RUN"
+        for url in https://us.download.nvidia.com/XFree86/Linux-x86_64/$V/NVIDIA-Linux-x86_64-$V.run \
+                   https://us.download.nvidia.com/tesla/$V/NVIDIA-Linux-x86_64-$V.run; do
+            say "download $url"
+            curl -fsSL -o "$RUN.part" "$url" && { mv "$RUN.part" "$RUN"; break; }
+        done
+        rm -f "$RUN.part"
     fi
-    x=$(mktemp -d "$ROOT/src/x-$V.XXXX")
-    sh "$RUN" -x --target "$x/pkg" > /dev/null 2>&1 || { rm -rf "$x"; die "could not extract $RUN"; }
-    cp "$x/pkg/firmware/"gsp_*.bin "$OUT/firmware/nvidia/$V/" 2>/dev/null
-    rm -rf "$x"
+    if [ -s "$RUN" ]; then
+        x=$(mktemp -d "$ROOT/src/x-$V.XXXX")
+        sh "$RUN" -x --target "$x/pkg" > /dev/null 2>&1 || { rm -rf "$x"; die "could not extract $RUN"; }
+        cp "$x/pkg/firmware/"gsp_*.bin "$OUT/firmware/nvidia/$V/" 2>/dev/null
+        rm -rf "$x"
+    else
+        say "no .run for $V on us.download.nvidia.com (XFree86 or tesla)"
+        fetch_deb_firmware || die "no firmware for $V: no .run and no CUDA-repo firmware deb"
+    fi
 fi
 ls "$OUT/firmware/nvidia/$V/"gsp_ga10x.bin >/dev/null 2>&1 || die "no gsp_ga10x.bin in the $V package"
 say "firmware ✔ $(ls "$OUT/firmware/nvidia/$V/" | tr '\n' ' ')"
