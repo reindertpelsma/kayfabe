@@ -34,12 +34,12 @@
 | ff_vulkan | PASS | PASS (batched) | 9/9 match | **PASS** |  |
 | ff_opencl | PASS | PASS (batched) | 8/8 match | **PASS** |  |
 | ff_placebo | PASS | PASS (batched) | 2/2 match | **PASS** |  |
-| blender_cycles_cuda | PASS | PASS (batched) | 0/0 match, 1 nondet, png by PSNR 95.92dB vs floor 94.77dB: MATCH | **PASS** |  |
-| blender_cycles_optix | PASS | PASS (batched) | 0/0 match, 1 nondet, png by PSNR 97.50dB vs floor 96.53dB: MATCH | **PASS** |  |
+| blender_cycles_cuda | PASS | PASS (batched) | 0/0 match, 1 nondet, png by PSNR 96.015316dB vs floor 99.325248dB: DIFF DIFF:png(psnr) | **FAIL(DIFF)** | rc=0 4s host_xid=0 guest_xid=0 kf3_rc=0 kf3_refusals=0 — warn:BLENDER_OK CYCLES CUDA |
+| blender_cycles_optix | PASS | PASS (batched) | 0/0 match, 1 nondet, png by PSNR 99.994716dB vs floor 100.786528dB: MATCH | **PASS** |  |
 | blender_eevee | PASS | PASS (batched) | 1/1 match | **PASS** |  |
 | blender_workbench | PASS | PASS (batched) | 1/1 match | **PASS** |  |
 | blender_eevee_vulkan | PASS | PASS (batched) | 1/1 match | **PASS** |  |
 | vk_ofa | PASS | PASS (batched) | 2/2 match | **PASS** |  |
 
-PASS: 38
-GSET_SUITE_SUMMARY pass=38/38 notrun_host=0
+FAIL(DIFF): 1, PASS: 37
+GSET_SUITE_SUMMARY pass=37/38 notrun_host=0
