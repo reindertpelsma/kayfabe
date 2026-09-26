@@ -2120,7 +2120,7 @@ __global__ void kf_par_bases(KfArgs a, uint32_t *pdbbase)
             d->tbl_run_count[p] = n;
             atomicOr(&d->hdr_flags, KFWR_HF_TRUNCATED);
             atomicOr(&d->walk_trunc, 1u);
-            kf_par_refuse(d, KFWR_R_RUN_CAP);
+            kf_par_refuse_in(d, KFWR_R_RUN_CAP, p);   /* the host names WHICH space overflowed */
         }
         run += n;
     }

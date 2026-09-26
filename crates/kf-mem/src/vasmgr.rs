@@ -242,6 +242,12 @@ impl<T: MapTarget> VasTable<T> {
         self.spaces.iter().filter(|(_, s)| s.root.is_some()).map(|(&k, _)| k).collect()
     }
 
+    /// Every object held: `(key, root, slot)`, in key order (diagnostics).
+    #[must_use]
+    pub fn objects(&self) -> Vec<(VasKey, Option<u64>, Option<u32>)> {
+        self.spaces.iter().map(|(&k, s)| (k, s.root, s.slot)).collect()
+    }
+
     /// Objects held.
     #[must_use]
     pub fn len(&self) -> usize {
@@ -346,10 +352,21 @@ impl Walker for GpuWalker {
         r.validate().map_err(|e| format!("walk report refused: {e}"))?;
         r.require_diff().map_err(|e| format!("walk report refused: {e}"))?;
         if r.truncated() {
+            // ★ Which entries refused: `reserved2` carries each entry's own `KFWR_R_*` bits.
+            let refusing: Vec<String> = r
+                .pdbs
+                .iter()
+                .filter(|p| p.reserved2 != 0)
+                .map(|p| format!("pdb {:#x} slot {} refuse {:#x}", p.pdb, p.reserved, p.reserved2))
+                .collect();
             return Err(format!(
-                "walk report TRUNCATED (flags={:#x}, refuse_mask={:#x}, runs {} of {}): nothing \
-                 of it is applied, nothing committed",
-                r.header.flags, r.header.refuse_mask, r.runs.len(), r.header.run_count
+                "walk report TRUNCATED (flags={:#x}, refuse_mask={:#x}, runs {} of {}; refusing entries: [{}]): \
+                 nothing of it is applied, nothing committed",
+                r.header.flags,
+                r.header.refuse_mask,
+                r.runs.len(),
+                r.header.run_count,
+                refusing.join(", ")
             ));
         }
         if r.header.refusals > 0 {
@@ -879,6 +896,20 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         }
     }
 
+    /// The batch's objects (`key=slot@root`) and the table's size — for a refusal's name.
+    fn batch_census(&self, b: &Batch) -> String {
+        let walked: Vec<String> =
+            b.walked.iter().map(|(k, (s, r))| format!("{:#x}=s{s}@{r:#x}", k.0)).collect();
+        format!(
+            "walked {}: {}; table {} objects, {} rooted, {} free slots",
+            walked.len(),
+            walked.join(" "),
+            self.table.len(),
+            self.table.rooted().len(),
+            self.table.free_slots.len()
+        )
+    }
+
     /// Every invalidate in `batch` stays armed; counted and named.
     fn refuse_batch(&mut self, batch: &Batch, why: String) {
         for (w, _, _) in &batch.wants {
@@ -904,6 +935,13 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             Ok(Some(d)) => d,
             Err(e) => {
                 self.stats.walks_refused += 1;
+                // ★ Name WHAT was walked: a refused report is about the batch, and a batch can
+                // carry objects the refusing want never named (ALL_PDB, or several objects under
+                // one root). Without this the refusal names only the root that asked.
+                let e = match &self.inflight {
+                    Some(b) => format!("{e} [{}]", self.batch_census(b)),
+                    None => e,
+                };
                 if let Some(b) = self.inflight.take() {
                     for (w, _, _) in &b.wants {
                         if let Want::Invalidate(r, _) = w {
