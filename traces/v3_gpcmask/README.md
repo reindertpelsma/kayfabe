@@ -15,6 +15,7 @@ guest; the guest runs the stock 580.159.04 driver.
 | `fast_suite_948b38e2.out` | `948b38e2` | the thin guest at the lanes' card-aware `fb-mb` default (6144 on this card, no variable set): **30/30** |
 | `v3_gates_524b3d17.txt`, `fast_suite_524b3d17.out` | `524b3d17` (head) | gates **9/9**; thin guest **30/30** (the rerun) |
 | `fast_suite_524b3d17_concurrent_fuzz_seed.txt` | `524b3d17` | the first head run's one red (29/30): `--concurrent-fuzz`, whose seeded CONTROL drew no engine op; the same seed replayed on **bare metal** reds identically — a raw-client property, not kayfabe (`crates/kayfabe-rm-ladder/src/main.rs:9840`: the control needs `ctl_engine > 0`) |
+| `crate_tests_2e32b7b1.txt` | `2e32b7b1` | `cargo test --no-fail-fast -p kf-…` (all 17 `kf-*` crates, `KAYFABE_NO_KVM=1`): 113 test binaries, **1476 passed, 0 failed** — incl. `cap1_differential`, `cap1b_differential`, `host_facts_ga106`, `host_facts_query_ga106` |
 | `cuda_ladder_2e32b7b1.out` | `2e32b7b1` | `cuda_ladder.sh {host,guest} gpcm 1 cup3,cup8`: bare metal and fat guest both `CUP3_VAL=43`, `CUP8_BAD=0 CUP8_MAXERR=0` |
 | `grfs_probe_host_0d8426a3.txt`, `grfs_probe_guest_0d8426a3.txt` | `0d8426a3` | `scripts/bench/probes/grfs_probe.c` on the host, and inside the fat guest (`grfs_probe_hook.sh`) against the guest's own RM: the GR floorsweeping controls answer byte-identically (see `docs/design/V3_FLOORSWEPT_GR.md` §5 for the pairs that differ, and why) |
 
