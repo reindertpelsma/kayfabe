@@ -28,6 +28,10 @@ ITEMS=${*:-}
 if [ -n "${GSET_HOST_FROM:-}" ]; then
     F=$(dirname "$R")/$GSET_HOST_FROM
     for x in host.res host.dig host2.res host2.dig; do cp -f "$F/$x" "$R/$x" 2>/dev/null; done
+    # the bare-metal artefacts too (imgcmp.sh grades NONDET images against them) — linked, not copied
+    mkdir -p "$R/h2"
+    for t in "$F"/*.host_art.tar; do [ -f "$t" ] && ln -sf "$t" "$R/$(basename "$t")"; done
+    for t in "$F"/h2/*.host_art.tar; do [ -f "$t" ] && ln -sf "$t" "$R/h2/$(basename "$t")"; done
     want=${ITEMS:-$(bash "$HERE/items.sh" x list 2>/dev/null)}
     miss=""; for a in $want; do grep -q "item=$a " "$R/host.res" 2>/dev/null || miss="$miss $a"; done
     say "host baseline reused from $GSET_HOST_FROM; measuring on bare metal only:${miss:- (none)}"
