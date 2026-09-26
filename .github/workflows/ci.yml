@@ -133,9 +133,12 @@ jobs:
           ran=$(grep -c 'KVM-GATE: RAN' "$log" || true)
           skipped=$(grep -c 'KVM-GATE: SKIPPED' "$log" || true)
           total=$(( ran + skipped ))
-          echo "KVM-gate: ran=$ran skipped=$skipped total=$total (floor 35)"
-          if [ "$total" -lt 35 ]; then
-            echo "::error::KVM-gated tests were not reached: $total < 35." \
+          # ★ 35 -> 30, 2026-09-26: the v3 archive move took the archived tests/ suite's KVM-gated
+          # tests with it. Measured on the verification box (KAYFABE_NO_KVM=1 cargo test
+          # --workspace at 29531eb5): KVM-GATE ran=0 skipped=30.
+          echo "KVM-gate: ran=$ran skipped=$skipped total=$total (floor 30)"
+          if [ "$total" -lt 30 ]; then
+            echo "::error::KVM-gated tests were not reached: $total < 30." \
                  "Either they were deleted, or the gate stopped announcing itself." \
                  "A silent skip is worse than a red build."
             exit 1
@@ -182,60 +185,6 @@ jobs:
           fi
           if [ "$ran" -gt 0 ]; then
             echo "This runner permits namespaces: $ran gated tests actually executed."
-          fi
-      # ★★ VBIOS-ORACLE-gate non-vacuity — the same argument as the two gates above, for the
-      # tests that run NVIDIA's OWN VBIOS parser (`tests/oracle/vbios_oracle.c`, compiled by
-      # `tests/build.rs` out of the vendored open-kernel-modules trees).
-      #
-      # ★ Its honest limit, stated rather than glossed: **GitHub's runners do not have those
-      # trees**, and nothing is vendored here to stand in for them, so on THIS runner the
-      # suite is counted and never passes. It is a developer-box and bench gate. That is the
-      # KVM gate's failure mode repeated knowingly, and the floor is the only thing that
-      # stops the tests vanishing from both places at once.
-      #
-      # Why it is nonetheless worth a step: what the oracle tests catch is a MISREADING
-      # SHARED between the VBIOS builder and its transcribed Rust test oracle — measured, by
-      # transposing `StoredSize` and `PKCDataOffset` in both at once: `kayfabe-abi`'s own 94
-      # tests stayed GREEN and the real parser answered
-      # `failed to parse/prepare Falcon ucode … 0x37` (NV_ERR_INVALID_OFFSET). No amount of
-      # Rust-side testing reaches that class.
-      #
-      # Floor 10 = the ten tests in the suite; a floor, not an equality, because the set grows.
-      - name: VBIOS-ORACLE-gate reached-count (floor, not an exact match)
-        run: |
-          set -euo pipefail
-          log="${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}"
-          # ★★★ INFRASTRUCTURE vs RESULT — they must not be representable the same way.
-          # A missing, empty, truncated or foreign log makes every count below zero, which
-          # reads as "the gated tests vanished" and is a confident wrong answer. Exit 2 (not
-          # 1) so a caller can tell "the tree is bad" from "my input was".
-          if [ ! -s "$log" ] || ! grep -q 'KAYFABE-TEST-LOG-COMPLETE' "$log"; then
-            echo "::error::INFRASTRUCTURE FAILURE, NOT A TEST RESULT: $log is missing," \
-                 "empty, or carries no completion sentinel — so the producer step did not" \
-                 "finish, or another process is writing the same path. This step reports" \
-                 "NOTHING about the tree. Set KAYFABE_TEST_LOG to a private path" \
-                 "(scripts/ci_gates.sh does) and re-run."
-            ls -l "$log" || true
-            exit 2
-          fi
-          ran=$(grep -c 'VBIOS-ORACLE-GATE: RAN' "$log" || true)
-          skipped=$(grep -c 'VBIOS-ORACLE-GATE: SKIPPED' "$log" || true)
-          total=$(( ran + skipped ))
-          # 10 -> 13: the FWSEC interface-walk suite. The oracle now compiles
-          # `s_vbiosPatchInterfaceData` as well as the ROM parser, which is a whole
-          # extra PLANE — the one a stock guest actually stopped on — and three tests
-          # judge it. Raise this only when tests are added, and say which.
-          echo "VBIOS-oracle gate: ran=$ran skipped=$skipped total=$total (floor 13)"
-          if [ "$total" -lt 13 ]; then
-            echo "::error::VBIOS-oracle tests were not reached: $total < 13." \
-                 "Either they were deleted, or the gate stopped announcing itself." \
-                 "These are the ONLY tests that judge the synthetic VBIOS against the" \
-                 "real driver's parser rather than against a transcription of it;" \
-                 "a silent skip is worse than a red build."
-            exit 1
-          fi
-          if [ "$ran" -gt 0 ]; then
-            echo "This machine has the vendored ogkm trees: $ran oracle tests actually executed."
           fi
       - name: Clippy (-D warnings)
         run: cargo clippy --workspace --all-targets -- -D warnings

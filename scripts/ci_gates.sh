@@ -89,11 +89,12 @@ want_all=0
 # `Arch::vchid_from_userd_flags` against NVIDIA's own USERD_INDEX writer, reader,
 # recombination and eheap granularity). Same shape as the four above — it READS the test
 # log, so the extractor defers it and only the `--all` literal moves.
-# ★ 23 -> 17 and 11 -> 10 (2026-09-26, the v3 archive move), removed from ci.yml's `stable`
+# ★ 23 -> 16 and 11 -> 10 (2026-09-26, the v3 archive move), removed from ci.yml's `stable`
 # job: the GPA-accessor gate (its subject, `kayfabe-fwd`, is archived), the fuzz-workspace fmt
-# step (`fuzz/` is archived), and the GMMU/TOKEN/PUSHBUFFER/USERD-CHID oracle reached-count
-# steps (their only emitters were in the archived `tests/`). Deliberate, as this floor demands.
-GATE_STEPS_ALL_MIN=17
+# step (`fuzz/` is archived), and the VBIOS/GMMU/TOKEN/PUSHBUFFER/USERD-CHID oracle
+# reached-count steps (their only emitters were in the archived `tests/`; measured VBIOS
+# ran=0 skipped=0 on the verification box). Deliberate, as this floor demands.
+GATE_STEPS_ALL_MIN=16
 GATE_STEPS_FAST_MIN=10
 
 # ★★ A PER-INVOCATION test log, MEASURED 2026-07-30.
@@ -275,8 +276,10 @@ oracle_census() {
   local log="${KAYFABE_TEST_LOG:-/tmp/kayfabe-test.log}"
   local root fams fam ran skipped any_skipped=0
   root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-  # ★ 2026-09-26: `crates/`, not `tests/tests/` — the old conformance suite is archived, and the
-  # one family still emitted by a kept crate (VBIOS) lives in crate test targets.
+  # ★ 2026-09-26: `crates/`, not `tests/tests/` — the old conformance suite is archived. No kept
+  # crate EMITS an ORACLE-GATE marker today; the only hits are comments naming one (VBIOS, in
+  # kf-/kayfabe-linux-raw), which therefore print RAN=0 SKIPPED=0. That is the emitters having
+  # been archived with `tests/`, not a regression.
   fams=$(grep -rhoE --include='*.rs' '[A-Z0-9-]+-ORACLE-GATE' "$root"/crates 2>/dev/null | sort -u)
   # ⊘ NOT `return 0`. An empty derivation is the census failing, not the census finding
   # nothing — and a silent census is the very shape this whole function exists to remove.
