@@ -1,8 +1,15 @@
 # Headless graphics in kayfabe v3: what it takes, and whether channels are sufficient
 
-**STATUS: research only, 2026-09-26.** No code changed, no box used. Read against `kf-master`
-`42ca9d71`, ogkm `580.159.04` (`research_clones/ogkm-580.159.04`) and `610.43.02`
-(`research_clones/ogkm`), and the C tree at `8319499`.
+**STATUS (2026-09-26, updated the same day): STEPS 1–5 PASS ON A KAYFABE v3 FAT GUEST — measured,
+branch `v3-gfx`.** Box vgfx (vast 52661950, RTX 3080 Ti GA102, host driver 580.159.04, nested KVM),
+stock 580.159.04 guest, kf3 at `68fb3768`/`14ac1e5c`. Every render is **bit-identical to bare metal on
+the same box**: Vulkan compute, Vulkan colour + D32 depth + sampled pass, EGL colour + D24S8 depth +
+sampled pass, GLX (Xvfb + VirtualGL) colour + depth + sampled pass. §6 has the results, the eight
+walls in the order they fell, and what changed. ⊘ The research text below (§0–§5) is the
+pre-measurement reading; where a measurement overturned it, a **⊘ MEASURED** note sits above the
+claim. The original research was read against `kf-master` `42ca9d71`, ogkm `580.159.04`
+(`research_clones/ogkm-580.159.04`) and `610.43.02` (`research_clones/ogkm`), and the C tree at
+`8319499`.
 
 **Legend.** **[E]** means established: read in source at the cited `file:line`, or measured in a
 cited record. **[I]** means inferred: a reasoned conclusion that nothing has measured yet.
@@ -42,6 +49,14 @@ boundary, and its hardest wall was an fd crossing inside `NVKMS_IOCTL_REGISTER_S
 reaches kayfabe is only what the guest's CPU-RM sends to "GSP", plus doorbells.
 
 ### 1.1 Objects the graphics UMDs allocate, and whether the alloc reaches us
+
+> ⊘ **MEASURED 2026-09-26:** the `GF100_DISP_SW` and `GF100_ZBC_CLEAR` rows below said "allowlisted
+> opaque / answered as a graph node" — both were in fact **refused 0x56** (`alloc_shape` had no row).
+> ZBC_CLEAR is now a graph node answered by the per-VM table (§6.2); DISP_SW is a graph node too, but
+> the guest's OWN CPU-RM refuses it first on a displayless GPU (`disp_sw.c:67-71`,
+> `NV_ERR_INVALID_ARGUMENT`) — as on an A100 — and the UMD tolerates it. The measured UMD also
+> allocates `FERMI_TWOD_A 0x902d` and `KEPLER_INLINE_TO_MEMORY_B 0xa140` on its 3D channel (now
+> generated engine kinds, carried to the GR twin).
 
 Mode 1 found this list empirically, by host-vs-guest ioctl diffs. The flags below come from
 `ogkm-580 src/nvidia/src/kernel/rmapi/resource_list.h`.
@@ -104,6 +119,10 @@ What differs from compute, in order of risk:
 
 ### 2.1 PTE kind and compression. The one data-plane item. [E] facts, [U] consequence
 
+> ⊘ **MEASURED 2026-09-26 — the risk was real, for GL.** Vulkan's D32 render matched bare metal with
+> PITCH host PTEs, but GL's D24S8 depth buffer raised host **Xid 13 "3D-Z KIND Violation"** on every
+> draw. Fixed by carrying the kind (uncompressed) onto the host map — §6.2 wall 8.
+
 - The guest's real page tables are full of kinds and comptaglines. In a real GA106 cold-boot
   corpus, **6 986 of 7 008 leaf PTEs set KIND and 6 017 set COMPTAGLINE**
   `[E] cuda/walk/kf_tests.cu:2139-2140`.
@@ -165,6 +184,13 @@ Correctness should hold because each channel's pushbuffer sets its own state and
 sync is by semaphore [I]. The risk is UMD assumptions about a shared TSG context [U].
 
 ### 2.5 Bigger context buffers and VA collisions [I]
+
+> ⊘ **MEASURED 2026-09-26 — the split window does NOT keep them clear.** Host CPU-RM (not GSP)
+> allocates the twin's GR context buffers, lowest-fit just above the split window — exactly where
+> the guest's RM (same allocator) places its next surfaces. The guest's FIXED map found the VA held
+> (`HeldByHost`, 58 rows) and GL's ROP read a privileged host context buffer: host **Xid 31
+> `GPCCLIENT_PROP_0 … FAULT_PRIV_VIOLATION`**. Fixed by reserving the guest's ranges in every twin
+> space — §6.2 walls 6–7.
 
 Graphics contexts add the GFX global buffers and, with GFXP, preemption buffers of roughly tens
 of MB per context. Host RM places them at RM-chosen VAs in the twin's VAS. v3 already names a
@@ -230,6 +256,10 @@ three-way NVKMS branch that includes `NVA083`. That is **610** (`research_clones
 piece that matters for a render node, and the scoping doc did not see it.
 
 ### 3.2 The remaining display unknown, and it is one bit [U]
+
+> ✔ **ANSWERED 2026-09-26: YES.** With `nvidia-drm modeset=1` the guest registers `card0` +
+> `renderD128` ("Cannot find any crtc or sizes"), and the Vulkan ICD, EGL device platform and GLX (via
+> VirtualGL) all come up on the NVIDIA device with no display object at all.
 
 Does the **userspace** path survive `NO_HARDWARE`? That is the Vulkan ICD / EGL doing its own
 `NVKMS_IOCTL_ALLOC_DEVICE` on `/dev/nvidia-modeset` (the Mode-1 C needed NVKMS forwarding
@@ -350,3 +380,77 @@ actually makes.
    is fatal or merely slower (§1.2, §2.3). nvdiff settles it.
 4. **[U] TSG/subcontext split** under a real Vulkan device (§2.4).
 5. **[U] Video falcon BAR0 model**: which registers the guest reads once a falcon is named (§4).
+
+---
+
+## 6. Measured, 2026-09-26 — steps 1–5 on a v3 fat guest
+
+### 6.1 Results (gfx11, kf3 `68fb3768`; bare metal = the same box, same GPU, same userspace)
+
+| step | what is graded | bare metal | v3 guest |
+|---|---|---|---|
+| 1 | `nvidia-drm modeset=1`: param `Y`, `card0` + `renderD128` | (box's own drm) | ✔ PASS |
+| 2 | `vulkaninfo` names the NVIDIA device; 1 Mi-element Vulkan compute, every element checked | PASS | ✔ PASS, `VKC_HASH` **MATCH** |
+| 3 | Vulkan 2-pass offscreen render, OPTIMAL tiling, D32 depth test, sampled second pass; CPU reference + hashes | PASS | ✔ PASS, A/Z/B hashes **MATCH** |
+| 4 | EGL device platform, desktop GL 4.6: FBO (RGBA8 + D24S8), depth test, textured pass into a pbuffer | PASS | ✔ PASS, A/Z/B hashes **MATCH** |
+| 5 | Xvfb + VirtualGL (EGL back end): `glxinfo` renderer NVIDIA **and** `glx_gfx` (GLX window) renders correctly | PASS | ✔ PASS, A/Z/B hashes **MATCH** |
+
+Evidence: `traces/v3_gfx/` (guest gfx output, probe log with the graded lines, guest dmesg with NVRM,
+the rendered images, the bare-metal baseline). Harness: `scripts/bench/gfx_suite.sh` (one command:
+baseline, fat-guest boot, verdict), `scripts/bench/gfx/` (workloads + CPU reference `refcheck.h`),
+`scripts/bench/provision_guest_gfx.sh` (guest and host packages). ⊘ glxgears' frame count is printed
+but never graded: it stayed > 0 while the GPU faulted every frame (gfx7).
+
+### 6.2 The walls, in the order they fell (each measured, each fix on `v3-gfx`)
+
+1. **FB_GET_INFO[PARTITION_COUNT] and FB_GET_GPU_CACHE_INFO answered 0x56** — the UMD aborted device
+   init. Served from the host: `HostFacts::forwarded_fb_info` (PARTITION_COUNT/MASK, LTC_MASK, each
+   index asked alone) and `gpu_cache_info` (verbatim). [`ec5e9c86`]
+2. **VA space is a DUP_OBJECT alias.** The Vulkan UMD allocs its VA space in a probe client, dups it
+   into its device and frees the probe client; channels name the dup. `ChannelAlloc.vaspace_client`
+   keys the mirror by the original; `barpde` keeps an original freed under a live dup (orphan)
+   until its last alias goes (RM refcounts). [`c28f34c9`]
+3. **GPU_PROMOTE_CTX precedes the object's alloc for graphics** (`_kgrAlloc` promotes, then RPCs the
+   object). The owner-ruled stub now treats an empty twin as "pending": host RM births the twin's
+   own context with the engine object that follows. [`d64914eb`]
+4. **FIFO_GET_ENGINE_CONTEXT_PROPERTIES(GRAPHICS_ZCULL) answered 0x56** — the UMD tore its device down
+   right after allocating the 3D object. Served from the host-sourced `gr_context_buffers` with RM's
+   own id list (`kernel_fifo_ctrl.c:1036-1053`). [`86e13239`]
+5. (with 1–4) Vulkan compute and render **bit-identical**; GL faulted.
+6. **Host RM's own placements collide with guest VAs** (§2.5): Xid 31 PRIV_VIOLATION. kf-host now
+   reserves `[4.5 GiB, 1 TiB − 64 GiB)` and `[1 TiB, 2^47)` in every twin space with lazy
+   `NV50_MEMORY_VIRTUAL` objects and maps guest rows through them. [`cd43f663`]
+7. **…but the hole must stay below 1 TiB**: reserving up to `2^47` pushed the twin's context buffers
+   above it and every context faulted in ctxsw (Xid 44 — GR global ctx-buffer pointers are 40-bit).
+   Host hole = `[1 TiB − 64 GiB, 1 TiB)`; `[1 MiB, 4 GiB)` is withheld by RM already. [`b1eb1d75`]
+8. **PTE kind** (§2.1): Xid 13 "3D-Z KIND Violation". The walker already keys runs on kind; it was
+   dropped at `DiffRun`/`Desired`/NVOS46. Now carried as the **uncompressed** kind
+   (`kf_chip::ptekind`, one table for TU102/GH100/GB202 keyed per family) with
+   `PAGE_KIND_OVERRIDE`; the host key (CUDA `kf_hkey` + `diffmodel::host_key`) includes kind so a
+   re-kinded page is re-mapped; `kf_walk.ptx` regenerated (NVRTC; reproducible). [`68fb3768`]
+
+Also served, before the first boot, on the research's list: `INTERNAL_STATIC_KGR_GET_ZCULL_INFO` from
+the host's `GR_GET_ZCULL_INFO` [`df0a4d4b`]; per-VM ZBC table (never forwarded; defaults = a real
+GSP's measured defaults; ranges from the host) and `SET_ZBC_REFERENCED`; `GR_CTXSW_ZCULL_BIND` as an
+authored twin verb (foreign client refused; mode 0..=2); generated `TwoD`/`InlineToMemory` engine
+kinds carried to the GR twin like 3D; `GF100_DISP_SW`/`GF100_ZBC_CLEAR` graph nodes [`ec5e9c86`].
+
+### 6.3 Constraint notes (reported, not silently changed)
+
+- **ZBC is per-VM and never forwarded** (host table is GPU-global). Correct only while host twin
+  mappings are uncompressed (§2.1): with real compression the guest's ZBC indices would have to be
+  the hardware's — this decision re-opens then.
+- **The VA reservation is a placement policy, not an isolation boundary.** A guest row inside the
+  host hole `[1 TiB − 64 GiB, 1 TiB)` is still mapped through the range object and can still come
+  back `HeldByHost` (named, bounded log `kf-mem: HELD-BY-HOST`); the harm is self-harm in the VM's own
+  twin space. `KF3_NO_GUEST_VA_RESERVE=1` restores the old behaviour; a refused reservation degrades
+  to it and says so. ⚠ The ranges assume RM's split window and `vaStartMin` (both family-invariant
+  in 580 and 610) — a future RM that moves them needs these rows moved.
+- **GF100_DISP_SW is not twinned** (host dispsw acts on HOST display heads). A guest that methods it
+  faults its own twin.
+- **`NV2081_BINAPI` 0x20810107 and `PERF_BOOST` 0x2080200a still answer 0x56.** Both are
+  fire-and-forget on bare metal (params unchanged) and the UMD proceeds past them; BINAPI is an
+  opaque firmware interface and is deliberately not forwarded raw. ⊘ The BINAPI refusal makes the
+  UMD skip one `VID_HEAP` allocation it makes on bare metal (nvdiff) — no measured consequence yet.
+- Not attempted (out of scope today): NVENC/NVDEC (§4), NVIDIA-Xorg DDX / KMS head (§3.3),
+  `PREEMPTION_BIND`/`CTXSW_SETUP_BIND` (the UMD never issued them — nvdiff), compression.
