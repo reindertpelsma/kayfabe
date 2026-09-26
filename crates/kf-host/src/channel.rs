@@ -365,15 +365,17 @@ impl HostRm {
             .alloc_os_descriptor(&view, kf_linux_raw::HostOffset::new(0), len)
             .map_err(ScatterError::Descriptor)?;
         let t_desc = t0.elapsed();
-        // RM holds the pages now (and never the address): the view goes before any map exists.
-        drop(view);
+        // RM holds the pages now (and never the address): the view goes before any map exists —
+        // to the reaper, because its `munmap` is the costliest step (`[measured bm3]` 80-97 ms for
+        // 4 096 populated VMAs on the nested bench, vs 0.5 ms for the map itself).
+        reap_view(view);
         let t_drop = t0.elapsed();
         let r = self.map_kind(space, obj, MapBacking::SharedSlice, 0, len, Some(at), defer, kind);
         // ★ Bounded phase breakdown (the first 32 batches of the process): stitch vs pin vs map.
         static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
         if LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 32 {
             eprintln!(
-                "kf-host: map_scattered {} pieces {len:#x} bytes: stitch {} us, descriptor {} us, drop view {} us, map {} us",
+                "kf-host: map_scattered {} pieces {len:#x} bytes: stitch {} us, descriptor {} us, hand view to reaper {} us, map {} us",
                 pieces.len(),
                 t_stitch.as_micros(),
                 (t_desc - t_stitch).as_micros(),
@@ -800,3 +802,36 @@ pub enum ScatterError {
     /// The fixed map refused (incl. `VA_ALREADY_MAPPED`, [`RmError::PlacementRefused`]).
     Map(RmError),
 }
+
+/// ★ `V3_BATCHED_MAP.md` §3: release a stitched view OFF the caller's thread.
+///
+/// The view is dead the moment its descriptor exists — RM pinned its pages and keeps no address
+/// (`os-mlock.c:216-254`, `nv.c:3357-3400`); nothing reads it — so WHEN it is unmapped changes
+/// nothing but who waits. One long-lived reaper thread `munmap`s views in order. The queue holds at
+/// most [`REAP_QUEUE`] views: beyond that the caller waits for the reaper (backpressure keeps the
+/// process's VMA count bounded — each queued view is up to `BATCH_MAX_RUNS` VMAs — never an
+/// unbounded pile against `vm.max_map_count`). If the thread cannot be started, the view is dropped
+/// here, as before.
+fn reap_view(view: kf_linux_raw::MappedRegion) {
+    type Tx = std::sync::mpsc::SyncSender<kf_linux_raw::MappedRegion>;
+    static REAPER: std::sync::OnceLock<Option<std::sync::Mutex<Tx>>> = std::sync::OnceLock::new();
+    let tx = REAPER.get_or_init(|| {
+        let (tx, rx) = std::sync::mpsc::sync_channel::<kf_linux_raw::MappedRegion>(REAP_QUEUE);
+        std::thread::Builder::new()
+            .name("kf-view-reaper".into())
+            .spawn(move || {
+                for v in rx {
+                    drop(v);
+                }
+            })
+            .ok()
+            .map(|_| std::sync::Mutex::new(tx))
+    });
+    let sent = tx.as_ref().and_then(|m| m.lock().ok().map(|tx| tx.send(view)));
+    if let Some(Err(std::sync::mpsc::SendError(v))) = sent {
+        drop(v);
+    }
+}
+
+/// Stitched views that may wait for the reaper at once.
+const REAP_QUEUE: usize = 2;
