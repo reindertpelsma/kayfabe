@@ -780,9 +780,11 @@ pub const NVOS46_FLAGS_GPU_CACHEABLE_NO: u32 = 2 << 17;
 ///
 /// ★ RM's own map helpers set it unconditionally — *"Always enable snooping as that's what's
 /// needed for sysmem allocations and it's ignored for vidmem."* (`nv_gpu_ops.c:5130-5132`). Its
-/// only consumer in the map path is that sysmem branch, so on vidmem it changes nothing. The
-/// external-allocation PTEs UVM writes for `cuMemHostRegister` are `SYS_COH` on every
-/// non-fully-coherent platform (`nv_gpu_ops.c:3625`), which is why stock CUDA never meets this.
+/// only consumer in the map path is that sysmem branch, so on vidmem it changes nothing. Stock
+/// CUDA never meets this: `cudaHostRegister` makes the same OS descriptor and then maps it through
+/// `UVM_MAP_EXTERNAL_ALLOCATION`, never `NVOS46` (`[measured]` strace,
+/// `traces/v3_adasys/*/cudahostregister_ioctl_path.txt`), and UVM's external PTEs are `SYS_COH`
+/// on every non-fully-coherent platform (`nv_gpu_ops.c:3543`, `:3625`).
 ///
 /// `[measured 2026-09-26, box 52821735/52822193 — ASRock B550 Pro4, Ryzen 9 5900X, IOMMU off,
 /// 2x RTX 4070 (AD104), host 580.159.04, bare metal]` One binary, only this bit toggled: gates 3

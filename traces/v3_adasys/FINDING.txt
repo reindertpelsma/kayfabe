@@ -30,10 +30,14 @@ box and not Ada. Evidence in this directory; every run carries its revision.
      so dmaAllocMapping takes it from the map flags (virt_mem_allocator_gm107.c:430-446) and writes
      SYS_COH only if set, else SYS_NONCOH (:1338-1350). 535.216.03/570.86.15: same, read straight off
      the bit (:294/:1010, :303/:1029). SYS_NONCOH = the GPU issues PCIe No-Snoop requests.
-   - Stock CUDA never takes that path: RM's own map helper sets the bit on every map ("Always enable
-     snooping as that's what's needed for sysmem allocations and it's ignored for vidmem",
-     nv_gpu_ops.c:5130-5132) and the PTEs UVM writes for external sysmem are SYS_COH on non-fully-
-     coherent platforms (nv_gpu_ops.c:3625).
+   - Stock CUDA never takes that path. MEASURED (rtx4070_gpu0_0400_b550_chipset/
+     cudahostregister_ioctl_path.txt, strace of tools/regpath.cu): cudaHostRegister is
+     NV_ESC_RM_ALLOC_MEMORY (the same OS descriptor kayfabe allocates) + UVM_CREATE_EXTERNAL_RANGE +
+     UVM_MAP_EXTERNAL_ALLOCATION, and NO NV_ESC_RM_MAP_MEMORY_DMA. UVM writes those PTEs from
+     nvUvmInterfaceGetExternalAllocPtes (uvm_map_external.c:187), whose aperture is
+     nvGpuOpsGetExternalAllocAperture (nv_gpu_ops.c:3543) = SYS_COH on every non-fully-coherent
+     platform (:3625). RM's own NVOS46 helper sets the bit on every map too ("Always enable snooping
+     as that's what's needed for sysmem allocations and it's ignored for vidmem", :5130-5132).
    - On bare metal RM ENABLES the GPU's PCIe Enable-No-Snoop (kernel_bif.c:473-477) unless the chipset is
      marked not capable; for a PASSTHROUGH GPU it clears it (chipset_pcie.c:965-970) — measured
      "DevCtl: ... NoSnoop-" in the VM. The Ryzen/B550 host honours No-Snoop: the engine reads DRAM under

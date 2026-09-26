@@ -1,0 +1,11 @@
+# strace -f -e trace=ioctl,write,openat of tools/regpath.cu (stock CUDA 12.4 runtime, driver 580.159.04, RTX 4070 0000:04:00.0), the MARK-bracketed phase, in order:
+# fd 11 = /dev/nvidia0, fd 9 = /dev/nvidia-uvm (from the openat lines). 0x27 = NV_ESC_RM_ALLOC_MEMORY (the OS descriptor), 0x49 = UVM_CREATE_EXTERNAL_RANGE (73), 0x21 = UVM_MAP_EXTERNAL_ALLOCATION (33): NO NV_ESC_RM_MAP_MEMORY_DMA.
+write(2, "MARK_REGISTER_BEGIN\n", 20) = 20
+ioctl(11, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x27, 0x38), 0x7ffcf31eab30) = 0
+ioctl(9, _IOC(_IOC_NONE, 0, 0x49, 0), 0x7ffcf31ea7f0) = 0
+ioctl(9, _IOC(_IOC_NONE, 0, 0x21, 0), 0x7ffcf31e83e0) = 0
+write(2, "MARK_REGISTER_END\n", 18) = 18
+write(2, "MARK_COPY_END\n", 14)   = 14
+# fd table:
+openat(AT_FDCWD, "/dev/nvidia-uvm", O_RDWR|O_CLOEXEC) = 9
+openat(AT_FDCWD, "/dev/nvidia0", O_RDWR|O_CLOEXEC) = 11
