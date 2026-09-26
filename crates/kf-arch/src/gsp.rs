@@ -745,6 +745,19 @@ pub trait BootSequence: Send + Sync {
     ///   `PDB_PROP_GPU_PREINITIALIZED_WPR_REGION`.
     fn after_suspend(&self) -> AfterSuspend;
 
+    /// ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md`) — **is the [`BootStep::PublishBootArgs`] address
+    /// the LibOS region array, or a structure that POINTS at it?** `None` (the default) = the
+    /// array itself: the falcon regime's `MAILBOX0/1` carry `pLibosInitArgumentsMemdesc`'s address.
+    /// `Some(off)` = a little-endian `u64` at `address + off` is the array's address.
+    ///
+    /// The FSP regime needs it: the COT payload's `gspBootArgsSysmemOffset` is the GSP-FMC's
+    /// `GSP_FMC_BOOT_PARAMS` (`kfspGetGspBootArgs`, `ogkm-580: kern_fsp_gh100.c:949-970`), whose
+    /// `gspRmParams.bootArgsOffset` is the LibOS array (`kgspPopulateGspRmInitArgs`-era
+    /// `kernel_gsp_gh100.c:460`).
+    fn boot_args_indirection(&self) -> Option<u64> {
+        None
+    }
+
     /// Serve a **generation-local** register read — one whose value is a function of boot
     /// state but which the shared [`GspReg`] vocabulary cannot name.
     ///

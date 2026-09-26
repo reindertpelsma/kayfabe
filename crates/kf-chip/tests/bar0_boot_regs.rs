@@ -95,13 +95,13 @@ fn the_link_width_is_the_hosts() {
 #[test]
 fn the_vbios_carries_the_hosts_version_and_the_generated_geometry() {
     let id = kf_chip::bar0::PciIdentity { vendor: 0x10de, device: 0x2803, class: [0, 0, 3] };
-    for fam in [Family::Turing, Family::Ampere, Family::Ada] {
+    // ★ FSP families read no VBIOS image (`kgspExtractVbiosFromRom_395e98`): same image, inert FWSEC.
+    for fam in Family::ALL {
         let p = kf_chip::bar0::vbios_profile(fam, id, (0x9507_1d00, 0x28)).unwrap();
         assert_eq!((p.vbios_version, p.vbios_oem_version), (0x9507_1d00, 0x28), "{fam:?}");
         assert_eq!(p.pci_device_id, 0x2803);
         assert_eq!(p.fwsec, kf_abi::vbios::GENERATED_FWSEC);
     }
-    assert!(kf_chip::bar0::vbios_profile(Family::Hopper, id, (0, 0)).is_err());
 }
 
 /// ★ A host without a VBIOS answer gets the NAMED neutral version, not another die's.

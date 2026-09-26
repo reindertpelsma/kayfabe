@@ -103,6 +103,17 @@ const NV_PFB_PRI_MMU_LOCAL_MEMORY_RANGE_GP102: u64 = 0x0010_0CE0;
 const NV_PGC6_BSI_VPR_SECURE_SCRATCH_15: u64 = 0x0011_80FC;
 /// `SCRUBBER_HANDOFF_DONE << 29`.
 const SCRUBBER_HANDOFF_DONE: u32 = 3 << 29;
+/// `NV_THERM_I2CS_SCRATCH_FSP_BOOT_COMPLETE_STATUS_SUCCESS` (`blackwell/gb202/dev_therm_addendum.h:29`,
+/// the same value in the gh100/gb100 addenda).
+const FSP_BOOT_COMPLETE_SUCCESS: u32 = 0xFF;
+
+/// `NV_THERM_I2CS_SCRATCH` for the host's architecture: `0xAD00BC` on consumer Blackwell (GB20x,
+/// `blackwell/gb202/dev_therm.h:27`), `0x200BC` on Hopper and datacenter Blackwell
+/// (`hopper/gh100/dev_therm.h:26`, `blackwell/gb100/dev_therm.h:27`).
+#[must_use]
+pub const fn therm_i2cs_scratch(architecture: u32) -> u64 {
+    if architecture == crate::arch::GB200 { 0x00AD_00BC } else { 0x0002_00BC }
+}
 /// Access-counter notify buffer: two pages of 32-byte entries — advertised, never written (the old
 /// tree's `resume_from_fault.md` §S2 ruling: migration heuristics simply never fire).
 const ACCESS_COUNTER_ENTRIES_ADVERTISED: u32 = 2 * (4096 / 32);
@@ -180,6 +191,24 @@ pub fn boot_regs(family: Family, f: &Bar0Facts) -> Vec<BootReg> {
             });
         }
     }
+    // ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md`): the FSP families' FIRST boot poll.
+    // `kfspPrepareBootCommands_GH100` opens with `kfspWaitForSecureBoot_HAL` (`ogkm-580:
+    // kern_fsp_gh100.c:1299`), which spins (4–5 s, then "FSP secure boot partition timed out") until
+    // `NV_THERM_I2CS_SCRATCH_FSP_BOOT_COMPLETE` (the whole register, `dev_therm_addendum.h`) reads
+    // `_STATUS_SUCCESS` = `0xFF`. FSP writes it "after completion of boot out of chip reset"; we are
+    // the FSP and there is no earlier instant, so it is a static boot register. The OFFSET is per die
+    // group, and the host's architecture draws the line: GB20x (`arch 0x1B0`) binds
+    // `kfspWaitForSecureBoot_GB202` over `blackwell/gb202/dev_therm.h:27` = `0xAD00BC`; GH100 and
+    // GB10x bind `_GH100`/`_GB100` over `hopper/gh100` / `blackwell/gb100` `dev_therm.h:26-27` =
+    // `0x200BC`. ⊘ The model's `on_read` answer for it was never published (only `GspReg`s are).
+    if matches!(family, Family::Hopper | Family::Blackwell) {
+        v.push(BootReg {
+            off: therm_i2cs_scratch(f.architecture),
+            value: FSP_BOOT_COMPLETE_SUCCESS,
+            name: "NV_THERM_I2CS_SCRATCH_FSP_BOOT_COMPLETE",
+            from: Provenance::Ogkm("kfspWaitForSecureBoot_{GH100,GB100,GB202}: FSP boot complete = 0xFF"),
+        });
+    }
     // ★ Ada only (`kgspExecuteScrubberIfNeeded_AD102`, `ogkm-580: kernel_gsp_ad102.c`; the image is
     // ALWAYS allocated on Ada — `kernel_gsp.c:3734` "WAR for Bug 5016200"). Before the booter runs,
     // RM reads SCRUBBER_HANDOFF and, below DONE, resets SEC2 and runs a scrubber HS ucode on it —
@@ -217,23 +246,22 @@ pub struct PciIdentity {
 /// ⊘ Was `VBIOS_PROFILES.first()`: the GA106 row's version `0x9418_0000` on every die
 /// (2026-09-26, `V3_FAMILY_PORT_ADA.md` §2).
 ///
-/// ⊘ Hopper/Blackwell boot through FSP and do not run FWSEC from the VBIOS; what their ROM image must
-/// carry is not yet established from ogkm, so they are refused by name here rather than handed a
-/// falcon family's image.
+/// ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md`): **Hopper/Blackwell read no VBIOS image.** Their
+/// `kgspExtractVbiosFromRom` binds `_395e98` = `NV_ERR_NOT_SUPPORTED` (every chip outside the
+/// TU10x…AD10x mask, `ogkm-580: generated/g_kernel_gsp_nvoc.c:1283-1301`, `g_kernel_gsp_nvoc.h:1803`),
+/// which `kgspPrepareForBootstrap` treats as *"not supported"* ⇒ no FWSEC parse
+/// (`kernel_gsp.c:3990-4015`); FSP runs FWSEC itself. So the ROM carries only what the PCI layer
+/// reads (identity + version) and the FWSEC geometry in it is inert — the same image, never a
+/// per-family variant. ⊘ Was a `RowUnbuilt` refusal, which stopped every FSP-family realize.
 ///
 /// # Errors
-/// A family whose ROM content is not yet derived.
+/// None today; kept fallible for a family whose ROM would need content we cannot derive.
 pub fn vbios_profile(
     family: Family,
     id: PciIdentity,
     version: (u32, u8),
 ) -> Result<kf_abi::vbios::VbiosProfile, crate::RowUnbuilt> {
-    if matches!(family, Family::Hopper | Family::Blackwell) {
-        return Err(crate::RowUnbuilt {
-            family,
-            what: "VBIOS image: FSP families do not run FWSEC; their ROM contents are not yet derived from ogkm",
-        });
-    }
+    let _ = family;
     Ok(kf_abi::vbios::VbiosProfile {
         name: "derived (host PCI identity + host VBIOS version + generated FWSEC geometry)",
         pci_vendor_id: id.vendor,

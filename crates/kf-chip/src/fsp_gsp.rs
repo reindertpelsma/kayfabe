@@ -203,6 +203,10 @@ const DWORDS_PER_EMEM_BLOCK: u64 = 64;
 /// derivation of the 852.
 const COT_BOOT_ARGS_OFF: usize = 8 + 852;
 
+/// `offsetof(GSP_FMC_BOOT_PARAMS, gspRmParams.bootArgsOffset)` — see
+/// [`FspBoot::boot_args_indirection`].
+pub const FMC_BOOT_PARAMS_BOOT_ARGS_OFFSET: u64 = 48;
+
 /// [`ArchBootState`] latch holding the EMEM window cursor, as a byte offset.
 const LATCH_EMEM_CURSOR: usize = 0;
 /// [`ArchBootState`] latch holding whether the cursor auto-increments on write.
@@ -355,6 +359,16 @@ impl BootSequence for FspBoot {
     /// Hopper and Blackwell alike. See [`BootSequence::after_suspend`].
     fn after_suspend(&self) -> AfterSuspend {
         AfterSuspend::FirmwareHalts
+    }
+
+    /// ★ `GSP_FMC_BOOT_PARAMS.gspRmParams.bootArgsOffset` (`ogkm-580:
+    /// arch/nvalloc/common/inc/gsp/gspifpub.h:113-120`, natural alignment): `initParams` (4) + pad,
+    /// `bootGspRmParams` at 8 (`target`, `gspRmDescSize`, `gspRmDescOffset` @8, `wprCarveoutOffset`
+    /// @16, `wprCarveoutSize` @24, `bIsGspRmBoot` @28 → 32 bytes), `gspRmParams` at 40: `target` @40,
+    /// `bootArgsOffset` @48. The COT's `gspBootArgsSysmemOffset` names this structure
+    /// (`kfspGetGspBootArgs`, `kern_fsp_gh100.c:949-970`), not the LibOS array.
+    fn boot_args_indirection(&self) -> Option<u64> {
+        Some(FMC_BOOT_PARAMS_BOOT_ARGS_OFFSET)
     }
 
     fn on_write(

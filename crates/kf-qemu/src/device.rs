@@ -159,6 +159,11 @@ pub struct Device {
     /// register on the page that is NOT a read side effect is served from here by the read exit,
     /// with the read-back-what-was-written semantics a `B` page has.
     holes: Vec<HoleShadow>,
+    /// ★ 2026-09-26: the FSP families' RM EMEM channel (`kf_trap::fspemem`) — its page is a hole,
+    /// and its data port and cursor are served here, on the vCPU. `None` on the falcon families.
+    fsp: Option<kf_trap::fspemem::FspEmem>,
+    /// The NVDM type of the last command FSP acknowledged (status line).
+    fsp_replies_type: std::sync::atomic::AtomicU32,
     ram: &'static crate::mem::RamMap,
     gsp: Mutex<Gsp>,
     /// ★ w828: the SAME register model the drainer's FSM answers from, shared lock-free with the
@@ -510,6 +515,8 @@ impl Device {
             gsp: Mutex::new(gsp),
             store_model,
             holes: kf_trap::memmap::holes_for(family).iter().map(|(p, _)| HoleShadow::new(*p, &boot)).collect(),
+            fsp: (family.boot_style() == kf_chip::BootStyle::Fsp).then(kf_trap::fspemem::FspEmem::new),
+            fsp_replies_type: std::sync::atomic::AtomicU32::new(0),
             boot,
             vbios,
             worker_efd,
@@ -664,6 +671,13 @@ impl Device {
                 None => {}
             }
         }
+        // ★ The FSP EMEM channel: its data port moves on a READ (`kf_trap::fspemem`).
+        if width == 4
+            && let Some(f) = &self.fsp
+            && let Some(v) = f.read(off)
+        {
+            return u64::from(v);
+        }
         let Some(h) = self.holes.iter().find(|h| (h.base..h.base + kf_trap::memmap::PAGE).contains(&off)) else {
             return 0;
         };
@@ -773,6 +787,15 @@ impl Device {
         // will poll, the request counter moves AFTER it, and one wake — the VA thread performs the
         // host op and publishes idle. ⊘ Nothing blocks here. The write also goes on to the plane
         // below (a plain privileged register), exactly as before.
+        // ★ 2026-09-26: the FSP EMEM channel moves its cursor NOW (RM reads it back right after
+        // the burst) and posts FSP's reply at the queue HEAD write. The write ALSO goes on to the
+        // plane below, unchanged: the GSP FSM reads the COT from its own copy of the window.
+        if width == 4
+            && let Some(f) = &self.fsp
+            && let kf_trap::fspemem::FspWrite::Replied { nvdm_type } = f.write(off, val as u32)
+        {
+            self.fsp_replies_type.store(nvdm_type, Ordering::Relaxed);
+        }
         let cache_op = if !doorbell && !in_usermode && width == 4 {
             kf_trap::cacheop::decode(self.family, off, val as u32)
         } else {
@@ -1318,7 +1341,11 @@ impl Device {
                 )
             } else {
                 String::new()
-            };
+            }
+            // ★ FSP families only: FSP's replies over the RM EMEM channel (`kf_trap::fspemem`).
+            + &self.fsp.as_ref().map_or_else(String::new, |f| {
+                format!(" fsp[replies={} last_nvdm={:#x}]", f.replies(), self.fsp_replies_type.load(o))
+            });
         let ws = &self.worker_stats;
         let toks: Vec<String> = self
             .chans
