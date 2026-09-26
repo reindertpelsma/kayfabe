@@ -213,7 +213,8 @@ pub fn served_chain(
     // ★★★ EXHAUSTIVE: a latch added to `ChainLogs` and not seated below is a compile error.
     let ChainLogs { unserviced, fault_buffer, os_events } = logs;
     let ObjectLinks { objects, memory, channels } = links;
-    let mut static_info = staticinfo::StaticInfoPolicy::new(board.clone(), driver);
+    let mut static_info = staticinfo::StaticInfoPolicy::new(board.clone(), driver)
+        .with_engine_caps(authored::engine_caps(&host.engines));
     if let (Some(n), Some(sn)) = (host.gpu_name, host.gpu_short_name.or(host.gpu_name)) {
         static_info = static_info.with_name(n, sn);
     }

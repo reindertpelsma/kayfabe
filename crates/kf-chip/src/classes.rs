@@ -34,12 +34,25 @@ pub enum Kind {
     /// ★ v3-gfx: the inline-to-memory class (`KEPLER_INLINE_TO_MEMORY_B`, Blackwell's own) — a
     /// GR-engine object for pushbuffer-literal uploads.
     InlineToMemory,
+    /// ★ A video ENCODER class (`NV*B7_VIDEO_ENCODER`, NVENC) — its own engine and runlist.
+    VideoEncoder,
+    /// ★ A video DECODER class (`NV*B0_VIDEO_DECODER`, NVDEC) — its own engine and runlist.
+    VideoDecoder,
 }
 
 impl Kind {
     /// Every kind.
-    pub const ALL: [Kind; 7] =
-        [Kind::ChannelGpfifo, Kind::Compute, Kind::DmaCopy, Kind::Usermode, Kind::ThreeD, Kind::TwoD, Kind::InlineToMemory];
+    pub const ALL: [Kind; 9] = [
+        Kind::ChannelGpfifo,
+        Kind::Compute,
+        Kind::DmaCopy,
+        Kind::Usermode,
+        Kind::ThreeD,
+        Kind::TwoD,
+        Kind::InlineToMemory,
+        Kind::VideoEncoder,
+        Kind::VideoDecoder,
+    ];
 }
 
 /// One family's engine classes, per kind. ⊘ Slices, not scalars: the whole point.
@@ -63,6 +76,11 @@ pub struct ClassSet {
     pub twod: &'static [u32],
     /// Inline-to-memory classes (GR engine).
     pub inline_to_memory: &'static [u32],
+    /// Video encoder (NVENC) classes — ⊘ EMPTY on a family whose chips list none (Hopper: GH100
+    /// has NVDEC and NVJPG but no NVENC, `g_gpu_class_list.c`), derived, never assumed.
+    pub video_encoder: &'static [u32],
+    /// Video decoder (NVDEC) classes.
+    pub video_decoder: &'static [u32],
 }
 
 impl ClassSet {
@@ -77,6 +95,8 @@ impl ClassSet {
             Kind::ThreeD => self.threed,
             Kind::TwoD => self.twod,
             Kind::InlineToMemory => self.inline_to_memory,
+            Kind::VideoEncoder => self.video_encoder,
+            Kind::VideoDecoder => self.video_decoder,
         }
     }
 
@@ -111,6 +131,8 @@ impl ClassSet {
                 ObjectKind::EngineObject { engine: EngineKind::GrGraphics }
             }
             Some(Kind::DmaCopy) => ObjectKind::EngineObject { engine: EngineKind::Ce },
+            Some(Kind::VideoEncoder) => ObjectKind::EngineObject { engine: EngineKind::NvEnc },
+            Some(Kind::VideoDecoder) => ObjectKind::EngineObject { engine: EngineKind::NvDec },
             Some(Kind::Usermode) | None => ObjectKind::Unknown,
         }
     }
@@ -130,6 +152,8 @@ pub const FAMILIES: [ClassSet; 5] = [
         threed: &[0xC597 /* TURING_A */],
         twod: &[0x902D /* FERMI_TWOD_A */],
         inline_to_memory: &[0xA140 /* KEPLER_INLINE_TO_MEMORY_B */],
+        video_encoder: &[0xB4B7 /* NVB4B7_VIDEO_ENCODER */, 0xC4B7 /* NVC4B7_VIDEO_ENCODER */],
+        video_decoder: &[0xC4B0 /* NVC4B0_VIDEO_DECODER */],
     },
     ClassSet {
         family: Family::Ampere,
@@ -141,6 +165,8 @@ pub const FAMILIES: [ClassSet; 5] = [
         threed: &[0xC697 /* AMPERE_A */, 0xC797 /* AMPERE_B */],
         twod: &[0x902D /* FERMI_TWOD_A */],
         inline_to_memory: &[0xA140 /* KEPLER_INLINE_TO_MEMORY_B */],
+        video_encoder: &[0xC7B7 /* NVC7B7_VIDEO_ENCODER */],
+        video_decoder: &[0xC6B0 /* NVC6B0_VIDEO_DECODER */, 0xC7B0 /* NVC7B0_VIDEO_DECODER */],
     },
     ClassSet {
         family: Family::Ada,
@@ -152,6 +178,8 @@ pub const FAMILIES: [ClassSet; 5] = [
         threed: &[0xC997 /* ADA_A */],
         twod: &[0x902D /* FERMI_TWOD_A */],
         inline_to_memory: &[0xA140 /* KEPLER_INLINE_TO_MEMORY_B */],
+        video_encoder: &[0xC9B7 /* NVC9B7_VIDEO_ENCODER */],
+        video_decoder: &[0xC9B0 /* NVC9B0_VIDEO_DECODER */],
     },
     ClassSet {
         family: Family::Hopper,
@@ -163,6 +191,8 @@ pub const FAMILIES: [ClassSet; 5] = [
         threed: &[0xCB97 /* HOPPER_A */],
         twod: &[0x902D /* FERMI_TWOD_A */],
         inline_to_memory: &[0xA140 /* KEPLER_INLINE_TO_MEMORY_B */],
+        video_encoder: &[],
+        video_decoder: &[0xB8B0 /* NVB8B0_VIDEO_DECODER */],
     },
     ClassSet {
         family: Family::Blackwell,
@@ -174,6 +204,8 @@ pub const FAMILIES: [ClassSet; 5] = [
         threed: &[0xCD97 /* BLACKWELL_A */, 0xCE97 /* BLACKWELL_B */],
         twod: &[0x902D /* FERMI_TWOD_A */],
         inline_to_memory: &[0xCD40 /* BLACKWELL_INLINE_TO_MEMORY_A */],
+        video_encoder: &[0xCEB7 /* NVCEB7_VIDEO_ENCODER */, 0xCFB7 /* NVCFB7_VIDEO_ENCODER */, 0xD1B7 /* NVD1B7_VIDEO_ENCODER */],
+        video_decoder: &[0xCDB0 /* NVCDB0_VIDEO_DECODER */, 0xCEB0 /* NVCEB0_VIDEO_DECODER */, 0xCFB0 /* NVCFB0_VIDEO_DECODER */, 0xD1B0 /* NVD1B0_VIDEO_DECODER */, 0xD2B0 /* NVD2B0_VIDEO_DECODER */],
     },
 ];
 

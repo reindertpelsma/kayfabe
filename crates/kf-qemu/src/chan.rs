@@ -94,6 +94,12 @@ struct PtChan {
     stopped: bool,
     /// ★ v3-chanctl: the guest DISABLED it (`DISABLE_CHANNELS`) — only `bDisable=FALSE` undoes it.
     disabled: bool,
+    /// ★ v3-video: the twin's host VA space (the mirror of the guest's) and its placement rows.
+    space: kf_host::VaSpace,
+    rows: crate::mem::PlacedRows,
+    /// ★ v3-video: the guest's falcon context buffer `(VA, size)` from its falcon promote — the VA
+    /// the host's own falcon context is steered onto (see `ChanPlane::engine_object`).
+    falcon_ctx: Option<(u64, u64)>,
 }
 
 /// ★★★ v3-promote — **the guest's context-buffer statements, satisfied by the twin** (owner
@@ -558,6 +564,13 @@ pub struct ChanPlane {
     pub act_total_us: AtomicU64,
     /// Passthrough twins born.
     pub pt_births: AtomicU64,
+    /// ★ v3-video: host NVENC session slots held per guest client (acquired on OUR host client;
+    /// released with the guest's release or its client's free).
+    enc_sessions: Mutex<HashMap<u32, u32>>,
+    /// ★ v3-video: guest TSG `(hClient, hTsg)` → `(host group, live members)` — the guest's TSG
+    /// membership mirrored, so its channels share ONE host GR context as on hardware. Touched by
+    /// acts only (serialised on the act thread).
+    groups: Mutex<HashMap<(u32, u32), (u32, u32)>>,
     /// ★ Per guest token: doorbells the vCPU trap rang INLINE, and how many reached the host's
     /// doorbell (the `DOORBELL-LEDGER` line at free; atomics only — the vCPU writes them).
     rung: Box<[AtomicU64]>,
@@ -621,6 +634,22 @@ impl ChanPlane {
                 kinds.push((kf_rm::authored::EngineKind::Copy(i), kf_host::event::notifier_ce(i), et));
             }
         }
+        // ★ The video engines the served table advertises (it lists only the host's own): one
+        // non-stall event each, announced on the vector the guest was told
+        // (`authored::engine_notification_rows`) — its `gkflcnServiceNotificationInterrupt` wakes
+        // the guest's NVENC/NVDEC OS events from it.
+        for i in 0..kf_abi::submit::NVENC_SIZE {
+            let kind = kf_rm::authored::EngineKind::VideoEncode(i);
+            if let (Some(et), Some(_)) = (kf_abi::submit::engine_type_nvenc(i), kf_rm::authored::non_stall_vector_for(intr_table, kind)) {
+                kinds.push((kind, kf_host::event::notifier_nvenc(i), et));
+            }
+        }
+        for i in 0..kf_abi::submit::NVDEC_SIZE {
+            let kind = kf_rm::authored::EngineKind::VideoDecode(i);
+            if let (Some(et), Some(_)) = (kf_abi::submit::engine_type_nvdec(i), kf_rm::authored::non_stall_vector_for(intr_table, kind)) {
+                kinds.push((kind, kf_host::event::notifier_nvdec(i), et));
+            }
+        }
         for (kind, notify, engine_type) in kinds {
             let ev = rm.open_event_fd().map_err(|e| format!("{} event fd: {e:?}", kind.name()))?;
             rm.alloc_os_event(rm.subdevice(), notify, true, &ev).map_err(|e| format!("{} os event: {e:?}", kind.name()))?;
@@ -674,6 +703,8 @@ impl ChanPlane {
             act_worst_us: AtomicU64::new(0),
             act_total_us: AtomicU64::new(0),
             pt_births: AtomicU64::new(0),
+            groups: Mutex::new(HashMap::new()),
+            enc_sessions: Mutex::new(HashMap::new()),
             rung: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
             rang: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
             rc_ev,
@@ -816,6 +847,8 @@ impl ChanPlane {
                     "schedule",
                     Box::new(move |me: &ChanPlane| {
                         let mut restarted = 0;
+                        // ★ v3-video: twins of one guest TSG share ONE host group — schedule it once.
+                        let mut groups_done = std::collections::HashSet::new();
                         for (k, c) in &twins {
                             // ★ v3-chanctl: a STOPPED twin is re-enabled before it is scheduled
                             // (STOP disabled it; "it has to be scheduled, bound and enabled again",
@@ -841,7 +874,9 @@ impl ChanPlane {
                                     }
                                 }
                             }
-                            me.rm.schedule_enable(*c, enable).map_err(|e| (NV_ERR_INVALID_STATE, format!("host {:#x}: {e:?}", c.token)))?;
+                            if groups_done.insert(c.tsg) {
+                                me.rm.schedule_enable(*c, enable).map_err(|e| (NV_ERR_INVALID_STATE, format!("host {:#x}: {e:?}", c.token)))?;
+                            }
                         }
                         Ok(format!("{client:#x}:{object:#x} GPFIFO_SCHEDULE enable={enable} on {} twin(s) ({restarted} restarted after STOP)", twins.len()))
                     }),
@@ -1006,7 +1041,12 @@ impl ChanPlane {
             // the Device's own free, which follows it, is what removes its row (see `free`).
             ChanStatement::CudaLimitDisable => ChanAnswer::Done,
             ChanStatement::Free { client, object } => self.free(client, object),
-            ChanStatement::PromoteCtx { chan_client, object, engine_type, initialize, with_va, entries } => {
+            ChanStatement::PromoteCtx { chan_client, object, engine_type, initialize, with_va, entries, falcon_ctx } => {
+                if let (Some(fc), Ok(mut m)) = (falcon_ctx, self.pt.lock())
+                    && let Some(v) = m.get_mut(&(chan_client, object))
+                {
+                    v.falcon_ctx = Some(fc);
+                }
                 self.promote_ctx(chan_client, object, engine_type, initialize, with_va, entries)
             }
             ChanStatement::EvictCtx { chan_client, object, engine_type } => self.evict_ctx(chan_client, object, engine_type),
@@ -1015,6 +1055,7 @@ impl ChanPlane {
                 self.disable_channels(client, disable, only_scheduling, rewind_gp_put, list.as_slice())
             }
             ChanStatement::Preempt { client, object, wait } => self.preempt_group(client, object, wait),
+            ChanStatement::EncoderSession { client, acquire } => self.encoder_session(client, acquire),
         }
     }
 
@@ -1247,6 +1288,22 @@ impl ChanPlane {
             eprintln!("kf3: chan {client:#x}:{object:#x} GPU_PROMOTE_CTX: no passthrough twin — not ours (entries={entries})");
             return ChanAnswer::NotOurs;
         };
+        // ★ A VIDEO twin's promote is the falcon context (`_kflcnPromoteContext`,
+        // `kernel_falcon.c:184-276`: `entryCount = 0`, the guest VA only). Host RM allocated and
+        // promoted the twin's own falcon context with its engine object, so it is satisfied by the
+        // twin — nothing sent, no guest byte touched.
+        if kf_abi::submit::is_video_engine_type(engine) && engine_type == engine {
+            let Ok(mut m) = self.pt.lock() else {
+                return ChanAnswer::Refused { status: NV_ERR_INVALID_STATE, why: "twins poisoned".into() };
+            };
+            let Some(v) = m.get_mut(&(client, object)) else { return ChanAnswer::NotOurs };
+            v.ctx.promotes += 1;
+            eprintln!(
+                "kf3: chan {client:#x}:{object:#x} GPU_PROMOTE_CTX (video falcon ctx, engine {engine:#x}) SATISFIED BY TWIN host {ht:#x}: entries={entries} host_objects={} — not forwarded",
+                v.objects.len()
+            );
+            return ChanAnswer::Done;
+        }
         if engine != kf_abi::submit::ENGINE_TYPE_GRAPHICS || engine_type != engine {
             return ChanAnswer::Refused {
                 status: NV_ERR_INVALID_ARGUMENT,
@@ -1382,7 +1439,9 @@ impl ChanPlane {
     /// class (checked against the HOST family's generated set for the twin's engine) and params
     /// we author. Under a Translated channel it is a graph node only (our ring owns its object).
     fn engine_object(&self, client: u32, parent: u32, handle: u32, class: u32, copy_engine: Option<u32>) -> ChanAnswer {
-        let Some((chan, engine)) = self.pt.lock().ok().and_then(|m| m.get(&(client, parent)).map(|v| (v.chan, v.engine))) else {
+        let Some((chan, engine, space, rows)) =
+            self.pt.lock().ok().and_then(|m| m.get(&(client, parent)).map(|v| (v.chan, v.engine, v.space, v.rows.clone())))
+        else {
             return ChanAnswer::NotOurs;
         };
         let Some(kind) = kf_chip::classes_for(self.family).kind_of(class) else {
@@ -1394,6 +1453,46 @@ impl ChanPlane {
         self.defer(
             "engine object",
             Box::new(move |me: &ChanPlane| {
+                // ★★ v3-video — STEER THE HOST'S FALCON CONTEXT ONTO THE GUEST'S. In a video
+                // channel's VA space guest RM and host RM place buffers with the SAME lowest-free
+                // allocator, user buffers and RM-internal ones alike. `[measured vvid vid10]` the
+                // guest put its falcon ctx at G = 0x12002a000; host RM, allocating the twin's own ctx
+                // with this object, found G mirrored and took G+0x1000 — where nvcuvid then mapped a
+                // live 4 KiB buffer, which the walker could only report HELD BY HOST: the engine
+                // used the wrong page and NVDEC produced untouched frames. So G (the guest's ctx,
+                // which no engine ever reads — the twin runs on the host's) is unmapped from the
+                // twin first, and host RM takes G itself. Best effort: a failed unmap is logged.
+                let fc = if matches!(kind, kf_chip::classes::Kind::VideoEncoder | kf_chip::classes::Kind::VideoDecoder) {
+                    me.pt.lock().ok().and_then(|m| m.get(&(client, parent)).and_then(|v| v.falcon_ctx))
+                } else {
+                    None
+                };
+                // ★★ v3-int — HOW THIS COMPOSES WITH THE v3-gfx GUEST-VA RESERVATION
+                // (`kf_host::GUEST_VA_RANGES`). The collision above exists only where host RM's
+                // allocator may place: with the guest's ranges reserved in the twin's space, host
+                // RM's falcon ctx can only land in the host hole `[HOST_HOLE_LO, 1 TiB)` — never
+                // at G nor G+0x1000 — so no guest buffer can meet it and there is nothing to steer.
+                // ⇒ Steer ONLY when G is outside a live reservation (reservation refused, or
+                // `KF3_NO_GUEST_VA_RESERVE`); otherwise the guest's own mapping at G is left alone.
+                let fc = fc.filter(|&(va, len)| {
+                    let reserved = space.guest_reserved(va, len);
+                    if reserved {
+                        eprintln!(
+                            "kf3: chan {client:#x}:{parent:#x} falcon ctx G={va:#x}+{len:#x} is inside the reserved guest VA — host RM places its own ctx in the host hole; not steered"
+                        );
+                    }
+                    !reserved
+                });
+                // The row goes first (and for good): from here G is host RM's, and the walker's
+                // eventual unmap of the guest's page there is answered without a host call.
+                let steer = fc.map(|(va, len)| match rows.write().map(|mut r| r.remove(&va)) {
+                    Ok(None) => format!(" [guest ctx VA {va:#x} not mirrored yet — host RM takes it free; the walker will find it held]"),
+                    Err(_) => format!(" [placement rows poisoned — host ctx placement unsteered]"),
+                    Ok(Some(_)) => match me.rm.unmap(space, va, false) {
+                    Ok(()) => format!(" [host ctx steered onto the guest's ctx VA {va:#x}+{len:#x}]"),
+                    Err(e) => format!(" [guest ctx VA {va:#x} not unmapped ({e:?}) — host ctx placement unsteered]"),
+                    },
+                });
                 let h = kf_chan::passthrough::engine_object(me.rm, chan, engine, class, kind, copy_engine).map_err(|e| (NV_ERR_INVALID_CLASS, e))?;
                 if let Ok(mut m) = me.pt.lock()
                     && let Some(v) = m.get_mut(&(client, parent))
@@ -1403,7 +1502,7 @@ impl ChanPlane {
                 if let Ok(mut m) = me.pt_objs.lock() {
                     m.insert((client, handle), (client, parent));
                 }
-                Ok(format!("{client:#x}:{handle:#x} class {class:#x} ({kind:?}) on twin host {:#x} -> host object {h:#x}", chan.token))
+                Ok(format!("{client:#x}:{handle:#x} class {class:#x} ({kind:?}) on twin host {:#x} -> host object {h:#x}{}", chan.token, steer.unwrap_or_default()))
             }),
         )
     }
@@ -1541,7 +1640,8 @@ impl ChanPlane {
         } else {
             None
         };
-        if translated.is_empty() && twins.is_empty() && obj.is_none() && debuggers.is_empty() && !limit_off {
+        let sessions = client == object && self.enc_sessions.lock().is_ok_and(|m| m.get(&client).is_some_and(|n| *n > 0));
+        if translated.is_empty() && twins.is_empty() && obj.is_none() && debuggers.is_empty() && !limit_off && !sessions {
             return ChanAnswer::NotOurs;
         }
         if !twins.is_empty() {
@@ -1568,6 +1668,9 @@ impl ChanPlane {
             "free",
             Box::new(move |me: &ChanPlane| {
                 let mut line = Vec::new();
+                if client == object {
+                    line.extend(me.release_encoder_sessions(client));
+                }
                 for h in debuggers {
                     let r = me.rm.free(h);
                     line.push(format!("debugger session host {h:#x} {}", if r.is_ok() { "freed" } else { "FREE REFUSED" }));
@@ -1581,7 +1684,7 @@ impl ChanPlane {
                     line.push(format!("translated host {ht:#x}"));
                 }
                 for ((c, h), t) in twins {
-                    let r = me.rm.free_channel(t.chan);
+                    let r = me.release_twin(c, t.tsg, t.chan);
                     t.live.fetch_sub(1, Ordering::AcqRel);
                     // The error context goes AFTER its channel (host RM refuses freeing a context
                     // DMA a live channel names as its error context).
@@ -1612,6 +1715,66 @@ impl ChanPlane {
         )
     }
 
+    /// ★ v3-video: a guest NVENC session acquire/release, carried to the HOST's GPU-wide slot
+    /// accounting (`kf_abi::gssreplay::GSS_ENC_SESSION_ACQUIRE`): an act (a host ioctl), the reply
+    /// held until it lands. A release with nothing held is answered without a host call.
+    fn encoder_session(&self, client: u32, acquire: bool) -> ChanAnswer {
+        self.defer(
+            "encoder session",
+            Box::new(move |me: &ChanPlane| {
+                let held = me.enc_sessions.lock().map(|m| m.get(&client).copied().unwrap_or(0)).unwrap_or(0);
+                if !acquire && held == 0 {
+                    return Ok(format!("{client:#x} NVENC session release with none held — no host call"));
+                }
+                let cmd = if acquire { kf_abi::gssreplay::GSS_ENC_SESSION_ACQUIRE } else { kf_abi::gssreplay::GSS_ENC_SESSION_RELEASE };
+                let mut p = [0u8; kf_abi::gssreplay::ENC_SESSION_PARAMS_SIZE];
+                me.rm.raw_control(me.rm.subdevice(), cmd, &mut p).map_err(|e| {
+                    let st = match e {
+                        kf_host::RmError::Other(s) if s < 0x4B00 => s,
+                        _ => NV_ERR_INVALID_STATE,
+                    };
+                    (st, format!("{client:#x} host NVENC session {}: {e:?}", if acquire { "acquire" } else { "release" }))
+                })?;
+                let now = me.enc_sessions.lock().map(|mut m| {
+                    let c = m.entry(client).or_insert(0);
+                    if acquire { *c += 1 } else { *c = c.saturating_sub(1) }
+                    *c
+                });
+                Ok(format!("{client:#x} NVENC session {} on the host (held now {now:?})", if acquire { "ACQUIRED" } else { "released" }))
+            }),
+        )
+    }
+
+    /// ★ v3-video: release every host NVENC slot a freed guest client still held.
+    fn release_encoder_sessions(&self, client: u32) -> Vec<String> {
+        let n = self.enc_sessions.lock().ok().and_then(|mut m| m.remove(&client)).unwrap_or(0);
+        (0..n)
+            .map(|_| {
+                let mut p = [0u8; kf_abi::gssreplay::ENC_SESSION_PARAMS_SIZE];
+                let r = self.rm.raw_control(self.rm.subdevice(), kf_abi::gssreplay::GSS_ENC_SESSION_RELEASE, &mut p);
+                format!("NVENC session of freed client {client:#x} released on the host ({})", if r.is_ok() { "ok" } else { "REFUSED" })
+            })
+            .collect()
+    }
+
+    /// ★ v3-video: free a Passthrough twin — a member of a shared host group frees its channel,
+    /// and the group goes with its LAST member; an ungrouped twin frees channel and group.
+    fn release_twin(&self, client: u32, guest_tsg: Option<u32>, chan: kf_host::Channel) -> Result<(), kf_host::RmError> {
+        let Some(k) = guest_tsg.map(|t| (client, t)) else { return self.rm.free_channel(chan) };
+        let r = self.rm.free_member(chan);
+        let last = self.groups.lock().map_or(true, |mut m| match m.get_mut(&k) {
+            Some(g) if g.1 > 1 => {
+                g.1 -= 1;
+                false
+            }
+            _ => {
+                m.remove(&k);
+                true
+            }
+        });
+        if last { r.and(self.rm.free(chan.tsg)) } else { r }
+    }
+
     fn slot(&self, ht: u32) -> Option<Arc<Mutex<Slot>>> {
         self.slots.read().ok()?.get(&ht).cloned()
     }
@@ -1633,8 +1796,15 @@ impl ChanPlane {
             );
             return ChanAnswer::NotOurs;
         }
-        if passthrough && !is_copy_engine(engine) && engine != kf_abi::submit::ENGINE_TYPE_GRAPHICS {
-            return refuse(NV_ERR_NOT_SUPPORTED, format!("user channel on engine type {engine:#x}: only a copy engine or GR0 has a passthrough twin"));
+        if passthrough
+            && !is_copy_engine(engine)
+            && engine != kf_abi::submit::ENGINE_TYPE_GRAPHICS
+            && !kf_abi::submit::is_video_engine_type(engine)
+        {
+            return refuse(
+                NV_ERR_NOT_SUPPORTED,
+                format!("user channel on engine type {engine:#x}: only a copy engine, GR0 or a video engine has a passthrough twin"),
+            );
         }
         let Some(vas) = a.vaspace else {
             return refuse(NV_ERR_INVALID_STATE, format!("no VA space resolved (hVASpace={:#x}, parent {:#x})", a.h_vaspace, a.parent));
@@ -1687,6 +1857,7 @@ impl ChanPlane {
             };
             let g0 = kf_chan::passthrough::GuestChannel { gpfifo_va: a.gpfifo_va, entries: a.entries.max(1), userd, engine, err_ctx: 0 };
             let space = mirror.space;
+            let rows = mirror.rows.clone();
             // ★ P5c: counted NOW (on the drainer, in statement order), so a VA-space free that
             // follows can never recycle the space under a birth still queued.
             let live = mirror.live.clone();
@@ -1696,8 +1867,16 @@ impl ChanPlane {
                 Box::new(move |me: &ChanPlane| {
                     let notifier = err_at.and_then(|(obj, off, at)| me.arm_notifier(a.client, a.handle, obj, off, at));
                     let g = kf_chan::passthrough::GuestChannel { err_ctx: notifier.as_ref().map_or(0, |n| n.ctx), ..g0 };
-                    let chan = match kf_chan::passthrough::birth_twin(me.rm, space, g) {
-                        Ok(c) => c,
+                    // ★ v3-video: a member of a guest TSG joins the host group standing for it.
+                    let gkey = a.tsg.map(|t| (a.client, t));
+                    let join = gkey.and_then(|k| me.groups.lock().ok().and_then(|m| m.get(&k).map(|g| g.0)));
+                    let chan = match kf_chan::passthrough::birth_twin_in(me.rm, space, g, join) {
+                        Ok(c) => {
+                            if let (Some(k), Ok(mut m)) = (gkey, me.groups.lock()) {
+                                m.entry(k).and_modify(|g| g.1 += 1).or_insert((c.tsg, 1));
+                            }
+                            c
+                        }
                         Err(e) => {
                             live.fetch_sub(1, Ordering::AcqRel);
                             if let Some(n) = notifier {
@@ -1713,7 +1892,7 @@ impl ChanPlane {
                         .map_err(|_| "caps poisoned".to_string())
                         .and_then(|mut c| me.plane.allocate_channel(&mut c, idx, Route::Passthrough, chan.token, owner).map_err(|e| format!("{e:?}")));
                     if let Err(e) = alloc {
-                        let _ = me.rm.free_channel(chan);
+                        let _ = me.release_twin(a.client, a.tsg, chan);
                         live.fetch_sub(1, Ordering::AcqRel);
                         if let Some(n) = notifier {
                             me.release_notifier(n);
@@ -1735,6 +1914,9 @@ impl ChanPlane {
                             notifier,
                             stopped: false,
                             disabled: false,
+                            space,
+                            rows,
+                            falcon_ctx: None,
                         });
                     }
                     me.pt_births.fetch_add(1, Ordering::Relaxed);

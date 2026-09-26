@@ -313,6 +313,9 @@ pub enum ChanStatement {
         with_va: u32,
         /// Entries decoded.
         entries: u32,
+        /// ★ v3-video: a video FALCON promote's `(virtAddress, size)` — where the guest's CPU-RM
+        /// mapped its own (never-executed) falcon context buffer. `None` for every GR promote.
+        falcon_ctx: Option<(u64, u64)>,
     },
     /// `GPU_EVICT_CTX` (`0x2080012c`) — the unbind counterpart (`nvGpuOpsStopChannel`).
     EvictCtx {
@@ -358,6 +361,15 @@ pub enum ChanStatement {
         object: u32,
         /// `bWait` as the guest asked (the host verb always waits: the held reply IS the preempt).
         wait: bool,
+    },
+    /// ★ v3-video: acquire (`0x20808163`) / release (`0x20808164`) one GPU-wide NVENC session slot
+    /// (`kf_abi::gssreplay::GSS_ENC_SESSION_ACQUIRE`) — carried to OUR host client, never answered
+    /// from a table: the slot is host state.
+    EncoderSession {
+        /// `hClient` of the call (the guest process's client).
+        client: u32,
+        /// Acquire (`true`) or release.
+        acquire: bool,
     },
     /// An object was freed (maybe one of ours).
     Free {
@@ -535,6 +547,8 @@ impl ChannelPolicy {
                             | kf_chip::classes::Kind::ThreeD
                             | kf_chip::classes::Kind::TwoD
                             | kf_chip::classes::Kind::InlineToMemory
+                            | kf_chip::classes::Kind::VideoEncoder
+                            | kf_chip::classes::Kind::VideoDecoder
                     )
                 ) =>
             {
@@ -672,6 +686,13 @@ impl ChannelPolicy {
                 ChanStatement::Schedule { client: h.client, object: h.object, enable: params.first().is_some_and(|&b| b != 0) }
             }
             GET_WORK_SUBMIT_TOKEN => ChanStatement::Token { client: h.client, object: h.object },
+            // ★ v3-video: exactly the measured shape (4 zero bytes) is carried; anything else stays
+            // unserviced, refused as before.
+            kf_abi::gssreplay::GSS_ENC_SESSION_ACQUIRE | kf_abi::gssreplay::GSS_ENC_SESSION_RELEASE
+                if params.len() == kf_abi::gssreplay::ENC_SESSION_PARAMS_SIZE && params.iter().all(|b| *b == 0) =>
+            {
+                ChanStatement::EncoderSession { client: h.client, acquire: h.cmd == kf_abi::gssreplay::GSS_ENC_SESSION_ACQUIRE }
+            }
             GR_SET_CTXSW_PREEMPTION_MODE => {
                 if !self.abi.capabilities().control(kf_arch::ids::ControlCmd(h.cmd)).is_permitted() {
                     return None;
@@ -750,6 +771,15 @@ impl ChannelPolicy {
                 }
                 let p = match self.abi.decode_promote_ctx(params) {
                     Ok(p) => p,
+                    // ★ v3-video: a video falcon's context promote (`kernel_falcon.c:184-276`) —
+                    // no entries, the buffer's VA only. Satisfied by the twin (host RM promoted its
+                    // own falcon context with the engine object); carried with no entries.
+                    Err(kf_abi::wire::AbiError::PromoteLegacyShape { .. }) if self.abi.decode_falcon_promote(params).is_ok() => {
+                        let (engine_type, chan_client, object, va, size) = self.abi.decode_falcon_promote(params).ok()?;
+                        eprintln!("kf-rm: chanlink: falcon ctx promote {chan_client:#x}:{object:#x} engine {engine_type:#x} guest ctx buffer VA {va:#x}+{size:#x}");
+                        let st = ChanStatement::PromoteCtx { chan_client, object, engine_type, initialize: 0, with_va: 0, entries: 0, falcon_ctx: Some((va, size)) };
+                        return self.carry_control_statement(st, cmd, &h);
+                    }
                     Err(e) => return Some(Self::refusal(NV_ERR_INVALID_ARGUMENT, &format!("GPU_PROMOTE_CTX undecodable: {e:?}"), cmd)),
                 };
                 let (mut initialize, mut with_va, mut entries) = (0u32, 0u32, 0u32);
@@ -772,6 +802,7 @@ impl ChannelPolicy {
                     initialize,
                     with_va,
                     entries,
+                    falcon_ctx: None,
                 }
             }
             EVICT_CTX => {
@@ -850,6 +881,11 @@ impl ChannelPolicy {
             }
             _ => return None,
         };
+        self.carry_control_statement(st, cmd, &h)
+    }
+
+    /// Carry a control statement to the sink and build the guest's reply from its answer.
+    fn carry_control_statement(&mut self, st: ChanStatement, cmd: &RpcCommand, h: &kf_abi::view::RpcControlReq) -> Option<Reply> {
         self.carried += 1;
         match (self.sink)(st) {
             ChanAnswer::NotOurs => None,
@@ -964,7 +1000,9 @@ pub fn alloc_shape(abi: &DriverAbiTable, class: u32) -> Option<AllocParams> {
         | kf_chip::classes::Kind::DmaCopy
         | kf_chip::classes::Kind::ThreeD
         | kf_chip::classes::Kind::TwoD
-        | kf_chip::classes::Kind::InlineToMemory => Some(AllocParams::NoDeclaredFacts),
+        | kf_chip::classes::Kind::InlineToMemory
+        | kf_chip::classes::Kind::VideoEncoder
+        | kf_chip::classes::Kind::VideoDecoder => Some(AllocParams::NoDeclaredFacts),
         kf_chip::classes::Kind::Usermode => None,
     })
 }
@@ -1143,7 +1181,8 @@ mod tests {
                 engine_type: 1,
                 initialize: 1 << 0,
                 with_va: 1 << 2,
-                entries: 2
+                entries: 2,
+                falcon_ctx: None
             })
         );
         // A channel the plane does not own: declined (the FSM's named refusal answers it).

@@ -199,6 +199,18 @@ pub fn engine_notification_rows(engines: &[EngineKind], grce_mask: u64) -> Vec<I
                 out.push(row(MC_CE0 + i, next_runlist));
                 next_runlist += 1;
             }
+            // ★ A video engine has its own runlist and notifies on it (the vector is the runlist
+            // number, as for an async CE). Nonstall ONLY: its stall interrupts belong to the GSP,
+            // and a generic falcon registers only a notification service
+            // (`ogkm-580: kernel_falcon.c:396-398`).
+            EngineKind::VideoEncode(i) => {
+                out.push(row(MC_NVENC0 + i, next_runlist));
+                next_runlist += 1;
+            }
+            EngineKind::VideoDecode(i) => {
+                out.push(row(MC_NVDEC0 + i, next_runlist));
+                next_runlist += 1;
+            }
             EngineKind::Software => {}
         }
     }
@@ -221,6 +233,8 @@ pub fn non_stall_vector_for(table: &[IntrTableEntry], engine: EngineKind) -> Opt
     match engine {
         EngineKind::Graphics(i) => row(MC_GR0 + i),
         EngineKind::Copy(i) => row(MC_CE0 + i).or_else(|| row(MC_GR0)),
+        EngineKind::VideoEncode(i) => row(MC_NVENC0 + i),
+        EngineKind::VideoDecode(i) => row(MC_NVDEC0 + i),
         EngineKind::Software => None,
     }
 }
@@ -236,6 +250,10 @@ pub enum EngineKind {
     Graphics(u32),
     /// `CEn` (an LCE).
     Copy(u32),
+    /// ★ `NVENCn` — a video encoder, advertised because the HOST lists it (`GET_ENGINES_V2`).
+    VideoEncode(u32),
+    /// ★ `NVDECn` — a video decoder, likewise.
+    VideoDecode(u32),
     /// RM's software pseudo-engine.
     Software,
 }
@@ -247,6 +265,8 @@ impl EngineKind {
         match self {
             EngineKind::Graphics(i) => format!("GR{i}"),
             EngineKind::Copy(i) => format!("CE{i}"),
+            EngineKind::VideoEncode(i) => format!("NVENC{i}"),
+            EngineKind::VideoDecode(i) => format!("NVDEC{i}"),
             EngineKind::Software => "SOFTWARE".to_string(),
         }
     }
@@ -292,13 +312,51 @@ pub mod slot {
 const CLASS_GRAPHICS: u32 = 0x00d3_34df;
 const CLASS_OBJCE: u32 = 0x0079_3ceb;
 const CLASS_OBJSWENG: u32 = 0x0095_a6f5;
+/// `OBJMSENC 0xe97b6c` / `OBJBSP 0x8f99e1` (`ogkm-580: g_eng_desc_nvoc.h:1273,833`) —
+/// `ENG_NVENC(i)` / `ENG_NVDEC(i)`. `[measured]` the captured GA106 FIFO table
+/// (`C: src/qemu/mode2_initctrl_ga106.h:5054`, `ctl_20801112`) carries `0xe97b6c00` / `0x8f99e100`.
+const CLASS_OBJMSENC: u32 = 0x00e9_7b6c;
+const CLASS_OBJBSP: u32 = 0x008f_99e1;
 /// `NV_PTOP_DEVICE_INFO2_DEV_TYPE_ENUM_GRAPHICS` / `_LCE` (`ampere/ga100/dev_top.h:34`,
 /// `blackwell/gb100/dev_top.h:42`).
 const DEV_TYPE_GRAPHICS: u32 = 0;
 const DEV_TYPE_LCE: u32 = 0x13;
+/// `DEV_TYPE_ENUM` NVENC `0x0e` / NVDEC `0x10` — ⊘ not in any ogkm `dev_top.h`; from nouveau's
+/// device-info decoders (`nvkm/subdev/top/ga100.c:76-77`, `gk104.c:88-90`, the same codes in both
+/// formats) and `[measured]` the captured GA106 table (NVENC0 `0xe`, NVDEC0 `0x10`). The guest's
+/// only DEV_TYPE reader is the LCE fault-id range (`kern_gmmu_ga100.c:276`), which skips both.
+const DEV_TYPE_NVENC: u32 = 0x0e;
+const DEV_TYPE_NVDEC: u32 = 0x10;
 /// `MC_ENGINE_IDX_GR0` / `_CE0` (`engine_idx.h:54,128`).
 const MC_GR0: u32 = 84;
 const MC_CE0: u32 = 15;
+/// `MC_ENGINE_IDX_NVENC` 38 (`NVENC1..3` = 39..41) / `MC_ENGINE_IDX_BSP` 65 (`NVDEC1..7` = 66..72)
+/// (`ogkm-580: intr/engine_idx.h:78-81,107-117`).
+const MC_NVENC0: u32 = 38;
+const MC_NVDEC0: u32 = 65;
+/// The first `NV_PMC_DEVICE_ENABLE` bit authored for a video engine — above every bit GR (12)
+/// and the CEs (2..=11, 13..=22) can take; the register is ONE 32-bit word
+/// (`kernel_bif_ga100.c:584`, `NV_PMC_DEVICE_ENABLE__SIZE_1 <= 1`).
+const RESET_VIDEO_FIRST: u32 = 23;
+
+/// ★ The MMU fault-engine id of video engine `i` — `NV_PFAULT_MMU_ENG_ID_NVENC<i>` /
+/// `_NVDEC<i>` in the family's `dev_fault.h`:
+/// - Turing (`turing/tu102/dev_fault.h`): NVDEC `10, 25, 26` (⊘ NOT contiguous), NVENC `11, 12, 13`.
+/// - Ampere / Ada (`ampere/ga100`, `ada/ad102`): NVDEC `25..=29`, NVENC `11..=13`.
+///   `[measured]` the captured GA106 table: NVENC0 `0xb`, NVDEC0 `0x19`.
+/// - Blackwell (`blackwell/gb100`, `gb202`): NVDEC `28..=35`, NVENC `44..=47`.
+/// - Hopper: refused with the whole table ([`fault_ids`]).
+///
+/// `None` = the family's header names no such instance — refused by the caller, by name.
+fn video_fault_id(family: Family, encoder: bool, i: u32) -> Option<u32> {
+    let (enc, dec): (&[u32], &[u32]) = match family {
+        Family::Turing => (&[11, 12, 13], &[10, 25, 26]),
+        Family::Ampere | Family::Ada => (&[11, 12, 13], &[25, 26, 27, 28, 29]),
+        Family::Blackwell => (&[44, 45, 46, 47], &[28, 29, 30, 31, 32, 33, 34, 35]),
+        Family::Hopper => (&[], &[]),
+    };
+    (if encoder { enc } else { dec }).get(i as usize).copied()
+}
 
 /// The MMU fault-engine ids of a family: `(GRAPHICS, CE0, HOST0)`.
 ///
@@ -322,6 +380,49 @@ fn fault_ids(family: Family) -> Result<(u32, u32, u32), LayoutRefusal> {
     }
 }
 
+/// ★ `GspStaticConfigInfo.engineCaps[]` over the served FIFO table: bit `t` for every host-driven
+/// engine's **NV2080** type `t` (the table carries RM types; converted back per kind — the two
+/// spaces diverge for CE10+, NVENC and NVDEC). The SW pseudo-engine has no bit.
+#[must_use]
+pub fn engine_caps(engines: &[FifoDeviceEntry]) -> [u32; kf_abi::gspstaticinfo::ENGINE_CAPS_WORDS] {
+    use kf_abi::submit as s;
+    let mut caps = [0u32; kf_abi::gspstaticinfo::ENGINE_CAPS_WORDS];
+    for e in engines {
+        if e.engine_data[slot::IS_HOST_DRIVEN_ENGINE] == 0 {
+            continue;
+        }
+        let rm = e.engine_data[slot::RM_ENGINE_TYPE];
+        let nv2080 = match rm {
+            0x01..=0x08 => Some(rm),
+            _ if s::rm_copy_index_of_engine_type(rm).is_some() => {
+                s::rm_copy_index_of_engine_type(rm).and_then(kf_chan_copy_engine_type)
+            }
+            _ if (s::RM_ENGINE_TYPE_NVDEC0..s::RM_ENGINE_TYPE_NVDEC0 + s::NVDEC_SIZE).contains(&rm) => {
+                s::engine_type_nvdec(rm - s::RM_ENGINE_TYPE_NVDEC0)
+            }
+            _ if (s::RM_ENGINE_TYPE_NVENC0..s::RM_ENGINE_TYPE_NVENC0 + s::NVENC_SIZE).contains(&rm) => {
+                s::engine_type_nvenc(rm - s::RM_ENGINE_TYPE_NVENC0)
+            }
+            _ => None,
+        };
+        if let Some(t) = nv2080
+            && (t as usize) < 32 * caps.len()
+        {
+            caps[t as usize / 32] |= 1 << (t % 32);
+        }
+    }
+    caps
+}
+
+/// `NV2080_ENGINE_TYPE_COPY(i)` over both decades.
+fn kf_chan_copy_engine_type(i: u32) -> Option<u32> {
+    match i {
+        0..=9 => kf_abi::submit::engine_type_copy(i),
+        10..=19 => Some(kf_abi::submit::ENGINE_TYPE_COPY10 + i - 10),
+        _ => None,
+    }
+}
+
 /// Why the engine table's layout is what it is.
 pub const ENGINE_LAYOUT_WHY: Why = Why::Advertised(
     "runlist, PBDMA, reset, RC and CHRAM slots describe OUR device's topology, not the host's: guest channels \
@@ -330,7 +431,9 @@ pub const ENGINE_LAYOUT_WHY: Why = Why::Advertised(
      GB20x) share runlist 0 with GR's PBDMAs 0 and 1 (GRCE k on PBDMA k mod 2 — ENGINE_MAX_PBDMA is 2); every other \
      LCE owns runlist 1, 2, ... with PBDMA runlist+1; RUNLIST_PRI_BASE = 0xC00000 + 0x400*runlist and \
      CHRAM_PRI_BASE = 0xC20000 + 0x2000*runlist on Ampere+ (engine_info.h:66-90: 'valid only on Ampere+', so 0 \
-     on Turing; no kernel-RM reader outside kfifoEngineInfoXlate); RESET bits 12 (GR) and 2+i / 3+i (CEi, i<10 / \
+     on Turing; no kernel-RM reader outside kfifoEngineInfoXlate); a video engine (NVENCi / NVDECi, advertised \
+     because the host lists it) owns the next runlist exactly as an async LCE does, with PBDMA runlist+1 and RESET \
+     bits from 23 up; RESET bits 12 (GR) and 2+i / 3+i (CEi, i<10 / \
      i>=10) in our NV_PMC_DEVICE_ENABLE (sole reader kbifGetValidDeviceEnginesToReset_GA100, \
      kernel_bif_ga100.c:572-605); INTR 0 (kernel_fifo_ga100.c:52 'no longer stored on Ampere+', no reader on \
      Turing either); RC_MASK 0 (no kernel-RM reader at all). ENG_DESC, DEV_TYPE_ENUM, MC and the MMU fault ids \
@@ -356,6 +459,7 @@ pub fn engine_table(family: Family, engines: &[EngineKind], grce_mask: u64) -> R
     let mut next_runlist = 1u32;
     let mut next_tag = 0u32;
     let mut grce_seen = 0u32;
+    let mut next_reset = RESET_VIDEO_FIRST;
     let mut out = Vec::with_capacity(engines.len());
     for &kind in engines {
         let mut d = [0u32; ENGINE_DATA_TYPES];
@@ -368,7 +472,7 @@ pub fn engine_table(family: Family, engines: &[EngineKind], grce_mask: u64) -> R
                 grce_seen += 1;
                 (Some(0), grce_seen)
             }
-            EngineKind::Copy(_) => {
+            EngineKind::Copy(_) | EngineKind::VideoEncode(_) | EngineKind::VideoDecode(_) => {
                 let r = next_runlist;
                 next_runlist += 1;
                 (Some(r), 0)
@@ -402,6 +506,24 @@ pub fn engine_table(family: Family, engines: &[EngineKind], grce_mask: u64) -> R
                 };
                 num_pbdmas = 1;
             }
+            EngineKind::VideoEncode(i) | EngineKind::VideoDecode(i) => {
+                let encoder = matches!(kind, EngineKind::VideoEncode(_));
+                d[slot::ENG_DESC] = (if encoder { CLASS_OBJMSENC } else { CLASS_OBJBSP }) << 8 | i;
+                d[slot::MMU_FAULT_ID] = video_fault_id(family, encoder, i).ok_or(LayoutRefusal {
+                    family,
+                    missing: "NV_PFAULT_MMU_ENG_ID_NVENC<i>/NVDEC<i> for this instance: the family's dev_fault.h names none",
+                })?;
+                if next_reset > 31 {
+                    return Err(LayoutRefusal { family, missing: "a free NV_PMC_DEVICE_ENABLE bit for a video engine (one 32-bit word)" });
+                }
+                d[slot::RESET] = next_reset;
+                next_reset += 1;
+                d[slot::MC] = if encoder { MC_NVENC0 } else { MC_NVDEC0 } + i;
+                d[slot::DEV_TYPE_ENUM] = if encoder { DEV_TYPE_NVENC } else { DEV_TYPE_NVDEC };
+                d[slot::INSTANCE_ID] = i;
+                pbdma_ids[0] = runlist.unwrap_or(0) + 1;
+                num_pbdmas = 1;
+            }
             EngineKind::Software => {
                 d[slot::ENG_DESC] = CLASS_OBJSWENG << 8;
                 d[slot::FIFO_TAG] = u32::MAX;
@@ -426,6 +548,8 @@ pub fn engine_table(family: Family, engines: &[EngineKind], grce_mask: u64) -> R
         d[slot::RM_ENGINE_TYPE] = match kind {
             EngineKind::Graphics(i) => 1 + i,
             EngineKind::Copy(i) => kf_abi::submit::RM_ENGINE_TYPE_COPY0 + i,
+            EngineKind::VideoEncode(i) => kf_abi::submit::RM_ENGINE_TYPE_NVENC0 + i,
+            EngineKind::VideoDecode(i) => kf_abi::submit::RM_ENGINE_TYPE_NVDEC0 + i,
             EngineKind::Software => kf_abi::submit::RM_ENGINE_TYPE_SW,
         };
         out.push(FifoDeviceEntry {

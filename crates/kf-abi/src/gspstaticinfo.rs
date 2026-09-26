@@ -113,7 +113,11 @@ const SRIOV_CAPS_SIZE: usize = 80;
 /// (`ogkm-580: src/nvidia/inc/kernel/gpu/nvbitmask.h:35`), with `RM_ENGINE_TYPE_LAST ==
 /// NV2080_ENGINE_TYPE_LAST == 0x54` (`ogkm-580: gpu_engine_type.c:32` and
 /// `src/common/sdk/nvidia/inc/class/cl2080_notification.h:373`).
-const ENGINE_CAPS_WORDS: usize = (0x54 - 1) / 32 + 1;
+pub const ENGINE_CAPS_WORDS: usize = (0x54 - 1) / 32 + 1;
+
+/// ★ Byte offset of `engineCaps[]` — after `fbRegionInfoParams`, `sriovCaps` and the u32
+/// `sriovMaxGfid` (`ogkm-580: gsp_static_config.h:84-88`).
+pub const ENGINE_CAPS_OFF: usize = FB_REGION_INFO_PARAMS_OFF + FB_REGION_INFO_PARAMS_SIZE + SRIOV_CAPS_SIZE + 4;
 
 /// Round `off` up to `align`, which must be a power of two.
 const fn align_up(off: usize, align: usize) -> usize {
@@ -529,6 +533,14 @@ pub struct GspStaticInfo<'a> {
     /// ★★★★ `bar2PdeBase` — the framebuffer address of OUR BAR2 root page. See
     /// [`BAR2_PDE_BASE_OFF`].
     pub bar2_pde_base: u64,
+    /// ★ `engineCaps[]` — a bitmask indexed by **NV2080** engine type (bit `t % 32` of word
+    /// `t / 32`), converted to RM types by `gpuGetRmEngineTypeCapMask`
+    /// (`ogkm-580: gpu_engine_type.c:305-331`). Its only GSP-client reader is
+    /// `gpuCheckEngineWithOrderList_KERNEL` (`gpu.c:6432-6565`), and for NVENC / NVDEC / OFA /
+    /// NVJPG / SEC2 it is the WHOLE presence test: a video class survives
+    /// `gpuRemoveMissingEngines` (`gpu.c:1786-1824`) only when its bit is set. All zero = the
+    /// guest keeps no video class at all.
+    pub engine_caps: [u32; ENGINE_CAPS_WORDS],
 }
 
 /// A `GspStaticConfigInfo` this port will not put on the wire.
@@ -728,6 +740,9 @@ pub fn encode_gsp_static_info(
     // same reason as BAR1's.
     body[BAR2_PDE_BASE_OFF..BAR2_PDE_BASE_OFF + 8]
         .copy_from_slice(&info.bar2_pde_base.to_le_bytes());
+    for (i, w) in info.engine_caps.iter().enumerate() {
+        body[ENGINE_CAPS_OFF + 4 * i..ENGINE_CAPS_OFF + 4 * i + 4].copy_from_slice(&w.to_le_bytes());
+    }
     Ok(body)
 }
 
@@ -802,6 +817,7 @@ mod tests {
                 short_name: Some(GpuName::declared("C")),
                 bar1_pde_base: 0,
                 bar2_pde_base: 0,
+                engine_caps: [0; ENGINE_CAPS_WORDS],
             },
             GspStaticInfoWire::Pre610,
         )
@@ -893,6 +909,7 @@ mod tests {
                 short_name: a_short_name(),
                 bar1_pde_base: 0,
                 bar2_pde_base: 0,
+                engine_caps: [0; ENGINE_CAPS_WORDS],
             },
             GspStaticInfoWire::Pre610,
         )
@@ -957,6 +974,7 @@ mod tests {
                 short_name: a_short_name(),
                 bar1_pde_base: 0,
                 bar2_pde_base: 0,
+                engine_caps: [0; ENGINE_CAPS_WORDS],
             },
             GspStaticInfoWire::Pre610,
         )
@@ -988,6 +1006,7 @@ mod tests {
                 short_name: a_short_name(),
                 bar1_pde_base: 0,
                 bar2_pde_base: 0,
+                engine_caps: [0; ENGINE_CAPS_WORDS],
             },
             GspStaticInfoWire::Pre610,
         )
@@ -1015,6 +1034,7 @@ mod tests {
                 short_name: a_short_name(),
                 bar1_pde_base: 0,
                 bar2_pde_base: 0,
+                engine_caps: [0; ENGINE_CAPS_WORDS],
             },
             GspStaticInfoWire::Pre610,
         )
@@ -1060,6 +1080,7 @@ mod tests {
                 short_name: a_short_name(),
                 bar1_pde_base: 0,
                 bar2_pde_base: 0,
+                engine_caps: [0; ENGINE_CAPS_WORDS],
             },
             GspStaticInfoWire::Pre610,
         )
@@ -1086,6 +1107,7 @@ mod tests {
                 short_name: a_short_name(),
                 bar1_pde_base: 0,
                 bar2_pde_base: 0,
+                engine_caps: [0; ENGINE_CAPS_WORDS],
             },
             GspStaticInfoWire::Pre610,
         )
@@ -1111,6 +1133,7 @@ mod tests {
                 short_name: a_short_name(),
                 bar1_pde_base: 0,
                 bar2_pde_base: 0,
+                engine_caps: [0; ENGINE_CAPS_WORDS],
             },
             GspStaticInfoWire::From610_43_02,
         )

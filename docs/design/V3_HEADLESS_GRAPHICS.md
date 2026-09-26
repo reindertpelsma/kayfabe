@@ -185,6 +185,12 @@ sync is by semaphore [I]. The risk is UMD assumptions about a shared TSG context
 
 ### 2.5 Bigger context buffers and VA collisions [I]
 
+> ★ **`v3-int` (2026-09-26):** the same two-allocator hazard was found independently for the
+> video falcon context (`V3_VIDEO_ENGINES.md` §2.1) and fixed there by steering host RM onto the
+> guest's own context VA. With this document's guest-VA reservation in place the steer is
+> unnecessary and is skipped for any VA inside a live reservation; it remains the fallback when the
+> reservation is refused or disabled. See the correction block at the top of that section.
+
 > ⊘ **MEASURED 2026-09-26 — the split window does NOT keep them clear.** Host CPU-RM (not GSP)
 > allocates the twin's GR context buffers, lowest-fit just above the split window — exactly where
 > the guest's RM (same allocator) places its next surfaces. The guest's FIXED map found the VA held

@@ -145,6 +145,13 @@ pub struct HostFacts {
     /// once at realize. `None` = the host refused it, and the guest's identical ask is refused
     /// likewise (the guest sees what host userspace sees). ⊘ Replaces the GA106 clock words.
     pub perf_level_info_v2: Option<Vec<u8>>,
+    /// ★ The host's answers to the GSS-legacy requests of `kf_abi::gssreplay::ROWS` (the clock
+    /// listing / clock query `libnvidia-encode` gates a session on), asked at realize with requests
+    /// we author. A row the host refused is absent (the guest's is then answered as before).
+    pub gss_replay: Vec<kf_abi::gssreplay::Answer>,
+    /// ★ The host's `MSENC_GET_CAPS_V2` / `BSP_GET_CAPS_V2` tables for the advertised video
+    /// engines (`kf_abi::videocaps`).
+    pub video_caps: Vec<kf_abi::videocaps::CapsAnswer>,
 }
 
 /// Where a fact comes from.
@@ -187,9 +194,9 @@ pub const PROVENANCE: &[(&str, Source)] = &[
     ("intr_subtree_map", Source::HostControl { cmd: 0x2080_170f, name: "MC_GET_INTR_CATEGORY_SUBTREE_MAP" }),
     ("chip_info", Source::FamilyRule("USERMODE base = DRF_BASE(NV_VIRTUAL_FUNCTION_FULL_PHYS_OFFSET) + NV_VIRTUAL_FUNCTION (ogkm dev_vm.h); sub-rev from MC_GET_ARCH_INFO; isCmpSku from GPU_GET_INFO_V2[CMP_SKU 0x3c]")),
     ("user_register_access_map", Source::Authored("accessmap.rs")),
-    ("constructed_falcons", Source::Authored("none constructed")),
+    ("constructed_falcons", Source::HostControl { cmd: 0x2080_01b0, name: "GPU_GET_CONSTRUCTED_FALCON_INFO, kept to the engDescs of the advertised VIDEO engines (NVENC/NVDEC); empty when the host lists none (hostquery::query_video_falcons)" }),
     ("memory_system", Source::HostControl { cmd: 0x2080_1303, name: "FB_GET_INFO_V2 (L2 size, RAM type, LTC count) + GR_GET_INFO_V2[LITTER_NUM_SLICES_PER_LTC]; comptag policy, compression page and flags authored" }),
-    ("device_info", Source::FamilyRule("PRI bases: GR = NV_PGRAPH 0x400000, LCE = the NV_CE block 0x104000 (ogkm dev_ce.h), SW = not a device; over the GPU_GET_ENGINES_V2 list")),
+    ("device_info", Source::FamilyRule("PRI bases: GR = NV_PGRAPH 0x400000, LCE = the NV_CE block 0x104000 (ogkm dev_ce.h), NVENC/NVDEC = the host falcon table's registerBase for the same engDesc, SW = not a device; over the GPU_GET_ENGINES_V2 list")),
     ("conf_compute", Source::Authored("CC off, fabricated so ogkm accepts it")),
     ("bif_static", Source::Authored("fabricated so ogkm accepts it (no C2C, single function)")),
     ("fifo_channels", Source::Authored("the channel count is ours to set")),
@@ -219,6 +226,8 @@ pub const PROVENANCE: &[(&str, Source)] = &[
     ("gpu_short_name", Source::HostControl { cmd: 0x2080_0111, name: "GPU_GET_SHORT_NAME_STRING" }),
     ("vbios_version", Source::HostControl { cmd: 0x2080_0810, name: "BIOS_GET_INFO_V2 [REVISION 0x0, OEM_REVISION 0x1] (a host that does not answer = None: cosmetic, never a realize failure)" }),
     ("perf_level_info_v2", Source::HostControl { cmd: 0x2080_200b, name: "PERF_GET_LEVEL_INFO_V2 (libcudart's question, asked once; a host refusal is kept and relayed)" }),
+    ("video_caps", Source::HostControl { cmd: 0x0080_1c02, name: "MSENC_GET_CAPS_V2 0x801b02 / BSP_GET_CAPS_V2 0x801c02 on the host DEVICE, per advertised instance (kf_abi::videocaps)" }),
+    ("gss_replay", Source::HostControl { cmd: 0x2080_a028, name: "GSS-legacy 0x20809064 / 0x2080a028 (layouts measured, kf_abi::gssreplay::ROWS), asked with requests we author; the bytes the host wrote" }),
 ];
 
 /// Why a host reply could not become a fact — by name, never a zero.

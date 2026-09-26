@@ -174,6 +174,7 @@ fn the_encoder_reproduces_the_oracles_own_fb_region_bytes() {
             // `a_name_this_port_was_never_told_is_served_as_zero_for_every_chip_row`.
             name: Some(GpuName::declared("NVIDIA GeForce RTX 3060")),
             short_name: Some(GpuName::declared("GA106-A")),
+            engine_caps: [0; kf_abi::gspstaticinfo::ENGINE_CAPS_WORDS],
         },
         GspStaticInfoWire::Pre610,
     )

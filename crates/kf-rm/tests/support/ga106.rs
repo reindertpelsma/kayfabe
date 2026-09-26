@@ -493,6 +493,8 @@ pub fn host_facts() -> HostFacts {
         // board version; the v3 device asks the host (`BIOS_GET_INFO_V2`).
         vbios_version: Some((0x9418_0000, 0x00)),
         perf_level_info_v2: Some(perf_level_info_v2()),
+        gss_replay: Vec::new(),
+        video_caps: Vec::new(),
     }
 }
 

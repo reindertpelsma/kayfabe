@@ -118,6 +118,14 @@ impl VaSpace {
         }
         Ok(self.range)
     }
+
+    /// ★ v3-int: whether `[va, va+len)` lies wholly inside a LIVE guest reservation — i.e. host
+    /// RM's own allocator can never place anything there (only the guest's FIXED maps land in it).
+    #[must_use]
+    pub fn guest_reserved(&self, va: u64, len: u64) -> bool {
+        let end = va.saturating_add(len.max(1));
+        self.guest.iter().any(|g| g.handle != 0 && va >= g.lo && end <= g.hi)
+    }
 }
 
 /// A FIXED map that straddles the edge of a [`GuestVaRange`].
@@ -330,6 +338,22 @@ impl HostRm {
         if !ring.userd_offset.is_multiple_of(USERD_ALIGNMENT) {
             return Err(RmError::Other(USERD_OFFSET_MISALIGNED));
         }
+        let tsg = self.birth_group(space, engine_type)?;
+        self.birth_member(tsg, engine_type, ring, true).inspect_err(|_| {
+            let _ = self.free(tsg);
+        })
+    }
+
+    /// ★ A host channel GROUP (`KEPLER_CHANNEL_GROUP_A`) over `space` on `engine_type`, with no
+    /// member yet — the twin of ONE guest TSG, whose channels are born into it with
+    /// [`HostRm::birth_member`]. `[measured vvid 2026-09-26]` CUDA puts its 8 GR channels in ONE
+    /// TSG sharing ONE GR context; per-channel host TSGs split that context and a kernel launched
+    /// on a second stream's channel fails the SKED local-memory check (Xid 13
+    /// `SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE`) — context state pushed on one channel never reached it.
+    ///
+    /// # Errors
+    /// The host's refusal.
+    pub fn birth_group(&self, space: VaSpace, engine_type: u32) -> Result<u32, RmError> {
         let mut tsg_params = [0u8; NvChannelGroupAllocationParameters::SIZE];
         NvChannelGroupAllocationParameters {
             h_object_error: 0,
@@ -343,7 +367,22 @@ impl HostRm {
         let want = self.mint();
         let tsg = self.raw_alloc(self.device, want, CHANNEL_GROUP, &mut tsg_params)?;
         self.remember(tsg, self.device);
+        Ok(tsg)
+    }
 
+    /// ★ A channel over `ring` inside the host group `tsg` → bound → work-submit token. The FIRST
+    /// member binds the group (`NVA06C_CTRL_CMD_BIND`, every member present); a later member binds
+    /// itself (`NVA06F_CTRL_CMD_BIND` on the channel) so a bound group's other members are never
+    /// re-bound. `hContextShare = 0`: the group's LEGACY subcontext, shared by every member
+    /// (`kernel_channel.c:607-668`) — one GR context, as CUDA's one-ctxshare TSG has on hardware.
+    /// A failure frees the channel (never the group, which the caller owns).
+    ///
+    /// # Errors
+    /// [`USERD_OFFSET_MISALIGNED`] before any host call; else the host's refusal.
+    pub fn birth_member(&self, tsg: u32, engine_type: u32, ring: RingSpec, first: bool) -> Result<Channel, RmError> {
+        if !ring.userd_offset.is_multiple_of(USERD_ALIGNMENT) {
+            return Err(RmError::Other(USERD_OFFSET_MISALIGNED));
+        }
         let mut chan_params = [0u8; ChannelAllocParams::SIZE];
         let encoded = ChannelAllocParams {
             h_object_error: ring.err_notifier,
@@ -365,25 +404,18 @@ impl HostRm {
         }
         .encode_into(&mut chan_params);
         if encoded.is_err() {
-            let _ = self.free(tsg);
             return Err(RmError::Other(ABI_ENCODE_FAILED));
         }
         let want = self.mint();
-        let chan = match self.raw_alloc(tsg, want, self.classes.gpfifo_channel().channel_id().0, &mut chan_params) {
-            Ok(h) => h,
-            Err(e) => {
-                let _ = self.free(tsg);
-                return Err(e);
-            }
-        };
+        let chan = self.raw_alloc(tsg, want, self.classes.gpfifo_channel().channel_id().0, &mut chan_params)?;
         self.remember(chan, tsg);
         let unwind = |me: &Self| {
             let _ = me.free(chan);
-            let _ = me.free(tsg);
         };
         let mut bind = [0u8; BIND_PARAMS_SIZE];
         bind.copy_from_slice(&engine_type.to_le_bytes());
-        if let Err(e) = self.raw_control(tsg, NVA06C_CTRL_CMD_BIND, &mut bind) {
+        let (on, cmd) = if first { (tsg, NVA06C_CTRL_CMD_BIND) } else { (chan, kf_abi::submit::NVA06F_CTRL_CMD_BIND) };
+        if let Err(e) = self.raw_control(on, cmd, &mut bind) {
             unwind(self);
             return Err(e);
         }
@@ -469,6 +501,25 @@ impl HostRm {
         };
         let want = self.mint();
         let h = self.raw_alloc(chan.chan, want, class, params)?;
+        self.remember(h, chan.chan);
+        Ok(h)
+    }
+
+    /// ★ A VIDEO engine object (NVENC / NVDEC class) of `class` on `chan`, with params WE author:
+    /// `NV_MSENC_ALLOCATION_PARAMETERS` / `NV_BSP_ALLOCATION_PARAMETERS` — the same 12 bytes
+    /// `{size = 12, prohibitMultipleInstances = 0, engineInstance}` (`ogkm-580: nvos.h:2943-2996`),
+    /// `engineInstance` = the twin's own engine index, so nothing of the guest's alloc but its
+    /// class reaches the host. Host RM (a GSP client itself) allocates and promotes the falcon
+    /// context (`kernel_falcon.c:279-299`) — the guest's own context buffer is never used.
+    ///
+    /// # Errors
+    /// The host's refusal.
+    pub fn alloc_video_object(&self, chan: Channel, class: u32, engine_instance: u32) -> Result<u32, RmError> {
+        let mut p = [0u8; 12];
+        p[0..4].copy_from_slice(&12u32.to_le_bytes());
+        p[8..12].copy_from_slice(&engine_instance.to_le_bytes());
+        let want = self.mint();
+        let h = self.raw_alloc(chan.chan, want, class, &mut p)?;
         self.remember(h, chan.chan);
         Ok(h)
     }
@@ -701,5 +752,14 @@ impl HostRm {
         let a = self.free(chan.chan);
         let b = self.free(chan.tsg);
         a.and(b)
+    }
+
+    /// ★ Free ONE member of a shared group (the channel only); the group is freed by its owner
+    /// when its last member goes ([`HostRm::free`] on `chan.tsg`).
+    ///
+    /// # Errors
+    /// The host's status.
+    pub fn free_member(&self, chan: Channel) -> Result<(), RmError> {
+        self.free(chan.chan)
     }
 }

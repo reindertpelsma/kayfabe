@@ -390,8 +390,18 @@ impl MapTarget for GpuMirror {
     }
     fn unmap(&self, va: u64, defer: bool) -> Result<(), String> {
         // ⊘ Forget the row FIRST: a reader must never resolve through a mapping being torn down.
-        if let Ok(mut r) = self.rows.write() {
-            r.remove(&va);
+        // ★ v3-video: NO row = nothing of OURS is mapped there — a leaf the host held (host RM's
+        // own buffer) or one the channel plane handed to host RM (a steered falcon context). A
+        // host unmap there would name host RM's mapping, which is not ours to remove (`[measured
+        // vvid vid11]` refused `Other(87)`, leaving the space unsettled): answered with no host call.
+        match self.rows.write() {
+            Ok(mut r) => {
+                if r.remove(&va).is_none() {
+                    eprintln!("kf3: mem unmap {va:#x}: no placement of ours there (host-held or handed to host RM) — no host call");
+                    return Ok(());
+                }
+            }
+            Err(_) => return Err(format!("unmap {va:#x}: placement rows poisoned")),
         }
         self.vas.unmap(va, defer)
     }

@@ -193,6 +193,8 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
         match target.map(&d, true) {
             Ok(Mapped::Placed) => out.mapped += 1,
             Ok(Mapped::HeldByHost) => {
+                // Rare (a host-RM placement in the twin's VAS at the guest's VA): named per leaf.
+                eprintln!("kf3: mem leaf {:#x}+{:#x} HELD BY HOST (host RM placed its own buffer there)", d.va, d.len);
                 out.held += 1;
                 out.codes[i] = KFWR_ACK_HELD;
                 // ★ v3-gfx: name WHERE (bounded) — a held row is a guest VA host RM already owns.

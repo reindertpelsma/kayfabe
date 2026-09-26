@@ -196,6 +196,8 @@ fn every_host_fact_states_where_it_comes_from() {
         gpu_short_name: _,
         vbios_version: _,
         perf_level_info_v2: _,
+        gss_replay: _,
+        video_caps: _,
     } = ga106::host_facts();
     let fields = [
         "family", "has_c2c", "ce_caps", "engines", "lce_pce_masks", "intr_table", "intr_subtree_map",
@@ -203,7 +205,7 @@ fn every_host_fact_states_where_it_comes_from() {
         "device_info", "conf_compute", "bif_static", "fifo_channels", "gmmu_static", "gr_static",
         "gr_info", "gr_context_buffers", "gr_zcull_info", "zbc_table_sizes", "forwarded_fb_extra", "gpu_cache_info", "forwarded_gpu_info", "forwarded_fb_info", "smc_mode", "pcie_max_gen",
         "ce_fault_method_buffer_size", "gsp_features", "gpu_name", "gpu_short_name",
-        "vbios_version", "perf_level_info_v2",
+        "vbios_version", "perf_level_info_v2", "gss_replay", "video_caps",
     ];
     for f in fields {
         let n = hostfacts::PROVENANCE.iter().filter(|(name, _)| *name == f).count();

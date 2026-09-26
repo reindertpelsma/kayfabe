@@ -352,6 +352,32 @@ impl core::fmt::Display for FalconInfoError {
 
 impl core::error::Error for FalconInfoError {}
 
+/// ★ Decode a HOST's `NV2080_CTRL_GPU_GET_CONSTRUCTED_FALCON_INFO_PARAMS` reply — the
+/// unprivileged per-die source of the video falcons (`hostquery::query_video_falcons`).
+///
+/// # Errors
+/// [`FalconInfoError::TooManyFalcons`] for a count past [`MAX_CONSTRUCTED_FALCONS`] (a reply
+/// that would index past its own table), and for a reply shorter than its declared count.
+pub fn decode_constructed_falcon_info(params: &[u8]) -> Result<Vec<ConstructedFalcon>, FalconInfoError> {
+    let rd = |off: usize| -> Option<u32> { params.get(off..off + 4).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]])) };
+    let count = rd(NUM_CONSTRUCTED_FALCONS_OFF).unwrap_or(0) as usize;
+    if count > MAX_CONSTRUCTED_FALCONS {
+        return Err(FalconInfoError::TooManyFalcons { count, max: MAX_CONSTRUCTED_FALCONS });
+    }
+    (0..count)
+        .map(|i| {
+            let at = CONSTRUCTED_FALCONS_TABLE_OFF + i * CONSTRUCTED_FALCON_STRIDE;
+            let f = |off| rd(at + off);
+            match (f(ENG_DESC_OFF), f(CTX_ATTR_OFF), f(CTX_BUFFER_SIZE_OFF), f(ADDR_SPACE_LIST_OFF), f(REGISTER_BASE_OFF)) {
+                (Some(eng_desc), Some(ctx_attr), Some(ctx_buffer_size), Some(addr_space_list), Some(register_base)) => {
+                    Ok(ConstructedFalcon { eng_desc, ctx_attr, ctx_buffer_size, addr_space_list, register_base })
+                }
+                _ => Err(FalconInfoError::TooManyFalcons { count, max: i }),
+            }
+        })
+        .collect()
+}
+
 /// Encode `NV2080_CTRL_GPU_GET_CONSTRUCTED_FALCON_INFO_PARAMS` from a chip's row.
 ///
 /// The whole [`FALCON_INFO_PARAMS_SIZE`]-byte struct is returned, zero past the declared
