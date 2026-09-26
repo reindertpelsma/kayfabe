@@ -128,6 +128,8 @@ fn fsp_families_get_the_boot_gate_and_config_cycle_link_caps_at_their_die_groups
         let regs = boot_regs(fam, &f(arch));
         let t = regs.iter().find(|r| r.name == "NV_THERM_I2CS_SCRATCH_FSP_BOOT_COMPLETE").unwrap();
         assert_eq!((t.off, t.value), (therm, 0xFF), "{arch:#x}");
+        let mirror = regs.iter().find(|r| r.off == 0x0009_206C).map(|r| r.value);
+        assert_eq!(mirror, (arch != 0x1A0).then_some(caps), "{arch:#x}: the passthrough BAR0 config mirror");
         let w = kf_chip::bar0::config_words(fam, &f(arch));
         assert_eq!(w.iter().map(|w| (w.off, w.value)).collect::<Vec<_>>(), vec![(cfg, caps)], "{arch:#x}");
     }

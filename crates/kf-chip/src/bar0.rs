@@ -209,6 +209,22 @@ pub fn boot_regs(family: Family, f: &Bar0Facts) -> Vec<BootReg> {
             from: Provenance::Ogkm("kfspWaitForSecureBoot_{GH100,GB100,GB202}: FSP boot complete = 0xFF"),
         });
     }
+    // ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §4): in a VM RM takes the PASSTHROUGH branch of
+    // `gpuReadBusConfigCycle_GM107` (`bIsPassthru`, `ogkm-580: gpu.c:4745-4769`; `kern_gpu_gm107.c:
+    // 103-106`), and on GH100/GB20x `gpuReadPassThruConfigReg_GH100` reads the config space's BAR0
+    // MIRROR: `DEVICE_BASE(NV_EP_PCFGM)` = `0x92000` (`hopper/gh100/dev_xtl_ep_pri.h:26`) + the
+    // offset (`kern_gpu_gh100.c:99-109`, bound for GH100 + GB20x, `g_gpu_nvoc.c:1197-1207`). So the
+    // link capabilities `config_words` presents at `0x6C` are ALSO served at `0x9206C` — the XVE
+    // mirror GA10x reads at `0x88084`, one family later. `[measured bws2]` without it UVM still saw
+    // "Unknown PCIe speed". ⊘ GB10x binds `_GB100` = a real config cycle; nothing to mirror.
+    if matches!(family, Family::Hopper | Family::Blackwell) && f.architecture != crate::arch::GB100 {
+        v.push(BootReg {
+            off: NV_EP_PCFGM + u64::from(NV_EP_PCFG_GPU_LINK_CAPABILITIES),
+            value: f.pcie_link_caps,
+            name: "NV_EP_PCFGM + NV_EP_PCFG_GPU_LINK_CAPABILITIES",
+            from: Provenance::Host("the host's PCIe link capability"),
+        });
+    }
     // ★ Ada only (`kgspExecuteScrubberIfNeeded_AD102`, `ogkm-580: kernel_gsp_ad102.c`; the image is
     // ALWAYS allocated on Ada — `kernel_gsp.c:3734` "WAR for Bug 5016200"). Before the booter runs,
     // RM reads SCRUBBER_HANDOFF and, below DONE, resets SEC2 and runs a scrubber HS ucode on it —
@@ -224,6 +240,12 @@ pub fn boot_regs(family: Family, f: &Bar0Facts) -> Vec<BootReg> {
     }
     v
 }
+
+/// `DEVICE_BASE(NV_EP_PCFGM)` — the BAR0 mirror of PCI config space on GH100/GB20x
+/// (`ogkm-580: hopper/gh100/dev_xtl_ep_pri.h:26`, `0x92FFF:0x92000`).
+const NV_EP_PCFGM: u64 = 0x0009_2000;
+/// `NV_EP_PCFG_GPU_LINK_CAPABILITIES` (`hopper/gh100/dev_xtl_ep_pcfg_gpu.h:73`).
+const NV_EP_PCFG_GPU_LINK_CAPABILITIES: u16 = 0x6C;
 
 /// ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §4) — one dword of the device's **PCI configuration
 /// space** the guest driver reads with a real config cycle.
@@ -259,7 +281,7 @@ pub fn config_words(family: Family, f: &Bar0Facts) -> Vec<ConfigWord> {
     let off = match family {
         Family::Turing | Family::Ampere | Family::Ada => return Vec::new(),
         Family::Blackwell if f.architecture == crate::arch::GB100 => 0x4C,
-        Family::Hopper | Family::Blackwell => 0x6C,
+        Family::Hopper | Family::Blackwell => NV_EP_PCFG_GPU_LINK_CAPABILITIES,
     };
     vec![ConfigWord {
         off,
