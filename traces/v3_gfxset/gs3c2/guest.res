@@ -1,0 +1,2 @@
+GSET_RES side=guest item=blender_cycles_cuda verdict=PASS rc=0 secs=7 note=warn:BLENDER_OK CYCLES CUDA gpu=NVIDIA_GeForce_RTX_3070 backend=none(SystemError) w=640 h=360 mean=0.741335 boot=gs_gs3c2_b1 host_xid=0 guest_xid=0 kf3_rc=0 kf3_refusals=6 kf3_unserviced=20 kf3_lines=891
+GSET_RES side=guest item=blender_cycles_optix verdict=PASS rc=0 secs=4 note=warn:BLENDER_OK CYCLES OPTIX gpu=NVIDIA_GeForce_RTX_3070 backend=none(SystemError) w=640 h=360 mean=0.741335 boot=gs_gs3c2_b1 host_xid=0 guest_xid=0 kf3_rc=0 kf3_refusals=0 kf3_unserviced=19 kf3_lines=886

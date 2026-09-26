@@ -1,0 +1,41 @@
+=== pv_gbm_egl_import side=host start=2026-09-26T17:07:29+00:00 host=ubuntu kernel=6.8.0-59-generic drv=580.159.04
+[renderD128] ok   open(/dev/dri/renderD128) fd=3
+[renderD128] ok   gbm_create_device backend=nvidia
+[renderD128] ok   gbm_bo_create 256x256 modifier=0x300000000606014 planes=1 stride=1024
+[renderD128] ok   gbm_bo_get_fd fd=4
+[renderD128] ok   eglInitialize 1.5 vendor=NVIDIA
+[renderD128] ok   eglMakeCurrent GL_RENDERER='NVIDIA GeForce RTX 3070/PCIe/SSE2'
+[renderD128] ok   eglCreateImageKHR(LINUX_DMA_BUF, modifier)
+[renderD128] FAIL eglCreateImageKHR(NATIVE_PIXMAP from gbm_bo) egl_error=0x300c   <-- this is the exact glamor call
+[renderD128] ok   glEGLImageTargetTexture2DOES bound to texture
+[renderD128] ok   FBO complete -- imported bo is a usable render target
+[renderD128] ok   render+readback rgba(0,255,0,255)
+[renderD128] -- NATIVE_PIXMAP modifier sweep --
+[renderD128]   SCANOUT|RENDERING            modifier=0x0300000000606014 NATIVE_PIXMAP=FAIL (egl 0x300c)
+[renderD128]   RENDERING                    modifier=0x0300000000e08014 NATIVE_PIXMAP=FAIL (egl 0x300c)
+[renderD128]   SCANOUT|RENDERING|LINEAR     bo_create FAILED
+[renderD128]   with_modifiers(LINEAR)       modifier=0x0000000000000000 NATIVE_PIXMAP=FAIL (egl 0x300c)
+[renderD128] RESULT all-good
+rc=0
+GSET_DIG side=host item=pv_gbm_egl_import key=renderD128 val=a09c02ac2450d2e7
+[card0] ok   open(/dev/dri/card0) fd=3
+[card0] ok   gbm_create_device backend=nvidia
+[card0] ok   gbm_bo_create 256x256 modifier=0x300000000606014 planes=1 stride=1024
+[card0] ok   gbm_bo_get_fd fd=4
+[card0] ok   eglInitialize 1.5 vendor=NVIDIA
+[card0] ok   eglMakeCurrent GL_RENDERER='NVIDIA GeForce RTX 3070/PCIe/SSE2'
+[card0] ok   eglCreateImageKHR(LINUX_DMA_BUF, modifier)
+[card0] FAIL eglCreateImageKHR(NATIVE_PIXMAP from gbm_bo) egl_error=0x300c   <-- this is the exact glamor call
+[card0] ok   glEGLImageTargetTexture2DOES bound to texture
+[card0] ok   FBO complete -- imported bo is a usable render target
+[card0] ok   render+readback rgba(0,255,0,255)
+[card0] -- NATIVE_PIXMAP modifier sweep --
+[card0]   SCANOUT|RENDERING            modifier=0x0300000000606014 NATIVE_PIXMAP=FAIL (egl 0x300c)
+[card0]   RENDERING                    modifier=0x0300000000e08014 NATIVE_PIXMAP=FAIL (egl 0x300c)
+[card0]   SCANOUT|RENDERING|LINEAR     bo_create FAILED
+[card0]   with_modifiers(LINEAR)       modifier=0x0000000000000000 NATIVE_PIXMAP=FAIL (egl 0x300c)
+[card0] RESULT all-good
+rc=0
+GSET_DIG side=host item=pv_gbm_egl_import key=card0 val=9ef5475b09d6aff6
+GSET_OK
+=== end rc=0 secs=1 2026-09-26T17:07:30+00:00

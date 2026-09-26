@@ -1,0 +1,31 @@
+=== pv_dmabuf_import side=guest start=2026-09-26T17:49:46+00:00 host=ubuntu kernel=6.8.0-139-generic drv=580.159.04
+/dev/dri/card0 linear: gbm backend: nvidia
+/dev/dri/card0 linear: EGL 1.5 vendor=NVIDIA
+/dev/dri/card0 linear: bo: stride=1024 modifier=0x0 dmabuf_fd=20
+/dev/dri/card0 linear: >>> eglCreateImageKHR(LINUX_DMA_BUF) BEGIN
+/dev/dri/card0 linear: <<< eglCreateImageKHR END: img=0x55ac6f11fc81 egl_err=0x3000
+/dev/dri/card0 linear: RESULT import=OK
+GSET_DIG side=guest item=pv_dmabuf_import key=card0_linear val=RESULT_import=OK
+/dev/dri/card0 blocklinear: gbm backend: nvidia
+/dev/dri/card0 blocklinear: EGL 1.5 vendor=NVIDIA
+/dev/dri/card0 blocklinear: bo: stride=1024 modifier=0x300000000606014 dmabuf_fd=20
+/dev/dri/card0 blocklinear: >>> eglCreateImageKHR(LINUX_DMA_BUF) BEGIN
+/dev/dri/card0 blocklinear: <<< eglCreateImageKHR END: img=0x5e7809dafc21 egl_err=0x3000
+/dev/dri/card0 blocklinear: RESULT import=OK
+GSET_DIG side=guest item=pv_dmabuf_import key=card0_blocklinear val=RESULT_import=OK
+/dev/dri/renderD128 linear: gbm backend: nvidia
+/dev/dri/renderD128 linear: EGL 1.5 vendor=NVIDIA
+/dev/dri/renderD128 linear: bo: stride=1024 modifier=0x0 dmabuf_fd=20
+/dev/dri/renderD128 linear: >>> eglCreateImageKHR(LINUX_DMA_BUF) BEGIN
+/dev/dri/renderD128 linear: <<< eglCreateImageKHR END: img=0x603a54fa9c81 egl_err=0x3000
+/dev/dri/renderD128 linear: RESULT import=OK
+GSET_DIG side=guest item=pv_dmabuf_import key=renderD128_linear val=RESULT_import=OK
+/dev/dri/renderD128 blocklinear: gbm backend: nvidia
+/dev/dri/renderD128 blocklinear: EGL 1.5 vendor=NVIDIA
+/dev/dri/renderD128 blocklinear: bo: stride=1024 modifier=0x300000000606014 dmabuf_fd=20
+/dev/dri/renderD128 blocklinear: >>> eglCreateImageKHR(LINUX_DMA_BUF) BEGIN
+/dev/dri/renderD128 blocklinear: <<< eglCreateImageKHR END: img=0x55dca345dc81 egl_err=0x3000
+/dev/dri/renderD128 blocklinear: RESULT import=OK
+GSET_DIG side=guest item=pv_dmabuf_import key=renderD128_blocklinear val=RESULT_import=OK
+GSET_OK
+=== end rc=0 secs=1 2026-09-26T17:49:47+00:00

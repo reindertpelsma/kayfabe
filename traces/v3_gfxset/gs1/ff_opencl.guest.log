@@ -1,0 +1,19 @@
+=== ff_opencl side=guest start=2026-09-26T18:11:23+00:00 host=ubuntu kernel=6.8.0-139-generic drv=580.159.04
+ff avgblur_opencl rc=0 md5=182fa33790919e5d bytes=41472000
+GSET_DIG side=guest item=ff_opencl key=avgblur_opencl val=182fa33790919e5d
+ff boxblur_opencl rc=0 md5=4477dd953ff0287c bytes=41472000
+GSET_DIG side=guest item=ff_opencl key=boxblur_opencl val=4477dd953ff0287c
+ff unsharp_opencl rc=0 md5=eb93b33a7b1307bc bytes=41472000
+GSET_DIG side=guest item=ff_opencl key=unsharp_opencl val=eb93b33a7b1307bc
+ff sobel_opencl rc=0 md5=8942e49f88eb0932 bytes=41472000
+GSET_DIG side=guest item=ff_opencl key=sobel_opencl val=8942e49f88eb0932
+ff convolution_opencl rc=0 md5=201ef480e9b650f1 bytes=41472000
+GSET_DIG side=guest item=ff_opencl key=convolution_opencl val=201ef480e9b650f1
+ff nlmeans_opencl rc=0 md5=7079f9f228ff3750 bytes=41472000
+GSET_DIG side=guest item=ff_opencl key=nlmeans_opencl val=7079f9f228ff3750
+ff transpose_opencl rc=0 md5=8100c2e85cce4282 bytes=41472000
+GSET_DIG side=guest item=ff_opencl key=transpose_opencl val=8100c2e85cce4282
+ff erosion_opencl rc=0 md5=4fdbfe5a810f3dd7 bytes=41472000
+GSET_DIG side=guest item=ff_opencl key=erosion_opencl val=4fdbfe5a810f3dd7
+GSET_OK
+=== end rc=0 secs=11 2026-09-26T18:11:34+00:00

@@ -1,0 +1,6 @@
+[gset-suite 2026-09-26T21:54:09+00:00] GSET_SUITE_STARTED run=gs3c2 rev=d06833f0
+[gset-suite 2026-09-26T21:54:09+00:00] host baseline reused from gs1; measuring on bare metal only: (none)
+[gset-suite 2026-09-26T21:54:09+00:00] kf3 binary: /workspace/bench/kf3-bins/d06833f0/qemu-system-x86_64  items: blender_cycles_cuda blender_cycles_optix
+[gset-suite 2026-09-26T21:55:27+00:00] boot gs_gs3c2_b1 rc=0 items=[blender_cycles_cuda blender_cycles_optix] :: /workspace/bench/run_gs_gs3c2_b1_probe.log:GSET_HOOK tag=gs_gs3c2_b1 items=[blender_cycles_cuda blender_cycles_optix] guest=NVIDIA GeForce RTX 3070, 580.159.04, Disabled /workspace/bench/run_gs_gs3c2_b1_probe.log:GSET_HO
+[gset-suite 2026-09-26T21:55:45+00:00] GSET_SUITE_VERDICT=FAIL (pass=2/37) rev=d06833f0
+[gset-suite 2026-09-26T21:55:45+00:00] GSET_SUITE_EXIT=2026-09-26T21:55:45+00:00

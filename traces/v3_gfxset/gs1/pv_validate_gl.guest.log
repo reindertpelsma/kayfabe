@@ -1,0 +1,15 @@
+=== pv_validate_gl side=guest start=2026-09-26T17:41:15+00:00 host=ubuntu kernel=6.8.0-139-generic drv=580.159.04
+CHECK|egl_loader|PASS|/lib/x86_64-linux-gnu/libEGL.so.1
+CHECK|egl_context|PASS|EGL_EXT_platform_device dev 0/3, EGL 1.5
+CHECK|gl_renderer|PASS|GL_RENDERER='NVIDIA GeForce RTX 3070/PCIe/SSE2' GL_VENDOR='NVIDIA Corporation' GL_VERSION='OpenGL ES 3.2 NVIDIA 580.159.04'
+CHECK|gl_renderer_is_nvidia|PASS|NVIDIA GeForce RTX 3070/PCIe/SSE2
+CHECK|gl_draw_pixel_check|PASS|64x64 FBO: inside(16,16)=RGBA(255,127,0,255)==triangle, outside(48,48)=RGBA(0,0,0,255)==clear
+egl_context=PASS
+egl_loader=PASS
+gl_draw_pixel_check=PASS
+gl_renderer=PASS
+gl_renderer_is_nvidia=PASS
+GSET_DIG side=guest item=pv_validate_gl key=checks val=ca0da02b1e428a9c
+GSET_DIG side=guest item=pv_validate_gl key=pixels val=a0fa3666d3c9d716
+GSET_OK
+=== end rc=0 secs=1 2026-09-26T17:41:16+00:00

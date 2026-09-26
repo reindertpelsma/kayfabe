@@ -1,0 +1,185 @@
+[   19.877277] nvidia-nvlink: Nvlink Core is being initialized, major device number 239
+
+[   19.884557] nvidia 0000:00:03.0: vgaarb: VGA decodes changed: olddecodes=none,decodes=none:owns=io+mem
+[   19.887397] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+[   21.593919] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   21.593929] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   21.593932] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   21.593990] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   21.596768] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:233
+[   21.596826] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_USER_SHARED_DATA_SET_DATA_POLL, &params, sizeof(params)) @ gpu_user_shared_data.c:268
+[   21.620404] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   21.623309] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   21.623371] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_CE_GET_PCE_CONFIG_FOR_LCE_TYPE, &pceConfigParams, sizeof(pceConfigParams)) @ kernel_ce.c:1020
+[   21.623405] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, NV2080_CTRL_CE_LCE_TYPE_DECOMP, &numPcesPerLce, &numLces, &supportedPceMask, &supportedLceMask, &pcesPerHshub) @ kernel_ce_gp100.c:62
+[   21.637022] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   21.637034] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   21.637039] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   21.654678] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   21.654686] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   21.654690] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   21.875896] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgrobjPromoteContext(pGpu, pKernelGraphicsObject, pKernelGraphics) @ kernel_graphics_object.c:224
+[   21.876477] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->AllocWithHandle(pRmApi, hClientId, hChannelId, hObj3D, classNum, NULL, 0) @ kernel_graphics.c:2519
+[   21.878920] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   21.878925] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   21.878927] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   21.878930] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   21.882299] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgraphicsCreateGoldenImageChannel(pGpu, pKernelGraphics) @ kernel_graphics.c:508
+[   21.882341] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ kernel_fifo.c:3129
+[   21.891675] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00008; hParent=0x31415903; hObject=0x31415900; hClass=0x0000c36f; paramsSize=0x00000170; paramsStatus=0x00000056; status=0x00000056
+[   21.891684] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from status @ kernel_channel.c:2827
+[   21.891692] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _kchannelSendChannelAllocRpc(pKernelChannel, pChannelGpfifoParams, pKernelChannelGroup, bFullSriov) @ kernel_channel.c:940
+[   21.893820] NVRM: nvAssertFailedNoLog: Assertion failed: status == NV_OK @ kernel_rc_watchdog.c:1198
+[   21.896914] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00009; hParent=0xcaf00001; hObject=0xcaf00002; hClass=0x0000402c; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[   22.556199] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:373
+[   22.557272] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:373
+[   22.574031] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00001; hParent=0xa55a0030; hObject=0xa55a0070; hClass=0x0000208f; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[   22.648144] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ fecs_event_list.c:1623
+[   22.657684] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:213
+[   25.267844] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   25.267982] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   25.267989] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   25.268339] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   25.272219] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:233
+[   25.272295] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_USER_SHARED_DATA_SET_DATA_POLL, &params, sizeof(params)) @ gpu_user_shared_data.c:268
+[   25.284174] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   25.287889] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   25.287978] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_CE_GET_PCE_CONFIG_FOR_LCE_TYPE, &pceConfigParams, sizeof(pceConfigParams)) @ kernel_ce.c:1020
+[   25.287987] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, NV2080_CTRL_CE_LCE_TYPE_DECOMP, &numPcesPerLce, &numLces, &supportedPceMask, &supportedLceMask, &pcesPerHshub) @ kernel_ce_gp100.c:62
+[   25.302338] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   25.302349] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   25.302355] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   25.317763] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   25.317773] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   25.317779] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   25.473676] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgrobjPromoteContext(pGpu, pKernelGraphicsObject, pKernelGraphics) @ kernel_graphics_object.c:224
+[   25.474421] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->AllocWithHandle(pRmApi, hClientId, hChannelId, hObj3D, classNum, NULL, 0) @ kernel_graphics.c:2519
+[   25.476336] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   25.476341] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   25.476343] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   25.476345] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   25.479706] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgraphicsCreateGoldenImageChannel(pGpu, pKernelGraphics) @ kernel_graphics.c:508
+[   25.479713] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ kernel_fifo.c:3129
+[   25.489328] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00012; hParent=0x31415903; hObject=0x31415900; hClass=0x0000c36f; paramsSize=0x00000170; paramsStatus=0x00000056; status=0x00000056
+[   25.489338] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from status @ kernel_channel.c:2827
+[   25.489347] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _kchannelSendChannelAllocRpc(pKernelChannel, pChannelGpfifoParams, pKernelChannelGroup, bFullSriov) @ kernel_channel.c:940
+[   25.491595] NVRM: nvAssertFailedNoLog: Assertion failed: status == NV_OK @ kernel_rc_watchdog.c:1198
+[   25.494892] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00013; hParent=0xcaf00001; hObject=0xcaf00002; hClass=0x0000402c; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[   25.594280] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ fecs_event_list.c:1623
+[   25.604808] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:213
+[   26.001643] nvidia-modeset: Loading NVIDIA UNIX Open Kernel Mode Setting Driver for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:04:37 UTC 2026
+[   26.020571] [drm] [nvidia-drm] [GPU ID 0x00000003] Loading driver
+[   26.488398] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   26.488408] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   26.488411] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   26.488498] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   26.490955] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:233
+[   26.491046] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_USER_SHARED_DATA_SET_DATA_POLL, &params, sizeof(params)) @ gpu_user_shared_data.c:268
+[   26.501153] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   26.504053] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   26.504117] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_CE_GET_PCE_CONFIG_FOR_LCE_TYPE, &pceConfigParams, sizeof(pceConfigParams)) @ kernel_ce.c:1020
+[   26.504124] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, NV2080_CTRL_CE_LCE_TYPE_DECOMP, &numPcesPerLce, &numLces, &supportedPceMask, &supportedLceMask, &pcesPerHshub) @ kernel_ce_gp100.c:62
+[   26.516584] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   26.516593] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   26.516597] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   26.529345] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   26.529353] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   26.529357] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   26.716488] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgrobjPromoteContext(pGpu, pKernelGraphicsObject, pKernelGraphics) @ kernel_graphics_object.c:224
+[   26.716976] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->AllocWithHandle(pRmApi, hClientId, hChannelId, hObj3D, classNum, NULL, 0) @ kernel_graphics.c:2519
+[   26.718586] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   26.718591] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   26.718593] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   26.718596] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   26.721446] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgraphicsCreateGoldenImageChannel(pGpu, pKernelGraphics) @ kernel_graphics.c:508
+[   26.721453] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ kernel_fifo.c:3129
+[   26.730094] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0001c; hParent=0x31415903; hObject=0x31415900; hClass=0x0000c36f; paramsSize=0x00000170; paramsStatus=0x00000056; status=0x00000056
+[   26.730104] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from status @ kernel_channel.c:2827
+[   26.730111] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _kchannelSendChannelAllocRpc(pKernelChannel, pChannelGpfifoParams, pKernelChannelGroup, bFullSriov) @ kernel_channel.c:940
+[   26.732271] NVRM: nvAssertFailedNoLog: Assertion failed: status == NV_OK @ kernel_rc_watchdog.c:1198
+[   26.735434] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0001d; hParent=0xcaf00001; hObject=0xcaf00002; hClass=0x0000402c; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[   26.752393] [drm] Initialized nvidia-drm 0.0.0 20160202 for 0000:00:03.0 on minor 0
+[   26.752614] nvidia 0000:00:03.0: [drm] No compatible format found
+[   26.752664] nvidia 0000:00:03.0: [drm] Cannot find any crtc or sizes
+[   29.145903] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   29.179682] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   29.580283] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   29.608002] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   29.737541] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   29.751305] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   29.798782] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   29.814742] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   29.882587] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   29.983883] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   29.997616] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   30.059174] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   30.074356] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   30.107261] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   30.120440] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   30.169496] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   30.184518] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   30.224020] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   30.340592] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   30.464037] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   30.609086] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   30.727212] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   30.856914] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   30.981243] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   31.123598] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   31.239713] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   31.261084] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   31.339297] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   31.367076] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   31.376441] NVRM: nvAssertOkFailedNoLog: Assertion failed: Invalid argument to call [NV_ERR_INVALID_ARGUMENT] (0x0000001F) returned from pRmApi->AllocWithSecInfo(pRmApi, hClient, hParent, &pChannelGpfifoParams->hPhysChannelGroup, KEPLER_CHANNEL_GROUP_A, NV_PTR_TO_NvP64(&tsgParams), sizeof(tsgParams), RMAPI_ALLOC_FLAGS_SKIP_RPC, NvP64_NULL, &pRmApi->defaultSecInfo) @ kernel_channel.c:381
+[   34.582808] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   34.628821] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   34.866193] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   34.892320] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   34.999797] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   35.016970] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   35.071762] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   35.087003] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   35.148368] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   36.978288] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   37.010225] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   38.536232] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   38.563524] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   38.689030] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   38.702480] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   38.748619] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   38.763411] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   38.825492] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   40.153309] hrtimer: interrupt took 5869042 ns
+[   45.386723] NVRM: kgmmuClientShadowFaultBufferUnregister_IMPL: Unregistering non-replayable fault buffer failed (status=0x00000056), proceeding...
+[   45.396534] NVRM: kgmmuFaultBufferReplayableDestroy_IMPL: Unregistering Replayable Fault buffer failed (status=0x00000056), proceeding...
+[   45.406471] NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+[   63.601294] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   64.124001] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   66.032372] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   66.059171] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   66.171491] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   66.184768] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   66.236119] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   66.251792] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   66.318146] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   67.713280] NVRM: kgmmuClientShadowFaultBufferUnregister_IMPL: Unregistering non-replayable fault buffer failed (status=0x00000056), proceeding...
+[   67.714051] NVRM: kgmmuFaultBufferReplayableDestroy_IMPL: Unregistering Replayable Fault buffer failed (status=0x00000056), proceeding...
+[   67.714769] NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+[   70.454203] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   70.484353] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   70.656363] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   70.682085] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   70.786235] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   70.799295] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   70.844093] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   70.859094] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   70.923215] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   71.540461] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   71.571894] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   71.745540] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   71.774233] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   71.880173] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   71.893065] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   71.937200] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   71.951928] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   72.012894] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)

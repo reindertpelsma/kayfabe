@@ -1,0 +1,16 @@
+=== ff_placebo side=guest start=2026-09-26T18:14:08+00:00 host=ubuntu kernel=6.8.0-139-generic drv=580.159.04
+vulkan ICD: /etc/vulkan/icd.d/nvidia_icd.json only
+ff libplacebo_scale rc=187 md5=EMPTY bytes=
+Device creation failed: -542398533.
+Failed to set value 'vulkan=vk:0' for option 'init_hw_device': Generic error in an external library
+Error parsing global options: Generic error in an external library
+GSET_FAIL libplacebo_scale rc=187
+GSET_DIG side=guest item=ff_placebo key=libplacebo_scale val=EMPTY
+ff libplacebo_deband rc=187 md5=EMPTY bytes=
+Device creation failed: -542398533.
+Failed to set value 'vulkan=vk:0' for option 'init_hw_device': Generic error in an external library
+Error parsing global options: Generic error in an external library
+GSET_FAIL libplacebo_deband rc=187
+GSET_DIG side=guest item=ff_placebo key=libplacebo_deband val=EMPTY
+GSET_OK
+=== end rc=0 secs=8 2026-09-26T18:14:16+00:00

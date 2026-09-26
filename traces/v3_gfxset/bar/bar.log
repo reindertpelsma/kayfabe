@@ -1,0 +1,18 @@
+BAR_START 2026-09-26T18:37:45+00:00
+GS1_DONE [gset-suite 2026-09-26T18:17:19+00:00] GSET_SUITE_VERDICT=FAIL (pass=33/37) rev=c179a845
+REV=286387f3 dirty=0
+STEP kf3 2026-09-26T18:37:45+00:00
+KF3_RC=0 KF3_BUILT /workspace/bench/kf3-bins/286387f3/qemu-system-x86_64 rev=286387f3 mtime=2026-09-26 18:37:56.439202472 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+-rwxr-xr-x 1 root root 83815184 Sep 26 18:37 /workspace/bench/kf3-bins/286387f3/qemu-system-x86_64
+STEP crate_tests 2026-09-26T18:37:56+00:00
+CRATE_TESTS_RC=0 passed=1489 failed=0
+STEP gates 2026-09-26T18:39:01+00:00
+GATES_RC=0 V3_GATES_SUMMARY pass=9 fail=0
+STEP fastguest 2026-09-26T18:39:15+00:00
+LADDER_BUILD_RC=0
+FG_RC=0
+STEP fast_suite 2026-09-26T18:39:46+00:00
+FAST_SUITE_RC=0 FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+STEP cuda_ladder 2026-09-26T18:47:52+00:00
+OLD_LADDER_DONE 2026-09-26T18:50:41+00:00 (286387f3, parent run_bar.sh stopped before gfxset: superseded by bar2)
+BAR_EXIT 2026-09-26T18:50:41+00:00 (stopped before the gfxset step; bar2.log carries the merged head)

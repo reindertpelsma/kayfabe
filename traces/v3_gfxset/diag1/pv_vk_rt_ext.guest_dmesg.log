@@ -1,0 +1,12 @@
+[   63.601294] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   64.124001] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   66.032372] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   66.059171] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   66.171491] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   66.184768] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   66.236119] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   66.251792] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   66.318146] NVRM: kfifoEngineInfoXlate_GM107: Asked for host-specific type(0x3) for non-host engine type(0xf),val(0x00000007)
+[   67.713280] NVRM: kgmmuClientShadowFaultBufferUnregister_IMPL: Unregistering non-replayable fault buffer failed (status=0x00000056), proceeding...
+[   67.714051] NVRM: kgmmuFaultBufferReplayableDestroy_IMPL: Unregistering Replayable Fault buffer failed (status=0x00000056), proceeding...
+[   67.714769] NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...

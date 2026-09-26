@@ -1,0 +1,15 @@
+=== pv_fbo_formats side=guest start=2026-09-26T17:49:40+00:00 host=ubuntu kernel=6.8.0-139-generic drv=580.159.04
+egl_display: EGL_EXT_platform_device dev 0/3, EGL 1.5
+egl_context: pbuffer 64x64
+GL_RENDERER='NVIDIA GeForce RTX 3070/PCIe/SSE2'
+GL_VENDOR='NVIDIA Corporation'
+GL_VERSION='OpenGL ES 3.2 NVIDIA 580.159.04'
+FBO| GL_RGBA/GL_UNSIGNED_BYTE texture   status=0x8CD5 GL_FRAMEBUFFER_COMPLETE                       glGetError alloc=0x0 attach=0x0 after=0x0
+FBO| GL_RGBA8 renderbuffer              status=0x8CD5 GL_FRAMEBUFFER_COMPLETE                       glGetError alloc=0x0 attach=0x0 after=0x0
+FBO| GL_RGB565 renderbuffer             status=0x8CD5 GL_FRAMEBUFFER_COMPLETE                       glGetError alloc=0x0 attach=0x0 after=0x0
+FBO| GL_RGBA4 renderbuffer              status=0x8CD5 GL_FRAMEBUFFER_COMPLETE                       glGetError alloc=0x0 attach=0x0 after=0x0
+FBO| GL_RGB5_A1 renderbuffer            status=0x8CD5 GL_FRAMEBUFFER_COMPLETE                       glGetError alloc=0x0 attach=0x0 after=0x0
+SUMMARY| 0/5 configurations incomplete
+GSET_DIG side=guest item=pv_fbo_formats key=summary val=a532cabc738a062b
+GSET_OK
+=== end rc=0 secs=1 2026-09-26T17:49:41+00:00

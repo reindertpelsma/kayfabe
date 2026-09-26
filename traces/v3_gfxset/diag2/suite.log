@@ -1,0 +1,18 @@
+[gset-suite 2026-09-26T18:24:42+00:00] GSET_SUITE_STARTED run=diag2 rev=c9acfbab
+[gset-host 18:24:42] host nvidia-drm modeset=Y dri=by-path card0 renderD128  nodes=/dev/nvidia-modeset /dev/nvidia-uvm /dev/nvidia-uvm-tools /dev/nvidia0 /dev/nvidiactl  /dev/nvidia-caps: nvidia-cap1 nvidia-cap2 
+hostroot: UP image=/workspace/bench/guest.qcow2 root=/mnt/gset/root os=Ubuntu 24.04.5 LTS nvlibs=libnvidia-glcore.so.580.159.04 hostdrv=580.159.04
+[gset-host 18:24:45] items: ff_vulkan_init ff_vulkan ff_placebo vk_compute vk_render pv_validate_vk blender_eevee_vulkan vk_ofa
+GSET_RES side=host item=ff_vulkan_init verdict=PASS rc=0 secs=1 note=warn:[in#0/lavfi @ 0x63482f6bb840] Input stream #0:0 (video): 5 packets read (2120 bytes); 4 frames decoded; 0 decode errors;  host_xid=0
+GSET_RES side=host item=ff_vulkan verdict=PASS rc=0 secs=11 note=- host_xid=0
+GSET_RES side=host item=ff_placebo verdict=PASS rc=0 secs=3 note=- host_xid=0
+GSET_RES side=host item=vk_compute verdict=PASS rc=0 secs=0 note=- host_xid=0
+GSET_RES side=host item=vk_render verdict=PASS rc=0 secs=0 note=warn:VKR_REF_FAILS=0 host_xid=0
+GSET_RES side=host item=pv_validate_vk verdict=PASS rc=0 secs=0 note=- host_xid=0
+GSET_RES side=host item=blender_eevee_vulkan verdict=PASS rc=0 secs=2 note=- host_xid=0
+GSET_RES side=host item=vk_ofa verdict=PASS rc=0 secs=1 note=- host_xid=0
+[gset-host 18:25:04] HOST_DONE 8 pass / 8 rows
+hostroot: DOWN
+[gset-suite 2026-09-26T18:25:04+00:00] kf3 binary: /workspace/bench/kf3-bins/c9acfbab/qemu-system-x86_64  items: ff_vulkan_init ff_vulkan ff_placebo vk_compute vk_render pv_validate_vk blender_eevee_vulkan vk_ofa
+[gset-suite 2026-09-26T18:27:36+00:00] boot gs_diag2_b1 rc=0 items=[ff_vulkan_init ff_vulkan ff_placebo vk_compute vk_render pv_validate_vk blender_eevee_vulkan vk_ofa] :: /workspace/bench/run_gs_diag2_b1_probe.log:GSET_HOOK tag=gs_diag2_b1 items=[ff_vulkan_init ff_vulkan ff_placebo vk_compute vk_render pv_validate_vk blender_eevee_vulkan vk_ofa] guest=NVIDIA GeForce RTX 3070, 580.159.04, 
+[gset-suite 2026-09-26T18:27:36+00:00] GSET_SUITE_VERDICT=PASS (pass=8/8) rev=c9acfbab
+[gset-suite 2026-09-26T18:27:36+00:00] GSET_SUITE_EXIT=2026-09-26T18:27:36+00:00

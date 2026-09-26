@@ -666,6 +666,14 @@ impl ChanPlane {
                 kinds.push((kind, kf_host::event::notifier_nvdec(i), et));
             }
         }
+        // ★ v3-gfxset: the optical-flow engine, the same way (its `gkflcnServiceNotificationInterrupt`
+        // wakes the guest's OFA OS events — VK_NV_optical_flow's completion).
+        for i in 0..kf_abi::submit::OFA_SIZE {
+            let kind = kf_rm::authored::EngineKind::OpticalFlow(i);
+            if let (Some(et), Some(_)) = (kf_abi::submit::engine_type_ofa(i), kf_rm::authored::non_stall_vector_for(intr_table, kind)) {
+                kinds.push((kind, kf_host::event::notifier_ofa(i), et));
+            }
+        }
         for (kind, notify, engine_type) in kinds {
             let ev = rm.open_event_fd().map_err(|e| format!("{} event fd: {e:?}", kind.name()))?;
             rm.alloc_os_event(rm.subdevice(), notify, true, &ev).map_err(|e| format!("{} os event: {e:?}", kind.name()))?;
@@ -969,16 +977,37 @@ impl ChanPlane {
             ChanStatement::CtxswPreemption { client, channel, flags, gfxp, cilp } => {
                 // The guest's channel, or every twin of the guest's TSG — GR twins only: the mode
                 // is a GR context property (a CE twin in the group has none).
-                let twins: Vec<kf_host::Channel> = self
-                    .pt
-                    .lock()
-                    .map(|m| {
-                        m.iter()
-                            .filter(|(k, v)| k.0 == client && (k.1 == channel || v.tsg == Some(channel)) && v.engine == kf_abi::submit::ENGINE_TYPE_GRAPHICS)
-                            .map(|(_, v)| v.chan)
-                            .collect()
-                    })
-                    .unwrap_or_default();
+                // ★ v3-gfxset: …unless the target HAS no GR twin. `[measured diag1, RTX 3070]` the
+                // Vulkan UMD (ffmpeg's device: 2 transfer queues) sets CILP on each BARE copy channel
+                // it creates (`hChannel` = the channel, its TSG implicit, `kernel_channel.c:354-381`);
+                // on bare metal GSP answers NV_OK, here the GR-only filter left nothing, the answer
+                // fell through to 0x56, and the UMD freed the channel, retried and failed
+                // `vkCreateDevice` (VK_ERROR_INITIALIZATION_FAILED). Such a target's own twins get the
+                // same authored verb, on their own host groups, and the HOST decides — never a
+                // forged OK. A target with no twin at all is still not ours.
+                let pick = |gr_only: bool| -> Vec<kf_host::Channel> {
+                    let mut out: Vec<kf_host::Channel> = self
+                        .pt
+                        .lock()
+                        .map(|m| {
+                            m.iter()
+                                .filter(|(k, v)| {
+                                    k.0 == client
+                                        && (k.1 == channel || v.tsg == Some(channel))
+                                        && (!gr_only || v.engine == kf_abi::submit::ENGINE_TYPE_GRAPHICS)
+                                })
+                                .map(|(_, v)| v.chan)
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    out.sort_by_key(|c| c.tsg);
+                    out.dedup_by_key(|c| c.tsg); // one call per HOST group, as the mode is per group
+                    out
+                };
+                let mut twins = pick(true);
+                if twins.is_empty() {
+                    twins = pick(false);
+                }
                 if twins.is_empty() {
                     return ChanAnswer::NotOurs;
                 }
@@ -990,7 +1019,7 @@ impl ChanPlane {
                                 .set_ctxsw_preemption_mode(*c, flags, gfxp, cilp)
                                 .map_err(|e| (NV_ERR_NOT_SUPPORTED, format!("twin host {:#x} SET_CTXSW_PREEMPTION_MODE: {e:?}", c.token)))?;
                         }
-                        Ok(format!("{client:#x}:{channel:#x} SET_CTXSW_PREEMPTION_MODE flags={flags:#x} gfxp={gfxp} cilp={cilp} on {} GR twin(s)", twins.len()))
+                        Ok(format!("{client:#x}:{channel:#x} SET_CTXSW_PREEMPTION_MODE flags={flags:#x} gfxp={gfxp} cilp={cilp} on {} host group(s)", twins.len()))
                     }),
                 )
             }
@@ -1489,7 +1518,10 @@ impl ChanPlane {
                 // used the wrong page and NVDEC produced untouched frames. So G (the guest's ctx,
                 // which no engine ever reads — the twin runs on the host's) is unmapped from the
                 // twin first, and host RM takes G itself. Best effort: a failed unmap is logged.
-                let fc = if matches!(kind, kf_chip::classes::Kind::VideoEncoder | kf_chip::classes::Kind::VideoDecoder) {
+                let fc = if matches!(
+                    kind,
+                    kf_chip::classes::Kind::VideoEncoder | kf_chip::classes::Kind::VideoDecoder | kf_chip::classes::Kind::OpticalFlow
+                ) {
                     me.pt.lock().ok().and_then(|m| m.get(&(client, parent)).and_then(|v| v.falcon_ctx))
                 } else {
                     None

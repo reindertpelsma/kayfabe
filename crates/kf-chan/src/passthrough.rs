@@ -151,6 +151,12 @@ pub fn engine_object(
             let i = kf_abi::submit::nvdec_index_of_engine_type(engine).unwrap_or(0);
             return rm.alloc_video_object(chan, class, i).map_err(|e| format!("video decoder object {class:#x}: {e:?}"));
         }
+        // ★ v3-gfxset: the optical-flow class on a twin of an OFA engine — the same authored
+        // 12-byte `NV_OFA_ALLOCATION_PARAMETERS` (`nvos.h:3011-3016`), the twin's own instance.
+        Kind::OpticalFlow if kf_abi::submit::ofa_index_of_engine_type(engine).is_some() => {
+            let i = kf_abi::submit::ofa_index_of_engine_type(engine).unwrap_or(0);
+            return rm.alloc_video_object(chan, class, i).map_err(|e| format!("optical-flow object {class:#x}: {e:?}"));
+        }
         k => return Err(format!("class {class:#x} ({k:?}) on a twin of engine {engine:#x}")),
     };
     rm.alloc_engine_object(chan, class, copy).map_err(|e| format!("engine object {class:#x}: {e:?}"))

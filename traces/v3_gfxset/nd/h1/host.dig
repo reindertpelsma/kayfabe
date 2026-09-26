@@ -1,0 +1,4 @@
+GSET_DIG side=host item=blender_cycles_cuda key=png val=14af6fa53ad32231
+GSET_VAL side=host item=blender_cycles_cuda key=mean val=0.741335
+GSET_DIG side=host item=blender_cycles_optix key=png val=2587d2d764139c6d
+GSET_VAL side=host item=blender_cycles_optix key=mean val=0.741335

@@ -1,0 +1,7 @@
+=== blender_eevee_vulkan side=guest start=2026-09-26T18:12:49+00:00 host=ubuntu kernel=6.8.0-139-generic drv=580.159.04
+vulkan ICD: /etc/vulkan/icd.d/nvidia_icd.json only
+BLENDER_OK EEVEE GPU gpu=NVIDIA_GeForce_RTX_3070 backend=VULKAN w=640 h=360 mean=0.712611
+GSET_DIG side=guest item=blender_eevee_vulkan key=png val=6053d7374c016731
+GSET_VAL side=guest item=blender_eevee_vulkan key=mean val=0.712611
+GSET_OK
+=== end rc=0 secs=11 2026-09-26T18:13:00+00:00

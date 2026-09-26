@@ -1,0 +1,6 @@
+=== blender_eevee side=guest start=2026-09-26T18:11:57+00:00 host=ubuntu kernel=6.8.0-139-generic drv=580.159.04
+BLENDER_OK EEVEE GPU gpu=NVIDIA_GeForce_RTX_3070/PCIe/SSE2 backend=OPENGL w=640 h=360 mean=0.712611
+GSET_DIG side=guest item=blender_eevee key=png val=74cd1c5789ee9810
+GSET_VAL side=guest item=blender_eevee key=mean val=0.712611
+GSET_OK
+=== end rc=0 secs=45 2026-09-26T18:12:42+00:00

@@ -111,7 +111,7 @@ CHIPS=$(nm "$tmp/list.o" | awk '{print $NF}' | sed -n 's/^gpuGetEngClassDescript
 # ⊘ `-dM` prints the macro table the preprocessor ENDED with — the only names that survive
 # conditionals. The pattern is applied to macro NAMES, not to C.
 gcc $CFLAGS -E -dM "$tmp/all.h" | awk '{print $2}' \
-  | grep -E '^[A-Z0-9]+_(CHANNEL_GPFIFO|COMPUTE|DMA_COPY|USERMODE|TWOD|INLINE_TO_MEMORY)_[A-Z]$|^(TURING|AMPERE|ADA|HOPPER|BLACKWELL)_[A-Z]$|^NV[0-9A-F]{4}_VIDEO_(ENCODER|DECODER)$' \
+  | grep -E '^[A-Z0-9]+_(CHANNEL_GPFIFO|COMPUTE|DMA_COPY|USERMODE|TWOD|INLINE_TO_MEMORY)_[A-Z]$|^(TURING|AMPERE|ADA|HOPPER|BLACKWELL)_[A-Z]$|^NV[0-9A-F]{4}_VIDEO_(ENCODER|DECODER|OFA)$' \
   | sort -u > "$tmp/names"
 {
   echo '#include <stdio.h>'
@@ -152,6 +152,7 @@ kind_of() {
     *_DMA_COPY_?) echo dma_copy ;; *_USERMODE_?) echo usermode ;;
     *_TWOD_?) echo twod ;; *_INLINE_TO_MEMORY_?) echo inline_to_memory ;;   # ★ v3-gfx: GR-engine graphics classes
     *_VIDEO_ENCODER) echo video_encoder ;; *_VIDEO_DECODER) echo video_decoder ;;   # ★ v3-video
+    *_VIDEO_OFA) echo optical_flow ;;   # ★ v3-gfxset: the optical-flow accelerator (VK_NV_optical_flow)
     *) echo threed ;;   # the pattern in step 3 admits only <FAMILY>_<LETTER> here
   esac
 }
@@ -179,7 +180,7 @@ else
     echo "    ClassSet {"
     echo "        family: Family::$f,"
     echo "        chips: &[${chips%, }],"
-    for k in channel_gpfifo compute dma_copy usermode threed twod inline_to_memory video_encoder video_decoder; do
+    for k in channel_gpfifo compute dma_copy usermode threed twod inline_to_memory video_encoder video_decoder optical_flow; do
       ids=$(awk -v f="$f" -v k="$k" '$1==f && $2==k {printf "%s /* %s */, ", $3, $4}' "$tmp/rows.u")
       echo "        $k: &[${ids%, }],"
     done

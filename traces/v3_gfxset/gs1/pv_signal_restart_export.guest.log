@@ -1,0 +1,5 @@
+=== pv_signal_restart_export side=guest start=2026-09-26T17:49:53+00:00 host=ubuntu kernel=6.8.0-139-generic drv=580.159.04
+PASS  signal_restart_export  300/300 dma-buf exports succeeded under 215 SIGALRMs (0 failed)
+GSET_DIG side=guest item=pv_signal_restart_export key=result val=300/300_dma-buf_exports_succeeded
+GSET_OK
+=== end rc=0 secs=3 2026-09-26T17:49:56+00:00

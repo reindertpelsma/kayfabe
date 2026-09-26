@@ -1,0 +1,57 @@
+=== diag1 ff_vulkan_init: nvdiff diff host(A) vs guest(B), STATUS divergences only (the rest is id/handle/addr canonicalisation residue)
+records: A=4039 B=3831   opcode-aligned ratio=0.899619
+classification census: {'addrlike': 8592, 'handle': 645, 'ptr': 199, 'UNEXPLAINED': 7334, 'MISSING': 499, 'STATUS': 28, 'EXTRA': 291}
+  A[104] B[100] nvidia-modeset:nr_0x00                               STATUS       rc 0 vs -1
+  A[150] B[146] nvidiactl:RM_CONTROL:cmd=0x20810107                  STATUS       NV status 0x0 vs 0x56
+  A[164] B[160] nvidiactl:RM_CONTROL:cmd=0x2080200a                  STATUS       NV status 0x0 vs 0x56
+  A[276] B[272] nvidiactl:RM_ALLOC:cls=0x9072                        STATUS       NV status 0x0 vs 0x1f
+  A[277] B[273] nvidiactl:RM_ALLOC:cls=0x9072                        STATUS       NV status 0x0 vs 0x1f
+  A[278] B[274] nvidiactl:RM_ALLOC:cls=0x9072                        STATUS       NV status 0x0 vs 0x1f
+  A[279] B[275] nvidiactl:RM_ALLOC:cls=0x9072                        STATUS       NV status 0x0 vs 0x1f
+  A[589] B[556] nvidiactl:RM_CONTROL:cmd=0x2080200a                  STATUS       NV status 0x0 vs 0x56
+  A[817] B[784] nvidiactl:RM_CONTROL:cmd=0x2080200a                  STATUS       NV status 0x0 vs 0x56
+  A[872] B[839] nvidiactl:RM_CONTROL:cmd=0x20801210                  STATUS       NV status 0x0 vs 0x56
+  A[907] B[957] nvidiactl:RM_CONTROL:cmd=0x2080200a                  STATUS       NV status 0x0 vs 0x56
+  A[1074] B[1124] nvidiactl:RM_CONTROL:cmd=0x2080200a                  STATUS       NV status 0x0 vs 0x56
+  A[1129] B[1179] nvidiactl:RM_CONTROL:cmd=0x20801210                  STATUS       NV status 0x0 vs 0x56
+  A[1141] B[1274] nvidiactl:RM_CONTROL:cmd=0x2080200a                  STATUS       NV status 0x0 vs 0x56
+  A[1196] B[1329] nvidiactl:RM_CONTROL:cmd=0x20801210                  STATUS       NV status 0x0 vs 0x56
+  A[1209] B[1425] nvidiactl:RM_CONTROL:cmd=0x2080200a                  STATUS       NV status 0x0 vs 0x56
+  A[1377] B[1593] nvidiactl:RM_CONTROL:cmd=0x2080200a                  STATUS       NV status 0x0 vs 0x56
+  A[1545] B[1761] nvidiactl:RM_CONTROL:cmd=0x2080200a                  STATUS       NV status 0x0 vs 0x56
+  A[1718] B[1934] nvidiactl:RM_CONTROL:cmd=0x2080200a                  STATUS       NV status 0x0 vs 0x56
+  A[1886] B[2102] nvidiactl:RM_CONTROL:cmd=0x2080200a                  STATUS       NV status 0x0 vs 0x56
+  A[2054] B[2270] nvidiactl:RM_CONTROL:cmd=0x2080200a                  STATUS       NV status 0x0 vs 0x56
+  A[2222] B[2439] nvidiactl:RM_CONTROL:cmd=0x2080200a                  STATUS       NV status 0x0 vs 0x56
+  A[2414] B[2631] nvidiactl:RM_CONTROL:cmd=0x2080200a                  STATUS       NV status 0x0 vs 0x56
+  A[2581] B[2798] nvidiactl:RM_CONTROL:cmd=0x2080200a                  STATUS       NV status 0x0 vs 0x56
+  A[2654] B[2871] nvidiactl:RM_CONTROL:cmd=0x20801210                  STATUS       NV status 0x0 vs 0x56
+  A[2666] B[2910] nvidiactl:RM_CONTROL:cmd=0x2080200a                  STATUS       NV status 0x0 vs 0x56
+  A[2713] B[2957] nvidiactl:RM_ALLOC:cls=0xc56f                        STATUS       NV status 0x0 vs 0x1f
+  A[4027] B[3820] nvidia-modeset:nr_0x00                               STATUS       rc 0 vs -1
+=== diag2 ff_vulkan_init: nvdiff diff host(A) vs guest(B), STATUS divergences only (the rest is id/handle/addr canonicalisation residue)
+records: A=4039 B=3996   opcode-aligned ratio=0.994151
+classification census: {'addrlike': 10419, 'handle': 215, 'ptr': 146, 'UNEXPLAINED': 8328, 'MISSING': 45, 'STATUS': 23, 'EXTRA': 2}
+  A[104] B[100] nvidia-modeset:nr_0x00                               STATUS       rc 0 vs -1
+  A[150] B[146] nvidiactl:RM_CONTROL:cmd=0x20810107                  STATUS       NV status 0x0 vs 0x56
+  A[164] B[160] nvidiactl:RM_CONTROL:cmd=0x2080200a                  STATUS       NV status 0x0 vs 0x56
+  A[276] B[272] nvidiactl:RM_ALLOC:cls=0x9072                        STATUS       NV status 0x0 vs 0x1f
+  A[277] B[273] nvidiactl:RM_ALLOC:cls=0x9072                        STATUS       NV status 0x0 vs 0x1f
+  A[278] B[274] nvidiactl:RM_ALLOC:cls=0x9072                        STATUS       NV status 0x0 vs 0x1f
+  A[279] B[275] nvidiactl:RM_ALLOC:cls=0x9072                        STATUS       NV status 0x0 vs 0x1f
+  A[589] B[556] nvidiactl:RM_CONTROL:cmd=0x2080200a                  STATUS       NV status 0x0 vs 0x56
+  A[817] B[784] nvidiactl:RM_CONTROL:cmd=0x2080200a                  STATUS       NV status 0x0 vs 0x56
+  A[907] B[874] nvidiactl:RM_CONTROL:cmd=0x2080200a                  STATUS       NV status 0x0 vs 0x56
+  A[1074] B[1041] nvidiactl:RM_CONTROL:cmd=0x2080200a                  STATUS       NV status 0x0 vs 0x56
+  A[1141] B[1108] nvidiactl:RM_CONTROL:cmd=0x2080200a                  STATUS       NV status 0x0 vs 0x56
+  A[1209] B[1176] nvidiactl:RM_CONTROL:cmd=0x2080200a                  STATUS       NV status 0x0 vs 0x56
+  A[1377] B[1344] nvidiactl:RM_CONTROL:cmd=0x2080200a                  STATUS       NV status 0x0 vs 0x56
+  A[1545] B[1512] nvidiactl:RM_CONTROL:cmd=0x2080200a                  STATUS       NV status 0x0 vs 0x56
+  A[1718] B[1685] nvidiactl:RM_CONTROL:cmd=0x2080200a                  STATUS       NV status 0x0 vs 0x56
+  A[1886] B[1853] nvidiactl:RM_CONTROL:cmd=0x2080200a                  STATUS       NV status 0x0 vs 0x56
+  A[2054] B[2021] nvidiactl:RM_CONTROL:cmd=0x2080200a                  STATUS       NV status 0x0 vs 0x56
+  A[2222] B[2190] nvidiactl:RM_CONTROL:cmd=0x2080200a                  STATUS       NV status 0x0 vs 0x56
+  A[2414] B[2382] nvidiactl:RM_CONTROL:cmd=0x2080200a                  STATUS       NV status 0x0 vs 0x56
+  A[2581] B[2549] nvidiactl:RM_CONTROL:cmd=0x2080200a                  STATUS       NV status 0x0 vs 0x56
+  A[2666] B[2634] nvidiactl:RM_CONTROL:cmd=0x2080200a                  STATUS       NV status 0x0 vs 0x56
+  A[4027] B[3985] nvidia-modeset:nr_0x00                               STATUS       rc 0 vs -1

@@ -1,0 +1,47 @@
+=== geekbench_vulkan side=host start=2026-09-26T17:19:48+00:00 host=ubuntu kernel=6.8.0-59-generic drv=580.159.04
+vulkan ICD: /etc/vulkan/icd.d/nvidia_icd.json only
+Enter your Geekbench 7 Pro license using the following command line:
+  /opt/gfxset/geekbench/geekbench7 --unlock <email> <key>
+System Information
+  Operating System              Ubuntu 24.04.5 LTS
+  Kernel                        Linux 6.8.0-59-generic x86_64
+  Model                         QEMU Standard PC (i440FX + PIIX, 1996)
+  Motherboard                   N/A
+  BIOS                          EFI Development Kit II / OVMF 0.0.0
+CPU Information
+  Name                          Intel Xeon W-2133
+  Topology                      5 Processors, 5 Cores
+  Identifier                    GenuineIntel Family 6 Model 85 Stepping 4
+  Base Frequency                3.60 GHz
+  L1 Instruction Cache          32.0 KB
+  L1 Data Cache                 32.0 KB
+  L2 Cache                      4.00 MB
+  L3 Cache                      16.0 MB
+  Instruction Sets              sse2 sse3 pclmul fma3 sse41 aesni avx f16c avx2 avx512-f avx512-dq avx512-bw avx512-vl
+Memory Information
+  Size                          24.4 GB
+Vulkan Information
+  Device Name                   NVIDIA GeForce RTX 3070
+GPU
+  Running Background Blur
+  Running Face Tracking
+  Running Super Resolution
+  Running Horizon Detection
+  Running Photo Filter
+  Running Video Filter
+  Running RAW
+  Running Feature Matching
+  Running Path Tracer
+  Running Particle Physics
+  Running Fluid Simulation
+Uploading results to the Geekbench Browser. This could take a minute or two 
+depending on the speed of your internet connection.
+Upload succeeded. Visit the following link and view your results online:
+  https://browser.geekbench.com/v7/gpu/219655
+Visit the following link and add this result to your profile:
+  https://browser.geekbench.com/v7/gpu/219655/claim?key=<stripped>
+GSET_DIG side=host item=geekbench_vulkan key=workloads val=e607e90e25974b49
+GSET_VAL side=host item=geekbench_vulkan key=workload_count val=11
+GSET_VAL side=host item=geekbench_vulkan key=result_url val=https://browser.geekbench.com/v7/gpu/219655
+GSET_OK
+=== end rc=0 secs=175 2026-09-26T17:22:43+00:00

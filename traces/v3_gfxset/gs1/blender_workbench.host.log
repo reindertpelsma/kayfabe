@@ -1,0 +1,6 @@
+=== blender_workbench side=host start=2026-09-26T17:26:23+00:00 host=ubuntu kernel=6.8.0-59-generic drv=580.159.04
+BLENDER_OK WORKBENCH GPU gpu=NVIDIA_GeForce_RTX_3070/PCIe/SSE2 backend=OPENGL w=640 h=360 mean=0.634848
+GSET_DIG side=host item=blender_workbench key=png val=4bfce2c5ef4e502b
+GSET_VAL side=host item=blender_workbench key=mean val=0.634848
+GSET_OK
+=== end rc=0 secs=2 2026-09-26T17:26:25+00:00

@@ -38,11 +38,14 @@ pub enum Kind {
     VideoEncoder,
     /// ★ A video DECODER class (`NV*B0_VIDEO_DECODER`, NVDEC) — its own engine and runlist.
     VideoDecoder,
+    /// ★ v3-gfxset: the optical-flow class (`NV*FA_VIDEO_OFA`, OFA) — its own engine and runlist;
+    /// the engine behind `VK_NV_optical_flow` and the NVOFA SDK.
+    OpticalFlow,
 }
 
 impl Kind {
     /// Every kind.
-    pub const ALL: [Kind; 9] = [
+    pub const ALL: [Kind; 10] = [
         Kind::ChannelGpfifo,
         Kind::Compute,
         Kind::DmaCopy,
@@ -52,6 +55,7 @@ impl Kind {
         Kind::InlineToMemory,
         Kind::VideoEncoder,
         Kind::VideoDecoder,
+        Kind::OpticalFlow,
     ];
 }
 
@@ -81,6 +85,9 @@ pub struct ClassSet {
     pub video_encoder: &'static [u32],
     /// Video decoder (NVDEC) classes.
     pub video_decoder: &'static [u32],
+    /// ★ Optical-flow (OFA) classes — ⊘ EMPTY on Turing (no `NV*FA_VIDEO_OFA` in any TU10x list),
+    /// derived, never assumed.
+    pub optical_flow: &'static [u32],
 }
 
 impl ClassSet {
@@ -97,6 +104,7 @@ impl ClassSet {
             Kind::InlineToMemory => self.inline_to_memory,
             Kind::VideoEncoder => self.video_encoder,
             Kind::VideoDecoder => self.video_decoder,
+            Kind::OpticalFlow => self.optical_flow,
         }
     }
 
@@ -133,6 +141,9 @@ impl ClassSet {
             Some(Kind::DmaCopy) => ObjectKind::EngineObject { engine: EngineKind::Ce },
             Some(Kind::VideoEncoder) => ObjectKind::EngineObject { engine: EngineKind::NvEnc },
             Some(Kind::VideoDecoder) => ObjectKind::EngineObject { engine: EngineKind::NvDec },
+            // ★ v3-gfxset: OFA is an engine kayfabe routes (a passthrough twin) and never interprets
+            // — `EngineKind::Other`'s own definition; no census or RC route distinguishes it.
+            Some(Kind::OpticalFlow) => ObjectKind::EngineObject { engine: EngineKind::Other },
             Some(Kind::Usermode) | None => ObjectKind::Unknown,
         }
     }
@@ -154,6 +165,7 @@ pub const FAMILIES: [ClassSet; 5] = [
         inline_to_memory: &[0xA140 /* KEPLER_INLINE_TO_MEMORY_B */],
         video_encoder: &[0xB4B7 /* NVB4B7_VIDEO_ENCODER */, 0xC4B7 /* NVC4B7_VIDEO_ENCODER */],
         video_decoder: &[0xC4B0 /* NVC4B0_VIDEO_DECODER */],
+        optical_flow: &[],
     },
     ClassSet {
         family: Family::Ampere,
@@ -167,6 +179,7 @@ pub const FAMILIES: [ClassSet; 5] = [
         inline_to_memory: &[0xA140 /* KEPLER_INLINE_TO_MEMORY_B */],
         video_encoder: &[0xC7B7 /* NVC7B7_VIDEO_ENCODER */],
         video_decoder: &[0xC6B0 /* NVC6B0_VIDEO_DECODER */, 0xC7B0 /* NVC7B0_VIDEO_DECODER */],
+        optical_flow: &[0xC6FA /* NVC6FA_VIDEO_OFA */, 0xC7FA /* NVC7FA_VIDEO_OFA */],
     },
     ClassSet {
         family: Family::Ada,
@@ -180,6 +193,7 @@ pub const FAMILIES: [ClassSet; 5] = [
         inline_to_memory: &[0xA140 /* KEPLER_INLINE_TO_MEMORY_B */],
         video_encoder: &[0xC9B7 /* NVC9B7_VIDEO_ENCODER */],
         video_decoder: &[0xC9B0 /* NVC9B0_VIDEO_DECODER */],
+        optical_flow: &[0xC9FA /* NVC9FA_VIDEO_OFA */],
     },
     ClassSet {
         family: Family::Hopper,
@@ -193,6 +207,7 @@ pub const FAMILIES: [ClassSet; 5] = [
         inline_to_memory: &[0xA140 /* KEPLER_INLINE_TO_MEMORY_B */],
         video_encoder: &[],
         video_decoder: &[0xB8B0 /* NVB8B0_VIDEO_DECODER */],
+        optical_flow: &[0xB8FA /* NVB8FA_VIDEO_OFA */],
     },
     ClassSet {
         family: Family::Blackwell,
@@ -206,6 +221,7 @@ pub const FAMILIES: [ClassSet; 5] = [
         inline_to_memory: &[0xCD40 /* BLACKWELL_INLINE_TO_MEMORY_A */],
         video_encoder: &[0xCEB7 /* NVCEB7_VIDEO_ENCODER */, 0xCFB7 /* NVCFB7_VIDEO_ENCODER */, 0xD1B7 /* NVD1B7_VIDEO_ENCODER */],
         video_decoder: &[0xCDB0 /* NVCDB0_VIDEO_DECODER */, 0xCEB0 /* NVCEB0_VIDEO_DECODER */, 0xCFB0 /* NVCFB0_VIDEO_DECODER */, 0xD1B0 /* NVD1B0_VIDEO_DECODER */, 0xD2B0 /* NVD2B0_VIDEO_DECODER */],
+        optical_flow: &[0xCDFA /* NVCDFA_VIDEO_OFA */, 0xCEFA /* NVCEFA_VIDEO_OFA */, 0xCFFA /* NVCFFA_VIDEO_OFA */, 0xD1FA /* NVD1FA_VIDEO_OFA */, 0xD2FA /* NVD2FA_VIDEO_OFA */],
     },
 ];
 
@@ -241,6 +257,10 @@ mod gfx_kinds {
             }
         }
         assert_eq!(classes_for(Family::Blackwell).kind_of(0xCD40), Some(Kind::InlineToMemory));
+        // ★ v3-gfxset: OFA is generated where the chips list it, and only there
+        assert_eq!(classes_for(Family::Ampere).kind_of(0xC7FA), Some(Kind::OpticalFlow));
+        assert_eq!(classes_for(Family::Ada).kind_of(0xC9FA), Some(Kind::OpticalFlow));
+        assert!(classes_for(Family::Turing).optical_flow.is_empty(), "no TU10x chip lists an OFA class");
         assert_eq!(classes_for(Family::Ampere).kind_of(0x902D), Some(Kind::TwoD));
     }
 }

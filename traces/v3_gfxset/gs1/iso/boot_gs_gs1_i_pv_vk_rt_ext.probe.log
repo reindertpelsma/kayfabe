@@ -1,0 +1,65 @@
+=== boot_capture tag=gs_gs1_i_pv_vk_rt_ext at 2026-09-26T18:16:58+00:00 ===
+=== source revision: c179a845 ===
+=== qemu binary: -rwxr-xr-x 1 root root 83816672 Sep 26 16:25 /workspace/bench/kf3-bins/ce20926e/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /root/kayfabe/scripts/bench/boot_nvkvm.sh  sha256=34dff8095254ba52
+    used: /root/kayfabe/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Sat Sep 26 18:17:02 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3070        Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /   6144MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Sep 26 18:17 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Sep 26 18:17 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Sep 26 18:17 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Sep 26 18:17 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Sep 26 18:17 .
+drwxr-xr-x 18 root root   4000 Sep 26 18:17 ..
+cr--------  1 root root 240, 1 Sep 26 18:17 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Sep 26 18:17 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /root/kayfabe/scripts/bench/gfxset/hook.sh at 2026-09-26T18:17:04+00:00 ===
+GSET_SHIPPED
+GSET_HOOK tag=gs_gs1_i_pv_vk_rt_ext items=[pv_vk_rt_ext] guest=NVIDIA GeForce RTX 3070, 580.159.04, Disabled
+GSET_GUEST_DRM rc=0 Y by-path card0 renderD128 
+GSET_RES side=guest item=pv_vk_rt_ext verdict=FAIL rc=0 secs=1 note=GSET_FAIL rc=2  boot=gs_gs1_i_pv_vk_rt_ext host_xid=0 guest_xid=0 kf3_rc=0 kf3_refusals=0 kf3_unserviced=34 kf3_lines=419
+GSET_HOOK_DONE
+HOOK_RC=0
+=== GUEST dmesg AFTER the workload (phase 3b captured 28 lines BEFORE it) ===
+GUEST_DMESG_AFTER_LINES=73
+GUEST_DMESG_AFTER_NVRM=65
+GUEST_DMESG_WORKLOAD_DELTA=45
+=== HOST dmesg delta for this boot (watermark 936 → 936) ===
+HOST_DMESG_LINES=0
+HOST_DMESG_NVRM=0
+0
+HOST_DMESG_XID=0
+0

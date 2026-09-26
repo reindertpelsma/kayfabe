@@ -1,0 +1,13 @@
+=== pv_gbmprobe_gbmshot side=guest start=2026-09-26T17:50:02+00:00 host=ubuntu kernel=6.8.0-139-generic drv=580.159.04
+DRM driver: nvidia-drm
+gbm backend name: nvidia
+EGL 1.5 vendor=NVIDIA
+GL_RENDERER: NVIDIA GeForce RTX 3070/PCIe/SSE2
+GL_VENDOR:   NVIDIA Corporation
+RESULT GPU-OK
+gbm backend: nvidia
+GL_RENDERER: NVIDIA GeForce RTX 3070/PCIe/SSE2
+wrote /var/tmp/gfxset/out/guest/pv_gbmprobe_gbmshot.d/head.ppm (1280x720)
+GSET_DIG side=guest item=pv_gbmprobe_gbmshot key=ppm val=085454ddaba5b950
+GSET_OK
+=== end rc=0 secs=1 2026-09-26T17:50:03+00:00

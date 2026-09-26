@@ -1,0 +1,82 @@
+[   20.660317] nvidia-nvlink: Nvlink Core is being initialized, major device number 239
+
+[   20.668318] nvidia 0000:00:03.0: vgaarb: VGA decodes changed: olddecodes=none,decodes=none:owns=io+mem
+[   20.670909] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+[   22.505228] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:233
+[   22.505294] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_USER_SHARED_DATA_SET_DATA_POLL, &params, sizeof(params)) @ gpu_user_shared_data.c:268
+[   22.524685] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   22.527521] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   22.527581] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_CE_GET_PCE_CONFIG_FOR_LCE_TYPE, &pceConfigParams, sizeof(pceConfigParams)) @ kernel_ce.c:1020
+[   22.527588] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, NV2080_CTRL_CE_LCE_TYPE_DECOMP, &numPcesPerLce, &numLces, &supportedPceMask, &supportedLceMask, &pcesPerHshub) @ kernel_ce_gp100.c:62
+[   22.746813] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgrobjPromoteContext(pGpu, pKernelGraphicsObject, pKernelGraphics) @ kernel_graphics_object.c:224
+[   22.747312] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->AllocWithHandle(pRmApi, hClientId, hChannelId, hObj3D, classNum, NULL, 0) @ kernel_graphics.c:2519
+[   22.749045] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   22.749049] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   22.749050] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   22.749052] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   22.752013] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgraphicsCreateGoldenImageChannel(pGpu, pKernelGraphics) @ kernel_graphics.c:508
+[   22.752018] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ kernel_fifo.c:3129
+[   22.759670] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00008; hParent=0x31415903; hObject=0x31415900; hClass=0x0000c36f; paramsSize=0x00000170; paramsStatus=0x00000056; status=0x00000056
+[   22.759676] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from status @ kernel_channel.c:2827
+[   22.759682] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _kchannelSendChannelAllocRpc(pKernelChannel, pChannelGpfifoParams, pKernelChannelGroup, bFullSriov) @ kernel_channel.c:940
+[   22.761427] NVRM: nvAssertFailedNoLog: Assertion failed: status == NV_OK @ kernel_rc_watchdog.c:1198
+[   22.764109] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00009; hParent=0xcaf00001; hObject=0xcaf00002; hClass=0x0000402c; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[   23.239002] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:373
+[   23.240159] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:373
+[   23.254830] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00001; hParent=0xa55a0030; hObject=0xa55a0070; hClass=0x0000208f; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[   23.318299] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ fecs_event_list.c:1623
+[   23.328362] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:213
+[   25.819362] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:233
+[   25.819414] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_USER_SHARED_DATA_SET_DATA_POLL, &params, sizeof(params)) @ gpu_user_shared_data.c:268
+[   25.828203] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   25.830705] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   25.830829] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_CE_GET_PCE_CONFIG_FOR_LCE_TYPE, &pceConfigParams, sizeof(pceConfigParams)) @ kernel_ce.c:1020
+[   25.830836] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, NV2080_CTRL_CE_LCE_TYPE_DECOMP, &numPcesPerLce, &numLces, &supportedPceMask, &supportedLceMask, &pcesPerHshub) @ kernel_ce_gp100.c:62
+[   26.040163] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgrobjPromoteContext(pGpu, pKernelGraphicsObject, pKernelGraphics) @ kernel_graphics_object.c:224
+[   26.040687] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->AllocWithHandle(pRmApi, hClientId, hChannelId, hObj3D, classNum, NULL, 0) @ kernel_graphics.c:2519
+[   26.042352] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   26.042357] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   26.042359] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   26.042361] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   26.045281] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgraphicsCreateGoldenImageChannel(pGpu, pKernelGraphics) @ kernel_graphics.c:508
+[   26.045287] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ kernel_fifo.c:3129
+[   26.054381] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00012; hParent=0x31415903; hObject=0x31415900; hClass=0x0000c36f; paramsSize=0x00000170; paramsStatus=0x00000056; status=0x00000056
+[   26.054389] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from status @ kernel_channel.c:2827
+[   26.054397] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _kchannelSendChannelAllocRpc(pKernelChannel, pChannelGpfifoParams, pKernelChannelGroup, bFullSriov) @ kernel_channel.c:940
+[   26.056572] NVRM: nvAssertFailedNoLog: Assertion failed: status == NV_OK @ kernel_rc_watchdog.c:1198
+[   26.062472] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00013; hParent=0xcaf00001; hObject=0xcaf00002; hClass=0x0000402c; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[   26.145968] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ fecs_event_list.c:1623
+[   26.156153] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:213
+[   26.537208] nvidia-modeset: Loading NVIDIA UNIX Open Kernel Mode Setting Driver for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:04:37 UTC 2026
+[   26.547959] [drm] [nvidia-drm] [GPU ID 0x00000003] Loading driver
+[   27.131997] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:233
+[   27.132159] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_USER_SHARED_DATA_SET_DATA_POLL, &params, sizeof(params)) @ gpu_user_shared_data.c:268
+[   27.144679] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   27.147533] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[   27.147600] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_CE_GET_PCE_CONFIG_FOR_LCE_TYPE, &pceConfigParams, sizeof(pceConfigParams)) @ kernel_ce.c:1020
+[   27.147608] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, NV2080_CTRL_CE_LCE_TYPE_DECOMP, &numPcesPerLce, &numLces, &supportedPceMask, &supportedLceMask, &pcesPerHshub) @ kernel_ce_gp100.c:62
+[   27.347858] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgrobjPromoteContext(pGpu, pKernelGraphicsObject, pKernelGraphics) @ kernel_graphics_object.c:224
+[   27.348290] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->AllocWithHandle(pRmApi, hClientId, hChannelId, hObj3D, classNum, NULL, 0) @ kernel_graphics.c:2519
+[   27.350143] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   27.350147] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   27.350148] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   27.350149] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[   27.353057] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgraphicsCreateGoldenImageChannel(pGpu, pKernelGraphics) @ kernel_graphics.c:508
+[   27.353062] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ kernel_fifo.c:3129
+[   27.360407] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0001c; hParent=0x31415903; hObject=0x31415900; hClass=0x0000c36f; paramsSize=0x00000170; paramsStatus=0x00000056; status=0x00000056
+[   27.360413] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from status @ kernel_channel.c:2827
+[   27.360418] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _kchannelSendChannelAllocRpc(pKernelChannel, pChannelGpfifoParams, pKernelChannelGroup, bFullSriov) @ kernel_channel.c:940
+[   27.362045] NVRM: nvAssertFailedNoLog: Assertion failed: status == NV_OK @ kernel_rc_watchdog.c:1198
+[   27.364488] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0001d; hParent=0xcaf00001; hObject=0xcaf00002; hClass=0x0000402c; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[   27.377341] [drm] Initialized nvidia-drm 0.0.0 20160202 for 0000:00:03.0 on minor 0
+[   27.377545] nvidia 0000:00:03.0: [drm] No compatible format found
+[   27.377590] nvidia 0000:00:03.0: [drm] Cannot find any crtc or sizes
+[   32.504704] NVRM: nvAssertOkFailedNoLog: Assertion failed: Invalid argument to call [NV_ERR_INVALID_ARGUMENT] (0x0000001F) returned from pRmApi->AllocWithSecInfo(pRmApi, hClient, hParent, &pChannelGpfifoParams->hPhysChannelGroup, KEPLER_CHANNEL_GROUP_A, NV_PTR_TO_NvP64(&tsgParams), sizeof(tsgParams), RMAPI_ALLOC_FLAGS_SKIP_RPC, NvP64_NULL, &pRmApi->defaultSecInfo) @ kernel_channel.c:381
+[   35.539127] NVRM: nvAssertOkFailedNoLog: Assertion failed: Invalid argument to call [NV_ERR_INVALID_ARGUMENT] (0x0000001F) returned from pRmApi->AllocWithSecInfo(pRmApi, hClient, hParent, &pChannelGpfifoParams->hPhysChannelGroup, KEPLER_CHANNEL_GROUP_A, NV_PTR_TO_NvP64(&tsgParams), sizeof(tsgParams), RMAPI_ALLOC_FLAGS_SKIP_RPC, NvP64_NULL, &pRmApi->defaultSecInfo) @ kernel_channel.c:381
+[   38.298415] NVRM: nvAssertOkFailedNoLog: Assertion failed: Invalid argument to call [NV_ERR_INVALID_ARGUMENT] (0x0000001F) returned from pRmApi->AllocWithSecInfo(pRmApi, hClient, hParent, &pChannelGpfifoParams->hPhysChannelGroup, KEPLER_CHANNEL_GROUP_A, NV_PTR_TO_NvP64(&tsgParams), sizeof(tsgParams), RMAPI_ALLOC_FLAGS_SKIP_RPC, NvP64_NULL, &pRmApi->defaultSecInfo) @ kernel_channel.c:381
+[   41.213561] NVRM: nvAssertOkFailedNoLog: Assertion failed: Invalid argument to call [NV_ERR_INVALID_ARGUMENT] (0x0000001F) returned from pRmApi->AllocWithSecInfo(pRmApi, hClient, hParent, &pChannelGpfifoParams->hPhysChannelGroup, KEPLER_CHANNEL_GROUP_A, NV_PTR_TO_NvP64(&tsgParams), sizeof(tsgParams), RMAPI_ALLOC_FLAGS_SKIP_RPC, NvP64_NULL, &pRmApi->defaultSecInfo) @ kernel_channel.c:381
+[   43.926456] NVRM: nvAssertOkFailedNoLog: Assertion failed: Invalid argument to call [NV_ERR_INVALID_ARGUMENT] (0x0000001F) returned from pRmApi->AllocWithSecInfo(pRmApi, hClient, hParent, &pChannelGpfifoParams->hPhysChannelGroup, KEPLER_CHANNEL_GROUP_A, NV_PTR_TO_NvP64(&tsgParams), sizeof(tsgParams), RMAPI_ALLOC_FLAGS_SKIP_RPC, NvP64_NULL, &pRmApi->defaultSecInfo) @ kernel_channel.c:381
+[   46.604004] NVRM: nvAssertOkFailedNoLog: Assertion failed: Invalid argument to call [NV_ERR_INVALID_ARGUMENT] (0x0000001F) returned from pRmApi->AllocWithSecInfo(pRmApi, hClient, hParent, &pChannelGpfifoParams->hPhysChannelGroup, KEPLER_CHANNEL_GROUP_A, NV_PTR_TO_NvP64(&tsgParams), sizeof(tsgParams), RMAPI_ALLOC_FLAGS_SKIP_RPC, NvP64_NULL, &pRmApi->defaultSecInfo) @ kernel_channel.c:381
+[   49.314578] NVRM: nvAssertOkFailedNoLog: Assertion failed: Invalid argument to call [NV_ERR_INVALID_ARGUMENT] (0x0000001F) returned from pRmApi->AllocWithSecInfo(pRmApi, hClient, hParent, &pChannelGpfifoParams->hPhysChannelGroup, KEPLER_CHANNEL_GROUP_A, NV_PTR_TO_NvP64(&tsgParams), sizeof(tsgParams), RMAPI_ALLOC_FLAGS_SKIP_RPC, NvP64_NULL, &pRmApi->defaultSecInfo) @ kernel_channel.c:381
+[   52.032700] NVRM: nvAssertOkFailedNoLog: Assertion failed: Invalid argument to call [NV_ERR_INVALID_ARGUMENT] (0x0000001F) returned from pRmApi->AllocWithSecInfo(pRmApi, hClient, hParent, &pChannelGpfifoParams->hPhysChannelGroup, KEPLER_CHANNEL_GROUP_A, NV_PTR_TO_NvP64(&tsgParams), sizeof(tsgParams), RMAPI_ALLOC_FLAGS_SKIP_RPC, NvP64_NULL, &pRmApi->defaultSecInfo) @ kernel_channel.c:381
+[   54.831812] NVRM: nvAssertOkFailedNoLog: Assertion failed: Invalid argument to call [NV_ERR_INVALID_ARGUMENT] (0x0000001F) returned from pRmApi->AllocWithSecInfo(pRmApi, hClient, hParent, &pChannelGpfifoParams->hPhysChannelGroup, KEPLER_CHANNEL_GROUP_A, NV_PTR_TO_NvP64(&tsgParams), sizeof(tsgParams), RMAPI_ALLOC_FLAGS_SKIP_RPC, NvP64_NULL, &pRmApi->defaultSecInfo) @ kernel_channel.c:381

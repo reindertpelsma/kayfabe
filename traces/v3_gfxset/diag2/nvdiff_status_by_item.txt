@@ -1,0 +1,44 @@
+# nvdiff diff host(A) vs guest(B), diag2 (kf3 c9acfbab), every Vulkan item: census + the STATUS divergences, counted
+# (the rest of the census is the canonicalisation residue: ids, handles, addresses; see nvdiff.py --noise)
+== ff_vulkan_init       1 classification census: {'addrlike': 10419, 'handle': 215, 'ptr': 146, 'UNEXPLAINED': 8328, 'MISSING': 45, 'STATUS': 23, 'EXTRA': 2}
+2 nvidia-modeset:nr_0x00 rc 0 vs -1
+4 nvidiactl:RM_ALLOC:cls=0x9072 NV status 0x0 vs 0x1f
+16 nvidiactl:RM_CONTROL:cmd=0x2080200a NV status 0x0 vs 0x56
+1 nvidiactl:RM_CONTROL:cmd=0x20810107 NV status 0x0 vs 0x56
+== ff_vulkan       1 classification census: {'addrlike': 106626, 'handle': 195, 'ptr': 148, 'UNEXPLAINED': 82322, 'MISSING': 13208, 'STATUS': 165, 'EXTRA': 12257}
+13 nvidia-modeset:nr_0x00 rc 0 vs -1
+28 nvidiactl:RM_ALLOC:cls=0x9072 NV status 0x0 vs 0x1f
+112 nvidiactl:RM_CONTROL:cmd=0x2080200a NV status 0x0 vs 0x56
+4 nvidiactl:RM_CONTROL:cmd=0x2080a0d1 NV status 0x0 vs 0x56
+7 nvidiactl:RM_CONTROL:cmd=0x20810107 NV status 0x0 vs 0x56
+== ff_placebo       1 classification census: {'addrlike': 21891, 'handle': 225, 'ptr': 148, 'UNEXPLAINED': 17267, 'MISSING': 220, 'STATUS': 46, 'EXTRA': 36}
+4 nvidia-modeset:nr_0x00 rc 0 vs -1
+8 nvidiactl:RM_ALLOC:cls=0x9072 NV status 0x0 vs 0x1f
+32 nvidiactl:RM_CONTROL:cmd=0x2080200a NV status 0x0 vs 0x56
+2 nvidiactl:RM_CONTROL:cmd=0x20810107 NV status 0x0 vs 0x56
+== vk_compute       1 classification census: {'addrlike': 2763, 'handle': 215, 'ptr': 148, 'UNEXPLAINED': 2432, 'MISSING': 109, 'STATUS': 11, 'EXTRA': 1}
+2 nvidia-modeset:nr_0x00 rc 0 vs -1
+4 nvidiactl:RM_ALLOC:cls=0x9072 NV status 0x0 vs 0x1f
+4 nvidiactl:RM_CONTROL:cmd=0x2080200a NV status 0x0 vs 0x56
+1 nvidiactl:RM_CONTROL:cmd=0x20810107 NV status 0x0 vs 0x56
+== vk_render       1 classification census: {'addrlike': 2878, 'handle': 215, 'ptr': 148, 'UNEXPLAINED': 2496, 'MISSING': 109, 'STATUS': 11, 'EXTRA': 1}
+2 nvidia-modeset:nr_0x00 rc 0 vs -1
+4 nvidiactl:RM_ALLOC:cls=0x9072 NV status 0x0 vs 0x1f
+4 nvidiactl:RM_CONTROL:cmd=0x2080200a NV status 0x0 vs 0x56
+1 nvidiactl:RM_CONTROL:cmd=0x20810107 NV status 0x0 vs 0x56
+== pv_validate_vk       1 classification census: {'addrlike': 2458, 'handle': 189, 'ptr': 148, 'UNEXPLAINED': 2112, 'MISSING': 98, 'STATUS': 10, 'EXTRA': 1}
+1 nvidia-modeset:nr_0x00 rc 0 vs -1
+4 nvidiactl:RM_ALLOC:cls=0x9072 NV status 0x0 vs 0x1f
+4 nvidiactl:RM_CONTROL:cmd=0x2080200a NV status 0x0 vs 0x56
+1 nvidiactl:RM_CONTROL:cmd=0x20810107 NV status 0x0 vs 0x56
+== blender_eevee_vulkan       1 classification census: {'addrlike': 4831, 'handle': 223, 'ptr': 162, 'UNEXPLAINED': 4303, 'MISSING': 219, 'STATUS': 19, 'EXTRA': 4}
+4 nvidia-modeset:nr_0x00 rc 0 vs -1
+8 nvidiactl:RM_ALLOC:cls=0x9072 NV status 0x0 vs 0x1f
+5 nvidiactl:RM_CONTROL:cmd=0x2080200a NV status 0x0 vs 0x56
+2 nvidiactl:RM_CONTROL:cmd=0x20810107 NV status 0x0 vs 0x56
+== vk_ofa       1 classification census: {'addrlike': 3866, 'handle': 215, 'ptr': 148, 'UNEXPLAINED': 3264, 'MISSING': 109, 'STATUS': 12, 'EXTRA': 1}
+2 nvidia-modeset:nr_0x00 rc 0 vs -1
+4 nvidiactl:RM_ALLOC:cls=0x9072 NV status 0x0 vs 0x1f
+4 nvidiactl:RM_CONTROL:cmd=0x2080200a NV status 0x0 vs 0x56
+1 nvidiactl:RM_CONTROL:cmd=0x20810107 NV status 0x0 vs 0x56
+1 nvidiactl:RM_CONTROL:cmd=0x20810108 NV status 0x0 vs 0x56
