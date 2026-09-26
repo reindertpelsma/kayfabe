@@ -261,6 +261,9 @@ version = "0.1.0"
 [[package]]
 name = "kf-disp"
 version = "0.1.0"
+dependencies = [
+ "kf-chip",
+]
 
 [[package]]
 name = "kf-gsp"
