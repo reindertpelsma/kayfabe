@@ -200,6 +200,34 @@ typedef struct KfSlot {
     uint32_t n[4];
 } KfSlot;
 
+#define KF_MAX_PDB_L 64u   /* == KF_MAX_PDB (defined below; checked there) */
+
+/* ★★★★★ THE CAPACITY LAYOUT — HOST-MANAGED, PER WALK (w829, the no-PM UVM wall).
+ *
+ * ⊘ Was: one uniform `runs_per_pdb` (16 384) for every walk entry's table slice AND every
+ * slot. `[measured uw4]` a CUDA process maps a VA-contiguous ~56 MiB of sysmem whose guest
+ * pages are SCATTERED: 16 378 VA-contiguous 4 KiB neighbours, 0 of them GPA-contiguous, so
+ * every page is its own run. As guest RAM fragments (every process, faster with an adapter
+ * re-init per process) the space crosses 16 384 and its walk truncates — the channel dies.
+ * ⇒ Capacity is now a POOL the host carves per walk entry and per slot, sized to what each
+ * space needs, grown on demand. The kernel reports the need (`KfPdbEntry::reserved2 >> 32`).
+ *
+ * Invariants the host keeps (and the kernel refuses by name if broken):
+ *   walk_off/cap: disjoint regions of the walk pool; scratch for entry t is
+ *                 [4*walk_off, 4*(walk_off+walk_cap)) runs and [3*walk_off, …) words;
+ *   walk_cap[t] >= slot_cap[slots[t]]  (the diff's staging bound: 3 * walk_cap);
+ *   prev_*: the PREVIOUS walk's walk_off/cap — the commit node's scratch;
+ *   slot_off/cap: disjoint regions of the committed-placement pool. */
+#define KF_MAX_SLOTS 128u
+typedef struct KfLayout {
+    uint32_t walk_off[KF_MAX_PDB_L];
+    uint32_t walk_cap[KF_MAX_PDB_L];
+    uint32_t prev_off[KF_MAX_PDB_L];
+    uint32_t prev_cap[KF_MAX_PDB_L];
+    uint32_t slot_off[KF_MAX_SLOTS];
+    uint32_t slot_cap[KF_MAX_SLOTS];
+} KfLayout;
+
 /* ★★★★★ THE HOST'S VERDICT on one report (COMMIT-ON-ACK). Written by the host
  * before the next walk is submitted; the next walk's first node commits it.
  * `code[i]` (a separate array, one byte per report run) is one of: */
@@ -225,13 +253,16 @@ typedef struct KfScope {
 /* Bumped whenever the format descriptor's layout changes. A host/PTX skew must
  * fail LOUDLY at launch rather than decode garbage field offsets and look like a
  * page-table bug (THE_CONSTRAINTS.md §21). */
-#define KF_ABI_VERSION 3u   /* 3: the diff/ack protocol (KfArgs, KfDev, KfSlot, KfAck) */
+#define KF_ABI_VERSION 4u   /* 3: the diff/ack protocol; 4: the host-managed capacity layout (KfLayout, KfDev::need) */
 
 #define KF_TBL_VER2 2u   /* Pascal…Ada  — GA10x is the tested one               */
 #define KF_TBL_VER3 3u   /* Hopper/Blackwell — SKETCHED, NEVER RUN, and refused
                           * unless KF_ALLOW_UNTESTED_VER3 is defined.           */
 
 #define KF_MAX_PDB   64u   /* address spaces the kernel's table can hold */
+#if KF_MAX_PDB != KF_MAX_PDB_L
+#error "KF_MAX_PDB_L must equal KF_MAX_PDB"
+#endif
 #define KF_MAX_SCOPE 256u
 
 typedef struct KfWalkCfg {

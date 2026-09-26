@@ -27,6 +27,7 @@
 //! build**, which is what §w724d prescribes.
 
 pub mod abi;
+pub mod capacity;
 pub mod diffmodel;
 pub mod driver_unsafe;
 pub mod selftest;

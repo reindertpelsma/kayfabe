@@ -471,8 +471,10 @@ impl Device {
             .set_root(crate::mem::K_BAR1, layout.bar1_pde_base, kf_trap::PdbAperture::Vidmem)
             .map_err(|e| format!("our BAR1 root: {e:?}"))?;
         eprintln!(
-            "kf3: P4 memory plane: store {} MiB (imported into the walker), roots bar1={:#x} bar2={:#x}, PRAMIN one map+mmap per move, trigger @{:#x}",
+            "kf3: P4 memory plane: store {} MiB (imported into the walker), walker pools {} MiB of host GPU memory ({}), roots bar1={:#x} bar2={:#x}, PRAMIN one map+mmap per move, trigger @{:#x}",
             cfg.fb_mb,
+            va.walker().kernel.pool_bytes() >> 20,
+            va.walker().kernel.capacity_census(),
             layout.bar1_pde_base,
             layout.bar2_pde_base,
             mem.port.regs().trigger,

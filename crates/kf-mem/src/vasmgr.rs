@@ -345,7 +345,12 @@ impl Walker for GpuWalker {
     }
 
     fn poll(&mut self) -> Result<Option<WalkDone>, String> {
-        let Some(c) = self.kernel.try_collect().map_err(|e| e.to_string())? else {
+        let got = self.kernel.try_collect().map_err(|e| e.to_string());
+        // ★ w829: capacity growth / re-walks / ceilings are named in the log as they happen.
+        for ev in self.kernel.take_capacity_events() {
+            eprintln!("kf3: walk {ev}");
+        }
+        let Some(c) = got? else {
             return Ok(None);
         };
         let r = &c.report;
@@ -356,12 +361,12 @@ impl Walker for GpuWalker {
             let refusing: Vec<String> = r
                 .pdbs
                 .iter()
-                .filter(|p| p.reserved2 != 0)
-                .map(|p| format!("pdb {:#x} slot {} refuse {:#x}", p.pdb, p.reserved, p.reserved2))
+                .filter(|p| p.refused_bits() != 0)
+                .map(|p| format!("pdb {:#x} slot {} refuse {:#x} need {}", p.pdb, p.reserved, p.refused_bits(), p.need()))
                 .collect();
             if std::env::var_os("KF_VAS_CENSUS").is_some() {
                 for (i, p) in r.pdbs.iter().enumerate() {
-                    if p.reserved2 != 0
+                    if p.refused_bits() != 0
                         && let Ok(runs) = self.kernel.debug_walk_runs(i as u32)
                     {
                         eprintln!("kf3: census walk entry {i} pdb {:#x}: {}", p.pdb, run_census(&runs));
@@ -424,7 +429,7 @@ impl Walker for GpuWalker {
                     partial: p.vas_flags & kf_cuda::abi::KFWR_V_PARTIAL != 0,
                     overflow: p.vas_flags & kf_cuda::abi::KFWR_V_OVERFLOW != 0,
                     refused: if p.vas_flags & kf_cuda::abi::KFWR_V_REFUSED != 0 {
-                        u32::try_from(p.reserved2).unwrap_or(u32::MAX).max(1)
+                        p.refused_bits().max(1)
                     } else {
                         0
                     },
