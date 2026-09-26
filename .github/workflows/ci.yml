@@ -5,8 +5,7 @@
 # Every-push gates (fast, deterministic — these stay the bar for landing anything):
 # - stable: the main workspace — build, the full fast suite (KAYFABE_SLOW unset:
 #   the two measured-slow tests skip loudly, everything else runs), clippy -D
-#   warnings, rustfmt --check (both workspaces; the fuzz crate is its own
-#   workspace so it needs its own fmt pass), and the §6.2 hexagonal boundary grep
+#   warnings, rustfmt --check, and the §6.2 hexagonal boundary grep
 #   (decision #37): the pure logic crates must name NO OS readiness primitive, in
 #   code or in comments.
 # - aarch64: cross-`cargo check` the whole workspace for arm64 (decision #36).
@@ -15,27 +14,16 @@
 #   `cargo check` type-checks without linking, so no cross-toolchain/QEMU is
 #   needed — an x86-ism that ever creeps into the core fails THIS gate on the push
 #   that introduces it. See docs/design/portability_arm64.md.
-# - nightly: the fuzz crate (libfuzzer needs nightly) — a plain `cargo build` in
-#   fuzz/ so the one raw-guest-bytes harness KEEPS COMPILING as the core evolves
-#   (it is a separate workspace, so nothing else rebuilds it). Actually *running*
-#   the fuzzer stays a manual/local gate (`cargo +nightly fuzz run`, see README);
-#   CI only pins compilation.
+# - (removed 2026-09-26, v3 archive) nightly-fuzz, tsan and mutants: the fuzz
+#   crate, the kayfabe-tests threaded suites and the L1 mutation surface they
+#   gated (kayfabe-rt/-fwd/-shell/-core) moved to archive/ at the v3 cutover.
 #
-# Standing scheduled gates (slow, so not per-push — but STANDING, not
-# remembered-by-a-human; that is how 9k lines of L1 once reached master with
-# neither TSan nor a mutation run):
-# - slow (nightly + dispatch): the whole suite with KAYFABE_SLOW=1 — the
-#   pushbuffer proptest fuzz (73 s) and the 16-thread stress soak (≈20 s), the
-#   two tests measurement showed dominate the wall clock, actually run.
-# - tsan (nightly + dispatch): ThreadSanitizer over the four threaded suites —
-#   the §8.2 race ceiling (l1_concurrency.md §12.15 records the first run: 28
-#   tests, 0 races).
-# - mutants (weekly + dispatch): cargo-mutants over the L1 surface — the
-#   core_mutation_gate.md standing gate. Runs with KAYFABE_SLOW=1 (the gated
-#   pushbuffer fuzz is the only coverage of the hostile-input decoder, and gating
-#   it hollowed out a security gate), CARGO_INCREMENTAL=0 (incremental ICEs get
-#   mis-scored as "unviable" and inflate the number), and a HARD threshold read
-#   off the measured baseline — see the job's own comments for each.
+# Standing scheduled gate (slow, so not per-push):
+# - slow (nightly + dispatch): the whole suite with KAYFABE_SLOW=1.
+#
+# ⚠ These jobs still encode the PRE-v3 tree's gates, and CI was already red on
+# master before the archive move. The verdict of record for v3 is the hardware
+# sequence (scripts/bench/v3_gates.sh + the 30-arm fast suite); see CLAUDE.md.
 
 name: CI
 
@@ -44,10 +32,9 @@ on:
   pull_request:
     branches: [master]
   schedule:
-    # Nightly (slow + tsan) and weekly (mutants) — the job `if:`s key off the
-    # exact cron string, so keep these in sync with them.
+    # Nightly (slow) — the job `if:` keys off the
+    # exact cron string, so keep it in sync.
     - cron: '43 2 * * *'
-    - cron: '43 4 * * 6'
   workflow_dispatch:
 
 env:
@@ -500,8 +487,8 @@ jobs:
       # word naming a userspace library this port has to talk ABOUT.
       - name: Hexagonal boundary gate (no OS vocabulary in the pure logic crates)
         run: |
-          pure="crates/kayfabe-core crates/kayfabe-completion crates/kayfabe-fwd \
-                crates/kayfabe-mmu crates/kayfabe-gsp crates/kayfabe-rmrpc crates/kayfabe-arch \
+          pure="crates/kayfabe-completion \
+                crates/kayfabe-mmu crates/kayfabe-gsp crates/kayfabe-arch \
                 crates/kayfabe-abi crates/kayfabe-device \
                 crates/kayfabe-util crates/kayfabe-trace crates/kayfabe-isolate crates/kayfabe-vmm \
                 crates/kayfabe-chips"
@@ -554,11 +541,11 @@ jobs:
       # that reason.)
       - name: VMM-vocabulary gate (no hypervisor API vocabulary in the core or the shell)
         run: |
-          portable="crates/kayfabe-core crates/kayfabe-completion crates/kayfabe-fwd \
-                    crates/kayfabe-mmu crates/kayfabe-gsp crates/kayfabe-rmrpc \
+          portable="crates/kayfabe-completion \
+                    crates/kayfabe-mmu crates/kayfabe-gsp \
                     crates/kayfabe-arch crates/kayfabe-abi crates/kayfabe-device \
                     crates/kayfabe-util crates/kayfabe-trace crates/kayfabe-isolate \
-                    crates/kayfabe-vmm crates/kayfabe-rt crates/kayfabe-shell \
+                    crates/kayfabe-vmm \
                     crates/kayfabe-chips"
           # ★ `crates/kayfabe-shell` ADDED 2026-07-29 (task #100). This step is named
           # *"…in the core or the shell"* and did not cover the crate literally called
@@ -657,8 +644,8 @@ jobs:
       #    to be a decision somebody writes down.
       - name: Generation-name gate (no concrete chip or driver version in the logic crates)
         run: |
-          pure="crates/kayfabe-core crates/kayfabe-completion crates/kayfabe-fwd \
-                crates/kayfabe-mmu crates/kayfabe-gsp crates/kayfabe-rmrpc crates/kayfabe-arch \
+          pure="crates/kayfabe-completion \
+                crates/kayfabe-mmu crates/kayfabe-gsp crates/kayfabe-arch \
                 crates/kayfabe-util crates/kayfabe-trace crates/kayfabe-isolate \
                 crates/kayfabe-vmm crates/kayfabe-isolate-host"
           hits=$(grep -rniE --exclude-dir=target \
@@ -987,53 +974,6 @@ jobs:
             echo "lexical (PhantomData is a ZST), never editorial."
             exit 1
           fi
-      # ★★★ The GPA-ACCESSOR gate (l1_os_shell.md §6.1/§6.3/§10.1 item 6, the 2026-07-27
-      # contact round). `Vmm::gpa_read`/`gpa_write` are the ONLY in-lock-legal capability
-      # that takes a GUEST-CHOSEN address, and their legality rests entirely on the
-      # implementation being unable to reach VMM-global API. On a real backend that is
-      # decided at run time by which region the guest's number lands on — a lock inversion
-      # the guest constructs on demand, invisible to the type system, to the lock ranks
-      # (a lock we do not take ourselves has no rank), to the written list of VMM
-      # functions an in-lock-legal method may call, and to the other three greps here.
-      #
-      # The defence is a POSITIVE proof (`kayfabe_vmm::GuestRamMap`) plus ONE core-side
-      # classification site (`kayfabe_fwd::guest_read`), because a second call site is a
-      # second place a refusal can be folded into a generic fault — which is exactly what
-      # the code did before (`map_err(|_| FwdFault::GpaRead { .. })`, discarding the
-      # variant that says "the guest aimed at a device").
-      #
-      # Scope = the PURE crates only. `kayfabe-mocks` implements the accessors (that is
-      # its job), `kayfabe-rt` passes a `&mut dyn Vmm` through without calling them, and
-      # the tests drive both sides deliberately.
-      #
-      # Exit-code polarity, as at every gate above: `grep -r` exits 0 on a HIT, and a hit
-      # is the FAILURE case — hence the `if`, never a bare `grep` under `set -e`.
-      - name: GPA-accessor gate (exactly one core-side classification site)
-        run: |
-          pure="crates/kayfabe-core crates/kayfabe-completion crates/kayfabe-mmu \
-                crates/kayfabe-gsp crates/kayfabe-rmrpc crates/kayfabe-arch crates/kayfabe-abi \
-                crates/kayfabe-util crates/kayfabe-trace crates/kayfabe-isolate"
-          if grep -rnE --exclude-dir=target '\.gpa_(read|write)\(' $pure; then
-            echo ""
-            echo "★ GPA-ACCESSOR BREACH — l1_os_shell.md §6.1 / §10.1 item 6."
-            echo "Guest-physical access belongs to ONE core-side site,"
-            echo "kayfabe_fwd::guest_read, which classifies the refusal:"
-            echo "  VmmError::NonRamGpa -> FwdFault::NonRamGpa  (the guest aimed a"
-            echo "                         descriptor at a DEVICE register window; on a"
-            echo "                         real backend serving it takes the VMM's global"
-            echo "                         lock beneath one of our ranked locks)"
-            echo "  anything else       -> FwdFault::GpaRead    (nothing is there)"
-            echo "Route the access through it. Never re-derive the classification, and"
-            echo "never map_err(|_| ..) it away — the discarded variant IS the finding."
-            exit 1
-          fi
-          n=$(grep -cE '\.gpa_(read|write)\(' crates/kayfabe-fwd/src/lib.rs || true)
-          if [ "$n" != "1" ]; then
-            echo ""
-            echo "★ GPA-ACCESSOR BREACH — kayfabe-fwd has $n guest-memory access sites,"
-            echo "expected exactly 1 (kayfabe_fwd::guest_read). See the message above."
-            exit 1
-          fi
       # ★ The BRIDGE-EXCLUSIVITY gate (docs/design/gsp_core_bridge.md §1.2, which asks for
       # it in as many words: "It is the ONLY crate in the tree permitted to name both
       # `RpcCommand` and `RmEvent`. That is a one-line CI grep and should be added as one").
@@ -1137,7 +1077,7 @@ jobs:
           # MODEL it, and every test judges production code against that model. The oracle was
           # once 610-shaped for BOTH profiles (correction brief B1) — an untagged citation there
           # is a wrong test, which is worse than a wrong comment because it reports green.
-          hits=$(grep -rn 'ogkm:' crates tests fuzz --include='*.rs' 2>/dev/null || true)
+          hits=$(grep -rn 'ogkm:' crates --include='*.rs' 2>/dev/null || true)
           if [ -n "$hits" ]; then
             echo "$hits"
             echo ""
@@ -1691,11 +1631,11 @@ jobs:
           # yields `None`, which is a MEASUREMENT about that host, never a load failure. The
           # binding is loaded on every boot for the walk kernel, and a required symbol absent
           # from an older `libcuda` would turn a missing experiment into a missing walker.
-          AUDITED="kayfabe-linux-raw:127 kayfabe-qemu-raw:61 kayfabe-cuda:40"
+          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:40"
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
           missing=""
-          for m in crates/*/Cargo.toml tests/Cargo.toml; do
+          for m in crates/*/Cargo.toml; do
             exempt=0
             for entry in $AUDITED; do
               case "$m" in "crates/${entry%%:*}/Cargo.toml") exempt=1;; esac
@@ -2056,10 +1996,6 @@ jobs:
             echo "growth stops being a count of the audit surface."
             exit 1
           fi
-      - name: Format check (fuzz workspace)
-        run: cargo fmt --all --check
-        working-directory: fuzz
-
   aarch64:
     name: aarch64 — core cross-checks (no x86 assumptions)
     runs-on: ubuntu-latest
@@ -2080,20 +2016,6 @@ jobs:
           KAYFABE_ISOLATE_IMAGE_STUB: "1"
         run: cargo check --workspace --target aarch64-unknown-linux-gnu
 
-  nightly-fuzz:
-    name: nightly — fuzz harness compiles
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      # Sets RUSTUP_TOOLCHAIN, overriding the repo's stable rust-toolchain.toml.
-      - uses: dtolnay/rust-toolchain@nightly
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: fuzz
-      - name: Build fuzz harness (compile gate only; running it is manual)
-        run: cargo build
-        working-directory: fuzz
-
   slow:
     name: slow — full suite with the soaks (KAYFABE_SLOW=1)
     # Nightly cron + manual dispatch only — never the push path (the push gate's
@@ -2109,224 +2031,3 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Test with the slow gate open (pushbuffer proptest fuzz + 16-thread stress soak)
         run: KAYFABE_SLOW=1 cargo test --workspace
-
-  tsan:
-    name: tsan — race ceiling over the threaded suites
-    if: github.event.schedule == '43 2 * * *' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      # TSan needs nightly (-Zsanitizer) + rust-src (-Zbuild-std rebuilds std
-      # instrumented — without it, std's own synchronization is invisible to TSan
-      # and every lock handoff reads as a race).
-      - uses: dtolnay/rust-toolchain@nightly
-        with:
-          components: rust-src
-          # ★ The nested isolate build KEEPS `RUSTUP_TOOLCHAIN`, so it is nightly that
-          # builds the image in this job — which is why the musl target has to be installed
-          # for nightly here rather than assumed from the stable job.
-          targets: x86_64-unknown-linux-musl
-      - uses: Swatinem/rust-cache@v2
-      # The exact first-campaign invocation (l1_concurrency.md §12.15: 28 tests,
-      # 0 races), plus KAYFABE_SLOW=1 so the gated stress soak — the whole reason
-      # this job exists — actually runs under the sanitizer. TSan inflates
-      # runtimes ~20× (measured: concurrency_stress 290 s, rt_shell 69 s,
-      # l1_mean 20 s), which is why the watchdog override exists: without it the
-      # suites' own wedge-watchdogs would abort on instrumentation tax, not on a
-      # real hang.
-      - name: ThreadSanitizer (concurrency_stress, rt_shell, l1_verb_seam, l1_mean)
-        run: |
-          KAYFABE_SLOW=1 KAYFABE_STRESS_WATCHDOG_SECS=1800 RUSTFLAGS="-Zsanitizer=thread" \
-            cargo +nightly test -p kayfabe-tests \
-            --test concurrency_stress --test rt_shell --test l1_verb_seam --test l1_mean \
-            -Zbuild-std --target x86_64-unknown-linux-gnu -- --test-threads=1
-
-  mutants:
-    name: mutants — L1-surface mutation gate
-    # Weekly cron + manual dispatch — a mutation campaign is hours, not minutes.
-    if: github.event.schedule == '43 4 * * 6' || github.event_name == 'workflow_dispatch'
-    # ★★ MEASURED 2026-07-28 — WITHOUT THIS, A BROKEN SUITE SCORES 100%.
-    # cargo-mutants baselines with `--package=<mutated pkgs>` while the mutants
-    # themselves run `--workspace`. The baseline therefore runs only ~200 tests
-    # across 39 binaries and OMITS `kayfabe-tests` ENTIRELY — the conformance
-    # suite that catches most mutants. A red conformance suite would pass the
-    # baseline and then make EVERY mutant look CAUGHT. `needs: stable` makes the
-    # real suite a precondition of the gate rather than an assumption of it.
-    needs: stable
-    runs-on: ubuntu-latest
-    # No `continue-on-error`: the threshold below IS the gate (see
-    # core_mutation_gate.md §L1 baseline for the measurement it is derived from).
-    timeout-minutes: 600
-    env:
-      # ★ KAYFABE_SLOW=1 — a slow-test gate silently weakened a SECURITY gate.
-      #
-      # This job used to run with KAYFABE_SLOW unset "because the fast path is what
-      # makes mutants × suite tractable". Measured consequence: the 73 s pushbuffer
-      # proptest fuzz is the ONLY coverage of the untrusted, guest-controlled
-      # pushbuffer decoder, and skipping it let decoder mutants survive that the
-      # fuzz kills (verified on the decoder scope: 2 missed → 1 with the flag set).
-      # So the flag that was introduced to keep the *push* gate fast had, as a side
-      # effect, hollowed out the mutation gate exactly where the input is hostile.
-      # Cost, honestly: the two gated soaks add ~90 s per mutant, roughly doubling
-      # this job's wall clock. It is a weekly cron; correctness of the gate wins.
-      KAYFABE_SLOW: '1'
-      # ★ CARGO_INCREMENTAL=0 — incremental compilation ICEs inside the mutants
-      # temp tree, and cargo-mutants scores a build failure as "unviable".
-      #
-      # cargo-mutants rewrites one source file per mutant inside a copied tree that
-      # reuses one `target/` (and therefore one incremental dep-graph cache). That
-      # cache does not survive the churn: rustc aborts with
-      # `on_disk_cache.rs: assertion left == right failed`. cargo-mutants cannot
-      # tell a compiler crash from a type error, so every ICE'd mutant is filed
-      # "unviable" and DROPPED FROM THE DENOMINATOR — silently inflating the score.
-      # Measured on the first L1 campaign: 136 of 293 mutant builds ICE'd, and
-      # `SourceRegistry::is_empty -> true` was reported unviable while the sibling
-      # `-> false` was caught. Turning incremental off removed every ICE.
-      # NEVER remove this without re-checking the ICE guard step below.
-      CARGO_INCREMENTAL: '0'
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: x86_64-unknown-linux-musl   # the embedded isolate image; see the stable job
-      - uses: Swatinem/rust-cache@v2
-      - name: Install cargo-mutants
-        run: cargo install --locked cargo-mutants
-      # Scope = the L1 surface: kayfabe-rt (the threaded shell's logic), the
-      # core's completion-source reactor, and the plan/execute/commit + isolate
-      # pool/condemnation code (kayfabe-fwd and kayfabe-isolate are single-file
-      # crates, so file scope == crate scope). Same knobs as the L0 campaign
-      # (core_mutation_gate.md §Reproduce), except the baseline is NOT skipped:
-      # in CI nothing has pre-verified the tree is green, and a broken baseline
-      # must fail the campaign rather than poison every mutant's result.
-      #
-      # `cargo mutants` exits non-zero if ANY mutant survives, which is not the
-      # bar this gate holds (see the scoring step) — hence `|| true` here and a
-      # threshold check on the recorded outcome files afterwards.
-      - name: cargo mutants over the L1 surface
-        run: |
-          # ★★ SCOPE = EVERY PRODUCTION CRATE. It used to be four hand-picked paths,
-          # which by 2026-07-27 covered only ~17k of 41.6k implementation lines — so the
-          # threshold described the OLD core while every real defect that week lived in
-          # the NEW OS layer (an Arc-ownership R1 violation, a silent-wrap ledger race, an
-          # address-blind arena). A gate that measures a shrinking minority reports a
-          # number about code nobody is changing.
-          #
-          # Test scaffolding is excluded in mutants.toml (crates/kayfabe-mocks/**,
-          # tests/src/**), not here — mutating an instrument is a category error, and 48%
-          # of one run's misses were exactly that.
-          # ★★ ABSOLUTE TIMEOUT, AND DELIBERATELY NOT --timeout-multiplier.
-          # Measured 2026-07-28: the workspace suite takes 201 s ALONE on a
-          # 25-core box, so a 4-vCPU runner at -j 2 is slower still — the old
-          # `--timeout 240` sat at or BELOW honest completion. cargo-mutants
-          # counts a TIMEOUT as KILLED, so mass timeouts would report ~100 % and
-          # the gate would never fire: the failure is silent and one-directional.
-          # A multiplier is worse than useless here because it is computed off
-          # cargo-mutants' own baseline, which omits `kayfabe-tests` (see the
-          # `needs: stable` note) and therefore measures ~14 s.
-          cargo mutants --test-workspace true -j 2 \
-            --timeout 1800 --build-timeout 900 \
-            -f 'crates/*/src/**/*.rs' || true
-      # ★ The anti-inflation guard. "Unviable" is supposed to mean "the mutant does
-      # not typecheck" (a tool artifact). If it ever again means "rustc crashed",
-      # the denominator is fiction and so is the score — so a single ICE in any
-      # mutant's build log fails the job outright, BEFORE the threshold is read.
-      - name: Guard — no compiler ICE may be scored as "unviable"
-        run: |
-          if grep -rlq "thread 'rustc'" mutants.out/log/; then
-            echo "★ A mutant build ICE'd. cargo-mutants files that as 'unviable',"
-            echo "which removes the mutant from the denominator and INFLATES the"
-            echo "score. Do not trust this campaign's number. Offending logs:"
-            grep -rl "thread 'rustc'" mutants.out/log/ | head -20
-            exit 1
-          fi
-      # ★ The threshold, derived from the measured L1 baseline — not aspirational.
-      # score = (caught + timeout) / (caught + timeout + missed); `unviable` is
-      # excluded because it is a tool artifact, exactly as in the L0 table.
-      # See core_mutation_gate.md §L1 baseline for why the bar sits here and not
-      # at L0's 99.2%: this surface is measured, and a gate set above reality is
-      # theatre that gets muted after the first red night.
-      - name: Score the campaign against the measured L1 threshold
-        run: |
-          THRESHOLD=${MUTATION_THRESHOLD_PCT}
-          n() { if [ -f "mutants.out/$1.txt" ]; then wc -l < "mutants.out/$1.txt"; else echo 0; fi; }
-          caught=$(n caught); missed=$(n missed); to=$(n timeout); unviable=$(n unviable)
-          killed=$((caught + to)); viable=$((killed + missed))
-          if [ "$viable" -eq 0 ]; then
-            echo "★ Zero viable mutants — the campaign tested nothing. Failing."
-            echo "(The usual cause is a lost --test-workspace: kayfabe-fwd and"
-            echo " kayfabe-rt have no unit tests of their own, so without it the"
-            echo " harness runs an empty suite and reports everything MISSED.)"
-            exit 1
-          fi
-          score=$((killed * 1000 / viable))
-          echo "caught=$caught timeout=$to missed=$missed unviable=$unviable"
-          echo "score = $killed/$viable = $((score / 10)).$((score % 10))% (bar: ${THRESHOLD}.0%)"
-          if [ "$score" -lt $((THRESHOLD * 10)) ]; then
-            echo "★ MUTATION SCORE REGRESSION — below the measured L1 baseline."
-            echo "Survivors:"; cat mutants.out/missed.txt
-            exit 1
-          fi
-        env:
-          # The bar. Raise it when a campaign measures higher and the new number
-          # holds across a run; never lower it to make a red night go away —
-          # a survivor is a test gap, and this file is where that gets argued.
-          # ⚠ PENDING RE-DERIVATION (2026-07-27). 91 was measured against the OLD
-          # four-path scope (~17k of 41.6k lines). The scope above is now every
-          # production crate, so this number describes a different population and MUST
-          # be re-derived from the first full run under the new scope before it is
-          # trusted as a bar. This job is weekly/dispatch only, so a temporarily wrong
-          # bar blocks nothing — but do not quote the score until it is re-derived.
-          # ★★ 86 — THE FIRST UNCONTAMINATED MEASUREMENT, 2026-07-28.
-          # Full campaign at b64a3f5 under the CORRECTED config (2667 targets,
-          # scaffolding genuinely excluded for the first time — see
-          # .cargo/mutants.toml's header for why it never was before):
-          #     caught 1900 · missed 310 · timeout 4 · unviable 453
-          #     (1900 + 4) / (1900 + 4 + 310) = 86.0 %
-          #
-          # ★ THIS IS A FLOOR, NOT THE CEILING. Real coverage on current master is
-          # HIGHER: c0ec2fa deleted nine uncalled items and made Spine::arch private,
-          # and e9564d7 added seven tests closing the gsp boot/replay/fault survivors
-          # — both land AFTER the measured tree, so some of those 310 are already
-          # closed. The 4 timeouts are also counted as kills pending individual
-          # adjudication at 3600 s. Raise this when a campaign MEASURES higher; never
-          # lower it to make a red night go away.
-          #
-          # ★★ WHY IT DROPPED FROM 91. The old 91 was set against a different, smaller
-          # scope AND was never measured with the config in effect. The prior run's
-          # 95.4 % is not comparable and should not be quoted: proptest seeds
-          # accumulate monotonically inside cargo-mutants job trees (measured: 7 of 12
-          # trees diverged by T+1h35m), biasing kills UPWARD as a run proceeds, and
-          # two test-adding commits landed in that run's working tree mid-campaign.
-          # Both biases push the same way and neither has a downward counterpart.
-          # A bar above reality is theatre that gets muted after the first red night.
-          # ⚠ WAS 86 FOR ONE COMMIT (1afc5ff) AND THAT GATE COULD NOT PASS.
-          # CI's formula is integer: 1904*1000//2214 = 859 < 860. Setting the bar
-          # AT the measured 85.998 % fails by ONE mutant. Do not set this to the
-          # measurement; set it BELOW, with headroom sized to the known noise.
-          #
-          # 83 tolerates 376 survivors against the 310 measured — 66 of slack, for
-          # three reasons that are all measured, not guessed:
-          #   1. ★ CI RUNS ON ubuntu-latest, WHICH HAS NO /dev/kvm. kvm_gate.rs's own
-          #      docs say so, and the measuring box HAS it (36 RAN / 0 SKIPPED). So CI
-          #      scores a STRICTLY LESS COVERED population than 85.998 % describes.
-          #      That blind spot is being sized; until then this bar must absorb it.
-          #   2. proptest seeds accumulate inside job trees, so a couple of rows flip
-          #      between runs with no code change.
-          #   3. 4 timeouts are scored as kills pending individual adjudication.
-          # ★★ 80, NOT 83 — AND NOT 86. I have now sized this wrong TWICE by fitting
-          # the bar to a measurement instead of leaving slack:
-          #   86 (1afc5ff) failed the run it came from by ONE mutant (integer formula).
-          #   83 (f556d03) passes THIS box, but CI has no /dev/kvm and would pass by
-          #      ONE TENTH of a percent — the same mistake wearing a different number.
-          #
-          # ★ MEASURED: the same crate scores 104 survivors WITHOUT /dev/kvm vs 41 with
-          # (kayfabe-vmm-kvm, probed alone). CI runs on ubuntu-latest, which has none —
-          # kvm_gate.rs's docs say so, and the measuring box logged 36 RAN / 0 SKIPPED.
-          # Projecting that +63 onto the campaign: 1841/2214 = 83.1 %, i.e. exactly at 83.
-          # And that projection is OPTIMISTIC — it assumes the delta is confined to one
-          # crate, while kayfabe-rt and kayfabe-shell also drive the reactor.
-          #
-          # 80 leaves ~3.1 points (~69 survivors) of real slack. Raise it when an actual
-          # CI run MEASURES higher; this number is still a projection, not a CI reading.
-          MUTATION_THRESHOLD_PCT: '80'

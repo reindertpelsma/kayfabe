@@ -89,8 +89,11 @@ want_all=0
 # `Arch::vchid_from_userd_flags` against NVIDIA's own USERD_INDEX writer, reader,
 # recombination and eheap granularity). Same shape as the four above — it READS the test
 # log, so the extractor defers it and only the `--all` literal moves.
-GATE_STEPS_ALL_MIN=23
-GATE_STEPS_FAST_MIN=11
+# ★ 23 -> 21 and 11 -> 10 (2026-09-26, the v3 archive move): the GPA-accessor gate (its
+# subject, `kayfabe-fwd`, is archived) and the fuzz-workspace fmt step (`fuzz/` is archived)
+# were removed from ci.yml's `stable` job. Deliberate, and said here as this floor demands.
+GATE_STEPS_ALL_MIN=21
+GATE_STEPS_FAST_MIN=10
 
 # ★★ A PER-INVOCATION test log, MEASURED 2026-07-30.
 #
