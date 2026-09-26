@@ -14,4 +14,5 @@ pub mod apply;
 pub mod batch;
 pub mod cpuwin;
 pub mod ledger;
+pub mod maplog;
 pub mod vasmgr;

@@ -133,6 +133,7 @@ pub mod inittables;
 // named by role so a name-based gate can tell them from the three that do.
 pub mod invariant_classes;
 pub mod l2evict;
+pub mod mcintr;
 pub mod memsysconfig;
 pub mod notifier;
 pub mod oracle;

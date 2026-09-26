@@ -584,6 +584,9 @@ pub struct ChanPlane {
     /// doorbell (the `DOORBELL-LEDGER` line at free; atomics only — the vCPU writes them).
     rung: Box<[AtomicU64]>,
     rang: Box<[AtomicU64]>,
+    /// ★ `KF3_MAPLOG` only: per guest token, when its last inline doorbell was rung (µs on the
+    /// `kf_mem::maplog` clock; 0 = never, or maplog off).
+    rung_at_us: Box<[AtomicU64]>,
     /// ★ P5c: the host robust-channel event fd — one dataless `NV01_EVENT_OS_EVENT` per twin's
     /// context DMA (notify index 0: `krcErrorSendEventNotificationsCtxDma_FWCLIENT` walks exactly
     /// those, `kernel_rc_notification.c:380-400`), all on this fd. A worker's poller watches it.
@@ -716,6 +719,7 @@ impl ChanPlane {
             enc_sessions: Mutex::new(HashMap::new()),
             rung: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
             rang: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
+            rung_at_us: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
             rc_ev,
             rc_queue: Mutex::new(Vec::new()),
             rc_armed: AtomicU64::new(0),
@@ -769,6 +773,15 @@ impl ChanPlane {
     pub fn note_inline(&self, idx: u32, reached: bool) {
         if let Some(c) = self.rung.get(idx as usize) {
             c.fetch_add(1, Ordering::Relaxed);
+        }
+        if kf_mem::maplog::on()
+            && let Some(c) = self.rung_at_us.get(idx as usize)
+        {
+            // ⊘ Diagnostic only (and it writes a line from the vCPU — never on in production).
+            let t = kf_mem::maplog::t();
+            c.store((t * 1e6) as u64, Ordering::Relaxed);
+            let n = self.rung.get(idx as usize).map_or(0, |r| r.load(Ordering::Relaxed));
+            eprintln!("kf3: maplog t={t:.6} DOORBELL chid {idx:#x} #{n} reached={reached}");
         }
         if reached && let Some(c) = self.rang.get(idx as usize) {
             c.fetch_add(1, Ordering::Relaxed);
@@ -2097,6 +2110,18 @@ impl ChanPlane {
                     "kf3: RC host twin {:#x} (guest chid {:#x}, engine {:#x}) wrote its notifier: except_type={:#x} (Xid {}) — forwarding RC_TRIGGERED",
                     e.host_token, e.chid, e.engine, e.except_type, e.except_type
                 );
+                if kf_mem::maplog::on() {
+                    eprintln!(
+                        "kf3: maplog t={:.6} RC-SEEN twin host {:#x} guest chid {:#x} engine {:#x} except_type={:#x} doorbells rung={} last@{}",
+                        kf_mem::maplog::t(),
+                        e.host_token,
+                        e.chid,
+                        e.engine,
+                        e.except_type,
+                        self.rung.get(e.chid as usize).map_or(0, |c| c.load(Ordering::Relaxed)),
+                        self.last_rung(e.chid)
+                    );
+                }
             }
             if let Ok(mut q) = self.rc_queue.lock() {
                 q.extend(found);
@@ -2249,6 +2274,35 @@ impl ChanPlane {
             self.completions.clear(g.guest_idx);
         }
         g.chan.counts().1 > before
+    }
+
+    /// ★ `KF3_MAPLOG` (diagnostic): the passthrough twins in host space `space`, each as
+    /// `chid:engine=rung` — the doorbells the guest has rung on it so far (a relaxed read).
+    #[must_use]
+    pub fn pt_doorbells(&self, space: u32) -> String {
+        // ⊘ try_lock: the VA thread must never wait on a lock the act thread may hold.
+        let Ok(m) = self.pt.try_lock() else { return "[pt busy]".into() };
+        let mut v: Vec<(u32, u32, u64)> = m
+            .values()
+            .filter(|t| t.space.space == space)
+            .map(|t| (t.idx, t.engine, self.rung.get(t.idx as usize).map_or(0, |c| c.load(Ordering::Relaxed))))
+            .collect();
+        v.sort_unstable();
+        format!(
+            "[{}]",
+            v.iter()
+                .map(|(i, e, n)| format!("{i:#x}:{e:#x}={n}@{}", self.last_rung(*i)))
+                .collect::<Vec<_>>()
+                .join(" ")
+        )
+    }
+
+    /// `KF3_MAPLOG`: when guest token `idx` last rang (seconds on the maplog clock), or `-`.
+    fn last_rung(&self, idx: u32) -> String {
+        match self.rung_at_us.get(idx as usize).map_or(0, |c| c.load(Ordering::Relaxed)) {
+            0 => "-".into(),
+            us => format!("{:.6}", us as f64 / 1e6),
+        }
     }
 
     /// Whether the channel behind `ht` can take work (a dead one cannot: §7 then poisons).

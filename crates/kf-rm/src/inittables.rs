@@ -577,6 +577,15 @@ pub enum WantedTable {
     /// bytes (`C: mode2_initctrl_ga106.h:6245 = 0x20800a6c`, `psize = 4, dlen = 0`). Both sources agree
     /// on a zero-filled body, so that is what is encoded.
     MemsysL2InvalidateEvict,
+    /// `NV2080_CTRL_CMD_MC_SERVICE_INTERRUPTS` (`0x20801702`) — ★★★ v3-mapfix: the control a
+    /// blocked CUDA/OpenCL waiter issues after each 1 s wait slice, and whose REFUSAL ended the
+    /// wait early: `[measured 2026-09-26, clpeak on GA106]` every FP64 `clFinish` returned at
+    /// exactly +1.000 s with the batch still running on the host (FP64 449.9 GFLOPS reported,
+    /// 218 on bare metal), the host fell behind, and a freed buffer was written by the backlog
+    /// (host Xid 31 `FAULT_PDE`). Answered `NV_OK` with `engines` echoed — physical RM's own
+    /// answer for a device with no interrupt state held back; it completes nothing (the waiter
+    /// re-checks its semaphore). The full argument is [`kf_abi::mcintr`].
+    McServiceInterrupts,
     /// `NV2080_CTRL_CMD_CE_GET_FAULT_METHOD_BUFFER_SIZE` (`0x20802a08`) — ★★★ the first
     /// variant whose reply this port **could not derive from any document it holds**, and
     /// the first answered with a number taken off a real GA106.
@@ -1108,7 +1117,7 @@ impl WantedTable {
     ///
     /// [`WantedTable::cmd_id`] remains the mechanism on the other side — exhaustive over
     /// `Self`, so a new variant does not compile until it has an id.
-    pub const ALL: [WantedTable; 51] = [
+    pub const ALL: [WantedTable; 52] = [
         Self::DeviceInfo,
         Self::IntrKernelTable,
         Self::PciBarInfo,
@@ -1126,6 +1135,7 @@ impl WantedTable {
         Self::RegisterAccessCntrBuffer,
         Self::EventSetNotification,
         Self::MemsysL2InvalidateEvict,
+        Self::McServiceInterrupts,
         Self::CeFaultMethodBufferSize,
         Self::GrCaps,
         Self::GrInfo,
@@ -1200,6 +1210,7 @@ impl WantedTable {
             Self::MemsysL2InvalidateEvict => {
                 kf_abi::l2evict::NV2080_CTRL_CMD_INTERNAL_MEMSYS_L2_INVALIDATE_EVICT
             }
+            Self::McServiceInterrupts => kf_abi::mcintr::NV2080_CTRL_CMD_MC_SERVICE_INTERRUPTS,
             Self::CeFaultMethodBufferSize => {
                 kf_abi::fmbsize::NV2080_CTRL_CMD_CE_GET_FAULT_METHOD_BUFFER_SIZE
             }
@@ -1290,6 +1301,7 @@ impl WantedTable {
                 kf_abi::eventnotify::EVENT_SET_NOTIFICATION_PARAMS_SIZE
             }
             Self::MemsysL2InvalidateEvict => kf_abi::l2evict::L2_INVALIDATE_EVICT_PARAMS_SIZE,
+            Self::McServiceInterrupts => kf_abi::mcintr::MC_SERVICE_INTERRUPTS_PARAMS_SIZE,
             Self::CeFaultMethodBufferSize => {
                 kf_abi::fmbsize::CE_FAULT_METHOD_BUFFER_SIZE_PARAMS_SIZE
             }
@@ -2100,6 +2112,18 @@ impl CommandPolicy for InitTablePolicy {
                     return refuse();
                 };
                 l2evict::encode_l2_invalidate_evict(&evict)
+            }
+            // ★★★ v3-mapfix — serviced, `engines` echoed (the guest re-reads it after the RPC
+            // to pick what IT services, `intr.c:228-278`). Refusing it was the forged
+            // completion: the waiter took the `0x56` as the end of its wait (`kf_abi::mcintr`).
+            WantedTable::McServiceInterrupts => {
+                let at = req.params_at;
+                match kf_abi::mcintr::answer_mc_service_interrupts(
+                    &cmd.payload[at..at + want.params_size()],
+                ) {
+                    Some(p) => p,
+                    None => return refuse(),
+                }
             }
             // ★★★ The arm answered with a number **measured on real silicon** — an RTX 3060
             // running open 580.159.04, 2026-08-01, `traces/real_ga106/`. It reads no
