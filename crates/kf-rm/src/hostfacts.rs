@@ -134,9 +134,12 @@ pub struct HostFacts {
     /// The short name (`GPU_GET_SHORT_NAME_STRING` `0x20800111`), e.g. `GA106-A`.
     pub gpu_short_name: Option<GpuName>,
     /// ★ The host's VBIOS version `(REVISION, OEM_REVISION)` (`BIOS_GET_INFO_V2` `0x20800810`,
-    /// NON_PRIVILEGED) — what the synthetic ROM declares (`kf_chip::bar0::vbios_profile`).
+    /// NON_PRIVILEGED) — what the synthetic ROM declares (`kf_chip::bar0::vbios_profile`) and what
+    /// the guest's own `BIOS_GET_INFO_V2` is answered with (`nvidia-smi`'s VBIOS column).
     /// ⊘ Replaces the GA106 row's `0x9418_0000` on every die.
-    pub vbios_version: (u32, u8),
+    /// `None` = the host did not answer: **cosmetic, so never a realize failure** — the ROM carries
+    /// `kf_abi::vbios::NEUTRAL_VBIOS_VERSION` and the guest's ask is refused, as before.
+    pub vbios_version: Option<(u32, u8)>,
     /// ★ The host's reply to libcudart's `PERF_GET_LEVEL_INFO_V2` question
     /// (`kf_abi::cudartinit::perf_level_info_v2_request`, `0x2080200b`, NON_PRIVILEGED), asked
     /// once at realize. `None` = the host refused it, and the guest's identical ask is refused
@@ -214,7 +217,7 @@ pub const PROVENANCE: &[(&str, Source)] = &[
     ("gsp_features", Source::HostControl { cmd: 0x2080_3601, name: "GSP_GET_FEATURES" }),
     ("gpu_name", Source::HostControl { cmd: 0x2080_0110, name: "GPU_GET_NAME_STRING (ASCII)" }),
     ("gpu_short_name", Source::HostControl { cmd: 0x2080_0111, name: "GPU_GET_SHORT_NAME_STRING" }),
-    ("vbios_version", Source::HostControl { cmd: 0x2080_0810, name: "BIOS_GET_INFO_V2 [REVISION 0x0, OEM_REVISION 0x1]" }),
+    ("vbios_version", Source::HostControl { cmd: 0x2080_0810, name: "BIOS_GET_INFO_V2 [REVISION 0x0, OEM_REVISION 0x1] (a host that does not answer = None: cosmetic, never a realize failure)" }),
     ("perf_level_info_v2", Source::HostControl { cmd: 0x2080_200b, name: "PERF_GET_LEVEL_INFO_V2 (libcudart's question, asked once; a host refusal is kept and relayed)" }),
 ];
 
@@ -311,14 +314,10 @@ pub fn derive_ce_caps(reply: &[u8]) -> Result<kf_abi::cecaps::HostCeCaps, FactRe
     Ok(c)
 }
 
-/// `NV2080_CTRL_CMD_BIOS_GET_INFO_V2` (`ogkm-580: ctrl2080bios.h:97`).
-pub const NV2080_CTRL_CMD_BIOS_GET_INFO_V2: u32 = 0x2080_0810;
-/// `sizeof(NV2080_CTRL_BIOS_GET_INFO_V2_PARAMS)` — `{count, {index, data}[15]}` (`:101-104`).
-pub const BIOS_GET_INFO_V2_PARAMS_SIZE: usize = 4 + 8 * 15;
-/// `NV2080_CTRL_BIOS_INFO_INDEX_REVISION` / `_OEM_REVISION` (`:44-45`).
-pub const BIOS_INFO_INDEX_REVISION: u32 = 0;
-/// See [`BIOS_INFO_INDEX_REVISION`].
-pub const BIOS_INFO_INDEX_OEM_REVISION: u32 = 1;
+pub use kf_abi::vbios::{
+    BIOS_GET_INFO_V2_PARAMS_SIZE, BIOS_INFO_INDEX_OEM_REVISION, BIOS_INFO_INDEX_REVISION,
+    NV2080_CTRL_CMD_BIOS_GET_INFO_V2,
+};
 
 /// ★ `vbios_version` from a `BIOS_GET_INFO_V2` reply asked `[REVISION, OEM_REVISION]`.
 ///

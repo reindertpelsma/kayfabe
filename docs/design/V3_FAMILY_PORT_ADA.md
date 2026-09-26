@@ -60,6 +60,13 @@ GA106 `CE_GET_ALL_CAPS` capture). `BIOS_GET_INFO_V2` has **no** real-GA106 captu
 it is one more "uncaptured" field (`over_the_real_ga106_the_query_refuses_only_the_uncaptured`).
 ⚠ Behaviour change on GA106, cosmetic: the ROM now carries the board's real VBIOS version instead of
 `0x9418_0000` (only the guest's `NVRM` log prints it).
+★ **Amended the same day (coordinator):** `vbios_version` is `Option` and **never fails realize** — a
+host that does not answer `BIOS_GET_INFO_V2` leaves it `None`, the ROM declares the named
+`kf_abi::vbios::NEUTRAL_VBIOS_VERSION` (`00.00.00.00.00`) and realize logs that by name. And the
+guest's **own** `BIOS_GET_INFO_V2` (`0x20800810`, routed to physical) is now SERVED from it
+(`WantedTable::BiosGetInfoV2`) so guest `nvidia-smi` shows the real VBIOS; refused when `None` or for
+an index the header does not define. `cap1b` never reaches it (added to that differential's
+named exception set, 32 of 51).
 
 ## 3. The client had the GA10x pin, not kayfabe
 
@@ -119,5 +126,5 @@ class pin and all four GA106 words are fixed (§2, §3).
 3. **Hopper / Blackwell**: FSP boot + the falcon PIO auto-increment read side effect (THE_CONSTRAINTS
    §52) and the read-triggered L2 cache op (`v3-reinit`); Hopper's PBDMA fault ids (`HOST0`) unstated
    in the tree (engine table refuses Hopper by name).
-4. Not done here, named: the guest's own `BIOS_GET_INFO_V2` (`nvidia-smi`'s VBIOS column) is still
-   unserved — `HostFacts::vbios_version` now holds the answer, one `WantedTable` arm away.
+4. ~~The guest's own `BIOS_GET_INFO_V2` is unserved~~ — ✔ served from `HostFacts::vbios_version`
+   (same day, see §2).

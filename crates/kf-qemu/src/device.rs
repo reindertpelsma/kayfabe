@@ -314,7 +314,17 @@ impl Device {
             device: pci.device,
             class: [(pci.class & 0xFF) as u8, ((pci.class >> 8) & 0xFF) as u8, ((pci.class >> 16) & 0xFF) as u8],
         };
-        let vbios = vbios_profile(family, id, host.vbios_version)
+        // ★ Cosmetic: a host that did not answer BIOS_GET_INFO_V2 does not stop the VM — the ROM
+        // declares the named neutral version and the guest's own ask is refused. Said by name.
+        let vbios_version = host.vbios_version.unwrap_or_else(|| {
+            eprintln!(
+                "kf3: host BIOS_GET_INFO_V2 (0x20800810) not answered: synthetic ROM declares \
+                 NEUTRAL_VBIOS_VERSION {:?}; the guest's BIOS_GET_INFO_V2 will be refused",
+                kf_abi::vbios::NEUTRAL_VBIOS_VERSION
+            );
+            kf_abi::vbios::NEUTRAL_VBIOS_VERSION
+        });
+        let vbios = vbios_profile(family, id, vbios_version)
             .map_err(|e| format!("{e:?}"))
             .and_then(|p| kf_abi::vbios::build(&p, table.vbios_wire()).map_err(|e| format!("VBIOS: {e:?}")))?;
 

@@ -605,6 +605,12 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
         WantedTable::CudartInit9064,
         WantedTable::CudartInit9A001,
         WantedTable::CudartPerfLevelInfoV2,
+        // ★ 2026-09-26 (`v3-families`): `BiosGetInfoV2` (`0x20800810`) — served from the HOST's
+        // VBIOS version so guest `nvidia-smi` shows the real one. `[measured by this test]` the
+        // replay never reaches it on `cap1b`'s queue (the C never served it, so the guest's
+        // `nvidia-smi` ask is not in the envelope this file judges). Its reply is pinned in
+        // `kf-rm/tests/init_tables.rs::bios_get_info_v2_is_the_hosts_version_or_refused`.
+        WantedTable::BiosGetInfoV2,
     ]
     .into_iter()
     .collect();
@@ -697,10 +703,11 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
     // sentence is left standing with this correction above it rather than quietly softened.
     // ⊘ 47 -> 48 and 28 -> 29 at v3-gfx (`0x20800a2c` ZCULL_INFO): past the closure limit, as
     // its GR static-info siblings are — 29 of 48 (60.4 %).
-    assert_eq!(universe.len(), 50, "non-vacuity: the universe is not empty");
+    // ⊘ 50 -> 51 and 31 -> 32 at v3-families (`0x20800810` BIOS_GET_INFO_V2): 32 of 51 (62.7 %).
+    assert_eq!(universe.len(), 51, "non-vacuity: the universe is not empty");
     assert_eq!(
         outside_the_closure_limit.len(),
-        31,
+        32,
         "non-vacuity in the other direction: the exception set is SMALL, and every entry \
          costs reply-plane coverage"
     );

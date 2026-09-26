@@ -1074,6 +1074,10 @@ pub enum WantedTable {
     /// and the first SPLICED row (the request carries content, so a constant body would
     /// clobber it). See [`kf_abi::cudartinit::SPLICED`].
     CudartPerfLevelInfoV2,
+    /// `0x20800810` `BIOS_GET_INFO_V2` — routed to physical RM (export flags `0x60048`); answered
+    /// from the HOST's VBIOS version (`HostFacts::vbios_version`) so guest `nvidia-smi` shows the
+    /// real VBIOS. Refused when the host did not answer (2026-09-26).
+    BiosGetInfoV2,
 }
 
 impl WantedTable {
@@ -1104,7 +1108,7 @@ impl WantedTable {
     ///
     /// [`WantedTable::cmd_id`] remains the mechanism on the other side — exhaustive over
     /// `Self`, so a new variant does not compile until it has an id.
-    pub const ALL: [WantedTable; 50] = [
+    pub const ALL: [WantedTable; 51] = [
         Self::DeviceInfo,
         Self::IntrKernelTable,
         Self::PciBarInfo,
@@ -1155,6 +1159,7 @@ impl WantedTable {
         Self::CudartInit9064,
         Self::CudartInit9A001,
         Self::CudartPerfLevelInfoV2,
+        Self::BiosGetInfoV2,
     ];
 
     /// The control id this table answers — and the **only** place an id is stated.
@@ -1248,6 +1253,7 @@ impl WantedTable {
             Self::CudartInit9064 => kf_abi::cudartinit::CUDART_INIT_0X9064,
             Self::CudartInit9A001 => kf_abi::cudartinit::CUDART_INIT_0XA001,
             Self::CudartPerfLevelInfoV2 => kf_abi::cudartinit::PERF_GET_LEVEL_INFO_V2,
+            Self::BiosGetInfoV2 => kf_abi::vbios::NV2080_CTRL_CMD_BIOS_GET_INFO_V2,
             Self::C2cInfo => kf_abi::c2cinfo::NV2080_CTRL_CMD_BUS_GET_C2C_INFO,
             Self::PromoteFaultMethodBuffers => {
                 kf_abi::fmbpromote::NVA06C_CTRL_CMD_INTERNAL_PROMOTE_FAULT_METHOD_BUFFERS
@@ -1322,6 +1328,7 @@ impl WantedTable {
             Self::CudartInit9064 => 520,
             Self::CudartInit9A001 => 16,
             Self::CudartPerfLevelInfoV2 => 780,
+            Self::BiosGetInfoV2 => kf_abi::vbios::BIOS_GET_INFO_V2_PARAMS_SIZE,
             Self::C2cInfo => kf_abi::c2cinfo::C2C_INFO_PARAMS_SIZE,
             Self::PromoteFaultMethodBuffers => {
                 kf_abi::fmbpromote::PROMOTE_FAULT_METHOD_BUFFERS_PARAMS_SIZE
@@ -2546,6 +2553,18 @@ impl CommandPolicy for InitTablePolicy {
                     return refuse();
                 }
                 p
+            }
+            // ★ The host's VBIOS version, or a refusal when the host gave none (never a zero:
+            // `00.00…` in nvidia-smi would be an invented version).
+            WantedTable::BiosGetInfoV2 => {
+                let at = req.params_at;
+                let Some(v) = self.host.vbios_version else {
+                    return refuse();
+                };
+                match kf_abi::vbios::answer_bios_get_info_v2(&cmd.payload[at..at + want.params_size()], v) {
+                    Some(p) => p,
+                    None => return refuse(),
+                }
             }
             WantedTable::GssLegacy8159 | WantedTable::GssLegacy8162 => {
                 let at = req.params_at;

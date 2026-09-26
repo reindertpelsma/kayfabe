@@ -215,11 +215,14 @@ fn over_the_real_ga106_the_query_refuses_only_the_uncaptured() {
     assert!(no_capture("gr_static", 0x2080_1237), "GR_GET_ZCULL_MASK was never captured: {refused}");
     assert!(no_capture("gr_zcull_info", 0x2080_1206), "GR_GET_ZCULL_INFO was never captured: {refused}");
     assert!(no_capture("zbc_table_sizes", 0x9096_0106), "GET_ZBC_CLEAR_TABLE_SIZE was never captured: {refused}");
-    assert!(no_capture("vbios_version", 0x2080_0810), "BIOS_GET_INFO_V2 was never captured: {refused}");
+    // ⊘ BIOS_GET_INFO_V2 was never captured — and a host that does not answer it is NOT a refused
+    // field: the version is cosmetic (coordinator, 2026-09-26). It is asked, and `None`.
+    assert!(host.asked.contains(&0x2080_0810));
+    assert!(!refused.fields().contains(&"vbios_version"));
     assert_eq!(by_field.get("memory_system"), Some(&&FieldCause::DependsOn("gr_info")));
     assert_eq!(
         refused.fields(),
-        ["intr_table", "intr_subtree_map", "memory_system", "gr_static", "gr_info", "gr_context_buffers", "gr_zcull_info", "zbc_table_sizes", "vbios_version"],
+        ["intr_table", "intr_subtree_map", "memory_system", "gr_static", "gr_info", "gr_context_buffers", "gr_zcull_info", "zbc_table_sizes"],
         "{refused}"
     );
     assert!(!refused.refusals.iter().any(|r| matches!(r.cause, FieldCause::Unsourced(_))));
@@ -506,8 +509,9 @@ impl HostControls for CompletedGa106 {
             }
             // BIOS_GET_INFO_V2 [REVISION, OEM_REVISION] — the fixture's pair.
             0x2080_0810 => {
-                put(p, 8, f.vbios_version.0);
-                put(p, 16, u32::from(f.vbios_version.1));
+                let v = f.vbios_version.expect("the fixture answers it");
+                put(p, 8, v.0);
+                put(p, 16, u32::from(v.1));
                 Ok(())
             }
             // PERF_GET_LEVEL_INFO_V2 — the fixture's reply (the GA106 oracle words).
@@ -819,4 +823,22 @@ fn gr_zcull_info_is_the_hosts_reply_and_only_not_supported_means_none() {
         assert_eq!(u32::from_le_bytes(enc[4 * i..4 * i + 4].try_into().expect("4")), *w);
     }
     assert!(enc[40..].iter().all(|&b| b == 0));
+}
+
+/// ★ A host that refuses `BIOS_GET_INFO_V2` still realizes: `vbios_version` is `None`, not a
+/// refused field (cosmetic — coordinator, 2026-09-26).
+#[test]
+fn a_host_refusing_bios_info_still_fills_every_field_with_no_vbios_version() {
+    struct NoBios(CompletedGa106);
+    impl HostControls for NoBios {
+        fn control(&mut self, cmd: u32, p: &mut [u8]) -> Result<(), HostRefusal> {
+            if cmd == 0x2080_0810 {
+                return Err(HostRefusal { status: Some(0x56), detail: "refused".into() });
+            }
+            self.0.control(cmd, p)
+        }
+    }
+    let got = hostquery::query_host_facts(&mut NoBios(CompletedGa106(Ga106Replay::load())), Family::Ampere)
+        .unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(got.vbios_version, None);
 }

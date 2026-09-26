@@ -805,14 +805,20 @@ pub fn query_ce_caps(host: &mut dyn HostControls) -> Result<kf_abi::cecaps::Host
 
 /// ★ `vbios_version` — `BIOS_GET_INFO_V2 [REVISION, OEM_REVISION]` (`0x20800810`, NON_PRIVILEGED).
 ///
+/// ⊘ **Cosmetic, so it never refuses realize** (coordinator, 2026-09-26): a host refusal OR a reply
+/// that does not decode is `None` — the ROM then declares `kf_abi::vbios::NEUTRAL_VBIOS_VERSION` and
+/// the guest's own ask is refused. The composition root logs the `None` by name.
+///
 /// # Errors
-/// [`FieldCause`].
-pub fn query_vbios_version(host: &mut dyn HostControls) -> Result<(u32, u8), FieldCause> {
+/// None today; the `Result` keeps the query's shape.
+pub fn query_vbios_version(host: &mut dyn HostControls) -> Result<Option<(u32, u8)>, FieldCause> {
     let req = info_list_request(
         hostfacts::BIOS_GET_INFO_V2_PARAMS_SIZE,
         &[hostfacts::BIOS_INFO_INDEX_REVISION, hostfacts::BIOS_INFO_INDEX_OEM_REVISION],
     );
-    Ok(hostfacts::derive_vbios_version(&ask(host, hostfacts::NV2080_CTRL_CMD_BIOS_GET_INFO_V2, req)?)?)
+    Ok(ask(host, hostfacts::NV2080_CTRL_CMD_BIOS_GET_INFO_V2, req)
+        .ok()
+        .and_then(|r| hostfacts::derive_vbios_version(&r).ok()))
 }
 
 /// ★ `perf_level_info_v2` — libcudart's `PERF_GET_LEVEL_INFO_V2` question, asked of the host

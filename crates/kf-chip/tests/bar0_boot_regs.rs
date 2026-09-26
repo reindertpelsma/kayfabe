@@ -103,3 +103,12 @@ fn the_vbios_carries_the_hosts_version_and_the_generated_geometry() {
     }
     assert!(kf_chip::bar0::vbios_profile(Family::Hopper, id, (0, 0)).is_err());
 }
+
+/// ★ A host without a VBIOS answer gets the NAMED neutral version, not another die's.
+#[test]
+fn the_neutral_vbios_version_is_named_and_not_a_die_row() {
+    let id = kf_chip::bar0::PciIdentity { vendor: 0x10de, device: 0x2504, class: [0, 0, 3] };
+    let p = kf_chip::bar0::vbios_profile(Family::Ampere, id, kf_abi::vbios::NEUTRAL_VBIOS_VERSION).unwrap();
+    assert_eq!((p.vbios_version, p.vbios_oem_version), (0, 0));
+    assert!(kf_abi::vbios::VBIOS_PROFILES.iter().all(|r| r.vbios_version != p.vbios_version));
+}

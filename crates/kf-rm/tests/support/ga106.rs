@@ -491,7 +491,7 @@ pub fn host_facts() -> HostFacts {
         gpu_short_name: None,
         // The old row's ROM version (`kf_abi::vbios::VBIOS_PROFILES[0]`) — ⊘ not a measured
         // board version; the v3 device asks the host (`BIOS_GET_INFO_V2`).
-        vbios_version: (0x9418_0000, 0x00),
+        vbios_version: Some((0x9418_0000, 0x00)),
         perf_level_info_v2: Some(perf_level_info_v2()),
     }
 }

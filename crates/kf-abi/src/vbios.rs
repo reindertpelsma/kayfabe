@@ -481,6 +481,46 @@ pub const GENERATED_FWSEC: FwsecProfile = FwsecProfile {
     signature_versions: 0x0001,
 };
 
+/// ★ The VBIOS version the synthetic ROM declares when the host did not answer
+/// `BIOS_GET_INFO_V2` — **named and neutral** (`00.00.00.00.00`), never another die's row.
+/// Cosmetic: the guest's kernel prints it (`_kgspVbiosVersionToStr`) and nothing branches on it.
+pub const NEUTRAL_VBIOS_VERSION: (u32, u8) = (0, 0);
+
+/// `NV2080_CTRL_CMD_BIOS_GET_INFO_V2` (`ogkm-580: ctrl2080bios.h:97`).
+pub const NV2080_CTRL_CMD_BIOS_GET_INFO_V2: u32 = 0x2080_0810;
+/// `NV2080_CTRL_BIOS_INFO_MAX_SIZE` (`ctrl2080bios.h:42`).
+pub const BIOS_INFO_MAX_SIZE: usize = 15;
+/// `sizeof(NV2080_CTRL_BIOS_GET_INFO_V2_PARAMS)` — `{count, {index, data}[15]}` (`:101-104`).
+pub const BIOS_GET_INFO_V2_PARAMS_SIZE: usize = 4 + 8 * BIOS_INFO_MAX_SIZE;
+/// `NV2080_CTRL_BIOS_INFO_INDEX_REVISION` (`:44`).
+pub const BIOS_INFO_INDEX_REVISION: u32 = 0;
+/// `NV2080_CTRL_BIOS_INFO_INDEX_OEM_REVISION` (`:45`).
+pub const BIOS_INFO_INDEX_OEM_REVISION: u32 = 1;
+
+/// ★ Answer the guest's own `BIOS_GET_INFO_V2` (routed to physical RM, export flags `0x60048`) from
+/// the HOST's VBIOS version: each asked `REVISION` / `OEM_REVISION` gets its `data`; the request is
+/// otherwise echoed. `None` (refuse the whole call) for a short buffer, a count past the array, or
+/// an index this header does not define — only two are defined, and a zero for anything else would
+/// be an invented value.
+#[must_use]
+pub fn answer_bios_get_info_v2(request: &[u8], version: (u32, u8)) -> Option<Vec<u8>> {
+    let mut out = request.get(..BIOS_GET_INFO_V2_PARAMS_SIZE)?.to_vec();
+    let w = |b: &[u8], o: usize| u32::from_le_bytes([b[o], b[o + 1], b[o + 2], b[o + 3]]);
+    let n = w(&out, 0) as usize;
+    if n > BIOS_INFO_MAX_SIZE {
+        return None;
+    }
+    for i in 0..n {
+        let data = match w(&out, 4 + 8 * i) {
+            BIOS_INFO_INDEX_REVISION => version.0,
+            BIOS_INFO_INDEX_OEM_REVISION => u32::from(version.1),
+            _ => return None,
+        };
+        out[8 + 8 * i..12 + 8 * i].copy_from_slice(&data.to_le_bytes());
+    }
+    Some(out)
+}
+
 /// The known device profiles.
 ///
 /// ⊘ **Superseded as a production source, 2026-09-26 (`v3-families`).** The v3 device builds
