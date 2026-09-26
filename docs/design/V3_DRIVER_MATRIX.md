@@ -452,8 +452,11 @@ kernel_gsp.c` `_kgspHeartbeatIsGspRmHeartbeatTimedOut`, supported on GA102 and l
 *"LibOS heartbeat timed out"* after every RPC. Not fatal (the 595.84 ladder is 4/4 with it), but an
 RPC that DOES time out is then classified as a hung GSP (`_kgspIsTimeoutFatal`). Up to 590 the
 registers are read only by `kgspDumpMailbox` (a failure dump), so publishing a heartbeat is
-version-independent: the drainer can store the host GPU's time (the timer page the guest already
-reads) into the two words every ~0.5 s. Not built.
+version-independent. ★ **Built:** the drainer stores the host GPU's time in ms (`HostRm::gpu_time_ns`
+— the usermode page's `TIME_1:_0`, the counter the guest itself reads through the aliased page)
+into both words every 0.5 s, on GA102-and-later families (`kf_chip::Family::gsp_heartbeat_mailboxes`,
+offsets pinned to each die group's `NV_PGSP_MAILBOX(i)`). Hardware check pending (a 595/610
+guest's dmesg must lose the *"heartbeat timed out"* lines).
 
 **Host axis — what a sub-580 host cannot be asked, measured on host 575.57.08 (all refused by
 name, none silent):**
