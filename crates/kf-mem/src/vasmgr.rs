@@ -378,6 +378,15 @@ impl Walker for GpuWalker {
                 refusing.join(", ")
             ));
         }
+        if std::env::var_os("KF_VAS_CENSUS").is_some() {
+            for (i, p) in r.pdbs.iter().enumerate() {
+                if p.vas_flags & kf_cuda::abi::KFWR_V_OVERFLOW != 0
+                    && let Ok(runs) = self.kernel.debug_walk_runs(i as u32)
+                {
+                    eprintln!("kf3: census overflow entry {i} pdb {:#x} slot {}: {}", p.pdb, p.reserved, run_census(&runs));
+                }
+            }
+        }
         if r.header.refusals > 0 {
             // ★ P6b: a refusal inside a report is named — a walk that refused a table reports
             // fewer leaves than the guest's tables hold.
