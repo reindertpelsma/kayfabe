@@ -15,12 +15,18 @@ mkdir -p "$OUT"; cd "$OUT" || exit 2
 R=results.txt; : > "$R"
 say() { echo "$*" | tee -a "$R"; }
 md5() { [ -s "$1" ] && md5sum "$1" | cut -d' ' -f1 || echo EMPTY; }
-say "VIDEO_LANE_START $(date -Is) host=$(hostname) ff=$(sha256sum "$FF" | cut -c1-16)"
+say "VIDEO_LANE_START $(date -Is) host=$(hostname) ff=$(sha256sum "$FF" | cut -c1-16) compact=${VIDEO_COMPACT:-0}"
 say "driver=$(cat /proc/driver/nvidia/version 2>/dev/null | head -1 | grep -o '[0-9]*\.[0-9]*\.[0-9]*' | head -1)"
 W=1280; H=720; N=90
 T="timeout -s INT 600"
+# ⊘ VIDEO_COMPACT=1 (guest diagnosis, OFF by default and never on bare metal): drop the page cache and
+#   compact memory before each step, so each process's pinned sysmem is physically contiguous.
+#   Exists to TEST the hypothesis that the kf3 walk's per-space run cap (16 384) is reached by a later
+#   process's fragmented sysmem (V3_VIDEO_ENGINES.md §6) — a result with it is not the default one.
+compact() { [ "${VIDEO_COMPACT:-0}" = 1 ] && { sync; echo 3 | sudo tee /proc/sys/vm/drop_caches >/dev/null; echo 1 | sudo tee /proc/sys/vm/compact_memory >/dev/null; }; return 0; }
 run() { # name, cmd...
   local n=$1; shift
+  compact
   local t0=$(date +%s.%N)
   "$@" > "$n.log" 2>&1; local rc=$?
   local t1=$(date +%s.%N)
