@@ -142,17 +142,25 @@ captures (`h2`, `h3`):
 
 ### 6.2 The merge bar
 
-| check | `f8e6a513` (pre-rebase) | `393012fd` (rebased on master `dd3aed08`) |
+| check | `f8e6a513` (pre-rebase) | **`393012fd`** (rebased on master `dd3aed08`) |
 |---|---|---|
-| `kf-*` crate tests | 1 482 / 0 failed (at `6fc25d7b`: the cap1b count repair, which master had made identically and the rebase dropped as empty) | *(pending — §6.3)* |
-| `v3_gates.sh` | **9/9** | *(pending)* |
-| `KF_DEVICE=kf3 fast_suite.sh … 180` | **30/30** | *(pending)* |
-| CUDA ladder, guest (`cup2` `cup3` `cup8` `cup8bench`) | 8/8 PASS, as the baseline binary (8/8); cup8bench N=2048 1964.9 vs 1966.1 GFLOPS baseline, host 1978–2212 | *(pending)* |
-| re-recorded workloads | 23/23 PASS, divergences as §6.1 | *(pending)* |
+| `kf-*` crate tests (all 17 `kf-*` crates, `--no-fail-fast`) | 1 482 passed / 0 failed (at `6fc25d7b`, which repaired a cap1b count v3-mapfix had left red; master made the identical repair, so the rebase dropped it as empty) | **1 494 passed / 0 failed** |
+| `v3_gates.sh` | 9/9 | **9/9** |
+| `KF_DEVICE=kf3 fast_suite.sh … 180` (raw client and fast guest rebuilt at the revision) | 30/30 | **30/30** |
+| CUDA ladder, guest (`cup2` `cup3` `cup8` `cup8bench`) | 8/8 PASS, as the baseline binary (8/8); cup8bench N=2048 1964.9 vs 1966.1 GFLOPS baseline, host 1978–2212 | **4/4 PASS** |
+| re-recorded workloads | 23/23 PASS, divergences as §6.1 | **8/8 PASS** (`deviceQuery` `blocksync` `cup2` `torch_correct` `llama_gen` `clpeak` `vkpeak` `nvidia_smi`) |
 
-### 6.3 At the rebased tip
+### 6.3 At the rebased tip, the fixed divergences stay gone
 
-*(the chain `verify3.sh` on `vrf` at `393012fd`; filled when it exits)*
+`g5`, kf3 `393012fd`, against the same bare-metal captures: `0x2080a026` / `0x2080a084` absent from
+every userspace census; `0x20800a70`, `0x00801814`, `0x2080a026`, `0x2080a084` (and master's
+`0x20800a34`) absent from the kernel ledger; `deviceQuery` **1695 MHz**; `blocksync` 3/3; guest ioctl
+record counts equal to bare metal for `cup2` 403, `deviceQuery` 422, `torch_correct` 839,
+`llama_gen` 748, `blocksync` 415; the boot's heartbeat `sysmembars=158 root_unsets=12`.
+
+Evidence (every capture, compressed, with the verification logs):
+`traces/v3_refusal_audit/ga102_vrf/`. The userspace matrix re-derives from it offline (its
+README; reproduces the 39 rows of §6.1).
 
 ## 7. Class C — kept refused, the list
 

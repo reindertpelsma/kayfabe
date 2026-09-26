@@ -157,7 +157,9 @@ def open_text(path):
             return io.TextIOWrapper(zstandard.ZstdDecompressor().stream_reader(open(path, "rb")),
                                     errors="replace")
         except ImportError:
-            p = subprocess.run(["zstd", "-dc", path], stdout=subprocess.PIPE, check=True)
+            # ⊘ Through stdin: `zstd -dc <symlink>` refuses a symbolic link ("ignoring").
+            with open(path, "rb") as src:
+                p = subprocess.run(["zstd", "-dc"], stdin=src, stdout=subprocess.PIPE, check=True)
             return io.StringIO(p.stdout.decode("utf-8", "replace"))
     if path.endswith(".gz"):
         import gzip

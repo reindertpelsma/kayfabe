@@ -1,0 +1,25 @@
+VERIFY3_START 2026-09-26T15:58:56+00:00
+REV=393012fd base=283a5304
+KF3_RC=0
+KF3_BUILT /workspace/bench/kf3-bins/393012fd/qemu-system-x86_64 rev=393012fd mtime=2026-09-26 15:59:30.191607170 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+RAWCLIENT_RC=0
+FG_RC=0
+== kernel release: 6.8.0-139-generic
+CRATES_START 2026-09-26T16:00:42+00:00
+CRATES_RC=0
+CRATES passed=1494 failed=0
+GATES_START 2026-09-26T16:01:23+00:00
+V3_GATES_SUMMARY pass=9 fail=0
+FAST_START 2026-09-26T16:01:59+00:00
+FAST_RC=0
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+LADDER_START 2026-09-26T16:15:32+00:00
+LADDER_GUEST_RC=0
+CL_ROW mode=guest rung=cup2 rep=1 verdict=PASS boot_rc=0 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]  trapped=1045
+CL_ROW mode=guest rung=cup3 rep=1 verdict=PASS boot_rc=0 graded=[CUP3_VAL=43]  trapped=10524 
+CL_ROW mode=guest rung=cup8 rep=1 verdict=PASS boot_rc=0 graded=[CUP8_BAD=0 CUP8_MAXERR=0] CUP8_WALL_S=5 trapped=10602 
+CL_ROW mode=guest rung=cup8bench rep=1 verdict=PASS boot_rc=0 graded=[GUEST_BENCH_TOTAL_BAD=0 GUEST_BENCH_VERDICT=PASS (
+RERECORD_START 2026-09-26T16:21:12+00:00
+RERECORD_RC=0
+[rf_run 2026-09-26T16:33:02+00:00] GUEST_DONE 8 pass / 8 rows
+VERIFY3_EXIT 2026-09-26T16:33:02+00:00

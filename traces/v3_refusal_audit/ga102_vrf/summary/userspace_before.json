@@ -1,0 +1,488 @@
+[
+ {
+  "op": "ctl:RM_CONTROL:0x2080200a",
+  "label": "ctl:RM_CONTROL:0x2080200a NV2080_CTRL_CMD_PERF_BOOST",
+  "outcome": "st=0x56",
+  "workloads": {
+   "asyncAPI": 1,
+   "blocksync": 1,
+   "clpeak": 1,
+   "cup2": 1,
+   "cup3": 1,
+   "cup8": 1,
+   "egl_offscreen": 1,
+   "gpu_burn": 1,
+   "graphMemoryNodes": 1,
+   "llama_gen": 1,
+   "nvdec_h264": 1,
+   "nvenc_h264": 1,
+   "nvenc_hevc": 1,
+   "simpleCallback": 1,
+   "simpleCudaGraphs": 1,
+   "simpleIPC": 2,
+   "simpleStreams": 1,
+   "torch_correct": 1,
+   "torch_train": 1,
+   "vkpeak": 32,
+   "vulkaninfo": 5
+  },
+  "host_ok": 57,
+  "host_calls": 57
+ },
+ {
+  "op": "ctl:RM_CONTROL:0x20810108",
+  "label": "ctl:RM_CONTROL:0x20810108 ?",
+  "outcome": "st=0x56",
+  "workloads": {
+   "asyncAPI": 1,
+   "blocksync": 1,
+   "clpeak": 1,
+   "cup2": 1,
+   "cup3": 1,
+   "cup8": 1,
+   "gpu_burn": 2,
+   "graphMemoryNodes": 1,
+   "llama_gen": 1,
+   "nvdec_h264": 1,
+   "nvenc_h264": 1,
+   "nvenc_hevc": 1,
+   "nvidia_smi": 4,
+   "simpleCallback": 1,
+   "simpleCudaGraphs": 1,
+   "simpleIPC": 2,
+   "simpleStreams": 1,
+   "torch_correct": 1,
+   "torch_train": 1
+  },
+  "host_ok": 24,
+  "host_calls": 24
+ },
+ {
+  "op": "ctl:RM_CONTROL:0x2080a084",
+  "label": "ctl:RM_CONTROL:0x2080a084 ?",
+  "outcome": "st=0x56",
+  "workloads": {
+   "asyncAPI": 5,
+   "blocksync": 2,
+   "clpeak": 1,
+   "gpu_burn": 6,
+   "graphMemoryNodes": 3,
+   "llama_gen": 54,
+   "nvidia_smi": 1,
+   "simpleCallback": 4,
+   "simpleCudaGraphs": 3,
+   "simpleIPC": 8,
+   "simpleStreams": 5,
+   "torch_correct": 22,
+   "torch_train": 22
+  },
+  "host_ok": 136,
+  "host_calls": 136
+ },
+ {
+  "op": "ctl:RM_CONTROL:0x2080a026",
+  "label": "ctl:RM_CONTROL:0x2080a026 ?",
+  "outcome": "st=0x56",
+  "workloads": {
+   "asyncAPI": 5,
+   "blocksync": 2,
+   "clpeak": 1,
+   "gpu_burn": 6,
+   "graphMemoryNodes": 3,
+   "llama_gen": 54,
+   "simpleCallback": 4,
+   "simpleCudaGraphs": 3,
+   "simpleIPC": 8,
+   "simpleStreams": 5,
+   "torch_correct": 22,
+   "torch_train": 22
+  },
+  "host_ok": 135,
+  "host_calls": 135
+ },
+ {
+  "op": "ctl:RM_ALLOC:cls=0x9072",
+  "label": "ctl:RM_ALLOC:cls=0x9072",
+  "outcome": "st=0x1f",
+  "workloads": {
+   "egl_offscreen": 4,
+   "vkpeak": 4,
+   "vulkaninfo": 4
+  },
+  "host_ok": 12,
+  "host_calls": 12
+ },
+ {
+  "op": "modeset:nr0x00",
+  "label": "modeset:nr0x00",
+  "outcome": "rc=-1/errno=1",
+  "workloads": {
+   "egl_offscreen": 2,
+   "vkpeak": 2,
+   "vulkaninfo": 2
+  },
+  "host_ok": 18,
+  "host_calls": 18
+ },
+ {
+  "op": "ctl:RM_CONTROL:0x20808165",
+  "label": "ctl:RM_CONTROL:0x20808165 ?",
+  "outcome": "st=0x56",
+  "workloads": {
+   "nvdec_h264": 2,
+   "nvenc_h264": 2,
+   "nvenc_hevc": 2
+  },
+  "host_ok": 6,
+  "host_calls": 10
+ },
+ {
+  "op": "ctl:RM_CONTROL:0x20810107",
+  "label": "ctl:RM_CONTROL:0x20810107 ?",
+  "outcome": "st=0x56",
+  "workloads": {
+   "egl_offscreen": 1,
+   "vkpeak": 1,
+   "vulkaninfo": 1
+  },
+  "host_ok": 3,
+  "host_calls": 3
+ },
+ {
+  "op": "ctl:RM_CONTROL:0x2080a0d1",
+  "label": "ctl:RM_CONTROL:0x2080a0d1 ?",
+  "outcome": "st=0x56",
+  "workloads": {
+   "vkpeak": 345,
+   "vulkaninfo": 1
+  },
+  "host_ok": 323,
+  "host_calls": 323
+ },
+ {
+  "op": "ctl:RM_CONTROL:0x00de0001",
+  "label": "ctl:RM_CONTROL:0x00de0001 NV00DE_CTRL_CMD_REQUEST_DATA_POLL",
+  "outcome": "st=0x56",
+  "workloads": {
+   "gpu_burn": 1,
+   "nvidia_smi": 10
+  },
+  "host_ok": 13,
+  "host_calls": 13
+ },
+ {
+  "op": "ctl:RM_CONTROL:0x00800294",
+  "label": "ctl:RM_CONTROL:0x00800294 NV0080_CTRL_CMD_GPU_GET_BRAND_CAPS",
+  "outcome": "st=0x56",
+  "workloads": {
+   "gpu_burn": 1,
+   "nvidia_smi": 3
+  },
+  "host_ok": 4,
+  "host_calls": 4
+ },
+ {
+  "op": "ctl:RM_CONTROL:0x20800513",
+  "label": "ctl:RM_CONTROL:0x20800513 NV2080_CTRL_CMD_THERMAL_SYSTEM_EXECUTE_V2",
+  "outcome": "st=0x56",
+  "workloads": {
+   "gpu_burn": 1,
+   "nvidia_smi": 3
+  },
+  "host_ok": 0,
+  "host_calls": 0
+ },
+ {
+  "op": "ctl:RM_CONTROL:0x20801210",
+  "label": "ctl:RM_CONTROL:0x20801210 NV2080_CTRL_CMD_GR_SET_CTXSW_PREEMPTION_MODE",
+  "outcome": "st=0x56",
+  "workloads": {
+   "vkpeak": 3,
+   "vulkaninfo": 1
+  },
+  "host_ok": 33,
+  "host_calls": 33
+ },
+ {
+  "op": "ctl:RM_CONTROL:0x2080852a",
+  "label": "ctl:RM_CONTROL:0x2080852a ?",
+  "outcome": "st=0x56",
+  "workloads": {
+   "gpu_burn": 1,
+   "nvidia_smi": 1
+  },
+  "host_ok": 2,
+  "host_calls": 2
+ },
+ {
+  "op": "ctl:RM_CONTROL:0x20808536",
+  "label": "ctl:RM_CONTROL:0x20808536 ?",
+  "outcome": "st=0x56",
+  "workloads": {
+   "gpu_burn": 1,
+   "nvidia_smi": 1
+  },
+  "host_ok": 2,
+  "host_calls": 2
+ },
+ {
+  "op": "ctl:RM_CONTROL:0x2080014b",
+  "label": "ctl:RM_CONTROL:0x2080014b NV2080_CTRL_CMD_GPU_GET_INFOROM_OBJECT_VERSION",
+  "outcome": "st=0x56",
+  "workloads": {
+   "nvidia_smi": 15
+  },
+  "host_ok": 3,
+  "host_calls": 15
+ },
+ {
+  "op": "ctl:RM_CONTROL:0x20810110",
+  "label": "ctl:RM_CONTROL:0x20810110 ?",
+  "outcome": "st=0x56",
+  "workloads": {
+   "nvidia_smi": 13
+  },
+  "host_ok": 0,
+  "host_calls": 0
+ },
+ {
+  "op": "ctl:RM_CONTROL:0x20802068",
+  "label": "ctl:RM_CONTROL:0x20802068 NV2080_CTRL_CMD_PERF_GET_CURRENT_PSTATE",
+  "outcome": "st=0x56",
+  "workloads": {
+   "nvidia_smi": 7
+  },
+  "host_ok": 0,
+  "host_calls": 0
+ },
+ {
+  "op": "ctl:RM_CONTROL:0x2080a097",
+  "label": "ctl:RM_CONTROL:0x2080a097 ?",
+  "outcome": "st=0x56",
+  "workloads": {
+   "nvidia_smi": 7
+  },
+  "host_ok": 0,
+  "host_calls": 0
+ },
+ {
+  "op": "ctl:RM_CONTROL:0x20802087",
+  "label": "ctl:RM_CONTROL:0x20802087 NV2080_CTRL_CMD_PERF_GET_VID_ENG_PERFMON_SAMPLE",
+  "outcome": "st=0x56",
+  "workloads": {
+   "nvidia_smi": 4
+  },
+  "host_ok": 0,
+  "host_calls": 0
+ },
+ {
+  "op": "ctl:RM_CONTROL:0x20809004",
+  "label": "ctl:RM_CONTROL:0x20809004 ?",
+  "outcome": "st=0x56",
+  "workloads": {
+   "nvidia_smi": 4
+  },
+  "host_ok": 0,
+  "host_calls": 0
+ },
+ {
+  "op": "ctl:RM_ALLOC:cls=0x0073",
+  "label": "ctl:RM_ALLOC:cls=0x0073",
+  "outcome": "st=0x56",
+  "workloads": {
+   "nvidia_smi": 3
+  },
+  "host_ok": 3,
+  "host_calls": 3
+ },
+ {
+  "op": "ctl:RM_ALLOC:cls=0x208f",
+  "label": "ctl:RM_ALLOC:cls=0x208f",
+  "outcome": "st=0x56",
+  "workloads": {
+   "nvidia_smi": 3
+  },
+  "host_ok": 2,
+  "host_calls": 2
+ },
+ {
+  "op": "ctl:RM_CONTROL:0x2080013f",
+  "label": "ctl:RM_CONTROL:0x2080013f NV2080_CTRL_CMD_GPU_GET_OEM_BOARD_INFO",
+  "outcome": "st=0x56",
+  "workloads": {
+   "nvidia_smi": 3
+  },
+  "host_ok": 3,
+  "host_calls": 3
+ },
+ {
+  "op": "ctl:RM_CONTROL:0x2080852e",
+  "label": "ctl:RM_CONTROL:0x2080852e ?",
+  "outcome": "st=0x56",
+  "workloads": {
+   "nvidia_smi": 3
+  },
+  "host_ok": 3,
+  "host_calls": 3
+ },
+ {
+  "op": "ctl:RM_CONTROL:0x2080a612",
+  "label": "ctl:RM_CONTROL:0x2080a612 ?",
+  "outcome": "st=0x56",
+  "workloads": {
+   "nvidia_smi": 3
+  },
+  "host_ok": 3,
+  "host_calls": 3
+ },
+ {
+  "op": "ctl:RM_CONTROL:0x2080a618",
+  "label": "ctl:RM_CONTROL:0x2080a618 ?",
+  "outcome": "st=0x56",
+  "workloads": {
+   "nvidia_smi": 3
+  },
+  "host_ok": 3,
+  "host_calls": 3
+ },
+ {
+  "op": "ctl:RM_CONTROL:0x20801813",
+  "label": "ctl:RM_CONTROL:0x20801813 NV2080_CTRL_CMD_BUS_GET_PEX_COUNTERS",
+  "outcome": "st=0x56",
+  "workloads": {
+   "nvidia_smi": 2
+  },
+  "host_ok": 2,
+  "host_calls": 2
+ },
+ {
+  "op": "ctl:RM_CONTROL:0x20801819",
+  "label": "ctl:RM_CONTROL:0x20801819 NV2080_CTRL_CMD_BUS_GET_PEX_UTIL_COUNTERS",
+  "outcome": "st=0x56",
+  "workloads": {
+   "nvidia_smi": 2
+  },
+  "host_ok": 4,
+  "host_calls": 4
+ },
+ {
+  "op": "ctl:RM_ALLOC:cls=0x90e7",
+  "label": "ctl:RM_ALLOC:cls=0x90e7",
+  "outcome": "st=0x56",
+  "workloads": {
+   "nvidia_smi": 1
+  },
+  "host_ok": 1,
+  "host_calls": 1
+ },
+ {
+  "op": "ctl:RM_CONTROL:0x20800102",
+  "label": "ctl:RM_CONTROL:0x20800102 NV2080_CTRL_CMD_GPU_GET_INFO_V2",
+  "outcome": "st=0x56",
+  "workloads": {
+   "nvidia_smi": 1
+  },
+  "host_ok": 35,
+  "host_calls": 35
+ },
+ {
+  "op": "ctl:RM_CONTROL:0x20800156",
+  "label": "ctl:RM_CONTROL:0x20800156 NV2080_CTRL_CMD_GPU_GET_INFOROM_IMAGE_VERSION",
+  "outcome": "st=0x56",
+  "workloads": {
+   "nvidia_smi": 1
+  },
+  "host_ok": 1,
+  "host_calls": 1
+ },
+ {
+  "op": "ctl:RM_CONTROL:0x208001a4",
+  "label": "ctl:RM_CONTROL:0x208001a4 NV2080_CTRL_CMD_GPU_GET_CHIP_DETAILS",
+  "outcome": "st=0x56",
+  "workloads": {
+   "nvidia_smi": 1
+  },
+  "host_ok": 1,
+  "host_calls": 1
+ },
+ {
+  "op": "ctl:RM_CONTROL:0x20801829",
+  "label": "ctl:RM_CONTROL:0x20801829 NV2080_CTRL_CMD_BUS_GET_PCIE_REQ_ATOMICS_CAPS",
+  "outcome": "st=0x56",
+  "workloads": {
+   "nvidia_smi": 1
+  },
+  "host_ok": 1,
+  "host_calls": 1
+ },
+ {
+  "op": "ctl:RM_CONTROL:0x20801830",
+  "label": "ctl:RM_CONTROL:0x20801830 NV2080_CTRL_CMD_BUS_GET_PCIE_CPL_ATOMICS_CAPS",
+  "outcome": "st=0x56",
+  "workloads": {
+   "nvidia_smi": 1
+  },
+  "host_ok": 1,
+  "host_calls": 1
+ },
+ {
+  "op": "ctl:RM_CONTROL:0x20803083",
+  "label": "ctl:RM_CONTROL:0x20803083 NV2080_CTRL_CMD_NVLINK_GET_PLATFORM_INFO",
+  "outcome": "st=0x56",
+  "workloads": {
+   "nvidia_smi": 1
+  },
+  "host_ok": 1,
+  "host_calls": 1
+ },
+ {
+  "op": "ctl:RM_CONTROL:0x20803401",
+  "label": "ctl:RM_CONTROL:0x20803401 NV2080_CTRL_CMD_ECC_GET_VOLATILE_COUNTS",
+  "outcome": "st=0x56",
+  "workloads": {
+   "nvidia_smi": 1
+  },
+  "host_ok": 1,
+  "host_calls": 1
+ },
+ {
+  "op": "ctl:RM_CONTROL:0x20803404",
+  "label": "ctl:RM_CONTROL:0x20803404 NV2080_CTRL_CMD_ECC_GET_REPAIR_STATUS",
+  "outcome": "st=0x56",
+  "workloads": {
+   "nvidia_smi": 1
+  },
+  "host_ok": 1,
+  "host_calls": 1
+ },
+ {
+  "op": "ctl:RM_CONTROL:0x2080a080",
+  "label": "ctl:RM_CONTROL:0x2080a080 ?",
+  "outcome": "st=0x56",
+  "workloads": {
+   "nvidia_smi": 1
+  },
+  "host_ok": 2,
+  "host_calls": 2
+ },
+ {
+  "op": "ctl:RM_CONTROL:0x2080a0a7",
+  "label": "ctl:RM_CONTROL:0x2080a0a7 ?",
+  "outcome": "st=0x56",
+  "workloads": {
+   "nvidia_smi": 1
+  },
+  "host_ok": 1,
+  "host_calls": 1
+ },
+ {
+  "op": "ctl:RM_CONTROL:0x20810111",
+  "label": "ctl:RM_CONTROL:0x20810111 ?",
+  "outcome": "st=0x56",
+  "workloads": {
+   "nvidia_smi": 1
+  },
+  "host_ok": 0,
+  "host_calls": 0
+ }
+]

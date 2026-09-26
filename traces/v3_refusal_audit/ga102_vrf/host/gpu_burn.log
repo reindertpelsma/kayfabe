@@ -1,0 +1,27 @@
+=== gpu_burn side=host start=2026-09-26T12:57:44+00:00 cmd: cd /opt/apps/bundle/gpu-burn && ./gpu_burn 10
+GPU 0: NVIDIA GeForce RTX 3090 (UUID: GPU-56181f4b-81f6-e17b-9fd5-7e3578375942)
+cuInit returned 0 (no error)
+Using compare file: compare.fatbin
+Burning for 10 seconds.
+40.0%  proc'd: 81 (22404 Gflop/s)   errors: 0   temps: 48 C 
+	Summary at:   Sat Sep 26 12:57:55 UTC 2026
+
+50.0%  proc'd: 81 (22404 Gflop/s)   errors: 0   temps: 48 C 50.0%  proc'd: 81 (22404 Gflop/s)   errors: 0   temps: 48 C 50.0%  proc'd: 81 (22404 Gflop/s)   errors: 0   temps: 48 C 50.0%  proc'd: 81 (22404 Gflop/s)   errors: 0   temps: 48 C 50.0%  proc'd: 81 (22404 Gflop/s)   errors: 0   temps: 48 C 50.0%  proc'd: 81 (22404 Gflop/s)   errors: 0   temps: 48 C 50.0%  proc'd: 81 (22404 Gflop/s)   errors: 0   temps: 48 C 50.0%  proc'd: 81 (22404 Gflop/s)   errors: 0   temps: 48 C 50.0%  proc'd: 81 (22404 Gflop/s)   errors: 0   temps: 48 C 50.0%  proc'd: 81 (22404 Gflop/s)   errors: 0   temps: 48 C 50.0%  proc'd: 81 (22404 Gflop/s)   errors: 0   temps: 68 C 50.0%  proc'd: 81 (22404 Gflop/s)   errors: 0   temps: 68 C 50.0%  proc'd: 81 (22404 Gflop/s)   errors: 0   temps: 68 C 50.0%  proc'd: 81 (22404 Gflop/s)   errors: 0   temps: 68 C 50.0%  proc'd: 81 (22404 Gflop/s)   errors: 0   temps: 68 C 50.0%  proc'd: 81 (22404 Gflop/s)   errors: 0   temps: 68 C 50.0%  proc'd: 81 (22404 Gflop/s)   errors: 0   temps: 68 C 50.0%  proc'd: 81 (22404 Gflop/s)   errors: 0   temps: 68 C 50.0%  proc'd: 81 (22404 Gflop/s)   errors: 0   temps: 68 C 80.0%  proc'd: 162 (24881 Gflop/s)   errors: 0   temps: 68 C 
+	Summary at:   Sat Sep 26 12:57:59 UTC 2026
+
+100.0%  proc'd: 162 (24881 Gflop/s)   errors: 0   temps: 68 C 
+	Summary at:   Sat Sep 26 12:58:01 UTC 2026
+
+100.0%  proc'd: 162 (24881 Gflop/s)   errors: 0   temps: 68 C 100.0%  proc'd: 162 (24881 Gflop/s)   errors: 0   temps: 68 C 100.0%  proc'd: 162 (24881 Gflop/s)   errors: 0   temps: 68 C 100.0%  proc'd: 162 (24881 Gflop/s)   errors: 0   temps: 68 C 100.0%  proc'd: 162 (24881 Gflop/s)   errors: 0   temps: 68 C 100.0%  proc'd: 162 (24881 Gflop/s)   errors: 0   temps: 68 C 100.0%  proc'd: 162 (24881 Gflop/s)   errors: 0   temps: 68 C 100.0%  proc'd: 162 (24881 Gflop/s)   errors: 0   temps: 68 C 100.0%  proc'd: 162 (24881 Gflop/s)   errors: 0   temps: 68 C 100.0%  proc'd: 162 (24881 Gflop/s)   errors: 0   temps: 69 C 100.0%  proc'd: 162 (24881 Gflop/s)   errors: 0   temps: 69 C 100.0%  proc'd: 162 (24881 Gflop/s)   errors: 0   temps: 69 C 100.0%  proc'd: 162 (24881 Gflop/s)   errors: 0   temps: 69 C 100.0%  proc'd: 162 (24881 Gflop/s)   errors: 0   temps: 69 C 100.0%  proc'd: 162 (24881 Gflop/s)   errors: 0   temps: 69 C 100.0%  proc'd: 162 (24881 Gflop/s)   errors: 0   temps: 69 C 100.0%  proc'd: 162 (24881 Gflop/s)   errors: 0   temps: 69 C 100.0%  proc'd: 162 (24881 Gflop/s)   errors: 0   temps: 69 C 100.0%  proc'd: 243 (24818 Gflop/s)   errors: 0   temps: 69 C 
+Killing processes with SIGTERM (soft kill)
+Using compare file: compare.fatbin
+Burning for 10 seconds.
+Initialized device 0 with 24124 MB of memory (23848 MB available, using 21463 MB of it), using FLOATS
+Results are 268435456 bytes each, thus performing 81 iterations
+Freed memory for dev 0
+Uninitted cublas
+done
+
+Tested 1 GPUs:
+	GPU 0: OK
+=== end rc=0 secs=48 2026-09-26T12:58:32+00:00
