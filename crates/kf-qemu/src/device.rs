@@ -1284,12 +1284,28 @@ impl Device {
             return;
         }
         let mut beat = (std::time::Instant::now(), String::new());
+        // ★ The GSP heartbeats (`kf_chip::Family::gsp_heartbeat_mailboxes`): a 595.84+ guest reads
+        // them after every RPC poll. Stored on this thread (never a vCPU) every 0.5 s — well inside
+        // the guest's 1.3 × default-timeout window — in ms of the host GPU clock the guest itself
+        // reads through the aliased usermode page.
+        let heartbeat = self.plane.family.gsp_heartbeat_mailboxes();
+        let mut hb_at = std::time::Instant::now() - std::time::Duration::from_secs(1);
         let mut prof_beat = std::time::Instant::now();
         let mut marks_seen = 0u64;
         let mut busy_from = crate::prof::now_ns();
         // ★ w827: the last wait ended by TIMEOUT — did the pass after it find work?
         let mut after_timeout = false;
         while !self.stop.load(Ordering::Acquire) {
+            if let Some([gsprm, libos]) = heartbeat
+                && hb_at.elapsed() >= std::time::Duration::from_millis(500)
+            {
+                hb_at = std::time::Instant::now();
+                if let Ok(ns) = self.rm.gpu_time_ns() {
+                    let ms = u64::from((ns / 1_000_000) as u32);
+                    self.shadow_store(gsprm, ms, 4);
+                    self.shadow_store(libos, ms, 4);
+                }
+            }
             // A heartbeat for the boot log, on the drainer (never a vCPU): printed only on change.
             if beat.0.elapsed() >= std::time::Duration::from_secs(2) {
                 let now = self.status_line();

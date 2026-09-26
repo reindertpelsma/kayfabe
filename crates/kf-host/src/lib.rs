@@ -602,6 +602,29 @@ impl HostRm {
     /// `classes.gpfifo_channel()` — is a **type error**, not a silent mis-allocation
     /// that a Hopper host would have served. Before this signature, that exact swap was
     /// bitten and **nothing in the workspace went red**.
+    /// ★ The host GPU's time (ns) — `NV_VIRTUAL_FUNCTION_TIME_1:_0` read through the usermode
+    /// window, the SAME counter §53.1 aliases read-only into the guest's BAR0 (so a value derived
+    /// from it is on the guest's own GPU clock). High, low, high again until the high word is
+    /// stable, as `tmrGetCurrentTime` does.
+    ///
+    /// # Errors
+    /// The session has no usermode window, or the window refused the read.
+    pub fn gpu_time_ns(&self) -> Result<u64, RmError> {
+        let w = self.usermode.as_ref().map_err(|e| *e)?;
+        let rd = |off: u64| {
+            w.region
+                .load_u32(HostOffset::new(off))
+                .map_err(|e| region_error(&e))
+        };
+        loop {
+            let hi = rd(USERMODE_TIME_1)?;
+            let lo = rd(USERMODE_TIME_0)?;
+            if rd(USERMODE_TIME_1)? == hi {
+                return Ok((u64::from(hi) << 32) | u64::from(lo));
+            }
+        }
+    }
+
     /// ★ The usermode window as an opaque [`kf_linux_raw::HostSpan`] — the pages §53.1 disposition C aliases
     /// read-only into the guest's BAR0 (the live microsecond counter; writes still trap).
     ///
