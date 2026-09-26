@@ -68,6 +68,12 @@ fft_cufft|90|CHECK|$B/bin/fft_cufft
 sha256|90|CHECK|$B/bin/sha256
 memcpy2d|90|CHECK|$B/bin/memcpy2d
 attach_verify|90|RESULT: CORRECT|$B/bin/attach_verify
+stream_default|60|STREAM_PROBE_DONE default rc=0|$B/bin/stream_probe default
+stream_created|60|STREAM_PROBE_DONE created rc=0|$B/bin/stream_probe created
+stream_nonblocking|60|STREAM_PROBE_DONE nonblocking rc=0|$B/bin/stream_probe nonblocking
+stream_perthread|60|STREAM_PROBE_DONE perthread rc=0|$B/bin/stream_probe perthread
+stream_two|60|STREAM_PROBE_DONE two rc=0|$B/bin/stream_probe two
+stream_created2nd|60|STREAM_PROBE_DONE created2nd rc=0|$B/bin/stream_probe created2nd
 gpu_burn|180|GPU 0: OK|cd $B/gpu-burn && ./gpu_burn 60
 torch_correct|300|TORCH_CORRECT_DONE|$PY $B/share/torch_correct.py
 torch_ai_bench|900|CHECK bert_infer_seqs ok|$PY $B/share/ai_bench.py
