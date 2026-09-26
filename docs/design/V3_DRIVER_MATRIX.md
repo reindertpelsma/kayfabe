@@ -250,6 +250,52 @@ them — before 575 those bytes were `params[0..8]` and were being zeroed in eve
 | 595.84 | 11 | 46 | static info 1592, nine-field init args, KGR info/floorsweeping, GPU name 68, `rpc_run_cpu_sequencer_v` |
 | 610.x | 18 | 72 | 16-byte MCTP element (encoded), static info 1600, `USER_REGISTER_ACCESS_MAP` 20492, SM order 73760 (> 64 KiB element max), GPU info 580, … |
 
-## 8. Open / next
+## 8. What is next, and what needs an owner decision
 
-(filled as the walk proceeds)
+### 8.1 Mechanical (no decision needed — the matrix already states the answer)
+
+Every item below is "an encoder written for 580.159.04's layout, fed the measured layout instead",
+the same move `GspStaticConfigInfo` already made (§4, byte-identical at every 580.x tag):
+
+| guest version | encoders to move onto the matrix (beyond what §4 did) | est. |
+|---|---|---|
+| 575.x | `INTR_GET_KERNEL_TABLE` (2068), `FB_GET_INFO_V2` (460), `GPU_GET_INFO_V2` (532), `GRMGR_GET_GR_FS_INFO`, `KGR_GET_FLOORSWEEPING_MASKS` (2368), `KGR_GET_GLOBAL_SM_ORDER` (26912), `KGR_GET_PPC_MASKS` | 1–2 days |
+| 570.x | 575's + `KGR_GET_INFO` entry count, `GET_GLOBAL_SM_ORDER` 23072 (12-byte entries) | +0.5 day |
+| 565 / 560 / 555 / 550 | + `INTERNAL_GET_DEVICE_INFO_TABLE` (9220/11268), `rpc_rc_triggered_v` (no `gfid` at ≤560), static info's `SM_info` block at ≤550 (a VALUE the guest may read — needs the 550 driver's reader checked, not only a layout) | 2–3 days |
+| 590.48.01 | `KGR_GET_INFO` (3776), MSENC caps table grows to 6 | 0.5 day |
+| 595.84 | + nine-field init args (the element header size cross-check becomes live), `GPU_GET_NAME_STRING` 68 | 0.5 day |
+
+### 8.2 Decisions I need
+
+1. **The grader is a 580-only RM client.** `kayfabe-rm-ladder` (frozen tree) refuses any guest
+   driver outside [580.65.06, 581) at rung R2 and carries 580 layouts for `GET_CLASSLIST_V2`,
+   `NVOS46`, `NVOS47`, `GPFIFO_SCHEDULE`, UVM. So the **thin guest cannot grade a 570/575/590/595/610
+   guest**, whatever kayfabe does. The grader and kf-host are the same kind of program (an RM
+   client that must speak one driver's ABI); the matrix answers both. Proposal: do the grader's
+   planned "step 2" (lift `rm.rs` onto kf-host) together with making kf-host version-aware for
+   the host axis — one mechanism for both clients. Until then non-580 guests are graded by the
+   fat-guest CUDA ladder only.
+2. **610: an RPC reply larger than one queue element.** `KGR_GET_GLOBAL_SM_ORDER` is 73 760 bytes
+   at 610 — above the 64 KiB element maximum — so the GSP must answer with continuation records.
+   kf-gsp reassembles guest→GSP continuations but has never *sent* one: a new (moderate) emulation
+   piece in the queue writer.
+3. **Host drivers below 580.65.06 do not expose `MC_GET_INTR_CATEGORY_SUBTREE_MAP`** (and 535/545
+   not `MC_GET_STATIC_INTR_TABLE`), which kf3 copies into the guest's interrupt table. No layout
+   fix exists; the fact needs another source (authored per family from ogkm, or derived from the
+   host's interrupt table) — which way is a design call.
+4. **The walk kernel's PTX ISA is 8.8 (NVRTC 12.9)** — every host driver below 575 refuses to JIT
+   it, and realize refuses without the walker. Rebuilding it with NVRTC 12.2 (ISA 8.2, drivers
+   ≥ 535) changes the shipped kernel for every host; it needs gates 7–9 re-run. OK to do?
+5. **535/545 have no reviewed capability allowlist in this port.** nvproxy has 535.104.05 and
+   545.23.06 blocks; porting them is a security-policy review, not a layout job.
+6. **Default when `guest-driver=` is unset.** Today: the host's version, and the fn-1 check refuses
+   a guest that differs. A friendlier default is to re-select at fn 1 for pairs whose pre-fn-1
+   surface is identical (the matrix can state it per pair) — more code in the table plumbing,
+   fewer refused VMs after a guest-side driver update.
+7. **615.71.09 (beyond the asked range)** changes the GSP element again (an encryption union after
+   `mctpMagic`/`mctpPayloadSize`) — refused by name today (`NoEncoding`).
+
+### 8.3 The host walk
+
+Not started. kf-host still carries the pinned interval; §2.2 is its work list (H1–H9), with the
+decision items 3 and 4 above as its blockers below 575 / 580.65.06.
