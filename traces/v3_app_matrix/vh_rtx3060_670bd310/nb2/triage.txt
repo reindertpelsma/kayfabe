@@ -1,0 +1,53 @@
+conjugateGradientUM|FAIL|0|10s|gXid:-|kf3rc:kf3: RC host twin 0x1f (guest chid 0x8, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED|kf3ref:-|Test Summary: Error amount = 1.000000, result = SUCCESS
+cudaTensorCoreGemm|PASS|0|4s|gXid:-|kf3rc:-|kf3ref:-|-
+bf16TensorCoreGemm|PASS|0|13s|gXid:-|kf3rc:-|kf3ref:-|-
+globalToShmemAsyncCopy|PASS|0|2s|gXid:-|kf3rc:-|kf3ref:-|-
+cdpSimpleQuicksort|PASS|0|5s|gXid:-|kf3rc:-|kf3ref:-|-
+graphMemoryNodes|PASS|0|4s|gXid:-|kf3rc:-|kf3ref:-|-
+simpleCudaGraphs|PASS|0|2s|gXid:-|kf3rc:-|kf3ref:-|-
+simpleCUBLAS|PASS|0|3s|gXid:-|kf3rc:-|kf3ref:-|-
+simpleCUFFT|PASS|0|1s|gXid:-|kf3rc:-|kf3ref:-|-
+conjugateGradient|PASS|0|1s|gXid:-|kf3rc:-|kf3ref:-|warn:Test Summary: Error amount = 0.000000
+MersenneTwisterGP11213|PASS|0|2s|gXid:-|kf3rc:-|kf3ref:-|warn:Max absolute error: 0.000000E+00
+reduction|PASS|0|2s|gXid:-|kf3rc:-|kf3ref:-|-
+sortingNetworks|PASS|0|10s|gXid:-|kf3rc:-|kf3ref:-|-
+scan|PASS|0|3s|gXid:-|kf3rc:-|kf3ref:-|-
+histogram|PASS|0|3s|gXid:-|kf3rc:-|kf3ref:-|-
+BlackScholes|PASS|0|3s|gXid:-|kf3rc:-|kf3ref:-|warn:Max absolute error: 1.192093E-05
+fastWalshTransform|PASS|0|6s|gXid:-|kf3rc:-|kf3ref:-|-
+transpose|PASS|0|1s|gXid:-|kf3rc:-|kf3ref:-|-
+stream_triad|PASS|0|2s|gXid:-|kf3rc:-|kf3ref:-|-
+reduce|PASS|0|3s|gXid:-|kf3rc:-|kf3ref:-|-
+nbody|PASS|0|2s|gXid:-|kf3rc:-|kf3ref:-|-
+blackscholes|PASS|0|3s|gXid:-|kf3rc:-|kf3ref:-|-
+mandelbrot|PASS|0|2s|gXid:-|kf3rc:-|kf3ref:-|-
+conv2d|PASS|0|2s|gXid:-|kf3rc:-|kf3ref:-|-
+sgemm_cublas|PASS|0|3s|gXid:-|kf3rc:-|kf3ref:-|-
+fft_cufft|PASS|0|2s|gXid:-|kf3rc:-|kf3ref:-|-
+sha256|PASS|0|3s|gXid:-|kf3rc:-|kf3ref:-|-
+memcpy2d|PASS|0|2s|gXid:-|kf3rc:-|kf3ref:-|-
+attach_verify|FAIL|1|2s|gXid:-|kf3rc:kf3: RC host twin 0x21 (guest chid 0xa, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED|kf3ref:-|FAIL cudaDeviceSynchronize() -> 719 (unspecified launch failure)
+stream_default|PASS|0|2s|gXid:-|kf3rc:-|kf3ref:-|-
+stream_created|PASS|0|2s|gXid:-|kf3rc:-|kf3ref:-|-
+stream_nonblocking|PASS|0|1s|gXid:-|kf3rc:-|kf3ref:-|-
+stream_perthread|PASS|0|2s|gXid:-|kf3rc:-|kf3ref:-|-
+stream_two|PASS|0|1s|gXid:-|kf3rc:-|kf3ref:-|-
+stream_created2nd|PASS|0|2s|gXid:-|kf3rc:-|kf3ref:-|-
+gpu_burn|FAIL|139|63s|gXid:-|kf3rc:-|kf3ref:-|cuInit returned 0 (no error)
+torch_correct|PASS|0|77s|gXid:-|kf3rc:-|kf3ref:-|-
+torch_ai_bench|FAIL|1|3s|gXid:-|kf3rc:-|kf3ref:(1) kf3: act birth translated REFUSED (0x56): USERD view of store 0xc0000: NoMemory (163 us)|/opt/apps/venv/lib/python3.12/site-packages/torch/cuda/__init__.py:129: UserWarning: CUDA initialization: CUDA driver initialization failed,
+hf_generate|PASS|0|52s|gXid:-|kf3rc:-|kf3ref:-|-
+cupy|PASS|0|4s|gXid:-|kf3rc:-|kf3ref:-|-
+llama_cpp_gen|PASS|0|8s|gXid:-|kf3rc:-|kf3ref:-|warn:done_getting_tensors: tensor 'token_embd.weight' (q4_K) (and 0 others) cannot be used with preferred buffer type CUDA_Host, using CPU i
+llama_bench|PASS|0|4s|gXid:-|kf3rc:-|kf3ref:-|-
+vulkaninfo|PASS|0|2s|gXid:-|kf3rc:-|kf3ref:-|warn:error: XDG_RUNTIME_DIR is invalid or not set in the environment.
+vkpeak|PASS|0|418s|gXid:-|kf3rc:-|kf3ref:-|-
+egl_offscreen|PASS|0|20s|gXid:-|kf3rc:-|kf3ref:-|-
+clinfo|PASS|0|5s|gXid:-|kf3rc:-|kf3ref:-|-
+clpeak|PASS|0|96s|gXid:-|kf3rc:kf3: RC host twin 0x23 (guest chid 0xc, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED|kf3ref:-|-
+nvenc_h264|PASS|0|8s|gXid:-|kf3rc:-|kf3ref:-|-
+nvenc_hevc|PASS|0|7s|gXid:-|kf3rc:-|kf3ref:-|-
+nvdec_h264|PASS|0|6s|gXid:-|kf3rc:-|kf3ref:-|-
+hashcat|PASS|0|27s|gXid:-|kf3rc:-|kf3ref:-|warn:This means that hashcat cannot use the full parallel power of your device(s).
+blender_cycles|PASS|0|11s|gXid:-|kf3rc:-|kf3ref:-|-
+geekbench_gpu|PASS|0|69s|gXid:-|kf3rc:-|kf3ref:-|warn: unknown error (internal code 35)

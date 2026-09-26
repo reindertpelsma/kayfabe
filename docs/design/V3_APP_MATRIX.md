@@ -1,6 +1,146 @@
 # V3 app matrix — which real CUDA apps work in a kayfabe v3 fat guest
 
-**STATUS: ANSWERED, 2026-09-26** (measured 00:10–04:00 UTC). kayfabe **`79848341`** (origin/master; the kf3 binary was built
+**STATUS: LIVE, 2026-09-26 — current result is §R2 (kayfabe `670bd310`, measured 05:00–07:30 UTC):
+58/65 apps work (was 35/65).** §0–§5 below are the first measurement at `79848341`, kept unchanged
+as the baseline R2 is compared against; their cause list is SUPERSEDED by §R2.3 (A, B, D, E, F fixed).
+
+## R2 — re-run at kayfabe `670bd310` (2026-09-26)
+
+Since `79848341`, master gained: one host TSG per guest context share (the 2nd-CUDA-stream fix),
+pooled/host-managed walker capacity (the no-PM multi-process fix), NVENC/NVDEC, headless
+Vulkan/EGL, the GSP reopen fix, and batched host maps. Same app set, same predicates (two
+tightened, §R2.4), same harness.
+
+**Box:** vast 52624429 (`vh`), **RTX 3060 12 GB (GA106)**, AMD EPYC 7452, host driver 580.159.04
+(kernel-open); kf3 binary `/workspace/bench/kf3-bins/670bd310/qemu-system-x86_64` (boot_capture
+stamp `kf3-bin-rev:670bd310`); guest = a **copy** of the box's LLM fat guest (`guest_apps.qcow2`,
+Ubuntu 24.04, kernel 6.8.0-139, stock 580.159.04) provisioned with `provision_guest_apps.sh`, so the
+LLM guest stayed untouched; `fb-mb=8192`, 16 GiB RAM, 6 vCPUs. The bundle was rebuilt on this box
+(`build_bundle.sh`, bundle sha `4ec119b39ec2395e`, llama.cpp pinned to `4b1a27f`). No RTX 3070 this
+round — cause I (3070-only) is not re-measured.
+
+### R2.0 Headline
+
+- **Host (bare metal, same box): 71/71 PASS** (`h1`; `h2` re-ran clpeak + llama_cpp_gen under the
+  tightened predicates: PASS).
+- **Guest: 58/65 apps PASS, and all 6 stream probes PASS** — without persistence mode, several apps
+  per boot. **With persistence mode: the identical 58/65 and the identical 7 failures** (`pm2`).
+- **Cause A (non-default streams, Xid 13 SKEDCHECK05) is gone**: all 21 apps it blocked and all 5
+  non-default `stream_probe` shapes pass — PyTorch (`torch_correct`, CNN-train digest = host),
+  llama.cpp gen (token-identical to host) + bench, CuPy, hashcat, Blender CUDA+OptiX, Geekbench,
+  every CUDA-graph / multi-stream sample.
+- **NVENC/NVDEC, EGL, Vulkan now work**: nvenc_h264/hevc, nvdec_h264, egl_offscreen, vulkaninfo,
+  vkpeak (every vkpeak figure within 1 % of bare metal).
+- **No-PM multi-app boots now work** (§R2.2): 39 CUDA processes in one boot without PM (was 5–6).
+  The budget that remains is a host `NoMemory` at the ~40th process (no PM) / ~60th (PM) — cause J.
+- **What is left: one family** — a host **Xid 31 MMU fault on the guest's GR work** (5 apps
+  `FAULT_PDE`, 1 app `FAULT_PTE`), incl. the known **silent wrong answer** in `conjugateGradientUM`
+  — plus the known `gpu_burn` SIGSEGV. `clpeak` moved to FAIL: it was a **false PASS** of the old
+  predicate (§R2.4), and it shows the fault is **not CUDA-managed-memory-only** (OpenCL hits it).
+- Digests host vs guest: `torch_correct` cnn_train_step `763c693a5a53f948` ==, `hf_generate`
+  `0d973108a6251e14` == (also == the 79848341 run), `llama_cpp_gen` generated text
+  `caf613a5d956b7e3` == (pm2; nb2/iso1 compared by text, token-identical).
+
+### R2.1 Results
+
+Runs (results under `traces/v3_app_matrix/vh_rtx3060_670bd310/<run>/`, `triage.txt` = one evidence
+line per app from `scripts/apps/triage.py`):
+- `nb1` — no PM, **all 71 rows in one boot**. Stopped by hand after the boot wedged at
+  `UnifiedMemoryStreams` (row 18; see C′) — the harness then had no wedge detection (added, §R2.4).
+- `nb2` — no PM, rows 19–71 batched (`conjugateGradientUM` onward) with the wedge probe: 2 boots.
+- `iso1` — every non-PASS app alone in a fresh boot (the verdict of record for failures).
+- `seq2` — no PM, 100× `vectorAdd` in one boot (the process budget).
+- `pm2` — guest PM on, all 71 rows batched with the wedge probe: 2 boots.
+
+A row PASSes if it passed in a batched boot (a pass in a shared boot is still a pass); a failure is
+confirmed alone (`iso1`). Old = the 79848341 3060 column of §2.
+
+| app | host | guest no-PM (batched) | guest alone | guest PM (batched) | old 3060 | failure point / evidence |
+|---|---|---|---|---|---|---|
+| nvidia_smi … simpleIPC (16 rows¹) | PASS | PASS | - | PASS | 9 PASS, 7 A | ¹ nvidia_smi, deviceQuery, vectorAdd, vectorAddDrv, matrixMul, matrixMulDrv, bandwidthTest, simpleStreams, asyncAPI, simpleAtomicIntrinsics, simpleCallback, simpleOccupancy, simpleZeroCopy, simpleCooperativeGroups, concurrentKernels, simpleIPC |
+| UnifiedMemoryStreams | PASS | TIMEOUT (wedge) | **TIMEOUT (C′)** | FAIL 719 | FAIL (A) | host `Xid 31 … GPC1 … @0x7c70_d8489000 FAULT_PTE VIRT_READ`; kf3 `REFUSED VasKey(..) root 0x201000: 1 run(s) not applied: map 0x7c70d8400000+0x10000: Other(31)` (RM `NV_ERR_INVALID_ARGUMENT`) + `split ticket REFUSED`; no PM ⇒ the boot is **wedged** afterwards (sanity vectorAdd fails) |
+| UnifiedMemoryPerf | PASS | TIMEOUT (after the wedge) | **FAIL (C)** | FAIL | FAIL (A) | `matrixMultiplyPerf.cu:435 code=719 cudaStreamSynchronize`; host `Xid 31 … @0x7c7d_22000000 FAULT_PDE VIRT_READ` |
+| conjugateGradientUM | PASS | FAIL | **FAIL (C)** | FAIL | FAIL (C) | ⊘ **silent wrong answer**: `Error amount = 1.000000, result = SUCCESS`; host `Xid 31 … @0x791b_b6200000 FAULT_PDE VIRT_READ` |
+| cudaTensorCoreGemm … memcpy2d (27 rows²) | PASS | PASS | - | PASS | 23 PASS, 4 A | ² incl. globalToShmemAsyncCopy, graphMemoryNodes, simpleCudaGraphs, MersenneTwisterGP11213 (were A), all nvkvm-pv realapp kernels |
+| attach_verify | PASS | FAIL | **FAIL (C)** | FAIL | FAIL (A) | `cudaDeviceSynchronize() -> 719`, the buffers verified `0 mismatched` first; host `Xid 31 … @0x7280_a8007000 FAULT_PDE VIRT_READ` |
+| stream_default … stream_created2nd (6 probes) | PASS | PASS | - | PASS | 1 PASS, 5 A | every stream shape, incl. `created2nd` |
+| gpu_burn | PASS | FAIL | **FAIL (G)** | FAIL | FAIL (G) | SIGSEGV right after `cuInit returned 0` (guest `segfault at 7ffc83508000 … error 4 in gpu_burn`); no Xid, no kf3 refusal — known, branch `v3-appfix` |
+| torch_correct | PASS | PASS | - | PASS | FAIL (A) | digest == host |
+| torch_ai_bench | PASS | FAIL (J: no CUDA) | **FAIL (C)** | TIMEOUT (J) | FAIL (C) | alone: `RuntimeError: CUDA error: unspecified launch failure`, host `Xid 31 … @0x79af_c2127000 FAULT_PDE VIRT_WRITE`; in nb2 it was the ~41st process of the boot: kf3 `act birth translated REFUSED (0x56): USERD view of store 0xc0000: NoMemory` ⇒ `torch.cuda.is_available()` False; in pm2 the ~60th: `NV_ESC_RM_MAP_MEMORY … NoMemory` |
+| hf_generate, cupy, llama_cpp_gen, llama_bench | PASS | PASS | - | PASS | 1 PASS, 2 B, 1 A | digests == host |
+| vulkaninfo, vkpeak, egl_offscreen | PASS | PASS | - | PASS | F, F, E | vkpeak fp32 9335 vs host 9275 GFLOPS, fp16-matrix 55690 vs 55538 |
+| clinfo | PASS | PASS | - | PASS | PASS | |
+| clpeak | PASS | PASS (old predicate) | **FAIL (C)** | FAIL | PASS (old predicate) | ⊘ false PASS: GPU integer, integer-24bit, transfer and launch-latency groups `clFinish (-36)` → `Tests skipped`; host `Xid 31 … @0x772b_de422000 FAULT_PDE VIRT_WRITE`. Host: 0 skipped |
+| nvenc_h264, nvenc_hevc, nvdec_h264 | PASS | PASS | - | PASS | D | 600 frames each, NVDEC used (no software fallback) |
+| hashcat, blender_cycles, geekbench_gpu | PASS | PASS | - | PASS | A | hashcat cracks; Blender CUDA+OptiX `mean=0.6405` == host; GB6 OpenCL completes (`internal code 35` is printed on the host too) |
+
+**Totals (65 apps, probes excluded): host 65/65; guest 58/65 — no PM and PM alike** (was 35/65 on
+the 3060 at `79848341`; 34/65 on the 3070). Apples-to-apples with the old, weaker clpeak predicate:
+59/65. Stream probes 6/6 (was 1/6).
+
+### R2.2 No-PM multi-app boots — they hold now, up to ~40 CUDA processes
+
+- `seq2` (no PM, 100× `vectorAdd`, one boot): **39 PASS**, the 40th hangs: kf3
+  `REFUSED VasKey(18446744069414584321) root 0x1f1cac000: 1 run(s) not applied: window map
+  0x110000+0x200000 (store @0x1000000): arm: NV_ESC_RM_MAP_MEMORY store@0x1000000+0x200000: NoMemory`
+  — the **same** signature as §3 J; the boot is then wedged (sanity vectorAdd fails). At `79848341`
+  the same experiment stopped after **5–6** (cause B, `slot N is full`): **B is gone** —
+  `slot … is full` appears in no log of this round.
+- `nb2` boot 1 ran **37 apps** (CUDA samples, cuBLAS/cuFFT, the realapp kernels, torch_correct,
+  gpu_burn's crash, two Xid-31 faults) with every verdict equal to its isolated verdict; the 38th row
+  (`torch_ai_bench`, the ~41st CUDA process counting 3 wedge probes) failed `cuInit` on a second
+  NoMemory spelling (`USERD view of store 0xc0000: NoMemory`).
+  `nb2` boot 2 ran the remaining 15 rows (LLMs, Vulkan, EGL, OpenCL, video, hashcat, Blender,
+  Geekbench) — all PASS except clpeak (C).
+- With PM (`pm2`) the budget is ~60 processes (J at `torch_ai_bench`, the 56th row + 5 wedge
+  probes), matching §3 J's ~60th at `79848341`. ⇒ **J is now THE per-boot process budget** in both
+  modes; it is the "~60th-process host OOM leak" already being worked on (branch `v3-appfix`).
+- ⊘ One no-PM-only hazard: after `UnifiedMemoryStreams`' fault (C′) the no-PM boot is **wedged**
+  (nb1: the next two apps hung silently, then a guest kernel channel `host 0x1001a
+  REFUSED-AND-POISONED (§7)`; iso1: the sanity vectorAdd hung). With PM the same app fails fast with
+  719 and the boot carries on.
+
+### R2.3 Causes, ranked by apps blocked (670bd310)
+
+| rank | cause | apps (of 65) | status vs 79848341 | signature |
+|---|---|---|---|---|
+| 1 | **C — host Xid 31 `FAULT_PDE` on the guest's GR work** | **5**: conjugateGradientUM (**silent wrong answer**), attach_verify, UnifiedMemoryPerf, torch_ai_bench, clpeak | was 2 (most were masked by A) — known, `v3-appfix` | host `Xid 31, MMU Fault: ENGINE GRAPHICS GPCn … FAULT_PDE ACCESS_TYPE_VIRT_READ/WRITE` at a user VA (`0x72xx…0x7exx`); kf3 `RC host twin … except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED` on every channel of the context; no kf3 refusal precedes it. ⚠ **clpeak is OpenCL** — the class is not CUDA-managed-memory-only |
+| 2 | **C′ — `FAULT_PTE` behind a refused host map** | 1: UnifiedMemoryStreams | new signature (was masked by A) | kf3 `1 run(s) not applied: map <va>+0x10000: Other(31)` (`NV_ERR_INVALID_ARGUMENT`) then host `Xid 31 … FAULT_PTE VIRT_READ` at/near that VA (nb1: map `0x7111f8600000+0x10000`, fault `0x7111_f8603000` — inside it); no PM ⇒ boot wedged afterwards |
+| 3 | G — gpu_burn SIGSEGV | 1 | unchanged — known, `v3-appfix` | segfault just after `cuInit`; no Xid, no refusal |
+| — | **J — host `NoMemory` process budget** | 0 alone; every app past the ~40th (no PM) / ~60th (PM) process of a boot | **now the only per-boot budget** (B gone) — known, `v3-appfix` | `NV_ESC_RM_MAP_MEMORY store@0x1000000+0x200000: NoMemory`, or `act birth … USERD view of store 0xc0000: NoMemory` |
+| ✔ | A — non-default streams (Xid 13 SKEDCHECK05) | 0 (was 21 + 5 probes) | **FIXED** | 0 host `Xid 13` in the 13 captured host-dmesg windows (the same windows hold every Xid 31 of §R2.1, so the capture works); 0 `SKEDCHECK` in any per-app kf3 log |
+| ✔ | B — walker slot exhaustion | 0 (was 5 + the per-boot budget) | **FIXED** | 0 `is full and nothing can be retired` in any per-app kf3 log (the same logs carry the `REFUSED VasKey` lines of J, so they capture `mem` refusals) |
+| ✔ | D — video engines | 0 (was 3) | **FIXED** | |
+| ✔ | E — EGL / F — Vulkan | 0 (was 1 / 2) | **FIXED** | vulkaninfo returns in 2 s; 0 `scrubberDestruct` in any per-app guest dmesg |
+| ? | I — walk beyond the FB span (`fb-mb=6144`, 3070 only) | – | not re-measured (no 3070 box) | |
+
+### R2.4 Harness changes in this round (branch `v3-apps2`, scripts only)
+
+- **Wedge probe** (`apps_hook.sh`): after any non-PASS row, run `vectorAdd` (60 s); if it fails,
+  write `APPS_WEDGE` and end the boot — `apps_matrix.sh` reboots and continues with the rest. Without
+  it, nb1 burned every later app's full timeout after one wedge.
+- **clpeak predicate**: FAIL on `clFinish (-N)` / `Tests skipped` (its bandwidth line — the old
+  predicate — prints even when the compute groups abort).
+- **llama_cpp_gen digest**: over the generated text only. This llama.cpp rev logs `VRAM: <n> MiB`
+  (7871 in the guest vs 11909 on the host) and timings between tokens, so three different digests
+  came out of one token-identical output.
+- **Bench lock**: `apps_matrix.sh` takes `/tmp/kayfabe-fastguest.lock` per boot (and for the host
+  run) and releases it between boots.
+- **`KF_GUEST_IMG`** (`boot_nvkvm.sh`, `provision_guest_apps.sh`): run on a copy of the guest image so
+  another lane's guest (here the LLM guest) stays intact.
+- `build_bundle.sh` pins llama.cpp to `4b1a27f` (it cloned HEAD).
+- `triage.py`: per-app evidence line (verdict, guest Xid, first kf3 RC line, first non-baseline kf3
+  refusal, note).
+
+Reproduce (on `vh`-shaped box): as §5, plus `KF_GUEST_IMG=/workspace/bench/guest_apps.qcow2` for
+provisioning and every guest run; `APPS_PER_BOOT=100` for the batched no-PM run, `APPS_GUEST_PM=1`
+for the PM run, `APPS_PER_BOOT=1` for isolation.
+
+---
+
+# R1 — the first measurement, kayfabe `79848341`
+
+**STATUS of R1: ANSWERED, 2026-09-26** (measured 00:10–04:00 UTC). kayfabe **`79848341`** (origin/master; the kf3 binary was built
 from it, `kf3-bins/79848341`); harness commits on branch `v3-apps` touch only `scripts/apps/`,
 `traces/v3_app_matrix/` and this file. Two rented vast KVM boxes, host driver **580.159.04**
 (kernel-open), guest Ubuntu 24.04 with the stock **580.159.04** guest driver, kf3 device, 16 GiB

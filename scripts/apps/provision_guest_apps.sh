@@ -5,13 +5,14 @@
 set -uo pipefail
 BENCH=/workspace/bench; HERE="$(cd "$(dirname "$0")" && pwd)"
 say(){ echo "[$(date -Is)] $*"; }
+IMG=${KF_GUEST_IMG:-$BENCH/guest.qcow2}   # a copy keeps the LLM guest intact (boot_nvkvm.sh honours the same var)
 pgrep -x qemu-system-x86 >/dev/null && { say "⊘ a QEMU is already running — the bench is serialized, refusing"; exit 2; }
 [ -s /workspace/apps/bundle.tgz ] || { say "⊘ no /workspace/apps/bundle.tgz — run build_bundle.sh first"; exit 2; }
 # room for torch + blender + models (the base image has ~33 GB); cloud-init growpart extends / on boot
-if [ ! -f "$BENCH/.apps_resized" ]; then qemu-img resize "$BENCH/guest.qcow2" +40G && touch "$BENCH/.apps_resized"; fi
+if [ ! -f "$IMG.apps_resized" ]; then qemu-img resize "$IMG" +40G && touch "$IMG.apps_resized"; fi
 # ⚠ -cpu host is required (x86-64-v2 for numpy; see provision_guest_llm.sh)
 qemu-system-x86_64 -enable-kvm -cpu host -m 12G -smp 8 -display none \
-  -drive if=virtio,file="$BENCH/guest.qcow2",format=qcow2 \
+  -drive if=virtio,file="$IMG",format=qcow2 \
   -netdev user,id=n0,hostfwd=tcp::2222-:22 -device virtio-net-pci,netdev=n0 \
   -serial file:"$BENCH/appsprov_serial.log" -daemonize -pidfile "$BENCH/appsprov.pid"
 GS="ssh -i $BENCH/guest_key -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=8 -o ServerAliveInterval=20 ubuntu@127.0.0.1"

@@ -48,5 +48,18 @@ for app in $APPS; do
   echo "$line boot=$TAG guest_xid=$nx kf3_lines=$nk kf3_refusals=$nr" | tee -a "$OUT/guest.res"
   grep -a '^APPDIG ' <<<"$res" | tee -a "$OUT/guest.dig"
   [ $alive = 0 ] && { echo "APPS_HOOK guest dead after $app — stopping this boot"; break; }
+  # ⊘ measured nb1 (670bd310, vh): after UnifiedMemoryStreams' fault the boot was WEDGED — every
+  # later app burned its whole timeout silently. After any non-PASS row, prove the boot still runs
+  # CUDA (vectorAdd, 60 s); if not, record WEDGED and end the boot — apps_matrix.sh reboots and
+  # continues with the remaining apps, so one wedge costs one app, not the rest of the list.
+  case "$line" in *verdict=PASS*) ;; *)
+    if [ "${APPS_WEDGE_PROBE:-1}" = 1 ]; then
+      sane=$(timeout 90 "$G" 'sudo timeout -k 5 60 /opt/apps/bundle/samples/vectorAdd 2>&1 | grep -c "Test PASSED"' 2>/dev/null | tr -d '\r')
+      if [ "${sane:-0}" != 1 ]; then
+        echo "APPS_WEDGE boot=$TAG after=$app sanity_vectorAdd=${sane:-none}" | tee -a "$OUT/guest.res"
+        echo "APPS_HOOK boot wedged after $app — stopping this boot"; break
+      fi
+    fi ;;
+  esac
 done
 echo "APPS_HOOK_DONE"

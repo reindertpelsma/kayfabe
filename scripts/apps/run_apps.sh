@@ -17,6 +17,8 @@ export LD_LIBRARY_PATH=$B/lib:$B/llama${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
 export HF_HOME=$D/hf HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
 S=$B/samples
 
+# ⊘ llama_cpp_gen's digest covers ONLY the generated text: this llama.cpp rev logs VRAM size and
+#   timings between the tokens (measured 670bd310: 3 digests for one token-identical output).
 # name|timeout|pass-regex|command   (pass = rc 0 AND regex matches AND no "CHECK .* FAIL")
 # ⊘ many cuda-samples verify on the CPU and signal only through their EXIT CODE (no PASS line);
 #   their regex is then a completion marker from the last verified step, and rc 0 is the verdict.
@@ -79,7 +81,7 @@ torch_correct|300|TORCH_CORRECT_DONE|$PY $B/share/torch_correct.py
 torch_ai_bench|900|CHECK bert_infer_seqs ok|$PY $B/share/ai_bench.py
 hf_generate|600|OUTSHA|HF_MODEL=Qwen/Qwen2-0.5B-Instruct $PY $B/share/hf_generate.py
 cupy|300|CUPY_DONE|CUDA_PATH=$B/cuda $PY $B/share/cupy_check.py
-llama_cpp_gen|600|OUTSHA|$B/llama/llama-simple -m $D/qwen2.5-1.5b-instruct-q4_k_m.gguf -n 64 -ngl 99 "Explain in three sentences why the sky is blue." > $O/llama_gen.txt 2>&1; rc=$?; cat $O/llama_gen.txt; echo "OUTSHA llama_cpp $(grep -v -E '^(llama_|load|print_info|main:|ggml_|common_|\.|system_info|sampler|generate|init|build|graph|decode|\s*$)' $O/llama_gen.txt | sha256sum | cut -c1-16)"; exit $rc
+llama_cpp_gen|600|OUTSHA|$B/llama/llama-simple -m $D/qwen2.5-1.5b-instruct-q4_k_m.gguf -n 64 -ngl 99 "Explain in three sentences why the sky is blue." > $O/llama_gen.txt 2>&1; rc=$?; cat $O/llama_gen.txt; echo "OUTSHA llama_cpp $(sed -n '/sky is blue\./,/main: decoded/p' $O/llama_gen.txt | grep -v 'main: decoded' | sed -E 's/CUDA Graph id [0-9]+ reused//g' | grep -v -E '^[a-z_]+: ' | tr -d '\n' | sha256sum | cut -c1-16)"; exit $rc
 llama_bench|900|tg64|$B/llama/llama-bench -m $D/qwen2.5-1.5b-instruct-q4_k_m.gguf -ngl 99 -p 512 -n 64 -r 2
 vulkaninfo|60|NVIDIA|vulkaninfo --summary
 vkpeak|900|fp32-scalar|$B/bin/vkpeak 0
@@ -116,6 +118,10 @@ for app in "$@"; do
   elif [ $rc -eq 0 ] && grep -qaE "$rx" "$log" && ! grep -qaE '^CHECK .*FAIL' "$log"; then v=PASS; note=${note:+warn:$note}
   else v=FAIL; fi
   [ "$rx" = CHECK ] && [ $v = PASS ] && ! grep -qaE '^CHECK .*ok' "$log" && v=FAIL
+  # ⊘ measured 670bd310 (vh nb2): clpeak printed its bandwidth line (the old predicate) while its GPU
+  # integer / transfer / launch-latency tests aborted with `clFinish (-36)` after a host Xid 31 —
+  # a false PASS. clpeak reports a failed test as "Tests skipped"; the host baseline has none.
+  [ "$name" = clpeak ] && [ $v = PASS ] && grep -qaE 'clFinish \(-|Tests skipped' "$log" && { v=FAIL; note="clpeak: $(grep -aE -c 'Tests skipped' "$log") test groups skipped ($(grep -aoE -m1 'cl[A-Za-z]+ \(-[0-9]+\)' "$log"))"; }
   echo "APPRES side=$SIDE app=$name verdict=$v rc=$rc secs=$((t1-t0)) quiet=$quiet note=${note:--}"
   grep -a -E '^(OUTSHA|DIGEST) ' "$log" | sed "s/^/APPDIG side=$SIDE app=$name /"
 done

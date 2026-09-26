@@ -23,7 +23,9 @@ while busy; do say "waiting: a QEMU/cargo is running (serial bench)"; sleep 20; 
 if [ "$SIDE" = host ]; then
   mkdir -p /opt/apps
   cp -f "$HERE"/src/*.py /opt/apps/bundle/share/
+  exec 9>"${KF_LOCK:-/tmp/kayfabe-fastguest.lock}"; flock 9   # the host GPU is the bench GPU
   bash "$HERE/run_apps.sh" host "$@" | tee -a "$R/host.res"
+  flock -u 9
   for f in /opt/apps/out/host/*.log; do cp -f "$f" "$R/$(basename "$f" .log).host.log"; done
   dmesg | grep -E 'Xid|NVRM' | tail -50 > "$R/host_dmesg_tail.log"
   say "HOST_DONE $(grep -c 'verdict=PASS' "$R/host.res") pass / $(wc -l < "$R/host.res") rows"
@@ -34,10 +36,13 @@ QB=${KF3_BIN:-$(ls -td /workspace/bench/kf3-bins/*/qemu-system-x86_64 | head -1)
 [ -x "$QB" ] || { say "⊘ no kf3 binary"; exit 2; }
 say "kf3 binary: $QB"
 boot(){  # $1 tag, $2 apps, $3 outdir
+  # ★ serialize each boot on the shared bench lock (held per boot, released between boots)
+  exec 9>"${KF_LOCK:-/tmp/kayfabe-fastguest.lock}"; flock 9
   env KF_DEVICE=kf3 QEMU_BIN="$QB" NVKVM_RAM_MB=${NVKVM_RAM_MB:-16384} KF_SMP=${KF_SMP:-6} GQ_TIMEOUT=300 \
       APPS="$2" APPS_OUT="$3" POST_CAPTURE_HOOK="$HERE/apps_hook.sh" \
       bash "$REPO/scripts/bench/boot_capture.sh" "$1" > "$3/boot_$1.driver.log" 2>&1
   local rc=$?
+  flock -u 9; exec 9>&-
   for x in dmesg dmesg_after probe hostdmesg serial; do cp -f "/workspace/bench/run_$1_$x.log" "$3/boot_$1.$x.log" 2>/dev/null; done
   zstd -q -f "/workspace/bench/run_$1_qemu.log" -o "$3/boot_$1.qemu.log.zst" 2>/dev/null
   say "boot $1 rc=$rc apps=[$2] :: $(grep -a 'APPS_HOOK\|FAILED' "$3/boot_$1.driver.log" "/workspace/bench/run_$1_probe.log" 2>/dev/null | tail -2 | tr '\n' ' ' | cut -c1-200)"

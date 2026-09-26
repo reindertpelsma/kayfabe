@@ -71,7 +71,9 @@ done
 [ -x "$B/gpu-burn/gpu_burn" ]; ok gpu_burn $?
 
 # ---- llama.cpp (CUDA backend, sm_86) --------------------------------------------------------
-[ -d "$S/llama.cpp" ] || git clone -q --depth 1 https://github.com/ggml-org/llama.cpp.git "$S/llama.cpp"
+# pinned to the revision of the first matrix (V3_APP_MATRIX.md §1) so reruns are comparable
+LLAMA_PIN=${LLAMA_PIN:-4b1a27f}
+[ -d "$S/llama.cpp" ] || { git clone -q https://github.com/ggml-org/llama.cpp.git "$S/llama.cpp" && git -C "$S/llama.cpp" checkout -q "$LLAMA_PIN"; }
 ( cd "$S/llama.cpp" && cmake -B build -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=86 -DLLAMA_CURL=OFF \
     -DCMAKE_BUILD_TYPE=Release >/tmp/build_llama.log 2>&1 && cmake --build build -j"$(nproc)" --target llama-cli llama-bench llama-simple >>/tmp/build_llama.log 2>&1 )
 rm -f "$B"/llama/lib*.so*

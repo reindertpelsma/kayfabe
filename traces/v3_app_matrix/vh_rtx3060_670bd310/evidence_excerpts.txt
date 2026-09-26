@@ -1,0 +1,140 @@
+# evidence excerpts, kayfabe 670bd310, vast 52624429 (vh, RTX 3060 GA106, host 580.159.04); runs nb1/nb2/iso1/seq2/pm2
+
+=== iso1/UnifiedMemoryStreams — kf3 (RC / non-baseline refusals)
+kf3: RC host twin 0x25 (guest chid 0xe, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x24 (guest chid 0xd, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x22 (guest chid 0xb, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x1e (guest chid 0x7, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x23 (guest chid 0xc, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x1f (guest chid 0x8, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x20 (guest chid 0x9, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x21 (guest chid 0xa, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+--- iso1/UnifiedMemoryStreams — app
+
+=== nb1/UnifiedMemoryStreams — kf3 (RC / non-baseline refusals)
+kf3: RC host twin 0x1f (guest chid 0x8, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x21 (guest chid 0xa, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x24 (guest chid 0xd, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x23 (guest chid 0xc, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x20 (guest chid 0x9, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x25 (guest chid 0xe, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x22 (guest chid 0xb, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x1e (guest chid 0x7, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+--- nb1/UnifiedMemoryStreams — app
+
+=== iso1/UnifiedMemoryPerf — kf3 (RC / non-baseline refusals)
+kf3: RC host twin 0x1f (guest chid 0x8, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x1e (guest chid 0x7, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x25 (guest chid 0xe, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x22 (guest chid 0xb, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x21 (guest chid 0xa, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x24 (guest chid 0xd, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x23 (guest chid 0xc, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x20 (guest chid 0x9, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+--- iso1/UnifiedMemoryPerf — app
+iso1/UnifiedMemoryPerf.guest.log:Running ...CUDA error at matrixMultiplyPerf.cu:435 code=719(cudaErrorLaunchFailure) "cudaStreamSynchronize(streamToRunOn)" 
+
+=== iso1/conjugateGradientUM — kf3 (RC / non-baseline refusals)
+kf3: RC host twin 0x22 (guest chid 0xb, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x23 (guest chid 0xc, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x25 (guest chid 0xe, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x1f (guest chid 0x8, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x24 (guest chid 0xd, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x1e (guest chid 0x7, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x20 (guest chid 0x9, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x21 (guest chid 0xa, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+--- iso1/conjugateGradientUM — app
+iso1/conjugateGradientUM.guest.log:Test Summary:  Error amount = 1.000000, result = SUCCESS
+
+=== iso1/attach_verify — kf3 (RC / non-baseline refusals)
+kf3: RC host twin 0x20 (guest chid 0x9, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x22 (guest chid 0xb, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x1f (guest chid 0x8, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x21 (guest chid 0xa, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x24 (guest chid 0xd, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x1e (guest chid 0x7, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x25 (guest chid 0xe, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x23 (guest chid 0xc, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+--- iso1/attach_verify — app
+iso1/attach_verify.guest.log:FAIL cudaDeviceSynchronize() -> 719 (unspecified launch failure)
+
+=== iso1/torch_ai_bench — kf3 (RC / non-baseline refusals)
+kf3: RC host twin 0x20 (guest chid 0x9, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x25 (guest chid 0xe, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x1e (guest chid 0x7, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x1f (guest chid 0x8, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x23 (guest chid 0xc, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x22 (guest chid 0xb, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x24 (guest chid 0xd, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x21 (guest chid 0xa, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+--- iso1/torch_ai_bench — app
+iso1/torch_ai_bench.guest.log:RuntimeError: CUDA error: unspecified launch failure
+
+=== iso1/clpeak — kf3 (RC / non-baseline refusals)
+kf3: RC host twin 0x24 (guest chid 0xd, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x22 (guest chid 0xb, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x20 (guest chid 0x9, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x25 (guest chid 0xe, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x1f (guest chid 0x8, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x21 (guest chid 0xa, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x23 (guest chid 0xc, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x1e (guest chid 0x7, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED
+--- iso1/clpeak — app
+iso1/clpeak.guest.log:      int   : clFinish (-36)
+iso1/clpeak.guest.log:      int   : clFinish (-36)
+iso1/clpeak.guest.log:    Kernel launch latency : clFinish (-36)
+
+=== pm2/torch_ai_bench — kf3 (RC / non-baseline refusals)
+kf3: mem t=368.385s REFUSED VasKey(18446744069414584321) root 0x1f1cac000: 1 run(s) not applied: window map 0x110000+0x200000 (store @0x1000000): arm: NV_ESC_RM_MAP_MEMORY store@0x1000000+0x200000: NoMemory
+--- pm2/torch_ai_bench — app
+pm2/torch_ai_bench.guest.log:CHECK torch_matmul_fp32_TFLOPs FAIL
+
+=== seq2/vectorAdd — kf3 (RC / non-baseline refusals)
+kf3: mem t=216.823s REFUSED VasKey(18446744069414584321) root 0x1f1cac000: 1 run(s) not applied: window map 0x110000+0x200000 (store @0x1000000): arm: NV_ESC_RM_MAP_MEMORY store@0x1000000+0x200000: NoMemory
+--- seq2/vectorAdd — app
+
+=== nb2/torch_ai_bench — kf3 (RC / non-baseline refusals)
+kf3: act birth translated REFUSED (0x56): USERD view of store 0xc0000: NoMemory (163 us)
+--- nb2/torch_ai_bench — app
+nb2/torch_ai_bench.guest.log:    assert torch.cuda.is_available(), "no CUDA"
+nb2/torch_ai_bench.guest.log:AssertionError: no CUDA
+
+=== nb1/UnifiedMemoryPerf — kf3 (RC / non-baseline refusals)
+kf3: kernel channel host 0x1001a REFUSED-AND-POISONED (§7)
+--- nb1/UnifiedMemoryPerf — app
+
+=== iso1/gpu_burn — kf3 (RC / non-baseline refusals)
+--- iso1/gpu_burn — app
+iso1/gpu_burn.guest_dmesg.log:[   59.388342] gpu_burn[2069]: segfault at 7ffc83508000 ip 0000601b7ad7c2a1 sp 00007ffc83503bf0 error 4 in gpu_burn[601b7ad7a000+c000] likely on CPU 0 (core 0, socket 0)
+
+=== host dmesg Xid lines during these boots
+iso1/boot_ap_iso1_b1.hostdmesg.log: [45656.585233] NVRM: Xid (PCI:0000:00:07): 31, pid=841332, name=qemu-system-x86, channel 0x0000001f, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC1 GPCCLIENT_T1_8 faulted @ 0x7c70_d8489000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+iso1/boot_ap_iso1_b2.hostdmesg.log: [45982.914260] NVRM: Xid (PCI:0000:00:07): 31, pid=846718, name=qemu-system-x86, channel 0x00000022, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC1 GPCCLIENT_T1_0 faulted @ 0x7c7d_22000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+iso1/boot_ap_iso1_b3.hostdmesg.log: [46071.386801] NVRM: Xid (PCI:0000:00:07): 31, pid=848188, name=qemu-system-x86, channel 0x0000001e, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC1 GPCCLIENT_T1_1 faulted @ 0x791b_b6200000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+iso1/boot_ap_iso1_b4.hostdmesg.log: [46154.282470] NVRM: Xid (PCI:0000:00:07): 31, pid=849881, name=qemu-system-x86, channel 0x0000001f, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC1 GPCCLIENT_T1_1 faulted @ 0x7280_a8007000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+iso1/boot_ap_iso1_b6.hostdmesg.log: [46357.851502] NVRM: Xid (PCI:0000:00:07): 31, pid=853380, name=qemu-system-x86, channel 0x0000001e, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC2 GPCCLIENT_T1_8 faulted @ 0x79af_c2127000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+iso1/boot_ap_iso1_b7.hostdmesg.log: [46472.660385] NVRM: Xid (PCI:0000:00:07): 31, pid=855175, name=qemu-system-x86, channel 0x0000001f, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC1 GPCCLIENT_T1_7 faulted @ 0x772b_de422000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+pm2/boot_ap_pm2_b1.hostdmesg.log: [47219.186845] NVRM: Xid (PCI:0000:00:07): 31, pid=869725, name=qemu-system-x86, channel 0x00000022, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC2 GPCCLIENT_T1_4 faulted @ 0x7d32_d418c000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+pm2/boot_ap_pm2_b1.hostdmesg.log: [47246.688102] NVRM: Xid (PCI:0000:00:07): 31, pid=869725, name=qemu-system-x86, channel 0x00000022, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC1 GPCCLIENT_T1_0 faulted @ 0x7e60_70000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+pm2/boot_ap_pm2_b1.hostdmesg.log: [47251.252152] NVRM: Xid (PCI:0000:00:07): 31, pid=869725, name=qemu-system-x86, channel 0x0000001e, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC1 GPCCLIENT_T1_1 faulted @ 0x72bb_08200000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+pm2/boot_ap_pm2_b1.hostdmesg.log: [47377.376746] NVRM: Xid (PCI:0000:00:07): 31, pid=869725, name=qemu-system-x86, channel 0x0000001f, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC1 GPCCLIENT_T1_1 faulted @ 0x7934_8a007000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+pm2/boot_ap_pm2_b2.hostdmesg.log: [49097.262845] NVRM: Xid (PCI:0000:00:07): 31, pid=892143, name=qemu-system-x86, channel 0x0000001f, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC1 GPCCLIENT_T1_7 faulted @ 0x77dd_0f08c000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+nb2/boot_ap_nb2_b1.hostdmesg.log: [44085.228689] NVRM: Xid (PCI:0000:00:07): 31, pid=812773, name=qemu-system-x86, channel 0x0000001e, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC1 GPCCLIENT_T1_1 faulted @ 0x7788_76200000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+nb2/boot_ap_nb2_b1.hostdmesg.log: [44240.402272] NVRM: Xid (PCI:0000:00:07): 31, pid=812773, name=qemu-system-x86, channel 0x0000001f, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC1 GPCCLIENT_T1_0 faulted @ 0x747e_2e000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_READ
+nb2/boot_ap_nb2_b2.hostdmesg.log: [45167.114853] NVRM: Xid (PCI:0000:00:07): 31, pid=822337, name=qemu-system-x86, channel 0x0000001f, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC2 GPCCLIENT_T1_6 faulted @ 0x79cd_ef2eb000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+
+=== host Xid per boot, condensed (run/boot  channel  VA  type)
+iso1/boot_ap_iso1_b1.hostdmesg.log ch=0x0000001f va=0x7c70_d8489000 FAULT_PTE ACCESS_TYPE_VIRT_READ
+iso1/boot_ap_iso1_b2.hostdmesg.log ch=0x00000022 va=0x7c7d_22000000 FAULT_PDE ACCESS_TYPE_VIRT_READ
+iso1/boot_ap_iso1_b3.hostdmesg.log ch=0x0000001e va=0x791b_b6200000 FAULT_PDE ACCESS_TYPE_VIRT_READ
+iso1/boot_ap_iso1_b4.hostdmesg.log ch=0x0000001f va=0x7280_a8007000 FAULT_PDE ACCESS_TYPE_VIRT_READ
+iso1/boot_ap_iso1_b6.hostdmesg.log ch=0x0000001e va=0x79af_c2127000 FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+iso1/boot_ap_iso1_b7.hostdmesg.log ch=0x0000001f va=0x772b_de422000 FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+pm2/boot_ap_pm2_b1.hostdmesg.log ch=0x00000022 va=0x7d32_d418c000 FAULT_PTE ACCESS_TYPE_VIRT_READ
+pm2/boot_ap_pm2_b1.hostdmesg.log ch=0x00000022 va=0x7e60_70000000 FAULT_PDE ACCESS_TYPE_VIRT_READ
+pm2/boot_ap_pm2_b1.hostdmesg.log ch=0x0000001e va=0x72bb_08200000 FAULT_PDE ACCESS_TYPE_VIRT_READ
+pm2/boot_ap_pm2_b1.hostdmesg.log ch=0x0000001f va=0x7934_8a007000 FAULT_PDE ACCESS_TYPE_VIRT_READ
+pm2/boot_ap_pm2_b2.hostdmesg.log ch=0x0000001f va=0x77dd_0f08c000 FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+nb2/boot_ap_nb2_b1.hostdmesg.log ch=0x0000001e va=0x7788_76200000 FAULT_PDE ACCESS_TYPE_VIRT_READ
+nb2/boot_ap_nb2_b1.hostdmesg.log ch=0x0000001f va=0x747e_2e000000 FAULT_PDE ACCESS_TYPE_VIRT_READ
+nb2/boot_ap_nb2_b2.hostdmesg.log ch=0x0000001f va=0x79cd_ef2eb000 FAULT_PDE ACCESS_TYPE_VIRT_WRITE
