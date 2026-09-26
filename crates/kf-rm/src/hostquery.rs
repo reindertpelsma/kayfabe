@@ -68,6 +68,14 @@ pub trait HostControls {
     fn device_control(&mut self, cmd: u32, _params: &mut [u8]) -> Result<(), HostRefusal> {
         Err(HostRefusal { status: None, detail: format!("{cmd:#x}: no device-level controls on this session") })
     }
+
+    /// ★ Does the HOST's driver version have no such control at all — measured, not inferred from
+    /// a refusal (`kf_abi::hostabi`: the control's params struct is absent at that version)? Only
+    /// then may a field fall back to a family rule (owner ruling 3). Default `false`: a test double
+    /// speaks for one driver version.
+    fn lacks_control(&self, _cmd: u32) -> bool {
+        false
+    }
 }
 
 /// Why one field could not be filled.
@@ -1249,7 +1257,33 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
         Ok(g) => query_intr_table(host, kinds.as_deref().map_err(|e| e), *g),
         Err(_) => Err(FieldCause::DependsOn("ce_caps")),
     };
-    let intr_subtree_map = query_intr_subtree_map(host);
+    // ★ Ruling 3 (`V3_DRIVER_MATRIX.md` §8.2): a host below 580.65.06 has no
+    // `MC_GET_INTR_CATEGORY_SUBTREE_MAP` (`[matrix]` absent 535.309.01 … 575.64.05) — the map is
+    // then the family's, authored from ogkm (`kf_chip::authored_intr_subtree_map`), and the source
+    // used is printed. Where the host DOES report it, a disagreement with the authored map is
+    // printed too (the live cross-check), and the host's own answer is served.
+    let lacks_subtree_map = host.lacks_control(hostfacts::NV2080_CTRL_CMD_MC_GET_INTR_CATEGORY_SUBTREE_MAP);
+    let intr_subtree_map = match (query_intr_subtree_map(host), &family) {
+        (Ok(m), Ok(f)) => {
+            if let Some(a) = kf_chip::authored_intr_subtree_map(*f)
+                && a != m
+            {
+                eprintln!("kf3: host facts: intr_subtree_map: the host reports {m:x?}, ogkm's {f:?} rule says {a:x?} — serving the host's");
+            }
+            Ok(m)
+        }
+        (Err(e), Ok(f)) if lacks_subtree_map => match kf_chip::authored_intr_subtree_map(*f) {
+            Some(a) => {
+                eprintln!(
+                    "kf3: host facts: intr_subtree_map from the {f:?} family rule (ogkm intrInitSubtreeMap): the host \
+                     driver has no MC_GET_INTR_CATEGORY_SUBTREE_MAP ({e:?})"
+                );
+                Ok(a)
+            }
+            None => Err(e),
+        },
+        (r, _) => r,
+    };
     let chip_info = match &arch {
         Ok((_, sub)) => query_chip_info(host, *sub),
         Err(_) => Err(FieldCause::DependsOn("family")),
