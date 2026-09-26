@@ -18274,7 +18274,15 @@ mod mean {
         let mut gr_params = [0u8; 16];
         gr_params[0..4].copy_from_slice(&GR_ALLOC_VERSION.to_ne_bytes());
         gr_params[8..12].copy_from_slice(&GR_ALLOC_SIZE.to_ne_bytes());
-        let Some(compute) = kayfabe_chips::pinned_host_classes().compute_object() else {
+        // ★ The generation the HOST reports, never the build's pin (an AD106 refuses the
+        // pinned GA10x 0xc7c0 with NV_ERR_INVALID_CLASS). Falls back to the pin only when the
+        // host does not answer MC_GET_ARCH_INFO.
+        let classes = rm
+            .host_architecture()
+            .ok()
+            .and_then(kayfabe_chips::host_classes_for_arch)
+            .unwrap_or_else(kayfabe_chips::pinned_host_classes);
+        let Some(compute) = classes.compute_object() else {
             println!(
                 "FAIL  W392D P3 gr object  = this build's pinned host classes declare NO \
                  compute object for their generation. ⊘ UNMEASURED, not absent: the class \

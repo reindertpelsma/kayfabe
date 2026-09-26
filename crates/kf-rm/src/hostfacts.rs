@@ -96,6 +96,11 @@ pub struct HostFacts {
     pub gr_context_buffers: [ContextBuffer; CONTEXT_BUFFER_ID_COUNT],
     /// `GPU_GET_INFO_V2` indices answered from the host's own reply.
     pub forwarded_gpu_info: Vec<(u32, u32)>,
+    /// ★ `FB_GET_INFO_V2` indices answered from the host's own reply (bus width, RAM type, FBP
+    /// count/mask, L2 size, LTC/LTS counts). ⊘ Replaces the GA10x ratio projections
+    /// (`kf_abi::fbinfo::GA10X_*`): an AD106 has a 128-bit bus and a 32 MiB L2 that no Ampere
+    /// ratio reproduces — the host states the die's own words, unprivileged.
+    pub forwarded_fb_info: Vec<(u32, u32)>,
     /// SMC (MIG) mode (`GPU_GET_INFO_V2[GPU_SMC_MODE]`; ⚠ the INTERNAL `GET_SMC_MODE` is
     /// kernel-only).
     pub smc_mode: SmcMode,
@@ -166,6 +171,7 @@ pub const PROVENANCE: &[(&str, Source)] = &[
     ("gr_info", Source::HostControl { cmd: 0x2080_1228, name: "GR_GET_INFO_V2" }),
     ("gr_context_buffers", Source::HostControl { cmd: 0x2080_122d, name: "GR_GET_ENGINE_CONTEXT_PROPERTIES" }),
     ("forwarded_gpu_info", Source::HostControl { cmd: 0x2080_0102, name: "GPU_GET_INFO_V2" }),
+    ("forwarded_fb_info", Source::HostControl { cmd: 0x2080_1303, name: "FB_GET_INFO_V2 (the seven indices libcuda forwards; host words verbatim)" }),
     // ⊘ w827 CORRECTED from `GPU_GET_PARTITIONS 0x20800175` "(no partitions => SMC
     // unsupported)": an inference, and wrong for a MIG-capable part with MIG off (A100 is
     // DISABLED, not UNSUPPORTED). `GPU_GET_INFO_V2[GPU_SMC_MODE]` returns the mode word itself

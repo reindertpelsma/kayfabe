@@ -10318,6 +10318,18 @@ impl HostRmBackend {
         Ok((out.page_table(), out.pdb_addr))
     }
 
+    /// ★ `NV2080_CTRL_CMD_MC_GET_ARCH_INFO` (`0x20801701`, NON_PRIVILEGED) on this connection's
+    /// subdevice → the host's `architecture` (`0x170` Ampere, `0x190` Ada, …) — what a client
+    /// chooses its generation's classes by, instead of a build-time pin.
+    ///
+    /// # Errors
+    /// Whatever RM refused.
+    pub fn host_architecture(&self) -> Result<u32, RmError> {
+        let mut p = [0u8; 16];
+        self.conn.raw_control(self.conn.subdevice, 0x2080_1701, &mut p)?;
+        Ok(u32::from_le_bytes([p[0], p[1], p[2], p[3]]))
+    }
+
     /// ★★ **Issue one raw `NV_ESC_RM_CONTROL` on the DEVICE — for the in-band census's
     /// known-positive, and for nothing else.**
     ///

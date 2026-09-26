@@ -2256,17 +2256,13 @@ impl CommandPolicy for InitTablePolicy {
             // control zero means "no L2", "unknown RAM" or "no FB partitions", never blank.
             WantedTable::FbGetInfoV2 => {
                 let at = req.params_at;
-                let geometry = kf_abi::fbinfo::FbGeometry {
-                    l2_cache_size: self.host.memory_system.l2_cache_size,
-                    ram_type: self.host.memory_system.ram_type,
-                    ltc_count: self.host.memory_system.ltc_count,
-                };
-                let Ok(answers) = geometry.forwarded_answers() else {
-                    return refuse();
-                };
+                // ★ Family port (AD106, 2026-09-26): the host's own words, not the GA10x ratio
+                // projections of `ltcCount` (`kf_abi::fbinfo::GA10X_*`), which state a 256-bit
+                // bus for a 128-bit AD106. `forwarded_fb_info` is the same die's unprivileged
+                // FB_GET_INFO_V2 reply for exactly these indices.
                 match kf_abi::fbinfo::answer_fb_get_info_v2(
                     &cmd.payload[at..at + kf_abi::fbinfo::FB_GET_INFO_V2_PARAMS_SIZE],
-                    &answers,
+                    &self.host.forwarded_fb_info,
                 ) {
                     Ok(p) => p,
                     Err(_) => return refuse(),

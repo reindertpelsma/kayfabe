@@ -320,6 +320,21 @@ impl HostClasses for Gb20xHostClasses {
     }
 }
 
+/// ★ The host classes for the GENERATION the host reports (`MC_GET_ARCH_INFO.architecture`),
+/// or `None` for one this tree has no profile for. ⊘ What a client runs against is the
+/// device's family, never the build's pin: on an AD106 the pinned GA10x compute class
+/// (`0xc7c0`) is refused `NV_ERR_INVALID_CLASS` (measured 2026-09-26, RTX 4060 Ti, `--uvm-mean` P3).
+#[must_use]
+pub fn host_classes_for_arch(architecture: u32) -> Option<&'static dyn HostClasses> {
+    match architecture {
+        0x170 => Some(&Ga10xHostClasses),
+        0x190 => Some(&Ad10xHostClasses),
+        0x180 => Some(&Gh100HostClasses),
+        0x1B0 => Some(&Gb20xHostClasses),
+        _ => None,
+    }
+}
+
 /// ★★★ **The profile the host isolate is PINNED to** — and the word is `pinned`, not
 /// `default`, because nothing probes the host and calling it a default would imply
 /// something else was chosen against.
