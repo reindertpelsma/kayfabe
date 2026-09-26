@@ -503,6 +503,26 @@ numbering is itself per version (lower at 535/545) — translated by NAME throug
 5. **535/545 capability allowlist.** **RULED: port nvproxy's 535.104.05 / 545.23.06 blocks as a
    separate, clearly marked commit**, list every entry that differs from the 580 allowlist here —
    ⊘ **a security-policy change: explicit owner review before it merges.**
+   ⇒ **PORTED 2026-09-26 as ONE clearly marked commit — ⊘ OWNER REVIEW REQUIRED BEFORE MERGE.**
+   Every row is nvproxy's, and every delta is ALSO measured: each name below is absent from the
+   SDK headers of the version it is withheld from (`tools/drivermatrix` sweep, `ctrl_cmds` /
+   `class_ids`). The restructure moves the 545/550-era rows out of the shared floor into dated
+   blocks that every existing boundary names, so **no existing table's surface changes**
+   (`each_boundarys_resolved_delta_is_materialised` pins the counts: 162/78 at 550.54.04 as before).
+
+   | allowlist entry | 535.104.05 | 545.23.06 | 550.54.04 | 580.65.06 (the bench's) |
+   |---|---|---|---|---|
+   | `NVC36F_CTRL_GET_CLASS_ENGINEID` | ✔ | ✔ | ✔ | ✘ (nvproxy deletes it at 555.42.02) |
+   | `NV0000_CTRL_CMD_GPU_GET_ACTIVE_DEVICE_IDS`, `NV00DE_CTRL_CMD_REQUEST_DATA_POLL` | ✘ | ✔ | ✔ | ✔ |
+   | `NV0000_CTRL_CMD_GPU_ASYNC_ATTACH_ID`, `…_GPU_WAIT_ATTACH_ID`, `NV0080_CTRL_CMD_PERF_CUDA_LIMIT_SET_CONTROL`, `NV2080_CTRL_CMD_PERF_GET_CURRENT_PSTATE` | ✘ | ✘ | ✔ | ✔ |
+   | classes `NV_MEMORY_EXPORT`, `NV_IMEX_SESSION`, `NV_MEMORY_FABRIC_IMPORTED_REF`, `NVENC_SW_SESSION` | ✘ | ✘ | ✔ | ✔ |
+   | `NV_CONF_COMPUTE_CTRL_CMD_GPU_GET_KEY_ROTATION_STATE` (550.90.07), `NV_SEMAPHORE_SURFACE_CTRL_CMD_UNBIND_CHANNEL` (560.28.03), `THERMAL_SYSTEM_EXECUTE_V2` + the two `DRAM_ENCRYPTION_*_V575` (575.51.02) | ✘ | ✘ | ✘ | ✔ |
+   | classes: the Blackwell A/B channel, copy, 3D, compute, inline-to-memory, usermode; `NVCDB0`/`NVCDD1`/`NVCDFA`/`NVCFB7`/`NVCEB7`/`NVD1B7` (560–580) | ✘ | ✘ | ✘ | ✔ |
+
+   Counts resolved: 535.104.05 = **156 controls / 74 classes**, 545.23.06 = 158 / 74, 550.54.04 = 162 / 78.
+   ⚠ Not measurable by the sweep (their prefixes are outside its control-id patterns) and taken
+   from nvproxy alone: the `NV00FD`, `NV9096`, `NV906F`, `NV208F`, `NV90E6`, `NV_CONF_COMPUTE`
+   and `NV_SEMAPHORE_SURFACE` rows of the shared floor.
 6. **Default `guest-driver=`.** **RULED: re-select at fn 1** for (declared, reported) pairs whose
    pre-fn-1 surface is identical — the matrix states it per pair — and refuse by name otherwise.
 7. **615.71.09** (a third GSP element shape): **RULED: out of the asked range; stays refused by

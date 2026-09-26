@@ -419,6 +419,19 @@ const fn dv(major: u16, minor: u16, patch: u16) -> DriverVersion {
 
 /// Ascending. See [`CapsRow`].
 const CAPS_ROWS: &[CapsRow] = &[
+    // ★★★ [OWNER REVIEW REQUIRED — ruling 5, 2026-09-26] the two rows below admit 535/545
+    // guests (nvproxy's v535_104_05 / v545_23_06 blocks; `crate::capability`).
+    CapsRow {
+        from: dv(535, 104, 5),
+        caps: &crate::capability::CAPS_535_104_05,
+        note: "[OWNER REVIEW] nvproxy's oldest ABI (version.go:159): the 550.54.04 surface \
+               minus what 545.23.06 and 550.40.07 added",
+    },
+    CapsRow {
+        from: dv(545, 23, 6),
+        caps: &crate::capability::CAPS_545_23_06,
+        note: "[OWNER REVIEW] + GPU_GET_ACTIVE_DEVICE_IDS, NV00DE REQUEST_DATA_POLL (version.go:837-846)",
+    },
     CapsRow {
         from: dv(550, 54, 4),
         caps: &CAPS_550_54_04,
@@ -2297,19 +2310,20 @@ mod tests {
     /// no capability surface, never admitted against the 550 one.
     #[test]
     fn below_the_oldest_capability_row_is_refused_by_name() {
+        // ★★★ [OWNER REVIEW — ruling 5, 2026-09-26] the oldest row is now nvproxy's
+        // 535.104.05, so every measured tag has a capability surface; the refusal arm stays
+        // for a version below it (none is measured).
         assert_eq!(
-            at(535, 309, 1).map(|t| t.version),
-            Err(AbiError::NoCapabilityRow {
-                major: 535,
-                minor: 309,
-                patch: 1
-            })
+            at(535, 309, 1).map(|t| t.capabilities().note),
+            Ok(crate::capability::CAPS_535_104_05.note)
         );
-        assert!(
-            at(550, 54, 14).is_ok(),
-            "the oldest row's first measured tag resolves"
+        assert_eq!(
+            at(545, 23, 8).map(|t| t.capabilities().note),
+            Ok(crate::capability::CAPS_545_23_06.note)
         );
+        assert!(capabilities_for(DriverVersion { major: 535, minor: 104, patch: 4 }).is_none());
     }
+
 
     /// The NVOS46 shape follows the MEASURED layout, on both sides of 580.65.06.
     #[test]
