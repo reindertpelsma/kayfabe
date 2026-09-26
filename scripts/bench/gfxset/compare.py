@@ -44,6 +44,12 @@ def main(R):
     h1, h2 = res(f"{R}/host.res"), res(f"{R}/host2.res")
     gb, gi = res(f"{R}/guest.res"), res(f"{R}/iso/guest.res")
     hd1, hd2 = digs(f"{R}/host.dig"), digs(f"{R}/host2.dig")
+    # imgcmp.sh: NONDET image digests graded by PSNR against bare metal's own run-to-run noise
+    img = {}
+    if os.path.exists(f"{R}/imgcmp.txt"):
+        for line in open(f"{R}/imgcmp.txt", errors="replace"):
+            m = re.match(r"GSET_IMG item=(\S+) key=\S+ floor=(\S+) guest=(\S+) verdict=(\S+)", line)
+            if m: img[m.group(1)] = (m.group(2), m.group(3), m.group(4))
     gd = digs(f"{R}/guest.dig"); gd.update(digs(f"{R}/iso/guest.dig"))
     items = [i for i in list(h1) + [x for x in gb if x not in h1] if i and not i.startswith("_")]
     rows, cnt = [], collections.Counter()
@@ -55,6 +61,11 @@ def main(R):
         graded = [k for k in keys if k not in nondet]
         match = [k for k in graded if gd.get((it, k)) == hd1[(it, k)]]
         diff = [k for k in graded if (it, k) in gd and gd[(it, k)] != hd1[(it, k)]]
+        psnr = ""
+        if it in img and "png" in nondet:
+            fl, gq, iv = img[it]
+            psnr = f", png by PSNR {gq} vs floor {fl}: {iv}"
+            if iv == "DIFF": diff.append("png(psnr)")
         absent = [k for k in graded if (it, k) not in gd]
         hx = int(h.get("host_xid", "0") or 0); gx = g.get("host_xid", "-")
         # an item absent from the second bare-metal run was not re-measured (suite.sh GSET_HOST2_SKIP): no
@@ -74,7 +85,7 @@ def main(R):
         else:
             final = gv
         cnt[final] += 1
-        dig = f"{len(match)}/{len(graded)} match" + (f", {len(nondet)} nondet" if nondet else "")
+        dig = f"{len(match)}/{len(graded)} match" + (f", {len(nondet)} nondet" if nondet else "") + psnr
         if diff:
             dig += " DIFF:" + ",".join(diff[:4])
         if absent and gv == "PASS":

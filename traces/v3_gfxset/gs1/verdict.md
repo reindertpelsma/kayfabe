@@ -34,8 +34,8 @@
 | ff_vulkan | PASS | FAIL (alone) | 0/9 match DIFF:scale_vulkan,avgblur_vulkan,gblur_vulkan,chromaber_vulkan | **FAIL** | rc=187 27s host_xid=0 guest_xid=0 kf3_rc=0 kf3_refusals=0 — GSET_FAIL scale_vulkan |
 | ff_opencl | PASS | PASS (batched) | 8/8 match | **PASS** |  |
 | ff_placebo | PASS | FAIL (alone) | 0/2 match DIFF:libplacebo_scale,libplacebo_deband | **FAIL** | rc=187 8s host_xid=0 guest_xid=0 kf3_rc=0 kf3_refusals=0 — GSET_FAIL libplacebo_scale |
-| blender_cycles_cuda | PASS | PASS (batched) | 0/0 match, 1 nondet | **PASS** |  |
-| blender_cycles_optix | PASS | PASS (batched) | 0/0 match, 1 nondet | **PASS** |  |
+| blender_cycles_cuda | PASS | PASS (batched) | 0/0 match, 1 nondet, png by PSNR 97.776228dB vs floor 99.325248dB: MATCH | **PASS** |  |
+| blender_cycles_optix | PASS | PASS (batched) | 0/0 match, 1 nondet, png by PSNR 100.786528dB vs floor 100.786528dB: MATCH | **PASS** |  |
 | blender_eevee | PASS | PASS (batched) | 1/1 match | **PASS** |  |
 | blender_workbench | PASS | PASS (batched) | 1/1 match | **PASS** |  |
 | blender_eevee_vulkan | PASS | PASS (batched) | 1/1 match | **PASS** |  |
