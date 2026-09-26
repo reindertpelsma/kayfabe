@@ -355,6 +355,8 @@ struct HeldReply {
     deferred: Option<Deferred>,
     /// The command was a `GSP_RM_ALLOC` — a failed outcome is stamped into its params status too.
     alloc: bool,
+    /// ★ v3-refusals: what the command carried, for [`crate::refusal::RefusalLedger`].
+    detail: Option<u32>,
 }
 
 /// ★★★ **A reply whose STATUS is the outcome of a host act still in progress** (P5b).
@@ -747,6 +749,9 @@ pub struct GspFsm {
     /// ⊘ A `Vec` and not a map: it is ordered, it is single-digit in every measured boot,
     /// and the order replies are posted in is the order the guest asked for them.
     held: Vec<HeldReply>,
+    /// ★★★ v3-refusals: every non-`NV_OK` reply posted, keyed by what it answered
+    /// ([`crate::refusal`]). Written at the two posting sites only; answers nothing.
+    refusals: crate::refusal::RefusalLedger,
     /// ★ w827: the guest's last `NV_PRISCV_RISCV_BCR_CTRL` write ([`GspReg::GspRiscvBcrCtrl`]).
     bcr_ctrl: Option<u32>,
     /// ★ w828: how the life that is running now STOPS after fn-47 — latched from the regime that
@@ -872,6 +877,7 @@ impl GspFsm {
         GspFsm {
             pending_command_doorbells: 0,
             held: Vec::new(),
+            refusals: crate::refusal::RefusalLedger::new(),
             bcr_ctrl: None,
             after_suspend: AfterSuspend::AwaitsTeardownUcode,
             fw_halted_after_suspend: false,
@@ -1922,9 +1928,19 @@ impl GspFsm {
                 cmd.function,
                 self.held.len() + 1
             );
-            self.held.push(HeldReply { rpc: out, deferred, alloc: cmd.function == RpcFunction::RmAlloc });
+            self.held.push(HeldReply {
+                rpc: out,
+                deferred,
+                alloc: cmd.function == RpcFunction::RmAlloc,
+                detail: self.refusal_detail(cmd),
+            });
         } else {
             self.post(ram, &out)?;
+            // ★ v3-refusals: recorded AFTER a successful post — the status the guest reads.
+            if out.rpc_result != 0 {
+                let detail = self.refusal_detail(cmd);
+                self.refusals.note(out.function, detail, out.rpc_result, out.sequence);
+            }
         }
 
         if cmd.function == RpcFunction::UnloadingGuestDriver {
@@ -2183,8 +2199,11 @@ impl GspFsm {
                     }
                 }
             }
+            let detail = h.detail;
             self.post(ram, &rpc)?;
             self.held.remove(0);
+            // ★ v3-refusals: the FINAL status (after the deferred act resolved it).
+            self.refusals.note(rpc.function, detail, rpc.rpc_result, rpc.sequence);
             posted += 1;
         }
         if posted > 0 {
@@ -2194,6 +2213,27 @@ impl GspFsm {
             eprintln!("kayfabe: HELD-REPLY-POSTED n={posted} — their rows are on the host now");
         }
         Ok(posted)
+    }
+
+    /// ★★★ v3-refusals: every non-`NV_OK` reply posted so far ([`crate::refusal`]).
+    #[must_use]
+    pub fn refusals(&self) -> &crate::refusal::RefusalLedger {
+        &self.refusals
+    }
+
+    /// ★ v3-refusals: the refusal rows first seen since the previous call — one log line each.
+    pub fn take_fresh_refusals(&mut self) -> Vec<crate::refusal::RefusalRow> {
+        self.refusals.take_fresh()
+    }
+
+    /// What a command carried, for the refusal ledger: the control id of a `GSP_RM_CONTROL`, the
+    /// class of a `GSP_RM_ALLOC`, else `None`. A header read only — nothing is judged here.
+    fn refusal_detail(&self, cmd: &RpcCommand) -> Option<u32> {
+        match cmd.function {
+            RpcFunction::RmControl => self.abi.driver.decode_rpc_control(cmd.wire_body()).ok().map(|r| r.cmd),
+            RpcFunction::RmAlloc => self.abi.driver.decode_rpc_alloc(cmd.wire_body()).ok().map(|r| r.class),
+            _ => None,
+        }
     }
 
     /// How many replies are waiting on a refresh right now. ⊘ A non-zero value at teardown

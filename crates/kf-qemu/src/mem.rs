@@ -1092,6 +1092,10 @@ pub struct MemCounters {
     pub invalidates: AtomicU64,
     /// ★ w827: guest L2 cache ops served as host `FB_FLUSH_GPU_CACHE`.
     pub cache_ops: AtomicU64,
+    /// ★ v3-refusals: guest sysmembars (`INTERNAL_BUS_FLUSH_WITH_SYSMEMBAR`) served as the host's.
+    pub sysmembars: AtomicU64,
+    /// ★ v3-refusals: roots withdrawn by `DMA_UNSET_PAGE_DIRECTORY`.
+    pub root_unsets: AtomicU64,
     /// PRAMIN re-points whose window showed any scratch slot.
     pub pramin_miss_writes: AtomicU64,
     /// The last window base that missed (for the log).
@@ -1524,6 +1528,34 @@ pub fn apply_statement(
             plane.counters.bar_pdes.fetch_add(1, Ordering::Relaxed);
             m.schedule_walk(if p.bar == BarAperture::Bar2 { K_BAR2 } else { K_BAR1 }, trigger);
             format!("fn70 {:?} entry={:#x} shift={} -> our root @{root:#x}, walk scheduled", p.bar, p.entry, p.level_shift)
+        }
+        // ★★★ v3-refusals: the guest's sysmembar IS the host GPU's — the authored, unprivileged
+        // `FB_FLUSH_GPU_CACHE(FB_FLUSH_YES)` (the verb that serves a Hopper+ guest's token-register
+        // sysmembar). The statement settles only after it returns, so the held `NV_OK` is posted
+        // after the flush (`kf_rm::sysmembar`). A refused host verb is NAMED; the reply stays
+        // `NV_OK`, exactly as the Hopper+ register path releases its register — the guest's
+        // alternative is the same unflushed state with no name on it.
+        MemStatement::Sysmembar => {
+            let t = std::time::Instant::now();
+            let r = rm.fb_flush();
+            let n = plane.counters.sysmembars.fetch_add(1, Ordering::Relaxed) + 1;
+            match r {
+                Ok(()) => format!("sysmembar #{n}: host FB_FLUSH_GPU_CACHE(FB_FLUSH_YES) in {} us", t.elapsed().as_micros()),
+                Err(e) => {
+                    plane.counters.refused.fetch_add(1, Ordering::Relaxed);
+                    format!("sysmembar #{n}: host FB_FLUSH_GPU_CACHE REFUSED: {e:?}")
+                }
+            }
+        }
+        // ★★ v3-refusals: the guest withdrew this object's page directory — stop reading it
+        // (UVM frees it right after the held reply). ⊘ No unmap: the rows stay until a walk or
+        // the object's retirement says otherwise (`VasTable::clear_root`).
+        MemStatement::UnsetPageDir { client, vaspace } => {
+            let key = VasKey((u64::from(client) << 32) | u64::from(vaspace));
+            let had = m.table.root(key);
+            m.table.clear_root(key);
+            plane.counters.root_unsets.fetch_add(1, Ordering::Relaxed);
+            format!("unset pagedir {key:?}: root {} withdrawn — no walk reads it again", had.map_or("(none)".into(), |r| format!("{r:#x}")))
         }
         MemStatement::Retire { client, vaspace } => {
             let line = retire_mirror(m, plane, rm, VasKey((u64::from(client) << 32) | u64::from(vaspace)));

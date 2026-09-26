@@ -380,7 +380,16 @@ pub static SWEEP_TRIAGE: &[SweepControl] = &[
         cmd: 0x2080_0a70,
         engine: "KernelBus",
         disposition: SweepDisposition::RefusalIsInvisible,
-        why: "★★ CORRECTED (2026-08-01, with 0x20800a6c). This row read 'its callers treat a \
+        why: "★★★ SERVED as of v3-refusals (2026-09-26, kf_rm::sysmembar) — and the invisibility \
+              below is WHY it had to be served, not why it could stay refused: the guest \
+              swallows the refusal and proceeds as though the flush happened, on data-ordering \
+              paths (kmemsysCacheOp_HAL, FB_FLUSH_GPU_CACHE's FB_FLUSH_YES returning NV_OK to \
+              userspace). The row's own condition for serving — 'the day forwarding is on' — is \
+              every day in v3: guest work runs on the host GPU. Answered by the host sysmembar \
+              verb (FB_FLUSH_GPU_CACHE, FB_FLUSH_YES; the one that serves a Hopper+ guest's \
+              token-register sysmembar), the NV_OK held until it returns. [measured] vrf \
+              131f4841: 4-5 refusals per CUDA process before. The pre-v3 text follows, kept \
+              as the record. ★★ CORRECTED (2026-08-01, with 0x20800a6c). This row read 'its callers treat a \
               failed sysmembar as a failed flush' and classified it RefusalHalts. That is \
               FALSE on the GA106 HAL path, and the correction is one function deep: \
               kbusSendSysmembarSingle_KERNEL does return the status verbatim (ogkm-580: \

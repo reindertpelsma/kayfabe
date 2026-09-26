@@ -235,7 +235,7 @@ pub const PROVENANCE: &[(&str, Source)] = &[
     ("vbios_version", Source::HostControl { cmd: 0x2080_0810, name: "BIOS_GET_INFO_V2 [REVISION 0x0, OEM_REVISION 0x1] (a host that does not answer = None: cosmetic, never a realize failure)" }),
     ("perf_level_info_v2", Source::HostControl { cmd: 0x2080_200b, name: "PERF_GET_LEVEL_INFO_V2 (libcudart's question, asked once; a host refusal is kept and relayed)" }),
     ("video_caps", Source::HostControl { cmd: 0x0080_1c02, name: "MSENC_GET_CAPS_V2 0x801b02 / BSP_GET_CAPS_V2 0x801c02 on the host DEVICE, per advertised instance (kf_abi::videocaps)" }),
-    ("gss_replay", Source::HostControl { cmd: 0x2080_a028, name: "GSS-legacy 0x20809064 / 0x2080a028 (layouts measured, kf_abi::gssreplay::ROWS), asked with requests we author; the bytes the host wrote" }),
+    ("gss_replay", Source::HostControl { cmd: 0x2080_a028, name: "GSS-legacy 0x20809064 / 0x2080a028 / 0x2080a026 / 0x2080a084 (layouts measured, kf_abi::gssreplay::ROWS), asked with requests we author over two backgrounds; the bytes the host wrote" }),
 ];
 
 /// Why a host reply could not become a fact — by name, never a zero.

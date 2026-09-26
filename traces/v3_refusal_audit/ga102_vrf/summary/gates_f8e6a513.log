@@ -1,0 +1,188 @@
+V3_GATES_START 2026-09-26T13:34:08+00:00
+HEAD=f8e6a513 dirty=0
+GPU=NVIDIA GeForce RTX 3090, 580.159.04
+warning: variable does not need to be mutable
+   --> crates/kf-harness/src/bin/kf-gate9.rs:329:9
+    |
+329 |     let mut gpu_at = |n: u64, v: &mut Vec<u64>, us: u64| {
+    |         ----^^^^^^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/kf-harness/src/bin/kf-gate4.rs:352:9
+    |
+352 |     let mut plane = Plane::for_family(&vmm, TOKEN_TABLE, (TOKEN_TABLE - 1) as u32, kf_chip::Family::Ampere, 16 << 20);
+    |         ----^^^^^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+=== kf-gate1
+MEASURE session driver 580.159.04
+MEASURE channel tsg=0xcafe000a chan=0xcafe000b token=0x4
+MEASURE ce_notifiers_armed CE0:true CE1:true CE2:true CE3:true CE4:true CE5:true CE6:true CE7:true CE8:true CE9:true
+MEASURE quiet wakes=0 in 300 ms with nothing submitted
+CHECK none_arm_work_completes PASS Submitted { wakes: 0, early_wakes: 0, seen_at_wake: false, event_us: 300467, ce_released: true, fence_landed: true }
+MEASURE none_arm_wakes wakes=0 (an edge with no trigger of ours = someone else's)
+CHECK ce_intr_arm_work_completes PASS Submitted { wakes: 1, early_wakes: 0, seen_at_wake: true, event_us: 160, ce_released: true, fence_landed: true }
+MEASURE ce_intr_arm_edge seen_at_wake=true wakes=1 after_us=160
+CHECK bytes_copied_by_engine PASS 20 copies x 1024 words, 0 wrong
+CHECK nsi_completion_seen_at_wake PASS 20/20 fences read AT a wake; early_wakes=0; us p50=45 p90=51 max=76
+GATE1_VERDICT=PASS
+=== kf-gate2
+MEASURE store store 0xcafe0004 256 MiB contiguous_aligned=true imported into the walker
+MEASURE publish_first diff_runs=2 mapped=2 unmapped=0 refused=0 invalidated=true gpu_us=134 us=501
+CHECK first_publish_maps_the_guest_ranges PASS 2 runs mapped (want 2 coalesced)
+CHECK copy1_completes_by_event PASS Submitted { wakes: 1, early_wakes: 0, seen_at_wake: true, event_us: 85, ce_released: true, fence_landed: true }
+CHECK copy1_lands_where_the_guest_mapped_it PASS DATA_B == DATA_A pattern
+MEASURE publish_unchanged diff_runs=0 mapped=0 unmapped=0 refused=0 invalidated=false gpu_us=126 us=288
+CHECK unchanged_tables_change_nothing PASS diff_runs=0 mapped=0 unmapped=0
+MEASURE publish_remap diff_runs=2 mapped=1 unmapped=1 refused=0 invalidated=true gpu_us=130 us=401
+CHECK remap_reconciles PASS mapped=1 unmapped=1
+CHECK copy2_completes_by_event PASS Submitted { wakes: 2, early_wakes: 1, seen_at_wake: true, event_us: 57, ce_released: true, fence_landed: true }
+CHECK copy2_follows_the_remap PASS DATA_C == DATA_A pattern
+CHECK old_target_untouched PASS DATA_B still zero
+GATE2_VERDICT=PASS
+=== kf-gate3
+MEASURE identity_window base=0x1fffff0000000 bytes=0x10000000 us=91 (GROWS_DOWN, read back)
+MEASURE ram_window base=0x1ffffec000000 bytes=0x4000000 us=33408
+CHECK windows_distinct PASS fb=0x1fffff0000000 ram=0x1ffffec000000
+MEASURE publish_boot diff_runs=1 mapped=1 unmapped=0 refused=0 us=529
+CHECK kernel_vas_published PASS 1 runs
+MEASURE publish_at_split diff_runs=1 mapped=1 unmapped=0 refused=0 us=395
+MEASURE translated fetched=3 submissions=3 splits=1 wakes=3 pumps=4 us=740
+CHECK forwarded_per_token PASS fetched=3 submissions=3
+CHECK fill_zeroed_by_engine PASS FILL all zero (was 0xAB)
+CHECK phys_copy_by_engine PASS DST == SRC pattern
+CHECK split_walked_the_named_root PASS walks=[Some(1000000)] root=0x1000000
+CHECK virtual_copy_after_split PASS DST2 == NEW pattern (read through VA_NEW)
+CHECK sysmem_to_fb_by_engine PASS DST3 == guest-RAM R_SRC pattern
+CHECK fb_to_sysmem_by_engine PASS guest-RAM R_DST == SRC pattern
+CHECK guest_semaphore_written_natively PASS sem=0x5c0b0003 want=0x5c0b0003
+CHECK gp_get_authored_on_completion PASS guest GP_GET=3
+CHECK hostile_entry_refused_by_name PASS Err(Ring(Rewrite { gp: 3, why: PeerOperand }))
+CHECK hostile_entry_not_retired PASS guest GP_GET=3
+GATE3_VERDICT=PASS
+=== kf-gate4
+MEASURE windows fb=0x1fffff0000000 ram=0x1ffffec000000
+kf-host: map_scattered 192 pieces 0xc0000 bytes: stitch 776 us, descriptor 198 us, hand view to reaper 123 us, map 80 us
+CHECK kernel_vas_published_as_sysmem PASS 192 runs (sysmem rows), want 192
+CHECK scattered_sysmem_rows_placed_as_one_batch PASS batches=1 batched_runs=192 map_verbs=1 fallbacks=0 None
+MEASURE plane us=57217 served=144 parks=171 host_rings=74 vcpu_wakes=70 per_channel=[ch0:(24, 24, 1) ch1:(24, 24, 0) ch2:(24, 24, 0)]
+CHECK no_channel_died PASS 
+CHECK translated_never_forged PASS forged=0 poisoned=0 (§8: the GPU writes a Translated completion)
+CHECK pump_never_contended PASS 0 contended serves
+CHECK hostile_rings_produce_no_action PASS 0 of 200000
+CHECK every_copy_landed PASS 0 of 72 wrong []
+CHECK channel_retired_and_released PASS ch0: GP_GET=24 sem=24 (in guest RAM at the SCATTERED page, written by the engine through the batch)
+CHECK channel_retired_and_released PASS ch1: GP_GET=24 sem=24 (in guest RAM at the SCATTERED page, written by the engine through the batch)
+CHECK channel_retired_and_released PASS ch2: GP_GET=24 sem=24 (in guest RAM at the SCATTERED page, written by the engine through the batch)
+CHECK split_walked_once_on_a_worker PASS walks=[Some(1000000)]
+CHECK a_piece_of_a_batch_unmaps_alone PASS unmapped=1 unmap_verbs=1 booked=1 frees=0
+CHECK teardown_is_ranges_and_frees_the_batch PASS unmapped=191 ranges=2 unmap_verbs=2 booked=0 frees=1 rows_left=0
+GATE4_VERDICT=PASS
+=== kf-gate5
+CHECK process_vas_mirrored PASS diff_runs=3 mapped=3 refused=0
+MEASURE birth token=0x18 us=3077
+CHECK rm_adopted_the_guest_userd PASS the poisoned block is zeroed ⇒ it IS the twin's USERD
+CHECK every_ring_was_inline PASS 0 of 32 took another arm
+CHECK engine_ran_the_guest_ring_unparsed PASS 32 virtual copies through the mirrored process VAS
+CHECK hardware_advanced_the_guest_gp_get PASS guest USERD GP_GET=32 (written by the engine, not by us)
+CHECK no_worker_ever_saw_the_token PASS bits=[] wake_seq=0
+MEASURE ring_to_semaphore_us p50=6 p90=6 max=27 (includes the harness's DtoH poll)
+CHECK stop_verbs_unprivileged PASS DISABLE_CHANNELS(disable) + GPFIFO_SCHEDULE(false) on our own twin: Ok(()) (598 us)
+CHECK stopped_twin_runs_no_new_work PASS work queued + rung after the stop: sem=0x20 (want 0x20 = untouched)
+CHECK restart_verbs_unprivileged PASS DISABLE_CHANNELS(enable) + GPFIFO_SCHEDULE(true): Ok(()) (651 us)
+MEASURE restart_picks_up_pending_work_without_a_doorbell true
+CHECK restarted_twin_runs_again PASS sem=0x21 (want 0x21)
+CHECK preempt_verb_unprivileged PASS NVA06C PREEMPT(bWait=1) on our own group: Ok(()) (272 us)
+CHECK preempted_twin_still_schedulable PASS sem=0x22 (want 0x22)
+CHECK preempt_of_a_stopped_group PASS Ok(())
+GATE5_VERDICT=PASS
+=== kf-gate6
+CHECK process_vas_mirrored PASS diff_runs=3 mapped=3 refused=0
+MEASURE birth token=0x18 us=4408
+CHECK rm_adopted_the_guest_userd PASS the poisoned block is zeroed ⇒ it IS the twin's USERD
+CHECK every_ring_was_inline PASS 0 of 32 took another arm
+CHECK gr_ran_the_guest_ring_unparsed PASS 32 I2M literal writes through the mirrored process VAS
+CHECK hardware_advanced_the_guest_gp_get PASS guest USERD GP_GET=32 (written by the engine, not by us)
+CHECK no_worker_ever_saw_the_token PASS bits=[] wake_seq=0
+MEASURE ring_to_semaphore_us p50=95 p90=96 max=176 (includes the harness's DtoH poll)
+GATE6_VERDICT=PASS
+=== kf-gate7
+MEASURE store store 0xcafe0004 256 MiB contiguous_aligned=true imported into the walker
+MEASURE publish_first diff_runs=2 mapped=2 unmapped=0 refused=0 invalidated=true gpu_us=147 us=474
+CHECK first_publish_maps_the_guest_ranges PASS 2 runs mapped (want 2 coalesced)
+CHECK copy1_completes_by_event PASS Submitted { wakes: 1, early_wakes: 0, seen_at_wake: true, event_us: 67, ce_released: true, fence_landed: true }
+CHECK copy1_lands_where_the_guest_mapped_it PASS DATA_B == DATA_A pattern
+MEASURE publish_unchanged diff_runs=0 mapped=0 unmapped=0 refused=0 invalidated=false gpu_us=141 us=277
+CHECK unchanged_tables_change_nothing PASS diff_runs=0 mapped=0 unmapped=0
+MEASURE publish_remap diff_runs=2 mapped=1 unmapped=1 refused=0 invalidated=true gpu_us=145 us=397
+CHECK remap_reconciles PASS mapped=1 unmapped=1
+CHECK copy2_completes_by_event PASS Submitted { wakes: 2, early_wakes: 1, seen_at_wake: true, event_us: 65, ce_released: true, fence_landed: true }
+CHECK copy2_follows_the_remap PASS DATA_C == DATA_A pattern
+CHECK old_target_untouched PASS DATA_B still zero
+GATE7_VERDICT=PASS
+=== kf-gate8
+MEASURE store store 0xcafe0004 256 MiB contiguous_aligned=true
+MEASURE ver2_round1 Round { saw: VcpuSaw { trap_ns: [49130], published: 1, cleared: true, spin_us: 600 }, walk_wakes: 1, collected: 1, applied: [(VasKey(1), 2, 0)], superseded: 0, cleared: 1 }
+CHECK ver2_first_invalidate_maps_the_guest_ranges PASS mapped=2 (want 2 coalesced) cleared=1 stats=VaStats { walks_submitted: 1, walks_reconciled: 1, walks_refused: 0, spaces_reconciled: 1, mapped: 2, unmapped: 0, batches: 0, batched_runs: 0, range_unmaps: 0, batch_fallbacks: 0, host_invalidates: 1, cleared: 1, superseded: 0, already_idle: 0, named_missed: 0, unreconciled: 0, refusals: [], submit_ns_max: 84365, clipped_bytes: 0, timing: VaTiming { invals: 1, inval_ns: 580609, inval_ns_max: 580609, walks: 1, walk_ns: 293410, gpu_us: 134, plan_ns: 0, apply_ns: 159909, leaves_last: 2, host_calls: 3 }, splits: 0, split_missed: 0, held: 0, vmm_overlaps: 0, deferred_clears: 0, usermode_trapped: 0, usermode_unmirrored: 0, partial: 0, no_slot: 0, walk_refused_spaces: 0, splits_unsettled: 0 }
+CHECK ver2_vcpu_saw_the_clear PASS spin 600 us, published 1
+CHECK ver2_completion_arrived_as_an_fd_wake PASS walk wakes=1 collected=1
+CHECK ver2_copy1_completes_by_event PASS Submitted { wakes: 1, early_wakes: 0, seen_at_wake: true, event_us: 101, ce_released: true, fence_landed: true }
+CHECK ver2_copy1_lands_where_the_guest_mapped_it PASS DATA_B == DATA_A pattern
+MEASURE ver2_round2 Round { saw: VcpuSaw { trap_ns: [19728], published: 1, cleared: true, spin_us: 478 }, walk_wakes: 1, collected: 1, applied: [(VasKey(1), 1, 1)], superseded: 0, cleared: 1 }
+CHECK ver2_remap_reconciles_before_the_clear PASS mapped=1 unmapped=1 cleared=1
+CHECK ver2_copy2_completes_by_event PASS Submitted { wakes: 2, early_wakes: 1, seen_at_wake: true, event_us: 51, ce_released: true, fence_landed: true }
+CHECK ver2_copy2_follows_the_remap PASS DATA_C == DATA_A pattern, DATA_B still zero
+MEASURE ver2_round3 Round { saw: VcpuSaw { trap_ns: [20468, 2598], published: 2, cleared: true, spin_us: 605 }, walk_wakes: 2, collected: 2, applied: [(VasKey(1), 0, 0), (VasKey(1), 0, 0)], superseded: 1, cleared: 1 }
+CHECK ver2_a_rearmed_trigger_is_superseded_not_cleared PASS published=2 superseded=1 cleared=1
+CHECK ver2_named_missed_is_counted_and_cleared_without_a_walk PASS named_missed 0->1 walks 4->4
+MEASURE ver2_round5 Round { saw: VcpuSaw { trap_ns: [15872], published: 1, cleared: true, spin_us: 568 }, walk_wakes: 1, collected: 1, applied: [(VasKey(1), 0, 0), (VasKey(2), 1, 0)], superseded: 0, cleared: 1 }
+CHECK ver2_all_pdb_reconciles_every_rooted_space PASS applied=[(VasKey(1), 0, 0), (VasKey(2), 1, 0)] second_resolves=Some((false, 33554432))
+MEASURE trigger_trap ver2 worst=49us ceiling=1000us
+CHECK ver2_trigger_trap_is_under_the_ceiling PASS worst trigger trap 49 us
+MEASURE walk_submit ver2 walks=5 submit_us p50=45 max=100 budget=50 (MISSED) gpu_us=[134, 139, 130, 123, 141] graph=true param_updates=2 submit_ns=[80721, 45515, 34786, 33561, 100492]
+CHECK ver2_the_walk_never_blocked_its_submitter PASS cuCtxSynchronize calls=0; walks still on the GPU when submit returned: 5/5 (submit_ns=[80721, 45515, 34786, 33561, 100492] gpu_us=[134, 139, 130, 123, 141])
+CHECK ver2_every_host_op_ran_while_the_guest_saw_busy PASS stats=VaStats { walks_submitted: 5, walks_reconciled: 5, walks_refused: 0, spaces_reconciled: 6, mapped: 4, unmapped: 1, batches: 0, batched_runs: 0, range_unmaps: 0, batch_fallbacks: 0, host_invalidates: 3, cleared: 5, superseded: 1, already_idle: 0, named_missed: 1, unreconciled: 0, refusals: [], submit_ns_max: 105717, clipped_bytes: 0, timing: VaTiming { invals: 5, inval_ns: 2443467, inval_ns_max: 580609, walks: 5, walk_ns: 1396857, gpu_us: 667, plan_ns: 0, apply_ns: 419267, leaves_last: 1, host_calls: 8 }, splits: 0, split_missed: 0, held: 0, vmm_overlaps: 0, deferred_clears: 0, usermode_trapped: 0, usermode_unmirrored: 0, partial: 0, no_slot: 0, walk_refused_spaces: 0, splits_unsettled: 0 }
+CHECK ver2_nothing_refused PASS refusals=[]
+MEASURE ver3_round1 Round { saw: VcpuSaw { trap_ns: [19801], published: 1, cleared: true, spin_us: 547 }, walk_wakes: 1, collected: 1, applied: [(VasKey(1), 2, 0)], superseded: 0, cleared: 1 }
+CHECK ver3_first_invalidate_maps_the_guest_ranges PASS mapped=2 (want 2 coalesced) cleared=1 stats=VaStats { walks_submitted: 1, walks_reconciled: 1, walks_refused: 0, spaces_reconciled: 1, mapped: 2, unmapped: 0, batches: 0, batched_runs: 0, range_unmaps: 0, batch_fallbacks: 0, host_invalidates: 1, cleared: 1, superseded: 0, already_idle: 0, named_missed: 0, unreconciled: 0, refusals: [], submit_ns_max: 89344, clipped_bytes: 0, timing: VaTiming { invals: 1, inval_ns: 538171, inval_ns_max: 538171, walks: 1, walk_ns: 299835, gpu_us: 151, plan_ns: 0, apply_ns: 141482, leaves_last: 2, host_calls: 3 }, splits: 0, split_missed: 0, held: 0, vmm_overlaps: 0, deferred_clears: 0, usermode_trapped: 0, usermode_unmirrored: 0, partial: 0, no_slot: 0, walk_refused_spaces: 0, splits_unsettled: 0 }
+CHECK ver3_vcpu_saw_the_clear PASS spin 547 us, published 1
+CHECK ver3_completion_arrived_as_an_fd_wake PASS walk wakes=1 collected=1
+CHECK ver3_copy1_completes_by_event PASS Submitted { wakes: 1, early_wakes: 0, seen_at_wake: true, event_us: 92, ce_released: true, fence_landed: true }
+CHECK ver3_copy1_lands_where_the_guest_mapped_it PASS DATA_B == DATA_A pattern
+MEASURE ver3_round2 Round { saw: VcpuSaw { trap_ns: [19572], published: 1, cleared: true, spin_us: 462 }, walk_wakes: 1, collected: 1, applied: [(VasKey(1), 1, 1)], superseded: 0, cleared: 1 }
+CHECK ver3_remap_reconciles_before_the_clear PASS mapped=1 unmapped=1 cleared=1
+CHECK ver3_copy2_completes_by_event PASS Submitted { wakes: 2, early_wakes: 1, seen_at_wake: true, event_us: 58, ce_released: true, fence_landed: true }
+CHECK ver3_copy2_follows_the_remap PASS DATA_C == DATA_A pattern, DATA_B still zero
+MEASURE ver3_round3 Round { saw: VcpuSaw { trap_ns: [19944, 2281], published: 2, cleared: true, spin_us: 618 }, walk_wakes: 2, collected: 2, applied: [(VasKey(1), 0, 0), (VasKey(1), 0, 0)], superseded: 1, cleared: 1 }
+CHECK ver3_a_rearmed_trigger_is_superseded_not_cleared PASS published=2 superseded=1 cleared=1
+CHECK ver3_named_missed_is_counted_and_cleared_without_a_walk PASS named_missed 0->1 walks 4->4
+MEASURE ver3_round5 Round { saw: VcpuSaw { trap_ns: [15772], published: 1, cleared: true, spin_us: 571 }, walk_wakes: 1, collected: 1, applied: [(VasKey(1), 0, 0), (VasKey(2), 1, 0)], superseded: 0, cleared: 1 }
+CHECK ver3_all_pdb_reconciles_every_rooted_space PASS applied=[(VasKey(1), 0, 0), (VasKey(2), 1, 0)] second_resolves=Some((false, 33554432))
+MEASURE trigger_trap ver3 worst=19us ceiling=1000us
+CHECK ver3_trigger_trap_is_under_the_ceiling PASS worst trigger trap 19 us
+MEASURE walk_submit ver3 walks=5 submit_us p50=39 max=93 budget=50 (MISSED) gpu_us=[151, 152, 145, 138, 154] graph=true param_updates=2 submit_ns=[85831, 39778, 36121, 32988, 93736]
+CHECK ver3_the_walk_never_blocked_its_submitter PASS cuCtxSynchronize calls=0; walks still on the GPU when submit returned: 5/5 (submit_ns=[85831, 39778, 36121, 32988, 93736] gpu_us=[151, 152, 145, 138, 154])
+CHECK ver3_every_host_op_ran_while_the_guest_saw_busy PASS stats=VaStats { walks_submitted: 5, walks_reconciled: 5, walks_refused: 0, spaces_reconciled: 6, mapped: 4, unmapped: 1, batches: 0, batched_runs: 0, range_unmaps: 0, batch_fallbacks: 0, host_invalidates: 3, cleared: 5, superseded: 1, already_idle: 0, named_missed: 1, unreconciled: 0, refusals: [], submit_ns_max: 97790, clipped_bytes: 0, timing: VaTiming { invals: 5, inval_ns: 2412065, inval_ns_max: 564487, walks: 5, walk_ns: 1430052, gpu_us: 740, plan_ns: 0, apply_ns: 386530, leaves_last: 1, host_calls: 8 }, splits: 0, split_missed: 0, held: 0, vmm_overlaps: 0, deferred_clears: 0, usermode_trapped: 0, usermode_unmirrored: 0, partial: 0, no_slot: 0, walk_refused_spaces: 0, splits_unsettled: 0 }
+CHECK ver3_nothing_refused PASS refusals=[]
+GATE8_VERDICT=PASS
+=== kf-gate9
+CHECK ver2_gpu_diff_is_the_model_diff PASS 160 walks, 3528 runs compared, 0 mismatching entries, verdicts failed=902 held=85
+CHECK ver2_settled_slots_are_quiet_and_closed PASS quiet=true closed=true
+CHECK ver3_gpu_diff_is_the_model_diff PASS 160 walks, 3354 runs compared, 0 mismatching entries, verdicts failed=719 held=89
+CHECK ver3_settled_slots_are_quiet_and_closed PASS quiet=true closed=true
+CHECK ver2_growth_gpu_diff_is_the_model_diff PASS 160 walks, 3528 runs compared, 0 mismatching entries, verdicts failed=902 held=85
+CHECK ver2_growth_settled_slots_are_quiet_and_closed PASS quiet=true closed=true
+CHECK ver2_growth_slots_actually_grew PASS walk pool 1048576 runs, slot pool 2097152 runs (2096128 free), max per space 1048576, slots held 2, grows 5, retries 5, ceilings 0, largest slot 512, largest walk 512
+MEASURE throughput rows=13000 one_run_reports=13000 gpu_us_p50@1000=136 gpu_us_p50@13000=416 wall_us_p50@13000=591 total_s=6.1
+CHECK every_added_page_is_a_one_run_diff PASS 13000 of 13000
+CHECK the_diff_does_not_grow_with_the_space PASS gpu p50 136 us @1000 rows -> 416 us @13000 rows
+GATE9_VERDICT=PASS
+V3_GATES_SUMMARY pass=9 fail=0
+V3_GATES_EXIT pass=9 fail=0 2026-09-26T13:34:43+00:00

@@ -319,12 +319,28 @@ pub fn query_video_falcons(host: &mut dyn HostControls, kinds: &[EngineKind]) ->
 
 /// ★ `gss_replay` — ask the host every `kf_abi::gssreplay::ROWS` request (authored: zero but the
 /// named input words) and keep what it wrote. A refused row is left out: never fatal.
+///
+/// ★ v3-refusals: each row is asked TWICE — over zero and over
+/// [`kf_abi::gssreplay::PROBE_BACKGROUND`] — so a field the host writes whole is answered whole
+/// ([`kf_abi::gssreplay::Answer::from_probes`]). A refused or inconsistent second probe keeps the
+/// zero probe's answer (named once in the log).
 pub fn query_gss_replay(host: &mut dyn HostControls) -> Vec<kf_abi::gssreplay::Answer> {
     let mut out = Vec::new();
     for row in kf_abi::gssreplay::ROWS {
         let mut p = row.request();
         match host.control(row.cmd, &mut p) {
-            Ok(()) => out.push(kf_abi::gssreplay::Answer::from_host(*row, &p)),
+            Ok(()) => {
+                let mut b = row.request_over(kf_abi::gssreplay::PROBE_BACKGROUND);
+                let bg = host.control(row.cmd, &mut b).ok().map(|()| b);
+                let (a, both) = kf_abi::gssreplay::Answer::from_probes(*row, &p, bg.as_deref());
+                if !both {
+                    eprintln!(
+                        "kf3: host facts: GSS {:#010x} {:x?}: the background probe was refused or changed the answer — zero-probe bytes only",
+                        row.cmd, row.inputs
+                    );
+                }
+                out.push(a);
+            }
             Err(e) => eprintln!("kf3: host facts: GSS {:#010x} {:x?} refused by the host ({e:?}) — not served", row.cmd, row.inputs),
         }
     }

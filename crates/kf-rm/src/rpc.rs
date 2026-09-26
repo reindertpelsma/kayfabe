@@ -136,7 +136,9 @@ pub const CONTROLS: [(u32, ControlDisposition); 33] = [
     (0xa06f0103, ControlDisposition::ServedLocally),
     (0xa06f0104, ControlDisposition::ServedLocally),
     (0x906f0106, ControlDisposition::ServedLocally),
-    (0x2080a026, ControlDisposition::AdmittedUndispatched),
+    // ★ v3-refusals: served from the host's realize-time answer (`kf_abi::gssreplay`) — refused, it
+    // sent cudart to its fallback and `cudaDevAttrClockRate` read 420 MHz for a 1695 MHz die.
+    (0x2080a026, ControlDisposition::ServedLocally),
     // ⊘ §2.3 refused nine BY NAME; eight remain (MC_SERVICE_INTERRUPTS is served, below).
     (0x20800122, ControlDisposition::RefusedByName("GPU_EXEC_REG_OPS: arbitrary register peek/poke")),
     (0xb0cc010a, ControlDisposition::RefusedByName("perf EXEC_REG_OPS: arbitrary register peek/poke")),
