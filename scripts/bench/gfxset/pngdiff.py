@@ -49,5 +49,6 @@ def diff(p, q, tag):
     print(f"{tag} {nd}")
     print(f"# {tag}: {nd}/{(w//2)*(h//2)} sampled px differ")
 
-diff(sys.argv[1], sys.argv[2], "AB_DIFF")
-diff(sys.argv[2], sys.argv[3], "BC_DIFF")
+if __name__ == "__main__":   # (imgnoise.py imports load())
+    diff(sys.argv[1], sys.argv[2], "AB_DIFF")
+    diff(sys.argv[2], sys.argv[3], "BC_DIFF")

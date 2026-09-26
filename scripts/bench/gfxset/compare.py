@@ -62,11 +62,14 @@ def main(R):
         match = [k for k in graded if gd.get((it, k)) == hd1[(it, k)]]
         diff = [k for k in graded if (it, k) in gd and gd[(it, k)] != hd1[(it, k)]]
         psnr = ""
-        if it in img and "png" in nondet:
-            fl, gq, iv = img[it]
+        absent = [k for k in graded if (it, k) not in gd]
+        if "png" in nondet:
+            # ⊘ a NONDET image is graded by imgcmp.sh or it is NOT graded — and an ungraded image must not
+            #   pass silently (it did until 2026-09-26: no imgcmp row simply meant "not compared")
+            fl, gq, iv = img.get(it, ("-", "-", "NO_ROW"))
             psnr = f", png by PSNR {gq} vs floor {fl}: {iv}"
             if iv == "DIFF": diff.append("png(psnr)")
-        absent = [k for k in graded if (it, k) not in gd]
+            elif iv != "MATCH": absent.append("png(psnr-ungraded)")
         hx = int(h.get("host_xid", "0") or 0); gx = g.get("host_xid", "-")
         # an item absent from the second bare-metal run was not re-measured (suite.sh GSET_HOST2_SKIP): no
         # noise floor for it, but no evidence of flakiness either

@@ -9,9 +9,12 @@
 #      hook.sh running the items one per ssh call, batched per boot; a boot that dies or wedges is
 #      recorded and the rest continue in a fresh boot.
 #   3. Every non-PASS item re-run ALONE in a fresh boot (the verdict of record for a failure).
-#   4. compare.py → <resdir>/verdict.md and GSET_SUITE_VERDICT.
+#   4. imgcmp.sh → imgcmp.txt (NONDET images graded against bare metal's measured spread), compare.py →
+#      <resdir>/verdict.md and GSET_SUITE_VERDICT.
 # env: KF3_BIN (default: kf3-bins/<this rev>), NVKVM_RAM_MB (12288), KF_SMP (6), GSET_NO_HOST=1 (reuse
-#      an existing baseline), GSET_NO_ISOLATE=1, GSET_GUEST_PM=1 (guest persistence mode; default OFF).
+#      an existing baseline), GSET_NO_ISOLATE=1, GSET_GUEST_PM=1 (guest persistence mode; default OFF),
+#      GSET_NOISE_DIRS="<dir>..." (extra bare-metal runs of the NONDET items, e.g. host.sh <dir> blender_cycles_cuda
+#      blender_cycles_optix repeated: imgcmp.sh pools them into the spread; same box/image only).
 # ⊘ Strictly serial; takes /tmp/kayfabe-fastguest.lock per boot and releases it between boots.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"; REPO="$(cd "$HERE/../../.." && pwd)"
