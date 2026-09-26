@@ -326,3 +326,31 @@ fn a_hopper_plus_fast_scrub_becomes_a_virtual_zero_fill() {
     let l = wr.iter().find(|w| w.0 == ce::LAUNCH_DMA).unwrap().1;
     assert_ne!(l & (1 << 23), 0, "GA10x: bit 23 is not ours to touch");
 }
+
+/// ★ 2026-09-26: a Hopper+ CE's `OFFSET_*_UPPER` is 25 bits (57-bit VA). `[measured GB203]` the
+/// Blackwell host placed the identity window at `0x1ff_fffe_0000_0000`; masking to 17 bits sent the
+/// copy to `0x1fffe_…` (Xid 31 FAULT_PDE). Ampere keeps 17.
+#[test]
+fn a_hopper_plus_window_va_keeps_all_25_upper_bits() {
+    struct High;
+    impl Window for High {
+        fn translate(&self, t: Target, phys: u64, _len: u64) -> Option<u64> {
+            (t == Target::LocalFb).then_some(0x1ff_fffe_0000_0000 + phys)
+        }
+    }
+    const CAB5: u32 = 0xcab5;
+    fn is_bw_ce(c: u32) -> bool {
+        c == CAB5
+    }
+    let mut pb = m(SUB, 0, &[CAB5]);
+    pb.extend(m(SUB, ce::SET_DST_PHYS_MODE, &[0]));
+    pb.extend(m(SUB, ce::SET_REMAP_COMPONENTS, &[0x4]));
+    pb.extend(m(SUB, ce::OFFSET_OUT_UPPER, &[0x0, 0x5_0000]));
+    pb.extend(m(SUB, ce::LINE_LENGTH_IN, &[0x1000]));
+    pb.extend(m(SUB, ce::LAUNCH_DMA, &[(1 << 7) | (1 << 8) | ce::LAUNCH_REMAP_ENABLE | ce::LAUNCH_DST_PHYSICAL]));
+    let mut st = CeState::default();
+    let wr = writes(&rewrite(&pb, is_bw_ce, &mut st, &High).unwrap());
+    let at = wr.iter().position(|w| w.0 == ce::LAUNCH_DMA).unwrap();
+    let up = wr[..at].iter().rev().find(|w| w.0 == ce::OFFSET_OUT_UPPER).unwrap().1;
+    assert_eq!(up, 0x1ff_fffe, "all 25 bits of the window's upper half");
+}

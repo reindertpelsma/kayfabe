@@ -396,10 +396,10 @@ fn one_write(
     }
     // ── CE methods ─────────────────────────────────────────────────────────────────────────
     match m {
-        ce::OFFSET_IN_UPPER => st.off_in = (st.off_in & 0xFFFF_FFFF) | (u64::from(v & 0x1_FFFF) << 32),
+        ce::OFFSET_IN_UPPER => st.off_in = (st.off_in & 0xFFFF_FFFF) | (u64::from(v & upper_mask(st)) << 32),
         OFFSET_IN_LOWER => st.off_in = (st.off_in & !0xFFFF_FFFF) | u64::from(v),
         ce::OFFSET_OUT_UPPER => {
-            st.off_out = (st.off_out & 0xFFFF_FFFF) | (u64::from(v & 0x1_FFFF) << 32);
+            st.off_out = (st.off_out & 0xFFFF_FFFF) | (u64::from(v & upper_mask(st)) << 32);
         }
         OFFSET_OUT_LOWER => st.off_out = (st.off_out & !0xFFFF_FFFF) | u64::from(v),
         ce::LINE_LENGTH_IN => st.line_len = v,
@@ -463,8 +463,16 @@ fn xlate(w: &dyn Window, mode: u32, phys: u64, len: u64) -> Result<u64, Refusal>
         .ok_or(Refusal::Untranslatable { target: t, phys, len })
 }
 
-fn put_offset(cur: &mut Vec<u32>, sub: u32, upper: u32, va: u64) {
-    emit(cur, sub, upper, ((va >> 32) & 0x1_FFFF) as u32);
+/// ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §4): `OFFSET_{IN,OUT}_UPPER` is `16:0` through
+/// `NVC7B5` (a 49-bit VA, `clc7b5.h:162,166`) and `24:0` from `HOPPER_DMA_COPY_A` on (57-bit,
+/// `clc8b5.h:92,96`). `[measured GB203]` masking a Blackwell window VA to 17 bits sent the scrubber's
+/// zero-fill to `0x1fffe_0005_0000` instead of `0x1ff_fffe_0005_0000` — Xid 31 FAULT_PDE on our ring.
+const fn upper_mask(st: &CeState) -> u32 {
+    if st.ce_class >= HOPPER_DMA_COPY_A { 0x1FF_FFFF } else { 0x1_FFFF }
+}
+
+fn put_offset(cur: &mut Vec<u32>, st: &CeState, sub: u32, upper: u32, va: u64) {
+    emit(cur, sub, upper, ((va >> 32) as u32) & upper_mask(st));
     emit(cur, sub, upper + 4, (va & 0xFFFF_FFFF) as u32);
 }
 
@@ -498,14 +506,14 @@ fn launch_scrub_translated(cur: &mut Vec<u32>, st: &CeState, w: &dyn Window, sub
     let va = xlate(w, st.dst_mode, st.off_out, dst_len)?;
     emit(cur, sub, ce::SET_REMAP_CONST_A, 0);
     emit(cur, sub, ce::SET_REMAP_COMPONENTS, REMAP_BYTE_FILL_FROM_CONST_A);
-    put_offset(cur, sub, ce::OFFSET_OUT_UPPER, va);
+    put_offset(cur, st, sub, ce::OFFSET_OUT_UPPER, va);
     emit(
         cur,
         sub,
         ce::LAUNCH_DMA,
         (v & !(LAUNCH_MEMORY_SCRUB_ENABLE | ce::LAUNCH_SRC_PHYSICAL | ce::LAUNCH_DST_PHYSICAL)) | ce::LAUNCH_REMAP_ENABLE,
     );
-    put_offset(cur, sub, ce::OFFSET_OUT_UPPER, st.off_out);
+    put_offset(cur, st, sub, ce::OFFSET_OUT_UPPER, st.off_out);
     emit(cur, sub, ce::SET_REMAP_COMPONENTS, st.remap);
     emit(cur, sub, ce::SET_REMAP_CONST_A, st.const_a);
     Ok(())
@@ -527,11 +535,11 @@ fn launch_translated(
     }
     if let (true, Some(len)) = (src_phys, src_len) {
         let va = xlate(w, st.src_mode, st.off_in, len)?;
-        put_offset(cur, sub, ce::OFFSET_IN_UPPER, va);
+        put_offset(cur, st, sub, ce::OFFSET_IN_UPPER, va);
     }
     if dst_phys {
         let va = xlate(w, st.dst_mode, st.off_out, dst_len)?;
-        put_offset(cur, sub, ce::OFFSET_OUT_UPPER, va);
+        put_offset(cur, st, sub, ce::OFFSET_OUT_UPPER, va);
     }
     emit(
         cur,
@@ -542,10 +550,10 @@ fn launch_translated(
     // Restore the guest's own offsets: a later VIRTUAL launch that does not rewrite them must
     // still read what the guest wrote, not our window address.
     if src_rewritten {
-        put_offset(cur, sub, ce::OFFSET_IN_UPPER, st.off_in);
+        put_offset(cur, st, sub, ce::OFFSET_IN_UPPER, st.off_in);
     }
     if dst_phys {
-        put_offset(cur, sub, ce::OFFSET_OUT_UPPER, st.off_out);
+        put_offset(cur, st, sub, ce::OFFSET_OUT_UPPER, st.off_out);
     }
     Ok(())
 }
