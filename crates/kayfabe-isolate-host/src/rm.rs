@@ -87,6 +87,13 @@
 //! - **R17 — a real copy engine moved device memory.** Destination read before and after,
 //!   the "after" through an independent mapping, plus the engine's own release semaphore.
 
+/// ★ v3-adasys (2026-09-27): `NVOS46_FLAGS_CACHE_SNOOP_ENABLE` (field 4:4, value 1; `nvos.h`). Every
+/// system-memory map this grader makes is an OS descriptor over write-back host memory; without the
+/// bit RM builds a NON-coherent (PCIe No-Snoop) PTE and, on a bare-metal host whose GPU is not
+/// passed through, a copy engine reads DRAM beneath the CPU's dirty cache lines — the same defect
+/// `kf-host::nvos46_map_flags` fixed (`traces/v3_adasys/FINDING.txt`). RM ignores it for vidmem.
+const NVOS46_FLAGS_CACHE_SNOOP_ENABLE: u32 = 1 << 4;
+
 use crate::export::ChildExports;
 use kayfabe_abi::bringup::{
     NV_ESC_CHECK_VERSION_STR, NV_ESC_REGISTER_FD, NV_ESC_RM_ALLOC_MEMORY, NV_IOCTL_MAGIC,
@@ -1595,7 +1602,7 @@ mod birth_conn {
                 h_memory,
                 offset,
                 length: len,
-                flags: page_size | NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE,
+                flags: page_size | NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE | NVOS46_FLAGS_CACHE_SNOOP_ENABLE,
                 flags2: 0,
                 kind_override: 0,
                 dma_offset: at,
@@ -4660,6 +4667,7 @@ impl RmConnection {
             length: len,
             flags: extra
                 | page_size
+                | NVOS46_FLAGS_CACHE_SNOOP_ENABLE
                 | if at.is_some() {
                     NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE
                 } else {

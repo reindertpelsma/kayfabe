@@ -1,0 +1,30 @@
+NSAB_REV f63caee8 + KF_NO_SNOOP toggle; GPU NVIDIA GeForce RTX 4060 Ti, 00000000:00:07.0
+DevCtl original=0x2137 (NoSnoop-)
+NSAB devctl_nosnoop=off arm=snoop run=1 gate=3 verdict=PASS 
+NSAB devctl_nosnoop=off arm=snoop run=1 gate=4 verdict=PASS 
+NSAB devctl_nosnoop=off arm=snoop run=2 gate=3 verdict=PASS 
+NSAB devctl_nosnoop=off arm=snoop run=2 gate=4 verdict=PASS 
+NSAB devctl_nosnoop=off arm=snoop run=3 gate=3 verdict=PASS 
+NSAB devctl_nosnoop=off arm=snoop run=3 gate=4 verdict=PASS 
+NSAB devctl_nosnoop=off arm=nosnoop run=1 gate=3 verdict=PASS 
+NSAB devctl_nosnoop=off arm=nosnoop run=1 gate=4 verdict=PASS 
+NSAB devctl_nosnoop=off arm=nosnoop run=2 gate=3 verdict=PASS 
+NSAB devctl_nosnoop=off arm=nosnoop run=2 gate=4 verdict=PASS 
+NSAB devctl_nosnoop=off arm=nosnoop run=3 gate=3 verdict=PASS 
+NSAB devctl_nosnoop=off arm=nosnoop run=3 gate=4 verdict=PASS 
+DevCtl now=0x2937 (NoSnoop+)
+NSAB devctl_nosnoop=on arm=snoop run=1 gate=3 verdict=PASS 
+NSAB devctl_nosnoop=on arm=snoop run=1 gate=4 verdict=PASS 
+NSAB devctl_nosnoop=on arm=snoop run=2 gate=3 verdict=PASS 
+NSAB devctl_nosnoop=on arm=snoop run=2 gate=4 verdict=PASS 
+NSAB devctl_nosnoop=on arm=snoop run=3 gate=3 verdict=PASS 
+NSAB devctl_nosnoop=on arm=snoop run=3 gate=4 verdict=FAIL       1 pump_never_contended 
+NSAB devctl_nosnoop=on arm=nosnoop run=1 gate=3 verdict=PASS 
+NSAB devctl_nosnoop=on arm=nosnoop run=1 gate=4 verdict=PASS 
+NSAB devctl_nosnoop=on arm=nosnoop run=2 gate=3 verdict=PASS 
+NSAB devctl_nosnoop=on arm=nosnoop run=2 gate=4 verdict=PASS 
+NSAB devctl_nosnoop=on arm=nosnoop run=3 gate=3 verdict=PASS 
+NSAB devctl_nosnoop=on arm=nosnoop run=3 gate=4 verdict=PASS 
+DevCtl restored=0x2137 (NoSnoop-)
+dmesg lines during NSAB: 0; xid/fault: 0
+NSAB_DONE

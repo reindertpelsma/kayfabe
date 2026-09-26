@@ -1,0 +1,61 @@
+MERGEBAR_START 2026-09-26T22:30:33+00:00
+HEAD 2f71f662 dirty=0
+NVIDIA GeForce RTX 3090, 580.159.04, 00000000:00:07.0
+6.8.0-59-generic
+BOOT_IMAGE=/boot/vmlinuz-6.8.0-59-generic root=PARTUUID=85c80741-2a2a-4df8-94fc-8525e0031367 ro console=tty1 console=ttyS0 panic=-1
+iommu_groups=0
+		DevCtl:	CorrErr+ NonFatalErr+ FatalErr+ UnsupReq-
+			RlxdOrd+ ExtTag+ PhantFunc- AuxPwr- NoSnoop- FLReset-
+[    1.004402] iommu: Default domain type: Translated
+[    1.004732] iommu: DMA domain TLB invalidation policy: lazy mode
+HEAD=2f71f662 dirty=0
+GATE1_VERDICT=PASS
+GATE2_VERDICT=PASS
+GATE3_VERDICT=PASS
+GATE4_VERDICT=PASS
+GATE5_VERDICT=PASS
+GATE6_VERDICT=PASS
+GATE7_VERDICT=PASS
+GATE8_VERDICT=PASS
+GATE9_VERDICT=PASS
+V3_GATES_SUMMARY pass=9 fail=0
+KF3 binaries: 2f71f662 
+FAST_SUITE_EXIT=0
+rev=2f71f662
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+FAST_SUITE_RC=0
+dmesg lines during gates+suite: 150; xid/fault: 5
+== crate tests fix 2f71f662
+TEST_RC_fix=101
+TOTAL_fix passed=3483 failed=5 ignored=1
+failed tests fix: 5
+test no_binary_mints_the_isolates_address_space ... FAILED
+test spawn_unsafe::tests::a_child_runs_from_an_image_with_no_path_at_all ... FAILED
+test the_client_reports_its_state_on_every_path ... FAILED
+test the_probe_does_not_mint_the_rings_geometry_twice ... FAILED
+test the_set_of_truncated_rows_this_tree_references_is_exactly_the_set_it_argues_about ... FAILED
+      1 error: 5 targets failed:
+      1 error: test failed, to rerun pass `-p kayfabe-abi --test truncated_row_reads`
+      1 error: test failed, to rerun pass `-p kayfabe-isolate-host --test executor_vas_census`
+      1 error: test failed, to rerun pass `-p kayfabe-isolate-host --test guest_ring_census`
+      1 error: test failed, to rerun pass `-p kayfabe-isolate-host --test sysmem_notifier_node`
+== crate tests master 3d71b596
+TEST_RC_master=101
+TOTAL_master passed=3511 failed=5 ignored=1
+failed tests master: 5
+test no_binary_mints_the_isolates_address_space ... FAILED
+test rm::tests::no_collision_across_the_workspace ... FAILED
+test the_client_reports_its_state_on_every_path ... FAILED
+test the_probe_does_not_mint_the_rings_geometry_twice ... FAILED
+test the_set_of_truncated_rows_this_tree_references_is_exactly_the_set_it_argues_about ... FAILED
+      1 error: 5 targets failed:
+      1 error: test failed, to rerun pass `-p kayfabe-abi --test truncated_row_reads`
+      1 error: test failed, to rerun pass `-p kayfabe-isolate-host --lib`
+      1 error: test failed, to rerun pass `-p kayfabe-isolate-host --test executor_vas_census`
+      1 error: test failed, to rerun pass `-p kayfabe-isolate-host --test guest_ring_census`
+== failed-test set, master vs fix:
+2c2
+< test rm::tests::no_collision_across_the_workspace ... FAILED
+---
+> test spawn_unsafe::tests::a_child_runs_from_an_image_with_no_path_at_all ... FAILED
+MERGEBAR_EXIT 2026-09-26T22:50:14+00:00

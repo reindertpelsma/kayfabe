@@ -181,6 +181,20 @@ chosen. **This needs the owner.**
 
 ## §6 — Guest system memory: the second window
 
+> **`[v3-adasys, 2026-09-26, measured]` ★★★★★ THE WINDOW MUST BE MAPPED *SNOOPED*.**
+> `NVOS46_FLAGS_CACHE_SNOOP` is field `4:4` and its **zero value is `_DISABLE`**. kf-host never set
+> it, so every guest-RAM map (this window, gate 4's scattered rows, the published guest-RAM rows)
+> got a `SYS_NONCOH` PTE (`virt_mem_allocator_gm107.c:430-446`, `:1338-1350`), i.e. PCIe
+> **No-Snoop**. On a bare-metal host that honours No-Snoop the copy engine read DRAM beneath the
+> CPU's dirty lines (guest RAM the CPU had just written arrived as zeros) and wrote beneath its
+> stale ones (a completion semaphore in guest RAM read 0). Ryzen 9 5900X / B550, IOMMU off,
+> 2x RTX 4070, host 580.159.04: gates 3+4 **FAIL 10/10 without the bit, PASS 10/10 with it** (one
+> binary, both GPUs); stock CUDA on the same GPUs 22/22 (`traces/v3_adasys/`).
+> ⚠ **A VM cannot show this defect**: RM clears the GPU's Enable-No-Snoop for a passthrough GPU
+> (`chipset_pcie.c:965-970`), and the vast VM host kept DMA coherent even with the bit set again
+> by hand. That is why every KVM-box run was green. ⇒ Fixed at the one choke point
+> (`kf_host::nvos46_map_flags`), as RM's own helper does (`nv_gpu_ops.c:5130-5132`).
+
 The same trick, one level out. UVM's sysmem-side operands are **guest DMA addresses**, not GPGA
 offsets. ⇒ Map the whole guest memfd as **one `OS_DESCRIPTOR`** at `RAM_VA_BASE`, so a guest
 physical address `g` is `RAM_VA_BASE + g`.
