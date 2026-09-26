@@ -1,0 +1,17 @@
+BAR_START 2026-09-26T18:50:01+00:00 want=b15c7cc8
+REV=b15c7cc8 dirty=0 (origin/v3-gfxset=5fcf4575)
+STEP kf3 2026-09-26T18:50:42+00:00
+KF3_RC=0 KF3_BUILT /workspace/bench/kf3-bins/b15c7cc8/qemu-system-x86_64 rev=b15c7cc8 mtime=2026-09-26 18:51:10.626174112 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+-rwxr-xr-x 1 root root 85709472 Sep 26 18:51 /workspace/bench/kf3-bins/b15c7cc8/qemu-system-x86_64
+STEP crate_tests 2026-09-26T18:51:10+00:00
+CRATE_TESTS_RC=0 passed=1585 failed=0
+STEP gates 2026-09-26T18:52:08+00:00
+GATES_RC=0 V3_GATES_SUMMARY pass=9 fail=0
+STEP fastguest 2026-09-26T18:52:24+00:00
+LADDER_BUILD_RC=0
+FG_RC=0
+STEP fast_suite 2026-09-26T18:52:55+00:00
+FAST_SUITE_RC=0 /workspace/gfxset/bar2_fast_suite.log:FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+STEP cuda_ladder 2026-09-26T19:01:18+00:00
+CUDA_LADDER_RC=0
+STEP gfxset 2026-09-26T19:03:37+00:00
