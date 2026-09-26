@@ -122,6 +122,9 @@ class clc761.h
 # ── MMU fault buffer / access counter entries ────────────────────────────────────────────────────
 class clc369.h
 class clc365.h
+# ── RM's subdevice notifier enumeration — DRIVER ABI, not hardware, carried because kayfabe computes
+#    per-ENGINE notifier indices (CE/NVENC/NVDEC n) from it (`kf-host/src/event.rs`) ────────────────
+class cl2080_notification.h
 
 # ── USERD control structs (the GP_GET/GP_PUT the doorbell plane reads) and the notifier ─────────
 struct clc36f.h Nvc36fControl GPGet GPPut Get Put TopLevelGet
