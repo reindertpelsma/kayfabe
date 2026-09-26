@@ -41,7 +41,7 @@ Not blocking on Ada, left as named items (none reached a failing arm):
 | `kf-abi/src/cudartinit.rs:214-228` | `PERF_GET_LEVEL_INFO_V2` splices GA106 clock words | cosmetic; host has an unprivileged answer |
 | `kf-abi/src/cecaps.rs:272` | GA106-measured CE base caps for every family | Ada uses the same copy class; unverified; host has an unprivileged answer |
 | `kf-rm/src/authored.rs:182,350` | `GA10X_GRCE_LCE_MASK = 0x03` for every family | right for Ampere/Ada/Hopper; **wrong for GB20x** (`kernel_ce_gb202.c:36`, `0x0F`) — a per-die-group fact inside Blackwell |
-| `kf-trap/src/trappolicy.rs:194` | Hopper/Blackwell doorbell at BAR1 `page_base 0x9_0000` | no ogkm source found for the offset (headers give BAR0 `0x30090` only); unverified |
+| ~~`kf-trap/src/trappolicy.rs:194`~~ | ~~Hopper/Blackwell doorbell at BAR1 `page_base 0x9_0000`~~ | ⊘ **REPLACED 2026-09-26** (`V3_BAR1_DOORBELL.md`): no fixed page — the BAR1 view is overlaid where the guest's BAR1 PTEs put it; BAR0 stays live. Per-family data: `kf_chip::Family::usermode_mmio` |
 | `kf-abi/src/businfo.rs` via `bar0.rs` | link advertised fully trained at x16 | AD106 is x8; cosmetic |
 | `kf-rm/src/authored.rs:17,22,85-86` | CE fault-method buffer `0x5000`, GMMU fault-buffer sizes, GSP/DISP vectors `0x9b/0x9a` | ours to author by ruling (w827); vectors refuse realize if the host table collides — did not on Ada |
 | `kf-chip/src/bar0.rs:682-689` | 260 MiB firmware carve-out + BAR1/BAR2 root offsets from a 12 GiB GA106 capture | family-independent layout of OUR GSP; held on AD106 at `fb-mb=8192` |
