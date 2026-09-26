@@ -1638,7 +1638,8 @@ impl ChanPlane {
         let Some(vas) = a.vaspace else {
             return refuse(NV_ERR_INVALID_STATE, format!("no VA space resolved (hVASpace={:#x}, parent {:#x})", a.h_vaspace, a.parent));
         };
-        let key = VasKey((u64::from(a.client) << 32) | u64::from(vas));
+        // ★ v3-gfx: the VA space's OWN client (a dup'd space is keyed by its original).
+        let key = VasKey((u64::from(a.vaspace_client) << 32) | u64::from(vas));
         let Some(mirror) = self.mirrors.lock().ok().and_then(|m| m.get(&key).cloned()) else {
             return refuse(NV_ERR_INVALID_STATE, format!("VA space {key:?} has no mirror (no page-directory statement named it)"));
         };

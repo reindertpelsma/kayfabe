@@ -133,6 +133,11 @@ pub struct ChannelAlloc {
     /// device-default VAS RM creates lazily — the PMA scrubber's, `hVASpace = 0`). `None` when
     /// neither is known (refused by name at birth).
     pub vaspace: Option<u32>,
+    /// ★ v3-gfx: the client whose namespace holds [`Self::vaspace`] — the channel's own, unless
+    /// the VA space it names is a `DUP_OBJECT` alias, in which case the ORIGINAL's (the one the
+    /// page-directory statement named). `[measured vgfx 2026-09-26]` the Vulkan UMD allocs the VA
+    /// space in a probe client and dups it into its device; its context share names the dup.
+    pub vaspace_client: u32,
     /// ★ The guest's own channel id, off `flags` `USERD_INDEX` ([`decode_userd_index_chid`]).
     pub chid: Option<u32>,
     /// `flags` (`NVOS04_FLAGS_*`).
@@ -410,6 +415,12 @@ pub struct ChannelPolicy {
     tsgs: std::collections::BTreeMap<(u32, u32), (u32, u32, u32)>,
     /// ★ P5b: `(hClient, hCtxShare)` → its `hVASpace`.
     ctxshares: std::collections::BTreeMap<(u32, u32), u32>,
+    /// ★ v3-gfx: every VA-space object seen (alloc'd, or named by a page-directory statement).
+    vas_objects: std::collections::BTreeSet<(u32, u32)>,
+    /// ★ v3-gfx: `DUP_OBJECT` aliases of a VA-space object, `(dst client, dst handle)` → the
+    /// ORIGINAL — the same relation `barpde::PageDirPolicy` keeps, needed here because a channel
+    /// (via its context share) may name the alias while the root was stated for the original.
+    vas_aliases: std::collections::BTreeMap<(u32, u32), (u32, u32)>,
     /// The deferred outcome of the command last carried (`CommandPolicy::defers`).
     pending: Option<kf_gsp::Deferred>,
     /// Statements carried.
@@ -431,6 +442,8 @@ impl ChannelPolicy {
             vas_stated: Default::default(),
             tsgs: Default::default(),
             ctxshares: Default::default(),
+            vas_objects: Default::default(),
+            vas_aliases: Default::default(),
             pending: None,
             carried: 0,
             refused: 0,
@@ -492,6 +505,7 @@ impl ChannelPolicy {
         }
         match alloc_shape(&self.abi, h.class) {
             Some(AllocParams::VaSpace) => {
+                self.vas_objects.insert((h.client, h.handle));
                 let first = *self.vas_under.entry((h.client, h.parent)).or_insert(h.handle);
                 eprintln!(
                     "kf-rm: chanlink: FERMI_VASPACE_A {:#x}:{:#x} under {:#x} (device default for it: {first:#x})",
@@ -571,6 +585,14 @@ impl ChannelPolicy {
             e => e,
         };
         let privilege = self.abi.decode_channel_privilege(params).ok().flatten();
+        // ★ v3-gfx: a dup'd VA space is the ORIGINAL object (`DUP_OBJECT` aliases, it does not copy).
+        let (vaspace_client, vaspace) = match vaspace {
+            Some(v) => {
+                let (c, v) = self.vas_canonical(h.client, v);
+                (c, Some(v))
+            }
+            None => (h.client, None),
+        };
         let st = ChannelAlloc {
             client: h.client,
             parent: h.parent,
@@ -580,6 +602,7 @@ impl ChannelPolicy {
             entries: f.gp_fifo_entries,
             h_vaspace: f.h_vaspace,
             vaspace,
+            vaspace_client,
             chid: decode_userd_index_chid(f.flags),
             flags: f.flags,
             engine_type,
@@ -628,6 +651,7 @@ impl ChannelPolicy {
         {
             // Observed only: the memory plane's link answers these.
             self.vas_stated.entry(st.client.0).or_default().insert(st.vaspace.0);
+            self.vas_objects.insert((st.client.0, st.vaspace.0));
             return None;
         }
         let Some(params) = h.params_at.checked_add(h.params_size as usize).and_then(|e| cmd.payload.get(h.params_at..e)) else {
@@ -853,9 +877,32 @@ impl ChannelPolicy {
         }
     }
 
+    /// ★ v3-gfx: the VA-space object `(client, handle)` names — itself, or the original a dup aliases.
+    fn vas_canonical(&self, client: u32, handle: u32) -> (u32, u32) {
+        self.vas_aliases.get(&(client, handle)).copied().unwrap_or((client, handle))
+    }
+
+    /// ★ v3-gfx: a `DUP_OBJECT` of a VA-space object we know becomes an alias of the original.
+    fn on_dup(&mut self, cmd: &RpcCommand) -> Option<Reply> {
+        let d = self.abi.decode_dup(&cmd.payload).ok()?;
+        let src = self.vas_canonical(d.src_client, d.src_handle);
+        if self.vas_objects.contains(&src) {
+            self.vas_aliases.insert((d.dst_client, d.dst_handle), src);
+        }
+        None
+    }
+
     fn on_free(&mut self, cmd: &RpcCommand) -> Option<Reply> {
         let f = self.abi.decode_free(&cmd.payload).ok()?;
         let (client, object) = (f.client, f.handle);
+        // ★ v3-gfx: an alias's (or its client's) free drops the NAME. The original's own free
+        // keeps its aliases: RM refcounts the object, and the dup still holds it.
+        self.vas_aliases.retain(|&(c, h), _| !(c == client && (object == client || h == object)));
+        if client == object {
+            self.vas_objects.retain(|k| k.0 != client || self.vas_aliases.values().any(|o| o == k));
+        } else if !self.vas_aliases.values().any(|o| *o == (client, object)) {
+            self.vas_objects.remove(&(client, object));
+        }
         if client == object {
             self.kernel_clients.remove(&client);
             self.vas_under.retain(|k, _| k.0 != client);
@@ -1001,6 +1048,7 @@ impl CommandPolicy for ChannelPolicy {
             RpcFunction::RmAlloc => self.on_alloc(cmd),
             RpcFunction::RmControl => self.on_control(cmd),
             RpcFunction::Free => self.on_free(cmd),
+            RpcFunction::DupObject => self.on_dup(cmd),
             _ => None,
         }
     }
@@ -1169,6 +1217,33 @@ mod tests {
         assert_eq!(seen.lock().unwrap().len(), n, "a refused bind never reaches the plane");
         // A channel the plane does not own (a Translated/kernel one): declined.
         assert!(link.respond(&ctl(c, &bind(c, 0xdead_0001, 0, 2))).is_none());
+    }
+
+    /// ★ v3-gfx: a VA space `DUP_OBJECT`'d into another client resolves to its ORIGINAL (the
+    /// Vulkan UMD's shape, `[measured vgfx 2026-09-26]`: probe client's VAS dup'd into its device);
+    /// the original's own free keeps the alias alive (RM refcounts), the alias's free drops it.
+    #[test]
+    fn a_dupd_va_space_resolves_to_its_original_until_the_alias_goes() {
+        let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).expect("bench");
+        let sink: ChanSink = std::sync::Arc::new(|_| ChanAnswer::NotOurs);
+        let mut link = ChannelPolicy::new(abi, kf_abi::GuestOs::Linux, sink);
+        let rpc = |function: RpcFunction, payload: Vec<u8>| RpcCommand { function, code: 0, sequence: 1, payload, elements: 1, delivered: Vec::new() };
+        let words = |w: &[u32]| w.iter().flat_map(|v| v.to_le_bytes()).collect::<Vec<u8>>();
+        let (orig, alias) = ((0xc1d0_0016, 0xfade_0003), (0xc1d0_001a, 0xbeef_0300));
+        link.vas_objects.insert(orig);
+        // NVOS55: hClient hParent hObject hClientSrc hObjectSrc flags status
+        assert!(link.respond(&rpc(RpcFunction::DupObject, words(&[alias.0, 0xbeef_0003, alias.1, orig.0, orig.1, 0, 0]))).is_none());
+        assert_eq!(link.vas_canonical(alias.0, alias.1), orig);
+        // A dup of something that is not a known VA space is not an alias.
+        link.respond(&rpc(RpcFunction::DupObject, words(&[alias.0, 0xbeef_0003, 0xbeef_0400, orig.0, 0x1234, 0, 0])));
+        assert_eq!(link.vas_canonical(alias.0, 0xbeef_0400), (alias.0, 0xbeef_0400));
+        // The ORIGINAL's client goes (the UMD frees its probe client): the alias still resolves.
+        link.respond(&rpc(RpcFunction::Free, words(&[orig.0, 0, orig.0, 0])));
+        assert_eq!(link.vas_canonical(alias.0, alias.1), orig, "RM refcounts: the dup keeps the object");
+        assert!(link.vas_objects.contains(&orig));
+        // The alias's own free drops the name, and with it the last reference.
+        link.respond(&rpc(RpcFunction::Free, words(&[alias.0, 0xbeef_0003, alias.1, 0])));
+        assert_eq!(link.vas_canonical(alias.0, alias.1), alias);
     }
 
     /// ★ v3-gfx: `GF100_ZBC_CLEAR` and `GF100_DISP_SW` are graph nodes (no host twin); 2D and
