@@ -1075,6 +1075,10 @@ pub enum WantedTable {
     ///
     /// ⊘ Two further runtime-only ids (`0x2080a026`, `0x2080a084`) were measured **innocent**
     /// and are deliberately NOT here: the served set is the measured set, not the observed one.
+    /// ⊘⊘ CORRECTED 2026-09-26 (v3-refusals): innocent for `cudaGetDeviceCount` only — refused,
+    /// they sent cudart to the `0x2080a001` fallback and `cudaDevAttrClockRate` read 420 MHz for a
+    /// 1695 MHz die. They are served now, ahead of this table, by `kf_abi::gssreplay` (the host's
+    /// realize-time answer), not here.
     CudartWatchdogInfo,
     /// `0x20809009` — GSS-legacy, unnamed in every open header. Hardware: `{0, 0xd}`.
     CudartInit9009,

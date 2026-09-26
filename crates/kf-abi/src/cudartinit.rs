@@ -118,6 +118,16 @@ const WORDS_A001: &[u32] = &[0x1, 0x5, 0x2, 0x11];
 
 /// `(cmd, paramsSize, leading words)` — the whole served universe of this module.
 ///
+/// ⊘⊘ **CORRECTED 2026-09-26 (v3-refusals) — "innocent" measured ONE observable.** The
+/// paragraph below is still true of `cudaGetDeviceCount`, and nothing else: with both refused,
+/// cudart takes the `0x2080a001` fallback and reports **`GPU Max Clock rate: 420 MHz`** where
+/// bare metal says **1695 MHz** (`[measured vrf, GA102, deviceQuery host vs kf3 guest]`) — every
+/// `cudaDevAttrClockRate` in the guest was wrong. Both are now answered from the HOST's
+/// realize-time reply to the identical authored request (`crate::gssreplay`,
+/// `GSS_CUDART_A084` / `GSS_CUDART_CLOCKS`), not from this module: they are clocks of the die we
+/// run on, derived at runtime, never a captured row. This module's `0x2080a001` row is then
+/// reached only by a guest whose host refused them.
+///
 /// ⊘ `0x2080a026` and `0x2080a084` are **deliberately absent**: both were measured
 /// **innocent** (refusing either alone leaves the host at `0`), and this port does not answer
 /// a control merely because it saw one.
