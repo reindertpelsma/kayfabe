@@ -76,6 +76,14 @@ if [ "$PURGE_RC" -ne 0 ]; then
   echo "DRIVER_SWAP_DONE rc=6"; exit 6
 fi
 rm -rf /var/lib/dkms/nvidia
+# ⊘⊘ THE STALE MODULE SHADOWS THE NEW ONE. `[measured 2026-09-26, box 52788835]` a second swap
+# (580.159.04 -> 580.95.05, then -> 580.65.06) reported the installer complete and
+# `OPEN_MODULE=yes` while `modprobe` kept loading the FIRST install's `updates/dkms/nvidia.ko`
+# (580.159.04): userspace at the new version, the kernel at the old one, NVML "Driver/library
+# version mismatch". Clearing /var/lib/dkms does not remove the installed .ko files. Remove them,
+# re-index, and check the loaded version against the .run below.
+rm -f /lib/modules/"$(uname -r)"/updates/dkms/nvidia*.ko* /lib/modules/"$(uname -r)"/kernel/drivers/video/nvidia*.ko* 2>/dev/null
+depmod -a
 
 sh "$RUN" --silent --no-x-check --no-nouveau-check --no-questions --dkms -m=kernel-open -j8 2>&1 | tail -15
 echo "installer_rc_IGNORED_ON_PURPOSE=$?"
@@ -91,7 +99,13 @@ else
   echo "OPEN_MODULE=no  ⊘ THE SWAP DID NOT TAKE -- do not run anything downstream"
   echo "DRIVER_SWAP_DONE rc=4"; exit 4
 fi
-echo "$VER" | grep -q "580\." && echo "VERSION_580=yes" || echo "VERSION_580=no ⚠ unexpected version"
+WANT=$(basename "$RUN" .run | sed 's/^NVIDIA-Linux-x86_64-//')
+if echo "$VER" | grep -q " $WANT "; then
+  echo "VERSION_MATCH=yes ($WANT)"
+else
+  echo "VERSION_MATCH=no ⊘ the loaded module is not the $WANT this .run installed -- do not run anything downstream"
+  echo "DRIVER_SWAP_DONE rc=7"; exit 7
+fi
 
 # ⚠ ORDERING, measured 2026-09-06: the device nodes are created LAZILY, by `nvidia-modprobe`
 # on the first privileged open. Immediately after a fresh install they DO NOT EXIST, so an
