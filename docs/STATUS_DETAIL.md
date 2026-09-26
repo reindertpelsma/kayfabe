@@ -71,12 +71,16 @@ by `kayfabe-rm-ladder`, the raw client, which is still built from the frozen pre
       walker **drops the guest PTE's READ_ONLY bit**, so a read-only duplicate was mapped
       read-write on the host. Measured on master `283a5304` (vast 52732498, GA106):
       `readmostly_probe gpuwrite` and `downgrade` returned **`bad=1048576` — every value wrong —
-      with no CUDA error and no Xid**. At `v3-roperm` `a1a82903` READ_ONLY / ATOMIC_DISABLE /
-      VOLATILE join the walker's diff key and the host map (`NVOS46` `ACCESS_READ_ONLY` /
-      `TLB_LOCK_ENABLE` / `GPU_CACHEABLE_NO`): both modes now fail **loudly** (719 + host Xid 31
-      `FAULT_RO_VIOLATION`), never with a wrong value. They pass on bare metal only because the
-      write fault is replayable there, which is fault delivery (class C above). Evidence:
-      `traces/v3_roperm/`.
+      with no CUDA error and no Xid**. On `v3-roperm` one host policy (`kf_mem::apply::PermPolicy`)
+      keys and maps READ_ONLY and VOLATILE (`NVOS46` `ACCESS_READ_ONLY` / `GPU_CACHEABLE_NO`):
+      both modes now fail **loudly** (719 + host Xid 31 `FAULT_RO_VIOLATION`), never with a wrong
+      value. They pass on bare metal only because the write fault is replayable there, which is
+      fault delivery (class C above). ATOMIC_DISABLE is carried only with
+      `KF3_CARRY_ATOMIC_DISABLE=1`: carrying it made `atomicAdd_system` on a CPU-resident managed
+      page a 719, where leaving it off gives the bare-metal values. PRIVILEGED leaves are withheld
+      from user twins: none in CUDA spaces; vkpeak's GR context buffers were withheld and it ran at
+      host speed. Verified at `d6959acb` (gates 9/9, fast suite 30/30, ladder, 9/9 app samples).
+      Evidence: `traces/v3_roperm/`.
   - **C′, a refused host map (1 app):** `UnifiedMemoryStreams`. kf3 logs `1 run(s) not applied:
     map … Other(31)`, and the host then reports Xid 31 `FAULT_PTE` inside that range. Without
     persistence mode the boot stays wedged afterwards. Branch `v3-mapfix` is working on it; it

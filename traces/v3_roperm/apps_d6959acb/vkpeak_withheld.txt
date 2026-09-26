@@ -1,0 +1,130 @@
+kf-mem: PRIVILEGED leaf 0x120000000+0x10000 (ap=2 at=0x126650000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf3: VasKey(13965662543174041603) root 0x0: 1 privileged run(s) (0x10000 bytes) withheld — a user twin
+kf-mem: PRIVILEGED leaf 0x120010000+0x196000 (ap=0 at=0x70000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x120000000+0x10000 (ap=2 at=0x126650000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf3: VasKey(13965662543174041603) root 0x0: 2 privileged run(s) (0x1a6000 bytes) withheld — a user twin
+kf-mem: PRIVILEGED leaf 0x120010000+0x196000 (ap=0 at=0x70000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x120000000+0x10000 (ap=2 at=0x126650000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf3: VasKey(13965662543174041603) root 0x0: 2 privileged run(s) (0x1a6000 bytes) withheld — a user twin
+kf-mem: PRIVILEGED leaf 0x120010000+0x196000 (ap=0 at=0x70000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x120000000+0x10000 (ap=2 at=0x126650000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf3: VasKey(13965662543174041603) root 0x0: 2 privileged run(s) (0x1a6000 bytes) withheld — a user twin
+kf-mem: PRIVILEGED leaf 0x120010000+0x196000 (ap=0 at=0x70000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x1201ab000+0x3000 (ap=0 at=0x1efa55000 kind=0x6) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x120000000+0x10000 (ap=2 at=0x126650000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf3: VasKey(13965662543174041603) root 0x0: 3 privileged run(s) (0x1a9000 bytes) withheld — a user twin
+kf-mem: PRIVILEGED leaf 0x120010000+0x196000 (ap=0 at=0x70000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x1201ab000+0x3000 (ap=0 at=0x1efa55000 kind=0x6) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x120000000+0x10000 (ap=2 at=0x126650000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x121000000+0xa00000 (ap=0 at=0x1eee00000 kind=0x6) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf3: VasKey(13965662543174041603) root 0x0: 4 privileged run(s) (0xba9000 bytes) withheld — a user twin
+kf-mem: PRIVILEGED leaf 0x120010000+0x196000 (ap=0 at=0x70000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x1201ab000+0x3000 (ap=0 at=0x1efa55000 kind=0x6) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x120000000+0x10000 (ap=2 at=0x126650000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x120230000+0x20000 (ap=0 at=0x1ef800000 kind=0x6) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x121000000+0xa00000 (ap=0 at=0x1eee00000 kind=0x6) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf3: VasKey(13965662543174041603) root 0x0: 5 privileged run(s) (0xbc9000 bytes) withheld — a user twin
+kf-mem: PRIVILEGED leaf 0x120010000+0x196000 (ap=0 at=0x70000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x1201ab000+0x3000 (ap=0 at=0x1efa55000 kind=0x6) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x120000000+0x10000 (ap=2 at=0x126650000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x120230000+0xa0000 (ap=0 at=0x1ef800000 kind=0x6) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x121000000+0xa00000 (ap=0 at=0x1eee00000 kind=0x6) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf3: VasKey(13965662543174041603) root 0x0: 5 privileged run(s) (0xc49000 bytes) withheld — a user twin
+kf-mem: PRIVILEGED leaf 0x120010000+0x196000 (ap=0 at=0x70000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x1201ab000+0x3000 (ap=0 at=0x1efa55000 kind=0x6) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x120000000+0x10000 (ap=2 at=0x126650000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x120230000+0xa0000 (ap=0 at=0x1ef800000 kind=0x6) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x121000000+0xa00000 (ap=0 at=0x1eee00000 kind=0x6) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf3: VasKey(13965662543174041603) root 0x0: 5 privileged run(s) (0xc49000 bytes) withheld — a user twin
+kf-mem: PRIVILEGED leaf 0x120010000+0x196000 (ap=0 at=0x70000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x1201ab000+0x3000 (ap=0 at=0x1efa55000 kind=0x6) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x120000000+0x10000 (ap=2 at=0x126650000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x120230000+0xa0000 (ap=0 at=0x1ef800000 kind=0x6) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x121000000+0xa00000 (ap=0 at=0x1eee00000 kind=0x6) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf3: VasKey(13965662543174041603) root 0x0: 5 privileged run(s) (0xc49000 bytes) withheld — a user twin
+kf-mem: PRIVILEGED leaf 0x120010000+0x196000 (ap=0 at=0x70000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x1201ab000+0x3000 (ap=0 at=0x1efa55000 kind=0x6) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x120000000+0x10000 (ap=2 at=0x126650000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x120230000+0xa0000 (ap=0 at=0x1ef800000 kind=0x6) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x121000000+0xa00000 (ap=0 at=0x1eee00000 kind=0x6) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf3: VasKey(13965662543174041603) root 0x0: 5 privileged run(s) (0xc49000 bytes) withheld — a user twin
+kf-mem: PRIVILEGED leaf 0x120010000+0x196000 (ap=0 at=0x70000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x1201ab000+0x3000 (ap=0 at=0x1efa55000 kind=0x6) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x120000000+0x10000 (ap=2 at=0x126650000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x120230000+0xa0000 (ap=0 at=0x1ef800000 kind=0x6) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x121000000+0xa00000 (ap=0 at=0x1eee00000 kind=0x6) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf3: VasKey(13965662543174041603) root 0x0: 5 privileged run(s) (0xc49000 bytes) withheld — a user twin
+kf-mem: PRIVILEGED leaf 0x120010000+0x196000 (ap=0 at=0x70000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x1201ab000+0x3000 (ap=0 at=0x1efa55000 kind=0x6) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x120000000+0x10000 (ap=2 at=0x126650000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x120230000+0xa0000 (ap=0 at=0x1ef800000 kind=0x6) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x121000000+0xa00000 (ap=0 at=0x1eee00000 kind=0x6) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf3: VasKey(13965662543174041603) root 0x0: 5 privileged run(s) (0xc49000 bytes) withheld — a user twin
+kf-mem: PRIVILEGED leaf 0x120010000+0x196000 (ap=0 at=0x70000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x1201ab000+0x3000 (ap=0 at=0x1efa55000 kind=0x6) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x120000000+0x10000 (ap=2 at=0x126650000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x120230000+0xa0000 (ap=0 at=0x1ef800000 kind=0x6) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x121000000+0xa00000 (ap=0 at=0x1eee00000 kind=0x6) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf3: VasKey(13965662543174041603) root 0x0: 5 privileged run(s) (0xc49000 bytes) withheld — a user twin
+kf-mem: PRIVILEGED leaf 0x120010000+0x196000 (ap=0 at=0x70000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x1201ab000+0x3000 (ap=0 at=0x1efa55000 kind=0x6) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x120000000+0x10000 (ap=2 at=0x126650000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x120230000+0xa0000 (ap=0 at=0x1ef800000 kind=0x6) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x121000000+0xa00000 (ap=0 at=0x1eee00000 kind=0x6) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf3: VasKey(13965662543174041603) root 0x0: 5 privileged run(s) (0xc49000 bytes) withheld — a user twin
+kf-mem: PRIVILEGED leaf 0x120010000+0x196000 (ap=0 at=0x70000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x1201ab000+0x3000 (ap=0 at=0x1efa55000 kind=0x6) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x120000000+0x10000 (ap=2 at=0x126650000 kind=0x0) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x120230000+0xa0000 (ap=0 at=0x1ef800000 kind=0x6) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf-mem: PRIVILEGED leaf 0x121000000+0xa00000 (ap=0 at=0x1eee00000 kind=0x6) WITHHELD from a user twin — the guest kernel marked it privileged and the host cannot express PRIVILEGE, so no unprivileged channel may reach it
+kf3: VasKey(13965662543174041603) root 0x0: 5 privileged run(s) (0xc49000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 5 privileged run(s) (0xc49000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 5 privileged run(s) (0xc49000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 5 privileged run(s) (0xc49000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 5 privileged run(s) (0xc49000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 5 privileged run(s) (0xc49000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 5 privileged run(s) (0xc49000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 5 privileged run(s) (0xc49000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 5 privileged run(s) (0xc49000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 5 privileged run(s) (0xc49000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 5 privileged run(s) (0xc49000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 5 privileged run(s) (0xc49000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 5 privileged run(s) (0xc49000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 5 privileged run(s) (0xc49000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 5 privileged run(s) (0xc49000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 5 privileged run(s) (0xc49000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 5 privileged run(s) (0xc49000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 5 privileged run(s) (0xc49000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 6 privileged run(s) (0xc59000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 7 privileged run(s) (0xdef000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 7 privileged run(s) (0xdef000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 7 privileged run(s) (0xdef000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 8 privileged run(s) (0xdf2000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 9 privileged run(s) (0x17f2000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 10 privileged run(s) (0x1812000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 10 privileged run(s) (0x1892000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 10 privileged run(s) (0x1892000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 10 privileged run(s) (0x1892000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 10 privileged run(s) (0x1892000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 10 privileged run(s) (0x1892000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 10 privileged run(s) (0x1892000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 10 privileged run(s) (0x1892000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 10 privileged run(s) (0x1892000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 10 privileged run(s) (0x1892000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 10 privileged run(s) (0x1892000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 10 privileged run(s) (0x1892000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 10 privileged run(s) (0x1892000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 10 privileged run(s) (0x1892000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 10 privileged run(s) (0x1892000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 10 privileged run(s) (0x1892000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 10 privileged run(s) (0x1892000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 10 privileged run(s) (0x1892000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 10 privileged run(s) (0x1892000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 10 privileged run(s) (0x1892000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 10 privileged run(s) (0x1892000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 10 privileged run(s) (0x1892000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 10 privileged run(s) (0x1892000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 10 privileged run(s) (0x1892000 bytes) withheld — a user twin
+kf3: VasKey(13965662543174041603) root 0x0: 10 privileged run(s) (0x1892000 bytes) withheld — a user twin
+kf3: permission policy: READ_ONLY+VOLATILE carried to the host map, PRIVILEGED leaves withheld from user twins, ATOMIC_DISABLE not carried (KF3_CARRY_ATOMIC_DISABLE=1 enables it once fault delivery exists) (key_perm=0x68)
+kf-rm: chanlink: client 0xc1d00016 root: kernel=false internal=false

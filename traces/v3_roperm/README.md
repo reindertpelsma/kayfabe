@@ -133,15 +133,52 @@ Captures: `probes_guest_<rev>[_knob|_adcarried].log`, `phase1_6a985dbb.log` (bar
 
 A mirror is a guest-KERNEL space when its client is an RM-internal client (`0xC1E0xxxx`, a handle
 range no guest process can hold) or a Translated channel is born in it; every other mirror is a
-user twin and withholds privileged leaves. `[measured 5fead67d, pf_head]` 11 CUDA processes:
+user twin and withholds privileged leaves. The status line counts both sides: `priv_withheld`
+(withheld runs, per diff they appear in: a withheld run is never committed, so every walk of the
+space re-emits it, as the protocol re-emits any refused map) and `priv_mirrored`.
 
-- `priv_withheld=0` — **no user twin was ever handed a privileged leaf**;
-- `priv_mirrored=72` — every privileged leaf the walker reported lives in an RM-internal client's
-  VA space (`0xc1e0xxxx:0xbaba0042`, 11 of them), mirrored as before (`privilege_census_5fead67d.txt`);
-- 11 spaces turned kernel at a Translated birth (UVM's), 11 user spaces had Passthrough births, and
-  no space was both.
+| workload (boot) | `priv_withheld` | `priv_mirrored` | result |
+|---|---|---|---|
+| probes, 11 CUDA processes (`5fead67d`, `d6959acb`) | **0** | 72 | as in the tables above |
+| fast suite, 30 boots (`d6959acb`) | **0** | 78 | 30/30 |
+| CUDA ladder, 4 boots (`d6959acb`) | **0** | 12 per boot | cup3 = 43 ×2, cup8 `BAD=0 MAXERR=0` ×2 |
+| PyTorch, llama.cpp ×2, NVENC ×2, NVDEC, vectorAdd, simpleAtomicIntrinsics (`d6959acb`) | **0** | 18 per boot | all PASS |
+| **vkpeak** (Vulkan, `d6959acb`) | **135 637** (≈30 per walk over 4 599 walks) | 18 | **PASS**, every figure within 1% of the host |
 
-⇒ Nothing legitimate reached a user twin through a privileged leaf in these workloads, so the
-withholding has nothing to take away from them today. It is the guard for a guest kernel that
-does place one there. The RM-internal range being kernel from creation is what keeps the 72
-leaves mirrored.
+- CUDA's own VA spaces never carried a privileged leaf. Every privileged leaf of the CUDA workloads
+  was in an RM-internal client's space (`0xc1e0xxxx:0xbaba0042`), which stays mirrored.
+- ★ **Vulkan's does.** In the vkpeak boot the user client `0xc1d00016` (`kernel=false
+  internal=false`) had six privileged runs in RM's internal VA window of its own space:
+  `0x120000000+0x10000` (sysmem), `0x120010000+0x196000`, `0x1201ab000+0x3000`,
+  `0x120230000+0xa0000`, `0x121000000+0xa00000` (vidmem). These are GR context and global buffers
+  (RM sets `MEMDESC_FLAGS_GPU_PRIVILEGED` on them, `kernel_graphics_context.c:1127,1277`,
+  `kgraphics_gm200.c:173,199`). All were withheld, and vkpeak still passed at host speed
+  (`apps_d6959acb/vkpeak_withheld.txt`, `ro3g/vkpeak.guest.log` vs `ro3/vkpeak.host.log`).
+  The twin runs on host RM's own context buffers, so no legitimate path read the guest's. Before
+  this branch, a Vulkan shader could reach those buffers through the twin.
+
+⚠ Known limit of the classification: a space becomes KERNEL at its first Translated birth, so a
+privileged leaf walked in it before that birth was withheld and is placed at the space's next walk
+(its next invalidate or split), not at the birth. Measured above, no privileged leaf was ever
+walked in a space that turned kernel that way (UVM's 11 spaces had none); every privileged leaf was
+in an RM-internal client's space, which is kernel from creation.
+
+## Final verification — `d6959acb` against master `dd3aed08` (vast 52755785, RTX 3090 GA102)
+
+`d6959acb` is the rebased code (`5fead67d`) plus evidence files only. Later commits change only
+comments, docs and traces.
+
+| check | result | file |
+|---|---|---|
+| `cargo test --workspace --no-fail-fast` | 3 387 passed / 4 failed; master `dd3aed08`: 3 376 / 4; **identical failing sets** (4 old-tree tests); every `kf-*` crate 797 / 0 | `cargo_failing_{dd3aed08,d6959acb}.txt` |
+| CUDA walk suite (`make check`, `kf_tests`) | rc 0; **72/72** | `walk_make_check_d6959acb.log`, `kf_tests_d6959acb.log` |
+| v3 gates | **9/9**; gate 9 VER2 3 377 / VER3 3 395 / VER2-keyall 3 558 runs, **0 mismatches**, 430 / 444 / 448 permission edits | `gates_d6959acb.log` |
+| `KF_DEVICE=kf3 fast_suite.sh … 180` | **30/30** | `fast_suite_kf3_d6959acb.out` |
+| CUDA ladder, fat guest | cup3 **43** ×2; cup8 **`BAD=0 MAXERR=0`** ×2 | `cuda_ladder_d6959acb_guest.out` |
+| app samples, one per boot | host **9/9**, guest **9/9**; digests equal to the host's (`torch_correct` `763c693a5a53f948`, `llama_cpp_gen` `30451301af8e011d`) | `apps_d6959acb/` |
+| probes | as the tables above | `probes_guest_d6959acb.log` |
+
+⚠ On the first box (`5fead67d`) one extra test failed once,
+`spawn_unsafe::tests::a_child_runs_from_an_image_with_no_path_at_all` (`execve` errno 26,
+ETXTBSY). It passed 5/5 when re-run there and did not recur at `d6959acb`, so it is flaky, not
+caused by this branch.
