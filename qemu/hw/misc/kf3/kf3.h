@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#define KF3_ABI 7
+#define KF3_ABI 8
 
 typedef struct Kf3Identity {
     uint16_t vendor, device, subsystem_vendor, subsystem;
@@ -20,8 +20,9 @@ typedef struct Kf3Region {
 } Kf3Region;
 
 uint32_t kf3_abi_version(void);
+/* ★ ABI 8: `display` (0/1) — the virtual NVDisplay (docs/design/V3_DISPLAY.md). */
 int32_t kf3_realize(uint32_t gpu_minor, uint64_t fb_mb, uint64_t bar1_bytes, uint64_t bar2_bytes,
-                    const char *guest_driver, void **out,
+                    const char *guest_driver, uint32_t display, void **out,
                     char *err, size_t err_len);
 int32_t kf3_identity(void *h, Kf3Identity *out);
 /* ★ ABI 7: config-space words the guest reads by config cycle (Hopper+ PCIe link caps). */

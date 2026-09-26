@@ -1,0 +1,11 @@
+[package]
+name = "kf-disp"
+description = "v3 display plane: a virtual NVDisplay the stock guest driver drives (docs/design/V3_DISPLAY.md) — the monitor (EDID), the display-channel pushbuffer decoder, head/window state, vblank timing and scanout scheduling. Emulated channels only: no guest GPU work behind them, and nothing here touches the host's display engine."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

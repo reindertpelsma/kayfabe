@@ -18,6 +18,7 @@
 
 pub mod bar0;
 pub mod classes;
+pub mod display;
 pub mod falcon_gsp;
 pub mod fsp_gsp;
 pub mod host_classes;

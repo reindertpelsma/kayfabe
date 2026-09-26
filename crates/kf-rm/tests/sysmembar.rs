@@ -52,6 +52,7 @@ fn chain(memory: bool, log: &kf_rm::unserviced::UnservicedLog) -> (Box<dyn Comma
             guest_os: kf_abi::GuestOs::Linux,
         }),
         channels: None,
+        display: None,
     };
     let c = kf_rm::served_policy(
         ga106::board(),
