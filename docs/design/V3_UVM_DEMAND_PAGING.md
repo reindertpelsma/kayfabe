@@ -928,3 +928,118 @@ carry, and the table above is the ledger for it.
   kayfabe** (it is the only thing standing between two VMs' faults) and must be the first thing
   fuzzed: a corpus of fault packets across instance pointers, VEIDs and subcontexts, asserting each
   record reaches exactly the VM whose channel raised it and no other.
+
+---
+
+## 13. The guest-side replayable-fault plane — what kf3 must emulate (shared by b3 and N4)
+
+**STATUS: RESEARCH, 2026-09-26.** Source-derived from ogkm-580.159.04; nothing built here. This is
+the piece **both** routes need identically: b3 and N4 differ only in how the *host* twin's fault is
+obtained (§4.4 / §12), but both then inject it into the **guest's** emulated replayable-fault
+buffer and let the guest's stock UVM service it and issue the replay. This section pins the exact
+classes, registers, RPCs and encodings the guest driver uses, so the emulation is built against
+measured facts, not a sketch. ⊘ **Not wired to any host fault source, and no first cut is committed
+yet** — that is gated on E6′ (§12.3) showing the host side delivers a real replayable fault. The
+*design* below is independent of E6′: it is how the guest behaves, fixed by its driver.
+
+### 13.1 The plane is entirely inside interfaces kf3 already owns
+
+Every step is between the guest and kf3; nothing is privileged on the host (this is the §2.2
+finding of the archived `resume_from_fault.md`, re-pinned to source):
+
+| # | step | who | guest touches | kf3 status today |
+|---|---|---|---|---|
+| 1 | allocate the buffer (guest RAM) | guest CPU-RM | — | — |
+| 2 | tell the GPU where it is | guest CPU-RM → GSP | RPC `NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_FAULT_BUFFER` (`0x20800a9b`), PTE list | ✔ **served + recorded** (`kf-rm/src/faultbuffer.rs`, `kf-abi/src/faultbuffer.rs`); the PTE page list is captured |
+| 3 | map buffer + get register pointers | guest RM | `kgmmuGetFaultRegisterMappings_TU102` hands raw BAR0 addresses (`src/nvidia/src/kernel/gpu/mmu/arch/turing/kern_gmmu_tu102.c:188-231`) | the registers are in the trapped BAR0 window (below) |
+| 4 | read `PUT`, write `GET` | guest UVM, direct BAR0 | `MMU_FAULT_BUFFER_GET(1)`/`PUT(1)` | trapped; **`PUT` never advances** (`DELIVERY_UNBUILT`) |
+| 5 | the interrupt | GPU→guest | replayable-fault vector → `CPU_INTR_LEAF` bit | kf3 raises MSI-X already |
+| 6 | service (allocate/migrate/publish PTEs) | guest UVM | its own CE + `MEM_OP` on its channels | kf3 forwards these channels |
+| 7 | replay | guest UVM | `MEM_OP_A..D` `TLB_INVALIDATE_REPLAY=START` on the MEMOPS channel | ⊘ kf3's translated rewriter currently **drops** every `MEM_OP` TLB-invalidate at a split (`kf-chan/src/translated.rs:12-14, 337-351`) — the replay/cancel field is discarded there |
+
+### 13.2 The registers (Ampere/GA10x; BAR0 VF PRIV window, `dev_vm.h` tu102)
+
+`GPU_GET_VREG_OFFSET` adds the VF window base (`0xB80000` on GA10x), so with the replayable buffer
+at index `i=1`:
+
+| register | `dev_vm.h` def | offset (i=1) | +VF base | E6 cross-check |
+|---|---|---|---|---|
+| `MMU_FAULT_BUFFER_LO/HI(1)` | `0x3000+ i*32` / `0x3004+i*32` | `0x3020`/`0x3024` | `0xB83020/24` | — |
+| `MMU_FAULT_BUFFER_GET(1)` | `0x3008+i*32` (`:78`) | `0x3028` | **`0xB83028`** | ✔ Stage B `pFaultBufferGet` |
+| `MMU_FAULT_BUFFER_PUT(1)` | `0x300C+i*32` (`:90`) | `0x302C` | **`0xB8302C`** | ✔ Stage B `pFaultBufferPut` |
+| `CPU_INTR_LEAF(leaf)` | `0x1000+leaf*4` (`:54`) | leaf from the replayable-fault vector | | Stage B mask `0x1` |
+| `CPU_INTR_LEAF_EN_SET/CLEAR(leaf)` | `0x1200`/`0x1400 + leaf*4` (`:58,:62`) | | | ✔ Stage B `pPmcIntrEnSet/Clear` |
+| `MMU_PAGE_FAULT_CTRL` (prefetch) | `0x3070` (`:113`) | `0x3070` | `0xB83070` | ✔ Stage B `pPrefetchCtrl` |
+
+⚠ The E6 host module was handed the **identical** offsets by `InitFaultInfo` (§12.3, Stage B) — the
+guest side and the host side read the same register file; the emulation must present these in the
+guest's trapped BAR0 exactly as `kgmmuGetFaultRegisterMappings` computes them. `GET_PTR` is 20 bits
+(`:80`), and the buffer wraps at the entry count from the registration.
+
+### 13.3 The 32-byte packet (`clc369.h`, class `MMU_FAULT_BUFFER 0xc369`)
+
+kf3 writes one entry per injected fault, all fields before setting `VALID` last, a store fence,
+then advances `PUT`. Fields (`kernel-open/nvidia-uvm/clc369.h:34-67`, bit positions are
+`MW(hi:lo)` across the eight dwords):
+
+- dw0/1 `INST_LO`/`INST_HI` (`:40-41`) + `INST_APERTURE` (`:36-39`) — the **guest** instance-block
+  address of the faulting channel. ★ This is the attribution key on the guest side; kf3 already
+  maps host twin ↔ guest chid (RC forwarding prints `guest chid`), so it fills the **guest**
+  instance pointer here, never the host's.
+- dw2/3 `ADDR` (`:44-46`) + `ADDR_PHYS_APERTURE` (`:43`) — the faulting **VA** (from the host fault
+  record, which is a guest VA because the twin runs in the guest's VAS).
+- dw4/5 `TIMESTAMP` (`:47-49`).
+- dw6 `ENGINE_ID` (`:50`).
+- dw7 `FAULT_TYPE` (`:51`), `REPLAYABLE_FAULT` bit (`:52-54`), `CLIENT` (`:55`), `ACCESS_TYPE`
+  (`:56`), `GPC_ID` (`:58`), `REPLAYABLE_FAULT_EN` (`:62`), and `VALID` (`:65-67`) — **written
+  last**.
+
+⊘ The host fault record (from `InitFaultInfo`'s `bufferAddress`, N4) or the diverted record (b3)
+is the **same `clc369` layout** — so kf3 largely re-stamps the host packet with the guest instance
+pointer and re-emits it. The decode kf3 needs is the decode it would write.
+
+### 13.4 The interrupt, the replay, and the cancel
+
+- **Interrupt (step 5):** the level is re-derived from `GET != PUT`, not an edge — treating it as
+  an edge drops faults (archived `simulated_gpu_fault.md`). After writing the packet and advancing
+  `PUT`, kf3 pulses the replayable-fault `CPU_INTR_LEAF` bit and raises the MSI-X. The guest reads
+  `PUT`, services `[GET,PUT)`, writes `GET`.
+- **Replay (step 7):** the guest issues `uvm_hal_volta_replay_faults`
+  (`kernel-open/nvidia-uvm/uvm_volta_host.c:234-264`): `MEM_OP_A..D` with
+  `MEM_OP_C.TLB_INVALIDATE_REPLAY = START` (or `START_ACK_ALL`), targeting a dummy PDB, on the
+  MEMOPS channel. Values `clc56f.h:147-151`: `START=1`, `START_ACK_ALL=2`, `CANCEL_TARGETED=3`,
+  `CANCEL_GLOBAL=4`, `CANCEL_VA_GLOBAL=5`. ⊘ kf3's translated rewriter drops `MEM_OP` TLB
+  invalidates at a split point (`kf-chan/src/translated.rs`) — **this is exactly where the replay
+  must be recovered**: at that split, kf3 reads `MEM_OP_C.TLB_INVALIDATE_REPLAY`, and on
+  `START`/`START_ACK_ALL` it (a) reconciles the mapping the guest just published and (b) asks the
+  host side to replay (b3: `UVM_EFS_REPLAY`; N4: the module's own replay). On a `CANCEL_*` value it
+  maps to the host cancel scoped to that twin.
+- **Security (unchanged from §5):** because the rewriter drops the raw privileged `MEM_OP`, the
+  guest can never issue a host replay/cancel directly — kf3 authors the host action from the
+  decoded intent. Good either way.
+
+### 13.5 Non-replayable (CE/host) faults — the second buffer
+
+Guest UVM also registers a **client shadow buffer** for non-replayable faults
+(`NV2080_CTRL_CMD_INTERNAL_GMMU_REGISTER_CLIENT_SHADOW_FAULT_BUFFER`, `0x20800a9d`, already
+answered in kf3, `kf-abi/src/faultbuffer.rs:246-331`) and expects the `MMU_FAULT_QUEUED` event
+(`0x1005`, `src/nvidia/src/kernel/gpu/gsp/kernel_gsp.c:1048-1056`) to wake its non-replayable
+servicer. ⊘ E6 showed a **CE** fault is non-replayable (§12.3.1 (1)); so if the guest's own
+migration CE ever faults, this is the path — kf3 writes the shadow entry and sends the event. The
+guest then uses the `C076 CLEAR_FAULTED` SW method (`uvm_ampere_host.c:190-210`) to resume the
+channel, which kf3 translates to the twin (b3: `UVM_EFS_CLEAR_FAULTED`; N4: the module's clear).
+
+### 13.6 First cut — what fits behind a default-off switch (gated on E6′)
+
+⊘ **Not committed here.** When E6′ (§12.3) confirms the host side yields a real replayable packet,
+the first kf3 cut is a **guest fault-buffer emulator**, `KF_UVM_FAULT_INJECT` default **off**:
+1. on `0x20800a9b`, keep the recorded PTE page list as the buffer's backing (already captured);
+2. serve `MMU_FAULT_BUFFER_PUT(1)` from an emulator cursor, `GET(1)` from the guest's writes;
+3. an `inject(clc369_packet)` entry point (called by the host fault source later, **not wired
+   now**) that writes the packet, advances `PUT`, pulses the leaf and raises the MSI-X;
+4. at the translated rewriter's `MEM_OP` split, decode `TLB_INVALIDATE_REPLAY` and record the
+   intent (replay/cancel + scope) instead of only dropping it.
+Testable with a **mock** host source (a unit test that injects a synthetic packet and asserts the
+guest-side registers advance and the guest waiter wakes) before any host module exists — the same
+shape as the existing `simulated_fault.rs` mock. That keeps this plane on its own clock, decoupled
+from the b3-vs-N4 decision.
