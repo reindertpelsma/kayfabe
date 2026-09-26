@@ -344,6 +344,48 @@ pub trait GuestUserd {
     fn set_gp_get(&mut self, gp_get: u32) -> Result<(), String>;
 }
 
+/// ★★★★★ v3-initrace — **a Translated channel's USERD, as physical RM initialises it.**
+///
+/// The guest's CPU-RM clears a channel's USERD only when it is in SYSMEM (or on full SR-IOV):
+/// *"Clear Userd if it is in FB for SRIOV environment … or if in SYSMEM"*
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/fifo/kernel_channel.c:2344-2356`, the memset is
+/// `kfifoSetupUserD_GM107`, `kernel_fifo_gm107.c:797-808`: `NV_RAMUSERD_CHAN_SIZE` bytes of zero).
+/// An FB-resident USERD is the PHYSICAL RM's to initialise at allocation — host RM does exactly
+/// that to a passthrough twin's USERD (`rm_takes_a_guest_userd_and_zeroes_it`). For a Translated
+/// channel the physical RM is us, and until v3-initrace nothing did it.
+///
+/// ⊘⊘⊘ **What that cost, measured.** RM's allocator hands a new channel the same FB USERD slot an
+/// earlier channel used (every re-open of `/dev/nvidia0` puts the new CeUtils channel's USERD where
+/// the last one's was, cursors `GP_PUT = GP_GET = 2` still in it). The ring cursor starts at 0, so
+/// the first pump — rung by `GPFIFO_SCHEDULE`, before the guest has submitted anything — read the
+/// stale `GP_PUT` as queued work, fetched the guest's still-zero GP entries as NOPs, fenced them and
+/// authored `GP_GET` to the stale value. With a stale `GP_PUT = 1` the guest's real entry 0 then
+/// arrives with `GP_PUT = 1` = the cursor, so it is **never fetched**: `memmgrMemSet` times out,
+/// `RmInitAdapter failed (0x25:0x65)` — the adapter-init flake of `V3_DRIVER_MATRIX.md` §6, whose
+/// evidence (`forwarded=1 serves=3 last_put=1 GP_GET=1`, one host non-stall) this reproduces exactly
+/// (`KF3_INJECT_STALE_USERD=1`). A stale value ≥ 2 only "worked" by fetching the whole ring round.
+pub trait UserdInit {
+    /// Store one little-endian word `off` bytes from the channel's USERD base.
+    ///
+    /// # Errors
+    /// A failed store.
+    fn store_u32(&mut self, off: u64, v: u32) -> Result<(), String>;
+}
+
+/// ★ Zero the channel's USERD — `min(declared, NV_RAMUSERD_CHAN_SIZE)` bytes, whole words — as
+/// physical RM does before the allocation's reply (so the guest can never have written a cursor
+/// yet). Returns the bytes zeroed.
+///
+/// # Errors
+/// The first failed store, by name.
+pub fn zero_userd(u: &mut dyn UserdInit, declared: u64) -> Result<u64, String> {
+    let len = declared.min(kf_abi::submit::USERD_SIZE) & !3;
+    for off in (0..len).step_by(4) {
+        u.store_u32(off, 0).map_err(|e| format!("USERD +{off:#x}: {e}"))?;
+    }
+    Ok(len)
+}
+
 /// Where a `MEM_OP` split's walk stands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Split {

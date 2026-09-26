@@ -249,6 +249,20 @@ impl UserdView {
     }
 }
 
+/// ★ v3-initrace: the physical-RM initialisation of a Translated channel's USERD
+/// (`kf_chan::host::zero_userd`). ⊘ A store view covers only the 4 KiB page holding USERD, so a
+/// word past that page is refused by name rather than wrapped.
+impl kf_chan::host::UserdInit for UserdView {
+    fn store_u32(&mut self, off: u64, v: u32) -> Result<(), String> {
+        if let UserdView::Store { at, .. } = self
+            && *at + off + 4 > 0x1000
+        {
+            return Err(format!("USERD +{off:#x} is past the page its view maps"));
+        }
+        self.store(off, v)
+    }
+}
+
 struct Userd<'a>(&'a UserdView);
 impl GuestUserd for Userd<'_> {
     fn gp_put(&mut self) -> Result<u32, String> {
@@ -2091,6 +2105,16 @@ impl ChanPlane {
                     let _ = userd.store(kf_abi::submit::USERD_GP_GET, v);
                     eprintln!("kf3: chan {:#x}:{:#x} INJECTED stale USERD GP_PUT=GP_GET={v} (KF3_INJECT_STALE_USERD)", a.client, a.handle);
                 }
+                // ★★★★★ v3-initrace: physical RM's allocation-time USERD initialisation — we are the
+                // physical RM (`kf_chan::host::UserdInit`). Before the reply, so no guest cursor can
+                // exist yet; without it the ring's first pump read an earlier channel's GP_PUT.
+                let declared = match a.userd {
+                    Some(kf_arch::UserdMem::Framebuffer { size, .. } | kf_arch::UserdMem::Sysmem { size, .. }) => size,
+                    _ => kf_abi::submit::USERD_SIZE,
+                };
+                let mut userd = userd;
+                let zeroed = kf_chan::host::zero_userd(&mut userd, declared)
+                    .map_err(|e| fail((NV_ERR_INSUFFICIENT_RESOURCES, format!("USERD initialisation: {e}"))))?;
                 // ★ P6b: OUR ring goes in OUR region of the space, never where RM's allocator (the
                 // guest's own allocator) would put it — `crate::mem::RING_REGION_BASE`.
                 let at = crate::mem::take_ring_slot(&mirror.rings)
@@ -2145,7 +2169,7 @@ impl ChanPlane {
                 }
                 me.births.fetch_add(1, Ordering::Relaxed);
                 Ok(format!(
-                    "chan {:#x}:{:#x} BORN Translated: token {idx:#x} -> host {ht:#x} in {key:?} gpfifo={:#x}x{entries} userd={:?} engine={engine:#x} tsg={:x?} kernel_by={} ring_va={ring_va:#x} userd_at_birth(GP_PUT,GP_GET)={userd_at_birth:?}",
+                    "chan {:#x}:{:#x} BORN Translated: token {idx:#x} -> host {ht:#x} in {key:?} gpfifo={:#x}x{entries} userd={:?} engine={engine:#x} tsg={:x?} kernel_by={} ring_va={ring_va:#x} userd_at_birth(GP_PUT,GP_GET)={userd_at_birth:?} zeroed={zeroed}B",
                     a.client,
                     a.handle,
                     a.gpfifo_va,
