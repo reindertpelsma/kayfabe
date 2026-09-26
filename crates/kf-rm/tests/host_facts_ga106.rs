@@ -213,3 +213,29 @@ fn every_host_fact_states_where_it_comes_from() {
     }
     assert_eq!(hostfacts::PROVENANCE.len(), fields.len(), "a provenance row names no field");
 }
+
+/// ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §4): a floorswept LCE is a HOLE, not the end of the
+/// list — GB203 presents `{0,1,4,5}`. The hole is refused at the serve exactly like a missing row.
+#[test]
+fn a_floorswept_lce_is_a_hole_not_the_end_of_the_list() {
+    let m = |e: u32, mask: u32| {
+        let mut v = e.to_le_bytes().to_vec();
+        v.extend_from_slice(&mask.to_le_bytes());
+        v
+    };
+    let (l0, l1, l4, l5) = (m(0x9, 0x1), m(0xa, 0x2), m(0xd, 0x4), m(0xe, 0x8));
+    let replies: Vec<Option<&[u8]>> = vec![Some(&l0), Some(&l1), None, None, Some(&l4), Some(&l5), None];
+    let masks = hostfacts::derive_lce_pce_masks(&replies).expect("holes are not the end");
+    assert_eq!(masks, vec![0x1, 0x2, 0, 0, 0x4, 0x8]);
+    let present = 0b11_0011u64;
+    let ask = |engine_type: u32| {
+        let mut req = engine_type.to_le_bytes().to_vec();
+        req.extend_from_slice(&[0; 4]);
+        kf_abi::cepce::answer_ce_get_ce_pce_mask(&req, present, &masks)
+    };
+    assert_eq!(kf_abi::cepce::decode_ce_pce_mask(&ask(0xd).expect("COPY4 served")).unwrap(), 0x4);
+    assert!(ask(0xb).is_err(), "COPY2 is not present");
+    // A present LCE whose row is a hole is refused, never served as zero.
+    let err = kf_abi::cepce::answer_ce_get_ce_pce_mask(&{ let mut r = 0xbu32.to_le_bytes().to_vec(); r.extend_from_slice(&[0; 4]); r }, present | 0b100, &masks);
+    assert!(matches!(err, Err(kf_abi::cepce::CePceMaskError::NoMaskForEngine { .. })), "{err:?}");
+}

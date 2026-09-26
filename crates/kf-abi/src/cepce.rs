@@ -229,7 +229,9 @@ pub fn answer_ce_get_ce_pce_mask(
     // advertised, so the chip row owes a mask for it. A missing one is the chip row's fault
     // and is named as such — ⊘ never backfilled with zero, which on this control would claim
     // a copy engine backed by no physical engine at all.
-    let Some(&mask) = masks.get(index) else {
+    // ⊘ 2026-09-26: [`NO_PCE_MASK`] is a hole in the host's list (a floorswept or refused LCE),
+    // refused exactly like an index past the end — never served as "a CE with no PCEs".
+    let Some(&mask) = masks.get(index).filter(|m| **m != NO_PCE_MASK) else {
         return Err(CePceMaskError::NoMaskForEngine {
             engine_type,
             index,
@@ -240,6 +242,11 @@ pub fn answer_ce_get_ce_pce_mask(
     out[PCE_MASK_OFF..PCE_MASK_OFF + 4].copy_from_slice(&mask.to_le_bytes());
     Ok(out)
 }
+
+/// ★ 2026-09-26: the placeholder for an LCE with no host answer inside the host's list (a hole —
+/// GB203's floorswept LCE2/3). A present LCE always has at least one PCE, so `0` is never a real
+/// mask; [`answer_ce_get_ce_pce_mask`] refuses it as `NoMaskForEngine`.
+pub const NO_PCE_MASK: u32 = 0;
 
 /// Read the `[OUT]` word back out — for tests and the trace differential, so a comparison is
 /// done on a decoded value rather than on a hex string regrouped by hand.

@@ -365,9 +365,30 @@ pub fn query_video_caps(host: &mut dyn HostControls, kinds: &[EngineKind]) -> Ve
 /// # Errors
 /// [`FieldCause`].
 pub fn query_lce_pce_masks(host: &mut dyn HostControls) -> Result<Vec<u32>, FieldCause> {
+    query_lce_pce_masks_over(host, None)
+}
+
+/// ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §4): [`query_lce_pce_masks`] over the host's
+/// `CE_GET_ALL_CAPS` `present` mask. `[measured GB203]` the host presents LCEs `{0,1,4,5}`
+/// (floorswept LCE2/3): asking "until the first refusal" stopped at LCE2 and the guest's UVM got
+/// `NoMaskForEngine {COPY4}` → `UVM_REGISTER_GPU` `0x56`. A NON-present index below the highest
+/// present one is a HOLE (not asked, `None`); past it the old rule holds (ask until refused), so a
+/// contiguous part — GA106 `0x0f` — asks exactly what it always did.
+///
+/// # Errors
+/// [`FieldCause`].
+pub fn query_lce_pce_masks_over(host: &mut dyn HostControls, present: Option<u64>) -> Result<Vec<u32>, FieldCause> {
     let cmd = kf_abi::cepce::NV2080_CTRL_CMD_CE_GET_CE_PCE_MASK;
+    let highest = present.filter(|p| *p != 0).map(|p| 63 - p.leading_zeros());
     let mut replies: Vec<Option<Vec<u8>>> = Vec::new();
     for i in 0..kf_abi::submit::RM_ENGINE_TYPE_COPY_SIZE {
+        if let (Some(p), Some(hi)) = (present, highest)
+            && i < hi
+            && p & (1u64 << i) == 0
+        {
+            replies.push(None);
+            continue;
+        }
         let engine_type = if i < 10 {
             kf_abi::submit::ENGINE_TYPE_COPY0 + i
         } else {
@@ -380,6 +401,11 @@ pub fn query_lce_pce_masks(host: &mut dyn HostControls) -> Result<Vec<u32>, Fiel
             // ⊘ LCE0 refused is not "no copy engines": it is the host saying no, and its words
             // are the finding.
             Err(refused) if i == 0 => return Err(FieldCause::Host { cmd, refused }),
+            // A PRESENT LCE the host refused is a hole too (served as `NoMaskForEngine`), said by name.
+            Err(refused) if highest.is_some_and(|hi| i <= hi) => {
+                eprintln!("kf3: host facts: CE_GET_CE_PCE_MASK LCE{i} is present but refused ({refused:?}) — not served");
+                replies.push(None);
+            }
             Err(_) => {
                 replies.push(None);
                 break;
@@ -1006,7 +1032,7 @@ pub fn query_host_facts(host: &mut dyn HostControls, family: Family) -> Result<H
         (Err(e), _) => Err(e.clone()),
         (Ok(_), Err(_)) => Err(FieldCause::DependsOn("ce_caps")),
     };
-    let lce_pce_masks = query_lce_pce_masks(host);
+    let lce_pce_masks = query_lce_pce_masks_over(host, ce_caps.as_ref().ok().map(|c| c.present));
     let intr_table = match &grce {
         Ok(g) => query_intr_table(host, kinds.as_deref().map_err(|e| e), *g),
         Err(_) => Err(FieldCause::DependsOn("ce_caps")),

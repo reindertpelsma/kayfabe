@@ -138,6 +138,11 @@ pub struct CeState {
     pub mem_op_a: u32,
     /// ★ P6b: `MEM_OP_B` as last written.
     pub mem_op_b: u32,
+    /// ★ 2026-09-26: the CE class last bound by `SET_OBJECT` — `LAUNCH_DMA` bit 23 is
+    /// `MEMORY_SCRUB_ENABLE` only from `HOPPER_DMA_COPY_A` (`0xC8B5`) on (on `NVC7B5` it is `VPRMODE`).
+    pub ce_class: u32,
+    /// ★ 2026-09-26: `SET_REMAP_CONST_A` as the guest wrote it (restored after a converted scrub).
+    pub const_a: u32,
 }
 
 /// One piece of rewritten work, in order.
@@ -298,6 +303,7 @@ fn one_write(
         st.sw_subch &= !bit;
         if is_ce(class) {
             st.ce_subch |= bit;
+            st.ce_class = class;
             emit(cur, sub, m, v);
         } else if class == GP100_UVM_SW {
             st.sw_subch |= bit; // consumed: no host object stands behind it
@@ -403,9 +409,13 @@ fn one_write(
         PITCH_IN => st.pitch_in = v,
         PITCH_OUT => st.pitch_out = v,
         ce::SET_REMAP_COMPONENTS => st.remap = v,
+        ce::SET_REMAP_CONST_A => st.const_a = v,
         ce::LAUNCH_DMA => {
             let src_phys = v & ce::LAUNCH_SRC_PHYSICAL != 0;
             let dst_phys = v & ce::LAUNCH_DST_PHYSICAL != 0;
+            if dst_phys && st.ce_class >= HOPPER_DMA_COPY_A && v & LAUNCH_MEMORY_SCRUB_ENABLE != 0 {
+                return launch_scrub_translated(cur, st, w, sub, v);
+            }
             if src_phys || dst_phys {
                 return launch_translated(cur, st, w, sub, v, src_phys, dst_phys);
             }
@@ -456,6 +466,49 @@ fn xlate(w: &dyn Window, mode: u32, phys: u64, len: u64) -> Result<u64, Refusal>
 fn put_offset(cur: &mut Vec<u32>, sub: u32, upper: u32, va: u64) {
     emit(cur, sub, upper, ((va >> 32) & 0x1_FFFF) as u32);
     emit(cur, sub, upper + 4, (va & 0xFFFF_FFFF) as u32);
+}
+
+/// `HOPPER_DMA_COPY_A` — the first CE class with `LAUNCH_DMA_MEMORY_SCRUB_ENABLE` (`ogkm-580: clc8b5.h`).
+const HOPPER_DMA_COPY_A: u32 = 0xC8B5;
+/// `NVC8B5_LAUNCH_DMA_MEMORY_SCRUB_ENABLE` `23:23` (`clc8b5.h:84-86`).
+const LAUNCH_MEMORY_SCRUB_ENABLE: u32 = 1 << 23;
+/// `SET_REMAP_COMPONENTS` = `DST_X = CONST_A`, `COMPONENT_SIZE_ONE`, `NUM_DST_COMPONENTS_ONE` — RM's
+/// own 1-byte fill map (`channel_utils.c:1029-1033`).
+const REMAP_BYTE_FILL_FROM_CONST_A: u32 = ce::REMAP_DST_SEL_CONST_A;
+
+/// ★★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §4) — **a Hopper+ FAST SCRUB on a physical
+/// destination becomes the equivalent virtual zero-fill.**
+///
+/// `[measured GB203, bws3]` RM's PMA scrubber pushes `LAUNCH_DMA` with `MEMORY_SCRUB_ENABLE`
+/// (`memmgrMemUtilsCheckMemoryFastScrubEnable_GH100`: class ≥ `HOPPER_DMA_COPY_A`, dst PHYSICAL
+/// LOCAL_FB, 4 KiB aligned — `mem_utils_gm107.c:2055-2118`, `channel_utils.c:676-690`). Our generic
+/// rewrite turned the destination VIRTUAL and kept the scrub bit, and the host CE raised
+/// **Xid 71 (CE4 error)** on every launch: *"the fast scrubber only works with physical
+/// addressing"* (`kernel-open/nvidia-uvm/uvm_hopper_ce.c:185-196`). Our host channel may not address
+/// FB physically, so the operation is expressed as what it IS — zero the bytes — by the same
+/// engine: remap-enabled, `DST_X = CONST_A = 0`, 1-byte components (with remap disabled a scrub's
+/// element is one byte, so `LINE_LENGTH_IN` already counts bytes). The guest's remap registers
+/// are restored after the launch, exactly as its offsets are.
+fn launch_scrub_translated(cur: &mut Vec<u32>, st: &CeState, w: &dyn Window, sub: u32, v: u32) -> Result<(), Refusal> {
+    if v & ce::LAUNCH_DST_PITCH == 0 {
+        return Err(Refusal::BlockLinearPhysical);
+    }
+    // With remap DISABLED a scrub reads no source and its element is one byte.
+    let (_, dst_len) = extents(st, v & !ce::LAUNCH_REMAP_ENABLE)?;
+    let va = xlate(w, st.dst_mode, st.off_out, dst_len)?;
+    emit(cur, sub, ce::SET_REMAP_CONST_A, 0);
+    emit(cur, sub, ce::SET_REMAP_COMPONENTS, REMAP_BYTE_FILL_FROM_CONST_A);
+    put_offset(cur, sub, ce::OFFSET_OUT_UPPER, va);
+    emit(
+        cur,
+        sub,
+        ce::LAUNCH_DMA,
+        (v & !(LAUNCH_MEMORY_SCRUB_ENABLE | ce::LAUNCH_SRC_PHYSICAL | ce::LAUNCH_DST_PHYSICAL)) | ce::LAUNCH_REMAP_ENABLE,
+    );
+    put_offset(cur, sub, ce::OFFSET_OUT_UPPER, st.off_out);
+    emit(cur, sub, ce::SET_REMAP_COMPONENTS, st.remap);
+    emit(cur, sub, ce::SET_REMAP_CONST_A, st.const_a);
+    Ok(())
 }
 
 fn launch_translated(

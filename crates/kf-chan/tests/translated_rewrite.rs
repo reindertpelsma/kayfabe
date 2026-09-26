@@ -276,3 +276,53 @@ fn mem_op_l2_is_forwarded_access_counter_clr_is_served_and_the_rest_is_refused()
         assert!(format!("{e:?}").contains(&format!("{op}")), "op {op:#x} refused by name: {e:?}");
     }
 }
+
+/// ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §4): RM's Hopper+ FAST SCRUB (`LAUNCH_DMA` bit 23,
+/// dst PHYSICAL LOCAL_FB) cannot run virtual — the host CE raised Xid 71 on GB203. It becomes the
+/// equivalent virtual byte zero-fill; the guest's remap registers and offset are restored after.
+#[test]
+fn a_hopper_plus_fast_scrub_becomes_a_virtual_zero_fill() {
+    const CAB5: u32 = 0xcab5;
+    fn is_bw_ce(c: u32) -> bool {
+        c == CAB5
+    }
+    // channel_utils.c:618-690 — pattern, 1-byte map, phys dst, 4 KiB, scrub launch.
+    let mut pb = m(SUB, 0, &[CAB5]);
+    pb.extend(m(SUB, ce::SET_REMAP_CONST_A, &[0x5a]));
+    pb.extend(m(SUB, ce::SET_REMAP_COMPONENTS, &[0x5]));
+    pb.extend(m(SUB, ce::SET_DST_PHYS_MODE, &[0]));
+    pb.extend(m(SUB, ce::OFFSET_OUT_UPPER, &[0x0, 0x20_0000]));
+    pb.extend(m(SUB, ce::LINE_LENGTH_IN, &[0x1000]));
+    let launch = (1 << 7) | (1 << 8) | (1 << 23) | (1 << 26) | ce::LAUNCH_DST_PHYSICAL | ce::LAUNCH_SRC_PHYSICAL | 2;
+    pb.extend(m(SUB, ce::LAUNCH_DMA, &[launch]));
+    let mut st = CeState::default();
+    let wr = writes(&rewrite(&pb, is_bw_ce, &mut st, &W).unwrap());
+    let at = wr.iter().position(|w| w.0 == ce::LAUNCH_DMA).unwrap();
+    let l = wr[at].1;
+    assert_eq!(l & (1 << 23), 0, "no scrub bit on the virtual launch");
+    assert_eq!(l & (ce::LAUNCH_DST_PHYSICAL | ce::LAUNCH_SRC_PHYSICAL), 0, "virtual both sides");
+    assert_ne!(l & ce::LAUNCH_REMAP_ENABLE, 0, "a remap fill");
+    assert_eq!(l & 3, 2, "transfer type kept");
+    // Before the launch: CONST_A = 0, byte map from CONST_A, OFFSET_OUT = the window VA.
+    let before = &wr[..at];
+    assert_eq!(before.iter().rev().find(|w| w.0 == ce::SET_REMAP_CONST_A).unwrap().1, 0);
+    assert_eq!(before.iter().rev().find(|w| w.0 == ce::SET_REMAP_COMPONENTS).unwrap().1, 4);
+    let lo = before.iter().rev().find(|w| w.0 == 0x40c).unwrap().1;
+    assert_eq!(u64::from(lo), (WIN + 0x20_0000) & 0xFFFF_FFFF);
+    // After: the guest's own values are back.
+    let after = &wr[at + 1..];
+    assert!(after.contains(&(ce::SET_REMAP_CONST_A, 0x5a)));
+    assert!(after.contains(&(ce::SET_REMAP_COMPONENTS, 0x5)));
+    assert!(after.contains(&(0x40c, 0x20_0000)));
+    // ⊘ On an Ampere class bit 23 is VPRMODE, not a scrub: the generic phys rewrite, bit kept.
+    let mut pb = setup();
+    pb.extend(m(SUB, ce::SET_DST_PHYS_MODE, &[0]));
+    pb.extend(m(SUB, ce::SET_REMAP_COMPONENTS, &[0x4]));
+    pb.extend(m(SUB, ce::OFFSET_OUT_UPPER, &[0x0, 0x20_0000]));
+    pb.extend(m(SUB, ce::LINE_LENGTH_IN, &[0x1000]));
+    pb.extend(m(SUB, ce::LAUNCH_DMA, &[(1 << 7) | (1 << 8) | (1 << 23) | ce::LAUNCH_REMAP_ENABLE | ce::LAUNCH_DST_PHYSICAL]));
+    let mut st = CeState::default();
+    let wr = writes(&rewrite(&pb, is_ce, &mut st, &W).unwrap());
+    let l = wr.iter().find(|w| w.0 == ce::LAUNCH_DMA).unwrap().1;
+    assert_ne!(l & (1 << 23), 0, "GA10x: bit 23 is not ours to touch");
+}

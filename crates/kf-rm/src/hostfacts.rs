@@ -264,15 +264,25 @@ pub enum FactRefusal {
 ///
 /// # Errors
 /// [`FactRefusal`] on a short reply or when LCE0 is refused.
+///
+/// ⊘ 2026-09-26: a `None` BEFORE a later answer is a HOLE — a floorswept LCE (GB203's LCE2/3) —
+/// and is stored as [`kf_abi::cepce::NO_PCE_MASK`] (`0`: no physical engine), which the serve path
+/// refuses as `NoMaskForEngine` exactly like an index past the end. Trailing `None`s end the list.
 pub fn derive_lce_pce_masks(replies: &[Option<&[u8]>]) -> Result<Vec<u32>, FactRefusal> {
     let mut out = Vec::new();
     for r in replies {
-        let Some(body) = r else { break };
+        let Some(body) = r else {
+            out.push(kf_abi::cepce::NO_PCE_MASK);
+            continue;
+        };
         let mask = kf_abi::cepce::decode_ce_pce_mask(body).map_err(|_| FactRefusal::ShortReply {
             cmd: kf_abi::cepce::NV2080_CTRL_CMD_CE_GET_CE_PCE_MASK,
             len: body.len(),
         })?;
         out.push(mask);
+    }
+    while out.last() == Some(&kf_abi::cepce::NO_PCE_MASK) {
+        out.pop();
     }
     if out.is_empty() {
         return Err(FactRefusal::NoCopyEngine);
