@@ -285,6 +285,9 @@ pub enum ChanStatement {
         with_va: u32,
         /// Entries decoded.
         entries: u32,
+        /// ★ v3-video: a video FALCON promote's `(virtAddress, size)` — where the guest's CPU-RM
+        /// mapped its own (never-executed) falcon context buffer. `None` for every GR promote.
+        falcon_ctx: Option<(u64, u64)>,
     },
     /// `GPU_EVICT_CTX` (`0x2080012c`) — the unbind counterpart (`nvGpuOpsStopChannel`).
     EvictCtx {
@@ -707,7 +710,7 @@ impl ChannelPolicy {
                     Err(kf_abi::wire::AbiError::PromoteLegacyShape { .. }) if self.abi.decode_falcon_promote(params).is_ok() => {
                         let (engine_type, chan_client, object, va, size) = self.abi.decode_falcon_promote(params).ok()?;
                         eprintln!("kf-rm: chanlink: falcon ctx promote {chan_client:#x}:{object:#x} engine {engine_type:#x} guest ctx buffer VA {va:#x}+{size:#x}");
-                        let st = ChanStatement::PromoteCtx { chan_client, object, engine_type, initialize: 0, with_va: 0, entries: 0 };
+                        let st = ChanStatement::PromoteCtx { chan_client, object, engine_type, initialize: 0, with_va: 0, entries: 0, falcon_ctx: Some((va, size)) };
                         return self.carry_control_statement(st, cmd, &h);
                     }
                     Err(e) => return Some(Self::refusal(NV_ERR_INVALID_ARGUMENT, &format!("GPU_PROMOTE_CTX undecodable: {e:?}"), cmd)),
@@ -732,6 +735,7 @@ impl ChannelPolicy {
                     initialize,
                     with_va,
                     entries,
+                    falcon_ctx: None,
                 }
             }
             EVICT_CTX => {
@@ -1070,7 +1074,8 @@ mod tests {
                 engine_type: 1,
                 initialize: 1 << 0,
                 with_va: 1 << 2,
-                entries: 2
+                entries: 2,
+                falcon_ctx: None
             })
         );
         // A channel the plane does not own: declined (the FSM's named refusal answers it).

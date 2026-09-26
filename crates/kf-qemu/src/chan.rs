@@ -94,6 +94,11 @@ struct PtChan {
     stopped: bool,
     /// ★ v3-chanctl: the guest DISABLED it (`DISABLE_CHANNELS`) — only `bDisable=FALSE` undoes it.
     disabled: bool,
+    /// ★ v3-video: the twin's host VA space (the mirror of the guest's).
+    space: kf_host::VaSpace,
+    /// ★ v3-video: the guest's falcon context buffer `(VA, size)` from its falcon promote — the VA
+    /// the host's own falcon context is steered onto (see `ChanPlane::engine_object`).
+    falcon_ctx: Option<(u64, u64)>,
 }
 
 /// ★★★ v3-promote — **the guest's context-buffer statements, satisfied by the twin** (owner
@@ -1008,7 +1013,12 @@ impl ChanPlane {
             // the Device's own free, which follows it, is what removes its row (see `free`).
             ChanStatement::CudaLimitDisable => ChanAnswer::Done,
             ChanStatement::Free { client, object } => self.free(client, object),
-            ChanStatement::PromoteCtx { chan_client, object, engine_type, initialize, with_va, entries } => {
+            ChanStatement::PromoteCtx { chan_client, object, engine_type, initialize, with_va, entries, falcon_ctx } => {
+                if let (Some(fc), Ok(mut m)) = (falcon_ctx, self.pt.lock())
+                    && let Some(v) = m.get_mut(&(chan_client, object))
+                {
+                    v.falcon_ctx = Some(fc);
+                }
                 self.promote_ctx(chan_client, object, engine_type, initialize, with_va, entries)
             }
             ChanStatement::EvictCtx { chan_client, object, engine_type } => self.evict_ctx(chan_client, object, engine_type),
@@ -1400,7 +1410,7 @@ impl ChanPlane {
     /// class (checked against the HOST family's generated set for the twin's engine) and params
     /// we author. Under a Translated channel it is a graph node only (our ring owns its object).
     fn engine_object(&self, client: u32, parent: u32, handle: u32, class: u32, copy_engine: Option<u32>) -> ChanAnswer {
-        let Some((chan, engine)) = self.pt.lock().ok().and_then(|m| m.get(&(client, parent)).map(|v| (v.chan, v.engine))) else {
+        let Some((chan, engine, space)) = self.pt.lock().ok().and_then(|m| m.get(&(client, parent)).map(|v| (v.chan, v.engine, v.space))) else {
             return ChanAnswer::NotOurs;
         };
         let Some(kind) = kf_chip::classes_for(self.family).kind_of(class) else {
@@ -1412,6 +1422,24 @@ impl ChanPlane {
         self.defer(
             "engine object",
             Box::new(move |me: &ChanPlane| {
+                // ★★ v3-video — STEER THE HOST'S FALCON CONTEXT ONTO THE GUEST'S. In a video
+                // channel's VA space guest RM and host RM place buffers with the SAME lowest-free
+                // allocator, user buffers and RM-internal ones alike. `[measured vvid vid10]` the
+                // guest put its falcon ctx at G = 0x12002a000; host RM, allocating the twin's own ctx
+                // with this object, found G mirrored and took G+0x1000 — where nvcuvid then mapped a
+                // live 4 KiB buffer, which the walker could only report HELD BY HOST: the engine
+                // used the wrong page and NVDEC produced untouched frames. So G (the guest's ctx,
+                // which no engine ever reads — the twin runs on the host's) is unmapped from the
+                // twin first, and host RM takes G itself. Best effort: a failed unmap is logged.
+                let fc = if matches!(kind, kf_chip::classes::Kind::VideoEncoder | kf_chip::classes::Kind::VideoDecoder) {
+                    me.pt.lock().ok().and_then(|m| m.get(&(client, parent)).and_then(|v| v.falcon_ctx))
+                } else {
+                    None
+                };
+                let steer = fc.map(|(va, len)| match me.rm.unmap(space, va, false) {
+                    Ok(()) => format!(" [host ctx steered onto the guest's ctx VA {va:#x}+{len:#x}]"),
+                    Err(e) => format!(" [guest ctx VA {va:#x} not unmapped ({e:?}) — host ctx placement unsteered]"),
+                });
                 let h = kf_chan::passthrough::engine_object(me.rm, chan, engine, class, kind, copy_engine).map_err(|e| (NV_ERR_INVALID_CLASS, e))?;
                 if let Ok(mut m) = me.pt.lock()
                     && let Some(v) = m.get_mut(&(client, parent))
@@ -1421,7 +1449,7 @@ impl ChanPlane {
                 if let Ok(mut m) = me.pt_objs.lock() {
                     m.insert((client, handle), (client, parent));
                 }
-                Ok(format!("{client:#x}:{handle:#x} class {class:#x} ({kind:?}) on twin host {:#x} -> host object {h:#x}", chan.token))
+                Ok(format!("{client:#x}:{handle:#x} class {class:#x} ({kind:?}) on twin host {:#x} -> host object {h:#x}{}", chan.token, steer.unwrap_or_default()))
             }),
         )
     }
@@ -1831,6 +1859,8 @@ impl ChanPlane {
                             notifier,
                             stopped: false,
                             disabled: false,
+                            space,
+                            falcon_ctx: None,
                         });
                     }
                     me.pt_births.fetch_add(1, Ordering::Relaxed);
