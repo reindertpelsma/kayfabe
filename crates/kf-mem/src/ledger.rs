@@ -125,6 +125,20 @@ pub struct UsermodeRow {
     pub vf_rel: u64,
 }
 
+/// ★★★ **Whether a target's accepted work is live yet** (ruling 2026-09-26 (5),
+/// `V3_BAR1_DOORBELL.md` §3.1). A target whose verb only QUEUES the change (the Hopper+ BAR1
+/// doorbell overlay, made by QEMU's main loop) answers [`Settle::Pending`] until it lands; the VA
+/// manager then defers ONLY the clears of the invalidates that named that space — it never waits.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Settle {
+    /// Everything this target accepted is visible to the guest.
+    Live,
+    /// Accepted work is still in flight: do not clear yet.
+    Pending,
+    /// Accepted work failed after it was acknowledged: named; the invalidate stays armed.
+    Failed(String),
+}
+
 /// ★★★ **Where a diff's operations land** — `V3_P4_PORT_MAP.md` §2.3(b).
 ///
 /// The P4 composition (the invalidate → walk → apply → clear step, [`crate::vasmgr`]) must be
@@ -173,6 +187,12 @@ pub trait MapTarget {
     fn map_usermode(&self, u: &UsermodeRow) -> Result<Mapped, String> {
         let _ = u;
         Ok(Mapped::HeldByHost)
+    }
+
+    /// ★ Drain this target's asynchronous completions and say whether its accepted work is live
+    /// ([`Settle`]). Every synchronous target is always [`Settle::Live`].
+    fn settle(&self) -> Settle {
+        Settle::Live
     }
 
     /// ★ P4: the VA extent `[0, extent)` this target can express, or `None` for a whole GPU VA

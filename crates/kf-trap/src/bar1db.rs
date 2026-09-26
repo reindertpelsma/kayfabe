@@ -88,6 +88,12 @@ impl Bar1Doorbells {
         Bar1Doorbells { views: BTreeMap::new(), cap, usermode_len, bar1_bytes }
     }
 
+    /// Set the overlay pool's capacity (the C device's `bar1-overlays` property). Views already
+    /// held are kept; only later [`Bar1Doorbells::place`] calls see the new cap.
+    pub fn set_cap(&mut self, cap: usize) {
+        self.cap = cap;
+    }
+
     /// Validate and record `v`. The caller installs the trap only on `Ok`.
     ///
     /// # Errors

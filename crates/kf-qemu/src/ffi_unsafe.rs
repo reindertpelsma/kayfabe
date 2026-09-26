@@ -7,7 +7,7 @@ use core::ffi::{c_char, c_void};
 use std::ffi::CStr;
 
 /// Wire ABI of this surface; the C device refuses a mismatched archive.
-pub const KF3_ABI: u32 = 5;
+pub const KF3_ABI: u32 = 6;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -305,18 +305,36 @@ pub extern "C" fn kf3_bar1_follows_guest(h: *mut c_void) -> i32 {
     dev(h).map_or(-1, |d| i32::from(d.plane.doorbell.follows_guest_bar1()))
 }
 
-/// ★ Register the C device's BAR1 overlay verb (`V3_BAR1_DOORBELL.md` §4). Returns 0, or -1 (bad
-/// handle, null verb, or already registered).
+/// ★ Register the C device's BAR1 overlay verb and its pool size (`bar1-overlays`,
+/// `V3_BAR1_DOORBELL.md` §3.1). Returns 0, or -1 (bad handle, null verb, zero slots, or already
+/// registered).
 ///
 /// # Safety
-/// `f` must be callable from any non-vCPU thread with `opaque` for the process's lifetime; it
-/// may block (bounded) and must never be called on a vCPU.
+/// `f` must be callable from any non-vCPU thread with `opaque` for the process's lifetime and must
+/// not block (it queues; the main loop applies and answers through [`kf3_bar1_overlay_done`]).
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn kf3_set_bar1_overlay(h: *mut c_void, f: Option<crate::raw_unsafe::OverlayFn>, opaque: *mut c_void) -> i32 {
+pub unsafe extern "C" fn kf3_set_bar1_overlay(
+    h: *mut c_void,
+    f: Option<crate::raw_unsafe::OverlayFn>,
+    opaque: *mut c_void,
+    slots: u32,
+) -> i32 {
     let (Some(d), Some(f)) = (dev(h), f) else { return -1 };
+    if slots == 0 {
+        return -1;
+    }
     // SAFETY: forwarded from this function's contract.
     let hook = unsafe { crate::raw_unsafe::OverlayHook::adopt(f, opaque) };
-    if d.bar1_overlay.set(hook) { 0 } else { -1 }
+    if d.bar1_overlay.set(hook, slots as usize) { 0 } else { -1 }
+}
+
+/// ★ The main loop applied BAR1 overlay change `seq` with result `rc` (0, or a negative errno).
+/// Main-loop thread, BQL held; posts and wakes the VA thread — never blocks.
+#[unsafe(no_mangle)]
+pub extern "C" fn kf3_bar1_overlay_done(h: *mut c_void, seq: u64, rc: i32) {
+    if let Some(d) = dev(h) {
+        d.bar1_overlay_done(seq, rc);
+    }
 }
 
 /// ★ THE vCPU PATH for a write into a BAR1 usermode overlay: `vf_rel` = offset inside the 64 KiB

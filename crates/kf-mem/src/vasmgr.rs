@@ -43,7 +43,7 @@
 //! again at once, after its unmaps landed — its invalidate clears on that walk.
 
 use crate::apply::{ApplyCfg, Applied, DiffRun, apply_entry};
-use crate::ledger::MapTarget;
+use crate::ledger::{MapTarget, Settle};
 use kf_cuda::WalkEntry;
 use kf_trap::{ClearOutcome, InvalidateRequest, PdbAperture, Trigger};
 use std::collections::{BTreeMap, BTreeSet};
@@ -494,6 +494,8 @@ pub struct VaStats {
     pub held: u64,
     /// ★ P6b: walked leaves refused because they overlap one of OUR VMM placements.
     pub vmm_overlaps: u64,
+    /// ★ Invalidate clears deferred because a target's accepted work was not live yet.
+    pub deferred_clears: u64,
     /// ★ Hopper+ usermode-page views a target placed a trap for (BAR1, `V3_BAR1_DOORBELL.md`).
     pub usermode_trapped: u64,
     /// ★ Hopper+ usermode-page views satisfied with NO host mapping (a GPU VA view).
@@ -593,6 +595,9 @@ pub struct VaManager<W: Walker, T: MapTarget> {
     inflight: Option<Batch>,
     /// ★ P6: finished splits, `(ticket, outcome)`, until [`VaManager::take_splits`].
     splits_done: Vec<(u64, Result<(), String>)>,
+    /// ★ Ruling 2026-09-26 (5): invalidates whose runs all applied but whose target's work is not
+    /// live yet ([`Settle::Pending`]) — cleared by [`VaManager::on_targets`], never waited for.
+    awaiting: Vec<(InvalidateRequest, Vec<VasKey>, std::time::Instant)>,
     /// ★ P6b (b): the coverage grain — the family's smallest GMMU page ([`VaManager::with_page_grain`]).
     page_grain: u64,
     /// ★ The family's internal-MMIO usermode page ([`VaManager::with_usermode_mmio`]); `None`
@@ -615,6 +620,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             pending: Vec::new(),
             inflight: None,
             splits_done: Vec::new(),
+            awaiting: Vec::new(),
             page_grain: SMALL_PAGE,
             usermode: None,
             stats: VaStats::default(),
@@ -661,6 +667,70 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
     #[must_use]
     pub fn pending(&self) -> usize {
         self.pending.len()
+    }
+
+    /// ★ Invalidates applied but held un-cleared until a target's asynchronous work is live.
+    #[must_use]
+    pub fn awaiting(&self) -> usize {
+        self.awaiting.len()
+    }
+
+    /// The combined [`Settle`] of `keys`' targets, asking each target once per pass (`seen`).
+    fn settle_keys(&self, keys: &[VasKey], seen: &mut BTreeMap<VasKey, Settle>) -> Settle {
+        let mut acc = Settle::Live;
+        for k in keys {
+            let s = match seen.get(k) {
+                Some(s) => s.clone(),
+                None => {
+                    // An object removed meanwhile has nothing of ours left in flight.
+                    let s = self.table.spaces.get(k).map_or(Settle::Live, |sp| sp.target.settle());
+                    seen.insert(*k, s.clone());
+                    s
+                }
+            };
+            match s {
+                Settle::Failed(e) => return Settle::Failed(format!("{k:?}: {e}")),
+                Settle::Pending => acc = Settle::Pending,
+                Settle::Live => {}
+            }
+        }
+        acc
+    }
+
+    fn complete_invalidate(&mut self, r: InvalidateRequest, at: std::time::Instant, trigger: &Trigger, out: &mut Reconciled) {
+        let o = trigger.complete(r.seq);
+        self.stats.outcome(o);
+        let ns = ns_since(at);
+        let tm = &mut self.stats.timing;
+        tm.invals += 1;
+        tm.inval_ns += ns;
+        tm.inval_ns_max = tm.inval_ns_max.max(ns);
+        out.completed.push((r.seq, o));
+    }
+
+    /// ★★★ **A target's asynchronous work landed** (ruling 2026-09-26 (5)): clear every deferred
+    /// invalidate whose spaces are now all [`Settle::Live`]; one whose target reports
+    /// [`Settle::Failed`] stays armed (named, counted unreconciled). Never blocks — call it on
+    /// every wake; with nothing deferred it asks no target anything.
+    pub fn on_targets(&mut self, trigger: &Trigger) -> Reconciled {
+        let mut out = Reconciled::default();
+        if self.awaiting.is_empty() {
+            return out;
+        }
+        let mut seen = BTreeMap::new();
+        let waiting = std::mem::take(&mut self.awaiting);
+        for (r, keys, at) in waiting {
+            match self.settle_keys(&keys, &mut seen) {
+                Settle::Live => self.complete_invalidate(r, at, trigger, &mut out),
+                Settle::Pending => self.awaiting.push((r, keys, at)),
+                Settle::Failed(e) => {
+                    self.stats.unreconciled += 1;
+                    self.stats.refuse(format!("invalidate seq {}: target work failed after apply: {e}", r.seq));
+                    out.unreconciled.push(r.seq);
+                }
+            }
+        }
+        out
     }
 
     /// ★ Forget an object (its VA space is gone), returning its target so the caller can tear
@@ -950,6 +1020,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         }
         // ★ THE CLEAR IS LAST: every map above has landed and its space's ONE invalidate ran.
         let mut requeue: Vec<(Want, std::time::Instant)> = Vec::new();
+        let mut settled: BTreeMap<VasKey, Settle> = BTreeMap::new();
         for (w, keys, at) in &batch.wants {
             let bad = keys.iter().find(|k| failed.contains(k));
             let again = keys.iter().any(|k| partial.contains(k));
@@ -974,14 +1045,21 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 // ★ Its maps were withheld (slot capacity): the unmaps landed, walk again now.
                 requeue.push((*w, *at));
             } else {
-                let o = trigger.complete(r.seq);
-                self.stats.outcome(o);
-                let ns = ns_since(*at);
-                let tm = &mut self.stats.timing;
-                tm.invals += 1;
-                tm.inval_ns += ns;
-                tm.inval_ns_max = tm.inval_ns_max.max(ns);
-                out.completed.push((r.seq, o));
+                // ★ Ruling 2026-09-26 (5): a target whose accepted work is still in flight (the
+                // BAR1 doorbell overlay) defers THIS clear only — the guest keeps polling, which is
+                // legal; [`VaManager::on_targets`] clears it when the work is live.
+                match self.settle_keys(keys, &mut settled) {
+                    Settle::Live => self.complete_invalidate(*r, *at, trigger, &mut out),
+                    Settle::Pending => {
+                        self.stats.deferred_clears += 1;
+                        self.awaiting.push((*r, keys.clone(), *at));
+                    }
+                    Settle::Failed(e) => {
+                        self.stats.unreconciled += 1;
+                        self.stats.refuse(format!("invalidate seq {}: target work failed after apply: {e}", r.seq));
+                        out.unreconciled.push(r.seq);
+                    }
+                }
             }
         }
         for (w, at) in requeue.into_iter().rev() {
@@ -1179,9 +1257,14 @@ mod tests {
         refuse_map_at: RefCell<Option<u64>>,
         held_at: Option<u64>,
         reserved: Vec<(u64, u64)>,
+        /// ★ What `settle` answers — an async target (the BAR1 doorbell overlay) in miniature.
+        settle: Rc<RefCell<Settle>>,
     }
 
     impl MapTarget for FakeHost {
+        fn settle(&self) -> Settle {
+            self.settle.borrow().clone()
+        }
         fn map(&self, d: &Desired, _defer: bool) -> Result<Mapped, String> {
             if *self.refuse_map_at.borrow() == Some(d.va) {
                 return Err(format!("map {:#x}: refused (fake)", d.va));
@@ -1210,7 +1293,14 @@ mod tests {
     }
 
     fn host(r: &Rig, held_at: Option<u64>, reserved: Vec<(u64, u64)>) -> FakeHost {
-        FakeHost { ops: r.ops.clone(), port: r.port.clone(), refuse_map_at: RefCell::new(None), held_at, reserved }
+        FakeHost {
+            ops: r.ops.clone(),
+            port: r.port.clone(),
+            refuse_map_at: RefCell::new(None),
+            held_at,
+            reserved,
+            settle: Rc::new(RefCell::new(Settle::Live)),
+        }
     }
 
     fn rig() -> Rig {
@@ -1294,6 +1384,56 @@ mod tests {
         let out = settle(&mut r, PDB_A);
         assert_eq!(out.completed.len(), 1);
         assert!(ops(&r).is_empty(), "unchanged tables: nothing to do");
+    }
+
+    /// ★★★ Ruling 2026-09-26 (5): a target whose accepted work is still in flight (the BAR1
+    /// doorbell overlay, made by QEMU's main loop) defers ONLY the clear of the invalidate that
+    /// named it; nothing waits; the clear happens on the completion event, after the work is live.
+    #[test]
+    fn an_async_target_defers_only_its_own_invalidates_clear() {
+        let mut r = rig();
+        let pending = Rc::new(RefCell::new(Settle::Pending));
+        let mut h = host(&r, None, Vec::new());
+        h.settle = pending.clone();
+        r.m.table.insert(K_A, h);
+        r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem).unwrap();
+        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0)]);
+        let a = settle(&mut r, PDB_A);
+        assert!(a.completed.is_empty() && a.unreconciled.is_empty(), "applied, not cleared");
+        assert!(busy(&r.port), "the guest keeps polling — legal");
+        assert_eq!((r.m.awaiting(), r.m.stats.deferred_clears), (1, 1));
+        // A wake with the work still in flight changes nothing.
+        assert!(r.m.on_targets(r.port.trigger()).completed.is_empty());
+        assert!(busy(&r.port));
+        // The completion event: the work is live ⇒ THEN the clear.
+        *pending.borrow_mut() = Settle::Live;
+        let out = r.m.on_targets(r.port.trigger());
+        assert_eq!(out.completed.len(), 1);
+        assert!(!busy(&r.port));
+        assert_eq!(r.m.awaiting(), 0);
+        // Another space's invalidate is never held behind it.
+        *pending.borrow_mut() = Settle::Pending;
+        r.tables.borrow_mut().insert(PDB_B, vec![(0x2000_0000, 0x0300_0000, 0x1000, 0)]);
+        let b = settle(&mut r, PDB_B);
+        assert_eq!(b.completed.len(), 1, "B's target is live: cleared at once");
+    }
+
+    #[test]
+    fn async_work_that_fails_after_apply_leaves_the_invalidate_armed_and_named() {
+        let mut r = rig();
+        let st = Rc::new(RefCell::new(Settle::Pending));
+        let mut h = host(&r, None, Vec::new());
+        h.settle = st.clone();
+        r.m.table.insert(K_A, h);
+        r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem).unwrap();
+        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0)]);
+        settle(&mut r, PDB_A);
+        *st.borrow_mut() = Settle::Failed("overlay install refused (fake)".into());
+        let out = r.m.on_targets(r.port.trigger());
+        assert_eq!(out.unreconciled.len(), 1);
+        assert!(busy(&r.port), "never cleared over work that did not land");
+        assert!(r.m.stats.refusals.iter().any(|w| w.contains("overlay install refused")));
+        assert_eq!(r.m.awaiting(), 0);
     }
 
     #[test]

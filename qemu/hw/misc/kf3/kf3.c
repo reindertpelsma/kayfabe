@@ -39,7 +39,6 @@
 #include "qemu/event_notifier.h"
 #include "qemu/main-loop.h"
 #include "qemu/thread.h"
-#include "block/aio.h"
 #include "kf3.h"
 
 #if QEMU_VERSION_MAJOR < 10 || (QEMU_VERSION_MAJOR == 10 && QEMU_VERSION_MINOR < 2)
@@ -52,10 +51,9 @@ OBJECT_DECLARE_SIMPLE_TYPE(Kf3State, KF3)
 #define KF3_MAX_PIECES 64
 #define KF3_MSIX_BAR 5
 #define KF3_MAX_VECTORS 32
-/* Hopper+ BAR1 usermode-view overlays (crates/kf-qemu mem.rs BAR1_OVERLAY_SLOTS). */
-#define KF3_BAR1_OVERLAYS 64
-/* The VA thread's bounded wait for one overlay change (a named timeout, never a spin). */
-#define KF3_OVERLAY_WAIT_MS 5000
+/* Hopper+ BAR1 usermode-view overlays: the `bar1-overlays` property's default
+ * (crates/kf-qemu mem.rs BAR1_OVERLAY_SLOTS). */
+#define KF3_BAR1_OVERLAYS_DEFAULT 64
 
 typedef struct Kf3Vec {
     EventNotifier e;   /* wraps the Rust-owned eventfd (never closed here) */
@@ -100,8 +98,12 @@ struct Kf3State {
      * trap lockless to kf3_bar1_usermode_write), and the alias pool that places it in BAR1. */
     Kf3Piece bar1_um;
     uint64_t bar1_um_len;
-    Kf3Bar1Ov bar1_ov[KF3_BAR1_OVERLAYS];
-    uint64_t bar1_ov_timeouts;
+    uint32_t bar1_overlays;          /* property: the alias pool's size */
+    Kf3Bar1Ov *bar1_ov;              /* bar1_overlays slots, allocated once at realize */
+    QemuMutex bar1_q_lock;           /* guards bar1_q only; never held across anything else */
+    GQueue bar1_q;                   /* Kf3OvReq, FIFO: applied in submission order */
+    QEMUBH *bar1_bh;
+    uint64_t bar1_ov_applied, bar1_ov_failed;
     MemoryListener listener;
     Kf3Vec vec[KF3_MAX_VECTORS];
     uint64_t irq_routes, irq_route_fail;
@@ -362,29 +364,18 @@ static const MemoryRegionOps kf3_bar1_um_ops = {
 };
 
 typedef struct Kf3OvReq {
-    Kf3State *s;
+    uint64_t seq;
     uint32_t op;
     uint64_t base, len, vf_rel;
-    int32_t rc;
-    int refs;             /* the waiter and the bottom half; the last one out frees */
-    QemuSemaphore done;
 } Kf3OvReq;
 
-static void kf3_ov_req_put(Kf3OvReq *r)
-{
-    if (qatomic_fetch_dec(&r->refs) == 1) {
-        qemu_sem_destroy(&r->done);
-        g_free(r);
-    }
-}
-
-/* Main loop, BQL held. Idempotent both ways, so a retry after a timed-out wait converges. */
+/* Main loop, BQL held. Idempotent both ways. */
 static int32_t kf3_ov_apply(Kf3State *s, uint32_t op, uint64_t base, uint64_t len, uint64_t vf_rel)
 {
     Kf3Bar1Ov *hit = NULL, *free_slot = NULL;
     unsigned i;
 
-    for (i = 0; i < KF3_BAR1_OVERLAYS; i++) {
+    for (i = 0; i < s->bar1_overlays; i++) {
         Kf3Bar1Ov *o = &s->bar1_ov[i];
         if (o->live && o->base == base) {
             hit = o;
@@ -422,37 +413,51 @@ static int32_t kf3_ov_apply(Kf3State *s, uint32_t op, uint64_t base, uint64_t le
     return 0;
 }
 
+/* Main loop, BQL held: drain the queue in FIFO order (an unmap queued before a re-map of the same
+ * BAR1 VA is applied first), then post each result back to Rust, which wakes its VA thread. */
 static void kf3_ov_bh(void *opaque)
 {
-    Kf3OvReq *r = opaque;
-    r->rc = kf3_ov_apply(r->s, r->op, r->base, r->len, r->vf_rel);
-    qemu_sem_post(&r->done);
-    kf3_ov_req_put(r);
+    Kf3State *s = opaque;
+    for (;;) {
+        Kf3OvReq *r;
+        int32_t rc;
+        qemu_mutex_lock(&s->bar1_q_lock);
+        r = g_queue_pop_head(&s->bar1_q);
+        qemu_mutex_unlock(&s->bar1_q_lock);
+        if (!r) {
+            return;
+        }
+        rc = kf3_ov_apply(s, r->op, r->base, r->len, r->vf_rel);
+        if (rc == 0) {
+            s->bar1_ov_applied++;
+        } else {
+            s->bar1_ov_failed++;
+        }
+        kf3_bar1_overlay_done(s->h, r->seq, rc);
+        g_free(r);
+    }
 }
 
-/* Rust's OverlayFn. Called only from the VA-manager thread — never a vCPU. */
-static int32_t kf3_bar1_overlay(void *opaque, uint32_t op, uint64_t base, uint64_t len, uint64_t vf_rel)
+/* Rust's OverlayFn — the VA-manager thread, never a vCPU. ⊘ NEVER WAITS (ruling 2026-09-26 (5)):
+ * a thread blocking on the BQL holder is the deadlock class the blocking invariants forbid. It
+ * queues and schedules the bottom half; Rust holds only that invalidate's clear until
+ * kf3_bar1_overlay_done reports the change. */
+static int32_t kf3_bar1_overlay(void *opaque, uint64_t seq, uint32_t op, uint64_t base, uint64_t len,
+                                uint64_t vf_rel)
 {
     Kf3State *s = opaque;
     Kf3OvReq *r = g_new0(Kf3OvReq, 1);
-    int32_t rc;
 
-    r->s = s;
+    r->seq = seq;
     r->op = op;
     r->base = base;
     r->len = len;
     r->vf_rel = vf_rel;
-    r->refs = 2;
-    qemu_sem_init(&r->done, 0);
-    aio_bh_schedule_oneshot(qemu_get_aio_context(), kf3_ov_bh, r);
-    if (qemu_sem_timedwait(&r->done, KF3_OVERLAY_WAIT_MS) == 0) {
-        rc = r->rc;
-    } else {
-        qatomic_inc(&s->bar1_ov_timeouts);
-        rc = -ETIMEDOUT; /* named; the run is retried at the next walk and apply is idempotent */
-    }
-    kf3_ov_req_put(r);
-    return rc;
+    qemu_mutex_lock(&s->bar1_q_lock);
+    g_queue_push_tail(&s->bar1_q, r);
+    qemu_mutex_unlock(&s->bar1_q_lock);
+    qemu_bh_schedule(s->bar1_bh);
+    return 0;
 }
 
 static bool kf3_bar1_views_build(Kf3State *s, Error **errp)
@@ -474,11 +479,21 @@ static bool kf3_bar1_views_build(Kf3State *s, Error **errp)
         return false;
     }
     memory_region_enable_lockless_io(&s->bar1_um.mr);
-    for (i = 0; i < KF3_BAR1_OVERLAYS; i++) {
+    if (s->bar1_overlays == 0) {
+        error_setg(errp, "kf3: bar1-overlays must be at least 1 on a family with BAR1 doorbell views");
+        return false;
+    }
+    /* Allocated once and never freed: the device lives for the process, and its regions may not
+     * be destroyed during its lifetime (docs/devel/memory.rst). */
+    s->bar1_ov = g_new0(Kf3Bar1Ov, s->bar1_overlays);
+    for (i = 0; i < s->bar1_overlays; i++) {
         g_autofree char *name = g_strdup_printf("kf3-bar1-doorbell-view%u", i);
         memory_region_init_alias(&s->bar1_ov[i].alias, OBJECT(s), name, &s->bar1_um.mr, 0, 0x1000);
     }
-    if (kf3_set_bar1_overlay(s->h, kf3_bar1_overlay, s) != 0) {
+    qemu_mutex_init(&s->bar1_q_lock);
+    g_queue_init(&s->bar1_q);
+    s->bar1_bh = qemu_bh_new(kf3_ov_bh, s);
+    if (kf3_set_bar1_overlay(s->h, kf3_bar1_overlay, s, s->bar1_overlays) != 0) {
         error_setg(errp, "kf3: Rust refused the BAR1 overlay verb");
         return false;
     }
@@ -688,9 +703,9 @@ static void kf3_dev_exit(PCIDevice *pci)
     if (s->h) {
         kf3_status(s->h, st, sizeof(st));
         info_report("%s bar12_reads=%" PRIu64 " bar12_writes=%" PRIu64 " irq_routes=%" PRIu64
-                    " irq_route_fail=%" PRIu64 " bar1_ov_timeouts=%" PRIu64, st,
+                    " irq_route_fail=%" PRIu64 " bar1_ov_applied=%" PRIu64 " bar1_ov_failed=%" PRIu64, st,
                     qatomic_read(&s->bar12_reads), qatomic_read(&s->bar12_writes),
-                    s->irq_routes, s->irq_route_fail, qatomic_read(&s->bar1_ov_timeouts));
+                    s->irq_routes, s->irq_route_fail, s->bar1_ov_applied, s->bar1_ov_failed);
         memory_listener_unregister(&s->listener);
         kf3_unrealize(s->h);
     }
@@ -704,6 +719,8 @@ static const Property kf3_properties[] = {
     DEFINE_PROP_UINT32("gpu-minor", Kf3State, gpu_minor, 0),
     DEFINE_PROP_UINT64("fb-mb", Kf3State, fb_mb, 8192),
     DEFINE_PROP_UINT64("bar1-size", Kf3State, bar1_size, 256 * MiB),
+    /* Hopper+ only: how many BAR1 doorbell views can be trapped at once (~1 per CUDA process). */
+    DEFINE_PROP_UINT32("bar1-overlays", Kf3State, bar1_overlays, KF3_BAR1_OVERLAYS_DEFAULT),
     DEFINE_PROP_UINT64("bar2-size", Kf3State, bar2_size, 32 * MiB),
     DEFINE_PROP_UINT32("msix-vectors", Kf3State, msix_vectors, 32),
     DEFINE_PROP_STRING("guest-driver", Kf3State, guest_driver),

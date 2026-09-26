@@ -37,7 +37,7 @@ use crate::raw_unsafe::{BackendFd, RawRegion};
 use kf_host::{CpuViewRelease, HostRm, MapNode, ViewAccess};
 use kf_linux_raw::{Backing, CharDevice, GuestWindow, HostOffset, HostPageSize, Notifier, SharedRam};
 use kf_mem::cpuwin::{CpuWindow, PraminPool, SlotSource, ViewOps};
-use kf_mem::ledger::{Desired, HostVas, MapTarget, Mapped, UsermodeRow};
+use kf_mem::ledger::{Desired, HostVas, MapTarget, Mapped, Settle, UsermodeRow};
 use kf_mem::vasmgr::{GpuWalker, VaManager, VasKey};
 use kf_rm::barpde::{BarAperture, MemStatement};
 use kf_trap::pramin::{GRANULE, SLOTS, Target as WinTarget, WindowReg};
@@ -491,6 +491,12 @@ impl MapTarget for Target {
             Target::Gpu(g) => g.va_extent(),
         }
     }
+    fn settle(&self) -> Settle {
+        match self {
+            Target::Bar1(b) => b.settle(),
+            Target::Window(_) | Target::Gpu(_) => Settle::Live,
+        }
+    }
     fn map_usermode(&self, u: &UsermodeRow) -> Result<Mapped, String> {
         match self {
             // ⊘ BAR2 is RM's own kernel aperture; a usermode view there has no reader. The trait
@@ -503,40 +509,91 @@ impl MapTarget for Target {
     }
 }
 
-/// ★ How many BAR1 doorbell views the C device can overlay at once (its alias pool,
-/// `KF3_BAR1_OVERLAYS` in `kf3.c`). ⊘ User CPU maps are `ALLOW_DISCONTIG` ⇒ never reused
+/// ★ The default BAR1 doorbell-overlay pool (the C device's `bar1-overlays` property, which
+/// overrides it at registration). ⊘ User CPU maps are `ALLOW_DISCONTIG` ⇒ never reused
 /// (`mapping_cpu.c:484`, `kern_bus_gm107.c:3043-3047`), so this is roughly one per guest process
-/// holding a CUDA context, plus UVM's one kernel view. The 65th is refused by name.
+/// holding a CUDA context, plus UVM's one kernel view. One more is refused by name.
 pub const BAR1_OVERLAY_SLOTS: usize = 64;
 
-/// ★ The BAR1 overlay verb, registered by the C device after realize, and its counters.
-#[derive(Debug, Default)]
+/// ★ The BAR1 overlay verb the C device registered, its pool size, the completions its main-loop
+/// bottom half posts back, and the counters.
+#[derive(Debug)]
 pub struct Bar1Overlay {
     hook: std::sync::OnceLock<crate::raw_unsafe::OverlayHook>,
-    /// Overlays installed.
+    /// The C device's pool size.
+    pub cap: std::sync::atomic::AtomicUsize,
+    /// `(seq, rc)` posted by the main loop, drained by the VA thread in [`Bar1Target`]'s settle.
+    /// ⊘ Held only for a push or a `take` — never across a wait, never by a vCPU.
+    done: Mutex<Vec<(u64, i32)>>,
+    /// Overlays installed (confirmed live by the main loop).
     pub installed: AtomicU64,
-    /// Overlays removed.
+    /// Overlays removed (confirmed).
     pub removed: AtomicU64,
     /// Views refused (by the tracker or the C device), each named in the VA stats.
     pub refused: AtomicU64,
 }
 
-impl Bar1Overlay {
-    /// Register the C device's verb (once).
-    pub fn set(&self, h: crate::raw_unsafe::OverlayHook) -> bool {
-        self.hook.set(h).is_ok()
+impl Default for Bar1Overlay {
+    fn default() -> Self {
+        Bar1Overlay {
+            hook: std::sync::OnceLock::new(),
+            cap: std::sync::atomic::AtomicUsize::new(BAR1_OVERLAY_SLOTS),
+            done: Mutex::new(Vec::new()),
+            installed: AtomicU64::new(0),
+            removed: AtomicU64::new(0),
+            refused: AtomicU64::new(0),
+        }
     }
 }
 
-/// ★★★ **The Hopper+ BAR1 target** (`V3_BAR1_DOORBELL.md` §4): ordinary leaves go to the window;
-/// a usermode-page view becomes a write-trapped overlay at exactly the BAR1 offset the guest's
-/// own PTEs put it, BEFORE the guest's invalidate clears (map may not defer the mapping), and is
-/// removed when its UNMAP arrives. VA-manager thread only.
+impl Bar1Overlay {
+    /// Register the C device's verb and its pool size (once).
+    pub fn set(&self, h: crate::raw_unsafe::OverlayHook, cap: usize) -> bool {
+        if self.hook.set(h).is_err() {
+            return false;
+        }
+        self.cap.store(cap, Ordering::Release);
+        true
+    }
+
+    /// ★ The main loop reports change `seq` applied with `rc` (0 = live/removed). The caller then
+    /// wakes the VA thread; this never blocks beyond one uncontended push.
+    pub fn post(&self, seq: u64, rc: i32) {
+        if let Ok(mut d) = self.done.lock() {
+            d.push((seq, rc));
+        }
+    }
+
+    fn take(&self) -> Vec<(u64, i32)> {
+        self.done.lock().map(|mut d| std::mem::take(&mut *d)).unwrap_or_default()
+    }
+}
+
+/// One queued overlay change.
+#[derive(Debug, Clone, Copy)]
+struct InFlight {
+    install: bool,
+    view: kf_trap::bar1db::Bar1View,
+}
+
+/// ★★★ **The Hopper+ BAR1 target** (`V3_BAR1_DOORBELL.md` §3): ordinary leaves go to the window; a
+/// usermode-page view becomes a write-trapped overlay at exactly the BAR1 offset the guest's own
+/// PTEs put it, and is removed when its UNMAP arrives. VA-manager thread only.
+///
+/// ★ **Asynchronous (ruling 2026-09-26 (5))**: the verb QUEUES the change for QEMU's main loop and
+/// returns; [`MapTarget::settle`] answers `Pending` until the main loop posts it back, and the VA
+/// manager defers only the clears of the invalidates that named BAR1. ⇒ the overlay is live before
+/// the clear on map, and gone before the clear on unmap — with no thread ever waiting on the BQL.
 pub struct Bar1Target {
     /// The BAR1 window.
     pub win: CpuWindow<WindowOps>,
+    /// Views live or being installed (a removed view leaves at once — its removal is in flight).
     db: std::cell::RefCell<kf_trap::bar1db::Bar1Doorbells>,
     overlay: std::sync::Arc<Bar1Overlay>,
+    inflight: std::cell::RefCell<std::collections::BTreeMap<u64, InFlight>>,
+    next_seq: std::cell::Cell<u64>,
+    /// Bases whose install failed after its run was acknowledged: their UNMAP retires quietly.
+    dead: std::cell::RefCell<std::collections::BTreeSet<u64>>,
 }
 
 impl Bar1Target {
@@ -547,10 +604,13 @@ impl Bar1Target {
             win,
             db: std::cell::RefCell::new(kf_trap::bar1db::Bar1Doorbells::new(bar1_bytes, usermode_len, BAR1_OVERLAY_SLOTS)),
             overlay,
+            inflight: std::cell::RefCell::new(std::collections::BTreeMap::new()),
+            next_seq: std::cell::Cell::new(1),
+            dead: std::cell::RefCell::new(std::collections::BTreeSet::new()),
         }
     }
 
-    /// The views currently trapped (the guest doorbell module's replay set).
+    /// The views currently trapped or being installed (the guest doorbell module's replay set).
     #[must_use]
     pub fn views(&self) -> Vec<kf_trap::bar1db::Bar1View> {
         self.db.borrow().views().copied().collect()
@@ -561,9 +621,26 @@ impl Bar1Target {
         Err(why)
     }
 
-    /// An ordinary BAR1 leaf. ⊘ Refused by name under a LIVE doorbell view: the overlay would
-    /// shadow it, and the guest's stores to that memory would be decoded as doorbell writes. The
-    /// walker unmaps a whole placement before re-mapping its VA, so a correct guest never gets here.
+    fn submit(&self, install: bool, v: kf_trap::bar1db::Bar1View) -> Result<(), String> {
+        let Some(hook) = self.overlay.hook.get() else {
+            return Err(format!(
+                "BAR1 doorbell view {:#x}+{:#x}: the C device registered no overlay verb — the view cannot trap, and it is NEVER backed by guest RAM",
+                v.base, v.len
+            ));
+        };
+        let seq = self.next_seq.get();
+        hook.submit(seq, u32::from(install), v.base, v.len, v.vf_rel).map_err(|e| {
+            format!("BAR1 doorbell view {:#x}+{:#x}: the C device refused to queue the change (errno {e})", v.base, v.len)
+        })?;
+        self.next_seq.set(seq + 1);
+        self.inflight.borrow_mut().insert(seq, InFlight { install, view: v });
+        Ok(())
+    }
+
+    /// An ordinary BAR1 leaf. ⊘ Refused by name under a live (or installing) doorbell view: the
+    /// overlay would shadow it and turn the guest's stores to that memory into doorbell writes.
+    /// Under a view whose REMOVAL is in flight it is placed: it becomes visible when the removal
+    /// lands, which is before the invalidate that states it clears.
     fn map(&self, d: &Desired, defer: bool) -> Result<Mapped, String> {
         let end = d.va.saturating_add(d.len);
         if let Some(v) = self.db.borrow().views().find(|v| v.base < end && d.va < v.base + v.len) {
@@ -577,41 +654,76 @@ impl Bar1Target {
 
     fn map_usermode(&self, u: &UsermodeRow) -> Result<Mapped, String> {
         let v = kf_trap::bar1db::Bar1View { base: u.va, len: u.len, vf_rel: u.vf_rel };
-        let Some(hook) = self.overlay.hook.get() else {
-            return self.refuse(format!(
-                "BAR1 doorbell view {:#x}+{:#x}: the C device registered no overlay verb — the view cannot trap, and it is NEVER backed by guest RAM",
-                v.base, v.len
-            ));
-        };
-        if let Err(e) = self.db.borrow_mut().place(v) {
-            return self.refuse(format!("BAR1 doorbell view refused: {e:?}"));
+        {
+            let mut db = self.db.borrow_mut();
+            db.set_cap(self.overlay.cap.load(Ordering::Acquire));
+            if let Err(e) = db.place(v) {
+                drop(db);
+                return self.refuse(format!("BAR1 doorbell view refused: {e:?}"));
+            }
         }
-        if let Err(e) = hook.install(v.base, v.len, v.vf_rel) {
+        if let Err(e) = self.submit(true, v) {
             self.db.borrow_mut().remove(v.base);
-            return self.refuse(format!(
-                "BAR1 doorbell view {:#x}+{:#x} (page {:#x}): overlay install refused by the C device (errno {e}); retried at the next walk",
-                v.base, v.len, v.vf_rel
-            ));
+            return self.refuse(e);
         }
-        self.overlay.installed.fetch_add(1, Ordering::Relaxed);
+        self.dead.borrow_mut().remove(&v.base);
         Ok(Mapped::Placed)
     }
 
     fn unmap(&self, va: u64, defer: bool) -> Result<(), String> {
+        if self.dead.borrow_mut().remove(&va) {
+            return Ok(()); // its install failed (named then): nothing of ours is there
+        }
         let Some(v) = self.db.borrow().at_base(va) else {
             return self.win.unmap(va, defer);
         };
-        // ⊘ Unmap may not defer: the overlay is gone from QEMU's map before this returns, so the
-        // guest's invalidate clears only after its BAR1 VA shows the window again.
-        let Some(hook) = self.overlay.hook.get() else {
-            return self.refuse(format!("BAR1 doorbell view {va:#x}: no overlay verb to remove it"));
-        };
-        if let Err(e) = hook.remove(v.base, v.len) {
-            return self.refuse(format!("BAR1 doorbell view {va:#x}+{:#x}: overlay removal refused (errno {e}); retried", v.len));
+        // ⊘ Unmap may not complete while anything routes through the view: the removal is queued
+        // here, and `settle` holds the invalidate's clear until the main loop confirms it.
+        if let Err(e) = self.submit(false, v) {
+            return self.refuse(e);
         }
         self.db.borrow_mut().remove(va);
-        self.overlay.removed.fetch_add(1, Ordering::Relaxed);
         Ok(())
+    }
+
+    /// Drain the main loop's completions; `Pending` while any change is still queued.
+    fn settle(&self) -> Settle {
+        let mut failures = Vec::new();
+        for (seq, rc) in self.overlay.take() {
+            let Some(f) = self.inflight.borrow_mut().remove(&seq) else { continue };
+            match (f.install, rc) {
+                (true, 0) => {
+                    self.overlay.installed.fetch_add(1, Ordering::Relaxed);
+                }
+                (false, 0) => {
+                    self.overlay.removed.fetch_add(1, Ordering::Relaxed);
+                }
+                (true, e) => {
+                    // ⊘ Its run was already acknowledged APPLIED: the view is retired here and its
+                    // later UNMAP retires quietly (`dead`). Named; the invalidate stays armed.
+                    if self.db.borrow().at_base(f.view.base) == Some(f.view) {
+                        self.db.borrow_mut().remove(f.view.base);
+                    }
+                    self.dead.borrow_mut().insert(f.view.base);
+                    self.overlay.refused.fetch_add(1, Ordering::Relaxed);
+                    failures.push(format!(
+                        "BAR1 doorbell overlay {:#x}+{:#x} (page {:#x}): install FAILED in QEMU (errno {e}) — the view does not trap",
+                        f.view.base, f.view.len, f.view.vf_rel
+                    ));
+                }
+                (false, e) => {
+                    self.overlay.refused.fetch_add(1, Ordering::Relaxed);
+                    failures.push(format!("BAR1 doorbell overlay {:#x}: removal FAILED in QEMU (errno {e})", f.view.base));
+                }
+            }
+        }
+        if !failures.is_empty() {
+            Settle::Failed(failures.join("; "))
+        } else if self.inflight.borrow().is_empty() {
+            Settle::Live
+        } else {
+            Settle::Pending
+        }
     }
 }
 

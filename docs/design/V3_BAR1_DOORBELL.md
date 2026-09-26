@@ -164,14 +164,39 @@ guest RM: BAR1 invalidate (trapped BAR0 write, vCPU arms the port, no blocking)
 VA thread: GPU walk of OUR BAR1 root → diff run {va, len, at=0x30000, ap=2, kind=0xF}
            apply_entry: classify FIRST (before any memory row)
              User → Bar1Target::map_usermode → Bar1Doorbells::place (tracker, validates)
-                                              → C overlay verb: main-loop BH adds an ALIAS of the
-                                                usermode ROM at BAR1+va (priority 1), waits ≤5 s
-             ack APPLIED → trigger cleared only now (map may not defer the mapping)
+                                              → C verb QUEUES "install" (FIFO) + qemu_bh_schedule; returns
+             ack APPLIED to the walker; the target's settle() = Pending
+             ⇒ ONLY this invalidate's clear is deferred (VaManager.awaiting); the guest keeps polling
+main loop (BQL): bottom half pops the FIFO, adds an ALIAS of the usermode ROM at BAR1+va (priority 1),
+                 kf3_bar1_overlay_done(seq, 0) → Rust posts + signals the VA thread's eventfd
+VA thread: wake → on_targets → settle() = Live → trigger cleared (overlay live BEFORE the clear)
 vCPU: store to BAR1+va+0x90 → KVM read-only slot → lockless MMIO exit → kf3_bar1_usermode_write(vf_rel)
       → exactly the BAR0 usermode-page write: Class::Doorbell → token table (never the trap's identity)
-guest RM: unmap → PTEs cleared + invalidate → walk emits UNMAP(va) → Bar1Target::unmap
-      → overlay removed (BH) BEFORE the clear (unmap may not complete while anything routes through it)
+guest RM: unmap → PTEs cleared + invalidate → walk emits UNMAP(va) → Bar1Target::unmap queues "remove"
+      → clear deferred until the main loop reports it (overlay removed BEFORE the clear)
 ```
+
+### 3.1 Asynchronous by ruling (coordinator, 2026-09-26, ruling 5)
+
+The first version had the VA thread wait (≤ 5 s) for the main loop. ⊘ **Rejected**: a thread that
+blocks on the BQL holder is the deadlock class the blocking invariants forbid. Now:
+- The C verb (`kf3_bar1_overlay`) only pushes onto a mutex-guarded FIFO and calls
+  `qemu_bh_schedule` — it never waits. ⊘ Not `aio_bh_schedule_oneshot`: QEMU's BH list is LIFO
+  within a slice, and an unmap queued before a re-map of the same BAR1 VA must apply first.
+- `MapTarget::settle()` (`kf_mem::ledger::Settle`: `Live | Pending | Failed`) is how an async target
+  says its accepted work is not visible yet. `VaManager` defers the clear of exactly the invalidates
+  whose spaces answer `Pending` (`awaiting`, counted `deferred_clears`), and `VaManager::on_targets`
+  — called on every VA-thread wake — clears them once every named space is `Live`. Invalidates of
+  other spaces are never held behind it. With nothing deferred it asks no target anything.
+- The main loop reports each change through `kf3_bar1_overlay_done(seq, rc)`: one push into
+  `Bar1Overlay::done` (a Rust mutex held only for the push/take) and one write to the VA thread's
+  eventfd. Lock order: BQL → that mutex; the VA thread never takes the BQL.
+- A change that fails in QEMU after its walker run was acknowledged (it cannot, short of a bug: the
+  tracker pre-validates alignment, bounds, overlap and the pool size exactly as the C side does)
+  answers `Failed`: named in the VA refusals, counted, the invalidate stays armed; the view is
+  retired and its later UNMAP retires quietly.
+- A memory leaf over a view whose REMOVAL is queued is placed (it shows when the removal lands,
+  before the clear); over a live or installing view it is refused by name.
 
 - **Learned from the walk, not the alloc** (§1.4): the tracker (`kf_trap::bar1db::Bar1Doorbells`)
   is fed only by walked BAR1 leaves the family row classifies as the user page. It validates page
@@ -183,10 +208,11 @@ guest RM: unmap → PTEs cleared + invalidate → walk emits UNMAP(va) → Bar1T
   (Hopper+); `may_trap_write(BAR1, ..)` is false statically, and the dynamic gate is
   `Bar1Doorbells::may_trap_write`.
 - **The overlay is the §6.3 exception, used as §6.3 describes it**: a memslot change at the first
-  mapping of the usermode object, slow path, under the VMM's global lock (the main loop's BQL), on
-  the VA thread's behalf, never a vCPU. QEMU-side it is an alias of one 64 KiB ROM device created at
-  realize; the alias pool (64) is created once and only added/removed (QEMU's rule: do not destroy
-  regions during a device's lifetime). Adding it makes KVM split BAR1's slot around a read-only slot.
+  mapping of the usermode object, slow path, made by the main loop under the VMM's global lock (the
+  BQL) — never by a vCPU, and never waited for (§3.1). QEMU-side it is an alias of one 64 KiB ROM
+  device created at realize; the alias pool (device property `bar1-overlays`, default 64) is
+  created once and only added/removed (QEMU's rule: do not destroy regions during a device's
+  lifetime). Adding it makes KVM split BAR1's slot around a read-only slot.
 - **Reads** of the view hit the host's live usermode window (the ROM device's RAM is the host's
   64 KiB BAR0 usermode mapping, the same pages BAR0's disposition-C page aliases), so a read
   returns what the BAR0 view returns — a superset of hardware, where the BAR1 view "can't be used
@@ -198,16 +224,15 @@ guest RM: unmap → PTEs cleared + invalidate → walk emits UNMAP(va) → Bar1T
 - **The doorbell is adversarial to guest root** (`the_doorbell_is_adversarial_to_guest_root`):
   unchanged. The trap carries no identity; the token is masked and looked up in our table; an
   unknown token does nothing.
-- **Idempotent retries**: a timed-out wait (`-ETIMEDOUT`, counted `bar1_ov_timeouts`) fails the run;
-  the invalidate stays un-cleared, the next walk re-emits it, and the C verb converges (install of
-  an identical live view = 0, remove of an absent one = 0).
+- **Idempotent**: install of an identical live view = 0, remove of an absent one = 0.
 - **Doorbell-module asymmetry** (`V3_GUEST_DOORBELL_MODULE.md` §2): map installs our trap at once
   (the module may take over later — `Bar1Target::views()` is the replay set); unmap removes our
   trap before the clear, and is the single place the module's "wait for the module's ack" will go.
 - **No memory under a live view**: an ordinary BAR1 leaf overlapping a live doorbell view is refused
   by name (`Bar1Target::map`) — the overlay would shadow it and turn its stores into doorbell
   writes. The walker unmaps whole placements before re-mapping a VA, so a correct guest never hits it.
-- **Status line** (Hopper+ only): `bar1db[trapped= unmirrored= installed= removed= refused=]`.
+- **Status line** (Hopper+ only): `bar1db[trapped= unmirrored= deferred_clears= installed= removed= refused=]`;
+  the C device's exit line adds `bar1_ov_applied= bar1_ov_failed=`.
 
 ## 4. Code map
 
@@ -219,10 +244,11 @@ guest RM: unmap → PTEs cleared + invalidate → walk emits UNMAP(va) → Bar1T
 | BAR1 = one plain-RAM region on every family | `crates/kf-trap/src/memmap.rs`, `tests/memory_map.rs` |
 | `UsermodeRow`, `MapTarget::map_usermode` (default = not mirrored) | `crates/kf-mem/src/ledger.rs` |
 | classify before any memory row; counters | `crates/kf-mem/src/apply.rs`, `vasmgr.rs` (`with_usermode_mmio`) |
+| `Settle`, deferred clears (`awaiting`, `on_targets`) | `crates/kf-mem/src/ledger.rs`, `vasmgr.rs` |
 | `Bar1Target`, `Bar1Overlay`, `BAR1_OVERLAY_SLOTS` | `crates/kf-qemu/src/mem.rs` |
 | BAR0 doorbell live on all families; `bar1_usermode_write`; wiring | `crates/kf-qemu/src/device.rs` |
-| FFI (ABI 4 → 5) | `crates/kf-qemu/src/ffi_unsafe.rs`, `raw_unsafe.rs` (`OverlayHook`) |
-| overlay ROM, alias pool, BH + bounded wait | `qemu/hw/misc/kf3/kf3.c`, `kf3.h` |
+| FFI (ABI 6 — on top of v3-reinit's 5, `kf3_bar0_read`) | `crates/kf-qemu/src/ffi_unsafe.rs`, `raw_unsafe.rs` (`OverlayHook`) |
+| overlay ROM, alias pool (`bar1-overlays`), FIFO + one BH, completion callback | `qemu/hw/misc/kf3/kf3.c`, `kf3.h` |
 
 ## 5. Tests (local, no GPU)
 
@@ -238,10 +264,12 @@ guest RM: unmap → PTEs cleared + invalidate → walk emits UNMAP(va) → Bar1T
   GPU VA space answers HELD with no host call; **with the GA10x config (`usermode: None`) the same
   leaf takes the old memory path byte for byte**; PRIV/stray internal MMIO is refused while plain
   RAM at `0x30000` still maps; a view crossing the BAR1 extent is clipped like any row.
+- `kf-mem vasmgr::tests` — an async target (`Settle::Pending`) defers only its own invalidate's
+  clear, a wake with the work in flight changes nothing, the clear happens on `Live`, another
+  space's invalidate is never held behind it; `Failed` leaves the invalidate armed and named.
 - `kf3.c`: compile-checked against the local QEMU 11.1.1 tree with QEMU's own warning flags (header
   shims for the 10.2→11 moves): the new code is warning-free; the only errors are the pre-existing
-  11.x API drift in untouched lines (identical set on `origin/v3-mc2`). ⚠ Not built against 10.2
-  and never run.
+  11.x API drift in untouched lines. The bench build against QEMU 10.2 is recorded in §5.1.
 
 ## 6. Why Turing … Ada cannot change
 
@@ -290,20 +318,21 @@ source revision.
 tokens making progress, the negative control failing, and T4 `unmirrored=0`. T0 settles the
 libcuda question independently of kayfabe.
 
-## 8. Needs an owner decision
+## 8. Rulings and open items
 
-1. **GPU-VA view policy** (§1.3): implemented = *not mirrored, acknowledged HELD, counted*. The
-   alternative "refuse = FAILED" leaves the guest's invalidate un-cleared (a hang) on a mapping that
-   may never be rung. Passthrough of the host page is rejected (guest token ≠ host token).
-2. **Overlay reads** = the host's live usermode window (timer readable through BAR1) vs zeros
-   (hardware says the BAR1 view is not for reads). Chosen: the host window — never worse than BAR0.
-3. **Pool of 64 overlays** — roughly one per concurrent CUDA process (user maps are never reused)
-   plus UVM's one; the 65th is refused by name. Raise, or make it a device property.
-4. **PRIV/stray internal-MMIO leaves are FAILED** (the guest's invalidate hangs, loudly) rather than
-   HELD. No open-source client sets `bPriv` (`nv_gpu_ops.c:5549`).
-5. **The VA thread waits (≤ 5 s) for the main loop** to apply the overlay. Alternative: defer the
-   invalidate clear asynchronously. Chosen because §6.3 already sanctions a slow path under the
-   global lock and a bounded, named wait on a device thread (`V3_GUEST_DOORBELL_MODULE.md` §2).
-6. **Out of scope, flagged**: on every family the compute object's MMIO page is VIDMEM + kind `0xF`
-   (`kgrobjSetComputeMmio_IMPL`); if a client maps it, kayfabe maps store offset `chid × 4 KiB` as
-   PITCH memory. Untouched here (GA10x must not change); worth its own look.
+Coordinator rulings, 2026-09-26 (within the v3 constraints):
+1. GPU-VA views: acknowledged HELD, not mirrored, counted — **kept**.
+2. Reads through the BAR1 view = the host's live usermode page — **kept**.
+3. Overlay pool 64 — **kept, as the kf3 device property `bar1-overlays` (default 64)**; one more
+   view is refused by name (`Full { cap }`).
+4. PRIV/stray internal-MMIO leaves fail loudly, logged by name — **kept** (guest self-harm only).
+5. ⊘ **Changed**: no bounded wait on the VA thread — asynchronous overlay changes with deferred
+   clears (§3.1).
+
+Open:
+- **The compute object's MMIO page** (left alone by ruling 6): on every family
+  `kgrobjSetComputeMmio_IMPL` (`kernel_graphics_object.c:405-473`) describes a VIDMEM page with kind
+  `0xF`, address `chid × 4 KiB` (*"completely ignored"*). If a client maps it into a GPU VA, kayfabe
+  maps store offset `chid × 4 KiB` as PITCH memory in the host VAS instead of the internal MMIO.
+  Needs its own look (whether CUDA maps it, and what the host twin should see there).
+- libcuda's use of `bBar1Mapping` and of GPU-VA views — §7 T0 and T4.

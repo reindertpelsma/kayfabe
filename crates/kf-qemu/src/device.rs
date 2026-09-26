@@ -816,7 +816,15 @@ impl Device {
         }
     }
 
-    /// ★★★ **A write into a Hopper+ BAR1 usermode view** (`V3_BAR1_DOORBELL.md` §4) — the vCPU
+    /// ★ The main loop applied BAR1 overlay change `seq` (`rc` 0 = done): post it and wake the VA
+    /// thread, which releases the invalidate clear it was holding (ruling 2026-09-26 (5)).
+    /// Main-loop thread; never blocks beyond one uncontended push and one eventfd write.
+    pub fn bar1_overlay_done(&self, seq: u64, rc: i32) {
+        self.bar1_overlay.post(seq, rc);
+        let _ = self.mem.inbox.wake.signal();
+    }
+
+    /// ★★★ **A write into a Hopper+ BAR1 usermode view** (`V3_BAR1_DOORBELL.md` §3) — the vCPU
     /// path, from the C device's overlay; `vf_rel` is the offset inside the 64 KiB usermode page,
     /// decoded by the overlay itself (no lookup, no lock).
     ///
@@ -1026,6 +1034,19 @@ impl Device {
                 m.on_split(pdb, ticket, trigger);
             }
             let r = m.on_walk_ready(trigger);
+            // ★ Ruling 2026-09-26 (5): a BAR1 doorbell overlay the main loop has now made live (or
+            // removed) releases the invalidate clear it was holding. Never a wait: with nothing
+            // deferred this asks no target anything.
+            let t = m.on_targets(trigger);
+            if (!t.completed.is_empty() || !t.unreconciled.is_empty()) && logged < 256 {
+                logged += 1;
+                eprintln!(
+                    "kf3: mem t={:.3}s deferred clears released completed={:?} unreconciled={:?}",
+                    self.born.elapsed().as_secs_f64(),
+                    t.completed,
+                    t.unreconciled
+                );
+            }
             for (ticket, res) in m.take_splits() {
                 if let Err(e) = &res {
                     eprintln!("kf3: mem t={:.3}s split ticket {ticket} REFUSED: {e}", self.born.elapsed().as_secs_f64());
@@ -1274,9 +1295,10 @@ impl Device {
             + &if self.plane.doorbell.follows_guest_bar1() {
                 let b = &self.bar1_overlay;
                 format!(
-                    " bar1db[trapped={} unmirrored={} installed={} removed={} refused={}]",
+                    " bar1db[trapped={} unmirrored={} deferred_clears={} installed={} removed={} refused={}]",
                     va.usermode_trapped,
                     va.usermode_unmirrored,
+                    va.deferred_clears,
                     b.installed.load(o),
                     b.removed.load(o),
                     b.refused.load(o)
