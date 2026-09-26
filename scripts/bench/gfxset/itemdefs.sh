@@ -28,11 +28,18 @@ gset_timeout(){ case $1 in glmark2|blender_opendata|geekbench_vulkan) echo 1800 
 pv_checks(){ grep -a '^CHECK|' "$1" | awk -F'|' '{print $2"="$3}' | LC_ALL=C sort; }
 png_dig(){ "$FF" -hide_banner -loglevel error -i "$1" -f rawvideo -pix_fmt rgba - 2>/dev/null | md5sum | cut -c1-16; }
 xdg_up(){ export XDG_RUNTIME_DIR=$W/xdg; mkdir -p "$XDG_RUNTIME_DIR"; chmod 700 "$XDG_RUNTIME_DIR"; }
+# ★ nvkvm-pv's guests had NO Mesa (setup_guest.sh:350-352), so a Vulkan app's device 0 was the NVIDIA GPU.
+#   This image carries Mesa's ICDs (weston/sway pull them in), and lavapipe can enumerate first — the
+#   probes that take device 0 would then test lavapipe on BOTH sides. Restrict the loader to NVIDIA's ICD.
+nv_icd_only(){ local j; for j in /etc/vulkan/icd.d/nvidia_icd.json /usr/share/vulkan/icd.d/nvidia_icd.json; do
+    [ -f "$j" ] && { export VK_DRIVER_FILES=$j VK_ICD_FILENAMES=$j; echo "vulkan ICD: $j only"; return 0; }; done
+    echo "GSET_FAIL no NVIDIA Vulkan ICD json in the image"; return 1; }
 
 # ══ nvkvm-pv H1 + H4: validate.sh phase 3 (Vulkan), probe extracted verbatim ═══════════════════════
 # criterion (validate.sh): vendor 0x10DE and not a software device; data[i] == i*3+7 over N=4096;
 # vk_import_host_ptr imports 2 MiB (SKIP when the extension is not advertised).
 item_pv_validate_vk(){
+    nv_icd_only || return 0
     gset_need "$GB/vk_probe" || return 0
     base64 -d < "$GSET_BIN/src/nvkvmpv/comp.spv.b64" > comp.spv
     "$GB/vk_probe" "$W/comp.spv" > vk.out 2>&1; rc=$?; cat vk.out
@@ -54,6 +61,7 @@ item_pv_validate_gl(){
 }
 # ══ nvkvm-pv H3: the RDR2 check — vkCreateDevice with 7 RT/NVX extensions (tests/repro, candidate rev) ═
 item_pv_vk_rt_ext(){
+    nv_icd_only || return 0
     gset_need "$GB/vk_device_extensions" || return 0
     "$GB/vk_device_extensions" VK_KHR_acceleration_structure VK_KHR_ray_query VK_KHR_ray_tracing_pipeline \
         VK_NV_ray_tracing VK_NV_optical_flow VK_NV_cuda_kernel_launch VK_NVX_binary_import > rt.out 2>&1; rc=$?
@@ -62,6 +70,7 @@ item_pv_vk_rt_ext(){
 }
 # ══ nvkvm-pv H22: vkCreateDevice (tests/repro/vk_create_device.c) ═════════════════════════════════
 item_pv_vk_create_device(){
+    nv_icd_only || return 0
     gset_need "$GB/vk_create_device" || return 0
     "$GB/vk_create_device" > vcd.out 2>&1; rc=$?; cat vcd.out
     grep -q 'RESULT: vkCreateDevice rc=0 OK' vcd.out && echo GSET_OK || echo "GSET_FAIL rc=$rc $(grep -m1 RESULT vcd.out)"
@@ -69,6 +78,7 @@ item_pv_vk_create_device(){
 # ══ nvkvm-pv H6 (+EXTRA capability digests): vulkaninfo names the NVIDIA device ══════════════════
 # criterion (graphics_remote.sh): deviceName matches nvidia|rtx|geforce.
 item_vk_info(){
+    nv_icd_only || return 0
     gset_need vulkaninfo python3 || return 0
     vulkaninfo --summary > summary.txt 2>&1; rc=$?
     grep -E 'deviceName|driverVersion|apiVersion|driverID|conformanceVersion' summary.txt
@@ -83,6 +93,7 @@ item_vk_info(){
 # criterion (graphics_remote.sh): an fp32-scalar GFLOPS figure. Here: every figure printed, the test
 # SET (and which tests read 0) equal to bare metal; the numbers are recorded, not graded.
 item_vkpeak(){
+    nv_icd_only || return 0
     gset_need "$GSET_HOME/vkpeak/vkpeak" || return 0
     "$GSET_HOME/vkpeak/vkpeak" 0 > vkpeak.txt 2>&1; rc=$?; cat vkpeak.txt
     grep -E '^[a-z0-9-]+ += +[0-9.]+' vkpeak.txt | while read -r n _ v u; do gset_val "$n" "$v$u"; done
@@ -307,6 +318,7 @@ item_video_nvenc_nvdec(){
 }
 # ══ nvkvm-pv H5: Geekbench GPU, Vulkan backend (nvkvm-pv: GB7, composite vs bare metal, zero check) ══
 item_geekbench_vulkan(){
+    nv_icd_only || return 0
     local gbx; gbx=$(ls "$GSET_HOME"/geekbench/geekbench[0-9]* 2>/dev/null | grep -v '\.' | head -1)
     gset_need "${gbx:-/nonexistent/geekbench}" || return 0
     ( cd "$(dirname "$gbx")" && "$gbx" --gpu Vulkan --no-upload ) > gb.txt 2>&1; rc=$?
@@ -339,12 +351,14 @@ PY
 
 # ══ EXTRA — the v3-gfx lane (V3_HEADLESS_GRAPHICS.md §6), CPU-reference-checked renders ═════════════
 item_vk_compute(){
+    nv_icd_only || return 0
     gset_need "$GB/vk_gfx" || return 0
     "$GB/vk_gfx" compute 2>&1 | tee vkc.txt
     gset_dig VKC_HASH "$(sed -n 's/^VKC_HASH=//p' vkc.txt)"
     grep -q '^VKC_BAD=0$' vkc.txt && echo GSET_OK || echo "GSET_FAIL $(grep -m1 -E 'VKC_BAD|VK_FAIL' vkc.txt)"
 }
 item_vk_render(){
+    nv_icd_only || return 0
     gset_need "$GB/vk_gfx" || return 0
     "$GB/vk_gfx" render "$W/vkr" 2>&1 | tee vkr.txt
     for k in A Z B; do gset_dig "VKR_HASH_$k" "$(sed -n "s/^VKR_HASH_$k=//p" vkr.txt)"; done
@@ -401,6 +415,7 @@ item_ff_cuda(){
     echo GSET_OK
 }
 item_ff_vulkan(){
+    nv_icd_only || return 0
     gset_need "$FF" || return 0; ff_src || { echo "GSET_FAIL source"; return 0; }
     local I="-init_hw_device vulkan=vk:0 -filter_hw_device vk"
     ff_run scale_vulkan     nv12 "$I" "hwupload,scale_vulkan=w=640:h=360:scaler=bicubic,hwdownload,format=nv12"
@@ -427,7 +442,8 @@ item_ff_opencl(){
     ff_run erosion_opencl     yuv420p "$I" "hwupload,erosion_opencl,hwdownload,format=yuv420p"
     echo GSET_OK
 }
-item_ff_placebo(){  # libplacebo (Vulkan): scaling + debanding
+item_ff_placebo(){
+    nv_icd_only || return 0  # libplacebo (Vulkan): scaling + debanding
     gset_need "$FF" || return 0; ff_src || { echo "GSET_FAIL source"; return 0; }
     local I="-init_hw_device vulkan=vk:0 -filter_hw_device vk"
     ff_run libplacebo_scale  yuv420p "$I" "libplacebo=w=960:h=540:upscaler=ewa_lanczos:downscaler=mitchell:dithering=none:format=yuv420p"
@@ -448,4 +464,4 @@ item_blender_cycles_cuda(){ bl_run CYCLES CUDA; }
 item_blender_cycles_optix(){ bl_run CYCLES OPTIX; }
 item_blender_eevee(){ bl_run EEVEE GPU --gpu-backend opengl; }
 item_blender_workbench(){ bl_run WORKBENCH GPU --gpu-backend opengl; }
-item_blender_eevee_vulkan(){ bl_run EEVEE GPU --gpu-backend vulkan; }
+item_blender_eevee_vulkan(){ nv_icd_only || return 0; bl_run EEVEE GPU --gpu-backend vulkan; }

@@ -22,7 +22,13 @@ libopengl-dev libgl-dev libvulkan-dev libx11-dev libjpeg-dev libpng-dev libudev-
 meson ninja-build g++ gcc git make pkg-config xvfb x11-utils python3 unzip xz-utils curl ca-certificates \
 ocl-icd-libopencl1 clinfo libxi6 libxxf86vm1 libxfixes3 libxrender1 libxkbcommon0 libsm6 libice6 libgl1 libegl1"
 pgrep -x qemu-system-x86 >/dev/null && { say "⊘ a QEMU is already running — the bench is serialized, refusing"; exit 2; }
+# the static BtbN n8.1 build of V3_VIDEO_ENGINES.md §5 (sha 5d3a9e6b… there): fetched once per box
+if [ ! -x "$FF" ]; then
+  mkdir -p /workspace/video && curl -fsSL -o /workspace/video/ff.tar.xz https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n8.1-latest-linux64-gpl-8.1.tar.xz \
+    && rm -rf /workspace/video/ff && mkdir -p /workspace/video/ff && tar -xJf /workspace/video/ff.tar.xz -C /workspace/video/ff --strip-components=1
+fi
 [ -x "$FF" ] || { say "⊘ no static ffmpeg at $FF"; exit 2; }
+say "static ffmpeg sha256 $(sha256sum "$FF" | cut -c1-16)"
 if [ ! -f "$IMG.gset_resized" ]; then qemu-img resize "$IMG" +16G && touch "$IMG.gset_resized"; fi
 qemu-system-x86_64 -enable-kvm -cpu host -m 8G -smp "${GSET_PROV_SMP:-8}" -display none \
   -drive if=virtio,file="$IMG",format=qcow2 \
