@@ -137,8 +137,9 @@ pub struct Plane<'v> {
     pub drainer_wake: WakeWord,
     pub ring: PrivRing,
     pub token_mask: u32,
-    /// ★ 2026-09-26: doorbell value / channel → table index, per family (`kf_trap::tokenindex`):
-    /// `Vector { mask: token_mask }` through Hopper (unchanged), `RunlistVector` on Blackwell.
+    /// ★ 2026-09-26: doorbell value / channel → table index (`kf_trap::tokenindex`):
+    /// `RunlistVector` on the device ([`Plane::for_device`], every family); [`Plane::for_family`]
+    /// keeps `Vector { mask: token_mask }` through Hopper for the harness planes.
     pub token_index: kf_trap::tokenindex::TokenIndex,
     /// The time-setting registers of this device's timer HAL, refused by name on the privileged
     /// write arm (`timer::TimerRegs`). Per family, never per die.
@@ -170,6 +171,36 @@ impl<'v> Plane<'v> {
             kf_chip::Family::Ampere,
             kf_trap::timer::GA106_BAR0_BYTES,
         )
+    }
+
+    /// ★★ THE DEVICE'S constructor (`kf-qemu` realize): [`Plane::for_family`], but the token table
+    /// is ALWAYS indexed by `(runlist, chid)` ([`kf_trap::tokenindex::TokenIndex::RunlistVector`]).
+    ///
+    /// Whether the guest RM allocates chids per runlist is a (family × guest driver) fact —
+    /// `KernelFifo.bUsePerRunlistChram`: Blackwell at every tag, and from **610.43.02** also
+    /// GA10x / AD10x / GH100 (`610.57.04: generated/g_kernel_fifo_nvoc.c:233-243`; 580 … 595 list
+    /// only GB*). `[measured 2026-09-26, 610.57.04 guest on GA102]` the user channel (runlist 0,
+    /// chid 1) collided with the CeUtils channel (its own runlist, chid 1) on a chid-indexed table:
+    /// `OverDeclaredCap { cap: 0 }` → `0x1a`, and `cuInit` failed. ⇒ The index carries the runlist
+    /// on every family instead of keying the choice on a version: the doorbell token names
+    /// `RUNLIST_ID` 22:16 and `VECTOR` 11:0 on every die group (`kfifoGenerateWorkSubmitTokenHal_TU102`
+    /// / `_GA100` / `_GB202`, pinned by `tokenindex::hwref_check`), and the birth takes the runlist
+    /// from the FIFO table we serve — the one the guest's token carries — so `(runlist, chid)` is
+    /// unique whether the guest's chids are device-unique (≤ 595 on Turing … Hopper) or per runlist.
+    pub fn for_device(
+        vmm: &'v Vmm,
+        n_tokens: usize,
+        token_mask: u32,
+        family: kf_chip::Family,
+        bar0_bytes: u32,
+    ) -> Plane<'v> {
+        let mut p = Self::for_family(vmm, n_tokens, token_mask, family, bar0_bytes);
+        let index = kf_trap::tokenindex::TokenIndex::RunlistVector;
+        if p.tokens.len() < index.table_len() {
+            p.tokens = (0..index.table_len()).map(|_| TokenWord::new()).collect();
+        }
+        p.token_index = index;
+        p
     }
 
     /// ★ The general constructor: the family selects the timer HAL (`timer::timer_regs_for`),
