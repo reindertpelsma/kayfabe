@@ -1,6 +1,6 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
-**STATUS: LIVE, 2026-09-27** (written at master `3d523b43`). The single entry point for resuming work
+**STATUS: LIVE, 2026-09-27** (updated at master `f89f66bb`). The single entry point for resuming work
 without any chat history. Decisions live in `docs/OWNER_RULINGS.md`; per-topic detail in the design docs
 named below. ⊘ When this file and a design doc disagree, the design doc's dated STATUS wins — then fix
 this file.
@@ -9,14 +9,14 @@ this file.
 
 Every promotion to master passed the merge bar (`scripts/bench/box/merge_check.sh`): all `kf-*` crate
 tests, v3 gates 9/9, a kf3 build of that exact revision, and the 30-arm thin-guest suite 30/30.
-Last bar: `bcd55198` — 1616 tests / 0 failed, gates 9/9, 30/30 on an RTX 3060 (GA106).
+Last bar: `f89f66bb` — 1625 tests / 0 failed, gates 9/9, 30/30 on an RTX 3060 (GA106).
 
 | Area | State (hardware-measured unless marked) | Doc |
 |---|---|---|
 | Families | GA10x (GA106/GA104/GA102) 30/30; Ada AD106 30/30; Blackwell GB203 (RTX 5080) 30/30 + CUDA ladder; floor-swept boards (RTX 3060 Ti) 30/30. Turing, GA100, Hopper, GB10x: **source-derived only** (GA100/GB10B refused by name) | `design/V3_FAMILY_PORT_ADA.md`, `V3_FAMILY_PORT_BLACKWELL.md`, `V3_FLOORSWEPT_GR.md`, `V3_HW_BOUNDARY_INVENTORY.md` |
 | Multi-GPU | distinct host GPUs in one VM work (8×3060 box); per-card BAR1 budget refused at realize | `design/V3_MULTI_GPU_AUDIT.md` |
 | CUDA apps | 58/65 nvkvm-pv apps at `670bd310`; fixes since (clpeak, torch_ai_bench, gpu_burn, BAR1-view leak) ⇒ expected ~61/65, **not re-measured**; the rest need UVM demand paging | `design/V3_APP_MATRIX.md` |
-| Graphics / video | headless Vulkan, EGL, Xvfb+VirtualGL bit-identical to bare metal; NVENC/NVDEC byte-exact | `design/V3_HEADLESS_GRAPHICS.md`, `V3_VIDEO_ENGINES.md` |
+| Graphics / video | nvkvm-pv's headless graphics set + 15 more items: **38/38** on an RTX 3070 (31 byte-identical to bare metal; OFA optical flow advertised); NVENC/NVDEC byte-exact. Per-call GPU waits are slow on nested boxes (`glFinish` 62 vs 9 µs) | `design/V3_GFX_TESTSET.md` (display-phase list §7), `V3_HEADLESS_GRAPHICS.md`, `V3_VIDEO_ENGINES.md` |
 | Memory plane | pooled walker capacity (no per-space 16k-run wall); batched host maps; big-PTE slot ownership; guest PTE read-only/volatile carried, PRIV leaves withheld from user twins | `design/V3_BUILD.md`, `V3_BATCHED_MAP.md` |
 | Refusals | audited host-vs-guest: forged completions removed (MC_SERVICE_INTERRUPTS, sysmembar flush); the rest classified | `design/V3_REFUSAL_AUDIT.md` |
 | Driver matrix | 29 ogkm tags measured into generated tables; guest 580.x works end to end; ≤575 guests pass RM init (fn 54/79 carried); host 575.57.08 gates 9/9 | `design/V3_DRIVER_MATRIX.md` |
@@ -30,7 +30,6 @@ Last bar: `bcd55198` — 1616 tests / 0 failed, gates 9/9, 30/30 on an RTX 3060 
 |---|---|---|
 | `v3-drivers` | driver matrix (both axes) | everything except its last commit is merged up to `bcd55198`; **last commit `ee35ca4a` = 535/545 capability allowlist — HELD for owner review**; walk continues (575/590/595 guests pass the ladder; 570/565/550 blocked by §4.1) |
 | `v3-initrace` | the adapter re-init race + failed-boot recovery | in progress; see §4.1 |
-| `v3-gfxset` | nvkvm-pv's headless graphics test set on kayfabe | in progress; one finding so far: `0x20801210` refused breaks ffmpeg's Vulkan device (the refusal audit had it low-impact) |
 | `v3-adasys` | RTX 4070 sysmem copy failure, bare metal first | in progress; see §4.2 |
 | `v3-uvm-n4` | UVM demand-paging research + N4 experiments E5/E6/E6′ | research; E6″ not run; see §3.2 |
 | `v3-mgpu-audit` | original multi-GPU audit doc | **superseded** by the version merged with the multi-GPU fix |
@@ -110,3 +109,5 @@ measure on a non-nested host, where exits are a few µs rather than ~50 µs.
 - **A test runner without `--no-fail-fast` under-reports** (it stopped at the first red crate).
 - **A watchdog must not read "cannot probe" as "idle".**
 - **Boxes vanish** (vast destroyed several mid-run); evidence must already be in git.
+- **`git stash` is shared by every worktree of a repo** — another agent's `stash pop` applied someone
+  else's stash. Agents working in parallel worktrees save a patch file instead of stashing.
