@@ -350,6 +350,7 @@ impl HostRm {
         defer: bool,
         kind: u8,
     ) -> Result<u32, ScatterError> {
+        let t0 = std::time::Instant::now();
         let view = kf_linux_raw::MappedRegion::stitch(
             fd,
             pieces,
@@ -358,13 +359,29 @@ impl HostRm {
             kf_linux_raw::HostPageSize::query(),
         )
         .map_err(ScatterError::Stitch)?;
+        let t_stitch = t0.elapsed();
         let len = view.len_bytes();
         let obj = self
             .alloc_os_descriptor(&view, kf_linux_raw::HostOffset::new(0), len)
             .map_err(ScatterError::Descriptor)?;
+        let t_desc = t0.elapsed();
         // RM holds the pages now (and never the address): the view goes before any map exists.
         drop(view);
-        match self.map_kind(space, obj, MapBacking::SharedSlice, 0, len, Some(at), defer, kind) {
+        let t_drop = t0.elapsed();
+        let r = self.map_kind(space, obj, MapBacking::SharedSlice, 0, len, Some(at), defer, kind);
+        // ★ Bounded phase breakdown (the first 32 batches of the process): stitch vs pin vs map.
+        static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        if LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 32 {
+            eprintln!(
+                "kf-host: map_scattered {} pieces {len:#x} bytes: stitch {} us, descriptor {} us, drop view {} us, map {} us",
+                pieces.len(),
+                t_stitch.as_micros(),
+                (t_desc - t_stitch).as_micros(),
+                (t_drop - t_desc).as_micros(),
+                (t0.elapsed() - t_drop).as_micros()
+            );
+        }
+        match r {
             Ok(_) => Ok(obj),
             Err(e) => {
                 let _ = self.free(obj);
