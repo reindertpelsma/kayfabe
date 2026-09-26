@@ -296,7 +296,24 @@ cup8bench, every timed iteration verified).
 | 580.159.04 | 580.105.08 | `67e7eadb` | — | — | **30/30** | 0/4 → *staging fault* | the overlay was staged without the seed ISO; fixed in `f72f9a58` |
 | 580.159.04 | 580.159.04 | `f72f9a58` (rebased on master `e05ff74d`) | **9/9** | **1512 / 0** | *not run* (harness: the default initrd was built without the musl client ⇒ NOTRUN=30; re-run at `47348e3b`) | **4/4** | cup2 `0xabcd1234`, cup3 `43`, cup8 `bad=0 maxerr=0`, cup8bench verified |
 | 580.159.04 | 580.105.08 | `f72f9a58` | — | — | **29/30** | **4/4** | the fat guest re-staged with the seed ISO (`f72f9a58`); ladder identical to the default guest's. The one thin red is an **adapter-init flake**, see below |
-| 580.159.04 | 580.159.04 | `47348e3b` (rebased on master `02b27c2a`; walker PTX ISA 8.2) | **9/9** | **1533 / 0** | **30/30** | *running* | the early-merge candidate |
+| 580.159.04 | 580.159.04 | `47348e3b` (rebased on master `02b27c2a`; walker PTX ISA 8.2) | **9/9** | **1533 / 0** | **30/30** | **4/4** | the early-merge candidate — green on the whole bar |
+| 580.159.04 | 580.105.08 | `47348e3b` | — | — | **30/30** | **4/4** | + **fn-1 re-selection on hardware 3/3**: the 580.105.08 initrd on a DEFAULTED device logs `RE-SELECTED at fn 1: 580.159.04 (defaulted) -> 580.105.08` and passes `--timer`, `--engines`, `--ce-client` |
+| 580.159.04 | 580.159.04 | `6de22590` (rebased on master `f8c68286`; host axis carried) | **9/9** (RTX 3080 Ti, box 2) | **1591 / 0** | *running* | — | at the bench host every host carry is the identity |
+
+★ **How far each other guest version got at `47348e3b`** (`failure_point.sh`: one `--timer` boot,
+host 580.159.04; the 580-only grader refuses every non-580 guest by design, so "client rc=1" with
+no guest error means the guest's RM initialised):
+
+| guest | where it stopped | cause | status |
+|---|---|---|---|
+| 590.48.01 | **nowhere in the guest** — RmInitAdapter completes; the grader refuses | — | fat ladder queued (ruling 1) |
+| 595.84 | **nowhere in the guest** — RmInitAdapter completes; the grader refuses | — | fat ladder queued |
+| 575.57.08 / 575.51.03 | `intrInitInterruptTable` | `INTR_GET_KERNEL_TABLE` carry: the matrix had no element sizes, so `subtreeMap` read as one scalar that narrowed | fixed at `1b4aedaf` (element sizes) |
+| 570.148.08 / 570.124.06 | `intrInitInterruptTable` | same | same |
+| 565.57.01 | `intrInitInterruptTable` | same | same |
+| 550.54.14 | `gpuConstructDeviceInfoTable` | `INTERNAL_GET_DEVICE_INFO_TABLE` (9 220 bytes there) unported | carry added `b6574262` |
+| 610.57.04 | `RmInitAdapter 0x23:0x56` | `USER_REGISTER_ACCESS_MAP` (20 492 bytes) unported; next: SM order 73 760 > one message | carry `b6574262`; large RPCs `5b577f5d` (ruling 2) |
+| 535.309.01 | realize | no capability row below 550.54.04 | ruling 5: owner review |
 
 ★ **The 580.105.08 red at `f72f9a58`, measured.** Arm 1 (`--timer`): guest `RmInitAdapter failed!
 (0x25:0x65:1236)` after `memmgrMemSet … NV_ERR_TIMEOUT` (`mem_mgr.c:463`) and
