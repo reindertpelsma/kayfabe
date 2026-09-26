@@ -1,0 +1,82 @@
+=== boot_capture tag=llm_g3 at 2026-09-25T21:12:40+00:00 ===
+=== source revision: 856b4f22 ===
+=== qemu binary: -rwxr-xr-x 1 root root 95798888 Sep 25 19:46 /workspace/bench/kf3-bins/53c2bc20/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: kayfabe-rev:f8cfe8d77f88ddff6471dd67ccde96325d252d15 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /root/kf-llm/scripts/bench/boot_nvkvm.sh  sha256=7454bf433c1d9212
+    used: /root/kf-llm/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Fri Sep 25 21:12:50 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3060        Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /   8192MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Sep 25 21:12 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Sep 25 21:12 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Sep 25 21:12 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Sep 25 21:12 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Sep 25 21:12 .
+drwxr-xr-x 18 root root   4000 Sep 25 21:12 ..
+cr--------  1 root root 240, 1 Sep 25 21:12 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Sep 25 21:12 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /root/kf-llm/scripts/bench/llm_graph_probe_hook.sh at 2026-09-25T21:12:57+00:00 ===
+LGP PROBE_STAGE=side_small PROBE_OK=0 PROBE_EXC=RuntimeError: CUDA error: unspecified launch failure
+LGP_XID stage=side_small host_xid_lines_before=18 after=21
+LGP_XIDLINE stage=side_small [ 6464.837960] NVRM: Xid (PCI:0000:00:08): 13, Graphics Exception: SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed
+LGP_XIDLINE stage=side_small [ 6464.837993] NVRM: Xid (PCI:0000:00:08): 13, Graphics Exception: ESR 0x407020=0x1000 0x407028=0x0 0x40702c=0x204c380 0x407030=0x0
+LGP_XIDLINE stage=side_small [ 6464.838482] NVRM: Xid (PCI:0000:00:08): 13, pid=109771, name=qemu-system-x86, Graphics Exception: channel 0x0000001f, Class 0000c7c0, Offset 00000000, Data 00000000
+LGP PROBE_STAGE=side_model PROBE_OK=0 PROBE_EXC=RuntimeError: CUDA error: unspecified launch failure
+LGP_XID stage=side_model host_xid_lines_before=21 after=24
+LGP_XIDLINE stage=side_model [ 6496.798912] NVRM: Xid (PCI:0000:00:08): 13, Graphics Exception: SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed
+LGP_XIDLINE stage=side_model [ 6496.798973] NVRM: Xid (PCI:0000:00:08): 13, Graphics Exception: ESR 0x407020=0x1000 0x407028=0x0 0x40702c=0x204c380 0x407030=0x0
+LGP_XIDLINE stage=side_model [ 6496.799846] NVRM: Xid (PCI:0000:00:08): 13, pid=109771, name=qemu-system-x86, Graphics Exception: channel 0x0000001f, Class 0000c7c0, Offset 00000000, Data 00000000
+LGP PROBE_PREFILL_TOK=32671
+LGP PROBE_STAGE=static_pre PROBE_OK=1
+LGP_XID stage=static_pre host_xid_lines_before=24 after=24
+LGP PROBE_PREFILL_TOK=32671
+LGP PROBE_STEP_TOK=624
+LGP PROBE_STAGE=static_step PROBE_OK=1
+LGP_XID stage=static_step host_xid_lines_before=24 after=24
+LGP PROBE_PREFILL_TOK=32671
+LGP PROBE_STEP_TOK=624
+LGP PROBE_STAGE=capture PROBE_OK=0 PROBE_EXC=RuntimeError: CUDA error: unspecified launch failure
+LGP_XID stage=capture host_xid_lines_before=24 after=27
+LGP_XIDLINE stage=capture [ 6566.619215] NVRM: Xid (PCI:0000:00:08): 13, Graphics Exception: SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed
+LGP_XIDLINE stage=capture [ 6566.619266] NVRM: Xid (PCI:0000:00:08): 13, Graphics Exception: ESR 0x407020=0x1000 0x407028=0x0 0x40702c=0x204c380 0x407030=0x0
+LGP_XIDLINE stage=capture [ 6566.620041] NVRM: Xid (PCI:0000:00:08): 13, pid=109771, name=qemu-system-x86, Graphics Exception: channel 0x0000001f, Class 0000c7c0, Offset 00000000, Data 00000000
+HOOK_RC=0
+=== GUEST dmesg AFTER the workload (phase 3b captured 39 lines BEFORE it) ===
+GUEST_DMESG_AFTER_LINES=209
+GUEST_DMESG_AFTER_NVRM=205
+GUEST_DMESG_WORKLOAD_DELTA=170
+=== HOST dmesg delta for this boot (watermark 766 → 776) ===
+HOST_DMESG_LINES=10
+HOST_DMESG_NVRM=10
+HOST_DMESG_XID=9

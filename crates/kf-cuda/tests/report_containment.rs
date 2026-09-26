@@ -114,3 +114,29 @@ fn a_report_without_the_diff_flag_is_refused() {
     r.header.flags = kf_cuda::abi::KFWR_HF_RESYNC;
     assert!(matches!(r.require_diff(), Err(ReportError::NotDiff { flags: 2 })));
 }
+
+/// ★★★★★ w828 — a SYSMEM leaf names guest-PHYSICAL memory, not the store: the store span does
+/// not bound it (the guest-RAM map does, in `kf_mem::ledger::desired_from_leaves`). `[measured vh
+/// vhA_gpm]` bounding it here refused a valid page of an 8 GiB guest at 0x2_028f_0000 and killed
+/// UVM's copy channel.
+#[test]
+fn a_sysmem_run_is_not_bounded_by_the_store_span() {
+    for ap in [kf_cuda::abi::KFWR_AP_SYS_COHERENT, kf_cuda::abi::KFWR_AP_SYS_NONCOHERENT] {
+        let mut r0 = run(SPAN + (16 << 20), 0x1_0000, 1);
+        r0.flags = u32::from(ap);
+        assert_eq!(report(vec![r0]).validate(), Ok(()), "aperture {ap}: guest-physical, not a store offset");
+    }
+}
+
+/// The falsifier for the one above: the SAME address as a VIDMEM (and a PEER) leaf is still refused.
+#[test]
+fn a_vidmem_or_peer_run_past_the_span_is_still_refused() {
+    for ap in [0u8, 1u8] {
+        let mut r0 = run(SPAN + (16 << 20), 0x1_0000, 1);
+        r0.flags = u32::from(ap);
+        assert!(
+            matches!(report(vec![r0]).validate(), Err(ReportError::RunOutsideGpga { .. })),
+            "aperture {ap} past the store span must stay refused"
+        );
+    }
+}

@@ -453,6 +453,11 @@ pub struct KfMapRun {
     pub pdb_index: u16,
 }
 
+/// `KFWR_RF_AP_*` sys-coherent (`cuda/walk/kf_walk.h:109`): the run's `gpga` is guest-PHYSICAL.
+pub const KFWR_AP_SYS_COHERENT: u8 = 2;
+/// `KFWR_RF_AP_*` sys-noncoherent: the run's `gpga` is guest-PHYSICAL.
+pub const KFWR_AP_SYS_NONCOHERENT: u8 = 3;
+
 impl KfMapRun {
     /// The leaf aperture code: `flags` bits `KFWR_RF_AP_SHIFT`/`KFWR_RF_AP_MASK`
     /// (`cuda/walk/kf_walk.h:92-97` — 0 vidmem, 1 peer, 2 sys-coherent, 3 sys-noncoherent).

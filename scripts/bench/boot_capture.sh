@@ -96,7 +96,14 @@ if [ "${KF_DEVICE:-nvkvm}" = kf3 ] && [ -z "${QEMU_BIN:-}" ]; then
 fi
 REV=$(strings "$QBIN" 2>/dev/null | grep -o 'kayfabe-rev:[0-9a-f]\{8,40\}' | sort -u | head -1)
 # ⊘ kf3 carries no stamp; its binary is keyed BY revision in its own path (build_kf3.sh).
-[ -z "$REV" ] && [ "${KF_DEVICE:-nvkvm}" = kf3 ] && REV="kf3-bin-rev:$(basename "$(dirname "$QBIN")")"
+# ⊘ w828: and a `kayfabe-rev:` stamp in a kf3 binary is NOT kf3's — it is the OLD nvkvm device's
+# archive, linked into the same QEMU build dir by whoever built it last. [measured vh3, llm_g1] a
+# kf3 binary built at 53c2bc20 printed `kayfabe-rev:f8cfe8d7…` (the provisioning build's nvkvm
+# archive) under "every claim from this boot cites THIS revision". For kf3 the path IS the stamp.
+if [ "${KF_DEVICE:-nvkvm}" = kf3 ]; then
+  [ -n "$REV" ] && echo "[boot_capture:$TAG] (the binary's nvkvm-device stamp $REV is NOT kf3's revision)" >&2
+  REV="kf3-bin-rev:$(basename "$(dirname "$QBIN")")"
+fi
 REV=${REV:-kayfabe-rev:MISSING}
 printf '%s\n' "$REV" > "${LOG}_rev.txt"
 
