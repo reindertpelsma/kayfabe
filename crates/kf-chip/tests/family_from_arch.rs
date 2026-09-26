@@ -25,7 +25,8 @@ fn every_discrete_die_maps_to_its_family() {
 
 #[test]
 fn integrated_and_unknown_architectures_are_refused_by_name() {
-    for (a, i) in [(0x170, 0xB), (0x190, 0xB), (0x1B0, 0xB), (0x1B0, 0xC), (0x180, 1)] {
+    // ★ (0x1A0, 0xB) is GB10B (`nv_arch.h:111`, `g_hal_archimpl.h:88`), added 2026-09-26.
+    for (a, i) in [(0x170, 0xB), (0x190, 0xB), (0x1A0, 0xB), (0x1B0, 0xB), (0x1B0, 0xC), (0x180, 1)] {
         assert_eq!(Family::from_arch(a, i), Err(FamilyRefusal::Integrated { architecture: a, implementation: i }));
     }
     assert_eq!(Family::from_arch(0x140, 0), Err(FamilyRefusal::UnknownArchitecture(0x140)));

@@ -109,7 +109,9 @@ pub enum FamilyRefusal {
     /// An architecture this tree has no family for (pre-Turing: no GSP; or newer than ogkm).
     UnknownArchitecture(u32),
     /// An integrated (SoC) part — `GA10B`/`AD10B`/`GB20B` `0xB`, `GB20C` `0xC`, `GH100_SOC` `1`
-    /// (`ogkm-580: ctrl2080mc.h:114-151`): no vidmem, and the store IS vidmem.
+    /// (`ogkm-580: ctrl2080mc.h:114-151`), and `GB10B` (architecture `GB100`, implementation `0xB`:
+    /// `nv_arch.h:111`, `generated/g_hal_archimpl.h:88` — `ctrl2080mc.h` does not list it): no
+    /// vidmem, and the store IS vidmem.
     Integrated {
         /// `MC_GET_ARCH_INFO` architecture.
         architecture: u32,
@@ -129,8 +131,10 @@ impl Family {
     /// # Errors
     /// [`FamilyRefusal`], by name.
     pub fn from_arch(architecture: u32, implementation: u32) -> Result<Family, FamilyRefusal> {
+        // ⊘ CORRECTED 2026-09-26 (`V3_HW_BOUNDARY_INVENTORY.md`): `GB100` was missing, so a GB10B
+        // (arch 0x1A0, impl 0xB) was accepted as a discrete GB10x.
         let integrated = match architecture {
-            arch::GA100 | arch::AD100 | arch::GB200 => matches!(implementation, 0xB | 0xC),
+            arch::GA100 | arch::AD100 | arch::GB100 | arch::GB200 => matches!(implementation, 0xB | 0xC),
             arch::GH100 => implementation == 1,
             _ => false,
         };
