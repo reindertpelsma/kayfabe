@@ -15,7 +15,10 @@ pgrep -x qemu-system-x86 >/dev/null && { say "⊘ a QEMU is running — the benc
 if [ "$(cat /sys/module/nvidia_drm/parameters/modeset 2>/dev/null)" != Y ]; then
     rmmod nvidia_drm 2>/dev/null; modprobe nvidia-drm modeset=1 || say "⚠ modprobe nvidia-drm modeset=1 failed"
 fi
-say "host nvidia-drm modeset=$(cat /sys/module/nvidia_drm/parameters/modeset 2>/dev/null) dri=$(ls /dev/dri 2>/dev/null | tr '\n' ' ')"
+# the CUDA items (Cycles, ffmpeg CUDA filters, NVDEC hwaccel) need nvidia-uvm and its nodes, as the guest's
+# libcuda gets them through the setuid nvidia-modprobe; here root creates them once
+modprobe nvidia-uvm 2>/dev/null; nvidia-modprobe -u -c=0 2>/dev/null; nvidia-modprobe -m 2>/dev/null
+say "host nvidia-drm modeset=$(cat /sys/module/nvidia_drm/parameters/modeset 2>/dev/null) dri=$(ls /dev/dri 2>/dev/null | tr '\n' ' ') nodes=$(ls /dev/nvidia* | tr '\n' ' ')"
 bash "$HR" up || exit 2
 trap 'bash "$HR" down' EXIT
 mkdir -p "$ROOT/var/tmp/gfxset/bin" && cp -a "$HERE"/. "$HERE/../video_lane.sh" "$ROOT/var/tmp/gfxset/bin/" && chown -R 1000:1000 "$ROOT/var/tmp/gfxset"
