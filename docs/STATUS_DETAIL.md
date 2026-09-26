@@ -5,6 +5,9 @@
 > ★ Updated 2026-09-26 on branch `v3-gpcmask` (§1, §5): floor-swept GR — the first boot on a die
 > whose GPC mask is not `0..n` ([`design/V3_FLOORSWEPT_GR.md`](design/V3_FLOORSWEPT_GR.md)).
 >
+> ★ Updated 2026-09-26 on branch `v3-gfxset` (§3, §7): nvkvm-pv's headless-graphics test set
+> ([`design/V3_GFX_TESTSET.md`](design/V3_GFX_TESTSET.md)), roadmap item 2.
+>
 > The long form of the README's status. Each line names the revision, the box and the document
 > that holds the evidence. ⚠ Where a dated measurement and a summary disagree, believe the
 > measurement. ⊘ The pre-v3 version of this file (the `kayfabe-*` tree, the old test-suite
@@ -99,6 +102,15 @@ by `kayfabe-rm-ladder`, the raw client, which is still built from the frozen pre
 
   Evidence is in `traces/v3_gfx/`. It was re-run on the merged tree at `d536595d`
   (`traces/v3_int_ga106/gfx_guest_d536595d.txt`).
+- **nvkvm-pv's headless-graphics test set** ([`design/V3_GFX_TESTSET.md`](design/V3_GFX_TESTSET.md);
+  `v3-gfxset` `d06833f0` = master `59cc98a9` + the branch; vast 52775275, RTX 3070 GA104): nvkvm-pv's 25
+  headless rows in 23 items (Vulkan, EGL/GLES, GBM, dma-buf sharing, headless weston and sway with
+  capture, glmark2, NVENC/NVDEC, Geekbench Vulkan, Blender Open Data) and 15 more (ffmpeg
+  CUDA/Vulkan/OpenCL/libplacebo filters, Blender Cycles CUDA/OptiX, EEVEE on GL and Vulkan, VirtualGL,
+  optical flow). **38/38**: 31 items byte-identical to bare metal, the Cycles renders inside bare metal's
+  measured spread, 5 by nvkvm-pv's own criterion, no Xid. Master `dd3aed08` was 33/37: the optical-flow
+  engine was not advertised, and ctxsw preemption was refused on copy channels (ffmpeg's Vulkan device);
+  both fixed on the branch, with the SW engine row order the first fix exposed. Display is next (§7).
 - **NVENC/NVDEC** ([`design/V3_VIDEO_ENGINES.md`](design/V3_VIDEO_ENGINES.md); vast 52661900,
   RTX 3060 GA106). Every NVENC and NVDEC output of the graded lane is **byte-identical to bare
   metal**. The engine inventory comes from host queries and ogkm, not from a per-die row. Turing,
@@ -174,7 +186,8 @@ Only guest driver **580.159.04** has been run. The driver-version matrix is a la
 ## 7. Roadmap (owner, 2026-09-26)
 
 1. Apps: close the matrix (UVM demand paging, the refused map).
-2. The headless-graphics test set from nvkvm-pv.
+2. The headless-graphics test set from nvkvm-pv. — **38/38 on `v3-gfxset` `d06833f0`**, RTX 3070
+   ([`design/V3_GFX_TESTSET.md`](design/V3_GFX_TESTSET.md); merge-ready bar held there).
 3. Display, and a desktop (Linux Mint).
 4. *In parallel:* doorbell-module parity (§4).
 5. *In parallel:* Blackwell on hardware.
