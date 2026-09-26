@@ -1,0 +1,10 @@
+# host (bare metal, same box vast 52689820, RTX 3060, 580.159.04), um_probe built with CUDA 12.6 -arch=sm_86 -cudart static
+ATTR managed=1 concurrentManagedAccess=1 pageableMemoryAccess=1
+CHECK malloc ok bad=0
+CHECK cpuinit ok bad=0
+CHECK prefetch ok bad=0
+CHECK gpufirst ok bad=0
+CHECK advise ok bad=0
+CHECK pageable ok bad=0
+CHECK hostalloc ok bad=0
+CHECK d2h ok bad=0

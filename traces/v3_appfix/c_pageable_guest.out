@@ -1,0 +1,10 @@
+FIX_HOOK_START 2026-09-26T05:15:51+00:00 tag=g11
+=== hostalloc
+CHECK hostalloc ok bad=0
+=== d2h
+CHECK d2h ok bad=0
+=== pageable
+CHECK pageable FAIL cudaDeviceSynchronize() -> 719 (unspecified launch failure)
+102
+MMAP {'i': 393, 't': 'mmap', 'dev': 'nvidia-uvm', 'len': 2097152, 'prot': 3, 'flags': 17, 'off': '0x204800000', 'ret': '0x204800000'}
+FIX_HOOK_EXIT rc=0 2026-09-26T05:16:12+00:00

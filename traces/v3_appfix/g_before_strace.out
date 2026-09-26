@@ -1,0 +1,66 @@
+FIX_HOOK_START 2026-09-26T04:25:42+00:00 tag=g2
+/usr/bin/strace
+RC=3
+Failed register events for GPU 0000:00:03.0: N/A
+50
+1405  ioctl(9, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2b, 0x30), 0x7ffc9ae8d330) = 0
+1405  openat(AT_FDCWD, "/proc/devices", O_RDONLY) = 11
+1405  openat(AT_FDCWD, "/proc/driver/nvidia/capabilities/mig/monitor", O_RDONLY) = 11
+1405  openat(AT_FDCWD, "/proc/driver/nvidia/capabilities/mig/monitor", O_RDONLY) = 11
+1405  openat(AT_FDCWD, "/dev/nvidia-caps/nvidia-cap2", O_RDONLY|O_CLOEXEC) = 11
+1405  ioctl(9, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2b, 0x30), 0x7ffc9ae8d330) = 0
+1405  openat(AT_FDCWD, "/sys/devices/system/cpu/online", O_RDONLY|O_CLOEXEC) = 11
+1405  openat(AT_FDCWD, "/proc/self/status", O_RDONLY) = 11
+1405  openat(AT_FDCWD, "/sys/devices/system/node", O_RDONLY|O_NONBLOCK|O_CLOEXEC|O_DIRECTORY) = 11
+1405  openat(AT_FDCWD, "/sys/devices/system/node/node0/cpumap", O_RDONLY) = 14
+1405  openat(AT_FDCWD, "/proc/devices", O_RDONLY) = 11
+1405  openat(AT_FDCWD, "/dev/nvidia-uvm", O_RDWR|O_CLOEXEC) = 11
+1405  openat(AT_FDCWD, "/dev/nvidia-uvm", O_RDWR|O_CLOEXEC) = 14
+1405  ioctl(11, _IOC(_IOC_NONE, 0, 0x1, 0x3000), 0x7ffc9ae8d670) = 0
+1405  ioctl(14, _IOC(_IOC_NONE, 0, 0x4b, 0), 0x7ffc9ae8d6a8) = 0
+1405  ioctl(9, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7ffc9ae8c6f0) = 0
+1405  ioctl(9, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7ffc9ae8c550) = 0
+1405  ioctl(9, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7ffc9ae8c480) = 0
+1405  ioctl(9, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7ffc9ae8c480) = 0
+1405  openat(AT_FDCWD, "/proc/driver/nvidia/params", O_RDONLY) = 15
+1405  openat(AT_FDCWD, "/dev/nvidia0", O_RDWR|O_CLOEXEC) = 15
+1405  ioctl(15, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0xc9, 0x4), 0x7ffc9ae8cf90) = 0
+1405  ioctl(15, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0xd7, 0x230), 0x7ffc9ae8cd20) = 0
+1405  ioctl(9, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7ffc9ae8c500) = 0
+1405  ioctl(9, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2b, 0x30), 0x7ffc9ae8d040) = 0
+1405  ioctl(9, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7ffc9ae8c6a0) = 0
+1405  ioctl(9, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7ffc9ae8c430) = 0
+1405  ioctl(9, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7ffc9ae8c330) = 0
+1405  ioctl(9, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7ffc9ae8c330) = 0
+1405  openat(AT_FDCWD, "/proc/driver/nvidia/params", O_RDONLY) = 16
+1405  openat(AT_FDCWD, "/dev/nvidia0", O_RDWR|O_CLOEXEC) = 16
+1405  ioctl(16, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0xc9, 0x4), 0x7ffc9ae8ce40) = 0
+1405  ioctl(9, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2b, 0x30), 0x7ffc9ae8cef0) = 0
+1405  ioctl(9, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7ffc9ae8c510) = 0
+1405  ioctl(9, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7ffc9ae8c510) = 0
+1405  ioctl(9, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7ffc9ae8c660) = 0
+1405  ioctl(9, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7ffc9ae8c550) = 0
+1405  ioctl(9, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7ffc9ae8c3e0) = 0
+1405  ioctl(9, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7ffc9ae8c3e0) = 0
+1405  ioctl(9, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7ffc9ae8c3e0) = 0
+1405  ioctl(9, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2b, 0x30), 0x7ffc9ae8c550) = 0
+1405  ioctl(9, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7ffc9ae8bb70) = 0
+1405  ioctl(9, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7ffc9ae8c780) = 0
+1405  ioctl(9, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7ffc9ae8c230) = 0
+1405  openat(AT_FDCWD, "/dev/nvidia0", O_RDWR|O_CLOEXEC) = 17
+1405  ioctl(17, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0xc9, 0x4), 0x7ffc9ae8d220) = 0
+1405  ioctl(17, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0xce, 0x10), 0x7ffc9ae8d210) = 0
+1405  ioctl(17, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2b, 0x30), 0x7ffc9ae8d200) = 0
+1405  ioctl(9, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7ffc9ae8c790) = 0
+1405  ioctl(9, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x29, 0x10), 0x7ffc9ae8d210) = 0
+1405  ioctl(11, _IOC(_IOC_NONE, 0, 0x2, 0x3000), 0) = 0
+1405  ioctl(9, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x29, 0x10), 0x7ffc9ae8d120) = 0
+1405  ioctl(9, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x29, 0x10), 0x7ffc9ae8d120) = 0
+1405  ioctl(9, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x29, 0x10), 0x7ffc9ae8d120) = 0
+1405  ioctl(9, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x2a, 0x20), 0x7ffc9ae8c6c0) = 0
+1405  ioctl(9, _IOC(_IOC_READ|_IOC_WRITE, 0x46, 0x29, 0x10), 0x7ffc9ae8d140) = 0
+1406  +++ exited with 3 +++
+1405  +++ exited with 3 +++
+1404  --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=1405, si_uid=0, si_status=3, si_utime=1 /* 0.01 s */, si_stime=24 /* 0.24 s */} ---
+1404  +++ exited with 3 +++
+FIX_HOOK_EXIT rc=0 2026-09-26T04:25:44+00:00
