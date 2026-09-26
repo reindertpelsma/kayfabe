@@ -1,91 +1,91 @@
-BM_START 2026-09-26T10:13:26+00:00 hmm=1
+HOLDER pid=59044 HOLD_READY 0 -- a process holding the GPU registered with UVM (cudaMallocManaged 4 KiB, never touched) so the per-GPU fault_stats procfs node exists across the run; it is created on GPU registration and removed when the last UVM user exits
+BM_START 2026-09-26T10:20:04+00:00 hmm=1
 NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
 NVIDIA GeForce RTX 3060 Ti, 580.159.04
 uvm_disable_hmm=N debug_procfs=1
-NO_FAULT_STATS (need uvm_enable_debug_procfs=1)
 === um_probe malloc
-BEFORE 
+BEFORE replayable_faults 0 duplicates 0 faults_by_access_type:  prefetch 0  read 0  write 0  atomic 0 migrations:  num_pages_in 0 (0 MB)  num_pages_out 0 (0 MB) replays:  start 0  start_ack_all 0 non_replayable_faults 0 faults_by_access_type:  read 0  write 0  atomic 0 faults_by_addressing:  virtual 0  physical 0 migrations:  num_pages_in 0 (0 MB)  num_pages_out 0 (0 MB) 
 ATTR managed=1 concurrentManagedAccess=1 pageableMemoryAccess=1
 CHECK malloc ok bad=0
 RC=0
-AFTER  
+AFTER  replayable_faults 0 duplicates 0 faults_by_access_type:  prefetch 0  read 0  write 0  atomic 0 migrations:  num_pages_in 0 (0 MB)  num_pages_out 0 (0 MB) replays:  start 2  start_ack_all 0 non_replayable_faults 0 faults_by_access_type:  read 0  write 0  atomic 0 faults_by_addressing:  virtual 0  physical 0 migrations:  num_pages_in 0 (0 MB)  num_pages_out 0 (0 MB) 
 === um_probe cpuinit
-BEFORE 
+BEFORE replayable_faults 0 duplicates 0 faults_by_access_type:  prefetch 0  read 0  write 0  atomic 0 migrations:  num_pages_in 0 (0 MB)  num_pages_out 0 (0 MB) replays:  start 2  start_ack_all 0 non_replayable_faults 0 faults_by_access_type:  read 0  write 0  atomic 0 faults_by_addressing:  virtual 0  physical 0 migrations:  num_pages_in 0 (0 MB)  num_pages_out 0 (0 MB) 
 ATTR managed=1 concurrentManagedAccess=1 pageableMemoryAccess=1
 CHECK cpuinit ok bad=0
 RC=0
-AFTER  
+AFTER  replayable_faults 2969 duplicates 2489 faults_by_access_type:  prefetch 0  read 2969  write 0  atomic 0 migrations:  num_pages_in 480 (1 MB)  num_pages_out 24 (0 MB) replays:  start 26  start_ack_all 0 non_replayable_faults 0 faults_by_access_type:  read 0  write 0  atomic 0 faults_by_addressing:  virtual 0  physical 0 migrations:  num_pages_in 0 (0 MB)  num_pages_out 0 (0 MB) 
 === um_probe prefetch
-BEFORE 
+BEFORE replayable_faults 2969 duplicates 2489 faults_by_access_type:  prefetch 0  read 2969  write 0  atomic 0 migrations:  num_pages_in 480 (1 MB)  num_pages_out 24 (0 MB) replays:  start 26  start_ack_all 0 non_replayable_faults 0 faults_by_access_type:  read 0  write 0  atomic 0 faults_by_addressing:  virtual 0  physical 0 migrations:  num_pages_in 0 (0 MB)  num_pages_out 0 (0 MB) 
 ATTR managed=1 concurrentManagedAccess=1 pageableMemoryAccess=1
 CHECK prefetch ok bad=0
 RC=0
-AFTER  
+AFTER  replayable_faults 2969 duplicates 2489 faults_by_access_type:  prefetch 0  read 2969  write 0  atomic 0 migrations:  num_pages_in 480 (1 MB)  num_pages_out 48 (0 MB) replays:  start 28  start_ack_all 0 non_replayable_faults 0 faults_by_access_type:  read 0  write 0  atomic 0 faults_by_addressing:  virtual 0  physical 0 migrations:  num_pages_in 0 (0 MB)  num_pages_out 0 (0 MB) 
 === um_probe gpufirst
-BEFORE 
+BEFORE replayable_faults 2969 duplicates 2489 faults_by_access_type:  prefetch 0  read 2969  write 0  atomic 0 migrations:  num_pages_in 480 (1 MB)  num_pages_out 48 (0 MB) replays:  start 28  start_ack_all 0 non_replayable_faults 0 faults_by_access_type:  read 0  write 0  atomic 0 faults_by_addressing:  virtual 0  physical 0 migrations:  num_pages_in 0 (0 MB)  num_pages_out 0 (0 MB) 
 ATTR managed=1 concurrentManagedAccess=1 pageableMemoryAccess=1
 CHECK gpufirst ok bad=0
 RC=0
-AFTER  
+AFTER  replayable_faults 6012 duplicates 4960 faults_by_access_type:  prefetch 0  read 2969  write 3043  atomic 0 migrations:  num_pages_in 480 (1 MB)  num_pages_out 72 (0 MB) replays:  start 71  start_ack_all 0 non_replayable_faults 0 faults_by_access_type:  read 0  write 0  atomic 0 faults_by_addressing:  virtual 0  physical 0 migrations:  num_pages_in 0 (0 MB)  num_pages_out 0 (0 MB) 
 === um_probe advise
-BEFORE 
+BEFORE replayable_faults 6012 duplicates 4960 faults_by_access_type:  prefetch 0  read 2969  write 3043  atomic 0 migrations:  num_pages_in 480 (1 MB)  num_pages_out 72 (0 MB) replays:  start 71  start_ack_all 0 non_replayable_faults 0 faults_by_access_type:  read 0  write 0  atomic 0 faults_by_addressing:  virtual 0  physical 0 migrations:  num_pages_in 0 (0 MB)  num_pages_out 0 (0 MB) 
 ATTR managed=1 concurrentManagedAccess=1 pageableMemoryAccess=1
 CHECK advise ok bad=0
 RC=0
-AFTER  
+AFTER  replayable_faults 6012 duplicates 4960 faults_by_access_type:  prefetch 0  read 2969  write 3043  atomic 0 migrations:  num_pages_in 480 (1 MB)  num_pages_out 72 (0 MB) replays:  start 73  start_ack_all 0 non_replayable_faults 0 faults_by_access_type:  read 0  write 0  atomic 0 faults_by_addressing:  virtual 0  physical 0 migrations:  num_pages_in 0 (0 MB)  num_pages_out 0 (0 MB) 
 === um_probe pageable
-BEFORE 
+BEFORE replayable_faults 6012 duplicates 4960 faults_by_access_type:  prefetch 0  read 2969  write 3043  atomic 0 migrations:  num_pages_in 480 (1 MB)  num_pages_out 72 (0 MB) replays:  start 73  start_ack_all 0 non_replayable_faults 0 faults_by_access_type:  read 0  write 0  atomic 0 faults_by_addressing:  virtual 0  physical 0 migrations:  num_pages_in 0 (0 MB)  num_pages_out 0 (0 MB) 
 ATTR managed=1 concurrentManagedAccess=1 pageableMemoryAccess=1
 CHECK pageable ok bad=0
 RC=0
-AFTER  
+AFTER  replayable_faults 9470 duplicates 8065 faults_by_access_type:  prefetch 0  read 2969  write 6501  atomic 0 migrations:  num_pages_in 833 (3 MB)  num_pages_out 101 (0 MB) replays:  start 100  start_ack_all 0 non_replayable_faults 0 faults_by_access_type:  read 0  write 0  atomic 0 faults_by_addressing:  virtual 0  physical 0 migrations:  num_pages_in 0 (0 MB)  num_pages_out 0 (0 MB) 
 === um_probe hostalloc
-BEFORE 
+BEFORE replayable_faults 9470 duplicates 8065 faults_by_access_type:  prefetch 0  read 2969  write 6501  atomic 0 migrations:  num_pages_in 833 (3 MB)  num_pages_out 101 (0 MB) replays:  start 100  start_ack_all 0 non_replayable_faults 0 faults_by_access_type:  read 0  write 0  atomic 0 faults_by_addressing:  virtual 0  physical 0 migrations:  num_pages_in 0 (0 MB)  num_pages_out 0 (0 MB) 
 ATTR managed=1 concurrentManagedAccess=1 pageableMemoryAccess=1
 CHECK hostalloc ok bad=0
 RC=0
-AFTER  
+AFTER  replayable_faults 9470 duplicates 8065 faults_by_access_type:  prefetch 0  read 2969  write 6501  atomic 0 migrations:  num_pages_in 833 (3 MB)  num_pages_out 101 (0 MB) replays:  start 102  start_ack_all 0 non_replayable_faults 0 faults_by_access_type:  read 0  write 0  atomic 0 faults_by_addressing:  virtual 0  physical 0 migrations:  num_pages_in 0 (0 MB)  num_pages_out 0 (0 MB) 
 === um_probe d2h
-BEFORE 
+BEFORE replayable_faults 9470 duplicates 8065 faults_by_access_type:  prefetch 0  read 2969  write 6501  atomic 0 migrations:  num_pages_in 833 (3 MB)  num_pages_out 101 (0 MB) replays:  start 102  start_ack_all 0 non_replayable_faults 0 faults_by_access_type:  read 0  write 0  atomic 0 faults_by_addressing:  virtual 0  physical 0 migrations:  num_pages_in 0 (0 MB)  num_pages_out 0 (0 MB) 
 ATTR managed=1 concurrentManagedAccess=1 pageableMemoryAccess=1
 CHECK d2h ok bad=0
 RC=0
-AFTER  
+AFTER  replayable_faults 9470 duplicates 8065 faults_by_access_type:  prefetch 0  read 2969  write 6501  atomic 0 migrations:  num_pages_in 833 (3 MB)  num_pages_out 101 (0 MB) replays:  start 104  start_ack_all 0 non_replayable_faults 0 faults_by_access_type:  read 0  write 0  atomic 0 faults_by_addressing:  virtual 0  physical 0 migrations:  num_pages_in 0 (0 MB)  num_pages_out 0 (0 MB) 
 === readmostly_probe reprefetch
-BEFORE 
+BEFORE replayable_faults 9470 duplicates 8065 faults_by_access_type:  prefetch 0  read 2969  write 6501  atomic 0 migrations:  num_pages_in 833 (3 MB)  num_pages_out 101 (0 MB) replays:  start 104  start_ack_all 0 non_replayable_faults 0 faults_by_access_type:  read 0  write 0  atomic 0 faults_by_addressing:  virtual 0  physical 0 migrations:  num_pages_in 0 (0 MB)  num_pages_out 0 (0 MB) 
 CHECK reprefetch ok bad=0
 RC=0
-AFTER  
+AFTER  replayable_faults 9470 duplicates 8065 faults_by_access_type:  prefetch 0  read 2969  write 6501  atomic 0 migrations:  num_pages_in 833 (3 MB)  num_pages_out 101 (0 MB) replays:  start 106  start_ack_all 0 non_replayable_faults 0 faults_by_access_type:  read 0  write 0  atomic 0 faults_by_addressing:  virtual 0  physical 0 migrations:  num_pages_in 0 (0 MB)  num_pages_out 0 (0 MB) 
 === readmostly_probe fault
-BEFORE 
+BEFORE replayable_faults 9470 duplicates 8065 faults_by_access_type:  prefetch 0  read 2969  write 6501  atomic 0 migrations:  num_pages_in 833 (3 MB)  num_pages_out 101 (0 MB) replays:  start 106  start_ack_all 0 non_replayable_faults 0 faults_by_access_type:  read 0  write 0  atomic 0 faults_by_addressing:  virtual 0  physical 0 migrations:  num_pages_in 0 (0 MB)  num_pages_out 0 (0 MB) 
 CHECK fault ok bad=0
 RC=0
-AFTER  
+AFTER  replayable_faults 11348 duplicates 9754 faults_by_access_type:  prefetch 0  read 4847  write 6501  atomic 0 migrations:  num_pages_in 1022 (3 MB)  num_pages_out 101 (0 MB) replays:  start 116  start_ack_all 0 non_replayable_faults 0 faults_by_access_type:  read 0  write 0  atomic 0 faults_by_addressing:  virtual 0  physical 0 migrations:  num_pages_in 0 (0 MB)  num_pages_out 0 (0 MB) 
 === readmostly_probe gpuwrite
-BEFORE 
+BEFORE replayable_faults 11348 duplicates 9754 faults_by_access_type:  prefetch 0  read 4847  write 6501  atomic 0 migrations:  num_pages_in 1022 (3 MB)  num_pages_out 101 (0 MB) replays:  start 116  start_ack_all 0 non_replayable_faults 0 faults_by_access_type:  read 0  write 0  atomic 0 faults_by_addressing:  virtual 0  physical 0 migrations:  num_pages_in 0 (0 MB)  num_pages_out 0 (0 MB) 
 CHECK gpuwrite ok bad=0
 RC=0
-AFTER  
+AFTER  replayable_faults 26190 duplicates 19897 faults_by_access_type:  prefetch 0  read 4847  write 21343  atomic 0 migrations:  num_pages_in 1022 (3 MB)  num_pages_out 113 (0 MB) replays:  start 295  start_ack_all 0 non_replayable_faults 0 faults_by_access_type:  read 0  write 0  atomic 0 faults_by_addressing:  virtual 0  physical 0 migrations:  num_pages_in 0 (0 MB)  num_pages_out 0 (0 MB) 
 === readmostly_probe downgrade
-BEFORE 
+BEFORE replayable_faults 26190 duplicates 19897 faults_by_access_type:  prefetch 0  read 4847  write 21343  atomic 0 migrations:  num_pages_in 1022 (3 MB)  num_pages_out 113 (0 MB) replays:  start 295  start_ack_all 0 non_replayable_faults 0 faults_by_access_type:  read 0  write 0  atomic 0 faults_by_addressing:  virtual 0  physical 0 migrations:  num_pages_in 0 (0 MB)  num_pages_out 0 (0 MB) 
 CHECK downgrade ok bad=0
 RC=0
-AFTER  
+AFTER  replayable_faults 41380 duplicates 30377 faults_by_access_type:  prefetch 0  read 4847  write 36533  atomic 0 migrations:  num_pages_in 1022 (3 MB)  num_pages_out 137 (0 MB) replays:  start 480  start_ack_all 0 non_replayable_faults 0 faults_by_access_type:  read 0  write 0  atomic 0 faults_by_addressing:  virtual 0  physical 0 migrations:  num_pages_in 0 (0 MB)  num_pages_out 0 (0 MB) 
 === clpeak
-BEFORE 
+BEFORE replayable_faults 41380 duplicates 30377 faults_by_access_type:  prefetch 0  read 4847  write 36533  atomic 0 migrations:  num_pages_in 1022 (3 MB)  num_pages_out 137 (0 MB) replays:  start 480  start_ack_all 0 non_replayable_faults 0 faults_by_access_type:  read 0  write 0  atomic 0 faults_by_addressing:  virtual 0  physical 0 migrations:  num_pages_in 0 (0 MB)  num_pages_out 0 (0 MB) 
     Global memory bandwidth (GBPS)
       float   : 393.05
-      float2  : 405.17
-      float4  : 411.99
-      float8  : 355.30
-      float16 : 408.40
+      float2  : 405.15
+      float4  : 411.96
+      float8  : 353.95
+      float16 : 408.38
 
     Single-precision compute (GFLOPS)
-      float   : 17909.84
-      float2  : 17878.41
-      float4  : 17773.12
-      float8  : 17671.45
-      float16 : 17445.50
+      float   : 17897.82
+      float2  : 17879.33
+      float4  : 17774.08
+      float8  : 17618.70
+      float16 : 17446.34
 
     No half precision support! Skipped
 
@@ -97,24 +97,25 @@ BEFORE
       double16 : 286.49
 
     Integer compute (GIOPS)
-      int   : 9187.82
-      int2  : 9076.92
-      int4  : 9070.65
-      int8  : 9044.06
-      int16 : 9054.26
+      int   : 9194.55
+      int2  : 9070.95
+      int4  : 9093.85
+      int8  : 9024.49
+      int16 : 9054.06
 
     Transfer bandwidth (GBPS)
-      enqueueWriteBuffer         : 7.65
-      enqueueReadBuffer          : 7.27
-      enqueueMapBuffer(for read) : 8.27
-        memcpy from mapped ptr   : 10.37
-      enqueueUnmap(after write)  : 9.04
-        memcpy to mapped ptr     : 10.70
+      enqueueWriteBuffer         : 7.95
+      enqueueReadBuffer          : 8.70
+      enqueueMapBuffer(for read) : 8.26
+        memcpy from mapped ptr   : 10.55
+      enqueueUnmap(after write)  : 9.15
+        memcpy to mapped ptr     : 10.16
 
-    Kernel launch latency : 3.71 us
+    Kernel launch latency : 3.78 us
 
 RC=0
-AFTER  
-BM_EXIT rc=0 2026-09-26T10:15:58+00:00
+AFTER  replayable_faults 41380 duplicates 30377 faults_by_access_type:  prefetch 0  read 4847  write 36533  atomic 0 migrations:  num_pages_in 1022 (3 MB)  num_pages_out 137 (0 MB) replays:  start 497  start_ack_all 0 non_replayable_faults 0 faults_by_access_type:  read 0  write 0  atomic 0 faults_by_addressing:  virtual 0  physical 0 migrations:  num_pages_in 0 (0 MB)  num_pages_out 0 (0 MB) 
+BM_EXIT rc=0 2026-09-26T10:22:08+00:00
+HOLDER_ALIVE_AT_END=yes
 === dmesg (xid|nvrm|uvm) after run hmm=1
 === DMESG_END

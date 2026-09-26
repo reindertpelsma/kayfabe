@@ -52,7 +52,8 @@ hypothesis for an experiment, never a premise for code.
    host map flags, so a guest read-only duplicate is mapped **read-write on the host**, and an
    in-place RW→RO downgrade produces no diff at all. Predicted consequence: a GPU write to a
    `cudaMemAdviseSetReadMostly` page lands in a stale duplicate. The guest CPU then reads the old
-   value, with no fault and no error. The stock fix is to propagate RO. It turns a silent wrong
+   value, with no fault and no error. (Bare metal measured: that write takes ~15 k replayable
+   faults, §1.2.) The stock fix is to propagate RO. It turns a silent wrong
    answer into a loud 719, and the same fault delivery (b3) makes it correct. `[src]` + `[inf]`
    for the consequence.
 6. **First experiment** (§9): a host-only prototype of b3 on a rented GA10x with **no guest and no
@@ -106,35 +107,50 @@ before a `FAULT_PTE`) is a **separate** defect and not this note's.
 The matrix records clpeak (OpenCL) hitting `FAULT_PDE VIRT_WRITE @0x772b_de422000` after its
 float/half/double groups passed. The first failing group is *integer*, and everything after it
 fails too (a sticky context error). `[meas]` The VA is a UVA-range user address, and that alone
-cannot separate managed, HMM and device memory. §1.2 rules out HMM: clpeak passes on bare metal
-with host HMM off. Whether it takes demand faults at all is still unmeasured.
+cannot separate managed, HMM and device memory. ★ §1.2 settles it: on bare metal clpeak takes
+**zero** replayable faults (HMM on or off), so its guest fault is **not demand paging**. It is a kf3
+publication or ordering defect, and it is triaged separately from class C.
 
 ### 1.2 Bare-metal baseline — measured 2026-09-26
 
-`[meas]` rented RTX 3060 Ti, **open** kernel module 580.159.04, no guest and no kayfabe; raw output
-in `traces/v3_uvm_research/bm_rtx3060ti_580.159.04_hmm{1,0}.out` (driver `bm_run.sh`).
+`[meas]` rented RTX 3060 Ti, **open** kernel module 580.159.04, CUDA 12.6, clpeak 1.1.0 (Ubuntu),
+no guest and no kayfabe; raw output in `traces/v3_uvm_research/bm_rtx3060ti_580.159.04_hmm{1,0}.out`.
+Replayable-fault counts come from the host UVM `fault_stats` (debug procfs). ⚠ That node exists only
+while some process has the GPU registered with UVM, so the run keeps a holder process alive
+(`HOLDER` line in each file; `bm_run.sh` now does this itself). Deltas are per workload:
 
-| workload | host HMM on (stock) | host `uvm_disable_hmm=1` |
+| workload | HMM on (stock): result, replayable faults (pages in/out) | `uvm_disable_hmm=1` |
 |---|---|---|
-| `um_probe` malloc / cpuinit / prefetch / gpufirst / advise / hostalloc / d2h | ok | ok |
-| `um_probe pageable` (kernel writes `malloc` memory) | ok | **700**, host **`Xid 31 … GPC1 … FAULT_PDE ACCESS_TYPE_VIRT_WRITE @0x72a5_35f4a000`** |
-| `readmostly_probe` reprefetch / fault / gpuwrite / downgrade | ok ×4 | ok ×4 |
-| clpeak (every group incl. integer, transfer, launch latency; no half support on this card) | pass | **pass** |
+| `um_probe` malloc, prefetch, advise, hostalloc, d2h | ok, **0** | ok, 0 |
+| `um_probe cpuinit` (managed, CPU first touch) | ok, **2 969** (480/24) | ok, 3 054 |
+| `um_probe gpufirst` | ok, **3 043** (0/24) | ok, 3 331 |
+| `um_probe pageable` (kernel writes `malloc`) | ok, **3 458** (353/29) | **700** + host **`Xid 31 … FAULT_PDE ACCESS_TYPE_VIRT_WRITE`** at a `0x7584…` user VA |
+| `readmostly_probe reprefetch` | ok, **0** | ok, 0 |
+| `readmostly_probe fault` | ok, **1 878** | ok, 1 955 |
+| `readmostly_probe gpuwrite` | ok, **14 842** | ok, 14 906 |
+| `readmostly_probe downgrade` | ok, **15 190** | ok, 14 757 |
+| clpeak (all groups; no half support on this card) | ok, **0** | ok, 0 |
+
+Non-replayable faults: **0** in every row. About half of each replayable count is duplicates.
 
 Readings:
-- ★ **The kf3 signature is exactly what a host with no fault servicer looks like.** A GPU write to
-  an address nobody backs gives, on bare metal, the very line the app matrix records for the
-  guest (`Xid 31 … FAULT_PDE VIRT_WRITE` at a `0x7xxx` user VA). That is §2 made concrete: the
-  failure is the absence of a servicer, not a publication bug.
-- ✔ All four `readmostly_probe` modes pass on bare metal, so they are valid correctness oracles
-  for §6 / E3 (a kf3 FAIL there indicts kayfabe).
-- **clpeak does not depend on HMM** — it passes with host HMM off. So guest `uvm_disable_hmm=1`
-  (§7.2) is **not** a predicted fix for clpeak; its fault in the guest is either a managed/UVM
-  allocation inside NVIDIA's OpenCL runtime or not a demand-paging fault at all.
-- ⊘ **The fault counters were NOT captured.** `fault_stats` did not appear even with
-  `uvm_enable_debug_procfs=1` (every `BEFORE/AFTER` is empty; the script's `NO_FAULT_STATS` line
-  says so). So this run shows *which workloads work without HMM*, not *which take replayable
-  faults*. Whether clpeak demand-faults on bare metal is still **unmeasured** (§10 item 5).
+- ★ **The shapes that fail in kf3 are exactly the ones that demand-fault on bare metal**:
+  cpuinit, gpufirst and pageable. The ones kf3 passes (malloc, prefetch, advise, hostalloc, d2h)
+  take **zero** replayable faults. This confirms the §1 diagnosis by measurement.
+- ★ **HMM-off bare metal reproduces kf3's exact signature**: `Xid 31 … FAULT_PDE VIRT_WRITE` at a
+  user VA. The failure is the absence of a fault servicer, not a publication bug.
+- ✔ **`readmostly_probe` is a valid oracle.** All four modes pass on bare metal. `gpuwrite` and
+  `downgrade` take ~15 k replayable faults each: on real hardware the GPU write **does** fault
+  (read-only duplicate). That is the fault kf3 cannot deliver today, and, while READ_ONLY is dropped,
+  **never even raises** (§6). `reprefetch` takes zero faults, so it tests collapse ordering alone.
+- ★ **clpeak takes ZERO replayable faults and passes with HMM off.** Its guest `FAULT_PDE`
+  (`V3_APP_MATRIX.md`) is therefore **not a demand-paging fault**. On bare metal nothing in clpeak
+  needs a fault serviced. ⇒ It is a **publication or ordering defect in kf3**, a different class
+  from C, and it belongs with C′ (UnifiedMemoryStreams) as a mapping-plane bug. Neither this note's
+  options nor guest `uvm_disable_hmm=1` will fix it.
+- Fault volume (~3 k per 8 MiB first touch, ~15 k for the read-dup write case) sizes the latency
+  path in §4.4. Per-*batch* cost matters, not per-fault. UVM batches, and roughly half the entries
+  are duplicates.
 
 ---
 
@@ -565,8 +581,8 @@ most of the kf3-side risk lives.
   value and no error** (the silent case). After the §6 fix: `gpuwrite` and `downgrade` → 719.
   After b3: all four ok.
 - **E4: guest `uvm_disable_hmm=1`** against the five C-class apps and `um_probe pageable`. It
-  separates the HMM-keyed failures from the managed ones. ⊘ Not a predicted fix for clpeak:
-  clpeak passes on bare metal with host HMM off (§1.2).
+  separates the HMM-keyed failures from the managed ones. ⊘ Not a fix for clpeak: clpeak takes
+  zero demand faults on bare metal (§1.2); its guest fault is a separate kf3 mapping defect.
 
 ---
 
@@ -581,8 +597,7 @@ most of the kf3-side risk lives.
 3. Whether every guest PTE kind is expressible through UVM external-mapping attributes (§4.4). E2.
 4. Whether the guest ever routes `GP100_UVM_SW` (`C076`) methods through a channel kf3 forwards,
    and how kf3 handles that subchannel today.
-5. What clpeak's faulting buffer is. §1.2 rules out HMM (it passes with host HMM off); the fault
-   counters that would say whether it takes replayable faults at all were not captured (the
-   `fault_stats` procfs file did not appear). Next: count faults with the UVM tools event API
-   (`UVM_TOOLS_INIT_EVENT_TRACKER`, `UvmEventTypeGpuFault`) or a `uvm_gpu_replayable_faults`
-   tracepoint/kprobe hit count on bare metal. The allocation type itself is inside closed OpenCL.
+5. ⊘ **Answered, and reclassified**: clpeak takes zero replayable faults on bare metal (§1.2), so its
+   guest `FAULT_PDE` is a kf3 mapping-plane defect, not demand paging. Which buffer it is remains
+   open. The next step is a kf3-side capture of the refused or missing run at that VA, not this
+   note.
