@@ -640,6 +640,9 @@ pub struct VaStats {
     pub priv_withheld: u64,
     /// Bytes of [`VaStats::priv_withheld`].
     pub priv_withheld_bytes: u64,
+    /// ★ v3-roperm: PRIVILEGED map runs mirrored (guest-kernel spaces, CPU windows) — with
+    /// [`VaStats::priv_withheld`], every privileged leaf the walker reported.
+    pub priv_mirrored: u64,
 }
 
 /// ★ P5c: where an invalidate's wall time goes, summed over every one completed — never a decision
@@ -1240,6 +1243,13 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             self.stats.clipped_bytes += a.clipped_bytes;
             self.stats.priv_withheld += a.priv_withheld as u64;
             self.stats.priv_withheld_bytes += a.priv_withheld_bytes;
+            self.stats.priv_mirrored += a.priv_mirrored as u64;
+            if a.priv_mirrored > 0 {
+                static MIRRORED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+                if MIRRORED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 64 {
+                    eprintln!("kf3: {key:?} root {walked_root:#x}: {} privileged run(s) mirrored — a guest-kernel space or CPU window", a.priv_mirrored);
+                }
+            }
             if a.priv_withheld > 0 {
                 // ★ v3-roperm: WHICH space withheld (the per-leaf line cannot name it), bounded.
                 static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);

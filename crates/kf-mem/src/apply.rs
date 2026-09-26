@@ -79,6 +79,10 @@ pub struct Applied {
     pub priv_withheld: usize,
     /// Their bytes.
     pub priv_withheld_bytes: u64,
+    /// ★ v3-roperm: PRIVILEGED map runs this target MIRRORED (a guest-kernel space or a CPU
+    /// window) — the other half of the census, so a zero `priv_withheld` can be told apart from
+    /// "no privileged leaf was ever walked".
+    pub priv_mirrored: usize,
     /// ★ v3-mapfix: of `refused`, the UNMAPs the host refused — a placement that may still be
     /// live on the host after the guest dropped it (the one refusal that is not mere absence).
     pub unmap_refused: usize,
@@ -330,9 +334,12 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
         // ★★★ v3-roperm: a PRIVILEGED memory leaf never reaches a user twin (guest-internal
         // isolation: an unprivileged guest channel must not reach what the guest kernel marked
         // privileged, and the host cannot express the bit). Withheld, counted, named.
-        if r.privileged && withhold_privileged {
-            out.withhold_privileged(i, r);
-            continue;
+        if r.privileged {
+            if withhold_privileged {
+                out.withhold_privileged(i, r);
+                continue;
+            }
+            out.priv_mirrored += 1;
         }
         let mut d = match desired_from_leaves([(r.va, r.at, r.len, r.ap)], cfg.store_bytes, cfg.ram_offset) {
             // ★ v3-gfx: the host maps it with the guest's kind, uncompressed (`Desired::kind`).
@@ -752,7 +759,7 @@ mod tests {
         let kernel = Rec::default();
         let a = apply_entry(&kernel, &runs, &cfg());
         assert_eq!(a.codes, vec![KFWR_ACK_APPLIED; 2]);
-        assert_eq!(a.priv_withheld, 0);
+        assert_eq!((a.priv_withheld, a.priv_mirrored), (0, 1));
         assert_eq!(*kernel.ops.borrow(), vec!["map 0x200000000+0x1000", "map 0x200004000+0x3000", "inval"]);
         // An UNMAP of a (kernel-era) privileged placement still goes to the host.
         let a = apply_entry(&user, &[DiffRun { unmap: true, privileged: true, ..u(0x2_0000_4000, 0x3000) }], &cfg());
