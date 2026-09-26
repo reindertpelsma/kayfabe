@@ -16,7 +16,7 @@ Q=${QEMU_BIN:-/workspace/bench/qemu-build/qemu-system-x86_64}
 #   - guest RAM MUST be a shared memfd — the store/isolate plane adopts it, and an anonymous
 #     MAP_PRIVATE block makes every store-backed path refuse (a harness fault that reads as ours);
 #   - BAR1 defaults to 128 MiB (256 + headroom does not fit the host's 256 MiB aperture).
-KF_DEVICE=${KF_DEVICE:-nvkvm}
+KF_DEVICE=${KF_DEVICE:-kf3}
 if [ "$KF_DEVICE" = kf3 ]; then
     KF3_REPO="$(cd "$(dirname "$0")/../.." && pwd)"
     KF3_REV=$(git -C "$KF3_REPO" rev-parse --short=8 HEAD 2>/dev/null || echo unknown)
@@ -29,7 +29,7 @@ if [ "$KF_DEVICE" = kf3 ]; then
     DEVICE_ARG="kf3-gpu,fb-mb=${KF3_FB_MB:-8192},bar1-size=$(( KAYFABE_GUEST_BAR1_MB * 1024 * 1024 )),bar2-size=33554432,id=kf0${KF3_DEV_EXTRA:+,$KF3_DEV_EXTRA}"
     echo "== kf3 binary: $Q (rev $KF3_REV)  device: $DEVICE_ARG" >&2
 elif [ "$KF_DEVICE" = nvkvm ]; then
-    DEVICE_ARG="nvkvm-gpu,bar1-size=$(( ${KAYFABE_GUEST_BAR1_MB:-256} * 1024 * 1024 )),bar2-size=33554432,id=kf0${NVKVM_DEV_EXTRA:+,$NVKVM_DEV_EXTRA}"
+    echo "★ boot_nvkvm: KF_DEVICE=nvkvm refused — the old nvkvm device (crates/kayfabe-qemu-raw) was archived at v3 — see archive/README.md; use KF_DEVICE=kf3 (the default)" >&2; exit 2
 else
     echo "★ KF_DEVICE must be nvkvm or kf3, got [$KF_DEVICE]" >&2; exit 2
 fi
