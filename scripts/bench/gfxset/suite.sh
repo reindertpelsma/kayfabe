@@ -23,6 +23,25 @@ say "GSET_SUITE_STARTED run=$RUN rev=$REV"
 busy(){ pgrep -x qemu-system-x86 >/dev/null || pgrep -x cargo >/dev/null || pgrep -x rustc >/dev/null; }
 while busy; do say "waiting: a QEMU/cargo is running (serial bench)"; sleep 20; done
 ITEMS=${*:-}
+# ★ GSET_HOST_FROM=<run>: reuse that run's bare-metal baseline (valid only on the SAME box, GPU, guest
+#   image and item code — say so in the report) and measure on bare metal only the items it lacks.
+if [ -n "${GSET_HOST_FROM:-}" ]; then
+    F=$(dirname "$R")/$GSET_HOST_FROM
+    for x in host.res host.dig host2.res host2.dig; do cp -f "$F/$x" "$R/$x" 2>/dev/null; done
+    want=${ITEMS:-$(bash "$HERE/items.sh" x list 2>/dev/null)}
+    miss=""; for a in $want; do grep -q "item=$a " "$R/host.res" 2>/dev/null || miss="$miss $a"; done
+    say "host baseline reused from $GSET_HOST_FROM; measuring on bare metal only:${miss:- (none)}"
+    if [ -n "$miss" ]; then
+        exec 9>"${KF_LOCK:-/tmp/kayfabe-fastguest.lock}"; flock 9
+        mkdir -p "$R/hm1" "$R/hm2"
+        bash "$HERE/host.sh" "$R/hm1" $miss > "$R/hm1/host.console" 2>&1
+        bash "$HERE/host.sh" "$R/hm2" $miss > "$R/hm2/host.console" 2>&1
+        flock -u 9; exec 9>&-
+        cat "$R/hm1/host.res" >> "$R/host.res"; cat "$R/hm1/host.dig" >> "$R/host.dig" 2>/dev/null
+        cat "$R/hm2/host.res" >> "$R/host2.res"; cat "$R/hm2/host.dig" >> "$R/host2.dig" 2>/dev/null
+    fi
+    GSET_NO_HOST=1
+fi
 if [ "${GSET_NO_HOST:-0}" != 1 ]; then
     exec 9>"${KF_LOCK:-/tmp/kayfabe-fastguest.lock}"; flock 9
     rm -f "$R"/host.res "$R"/host.dig "$R"/host2.res "$R"/host2.dig
