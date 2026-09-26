@@ -1095,30 +1095,29 @@ fn the_gsp_element_wire_boundary_is_610_not_570() {
         .expect("in range")
     };
 
-    for (major, minor, patch) in [
-        (550u16, 54u16, 4u16),
-        (575, 64, 5),
-        (580, 65, 6),
-        (BENCH_DRIVER.major, BENCH_DRIVER.minor, BENCH_DRIVER.patch),
-        (595, 84, 0),
-        // ★ The off-by-one at the boundary, exactly as the NVOS46 test already pins for
-        // 580.65.05 vs 580.65.06: one patch below 610.43.02 is still the 48-byte form.
-        (609, 255, 255),
-        (610, 43, 1),
+    // ⊘⊘ CORRECTED 2026-09-26 (`V3_DRIVER_MATRIX.md` §4): every version below is now a MEASURED
+    // tag (the table no longer answers 550.54.04, 609.255.255 or 999.0.0 at all — they were never
+    // measured), and the measurement overturned one claim this test carried: **595.84 already
+    // declares the nine-field `MESSAGE_QUEUE_INIT_ARGUMENTS`** while keeping the 48-byte element.
+    // The hand table had keyed 595 as four-field, which silently skipped the header-size
+    // cross-check the nine-field form exists for.
+    for (major, minor, patch, init) in [
+        (550u16, 54u16, 14u16, GspInitArgsWire::FourField),
+        (575, 64, 5, GspInitArgsWire::FourField),
+        (580, 65, 6, GspInitArgsWire::FourField),
+        (BENCH_DRIVER.major, BENCH_DRIVER.minor, BENCH_DRIVER.patch, GspInitArgsWire::FourField),
+        (590, 48, 1, GspInitArgsWire::FourField),
+        (595, 84, 0, GspInitArgsWire::NineField),
     ] {
         assert_eq!(
             at(major, minor, patch).gsp_element_wire(),
             GspElementWire::Pre610,
             "{major}.{minor}.{patch} is on the 48-byte side",
         );
-        assert_eq!(
-            at(major, minor, patch).gsp_init_args_wire(),
-            GspInitArgsWire::FourField,
-            "{major}.{minor}.{patch} declares no queue geometry",
-        );
+        assert_eq!(at(major, minor, patch).gsp_init_args_wire(), init, "{major}.{minor}.{patch} init args");
     }
 
-    for (major, minor, patch) in [(610u16, 43u16, 2u16), (999, 0, 0)] {
+    for (major, minor, patch) in [(610u16, 43u16, 2u16), (610, 57, 4)] {
         assert_eq!(
             at(major, minor, patch).gsp_element_wire(),
             GspElementWire::From610_43_02,
@@ -1128,6 +1127,10 @@ fn the_gsp_element_wire_boundary_is_610_not_570() {
             at(major, minor, patch).gsp_init_args_wire(),
             GspInitArgsWire::NineField,
         );
+    }
+    // Unmeasured versions are refused, never extrapolated from the nearest tag.
+    for (major, minor, patch) in [(609u16, 255u16, 255u16), (610, 43, 1), (999, 0, 0)] {
+        assert!(table_for(DriverVersion { major, minor, patch }).is_err(), "{major}.{minor}.{patch} is unmeasured");
     }
 
     // The offsets each side implies, so a mis-typed table entry is caught here and not by

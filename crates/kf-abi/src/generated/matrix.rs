@@ -27,17 +27,26 @@ const fn r<T>(first: DriverVersion, last: DriverVersion, value: Option<T>) -> Ru
     Run { first, last, value }
 }
 
-/// Every ogkm tag the committed sweep measured, ascending (20 tags).
+/// Every ogkm tag the committed sweep measured, ascending (29 tags).
 pub const MEASURED: &[DriverVersion] = &[
     v(535, 309, 1), // 535.309.01
     v(545, 23, 8),  // 545.23.08
+    v(550, 40, 7),  // 550.40.07
     v(550, 54, 14), // 550.54.14
+    v(550, 90, 7),  // 550.90.07
+    v(555, 42, 2),  // 555.42.02
+    v(560, 28, 3),  // 560.28.03
     v(565, 57, 1),  // 565.57.01
+    v(570, 86, 15), // 570.86.15
     v(570, 124, 6), // 570.124.06
     v(570, 148, 8), // 570.148.08
+    v(575, 51, 2),  // 575.51.02
     v(575, 51, 3),  // 575.51.03
     v(575, 57, 8),  // 575.57.08
+    v(575, 64, 5),  // 575.64.05
     v(580, 65, 6),  // 580.65.06
+    v(580, 82, 7),  // 580.82.07
+    v(580, 94, 2),  // 580.94.02
     v(580, 95, 5),  // 580.95.05
     v(580, 105, 8), // 580.105.08
     v(580, 126, 9), // 580.126.09
@@ -243,16 +252,16 @@ pub const GSP_ARGUMENTS_CACHED: StructRuns = StructRuns {
     runs: &[
         r(
             v(535, 309, 1),
-            v(550, 54, 14),
+            v(550, 90, 7),
             Some(&GSP_ARGUMENTS_CACHED_L0),
-        ), // 535.309.01 … 550.54.14
-        r(v(565, 57, 1), v(565, 57, 1), Some(&GSP_ARGUMENTS_CACHED_L1)), // 565.57.01 … 565.57.01
+        ), // 535.309.01 … 550.90.07
+        r(v(555, 42, 2), v(565, 57, 1), Some(&GSP_ARGUMENTS_CACHED_L1)), // 555.42.02 … 565.57.01
         r(
-            v(570, 124, 6),
+            v(570, 86, 15),
             v(570, 148, 8),
             Some(&GSP_ARGUMENTS_CACHED_L2),
-        ), // 570.124.06 … 570.148.08
-        r(v(575, 51, 3), v(590, 48, 1), Some(&GSP_ARGUMENTS_CACHED_L3)), // 575.51.03 … 590.48.01
+        ), // 570.86.15 … 570.148.08
+        r(v(575, 51, 2), v(590, 48, 1), Some(&GSP_ARGUMENTS_CACHED_L3)), // 575.51.02 … 590.48.01
         r(v(595, 84, 0), v(595, 84, 0), Some(&GSP_ARGUMENTS_CACHED_L4)), // 595.84 … 595.84
         r(v(610, 43, 2), v(610, 57, 4), Some(&GSP_ARGUMENTS_CACHED_L5)), // 610.43.02 … 610.57.04
         r(v(615, 71, 9), v(615, 71, 9), Some(&GSP_ARGUMENTS_CACHED_L6)), // 615.71.09 … 615.71.09
@@ -524,9 +533,9 @@ const GSPFWWPRMETA_L2: Layout = Layout {
 pub const GSPFWWPRMETA: StructRuns = StructRuns {
     name: "GspFwWprMeta",
     runs: &[
-        r(v(535, 309, 1), v(550, 54, 14), Some(&GSPFWWPRMETA_L0)), // 535.309.01 … 550.54.14
-        r(v(565, 57, 1), v(610, 57, 4), Some(&GSPFWWPRMETA_L1)),   // 565.57.01 … 610.57.04
-        r(v(615, 71, 9), v(615, 71, 9), Some(&GSPFWWPRMETA_L2)),   // 615.71.09 … 615.71.09
+        r(v(535, 309, 1), v(550, 90, 7), Some(&GSPFWWPRMETA_L0)), // 535.309.01 … 550.90.07
+        r(v(555, 42, 2), v(610, 57, 4), Some(&GSPFWWPRMETA_L1)),  // 555.42.02 … 610.57.04
+        r(v(615, 71, 9), v(615, 71, 9), Some(&GSPFWWPRMETA_L2)),  // 615.71.09 … 615.71.09
     ],
 };
 
@@ -888,6 +897,261 @@ const GSPSTATICCONFIGINFO_L2: Layout = Layout {
     ],
 };
 const GSPSTATICCONFIGINFO_L3: Layout = Layout {
+    size: 2216,
+    fields: &[
+        f("RTD3GC6PerstDelay", 2116, 2),
+        f("RTD3GC6TotalBoardPower", 2114, 2),
+        f("SKUInfo", 808, 48),
+        f("SKUInfo.BoardID", 808, 4),
+        f("SKUInfo.CDP", 842, 6),
+        f("SKUInfo.businessCycle", 852, 4),
+        f("SKUInfo.chipSKU", 812, 9),
+        f("SKUInfo.chipSKUMod", 821, 5),
+        f("SKUInfo.project", 832, 5),
+        f("SKUInfo.projectSKU", 837, 5),
+        f("SKUInfo.projectSKUMod", 848, 2),
+        f("SKUInfo.skuConfigVersion", 828, 4),
+        f("SM_info", 1724, 36),
+        f("SM_info.geomGsObufEntries", 1744, 4),
+        f("SM_info.geomXbufEntries", 1748, 4),
+        f("SM_info.maxSPPerSM", 1752, 4),
+        f("SM_info.maxThreadsPerWarp", 1740, 4),
+        f("SM_info.maxWarpsPerSM", 1736, 4),
+        f("SM_info.regBankCount", 1728, 4),
+        f("SM_info.regBankRegCount", 1732, 4),
+        f("SM_info.rtCoreCount", 1756, 4),
+        f("SM_info.version", 1724, 4),
+        f("bAtsSupported", 2197, 1),
+        f("bClRootportNeedsNosnoopWAR", 2150, 1),
+        f("bGeforceSmb", 2105, 1),
+        f("bGpuInternalSku", 2100, 1),
+        f("bIsGc6Rtd3Allowed", 2109, 1),
+        f("bIsGc8Rtd3Allowed", 2110, 1),
+        f("bIsGcOffRtd3Allowed", 2111, 1),
+        f("bIsGcoffLegacyAllowed", 2112, 1),
+        f("bIsGpuUefi", 2198, 1),
+        f("bIsMobile", 2108, 1),
+        f("bIsNvidiaNvs", 2103, 1),
+        f("bIsQuadroAd", 2102, 1),
+        f("bIsQuadroGeneric", 2101, 1),
+        f("bIsTesla", 2107, 1),
+        f("bIsTitan", 2106, 1),
+        f("bIsVgx", 2104, 1),
+        f("bPageRetirementSupported", 2148, 1),
+        f("bSelfHostedMode", 2196, 1),
+        f("bSplitVasBetweenServerClientRm", 2149, 1),
+        f("bVbiosValid", 2136, 1),
+        f("bar1PdeBase", 2120, 8),
+        f("bar2PdeBase", 2128, 8),
+        f("displaylessMaxHeads", 2152, 8),
+        f("displaylessMaxHeads.maxNumHeads", 2156, 4),
+        f("displaylessMaxHeads.numHeads", 2152, 4),
+        f("displaylessMaxPixels", 2176, 8),
+        f("displaylessMaxResolution", 2160, 12),
+        f("displaylessMaxResolution.headIndex", 2160, 4),
+        f("displaylessMaxResolution.maxHResolution", 2164, 4),
+        f("displaylessMaxResolution.maxVResolution", 2168, 4),
+        f("ecidInfo", 2200, 12),
+        f("ecidInfo.ecidExtended", 2208, 4),
+        f("ecidInfo.ecidHigh", 2204, 4),
+        f("ecidInfo.ecidLow", 2200, 4),
+        f("engineCaps", 1716, 8),
+        f("fbRegionInfoParams", 856, 776),
+        f("fbRegionInfoParams.fbRegion", 864, 768),
+        f("fbRegionInfoParams.fbRegion[]", 864, 48),
+        f("fbRegionInfoParams.fbRegion[].bProtected", 894, 1),
+        f("fbRegionInfoParams.fbRegion[].base", 864, 8),
+        f("fbRegionInfoParams.fbRegion[].blackList", 895, 17),
+        f("fbRegionInfoParams.fbRegion[].limit", 872, 8),
+        f("fbRegionInfoParams.fbRegion[].performance", 888, 4),
+        f("fbRegionInfoParams.fbRegion[].reserved", 880, 8),
+        f("fbRegionInfoParams.fbRegion[].supportCompressed", 892, 1),
+        f("fbRegionInfoParams.fbRegion[].supportISO", 893, 1),
+        f("fbRegionInfoParams.numFBRegions", 856, 4),
+        f("fb_bus_width", 1784, 4),
+        f("fb_length", 1768, 8),
+        f("fb_ram_type", 1788, 4),
+        f("fbio_mask", 1776, 8),
+        f("fbp_mask", 1792, 8),
+        f("gfxpBufferAlignment", 1824, 20),
+        f("gfxpBufferSize", 1804, 20),
+        f("gidInfo", 24, 268),
+        f("gidInfo.data", 36, 256),
+        f("gidInfo.flags", 28, 4),
+        f("gidInfo.index", 24, 4),
+        f("gidInfo.length", 32, 4),
+        f("gpcInfo", 292, 4),
+        f("gpcInfo.gpcMask", 292, 4),
+        f("gpuNameString", 1844, 64),
+        f("gpuNameString_Unicode", 1972, 128),
+        f("gpuShortNameString", 1908, 64),
+        f("grCapsBits", 0, 23),
+        f("hInternalClient", 2184, 4),
+        f("hInternalDevice", 2188, 4),
+        f("hInternalSubdevice", 2192, 4),
+        f("l2_cache_size", 1800, 4),
+        f("poisonFuseEnabled", 1760, 1),
+        f("sriovCaps", 1632, 80),
+        f("sriovCaps.FirstVFBar0Address", 1648, 8),
+        f("sriovCaps.FirstVFBar1Address", 1656, 8),
+        f("sriovCaps.FirstVFBar2Address", 1664, 8),
+        f("sriovCaps.b64bitBar0", 1696, 1),
+        f("sriovCaps.b64bitBar1", 1697, 1),
+        f("sriovCaps.b64bitBar2", 1698, 1),
+        f("sriovCaps.bClientRmAllocatedCtxBuffer", 1702, 1),
+        f("sriovCaps.bEmulateVFBar0TlbInvalidationRegister", 1701, 1),
+        f("sriovCaps.bNonPowerOf2ChannelCountSupported", 1703, 1),
+        f("sriovCaps.bSriovEnabled", 1699, 1),
+        f("sriovCaps.bSriovHeavyEnabled", 1700, 1),
+        f("sriovCaps.bVfResizableBAR1Supported", 1704, 1),
+        f("sriovCaps.bar0Size", 1672, 8),
+        f("sriovCaps.bar1Size", 1680, 8),
+        f("sriovCaps.bar2Size", 1688, 8),
+        f("sriovCaps.firstVfOffset", 1636, 4),
+        f("sriovCaps.totalVFs", 1632, 4),
+        f("sriovCaps.vfFeatureMask", 1640, 4),
+        f("sriovMaxGfid", 1712, 4),
+        f("tpcInfo", 296, 256),
+        f("tpcInfo[]", 296, 8),
+        f("tpcInfo[].gpcId", 296, 4),
+        f("tpcInfo[].tpcMask", 300, 4),
+        f("vbiosSubDevice", 2144, 4),
+        f("vbiosSubVendor", 2140, 4),
+        f("zcullInfo", 552, 256),
+        f("zcullInfo[]", 552, 8),
+        f("zcullInfo[].gpcId", 552, 4),
+        f("zcullInfo[].zcullMask", 556, 4),
+    ],
+};
+const GSPSTATICCONFIGINFO_L4: Layout = Layout {
+    size: 2224,
+    fields: &[
+        f("RTD3GC6PerstDelay", 2114, 2),
+        f("RTD3GC6TotalBoardPower", 2112, 2),
+        f("SKUInfo", 808, 48),
+        f("SKUInfo.BoardID", 808, 4),
+        f("SKUInfo.CDP", 842, 6),
+        f("SKUInfo.businessCycle", 852, 4),
+        f("SKUInfo.chipSKU", 812, 9),
+        f("SKUInfo.chipSKUMod", 821, 5),
+        f("SKUInfo.project", 832, 5),
+        f("SKUInfo.projectSKU", 837, 5),
+        f("SKUInfo.projectSKUMod", 848, 2),
+        f("SKUInfo.skuConfigVersion", 828, 4),
+        f("SM_info", 1728, 36),
+        f("SM_info.geomGsObufEntries", 1748, 4),
+        f("SM_info.geomXbufEntries", 1752, 4),
+        f("SM_info.maxSPPerSM", 1756, 4),
+        f("SM_info.maxThreadsPerWarp", 1744, 4),
+        f("SM_info.maxWarpsPerSM", 1740, 4),
+        f("SM_info.regBankCount", 1732, 4),
+        f("SM_info.regBankRegCount", 1736, 4),
+        f("SM_info.rtCoreCount", 1760, 4),
+        f("SM_info.version", 1728, 4),
+        f("bAtsSupported", 2197, 1),
+        f("bClRootportNeedsNosnoopWAR", 2150, 1),
+        f("bGeforceSmb", 2105, 1),
+        f("bGpuInternalSku", 2100, 1),
+        f("bIsEfiInit", 2199, 1),
+        f("bIsGc6Rtd3Allowed", 2109, 1),
+        f("bIsGcOffRtd3Allowed", 2110, 1),
+        f("bIsGcoffLegacyAllowed", 2111, 1),
+        f("bIsGpuUefi", 2198, 1),
+        f("bIsMobile", 2108, 1),
+        f("bIsNvidiaNvs", 2103, 1),
+        f("bIsQuadroAd", 2102, 1),
+        f("bIsQuadroGeneric", 2101, 1),
+        f("bIsTesla", 2107, 1),
+        f("bIsTitan", 2106, 1),
+        f("bIsVgx", 2104, 1),
+        f("bPageRetirementSupported", 2148, 1),
+        f("bSelfHostedMode", 2196, 1),
+        f("bSplitVasBetweenServerClientRm", 2149, 1),
+        f("bVbiosValid", 2136, 1),
+        f("bar1PdeBase", 2120, 8),
+        f("bar2PdeBase", 2128, 8),
+        f("displaylessMaxHeads", 2152, 8),
+        f("displaylessMaxHeads.maxNumHeads", 2156, 4),
+        f("displaylessMaxHeads.numHeads", 2152, 4),
+        f("displaylessMaxPixels", 2176, 8),
+        f("displaylessMaxResolution", 2160, 12),
+        f("displaylessMaxResolution.headIndex", 2160, 4),
+        f("displaylessMaxResolution.maxHResolution", 2164, 4),
+        f("displaylessMaxResolution.maxVResolution", 2168, 4),
+        f("ecidInfo", 2200, 24),
+        f("ecidInfo[]", 2200, 12),
+        f("ecidInfo[].ecidExtended", 2208, 4),
+        f("ecidInfo[].ecidHigh", 2204, 4),
+        f("ecidInfo[].ecidLow", 2200, 4),
+        f("engineCaps", 1716, 12),
+        f("fbRegionInfoParams", 856, 776),
+        f("fbRegionInfoParams.fbRegion", 864, 768),
+        f("fbRegionInfoParams.fbRegion[]", 864, 48),
+        f("fbRegionInfoParams.fbRegion[].bProtected", 894, 1),
+        f("fbRegionInfoParams.fbRegion[].base", 864, 8),
+        f("fbRegionInfoParams.fbRegion[].blackList", 895, 17),
+        f("fbRegionInfoParams.fbRegion[].limit", 872, 8),
+        f("fbRegionInfoParams.fbRegion[].performance", 888, 4),
+        f("fbRegionInfoParams.fbRegion[].reserved", 880, 8),
+        f("fbRegionInfoParams.fbRegion[].supportCompressed", 892, 1),
+        f("fbRegionInfoParams.fbRegion[].supportISO", 893, 1),
+        f("fbRegionInfoParams.numFBRegions", 856, 4),
+        f("fb_bus_width", 1784, 4),
+        f("fb_length", 1768, 8),
+        f("fb_ram_type", 1788, 4),
+        f("fbio_mask", 1776, 8),
+        f("fbp_mask", 1792, 8),
+        f("gfxpBufferAlignment", 1824, 20),
+        f("gfxpBufferSize", 1804, 20),
+        f("gidInfo", 24, 268),
+        f("gidInfo.data", 36, 256),
+        f("gidInfo.flags", 28, 4),
+        f("gidInfo.index", 24, 4),
+        f("gidInfo.length", 32, 4),
+        f("gpcInfo", 292, 4),
+        f("gpcInfo.gpcMask", 292, 4),
+        f("gpuNameString", 1844, 64),
+        f("gpuNameString_Unicode", 1972, 128),
+        f("gpuShortNameString", 1908, 64),
+        f("grCapsBits", 0, 23),
+        f("hInternalClient", 2184, 4),
+        f("hInternalDevice", 2188, 4),
+        f("hInternalSubdevice", 2192, 4),
+        f("l2_cache_size", 1800, 4),
+        f("poisonFuseEnabled", 1764, 1),
+        f("sriovCaps", 1632, 80),
+        f("sriovCaps.FirstVFBar0Address", 1648, 8),
+        f("sriovCaps.FirstVFBar1Address", 1656, 8),
+        f("sriovCaps.FirstVFBar2Address", 1664, 8),
+        f("sriovCaps.b64bitBar0", 1696, 1),
+        f("sriovCaps.b64bitBar1", 1697, 1),
+        f("sriovCaps.b64bitBar2", 1698, 1),
+        f("sriovCaps.bClientRmAllocatedCtxBuffer", 1702, 1),
+        f("sriovCaps.bEmulateVFBar0TlbInvalidationRegister", 1701, 1),
+        f("sriovCaps.bNonPowerOf2ChannelCountSupported", 1703, 1),
+        f("sriovCaps.bSriovEnabled", 1699, 1),
+        f("sriovCaps.bSriovHeavyEnabled", 1700, 1),
+        f("sriovCaps.bVfResizableBAR1Supported", 1704, 1),
+        f("sriovCaps.bar0Size", 1672, 8),
+        f("sriovCaps.bar1Size", 1680, 8),
+        f("sriovCaps.bar2Size", 1688, 8),
+        f("sriovCaps.firstVfOffset", 1636, 4),
+        f("sriovCaps.totalVFs", 1632, 4),
+        f("sriovCaps.vfFeatureMask", 1640, 4),
+        f("sriovMaxGfid", 1712, 4),
+        f("tpcInfo", 296, 256),
+        f("tpcInfo[]", 296, 8),
+        f("tpcInfo[].gpcId", 296, 4),
+        f("tpcInfo[].tpcMask", 300, 4),
+        f("vbiosSubDevice", 2144, 4),
+        f("vbiosSubVendor", 2140, 4),
+        f("zcullInfo", 552, 256),
+        f("zcullInfo[]", 552, 8),
+        f("zcullInfo[].gpcId", 552, 4),
+        f("zcullInfo[].zcullMask", 556, 4),
+    ],
+};
+const GSPSTATICCONFIGINFO_L5: Layout = Layout {
     size: 1640,
     fields: &[
         f("RTD3GC6PerstDelay", 1530, 2),
@@ -993,7 +1257,7 @@ const GSPSTATICCONFIGINFO_L3: Layout = Layout {
         f("vbiosSubVendor", 1556, 4),
     ],
 };
-const GSPSTATICCONFIGINFO_L4: Layout = Layout {
+const GSPSTATICCONFIGINFO_L6: Layout = Layout {
     size: 1656,
     fields: &[
         f("RTD3GC6PerstDelay", 1532, 2),
@@ -1104,7 +1368,7 @@ const GSPSTATICCONFIGINFO_L4: Layout = Layout {
         f("vbiosSubVendor", 1556, 4),
     ],
 };
-const GSPSTATICCONFIGINFO_L5: Layout = Layout {
+const GSPSTATICCONFIGINFO_L7: Layout = Layout {
     size: 1792,
     fields: &[
         f("RTD3GC6PerstDelay", 1660, 2),
@@ -1216,7 +1480,7 @@ const GSPSTATICCONFIGINFO_L5: Layout = Layout {
         f("vbiosSubVendor", 1684, 4),
     ],
 };
-const GSPSTATICCONFIGINFO_L6: Layout = Layout {
+const GSPSTATICCONFIGINFO_L8: Layout = Layout {
     size: 1808,
     fields: &[
         f("RTD3GC6PerstDelay", 1676, 2),
@@ -1330,7 +1594,7 @@ const GSPSTATICCONFIGINFO_L6: Layout = Layout {
         f("vbiosSubVendor", 1700, 4),
     ],
 };
-const GSPSTATICCONFIGINFO_L7: Layout = Layout {
+const GSPSTATICCONFIGINFO_L9: Layout = Layout {
     size: 1592,
     fields: &[
         f("RTD3GC6PerstDelay", 1496, 2),
@@ -1428,7 +1692,7 @@ const GSPSTATICCONFIGINFO_L7: Layout = Layout {
         f("vbiosSubVendor", 1524, 4),
     ],
 };
-const GSPSTATICCONFIGINFO_L8: Layout = Layout {
+const GSPSTATICCONFIGINFO_L10: Layout = Layout {
     size: 1600,
     fields: &[
         f("RTD3GC6PerstDelay", 1496, 2),
@@ -1530,7 +1794,7 @@ const GSPSTATICCONFIGINFO_L8: Layout = Layout {
         f("vbiosSubVendor", 1524, 4),
     ],
 };
-const GSPSTATICCONFIGINFO_L9: Layout = Layout {
+const GSPSTATICCONFIGINFO_L11: Layout = Layout {
     size: 1608,
     fields: &[
         f("RTD3GC6PerstDelay", 1498, 2),
@@ -1633,7 +1897,7 @@ const GSPSTATICCONFIGINFO_L9: Layout = Layout {
         f("vbiosSubVendor", 1524, 4),
     ],
 };
-/// `GspStaticConfigInfo` — 10 distinct consumed layout(s) over 10 run(s).
+/// `GspStaticConfigInfo` — 12 distinct consumed layout(s) over 12 run(s).
 pub const GSPSTATICCONFIGINFO: StructRuns = StructRuns {
     name: "GspStaticConfigInfo",
     runs: &[
@@ -1643,18 +1907,16 @@ pub const GSPSTATICCONFIGINFO: StructRuns = StructRuns {
             Some(&GSPSTATICCONFIGINFO_L0),
         ), // 535.309.01 … 535.309.01
         r(v(545, 23, 8), v(545, 23, 8), Some(&GSPSTATICCONFIGINFO_L1)), // 545.23.08 … 545.23.08
-        r(
-            v(550, 54, 14),
-            v(550, 54, 14),
-            Some(&GSPSTATICCONFIGINFO_L2),
-        ), // 550.54.14 … 550.54.14
-        r(v(565, 57, 1), v(565, 57, 1), Some(&GSPSTATICCONFIGINFO_L3)), // 565.57.01 … 565.57.01
-        r(v(570, 124, 6), v(575, 57, 8), Some(&GSPSTATICCONFIGINFO_L4)), // 570.124.06 … 575.57.08
-        r(v(580, 65, 6), v(580, 178, 4), Some(&GSPSTATICCONFIGINFO_L5)), // 580.65.06 … 580.178.04
-        r(v(590, 48, 1), v(590, 48, 1), Some(&GSPSTATICCONFIGINFO_L6)), // 590.48.01 … 590.48.01
-        r(v(595, 84, 0), v(595, 84, 0), Some(&GSPSTATICCONFIGINFO_L7)), // 595.84 … 595.84
-        r(v(610, 43, 2), v(610, 57, 4), Some(&GSPSTATICCONFIGINFO_L8)), // 610.43.02 … 610.57.04
-        r(v(615, 71, 9), v(615, 71, 9), Some(&GSPSTATICCONFIGINFO_L9)), // 615.71.09 … 615.71.09
+        r(v(550, 40, 7), v(550, 90, 7), Some(&GSPSTATICCONFIGINFO_L2)), // 550.40.07 … 550.90.07
+        r(v(555, 42, 2), v(555, 42, 2), Some(&GSPSTATICCONFIGINFO_L3)), // 555.42.02 … 555.42.02
+        r(v(560, 28, 3), v(560, 28, 3), Some(&GSPSTATICCONFIGINFO_L4)), // 560.28.03 … 560.28.03
+        r(v(565, 57, 1), v(565, 57, 1), Some(&GSPSTATICCONFIGINFO_L5)), // 565.57.01 … 565.57.01
+        r(v(570, 86, 15), v(575, 64, 5), Some(&GSPSTATICCONFIGINFO_L6)), // 570.86.15 … 575.64.05
+        r(v(580, 65, 6), v(580, 178, 4), Some(&GSPSTATICCONFIGINFO_L7)), // 580.65.06 … 580.178.04
+        r(v(590, 48, 1), v(590, 48, 1), Some(&GSPSTATICCONFIGINFO_L8)), // 590.48.01 … 590.48.01
+        r(v(595, 84, 0), v(595, 84, 0), Some(&GSPSTATICCONFIGINFO_L9)), // 595.84 … 595.84
+        r(v(610, 43, 2), v(610, 57, 4), Some(&GSPSTATICCONFIGINFO_L10)), // 610.43.02 … 610.57.04
+        r(v(615, 71, 9), v(615, 71, 9), Some(&GSPSTATICCONFIGINFO_L11)), // 615.71.09 … 615.71.09
     ],
 };
 
@@ -1962,7 +2224,6 @@ const GSPSYSTEMINFO_L2: Layout = Layout {
         f("gpuPhysAddr", 0, 8),
         f("gpuPhysFbAddr", 8, 8),
         f("gpuPhysInstAddr", 16, 8),
-        f("gridBuildCsp", 868, 4),
         f("gspVFInfo", 824, 40),
         f("gspVFInfo.FirstVFBar0Address", 832, 8),
         f("gspVFInfo.FirstVFBar1Address", 840, 8),
@@ -1987,6 +2248,526 @@ const GSPSYSTEMINFO_L2: Layout = Layout {
     ],
 };
 const GSPSYSTEMINFO_L3: Layout = Layout {
+    size: 872,
+    fields: &[
+        f("Chipset", 96, 4),
+        f("FHBBusInfo", 110, 10),
+        f("FHBBusInfo.deviceID", 110, 2),
+        f("FHBBusInfo.revisionID", 118, 1),
+        f("FHBBusInfo.subdeviceID", 114, 2),
+        f("FHBBusInfo.subvendorID", 116, 2),
+        f("FHBBusInfo.vendorID", 112, 2),
+        f("acpiMethodData", 132, 676),
+        f("acpiMethodData.bValid", 132, 1),
+        f("acpiMethodData.capsMethodData", 800, 8),
+        f("acpiMethodData.capsMethodData.optimusCaps", 804, 4),
+        f("acpiMethodData.capsMethodData.status", 800, 4),
+        f("acpiMethodData.dodMethodData", 136, 72),
+        f("acpiMethodData.dodMethodData.acpiIdList", 144, 64),
+        f("acpiMethodData.dodMethodData.acpiIdListLen", 140, 4),
+        f("acpiMethodData.dodMethodData.status", 136, 4),
+        f("acpiMethodData.jtMethodData", 208, 12),
+        f("acpiMethodData.jtMethodData.bSBIOSCaps", 218, 1),
+        f("acpiMethodData.jtMethodData.jtCaps", 212, 4),
+        f("acpiMethodData.jtMethodData.jtRevId", 216, 2),
+        f("acpiMethodData.jtMethodData.status", 208, 4),
+        f("acpiMethodData.muxMethodData", 220, 580),
+        f("acpiMethodData.muxMethodData.acpiIdMuxModeTable", 224, 192),
+        f("acpiMethodData.muxMethodData.acpiIdMuxModeTable[]", 224, 12),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxModeTable[].acpiId",
+            224,
+            4,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxModeTable[].mode",
+            228,
+            4,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxModeTable[].status",
+            232,
+            4,
+        ),
+        f("acpiMethodData.muxMethodData.acpiIdMuxPartTable", 416, 192),
+        f("acpiMethodData.muxMethodData.acpiIdMuxPartTable[]", 416, 12),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxPartTable[].acpiId",
+            416,
+            4,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxPartTable[].mode",
+            420,
+            4,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxPartTable[].status",
+            424,
+            4,
+        ),
+        f("acpiMethodData.muxMethodData.acpiIdMuxStateTable", 608, 192),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxStateTable[]",
+            608,
+            12,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxStateTable[].acpiId",
+            608,
+            4,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxStateTable[].mode",
+            612,
+            4,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxStateTable[].status",
+            616,
+            4,
+        ),
+        f("acpiMethodData.muxMethodData.tableLen", 220, 4),
+        f("b64bBar0Supported", 102, 1),
+        f("bFlrSupported", 101, 1),
+        f("bGpuBehindBridge", 100, 1),
+        f("bIsPassthru", 812, 1),
+        f("bMnocAvailable", 103, 1),
+        f("bSystemHasMux", 108, 1),
+        f("bUpstreamL0sUnsupported", 104, 1),
+        f("bUpstreamL1PorMobileOnly", 107, 1),
+        f("bUpstreamL1PorSupported", 106, 1),
+        f("bUpstreamL1Unsupported", 105, 1),
+        f("chipsetIDInfo", 120, 10),
+        f("chipsetIDInfo.deviceID", 120, 2),
+        f("chipsetIDInfo.revisionID", 128, 1),
+        f("chipsetIDInfo.subdeviceID", 124, 2),
+        f("chipsetIDInfo.subvendorID", 126, 2),
+        f("chipsetIDInfo.vendorID", 122, 2),
+        f("clPdbProperties", 88, 8),
+        f("consoleMemSize", 56, 8),
+        f("gpuPhysAddr", 0, 8),
+        f("gpuPhysFbAddr", 8, 8),
+        f("gpuPhysInstAddr", 16, 8),
+        f("gridBuildCsp", 868, 4),
+        f("gspVFInfo", 824, 40),
+        f("gspVFInfo.FirstVFBar0Address", 832, 8),
+        f("gspVFInfo.FirstVFBar1Address", 840, 8),
+        f("gspVFInfo.FirstVFBar2Address", 848, 8),
+        f("gspVFInfo.b64bitBar0", 856, 1),
+        f("gspVFInfo.b64bitBar1", 857, 1),
+        f("gspVFInfo.b64bitBar2", 858, 1),
+        f("gspVFInfo.firstVFOffset", 828, 4),
+        f("gspVFInfo.totalVFs", 824, 4),
+        f("hypervisorType", 808, 4),
+        f("isGridBuild", 864, 1),
+        f("maxUserVa", 64, 8),
+        f("notifyOpSharedSurfacePhysAddr", 40, 8),
+        f("nvDomainBusDeviceFunc", 24, 8),
+        f("oorArch", 80, 1),
+        f("pciConfigMirrorBase", 72, 4),
+        f("pciConfigMirrorSize", 76, 4),
+        f("pcieAtomicsOpMask", 48, 8),
+        f("simAccessBufPhysAddr", 32, 8),
+        f("sysTimerOffsetNs", 816, 8),
+        f("upstreamAddressValid", 109, 1),
+    ],
+};
+const GSPSYSTEMINFO_L4: Layout = Layout {
+    size: 880,
+    fields: &[
+        f("Chipset", 96, 4),
+        f("FHBBusInfo", 110, 10),
+        f("FHBBusInfo.deviceID", 110, 2),
+        f("FHBBusInfo.revisionID", 118, 1),
+        f("FHBBusInfo.subdeviceID", 114, 2),
+        f("FHBBusInfo.subvendorID", 116, 2),
+        f("FHBBusInfo.vendorID", 112, 2),
+        f("acpiMethodData", 132, 676),
+        f("acpiMethodData.bValid", 132, 1),
+        f("acpiMethodData.capsMethodData", 800, 8),
+        f("acpiMethodData.capsMethodData.optimusCaps", 804, 4),
+        f("acpiMethodData.capsMethodData.status", 800, 4),
+        f("acpiMethodData.dodMethodData", 136, 72),
+        f("acpiMethodData.dodMethodData.acpiIdList", 144, 64),
+        f("acpiMethodData.dodMethodData.acpiIdListLen", 140, 4),
+        f("acpiMethodData.dodMethodData.status", 136, 4),
+        f("acpiMethodData.jtMethodData", 208, 12),
+        f("acpiMethodData.jtMethodData.bSBIOSCaps", 218, 1),
+        f("acpiMethodData.jtMethodData.jtCaps", 212, 4),
+        f("acpiMethodData.jtMethodData.jtRevId", 216, 2),
+        f("acpiMethodData.jtMethodData.status", 208, 4),
+        f("acpiMethodData.muxMethodData", 220, 580),
+        f("acpiMethodData.muxMethodData.acpiIdMuxModeTable", 224, 192),
+        f("acpiMethodData.muxMethodData.acpiIdMuxModeTable[]", 224, 12),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxModeTable[].acpiId",
+            224,
+            4,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxModeTable[].mode",
+            228,
+            4,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxModeTable[].status",
+            232,
+            4,
+        ),
+        f("acpiMethodData.muxMethodData.acpiIdMuxPartTable", 416, 192),
+        f("acpiMethodData.muxMethodData.acpiIdMuxPartTable[]", 416, 12),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxPartTable[].acpiId",
+            416,
+            4,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxPartTable[].mode",
+            420,
+            4,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxPartTable[].status",
+            424,
+            4,
+        ),
+        f("acpiMethodData.muxMethodData.acpiIdMuxStateTable", 608, 192),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxStateTable[]",
+            608,
+            12,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxStateTable[].acpiId",
+            608,
+            4,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxStateTable[].mode",
+            612,
+            4,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxStateTable[].status",
+            616,
+            4,
+        ),
+        f("acpiMethodData.muxMethodData.tableLen", 220, 4),
+        f("b64bBar0Supported", 102, 1),
+        f("bFlrSupported", 101, 1),
+        f("bGpuBehindBridge", 100, 1),
+        f("bIsPassthru", 812, 1),
+        f("bMnocAvailable", 103, 1),
+        f("bSystemHasMux", 108, 1),
+        f("bTdrEventSupported", 872, 1),
+        f("bUpstreamL0sUnsupported", 104, 1),
+        f("bUpstreamL1PorMobileOnly", 107, 1),
+        f("bUpstreamL1PorSupported", 106, 1),
+        f("bUpstreamL1Unsupported", 105, 1),
+        f("chipsetIDInfo", 120, 10),
+        f("chipsetIDInfo.deviceID", 120, 2),
+        f("chipsetIDInfo.revisionID", 128, 1),
+        f("chipsetIDInfo.subdeviceID", 124, 2),
+        f("chipsetIDInfo.subvendorID", 126, 2),
+        f("chipsetIDInfo.vendorID", 122, 2),
+        f("clPdbProperties", 88, 8),
+        f("consoleMemSize", 56, 8),
+        f("gpuPhysAddr", 0, 8),
+        f("gpuPhysFbAddr", 8, 8),
+        f("gpuPhysInstAddr", 16, 8),
+        f("gridBuildCsp", 868, 4),
+        f("gspVFInfo", 824, 40),
+        f("gspVFInfo.FirstVFBar0Address", 832, 8),
+        f("gspVFInfo.FirstVFBar1Address", 840, 8),
+        f("gspVFInfo.FirstVFBar2Address", 848, 8),
+        f("gspVFInfo.b64bitBar0", 856, 1),
+        f("gspVFInfo.b64bitBar1", 857, 1),
+        f("gspVFInfo.b64bitBar2", 858, 1),
+        f("gspVFInfo.firstVFOffset", 828, 4),
+        f("gspVFInfo.totalVFs", 824, 4),
+        f("hypervisorType", 808, 4),
+        f("isGridBuild", 864, 1),
+        f("maxUserVa", 64, 8),
+        f("notifyOpSharedSurfacePhysAddr", 40, 8),
+        f("nvDomainBusDeviceFunc", 24, 8),
+        f("oorArch", 80, 1),
+        f("pciConfigMirrorBase", 72, 4),
+        f("pciConfigMirrorSize", 76, 4),
+        f("pcieAtomicsOpMask", 48, 8),
+        f("simAccessBufPhysAddr", 32, 8),
+        f("sysTimerOffsetNs", 816, 8),
+        f("upstreamAddressValid", 109, 1),
+    ],
+};
+const GSPSYSTEMINFO_L5: Layout = Layout {
+    size: 896,
+    fields: &[
+        f("Chipset", 112, 4),
+        f("FHBBusInfo", 126, 10),
+        f("FHBBusInfo.deviceID", 126, 2),
+        f("FHBBusInfo.revisionID", 134, 1),
+        f("FHBBusInfo.subdeviceID", 130, 2),
+        f("FHBBusInfo.subvendorID", 132, 2),
+        f("FHBBusInfo.vendorID", 128, 2),
+        f("PCIDeviceID", 88, 4),
+        f("PCIRevisionID", 96, 4),
+        f("PCISubDeviceID", 92, 4),
+        f("acpiMethodData", 148, 676),
+        f("acpiMethodData.bValid", 148, 1),
+        f("acpiMethodData.capsMethodData", 816, 8),
+        f("acpiMethodData.capsMethodData.optimusCaps", 820, 4),
+        f("acpiMethodData.capsMethodData.status", 816, 4),
+        f("acpiMethodData.dodMethodData", 152, 72),
+        f("acpiMethodData.dodMethodData.acpiIdList", 160, 64),
+        f("acpiMethodData.dodMethodData.acpiIdListLen", 156, 4),
+        f("acpiMethodData.dodMethodData.status", 152, 4),
+        f("acpiMethodData.jtMethodData", 224, 12),
+        f("acpiMethodData.jtMethodData.bSBIOSCaps", 234, 1),
+        f("acpiMethodData.jtMethodData.jtCaps", 228, 4),
+        f("acpiMethodData.jtMethodData.jtRevId", 232, 2),
+        f("acpiMethodData.jtMethodData.status", 224, 4),
+        f("acpiMethodData.muxMethodData", 236, 580),
+        f("acpiMethodData.muxMethodData.acpiIdMuxModeTable", 240, 192),
+        f("acpiMethodData.muxMethodData.acpiIdMuxModeTable[]", 240, 12),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxModeTable[].acpiId",
+            240,
+            4,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxModeTable[].mode",
+            244,
+            4,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxModeTable[].status",
+            248,
+            4,
+        ),
+        f("acpiMethodData.muxMethodData.acpiIdMuxPartTable", 432, 192),
+        f("acpiMethodData.muxMethodData.acpiIdMuxPartTable[]", 432, 12),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxPartTable[].acpiId",
+            432,
+            4,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxPartTable[].mode",
+            436,
+            4,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxPartTable[].status",
+            440,
+            4,
+        ),
+        f("acpiMethodData.muxMethodData.acpiIdMuxStateTable", 624, 192),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxStateTable[]",
+            624,
+            12,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxStateTable[].acpiId",
+            624,
+            4,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxStateTable[].mode",
+            628,
+            4,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxStateTable[].status",
+            632,
+            4,
+        ),
+        f("acpiMethodData.muxMethodData.tableLen", 236, 4),
+        f("b64bBar0Supported", 118, 1),
+        f("bFlrSupported", 117, 1),
+        f("bGpuBehindBridge", 116, 1),
+        f("bIsPassthru", 828, 1),
+        f("bIsPrimary", 880, 1),
+        f("bMnocAvailable", 119, 1),
+        f("bPreserveVideoMemoryAllocations", 888, 1),
+        f("bSystemHasMux", 124, 1),
+        f("bUpstreamL0sUnsupported", 120, 1),
+        f("bUpstreamL1PorMobileOnly", 123, 1),
+        f("bUpstreamL1PorSupported", 122, 1),
+        f("bUpstreamL1Unsupported", 121, 1),
+        f("chipsetIDInfo", 136, 10),
+        f("chipsetIDInfo.deviceID", 136, 2),
+        f("chipsetIDInfo.revisionID", 144, 1),
+        f("chipsetIDInfo.subdeviceID", 140, 2),
+        f("chipsetIDInfo.subvendorID", 142, 2),
+        f("chipsetIDInfo.vendorID", 138, 2),
+        f("clPdbProperties", 104, 8),
+        f("consoleMemSize", 64, 8),
+        f("gpuPhysAddr", 0, 8),
+        f("gpuPhysFbAddr", 8, 8),
+        f("gpuPhysInstAddr", 16, 8),
+        f("gpuPhysIoAddr", 24, 8),
+        f("gridBuildCsp", 884, 4),
+        f("gspVFInfo", 840, 40),
+        f("gspVFInfo.FirstVFBar0Address", 848, 8),
+        f("gspVFInfo.FirstVFBar1Address", 856, 8),
+        f("gspVFInfo.FirstVFBar2Address", 864, 8),
+        f("gspVFInfo.b64bitBar0", 872, 1),
+        f("gspVFInfo.b64bitBar1", 873, 1),
+        f("gspVFInfo.b64bitBar2", 874, 1),
+        f("gspVFInfo.firstVFOffset", 844, 4),
+        f("gspVFInfo.totalVFs", 840, 4),
+        f("hypervisorType", 824, 4),
+        f("isGridBuild", 881, 1),
+        f("maxUserVa", 72, 8),
+        f("notifyOpSharedSurfacePhysAddr", 48, 8),
+        f("nvDomainBusDeviceFunc", 32, 8),
+        f("oorArch", 100, 1),
+        f("pciConfigMirrorBase", 80, 4),
+        f("pciConfigMirrorSize", 84, 4),
+        f("pcieAtomicsOpMask", 56, 8),
+        f("simAccessBufPhysAddr", 40, 8),
+        f("sysTimerOffsetNs", 832, 8),
+        f("upstreamAddressValid", 125, 1),
+    ],
+};
+const GSPSYSTEMINFO_L6: Layout = Layout {
+    size: 904,
+    fields: &[
+        f("Chipset", 120, 4),
+        f("FHBBusInfo", 134, 10),
+        f("FHBBusInfo.deviceID", 134, 2),
+        f("FHBBusInfo.revisionID", 142, 1),
+        f("FHBBusInfo.subdeviceID", 138, 2),
+        f("FHBBusInfo.subvendorID", 140, 2),
+        f("FHBBusInfo.vendorID", 136, 2),
+        f("PCIDeviceID", 88, 4),
+        f("PCIRevisionID", 96, 4),
+        f("PCISubDeviceID", 92, 4),
+        f("acpiMethodData", 156, 676),
+        f("acpiMethodData.bValid", 156, 1),
+        f("acpiMethodData.capsMethodData", 824, 8),
+        f("acpiMethodData.capsMethodData.optimusCaps", 828, 4),
+        f("acpiMethodData.capsMethodData.status", 824, 4),
+        f("acpiMethodData.dodMethodData", 160, 72),
+        f("acpiMethodData.dodMethodData.acpiIdList", 168, 64),
+        f("acpiMethodData.dodMethodData.acpiIdListLen", 164, 4),
+        f("acpiMethodData.dodMethodData.status", 160, 4),
+        f("acpiMethodData.jtMethodData", 232, 12),
+        f("acpiMethodData.jtMethodData.bSBIOSCaps", 242, 1),
+        f("acpiMethodData.jtMethodData.jtCaps", 236, 4),
+        f("acpiMethodData.jtMethodData.jtRevId", 240, 2),
+        f("acpiMethodData.jtMethodData.status", 232, 4),
+        f("acpiMethodData.muxMethodData", 244, 580),
+        f("acpiMethodData.muxMethodData.acpiIdMuxModeTable", 248, 192),
+        f("acpiMethodData.muxMethodData.acpiIdMuxModeTable[]", 248, 12),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxModeTable[].acpiId",
+            248,
+            4,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxModeTable[].mode",
+            252,
+            4,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxModeTable[].status",
+            256,
+            4,
+        ),
+        f("acpiMethodData.muxMethodData.acpiIdMuxPartTable", 440, 192),
+        f("acpiMethodData.muxMethodData.acpiIdMuxPartTable[]", 440, 12),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxPartTable[].acpiId",
+            440,
+            4,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxPartTable[].mode",
+            444,
+            4,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxPartTable[].status",
+            448,
+            4,
+        ),
+        f("acpiMethodData.muxMethodData.acpiIdMuxStateTable", 632, 192),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxStateTable[]",
+            632,
+            12,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxStateTable[].acpiId",
+            632,
+            4,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxStateTable[].mode",
+            636,
+            4,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxStateTable[].status",
+            640,
+            4,
+        ),
+        f("acpiMethodData.muxMethodData.tableLen", 244, 4),
+        f("b64bBar0Supported", 126, 1),
+        f("bClockBoostSupported", 899, 1),
+        f("bFeatureStretchVblankCapable", 898, 1),
+        f("bFlrSupported", 125, 1),
+        f("bGpuBehindBridge", 124, 1),
+        f("bIsPassthru", 836, 1),
+        f("bIsPrimary", 888, 1),
+        f("bMnocAvailable", 127, 1),
+        f("bPreserveVideoMemoryAllocations", 896, 1),
+        f("bTdrEventSupported", 897, 1),
+        f("bUpstreamL0sUnsupported", 128, 1),
+        f("bUpstreamL1PorMobileOnly", 131, 1),
+        f("bUpstreamL1PorSupported", 130, 1),
+        f("bUpstreamL1Unsupported", 129, 1),
+        f("chipsetIDInfo", 144, 10),
+        f("chipsetIDInfo.deviceID", 144, 2),
+        f("chipsetIDInfo.revisionID", 152, 1),
+        f("chipsetIDInfo.subdeviceID", 148, 2),
+        f("chipsetIDInfo.subvendorID", 150, 2),
+        f("chipsetIDInfo.vendorID", 146, 2),
+        f("clPdbProperties", 112, 8),
+        f("consoleMemSize", 64, 8),
+        f("gpuPhysAddr", 0, 8),
+        f("gpuPhysFbAddr", 8, 8),
+        f("gpuPhysInstAddr", 16, 8),
+        f("gpuPhysIoAddr", 24, 8),
+        f("gridBuildCsp", 892, 4),
+        f("gspVFInfo", 848, 40),
+        f("gspVFInfo.FirstVFBar0Address", 856, 8),
+        f("gspVFInfo.FirstVFBar1Address", 864, 8),
+        f("gspVFInfo.FirstVFBar2Address", 872, 8),
+        f("gspVFInfo.b64bitBar0", 880, 1),
+        f("gspVFInfo.b64bitBar1", 881, 1),
+        f("gspVFInfo.b64bitBar2", 882, 1),
+        f("gspVFInfo.firstVFOffset", 852, 4),
+        f("gspVFInfo.totalVFs", 848, 4),
+        f("hypervisorType", 832, 4),
+        f("isGridBuild", 889, 1),
+        f("maxUserVa", 72, 8),
+        f("notifyOpSharedSurfacePhysAddr", 48, 8),
+        f("nvDomainBusDeviceFunc", 32, 8),
+        f("oorArch", 104, 1),
+        f("pciConfigMirrorBase", 80, 4),
+        f("pciConfigMirrorSize", 84, 4),
+        f("pcieAtomicsCplDeviceCapMask", 100, 4),
+        f("pcieAtomicsOpMask", 56, 8),
+        f("simAccessBufPhysAddr", 40, 8),
+        f("sysTimerOffsetNs", 840, 8),
+        f("upstreamAddressValid", 132, 1),
+    ],
+};
+const GSPSYSTEMINFO_L7: Layout = Layout {
     size: 912,
     fields: &[
         f("Chipset", 120, 4),
@@ -2125,7 +2906,148 @@ const GSPSYSTEMINFO_L3: Layout = Layout {
         f("upstreamAddressValid", 133, 1),
     ],
 };
-const GSPSYSTEMINFO_L4: Layout = Layout {
+const GSPSYSTEMINFO_L8: Layout = Layout {
+    size: 920,
+    fields: &[
+        f("Chipset", 120, 4),
+        f("FHBBusInfo", 138, 10),
+        f("FHBBusInfo.deviceID", 138, 2),
+        f("FHBBusInfo.revisionID", 146, 1),
+        f("FHBBusInfo.subdeviceID", 142, 2),
+        f("FHBBusInfo.subvendorID", 144, 2),
+        f("FHBBusInfo.vendorID", 140, 2),
+        f("PCIDeviceID", 88, 4),
+        f("PCIRevisionID", 96, 4),
+        f("PCISubDeviceID", 92, 4),
+        f("acpiMethodData", 160, 676),
+        f("acpiMethodData.bValid", 160, 1),
+        f("acpiMethodData.capsMethodData", 828, 8),
+        f("acpiMethodData.capsMethodData.optimusCaps", 832, 4),
+        f("acpiMethodData.capsMethodData.status", 828, 4),
+        f("acpiMethodData.dodMethodData", 164, 72),
+        f("acpiMethodData.dodMethodData.acpiIdList", 172, 64),
+        f("acpiMethodData.dodMethodData.acpiIdListLen", 168, 4),
+        f("acpiMethodData.dodMethodData.status", 164, 4),
+        f("acpiMethodData.jtMethodData", 236, 12),
+        f("acpiMethodData.jtMethodData.bSBIOSCaps", 246, 1),
+        f("acpiMethodData.jtMethodData.jtCaps", 240, 4),
+        f("acpiMethodData.jtMethodData.jtRevId", 244, 2),
+        f("acpiMethodData.jtMethodData.status", 236, 4),
+        f("acpiMethodData.muxMethodData", 248, 580),
+        f("acpiMethodData.muxMethodData.acpiIdMuxModeTable", 252, 192),
+        f("acpiMethodData.muxMethodData.acpiIdMuxModeTable[]", 252, 12),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxModeTable[].acpiId",
+            252,
+            4,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxModeTable[].mode",
+            256,
+            4,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxModeTable[].status",
+            260,
+            4,
+        ),
+        f("acpiMethodData.muxMethodData.acpiIdMuxPartTable", 444, 192),
+        f("acpiMethodData.muxMethodData.acpiIdMuxPartTable[]", 444, 12),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxPartTable[].acpiId",
+            444,
+            4,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxPartTable[].mode",
+            448,
+            4,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxPartTable[].status",
+            452,
+            4,
+        ),
+        f("acpiMethodData.muxMethodData.acpiIdMuxStateTable", 636, 192),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxStateTable[]",
+            636,
+            12,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxStateTable[].acpiId",
+            636,
+            4,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxStateTable[].mode",
+            640,
+            4,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxStateTable[].status",
+            644,
+            4,
+        ),
+        f("acpiMethodData.muxMethodData.tableLen", 248, 4),
+        f("b64bBar0Supported", 126, 1),
+        f("bClockBoostSupported", 912, 1),
+        f("bEnableDynamicGranularityPageArrays", 911, 1),
+        f("bFeatureStretchVblankCapable", 910, 1),
+        f("bFlrSupported", 125, 1),
+        f("bGpuBehindBridge", 124, 1),
+        f("bIsPassthru", 840, 1),
+        f("bIsPrimary", 896, 1),
+        f("bMnocAvailable", 127, 1),
+        f("bPreserveVideoMemoryAllocations", 908, 1),
+        f("bRouteDispIntrsToCPU", 913, 1),
+        f("bSystemHasMux", 136, 1),
+        f("bTdrEventSupported", 909, 1),
+        f("bUpstreamL0sUnsupported", 132, 1),
+        f("bUpstreamL1PorMobileOnly", 135, 1),
+        f("bUpstreamL1PorSupported", 134, 1),
+        f("bUpstreamL1Unsupported", 133, 1),
+        f("chipsetIDInfo", 148, 10),
+        f("chipsetIDInfo.deviceID", 148, 2),
+        f("chipsetIDInfo.revisionID", 156, 1),
+        f("chipsetIDInfo.subdeviceID", 152, 2),
+        f("chipsetIDInfo.subvendorID", 154, 2),
+        f("chipsetIDInfo.vendorID", 150, 2),
+        f("chipsetL1ssEnable", 128, 4),
+        f("clPdbProperties", 112, 8),
+        f("consoleMemSize", 64, 8),
+        f("gpuPhysAddr", 0, 8),
+        f("gpuPhysFbAddr", 8, 8),
+        f("gpuPhysInstAddr", 16, 8),
+        f("gpuPhysIoAddr", 24, 8),
+        f("gridBuildCsp", 904, 4),
+        f("gspVFInfo", 856, 40),
+        f("gspVFInfo.FirstVFBar0Address", 864, 8),
+        f("gspVFInfo.FirstVFBar1Address", 872, 8),
+        f("gspVFInfo.FirstVFBar2Address", 880, 8),
+        f("gspVFInfo.b64bitBar0", 888, 1),
+        f("gspVFInfo.b64bitBar1", 889, 1),
+        f("gspVFInfo.b64bitBar2", 890, 1),
+        f("gspVFInfo.firstVFOffset", 860, 4),
+        f("gspVFInfo.totalVFs", 856, 4),
+        f("hypervisorType", 836, 4),
+        f("isGridBuild", 897, 1),
+        f("maxUserVa", 72, 8),
+        f("notifyOpSharedSurfacePhysAddr", 48, 8),
+        f("nvDomainBusDeviceFunc", 32, 8),
+        f("oorArch", 104, 1),
+        f("pciConfigMirrorBase", 80, 4),
+        f("pciConfigMirrorSize", 84, 4),
+        f("pcieAtomicsCplDeviceCapMask", 100, 4),
+        f("pcieAtomicsOpMask", 56, 8),
+        f("pcieConfigReg", 900, 4),
+        f("pcieConfigReg.linkCap", 900, 4),
+        f("simAccessBufPhysAddr", 40, 8),
+        f("sysTimerOffsetNs", 848, 8),
+        f("upstreamAddressValid", 137, 1),
+    ],
+};
+const GSPSYSTEMINFO_L9: Layout = Layout {
     size: 928,
     fields: &[
         f("Chipset", 120, 4),
@@ -2267,7 +3189,7 @@ const GSPSYSTEMINFO_L4: Layout = Layout {
         f("upstreamAddressValid", 137, 1),
     ],
 };
-const GSPSYSTEMINFO_L5: Layout = Layout {
+const GSPSYSTEMINFO_L10: Layout = Layout {
     size: 936,
     fields: &[
         f("Chipset", 120, 4),
@@ -2409,7 +3331,7 @@ const GSPSYSTEMINFO_L5: Layout = Layout {
         f("upstreamAddressValid", 137, 1),
     ],
 };
-const GSPSYSTEMINFO_L6: Layout = Layout {
+const GSPSYSTEMINFO_L11: Layout = Layout {
     size: 936,
     fields: &[
         f("Chipset", 120, 4),
@@ -2553,7 +3475,152 @@ const GSPSYSTEMINFO_L6: Layout = Layout {
         f("virtualConfigBits", 840, 2),
     ],
 };
-const GSPSYSTEMINFO_L7: Layout = Layout {
+const GSPSYSTEMINFO_L12: Layout = Layout {
+    size: 936,
+    fields: &[
+        f("Chipset", 120, 4),
+        f("FHBBusInfo", 138, 10),
+        f("FHBBusInfo.deviceID", 138, 2),
+        f("FHBBusInfo.revisionID", 146, 1),
+        f("FHBBusInfo.subdeviceID", 142, 2),
+        f("FHBBusInfo.subvendorID", 144, 2),
+        f("FHBBusInfo.vendorID", 140, 2),
+        f("PCIDeviceID", 88, 4),
+        f("PCIRevisionID", 96, 4),
+        f("PCISubDeviceID", 92, 4),
+        f("acpiMethodData", 160, 676),
+        f("acpiMethodData.bValid", 160, 1),
+        f("acpiMethodData.capsMethodData", 828, 8),
+        f("acpiMethodData.capsMethodData.optimusCaps", 832, 4),
+        f("acpiMethodData.capsMethodData.status", 828, 4),
+        f("acpiMethodData.dodMethodData", 164, 72),
+        f("acpiMethodData.dodMethodData.acpiIdList", 172, 64),
+        f("acpiMethodData.dodMethodData.acpiIdListLen", 168, 4),
+        f("acpiMethodData.dodMethodData.status", 164, 4),
+        f("acpiMethodData.jtMethodData", 236, 12),
+        f("acpiMethodData.jtMethodData.bSBIOSCaps", 246, 1),
+        f("acpiMethodData.jtMethodData.jtCaps", 240, 4),
+        f("acpiMethodData.jtMethodData.jtRevId", 244, 2),
+        f("acpiMethodData.jtMethodData.status", 236, 4),
+        f("acpiMethodData.muxMethodData", 248, 580),
+        f("acpiMethodData.muxMethodData.acpiIdMuxModeTable", 252, 192),
+        f("acpiMethodData.muxMethodData.acpiIdMuxModeTable[]", 252, 12),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxModeTable[].acpiId",
+            252,
+            4,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxModeTable[].mode",
+            256,
+            4,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxModeTable[].status",
+            260,
+            4,
+        ),
+        f("acpiMethodData.muxMethodData.acpiIdMuxPartTable", 444, 192),
+        f("acpiMethodData.muxMethodData.acpiIdMuxPartTable[]", 444, 12),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxPartTable[].acpiId",
+            444,
+            4,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxPartTable[].mode",
+            448,
+            4,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxPartTable[].status",
+            452,
+            4,
+        ),
+        f("acpiMethodData.muxMethodData.acpiIdMuxStateTable", 636, 192),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxStateTable[]",
+            636,
+            12,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxStateTable[].acpiId",
+            636,
+            4,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxStateTable[].mode",
+            640,
+            4,
+        ),
+        f(
+            "acpiMethodData.muxMethodData.acpiIdMuxStateTable[].status",
+            644,
+            4,
+        ),
+        f("acpiMethodData.muxMethodData.tableLen", 248, 4),
+        f("b64bBar0Supported", 126, 1),
+        f("bClockBoostSupported", 912, 1),
+        f("bEnableDynamicGranularityPageArrays", 911, 1),
+        f("bFeatureStretchVblankCapable", 910, 1),
+        f("bFlrSupported", 125, 1),
+        f("bGpuBehindBridge", 124, 1),
+        f("bGspNocatEnabled", 929, 1),
+        f("bIsCmcBasedHws", 928, 1),
+        f("bIsPassthru", 842, 1),
+        f("bIsPrimary", 896, 1),
+        f("bMnocAvailable", 127, 1),
+        f("bPreserveVideoMemoryAllocations", 908, 1),
+        f("bS0ixSupport", 930, 1),
+        f("bSystemHasMux", 136, 1),
+        f("bTdrEventSupported", 909, 1),
+        f("bUpstreamL0sUnsupported", 132, 1),
+        f("bUpstreamL1PorMobileOnly", 135, 1),
+        f("bUpstreamL1PorSupported", 134, 1),
+        f("bUpstreamL1Unsupported", 133, 1),
+        f("chipsetIDInfo", 148, 10),
+        f("chipsetIDInfo.deviceID", 148, 2),
+        f("chipsetIDInfo.revisionID", 156, 1),
+        f("chipsetIDInfo.subdeviceID", 152, 2),
+        f("chipsetIDInfo.subvendorID", 154, 2),
+        f("chipsetIDInfo.vendorID", 150, 2),
+        f("chipsetL1ssEnable", 128, 4),
+        f("clPdbProperties", 112, 8),
+        f("consoleMemSize", 64, 8),
+        f("gpuPhysAddr", 0, 8),
+        f("gpuPhysFbAddr", 8, 8),
+        f("gpuPhysInstAddr", 16, 8),
+        f("gpuPhysIoAddr", 24, 8),
+        f("gridBuildCsp", 904, 4),
+        f("gspVFInfo", 856, 40),
+        f("gspVFInfo.FirstVFBar0Address", 864, 8),
+        f("gspVFInfo.FirstVFBar1Address", 872, 8),
+        f("gspVFInfo.FirstVFBar2Address", 880, 8),
+        f("gspVFInfo.b64bitBar0", 888, 1),
+        f("gspVFInfo.b64bitBar1", 889, 1),
+        f("gspVFInfo.b64bitBar2", 890, 1),
+        f("gspVFInfo.firstVFOffset", 860, 4),
+        f("gspVFInfo.totalVFs", 856, 4),
+        f("hostPageSize", 920, 8),
+        f("hypervisorType", 836, 4),
+        f("isGridBuild", 897, 1),
+        f("maxUserVa", 72, 8),
+        f("notifyOpSharedSurfacePhysAddr", 48, 8),
+        f("nvDomainBusDeviceFunc", 32, 8),
+        f("oorArch", 104, 1),
+        f("pciConfigMirrorBase", 80, 4),
+        f("pciConfigMirrorSize", 84, 4),
+        f("pcieAtomicsCplDeviceCapMask", 100, 4),
+        f("pcieAtomicsOpMask", 56, 8),
+        f("pcieConfigReg", 900, 4),
+        f("pcieConfigReg.linkCap", 900, 4),
+        f("simAccessBufPhysAddr", 40, 8),
+        f("sysTimerOffsetNs", 848, 8),
+        f("upstreamAddressValid", 137, 1),
+        f("virtualConfigBits", 840, 2),
+    ],
+};
+const GSPSYSTEMINFO_L13: Layout = Layout {
     size: 936,
     fields: &[
         f("Chipset", 120, 4),
@@ -2699,7 +3766,7 @@ const GSPSYSTEMINFO_L7: Layout = Layout {
         f("virtualConfigBits", 840, 2),
     ],
 };
-const GSPSYSTEMINFO_L8: Layout = Layout {
+const GSPSYSTEMINFO_L14: Layout = Layout {
     size: 936,
     fields: &[
         f("Chipset", 120, 4),
@@ -2846,7 +3913,7 @@ const GSPSYSTEMINFO_L8: Layout = Layout {
         f("virtualConfigBits", 840, 2),
     ],
 };
-const GSPSYSTEMINFO_L9: Layout = Layout {
+const GSPSYSTEMINFO_L15: Layout = Layout {
     size: 944,
     fields: &[
         f("Chipset", 120, 4),
@@ -2995,7 +4062,7 @@ const GSPSYSTEMINFO_L9: Layout = Layout {
         f("virtualConfigBits", 840, 2),
     ],
 };
-const GSPSYSTEMINFO_L10: Layout = Layout {
+const GSPSYSTEMINFO_L16: Layout = Layout {
     size: 944,
     fields: &[
         f("Chipset", 120, 4),
@@ -3145,7 +4212,7 @@ const GSPSYSTEMINFO_L10: Layout = Layout {
         f("virtualConfigBits", 840, 2),
     ],
 };
-const GSPSYSTEMINFO_L11: Layout = Layout {
+const GSPSYSTEMINFO_L17: Layout = Layout {
     size: 952,
     fields: &[
         f("Chipset", 120, 4),
@@ -3296,7 +4363,7 @@ const GSPSYSTEMINFO_L11: Layout = Layout {
         f("virtualConfigBits", 840, 2),
     ],
 };
-const GSPSYSTEMINFO_L12: Layout = Layout {
+const GSPSYSTEMINFO_L18: Layout = Layout {
     size: 952,
     fields: &[
         f("Chipset", 120, 4),
@@ -3450,23 +4517,29 @@ const GSPSYSTEMINFO_L12: Layout = Layout {
         f("virtualConfigBits", 840, 2),
     ],
 };
-/// `GspSystemInfo` — 13 distinct consumed layout(s) over 13 run(s).
+/// `GspSystemInfo` — 19 distinct consumed layout(s) over 19 run(s).
 pub const GSPSYSTEMINFO: StructRuns = StructRuns {
     name: "GspSystemInfo",
     runs: &[
         r(v(535, 309, 1), v(535, 309, 1), Some(&GSPSYSTEMINFO_L0)), // 535.309.01 … 535.309.01
         r(v(545, 23, 8), v(545, 23, 8), Some(&GSPSYSTEMINFO_L1)),   // 545.23.08 … 545.23.08
-        r(v(550, 54, 14), v(550, 54, 14), Some(&GSPSYSTEMINFO_L2)), // 550.54.14 … 550.54.14
-        r(v(565, 57, 1), v(565, 57, 1), Some(&GSPSYSTEMINFO_L3)),   // 565.57.01 … 565.57.01
-        r(v(570, 124, 6), v(570, 148, 8), Some(&GSPSYSTEMINFO_L4)), // 570.124.06 … 570.148.08
-        r(v(575, 51, 3), v(575, 57, 8), Some(&GSPSYSTEMINFO_L5)),   // 575.51.03 … 575.57.08
-        r(v(580, 65, 6), v(580, 65, 6), Some(&GSPSYSTEMINFO_L6)),   // 580.65.06 … 580.65.06
-        r(v(580, 95, 5), v(580, 95, 5), Some(&GSPSYSTEMINFO_L7)),   // 580.95.05 … 580.95.05
-        r(v(580, 105, 8), v(580, 178, 4), Some(&GSPSYSTEMINFO_L8)), // 580.105.08 … 580.178.04
-        r(v(590, 48, 1), v(590, 48, 1), Some(&GSPSYSTEMINFO_L9)),   // 590.48.01 … 590.48.01
-        r(v(595, 84, 0), v(595, 84, 0), Some(&GSPSYSTEMINFO_L10)),  // 595.84 … 595.84
-        r(v(610, 43, 2), v(610, 57, 4), Some(&GSPSYSTEMINFO_L11)),  // 610.43.02 … 610.57.04
-        r(v(615, 71, 9), v(615, 71, 9), Some(&GSPSYSTEMINFO_L12)),  // 615.71.09 … 615.71.09
+        r(v(550, 40, 7), v(550, 40, 7), Some(&GSPSYSTEMINFO_L2)),   // 550.40.07 … 550.40.07
+        r(v(550, 54, 14), v(550, 54, 14), Some(&GSPSYSTEMINFO_L3)), // 550.54.14 … 550.54.14
+        r(v(550, 90, 7), v(550, 90, 7), Some(&GSPSYSTEMINFO_L4)),   // 550.90.07 … 550.90.07
+        r(v(555, 42, 2), v(555, 42, 2), Some(&GSPSYSTEMINFO_L5)),   // 555.42.02 … 555.42.02
+        r(v(560, 28, 3), v(560, 28, 3), Some(&GSPSYSTEMINFO_L6)),   // 560.28.03 … 560.28.03
+        r(v(565, 57, 1), v(565, 57, 1), Some(&GSPSYSTEMINFO_L7)),   // 565.57.01 … 565.57.01
+        r(v(570, 86, 15), v(570, 86, 15), Some(&GSPSYSTEMINFO_L8)), // 570.86.15 … 570.86.15
+        r(v(570, 124, 6), v(570, 148, 8), Some(&GSPSYSTEMINFO_L9)), // 570.124.06 … 570.148.08
+        r(v(575, 51, 2), v(575, 64, 5), Some(&GSPSYSTEMINFO_L10)),  // 575.51.02 … 575.64.05
+        r(v(580, 65, 6), v(580, 65, 6), Some(&GSPSYSTEMINFO_L11)),  // 580.65.06 … 580.65.06
+        r(v(580, 82, 7), v(580, 82, 7), Some(&GSPSYSTEMINFO_L12)),  // 580.82.07 … 580.82.07
+        r(v(580, 94, 2), v(580, 95, 5), Some(&GSPSYSTEMINFO_L13)),  // 580.94.02 … 580.95.05
+        r(v(580, 105, 8), v(580, 178, 4), Some(&GSPSYSTEMINFO_L14)), // 580.105.08 … 580.178.04
+        r(v(590, 48, 1), v(590, 48, 1), Some(&GSPSYSTEMINFO_L15)),  // 590.48.01 … 590.48.01
+        r(v(595, 84, 0), v(595, 84, 0), Some(&GSPSYSTEMINFO_L16)),  // 595.84 … 595.84
+        r(v(610, 43, 2), v(610, 57, 4), Some(&GSPSYSTEMINFO_L17)),  // 610.43.02 … 610.57.04
+        r(v(615, 71, 9), v(615, 71, 9), Some(&GSPSYSTEMINFO_L18)),  // 615.71.09 … 615.71.09
     ],
 };
 
@@ -3548,14 +4621,14 @@ pub const MESSAGE_QUEUE_INIT_ARGUMENTS: StructRuns = StructRuns {
     runs: &[
         r(
             v(535, 309, 1),
-            v(550, 54, 14),
+            v(550, 90, 7),
             Some(&MESSAGE_QUEUE_INIT_ARGUMENTS_L0),
-        ), // 535.309.01 … 550.54.14
+        ), // 535.309.01 … 550.90.07
         r(
-            v(565, 57, 1),
+            v(555, 42, 2),
             v(590, 48, 1),
             Some(&MESSAGE_QUEUE_INIT_ARGUMENTS_L1),
-        ), // 565.57.01 … 590.48.01
+        ), // 555.42.02 … 590.48.01
         r(
             v(595, 84, 0),
             v(610, 57, 4),
@@ -3596,10 +4669,10 @@ pub const NV0000_ALLOC_PARAMETERS: StructRuns = StructRuns {
             Some(&NV0000_ALLOC_PARAMETERS_L0),
         ), // 535.309.01 … 565.57.01
         r(
-            v(570, 124, 6),
+            v(570, 86, 15),
             v(615, 71, 9),
             Some(&NV0000_ALLOC_PARAMETERS_L1),
-        ), // 570.124.06 … 615.71.09
+        ), // 570.86.15 … 615.71.09
     ],
 };
 
@@ -3766,15 +4839,15 @@ pub const NV0080_CTRL_GPU_GET_CLASSLIST_V2_PARAMS: StructRuns = StructRuns {
             Some(&NV0080_CTRL_GPU_GET_CLASSLIST_V2_PARAMS_L0),
         ), // 535.309.01 … 545.23.08
         r(
-            v(550, 54, 14),
-            v(550, 54, 14),
+            v(550, 40, 7),
+            v(550, 90, 7),
             Some(&NV0080_CTRL_GPU_GET_CLASSLIST_V2_PARAMS_L1),
-        ), // 550.54.14 … 550.54.14
+        ), // 550.40.07 … 550.90.07
         r(
-            v(565, 57, 1),
-            v(575, 57, 8),
+            v(555, 42, 2),
+            v(575, 64, 5),
             Some(&NV0080_CTRL_GPU_GET_CLASSLIST_V2_PARAMS_L2),
-        ), // 565.57.01 … 575.57.08
+        ), // 555.42.02 … 575.64.05
         r(
             v(580, 65, 6),
             v(615, 71, 9),
@@ -3801,15 +4874,15 @@ pub const NV0080_CTRL_MSENC_GET_CAPS_V2_PARAMS: StructRuns = StructRuns {
     runs: &[
         r(v(535, 309, 1), v(545, 23, 8), None), // 535.309.01 … 545.23.08
         r(
-            v(550, 54, 14),
-            v(580, 65, 6),
+            v(550, 40, 7),
+            v(580, 82, 7),
             Some(&NV0080_CTRL_MSENC_GET_CAPS_V2_PARAMS_L0),
-        ), // 550.54.14 … 580.65.06
+        ), // 550.40.07 … 580.82.07
         r(
-            v(580, 95, 5),
+            v(580, 94, 2),
             v(580, 178, 4),
             Some(&NV0080_CTRL_MSENC_GET_CAPS_V2_PARAMS_L1),
-        ), // 580.95.05 … 580.178.04
+        ), // 580.94.02 … 580.178.04
         r(
             v(590, 48, 1),
             v(595, 84, 0),
@@ -4066,10 +5139,10 @@ pub const NV2080_CTRL_CMD_BUS_GET_C2C_INFO_PARAMS: StructRuns = StructRuns {
             Some(&NV2080_CTRL_CMD_BUS_GET_C2C_INFO_PARAMS_L0),
         ), // 535.309.01 … 570.148.08
         r(
-            v(575, 51, 3),
+            v(575, 51, 2),
             v(595, 84, 0),
             Some(&NV2080_CTRL_CMD_BUS_GET_C2C_INFO_PARAMS_L1),
-        ), // 575.51.03 … 595.84
+        ), // 575.51.02 … 595.84
         r(
             v(610, 43, 2),
             v(615, 71, 9),
@@ -4104,14 +5177,14 @@ pub const NV2080_CTRL_CMD_BUS_GET_PCIE_SUPPORTED_GPU_ATOMICS_PARAMS: StructRuns 
     runs: &[
         r(
             v(535, 309, 1),
-            v(550, 54, 14),
+            v(555, 42, 2),
             Some(&NV2080_CTRL_CMD_BUS_GET_PCIE_SUPPORTED_GPU_ATOMICS_PARAMS_L0),
-        ), // 535.309.01 … 550.54.14
+        ), // 535.309.01 … 555.42.02
         r(
-            v(565, 57, 1),
+            v(560, 28, 3),
             v(615, 71, 9),
             Some(&NV2080_CTRL_CMD_BUS_GET_PCIE_SUPPORTED_GPU_ATOMICS_PARAMS_L1),
-        ), // 565.57.01 … 615.71.09
+        ), // 560.28.03 … 615.71.09
     ],
 };
 
@@ -4230,14 +5303,14 @@ pub const NV2080_CTRL_FB_GET_INFO_V2_PARAMS: StructRuns = StructRuns {
         ), // 535.309.01 … 535.309.01
         r(
             v(545, 23, 8),
-            v(550, 54, 14),
+            v(555, 42, 2),
             Some(&NV2080_CTRL_FB_GET_INFO_V2_PARAMS_L1),
-        ), // 545.23.08 … 550.54.14
+        ), // 545.23.08 … 555.42.02
         r(
-            v(565, 57, 1),
-            v(575, 57, 8),
+            v(560, 28, 3),
+            v(575, 64, 5),
             Some(&NV2080_CTRL_FB_GET_INFO_V2_PARAMS_L2),
-        ), // 565.57.01 … 575.57.08
+        ), // 560.28.03 … 575.64.05
         r(
             v(580, 65, 6),
             v(615, 71, 9),
@@ -4375,10 +5448,10 @@ pub const NV2080_CTRL_GPU_GET_CONSTRUCTED_FALCON_INFO_PARAMS: StructRuns = Struc
     runs: &[
         r(v(535, 309, 1), v(545, 23, 8), None), // 535.309.01 … 545.23.08
         r(
-            v(550, 54, 14),
+            v(550, 40, 7),
             v(615, 71, 9),
             Some(&NV2080_CTRL_GPU_GET_CONSTRUCTED_FALCON_INFO_PARAMS_L0),
-        ), // 550.54.14 … 615.71.09
+        ), // 550.40.07 … 615.71.09
     ],
 };
 
@@ -4447,10 +5520,10 @@ pub const NV2080_CTRL_GPU_GET_INFO_V2_PARAMS: StructRuns = StructRuns {
             Some(&NV2080_CTRL_GPU_GET_INFO_V2_PARAMS_L1),
         ), // 545.23.08 … 570.148.08
         r(
-            v(575, 51, 3),
-            v(575, 57, 8),
+            v(575, 51, 2),
+            v(575, 64, 5),
             Some(&NV2080_CTRL_GPU_GET_INFO_V2_PARAMS_L2),
-        ), // 575.51.03 … 575.57.08
+        ), // 575.51.02 … 575.64.05
         r(
             v(580, 65, 6),
             v(595, 84, 0),
@@ -4683,9 +5756,9 @@ pub const NV2080_CTRL_GRMGR_GET_GR_FS_INFO_PARAMS: StructRuns = StructRuns {
     runs: &[
         r(
             v(535, 309, 1),
-            v(575, 57, 8),
+            v(575, 64, 5),
             Some(&NV2080_CTRL_GRMGR_GET_GR_FS_INFO_PARAMS_L0),
-        ), // 535.309.01 … 575.57.08
+        ), // 535.309.01 … 575.64.05
         r(
             v(580, 65, 6),
             v(615, 71, 9),
@@ -4803,10 +5876,10 @@ pub const NV2080_CTRL_INTERNAL_BIF_GET_STATIC_INFO_PARAMS: StructRuns = StructRu
             Some(&NV2080_CTRL_INTERNAL_BIF_GET_STATIC_INFO_PARAMS_L1),
         ), // 545.23.08 … 565.57.01
         r(
-            v(570, 124, 6),
+            v(570, 86, 15),
             v(615, 71, 9),
             Some(&NV2080_CTRL_INTERNAL_BIF_GET_STATIC_INFO_PARAMS_L2),
-        ), // 570.124.06 … 615.71.09
+        ), // 570.86.15 … 615.71.09
     ],
 };
 
@@ -4877,6 +5950,25 @@ const NV2080_CTRL_INTERNAL_GET_DEVICE_INFO_TABLE_PARAMS_L1: Layout = Layout {
     ],
 };
 const NV2080_CTRL_INTERNAL_GET_DEVICE_INFO_TABLE_PARAMS_L2: Layout = Layout {
+    size: 11268,
+    fields: &[
+        f("deviceInfoTable", 4, 11264),
+        f("deviceInfoTable[]", 4, 44),
+        f("deviceInfoTable[].deviceBroadcastPriBase", 44, 4),
+        f("deviceInfoTable[].devicePriBase", 20, 4),
+        f("deviceInfoTable[].faultId", 4, 4),
+        f("deviceInfoTable[].ginTargetId", 40, 4),
+        f("deviceInfoTable[].groupId", 36, 4),
+        f("deviceInfoTable[].instanceId", 8, 4),
+        f("deviceInfoTable[].isEngine", 24, 4),
+        f("deviceInfoTable[].resetId", 16, 4),
+        f("deviceInfoTable[].rlEngId", 28, 4),
+        f("deviceInfoTable[].runlistPriBase", 32, 4),
+        f("deviceInfoTable[].typeEnum", 12, 4),
+        f("numEntries", 0, 4),
+    ],
+};
+const NV2080_CTRL_INTERNAL_GET_DEVICE_INFO_TABLE_PARAMS_L3: Layout = Layout {
     size: 24580,
     fields: &[
         f("deviceInfoTable", 4, 24576),
@@ -4896,7 +5988,7 @@ const NV2080_CTRL_INTERNAL_GET_DEVICE_INFO_TABLE_PARAMS_L2: Layout = Layout {
         f("numEntries", 0, 4),
     ],
 };
-/// `NV2080_CTRL_INTERNAL_GET_DEVICE_INFO_TABLE_PARAMS` — 3 distinct consumed layout(s) over 3 run(s).
+/// `NV2080_CTRL_INTERNAL_GET_DEVICE_INFO_TABLE_PARAMS` — 4 distinct consumed layout(s) over 4 run(s).
 pub const NV2080_CTRL_INTERNAL_GET_DEVICE_INFO_TABLE_PARAMS: StructRuns = StructRuns {
     name: "NV2080_CTRL_INTERNAL_GET_DEVICE_INFO_TABLE_PARAMS",
     runs: &[
@@ -4906,14 +5998,19 @@ pub const NV2080_CTRL_INTERNAL_GET_DEVICE_INFO_TABLE_PARAMS: StructRuns = Struct
             Some(&NV2080_CTRL_INTERNAL_GET_DEVICE_INFO_TABLE_PARAMS_L0),
         ), // 535.309.01 … 545.23.08
         r(
-            v(550, 54, 14),
-            v(550, 54, 14),
+            v(550, 40, 7),
+            v(555, 42, 2),
             Some(&NV2080_CTRL_INTERNAL_GET_DEVICE_INFO_TABLE_PARAMS_L1),
-        ), // 550.54.14 … 550.54.14
+        ), // 550.40.07 … 555.42.02
+        r(
+            v(560, 28, 3),
+            v(560, 28, 3),
+            Some(&NV2080_CTRL_INTERNAL_GET_DEVICE_INFO_TABLE_PARAMS_L2),
+        ), // 560.28.03 … 560.28.03
         r(
             v(565, 57, 1),
             v(615, 71, 9),
-            Some(&NV2080_CTRL_INTERNAL_GET_DEVICE_INFO_TABLE_PARAMS_L2),
+            Some(&NV2080_CTRL_INTERNAL_GET_DEVICE_INFO_TABLE_PARAMS_L3),
         ), // 565.57.01 … 615.71.09
     ],
 };
@@ -5036,10 +6133,10 @@ pub const NV2080_CTRL_INTERNAL_GPU_GET_CHIP_INFO_PARAMS: StructRuns = StructRuns
             Some(&NV2080_CTRL_INTERNAL_GPU_GET_CHIP_INFO_PARAMS_L0),
         ), // 535.309.01 … 545.23.08
         r(
-            v(550, 54, 14),
+            v(550, 40, 7),
             v(610, 57, 4),
             Some(&NV2080_CTRL_INTERNAL_GPU_GET_CHIP_INFO_PARAMS_L1),
-        ), // 550.54.14 … 610.57.04
+        ), // 550.40.07 … 610.57.04
         r(v(615, 71, 9), v(615, 71, 9), None), // 615.71.09 … 615.71.09
     ],
 };
@@ -5134,9 +6231,9 @@ pub const NV2080_CTRL_INTERNAL_INTR_GET_KERNEL_TABLE_PARAMS: StructRuns = Struct
     runs: &[
         r(
             v(535, 309, 1),
-            v(575, 57, 8),
+            v(575, 64, 5),
             Some(&NV2080_CTRL_INTERNAL_INTR_GET_KERNEL_TABLE_PARAMS_L0),
-        ), // 535.309.01 … 575.57.08
+        ), // 535.309.01 … 575.64.05
         r(
             v(580, 65, 6),
             v(615, 71, 9),
@@ -5197,10 +6294,10 @@ pub const NV2080_CTRL_INTERNAL_MEMSYS_GET_STATIC_CONFIG_PARAMS: StructRuns = Str
             Some(&NV2080_CTRL_INTERNAL_MEMSYS_GET_STATIC_CONFIG_PARAMS_L0),
         ), // 535.309.01 … 545.23.08
         r(
-            v(550, 54, 14),
+            v(550, 40, 7),
             v(615, 71, 9),
             Some(&NV2080_CTRL_INTERNAL_MEMSYS_GET_STATIC_CONFIG_PARAMS_L1),
-        ), // 550.54.14 … 615.71.09
+        ), // 550.40.07 … 615.71.09
     ],
 };
 
@@ -5273,10 +6370,10 @@ pub const NV2080_CTRL_INTERNAL_STATIC_KGR_GET_CONTEXT_BUFFERS_INFO_PARAMS: Struc
                 Some(&NV2080_CTRL_INTERNAL_STATIC_KGR_GET_CONTEXT_BUFFERS_INFO_PARAMS_L0),
             ), // 535.309.01 … 545.23.08
             r(
-                v(550, 54, 14),
+                v(550, 40, 7),
                 v(615, 71, 9),
                 Some(&NV2080_CTRL_INTERNAL_STATIC_KGR_GET_CONTEXT_BUFFERS_INFO_PARAMS_L1),
-            ), // 550.54.14 … 615.71.09
+            ), // 550.40.07 … 615.71.09
         ],
     };
 
@@ -5395,9 +6492,9 @@ pub const NV2080_CTRL_INTERNAL_STATIC_KGR_GET_FLOORSWEEPING_MASKS_PARAMS: Struct
     runs: &[
         r(
             v(535, 309, 1),
-            v(575, 57, 8),
+            v(575, 64, 5),
             Some(&NV2080_CTRL_INTERNAL_STATIC_KGR_GET_FLOORSWEEPING_MASKS_PARAMS_L0),
-        ), // 535.309.01 … 575.57.08
+        ), // 535.309.01 … 575.64.05
         r(
             v(580, 65, 6),
             v(590, 48, 1),
@@ -5527,10 +6624,10 @@ pub const NV2080_CTRL_INTERNAL_STATIC_KGR_GET_GLOBAL_SM_ORDER_PARAMS: StructRuns
             Some(&NV2080_CTRL_INTERNAL_STATIC_KGR_GET_GLOBAL_SM_ORDER_PARAMS_L0),
         ), // 535.309.01 … 570.148.08
         r(
-            v(575, 51, 3),
-            v(575, 57, 8),
+            v(575, 51, 2),
+            v(575, 64, 5),
             Some(&NV2080_CTRL_INTERNAL_STATIC_KGR_GET_GLOBAL_SM_ORDER_PARAMS_L1),
-        ), // 575.51.03 … 575.57.08
+        ), // 575.51.02 … 575.64.05
         r(
             v(580, 65, 6),
             v(595, 84, 0),
@@ -5619,10 +6716,10 @@ pub const NV2080_CTRL_INTERNAL_STATIC_KGR_GET_INFO_PARAMS: StructRuns = StructRu
             Some(&NV2080_CTRL_INTERNAL_STATIC_KGR_GET_INFO_PARAMS_L1),
         ), // 545.23.08 … 565.57.01
         r(
-            v(570, 124, 6),
+            v(570, 86, 15),
             v(580, 178, 4),
             Some(&NV2080_CTRL_INTERNAL_STATIC_KGR_GET_INFO_PARAMS_L2),
-        ), // 570.124.06 … 580.178.04
+        ), // 570.86.15 … 580.178.04
         r(
             v(590, 48, 1),
             v(595, 84, 0),
@@ -5694,9 +6791,9 @@ pub const NV2080_CTRL_INTERNAL_STATIC_KGR_GET_PPC_MASKS_PARAMS: StructRuns = Str
     runs: &[
         r(
             v(535, 309, 1),
-            v(575, 57, 8),
+            v(575, 64, 5),
             Some(&NV2080_CTRL_INTERNAL_STATIC_KGR_GET_PPC_MASKS_PARAMS_L0),
-        ), // 535.309.01 … 575.57.08
+        ), // 535.309.01 … 575.64.05
         r(
             v(580, 65, 6),
             v(590, 48, 1),
@@ -5793,10 +6890,10 @@ pub const NV2080_CTRL_INTERNAL_STATIC_KGR_GET_SM_ISSUE_RATE_MODIFIER_V2_PARAMS: 
         runs: &[
             r(v(535, 309, 1), v(570, 148, 8), None), // 535.309.01 … 570.148.08
             r(
-                v(575, 51, 3),
+                v(575, 51, 2),
                 v(615, 71, 9),
                 Some(&NV2080_CTRL_INTERNAL_STATIC_KGR_GET_SM_ISSUE_RATE_MODIFIER_V2_PARAMS_L0),
-            ), // 575.51.03 … 615.71.09
+            ), // 575.51.02 … 615.71.09
         ],
     };
 
@@ -5932,10 +7029,10 @@ pub const NV2080_CTRL_PERF_GET_LEVEL_INFO_V2_PARAMS: StructRuns = StructRuns {
     runs: &[
         r(v(535, 309, 1), v(545, 23, 8), None), // 535.309.01 … 545.23.08
         r(
-            v(550, 54, 14),
+            v(550, 40, 7),
             v(615, 71, 9),
             Some(&NV2080_CTRL_PERF_GET_LEVEL_INFO_V2_PARAMS_L0),
-        ), // 550.54.14 … 615.71.09
+        ), // 550.40.07 … 615.71.09
     ],
 };
 
@@ -6026,10 +7123,10 @@ pub const NVA06C_CTRL_GPFIFO_SCHEDULE_PARAMS: StructRuns = StructRuns {
             Some(&NVA06C_CTRL_GPFIFO_SCHEDULE_PARAMS_L0),
         ), // 535.309.01 … 570.148.08
         r(
-            v(575, 51, 3),
+            v(575, 51, 2),
             v(615, 71, 9),
             Some(&NVA06C_CTRL_GPFIFO_SCHEDULE_PARAMS_L1),
-        ), // 575.51.03 … 615.71.09
+        ), // 575.51.02 … 615.71.09
     ],
 };
 
@@ -6117,10 +7214,10 @@ pub const NVA06F_CTRL_GPFIFO_SCHEDULE_PARAMS: StructRuns = StructRuns {
             Some(&NVA06F_CTRL_GPFIFO_SCHEDULE_PARAMS_L0),
         ), // 535.309.01 … 570.148.08
         r(
-            v(575, 51, 3),
+            v(575, 51, 2),
             v(615, 71, 9),
             Some(&NVA06F_CTRL_GPFIFO_SCHEDULE_PARAMS_L1),
-        ), // 575.51.03 … 615.71.09
+        ), // 575.51.02 … 615.71.09
     ],
 };
 
@@ -6684,8 +7781,8 @@ pub const NVOS32_PARAMETERS: StructRuns = StructRuns {
     name: "NVOS32_PARAMETERS",
     runs: &[
         r(v(535, 309, 1), v(545, 23, 8), Some(&NVOS32_PARAMETERS_L0)), // 535.309.01 … 545.23.08
-        r(v(550, 54, 14), v(570, 148, 8), Some(&NVOS32_PARAMETERS_L1)), // 550.54.14 … 570.148.08
-        r(v(575, 51, 3), v(615, 71, 9), Some(&NVOS32_PARAMETERS_L2)),  // 575.51.03 … 615.71.09
+        r(v(550, 40, 7), v(570, 148, 8), Some(&NVOS32_PARAMETERS_L1)), // 550.40.07 … 570.148.08
+        r(v(575, 51, 2), v(615, 71, 9), Some(&NVOS32_PARAMETERS_L2)),  // 575.51.02 … 615.71.09
     ],
 };
 
@@ -6786,7 +7883,7 @@ const NVOS46_PARAMETERS_L1: Layout = Layout {
 pub const NVOS46_PARAMETERS: StructRuns = StructRuns {
     name: "NVOS46_PARAMETERS",
     runs: &[
-        r(v(535, 309, 1), v(575, 57, 8), Some(&NVOS46_PARAMETERS_L0)), // 535.309.01 … 575.57.08
+        r(v(535, 309, 1), v(575, 64, 5), Some(&NVOS46_PARAMETERS_L0)), // 535.309.01 … 575.64.05
         r(v(580, 65, 6), v(615, 71, 9), Some(&NVOS46_PARAMETERS_L1)),  // 580.65.06 … 615.71.09
     ],
 };
@@ -6821,7 +7918,7 @@ pub const NVOS47_PARAMETERS: StructRuns = StructRuns {
     name: "NVOS47_PARAMETERS",
     runs: &[
         r(v(535, 309, 1), v(545, 23, 8), Some(&NVOS47_PARAMETERS_L0)), // 535.309.01 … 545.23.08
-        r(v(550, 54, 14), v(615, 71, 9), Some(&NVOS47_PARAMETERS_L1)), // 550.54.14 … 615.71.09
+        r(v(550, 40, 7), v(615, 71, 9), Some(&NVOS47_PARAMETERS_L1)),  // 550.40.07 … 615.71.09
     ],
 };
 
@@ -7106,10 +8203,10 @@ pub const NV_CHANNEL_ALLOC_PARAMS: StructRuns = StructRuns {
             Some(&NV_CHANNEL_ALLOC_PARAMS_L0),
         ), // 535.309.01 … 565.57.01
         r(
-            v(570, 124, 6),
+            v(570, 86, 15),
             v(595, 84, 0),
             Some(&NV_CHANNEL_ALLOC_PARAMS_L1),
-        ), // 570.124.06 … 595.84
+        ), // 570.86.15 … 595.84
         r(
             v(610, 43, 2),
             v(615, 71, 9),
@@ -7380,9 +8477,9 @@ pub const NV_VASPACE_ALLOCATION_PARAMETERS: StructRuns = StructRuns {
     runs: &[
         r(
             v(535, 309, 1),
-            v(575, 57, 8),
+            v(575, 64, 5),
             Some(&NV_VASPACE_ALLOCATION_PARAMETERS_L0),
-        ), // 535.309.01 … 575.57.08
+        ), // 535.309.01 … 575.64.05
         r(
             v(580, 65, 6),
             v(615, 71, 9),
@@ -7441,9 +8538,9 @@ pub const UVM_MAP_EXTERNAL_ALLOCATION_PARAMS: StructRuns = StructRuns {
     runs: &[
         r(
             v(535, 309, 1),
-            v(545, 23, 8),
+            v(550, 40, 7),
             Some(&UVM_MAP_EXTERNAL_ALLOCATION_PARAMS_L0),
-        ), // 535.309.01 … 545.23.08
+        ), // 535.309.01 … 550.40.07
         r(
             v(550, 54, 14),
             v(615, 71, 9),
@@ -7615,10 +8712,10 @@ pub const NV_IOCTL_EXPORT_TO_DMA_BUF_FD_T: StructRuns = StructRuns {
             Some(&NV_IOCTL_EXPORT_TO_DMA_BUF_FD_T_L0),
         ), // 535.309.01 … 565.57.01
         r(
-            v(570, 124, 6),
-            v(575, 57, 8),
+            v(570, 86, 15),
+            v(575, 64, 5),
             Some(&NV_IOCTL_EXPORT_TO_DMA_BUF_FD_T_L1),
-        ), // 570.124.06 … 575.57.08
+        ), // 570.86.15 … 575.64.05
         r(
             v(580, 65, 6),
             v(615, 71, 9),
@@ -7779,7 +8876,7 @@ pub const RPC_GSP_RM_CONTROL_V: StructRuns = StructRuns {
             v(570, 148, 8),
             Some(&RPC_GSP_RM_CONTROL_V_L0),
         ), // 535.309.01 … 570.148.08
-        r(v(575, 51, 3), v(615, 71, 9), Some(&RPC_GSP_RM_CONTROL_V_L1)), // 575.51.03 … 615.71.09
+        r(v(575, 51, 2), v(615, 71, 9), Some(&RPC_GSP_RM_CONTROL_V_L1)), // 575.51.02 … 615.71.09
     ],
 };
 
@@ -7884,9 +8981,9 @@ const RPC_OS_ERROR_LOG_V_L2: Layout = Layout {
 pub const RPC_OS_ERROR_LOG_V: StructRuns = StructRuns {
     name: "rpc_os_error_log_v",
     runs: &[
-        r(v(535, 309, 1), v(565, 57, 1), Some(&RPC_OS_ERROR_LOG_V_L0)), // 535.309.01 … 565.57.01
+        r(v(535, 309, 1), v(570, 86, 15), Some(&RPC_OS_ERROR_LOG_V_L0)), // 535.309.01 … 570.86.15
         r(v(570, 124, 6), v(570, 148, 8), Some(&RPC_OS_ERROR_LOG_V_L1)), // 570.124.06 … 570.148.08
-        r(v(575, 51, 3), v(615, 71, 9), Some(&RPC_OS_ERROR_LOG_V_L2)),  // 575.51.03 … 615.71.09
+        r(v(575, 51, 2), v(615, 71, 9), Some(&RPC_OS_ERROR_LOG_V_L2)),   // 575.51.02 … 615.71.09
     ],
 };
 
@@ -7948,6 +9045,23 @@ const RPC_RC_TRIGGERED_V_L2: Layout = Layout {
     ],
 };
 const RPC_RC_TRIGGERED_V_L3: Layout = Layout {
+    size: 44,
+    fields: &[
+        f("bCallbackNeeded", 36, 1),
+        f("chid", 4, 4),
+        f("exceptLevel", 8, 4),
+        f("exceptType", 12, 4),
+        f("mmuFaultAddrHi", 28, 4),
+        f("mmuFaultAddrLo", 24, 4),
+        f("mmuFaultType", 32, 4),
+        f("nv2080EngineType", 0, 4),
+        f("partitionAttributionId", 20, 2),
+        f("rcJournalBuffer", 44, 0),
+        f("rcJournalBufferSize", 40, 4),
+        f("scope", 16, 4),
+    ],
+};
+const RPC_RC_TRIGGERED_V_L4: Layout = Layout {
     size: 48,
     fields: &[
         f("bCallbackNeeded", 40, 1),
@@ -7965,7 +9079,7 @@ const RPC_RC_TRIGGERED_V_L3: Layout = Layout {
         f("scope", 20, 4),
     ],
 };
-const RPC_RC_TRIGGERED_V_L4: Layout = Layout {
+const RPC_RC_TRIGGERED_V_L5: Layout = Layout {
     size: 64,
     fields: &[
         f("bCallbackNeeded", 40, 1),
@@ -7987,15 +9101,16 @@ const RPC_RC_TRIGGERED_V_L4: Layout = Layout {
         f("scope", 20, 4),
     ],
 };
-/// `rpc_rc_triggered_v` — 5 distinct consumed layout(s) over 5 run(s).
+/// `rpc_rc_triggered_v` — 6 distinct consumed layout(s) over 6 run(s).
 pub const RPC_RC_TRIGGERED_V: StructRuns = StructRuns {
     name: "rpc_rc_triggered_v",
     runs: &[
         r(v(535, 309, 1), v(535, 309, 1), Some(&RPC_RC_TRIGGERED_V_L0)), // 535.309.01 … 535.309.01
         r(v(545, 23, 8), v(545, 23, 8), Some(&RPC_RC_TRIGGERED_V_L1)),   // 545.23.08 … 545.23.08
-        r(v(550, 54, 14), v(550, 54, 14), Some(&RPC_RC_TRIGGERED_V_L2)), // 550.54.14 … 550.54.14
-        r(v(565, 57, 1), v(610, 57, 4), Some(&RPC_RC_TRIGGERED_V_L3)),   // 565.57.01 … 610.57.04
-        r(v(615, 71, 9), v(615, 71, 9), Some(&RPC_RC_TRIGGERED_V_L4)),   // 615.71.09 … 615.71.09
+        r(v(550, 40, 7), v(550, 90, 7), Some(&RPC_RC_TRIGGERED_V_L2)),   // 550.40.07 … 550.90.07
+        r(v(555, 42, 2), v(560, 28, 3), Some(&RPC_RC_TRIGGERED_V_L3)),   // 555.42.02 … 560.28.03
+        r(v(565, 57, 1), v(610, 57, 4), Some(&RPC_RC_TRIGGERED_V_L4)),   // 565.57.01 … 610.57.04
+        r(v(615, 71, 9), v(615, 71, 9), Some(&RPC_RC_TRIGGERED_V_L5)),   // 615.71.09 … 615.71.09
     ],
 };
 
@@ -8214,8 +9329,8 @@ pub const CLASS_IDS_AMPERE_USERMODE_A: ValueRuns = ValueRuns {
 pub const CLASS_IDS_BLACKWELL_A: ValueRuns = ValueRuns {
     name: "class_ids:BLACKWELL_A",
     runs: &[
-        r(v(535, 309, 1), v(550, 54, 14), None), // 535.309.01 … 550.54.14
-        r(v(565, 57, 1), v(615, 71, 9), Some(0xcd97)), // 565.57.01 … 615.71.09
+        r(v(535, 309, 1), v(555, 42, 2), None), // 535.309.01 … 555.42.02
+        r(v(560, 28, 3), v(615, 71, 9), Some(0xcd97)), // 560.28.03 … 615.71.09
     ],
 };
 
@@ -8224,7 +9339,7 @@ pub const CLASS_IDS_BLACKWELL_B: ValueRuns = ValueRuns {
     name: "class_ids:BLACKWELL_B",
     runs: &[
         r(v(535, 309, 1), v(565, 57, 1), None), // 535.309.01 … 565.57.01
-        r(v(570, 124, 6), v(615, 71, 9), Some(0xce97)), // 570.124.06 … 615.71.09
+        r(v(570, 86, 15), v(615, 71, 9), Some(0xce97)), // 570.86.15 … 615.71.09
     ],
 };
 
@@ -8232,8 +9347,8 @@ pub const CLASS_IDS_BLACKWELL_B: ValueRuns = ValueRuns {
 pub const CLASS_IDS_BLACKWELL_CHANNEL_GPFIFO_A: ValueRuns = ValueRuns {
     name: "class_ids:BLACKWELL_CHANNEL_GPFIFO_A",
     runs: &[
-        r(v(535, 309, 1), v(550, 54, 14), None), // 535.309.01 … 550.54.14
-        r(v(565, 57, 1), v(615, 71, 9), Some(0xc96f)), // 565.57.01 … 615.71.09
+        r(v(535, 309, 1), v(555, 42, 2), None), // 535.309.01 … 555.42.02
+        r(v(560, 28, 3), v(615, 71, 9), Some(0xc96f)), // 560.28.03 … 615.71.09
     ],
 };
 
@@ -8242,7 +9357,7 @@ pub const CLASS_IDS_BLACKWELL_CHANNEL_GPFIFO_B: ValueRuns = ValueRuns {
     name: "class_ids:BLACKWELL_CHANNEL_GPFIFO_B",
     runs: &[
         r(v(535, 309, 1), v(565, 57, 1), None), // 535.309.01 … 565.57.01
-        r(v(570, 124, 6), v(615, 71, 9), Some(0xca6f)), // 570.124.06 … 615.71.09
+        r(v(570, 86, 15), v(615, 71, 9), Some(0xca6f)), // 570.86.15 … 615.71.09
     ],
 };
 
@@ -8250,8 +9365,8 @@ pub const CLASS_IDS_BLACKWELL_CHANNEL_GPFIFO_B: ValueRuns = ValueRuns {
 pub const CLASS_IDS_BLACKWELL_COMPUTE_A: ValueRuns = ValueRuns {
     name: "class_ids:BLACKWELL_COMPUTE_A",
     runs: &[
-        r(v(535, 309, 1), v(550, 54, 14), None), // 535.309.01 … 550.54.14
-        r(v(565, 57, 1), v(615, 71, 9), Some(0xcdc0)), // 565.57.01 … 615.71.09
+        r(v(535, 309, 1), v(555, 42, 2), None), // 535.309.01 … 555.42.02
+        r(v(560, 28, 3), v(615, 71, 9), Some(0xcdc0)), // 560.28.03 … 615.71.09
     ],
 };
 
@@ -8260,7 +9375,7 @@ pub const CLASS_IDS_BLACKWELL_COMPUTE_B: ValueRuns = ValueRuns {
     name: "class_ids:BLACKWELL_COMPUTE_B",
     runs: &[
         r(v(535, 309, 1), v(565, 57, 1), None), // 535.309.01 … 565.57.01
-        r(v(570, 124, 6), v(615, 71, 9), Some(0xcec0)), // 570.124.06 … 615.71.09
+        r(v(570, 86, 15), v(615, 71, 9), Some(0xcec0)), // 570.86.15 … 615.71.09
     ],
 };
 
@@ -8268,8 +9383,8 @@ pub const CLASS_IDS_BLACKWELL_COMPUTE_B: ValueRuns = ValueRuns {
 pub const CLASS_IDS_BLACKWELL_DMA_COPY_A: ValueRuns = ValueRuns {
     name: "class_ids:BLACKWELL_DMA_COPY_A",
     runs: &[
-        r(v(535, 309, 1), v(550, 54, 14), None), // 535.309.01 … 550.54.14
-        r(v(565, 57, 1), v(615, 71, 9), Some(0xc9b5)), // 565.57.01 … 615.71.09
+        r(v(535, 309, 1), v(555, 42, 2), None), // 535.309.01 … 555.42.02
+        r(v(560, 28, 3), v(615, 71, 9), Some(0xc9b5)), // 560.28.03 … 615.71.09
     ],
 };
 
@@ -8278,7 +9393,7 @@ pub const CLASS_IDS_BLACKWELL_DMA_COPY_B: ValueRuns = ValueRuns {
     name: "class_ids:BLACKWELL_DMA_COPY_B",
     runs: &[
         r(v(535, 309, 1), v(565, 57, 1), None), // 535.309.01 … 565.57.01
-        r(v(570, 124, 6), v(615, 71, 9), Some(0xcab5)), // 570.124.06 … 615.71.09
+        r(v(570, 86, 15), v(615, 71, 9), Some(0xcab5)), // 570.86.15 … 615.71.09
     ],
 };
 
@@ -8286,8 +9401,8 @@ pub const CLASS_IDS_BLACKWELL_DMA_COPY_B: ValueRuns = ValueRuns {
 pub const CLASS_IDS_BLACKWELL_INLINE_TO_MEMORY_A: ValueRuns = ValueRuns {
     name: "class_ids:BLACKWELL_INLINE_TO_MEMORY_A",
     runs: &[
-        r(v(535, 309, 1), v(550, 54, 14), None), // 535.309.01 … 550.54.14
-        r(v(565, 57, 1), v(615, 71, 9), Some(0xcd40)), // 565.57.01 … 615.71.09
+        r(v(535, 309, 1), v(555, 42, 2), None), // 535.309.01 … 555.42.02
+        r(v(560, 28, 3), v(615, 71, 9), Some(0xcd40)), // 560.28.03 … 615.71.09
     ],
 };
 
@@ -8296,7 +9411,7 @@ pub const CLASS_IDS_BLACKWELL_USERMODE_A: ValueRuns = ValueRuns {
     name: "class_ids:BLACKWELL_USERMODE_A",
     runs: &[
         r(v(535, 309, 1), v(565, 57, 1), None), // 535.309.01 … 565.57.01
-        r(v(570, 124, 6), v(615, 71, 9), Some(0xc761)), // 570.124.06 … 615.71.09
+        r(v(570, 86, 15), v(615, 71, 9), Some(0xc761)), // 570.86.15 … 615.71.09
     ],
 };
 
@@ -8464,7 +9579,7 @@ pub const CLASS_IDS_HOPPER_DMA_COPY_A: ValueRuns = ValueRuns {
 pub const CLASS_IDS_HOPPER_MMU_VIDMEM_ACCESS_BIT_BUFFER: ValueRuns = ValueRuns {
     name: "class_ids:HOPPER_MMU_VIDMEM_ACCESS_BIT_BUFFER",
     runs: &[
-        r(v(535, 309, 1), v(575, 57, 8), None), // 535.309.01 … 575.57.08
+        r(v(535, 309, 1), v(575, 64, 5), None), // 535.309.01 … 575.64.05
         r(v(580, 65, 6), v(615, 71, 9), Some(0xc863)), // 580.65.06 … 615.71.09
     ],
 };
@@ -8522,7 +9637,7 @@ pub const CLASS_IDS_KEPLER_DEVICE_VGPU: ValueRuns = ValueRuns {
     name: "class_ids:KEPLER_DEVICE_VGPU",
     runs: &[
         r(v(535, 309, 1), v(545, 23, 8), None), // 535.309.01 … 545.23.08
-        r(v(550, 54, 14), v(615, 71, 9), Some(0xa080)), // 550.54.14 … 615.71.09
+        r(v(550, 40, 7), v(615, 71, 9), Some(0xa080)), // 550.40.07 … 615.71.09
     ],
 };
 
@@ -8555,8 +9670,8 @@ pub const CLASS_IDS_KERNEL_WATCHDOG: ValueRuns = ValueRuns {
 pub const CLASS_IDS_LOCK_STRESS_OBJECT: ValueRuns = ValueRuns {
     name: "class_ids:LOCK_STRESS_OBJECT",
     runs: &[
-        r(v(535, 309, 1), v(550, 54, 14), None), // 535.309.01 … 550.54.14
-        r(v(565, 57, 1), v(615, 71, 9), Some(0x100)), // 565.57.01 … 615.71.09
+        r(v(535, 309, 1), v(550, 90, 7), None), // 535.309.01 … 550.90.07
+        r(v(555, 42, 2), v(615, 71, 9), Some(0x100)), // 555.42.02 … 615.71.09
     ],
 };
 
@@ -8565,7 +9680,7 @@ pub const CLASS_IDS_LOCK_TEST_RELAXED_DUP_OBJECT: ValueRuns = ValueRuns {
     name: "class_ids:LOCK_TEST_RELAXED_DUP_OBJECT",
     runs: &[
         r(v(535, 309, 1), v(570, 148, 8), None), // 535.309.01 … 570.148.08
-        r(v(575, 51, 3), v(615, 71, 9), Some(0x101)), // 575.51.03 … 615.71.09
+        r(v(575, 51, 2), v(615, 71, 9), Some(0x101)), // 575.51.02 … 615.71.09
     ],
 };
 
@@ -8597,7 +9712,7 @@ pub const CLASS_IDS_MAXWELL_PROFILER: ValueRuns = ValueRuns {
 pub const CLASS_IDS_MAXWELL_PROFILER_CONTEXT: ValueRuns = ValueRuns {
     name: "class_ids:MAXWELL_PROFILER_CONTEXT",
     runs: &[
-        r(v(535, 309, 1), v(550, 54, 14), None), // 535.309.01 … 550.54.14
+        r(v(535, 309, 1), v(560, 28, 3), None), // 535.309.01 … 560.28.03
         r(v(565, 57, 1), v(615, 71, 9), Some(0xb1cc)), // 565.57.01 … 615.71.09
     ],
 };
@@ -8808,7 +9923,7 @@ pub const CLASS_IDS_NV01_MEMORY_SYNCPOINT: ValueRuns = ValueRuns {
     name: "class_ids:NV01_MEMORY_SYNCPOINT",
     runs: &[
         r(v(535, 309, 1), v(565, 57, 1), None), // 535.309.01 … 565.57.01
-        r(v(570, 124, 6), v(615, 71, 9), Some(0xc3)), // 570.124.06 … 615.71.09
+        r(v(570, 86, 15), v(615, 71, 9), Some(0xc3)), // 570.86.15 … 615.71.09
     ],
 };
 
@@ -9505,7 +10620,7 @@ pub const CLASS_IDS_NVC970_DISPLAY: ValueRuns = ValueRuns {
     name: "class_ids:NVC970_DISPLAY",
     runs: &[
         r(v(535, 309, 1), v(565, 57, 1), None), // 535.309.01 … 565.57.01
-        r(v(570, 124, 6), v(615, 71, 9), Some(0xc970)), // 570.124.06 … 615.71.09
+        r(v(570, 86, 15), v(615, 71, 9), Some(0xc970)), // 570.86.15 … 615.71.09
     ],
 };
 
@@ -9514,7 +10629,7 @@ pub const CLASS_IDS_NVC971_DISP_SF_USER: ValueRuns = ValueRuns {
     name: "class_ids:NVC971_DISP_SF_USER",
     runs: &[
         r(v(535, 309, 1), v(565, 57, 1), None), // 535.309.01 … 565.57.01
-        r(v(570, 124, 6), v(615, 71, 9), Some(0xc971)), // 570.124.06 … 615.71.09
+        r(v(570, 86, 15), v(615, 71, 9), Some(0xc971)), // 570.86.15 … 615.71.09
     ],
 };
 
@@ -9523,7 +10638,7 @@ pub const CLASS_IDS_NVC973_DISP_CAPABILITIES: ValueRuns = ValueRuns {
     name: "class_ids:NVC973_DISP_CAPABILITIES",
     runs: &[
         r(v(535, 309, 1), v(565, 57, 1), None), // 535.309.01 … 565.57.01
-        r(v(570, 124, 6), v(615, 71, 9), Some(0xc973)), // 570.124.06 … 615.71.09
+        r(v(570, 86, 15), v(615, 71, 9), Some(0xc973)), // 570.86.15 … 615.71.09
     ],
 };
 
@@ -9532,7 +10647,7 @@ pub const CLASS_IDS_NVC97A_CURSOR_IMM_CHANNEL_PIO: ValueRuns = ValueRuns {
     name: "class_ids:NVC97A_CURSOR_IMM_CHANNEL_PIO",
     runs: &[
         r(v(535, 309, 1), v(565, 57, 1), None), // 535.309.01 … 565.57.01
-        r(v(570, 124, 6), v(615, 71, 9), Some(0xc97a)), // 570.124.06 … 615.71.09
+        r(v(570, 86, 15), v(615, 71, 9), Some(0xc97a)), // 570.86.15 … 615.71.09
     ],
 };
 
@@ -9541,7 +10656,7 @@ pub const CLASS_IDS_NVC97B_WINDOW_IMM_CHANNEL_DMA: ValueRuns = ValueRuns {
     name: "class_ids:NVC97B_WINDOW_IMM_CHANNEL_DMA",
     runs: &[
         r(v(535, 309, 1), v(565, 57, 1), None), // 535.309.01 … 565.57.01
-        r(v(570, 124, 6), v(615, 71, 9), Some(0xc97b)), // 570.124.06 … 615.71.09
+        r(v(570, 86, 15), v(615, 71, 9), Some(0xc97b)), // 570.86.15 … 615.71.09
     ],
 };
 
@@ -9550,7 +10665,7 @@ pub const CLASS_IDS_NVC97D_CORE_CHANNEL_DMA: ValueRuns = ValueRuns {
     name: "class_ids:NVC97D_CORE_CHANNEL_DMA",
     runs: &[
         r(v(535, 309, 1), v(565, 57, 1), None), // 535.309.01 … 565.57.01
-        r(v(570, 124, 6), v(615, 71, 9), Some(0xc97d)), // 570.124.06 … 615.71.09
+        r(v(570, 86, 15), v(615, 71, 9), Some(0xc97d)), // 570.86.15 … 615.71.09
     ],
 };
 
@@ -9559,7 +10674,7 @@ pub const CLASS_IDS_NVC97E_WINDOW_CHANNEL_DMA: ValueRuns = ValueRuns {
     name: "class_ids:NVC97E_WINDOW_CHANNEL_DMA",
     runs: &[
         r(v(535, 309, 1), v(565, 57, 1), None), // 535.309.01 … 565.57.01
-        r(v(570, 124, 6), v(615, 71, 9), Some(0xc97e)), // 570.124.06 … 615.71.09
+        r(v(570, 86, 15), v(615, 71, 9), Some(0xc97e)), // 570.86.15 … 615.71.09
     ],
 };
 
@@ -9600,7 +10715,7 @@ pub const CLASS_IDS_NVCA70_DISPLAY: ValueRuns = ValueRuns {
     name: "class_ids:NVCA70_DISPLAY",
     runs: &[
         r(v(535, 309, 1), v(565, 57, 1), None), // 535.309.01 … 565.57.01
-        r(v(570, 124, 6), v(615, 71, 9), Some(0xca70)), // 570.124.06 … 615.71.09
+        r(v(570, 86, 15), v(615, 71, 9), Some(0xca70)), // 570.86.15 … 615.71.09
     ],
 };
 
@@ -9609,7 +10724,7 @@ pub const CLASS_IDS_NVCA71_DISP_SF_USER: ValueRuns = ValueRuns {
     name: "class_ids:NVCA71_DISP_SF_USER",
     runs: &[
         r(v(535, 309, 1), v(565, 57, 1), None), // 535.309.01 … 565.57.01
-        r(v(570, 124, 6), v(615, 71, 9), Some(0xca71)), // 570.124.06 … 615.71.09
+        r(v(570, 86, 15), v(615, 71, 9), Some(0xca71)), // 570.86.15 … 615.71.09
     ],
 };
 
@@ -9618,7 +10733,7 @@ pub const CLASS_IDS_NVCA73_DISP_CAPABILITIES: ValueRuns = ValueRuns {
     name: "class_ids:NVCA73_DISP_CAPABILITIES",
     runs: &[
         r(v(535, 309, 1), v(565, 57, 1), None), // 535.309.01 … 565.57.01
-        r(v(570, 124, 6), v(615, 71, 9), Some(0xca73)), // 570.124.06 … 615.71.09
+        r(v(570, 86, 15), v(615, 71, 9), Some(0xca73)), // 570.86.15 … 615.71.09
     ],
 };
 
@@ -9627,7 +10742,7 @@ pub const CLASS_IDS_NVCA7A_CURSOR_IMM_CHANNEL_PIO: ValueRuns = ValueRuns {
     name: "class_ids:NVCA7A_CURSOR_IMM_CHANNEL_PIO",
     runs: &[
         r(v(535, 309, 1), v(565, 57, 1), None), // 535.309.01 … 565.57.01
-        r(v(570, 124, 6), v(615, 71, 9), Some(0xca7a)), // 570.124.06 … 615.71.09
+        r(v(570, 86, 15), v(615, 71, 9), Some(0xca7a)), // 570.86.15 … 615.71.09
     ],
 };
 
@@ -9636,7 +10751,7 @@ pub const CLASS_IDS_NVCA7B_WINDOW_IMM_CHANNEL_DMA: ValueRuns = ValueRuns {
     name: "class_ids:NVCA7B_WINDOW_IMM_CHANNEL_DMA",
     runs: &[
         r(v(535, 309, 1), v(565, 57, 1), None), // 535.309.01 … 565.57.01
-        r(v(570, 124, 6), v(615, 71, 9), Some(0xca7b)), // 570.124.06 … 615.71.09
+        r(v(570, 86, 15), v(615, 71, 9), Some(0xca7b)), // 570.86.15 … 615.71.09
     ],
 };
 
@@ -9645,7 +10760,7 @@ pub const CLASS_IDS_NVCA7D_CORE_CHANNEL_DMA: ValueRuns = ValueRuns {
     name: "class_ids:NVCA7D_CORE_CHANNEL_DMA",
     runs: &[
         r(v(535, 309, 1), v(565, 57, 1), None), // 535.309.01 … 565.57.01
-        r(v(570, 124, 6), v(615, 71, 9), Some(0xca7d)), // 570.124.06 … 615.71.09
+        r(v(570, 86, 15), v(615, 71, 9), Some(0xca7d)), // 570.86.15 … 615.71.09
     ],
 };
 
@@ -9654,7 +10769,7 @@ pub const CLASS_IDS_NVCA7E_WINDOW_CHANNEL_DMA: ValueRuns = ValueRuns {
     name: "class_ids:NVCA7E_WINDOW_CHANNEL_DMA",
     runs: &[
         r(v(535, 309, 1), v(565, 57, 1), None), // 535.309.01 … 565.57.01
-        r(v(570, 124, 6), v(615, 71, 9), Some(0xca7e)), // 570.124.06 … 615.71.09
+        r(v(570, 86, 15), v(615, 71, 9), Some(0xca7e)), // 570.86.15 … 615.71.09
     ],
 };
 
@@ -9663,7 +10778,7 @@ pub const CLASS_IDS_NVCB70_DISPLAY: ValueRuns = ValueRuns {
     name: "class_ids:NVCB70_DISPLAY",
     runs: &[
         r(v(535, 309, 1), v(570, 148, 8), None), // 535.309.01 … 570.148.08
-        r(v(575, 51, 3), v(615, 71, 9), Some(0xcb70)), // 575.51.03 … 615.71.09
+        r(v(575, 51, 2), v(615, 71, 9), Some(0xcb70)), // 575.51.02 … 615.71.09
     ],
 };
 
@@ -9672,7 +10787,7 @@ pub const CLASS_IDS_NVCB71_DISP_SF_USER: ValueRuns = ValueRuns {
     name: "class_ids:NVCB71_DISP_SF_USER",
     runs: &[
         r(v(535, 309, 1), v(570, 148, 8), None), // 535.309.01 … 570.148.08
-        r(v(575, 51, 3), v(615, 71, 9), Some(0xcb71)), // 575.51.03 … 615.71.09
+        r(v(575, 51, 2), v(615, 71, 9), Some(0xcb71)), // 575.51.02 … 615.71.09
     ],
 };
 
@@ -9681,7 +10796,7 @@ pub const CLASS_IDS_NVCB73_DISP_CAPABILITIES: ValueRuns = ValueRuns {
     name: "class_ids:NVCB73_DISP_CAPABILITIES",
     runs: &[
         r(v(535, 309, 1), v(570, 148, 8), None), // 535.309.01 … 570.148.08
-        r(v(575, 51, 3), v(615, 71, 9), Some(0xcb73)), // 575.51.03 … 615.71.09
+        r(v(575, 51, 2), v(615, 71, 9), Some(0xcb73)), // 575.51.02 … 615.71.09
     ],
 };
 
@@ -9690,7 +10805,7 @@ pub const CLASS_IDS_NVCB7A_CURSOR_IMM_CHANNEL_PIO: ValueRuns = ValueRuns {
     name: "class_ids:NVCB7A_CURSOR_IMM_CHANNEL_PIO",
     runs: &[
         r(v(535, 309, 1), v(570, 148, 8), None), // 535.309.01 … 570.148.08
-        r(v(575, 51, 3), v(615, 71, 9), Some(0xcb7a)), // 575.51.03 … 615.71.09
+        r(v(575, 51, 2), v(615, 71, 9), Some(0xcb7a)), // 575.51.02 … 615.71.09
     ],
 };
 
@@ -9699,7 +10814,7 @@ pub const CLASS_IDS_NVCB7B_WINDOW_IMM_CHANNEL_DMA: ValueRuns = ValueRuns {
     name: "class_ids:NVCB7B_WINDOW_IMM_CHANNEL_DMA",
     runs: &[
         r(v(535, 309, 1), v(570, 148, 8), None), // 535.309.01 … 570.148.08
-        r(v(575, 51, 3), v(615, 71, 9), Some(0xcb7b)), // 575.51.03 … 615.71.09
+        r(v(575, 51, 2), v(615, 71, 9), Some(0xcb7b)), // 575.51.02 … 615.71.09
     ],
 };
 
@@ -9708,7 +10823,7 @@ pub const CLASS_IDS_NVCB7D_CORE_CHANNEL_DMA: ValueRuns = ValueRuns {
     name: "class_ids:NVCB7D_CORE_CHANNEL_DMA",
     runs: &[
         r(v(535, 309, 1), v(570, 148, 8), None), // 535.309.01 … 570.148.08
-        r(v(575, 51, 3), v(615, 71, 9), Some(0xcb7d)), // 575.51.03 … 615.71.09
+        r(v(575, 51, 2), v(615, 71, 9), Some(0xcb7d)), // 575.51.02 … 615.71.09
     ],
 };
 
@@ -9717,7 +10832,7 @@ pub const CLASS_IDS_NVCB7E_WINDOW_CHANNEL_DMA: ValueRuns = ValueRuns {
     name: "class_ids:NVCB7E_WINDOW_CHANNEL_DMA",
     runs: &[
         r(v(535, 309, 1), v(570, 148, 8), None), // 535.309.01 … 570.148.08
-        r(v(575, 51, 3), v(615, 71, 9), Some(0xcb7e)), // 575.51.03 … 615.71.09
+        r(v(575, 51, 2), v(615, 71, 9), Some(0xcb7e)), // 575.51.02 … 615.71.09
     ],
 };
 
@@ -9725,7 +10840,7 @@ pub const CLASS_IDS_NVCB7E_WINDOW_CHANNEL_DMA: ValueRuns = ValueRuns {
 pub const CLASS_IDS_NVCC70_DISPLAY: ValueRuns = ValueRuns {
     name: "class_ids:NVCC70_DISPLAY",
     runs: &[
-        r(v(535, 309, 1), v(575, 57, 8), None), // 535.309.01 … 575.57.08
+        r(v(535, 309, 1), v(575, 64, 5), None), // 535.309.01 … 575.64.05
         r(v(580, 65, 6), v(615, 71, 9), Some(0xcc70)), // 580.65.06 … 615.71.09
     ],
 };
@@ -9734,7 +10849,7 @@ pub const CLASS_IDS_NVCC70_DISPLAY: ValueRuns = ValueRuns {
 pub const CLASS_IDS_NVCC71_DISP_SF_USER: ValueRuns = ValueRuns {
     name: "class_ids:NVCC71_DISP_SF_USER",
     runs: &[
-        r(v(535, 309, 1), v(575, 57, 8), None), // 535.309.01 … 575.57.08
+        r(v(535, 309, 1), v(575, 64, 5), None), // 535.309.01 … 575.64.05
         r(v(580, 65, 6), v(615, 71, 9), Some(0xcc71)), // 580.65.06 … 615.71.09
     ],
 };
@@ -9743,7 +10858,7 @@ pub const CLASS_IDS_NVCC71_DISP_SF_USER: ValueRuns = ValueRuns {
 pub const CLASS_IDS_NVCC73_DISP_CAPABILITIES: ValueRuns = ValueRuns {
     name: "class_ids:NVCC73_DISP_CAPABILITIES",
     runs: &[
-        r(v(535, 309, 1), v(575, 57, 8), None), // 535.309.01 … 575.57.08
+        r(v(535, 309, 1), v(575, 64, 5), None), // 535.309.01 … 575.64.05
         r(v(580, 65, 6), v(615, 71, 9), Some(0xcc73)), // 580.65.06 … 615.71.09
     ],
 };
@@ -9752,7 +10867,7 @@ pub const CLASS_IDS_NVCC73_DISP_CAPABILITIES: ValueRuns = ValueRuns {
 pub const CLASS_IDS_NVCC7A_CURSOR_IMM_CHANNEL_PIO: ValueRuns = ValueRuns {
     name: "class_ids:NVCC7A_CURSOR_IMM_CHANNEL_PIO",
     runs: &[
-        r(v(535, 309, 1), v(575, 57, 8), None), // 535.309.01 … 575.57.08
+        r(v(535, 309, 1), v(575, 64, 5), None), // 535.309.01 … 575.64.05
         r(v(580, 65, 6), v(615, 71, 9), Some(0xcc7a)), // 580.65.06 … 615.71.09
     ],
 };
@@ -9761,7 +10876,7 @@ pub const CLASS_IDS_NVCC7A_CURSOR_IMM_CHANNEL_PIO: ValueRuns = ValueRuns {
 pub const CLASS_IDS_NVCC7B_WINDOW_IMM_CHANNEL_DMA: ValueRuns = ValueRuns {
     name: "class_ids:NVCC7B_WINDOW_IMM_CHANNEL_DMA",
     runs: &[
-        r(v(535, 309, 1), v(575, 57, 8), None), // 535.309.01 … 575.57.08
+        r(v(535, 309, 1), v(575, 64, 5), None), // 535.309.01 … 575.64.05
         r(v(580, 65, 6), v(615, 71, 9), Some(0xcc7b)), // 580.65.06 … 615.71.09
     ],
 };
@@ -9770,7 +10885,7 @@ pub const CLASS_IDS_NVCC7B_WINDOW_IMM_CHANNEL_DMA: ValueRuns = ValueRuns {
 pub const CLASS_IDS_NVCC7D_CORE_CHANNEL_DMA: ValueRuns = ValueRuns {
     name: "class_ids:NVCC7D_CORE_CHANNEL_DMA",
     runs: &[
-        r(v(535, 309, 1), v(575, 57, 8), None), // 535.309.01 … 575.57.08
+        r(v(535, 309, 1), v(575, 64, 5), None), // 535.309.01 … 575.64.05
         r(v(580, 65, 6), v(615, 71, 9), Some(0xcc7d)), // 580.65.06 … 615.71.09
     ],
 };
@@ -9779,7 +10894,7 @@ pub const CLASS_IDS_NVCC7D_CORE_CHANNEL_DMA: ValueRuns = ValueRuns {
 pub const CLASS_IDS_NVCC7E_WINDOW_CHANNEL_DMA: ValueRuns = ValueRuns {
     name: "class_ids:NVCC7E_WINDOW_CHANNEL_DMA",
     runs: &[
-        r(v(535, 309, 1), v(575, 57, 8), None), // 535.309.01 … 575.57.08
+        r(v(535, 309, 1), v(575, 64, 5), None), // 535.309.01 … 575.64.05
         r(v(580, 65, 6), v(615, 71, 9), Some(0xcc7e)), // 580.65.06 … 615.71.09
     ],
 };
@@ -9788,8 +10903,8 @@ pub const CLASS_IDS_NVCC7E_WINDOW_CHANNEL_DMA: ValueRuns = ValueRuns {
 pub const CLASS_IDS_NVCDB0_VIDEO_DECODER: ValueRuns = ValueRuns {
     name: "class_ids:NVCDB0_VIDEO_DECODER",
     runs: &[
-        r(v(535, 309, 1), v(550, 54, 14), None), // 535.309.01 … 550.54.14
-        r(v(565, 57, 1), v(615, 71, 9), Some(0xcdb0)), // 565.57.01 … 615.71.09
+        r(v(535, 309, 1), v(555, 42, 2), None), // 535.309.01 … 555.42.02
+        r(v(560, 28, 3), v(615, 71, 9), Some(0xcdb0)), // 560.28.03 … 615.71.09
     ],
 };
 
@@ -9797,8 +10912,8 @@ pub const CLASS_IDS_NVCDB0_VIDEO_DECODER: ValueRuns = ValueRuns {
 pub const CLASS_IDS_NVCDD1_VIDEO_NVJPG: ValueRuns = ValueRuns {
     name: "class_ids:NVCDD1_VIDEO_NVJPG",
     runs: &[
-        r(v(535, 309, 1), v(550, 54, 14), None), // 535.309.01 … 550.54.14
-        r(v(565, 57, 1), v(615, 71, 9), Some(0xcdd1)), // 565.57.01 … 615.71.09
+        r(v(535, 309, 1), v(555, 42, 2), None), // 535.309.01 … 555.42.02
+        r(v(560, 28, 3), v(615, 71, 9), Some(0xcdd1)), // 560.28.03 … 615.71.09
     ],
 };
 
@@ -9806,8 +10921,8 @@ pub const CLASS_IDS_NVCDD1_VIDEO_NVJPG: ValueRuns = ValueRuns {
 pub const CLASS_IDS_NVCDFA_VIDEO_OFA: ValueRuns = ValueRuns {
     name: "class_ids:NVCDFA_VIDEO_OFA",
     runs: &[
-        r(v(535, 309, 1), v(550, 54, 14), None), // 535.309.01 … 550.54.14
-        r(v(565, 57, 1), v(615, 71, 9), Some(0xcdfa)), // 565.57.01 … 615.71.09
+        r(v(535, 309, 1), v(555, 42, 2), None), // 535.309.01 … 555.42.02
+        r(v(560, 28, 3), v(615, 71, 9), Some(0xcdfa)), // 560.28.03 … 615.71.09
     ],
 };
 
@@ -9815,7 +10930,7 @@ pub const CLASS_IDS_NVCDFA_VIDEO_OFA: ValueRuns = ValueRuns {
 pub const CLASS_IDS_NVCEB0_VIDEO_DECODER: ValueRuns = ValueRuns {
     name: "class_ids:NVCEB0_VIDEO_DECODER",
     runs: &[
-        r(v(535, 309, 1), v(575, 57, 8), None), // 535.309.01 … 575.57.08
+        r(v(535, 309, 1), v(575, 64, 5), None), // 535.309.01 … 575.64.05
         r(v(580, 65, 6), v(615, 71, 9), Some(0xceb0)), // 580.65.06 … 615.71.09
     ],
 };
@@ -9824,7 +10939,7 @@ pub const CLASS_IDS_NVCEB0_VIDEO_DECODER: ValueRuns = ValueRuns {
 pub const CLASS_IDS_NVCEB7_VIDEO_ENCODER: ValueRuns = ValueRuns {
     name: "class_ids:NVCEB7_VIDEO_ENCODER",
     runs: &[
-        r(v(535, 309, 1), v(575, 57, 8), None), // 535.309.01 … 575.57.08
+        r(v(535, 309, 1), v(575, 64, 5), None), // 535.309.01 … 575.64.05
         r(v(580, 65, 6), v(615, 71, 9), Some(0xceb7)), // 580.65.06 … 615.71.09
     ],
 };
@@ -9833,7 +10948,7 @@ pub const CLASS_IDS_NVCEB7_VIDEO_ENCODER: ValueRuns = ValueRuns {
 pub const CLASS_IDS_NVCED0_VIDEO_NVJPG: ValueRuns = ValueRuns {
     name: "class_ids:NVCED0_VIDEO_NVJPG",
     runs: &[
-        r(v(535, 309, 1), v(575, 57, 8), None), // 535.309.01 … 575.57.08
+        r(v(535, 309, 1), v(575, 64, 5), None), // 535.309.01 … 575.64.05
         r(v(580, 65, 6), v(615, 71, 9), Some(0xced0)), // 580.65.06 … 615.71.09
     ],
 };
@@ -9842,7 +10957,7 @@ pub const CLASS_IDS_NVCED0_VIDEO_NVJPG: ValueRuns = ValueRuns {
 pub const CLASS_IDS_NVCEFA_VIDEO_OFA: ValueRuns = ValueRuns {
     name: "class_ids:NVCEFA_VIDEO_OFA",
     runs: &[
-        r(v(535, 309, 1), v(575, 57, 8), None), // 535.309.01 … 575.57.08
+        r(v(535, 309, 1), v(575, 64, 5), None), // 535.309.01 … 575.64.05
         r(v(580, 65, 6), v(615, 71, 9), Some(0xcefa)), // 580.65.06 … 615.71.09
     ],
 };
@@ -9852,7 +10967,7 @@ pub const CLASS_IDS_NVCFB0_VIDEO_DECODER: ValueRuns = ValueRuns {
     name: "class_ids:NVCFB0_VIDEO_DECODER",
     runs: &[
         r(v(535, 309, 1), v(565, 57, 1), None), // 535.309.01 … 565.57.01
-        r(v(570, 124, 6), v(615, 71, 9), Some(0xcfb0)), // 570.124.06 … 615.71.09
+        r(v(570, 86, 15), v(615, 71, 9), Some(0xcfb0)), // 570.86.15 … 615.71.09
     ],
 };
 
@@ -9861,7 +10976,7 @@ pub const CLASS_IDS_NVCFB7_VIDEO_ENCODER: ValueRuns = ValueRuns {
     name: "class_ids:NVCFB7_VIDEO_ENCODER",
     runs: &[
         r(v(535, 309, 1), v(565, 57, 1), None), // 535.309.01 … 565.57.01
-        r(v(570, 124, 6), v(615, 71, 9), Some(0xcfb7)), // 570.124.06 … 615.71.09
+        r(v(570, 86, 15), v(615, 71, 9), Some(0xcfb7)), // 570.86.15 … 615.71.09
     ],
 };
 
@@ -9870,7 +10985,7 @@ pub const CLASS_IDS_NVCFD1_VIDEO_NVJPG: ValueRuns = ValueRuns {
     name: "class_ids:NVCFD1_VIDEO_NVJPG",
     runs: &[
         r(v(535, 309, 1), v(565, 57, 1), None), // 535.309.01 … 565.57.01
-        r(v(570, 124, 6), v(615, 71, 9), Some(0xcfd1)), // 570.124.06 … 615.71.09
+        r(v(570, 86, 15), v(615, 71, 9), Some(0xcfd1)), // 570.86.15 … 615.71.09
     ],
 };
 
@@ -9879,7 +10994,7 @@ pub const CLASS_IDS_NVCFFA_VIDEO_OFA: ValueRuns = ValueRuns {
     name: "class_ids:NVCFFA_VIDEO_OFA",
     runs: &[
         r(v(535, 309, 1), v(565, 57, 1), None), // 535.309.01 … 565.57.01
-        r(v(570, 124, 6), v(615, 71, 9), Some(0xcffa)), // 570.124.06 … 615.71.09
+        r(v(570, 86, 15), v(615, 71, 9), Some(0xcffa)), // 570.86.15 … 615.71.09
     ],
 };
 
@@ -9887,7 +11002,7 @@ pub const CLASS_IDS_NVCFFA_VIDEO_OFA: ValueRuns = ValueRuns {
 pub const CLASS_IDS_NVD1B0_VIDEO_DECODER: ValueRuns = ValueRuns {
     name: "class_ids:NVD1B0_VIDEO_DECODER",
     runs: &[
-        r(v(535, 309, 1), v(575, 57, 8), None), // 535.309.01 … 575.57.08
+        r(v(535, 309, 1), v(575, 64, 5), None), // 535.309.01 … 575.64.05
         r(v(580, 65, 6), v(615, 71, 9), Some(0xd1b0)), // 580.65.06 … 615.71.09
     ],
 };
@@ -9896,7 +11011,7 @@ pub const CLASS_IDS_NVD1B0_VIDEO_DECODER: ValueRuns = ValueRuns {
 pub const CLASS_IDS_NVD1B7_VIDEO_ENCODER: ValueRuns = ValueRuns {
     name: "class_ids:NVD1B7_VIDEO_ENCODER",
     runs: &[
-        r(v(535, 309, 1), v(575, 57, 8), None), // 535.309.01 … 575.57.08
+        r(v(535, 309, 1), v(575, 64, 5), None), // 535.309.01 … 575.64.05
         r(v(580, 65, 6), v(615, 71, 9), Some(0xd1b7)), // 580.65.06 … 615.71.09
     ],
 };
@@ -9905,7 +11020,7 @@ pub const CLASS_IDS_NVD1B7_VIDEO_ENCODER: ValueRuns = ValueRuns {
 pub const CLASS_IDS_NVD1FA_VIDEO_OFA: ValueRuns = ValueRuns {
     name: "class_ids:NVD1FA_VIDEO_OFA",
     runs: &[
-        r(v(535, 309, 1), v(575, 57, 8), None), // 535.309.01 … 575.57.08
+        r(v(535, 309, 1), v(575, 64, 5), None), // 535.309.01 … 575.64.05
         r(v(580, 65, 6), v(615, 71, 9), Some(0xd1fa)), // 580.65.06 … 615.71.09
     ],
 };
@@ -9942,7 +11057,7 @@ pub const CLASS_IDS_NVENC_SW_SESSION: ValueRuns = ValueRuns {
     name: "class_ids:NVENC_SW_SESSION",
     runs: &[
         r(v(535, 309, 1), v(545, 23, 8), None), // 535.309.01 … 545.23.08
-        r(v(550, 54, 14), v(615, 71, 9), Some(0xa0bc)), // 550.54.14 … 615.71.09
+        r(v(550, 40, 7), v(615, 71, 9), Some(0xa0bc)), // 550.40.07 … 615.71.09
     ],
 };
 
@@ -9951,7 +11066,7 @@ pub const CLASS_IDS_NVFBC_SW_SESSION: ValueRuns = ValueRuns {
     name: "class_ids:NVFBC_SW_SESSION",
     runs: &[
         r(v(535, 309, 1), v(545, 23, 8), None), // 535.309.01 … 545.23.08
-        r(v(550, 54, 14), v(615, 71, 9), Some(0xa0bd)), // 550.54.14 … 615.71.09
+        r(v(550, 40, 7), v(615, 71, 9), Some(0xa0bd)), // 550.40.07 … 615.71.09
     ],
 };
 
@@ -9992,7 +11107,7 @@ pub const CLASS_IDS_NV_IMEX_SESSION: ValueRuns = ValueRuns {
     name: "class_ids:NV_IMEX_SESSION",
     runs: &[
         r(v(535, 309, 1), v(545, 23, 8), None), // 535.309.01 … 545.23.08
-        r(v(550, 54, 14), v(615, 71, 9), Some(0xf1)), // 550.54.14 … 615.71.09
+        r(v(550, 40, 7), v(615, 71, 9), Some(0xf1)), // 550.40.07 … 615.71.09
     ],
 };
 
@@ -10001,7 +11116,7 @@ pub const CLASS_IDS_NV_MEMORY_EXPORT: ValueRuns = ValueRuns {
     name: "class_ids:NV_MEMORY_EXPORT",
     runs: &[
         r(v(535, 309, 1), v(545, 23, 8), None), // 535.309.01 … 545.23.08
-        r(v(550, 54, 14), v(615, 71, 9), Some(0xe0)), // 550.54.14 … 615.71.09
+        r(v(550, 40, 7), v(615, 71, 9), Some(0xe0)), // 550.40.07 … 615.71.09
     ],
 };
 
@@ -10027,7 +11142,7 @@ pub const CLASS_IDS_NV_MEMORY_FABRIC_IMPORTED_REF: ValueRuns = ValueRuns {
     name: "class_ids:NV_MEMORY_FABRIC_IMPORTED_REF",
     runs: &[
         r(v(535, 309, 1), v(545, 23, 8), None), // 535.309.01 … 545.23.08
-        r(v(550, 54, 14), v(615, 71, 9), Some(0xfb)), // 550.54.14 … 615.71.09
+        r(v(550, 40, 7), v(615, 71, 9), Some(0xfb)), // 550.40.07 … 615.71.09
     ],
 };
 
@@ -10036,7 +11151,7 @@ pub const CLASS_IDS_NV_MEMORY_FABRIC_IMPORT_V2: ValueRuns = ValueRuns {
     name: "class_ids:NV_MEMORY_FABRIC_IMPORT_V2",
     runs: &[
         r(v(535, 309, 1), v(545, 23, 8), None), // 535.309.01 … 545.23.08
-        r(v(550, 54, 14), v(615, 71, 9), Some(0xf9)), // 550.54.14 … 615.71.09
+        r(v(550, 40, 7), v(615, 71, 9), Some(0xf9)), // 550.40.07 … 615.71.09
     ],
 };
 
@@ -10250,7 +11365,7 @@ pub const CTRL_CMDS_NV0080_CTRL_CMD_MSENC_GET_CAPS_V2: ValueRuns = ValueRuns {
     name: "ctrl_cmds:NV0080_CTRL_CMD_MSENC_GET_CAPS_V2",
     runs: &[
         r(v(535, 309, 1), v(545, 23, 8), None), // 535.309.01 … 545.23.08
-        r(v(550, 54, 14), v(615, 71, 9), Some(0x801b02)), // 550.54.14 … 615.71.09
+        r(v(550, 40, 7), v(615, 71, 9), Some(0x801b02)), // 550.40.07 … 615.71.09
     ],
 };
 
@@ -10396,7 +11511,7 @@ pub const CTRL_CMDS_NV2080_CTRL_CMD_GPU_GET_CONSTRUCTED_FALCON_INFO: ValueRuns =
     name: "ctrl_cmds:NV2080_CTRL_CMD_GPU_GET_CONSTRUCTED_FALCON_INFO",
     runs: &[
         r(v(535, 309, 1), v(545, 23, 8), None), // 535.309.01 … 545.23.08
-        r(v(550, 54, 14), v(615, 71, 9), Some(0x208001b0)), // 550.54.14 … 615.71.09
+        r(v(550, 40, 7), v(615, 71, 9), Some(0x208001b0)), // 550.40.07 … 615.71.09
     ],
 };
 
@@ -10672,7 +11787,7 @@ pub const CTRL_CMDS_NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_SM_ISSUE_RATE_MODIFI
         name: "ctrl_cmds:NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_SM_ISSUE_RATE_MODIFIER_V2",
         runs: &[
             r(v(535, 309, 1), v(570, 148, 8), None), // 535.309.01 … 570.148.08
-            r(v(575, 51, 3), v(615, 71, 9), Some(0x20800b03)), // 575.51.03 … 615.71.09
+            r(v(575, 51, 2), v(615, 71, 9), Some(0x20800b03)), // 575.51.02 … 615.71.09
         ],
     };
 
@@ -10723,7 +11838,7 @@ pub const CTRL_CMDS_NV2080_CTRL_CMD_PERF_GET_LEVEL_INFO_V2: ValueRuns = ValueRun
     name: "ctrl_cmds:NV2080_CTRL_CMD_PERF_GET_LEVEL_INFO_V2",
     runs: &[
         r(v(535, 309, 1), v(545, 23, 8), None), // 535.309.01 … 545.23.08
-        r(v(550, 54, 14), v(615, 71, 9), Some(0x2080200b)), // 550.54.14 … 615.71.09
+        r(v(550, 40, 7), v(615, 71, 9), Some(0x2080200b)), // 550.40.07 … 615.71.09
     ],
 };
 
@@ -10804,7 +11919,7 @@ pub const GSP_FW_META_CONSTS_GSP_FW_SR_META_INTERNAL_SIZE: ValueRuns = ValueRuns
     name: "gsp_fw_meta_consts:GSP_FW_SR_META_INTERNAL_SIZE",
     runs: &[
         r(v(535, 309, 1), v(565, 57, 1), None), // 535.309.01 … 565.57.01
-        r(v(570, 124, 6), v(615, 71, 9), Some(0x80)), // 570.124.06 … 615.71.09
+        r(v(570, 86, 15), v(615, 71, 9), Some(0x80)), // 570.86.15 … 615.71.09
     ],
 };
 
@@ -11372,7 +12487,7 @@ pub const NV_IOCTL_CONSTS_NV_ESC_WAIT_OPEN_COMPLETE: ValueRuns = ValueRuns {
     name: "nv_ioctl_consts:NV_ESC_WAIT_OPEN_COMPLETE",
     runs: &[
         r(v(535, 309, 1), v(545, 23, 8), None), // 535.309.01 … 545.23.08
-        r(v(550, 54, 14), v(615, 71, 9), Some(0xda)), // 550.54.14 … 615.71.09
+        r(v(550, 40, 7), v(615, 71, 9), Some(0xda)), // 550.40.07 … 615.71.09
     ],
 };
 
@@ -11550,8 +12665,8 @@ pub const RPC_EVENTS_NV_VGPU_MSG_EVENT_EXTDEV_INTR_SERVICE: ValueRuns = ValueRun
 pub const RPC_EVENTS_NV_VGPU_MSG_EVENT_FECS_ERROR: ValueRuns = ValueRuns {
     name: "rpc_events:NV_VGPU_MSG_EVENT_FECS_ERROR",
     runs: &[
-        r(v(535, 309, 1), v(550, 54, 14), None), // 535.309.01 … 550.54.14
-        r(v(565, 57, 1), v(615, 71, 9), Some(0x1021)), // 565.57.01 … 615.71.09
+        r(v(535, 309, 1), v(550, 90, 7), None), // 535.309.01 … 550.90.07
+        r(v(555, 42, 2), v(615, 71, 9), Some(0x1021)), // 555.42.02 … 615.71.09
     ],
 };
 
@@ -11629,7 +12744,7 @@ pub const RPC_EVENTS_NV_VGPU_MSG_EVENT_GSP_POST_NOCAT_RECORD: ValueRuns = ValueR
     name: "rpc_events:NV_VGPU_MSG_EVENT_GSP_POST_NOCAT_RECORD",
     runs: &[
         r(v(535, 309, 1), v(545, 23, 8), None), // 535.309.01 … 545.23.08
-        r(v(550, 54, 14), v(615, 71, 9), Some(0x1020)), // 550.54.14 … 615.71.09
+        r(v(550, 40, 7), v(615, 71, 9), Some(0x1020)), // 550.40.07 … 615.71.09
     ],
 };
 
@@ -11673,7 +12788,8 @@ pub const RPC_EVENTS_NV_VGPU_MSG_EVENT_NUM_EVENTS: ValueRuns = ValueRuns {
     runs: &[
         r(v(535, 309, 1), v(535, 309, 1), Some(0x101f)), // 535.309.01 … 535.309.01
         r(v(545, 23, 8), v(545, 23, 8), Some(0x101e)),   // 545.23.08 … 545.23.08
-        r(v(550, 54, 14), v(550, 54, 14), Some(0x1021)), // 550.54.14 … 550.54.14
+        r(v(550, 40, 7), v(550, 90, 7), Some(0x1021)),   // 550.40.07 … 550.90.07
+        r(v(555, 42, 2), v(560, 28, 3), Some(0x1022)),   // 555.42.02 … 560.28.03
         r(v(565, 57, 1), v(580, 159, 4), Some(0x1023)),  // 565.57.01 … 580.159.04
         r(v(580, 173, 2), v(580, 178, 4), Some(0x1024)), // 580.173.02 … 580.178.04
         r(v(590, 48, 1), v(590, 48, 1), Some(0x1026)),   // 590.48.01 … 590.48.01
@@ -11699,7 +12815,7 @@ pub const RPC_EVENTS_NV_VGPU_MSG_EVENT_NVLINK_FATAL_ERROR_RECOVERY: ValueRuns = 
     name: "rpc_events:NV_VGPU_MSG_EVENT_NVLINK_FATAL_ERROR_RECOVERY",
     runs: &[
         r(v(535, 309, 1), v(545, 23, 8), None), // 535.309.01 … 545.23.08
-        r(v(550, 54, 14), v(615, 71, 9), Some(0x101f)), // 550.54.14 … 615.71.09
+        r(v(550, 40, 7), v(615, 71, 9), Some(0x101f)), // 550.40.07 … 615.71.09
     ],
 };
 
@@ -11830,7 +12946,7 @@ pub const RPC_EVENTS_NV_VGPU_MSG_EVENT_RC_TRIGGERED: ValueRuns = ValueRuns {
 pub const RPC_EVENTS_NV_VGPU_MSG_EVENT_RECOVERY_ACTION: ValueRuns = ValueRuns {
     name: "rpc_events:NV_VGPU_MSG_EVENT_RECOVERY_ACTION",
     runs: &[
-        r(v(535, 309, 1), v(550, 54, 14), None), // 535.309.01 … 550.54.14
+        r(v(535, 309, 1), v(560, 28, 3), None), // 535.309.01 … 560.28.03
         r(v(565, 57, 1), v(615, 71, 9), Some(0x1022)), // 565.57.01 … 615.71.09
     ],
 };
@@ -11906,7 +13022,7 @@ pub const RPC_EVENTS_NV_VGPU_MSG_EVENT_UPDATE_GSP_TRACE: ValueRuns = ValueRuns {
     name: "rpc_events:NV_VGPU_MSG_EVENT_UPDATE_GSP_TRACE",
     runs: &[
         r(v(535, 309, 1), v(545, 23, 8), None), // 535.309.01 … 545.23.08
-        r(v(550, 54, 14), v(615, 71, 9), Some(0x101e)), // 550.54.14 … 615.71.09
+        r(v(550, 40, 7), v(615, 71, 9), Some(0x101e)), // 550.40.07 … 615.71.09
     ],
 };
 
@@ -12156,7 +13272,7 @@ pub const RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_CTRL_CMD_GET_CHIPLET_HS_CREDIT_POOL
     ValueRuns {
         name: "rpc_functions:NV_VGPU_MSG_FUNCTION_CTRL_CMD_GET_CHIPLET_HS_CREDIT_POOL",
         runs: &[
-            r(v(535, 309, 1), v(565, 57, 1), None), // 535.309.01 … 565.57.01
+            r(v(535, 309, 1), v(570, 86, 15), None), // 535.309.01 … 570.86.15
             r(v(570, 124, 6), v(615, 71, 9), Some(0xe0)), // 570.124.06 … 615.71.09
         ],
     };
@@ -12166,7 +13282,7 @@ pub const RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_CTRL_CMD_GET_HS_CREDITS_MAPPING: Va
     ValueRuns {
         name: "rpc_functions:NV_VGPU_MSG_FUNCTION_CTRL_CMD_GET_HS_CREDITS_MAPPING",
         runs: &[
-            r(v(535, 309, 1), v(565, 57, 1), None), // 535.309.01 … 565.57.01
+            r(v(535, 309, 1), v(570, 86, 15), None), // 535.309.01 … 570.86.15
             r(v(570, 124, 6), v(615, 71, 9), Some(0xe1)), // 570.124.06 … 615.71.09
         ],
     };
@@ -12176,7 +13292,7 @@ pub const RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_CTRL_CMD_INTERNAL_CONTROL_GSP_TRACE
     ValueRuns {
         name: "rpc_functions:NV_VGPU_MSG_FUNCTION_CTRL_CMD_INTERNAL_CONTROL_GSP_TRACE",
         runs: &[
-            r(v(535, 309, 1), v(550, 54, 14), None), // 535.309.01 … 550.54.14
+            r(v(535, 309, 1), v(560, 28, 3), None), // 535.309.01 … 560.28.03
             r(v(565, 57, 1), v(615, 71, 9), Some(0xd5)), // 565.57.01 … 615.71.09
         ],
     };
@@ -12186,7 +13302,7 @@ pub const RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_CTRL_CMD_INTERNAL_GPU_CHECK_CTS_ID_
     ValueRuns {
         name: "rpc_functions:NV_VGPU_MSG_FUNCTION_CTRL_CMD_INTERNAL_GPU_CHECK_CTS_ID_VALID",
         runs: &[
-            r(v(535, 309, 1), v(575, 57, 8), None), // 535.309.01 … 575.57.08
+            r(v(535, 309, 1), v(575, 64, 5), None), // 535.309.01 … 575.64.05
             r(v(580, 65, 6), v(615, 71, 9), Some(0xe3)), // 580.65.06 … 615.71.09
         ],
     };
@@ -12197,7 +13313,7 @@ pub const RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_CTRL_CMD_INTERNAL_GPU_START_FABRIC_
         name: "rpc_functions:NV_VGPU_MSG_FUNCTION_CTRL_CMD_INTERNAL_GPU_START_FABRIC_PROBE",
         runs: &[
             r(v(535, 309, 1), v(545, 23, 8), None), // 535.309.01 … 545.23.08
-            r(v(550, 54, 14), v(615, 71, 9), Some(0xcd)), // 550.54.14 … 615.71.09
+            r(v(550, 40, 7), v(615, 71, 9), Some(0xcd)), // 550.40.07 … 615.71.09
         ],
     };
 
@@ -12206,8 +13322,8 @@ pub const RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_CTRL_CMD_NVLINK_INBAND_SEND_DATA: V
     ValueRuns {
         name: "rpc_functions:NV_VGPU_MSG_FUNCTION_CTRL_CMD_NVLINK_INBAND_SEND_DATA",
         runs: &[
-            r(v(535, 309, 1), v(550, 54, 14), None), // 535.309.01 … 550.54.14
-            r(v(565, 57, 1), v(615, 71, 9), Some(0xd3)), // 565.57.01 … 615.71.09
+            r(v(535, 309, 1), v(550, 90, 7), None), // 535.309.01 … 550.90.07
+            r(v(555, 42, 2), v(615, 71, 9), Some(0xd3)), // 555.42.02 … 615.71.09
         ],
     };
 
@@ -12242,7 +13358,7 @@ pub const RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_CTRL_DBG_GET_MODE_MMU_DEBUG: ValueR
     name: "rpc_functions:NV_VGPU_MSG_FUNCTION_CTRL_DBG_GET_MODE_MMU_DEBUG",
     runs: &[
         r(v(535, 309, 1), v(545, 23, 8), None), // 535.309.01 … 545.23.08
-        r(v(550, 54, 14), v(615, 71, 9), Some(0xcb)), // 550.54.14 … 615.71.09
+        r(v(550, 40, 7), v(615, 71, 9), Some(0xcb)), // 550.40.07 … 615.71.09
     ],
 };
 
@@ -12252,7 +13368,7 @@ pub const RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_CTRL_DBG_GET_MODE_MMU_GCC_DEBUG: Va
         name: "rpc_functions:NV_VGPU_MSG_FUNCTION_CTRL_DBG_GET_MODE_MMU_GCC_DEBUG",
         runs: &[
             r(v(535, 309, 1), v(565, 57, 1), None), // 535.309.01 … 565.57.01
-            r(v(570, 124, 6), v(615, 71, 9), Some(0xda)), // 570.124.06 … 615.71.09
+            r(v(570, 86, 15), v(615, 71, 9), Some(0xda)), // 570.86.15 … 615.71.09
         ],
     };
 
@@ -12313,7 +13429,7 @@ pub const RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_CTRL_DBG_SET_MODE_MMU_GCC_DEBUG: Va
         name: "rpc_functions:NV_VGPU_MSG_FUNCTION_CTRL_DBG_SET_MODE_MMU_GCC_DEBUG",
         runs: &[
             r(v(535, 309, 1), v(565, 57, 1), None), // 535.309.01 … 565.57.01
-            r(v(570, 124, 6), v(615, 71, 9), Some(0xd9)), // 570.124.06 … 615.71.09
+            r(v(570, 86, 15), v(615, 71, 9), Some(0xd9)), // 570.86.15 … 615.71.09
         ],
     };
 
@@ -12639,7 +13755,7 @@ pub const RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_CTRL_GPU_GET_INFO_V2: ValueRuns = V
     name: "rpc_functions:NV_VGPU_MSG_FUNCTION_CTRL_GPU_GET_INFO_V2",
     runs: &[
         r(v(535, 309, 1), v(545, 23, 8), None), // 535.309.01 … 545.23.08
-        r(v(550, 54, 14), v(615, 71, 9), Some(0xd1)), // 550.54.14 … 615.71.09
+        r(v(550, 40, 7), v(615, 71, 9), Some(0xd1)), // 550.40.07 … 615.71.09
     ],
 };
 
@@ -12844,7 +13960,7 @@ pub const RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_CTRL_NVLINK_GET_INBAND_RECEIVED_DAT
         name: "rpc_functions:NV_VGPU_MSG_FUNCTION_CTRL_NVLINK_GET_INBAND_RECEIVED_DATA",
         runs: &[
             r(v(535, 309, 1), v(545, 23, 8), None), // 535.309.01 … 545.23.08
-            r(v(550, 54, 14), v(615, 71, 9), Some(0xce)), // 550.54.14 … 615.71.09
+            r(v(550, 40, 7), v(615, 71, 9), Some(0xce)), // 550.40.07 … 615.71.09
         ],
     };
 
@@ -12922,7 +14038,7 @@ pub const RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_CTRL_RELEASE_CCU_PROF: ValueRuns = 
     name: "rpc_functions:NV_VGPU_MSG_FUNCTION_CTRL_RELEASE_CCU_PROF",
     runs: &[
         r(v(535, 309, 1), v(565, 57, 1), None), // 535.309.01 … 565.57.01
-        r(v(570, 124, 6), v(615, 71, 9), Some(0xde)), // 570.124.06 … 615.71.09
+        r(v(570, 86, 15), v(615, 71, 9), Some(0xde)), // 570.86.15 … 615.71.09
     ],
 };
 
@@ -12931,7 +14047,7 @@ pub const RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_CTRL_RELEASE_HES: ValueRuns = Value
     name: "rpc_functions:NV_VGPU_MSG_FUNCTION_CTRL_RELEASE_HES",
     runs: &[
         r(v(535, 309, 1), v(565, 57, 1), None), // 535.309.01 … 565.57.01
-        r(v(570, 124, 6), v(615, 71, 9), Some(0xdc)), // 570.124.06 … 615.71.09
+        r(v(570, 86, 15), v(615, 71, 9), Some(0xdc)), // 570.86.15 … 615.71.09
     ],
 };
 
@@ -12940,7 +14056,7 @@ pub const RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_CTRL_RESERVE_CCU_PROF: ValueRuns = 
     name: "rpc_functions:NV_VGPU_MSG_FUNCTION_CTRL_RESERVE_CCU_PROF",
     runs: &[
         r(v(535, 309, 1), v(565, 57, 1), None), // 535.309.01 … 565.57.01
-        r(v(570, 124, 6), v(615, 71, 9), Some(0xdd)), // 570.124.06 … 615.71.09
+        r(v(570, 86, 15), v(615, 71, 9), Some(0xdd)), // 570.86.15 … 615.71.09
     ],
 };
 
@@ -12949,7 +14065,7 @@ pub const RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_CTRL_RESERVE_HES: ValueRuns = Value
     name: "rpc_functions:NV_VGPU_MSG_FUNCTION_CTRL_RESERVE_HES",
     runs: &[
         r(v(535, 309, 1), v(565, 57, 1), None), // 535.309.01 … 565.57.01
-        r(v(570, 124, 6), v(615, 71, 9), Some(0xdb)), // 570.124.06 … 615.71.09
+        r(v(570, 86, 15), v(615, 71, 9), Some(0xdb)), // 570.86.15 … 615.71.09
     ],
 };
 
@@ -13046,8 +14162,8 @@ pub const RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_CTRL_SET_ZBC_DEPTH_CLEAR: ValueRuns
 pub const RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_CTRL_SET_ZBC_STENCIL_CLEAR: ValueRuns = ValueRuns {
     name: "rpc_functions:NV_VGPU_MSG_FUNCTION_CTRL_SET_ZBC_STENCIL_CLEAR",
     runs: &[
-        r(v(535, 309, 1), v(550, 54, 14), None), // 535.309.01 … 550.54.14
-        r(v(565, 57, 1), v(615, 71, 9), Some(0xd6)), // 565.57.01 … 615.71.09
+        r(v(535, 309, 1), v(555, 42, 2), None), // 535.309.01 … 555.42.02
+        r(v(560, 28, 3), v(615, 71, 9), Some(0xd6)), // 560.28.03 … 615.71.09
     ],
 };
 
@@ -13065,7 +14181,7 @@ pub const RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_CTRL_SUBDEVICE_GET_LIBOS_HEAP_STATS
         name: "rpc_functions:NV_VGPU_MSG_FUNCTION_CTRL_SUBDEVICE_GET_LIBOS_HEAP_STATS",
         runs: &[
             r(v(535, 309, 1), v(565, 57, 1), None), // 535.309.01 … 565.57.01
-            r(v(570, 124, 6), v(615, 71, 9), Some(0xd8)), // 570.124.06 … 615.71.09
+            r(v(570, 86, 15), v(615, 71, 9), Some(0xd8)), // 570.86.15 … 615.71.09
         ],
     };
 
@@ -13083,7 +14199,7 @@ pub const RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_CTRL_SUBDEVICE_GET_VGPU_HEAP_STATS:
         name: "rpc_functions:NV_VGPU_MSG_FUNCTION_CTRL_SUBDEVICE_GET_VGPU_HEAP_STATS",
         runs: &[
             r(v(535, 309, 1), v(565, 57, 1), None), // 535.309.01 … 565.57.01
-            r(v(570, 124, 6), v(615, 71, 9), Some(0xd7)), // 570.124.06 … 615.71.09
+            r(v(570, 86, 15), v(615, 71, 9), Some(0xd7)), // 570.86.15 … 615.71.09
         ],
     };
 
@@ -13197,7 +14313,7 @@ pub const RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_GET_BRAND_CAPS: ValueRuns = ValueRu
     name: "rpc_functions:NV_VGPU_MSG_FUNCTION_GET_BRAND_CAPS",
     runs: &[
         r(v(535, 309, 1), v(545, 23, 8), None), // 535.309.01 … 545.23.08
-        r(v(550, 54, 14), v(615, 71, 9), Some(0xd2)), // 550.54.14 … 615.71.09
+        r(v(550, 40, 7), v(615, 71, 9), Some(0xd2)), // 550.40.07 … 615.71.09
     ],
 };
 
@@ -13263,7 +14379,7 @@ pub const RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_GET_STATIC_DATA: ValueRuns = ValueR
     name: "rpc_functions:NV_VGPU_MSG_FUNCTION_GET_STATIC_DATA",
     runs: &[
         r(v(535, 309, 1), v(545, 23, 8), None), // 535.309.01 … 545.23.08
-        r(v(550, 54, 14), v(615, 71, 9), Some(0xcf)), // 550.54.14 … 615.71.09
+        r(v(550, 40, 7), v(615, 71, 9), Some(0xcf)), // 550.40.07 … 615.71.09
     ],
 };
 
@@ -13445,10 +14561,12 @@ pub const RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_NUM_FUNCTIONS: ValueRuns = ValueRun
     name: "rpc_functions:NV_VGPU_MSG_FUNCTION_NUM_FUNCTIONS",
     runs: &[
         r(v(535, 309, 1), v(545, 23, 8), Some(0xcb)), // 535.309.01 … 545.23.08
-        r(v(550, 54, 14), v(550, 54, 14), Some(0xd3)), // 550.54.14 … 550.54.14
-        r(v(565, 57, 1), v(565, 57, 1), Some(0xd7)),  // 565.57.01 … 565.57.01
+        r(v(550, 40, 7), v(550, 90, 7), Some(0xd3)),  // 550.40.07 … 550.90.07
+        r(v(555, 42, 2), v(555, 42, 2), Some(0xd4)),  // 555.42.02 … 555.42.02
+        r(v(560, 28, 3), v(565, 57, 1), Some(0xd7)),  // 560.28.03 … 565.57.01
+        r(v(570, 86, 15), v(570, 86, 15), Some(0xdf)), // 570.86.15 … 570.86.15
         r(v(570, 124, 6), v(570, 124, 6), Some(0xe2)), // 570.124.06 … 570.124.06
-        r(v(570, 148, 8), v(575, 57, 8), Some(0xe3)), // 570.148.08 … 575.57.08
+        r(v(570, 148, 8), v(575, 64, 5), Some(0xe3)), // 570.148.08 … 575.64.05
         r(v(580, 65, 6), v(580, 126, 9), Some(0xe4)), // 580.65.06 … 580.126.09
         r(v(580, 159, 4), v(580, 178, 4), Some(0xe5)), // 580.159.04 … 580.178.04
         r(v(590, 48, 1), v(590, 48, 1), Some(0xe4)),  // 590.48.01 … 590.48.01
@@ -13527,9 +14645,9 @@ pub const RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_REMOVE_DEFERRED_API: ValueRuns = Va
 pub const RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_RESERVED: ValueRuns = ValueRuns {
     name: "rpc_functions:NV_VGPU_MSG_FUNCTION_RESERVED",
     runs: &[
-        r(v(535, 309, 1), v(565, 57, 1), None), // 535.309.01 … 565.57.01
+        r(v(535, 309, 1), v(570, 86, 15), None), // 535.309.01 … 570.86.15
         r(v(570, 124, 6), v(570, 148, 8), Some(0xdf)), // 570.124.06 … 570.148.08
-        r(v(575, 51, 3), v(615, 71, 9), None),  // 575.51.03 … 615.71.09
+        r(v(575, 51, 2), v(615, 71, 9), None),   // 575.51.02 … 615.71.09
     ],
 };
 
@@ -13546,7 +14664,7 @@ pub const RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_RESERVED_190: ValueRuns = ValueRuns
     name: "rpc_functions:NV_VGPU_MSG_FUNCTION_RESERVED_190",
     runs: &[
         r(v(535, 309, 1), v(570, 148, 8), None), // 535.309.01 … 570.148.08
-        r(v(575, 51, 3), v(615, 71, 9), Some(0xbe)), // 575.51.03 … 615.71.09
+        r(v(575, 51, 2), v(615, 71, 9), Some(0xbe)), // 575.51.02 … 615.71.09
     ],
 };
 
@@ -13564,7 +14682,17 @@ pub const RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_RESERVED_208: ValueRuns = ValueRuns
     name: "rpc_functions:NV_VGPU_MSG_FUNCTION_RESERVED_208",
     runs: &[
         r(v(535, 309, 1), v(545, 23, 8), None), // 535.309.01 … 545.23.08
-        r(v(550, 54, 14), v(615, 71, 9), Some(0xd0)), // 550.54.14 … 615.71.09
+        r(v(550, 40, 7), v(615, 71, 9), Some(0xd0)), // 550.40.07 … 615.71.09
+    ],
+};
+
+/// `rpc_functions:NV_VGPU_MSG_FUNCTION_RESERVED_213`
+pub const RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_RESERVED_213: ValueRuns = ValueRuns {
+    name: "rpc_functions:NV_VGPU_MSG_FUNCTION_RESERVED_213",
+    runs: &[
+        r(v(535, 309, 1), v(555, 42, 2), None), // 535.309.01 … 555.42.02
+        r(v(560, 28, 3), v(560, 28, 3), Some(0xd5)), // 560.28.03 … 560.28.03
+        r(v(565, 57, 1), v(615, 71, 9), None),  // 565.57.01 … 615.71.09
     ],
 };
 
@@ -13629,7 +14757,7 @@ pub const RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_RM_API_CONTROL: ValueRuns = ValueRu
     name: "rpc_functions:NV_VGPU_MSG_FUNCTION_RM_API_CONTROL",
     runs: &[
         r(v(535, 309, 1), v(545, 23, 8), None), // 535.309.01 … 545.23.08
-        r(v(550, 54, 14), v(615, 71, 9), Some(0xcc)), // 550.54.14 … 615.71.09
+        r(v(550, 40, 7), v(615, 71, 9), Some(0xcc)), // 550.40.07 … 615.71.09
     ],
 };
 
@@ -13654,7 +14782,7 @@ pub const RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_SETUP_HIBERNATION_BUFFER: ValueRuns
     name: "rpc_functions:NV_VGPU_MSG_FUNCTION_SETUP_HIBERNATION_BUFFER",
     runs: &[
         r(v(535, 309, 1), v(570, 148, 8), None), // 535.309.01 … 570.148.08
-        r(v(575, 51, 3), v(615, 71, 9), Some(0xdf)), // 575.51.03 … 615.71.09
+        r(v(575, 51, 2), v(615, 71, 9), Some(0xdf)), // 575.51.02 … 615.71.09
     ],
 };
 
@@ -13712,7 +14840,7 @@ pub const RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_SET_SYSMEM_DIRTY_PAGE_TRACKING_BUFF
         name: "rpc_functions:NV_VGPU_MSG_FUNCTION_SET_SYSMEM_DIRTY_PAGE_TRACKING_BUFFER",
         runs: &[
             r(v(535, 309, 1), v(570, 148, 8), Some(0xbe)), // 535.309.01 … 570.148.08
-            r(v(575, 51, 3), v(615, 71, 9), None),         // 575.51.03 … 615.71.09
+            r(v(575, 51, 2), v(615, 71, 9), None),         // 575.51.02 … 615.71.09
         ],
     };
 
@@ -13825,8 +14953,8 @@ pub const RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_UPDATE_BAR_PDE: ValueRuns = ValueRu
 pub const RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_UPDATE_GPM_GUEST_BUFFER_INFO: ValueRuns = ValueRuns {
     name: "rpc_functions:NV_VGPU_MSG_FUNCTION_UPDATE_GPM_GUEST_BUFFER_INFO",
     runs: &[
-        r(v(535, 309, 1), v(550, 54, 14), None), // 535.309.01 … 550.54.14
-        r(v(565, 57, 1), v(615, 71, 9), Some(0xd4)), // 565.57.01 … 615.71.09
+        r(v(535, 309, 1), v(555, 42, 2), None), // 535.309.01 … 555.42.02
+        r(v(560, 28, 3), v(615, 71, 9), Some(0xd4)), // 560.28.03 … 615.71.09
     ],
 };
 
@@ -13925,7 +15053,7 @@ pub const UVM_IOCTLS_UVM_ADD_SESSION: ValueRuns = ValueRuns {
 pub const UVM_IOCTLS_UVM_ALLOC_DEVICE_P2P: ValueRuns = ValueRuns {
     name: "uvm_ioctls:UVM_ALLOC_DEVICE_P2P",
     runs: &[
-        r(v(535, 309, 1), v(550, 54, 14), None), // 535.309.01 … 550.54.14
+        r(v(535, 309, 1), v(560, 28, 3), None), // 535.309.01 … 560.28.03
         r(v(565, 57, 1), v(615, 71, 9), Some(0x4e)), // 565.57.01 … 615.71.09
     ],
 };
@@ -13959,7 +15087,7 @@ pub const UVM_IOCTLS_UVM_CLEAN_UP_ZOMBIE_RESOURCES: ValueRuns = ValueRuns {
 pub const UVM_IOCTLS_UVM_CLEAR_ALL_ACCESS_COUNTERS: ValueRuns = ValueRuns {
     name: "uvm_ioctls:UVM_CLEAR_ALL_ACCESS_COUNTERS",
     runs: &[
-        r(v(535, 309, 1), v(550, 54, 14), None), // 535.309.01 … 550.54.14
+        r(v(535, 309, 1), v(560, 28, 3), None), // 535.309.01 … 560.28.03
         r(v(565, 57, 1), v(615, 71, 9), Some(0x4f)), // 565.57.01 … 615.71.09
     ],
 };
@@ -14099,7 +15227,7 @@ pub const UVM_IOCTLS_UVM_DEBUG_ACCESS_MEMORY: ValueRuns = ValueRuns {
     name: "uvm_ioctls:UVM_DEBUG_ACCESS_MEMORY",
     runs: &[
         r(v(535, 309, 1), v(570, 148, 8), Some(0x24)), // 535.309.01 … 570.148.08
-        r(v(575, 51, 3), v(615, 71, 9), None),         // 575.51.03 … 615.71.09
+        r(v(575, 51, 2), v(615, 71, 9), None),         // 575.51.02 … 615.71.09
     ],
 };
 
@@ -14108,7 +15236,7 @@ pub const UVM_IOCTLS_UVM_DEBUG_ACCESS_PAGE_SIZE: ValueRuns = ValueRuns {
     name: "uvm_ioctls:UVM_DEBUG_ACCESS_PAGE_SIZE",
     runs: &[
         r(v(535, 309, 1), v(570, 148, 8), Some(0x1000)), // 535.309.01 … 570.148.08
-        r(v(575, 51, 3), v(615, 71, 9), None),           // 575.51.03 … 615.71.09
+        r(v(575, 51, 2), v(615, 71, 9), None),           // 575.51.02 … 615.71.09
     ],
 };
 
@@ -14159,7 +15287,7 @@ pub const UVM_IOCTLS_UVM_DISABLE_SYSTEM_WIDE_ATOMICS: ValueRuns = ValueRuns {
 pub const UVM_IOCTLS_UVM_DISCARD: ValueRuns = ValueRuns {
     name: "uvm_ioctls:UVM_DISCARD",
     runs: &[
-        r(v(535, 309, 1), v(575, 57, 8), None), // 535.309.01 … 575.57.08
+        r(v(535, 309, 1), v(575, 64, 5), None), // 535.309.01 … 575.64.05
         r(v(580, 65, 6), v(615, 71, 9), Some(0x50)), // 580.65.06 … 615.71.09
     ],
 };
@@ -14168,7 +15296,7 @@ pub const UVM_IOCTLS_UVM_DISCARD: ValueRuns = ValueRuns {
 pub const UVM_IOCTLS_UVM_DISCARD_FLAGS_UNMAP: ValueRuns = ValueRuns {
     name: "uvm_ioctls:UVM_DISCARD_FLAGS_UNMAP",
     runs: &[
-        r(v(535, 309, 1), v(575, 57, 8), None), // 535.309.01 … 575.57.08
+        r(v(535, 309, 1), v(575, 64, 5), None), // 535.309.01 … 575.64.05
         r(v(580, 65, 6), v(615, 71, 9), Some(0x1)), // 580.65.06 … 615.71.09
     ],
 };
@@ -14505,8 +15633,8 @@ pub const UVM_IOCTLS_UVM_MAX_COUNTERS_PER_IOCTL_CALL: ValueRuns = ValueRuns {
 pub const UVM_IOCTLS_UVM_MAX_GPUS: ValueRuns = ValueRuns {
     name: "uvm_ioctls:UVM_MAX_GPUS",
     runs: &[
-        r(v(535, 309, 1), v(550, 54, 14), Some(0x20)), // 535.309.01 … 550.54.14
-        r(v(565, 57, 1), v(615, 71, 9), Some(0x100)),  // 565.57.01 … 615.71.09
+        r(v(535, 309, 1), v(550, 90, 7), Some(0x20)), // 535.309.01 … 550.90.07
+        r(v(555, 42, 2), v(615, 71, 9), Some(0x100)), // 555.42.02 … 615.71.09
     ],
 };
 
@@ -14514,7 +15642,7 @@ pub const UVM_IOCTLS_UVM_MAX_GPUS: ValueRuns = ValueRuns {
 pub const UVM_IOCTLS_UVM_MAX_GPUS_V1: ValueRuns = ValueRuns {
     name: "uvm_ioctls:UVM_MAX_GPUS_V1",
     runs: &[
-        r(v(535, 309, 1), v(545, 23, 8), None), // 535.309.01 … 545.23.08
+        r(v(535, 309, 1), v(550, 40, 7), None), // 535.309.01 … 550.40.07
         r(v(550, 54, 14), v(615, 71, 9), Some(0x20)), // 550.54.14 … 615.71.09
     ],
 };
@@ -14523,9 +15651,9 @@ pub const UVM_IOCTLS_UVM_MAX_GPUS_V1: ValueRuns = ValueRuns {
 pub const UVM_IOCTLS_UVM_MAX_GPUS_V2: ValueRuns = ValueRuns {
     name: "uvm_ioctls:UVM_MAX_GPUS_V2",
     runs: &[
-        r(v(535, 309, 1), v(545, 23, 8), None), // 535.309.01 … 545.23.08
-        r(v(550, 54, 14), v(550, 54, 14), Some(0x100)), // 550.54.14 … 550.54.14
-        r(v(565, 57, 1), v(615, 71, 9), None),  // 565.57.01 … 615.71.09
+        r(v(535, 309, 1), v(550, 40, 7), None), // 535.309.01 … 550.40.07
+        r(v(550, 54, 14), v(550, 90, 7), Some(0x100)), // 550.54.14 … 550.90.07
+        r(v(555, 42, 2), v(615, 71, 9), None),  // 555.42.02 … 615.71.09
     ],
 };
 
@@ -14533,8 +15661,8 @@ pub const UVM_IOCTLS_UVM_MAX_GPUS_V2: ValueRuns = ValueRuns {
 pub const UVM_IOCTLS_UVM_MAX_PROCESSORS: ValueRuns = ValueRuns {
     name: "uvm_ioctls:UVM_MAX_PROCESSORS",
     runs: &[
-        r(v(535, 309, 1), v(550, 54, 14), Some(0x21)), // 535.309.01 … 550.54.14
-        r(v(565, 57, 1), v(615, 71, 9), Some(0x101)),  // 565.57.01 … 615.71.09
+        r(v(535, 309, 1), v(550, 90, 7), Some(0x21)), // 535.309.01 … 550.90.07
+        r(v(555, 42, 2), v(615, 71, 9), Some(0x101)), // 555.42.02 … 615.71.09
     ],
 };
 
@@ -14542,7 +15670,7 @@ pub const UVM_IOCTLS_UVM_MAX_PROCESSORS: ValueRuns = ValueRuns {
 pub const UVM_IOCTLS_UVM_MAX_PROCESSORS_V1: ValueRuns = ValueRuns {
     name: "uvm_ioctls:UVM_MAX_PROCESSORS_V1",
     runs: &[
-        r(v(535, 309, 1), v(545, 23, 8), None), // 535.309.01 … 545.23.08
+        r(v(535, 309, 1), v(550, 40, 7), None), // 535.309.01 … 550.40.07
         r(v(550, 54, 14), v(615, 71, 9), Some(0x21)), // 550.54.14 … 615.71.09
     ],
 };
@@ -14551,9 +15679,9 @@ pub const UVM_IOCTLS_UVM_MAX_PROCESSORS_V1: ValueRuns = ValueRuns {
 pub const UVM_IOCTLS_UVM_MAX_PROCESSORS_V2: ValueRuns = ValueRuns {
     name: "uvm_ioctls:UVM_MAX_PROCESSORS_V2",
     runs: &[
-        r(v(535, 309, 1), v(545, 23, 8), None), // 535.309.01 … 545.23.08
-        r(v(550, 54, 14), v(550, 54, 14), Some(0x101)), // 550.54.14 … 550.54.14
-        r(v(565, 57, 1), v(615, 71, 9), None),  // 565.57.01 … 615.71.09
+        r(v(535, 309, 1), v(550, 40, 7), None), // 535.309.01 … 550.40.07
+        r(v(550, 54, 14), v(550, 90, 7), Some(0x101)), // 550.54.14 … 550.90.07
+        r(v(555, 42, 2), v(615, 71, 9), None),  // 555.42.02 … 615.71.09
     ],
 };
 
@@ -14667,7 +15795,7 @@ pub const UVM_IOCTLS_UVM_PAGEABLE_MEM_ACCESS_ON_GPU: ValueRuns = ValueRuns {
 pub const UVM_IOCTLS_UVM_PAGE_SIZE_128K: ValueRuns = ValueRuns {
     name: "uvm_ioctls:UVM_PAGE_SIZE_128K",
     runs: &[
-        r(v(535, 309, 1), v(575, 57, 8), None), // 535.309.01 … 575.57.08
+        r(v(535, 309, 1), v(575, 64, 5), None), // 535.309.01 … 575.64.05
         r(v(580, 65, 6), v(615, 71, 9), Some(0x20000)), // 580.65.06 … 615.71.09
     ],
 };
@@ -14676,7 +15804,7 @@ pub const UVM_IOCTLS_UVM_PAGE_SIZE_128K: ValueRuns = ValueRuns {
 pub const UVM_IOCTLS_UVM_PAGE_SIZE_256G: ValueRuns = ValueRuns {
     name: "uvm_ioctls:UVM_PAGE_SIZE_256G",
     runs: &[
-        r(v(535, 309, 1), v(575, 57, 8), None), // 535.309.01 … 575.57.08
+        r(v(535, 309, 1), v(575, 64, 5), None), // 535.309.01 … 575.64.05
         r(v(580, 65, 6), v(615, 71, 9), Some(0x4000000000)), // 580.65.06 … 615.71.09
     ],
 };
@@ -14685,7 +15813,7 @@ pub const UVM_IOCTLS_UVM_PAGE_SIZE_256G: ValueRuns = ValueRuns {
 pub const UVM_IOCTLS_UVM_PAGE_SIZE_2M: ValueRuns = ValueRuns {
     name: "uvm_ioctls:UVM_PAGE_SIZE_2M",
     runs: &[
-        r(v(535, 309, 1), v(575, 57, 8), None), // 535.309.01 … 575.57.08
+        r(v(535, 309, 1), v(575, 64, 5), None), // 535.309.01 … 575.64.05
         r(v(580, 65, 6), v(615, 71, 9), Some(0x200000)), // 580.65.06 … 615.71.09
     ],
 };
@@ -14694,7 +15822,7 @@ pub const UVM_IOCTLS_UVM_PAGE_SIZE_2M: ValueRuns = ValueRuns {
 pub const UVM_IOCTLS_UVM_PAGE_SIZE_4K: ValueRuns = ValueRuns {
     name: "uvm_ioctls:UVM_PAGE_SIZE_4K",
     runs: &[
-        r(v(535, 309, 1), v(575, 57, 8), None), // 535.309.01 … 575.57.08
+        r(v(535, 309, 1), v(575, 64, 5), None), // 535.309.01 … 575.64.05
         r(v(580, 65, 6), v(615, 71, 9), Some(0x1000)), // 580.65.06 … 615.71.09
     ],
 };
@@ -14703,7 +15831,7 @@ pub const UVM_IOCTLS_UVM_PAGE_SIZE_4K: ValueRuns = ValueRuns {
 pub const UVM_IOCTLS_UVM_PAGE_SIZE_512M: ValueRuns = ValueRuns {
     name: "uvm_ioctls:UVM_PAGE_SIZE_512M",
     runs: &[
-        r(v(535, 309, 1), v(575, 57, 8), None), // 535.309.01 … 575.57.08
+        r(v(535, 309, 1), v(575, 64, 5), None), // 535.309.01 … 575.64.05
         r(v(580, 65, 6), v(615, 71, 9), Some(0x20000000)), // 580.65.06 … 615.71.09
     ],
 };
@@ -14712,7 +15840,7 @@ pub const UVM_IOCTLS_UVM_PAGE_SIZE_512M: ValueRuns = ValueRuns {
 pub const UVM_IOCTLS_UVM_PAGE_SIZE_64K: ValueRuns = ValueRuns {
     name: "uvm_ioctls:UVM_PAGE_SIZE_64K",
     runs: &[
-        r(v(535, 309, 1), v(575, 57, 8), None), // 535.309.01 … 575.57.08
+        r(v(535, 309, 1), v(575, 64, 5), None), // 535.309.01 … 575.64.05
         r(v(580, 65, 6), v(615, 71, 9), Some(0x10000)), // 580.65.06 … 615.71.09
     ],
 };
@@ -14721,7 +15849,7 @@ pub const UVM_IOCTLS_UVM_PAGE_SIZE_64K: ValueRuns = ValueRuns {
 pub const UVM_IOCTLS_UVM_PAGE_SIZE_DEFAULT: ValueRuns = ValueRuns {
     name: "uvm_ioctls:UVM_PAGE_SIZE_DEFAULT",
     runs: &[
-        r(v(535, 309, 1), v(575, 57, 8), None), // 535.309.01 … 575.57.08
+        r(v(535, 309, 1), v(575, 64, 5), None), // 535.309.01 … 575.64.05
         r(v(580, 65, 6), v(615, 71, 9), Some(0x0)), // 580.65.06 … 615.71.09
     ],
 };
@@ -14730,8 +15858,8 @@ pub const UVM_IOCTLS_UVM_PAGE_SIZE_DEFAULT: ValueRuns = ValueRuns {
 pub const UVM_IOCTLS_UVM_PARENT_ID_MAX_SUB_PROCESSORS: ValueRuns = ValueRuns {
     name: "uvm_ioctls:UVM_PARENT_ID_MAX_SUB_PROCESSORS",
     runs: &[
-        r(v(535, 309, 1), v(550, 54, 14), None), // 535.309.01 … 550.54.14
-        r(v(565, 57, 1), v(615, 71, 9), Some(0x8)), // 565.57.01 … 615.71.09
+        r(v(535, 309, 1), v(550, 90, 7), None), // 535.309.01 … 550.90.07
+        r(v(555, 42, 2), v(615, 71, 9), Some(0x8)), // 555.42.02 … 615.71.09
     ],
 };
 
@@ -14757,7 +15885,7 @@ pub const UVM_IOCTLS_UVM_POPULATE_PAGEABLE_FLAGS_ALL: ValueRuns = ValueRuns {
     name: "uvm_ioctls:UVM_POPULATE_PAGEABLE_FLAGS_ALL",
     runs: &[
         r(v(535, 309, 1), v(570, 148, 8), Some(0x3)), // 535.309.01 … 570.148.08
-        r(v(575, 51, 3), v(615, 71, 9), Some(0x7)),   // 575.51.03 … 615.71.09
+        r(v(575, 51, 2), v(615, 71, 9), Some(0x7)),   // 575.51.02 … 615.71.09
     ],
 };
 
@@ -14766,7 +15894,7 @@ pub const UVM_IOCTLS_UVM_POPULATE_PAGEABLE_FLAGS_INTERNAL: ValueRuns = ValueRuns
     name: "uvm_ioctls:UVM_POPULATE_PAGEABLE_FLAGS_INTERNAL",
     runs: &[
         r(v(535, 309, 1), v(570, 148, 8), None), // 535.309.01 … 570.148.08
-        r(v(575, 51, 3), v(615, 71, 9), Some(0x4)), // 575.51.03 … 615.71.09
+        r(v(575, 51, 2), v(615, 71, 9), Some(0x4)), // 575.51.02 … 615.71.09
     ],
 };
 
@@ -14775,7 +15903,7 @@ pub const UVM_IOCTLS_UVM_POPULATE_PAGEABLE_FLAGS_TEST: ValueRuns = ValueRuns {
     name: "uvm_ioctls:UVM_POPULATE_PAGEABLE_FLAGS_TEST",
     runs: &[
         r(v(535, 309, 1), v(570, 148, 8), None), // 535.309.01 … 570.148.08
-        r(v(575, 51, 3), v(615, 71, 9), Some(0x3)), // 575.51.03 … 615.71.09
+        r(v(575, 51, 2), v(615, 71, 9), Some(0x3)), // 575.51.02 … 615.71.09
     ],
 };
 
@@ -14784,7 +15912,7 @@ pub const UVM_IOCTLS_UVM_POPULATE_PAGEABLE_FLAGS_TEST_ALL: ValueRuns = ValueRuns
     name: "uvm_ioctls:UVM_POPULATE_PAGEABLE_FLAGS_TEST_ALL",
     runs: &[
         r(v(535, 309, 1), v(570, 148, 8), Some(0x3)), // 535.309.01 … 570.148.08
-        r(v(575, 51, 3), v(615, 71, 9), None),        // 575.51.03 … 615.71.09
+        r(v(575, 51, 2), v(615, 71, 9), None),        // 575.51.02 … 615.71.09
     ],
 };
 
@@ -14801,7 +15929,7 @@ pub const UVM_IOCTLS_UVM_POPULATE_PAGEABLE_FLAG_ALLOW_SPECIAL: ValueRuns = Value
     name: "uvm_ioctls:UVM_POPULATE_PAGEABLE_FLAG_ALLOW_SPECIAL",
     runs: &[
         r(v(535, 309, 1), v(570, 148, 8), None), // 535.309.01 … 570.148.08
-        r(v(575, 51, 3), v(615, 71, 9), Some(0x4)), // 575.51.03 … 615.71.09
+        r(v(575, 51, 2), v(615, 71, 9), Some(0x4)), // 575.51.02 … 615.71.09
     ],
 };
 
@@ -14826,7 +15954,7 @@ pub const UVM_IOCTLS_UVM_PREVENT_MIGRATION_RANGE_GROUPS: ValueRuns = ValueRuns {
 pub const UVM_IOCTLS_UVM_PROCESSOR_MASK_SIZE: ValueRuns = ValueRuns {
     name: "uvm_ioctls:UVM_PROCESSOR_MASK_SIZE",
     runs: &[
-        r(v(535, 309, 1), v(545, 23, 8), None), // 535.309.01 … 545.23.08
+        r(v(535, 309, 1), v(550, 40, 7), None), // 535.309.01 … 550.40.07
         r(v(550, 54, 14), v(615, 71, 9), Some(0x5)), // 550.54.14 … 615.71.09
     ],
 };
@@ -15073,7 +16201,7 @@ pub const UVM_IOCTLS_UVM_TOOLS_GET_PROCESSOR_UUID_TABLE: ValueRuns = ValueRuns {
 pub const UVM_IOCTLS_UVM_TOOLS_GET_PROCESSOR_UUID_TABLE_V2: ValueRuns = ValueRuns {
     name: "uvm_ioctls:UVM_TOOLS_GET_PROCESSOR_UUID_TABLE_V2",
     runs: &[
-        r(v(535, 309, 1), v(550, 54, 14), None), // 535.309.01 … 550.54.14
+        r(v(535, 309, 1), v(560, 28, 3), None), // 535.309.01 … 560.28.03
         r(v(565, 57, 1), v(615, 71, 9), Some(0x4d)), // 565.57.01 … 615.71.09
     ],
 };
@@ -15090,7 +16218,7 @@ pub const UVM_IOCTLS_UVM_TOOLS_INIT_EVENT_TRACKER: ValueRuns = ValueRuns {
 pub const UVM_IOCTLS_UVM_TOOLS_INIT_EVENT_TRACKER_V2: ValueRuns = ValueRuns {
     name: "uvm_ioctls:UVM_TOOLS_INIT_EVENT_TRACKER_V2",
     runs: &[
-        r(v(535, 309, 1), v(550, 54, 14), None), // 535.309.01 … 550.54.14
+        r(v(535, 309, 1), v(560, 28, 3), None), // 535.309.01 … 560.28.03
         r(v(565, 57, 1), v(615, 71, 9), Some(0x4c)), // 565.57.01 … 615.71.09
     ],
 };
@@ -15190,10 +16318,12 @@ pub const VGX_VERSION_VGX_MAJOR_VERSION_NUMBER: ValueRuns = ValueRuns {
     runs: &[
         r(v(535, 309, 1), v(535, 309, 1), Some(0x23)), // 535.309.01 … 535.309.01
         r(v(545, 23, 8), v(545, 23, 8), Some(0x24)),   // 545.23.08 … 545.23.08
-        r(v(550, 54, 14), v(550, 54, 14), Some(0x25)), // 550.54.14 … 550.54.14
+        r(v(550, 40, 7), v(550, 90, 7), Some(0x25)),   // 550.40.07 … 550.90.07
+        r(v(555, 42, 2), v(555, 42, 2), Some(0x26)),   // 555.42.02 … 555.42.02
+        r(v(560, 28, 3), v(560, 28, 3), Some(0x27)),   // 560.28.03 … 560.28.03
         r(v(565, 57, 1), v(565, 57, 1), Some(0x28)),   // 565.57.01 … 565.57.01
-        r(v(570, 124, 6), v(570, 148, 8), Some(0x29)), // 570.124.06 … 570.148.08
-        r(v(575, 51, 3), v(575, 57, 8), Some(0x2a)),   // 575.51.03 … 575.57.08
+        r(v(570, 86, 15), v(570, 148, 8), Some(0x29)), // 570.86.15 … 570.148.08
+        r(v(575, 51, 2), v(575, 64, 5), Some(0x2a)),   // 575.51.02 … 575.64.05
         r(v(580, 65, 6), v(580, 178, 4), Some(0x2b)),  // 580.65.06 … 580.178.04
         r(v(590, 48, 1), v(590, 48, 1), Some(0x2c)),   // 590.48.01 … 590.48.01
         r(v(595, 84, 0), v(595, 84, 0), Some(0x2d)),   // 595.84 … 595.84
@@ -15208,11 +16338,15 @@ pub const VGX_VERSION_VGX_MINOR_VERSION_NUMBER: ValueRuns = ValueRuns {
     runs: &[
         r(v(535, 309, 1), v(535, 309, 1), Some(0x5)), // 535.309.01 … 535.309.01
         r(v(545, 23, 8), v(545, 23, 8), Some(0xa)),   // 545.23.08 … 545.23.08
-        r(v(550, 54, 14), v(550, 54, 14), Some(0x1b)), // 550.54.14 … 550.54.14
+        r(v(550, 40, 7), v(550, 40, 7), Some(0x18)),  // 550.40.07 … 550.40.07
+        r(v(550, 54, 14), v(550, 90, 7), Some(0x1b)), // 550.54.14 … 550.90.07
+        r(v(555, 42, 2), v(555, 42, 2), Some(0x5)),   // 555.42.02 … 555.42.02
+        r(v(560, 28, 3), v(560, 28, 3), Some(0x6)),   // 560.28.03 … 560.28.03
         r(v(565, 57, 1), v(565, 57, 1), Some(0x8)),   // 565.57.01 … 565.57.01
+        r(v(570, 86, 15), v(570, 86, 15), Some(0x9)), // 570.86.15 … 570.86.15
         r(v(570, 124, 6), v(570, 124, 6), Some(0xb)), // 570.124.06 … 570.124.06
         r(v(570, 148, 8), v(570, 148, 8), Some(0xc)), // 570.148.08 … 570.148.08
-        r(v(575, 51, 3), v(575, 57, 8), Some(0x9)),   // 575.51.03 … 575.57.08
+        r(v(575, 51, 2), v(575, 64, 5), Some(0x9)),   // 575.51.02 … 575.64.05
         r(v(580, 65, 6), v(580, 178, 4), Some(0x13)), // 580.65.06 … 580.178.04
         r(v(590, 48, 1), v(590, 48, 1), Some(0x7)),   // 590.48.01 … 590.48.01
         r(v(595, 84, 0), v(595, 84, 0), Some(0x3)),   // 595.84 … 595.84
@@ -16014,6 +17148,7 @@ pub const ALL_VALUES: &[&ValueRuns] = &[
     &RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_RESERVED_190,
     &RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_RESERVED_201,
     &RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_RESERVED_208,
+    &RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_RESERVED_213,
     &RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_RESERVED_57,
     &RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_RESET_CURRENT_GR_CONTEXT,
     &RPC_FUNCTIONS_NV_VGPU_MSG_FUNCTION_RESTORE_HIBERNATION_DATA,
