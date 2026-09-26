@@ -12257,7 +12257,17 @@ impl HostRmBackend {
             std::thread::sleep(Duration::from_millis(1));
             semaphore = self.ring_load_u32(chan, sem_offset)?;
         }
-        let (gp_get, gp_put) = self.userd_cursors(chan)?;
+        // ★★★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §3, measured bare metal on a GB203): the
+        // PBDMA's write-back of `GP_GET` into USERD is ASYNCHRONOUS to the semaphore release. On
+        // GA10x it happened to land first; on Blackwell a read taken the instant the semaphore
+        // lands saw `GP_GET 0 GP_PUT 1` with the payload already there — and five bare-metal arms
+        // read that as "hardware never fetched". GP_GET is still hardware's word (it is never
+        // ours to write), so the bar is unchanged: it must reach GP_PUT — within the same budget.
+        let (mut gp_get, mut gp_put) = self.userd_cursors(chan)?;
+        while semaphore == payload && gp_get != gp_put && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(1));
+            (gp_get, gp_put) = self.userd_cursors(chan)?;
+        }
         Ok(SubmitOutcome {
             semaphore,
             gp_get,

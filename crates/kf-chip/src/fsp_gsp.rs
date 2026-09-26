@@ -211,6 +211,11 @@ pub const FMC_BOOT_PARAMS_BOOT_ARGS_OFFSET: u64 = 48;
 const LATCH_EMEM_CURSOR: usize = 0;
 /// [`ArchBootState`] latch holding whether the cursor auto-increments on write.
 const LATCH_EMEM_AINCW: usize = 1;
+/// [`ArchBootState`] latch holding the last `QUEUE_TAIL` (the packet's last dword, in bytes).
+const LATCH_PACKET_TAIL: usize = 2;
+/// `NVDM_TYPE_COT` (`ogkm-580: arch/nvalloc/common/inc/fsp/fsp_nvdm_format.h:40`), in the MCTP
+/// message header's `NVDM_TYPE` field `31:24` (`fsp_mctp_format.h:50`) — packet dword 1.
+const NVDM_TYPE_COT: u32 = 0x14;
 
 // ── encodings ─────────────────────────────────────────────────────────────────────
 
@@ -402,8 +407,23 @@ impl BootSequence for FspBoot {
             // Written before the head, and on its own it means nothing: the driver's own
             // comment is that the head write is the one that interrupts FSP
             // (`ogkm-580: kern_fsp_gh100.c:86-99`).
-            PFSP_QUEUE_TAIL => return BootSteps::none(),
+            // ★ The packet's extent (`TAIL` = its last dword, `_kfspUpdateQueueHeadTail_GH100`).
+            PFSP_QUEUE_TAIL => {
+                state.set_latch(LATCH_PACKET_TAIL, val);
+                return BootSteps::none();
+            }
             PFSP_QUEUE_HEAD => {
+                // ⊘ 2026-09-26: only a COT packet boots the GSP. RM sends other NVDM packets over
+                // the same channel before it (the Blackwell clock-boost CAPS_QUERY and CLOCK_BOOST,
+                // `kfspCheckForClockBoostCapability_GB100` / `kfspSendClockBoostRpc_GB100`), and
+                // the window keeps an earlier packet's bytes past a shorter one's end — so a
+                // second device open's CAPS_QUERY would have re-published the PREVIOUS life's
+                // boot-args pointer. The packet must be a COT and must reach the field.
+                let is_cot = state.window_read_u32(4).is_some_and(|w| w >> 24 == NVDM_TYPE_COT);
+                let reaches = (state.latch(LATCH_PACKET_TAIL) as usize).saturating_add(4) >= COT_BOOT_ARGS_OFF + 8;
+                if !(is_cot && reaches) {
+                    return BootSteps::none();
+                }
                 let Some(gpa) = state.window_read_u64(COT_BOOT_ARGS_OFF) else {
                     // MISS = FAULT-shaped: the guest never streamed a payload this long,
                     // so there is no boot-args pointer and we invent none.
