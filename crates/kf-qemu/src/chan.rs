@@ -34,7 +34,7 @@
 //! irqfd — `Device::latch_and_deliver`. ⊘ Never forged, never inline: a host NSI is the only
 //! trigger, and it carries no channel identity (RM's waiters re-check their semaphores).
 
-use crate::mem::{Mirror, Mirrors, RamMap, resolve_placed_prefix};
+use crate::mem::{Mirror, Mirrors, RamMap, resolve_placed, resolve_placed_prefix};
 use crate::raw_unsafe::RawRegion;
 use kf_chan::completions::Completions;
 use kf_chan::host::{ChanError, GuestUserd, HostRing, Publisher, Split, TranslatedChannel};
