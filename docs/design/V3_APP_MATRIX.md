@@ -23,7 +23,7 @@ hang, no crash, no Xid. Not parity, not timing. Every app ran on the **host of t
   parallelism, cooperative groups, simpleCUBLAS/CUFFT, conjugateGradient), HF transformers greedy
   generate (**token-identical to the host**), OpenCL (clinfo, clpeak).
 - **One defect blocks most of the rest: any kernel launched on a non-default CUDA stream** faults the
-  host GPU with **`Xid 13 SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE`** (§3 A) — 20 of the 65 apps, including
+  host GPU with **`Xid 13 SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE`** (§3 A) — 21 of the 65 apps, including
   PyTorch, llama.cpp, Blender, hashcat, Geekbench and every CUDA-graph / multi-stream sample.
 - **A guest can run only ~5–6 CUDA processes per boot**; the next one hangs forever and so does every
   one after it (§3 B). Some single processes (a 1 GB model load) hit the same wall alone.
@@ -161,7 +161,7 @@ in `traces/v3_app_matrix/va1_rtx3060/evidence_excerpts.txt`.
 
 | rank | cause | apps blocked (of 65) | signature |
 |---|---|---|---|
-| 1 | **A — kernels on a non-default stream fault the host GR** | **20** (+ all 5 non-default stream probes) | host `Xid 13, Graphics Exception: SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed`, class `c7c0`; kf3 `RC host twin … (guest chid 0x8/0x9, engine 0x1) … Xid 13 — forwarding RC_TRIGGERED`; app sees `cudaErrorLaunchFailure (719)` |
+| 1 | **A — kernels on a non-default stream fault the host GR** | **21** (+ all 5 non-default stream probes) | host `Xid 13, Graphics Exception: SKEDCHECK05_LOCAL_MEMORY_TOTAL_SIZE failed`, class `c7c0`; kf3 `RC host twin … (guest chid 0x8/0x9, engine 0x1) … Xid 13 — forwarding RC_TRIGGERED`; app sees `cudaErrorLaunchFailure (719)` |
 | 2 | **B — VA-space slot exhaustion ⇒ silent hang** | **5** directly (cupy, llama_cpp_gen, simpleZeroCopy, simpleAtomicIntrinsics, simpleCudaGraphs — nondeterministic, box-dependent) **and every app from the ~6th–7th CUDA process of a boot on** | kf3 `REFUSED VasKey(..) root 0x201000: slot N is full and nothing can be retired — raise WalkCfg::runs_per_pdb` + `split ticket N REFUSED`; the process then makes no progress, no Xid |
 | 3 | **D — video engines absent** | 3 (nvenc_h264, nvenc_hevc, nvdec_h264) | `OpenEncodeSessionEx failed: unsupported device`; `cuvidGetDecoderCaps … CUDA_ERROR_NO_DEVICE`; no kf3 refusal (the guest never asks) |
 | 4 | **C — MMU fault on a managed/UVM mapping** | 2 (conjugateGradientUM — **silent wrong answer**, torch_ai_bench on the 3060) | host `Xid 31 … MMU Fault: ENGINE GRAPHICS … FAULT_PDE`, first compute channel (guest chid 0x7) |
@@ -190,7 +190,7 @@ first hang. The first r1 attempt (all apps batched in one boot) wedged at the 3r
 later app timed out silently (`traces/v3_app_matrix/va1_rtx3060/r1_batched_contaminated/`). Single
 processes with many mappings (llama.cpp loading a 1 GB model, CuPy) hit it on their own. ⇒ In
 practice this blocks *every* app for any guest that has already run a handful of CUDA processes; it
-is ranked 2 only because the per-boot matrix isolates it. The persistence-mode variant is in §4.
+is ranked 2 only because the per-boot matrix isolates it. With guest persistence mode the budget disappears (§4).
 
 ### C — Xid 31 on managed memory (rank 4)
 `conjugateGradientUM` finishes, prints `result = SUCCESS`, and reports `Error amount = 1.000000`
@@ -200,8 +200,12 @@ is ranked 2 only because the per-boot matrix isolates it. The persistence-mode v
 
 ## 4. Open items (not blocking the matrix)
 
-- Persistence mode (`APPS_GUEST_PM=1`) with 1 created-stream app + 9× vectorAdd in one boot:
-  _running at the time of writing; recorded in `traces/v3_app_matrix/va1_rtx3060/seqpm/` if it lands._
+- ★ **Persistence mode removes B's per-boot budget.** `seqpm` (3060, `nvidia-smi -pm 1` in the guest,
+  then `stream_created` + 9× `vectorAdd` in ONE boot): **all 9 vectorAdd PASS** (without PM: 6 then
+  hang), and `stream_created` still FAILs with 719 (A is independent of PM). ⇒ B is tied to the guest
+  RM tearing the adapter down and re-initialising it per process (what happens without PM), not to the
+  processes themselves. `traces/v3_app_matrix/va1_rtx3060/seqpm/`. A full one-boot PM run of all 71
+  rows (`pm1`) follows in §4b.
 - EGL / Vulkan / gpu_burn root causes are not localised beyond the signatures above (no kf3 refusal is
   logged for any of them).
 
