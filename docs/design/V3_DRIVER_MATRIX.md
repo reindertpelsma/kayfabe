@@ -306,8 +306,8 @@ the fat-guest CUDA ladder (cup2 / cup3 / cup8 / cup8bench).
 | 580.95.05 | thin 29/30 (`rpc-mixed-allocs`: a SYSMEM object read `0xffffffff`, dead mapping — rerun queued) | `47348e3b` |
 | 580.126.09 / 580.173.02 / 580.178.04 | *running* | `47348e3b` |
 | **590.48.01** | init ✔, **ladder 4/4** | `6de22590` |
-| 595.84 | init ✔, ladder *running* | `6de22590` |
-| 575.57.08 | init ✔ (after the element-size fix), ladder *running* | `6de22590` |
+| **595.84** | init ✔, **ladder 4/4** | `6de22590` |
+| 575.57.08 | init ✔; ladder **0/4**: `cuInit` → `CUDA_ERROR_NOT_INITIALIZED`. The one control only this guest asks is the GSS-legacy **`0x2080a637`**, a **96 024-byte** params block — i.e. a LARGE RPC (head `payload_len=65456`), refused (no header, no policy). Large RPCs are joined since `5b577f5d`; what a real 575 GSP answers is captured on bare metal in the host walk (nvdiff) | `6de22590` |
 | 575.51.03 | INTR wall at `47348e3b`; re-run queued | — |
 | 570.148.08 | init ✔, ladder queued | `6de22590` |
 | 570.124.06 | INTR wall at `47348e3b`; re-run queued | — |
