@@ -41,6 +41,9 @@ for l in libcudart.so.12 libcublas.so.12 libcublasLt.so.12 libcufft.so.11 libcur
 done
 ls "$B/lib" | tr '\n' ' '; echo
 
+# CUDA headers for runtime compilation (CuPy's NVRTC path #includes vector_types.h etc.; the
+# guest has no toolkit) — both sides point CUDA_PATH here, so they compile against the same headers
+mkdir -p "$B/cuda" && cp -a /usr/local/cuda-12.6/targets/x86_64-linux/include "$B/cuda/"
 # ---- cuda-samples v12.5 (Makefile tree; the self-verifying subset) ---------------------------
 [ -d "$S/cuda-samples" ] || git clone -q --depth 1 --branch v12.5 https://github.com/NVIDIA/cuda-samples.git "$S/cuda-samples"
 SAMPLES="1_Utilities/deviceQuery 1_Utilities/bandwidthTest 0_Introduction/vectorAdd 0_Introduction/matrixMul \

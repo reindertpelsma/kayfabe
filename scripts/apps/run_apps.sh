@@ -78,7 +78,7 @@ gpu_burn|180|GPU 0: OK|cd $B/gpu-burn && ./gpu_burn 60
 torch_correct|300|TORCH_CORRECT_DONE|$PY $B/share/torch_correct.py
 torch_ai_bench|900|CHECK bert_infer_seqs ok|$PY $B/share/ai_bench.py
 hf_generate|600|OUTSHA|HF_MODEL=Qwen/Qwen2-0.5B-Instruct $PY $B/share/hf_generate.py
-cupy|300|CUPY_DONE|$PY $B/share/cupy_check.py
+cupy|300|CUPY_DONE|CUDA_PATH=$B/cuda $PY $B/share/cupy_check.py
 llama_cpp_gen|600|OUTSHA|$B/llama/llama-simple -m $D/qwen2.5-1.5b-instruct-q4_k_m.gguf -n 64 -ngl 99 "Explain in three sentences why the sky is blue." > $O/llama_gen.txt 2>&1; rc=$?; cat $O/llama_gen.txt; echo "OUTSHA llama_cpp $(grep -v -E '^(llama_|load|print_info|main:|ggml_|common_|\.|system_info|sampler|generate|init|build|graph|decode|\s*$)' $O/llama_gen.txt | sha256sum | cut -c1-16)"; exit $rc
 llama_bench|900|tg64|$B/llama/llama-bench -m $D/qwen2.5-1.5b-instruct-q4_k_m.gguf -ngl 99 -p 512 -n 64 -r 2
 vulkaninfo|60|NVIDIA|vulkaninfo --summary
