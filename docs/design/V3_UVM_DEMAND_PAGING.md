@@ -47,7 +47,11 @@ hypothesis for an experiment, never a premise for code.
    and the replay/cancel/clear-faulted decode are the unbuilt steps 5b–5d of the archived
    `resume_from_fault.md`, and every register, RPC and interrupt they need is already trapped
    (§5). `[src]`
-5. **Read duplication (item 3, replaced per owner) is broken today, silently** (§6). The walker
+5. ⊘ **MEASURED AND FIXED 2026-09-26 on branch `v3-roperm` — read the §6 box first.** The
+   prediction below held exactly (`gpuwrite` / `downgrade`: `bad=1048576`, no error, no Xid on
+   master `283a5304`); READ_ONLY is now carried and both fail loudly (719 + host Xid 31
+   `FAULT_RO_VIOLATION`). Evidence `traces/v3_roperm/`.
+   **Read duplication (item 3, replaced per owner) is broken today, silently** (§6). The walker
    decodes a guest PTE's READ_ONLY bit and then drops it. It is not in the diff key and not in the
    host map flags, so a guest read-only duplicate is mapped **read-write on the host**, and an
    in-place RW→RO downgrade produces no diff at all. Predicted consequence: a GPU write to a
@@ -452,6 +456,19 @@ commit-on-ack, doorbell plane and RC forwarding are unchanged.
 ---
 
 ## 6. Read duplication (item 3 as replaced) — does kf3 handle what stock UVM does?
+
+> ### ⊘⊘⊘ MEASURED AND FIXED 2026-09-26 (`v3-roperm`) — the table below is the state it replaced
+> `[meas]` master `283a5304`, RTX 3060 GA106: `readmostly_probe gpuwrite` and `downgrade` →
+> `bad=1048576`, no CUDA error, no Xid — the silent case, exactly as predicted. `v3-roperm`
+> carries the permissions under ONE host policy (`kf_mem::apply::PermPolicy`), keyed per launch
+> (`KfArgs::key_perm`): **READ_ONLY** and **VOLATILE** carried to the host map (a permission flip
+> on a kept placement is UNMAP + MAP); after, both modes fail **loudly** (719 + host Xid 31
+> `FAULT_RO_VIOLATION`), never with a wrong value. ⊘ **ATOMIC_DISABLE is NOT carried by default**
+> (`KF3_CARRY_ATOMIC_DISABLE=1` enables it once fault delivery exists): measured, carrying it turns
+> `atomicAdd_system` on a CPU-resident managed page into a 719 (host Xid 31 atomic fault) where the
+> uncarried mapping gives the host's values. ⊘ **PRIVILEGE** cannot be placed by the host; a USER
+> twin withholds a privileged leaf instead (counted, never committed). The fix is the "stock fix"
+> below; correct values still need fault delivery (b3). Evidence: `traces/v3_roperm/`.
 
 **What guest UVM does** `[src]`:
 - A read fault in a `ReadMostly` range copies the page to the faulting processor and maps it
