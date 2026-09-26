@@ -11,8 +11,14 @@
 //! Nothing here touches the host's display engine, and nothing a guest writes is forwarded.
 //!
 //! This crate holds the parts that are pure logic and GPU-free:
+//! - [`class`] — the display classes' methods, fields and caps registers, derived from ogkm;
 //! - [`edid`] — the virtual monitor's EDID (authored, never captured);
+//! - [`layout`] — the wire layouts, derived from ogkm by compiling its headers;
+//! - [`model`] — the physical-RM side: the controls' answers and the channel registry;
 //! - [`pushbuf`] — the bounded NVDisplay DMA pushbuffer decoder.
 
+pub mod class;
 pub mod edid;
+pub mod layout;
+pub mod model;
 pub mod pushbuf;

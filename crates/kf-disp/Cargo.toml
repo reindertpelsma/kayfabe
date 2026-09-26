@@ -6,6 +6,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+kf-chip.workspace = true
 
 [lints]
 workspace = true

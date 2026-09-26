@@ -1,6 +1,35 @@
 # V3 display — a virtual NVIDIA display the stock driver drives, scanned out by kayfabe
 
-**STATUS: DESIGN, LIVE — decided 2026-09-27 (branch `v3-display`), Phase 2 in progress.** Phase 1 of the
+> ### ⊘ STOPPED 2026-09-27 (owner: weekly usage limit) — where this stands, and the next steps
+> **Done (branch `v3-display`):** Phase 1 — this design, decision (a). M0 code (`5dbf670b`, device
+> property `display=on`, default off): the chip display rows (`kf_chip::display`), the KernelDisplay
+> init controls (`kf_rm::display`), display classes admitted as graph nodes, the display lane
+> (`scripts/bench/display/`), guest display provisioning, a VNC+pixman kf3 build.
+> **[M] measured, run `m0a` on vast 52837869 (RTX 3090 GA102, host+guest 580.159.04, kf3 `5dbf670b`),
+> evidence `traces/v3_display/m0a/`:** with `display=on` the guest's **KernelDisplay comes up** (no
+> `kdisp*` init failure; `numDispChannels` etc. accepted), compute unchanged (`nvidia-smi` OK), and
+> **NVKMS stops at its first physical-RM query**: `NV0073_CTRL_CMD_SYSTEM_GET_CAPS_V2` (`0x730101`)
+> refused ⇒ *"Failed to determine display common capabilities"* ⇒ nvidia-drm falls back to displayless
+> (`card0` with 0 connectors). The ledger also names `0x730107` (GET_SUPPORTED), `0x730102`
+> (GET_NUM_HEADS) and `0x730151` (MAP_SHARED_DATA). Pre-existing, not display: the RC watchdog's
+> `0xc36f` channel alloc and `NV40_I2C` are refused and tolerated.
+> **Written but not yet on the bench (after `5dbf670b`):** `kf_disp::layout` + `tools/derive_display_layouts.sh`
+> (control layouts compiled from ogkm), `kf_disp::class` + `tools/derive_display_classes.sh` (per-family
+> method/field/caps tables compiled from the class headers), `kf_disp::model` (answers for all ~30
+> NVKMS bring-up controls of §4.2 (A), the pushbuffer/channel registry, `GET_CHANNEL_INFO` idle from GET==PUT).
+> Unit-tested (`cargo test -p kf-disp`), **not yet wired**: `kf_rm::display` still answers only the M0 set.
+> **Next, in order:** (1) make `kf_rm::display::DisplayPolicy` delegate to a shared
+> `Arc<Mutex<kf_disp::model::DisplayModel>>` and observe display allocs/frees (`DisplayModel::alloc/free`);
+> (2) `kf_disp::engine`: PUT → read the 4 KiB sysmem pushbuffer → decode → assembly/armed state per class
+> (derived tables) → core notifier FINISHED + ARMED mirror at `0x688000` → window flips with acquire
+> (EQ `0xf473f473`) / release-on-flip-away (`0xd00dd00d`) + WRITE_AWAKEN notifier; ctxdma resolution by
+> scanning the guest's instance-memory hash table (§4.4); (3) `kf-qemu`: a display worker thread, the
+> BAR0 display register file (W1C `EVT_STAT_*` applied in the trap, derived `RM_INTR_*`/`DISPATCH`,
+> `CORE_HEAD_STATE` AWAKE, cursor `FREE`=4, the caps page at `0x640000` from the C373/C673 tables), the
+> AWAKEN interrupt on vector `0x9a`; (4) M2: the scanout copy kernel (kf-cuda) + the QEMU graphic console
+> (kf3.c) + `lane.sh` pixel-exact grade. Merge bar not run on this branch (display defaults off).
+
+**STATUS: DESIGN, LIVE — decided 2026-09-27 (branch `v3-display`); Phase 2 STOPPED at M0 (see the note above).** Phase 1 of the
 owner's display roadmap item (`OWNER_RULINGS.md` §C.3, 2026-09-26: *"go full in on getting the DISPLAY to
 work, then display apps / Mint desktop etc. that nvkvm-pv had working, on kayfabe"*). Nothing below is
 measured on a kf3 guest yet except where a row says **[M]**; source readings are **[E]** with a
