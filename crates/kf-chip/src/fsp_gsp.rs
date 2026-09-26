@@ -736,6 +736,13 @@ impl GspModel for FspGspModel {
         &self.boot
     }
 
+    /// ★ v3-initrace: FSP runs FWSEC itself on this regime (`kgspPrepareForBootstrap` finds no
+    /// FWSEC to parse, `kf_chip::bar0::vbios_profile`), so there is no ucode DMEM image of ours
+    /// to read a command out of.
+    fn falcon_dma(&self, _bar: u8, _off: u64, _value: u64) -> Option<kf_arch::gsp::FalconDma> {
+        None
+    }
+
     fn libos_region_layout(&self) -> LibosRegionLayout {
         // The LibOS region descriptor is a driver-side structure, not a chip register, and
         // `libos_init_args.h` is architecture-independent — so this half genuinely is the

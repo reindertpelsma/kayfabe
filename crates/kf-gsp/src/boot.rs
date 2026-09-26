@@ -868,7 +868,60 @@ pub struct GspFsm {
     /// Bound on how many LibOS region-array entries a hostile guest can make us read.
     /// Also bounds the page-table entry count.
     max_entries: u32,
+    /// ★★★ v3-initrace: the FRTS offset the FWSEC about to start was commanded to place
+    /// ([`BootStep::FwsecCommand`], [`read_frts_command`]) — consumed by the next STARTCPU.
+    frts_pending: Option<u64>,
+    /// … and the one the FWSEC that raised WPR2 was commanded to place, served while WPR2 is up
+    /// ([`GspObservation::frts_offset`]). Cleared when WPR2 comes down.
+    frts_offset: Option<u64>,
 }
+
+/// ★★★ v3-initrace — **FWSEC's FRTS command, read out of the DMEM image RM loaded it from.**
+///
+/// The image is OUR generated ROM's FWSEC (`kf_abi::vbios::GENERATED_FWSEC`, served to every
+/// falcon-boot family by `kf_chip::bar0::vbios_profile`), which RM copied to guest RAM and patched
+/// (`s_vbiosPatchInterfaceData`, `ogkm-580: kernel_gsp_frts_tu102.c:156-262`): the DMEM mapper's
+/// `init_cmd` (+44, `:81-99`) is `CMD_FRTS` (0x15, `:100`) and the command buffer at
+/// `cmd_in_buffer_offset` holds `FWSECLIC_FRTS_CMD` — a 24-byte `FWSECLIC_READ_VBIOS_DESC`, then
+/// `frtsRegionDesc {version=1, size=20, frtsRegionOffset4K, frtsRegionSize=0x100 (1 MiB),
+/// frtsRegionMediaType=FB (2)}` (`:103-130`, filled at `:319-327`).
+///
+/// `dmem0` is the guest-physical address of DMEM physical offset 0 ([`BootStep::FwsecCommand`]);
+/// the image's data is loaded at `dmem_phys_base`. Every word read lies inside the image's DMEM
+/// load (`dmem_load_size`), at offsets fixed by the ROM we generated — never at an offset the
+/// guest wrote — and the image's own mapper must agree with it. `None` for any other command
+/// (FWSEC-SB), a refused read, or a descriptor FWSEC would not accept: the model then derives.
+fn read_frts_command(ram: &mut dyn GuestRam, dmem0: u64) -> Option<u64> {
+    let g = kf_abi::vbios::GENERATED_FWSEC;
+    let image = dmem0.checked_add(u64::from(g.dmem_phys_base))?;
+    let mut rd = |off: u32| -> Option<u32> {
+        if off.checked_add(4)? > g.dmem_load_size {
+            return None;
+        }
+        let mut b = [0u8; 4];
+        ram.read(image.checked_add(u64::from(off))?, &mut b).ok()?;
+        Some(u32::from_le_bytes(b))
+    };
+    // FALCON_APPLICATION_INTERFACE_DMEM_MAPPER_V3: cmd_in_buffer_offset +8, init_cmd +44.
+    if rd(g.dmem_mapper_offset.checked_add(8)?)? != g.cmd_in_buffer_offset {
+        return None;
+    }
+    if rd(g.dmem_mapper_offset.checked_add(44)?)? != FWSEC_CMD_FRTS {
+        return None;
+    }
+    let desc = g.cmd_in_buffer_offset.checked_add(24)?;
+    let (version, size) = (rd(desc)?, rd(desc + 4)?);
+    let (offset_4k, size_4k, media) = (rd(desc + 8)?, rd(desc + 12)?, rd(desc + 16)?);
+    (version == 1 && size == 20 && size_4k == FRTS_REGION_SIZE_1MB_IN_4K && media == FRTS_REGION_MEDIA_FB)
+        .then_some(u64::from(offset_4k) << 12)
+}
+
+/// `FALCON_APPLICATION_INTERFACE_DMEM_MAPPER_V3_CMD_FRTS` (`ogkm-580: kernel_gsp_frts_tu102.c:100`).
+const FWSEC_CMD_FRTS: u32 = 0x15;
+/// `FWSECLIC_FRTS_REGION_SIZE_1MB_IN_4K` (`:125`).
+const FRTS_REGION_SIZE_1MB_IN_4K: u32 = 0x100;
+/// `FWSECLIC_FRTS_REGION_MEDIA_FB` (`:124`).
+const FRTS_REGION_MEDIA_FB: u32 = 2;
 
 impl GspFsm {
     /// A cold device.
@@ -896,6 +949,8 @@ impl GspFsm {
             cmd_read_ptr: 0,
             region_identity: None,
             max_entries: 4096,
+            frts_pending: None,
+            frts_offset: None,
         }
     }
 
@@ -936,6 +991,7 @@ impl GspFsm {
             boot_args_lo: self.mailbox_lo,
             boot_args_hi: self.mailbox_hi,
             riscv_bcr_ctrl: self.bcr_ctrl,
+            frts_offset: if self.phase.wpr2_up() { self.frts_offset } else { None },
         }
     }
 
@@ -1105,6 +1161,10 @@ impl GspFsm {
         report: &mut ServiceReport,
     ) -> Result<(), GspFault> {
         match step {
+            BootStep::FwsecCommand(dmem0) => {
+                // ★ v3-initrace: consumed by the StartProcessor that follows in the same write.
+                self.frts_pending = read_frts_command(ram, dmem0);
+            }
             BootStep::StartProcessor => {
                 // ★ w828: the regime that starts the processor decides how it stops.
                 self.after_suspend = model.boot_sequence().after_suspend();
@@ -1199,10 +1259,13 @@ impl GspFsm {
 
     /// E1 / E2 / E3 — the GSP falcon STARTCPU, classified on `phase` alone.
     fn gsp_startcpu(&mut self) -> Transition {
+        // ★ v3-initrace: the command read for THIS start (if any) is consumed now, whichever way.
+        let frts = self.frts_pending.take();
         match self.phase {
             BootPhase::Cold | BootPhase::Halted => {
                 self.phase = BootPhase::ProtectedRegionUp;
                 self.fw_halted_after_suspend = false;
+                self.frts_offset = frts;
                 Transition::E1
             }
             BootPhase::Suspending => {
@@ -1220,6 +1283,9 @@ impl GspFsm {
     /// value**.
     fn enter_halted(&mut self) {
         self.phase = BootPhase::Halted;
+        // ★ v3-initrace: WPR2 is down; the next FWSEC-FRTS carries its own command.
+        self.frts_offset = None;
+        self.frts_pending = None;
         self.queue = QueueState::Unbound;
         self.init_done_posted = false;
         self.swgen0_pending = false;
@@ -2600,7 +2666,7 @@ mod a_life_ends_and_the_next_one_boots {
 
     /// A GSP Axis-A bundle for the bench driver. Only its shape matters here: these tests never
     /// decode an element.
-    fn abi() -> GspAbi {
+    pub(super) fn abi() -> GspAbi {
         let table = kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).expect("bench driver");
         let wire = table.gsp_element_wire();
         let transport = match wire.transport() {
@@ -2717,5 +2783,91 @@ mod a_life_ends_and_the_next_one_boots {
         let mut policy = EchoOk;
         assert_eq!(f.service_one_deferred_command(&mut ram, &mut policy).unwrap_err(), GspFault::ProcessorSuspended);
         assert_eq!(f.pending_command_doorbells(), 1, "the refused doorbell is consumed, not retried forever");
+    }
+}
+
+#[cfg(test)]
+mod a_retry_after_a_failed_boot_reads_its_own_frts_command {
+    //! ★★★ v3-initrace — `V3_HW_BOUNDARY_INVENTORY.md` §5.2 L1: after ONE failed GSP boot RM moves
+    //! the FRTS region down by `kgspGetWprEndMargin` (`ogkm-580: kernel_gsp.c:5637-5697`) and checks
+    //! `WPR2_ADDR_LO` against the moved offset exactly (`kernel_gsp_frts_tu102.c:514-524`). The FSM
+    //! now reads the offset out of the FWSEC-FRTS command RM patched into the DMEM image; the model's
+    //! encode of it is `kf-chip/tests/wpr_end_margin.rs`, the sequence's latching of the DMA source
+    //! `kf-chip/tests/wpr_end_margin.rs` too.
+    use super::*;
+    use std::collections::BTreeMap;
+
+    /// Guest RAM: a sparse byte map; an address never written is REFUSED (as unregistered RAM is).
+    #[derive(Default)]
+    struct Ram(BTreeMap<u64, u8>);
+    impl Ram {
+        fn put32(&mut self, gpa: u64, v: u32) {
+            for (i, b) in v.to_le_bytes().into_iter().enumerate() {
+                self.0.insert(gpa + i as u64, b);
+            }
+        }
+    }
+    impl GuestRam for Ram {
+        fn read(&mut self, gpa: u64, buf: &mut [u8]) -> Result<(), crate::fault::RamRefused> {
+            let len = buf.len();
+            for (i, o) in buf.iter_mut().enumerate() {
+                *o = *self.0.get(&(gpa + i as u64)).ok_or(crate::fault::RamRefused { gpa, len, why: "not registered" })?;
+            }
+            Ok(())
+        }
+        fn write(&mut self, _gpa: u64, _bytes: &[u8]) -> Result<(), crate::fault::RamRefused> {
+            unreachable!("the FRTS command is read, never written")
+        }
+    }
+
+    const IMAGE: u64 = 0x7654_3000;
+
+    /// What RM leaves in guest RAM for FWSEC (`s_vbiosPatchInterfaceData` over OUR generated
+    /// image): the whole DMEM load present (zeros), the mapper's `cmd_in_buffer_offset`, `init_cmd`,
+    /// and the FRTS region descriptor.
+    fn image(cmd: u32, off_4k: u32, size_4k: u32, media: u32) -> Ram {
+        let g = kf_abi::vbios::GENERATED_FWSEC;
+        let base = IMAGE + u64::from(g.dmem_phys_base);
+        let mut r = Ram::default();
+        for o in (0..g.dmem_load_size).step_by(4) {
+            r.put32(base + u64::from(o), 0);
+        }
+        r.put32(base + u64::from(g.dmem_mapper_offset + 8), g.cmd_in_buffer_offset);
+        r.put32(base + u64::from(g.dmem_mapper_offset + 44), cmd);
+        let d = base + u64::from(g.cmd_in_buffer_offset + 24);
+        for (i, v) in [1, 20, off_4k, size_4k, media].into_iter().enumerate() {
+            r.put32(d + 4 * i as u64, v);
+        }
+        r
+    }
+
+    #[test]
+    fn the_frts_offset_is_read_from_the_command_and_only_from_an_acceptable_one() {
+        let at = 0x1f6e0_000u64; // a margin-shifted FRTS offset (4 KiB units: 0x1f6e0)
+        assert_eq!(read_frts_command(&mut image(0x15, 0x1f6e0, 0x100, 2), IMAGE), Some(at));
+        assert_eq!(read_frts_command(&mut image(0x19, 0x1f6e0, 0x100, 2), IMAGE), None, "FWSEC-SB carries no region");
+        assert_eq!(read_frts_command(&mut image(0x15, 0x1f6e0, 0x200, 2), IMAGE), None, "only the 1 MiB region FWSEC builds");
+        assert_eq!(read_frts_command(&mut image(0x15, 0x1f6e0, 0x100, 1), IMAGE), None, "only the FB medium");
+        let mut other = image(0x15, 0x1f6e0, 0x100, 2);
+        let g = kf_abi::vbios::GENERATED_FWSEC;
+        other.put32(IMAGE + u64::from(g.dmem_phys_base + g.dmem_mapper_offset + 8), g.cmd_in_buffer_offset + 0x40);
+        assert_eq!(read_frts_command(&mut other, IMAGE), None, "a mapper that disagrees with the ROM we generated");
+        assert_eq!(read_frts_command(&mut Ram::default(), IMAGE), None, "unregistered RAM is refused, never zero");
+        assert_eq!(read_frts_command(&mut image(0x15, 0x1f6e0, 0x100, 2), u64::MAX - 8), None, "no wrap");
+    }
+
+    #[test]
+    fn the_command_read_for_a_start_is_served_while_wpr2_is_up_and_dropped_when_it_comes_down() {
+        let mut f = GspFsm::new(super::a_life_ends_and_the_next_one_boots::abi());
+        assert_eq!(f.observe().frts_offset, None);
+        f.frts_pending = read_frts_command(&mut image(0x15, 0x1f6e0, 0x100, 2), IMAGE);
+        assert_eq!(f.gsp_startcpu(), Transition::E1);
+        assert_eq!(f.observe().frts_offset, Some(0x1f6e0_000), "the retry's FWSEC-FRTS placed it there");
+        assert_eq!(f.gsp_startcpu(), Transition::E3, "a start while up changes nothing");
+        assert_eq!(f.observe().frts_offset, Some(0x1f6e0_000));
+        f.enter_halted();
+        assert_eq!(f.observe().frts_offset, None, "WPR2 down: nothing is served");
+        assert_eq!(f.gsp_startcpu(), Transition::E1, "a start with no command read of its own");
+        assert_eq!(f.observe().frts_offset, None, "derives — never the previous life's command");
     }
 }

@@ -1857,6 +1857,22 @@ impl HostOps for Device {
         }
         let mut ram = Ram(self);
         let before = g.fsm.phase();
+        let frts_before = g.fsm.observe().frts_offset;
+        // ⊘ FAULT INJECTION (`KF3_INJECT_FWSEC_FAIL=<n>`, default off): the first n FWSEC-FRTS
+        // starts (a GSP falcon STARTCPU from Cold/Halted) are dropped before the FSM sees them —
+        // WPR2 never comes up, the guest's `kgspExecuteFwsec` fails "no initialized WPR2 found",
+        // and RM retries with its WPR-end margin (`V3_HW_BOUNDARY_INVENTORY.md` §5.2 L1). Never set
+        // outside a reproduction.
+        if bar == 0
+            && g.model.at(GspReg::GspFalconCpuctl) == Some((0, u64::from(offset)))
+            && g.model.is_startcpu(value)
+            && matches!(before, kf_arch::BootPhase::Cold | kf_arch::BootPhase::Halted)
+            && inject_fwsec_fail_take()
+        {
+            eprintln!("kf3: INJECTED: FWSEC-FRTS STARTCPU dropped (KF3_INJECT_FWSEC_FAIL) — WPR2 stays down, the guest's boot attempt fails");
+            self.publish(g);
+            return;
+        }
         match g.fsm.mmio_write_with(&mut ram, g.model.as_ref(), g.policy.as_mut(), bar, u64::from(offset), value) {
             Ok(r) => {
                 n_cmds += r.commands.len();
@@ -1881,6 +1897,15 @@ impl HostOps for Device {
         if after != before {
             // ★ The P2 gate's observable: the boot phase, logged by the drainer (never a vCPU).
             eprintln!("kf3: GSP phase {before:?} -> {after:?}");
+        }
+        // ★ v3-initrace: where WPR2 came up — the guest's own FWSEC-FRTS command, or the derivation.
+        let frts_after = g.fsm.observe().frts_offset;
+        if frts_after != frts_before && after == kf_arch::BootPhase::ProtectedRegionUp {
+            eprintln!(
+                "kf3: GSP WPR2 up at the guest's FWSEC-FRTS command: frts_offset={} (served WPR2_ADDR_LO={:?})",
+                frts_after.map_or("none read — derived".to_string(), |o| format!("{o:#x}")),
+                g.model.at(GspReg::Wpr2AddrLo).and_then(|(b, o)| g.fsm.mmio_read_with(g.model.as_ref(), b, o)).map(|r| r.map(|v| format!("{v:#x}")))
+            );
         }
         // ★ P4: a held reply (fn 70, a page-directory statement) goes only once the VA thread has
         // settled every statement received — its root written and walked (§49.1 for the RPC
@@ -1938,6 +1963,15 @@ impl HostOps for Device {
     fn fault_channel(&self, _host_token: u32) {}
     fn map_guest_slice(&self, _slice: HostSlice) {}
     fn teardown_step(&self, _step: Step) {}
+}
+
+/// ⊘ `KF3_INJECT_FWSEC_FAIL=<n>` (default off): take one of the n injected FWSEC failures.
+fn inject_fwsec_fail_take() -> bool {
+    static LEFT: std::sync::OnceLock<AtomicU64> = std::sync::OnceLock::new();
+    let left = LEFT.get_or_init(|| {
+        AtomicU64::new(std::env::var("KF3_INJECT_FWSEC_FAIL").ok().and_then(|v| v.trim().parse().ok()).unwrap_or(0))
+    });
+    left.fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1)).is_ok()
 }
 
 /// ★★★ v3-refusals: one line per refusal row the FSM posted for the FIRST time — a non-OK status

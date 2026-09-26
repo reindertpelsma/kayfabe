@@ -335,6 +335,12 @@ pub struct GspObservation {
     /// The value the guest last wrote to [`GspReg::GspRiscvBcrCtrl`] (`None` = never written:
     /// the register's reset value).
     pub riscv_bcr_ctrl: Option<u32>,
+    /// ★★★ v3-initrace — **where the guest's own FWSEC-FRTS command put the FRTS region**: the
+    /// FB offset `frtsRegionOffset4K << 12` read out of the DMEM image the FWSEC that raised WPR2
+    /// was loaded from ([`BootStep::FwsecCommand`]). `None`: no such command was read, and the
+    /// model derives the offset from the FB size alone — which is right only while RM's WPR-end
+    /// margin is zero (`kgspGetWprEndMargin`: non-zero on every boot after a failed one).
+    pub frts_offset: Option<u64>,
 }
 
 /// The geometry of the LibOS memory-region init-args array the guest publishes.
@@ -412,6 +418,14 @@ pub enum BootStep {
     CommandDoorbell,
     /// The guest acknowledged the status-queue interrupt edge.
     ClearStatusIrq,
+    /// ★★★ v3-initrace — the HS ucode the next [`BootStep::StartProcessor`] starts was loaded
+    /// into the boot processor's DMEM from guest-physical memory, DMEM offset 0 at this address:
+    /// read the command RM patched into it (`s_vbiosPatchInterfaceData`,
+    /// `ogkm-580: kernel_gsp_frts_tu102.c:156-262`) before starting it — FWSEC-FRTS carries the FB
+    /// offset WPR2 must come up at, and RM checks it exactly.
+    ///
+    /// *Turing regime (GA10x, AD10x `BOOT_FROM_HS`):* the GSP falcon's `DMATRF*` DMEM load.
+    FwsecCommand(u64),
 }
 
 impl BootStep {
@@ -428,6 +442,7 @@ impl BootStep {
             BootStep::PublishBootArgs(_) => BootStepKind::PublishBootArgs,
             BootStep::CommandDoorbell => BootStepKind::CommandDoorbell,
             BootStep::ClearStatusIrq => BootStepKind::ClearStatusIrq,
+            BootStep::FwsecCommand(_) => BootStepKind::FwsecCommand,
         }
     }
 }
@@ -451,6 +466,8 @@ pub enum BootStepKind {
     CommandDoorbell,
     /// See [`BootStep::ClearStatusIrq`].
     ClearStatusIrq,
+    /// See [`BootStep::FwsecCommand`].
+    FwsecCommand,
 }
 
 /// The steps one register write means — at most [`BootSteps::CAPACITY`] of them.
@@ -918,6 +935,17 @@ pub trait GspModel: Send + Sync {
 
     fn libos_region_layout(&self) -> LibosRegionLayout;
 
+    /// ★★★ v3-initrace — **a write to the boot processor's ucode-load DMA registers**, decoded
+    /// (`NV_PFALCON_FALCON_DMATRFBASE/BASE1/MOFFS/FBOFFS/CMD`,
+    /// `ogkm-580: src/common/inc/swref/published/ampere/ga102/dev_falcon_v4.h:53-79`). The model
+    /// ANSWERS none of them (the read shadow keeps what the guest wrote, and `DMATRFCMD`'s
+    /// read-back stays [`Self::answer_on_store`]'s): a boot sequence only LATCHES them, to know
+    /// where the DMEM image of the ucode it is about to start lives ([`BootStep::FwsecCommand`]).
+    ///
+    /// ⊘ **Deliberately not defaulted**: `None` is a statement (this generation's FWSEC does not
+    /// run on the GSP falcon — FSP runs it on Hopper+), not an omission.
+    fn falcon_dma(&self, bar: u8, off: u64, value: u64) -> Option<FalconDma>;
+
     /// **The boot ordering this generation follows.**
     ///
     /// ⊘ **Deliberately not defaulted.** A default would have to be *some* generation's
@@ -927,6 +955,27 @@ pub trait GspModel: Send + Sync {
     /// as the one next door": saying so is one line, and inheriting it by omission is
     /// unreadable.
     fn boot_sequence(&self) -> &dyn BootSequence;
+}
+
+/// ★ v3-initrace — one decoded write to the boot processor's ucode-load DMA registers
+/// ([`GspModel::falcon_dma`]). A DMEM block `MOFFS` comes from `(BASE1:BASE << 8) + FBOFFS`
+/// (`s_dmaTransfer_GA102`, `ogkm-580: kernel_gsp_falcon_ga102.c:98-145`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FalconDma {
+    /// `DMATRFBASE` — the source address, bits 39:8.
+    Base(u32),
+    /// `DMATRFBASE1` — the source address, bits 48:40 (field `8:0`).
+    Base1(u32),
+    /// `DMATRFMOFFS` — the falcon IMEM/DMEM offset of this block.
+    MemOffset(u32),
+    /// `DMATRFFBOFFS` — this block's offset from the base.
+    SourceOffset(u32),
+    /// `DMATRFCMD` — one block moved: into `DMEM` (`IMEM` 4:4 clear) and from memory into the
+    /// falcon (`WRITE` 5:5 clear), or anything else.
+    Transfer {
+        /// A load of DMEM from memory — the only transfer that carries a ucode's data.
+        dmem_load: bool,
+    },
 }
 
 kf_util::assert_send_sync!(

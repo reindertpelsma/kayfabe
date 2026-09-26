@@ -73,6 +73,19 @@ const FALCON_HWCFG2: u64 = 0x0f4;
 const FALCON_CPUCTL: u64 = 0x100;
 /// `NV_PFALCON_FALCON_DMATRFCMD`.
 const FALCON_DMATRFCMD: u64 = 0x118;
+/// ★ v3-initrace — the ucode-load DMA source registers, falcon-relative: `DMATRFBASE` (`0x110`,
+/// bits 39:8 of the source), `DMATRFMOFFS` (`0x114`), `DMATRFFBOFFS` (`0x11c`), `DMATRFBASE1`
+/// (`0x128`, field `8:0`) — identical in `ogkm-580: src/common/inc/swref/published/turing/tu102/
+/// dev_falcon_v4.h:72-96` and `.../ampere/ga102/dev_falcon_v4.h:53-79`.
+const FALCON_DMATRFBASE: u64 = 0x110;
+const FALCON_DMATRFMOFFS: u64 = 0x114;
+const FALCON_DMATRFFBOFFS: u64 = 0x11c;
+const FALCON_DMATRFBASE1: u64 = 0x128;
+/// `NV_PFALCON_FALCON_DMATRFCMD_IMEM` 4:4 and `_WRITE` 5:5 (same headers).
+const DMATRFCMD_IMEM: u64 = 1 << 4;
+const DMATRFCMD_WRITE: u64 = 1 << 5;
+/// `NV_PFALCON_FALCON_DMATRFBASE1_BASE` 8:0.
+const DMATRFBASE1_MASK: u64 = 0x1FF;
 
 /// `NV_PGSP_QUEUE_HEAD(0)`; stride 8, `__SIZE_1 = 8`
 /// (`ogkm-580: dev_gsp.h:38-39`). The C hard-codes queue 0
@@ -263,6 +276,35 @@ pub const fn fb_length_for(fb_size_mb: u64) -> u64 {
 #[must_use]
 pub const fn frts_offset_for(fb_size_mb: u64) -> u64 {
     gsp_fw_wpr_end_for(fb_size_mb) - FRTS_SIZE
+}
+
+/// ★★★ v3-initrace — **the FRTS offset WPR2 is served at: the guest's own command, when it gave
+/// one we can accept, else the zero-margin derivation.**
+///
+/// RM places the FRTS region at `gspFwWprEnd - frtsSize` where
+/// `gspFwWprEnd = NV_ALIGN_DOWN64(vbiosReservedOffset - kgspGetWprEndMargin(), 0x20000)`
+/// (`kgspPopulateWprMeta_TU102`, `ogkm-580: kernel_gsp_tu102.c:776-779`), hands that offset to
+/// FWSEC as `frtsRegionOffset4K` (`kernel_gsp_frts_tu102.c:324`) and then checks
+/// `WPR2_ADDR_LO == frtsOffset >> 12` exactly (`:514-524`). The margin is zero on a clean boot
+/// and **non-zero on every boot after a failed one** (`kgspGetWprEndMargin_IMPL`,
+/// `kernel_gsp.c:5637-5697`: `(gspFwWprEnd - nonWprHeapOffset)` of the previous attempt, or the
+/// estimated WPR size, times `bootAttempts`; `bootAttempts` is persisted in the registry across
+/// opens, `:3913-3921`). Deriving from the FB size alone therefore failed every retry — one
+/// transient boot failure became a dead device until QEMU restarted
+/// (`V3_HW_BOUNDARY_INVENTORY.md` §5.2 L1).
+///
+/// ⊘ The commanded offset is guest-written, so it is accepted only as FWSEC itself would place
+/// the region: 4 KiB-aligned (it arrives in 4 KiB units), at least one FRTS size above FB
+/// offset 0, and wholly at or below the zero-margin WPR end — a margin only ever moves it DOWN.
+/// Anything else falls back to the derivation (and RM's own exact compare then fails the boot
+/// by name, as it does today).
+#[must_use]
+pub const fn frts_offset_served(fb_size_mb: u64, commanded: Option<u64>) -> u64 {
+    let derived = frts_offset_for(fb_size_mb);
+    match commanded {
+        Some(o) if o.is_multiple_of(0x1000) && o >= FRTS_SIZE && o <= derived => o,
+        _ => derived,
+    }
 }
 
 /// Pack a byte address into the `_VAL` field of a WPR2 address register.
@@ -492,17 +534,20 @@ impl GspModel for FalconGspModel {
                     RISCV_CPUCTL_ACTIVE
                 }
             }
-            // Derived from THIS MODEL'S size (`FalconGspModel::fb_size_mb`) — there is no other.
+            // ★ v3-initrace: the guest's own FRTS command when accepted, else derived from THIS
+            // MODEL'S size (`FalconGspModel::fb_size_mb`) — see `frts_offset_served`. HI is the
+            // region's end (`frtsOffset + frtsSize`), which with a zero margin is exactly the
+            // derived `gspFwWprEnd`.
             GspReg::Wpr2AddrLo => {
                 if obs.wpr2_up {
-                    wpr2_reg(frts_offset_for(self.fb_size_mb))
+                    wpr2_reg(frts_offset_served(self.fb_size_mb, obs.frts_offset))
                 } else {
                     0
                 }
             }
             GspReg::Wpr2AddrHi => {
                 if obs.wpr2_up {
-                    wpr2_reg(gsp_fw_wpr_end_for(self.fb_size_mb))
+                    wpr2_reg(frts_offset_served(self.fb_size_mb, obs.frts_offset) + FRTS_SIZE)
                 } else {
                     0
                 }
@@ -543,6 +588,27 @@ impl GspModel for FalconGspModel {
     /// state nothing, which is why [`GspModel::boot_sequence`] has no default.
     fn boot_sequence(&self) -> &dyn BootSequence {
         &self.boot
+    }
+
+    /// ★ v3-initrace: the GSP falcon's ucode-load DMA registers — the ones FWSEC is loaded
+    /// through on `BOOT_FROM_HS` (`kgspExecuteHsFalcon_GA102`, bound for GA102…AD107,
+    /// `ogkm-580: gen/g_kernel_gsp_nvoc.c:1427-1445`). ⊘ Only the GSP falcon's: SEC2's Booter
+    /// load is a different ucode with no command we read.
+    fn falcon_dma(&self, bar: u8, off: u64, value: u64) -> Option<kf_arch::gsp::FalconDma> {
+        use kf_arch::gsp::FalconDma;
+        if bar != 0 {
+            return None;
+        }
+        #[allow(clippy::cast_possible_truncation)]
+        let v32 = value as u32;
+        Some(match off.checked_sub(PGSP)? {
+            FALCON_DMATRFBASE => FalconDma::Base(v32),
+            FALCON_DMATRFBASE1 => FalconDma::Base1((value & DMATRFBASE1_MASK) as u32),
+            FALCON_DMATRFMOFFS => FalconDma::MemOffset(v32),
+            FALCON_DMATRFFBOFFS => FalconDma::SourceOffset(v32),
+            FALCON_DMATRFCMD => FalconDma::Transfer { dmem_load: value & (DMATRFCMD_IMEM | DMATRFCMD_WRITE) == 0 },
+            _ => return None,
+        })
     }
 
     fn libos_region_layout(&self) -> LibosRegionLayout {
