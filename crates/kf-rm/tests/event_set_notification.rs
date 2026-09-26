@@ -658,11 +658,12 @@ fn the_probe_admits_exactly_the_named_index_and_the_default_still_refuses_an_unl
     //
     // ⚠ What did NOT change is the shape being guarded: the probe must still be a set that
     // admits exactly what it names, and the default must still refuse an index on neither
-    // list. Index 37 carries that half now, and it is a *legal* index — the guard is about
-    // the promise, not about the wire bounds.
+    // list. Index 36 carries that half now (⊘ v3-appfix: 37, RC_ERROR, moved to
+    // `GUEST_RAISED_NOTIFIERS` — the guest's own CPU-RM raises it), and it is a *legal*
+    // index — the guard is about the promise, not about the wire bounds.
     assert_ne!(
         policy()
-            .respond(&arming_of(37))
+            .respond(&arming_of(36))
             .expect("claimed")
             .rpc_result,
         0,
@@ -687,15 +688,15 @@ fn the_probe_admits_exactly_the_named_index_and_the_default_still_refuses_an_unl
         "index 35 is delivered, so the SHIPPING policy — probe set empty — serves its arming"
     );
     // The probe admits what it names…
-    let mut probed = probed_policy("37");
+    let mut probed = probed_policy("36");
     assert_eq!(
-        probed.respond(&arming_of(37)).expect("served").rpc_result,
+        probed.respond(&arming_of(36)).expect("served").rpc_result,
         0,
-        "a probe naming 37 serves the arming — reachability instrumentation"
+        "a probe naming 36 serves the arming — reachability instrumentation"
     );
-    // …and nothing it does not name: 36 is another legal index on neither list.
+    // …and nothing it does not name: 38 is another legal index on neither list.
     assert_ne!(
-        probed.respond(&arming_of(36)).expect("claimed").rpc_result,
+        probed.respond(&arming_of(38)).expect("claimed").rpc_result,
         0,
         "the probe is a set, not a switch: an unnamed, undelivered index stays refused"
     );
@@ -776,4 +777,26 @@ fn the_probe_does_not_bypass_the_transition_rule_or_the_wire_bounds() {
         0,
         "an out-of-range index is refused by the DECODE before any probe is consulted"
     );
+}
+
+/// ★★★ v3-appfix — **the guest-raised list is PINNED to exactly what NVML's event set arms**
+/// (`nvidia-smi -l`, `[measured v3-appfix g3]`: 37, 118, 159, 155, 156, 191, 192, every one
+/// `NV_OK` on bare metal), every row cites its CPU-RM producer, it is disjoint from the other
+/// two lists, and the shipping policy serves every one of them.
+#[test]
+fn the_guest_raised_list_is_exactly_nvmls_event_set_and_the_shipping_policy_serves_it() {
+    use kf_abi::eventnotify::{GUEST_RAISED_NOTIFIERS, is_delivered_notifier, is_silent_notifier};
+    let mut indices: Vec<u32> = GUEST_RAISED_NOTIFIERS.iter().map(|n| n.index).collect();
+    indices.sort_unstable();
+    assert_eq!(indices, vec![37, 118, 155, 156, 159, 191, 192]);
+    for n in GUEST_RAISED_NOTIFIERS {
+        assert!(n.why.contains("ogkm-580:"), "notifier {} names no CPU-RM producer", n.index);
+        assert!(!is_silent_notifier(n.index) && !is_delivered_notifier(n.index), "notifier {} is on two lists", n.index);
+    }
+    let mut p = policy();
+    for ev in [37u32, 118, 159, 155, 156, 191, 192] {
+        assert_eq!(p.respond(&arming_of(ev)).expect("served").rpc_result, 0, "nvidia-smi -l arms {ev}; bare metal answers NV_OK");
+    }
+    // RM's transition rule still holds for them: REPEAT over REPEAT is refused.
+    assert_ne!(p.respond(&arming_of(37)).expect("claimed").rpc_result, 0);
 }

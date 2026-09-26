@@ -1344,8 +1344,10 @@ impl Device {
             .filter(|e| e.wakes.load(o) > 0)
             .map(|e| format!("{}:{}/{}raised", e.name, e.wakes.load(o), e.raised.load(o)))
             .collect();
+        let (va, vr, vx) = self.rm.view_counts();
         let rc = format!(
-            " rc[armed={} unarmed={} wakes={} seen={} posted={}]",
+            " views[armed={va} released={vr} refused={vx} held={}] rc[armed={} unarmed={} wakes={} seen={} posted={}]",
+            va.saturating_sub(vr),
             self.chans.rc_armed.load(o),
             self.chans.rc_unarmed.load(o),
             self.chans.rc_wakes.load(o),

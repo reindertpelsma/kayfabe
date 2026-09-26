@@ -187,3 +187,51 @@ Each cell mean of 3 processes.
   ONE `NVOS47` range. A 12 288-run space: 3 map + 1 unmap verbs (was 24 576); exit unmap 1 256 →
   7 ms (the per-run unmap was O(mappings): RM walks the whole inter-mapping list per call); no-PM
   process 4.7 → 4.3 s mean on `vh`. The map half is slower (265 → 352 ms: stitch `mmap`s).
+
+★★★ **App-matrix fixes, `v3-appfix` (2026-09-26; box vast 52689820, RTX 3060 GA106, 580.159.04;
+fat guest, kf3 binaries `kf3-bins/<rev>`).** The three guest-only failures of `V3_APP_MATRIX.md`
+(branch `v3-apps`, measured at `79848341`, bare metal passes all), bare metal re-run on this box first.
+- **J — host `NV_ESC_RM_MAP_MEMORY … NoMemory` at the ~60th process (FIXED, `f372f63f`).** Measured
+  (`ce2cb06d`, guest PM, 100× a small CUDA process): host BAR1 used grew **~4.5 MiB per process**,
+  the 256 MiB aperture was full at ~55 and the next process hung. kf3's new `views[]` counters
+  (`HostRm::view_counts`, in the status line) showed held CPU views growing ~4 per process = the 4
+  Translated (guest-kernel CE) channels each process births. ⊘ **`HostRing` owned nothing but its
+  channel**: its 1 MiB device-local object, the object's GPU mapping and its BAR1 CPU view (armed by
+  `HostRm::map_cpu`, which DROPS the release cookie) survived every retire, and the ring slot was
+  never reused (*"a freed ring's memory stays mapped today"*). Fix: the ring owns
+  `{object, view cookie, space}`; `HostRing::release` (after the channel free) munmaps,
+  `NV_ESC_RM_UNMAP_MEMORY`, GPU-unmaps and frees; refused births unwind the same way; slots are a
+  pool, returned only on a clean release. **After: 100/100 processes in one PM boot, host BAR1 flat
+  at 17-19 MiB** (was +4.5 MiB/process), held views flat (~90-110).
+- **G — `gpu_burn` SIGSEGV after `cuInit` (FIXED, `b0ceaf09`).** Not a CUDA fault: gpu_burn reads
+  `nvidia-smi -l 5 -q -d TEMPERATURE` until `'\n'` into a 10 KiB stack buffer and runs off its stack
+  on EOF. In the guest `nvidia-smi -l` exited 3 at once (*"Failed register events"*). nvdiff shim,
+  host vs guest: NVML arms `EVENT_SET_NOTIFICATION` for 37, 118, 159, 155, 156, 191, 192 — all `NV_OK`
+  on bare metal; kf3 answered 37 (`RC_ERROR`) `0x56`. Every one of the seven is raised by the guest's
+  OWN CPU-RM (`gpuNotifySubDeviceEvent`), so the GSP arming is bookkeeping: new admitting list
+  `kf_abi::eventnotify::GUEST_RAISED_NOTIFIERS`, pinned by a test. After: `nvidia-smi -l` runs,
+  gpu_burn `GPU 0: OK`.
+- **C — managed memory / Xid 31 `FAULT_PDE` (ROOT-CAUSED; NOT fixable inside the current host
+  boundary).** `um_probe` shapes, each fully checked, host vs guest: `cudaMalloc`, managed +
+  `cudaMemPrefetchAsync`, managed + `cudaMemAdviseSetAccessedBy`, `cudaHostAlloc`, D2H into pageable
+  — **all correct in the guest**; managed with CPU first touch, managed with GPU first touch, and a
+  kernel writing plain `malloc` memory (HMM, `pageableMemoryAccess=1`) — **host Xid 31 FAULT_PDE,
+  guest `cudaDeviceSynchronize` = 719**. ⇒ everything the guest UVM MAPS is published correctly; what
+  fails is **demand paging**: the guest UVM expects a replayable fault to populate the page, kf3
+  delivers none (`kf_abi::faultbuffer::DELIVERY_UNBUILT`), and the host twin's fault is
+  non-replayable, so the host RCs the TSG. `torch_ai_bench` is the same class (its fault VA
+  `0x7fa9_87c45000` is pageable host memory). ⊘ The guest is **not** told success: the RC is
+  forwarded (`RC_TRIGGERED`, Xid 31) and CUDA returns 719; `conjugateGradientUM` prints `SUCCESS`
+  because it checks neither its `cudaDeviceSynchronize` (`main.cpp:171,220`) nor its cuBLAS status,
+  and its verdict is `k <= max_iter` (`:270-272`). ⊘ Why it cannot be closed from host userspace:
+  a replayable host fault needs a fault-capable VAS, which RM refuses unless it is also
+  EXTERNALLY_OWNED (`ogkm-580 vaspace_api.c:678-690`, i.e. UVM-owned page tables), and the fault
+  buffer class is `RS_FLAGS_ALLOC_KERNEL_PRIVILEGED` (`resource_list.h`, `MMU_FAULT_BUFFER`). An owner
+  decision (a host fault channel, or a sanctioned eager-mapping policy) — `THE_OPEN_QUESTIONS.md` §4.
+- **Matrix re-run, single-stream + UVM rows (`fix1`, one app per boot, kf3 `f372f63f`):** host
+  **43/43**, guest **38/43** (the same 43 rows were 36/43 at `79848341`: `gpu_burn` G and `cupy` B now
+  PASS). Remaining: `conjugateGradientUM` and `torch_ai_bench` (C, above); `UnifiedMemoryPerf`,
+  `attach_verify`, `UnifiedMemoryStreams` (A — Xid 13 `SKEDCHECK05` on the 2nd stream's twin, the
+  `v3-int` one-TSG fix; `UnifiedMemoryStreams` prints 719 and then hangs in its other threads, the
+  same on master `ce2cb06d` and on `f703cdaf` — A/B'd, not a regression). v3 gates **9/9** and
+  `KF_DEVICE=kf3` fast suite **30/30** at `f703cdaf`. Raw: `traces/v3_appfix/`.
