@@ -470,6 +470,7 @@ pub fn host_facts() -> HostFacts {
         zbc_table_sizes: None,
         forwarded_fb_extra: vec![],
         gpu_cache_info: None,
+        gr_sm_issue_rate_modifier: None,
         forwarded_gpu_info: kf_abi::gpuinfo::GA106_FORWARDED_GPU_INFO.to_vec(),
         // The GA106's measured words (`kf_abi::fbinfo` tests: bus 0xc0, FBPs 3, LTS 18), which
         // the GA10x projections of its row reproduce.

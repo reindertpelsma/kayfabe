@@ -1134,6 +1134,15 @@ impl GspFsm {
                 // Consumed: the next publish needs a fresh pair, so a single later
                 // write cannot re-trigger against a half that is no longer current.
                 self.boot_args_seen = (false, false);
+                // ★ FSP regime: the address names GSP_FMC_BOOT_PARAMS, which points at the array.
+                let gpa = match model.boot_sequence().boot_args_indirection() {
+                    None => gpa,
+                    Some(off) => {
+                        let mut b = [0u8; 8];
+                        ram.read(gpa.checked_add(off).ok_or(GspFault::RmargsRegionAbsent { scanned: 0 })?, &mut b)?;
+                        u64::from_le_bytes(b)
+                    }
+                };
                 let mut r = self.publish(ram, model, policy, gpa)?;
                 report.transitions.push(Transition::E6);
                 report.transitions.append(&mut r.transitions);

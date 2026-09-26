@@ -496,6 +496,11 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
         // `kf-rm/tests/host_facts_query_ga106.rs::gr_zcull_info_is_the_hosts_reply_and_only_not_supported_means_none`
         // (the row is the host's own reply word for word; engine 0 only).
         WantedTable::GrZcullInfo,
+        // ⚠ 2026-09-26: `0x20800a34` SM_ISSUE_RATE_MODIFIER — the same GR static run, past `cap1b`'s
+        // closure limit. ★ Covered by the host's own client reply at realize
+        // (`HostFacts::gr_sm_issue_rate_modifier`), engine 0 only; `[measured GB203]` libcuda's
+        // `cuInit` needs the guest's client control served from it.
+        WantedTable::GrSmIssueRateModifier,
         // ⚠ v3-gfx: `0x20801315` FB_GET_GPU_CACHE_INFO — asked by the GL/Vulkan UMD, a process
         // `cap1b` (nvidia-smi) never ran. ★ Covered by the host's own reply at realize
         // (`HostFacts::gpu_cache_info`), served verbatim.
@@ -611,6 +616,12 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
         // `nvidia-smi` ask is not in the envelope this file judges). Its reply is pinned in
         // `kf-rm/tests/init_tables.rs::bios_get_info_v2_is_the_hosts_version_or_refused`.
         WantedTable::BiosGetInfoV2,
+        // ★ 2026-09-26 (`v3-mapfix` 56032c46): `McServiceInterrupts` (`0x20801702`) — asked only
+        // by a runtime WAITER after 1 s with no interrupt (clpeak's `clFinish`), never by the cold
+        // boot this capture records, so the replay cannot reach it. Refusing it forged the end of
+        // the guest's wait (`kf_abi::mcintr`); its reply is pinned in
+        // `kf-rm/tests/mc_service_interrupts.rs`.
+        WantedTable::McServiceInterrupts,
     ]
     .into_iter()
     .collect();
@@ -704,10 +715,14 @@ fn every_control_this_port_serves_is_exercised_by_the_replay() {
     // ⊘ 47 -> 48 and 28 -> 29 at v3-gfx (`0x20800a2c` ZCULL_INFO): past the closure limit, as
     // its GR static-info siblings are — 29 of 48 (60.4 %).
     // ⊘ 50 -> 51 and 31 -> 32 at v3-families (`0x20800810` BIOS_GET_INFO_V2): 32 of 51 (62.7 %).
-    assert_eq!(universe.len(), 51, "non-vacuity: the universe is not empty");
+    // ⊘ 51 -> 52 and 32 -> 33 at v3-blackwell (`0x20800a34` SM_ISSUE_RATE_MODIFIER, a GR
+    // static-info sibling past the closure limit): 33 of 52 (63.5 %).
+    // ⊘ 52 -> 53 and 33 -> 34 at the v3-mapfix merge (`0x20801702` MC_SERVICE_INTERRUPTS, a
+    // runtime waiter's call that no cold-boot capture contains): 34 of 53 (64.2 %).
+    assert_eq!(universe.len(), 53, "non-vacuity: the universe is not empty");
     assert_eq!(
         outside_the_closure_limit.len(),
-        32,
+        34,
         "non-vacuity in the other direction: the exception set is SMALL, and every entry \
          costs reply-plane coverage"
     );

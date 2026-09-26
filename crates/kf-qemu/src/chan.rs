@@ -536,6 +536,9 @@ pub struct ChanPlane {
     /// ★ The HOST async copy engine our rings run on (authored: the first copy engine the host
     /// says is not a GRCE).
     pub host_ce: u32,
+    /// ★ 2026-09-26: the served FIFO table — which runlist an engine's channels are on (the
+    /// Blackwell token index carries it, `kf_trap::tokenindex`).
+    engine_table: Vec<kf_abi::inittables::FifoDeviceEntry>,
     stop: AtomicBool,
     /// The host family (its generated class sets check a guest engine-object class).
     family: kf_chip::Family,
@@ -621,6 +624,7 @@ impl ChanPlane {
         tokens: usize,
         family: kf_chip::Family,
         intr_table: &[kf_abi::inittables::IntrTableEntry],
+        engine_table: &[kf_abi::inittables::FifoDeviceEntry],
     ) -> Result<ChanPlane, String> {
         // ★ Authored, never the guest's engine number: the first HOST copy engine that is not a
         // graphics CE. ⊘ A GRCE shares the GR runlist and routes subchannels 0-3 to GR — RM's
@@ -701,6 +705,7 @@ impl ChanPlane {
             poisoned: AtomicU64::new(0),
             births: AtomicU64::new(0),
             host_ce,
+            engine_table: engine_table.to_vec(),
             stop: AtomicBool::new(false),
             family,
             pt: Mutex::new(HashMap::new()),
@@ -1839,8 +1844,14 @@ impl ChanPlane {
         let Some(chid) = a.chid else {
             return refuse(NV_ERR_INVALID_STATE, format!("no guest chid in flags {:#x} (USERD_INDEX not fixed)", a.flags));
         };
-        let idx = chid & self.plane.token_mask;
-        if idx != chid || (idx as usize) >= self.plane.tokens.len() {
+        // ★ 2026-09-26: the index is per family (`kf_trap::tokenindex`) — on Blackwell chids are per
+        // runlist, and the runlist is the one the served FIFO table gives this engine (what the
+        // guest's own token carries in RUNLIST_ID). Through Hopper the runlist is ignored.
+        let runlist = kf_rm::authored::runlist_of_engine_type(&self.engine_table, engine).unwrap_or(0);
+        let Some(idx) = self.plane.token_index.of_channel(runlist, chid) else {
+            return refuse(NV_ERR_INSUFFICIENT_RESOURCES, format!("chid {chid:#x} (runlist {runlist}) outside the token table"));
+        };
+        if (idx as usize) >= self.plane.tokens.len() {
             return refuse(NV_ERR_INSUFFICIENT_RESOURCES, format!("chid {chid:#x} outside the token table"));
         }
         if passthrough {
@@ -2098,7 +2109,13 @@ impl ChanPlane {
                 }
                 if w != n.at_arm && (w[3] >> 16) != 0 {
                     n.reported = true;
-                    found.push(RcEvent { chid: t.idx, engine: t.engine, except_type: w[2], host_token: t.chan.token });
+                    found.push(RcEvent {
+                        // ★ 2026-09-26: the GUEST chid (the index carries the runlist on Blackwell).
+                        chid: self.plane.token_index.chid_of(t.idx),
+                        engine: t.engine,
+                        except_type: w[2],
+                        host_token: t.chan.token,
+                    });
                 }
             }
         }

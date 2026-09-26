@@ -328,7 +328,7 @@ impl Fixture {
             worker_wake: &self.wworker,
             drainer_wake: &self.wdrainer,
             ring: &self.ring,
-            token_mask: 0x1f,
+            index: crate::tokenindex::TokenIndex::Vector { mask: 0x1f },
             timer: timer::TIMER_GV100,
         }
     }

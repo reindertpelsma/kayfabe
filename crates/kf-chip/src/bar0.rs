@@ -103,6 +103,17 @@ const NV_PFB_PRI_MMU_LOCAL_MEMORY_RANGE_GP102: u64 = 0x0010_0CE0;
 const NV_PGC6_BSI_VPR_SECURE_SCRATCH_15: u64 = 0x0011_80FC;
 /// `SCRUBBER_HANDOFF_DONE << 29`.
 const SCRUBBER_HANDOFF_DONE: u32 = 3 << 29;
+/// `NV_THERM_I2CS_SCRATCH_FSP_BOOT_COMPLETE_STATUS_SUCCESS` (`blackwell/gb202/dev_therm_addendum.h:29`,
+/// the same value in the gh100/gb100 addenda).
+const FSP_BOOT_COMPLETE_SUCCESS: u32 = 0xFF;
+
+/// `NV_THERM_I2CS_SCRATCH` for the host's architecture: `0xAD00BC` on consumer Blackwell (GB20x,
+/// `blackwell/gb202/dev_therm.h:27`), `0x200BC` on Hopper and datacenter Blackwell
+/// (`hopper/gh100/dev_therm.h:26`, `blackwell/gb100/dev_therm.h:27`).
+#[must_use]
+pub const fn therm_i2cs_scratch(architecture: u32) -> u64 {
+    if architecture == crate::arch::GB200 { 0x00AD_00BC } else { 0x0002_00BC }
+}
 /// Access-counter notify buffer: two pages of 32-byte entries — advertised, never written (the old
 /// tree's `resume_from_fault.md` §S2 ruling: migration heuristics simply never fire).
 const ACCESS_COUNTER_ENTRIES_ADVERTISED: u32 = 2 * (4096 / 32);
@@ -180,6 +191,40 @@ pub fn boot_regs(family: Family, f: &Bar0Facts) -> Vec<BootReg> {
             });
         }
     }
+    // ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md`): the FSP families' FIRST boot poll.
+    // `kfspPrepareBootCommands_GH100` opens with `kfspWaitForSecureBoot_HAL` (`ogkm-580:
+    // kern_fsp_gh100.c:1299`), which spins (4–5 s, then "FSP secure boot partition timed out") until
+    // `NV_THERM_I2CS_SCRATCH_FSP_BOOT_COMPLETE` (the whole register, `dev_therm_addendum.h`) reads
+    // `_STATUS_SUCCESS` = `0xFF`. FSP writes it "after completion of boot out of chip reset"; we are
+    // the FSP and there is no earlier instant, so it is a static boot register. The OFFSET is per die
+    // group, and the host's architecture draws the line: GB20x (`arch 0x1B0`) binds
+    // `kfspWaitForSecureBoot_GB202` over `blackwell/gb202/dev_therm.h:27` = `0xAD00BC`; GH100 and
+    // GB10x bind `_GH100`/`_GB100` over `hopper/gh100` / `blackwell/gb100` `dev_therm.h:26-27` =
+    // `0x200BC`. ⊘ The model's `on_read` answer for it was never published (only `GspReg`s are).
+    if matches!(family, Family::Hopper | Family::Blackwell) {
+        v.push(BootReg {
+            off: therm_i2cs_scratch(f.architecture),
+            value: FSP_BOOT_COMPLETE_SUCCESS,
+            name: "NV_THERM_I2CS_SCRATCH_FSP_BOOT_COMPLETE",
+            from: Provenance::Ogkm("kfspWaitForSecureBoot_{GH100,GB100,GB202}: FSP boot complete = 0xFF"),
+        });
+    }
+    // ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §4): in a VM RM takes the PASSTHROUGH branch of
+    // `gpuReadBusConfigCycle_GM107` (`bIsPassthru`, `ogkm-580: gpu.c:4745-4769`; `kern_gpu_gm107.c:
+    // 103-106`), and on GH100/GB20x `gpuReadPassThruConfigReg_GH100` reads the config space's BAR0
+    // MIRROR: `DEVICE_BASE(NV_EP_PCFGM)` = `0x92000` (`hopper/gh100/dev_xtl_ep_pri.h:26`) + the
+    // offset (`kern_gpu_gh100.c:99-109`, bound for GH100 + GB20x, `g_gpu_nvoc.c:1197-1207`). So the
+    // link capabilities `config_words` presents at `0x6C` are ALSO served at `0x9206C` — the XVE
+    // mirror GA10x reads at `0x88084`, one family later. `[measured bws2]` without it UVM still saw
+    // "Unknown PCIe speed". ⊘ GB10x binds `_GB100` = a real config cycle; nothing to mirror.
+    if matches!(family, Family::Hopper | Family::Blackwell) && f.architecture != crate::arch::GB100 {
+        v.push(BootReg {
+            off: NV_EP_PCFGM + u64::from(NV_EP_PCFG_GPU_LINK_CAPABILITIES),
+            value: f.pcie_link_caps,
+            name: "NV_EP_PCFGM + NV_EP_PCFG_GPU_LINK_CAPABILITIES",
+            from: Provenance::Host("the host's PCIe link capability"),
+        });
+    }
     // ★ Ada only (`kgspExecuteScrubberIfNeeded_AD102`, `ogkm-580: kernel_gsp_ad102.c`; the image is
     // ALWAYS allocated on Ada — `kernel_gsp.c:3734` "WAR for Bug 5016200"). Before the booter runs,
     // RM reads SCRUBBER_HANDOFF and, below DONE, resets SEC2 and runs a scrubber HS ucode on it —
@@ -194,6 +239,56 @@ pub fn boot_regs(family: Family, f: &Bar0Facts) -> Vec<BootReg> {
         });
     }
     v
+}
+
+/// `DEVICE_BASE(NV_EP_PCFGM)` — the BAR0 mirror of PCI config space on GH100/GB20x
+/// (`ogkm-580: hopper/gh100/dev_xtl_ep_pri.h:26`, `0x92FFF:0x92000`).
+const NV_EP_PCFGM: u64 = 0x0009_2000;
+/// `NV_EP_PCFG_GPU_LINK_CAPABILITIES` (`hopper/gh100/dev_xtl_ep_pcfg_gpu.h:73`).
+const NV_EP_PCFG_GPU_LINK_CAPABILITIES: u16 = 0x6C;
+
+/// ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §4) — one dword of the device's **PCI configuration
+/// space** the guest driver reads with a real config cycle.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ConfigWord {
+    /// Config-space offset (dword-aligned).
+    pub off: u16,
+    /// The value, read-only to the guest.
+    pub value: u32,
+    /// The register's name.
+    pub name: &'static str,
+    /// Where the value comes from.
+    pub from: Provenance,
+}
+
+/// ★ The config-space words the guest reads by **config cycle** on this family — the same PCIe
+/// facts [`boot_regs`] serves through the BAR0 `NV_XVE` mirror on Turing … Ada.
+///
+/// `[measured GB203 bws1]` UVM_REGISTER_GPU failed `0x40` after *"calculatePCIELinkRateMBps:
+/// Unknown PCIe speed"*: from Hopper on, `gpuReadBusConfigReg` binds `_GH100` →
+/// `gpuReadBusConfigCycle_HAL`, an OS config-space read (`ogkm-580: kern_gpu_gh100.c:79-87`,
+/// `g_gpu_nvoc.c:1143-1155`), NOT the BAR0 mirror — and our conventional-PCI device had nothing
+/// there. `kbifGetGpuLinkCapabilities_IMPL` (`kernel_bif.c:879-902`) reads the address
+/// `kbifGetBusOptionsAddr_HAL` names, which is per die group:
+/// - GH100 + GB20x: `_GH100` → `NV_EP_PCFG_GPU_LINK_CAPABILITIES` = `0x6C`
+///   (`hopper/gh100/dev_xtl_ep_pcfg_gpu.h:73`; GB20x binds it, `g_kernel_bif_nvoc.c:965-982`);
+/// - GB10x: `_GB100` → `NV_PF0_LINK_CAPABILITIES` = `0x4C` (`blackwell/gb100/dev_pcfg_pf0.h:126`).
+///
+/// The value is the host's own link word, in the PCIe Link Capabilities layout the XVE mirror
+/// already uses (`pcie_link_caps`). Empty for Turing … Ada: their reads go through BAR0.
+#[must_use]
+pub fn config_words(family: Family, f: &Bar0Facts) -> Vec<ConfigWord> {
+    let off = match family {
+        Family::Turing | Family::Ampere | Family::Ada => return Vec::new(),
+        Family::Blackwell if f.architecture == crate::arch::GB100 => 0x4C,
+        Family::Hopper | Family::Blackwell => NV_EP_PCFG_GPU_LINK_CAPABILITIES,
+    };
+    vec![ConfigWord {
+        off,
+        value: f.pcie_link_caps,
+        name: "PCIe LINK_CAPABILITIES (config cycle)",
+        from: Provenance::Host("the host's PCIe link capability"),
+    }]
 }
 
 /// The host GPU's PCI identity — what the guest's driver binds on (read from the host's own config
@@ -217,23 +312,22 @@ pub struct PciIdentity {
 /// ⊘ Was `VBIOS_PROFILES.first()`: the GA106 row's version `0x9418_0000` on every die
 /// (2026-09-26, `V3_FAMILY_PORT_ADA.md` §2).
 ///
-/// ⊘ Hopper/Blackwell boot through FSP and do not run FWSEC from the VBIOS; what their ROM image must
-/// carry is not yet established from ogkm, so they are refused by name here rather than handed a
-/// falcon family's image.
+/// ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md`): **Hopper/Blackwell read no VBIOS image.** Their
+/// `kgspExtractVbiosFromRom` binds `_395e98` = `NV_ERR_NOT_SUPPORTED` (every chip outside the
+/// TU10x…AD10x mask, `ogkm-580: generated/g_kernel_gsp_nvoc.c:1283-1301`, `g_kernel_gsp_nvoc.h:1803`),
+/// which `kgspPrepareForBootstrap` treats as *"not supported"* ⇒ no FWSEC parse
+/// (`kernel_gsp.c:3990-4015`); FSP runs FWSEC itself. So the ROM carries only what the PCI layer
+/// reads (identity + version) and the FWSEC geometry in it is inert — the same image, never a
+/// per-family variant. ⊘ Was a `RowUnbuilt` refusal, which stopped every FSP-family realize.
 ///
 /// # Errors
-/// A family whose ROM content is not yet derived.
+/// None today; kept fallible for a family whose ROM would need content we cannot derive.
 pub fn vbios_profile(
     family: Family,
     id: PciIdentity,
     version: (u32, u8),
 ) -> Result<kf_abi::vbios::VbiosProfile, crate::RowUnbuilt> {
-    if matches!(family, Family::Hopper | Family::Blackwell) {
-        return Err(crate::RowUnbuilt {
-            family,
-            what: "VBIOS image: FSP families do not run FWSEC; their ROM contents are not yet derived from ogkm",
-        });
-    }
+    let _ = family;
     Ok(kf_abi::vbios::VbiosProfile {
         name: "derived (host PCI identity + host VBIOS version + generated FWSEC geometry)",
         pci_vendor_id: id.vendor,

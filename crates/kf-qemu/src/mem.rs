@@ -749,6 +749,8 @@ pub struct Bar1Overlay {
     pub removed: AtomicU64,
     /// Views refused (by the tracker or the C device), each named in the VA stats.
     pub refused: AtomicU64,
+    /// ★ 2026-09-26: doorbell writes (`+0x90`) that arrived through a BAR1 view (T1 evidence).
+    pub rings: AtomicU64,
 }
 
 impl Default for Bar1Overlay {
@@ -760,6 +762,7 @@ impl Default for Bar1Overlay {
             installed: AtomicU64::new(0),
             removed: AtomicU64::new(0),
             refused: AtomicU64::new(0),
+            rings: AtomicU64::new(0),
         }
     }
 }
@@ -911,10 +914,26 @@ impl Bar1Target {
             let Some(f) = self.inflight.borrow_mut().remove(&seq) else { continue };
             match (f.install, rc) {
                 (true, 0) => {
-                    self.overlay.installed.fetch_add(1, Ordering::Relaxed);
+                    // ★ 2026-09-26 (T1 evidence, `V3_BAR1_DOORBELL.md` §7): one bounded line per
+                    // view, on the VA thread — the heartbeat misses an arm shorter than its period.
+                    let n = self.overlay.installed.fetch_add(1, Ordering::Relaxed) + 1;
+                    if n <= 32 {
+                        eprintln!(
+                            "kf3: bar1db view LIVE #{n}: BAR1 {:#x}+{:#x} (usermode page {:#x}) now traps its doorbell",
+                            f.view.base, f.view.len, f.view.vf_rel
+                        );
+                    }
                 }
                 (false, 0) => {
-                    self.overlay.removed.fetch_add(1, Ordering::Relaxed);
+                    let n = self.overlay.removed.fetch_add(1, Ordering::Relaxed) + 1;
+                    if n <= 32 {
+                        eprintln!(
+                            "kf3: bar1db view REMOVED #{n}: BAR1 {:#x}+{:#x} (doorbells through BAR1 views so far: {})",
+                            f.view.base,
+                            f.view.len,
+                            self.overlay.rings.load(Ordering::Relaxed)
+                        );
+                    }
                 }
                 (true, e) => {
                     // ⊘ Its run was already acknowledged APPLIED: the view is retired here and its

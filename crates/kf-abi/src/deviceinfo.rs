@@ -654,6 +654,9 @@ pub fn encode_internal_device_info_table(
     let mut params = vec![0u8; INTERNAL_DEVICE_INFO_PARAMS_SIZE];
     let mut written = 0usize;
     let mut lce_fault_ids: Vec<u32> = Vec::new();
+    // `faultId - instanceId` per LCE: one value on a part whose copy-engine fault ids are the
+    // family's per-LCE block (`NV_PFAULT_MMU_ENG_ID_CE<i>` = `CE0 + i`).
+    let mut lce_fault_bases: Vec<i64> = Vec::new();
 
     for e in engines {
         let host_driven = e.engine_data[engine_info_type::IS_HOST_DRIVEN_ENGINE] != 0;
@@ -713,6 +716,7 @@ pub fn encode_internal_device_info_table(
         let type_enum = e.engine_data[engine_info_type::DEV_TYPE_ENUM];
         if type_enum == DEV_TYPE_ENUM_LCE {
             lce_fault_ids.push(fault_id);
+            lce_fault_bases.push(i64::from(fault_id) - i64::from(instance_id));
         }
 
         let at = DEVICE_INFO_TABLE_OFF + written * INTERNAL_DEVICE_INFO_STRIDE;
@@ -757,7 +761,16 @@ pub fn encode_internal_device_info_table(
     let first = lce_fault_ids[0];
     let last = lce_fault_ids[lce_fault_ids.len() - 1];
     let span = u64::from(last) - u64::from(first) + 1;
-    if span != lce_fault_ids.len() as u64 {
+    // ⊘ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §4): a GAP is legal when it is a floorswept
+    // LCE's own slot. `[measured GB203]` the host presents LCEs {0,1,4,5} → fault ids
+    // {65,66,69,70} (`blackwell/gb202/dev_fault.h:74-79`: CE<i> = 65 + i). The ids in the gap
+    // (67, 68) ARE copy-engine ids in the family's header — CE2/CE3, fused off — so RM's range
+    // test classifies them correctly, and host RM has the same range on the same die. What is
+    // still refused: duplicates, and any row whose id is not `CE0 + instance` for the SAME CE0
+    // as the others (an id in the gap that would belong to nobody).
+    let distinct = lce_fault_ids.windows(2).all(|w| w[0] != w[1]);
+    let one_block = lce_fault_bases.windows(2).all(|w| w[0] == w[1]);
+    if !(span == lce_fault_ids.len() as u64 || distinct && one_block) {
         return Err(DeviceInfoError::CopyEngineFaultIdsNotContiguous {
             first,
             last,
