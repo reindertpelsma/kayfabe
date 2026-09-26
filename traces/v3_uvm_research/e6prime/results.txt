@@ -1,0 +1,111 @@
+================================================================================
+E6' — finishing the N4 proof (raw-RM compute launcher + replayable-fault path)
+================================================================================
+Date: 2026-09-26
+Box:  vast.ai 52778545 (uvm6p), KVM template, RTX 3090 = GA102 (PCI 10de:2204),
+      full Ubuntu 22.04 VM w/ GPU via VFIO, root + CAP_SYS_MODULE + CAP_SYS_ADMIN.
+Driver: OPEN kernel module 580.159.04 — CONFIRMED BY CONTENT
+      (/proc/driver/nvidia/version: "NVIDIA UNIX Open Kernel Module ... 580.159.04";
+       nvidia-smi Driver Version 580.159.04). dkms Module.symvers regenerated:
+       76 nvUvmInterface* CRCs. CUDA toolkit 12.6 (nvcc) installed.
+GPU class (GetGpuInfo, from prior E6 on GA104, same GA10x family): host 0xc56f,
+      ce 0xc7b5, compute 0xc7c0. GA102 uses the same GA10x classes.
+
+MILESTONE TABLE (M1..M6 as defined in the task)
+--------------------------------------------------------------------------------
+  M1 raw compute launch works            : NOT REACHED (blocked pre-launch, see below)
+  M2 replayable fault reaches module     : NOT REACHED (needs M1)
+  M3 latency                             : NOT REACHED
+  M4 replay completes                    : NOT REACHED
+  M5 scoped cancel                       : NOT REACHED
+  M6 negative control                    : NOT REACHED
+
+  => Highest milestone: BELOW M1. But several PRE-M1 results that the N4 design
+     turned on were MEASURED for the first time (below). Prior E6 Stage A/B
+     (module owns the real HW replayable fault buffer + interrupt on stock
+     nvidia.ko, nvidia-uvm unloaded) remains valid and is the foundation.
+
+WHAT WAS NEWLY MEASURED (all on open 580.159.04, unprivileged userspace RM client)
+--------------------------------------------------------------------------------
+[A] ARCHITECTURE CONFIRMED FROM SOURCE — the module CANNOT allocate a compute
+    (GR) channel via the exported UVM interface. nvUvmInterfaceTsgAllocate /
+    ChannelAllocate reject every engineType except CE and SEC2:
+      nv_gpu_ops.c:6371-6372  if (engineType != CE && engineType != SEC2)
+                                  return NV_ERR_INVALID_ARGUMENT;
+      nv_gpu_ops.c:6390 comment "nvGpuOps only allocates channels/TSGs for CE
+                                  and SEC2 engine types."
+    => The userspace-RM-client split of design correction (2) is MANDATORY, not
+       just preferable: the faulting compute channel MUST be created by an
+       unprivileged userspace client and adopted by the module (Dup/Retain).
+
+[B] ***KEY RESULT*** Unprivileged userspace CAN create the N4 fault-capable VAS.
+    FERMI_VASPACE_A with flags = ENABLE_PAGE_FAULTING(BIT6) | IS_EXTERNALLY_OWNED(BIT3)
+    = 0x48  -> RM status 0x0 (NV_OK).  (nvos.h:3170,3173; vaspace_api.c:611-619
+    grants these flags with no privilege gate.)  This was previously only a
+    source reading in V3_UVM_DEMAND_PAGING §12.3.1(2); it is now measured.
+    (see box_out/rmlaunch_run.txt line "[S1] VAS FAULTING status=0x0")
+
+[C] The full unprivileged RM alloc chain works from userspace (all status 0x0):
+      NV01_ROOT client (RM-assigned handle), NV01_DEVICE_0, NV20_SUBDEVICE_0,
+      NV2080_CTRL_CMD_GPU_GET_ID (gpuId=0x8), FERMI_VASPACE_A (normal),
+      FERMI_VASPACE_A (fault-capable), NV01_MEMORY_SYSTEM (64 KiB, backing
+      confirmed: returned size=0x10000, attr=0xb2800000).
+    Userspace open sequence pinned: /dev/nvidiactl + /dev/nvidia0, then
+      NV_ESC_REGISTER_FD (0xC9) devfd->ctlfd (rc=0). RM escapes on ctlfd.
+
+[D] Compute-kernel + QMD prerequisites gathered and VALIDATED via libcuda:
+      k.cu = one global store `out[0]=7`. sm_86 cubin: REG=8, STACK/SHARED/LOCAL=0,
+      program .text.k = 256 B, constant bank0 = 0x168 B, param pointer at
+      c[0x0][0x160] (8 B) [box_out/k_sass.txt, k_elf.txt, k_resusage.txt].
+      libcuda (nvidia-uvm loaded) launched the same kernel: out=7 PASS — so the
+      kernel and its resource facts are ground truth for a hand-built QMD.
+    GA10x compute QMD is QMDV02 family (NVC7C0_SEND_PCAS_A=0x02b4 QMD_ADDRESS>>8,
+      SEND_PCAS_B=0x02b8). NOTE: the task's "version 3.x" is Ada/Hopper; GA10x
+      (0xc7c0) is V02_04. QMD layout header is NOT shipped in ogkm (only the
+      ancient cla0c0qmd.h V00_06) — a hand-built or captured QMD is required.
+
+[E] Fault-packet decode CORRECTED for the module (clc369.h): 32-byte entry,
+      faulting VA at dwords [2]/[3]  (ADDR_LO=MW(31:2*32+12), ADDR_HI=dw3),
+      inst_ptr at dwords [0]/[1], VALID = bit31 of dw7. The committed E6
+      skeleton decoded dw0/dw1 (= inst_ptr), which is WRONG for the VA.
+
+BLOCKER (exact call + status + source)
+--------------------------------------------------------------------------------
+Blocked while wiring the userspace RM client's memory mapping (needed before any
+channel/QMD work). A 64 KiB NV01_MEMORY_SYSTEM object allocates OK, but:
+
+  1. CPU map: NV_ESC_RM_MAP_MEMORY (0x4E) — SOLVED the ABI (needs the
+     nv_ioctl_nvos33_parameters_with_fd wrapper {NVOS33_PARAMETERS; int fd;},
+     is NV_CTL_DEVICE_ONLY so issued on ctlfd with fd=devfd; escape.c:507-534) —
+     the ioctl now succeeds (r=0) but RM returns status 0x1F = NV_ERR_INVALID_ARGUMENT
+     for BOTH hDevice and hSubdevice as the map handle. serverMap_Prologue
+     (mapping_cpu.c:876-958) passes for this case, so 0x1F arises in the map body
+     or rm_create_mmap_context (not fully root-caused in budget).
+
+  2. GPU-VA map: NV_ESC_RM_MAP_MEMORY_DMA (0x57, NVOS46, CTL_DEVICE_ONLY, hDma=VAS)
+     -> RM status 0x33 = NV_ERR_INVALID_OBJECT_HANDLE. Source: the map-dma path
+     hits "pSrcMemDesc != NULL -> NV_ERR_INVALID_OBJECT_HANDLE" (mapping.c:152) —
+     the source memory descriptor resolves NULL in the DMA-map context. Likely a
+     wrong-parent / needs-virtual-reservation issue (NV01_MEMORY_VIRTUAL) not
+     resolved in budget.
+
+=> Channel (AMPERE_CHANNEL_GPFIFO_A 0xc56f) + TSG + compute object (0xc7c0) +
+   USERD/doorbell/work-submit-token (NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN
+   0xc36f0108) + QMD build + launch were NOT attempted — they are downstream of
+   working memory mapping.
+
+GPU STATE: healthy at teardown. NO Xid, NO Node-Reboot (open 580.159.04, 0 MiB
+   used). box_out/dmesg_tail.txt: zero "Xid". (Contrast prior E6 Stage C, which
+   RC'd with Xid 39/154 from a NON-replayable CE fault — this run never submitted
+   GPU work, so no fault of any kind.)
+
+FILES
+--------------------------------------------------------------------------------
+  rmlaunch.c        the userspace raw-RM client (S0 alloc chain + S1 both VAS +
+                    S2 mem alloc/map). Compiles clean vs ogkm 580.159.04 SDK headers.
+  k.cu / box_out/k.ptx / k_sass.txt / k_elf.txt / k_resusage.txt   kernel + dumps
+  val.cu            libcuda validator (out=7 PASS)
+  build_kernel.sh / build_launch.sh / provision_uvm6.sh   repro scripts
+  provision.log     full provisioning log (open-580 swap, dkms 76 CRCs, cuda, ogkm)
+  box_out/rmlaunch_run.txt   the staged run output (the milestone evidence)
+  box_out/driver_version.txt, nvidia_smi.txt, dmesg_tail.txt   box state

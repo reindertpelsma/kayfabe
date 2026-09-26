@@ -816,7 +816,15 @@ faulting ⇒ externally owned (`:688-689`) and not with `SET_MIRRORED` (`:654`);
 kernel-privilege check there (`:172-179`) is for the `GPU_HOST` index, unrelated. ★ This is
 exactly **nvidia-uvm's own architecture** — `UVM_REGISTER_GPU_VASPACE` dups a userspace VAS
 (`kernel-open/nvidia-uvm/uvm_va_space.c:1531`) — and it **fits kayfabe with no new component**:
-the VMM is already the unprivileged RM client that creates the twin. Corrected N4 flow:
+the VMM is already the unprivileged RM client that creates the twin. ✔ **MEASURED by E6′ (2026-09-26, RTX 3090 GA102, open 580.159.04):** an unprivileged userspace RM
+client created `FERMI_VASPACE_A` with `ENABLE_PAGE_FAULTING | IS_EXTERNALLY_OWNED` (flags `0x48`)
+→ **`NV_OK`** (`traces/v3_uvm_research/e6prime/box_out/rmlaunch_run.txt`: `[S1] VAS FAULTING
+status=0x0`). Previously only a source reading; now measured. ★ And the split is **forced**, not
+just preferred: the exported `TsgAllocate` rejects every engine type except CE and SEC2
+(`nv_gpu_ops.c:6371-6373`, *"nvGpuOps only allocates channels/TSGs for CE and SEC2"*) — so the
+module **cannot** create the compute channel either; it must adopt one userspace created.
+
+Corrected N4 flow:
 1. the **VMM** (unprivileged) allocates the twin VAS with `ENABLE_FAULTING | IS_EXTERNALLY_OWNED`
    and the twin GR channel in it;
 2. the VMM passes the handles to kf-uvm.ko (an ioctl shaped like `UVM_REGISTER_GPU_VASPACE`);
@@ -846,6 +854,40 @@ the walker (§12.4).** With nvidia-uvm absent, `libcuda`'s `cuInit` fails (it ne
 the **guest's own libcuda** and executed on the twin, so kayfabe needs no QMD builder *for guest
 faults* — only for its own walker and for a host-only proof.
 
+⊘ **(5) CORRECTED — the faulting VAS is populated by the MODULE writing PTEs, never by RM
+`MAP_MEMORY_DMA`.** E6′ tried `NV_ESC_RM_MAP_MEMORY_DMA` into the VAS and got `0x33`
+`NV_ERR_INVALID_OBJECT_HANDLE` (`mapping.c:152`). That is the wrong mechanism, not a wall: RM
+reserves no VA and allocates no page tables in an externally-owned VAS
+(`src/nvidia/src/kernel/mem_mgr/gpu_vaspace.c:1419-1424`, `:3161-3168` — §4.1). The model is
+nvidia-uvm's own: ask RM for the PTE **values** of an RM allocation with
+`nvUvmInterfaceGetExternalAllocPtes` (`kernel-open/nvidia-uvm/uvm_map_external.c:187`) and write
+them into the page tree **the module owns** (`:241` `uvm_pte_batch_single_write_ptes`,
+`:280`/`:472` `map_rm_pt_range`, `:1155`). ⇒ In N4 the module is the page-table writer (it already
+holds the PDB via `SetPageDirectory`); RM only supplies encodings.
+
+⊘ **(6) The userspace client's CPU-map failure (`0x1f`) is an already-solved kf3 subtlety.** E6′'s
+`NV_ESC_RM_MAP_MEMORY` of a 64 KiB **system**-memory object returned `0x1f`
+`NV_ERR_INVALID_ARGUMENT`. kf3's own RM client documents why (R14,
+`crates/kf-host/src/lib.rs:972-990`): RM picks the **control** node's state for system memory and
+the device node's for a BAR address (`osapi.c:2270-2279`), and `nv_get_file_private` refuses a
+descriptor of the other kind (`kernel-open/nvidia/nv-usermap.c:45-47`). E6′ passed `fd=devfd` for a
+sysmem object — the wrong kind. ⇒ **Reuse kf-host's `map_cpu` (R14) — do not hand-roll the RM
+client in C**; it already encodes this and the subdevice-parent / device-mapper rule
+(`lib.rs:520-524`).
+
+⊘ **(7) CORRECTED — the GA10x compute QMD is V02_04, not "3.x"** (the E6′ prompt was wrong; V03 is
+Ada/Hopper). Methods `NVC7C0_SEND_PCAS_A=0x02b4` (QMD address >> 8) / `SEND_SIGNALING_PCAS_B=0x02bc`
+(`clc7c0.h:441-453`). ⚠ The **QMD layout is not shipped** in ogkm (only the old `cla0c0qmd.h`
+V00_06): it must be captured from a libcuda launch or hand-built from the kernel's cubin facts —
+E6′ gathered them (sm_86: 8 regs, 256-byte program, param pointer at `c[0x0][0x160]`, validated
+through libcuda: `out=7`).
+
+⊘ **Bug fixed in the committed E6 skeleton:** `kf_uvm_probe.c` decoded the fault VA as
+`(dw[1]<<32)|dw[0]` — but dwords 0/1 are `INST_LO/HI` (the instance pointer); the address is
+`ADDR = MW((31+3*32):(2*32+12))`, i.e. `dw2[31:12] + dw3` (`clc369.h:40-46`). It never ran on a real
+packet (Stage C's `PUT` never moved), so no result depended on it; fixed to
+`(dw[3]<<32)|(dw[2]&0xFFFFF000)`. E6′ caught it.
+
 **Operational findings (for whoever reruns this):**
 - ⊘ **A plain vast CUDA container cannot run E6.** It is an unprivileged Docker container
   (`CapEff` lacks `CAP_SYS_MODULE`/`CAP_SYS_ADMIN`; `delete_module` → `EPERM`), so `rmmod
@@ -863,6 +905,21 @@ buffer, decoded VA correct, **fault-to-module latency measured**, map + replay c
 with correct data, a VAS-scoped cancel leaves a second channel alive; or (b) **integrated**: the same
 module wired into kf3, the fault raised by a real guest `cudaMallocManaged` first touch — no QMD
 builder needed. (a) is the smaller, decisive step and also builds the walker's launcher.
+
+**E6′ — RESULT (2026-09-26, RTX 3090 GA102, open 580.159.04, KVM-template VM; evidence
+`traces/v3_uvm_research/e6prime/`).** ⊘ **Highest milestone: below M1** — no compute launch, so **no
+replayable fault, no latency, no replay/cancel/negative-control numbers.** GPU healthy (zero Xid;
+no work was submitted). What it **did** establish, all measured: the fault-capable VAS is creatable
+by an unprivileged client (✔, folded into (2)); the module cannot make a compute channel (✔ source,
+into (2)); the full unprivileged RM alloc chain works (client, device, subdevice, `GPU_GET_ID`, both
+VAS kinds, sysmem — all `NV_OK`); the kernel/QMD facts for sm_86, validated through libcuda. It
+stopped at **memory mapping** — and both blockers turn out to be **resolved in principle**, not walls:
+the CPU map is the known kf-host R14 descriptor-kind subtlety (6), and the GPU map was the wrong
+mechanism — the module writes PTEs (5). ⇒ **E6″** = E6′ redone on kf-host's proven client:
+kf-host CPU-maps the QMD/program/params (R14); the module adopts the VAS + compute channel and
+populates the target via `GetExternalAllocPtes`; a hand-built/captured V02_04 QMD launches the
+one-store kernel. That is the remaining bulk of the work, larger than one session — consistent
+with §12.4's estimate that the launcher is N4's single biggest cost.
 
 ### 12.4 Moving the walker off libcuda to raw RM — estimate (N4 removes host CUDA)
 
@@ -907,7 +964,7 @@ module built against nvidia.ko's exported, documented interface, with nvidia.ko 
 | **isolation from a compromised VMM** | must not trust it: every request names only kernel-issued ids for objects that VM's own process created; cancels use kernel-stored instance pointer / PDB; a kernel timeout bounds parked faults | same discipline, **plus** N4 owns replay and must rate-limit it itself (in b3, UVM's replay policy already exists). ★ Two structural helps, measured/sourced in E6: the module adopts only VAS/channel handles the **calling VMM's own RM client** created (`Dup`/`Retain` validate `hClient`), and every GPU op requires the caller to hold that GPU's fd (§12.3.1 (2)-(3)) |
 | twin page tables | RM-owned; published through UVM external-map ioctls ⇒ RM map executor, kind-override question, per-map TLB cost | the **VMM** creates the faulting VAS (unprivileged, as every CUDA process does); the module **adopts** it (`DupAddressSpace` + `SetPageDirectory`) and writes the page tables **directly** — those three kf3 questions vanish (§12.3.1 (2)) |
 | code | ~0.5–1 kLoC patch + kf3 publish-executor swap | ~2–4 kLoC module + ~1–2 kLoC raw-RM launcher — ⚠ the launcher is on the critical path **twice** (the walker **and** any host-only fault proof, §12.3.1 (4)) |
-| **measured feasibility (2026-09-26)** | not built; feasible from source (§4.4) | ✔ **core takeover measured**: sole UVM registrant + hardware fault buffer + interrupt on stock nvidia.ko (E6 Stages A/B). ⊘ replayable packet not yet shown (Stage C, E6′) |
+| **measured feasibility (2026-09-26)** | not built; feasible from source (§4.4) | ✔ **core takeover measured**: sole UVM registrant + hardware fault buffer + interrupt on stock nvidia.ko (E6 Stages A/B). ⊘ replayable packet not yet shown: E6′ stopped below M1 at memory mapping (both blockers resolved in principle, §12.3.1 (5)-(6)); **E6″** reuses kf-host's client |
 | shared by both | guest fault plane (§5); READ_ONLY hygiene (§6, done on `v3-roperm`) | same |
 
 **Recommendation, in those terms.** Both are feasible; the choice is which maintenance cost to

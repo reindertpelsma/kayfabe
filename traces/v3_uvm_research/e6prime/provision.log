@@ -1,0 +1,94 @@
+PROVISION_START 2026-09-26T16:39:20+00:00  kernel=6.8.0-59-generic
+=== PHASE 0: build deps + apt hygiene ===
+dpkg lock free after 0s
+Fetched 31.0 MB in 6s (5329 kB/s)
+Reading package lists...
+NEEDRESTART-KCUR: 6.8.0-59-generic
+NEEDRESTART-KEXP: 6.8.0-59-generic
+NEEDRESTART-KSTA: 1
+PHASE0_rc=0 gcc=gcc (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0 headers=/lib/modules/6.8.0-59-generic/build
+=== PHASE 1: clone kayfabe (v3-uvm-n4) ===
+Cloning into '/root/kayfabe'...
+Updating files:  86% (6396/7398)Updating files:  87% (6437/7398)Updating files:  88% (6511/7398)Updating files:  89% (6585/7398)Updating files:  90% (6659/7398)Updating files:  91% (6733/7398)Updating files:  92% (6807/7398)Updating files:  93% (6881/7398)Updating files:  94% (6955/7398)Updating files:  95% (7029/7398)Updating files:  96% (7103/7398)Updating files:  97% (7177/7398)Updating files:  98% (7251/7398)Updating files:  99% (7325/7398)Updating files: 100% (7398/7398)Updating files: 100% (7398/7398), done.
+PHASE1_rc=0 head=faa5301c branch=v3-uvm-n4
+=== PHASE 2: driver swap to OPEN 580.159.04 ===
+[drv] DRIVER_SWAP_START 2026-09-26T16:40:46+00:00
+[drv] before: NVRM version: NVIDIA UNIX x86_64 Kernel Module  575.51.03  Wed Apr 16 14:22:51 UTC 2025
+[drv] downloading NVIDIA-Linux-x86_64-580.159.04.run
+[drv] -rw-r--r-- 1 root root 397162548 Sep 26 16:40 /root/NVIDIA-Linux-x86_64-580.159.04.run
+[drv] dpkg lock free after 0s
+[drv] held packages: libnvidia-cfg1-575 libnvidia-common-575 libnvidia-compute-575 libnvidia-decode-575 libnvidia-encode-575 libnvidia-extra-575 libnvidia-fbc1-575 libnvidia-gl-575 nvidia-driver-575 
+[drv] Canceled hold on libnvidia-cfg1-575.
+[drv] Canceled hold on libnvidia-common-575.
+[drv] Canceled hold on libnvidia-compute-575.
+[drv] Canceled hold on libnvidia-decode-575.
+[drv] Canceled hold on libnvidia-encode-575.
+[drv] Canceled hold on libnvidia-extra-575.
+[drv] Canceled hold on libnvidia-fbc1-575.
+[drv] Canceled hold on libnvidia-gl-575.
+[drv] Canceled hold on nvidia-driver-575.
+[drv] unhold_rc=0
+[drv] holds remaining after unhold: 0  ⇒ MUST be 0
+[drv] modules still loaded: 0
+[drv] dpkg: warning: while removing nvidia-kernel-common-575, directory '/usr/lib/systemd/system' not empty so not removed
+[drv] dpkg: warning: while removing nvidia-kernel-common-575, directory '/usr/lib/modprobe.d' not empty so not removed
+[drv] Purging configuration files for nvidia-settings (575.51.03-0ubuntu1) ...
+[drv] Processing triggers for initramfs-tools (0.140ubuntu13.4) ...
+[drv] update-initramfs: Generating /boot/initrd.img-6.8.0-59-generic
+[drv] purge_rc=0  nvidia packages remaining: 6
+[drv] Verifying archive integrity... OK
+[drv] Uncompressing NVIDIA Accelerated Graphics Driver for Linux-x86_64 580.159.04......................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
+[drv] 
+[drv] WARNING: This NVIDIA driver package includes Vulkan components, but no Vulkan ICD loader was detected on this system. The NVIDIA Vulkan ICD will not function without the loader. Most distributions package the Vulkan loader; try installing the "vulkan-loader", "vulkan-icd-loader", or "libvulkan1" package.
+[drv] 
+[drv] 
+[drv] WARNING: Unable to determine the path to install the libglvnd EGL vendor library config files. Check that you have pkg-config and the libglvnd development libraries installed, or specify a path with --glvnd-egl-config-path.
+[drv] 
+[drv] installer_rc_IGNORED_ON_PURPOSE=0
+[drv] after: NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+[drv] modinfo: version:        580.159.04 license:        Dual MIT/GPL 
+[drv] OPEN_MODULE=yes
+[drv] VERSION_580=yes
+[drv] open /dev/nvidiactl: OK
+[drv] open /dev/nvidia0: OK
+[drv] open /dev/nvidia-uvm: OK
+[drv] NVIDIA GeForce RTX 3090, 580.159.04
+[drv] DRIVER_SWAP_DONE rc=0 2026-09-26T16:45:54+00:00
+PHASE2_provision_host_driver_rc=0
+driver now: NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+OPEN=yes
+V580=yes
+=== PHASE 3: dkms build (regenerate Module.symvers with nvUvm* CRCs) ===
+nvidia/580.159.04, 6.8.0-59-generic, x86_64: installed
+Public certificate (MOK): /var/lib/shim-signed/mok/MOK.der
+
+Building module(s)............................... done.
+Signing module /var/lib/dkms/nvidia/580.159.04/build/nvidia.ko
+Signing module /var/lib/dkms/nvidia/580.159.04/build/nvidia-uvm.ko
+Signing module /var/lib/dkms/nvidia/580.159.04/build/nvidia-modeset.ko
+Signing module /var/lib/dkms/nvidia/580.159.04/build/nvidia-drm.ko
+Signing module /var/lib/dkms/nvidia/580.159.04/build/nvidia-peermem.ko
+PHASE3_dkms_rc=0
+SYMVERS=/var/lib/dkms/nvidia/580.159.04/6.8.0-59-generic/x86_64/module/Module.symvers
+nvUvm_CRC_count=76
+=== PHASE 4: CUDA toolkit 12.6 (toolkit only, NO driver) ===
+Setting up cuda-keyring (1.1-1) ...
+Reading package lists...
+NEEDRESTART-VER: 3.5
+NEEDRESTART-KCUR: 6.8.0-59-generic
+NEEDRESTART-KEXP: 6.8.0-59-generic
+NEEDRESTART-KSTA: 1
+PHASE4_rc=0
+nvcc=/usr/local/cuda-12.6/bin/nvcc ver=Build cuda_12.6.r12.6/compiler.35059454_0
+=== PHASE 5: ogkm headers (open-gpu-kernel-modules 580.159.04) ===
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+PHASE5_rc=0 ogkm_head=b81d58e
+clc7c0.h: /root/ogkm/src/common/sdk/nvidia/inc/class/clc7c0.h
+clc56f.h: /root/ogkm/kernel-open/nvidia-uvm/clc56f.h
+=== PHASE 6: final state ===
+modules: nvidia_uvm nvidia_drm nvidia_modeset nvidia 
+NVIDIA GeForce RTX 3090, 580.159.04, GPU-3d04b7f2-6c38-5dfd-f25a-d642d279886f
+/dev/root        78G  8.2G   70G  11% /
+PROVISION_DONE rc=0 2026-09-26T16:48:13+00:00

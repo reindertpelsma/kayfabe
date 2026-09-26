@@ -253,10 +253,13 @@ static void stage_c(void)
         const volatile u8 *pkt = (const volatile u8*)g_fault.replayable.bufferAddress + (u64)idx*32;
         s64 lat_ns = ktime_to_ns(ktime_sub(tobs, t0));
         const volatile u32 *dw = (const volatile u32*)pkt;
-        u64 faddr = ((u64)dw[1] << 32) | dw[0];
+        /* clc369.h:40-46: dw0/1 = INST_LO/HI (the instance pointer), NOT the address.
+         * ADDR = MW((31+3*32):(2*32+12)): bits dw2[31:12] + dw3[31:0]; dw2[11:0] carries
+         * ADDR_PHYS_APERTURE etc. Corrected 2026-09-26 (E6' caught the dw0/1 decode). */
+        u64 faddr = ((u64)dw[3] << 32) | (dw[2] & 0xFFFFF000u);
         pr_info(KLOG "STAGE C: FAULT OBSERVED idx=%u fault-to-module latency=%lld ns\n", idx, lat_ns);
         hexdump32("STAGE C: raw fault packet", pkt);
-        pr_info(KLOG "STAGE C: decoded fault VA(dw0/1)=0x%llx (expected src ~0x%llx)\n",
+        pr_info(KLOG "STAGE C: decoded fault VA(dw2/3)=0x%llx (expected src ~0x%llx)\n",
                 (unsigned long long)(faddr & ~0xfffULL), (unsigned long long)UNMAPPED_SRC);
         pr_info(KLOG "STAGE C: PARTIAL PASS -- real HW fault reached the module\n");
     } else {

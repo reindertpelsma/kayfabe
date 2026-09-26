@@ -1,0 +1,20 @@
+=== rmlaunch E6' ===
+[S0] ctlfd=3 devfd=4
+[S0] register_fd(devfd->ctlfd) rc=0 errno=0
+[S0] client alloc r=0 status=0x0 hClient=0xc1d0015a (p.hClient=0xc1d0015a)
+[S0] device  status=0x0
+[S0] subdev  status=0x0
+[S0] GPU_GET_ID status=0x0 gpuId=0x8
+[S0] attach_gpus_to_fd(devfd) rc=-1 errno=22
+[S1] VAS normal   status=0x0
+[S1] VAS FAULTING status=0x0  (flags=0x48 ENABLE_PAGE_FAULTING|IS_EXTERNALLY_OWNED)
+[S1] ^ this is the feasibility test: can UNPRIV userspace create the N4 fault-capable VAS?
+   alloc_sysmem req=0x10000 status=0x0  ret: size=0x10000 attr=0xb2800000 attr2=0x9 addr=0x0
+[S2] sysmem alloc OK h=0xb0000001 size=0x10000
+   RM_MAP_MEMORY hDev=0xca000001 r=0 status=0x1f
+   RM_MAP_MEMORY hDev=0xca000002 r=0 status=0x1f
+[S2] cpu_map FAILED (continuing to gpu_map)
+   RM_MAP_MEMORY_DMA r=0 status=0x33 errno=22
+[S2] gpu_map FAILED
+[S2] summary: sysmem_alloc=OK cpu_map=FAIL gpu_map=FAIL
+[DONE] reached end of implemented stages
