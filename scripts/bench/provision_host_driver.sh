@@ -87,6 +87,10 @@ depmod -a
 
 sh "$RUN" --silent --no-x-check --no-nouveau-check --no-questions --dkms -m=kernel-open -j8 2>&1 | tail -15
 echo "installer_rc_IGNORED_ON_PURPOSE=$?"
+# ⊘ The installer overwrites /var/log/nvidia-installer.log on every run, so the NEXT swap destroys
+# the only statement of why THIS one failed (measured 2026-09-26: 565.57.01 and 550.54.14 failed
+# "Building kernel modules" and the log was gone one swap later). Keep a per-version copy.
+cp /var/log/nvidia-installer.log "/root/nvidia-installer-$(basename "$RUN" .run).log" 2>/dev/null
 
 # ---- verification: CONTENT, not exit codes ----
 modprobe nvidia 2>/dev/null
@@ -97,6 +101,7 @@ if echo "$VER" | grep -q "Open Kernel Module"; then
   echo "OPEN_MODULE=yes"
 else
   echo "OPEN_MODULE=no  ⊘ THE SWAP DID NOT TAKE -- do not run anything downstream"
+  grep -a -n -E "error:|Error |\*\*\*|conftest|FATAL" /var/log/nvidia-installer.log 2>/dev/null | head -20 | sed 's/^/  installer.log: /'
   echo "DRIVER_SWAP_DONE rc=4"; exit 4
 fi
 WANT=$(basename "$RUN" .run | sed 's/^NVIDIA-Linux-x86_64-//')
