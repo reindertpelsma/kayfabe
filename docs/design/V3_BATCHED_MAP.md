@@ -130,6 +130,56 @@ live channel runs in it keeps its batches mapped — as it keeps its rows today.
   family-independent RM API; the grain is 4 KiB on Turing … Blackwell; kinds are carried as before.
 - **Off switch** — `KF3_NO_BATCHED_MAP=1` restores the per-run path (A/B, and an escape hatch).
 
-## 7. Measured
+## 7. Measured — `vh` (vast 52624429: EPYC 7452 KVM guest ⇒ nested, RTX 3060 GA106, 580.159.04)
 
-See §7.1–7.3 (filled from the `vh` runs of this branch).
+Workload: `scripts/bench/uvm_reinit_box.sh` — fat guest (`KF_DEVICE=kf3`, 8 GiB, 4 vCPU), **no
+persistence mode**, 24 torch processes in a row (`x=torch.ones(1<<20,'cuda'); (x*2).sum()`), each
+a full adapter re-init. Parsed by the `mem large apply` / `census retire` lines (`KF_VAS_CENSUS=1`).
+
+### 7.1 Before / after
+
+| | before `bm0_nopm` (rev `577cb1ee`) | after `bm4_nopm` (rev `c0ebcda1`) |
+|---|---|---|
+| processes | **24/24** PASS | **24/24** PASS |
+| map of a 12 288-run space: host map verbs | 12 288 | **3** (3 batches ≤ 4 096 runs) |
+| … wall time (min / mean / max) | 234 / 265 / 273 ms | 286 / 352 / 409 ms |
+| exit unmap of the same space: host unmap verbs | 12 288 | **1** (one range) |
+| … wall time (min / mean / max) | 1 028 / 1 256 / 1 516 ms | **3 / 7 / 8 ms** |
+| map + unmap of that space | ~1 520 ms, ~24 600 host calls | **~360 ms, 4 verbs (8 RM ioctls incl. 3 descriptors + 3 frees)** |
+| whole CUDA space, lifetime (13 spaces of 13 075-16 552 runs) | ~15 k maps + ~15 k unmaps | **59 map calls + 42 unmap calls + 15 frees**; 437 ms map, 12 ms unmap (means) |
+| process wall time, procs 2-24 (min / mean / max) | 3 798 / **4 716** / 6 016 ms | 3 822 / **4 286** / 4 859 ms |
+
+(Proc 1 includes the cold boot of the guest driver: 17.0 s → 16.5 s.) Intermediate `bm2_nopm`
+(rev `b675274f`, before the reaper): 24/24, maps 428 ms, unmaps 7 ms, procs 4 321 ms mean.
+
+### 7.2 Where the map side's time went (`bm3_diag`, per 4 096-piece batch)
+
+stitch 25-59 ms (4 096 `MAP_FIXED` ≈ 6-14 µs each on this nested box) · descriptor 7-18 ms (RM
+pins + IOMMU-maps 4 096 pages) · **the view's `munmap` 80-97 ms** · the map itself **0.5 ms**.
+⇒ The `munmap` now runs on a reaper thread (`reap_view`, bounded queue of 2); handing it over costs
+~10 µs. ⊘ The map half is still **slower** than per-run (352 vs 265 ms): the stitch's `mmap`s and
+the reaper's concurrent `munmap` (same `mmap_lock`) are the floor here, not RM. The trade is taken
+because the unmap half — quadratic before (§1) — falls by ~1.25 s per process, and every later
+unmap in the space walks a list of tens of mappings instead of ~15 000.
+⚠ Open budget: a cheaper stitch (fewer VMA operations per piece) is the next lever on the map
+half; on a non-nested host the `mmap`/`munmap` costs are expected to be several times smaller —
+unmeasured.
+
+### 7.3 Verification
+
+- Unit: `kf-linux-raw` (stitch: page order, write-through to the file, refusals), `kf-mem` (batch
+  grouping, cap, fallback verdicts incl. HELD/FAILED, range grouping and its fallback, `BatchBook`
+  accounting) — `cargo test -p kf-linux-raw -p kf-mem -p kf-host -p kf-qemu -p kf-harness` green.
+- **v3 gates 9/9 at `c0ebcda1`** (`/workspace/bench/uvmwall/bm_gates.log` on vh). Gate 4 now
+  scatters its 192 channel pages across guest RAM in reverse order and asserts on the GPU:
+  `scattered_sysmem_rows_placed_as_one_batch` (1 batch, 192 runs, 1 map verb), all three
+  channels' **engine-written semaphores at the scattered pages** (page order through the batch is
+  right), `a_piece_of_a_batch_unmaps_alone` (a middle page by range; the object stays booked), and
+  `teardown_is_ranges_and_frees_the_batch` (2 ranges around the hole, the object freed once).
+- 24/24 no-PM torch processes (`bm2`, `bm4`), 0 batch fallbacks, 0 free refusals.
+- **30-arm fast suite 30/30 PASS at `c0ebcda1`** (`KF_DEVICE=kf3`, budget 180 s; vh `/workspace/bench/bmfs_suite.out`); arm times in line with earlier revisions (e.g. `--ce-client-guest-ram` 81 s vs 84-90 s).
+- ⊘ Found on the way (`bm1`, rev `366e6db1`): `kf_qemu::mem::Target` forwarded only the trait
+  methods that existed when it was written, so the new verbs hit the trait DEFAULT for every space
+  — 3 groups formed, **0** batched, and nothing said so except 3 surplus map verbs. Fixed by
+  explicit forwarding (`b675274f`). A trait default that means "not supported" is invisible
+  through a wrapper; the instrument that caught it was `map verbs = runs + 3`.
