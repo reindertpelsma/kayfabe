@@ -1,0 +1,6 @@
+Q5_START 2026-09-26T19:35:43+00:00 rev=9339ee6b host=580.159.04
+CLIENT_RC=0
+KF3_BUILD_RC=0 KF3_BUILT /workspace/bench/kf3-bins/9339ee6b/qemu-system-x86_64 rev=9339ee6b mtime=2026-09-26 19:36:17.550642492 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+TESTS_RC=0 passed=1601 failed=0
+V3_GATES_SUMMARY pass=0 fail=9 failed: kf-gate1(rc=1,verdict=FAIL) kf-gate2(rc=1,verdict=FAIL) kf-gate3(rc=1,verdict=FAIL) kf-gate4(rc=1,verdict=FAIL) kf-gate5(rc=1,verdict=FAIL) kf-gate6(rc=1,verdict=FAIL) kf-gate7(rc=1,verdict=FAIL) kf-gate8(rc=1,verdict=FAIL) kf-gate9(rc=1,verdict=FAIL)
+Q5_STOPPED gates not 9/9

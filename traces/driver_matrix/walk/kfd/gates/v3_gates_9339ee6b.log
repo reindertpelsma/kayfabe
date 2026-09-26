@@ -1,0 +1,55 @@
+V3_GATES_START 2026-09-26T19:37:21+00:00
+HEAD=9339ee6b dirty=0
+GPU=No devices were found
+warning: variable does not need to be mutable
+   --> crates/kf-harness/src/bin/kf-gate9.rs:329:9
+    |
+329 |     let mut gpu_at = |n: u64, v: &mut Vec<u64>, us: u64| {
+    |         ----^^^^^^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/kf-harness/src/bin/kf-gate4.rs:352:9
+    |
+352 |     let mut plane = Plane::for_family(&vmm, TOKEN_TABLE, (TOKEN_TABLE - 1) as u32, kf_chip::Family::Ampere, 16 << 20);
+    |         ----^^^^^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+=== kf-gate1
+CHECK run FAIL RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { call: "openat", errno: Some(5) }
+GATE1_VERDICT=FAIL
+=== kf-gate2
+CHECK run FAIL RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { call: "openat", errno: Some(5) }
+GATE2_VERDICT=FAIL
+=== kf-gate3
+CHECK run FAIL RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { call: "openat", errno: Some(5) }
+GATE3_VERDICT=FAIL
+=== kf-gate4
+CHECK run FAIL RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { call: "openat", errno: Some(5) }
+GATE4_VERDICT=FAIL
+=== kf-gate5
+CHECK run FAIL RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { call: "openat", errno: Some(5) }
+GATE5_VERDICT=FAIL
+=== kf-gate6
+CHECK run FAIL RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { call: "openat", errno: Some(5) }
+GATE6_VERDICT=FAIL
+=== kf-gate7
+CHECK run FAIL RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { call: "openat", errno: Some(5) }
+GATE7_VERDICT=FAIL
+=== kf-gate8
+CHECK run FAIL RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { call: "openat", errno: Some(5) }
+GATE8_VERDICT=FAIL
+=== kf-gate9
+CHECK ver2_run FAIL ver2: cuInit refused: 999 (CUDA_ERROR_UNKNOWN)
+CHECK ver3_run FAIL ver3: cuInit refused: 999 (CUDA_ERROR_UNKNOWN)
+CHECK ver2_growth_run FAIL ver2-growth: cuInit refused: 999 (CUDA_ERROR_UNKNOWN)
+CHECK throughput_run FAIL cuInit refused: 999 (CUDA_ERROR_UNKNOWN)
+GATE9_VERDICT=FAIL
+V3_GATES_SUMMARY pass=0 fail=9 failed: kf-gate1(rc=1,verdict=FAIL) kf-gate2(rc=1,verdict=FAIL) kf-gate3(rc=1,verdict=FAIL) kf-gate4(rc=1,verdict=FAIL) kf-gate5(rc=1,verdict=FAIL) kf-gate6(rc=1,verdict=FAIL) kf-gate7(rc=1,verdict=FAIL) kf-gate8(rc=1,verdict=FAIL) kf-gate9(rc=1,verdict=FAIL)
+V3_GATES_EXIT pass=0 fail=9 2026-09-26T19:38:11+00:00

@@ -1,0 +1,61 @@
+Q4H_START 2026-09-26T18:08:01+00:00 rev=6de22590 host=580.159.04 gpu=NVIDIA GeForce RTX 3080 Ti
+CLIENT_RC=0
+KF3_BUILD_RC=0 KF3_BUILT /workspace/bench/kf3-bins/6de22590/qemu-system-x86_64 rev=6de22590 mtime=2026-09-26 18:08:37.241640234 +0000 (shared build dir /workspace/bench/qemu-build-kf3)
+TESTS_RC=0 passed=1591 failed=0
+V3_GATES_SUMMARY pass=9 fail=0
+STAGE 575.57.08 rc=0 [2026-09-26T18:10:16+00:00] stage 575.57.08: STAGED ✔ /workspace/drivers/575.57.08
+STAGE 570.148.08 rc=0 [2026-09-26T18:12:10+00:00] stage 570.148.08: STAGED ✔ /workspace/drivers/570.148.08
+STAGE 565.57.01 rc=0 [2026-09-26T18:14:02+00:00] stage 565.57.01: STAGED ✔ /workspace/drivers/565.57.01
+STAGE 550.54.14 rc=0 [2026-09-26T18:15:04+00:00] stage 550.54.14: STAGED ✔ /workspace/drivers/550.54.14
+STAGE 590.48.01 rc=0 [2026-09-26T18:16:59+00:00] stage 590.48.01: STAGED ✔ /workspace/drivers/590.48.01
+STAGE 595.84 rc=0 [2026-09-26T18:18:50+00:00] stage 595.84: STAGED ✔ /workspace/drivers/595.84
+STAGING_DONE
+FG_DEFAULT_RC=0
+MATRIX_ROW host=580.159.04 guest=default rev=6de22590 FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+FAILPOINT guest=575.57.08 host=580.159.04 rev=6de22590 verdict=FAST_VERDICT=FAIL (raw client rc=1) first_refusal=[kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 100000), (20c, 100000)]: the background probe was refused or changed the answer — zero-probe bytes only]
+kf-rm: RPC-REFUSED #1 AllocClassNotPermitted { class: 50031, denial: NotOnAllowlist } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides
+kf-rm: RPC-REFUSED #2 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. 
+[    9.631006] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevi
+[    9.675414] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevi
+[    9.767638] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, N
+FAILPOINT guest=570.148.08 host=580.159.04 rev=6de22590 verdict=FAST_VERDICT=FAIL (raw client rc=1) first_refusal=[kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 100000), (20c, 100000)]: the background probe was refused or changed the answer — zero-probe bytes only]
+kf-rm: RPC-REFUSED #1 AllocClassNotPermitted { class: 50031, denial: NotOnAllowlist } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides
+kf-rm: RPC-REFUSED #2 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. 
+[    8.874813] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevi
+[    8.918376] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevi
+[    9.007454] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, N
+FAILPOINT guest=565.57.01 host=580.159.04 rev=6de22590 verdict=FAST_VERDICT=FAIL (raw client rc=1) first_refusal=[kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 100000), (20c, 100000)]: the background probe was refused or changed the answer — zero-probe bytes only]
+W349REFUSE cmd=0x20800aac why=unported-at-version struct=NV2080_CTRL_INTERNAL_BIF_GET_STATIC_INFO_PARAMS guest_driver=565.57.01 measured_size=16 encoder_size=4
+kf-rm: RPC-REFUSED #1 AllocClassNotPermitted { class: 50031, denial: NotOnAllowlist } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides
+kf-rm: RPC-REFUSED #2 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. 
+[    8.462741] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, N
+[    8.513130] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevi
+[    8.605294] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, N
+FAILPOINT guest=550.54.14 host=580.159.04 rev=6de22590 verdict=FAST_VERDICT=CRASH (budget 120s exceeded — a timeout IS a crash) first_refusal=[kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 100000), (20c, 100000)]: the background probe was refused or changed the answer — zero-probe bytes o
+W349REFUSE cmd=0x20800a40 why=unported-at-version struct=NV2080_CTRL_INTERNAL_GET_DEVICE_INFO_TABLE_PARAMS guest_driver=550.54.14 measured_size=9220 encoder_size=24580
+W349REFUSE cmd=0x20800aac why=unported-at-version struct=NV2080_CTRL_INTERNAL_BIF_GET_STATIC_INFO_PARAMS guest_driver=550.54.14 measured_size=16 encoder_size=4
+W349REFUSE cmd=0x20800a40 why=unported-at-version struct=NV2080_CTRL_INTERNAL_GET_DEVICE_INFO_TABLE_PARAMS guest_driver=550.54.14 measured_size=9220 encoder_size=24580
+[    8.624633] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from gpuConstructDeviceInfoTable_HAL(pGpu) @ kernel_fifo.c:2117
+[    8.676430] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kfifoConstructEngineList_HAL(pGpu, pKernelFifo) @ kernel_fifo_gm107.c
+[    8.714041] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, N
+Q4H_FAILPOINTS_EXIT 2026-09-26T18:40:07+00:00
+[2026-09-26T18:43:28+00:00] fat 590.48.01: STAGED ✔ /workspace/bench/guest-590.48.01.qcow2
+LADDER host=580.159.04 guest=590.48.01 rev=6de22590 4/4
+CL_ROW mode=guest rung=cup2 rep=1 verdict=PASS boot_rc=0 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]  trapped=10369
+CL_ROW mode=guest rung=cup3 rep=1 verdict=PASS boot_rc=0 graded=[CUP3_VAL=43]  trapped=10354
+CL_ROW mode=guest rung=cup8 rep=1 verdict=PASS boot_rc=0 graded=[CUP8_BAD=0 CUP8_MAXERR=0] CUP8_WALL_S=5 trapped=10505
+CL_ROW mode=guest rung=cup8bench rep=1 verdict=PASS boot_rc=0 graded=[GUEST_BENCH_TOTAL_BAD=0 GUEST_BENCH_VERDICT=PASS (every timed iteration verified)] BENCH_measure_WALL_S=5 trapped=10997
+[2026-09-26T18:53:04+00:00] fat 595.84: STAGED ✔ /workspace/bench/guest-595.84.qcow2
+LADDER host=580.159.04 guest=595.84 rev=6de22590 4/4
+CL_ROW mode=guest rung=cup2 rep=1 verdict=PASS boot_rc=0 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]  trapped=12242
+CL_ROW mode=guest rung=cup3 rep=1 verdict=PASS boot_rc=0 graded=[CUP3_VAL=43]  trapped=12249
+CL_ROW mode=guest rung=cup8 rep=1 verdict=PASS boot_rc=0 graded=[CUP8_BAD=0 CUP8_MAXERR=0] CUP8_WALL_S=5 trapped=12368
+CL_ROW mode=guest rung=cup8bench rep=1 verdict=PASS boot_rc=0 graded=[GUEST_BENCH_TOTAL_BAD=0 GUEST_BENCH_VERDICT=PASS (every timed iteration verified)] BENCH_measure_WALL_S=5 trapped=12922
+[2026-09-26T19:02:45+00:00] fat 575.57.08: STAGED ✔ /workspace/bench/guest-575.57.08.qcow2
+LADDER host=580.159.04 guest=575.57.08 rev=6de22590 0/4
+CL_ROW mode=guest rung=cup2 rep=1 verdict=FAIL boot_rc=0 graded=[]  trapped=6336
+CL_ROW mode=guest rung=cup3 rep=1 verdict=FAIL boot_rc=0 graded=[CUP3_VAL=NO_KERNEL_LINE]  trapped=6336
+CL_ROW mode=guest rung=cup8 rep=1 verdict=FAIL boot_rc=0 graded=[CUP8_BAD=NO_RESULT_LINE CUP8_MAXERR=NO_RESULT_LINE] CUP8_WALL_S=3 trapped=6328
+CL_ROW mode=guest rung=cup8bench rep=1 verdict=FAIL boot_rc=0 graded=[GUEST_BENCH_TOTAL_BAD=NO_LINE GUEST_BENCH_VERDICT=] BENCH_measure_WALL_S=3 trapped=6336
+INITFLAKE boots=30 adapter_failures=0
+Q4H_EXIT 2026-09-26T19:09:01+00:00
