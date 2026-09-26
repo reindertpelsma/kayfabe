@@ -441,6 +441,17 @@ item_ff_cuda(){
     ff_run overlay_cuda    nv12 "$I" "split[a][b];[a]hwupload_cuda[m];[b]scale=320:180,hwupload_cuda[o];[m][o]overlay_cuda=x=64:y=48,hwdownload,format=nv12"
     echo GSET_OK
 }
+# ONE ffmpeg process: the Vulkan device init at debug verbosity (the queue families and extensions
+# ffmpeg asks for) + one upload/download — the item to trace (GSET_NVDIFF=1) when ff_vulkan fails.
+item_ff_vulkan_init(){
+    nv_icd_only || return 0
+    gset_need "$FF" || return 0
+    "$FF" -hide_banner -v debug -init_hw_device vulkan=vk:0 -filter_hw_device vk -f lavfi -i testsrc2=size=256x256:rate=1 \
+        -frames:v 1 -vf format=nv12,hwupload,hwdownload,format=nv12 -f rawvideo -pix_fmt nv12 o.raw > ffv.txt 2>&1; rc=$?
+    grep -aiE 'vulkan|queue|extension|device|error|fail' ffv.txt | head -80
+    gset_dig frame "$(gset_md5 o.raw)"
+    [ $rc -eq 0 ] && [ -s o.raw ] && echo GSET_OK || echo "GSET_FAIL ffmpeg vulkan init rc=$rc: $(grep -m1 -aE 'failure|failed' ffv.txt)"
+}
 item_ff_vulkan(){
     nv_icd_only || return 0
     gset_need "$FF" || return 0; ff_src || { echo "GSET_FAIL source"; return 0; }

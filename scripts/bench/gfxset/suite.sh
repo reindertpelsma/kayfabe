@@ -50,8 +50,11 @@ if [ "${GSET_NO_HOST:-0}" != 1 ]; then
     # not content) are skipped there to save ~15 min — compare.py treats them as not re-measured
     I2=""; for a in ${ITEMS:-$(sed -n 's/^GSET_RES side=host item=\([^ ]*\) .*/\1/p' "$R/host.res")}; do
         case " ${GSET_HOST2_SKIP:-vkpeak geekbench_vulkan blender_opendata} " in *" $a "*) ;; *) I2="$I2 $a";; esac; done
-    mkdir -p "$R/h2" && bash "$HERE/host.sh" "$R/h2" $I2 > "$R/h2/host.console" 2>&1
-    cp -f "$R/h2/host.res" "$R/host2.res"; cp -f "$R/h2/host.dig" "$R/host2.dig"
+    # ⊘ an empty I2 must not reach host.sh, whose empty argument list means EVERY item
+    if [ -n "$(echo $I2)" ]; then
+        mkdir -p "$R/h2" && bash "$HERE/host.sh" "$R/h2" $I2 > "$R/h2/host.console" 2>&1
+        cp -f "$R/h2/host.res" "$R/host2.res"; cp -f "$R/h2/host.dig" "$R/host2.dig"
+    fi
     flock -u 9; exec 9>&-
 fi
 [ -n "$ITEMS" ] || ITEMS=$(sed -n 's/^GSET_RES side=host item=\([^ ]*\) .*/\1/p' "$R/host.res" | tr '\n' ' ')
