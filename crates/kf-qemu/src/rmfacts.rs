@@ -51,7 +51,7 @@ impl HostControls for Session<'_> {
                     let want = self.0.mint();
                     let h = self
                         .0
-                        .raw_alloc(self.0.subdevice(), want, 0x9096, &mut [])
+                        .raw_alloc(self.0.subdevice(), want, 0x9096, None, &mut [])
                         .map_err(|e| HostRefusal { status: nv_status(&e), detail: format!("GF100_ZBC_CLEAR alloc: {e:?}") })?;
                     self.0.remember(h, self.0.subdevice());
                     self.1 = Some(h);

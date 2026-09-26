@@ -179,7 +179,7 @@ impl HostRm {
             .encode_into(&mut params)
             .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         let want = self.mint();
-        let space = self.raw_alloc(self.device, want, VA_SPACE, &mut params)?;
+        let space = self.raw_alloc(self.device, want, VA_SPACE, Some(kf_abi::hostabi::HostParams::Measured(&kf_abi::generated::matrix::NV_VASPACE_ALLOCATION_PARAMETERS)), &mut params)?;
         self.remember(space, self.device);
         let mut range = [0u8; NvMemoryVirtualAllocationParams::SIZE];
         NvMemoryVirtualAllocationParams {
@@ -190,7 +190,7 @@ impl HostRm {
         .encode_into(&mut range)
         .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         let want = self.mint();
-        match self.raw_alloc(self.device, want, NV01_MEMORY_VIRTUAL, &mut range) {
+        match self.raw_alloc(self.device, want, NV01_MEMORY_VIRTUAL, Some(kf_abi::hostabi::HostParams::Measured(&kf_abi::generated::matrix::NV_MEMORY_VIRTUAL_ALLOCATION_PARAMS)), &mut range) {
             Ok(h) => {
                 self.remember(h, self.device);
                 let mut vas = VaSpace { space, range: h, guest: [GuestVaRange::default(); 2] };
@@ -226,7 +226,7 @@ impl HostRm {
         p[80..88].copy_from_slice(&at.to_le_bytes()); // offset
         p[108..112].copy_from_slice(&space.to_le_bytes()); // hVASpace
         let want = self.mint();
-        let h = self.raw_alloc(self.device, want, NV50_MEMORY_VIRTUAL, &mut p)?;
+        let h = self.raw_alloc(self.device, want, NV50_MEMORY_VIRTUAL, Some(kf_abi::hostabi::HostParams::Measured(&kf_abi::generated::matrix::NV_MEMORY_ALLOCATION_PARAMS)), &mut p)?;
         self.remember(h, self.device);
         Ok(h)
     }
@@ -460,7 +460,7 @@ impl HostRm {
         .encode_into(&mut tsg_params)
         .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         let want = self.mint();
-        let tsg = self.raw_alloc(self.device, want, CHANNEL_GROUP, &mut tsg_params)?;
+        let tsg = self.raw_alloc(self.device, want, CHANNEL_GROUP, Some(kf_abi::hostabi::HostParams::Measured(&kf_abi::generated::matrix::NV_CHANNEL_GROUP_ALLOCATION_PARAMETERS)), &mut tsg_params)?;
         self.remember(tsg, self.device);
         Ok(tsg)
     }
@@ -502,7 +502,7 @@ impl HostRm {
             return Err(RmError::Other(ABI_ENCODE_FAILED));
         }
         let want = self.mint();
-        let chan = self.raw_alloc(tsg, want, self.classes.gpfifo_channel().channel_id().0, &mut chan_params)?;
+        let chan = self.raw_alloc(tsg, want, self.classes.gpfifo_channel().channel_id().0, Some(kf_abi::hostabi::HostParams::Measured(&kf_abi::generated::matrix::NV_CHANNEL_ALLOC_PARAMS)), &mut chan_params)?;
         self.remember(chan, tsg);
         let unwind = |me: &Self| {
             let _ = me.free(chan);
@@ -541,7 +541,7 @@ impl HostRm {
         .encode_into(&mut params)
         .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
         let want = self.mint();
-        let h = self.raw_alloc(chan.chan, want, self.classes.ce_object().ce_object_id().0, &mut params)?;
+        let h = self.raw_alloc(chan.chan, want, self.classes.ce_object().ce_object_id().0, Some(kf_abi::hostabi::HostParams::Measured(&kf_abi::generated::matrix::NVB0B5_ALLOCATION_PARAMETERS)), &mut params)?;
         self.remember(h, chan.chan);
         Ok(h)
     }
@@ -564,7 +564,7 @@ impl HostRm {
         params[0..4].copy_from_slice(&2u32.to_le_bytes());
         params[8..12].copy_from_slice(&16u32.to_le_bytes());
         let want = self.mint();
-        let h = self.raw_alloc(chan.chan, want, class, &mut params)?;
+        let h = self.raw_alloc(chan.chan, want, class, Some(kf_abi::hostabi::HostParams::Measured(&kf_abi::generated::matrix::NV_GR_ALLOCATION_PARAMETERS)), &mut params)?;
         self.remember(h, chan.chan);
         Ok((h, class))
     }
@@ -594,8 +594,13 @@ impl HostRm {
                 &mut gr
             }
         };
+        let strukt = if copy_engine.is_some() {
+            kf_abi::hostabi::HostParams::Measured(&kf_abi::generated::matrix::NVB0B5_ALLOCATION_PARAMETERS)
+        } else {
+            kf_abi::hostabi::HostParams::Measured(&kf_abi::generated::matrix::NV_GR_ALLOCATION_PARAMETERS)
+        };
         let want = self.mint();
-        let h = self.raw_alloc(chan.chan, want, class, params)?;
+        let h = self.raw_alloc(chan.chan, want, class, Some(strukt), params)?;
         self.remember(h, chan.chan);
         Ok(h)
     }
@@ -613,8 +618,19 @@ impl HostRm {
         let mut p = [0u8; 12];
         p[0..4].copy_from_slice(&12u32.to_le_bytes());
         p[8..12].copy_from_slice(&engine_instance.to_le_bytes());
+        // The two blocks are one 12-byte layout at every measured tag, renamed NVENC/NVDEC at
+        // 610 — carried under the class's own name: `xxB7` is an encoder class, `xxB0` a decoder.
+        let m = &kf_abi::generated::matrix::NV_MSENC_ALLOCATION_PARAMETERS;
+        let strukt = if class & 0xff == 0xb7 {
+            kf_abi::hostabi::HostParams::Renamed { before: m, after: &kf_abi::generated::matrix::NV_NVENC_ALLOCATION_PARAMETERS }
+        } else {
+            kf_abi::hostabi::HostParams::Renamed {
+                before: &kf_abi::generated::matrix::NV_BSP_ALLOCATION_PARAMETERS,
+                after: &kf_abi::generated::matrix::NV_NVDEC_ALLOCATION_PARAMETERS,
+            }
+        };
         let want = self.mint();
-        let h = self.raw_alloc(chan.chan, want, class, &mut p)?;
+        let h = self.raw_alloc(chan.chan, want, class, Some(strukt), &mut p)?;
         self.remember(h, chan.chan);
         Ok(h)
     }
@@ -633,7 +649,7 @@ impl HostRm {
         params[4..8].copy_from_slice(&self.client.raw().to_le_bytes());
         params[8..12].copy_from_slice(&obj3d.to_le_bytes());
         let want = self.mint();
-        let h = self.raw_alloc(self.device, want, 0x83de, &mut params)?;
+        let h = self.raw_alloc(self.device, want, 0x83de, Some(kf_abi::hostabi::HostParams::Measured(&kf_abi::generated::matrix::NV83DE_ALLOC_PARAMETERS)), &mut params)?;
         self.remember(h, self.device);
         Ok(h)
     }
@@ -834,7 +850,7 @@ impl HostRm {
         p[16..24].copy_from_slice(&offset.to_le_bytes());
         p[24..32].copy_from_slice(&limit.to_le_bytes());
         let want = self.mint();
-        let h = self.raw_alloc(self.device, want, NV01_CONTEXT_DMA, &mut p)?;
+        let h = self.raw_alloc(self.device, want, NV01_CONTEXT_DMA, Some(kf_abi::hostabi::HostParams::Measured(&kf_abi::generated::matrix::NV_CONTEXT_DMA_ALLOCATION_PARAMS)), &mut p)?;
         self.remember(h, self.device);
         Ok(h)
     }
