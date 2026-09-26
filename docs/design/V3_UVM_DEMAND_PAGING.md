@@ -1001,6 +1001,54 @@ carry, and the table above is the ledger for it.
   kayfabe** (it is the only thing standing between two VMs' faults) and must be the first thing
   fuzzed: a corpus of fault packets across instance pointers, VEIDs and subcontexts, asserting each
   record reaches exactly the VM whose channel raised it and no other.
+- ⚠ **CORRECTION to §12.3.1(2):** that section reads RM's Dup/Retain path as enforcement that a
+  module "adopts only VAS/channel handles the calling VMM's own RM client created." Re-reading
+  `nvGpuOpsDupAddressSpace` and `nvGpuOpsRetainChannel` (`nv_gpu_ops.c`) finds no such check: both
+  resolve the caller-supplied `hClient`/handle pair through `serverutilGetResourceRef` /
+  `CliGetKernelChannel` with no comparison against who is calling. The **kernel source itself
+  says this is missing**: `uvm_va_space.c:1528-1530` and `uvm_user_channel.c:132-133,948` each
+  read *"TODO: Bug 1624521: This interface needs to use rm\_control\_fd to do validation"*, and
+  the fd is then explicitly discarded (`(void)user_rm_va_space->rm_control_fd;`). ⇒ if N4 is
+  built, **the module must do this validation itself** (compare the adopting fd's owning process,
+  or an explicit capability token, against the VMM that is asking) — it is not a property N4
+  inherits for free from RM, and §8's threat-model claim for b3/N4 alike ("map only RM objects its
+  own client holds") needs the same re-check before it is relied on for isolation. `[src]`
+
+## 12.6 E6″ phase 0 — the real driver's mapping and launch ioctl shape, measured
+
+E6′ stopped on two blockers: GPU-VA mapping into the externally-owned VAS (`0x33`) and CPU mapping
+of the backing sysmem (`0x1f`), and no compute launch. Rather than guess the fix from source, a
+**stock** box (nvidia-uvm loaded, no takeover) was used to capture the *exact* ioctl sequence and
+byte layout a real, unmodified `libcuda` sends for both — full results and raw traces in
+`traces/v3_uvm_research/e6pp/results.txt` (branch `v3-uvm-e6pp`, forked from this branch at
+`600b864a`). Method: an `LD_PRELOAD` logger on `ioctl()`/`mmap()` that decodes every UVM ioctl's
+`rmStatus` and every RM escape's class/command/status, changing nothing about the call.
+
+**Headline result:** every data allocation libcuda makes is `RM_ALLOC` (class `0x0040`
+`NV01_MEMORY_USER` for vidmem, or `0x003e` `NV01_MEMORY_SYSTEM` for sysmem) followed by exactly one
+`UVM_CREATE_EXTERNAL_RANGE` + one `UVM_MAP_EXTERNAL_ALLOCATION` pair — never a raw
+`NV_ESC_RM_MAP_MEMORY_DMA` into the VAS. This confirms §12.3.1(5)'s diagnosis (E6′'s `0x33` was
+the wrong mechanism) with the real driver's own traffic rather than only a source reading, and it
+gives the exact byte layout of `UVM_MAP_EXTERNAL_ALLOCATION_PARAMS` as sent
+(base/length/rmCtrlFd/hClient/hMemory/gpuUuid/gpuAttributesCount/mappingType), byte-for-byte
+matching what the independent `tinygrad` NV backend builds from the struct definitions. A sysmem
+allocation additionally takes a CPU-side `NV_ESC_RM_MAP_MEMORY` **between** the RM alloc and the
+external-range pair — E6′'s `0x1f` came from attempting that map with the wrong handle/ordering,
+consistent with §12.3.1(6). tinygrad's own NV backend independently ran a real kernel on this same
+stock box (`tinygrad NV ok`), a second, libcuda-free confirmation of the same call shape.
+
+⊘ **Correction to §12.3.1(7):** ogkm does not ship the QMD layout, but NVIDIA's separate
+`open-gpu-doc` repository (MIT-licensed, the source the ogkm compute-class headers are generated
+from) ships `classes/compute/clc7c0qmd.h` in full, with `QMDV02_03`, `QMDV02_04` and `QMDV03_00`
+all defined. The "hand-build a QMD with no reference layout" cost in §12.4 is smaller than stated:
+the layout exists and is public; what is still missing once nvidia-uvm is unloaded is a compiler
+(libcuda's JIT), not the QMD's field layout.
+
+**What phase 0 does not answer:** it kept nvidia-uvm loaded, so it is not a repeat of E6/E6′'s
+takeover test and produces no fault, latency, replay or cancel numbers. Those still require a
+module-present run (E6″ proper): adopt the VAS/channel per §12.3.1(2), then drive the same
+`UVM_CREATE_EXTERNAL_RANGE`/`UVM_MAP_EXTERNAL_ALLOCATION` calls captured here against the
+module's adopted VAS instead of nvidia-uvm's own.
 
 ---
 

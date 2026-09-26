@@ -1,0 +1,175 @@
+================================================================================
+E6'' phase 0 — real-hardware capture of the UVM ioctl surface a stock CUDA
+program uses for memory mapping and channel setup (the two things E6' blocked on)
+================================================================================
+Date: 2026-09-27
+Box:  vast.ai 52828723, container, RTX 3060 (GA106, PCI 0x2504:10DE), STOCK open
+      kernel module 580.126.20, nvidia-uvm LOADED (no unload, no kernel build —
+      this phase answers "what does the real driver actually do", not the
+      takeover question, which E6/E6' already answered on GA104/GA102).
+Method: LD_PRELOAD logger (nvioctl_log.c, this dir) intercepts ioctl()/mmap() on
+      any fd resolving to /dev/nvidia-uvm, /dev/nvidiactl or /dev/nvidiaN,
+      decodes RM's NVOS21/54/46 escape structs and every UVM_* ioctl's rmStatus,
+      and passes the real call through unchanged. Full traces: log_libcuda.txt
+      (487 events), log_tinygrad.txt (5 events, see NOTE below), phase0.out.
+
+WHAT WAS MEASURED
+--------------------------------------------------------------------------------
+(A) A stock CUDA program (val.cu: cudaMalloc, cudaMemset, launch, sync, memcpy
+    — the same E6' validator kernel, `out[0]=7`) runs correctly under the
+    logger with zero behavior change: VALIDATOR out=7 PASS. The logger is
+    non-invasive.
+
+(B) libcuda's init sequence, in order (log_libcuda.txt:1-15):
+      RM_ALLOC class=0x0041 (NV01_ROOT_CLIENT) -> RM_ALLOC class=0x0041 again
+      (second client) -> UVM_INITIALIZE(0x30000001) rmStatus=0x0
+      -> UVM_MM_INITIALIZE(75) rmStatus=0x0 -> UVM_PAGEABLE_MEM_ACCESS(39)
+      rmStatus=0x0 args=01000000.
+    tinygrad's NV backend hits the IDENTICAL first four calls in the IDENTICAL
+    order (log_tinygrad.txt:1-4: RM_ALLOC class=0x41, CONTROL cmd=0x13e,
+    UVM_INITIALIZE(805306369)=0x30000001, UVM_MM_INITIALIZE(75)) — two
+    independent implementations (proprietary libcuda, and tinygrad's from-
+    source NV backend) agree on the init order. This cross-checks
+    ops_nv.py's own sequence (§1 of the parent doc's tinygrad citation).
+
+(C) *** THE MAPPING ANSWER (blocker 1) *** — the real byte layout of
+    UVM_CREATE_EXTERNAL_RANGE and UVM_MAP_EXTERNAL_ALLOCATION as libcuda
+    actually sends them (log_libcuda.txt, first occurrence at line ~200,
+    17 more occurrences through teardown):
+
+      UVM_CREATE_EXTERNAL_RANGE(73) args=
+        00000000 02000000 00002000 00000000 00000000
+        ^base_lo ^base_hi ^length_lo ^length_hi ^(pad/rmStatus follows)
+      decoded: base=0x0000000200000000, length=0x2000 (one 8KiB range)
+
+      UVM_MAP_EXTERNAL_ALLOCATION(33) args=
+        00000000 02000000 00002000 00000000 00000000 00000000
+        bb4b845e 73647656 2af346b4 f619b22f
+        01000000 00000000 00000000 00000000 00000000 00000000
+        ^base=same as above  ^length=same  ^rmCtrlFd=0(caller's own ctl fd)
+        ^hClient/hMemory region ^gpuUuid (16 bytes, this GPU's UUID)
+        ^gpuAttributesCount=1  ^perGpuAttributes[0].gpuMappingType=... (rest 0)
+
+      This is byte-for-byte the UVM_MAP_EXTERNAL_ALLOCATION_PARAMS shape
+      ops_nv.py builds (base, length, rmCtrlFd, hClient, hMemory,
+      gpuAttributesCount, perGpuAttributes[], mapped_gpu_ids[]) — now
+      confirmed against the real, closed-source driver's own traffic, not
+      just against tinygrad's source.
+
+      Pattern across all 25 occurrences (log_libcuda.txt): every data
+      allocation is RM_ALLOC class=0x0040 (NV01_MEMORY_USER, vidmem) or
+      class=0x003e (NV01_MEMORY_SYSTEM, sysmem) FOLLOWED BY exactly one
+      UVM_CREATE_EXTERNAL_RANGE + one UVM_MAP_EXTERNAL_ALLOCATION pair, e.g.:
+        RM_ALLOC class=0x0040 new=0x5c000071
+        UVM_CREATE_EXTERNAL_RANGE  args=0000e066 ed770000 00002000 ...
+        UVM_MAP_EXTERNAL_ALLOCATION args=0000e066 ed770000 00002000 ...
+      A sysmem allocation additionally takes a CPU-side RM_MAP_MEMORY
+      (esc=0x4e) between the alloc and the external-range pair:
+        RM_ALLOC class=0x003e new=0x5c000073
+        CONTROL cmd=0x00000d01 obj=0xc1d6538d   (query? size/attr)
+        RM ctl esc=0x4e   (NV_ESC_RM_MAP_MEMORY — CPU map, succeeds)
+        UVM_CREATE_EXTERNAL_RANGE  args=00000067 ed770000 00002000 ...
+        UVM_MAP_EXTERNAL_ALLOCATION args=00000067 ed770000 00002000 ...
+      ⇒ this is the exact ordering E6' was missing when its own
+      NV_ESC_RM_MAP_MEMORY attempt returned 0x1f and its
+      NV_ESC_RM_MAP_MEMORY_DMA attempt returned 0x33: E6' tried to put PTEs
+      in the externally-owned VAS via a raw RM escape instead of via
+      UVM_MAP_EXTERNAL_ALLOCATION, and it CPU-mapped before establishing the
+      GPU-VA range rather than after. §12.3.1(5)/(6) of the parent doc
+      diagnosed this from source; this run shows the real call order.
+
+(D) *** THE LAUNCH ANSWER (blocker 2) *** — RM classes actually allocated by
+    libcuda (log_libcuda.txt, full count):
+        22x 0x003e NV01_MEMORY_SYSTEM        16x 0xc7b5 AMPERE_DMA_COPY_B (CE)
+        16x 0xc56f AMPERE_CHANNEL_GPFIFO_A   15x 0x0040 NV01_MEMORY_USER (vidmem)
+         8x 0xc7c0 AMPERE_COMPUTE_B           7x 0x0079 NV01_EVENT_OS_EVENT
+         3x 0xa06c KEPLER_CHANNEL_GROUP_A     2x 0x90f1 FERMI_VASPACE_A
+         2x 0x0041 NV01_ROOT_CLIENT           1x 0xcb33 NV_CONFIDENTIAL_COMPUTE
+         1x 0xc461 TURING_USERMODE_A          1x 0x9067 FERMI_CONTEXT_SHARE_A
+         1x 0x83de GT200_DEBUGGER             1x 0x50a0 NV50_MEMORY_VIRTUAL
+         1x 0x2081 NV2081_BINAPI              1x 0x2080 NV20_SUBDEVICE_0
+         1x 0x00de (SET_COLOR_TARGET fragment,within a control blob, not a real class)
+         1x 0x0080 NV01_DEVICE_0
+    ⇒ AMPERE_COMPUTE_B (0xc7c0) is allocated 8 times (multiple contexts /
+    debug object per ops_nv.py's debug_compute_obj) but the CHANNEL classes
+    (0xc56f gpfifo, 0xa06c TSG) and the mapping mechanism (C) are the same
+    ones tinygrad's from-source, libcuda-free NV backend builds by hand and
+    launches through, per the parent doc's tinygrad citation. This run adds
+    NO new class to that list; it CONFIRMS the list is complete and that
+    the real driver uses nothing exotic. GT200_DEBUGGER(0x83de) appears
+    because CUDA's default context enables the SM debugger API; a minimal
+    launcher does not need it (tinygrad's ops_nv.py never allocates it
+    outside its optional debug path).
+
+    UVM_REGISTER_GPU_VASPACE(25) args=
+        bb4b845e 73647656 2af346b4 f619b22f 08000000 8d53d6c1 0e00005c
+        ^gpuUuid(16B)                        ^rmCtrlFd=8 ^hClient  ^hVaSpace
+    UVM_REGISTER_CHANNEL(27) args=
+        bb4b845e 73647656 2af346b4 f619b22f 08000000 8d53d6c1 2000005c
+        00000000 00004003 02000000 0080eb00 00000000 00000000
+        ^gpuUuid            ^rmCtrlFd ^hClient ^hChannel ^base(pad)
+                                                          ^base=0x300400_...
+    Two REGISTER_CHANNEL calls appear (compute + copy channel, matching
+    ops_nv.py's two-fifo "COMPUTE:0"/"COPY:0" setup exactly).
+
+(E) UVM_PAGEABLE_MEM_ACCESS_ON_GPU(70) args=<gpuUuid> 01000000 rmStatus=0x0
+    and UVM_ALLOC_SEMAPHORE_POOL(68) both succeed with the same gpuUuid
+    bytes seen throughout — one GPU, one uuid, consistent across the run.
+
+NOTE on log_tinygrad.txt (5 lines only)
+--------------------------------------------------------------------------------
+tinygrad's NV backend DID initialize on this stock box and DID run a real
+kernel: stdout shows "tinygrad NV ok [1, 3, 5] 2047" (Tensor.arange then a
+GPU-side *2+1, byte-exact) — a SECOND, independent, libcuda-free confirmation
+that this driver/box/GPU combination runs real compute through the NV backend
+described in (C)/(D). The log stops at 5 lines (RM_ALLOC root client, one
+CONTROL, UVM_INITIALIZE, UVM_MM_INITIALIZE, one CARD_INFO escape) because the
+rest of that device's setup and every subsequent op ran inside a
+multiprocessing compile-worker subprocess whose ioctls this preload run did
+not capture (a logger-coverage gap, not a driver behavior) — separately,
+tinygrad's matmul call then hit an unrelated Python 3.10-vs-3.11 stdlib
+mismatch (a second worker process failing to pick ANY interface, "No
+interface for NV:0 is available") that is a packaging issue in this
+environment, not evidence about the driver. Not chased further: (C)/(D)
+above, from libcuda's own traffic, already answer both blockers, and per the
+parent doc (12.3.1(4)) the integrated design serves the GUEST's libcuda
+anyway, making the libcuda trace the more load-bearing of the two.
+
+WHAT THIS DOES NOT ANSWER
+--------------------------------------------------------------------------------
+This run kept nvidia-uvm LOADED — it is not a repeat of E6/E6's takeover test
+(module owns the fault buffer with nvidia-uvm absent), which E6 already PASSED
+on GA104 and which does not need repeating. It also submits no deliberately-
+unmapped access, so it produces no fault, no latency and no replay/cancel
+numbers — those still require the M1..M6 sequence in E6/E6' with a module
+present. What it adds is the missing middle step: the EXACT ioctl shape and
+call order for mapping (C) and the confirmed, unchanged class list for launch
+(D), against which the next module-present run can be built and checked call-
+by-call instead of guessed from struct definitions.
+
+FILES
+--------------------------------------------------------------------------------
+  nvioctl_log.c, gen_uvm_table.c, uvm_list.inc, uvm_table.h   the logger + its
+                    generated UVM-ioctl name/size table (from ogkm-580.159.04
+                    kernel-open/nvidia-uvm/uvm_ioctl.h)
+  val.cu, k.cu      the E6' validator kernel, reused unmodified
+  phase0.sh         the box-side driver: builds the logger, runs val under it,
+                    runs tinygrad under it, prints ioctl histograms
+  phase0.out        console output of the run
+  log_libcuda.txt   487-line raw trace (source for all decoded fields above)
+  log_tinygrad.txt  5-line raw trace (see NOTE)
+
+NEXT STEP
+--------------------------------------------------------------------------------
+E6'' proper: repeat E6/E6' (module present, nvidia-uvm absent, unprivileged
+userspace creates VAS+channel, module adopts via Dup/Retain/Bind) and, once
+the module has adopted the VAS, drive the SAME UVM_CREATE_EXTERNAL_RANGE /
+UVM_MAP_EXTERNAL_ALLOCATION calls captured here — now against the module's
+adopted VAS instead of nvidia-uvm's own — to place the QMD/program/params.
+The module has no compiler, so libcuda still cannot run once nvidia-uvm is
+unloaded (per parent doc 12.4); the launcher stays a hand-built or captured
+QMD, and clc7c0qmd.h (NVIDIA's own open-gpu-doc repo, MIT) ships the
+QMDV02_03/02_04/03_00 layouts in full — this corrects parent-doc 12.3.1(7),
+which said the layout "is NOT shipped in ogkm" (true for ogkm specifically;
+false for NVIDIA's separate open-gpu-doc repository, which is the class
+header source ogkm's own compute-class files are generated from).

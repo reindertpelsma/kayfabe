@@ -1,0 +1,487 @@
+244243211.072 pid=508 RM ctl esc=0xd6 ret=0
+244243211.122 pid=508 RM ctl esc=0xc8 ret=0
+244243211.236 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x0041 parent=0x0 new=0xc1d6538c status=0x0
+244243211.268 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000101 obj=0xc1d6538c status=0x0
+244243211.437 pid=508 RM ctl esc=0x29 ret=0
+244243211.530 pid=508 RM ctl esc=0xd6 ret=0
+244243211.542 pid=508 RM ctl esc=0xc8 ret=0
+244243211.600 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x0041 parent=0x0 new=0xc1d6538d status=0x0
+244243211.628 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000d04 obj=0xc1d6538d status=0x0
+244243211.642 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000d04 obj=0xc1d6538d status=0x0
+244243211.678 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xcb33 parent=0xc1d6538d new=0x5c000001 status=0x0
+244243211.708 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x000001f0 obj=0xc1d6538d status=0x0
+244243212.095 pid=508 UVM UVM_INITIALIZE(805306369) ret=0 rmStatus=0x0 args=00000000 00000000 00000000 
+244243212.123 pid=508 UVM UVM_MM_INITIALIZE(75) ret=0 rmStatus=0x0 args=0a000000 
+244243212.137 pid=508 UVM UVM_PAGEABLE_MEM_ACCESS(39) ret=0 rmStatus=0x0 args=01000000 
+244243212.167 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000214 obj=0xc1d6538d status=0x0
+244243212.190 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000a04 obj=0xc1d6538d status=0x0
+244243212.206 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000215 obj=0xc1d6538d status=0x0
+244243212.291 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000215 obj=0xc1d6538d status=0x0
+244243212.394 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000215 obj=0xc1d6538d status=0x0
+244243212.463 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000215 obj=0xc1d6538d status=0x0
+244243212.529 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000215 obj=0xc1d6538d status=0x0
+244243212.596 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000215 obj=0xc1d6538d status=0x0
+244243212.663 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000215 obj=0xc1d6538d status=0x0
+244243212.729 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000215 obj=0xc1d6538d status=0x0
+244243212.821 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0xcb330101 obj=0x5c000001 status=0x0
+244243212.840 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000288 obj=0xc1d6538d status=0x0
+244243212.863 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000205 obj=0xc1d6538d status=0x0
+244243212.876 pid=508 RM ctl esc=0x29 ret=0
+244243212.890 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000201 obj=0xc1d6538d status=0x0
+244243212.904 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243212.983 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000216 obj=0xc1d6538d status=0x0
+244243213.040 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000205 obj=0xc1d6538d status=0x0
+244243213.061 pid=508 RM ctl esc=0x29 ret=0
+244243213.077 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000201 obj=0xc1d6538d status=0x0
+244243213.092 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243213.108 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243213.188 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000216 obj=0xc1d6538d status=0x0
+244243213.210 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000205 obj=0xc1d6538d status=0x0
+244243213.223 pid=508 RM ctl esc=0x29 ret=0
+244243213.237 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000201 obj=0xc1d6538d status=0x0
+244243213.252 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243213.267 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243213.282 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243213.372 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000216 obj=0xc1d6538d status=0x0
+244243213.406 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000205 obj=0xc1d6538d status=0x0
+244243213.418 pid=508 RM ctl esc=0x29 ret=0
+244243213.431 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000201 obj=0xc1d6538d status=0x0
+244243213.445 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243213.469 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243213.484 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243213.498 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243213.567 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000216 obj=0xc1d6538d status=0x0
+244243213.588 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000205 obj=0xc1d6538d status=0x0
+244243213.600 pid=508 RM ctl esc=0x29 ret=0
+244243213.612 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000201 obj=0xc1d6538d status=0x0
+244243213.626 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243213.640 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243213.654 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243213.668 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243213.682 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243213.750 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000216 obj=0xc1d6538d status=0x0
+244243213.770 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000205 obj=0xc1d6538d status=0x0
+244243213.782 pid=508 RM ctl esc=0x29 ret=0
+244243213.795 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000201 obj=0xc1d6538d status=0x0
+244243213.808 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243213.822 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243213.836 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243213.850 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243213.865 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243213.879 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243213.948 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000216 obj=0xc1d6538d status=0x0
+244243213.968 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000205 obj=0xc1d6538d status=0x0
+244243213.980 pid=508 RM ctl esc=0x29 ret=0
+244243213.992 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000201 obj=0xc1d6538d status=0x0
+244243214.042 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243214.065 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243214.082 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243214.098 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243214.114 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243214.130 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243214.146 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243214.224 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000216 obj=0xc1d6538d status=0x0
+244243214.246 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000205 obj=0xc1d6538d status=0x0
+244243214.259 pid=508 RM ctl esc=0x29 ret=0
+244243214.274 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000201 obj=0xc1d6538d status=0x0
+244243214.289 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243214.305 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243214.320 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243214.367 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243214.383 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243214.398 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243214.413 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243214.428 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243214.498 pid=508 RM /dev/nvidia7 esc=0xc9 ret=0
+244243214.538 pid=508 RM /dev/nvidia7 esc=0xd7 ret=0
+244243216.089 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x0080 parent=0xc1d6538d new=0x5c000009 status=0x0
+244243216.117 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00801402 obj=0x5c000009 status=0x0
+244243216.135 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00800292 obj=0x5c000009 status=0x0
+244243216.148 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00800280 obj=0x5c000009 status=0x0
+244243216.167 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243216.183 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000201 obj=0xc1d6538d status=0x0
+244243216.198 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243216.213 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243216.228 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243216.244 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243216.260 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243216.276 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243216.292 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243216.308 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000202 obj=0xc1d6538d status=0x0
+244243216.402 pid=508 RM /dev/nvidia7 esc=0xc9 ret=0
+244243217.118 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x2080 parent=0x5c000009 new=0x5c00000a status=0x0
+244243217.793 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x2081 parent=0x5c00000a new=0x5c00000b status=0x0
+244243217.820 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20801303 obj=0x5c00000a status=0x0
+244243217.838 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20801303 obj=0x5c00000a status=0x0
+244243217.857 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x2080014a obj=0x5c00000a status=0x0
+244243217.902 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00800289 obj=0x5c000009 status=0x0
+244243218.476 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20810108 obj=0x5c00000b status=0x0
+244243218.506 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20801303 obj=0x5c00000a status=0x0
+244243219.496 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20800102 obj=0x5c00000a status=0x0
+244243219.520 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20801701 obj=0x5c00000a status=0x0
+244243219.540 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20801823 obj=0x5c00000a status=0x0
+244243219.553 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20801801 obj=0x5c00000a status=0x0
+244243220.143 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20801823 obj=0x5c00000a status=0x0
+244243220.166 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20801803 obj=0x5c00000a status=0x0
+244243220.744 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x2080182a obj=0x5c00000a status=0x0
+244243221.338 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x2080012f obj=0x5c00000a status=0x56
+244243221.781 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20801303 obj=0x5c00000a status=0x0
+244243222.860 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20800170 obj=0x5c00000a status=0x0
+244243222.881 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20800119 obj=0x5c00000a status=0x0
+244243222.894 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x0000027b obj=0xc1d6538d status=0x0
+244243222.932 pid=508 RM /dev/nvidia7 esc=0xc9 ret=0
+244243222.945 pid=508 RM /dev/nvidia7 esc=0xce ret=0
+244243222.985 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20801201 obj=0x5c00000a status=0x0
+244243223.070 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x2080122a obj=0x5c00000a status=0x0
+244243223.101 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x2080122b obj=0x5c00000a status=0x0
+244243223.120 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x2080122b obj=0x5c00000a status=0x0
+244243223.137 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x2080122b obj=0x5c00000a status=0x0
+244243223.170 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20801227 obj=0x5c00000a status=0x0
+244243224.357 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20802a0a obj=0x5c00000a status=0x0
+244243224.405 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x2080121b obj=0x5c00000a status=0x0
+244243225.366 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20803801 obj=0x5c00000a status=0x0
+244243225.395 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00801307 obj=0x5c000009 status=0x0
+244243225.946 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20801303 obj=0x5c00000a status=0x0
+244243225.990 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xc461 parent=0x5c00000a new=0x5c00000c status=0x0
+244243226.045 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000d01 obj=0xc1d6538d status=0x0
+244243226.103 pid=508 RM ctl esc=0x4e ret=0
+244243226.151 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x00de parent=0x5c00000a new=0x5c00000d status=0x0
+244243226.171 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000d01 obj=0xc1d6538d status=0x0
+244243226.217 pid=508 RM ctl esc=0x4e ret=0
+244243226.241 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20803601 obj=0x5c00000a status=0x0
+244243227.294 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x90f1 parent=0x5c000009 new=0x5c00000e status=0x0
+244243231.000 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x90f1 parent=0x5c000009 new=0x5c00000f status=0x0
+244243231.055 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20800111 obj=0x5c00000a status=0x0
+244243231.069 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20800110 obj=0x5c00000a status=0x0
+244243231.090 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x2080014a obj=0x5c00000a status=0x0
+244243231.133 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20800131 obj=0x5c00000a status=0x0
+244243231.722 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20808159 obj=0x5c00000a status=0x0
+244243231.797 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000136 obj=0xc1d6538d status=0x0
+244243231.846 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x2080220c obj=0x5c00000a status=0x0
+244243231.865 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20802210 obj=0x5c00000a status=0x0
+244243231.929 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x0000013a obj=0xc1d6538d status=0x0
+244243231.949 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20808162 obj=0x5c00000a status=0x0
+244243232.462 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x2080182b obj=0x5c00000a status=0x0
+244243232.510 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20803002 obj=0x5c00000a status=0x0
+244243339.639 pid=508 UVM UVM_REGISTER_GPU(37) ret=0 rmStatus=0x0 args=bb4b845e 73647656 2af346b4 f619b22f 00000000 ffffffff ffffffff 00000000 00000000 
+244243339.747 pid=508 UVM UVM_PAGEABLE_MEM_ACCESS_ON_GPU(70) ret=0 rmStatus=0x0 args=bb4b845e 73647656 2af346b4 f619b22f 01000000 
+244243339.764 pid=508 UVM UVM_CREATE_RANGE_GROUP(23) ret=0 rmStatus=0x0 args=01000000 00000000 00000000 
+244243339.815 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x50a0 parent=0x5c000009 new=0x5c000011 status=0x0
+244243340.185 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20800110 obj=0x5c00000a status=0x0
+244243340.231 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20802209 obj=0x5c00000a status=0x0
+244243340.257 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20809009 obj=0x5c00000a status=0x0
+244243340.804 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20809064 obj=0x5c00000a status=0x0
+244243341.201 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20809001 obj=0x5c00000a status=0x0
+244243341.492 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x2080a084 obj=0x5c00000a status=0x0
+244243342.043 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x2080a026 obj=0x5c00000a status=0x0
+244243342.081 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20809009 obj=0x5c00000a status=0x0
+244243342.556 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20809064 obj=0x5c00000a status=0x0
+244243342.926 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20809001 obj=0x5c00000a status=0x0
+244243343.184 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x2080a084 obj=0x5c00000a status=0x0
+244243343.760 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x2080a026 obj=0x5c00000a status=0x0
+244243343.878 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20803601 obj=0x5c00000a status=0x0
+244243355.361 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x2080200a obj=0x5c00000a status=0x0
+244243355.616 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20800145 obj=0x5c00000a status=0x0
+244243356.221 pid=508 UVM UVM_REGISTER_GPU_VASPACE(25) ret=0 rmStatus=0x0 args=bb4b845e 73647656 2af346b4 f619b22f 08000000 8d53d6c1 0e00005c 
+244243356.377 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x0040 parent=0x5c000009 new=0x5c000012 status=0x0
+244243356.423 pid=508 UVM UVM_CREATE_EXTERNAL_RANGE(73) ret=0 rmStatus=0x0 args=00000000 02000000 00002000 00000000 00000000 
+244243356.624 pid=508 UVM UVM_MAP_EXTERNAL_ALLOCATION(33) ret=0 rmStatus=0x0 args=00000000 02000000 00002000 00000000 00000000 00000000 bb4b845e 73647656 2af346b4 f619b22f 01000000 00000000 00000000 00000000 00000000 00000000 
+244243356.744 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x0040 parent=0x5c000009 new=0x5c000015 status=0x0
+244243356.795 pid=508 UVM UVM_CREATE_EXTERNAL_RANGE(73) ret=0 rmStatus=0x0 args=00000000 00010000 00002000 00000000 00000000 
+244243356.960 pid=508 UVM UVM_MAP_EXTERNAL_ALLOCATION(33) ret=0 rmStatus=0x0 args=00000000 00010000 00002000 00000000 00000000 00000000 bb4b845e 73647656 2af346b4 f619b22f 01000000 00000000 00000000 00000000 00000000 00000000 
+244243357.061 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x0040 parent=0x5c000009 new=0x5c000016 status=0x0
+244243357.104 pid=508 UVM UVM_CREATE_EXTERNAL_RANGE(73) ret=0 rmStatus=0x0 args=00000002 00010000 00002000 00000000 00000000 
+244243357.223 pid=508 UVM UVM_MAP_EXTERNAL_ALLOCATION(33) ret=0 rmStatus=0x0 args=00000002 00010000 00002000 00000000 00000000 00000000 bb4b845e 73647656 2af346b4 f619b22f 01000000 00000000 00000000 00000000 00000000 00000000 
+244243357.411 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x0040 parent=0x5c000009 new=0x5c000017 status=0x0
+244243357.455 pid=508 UVM UVM_CREATE_EXTERNAL_RANGE(73) ret=0 rmStatus=0x0 args=00000066 ed770000 00002000 00000000 00000000 
+244243357.619 pid=508 UVM UVM_MAP_EXTERNAL_ALLOCATION(33) ret=0 rmStatus=0x0 args=00000066 ed770000 00002000 00000000 00000000 00000000 bb4b845e 73647656 2af346b4 f619b22f 01000000 00000000 00000000 00000000 00000000 00000000 
+244243358.726 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xa06c parent=0x5c000009 new=0x5c000019 status=0x0
+244243359.064 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x9067 parent=0x5c000019 new=0x5c00001a status=0x0
+244243359.191 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x0040 parent=0x5c000009 new=0x5c00001b status=0x0
+244243359.230 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000d01 obj=0xc1d6538d status=0x0
+244243359.369 pid=508 RM ctl esc=0x4e ret=0
+244243359.445 pid=508 RM ctl esc=0x5e ret=0
+244243359.488 pid=508 UVM UVM_CREATE_EXTERNAL_RANGE(73) ret=0 rmStatus=0x0 args=00002000 02000000 00002000 00000000 00000000 
+244243359.612 pid=508 UVM UVM_MAP_EXTERNAL_ALLOCATION(33) ret=0 rmStatus=0x0 args=00002000 02000000 00002000 00000000 00000000 00000000 bb4b845e 73647656 2af346b4 f619b22f 01000000 00000000 00000000 00000000 00000000 00000000 
+244243464.553 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x003e parent=0x5c000009 new=0x5c00001d status=0x0
+244243464.701 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000d01 obj=0xc1d6538d status=0x0
+244243464.813 pid=508 RM ctl esc=0x4e ret=0
+244243467.875 pid=508 UVM UVM_CREATE_EXTERNAL_RANGE(73) ret=0 rmStatus=0x0 args=00004000 02000000 00000003 00000000 00000000 
+244243468.898 pid=508 UVM UVM_MAP_EXTERNAL_ALLOCATION(33) ret=0 rmStatus=0x0 args=00004000 02000000 00000003 00000000 00000000 00000000 bb4b845e 73647656 2af346b4 f619b22f 01000000 00000000 00000000 00000000 00000000 00000000 
+244243469.074 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x003e parent=0x5c000009 new=0x5c00001f status=0x0
+244243469.118 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000d01 obj=0xc1d6538d status=0x0
+244243469.194 pid=508 RM ctl esc=0x4e ret=0
+244243470.042 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xc56f parent=0x5c000019 new=0x5c000020 status=0x0
+244243470.092 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x0080170d obj=0x5c000009 status=0x0
+244243470.963 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xc7c0 parent=0x5c000020 new=0x5c000021 status=0x0
+244243471.031 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x906f0101 obj=0x5c000020 status=0x0
+244243471.342 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xc7b5 parent=0x5c000020 new=0x5c000022 status=0x0
+244243471.400 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x906f0101 obj=0x5c000020 status=0x0
+244243471.460 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0xc36f0108 obj=0x5c000020 status=0x0
+244243471.508 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20801218 obj=0x5c00000a status=0x0
+244243472.501 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x003e parent=0x5c000009 new=0x5c000023 status=0x0
+244243472.545 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000d01 obj=0xc1d6538d status=0x0
+244243472.620 pid=508 RM ctl esc=0x4e ret=0
+244243472.807 pid=508 UVM UVM_CREATE_EXTERNAL_RANGE(73) ret=0 rmStatus=0x0 args=00004004 02000000 00002000 00000000 00000000 
+244243472.979 pid=508 UVM UVM_MAP_EXTERNAL_ALLOCATION(33) ret=0 rmStatus=0x0 args=00004004 02000000 00002000 00000000 00000000 00000000 bb4b845e 73647656 2af346b4 f619b22f 01000000 00000000 00000000 00000000 00000000 00000000 
+244243473.333 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x003e parent=0x5c000009 new=0x5c000025 status=0x0
+244243473.371 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000d01 obj=0xc1d6538d status=0x0
+244243473.447 pid=508 RM ctl esc=0x4e ret=0
+244243474.183 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xc56f parent=0x5c000019 new=0x5c000026 status=0x0
+244243474.229 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x0080170d obj=0x5c000009 status=0x0
+244243474.682 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xc7c0 parent=0x5c000026 new=0x5c000027 status=0x0
+244243474.739 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x906f0101 obj=0x5c000026 status=0x0
+244243475.058 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xc7b5 parent=0x5c000026 new=0x5c000028 status=0x0
+244243475.127 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x906f0101 obj=0x5c000026 status=0x0
+244243475.185 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0xc36f0108 obj=0x5c000026 status=0x0
+244243475.230 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20801218 obj=0x5c00000a status=0x0
+244243475.405 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x003e parent=0x5c000009 new=0x5c000029 status=0x0
+244243475.441 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000d01 obj=0xc1d6538d status=0x0
+244243475.514 pid=508 RM ctl esc=0x4e ret=0
+244243476.192 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xc56f parent=0x5c000019 new=0x5c00002a status=0x0
+244243476.236 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x0080170d obj=0x5c000009 status=0x0
+244243476.698 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xc7c0 parent=0x5c00002a new=0x5c00002b status=0x0
+244243476.755 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x906f0101 obj=0x5c00002a status=0x0
+244243477.070 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xc7b5 parent=0x5c00002a new=0x5c00002c status=0x0
+244243477.132 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x906f0101 obj=0x5c00002a status=0x0
+244243477.190 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0xc36f0108 obj=0x5c00002a status=0x0
+244243477.234 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20801218 obj=0x5c00000a status=0x0
+244243477.412 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x003e parent=0x5c000009 new=0x5c00002d status=0x0
+244243477.448 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000d01 obj=0xc1d6538d status=0x0
+244243477.521 pid=508 RM ctl esc=0x4e ret=0
+244243478.227 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xc56f parent=0x5c000019 new=0x5c00002e status=0x0
+244243478.272 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x0080170d obj=0x5c000009 status=0x0
+244243478.736 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xc7c0 parent=0x5c00002e new=0x5c00002f status=0x0
+244243478.794 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x906f0101 obj=0x5c00002e status=0x0
+244243479.116 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xc7b5 parent=0x5c00002e new=0x5c000030 status=0x0
+244243479.178 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x906f0101 obj=0x5c00002e status=0x0
+244243479.235 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0xc36f0108 obj=0x5c00002e status=0x0
+244243479.280 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20801218 obj=0x5c00000a status=0x0
+244243479.452 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x003e parent=0x5c000009 new=0x5c000031 status=0x0
+244243479.496 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000d01 obj=0xc1d6538d status=0x0
+244243479.569 pid=508 RM ctl esc=0x4e ret=0
+244243480.238 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xc56f parent=0x5c000019 new=0x5c000032 status=0x0
+244243480.283 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x0080170d obj=0x5c000009 status=0x0
+244243480.739 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xc7c0 parent=0x5c000032 new=0x5c000033 status=0x0
+244243480.796 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x906f0101 obj=0x5c000032 status=0x0
+244243481.111 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xc7b5 parent=0x5c000032 new=0x5c000034 status=0x0
+244243481.174 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x906f0101 obj=0x5c000032 status=0x0
+244243481.231 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0xc36f0108 obj=0x5c000032 status=0x0
+244243481.275 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20801218 obj=0x5c00000a status=0x0
+244243481.449 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x003e parent=0x5c000009 new=0x5c000035 status=0x0
+244243481.485 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000d01 obj=0xc1d6538d status=0x0
+244243481.557 pid=508 RM ctl esc=0x4e ret=0
+244243482.251 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xc56f parent=0x5c000019 new=0x5c000036 status=0x0
+244243482.296 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x0080170d obj=0x5c000009 status=0x0
+244243482.742 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xc7c0 parent=0x5c000036 new=0x5c000037 status=0x0
+244243482.800 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x906f0101 obj=0x5c000036 status=0x0
+244243483.121 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xc7b5 parent=0x5c000036 new=0x5c000038 status=0x0
+244243483.184 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x906f0101 obj=0x5c000036 status=0x0
+244243483.241 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0xc36f0108 obj=0x5c000036 status=0x0
+244243483.285 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20801218 obj=0x5c00000a status=0x0
+244243483.424 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x003e parent=0x5c000009 new=0x5c000039 status=0x0
+244243483.460 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000d01 obj=0xc1d6538d status=0x0
+244243483.532 pid=508 RM ctl esc=0x4e ret=0
+244243484.218 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xc56f parent=0x5c000019 new=0x5c00003a status=0x0
+244243484.264 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x0080170d obj=0x5c000009 status=0x0
+244243484.710 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xc7c0 parent=0x5c00003a new=0x5c00003b status=0x0
+244243484.768 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x906f0101 obj=0x5c00003a status=0x0
+244243485.079 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xc7b5 parent=0x5c00003a new=0x5c00003c status=0x0
+244243485.142 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x906f0101 obj=0x5c00003a status=0x0
+244243485.199 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0xc36f0108 obj=0x5c00003a status=0x0
+244243485.243 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20801218 obj=0x5c00000a status=0x0
+244243485.422 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x003e parent=0x5c000009 new=0x5c00003d status=0x0
+244243485.458 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000d01 obj=0xc1d6538d status=0x0
+244243485.531 pid=508 RM ctl esc=0x4e ret=0
+244243486.217 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xc56f parent=0x5c000019 new=0x5c00003e status=0x0
+244243486.261 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x0080170d obj=0x5c000009 status=0x0
+244243486.712 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xc7c0 parent=0x5c00003e new=0x5c00003f status=0x0
+244243486.770 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x906f0101 obj=0x5c00003e status=0x0
+244243487.091 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xc7b5 parent=0x5c00003e new=0x5c000040 status=0x0
+244243487.154 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x906f0101 obj=0x5c00003e status=0x0
+244243487.211 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0xc36f0108 obj=0x5c00003e status=0x0
+244243487.255 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20801218 obj=0x5c00000a status=0x0
+244243489.873 pid=508 UVM UVM_REGISTER_CHANNEL(27) ret=0 rmStatus=0x0 args=bb4b845e 73647656 2af346b4 f619b22f 08000000 8d53d6c1 2000005c 00000000 00004003 02000000 0080eb00 00000000 00000000 
+244243492.125 pid=508 UVM UVM_REGISTER_CHANNEL(27) ret=0 rmStatus=0x0 args=bb4b845e 73647656 2af346b4 f619b22f 08000000 8d53d6c1 2600005c 00000000 00004003 02000000 0080eb00 00000000 00000000 
+244243493.898 pid=508 UVM UVM_REGISTER_CHANNEL(27) ret=0 rmStatus=0x0 args=bb4b845e 73647656 2af346b4 f619b22f 08000000 8d53d6c1 2a00005c 00000000 00004003 02000000 0080eb00 00000000 00000000 
+244243495.674 pid=508 UVM UVM_REGISTER_CHANNEL(27) ret=0 rmStatus=0x0 args=bb4b845e 73647656 2af346b4 f619b22f 08000000 8d53d6c1 2e00005c 00000000 00004003 02000000 0080eb00 00000000 00000000 
+244243497.396 pid=508 UVM UVM_REGISTER_CHANNEL(27) ret=0 rmStatus=0x0 args=bb4b845e 73647656 2af346b4 f619b22f 08000000 8d53d6c1 3200005c 00000000 00004003 02000000 0080eb00 00000000 00000000 
+244243499.086 pid=508 UVM UVM_REGISTER_CHANNEL(27) ret=0 rmStatus=0x0 args=bb4b845e 73647656 2af346b4 f619b22f 08000000 8d53d6c1 3600005c 00000000 00004003 02000000 0080eb00 00000000 00000000 
+244243500.814 pid=508 UVM UVM_REGISTER_CHANNEL(27) ret=0 rmStatus=0x0 args=bb4b845e 73647656 2af346b4 f619b22f 08000000 8d53d6c1 3a00005c 00000000 00004003 02000000 0080eb00 00000000 00000000 
+244243502.559 pid=508 UVM UVM_REGISTER_CHANNEL(27) ret=0 rmStatus=0x0 args=bb4b845e 73647656 2af346b4 f619b22f 08000000 8d53d6c1 3e00005c 00000000 00004003 02000000 0080eb00 00000000 00000000 
+244243503.067 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0xa06c0101 obj=0x5c000019 status=0x0
+244243503.125 pid=508 RM /dev/nvidia7 esc=0xc9 ret=0
+244243503.154 pid=508 RM /dev/nvidia7 esc=0xce ret=0
+244243503.457 pid=508 RM /dev/nvidia7 esc=0x2b ret=0 ALLOC class=0x0079 parent=0x5c00000a new=0x5c000041 status=0x0
+244243504.546 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xa06c parent=0x5c000009 new=0x5c000042 status=0x0
+244243504.733 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x003e parent=0x5c000009 new=0x5c000043 status=0x0
+244243504.759 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000d01 obj=0xc1d6538d status=0x0
+244243504.806 pid=508 RM ctl esc=0x4e ret=0
+244243505.833 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xc56f parent=0x5c000042 new=0x5c000044 status=0x0
+244243505.867 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x0080170d obj=0x5c000009 status=0x0
+244243506.182 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xc7b5 parent=0x5c000044 new=0x5c000045 status=0x0
+244243506.226 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x906f0101 obj=0x5c000044 status=0x0
+244243506.261 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0xc36f0108 obj=0x5c000044 status=0x0
+244243506.391 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x003e parent=0x5c000009 new=0x5c000046 status=0x0
+244243506.415 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000d01 obj=0xc1d6538d status=0x0
+244243506.462 pid=508 RM ctl esc=0x4e ret=0
+244243507.144 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xc56f parent=0x5c000042 new=0x5c000047 status=0x0
+244243507.183 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x0080170d obj=0x5c000009 status=0x0
+244243507.489 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xc7b5 parent=0x5c000047 new=0x5c000048 status=0x0
+244243507.528 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x906f0101 obj=0x5c000047 status=0x0
+244243507.563 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0xc36f0108 obj=0x5c000047 status=0x0
+244243507.714 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x003e parent=0x5c000009 new=0x5c000049 status=0x0
+244243507.741 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000d01 obj=0xc1d6538d status=0x0
+244243507.793 pid=508 RM ctl esc=0x4e ret=0
+244243508.491 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xc56f parent=0x5c000042 new=0x5c00004a status=0x0
+244243508.530 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x0080170d obj=0x5c000009 status=0x0
+244243508.843 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xc7b5 parent=0x5c00004a new=0x5c00004b status=0x0
+244243508.883 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x906f0101 obj=0x5c00004a status=0x0
+244243508.930 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0xc36f0108 obj=0x5c00004a status=0x0
+244243509.066 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x003e parent=0x5c000009 new=0x5c00004c status=0x0
+244243509.109 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000d01 obj=0xc1d6538d status=0x0
+244243509.169 pid=508 RM ctl esc=0x4e ret=0
+244243509.842 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xc56f parent=0x5c000042 new=0x5c00004d status=0x0
+244243509.870 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x0080170d obj=0x5c000009 status=0x0
+244243510.174 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xc7b5 parent=0x5c00004d new=0x5c00004e status=0x0
+244243510.221 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x906f0101 obj=0x5c00004d status=0x0
+244243510.257 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0xc36f0108 obj=0x5c00004d status=0x0
+244243511.285 pid=508 UVM UVM_REGISTER_CHANNEL(27) ret=0 rmStatus=0x0 args=bb4b845e 73647656 2af346b4 f619b22f 08000000 8d53d6c1 4400005c 00000000 00000000 00000000 00000000 00000000 00000000 
+244243512.290 pid=508 UVM UVM_REGISTER_CHANNEL(27) ret=0 rmStatus=0x0 args=bb4b845e 73647656 2af346b4 f619b22f 08000000 8d53d6c1 4700005c 00000000 00000000 00000000 00000000 00000000 00000000 
+244243513.298 pid=508 UVM UVM_REGISTER_CHANNEL(27) ret=0 rmStatus=0x0 args=bb4b845e 73647656 2af346b4 f619b22f 08000000 8d53d6c1 4a00005c 00000000 00000000 00000000 00000000 00000000 00000000 
+244243514.295 pid=508 UVM UVM_REGISTER_CHANNEL(27) ret=0 rmStatus=0x0 args=bb4b845e 73647656 2af346b4 f619b22f 08000000 8d53d6c1 4d00005c 00000000 00000000 00000000 00000000 00000000 00000000 
+244243514.689 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0xa06c0101 obj=0x5c000042 status=0x0
+244243514.724 pid=508 RM /dev/nvidia7 esc=0xc9 ret=0
+244243514.737 pid=508 RM /dev/nvidia7 esc=0xce ret=0
+244243515.032 pid=508 RM /dev/nvidia7 esc=0x2b ret=0 ALLOC class=0x0079 parent=0x5c00000a new=0x5c00004f status=0x0
+244243515.989 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xa06c parent=0x5c000009 new=0x5c000050 status=0x0
+244243516.156 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x003e parent=0x5c000009 new=0x5c000051 status=0x0
+244243516.188 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000d01 obj=0xc1d6538d status=0x0
+244243516.235 pid=508 RM ctl esc=0x4e ret=0
+244243517.149 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xc56f parent=0x5c000050 new=0x5c000052 status=0x0
+244243517.183 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x0080170d obj=0x5c000009 status=0x0
+244243517.486 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xc7b5 parent=0x5c000052 new=0x5c000053 status=0x0
+244243517.522 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x906f0101 obj=0x5c000052 status=0x0
+244243517.556 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0xc36f0108 obj=0x5c000052 status=0x0
+244243517.674 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x003e parent=0x5c000009 new=0x5c000054 status=0x0
+244243517.699 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000d01 obj=0xc1d6538d status=0x0
+244243517.745 pid=508 RM ctl esc=0x4e ret=0
+244243518.423 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xc56f parent=0x5c000050 new=0x5c000055 status=0x0
+244243518.456 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x0080170d obj=0x5c000009 status=0x0
+244243518.757 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xc7b5 parent=0x5c000055 new=0x5c000056 status=0x0
+244243518.793 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x906f0101 obj=0x5c000055 status=0x0
+244243518.826 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0xc36f0108 obj=0x5c000055 status=0x0
+244243518.942 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x003e parent=0x5c000009 new=0x5c000057 status=0x0
+244243518.966 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000d01 obj=0xc1d6538d status=0x0
+244243519.022 pid=508 RM ctl esc=0x4e ret=0
+244243519.698 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xc56f parent=0x5c000050 new=0x5c000058 status=0x0
+244243519.726 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x0080170d obj=0x5c000009 status=0x0
+244243520.047 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xc7b5 parent=0x5c000058 new=0x5c000059 status=0x0
+244243520.104 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x906f0101 obj=0x5c000058 status=0x0
+244243520.153 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0xc36f0108 obj=0x5c000058 status=0x0
+244243520.273 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x003e parent=0x5c000009 new=0x5c00005a status=0x0
+244243520.297 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000d01 obj=0xc1d6538d status=0x0
+244243520.342 pid=508 RM ctl esc=0x4e ret=0
+244243521.025 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xc56f parent=0x5c000050 new=0x5c00005b status=0x0
+244243521.066 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x0080170d obj=0x5c000009 status=0x0
+244243521.371 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0xc7b5 parent=0x5c00005b new=0x5c00005c status=0x0
+244243521.408 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x906f0101 obj=0x5c00005b status=0x0
+244243521.441 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0xc36f0108 obj=0x5c00005b status=0x0
+244243522.511 pid=508 UVM UVM_REGISTER_CHANNEL(27) ret=0 rmStatus=0x0 args=bb4b845e 73647656 2af346b4 f619b22f 08000000 8d53d6c1 5200005c 00000000 00000000 00000000 00000000 00000000 00000000 
+244243523.534 pid=508 UVM UVM_REGISTER_CHANNEL(27) ret=0 rmStatus=0x0 args=bb4b845e 73647656 2af346b4 f619b22f 08000000 8d53d6c1 5500005c 00000000 00000000 00000000 00000000 00000000 00000000 
+244243524.562 pid=508 UVM UVM_REGISTER_CHANNEL(27) ret=0 rmStatus=0x0 args=bb4b845e 73647656 2af346b4 f619b22f 08000000 8d53d6c1 5800005c 00000000 00000000 00000000 00000000 00000000 00000000 
+244243525.608 pid=508 UVM UVM_REGISTER_CHANNEL(27) ret=0 rmStatus=0x0 args=bb4b845e 73647656 2af346b4 f619b22f 08000000 8d53d6c1 5b00005c 00000000 00000000 00000000 00000000 00000000 00000000 
+244243525.988 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0xa06c0101 obj=0x5c000050 status=0x0
+244243526.041 pid=508 RM /dev/nvidia7 esc=0xc9 ret=0
+244243526.066 pid=508 RM /dev/nvidia7 esc=0xce ret=0
+244243526.377 pid=508 RM /dev/nvidia7 esc=0x2b ret=0 ALLOC class=0x0079 parent=0x5c00000a new=0x5c00005d status=0x0
+244243527.393 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x003e parent=0x5c000009 new=0x5c00005e status=0x0
+244243527.427 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000d01 obj=0xc1d6538d status=0x0
+244243527.474 pid=508 RM ctl esc=0x4e ret=0
+244243527.618 pid=508 UVM UVM_CREATE_EXTERNAL_RANGE(73) ret=0 rmStatus=0x0 args=00006004 02000000 00002000 00000000 00000000 
+244243527.737 pid=508 UVM UVM_MAP_EXTERNAL_ALLOCATION(33) ret=0 rmStatus=0x0 args=00006004 02000000 00002000 00000000 00000000 00000000 bb4b845e 73647656 2af346b4 f619b22f 01000000 00000000 00000000 00000000 00000000 00000000 
+244243528.831 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x0040 parent=0x5c000009 new=0x5c000060 status=0x0
+244243528.870 pid=508 UVM UVM_CREATE_EXTERNAL_RANGE(73) ret=0 rmStatus=0x0 args=00002066 ed770000 00002000 00000000 00000000 
+244243528.953 pid=508 UVM UVM_MAP_EXTERNAL_ALLOCATION(33) ret=0 rmStatus=0x0 args=00002066 ed770000 00002000 00000000 00000000 00000000 bb4b845e 73647656 2af346b4 f619b22f 01000000 00000000 00000000 00000000 00000000 00000000 
+244243529.995 pid=508 UVM UVM_ALLOC_SEMAPHORE_POOL(68) ret=0 rmStatus=0x0 args=00008004 02000000 00002000 00000000 bb4b845e 73647656 2af346b4 f619b22f 01000000 01000000 00000000 00000000 00000000 00000000 00000000 00000000 
+244243530.155 pid=508 MMAP /dev/nvidia-uvm addr=0x204800000 len=0x200000 off=0x204800000 -> 0x204800000
+244243530.168 pid=508 UVM UVM_VALIDATE_VA_RANGE(72) ret=0 rmStatus=0x0 args=00008004 02000000 00002000 00000000 00000000 
+244243530.265 pid=508 UVM UVM_CREATE_RANGE_GROUP(23) ret=0 rmStatus=0x0 args=02000000 00000000 00000000 
+244243530.278 pid=508 UVM UVM_CREATE_RANGE_GROUP(23) ret=0 rmStatus=0x0 args=03000000 00000000 00000000 
+244243530.289 pid=508 UVM UVM_CREATE_RANGE_GROUP(23) ret=0 rmStatus=0x0 args=04000000 00000000 00000000 
+244243530.299 pid=508 UVM UVM_CREATE_RANGE_GROUP(23) ret=0 rmStatus=0x0 args=05000000 00000000 00000000 
+244243530.309 pid=508 UVM UVM_CREATE_RANGE_GROUP(23) ret=0 rmStatus=0x0 args=06000000 00000000 00000000 
+244243530.318 pid=508 UVM UVM_CREATE_RANGE_GROUP(23) ret=0 rmStatus=0x0 args=07000000 00000000 00000000 
+244243530.335 pid=508 UVM UVM_CREATE_RANGE_GROUP(23) ret=0 rmStatus=0x0 args=08000000 00000000 00000000 
+244243533.625 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x003e parent=0x5c000009 new=0x5c000062 status=0x0
+244243533.660 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000d01 obj=0xc1d6538d status=0x0
+244243533.718 pid=508 RM ctl esc=0x4e ret=0
+244243533.819 pid=508 UVM UVM_CREATE_EXTERNAL_RANGE(73) ret=0 rmStatus=0x0 args=00004066 ed770000 00002000 00000000 00000000 
+244243533.930 pid=508 UVM UVM_MAP_EXTERNAL_ALLOCATION(33) ret=0 rmStatus=0x0 args=00004066 ed770000 00002000 00000000 00000000 00000000 bb4b845e 73647656 2af346b4 f619b22f 01000000 00000000 00000000 00000000 00000000 00000000 
+244243535.248 pid=508 RM /dev/nvidia7 esc=0x27 ret=0
+244243535.283 pid=508 UVM UVM_CREATE_EXTERNAL_RANGE(73) ret=0 rmStatus=0x0 args=00006066 ed770000 00002000 00000000 00000000 
+244243535.392 pid=508 UVM UVM_MAP_EXTERNAL_ALLOCATION(33) ret=0 rmStatus=0x0 args=00006066 ed770000 00002000 00000000 00000000 00000000 bb4b845e 73647656 2af346b4 f619b22f 01000000 00000000 00000000 00000000 00000000 00000000 
+244243535.473 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x0040 parent=0x5c000009 new=0x5c000066 status=0x0
+244243535.503 pid=508 UVM UVM_CREATE_EXTERNAL_RANGE(73) ret=0 rmStatus=0x0 args=0000a004 02000000 00002000 00000000 00000000 
+244243535.580 pid=508 UVM UVM_MAP_EXTERNAL_ALLOCATION(33) ret=0 rmStatus=0x0 args=0000a004 02000000 00002000 00000000 00000000 00000000 bb4b845e 73647656 2af346b4 f619b22f 01000000 00000000 00000000 00000000 00000000 00000000 
+244243537.826 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x0040 parent=0x5c000009 new=0x5c000068 status=0x0
+244243537.860 pid=508 UVM UVM_CREATE_EXTERNAL_RANGE(73) ret=0 rmStatus=0x0 args=0000c004 02000000 00002000 00000000 00000000 
+244243537.941 pid=508 UVM UVM_MAP_EXTERNAL_ALLOCATION(33) ret=0 rmStatus=0x0 args=0000c004 02000000 00002000 00000000 00000000 00000000 bb4b845e 73647656 2af346b4 f619b22f 01000000 00000000 00000000 00000000 00000000 00000000 
+244243539.537 pid=508 RM /dev/nvidia7 esc=0x27 ret=0
+244243539.576 pid=508 UVM UVM_CREATE_EXTERNAL_RANGE(73) ret=0 rmStatus=0x0 args=00008066 ed770000 00002000 00000000 00000000 
+244243539.690 pid=508 UVM UVM_MAP_EXTERNAL_ALLOCATION(33) ret=0 rmStatus=0x0 args=00008066 ed770000 00002000 00000000 00000000 00000000 bb4b845e 73647656 2af346b4 f619b22f 01000000 00000000 00000000 00000000 00000000 00000000 
+244243539.750 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x0040 parent=0x5c000009 new=0x5c00006c status=0x0
+244243539.773 pid=508 UVM UVM_CREATE_EXTERNAL_RANGE(73) ret=0 rmStatus=0x0 args=0000a066 ed770000 00002000 00000000 00000000 
+244243539.848 pid=508 UVM UVM_MAP_EXTERNAL_ALLOCATION(33) ret=0 rmStatus=0x0 args=0000a066 ed770000 00002000 00000000 00000000 00000000 bb4b845e 73647656 2af346b4 f619b22f 01000000 00000000 00000000 00000000 00000000 00000000 
+244243539.910 pid=508 UVM UVM_MAP_DYNAMIC_PARALLELISM_REGION(65) ret=0 rmStatus=0x0 args=0000c066 ed770000 00100000 00000000 bb4b845e 73647656 2af346b4 f619b22f 00000000 
+244243541.216 pid=508 RM /dev/nvidia7 esc=0x27 ret=0
+244243541.256 pid=508 UVM UVM_CREATE_EXTERNAL_RANGE(73) ret=0 rmStatus=0x0 args=0000e004 02000000 00002000 00000000 00000000 
+244243541.381 pid=508 UVM UVM_MAP_EXTERNAL_ALLOCATION(33) ret=0 rmStatus=0x0 args=0000e004 02000000 00002000 00000000 00000000 00000000 bb4b845e 73647656 2af346b4 f619b22f 01000000 00000000 00000000 00000000 00000000 00000000 
+244243541.699 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x0040 parent=0x5c000009 new=0x5c000071 status=0x0
+244243541.732 pid=508 UVM UVM_CREATE_EXTERNAL_RANGE(73) ret=0 rmStatus=0x0 args=0000e066 ed770000 00002000 00000000 00000000 
+244243541.812 pid=508 UVM UVM_MAP_EXTERNAL_ALLOCATION(33) ret=0 rmStatus=0x0 args=0000e066 ed770000 00002000 00000000 00000000 00000000 bb4b845e 73647656 2af346b4 f619b22f 01000000 00000000 00000000 00000000 00000000 00000000 
+244243542.925 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x003e parent=0x5c000009 new=0x5c000073 status=0x0
+244243542.960 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000d01 obj=0xc1d6538d status=0x0
+244243543.029 pid=508 RM ctl esc=0x4e ret=0
+244243543.160 pid=508 UVM UVM_CREATE_EXTERNAL_RANGE(73) ret=0 rmStatus=0x0 args=00000067 ed770000 00002000 00000000 00000000 
+244243543.278 pid=508 UVM UVM_MAP_EXTERNAL_ALLOCATION(33) ret=0 rmStatus=0x0 args=00000067 ed770000 00002000 00000000 00000000 00000000 bb4b845e 73647656 2af346b4 f619b22f 01000000 00000000 00000000 00000000 00000000 00000000 
+244243552.143 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x0040 parent=0x5c000009 new=0x5c000075 status=0x0
+244243552.193 pid=508 UVM UVM_CREATE_EXTERNAL_RANGE(73) ret=0 rmStatus=0x0 args=00002067 ed770000 00002000 00000000 00000000 
+244243552.323 pid=508 UVM UVM_MAP_EXTERNAL_ALLOCATION(33) ret=0 rmStatus=0x0 args=00002067 ed770000 00002000 00000000 00000000 00000000 bb4b845e 73647656 2af346b4 f619b22f 01000000 00000000 00000000 00000000 00000000 00000000 
+244243559.575 pid=508 RM /dev/nvidia7 esc=0x27 ret=0
+244243559.625 pid=508 UVM UVM_CREATE_EXTERNAL_RANGE(73) ret=0 rmStatus=0x0 args=00004067 ed770000 00002000 00000000 00000000 
+244243559.801 pid=508 UVM UVM_MAP_EXTERNAL_ALLOCATION(33) ret=0 rmStatus=0x0 args=00004067 ed770000 00002000 00000000 00000000 00000000 bb4b845e 73647656 2af346b4 f619b22f 01000000 00000000 00000000 00000000 00000000 00000000 
+244243561.453 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x83de parent=0x5c000009 new=0x5c000079 status=0x0
+244243563.815 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x003e parent=0x5c000009 new=0x5c00007a status=0x0
+244243563.863 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00000d01 obj=0xc1d6538d status=0x0
+244243563.941 pid=508 RM ctl esc=0x4e ret=0
+244243564.343 pid=508 UVM UVM_CREATE_EXTERNAL_RANGE(73) ret=0 rmStatus=0x0 args=00006067 ed770000 00305300 00000000 00000000 
+244243564.592 pid=508 UVM UVM_MAP_EXTERNAL_ALLOCATION(33) ret=0 rmStatus=0x0 args=00006067 ed770000 00305300 00000000 00000000 00000000 bb4b845e 73647656 2af346b4 f619b22f 01000000 00000000 00000000 00000000 00000000 00000000 
+244243565.996 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x0040 parent=0x5c000009 new=0x5c00007c status=0x0
+244243566.049 pid=508 UVM UVM_CREATE_EXTERNAL_RANGE(73) ret=0 rmStatus=0x0 args=00000064 ed770000 0000e000 00000000 00000000 
+244243566.175 pid=508 UVM UVM_MAP_EXTERNAL_ALLOCATION(33) ret=0 rmStatus=0x0 args=00000064 ed770000 0000e000 00000000 00000000 00000000 bb4b845e 73647656 2af346b4 f619b22f 01000000 00000000 00000000 00000000 00000000 00000000 
+244243566.281 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x0040 parent=0x5c000009 new=0x5c00007e status=0x0
+244243566.318 pid=508 UVM UVM_CREATE_EXTERNAL_RANGE(73) ret=0 rmStatus=0x0 args=0000e064 ed770000 00002000 00000000 00000000 
+244243566.549 pid=508 UVM UVM_MAP_EXTERNAL_ALLOCATION(33) ret=0 rmStatus=0x0 args=0000e064 ed770000 00002000 00000000 00000000 00000000 bb4b845e 73647656 2af346b4 f619b22f 01000000 00000000 00000000 00000000 00000000 00000000 
+244243567.480 pid=508 RM /dev/nvidia7 esc=0xc9 ret=0
+244243567.517 pid=508 RM /dev/nvidia7 esc=0xce ret=0
+244243567.956 pid=508 RM /dev/nvidia7 esc=0x2b ret=0 ALLOC class=0x0079 parent=0x5c000021 new=0x5c000080 status=0x0
+244243568.044 pid=508 RM /dev/nvidia7 esc=0xc9 ret=0
+244243568.072 pid=508 RM /dev/nvidia7 esc=0xce ret=0
+244243568.365 pid=508 RM /dev/nvidia7 esc=0x2b ret=0 ALLOC class=0x0079 parent=0x5c000021 new=0x5c000081 status=0x0
+244243568.435 pid=508 RM /dev/nvidia7 esc=0xc9 ret=0
+244243568.457 pid=508 RM /dev/nvidia7 esc=0xce ret=0
+244243568.743 pid=508 RM /dev/nvidia7 esc=0x2b ret=0 ALLOC class=0x0079 parent=0x5c000021 new=0x5c000082 status=0x0
+244243568.810 pid=508 RM /dev/nvidia7 esc=0xc9 ret=0
+244243568.832 pid=508 RM /dev/nvidia7 esc=0xce ret=0
+244243569.134 pid=508 RM /dev/nvidia7 esc=0x2b ret=0 ALLOC class=0x0079 parent=0x5c000021 new=0x5c000083 status=0x0
+244243569.546 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x83de0309 obj=0x5c000079 status=0x0
+244243569.979 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x20801210 obj=0x5c00000a status=0x0
+244243570.381 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0xa06c0103 obj=0x5c000019 status=0x0
+244243570.491 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x0040 parent=0x5c000009 new=0x5c000084 status=0x0
+244243570.534 pid=508 UVM UVM_CREATE_EXTERNAL_RANGE(73) ret=0 rmStatus=0x0 args=0000005e ed770000 00002004 00000000 00000000 
+244243570.703 pid=508 UVM UVM_MAP_EXTERNAL_ALLOCATION(33) ret=0 rmStatus=0x0 args=0000005e ed770000 00002004 00000000 00000000 00000000 bb4b845e 73647656 2af346b4 f619b22f 01000000 00000000 00000000 00000000 00000000 00000000 
+244243589.136 pid=508 RM ctl esc=0x2a ret=0 CONTROL cmd=0x00801909 obj=0x5c000009 status=0x0
+244243589.563 pid=508 RM ctl esc=0x2b ret=0 ALLOC class=0x0040 parent=0x5c000009 new=0x5c000086 status=0x0
+244243589.613 pid=508 UVM UVM_CREATE_EXTERNAL_RANGE(73) ret=0 rmStatus=0x0 args=00002062 ed770000 00002000 00000000 00000000 
+244243589.752 pid=508 UVM UVM_MAP_EXTERNAL_ALLOCATION(33) ret=0 rmStatus=0x0 args=00002062 ed770000 00002000 00000000 00000000 00000000 bb4b845e 73647656 2af346b4 f619b22f 01000000 00000000 00000000 00000000 00000000 00000000 
