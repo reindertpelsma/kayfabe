@@ -1,0 +1,22 @@
+=== ff_vulkan side=host start=2026-09-26T18:24:46+00:00 host=ubuntu kernel=6.8.0-59-generic drv=580.159.04
+vulkan ICD: /etc/vulkan/icd.d/nvidia_icd.json only
+ff scale_vulkan rc=0 md5=49022dfc77a0d93f bytes=10368000
+GSET_DIG side=host item=ff_vulkan key=scale_vulkan val=49022dfc77a0d93f
+ff avgblur_vulkan rc=0 md5=459aa0d7365639bd bytes=41472000
+GSET_DIG side=host item=ff_vulkan key=avgblur_vulkan val=459aa0d7365639bd
+ff gblur_vulkan rc=0 md5=7006e71ae6cadb31 bytes=41472000
+GSET_DIG side=host item=ff_vulkan key=gblur_vulkan val=7006e71ae6cadb31
+ff chromaber_vulkan rc=0 md5=304f54a5fe0e3ee5 bytes=41472000
+GSET_DIG side=host item=ff_vulkan key=chromaber_vulkan val=304f54a5fe0e3ee5
+ff flip_vulkan rc=0 md5=3a0255ae8e2c6769 bytes=41472000
+GSET_DIG side=host item=ff_vulkan key=flip_vulkan val=3a0255ae8e2c6769
+ff transpose_vulkan rc=0 md5=4389525c06c32ab3 bytes=41472000
+GSET_DIG side=host item=ff_vulkan key=transpose_vulkan val=4389525c06c32ab3
+ff nlmeans_vulkan rc=0 md5=e830072672784c7b bytes=41472000
+GSET_DIG side=host item=ff_vulkan key=nlmeans_vulkan val=e830072672784c7b
+ff bwdif_vulkan rc=0 md5=33fefb0045e3465d bytes=41472000
+GSET_DIG side=host item=ff_vulkan key=bwdif_vulkan val=33fefb0045e3465d
+ff overlay_vulkan rc=0 md5=bcac3dda488ab138 bytes=41472000
+GSET_DIG side=host item=ff_vulkan key=overlay_vulkan val=bcac3dda488ab138
+GSET_OK
+=== end rc=0 secs=11 2026-09-26T18:24:57+00:00

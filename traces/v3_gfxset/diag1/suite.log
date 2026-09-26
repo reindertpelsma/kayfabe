@@ -1,0 +1,14 @@
+[gset-suite 2026-09-26T18:17:56+00:00] GSET_SUITE_STARTED run=diag1 rev=9bc91512
+[gset-host 18:17:56] host nvidia-drm modeset=Y dri=by-path card0 renderD128  nodes=/dev/nvidia-modeset /dev/nvidia-uvm /dev/nvidia-uvm-tools /dev/nvidia0 /dev/nvidiactl  /dev/nvidia-caps: nvidia-cap1 nvidia-cap2 
+hostroot: UP image=/workspace/bench/guest.qcow2 root=/mnt/gset/root os=Ubuntu 24.04.5 LTS nvlibs=libnvidia-glcore.so.580.159.04 hostdrv=580.159.04
+[gset-host 18:17:58] items: ff_vulkan_init vk_ofa pv_vk_rt_ext vk_info
+GSET_RES side=host item=ff_vulkan_init verdict=PASS rc=0 secs=1 note=warn:[in#0/lavfi @ 0x571d177e8840] Input stream #0:0 (video): 6 packets read (2544 bytes); 5 frames decoded; 0 decode errors;  host_xid=0
+GSET_RES side=host item=vk_ofa verdict=PASS rc=0 secs=1 note=- host_xid=0
+GSET_RES side=host item=pv_vk_rt_ext verdict=PASS rc=0 secs=0 note=- host_xid=0
+GSET_RES side=host item=vk_info verdict=PASS rc=0 secs=0 note=- host_xid=0
+[gset-host 18:18:02] HOST_DONE 4 pass / 4 rows
+hostroot: DOWN
+[gset-suite 2026-09-26T18:18:03+00:00] kf3 binary: /workspace/bench/kf3-bins/9bc91512/qemu-system-x86_64  items: ff_vulkan_init vk_ofa pv_vk_rt_ext vk_info
+[gset-suite 2026-09-26T18:19:55+00:00] boot gs_diag1_b1 rc=0 items=[ff_vulkan_init vk_ofa pv_vk_rt_ext vk_info] :: /workspace/bench/run_gs_diag1_b1_probe.log:GSET_RES side=guest item=ff_vulkan_init verdict=FAIL rc=0 secs=4 note=GSET_FAIL ffmpeg vulkan init rc=187: [Vulkan @ 0x61f949a1fc80] Device creation failure: VK_ERROR_INITIALIZA
+[gset-suite 2026-09-26T18:19:56+00:00] GSET_SUITE_VERDICT=FAIL (pass=3/4) rev=9bc91512
+[gset-suite 2026-09-26T18:19:56+00:00] GSET_SUITE_EXIT=2026-09-26T18:19:56+00:00

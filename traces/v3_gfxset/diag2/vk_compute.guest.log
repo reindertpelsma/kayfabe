@@ -1,0 +1,12 @@
+=== vk_compute side=guest start=2026-09-26T18:27:05+00:00 host=ubuntu kernel=6.8.0-139-generic drv=580.159.04
+vulkan ICD: /etc/vulkan/icd.d/nvidia_icd.json only
+VK_START mode=compute
+VK_DEVICE[0]=NVIDIA GeForce RTX 3070 vendor=0x10de type=2 api=1.4.312 driver=0x9127c100
+VK_STAGE=device_created
+VKC_N=1048576
+VKC_HASH=9ef8f95225b2291f
+VKC_BAD=0
+VK_DONE rc=0
+GSET_DIG side=guest item=vk_compute key=VKC_HASH val=9ef8f95225b2291f
+GSET_OK
+=== end rc=0 secs=1 2026-09-26T18:27:06+00:00
