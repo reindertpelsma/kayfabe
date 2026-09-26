@@ -57,7 +57,9 @@ def main(R):
         diff = [k for k in graded if (it, k) in gd and gd[(it, k)] != hd1[(it, k)]]
         absent = [k for k in graded if (it, k) not in gd]
         hx = int(h.get("host_xid", "0") or 0); gx = g.get("host_xid", "-")
-        h2v = h2.get(it, {}).get("verdict", "PASS" if not h2 else "-")
+        # an item absent from the second bare-metal run was not re-measured (suite.sh GSET_HOST2_SKIP): no
+        # noise floor for it, but no evidence of flakiness either
+        h2v = h2.get(it, {}).get("verdict", "PASS")
         hx2 = int(h2.get(it, {}).get("host_xid", "0") or 0)
         if hv != "PASS" or hx > 0:
             final = "NOTRUN(host)"

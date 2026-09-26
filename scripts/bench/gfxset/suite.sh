@@ -27,7 +27,11 @@ if [ "${GSET_NO_HOST:-0}" != 1 ]; then
     exec 9>"${KF_LOCK:-/tmp/kayfabe-fastguest.lock}"; flock 9
     rm -f "$R"/host.res "$R"/host.dig "$R"/host2.res "$R"/host2.dig
     bash "$HERE/host.sh" "$R" $ITEMS 2>&1 | tee -a "$R/suite.log" | grep -E 'GSET_RES|HOST_DONE|⊘'
-    mkdir -p "$R/h2" && bash "$HERE/host.sh" "$R/h2" $ITEMS > "$R/h2/host.console" 2>&1
+    # run 2 = the noise floor of the CONTENT digests; the perf-only items (their digests are test-set shapes,
+    # not content) are skipped there to save ~15 min — compare.py treats them as not re-measured
+    I2=""; for a in ${ITEMS:-$(sed -n 's/^GSET_RES side=host item=\([^ ]*\) .*/\1/p' "$R/host.res")}; do
+        case " ${GSET_HOST2_SKIP:-vkpeak geekbench_vulkan blender_opendata} " in *" $a "*) ;; *) I2="$I2 $a";; esac; done
+    mkdir -p "$R/h2" && bash "$HERE/host.sh" "$R/h2" $I2 > "$R/h2/host.console" 2>&1
     cp -f "$R/h2/host.res" "$R/host2.res"; cp -f "$R/h2/host.dig" "$R/host2.dig"
     flock -u 9; exec 9>&-
 fi
