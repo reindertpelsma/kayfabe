@@ -510,7 +510,7 @@ impl AllocPermit {
 /// universally shared has been stripped out of it.
 ///
 /// ★★★ *Stripped*, not *inherited*. A row lives here only if every boundary in
-/// [`crate::versions::TABLES`] has it; the moment one boundary does not, the row moves
+/// [`crate::versions::capability_tables`] has it; the moment one boundary does not, the row moves
 /// out into per-boundary blocks. That is what makes a removal expressible at all, and
 /// `the_shared_base_holds_only_what_every_boundary_shares` is the gate that keeps it
 /// honest in both directions: nothing here may be missing from a boundary, and nothing
@@ -1838,7 +1838,7 @@ pub static CAPS_610_43_02: CapabilityTable = CapabilityTable {
 /// quantified over.
 ///
 /// ★★ Derived-from, not parallel-to: `the_boundary_list_is_the_whole_universe` checks
-/// this against [`crate::versions::TABLES`], so a driver row added there without a
+/// this against [`crate::versions::capability_tables`], so a driver row added there without a
 /// boundary here turns the suite red instead of quietly shrinking every gate below.
 /// (`gates_quantified_over_a_list`: shortening a list weakens a gate with zero red
 /// tests.)
@@ -1857,17 +1857,19 @@ pub static ALL_BOUNDARIES: &[&CapabilityTable] = &[
 mod tests {
     use super::*;
     use crate::DriverVersion;
-    use crate::versions::{AllocParams, ControlParams, table_for};
+    use crate::versions::{AllocParams, ControlParams, capabilities_for, table_for};
     use std::collections::BTreeSet;
 
+    /// ★ The allowlist's own boundary semantics ("newest row ≤ version") — deliberately NOT
+    /// through `table_for`, which since 2026-09-26 admits only MEASURED tags: these tests
+    /// probe one patch below each nvproxy boundary, which is policy, not a driver release.
     fn at(major: u16, minor: u16, patch: u16) -> &'static CapabilityTable {
-        table_for(DriverVersion {
+        capabilities_for(DriverVersion {
             major,
             minor,
             patch,
         })
         .expect("in range")
-        .capabilities()
     }
 
     /// One boundary's expected **resolved** surface: a label, its driver version, the
@@ -1944,7 +1946,7 @@ mod tests {
 
     /// ★★★ **The universe every structural test here is quantified over is DERIVED.**
     ///
-    /// [`ALL_BOUNDARIES`] must be exactly the set of tables [`crate::versions::TABLES`]
+    /// [`ALL_BOUNDARIES`] must be exactly the set of tables [`crate::versions::capability_tables`]
     /// points at. A driver row added there whose `caps` is a table missing from here
     /// would sit outside every gate below — a smaller universe is a smaller true
     /// statement, and shortening a list weakens a gate with zero red tests
@@ -1962,9 +1964,8 @@ mod tests {
             "two boundaries share a note, so `note` is not an identity here and the \
              comparison below would pass while conflating them"
         );
-        let from_tables: BTreeSet<&str> = crate::versions::TABLES
-            .iter()
-            .map(|t| t.capabilities().note)
+        let from_tables: BTreeSet<&str> = crate::versions::capability_tables()
+            .map(|t| t.note)
             .collect();
         assert_eq!(
             from_tables, declared,
@@ -1975,7 +1976,7 @@ mod tests {
         // `TABLES` that grew a row without a boundary would already have failed above,
         // but the literal is what says how big the universe is meant to be.
         assert_eq!(ALL_BOUNDARIES.len(), 8);
-        assert_eq!(crate::versions::TABLES.len(), 8);
+        assert_eq!(crate::versions::capability_tables().count(), 8);
     }
 
     /// ★★★ **The strip is real in both directions**, which is the property that makes a
@@ -3000,16 +3001,11 @@ mod tests {
         // The 575 row is its own row: a fall-through to 570's would make the whole test
         // assert about one boundary twice. `DriverAbiTable` exposes no version accessor,
         // so it is identified by the one public field that distinguishes it.
-        let row = table_for(DriverVersion {
-            major: 575,
-            minor: 51,
-            patch: 2,
-        })
-        .expect("575.51.02 has a row");
-        assert!(
-            row.note.contains("CAPS_575_51_02"),
-            "575.51.02 resolved to a row whose note is {:?} — it must resolve to its OWN \
-             row, not fall through to 570's",
+        let row = at(575, 51, 2);
+        assert_eq!(
+            row.note, CAPS_575_51_02.note,
+            "575.51.02 resolved to the allowlist {:?} — it must resolve to its OWN row, not \
+             fall through to 570's",
             row.note
         );
 

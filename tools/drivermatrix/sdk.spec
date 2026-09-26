@@ -8,3 +8,8 @@ typedefs  ctrl_params                 sdk  nvtypes.h,ctrl/*.h,ctrl/*/*.h   (NV00
 macros    class_ids                   rm   g_allclasses.h                                                       [A-Z0-9_]+
 typedefs  alloc_params                rm   nvos.h,=SDK_ALL_CLASSES_INCLUDE_FULL_HEADER,g_allclasses.h,alloc/alloc_channel.h|nvos.h,=SDK_ALL_CLASSES_INCLUDE_FULL_HEADER,g_allclasses.h   (NV_[A-Z0-9_]*ALLOC[A-Z0-9_]*PARAM[A-Z0-9_]*|NV[0-9A-F]{4}_ALLOC(ATION)?_PARAM[A-Z0-9_]*|NV_[A-Z0-9_]*_ALLOCATION_PARAMETERS|NV_CHANNEL_ALLOC_PARAMS|NV_CHANNELGPFIFO_ALLOCATION_PARAMETERS)
 typedefs  nvos_params                 sdk  nvtypes.h,nvos.h                                                     NVOS[0-9A-F]+_PARAMETERS|NV_[A-Z0-9_]*_PARAMS
+#
+# ── the SDK's own sizes and numberings behind the served controls ────────────────────────────
+macros    nv2080_engine_type          sdk  nvtypes.h,class/cl2080_notification.h                               NV2080_ENGINE_TYPE_[A-Z0-9_]+
+macros    nv2080_notifiers            sdk  nvtypes.h,class/cl2080_notification.h                               NV2080_NOTIFIERS_[A-Z0-9_]+
+macros    ctrl_limits                 sdk  nvtypes.h,ctrl/*.h,ctrl/*/*.h   (NV0000|NV0080|NV2080|NVA06F|NVA06C|NVC36F|NV90F1)_CTRL_[A-Z0-9_]*(MAX|SIZE|COUNT|INDEX)[A-Z0-9_]*

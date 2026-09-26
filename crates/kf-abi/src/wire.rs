@@ -69,6 +69,41 @@ pub enum AbiError {
         /// Patch version requested.
         patch: u16,
     },
+    /// ★ The driver version is not one of the measured ogkm tags
+    /// (`crate::generated::matrix::MEASURED`). Refused by name, never answered with a
+    /// neighbouring tag's layouts — see `crate::matrix` for why "newest ≤" is wrong here.
+    Unmeasured {
+        /// Major version requested.
+        major: u16,
+        /// Minor version requested.
+        minor: u16,
+        /// Patch version requested.
+        patch: u16,
+    },
+    /// ★ A measured driver version whose layout for `what` no decoder or encoder in this
+    /// crate speaks (e.g. 615.71.09's encrypted GSP queue element). The honest refusal of a
+    /// real gap, named with the struct that differs.
+    NoEncoding {
+        /// The struct (or struct.field) whose measured layout has no encoding here.
+        what: &'static str,
+        /// Major version.
+        major: u16,
+        /// Minor version.
+        minor: u16,
+        /// Patch version.
+        patch: u16,
+    },
+    /// ★ A measured driver version below the oldest reviewed capability allowlist row
+    /// (`crate::versions`' `CAPS_ROWS`): there is no reviewed control/class surface to
+    /// admit the guest against.
+    NoCapabilityRow {
+        /// Major version.
+        major: u16,
+        /// Minor version.
+        minor: u16,
+        /// Patch version.
+        patch: u16,
+    },
     /// An `NV_ESC_RM_ALLOC` arrived with an ioctl size matching neither the v1
     /// (`NVOS21`, 32 bytes) nor the v2 (`NVOS64`, 48 bytes) shape.
     ///
@@ -164,6 +199,57 @@ impl core::fmt::Display for AbiError {
                 patch,
             } => {
                 write!(f, "no ABI table for driver {major}.{minor}.{patch}")
+            }
+            Self::Unmeasured {
+                major,
+                minor,
+                patch,
+            } => {
+                let v = crate::DriverVersion {
+                    major: *major,
+                    minor: *minor,
+                    patch: *patch,
+                };
+                write!(
+                    f,
+                    "driver {v} was never measured: kayfabe answers only the ogkm tags in the \
+                     committed driver matrix (a release between two measured tags can move a \
+                     field); measure it with `tools/drivermatrix/regen.sh {v}`"
+                )
+            }
+            Self::NoEncoding {
+                what,
+                major,
+                minor,
+                patch,
+            } => {
+                let v = crate::DriverVersion {
+                    major: *major,
+                    minor: *minor,
+                    patch: *patch,
+                };
+                write!(
+                    f,
+                    "driver {v}: the measured layout of {what} has no encoding in kayfabe \
+                     (a real gap — docs/design/V3_DRIVER_MATRIX.md §6)"
+                )
+            }
+            Self::NoCapabilityRow {
+                major,
+                minor,
+                patch,
+            } => {
+                let v = crate::DriverVersion {
+                    major: *major,
+                    minor: *minor,
+                    patch: *patch,
+                };
+                write!(
+                    f,
+                    "driver {v} is below the oldest reviewed capability allowlist (nvproxy \
+                     rows start at 550.54.04 in this port); refusing rather than admitting it \
+                     against another version's control/class surface"
+                )
             }
             Self::UnknownAllocWire { ioctl_size } => {
                 write!(

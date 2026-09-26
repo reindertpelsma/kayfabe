@@ -1668,7 +1668,12 @@ impl CommandPolicy for InitTablePolicy {
             let ps = req.params_size as usize;
             if cmd.payload.len() >= req.params_at + ps {
                 let mut params = cmd.payload[req.params_at..req.params_at + ps].to_vec();
-                match kf_abi::videocaps::answer(&self.host.video_caps, req.cmd, &mut params) {
+                // ★ At the GUEST's measured layout (8 bytes at 580.65.06, 12 from 580.95.05).
+                let answered = match self.driver.video_caps_layout(req.cmd) {
+                    Some(layout) => kf_abi::videocaps::answer_at(layout, &self.host.video_caps, req.cmd, &mut params),
+                    None => Err(kf_abi::videocaps::CapsRefusal::NotACapsControl(req.cmd)),
+                };
+                match answered {
                     Ok(()) => {
                         let mut body = cmd.payload.clone();
                         body[CONTROL_STATUS_OFF..CONTROL_STATUS_OFF + 4].copy_from_slice(&NV_OK.to_le_bytes());

@@ -57,12 +57,13 @@
 //!
 //! # 2. How version skew is represented
 //!
-//! [`versions::TABLES`] — nvproxy's inherit-then-mutate registry
-//! (`gvisor/pkg/sentry/devices/nvproxy/version.go:142-162`), keyed on the **full**
-//! `major.minor.patch` because the real boundaries are mid-major (`NVOS46` grew
-//! at 580.65.06, `NVOS47` at 550.54.04). Selection is "newest entry ≤ requested";
-//! below the oldest entry is [`wire::AbiError::NoTableForVersion`], never a
-//! nearest-neighbour fallback.
+//! ★ **Since 2026-09-26 (`docs/design/V3_DRIVER_MATRIX.md`): MEASURED, per exact tag.**
+//! [`versions::table_for`] assembles a [`versions::DriverAbiTable`] for a driver version
+//! from [`matrix`] — every consumed layout and constant, measured by compiling ogkm at each
+//! tag (`tools/drivermatrix/`). Selection is **exact membership** in the measured tag list;
+//! an unmeasured version is [`wire::AbiError::Unmeasured`], never a nearest-neighbour
+//! fallback (the ogkm history moves fields INSIDE a branch). The one hand-kept row set left
+//! is the capability allowlist (nvproxy policy, "newest row ≤ version").
 //!
 //! ## 2.1 ★ The guest OS is a SECOND key, and it lives beside this one
 //!
@@ -133,6 +134,8 @@ pub mod inittables;
 // named by role so a name-based gate can tell them from the three that do.
 pub mod invariant_classes;
 pub mod l2evict;
+// ★ The driver matrix — measured per-version ABI facts and the one lookup rule (V3_DRIVER_MATRIX.md).
+pub mod matrix;
 pub mod mcintr;
 pub mod memsysconfig;
 pub mod notifier;
@@ -278,6 +281,55 @@ pub struct DriverVersion {
     pub patch: u16,
 }
 
+impl DriverVersion {
+    /// Parse a driver's own version string — `"580.159.04"` or, for the releases NVIDIA
+    /// numbers with two fields, `"595.84"` (`NV_VERSION_STRING` in
+    /// `ogkm-595.84: src/common/inc/nvUnixVersion.h:8`; also 580.142, 570.144, 550.67, 535.98).
+    ///
+    /// ★ Strict (`docs/design/V3_DRIVER_MATRIX.md` §4.1): two or three all-digit fields and
+    /// nothing else. A two-field version is its own release with patch 0 — never "some patch
+    /// we did not read". ⊘ The previous parser (`kf-qemu` `parse_version`) turned a malformed
+    /// patch into `0` (`"580.65.06-x"` → 580.65.0 → the 575 row), i.e. a typo selected
+    /// another version's layouts; a string we half-understand is now `None`.
+    #[must_use]
+    pub fn parse(s: &str) -> Option<Self> {
+        let s = s.trim();
+        let mut parts = s.split('.');
+        let mut field = || -> Option<Option<u16>> {
+            let Some(p) = parts.next() else {
+                return Some(None);
+            };
+            if p.is_empty() || p.len() > 5 || !p.bytes().all(|b| b.is_ascii_digit()) {
+                return None;
+            }
+            p.parse::<u16>().ok().map(Some)
+        };
+        let major = field()??;
+        let minor = field()??;
+        let patch = field()?.unwrap_or(0);
+        if parts.next().is_some() {
+            return None;
+        }
+        Some(Self {
+            major,
+            minor,
+            patch,
+        })
+    }
+}
+
+impl core::fmt::Display for DriverVersion {
+    /// The driver's own spelling: the patch zero-padded to two digits (`580.159.04`), and a
+    /// patch of zero omitted (`595.84`) — so a log line greps against `nvidia-smi` verbatim.
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        if self.patch == 0 {
+            write!(f, "{}.{}", self.major, self.minor)
+        } else {
+            write!(f, "{}.{}.{:02}", self.major, self.minor, self.patch)
+        }
+    }
+}
+
 /// # Axis-A runtime dispatch (shape only this milestone)
 ///
 /// One impl per generated driver version (nvproxy-style versioned tables with
@@ -304,6 +356,21 @@ kf_util::assert_send_sync!(DriverVersion, dyn DriverAbi);
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// ★ The strict parse: the two spellings NVIDIA uses round-trip, and nothing else parses.
+    #[test]
+    fn driver_versions_parse_strictly_and_print_as_the_driver_spells_them() {
+        let v = DriverVersion::parse("580.159.04").expect("three fields");
+        assert_eq!((v.major, v.minor, v.patch), (580, 159, 4));
+        assert_eq!(v.to_string(), "580.159.04");
+        let v = DriverVersion::parse("595.84").expect("two fields is a real release");
+        assert_eq!((v.major, v.minor, v.patch), (595, 84, 0));
+        assert_eq!(v.to_string(), "595.84");
+        assert_eq!(DriverVersion::parse(" 610.43.02\n").map(|v| v.to_string()).as_deref(), Some("610.43.02"));
+        for bad in ["", "580", "580.", "580.65.06-x", "580.65.06.1", "v580.65.06", "580.x.04", "580..04"] {
+            assert_eq!(DriverVersion::parse(bad), None, "{bad:?} must not parse");
+        }
+    }
 
     // ★ `only_the_kernel_sentinel_decodes_to_a_kernel_client` MOVED on 2026-07-29, to
     // `guest_os.rs`'s own test module, together with the function it is about. It now

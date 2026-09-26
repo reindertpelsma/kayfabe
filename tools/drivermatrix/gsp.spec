@@ -30,3 +30,9 @@ typedefs  rpc_structs                 rm   nvtypes.h,vgpu/vgpu_version.h,vgpu/rp
 #
 #
 
+#
+# ── engine numbering the GSP-RM and the guest's CPU-RM must agree on ──────────────────────────
+# RM_ENGINE_TYPE_* / MC_ENGINE_IDX_* are RM-internal numberings the guest reads back out of our
+# init tables (FIFO_GET_DEVICE_INFO_TABLE, INTR_GET_KERNEL_TABLE, engineCaps bit positions).
+macros    rm_engine_type              rm   nvtypes.h,gpu/gpu_engine_type.h                                      RM_ENGINE_TYPE_[A-Z0-9_]+
+macros    mc_engine_idx               rm   nvtypes.h,gpu/intr/engine_idx.h                                      MC_ENGINE_IDX_[A-Z0-9_]+

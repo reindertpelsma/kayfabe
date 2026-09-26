@@ -202,11 +202,6 @@ pub struct Device {
     held_stamps: Mutex<std::collections::VecDeque<u64>>,
 }
 
-fn parse_version(s: &str) -> Option<kf_abi::DriverVersion> {
-    let mut it = s.trim().split('.').map(|x| x.parse::<u16>().ok());
-    Some(kf_abi::DriverVersion { major: it.next()??, minor: it.next()??, patch: it.next().flatten().unwrap_or(0) })
-}
-
 impl Device {
     /// ★ Realize: host session → family → store → derived BAR0 → GSP FSM + answers → plane.
     ///
@@ -310,13 +305,28 @@ impl Device {
         let boot = boot_regs(family, &facts);
         let config_words = config_words(family, &facts);
 
-        let guest = match &cfg.guest_driver {
-            Some(v) => v.clone(),
-            None => rm.driver_version().to_string(),
+        // ★ The GUEST driver axis (`docs/design/V3_DRIVER_MATRIX.md` §4): the version every guest-facing
+        // layout is selected for. DECLARED by `guest-driver=`; unset, it defaults to the host's own
+        // version (the thin guest's host mode boots the host's modules) — and either way the guest's
+        // own fn-1 string is checked against it (`kf_rm::guestsysinfo`), so a wrong declaration is a
+        // named refusal, never a guest answered with another release's layouts.
+        let (guest, source) = match &cfg.guest_driver {
+            Some(v) => (v.clone(), "guest-driver="),
+            None => (rm.driver_version().to_string(), "defaulted to the host's"),
         };
-        let version = parse_version(&guest).ok_or(format!("guest driver version {guest:?} does not parse"))?;
-        let table = kf_abi::versions::table_for(version).map_err(|e| format!("guest driver {guest}: {e:?}"))?;
-        let abi = kf_rm::abi::gsp_abi_for(version).map_err(|e| format!("GSP ABI for {guest}: {e:?}"))?;
+        let version = kf_abi::DriverVersion::parse(&guest)
+            .ok_or(format!("guest driver version {guest:?} does not parse (want major.minor[.patch])"))?;
+        let table = kf_abi::versions::table_for(version).map_err(|e| format!("guest driver {version}: {e}"))?;
+        let abi = kf_rm::abi::gsp_abi_for(version).map_err(|e| format!("GSP ABI for {version}: {e:?}"))?;
+        eprintln!(
+            "kf3: guest driver {version} ({source}); measured ABI: static-info {:?}, element {:?}, \
+             init-args {:?}, rm-control params@{}, vgx {:?}",
+            table.gsp_static_info_wire(),
+            table.gsp_element_wire(),
+            table.gsp_init_args_wire(),
+            table.rm_control_wire().params_off,
+            table.vgx_version().map(|v| (v.major, v.minor)),
+        );
 
         let id = kf_chip::bar0::PciIdentity {
             vendor: pci.vendor,

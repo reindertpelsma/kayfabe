@@ -1,0 +1,24 @@
+# The measured ogkm tags (one per line). A driver version not listed here is UNMEASURED and
+# kf-abi refuses it by name. Add a tag with `tools/drivermatrix/regen.sh <tag>`.
+# Seeded 2026-09-26 with the nvkvm-pv tested-platforms range (docs/reference/tested-platforms.md
+# there) plus the first 615 tag.
+535.309.01
+545.23.08
+550.54.14
+565.57.01
+570.124.06
+570.148.08
+575.51.03
+575.57.08
+580.65.06
+580.95.05
+580.105.08
+580.126.09
+580.159.04
+580.173.02
+580.178.04
+590.48.01
+595.84
+610.43.02
+610.57.04
+615.71.09

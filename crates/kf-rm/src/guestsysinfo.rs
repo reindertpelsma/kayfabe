@@ -96,6 +96,60 @@ impl GuestSystemInfoPolicy {
         }
         Ok(ours)
     }
+
+    /// ★★★ The driver-version cross-check (`docs/design/V3_DRIVER_MATRIX.md` §4.2): the
+    /// guest's own `NV_VERSION_STRING`, off fn 1, against the version every layout on this
+    /// device was selected for.
+    ///
+    /// The device's version is DECLARED (the `guest-driver=` property, defaulting to the
+    /// host's); fn 1 is the first place the guest states its own. A disagreement means every
+    /// measured layout this device answers with belongs to another release — refused by name
+    /// here, the earliest point the guest can be told, rather than answered with layouts
+    /// that are wrong in ways that surface hundreds of messages later.
+    ///
+    /// # Errors
+    /// [`VersionCheck::Undecodable`] / [`VersionCheck::Mismatch`].
+    pub fn check_driver_version(&self, payload: &[u8]) -> Result<(), VersionCheck> {
+        let said = guestsysinfo::decode_guest_driver_version(payload)
+            .map_err(VersionCheck::Undecodable)?;
+        let declared = self.driver.driver_version();
+        match kf_abi::DriverVersion::parse(said) {
+            Some(v) if v == declared => Ok(()),
+            _ => Err(VersionCheck::Mismatch {
+                guest: said.to_string(),
+                declared,
+            }),
+        }
+    }
+}
+
+/// Why fn 1's driver-version cross-check refused.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VersionCheck {
+    /// The guest's `guestDriverVersion` could not be read.
+    Undecodable(GuestSystemInfoError),
+    /// The guest is a different release from the one this device's layouts were selected for.
+    Mismatch {
+        /// What the guest said, verbatim.
+        guest: String,
+        /// What the device was declared for.
+        declared: kf_abi::DriverVersion,
+    },
+}
+
+impl core::fmt::Display for VersionCheck {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Undecodable(e) => write!(f, "the guest's driver version is unreadable ({e})"),
+            Self::Mismatch { guest, declared } => write!(
+                f,
+                "the guest driver says it is {guest:?} but this device's layouts were selected \
+                 for {declared} — set the device property guest-driver={guest} (refusing \
+                 SET_GUEST_SYSTEM_INFO rather than answering a {guest} guest with {declared} \
+                 layouts)"
+            ),
+        }
+    }
 }
 
 /// A reply that carries no body and a non-zero envelope result — the short-circuit.
@@ -109,13 +163,26 @@ fn refuse() -> Option<Reply> {
 impl CommandPolicy for GuestSystemInfoPolicy {
     fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
         match cmd.function {
-            RpcFunction::SetGuestSystemInfo => match self.agreed_version(&cmd.payload) {
-                Ok(ours) => Some(Reply {
-                    rpc_result: NV_OK,
-                    body: encode_set_guest_system_info_reply(ours),
-                }),
-                Err(_) => refuse(),
-            },
+            RpcFunction::SetGuestSystemInfo => {
+                if let Err(why) = self.check_driver_version(&cmd.payload) {
+                    eprintln!("kf-rm: SET_GUEST_SYSTEM_INFO refused: {why}");
+                    return refuse();
+                }
+                match self.agreed_version(&cmd.payload) {
+                    Ok(ours) => Some(Reply {
+                        rpc_result: NV_OK,
+                        body: encode_set_guest_system_info_reply(ours),
+                    }),
+                    Err(e) => {
+                        eprintln!(
+                            "kf-rm: SET_GUEST_SYSTEM_INFO refused: the vGPU handshake does not \
+                             agree for driver {} ({e})",
+                            self.driver.driver_version()
+                        );
+                        refuse()
+                    }
+                }
+            }
             // ⊘ No body of our own: the guest reads only the status off this one. The
             // request's three 256-byte `[IN]` strings are NOT reflected — `Reply` with an
             // empty body zero-fills to the request's own length.

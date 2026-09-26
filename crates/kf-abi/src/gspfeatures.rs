@@ -46,6 +46,12 @@
 //! | [`crate::versions::DriverAbiTable`]'s own `version()` | **`580.65.06`** | ⊘⊘ **contradicted** — see below |
 //! | the guest's own `NV_VERSION_STRING`, off the wire | `580.159.04` | ★ this one |
 //!
+//! ⊘⊘ **CORRECTED 2026-09-26 — the table row below no longer exists.** `table_for` now
+//! assembles each table for the EXACT measured driver tag (`docs/design/V3_DRIVER_MATRIX.md`
+//! §4), so `version()` IS the declared guest version. The wire remains the source for the
+//! reason that survives: the table's version is the operator's declaration, the fn-1 string
+//! is the guest's own, and `kf-rm` refuses the pair when they disagree.
+//!
 //! ⊘⊘ **The second is the trap, and it is the reading §14.35's own sentence invites.** That
 //! section says to *"serve it from the guest `DriverVersion` the device already detects to
 //! select its ABI table"* — and the value the device retains after that selection is the
@@ -611,34 +617,19 @@ mod tests {
     }
 
     #[test]
-    fn the_abi_tables_version_is_not_the_guests_version_and_serving_it_would_be_wrong() {
-        // ★★★ The falsifier for this module's central sourcing claim, and the measurement
-        // that refuted §14.35's own instruction to *"serve it from the guest `DriverVersion`
-        // the device already detects to select its ABI table"*. What the device retains
-        // after that selection is the TABLE ROW, and `table_for` picks the newest entry
-        // `<=` requested — so the row's version is not the guest's.
+    fn the_abi_table_is_the_exact_measured_version_and_the_wire_stays_the_source() {
+        // ⊘⊘ CORRECTED 2026-09-26 (`docs/design/V3_DRIVER_MATRIX.md` §4): this test used to
+        // assert that `table_for(BENCH_DRIVER).version()` is NOT the bench version (it was
+        // the 580.65.06 boundary row). Tables are now assembled per EXACT measured tag, so
+        // the two coincide by construction. ★ The wire is still the source of the served
+        // string: the table's version is what the OPERATOR declared (`guest-driver=`), the
+        // fn-1 string is what the GUEST says it is, and `kf-rm`'s guest-system-info policy
+        // refuses the pair when they differ — a declaration is checked, never trusted.
         use crate::DriverAbi;
         let table = crate::versions::table_for(crate::versions::BENCH_DRIVER)
-            .expect("the bench driver is supported");
-        assert_ne!(
-            table.version(),
-            crate::versions::BENCH_DRIVER,
-            "if these ever coincide, this test stops protecting anything and the reason \
-             the wire is the source has to be re-argued rather than assumed"
-        );
-        // And concretely, so the failure message names the defect rather than a mismatch.
-        let served_if_wrong = format!(
-            "{}.{}.{:02}",
-            table.version().major,
-            table.version().minor,
-            table.version().patch
-        );
-        assert_eq!(served_if_wrong, "580.65.06");
-        assert_ne!(
-            served_if_wrong, "580.159.04",
-            "a real GA106 answers 580.159.04; serving the table row would have told a \
-             580.159.04 guest its GSP firmware is 580.65.06"
-        );
+            .expect("the bench driver is measured");
+        assert_eq!(table.version(), crate::versions::BENCH_DRIVER);
+        assert_eq!(table.version().to_string(), "580.159.04");
     }
 
     #[test]

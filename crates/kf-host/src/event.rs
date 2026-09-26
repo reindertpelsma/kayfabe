@@ -62,6 +62,8 @@ pub const NV2080_NOTIFIERS_CE0: u32 = 23;
 /// it — GB100/GB110 list COPY0..19 — where the non-stall events of COPY10..19 were armed on
 /// GSP_PERF_TRACE and its neighbours instead of CE10..19. Every die with ten or fewer CEs (all
 /// measured ones) is unaffected: `notifier_ce(n < 10)` never read this constant.
+/// `[measured, tools/drivermatrix]` 166 at every tag that has it (560.28.03 onward; before 560
+/// there is no CE10 notifier at all) — `kf-abi`'s matrix test pins it.
 pub const NV2080_NOTIFIERS_CE10: u32 = 166;
 
 /// The subdevice notifier index for copy engine `n` (`NV2080_NOTIFIERS_CE(x)`,
