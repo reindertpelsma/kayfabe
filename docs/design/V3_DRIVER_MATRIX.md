@@ -308,7 +308,14 @@ cup8bench, every timed iteration verified).
 | 580.159.04 | 580.105.08 | `f72f9a58` | — | — | **29/30** | **4/4** | the fat guest re-staged with the seed ISO (`f72f9a58`); ladder identical to the default guest's. The one thin red is an **adapter-init flake**, see below |
 | 580.159.04 | 580.159.04 | `47348e3b` (rebased on master `02b27c2a`; walker PTX ISA 8.2) | **9/9** | **1533 / 0** | **30/30** | **4/4** | the early-merge candidate — green on the whole bar |
 | 580.159.04 | 580.105.08 | `47348e3b` | — | — | **30/30** | **4/4** | + **fn-1 re-selection on hardware 3/3**: the 580.105.08 initrd on a DEFAULTED device logs `RE-SELECTED at fn 1: 580.159.04 (defaulted) -> 580.105.08` and passes `--timer`, `--engines`, `--ce-client` |
-| 580.159.04 | 580.159.04 | `6de22590` (rebased on master `f8c68286`; host axis carried) | **9/9** (RTX 3080 Ti, box 2) | **1591 / 0** | *running* | — | at the bench host every host carry is the identity |
+| 580.159.04 | 580.159.04 | `6de22590` (rebased on master `f8c68286`; host axis carried) | **9/9** (RTX 3080 Ti, box 2) | **1591 / 0** | **30/30** | — | at the bench host every host carry is the identity |
+| 580.159.04 | 580.65.06 | `47348e3b` | — | — | 28/30 | — | both reds are the adapter-init flake (§6 triage note) — one a NEW variant: `memmgrInitCeUtils` `NV_ERR_INVALID_STATE` with BOTH CeUtils submissions retired (the self-test's data check failed) |
+
+★ **At `6de22590` (element sizes in the matrix) the 575.57.08, 570.148.08 and 565.57.01 guests'
+RM INITIALISES** (`failure_point.sh`: no `RmInitAdapter` failure; the grader refuses them by
+design). 565 was still refused `INTERNAL_BIF_GET_STATIC_INFO` (16 bytes at ≤565; its status is
+discarded by the guest) — carried at `d687eb53`. 550.54.14 stopped at the device-info table
+(carried at `b6574262`) and BIF. Their fat ladders are the verdict (§8.2 ruling 1).
 
 ★ **How far each other guest version got at `47348e3b`** (`failure_point.sh`: one `--timer` boot,
 host 580.159.04; the 580-only grader refuses every non-580 guest by design, so "client rc=1" with
