@@ -38,7 +38,9 @@ cd "$(dirname "$0")/.." || exit 2
 #
 # w823: 1011 -> 1110 (SINGLE_STORE_PLAN.md archived; it said STATUS: LIVE while describing the
 #       scratchpad-isolate plane §10 deletes).
-BASE=${ARCHIVE_CITE_BASELINE:-1110}
+# 2026-09-26: 1110 -> 928 (v3 archive move: crates/kayfabe-{core,fwd,rmrpc,rt,shell,crec,
+#       qemu-raw,vmm-kvm,vmm-qemu} left crates/, and their comments with them — no comment edited).
+BASE=${ARCHIVE_CITE_BASELINE:-928}
 
 tmp=$(mktemp)
 grep -rhoE '[A-Za-z0-9_./-]+\.md' --include='*.rs' crates/ 2>/dev/null \
