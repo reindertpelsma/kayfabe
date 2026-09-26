@@ -36,6 +36,9 @@ pub struct FieldAt {
     /// Size in bytes. ⚠ A **bitfield** is recorded as a negative bit count (the sweep's
     /// convention); [`FieldAt::bytes`] refuses it rather than inventing a byte width.
     pub size: i32,
+    /// For an ARRAY: its element size in bytes (`-1` = multi-dimensional). `0` = not an array.
+    /// Measured from the DWARF element type — what [`transcode`] resizes an array by.
+    pub elem: i32,
 }
 
 impl FieldAt {
@@ -55,6 +58,13 @@ impl FieldAt {
     #[must_use]
     pub fn range(self) -> Option<core::ops::Range<usize>> {
         self.bytes().map(|b| self.off()..self.off() + b)
+    }
+
+    /// A 1-D array's `(element bytes, count)`; `None` for a non-array or a multi-dim array.
+    #[must_use]
+    pub fn array(self) -> Option<(usize, usize)> {
+        let e = usize::try_from(self.elem).ok().filter(|e| *e > 0)?;
+        Some((e, self.bytes()? / e))
     }
 }
 
@@ -305,6 +315,217 @@ impl Resolved {
     }
 }
 
+// =====================================================================================
+// ★★★ The measured TRANSCODER — one encoder, every version's layout
+// =====================================================================================
+
+/// Why a body could not be carried into another version's layout.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TranscodeError {
+    /// An array shrinks at the target version and a dropped element carries data. For a
+    /// per-GPC / per-engine array this means the hardware has more units than the guest's
+    /// struct can describe — a refusal, never a silent loss. Index-keyed lists the guest
+    /// cannot name beyond its capacity are declared truncatable by the caller.
+    Truncates {
+        /// The array's path.
+        path: &'static str,
+        /// The first dropped element that is non-zero.
+        index: usize,
+    },
+    /// A scalar narrows at the target version and the value does not fit.
+    Narrows {
+        /// The field's path.
+        path: &'static str,
+    },
+    /// A shape this transcoder does not carry (bitfields, a multi-dimensional array that
+    /// changes size, an element whose kind differs between the versions).
+    Unsupported {
+        /// The field's path.
+        path: &'static str,
+    },
+    /// The body is shorter than the source layout.
+    Short {
+        /// Bytes needed.
+        need: usize,
+        /// Bytes given.
+        got: usize,
+    },
+}
+
+impl fmt::Display for TranscodeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Truncates { path, index } => {
+                write!(f, "{path}[{index}] carries data the target version's struct has no room for")
+            }
+            Self::Narrows { path } => write!(f, "{path} does not fit the target version's narrower field"),
+            Self::Unsupported { path } => write!(f, "{path} has a shape the transcoder does not carry"),
+            Self::Short { need, got } => write!(f, "body is {got} bytes, the source layout is {need}"),
+        }
+    }
+}
+
+impl std::error::Error for TranscodeError {}
+
+fn parent_of(path: &str) -> &str {
+    path.rfind('.').map_or("", |i| &path[..i])
+}
+
+fn name_of(path: &str) -> &str {
+    path.rfind('.').map_or(path, |i| &path[i + 1..])
+}
+
+/// The direct children of container `parent` (`""` = the root): field paths whose parent is it,
+/// excluding array-element paths (`x[]`, which belong to their array `x`).
+fn children<'a>(l: &'a Layout, parent: &str) -> Vec<(&'static str, FieldAt)> {
+    l.fields
+        .iter()
+        .filter(|(p, _)| *p != "." && !p.ends_with("[]") && parent_of(p) == parent)
+        .map(|(p, f)| (*p, *f))
+        .collect::<Vec<_>>()
+}
+
+fn has_children(l: &Layout, path: &str) -> bool {
+    l.fields.iter().any(|(p, _)| *p != "." && parent_of(p) == path)
+}
+
+/// Children overlap ⇒ the container is a union: carried as raw bytes.
+fn is_union(l: &Layout, path: &str) -> bool {
+    let mut offs: Vec<(u32, i32)> = children(l, path).iter().map(|(_, f)| (f.off, f.size)).collect();
+    offs.sort_unstable();
+    offs.windows(2).any(|w| (w[0].0 as i64) + (w[0].1.max(0) as i64) > w[1].0 as i64)
+}
+
+/// ★★★ Carry `body`, encoded at the `from` layout, into the `to` layout **by field name**
+/// (`docs/design/V3_DRIVER_MATRIX.md` §4.5).
+///
+/// Every field present in both layouts is copied from its source offset to its target offset;
+/// structs recurse; arrays copy `min(count)` elements (struct elements recurse, scalar elements
+/// copy — zero-extending a widened element, refusing a narrowed one that does not fit); a union
+/// is carried as raw bytes. A field only the TARGET has stays zero (the guest's own newer field
+/// that the source version never stated). A field only the SOURCE has is dropped (the guest's
+/// version does not have it) and reported ONCE in the returned list when it carried data.
+///
+/// ⊘ An array that SHRINKS refuses when a dropped element carries data, unless its path is in
+/// `truncatable` — the caller's statement that the list is index-keyed and the guest cannot name
+/// entries beyond its own capacity. The default is the safe direction.
+///
+/// # Errors
+/// [`TranscodeError`] by path.
+pub fn transcode(
+    from: &Resolved,
+    to: &Resolved,
+    body: &[u8],
+    truncatable: &[&str],
+) -> Result<(Vec<u8>, Vec<&'static str>), TranscodeError> {
+    if body.len() < from.size() {
+        return Err(TranscodeError::Short { need: from.size(), got: body.len() });
+    }
+    let mut out = vec![0u8; to.size()];
+    let mut dropped = Vec::new();
+    // (path, from abs base of this instance, from elem-0 base, to abs base, to elem-0 base)
+    carry(from.layout, to.layout, "", 0, 0, 0, 0, body, &mut out, truncatable, &mut dropped)?;
+    Ok((out, dropped))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn carry(
+    fl: &Layout,
+    tl: &Layout,
+    container: &str,
+    f_base: usize,
+    f_e0: usize,
+    t_base: usize,
+    t_e0: usize,
+    body: &[u8],
+    out: &mut [u8],
+    truncatable: &[&str],
+    dropped: &mut Vec<&'static str>,
+) -> Result<(), TranscodeError> {
+    let fkids = children(fl, container);
+    let tkids = children(tl, container);
+    for (fp, ff) in &fkids {
+        let name = name_of(fp);
+        let Some((tp, tf)) = tkids.iter().find(|(p, _)| name_of(p) == name) else {
+            let at = f_base + (ff.off() - f_e0);
+            if let Some(b) = ff.bytes()
+                && body[at..at + b].iter().any(|x| *x != 0)
+                && !dropped.contains(fp)
+            {
+                dropped.push(*fp);
+            }
+            continue;
+        };
+        if ff.size < 0 || tf.size < 0 {
+            if ff != tf {
+                return Err(TranscodeError::Unsupported { path: fp });
+            }
+            // A bitfield at the same place in both: its bytes are shared with its neighbours
+            // and copied with them below (the enclosing scalar storage is identical).
+            continue;
+        }
+        let fa = f_base + (ff.off() - f_e0);
+        let ta = t_base + (tf.off() - t_e0);
+        match (ff.array(), tf.array()) {
+            (Some((fe, fnn)), Some((te, tn))) => {
+                let el_path_f = format!("{fp}[]");
+                let struct_elems = fl.fields.iter().any(|(p, _)| *p == el_path_f.as_str()) && has_children(fl, &el_path_f);
+                for i in 0..fnn.min(tn) {
+                    if struct_elems {
+                        let fe0 = fl.fields.iter().find(|(p, _)| *p == el_path_f.as_str()).map(|(_, f)| f.off()).unwrap_or(ff.off());
+                        let el_path_t = format!("{tp}[]");
+                        let te0 = tl.fields.iter().find(|(p, _)| *p == el_path_t.as_str()).map(|(_, f)| f.off()).unwrap_or(tf.off());
+                        let path: &'static str = fl.fields.iter().find(|(p, _)| *p == el_path_f.as_str()).map(|(p, _)| *p).unwrap_or(fp);
+                        carry(fl, tl, path, fa + i * fe, fe0, ta + i * te, te0, body, out, truncatable, dropped)?;
+                    } else {
+                        copy_scalar(&body[fa + i * fe..fa + (i + 1) * fe], &mut out[ta + i * te..ta + (i + 1) * te], fp)?;
+                    }
+                }
+                if fnn > tn {
+                    for i in tn..fnn {
+                        if body[fa + i * fe..fa + (i + 1) * fe].iter().any(|x| *x != 0) {
+                            if truncatable.contains(fp) {
+                                break;
+                            }
+                            return Err(TranscodeError::Truncates { path: fp, index: i });
+                        }
+                    }
+                }
+            }
+            (None, None) if has_children(fl, fp) && has_children(tl, tp) && !is_union(fl, fp) && !is_union(tl, tp) => {
+                carry(fl, tl, fp, f_base, f_e0, t_base, t_e0, body, out, truncatable, dropped)?;
+            }
+            (None, None) if has_children(fl, fp) || has_children(tl, tp) => {
+                // A union (or an aggregate on one side only): raw bytes, refusing a tail the
+                // target cannot hold.
+                let (fb, tb) = (ff.bytes().unwrap_or(0), tf.bytes().unwrap_or(0));
+                let n = fb.min(tb);
+                out[ta..ta + n].copy_from_slice(&body[fa..fa + n]);
+                if fb > tb && body[fa + tb..fa + fb].iter().any(|x| *x != 0) {
+                    return Err(TranscodeError::Truncates { path: fp, index: tb });
+                }
+            }
+            (None, None) => {
+                let (fb, tb) = (ff.bytes().unwrap_or(0), tf.bytes().unwrap_or(0));
+                copy_scalar(&body[fa..fa + fb], &mut out[ta..ta + tb], fp)?;
+            }
+            _ => return Err(TranscodeError::Unsupported { path: fp }),
+        }
+    }
+    Ok(())
+}
+
+/// Copy a little-endian scalar between widths: zero-extend when widening, refuse a value that
+/// does not fit when narrowing.
+fn copy_scalar(src: &[u8], dst: &mut [u8], path: &'static str) -> Result<(), TranscodeError> {
+    let n = src.len().min(dst.len());
+    dst[..n].copy_from_slice(&src[..n]);
+    if src.len() > dst.len() && src[dst.len()..].iter().any(|x| *x != 0) {
+        return Err(TranscodeError::Narrows { path });
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -338,6 +559,104 @@ mod tests {
         for v in ALL_VALUES {
             tiles(v.name, v.runs);
         }
+    }
+
+    // ── the transcoder, on synthetic layouts (independent of the generated data) ──────────
+
+    const fn fa(off: u32, size: i32, elem: i32) -> FieldAt {
+        FieldAt { off, size, elem }
+    }
+
+    /// "580-like": a count, a per-GPC mask array of 16 u32, and 4 entries of a struct
+    /// {id u32, phys u32 (580-only), val u16}.
+    static FROM: Layout = Layout {
+        size: 4 + 64 + 4 * 12,
+        fields: &[
+            ("count", fa(0, 4, 0)),
+            ("mask", fa(4, 64, 4)),
+            ("ent", fa(68, 48, 12)),
+            ("ent[]", fa(68, 12, 0)),
+            ("ent[].id", fa(68, 4, 0)),
+            ("ent[].phys", fa(72, 4, 0)),
+            ("ent[].val", fa(76, 2, 0)),
+        ],
+    };
+    /// "575-like": count, 12 masks, 3 entries of {id u32, val u32 (widened)}, and a 575-only tail.
+    static TO: Layout = Layout {
+        size: 4 + 48 + 3 * 8 + 4,
+        fields: &[
+            ("count", fa(0, 4, 0)),
+            ("mask", fa(4, 48, 4)),
+            ("ent", fa(52, 24, 8)),
+            ("ent[]", fa(52, 8, 0)),
+            ("ent[].id", fa(52, 4, 0)),
+            ("ent[].val", fa(56, 4, 0)),
+            ("tail", fa(76, 4, 0)),
+        ],
+    };
+
+    fn res(l: &'static Layout) -> Resolved {
+        Resolved { layout: l, strukt: "S", version: DriverVersion { major: 1, minor: 0, patch: 0 } }
+    }
+
+    fn u32_at(b: &[u8], o: usize) -> u32 {
+        u32::from_le_bytes(b[o..o + 4].try_into().expect("4"))
+    }
+
+    #[test]
+    fn transcode_carries_fields_by_name_across_layouts() {
+        let mut body = vec![0u8; FROM.size()];
+        body[0..4].copy_from_slice(&3u32.to_le_bytes());
+        for i in 0..12 {
+            body[4 + 4 * i..8 + 4 * i].copy_from_slice(&(0x100 + i as u32).to_le_bytes());
+        }
+        for i in 0..3 {
+            let o = 68 + 12 * i;
+            body[o..o + 4].copy_from_slice(&(10 + i as u32).to_le_bytes());
+            body[o + 4..o + 8].copy_from_slice(&0xdead_u32.to_le_bytes()); // phys: 580-only
+            body[o + 8..o + 10].copy_from_slice(&(0x7000 + i as u16).to_le_bytes());
+        }
+        let (out, dropped) = transcode(&res(&FROM), &res(&TO), &body, &[]).expect("carries");
+        assert_eq!(out.len(), TO.size());
+        assert_eq!(u32_at(&out, 0), 3);
+        for i in 0..12 {
+            assert_eq!(u32_at(&out, 4 + 4 * i), 0x100 + i as u32, "mask[{i}]");
+        }
+        for i in 0..3 {
+            let o = 52 + 8 * i;
+            assert_eq!(u32_at(&out, o), 10 + i as u32, "ent[{i}].id");
+            assert_eq!(u32_at(&out, o + 4), 0x7000 + i as u32, "ent[{i}].val widened u16 -> u32");
+        }
+        assert_eq!(u32_at(&out, 76), 0, "a target-only field stays zero");
+        assert_eq!(dropped, vec!["ent[].phys"], "the source-only field with data is reported");
+    }
+
+    #[test]
+    fn a_shrinking_array_refuses_a_dropped_element_with_data_unless_declared_truncatable() {
+        let mut body = vec![0u8; FROM.size()];
+        body[4 + 4 * 13..8 + 4 * 13].copy_from_slice(&1u32.to_le_bytes()); // mask[13]: a 14th GPC
+        assert_eq!(
+            transcode(&res(&FROM), &res(&TO), &body, &[]).map(|_| ()),
+            Err(TranscodeError::Truncates { path: "mask", index: 13 })
+        );
+        assert!(transcode(&res(&FROM), &res(&TO), &body, &["mask"]).is_ok(), "declared truncatable");
+        // An all-zero tail is not data: dropping it loses nothing.
+        let zero = vec![0u8; FROM.size()];
+        assert!(transcode(&res(&FROM), &res(&TO), &zero, &[]).is_ok());
+    }
+
+    #[test]
+    fn a_narrowed_scalar_that_does_not_fit_is_refused() {
+        // TO → FROM direction: ent[].val narrows u32 -> u16.
+        let mut body = vec![0u8; TO.size()];
+        body[56..60].copy_from_slice(&0x1_0000u32.to_le_bytes());
+        assert_eq!(
+            transcode(&res(&TO), &res(&FROM), &body, &[]).map(|_| ()),
+            Err(TranscodeError::Narrows { path: "ent[].val" })
+        );
+        body[56..60].copy_from_slice(&0xffffu32.to_le_bytes());
+        let (out, _) = transcode(&res(&TO), &res(&FROM), &body, &[]).expect("fits");
+        assert_eq!(u16::from_le_bytes([out[76], out[77]]), 0xffff);
     }
 
     /// ⊘ An unmeasured version is refused — including one strictly BETWEEN two measured tags,

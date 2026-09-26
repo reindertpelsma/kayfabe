@@ -79,6 +79,20 @@ def fields(rows):
     return d
 
 
+def elems(rows):
+    """path -> array element size (1-D arrays only; 0 = not an array, -1 = multi-dimensional)."""
+    d = {}
+    for (p, _o, _s, t) in rows:
+        if p in d:
+            continue
+        if t.startswith("array/"):
+            spec = t[len("array/"):]
+            d[p] = -1 if "x" in spec else int(spec or 0)
+        else:
+            d[p] = 0
+    return d
+
+
 def read_only(path):
     if not path:
         return None
@@ -111,13 +125,27 @@ def cmd_ranges(a):
         o.write("# tags\t" + " ".join(tags) + "\n")
         for s in structs:
             per = {t: fields(lay[t][s]) if s in lay[t] else None for t in tags}
+            el = {t: elems(lay[t][s]) if s in lay[t] else None for t in tags}
             paths = sorted({p for t in tags if per[t] for p in per[t]})
             for p in paths:
                 item = s if p == "." else f"{s}.{p}"
                 if not wanted(keep, item) and not wanted(keep, s):
                     continue
-                for (f0, f1, v) in runs(tags, lambda t: per[t].get(p) if per[t] else None):
-                    vv = "ABSENT" if v is None else f"{v[0]}+{v[1]}"
+
+                def val(t, p=p):
+                    if not per[t] or p not in per[t]:
+                        return None
+                    e = el[t].get(p, 0)
+                    return per[t][p] + ((e,) if e else ())
+
+                for (f0, f1, v) in runs(tags, val):
+                    if v is None:
+                        vv = "ABSENT"
+                    elif len(v) == 3:
+                        # `@ELEM` marks a 1-D array of ELEM-byte elements; `@-1` a multi-dim one.
+                        vv = f"{v[0]}+{v[1]}@{v[2]}"
+                    else:
+                        vv = f"{v[0]}+{v[1]}"
                     o.write(f"{'sizeof' if p == '.' else 'field'}\t{item}\t{f0}\t{f1}\t{vv}\n")
         for n in names:
             if not wanted(keep, n):

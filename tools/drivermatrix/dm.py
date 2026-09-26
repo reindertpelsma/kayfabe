@@ -232,7 +232,12 @@ def tname(t):
         if t.tag == "DW_TAG_pointer_type":
             return "ptr"
         if t.tag == "DW_TAG_array_type":
-            return "array"
+            # ★ `array/<element bytes>[x<dims>]` — the element size is what a TRANSCODER needs
+            # to resize an array between two versions (count = size / element); the dims are
+            # recorded so a multi-dimensional array is never resized as if it were flat.
+            dims = [sub for sub in t.iter_children() if sub.tag == "DW_TAG_subrange_type"]
+            el = type_size(t.get_DIE_from_attribute("DW_AT_type"))
+            return f"array/{el}" + (f"x{len(dims)}" if len(dims) > 1 else "")
         if nm:
             return nm.value.decode()
         if t.tag in ("DW_TAG_structure_type",):

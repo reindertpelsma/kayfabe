@@ -75,7 +75,12 @@ def main():
             key = "." if kind == "sizeof" else p
             d = sfields.setdefault(s, collections.OrderedDict()).setdefault(key, {})
             for t in span:
-                d[t] = None if val == "ABSENT" else tuple(int(x) for x in val.split("+"))
+                if val == "ABSENT":
+                    d[t] = None
+                else:
+                    offsz, _, el = val.partition("@")
+                    o_, s_ = (int(x) for x in offsz.split("+"))
+                    d[t] = (o_, s_, int(el) if el else 0)
         elif kind == "value":
             d = values.setdefault(item, {})
             for t in span:
@@ -93,8 +98,8 @@ def main():
     o.append("use crate::matrix::{FieldAt, Layout, Run, StructRuns, ValueRuns};\n\n")
     o.append("const fn v(major: u16, minor: u16, patch: u16) -> DriverVersion {\n")
     o.append("    DriverVersion { major, minor, patch }\n}\n\n")
-    o.append("const fn f(path: &'static str, off: u32, size: i32) -> (&'static str, FieldAt) {\n")
-    o.append("    (path, FieldAt { off, size })\n}\n\n")
+    o.append("const fn f(path: &'static str, off: u32, size: i32, elem: i32) -> (&'static str, FieldAt) {\n")
+    o.append("    (path, FieldAt { off, size, elem })\n}\n\n")
     o.append("const fn r<T>(first: DriverVersion, last: DriverVersion, value: Option<T>) -> Run<T> {\n")
     o.append("    Run { first, last, value }\n}\n\n")
     o.append(f"/// Every ogkm tag the committed sweep measured, ascending ({len(tags)} tags).\n")
@@ -132,7 +137,7 @@ def main():
             for p, fv in zip(paths, lay[1:]):
                 if fv is None:
                     continue
-                o.append(f"        f(\"{p}\", {fv[0]}, {fv[1]}),\n")
+                o.append(f"        f(\"{p}\", {fv[0]}, {fv[1]}, {fv[2]}),\n")
             o.append("    ],\n};\n")
         o.append(f"/// `{s}` — {len(distinct)} distinct consumed layout(s) over {len(runs)} run(s).\n")
         o.append(f"pub const {ident}: StructRuns = StructRuns {{\n    name: \"{s}\",\n    runs: &[\n")
