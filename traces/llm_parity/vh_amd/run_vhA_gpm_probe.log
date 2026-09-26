@@ -1,0 +1,107 @@
+=== boot_capture tag=vhA_gpm at 2026-09-25T22:59:39+00:00 ===
+=== source revision: d7741675 ===
+=== qemu binary: -rwxr-xr-x 1 root root 95798888 Sep 25 19:07 /workspace/bench/kf3-bins/8dd2bbdf/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: kayfabe-rev:da0419de682e0104d66e6c38e9d0e8b6bbbe7f2e 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /root/kf-llm2/scripts/bench/boot_nvkvm.sh  sha256=7454bf433c1d9212
+    used: /root/kf-llm2/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Fri Sep 25 22:59:48 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.04             Driver Version: 580.159.04     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3060        Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /   8192MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Sep 25 22:59 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Sep 25 22:59 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Sep 25 22:59 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Sep 25 22:59 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Sep 25 22:59 .
+drwxr-xr-x 18 root root   4000 Sep 25 22:59 ..
+cr--------  1 root root 240, 1 Sep 25 22:59 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Sep 25 22:59 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /root/kf-llm2/scripts/bench/llm_parity_hook.sh at 2026-09-25T22:59:54+00:00 ===
+LP_GUEST_PM=Enabled Legacy persistence mode for GPU 00000000:00:03.0. All done. Enabled 
+LP_GUEST_SMI=NVIDIA GeForce RTX 3060, 580.159.04
+LP_GUEST_NPROC=4 LP_GUEST_MEM=7941
+LP_START lane=guest_pm date=2026-09-25T22:59:58+00:00 model=Qwen/Qwen2-0.5B-Instruct snapshot=[c540970f9e29518b1d8f06ab8b24cba66ad77b6d] short=3 long=512,2048 x3 warm=1
+LP lane=guest_pm kind=short ntok=16 proc=1 LLM_KVM_EXITS=1239277
+LP lane=guest_pm kind=short ntok=16 proc=1 LLM_DOORBELLS=22528
+LP lane=guest_pm kind=short ntok=16 proc=1 LLM_DEVICE=cuda
+LP lane=guest_pm kind=short ntok=16 proc=1 TORCH_CUDA_AVAILABLE=True
+LP lane=guest_pm kind=short ntok=16 proc=1 TORCH_DEV_COUNT=1
+LP lane=guest_pm kind=short ntok=16 proc=1 LLM_PARAM_DEVICE=cuda
+LP lane=guest_pm kind=short ntok=16 proc=1 LLM_RATIO_ELIGIBLE=1
+LP lane=guest_pm kind=short ntok=16 proc=1 LLM_TEXT= ______. A. Paris B. London C. New York D
+LP lane=guest_pm kind=short ntok=16 proc=1 LLM_TEXT_SHA256=51e95abb645c421494a10e6e218bfc494ec69ae995947126fa9c0c08f18d20fa
+LP lane=guest_pm kind=short ntok=16 proc=1 LLM_OK=1
+LP lane=guest_pm kind=short ntok=16 proc=1 LLM_TOKENS=16
+LP lane=guest_pm kind=short ntok=16 proc=1 LLM_MS=9784.9
+LP lane=guest_pm kind=short ntok=16 proc=1 LLM_RC=0
+LP_EXT lane=guest_pm kind=short ntok=16 proc=1 ext_ms=56990 rc=0
+LP lane=guest_pm kind=short ntok=16 proc=2 LLM_KVM_EXITS=89020
+LP lane=guest_pm kind=short ntok=16 proc=2 LLM_DOORBELLS=22531
+LP lane=guest_pm kind=short ntok=16 proc=2 LLM_DEVICE=cuda
+LP lane=guest_pm kind=short ntok=16 proc=2 TORCH_CUDA_AVAILABLE=True
+LP lane=guest_pm kind=short ntok=16 proc=2 TORCH_DEV_COUNT=1
+LP lane=guest_pm kind=short ntok=16 proc=2 LLM_PARAM_DEVICE=cuda
+LP lane=guest_pm kind=short ntok=16 proc=2 LLM_RATIO_ELIGIBLE=1
+LP lane=guest_pm kind=short ntok=16 proc=2 LLM_TEXT= ______. A. Paris B. London C. New York D
+LP lane=guest_pm kind=short ntok=16 proc=2 LLM_TEXT_SHA256=51e95abb645c421494a10e6e218bfc494ec69ae995947126fa9c0c08f18d20fa
+LP lane=guest_pm kind=short ntok=16 proc=2 LLM_OK=1
+LP lane=guest_pm kind=short ntok=16 proc=2 LLM_TOKENS=16
+LP lane=guest_pm kind=short ntok=16 proc=2 LLM_MS=2024.5
+LP lane=guest_pm kind=short ntok=16 proc=2 LLM_RC=0
+LP_EXT lane=guest_pm kind=short ntok=16 proc=2 ext_ms=10421 rc=0
+LP lane=guest_pm kind=short ntok=16 proc=3 LLM_KVM_EXITS=83122
+LP lane=guest_pm kind=short ntok=16 proc=3 LLM_DOORBELLS=22554
+LP lane=guest_pm kind=short ntok=16 proc=3 LLM_DEVICE=cuda
+LP lane=guest_pm kind=short ntok=16 proc=3 TORCH_CUDA_AVAILABLE=True
+LP lane=guest_pm kind=short ntok=16 proc=3 TORCH_DEV_COUNT=1
+LP lane=guest_pm kind=short ntok=16 proc=3 LLM_PARAM_DEVICE=cuda
+LP lane=guest_pm kind=short ntok=16 proc=3 LLM_RATIO_ELIGIBLE=1
+LP lane=guest_pm kind=short ntok=16 proc=3 LLM_TEXT= ______. A. Paris B. London C. New York D
+LP lane=guest_pm kind=short ntok=16 proc=3 LLM_TEXT_SHA256=51e95abb645c421494a10e6e218bfc494ec69ae995947126fa9c0c08f18d20fa
+LP lane=guest_pm kind=short ntok=16 proc=3 LLM_OK=1
+LP lane=guest_pm kind=short ntok=16 proc=3 LLM_TOKENS=16
+LP lane=guest_pm kind=short ntok=16 proc=3 LLM_MS=1972.3
+LP lane=guest_pm kind=short ntok=16 proc=3 LLM_RC=0
+LP_EXT lane=guest_pm kind=short ntok=16 proc=3 ext_ms=9982 rc=0
+Terminated
+HOOK_RC=143
+=== GUEST dmesg AFTER the workload (phase 3b captured 42 lines BEFORE it) ===
+GUEST_DMESG_AFTER_LINES=71
+GUEST_DMESG_AFTER_NVRM=68
+GUEST_DMESG_WORKLOAD_DELTA=29
+=== HOST dmesg delta for this boot (watermark 1183 → 1183) ===
+HOST_DMESG_LINES=0
+HOST_DMESG_NVRM=0
+0
+HOST_DMESG_XID=0
+0

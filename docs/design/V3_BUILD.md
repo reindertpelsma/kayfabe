@@ -138,3 +138,25 @@ Each cell mean of 3 processes.
   (`kf-host/src/channel.rs` `birth_channel`), so TSG-scoped GR state the guest programmed through its
   first channel is absent from the second's context (`CtxBind initialized: 0` vs `3591`). Blocks the
   CUDA-graph arm (`run_llm_graph.py`: bare 169.6 tok/s, host 165.6, 6x eager) and any multi-stream app.
+
+★★★ **Same matrix on AMD, w828b (`vh`: EPYC 7452 KVM guest, RTX 3060, 580.159.04; device `e5ff45ff`
+= the above + the sysmem-containment fix `f4813205`).** Raw: `traces/llm_parity/vh_amd/`.
+
+| tok/s | guest (kf3) | guest + PM | vh host | vc bare (Xeon) | guest+PM/vh | guest+PM/vc |
+|---|---|---|---|---|---|---|
+| short 16-tok cold | 4.80 | 5.81 | 17.19 | 13.40 | 0.34 | 0.43 |
+| 512 steady decode | 12.62 | 12.58 | 43.98 | 28.28 | 0.29 | 0.45 |
+| 2048 steady decode | 13.04 | 12.69 | 43.53 | 28.26 | 0.29 | 0.45 |
+
+- Exits are ~2x cheaper than on vh3's Intel, but the EPYC host is also 2.2x faster, so the ratio is
+  unchanged (0.29x vs 0.31x). Per 2048-token process (PM lane): **1084.5 doorbells and 1303 KVM
+  exits per token** (5.34M exits, 4.44M ledger doorbells). Excess per token 55.8 ms ⇒ **~51 µs of
+  guest time per doorbell** (42.8 µs per exit on average). `perf kvm stat` in the box (L1): npf
+  (the doorbell MMIO write) is 70% of exits at 18.5 µs average L1 handling; the rest is L0 nesting.
+  0.8x needs ≤ ~5 µs per doorbell.
+- ⊘ **Fixed: sysmem walk runs were bounded by the vidmem store span** (`f4813205`): UVM's CE channel
+  died on a valid guest page above 8 GiB GPA in any 8 GiB guest. ⊘ **Open: without guest persistence
+  mode, UVM's CE channel dies on the 5th CUDA process of a boot** (both boots, `vhA_g`/`vhB_g`):
+  `split walk (pdb 0x201000): walk report TRUNCATED (flags=0x85, refuse_mask=0x10 RUN_CAP)` — each
+  process re-inits the adapter; with PM (one init) 9 processes ran clean. Looks like placements for
+  UVM's re-created VAS accumulating across adapter cycles; not fixed.
