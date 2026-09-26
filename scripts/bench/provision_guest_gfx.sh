@@ -11,7 +11,7 @@ set -uo pipefail
 BENCH=/workspace/bench
 SRC_DIR="$(cd "$(dirname "$0")" && pwd)"
 VGL_URL=${VGL_URL:-https://github.com/VirtualGL/virtualgl/releases/download/3.1.3/virtualgl_3.1.3_amd64.deb}
-PKGS="vulkan-tools libvulkan-dev glslang-tools libegl-dev libopengl-dev libgl-dev mesa-utils xvfb x11-utils gcc"
+PKGS="vulkan-tools libvulkan-dev glslang-tools libegl-dev libopengl-dev libgl-dev libx11-dev mesa-utils xvfb x11-utils gcc"
 say(){ echo "[$(date -Is)] $*"; }
 
 if [ "${1:-}" = host ]; then

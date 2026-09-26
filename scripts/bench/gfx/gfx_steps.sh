@@ -5,7 +5,10 @@
 #   GFX_S2=PASS|FAIL   vulkaninfo names the NVIDIA device AND vk_gfx compute VKC_BAD=0
 #   GFX_S3=PASS|FAIL   vk_gfx render: CPU-reference check clean (hashes graded vs host by the caller)
 #   GFX_S4=PASS|FAIL   EGL device platform display + egl_gfx reference check clean
-#   GFX_S5=PASS|FAIL   Xvfb + VirtualGL (EGL back end): glxinfo renderer is NVIDIA, glxgears draws frames
+#   GFX_S5=PASS|FAIL   Xvfb + VirtualGL (EGL back end): glxinfo renderer is NVIDIA AND glx_gfx (GLX in an X
+#                      window) renders the scene correctly (CPU reference; hashes graded vs host by the caller).
+#                      ⊘ glxgears' frame count is printed but NOT graded: a client-side count stays >0 while
+#                      the GPU faults every frame (measured gfx7).
 # A step that could not run prints GFX_Sn=NOTRUN with the reason (never a silent pass).
 #   usage: gfx_steps.sh <host|guest> <build-dir>
 set -uo pipefail
@@ -31,7 +34,7 @@ ls -la /dev/dri/ 2>/dev/null | sed 's/^/  dri: /'
 
 # ── build ────────────────────────────────────────────────────────────────────────────────────
 if ! bash "$SRC/build_gfx.sh" "$OUT" 2>&1 | tail -3; then echo "GFX_BUILD=FAIL"; fi
-[ -x "$OUT/vk_gfx" ] && [ -x "$OUT/egl_gfx" ] && echo "GFX_BUILD=OK" || echo "GFX_BUILD=FAIL"
+[ -x "$OUT/vk_gfx" ] && [ -x "$OUT/egl_gfx" ] && [ -x "$OUT/glx_gfx" ] && echo "GFX_BUILD=OK" || echo "GFX_BUILD=FAIL"
 
 # ── S2: vulkaninfo + Vulkan compute ─────────────────────────────────────────────────────────
 VI=$(timeout "$T" vulkaninfo --summary 2>&1); VIRC=$?
@@ -71,7 +74,11 @@ else
     FR=$(echo "$GG" | grep -o '^[0-9]* frames' | head -1 | cut -d' ' -f1)
     echo "GFX_S5_RENDERER=$(echo "$GI" | grep -i 'OpenGL renderer string' | sed 's/.*: //')"
     echo "GFX_S5_FRAMES=${FR:-0}"
+    GX=$(cd /tmp && DISPLAY=:7 timeout "$T" vglrun -d egl "$OUT/glx_gfx" 2>&1); GXRC=$?
+    echo "$GX" | sed 's/^/  /'; echo "$GX" | grep -E '^GLXR_(HASH_[AZB]|REF_FAILS)=|^GLX_RENDERER='
+    echo "GFX_GLXR_RC=$GXRC"
     kill $XP 2>/dev/null; wait $XP 2>/dev/null
-    if echo "$GI" | grep -qi 'renderer string.*NVIDIA' && [ "${FR:-0}" -gt 0 ]; then echo "GFX_S5=PASS"; else echo "GFX_S5=FAIL"; fi
+    if echo "$GI" | grep -qi 'renderer string.*NVIDIA' && echo "$GX" | grep -q '^GLXR_REF_FAILS=0$' \
+       && echo "$GX" | grep -q '^GLX_RENDERER=.*NVIDIA'; then echo "GFX_S5=PASS"; else echo "GFX_S5=FAIL"; fi
 fi
 echo "GFX_STEPS_END role=$ROLE at $(date -Is)"

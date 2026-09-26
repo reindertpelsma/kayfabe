@@ -943,8 +943,7 @@ pub fn prewarm(plane: &MemPlane, rm: &'static HostRm, store: u32) -> Option<Stri
             Some(format!("prewarm: spare host space {:#x} ready before the guest runs — {line} (total {} us)", space.space, t0.elapsed().as_micros()))
         }
         (fb, ram) => {
-            let _ = rm.free(space.range);
-            let _ = rm.free(space.space);
+            rm.free_vaspace(space);
             Some(format!("prewarm: windows refused fb={fb:?} ram={ram:?} — no spare; {line}"))
         }
     }
@@ -986,8 +985,7 @@ fn retire_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, key: Va
     };
     if !recycled {
         // The windows go with the space; a refused unmap means the space is not clean — freed.
-        let _ = rm.free(g.vas.space.range);
-        let _ = rm.free(g.vas.space.space);
+        rm.free_vaspace(g.vas.space);
     }
     format!(
         "retire {key:?}: {} row(s) unmapped ({refused} refused), host space {:#x} {}",

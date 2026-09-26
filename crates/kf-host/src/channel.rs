@@ -19,7 +19,7 @@ use kf_abi::bringup::{
 use kf_abi::generated::classes::NvChannelGroupAllocationParameters;
 use kf_abi::invariant_classes::{CHANNEL_GROUP, VA_SPACE};
 use kf_abi::submit::{
-    BIND_PARAMS_SIZE, CeAllocParams, ChannelAllocParams, GpfifoScheduleParams,
+    BIND_PARAMS_SIZE, CeAllocParams, ChannelAllocParams, GpfifoScheduleParams, NvMemoryAllocationParams,
     NVA06C_CTRL_CMD_BIND, NVA06C_CTRL_CMD_GPFIFO_SCHEDULE,
     NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN, WORK_SUBMIT_TOKEN_PARAMS_SIZE,
 };
@@ -39,14 +39,76 @@ pub const USERD_ALIGNMENT: u64 = 512;
 pub const USERD_OFFSET_MISALIGNED: u32 = 0x4B70;
 
 /// One host VA space: the `FERMI_VASPACE_A` object and the `NV01_MEMORY_VIRTUAL` range over it
-/// that every map names as `hDma`.
+/// that every map names as `hDma` — except inside a [`GuestVaRange`], whose own reserving object
+/// is the `hDma` there.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct VaSpace {
     /// The VA space object.
     pub space: u32,
     /// The virtual range (`hDma`).
     pub range: u32,
+    /// ★ v3-gfx: the guest-allocatable VA ranges, RESERVED in this space (handle 0 = not reserved).
+    pub guest: [GuestVaRange; 2],
 }
+
+/// ★ v3-gfx — **a VA range reserved in the host space for the GUEST'S mappings.**
+///
+/// `[measured vgfx 2026-09-26, gfx7]` a GL guest faulted every 3D channel (host Xid 31,
+/// `GPCCLIENT_PROP_0 … FAULT_PRIV_VIOLATION`): host RM's own allocator places the twin's GR context
+/// buffers (privileged, `bIsKernelAlloc`) lowest-fit in the twin's space — the very VAs the guest's
+/// RM, running the same allocator, hands its next surfaces. The guest's FIXED map there then found
+/// the VA held by host RM (`VA_ALREADY_MAPPED` ⇒ `HeldByHost`) and its ROP read a host context
+/// buffer. RM offers userspace no way to steer its own placements (`VA_INTERNAL_LIMIT` pins them to
+/// the split window the client RM reserves against itself; `IS_MIRRORED` is VER1-only). ⇒ kf
+/// RESERVES the guest's allocatable ranges up front with a lazy `NV50_MEMORY_VIRTUAL` (no page
+/// tables pinned, `gpu_vaspace.c:1640`), so host RM's own placements can only land above them, and
+/// maps the guest's rows THROUGH the reservation (a FIXED map into a VA-reserving object is absolute
+/// and in-bounds, `dma.c:129-155`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct GuestVaRange {
+    /// The reserving `NV50_MEMORY_VIRTUAL` handle (0 = none).
+    pub handle: u32,
+    /// Inclusive start.
+    pub lo: u64,
+    /// Exclusive end.
+    pub hi: u64,
+}
+
+/// ★ v3-gfx: the ranges a guest's RM allocates from in a split VA space, family-invariant:
+/// `[vaStartMin, SPLIT_VAS_SERVER_RM_MANAGED_VA_START)` and from the split window's end up to the
+/// top of a CPU-mirrorable address (UVM places CUDA allocations at CPU VAs, `< 2^47`).
+/// `vaStartMin` = `gvaspaceGetReservedVaspaceBase` = 1 MiB (`g_gpu_vaspace_nvoc.h:811-815`); the
+/// window is `[4 GiB, 4.5 GiB)` (`g_gpu_vaspace_nvoc.h:99-100`), the host's own GSP's.
+pub const GUEST_VA_RANGES: [(u64, u64); 2] = [(1 << 20, 1 << 32), ((1 << 32) + (1 << 29), 1 << 47)];
+
+/// `NV50_MEMORY_VIRTUAL` (`ogkm-580: resource_list.h:516-523`, parent `Device`).
+const NV50_MEMORY_VIRTUAL: u32 = 0x50a0;
+/// `NVOS32_ALLOC_FLAGS_FIXED_ADDRESS_ALLOCATE | _LAZY | _VIRTUAL` (`nvos.h:1448-1464`).
+const NVOS32_RESERVE_FLAGS: u32 = 0x0000_0010 | 0x0000_0400 | 0x0008_0000;
+
+impl VaSpace {
+    /// The `hDma` a mapping of `[va, va+len)` names: the reservation that contains it, else the
+    /// space's range. ⊘ A mapping straddling a reservation edge is refused by name (the guest's
+    /// RM never allocates across the split window, and `2^47` is the CPU-VA ceiling).
+    ///
+    /// # Errors
+    /// [`VA_STRADDLES_RESERVATION`].
+    pub fn dma_for(&self, va: u64, len: u64) -> Result<u32, RmError> {
+        let end = va.saturating_add(len.max(1));
+        for g in self.guest.iter().filter(|g| g.handle != 0) {
+            if va >= g.lo && end <= g.hi {
+                return Ok(g.handle);
+            }
+            if va < g.hi && g.lo < end {
+                return Err(RmError::Other(VA_STRADDLES_RESERVATION));
+            }
+        }
+        Ok(self.range)
+    }
+}
+
+/// A FIXED map that straddles the edge of a [`GuestVaRange`].
+pub const VA_STRADDLES_RESERVATION: u32 = 0x4B71;
 
 /// One born host channel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -109,13 +171,52 @@ impl HostRm {
         match self.raw_alloc(self.device, want, NV01_MEMORY_VIRTUAL, &mut range) {
             Ok(h) => {
                 self.remember(h, self.device);
-                Ok(VaSpace { space, range: h })
+                let mut vas = VaSpace { space, range: h, guest: [GuestVaRange::default(); 2] };
+                // ★ v3-gfx: reserve the guest's ranges BEFORE anything is placed in the space. A
+                // refusal leaves that range unreserved (the pre-v3-gfx behaviour), and says so.
+                if std::env::var_os("KF3_NO_GUEST_VA_RESERVE").is_none() {
+                    for (slot, &(lo, hi)) in vas.guest.iter_mut().zip(GUEST_VA_RANGES.iter()) {
+                        match self.reserve_va(space, lo, hi - lo) {
+                            Ok(handle) => *slot = GuestVaRange { handle, lo, hi },
+                            Err(e) => eprintln!("kf-host: space {space:#x}: guest VA range [{lo:#x}, {hi:#x}) NOT reserved: {e:?} — host RM may place its own objects there"),
+                        }
+                    }
+                }
+                Ok(vas)
             }
             Err(e) => {
                 let _ = self.free(space);
                 Err(e)
             }
         }
+    }
+
+    /// ★ v3-gfx: a lazy, FIXED `NV50_MEMORY_VIRTUAL` reservation of `[at, at+len)` in `space`.
+    ///
+    /// # Errors
+    /// The host's refusal.
+    pub fn reserve_va(&self, space: u32, at: u64, len: u64) -> Result<u32, RmError> {
+        let mut p = [0u8; NvMemoryAllocationParams::SIZE];
+        NvMemoryAllocationParams { owner: self.client.raw(), kind: 0, attr: 0, size: len, alignment: 0 }
+            .encode_into(&mut p)
+            .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
+        p[8..12].copy_from_slice(&NVOS32_RESERVE_FLAGS.to_le_bytes());
+        p[80..88].copy_from_slice(&at.to_le_bytes()); // offset
+        p[108..112].copy_from_slice(&space.to_le_bytes()); // hVASpace
+        let want = self.mint();
+        let h = self.raw_alloc(self.device, want, NV50_MEMORY_VIRTUAL, &mut p)?;
+        self.remember(h, self.device);
+        Ok(h)
+    }
+
+    /// ★ v3-gfx: free a space and everything kf allocated over it (reservations first — they
+    /// reference the space).
+    pub fn free_vaspace(&self, space: VaSpace) {
+        for g in space.guest.iter().filter(|g| g.handle != 0) {
+            let _ = self.free(g.handle);
+        }
+        let _ = self.free(space.range);
+        let _ = self.free(space.space);
     }
 
     /// Map `len` bytes of `memory` at `offset` into `space`, at `at` if given. `defer` sets
@@ -139,7 +240,11 @@ impl HostRm {
         defer: bool,
     ) -> Result<u64, RmError> {
         let extra = if defer { NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE } else { 0 };
-        self.raw_map_dma_slice(space.range, memory, offset, len, at, extra, backing == MapBacking::SharedSlice)
+        let dma = match at {
+            Some(a) => space.dma_for(a, len)?,
+            None => space.range,
+        };
+        self.raw_map_dma_slice(dma, memory, offset, len, at, extra, backing == MapBacking::SharedSlice)
     }
 
     /// ★ Map ALL of `memory` (`len` bytes) into `space` at an address RM chooses, and return it —
@@ -161,7 +266,7 @@ impl HostRm {
     /// The host's status.
     pub fn unmap(&self, space: VaSpace, va: u64, defer: bool) -> Result<(), RmError> {
         let flags = if defer { NVOS47_FLAGS_DEFER_TLB_INVALIDATION_TRUE } else { 0 };
-        self.raw_unmap_dma_flags(space.range, va, flags)
+        self.raw_unmap_dma_flags(space.dma_for(va, 1)?, va, flags)
     }
 
     /// ONE TLB invalidate for `space` — the end of a deferred batch.

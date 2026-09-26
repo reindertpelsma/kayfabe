@@ -20,7 +20,7 @@ echo "GFX_GUEST_RC=$?"
 grep -q '^GFX_STEPS_END' "$OUT" || echo "⊘ GFX_STEPS_END missing — the guest run did not finish; every NOTRUN/absent step is UNMEASURED"
 sed 's/^/  guest| /' "$OUT"
 grep -E '^GFX_S[1-5]=' "$OUT"
-for k in VKC_HASH VKR_HASH_A VKR_HASH_Z VKR_HASH_B EGLR_HASH_A EGLR_HASH_Z EGLR_HASH_B; do
+for k in VKC_HASH VKR_HASH_A VKR_HASH_Z VKR_HASH_B EGLR_HASH_A EGLR_HASH_Z EGLR_HASH_B GLXR_HASH_A GLXR_HASH_Z GLXR_HASH_B; do
     g=$(grep -a "^$k=" "$OUT" | tail -1 | cut -d= -f2)
     h=$(grep -a "^$k=" "$BASE" 2>/dev/null | tail -1 | cut -d= -f2)
     if [ -z "$h" ]; then echo "GFX_CMP_$k=NOBASE guest=${g:-absent}"
