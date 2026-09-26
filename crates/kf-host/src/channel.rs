@@ -305,6 +305,74 @@ impl HostRm {
         self.raw_unmap_dma_flags(space.dma_for(va, 1)?, va, flags)
     }
 
+    /// ★★★ Unmap EVERY mapping of ours in `space` that intersects `[va, va+len)` — one host call
+    /// for any number of placements (`V3_BATCHED_MAP.md` §4; [`HostRm::raw_unmap_dma_range`]). A
+    /// placement straddling an edge is split and keeps its outside part. `defer` as for
+    /// [`HostRm::map`].
+    ///
+    /// ⊘ The range must be one the caller OWNS whole: RM removes whatever of this client's
+    /// mappings lie in it, so a range reaching into a window or a ring would take it down too.
+    ///
+    /// # Errors
+    /// [`VA_STRADDLES_RESERVATION`] before any host call; else the host's status.
+    pub fn unmap_range(&self, space: VaSpace, va: u64, len: u64, defer: bool) -> Result<(), RmError> {
+        if len == 0 {
+            return Err(RmError::NoMemory);
+        }
+        let flags = if defer { NVOS47_FLAGS_DEFER_TLB_INVALIDATION_TRUE } else { 0 };
+        self.raw_unmap_dma_range(space.dma_for(va, len)?, va, len, flags)
+    }
+
+    /// ★★★ **Map N scattered pieces of a file at ONE VA-contiguous range, in O(1) host RM calls**
+    /// (`V3_BATCHED_MAP.md` §3): stitch the pieces into one host view
+    /// ([`kf_linux_raw::MappedRegion::stitch`]), describe it with ONE
+    /// `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` (RM pins the pages and keeps no address — the view is
+    /// dropped before this returns), then ONE fixed `NV_ESC_RM_MAP_MEMORY_DMA` of the whole object
+    /// at `at`. Returns the object's handle: the caller owns it and frees it (with [`HostRm::free`])
+    /// once no mapping of it is left — freeing it earlier would unmap every piece
+    /// (`rs_client.c:1342-1395`, `_clientUnmapInterBackRefMappings`).
+    ///
+    /// ★ All or nothing: `Ok` ⇔ the host placed every piece at its VA; on any refusal nothing of
+    /// ours is left (a failed map is rolled back by RM, `virt_mem_allocator_gm107.c:1540-1557`, a
+    /// misplaced one torn down by [`HostRm::map`]'s placement assertion, and the object is freed).
+    /// Mapped as a [`MapBacking::SharedSlice`] (4 KiB pinned): a stitched object is not physically
+    /// contiguous at any bigger page.
+    ///
+    /// # Errors
+    /// The stitch (by name), the descriptor or the map — whichever refused.
+    #[allow(clippy::too_many_arguments)]
+    pub fn map_scattered(
+        &self,
+        space: VaSpace,
+        fd: std::os::fd::BorrowedFd<'_>,
+        pieces: &[(u64, u64)],
+        at: u64,
+        defer: bool,
+        kind: u8,
+    ) -> Result<u32, ScatterError> {
+        let view = kf_linux_raw::MappedRegion::stitch(
+            fd,
+            pieces,
+            kf_linux_raw::HostProt::ReadWrite,
+            kf_linux_raw::CachePolicy::WriteBack,
+            kf_linux_raw::HostPageSize::query(),
+        )
+        .map_err(ScatterError::Stitch)?;
+        let len = view.len_bytes();
+        let obj = self
+            .alloc_os_descriptor(&view, kf_linux_raw::HostOffset::new(0), len)
+            .map_err(ScatterError::Descriptor)?;
+        // RM holds the pages now (and never the address): the view goes before any map exists.
+        drop(view);
+        match self.map_kind(space, obj, MapBacking::SharedSlice, 0, len, Some(at), defer, kind) {
+            Ok(_) => Ok(obj),
+            Err(e) => {
+                let _ = self.free(obj);
+                Err(ScatterError::Map(e))
+            }
+        }
+    }
+
     /// ONE TLB invalidate for `space` — the end of a deferred batch.
     ///
     /// # Errors
@@ -702,4 +770,16 @@ impl HostRm {
         let b = self.free(chan.tsg);
         a.and(b)
     }
+}
+
+/// Why a [`HostRm::map_scattered`] placed nothing — each step named, so a refusal says whether the
+/// host kernel, the descriptor or the GPU map refused.
+#[derive(Debug)]
+pub enum ScatterError {
+    /// The stitched host view could not be built (e.g. a hugetlb backing, `max_map_count`).
+    Stitch(kf_linux_raw::RawError),
+    /// `NV01_MEMORY_SYSTEM_OS_DESCRIPTOR` refused.
+    Descriptor(RmError),
+    /// The fixed map refused (incl. `VA_ALREADY_MAPPED`, [`RmError::PlacementRefused`]).
+    Map(RmError),
 }
