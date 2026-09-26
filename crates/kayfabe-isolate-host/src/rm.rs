@@ -1602,7 +1602,7 @@ mod birth_conn {
                 h_memory,
                 offset,
                 length: len,
-                flags: page_size | NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE | NVOS46_FLAGS_CACHE_SNOOP_ENABLE,
+                flags: page_size | NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE | crate::rm::NVOS46_FLAGS_CACHE_SNOOP_ENABLE,
                 flags2: 0,
                 kind_override: 0,
                 dma_offset: at,
