@@ -958,7 +958,47 @@ mod perm_tests {
         let all = MapPerm { read_only: true, atomic_disable: true, volatile: true }.nvos46_flags();
         assert_eq!(all, 0x1 | (1 << 28) | (2 << 17));
         // None of them touches the fields the map path owns: FIXED 15, PAGE_SIZE 11:8, KIND_OVERRIDE
-        // 19, DEFER 31.
-        assert_eq!(all & ((1 << 15) | (0xF << 8) | (1 << 19) | (1 << 31)), 0);
+        // 19, DEFER 31, CACHE_SNOOP 4.
+        assert_eq!(all & ((1 << 15) | (0xF << 8) | (1 << 19) | (1 << 31) | (1 << 4)), 0);
+    }
+
+    /// ★★★★★ v3-adasys: EVERY map the crate makes asks RM to snoop the CPU cache
+    /// (`NVOS46_FLAGS_CACHE_SNOOP_ENABLE`, field `4:4` = 1, `nvos.h:1992-1994`) — whatever the
+    /// caller's permissions, kind, defer, grows-down, page-size pin or `FIXED` — and adding it
+    /// changes no other bit. ⊘ The field's zero value is `_DISABLE`: without it a guest-RAM map
+    /// is a `SYS_NONCOH` PTE, and on a platform that honours PCIe No-Snoop the copy engine reads
+    /// stale DRAM (`[measured]` gates 3/4 FAIL 10/10 on a bare-metal Ryzen/B550, PASS 10/10 with it).
+    #[test]
+    fn every_map_snoops_the_cpu_cache_and_changes_nothing_else() {
+        use kf_abi::bringup::{
+            NVOS46_FLAGS_CACHE_SNOOP_ENABLE, NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE,
+            NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE, NVOS46_FLAGS_DMA_OFFSET_GROWS_DOWN,
+            NVOS46_FLAGS_PAGE_KIND_OVERRIDE_YES, NVOS46_FLAGS_PAGE_SIZE_4KB,
+        };
+        assert_eq!(NVOS46_FLAGS_CACHE_SNOOP_ENABLE, 0x10, "nvos.h: CACHE_SNOOP is 4:4, _ENABLE is 1");
+        let perms = [
+            MapPerm::READ_WRITE,
+            MapPerm { read_only: true, ..MapPerm::READ_WRITE },
+            MapPerm { atomic_disable: true, volatile: true, read_only: true },
+        ];
+        let others = [
+            0,
+            NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE,
+            NVOS46_FLAGS_DMA_OFFSET_GROWS_DOWN,
+            NVOS46_FLAGS_PAGE_KIND_OVERRIDE_YES | NVOS46_FLAGS_DEFER_TLB_INVALIDATION_TRUE,
+        ];
+        for perm in perms {
+            for other in others {
+                let extra = perm.nvos46_flags() | other;
+                for page_size in [0, NVOS46_FLAGS_PAGE_SIZE_4KB] {
+                    for fixed in [false, true] {
+                        let f = crate::nvos46_map_flags(extra, page_size, fixed);
+                        assert_ne!(f & NVOS46_FLAGS_CACHE_SNOOP_ENABLE, 0, "snoop missing: {f:#x}");
+                        let want = extra | page_size | if fixed { NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE } else { 0 };
+                        assert_eq!(f & !NVOS46_FLAGS_CACHE_SNOOP_ENABLE, want, "another bit moved: {f:#x}");
+                    }
+                }
+            }
+        }
     }
 }

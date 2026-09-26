@@ -18,7 +18,8 @@ use kf_abi::bringup::{
     NV_ESC_CHECK_VERSION_STR, NV_ESC_REGISTER_FD, NV_ESC_RM_ALLOC_MEMORY, NV_IOCTL_MAGIC,
     NV01_MEMORY_SYSTEM_OS_DESCRIPTOR, NV20_SUBDEVICE_0,
     NVOS02_FLAGS_COHERENCY_CACHED, NVOS02_FLAGS_LOCATION_PCI, NVOS02_FLAGS_MAPPING_NO_MAP,
-    NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS, NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE,
+    NVOS02_FLAGS_PHYSICALITY_NONCONTIGUOUS, NVOS46_FLAGS_CACHE_SNOOP_ENABLE,
+    NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE,
     CardInfo, GpuIdInfoV2, NV_ESC_CARD_INFO, NV0000_CTRL_CMD_GPU_GET_ID_INFO_V2,
     Nv2080AllocParameters, Nvos02ParametersWithFd, RegisterFd,
 };
@@ -153,6 +154,25 @@ fn ioctl_error(e: &RawError) -> RmError {
         } => RmError::Other(0x8000_0000 | (*errno as u32 & 0xFFFF)),
         _ => RmError::Other(NOT_ON_THIS_RUNG),
     }
+}
+
+/// ★★★★★ The `NVOS46_PARAMETERS::flags` word of EVERY map this crate makes (the one choke point,
+/// [`HostRm::raw_map_dma_slice`]): the caller's `extra` (permissions, kind override, defer,
+/// grows-down), the page-size pin, `FIXED` when the caller named the address — and, always,
+/// [`NVOS46_FLAGS_CACHE_SNOOP_ENABLE`].
+///
+/// ⊘ Snooping is not optional here and not the caller's choice: every system-memory object this
+/// crate maps is an OS descriptor over WRITE-BACK host memory (guest RAM, the scattered rows), and
+/// the bit's zero value asks RM for a `SYS_NONCOH` PTE — PCIe No-Snoop — under which a copy engine
+/// reads DRAM beneath the CPU's dirty lines (`[measured v3-adasys]`: gates 3 and 4, 10/10 FAIL
+/// without it on a bare-metal Ryzen/B550 box, 10/10 PASS with it). On vidmem RM never reads it
+/// (`virt_mem_allocator_gm107.c:1338-1350` is the sysmem branch), which is why RM's own helper
+/// sets it on every map too (`nv_gpu_ops.c:5130-5132`).
+pub(crate) const fn nvos46_map_flags(extra: u32, page_size: u32, fixed: bool) -> u32 {
+    extra
+        | page_size
+        | NVOS46_FLAGS_CACHE_SNOOP_ENABLE
+        | if fixed { NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE } else { 0 }
 }
 
 fn host_version_gate(reported: Option<&str>) -> Result<String, String> {
@@ -867,13 +887,7 @@ impl HostRm {
             h_memory,
             offset,
             length: len,
-            flags: extra
-                | page_size
-                | if at.is_some() {
-                    NVOS46_FLAGS_DMA_OFFSET_FIXED_TRUE
-                } else {
-                    0
-                },
+            flags: nvos46_map_flags(extra, page_size, at.is_some()),
             flags2: 0,
             // ★ v3-gfx: applied only with `NVOS46_FLAGS_PAGE_KIND_OVERRIDE_YES` in `extra`.
             kind_override: kind,

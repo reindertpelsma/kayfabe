@@ -763,6 +763,38 @@ pub const NVOS46_FLAGS_TLB_LOCK_ENABLE: u32 = 1 << 28;
 /// PTE's `VOL` bit (VER2) or PCF `UNCACHED` (VER3). `_DEFAULT` (0) keeps the memory's own attribute.
 pub const NVOS46_FLAGS_GPU_CACHEABLE_NO: u32 = 2 << 17;
 
+/// ★★★★★ v3-adasys: `NVOS46_FLAGS_CACHE_SNOOP_ENABLE` — field `4:4`, value 1 (`ogkm-580:
+/// nvos.h:1992-1994`), i.e. `0x10`. **Same field and value in every tree from 535.43.02 to
+/// 610.57.04.**
+///
+/// ⊘ **The field's ZERO value is `_DISABLE`.** A map that does not name this bit asks for a
+/// NON-COHERENT system-memory mapping, and RM grants it. RM picks a sysmem PTE's aperture from
+/// this bit alone: an OS descriptor's memdesc leaves `cpuCacheSnoop` at
+/// `MEMDESC_CACHE_SNOOP_DEFER_TO_MAP` (enum value 0, `g_mem_desc_nvoc.h:667`; nothing on the
+/// descriptor path sets it), so `dmaAllocMapping_GM107` takes it from the map's flags
+/// (`virt_mem_allocator_gm107.c:430-446`) and writes `SYS_COH` only if it is set, `SYS_NONCOH`
+/// otherwise (`:1338-1350`). 535.216.03 and 570.86.15 do the same with a local `cacheSnoop`
+/// read straight off this bit (`:294`/`:1010`, `:303`/`:1029`). A `SYS_NONCOH` PTE makes the
+/// GPU access host memory with PCIe **No-Snoop** set: it reads DRAM underneath the CPU's dirty
+/// cache lines and writes DRAM underneath the CPU's stale ones.
+///
+/// ★ RM's own map helpers set it unconditionally — *"Always enable snooping as that's what's
+/// needed for sysmem allocations and it's ignored for vidmem."* (`nv_gpu_ops.c:5130-5132`). Its
+/// only consumer in the map path is that sysmem branch, so on vidmem it changes nothing. The
+/// external-allocation PTEs UVM writes for `cuMemHostRegister` are `SYS_COH` on every
+/// non-fully-coherent platform (`nv_gpu_ops.c:3625`), which is why stock CUDA never meets this.
+///
+/// `[measured 2026-09-26, box 52821735/52822193 — ASRock B550 Pro4, Ryzen 9 5900X, IOMMU off,
+/// 2x RTX 4070 (AD104), host 580.159.04, bare metal]` One binary, only this bit toggled: gates 3
+/// and 4 PASS 10/10 with it and FAIL 10/10 without it, on BOTH GPUs (CPU root port and B550
+/// chipset). The failures were a copy engine reading zeros from guest RAM that the CPU had
+/// just written, its writes to guest RAM sometimes invisible to the CPU, and a release semaphore
+/// in guest RAM reading 0. Stock CUDA on the same GPUs (pinned, pageable, zero-copy,
+/// `cudaHostRegister` over a `MAP_SHARED` memfd, `cuStreamWriteValue32` into it) was 22/22
+/// correct. ⚠ Whether No-Snoop is honoured is a property of the PLATFORM: an IOMMU or a VMM that
+/// forces coherence hides the defect, so a green run elsewhere never proved the bit unneeded.
+pub const NVOS46_FLAGS_CACHE_SNOOP_ENABLE: u32 = 1 << 4;
+
 /// ★★★ **THE BIG-PAGE SIZE THIS ARCHITECTURE FAMILY USES — 64 KiB.**
 ///
 /// ⊘ **Not a per-die constant, and constraint 12 is the reason the distinction is written
