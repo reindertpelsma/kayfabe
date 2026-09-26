@@ -1,0 +1,9 @@
+B4_START 2026-09-26T19:17:25+00:00 tree=5947b165
+fastguest-nvreg rc=0
+b4_nob_always bin=dcde8b34-dirty rc=1 verdict=[FAST_VERDICT=FAIL]  wpr2=[] fwsec_fail=[      1 failed to execute FWSEC for FRTS: WPR2 initialized at an unexpected location ] rminit_failed=1 injected=0
+b4_fix_always bin=dcde8b34 rc=0 verdict=[FAST_VERDICT=PASS]  wpr2=[      1 0x1fee00000 → served WPR2_ADDR_LO=Some(Ok("0x1fee000")) ] fwsec_fail=[] rminit_failed=0 injected=0
+b4_nob_retry bin=dcde8b34-dirty rc=1 verdict=[FAST_VERDICT=FAIL]  wpr2=[] fwsec_fail=[      1 failed to execute FWSEC for FRTS: WPR2 initialized at an unexpected location       1 failed to execute FWSEC for FRTS: no initialized WPR2 found ] rminit_failed=1 injected=1
+b4_fix_retry bin=dcde8b34 rc=0 verdict=[FAST_VERDICT=PASS]  wpr2=[      1 0x1fee00000 → served WPR2_ADDR_LO=Some(Ok("0x1fee000")) ] fwsec_fail=[      1 failed to execute FWSEC for FRTS: no initialized WPR2 found ] rminit_failed=0 injected=1
+b4_fix_retry_cyc bin=dcde8b34 rc=0 verdict=[FAST_VERDICT=PASS] FASTGUEST: CYCLES_DONE n=20 fails=0 first_fail=0 at 43.70s wpr2=[     20 0x1fee00000 → served WPR2_ADDR_LO=Some(Ok("0x1fee000")) ] fwsec_fail=[      1 failed to execute FWSEC for FRTS: no initialized WPR2 found ] rminit_failed=0 injected=1
+b4_nob_retry_cyc bin=dcde8b34-dirty rc=1 verdict=[FAST_VERDICT=FAIL] FASTGUEST: CYCLES_DONE n=5 fails=5 first_fail=1 at 14.02s wpr2=[] fwsec_fail=[      2 failed to execute FWSEC for FRTS: WPR2 initialized at an unexpected location       2 failed to execute FWSEC for FRTS: no initialized WPR2 found ] rminit_failed=10 injected=1
+B4_EXIT 2026-09-26T19:35:47+00:00

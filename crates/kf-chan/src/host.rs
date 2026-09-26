@@ -12,7 +12,7 @@
 
 use crate::ring::{GuestMemory, Next, RingRefusal, TranslatedRing};
 use crate::translated::{IsCeClass, Window};
-use kf_abi::submit::{ENGINE_TYPE_COPY0, USERD_GP_PUT, fifo, gp_entry, method_header_inc};
+use kf_abi::submit::{ENGINE_TYPE_COPY0, USERD_GP_GET, USERD_GP_PUT, fifo, gp_entry, method_header_inc};
 use kf_linux_raw::HostOffset as At;
 use std::collections::VecDeque;
 
@@ -223,6 +223,16 @@ impl HostRing {
         ))
     }
 
+    /// ★ v3-initrace (diagnostic): our ring's USERD `GP_GET` (what the host engine fetched),
+    /// `GP_PUT` (what we published) and the fence word — `None` once released.
+    pub fn cursors(&self) -> Option<(u32, u32, u32)> {
+        let c = self.cpu.as_ref()?;
+        let get = c.load_u32(At::new(USERD_OFF + USERD_GP_GET)).ok()?;
+        let put = c.load_u32(At::new(USERD_OFF + USERD_GP_PUT)).ok()?;
+        let fence = c.load_u32(At::new(FENCE_OFF)).ok()?;
+        Some((get, put, fence))
+    }
+
     /// Nothing pushed is still unfinished (as of the last [`HostRing::completed`]).
     #[must_use]
     pub fn idle(&self) -> bool {
@@ -334,6 +344,48 @@ pub trait GuestUserd {
     fn set_gp_get(&mut self, gp_get: u32) -> Result<(), String>;
 }
 
+/// ★★★★★ v3-initrace — **a Translated channel's USERD, as physical RM initialises it.**
+///
+/// The guest's CPU-RM clears a channel's USERD only when it is in SYSMEM (or on full SR-IOV):
+/// *"Clear Userd if it is in FB for SRIOV environment … or if in SYSMEM"*
+/// (`ogkm-580: src/nvidia/src/kernel/gpu/fifo/kernel_channel.c:2344-2356`, the memset is
+/// `kfifoSetupUserD_GM107`, `kernel_fifo_gm107.c:797-808`: `NV_RAMUSERD_CHAN_SIZE` bytes of zero).
+/// An FB-resident USERD is the PHYSICAL RM's to initialise at allocation — host RM does exactly
+/// that to a passthrough twin's USERD (`rm_takes_a_guest_userd_and_zeroes_it`). For a Translated
+/// channel the physical RM is us, and until v3-initrace nothing did it.
+///
+/// ⊘⊘⊘ **What that cost, measured.** RM's allocator hands a new channel the same FB USERD slot an
+/// earlier channel used (every re-open of `/dev/nvidia0` puts the new CeUtils channel's USERD where
+/// the last one's was, cursors `GP_PUT = GP_GET = 2` still in it). The ring cursor starts at 0, so
+/// the first pump — rung by `GPFIFO_SCHEDULE`, before the guest has submitted anything — read the
+/// stale `GP_PUT` as queued work, fetched the guest's still-zero GP entries as NOPs, fenced them and
+/// authored `GP_GET` to the stale value. With a stale `GP_PUT = 1` the guest's real entry 0 then
+/// arrives with `GP_PUT = 1` = the cursor, so it is **never fetched**: `memmgrMemSet` times out,
+/// `RmInitAdapter failed (0x25:0x65)` — the adapter-init flake of `V3_DRIVER_MATRIX.md` §6, whose
+/// evidence (`forwarded=1 serves=3 last_put=1 GP_GET=1`, one host non-stall) this reproduces exactly
+/// (`KF3_INJECT_STALE_USERD=1`). A stale value ≥ 2 only "worked" by fetching the whole ring round.
+pub trait UserdInit {
+    /// Store one little-endian word `off` bytes from the channel's USERD base.
+    ///
+    /// # Errors
+    /// A failed store.
+    fn store_u32(&mut self, off: u64, v: u32) -> Result<(), String>;
+}
+
+/// ★ Zero the channel's USERD — `min(declared, NV_RAMUSERD_CHAN_SIZE)` bytes, whole words — as
+/// physical RM does before the allocation's reply (so the guest can never have written a cursor
+/// yet). Returns the bytes zeroed.
+///
+/// # Errors
+/// The first failed store, by name.
+pub fn zero_userd(u: &mut dyn UserdInit, declared: u64) -> Result<u64, String> {
+    let len = declared.min(kf_abi::submit::USERD_SIZE) & !3;
+    for off in (0..len).step_by(4) {
+        u.store_u32(off, 0).map_err(|e| format!("USERD +{off:#x}: {e}"))?;
+    }
+    Ok(len)
+}
+
 /// Where a `MEM_OP` split's walk stands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Split {
@@ -378,6 +430,27 @@ pub enum Pumped {
     Waiting,
 }
 
+/// ★ v3-initrace (diagnostic, `KF3_COMPLETION_PROBE`): one host fence of a Translated channel —
+/// the guest semaphore releases its work asked for, and when it was submitted / seen complete.
+#[derive(Debug, Clone)]
+pub struct ProbeFence {
+    /// Our fence sequence.
+    pub seq: u32,
+    /// The guest `GP_GET` it retires, if it ends a guest entry.
+    pub gp_get: Option<u32>,
+    /// The releases the rewritten segments asked for (the words were forwarded unchanged).
+    pub releases: Vec<crate::translated::Release>,
+    /// The launches with a physical operand, as the guest wrote them.
+    pub launches: Vec<crate::translated::PhysLaunch>,
+    /// When the host doorbell for it was rung.
+    pub submitted: std::time::Instant,
+    /// When a pump first read the fence as reached.
+    pub completed: Option<std::time::Instant>,
+}
+
+/// Completed fences kept for the probe between takes (older ones are dropped).
+const PROBE_KEEP: usize = 16;
+
 /// ★ One guest kernel channel executed on the real engine through our host ring.
 pub struct TranslatedChannel {
     ring: TranslatedRing,
@@ -389,6 +462,38 @@ pub struct TranslatedChannel {
     walks: u64,
     submissions: u64,
     last_gp_get: Option<u32>,
+    /// ★ v3-initrace: `Some` only while the completion probe is on.
+    probe: Option<Probe>,
+}
+
+/// The probe's per-channel record: fences in flight, and completed ones not yet taken.
+#[derive(Debug, Default)]
+struct Probe {
+    inflight: VecDeque<ProbeFence>,
+    done: Vec<ProbeFence>,
+}
+
+impl Probe {
+    fn submitted(
+        &mut self,
+        seq: u32,
+        gp_get: Option<u32>,
+        releases: Vec<crate::translated::Release>,
+        launches: Vec<crate::translated::PhysLaunch>,
+    ) {
+        self.inflight.push_back(ProbeFence { seq, gp_get, releases, launches, submitted: std::time::Instant::now(), completed: None });
+    }
+    fn reached(&mut self, done: u32) {
+        while self.inflight.front().is_some_and(|f| reached(done, f.seq)) {
+            if let Some(mut f) = self.inflight.pop_front() {
+                f.completed = Some(std::time::Instant::now());
+                if self.done.len() >= PROBE_KEEP {
+                    self.done.remove(0);
+                }
+                self.done.push(f);
+            }
+        }
+    }
 }
 
 impl TranslatedChannel {
@@ -406,7 +511,32 @@ impl TranslatedChannel {
             walks: 0,
             submissions: 0,
             last_gp_get: None,
+            probe: None,
         }
+    }
+
+    /// ★ v3-initrace: record every fence's guest releases for the completion probe (diagnostic;
+    /// off by default — the device turns it on with `KF3_COMPLETION_PROBE`).
+    pub fn set_probe(&mut self, on: bool) {
+        self.probe = on.then(Probe::default);
+    }
+
+    /// ★ v3-initrace: the fences seen complete since the last call (oldest first), each with the
+    /// guest releases its work asked for. Empty while the probe is off.
+    pub fn take_completed(&mut self) -> Vec<ProbeFence> {
+        self.probe.as_mut().map(|p| std::mem::take(&mut p.done)).unwrap_or_default()
+    }
+
+    /// ★ v3-initrace: fences still in flight (the probe's "submitted, never seen complete").
+    #[must_use]
+    pub fn probe_inflight(&self) -> Vec<ProbeFence> {
+        self.probe.as_ref().map(|p| p.inflight.iter().cloned().collect()).unwrap_or_default()
+    }
+
+    /// ★ v3-initrace: our host ring's own `GP_GET`/`GP_PUT` (USERD) and the fence word — the
+    /// host side of the ordering the probe prints.
+    pub fn host_cursors(&mut self) -> Option<(u32, u32, u32)> {
+        self.host.cursors()
     }
 
     /// The host ring (its event fd goes in the worker's epoll).
@@ -455,6 +585,9 @@ impl TranslatedChannel {
         w: &dyn Window,
     ) -> Result<Pumped, ChanError> {
         let done = self.host.completed().map_err(ChanError::Host)?;
+        if let Some(p) = self.probe.as_mut() {
+            p.reached(done);
+        }
         let mut newest = None;
         while self.retire.front().is_some_and(|&(s, _)| reached(done, s)) {
             newest = self.retire.pop_front().map(|(_, g)| g);
@@ -510,8 +643,12 @@ impl TranslatedChannel {
                     done_edge.mark(self.token); // BEFORE the doorbell — see `completions`
                     match self.host.fence(rm).map_err(ChanError::Host)? {
                         Ok(seq) => {
-                            if let Some(g) = last_retire.take() {
+                            let g0 = last_retire.take();
+                            if let Some(g) = g0 {
                                 self.retire.push_back((seq, g));
+                            }
+                            if let Some(p) = self.probe.as_mut() {
+                                p.submitted(seq, g0, self.ring.take_releases(), self.ring.take_launches());
                             }
                             self.suspended = Some((seq, pdb, retires));
                             return Ok(Pumped::Waiting);
@@ -530,6 +667,9 @@ impl TranslatedChannel {
                 Ok(seq) => {
                     if let Some(g) = last_retire {
                         self.retire.push_back((seq, g));
+                    }
+                    if let Some(p) = self.probe.as_mut() {
+                        p.submitted(seq, last_retire, self.ring.take_releases(), self.ring.take_launches());
                     }
                 }
                 // No room for the tail: the regions already live carry fences of their own

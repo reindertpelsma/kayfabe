@@ -137,10 +137,100 @@ impl RamMap {
 pub struct StoreView {
     node: CharDevice,
     cookie: u64,
+    /// ★ v3-initrace: the store offset this view shows (the probe's view index).
+    off: u64,
+}
+
+/// ★★ v3-initrace — **which guest CPU window page shows which store page** (BAR1, BAR2, PRAMIN),
+/// kept ONLY while `KF3_COMPLETION_PROBE` is set, so a probe can say which view a guest CPU access
+/// to a framebuffer page went through and read what the guest sees there. Updated by
+/// [`WindowOps`] as it places and sinks. ⊘ `try_lock` only — a PRAMIN re-point runs on a vCPU, and
+/// a contended update is dropped and counted rather than waited for.
+pub struct ViewIndex {
+    inner: Mutex<ViewIndexInner>,
+    /// Updates dropped because the index was busy.
+    pub dropped: AtomicU64,
+}
+
+#[derive(Default)]
+struct ViewIndexInner {
+    /// Store page → every (window, window page) showing it.
+    by_store: std::collections::BTreeMap<u64, Vec<(&'static str, &'static GuestWindow, u64)>>,
+    /// (window, window page) → the store page it shows.
+    by_win: std::collections::BTreeMap<(&'static str, u64), u64>,
+}
+
+const VIEW_PAGE: u64 = 0x1000;
+
+impl ViewIndex {
+    fn with(&self, f: impl FnOnce(&mut ViewIndexInner)) {
+        match self.inner.try_lock() {
+            Ok(mut g) => f(&mut g),
+            Err(_) => {
+                self.dropped.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+    }
+
+    fn forget(g: &mut ViewIndexInner, name: &'static str, at: u64, len: u64) {
+        let pages: Vec<(&'static str, u64)> = g.by_win.range((name, at & !(VIEW_PAGE - 1))..(name, at.saturating_add(len))).map(|(k, _)| *k).collect();
+        for k in pages {
+            if let Some(sp) = g.by_win.remove(&k)
+                && let Some(v) = g.by_store.get_mut(&sp)
+            {
+                v.retain(|(n, _, w)| !(*n == k.0 && *w == k.1));
+                if v.is_empty() {
+                    g.by_store.remove(&sp);
+                }
+            }
+        }
+    }
+
+    fn placed(&self, name: &'static str, win: &'static GuestWindow, at: u64, len: u64, store_off: u64) {
+        self.with(|g| {
+            Self::forget(g, name, at, len);
+            let mut p = 0;
+            while p < len {
+                let (wp, sp) = ((at + p) & !(VIEW_PAGE - 1), (store_off + p) & !(VIEW_PAGE - 1));
+                g.by_win.insert((name, wp), sp);
+                g.by_store.entry(sp).or_default().push((name, win, wp));
+                p += VIEW_PAGE;
+            }
+        });
+    }
+
+    fn sunk(&self, name: &'static str, at: u64, len: u64) {
+        self.with(|g| Self::forget(g, name, at, len));
+    }
+
+    /// Every guest window position showing store offset `off`, and the `n` bytes the guest reads
+    /// there now (`None`: the read was refused).
+    pub fn guest_views(&self, off: u64, n: usize) -> Vec<(&'static str, u64, Option<Vec<u8>>)> {
+        let Ok(g) = self.inner.try_lock() else { return vec![("(index busy)", 0, None)] };
+        let Some(v) = g.by_store.get(&(off & !(VIEW_PAGE - 1))) else { return Vec::new() };
+        v.iter()
+            .map(|(name, win, wp)| {
+                let at = wp + (off & (VIEW_PAGE - 1));
+                let mut b = vec![0u8; n];
+                let got = win.read_into(HostOffset::new(at), &mut b).ok().map(|()| b);
+                (*name, at, got)
+            })
+            .collect()
+    }
+}
+
+/// The probe's view index — `None` unless `KF3_COMPLETION_PROBE` is set.
+#[must_use]
+pub fn view_index() -> Option<&'static ViewIndex> {
+    static IDX: std::sync::OnceLock<ViewIndex> = std::sync::OnceLock::new();
+    crate::chan::completion_probe_ms()?;
+    Some(IDX.get_or_init(|| ViewIndex { inner: Mutex::new(ViewIndexInner::default()), dropped: AtomicU64::new(0) }))
 }
 
 /// ★ The host verbs of ONE guest window — [`ViewOps`] over the real session.
 pub struct WindowOps {
+    /// ★ v3-initrace: the window's name, for the probe's view index ("BAR1", "BAR2", "PRAMIN").
+    name: &'static str,
     rm: &'static HostRm,
     store: u32,
     win: &'static GuestWindow,
@@ -218,13 +308,17 @@ impl ViewOps for WindowOps {
             .rm
             .arm_cpu_view(MapNode::Gpu, self.store, off, len, ViewAccess::ReadWrite)
             .map_err(|e| format!("NV_ESC_RM_MAP_MEMORY store@{off:#x}+{len:#x}: {e:?}"))?;
-        Ok(StoreView { node, cookie })
+        Ok(StoreView { node, cookie, off })
     }
 
     fn place_view(&self, at: u64, len: u64, v: &StoreView) -> Result<(), String> {
         self.win
             .place_device_view(HostOffset::new(at), len, v.node.as_fd(), true)
-            .map_err(|e| format!("mmap view @{at:#x}+{len:#x}: {e:?}"))
+            .map_err(|e| format!("mmap view @{at:#x}+{len:#x}: {e:?}"))?;
+        if let Some(ix) = view_index() {
+            ix.placed(self.name, self.win, at, len, v.off);
+        }
+        Ok(())
     }
 
     fn place_ram(&self, at: u64, len: u64, file_off: u64) -> Result<(), String> {
@@ -237,13 +331,21 @@ impl ViewOps for WindowOps {
             .ok_or("no fd-backed guest RAM (the VM needs memory-backend-memfd,share=on)")?;
         self.win
             .place(HostOffset::new(at), len, Backing::SharedFile { fd: fd.borrow(), offset: file_off })
-            .map_err(|e| format!("mmap guest RAM @{at:#x}+{len:#x} (file {file_off:#x}): {e:?}"))
+            .map_err(|e| format!("mmap guest RAM @{at:#x}+{len:#x} (file {file_off:#x}): {e:?}"))?;
+        if let Some(ix) = view_index() {
+            ix.sunk(self.name, at, len);
+        }
+        Ok(())
     }
 
     fn sink(&self, at: u64, len: u64) -> Result<(), String> {
         self.win
             .place(HostOffset::new(at), len, Backing::SharedFile { fd: self.scratch.as_backing_fd(), offset: at })
-            .map_err(|e| format!("mmap scratch @{at:#x}+{len:#x}: {e:?}"))
+            .map_err(|e| format!("mmap scratch @{at:#x}+{len:#x}: {e:?}"))?;
+        if let Some(ix) = view_index() {
+            ix.sunk(self.name, at, len);
+        }
+        Ok(())
     }
 
     fn release(&self, v: StoreView) -> Result<(), String> {
@@ -269,7 +371,7 @@ impl ViewOps for WindowOps {
             .rm
             .arm_cpu_view_on(node, self.store, off, len, ViewAccess::ReadWrite)
             .map_err(|e| format!("NV_ESC_RM_MAP_MEMORY store@{off:#x}+{len:#x}: {e:?}"))?;
-        Ok(StoreView { node, cookie })
+        Ok(StoreView { node, cookie, off })
     }
 
     /// Hand a replaced view to the reaper (off the vCPU); inline only if the reaper is gone.
@@ -1227,10 +1329,10 @@ impl MemPlane {
         let (pramin_win, pramin_scratch) = window(pramin_len, "PRAMIN")?;
         let (bar1_win, bar1_scratch) = window(bar1_bytes, "BAR1")?;
         let (bar2_win, bar2_scratch) = window(bar2_bytes, "BAR2")?;
-        let ops = |win, scratch, trap| WindowOps { rm, store, win, scratch, ram, trap };
+        let ops = |name, win, scratch, trap| WindowOps { name, rm, store, win, scratch, ram, trap };
         let trap = TrapNodes::start(rm, store)?;
         let pramin = PraminPool::new(
-            ops(pramin_win, pramin_scratch, Some(trap)),
+            ops("PRAMIN", pramin_win, pramin_scratch, Some(trap)),
             GRANULE,
             Box::new(move |gpa, len| ram.file_range(gpa, len).map(|(_, off)| off)),
         );
@@ -1256,8 +1358,8 @@ impl MemPlane {
                 fb_len: layout.fb_length,
                 spares: Mutex::new(Vec::new()),
             },
-            ops(bar1_win, bar1_scratch, None),
-            ops(bar2_win, bar2_scratch, None),
+            ops("BAR1", bar1_win, bar1_scratch, None),
+            ops("BAR2", bar2_win, bar2_scratch, None),
         ))
     }
 

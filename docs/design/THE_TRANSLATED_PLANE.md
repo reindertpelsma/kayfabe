@@ -225,6 +225,44 @@ nothing is owed, because the GPU did it.
    record beside `forwarded=`.
 2. **`GP_GET`** — hardware writes the **host twin's** USERD, and a Translated channel's ring is
    ours. ⇒ The guest's `GP_GET` is **one word we author**, by construction.
+3. ★★★★★ `[MEASURED v3-initrace, 2026-09-26]` **The guest's USERD itself — we are the physical RM
+   that initialises it at the channel's allocation.** The guest's CPU-RM clears a channel's USERD
+   only in SYSMEM (or on full SR-IOV) — *"Clear Userd if it is in FB for SRIOV environment … or if
+   in SYSMEM"* (`ogkm-580: kernel_channel.c:2344-2356`; the memset is `kfifoSetupUserD_GM107`,
+   `NV_RAMUSERD_CHAN_SIZE` zero bytes); an FB USERD is physical RM's to clear (host RM does exactly
+   that to a passthrough twin's — `rm_takes_a_guest_userd_and_zeroes_it`). Until `v3-initrace`
+   nothing did it for a Translated channel, and RM's allocator hands a new channel the slot an
+   earlier one used: **every re-open of `/dev/nvidia0` found the previous CeUtils channel's
+   `GP_PUT = GP_GET = 2` in the new one's USERD** (299/300 opens). The ring's cursor starts at 0 and
+   its first pump — rung by `GPFIFO_SCHEDULE`, before the guest submits — read that stale `GP_PUT`
+   as queued work: it fetched the guest's still-zero GP entries as NOPs and authored `GP_GET` to
+   the stale value. A stale `2` "worked" by fetching the whole 4096-entry ring round (`forwarded=4098`
+   for a channel that submitted twice); **a stale `1` skips the guest's first real entry for ever**
+   (it arrives at `GP_PUT = 1` = the cursor): `memmgrMemSet` times out and `RmInitAdapter` fails
+   `0x25:0x65` — the adapter-init flake of `V3_DRIVER_MATRIX.md` §6, with its exact evidence
+   (`forwarded=1 serves=3 last_put=1 GP_GET=1`, `submissions=0`, one host CE non-stall — our own NOP
+   fence, correctly not raised to the guest). Reproduced 20/20 with `KF3_INJECT_STALE_USERD=1`;
+   ⇒ `kf_chan::host::zero_userd` at birth, before the reply (the act thread). `[measured, vast
+   52792102 RTX 3090, host 580.159.04, guest 580.159.04, fast guest KF_CYCLES]` before (`626afea1`,
+   master `02b27c2a`): 0/600 natural open cycles failed, but 299/300 were born over the stale slot
+   (`forwarded=4098`), and **20/20 failed** with the stale `1` injected; after (`7f271349`, on
+   master `59cc98a9`): **0/300 natural, 0/300 injected, 300/300 `forwarded=2 submissions=2`** (and
+   0/150 cycles + 0/18 boots of the `--timer`, `--concurrency` and `--uvm-mean` arms on a 580.65.06 guest).
+   ★★ `[MEASURED, the coordinator's 100% reproducer]` **A 570.148.08 guest fails EVERY re-init**,
+   and it is this mechanism: 570's CeUtils self-test is a lone memcopy (575+ memset first), so the
+   first init's channel leaves `GP_PUT = GP_GET = 1`; every later incarnation (same token, same
+   host id, same GPFIFO VA, new VA space) is born over `(Some(1), Some(1))` and retires
+   `forwarded=1 submissions=0` — three incarnations in one fat-guest boot, all failed
+   (`v3-drivers 607f290f` + the probe commits, `cl_l570dr_88438930_cup2`). With the fix the
+   re-init's CeUtils retires `forwarded=1 submissions=1` with both releases `LANDED`
+   (`cl_l570dr_f5843151_*`), and the 570 ladder moves on to a DIFFERENT wall (570's UVM channel
+   GPFIFO VA not yet placed by the mirror — refused loudly, `DEAD` + `REFUSED-AND-POISONED`, see
+   `V3_DRIVER_MATRIX.md` §6). ⇒ One occurrence is **self-perpetuating** without the fix (the failed
+   channel leaves `GP_PUT = 1` for the next): a dead device until QEMU restarts, the same shape as
+   `V3_HW_BOUNDARY_INVENTORY.md` §5.2 L1. The completion probe
+   (`KF3_COMPLETION_PROBE`) showed every guest release LANDED where our rows place it: the
+   completion plane was never the defect; the one CE non-stall of a failing boot is our own fence
+   of the NOP retire (`releases=[]`), correctly not raised — no guest work reached the engine.
 
 ---
 

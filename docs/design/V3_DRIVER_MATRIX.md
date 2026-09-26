@@ -339,6 +339,43 @@ fast_suite.sh <tag> 180` (30 arms); gates = `scripts/bench/v3_gates.sh`; ladder 
 `cuda_ladder.sh guest` (cup2 CE round trip, cup3 `=43`, cup8 2048² matmul `bad=0 maxerr=0`,
 cup8bench, every timed iteration verified).
 
+> ★★★★★ **ROOT-CAUSED 2026-09-26 (`v3-initrace`) — the adapter-init flake below (`RmInitAdapter
+> 0x25:0x65` after `memmgrMemSet … NV_ERR_TIMEOUT`, CeUtils token `0x2` `forwarded=1 GP_GET=1`) is
+> NOT a completion-plane race and NOT version-specific.** A Translated channel was born over an
+> UNINITIALISED guest USERD: kayfabe is the physical RM for the guest's kernel channels, physical RM
+> zeroes an FB USERD at allocation (the guest's CPU-RM clears only a SYSMEM one,
+> `kernel_channel.c:2344-2356`), and kayfabe did not. A stale `GP_PUT = 1` left in the slot is read
+> by the `GPFIFO_SCHEDULE` pump as queued work: the guest's still-zero entry 0 is fetched as a NOP
+> (`submissions=0`), `GP_GET = 1` is authored, and the guest's REAL entry 0 then arrives at
+> `GP_PUT = 1` = the cursor and is never fetched. Every re-open finds the previous channel's stale
+> cursors (299/300 opens measured); only a stale `1` fails outright. Reproduced 20/20 with
+> `KF3_INJECT_STALE_USERD=1`; fixed by `kf_chan::host::zero_userd` at birth — 0/300 natural and
+> 0/300 injected after, at `7f271349` (vast `52792102`, the same RTX 3090 machine as `52746206`).
+> Mechanism and evidence: `THE_TRANSLATED_PLANE.md` §7 item 3. ⊘ The row's *"the PMA scrubber's CE
+> token never forwarded"* reading is superseded by this. ⚠ The second variant reported later
+> (`memmgrInitCeUtils` `NV_ERR_INVALID_STATE`, both CeUtils submissions retired: the self-test's
+> data check failed) is **not explained by it and stays open**: a clean slot (`forwarded=2`) rules
+> the stale cursor out, and it did not recur on `52792102` in ~1 600 self-tests (every open runs
+> one) nor in the targeted 580.65.06 arms. ★ Measured on the way: CeUtils' self-test reaches FB
+> **virtually**, through its FB alias (`memmgrMemUtilsMapFbAlias`, `LAUNCH_DMA 0x218e` — SRC
+> VIRTUAL, DST PHYSICAL sysmem), so the engine's source is whatever OUR host-space rows map at the
+> alias VA. `KF3_COMPLETION_PROBE=<ms>` now prints, per completed CeUtils fence, each operand's
+> bytes as the host holds them (a virtual side resolved through our rows) and through every guest
+> CPU window (BAR1/BAR2/PRAMIN) showing that store page — the first occurrence under the probe will
+> say whether the guest's write and the engine's read met the same memory.
+> ★★ **The 570.148.08 guest's deterministic re-init wall (§6.0) IS this mechanism**
+> `[measured, vast 52792102, v3-drivers 607f290f ± the fix]`: without it, every re-init's CeUtils
+> is born over the first life's `(GP_PUT, GP_GET) = (1, 1)` and retires `forwarded=1 submissions=0`
+> (three incarnations per boot, all failed); with it the re-init passes `memmgrInitCeUtils`
+> (`forwarded=1 submissions=1`, both releases landed). ⊘ **The 570 fat ladder is still 0/4, at a
+> different, later wall:** nvidia-uvm 570's first channel (`KERNEL+UVM_OWNED`, GPFIFO VA
+> `0x121010000`, 1024 entries) is read before the mirror has placed that VA — `DEAD: ring: Read …
+> not placed by us` → `REFUSED-AND-POISONED`, and `cup2` hangs in `uvm_channel_manager_create`
+> (`uvm_push_end_and_wait`). Refused by name, never retired — a version-gap item for this matrix.
+> ⊘ Also measured: on master `59cc98a9` (and the thin guest on either binary) a 570.148.08 guest
+> oopses in its FIRST init (`memmgrMemCopyWithTransferType`, NULL dereference) — the v3-drivers
+> head does not.
+
 | host | guest | rev | gates | tests | thin guest | fat guest ladder | notes |
 |---|---|---|---|---|---|---|---|
 | 580.159.04 | 580.159.04 | `283a5304` (master) | 9/9 | — | **30/30** | — | baseline on this box |

@@ -165,6 +165,20 @@ impl CpuIntr {
         p != 0 && self.top_en.load(Ordering::Acquire) & (1 << subtree_of_leaf(i)) != 0
     }
 
+    /// ★ v3-initrace (diagnostic): every leaf's pending and enable words, and the top enable —
+    /// `leaf[i]=pending/enabled …; top_en=…`, only leaves with a bit set in either.
+    #[must_use]
+    pub fn snapshot(&self) -> String {
+        let mut v = Vec::new();
+        for i in 0..self.n_leaf {
+            let (p, e) = (self.leaf[i].load(Ordering::Acquire), self.leaf_en[i].load(Ordering::Acquire));
+            if p != 0 || e != 0 {
+                v.push(format!("leaf{i}={p:#x}/{e:#x}"));
+            }
+        }
+        format!("[{}] top_en={:#x} top={:#x}", v.join(" "), self.top_en.load(Ordering::Acquire), self.top())
+    }
+
     /// What the guest reads at `r`.
     #[must_use]
     pub fn read(&self, r: Reg) -> u32 {

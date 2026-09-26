@@ -964,6 +964,61 @@ impl Device {
         }
     }
 
+    /// ★ v3-initrace: the completion probe's own thread (`KF3_COMPLETION_PROBE`, default off) —
+    /// every 100 ms ask the channel plane for overdue Translated channels, and print the device's
+    /// interrupt state beside any dump: the guest's CPU interrupt tree (pending/enabled per leaf,
+    /// top enable), MSI-X messages sent/held, the host non-stall events seen/raised per engine,
+    /// the tokens with a fence in flight, and the workers' counters. ⊘ Never a vCPU, never the
+    /// drainer, never a lock a vCPU takes; a sleep here delays nothing but this probe.
+    pub fn probe_loop(&self) {
+        let Some(ms) = crate::chan::completion_probe_ms() else { return };
+        eprintln!("kf3: PROBE on — completion probe, overdue after {ms} ms (KF3_COMPLETION_PROBE)");
+        let overdue = std::time::Duration::from_millis(ms);
+        while !self.stop.load(Ordering::Acquire) {
+            let lines = self.chans.probe_tick(overdue);
+            if !lines.is_empty() {
+                for l in &lines {
+                    eprintln!("{l}");
+                }
+                eprintln!("{}", self.probe_device_state());
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+    }
+
+    /// ★ v3-initrace: the device-wide half of a probe dump (see [`Device::probe_loop`]).
+    #[must_use]
+    pub fn probe_device_state(&self) -> String {
+        let o = Ordering::Relaxed;
+        let ic = &self.irq_counts;
+        let ws = &self.worker_stats;
+        let nsi: Vec<String> = self
+            .chans
+            .engines
+            .iter()
+            .map(|e| format!("{}:wakes={},raised={},live={},vec={:?}", e.name, e.wakes.load(o), e.raised.load(o), e.live.load(o), e.vector))
+            .collect();
+        let mut infl = Vec::new();
+        self.chans.completions.for_each_inflight(|t| infl.push(format!("{t:#x}")));
+        format!(
+            "kf3: PROBE-DUMP   device t={:.6}: intr {} irq[writes={} raised={} held={} oor={}] nsi[{}] inflight_tokens=[{}] workers[served={} parks={} host_rings={} timeouts_with_work={}] chan[contended={} poisoned={}]",
+            kf_mem::maplog::t(),
+            self.intr.snapshot(),
+            ic.writes.load(o),
+            ic.raised.load(o),
+            ic.held.load(o),
+            ic.out_of_range.load(o),
+            nsi.join(" "),
+            infl.join(" "),
+            ws.served.load(o),
+            ws.parks.load(o),
+            ws.host_rings.load(o),
+            ws.timeouts_with_work.load(o),
+            self.chans.contended.load(o),
+            self.chans.poisoned.load(o)
+        )
+    }
+
     /// ★ Latch `vector` (a completion this device announces) and deliver — any thread.
     pub fn latch_and_deliver(&self, vector: u32) {
         let raise = self.intr.latch(vector);
@@ -1814,6 +1869,21 @@ impl HostOps for Device {
         }
         let mut ram = Ram(self);
         let before = g.fsm.phase();
+        // ⊘ FAULT INJECTION (`KF3_INJECT_FWSEC_FAIL=<n>`, default off): the first n FWSEC-FRTS
+        // starts (a GSP falcon STARTCPU from Cold/Halted) are dropped before the FSM sees them —
+        // WPR2 never comes up, the guest's `kgspExecuteFwsec` fails "no initialized WPR2 found",
+        // and RM retries with its WPR-end margin (`V3_HW_BOUNDARY_INVENTORY.md` §5.2 L1). Never set
+        // outside a reproduction.
+        if bar == 0
+            && g.model.at(GspReg::GspFalconCpuctl) == Some((0, u64::from(offset)))
+            && g.model.is_startcpu(value)
+            && matches!(before, kf_arch::BootPhase::Cold | kf_arch::BootPhase::Halted)
+            && inject_fwsec_fail_take()
+        {
+            eprintln!("kf3: INJECTED: FWSEC-FRTS STARTCPU dropped (KF3_INJECT_FWSEC_FAIL) — WPR2 stays down, the guest's boot attempt fails");
+            self.publish(g);
+            return;
+        }
         match g.fsm.mmio_write_with(&mut ram, g.model.as_ref(), g.policy.as_mut(), bar, u64::from(offset), value) {
             Ok(r) => {
                 n_cmds += r.commands.len();
@@ -1838,6 +1908,16 @@ impl HostOps for Device {
         if after != before {
             // ★ The P2 gate's observable: the boot phase, logged by the drainer (never a vCPU).
             eprintln!("kf3: GSP phase {before:?} -> {after:?}");
+        }
+        // ★★★ v3-initrace: the FWSEC that just raised WPR2 was commanded where to put FRTS — read it
+        // before anything is published (the guest reads WPR2_ADDR_LO only after HALTED, published
+        // last). One guest-RAM read of ≤ 8 words at offsets of the ROM we generated.
+        if let Some(read) = g.fsm.resolve_frts_command(&mut ram) {
+            eprintln!(
+                "kf3: GSP WPR2 up at the guest's FWSEC-FRTS command: frts_offset={} → served WPR2_ADDR_LO={:?}",
+                read.map_or("unreadable/not FRTS — derived".to_string(), |o| format!("{o:#x}")),
+                g.model.at(GspReg::Wpr2AddrLo).and_then(|(b, o)| g.fsm.mmio_read_with(g.model.as_ref(), b, o)).map(|r| r.map(|v| format!("{v:#x}")))
+            );
         }
         // ★ P4: a held reply (fn 70, a page-directory statement) goes only once the VA thread has
         // settled every statement received — its root written and walked (§49.1 for the RPC
@@ -1895,6 +1975,15 @@ impl HostOps for Device {
     fn fault_channel(&self, _host_token: u32) {}
     fn map_guest_slice(&self, _slice: HostSlice) {}
     fn teardown_step(&self, _step: Step) {}
+}
+
+/// ⊘ `KF3_INJECT_FWSEC_FAIL=<n>` (default off): take one of the n injected FWSEC failures.
+fn inject_fwsec_fail_take() -> bool {
+    static LEFT: std::sync::OnceLock<AtomicU64> = std::sync::OnceLock::new();
+    let left = LEFT.get_or_init(|| {
+        AtomicU64::new(std::env::var("KF3_INJECT_FWSEC_FAIL").ok().and_then(|v| v.trim().parse().ok()).unwrap_or(0))
+    });
+    left.fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1)).is_ok()
 }
 
 /// ★★★ v3-refusals: one line per refusal row the FSM posted for the FIRST time — a non-OK status

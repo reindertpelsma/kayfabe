@@ -31,11 +31,30 @@
 
 use kf_arch::gsp::{
     AfterSuspend, ArchBootState, BootContext, BootPhase, BootSequence, BootStageDesc, BootStep, BootStepKind,
-    BootSteps, GspModel, GspReg, RegWrite,
+    BootSteps, FalconDma, GspModel, GspReg, RegWrite,
 };
 
 /// Latch slot holding the secure-booter argument — see [`FalconSecureBooterBoot`].
 const LATCH_BOOTER_ARG: usize = 0;
+/// ★ v3-initrace: latch slots for the GSP falcon's ucode-load DMA — the source base
+/// (`BASE1:BASE`, in 256-byte units), the last block's `MOFFS << 32 | FBOFFS`, and the
+/// guest-physical address of the DMEM image's offset 0 **plus one** (0 = no DMEM load since the
+/// last STARTCPU). See [`FalconSecureBooterBoot`]'s *FWSEC's command*.
+const LATCH_DMA_BASE: usize = 1;
+const LATCH_DMA_OFFS: usize = 2;
+const LATCH_DMEM_IMAGE: usize = 3;
+/// ★ v3-initrace: the PIO DMEM port — `addr | inc << 32`.
+const LATCH_PIO_PORT: usize = 4;
+/// … and the bootloader descriptor's `dataDmaBase` as written through it, `lo | hi << 32`, with
+/// which halves arrived since the last start in [`LATCH_BL_SEEN`] (bit 0 lo, bit 1 hi).
+const LATCH_BL_DATA: usize = 5;
+const LATCH_BL_SEEN: usize = 6;
+/// `RM_FLCN_BL_DMEM_DESC.dataDmaBase` — `{reserved[4], signature[4], ctxDma, codeDmaBase{lo,hi},
+/// nonSecureCodeOff, nonSecureCodeSize, secureCodeOff, secureCodeSize, codeEntryPoint,
+/// dataDmaBase{lo,hi}, …}` (`ogkm-580: src/nvidia/arch/nvalloc/common/inc/rmflcnbl.h:40-102`),
+/// copied to DMEM offset 0 (`kernel_gsp_falcon_tu102.c:260-266`).
+const BL_DATA_DMA_BASE_LO: u64 = 0x40;
+const BL_DATA_DMA_BASE_HI: u64 = 0x44;
 
 /// The **falcon + secure-booter** boot regime.
 ///
@@ -68,6 +87,17 @@ const LATCH_BOOTER_ARG: usize = 0;
 /// distinguishes a Load from an Unload at our boundary
 /// (`C: src/qemu/nvkvm_gpu_emul.c:4222-4234`). It used to be a `sec2_mailbox0` field on
 /// the FSM itself — one regime's convention living in the arch-independent value.
+///
+/// # ★★★ v3-initrace — FWSEC's command
+///
+/// RM loads FWSEC into the GSP falcon by DMA, 256 bytes at a time, DMEM block `MOFFS` from
+/// `(BASE1:BASE << 8) + FBOFFS` (`s_dmaTransfer_GA102`, `ogkm-580:
+/// kernel_gsp_falcon_ga102.c:98-145`, driven by `kgspExecuteHsFalcon_GA102`, `:176-258`) — and
+/// the DMEM image carries the FRTS command RM patched in, whose `frtsRegionOffset4K` is where
+/// WPR2 must come up. So the three [`GspModel::falcon_dma`] latches locate the image's DMEM
+/// offset 0, and the STARTCPU that runs the ucode is preceded by [`BootStep::FwsecCommand`]
+/// carrying it. ⊘ The latch is consumed by that STARTCPU: a later STARTCPU with no DMEM load of
+/// its own reads nothing stale.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct FalconSecureBooterBoot;
 
@@ -81,6 +111,10 @@ impl FalconSecureBooterBoot {
 
 /// See [`BootSequence::stages`] — the cold-boot stages of this regime, in order.
 const FALCON_BOOTER_STAGES: &[BootStageDesc] = &[
+    BootStageDesc {
+        name: "FWSEC's FRTS command, read out of the DMEM image the GSP falcon was loaded from",
+        step: BootStepKind::FwsecCommand,
+    },
     BootStageDesc {
         name: "GSP falcon STARTCPU runs FWSEC and raises the protected region",
         step: BootStepKind::StartProcessor,
@@ -123,7 +157,54 @@ impl BootSequence for FalconSecureBooterBoot {
         state: &mut ArchBootState,
     ) -> BootSteps {
         let val = w.val;
-        // An offset the shared vocabulary cannot name means nothing in this regime: every
+        // ★ v3-initrace: the GSP falcon's ucode-load DMA — latched, never answered.
+        if let Some(d) = model.falcon_dma(w.bar, w.off, val) {
+            match d {
+                FalconDma::Base(b) => {
+                    let base = (state.latch(LATCH_DMA_BASE) & !0xFFFF_FFFF) | u64::from(b);
+                    state.set_latch(LATCH_DMA_BASE, base);
+                }
+                FalconDma::Base1(b) => {
+                    let base = (state.latch(LATCH_DMA_BASE) & 0xFFFF_FFFF) | (u64::from(b) << 32);
+                    state.set_latch(LATCH_DMA_BASE, base);
+                }
+                FalconDma::MemOffset(m) => {
+                    let o = (state.latch(LATCH_DMA_OFFS) & 0xFFFF_FFFF) | (u64::from(m) << 32);
+                    state.set_latch(LATCH_DMA_OFFS, o);
+                }
+                FalconDma::SourceOffset(f) => {
+                    let o = (state.latch(LATCH_DMA_OFFS) & !0xFFFF_FFFF) | u64::from(f);
+                    state.set_latch(LATCH_DMA_OFFS, o);
+                }
+                FalconDma::Transfer { dmem_load: true } => {
+                    // DMEM block `m` came from `base + f`, so DMEM offset 0 is at `base + f - m`.
+                    let o = state.latch(LATCH_DMA_OFFS);
+                    let (m, f) = (o >> 32, o & 0xFFFF_FFFF);
+                    let image = (state.latch(LATCH_DMA_BASE) << 8).checked_add(f).and_then(|a| a.checked_sub(m));
+                    state.set_latch(LATCH_DMEM_IMAGE, image.map_or(0, |a| a.saturating_add(1)));
+                }
+                FalconDma::Transfer { dmem_load: false } => {}
+                FalconDma::DmemPort { addr, inc } => {
+                    state.set_latch(LATCH_PIO_PORT, u64::from(addr) | (u64::from(inc) << 32));
+                }
+                FalconDma::DmemWord(word) => {
+                    let port = state.latch(LATCH_PIO_PORT);
+                    let addr = port & 0xFFFF_FFFF;
+                    let (data, seen) = (state.latch(LATCH_BL_DATA), state.latch(LATCH_BL_SEEN));
+                    if addr == BL_DATA_DMA_BASE_LO {
+                        state.set_latch(LATCH_BL_DATA, (data & !0xFFFF_FFFF) | u64::from(word));
+                        state.set_latch(LATCH_BL_SEEN, seen | 1);
+                    } else if addr == BL_DATA_DMA_BASE_HI {
+                        state.set_latch(LATCH_BL_DATA, (data & 0xFFFF_FFFF) | (u64::from(word) << 32));
+                        state.set_latch(LATCH_BL_SEEN, seen | 2);
+                    }
+                    if port >> 32 != 0 {
+                        state.set_latch(LATCH_PIO_PORT, (port & !0xFFFF_FFFF) | ((addr + 4) & 0xFFFF));
+                    }
+                }
+            }
+        }
+        // An offset the shared vocabulary cannot name means nothing else in this regime: every
         // write it reacts to has a `GspReg`. A generation outside the regime is exactly
         // the case where that is false, and it does not use this sequence.
         let Some(reg) = w.reg else {
@@ -131,7 +212,21 @@ impl BootSequence for FalconSecureBooterBoot {
         };
         match reg {
             GspReg::GspFalconCpuctl if model.is_startcpu(val) => {
-                BootSteps::one(BootStep::StartProcessor)
+                // The image this start runs: the DMA-loaded DMEM (`BOOT_FROM_HS`), else the
+                // bootloader descriptor's `dataDmaBase` (`BOOT_WITH_LOADER`) — each only if it was
+                // written since the last start (both latches are consumed here).
+                let image = state.latch(LATCH_DMEM_IMAGE);
+                let bl = (state.latch(LATCH_BL_SEEN) == 3).then(|| state.latch(LATCH_BL_DATA));
+                state.set_latch(LATCH_DMEM_IMAGE, 0);
+                state.set_latch(LATCH_BL_SEEN, 0);
+                let mut steps = BootSteps::none();
+                if image != 0 {
+                    steps.push(BootStep::FwsecCommand(image - 1));
+                } else if let Some(base) = bl {
+                    steps.push(BootStep::FwsecCommand(base));
+                }
+                steps.push(BootStep::StartProcessor);
+                steps
             }
             GspReg::Sec2FalconMailbox0 => {
                 // Latched, not acted on: Load and Unload differ only by this argument.

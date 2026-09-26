@@ -143,6 +143,214 @@ pub struct CeState {
     pub ce_class: u32,
     /// ★ 2026-09-26: `SET_REMAP_CONST_A` as the guest wrote it (restored after a converted scrub).
     pub const_a: u32,
+    /// ★ v3-initrace (diagnostic record only): the semaphore state the guest's methods set, and
+    /// the releases its launches asked for — see [`Releases`]. Nothing here changes a word the
+    /// rewriter emits.
+    pub sema: SemaRegs,
+    /// The releases recorded since the ring last took them ([`crate::ring::TranslatedRing`]).
+    pub releases: Releases,
+    /// ★ v3-initrace: the data-moving launches since the last take, as the guest wrote them
+    /// (before our rewrite) — the completion probe reads their bytes back.
+    pub launches: PhysLaunches,
+}
+
+/// ★ v3-initrace (diagnostic record only): one side of a launch, as the guest named it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Operand {
+    /// A PHYSICAL operand: `(target, address, bytes)`.
+    Physical(Target, u64, u64),
+    /// A VIRTUAL operand in the channel's own VA space: `(va, bytes)` — reached by the engine
+    /// through the host space's placements (e.g. CeUtils' FB alias, `memmgrMemUtilsMapFbAlias`).
+    Virtual(u64, u64),
+}
+
+/// ★ v3-initrace (diagnostic record only): one `LAUNCH_DMA` that moved data, as the guest wrote it
+/// — each side's operand (`None`: that side is not read, e.g. a memset's source).
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct PhysLaunch {
+    /// The `LAUNCH_DMA` word.
+    pub launch: u32,
+    /// The source, if read.
+    pub src: Option<Operand>,
+    /// The destination.
+    pub dst: Option<Operand>,
+}
+
+/// The last [`PhysLaunches::CAP`] physical launches since the last take.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct PhysLaunches {
+    kept: [PhysLaunch; PhysLaunches::CAP],
+    n: u8,
+}
+
+impl PhysLaunches {
+    /// Launches kept between takes (older ones are dropped).
+    pub const CAP: usize = 4;
+
+    fn push(&mut self, l: PhysLaunch) {
+        if usize::from(self.n) < Self::CAP {
+            self.kept[usize::from(self.n)] = l;
+            self.n += 1;
+        } else {
+            self.kept.copy_within(1.., 0);
+            self.kept[Self::CAP - 1] = l;
+        }
+    }
+
+    /// The launches recorded so far, oldest first; the record is emptied.
+    pub fn take(&mut self) -> Vec<PhysLaunch> {
+        let v = self.kept[..usize::from(self.n)].to_vec();
+        self.n = 0;
+        v
+    }
+}
+
+/// `NV906F_SEMAPHOREA..D` / `NVC56F_SEMAPHOREA..D` — the legacy host semaphore
+/// (`ogkm-580: cl906f.h:78-97`, `clc56f.h:76-83`; RM's CeUtils releases its PB-get index with it,
+/// `channel_utils.c:737-750`).
+const HOST_SEMAPHORE_A: u32 = 0x10;
+const HOST_SEMAPHORE_B: u32 = 0x14;
+const HOST_SEMAPHORE_C: u32 = 0x18;
+const HOST_SEMAPHORE_D: u32 = 0x1c;
+/// `NV906F_SEMAPHORED_OPERATION` 3:0 (`cl906f.h:85`; `clc56f.h` widens it to 4:0 with
+/// `REDUCTION` = 0x10) — `_RELEASE` = 2 (`cl906f.h:87`).
+const HOST_SEMAPHORE_D_OP_MASK: u32 = 0x1f;
+const HOST_SEMAPHORE_D_OP_RELEASE: u32 = 2;
+
+/// ★ v3-initrace: the semaphore registers a channel's methods last wrote (diagnostic record).
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct SemaRegs {
+    /// CE `SET_SEMAPHORE_A` (address 48:32 / 56:32).
+    pub ce_a: u32,
+    /// CE `SET_SEMAPHORE_B` (address 31:0).
+    pub ce_b: u32,
+    /// CE `SET_SEMAPHORE_PAYLOAD`.
+    pub ce_payload: u32,
+    /// Host `SEMAPHOREA` — address 39:32.
+    pub host_a: u32,
+    /// Host `SEMAPHOREB` — address 31:2.
+    pub host_b: u32,
+    /// Host `SEMAPHOREC` — the payload.
+    pub host_c: u32,
+    /// Host `SEM_ADDR_LO` — address 31:2.
+    pub sem_lo: u32,
+    /// Host `SEM_ADDR_HI` — address 39:32.
+    pub sem_hi: u32,
+    /// Host `SEM_PAYLOAD_LO`.
+    pub sem_payload: u32,
+}
+
+/// Which method released a semaphore.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum ReleaseKind {
+    /// A copy-engine `LAUNCH_DMA` with `SEMAPHORE_TYPE` one-word (`clc7b5.h:99`).
+    #[default]
+    CeOneWord,
+    /// A copy-engine release with `SEMAPHORE_REDUCTION_ENABLE` (`clc7b5.h:147`, bit 19): the word
+    /// becomes `op(old, payload)` (UVM's tracking semaphores INC with the payload as the wrap
+    /// value), so the payload is NOT the value written — never judged against it.
+    CeReduction,
+    /// … four-word (with timestamp; the payload is the first word).
+    CeFourWord,
+    /// … conditional-interrupt semaphore.
+    CeConditionalIntr,
+    /// A host `SEMAPHORED` `RELEASE`.
+    HostSemaphoreD,
+    /// A host `SEM_EXECUTE` `RELEASE`.
+    HostSemExecute,
+}
+
+/// ★ v3-initrace: one semaphore RELEASE a guest segment asked the engine for — the virtual
+/// address in the channel's space and the 32-bit payload. Recorded as the rewriter forwards the
+/// words unchanged; the completion probe (`KF3_COMPLETION_PROBE`) reads the word there after the
+/// engine completed, through OUR placements, to say where the guest's completion landed.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct Release {
+    /// The semaphore's virtual address in the channel's VA space.
+    pub va: u64,
+    /// The low 32 bits the engine writes.
+    pub payload: u32,
+    /// The method that asked.
+    pub kind: ReleaseKind,
+}
+
+/// The last [`Releases::CAP`] releases since the last take (older ones are counted, not kept).
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct Releases {
+    kept: [Release; Releases::CAP],
+    n: u8,
+    /// Releases dropped because more than [`Releases::CAP`] arrived between takes.
+    pub dropped: u32,
+}
+
+impl Releases {
+    /// Releases kept between takes.
+    pub const CAP: usize = 4;
+
+    fn push(&mut self, r: Release) {
+        if usize::from(self.n) < Self::CAP {
+            self.kept[usize::from(self.n)] = r;
+            self.n += 1;
+        } else {
+            self.kept.copy_within(1.., 0);
+            self.kept[Self::CAP - 1] = r;
+            self.dropped = self.dropped.saturating_add(1);
+        }
+    }
+
+    /// The releases recorded so far, oldest first; the record is emptied.
+    pub fn take(&mut self) -> Vec<Release> {
+        let v = self.kept[..usize::from(self.n)].to_vec();
+        self.n = 0;
+        v
+    }
+}
+
+/// `NVC7B5_LAUNCH_DMA_SEMAPHORE_REDUCTION_ENABLE` 19:19 (`ogkm-580: clc7b5.h:147`).
+const LAUNCH_SEMAPHORE_REDUCTION_ENABLE: u32 = 1 << 19;
+
+/// Record the semaphore methods `(sub, m, v)` sets — host methods below `0x100` on any
+/// subchannel, CE methods on a hardware subchannel. Pure bookkeeping.
+fn note_semaphore(st: &mut CeState, sub: u32, m: u32, v: u32) {
+    let upper = upper_mask(st);
+    let s = &mut st.sema;
+    match m {
+        HOST_SEMAPHORE_A => s.host_a = v,
+        HOST_SEMAPHORE_B => s.host_b = v,
+        HOST_SEMAPHORE_C => s.host_c = v,
+        HOST_SEMAPHORE_D if v & HOST_SEMAPHORE_D_OP_MASK == HOST_SEMAPHORE_D_OP_RELEASE => {
+            let va = (u64::from(s.host_a & 0xFF) << 32) | u64::from(s.host_b & !3);
+            let r = Release { va, payload: s.host_c, kind: ReleaseKind::HostSemaphoreD };
+            st.releases.push(r);
+        }
+        kf_abi::submit::fifo::SEM_ADDR_LO => s.sem_lo = v,
+        kf_abi::submit::fifo::SEM_ADDR_HI => s.sem_hi = v,
+        kf_abi::submit::fifo::SEM_PAYLOAD_LO => s.sem_payload = v,
+        kf_abi::submit::fifo::SEM_EXECUTE
+            if v & kf_abi::submit::fifo::SEM_EXECUTE_OPERATION_MASK == kf_abi::submit::fifo::SEM_EXECUTE_OPERATION_RELEASE =>
+        {
+            let va = (u64::from(s.sem_hi & 0xFF) << 32) | u64::from(s.sem_lo & !3);
+            let r = Release { va, payload: s.sem_payload, kind: ReleaseKind::HostSemExecute };
+            st.releases.push(r);
+        }
+        _ if sub > 4 || m < 0x100 => {}
+        ce::SET_SEMAPHORE_A => s.ce_a = v,
+        ce::SET_SEMAPHORE_B => s.ce_b = v,
+        ce::SET_SEMAPHORE_PAYLOAD => s.ce_payload = v,
+        ce::LAUNCH_DMA => {
+            let kind = match (v & ce::LAUNCH_SEMAPHORE_TYPE_MASK) >> 3 {
+                0 => return,
+                _ if v & LAUNCH_SEMAPHORE_REDUCTION_ENABLE != 0 => ReleaseKind::CeReduction,
+                1 => ReleaseKind::CeOneWord,
+                2 => ReleaseKind::CeFourWord,
+                _ => ReleaseKind::CeConditionalIntr,
+            };
+            let va = (u64::from(s.ce_a & upper) << 32) | u64::from(s.ce_b);
+            let r = Release { va, payload: s.ce_payload, kind };
+            st.releases.push(r);
+        }
+        _ => {}
+    }
 }
 
 /// One piece of rewritten work, in order.
@@ -265,6 +473,11 @@ pub fn rewrite(
         i += consumed;
         let sub = h.subchannel;
         for (m, v) in addrs_vals {
+            // ★ v3-initrace: bookkeeping only, BEFORE the write is handled (a refused write
+            // below records a release that never ran — harmless: the channel is then dead).
+            if st.sw_subch & (1u8 << (sub & 7)) == 0 || m < 0x100 {
+                note_semaphore(st, sub, m, v);
+            }
             one_write(&mut out, &mut cur, is_ce, st, w, sub, m, v)?;
         }
     }
@@ -413,6 +626,17 @@ fn one_write(
         ce::LAUNCH_DMA => {
             let src_phys = v & ce::LAUNCH_SRC_PHYSICAL != 0;
             let dst_phys = v & ce::LAUNCH_DST_PHYSICAL != 0;
+            // ★ v3-initrace: bookkeeping for the completion probe (the words are unchanged).
+            if v & ce::LAUNCH_TRANSFER_MASK != ce::LAUNCH_TRANSFER_NONE
+                && let Ok((src_len, dst_len)) = extents(st, v)
+            {
+                let side = |phys: bool, mode: u32, at: u64, n: u64| {
+                    if phys { Operand::Physical(Target::from_bits(mode), at, n) } else { Operand::Virtual(at, n) }
+                };
+                let src = src_len.map(|n| side(src_phys, st.src_mode, st.off_in, n));
+                let dst = Some(side(dst_phys, st.dst_mode, st.off_out, dst_len));
+                st.launches.push(PhysLaunch { launch: v, src, dst });
+            }
             if dst_phys && st.ce_class >= HOPPER_DMA_COPY_A && v & LAUNCH_MEMORY_SCRUB_ENABLE != 0 {
                 return launch_scrub_translated(cur, st, w, sub, v);
             }

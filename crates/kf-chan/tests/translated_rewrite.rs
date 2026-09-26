@@ -354,3 +354,35 @@ fn a_hopper_plus_window_va_keeps_all_25_upper_bits() {
     let up = wr[..at].iter().rev().find(|w| w.0 == ce::OFFSET_OUT_UPPER).unwrap().1;
     assert_eq!(up, 0x1ff_fffe, "all 25 bits of the window's upper half");
 }
+
+/// ★ v3-initrace: the completion probe's record — every RELEASE the guest's methods ask for (CE
+/// launch semaphores, host `SEMAPHORED` / `SEM_EXECUTE` releases) is recorded with its VA and
+/// payload, acquires and launches without a semaphore are not, and the forwarded words are
+/// exactly what they were without the record.
+#[test]
+fn releases_are_recorded_and_the_words_are_unchanged() {
+    use kf_chan::translated::ReleaseKind;
+    let mut pb = setup();
+    pb.extend(m(SUB, ce::SET_SEMAPHORE_A, &[0x3, 0x2006_c004, 7]));
+    pb.extend(m(SUB, ce::LAUNCH_DMA, &[ce::LAUNCH_SEMAPHORE_RELEASE_ONE_WORD]));
+    pb.extend(m(SUB, ce::LAUNCH_DMA, &[0])); // no semaphore
+    pb.extend(m(0, 0x10, &[0x3, 0x2006_c000, 9, 0x0110_0002])); // SEMAPHOREA-D, RELEASE
+    pb.extend(m(0, 0x10, &[0x3, 0x2006_c000, 9, 0x0000_0001])); // …D ACQUIRE: not a release
+    pb.extend(m(0, 0x5c, &[0x2006_c008, 0x3, 11, 0, 1])); // SEM_ADDR_LO..SEM_EXECUTE RELEASE
+    pb.extend(m(0, 0x6c, &[0])); // SEM_EXECUTE ACQUIRE
+    let mut st = CeState::default();
+    let out = rewrite(&pb, is_ce, &mut st, &W).unwrap();
+    let got: Vec<(u64, u32, ReleaseKind)> = st.releases.take().iter().map(|r| (r.va, r.payload, r.kind)).collect();
+    assert_eq!(
+        got,
+        vec![
+            (0x3_2006_c004, 7, ReleaseKind::CeOneWord),
+            (0x3_2006_c000, 9, ReleaseKind::HostSemaphoreD),
+            (0x3_2006_c008, 11, ReleaseKind::HostSemExecute),
+        ]
+    );
+    assert!(st.releases.take().is_empty(), "a take empties the record");
+    // The record never changes what is forwarded: same words with a fresh state.
+    let mut st2 = CeState::default();
+    assert_eq!(writes(&rewrite(&pb, is_ce, &mut st2, &W).unwrap()), writes(&out));
+}

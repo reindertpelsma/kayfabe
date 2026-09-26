@@ -126,3 +126,80 @@ fn hostile_rings_are_refused_by_name() {
     let mut r = TranslatedRing::new(GPFIFO, 4, 0);
     assert_eq!(r.next(1, &mut mem, is_ce, &W), Err(RingRefusal::Rewrite { gp: 0, why: Refusal::PeerOperand }));
 }
+
+/// Drain the ring at `gp_put` into the steps it produced (Idle excluded).
+fn drain(r: &mut TranslatedRing, gp_put: u32, mem: &mut Mem) -> Vec<Next> {
+    let mut v = Vec::new();
+    loop {
+        match r.next(gp_put, mem, is_ce, &W).unwrap() {
+            Next::Idle => return v,
+            n => v.push(n),
+        }
+    }
+}
+
+/// ★★★★★ v3-initrace — **why a Translated channel must be born over a ZEROED USERD** (the
+/// adapter-init flake, `V3_DRIVER_MATRIX.md` §6). The ring's cursor starts at 0; its first pump is
+/// rung by `GPFIFO_SCHEDULE`, before the guest has submitted anything, and reads the USERD's
+/// `GP_PUT`. A stale 1 left by an earlier channel in the same slot makes that pump fetch the
+/// guest's still-zero entry 0 as a NOP and retire it — so when the guest's REAL entry 0 arrives
+/// with `GP_PUT = 1` the cursor is already there and it is never fetched. `zero_userd` at birth is
+/// what makes the first read 0.
+#[test]
+fn a_ring_born_over_a_stale_gp_put_never_fetches_the_guests_first_entry() {
+    let real = |mem: &mut Mem| {
+        let mut w = m(4, 0, &[CE_CLASS]);
+        w.extend(m(4, ce::SET_SEMAPHORE_A, &[0x3, 0x2006_c004, 1]));
+        w.extend(m(4, ce::LAUNCH_DMA, &[ce::LAUNCH_SEMAPHORE_RELEASE_ONE_WORD]));
+        seg(mem, 0, PB, &w);
+    };
+    // The stale slot: the schedule-time pump sees GP_PUT = 1 over a zeroed GPFIFO.
+    let mut mem = Mem::default();
+    mem.entry(0, 0);
+    let mut r = TranslatedRing::new(GPFIFO, 4096, 0);
+    assert_eq!(drain(&mut r, 1, &mut mem), vec![Next::Submit { words: vec![], retires: Some(1) }], "the NOP it fetched");
+    real(&mut mem);
+    assert!(drain(&mut r, 1, &mut mem).is_empty(), "the guest's real entry 0 is never fetched");
+    assert!(r.take_releases().is_empty(), "so its semaphore release never reaches the engine");
+
+    // The zeroed slot (physical RM's initialisation): the same schedule-time pump sees 0.
+    let mut mem = Mem::default();
+    mem.entry(0, 0);
+    let mut r = TranslatedRing::new(GPFIFO, 4096, 0);
+    assert!(drain(&mut r, 0, &mut mem).is_empty());
+    real(&mut mem);
+    let steps = drain(&mut r, 1, &mut mem);
+    assert!(matches!(steps.as_slice(), [Next::Submit { retires: Some(1), .. }]), "{steps:?}");
+    let rel = r.take_releases();
+    assert_eq!(rel.len(), 1, "the release is forwarded: {rel:?}");
+    assert_eq!((rel[0].va, rel[0].payload), (0x3_2006_c004, 1));
+}
+
+/// ★ v3-initrace: `zero_userd` clears NV_RAMUSERD_CHAN_SIZE (512) bytes — both cursors included —
+/// never more than the guest declared, whole words only, and names the first refused store.
+#[test]
+fn zero_userd_clears_the_channel_size_and_no_further() {
+    use kf_chan::host::{UserdInit, zero_userd};
+    struct Page([u8; 4096], Option<u64>);
+    impl UserdInit for Page {
+        fn store_u32(&mut self, off: u64, v: u32) -> Result<(), String> {
+            if Some(off) == self.1 {
+                return Err("refused".into());
+            }
+            self.0[off as usize..off as usize + 4].copy_from_slice(&v.to_le_bytes());
+            Ok(())
+        }
+    }
+    let mut p = Page([0xAA; 4096], None);
+    assert_eq!(zero_userd(&mut p, 512).unwrap(), 512);
+    assert!(p.0[..512].iter().all(|&b| b == 0));
+    assert!(p.0[512..].iter().all(|&b| b == 0xAA), "nothing past the channel's USERD");
+    let (put, get) = (kf_abi::submit::USERD_GP_PUT as usize, kf_abi::submit::USERD_GP_GET as usize);
+    assert_eq!((p.0[put], p.0[get]), (0, 0));
+
+    let mut p = Page([0xAA; 4096], None);
+    assert_eq!(zero_userd(&mut p, 1 << 20).unwrap(), 512, "a larger declared size is clamped to the channel's");
+    assert_eq!(zero_userd(&mut p, 0x8e).unwrap(), 0x8c, "whole words only");
+    let mut p = Page([0xAA; 4096], Some(0x88));
+    assert!(zero_userd(&mut p, 512).unwrap_err().contains("+0x88"));
+}
