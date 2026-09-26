@@ -2,7 +2,8 @@
 """perf.py <resdir> — the RECORDED numbers (GSET_VAL), guest vs bare metal, as ratios. Never a grade.
 ⊘ A guest FASTER than bare metal is flagged, not celebrated: a refused MC_SERVICE_INTERRUPTS once ended
 GPU waits early (v3-mapfix 56032c46) and made vkpeak read faster in the guest than on bare metal.
-Rows: numeric values present on both sides; 'higher is better' unless the key says ns/ms/secs/time."""
+Rows: numeric values present on both sides; 'higher is better' unless the key says ns/us/ms/secs/time.
+The ratio is always oriented so that > 1 means the guest did BETTER than bare metal."""
 import re, sys, collections
 R = sys.argv[1]
 def vals(paths):
@@ -29,7 +30,7 @@ for (it, k), hv in h.items():
         a, b = num(hv), num(gv)
     if a is None or b is None or a == 0:
         continue
-    lower_better = bool(re.search(r"(_ns|_ms|secs|time|wall)", k))
+    lower_better = bool(re.search(r"(_ns|_us|_ms|secs|time|wall)", k))
     r = b / a if not lower_better else a / b
     note = "⚠ FASTER than bare metal — check for early-ended waits" if r > 1.03 else ""
     print(f"| {it} | {k} | {a:g} | {b:g} | {r:.2f} | {note} |")
