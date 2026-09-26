@@ -396,6 +396,95 @@ pub fn is_delivered_notifier(index: u32) -> bool {
     DELIVERED_NOTIFIERS.iter().any(|n| n.index == index)
 }
 
+/// `NV2080_NOTIFIERS_RC_ERROR` (`ogkm-580: cl2080_notification.h:74`).
+pub const NV2080_NOTIFIERS_RC_ERROR: u32 = 37;
+/// `NV2080_NOTIFIERS_POWER_EVENT` (`ogkm-580: cl2080_notification.h:156`).
+pub const NV2080_NOTIFIERS_POWER_EVENT: u32 = 118;
+/// `NV2080_NOTIFIERS_POISON_ERROR_NON_FATAL` (`ogkm-580: cl2080_notification.h:196`).
+pub const NV2080_NOTIFIERS_POISON_ERROR_NON_FATAL: u32 = 155;
+/// `NV2080_NOTIFIERS_POISON_ERROR_FATAL` (`ogkm-580: cl2080_notification.h:197`).
+pub const NV2080_NOTIFIERS_POISON_ERROR_FATAL: u32 = 156;
+/// `NV2080_NOTIFIERS_SMC_CONFIG_UPDATE` (`ogkm-580: cl2080_notification.h:200`).
+pub const NV2080_NOTIFIERS_SMC_CONFIG_UPDATE: u32 = 159;
+/// `NV2080_NOTIFIERS_GPU_UNAVAILABLE` (`ogkm-580: cl2080_notification.h:232`).
+pub const NV2080_NOTIFIERS_GPU_UNAVAILABLE: u32 = 191;
+/// `NV2080_NOTIFIERS_GPU_RECOVERY_ACTION` (`ogkm-580: cl2080_notification.h:233`).
+pub const NV2080_NOTIFIERS_GPU_RECOVERY_ACTION: u32 = 192;
+
+/// ★★★ **The notifier indices the guest's OWN CPU-RM raises** — the third promise, and the
+/// one that makes the GSP arming pure bookkeeping.
+///
+/// With GSP enabled, `subdeviceCtrlCmdEventSetNotification_IMPL` forwards the arming to the
+/// physical RM FIRST and only records `pSubdevice->notifyActions` when that returns `NV_OK`
+/// (`ogkm-580: subdevice_ctrl_event_kernel.c:108-117`). For the indices below the PRODUCER
+/// is `gpuNotifySubDeviceEvent` inside that same CPU-RM, which consults the CPU-side
+/// `notifyActions` and nothing on the GSP — so this device's answer decides only whether the
+/// guest RM will deliver its own event, never whether this device must raise one. Refusing
+/// them promised nothing and broke real software: `nvidia-smi -l` (NVML's event set) arms
+/// all seven, gives up on the first refusal with *"Failed register events"* and exits 3;
+/// `gpu_burn` reads its temperature pipe until `'\n'` and ran off its 10 KiB stack buffer
+/// on that EOF (`[measured v3-appfix g2/g3]` host: every arming `NV_OK`; guest: index 37
+/// answered `0x56`, then `FREE`).
+///
+/// ⊘ Not [`SILENT_NOTIFIERS`] (several of these CAN occur — an RC does) and not
+/// [`DELIVERED_NOTIFIERS`] (this device raises no vector for them); every row's argument
+/// must cite the CPU-RM producer, and a row whose producer is on the GSP does not belong.
+pub const GUEST_RAISED_NOTIFIERS: &[GuestRaisedNotifier] = &[
+    GuestRaisedNotifier {
+        index: NV2080_NOTIFIERS_RC_ERROR,
+        why: "raised by krcErrorSendEventNotifications_KERNEL (ogkm-580: \
+              kernel_rc_notification.c:463) — CPU-RM — which _kgspRpcRCTriggered calls \
+              (kernel_gsp.c:752) when THIS device posts RC_TRIGGERED for a host twin whose \
+              error notifier the host wrote (kf-qemu chan.rs rc_scan)",
+    },
+    GuestRaisedNotifier {
+        index: NV2080_NOTIFIERS_POWER_EVENT,
+        why: "raised by the AC/DC power-state path in CPU-RM (ogkm-580: kern_perf_pwr.c:255), \
+              after its own PERF_SET_POWERSTATE control; no GSP event carries it",
+    },
+    GuestRaisedNotifier {
+        index: NV2080_NOTIFIERS_POISON_ERROR_NON_FATAL,
+        why: "raised by the CPU-RM error-containment walk (ogkm-580: \
+              kern_gpu_error_cont_ga100.c:59-70, _gpuNotifySubDeviceEventNotifier) from the \
+              notifier column of the row it selected; the GSP reports, the CPU-RM notifies",
+    },
+    GuestRaisedNotifier {
+        index: NV2080_NOTIFIERS_POISON_ERROR_FATAL,
+        why: "raised by the same CPU-RM error-containment walk as the non-fatal index \
+              (ogkm-580: kern_gpu_error_cont_gb100.c:57-71, _gpuNotifySubDeviceEventNotifier)",
+    },
+    GuestRaisedNotifier {
+        index: NV2080_NOTIFIERS_SMC_CONFIG_UPDATE,
+        why: "raised by the CPU-RM MIG manager when a GPU/compute instance is created or \
+              destroyed (ogkm-580: kernel_mig_manager.c:7266,7705, \
+              gpu_instance_subscription.c:570,674)",
+    },
+    GuestRaisedNotifier {
+        index: NV2080_NOTIFIERS_GPU_UNAVAILABLE,
+        why: "raised by CPU-RM itself when a GSP RPC times out (ogkm-580: kernel_gsp.c:2169) \
+              — i.e. about THIS device, by the guest",
+    },
+    GuestRaisedNotifier {
+        index: NV2080_NOTIFIERS_GPU_RECOVERY_ACTION,
+        why: "raised by CPU-RM when the GPU's recovery action changes (ogkm-580: gpu.c:7031)",
+    },
+];
+
+/// One row of [`GUEST_RAISED_NOTIFIERS`] — an index, and where the guest's own RM raises it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GuestRaisedNotifier {
+    /// The `NV2080_NOTIFIERS_*` index.
+    pub index: u32,
+    /// The CPU-RM producer, cited.
+    pub why: &'static str,
+}
+
+/// Whether the guest's own CPU-RM raises `index` — see [`GUEST_RAISED_NOTIFIERS`].
+#[must_use]
+pub fn is_guest_raised_notifier(index: u32) -> bool {
+    GUEST_RAISED_NOTIFIERS.iter().any(|n| n.index == index)
+}
+
 /// One row of [`SILENT_NOTIFIERS`] — an index, and the argument for accepting it.
 ///
 /// ★ The argument is a field rather than a comment so a test can demand every row carry

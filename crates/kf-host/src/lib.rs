@@ -305,6 +305,11 @@ pub struct HostRm {
     /// from `DISABLE` (`subdevice_ctrl_event_kernel.c:123-130`), so it is done once, here.
     armed: Mutex<std::collections::BTreeSet<u32>>,
     cpu_maps: std::sync::atomic::AtomicU64,
+    /// ★ v3-appfix: CPU views (`NV_ESC_RM_MAP_MEMORY`) that SUCCEEDED, views given back
+    /// (`NV_ESC_RM_UNMAP_MEMORY` answered `NV_OK`), and give-backs the host REFUSED. Armed minus
+    /// released is host BAR1 aperture this session still holds — the number that ran the host
+    /// out of `NV_ESC_RM_MAP_MEMORY` at the ~60th guest process (V3_APP_MATRIX §3 J).
+    views: [std::sync::atomic::AtomicU64; 3],
     usermode: Result<UsermodeWindow, RmError>,
     classes: Box<dyn HostClasses>,
     /// `MC_GET_ARCH_INFO` as the host answered it: `(architecture, implementation, revision)`.
@@ -400,6 +405,7 @@ impl HostRm {
                 parents: BTreeMap::new(),
             }),
             cpu_maps: std::sync::atomic::AtomicU64::new(0),
+            views: Default::default(),
             // Filled in below, once there is a subdevice to parent it to.
             usermode: Err(RmError::Other(NOT_ON_THIS_RUNG)),
         };
@@ -1164,6 +1170,7 @@ impl HostRm {
         let out =
             Nvos33ParametersWithFd::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
         status_check(out.status)?;
+        self.views[0].fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         Ok((node, out.p_linear_address))
     }
 
@@ -1181,6 +1188,7 @@ impl HostRm {
     /// Whatever RM puts in `status`. ⚠ Which is **the only place a refusal appears**: `ioctl(2)`
     /// returns 0 and leaves `errno` untouched even when the unmap fails.
     pub fn release_cpu_view(&self, r: CpuViewRelease) -> Result<(), RmError> {
+        let (r_mem, r_cookie) = (r.h_memory, r.p_linear_address);
         let mut arg = [0u8; Nvos34Parameters::SIZE];
         Nvos34Parameters {
             // ⊘ F11: this session's OWN client and device, read here — never carried in from the
@@ -1200,7 +1208,20 @@ impl HostRm {
             .ioctl(req, &mut arg, &mut [])
             .map_err(|e| ioctl_error(&e))?;
         let out = Nvos34Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
-        status_check(out.status)
+        let r = status_check(out.status);
+        let n = self.views[if r.is_ok() { 1 } else { 2 }].fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if r.is_err() && n < 16 {
+            eprintln!("kf-host: CPU view release REFUSED (#{n}): memory {:#x} cookie {:#x}: status {:#x} — its BAR1 aperture stays held", r_mem, r_cookie, out.status);
+        }
+        r
+    }
+
+    /// ★ v3-appfix: `(armed, released, release_refused)` CPU views over this session's life.
+    /// `armed - released` is the host BAR1 aperture still held.
+    #[must_use]
+    pub fn view_counts(&self) -> (u64, u64, u64) {
+        let o = std::sync::atomic::Ordering::Relaxed;
+        (self.views[0].load(o), self.views[1].load(o), self.views[2].load(o))
     }
 
     /// Allocate `len` bytes of **device-local** memory — the only kind a ring, a USERD

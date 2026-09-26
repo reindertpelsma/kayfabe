@@ -1958,8 +1958,11 @@ impl CommandPolicy for InitTablePolicy {
                 // ⊘ The third disjunct is a PROBE and is off unless the device property
                 // names an index — see `eventnotify::ProbeArmSet`. A boot that gets
                 // further because of it measures REACHABILITY, never correctness.
+                // ★ v3-appfix: a THIRD admitting list — indices the guest's own CPU-RM raises
+                // (`GUEST_RAISED_NOTIFIERS`), for which this arming is bookkeeping only.
                 if !eventnotify::is_silent_notifier(reg.event)
                     && !eventnotify::is_delivered_notifier(reg.event)
+                    && !eventnotify::is_guest_raised_notifier(reg.event)
                     && !self.probe_arm.contains(reg.event)
                 {
                     return refuse();
