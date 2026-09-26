@@ -53,25 +53,34 @@ def fmt(v):
     return "inf" if v == math.inf else f"{v:.2f}"
 
 
-def matrix(paths):
-    """--matrix a.png b.png ...: every pair's number of differing values (and the largest difference) —
-    the evidence behind a verdict, and the test for a SYSTEMATIC guest difference (guest images that agree
-    with each other but not with bare metal)."""
+def matrix(paths, nbare):
+    """--matrix [--nbare K] a.png b.png ...: every pair's number of differing values (and the largest
+    difference) — the evidence behind a verdict, and the test for a SYSTEMATIC guest difference (guest
+    images that agree with each other but not with bare metal). With --nbare K (the first K paths are
+    bare metal) it also prints each image's SPREAD: its mean number of differing values to the bare-metal
+    images (itself excluded) — a guest image is an outlier when its spread exceeds every bare image's."""
     imgs = [rgb(p) for p in paths]
     names = [os.path.basename(p) for p in paths]
+    D = [[dist(a, b) if i != j else (math.inf, 0, 0) for j, b in enumerate(imgs)] for i, a in enumerate(imgs)]
     print("ndiff/maxdiff " + " ".join(f"{n[:14]:>14}" for n in names))
-    for i, a in enumerate(imgs):
-        row = []
-        for j, b in enumerate(imgs):
-            _, nd, mx = dist(a, b) if i != j else (0, 0, 0)
-            row.append(f"{nd:>11}/{mx:<2}")
-        print(f"{names[i][:14]:>14} " + " ".join(row))
+    for i in range(len(imgs)):
+        print(f"{names[i][:14]:>14} " + " ".join(f"{D[i][j][1]:>11}/{D[i][j][2]:<2}" for j in range(len(imgs))))
+    if nbare >= 2:
+        for i in range(len(imgs)):
+            others = [D[i][j][1] for j in range(nbare) if j != i]
+            tag = "bare " if i < nbare else "GUEST"
+            print(f"spread {tag} {names[i]} mean_ndiff_to_bare={statistics.mean(others):.2f} "
+                  f"min={min(others)} max={max(others)} maxdiff={max(D[i][j][2] for j in range(nbare) if j != i)}")
 
 
 def main():
     a = sys.argv[1:]
     if a[:1] == ["--matrix"]:
-        return matrix(a[1:])
+        a = a[1:]
+        nbare = 0
+        if a[:1] == ["--nbare"]:
+            nbare, a = int(a[1]), a[2:]
+        return matrix(a, nbare)
     if "--bare" not in a or "--guest" not in a:
         raise SystemExit(__doc__)
     bare = a[a.index("--bare") + 1:a.index("--guest")]
