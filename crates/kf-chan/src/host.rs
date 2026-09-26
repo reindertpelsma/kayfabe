@@ -68,11 +68,27 @@ struct Region {
     seq: u32,
 }
 
+/// The host resources one [`HostRing`] holds besides its channel.
+#[derive(Debug, Clone, Copy)]
+struct RingOwned {
+    mem: u32,
+    cookie: u64,
+    space: kf_host::VaSpace,
+}
+
 /// ★ A copy-engine host channel we own. Its completions reach the worker through the SESSION's one
 /// completion fd ([`crate::completions::Completions`]), never an fd of its own.
 pub struct HostRing {
-    cpu: kf_linux_raw::VolatileRegion,
+    /// `None` once [`HostRing::release`] has unmapped it.
+    cpu: Option<kf_linux_raw::VolatileRegion>,
     _node: kf_linux_raw::CharDevice,
+    /// ★ v3-appfix J: what the ring OWNS on the host, so [`HostRing::release`] can give it back —
+    /// the device-local object, its CPU view's release cookie, and the space it is mapped in.
+    /// ⊘ Before this the ring kept none of them: every retired Translated channel left a 1 MiB
+    /// object, its GPU mapping and its host BAR1 CPU view behind (`[measured v3-appfix g5]`
+    /// ~4.5 MiB of host BAR1 per guest CUDA process with persistence mode, the 256 MiB aperture
+    /// exhausted at ~55 processes: `NV_ESC_RM_MAP_MEMORY … NoMemory`, V3_APP_MATRIX §3 J).
+    owned: Option<RingOwned>,
     va: u64,
     chan: kf_host::Channel,
     head: u64,
@@ -121,22 +137,90 @@ impl HostRing {
                 return Err(format!("map ring{}: {e:?}", at.map(|a| format!(" at {a:#x}")).unwrap_or_default()));
             }
         };
-        let (node, cpu) = rm
-            .map_cpu(mem, RING_BYTES, kf_linux_raw::CachePolicy::Uncached)
-            .map_err(|e| format!("cpu ring: {e:?}"))?;
-        let chan = rm
-            .birth_channel(space, engine, kf_host::RingSpec {
-                gp_fifo_va: va + GPFIFO_OFF,
-                gp_fifo_entries: GPFIFO_ENTRIES,
-                userd_memory: mem,
-                userd_offset: USERD_OFF,
-                err_notifier: 0,
-            })
-            .map_err(|e| format!("birth: {e:?}"))?;
-        rm.alloc_ce_object(chan, engine).map_err(|e| format!("ce object: {e:?}"))?;
-        rm.schedule(chan).map_err(|e| format!("schedule: {e:?}"))?;
-        cpu.store_u32(At::new(FENCE_OFF), 0).map_err(|e| format!("{e:?}"))?;
-        Ok(HostRing { cpu, _node: node, va, chan, head: 0, put: 0, seq: 0, live: VecDeque::new() })
+        // ★ Every failure below gives back what was built (object, mapping, view) — a refused
+        // birth must not leak the host aperture any more than a retired one may.
+        let undo = |cookie: Option<u64>| {
+            if let Some(c) = cookie {
+                let _ = rm.release_cpu_view(kf_host::CpuViewRelease { h_memory: mem, p_linear_address: c });
+            }
+            let _ = rm.unmap(space, va, false);
+            let _ = rm.free(mem);
+        };
+        // The CPU view is armed with its release COOKIE kept (`HostRm::map_cpu` drops it, which
+        // makes a view unreleasable for the life of the process).
+        let (node, cookie) = match rm.arm_cpu_view(kf_host::MapNode::Gpu, mem, 0, RING_BYTES, kf_host::ViewAccess::ReadWrite) {
+            Ok(v) => v,
+            Err(e) => {
+                undo(None);
+                return Err(format!("cpu ring: {e:?}"));
+            }
+        };
+        let cpu = match kf_linux_raw::VolatileRegion::map(
+            kf_linux_raw::Backing::DeviceFile { fd: node.as_fd() },
+            RING_BYTES,
+            kf_linux_raw::CachePolicy::Uncached,
+            kf_linux_raw::HostPageSize::query(),
+        ) {
+            Ok(r) => r,
+            Err(e) => {
+                undo(Some(cookie));
+                return Err(format!("cpu ring mmap: {e:?}"));
+            }
+        };
+        let owned = RingOwned { mem, cookie, space };
+        let chan = match rm.birth_channel(space, engine, kf_host::RingSpec {
+            gp_fifo_va: va + GPFIFO_OFF,
+            gp_fifo_entries: GPFIFO_ENTRIES,
+            userd_memory: mem,
+            userd_offset: USERD_OFF,
+            err_notifier: 0,
+        }) {
+            Ok(c) => c,
+            Err(e) => {
+                drop(cpu);
+                undo(Some(cookie));
+                return Err(format!("birth: {e:?}"));
+            }
+        };
+        let mut ring = HostRing { cpu: Some(cpu), _node: node, owned: Some(owned), va, chan, head: 0, put: 0, seq: 0, live: VecDeque::new() };
+        let tail = rm
+            .alloc_ce_object(chan, engine)
+            .map_err(|e| format!("ce object: {e:?}"))
+            .and_then(|_| rm.schedule(chan).map_err(|e| format!("schedule: {e:?}")))
+            .and_then(|()| ring.cpu()?.store_u32(At::new(FENCE_OFF), 0).map_err(|e| format!("{e:?}")));
+        if let Err(e) = tail {
+            let _ = rm.free_channel(chan);
+            ring.release(rm);
+            return Err(e);
+        }
+        Ok(ring)
+    }
+
+    fn cpu(&self) -> Result<&kf_linux_raw::VolatileRegion, String> {
+        self.cpu.as_ref().ok_or_else(|| "host ring already released (no CPU mapping)".to_string())
+    }
+
+    /// ★ v3-appfix J: give back what the ring owns besides its channel — its CPU view (host BAR1
+    /// aperture), its GPU mapping and its device-local object. Call it AFTER the channel is freed
+    /// (the channel's GPFIFO and USERD live in the object). Idempotent; returns what it released.
+    ///
+    /// ⊘ Order: the CPU mapping is removed FIRST (never left over BAR1 pages RM is about to
+    /// reassign), then `NV_ESC_RM_UNMAP_MEMORY`, then the GPU unmap, then the free. A ring that
+    /// is used after this refuses every store/load by name (no mapping).
+    pub fn release(&mut self, rm: &kf_host::HostRm) -> Option<String> {
+        let o = self.owned.take()?;
+        // Drop the CPU mapping (munmap) before the view's aperture is given back.
+        self.cpu = None;
+        let view = rm.release_cpu_view(kf_host::CpuViewRelease { h_memory: o.mem, p_linear_address: o.cookie });
+        let unmap = rm.unmap(o.space, self.va, false);
+        let free = rm.free(o.mem);
+        Some(format!(
+            "ring {:#x} released: cpu unmapped, view {} unmap {} free {}",
+            self.va,
+            if view.is_ok() { "ok" } else { "REFUSED" },
+            if unmap.is_ok() { "ok" } else { "REFUSED" },
+            if free.is_ok() { "ok" } else { "REFUSED" }
+        ))
     }
 
     /// Nothing pushed is still unfinished (as of the last [`HostRing::completed`]).
@@ -162,7 +246,7 @@ impl HostRing {
     /// # Errors
     /// A failed load.
     pub fn completed(&mut self) -> Result<u32, String> {
-        let done = self.cpu.load_u32(At::new(FENCE_OFF)).map_err(|e| format!("{e:?}"))?;
+        let done = self.cpu()?.load_u32(At::new(FENCE_OFF)).map_err(|e| format!("{e:?}"))?;
         while self.live.front().is_some_and(|r| reached(done, r.seq)) {
             self.live.pop_front();
         }
@@ -198,12 +282,12 @@ impl HostRing {
             return Ok(Err(Busy));
         }
         for (i, w) in words.iter().enumerate() {
-            self.cpu.store_u32(At::new(start + 4 * i as u64), *w).map_err(|e| format!("{e:?}"))?;
+            self.cpu()?.store_u32(At::new(start + 4 * i as u64), *w).map_err(|e| format!("{e:?}"))?;
         }
         let entry = gp_entry(self.va + start, n).ok_or("gp entry (ring VA above 2^40?)")?;
         let gp = GPFIFO_OFF + u64::from(self.put % GPFIFO_ENTRIES) * 8;
-        self.cpu.store_u32(At::new(gp), entry as u32).map_err(|e| format!("{e:?}"))?;
-        self.cpu.store_u32(At::new(gp + 4), (entry >> 32) as u32).map_err(|e| format!("{e:?}"))?;
+        self.cpu()?.store_u32(At::new(gp), entry as u32).map_err(|e| format!("{e:?}"))?;
+        self.cpu()?.store_u32(At::new(gp + 4), (entry >> 32) as u32).map_err(|e| format!("{e:?}"))?;
         self.put = self.put.wrapping_add(1);
         self.head = start + n;
         // Covered by the NEXT fence.
@@ -224,7 +308,7 @@ impl HostRing {
         }
         self.seq = seq;
         kf_linux_raw::release_fence();
-        self.cpu
+        self.cpu()?
             .store_u32(At::new(USERD_OFF + USERD_GP_PUT), self.put % GPFIFO_ENTRIES)
             .map_err(|e| format!("{e:?}"))?;
         kf_linux_raw::release_fence();
@@ -329,6 +413,12 @@ impl TranslatedChannel {
     #[must_use]
     pub fn host(&self) -> &HostRing {
         &self.host
+    }
+
+    /// ★ v3-appfix J: release the host ring's object, mapping and CPU view — AFTER the host
+    /// channel is freed. See [`HostRing::release`].
+    pub fn release_host(&mut self, rm: &kf_host::HostRm) -> Option<String> {
+        self.host.release(rm)
     }
 
     /// `(guest GP entries fetched, host submissions, walks at splits)`.

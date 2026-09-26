@@ -344,16 +344,40 @@ pub const RING_REGION_BASE: u64 = kf_chan::host::RING_VA_LIMIT - RING_REGION_BYT
 /// The ring region's size.
 pub const RING_REGION_BYTES: u64 = 4 << 30;
 
-/// ★ P6b: the next free ring slot of one host space — never reused (a freed ring's memory stays
-/// mapped today; a slot is a VA, not a promise it was released).
-pub type RingSlots = std::sync::Arc<AtomicU64>;
+/// ★ P6b: the ring slots of one host space — the next never-used slot, and the slots whose ring
+/// was RELEASED (object freed, GPU mapping gone: v3-appfix J). A slot is a VA; it returns to the
+/// pool only when its ring's release fully succeeded, never on a refusal.
+pub type RingSlots = std::sync::Arc<std::sync::Mutex<RingSlotPool>>;
 
-/// ★ P6b: the VA of the next ring slot in a space, or `None` when the region is exhausted.
+/// See [`RingSlots`].
+#[derive(Debug, Default)]
+pub struct RingSlotPool {
+    next: u64,
+    free: Vec<u64>,
+}
+
+/// ★ P6b: the VA of a free ring slot in a space (a released one first), or `None` when the region
+/// is exhausted.
 #[must_use]
 pub fn take_ring_slot(slots: &RingSlots) -> Option<u64> {
     let per = RING_REGION_BYTES / kf_chan::host::RING_BYTES;
-    let i = slots.fetch_add(1, Ordering::AcqRel);
-    (i < per).then(|| RING_REGION_BASE + i * kf_chan::host::RING_BYTES)
+    let mut p = slots.lock().ok()?;
+    if let Some(va) = p.free.pop() {
+        return Some(va);
+    }
+    let i = p.next;
+    (i < per).then(|| {
+        p.next += 1;
+        RING_REGION_BASE + i * kf_chan::host::RING_BYTES
+    })
+}
+
+/// ★ v3-appfix J: return a slot whose ring was fully released (unmapped and freed).
+pub fn give_ring_slot(slots: &RingSlots, va: u64) {
+    let in_region = va >= RING_REGION_BASE && va < RING_REGION_BASE + RING_REGION_BYTES;
+    if in_region && let Ok(mut p) = slots.lock() && !p.free.contains(&va) {
+        p.free.push(va);
+    }
 }
 
 /// ★ A mirrored host VA space: the reconcile's target, and the row record beside it.
@@ -1354,6 +1378,26 @@ mod tests {
 
     /// The measured bases, at 12 GiB, are inside what is armed, and a 1 MiB window from each is
     /// wholly covered.
+    /// ★ v3-appfix J: a released ring's slot is reused before a fresh one, only slots inside the
+    /// region are accepted back, and a slot is never handed out twice.
+    #[test]
+    fn a_released_ring_slot_is_reused_and_never_doubled() {
+        let slots = RingSlots::default();
+        let a = take_ring_slot(&slots).expect("first slot");
+        let b = take_ring_slot(&slots).expect("second slot");
+        assert_eq!(a, RING_REGION_BASE);
+        assert_eq!(b, RING_REGION_BASE + kf_chan::host::RING_BYTES);
+        give_ring_slot(&slots, a);
+        give_ring_slot(&slots, a);
+        give_ring_slot(&slots, 0x1000);
+        assert_eq!(take_ring_slot(&slots), Some(a), "the released slot comes back first");
+        assert_eq!(
+            take_ring_slot(&slots),
+            Some(RING_REGION_BASE + 2 * kf_chan::host::RING_BYTES),
+            "a double give and a foreign VA are not slots"
+        );
+    }
+
     #[test]
     fn the_bar2_key_is_no_guest_key() {
         assert_eq!(K_BAR2.0 >> 32, 0xFFFF_FFFF);

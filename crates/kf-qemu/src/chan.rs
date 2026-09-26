@@ -1778,7 +1778,12 @@ impl ChanPlane {
                     .map_err(|_| "caps poisoned".to_string())
                     .and_then(|mut c| me.plane.allocate_channel(&mut c, idx, Route::Translated, ht, Owner::Kernel).map_err(|e| format!("{e:?}")));
                 if let Err(e) = alloc {
+                    let mut chan = chan;
                     let _ = me.rm.free_channel(chan.host().channel());
+                    // ★ v3-appfix J: and the ring's own object, mapping and CPU view.
+                    if chan.release_host(me.rm).is_some_and(|l| !l.contains("REFUSED")) {
+                        crate::mem::give_ring_slot(&mirror.rings, ring_va);
+                    }
                     return Err(fail((NV_ERR_INSUFFICIENT_RESOURCES, format!("token {idx:#x}: {e}"))));
                 }
                 let slot = Slot {
@@ -1963,7 +1968,23 @@ impl ChanPlane {
         if !freed {
             eprintln!("kf3: chan token {:#x} (host {ht:#x}) STRANDED: still BUSY after 200 ms", g.guest_idx);
         }
-        let _ = self.rm.free_channel(g.chan.host().channel());
+        let freed_chan = self.rm.free_channel(g.chan.host().channel()).is_ok();
+        // ★ v3-appfix J: the ring's 1 MiB object, its GPU mapping and its host BAR1 CPU view went
+        // with NOTHING before — ~4.5 MiB of host BAR1 per guest CUDA process with persistence
+        // mode, the 256 MiB aperture gone at ~55 processes. Only after the channel is freed (its
+        // GPFIFO and USERD live in the object); the ring's VA slot is reused only when every step
+        // of the release succeeded.
+        let ring_va = g.chan.host().va();
+        let ring_line = if freed_chan { g.chan.release_host(self.rm) } else { None };
+        if ring_line.as_deref().is_some_and(|l| !l.contains("REFUSED")) {
+            crate::mem::give_ring_slot(&g.mirror.rings, ring_va);
+        }
+        if let Some(l) = ring_line.as_deref().filter(|l| l.contains("REFUSED")) {
+            eprintln!("kf3: chan token {:#x} (host {ht:#x}) {l}", g.guest_idx);
+        }
+        if !freed_chan {
+            eprintln!("kf3: chan token {:#x} (host {ht:#x}): host channel free REFUSED — its ring is KEPT (the channel still names it)", g.guest_idx);
+        }
         g.mirror.live.fetch_sub(1, Ordering::AcqRel);
         let armed = g.views.armed;
         g.views.release_all(self.rm, self.store);
