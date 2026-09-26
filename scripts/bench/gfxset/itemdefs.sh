@@ -16,7 +16,7 @@ GB=$GSET_HOME/gfxbin
 FF=$GSET_HOME/ff/bin/ffmpeg
 BL=$GSET_HOME/blender/blender
 GM=$GSET_HOME/glmark2
-gset_items(){ echo "pv_validate_vk pv_validate_gl pv_vk_rt_ext pv_vk_create_device vk_info vkpeak egl_offscreen \
+gset_items(){ echo "pv_validate_vk pv_validate_gl pv_vk_rt_ext vk_ofa pv_vk_create_device vk_info vkpeak egl_offscreen \
 gl_micro pv_fbo_formats pv_egl_dmabuf_export pv_dmabuf_import pv_xiso_sharing pv_signal_restart_export \
 pv_gbm_egl_import pv_gbmprobe_gbmshot weston_headless weston_client_diff sway_screencap glmark2 \
 pv_nvenc_nvdec_fps video_nvenc_nvdec geekbench_vulkan blender_opendata \
@@ -67,6 +67,20 @@ item_pv_vk_rt_ext(){
         VK_NV_ray_tracing VK_NV_optical_flow VK_NV_cuda_kernel_launch VK_NVX_binary_import > rt.out 2>&1; rc=$?
     cat rt.out; gset_dig result "$(grep -m1 '^RESULT' rt.out | tr ' ' _)"
     [ $rc -eq 0 ] && grep -q '^RESULT: 0 ' rt.out && echo GSET_OK || echo "GSET_FAIL rc=$rc $(grep -m1 RESULT rt.out)"
+}
+# ══ EXTRA (the engine behind H3's VK_NV_optical_flow): OFA does real work, with a known answer ═══════
+# vk_ofa: a frame and its (5,3)-px shifted copy through vkCmdOpticalFlowExecuteNV; the median flow must
+# recover the shift and the whole flow field is digested vs bare metal. Built on first use with the
+# image's own gcc/headers into $GSET_OUT (so both sides run one binary).
+item_vk_ofa(){
+    nv_icd_only || return 0
+    local B=$GSET_OUT/vk_ofa
+    [ -x "$B" ] || gcc -O2 -o "$B" "$GSET_BIN/src/vk_ofa.c" -lvulkan -lm || { echo "GSET_FAIL vk_ofa build"; return 0; }
+    "$B" > ofa.txt 2>&1; rc=$?; cat ofa.txt
+    gset_dig flow_field "$(sed -n 's/^OFA_HASH //p' ofa.txt)"
+    gset_dig median "$(sed -n 's/^OFA_MEDIAN_[XY] //p' ofa.txt | tr '\n' ,)"
+    gset_val good_frac "$(sed -n 's/^OFA_GOOD_FRAC //p' ofa.txt)"
+    [ $rc -eq 0 ] && grep -q '^OFA_OK' ofa.txt && echo GSET_OK || echo "GSET_FAIL rc=$rc $(grep -m1 OFA_FAIL ofa.txt)"
 }
 # ══ nvkvm-pv H22: vkCreateDevice (tests/repro/vk_create_device.c) ═════════════════════════════════
 item_pv_vk_create_device(){

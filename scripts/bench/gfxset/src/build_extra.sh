@@ -27,6 +27,7 @@ cc -O2 -o "$B/gbmshot" "$P/gbmshot.c" $GBMX $EGLGL -lm;                      ok 
 cc -O2 -o "$B/gl_decompose" "$P/gl_decompose.c" $EGLGL -lm;                  ok gl_decompose $?
 cc -O2 -o "$B/gl_drawrate" "$P/gl_drawrate.c" $EGLGL;                        ok gl_drawrate $?
 cc -O2 -o "$B/gl_finishrate" "$P/gl_finishrate.c" $EGLGL;                    ok gl_finishrate $?
+cc -O2 -o "$B/vk_ofa" "$S/vk_ofa.c" -lvulkan -lm;                            ok vk_ofa $?
 # Wayland clients: protocol glue from wayland-scanner
 wayland-scanner client-header "$WP/stable/xdg-shell/xdg-shell.xml" "$T/xdg-shell-client-protocol.h" \
   && wayland-scanner private-code "$WP/stable/xdg-shell/xdg-shell.xml" "$T/xdg-shell-protocol.c" \
