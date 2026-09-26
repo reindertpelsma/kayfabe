@@ -161,8 +161,8 @@
 //! says which for two of them (`ctrl2080internal.h:299-316`): `tpcMask[]` is *"indexed by
 //! physical GPC ID for non-MIG"* and `zcullMask[]` *"always indexed by physical GPC ID"*, while
 //! `tpcCount[]` is *"always indexed by logical GPC ID"*. For `mmuPerGpc[]` and
-//! `numPesPerGpc[]` the header says nothing; ★ **the two floorswept parts below settle them
-//! as LOGICAL** — each is filled at `0..n` whatever the physical mask (AD102: index 0 is
+//! `numPesPerGpc[]` the header says nothing; ★ **the floorswept parts below settle them as
+//! LOGICAL** — each is filled at `0..n` whatever the physical mask (AD102: index 0 is
 //! filled though physical GPC 0 is fused, index 11 is empty though physical GPC 11 is
 //! enabled; GA104: `numPesPerGpc[5]` is empty though physical GPC 5 is enabled):
 //!
@@ -182,7 +182,7 @@
 //! ⇒ [`GrStaticProfile::gpcs`] is one row **per logical GPC, in logical order**, and each row
 //! names its physical GPC ([`GpcRow::physical_id`]). The encoder writes the logical fields at
 //! the row's position and the physical ones at `physical_id`; a fused GPC's `tpcMask` and
-//! `zcullMask` are zero, which is what all three dies above report. `gpcMask` is the OR of
+//! `zcullMask` are zero, which is what every die above reports. `gpcMask` is the OR of
 //! the rows' physical bits — derived, never stated twice.
 
 // ---------------------------------------------------------------------------------------
