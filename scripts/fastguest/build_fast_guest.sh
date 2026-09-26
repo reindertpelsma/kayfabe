@@ -103,30 +103,52 @@ if [ -n "$GDRV" ]; then
 fi
 if [ "${KF_FROM_HOST:-0}" = "1" ]; then
     KREL=$(uname -r)
-    echo "== HOST MODE: kernel $KREL, modules from /lib/modules/$KREL"
-    cp "/boot/vmlinuz-$KREL" "$OUT/vmlinuz" 2>/dev/null \
-      || die "no /boot/vmlinuz-$KREL on the host — a container may not ship the kernel image"
-    mkdir -p "$ROOT/ird/lib/modules"
+    KBOOT=/boot
     MODROOT="/lib/modules/$KREL"
+    # ★ `KF_GUEST_KROOT` — a guest kernel OTHER than the host's, staged (extracted, never
+    # installed) by `scripts/drivermatrix/stage_guest_kernel.sh`: for guest drivers that do not
+    # build on the host's kernel (545 on 6.8). The staged driver must have been built for it.
+    if [ -n "${KF_GUEST_KROOT:-}" ]; then
+        [ -f "$KF_GUEST_KROOT/STAGED" ] || die "KF_GUEST_KROOT=$KF_GUEST_KROOT has no STAGED marker"
+        KREL=$(sed -n 's/^krel=//p' "$KF_GUEST_KROOT/STAGED")
+        KBOOT=$KF_GUEST_KROOT/boot
+        MODROOT="$KF_GUEST_KROOT/lib/modules/$KREL"
+    fi
+    echo "== HOST MODE: kernel $KREL, modules from $MODROOT"
+    cp "$KBOOT/vmlinuz-$KREL" "$OUT/vmlinuz" 2>/dev/null \
+      || die "no $KBOOT/vmlinuz-$KREL — a container may not ship the kernel image"
+    mkdir -p "$ROOT/ird/lib/modules"
     DEP="$MODROOT/modules.dep"
     [ -f "$DEP" ] || die "no $DEP on the host"
     : > "$ROOT/ird/lib/modules/loadorder"
     found=0
     for ko in nvidia nvidia-uvm nvidia-modeset; do
         line=$(grep -E "(^|/)$ko\.ko(\.[a-z]+)?:" "$DEP" | head -1)
+        # ⊘ A staged guest kernel has no nvidia modules in its modules.dep: the closure comes
+        # from the staged module's own `depends`, each dependency resolved in that kernel's tree.
+        if [ -z "$line" ] && [ -n "$GDRV" ] && [ -f "$GDRV/modules/$ko.ko" ]; then
+            deps=""
+            for d in $(modinfo -F depends "$GDRV/modules/$ko.ko" 2>/dev/null | tr ',' ' '); do
+                dl=$(grep -E "(^|/)$d\.ko(\.[a-z]+)?:" "$DEP" | head -1)
+                [ -n "$dl" ] && deps="$deps ${dl#*:} ${dl%%:*}"
+            done
+            line="kernel/drivers/video/$ko.ko:$deps"
+        fi
         [ -n "$line" ] || continue
         self=${line%%:*}; deps=${line#*:}
         order=""; for d in $deps; do order="$d $order"; done
         for rel in $order "$self"; do
-            src="$MODROOT/$rel"; [ -f "$src" ] || continue
+            src="$MODROOT/$rel"
             base=$(basename "$rel"); base=${base%.zst}; base=${base%.xz}; base=${base%.ko}.ko
             dst="$ROOT/ird/lib/modules/$base"; [ -f "$dst" ] && continue
             # ★ the staged guest driver replaces the NVIDIA modules themselves, never their deps
+            # (and may be the only copy: a staged guest kernel ships no nvidia modules)
             if [ -n "$GDRV" ] && [ -f "$GDRV/modules/$base" ]; then
                 cp "$GDRV/modules/$base" "$dst"
                 echo "$base" >> "$ROOT/ird/lib/modules/loadorder"; found=$((found+1))
                 continue
             fi
+            [ -f "$src" ] || continue
             case "$src" in *.zst) zstd -dq -o "$dst" "$src" ;;
                            *.xz)  xz -dc "$src" > "$dst" ;;
                            *)     cp "$src" "$dst" ;; esac

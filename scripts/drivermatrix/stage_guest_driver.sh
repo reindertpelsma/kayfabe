@@ -34,7 +34,9 @@ set -uo pipefail
 V=${1:?usage: stage_guest_driver.sh <version> [<stage-root>]}
 ROOT=${2:-/workspace/drivers}
 KREL=${KREL:-$(uname -r)}
-KBUILD=/lib/modules/$KREL/build
+# ★ A guest kernel other than the host's (`stage_guest_kernel.sh`): `KREL=<krel>
+# KBUILD=<stage>/kernels/<krel>/lib/modules/<krel>/build`.
+KBUILD=${KBUILD:-/lib/modules/$KREL/build}
 OUT=$ROOT/$V
 SRC=$ROOT/src/ogkm-$V
 RUN=$OUT/NVIDIA-Linux-x86_64-$V.run
