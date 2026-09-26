@@ -93,6 +93,17 @@ Stable 535 → 610, verified: the 48-byte GSP element (until 610's 16-byte MCTP 
 | H9 | controls absent on old hosts | `hostquery.rs:402-432` | `MC_GET_INTR_CATEGORY_SUBTREE_MAP` absent < 580.65.06; `MC_GET_STATIC_INTR_TABLE` absent at 535/545 — **needs another source**, not a size fix |
 | H10 | `NV2080_NOTIFIERS_CE10` | `kf-host/src/event.rs:59` | was **184** (= `GSP_PERF_TRACE`); 166 at every tag that has it — **fixed** (a bug on every host) |
 
+★ **Cross-checked against nvkvm-pv (coordinator, 2026-09-26: nvkvm-pv is the source of truth for
+these user↔kernel ioctl structs).** nvkvm-pv measured its nine profile fields plus the five
+`UVM_REGISTER_GPU` fields at all 216 published tags 515→610 with `sizeof`/`offsetof` probes
+(`nvkvm-pv/tests/abi_parity/ogkm_abi_sweep_20260826.tsv`); this matrix measured the same structs
+from gcc's DWARF. `tools/drivermatrix/crosscheck_nvkvm_pv.py` compares every cell both measured:
+**167 tags × 14 fields = 2 338 cells, 2 338 agree, 0 disagree**
+(`traces/driver_matrix/nvkvm_pv_crosscheck.tsv`). Two independent instruments agree on every
+host-axis cell they share, including both in-branch boundaries (535.54.03 → 535.86.05 channel,
+550.40.07 → 550.40.53 UVM). nvkvm-pv's profile boundaries therefore apply to H3/H4/H7 as stated:
+`NVKVM_ABI_525` (channel 304) … `NVKVM_ABI_610` (channel 376).
+
 The raw client (`kayfabe-rm-ladder`, the thin guest's grader, running against the **guest**
 driver) has its own copy of H1/H2/H3/H4/H5/H7 and the UVM layouts (`UVM_MAP_EXTERNAL_ALLOCATION`
 1200 before 550.40.53; `UVM_FREE`/`UVM_UNREGISTER_CHANNEL` shrink at 590.44.01) — so the thin
