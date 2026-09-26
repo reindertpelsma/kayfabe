@@ -7,7 +7,7 @@
 > - Much of the Mode-1 feature set now runs on the Mode-2 architecture: 58/65 real apps
 >   including PyTorch and llama.cpp, headless Vulkan/EGL/GLX bit-identical to bare metal, and
 >   NVENC/NVDEC byte-identical.
-> - Performance is not at parity: LLM decode runs at 0.29–0.31× host because of doorbell VM
+> - Performance is not at parity: LLM decode runs at 0.29–0.31× host mostly because of doorbell VM
 >   exits.
 > - Turing+ breadth is measured only on Ampere and Ada.
 > - **§2.1:** the rootless end-to-end boot it asks for has **still not been recorded**.
