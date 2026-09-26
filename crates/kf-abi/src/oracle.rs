@@ -622,6 +622,22 @@ pub const CAPTURE_RELIANCE: &[CaptureReliance] = &[
               re-decided — the five fields `kceGetPceConfigForLceType` copies out span 20 \
               bytes of a 28-byte reply and only 16 were kept",
     },
+    // ★ 2026-09-26 (v3-mc9 merge): `0x20800a34` is BACK — v3-blackwell serves
+    // INTERNAL_STATIC_KGR_GET_SM_ISSUE_RATE_MODIFIER (`V3_FAMILY_PORT_BLACKWELL.md` §4), and it
+    // does so from the HOST's unprivileged GR_GET_SM_ISSUE_RATE_MODIFIER, not from the capture.
+    CaptureReliance {
+        cmd: 0x2080_0a34,
+        read_end: 0,
+        sites: &[
+            "crates/kf-abi/src/grstatic.rs",
+            "crates/kf-rm/tests/init_tables.rs",
+            "crates/kf-crec/tests/cap1b_differential.rs",
+        ],
+        why: "NOT A READ of the capture. The answer is the host die's own \
+              GR_GET_SM_ISSUE_RATE_MODIFIER reply (a host fact queried at VM start); the \
+              truncated C row (64 of 72 bytes kept) is never decoded. The other two sites only \
+              name the id (the served-universe count and the replay's exception set)",
+    },
     // ⊘ 2026-09-26: the two §16.56 rows (`0x20800a34`, `0x20800b03`) are REMOVED. Their only
     // site was `tests/tests/admitted_is_served.rs` — a membership list, never a read — and that
     // suite moved to `archive/tests/` with the pre-v3 tree, so nothing live names either id any
