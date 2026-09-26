@@ -1830,6 +1830,11 @@ pub struct RmConnection {
     /// wrong one would have been served rather than refused. See
     /// [`kayfabe_arch::HostClasses`] for the table and the sourcing.
     ///
+    /// ⊘⊘ **CORRECTED 2026-09-26 — it is a PROBE now** at every in-tree caller:
+    /// [`RmConnection::open_on_host`] reads the device's `GET_CLASSLIST_V2` and derives the
+    /// profile (`kayfabe_chips::DerivedHostClasses`). [`RmConnection::open`] still takes a pin
+    /// for a caller that has one. The paragraph below is the pre-probe state.
+    ///
     /// ⊘ It is a **pin, not a probe.** Nothing here asks the device what it is; the
     /// caller passes a profile and today every caller passes the same one
     /// (`kayfabe_chips::pinned_host_classes`, GA10x — the only part any of this has been
@@ -3304,6 +3309,41 @@ impl RmConnection {
         gpu: GpuId,
         classes: &'static dyn HostClasses,
     ) -> Result<Self, BringUpError> {
+        Self::open_with(dev, gpu, Some(classes))
+    }
+
+    /// ★★★ **Walk the bring-up ladder and ASK THE HOST which classes its die takes** — the
+    /// replacement for `open(.., kayfabe_chips::pinned_host_classes())` at every raw-client
+    /// call site (2026-09-26, `v3-families`). After R6 the device's own
+    /// `NV0080_CTRL_CMD_GPU_GET_CLASSLIST_V2` (NON_PRIVILEGED) is read and
+    /// [`kayfabe_chips::DerivedHostClasses::from_host_list`] picks the newest class per role, so
+    /// an AD106 gets `ADA_COMPUTE_A 0xC9C0` (the pin's `0xC7C0` is refused `NV_ERR_INVALID_CLASS`
+    /// there, measured 2026-09-26), a GB202 the `BLACKWELL_*_B` set, a GA100 the `_A` set. On a
+    /// GA10x host it reproduces the pin exactly (`kayfabe-chips` `derived_tests`).
+    ///
+    /// # Errors
+    /// [`BringUpError`], naming the rung — `R6a` when the host's class list cannot be read or
+    /// carries no class of a required role.
+    pub fn open_on_host(dev: &DevDir, gpu: GpuId) -> Result<Self, BringUpError> {
+        Self::open_with(dev, gpu, None)
+    }
+
+    /// The class profile this connection allocates with — the caller's pin, or the one derived
+    /// from the host's class list ([`RmConnection::open_on_host`]).
+    #[must_use]
+    pub fn host_classes(&self) -> &'static dyn HostClasses {
+        self.classes
+    }
+
+    fn open_with(
+        dev: &DevDir,
+        gpu: GpuId,
+        pinned: Option<&'static dyn HostClasses>,
+    ) -> Result<Self, BringUpError> {
+        // ⊘ A derived profile is only known after R6 (the class list is a DEVICE control); until
+        // then the field holds the GA10x pin, and NOTHING reads it before it is replaced below —
+        // the first reader is R6b's usermode open, which runs after the replacement.
+        let classes = pinned.unwrap_or_else(kayfabe_chips::pinned_host_classes);
         // R0/R1 — the two nodes, by name, relative to the granted directory. The naming is
         // the C's `dev_id_to_path`: the control node is the literal `nvidiactl`, NOT
         // `nvidia` with an index (`C: src/stub/nvkvm_stub.c:1544-1563`).
@@ -3431,6 +3471,25 @@ impl RmConnection {
             device,
             subdevice,
             ..conn
+        };
+        // ★ R6a — the host die's own class list, when no pin was passed ([`Self::open_on_host`]).
+        let conn = if pinned.is_none() {
+            let mut list = [0u8; kayfabe_chips::host_classes::CLASSLIST_V2_SIZE];
+            conn.raw_control(conn.device, kayfabe_chips::host_classes::NV0080_CTRL_CMD_GPU_GET_CLASSLIST_V2, &mut list)
+                .map_err(|e| BringUpError { rung: "R6a host class list", detail: format!("{e:?}") })?;
+            let ids = kayfabe_chips::host_classes::decode_classlist(&list).ok_or(BringUpError {
+                rung: "R6a host class list",
+                detail: "numClasses exceeds NV0080_CTRL_GPU_CLASSLIST_MAX_SIZE".to_string(),
+            })?;
+            let derived = kayfabe_chips::DerivedHostClasses::from_host_list(&ids).map_err(|e| BringUpError {
+                rung: "R6a host class list",
+                detail: format!("the host lists no class of a required role: {e:?}"),
+            })?;
+            // One small immutable profile per connection, for the connection's `'static` seam.
+            let classes: &'static dyn HostClasses = Box::leak(Box::new(derived));
+            RmConnection { classes, ..conn }
+        } else {
+            conn
         };
         let usermode = conn.open_usermode(conn.classes.usermode());
         Ok(RmConnection { usermode, ..conn })
@@ -10411,6 +10470,13 @@ impl HostRmBackend {
         // ★ `pdbAddr` returned alongside: it names WHICH tree answered, so the caller can
         // check the reply against the VAS it believes it asked about rather than trust it.
         Ok((out.page_table(), out.pdb_addr))
+    }
+
+    /// ★ The class profile this backend's connection allocates with — derived from the host's
+    /// own class list when it was opened with [`RmConnection::open_on_host`].
+    #[must_use]
+    pub fn host_classes(&self) -> &'static dyn HostClasses {
+        self.conn.host_classes()
     }
 
     /// ★ `NV2080_CTRL_CMD_MC_GET_ARCH_INFO` (`0x20801701`, NON_PRIVILEGED) on this connection's

@@ -24,6 +24,9 @@ kayfabe-abi.workspace = true
 # composes onto it — so the second generation is measured against the same baseline the
 # first one was.
 kayfabe-mocks.workspace = true
+# `classgen`: the GENERATED per-family engine class sets `DerivedHostClasses` intersects with
+# the host's own class list (replaces the GA10x pin for every raw-client connection).
+kayfabe-doorbell.workspace = true
 
 [lints]
 workspace = true

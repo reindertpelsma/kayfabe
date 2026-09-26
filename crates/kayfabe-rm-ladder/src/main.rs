@@ -121,7 +121,7 @@ fn concurrency(gpu: u32, threads: usize, verbs: usize) -> bool {
                 return None;
             }
         };
-        match RmConnection::open(&dev, GpuId(gpu), kayfabe_chips::pinned_host_classes()) {
+        match RmConnection::open_on_host(&dev, GpuId(gpu)) {
             Ok(c) => Some(Arc::new(c)),
             Err(e) => {
                 println!("FAIL  R12 {tag:<18} = RmConnection::open: {e:?}");
@@ -7863,7 +7863,7 @@ fn cross_client_leak(rm: &mut HostRmBackend, probe: W381Probe, gpu: u32) -> bool
             return false;
         }
     };
-    let conn_b = match RmConnection::open(&dev, GpuId(gpu), kayfabe_chips::pinned_host_classes()) {
+    let conn_b = match RmConnection::open_on_host(&dev, GpuId(gpu)) {
         Ok(c) => c,
         Err(e) => {
             println!(
@@ -9740,7 +9740,7 @@ fn concurrent_fuzz(
         }
     };
     for i in 1..cfg.clients {
-        match RmConnection::open(&dev, GpuId(gpu), kayfabe_chips::pinned_host_classes()) {
+        match RmConnection::open_on_host(&dev, GpuId(gpu)) {
             Ok(c) => conns.push(std::sync::Arc::new(c)),
             Err(e) => {
                 println!(
@@ -13051,7 +13051,7 @@ mod route_k {
             println!("K_BIT5_KP=UNMEASURED:no-devdir");
             return 1;
         };
-        let conn = match RmConnection::open(&dev, GpuId(gpu), kayfabe_chips::pinned_host_classes())
+        let conn = match RmConnection::open_on_host(&dev, GpuId(gpu))
         {
             Ok(c) => c,
             Err(e) => {
@@ -13059,7 +13059,7 @@ mod route_k {
                 return 1;
             }
         };
-        let classes = kayfabe_chips::pinned_host_classes();
+        let classes = conn.host_classes();
         let store = match conn.reserve_gpga(STORE_BYTES) {
             Ok(h) => h,
             Err(e) => {
@@ -13291,7 +13291,7 @@ mod route_k {
             println!("K_ROLE_I=UNMEASURED:no-devdir");
             return 1;
         };
-        let conn = match RmConnection::open(&dev, GpuId(gpu), kayfabe_chips::pinned_host_classes())
+        let conn = match RmConnection::open_on_host(&dev, GpuId(gpu))
         {
             Ok(c) => c,
             Err(e) => {
@@ -13647,7 +13647,7 @@ mod route_k {
             println!("K_EXIT=1 (no /dev)");
             return 1;
         };
-        let conn = match RmConnection::open(&dev, GpuId(gpu), kayfabe_chips::pinned_host_classes())
+        let conn = match RmConnection::open_on_host(&dev, GpuId(gpu))
         {
             Ok(c) => c,
             Err(e) => {
@@ -13655,7 +13655,7 @@ mod route_k {
                 return 1;
             }
         };
-        let classes = kayfabe_chips::pinned_host_classes();
+        let classes = conn.host_classes();
         let channel_class = classes.gpfifo_channel().channel_id().0;
         // ★ Row 2 asks about THIS class, not the channel's — see `birth_channel`'s engine
         //   object for why `GET_PIDS` cannot see a `KernelChannel`.
@@ -14232,7 +14232,7 @@ fn dma_roundtrip_probe(gpu: u32) -> i32 {
         println!("DR_RESULT=UNMEASURED:open-dev");
         return 2;
     };
-    let conn = match RmConnection::open(&dev, GpuId(gpu), kayfabe_chips::pinned_host_classes()) {
+    let conn = match RmConnection::open_on_host(&dev, GpuId(gpu)) {
         Ok(c) => c,
         Err(e) => {
             println!("DR_RESULT=UNMEASURED:rm-open:{e:?}");
@@ -14326,7 +14326,7 @@ fn unmap_retires_probe(gpu: u32) -> i32 {
         println!("UR_RESULT=UNMEASURED:open-dev");
         return 2;
     };
-    let conn = match RmConnection::open(&dev, GpuId(gpu), kayfabe_chips::pinned_host_classes()) {
+    let conn = match RmConnection::open_on_host(&dev, GpuId(gpu)) {
         Ok(c) => c,
         Err(e) => {
             println!("UR_RESULT=UNMEASURED:rm-open:{e:?}");
@@ -15133,7 +15133,7 @@ fn ladder_main() -> std::process::ExitCode {
     // ★ #156 — same pinned host-class profile the isolate child uses. The ladder is a
     // diagnostic for the SAME path, so a different profile here would make it a
     // diagnostic for a different one.
-    let conn = match RmConnection::open(&dev, GpuId(gpu), kayfabe_chips::pinned_host_classes()) {
+    let conn = match RmConnection::open_on_host(&dev, GpuId(gpu)) {
         Ok(c) => c,
         Err(e) => {
             println!("FAIL  {}", e);
@@ -18297,14 +18297,12 @@ mod mean {
         let mut gr_params = [0u8; 16];
         gr_params[0..4].copy_from_slice(&GR_ALLOC_VERSION.to_ne_bytes());
         gr_params[8..12].copy_from_slice(&GR_ALLOC_SIZE.to_ne_bytes());
-        // ★ The generation the HOST reports, never the build's pin (an AD106 refuses the
-        // pinned GA10x 0xc7c0 with NV_ERR_INVALID_CLASS). Falls back to the pin only when the
-        // host does not answer MC_GET_ARCH_INFO.
-        let classes = rm
-            .host_architecture()
-            .ok()
-            .and_then(kayfabe_chips::host_classes_for_arch)
-            .unwrap_or_else(kayfabe_chips::pinned_host_classes);
+        // ★ The classes the HOST's own class list names, never the build's pin (an AD106
+        // refuses the pinned GA10x 0xc7c0 with NV_ERR_INVALID_CLASS). ⊘ 2026-09-26: was
+        // `host_classes_for_arch(MC_GET_ARCH_INFO)` with a fallback to the pin — a table with no
+        // Turing, GB10x or GA100 row (GA100 is arch 0x170 and takes `AMPERE_COMPUTE_A`, not the
+        // GA10x `_B`). The connection now derives its profile at open (`R6a`).
+        let classes = rm.host_classes();
         let Some(compute) = classes.compute_object() else {
             println!(
                 "FAIL  W392D P3 gr object  = this build's pinned host classes declare NO \
