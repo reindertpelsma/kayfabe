@@ -1915,7 +1915,7 @@ impl CommandPolicy for InitTablePolicy {
                 };
                 match kf_abi::faultbuffer::decode_register_fault_buffer(raw) {
                     Ok(r) if !r.exceeds_vendor_bound() => raw.to_vec(),
-                    Ok(_) | Err(e) => return refuse_named(req.cmd, &e),
+                    Ok(_) | Err(_) => return refuse(),
                 }
             }
             // ★★★ `0x20800a9d` — the same three steps as the arm above, for the same reasons,
@@ -1940,7 +1940,7 @@ impl CommandPolicy for InitTablePolicy {
                 };
                 match kf_abi::faultbuffer::decode_register_client_shadow_fault_buffer(raw) {
                     Ok(r) if !r.exceeds_vendor_bound() => raw.to_vec(),
-                    Ok(_) | Err(e) => return refuse_named(req.cmd, &e),
+                    Ok(_) | Err(_) => return refuse(),
                 }
             }
             // ★★★ `0x20800a1d` — third of the three, and its geometry check has TWO arms
@@ -1959,7 +1959,7 @@ impl CommandPolicy for InitTablePolicy {
                 };
                 match kf_abi::faultbuffer::decode_register_access_cntr_buffer(raw) {
                     Ok(r) if !r.is_illegal_geometry() => raw.to_vec(),
-                    Ok(_) | Err(e) => return refuse_named(req.cmd, &e),
+                    Ok(_) | Err(_) => return refuse(),
                 }
             }
             // ★★★ The event-plane arm — the only one that CHANGES this policy's state, and
