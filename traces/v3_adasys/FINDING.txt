@@ -51,7 +51,24 @@ box and not Ada. Evidence in this directory; every run carries its revision.
    and always sets NVOS46_FLAGS_CACHE_SNOOP_ENABLE; unit test that it is set on every combination and
    moves no other bit. Gates at f63caee8: 9/9 on both 4070s (bare metal) and 9/9 in the VM.
 
-5. NOT covered here: kayfabe-isolate-host (the old plane, used only by kayfabe-rm-ladder) has its own
+5. MERGE BAR on a GA10x box (rtx3090_ga102_kvm_mergebar/, KVM-template VM, RTX 3090 GA102, host
+   580.159.04, bench provisioned at the branch; kf3 QEMU built at 2f71f662):
+   - v3 gates at 2f71f662: 9/9.
+   - KF_DEVICE=kf3 fast_suite.sh adasys_fix 180: FAST_SUITE_PASS=30 FAIL=0 CRASH=0 NOTRUN=0, RC=0.
+     Kernel log during gates+suite: 5x Xid 31 (CE0 MMU fault), timestamps inside --defer-liveness (4)
+     and --missing-page-fault (1), arms that fault on purpose, both PASS; plus RM teardown lines
+     (knvlinkCoreShutdownDeviceLinks x97, "Requested object not found" asserts x45) — not baselined
+     at master on this box.
+   - crate tests (cargo test --workspace --no-fail-fast): 3483 passed / 5 failed / 1 ignored at
+     2f71f662. Four failing targets fail IDENTICALLY at the base 59cc98a9 on the same box (basecmp.out)
+     and live in crates that do not depend on kf-host or kf-abi: kayfabe-abi truncated_row_reads
+     (0x20800a34 / 0x20800b03 referenced without a reliance statement) and three kayfabe-isolate-host
+     census tests reading src/bin/rmladder.rs, which no longer exists there. The fifth was a one-off
+     execve ETXTBSY in kayfabe-linux-raw's spawn test; 5/5 green on rerun at both revisions.
+   - clippy -D warnings stops in kf-util (not touched) on rust 1.98.1 lints at base and fix alike;
+     without -D, no finding in any line this branch changed.
+
+6. NOT covered here: kayfabe-isolate-host (the old plane, used only by kayfabe-rm-ladder) has its own
    NVOS46 map calls without the bit (rm.rs:1598, :4661) — out of v3's path, not changed. Whether a given
    bare-metal host honours No-Snoop is platform-specific (IOMMU force-coherent, chipset quirk lists); the
    RTX 5080 container box that passed 9/9 before the fix was not re-examined.

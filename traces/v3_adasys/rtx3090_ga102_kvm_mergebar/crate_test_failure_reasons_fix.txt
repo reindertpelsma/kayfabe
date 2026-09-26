@@ -1,0 +1,27 @@
+---- the_set_of_truncated_rows_this_tree_references_is_exactly_the_set_it_argues_about stdout ----
+thread 'the_set_of_truncated_rows_this_tree_references_is_exactly_the_set_it_argues_about' (121155) panicked at crates/kayfabe-abi/tests/truncated_row_reads.rs:142:5:
+these truncated rows are referenced but carry NO reliance statement — every one is a place where a read could be landing past what the recorder kept and nothing would say so: [
+    "0x20800a34 (referenced by [\"crates/kf-rm/tests/init_tables.rs\", \"crates/kf-crec/tests/cap1b_differential.rs\", \"crates/kf-abi/src/grstatic.rs\", \"crates/kf-abi/src/generated/matrix.rs\"])",
+    "0x20800b03 (referenced by [\"crates/kf-abi/src/generated/matrix.rs\"])",
+]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+---- no_binary_mints_the_isolates_address_space stdout ----
+thread 'no_binary_mints_the_isolates_address_space' (125844) panicked at crates/kayfabe-isolate-host/tests/executor_vas_census.rs:77:62:
+read /root/kayfabe/crates/kayfabe-isolate-host/src/bin/rmladder.rs: No such file or directory (os error 2)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+failures:
+---- the_probe_does_not_mint_the_rings_geometry_twice stdout ----
+thread 'the_probe_does_not_mint_the_rings_geometry_twice' (126062) panicked at crates/kayfabe-isolate-host/tests/guest_ring_census.rs:59:62:
+read /root/kayfabe/crates/kayfabe-isolate-host/src/bin/rmladder.rs: No such file or directory (os error 2)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+failures:
+---- the_client_reports_its_state_on_every_path stdout ----
+thread 'the_client_reports_its_state_on_every_path' (126430) panicked at crates/kayfabe-isolate-host/tests/sysmem_notifier_node.rs:36:52:
+read /root/kayfabe/crates/kayfabe-isolate-host/src/bin/rmladder.rs: No such file or directory (os error 2)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+failures:
+---- spawn_unsafe::tests::a_child_runs_from_an_image_with_no_path_at_all stdout ----
+thread 'spawn_unsafe::tests::a_child_runs_from_an_image_with_no_path_at_all' (126564) panicked at crates/kayfabe-linux-raw/src/spawn_unsafe.rs:1420:51:
+spawn from image: Syscall { call: "execve", errno: Some(26) }
+failures:
+    spawn_unsafe::tests::a_child_runs_from_an_image_with_no_path_at_all
