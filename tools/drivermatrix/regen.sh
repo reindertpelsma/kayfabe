@@ -28,7 +28,7 @@ for t in "$@"; do grep -qx "$t" "$HERE/tags.txt" || echo "$t" >> "$HERE/tags.txt
 TAGS=$(grep -v '^#' "$HERE/tags.txt" | grep . | sort -V | tr '\n' ' ')
 echo "== measuring $(echo $TAGS | wc -w) tag(s) into $WORK/sweep"
 python3 "$HERE/dm.py" sweep --tags "$TAGS" --spec "$HERE/gsp.spec" --spec "$HERE/sdk.spec" \
-    --spec "$HERE/os.spec" --work "$WORK/src" --out "$WORK/sweep" --jobs "$JOBS"
+    --spec "$HERE/os.spec" --spec "$HERE/host.spec" --work "$WORK/src" --out "$WORK/sweep" --jobs "$JOBS"
 # ⊘ Only the measured tags of THIS tag list — a stale directory from an earlier list must not
 # widen the table.
 mkdir -p "$WORK/sel"; rm -rf "$WORK/sel"/*
