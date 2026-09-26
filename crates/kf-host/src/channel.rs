@@ -74,12 +74,24 @@ pub struct GuestVaRange {
     pub hi: u64,
 }
 
-/// ★ v3-gfx: the ranges a guest's RM allocates from in a split VA space, family-invariant:
-/// `[vaStartMin, SPLIT_VAS_SERVER_RM_MANAGED_VA_START)` and from the split window's end up to the
-/// top of a CPU-mirrorable address (UVM places CUDA allocations at CPU VAs, `< 2^47`).
-/// `vaStartMin` = `gvaspaceGetReservedVaspaceBase` = 1 MiB (`g_gpu_vaspace_nvoc.h:811-815`); the
-/// window is `[4 GiB, 4.5 GiB)` (`g_gpu_vaspace_nvoc.h:99-100`), the host's own GSP's.
-pub const GUEST_VA_RANGES: [(u64, u64); 2] = [(1 << 20, 1 << 32), ((1 << 32) + (1 << 29), 1 << 47)];
+/// ★ v3-gfx: the guest-allocatable ranges reserved in every host twin space, leaving ONE hole for
+/// host RM's own placements: `[HOST_HOLE_LO, 1 TiB)`.
+///
+/// - Everything from the split window's end (`4.5 GiB`, `g_gpu_vaspace_nvoc.h:99-100`) — where the
+///   guest RM's bottom-up allocator places context buffers and surfaces — up to the hole.
+/// - Everything from `1 TiB` to the CPU-VA ceiling `2^47` (UVM places CUDA allocations at CPU VAs).
+/// - ⊘ The hole must stay BELOW `1 TiB`: `[measured vgfx 2026-09-26, gfx8]` with the whole of
+///   `[4.5 GiB, 2^47)` reserved, host RM placed the twin's GR context buffers above `2^47` and every
+///   3D/compute context faulted in context switch (host Xid 44) — GR's global context-buffer
+///   pointers are `VA >> 8` in 32-bit fields. kf's own ring region `[1 TiB − 4 GiB, 1 TiB)`
+///   (`kf-qemu` `RING_REGION_BASE`) is inside the hole and stays mapped through the range object.
+/// - ⊘ `[1 MiB, 4 GiB)` is NOT reserved: `[measured gfx8]` RM refuses a reservation there
+///   (`NoMemory`) — it already withholds it — so host RM cannot place there either.
+pub const GUEST_VA_RANGES: [(u64, u64); 2] = [((1 << 32) + (1 << 29), HOST_HOLE_LO), (1 << 40, 1 << 47)];
+/// The start of host RM's hole — 64 GiB below `1 TiB`. A guest reaches it only after its RM heap has
+/// handed out ~1 TiB of VA; a guest row there is mapped through the range object as before (and a
+/// collision is still named `HeldByHost`).
+pub const HOST_HOLE_LO: u64 = (1 << 40) - (64 << 30);
 
 /// `NV50_MEMORY_VIRTUAL` (`ogkm-580: resource_list.h:516-523`, parent `Device`).
 const NV50_MEMORY_VIRTUAL: u32 = 0x50a0;
