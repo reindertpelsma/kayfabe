@@ -358,6 +358,11 @@ at this branch with the verbose trace). ⊘ **Still not a PASS on this box, and 
 longer the reason:** the same arm on BARE METAL here takes **17-37 s** over 6 runs (the reference box:
 9 s) against a guest window of ~40 s after an ~15-20 s nested boot.
 
+**★ vh2 (EPYC 7452, KVM guest, GA106, 580.159.04), `da0419de`, ring trace, 120 s budget (owner
+2026-09-25):** suite **30/30**; `--ce-client-guest-ram` **PASS in 88 / 89 / 87 / 90 s** (suite + 3
+runs) — bare metal on the same box **7 / 6 / 6 s**. At the old 60 s budget the same arm reached
+31 452-33 620 invalidates before the kill (suites `dr1`/`dr2`/`dv1`: 29/30, only this arm out).
+
 **The "~2 ms per guest ioctl outside the VA thread", attributed** (`perf kvm stat`, 15 s mid-arm,
 ring trace): 2 934 invalidates; **43 970 trapped BAR0 writes (15 per invalidate), each an
 EPT-violation-emulated MMIO exit costing 70-92 µs under nested virtualization** — 12 of the 15 are

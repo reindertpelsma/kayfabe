@@ -1,5 +1,7 @@
 [workspace]
 resolver = "2"
+# The pre-v3 tree lives under archive/ and is deliberately not built (archive/README.md).
+exclude = ["archive"]
 members = [
     "crates/kf-mem",
     "crates/kf-trap",
@@ -26,25 +28,15 @@ members = [
     "crates/kayfabe-abi",
     "crates/kayfabe-mmu",
     "crates/kayfabe-vmm",
-    "crates/kayfabe-vmm-kvm",
-    "crates/kayfabe-vmm-qemu",
-    "crates/kayfabe-qemu-raw",
     "crates/kayfabe-cuda",
     "crates/kayfabe-isolate",
     "crates/kayfabe-isolate-host",
     "crates/kayfabe-completion",
-    "crates/kayfabe-core",
-    "crates/kayfabe-crec",
     "crates/kayfabe-device",
-    "crates/kayfabe-fwd",
     "crates/kayfabe-gsp",
-    "crates/kayfabe-rmrpc",
     "crates/kayfabe-trace",
     "crates/kayfabe-mocks",
-    "crates/kayfabe-rt",
     "crates/kayfabe-linux-raw",
-    "crates/kayfabe-shell",
-    "tests",
 ]
 
 [workspace.package]
@@ -79,23 +71,14 @@ kayfabe-chips = { path = "crates/kayfabe-chips" }
 kayfabe-abi = { path = "crates/kayfabe-abi" }
 kayfabe-mmu = { path = "crates/kayfabe-mmu" }
 kayfabe-vmm = { path = "crates/kayfabe-vmm" }
-kayfabe-vmm-kvm = { path = "crates/kayfabe-vmm-kvm" }
-kayfabe-vmm-qemu = { path = "crates/kayfabe-vmm-qemu" }
-kayfabe-qemu-raw = { path = "crates/kayfabe-qemu-raw" }
 kayfabe-isolate = { path = "crates/kayfabe-isolate" }
 kayfabe-isolate-host = { path = "crates/kayfabe-isolate-host" }
 kayfabe-completion = { path = "crates/kayfabe-completion" }
-kayfabe-core = { path = "crates/kayfabe-core" }
-kayfabe-crec = { path = "crates/kayfabe-crec" }
 kayfabe-device = { path = "crates/kayfabe-device" }
-kayfabe-fwd = { path = "crates/kayfabe-fwd" }
 kayfabe-gsp = { path = "crates/kayfabe-gsp" }
-kayfabe-rmrpc = { path = "crates/kayfabe-rmrpc" }
 kayfabe-trace = { path = "crates/kayfabe-trace" }
 kayfabe-mocks = { path = "crates/kayfabe-mocks" }
-kayfabe-rt = { path = "crates/kayfabe-rt" }
 kayfabe-linux-raw = { path = "crates/kayfabe-linux-raw" }
-kayfabe-shell = { path = "crates/kayfabe-shell" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

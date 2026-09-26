@@ -1,6 +1,13 @@
 # V3 — the Hopper+ BAR1 doorbell: follow where the guest RM puts it
 
-**STATUS: DESIGN+CODE, 2026-09-26 — HARDWARE-UNVERIFIED.** Branch `v3-bar1db` (off `v3-mc2`).
+> ⊘ **UPDATED 2026-09-26 (`v3-blackwell`) — MEASURED ON A GB203 (RTX 5080), not an H100.** §7's T0
+> (libcuda DOES set `bBar1Mapping`: a second `0xc661` object mapped at `BAR1 + 0xA0000`), T1 (UVM's
+> view trapped at BAR1 `0x90000`, 10 doorbells through it; the negative control
+> `KF3_NEGCTL_NO_BAR1_DOORBELL=1` hangs `UVM_REGISTER_GPU`) and T2 (the CUDA ladder rings 463–967
+> doorbells per boot through the view) — `V3_FAMILY_PORT_BLACKWELL.md` §5. T3/T4 not run; Hopper
+> itself still unverified.
+
+**STATUS: DESIGN+CODE, 2026-09-26 — HARDWARE-UNVERIFIED (see the update above: verified on GB203).** Branch `v3-bar1db` (off `v3-mc2`).
 Everything below about RM is read from ogkm-580.159.04 source (the owner's rule: the guest kernel
 driver is open, so derive per-arch behaviour from it); nothing has run on a Hopper or Blackwell
 GPU. The unit tests use a GH100-shaped fixture built from those citations. §7 is the H100 test

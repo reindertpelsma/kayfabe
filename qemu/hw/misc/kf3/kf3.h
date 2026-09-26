@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#define KF3_ABI 6
+#define KF3_ABI 7
 
 typedef struct Kf3Identity {
     uint16_t vendor, device, subsystem_vendor, subsystem;
@@ -24,6 +24,8 @@ int32_t kf3_realize(uint32_t gpu_minor, uint64_t fb_mb, uint64_t bar1_bytes, uin
                     const char *guest_driver, void **out,
                     char *err, size_t err_len);
 int32_t kf3_identity(void *h, Kf3Identity *out);
+/* ★ ABI 7: config-space words the guest reads by config cycle (Hopper+ PCIe link caps). */
+int32_t kf3_config_word(void *h, uint32_t idx, uint16_t *off, uint32_t *val);
 int32_t kf3_usermode_view(void *h, void **ptr, uint64_t *len);
 int64_t kf3_memory_map(void *h, uint64_t bar1, uint64_t bar2, Kf3Region *out, size_t cap);
 int32_t kf3_shadow_attach(void *h, uint64_t base, uint8_t *mem, uint64_t len);

@@ -89,7 +89,7 @@ BOOT_TIMEOUT=${BOOT_TIMEOUT:-150}
 # name its binary should still run, and should be UNCITABLE rather than silently unattributed.
 QBIN=${QEMU_BIN:-$BENCH/qemu-build/qemu-system-x86_64}
 # ★ w827: KF_DEVICE=kf3 — the per-revision kf3 binary (boot_nvkvm.sh selects the same one).
-if [ "${KF_DEVICE:-nvkvm}" = kf3 ] && [ -z "${QEMU_BIN:-}" ]; then
+if [ "${KF_DEVICE:-kf3}" = kf3 ] && [ -z "${QEMU_BIN:-}" ]; then
   _kr=$(git -C "$(cd "$(dirname "$0")/../.." && pwd)" rev-parse --short=8 HEAD 2>/dev/null || echo unknown)
   [ -z "$(git -C "$(cd "$(dirname "$0")/../.." && pwd)" status --porcelain --untracked-files=no 2>/dev/null)" ] || _kr="$_kr-dirty"
   QBIN=$BENCH/kf3-bins/$_kr/qemu-system-x86_64
@@ -100,7 +100,7 @@ REV=$(strings "$QBIN" 2>/dev/null | grep -o 'kayfabe-rev:[0-9a-f]\{8,40\}' | sor
 # archive, linked into the same QEMU build dir by whoever built it last. [measured vh3, llm_g1] a
 # kf3 binary built at 53c2bc20 printed `kayfabe-rev:f8cfe8d7…` (the provisioning build's nvkvm
 # archive) under "every claim from this boot cites THIS revision". For kf3 the path IS the stamp.
-if [ "${KF_DEVICE:-nvkvm}" = kf3 ]; then
+if [ "${KF_DEVICE:-kf3}" = kf3 ]; then
   [ -n "$REV" ] && echo "[boot_capture:$TAG] (the binary's nvkvm-device stamp $REV is NOT kf3's revision)" >&2
   REV="kf3-bin-rev:$(basename "$(dirname "$QBIN")")"
 fi
@@ -478,7 +478,7 @@ wait $QPID 2>/dev/null
 # notifier never ran — never that the numbers were zero.
 # ★ w827: kf3's end-of-run report is its `kf3: family=… trapped=…` status line (plus the per-token
 # DOORBELL-LEDGER lines printed as each channel is freed), not the old device's `nvkvm: doorbells:`.
-if [ "${KF_DEVICE:-nvkvm}" = kf3 ] && grep -q 'kf3: family=' "${LOG}_qemu.log" 2>/dev/null; then
+if [ "${KF_DEVICE:-kf3}" = kf3 ] && grep -q 'kf3: family=' "${LOG}_qemu.log" 2>/dev/null; then
   say "census present (kf3):"
   grep -a 'kf3: family=' "${LOG}_qemu.log" | tail -1 | cut -c1-300 | sed 's/^/    /'
   grep -a 'DOORBELL-LEDGER' "${LOG}_qemu.log" | sed 's/^.*DOORBELL-LEDGER/    DOORBELL-LEDGER/'

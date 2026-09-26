@@ -103,30 +103,22 @@ say "guest_key: $(ls -la $BENCH/guest_key | awk '{print $5}') bytes"
 track_a() {
   say "A: untar qemu"
   [ -d "$BENCH/qemu-$QEMU_VER" ] || tar -C "$BENCH" -xf "$BENCH/qemu-$QEMU_VER.tar.xz"
-  say "A: build_qom_shim (this is the long pole)"
+  say "A: build_kf3 (the v3 device; this is the long pole)"
   . "$HOME/.cargo/env" 2>/dev/null
-  # ⊘⊘⊘ **THE FEATURE SET IS PART OF THE RECIPE.** `[measured w823]` this built with DEFAULT
-  # features, and the resulting QEMU is one the FAST-GUEST lane refuses at device realize:
-  # `KAYFABE_ISOLATES asked for a host isolate plane, and this archive was built without the
-  # host-isolates feature`. The 30-arm thin-guest suite came back **30 CRASH / 0 PASS with an
-  # empty serial log** — a harness fault that reads exactly like a dead guest.
-  # ⇒ `cuda-scratchpad` implies `host-isolates`. A provisioner that produces an artifact the
-  # lanes cannot use has not provisioned anything.
-  CARGO_BUILD_JOBS=16 KAYFABE_SHIM_FEATURES="${KAYFABE_SHIM_FEATURES:-cuda-scratchpad}" \
-  bash "$REPO/scripts/build_qom_shim.sh" \
-      "$BENCH/qemu-$QEMU_VER" "$BENCH/qemu-build" > /tmp/trackA.log 2>&1
+  # ★ v3 cutover: track A builds the kf3 device (crates/kf-qemu + qemu/hw/misc/kf3) into
+  # $BENCH/qemu-build-kf3, and build_kf3.sh also installs the per-revision copy under
+  # $BENCH/kf3-bins/<rev>/ that run_fast_guest.sh and boot_nvkvm.sh select. ⊘ The old nvkvm
+  # device (build_qom_shim.sh → crates/kayfabe-qemu-raw) is archived; see archive/README.md.
+  CARGO_BUILD_JOBS=16 bash "$REPO/scripts/bench/build_kf3.sh" \
+      "$BENCH/qemu-$QEMU_VER" "$BENCH/qemu-build-kf3" > /tmp/trackA.log 2>&1
   echo "A_RC=$?"
-  # ⚠ Verify on CONTENT, not on the binary existing: a QEMU without the plane is the same size
-  # and the same mtime as one with it.
-  # ⊘ `grep -c`, never `grep -q`: under `pipefail` a `-q` early-exit SIGPIPEs `strings` and the
-  # check reports a false negative. Measured w823, and already on the record from w418.
-  _iso_n=$(grep -ac 'kayfabe-isolate-host' "$BENCH/qemu-build/qemu-system-x86_64" 2>/dev/null || true)
-  if [ "${_iso_n:-0}" -gt 0 ]; then
-      say "A: host-isolate plane present in the archive ✔"
+  # ⚠ Verify on CONTENT: build_kf3.sh's last line names the installed binary and its revision.
+  if grep -q '^KF3_BUILT ' /tmp/trackA.log; then
+      say "A: $(grep '^KF3_BUILT ' /tmp/trackA.log | tail -1)"
   else
-      kf_fatal "A: the built QEMU has NO host-isolate plane — the fast-guest lane will refuse it"
+      kf_fatal "A: build_kf3.sh did not report KF3_BUILT — read /tmp/trackA.log"
   fi
-  say "A: binary = $(ls -la $BENCH/qemu-build/qemu-system-x86_64 2>/dev/null | awk '{print $5}' || echo MISSING)"
+  say "A: binary = $(ls -la $BENCH/qemu-build-kf3/qemu-system-x86_64 2>/dev/null | awk '{print $5}' || echo MISSING)"
   tail -5 /tmp/trackA.log
 }
 
@@ -430,7 +422,7 @@ else
 fi
 
 # ⊘ And the artefact the whole guest lane needs, checked here rather than trusted from track A.
-[ -x "$BENCH/qemu-build/qemu-system-x86_64" ] || kf_fatal "no QEMU at $BENCH/qemu-build — read /tmp/trackA.log"
+[ -x "$BENCH/qemu-build-kf3/qemu-system-x86_64" ] || kf_fatal "no kf3 QEMU at $BENCH/qemu-build-kf3 — read /tmp/trackA.log"
 
 if [ -n "$KF_FATAL" ]; then
   say "BENCH_TREE_FAILED: $KF_FATAL"

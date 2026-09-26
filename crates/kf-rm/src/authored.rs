@@ -391,20 +391,7 @@ pub fn engine_caps(engines: &[FifoDeviceEntry]) -> [u32; kf_abi::gspstaticinfo::
         if e.engine_data[slot::IS_HOST_DRIVEN_ENGINE] == 0 {
             continue;
         }
-        let rm = e.engine_data[slot::RM_ENGINE_TYPE];
-        let nv2080 = match rm {
-            0x01..=0x08 => Some(rm),
-            _ if s::rm_copy_index_of_engine_type(rm).is_some() => {
-                s::rm_copy_index_of_engine_type(rm).and_then(kf_chan_copy_engine_type)
-            }
-            _ if (s::RM_ENGINE_TYPE_NVDEC0..s::RM_ENGINE_TYPE_NVDEC0 + s::NVDEC_SIZE).contains(&rm) => {
-                s::engine_type_nvdec(rm - s::RM_ENGINE_TYPE_NVDEC0)
-            }
-            _ if (s::RM_ENGINE_TYPE_NVENC0..s::RM_ENGINE_TYPE_NVENC0 + s::NVENC_SIZE).contains(&rm) => {
-                s::engine_type_nvenc(rm - s::RM_ENGINE_TYPE_NVENC0)
-            }
-            _ => None,
-        };
+        let nv2080 = nv2080_of_rm(e.engine_data[slot::RM_ENGINE_TYPE]);
         if let Some(t) = nv2080
             && (t as usize) < 32 * caps.len()
         {
@@ -412,6 +399,35 @@ pub fn engine_caps(engines: &[FifoDeviceEntry]) -> [u32; kf_abi::gspstaticinfo::
         }
     }
     caps
+}
+
+/// The `NV2080_ENGINE_TYPE_*` of an `RM_ENGINE_TYPE_*` (the two spaces diverge for CE10+, NVENC and
+/// NVDEC), or `None` for a type with no NV2080 counterpart here.
+fn nv2080_of_rm(rm: u32) -> Option<u32> {
+    use kf_abi::submit as s;
+    match rm {
+        0x01..=0x08 => Some(rm),
+        _ if s::rm_copy_index_of_engine_type(rm).is_some() => s::rm_copy_index_of_engine_type(rm).and_then(kf_chan_copy_engine_type),
+        _ if (s::RM_ENGINE_TYPE_NVDEC0..s::RM_ENGINE_TYPE_NVDEC0 + s::NVDEC_SIZE).contains(&rm) => {
+            s::engine_type_nvdec(rm - s::RM_ENGINE_TYPE_NVDEC0)
+        }
+        _ if (s::RM_ENGINE_TYPE_NVENC0..s::RM_ENGINE_TYPE_NVENC0 + s::NVENC_SIZE).contains(&rm) => {
+            s::engine_type_nvenc(rm - s::RM_ENGINE_TYPE_NVENC0)
+        }
+        _ => None,
+    }
+}
+
+/// ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §4): the runlist the served FIFO table puts an
+/// `NV2080_ENGINE_TYPE_*` on — what the guest's `kchannelGetRunlistId` answers for a channel on that
+/// engine, and so what its Blackwell work-submit token carries in `RUNLIST_ID`.
+#[must_use]
+pub fn runlist_of_engine_type(engines: &[FifoDeviceEntry], nv2080: u32) -> Option<u32> {
+    engines
+        .iter()
+        .filter(|e| e.engine_data[slot::IS_HOST_DRIVEN_ENGINE] != 0)
+        .find(|e| nv2080_of_rm(e.engine_data[slot::RM_ENGINE_TYPE]) == Some(nv2080))
+        .map(|e| e.engine_data[slot::RUNLIST])
 }
 
 /// `NV2080_ENGINE_TYPE_COPY(i)` over both decades.

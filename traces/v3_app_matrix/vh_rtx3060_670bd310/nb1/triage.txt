@@ -1,0 +1,19 @@
+nvidia_smi|PASS|0|1s|gXid:-|kf3rc:-|kf3ref:(1) kf-rm: RPC-REFUSED #8 UnmappedAllocClass { class: 8335 } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24|-
+deviceQuery|PASS|0|5s|gXid:-|kf3rc:-|kf3ref:-|-
+vectorAdd|PASS|0|2s|gXid:-|kf3rc:-|kf3ref:-|-
+vectorAddDrv|PASS|0|2s|gXid:-|kf3rc:-|kf3ref:-|-
+matrixMul|PASS|0|2s|gXid:-|kf3rc:-|kf3ref:-|-
+matrixMulDrv|PASS|0|2s|gXid:-|kf3rc:-|kf3ref:-|-
+bandwidthTest|PASS|0|4s|gXid:-|kf3rc:-|kf3ref:-|-
+simpleStreams|PASS|0|4s|gXid:-|kf3rc:-|kf3ref:-|-
+asyncAPI|PASS|0|2s|gXid:-|kf3rc:-|kf3ref:-|-
+simpleAtomicIntrinsics|PASS|0|2s|gXid:-|kf3rc:-|kf3ref:-|-
+simpleCallback|PASS|0|2s|gXid:-|kf3rc:-|kf3ref:-|-
+simpleOccupancy|PASS|0|2s|gXid:-|kf3rc:-|kf3ref:-|-
+simpleZeroCopy|PASS|0|2s|gXid:-|kf3rc:-|kf3ref:-|-
+simpleCooperativeGroups|PASS|0|2s|gXid:-|kf3rc:-|kf3ref:-|-
+concurrentKernels|PASS|0|2s|gXid:-|kf3rc:-|kf3ref:-|-
+simpleIPC|PASS|0|4s|gXid:-|kf3rc:-|kf3ref:-|-
+UnifiedMemoryStreams|TIMEOUT|137|136s|gXid:-|kf3rc:kf3: RC host twin 0x1f (guest chid 0x8, engine 0x1) wrote its notifier: except_type=0x1f (Xid 31) — forwarding RC_TRIGGERED|kf3ref:(2) kf3: mem t=139.361s split ticket 3069 REFUSED: split Some(201000): VasKey(13965663373732347911) did not apply|-
+UnifiedMemoryPerf|TIMEOUT|137|315s|gXid:-|kf3rc:-|kf3ref:(1) kf3: kernel channel host 0x1001a REFUSED-AND-POISONED (§7)|-
+conjugateGradientUM|TIMEOUT|137|135s|gXid:-|kf3rc:-|kf3ref:(1) kf3: kernel channel host 0x1001a REFUSED-AND-POISONED (§7)|-

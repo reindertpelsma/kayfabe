@@ -1712,6 +1712,18 @@ impl ChannelClass {
     pub const fn channel_id(self) -> ClassId {
         self.0
     }
+
+    /// ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §3) — **does this channel class's USERD carry a
+    /// hardware-written `GP_GET`?** Through Hopper the control struct names `GPGet` at `0x88`
+    /// (`HOPPER_CHANNEL_GPFIFO_A`, `ogkm-580: clc86f.h:29-45`); Blackwell's does NOT —
+    /// `Nvc96fControl`/`Nvca6fControl` are `Ignored00[0x23]` then `GPPut`
+    /// (`BLACKWELL_CHANNEL_GPFIFO_A/B`, `clc96f.h:29-33`, `clca6f.h:27-31`). `[measured bare metal,
+    /// GB203, 580.159.04]` the word stayed 0 for 22 s after the semaphore released. ⇒ on these
+    /// classes GP_GET is not a fact hardware states, and completion is the semaphore alone.
+    #[must_use]
+    pub const fn userd_has_gp_get(self) -> bool {
+        (self.0).0 < 0xC96F
+    }
 }
 
 /// The **usermode** class whose 64 KiB CPU mapping is the doorbell window, tagged with

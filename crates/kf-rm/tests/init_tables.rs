@@ -473,7 +473,12 @@ fn every_variant_of_the_served_universe_round_trips_through_its_own_control_id()
     // ★ 48 -> 49 at v3-gfx: `0x20801315` FB_GET_GPU_CACHE_INFO, the host's L2 state verbatim.
     // ★ 49 -> 50 at v3-gfx: `0x00801707` FIFO_GET_ENGINE_CONTEXT_PROPERTIES from the host's
     // context-buffer table (the Vulkan UMD asks GRAPHICS_ZCULL after its 3D object).
-    assert_eq!(WantedTable::ALL.len(), 51, "the served universe\'s size");
+    // ★ 51 -> 52 at v3-mapfix: `0x20801702` MC_SERVICE_INTERRUPTS — refusing it ended the
+    // guest's completion waits early (`kf_abi::mcintr`).
+    // ★ 52 -> 53 (2026-09-26, `V3_FAMILY_PORT_BLACKWELL.md` §4): `0x20800a34`
+    // INTERNAL_STATIC_KGR_GET_SM_ISSUE_RATE_MODIFIER, from the host's unprivileged
+    // GR_GET_SM_ISSUE_RATE_MODIFIER — libcuda's `cuInit` asks the client control on Blackwell.
+    assert_eq!(WantedTable::ALL.len(), 53, "the served universe's size");
     let mut ids = std::collections::BTreeSet::new();
     for w in WantedTable::ALL {
         let id = w.cmd_id();

@@ -23,7 +23,7 @@ TAG=${1:-fast}
 BUDGET=${2:-20}
 BENCH=${BENCH_DIR:-/workspace/bench}
 FG=$BENCH/fastguest
-if [ "${KF_DEVICE:-nvkvm}" = kf3 ]; then
+if [ "${KF_DEVICE:-kf3}" = kf3 ]; then
     # ★ 2026-09-25: the binary built from THIS checkout's revision (`build_kf3.sh` installs one per
     # revision) — never the shared build dir's, which another build can replace mid-measurement.
     KF3_REPO="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -171,48 +171,14 @@ echo "== qemu:  $Q  (built $(date -r "$Q" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || ec
 # ⇒ Refuse when the archive's own sources are newer than the linked binary. ⊘ Source mtime, not
 # a git stamp: an uncommitted edit is exactly the case that bites, and a commit-hash stamp
 # would call that tree clean.
-# ★ v3: KF_DEVICE selects the device. `nvkvm` (default) is the old tree's, with its archive checks;
-# `kf3` is the v3 device (crates/kf-qemu + qemu/hw/misc/kf3), built by scripts/bench/build_kf3.sh
-# into its own QEMU build dir. The suite and the grader are the SAME for both.
-KF_DEVICE=${KF_DEVICE:-nvkvm}
-if [ "$KF_DEVICE" = nvkvm ]; then
-KF_ROOT=${KF_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}
-if [ -d "$KF_ROOT/crates" ]; then
-    newest=$(find "$KF_ROOT/crates" -name '*.rs' -newer "$Q" -print -quit 2>/dev/null)
-    if [ -n "$newest" ]; then
-        echo "run_fast_guest: ⊘⊘ REFUSED — $Q is OLDER than $newest." >&2
-        echo "   The relink did not happen (or failed). Running would measure the previous" >&2
-        echo "   binary and attribute the result to the change under test. Rebuild:" >&2
-        echo "   KAYFABE_SHIM_FEATURES=cuda-scratchpad bash scripts/build_qom_shim.sh <src> <build>" >&2
-        exit 3
-    fi
-fi
-# ⊘⊘⊘ **THIS WAS THREE `echo`s UNTIL w823, AND IT COST THIRTY BOOTS.** The text below was
-# correct advice and checked nothing; `provision_bench_tree.sh` builds QEMU with DEFAULT
-# features, so a box provisioned by the documented recipe produced an archive this lane cannot
-# use — and the whole 30-arm suite came back `CRASH 0s` before anyone read QEMU's stderr.
-# ⚠ `A CHECK THAT REPORTS IS NOT A CHECK THAT GATES` — this file was a live instance of the
-# rule it is elsewhere careful about. A precondition is CHECKED, by name, before the first boot.
-# ⊘⊘⊘ **`grep -c`, NOT `grep -q` — AND THE FIRST VERSION OF THIS CHECK GOT IT WRONG.**
-# `[measured w823]` written as `strings "$Q" | grep -q ...` under `set -o pipefail`, this
-# refused a binary that DID contain the plane: `grep -q` exits on the first match, `strings`
-# dies of SIGPIPE, and `pipefail` reports the pipeline as failed. All 30 arms refused instantly.
-# ⚠ **This tree already recorded that exact class** (`a_pipe_into_grep_q_manufactures_a_failure`,
-# w418 — the same two commands). ⇒ A lesson in memory does not fire on its own; it fires when
-# something makes you look. `grep -c` consumes all input, so there is no SIGPIPE to lose.
-# ⇒ And the recorded fix is stronger than "use -c": **do not pipe at all.** `grep -a` reads the
-# binary directly, so there is no producer to signal and no pipeline status to invert.
-_iso_n=$(grep -ac 'kayfabe-isolate-host' "$Q" 2>/dev/null || true)
-if [ "${_iso_n:-0}" -eq 0 ]; then
-    echo "run_fast_guest: ⊘⊘ REFUSED — $Q was built WITHOUT the host-isolate plane." >&2
-    echo "   The archive needs cargo feature 'cuda-scratchpad' (which implies 'host-isolates')." >&2
-    echo "   Without it KAYFABE_ISOLATES refuses at device realize and every arm scores CRASH" >&2
-    echo "   with an EMPTY serial log — a HARNESS fault that reads exactly like a dead guest." >&2
-    echo "   Rebuild: KAYFABE_SHIM_FEATURES=cuda-scratchpad \\" >&2
-    echo "            bash scripts/build_qom_shim.sh /workspace/bench/qemu-10.2.4 $BENCH/qemu-build" >&2
-    exit 3
-fi
-echo "== archive feature check: host-isolate plane present ✔"
+# ★ v3: `kf3` is the only device (crates/kf-qemu + qemu/hw/misc/kf3), built by
+# scripts/bench/build_kf3.sh into its own QEMU build dir. ⊘ The old `nvkvm` device and its
+# archive checks (the source-mtime refusal above, the host-isolate feature check) moved to
+# archive/ with crates/kayfabe-qemu-raw at the v3 cutover; KF_DEVICE=nvkvm now refuses by name.
+KF_DEVICE=${KF_DEVICE:-kf3}
+if [ "$KF_DEVICE" != kf3 ]; then
+    echo "run_fast_guest: ⊘ KF_DEVICE=$KF_DEVICE refused — the old nvkvm device (crates/kayfabe-qemu-raw) was archived at v3 — see archive/README.md; use KF_DEVICE=kf3 (the default)" >&2
+    exit 2
 fi
 
 # ⊘⊘⊘ **THE DEVICE LINE AND THE RAM BACKING ARE NOT THE FAST LANE’S TO INVENT.** As first
@@ -257,7 +223,6 @@ export KAYFABE_GUEST_BAR1_MB=${KAYFABE_GUEST_BAR1_MB:-128}
 # `cardbudget` then refuses by name unless the summed BAR1 demand fits.
 MGPU_TOK=""
 case "$KF_DEVICE" in
-    nvkvm) DEVARGS=(-device "nvkvm-gpu,bar1-size=$BAR1_BYTES,bar2-size=33554432,id=kf0${NVKVM_DEV_EXTRA:+,$NVKVM_DEV_EXTRA}") ;;
     kf3)
         if [ -z "${KF3_GPUS:-}" ]; then
             DEVARGS=(-device "kf3-gpu,fb-mb=${KF3_FB_MB:-8192},bar1-size=$BAR1_BYTES,bar2-size=33554432,id=kf0${KF3_DEV_EXTRA:+,$KF3_DEV_EXTRA}")
@@ -277,7 +242,7 @@ case "$KF_DEVICE" in
             case ",$_mode," in *,serial,*|*,concurrent,*) ;; *) echo "run_fast_guest: KF_MGPU_MODE must name serial and/or concurrent, got [$_mode]" >&2; exit 2 ;; esac
             MGPU_TOK="KF_NGPU=$_i KF_MGPU_MODE=$_mode KF_HOLD0=${KF_HOLD0:-0} "
         fi ;;
-    *) echo "run_fast_guest: KF_DEVICE must be nvkvm or kf3, got [$KF_DEVICE]" >&2; exit 2 ;;
+    *) echo "run_fast_guest: KF_DEVICE must be kf3, got [$KF_DEVICE]" >&2; exit 2 ;;
 esac
 echo "== device(s): ${DEVARGS[*]}"
 [ -n "$MGPU_TOK" ] && echo "== multi-GPU guest contract: $MGPU_TOK"

@@ -502,6 +502,37 @@ fn run_census(runs: &[kf_cuda::abi::KfMapRun]) -> String {
 /// The default coverage grain: 4 KiB, the smallest GMMU page on every family this tree models.
 pub const SMALL_PAGE: u64 = 0x1000;
 
+/// `KF3_MAPLOG`: one want, as its trigger — which invalidate (PDB, `ALL_PDB`, `ALL_VA`), which
+/// split ticket (the channel plane logs the ticket's channel), which root statement.
+fn maplog_want(w: &Want) -> String {
+    match w {
+        Want::Invalidate(r, at) => format!(
+            "inval seq={} pdb={:#x}/{:?} all_pdb={} all_va={} hub_only={} raw={:#x} age_us={}",
+            r.seq,
+            r.inval.pdb,
+            r.inval.pdb_aperture,
+            r.inval.all_pdb,
+            r.inval.all_va,
+            r.inval.hubtlb_only,
+            r.inval.raw,
+            at.elapsed().as_micros()
+        ),
+        Want::Split { pdb, ticket } => format!("split ticket={ticket} pdb={pdb:x?}"),
+        Want::Root(k) => format!("root {k:?}"),
+    }
+}
+
+/// `KF3_MAPLOG`: a batch — each want with the objects IT named, then every object walked.
+fn maplog_batch(b: &Batch) -> String {
+    let wants: Vec<String> = b
+        .wants
+        .iter()
+        .map(|(w, keys, _)| format!("{{{} -> [{}]}}", maplog_want(w), keys.iter().map(|k| format!("{:#x}", k.0)).collect::<Vec<_>>().join(" ")))
+        .collect();
+    let walked: Vec<String> = b.walked.iter().map(|(k, (s, r))| format!("{:#x}=s{s}@{r:#x}", k.0)).collect();
+    format!("wants=[{}] walked=[{}]", wants.join(" "), walked.join(" "))
+}
+
 fn ns_since(t: std::time::Instant) -> u64 {
     u64::try_from(t.elapsed().as_nanos()).unwrap_or(u64::MAX)
 }
@@ -534,6 +565,9 @@ struct Batch {
     walked: BTreeMap<VasKey, (u32, u64)>,
     /// When the walk was submitted.
     submitted: std::time::Instant,
+    /// ★ `KF3_MAPLOG`: this walk's number (the n-th submitted), so its runs can be traced to its
+    /// wants.
+    id: u64,
 }
 
 /// What the VA manager has done, cumulatively. Every refusal is counted AND named.
@@ -798,6 +832,9 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
 
     fn complete_invalidate(&mut self, r: InvalidateRequest, at: std::time::Instant, trigger: &Trigger, out: &mut Reconciled) {
         let o = trigger.complete(r.seq);
+        if crate::maplog::on() {
+            eprintln!("kf3: maplog t={:.6} CLEAR inval seq={} {o:?} (arrive->clear {} us)", crate::maplog::t(), r.seq, at.elapsed().as_micros());
+        }
         self.stats.outcome(o);
         let ns = ns_since(at);
         let tm = &mut self.stats.timing;
@@ -855,6 +892,14 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
     /// ★ A published invalidate. **Never blocks**: it queues, and submits a walk if none is in
     /// flight. `trigger` is the port's, for a request that can be cleared without a walk.
     pub fn on_invalidate(&mut self, req: InvalidateRequest, trigger: &Trigger) {
+        if crate::maplog::on() {
+            eprintln!(
+                "kf3: maplog t={:.6} ARRIVE {} (inflight walk: {})",
+                crate::maplog::t(),
+                maplog_want(&Want::Invalidate(req, std::time::Instant::now())),
+                self.inflight.as_ref().map_or("none".to_string(), |b| format!("#{}", b.id))
+            );
+        }
         self.pending.push(Want::Invalidate(req, std::time::Instant::now()));
         self.pump(trigger);
     }
@@ -863,6 +908,14 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
     /// `PDB_ALL`). **Never blocks**: queued like an invalidate; the outcome is reported under
     /// `ticket` by [`Self::take_splits`] once every named space applied (or failed, by name).
     pub fn on_split(&mut self, pdb: Option<u64>, ticket: u64, trigger: &Trigger) {
+        if crate::maplog::on() {
+            eprintln!(
+                "kf3: maplog t={:.6} ARRIVE {} (inflight walk: {})",
+                crate::maplog::t(),
+                maplog_want(&Want::Split { pdb, ticket }),
+                self.inflight.as_ref().map_or("none".to_string(), |b| format!("#{}", b.id))
+            );
+        }
         self.stats.splits += 1;
         self.pending.push(Want::Split { pdb, ticket });
         self.pump(trigger);
@@ -875,6 +928,14 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
 
     /// A root changed with no invalidate behind it (Q10): walk `key` at the next opportunity.
     pub fn schedule_walk(&mut self, key: VasKey, trigger: &Trigger) {
+        if crate::maplog::on() {
+            eprintln!(
+                "kf3: maplog t={:.6} ARRIVE {} (inflight walk: {})",
+                crate::maplog::t(),
+                maplog_want(&Want::Root(key)),
+                self.inflight.as_ref().map_or("none".to_string(), |b| format!("#{}", b.id))
+            );
+        }
         self.pending.push(Want::Root(key));
         self.pump(trigger);
     }
@@ -887,8 +948,12 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             return;
         }
         let wants = core::mem::take(&mut self.pending);
-        let mut batch =
-            Batch { wants: Vec::with_capacity(wants.len()), walked: BTreeMap::new(), submitted: std::time::Instant::now() };
+        let mut batch = Batch {
+            wants: Vec::with_capacity(wants.len()),
+            walked: BTreeMap::new(),
+            submitted: std::time::Instant::now(),
+            id: self.stats.walks_submitted + 1,
+        };
         let mut vacuous: Vec<u64> = Vec::new();
         let mut no_slot: Vec<VasKey> = Vec::new();
         for w in wants {
@@ -937,6 +1002,9 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             batch.wants.push((w, keys, at));
         }
         // Nothing of ours is named: nothing can be stale, so the clear is honest now.
+        if crate::maplog::on() && !vacuous.is_empty() {
+            eprintln!("kf3: maplog t={:.6} vacuous invalidate(s) {vacuous:?} cleared without a walk (nothing of ours named)", crate::maplog::t());
+        }
         for seq in vacuous {
             self.stats.outcome(trigger.complete(seq));
         }
@@ -969,6 +1037,9 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             Ok(()) => {
                 self.stats.walks_submitted += 1;
                 batch.submitted = std::time::Instant::now();
+                if crate::maplog::on() {
+                    eprintln!("kf3: maplog t={:.6} walk#{} SUBMIT {}", crate::maplog::t(), batch.id, maplog_batch(&batch));
+                }
                 self.inflight = Some(batch);
             }
             Err(e) => {
@@ -1095,9 +1166,37 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 ));
                 continue;
             }
+            // ⊘⊘ DIAGNOSTIC ONLY (`KF3_DIAG_UNMAP_DELAY_MS`, default off, never a fix): hold a
+            // diff that UNMAPS for N ms before applying it — an A/B for "was host work still
+            // using the range when the guest's own invalidate said it was gone?". It blocks the VA
+            // thread (never a vCPU) and so delays every want queued behind it.
+            if let Some(ms) = crate::maplog::unmap_delay_ms()
+                && e.runs.iter().any(|r| r.unmap)
+            {
+                std::thread::sleep(std::time::Duration::from_millis(ms));
+            }
             let t_apply = std::time::Instant::now();
             let a = apply_entry(&space.target, &e.runs, &cfg);
             let apply_ns = ns_since(t_apply);
+            if crate::maplog::on() {
+                // ⊘ Diagnostic only (`KF3_MAPLOG=1`, default off): every diff run and its verdict,
+                // so a host fault VA can be matched against what the guest's tables said, when,
+                // and which want's walk applied it (`walk#` — its SUBMIT line names the wants).
+                let tt = crate::maplog::t();
+                for (i, r) in e.runs.iter().enumerate() {
+                    eprintln!(
+                        "kf3: maplog t={tt:.6} walk#{} {key:?} root {walked_root:#x} {} va={:#x} len={:#x} at={:#x} ap={} kind={:#x} ack={}",
+                        batch.id,
+                        if r.unmap { "UNMAP" } else { "MAP" },
+                        r.va,
+                        r.len,
+                        r.at,
+                        r.ap,
+                        r.kind,
+                        a.codes.get(i).copied().unwrap_or(0xff)
+                    );
+                }
+            }
             self.stats.timing.apply_ns += apply_ns;
             // ★ w829: the host-map cost of a large diff (a fragmented CUDA space is ~10^4 runs,
             // each ONE host map call on the guest-RAM object) — named, it is the next budget.

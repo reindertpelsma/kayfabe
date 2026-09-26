@@ -6396,6 +6396,10 @@ pub struct SubmitOutcome {
     /// USERD `GP_PUT`: our produce cursor, read back so the pair is a comparison and not
     /// an assumption.
     pub gp_put: u32,
+    /// ★ 2026-09-26: whether this channel's class has a hardware `GP_GET` at all
+    /// ([`kayfabe_arch::ChannelClass::userd_has_gp_get`]) — `false` on Blackwell, where the
+    /// fourth fact does not exist and the semaphore is the whole completion.
+    pub gp_get_by_hw: bool,
 }
 
 thread_local! {
@@ -7184,7 +7188,7 @@ impl CeEvidence {
     /// on its own so a report can say **which** of the four failed.
     #[must_use]
     pub fn cursor_caught_up(&self) -> bool {
-        self.submit.gp_get == self.submit.gp_put
+        !self.submit.gp_get_by_hw || self.submit.gp_get == self.submit.gp_put
     }
 }
 
@@ -7196,7 +7200,7 @@ impl SubmitOutcome {
     /// the submission this call made.
     #[must_use]
     pub fn landed(&self, payload: u32) -> bool {
-        self.semaphore == payload && self.gp_get == self.gp_put
+        self.semaphore == payload && (!self.gp_get_by_hw || self.gp_get == self.gp_put)
     }
 }
 
@@ -7313,6 +7317,29 @@ impl HostRmBackend {
     #[must_use]
     pub fn host_ctl_fd(&self) -> i32 {
         self.conn.ctl_fd()
+    }
+
+    /// ★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §3) — **the host's lowest-numbered present copy
+    /// engine that is NOT synchronous with GR**, from the die's own `NV2080_CTRL_CMD_CE_GET_ALL_CAPS`
+    /// (`0x20802a0a`, NON_PRIVILEGED, on the subdevice; `ogkm-580: ctrl2080ce.h:325-334`:
+    /// `NvU8 capsTbl[64][2]` then `NvU64 present` at 128; `NV2080_CTRL_CE_CAPS_GRCE` is byte 0 bit 0,
+    /// `:105-106`). ⊘ Replaces a pinned `COPY(2)`: that is GA106's first async CE, and on a GB203
+    /// `COPY(2)` does not exist (`NV_ERR_OBJECT_NOT_FOUND`) — present there is `{0,1,4,5}`.
+    ///
+    /// # Errors
+    /// Whatever RM refused the control with; `Other(NV_ERR_OBJECT_NOT_FOUND)` if every present
+    /// copy engine is a GRCE.
+    pub fn first_async_copy_engine(&self) -> Result<u32, RmError> {
+        const CE_GET_ALL_CAPS: u32 = 0x2080_2a0a;
+        const PRESENT_OFF: usize = 64 * 2;
+        let mut p = [0u8; PRESENT_OFF + 8];
+        self.conn.control_for_probe(self.conn.subdevice(), CE_GET_ALL_CAPS, &mut p)?;
+        let mut present = [0u8; 8];
+        present.copy_from_slice(&p[PRESENT_OFF..]);
+        let present = u64::from_le_bytes(present);
+        (0..64u32)
+            .find(|&i| present & (1 << i) != 0 && p[i as usize * 2] & 0x01 == 0)
+            .ok_or(RmError::Other(0x57))
     }
 
     /// ★★★ w392c — a real `FERMI_VASPACE_A` handle for `UVM_REGISTER_GPU_VASPACE.hVaSpace`.
@@ -7508,6 +7535,65 @@ impl HostRmBackend {
         drop(node);
         let _ = raw;
         Ok(out)
+    }
+
+    /// ★ `--mmio-bench` (owner, 2026-09-25): CPU access to CPU-VISIBLE, VIDMEM-RESIDENT memory
+    /// through its BAR mapping — the question "is our BAR1 window uncached where hardware is
+    /// write-combining?" answered by one number per direction, the SAME code on bare metal and in
+    /// the guest. One object, one write-combining mapping (`reserve_gpga` + `map_cpu`), then:
+    /// `(write u64 stores, read u64 loads, bulk copy_out in 64 KiB chunks)` — elapsed per pass
+    /// over `len` bytes, plus a checksum so the reads cannot be optimised away.
+    ///
+    /// # Errors
+    /// Whatever the allocation, mapping or an access refused with.
+    pub fn bench_vidmem_mmio(
+        &self,
+        len: u64,
+    ) -> Result<(std::time::Duration, std::time::Duration, std::time::Duration, u64), RmError> {
+        let raw = self.conn.reserve_gpga(len)?;
+        let (node, map) = self.conn.map_cpu(raw, len, CachePolicy::WriteCombining)?;
+        // ⊘ Pass 0 is COLD: every page's first touch faults the mapping in (and in a guest, a
+        // nested EPT fault). It is timed but not returned; the returned write is the WARM pass
+        // over the same pages — the memory-type (WC vs UC) answer on its own.
+        let cold = std::time::Instant::now();
+        let mut off = 0u64;
+        while off + 8 <= len {
+            map.store_u64(HostOffset::new(off), off).map_err(|e| region_error(&e))?;
+            off += 8;
+        }
+        release_fence();
+        println!("MMIO_BENCH cold-first-touch write_u64 {:.1} ns/op", cold.elapsed().as_nanos() as f64 / (len / 8) as f64);
+        let start = std::time::Instant::now();
+        let mut off = 0u64;
+        while off + 8 <= len {
+            map.store_u64(HostOffset::new(off), off ^ 0x5A5A_5A5A_5A5A_5A5A)
+                .map_err(|e| region_error(&e))?;
+            off += 8;
+        }
+        release_fence();
+        let write = start.elapsed();
+        let mut acc = 0u64;
+        let start = std::time::Instant::now();
+        let mut off = 0u64;
+        while off + 8 <= len {
+            acc = acc.wrapping_add(map.load_u64(HostOffset::new(off)).map_err(|e| region_error(&e))?);
+            off += 8;
+        }
+        let read = start.elapsed();
+        let chunk: u64 = 64 << 10;
+        let mut buf = vec![0u8; chunk as usize];
+        let start = std::time::Instant::now();
+        let mut at = 0u64;
+        while at + chunk <= len {
+            map.copy_out(HostOffset::new(at), &mut buf).map_err(|e| region_error(&e))?;
+            acc = acc.wrapping_add(u64::from(buf[0])).wrapping_add(u64::from(buf[buf.len() - 1]));
+            at += chunk;
+        }
+        let bulk = start.elapsed();
+        drop(map);
+        drop(node);
+        let _ = raw;
+        Ok((write, read, bulk, acc))
     }
 
     /// ★★★ **THE NEGATIVE CONTROL for [`Self::time_vidmem_read`]** — the identical loop shape
@@ -12257,11 +12343,23 @@ impl HostRmBackend {
             std::thread::sleep(Duration::from_millis(1));
             semaphore = self.ring_load_u32(chan, sem_offset)?;
         }
-        let (gp_get, gp_put) = self.userd_cursors(chan)?;
+        // ★★★ 2026-09-26 (`V3_FAMILY_PORT_BLACKWELL.md` §3, measured bare metal on a GB203): the
+        // PBDMA's write-back of `GP_GET` into USERD is ASYNCHRONOUS to the semaphore release. On
+        // GA10x it happened to land first; on Blackwell a read taken the instant the semaphore
+        // lands saw `GP_GET 0 GP_PUT 1` with the payload already there — and five bare-metal arms
+        // read that as "hardware never fetched". GP_GET is still hardware's word (it is never
+        // ours to write), so the bar is unchanged: it must reach GP_PUT — within the same budget.
+        let gp_get_by_hw = self.conn.host_classes().gpfifo_channel().userd_has_gp_get();
+        let (mut gp_get, mut gp_put) = self.userd_cursors(chan)?;
+        while gp_get_by_hw && semaphore == payload && gp_get != gp_put && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(1));
+            (gp_get, gp_put) = self.userd_cursors(chan)?;
+        }
         Ok(SubmitOutcome {
             semaphore,
             gp_get,
             gp_put,
+            gp_get_by_hw,
         })
     }
 
@@ -15597,7 +15695,8 @@ mod tests {
             .expect("crates/ is this crate's parent")
             .to_path_buf();
         assert!(
-            crates.join("kayfabe-fwd").is_dir(),
+            // A KEPT sibling: `kayfabe-fwd`, the crate first named here, is archived (archive/README.md).
+            crates.join("kayfabe-device").is_dir(),
             "cannot see sibling crates at {crates:?} — this gate would otherwise pass by \
              scanning nothing"
         );
@@ -16222,6 +16321,7 @@ mod tests {
             semaphore: 0xBEEF,
             gp_get: 1,
             gp_put: 1,
+            gp_get_by_hw: true,
         };
         assert!(ok.landed(0xBEEF));
         assert!(
@@ -16234,6 +16334,7 @@ mod tests {
             semaphore: 0,
             gp_get: 0,
             gp_put: 1,
+            gp_get_by_hw: true,
         };
         assert!(!userd_bug.landed(0xBEEF));
         // Fetched, but the methods evaporated — the wrong-subchannel shape.
@@ -16241,6 +16342,7 @@ mod tests {
             semaphore: 0,
             gp_get: 1,
             gp_put: 1,
+            gp_get_by_hw: true,
         };
         assert!(!fetched_only.landed(0xBEEF));
     }
@@ -16254,6 +16356,7 @@ mod tests {
             semaphore: 3,
             gp_get: 1,
             gp_put: 1,
+            gp_get_by_hw: true,
         };
         let good = CeEvidence {
             before: 0xFFFF_FFFF,

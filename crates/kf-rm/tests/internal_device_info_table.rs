@@ -707,6 +707,22 @@ fn copy_engine_fault_ids_that_are_not_one_run_are_unencodable() {
             count: 2
         }
     );
+    // ★ 2026-09-26: a floorswept LCE's slot is NOT "nobody's" — GB203 presents LCEs {0,1,4,5}
+    // with ids CE0+i = {65,66,69,70}; the gap 67/68 is CE2/CE3's by the family's dev_fault.h.
+    let lce = |name, id: u32, inst: u32| {
+        let mut e = synth(name, id, DEV_TYPE_ENUM_LCE, 1, 0x00c0_0000);
+        e.engine_data[engine_info_type::INSTANCE_ID] = inst;
+        e
+    };
+    let engines = [lce("CE0", 65, 0), lce("CE1", 66, 1), lce("CE4", 69, 4), lce("CE5", 70, 5)];
+    let r4 = row(vec![at("CE0", 0x0010_4000), at("CE1", 0x0010_4000), at("CE4", 0x0010_4000), at("CE5", 0x0010_4000)]);
+    assert!(encode(&engines, &r4).is_ok(), "a floorswept LCE's slot is a copy engine's id");
+    // …but an id that is not CE0+instance for the others' CE0 is still nobody's.
+    let engines = [lce("CE0", 65, 0), lce("CE1", 66, 1), lce("CE4", 70, 4), lce("CE5", 71, 5)];
+    assert!(matches!(
+        encode(&engines, &r4).expect_err("refused"),
+        DeviceInfoError::CopyEngineFaultIdsNotContiguous { .. }
+    ));
     // ⊘ Non-vacuity, and the measurement the policy rests on: GA106's four are 0xf..=0x12.
     let p = encode(ga106::ENGINES, &device_info()).expect("projects");
     let ce_ids: Vec<u32> = (0..num_entries(&p) as usize)

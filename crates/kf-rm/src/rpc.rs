@@ -84,7 +84,15 @@ pub fn name_of(function: u32) -> Option<&'static str> {
 /// | `0x83de0307` | `DEBUG_SET_MODE_MMU_DEBUG` | SM-debugger |
 /// | `0x20800177` | `GPU_REPORT_NON_REPLAYABLE_FAULT` | the fault mechanism is not modelled |
 /// | `0x00e00102`, `0x00f10003`, `0x20803083` | fabric / NVLink | |
-/// | `0x20801702` | `MC_SERVICE_INTERRUPTS` | ★ **deliberately** refused, to cancel the guest's polling loop |
+/// | `0x20801702` | `MC_SERVICE_INTERRUPTS` | ⊘ SUPERSEDED — see below |
+///
+/// ⊘⊘⊘ **SUPERSEDED 2026-09-26 (v3-mapfix): `MC_SERVICE_INTERRUPTS` is SERVED.** §2.3 refused it
+/// *"to cancel the guest's polling loop"* — a v2-era device with no real completions, where the
+/// guest polled it forever. With completions as host events that refusal is the bug: a blocked
+/// waiter treats the `0x56` as the end of its wait, so it returned from `clFinish` with the work
+/// still running (`[measured]` clpeak FP64 449.9 vs 218 GFLOPS bare metal, then a host
+/// `FAULT_PDE` on a buffer the guest freed under the backlog). It is now
+/// `kf_rm::inittables::WantedTable::McServiceInterrupts`; the argument is `kf_abi::mcintr`.
 ///
 /// ⇒ The first handler written against that "inner allowlist" would have admitted **register
 /// peek/poke from the guest**. ⚠ And the coverage test *asserted* it was served — a test that
@@ -129,7 +137,7 @@ pub const CONTROLS: [(u32, ControlDisposition); 33] = [
     (0xa06f0104, ControlDisposition::ServedLocally),
     (0x906f0106, ControlDisposition::ServedLocally),
     (0x2080a026, ControlDisposition::AdmittedUndispatched),
-    // ⊘ The nine §2.3 refuses BY NAME.
+    // ⊘ §2.3 refused nine BY NAME; eight remain (MC_SERVICE_INTERRUPTS is served, below).
     (0x20800122, ControlDisposition::RefusedByName("GPU_EXEC_REG_OPS: arbitrary register peek/poke")),
     (0xb0cc010a, ControlDisposition::RefusedByName("perf EXEC_REG_OPS: arbitrary register peek/poke")),
     (0xb0cc0105, ControlDisposition::RefusedByName("ALLOC_PMA_STREAM: hardware performance counters")),
@@ -138,7 +146,8 @@ pub const CONTROLS: [(u32, ControlDisposition); 33] = [
     (0x00e00102, ControlDisposition::RefusedByName("fabric/NVLink")),
     (0x00f10003, ControlDisposition::RefusedByName("fabric/NVLink")),
     (0x20803083, ControlDisposition::RefusedByName("fabric/NVLink")),
-    (0x20801702, ControlDisposition::RefusedByName("MC_SERVICE_INTERRUPTS: deliberately refused to cancel the guest's polling loop")),
+    // ⊘ SUPERSEDED 2026-09-26: served (see the table's docs) — refusing it forged completions.
+    (0x20801702, ControlDisposition::ServedLocally),
 ];
 
 pub fn control_disposition(cmd: u32) -> ControlDisposition {

@@ -137,6 +137,9 @@ pub struct Plane<'v> {
     pub drainer_wake: WakeWord,
     pub ring: PrivRing,
     pub token_mask: u32,
+    /// ★ 2026-09-26: doorbell value / channel → table index, per family (`kf_trap::tokenindex`):
+    /// `Vector { mask: token_mask }` through Hopper (unchanged), `RunlistVector` on Blackwell.
+    pub token_index: kf_trap::tokenindex::TokenIndex,
     /// The time-setting registers of this device's timer HAL, refused by name on the privileged
     /// write arm (`timer::TimerRegs`). Per family, never per die.
     pub timer: kf_trap::timer::TimerRegs,
@@ -178,7 +181,19 @@ impl<'v> Plane<'v> {
         family: kf_chip::Family,
         bar0_bytes: u32,
     ) -> Plane<'v> {
+        // ★ 2026-09-26: Blackwell allocates chids PER RUNLIST (`kf_chip::Family::chids_per_runlist`),
+        // so its index carries the runlist and its table is sized for it.
+        let token_index = if family.chids_per_runlist() {
+            kf_trap::tokenindex::TokenIndex::RunlistVector
+        } else {
+            kf_trap::tokenindex::TokenIndex::Vector { mask: token_mask }
+        };
+        let n_tokens = n_tokens.max(match token_index {
+            kf_trap::tokenindex::TokenIndex::RunlistVector => token_index.table_len(),
+            kf_trap::tokenindex::TokenIndex::Vector { .. } => 0,
+        });
         Plane {
+            token_index,
             tokens: (0..n_tokens).map(|_| TokenWord::new()).collect(),
             bits: RungBitmap::new(),
             vmm,
@@ -200,7 +215,7 @@ impl<'v> Plane<'v> {
     /// it). Returns `true` when a parked worker must be signalled. ⊘ This is how completions share
     /// ONE path with doorbells: the channel's pump stays serialized by the token's BUSY state.
     pub fn ring_internal(&self, tok: u32) -> bool {
-        let Some(w) = self.tokens.get((tok & self.token_mask) as usize) else { return false };
+        let Some(w) = self.tokens.get(self.token_index.clamp(tok) as usize) else { return false };
         if w.ring(w.load().applied_seq) {
             self.bits.publish(tok);
             return self.vmm.worker_wake.bump() == kf_trap::Wake::SignalOne;
@@ -234,7 +249,7 @@ impl<'v> Plane<'v> {
         owner: Owner,
     ) -> Result<(), Refusal> {
         // ⊘ `[fable S7]` a guest-root-derived index must not panic the VMM.
-        let idx = (tok & self.token_mask) as usize;
+        let idx = self.token_index.clamp(tok) as usize;
         if idx >= self.tokens.len() {
             return Err(Refusal::OverDeclaredCap { twin: Twin::Channel, cap: self.tokens.len() as u32, asked: tok });
         }
@@ -267,7 +282,7 @@ impl<'v> Plane<'v> {
     /// released, so a guest that allocated and freed more than its cap over its life was refused
     /// forever.
     pub fn free_channel(&self, caps: &mut VmCaps, tok: u32) -> bool {
-        let idx = (tok & self.token_mask) as usize;
+        let idx = self.token_index.clamp(tok) as usize;
         let Some(w) = self.tokens.get(idx) else { return false };
         // §5.2: free waits out BUSY before the twin may be dropped.
         if !w.retire() {
@@ -287,7 +302,7 @@ impl<'v> Plane<'v> {
             worker_wake: &self.vmm.worker_wake,
             drainer_wake: &self.drainer_wake,
             ring: &self.ring,
-            token_mask: self.token_mask,
+            index: self.token_index,
             timer: self.timer,
         }
     }

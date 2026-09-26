@@ -389,7 +389,9 @@ fn the_birth_witness_can_tell_declined_from_never_asked() {
     // ★ Between w392j and w393 there was a THIRD call — the doorbell arm — and it was the
     // measured USERD-zeroing hazard (w233 / w392j's five `Xid 31`); that consult is gone and
     // its return is what the `None, None` literal above now pins.
-    let fwd = sibling_body("kayfabe-fwd", "src/lib.rs");
+    // ⊘ 2026-09-26: `kayfabe-fwd` is archived (archive/README.md) and frozen, so its half of
+    // the invariant is read from where it now lives. It cannot drift; the check stays honest.
+    let fwd = sibling_body("../archive/crates/kayfabe-fwd", "src/lib.rs");
     assert_eq!(
         // ⊘⊘ **CORRECTED 2026-09-15 (w745) — THE PATTERN, NOT THE RULING.** Constraint 26
         // gave `adopted_guest_ring` a fifth argument (the `RingSliceOracle`), so the
